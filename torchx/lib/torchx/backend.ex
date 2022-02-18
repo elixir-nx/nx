@@ -874,11 +874,11 @@ defmodule Torchx.Backend do
   def conv(%T{type: type} = out, t, k, opts) do
     padding = opts[:padding]
     strides = opts[:strides]
-    input_dilation = opts[:input_dilation]
+    kernel_dilation = opts[:kernel_dilation]
     feature_groups = opts[:feature_group_size]
 
     # Not supported yet
-    # kernel_dilation = opts[:kernel_dilation]
+    # input_dilation = opts[:input_dilation]
     # batch_groups = opts[:batch_group_size]
     # input_permutation = opts[:input_permutation]
     # kernel_permutation = opts[:kernel_permutation]
@@ -890,7 +890,7 @@ defmodule Torchx.Backend do
     t
     |> from_nx()
     |> Torchx.to_type(to_torch_type(type))
-    |> Torchx.conv(k_nx, strides, padding, input_dilation, false, feature_groups)
+    |> Torchx.conv(k_nx, strides, padding, kernel_dilation, false, feature_groups)
     |> to_nx(out)
   end
 
