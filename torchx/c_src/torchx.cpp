@@ -810,8 +810,8 @@ NIF(solve)
 
 NIF(conv)
 {
-  TENSOR_PARAM(0, tensorA);
-  TENSOR_PARAM(1, tensorB);
+  TENSOR_PARAM(0, tensor);
+  TENSOR_PARAM(1, kernel);
 
   LIST_PARAM(2, std::vector<int64_t>, stride);
   LIST_PARAM(3, std::vector<int64_t>, padding);
@@ -827,7 +827,7 @@ NIF(conv)
   // aten::_convolution(Tensor input, Tensor weight, Tensor? bias,
   //      int[] stride, int[] padding, int[] dilation, bool transposed,
   //      int[] output_padding, int groups, bool benchmark, bool deterministic, bool cudnn_enabled, bool allow_tf32) -> Tensor
-  TENSOR(at::_convolution(*tensorA, *tensorB, bias_tensor,
+  TENSOR(at::_convolution(*tensor, *kernel, bias_tensor,
     stride, padding, dilation, transposed, output_padding, groups,
     true,   // benchmark
     false,   // deterministic

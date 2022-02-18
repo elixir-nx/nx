@@ -884,12 +884,14 @@ defmodule Torchx.Backend do
     # kernel_permutation = opts[:kernel_permutation]
     # output_permutation = opts[:output_permutation]
 
-    t_nx = t |> from_nx() |> Torchx.to_type(to_torch_type(type))
+    padding = Enum.map(padding, fn {a, _b} -> a end)
     k_nx = k |> from_nx() |> Torchx.to_type(to_torch_type(type))
 
-    padding = Enum.map(padding, fn {a, b} -> a end)
-
-    to_nx(Torchx.conv(t_nx, k_nx, strides, padding, input_dilation, false, feature_groups), out)
+    t
+    |> from_nx()
+    |> Torchx.to_type(to_torch_type(type))
+    |> Torchx.conv(k_nx, strides, padding, input_dilation, false, feature_groups)
+    |> to_nx(out)
   end
 
   @impl true
