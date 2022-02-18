@@ -871,6 +871,30 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def conv(out, t, k, opts) do
+    padding = opts[:padding] || :valid
+    strides = opts[:strides] || [1]
+    input_dilation = opts[:input_dilation] || []
+    feature_groups = opts[:feature_group_size] || 0
+
+    # Not supported yet
+    # kernel_dilation = opts[:kernel_dilation]
+    # batch_groups = opts[:batch_group_size]
+    # input_permutation = opts[:input_permutation]
+    # kernel_permutation = opts[:kernel_permutation]
+    # output_permutation = opts[:output_permutation]
+
+    if padding == :valid do
+      padding = List.duplicate(0, length(t.shape))
+    end
+
+    t = from_nx(t)
+    k = from_nx(k)
+
+    to_nx(Torchx.conv(t, k, strides, padding, input_dilation, false, feature_groups), out)
+  end
+
+  @impl true
   def inspect(%T{} = tensor, inspect_opts) do
     result =
       if device?(tensor, :cpu) do

@@ -808,6 +808,32 @@ NIF(solve)
   TENSOR(torch::linalg_solve(*tensorA, *tensorB));
 }
 
+NIF(conv)
+{
+  TENSOR_PARAM(0, tensorA);
+  TENSOR_PARAM(1, tensorB);
+
+  LIST_PARAM(2, std::vector<int64_t>, stride);
+  LIST_PARAM(3, std::vector<int64_t>, padding);
+  LIST_PARAM(4, std::vector<int64_t>, dilation);
+  PARAM(5, bool, transposed);
+  PARAM(6, int64_t, groups);
+
+  c10::optional<at::Tensor> bias_tensor;
+
+  std::vector<int64_t> output_padding;
+  // aten::_convolution(Tensor input, Tensor weight, Tensor? bias,
+  //      int[] stride, int[] padding, int[] dilation, bool transposed,
+  //      int[] output_padding, int groups, bool benchmark, bool deterministic, bool cudnn_enabled, bool allow_tf32) -> Tensor
+  TENSOR(at::_convolution(*tensorA, *tensorB, bias_tensor,
+    stride, padding, dilation, transposed, output_padding, groups,
+    true,   // benchmark
+    true,   // deterministic
+    false,  // cudnn_enabled
+    true    // allow_tf32
+  ));
+}
+
 void free_tensor(ErlNifEnv *env, void *obj)
 {
   torch::Tensor* tensor = reinterpret_cast<torch::Tensor*>(obj);
@@ -981,6 +1007,8 @@ static ErlNifFunc nif_functions[] = {
     DF(where, 3),
     DF(amax, 3),
     DF(amin, 3),
+
+    DF(conv, 7),
 
     F(cuda_is_available, 0),
     F(cuda_device_count, 0),
