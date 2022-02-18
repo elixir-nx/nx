@@ -871,11 +871,11 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def conv(out, t, k, opts) do
-    padding = opts[:padding] || :valid
-    strides = opts[:strides] || [1]
-    input_dilation = opts[:input_dilation] || []
-    feature_groups = opts[:feature_group_size] || 0
+  def conv(%T{type: type} = out, t, k, opts) do
+    padding = opts[:padding]
+    strides = opts[:strides]
+    input_dilation = opts[:input_dilation]
+    feature_groups = opts[:feature_group_size]
 
     # Not supported yet
     # kernel_dilation = opts[:kernel_dilation]
@@ -884,14 +884,12 @@ defmodule Torchx.Backend do
     # kernel_permutation = opts[:kernel_permutation]
     # output_permutation = opts[:output_permutation]
 
-    if padding == :valid do
-      padding = List.duplicate(0, length(t.shape))
-    end
+    t_nx = t |> from_nx() |> Torchx.to_type(to_torch_type(type))
+    k_nx = k |> from_nx() |> Torchx.to_type(to_torch_type(type))
 
-    t = from_nx(t)
-    k = from_nx(k)
+    padding = Enum.map(padding, fn {a, b} -> a end)
 
-    to_nx(Torchx.conv(t, k, strides, padding, input_dilation, false, feature_groups), out)
+    to_nx(Torchx.conv(t_nx, k_nx, strides, padding, input_dilation, false, feature_groups), out)
   end
 
   @impl true

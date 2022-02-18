@@ -822,15 +822,17 @@ NIF(conv)
   c10::optional<at::Tensor> bias_tensor;
 
   std::vector<int64_t> output_padding;
+  output_padding.push_back(0);
+
   // aten::_convolution(Tensor input, Tensor weight, Tensor? bias,
   //      int[] stride, int[] padding, int[] dilation, bool transposed,
   //      int[] output_padding, int groups, bool benchmark, bool deterministic, bool cudnn_enabled, bool allow_tf32) -> Tensor
   TENSOR(at::_convolution(*tensorA, *tensorB, bias_tensor,
     stride, padding, dilation, transposed, output_padding, groups,
     true,   // benchmark
-    true,   // deterministic
+    false,   // deterministic
     false,  // cudnn_enabled
-    true    // allow_tf32
+    false   // allow_tf32
   ));
 }
 
