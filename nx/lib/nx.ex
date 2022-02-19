@@ -2764,6 +2764,35 @@ defmodule Nx do
   end
 
   @doc """
+  Returns the index of the given axis in the tensor.
+
+  ### Examples
+
+      iex> Nx.axis_index(Nx.iota({100, 10, 20}), 0)
+      0
+
+      iex> Nx.axis_index(Nx.iota({100, 10, 20}), -1)
+      2
+
+      iex> Nx.axis_index(Nx.iota({100, 10, 20}, names: [:batch, :x, :y]), :x)
+      1
+
+  ### Error cases
+
+      iex> Nx.axis_index(Nx.iota({100, 10, 20}), 3)
+      ** (ArgumentError) given axis (3) invalid for shape with rank 3
+
+      iex> Nx.axis_index(Nx.iota({100, 10, 20}, names: [:batch, :x, :y]), :z)
+      ** (ArgumentError) key :z not found in tensor with names [:batch, :x, :y]
+
+  """
+  @doc type: :shape
+  def axis_index(tensor, axis) do
+    shape = shape(tensor)
+    Nx.Shape.normalize_axis(shape, axis, names(tensor))
+  end
+
+  @doc """
   Returns the number of elements in the tensor.
 
   If a tuple is given as a shape, it computes the size
