@@ -670,6 +670,20 @@ NIF(argmin)
   }
 }
 
+NIF(cbrt)
+{
+  TENSOR_PARAM(0, tensor);
+
+  if (tensor->scalar_type() == torch::kDouble)
+  {
+    TENSOR(torch::pow(*tensor, 1.0 / 3));
+  }
+  else
+  {
+    TENSOR(torch::pow(*tensor, 1.0f / 3));
+  }
+}
+
 NIF(all)
 {
   TENSOR_PARAM(0, t);
@@ -946,6 +960,7 @@ static ErlNifFunc nif_functions[] = {
     DF(erf, 1),
     DF(erfc, 1),
     DF(erf_inv, 1),
+    DF(cbrt, 1),
 
     DF(tensordot, 4),
     DF(matmul, 2),

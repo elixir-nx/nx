@@ -616,7 +616,7 @@ defmodule Torchx.Backend do
     [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tan, :cosh, :sinh] ++
       [:tanh, :acos, :asin, :atan, :acosh, :asinh, :atanh, :sqrt, :rsqrt] ++
       [:erf, :erfc, :erf_inv, :abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign] ++
-      [:logical_not]
+      [:logical_not, :cbrt]
 
   for op <- unary_ops do
     @impl true

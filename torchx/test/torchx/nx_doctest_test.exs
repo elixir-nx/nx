@@ -82,7 +82,6 @@ defmodule Torchx.NxDoctestTest do
   ]
 
   @pending_doctests [
-    cbrt: 1,
     conv: 3,
     indexed_add: 3,
     put_slice: 3,
