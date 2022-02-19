@@ -722,7 +722,10 @@ defmodule Torchx.Backend do
     config =
       config
       |> Enum.map(fn {a, b, c} ->
-        if a < 0 || b < 0 || c != 0, do: raise("{#{a}, #{b}, #{c}} padding is not supported.")
+        if a < 0 or b < 0 or c != 0 do
+          raise ArgumentError, "{#{a}, #{b}, #{c}} padding is not supported"
+        end
+
         [a, b]
       end)
       |> List.flatten()
