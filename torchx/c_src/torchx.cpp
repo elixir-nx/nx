@@ -714,6 +714,14 @@ NIF(cholesky)
   TENSOR(torch::cholesky(*t, upper));
 }
 
+NIF(pad)
+{
+  TENSOR_PARAM(0, tensor)
+  LIST_PARAM(1, std::vector<int64_t>, config)
+  SCALAR_PARAM(2, constant)
+
+  TENSOR(torch::constant_pad_nd(*tensor, config, constant));
+}
 
 /* Transformations */
 
@@ -941,6 +949,7 @@ static ErlNifFunc nif_functions[] = {
 
     DF(tensordot, 4),
     DF(matmul, 2),
+    DF(pad, 3),
 
     DF(cholesky, 1),
     DF(cholesky, 2),

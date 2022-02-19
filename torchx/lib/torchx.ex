@@ -247,6 +247,8 @@ defmodule Torchx do
   deftensor round(tensor)
   deftensor sign(tensor)
 
+  deftensor pad(tensor, config, constant)
+
   ## LinAlg
 
   deftensor cholesky(tensor)
