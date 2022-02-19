@@ -728,6 +728,7 @@ defmodule Torchx.Backend do
 
         [a, b]
       end)
+      |> Enum.reverse()
       |> List.flatten()
 
     constant = Nx.to_number(constant)

@@ -71,6 +71,7 @@ defmodule Torchx.NxDoctestTest do
     # no API available - bit based
     bitcast: 2,
     count_leading_zeros: 1,
+    pad: 3,
     population_count: 1,
     # no API available - function based
     map: 3,
