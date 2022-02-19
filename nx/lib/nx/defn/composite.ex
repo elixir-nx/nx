@@ -147,22 +147,22 @@ defmodule Nx.Defn.Composite do
   ## Nx.Defn callbacks
 
   @doc false
-  def from_compile_args(args, cache) do
-    from_compile_args(args, cache, [])
+  def flatten_compile_args(args, cache) do
+    flatten_compile_args(args, cache, [])
   end
 
-  defp from_compile_args([arg | args], cache, vars) when is_function(arg) do
-    from_compile_args(args, [arg | cache], vars)
+  defp flatten_compile_args([arg | args], cache, vars) when is_function(arg) do
+    flatten_compile_args(args, [arg | cache], vars)
   end
 
-  defp from_compile_args([arg | args], cache, vars) do
-    from_compile_args(args, cache, [arg | vars])
+  defp flatten_compile_args([arg | args], cache, vars) do
+    flatten_compile_args(args, cache, [arg | vars])
   end
 
-  defp from_compile_args([], cache, vars), do: {cache, Enum.reverse(vars)}
+  defp flatten_compile_args([], cache, vars), do: {cache, Enum.reverse(vars)}
 
   @doc false
-  def from_runtime_args(args, tail) do
+  def flatten_runtime_args(args, tail) do
     flatten_list(args, tail, &Nx.to_tensor/1)
   end
 
@@ -172,7 +172,7 @@ defmodule Nx.Defn.Composite do
   end
 
   @doc false
-  def args_to_params(args, params) do
+  def flat_to_container_params(params, args) do
     {args, {[], _}} =
       Enum.map_reduce(args, {params, 0}, fn
         arg, acc
