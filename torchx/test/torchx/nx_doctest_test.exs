@@ -71,12 +71,13 @@ defmodule Torchx.NxDoctestTest do
     # no API available - bit based
     bitcast: 2,
     count_leading_zeros: 1,
-    pad: 3,
     population_count: 1,
     # no API available - function based
     map: 3,
     window_reduce: 5,
     reduce: 4,
+    # incomplete support
+    pad: 3,
     # product - some output/input types are unsupported by libtorch
     product: 2
   ]

@@ -376,8 +376,10 @@ defmodule Torchx.NxTest do
         Nx.product(Nx.tensor([[1, 2]]), axes: [2])
       end
     end
+  end
 
-    test "test pad_2d" do
+  describe "pad" do
+    test "2d" do
       Nx.tensor(1)
       |> Nx.pad(0, [])
       |> assert_all_close(Nx.tensor(1))
@@ -398,7 +400,7 @@ defmodule Torchx.NxTest do
       )
     end
 
-    test "test pad_3d" do
+    test "3d" do
       Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
       |> Nx.pad(0, [{0, 2, 0}, {1, 1, 0}, {1, 0, 0}])
       |> assert_all_close(
