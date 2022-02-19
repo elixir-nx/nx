@@ -84,7 +84,6 @@ defmodule Torchx.NxDoctestTest do
     cbrt: 1,
     conv: 3,
     indexed_add: 3,
-    pad: 3,
     put_slice: 3,
     window_max: 3,
     window_min: 3,

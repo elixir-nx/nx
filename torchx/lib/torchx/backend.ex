@@ -718,6 +718,24 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def pad(out, tensor, constant, config) do
+    config =
+      config
+      |> Enum.map(fn {a, b, c} ->
+        if a < 0 || b < 0 || c != 0, do: raise("{#{a}, #{b}, #{c}} padding is not supported.")
+        [a, b]
+      end)
+      |> List.flatten()
+
+    constant = Nx.to_number(constant)
+
+    tensor
+    |> from_nx()
+    |> Torchx.pad(config, constant)
+    |> to_nx(out)
+  end
+
+  @impl true
   def triangular_solve(%T{} = out, %T{} = a, %T{} = b, opts) do
     transform = opts[:transform_a]
     upper = !opts[:lower]
