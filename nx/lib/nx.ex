@@ -2777,6 +2777,14 @@ defmodule Nx do
       iex> Nx.axis_index(Nx.iota({100, 10, 20}, names: [:batch, :x, :y]), :x)
       1
 
+  ### Error cases
+
+      iex> Nx.axis_index(Nx.iota({100, 10, 20}), 3)
+      ** (ArgumentError) given axis (3) invalid for shape with rank 3
+
+      iex> Nx.axis_index(Nx.iota({100, 10, 20}, names: [:batch, :x, :y]), :z)
+      ** (ArgumentError) key :z not found in tensor with names [:batch, :x, :y]
+
   """
   @doc type: :shape
   def axis_index(tensor, axis) do
