@@ -16,10 +16,6 @@ defmodule Torchx.NxDoctestTest do
   end
 
   @temporarily_broken_doctests [
-    # argmax - tie_break option not supported
-    argmax: 2,
-    # argmin - tie_break option not supported
-    argmin: 2,
     # broadcast - shape mismatch in one test
     broadcast: 3,
     # dot - Batching not supported
