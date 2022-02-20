@@ -549,22 +549,65 @@ defmodule Torchx.Backend do
 
   @impl true
   def argmax(%T{} = out, %T{} = t, opts) do
-    unsupported_option!(opts, :tie_break, :low)
+    tie_break = opts[:tie_break] || :low
 
     axis = opts[:axis] || -1
-    keep_axes = opts[:keep_axes] || false
+    keep_axis = opts[:keep_axis] || false
 
-    Torchx.argmax(from_nx(t), axis, keep_axes) |> to_nx(out)
+    if tie_break == :low do
+      t
+      |> from_nx()
+      |> Torchx.argmax(axis, keep_axis)
+      |> to_nx(out)
+    else
+      result =
+        t
+        |> from_nx()
+        |> Torchx.flip([axis])
+        |> Torchx.argmax(axis, keep_axis)
+
+      create_scalar = fn scalar, input ->
+        %{data: %{ref: {actual, _}}, type: type} = input
+        Torchx.scalar_tensor(scalar - 2, to_torch_type(type), device_option([:device, actual]))
+      end
+
+      out.shape
+      |> elem(axis)
+      |> create_scalar.(t)
+      |> Torchx.subtract(result)
+      |> to_nx(out)
+    end
   end
 
   @impl true
   def argmin(%T{} = out, %T{} = t, opts) do
-    unsupported_option!(opts, :tie_break, :low)
-
+    tie_break = opts[:tie_break] || :low
     axis = opts[:axis] || -1
-    keep_axes = opts[:keep_axes] || false
+    keep_axis = opts[:keep_axis] || false
 
-    Torchx.argmin(from_nx(t), axis, keep_axes) |> to_nx(out)
+    if tie_break == :low do
+      t
+      |> from_nx()
+      |> Torchx.argmin(axis, keep_axis)
+      |> to_nx(out)
+    else
+      result =
+        t
+        |> from_nx()
+        |> Torchx.flip([axis])
+        |> Torchx.argmin(axis, keep_axis)
+
+      create_scalar = fn scalar, input ->
+        %{data: %{ref: {actual, _}}, type: type} = input
+        Torchx.scalar_tensor(scalar - 2, to_torch_type(type), device_option([:device, actual]))
+      end
+
+      out.shape
+      |> elem(axis)
+      |> create_scalar.(t)
+      |> Torchx.subtract(result)
+      |> to_nx(out)
+    end
   end
 
   ## Ops
@@ -1032,8 +1075,8 @@ defmodule Torchx.Backend do
   defp device_option(backend_opts), do: backend_opts[:device] || {:cpu, -1}
 
   defp unsupported_option!(opts, key, acceptable_default) do
-    if opts[key] != acceptable_default do
-      raise "#{inspect(key)} option is not supported in #{caller()}"
+    if opts[key] != nil and opts[key] != acceptable_default do
+      raise "#{inspect(key)} option with #{inspect(opts[key])} is not supported in #{caller()}"
     end
   end
 
