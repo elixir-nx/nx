@@ -26,14 +26,10 @@ defmodule Torchx.NxDoctestTest do
     dot: 6,
     # make_diagonal - depends on indexed_add
     make_diagonal: 2,
-    # mean - Torchx expects a input tensor but receives a number as input
+    # mean - Torchx does not support unsigned 64 bit integer
     mean: 2,
-    # quotient - Torchx expects a input tensor but receives a number as input
+    # quotient - Torchx does not support unsigned 32 bit integer
     quotient: 2,
-    # slice - expects numerical start indices, but now receives tensors,
-    slice: 4,
-    # stack - fails in some tests
-    stack: 2,
     # window_mean - depends on window_sum which is not implemented
     window_mean: 3,
     # require Elixir 1.13+
