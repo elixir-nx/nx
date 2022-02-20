@@ -490,4 +490,78 @@ defmodule Torchx.NxTest do
       )
     end
   end
+
+  describe "conv" do
+    test "test input_permutation" do
+      left = Nx.iota({9})
+      left = Nx.reshape(left, {1, 1, 3, 3})
+      right = Nx.iota({8})
+      right = Nx.reshape(right, {4, 1, 2, 1})
+
+      Nx.conv(left, right,
+        strides: 2,
+        padding: :same,
+        kernel_dilation: [2, 1],
+        input_permutation: [3, 1, 2, 0]
+      )
+      |> assert_all_close(
+        Nx.tensor([
+          [
+            [
+              [3.0],
+              [0.0]
+            ],
+            [
+              [9.0],
+              [6.0]
+            ],
+            [
+              [15.0],
+              [12.0]
+            ],
+            [
+              [21.0],
+              [18.0]
+            ]
+          ],
+          [
+            [
+              [4.0],
+              [0.0]
+            ],
+            [
+              [12.0],
+              [8.0]
+            ],
+            [
+              [20.0],
+              [16.0]
+            ],
+            [
+              [28.0],
+              [24.0]
+            ]
+          ],
+          [
+            [
+              [5.0],
+              [0.0]
+            ],
+            [
+              [15.0],
+              [10.0]
+            ],
+            [
+              [25.0],
+              [20.0]
+            ],
+            [
+              [35.0],
+              [30.0]
+            ]
+          ]
+        ])
+      )
+    end
+  end
 end

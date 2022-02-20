@@ -878,7 +878,8 @@ defmodule Torchx.Backend do
 
     Enum.each(input_dilation, fn a ->
       if a != 1 do
-        raise "input_dilation other than 1 is not supported"
+        raise ArgumentError,
+              "input_dilation other than 1 is not supported, got: #{inspect(input_dilation)}"
       end
     end)
 
