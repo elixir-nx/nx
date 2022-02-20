@@ -266,6 +266,8 @@ defmodule Torchx do
   deftensor clip(tensor, tensor_min, tensor_max)
   deftensor solve(tensor_a, tensor_b)
 
+  deftensor conv(tensor_input, tensor_kernel, strides, padding, dilation, transposed, groups)
+
   ## Dirty non-tensor return values
 
   defvalue to_blob(tensor)

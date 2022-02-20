@@ -873,6 +873,58 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def conv(%T{type: type} = out, t, k, opts) do
+    unsupported_option!(opts, :batch_group_size, 1)
+
+    input_dilation = opts[:input_dilation]
+
+    Enum.each(input_dilation, fn a ->
+      if a != 1 do
+        raise ArgumentError,
+              "input_dilation other than 1 is not supported, got: #{inspect(input_dilation)}"
+      end
+    end)
+
+    padding = opts[:padding]
+    strides = opts[:strides]
+    kernel_dilation = opts[:kernel_dilation]
+    feature_groups = opts[:feature_group_size]
+
+    permute = fn tensor, permutation ->
+      if permutation != nil do
+        Torchx.permute(tensor, permutation)
+      else
+        tensor
+      end
+    end
+
+    input_permutation = opts[:input_permutation]
+    kernel_permutation = opts[:kernel_permutation]
+    output_permutation = opts[:output_permutation]
+
+    pad_config =
+      padding
+      |> Enum.map(fn {a, b} -> [a, b] end)
+      |> Enum.reverse()
+      |> List.flatten()
+
+    k_nx =
+      k
+      |> from_nx()
+      |> Torchx.to_type(to_torch_type(type))
+      |> permute.(kernel_permutation)
+
+    t
+    |> from_nx()
+    |> permute.(input_permutation)
+    |> Torchx.pad(pad_config, 0)
+    |> Torchx.to_type(to_torch_type(type))
+    |> Torchx.conv(k_nx, strides, [0], kernel_dilation, false, feature_groups)
+    |> permute.(output_permutation)
+    |> to_nx(out)
+  end
+
+  @impl true
   def inspect(%T{} = tensor, inspect_opts) do
     result =
       if device?(tensor, :cpu) do

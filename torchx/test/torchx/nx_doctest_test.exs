@@ -77,7 +77,6 @@ defmodule Torchx.NxDoctestTest do
   ]
 
   @pending_doctests [
-    conv: 3,
     indexed_add: 3,
     put_slice: 3,
     window_max: 3,
