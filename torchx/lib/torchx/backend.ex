@@ -549,62 +549,34 @@ defmodule Torchx.Backend do
 
   @impl true
   def argmax(%T{} = out, %T{} = t, opts) do
-    tie_break = opts[:tie_break] || :low
-
-    axis = opts[:axis] || -1
-    keep_axis = opts[:keep_axis] || false
-
-    if tie_break == :low do
-      t
-      |> from_nx()
-      |> Torchx.argmax(axis, keep_axis)
-      |> to_nx(out)
-    else
-      result =
-        t
-        |> from_nx()
-        |> Torchx.flip([axis])
-        |> Torchx.argmax(axis, keep_axis)
-
-      create_scalar = fn scalar, input ->
-        %{data: %{ref: {actual, _}}, type: type} = input
-        Torchx.scalar_tensor(scalar - 2, to_torch_type(type), device_option([:device, actual]))
-      end
-
-      out.shape
-      |> elem(axis)
-      |> create_scalar.(t)
-      |> Torchx.subtract(result)
-      |> to_nx(out)
-    end
+    argminmax(:argmax, out, t, opts)
   end
 
   @impl true
-  def argmin(%T{} = out, %T{} = t, opts) do
+  def argmin(out, t, opts) do
+    argminmax(:argmin, out, t, opts)
+  end
+
+  defp argminmax(fun, %T{} = out, %T{} = t, opts) do
     tie_break = opts[:tie_break] || :low
     axis = opts[:axis] || -1
     keep_axis = opts[:keep_axis] || false
 
     if tie_break == :low do
-      t
-      |> from_nx()
-      |> Torchx.argmin(axis, keep_axis)
+      apply(Torchx, fun, [from_nx(t), axis, keep_axis])
       |> to_nx(out)
     else
-      result =
+      %{data: %{ref: {device, _}}, type: type, shape: shape} = t
+      scalar = Torchx.scalar_tensor(elem(shape, axis) - 1, to_torch_type(type), device)
+
+      flipped =
         t
         |> from_nx()
         |> Torchx.flip([axis])
-        |> Torchx.argmin(axis, keep_axis)
 
-      create_scalar = fn scalar, input ->
-        %{data: %{ref: {actual, _}}, type: type} = input
-        Torchx.scalar_tensor(scalar - 2, to_torch_type(type), device_option([:device, actual]))
-      end
+      result = apply(Torchx, fun, [flipped, axis, keep_axis])
 
-      out.shape
-      |> elem(axis)
-      |> create_scalar.(t)
+      scalar
       |> Torchx.subtract(result)
       |> to_nx(out)
     end
