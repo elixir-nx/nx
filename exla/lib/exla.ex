@@ -294,12 +294,13 @@ defmodule EXLA do
 
   ## Examples
 
+      iex> fun = fn a, b -> Nx.add(a, b) end
       iex> left = Nx.tensor(1, type: {:u, 8})
       iex> right = Nx.tensor([1, 2, 3], type: {:u, 16})
-      iex> EXLA.jit(&Nx.add/2, [left, right])
-      iex> EXLA.jit_cached?(&Nx.add/2, [left, right])
+      iex> EXLA.jit(fun, [left, right])
+      iex> EXLA.jit_cached?(fun, [left, right])
       true
-      iex> EXLA.jit_cached?(&Nx.add/2, [left, Nx.tensor([1, 2, 3, 4], type: {:u, 16})])
+      iex> EXLA.jit_cached?(fun, [left, Nx.tensor([1, 2, 3, 4], type: {:u, 16})])
       false
 
   """
