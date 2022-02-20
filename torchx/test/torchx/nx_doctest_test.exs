@@ -32,8 +32,6 @@ defmodule Torchx.NxDoctestTest do
     quotient: 2,
     # slice - expects numerical start indices, but now receives tensors,
     slice: 4,
-    # slice_along_axis - expects scalar starts and receives tensors
-    slice_along_axis: 4,
     # stack - fails in some tests
     stack: 2,
     # window_mean - depends on window_sum which is not implemented

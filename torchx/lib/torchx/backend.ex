@@ -263,6 +263,12 @@ defmodule Torchx.Backend do
   defp narrow(ref, [start | starts], [length | lengths], axis, shape) do
     dim = elem(shape, axis)
 
+    start =
+      case start do
+        %{} -> Nx.to_number(start)
+        _ -> start
+      end
+
     # Nothing to narrow
     if start == 0 and length == dim do
       narrow(ref, starts, lengths, axis + 1, shape)
