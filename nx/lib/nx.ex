@@ -7823,6 +7823,71 @@ defmodule Nx do
         ]
       >
 
+      iex> left = Nx.iota({9})
+      iex> left = Nx.reshape(left, {1, 1, 3, 3})
+      iex> right = Nx.iota({8})
+      iex> right = Nx.reshape(right, {4, 1, 2, 1})
+      iex> Nx.conv(left, right, strides: 2, padding: :same, kernel_dilation: [2, 1], input_permutation: [3, 1, 2, 0])
+      #Nx.Tensor<
+        f32[3][4][2][1]
+        [
+          [
+            [
+              [3.0],
+              [0.0]
+            ],
+            [
+              [9.0],
+              [6.0]
+            ],
+            [
+              [15.0],
+              [12.0]
+            ],
+            [
+              [21.0],
+              [18.0]
+            ]
+          ],
+          [
+            [
+              [4.0],
+              [0.0]
+            ],
+            [
+              [12.0],
+              [8.0]
+            ],
+            [
+              [20.0],
+              [16.0]
+            ],
+            [
+              [28.0],
+              [24.0]
+            ]
+          ],
+          [
+            [
+              [5.0],
+              [0.0]
+            ],
+            [
+              [15.0],
+              [10.0]
+            ],
+            [
+              [25.0],
+              [20.0]
+            ],
+            [
+              [35.0],
+              [30.0]
+            ]
+          ]
+        ]
+      >
+
   """
   @doc type: :ndim
   def conv(tensor, kernel, opts \\ []) when is_list(opts) do
