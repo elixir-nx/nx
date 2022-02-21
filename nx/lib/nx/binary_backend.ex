@@ -536,7 +536,7 @@ defmodule Nx.BinaryBackend do
     # The intution here is that we can pre-condense the contracting axes into a
     # single dimension, which will then be contracted through bin_zip_reduce below.
     # This takes a shape {a, m, n, b} which contracts on m, n and turns it into
-    # {m * n, a, b}, contracting on the first dimension.
+    # {a, b, m * n}, contracting on the last dimension.
 
     axes = Nx.axes(tensor)
 
@@ -545,7 +545,7 @@ defmodule Nx.BinaryBackend do
       |> Enum.sort(:desc)
       |> Enum.reduce(axes, &List.delete_at(&2, &1))
 
-    transpose_axes = contract_axes ++ remaining_axes
+    transpose_axes = remaining_axes ++ contract_axes
 
     transposed =
       if transpose_axes == axes do
@@ -555,15 +555,19 @@ defmodule Nx.BinaryBackend do
         transpose(%{tensor | shape: shape, names: names}, tensor, transpose_axes)
       end
 
-    {contracted, kept} =
+    {kept, contracted} =
       transposed.shape
       |> Tuple.to_list()
-      |> Enum.split(length(contract_axes))
+      |> Enum.split(length(remaining_axes))
 
-    reduced_shape = List.to_tuple([Enum.product(contracted) | kept])
+    kept_shape = List.to_tuple(kept)
+
+    kept_size = tuple_size(kept_shape)
+
+    reduced_shape = Tuple.insert_at(kept_shape, kept_size, Enum.product(contracted))
 
     {%{transposed | shape: reduced_shape, names: List.duplicate(nil, tuple_size(reduced_shape))},
-     [0]}
+     [kept_size]}
   end
 
   ## Element wise ternary ops
