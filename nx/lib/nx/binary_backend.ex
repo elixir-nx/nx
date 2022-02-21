@@ -536,7 +536,9 @@ defmodule Nx.BinaryBackend do
     # The intution here is that we can pre-condense the contracting axes into a
     # single dimension, which will then be contracted through bin_zip_reduce below.
     # This takes a shape {a, m, n, b} which contracts on m, n and turns it into
-    # {a, b, m * n}, contracting on the last dimension.
+    # {a, b, m * n}, contracting on the last dimension. This is necessary because
+    # bin_zip_reduce and aggregate_axes are order independent but dot depends
+    # on the axes order.
 
     axes = Nx.axes(tensor)
 
