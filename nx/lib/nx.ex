@@ -9225,8 +9225,7 @@ defmodule Nx do
     data_term = to_term(tensor_or_container)
     term = {@file_version, System.endianness(), data_term}
 
-    term
-    |> :erlang.term_to_binary(opts)
+    :erlang.term_to_binary(term, opts)
   end
 
   defp to_term(tensor_or_container) do
