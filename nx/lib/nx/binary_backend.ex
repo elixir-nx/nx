@@ -525,11 +525,10 @@ defmodule Nx.BinaryBackend do
 
     {right, right_contract_axes} = bin_dot_transpose_contract_axes(right, contract_axes2)
 
-    bin_zip_reduce(left, left_contract_axes, right, right_contract_axes, type, 0, fn lhs,
-                                                                                     rhs,
-                                                                                     acc ->
-      res = binary_to_number(lhs, t1) * binary_to_number(rhs, t2) + acc
-      {res, res}
+    bin_zip_reduce(left, left_contract_axes, right, right_contract_axes, type, 0, fn
+      lhs, rhs, acc ->
+        res = binary_to_number(lhs, t1) * binary_to_number(rhs, t2) + acc
+        {res, res}
     end)
   end
 
