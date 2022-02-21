@@ -534,6 +534,10 @@ defmodule Nx.BinaryBackend do
   end
 
   defp bin_dot_transpose_contract_axes(tensor, contract_axes) do
+    # The intution here is that we can pre-condense the contracting axes into a
+    # single dimension, which will then be contracted through bin_zip_reduce below.
+    # This takes a shape {a, m, n, b} which contracts on m, n and turns it into
+    # {m * n, a, b}, contracting on the first dimension.
     remaining_axes =
       contract_axes
       |> Enum.sort(:desc)
