@@ -9185,65 +9185,137 @@ defmodule Nx do
   ## Utilities
 
   @doc """
-  Saves a tensor or container of tensors to the given `path`.
+  Serializes the given tensor or container of tensors to a binary.
 
-  If `path` does not contain `.nx` file extension, it will be appended
-  to the file path.
+  You may pass a tensor, tuple, or map to serialize.
 
   `opts` controls the serialization options. For example, you can choose
   to compress the given tensor or container of tensors by passing a
   compression level:
 
-      Nx.save(tensor, "a.nx", compressed: 9)
+      Nx.serialize(tensor, compressed: 9)
 
-  Compression level corresponds to compression options in `:erlang.term_to_binary/2`. 
+  Compression level corresponds to compression options in `:erlang.term_to_binary/2`.
+
+  ## Examples
+
+      iex> a = Nx.tensor([1, 2, 3])
+      iex> serialized_a = Nx.serialize(a)
+      iex> Nx.deserialize(serialized_a)
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+
+      iex> container = {Nx.tensor([1, 2, 3]), %{b: Nx.tensor([4, 5, 6])}}
+      iex> serialized_container = Nx.serialize(container)
+      iex> {a, %{b: b}} = Nx.deserialize(serialized_container)
+      iex> a
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+      iex> b
+      #Nx.Tensor<
+        s64[3]
+        [4, 5, 6]
+      >
   """
-  def save(tensor_or_container, path, opts \\ []) do
-    term = {@file_version, System.endianness(), tensor_or_container}
+  def serialize(tensor_or_container, opts \\ []) do
+    data_term = to_term(tensor_or_container)
+    term = {@file_version, System.endianness(), data_term}
     term
     |> :erlang.term_to_binary(opts)
-    |> then(&File.write!(path, &1))
+  end
+
+  defp to_term(tensor_or_container) do
+    case tensor_or_container do
+      %T{} = tensor ->
+        shape = shape(tensor)
+        type = type(tensor)
+        names = names(tensor)
+        binary = to_binary(tensor)
+        {:tensor, shape, type, names, binary}
+
+      container when is_tuple(container) or is_map(container) ->
+        {serialized, :ok} =
+          Nx.Container.traverse(container, :ok, fn container_elem, :ok ->
+            {to_term(container_elem), :ok}
+          end)
+        {:container, serialized}
+
+      value ->
+        raise ArgumentError, "unable to serialize #{inspect(value)} as a tensor" <>
+                                " or container. Only tuples and maps are supported" <>
+                                " If you are attempting to serialize a custom container," <>
+                                " you will need to serialize fields in the container manually"
+    end
   end
 
   @doc """
-  Loads a tensor or container of tensors from the given `path`.
+  Deserializes a serialized representation of a tensor or a container
+  with the given options.
 
-  *NOTE:* This function deserializes values with `:erlang.binary_to_term/2`.
-  Thus, you should only load data from trusted sources.
+  It is the opposite of `Nx.serialize/2`.
+
+  ## Examples
+
+      iex> a = Nx.tensor([1, 2, 3])
+      iex> serialized_a = Nx.serialize(a)
+      iex> Nx.deserialize(serialized_a)
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+
+      iex> container = {Nx.tensor([1, 2, 3]), %{b: Nx.tensor([4, 5, 6])}}
+      iex> serialized_container = Nx.serialize(container)
+      iex> {a, %{b: b}} = Nx.deserialize(serialized_container)
+      iex> a
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+      iex> b
+      #Nx.Tensor<
+        s64[3]
+        [4, 5, 6]
+      >
   """
-  def load(path, opts \\ []) do
-    sys_endianness = System.endianness()
-    term =
-      path
-      |> File.read!()
-      |> :erlang.binary_to_term(opts ++ [:safe])
+  def deserialize(data, opts \\ []) do
+    data
+    |> :erlang.binary_to_term(opts ++ [:safe])
+    |> from_term()
+  end
 
+  defp from_term({1, endianness, term}) do
     case term do
-      {1, endianness, term} when endianness == sys_endianness ->
-        # endianness matches, so we can just return the term
-        term
-      {1, _, term} ->
-        # endianness does not match, so we need to traverse
-        # and convert byte order of each tensor
-        convert_endianness(term)
+      {:tensor, shape, {_, size} = type, names, binary} ->
+        if endianness == System.endianness() do
+          binary
+          |> from_binary(type)
+          |> reshape(shape, names: names)
+        else
+          binary
+          |> new_byte_order(size, endianness)
+          |> from_binary(type)
+          |> reshape(shape, names: names)
+        end
+
+      {:container, container} ->
+        {deserialized, :ok} =
+          Nx.Container.traverse(container, :ok, fn container_elem, :ok ->
+            {from_term({1, endianness, container_elem}), :ok}
+          end)
+        deserialized
+
+      _ ->
+        raise ArgumentError, "unable to deserialize binary term to tensor"
     end
   end
 
-  defp convert_endianness(value) do
-    case value do
-      %T{shape: shape, type: {_, size} = type} = value ->
-        data =
-          value
-          |> to_binary()
-          |> new_byte_order(size, System.endianness())
-
-        data
-        |> from_binary(type)
-        |> reshape(shape)
-
-      value ->
-        Nx.Container.traverse(value, :ok, fn x, :ok -> {convert_endianness(x), :ok} end)
-    end
+  defp from_term(_) do
+    raise ArgumentError, "unable to deserialize binary term to tensor"
   end
 
   @doc """
