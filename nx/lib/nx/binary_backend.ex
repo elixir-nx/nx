@@ -1901,6 +1901,10 @@ defmodule Nx.BinaryBackend do
     |> then(&from_binary(out, &1))
   end
 
+  defp bin_concatenate(binaries_with_shape, _size, 0, _output_shape) do
+    binaries_with_shape |> Enum.map(&elem(&1, 0)) |> IO.iodata_to_binary()
+  end
+
   defp bin_concatenate(binaries_with_shape, size, axis, output_shape) do
     rank = tuple_size(output_shape)
     steps = product_part(output_shape, 0, axis)
