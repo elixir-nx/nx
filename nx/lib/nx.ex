@@ -7180,7 +7180,6 @@ defmodule Nx do
         50.0
       >
 
-
   """
   @doc type: :ndim
   def dot(t1, contract_axes1, t2, contract_axes2) do
