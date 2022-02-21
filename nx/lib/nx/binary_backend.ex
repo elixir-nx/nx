@@ -538,7 +538,7 @@ defmodule Nx.BinaryBackend do
     # This takes a shape {a, m, n, b} which contracts on m, n and turns it into
     # {m * n, a, b}, contracting on the first dimension.
 
-    axes = Enum.to_list(0..(tuple_size(tensor.shape) - 1)//1)
+    axes = Nx.axes(tensor)
 
     remaining_axes =
       contract_axes
