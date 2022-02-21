@@ -520,84 +520,35 @@ defmodule Nx.BinaryBackend do
     from_binary(out, bin_result)
   end
 
-  defp bin_dot(
-         %{type: t1} = left,
-         [_] = contract_axes1,
-         %{type: t2} = right,
-         [_] = contract_axes2,
-         type
-       ) do
-    # base clause for when there's only one contracting axis
-    bin_zip_reduce(left, contract_axes1, right, contract_axes2, type, 0, fn lhs, rhs, acc ->
+  defp bin_dot(%{type: t1} = left, contract_axes1, %{type: t2} = right, contract_axes2, type) do
+    {left, left_contract_axes} = bin_dot_transpose_contract_axes(left, contract_axes1)
+
+    {right, right_contract_axes} = bin_dot_transpose_contract_axes(right, contract_axes2)
+
+    bin_zip_reduce(left, left_contract_axes, right, right_contract_axes, type, 0, fn lhs,
+                                                                                     rhs,
+                                                                                     acc ->
       res = binary_to_number(lhs, t1) * binary_to_number(rhs, t2) + acc
       {res, res}
     end)
   end
 
-  defp bin_dot(left, left_contracting_axes, right, right_contracting_axes, type) do
-    # First, we transpose the contracting axes to the inner dimensions.
-    # That is, we transpose the contracting axes of the left tensor to
-    # the rightmost dimensions and and the contracting axes of the right
-    # tensor to the leftmost dimensions.
-    # This is so we can intuively make an analogy with matrix multiplication
-    # in which A(m x n) . B(n x k) results in C(m x k).
-
-    left_axes = Nx.axes(left)
-    right_axes = Nx.axes(right)
-
-    remove_contracting_axes = fn axes, to_remove ->
-      to_remove
+  defp bin_dot_transpose_contract_axes(tensor, contract_axes) do
+    remaining_axes =
+      contract_axes
       |> Enum.sort(:desc)
-      |> Enum.reduce(axes, &List.delete_at(&2, &1))
-    end
+      |> Enum.reduce(Nx.axes(tensor), &List.delete_at(&2, &1))
 
-    left_remaining_axes = remove_contracting_axes.(left_axes, left_contracting_axes)
-    right_remaining_axes = remove_contracting_axes.(right_axes, right_contracting_axes)
+    transposed = Nx.transpose(tensor, axes: contract_axes ++ remaining_axes)
 
-    left_transpose_axes = left_remaining_axes ++ left_contracting_axes
+    {contracted, kept} =
+      transposed.shape
+      |> Tuple.to_list()
+      |> Enum.split(length(contract_axes))
 
-    {left_transposed_shape, _} = Nx.Shape.transpose(left.shape, left_transpose_axes, left.names)
+    reduced_shape = List.to_tuple([Enum.product(contracted) | kept])
 
-    left_transposed =
-      transpose(
-        %{left | shape: left_transposed_shape},
-        left,
-        left_transpose_axes
-      )
-
-    right_transpose_axes = right_contracting_axes ++ right_remaining_axes
-
-    {right_transposed_shape, _} =
-      Nx.Shape.transpose(right.shape, right_transpose_axes, right.names)
-
-    right_transposed =
-      transpose(
-        %{right | shape: right_transposed_shape},
-        right,
-        right_transpose_axes
-      )
-
-    {left_outer_axes, left_contracting_dims} =
-      left_transposed_shape |> Tuple.to_list() |> Enum.split(-length(left_contracting_axes))
-
-    left_reduced_shape =
-      left_outer_axes |> Enum.concat([Enum.product(left_contracting_dims)]) |> List.to_tuple()
-
-    {right_contracting_dims, right_outer_axes} =
-      right_transposed_shape |> Tuple.to_list() |> Enum.split(length(right_contracting_axes))
-
-    right_reduced_shape = List.to_tuple([Enum.product(right_contracting_dims) | right_outer_axes])
-
-    IO.inspect(left_reduced_shape, label: "left_reduced_shape")
-    IO.inspect(right_reduced_shape, label: "right_reduced_shape")
-
-    bin_dot(
-      %{left_transposed | shape: left_reduced_shape},
-      [-1],
-      %{right_transposed | shape: right_reduced_shape},
-      [0],
-      type
-    )
+    {Nx.reshape(transposed, reduced_shape), [0]}
   end
 
   ## Element wise ternary ops

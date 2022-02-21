@@ -1109,13 +1109,39 @@ defmodule NxTest do
     end
   end
 
+  describe "dot/4" do
+    test "does not re-sort the contracting axes" do
+      left = Nx.iota({2, 7, 8, 3, 1})
+      right = Nx.iota({1, 8, 3, 7, 3})
+
+      result = Nx.dot(left, [3, 1, 2], right, [2, 3, 1])
+
+      assert {2, 1, 1, 3} == result.shape
+
+      # Expected result obtained from pytorch
+      assert result ==
+               Nx.tensor([
+                 [
+                   [
+                     [3_731_448, 3_745_476, 3_759_504]
+                   ]
+                 ],
+                 [
+                   [
+                     [10_801_560, 10_843_812, 10_886_064]
+                   ]
+                 ]
+               ])
+    end
+  end
+
   describe "dot/6" do
     test "works with batched dot and different size non-batch dims" do
       t1 = Nx.iota({3, 2, 4, 1})
       t2 = Nx.iota({3, 4, 2, 2})
 
       assert Nx.dot(t1, [1, 2], [0], t2, [2, 1], [0]) ==
-               Nx.tensor([[[280, 308]], [[2200, 2292]], [[6168, 6324]]])
+               Nx.tensor([[[252, 280]], [[2172, 2264]], [[6140, 6296]]])
     end
 
     test "works with multiple batch dimensions" do
