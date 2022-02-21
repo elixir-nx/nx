@@ -9224,6 +9224,7 @@ defmodule Nx do
   def serialize(tensor_or_container, opts \\ []) do
     data_term = to_term(tensor_or_container)
     term = {@file_version, System.endianness(), data_term}
+
     term
     |> :erlang.term_to_binary(opts)
   end
@@ -9242,13 +9243,15 @@ defmodule Nx do
           Nx.Container.traverse(container, :ok, fn container_elem, :ok ->
             {to_term(container_elem), :ok}
           end)
+
         {:container, serialized}
 
       value ->
-        raise ArgumentError, "unable to serialize #{inspect(value)} as a tensor" <>
-                                " or container. Only tuples and maps are supported" <>
-                                " If you are attempting to serialize a custom container," <>
-                                " you will need to serialize fields in the container manually"
+        raise ArgumentError,
+              "unable to serialize #{inspect(value)} as a tensor" <>
+                " or container. Only tuples and maps are supported" <>
+                " If you are attempting to serialize a custom container," <>
+                " you will need to serialize fields in the container manually"
     end
   end
 
@@ -9307,6 +9310,7 @@ defmodule Nx do
           Nx.Container.traverse(container, :ok, fn container_elem, :ok ->
             {from_term({1, endianness, container_elem}), :ok}
           end)
+
         deserialized
 
       _ ->
