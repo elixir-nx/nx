@@ -195,8 +195,16 @@ defmodule EXLA do
   the `EXLA` compiler with the client as the compilers for `Nx.Defn`.
   If no client is found, `EXLA` is not set as compiler at all,
   therefore it is common to add `:host` as the last option.
+
+  If additional options are given, they are given as compiler options:
+
+      EXLA.set_preferred_defn_options(
+        [:tpu, :cuda, :rocm, :host],
+        run_options: [keep_on_device: true]
+      )
+
   """
-  def set_preferred_defn_options(clients) do
+  def set_preferred_defn_options(clients, opts \\ []) do
     supported_platforms = EXLA.Client.get_supported_platforms()
     all_clients = Application.fetch_env!(:exla, :clients)
 
@@ -208,7 +216,7 @@ defmodule EXLA do
       end)
 
     if chosen do
-      Nx.Defn.global_default_options(compiler: EXLA, client: chosen)
+      Nx.Defn.global_default_options(Keyword.merge(opts, compiler: EXLA, client: chosen))
       chosen
     end
   end
