@@ -4946,9 +4946,9 @@ defmodule Nx do
         [3.0]
       >
 
-      iex> Nx.indexed_add(Nx.tensor([1], type: {:u, 32}), Nx.tensor([[0], [0]]), Nx.tensor([1, 1], type: {:u, 64}))
+      iex> Nx.indexed_add(Nx.tensor([1], type: {:s, 32}), Nx.tensor([[0], [0]]), Nx.tensor([1, 1], type: {:s, 64}))
       #Nx.Tensor<
-        u64[1]
+        s64[1]
         [3]
       >
 

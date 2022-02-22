@@ -371,10 +371,16 @@ defmodule Torchx.Backend do
   def indexed_add(out, tensor, indices, updates) do
     linear_indices_tx = as_torchx_linear_indices(tensor.shape, indices)
 
+    updates_tx =
+      updates
+      |> from_nx()
+      |> Torchx.to_type(to_torch_type(out.type))
+
     tensor
     |> from_nx()
+    |> Torchx.to_type(to_torch_type(out.type))
     |> Torchx.reshape({Tuple.product(tensor.shape)})
-    |> Torchx.indexed_add(linear_indices_tx, from_nx(updates), 0)
+    |> Torchx.indexed_add(linear_indices_tx, updates_tx, 0)
     |> Torchx.reshape(out.shape)
     |> to_nx(out)
   end
