@@ -3075,6 +3075,9 @@ defmodule Nx do
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `+` operator
+  in place of this function: `left + right`.
+
   ## Examples
 
   ### Adding scalars
@@ -3276,8 +3279,8 @@ defmodule Nx do
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
 
-  If you're using `Nx.Defn.defn/2`, you can use the `Nx.Defn.Kernel.*/2`
-  operator in place of this function.
+  If you're using `Nx.Defn.defn/2`, you can use the `*` operator
+  operator in place of this function as `left * right`.
 
   ## Examples
 
@@ -3401,6 +3404,9 @@ defmodule Nx do
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `rem/2` function
+  in place of this function: `rem(left, right)`.
+
   ## Examples
 
   ### Remainder of scalars
@@ -3454,6 +3460,9 @@ defmodule Nx do
 
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
+
+  If you're using `Nx.Defn.defn/2`, you can use the `/` operator
+  in place of this function: `left / right`.
 
   ## Examples
 
@@ -3677,6 +3686,9 @@ defmodule Nx do
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `max/2` function
+  in place of this function: `max(left, right)`.
+
   ## Examples
 
   ### Max between scalars
@@ -3747,6 +3759,9 @@ defmodule Nx do
 
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
+
+  If you're using `Nx.Defn.defn/2`, you can use the `min/2` function
+  in place of this function: `min(left, right)`.
 
   ## Examples
 
@@ -3832,6 +3847,9 @@ defmodule Nx do
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `&&&` operator
+  in place of this function: `left &&& right`.
+
   ## Examples
 
   ### bitwise and between scalars
@@ -3881,6 +3899,9 @@ defmodule Nx do
 
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
+
+  If you're using `Nx.Defn.defn/2`, you can use the `|||` operator
+  in place of this function: `left ||| right`.
 
   ## Examples
 
@@ -3986,6 +4007,9 @@ defmodule Nx do
   shifts are negative, Nx's default backend will raise,
   but it may trigger undefined behaviour in other backends.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `<<<` operator
+  in place of this function: `left <<< right`.
+
   ## Examples
 
   ### Left shift between scalars
@@ -4041,6 +4065,9 @@ defmodule Nx do
   shifts are negative, Nx's default backend will raise,
   but it may trigger undefined behaviour in other backends.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `>>>` operator
+  in place of this function: `left >>> right`.
+
   ## Examples
 
   ### Right shift between scalars
@@ -4086,6 +4113,9 @@ defmodule Nx do
 
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
+
+  If you're using `Nx.Defn.defn/2`, you can use the `==` operator
+  in place of this function: `left == right`.
 
   ## Examples
 
@@ -4138,6 +4168,9 @@ defmodule Nx do
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `and/ operator
+  in place of this function: `left and right`.
+
   ## Examples
 
       iex> Nx.logical_and(1, Nx.tensor([-1, 0, 1], names: [:data]))
@@ -4181,6 +4214,9 @@ defmodule Nx do
 
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
+
+  If you're using `Nx.Defn.defn/2`, you can use the `or` operator
+  in place of this function: `left or right`.
 
   ## Examples
 
@@ -4268,6 +4304,9 @@ defmodule Nx do
   Zero is considered false, any other number is considered
   true.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `not` operator
+  in place of this function: `not tensor`.
+
   ## Examples
 
       iex> Nx.logical_not(Nx.tensor([-1, 0, 1], names: [:data]))
@@ -4309,6 +4348,9 @@ defmodule Nx do
 
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
+
+  If you're using `Nx.Defn.defn/2`, you can use the `!=` operator
+  in place of this function: `left != right`.
 
   ## Examples
 
@@ -4360,6 +4402,9 @@ defmodule Nx do
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `>` operator
+  in place of this function: `left > right`.
+
   ## Examples
 
   ### Comparison of scalars
@@ -4410,6 +4455,9 @@ defmodule Nx do
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `<` operator
+  in place of this function: `left < right`.
+
   ## Examples
 
   ### Comparison of scalars
@@ -4444,6 +4492,7 @@ defmodule Nx do
           [0, 0, 1]
         ]
       >
+
   """
   @doc type: :element
   def less(left, right), do: element_wise_pred_op(left, right, :less)
@@ -4455,6 +4504,9 @@ defmodule Nx do
 
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
+
+  If you're using `Nx.Defn.defn/2`, you can use the `>=` operator
+  in place of this function: `left >= right`.
 
   ## Examples
 
@@ -4494,6 +4546,7 @@ defmodule Nx do
           [1, 1, 1]
         ]
       >
+
   """
   @doc type: :element
   def greater_equal(left, right), do: element_wise_pred_op(left, right, :greater_equal)
@@ -4505,6 +4558,9 @@ defmodule Nx do
 
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
+
+  If you're using `Nx.Defn.defn/2`, you can use the `<=` operator
+  in place of this function: `left <= right`.
 
   ## Examples
 
@@ -4544,6 +4600,7 @@ defmodule Nx do
           [0, 0, 0]
         ]
       >
+
   """
   @doc type: :element
   def less_equal(left, right), do: element_wise_pred_op(left, right, :less_equal)
@@ -4968,6 +5025,9 @@ defmodule Nx do
   @doc """
   Negates each element in the tensor.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `-` unary operator
+  in place of this function: `-tensor`.
+
   ## Examples
 
       iex> Nx.negate(1)
@@ -5050,6 +5110,9 @@ defmodule Nx do
 
   @doc """
   Applies bitwise not to each element in the tensor.
+
+  If you're using `Nx.Defn.defn/2`, you can use the `~~~` operator
+  in place of this function: `~~~tensor`.
 
   ## Examples
 
