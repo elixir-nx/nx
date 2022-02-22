@@ -1947,6 +1947,16 @@ defmodule NxTest do
     end
   end
 
+  describe "gather" do
+    test "raises when out of bounds" do
+      t = Nx.tensor([[1, 2], [3, 4]])
+
+      assert_raise ArgumentError, "index 10 is out of bounds for axis 0 in shape [2]", fn ->
+        Nx.gather(t, Nx.tensor([[10, -10]]))
+      end
+    end
+  end
+
   describe "variance/1" do
     test "calculates variance of a tensor" do
       t = Nx.tensor([[4, 5], [2, 3], [1, 0]])

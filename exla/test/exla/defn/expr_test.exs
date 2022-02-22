@@ -2737,9 +2737,12 @@ defmodule EXLA.Defn.ExprTest do
                Nx.tensor([[0, 0, 0], [0, 1, 1], [1, 1, 1]])
              ) ==
                Nx.tensor([1, 12, 112])
+
+      assert gather(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[-1, -1], [10, 11], [-1, 10]])) ==
+               Nx.tensor([1, 4, 2])
     end
 
-    test "2d indices" do
+    test "2d result" do
       assert gather(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[[1, 1], [0, 0]], [[1, 0], [0, 1]]])) ==
                Nx.tensor([[4, 1], [3, 2]])
     end
