@@ -56,11 +56,11 @@ defmodule EXLA do
         tpu: [platform: :tpu]
 
   In scripts and code notebooks, you can call
-  `EXLA.set_preferred_defn_options/1`, which will traverse the list
+  `EXLA.set_as_nx_default/1`, which will traverse the list
   of clients and enable the `EXLA` compiler with the first client
   available as the default `defn` options:
 
-      EXLA.set_preferred_defn_options([:tpu, :cuda, :rocm, :host])
+      EXLA.set_as_nx_default([:tpu, :cuda, :rocm, :host])
 
   > **Important!** you should avoid using multiple clients for the
   > same platform. If you have multiple clients per platform, they
@@ -189,7 +189,7 @@ defmodule EXLA do
 
   ## Examples
 
-      EXLA.set_preferred_defn_options([:tpu, :cuda, :rocm, :host])
+      EXLA.set_as_nx_default([:tpu, :cuda, :rocm, :host])
 
   The above will try to find the first client available and set
   the `EXLA` compiler with the client as the compilers for `Nx.Defn`.
@@ -198,13 +198,13 @@ defmodule EXLA do
 
   If additional options are given, they are given as compiler options:
 
-      EXLA.set_preferred_defn_options(
+      EXLA.set_as_nx_default(
         [:tpu, :cuda, :rocm, :host],
         run_options: [keep_on_device: true]
       )
 
   """
-  def set_preferred_defn_options(clients, opts \\ []) do
+  def set_as_nx_default(clients, opts \\ []) do
     supported_platforms = EXLA.Client.get_supported_platforms()
     all_clients = Application.fetch_env!(:exla, :clients)
 
@@ -219,6 +219,12 @@ defmodule EXLA do
       Nx.Defn.global_default_options(Keyword.merge(opts, compiler: EXLA, client: chosen))
       chosen
     end
+  end
+
+  @doc false
+  @deprecated "Use set_as_nx_default/2 instead"
+  def set_preferred_defn_options(clients, opts \\ []) do
+    set_as_nx_default(clients, opts)
   end
 
   @doc """
