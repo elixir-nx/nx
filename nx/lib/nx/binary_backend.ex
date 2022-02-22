@@ -521,10 +521,55 @@ defmodule Nx.BinaryBackend do
   end
 
   defp bin_dot(%{type: t1} = left, contract_axes1, %{type: t2} = right, contract_axes2, type) do
-    bin_zip_reduce(left, contract_axes1, right, contract_axes2, type, 0, fn lhs, rhs, acc ->
-      res = binary_to_number(lhs, t1) * binary_to_number(rhs, t2) + acc
-      {res, res}
+    {left, left_contract_axes} = bin_dot_transpose_contract_axes(left, contract_axes1)
+
+    {right, right_contract_axes} = bin_dot_transpose_contract_axes(right, contract_axes2)
+
+    bin_zip_reduce(left, left_contract_axes, right, right_contract_axes, type, 0, fn
+      lhs, rhs, acc ->
+        res = binary_to_number(lhs, t1) * binary_to_number(rhs, t2) + acc
+        {res, res}
     end)
+  end
+
+  defp bin_dot_transpose_contract_axes(tensor, contract_axes) do
+    # The intution here is that we can pre-condense the contracting axes into a
+    # single dimension, which will then be contracted through bin_zip_reduce below.
+    # This takes a shape {a, m, n, b} which contracts on m, n and turns it into
+    # {a, b, m * n}, contracting on the last dimension. This is necessary because
+    # bin_zip_reduce and aggregate_axes are order independent but dot depends
+    # on the axes order.
+
+    axes = Nx.axes(tensor)
+
+    remaining_axes =
+      contract_axes
+      |> Enum.sort(:desc)
+      |> Enum.reduce(axes, &List.delete_at(&2, &1))
+
+    transpose_axes = remaining_axes ++ contract_axes
+
+    transposed =
+      if transpose_axes == axes do
+        tensor
+      else
+        {shape, names} = Nx.Shape.transpose(tensor.shape, transpose_axes, tensor.names)
+        transpose(%{tensor | shape: shape, names: names}, tensor, transpose_axes)
+      end
+
+    {kept, contracted} =
+      transposed.shape
+      |> Tuple.to_list()
+      |> Enum.split(length(remaining_axes))
+
+    kept_shape = List.to_tuple(kept)
+
+    kept_size = tuple_size(kept_shape)
+
+    reduced_shape = Tuple.insert_at(kept_shape, kept_size, Enum.product(contracted))
+
+    {%{transposed | shape: reduced_shape, names: List.duplicate(nil, tuple_size(reduced_shape))},
+     [kept_size]}
   end
 
   ## Element wise ternary ops

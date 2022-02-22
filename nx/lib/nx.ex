@@ -7201,6 +7201,14 @@ defmodule Nx do
         ]
       >
 
+      iex> t1 = Nx.tensor([[0.0, 1.0, 2.0], [3.0, 4.0, 5.0]])
+      iex> t2 = Nx.tensor([[0.0, 1.0], [2.0, 3.0], [4.0, 5.0]])
+      iex> Nx.dot(t1, [0, 1], t2, [1, 0])
+      #Nx.Tensor<
+        f32
+        50.0
+      >
+
   """
   @doc type: :ndim
   def dot(t1, contract_axes1, t2, contract_axes2) do
