@@ -357,31 +357,46 @@ defmodule Torchx.Backend do
 
   @impl true
   def gather(out, tensor, idx) do
+    linear_indices_tx = as_torchx_linear_indices(tensor.shape, idx)
+
+    tensor
+    |> from_nx()
+    |> Torchx.reshape({Tuple.product(tensor.shape)})
+    |> Torchx.gather(linear_indices_tx, 0)
+    |> Torchx.reshape(out.shape)
+    |> to_nx(out)
+  end
+
+  @impl true
+  def indexed_add(out, tensor, indices, updates) do
+    linear_indices_tx = as_torchx_linear_indices(tensor.shape, indices)
+
+    tensor
+    |> from_nx()
+    |> Torchx.reshape({Tuple.product(tensor.shape)})
+    |> Torchx.indexed_add(linear_indices_tx, from_nx(updates), 0)
+    |> Torchx.reshape(out.shape)
+    |> to_nx(out)
+  end
+
+  defp as_torchx_linear_indices(shape, idx) do
     # Nx provides indices as a tensor of shape {*, input_dims}
     # However, torch expects indices to be a tensor of indices along a given axis.
     # As such, we need to convert the indices tensor to linear indices.
     # See the function below for an explanation on the offsets calculation
 
     linear_indices_offsets =
-      tensor.shape
+      shape
       |> linear_indices_offsets()
       |> from_nx()
 
     lin_idx_num_elements =
       idx.shape |> Tuple.delete_at(tuple_size(idx.shape) - 1) |> Tuple.product()
 
-    linear_indices =
-      idx
-      |> from_nx()
-      |> Torchx.tensordot(linear_indices_offsets, [tuple_size(idx.shape) - 1], [0])
-      |> Torchx.reshape({lin_idx_num_elements})
-
-    tensor
+    idx
     |> from_nx()
-    |> Torchx.reshape({Tuple.product(tensor.shape)})
-    |> Torchx.gather(linear_indices, 0)
-    |> Torchx.reshape(out.shape)
-    |> to_nx(out)
+    |> Torchx.tensordot(linear_indices_offsets, [tuple_size(idx.shape) - 1], [0])
+    |> Torchx.reshape({lin_idx_num_elements})
   end
 
   defp linear_indices_offsets(shape) do
