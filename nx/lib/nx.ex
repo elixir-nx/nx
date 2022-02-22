@@ -3208,6 +3208,9 @@ defmodule Nx do
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `-` operator
+  in place of this function: `left - right`.
+
   ## Examples
 
   ### Subtracting scalars
@@ -4168,7 +4171,7 @@ defmodule Nx do
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
 
-  If you're using `Nx.Defn.defn/2`, you can use the `and/ operator
+  If you're using `Nx.Defn.defn/2`, you can use the `and` operator
   in place of this function: `left and right`.
 
   ## Examples
