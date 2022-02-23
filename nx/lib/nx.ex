@@ -8688,6 +8688,7 @@ defmodule Nx do
   """
   @doc type: :indexed
   def gather(tensor, indices) do
+    
     tensor = to_tensor(tensor)
     indices = to_tensor(indices)
 
