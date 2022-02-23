@@ -9307,6 +9307,10 @@ defmodule Nx do
 
   defp to_term(tensor_or_container) do
     case tensor_or_container do
+      number when is_number(number) ->
+        type = Nx.Type.infer(number)
+        {:tensor, {}, type, [], number_to_binary(number, type)}
+
       %T{} = tensor ->
         shape = shape(tensor)
         type = type(tensor)

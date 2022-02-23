@@ -1903,6 +1903,11 @@ defmodule NxTest do
         Nx.serialize(%Container{})
       end
     end
+
+    test "serializes numbers" do
+      assert Nx.deserialize(Nx.serialize(123)) == Nx.tensor(123)
+      assert Nx.deserialize(Nx.serialize(1.2)) == Nx.tensor(1.2)
+    end
   end
 
   describe "sigils" do
