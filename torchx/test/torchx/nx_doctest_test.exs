@@ -16,26 +16,16 @@ defmodule Torchx.NxDoctestTest do
   end
 
   @temporarily_broken_doctests [
-    # argmax - tie_break option not supported
-    argmax: 2,
-    # argmin - tie_break option not supported
-    argmin: 2,
     # broadcast - shape mismatch in one test
     broadcast: 3,
     # dot - Batching not supported
     dot: 6,
     # make_diagonal - depends on indexed_add
     make_diagonal: 2,
-    # mean - Torchx expects a input tensor but receives a number as input
+    # mean - Torchx does not support unsigned 64 bit integer
     mean: 2,
-    # quotient - Torchx expects a input tensor but receives a number as input
+    # quotient - Torchx does not support unsigned 32 bit integer
     quotient: 2,
-    # slice - expects numerical start indices, but now receives tensors,
-    slice: 4,
-    # slice_along_axis - expects scalar starts and receives tensors
-    slice_along_axis: 4,
-    # stack - fails in some tests
-    stack: 2,
     # window_mean - depends on window_sum which is not implemented
     window_mean: 3,
     # require Elixir 1.13+
@@ -76,15 +66,14 @@ defmodule Torchx.NxDoctestTest do
     map: 3,
     window_reduce: 5,
     reduce: 4,
+    # incomplete support
+    pad: 3,
     # product - some output/input types are unsupported by libtorch
     product: 2
   ]
 
   @pending_doctests [
-    cbrt: 1,
-    conv: 3,
     indexed_add: 3,
-    pad: 3,
     put_slice: 3,
     window_max: 3,
     window_min: 3,

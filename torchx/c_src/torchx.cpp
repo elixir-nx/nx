@@ -670,6 +670,20 @@ NIF(argmin)
   }
 }
 
+NIF(cbrt)
+{
+  TENSOR_PARAM(0, tensor);
+
+  if (tensor->scalar_type() == torch::kDouble)
+  {
+    TENSOR(torch::pow(*tensor, 1.0 / 3));
+  }
+  else
+  {
+    TENSOR(torch::pow(*tensor, 1.0f / 3));
+  }
+}
+
 NIF(all)
 {
   TENSOR_PARAM(0, t);
@@ -714,6 +728,14 @@ NIF(cholesky)
   TENSOR(torch::cholesky(*t, upper));
 }
 
+NIF(pad)
+{
+  TENSOR_PARAM(0, tensor)
+  LIST_PARAM(1, std::vector<int64_t>, config)
+  SCALAR_PARAM(2, constant)
+
+  TENSOR(torch::constant_pad_nd(*tensor, config, constant));
+}
 
 /* Transformations */
 
@@ -784,6 +806,34 @@ NIF(solve)
   TENSOR_PARAM(1, tensorB);
 
   TENSOR(torch::linalg_solve(*tensorA, *tensorB));
+}
+
+NIF(conv)
+{
+  TENSOR_PARAM(0, tensor);
+  TENSOR_PARAM(1, kernel);
+
+  LIST_PARAM(2, std::vector<int64_t>, stride);
+  LIST_PARAM(3, std::vector<int64_t>, padding);
+  LIST_PARAM(4, std::vector<int64_t>, dilation);
+  PARAM(5, bool, transposed);
+  PARAM(6, int64_t, groups);
+
+  c10::optional<at::Tensor> bias_tensor;
+
+  std::vector<int64_t> output_padding;
+  output_padding.push_back(0);
+
+  // aten::_convolution(Tensor input, Tensor weight, Tensor? bias,
+  //      int[] stride, int[] padding, int[] dilation, bool transposed,
+  //      int[] output_padding, int groups, bool benchmark, bool deterministic, bool cudnn_enabled, bool allow_tf32) -> Tensor
+  TENSOR(at::_convolution(*tensor, *kernel, bias_tensor,
+    stride, padding, dilation, transposed, output_padding, groups,
+    true,   // benchmark
+    false,   // deterministic
+    false,  // cudnn_enabled
+    false   // allow_tf32
+  ));
 }
 
 void free_tensor(ErlNifEnv *env, void *obj)
@@ -938,9 +988,11 @@ static ErlNifFunc nif_functions[] = {
     DF(erf, 1),
     DF(erfc, 1),
     DF(erf_inv, 1),
+    DF(cbrt, 1),
 
     DF(tensordot, 4),
     DF(matmul, 2),
+    DF(pad, 3),
 
     DF(cholesky, 1),
     DF(cholesky, 2),
@@ -957,6 +1009,8 @@ static ErlNifFunc nif_functions[] = {
     DF(where, 3),
     DF(amax, 3),
     DF(amin, 3),
+
+    DF(conv, 7),
 
     F(cuda_is_available, 0),
     F(cuda_device_count, 0),

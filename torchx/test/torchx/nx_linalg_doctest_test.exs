@@ -15,7 +15,9 @@ defmodule Torchx.NxLinAlgDoctestTest do
     cholesky: 1,
     matrix_power: 2,
     qr: 2,
-    triangular_solve: 3
+    triangular_solve: 3,
+    solve: 2,
+    invert: 1
   ]
 
   # Results do not match but properties are respected

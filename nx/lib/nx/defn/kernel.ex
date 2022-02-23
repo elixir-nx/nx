@@ -662,6 +662,8 @@ defmodule Nx.Defn.Kernel do
   @doc """
   Element-wise equality operation.
 
+  It delegates to `Nx.equal/2`.
+
   ## Examples
 
       defn check_equality(a, b) do
@@ -677,11 +679,14 @@ defmodule Nx.Defn.Kernel do
   @doc """
   Element-wise inequality operation.
 
+  It delegates to `Nx.not_equal/2`.
+
   ## Examples
 
       defn check_inequality(a, b) do
         a != b
       end
+
   """
   def left != right when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.!=(left, right))
@@ -691,11 +696,14 @@ defmodule Nx.Defn.Kernel do
   @doc """
   Element-wise less than operation.
 
+  It delegates to `Nx.less/2`.
+
   ## Examples
 
       defn check_less_than(a, b) do
         a < b
       end
+
   """
   def left < right when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.<(left, right))
@@ -705,11 +713,14 @@ defmodule Nx.Defn.Kernel do
   @doc """
   Element-wise greater than operation.
 
+  It delegates to `Nx.greater/2`.
+
   ## Examples
 
       defn check_greater_than(a, b) do
         a > b
       end
+
   """
   def left > right when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.>(left, right))
@@ -719,11 +730,14 @@ defmodule Nx.Defn.Kernel do
   @doc """
   Element-wise less-equal operation.
 
+  It delegates to `Nx.less_equal/2`.
+
   ## Examples
 
       defn check_less_equal(a, b) do
         a <= b
       end
+
   """
   def left <= right when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.<=(left, right))
@@ -733,11 +747,14 @@ defmodule Nx.Defn.Kernel do
   @doc """
   Element-wise greater-equal operation.
 
+  It delegates to `Nx.greater_equal/2`.
+
   ## Examples
 
       defn check_greater_equal(a, b) do
         a >= b
       end
+
   """
   def left >= right when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.>=(left, right))

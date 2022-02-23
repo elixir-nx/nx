@@ -28,7 +28,7 @@ defmodule EXLA.DeviceBackend do
   def from_binary(%T{shape: shape, type: type} = tensor, binary, opts) do
     {client, device_id} = client_and_device_id(opts)
     shape = EXLA.Shape.make_shape(type, shape)
-    buffer = EXLA.Buffer.place_on_device(binary, shape, client, device_id)
+    buffer = EXLA.DeviceBuffer.place_on_device(binary, shape, client, device_id)
     put_in(tensor.data, %DB{buffer: buffer})
   end
 
@@ -39,7 +39,7 @@ defmodule EXLA.DeviceBackend do
 
   # TODO: Support direct transfers without going through Elixir
   def backend_copy(%T{data: %DB{buffer: buffer}} = tensor, backend, opts) do
-    backend.from_binary(tensor, EXLA.Buffer.read(buffer), opts)
+    backend.from_binary(tensor, EXLA.DeviceBuffer.read(buffer), opts)
   end
 
   @impl true
@@ -50,24 +50,24 @@ defmodule EXLA.DeviceBackend do
       try do
         backend_copy(tensor, backend, opts)
       after
-        EXLA.Buffer.deallocate(buffer)
+        EXLA.DeviceBuffer.deallocate(buffer)
       end
     end
   end
 
   @impl true
   def backend_deallocate(%T{data: %DB{buffer: buffer}}) do
-    EXLA.Buffer.deallocate(buffer)
+    EXLA.DeviceBuffer.deallocate(buffer)
   end
 
   @impl true
   def to_binary(%T{data: %DB{buffer: buffer}, type: {_, size}}, limit) do
-    EXLA.Buffer.read(buffer, limit * div(size, 8))
+    EXLA.DeviceBuffer.read(buffer, limit * div(size, 8))
   end
 
   @impl true
   def inspect(%T{data: %DB{buffer: buffer}}, _opts) do
-    %EXLA.Buffer{client_name: client_name, device_id: device_id, ref: ref} = buffer
+    %EXLA.DeviceBuffer{client_name: client_name, device_id: device_id, ref: ref} = buffer
     '#Ref<' ++ rest = :erlang.ref_to_list(ref)
     "EXLA.DeviceBackend<#{client_name}:#{device_id}, " <> List.to_string(rest)
   end

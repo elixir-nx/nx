@@ -238,6 +238,7 @@ defmodule Torchx do
   deftensor erf(tensor)
   deftensor erfc(tensor)
   deftensor erf_inv(tensor)
+  deftensor cbrt(tensor)
 
   deftensor abs(tensor)
   deftensor bitwise_not(tensor)
@@ -246,6 +247,8 @@ defmodule Torchx do
   deftensor negate(tensor)
   deftensor round(tensor)
   deftensor sign(tensor)
+
+  deftensor pad(tensor, config, constant)
 
   ## LinAlg
 
@@ -261,7 +264,9 @@ defmodule Torchx do
   deftensor determinant(tensor)
   deftensor sort(tensor, axis, descending)
   deftensor clip(tensor, tensor_min, tensor_max)
-  deftensor solve(tensora, tensorb)
+  deftensor solve(tensor_a, tensor_b)
+
+  deftensor conv(tensor_input, tensor_kernel, strides, padding, dilation, transposed, groups)
 
   ## Dirty non-tensor return values
 

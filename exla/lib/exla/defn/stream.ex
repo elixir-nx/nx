@@ -147,7 +147,8 @@ defmodule EXLA.Defn.Stream do
 
         {:DOWN, ^outfeed_ref, _, _, _} ->
           fun = if keep_on_device, do: & &1, else: &Nx.backend_transfer/1
-          EXLA.Defn.Buffers.to_nx!(EXLA.Defn.Runner.read(runner), done, fun)
+          [result] = EXLA.Defn.Runner.read(runner)
+          EXLA.Defn.Buffers.to_nx!(result, done, fun)
       end
     end
   end

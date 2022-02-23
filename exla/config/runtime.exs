@@ -9,5 +9,5 @@ config :exla, :clients,
 config :nx, :default_defn_options, compiler: EXLA, client: String.to_atom(target)
 
 config :logger, :console,
-  format: "\n$time [$level] $metadata $levelpad$message\n",
+  format: "\n$time [$level] $metadata $message\n",
   metadata: [:domain, :file, :line]

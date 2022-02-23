@@ -293,6 +293,8 @@ defmodule Nx do
   @type axis :: Nx.Tensor.axis()
   @type axes :: Nx.Tensor.axes()
 
+  @file_version 1
+
   ## Creation API
 
   @doc """
@@ -1454,6 +1456,9 @@ defmodule Nx do
   @doc """
   Returns the underlying tensor as a flat list.
 
+  Negative infinity, infinity, and NaN will be respectively returned
+  as the atoms `:neg_infinity`, `:infinity`, and `:nan`.
+
   ## Examples
 
       iex> Nx.to_flat_list(1)
@@ -1465,13 +1470,18 @@ defmodule Nx do
       iex> Nx.to_flat_list(Nx.tensor([1.0, 2.0, 3.0]), limit: 2)
       [1.0, 2.0]
 
+  Non-finite numbers are returned as atoms:
+
+      iex> t = Nx.tensor([Nx.Constants.neg_infinity(), Nx.Constants.nan(), Nx.Constants.infinity()])
+      iex> Nx.to_flat_list(t)
+      [:neg_infinity, :nan, :infinity]
+
   """
   @doc type: :conversion
   def to_flat_list(tensor, opts \\ []) do
     opts = keyword!(opts, [:limit])
     %{type: {_, size} = type} = tensor = to_tensor(tensor)
 
-    # TODO: Simplify loop once nonfinite are officially supported in the VM
     for <<part::size(size)-bitstring <- to_binary(tensor, Keyword.take(opts, [:limit]))>> do
       match_types [type] do
         <<match!(var, 0)>> = part
@@ -2756,6 +2766,35 @@ defmodule Nx do
   end
 
   @doc """
+  Returns the index of the given axis in the tensor.
+
+  ### Examples
+
+      iex> Nx.axis_index(Nx.iota({100, 10, 20}), 0)
+      0
+
+      iex> Nx.axis_index(Nx.iota({100, 10, 20}), -1)
+      2
+
+      iex> Nx.axis_index(Nx.iota({100, 10, 20}, names: [:batch, :x, :y]), :x)
+      1
+
+  ### Error cases
+
+      iex> Nx.axis_index(Nx.iota({100, 10, 20}), 3)
+      ** (ArgumentError) given axis (3) invalid for shape with rank 3
+
+      iex> Nx.axis_index(Nx.iota({100, 10, 20}, names: [:batch, :x, :y]), :z)
+      ** (ArgumentError) key :z not found in tensor with names [:batch, :x, :y]
+
+  """
+  @doc type: :shape
+  def axis_index(tensor, axis) do
+    shape = shape(tensor)
+    Nx.Shape.normalize_axis(shape, axis, names(tensor))
+  end
+
+  @doc """
   Returns the number of elements in the tensor.
 
   If a tuple is given as a shape, it computes the size
@@ -3038,6 +3077,9 @@ defmodule Nx do
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `+` operator
+  in place of this function: `left + right`.
+
   ## Examples
 
   ### Adding scalars
@@ -3168,6 +3210,9 @@ defmodule Nx do
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `-` operator
+  in place of this function: `left - right`.
+
   ## Examples
 
   ### Subtracting scalars
@@ -3238,6 +3283,9 @@ defmodule Nx do
 
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
+
+  If you're using `Nx.Defn.defn/2`, you can use the `*` operator
+  operator in place of this function as `left * right`.
 
   ## Examples
 
@@ -3361,6 +3409,9 @@ defmodule Nx do
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `rem/2` function
+  in place of this function: `rem(left, right)`.
+
   ## Examples
 
   ### Remainder of scalars
@@ -3414,6 +3465,9 @@ defmodule Nx do
 
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
+
+  If you're using `Nx.Defn.defn/2`, you can use the `/` operator
+  in place of this function: `left / right`.
 
   ## Examples
 
@@ -3637,6 +3691,9 @@ defmodule Nx do
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `max/2` function
+  in place of this function: `max(left, right)`.
+
   ## Examples
 
   ### Max between scalars
@@ -3707,6 +3764,9 @@ defmodule Nx do
 
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
+
+  If you're using `Nx.Defn.defn/2`, you can use the `min/2` function
+  in place of this function: `min(left, right)`.
 
   ## Examples
 
@@ -3792,6 +3852,9 @@ defmodule Nx do
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `&&&` operator
+  in place of this function: `left &&& right`.
+
   ## Examples
 
   ### bitwise and between scalars
@@ -3841,6 +3904,9 @@ defmodule Nx do
 
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
+
+  If you're using `Nx.Defn.defn/2`, you can use the `|||` operator
+  in place of this function: `left ||| right`.
 
   ## Examples
 
@@ -3946,6 +4012,9 @@ defmodule Nx do
   shifts are negative, Nx's default backend will raise,
   but it may trigger undefined behaviour in other backends.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `<<<` operator
+  in place of this function: `left <<< right`.
+
   ## Examples
 
   ### Left shift between scalars
@@ -4001,6 +4070,9 @@ defmodule Nx do
   shifts are negative, Nx's default backend will raise,
   but it may trigger undefined behaviour in other backends.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `>>>` operator
+  in place of this function: `left >>> right`.
+
   ## Examples
 
   ### Right shift between scalars
@@ -4046,6 +4118,9 @@ defmodule Nx do
 
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
+
+  If you're using `Nx.Defn.defn/2`, you can use the `==` operator
+  in place of this function: `left == right`.
 
   ## Examples
 
@@ -4098,6 +4173,9 @@ defmodule Nx do
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `and` operator
+  in place of this function: `left and right`.
+
   ## Examples
 
       iex> Nx.logical_and(1, Nx.tensor([-1, 0, 1], names: [:data]))
@@ -4141,6 +4219,9 @@ defmodule Nx do
 
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
+
+  If you're using `Nx.Defn.defn/2`, you can use the `or` operator
+  in place of this function: `left or right`.
 
   ## Examples
 
@@ -4228,6 +4309,9 @@ defmodule Nx do
   Zero is considered false, any other number is considered
   true.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `not` operator
+  in place of this function: `not tensor`.
+
   ## Examples
 
       iex> Nx.logical_not(Nx.tensor([-1, 0, 1], names: [:data]))
@@ -4246,10 +4330,20 @@ defmodule Nx do
   @doc type: :element
   def logical_not(tensor) do
     tensor = to_tensor(tensor)
-    type = tensor.type
-    out = %T{shape: {}, type: type, names: []}
-    zero = Nx.BinaryBackend.from_binary(out, number_to_binary(0, type), [])
-    element_wise_pred_op(tensor, zero, :equal)
+    output = Nx.template(tensor.shape, {:u, 8}, names: tensor.names)
+
+    Nx.Shared.optional(:logical_not, [tensor], output, fn tensor ->
+      type = tensor.type
+
+      zero =
+        Nx.BinaryBackend.from_binary(
+          %T{shape: {}, type: type, names: []},
+          number_to_binary(0, type),
+          []
+        )
+
+      element_wise_pred_op(tensor, zero, :equal)
+    end)
   end
 
   @doc """
@@ -4259,6 +4353,9 @@ defmodule Nx do
 
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
+
+  If you're using `Nx.Defn.defn/2`, you can use the `!=` operator
+  in place of this function: `left != right`.
 
   ## Examples
 
@@ -4310,6 +4407,9 @@ defmodule Nx do
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `>` operator
+  in place of this function: `left > right`.
+
   ## Examples
 
   ### Comparison of scalars
@@ -4360,6 +4460,9 @@ defmodule Nx do
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `<` operator
+  in place of this function: `left < right`.
+
   ## Examples
 
   ### Comparison of scalars
@@ -4394,6 +4497,7 @@ defmodule Nx do
           [0, 0, 1]
         ]
       >
+
   """
   @doc type: :element
   def less(left, right), do: element_wise_pred_op(left, right, :less)
@@ -4405,6 +4509,9 @@ defmodule Nx do
 
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
+
+  If you're using `Nx.Defn.defn/2`, you can use the `>=` operator
+  in place of this function: `left >= right`.
 
   ## Examples
 
@@ -4444,6 +4551,7 @@ defmodule Nx do
           [1, 1, 1]
         ]
       >
+
   """
   @doc type: :element
   def greater_equal(left, right), do: element_wise_pred_op(left, right, :greater_equal)
@@ -4455,6 +4563,9 @@ defmodule Nx do
 
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
+
+  If you're using `Nx.Defn.defn/2`, you can use the `<=` operator
+  in place of this function: `left <= right`.
 
   ## Examples
 
@@ -4494,6 +4605,7 @@ defmodule Nx do
           [0, 0, 0]
         ]
       >
+
   """
   @doc type: :element
   def less_equal(left, right), do: element_wise_pred_op(left, right, :less_equal)
@@ -4918,6 +5030,9 @@ defmodule Nx do
   @doc """
   Negates each element in the tensor.
 
+  If you're using `Nx.Defn.defn/2`, you can use the `-` unary operator
+  in place of this function: `-tensor`.
+
   ## Examples
 
       iex> Nx.negate(1)
@@ -5000,6 +5115,9 @@ defmodule Nx do
 
   @doc """
   Applies bitwise not to each element in the tensor.
+
+  If you're using `Nx.Defn.defn/2`, you can use the `~~~` operator
+  in place of this function: `~~~tensor`.
 
   ## Examples
 
@@ -7154,6 +7272,14 @@ defmodule Nx do
         ]
       >
 
+      iex> t1 = Nx.tensor([[0.0, 1.0, 2.0], [3.0, 4.0, 5.0]])
+      iex> t2 = Nx.tensor([[0.0, 1.0], [2.0, 3.0], [4.0, 5.0]])
+      iex> Nx.dot(t1, [0, 1], t2, [1, 0])
+      #Nx.Tensor<
+        f32
+        50.0
+      >
+
   """
   @doc type: :ndim
   def dot(t1, contract_axes1, t2, contract_axes2) do
@@ -9134,6 +9260,143 @@ defmodule Nx do
   end
 
   ## Utilities
+
+  @doc """
+  Serializes the given tensor or container of tensors to a binary.
+
+  You may pass a tensor, tuple, or map to serialize.
+
+  `opts` controls the serialization options. For example, you can choose
+  to compress the given tensor or container of tensors by passing a
+  compression level:
+
+      Nx.serialize(tensor, compressed: 9)
+
+  Compression level corresponds to compression options in `:erlang.term_to_binary/2`.
+
+  ## Examples
+
+      iex> a = Nx.tensor([1, 2, 3])
+      iex> serialized_a = Nx.serialize(a)
+      iex> Nx.deserialize(serialized_a)
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+
+      iex> container = {Nx.tensor([1, 2, 3]), %{b: Nx.tensor([4, 5, 6])}}
+      iex> serialized_container = Nx.serialize(container)
+      iex> {a, %{b: b}} = Nx.deserialize(serialized_container)
+      iex> a
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+      iex> b
+      #Nx.Tensor<
+        s64[3]
+        [4, 5, 6]
+      >
+  """
+  def serialize(tensor_or_container, opts \\ []) do
+    data_term = to_term(tensor_or_container)
+    term = {@file_version, System.endianness(), data_term}
+
+    :erlang.term_to_binary(term, opts)
+  end
+
+  defp to_term(tensor_or_container) do
+    case tensor_or_container do
+      %T{} = tensor ->
+        shape = shape(tensor)
+        type = type(tensor)
+        names = names(tensor)
+        binary = to_binary(tensor)
+        {:tensor, shape, type, names, binary}
+
+      container when is_tuple(container) or is_map(container) ->
+        {serialized, :ok} =
+          Nx.Container.traverse(container, :ok, fn container_elem, :ok ->
+            {to_term(container_elem), :ok}
+          end)
+
+        {:container, serialized}
+
+      value ->
+        raise ArgumentError,
+              "unable to serialize #{inspect(value)} as a tensor" <>
+                " or container. Only tuples and maps are supported" <>
+                " If you are attempting to serialize a custom container," <>
+                " you will need to serialize fields in the container manually"
+    end
+  end
+
+  @doc """
+  Deserializes a serialized representation of a tensor or a container
+  with the given options.
+
+  It is the opposite of `Nx.serialize/2`.
+
+  ## Examples
+
+      iex> a = Nx.tensor([1, 2, 3])
+      iex> serialized_a = Nx.serialize(a)
+      iex> Nx.deserialize(serialized_a)
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+
+      iex> container = {Nx.tensor([1, 2, 3]), %{b: Nx.tensor([4, 5, 6])}}
+      iex> serialized_container = Nx.serialize(container)
+      iex> {a, %{b: b}} = Nx.deserialize(serialized_container)
+      iex> a
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+      iex> b
+      #Nx.Tensor<
+        s64[3]
+        [4, 5, 6]
+      >
+  """
+  def deserialize(data, opts \\ []) do
+    data
+    |> :erlang.binary_to_term(opts ++ [:safe])
+    |> from_term()
+  end
+
+  defp from_term({1, endianness, term}) do
+    case term do
+      {:tensor, shape, {_, size} = type, names, binary} ->
+        if endianness == System.endianness() do
+          binary
+          |> from_binary(type)
+          |> reshape(shape, names: names)
+        else
+          binary
+          |> new_byte_order(size, endianness)
+          |> from_binary(type)
+          |> reshape(shape, names: names)
+        end
+
+      {:container, container} ->
+        {deserialized, :ok} =
+          Nx.Container.traverse(container, :ok, fn container_elem, :ok ->
+            {from_term({1, endianness, container_elem}), :ok}
+          end)
+
+        deserialized
+
+      _ ->
+        raise ArgumentError, "unable to deserialize binary term to tensor"
+    end
+  end
+
+  defp from_term(_) do
+    raise ArgumentError, "unable to deserialize binary term to tensor"
+  end
 
   @doc """
   Loads a `.npy` file into a tensor.

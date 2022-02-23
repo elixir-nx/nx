@@ -28,6 +28,27 @@ defmodule Nx.LinAlgTest do
     end
   end
 
+  describe "solve/2" do
+    test "does not preserve names" do
+      a = Nx.tensor([[1, 0, 1], [1, 1, 0], [1, 1, 1]], names: [:x, :y])
+
+      assert Nx.LinAlg.solve(a, Nx.tensor([0, 2, 1], names: [:z])) |> Nx.round() ==
+               Nx.tensor([1.0, 1.0, -1.0])
+    end
+  end
+
+  describe "determinant/1" do
+    test "does not preserve names" do
+      two_by_two = Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
+      assert Nx.LinAlg.determinant(two_by_two) == Nx.tensor(-2.0)
+
+      three_by_three =
+        Nx.tensor([[1.0, 2.0, 3.0], [1.0, -2.0, 3.0], [7.0, 8.0, 9.0]], names: [:x, :y])
+
+      assert Nx.LinAlg.determinant(three_by_three) == Nx.tensor(48.0)
+    end
+  end
+
   describe "norm/2" do
     test "raises for rank 3 or greater tensors" do
       t = Nx.iota({2, 2, 2})

@@ -482,6 +482,15 @@ defmodule Nx.LinAlg do
         ]
       >
 
+  If the axes are named, their names are not preserved in the output:
+
+      iex> a = Nx.tensor([[1, 0, 1], [1, 1, 0], [1, 1, 1]], names: [:x, :y])
+      iex> Nx.LinAlg.solve(a, Nx.tensor([0, 2, 1], names: [:z])) |> Nx.round()
+      #Nx.Tensor<
+        f32[3]
+        [1.0, 1.0, -1.0]
+      >
+
   ### Error cases
 
       iex> Nx.LinAlg.solve(Nx.tensor([[1, 0], [0, 1]]), Nx.tensor([4, 2, 4, 2]))
@@ -496,13 +505,10 @@ defmodule Nx.LinAlg do
     %T{shape: b_shape, type: b_type} = b = Nx.to_tensor(b)
 
     output_shape = Nx.Shape.solve(a_shape, b_shape)
-
     output_type = a_type |> Nx.Type.merge(b_type) |> Nx.Type.to_floating()
+    output = Nx.template(output_shape, output_type)
 
-    output_names = List.duplicate(nil, tuple_size(output_shape))
-    output = %T{b | shape: output_shape, type: output_type, names: output_names}
-
-    Nx.Shared.default_implementation(:solve, [output, a, b], fn _output, a, b ->
+    Nx.Shared.optional(:solve, [a, b], output, fn a, b ->
       # We need to achieve an LQ decomposition for `a` (henceforth called A)
       # because triangular_solve only accepts lower_triangular matrices
       # Therefore, we can use the fact that if we have M = Q'R' -> transpose(M) = LQ.
@@ -1123,21 +1129,39 @@ defmodule Nx.LinAlg do
         f32
         48.0
       >
+
+  If the axes are named, their names are not preserved in the output:
+
+      iex> two_by_two = Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
+      iex> Nx.LinAlg.determinant(two_by_two)
+      #Nx.Tensor<
+        f32
+        -2.0
+      >
+
+      iex> three_by_three = Nx.tensor([[1.0, 2.0, 3.0], [1.0, -2.0, 3.0], [7.0, 8.0, 9.0]], names: [:x, :y])
+      iex> Nx.LinAlg.determinant(three_by_three)
+      #Nx.Tensor<
+        f32
+        48.0
+      >
+
   """
   defn determinant(tensor) do
     Nx.Defn.Kernel.assert_shape_pattern(tensor, {n, n})
 
-    {n, _} = Nx.shape(tensor)
+    transform(tensor, fn tensor ->
+      output = Nx.template({}, Nx.Type.to_floating(tensor.type))
 
-    transform(n, fn
-      2 ->
-        determinant_2by2(tensor)
+      Nx.Shared.optional(:determinant, [tensor], output, fn tensor ->
+        {n, _} = Nx.shape(tensor)
 
-      3 ->
-        determinant_3by3(tensor)
-
-      _ ->
-        determinant_NbyN(tensor)
+        case n do
+          2 -> determinant_2by2(tensor)
+          3 -> determinant_3by3(tensor)
+          _ -> determinant_NbyN(tensor)
+        end
+      end)
     end)
   end
 

@@ -263,6 +263,8 @@ defmodule Torchx.Backend do
   defp narrow(ref, [start | starts], [length | lengths], axis, shape) do
     dim = elem(shape, axis)
 
+    start = to_number(start)
+
     # Nothing to narrow
     if start == 0 and length == dim do
       narrow(ref, starts, lengths, axis + 1, shape)
@@ -537,23 +539,47 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def argmax(%T{} = out, %T{} = t, opts) do
-    unsupported_option!(opts, :tie_break, :low)
-
-    axis = opts[:axis] || -1
-    keep_axes = opts[:keep_axes] || false
-
-    Torchx.argmax(from_nx(t), axis, keep_axes) |> to_nx(out)
+  def determinant(out, tensor) do
+    tensor
+    |> from_nx()
+    |> Torchx.to_type(to_torch_type(out.type))
+    |> Torchx.determinant()
+    |> to_nx(out)
   end
 
   @impl true
-  def argmin(%T{} = out, %T{} = t, opts) do
-    unsupported_option!(opts, :tie_break, :low)
+  def argmax(%T{} = out, %T{} = t, opts) do
+    argminmax(:argmax, out, t, opts)
+  end
 
+  @impl true
+  def argmin(out, t, opts) do
+    argminmax(:argmin, out, t, opts)
+  end
+
+  defp argminmax(fun, %T{} = out, %T{} = t, opts) do
+    tie_break = opts[:tie_break] || :low
     axis = opts[:axis] || -1
-    keep_axes = opts[:keep_axes] || false
+    keep_axis = opts[:keep_axis] || false
 
-    Torchx.argmin(from_nx(t), axis, keep_axes) |> to_nx(out)
+    if tie_break == :low do
+      apply(Torchx, fun, [from_nx(t), axis, keep_axis])
+      |> to_nx(out)
+    else
+      %{data: %{ref: {device, _}}, type: type, shape: shape} = t
+      scalar = Torchx.scalar_tensor(elem(shape, axis) - 1, to_torch_type(type), device)
+
+      flipped =
+        t
+        |> from_nx()
+        |> Torchx.flip([axis])
+
+      result = apply(Torchx, fun, [flipped, axis, keep_axis])
+
+      scalar
+      |> Torchx.subtract(result)
+      |> to_nx(out)
+    end
   end
 
   ## Ops
@@ -606,7 +632,8 @@ defmodule Torchx.Backend do
   unary_ops =
     [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tan, :cosh, :sinh] ++
       [:tanh, :acos, :asin, :atan, :acosh, :asinh, :atanh, :sqrt, :rsqrt] ++
-      [:erf, :erfc, :erf_inv, :abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign]
+      [:erf, :erfc, :erf_inv, :abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign] ++
+      [:logical_not, :cbrt]
 
   for op <- unary_ops do
     @impl true
@@ -708,6 +735,28 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def pad(out, tensor, constant, config) do
+    config =
+      config
+      |> Enum.map(fn {a, b, c} ->
+        if a < 0 or b < 0 or c != 0 do
+          raise ArgumentError, "{#{a}, #{b}, #{c}} padding is not supported"
+        end
+
+        [a, b]
+      end)
+      |> Enum.reverse()
+      |> List.flatten()
+
+    constant = Nx.to_number(constant)
+
+    tensor
+    |> from_nx()
+    |> Torchx.pad(config, constant)
+    |> to_nx(out)
+  end
+
+  @impl true
   def triangular_solve(%T{} = out, %T{} = a, %T{} = b, opts) do
     transform = opts[:transform_a]
     upper = !opts[:lower]
@@ -736,26 +785,7 @@ defmodule Torchx.Backend do
       |> Torchx.reshape(batched_a_shape)
       |> Torchx.to_type(out_type)
 
-    eps = 1.0e-10 |> Nx.tensor() |> Torchx.from_nx()
-
-    # We need to manually validate if the A tensor is singular
-    # (i.e. the tensor has its determinant equal to 0)
-    # Otherwise, an exception will be thrown by libtorch.
-    #
-    # a non-zero eps value is chosen so we can account for possible rounding errors
-    # in the determinant calculation
-    is_singular =
-      a_tx
-      |> Torchx.determinant()
-      |> Torchx.abs()
-      |> Torchx.reshape({})
-      |> Torchx.less_equal(eps)
-      |> Torchx.to_nx()
-      |> Nx.backend_transfer(Nx.BinaryBackend)
-
-    if Nx.tensor(1, type: {:u, 8}, backend: Nx.BinaryBackend) == is_singular do
-      raise ArgumentError, "can't solve for singular matrix"
-    end
+    check_singular_matrix(a_tx)
 
     b_tx = b |> from_nx() |> Torchx.reshape(batched_b_shape) |> Torchx.to_type(out_type)
 
@@ -767,11 +797,38 @@ defmodule Torchx.Backend do
 
   @impl true
   def solve(%T{type: type} = out, a, b) do
-    a_torch = a |> from_nx |> Torchx.to_type(to_torch_type(type))
-    b_torch = b |> from_nx |> Torchx.to_type(to_torch_type(type))
+    a_tx = a |> from_nx |> Torchx.to_type(to_torch_type(type))
+    b_tx = b |> from_nx |> Torchx.to_type(to_torch_type(type))
 
-    Torchx.solve(a_torch, b_torch)
+    check_singular_matrix(a_tx)
+
+    a_tx
+    |> Torchx.solve(b_tx)
     |> to_nx(out)
+  end
+
+  defp check_singular_matrix(tensor) do
+    eps = 1.0e-10 |> Nx.tensor() |> Torchx.from_nx()
+
+    # We need to manually validate if the A tensor is singular
+    # (i.e. the tensor has its determinant equal to 0)
+    # Otherwise, an exception will be thrown by libtorch.
+    #
+    # a non-zero eps value is chosen so we can account for possible rounding errors
+    # in the determinant calculation
+    is_singular =
+      tensor
+      |> Torchx.determinant()
+      |> Torchx.abs()
+      |> Torchx.reshape({})
+      |> Torchx.less_equal(eps)
+      |> Torchx.to_nx()
+      |> Nx.to_number()
+      |> Kernel.==(1)
+
+    if is_singular do
+      raise ArgumentError, "can't solve for singular matrix"
+    end
   end
 
   @impl true
@@ -827,6 +884,58 @@ defmodule Torchx.Backend do
     tensor
     |> from_nx()
     |> Torchx.amin(axes, keep_axes)
+    |> to_nx(out)
+  end
+
+  @impl true
+  def conv(%T{type: type} = out, t, k, opts) do
+    unsupported_option!(opts, :batch_group_size, 1)
+
+    input_dilation = opts[:input_dilation]
+
+    Enum.each(input_dilation, fn a ->
+      if a != 1 do
+        raise ArgumentError,
+              "input_dilation other than 1 is not supported, got: #{inspect(input_dilation)}"
+      end
+    end)
+
+    padding = opts[:padding]
+    strides = opts[:strides]
+    kernel_dilation = opts[:kernel_dilation]
+    feature_groups = opts[:feature_group_size]
+
+    permute = fn tensor, permutation ->
+      if permutation != nil do
+        Torchx.permute(tensor, permutation)
+      else
+        tensor
+      end
+    end
+
+    input_permutation = opts[:input_permutation]
+    kernel_permutation = opts[:kernel_permutation]
+    output_permutation = opts[:output_permutation]
+
+    pad_config =
+      padding
+      |> Enum.map(fn {a, b} -> [a, b] end)
+      |> Enum.reverse()
+      |> List.flatten()
+
+    k_nx =
+      k
+      |> from_nx()
+      |> Torchx.to_type(to_torch_type(type))
+      |> permute.(kernel_permutation)
+
+    t
+    |> from_nx()
+    |> permute.(input_permutation)
+    |> Torchx.pad(pad_config, 0)
+    |> Torchx.to_type(to_torch_type(type))
+    |> Torchx.conv(k_nx, strides, [0], kernel_dilation, false, feature_groups)
+    |> permute.(output_permutation)
     |> to_nx(out)
   end
 
@@ -938,8 +1047,8 @@ defmodule Torchx.Backend do
   defp device_option(backend_opts), do: backend_opts[:device] || {:cpu, -1}
 
   defp unsupported_option!(opts, key, acceptable_default) do
-    if opts[key] != acceptable_default do
-      raise "#{inspect(key)} option is not supported in #{caller()}"
+    if opts[key] != nil and opts[key] != acceptable_default do
+      raise "#{inspect(key)} option with #{inspect(opts[key])} is not supported in #{caller()}"
     end
   end
 

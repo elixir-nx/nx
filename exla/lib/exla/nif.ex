@@ -284,6 +284,9 @@ defmodule EXLA.NIF do
   def transfer_from_outfeed(_client, _device, _shapes, _pid, _ref),
     do: :erlang.nif_error(:undef)
 
+  def copy_buffer_to_device(_client, _buffer, _device),
+    do: :erlang.nif_error(:undef)
+
   def start_log_sink(_sink_pid),
     do: :erlang.nif_error(:undef)
 end

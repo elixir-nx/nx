@@ -1,10 +1,12 @@
 defmodule Nx.HeatmapTest do
   use ExUnit.Case, async: true
+  alias Nx.Constants, as: C
 
   @tensor0 Nx.tensor(0)
   @tensor1 Nx.tensor([1, 2, 3, 4, 5])
   @tensor2 Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]])
   @tensor3 Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
+  @non_finite Nx.tensor([C.neg_infinity(), -1, C.nan(), 1, C.infinity()])
 
   test "rank 0" do
     assert_raise ArgumentError, fn -> Nx.to_heatmap(@tensor0) end
@@ -56,6 +58,26 @@ defmodule Nx.HeatmapTest do
              >\
              """
     end
+
+    test "non-finite" do
+      assert @non_finite |> Nx.to_heatmap(ansi_enabled: false) |> inspect() == """
+             #Nx.Heatmap<
+               f32[5]
+               -0x9+
+             >\
+             """
+
+      assert Nx.stack([@non_finite, @non_finite])
+             |> Nx.to_heatmap(ansi_enabled: false)
+             |> inspect() == """
+             #Nx.Heatmap<
+               f32[2][5]
+             \s\s
+               -0x9+
+               -0x9+
+             >\
+             """
+    end
   end
 
   describe "with ANSI" do
@@ -101,6 +123,15 @@ defmodule Nx.HeatmapTest do
                  \e[48;5;232m\u3000\e[48;5;237m\u3000\e[48;5;241m\u3000\e[0m
                  \e[48;5;246m\u3000\e[48;5;250m\u3000\e[48;5;255m\u3000\e[0m
                ]
+             >\
+             """
+    end
+
+    test "non-finite" do
+      assert @non_finite |> Nx.to_heatmap(ansi_enabled: true) |> inspect() == """
+             #Nx.Heatmap<
+               f32[5]
+               \e[48;5;232m∞\e[48;5;232m　\e[41m　\e[48;5;255m　\e[48;5;255m∞\e[0m
              >\
              """
     end
