@@ -341,6 +341,16 @@ NIF(gather)
   TENSOR(torch::gather(*input, axis, *indices));
 }
 
+NIF(indexed_add)
+{
+  TENSOR_PARAM(0, input);
+  TENSOR_PARAM(1, indices);
+  TENSOR_PARAM(2, updates);
+  PARAM(3, int64_t, axis);
+
+  TENSOR(torch::scatter_add(*input, axis, *indices, *updates));
+}
+
 NIF(argsort)
 {
   TENSOR_PARAM(0, input);
@@ -916,6 +926,7 @@ static ErlNifFunc nif_functions[] = {
     DF(as_strided, 4),
     DF(concatenate, 2),
     DF(gather, 3),
+    DF(indexed_add, 4),
     DF(argsort, 3),
     DF(flip, 2),
 

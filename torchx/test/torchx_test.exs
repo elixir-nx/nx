@@ -49,4 +49,32 @@ defmodule TorchxTest do
       assert expected |> Nx.equal(result) |> Nx.all() |> Nx.to_number() == 1
     end
   end
+
+  describe "indexed_add" do
+    test "raises when out of bounds" do
+      t = Nx.tensor([[1, 2], [3, 4]])
+
+      assert_raise ArgumentError, "index 3 is out of bounds for axis 0 in shape {2, 2}", fn ->
+        Nx.indexed_add(t, Nx.tensor([[3, -10]]), Nx.tensor([1]))
+      end
+
+      assert_raise ArgumentError, "index -1 is out of bounds for axis 1 in shape {2, 2}", fn ->
+        Nx.indexed_add(t, Nx.tensor([[0, -1]]), Nx.tensor([1]))
+      end
+    end
+  end
+
+  describe "gather" do
+    test "raises when out of bounds" do
+      t = Nx.tensor([[1, 2], [3, 4]])
+
+      assert_raise ArgumentError, "index 3 is out of bounds for axis 0 in shape {2, 2}", fn ->
+        Nx.gather(t, Nx.tensor([[3, -10]]))
+      end
+
+      assert_raise ArgumentError, "index -1 is out of bounds for axis 1 in shape {2, 2}", fn ->
+        Nx.gather(t, Nx.tensor([[0, -1]]))
+      end
+    end
+  end
 end
