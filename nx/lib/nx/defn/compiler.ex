@@ -13,16 +13,16 @@ defmodule Nx.Defn.Compiler do
   It must call `fun` with the `vars` as arguments. Note the `key`
   does not include the `vars` in its cache. Therefore, if you want
   to cache the result of `fun.(vars)`, you likely want to include
-  the vars in the cache key. `vars` are all tensor templates,
-  therefore they can be cached directly or in function of their
-  type and shape.
+  the vars in the cache key. `vars` is a flat list of tensor
+  templates, so they can be added directly as part of the cache
+  key or, most often, in function of their type and shape.
 
   Once the expression is built and compiled, it must be invoked
   for each list of arguments in `args_list`. In a nutshell, `vars`
   are used to build the expression from `fun` which is then
   invoked for each list of arguments in `args_list`. All lists
-  in `args_list` are guaranteed to have the same tensor types,
-  shapes, and names.
+  in `args_list` are guaranteed to be flat lists of the same length,
+  containing tensors of the same type, shape, and name.
 
   The callback uses double underscores so it can be defined
   at root modules without affecting the module's main API.
@@ -39,19 +39,23 @@ defmodule Nx.Defn.Compiler do
   Callback for streaming (on top of JIT compilation).
 
   It receives the same arguments as `c:__jit__/5` with the addition
-  of the streaming and accumulator templates. It must return a struct
-  that implements the `Nx.Stream` protocol.
+  of the streaming input and accumulator templates. If the input
+  and accumulator are containers, they are kept in their container
+  shapes. As in `c:__jit__/5`, both `vars` and `args_list` are flat
+  lists of tensors (without their container shape).
+
+  It must return a struct that implements the `Nx.Stream` protocol.
   """
   @callback __stream__(
               key :: term,
-              stream,
+              input,
               acc,
               vars :: [Nx.t()],
-              fun :: ([Nx.t()] -> acc),
+              fun :: ([Nx.t()] -> {output, acc}),
               args_list :: [[Nx.t()]],
               opts :: keyword
             ) :: [Nx.Stream.t()]
-            when stream: Nx.contained(), acc: Nx.contained()
+            when input: Nx.contained(), output: Nx.contained(), acc: Nx.contained()
 
   # Modules allowed in defn
   @allowed_modules [Nx, Nx.Constants, Nx.Defn, Nx.Defn.Kernel, Nx.LinAlg]
