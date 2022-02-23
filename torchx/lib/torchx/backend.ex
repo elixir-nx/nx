@@ -393,36 +393,20 @@ defmodule Torchx.Backend do
 
     # Index limit validation
 
-    raise_out_of_bounds = fn index, shape, axis_number ->
-      raise ArgumentError,
-            "index #{index} is out of bounds for axis #{axis_number} in shape #{inspect(shape)}"
-    end
-
-    # check the upper bounds
-
     ndims = tuple_size(shape)
 
     flattened_idx = Nx.reshape(idx, {div(Nx.size(idx), ndims), ndims})
+    shape_tensor = shape |> Tuple.to_list() |> Nx.tensor()
 
-    flattened_idx
-    |> Nx.reduce_max(axes: [0])
-    |> Nx.to_flat_list()
-    |> Enum.with_index(fn index, axis_number ->
-      if index >= elem(shape, axis_number) do
-        raise_out_of_bounds.(index, shape, axis_number)
-      end
-    end)
+    upper_clamp_selector = Nx.greater_equal(flattened_idx, shape_tensor)
 
-    # check the lower bounds
+    upper_clamped_idx =
+      Nx.select(upper_clamp_selector, Nx.subtract(shape_tensor, 1), flattened_idx)
 
-    flattened_idx
-    |> Nx.reduce_min(axes: [0])
-    |> Nx.to_flat_list()
-    |> Enum.with_index(fn index, axis_number ->
-      if index < 0 do
-        raise_out_of_bounds.(index, shape, axis_number)
-      end
-    end)
+    lower_clamp_selector = Nx.less(upper_clamped_idx, 0)
+
+    fully_clamped_idx =
+      lower_clamp_selector |> Nx.select(0, upper_clamped_idx) |> Nx.reshape(idx.shape)
 
     # Actual conversion algorithm
 
@@ -434,7 +418,7 @@ defmodule Torchx.Backend do
     lin_idx_num_elements =
       idx.shape |> Tuple.delete_at(tuple_size(idx.shape) - 1) |> Tuple.product()
 
-    idx
+    fully_clamped_idx
     |> from_nx()
     |> Torchx.tensordot(linear_indices_offsets, [tuple_size(idx.shape) - 1], [0])
     |> Torchx.reshape({lin_idx_num_elements})
