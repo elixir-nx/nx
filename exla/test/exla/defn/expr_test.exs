@@ -3186,9 +3186,10 @@ defmodule EXLA.Defn.ExprTest do
     test "works on a 50x50 matrix" do
       tensor = Nx.random_normal({50, 50})
       tensor = Nx.dot(tensor, Nx.transpose(tensor))
-      lhs = cholesky(tensor)
-      rhs = Nx.LinAlg.cholesky(tensor)
-      compare_tensors!(lhs, rhs, atol: 1.0e-4, rtol: 1.0e-2)
+      tensor = Nx.add(tensor, Nx.multiply(50, Nx.eye(tensor)))
+
+      l = cholesky(tensor)
+      compare_tensors!(Nx.dot(l, Nx.transpose(l)), tensor, atol: 1.0e-4, rtol: 1.0e-2)
     end
   end
 
