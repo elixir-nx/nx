@@ -35,6 +35,15 @@ defmodule EXLA.ExecutableTest do
                run_one([t1, t2], fn b, x, y -> Op.tuple(b, [Op.add(x, y)]) end)
     end
 
+    test "finds dynamic dimension size" do
+      # TODO: multi-dimensional tests?
+      t =
+        BinaryBuffer.from_binary(<<1::32-native, 7::32-native>>, Shape.make_shape({:s, 32}, {2}))
+
+      assert [%BinaryBuffer{data: <<2::32-native>>}] =
+               run_one([t], fn b, x -> Op.tuple(b, [Op.get_dimension_size(x, 0)]) end)
+    end
+
     test "succeeds when data is preloaded" do
       t1 =
         DeviceBuffer.place_on_device(

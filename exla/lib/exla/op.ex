@@ -84,6 +84,13 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  ## Dimension
+
+  def get_dimension_size(%Op{ref: operand} = op, dim) when is_integer(dim) do
+    ref = EXLA.NIF.get_dimension_size(operand, dim) |> unwrap!()
+    %{op | ref: ref}
+  end
+
   ## Shape
 
   @doc """

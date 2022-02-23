@@ -245,6 +245,27 @@ ERL_NIF_TERM deallocate_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
   }
 }
 
+// Dimension Functions
+
+ERL_NIF_TERM get_dimension_size(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+	if (argc != 2) {
+		return exla::nif::error(env, "Bad argument count.");
+	}
+
+	xla::XlaOp *operand;
+	if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
+		return exla::nif::error(env, "Unable to get operand.");
+	}
+
+	exla::int64 dimension;
+	if (!exla::nif::get(env, argv[1], &dimension)) {
+		return exla::nif::error(env, "Unable to get dimension.");
+	}
+
+	xla::XlaOp op = xla::GetDimensionSize(*operand, dimension);
+	return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
+}
+
 // Shape Functions
 
 ERL_NIF_TERM make_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -2283,6 +2304,8 @@ static ErlNifFunc exla_funcs[] = {
   // ExlaExecutable
   {"run_io", 5, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"run_cpu", 5, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+  // Dimension
+  {"get_dimension_size", 2, get_dimension_size},
   // Shape
   {"make_shape", 2, make_shape},
   {"make_token_shape", 0, make_token_shape},

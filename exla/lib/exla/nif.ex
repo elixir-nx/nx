@@ -202,6 +202,8 @@ defmodule EXLA.NIF do
 
   def get_tuple_element(_operand, _index), do: :erlang.nif_error(:undef)
 
+  def get_dimension_size(_operand, _dim), do: :erlang.nif_error(:undef)
+
   def cholesky(_operand), do: :erlang.nif_error(:undef)
 
   def eigh(_operand, _lower), do: :erlang.nif_error(:undef)
