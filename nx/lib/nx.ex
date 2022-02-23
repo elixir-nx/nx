@@ -6991,18 +6991,19 @@ defmodule Nx do
   Maps the given scalar function over the entire
   tensor.
 
-  The type of the returned tensor will be the same type
-  as the given tensor, unless the `:type` option is given.
-  Therefore, keep in mind explicit casting may be necessary.
-  For example, if you have an integer tensor and you convert
-  it to a float, it will fail:
+  The type of the returned tensor will be of the same type
+  as the input tensor, unless the `:type` option is given.
+  Therefore, you may need to explicitly cast the tensor to
+  avoid errors. For example, if you have an integer tensor
+  and you convert it to a float, as below, it will fail:
 
-      iex> Nx.map(Nx.tensor([[1, 2, 3], [4, 5, 6]]), fn x -> Nx.multiply(x, 1.0) end)
-      ** (ArgumentError) argument error
+      tensor = Nx.tensor([[1, 2, 3], [4, 5, 6]]),
+      Nx.map(tensor, fn x -> Nx.multiply(x, 1.0) end)
 
   You need to explicitly pass the output type in such cases:
 
-      iex> Nx.map(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [type: {:f, 32}], fn x -> Nx.multiply(x, 1.0) end)
+      iex> tensor = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      iex> Nx.map(tensor, [type: {:f, 32}], fn x -> Nx.multiply(x, 1.0) end)
       #Nx.Tensor<
         f32[2][3]
         [
@@ -9313,6 +9314,9 @@ defmodule Nx do
         binary = to_binary(tensor)
         {:tensor, shape, type, names, binary}
 
+      %_{} = value ->
+        bad_serialize!(value)
+
       container when is_tuple(container) or is_map(container) ->
         {serialized, :ok} =
           Nx.Container.traverse(container, :ok, fn container_elem, :ok ->
@@ -9322,12 +9326,15 @@ defmodule Nx do
         {:container, serialized}
 
       value ->
-        raise ArgumentError,
-              "unable to serialize #{inspect(value)} as a tensor" <>
-                " or container. Only tuples and maps are supported" <>
-                " If you are attempting to serialize a custom container," <>
-                " you will need to serialize fields in the container manually"
+        bad_serialize!(value)
     end
+  end
+
+  defp bad_serialize!(value) do
+    raise ArgumentError,
+          "unable to serialize #{inspect(value)}. Only tensors, tuples and " <>
+            " maps are supported. If you are attempting to serialize a custom " <>
+            " container, you will need to serialize fields in the container manually"
   end
 
   @doc """
@@ -9362,7 +9369,7 @@ defmodule Nx do
   """
   def deserialize(data, opts \\ []) do
     data
-    |> :erlang.binary_to_term(opts ++ [:safe])
+    |> :erlang.binary_to_term(opts)
     |> from_term()
   end
 

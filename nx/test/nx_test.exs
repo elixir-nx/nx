@@ -1897,15 +1897,25 @@ defmodule NxTest do
     end
   end
 
+  describe "serialize/deserialize" do
+    test "cannot serialize containers" do
+      assert_raise ArgumentError, ~r"unable to serialize", fn ->
+        Nx.serialize(%Container{})
+      end
+    end
+  end
+
   describe "sigils" do
     test "evaluates to tensor" do
       import Nx
 
       assert ~M[-1 2 3 4] == Nx.tensor([[-1, 2, 3, 4]])
+
       assert ~M[1
                 2
                 3
                 4] == Nx.tensor([[1], [2], [3], [4]])
+
       assert ~M[1.0 2  3
                 11  12 13] == Nx.tensor([[1.0, 2, 3], [11, 12, 13]])
 
