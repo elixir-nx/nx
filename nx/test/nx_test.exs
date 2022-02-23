@@ -1951,7 +1951,7 @@ defmodule NxTest do
     test "raises when out of bounds" do
       t = Nx.tensor([[1, 2], [3, 4]])
 
-      assert_raise ArgumentError, "index 10 is out of bounds for axis 0 in shape [2]", fn ->
+      assert_raise ArgumentError, "index 10 is out of bounds for axis 0 in shape {2, 2}", fn ->
         Nx.gather(t, Nx.tensor([[10, -10]]))
       end
     end
