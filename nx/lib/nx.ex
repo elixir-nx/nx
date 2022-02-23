@@ -4953,12 +4953,6 @@ defmodule Nx do
       >
 
   ### Error cases
-      iex> Nx.indexed_add(Nx.tensor([[1], [2]]), Nx.tensor([[0, 1]]), Nx.tensor([0]))
-      ** (ArgumentError) index 1 is out of bounds for axis 1 in shape {2, 1}
-
-      iex> Nx.indexed_add(Nx.tensor([[1], [2]]), Nx.tensor([[-1, 0]]), Nx.tensor([0]))
-      ** (ArgumentError) index -1 is out of bounds for axis 0 in shape {2, 1}
-
       iex> Nx.indexed_add(Nx.tensor([[1], [2]]), Nx.tensor([[[1, 2, 3]]]), Nx.tensor([0]))
       ** (ArgumentError) indices must be a rank 2 tensor, got: 3
 
@@ -8679,12 +8673,6 @@ defmodule Nx do
 
       iex> Nx.gather(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[0, 0]], type: {:f, 32}))
       ** (ArgumentError) indices must be an integer tensor, got {:f, 32}
-
-      iex> Nx.gather(Nx.tensor([[1], [2]]), Nx.tensor([[0, 1]]))
-      ** (ArgumentError) index 1 is out of bounds for axis 1 in shape {2, 1}
-
-      iex> Nx.gather(Nx.tensor([[1], [2]]), Nx.tensor([[-1, 0]]))
-      ** (ArgumentError) index -1 is out of bounds for axis 0 in shape {2, 1}
   """
   @doc type: :indexed
   def gather(tensor, indices) do
