@@ -389,7 +389,42 @@ defmodule Torchx.Backend do
     # Nx provides indices as a tensor of shape {*, input_dims}
     # However, torch expects indices to be a tensor of indices along a given axis.
     # As such, we need to convert the indices tensor to linear indices.
-    # See the function below for an explanation on the offsets calculation
+    # See the `linear_indices_offsets` function for an explanation on the offsets calculation.
+
+    # Index limit validation
+
+    raise_out_of_bounds = fn index, shape, axis_number ->
+      raise ArgumentError,
+            "index #{index} is out of bounds for axis #{axis_number} in shape #{inspect(shape)}"
+    end
+
+    # check the upper bounds
+
+    ndims = tuple_size(shape)
+
+    flattened_idx = Nx.reshape(idx, {div(Nx.size(idx), ndims), ndims})
+
+    flattened_idx
+    |> Nx.reduce_max(axes: [0])
+    |> Nx.to_flat_list()
+    |> Enum.with_index(fn index, axis_number ->
+      if index >= elem(shape, axis_number) do
+        raise_out_of_bounds.(index, shape, axis_number)
+      end
+    end)
+
+    # check the lower bounds
+
+    flattened_idx
+    |> Nx.reduce_min(axes: [0])
+    |> Nx.to_flat_list()
+    |> Enum.with_index(fn index, axis_number ->
+      if index < 0 do
+        raise_out_of_bounds.(index, shape, axis_number)
+      end
+    end)
+
+    # Actual conversion algorithm
 
     linear_indices_offsets =
       shape
