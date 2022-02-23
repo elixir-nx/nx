@@ -9337,8 +9337,8 @@ defmodule Nx do
   defp bad_serialize!(value) do
     raise ArgumentError,
           "unable to serialize #{inspect(value)}. Only tensors, tuples and " <>
-            " maps are supported. If you are attempting to serialize a custom " <>
-            " container, you will need to serialize fields in the container manually"
+            "maps are supported. If you are attempting to serialize a custom " <>
+            "container, you will need to serialize fields in the container manually"
   end
 
   @doc """
