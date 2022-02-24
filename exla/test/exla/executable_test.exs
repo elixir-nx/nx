@@ -62,26 +62,31 @@ defmodule EXLA.ExecutableTest do
       sum_ast = Op.add(lhs, rhs)
       sum = Builder.build(sum_ast)
 
-      assert [%BinaryBuffer{data: <<6::32-native>>}] = run_one([operand, init], fn b, operand, init ->
-        Op.tuple(b, [Op.reduce(operand, init, sum, {0})])
-      end)
+      assert [%BinaryBuffer{data: <<6::32-native>>}] =
+               run_one([operand, init], fn b, operand, init ->
+                 Op.tuple(b, [Op.reduce(operand, init, sum, {0})])
+               end)
 
       size_shape = Shape.make_shape({:s, 32}, {})
       size = <<2::32-native>>
       size = BinaryBuffer.from_binary(size, size_shape)
 
-      [operand] = run_one([operand, size], fn b, operand, size ->
-        Op.tuple(b, [Op.set_dimension_size(operand, size, 0)])
-      end)
+      [operand] =
+        run_one([operand, size], fn b, operand, size ->
+          Op.tuple(b, [Op.set_dimension_size(operand, size, 0)])
+        end)
 
       IO.inspect(operand, label: "operand-after")
 
-      assert [%BinaryBuffer{data: <<2::32-native>>}] = run_one([operand], fn b, operand ->
-        Op.tuple(b, [Op.get_dimension_size(operand, 0)])
-      end)
-      assert [%BinaryBuffer{data: <<3::32-native>>}] = run_one([operand, init], fn b, operand, init ->
-        Op.tuple(b, [Op.reduce(operand, init, sum, {0})])
-      end)
+      assert [%BinaryBuffer{data: <<2::32-native>>}] =
+               run_one([operand], fn b, operand ->
+                 Op.tuple(b, [Op.get_dimension_size(operand, 0)])
+               end)
+
+      assert [%BinaryBuffer{data: <<3::32-native>>}] =
+               run_one([operand, init], fn b, operand, init ->
+                 Op.tuple(b, [Op.reduce(operand, init, sum, {0})])
+               end)
     end
 
     test "succeeds when data is preloaded" do
