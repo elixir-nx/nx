@@ -91,6 +91,11 @@ defmodule EXLA.Op do
     %{op | ref: ref}
   end
 
+  def set_dimension_size(%Op{ref: operand} = op, %Op{ref: size}, dim) when is_integer(dim) do
+    ref = EXLA.NIF.set_dimension_size(operand, size, dim) |> unwrap!()
+    %{op | ref: ref}
+  end
+
   ## Shape
 
   @doc """

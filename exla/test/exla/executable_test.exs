@@ -1,7 +1,7 @@
 defmodule EXLA.ExecutableTest do
   use ExUnit.Case, async: true
 
-  alias EXLA.{BinaryBuffer, DeviceBuffer, Executable, Op, Shape}
+  alias EXLA.{BinaryBuffer, DeviceBuffer, Executable, Op, Shape, Builder}
   import EXLAHelpers
 
   test "raises on invalid tuples" do
@@ -37,11 +37,51 @@ defmodule EXLA.ExecutableTest do
 
     test "finds dynamic dimension size" do
       # TODO: multi-dimensional tests?
-      t =
-        BinaryBuffer.from_binary(<<1::32-native, 7::32-native>>, Shape.make_shape({:s, 32}, {2}))
+      d = <<1::32-native, 7::32-native>>
+      t = BinaryBuffer.from_binary(d, Shape.make_shape({:s, 32}, {2}))
 
       assert [%BinaryBuffer{data: <<2::32-native>>}] =
                run_one([t], fn b, x -> Op.tuple(b, [Op.get_dimension_size(x, 0)]) end)
+    end
+
+    test "sets dynamic dimension size" do
+      operand_shape = Shape.make_shape({:s, 32}, {3})
+      operand = <<1::32-native, 2::32-native, 3::32-native>>
+      operand = BinaryBuffer.from_binary(operand, operand_shape)
+
+      IO.inspect(operand, label: "operand-before")
+
+      init_shape = Shape.make_shape({:s, 32}, {})
+      init = BinaryBuffer.from_binary(<<0::32-native>>, init_shape)
+
+      b = Builder.new("reduce")
+      sum_shape = Shape.make_shape({:s, 32}, {})
+
+      lhs = Op.parameter(b, 0, sum_shape, "a")
+      rhs = Op.parameter(b, 1, sum_shape, "b")
+      sum_ast = Op.add(lhs, rhs)
+      sum = Builder.build(sum_ast)
+
+      assert [%BinaryBuffer{data: <<6::32-native>>}] = run_one([operand, init], fn b, operand, init ->
+        Op.tuple(b, [Op.reduce(operand, init, sum, {0})])
+      end)
+
+      size_shape = Shape.make_shape({:s, 32}, {})
+      size = <<2::32-native>>
+      size = BinaryBuffer.from_binary(size, size_shape)
+
+      [operand] = run_one([operand, size], fn b, operand, size ->
+        Op.tuple(b, [Op.set_dimension_size(operand, size, 0)])
+      end)
+
+      IO.inspect(operand, label: "operand-after")
+
+      assert [%BinaryBuffer{data: <<2::32-native>>}] = run_one([operand], fn b, operand ->
+        Op.tuple(b, [Op.get_dimension_size(operand, 0)])
+      end)
+      assert [%BinaryBuffer{data: <<3::32-native>>}] = run_one([operand, init], fn b, operand, init ->
+        Op.tuple(b, [Op.reduce(operand, init, sum, {0})])
+      end)
     end
 
     test "succeeds when data is preloaded" do

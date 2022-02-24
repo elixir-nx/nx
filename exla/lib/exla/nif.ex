@@ -204,6 +204,8 @@ defmodule EXLA.NIF do
 
   def get_dimension_size(_operand, _dim), do: :erlang.nif_error(:undef)
 
+  def set_dimension_size(_operand, _size, _dim), do: :erlang.nif_error(:undef)
+
   def cholesky(_operand), do: :erlang.nif_error(:undef)
 
   def eigh(_operand, _lower), do: :erlang.nif_error(:undef)
