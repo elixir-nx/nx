@@ -82,25 +82,34 @@ defmodule EXLA.ExecutableTest do
 
       operand = EXLAHelpers.make_buffer(data, {:s, 32}, {3, 2})
 
-      count = EXLAHelpers.make_buffer(<<3::32-native>>, {:s, 32}, {})
+      count = EXLAHelpers.make_buffer(<<2::32-native>>, {:s, 32}, {})
 
-      [%BinaryBuffer{shape: shape}] =
-        run_one([operand, count], fn b, operand, count ->
-          Op.tuple(b, [Op.dynamic_reshape(operand, [count], [6], [true])])
+      # Reducing the input will prove if dynamic operations have been
+      # applied or not!
+      # TODO(dmorn): what about a lighter solution / wrapper around this
+      # assertion? (see set_dimension_size test)
+
+      init = EXLAHelpers.make_buffer(<<0::32-native>>, {:s, 32}, {})
+
+      b = Builder.new("reduce")
+      sum_shape = Shape.make_shape({:s, 32}, {})
+
+      lhs = Op.parameter(b, 0, sum_shape, "a")
+      rhs = Op.parameter(b, 1, sum_shape, "b")
+      sum_ast = Op.add(lhs, rhs)
+      sum = Builder.build(sum_ast)
+
+      [%BinaryBuffer{shape: shape}, %BinaryBuffer{data: data}] =
+        run_one([operand, count, init], fn b, operand, count, init ->
+          reshaped = Op.dynamic_reshape(operand, [count], [6], [true])
+          Op.tuple(b, [reshaped, Op.reduce(reshaped, init, sum, {0})])
         end)
 
-      # returns {6}!
-      assert shape.dims == {3}
-
-      height = EXLAHelpers.make_buffer(<<3::32-native>>, {:s, 32}, {})
-      width = EXLAHelpers.make_buffer(<<2::32-native>>, {:s, 32}, {})
-
-      [%BinaryBuffer{shape: shape}] =
-        run_one([operand, height, width], fn b, operand, height, width ->
-          Op.tuple(b, [Op.dynamic_reshape(operand, [height, width], [6], [true])])
-        end)
-
-      assert shape.dims == {3, 2}
+      # tensor dimensions become the upper bounds provided in the reshape
+      # operation. If some dimensions are dynamic, that's reflected on
+      # subsequent operations.
+      assert shape.dims == {6}
+      assert data == <<13::32-native>>
     end
 
     test "succeeds when data is preloaded" do

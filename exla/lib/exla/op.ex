@@ -118,7 +118,7 @@ defmodule EXLA.Op do
     sizes = Enum.map(sizes, fn %Op{ref: ref} -> ref end)
     is_dynamic = Enum.map(is_dynamic, fn x -> boolean_to_int(x) end)
     ref = EXLA.NIF.dynamic_reshape(operand, sizes, bounds, is_dynamic) |> unwrap!()
-    %{builder: b, ref: ref}
+    %Op{builder: b, ref: ref}
   end
 
   @doc """
