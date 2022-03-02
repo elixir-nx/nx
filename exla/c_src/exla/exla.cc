@@ -248,44 +248,44 @@ ERL_NIF_TERM deallocate_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
 // Dimension Functions
 
 ERL_NIF_TERM get_dimension_size(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-	if (argc != 2) {
-		return exla::nif::error(env, "Bad argument count.");
-	}
+  if (argc != 2) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
 
-	xla::XlaOp *operand;
-	if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
-		return exla::nif::error(env, "Unable to get operand.");
-	}
+  xla::XlaOp *operand;
+  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
 
-	exla::int64 dimension;
-	if (!exla::nif::get(env, argv[1], &dimension)) {
-		return exla::nif::error(env, "Unable to get dimension.");
-	}
+  exla::int64 dimension;
+  if (!exla::nif::get(env, argv[1], &dimension)) {
+    return exla::nif::error(env, "Unable to get dimension.");
+  }
 
-	xla::XlaOp op = xla::GetDimensionSize(*operand, dimension);
-	return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
+  xla::XlaOp op = xla::GetDimensionSize(*operand, dimension);
+  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
 ERL_NIF_TERM set_dimension_size(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-	if (argc != 3) {
-		return exla::nif::error(env, "Bad argument count.");
-	}
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
 
-	xla::XlaOp *operand;
-	if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
-		return exla::nif::error(env, "Unable to get operand.");
-	}
-	xla::XlaOp *size;
-	if (!exla::nif::get<xla::XlaOp>(env, argv[1], size)) {
-		return exla::nif::error(env, "Unable to get size.");
-	}
-	exla::int64 dimension;
-	if (!exla::nif::get(env, argv[2], &dimension)) {
-		return exla::nif::error(env, "Unable to get dimension.");
-	}
+  xla::XlaOp *operand;
+  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  xla::XlaOp *size;
+  if (!exla::nif::get<xla::XlaOp>(env, argv[1], size)) {
+    return exla::nif::error(env, "Unable to get size.");
+  }
+  exla::int64 dimension;
+  if (!exla::nif::get(env, argv[2], &dimension)) {
+    return exla::nif::error(env, "Unable to get dimension.");
+  }
 
-	xla::XlaOp op = xla::SetDimensionSize(*operand, *size, dimension);
-	return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
+  xla::XlaOp op = xla::SetDimensionSize(*operand, *size, dimension);
+  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
 // Shape Functions
@@ -1395,33 +1395,33 @@ ERL_NIF_TERM reshape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
 
 ERL_NIF_TERM dynamic_reshape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-	if (argc != 4) {
-		return exla::nif::error(env, "Bad argument count.");
-	}
+  if (argc != 4) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
 
-	xla::XlaOp* operand;
-	std::vector<xla::XlaOp> dim_sizes;
-	std::vector<exla::int64> new_size_bounds;
-	std::vector<bool> dims_are_dynamic;
+  xla::XlaOp* operand;
+  std::vector<xla::XlaOp> dim_sizes;
+  std::vector<exla::int64> new_size_bounds;
+  std::vector<bool> dims_are_dynamic;
 
-	if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
-		return exla::nif::error(env, "Unable to get operand.");
-	}
-	if (!exla::nif::get_list<xla::XlaOp>(env, argv[1], dim_sizes)) {
-		return exla::nif::error(env, "Unable to get dimension sizes.");
-	}
-	if (!exla::nif::get_list(env, argv[2], new_size_bounds)) {
-		return exla::nif::error(env, "Unable to get new size bounds.");
-	}
-	if (!exla::nif::get_list(env, argv[3], dims_are_dynamic)) {
-		return exla::nif::error(env, "Unable to get dynamic dimensions flag.");
-	}
+  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get_list<xla::XlaOp>(env, argv[1], dim_sizes)) {
+    return exla::nif::error(env, "Unable to get dimension sizes.");
+  }
+  if (!exla::nif::get_list(env, argv[2], new_size_bounds)) {
+    return exla::nif::error(env, "Unable to get new size bounds.");
+  }
+  if (!exla::nif::get_list(env, argv[3], dims_are_dynamic)) {
+    return exla::nif::error(env, "Unable to get dynamic dimensions flag.");
+  }
 
-	// Enqueues a dynamic reshape operation. The dynamic reshape takes additional
-	// XlaOps as sizes for the result dimension. The result dim i is a dynamic
-	// dimension dimension if dims_are_dynamic[i] is true.
-	xla::XlaOp op = xla::DynamicReshape(*operand, dim_sizes, new_size_bounds, dims_are_dynamic);
-	return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
+  // Enqueues a dynamic reshape operation. The dynamic reshape takes additional
+  // XlaOps as sizes for the result dimension. The result dim i is a dynamic
+  // dimension dimension if dims_are_dynamic[i] is true.
+  xla::XlaOp op = xla::DynamicReshape(*operand, dim_sizes, new_size_bounds, dims_are_dynamic);
+  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
 ERL_NIF_TERM broadcast_in_dim(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
