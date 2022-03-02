@@ -76,6 +76,33 @@ defmodule EXLA.ExecutableTest do
                end)
     end
 
+    test "reshapes tensors dynamically" do
+      data =
+        <<11::32-native, 2::32-native, 3::32-native, 4::32-native, 5::32-native, 6::32-native>>
+
+      operand = EXLAHelpers.make_buffer(data, {:s, 32}, {3, 2})
+
+      count = EXLAHelpers.make_buffer(<<3::32-native>>, {:s, 32}, {})
+
+      [%BinaryBuffer{shape: shape}] =
+        run_one([operand, count], fn b, operand, count ->
+          Op.tuple(b, [Op.dynamic_reshape(operand, [count], [6], [true])])
+        end)
+
+      # returns {6}!
+      assert shape.dims == {3}
+
+      height = EXLAHelpers.make_buffer(<<3::32-native>>, {:s, 32}, {})
+      width = EXLAHelpers.make_buffer(<<2::32-native>>, {:s, 32}, {})
+
+      [%BinaryBuffer{shape: shape}] =
+        run_one([operand, height, width], fn b, operand, height, width ->
+          Op.tuple(b, [Op.dynamic_reshape(operand, [height, width], [6], [true])])
+        end)
+
+      assert shape.dims == {3, 2}
+    end
+
     test "succeeds when data is preloaded" do
       t1 =
         DeviceBuffer.place_on_device(

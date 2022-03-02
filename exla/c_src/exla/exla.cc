@@ -1393,6 +1393,37 @@ ERL_NIF_TERM reshape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
+
+ERL_NIF_TERM dynamic_reshape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+	if (argc != 4) {
+		return exla::nif::error(env, "Bad argument count.");
+	}
+
+	xla::XlaOp* operand;
+	std::vector<xla::XlaOp> dim_sizes;
+	std::vector<exla::int64> new_size_bounds;
+	std::vector<bool> dims_are_dynamic;
+
+	if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
+		return exla::nif::error(env, "Unable to get operand.");
+	}
+	if (!exla::nif::get_list<xla::XlaOp>(env, argv[1], dim_sizes)) {
+		return exla::nif::error(env, "Unable to get dimension sizes.");
+	}
+	if (!exla::nif::get_list(env, argv[2], new_size_bounds)) {
+		return exla::nif::error(env, "Unable to get new size bounds.");
+	}
+	if (!exla::nif::get_list(env, argv[3], dims_are_dynamic)) {
+		return exla::nif::error(env, "Unable to get dynamic dimensions flag.");
+	}
+
+	// Enqueues a dynamic reshape operation. The dynamic reshape takes additional
+	// XlaOps as sizes for the result dimension. The result dim i is a dynamic
+	// dimension dimension if dims_are_dynamic[i] is true.
+	xla::XlaOp op = xla::DynamicReshape(*operand, dim_sizes, new_size_bounds, dims_are_dynamic);
+	return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
+}
+
 ERL_NIF_TERM broadcast_in_dim(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");
@@ -2424,6 +2455,7 @@ static ErlNifFunc exla_funcs[] = {
   // Shape/Type Manipulation
   {"broadcast_in_dim", 3, broadcast_in_dim},
   {"reshape", 2, reshape},
+  {"dynamic_reshape", 4, dynamic_reshape},
   {"get_shape", 2, get_shape_op},
   {"convert_element_type", 2, convert_element_type},
   {"bitcast_convert_type", 2, bitcast_convert_type},

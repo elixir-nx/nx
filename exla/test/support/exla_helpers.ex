@@ -34,4 +34,11 @@ defmodule EXLAHelpers do
     [result] = EXLA.Executable.run(exec, [args], opts)
     result
   end
+
+  # TODO: what about a macro that generates the required binary data given a
+  # list of items and a shape specification?
+  def make_buffer(data, type, dims) do
+    shape = EXLA.Shape.make_shape(type, dims)
+    EXLA.BinaryBuffer.from_binary(data, shape)
+  end
 end

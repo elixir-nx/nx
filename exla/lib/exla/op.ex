@@ -114,6 +114,13 @@ defmodule EXLA.Op do
     %{op | ref: ref}
   end
 
+  def dynamic_reshape(%Op{builder: b, ref: operand}, sizes, bounds, is_dynamic) do
+    sizes = Enum.map(sizes, fn %Op{ref: ref} -> ref end)
+    is_dynamic = Enum.map(is_dynamic, fn x -> boolean_to_int(x) end)
+    ref = EXLA.NIF.dynamic_reshape(operand, sizes, bounds, is_dynamic) |> unwrap!()
+    %{builder: b, ref: ref}
+  end
+
   @doc """
   Pads the tensor with value and padding config.
   """

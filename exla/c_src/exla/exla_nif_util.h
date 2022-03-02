@@ -222,6 +222,9 @@ int get_list(ErlNifEnv* env,
              std::vector<int64> &var);
 int get_list(ErlNifEnv* env,
              ERL_NIF_TERM list,
+             std::vector<bool> &var);
+int get_list(ErlNifEnv* env,
+             ERL_NIF_TERM list,
              std::vector<ErlNifBinary> &var);
 
 template <typename T>

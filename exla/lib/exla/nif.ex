@@ -162,6 +162,9 @@ defmodule EXLA.NIF do
   def reshape(_operand, _dimensions),
     do: :erlang.nif_error(:undef)
 
+  def dynamic_reshape(_operand, _dim_sizes, _new_size_bounds, _dims_are_dynamic),
+    do: :erlang.nif_error(:undef)
+
   def broadcast_in_dim(_operand, _dimensions, _broadcast_dims),
     do: :erlang.nif_error(:undef)
 
