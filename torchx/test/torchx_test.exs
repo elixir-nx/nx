@@ -1,5 +1,5 @@
 defmodule TorchxTest do
-  use ExUnit.Case, async: true
+  use Torchx.Case, async: true
 
   doctest Torchx
 
@@ -47,6 +47,25 @@ defmodule TorchxTest do
       result = slice.(tensor)
 
       assert expected |> Nx.equal(result) |> Nx.all() |> Nx.to_number() == 1
+    end
+  end
+
+  describe "indexed_add" do
+    test "clamps when out of bounds" do
+      t = Nx.tensor([[1, 2], [3, 4]])
+
+      result = Nx.indexed_add(t, Nx.tensor([[3, -10]]), Nx.tensor([50]))
+
+      assert_all_close(result, Nx.tensor([[1, 2], [53, 4]]))
+    end
+  end
+
+  describe "gather" do
+    test "raises when out of bounds" do
+      t = Nx.tensor([[1, 2], [3, 4]])
+
+      result = Nx.gather(t, Nx.tensor([[3, -10]]))
+      assert_all_close(result, Nx.tensor([3]))
     end
   end
 end

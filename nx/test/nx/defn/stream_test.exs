@@ -34,7 +34,7 @@ defmodule Nx.Defn.StreamTest do
   end
 
   test "converts accumulator to tensors" do
-    assert %_{} = stream = Nx.Defn.stream(fn -> :unused end, [1, {2, 3}])
+    assert %_{} = stream = Nx.Defn.stream(fn _, _ -> {0, 0} end, [1, {2, 3}])
     assert Nx.Stream.done(stream) == {Nx.tensor(2), Nx.tensor(3)}
   end
 
@@ -49,7 +49,7 @@ defmodule Nx.Defn.StreamTest do
   @tag :capture_log
   test "raises on errors" do
     Process.flag(:trap_exit, true)
-    assert %_{} = stream = Nx.Defn.stream(fn _, _ -> :bad end, [1, 2])
+    assert %_{} = stream = Nx.Defn.stream(fn _, _ -> 0 end, [1, 2])
 
     assert Nx.Stream.send(stream, 1) == :ok
     assert catch_exit(Nx.Stream.recv(stream))
@@ -59,7 +59,7 @@ defmodule Nx.Defn.StreamTest do
   end
 
   test "raises if stream is not compatible on send" do
-    assert %_{} = stream = Nx.Defn.stream(fn -> :unused end, [1, {2, 3}])
+    assert %_{} = stream = Nx.Defn.stream(fn _, _ -> {0, 0} end, [1, {2, 3}])
 
     assert_raise ArgumentError,
                  ~r/Nx stream expected a tensor of type, shape, and names on send/,
@@ -77,7 +77,7 @@ defmodule Nx.Defn.StreamTest do
   end
 
   test "raises if already done" do
-    assert %_{} = stream = Nx.Defn.stream(fn -> :bad end, [1, 2])
+    assert %_{} = stream = Nx.Defn.stream(fn _, _ -> 0 end, [1, 2])
     assert Nx.Stream.done(stream) == Nx.tensor(2)
     assert {:noproc, _} = catch_exit(Nx.Stream.done(stream))
   end
@@ -93,7 +93,7 @@ defmodule Nx.Defn.StreamTest do
 
   test "raises if stream is done when recving" do
     Process.flag(:trap_exit, true)
-    assert %_{} = stream = Nx.Defn.stream(fn -> :bad end, [1, 2])
+    assert %_{} = stream = Nx.Defn.stream(fn _, _ -> 0 end, [1, 2])
 
     assert capture_log(fn ->
              Task.start_link(fn -> Nx.Stream.recv(stream) end)

@@ -272,7 +272,8 @@ defmodule Nx.Defn do
     end
 
     opts = prepare_options(opts)
-    Nx.Defn.Compiler.__jit__(fun, args, opts)
+    [res] = Nx.Defn.Compiler.__jit__(fun, [args], opts)
+    res
   end
 
   @doc """
@@ -360,7 +361,8 @@ defmodule Nx.Defn do
       [input, acc | args] ->
         acc = Nx.Defn.Composite.traverse(acc, &Nx.to_tensor/1)
         opts = prepare_options(opts)
-        Nx.Defn.Compiler.__stream__(fun, Nx.to_template(input), acc, args, opts)
+        [stream] = Nx.Defn.Compiler.__stream__(fun, Nx.to_template(input), acc, args, opts)
+        stream
 
       _ ->
         raise ArgumentError, "Nx.Defn.stream/3 expects at least two arguments"

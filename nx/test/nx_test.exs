@@ -792,6 +792,18 @@ defmodule NxTest do
         assert result == Nx.indexed_add(Nx.tensor(zeros), Nx.tensor([[i, i]]), upd)
       end
     end
+
+    test "raises when out of bounds" do
+      t = Nx.tensor([[1, 2], [3, 4]])
+
+      assert_raise ArgumentError, "index 3 is out of bounds for axis 0 in shape {2, 2}", fn ->
+        Nx.indexed_add(t, Nx.tensor([[3, -10]]), Nx.tensor([1]))
+      end
+
+      assert_raise ArgumentError, "index -1 is out of bounds for axis 1 in shape {2, 2}", fn ->
+        Nx.indexed_add(t, Nx.tensor([[0, -1]]), Nx.tensor([1]))
+      end
+    end
   end
 
   describe "quotient/2" do
@@ -1885,15 +1897,30 @@ defmodule NxTest do
     end
   end
 
+  describe "serialize/deserialize" do
+    test "cannot serialize containers" do
+      assert_raise ArgumentError, ~r"unable to serialize", fn ->
+        Nx.serialize(%Container{})
+      end
+    end
+
+    test "serializes numbers" do
+      assert Nx.deserialize(Nx.serialize(123)) == Nx.tensor(123)
+      assert Nx.deserialize(Nx.serialize(1.2)) == Nx.tensor(1.2)
+    end
+  end
+
   describe "sigils" do
     test "evaluates to tensor" do
       import Nx
 
       assert ~M[-1 2 3 4] == Nx.tensor([[-1, 2, 3, 4]])
+
       assert ~M[1
                 2
                 3
                 4] == Nx.tensor([[1], [2], [3], [4]])
+
       assert ~M[1.0 2  3
                 11  12 13] == Nx.tensor([[1.0, 2, 3], [11, 12, 13]])
 
@@ -1951,8 +1978,12 @@ defmodule NxTest do
     test "raises when out of bounds" do
       t = Nx.tensor([[1, 2], [3, 4]])
 
-      assert_raise ArgumentError, "index 10 is out of bounds for axis 0 in shape [2]", fn ->
-        Nx.gather(t, Nx.tensor([[10, -10]]))
+      assert_raise ArgumentError, "index 3 is out of bounds for axis 0 in shape {2, 2}", fn ->
+        Nx.gather(t, Nx.tensor([[3, -10]]))
+      end
+
+      assert_raise ArgumentError, "index -1 is out of bounds for axis 1 in shape {2, 2}", fn ->
+        Nx.gather(t, Nx.tensor([[0, -1]]))
       end
     end
   end

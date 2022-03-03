@@ -5,7 +5,7 @@ defmodule EXLA.Defn do
   alias Nx.Tensor, as: T
 
   @doc false
-  def __stream__(key, input, acc, vars, fun, options) do
+  def __stream__(key, input, acc, vars, fun, [args], options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
     keep_on_device? = Keyword.get(run_options, :keep_on_device, false)
     run_options = Keyword.put(run_options, :keep_on_device, true)
@@ -17,13 +17,13 @@ defmodule EXLA.Defn do
     input_vars = Nx.Defn.Composite.flatten_list([input])
     input_shape = EXLA.Shape.make_tuple_shape(Enum.map(input_vars, &nx_to_shape!/1))
     acc_vars = Nx.Defn.Composite.flatten_list([acc])
-    split_fun = &split_stream(&1, &2, length(input_vars), length(acc_vars))
+    used_fun = &stream_used_inputs(&1, length(input_vars), length(acc_vars))
 
     comp_fun =
       &to_stream_computation(client, key, input_shape, acc_vars, &1, &2, &3, compile_options)
 
-    {executable, inputs, {output, acc_output}, hooks, output_shapes} =
-      compile(client, {:stream, key}, vars, fun, compile_options, split_fun, comp_fun)
+    {executable, used_inputs, {output, acc_output}, hooks, output_shapes} =
+      compile(client, {:stream, key}, vars, fun, compile_options, used_fun, comp_fun)
 
     # Execution of streams requires the coordination of
     # multiple processes which is outlined below.
@@ -32,7 +32,11 @@ defmodule EXLA.Defn do
     # to avoid transfer to the device unless we know we are
     # ready to use the device.
     lock = EXLA.Defn.Lock.lock(run_key(executable))
-    buffers = EXLA.Defn.Buffers.from_nx!(inputs)
+
+    buffers =
+      args
+      |> filter_inputs(used_inputs)
+      |> EXLA.Defn.Buffers.from_nx!()
 
     # Now that we have transferred to device, we spawn a runner process
     # to execute the stream. We use a runner instead of a task to avoid
@@ -54,29 +58,27 @@ defmodule EXLA.Defn do
     hooks = Map.put(hooks, 1, {output_shapes, {self(), lock}})
     {:ok, outfeed} = EXLA.Defn.Outfeed.start_child(executable, hooks)
 
-    EXLA.Defn.Stream.run(
-      executable,
-      lock,
-      runner,
-      outfeed,
-      input,
-      input_shape,
-      output,
-      output_shapes,
-      acc_output,
-      keep_on_device?
-    )
+    stream =
+      EXLA.Defn.Stream.run(
+        executable,
+        lock,
+        runner,
+        outfeed,
+        input,
+        input_shape,
+        output,
+        output_shapes,
+        acc_output,
+        keep_on_device?
+      )
+
+    [stream]
   end
 
-  defp split_stream(vars, used, input_length, acc_length) do
+  defp stream_used_inputs(used, input_length, acc_length) do
     # Remove inputs from used buffers and include all accumulator entries.
     total = input_length + acc_length
-
-    used =
-      Enum.to_list(input_length..(input_length + acc_length - 1)//1) ++
-        Enum.drop_while(used, &(&1 < total))
-
-    {Enum.take(vars, input_length), used}
+    Enum.to_list(input_length..(total - 1)//1) ++ Enum.drop_while(used, &(&1 < total))
   end
 
   defp to_stream_computation(
@@ -215,16 +217,16 @@ defmodule EXLA.Defn do
   end
 
   @doc false
-  def __jit__(key, vars, fun, options) do
+  def __jit__(key, vars, fun, [args], options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
     {client_name, compile_options} = Keyword.pop(compile_options, :client, :host)
     client = EXLA.Client.fetch!(client_name)
     callback = &to_root_computation(key, &1, &2, &3, compile_options)
 
-    {executable, inputs, outputs, hooks, :ok} =
-      compile(client, key, vars, fun, compile_options, fn _, used -> {[], used} end, callback)
+    {executable, used_inputs, outputs, hooks, :ok} =
+      compile(client, key, vars, fun, compile_options, & &1, callback)
 
-    maybe_outfeed(executable, inputs, outputs, hooks, run_options)
+    maybe_outfeed(executable, args, used_inputs, outputs, hooks, run_options)
   end
 
   defp to_root_computation(key, expr, used_shapes, used_hooks, options) do
@@ -248,21 +250,31 @@ defmodule EXLA.Defn do
     {EXLA.Builder.build(res), :ok, outfeed_hooks}
   end
 
-  defp maybe_outfeed(executable, inputs, outputs, hooks, run_options) when hooks == %{} do
+  defp maybe_outfeed(executable, args, used_inputs, outputs, hooks, run_options)
+       when hooks == %{} do
     lock = EXLA.Defn.Lock.lock(run_key(executable))
 
     try do
-      EXLA.Executable.run(executable, [EXLA.Defn.Buffers.from_nx!(inputs)], run_options)
+      buffers =
+        args
+        |> filter_inputs(used_inputs)
+        |> EXLA.Defn.Buffers.from_nx!()
+
+      EXLA.Executable.run(executable, [buffers], run_options)
     else
-      [result] -> EXLA.Defn.Buffers.to_nx!(result, outputs)
+      [result] -> [EXLA.Defn.Buffers.to_nx!(result, outputs)]
     after
       EXLA.Defn.Lock.unlock(lock)
     end
   end
 
-  defp maybe_outfeed(executable, inputs, outputs, hooks, run_options) do
+  defp maybe_outfeed(executable, args, used_inputs, outputs, hooks, run_options) do
     lock = EXLA.Defn.Lock.lock(run_key(executable))
-    buffers = EXLA.Defn.Buffers.from_nx!(inputs)
+
+    buffers =
+      args
+      |> filter_inputs(used_inputs)
+      |> EXLA.Defn.Buffers.from_nx!()
 
     {:ok, runner} =
       EXLA.Defn.Runner.start_link(lock, fn ->
@@ -279,7 +291,7 @@ defmodule EXLA.Defn do
     receive do
       {:DOWN, ^ref, _, _, _} ->
         [result] = EXLA.Defn.Runner.read(runner)
-        EXLA.Defn.Buffers.to_nx!(result, outputs, fun)
+        [EXLA.Defn.Buffers.to_nx!(result, outputs, fun)]
     end
   end
 
@@ -287,7 +299,7 @@ defmodule EXLA.Defn do
 
   ## Compile
 
-  defp compile(client, key, vars, fun, options, to_split, to_computation) do
+  defp compile(client, key, vars, fun, options, to_used, to_computation) do
     {{expr_cache_fun, comp_cache_fun}, options} =
       Keyword.pop(options, EXLA, {&EXLA.Defn.LockedCache.run/2, &EXLA.Defn.LockedCache.run/2})
 
@@ -304,14 +316,13 @@ defmodule EXLA.Defn do
     {hooks, options} = Keyword.pop(options, :hooks, %{})
     used_hooks = Enum.sort(for {k, v} <- defined_hooks, v != nil or Map.has_key?(hooks, k), do: k)
 
-    {non_buffers, used_inputs} = to_split.(vars, used_inputs)
-    {inputs, cache_args} = filter_inputs(vars, used_inputs)
-    cache_args = Enum.map(non_buffers, &nx_to_cache_key!/1) ++ cache_args
+    used_inputs = to_used.(used_inputs)
+    cache_args = Enum.map(vars, &nx_to_cache_key!/1)
     cache_key = {key, cache_args, client.name, used_hooks, options}
 
     {_, {executable, extra, outfeed_hooks}} =
       comp_cache_fun.(cache_key, fn ->
-        shapes = Enum.map(inputs, &nx_to_shape!/1)
+        shapes = vars |> filter_inputs(used_inputs) |> Enum.map(&nx_to_shape!/1)
         inputs_and_shapes = Enum.zip(used_inputs, shapes)
 
         {computation, extra, hooks} =
@@ -327,7 +338,7 @@ defmodule EXLA.Defn do
           do: {flag, {shapes, compile_hook(key, hooks, defined_hooks, template)}},
           into: %{}
 
-    {executable, inputs, outputs, hooks, extra}
+    {executable, used_inputs, outputs, hooks, extra}
   end
 
   defp compile_hook(key, hooks, defined_hooks, template) do
@@ -1486,20 +1497,16 @@ defmodule EXLA.Defn do
 
   # Helpers
 
-  defp filter_inputs(vars, inputs), do: filter_inputs(vars, 0, inputs, [], [])
+  defp filter_inputs(args, inputs), do: filter_inputs(args, 0, inputs)
 
-  defp filter_inputs([var | vars], i, [i | inputs], buffers, cache) do
-    i = i + 1
-    filter_inputs(vars, i, inputs, [var | buffers], [nx_to_cache_key!(var) | cache])
-  end
+  defp filter_inputs([var | vars], i, [i | inputs]),
+    do: [var | filter_inputs(vars, i + 1, inputs)]
 
-  defp filter_inputs([var | vars], i, inputs, buffers, cache) do
-    filter_inputs(vars, i + 1, inputs, buffers, [nx_to_cache_key!(var) | cache])
-  end
+  defp filter_inputs([_var | vars], i, inputs),
+    do: filter_inputs(vars, i + 1, inputs)
 
-  defp filter_inputs([], _i, [], buffers, cache) do
-    {Enum.reverse(buffers), cache}
-  end
+  defp filter_inputs([], _i, []),
+    do: []
 
   defp nx_to_shape!(%T{type: type, shape: shape}), do: EXLA.Shape.make_shape(type, shape)
   defp nx_to_cache_key!(%T{type: type, shape: shape}), do: {type, shape}

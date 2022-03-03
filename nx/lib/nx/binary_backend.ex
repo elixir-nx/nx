@@ -1914,16 +1914,16 @@ defmodule Nx.BinaryBackend do
     from_binary(out, new_data)
   end
 
-  defp index_to_binary_offset(index, shape) when is_list(index) and is_tuple(shape) do
+  defp index_to_binary_offset(index, input_shape) when is_list(index) and is_tuple(input_shape) do
     {offset, []} =
       index
       |> Enum.with_index()
       |> Enum.reduce(
-        {0, Tuple.to_list(shape)},
+        {0, Tuple.to_list(input_shape)},
         fn {idx, axis}, {offset, [dim_size | shape]} ->
           if idx < 0 or idx >= dim_size do
             raise ArgumentError,
-                  "index #{idx} is out of bounds for axis #{axis} in shape #{inspect(shape)}"
+                  "index #{idx} is out of bounds for axis #{axis} in shape #{inspect(input_shape)}"
           end
 
           {offset + idx * Enum.product(shape), shape}

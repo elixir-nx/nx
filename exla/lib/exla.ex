@@ -365,8 +365,8 @@ defmodule EXLA do
   end
 
   @impl true
-  defdelegate __jit__(key, vars, fun, opts), to: EXLA.Defn
+  defdelegate __jit__(key, vars, fun, args, opts), to: EXLA.Defn
 
   @impl true
-  defdelegate __stream__(key, input, acc, vars, fun, opts), to: EXLA.Defn
+  defdelegate __stream__(key, input, acc, vars, fun, args, opts), to: EXLA.Defn
 end
