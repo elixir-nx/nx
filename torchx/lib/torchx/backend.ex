@@ -1004,11 +1004,13 @@ defmodule Torchx.Backend do
         List.duplicate(1, 4 - tuple_size(tensor.shape)) ++ Tuple.to_list(tensor.shape)
       )
 
+    padding = List.duplicate(0, 3)
+
     tensor
-    |> Nx.multiply(1.0)
-    |> Nx.reshape(pool_shape)
     |> from_nx()
-    |> Torchx.max_pool_3d(window_dims, strides, List.duplicate(0, 3), window_dilations)
+    |> Torchx.reshape(pool_shape)
+    |> Torchx.to_type(:double)
+    |> Torchx.max_pool_3d(window_dims, strides, padding, window_dilations)
     |> Torchx.reshape(out.shape)
     |> Torchx.to_type(to_torch_type(out.type))
     |> to_nx(out)
