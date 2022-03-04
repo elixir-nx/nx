@@ -834,7 +834,7 @@ defmodule NxTest do
     test "returns a dynamically reshaped tensor" do
       t = Nx.tensor([1, 2, 3, 4, 5, 6])
       s = Nx.tensor([2, 2])
-      b = [3, 3]
+      b = {3, 3}
 
       reshaped = Nx.dynamic_reshape(t, s, b)
       sum = Nx.reduce(reshaped, 0, fn x, y -> Nx.add(x, y) end)
