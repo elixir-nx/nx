@@ -830,6 +830,21 @@ defmodule NxTest do
     end
   end
 
+  describe "dynamic_reshape" do
+    test "returns a dynamically reshaped tensor" do
+      t = Nx.tensor([1, 2, 3, 4, 5, 6])
+      s = Nx.tensor([2, 2])
+      b = [3, 3]
+
+      reshaped = Nx.dynamic_reshape(t, s, b)
+      sum = Nx.reduce(reshaped, 0, fn x, y -> Nx.add(x, y) end)
+
+      assert reshaped == Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      # 1+2+4+5
+      assert sum == Nx.tensor([12])
+    end
+  end
+
   describe "flatten" do
     test "returns a flattened tensor given a N-Dimensional tensor" do
       t = Nx.iota({3, 3, 3})
