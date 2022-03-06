@@ -981,16 +981,15 @@ defmodule Torchx.Backend do
 
   @impl true
   def window_max(out, tensor, window_dims_tuple, opts) do
+    if tuple_size(window_dims_tuple) > 3 do
+      raise ArgumentError, "cannot have more than 3 dimensions for the window"
+    end
+
     if Enum.any?(opts[:padding], fn conf -> conf |> Tuple.to_list() |> Enum.any?(&(&1 != 0)) end) do
       raise ArgumentError, "padding unsupported"
     end
 
     strides = opts[:strides]
-
-    if tuple_size(window_dims_tuple) > 3 do
-      raise ArgumentError, "cannot have more than 3 dimensions for the window"
-    end
-
     window_dilations = opts[:window_dilations]
 
     strides = List.duplicate(1, 3 - length(strides)) ++ strides
@@ -1004,12 +1003,18 @@ defmodule Torchx.Backend do
         List.duplicate(1, 4 - tuple_size(tensor.shape)) ++ Tuple.to_list(tensor.shape)
       )
 
+    # TO-DO: implement actual padding
     padding = List.duplicate(0, 3)
+
+    intermediate_type =
+      tensor.type
+      |> Nx.Type.to_floating()
+      |> to_torch_type()
 
     tensor
     |> from_nx()
     |> Torchx.reshape(pool_shape)
-    |> Torchx.to_type(:double)
+    |> Torchx.to_type(intermediate_type)
     |> Torchx.max_pool_3d(window_dims, strides, padding, window_dilations)
     |> Torchx.reshape(out.shape)
     |> Torchx.to_type(to_torch_type(out.type))
