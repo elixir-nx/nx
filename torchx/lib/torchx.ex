@@ -268,6 +268,7 @@ defmodule Torchx do
   deftensor solve(tensor_a, tensor_b)
 
   deftensor conv(tensor_input, tensor_kernel, strides, padding, dilation, transposed, groups)
+  deftensor max_pool_3d(tensor_input, kernel_size, strides, padding, dilation)
 
   ## Dirty non-tensor return values
 

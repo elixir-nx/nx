@@ -846,6 +846,17 @@ NIF(conv)
   ));
 }
 
+NIF(max_pool_3d)
+{
+  TENSOR_PARAM(0, tensor);
+  LIST_PARAM(1, std::vector<int64_t>, kernel_size);
+  LIST_PARAM(2, std::vector<int64_t>, strides);
+  LIST_PARAM(3, std::vector<int64_t>, padding);
+  LIST_PARAM(4, std::vector<int64_t>, dilation);
+
+  TENSOR(at::max_pool3d(*tensor, kernel_size, strides, padding, dilation));
+}
+
 void free_tensor(ErlNifEnv *env, void *obj)
 {
   torch::Tensor* tensor = reinterpret_cast<torch::Tensor*>(obj);
@@ -1022,6 +1033,7 @@ static ErlNifFunc nif_functions[] = {
     DF(amin, 3),
 
     DF(conv, 7),
+    DF(max_pool_3d, 5),
 
     F(cuda_is_available, 0),
     F(cuda_device_count, 0),

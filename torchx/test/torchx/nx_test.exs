@@ -564,4 +564,47 @@ defmodule Torchx.NxTest do
       )
     end
   end
+
+  describe "window_max" do
+    test "works with default opts" do
+      result =
+        Nx.window_max(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]), {1, 2, 1})
+
+      assert_all_close(
+        result,
+        Nx.tensor([
+          [
+            [4, 5, 6]
+          ],
+          [
+            [4, 5, 6]
+          ]
+        ])
+      )
+    end
+
+    test "fails with non-zero padding" do
+      assert_raise ArgumentError, fn ->
+        Nx.window_max(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]), {1, 2, 1},
+          padding: [{0, 1}, {2, 0}, {1, 1}]
+        )
+      end
+    end
+
+    test "works with non-default options" do
+      t = Nx.tensor([[[4, 2, 1, 3], [4, 2, 1, 7]], [[1, 2, 5, 7], [1, 8, 9, 2]]])
+      opts = [strides: [2, 1, 1], padding: :valid, window_dilations: [1, 2, 2]]
+      result = Nx.window_max(t, {1, 1, 2}, opts)
+
+      assert_all_close(
+        result,
+        Nx.tensor([
+          [
+            [4, 3],
+            [4, 7]
+          ]
+        ])
+      )
+    end
+  end
 end
