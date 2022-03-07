@@ -1022,6 +1022,28 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def window_min(out, tensor, window_dims_tuple, opts) do
+    # libtorch does not expose min_pool3d or similar
+    # Therefore, we use the fact that for any set of negative numbers,
+    # the maximum value is also the one with the smallest absolute value.
+
+    # For instance abs(min([1, 2, 3, 4])) == abs(max([-1, -2, -3, -4])).
+
+    # We can also look at this from inequality point of view.
+    # Negating both sides flips the comparison: x > y -> -x < -y
+    # So a function which returns the smallest side will end up
+    # returning the other one if the inputs are negated.
+
+    # So if we negate the input and then negate the output of window_max,
+    # we get the expected result for window_min.
+
+    tensor
+    |> Nx.negate()
+    |> then(&window_max(out, &1, window_dims_tuple, opts))
+    |> Nx.negate()
+  end
+
+  @impl true
   def inspect(%T{} = tensor, inspect_opts) do
     result =
       if device?(tensor, :cpu) do
