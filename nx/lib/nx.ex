@@ -9380,16 +9380,10 @@ defmodule Nx do
   defp from_term({1, endianness, term}) do
     case term do
       {:tensor, shape, {_, size} = type, names, binary} ->
-        if endianness == System.endianness() do
-          binary
-          |> from_binary(type)
-          |> reshape(shape, names: names)
-        else
-          binary
-          |> new_byte_order(size, endianness)
-          |> from_binary(type)
-          |> reshape(shape, names: names)
-        end
+        binary
+        |> new_byte_order(size, endianness)
+        |> from_binary(type)
+        |> reshape(shape, names: names)
 
       {:container, container} ->
         {deserialized, :ok} =
