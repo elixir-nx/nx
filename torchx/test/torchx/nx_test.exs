@@ -640,7 +640,7 @@ defmodule Torchx.NxTest do
     @tag :skip
     test "works with non-default options" do
       t = Nx.tensor([[[4, 2, 1, 3], [4, 2, 1, 7]], [[1, 2, 5, 7], [1, 8, 9, 2]]])
-      opts = [strides: [2, 1, 1], padding: :valid, window_dilations: [1, 2, 1]]
+      opts = [strides: [2, 1, 1], padding: :valid, window_dilations: [1, 2, 2]]
       result = Nx.window_min(t, {1, 1, 2}, opts)
 
       assert_all_close(
