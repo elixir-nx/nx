@@ -1019,8 +1019,8 @@ defmodule Torchx.Backend do
     end)
   end
 
-  def window_op(out, tensor, window_dims_tuple, opts, reduce_fun)
-      when is_function(reduce_fun, 2) do
+  defp window_op(out, tensor, window_dims_tuple, opts, reduce_fun)
+       when is_function(reduce_fun, 2) do
     if opts[:window_dilations] != List.duplicate(1, tuple_size(tensor.shape)) do
       raise ArgumentError, "window_dilations unsupported"
     end
