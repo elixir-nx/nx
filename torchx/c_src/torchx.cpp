@@ -368,6 +368,16 @@ NIF(flip)
   TENSOR(torch::flip(*input, dims));
 }
 
+NIF(unfold)
+{
+  TENSOR_PARAM(0, input);
+  PARAM(1, int64_t, dim);
+  PARAM(2, int64_t, size);
+  PARAM(3, int64_t, step);
+
+  TENSOR(at::native::unfold(*input, dim, size, step));
+}
+
 NIF(permute)
 {
   TENSOR_PARAM(0, t);
@@ -940,6 +950,7 @@ static ErlNifFunc nif_functions[] = {
     DF(indexed_add, 4),
     DF(argsort, 3),
     DF(flip, 2),
+    DF(unfold, 4),
 
     DF(add, 2),
     DF(subtract, 2),

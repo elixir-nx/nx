@@ -1044,6 +1044,53 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def window_sum(out, tensor, window_dims_tuple, opts) do
+    window_op(out, tensor, window_dims_tuple, opts, &Torchx.sum(&1, &2, false))
+  end
+
+  @impl true
+  def window_op(out, tensor, window_dims_tuple, opts, reduce_fun)
+      when is_function(reduce_fun, 2) do
+    if opts[:window_dilations] != List.duplicate(1, tuple_size(tensor.shape)) do
+      raise ArgumentError, "window_dilations unsupported"
+    end
+
+    strides = opts[:strides]
+
+    pad_config =
+      opts[:padding]
+      |> Enum.map(fn {a, b} -> [a, b] end)
+      |> Enum.reverse()
+      |> List.flatten()
+
+    intermediate_type =
+      tensor.type
+      |> Nx.Type.to_floating()
+      |> to_torch_type()
+
+    t_tx =
+      tensor
+      |> from_nx()
+      |> Torchx.to_type(intermediate_type)
+      |> Torchx.pad(pad_config, 0)
+
+    {t_tx, _} =
+      for {window_dim, stride} <- Enum.zip(Tuple.to_list(window_dims_tuple), strides),
+          reduce: {t_tx, 0} do
+        {t_tx, dim} ->
+          {Torchx.unfold(t_tx, dim, window_dim, stride), dim + 1}
+      end
+
+    axes = Enum.to_list(-tuple_size(window_dims_tuple)..-1//1)
+
+    reduce_fun
+    |> apply([t_tx, axes])
+    |> Torchx.reshape(out.shape)
+    |> Torchx.to_type(to_torch_type(out.type))
+    |> to_nx(out)
+  end
+
+  @impl true
   def inspect(%T{} = tensor, inspect_opts) do
     result =
       if device?(tensor, :cpu) do
