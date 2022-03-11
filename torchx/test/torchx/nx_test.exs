@@ -673,4 +673,23 @@ defmodule Torchx.NxTest do
       )
     end
   end
+
+  describe "window_product" do
+    test "works with simple params" do
+      t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]])
+      result = Nx.window_product(t, {1, 2, 1})
+
+      assert_all_close(
+        result,
+        Nx.tensor([
+          [
+            [4, 10, 18]
+          ],
+          [
+            [4, 10, 18]
+          ]
+        ])
+      )
+    end
+  end
 end

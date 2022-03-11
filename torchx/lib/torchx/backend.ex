@@ -554,8 +554,14 @@ defmodule Torchx.Backend do
   end
 
   defp aggregate_over_axes(t, axes, keep_axes, fun) when is_function(fun, 3) do
+    t_tx =
+      case t do
+        {_, _} -> t
+        _ -> from_nx(t)
+      end
+
     {_, result_tx} =
-      for _ <- 1..length(axes), reduce: {axes, from_nx(t)} do
+      for _ <- 1..length(axes), reduce: {axes, t_tx} do
         {[], t_tx} ->
           {[], t_tx}
 
@@ -979,6 +985,7 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
+  @impl true
   def window_max(out, tensor, window_dims_tuple, opts) do
     window_op(
       out,
@@ -989,6 +996,7 @@ defmodule Torchx.Backend do
     )
   end
 
+  @impl true
   def window_min(out, tensor, window_dims_tuple, opts) do
     window_op(
       out,
@@ -1005,6 +1013,12 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def window_product(out, tensor, window_dims_tuple, opts) do
+    window_op(out, tensor, window_dims_tuple, opts, fn tensor, axes ->
+      aggregate_over_axes(tensor, axes, false, &Torchx.product/3)
+    end)
+  end
+
   def window_op(out, tensor, window_dims_tuple, opts, reduce_fun)
       when is_function(reduce_fun, 2) do
     if opts[:window_dilations] != List.duplicate(1, tuple_size(tensor.shape)) do
@@ -1017,12 +1031,6 @@ defmodule Torchx.Backend do
 
     strides = opts[:strides]
 
-    pad_config =
-      opts[:padding]
-      |> Enum.map(fn {a, b} -> [0, 0] end)
-      |> Enum.reverse()
-      |> List.flatten()
-
     intermediate_type =
       tensor.type
       |> Nx.Type.to_floating()
@@ -1033,7 +1041,6 @@ defmodule Torchx.Backend do
       tensor
       |> from_nx()
       |> Torchx.to_type(intermediate_type)
-      |> Torchx.pad(pad_config, 0)
 
     {t_tx, _} =
       for {window_dim, stride} <- Enum.zip(Tuple.to_list(window_dims_tuple), strides),
@@ -1042,7 +1049,10 @@ defmodule Torchx.Backend do
           {Torchx.unfold(t_tx, dim, window_dim, stride), dim + 1}
       end
 
-    axes = Enum.to_list(-tuple_size(window_dims_tuple)..-1//1)
+    axes =
+      Enum.map(tuple_size(window_dims_tuple)..1//-1, fn axis ->
+        tuple_size(Torchx.shape(t_tx)) - axis
+      end)
 
     reduce_fun
     |> apply([t_tx, axes])
