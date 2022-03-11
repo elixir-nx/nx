@@ -979,68 +979,24 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  @impl true
   def window_max(out, tensor, window_dims_tuple, opts) do
-    if tuple_size(window_dims_tuple) > 3 do
-      raise ArgumentError, "cannot have more than 3 dimensions for the window"
-    end
-
-    if Enum.any?(opts[:padding], fn conf -> conf |> Tuple.to_list() |> Enum.any?(&(&1 != 0)) end) do
-      raise ArgumentError, "padding unsupported"
-    end
-
-    strides = opts[:strides]
-    window_dilations = opts[:window_dilations]
-
-    strides = List.duplicate(1, 3 - length(strides)) ++ strides
-    window_dilations = List.duplicate(1, 3 - length(window_dilations)) ++ window_dilations
-
-    window_dims =
-      List.duplicate(1, 3 - tuple_size(window_dims_tuple)) ++ Tuple.to_list(window_dims_tuple)
-
-    pool_shape =
-      List.to_tuple(
-        List.duplicate(1, 4 - tuple_size(tensor.shape)) ++ Tuple.to_list(tensor.shape)
-      )
-
-    # TO-DO: implement actual padding
-    padding = List.duplicate(0, 3)
-
-    intermediate_type =
-      tensor.type
-      |> Nx.Type.to_floating()
-      |> to_torch_type()
-
-    tensor
-    |> from_nx()
-    |> Torchx.reshape(pool_shape)
-    |> Torchx.to_type(intermediate_type)
-    |> Torchx.max_pool_3d(window_dims, strides, padding, window_dilations)
-    |> Torchx.reshape(out.shape)
-    |> Torchx.to_type(to_torch_type(out.type))
-    |> to_nx(out)
+    window_op(
+      out,
+      tensor,
+      window_dims_tuple,
+      opts,
+      &Torchx.amax(&1, &2, false)
+    )
   end
 
-  @impl true
   def window_min(out, tensor, window_dims_tuple, opts) do
-    # libtorch does not expose min_pool3d or similar
-    # Therefore, we use the fact that for any set of negative numbers,
-    # the maximum value is also the one with the smallest absolute value.
-
-    # For instance abs(min([1, 2, 3, 4])) == abs(max([-1, -2, -3, -4])).
-
-    # We can also look at this from inequality point of view.
-    # Negating both sides flips the comparison: x > y -> -x < -y
-    # So a function which returns the smallest side will end up
-    # returning the other one if the inputs are negated.
-
-    # So if we negate the input and then negate the output of window_max,
-    # we get the expected result for window_min.
-
-    tensor
-    |> Nx.negate()
-    |> then(&window_max(out, &1, window_dims_tuple, opts))
-    |> Nx.negate()
+    window_op(
+      out,
+      tensor,
+      window_dims_tuple,
+      opts,
+      &Torchx.amin(&1, &2, false)
+    )
   end
 
   @impl true
@@ -1055,11 +1011,15 @@ defmodule Torchx.Backend do
       raise ArgumentError, "window_dilations unsupported"
     end
 
+    if Enum.any?(opts[:padding], fn conf -> conf |> Tuple.to_list() |> Enum.any?(&(&1 != 0)) end) do
+      raise ArgumentError, "padding unsupported"
+    end
+
     strides = opts[:strides]
 
     pad_config =
       opts[:padding]
-      |> Enum.map(fn {a, b} -> [a, b] end)
+      |> Enum.map(fn {a, b} -> [0, 0] end)
       |> Enum.reverse()
       |> List.flatten()
 
@@ -1068,6 +1028,7 @@ defmodule Torchx.Backend do
       |> Nx.Type.to_floating()
       |> to_torch_type()
 
+    # TO-DO: support padding
     t_tx =
       tensor
       |> from_nx()
