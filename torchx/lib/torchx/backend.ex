@@ -992,6 +992,7 @@ defmodule Torchx.Backend do
       tensor,
       window_dims_tuple,
       opts,
+      tensor.type |> Nx.Constants.min_finite() |> Nx.to_number(),
       &Torchx.amax(&1, &2, false)
     )
   end
@@ -1003,31 +1004,32 @@ defmodule Torchx.Backend do
       tensor,
       window_dims_tuple,
       opts,
+      tensor.type |> Nx.Constants.max_finite() |> Nx.to_number(),
       &Torchx.amin(&1, &2, false)
     )
   end
 
   @impl true
   def window_sum(out, tensor, window_dims_tuple, opts) do
-    window_op(out, tensor, window_dims_tuple, opts, &Torchx.sum(&1, &2, false))
+    window_op(out, tensor, window_dims_tuple, opts, 0, &Torchx.sum(&1, &2, false))
   end
 
   @impl true
   def window_product(out, tensor, window_dims_tuple, opts) do
-    window_op(out, tensor, window_dims_tuple, opts, fn tensor, axes ->
+    window_op(out, tensor, window_dims_tuple, opts, 1, fn tensor, axes ->
       aggregate_over_axes(tensor, axes, false, &Torchx.product/3)
     end)
   end
 
-  defp window_op(out, tensor, window_dims_tuple, opts, reduce_fun)
+  defp window_op(out, tensor, window_dims_tuple, opts, pad_constant, reduce_fun)
        when is_function(reduce_fun, 2) do
     if opts[:window_dilations] != List.duplicate(1, tuple_size(tensor.shape)) do
       raise ArgumentError, "window_dilations unsupported"
     end
 
-    if Enum.any?(opts[:padding], fn conf -> conf |> Tuple.to_list() |> Enum.any?(&(&1 != 0)) end) do
-      raise ArgumentError, "padding unsupported"
-    end
+    # if Enum.any?(opts[:padding], fn conf -> conf |> Tuple.to_list() |> Enum.any?(&(&1 != 0)) end) do
+    #   raise ArgumentError, "padding unsupported"
+    # end
 
     strides = opts[:strides]
 
@@ -1036,11 +1038,17 @@ defmodule Torchx.Backend do
       |> Nx.Type.to_floating()
       |> to_torch_type()
 
-    # TO-DO: support padding
+    padding =
+      opts[:padding]
+      |> Enum.map(fn {a, b} -> [a, b] end)
+      |> Enum.reverse()
+      |> List.flatten()
+
     t_tx =
       tensor
       |> from_nx()
       |> Torchx.to_type(intermediate_type)
+      |> Torchx.pad(padding, pad_constant)
 
     {t_tx, _} =
       for {window_dim, stride} <- Enum.zip(Tuple.to_list(window_dims_tuple), strides),
