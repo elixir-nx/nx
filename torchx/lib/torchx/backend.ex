@@ -554,8 +554,14 @@ defmodule Torchx.Backend do
   end
 
   defp aggregate_over_axes(t, axes, keep_axes, fun) when is_function(fun, 3) do
+    t_tx =
+      case t do
+        {_, _} -> t
+        _ -> from_nx(t)
+      end
+
     {_, result_tx} =
-      for _ <- 1..length(axes), reduce: {axes, from_nx(t)} do
+      for _ <- 1..length(axes), reduce: {axes, t_tx} do
         {[], t_tx} ->
           {[], t_tx}
 
@@ -981,66 +987,86 @@ defmodule Torchx.Backend do
 
   @impl true
   def window_max(out, tensor, window_dims_tuple, opts) do
-    if tuple_size(window_dims_tuple) > 3 do
-      raise ArgumentError, "cannot have more than 3 dimensions for the window"
+    window_op(
+      out,
+      tensor,
+      window_dims_tuple,
+      opts,
+      tensor.type |> Nx.Constants.min_finite() |> Nx.to_number(),
+      &Torchx.amax(&1, &2, false)
+    )
+  end
+
+  @impl true
+  def window_min(out, tensor, window_dims_tuple, opts) do
+    window_op(
+      out,
+      tensor,
+      window_dims_tuple,
+      opts,
+      tensor.type |> Nx.Constants.max_finite() |> Nx.to_number(),
+      &Torchx.amin(&1, &2, false)
+    )
+  end
+
+  @impl true
+  def window_sum(out, tensor, window_dims_tuple, opts) do
+    window_op(out, tensor, window_dims_tuple, opts, 0, &Torchx.sum(&1, &2, false))
+  end
+
+  @impl true
+  def window_product(out, tensor, window_dims_tuple, opts) do
+    window_op(out, tensor, window_dims_tuple, opts, 1, fn tensor, axes ->
+      aggregate_over_axes(tensor, axes, false, &Torchx.product/3)
+    end)
+  end
+
+  defp window_op(out, tensor, window_dims_tuple, opts, pad_constant, reduce_fun)
+       when is_function(reduce_fun, 2) do
+    if opts[:window_dilations] != List.duplicate(1, tuple_size(tensor.shape)) do
+      raise ArgumentError, "window_dilations unsupported"
     end
 
-    if Enum.any?(opts[:padding], fn conf -> conf |> Tuple.to_list() |> Enum.any?(&(&1 != 0)) end) do
-      raise ArgumentError, "padding unsupported"
-    end
+    # if Enum.any?(opts[:padding], fn conf -> conf |> Tuple.to_list() |> Enum.any?(&(&1 != 0)) end) do
+    #   raise ArgumentError, "padding unsupported"
+    # end
 
     strides = opts[:strides]
-    window_dilations = opts[:window_dilations]
-
-    strides = List.duplicate(1, 3 - length(strides)) ++ strides
-    window_dilations = List.duplicate(1, 3 - length(window_dilations)) ++ window_dilations
-
-    window_dims =
-      List.duplicate(1, 3 - tuple_size(window_dims_tuple)) ++ Tuple.to_list(window_dims_tuple)
-
-    pool_shape =
-      List.to_tuple(
-        List.duplicate(1, 4 - tuple_size(tensor.shape)) ++ Tuple.to_list(tensor.shape)
-      )
-
-    # TO-DO: implement actual padding
-    padding = List.duplicate(0, 3)
 
     intermediate_type =
       tensor.type
       |> Nx.Type.to_floating()
       |> to_torch_type()
 
-    tensor
-    |> from_nx()
-    |> Torchx.reshape(pool_shape)
-    |> Torchx.to_type(intermediate_type)
-    |> Torchx.max_pool_3d(window_dims, strides, padding, window_dilations)
+    padding =
+      opts[:padding]
+      |> Enum.map(fn {a, b} -> [a, b] end)
+      |> Enum.reverse()
+      |> List.flatten()
+
+    t_tx =
+      tensor
+      |> from_nx()
+      |> Torchx.to_type(intermediate_type)
+      |> Torchx.pad(padding, pad_constant)
+
+    {t_tx, _} =
+      for {window_dim, stride} <- Enum.zip(Tuple.to_list(window_dims_tuple), strides),
+          reduce: {t_tx, 0} do
+        {t_tx, dim} ->
+          {Torchx.unfold(t_tx, dim, window_dim, stride), dim + 1}
+      end
+
+    axes =
+      Enum.map(tuple_size(window_dims_tuple)..1//-1, fn axis ->
+        tuple_size(Torchx.shape(t_tx)) - axis
+      end)
+
+    reduce_fun
+    |> apply([t_tx, axes])
     |> Torchx.reshape(out.shape)
     |> Torchx.to_type(to_torch_type(out.type))
     |> to_nx(out)
-  end
-
-  @impl true
-  def window_min(out, tensor, window_dims_tuple, opts) do
-    # libtorch does not expose min_pool3d or similar
-    # Therefore, we use the fact that for any set of negative numbers,
-    # the maximum value is also the one with the smallest absolute value.
-
-    # For instance abs(min([1, 2, 3, 4])) == abs(max([-1, -2, -3, -4])).
-
-    # We can also look at this from inequality point of view.
-    # Negating both sides flips the comparison: x > y -> -x < -y
-    # So a function which returns the smallest side will end up
-    # returning the other one if the inputs are negated.
-
-    # So if we negate the input and then negate the output of window_max,
-    # we get the expected result for window_min.
-
-    tensor
-    |> Nx.negate()
-    |> then(&window_max(out, &1, window_dims_tuple, opts))
-    |> Nx.negate()
   end
 
   @impl true

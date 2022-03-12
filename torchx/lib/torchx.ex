@@ -163,6 +163,7 @@ defmodule Torchx do
   deftensor indexed_add(tensor_input, tensor_indices, tensor_updates, axis)
   deftensor argsort(tensor, axis, is_descending)
   deftensor flip(tensor, axis)
+  deftensor unfold(tensor, dimension, size, step)
   deftensor where(tensorA, tensorB, tensorC)
 
   ## Aggregation
