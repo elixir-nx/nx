@@ -3,6 +3,8 @@
 
 #include "nx_nif_utils.hpp"
 
+#define EMPTY_TAG 0xABADFACE
+
 std::map<const std::string, const torch::ScalarType> dtypes = {{"byte", torch::kByte}, {"char", torch::kChar}, {"short", torch::kShort}, {"int", torch::kInt}, {"long", torch::kLong}, {"half", torch::kHalf}, {"brain", torch::kBFloat16}, {"float", torch::kFloat}, {"double", torch::kDouble}, {"bool", torch::kBool}};
 std::map<const std::string, const int> dtype_sizes = {{"byte", 1}, {"char", 1}, {"short", 2}, {"int", 4}, {"long", 8}, {"half", 2}, {"brain", 2}, {"float", 4}, {"double", 8}};
 
@@ -52,7 +54,10 @@ inline const std::string* type2string(const torch::ScalarType type)
   if (!enif_get_resource(env, argv[ARGN], TENSOR_TYPE, (void **)&VAR))  { \
     std::ostringstream msg;                                               \
     msg << "Unable to get " #VAR " tensor param in NIF." << __func__ << "/" << argc;  \
-    return nx::nif::error(env, msg.str().c_str());                        \
+    return nx::nif::argerror(env, msg.str().c_str());                     \
+  }                                                                       \
+  if (*(intptr_t*)VAR == EMPTY_TAG)  {                                    \
+    return nx::nif::argerror(env, "Tensor is already deallocated");       \
   }
 
 #define CATCH()                                              \
@@ -60,7 +65,7 @@ inline const std::string* type2string(const torch::ScalarType type)
   {                                                          \
     std::ostringstream msg;                                  \
     msg << error.msg() << " in NIF." << __func__ << "/" << argc; \
-    return nx::nif::error(env, msg.str().c_str());           \
+    return nx::nif::argerror(env, msg.str().c_str());           \
   }
 
 #define SCALAR(S)                                            \
@@ -136,10 +141,17 @@ NIF(delete_tensor)
 {
   TENSOR_PARAM(0, t);
 
-  t->~Tensor();
-  enif_release_resource(t);
+  if (*(intptr_t*)t != EMPTY_TAG)
+  {
+    t->~Tensor();
+    *(intptr_t*)t = EMPTY_TAG;
 
-  return nx::nif::ok(env);
+    return nx::nif::ok(env);
+  }
+  else
+  {
+    return nx::nif::error(env, "already deleted tensor");
+  }
 }
 
 unsigned long elem_count(std::vector<int64_t> shape)
@@ -870,9 +882,10 @@ NIF(max_pool_3d)
 void free_tensor(ErlNifEnv *env, void *obj)
 {
   torch::Tensor* tensor = reinterpret_cast<torch::Tensor*>(obj);
-  if (tensor != nullptr) {
+
+  if (tensor != nullptr && *(intptr_t*)obj != EMPTY_TAG)
+  {
     tensor->~Tensor();
-    tensor = nullptr;
   }
 }
 
