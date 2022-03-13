@@ -42,7 +42,7 @@ defmodule TorchxTest do
 
       slice = fn t -> Nx.slice(t, [1, 1, 1], [6, 5, 4], strides: [2, 3, 1]) end
 
-      expected = tensor |> Nx.backend_transfer(Nx.BinaryBackend) |> then(slice)
+      expected = tensor |> Nx.backend_copy(Nx.BinaryBackend) |> then(slice)
 
       result = slice.(tensor)
 

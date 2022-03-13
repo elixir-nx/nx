@@ -29,7 +29,7 @@ defmodule Torchx.NxTest do
     b = Nx.tensor(data_b, type: type_b)
     c = Kernel.apply(Nx, op, [a, b])
 
-    binary_a = Nx.backend_transfer(a, Nx.BinaryBackend)
+    binary_a = Nx.backend_copy(a, Nx.BinaryBackend)
     binary_b = Nx.backend_transfer(b, Nx.BinaryBackend)
     binary_c = Kernel.apply(Nx, op, [binary_a, binary_b])
     assert Nx.backend_transfer(c) == binary_c
@@ -269,7 +269,7 @@ defmodule Torchx.NxTest do
 
     test "non-finite to between floats conversions" do
       non_finite = Nx.tensor([Nx.Constants.infinity(), Nx.Constants.neg_infinity()])
-      non_finite_binary_backend = Nx.backend_transfer(non_finite)
+      non_finite_binary_backend = Nx.backend_copy(non_finite)
 
       assert Nx.as_type(non_finite, {:f, 16}) |> Nx.backend_transfer() ==
                Nx.as_type(non_finite_binary_backend, {:f, 16})
