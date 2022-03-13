@@ -93,12 +93,12 @@ defmodule Torchx.MixProject do
 
       # This is so we don't forget to update the URLs below when we want to update libtorch
       if @libtorch_target != "cpu" and {:unix, :darwin} == :os.type() do
-        Mix.error("No CUDA support on OSX")
+        Mix.raise("No CUDA support on OSX")
       end
 
       # Check if target is valid
       unless Enum.member?(@valid_targets, @libtorch_target) do
-        Mix.error("Invalid target, please use one of #{inspect(@valid_targets)}")
+        Mix.raise("Invalid target, please use one of #{inspect(@valid_targets)}")
       end
 
       url =
@@ -114,7 +114,7 @@ defmodule Torchx.MixProject do
                 "https://download.pytorch.org/libtorch/#{@libtorch_target}/libtorch-macos-#{@libtorch_version}.zip"
 
               _ ->
-                Mix.error(
+                Mix.raise(
                   "Please download pre-built/compile LibTorch and set environment variable LIBTORCH_DIR"
                 )
             end
@@ -124,7 +124,7 @@ defmodule Torchx.MixProject do
             "https://download.pytorch.org/libtorch/#{@libtorch_target}/libtorch-win-shared-with-deps-#{@libtorch_version}%2B#{@libtorch_target}.zip"
 
           os ->
-            Mix.error("OS #{inspect(os)} is not supported")
+            Mix.raise("OS #{inspect(os)} is not supported")
         end
 
       download!(url, libtorch_zip)
