@@ -169,10 +169,25 @@ defmodule Torchx.Backend do
 
   @impl true
   def backend_transfer(tensor, backend, opts) do
-    backend_copy(tensor, backend, opts)
-    # TODO: implement deallocation after transfer
-    # after
-    #  backend_deallocate(tensor)
+    if backend == __MODULE__ and same_client_device?(tensor, opts) do
+      tensor
+    else
+      if backend == Nx.Tensor do
+        backend_copy(tensor, backend, opts)
+      else
+        try do
+          backend_copy(tensor, backend, opts)
+        after
+          backend_deallocate(tensor)
+        end
+      end
+    end
+  end
+
+  defp same_client_device?(tensor, opts) do
+    %T{data: %TB{ref: {actual, _}}} = tensor
+    # TODO: Check device id
+    actual == (opts[:device] || :cpu)
   end
 
   @impl true
@@ -185,6 +200,7 @@ defmodule Torchx.Backend do
   end
 
   def backend_copy(tensor, backend, opts) do
+    # to_blob will share data between tensors
     backend.from_binary(tensor, Torchx.to_blob(from_nx(tensor)), opts)
   end
 
