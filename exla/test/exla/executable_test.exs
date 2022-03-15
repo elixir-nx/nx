@@ -165,8 +165,7 @@ defmodule EXLA.ExecutableTest do
       [
         # {input enumerable, {input shape}, [reshape upper bounds], [reshape
         # dynamic dimensions], {expected reduce data, expected reduce shape}}
-        {1..10, {10}, [10], [10], {55, {}}},
-        {1..12, {12}, [12], [2], {3, {}}},
+        {1..10, {10}, [10], [6], {21, {}}},
         {1..10, {10}, [5, 2], [5, 2], {[3, 7, 11, 15, 19], {5}}},
         # Look carefully: underlying data is flattened, truncated and finally
         # re-shaped! One could also expect the output to be {3, 9, 15, 21}.
@@ -180,7 +179,7 @@ defmodule EXLA.ExecutableTest do
         new_sizes = Enum.map(new_sizes, &make_buffer(&1, {:s, 32}, {}))
         is_dynamic = List.duplicate(true, length(bounds))
 
-        acc = EXLAHelpers.make_buffer(0, {:s, 32}, {})
+        acc = make_buffer(0, {:s, 32}, {})
         sum = build_reduce_sum_computation("reduce-#{inspect(index)}")
 
         # Compilation phase. Helper functions are not used as the input
@@ -193,9 +192,11 @@ defmodule EXLA.ExecutableTest do
         # Avoid operand, acc and new_sizes variable shadowing.
         op =
           (fn ->
-             {[operand, acc | new_sizes], _} =
-               Enum.map_reduce(shapes, 0, fn shape, pos ->
-                 {EXLA.Op.parameter(builder, pos, shape, <<?a + pos>>), pos + 1}
+             [operand, acc | new_sizes] =
+               shapes
+               |> Enum.with_index()
+               |> Enum.map(fn {shape, pos} ->
+                 EXLA.Op.parameter(builder, pos, shape, <<?a + pos>>)
                end)
 
              reshaped = Op.dynamic_reshape(operand, new_sizes, bounds, is_dynamic)
