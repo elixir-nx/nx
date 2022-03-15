@@ -35,10 +35,14 @@ defmodule EXLAHelpers do
     result
   end
 
-  # TODO: what about a macro that generates the required binary data given a
-  # list of items and a shape specification?
-  def make_buffer(data, type, dims) do
+  def make_buffer(i, type = {:s, size}, {}) do
+    shape = EXLA.Shape.make_shape(type, {})
+    EXLA.BinaryBuffer.from_binary(<<i::size(size)-native>>, shape)
+  end
+
+  def make_buffer(enumerable, type = {:s, size}, dims) do
     shape = EXLA.Shape.make_shape(type, dims)
+    data = for x <- enumerable, into: <<>>, do: <<x::size(size)-native>>
     EXLA.BinaryBuffer.from_binary(data, shape)
   end
 end

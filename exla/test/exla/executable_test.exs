@@ -35,81 +35,182 @@ defmodule EXLA.ExecutableTest do
                run_one([t1, t2], fn b, x, y -> Op.tuple(b, [Op.add(x, y)]) end)
     end
 
-    test "finds dynamic dimension size" do
-      # TODO: multi-dimensional tests?
-      d = <<1::32-native, 7::32-native>>
-      t = BinaryBuffer.from_binary(d, Shape.make_shape({:s, 32}, {2}))
+    test "get_dimension_size/2" do
+      tests = [
+        # {input enumerable, {input shape}, dimension, expected size}
+        {1..10, {10}, 0, 10},
+        {1..10, {2, 5}, 0, 2},
+        {1..12, {4, 3}, 1, 3},
+        {1..12, {3, 2, 2}, 2, 2}
+      ]
 
-      assert [%BinaryBuffer{data: <<2::32-native>>}] =
-               run_one([t], fn b, x -> Op.tuple(b, [Op.get_dimension_size(x, 0)]) end)
+      Enum.each(tests, fn {data, shape, dim, expected} ->
+        want = make_buffer(expected, {:s, 32}, {})
+        operand = make_buffer(data, {:s, 32}, shape)
+
+        [have] =
+          run_one([operand], fn b, operand ->
+            Op.tuple(b, [Op.get_dimension_size(operand, dim)])
+          end)
+
+        assert have.data == want.data
+      end)
     end
 
-    test "sets dynamic dimension size" do
-      operand_shape = Shape.make_shape({:s, 32}, {4})
-      operand = <<1::32-native, 2::32-native, 3::32-native, 4::32-native>>
-      operand = BinaryBuffer.from_binary(operand, operand_shape)
-
-      init_shape = Shape.make_shape({:s, 32}, {})
-      init = BinaryBuffer.from_binary(<<0::32-native>>, init_shape)
-
-      b = Builder.new("reduce")
+    defp build_reduce_sum_computation(name) do
+      b = Builder.new(name)
       sum_shape = Shape.make_shape({:s, 32}, {})
 
       lhs = Op.parameter(b, 0, sum_shape, "a")
       rhs = Op.parameter(b, 1, sum_shape, "b")
       sum_ast = Op.add(lhs, rhs)
-      sum = Builder.build(sum_ast)
-
-      assert [%BinaryBuffer{data: <<10::32-native>>}] =
-               run_one([operand, init], fn b, operand, init ->
-                 Op.tuple(b, [Op.reduce(operand, init, sum, {0})])
-               end)
-
-      size_shape = Shape.make_shape({:s, 32}, {})
-      size = <<2::32-native>>
-      size = BinaryBuffer.from_binary(size, size_shape)
-
-      assert [%BinaryBuffer{data: <<3::32-native>>}] =
-               run_one([operand, init, size], fn b, operand, init, size ->
-                 resized = Op.set_dimension_size(operand, size, 0)
-                 Op.tuple(b, [Op.reduce(resized, init, sum, {0})])
-               end)
+      Builder.build(sum_ast)
     end
 
-    test "reshapes tensors dynamically" do
-      data =
-        <<11::32-native, 2::32-native, 3::32-native, 4::32-native, 5::32-native, 6::32-native>>
+    test "set_dimension_size/2" do
+      # Output is asserted using the same technique as in
+      # https://www.tensorflow.org/xla/operation_semantics#setdimensionsize
 
-      operand = EXLAHelpers.make_buffer(data, {:s, 32}, {3, 2})
+      [
+        # {input enumerable, {input shape}, {dimension, new size}, {expected
+        # reduce data, expected reduce shape}}
+        {1..10, {10}, {0, 5}, {15, {}}},
+        {1..10, {10}, {0, 2}, {3, {}}},
 
-      count = EXLAHelpers.make_buffer(<<2::32-native>>, {:s, 32}, {})
+        # 3=1+2, 13=6+7 !
+        # 1 2 | 3 4 5
+        # 6 7 | 8 9 10
+        {1..10, {2, 5}, {1, 2}, {[3, 13], {2}}}
+      ]
+      |> Enum.with_index()
+      |> Enum.each(fn {{data, shape, {dim, new_size}, {exp_data, exp_shape}}, index} ->
+        want = make_buffer(exp_data, {:s, 32}, exp_shape)
+        operand = make_buffer(data, {:s, 32}, shape)
+        new_size = make_buffer(new_size, {:s, 32}, {})
+        acc = make_buffer(0, {:s, 32}, {})
+        sum = build_reduce_sum_computation("reduce-#{inspect(index)}")
 
-      # Reducing the input will prove if dynamic operations have been
-      # applied or not!
-      # TODO(dmorn): what about a lighter solution / wrapper around this
-      # assertion? (see set_dimension_size test)
+        [have] =
+          run_one([operand, new_size, acc], fn b, operand, new_size, acc ->
+            resized = Op.set_dimension_size(operand, new_size, dim)
 
-      init = EXLAHelpers.make_buffer(<<0::32-native>>, {:s, 32}, {})
+            # NOTE: the reduction is performed at the same dimension as the
+            # dynamic dimension change is.
+            Op.tuple(b, [Op.reduce(resized, acc, sum, {dim})])
+          end)
 
-      b = Builder.new("reduce")
-      sum_shape = Shape.make_shape({:s, 32}, {})
+        assert have.data == want.data
+      end)
+    end
 
-      lhs = Op.parameter(b, 0, sum_shape, "a")
-      rhs = Op.parameter(b, 1, sum_shape, "b")
-      sum_ast = Op.add(lhs, rhs)
-      sum = Builder.build(sum_ast)
+    test "set_dimension_size/2 shrink and squeeze special case" do
+      # Test designed to understand what happens if a dimension is first
+      # shrinked then squeezed. Two outcomes are possible: either the data cut
+      # in the shrink phase is truncated and lost or the undelying data is left
+      # untouched. The latter case is what is happening here.
 
-      [%BinaryBuffer{shape: shape}, %BinaryBuffer{data: data}] =
-        run_one([operand, count, init], fn b, operand, count, init ->
-          reshaped = Op.dynamic_reshape(operand, [count], [6], [true])
-          Op.tuple(b, [reshaped, Op.reduce(reshaped, init, sum, {0})])
+      operand = make_buffer(1..10, {:s, 32}, {10})
+      new_size_shrink = make_buffer(2, {:s, 32}, {})
+      new_size_squeeze = make_buffer(4, {:s, 32}, {})
+      want_shrinked = make_buffer(3, {:s, 32}, {})
+      want_squeezed = make_buffer(10, {:s, 32}, {})
+
+      acc_shrink = make_buffer(0, {:s, 32}, {})
+      acc_squeeze = make_buffer(0, {:s, 32}, {})
+      sum = build_reduce_sum_computation("reduce")
+
+      params = [
+        operand,
+        new_size_shrink,
+        new_size_squeeze,
+        acc_shrink,
+        acc_squeeze
+      ]
+
+      [have_shrinked, have_squeezed] =
+        run_one(params, fn b,
+                           operand,
+                           new_size_shrink,
+                           new_size_squeeze,
+                           acc_shrink,
+                           acc_squeeze ->
+          shrinked = Op.set_dimension_size(operand, new_size_shrink, 0)
+          squeezed = Op.set_dimension_size(shrinked, new_size_squeeze, 0)
+
+          Op.tuple(b, [
+            Op.reduce(shrinked, acc_shrink, sum, {0}),
+            Op.reduce(squeezed, acc_squeeze, sum, {0})
+          ])
         end)
 
-      # tensor dimensions become the upper bounds provided in the reshape
-      # operation. If some dimensions are dynamic, that's reflected on
-      # subsequent operations.
-      assert shape.dims == {6}
-      assert data == <<13::32-native>>
+      assert have_shrinked.data == want_shrinked.data
+      assert have_squeezed.data == want_squeezed.data
+    end
+
+    test "set_dimension_size/2 leaves tensor shape untouched" do
+      # Test designed to ensure that set_dimension_size operations do not
+      # actually change the tensor's shape.
+      operand = make_buffer(1..10, {:s, 32}, {10})
+      new_size = make_buffer(6, {:s, 32}, {})
+
+      [have] =
+        run_one([operand, new_size], fn b, operand, new_size ->
+          Op.tuple(b, [Op.set_dimension_size(operand, new_size, 0)])
+        end)
+
+      assert have.shape.dims == {10}
+    end
+
+    test "dynamic_reshape/4" do
+      [
+        # {input enumerable, {input shape}, [reshape upper bounds], [reshape
+        # dynamic dimensions], {expected reduce data, expected reduce shape}}
+        {1..10, {10}, [10], [10], {55, {}}},
+        {1..12, {12}, [12], [2], {3, {}}},
+        {1..10, {10}, [5, 2], [5, 2], {[3, 7, 11, 15, 19], {5}}},
+        # Look carefully: underlying data is flattened, truncated and finally
+        # re-shaped! One could also expect the output to be {3, 9, 15, 21}.
+        {1..12, {12}, [4, 3], [4, 2], {[3, 7, 11, 15], {4}}}
+      ]
+      |> Enum.with_index()
+      |> Enum.each(fn {{data, shape, bounds, new_sizes, {exp_data, exp_shape}}, index} ->
+        want = make_buffer(exp_data, {:s, 32}, exp_shape)
+
+        operand = make_buffer(data, {:s, 32}, shape)
+        new_sizes = Enum.map(new_sizes, &make_buffer(&1, {:s, 32}, {}))
+        is_dynamic = List.duplicate(true, length(bounds))
+
+        acc = EXLAHelpers.make_buffer(0, {:s, 32}, {})
+        sum = build_reduce_sum_computation("reduce-#{inspect(index)}")
+
+        # Compilation phase. Helper functions are not used as the input
+        # bounds/sizes are lists of variables sizes and run_one/compile are not
+        # designed for that.
+
+        builder = EXLA.Builder.new("test-#{inspect(index)}")
+        shapes = Enum.map([operand, acc | new_sizes], fn x -> x.shape end)
+
+        # Avoid operand, acc and new_sizes variable shadowing.
+        op =
+          (fn ->
+             {[operand, acc | new_sizes], _} =
+               Enum.map_reduce(shapes, 0, fn shape, pos ->
+                 {EXLA.Op.parameter(builder, pos, shape, <<?a + pos>>), pos + 1}
+               end)
+
+             reshaped = Op.dynamic_reshape(operand, new_sizes, bounds, is_dynamic)
+             reduced = Op.reduce(reshaped, acc, sum, {length(bounds) - 1})
+             Op.tuple(builder, [reduced])
+           end).()
+
+        [[result]] =
+          op
+          |> EXLA.Builder.build()
+          |> EXLA.Computation.compile(client(), shapes)
+          |> EXLA.Executable.run([[operand, acc | new_sizes]])
+
+        assert result.data == want.data
+      end)
     end
 
     test "succeeds when data is preloaded" do
