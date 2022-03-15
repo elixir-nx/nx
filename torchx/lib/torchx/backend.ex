@@ -595,22 +595,27 @@ defmodule Torchx.Backend do
 
   @impl true
   def argmax(%T{} = out, %T{} = t, opts) do
-    argminmax(:argmax, out, t, opts)
+    argminmax_assert_out(:argmax, out, t, opts)
   end
 
   @impl true
   def argmin(out, t, opts) do
-    argminmax(:argmin, out, t, opts)
+    argminmax_assert_out(:argmin, out, t, opts)
   end
 
-  defp argminmax(fun, %T{} = out, %T{} = t, opts) do
+  defp argminmax_assert_out(fun, %T{} = out, %T{} = t, opts) do
+    fun
+    |> argminmax(t, opts)
+    |> to_nx(out)
+  end
+
+  defp argminmax(fun, %T{} = t, opts) do
     tie_break = opts[:tie_break] || :low
     axis = opts[:axis] || -1
     keep_axis = opts[:keep_axis] || false
 
     if tie_break == :low do
       apply(Torchx, fun, [from_nx(t), axis, keep_axis])
-      |> to_nx(out)
     else
       %{data: %{ref: {device, _}}, type: type, shape: shape} = t
       scalar = Torchx.scalar_tensor(elem(shape, axis) - 1, to_torch_type(type), device)
@@ -624,7 +629,6 @@ defmodule Torchx.Backend do
 
       scalar
       |> Torchx.subtract(result)
-      |> to_nx(out)
     end
   end
 
@@ -1021,9 +1025,66 @@ defmodule Torchx.Backend do
     end)
   end
 
+  @impl true
+  def window_scatter_max(out, tensor, source, init_value, window_dims_tuple, opts) do
+    argmax =
+      window_op(
+        %{tensor | shape: {Nx.size(out)}},
+        tensor,
+        window_dims_tuple,
+        opts,
+        1,
+        fn tensor_tx, axes ->
+          tensor =
+            Torchx.to_nx(tensor_tx)
+            |> IO.inspect(label: "torchx/lib/torchx/backend.ex:1030")
+
+          # axes always represents the last dimensions, which refer to the reduce window
+          {kept_axes, reduced_axes} =
+            tensor.shape
+            |> Tuple.to_list()
+            |> Enum.split(length(axes))
+            |> IO.inspect(label: "torchx/lib/torchx/backend.ex:1035")
+
+          kept_axes_tuple =
+            List.to_tuple(kept_axes)
+            |> IO.inspect(label: "torchx/lib/torchx/backend.ex:1041")
+
+          flat_shape =
+            Tuple.insert_at(
+              kept_axes_tuple,
+              tuple_size(kept_axes_tuple),
+              Enum.product(reduced_axes)
+            )
+            |> IO.inspect(label: "torchx/lib/torchx/backend.ex:1050")
+
+          flattened_tensor =
+            Nx.reshape(tensor, flat_shape)
+            |> IO.inspect(label: "torchx/lib/torchx/backend.ex:1053")
+
+          argminmax(:argmax, flattened_tensor, opts)
+          |> tap(fn t ->
+            IO.inspect(t |> Torchx.to_nx(), label: "torchx/lib/torchx/backend.ex:1067")
+          end)
+        end
+      )
+      |> Torchx.from_nx()
+
+    target = Nx.broadcast(init_value, out.shape) |> Torchx.from_nx()
+    updates = Nx.reshape(source, {Nx.size(source)}) |> Torchx.from_nx()
+
+    target
+    |> Torchx.from_nx()
+    |> Torchx.indexed_add(argmax, updates, -1)
+    |> Torchx.to_type(to_torch_type(out.type))
+    |> to_nx(out)
+  end
+
   defp window_op(out, tensor, window_dims_tuple, opts, pad_constant, reduce_fun)
        when is_function(reduce_fun, 2) do
-    if opts[:window_dilations] != List.duplicate(1, tuple_size(tensor.shape)) do
+    window_dilations = opts[:window_dilations]
+
+    if window_dilations && window_dilations != List.duplicate(1, tuple_size(tensor.shape)) do
       raise ArgumentError, "window_dilations unsupported"
     end
 
@@ -1037,6 +1098,7 @@ defmodule Torchx.Backend do
       tensor.type
       |> Nx.Type.to_floating()
       |> to_torch_type()
+      |> IO.inspect(label: "torchx/lib/torchx/backend.ex:1078")
 
     padding =
       opts[:padding]
@@ -1049,6 +1111,7 @@ defmodule Torchx.Backend do
       |> from_nx()
       |> Torchx.to_type(intermediate_type)
       |> Torchx.pad(padding, pad_constant)
+      |> IO.inspect(label: "torchx/lib/torchx/backend.ex:1091")
 
     {t_tx, _} =
       for {window_dim, stride} <- Enum.zip(Tuple.to_list(window_dims_tuple), strides),
@@ -1063,7 +1126,9 @@ defmodule Torchx.Backend do
       end)
 
     reduce_fun
+    |> IO.inspect(label: "torchx/lib/torchx/backend.ex:1106")
     |> apply([t_tx, axes])
+    |> IO.inspect(label: "torchx/lib/torchx/backend.ex:1108")
     |> Torchx.reshape(out.shape)
     |> Torchx.to_type(to_torch_type(out.type))
     |> to_nx(out)

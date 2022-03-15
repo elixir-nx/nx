@@ -82,7 +82,7 @@ defmodule Torchx.NxDoctestTest do
     # window_sum - still needs to support padding and window_dilations
     window_sum: 3,
     put_slice: 3,
-    window_scatter_max: 5,
+    # window_scatter_max: 5,
     window_scatter_min: 5
   ]
 
