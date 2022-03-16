@@ -1068,7 +1068,7 @@ defmodule Torchx.Backend do
 
     flat_source = Nx.flatten(source)
 
-    init_val
+    init_value
     |> Nx.backend_transfer(Torchx.Backend)
     |> Nx.broadcast(out.shape)
     |> Nx.indexed_add(indices, flat_source)
