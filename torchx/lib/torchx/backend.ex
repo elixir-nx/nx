@@ -1060,7 +1060,7 @@ defmodule Torchx.Backend do
       |> Nx.axes()
       |> Enum.map(fn axis ->
         tensor
-        |> Nx.iota(axis: axis)
+        |> Nx.iota(axis: axis, backend: Torchx.Backend)
         |> then(unfold_flat)
         |> Nx.take_along_axis(Nx.new_axis(argmax, -1), axis: -1)
       end)
@@ -1073,7 +1073,7 @@ defmodule Torchx.Backend do
     flat_source = Nx.flatten(source)
 
     init_value
-    |> Nx.broadcast(out.shape)
+    |> Nx.broadcast(out.shape, backend: Torchx.Backend)
     |> Nx.indexed_add(indices, flat_source)
     |> Nx.as_type(out.type)
   end
