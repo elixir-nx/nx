@@ -605,30 +605,25 @@ defmodule Torchx.Backend do
 
   defp argminmax_assert_out(fun, %T{} = out, %T{} = t, opts) do
     fun
-    |> argminmax(t, opts)
+    |> argminmax(from_nx(t), t.type, t.shape, opts)
     |> to_nx(out)
   end
 
-  defp argminmax(fun, %T{} = t, opts) do
+  defp argminmax(fun, {device, _} = t, type, shape, opts) do
     tie_break = opts[:tie_break] || :low
-    axis = opts[:axis] || -1
+    axis = opts[:axis] || tuple_size(shape) - 1
     keep_axis = opts[:keep_axis] || false
 
     if tie_break == :low do
-      apply(Torchx, fun, [from_nx(t), axis, keep_axis])
+      apply(Torchx, fun, [t, axis, keep_axis])
     else
-      %{data: %{ref: {device, _}}, type: type, shape: shape} = t
       scalar = Torchx.scalar_tensor(elem(shape, axis) - 1, to_torch_type(type), device)
 
-      flipped =
-        t
-        |> from_nx()
-        |> Torchx.flip([axis])
+      flipped = Torchx.flip(t, [axis])
 
       result = apply(Torchx, fun, [flipped, axis, keep_axis])
 
-      scalar
-      |> Torchx.subtract(result)
+      Torchx.subtract(scalar, result)
     end
   end
 
@@ -1027,57 +1022,59 @@ defmodule Torchx.Backend do
 
   @impl true
   def window_scatter_max(out, tensor, source, init_value, window_dims_tuple, opts) do
+    intermediate_type =
+      tensor.type
+      |> Nx.Type.to_floating()
+      |> to_torch_type()
+
+    unfold_flat = fn tensor ->
+      unfolded =
+        tensor
+        |> unfold_windows(opts[:padding], 0, window_dims_tuple, opts[:strides])
+        |> Torchx.to_nx()
+
+      {to_keep, to_flatten} =
+        unfolded
+        |> Map.get(:shape)
+        |> Tuple.to_list()
+        |> Enum.split(-tuple_size(window_dims_tuple))
+
+      flat_shape =
+        to_keep
+        |> List.to_tuple()
+        |> then(&Tuple.insert_at(&1, tuple_size(&1), Enum.product(to_flatten)))
+
+      Nx.reshape(unfolded, flat_shape)
+    end
+
     argmax =
-      window_op(
-        %{tensor | shape: {Nx.size(out)}},
-        tensor,
-        window_dims_tuple,
-        opts,
-        1,
-        fn tensor_tx, axes ->
-          tensor =
-            Torchx.to_nx(tensor_tx)
-            |> IO.inspect(label: "torchx/lib/torchx/backend.ex:1030")
+      tensor
+      |> from_nx()
+      |> Torchx.to_type(intermediate_type)
+      |> then(unfold_flat)
+      |> Nx.argmax(axis: -1)
 
-          # axes always represents the last dimensions, which refer to the reduce window
-          {kept_axes, reduced_axes} =
-            tensor.shape
-            |> Tuple.to_list()
-            |> Enum.split(length(axes))
-            |> IO.inspect(label: "torchx/lib/torchx/backend.ex:1035")
+    indices_to_flatten =
+      tensor
+      |> Nx.axes()
+      |> Enum.map(fn axis ->
+        tensor
+        |> Nx.iota(axis: axis)
+        |> then(unfold_flat)
+        |> Nx.take_along_axis(Nx.new_axis(argmax, -1), axis: -1)
+      end)
+      |> Nx.concatenate(axis: -1)
 
-          kept_axes_tuple =
-            List.to_tuple(kept_axes)
-            |> IO.inspect(label: "torchx/lib/torchx/backend.ex:1041")
+    num_axes = tuple_size(out.shape)
+    num_rows = div(Nx.size(indices_to_flatten), num_axes)
+    indices = Nx.reshape(indices_to_flatten, {num_rows, num_axes}) |> IO.inspect(label: "indices")
 
-          flat_shape =
-            Tuple.insert_at(
-              kept_axes_tuple,
-              tuple_size(kept_axes_tuple),
-              Enum.product(reduced_axes)
-            )
-            |> IO.inspect(label: "torchx/lib/torchx/backend.ex:1050")
+    flat_source = Nx.flatten(source) |> IO.inspect(label: "source")
 
-          flattened_tensor =
-            Nx.reshape(tensor, flat_shape)
-            |> IO.inspect(label: "torchx/lib/torchx/backend.ex:1053")
-
-          argminmax(:argmax, flattened_tensor, opts)
-          |> tap(fn t ->
-            IO.inspect(t |> Torchx.to_nx(), label: "torchx/lib/torchx/backend.ex:1067")
-          end)
-        end
-      )
-      |> Torchx.from_nx()
-
-    target = Nx.broadcast(init_value, out.shape) |> Torchx.from_nx()
-    updates = Nx.reshape(source, {Nx.size(source)}) |> Torchx.from_nx()
-
-    target
-    |> Torchx.from_nx()
-    |> Torchx.indexed_add(argmax, updates, -1)
-    |> Torchx.to_type(to_torch_type(out.type))
-    |> to_nx(out)
+    init_value
+    |> Nx.broadcast(out.shape)
+    |> Nx.indexed_add(indices, flat_source)
+    |> Nx.as_type(out.type)
   end
 
   defp window_op(out, tensor, window_dims_tuple, opts, pad_constant, reduce_fun)
@@ -1092,33 +1089,16 @@ defmodule Torchx.Backend do
     #   raise ArgumentError, "padding unsupported"
     # end
 
-    strides = opts[:strides]
-
     intermediate_type =
       tensor.type
       |> Nx.Type.to_floating()
       |> to_torch_type()
-      |> IO.inspect(label: "torchx/lib/torchx/backend.ex:1078")
-
-    padding =
-      opts[:padding]
-      |> Enum.map(fn {a, b} -> [a, b] end)
-      |> Enum.reverse()
-      |> List.flatten()
 
     t_tx =
       tensor
       |> from_nx()
       |> Torchx.to_type(intermediate_type)
-      |> Torchx.pad(padding, pad_constant)
-      |> IO.inspect(label: "torchx/lib/torchx/backend.ex:1091")
-
-    {t_tx, _} =
-      for {window_dim, stride} <- Enum.zip(Tuple.to_list(window_dims_tuple), strides),
-          reduce: {t_tx, 0} do
-        {t_tx, dim} ->
-          {Torchx.unfold(t_tx, dim, window_dim, stride), dim + 1}
-      end
+      |> unfold_windows(opts[:padding], pad_constant, window_dims_tuple, opts[:strides])
 
     axes =
       Enum.map(tuple_size(window_dims_tuple)..1//-1, fn axis ->
@@ -1126,12 +1106,33 @@ defmodule Torchx.Backend do
       end)
 
     reduce_fun
-    |> IO.inspect(label: "torchx/lib/torchx/backend.ex:1106")
     |> apply([t_tx, axes])
-    |> IO.inspect(label: "torchx/lib/torchx/backend.ex:1108")
     |> Torchx.reshape(out.shape)
     |> Torchx.to_type(to_torch_type(out.type))
     |> to_nx(out)
+  end
+
+  def unfold_windows(%T{} = tensor, padding, pad_constant, window_dims_tuple, strides) do
+    unfold_windows(from_nx(tensor), padding, pad_constant, window_dims_tuple, strides)
+  end
+
+  def unfold_windows(tensor, padding, pad_constant, window_dims_tuple, strides) do
+    padding =
+      padding
+      |> Enum.map(fn {a, b} -> [a, b] end)
+      |> Enum.reverse()
+      |> List.flatten()
+
+    padded = Torchx.pad(tensor, padding, pad_constant)
+
+    {t_tx, _} =
+      for {window_dim, stride} <- Enum.zip(Tuple.to_list(window_dims_tuple), strides),
+          reduce: {padded, 0} do
+        {t_tx, dim} ->
+          {Torchx.unfold(t_tx, dim, window_dim, stride), dim + 1}
+      end
+
+    t_tx
   end
 
   @impl true
