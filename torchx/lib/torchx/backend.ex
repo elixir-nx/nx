@@ -963,11 +963,7 @@ defmodule Torchx.Backend do
     kernel_permutation = opts[:kernel_permutation]
     output_permutation = opts[:output_permutation]
 
-    pad_config =
-      padding
-      |> Enum.map(fn {a, b} -> [a, b] end)
-      |> Enum.reverse()
-      |> List.flatten()
+    pad_config = flatten_padding(padding)
 
     k_nx =
       k
@@ -1118,11 +1114,7 @@ defmodule Torchx.Backend do
   end
 
   def unfold_windows(tensor, padding, pad_constant, window_dims_tuple, strides) do
-    padding =
-      padding
-      |> Enum.map(fn {a, b} -> [a, b] end)
-      |> Enum.reverse()
-      |> List.flatten()
+    padding = flatten_padding(padding)
 
     padded = Torchx.pad(tensor, padding, pad_constant)
 
@@ -1134,6 +1126,10 @@ defmodule Torchx.Backend do
       end
 
     t_tx
+  end
+
+  defp flatten_padding(padding) do
+    Enum.reduce(padding, [], fn {a, b}, acc -> [a, b | acc] end)
   end
 
   @impl true
