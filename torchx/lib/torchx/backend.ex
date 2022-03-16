@@ -594,7 +594,7 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def argmax(out, t, opts) do
+  def argmax(%T{} = out, %T{} = t, opts) do
     argminmax(:argmax, out, t, opts)
   end
 
