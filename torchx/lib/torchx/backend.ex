@@ -1069,7 +1069,8 @@ defmodule Torchx.Backend do
     flat_source = Nx.flatten(source)
 
     init_value
-    |> Nx.broadcast(out.shape, backend: Torchx.Backend)
+    |> Nx.backend_transfer(Torchx.Backend)
+    |> Nx.broadcast(out.shape)
     |> Nx.indexed_add(indices, flat_source)
     |> Nx.as_type(out.type)
   end
