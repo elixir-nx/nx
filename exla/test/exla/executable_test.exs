@@ -57,8 +57,8 @@ defmodule EXLA.ExecutableTest do
       end)
     end
 
-    defp build_reduce_sum_computation(name) do
-      b = Builder.new(name)
+    defp build_reduce_sum_computation(builder) do
+      b = Builder.new(builder, "reduce")
       sum_shape = Shape.make_shape({:s, 32}, {})
 
       lhs = Op.parameter(b, 0, sum_shape, "a")
@@ -82,16 +82,15 @@ defmodule EXLA.ExecutableTest do
         # 6 7 | 8 9 10
         {1..10, {2, 5}, {1, 2}, {[3, 13], {2}}}
       ]
-      |> Enum.with_index()
-      |> Enum.each(fn {{data, shape, {dim, new_size}, {exp_data, exp_shape}}, index} ->
+      |> Enum.each(fn {data, shape, {dim, new_size}, {exp_data, exp_shape}} ->
         want = make_buffer(exp_data, {:s, 32}, exp_shape)
         operand = make_buffer(data, {:s, 32}, shape)
         new_size = make_buffer(new_size, {:s, 32}, {})
         acc = make_buffer(0, {:s, 32}, {})
-        sum = build_reduce_sum_computation("reduce-#{inspect(index)}")
 
         [have] =
           run_one([operand, new_size, acc], fn b, operand, new_size, acc ->
+            sum = build_reduce_sum_computation(b)
             resized = Op.set_dimension_size(operand, new_size, dim)
 
             # NOTE: the reduction is performed at the same dimension as the
@@ -117,7 +116,6 @@ defmodule EXLA.ExecutableTest do
 
       acc_shrink = make_buffer(0, {:s, 32}, {})
       acc_squeeze = make_buffer(0, {:s, 32}, {})
-      sum = build_reduce_sum_computation("reduce")
 
       params = [
         operand,
@@ -134,6 +132,7 @@ defmodule EXLA.ExecutableTest do
                            new_size_squeeze,
                            acc_shrink,
                            acc_squeeze ->
+          sum = build_reduce_sum_computation(b)
           shrinked = Op.set_dimension_size(operand, new_size_shrink, 0)
           squeezed = Op.set_dimension_size(shrinked, new_size_squeeze, 0)
 
@@ -165,14 +164,22 @@ defmodule EXLA.ExecutableTest do
       [
         # {input enumerable, {input shape}, [reshape upper bounds], [reshape
         # dynamic dimensions], {expected reduce data, expected reduce shape}}
-        {1..10, {10}, [10], [6], {21, {}}},
+        {1..10, {10}, [10], [10], {55, {}}},
+        {1..10, {10}, [2, 5], [2, 5], {[15, 40], {2}}},
         {1..10, {10}, [5, 2], [5, 2], {[3, 7, 11, 15, 19], {5}}},
-        # Look carefully: underlying data is flattened, truncated and finally
+        # reshape that decreases tensor size at runtime, to rank 1
+        {1..12, {12}, [12], [10], {55, {}}},
+        {1..12, {12}, [12], [3], {6, {}}},
+        {1..12, {4, 3}, [12], [3], {6, {}}},
+        {1..120, {120}, [120], [3], {6, {}}}
+        # reshape that decreases tensor size at runtime, to rank 2
+        # NOTE: underlying data is flattened, truncated and finally
         # re-shaped! One could also expect the output to be {3, 9, 15, 21}.
-        {1..12, {12}, [4, 3], [4, 2], {[3, 7, 11, 15], {4}}}
+        # NOTE: this leads to a segmentation fault!
+        # {1..12, {12}, [4, 3], [4, 2], {[3, 7, 11, 15], {4}}}
+        # {1..12, {4, 3}, [4, 3], [4, 2], {[3, 7, 11, 15], {4}}}
       ]
-      |> Enum.with_index()
-      |> Enum.each(fn {{data, shape, bounds, new_sizes, {exp_data, exp_shape}}, index} ->
+      |> Enum.each(fn {data, shape, bounds, new_sizes, {exp_data, exp_shape}} ->
         want = make_buffer(exp_data, {:s, 32}, exp_shape)
 
         operand = make_buffer(data, {:s, 32}, shape)
@@ -180,13 +187,14 @@ defmodule EXLA.ExecutableTest do
         is_dynamic = List.duplicate(true, length(bounds))
 
         acc = make_buffer(0, {:s, 32}, {})
-        sum = build_reduce_sum_computation("reduce-#{inspect(index)}")
 
         # Compilation phase. Helper functions are not used as the input
         # bounds/sizes are lists of variables sizes and run_one/compile are not
         # designed for that.
 
-        builder = EXLA.Builder.new("test-#{inspect(index)}")
+        builder = EXLA.Builder.new("test")
+        sum = build_reduce_sum_computation(builder)
+
         shapes = Enum.map([operand, acc | new_sizes], fn x -> x.shape end)
 
         # Avoid operand, acc and new_sizes variable shadowing.
@@ -199,9 +207,12 @@ defmodule EXLA.ExecutableTest do
                  EXLA.Op.parameter(builder, pos, shape, <<?a + pos>>)
                end)
 
-             reshaped = Op.dynamic_reshape(operand, new_sizes, bounds, is_dynamic)
-             reduced = Op.reduce(reshaped, acc, sum, {length(bounds) - 1})
-             Op.tuple(builder, [reduced])
+             op =
+               operand
+               |> Op.dynamic_reshape(new_sizes, bounds, is_dynamic)
+               |> Op.reduce(acc, sum, {length(bounds) - 1})
+
+             Op.tuple(builder, [op])
            end).()
 
         [[result]] =
