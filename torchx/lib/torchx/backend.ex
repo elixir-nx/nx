@@ -611,7 +611,7 @@ defmodule Torchx.Backend do
 
   defp argminmax(fun, {device, _} = t, type, shape, opts) do
     tie_break = opts[:tie_break] || :low
-    axis = opts[:axis] || tuple_size(shape) - 1
+    axis = opts[:axis] || -1
     keep_axis = opts[:keep_axis] || false
 
     if tie_break == :low do
@@ -1067,9 +1067,9 @@ defmodule Torchx.Backend do
 
     num_axes = tuple_size(out.shape)
     num_rows = div(Nx.size(indices_to_flatten), num_axes)
-    indices = Nx.reshape(indices_to_flatten, {num_rows, num_axes}) |> IO.inspect(label: "indices")
+    indices = Nx.reshape(indices_to_flatten, {num_rows, num_axes})
 
-    flat_source = Nx.flatten(source) |> IO.inspect(label: "source")
+    flat_source = Nx.flatten(source)
 
     init_value
     |> Nx.broadcast(out.shape)
