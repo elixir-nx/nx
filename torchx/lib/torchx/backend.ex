@@ -594,36 +594,37 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def argmax(%T{} = out, %T{} = t, opts) do
-    argminmax_assert_out(:argmax, out, t, opts)
+  def argmax(out, t, opts) do
+    argminmax(:argmax, out, t, opts)
   end
 
   @impl true
   def argmin(out, t, opts) do
-    argminmax_assert_out(:argmin, out, t, opts)
+    argminmax(:argmin, out, t, opts)
   end
 
-  defp argminmax_assert_out(fun, %T{} = out, %T{} = t, opts) do
-    fun
-    |> argminmax(from_nx(t), t.type, t.shape, opts)
-    |> to_nx(out)
-  end
-
-  defp argminmax(fun, {device, _} = t, type, shape, opts) do
+  defp argminmax(fun, %T{} = out, %T{} = t, opts) do
     tie_break = opts[:tie_break] || :low
     axis = opts[:axis] || -1
     keep_axis = opts[:keep_axis] || false
 
     if tie_break == :low do
-      apply(Torchx, fun, [t, axis, keep_axis])
+      apply(Torchx, fun, [from_nx(t), axis, keep_axis])
+      |> to_nx(out)
     else
+      %{data: %{ref: {device, _}}, type: type, shape: shape} = t
       scalar = Torchx.scalar_tensor(elem(shape, axis) - 1, to_torch_type(type), device)
 
-      flipped = Torchx.flip(t, [axis])
+      flipped =
+        t
+        |> from_nx()
+        |> Torchx.flip([axis])
 
       result = apply(Torchx, fun, [flipped, axis, keep_axis])
 
-      Torchx.subtract(scalar, result)
+      scalar
+      |> Torchx.subtract(result)
+      |> to_nx(out)
     end
   end
 
