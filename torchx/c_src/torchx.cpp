@@ -3,7 +3,8 @@
 
 #include "nx_nif_utils.hpp"
 
-#define EMPTY_TAG 0xABADFACE
+// Mutex to protect tag check
+static ErlNifMutex* tensor_mutex;
 
 std::map<const std::string, const torch::ScalarType> dtypes = {{"byte", torch::kByte}, {"char", torch::kChar}, {"short", torch::kShort}, {"int", torch::kInt}, {"long", torch::kLong}, {"half", torch::kHalf}, {"brain", torch::kBFloat16}, {"float", torch::kFloat}, {"double", torch::kDouble}, {"bool", torch::kBool}};
 std::map<const std::string, const int> dtype_sizes = {{"byte", 1}, {"char", 1}, {"short", 2}, {"int", 4}, {"long", 8}, {"half", 2}, {"brain", 2}, {"float", 4}, {"double", 8}};
@@ -24,6 +25,8 @@ inline const std::string* type2string(const torch::ScalarType type)
 }
 
 #define NIF(NAME) ERL_NIF_TERM NAME(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+
+#define IS_TENSOR_ALIVE(tensorPtr) (*(bool*)(tensorPtr + 1))
 
 #define SCALAR_PARAM(ARGN, VAR) \
   torch::Scalar VAR;            \
@@ -54,10 +57,10 @@ inline const std::string* type2string(const torch::ScalarType type)
   if (!enif_get_resource(env, argv[ARGN], TENSOR_TYPE, (void **)&VAR))  { \
     std::ostringstream msg;                                               \
     msg << "Unable to get " #VAR " tensor param in NIF." << __func__ << "/" << argc;  \
-    return nx::nif::argerror(env, msg.str().c_str());                     \
+    return nx::nif::error(env, msg.str().c_str());                     \
   }                                                                       \
-  if (*(intptr_t*)VAR == EMPTY_TAG)  {                                    \
-    return nx::nif::argerror(env, "Tensor is already deallocated");       \
+  if (!IS_TENSOR_ALIVE(VAR))  {                                    \
+    return enif_make_badarg(env);                                         \
   }
 
 #define CATCH()                                              \
@@ -65,7 +68,7 @@ inline const std::string* type2string(const torch::ScalarType type)
   {                                                          \
     std::ostringstream msg;                                  \
     msg << error.msg() << " in NIF." << __func__ << "/" << argc; \
-    return nx::nif::argerror(env, msg.str().c_str());           \
+    return nx::nif::error(env, msg.str().c_str());           \
   }
 
 #define SCALAR(S)                                            \
@@ -125,11 +128,12 @@ create_tensor_resource(ErlNifEnv *env, torch::Tensor tensor)
   ERL_NIF_TERM ret;
   torch::Tensor *tensorPtr;
 
-  tensorPtr = (torch::Tensor *)enif_alloc_resource(TENSOR_TYPE, sizeof(torch::Tensor));
+  tensorPtr = (torch::Tensor *)enif_alloc_resource(TENSOR_TYPE, sizeof(torch::Tensor) + sizeof(bool));
   if (tensorPtr == NULL)
     return enif_make_badarg(env);
 
   new (tensorPtr) torch::Tensor(tensor.variable_data());
+  *(bool*)(tensorPtr + 1) = true;
 
   ret = enif_make_resource(env, tensorPtr);
   enif_release_resource(tensorPtr);
@@ -141,15 +145,18 @@ NIF(delete_tensor)
 {
   TENSOR_PARAM(0, t);
 
-  if (*(intptr_t*)t != EMPTY_TAG)
+  enif_mutex_lock(tensor_mutex);
+  if (IS_TENSOR_ALIVE(t))
   {
+    *(bool*)(t + 1) = false;
+    enif_mutex_unlock(tensor_mutex);
     t->~Tensor();
-    *(intptr_t*)t = EMPTY_TAG;
 
     return nx::nif::ok(env);
   }
   else
   {
+    enif_mutex_unlock(tensor_mutex);
     return nx::nif::error(env, "already deleted tensor");
   }
 }
@@ -883,7 +890,7 @@ void free_tensor(ErlNifEnv *env, void *obj)
 {
   torch::Tensor* tensor = reinterpret_cast<torch::Tensor*>(obj);
 
-  if (tensor != nullptr && *(intptr_t*)obj != EMPTY_TAG)
+  if (tensor != nullptr && IS_TENSOR_ALIVE(tensor))
   {
     tensor->~Tensor();
   }
@@ -914,7 +921,12 @@ int upgrade(ErlNifEnv *env, void **priv_data, void **old_priv_data, ERL_NIF_TERM
 
 int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info)
 {
+  const char *name = "Tensor";
   if (open_resource_type(env) == -1)
+    return -1;
+  
+  tensor_mutex = enif_mutex_create((char*)name);
+  if (tensor_mutex == NULL)
     return -1;
 
   // Silence "unused var" warnings.
@@ -922,6 +934,11 @@ int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info)
   (void)(load_info);
 
   return 0;
+}
+
+void unload(ErlNifEnv* caller_env, void* priv_data)
+{
+  enif_mutex_destroy(tensor_mutex);
 }
 
 #define F(NAME, ARITY)    \
@@ -1065,4 +1082,4 @@ static ErlNifFunc nif_functions[] = {
     F(shape, 1),
     F(nbytes, 1)};
 
-ERL_NIF_INIT(Elixir.Torchx.NIF, nif_functions, load, NULL, upgrade, NULL)
+ERL_NIF_INIT(Elixir.Torchx.NIF, nif_functions, load, NULL, upgrade, unload)

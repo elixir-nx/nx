@@ -166,11 +166,9 @@ defmodule Torchx.Backend do
 
   @impl true
   def backend_deallocate(%T{} = t) do
-    try do
-      Torchx.delete_tensor(from_nx(t))
-    rescue
-      ArgumentError -> :already_deallocated
-    end
+    Torchx.delete_tensor(from_nx(t))
+  rescue
+    ArgumentError -> :already_deallocated
   end
 
   @impl true

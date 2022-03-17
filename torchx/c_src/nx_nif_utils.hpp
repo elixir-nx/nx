@@ -49,14 +49,6 @@ namespace nx
       return enif_make_tuple2(env, atom, msg_term);
     }
 
-    // Helper for returning `{:argerror, msg}` from NIF.
-    ERL_NIF_TERM argerror(ErlNifEnv *env, const char *msg)
-    {
-      ERL_NIF_TERM atom = enif_make_atom(env, "argerror");
-      ERL_NIF_TERM msg_term = enif_make_string(env, msg, ERL_NIF_LATIN1);
-      return enif_make_tuple2(env, atom, msg_term);
-    }
-
     // Helper for returning `{:ok, term}` from NIF.
     ERL_NIF_TERM ok(ErlNifEnv *env)
     {

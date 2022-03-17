@@ -340,7 +340,6 @@ defmodule Torchx do
   defp unwrap!(:ok), do: :ok
   defp unwrap!({:ok, result}), do: result
   defp unwrap!({:error, error}), do: raise("Torchx: " <> List.to_string(error))
-  defp unwrap!({:argerror, error}), do: raise(ArgumentError, "Torchx: " <> List.to_string(error))
 
   defp unwrap_tensor!(tagged_result, device) do
     case unwrap!(tagged_result) do
