@@ -612,8 +612,8 @@ defmodule Torchx.Backend do
       apply(Torchx, fun, [from_nx(t), axis, keep_axis])
       |> to_nx(out)
     else
-      %{data: %{ref: {device, _}}, type: type, shape: shape} = t
-      scalar = Torchx.scalar_tensor(elem(shape, axis) - 1, to_torch_type(type), device)
+      %{data: %{ref: {device, _}}, shape: shape} = t
+      scalar = Torchx.scalar_tensor(elem(shape, axis) - 1, to_torch_type(out.type), device)
 
       flipped =
         t
@@ -624,7 +624,7 @@ defmodule Torchx.Backend do
 
       scalar
       |> Torchx.subtract(result)
-      |> Torchx.to_type(to_torch_type(out.type))
+      # |> Torchx.to_type(to_torch_type(out.type))
       |> to_nx(out)
     end
   end
@@ -1074,11 +1074,8 @@ defmodule Torchx.Backend do
       tensor
       |> from_nx()
       |> Torchx.to_type(intermediate_type)
-      |> IO.inspect(label: "1076")
       |> then(unfold_flat)
-      |> IO.inspect(label: "1078")
       |> then(function)
-      |> IO.inspect(label: "1080")
 
     indices_to_flatten =
       tensor
