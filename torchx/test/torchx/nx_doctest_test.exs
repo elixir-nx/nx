@@ -81,8 +81,7 @@ defmodule Torchx.NxDoctestTest do
     window_product: 3,
     # window_sum - still needs to support padding and window_dilations
     window_sum: 3,
-    put_slice: 3,
-    window_scatter_min: 5
+    put_slice: 3
   ]
 
   doctest Nx,
