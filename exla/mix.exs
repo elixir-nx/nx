@@ -17,7 +17,10 @@ defmodule EXLA.MixProject do
       # otherwise its Makefile will run only upon the initial compilation
       compilers:
         if(xla_build?(), do: [:xla], else: []) ++ [:exla, :elixir_make] ++ Mix.compilers(),
-      aliases: aliases()
+      aliases: aliases(),
+      make_env: %{
+        "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}"
+      }
     ]
   end
 

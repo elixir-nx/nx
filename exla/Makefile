@@ -39,9 +39,14 @@ else
 endif
 
 $(EXLA_SO): $(EXLA_CACHE_SO)
-	mkdir -p $(PRIV_DIR)
-	ln -sf $(abspath $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR)
-	ln -sf $(abspath $(EXLA_CACHE_SO)) $(EXLA_SO)
+	@ mkdir -p $(PRIV_DIR)
+	@ if [ "${MIX_BUILD_EMBEDDED}" = "true" ]; then \
+		cp -a $(abspath $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR) ; \
+		cp -a $(abspath $(EXLA_CACHE_SO)) $(EXLA_SO) ; \
+	else \
+		ln -sf $(abspath $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR) ; \
+		ln -sf $(abspath $(EXLA_CACHE_SO)) $(EXLA_SO) ; \
+	fi
 
 $(EXLA_CACHE_SO): $(XLA_EXTENSION_DIR) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h
 	$(CXX) $(CFLAGS) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/exla_client.cc -o $(EXLA_CACHE_SO) $(LDFLAGS)
