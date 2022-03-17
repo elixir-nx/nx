@@ -1019,6 +1019,18 @@ defmodule Torchx.Backend do
 
   @impl true
   def window_scatter_max(out, tensor, source, init_value, window_dims_tuple, opts) do
+    window_scatter_function(
+      &Nx.argmax(&1, axis: -1),
+      out,
+      tensor,
+      source,
+      init_value,
+      window_dims_tuple,
+      opts
+    )
+  end
+
+  defp window_scatter_function(function, out, tensor, source, init_value, window_dims_tuple, opts) do
     intermediate_type =
       tensor.type
       |> Nx.Type.to_floating()
@@ -1049,7 +1061,7 @@ defmodule Torchx.Backend do
       |> from_nx()
       |> Torchx.to_type(intermediate_type)
       |> then(unfold_flat)
-      |> Nx.argmax(axis: -1)
+      |> then(function)
 
     indices_to_flatten =
       tensor
