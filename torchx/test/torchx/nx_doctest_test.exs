@@ -73,16 +73,15 @@ defmodule Torchx.NxDoctestTest do
   ]
 
   @pending_doctests [
-    # window_max - still needs to support padding and window_dilations
+    # window_max - still needs to support window_dilations
     window_max: 3,
-    # window_min - still needs to support padding and window_dilations
+    # window_min - still needs to support window_dilations
     window_min: 3,
-    # window_product - still needs to support padding and window_dilations
+    # window_product - still needs to support window_dilations
     window_product: 3,
-    # window_sum - still needs to support padding and window_dilations
+    # window_sum - still needs to support window_dilations
     window_sum: 3,
-    put_slice: 3,
-    window_scatter_min: 5
+    put_slice: 3
   ]
 
   doctest Nx,

@@ -612,8 +612,8 @@ defmodule Torchx.Backend do
       apply(Torchx, fun, [from_nx(t), axis, keep_axis])
       |> to_nx(out)
     else
-      %{data: %{ref: {device, _}}, type: type, shape: shape} = t
-      scalar = Torchx.scalar_tensor(elem(shape, axis) - 1, to_torch_type(type), device)
+      %{data: %{ref: {device, _}}, shape: shape} = t
+      scalar = Torchx.scalar_tensor(elem(shape, axis) - 1, to_torch_type(out.type), device)
 
       flipped =
         t
@@ -1018,7 +1018,32 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def window_scatter_min(out, tensor, source, init_value, window_dims_tuple, opts) do
+    window_scatter_function(
+      &Nx.argmin(&1, axis: -1, tie_break: :high),
+      out,
+      tensor,
+      source,
+      init_value,
+      window_dims_tuple,
+      opts
+    )
+  end
+
+  @impl true
   def window_scatter_max(out, tensor, source, init_value, window_dims_tuple, opts) do
+    window_scatter_function(
+      &Nx.argmax(&1, axis: -1),
+      out,
+      tensor,
+      source,
+      init_value,
+      window_dims_tuple,
+      opts
+    )
+  end
+
+  defp window_scatter_function(function, out, tensor, source, init_value, window_dims_tuple, opts) do
     intermediate_type =
       tensor.type
       |> Nx.Type.to_floating()
@@ -1044,12 +1069,12 @@ defmodule Torchx.Backend do
       Nx.reshape(unfolded, flat_shape)
     end
 
-    argmax =
+    arg_idx =
       tensor
       |> from_nx()
       |> Torchx.to_type(intermediate_type)
       |> then(unfold_flat)
-      |> Nx.argmax(axis: -1)
+      |> then(function)
 
     indices_to_flatten =
       tensor
@@ -1059,7 +1084,7 @@ defmodule Torchx.Backend do
         tensor
         |> Nx.iota(axis: axis, backend: Torchx.Backend)
         |> then(unfold_flat)
-        |> Nx.take_along_axis(Nx.new_axis(argmax, -1), axis: -1)
+        |> Nx.take_along_axis(Nx.new_axis(arg_idx, -1), axis: -1)
       end)
       |> Nx.concatenate(axis: -1)
 
