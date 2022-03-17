@@ -624,7 +624,6 @@ defmodule Torchx.Backend do
 
       scalar
       |> Torchx.subtract(result)
-      # |> Torchx.to_type(to_torch_type(out.type))
       |> to_nx(out)
     end
   end
