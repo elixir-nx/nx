@@ -1055,6 +1055,7 @@ defmodule Torchx.Backend do
       tensor
       |> Nx.axes()
       |> Enum.map(fn axis ->
+        # TO-DO: allocate iotas in the same device as the tensor
         tensor
         |> Nx.iota(axis: axis, backend: Torchx.Backend)
         |> then(unfold_flat)
