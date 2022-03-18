@@ -294,6 +294,38 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def put_slice(out, input, start_indices, slice) do
+    {device, _} = input_tx = from_nx(input)
+
+    ranges =
+      start_indices
+      |> Enum.map(&Nx.to_number/1)
+      |> Enum.zip(Tuple.to_list(slice.shape))
+      |> Enum.map(fn {s, l} -> s..(s + l - 1)//1 end)
+      |> Enum.reduce(fn range, acc -> for x <- range, y <- acc, do: [x, y] end)
+
+    linear_indices_tx =
+      if is_list(ranges) do
+        ranges
+      |> Enum.map(fn l -> l |> Enum.to_list() |> List.flatten() |> Enum.reverse() end)
+      |> Nx.tensor(backend: {__MODULE__, device: device})
+      |> then(&as_torchx_linear_indices(input.shape, &1))
+      else
+        ranges
+        |> Enum.to_list()
+        |> Nx.tensor()
+        |> Torchx.from_nx()
+      end
+
+    slice_tx = slice |> from_nx() |> Torchx.to_type(to_torch_type(out.type))
+
+    input_tx
+    |> Torchx.to_type(to_torch_type(out.type))
+    |> Torchx.put(linear_indices_tx, slice_tx)
+    |> to_nx(out)
+  end
+
+  @impl true
   def concatenate(out, tensors, axis) do
     tensors
     |> Enum.map(&from_nx/1)

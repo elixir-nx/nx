@@ -80,8 +80,7 @@ defmodule Torchx.NxDoctestTest do
     # window_product - still needs to support window_dilations
     window_product: 3,
     # window_sum - still needs to support window_dilations
-    window_sum: 3,
-    put_slice: 3
+    window_sum: 3
   ]
 
   doctest Nx,
