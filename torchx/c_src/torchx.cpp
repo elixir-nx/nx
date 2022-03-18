@@ -76,12 +76,12 @@ public:
     }
   }
 
-  torch::Tensor* data()
+  torch::Tensor* data() const
   {
     return ptr;
   }
 
-  bool is_valid()
+  bool is_valid() const
   {
     return ptr != nullptr;
   }
