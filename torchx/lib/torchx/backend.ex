@@ -300,7 +300,7 @@ defmodule Torchx.Backend do
     slice_shape_list = Tuple.to_list(slice.shape)
 
     start_indices =
-      Enum.zip_with([Tuple.to_list(input.shape), start_indices_unbounded, slice_shape_list], fn [dim_size, idx, len] = l ->
+      Enum.zip_with([Tuple.to_list(input.shape), start_indices_unbounded, slice_shape_list], fn [dim_size, idx, len] ->
         idx = Nx.to_number(idx)
         min(max(idx, 0), dim_size - len)
       end)
