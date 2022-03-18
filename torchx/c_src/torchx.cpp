@@ -1,10 +1,8 @@
 #include <torch/torch.h>
 #include <iostream>
+#include <atomic>
 
 #include "nx_nif_utils.hpp"
-
-// Mutex to protect tag check
-static ErlNifMutex* tensor_mutex;
 
 std::map<const std::string, const torch::ScalarType> dtypes = {{"byte", torch::kByte}, {"char", torch::kChar}, {"short", torch::kShort}, {"int", torch::kInt}, {"long", torch::kLong}, {"half", torch::kHalf}, {"brain", torch::kBFloat16}, {"float", torch::kFloat}, {"double", torch::kDouble}, {"bool", torch::kBool}};
 std::map<const std::string, const int> dtype_sizes = {{"byte", 1}, {"char", 1}, {"short", 2}, {"int", 4}, {"long", 8}, {"half", 2}, {"brain", 2}, {"float", 4}, {"double", 8}};
@@ -23,6 +21,75 @@ inline const std::string* type2string(const torch::ScalarType type)
   }
   return nullptr;
 }
+
+// the class instance to manage the refcount of Tensor
+class TensorP
+{
+public:
+  TensorP(ErlNifEnv *env, const ERL_NIF_TERM arg) : ptr(nullptr)
+  {
+    // setup
+    if (!enif_get_resource(env, arg, TENSOR_TYPE, (void **)&ptr))
+    {
+      // didn't give this parameter
+      return;
+    }
+
+    refcount = (std::atomic<int> *)(ptr + 1);
+
+    if (refcount->load() == 0)
+    {
+      // already deallocated
+      ptr = nullptr;
+      return;
+    }
+
+    if (is_valid())
+    {
+      // increase reference count
+      ++(*refcount);
+    }
+  }
+
+  ~TensorP()
+  {
+    if (is_valid())
+    {
+      // decrease reference count
+      if (refcount->fetch_sub(1) == 0)
+      {
+        ptr->~Tensor();
+      }
+    }
+  }
+
+  bool deallocate()
+  {
+    if (is_valid())
+    {
+      --(*refcount);
+      return true;
+    }
+    else
+    {
+      return false;
+    }
+  }
+
+  torch::Tensor* data()
+  {
+    return ptr;
+  }
+
+  bool is_valid()
+  {
+    return ptr != nullptr;
+  }
+
+private:
+  torch::Tensor *ptr;
+  std::atomic<int> *refcount;
+};
 
 #define NIF(NAME) ERL_NIF_TERM NAME(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 
@@ -53,14 +120,12 @@ inline const std::string* type2string(const torch::ScalarType type)
 #define OPTS(TYPE, DEV_VEC) DEVICE(DEV_VEC).dtype(TYPE)
 
 #define TENSOR_PARAM(ARGN, VAR)                                           \
-  torch::Tensor *VAR;                                                     \
-  if (!enif_get_resource(env, argv[ARGN], TENSOR_TYPE, (void **)&VAR))  { \
-    std::ostringstream msg;                                               \
-    msg << "Unable to get " #VAR " tensor param in NIF." << __func__ << "/" << argc;  \
-    return nx::nif::error(env, msg.str().c_str());                     \
-  }                                                                       \
-  if (!IS_TENSOR_ALIVE(VAR))  {                                    \
+  TensorP VAR##_tp(env, argv[ARGN]);                                      \
+  torch::Tensor* VAR;                                                     \
+  if (!VAR##_tp.is_valid())  {                                            \
     return enif_make_badarg(env);                                         \
+  } else {                                                                \
+    VAR = VAR##_tp.data();                                                \
   }
 
 #define CATCH()                                              \
@@ -128,12 +193,12 @@ create_tensor_resource(ErlNifEnv *env, torch::Tensor tensor)
   ERL_NIF_TERM ret;
   torch::Tensor *tensorPtr;
 
-  tensorPtr = (torch::Tensor *)enif_alloc_resource(TENSOR_TYPE, sizeof(torch::Tensor) + sizeof(bool));
+  tensorPtr = (torch::Tensor *)enif_alloc_resource(TENSOR_TYPE, sizeof(torch::Tensor) + sizeof(std::atomic<int>));
   if (tensorPtr == NULL)
     return enif_make_badarg(env);
 
   new (tensorPtr) torch::Tensor(tensor.variable_data());
-  *(bool*)(tensorPtr + 1) = true;
+  new (tensorPtr + 1) std::atomic<int>(1);
 
   ret = enif_make_resource(env, tensorPtr);
   enif_release_resource(tensorPtr);
@@ -143,22 +208,10 @@ create_tensor_resource(ErlNifEnv *env, torch::Tensor tensor)
 
 NIF(delete_tensor)
 {
-  TENSOR_PARAM(0, t);
+  TensorP tensor(env, argv[0]);
 
-  enif_mutex_lock(tensor_mutex);
-  if (IS_TENSOR_ALIVE(t))
-  {
-    *(bool*)(t + 1) = false;
-    enif_mutex_unlock(tensor_mutex);
-    t->~Tensor();
-
-    return nx::nif::ok(env);
-  }
-  else
-  {
-    enif_mutex_unlock(tensor_mutex);
-    return nx::nif::error(env, "already deleted tensor");
-  }
+  return tensor.deallocate()? nx::nif::ok(env):
+    enif_make_badarg(env);
 }
 
 unsigned long elem_count(std::vector<int64_t> shape)
@@ -769,7 +822,7 @@ NIF(cholesky)
 
 NIF(pad)
 {
-  TENSOR_PARAM(0, tensor)
+  TENSOR_PARAM(0, tensor);
   LIST_PARAM(1, std::vector<int64_t>, config)
   SCALAR_PARAM(2, constant)
 
@@ -921,24 +974,14 @@ int upgrade(ErlNifEnv *env, void **priv_data, void **old_priv_data, ERL_NIF_TERM
 
 int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info)
 {
-  const char *name = "Tensor";
   if (open_resource_type(env) == -1)
     return -1;
   
-  tensor_mutex = enif_mutex_create((char*)name);
-  if (tensor_mutex == NULL)
-    return -1;
-
   // Silence "unused var" warnings.
   (void)(priv_data);
   (void)(load_info);
 
   return 0;
-}
-
-void unload(ErlNifEnv* caller_env, void* priv_data)
-{
-  enif_mutex_destroy(tensor_mutex);
 }
 
 #define F(NAME, ARITY)    \
@@ -1082,4 +1125,4 @@ static ErlNifFunc nif_functions[] = {
     F(shape, 1),
     F(nbytes, 1)};
 
-ERL_NIF_INIT(Elixir.Torchx.NIF, nif_functions, load, NULL, upgrade, unload)
+ERL_NIF_INIT(Elixir.Torchx.NIF, nif_functions, load, NULL, upgrade, NULL)
