@@ -300,7 +300,11 @@ defmodule Torchx.Backend do
     slice_shape_list = Tuple.to_list(slice.shape)
 
     start_indices =
-      Enum.zip_with([Tuple.to_list(input.shape), start_indices_unbounded, slice_shape_list], fn [dim_size, idx, len] ->
+      Enum.zip_with([Tuple.to_list(input.shape), start_indices_unbounded, slice_shape_list], fn [
+                                                                                                  dim_size,
+                                                                                                  idx,
+                                                                                                  len
+                                                                                                ] ->
         idx = Nx.to_number(idx)
         min(max(idx, 0), dim_size - len)
       end)
@@ -437,19 +441,18 @@ defmodule Torchx.Backend do
     flattened_idx = Nx.reshape(idx, {div(Nx.size(idx), ndims), ndims})
     shape_tensor = shape |> Tuple.to_list() |> Nx.tensor()
 
-    upper_clamped_idx = if lengths do
-      upper_lim = Nx.subtract(shape_tensor, lengths)
+    upper_clamped_idx =
+      if lengths do
+        upper_lim = Nx.subtract(shape_tensor, lengths)
 
-      flattened_idx
-      |> Nx.greater_equal(upper_lim)
-      |> Nx.select(upper_lim, flattened_idx)
-    else
-      flattened_idx
-      |> Nx.greater_equal(shape_tensor)
-      |> Nx.select(Nx.subtract(shape_tensor, 1), flattened_idx)
-    end
-
-
+        flattened_idx
+        |> Nx.greater_equal(upper_lim)
+        |> Nx.select(upper_lim, flattened_idx)
+      else
+        flattened_idx
+        |> Nx.greater_equal(shape_tensor)
+        |> Nx.select(Nx.subtract(shape_tensor, 1), flattened_idx)
+      end
 
     lower_clamp_selector = Nx.less(upper_clamped_idx, 0)
 
