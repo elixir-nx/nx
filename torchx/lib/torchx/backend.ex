@@ -294,26 +294,33 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def put_slice(out, input, start_indices, slice) do
+  def put_slice(out, input, start_indices_unbounded, slice) do
     {device, _} = input_tx = from_nx(input)
 
-    ranges =
-      start_indices
-      |> Enum.map(&Nx.to_number/1)
-      |> Enum.zip(Tuple.to_list(slice.shape))
-      |> Enum.map(fn {s, l} -> s..(s + l - 1)//1 end)
-      |> Enum.reduce(fn range, acc -> for x <- range, y <- acc, do: [x, y] end)
+    slice_shape_list = Tuple.to_list(slice.shape)
 
+    start_indices =
+      Enum.zip_with([Tuple.to_list(input.shape), start_indices_unbounded, slice_shape_list], fn [dim_size, idx, len] = l ->
+        idx = Nx.to_number(idx)
+        min(max(idx, 0), dim_size - len)
+      end)
+
+    range_or_ranges =
+      [start_indices, slice_shape_list]
+      |> Enum.zip_with(fn [s, l] -> s..(s + l - 1)//1 end)
+      |> Enum.reverse()
+      |> Enum.reduce(fn range, acc -> for x <- range, y <- acc, do: List.flatten([x, y]) end)
+
+    # if below is needed for when the reduce receives a single-element list
     linear_indices_tx =
-      if is_list(ranges) do
-        ranges
-      |> Enum.map(fn l -> l |> Enum.to_list() |> List.flatten() |> Enum.reverse() end)
-      |> Nx.tensor(backend: {__MODULE__, device: device})
-      |> then(&as_torchx_linear_indices(input.shape, &1))
+      if is_list(range_or_ranges) do
+        range_or_ranges
+        |> Nx.tensor(backend: {__MODULE__, device: device})
+        |> then(&as_torchx_linear_indices(input.shape, &1))
       else
-        ranges
+        range_or_ranges
         |> Enum.to_list()
-        |> Nx.tensor()
+        |> Nx.tensor(backend: {__MODULE__, device: device})
         |> Torchx.from_nx()
       end
 
@@ -417,7 +424,7 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  defp as_torchx_linear_indices(shape, idx) do
+  defp as_torchx_linear_indices(shape, idx, lengths \\ nil) do
     # Nx provides indices as a tensor of shape {*, input_dims}
     # However, torch expects indices to be a tensor of indices along a given axis.
     # As such, we need to convert the indices tensor to linear indices.
@@ -430,10 +437,19 @@ defmodule Torchx.Backend do
     flattened_idx = Nx.reshape(idx, {div(Nx.size(idx), ndims), ndims})
     shape_tensor = shape |> Tuple.to_list() |> Nx.tensor()
 
-    upper_clamp_selector = Nx.greater_equal(flattened_idx, shape_tensor)
+    upper_clamped_idx = if lengths do
+      upper_lim = Nx.subtract(shape_tensor, lengths)
 
-    upper_clamped_idx =
-      Nx.select(upper_clamp_selector, Nx.subtract(shape_tensor, 1), flattened_idx)
+      flattened_idx
+      |> Nx.greater_equal(upper_lim)
+      |> Nx.select(upper_lim, flattened_idx)
+    else
+      flattened_idx
+      |> Nx.greater_equal(shape_tensor)
+      |> Nx.select(Nx.subtract(shape_tensor, 1), flattened_idx)
+    end
+
+
 
     lower_clamp_selector = Nx.less(upper_clamped_idx, 0)
 
