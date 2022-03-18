@@ -976,7 +976,7 @@ int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info)
 {
   if (open_resource_type(env) == -1)
     return -1;
-  
+
   // Silence "unused var" warnings.
   (void)(priv_data);
   (void)(load_info);
