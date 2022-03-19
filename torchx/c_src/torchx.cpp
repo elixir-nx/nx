@@ -31,7 +31,7 @@ public:
     // setup
     if (!enif_get_resource(env, arg, TENSOR_TYPE, (void **)&ptr))
     {
-      // didn't give this parameter
+      err = nx::nif::error(env, "Unable to get tensor param in NIF");
       return;
     }
 
@@ -41,6 +41,7 @@ public:
     {
       // already deallocated
       ptr = nullptr;
+      err = enif_make_badarg(env);
       return;
     }
 
@@ -86,9 +87,15 @@ public:
     return ptr != nullptr;
   }
 
+  ERL_NIF_TERM error()
+  {
+     return err;
+  }
+
 private:
   torch::Tensor *ptr;
   std::atomic<int> *refcount;
+  ERL_NIF_TERM err;
 };
 
 #define NIF(NAME) ERL_NIF_TERM NAME(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
@@ -123,7 +130,7 @@ private:
   TensorP VAR##_tp(env, argv[ARGN]);                                      \
   torch::Tensor* VAR;                                                     \
   if (!VAR##_tp.is_valid())  {                                            \
-    return enif_make_badarg(env);                                         \
+    return VAR##_tp.error();                                              \
   } else {                                                                \
     VAR = VAR##_tp.data();                                                \
   }
