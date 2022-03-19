@@ -76,7 +76,7 @@ public:
     }
   }
 
-  torch::Tensor* data() const
+  torch::Tensor *data() const
   {
     return ptr;
   }
@@ -210,8 +210,7 @@ NIF(delete_tensor)
 {
   TensorP tensor(env, argv[0]);
 
-  return tensor.deallocate()? nx::nif::ok(env):
-    enif_make_badarg(env);
+  return tensor.deallocate() ? nx::nif::ok(env) : enif_make_badarg(env);
 }
 
 unsigned long elem_count(std::vector<int64_t> shape)
