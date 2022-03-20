@@ -426,7 +426,7 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  defp as_torchx_linear_indices(shape, idx, lengths \\ nil) do
+  defp as_torchx_linear_indices(shape, idx) do
     # Nx provides indices as a tensor of shape {*, input_dims}
     # However, torch expects indices to be a tensor of indices along a given axis.
     # As such, we need to convert the indices tensor to linear indices.
@@ -440,17 +440,9 @@ defmodule Torchx.Backend do
     shape_tensor = shape |> Tuple.to_list() |> Nx.tensor()
 
     upper_clamped_idx =
-      if lengths do
-        upper_lim = Nx.subtract(shape_tensor, lengths)
-
-        flattened_idx
-        |> Nx.greater_equal(upper_lim)
-        |> Nx.select(upper_lim, flattened_idx)
-      else
-        flattened_idx
-        |> Nx.greater_equal(shape_tensor)
-        |> Nx.select(Nx.subtract(shape_tensor, 1), flattened_idx)
-      end
+      flattened_idx
+      |> Nx.greater_equal(shape_tensor)
+      |> Nx.select(Nx.subtract(shape_tensor, 1), flattened_idx)
 
     lower_clamp_selector = Nx.less(upper_clamped_idx, 0)
 
