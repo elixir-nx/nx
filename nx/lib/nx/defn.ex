@@ -179,8 +179,8 @@ defmodule Nx.Defn do
         %{map | a: Nx.add(map.a, 1)}
       end
 
-  The following code increments the value under the key `:a` by
-  1. However, because the function receives the whole map and
+  The following code increments the value under the key `:a`
+  by 1. However, because the function receives the whole map and
   returns the whole map, it means if the map has 120 keys, the
   whole map will be copied to the CPU/GPU, and then brought back.
 
