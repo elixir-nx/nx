@@ -299,12 +299,10 @@ defmodule Torchx.Backend do
 
     slice_shape_list = Tuple.to_list(slice.shape)
 
+    zip_indices_input = [Tuple.to_list(input.shape), start_indices_unbounded, slice_shape_list]
+
     start_indices =
-      Enum.zip_with([Tuple.to_list(input.shape), start_indices_unbounded, slice_shape_list], fn [
-                                                                                                  dim_size,
-                                                                                                  idx,
-                                                                                                  len
-                                                                                                ] ->
+      Enum.zip_with(zip_indices_input, fn [dim_size, idx, len] ->
         idx = Nx.to_number(idx)
         min(max(idx, 0), dim_size - len)
       end)
