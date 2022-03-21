@@ -294,6 +294,47 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def put_slice(out, input, start_indices_unbounded, slice) do
+    {device, _} = input_tx = from_nx(input)
+
+    slice_shape_list = Tuple.to_list(slice.shape)
+
+    zip_indices_input = [Tuple.to_list(input.shape), start_indices_unbounded, slice_shape_list]
+
+    start_indices =
+      Enum.zip_with(zip_indices_input, fn [dim_size, idx, len] ->
+        idx = Nx.to_number(idx)
+        min(max(idx, 0), dim_size - len)
+      end)
+
+    range_or_ranges =
+      [start_indices, slice_shape_list]
+      |> Enum.zip_with(fn [s, l] -> s..(s + l - 1)//1 end)
+      |> Enum.reverse()
+      |> Enum.reduce(fn range, acc -> for x <- range, y <- acc, do: List.flatten([x, y]) end)
+
+    # if below is needed for when the reduce receives a single-element list
+    linear_indices_tx =
+      if is_list(range_or_ranges) do
+        range_or_ranges
+        |> Nx.tensor(backend: {__MODULE__, device: device})
+        |> then(&as_torchx_linear_indices(input.shape, &1))
+      else
+        range_or_ranges
+        |> Enum.to_list()
+        |> Nx.tensor(backend: {__MODULE__, device: device})
+        |> Torchx.from_nx()
+      end
+
+    slice_tx = slice |> from_nx() |> Torchx.to_type(to_torch_type(out.type))
+
+    input_tx
+    |> Torchx.to_type(to_torch_type(out.type))
+    |> Torchx.put(linear_indices_tx, slice_tx)
+    |> to_nx(out)
+  end
+
+  @impl true
   def concatenate(out, tensors, axis) do
     tensors
     |> Enum.map(&from_nx/1)
@@ -398,10 +439,10 @@ defmodule Torchx.Backend do
     flattened_idx = Nx.reshape(idx, {div(Nx.size(idx), ndims), ndims})
     shape_tensor = shape |> Tuple.to_list() |> Nx.tensor()
 
-    upper_clamp_selector = Nx.greater_equal(flattened_idx, shape_tensor)
-
     upper_clamped_idx =
-      Nx.select(upper_clamp_selector, Nx.subtract(shape_tensor, 1), flattened_idx)
+      flattened_idx
+      |> Nx.greater_equal(shape_tensor)
+      |> Nx.select(Nx.subtract(shape_tensor, 1), flattened_idx)
 
     lower_clamp_selector = Nx.less(upper_clamped_idx, 0)
 

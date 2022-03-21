@@ -378,6 +378,15 @@ NIF(unfold)
   TENSOR(at::native::unfold(*input, dim, size, step));
 }
 
+NIF(put)
+{
+  TENSOR_PARAM(0, input);
+  TENSOR_PARAM(1, index);
+  TENSOR_PARAM(2, source);
+
+  TENSOR(at::put(*input, *index, *source));
+}
+
 NIF(permute)
 {
   TENSOR_PARAM(0, t);
@@ -951,6 +960,7 @@ static ErlNifFunc nif_functions[] = {
     DF(argsort, 3),
     DF(flip, 2),
     DF(unfold, 4),
+    DF(put, 3),
 
     DF(add, 2),
     DF(subtract, 2),
