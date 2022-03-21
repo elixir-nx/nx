@@ -6,8 +6,6 @@ defmodule Torchx.NxLinAlgDoctestTest do
   for the excluded tests can be found on Torchx.NxTest.
   """
 
-  # TODO: Add backend tests for the doctests that are excluded
-
   use ExUnit.Case, async: true
 
   # Results match but there are arounding errors
@@ -17,19 +15,20 @@ defmodule Torchx.NxLinAlgDoctestTest do
     qr: 2,
     triangular_solve: 3,
     solve: 2,
-    invert: 1
+    invert: 1,
+    determinant: 1
   ]
 
   # Results do not match but properties are respected
+  # All of these have tests in nx_linalg_test.exs
   @property_doctests [
     eigh: 2,
     lu: 2,
     svd: 2
   ]
 
-  @pending_doctests [
-    # unsigned 64 bit integer support
-    determinant: 1,
+  @type_incompatibility_doctests [
+    # u64 is not supported by Torchx
     norm: 2
   ]
 
@@ -40,7 +39,7 @@ defmodule Torchx.NxLinAlgDoctestTest do
 
   doctest Nx.LinAlg,
     except:
-      @pending_doctests
+      @type_incompatibility_doctests
       |> Kernel.++(@rounding_error_doctests)
       |> Kernel.++(@property_doctests)
 end

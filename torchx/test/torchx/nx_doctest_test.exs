@@ -6,8 +6,6 @@ defmodule Torchx.NxDoctestTest do
   for the excluded tests can be found on Torchx.NxTest.
   """
 
-  # TODO: Add backend tests for the doctests that are excluded
-
   use ExUnit.Case, async: true
 
   setup do
@@ -26,8 +24,6 @@ defmodule Torchx.NxDoctestTest do
     mean: 2,
     # quotient - Torchx does not support unsigned 32 bit integer
     quotient: 2,
-    # window_mean - depends on window_sum which is not implemented
-    window_mean: 3,
     # require Elixir 1.13+
     sigil_M: 2,
     sigil_V: 2
@@ -72,20 +68,17 @@ defmodule Torchx.NxDoctestTest do
     product: 2
   ]
 
-  @pending_doctests [
-    # window_max - still needs to support window_dilations
+  @unimplemented_window_dilations_doctests [
     window_max: 3,
-    # window_min - still needs to support window_dilations
     window_min: 3,
-    # window_product - still needs to support window_dilations
     window_product: 3,
-    # window_sum - still needs to support window_dilations
-    window_sum: 3
+    window_sum: 3,
+    window_mean: 3
   ]
 
   doctest Nx,
     except:
-      @pending_doctests
+      @unimplemented_window_dilations_doctests
       |> Kernel.++(@temporarily_broken_doctests)
       |> Kernel.++(@rounding_error_doctests)
       |> Kernel.++(@os_rounding_error_doctests)

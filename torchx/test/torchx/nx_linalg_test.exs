@@ -300,6 +300,28 @@ defmodule Torchx.NxLinAlgTest do
     end
   end
 
+   describe "eigh" do
+    test "property" do
+      for _ <- 1..20 do
+        a = {3, 3} |> Nx.random_uniform() |> then(&Nx.add(&1, Nx.transpose(&1)))
+
+        {eigenval, eigenvec} = Nx.LinAlg.eigh(a)
+
+        a_reconstructed = eigenvec |> Nx.multiply(eigenval) |> Nx.dot(eigenvec |> Nx.transpose())
+
+        assert_all_close(a, a_reconstructed)
+      end
+    end
+
+    test "invalid a shape" do
+      assert_raise ArgumentError,
+                   "tensor must be a square matrix (a tensor with two equal axes), got shape: {3, 4}",
+                   fn ->
+                     Nx.LinAlg.eigh(Nx.tensor([[1, 1, 1, 1], [-1, 4, 4, -1], [4, -2, 2, 0]]))
+                   end
+    end
+  end
+
   describe "svd" do
     test "factors square matrix" do
       t = Nx.tensor([[1.0, 0, 0], [0, 1, 0], [0, 0, -1]])

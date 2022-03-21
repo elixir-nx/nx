@@ -214,7 +214,6 @@ defmodule Torchx.Backend do
     Torchx.squeeze(from_nx(t)) |> to_nx(out)
   end
 
-  # TODO: Handle axes properly
   @impl true
   def broadcast(out, %T{} = t, shape, axes) do
     Torchx.broadcast_to(maybe_reshape(t, shape, axes) |> from_nx(), shape)
