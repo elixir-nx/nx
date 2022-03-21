@@ -90,10 +90,6 @@ defmodule Torchx.Macro do
 end
 
 defmodule Torchx do
-  # TODO: Add moduledoc that documents the types and devices.
-  # Make it clear they are Torchx specific and that Torchx.Backend
-  # provides the mapping between Nx to the underlying Torchx types.
-
   use Torchx.Macro
   alias Torchx.NIF
 

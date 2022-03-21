@@ -161,7 +161,6 @@ defmodule Nx.LinAlgTest do
 
     test "property" do
       for _ <- 1..10 do
-        # TODO: Implement the case of wide-matrix QR
         square = Nx.random_uniform({4, 4})
         tall = Nx.random_uniform({4, 3})
 
