@@ -931,23 +931,57 @@ defmodule Nx do
   @doc """
   Shuffles tensor elements.
 
+  By default, shuffles elements within the whole tensor. When `:axis`
+  is given, shuffles the tensor along the specific axis instead.
+
   ## Options
 
-    * `:axis` - the axis to shuffle along. If no axis is given,
-      elements are shuffled within the whole tensor
+    * `:axis` - the axis to shuffle along
+
+  ## Examples
+
+  Shuffling all elements:
+
+      t = Nx.tensor([[1, 2], [3, 4], [5, 6]])
+      Nx.shuffle(t)
+      #=>
+      #Nx.Tensor<
+        s64[3][2]
+        [
+          [5, 1],
+          [2, 3],
+          [6, 4]
+        ]
+      >
+
+  Shuffling rows in a two-dimensional tensor:
+
+      t = Nx.tensor([[1, 2], [3, 4], [5, 6]])
+      Nx.shuffle(t, axis: 0)
+      #=>
+      #Nx.Tensor<
+        s64[3][2]
+        [
+          [5, 6],
+          [1, 2],
+          [3, 4]
+        ]
+      >
   """
   @doc type: :random
   def shuffle(tensor, opts \\ []) do
+    opts = keyword!(opts, [:axis])
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
 
     if axis = opts[:axis] do
       axis = Nx.Shape.normalize_axis(shape, axis, names)
-      indices = tensor |> Nx.random_uniform() |> Nx.argsort(axis: axis)
-      Nx.take_along_axis(tensor, indices, axis: axis)
+      size = Nx.axis_size(tensor, axis)
+      permutation = Nx.random_uniform({size}) |> Nx.argsort()
+      Nx.take(tensor, permutation, axis: axis)
     else
       flattened = Nx.flatten(tensor)
-      indices = flattened |> Nx.random_uniform() |> Nx.argsort()
-      flattened |> Nx.take(indices) |> Nx.reshape(tensor)
+      permutation = flattened |> Nx.random_uniform() |> Nx.argsort()
+      flattened |> Nx.take(permutation) |> Nx.reshape(tensor)
     end
   end
 
