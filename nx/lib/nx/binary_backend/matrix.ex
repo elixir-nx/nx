@@ -307,19 +307,14 @@ defmodule Nx.BinaryBackend.Matrix do
     {approximate_zeros(hess_matrix, eps), approximate_zeros(q_matrix, eps)}
   end
 
-  # TODO: Eliminate this function and use the binary implementation
   defp is_approximately_same?(a, b, eps) do
     # Determine if matrices `a` and `b` are equal in the range of eps
-    Enum.zip(a, b)
+    a
+    |> Enum.zip(b)
     |> Enum.all?(fn {a_row, b_row} ->
-      Enum.zip(a_row, b_row)
-      |> Enum.map(&Tuple.to_list(&1))
-      |> Enum.all?(
-        &Enum.reduce(
-          &1,
-          fn a_elem, b_elem -> abs(a_elem - b_elem) <= eps end
-        )
-      )
+      a_row
+      |> Enum.zip(b_row)
+      |> Enum.all?(fn {a_elem, b_elem} -> abs(a_elem - b_elem) <= eps end)
     end)
   end
 
@@ -466,9 +461,6 @@ defmodule Nx.BinaryBackend.Matrix do
 
     {s, [vt_row | _] = vt} = apply_singular_value_corrections(s, vt)
 
-    # TODO: complete the vt matrix with linearly independent rows
-    # requires solving a homogeneous equation system for non-homogenous
-    # solutions
     if length(vt) != vt_rows or length(vt_row) != vt_cols do
       raise "vt matrix completion for wide-matrices not implemented for Nx.BinaryBackend"
     end

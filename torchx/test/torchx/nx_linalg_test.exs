@@ -300,7 +300,7 @@ defmodule Torchx.NxLinAlgTest do
     end
   end
 
-   describe "eigh" do
+  describe "eigh" do
     test "property" do
       for _ <- 1..20 do
         a = {3, 3} |> Nx.random_uniform() |> then(&Nx.add(&1, Nx.transpose(&1)))
