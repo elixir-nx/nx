@@ -931,7 +931,7 @@ defmodule Nx do
   @doc """
   Shuffles tensor elements.
 
-  By default shuffles elements within the whole tensor. When `:axis`
+  By default, shuffles elements within the whole tensor. When `:axis`
   is given, shuffles the tensor along the specific axis instead.
 
   ## Options
