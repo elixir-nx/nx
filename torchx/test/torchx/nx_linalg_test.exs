@@ -371,8 +371,6 @@ defmodule Torchx.NxLinAlgTest do
       )
     end
 
-    # TO-DO: deal with `Nx.sum` returning s64 on Torchx instead of u64
-    @tag :skip
     test "works for order bigger than 3" do
       assert_all_close(
         Nx.LinAlg.determinant(
@@ -383,7 +381,7 @@ defmodule Torchx.NxLinAlgTest do
             [0, 7, 8, 9.0]
           ])
         ),
-        Nx.tensor(-48)
+        Nx.tensor(48.0)
       )
 
       assert_all_close(
