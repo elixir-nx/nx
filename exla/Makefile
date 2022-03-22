@@ -26,7 +26,7 @@ LDFLAGS = -L$(XLA_EXTENSION_LIB) -lxla_extension
 ifeq ($(shell uname -s), Darwin)
 	LDFLAGS += -flat_namespace -undefined suppress
 	POST_INSTALL = install_name_tool \
-		-change bazel-out/darwin_arm64-opt/bin/tensorflow/compiler/xla/extension/libxla_extension.so @loader_path/lib/libxla_extension.so \
+		-change bazel-out/darwin_arm64-opt/bin/tensorflow/compiler/xla/extension/libxla_extension.so @loader_path/xla_extension/lib/libxla_extension.so \
 		-change bazel-out/darwin-opt/bin/tensorflow/compiler/xla/extension/libxla_extension.so @loader_path/lib/libxla_extension.so \
 		$(EXLA_CACHE_SO)
 else
