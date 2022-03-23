@@ -100,10 +100,13 @@ defmodule Nx.Type do
       {:s, 64}
       iex> Nx.Type.infer(1.0)
       {:f, 32}
+      iex> Nx.Type.infer(Complex.new(1))
+      {:c, 64}
 
   """
   def infer(value) when is_integer(value), do: {:s, 64}
   def infer(value) when is_float(value), do: {:f, 32}
+  def infer(%Complex{}), do: {:c, 64}
 
   @doc """
   Validates the given type tuple.
@@ -298,6 +301,7 @@ defmodule Nx.Type do
     end
   end
 
+  defp type_to_int(:c), do: 4
   defp type_to_int(:f), do: 3
   defp type_to_int(:bf), do: 2
   defp type_to_int(:s), do: 1

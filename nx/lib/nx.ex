@@ -491,7 +491,7 @@ defmodule Nx do
     Enum.reduce(tail, infer_type(head), &Nx.Type.merge(infer_type(&1), &2))
   end
 
-  defp infer_type(number) when is_number(number) do
+  defp infer_type(number) when is_number(number) or is_struct(number, Complex) do
     Nx.Type.infer(number)
   end
 
