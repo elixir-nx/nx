@@ -1498,6 +1498,13 @@ defmodule Nx do
     backend.constant(out, number, options)
   end
 
+  def to_tensor(%Complex{} = number) do
+    {backend, options} = default_backend()
+    {_, size} = number.re |> Nx.Type.infer() |> Nx.Type.merge(Nx.Type.infer(number.im))
+    out = %T{shape: {}, type: {:c, size * 2}, names: []}
+    backend.constant(out, number, options)
+  end
+
   def to_tensor(t) do
     raise ArgumentError, "expected a %Nx.Tensor{} or a number, got: #{inspect(t)}"
   end
@@ -3098,8 +3105,32 @@ defmodule Nx do
 
   ## Element-wise binary ops
 
+  @allow_complex_type_bin_ops [
+    :add,
+    :subtract,
+    :multiply,
+    :divide,
+    :atan2,
+    :max,
+    :min,
+    :power,
+    :equal,
+    :not_equal,
+    :greater,
+    :less,
+    :greater_equal,
+    :logical_and,
+    :logical_or,
+    :logical_xor
+  ]
+
   defp element_wise_bin_op(left, right, op, fun) do
-    type = binary_type(left, right) |> fun.()
+    {type_class, _} = type = binary_type(left, right) |> fun.()
+
+    if type_class == :c and op not in @allow_complex_type_bin_ops do
+      raise ArgumentError, "Nx.#{op}/2 does not support complex numbers"
+    end
+
     %T{shape: left_shape, names: left_names} = left = to_tensor(left)
     %T{shape: right_shape, names: right_names} = right = to_tensor(right)
 
