@@ -1199,12 +1199,18 @@ defmodule Nx.LinAlg do
     {p, l, u} = Nx.LinAlg.lu(t)
 
     diag = Nx.take_diagonal(l) * Nx.take_diagonal(u)
-
     is_zero = Nx.any(diag == 0)
+    transitions = Nx.dot(p, Nx.iota({n}))
 
-    iota = Nx.iota({n})
+    parity =
+      transform(transitions, fn transitions ->
+        {m} = Nx.shape(transitions)
 
-    parity = Nx.sum(Nx.dot(p, iota) != iota)
+        for i <- 0..(m - 1), reduce: 0 do
+          parity ->
+            Nx.add(parity, Nx.sum(Nx.greater(transitions[i], transitions[i..-1//1])))
+        end
+      end)
 
     sign =
       if is_zero do
