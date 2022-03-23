@@ -137,6 +137,7 @@ defmodule Nx.Type do
   defp validate({:u, size} = type) when size in [8, 16, 32, 64], do: type
   defp validate({:f, size} = type) when size in [16, 32, 64], do: type
   defp validate({:bf, size} = type) when size in [16], do: type
+  defp validate({:c, size} = type) when size in [64, 128], do: type
   defp validate(_type), do: :error
 
   @doc """

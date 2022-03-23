@@ -119,7 +119,7 @@ defmodule Nx.BinaryBackend do
   defp from_binary(t, other), do: %{t | data: %B{state: IO.iodata_to_binary(other)}}
 
   @impl true
-  def to_binary(%{type: {_, size}} = t, limit) do
+  def to_binary(%{type: {_backend_options, size}} = t, limit) do
     limit = limit * div(size, 8)
     binary = to_binary(t)
 
@@ -693,29 +693,38 @@ defmodule Nx.BinaryBackend do
     from_binary(out, data)
   end
 
-  defp element_add(_, a, b), do: a + b
-  defp element_subtract(_, a, b), do: a - b
-  defp element_multiply(_, a, b), do: a * b
-  defp element_divide(_, a, b), do: a / b
-  defp element_quotient(_, a, b), do: div(a, b)
-  defp element_atan2(_, a, b), do: :math.atan2(a, b)
-  defp element_max(_, a, b), do: :erlang.max(a, b)
-  defp element_min(_, a, b), do: :erlang.min(a, b)
+  defp element_add(_, a, b), do: Complex.add(a, b)
+  defp element_subtract(_, a, b), do: Complex.subtract(a, b)
+  defp element_multiply(_, a, b), do: Complex.multiply(a, b)
+  defp element_divide(_, a, b), do: Complex.divide(a, b)
+  defp element_quotient(_, a, b), do: validate_numbers(a, b, &div/2)
 
-  defp element_remainder(_, a, b) when is_integer(a) and is_integer(b), do: rem(a, b)
-  defp element_remainder(_, a, b), do: :math.fmod(a, b)
+  defp element_atan2(_, a, b), do: Complex.atan2(a, b)
+  defp element_max(_, a, b), do: validate_numbers(a, b, &:erlang.max/2)
+  defp element_min(_, a, b), do: validate_numbers(a, b, &:erlang.min/2)
+
+  defp element_remainder(_, a, b) do
+    validate_numbers(a, b, fn
+      x, y when is_integer(x) and is_integer(y) -> rem(x, y)
+      x, y -> :math.fmod(x, y)
+    end)
+  end
 
   defp element_power({type, _}, a, b) when type in [:s, :u], do: Integer.pow(a, b)
-  defp element_power(_, a, b), do: :math.pow(a, b)
+  defp element_power(_, a, b), do: Complex.pow(a, b)
 
-  defp element_bitwise_and(_, a, b), do: :erlang.band(a, b)
-  defp element_bitwise_or(_, a, b), do: :erlang.bor(a, b)
-  defp element_bitwise_xor(_, a, b), do: :erlang.bxor(a, b)
+  defp element_bitwise_and(_, a, b), do: validate_numbers(a, b, &:erlang.band/2)
+  defp element_bitwise_or(_, a, b), do: validate_numbers(a, b, &:erlang.bor/2)
+  defp element_bitwise_xor(_, a, b), do: validate_numbers(a, b, &:erlang.bxor/2)
 
-  defp element_left_shift(_, a, b) when b >= 0, do: :erlang.bsl(a, b)
+  defp element_left_shift(_, a, b) when is_number(b) and b >= 0,
+    do: validate_numbers(a, b, &:erlang.bsl/2)
+
   defp element_left_shift(_, _, b), do: raise(ArgumentError, "cannot left shift by #{b}")
 
-  defp element_right_shift(_, a, b) when b >= 0, do: :erlang.bsr(a, b)
+  defp element_right_shift(_, a, b) when is_number(b) and b >= 0,
+    do: validate_numbers(a, b, &:erlang.bsr/2)
+
   defp element_right_shift(_, _, b), do: raise(ArgumentError, "cannot right shift by #{b}")
 
   defp element_equal(_, a, b), do: if(a == b, do: 1, else: 0)
@@ -736,6 +745,23 @@ defmodule Nx.BinaryBackend do
   defp element_logical_xor(_, l, _) when l == 0, do: 1
   defp element_logical_xor(_, _, r) when r == 0, do: 1
   defp element_logical_xor(_, _, _), do: 0
+
+  defp validate_numbers(a, b, fun) do
+    case {a, b} do
+      {%Complex{}, %Complex{}} ->
+        raise ArithmeticError,
+              "arguments cannot be complex numbers. Got: #{inspect(a)} and #{inspect(b)}"
+
+      {%Complex{}, _} ->
+        raise ArithmeticError, "arguments cannot be complex numbers. Got: #{inspect(a)}"
+
+      {_, %Complex{}} ->
+        raise ArithmeticError, "arguments cannot be complex numbers. Got: #{inspect(b)}"
+
+      {_, _} ->
+        apply(fun, [a, b])
+    end
+  end
 
   ## Element wise unary ops
 

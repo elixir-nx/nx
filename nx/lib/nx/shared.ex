@@ -81,7 +81,7 @@ defmodule Nx.Shared do
     end
   end
 
-  @all_types [:s, :f, :bf, :u]
+  @all_types [:s, :f, :bf, :u, :c]
 
   defp match_types([h | t]) do
     for type <- @all_types, t <- match_types(t) do
@@ -91,11 +91,15 @@ defmodule Nx.Shared do
 
   defp match_types([]), do: [[]]
 
-  defp match_bin_modifier(var, type, size) when type in [:f, :bf],
+  defp match_bin_modifier(var, type, size) when type in [:f, :bf, :c],
     do: quote(do: unquote(var) :: bitstring - size(unquote(size)))
 
   defp match_bin_modifier(var, type, size),
     do: shared_bin_modifier(var, type, size)
+
+  defp read_bin_modifier(var, :c, size) do
+    quote do: Nx.Shared.read_complex(unquote(var), unquote(size))
+  end
 
   defp read_bin_modifier(var, :bf, _) do
     quote do: Nx.Shared.read_bf16(unquote(var))
@@ -118,16 +122,33 @@ defmodule Nx.Shared do
       quote do
         case unquote(var) do
           x when is_number(x) -> binary_part(<<x::float-native-32>>, 2, 2)
-          x -> Nx.Shared.write_bf6(x)
+          x -> Nx.Shared.write_bf16(x)
         end :: binary
       end
     else
       quote do
         case unquote(var) do
           x when is_number(x) -> binary_part(<<x::float-native-32>>, 0, 2)
-          x -> Nx.Shared.write_bf6(x)
+          x -> Nx.Shared.write_bf16(x)
         end :: binary
       end
+    end
+  end
+
+  defp write_bin_modifier(var, :c, size) do
+    quote do
+      case unquote(var) do
+        x when is_number(x) ->
+          elem_size = div(unquote(size), 2)
+          <<x::float-native-size(elem_size), 0::float-native-size(elem_size)>>
+
+        %Complex{re: re, im: im} ->
+          elem_size = div(unquote(size), 2)
+          <<re::float-native-size(elem_size), im::float-native-size(elem_size)>>
+
+        x ->
+          Nx.Shared.write_non_finite(x, unquote(size))
+      end :: binary
     end
   end
 
@@ -172,9 +193,18 @@ defmodule Nx.Shared do
   end
 
   @doc """
+  C64 and C128 callback.
+  """
+  def read_complex(val, size) do
+    elem_size = div(size, 2)
+    <<re::float-native-size(elem_size), im::float-native-size(elem_size)>> = val
+    Complex.new(re, im)
+  end
+
+  @doc """
   BF16 write callback.
   """
-  def write_bf6(data) do
+  def write_bf16(data) do
     case data do
       :infinity -> unquote(Nx.Type.infinity_binary({:bf, 16}))
       :neg_infinity -> unquote(Nx.Type.neg_infinity_binary({:bf, 16}))

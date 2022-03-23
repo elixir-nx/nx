@@ -509,6 +509,17 @@ defmodule Nx do
     backend.constant(%T{shape: {}, type: type, names: names}, arg, backend_options)
   end
 
+  defp tensor(%Complex{} = arg, {:c, size}, opts) do
+    names = Nx.Shape.named_axes!(opts[:names], {})
+    {backend, backend_options} = backend_from_options!(opts) || default_backend()
+    backend.constant(%T{shape: {}, type: {:c, size}, names: names}, arg, backend_options)
+  end
+
+  defp tensor(%Complex{}, type, _) do
+    raise ArgumentError,
+          "invalid type for complex number. Expected {:c, 64} or {:c, 128}, got: #{inspect(type)}"
+  end
+
   defp tensor(arg, type, opts) when is_list(arg) do
     {shape, data} = flatten_list(arg, type)
 
@@ -560,6 +571,10 @@ defmodule Nx do
 
   defp tensor_or_number_to_binary(%Nx.Tensor{shape: {}} = tensor, type) do
     tensor |> as_type(type) |> to_binary()
+  end
+
+  defp tensor_or_number_to_binary(%Complex{re: re, im: im}, {:c, size}) do
+    number_to_binary(re, {:f, div(size, 2)}) <> number_to_binary(im, {:f, div(size, 2)})
   end
 
   defp tensor_or_number_to_binary(number, type) when is_number(number) do
