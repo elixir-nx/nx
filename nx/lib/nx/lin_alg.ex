@@ -1115,7 +1115,7 @@ defmodule Nx.LinAlg do
       ...> ]))
       #Nx.Tensor<
         f32
-        -48.0
+        48.0
       >
 
       iex> Nx.LinAlg.determinant(Nx.tensor([
