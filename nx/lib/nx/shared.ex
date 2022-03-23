@@ -260,7 +260,13 @@ defmodule Nx.Shared do
   def unary_math_funs,
     do: [
       exp: {"exponential", quote(do: Complex.exp(var!(x)))},
-      expm1: {"exponential minus one", quote(do: Complex.exp(Complex.subtract(var!(x), 1)))},
+      expm1:
+        {"exponential minus one",
+         quote do
+           var!(x)
+           |> Complex.exp()
+           |> Complex.subtract(1)
+         end},
       log: {"natural log", quote(do: Complex.ln(var!(x)))},
       log1p: {"natural log plus one", quote(do: Complex.ln(Complex.add(var!(x), 1)))},
       logistic:
