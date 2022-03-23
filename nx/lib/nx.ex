@@ -5059,6 +5059,9 @@ defmodule Nx do
   end
 
   ## Unary ops
+  @allow_complex_type_unary_ops Nx.Shared.unary_math_funs()
+                                |> Keyword.keys()
+                                |> Kernel.--([:erf, :erfc, :erf_inv])
 
   for {name, {desc, code}} <- Nx.Shared.unary_math_funs() do
     formula = code |> Macro.to_string() |> String.replace("var!(x)", "x")
@@ -5074,6 +5077,17 @@ defmodule Nx do
       for input <- inputs do
         {res, _} = Code.eval_quoted(code, x: input)
         to_float32(res)
+      end
+
+    complex_check_block =
+      if name not in @allow_complex_type_unary_ops do
+        quote do
+          {type_class, _} = var!(type)
+
+          if type_class == :c do
+            raise ArgumentError, "Nx.#{unquote(name)}/1 does not support complex numbers"
+          end
+        end
       end
 
     @doc """
@@ -5102,6 +5116,9 @@ defmodule Nx do
     def unquote(name)(tensor) do
       tensor = to_tensor(tensor)
       type = Nx.Type.to_floating(tensor.type)
+
+      unquote(complex_check_block)
+
       impl!(tensor).unquote(name)(%{tensor | type: type}, tensor)
     end
   end

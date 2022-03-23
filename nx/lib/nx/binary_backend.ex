@@ -2179,8 +2179,8 @@ defmodule Nx.BinaryBackend do
 
   defp number_to_binary(number, type),
     do:
-      match_types([IO.inspect(type, label: "type")],
-        do: <<write!(IO.inspect(number, label: "number"), 0)>>
+      match_types([type],
+        do: <<write!(number, 0)>>
       )
 
   defp binary_to_number(bin, type) do

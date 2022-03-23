@@ -163,6 +163,7 @@ defmodule Nx.Type do
   """
   def to_floating({:bf, size}), do: {:bf, size}
   def to_floating({:f, size}), do: {:f, size}
+  def to_floating({:c, size}), do: {:c, size}
   def to_floating(type), do: merge(type, {:f, 32})
 
   @doc """
