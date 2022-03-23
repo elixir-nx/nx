@@ -770,7 +770,7 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def abs(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.abs/1)
+  def abs(out, tensor), do: element_wise_unary_op(out, tensor, &Complex.abs/1)
 
   @impl true
   def bitwise_not(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.bnot/1)
@@ -782,7 +782,7 @@ defmodule Nx.BinaryBackend do
   def floor(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.floor/1)
 
   @impl true
-  def negate(out, tensor), do: element_wise_unary_op(out, tensor, &-/1)
+  def negate(out, tensor), do: element_wise_unary_op(out, tensor, &Complex.negate/1)
 
   @impl true
   def round(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.round/1)

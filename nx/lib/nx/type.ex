@@ -382,6 +382,8 @@ defmodule Nx.Type do
     {:f, size}
   end
 
+  def merge_number({:c, size}, _number), do: {:c, size}
+
   def merge_number(_, number) when is_number(number) do
     {:f, 32}
   end
