@@ -9888,14 +9888,48 @@ defmodule Nx do
       |> String.split(" ", trim: true)
       |> Enum.map_reduce(type, fn str, type ->
         {module, type} =
-          if String.contains?(str, "."), do: {Float, {:f, 32}}, else: {Integer, type}
+          cond do
+            elem(type, 0) == :c -> {Complex, type}
+            String.contains?(str, "i") -> {Complex, {:c, 64}}
+            String.contains?(str, ".") -> {Float, {:f, 32}}
+            :otherwise -> {Integer, type}
+          end
 
-        case module.parse(str) do
-          {number, ""} -> {number, type}
-          _ -> raise ArgumentError, "expected a numerical value for tensor, got #{str}"
-        end
+        parse_string_to_number(module, str, type)
       end)
     end)
+  end
+
+  defp parse_string_to_number(Complex, str, type) do
+    case Complex.parse(str) do
+      {number, ""} ->
+        {number, type}
+
+      _ ->
+        case Float.parse(str) do
+          {number, ""} ->
+            {Complex.new(number), type}
+
+          _ ->
+            case Integer.parse(str) do
+              {number, ""} ->
+                {Complex.new(number), type}
+
+              _ ->
+                raise ArgumentError, "expected a numerical value for tensor, got #{str}"
+            end
+        end
+    end
+  end
+
+  defp parse_string_to_number(module, str, type) do
+    case module.parse(str) do
+      {number, ""} ->
+        {number, type}
+
+      _ ->
+        raise ArgumentError, "expected a numerical value for tensor, got #{str}"
+    end
   end
 
   ## Helpers
