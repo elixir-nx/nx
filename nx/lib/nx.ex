@@ -1498,9 +1498,9 @@ defmodule Nx do
     backend.constant(out, number, options)
   end
 
-  def to_tensor(%Complex{} = number) do
+  def to_tensor(%Complex{re: re, im: im} = number) do
     {backend, options} = default_backend()
-    {_, size} = number.re |> Nx.Type.infer() |> Nx.Type.merge(Nx.Type.infer(number.im))
+    {_, size} = re |> Nx.Type.infer() |> Nx.Type.merge(Nx.Type.infer(im))
     out = %T{shape: {}, type: {:c, size * 2}, names: []}
     backend.constant(out, number, options)
   end
