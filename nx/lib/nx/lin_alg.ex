@@ -1205,7 +1205,8 @@ defmodule Nx.LinAlg do
     upper_tri_mask = Nx.iota(nxn, axis: 0) |> Nx.less(Nx.iota(nxn, axis: 1))
 
     parity =
-      Nx.broadcast(transitions, nxn, axes: [0])
+      transitions
+      |> Nx.broadcast(nxn, axes: [0])
       |> Nx.greater(transitions)
       |> Nx.multiply(upper_tri_mask)
       |> Nx.sum()
