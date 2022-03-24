@@ -9,6 +9,7 @@ defmodule Nx.Type do
       * `:u` - unsigned integer (8, 16, 32, 64)
       * `:f` - float (16, 32, 64)
       * `:bf` - a brain floating point (16)
+      * `:c` - a complex number, represented as a pair of floats (64, 128)
 
   Note: there is a special type used by the `defn` compiler
   which is `{:tuple, size}`, that represents a tuple. Said types
@@ -29,6 +30,8 @@ defmodule Nx.Type do
           | {:f, 32}
           | {:f, 64}
           | {:bf, 16}
+          | {:c, 64}
+          | {:c, 128}
           | {:tuple, non_neg_integer}
 
   @doc """
@@ -159,6 +162,8 @@ defmodule Nx.Type do
       {:bf, 16}
       iex> Nx.Type.to_floating({:f, 32})
       {:f, 32}
+      iex> Nx.Type.to_floating({:c, 64})
+      {:c, 64}
 
   """
   def to_floating({:bf, size}), do: {:bf, size}
@@ -179,6 +184,8 @@ defmodule Nx.Type do
       {:bf, 16}
       iex> Nx.Type.to_aggregate({:f, 32})
       {:f, 32}
+      iex> Nx.Type.to_aggregate({:c, 64})
+      {:c, 64}
 
   """
   def to_aggregate({:u, _size}), do: {:u, 64}
@@ -209,6 +216,9 @@ defmodule Nx.Type do
       iex> Nx.Type.cast_number!({:bf, 16}, -10.0)
       -10.0
 
+      iex> Nx.Type.cast_number!({:c, 64}, 10)
+      %Complex{im: 0.0, re: 10.0}
+
       iex> Nx.Type.cast_number!({:u, 8}, -10)
       ** (ArgumentError) cannot cast number -10 to {:u, 8}
 
@@ -219,6 +229,7 @@ defmodule Nx.Type do
   def cast_number!({type, _}, int) when type in [:s] and is_integer(int), do: int
   def cast_number!({type, _}, int) when type in [:f, :bf] and is_integer(int), do: int * 1.0
   def cast_number!({type, _}, float) when type in [:f, :bf] and is_float(float), do: float
+  def cast_number!({:c, _}, number), do: Complex.new(number)
 
   def cast_number!(type, other) do
     raise ArgumentError, "cannot cast number #{inspect(other)} to #{inspect(type)}"
@@ -229,12 +240,15 @@ defmodule Nx.Type do
 
   Types have the following precedence:
 
-      f > bf > s > u
+      c > f > bf > s > u
 
   If the types are the same, they are merged to the highest size.
   If they are different, the one with the highest precedence wins,
   as long as the size of the `max(big, small * 2))` fits under 64
   bits. Otherwise it casts to f64.
+
+  In the case of complex numbers, the maximum bit size is 128 bits
+  because they are composed of two floats.
 
   ## Examples
 
@@ -290,6 +304,12 @@ defmodule Nx.Type do
       iex> Nx.Type.merge({:f, 64}, {:bf, 16})
       {:f, 64}
 
+      iex> Nx.Type.merge({:c, 64}, {:f, 32})
+      {:c, 64}
+      iex> Nx.Type.merge({:c, 64}, {:c, 64})
+      {:c, 64}
+      iex> Nx.Type.merge({:c, 128}, {:c, 64})
+      {:c, 128}
   """
   def merge({type, left_size}, {type, right_size}) do
     {type, max(left_size, right_size)}
@@ -418,6 +438,7 @@ defmodule Nx.Type do
   """
   def float?({:f, _}), do: true
   def float?({:bf, _}), do: true
+  def float?({:c, _}), do: true
   def float?({_, _}), do: false
 
   @doc """
