@@ -8,8 +8,9 @@ defmodule Nx.ComplexTest do
   import Nx.Helpers
 
   @arg Complex.new(2, 3)
+  @arg2 Complex.new(-2, 7)
 
-  describe "unary options" do
+  describe "unary operations" do
     test "exp" do
       assert_all_close(Nx.exp(@arg), Complex.new(-7.315, 1.042))
     end
@@ -95,6 +96,72 @@ defmodule Nx.ComplexTest do
         assert_raise ArgumentError, "Nx.#{unquote(fun)}/1 does not support complex numbers", fn ->
           Nx.unquote(fun)(@arg)
         end
+      end
+    end
+  end
+
+  describe "binary operations" do
+    test "add" do
+      assert_all_close(Nx.add(@arg, @arg2), Complex.new(0, 10))
+    end
+
+    test "subtract" do
+      assert_all_close(Nx.subtract(@arg, @arg2), Complex.new(4, -4))
+    end
+
+    test "multiply" do
+      assert_all_close(Nx.multiply(@arg, @arg2), Complex.new(-25, 8))
+    end
+
+    test "power" do
+      assert_all_close(Nx.power(@arg, @arg2), Complex.new(5.90369e-5, 5.26792e-5))
+    end
+
+    test "divide" do
+      assert_all_close(Nx.divide(@arg, @arg2), Complex.new(0.32075, -0.37735))
+    end
+
+    test "atan2" do
+      assert_all_close(Nx.atan2(Complex.new(7, 0), Complex.new(2.0, 0.0)), Complex.new(1.2925, 0))
+
+      assert_raise ArithmeticError, "Complex.atan2 only accepts real numbers as arguments", fn ->
+        Nx.atan2(7, @arg)
+      end
+
+      assert_raise ArithmeticError, "Complex.atan2 only accepts real numbers as arguments", fn ->
+        Nx.atan2(@arg, 7)
+      end
+    end
+
+    test "quotient" do
+      assert_raise ArgumentError,
+                   "quotient expects integer tensors as inputs and outputs an integer tensor, got: {:c, 64}",
+                   fn ->
+                     Nx.quotient(@arg, @arg2)
+                   end
+    end
+
+    for op <- [:remainder, :max, :min] do
+      test "#{op}" do
+        assert_raise ArgumentError, "Nx.#{unquote(op)}/2 does not support complex numbers", fn ->
+          Nx.unquote(op)(@arg, @arg2)
+        end
+      end
+    end
+
+    for op <- [
+          :bitwise_and,
+          :bitwise_or,
+          :bitwise_xor,
+          :left_shift,
+          :right_shift
+        ] do
+      test "#{op}" do
+        assert_raise ArgumentError,
+                     "bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:c, 64}",
+                     fn ->
+                       Nx.unquote(op)(@arg, @arg2)
+                     end
       end
     end
   end

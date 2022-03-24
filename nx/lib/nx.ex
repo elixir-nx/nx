@@ -3111,8 +3111,6 @@ defmodule Nx do
     :multiply,
     :divide,
     :atan2,
-    :max,
-    :min,
     :power,
     :equal,
     :not_equal,

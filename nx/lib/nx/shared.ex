@@ -331,6 +331,7 @@ defmodule Nx.Shared do
   # should validate the input in a later pass.
   defp type(%T{type: type}), do: type
   defp type({_, _} = type), do: type
+  defp type(%Complex{}), do: {:c, 64}
   defp type(_other), do: {:f, 32}
 
   ## Helpers
