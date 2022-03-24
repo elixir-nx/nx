@@ -6,6 +6,7 @@ defmodule Nx.ShapeTest do
   test "conv with empty dimensions raises" do
     assert_raise ArgumentError, ~r/conv would result/, fn ->
       names = [nil, nil, nil]
+
       Nx.Shape.conv(
         {1, 1, 1},
         names,

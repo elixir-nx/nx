@@ -724,10 +724,12 @@ defmodule Nx.Shape do
 
   defp do_conv_spatial_dims([cur | spatial], [f | filters], [s | strides]) do
     dim = floor((cur - f) / s) + 1
+
     if dim <= 0 do
-      raise ArgumentError, "conv would result in empty tensor which is" <>
-                              " not currently supported in Nx, please open an" <>
-                              " issue if you'd like this behavior to change"
+      raise ArgumentError,
+            "conv would result in empty tensor which is" <>
+              " not currently supported in Nx, please open an" <>
+              " issue if you'd like this behavior to change"
     else
       [dim | do_conv_spatial_dims(spatial, filters, strides)]
     end
