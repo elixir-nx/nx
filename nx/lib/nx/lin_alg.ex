@@ -1193,7 +1193,7 @@ defmodule Nx.LinAlg do
   end
 
   defnp determinant_NbyN(t) do
-    {n, _} = Nx.shape(t)
+    nxn = {n, _} = Nx.shape(t)
 
     # Taken from slogdet at https://github.com/google/jax/blob/a3a6afcd5b8bf3d60aba94054bb0001c0fcc50d7/jax/_src/numpy/linalg.py#L134
     {p, l, u} = Nx.LinAlg.lu(t)
@@ -1202,15 +1202,13 @@ defmodule Nx.LinAlg do
     is_zero = Nx.any(diag == 0)
     transitions = Nx.dot(p, Nx.iota({n}))
 
-    parity =
-      transform(transitions, fn transitions ->
-        {m} = Nx.shape(transitions)
+    upper_tri_mask = Nx.iota(nxn, axis: 0) |> Nx.less(Nx.iota(nxn, axis: 1))
 
-        for i <- 0..(m - 1), reduce: 0 do
-          parity ->
-            Nx.add(parity, Nx.sum(Nx.greater(transitions[i], transitions[i..-1//1])))
-        end
-      end)
+    parity =
+      Nx.broadcast(transitions, nxn, axes: [0])
+      |> Nx.greater(transitions)
+      |> Nx.multiply(upper_tri_mask)
+      |> Nx.sum()
 
     sign =
       if is_zero do
