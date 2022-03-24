@@ -433,4 +433,15 @@ defmodule Nx.Shared do
     raise ArgumentError,
           "expected default implementation to match template #{inspect(right)}, got: #{inspect(left)}"
   end
+
+  @doc false
+  def raise_complex_not_supported(function, arity) do
+    raise ArgumentError, "Nx.#{function}/#{arity} does not support complex numbers"
+  end
+
+  @doc false
+  def raise_complex_not_supported({:c, _}, function, arity),
+    do: raise_complex_not_supported(function, arity)
+
+  def raise_complex_not_supported(_, _, _), do: nil
 end

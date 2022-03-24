@@ -3123,10 +3123,10 @@ defmodule Nx do
   ]
 
   defp element_wise_bin_op(left, right, op, fun) do
-    {type_class, _} = type = binary_type(left, right) |> fun.()
+    type = binary_type(left, right) |> fun.()
 
-    if type_class == :c and op not in @allow_complex_type_bin_ops do
-      raise ArgumentError, "Nx.#{op}/2 does not support complex numbers"
+    if op not in @allow_complex_type_bin_ops do
+      Nx.Shared.raise_complex_not_supported(type, op, 2)
     end
 
     %T{shape: left_shape, names: left_names} = left = to_tensor(left)
@@ -5080,11 +5080,7 @@ defmodule Nx do
     complex_check_block =
       if name not in @allow_complex_type_unary_ops do
         quote do
-          {type_class, _} = var!(type)
-
-          if type_class == :c do
-            raise ArgumentError, "Nx.#{unquote(name)}/1 does not support complex numbers"
-          end
+          Nx.Shared.raise_complex_not_supported(var!(type), unquote(name), 1)
         end
       end
 
