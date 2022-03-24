@@ -444,4 +444,15 @@ defmodule Nx.Shared do
     do: raise_complex_not_supported(function, arity)
 
   def raise_complex_not_supported(_, _, _), do: nil
+
+  @doc false
+  def raise_complex_not_implemented_yet(function, arity) do
+    raise ArgumentError, "Nx.#{function}/#{arity} is not yet implemented for complex inputs"
+  end
+
+  @doc false
+  def raise_complex_not_implemented_yet({:c, _}, function, arity),
+    do: raise_complex_not_implemented_yet(function, arity)
+
+  def raise_complex_not_implemented_yet(_, _, _), do: nil
 end

@@ -55,7 +55,7 @@ defmodule Nx.LinAlg do
   def cholesky(tensor) do
     %T{type: type, shape: shape, names: names} = tensor = Nx.to_tensor(tensor)
 
-    Nx.Shared.raise_complex_not_supported(type, "LinAlg.cholesky", 1)
+    Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.cholesky", 1)
 
     output_type = Nx.Type.to_floating(type)
 
@@ -191,7 +191,7 @@ defmodule Nx.LinAlg do
     opts = keyword!(opts, [:ord, :axes])
     rank = Nx.rank(t)
 
-    Nx.Shared.raise_complex_not_supported(type, "LinAlg.norm", 2)
+    Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.norm", 2)
 
     unless rank == 1 or rank == 2,
       do: raise(ArgumentError, "expected 1-D or 2-D tensor, got tensor with shape #{inspect(s)}")
@@ -412,7 +412,7 @@ defmodule Nx.LinAlg do
     %T{shape: a_shape = {m, _}} = a = Nx.to_tensor(a)
     %T{shape: b_shape} = b = Nx.to_tensor(b)
 
-    Nx.Shared.raise_complex_not_supported(output_type, "LinAlg.triangular_solve", 3)
+    Nx.Shared.raise_complex_not_implemented_yet(output_type, "LinAlg.triangular_solve", 3)
 
     case opts[:transform_a] do
       t when t in [:none, :transpose] ->
@@ -514,7 +514,7 @@ defmodule Nx.LinAlg do
     output_type = a_type |> Nx.Type.merge(b_type) |> Nx.Type.to_floating()
     output = Nx.template(output_shape, output_type)
 
-    Nx.Shared.raise_complex_not_supported(output_type, "LinAlg.solve", 2)
+    Nx.Shared.raise_complex_not_implemented_yet(output_type, "LinAlg.solve", 2)
 
     Nx.Shared.optional(:solve, [a, b], output, fn a, b ->
       # We need to achieve an LQ decomposition for `a` (henceforth called A)
@@ -585,6 +585,10 @@ defmodule Nx.LinAlg do
   @doc from_backend: false
   defn invert(tensor) do
     assert_shape_pattern(tensor, {n, n})
+
+    transform(tensor, fn t ->
+      Nx.Shared.raise_complex_not_implemented_yet(t.type, "LinAlg.invert", 1)
+    end)
 
     tensor
     |> invert_tensor()
@@ -712,7 +716,7 @@ defmodule Nx.LinAlg do
     mode = opts[:mode]
     valid_modes = [:reduced, :complete]
 
-    Nx.Shared.raise_complex_not_supported(type, "LinAlg.qr", 2)
+    Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.qr", 2)
 
     unless mode in valid_modes do
       raise ArgumentError,
@@ -791,7 +795,7 @@ defmodule Nx.LinAlg do
     opts = keyword!(opts, max_iter: 50_000, eps: @default_eps)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
-    Nx.Shared.raise_complex_not_supported(type, "LinAlg.eigh", 2)
+    Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.eigh", 2)
 
     output_type = Nx.Type.to_floating(type)
     {eigenvals_shape, eigenvecs_shape} = Nx.Shape.eigh(shape)
@@ -879,7 +883,7 @@ defmodule Nx.LinAlg do
     opts = keyword!(opts, [:max_iter, eps: @default_eps])
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
-    Nx.Shared.raise_complex_not_supported(type, "LinAlg.svd", 2)
+    Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.svd", 2)
 
     output_type = Nx.Type.to_floating(type)
     {u_shape, s_shape, v_shape} = Nx.Shape.svd(shape)
@@ -987,7 +991,7 @@ defmodule Nx.LinAlg do
     opts = keyword!(opts, eps: @default_eps)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
-    Nx.Shared.raise_complex_not_supported(type, "LinAlg.lu", 2)
+    Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.lu", 2)
 
     output_type = Nx.Type.to_floating(type)
     {p_shape, l_shape, u_shape} = Nx.Shape.lu(shape)
@@ -1055,7 +1059,7 @@ defmodule Nx.LinAlg do
   @doc from_backend: false
   def matrix_power(tensor, power) when is_integer(power) and power < 0 do
     type = Nx.type(tensor)
-    Nx.Shared.raise_complex_not_supported(type, "LinAlg.matrix_power", 2)
+    Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.matrix_power", 2)
 
     matrix_power(invert(tensor), abs(power))
   end
@@ -1065,7 +1069,7 @@ defmodule Nx.LinAlg do
     # is optimized to not compute an initial eye.
     Nx.Defn.Kernel.assert_shape_pattern(tensor, {x, x})
     type = Nx.type(tensor)
-    Nx.Shared.raise_complex_not_supported(type, "LinAlg.matrix_power", 2)
+    Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.matrix_power", 2)
 
     Nx.eye(tensor)
   end
@@ -1073,7 +1077,7 @@ defmodule Nx.LinAlg do
   def matrix_power(tensor, power) when is_integer(power) do
     Nx.Defn.Kernel.assert_shape_pattern(tensor, {x, x})
     type = Nx.type(tensor)
-    Nx.Shared.raise_complex_not_supported(type, "LinAlg.matrix_power", 2)
+    Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.matrix_power", 2)
 
     power
     |> Integer.digits(2)
@@ -1175,7 +1179,7 @@ defmodule Nx.LinAlg do
 
     transform(tensor, fn tensor ->
       type = Nx.type(tensor)
-      Nx.Shared.raise_complex_not_supported(type, "LinAlg.determinant", 1)
+      Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.determinant", 1)
 
       output = Nx.template({}, Nx.Type.to_floating(tensor.type))
 

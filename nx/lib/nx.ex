@@ -3105,29 +3105,15 @@ defmodule Nx do
 
   ## Element-wise binary ops
 
-  @allow_complex_type_bin_ops [
-    :add,
-    :subtract,
-    :multiply,
-    :divide,
-    :atan2,
-    :power,
-    :equal,
-    :not_equal,
-    :greater,
-    :less,
-    :greater_equal,
-    :logical_and,
-    :logical_or,
-    :logical_xor
-  ]
+  defp non_complex_element_wise_bin_op(left, right, op, fun) do
+    type = binary_type(left, right) |> fun.()
+
+    Nx.Shared.raise_complex_not_supported(type, op, 2)
+    element_wise_bin_op(left, right, op, fun)
+  end
 
   defp element_wise_bin_op(left, right, op, fun) do
     type = binary_type(left, right) |> fun.()
-
-    if op not in @allow_complex_type_bin_ops do
-      Nx.Shared.raise_complex_not_supported(type, op, 2)
-    end
 
     %T{shape: left_shape, names: left_names} = left = to_tensor(left)
     %T{shape: right_shape, names: right_names} = right = to_tensor(right)
@@ -3529,7 +3515,7 @@ defmodule Nx do
 
   """
   @doc type: :element
-  def remainder(left, right), do: element_wise_bin_op(left, right, :remainder, & &1)
+  def remainder(left, right), do: non_complex_element_wise_bin_op(left, right, :remainder, & &1)
 
   @doc """
   Element-wise division of two tensors.
@@ -3833,7 +3819,7 @@ defmodule Nx do
 
   """
   @doc type: :element
-  def max(left, right), do: element_wise_bin_op(left, right, :max, & &1)
+  def max(left, right), do: non_complex_element_wise_bin_op(left, right, :max, & &1)
 
   @doc """
   Element-wise minimum of two tensors.
@@ -3907,7 +3893,7 @@ defmodule Nx do
 
   """
   @doc type: :element
-  def min(left, right), do: element_wise_bin_op(left, right, :min, & &1)
+  def min(left, right), do: non_complex_element_wise_bin_op(left, right, :min, & &1)
 
   ## Bitwise ops
 
@@ -5376,6 +5362,7 @@ defmodule Nx do
     def unquote(name)(tensor) do
       case to_tensor(tensor) do
         %T{type: {type, _}} = tensor when type in [:s, :u] -> tensor
+        %T{type: {:c, _}} -> Nx.Shared.raise_complex_not_supported(unquote(name), 1)
         %T{} = tensor -> impl!(tensor).unquote(name)(tensor, tensor)
       end
     end

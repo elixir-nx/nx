@@ -91,7 +91,7 @@ defmodule Nx.ComplexTest do
       assert_all_close(Nx.cbrt(@arg), Complex.new(1.4518, 0.4934))
     end
 
-    for fun <- [:erf, :erfc, :erf_inv] do
+    for fun <- [:erf, :erfc, :erf_inv, :round, :floor, :ceil] do
       test "#{fun}" do
         assert_raise ArgumentError, "Nx.#{unquote(fun)}/1 does not support complex numbers", fn ->
           Nx.unquote(fun)(@arg)
@@ -163,6 +163,78 @@ defmodule Nx.ComplexTest do
                        Nx.unquote(op)(@arg, @arg2)
                      end
       end
+    end
+  end
+
+  describe "LinAlg not yet implemented" do
+    for function <- [:qr, :lu, :svd, :norm, :eigh] do
+      test "#{function}" do
+        t = Nx.broadcast(Nx.tensor(1, type: {:c, 64}), {3, 3})
+
+        assert_raise ArgumentError,
+                     "Nx.LinAlg.#{unquote(function)}/2 is not yet implemented for complex inputs",
+                     fn ->
+                       Nx.LinAlg.unquote(function)(t)
+                     end
+      end
+    end
+
+    test "invert" do
+      t = Nx.broadcast(Nx.tensor(1, type: {:c, 64}), {3, 3})
+
+      assert_raise ArgumentError,
+                   "Nx.LinAlg.invert/1 is not yet implemented for complex inputs",
+                   fn ->
+                     Nx.LinAlg.invert(t)
+                   end
+    end
+
+    test "determinant" do
+      t = Nx.broadcast(Nx.tensor(1, type: {:c, 64}), {3, 3})
+
+      assert_raise ArgumentError,
+                   "Nx.LinAlg.determinant/1 is not yet implemented for complex inputs",
+                   fn ->
+                     Nx.LinAlg.determinant(t)
+                   end
+    end
+
+    test "cholesky" do
+      t = Nx.broadcast(Nx.tensor(1, type: {:c, 64}), {3, 3})
+
+      assert_raise ArgumentError,
+                   "Nx.LinAlg.cholesky/1 is not yet implemented for complex inputs",
+                   fn ->
+                     Nx.LinAlg.cholesky(t)
+                   end
+    end
+
+    test "triangular_solve" do
+      t = Nx.broadcast(Nx.tensor(1, type: {:c, 64}), {3, 3})
+
+      assert_raise ArgumentError,
+                   "Nx.LinAlg.triangular_solve/3 is not yet implemented for complex inputs",
+                   fn ->
+                     Nx.LinAlg.triangular_solve(t, t)
+                   end
+    end
+
+    test "solve" do
+      t = Nx.broadcast(Nx.tensor(1, type: {:c, 64}), {3, 3})
+
+      assert_raise ArgumentError,
+                   "Nx.LinAlg.solve/2 is not yet implemented for complex inputs",
+                   fn ->
+                     Nx.LinAlg.solve(t, t)
+                   end
+    end
+
+    test "matrix_power" do
+      assert_raise ArgumentError,
+                   "Nx.LinAlg.matrix_power/2 is not yet implemented for complex inputs",
+                   fn ->
+                     Nx.LinAlg.matrix_power(Nx.broadcast(Nx.tensor(1, type: {:c, 64}), {3, 3}), 2)
+                   end
     end
   end
 end
