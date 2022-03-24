@@ -32,11 +32,14 @@ defmodule Nx.BinaryBackend do
     min = scalar_to_number(min)
     max = scalar_to_number(max)
 
+    gen_float = fn -> (max - min) * :rand.uniform() + min end
+
     gen =
       case type do
         {:s, _} -> fn -> min + :rand.uniform(max - min) - 1 end
         {:u, _} -> fn -> min + :rand.uniform(max - min) - 1 end
-        {_, _} -> fn -> (max - min) * :rand.uniform() + min end
+        {:c, _} -> fn -> Complex.new(gen_float.(), gen_float.()) end
+        {_, _} -> gen_float
       end
 
     data = for _ <- 1..Nx.size(shape), into: "", do: number_to_binary(gen.(), type)
@@ -48,10 +51,21 @@ defmodule Nx.BinaryBackend do
     mu = scalar_to_number(mu)
     sigma = scalar_to_number(sigma)
 
+    gen =
+      case type do
+        {:c, _} ->
+          fn ->
+            Complex.new(:rand.normal(mu, sigma), :rand.normal(mu, sigma))
+          end
+
+        _ ->
+          fn -> :rand.normal(mu, sigma) end
+      end
+
     data =
       for _ <- 1..Nx.size(shape),
           into: "",
-          do: number_to_binary(:rand.normal(mu, sigma), type)
+          do: number_to_binary(gen.(), type)
 
     from_binary(out, data)
   end
@@ -119,7 +133,7 @@ defmodule Nx.BinaryBackend do
   defp from_binary(t, other), do: %{t | data: %B{state: IO.iodata_to_binary(other)}}
 
   @impl true
-  def to_binary(%{type: {_, size}} = t, limit) do
+  def to_binary(%{type: {_backend_options, size}} = t, limit) do
     limit = limit * div(size, 8)
     binary = to_binary(t)
 
@@ -693,49 +707,48 @@ defmodule Nx.BinaryBackend do
     from_binary(out, data)
   end
 
-  defp element_add(_, a, b), do: a + b
-  defp element_subtract(_, a, b), do: a - b
-  defp element_multiply(_, a, b), do: a * b
-  defp element_divide(_, a, b), do: a / b
+  defp element_add(_, a, b), do: Complex.add(a, b)
+  defp element_subtract(_, a, b), do: Complex.subtract(a, b)
+  defp element_multiply(_, a, b), do: Complex.multiply(a, b)
+  defp element_divide(_, a, b), do: Complex.divide(a, b)
   defp element_quotient(_, a, b), do: div(a, b)
-  defp element_atan2(_, a, b), do: :math.atan2(a, b)
-  defp element_max(_, a, b), do: :erlang.max(a, b)
-  defp element_min(_, a, b), do: :erlang.min(a, b)
 
   defp element_remainder(_, a, b) when is_integer(a) and is_integer(b), do: rem(a, b)
   defp element_remainder(_, a, b), do: :math.fmod(a, b)
 
+  defp element_atan2(_, a, b), do: Complex.atan2(a, b)
+  defp element_max(_, a, b), do: max(a, b)
+  defp element_min(_, a, b), do: min(a, b)
+
   defp element_power({type, _}, a, b) when type in [:s, :u], do: Integer.pow(a, b)
-  defp element_power(_, a, b), do: :math.pow(a, b)
+  defp element_power(_, a, b), do: Complex.power(a, b)
 
   defp element_bitwise_and(_, a, b), do: :erlang.band(a, b)
   defp element_bitwise_or(_, a, b), do: :erlang.bor(a, b)
   defp element_bitwise_xor(_, a, b), do: :erlang.bxor(a, b)
 
-  defp element_left_shift(_, a, b) when b >= 0, do: :erlang.bsl(a, b)
+  defp element_left_shift(_, a, b) when is_number(b) and b >= 0,
+    do: :erlang.bsl(a, b)
+
   defp element_left_shift(_, _, b), do: raise(ArgumentError, "cannot left shift by #{b}")
 
-  defp element_right_shift(_, a, b) when b >= 0, do: :erlang.bsr(a, b)
+  defp element_right_shift(_, a, b) when is_number(b) and b >= 0,
+    do: :erlang.bsr(a, b)
+
   defp element_right_shift(_, _, b), do: raise(ArgumentError, "cannot right shift by #{b}")
 
-  defp element_equal(_, a, b), do: if(a == b, do: 1, else: 0)
-  defp element_not_equal(_, a, b), do: if(a != b, do: 1, else: 0)
-  defp element_greater(_, a, b), do: if(a > b, do: 1, else: 0)
-  defp element_less(_, a, b), do: if(a < b, do: 1, else: 0)
-  defp element_greater_equal(_, a, b), do: if(a >= b, do: 1, else: 0)
-  defp element_less_equal(_, a, b), do: if(a <= b, do: 1, else: 0)
+  defp element_equal(_, a, b), do: a |> Complex.equal?(b) |> boolean_as_number()
+  defp element_not_equal(_, a, b), do: a |> Complex.not_equal?(b) |> boolean_as_number()
+  defp element_greater(_, a, b), do: a |> Complex.greater?(b) |> boolean_as_number()
+  defp element_less(_, a, b), do: a |> Complex.less?(b) |> boolean_as_number()
+  defp element_greater_equal(_, a, b), do: a |> Complex.greater_equal?(b) |> boolean_as_number()
+  defp element_less_equal(_, a, b), do: a |> Complex.less_equal?(b) |> boolean_as_number()
+  defp element_logical_and(_, a, b), do: a |> Complex.logical_and?(b) |> boolean_as_number()
+  defp element_logical_or(_, a, b), do: a |> Complex.logical_or?(b) |> boolean_as_number()
+  defp element_logical_xor(_, a, b), do: a |> Complex.logical_xor?(b) |> boolean_as_number()
 
-  defp element_logical_and(_, l, _) when l == 0, do: 0
-  defp element_logical_and(_, _, r) when r == 0, do: 0
-  defp element_logical_and(_, _, _), do: 1
-
-  defp element_logical_or(_, l, r) when l == 0 and r == 0, do: 0
-  defp element_logical_or(_, _, _), do: 1
-
-  defp element_logical_xor(_, l, r) when l == 0 and r == 0, do: 0
-  defp element_logical_xor(_, l, _) when l == 0, do: 1
-  defp element_logical_xor(_, _, r) when r == 0, do: 1
-  defp element_logical_xor(_, _, _), do: 0
+  defp boolean_as_number(true), do: 1
+  defp boolean_as_number(false), do: 0
 
   ## Element wise unary ops
 
@@ -771,7 +784,7 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def abs(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.abs/1)
+  def abs(out, tensor), do: element_wise_unary_op(out, tensor, &Complex.abs/1)
 
   @impl true
   def bitwise_not(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.bnot/1)
@@ -783,7 +796,7 @@ defmodule Nx.BinaryBackend do
   def floor(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.floor/1)
 
   @impl true
-  def negate(out, tensor), do: element_wise_unary_op(out, tensor, &-/1)
+  def negate(out, tensor), do: element_wise_unary_op(out, tensor, &Complex.negate/1)
 
   @impl true
   def round(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.round/1)
@@ -2179,7 +2192,10 @@ defmodule Nx.BinaryBackend do
   end
 
   defp number_to_binary(number, type),
-    do: match_types([type], do: <<write!(number, 0)>>)
+    do:
+      match_types([type],
+        do: <<write!(number, 0)>>
+      )
 
   defp binary_to_number(bin, type) do
     match_types [type] do

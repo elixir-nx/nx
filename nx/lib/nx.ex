@@ -491,7 +491,7 @@ defmodule Nx do
     Enum.reduce(tail, infer_type(head), &Nx.Type.merge(infer_type(&1), &2))
   end
 
-  defp infer_type(number) when is_number(number) do
+  defp infer_type(number) when is_number(number) or is_struct(number, Complex) do
     Nx.Type.infer(number)
   end
 
@@ -507,6 +507,17 @@ defmodule Nx do
     names = Nx.Shape.named_axes!(opts[:names], {})
     {backend, backend_options} = backend_from_options!(opts) || default_backend()
     backend.constant(%T{shape: {}, type: type, names: names}, arg, backend_options)
+  end
+
+  defp tensor(%Complex{} = arg, {:c, size}, opts) do
+    names = Nx.Shape.named_axes!(opts[:names], {})
+    {backend, backend_options} = backend_from_options!(opts) || default_backend()
+    backend.constant(%T{shape: {}, type: {:c, size}, names: names}, arg, backend_options)
+  end
+
+  defp tensor(%Complex{}, type, _) do
+    raise ArgumentError,
+          "invalid type for complex number. Expected {:c, 64} or {:c, 128}, got: #{inspect(type)}"
   end
 
   defp tensor(arg, type, opts) when is_list(arg) do
@@ -560,6 +571,10 @@ defmodule Nx do
 
   defp tensor_or_number_to_binary(%Nx.Tensor{shape: {}} = tensor, type) do
     tensor |> as_type(type) |> to_binary()
+  end
+
+  defp tensor_or_number_to_binary(%Complex{re: re, im: im}, {:c, size}) do
+    number_to_binary(re, {:f, div(size, 2)}) <> number_to_binary(im, {:f, div(size, 2)})
   end
 
   defp tensor_or_number_to_binary(number, type) when is_number(number) do
@@ -1480,6 +1495,13 @@ defmodule Nx do
     {backend, options} = default_backend()
     type = Nx.Type.infer(number)
     out = %T{shape: {}, type: type, names: []}
+    backend.constant(out, number, options)
+  end
+
+  def to_tensor(%Complex{re: re, im: im} = number) do
+    {backend, options} = default_backend()
+    {_, size} = re |> Nx.Type.infer() |> Nx.Type.merge(Nx.Type.infer(im))
+    out = %T{shape: {}, type: {:c, size * 2}, names: []}
     backend.constant(out, number, options)
   end
 
@@ -3083,8 +3105,16 @@ defmodule Nx do
 
   ## Element-wise binary ops
 
+  defp non_complex_element_wise_bin_op(left, right, op, fun) do
+    type = binary_type(left, right) |> fun.()
+
+    Nx.Shared.raise_complex_not_supported(type, op, 2)
+    element_wise_bin_op(left, right, op, fun)
+  end
+
   defp element_wise_bin_op(left, right, op, fun) do
     type = binary_type(left, right) |> fun.()
+
     %T{shape: left_shape, names: left_names} = left = to_tensor(left)
     %T{shape: right_shape, names: right_names} = right = to_tensor(right)
 
@@ -3485,7 +3515,7 @@ defmodule Nx do
 
   """
   @doc type: :element
-  def remainder(left, right), do: element_wise_bin_op(left, right, :remainder, & &1)
+  def remainder(left, right), do: non_complex_element_wise_bin_op(left, right, :remainder, & &1)
 
   @doc """
   Element-wise division of two tensors.
@@ -3789,7 +3819,7 @@ defmodule Nx do
 
   """
   @doc type: :element
-  def max(left, right), do: element_wise_bin_op(left, right, :max, & &1)
+  def max(left, right), do: non_complex_element_wise_bin_op(left, right, :max, & &1)
 
   @doc """
   Element-wise minimum of two tensors.
@@ -3863,7 +3893,7 @@ defmodule Nx do
 
   """
   @doc type: :element
-  def min(left, right), do: element_wise_bin_op(left, right, :min, & &1)
+  def min(left, right), do: non_complex_element_wise_bin_op(left, right, :min, & &1)
 
   ## Bitwise ops
 
@@ -5013,6 +5043,7 @@ defmodule Nx do
   end
 
   ## Unary ops
+  @disallow_complex_type_unary_ops [:erf, :erfc, :erf_inv]
 
   for {name, {desc, code}} <- Nx.Shared.unary_math_funs() do
     formula = code |> Macro.to_string() |> String.replace("var!(x)", "x")
@@ -5028,6 +5059,13 @@ defmodule Nx do
       for input <- inputs do
         {res, _} = Code.eval_quoted(code, x: input)
         to_float32(res)
+      end
+
+    complex_check_block =
+      if name in @disallow_complex_type_unary_ops do
+        quote do
+          Nx.Shared.raise_complex_not_supported(var!(type), unquote(name), 1)
+        end
       end
 
     @doc """
@@ -5056,6 +5094,9 @@ defmodule Nx do
     def unquote(name)(tensor) do
       tensor = to_tensor(tensor)
       type = Nx.Type.to_floating(tensor.type)
+
+      unquote(complex_check_block)
+
       impl!(tensor).unquote(name)(%{tensor | type: type}, tensor)
     end
   end
@@ -5319,6 +5360,7 @@ defmodule Nx do
     def unquote(name)(tensor) do
       case to_tensor(tensor) do
         %T{type: {type, _}} = tensor when type in [:s, :u] -> tensor
+        %T{type: {:c, _}} -> Nx.Shared.raise_complex_not_supported(unquote(name), 1)
         %T{} = tensor -> impl!(tensor).unquote(name)(tensor, tensor)
       end
     end

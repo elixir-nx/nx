@@ -194,6 +194,7 @@ defmodule Nx.Backend do
     chunk_each(dim - 1, rest, [doc | acc], limit, fun)
   end
 
+  defp inspect_value(%Complex{} = val), do: Complex.to_string(val)
   defp inspect_value(integer) when is_integer(integer), do: Integer.to_string(integer)
   defp inspect_value(float) when is_float(float), do: Float.to_string(float)
   defp inspect_value(:neg_infinity), do: "-Inf"
