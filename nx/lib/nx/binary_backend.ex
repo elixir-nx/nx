@@ -32,11 +32,14 @@ defmodule Nx.BinaryBackend do
     min = scalar_to_number(min)
     max = scalar_to_number(max)
 
+    gen_float = fn -> (max - min) * :rand.uniform() + min end
+
     gen =
       case type do
         {:s, _} -> fn -> min + :rand.uniform(max - min) - 1 end
         {:u, _} -> fn -> min + :rand.uniform(max - min) - 1 end
-        {_, _} -> fn -> (max - min) * :rand.uniform() + min end
+        {:c, _} -> fn -> Complex.new(gen_float.(), gen_float.()) end
+        {_, _} -> gen_float
       end
 
     data = for _ <- 1..Nx.size(shape), into: "", do: number_to_binary(gen.(), type)
@@ -48,10 +51,21 @@ defmodule Nx.BinaryBackend do
     mu = scalar_to_number(mu)
     sigma = scalar_to_number(sigma)
 
+    gen =
+      case type do
+        {:c, _} ->
+          fn ->
+            Complex.new(:rand.normal(mu, sigma), :rand.normal(mu, sigma))
+          end
+
+        _ ->
+          fn -> :rand.normal(mu, sigma) end
+      end
+
     data =
       for _ <- 1..Nx.size(shape),
           into: "",
-          do: number_to_binary(:rand.normal(mu, sigma), type)
+          do: number_to_binary(gen.(), type)
 
     from_binary(out, data)
   end
