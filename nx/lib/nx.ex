@@ -9813,6 +9813,13 @@ defmodule Nx do
           [0.0999755859375, 0.199951171875, 0.300048828125, 0.39990234375]
         ]
       >
+      iex> ~M[1+1i 2-2.0i -3]
+      #Nx.Tensor<
+        c64[3]
+        [
+          [1.0 + 1.0i, 2.0 - 2.0i, -3.0 + 0.0i]
+        ]
+      >
 
   """
   @doc type: :creation
@@ -9847,6 +9854,11 @@ defmodule Nx do
       #Nx.Tensor<
         f16[4]
         [0.0999755859375, 0.199951171875, 0.300048828125, 0.39990234375]
+      >
+      iex> ~V[1+1i 2-2.0i -3]
+      #Nx.Tensor<
+        c64[3]
+        [1.0 + 1.0i, 2.0 - 2.0i, -3.0 + 0.0i]
       >
 
   """
@@ -9901,24 +9913,24 @@ defmodule Nx do
   end
 
   defp parse_string_to_number(Complex, str, type) do
-    case Complex.parse(str) do
-      {number, ""} ->
-        {number, type}
+    apply_parse = fn fun ->
+      case apply(fun, [str]) do
+        :error -> false
+        val -> val
+      end
+    end
+
+    result = Enum.find_value([&Complex.parse/1, &Float.parse/1, &Integer.parse/1], apply_parse)
+
+    case result do
+      {%Complex{} = num, ""} ->
+        {num, type}
+
+      {num, ""} ->
+        {Complex.new(num), type}
 
       _ ->
-        case Float.parse(str) do
-          {number, ""} ->
-            {Complex.new(number), type}
-
-          _ ->
-            case Integer.parse(str) do
-              {number, ""} ->
-                {Complex.new(number), type}
-
-              _ ->
-                raise ArgumentError, "expected a numerical value for tensor, got #{str}"
-            end
-        end
+        raise ArgumentError, "expected a numerical value for tensor, got #{str}"
     end
   end
 
