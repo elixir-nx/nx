@@ -1115,7 +1115,7 @@ defmodule Nx.LinAlg do
       ...> ]))
       #Nx.Tensor<
         f32
-        -48.0
+        48.0
       >
 
       iex> Nx.LinAlg.determinant(Nx.tensor([
@@ -1193,18 +1193,23 @@ defmodule Nx.LinAlg do
   end
 
   defnp determinant_NbyN(t) do
-    {n, _} = Nx.shape(t)
+    nxn = {n, _} = Nx.shape(t)
 
     # Taken from slogdet at https://github.com/google/jax/blob/a3a6afcd5b8bf3d60aba94054bb0001c0fcc50d7/jax/_src/numpy/linalg.py#L134
     {p, l, u} = Nx.LinAlg.lu(t)
 
     diag = Nx.take_diagonal(l) * Nx.take_diagonal(u)
-
     is_zero = Nx.any(diag == 0)
+    transitions = Nx.dot(p, Nx.iota({n}))
 
-    iota = Nx.iota({n})
+    upper_tri_mask = Nx.iota(nxn, axis: 0) |> Nx.less(Nx.iota(nxn, axis: 1))
 
-    parity = Nx.sum(Nx.dot(p, iota) != iota)
+    parity =
+      transitions
+      |> Nx.broadcast(nxn, axes: [0])
+      |> Nx.greater(transitions)
+      |> Nx.multiply(upper_tri_mask)
+      |> Nx.sum()
 
     sign =
       if is_zero do
