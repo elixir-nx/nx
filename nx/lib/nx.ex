@@ -5043,9 +5043,7 @@ defmodule Nx do
   end
 
   ## Unary ops
-  @allow_complex_type_unary_ops Nx.Shared.unary_math_funs()
-                                |> Keyword.keys()
-                                |> Kernel.--([:erf, :erfc, :erf_inv])
+  @disallow_complex_type_unary_ops [:erf, :erfc, :erf_inv]
 
   for {name, {desc, code}} <- Nx.Shared.unary_math_funs() do
     formula = code |> Macro.to_string() |> String.replace("var!(x)", "x")
@@ -5064,7 +5062,7 @@ defmodule Nx do
       end
 
     complex_check_block =
-      if name not in @allow_complex_type_unary_ops do
+      if name in @disallow_complex_type_unary_ops do
         quote do
           Nx.Shared.raise_complex_not_supported(var!(type), unquote(name), 1)
         end
