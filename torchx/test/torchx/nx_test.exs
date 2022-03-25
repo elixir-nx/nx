@@ -32,10 +32,10 @@ defmodule Torchx.NxTest do
     binary_a = Nx.backend_copy(a, Nx.BinaryBackend)
     binary_b = Nx.backend_transfer(b, Nx.BinaryBackend)
     binary_c = Kernel.apply(Nx, op, [binary_a, binary_b])
-    assert Nx.backend_transfer(c) == binary_c
+    assert_equal(c, binary_c)
 
     mixed_c = Kernel.apply(Nx, op, [a, binary_b])
-    assert Nx.backend_transfer(mixed_c) == binary_c
+    assert_equal(mixed_c, binary_c)
   end
 
   defp test_unary_op(op, data \\ [[1, 2], [3, 4]], type) do
@@ -44,7 +44,7 @@ defmodule Torchx.NxTest do
 
     binary_t = Nx.backend_transfer(t, Nx.BinaryBackend)
     binary_r = Kernel.apply(Nx, op, [binary_t])
-    assert Nx.backend_transfer(r) == binary_r
+    assert_equal(r, binary_r)
   end
 
   describe "binary ops" do
@@ -121,11 +121,10 @@ defmodule Torchx.NxTest do
 
         c = Nx.divide(a, b)
 
-        assert Nx.backend_transfer(c) ==
-                 Nx.tensor([[0.2001953125, 0.333984375], [0.427734375, 0.5]],
-                   type: {:bf, 16},
-                   backend: Nx.BinaryBackend
-                 )
+        assert_equal(
+          c,
+          Nx.tensor([[0.2001953125, 0.333984375], [0.427734375, 0.5]])
+        )
       end
     end
   end
@@ -144,8 +143,7 @@ defmodule Torchx.NxTest do
     test "iota" do
       t = Nx.iota({2, 3})
 
-      assert Nx.backend_transfer(t) ==
-               Nx.tensor([[0, 1, 2], [3, 4, 5]], backend: Nx.BinaryBackend)
+      assert_equal(t, Nx.tensor([[0, 1, 2], [3, 4, 5]]))
     end
 
     test "make_diagonal" do
@@ -154,7 +152,7 @@ defmodule Torchx.NxTest do
         |> Nx.tensor()
         |> Nx.make_diagonal()
 
-      assert_all_close(t, Nx.tensor([[1, 0, 0], [0, 2, 0], [0, 0, 3]]))
+      assert_equal(t, Nx.tensor([[1, 0, 0], [0, 2, 0], [0, 0, 3]]))
     end
 
     test "random_uniform" do
