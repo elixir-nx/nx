@@ -18,8 +18,6 @@ defmodule Torchx.NxDoctestTest do
     broadcast: 3,
     # dot - Batching not supported
     dot: 6,
-    # make_diagonal - depends on indexed_add
-    make_diagonal: 2,
     # mean - Torchx does not support unsigned 64 bit integer
     mean: 2,
     # quotient - Torchx does not support unsigned 32 bit integer
