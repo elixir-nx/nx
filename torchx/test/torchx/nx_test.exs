@@ -148,6 +148,16 @@ defmodule Torchx.NxTest do
                Nx.tensor([[0, 1, 2], [3, 4, 5]], backend: Nx.BinaryBackend)
     end
 
+    test "make_diagonal" do
+      t =
+        [1, 2, 3]
+        |> Nx.tensor()
+        |> Nx.make_diagonal()
+
+      assert Nx.backend_transfer(t) ==
+               Nx.tensor([[1, 0, 0], [0, 2, 0], [0, 0, 3]], backend: Nx.BinaryBackend)
+    end
+
     test "random_uniform" do
       t = Nx.random_uniform({30, 50})
 
