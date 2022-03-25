@@ -154,8 +154,7 @@ defmodule Torchx.NxTest do
         |> Nx.tensor()
         |> Nx.make_diagonal()
 
-      assert Nx.backend_transfer(t) ==
-               Nx.tensor([[1, 0, 0], [0, 2, 0], [0, 0, 3]], backend: Nx.BinaryBackend)
+      assert_all_close(t, Nx.tensor([[1, 0, 0], [0, 2, 0], [0, 0, 3]]))
     end
 
     test "random_uniform" do
