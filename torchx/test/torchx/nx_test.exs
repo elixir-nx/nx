@@ -123,10 +123,7 @@ defmodule Torchx.NxTest do
 
         assert_equal(
           c,
-          Nx.tensor([[0.2001953125, 0.333984375], [0.427734375, 0.5]],
-            type: {:bf, 16},
-            backend: Nx.BinaryBackend
-          )
+          Nx.tensor([[0.2001953125, 0.333984375], [0.427734375, 0.5]])
         )
       end
     end
@@ -250,58 +247,42 @@ defmodule Torchx.NxTest do
 
   describe "Nx.as_type" do
     test "basic conversions" do
-      assert_equal(
-        Nx.as_type(Nx.tensor([0, 1, 2]), {:f, 32}),
-        Nx.tensor([0.0, 1.0, 2.0], backend: Nx.BinaryBackend)
-      )
+      assert Nx.as_type(Nx.tensor([0, 1, 2]), {:f, 32}) |> Nx.backend_transfer() ==
+               Nx.tensor([0.0, 1.0, 2.0], backend: Nx.BinaryBackend)
 
-      assert_equal(
-        Nx.as_type(Nx.tensor([0.0, 1.0, 2.0]), {:s, 64}),
-        Nx.tensor([0, 1, 2], backend: Nx.BinaryBackend)
-      )
+      assert Nx.as_type(Nx.tensor([0.0, 1.0, 2.0]), {:s, 64}) |> Nx.backend_transfer() ==
+               Nx.tensor([0, 1, 2], backend: Nx.BinaryBackend)
 
-      assert_equal(
-        Nx.as_type(Nx.tensor([0.0, 1.0, 2.0]), {:bf, 16}),
-        Nx.tensor([0.0, 1.0, 2.0], type: {:bf, 16}, backend: Nx.BinaryBackend)
-      )
+      assert Nx.as_type(Nx.tensor([0.0, 1.0, 2.0]), {:bf, 16}) |> Nx.backend_transfer() ==
+               Nx.tensor([0.0, 1.0, 2.0], type: {:bf, 16}, backend: Nx.BinaryBackend)
     end
 
     test "non-finite to integer conversions" do
       non_finite =
         Nx.tensor([Nx.Constants.infinity(), Nx.Constants.nan(), Nx.Constants.neg_infinity()])
 
-      assert_equal(
-        Nx.as_type(non_finite, {:u, 8}),
-        Nx.tensor([0, 0, 0], type: {:u, 8}, backend: Nx.BinaryBackend)
-      )
+      assert Nx.as_type(non_finite, {:u, 8}) |> Nx.backend_transfer() ==
+               Nx.tensor([0, 0, 0], type: {:u, 8}, backend: Nx.BinaryBackend)
 
-      assert_equal(
-        Nx.as_type(non_finite, {:s, 16}),
-        Nx.tensor([0, 0, 0], type: {:s, 16}, backend: Nx.BinaryBackend)
-      )
+      assert Nx.as_type(non_finite, {:s, 16}) |> Nx.backend_transfer() ==
+               Nx.tensor([0, 0, 0], type: {:s, 16}, backend: Nx.BinaryBackend)
 
-      assert_equal(
-        Nx.as_type(non_finite, {:s, 32}),
-        Nx.tensor([-2_147_483_648, -2_147_483_648, -2_147_483_648],
-          type: {:s, 32},
-          backend: Nx.BinaryBackend
-        )
-      )
+      assert Nx.as_type(non_finite, {:s, 32}) |> Nx.backend_transfer() ==
+               Nx.tensor([-2_147_483_648, -2_147_483_648, -2_147_483_648],
+                 type: {:s, 32},
+                 backend: Nx.BinaryBackend
+               )
     end
 
     test "non-finite to between floats conversions" do
       non_finite = Nx.tensor([Nx.Constants.infinity(), Nx.Constants.neg_infinity()])
       non_finite_binary_backend = Nx.backend_copy(non_finite)
 
-      assert_equal(
-        Nx.as_type(non_finite, {:f, 16}),
-        Nx.as_type(non_finite_binary_backend, {:f, 16})
-      )
+      assert Nx.as_type(non_finite, {:f, 16}) |> Nx.backend_transfer() ==
+               Nx.as_type(non_finite_binary_backend, {:f, 16})
 
-      assert_equal(
-        Nx.as_type(non_finite, {:f, 64}),
-        Nx.as_type(non_finite_binary_backend, {:f, 64})
-      )
+      assert Nx.as_type(non_finite, {:f, 64}) |> Nx.backend_transfer() ==
+               Nx.as_type(non_finite_binary_backend, {:f, 64})
     end
   end
 
