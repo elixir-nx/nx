@@ -28,4 +28,20 @@ defmodule Torchx.Case do
       """)
     end
   end
+
+  def assert_equal(left, right) do
+    equals =
+      left
+      |> Nx.equal(right)
+      |> Nx.all()
+      |> Nx.to_number()
+
+    if equals != 1 do
+      flunk("""
+      Tensor assertion failed.
+      left: #{inspect(left)}
+      right: #{inspect(right)}
+      """)
+    end
+  end
 end
