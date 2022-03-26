@@ -1,5 +1,6 @@
 #include <torch/torch.h>
 #include <iostream>
+#include <atomic>
 
 #include "nx_nif_utils.hpp"
 
@@ -20,6 +21,85 @@ inline const std::string* type2string(const torch::ScalarType type)
   }
   return nullptr;
 }
+
+// the class instance to manage the refcount of Tensor
+class TensorP
+{
+public:
+  TensorP(ErlNifEnv *env, const ERL_NIF_TERM arg) : ptr(nullptr)
+  {
+    // setup
+    if (!enif_get_resource(env, arg, TENSOR_TYPE, (void **)&ptr))
+    {
+      err = nx::nif::error(env, "Unable to get tensor param in NIF");
+      return;
+    }
+
+    refcount = (std::atomic<int> *)(ptr + 1);
+    deleted = (std::atomic_flag *)(refcount + 1);
+
+    if (refcount->load() == 0)
+    {
+      // already deallocated
+      ptr = nullptr;
+      err = enif_make_badarg(env);
+      return;
+    }
+
+    if (is_valid())
+    {
+      // increase reference count
+      ++(*refcount);
+    }
+  }
+
+  ~TensorP()
+  {
+    if (is_valid())
+    {
+      // decrease reference count
+      if (refcount->fetch_sub(1) == 0)
+      {
+        ptr->~Tensor();
+      }
+    }
+  }
+
+  bool deallocate()
+  {
+    if (is_valid()
+      && atomic_flag_test_and_set(deleted) == false)
+    {
+      --(*refcount);
+      return true;
+    }
+    else
+    {
+      return false;
+    }
+  }
+
+  torch::Tensor *data() const
+  {
+    return ptr;
+  }
+
+  bool is_valid() const
+  {
+    return ptr != nullptr;
+  }
+
+  ERL_NIF_TERM error()
+  {
+     return err;
+  }
+
+private:
+  torch::Tensor *ptr;
+  std::atomic<int> *refcount;
+  std::atomic_flag *deleted;
+  ERL_NIF_TERM err;
+};
 
 #define NIF(NAME) ERL_NIF_TERM NAME(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 
@@ -48,11 +128,12 @@ inline const std::string* type2string(const torch::ScalarType type)
 #define OPTS(TYPE, DEV_VEC) DEVICE(DEV_VEC).dtype(TYPE)
 
 #define TENSOR_PARAM(ARGN, VAR)                                           \
-  torch::Tensor *VAR;                                                     \
-  if (!enif_get_resource(env, argv[ARGN], TENSOR_TYPE, (void **)&VAR))  { \
-    std::ostringstream msg;                                               \
-    msg << "Unable to get " #VAR " tensor param in NIF." << __func__ << "/" << argc;  \
-    return nx::nif::error(env, msg.str().c_str());                        \
+  TensorP VAR##_tp(env, argv[ARGN]);                                      \
+  torch::Tensor* VAR;                                                     \
+  if (!VAR##_tp.is_valid())  {                                            \
+    return VAR##_tp.error();                                              \
+  } else {                                                                \
+    VAR = VAR##_tp.data();                                                \
   }
 
 #define CATCH()                                              \
@@ -119,12 +200,15 @@ create_tensor_resource(ErlNifEnv *env, torch::Tensor tensor)
 {
   ERL_NIF_TERM ret;
   torch::Tensor *tensorPtr;
+  std::atomic<int> *refcount;
 
-  tensorPtr = (torch::Tensor *)enif_alloc_resource(TENSOR_TYPE, sizeof(torch::Tensor));
+  tensorPtr = (torch::Tensor *)enif_alloc_resource(TENSOR_TYPE, sizeof(torch::Tensor) + sizeof(std::atomic<int>) + sizeof(std::atomic_flag));
   if (tensorPtr == NULL)
     return enif_make_badarg(env);
 
   new (tensorPtr) torch::Tensor(tensor.variable_data());
+  refcount = new (tensorPtr + 1) std::atomic<int>(1);
+  new (refcount + 1) std::atomic_flag();
 
   ret = enif_make_resource(env, tensorPtr);
   enif_release_resource(tensorPtr);
@@ -134,12 +218,9 @@ create_tensor_resource(ErlNifEnv *env, torch::Tensor tensor)
 
 NIF(delete_tensor)
 {
-  TENSOR_PARAM(0, t);
+  TensorP tensor(env, argv[0]);
 
-  t->~Tensor();
-  enif_release_resource(t);
-
-  return nx::nif::ok(env);
+  return tensor.deallocate() ? nx::nif::ok(env) : enif_make_badarg(env);
 }
 
 unsigned long elem_count(std::vector<int64_t> shape)
@@ -759,7 +840,7 @@ NIF(cholesky)
 
 NIF(pad)
 {
-  TENSOR_PARAM(0, tensor)
+  TENSOR_PARAM(0, tensor);
   LIST_PARAM(1, std::vector<int64_t>, config)
   SCALAR_PARAM(2, constant)
 
@@ -879,10 +960,16 @@ NIF(max_pool_3d)
 void free_tensor(ErlNifEnv *env, void *obj)
 {
   torch::Tensor* tensor = reinterpret_cast<torch::Tensor*>(obj);
-  if (tensor != nullptr) {
+  std::atomic<int> *refcount = reinterpret_cast<std::atomic<int> *>(tensor + 1);
+  std::atomic_flag *deleted = reinterpret_cast<std::atomic_flag *>(refcount + 1);
+
+  if (atomic_flag_test_and_set(deleted) == false)
+  {
     tensor->~Tensor();
-    tensor = nullptr;
   }
+
+  deleted->~atomic_flag();
+  refcount->~atomic<int>();
 }
 
 static int
