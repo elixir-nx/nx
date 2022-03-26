@@ -210,7 +210,7 @@ create_tensor_resource(ErlNifEnv *env, torch::Tensor tensor)
 
   new (tensorPtr) torch::Tensor(tensor.variable_data());
   refcount = new (tensorPtr + 1) std::atomic<int>(1);
-  new (refcount + 1) std::atomic_flag(ATOMIC_FLAG_INIT);
+  new (refcount + 1) std::atomic_flag();
 
   ret = enif_make_resource(env, tensorPtr);
   enif_release_resource(tensorPtr);
