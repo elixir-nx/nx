@@ -103,8 +103,6 @@ private:
 
 #define NIF(NAME) ERL_NIF_TERM NAME(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 
-#define IS_TENSOR_ALIVE(tensorPtr) (*(bool*)(tensorPtr + 1))
-
 #define SCALAR_PARAM(ARGN, VAR) \
   torch::Scalar VAR;            \
   VAR.~Scalar();                \
@@ -953,11 +951,16 @@ NIF(max_pool_3d)
 void free_tensor(ErlNifEnv *env, void *obj)
 {
   torch::Tensor* tensor = reinterpret_cast<torch::Tensor*>(obj);
+  std::atomic<int> *refcount = reinterpret_cast<std::atomic<int> *>(tensor + 1);
+  std::atomic_flag *deleted = reinterpret_cast<std::atomic_flag *>(refcount + 1);
 
-  if (tensor != nullptr && IS_TENSOR_ALIVE(tensor))
+  if (atomic_flag_test_and_set(deleted) == false)
   {
     tensor->~Tensor();
   }
+
+  deleted->~atomic_flag();
+  refcount->~atomic<int>();
 }
 
 static int
