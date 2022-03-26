@@ -36,6 +36,7 @@ public:
     }
 
     refcount = (std::atomic<int> *)(ptr + 1);
+    deleted = (std::atomic_flag *)(refcount + 1);
 
     if (refcount->load() == 0)
     {
@@ -66,7 +67,8 @@ public:
 
   bool deallocate()
   {
-    if (is_valid())
+    if (is_valid()
+      && atomic_flag_test_and_set(deleted) == false)
     {
       --(*refcount);
       return true;
@@ -95,6 +97,7 @@ public:
 private:
   torch::Tensor *ptr;
   std::atomic<int> *refcount;
+  std::atomic_flag *deleted;
   ERL_NIF_TERM err;
 };
 
@@ -199,13 +202,15 @@ create_tensor_resource(ErlNifEnv *env, torch::Tensor tensor)
 {
   ERL_NIF_TERM ret;
   torch::Tensor *tensorPtr;
+  std::atomic<int> *refcount;
 
-  tensorPtr = (torch::Tensor *)enif_alloc_resource(TENSOR_TYPE, sizeof(torch::Tensor) + sizeof(std::atomic<int>));
+  tensorPtr = (torch::Tensor *)enif_alloc_resource(TENSOR_TYPE, sizeof(torch::Tensor) + sizeof(std::atomic<int>) + sizeof(std::atomic_flag));
   if (tensorPtr == NULL)
     return enif_make_badarg(env);
 
   new (tensorPtr) torch::Tensor(tensor.variable_data());
-  new (tensorPtr + 1) std::atomic<int>(1);
+  refcount = new (tensorPtr + 1) std::atomic<int>(1);
+  new (refcount + 1) std::atomic_flag(ATOMIC_FLAG_INIT);
 
   ret = enif_make_resource(env, tensorPtr);
   enif_release_resource(tensorPtr);
