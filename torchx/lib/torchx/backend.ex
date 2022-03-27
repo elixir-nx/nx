@@ -934,6 +934,8 @@ defmodule Torchx.Backend do
 
   @impl true
   def select(out, pred, on_true, on_false) do
+    on_true = Nx.as_type(on_true, Nx.type(out))
+    on_false = Nx.as_type(on_false, Nx.type(out))
     on_true_torch = from_nx(on_true)
     on_false_torch = from_nx(on_false)
 
