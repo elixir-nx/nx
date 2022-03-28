@@ -8884,11 +8884,16 @@ defmodule Nx do
       [t | []] ->
         t
 
-      [t1 | _] = tensors ->
+      [%T{data: %t1_backend{}} = t1 | _] = tensors ->
         {tensors, [type1 | rest], [s1 | _] = shapes, [n1 | _] = names} =
           tensors
           |> Enum.map(fn t ->
-            %T{type: type, shape: shape, names: names} = t = to_tensor(t)
+            %T{data: %t_backend{}, type: type, shape: shape, names: names} = t = to_tensor(t)
+
+            if t_backend != t1_backend do
+              raise ArgumentError, "Nx.concatenate does not support mixed backends for tensors"
+            end
+
             {t, type, shape, names}
           end)
           |> unzip4()
