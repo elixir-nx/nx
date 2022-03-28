@@ -4744,6 +4744,11 @@ defmodule Nx do
         [1, 0, 0]
       >
 
+      iex> Nx.select(Nx.tensor([0, 1, 0]), Nx.tensor([1, 1, 1]), Nx.tensor([2.0, 2.0, 2.0]))
+      #Nx.Tensor<
+        f32[3]
+        [2.0, 1.0, 2.0]
+      >
   """
   @doc type: :element
   def select(pred, on_true, on_false) do
