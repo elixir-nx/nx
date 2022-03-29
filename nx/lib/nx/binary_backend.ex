@@ -760,19 +760,20 @@ defmodule Nx.BinaryBackend do
     boolean_as_number(a_re < b_re and a_im < b_im)
   end
 
-  defp element_greater_equal(a, b) when is_number(a) and is_number(b),
+  defp element_greater_equal(_, a, b) when is_number(a) and is_number(b),
     do: boolean_as_number(a >= b)
 
-  defp element_greater_equal(a, b) do
+  defp element_greater_equal(_, a, b) do
     %{re: a_re, im: a_im} = as_complex(a)
     %{re: b_re, im: b_im} = as_complex(b)
 
     boolean_as_number(a_re >= b_re and a_im >= b_im)
   end
 
-  defp element_less_equal(a, b) when is_number(a) and is_number(b), do: a <= b
+  defp element_less_equal(_, a, b) when is_number(a) and is_number(b),
+    do: boolean_as_number(a <= b)
 
-  defp element_less_equal(a, b) do
+  defp element_less_equal(_, a, b) do
     %{re: a_re, im: a_im} = as_complex(a)
     %{re: b_re, im: b_im} = as_complex(b)
 
@@ -785,6 +786,9 @@ defmodule Nx.BinaryBackend do
 
   defp boolean_as_number(true), do: 1
   defp boolean_as_number(false), do: 0
+
+  defp as_complex(%Complex{} = z), do: z
+  defp as_complex(n), do: Complex.new(n)
 
   ## Element wise unary ops
 
