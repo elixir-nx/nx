@@ -8881,18 +8881,14 @@ defmodule Nx do
       [] ->
         raise ArgumentError, "empty list passed to concatenate"
 
-      [t | []] ->
+      [t] ->
         t
 
-      [%T{data: %t1_backend{}} = t1 | _] = tensors ->
+      [t1 | _] = tensors ->
         {tensors, [type1 | rest], [s1 | _] = shapes, [n1 | _] = names} =
           tensors
           |> Enum.map(fn t ->
-            %T{data: %t_backend{}, type: type, shape: shape, names: names} = t = to_tensor(t)
-
-            if t_backend != t1_backend do
-              raise ArgumentError, "Nx.concatenate does not support mixed backends for tensors"
-            end
+            %T{type: type, shape: shape, names: names} = t = to_tensor(t)
 
             {t, type, shape, names}
           end)
@@ -8906,7 +8902,7 @@ defmodule Nx do
           |> Enum.reduce(type1, fn t1, t2 -> Nx.Type.merge(t1, t2) end)
 
         out = %{t1 | type: output_type, shape: output_shape, names: output_names}
-        impl!(t1).concatenate(out, tensors, axis)
+        list_impl!(tensors).concatenate(out, tensors, axis)
     end
   end
 
