@@ -68,4 +68,17 @@ defmodule TorchxTest do
       assert_all_close(result, Nx.tensor([3]))
     end
   end
+
+  describe "concatenate" do
+    test "works with mixed backends" do
+      backends = [Nx.BinaryBackend, Torchx.Backend]
+
+      for b1 <- backends, b2 <- backends do
+        t1 = Nx.tensor([1, 2], backend: b1)
+        t2 = Nx.tensor([3, 4], backend: b2)
+
+        assert_equal(Nx.tensor([1, 2, 3, 4]), Nx.concatenate([t1, t2]))
+      end
+    end
+  end
 end
