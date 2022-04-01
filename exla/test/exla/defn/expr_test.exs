@@ -2966,6 +2966,18 @@ defmodule EXLA.Defn.ExprTest do
     test "works with constants" do
       assert concat_constants() == Nx.tensor([1, 2])
     end
+
+    test "works with mixed backends" do
+      opts = [[backend: Nx.BinaryBackend], []]
+
+      for opts1 <- opts, opts2 <- opts do
+        t1 = Nx.tensor([1, 2], opts1)
+        t2 = Nx.tensor([3, 4], opts2)
+        t3 = Nx.tensor([5, 6], opts1)
+
+        compare_tensors!(Nx.tensor([1, 2, 3, 4, 5, 6]), Nx.concatenate([t1, t2, t3]))
+      end
+    end
   end
 
   describe "decompositions" do

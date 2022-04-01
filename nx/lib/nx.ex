@@ -8881,7 +8881,7 @@ defmodule Nx do
       [] ->
         raise ArgumentError, "empty list passed to concatenate"
 
-      [t | []] ->
+      [t] ->
         t
 
       [t1 | _] = tensors ->
@@ -8889,6 +8889,7 @@ defmodule Nx do
           tensors
           |> Enum.map(fn t ->
             %T{type: type, shape: shape, names: names} = t = to_tensor(t)
+
             {t, type, shape, names}
           end)
           |> unzip4()
@@ -8901,7 +8902,7 @@ defmodule Nx do
           |> Enum.reduce(type1, fn t1, t2 -> Nx.Type.merge(t1, t2) end)
 
         out = %{t1 | type: output_type, shape: output_shape, names: output_names}
-        impl!(t1).concatenate(out, tensors, axis)
+        list_impl!(tensors).concatenate(out, tensors, axis)
     end
   end
 
