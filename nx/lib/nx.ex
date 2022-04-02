@@ -5050,9 +5050,7 @@ defmodule Nx do
   ## Unary ops
   @disallow_complex_type_unary_ops [:erf, :erfc, :erf_inv]
 
-  for {name, {desc, code}} <- Nx.Shared.unary_math_funs() do
-    formula = code |> Macro.to_string() |> String.replace("var!(x)", "x")
-
+  for {name, {desc, code, formula}} <- Nx.Shared.unary_math_funs() do
     inputs =
       if name in [:acos, :asin, :atan, :atanh, :erf_inv] do
         [to_float32(0.1), to_float32(0.5), to_float32(0.9)]
@@ -5078,7 +5076,7 @@ defmodule Nx do
 
     It is equivalent to:
 
-        #{formula}
+    #{formula}
 
     ## Examples
 
