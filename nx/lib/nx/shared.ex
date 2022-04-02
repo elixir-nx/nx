@@ -259,16 +259,24 @@ defmodule Nx.Shared do
   """
   def unary_math_funs,
     do: [
-      exp: {"exponential", quote(do: Complex.exp(var!(x)))},
+      exp: {"exponential", quote(do: Complex.exp(var!(x))), "$$exp(z) = e^z$$"},
       expm1:
         {"exponential minus one",
          quote do
            var!(x)
            |> Complex.exp()
            |> Complex.subtract(1)
-         end},
-      log: {"natural log", quote(do: Complex.ln(var!(x)))},
-      log1p: {"natural log plus one", quote(do: Complex.ln(Complex.add(var!(x), 1)))},
+         end, "$$expm1(z) = e^z - 1$$"},
+      log:
+        {"natural log", quote(do: Complex.ln(var!(x))),
+         ~S"""
+         $log(z) = ln(z),\quad \text{if z} \in \Reals$
+
+         $log(z) = ln(r) + i\theta,\quad\text{if }z = re^{i\theta} \in \Complex$
+         """},
+      log1p:
+        {"natural log plus one", quote(do: Complex.ln(Complex.add(var!(x), 1))),
+         "$$log1p(z) = log(z + 1)$$"},
       logistic:
         {"standard logistic (a sigmoid)",
          quote do
@@ -277,25 +285,44 @@ defmodule Nx.Shared do
            |> Complex.exp()
            |> Complex.add(1)
            |> then(&Complex.divide(1, &1))
-         end},
-      cos: {"cosine", quote(do: Complex.cos(var!(x)))},
-      sin: {"sine", quote(do: Complex.sin(var!(x)))},
-      tan: {"tangent", quote(do: Complex.tan(var!(x)))},
-      cosh: {"hyperbolic cosine", quote(do: Complex.cosh(var!(x)))},
-      sinh: {"hyperbolic sine", quote(do: Complex.sinh(var!(x)))},
-      tanh: {"hyperbolic tangent", quote(do: Complex.tanh(var!(x)))},
-      acos: {"inverse cosine", quote(do: Complex.acos(var!(x)))},
-      asin: {"inverse sine", quote(do: Complex.asin(var!(x)))},
-      atan: {"inverse tangent", quote(do: Complex.atan(var!(x)))},
-      acosh: {"inverse hyperbolic cosine", quote(do: Complex.acosh(var!(x)))},
-      asinh: {"inverse hyperbolic sine", quote(do: Complex.asinh(var!(x)))},
-      atanh: {"inverse hyperbolic tangent", quote(do: Complex.atanh(var!(x)))},
-      sqrt: {"square root", quote(do: Complex.sqrt(var!(x)))},
-      rsqrt: {"reverse square root", quote(do: Complex.divide(1, Complex.sqrt(var!(x))))},
-      cbrt: {"cube root", quote(do: Complex.power(var!(x), 1 / 3))},
-      erf: {"error function", quote(do: Complex.erf(var!(x)))},
-      erfc: {"one minus error function", quote(do: Complex.erfc(var!(x)))},
-      erf_inv: {"inverse error function", quote(do: Complex.erf_inv(var!(x)))}
+         end, "$$logistic(z) = \\frac{1}{1 + e^{-z}}$$"},
+      cos:
+        {"cosine", quote(do: Complex.cos(var!(x))), "$$cos(z) = \\frac{e^{iz} + e^{-iz}}{2}$$"},
+      sin: {"sine", quote(do: Complex.sin(var!(x))), "$$sin(z) = \\frac{e^{iz} - e^{-iz}}{2i}$$"},
+      tan: {"tangent", quote(do: Complex.tan(var!(x))), "$$tan(z) = \\frac{sin(z)}{cos(z)}$$"},
+      cosh:
+        {"hyperbolic cosine", quote(do: Complex.cosh(var!(x))),
+         "$$cosh(z) = \\frac{e^z + e^{-z}}{2}$$"},
+      sinh:
+        {"hyperbolic sine", quote(do: Complex.sinh(var!(x))),
+         "$$sinh(z) = \\frac{e^z - e^{-z}}{2}$$"},
+      tanh:
+        {"hyperbolic tangent", quote(do: Complex.tanh(var!(x))),
+         "$$sinh(z) = \\frac{e^z - e^{-z}}{e^z + e^{-z}}$$"},
+      acos: {"inverse cosine", quote(do: Complex.acos(var!(x))), "$$acos(cos(z)) = z$$"},
+      asin: {"inverse sine", quote(do: Complex.asin(var!(x))), "$$asin(sin(z)) = z$$"},
+      atan: {"inverse tangent", quote(do: Complex.atan(var!(x))), "$$atan(tan(z)) = z$$"},
+      acosh:
+        {"inverse hyperbolic cosine", quote(do: Complex.acosh(var!(x))), "$$acosh(cosh(z)) = z$$"},
+      asinh:
+        {"inverse hyperbolic sine", quote(do: Complex.asinh(var!(x))), "$$asinh(sinh(z)) = z$$"},
+      atanh:
+        {"inverse hyperbolic tangent", quote(do: Complex.atanh(var!(x))),
+         "$$atanh(tanh(z)) = z$$"},
+      sqrt: {"square root", quote(do: Complex.sqrt(var!(x))), "$$sqrt(z) = \\sqrt{z}$$"},
+      rsqrt:
+        {"reverse square root", quote(do: Complex.divide(1, Complex.sqrt(var!(x)))),
+         "$$rsqrt(z) = \\frac{1}{\\sqrt{z}}$$"},
+      cbrt:
+        {"cube root", quote(do: Complex.power(var!(x), 1 / 3)), "$$cbrt(z) = z^{\\frac{1}{3}}$$"},
+      erf:
+        {"error function", quote(do: Complex.erf(var!(x))),
+         "$$erf(z) = \\frac{2}{\\sqrt{\\pi}} \\int_{0}^{z} e^{-t^2}dt$$"},
+      erfc:
+        {"one minus error function", quote(do: Complex.erfc(var!(x))), "$$erfc(z) = 1 - erf(z)$$"},
+      erf_inv:
+        {"inverse error function", quote(do: Complex.erf_inv(var!(x))),
+         "$$erf\\text{\\textunderscore}inv(erf(z)) = z$$"}
     ]
 
   ## Types
