@@ -412,6 +412,21 @@ defmodule Nx.Defn.Kernel do
   def left * right, do: Nx.multiply(left, right)
 
   @doc """
+  Element-wise multiplication operator.
+
+  It delegates to `Nx.power/2` (supports broadcasting).
+
+  ## Examples
+
+      defn power(a, b) do
+        a ** b
+      end
+
+  """
+  def left ** right when Kernel.and(is_number(left), is_number(right)), do: Kernel.**(left, right)
+  def left ** right, do: Nx.power(left, right)
+
+  @doc """
   Element-wise division operator.
 
   It delegates to `Nx.divide/2` (supports broadcasting).

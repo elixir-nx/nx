@@ -12,7 +12,7 @@ defmodule Nx.MixProject do
     [
       app: :nx,
       version: @version,
-      elixir: "~> 1.12",
+      elixir: "~> 1.13",
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       docs: docs(),
