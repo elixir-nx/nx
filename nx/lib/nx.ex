@@ -1784,6 +1784,28 @@ defmodule Nx do
         [0, 1, 2]
       >
 
+  Casting numbers as complex will return the corresponding complex with 0 imaginary component:
+
+      iex> Nx.as_type(Nx.tensor([1, -2]), {:c, 64})
+      #Nx.Tensor<
+        c64[2]
+        [1.0+0.0i, -2.0+0.0i]
+      >
+
+  Casting complex numbers will return their real parts as the target type:
+
+      iex> Nx.as_type(Nx.tensor([Complex.new(1, 2), Complex.new(0, 3), Complex.new(4, 5)]), {:f, 64})
+      #Nx.Tensor<
+        f64[3]
+        [1.0, 0.0, 4.0]
+      >
+
+      iex> Nx.as_type(Nx.tensor([Complex.new(-1, 2), Complex.new(-2, 3), Complex.new(3, -4)]), {:s, 64})
+      #Nx.Tensor<
+        s64[3]
+        [-1, -2, 3]
+      >
+
   Casting of non-finite values to integer types convert to pre-determined
   integer values:
 
