@@ -9,7 +9,7 @@ defmodule EXLA.MixProject do
       app: :exla,
       name: "EXLA",
       version: @version,
-      elixir: "~> 1.12-dev",
+      elixir: "~> 1.13",
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       docs: docs(),

@@ -21,7 +21,7 @@ defmodule Torchx.MixProject do
       app: :torchx,
       name: "Torchx",
       version: @version,
-      elixir: "~> 1.12-dev",
+      elixir: "~> 1.13",
       deps: deps(),
       docs: docs(),
       compilers: @libtorch_compilers ++ Mix.compilers(),
