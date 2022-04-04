@@ -1478,6 +1478,7 @@ defmodule Nx.Defn.Kernel do
       import Kernel, only: []
       import Nx.Defn.Kernel, only: unquote(Kernel.@(definitions))
       alias Nx.Defn.Kernel, as: Kernel
+      alias Nx.Defn.Complex, as: Complex
     end
   end
 end

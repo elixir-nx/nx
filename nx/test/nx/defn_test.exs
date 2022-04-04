@@ -1101,6 +1101,25 @@ defmodule Nx.DefnTest do
                    fn -> factorial(10.0) end
     end
 
+    defn add_complex(t) do
+      c = Complex.new(2, 2)
+      Nx.add(c, t)
+    end
+
+    test "complex numbers" do
+      t = add_complex(1)
+
+      assert inspect(t) == """
+      #Nx.Tensor<
+        c64\n  
+        Nx.Defn.Expr
+        parameter a:0         s64
+        b = add 2.0+2.0i, a   c64
+      >
+      """
+      |> String.trim()
+    end
+
     defn while_mixed_return(a, b) do
       while {a, b}, Nx.less(a, 10) do
         %{a: a, b: b}
