@@ -1256,6 +1256,8 @@ defmodule Torchx.Backend do
   def from_torch_type(:half), do: {:f, 16}
   def from_torch_type(:float), do: {:f, 32}
   def from_torch_type(:double), do: {:f, 64}
+  def from_torch_type(:complex), do: {:c, 64}
+  def from_torch_type(:complex_double), do: {:c, 128}
 
   defp to_torch_type(nx_type, hint \\ "")
   defp to_torch_type({:u, 8}, _), do: :byte
@@ -1267,6 +1269,8 @@ defmodule Torchx.Backend do
   defp to_torch_type({:f, 16}, _), do: :half
   defp to_torch_type({:f, 32}, _), do: :float
   defp to_torch_type({:f, 64}, _), do: :double
+  defp to_torch_type({:c, 64}, _), do: :complex
+  defp to_torch_type({:c, 128}, _), do: :complex_double
 
   defp to_torch_type({:u, size}, hint) when size in [16, 32, 64] do
     raise ArgumentError,
