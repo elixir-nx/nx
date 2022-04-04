@@ -5199,12 +5199,17 @@ defmodule Nx do
 
   ## Examples
 
-       iex>Nx.conjugate(Complex.new(1, 2))
+       iex> Nx.conjugate(Complex.new(1, 2))
        #Nx.Tensor<
          c64
          1.0-2.0i
        >
 
+       iex> Nx.conjugate(1)
+       #Nx.Tensor<
+         c128
+         1.0+0.0i
+       >
 
        iex> Nx.conjugate(Nx.tensor([Complex.new(1, 2), Complex.new(2, -4)]))
        #Nx.Tensor<
@@ -5216,7 +5221,7 @@ defmodule Nx do
   def conjugate(tensor) do
     tensor = to_tensor(tensor)
 
-    impl!(tensor).conjugate(tensor, tensor)
+    impl!(tensor).conjugate(%{tensor | type: Nx.Type.to_complex(tensor.type)}, tensor)
   end
 
   @doc """
