@@ -5213,6 +5213,38 @@ defmodule Nx do
   end
 
   @doc """
+  Calculates the complex conjugate of each element in the tensor.
+
+  If $z = a + bi = r e^\\theta$, $conjugate(z) = z^* = a - bi =  r e^{-\\theta}$
+
+  ## Examples
+
+       iex> Nx.conjugate(Complex.new(1, 2))
+       #Nx.Tensor<
+         c64
+         1.0-2.0i
+       >
+
+       iex> Nx.conjugate(1)
+       #Nx.Tensor<
+         c64
+         1.0+0.0i
+       >
+
+       iex> Nx.conjugate(Nx.tensor([Complex.new(1, 2), Complex.new(2, -4)]))
+       #Nx.Tensor<
+         c64[2]
+         [1.0-2.0i, 2.0+4.0i]
+       >
+  """
+  @doc type: :element
+  def conjugate(tensor) do
+    tensor = to_tensor(tensor)
+
+    impl!(tensor).conjugate(%{tensor | type: Nx.Type.to_complex(tensor.type)}, tensor)
+  end
+
+  @doc """
   Applies bitwise not to each element in the tensor.
 
   If you're using `Nx.Defn.defn/2`, you can use the `~~~` operator
