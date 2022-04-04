@@ -1102,8 +1102,7 @@ defmodule Nx.DefnTest do
     end
 
     defn add_complex(t) do
-      c = Complex.new(2, 2)
-      Nx.add(c, t)
+      complex(t, 2)
     end
 
     test "complex numbers" do
@@ -1111,10 +1110,10 @@ defmodule Nx.DefnTest do
 
       assert inspect(t) == """
       #Nx.Tensor<
-        c64\n  
+        c64\n\s\s
         Nx.Defn.Expr
         parameter a:0         s64
-        b = add 2.0+2.0i, a   c64
+        b = add 0.0+2.0i, a   c64
       >
       """
       |> String.trim()

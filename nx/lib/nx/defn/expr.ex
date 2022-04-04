@@ -397,10 +397,10 @@ defmodule Nx.Defn.Expr do
         ensure_compatible(t1, out)
 
       c1 && c2 ->
-        constant(out, c1 * c2)
+        constant(out, Complex.multiply(c1, c2))
 
       c2 ->
-        commute(out, context, :multiply, &*/2, c2, t2, t1)
+        commute(out, context, :multiply, &Complex.multiply/2, c2, t2, t1)
 
       true ->
         case t2 do
@@ -411,7 +411,7 @@ defmodule Nx.Defn.Expr do
             binary_expr(out, context, :divide, t1, t2)
 
           %T{} ->
-            commute(out, context, :multiply, &*/2, c1, t1, t2)
+            commute(out, context, :multiply, &Complex.multiply/2, c1, t1, t2)
         end
     end
   end

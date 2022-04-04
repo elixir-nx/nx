@@ -946,6 +946,11 @@ defmodule Nx.Defn.Kernel do
             "got: #{Macro.to_string(other)}"
   end
 
+  def complex(real, imag \\ 0) do
+    imag_component = Nx.multiply(Nx.tensor(imag), Nx.tensor(Complex.new(0, 1)))
+    Nx.add(real, imag_component)
+  end
+
   @doc """
   Defines a `while` loop.
 
@@ -1478,7 +1483,6 @@ defmodule Nx.Defn.Kernel do
       import Kernel, only: []
       import Nx.Defn.Kernel, only: unquote(Kernel.@(definitions))
       alias Nx.Defn.Kernel, as: Kernel
-      alias Nx.Defn.Complex, as: Complex
     end
   end
 end
