@@ -15,6 +15,9 @@ defmodule Torchx.Case do
     atol = opts[:atol] || 1.0e-4
     rtol = opts[:rtol] || 1.0e-4
 
+    IO.inspect(left, label: "left")
+    IO.inspect(right, label: "right")
+
     equals =
       left
       |> Nx.all_close(right, atol: atol, rtol: rtol)

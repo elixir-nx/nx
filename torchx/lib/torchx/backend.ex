@@ -35,7 +35,8 @@ defmodule Torchx.Backend do
 
   @impl true
   def constant(%T{shape: {}, type: type} = out, scalar, backend_options) do
-    Torchx.scalar_tensor(scalar, to_torch_type(type), device_option(backend_options))
+    scalar
+    |> Torchx.scalar_tensor(to_torch_type(type), device_option(backend_options))
     |> to_nx(out)
   end
 

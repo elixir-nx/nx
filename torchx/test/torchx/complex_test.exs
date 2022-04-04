@@ -8,6 +8,17 @@ defmodule Torchx.ComplexTest do
   @arg Complex.new(2, 3)
   @arg2 Complex.new(-2, 7)
 
+  describe "creation" do
+    @tag :focus
+    test "constant" do
+      t =  Nx.tensor(@arg)
+      assert {:c, 64} == t.type
+      assert @arg == Nx.to_number(t)
+    end
+    test "complex-only list"
+    test "mixed list"
+  end
+
   describe "unary operations" do
     test "exp" do
       assert_all_close(Nx.exp(@arg), Complex.new(-7.315, 1.042))

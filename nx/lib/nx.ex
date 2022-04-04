@@ -5186,6 +5186,7 @@ defmodule Nx do
 
     case tensor.type do
       {:u, _} -> tensor
+      {:c, size} -> impl!(tensor).abs(%{tensor | type: {:f, div(size, 2)}}, tensor)
       _ -> impl!(tensor).abs(tensor, tensor)
     end
   end
