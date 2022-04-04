@@ -91,6 +91,10 @@ defmodule Nx.ComplexTest do
       assert_all_close(Nx.cbrt(@arg), Complex.new(1.4518, 0.4934))
     end
 
+    test "conjugate" do
+      assert Nx.conjugate(@arg) == Nx.tensor(Complex.new(2, -3))
+    end
+
     for fun <- [:erf, :erfc, :erf_inv, :round, :floor, :ceil] do
       test "#{fun}" do
         assert_raise ArgumentError, "Nx.#{unquote(fun)}/1 does not support complex numbers", fn ->

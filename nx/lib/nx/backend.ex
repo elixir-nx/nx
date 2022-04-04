@@ -112,7 +112,7 @@ defmodule Nx.Backend do
 
   unary_ops =
     Enum.map(Nx.Shared.unary_math_funs(), &elem(&1, 0)) ++
-      [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign] ++
+      [:abs, :bitwise_not, :ceil, :conjugate, :floor, :negate, :round, :sign] ++
       [:count_leading_zeros, :population_count]
 
   for unary_op <- unary_ops do
