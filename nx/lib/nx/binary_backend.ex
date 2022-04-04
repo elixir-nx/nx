@@ -2039,19 +2039,27 @@ defmodule Nx.BinaryBackend do
             for <<match!(x, 0) <- data>>, into: <<>> do
               x = read!(x, 0)
 
-              cond do
-                float_output? ->
+              case x do
+                %Complex{re: re} when float_output? ->
+                  number_to_binary(re, output_type)
+
+                _ when float_output? ->
                   number_to_binary(x, output_type)
 
-                is_number(x) ->
+                %Complex{re: re} ->
+                  number_to_binary(trunc(re), output_type)
+
+                _ when is_number(x) ->
                   number_to_binary(trunc(x), output_type)
 
-                true ->
-                  case x do
-                    :nan -> number_to_binary(0, output_type)
-                    :infinity -> Nx.Type.max_finite_binary(output_type)
-                    :neg_infinity -> Nx.Type.min_finite_binary(output_type)
-                  end
+                :nan ->
+                  number_to_binary(0, output_type)
+
+                :infinity ->
+                  Nx.Type.max_finite_binary(output_type)
+
+                :neg_infinity ->
+                  Nx.Type.min_finite_binary(output_type)
               end
             end
           end
