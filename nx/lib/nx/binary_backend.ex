@@ -2040,6 +2040,9 @@ defmodule Nx.BinaryBackend do
               x = read!(x, 0)
 
               case x do
+                %Complex{re: re} when float_output? ->
+                  number_to_binary(re, output_type)
+
                 _ when float_output? ->
                   number_to_binary(x, output_type)
 

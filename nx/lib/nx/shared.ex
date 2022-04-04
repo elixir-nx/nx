@@ -121,7 +121,6 @@ defmodule Nx.Shared do
     if System.endianness() == :little do
       quote do
         case unquote(var) do
-          %Complex{re: x} -> binary_part(<<x::float-native-32>>, 2, 2)
           x when is_number(x) -> binary_part(<<x::float-native-32>>, 2, 2)
           x -> Nx.Shared.write_bf16(x)
         end :: binary
@@ -129,7 +128,6 @@ defmodule Nx.Shared do
     else
       quote do
         case unquote(var) do
-          %Complex{re: x} -> binary_part(<<x::float-native-32>>, 0, 2)
           x when is_number(x) -> binary_part(<<x::float-native-32>>, 0, 2)
           x -> Nx.Shared.write_bf16(x)
         end :: binary
@@ -157,14 +155,14 @@ defmodule Nx.Shared do
   defp write_bin_modifier(var, :f, size) do
     quote do
       case unquote(var) do
-        %Complex{re: x} -> <<x::float-native-size(unquote(size))>>
         x when is_number(x) -> <<x::float-native-size(unquote(size))>>
         x -> Nx.Shared.write_non_finite(x, unquote(size))
       end :: binary
     end
   end
 
-  defp write_bin_modifier(var, type, size), do: shared_bin_modifier(var, type, size)
+  defp write_bin_modifier(var, type, size),
+    do: shared_bin_modifier(var, type, size)
 
   defp shared_bin_modifier(var, :s, size),
     do: quote(do: unquote(var) :: signed - integer - native - size(unquote(size)))
