@@ -177,23 +177,23 @@ defmodule Nx.Type do
 
   ## Examples
 
-      iex> Nx.Type.to_complex({:s, 8})
-      {:c, 64}
-      iex> Nx.Type.to_complex({:s, 32})
+      iex> Nx.Type.to_complex({:s, 64})
       {:c, 64}
       iex> Nx.Type.to_complex({:bf, 16})
       {:c, 64}
       iex> Nx.Type.to_complex({:f, 32})
       {:c, 64}
-      iex> Nx.Type.to_complex({:s, 64})
-      {:c, 128}
+      iex> Nx.Type.to_complex({:c, 64})
+      {:c, 64}
       iex> Nx.Type.to_complex({:f, 64})
+      {:c, 128}
+      iex> Nx.Type.to_complex({:c, 128})
       {:c, 128}
 
   """
   def to_complex({:c, size}), do: {:c, size}
-  def to_complex({_name, size}) when size <= 32, do: {:c, 64}
-  def to_complex(_type), do: {:c, 128}
+  def to_complex({:f, 64}), do: {:c, 128}
+  def to_complex(_type), do: {:c, 64}
 
   @doc """
   Converts the given type to an aggregation precision.

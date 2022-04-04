@@ -5207,7 +5207,7 @@ defmodule Nx do
 
        iex> Nx.conjugate(1)
        #Nx.Tensor<
-         c128
+         c64
          1.0+0.0i
        >
 
