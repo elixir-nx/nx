@@ -5195,7 +5195,7 @@ defmodule Nx do
   @doc """
   Calculates the complex conjugate of each element in the tensor.
 
-  If $z = a + bi$, $conjugate(z) = z^* = a - bi$
+  If $z = a + bi = r e^\\theta$, $conjugate(z) = z^* = a - bi =  r e^{-\\theta}$
 
   ## Examples
 
