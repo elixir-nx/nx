@@ -323,7 +323,7 @@ defmodule Nx.Defn.Expr do
   unary_ops =
     [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tan, :cosh, :sinh, :tanh] ++
       [:acosh, :asinh, :atanh, :sqrt, :rsqrt, :cbrt, :negate, :sign, :abs, :bitwise_not] ++
-      [:conjugate, :population_count, :count_leading_zeros, :floor, :ceil, :round] ++
+      [:conjugate, :phase, :population_count, :count_leading_zeros, :floor, :ceil, :round] ++
       [:erf, :erfc, :erf_inv, :acos, :asin, :atan, :bitcast]
 
   for op <- unary_ops do

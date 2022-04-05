@@ -18,6 +18,8 @@ defmodule Torchx.NxDoctestTest do
     broadcast: 3,
     # conjugate - Torchx does not support complex numbers
     conjugate: 1,
+    # phase - Torchx does not support complex numbers
+    phase: 1,
     # dot - Batching not supported
     dot: 6,
     # mean - Torchx does not support unsigned 64 bit integer

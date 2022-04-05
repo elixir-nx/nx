@@ -830,6 +830,9 @@ defmodule Nx.BinaryBackend do
   def conjugate(out, tensor), do: element_wise_unary_op(out, tensor, &Complex.conjugate/1)
 
   @impl true
+  def phase(out, tensor), do: element_wise_unary_op(out, tensor, &Complex.phase/1)
+
+  @impl true
   def bitwise_not(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.bnot/1)
 
   @impl true

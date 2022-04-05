@@ -5245,6 +5245,38 @@ defmodule Nx do
   end
 
   @doc """
+  Calculates the complex phase angle of each element in the tensor.
+
+  If $z = a + bi = r e^\\theta$, $phase(z) = {\rm atan2}(b, a)$
+
+  ## Examples
+
+       iex> Nx.phase(Complex.new(1, 2))
+       #Nx.Tensor<
+         c64
+         1.1071487665176392+0.0i
+       >
+
+       iex> Nx.phase(1)
+       #Nx.Tensor<
+         f32
+         0.0
+       >
+
+       iex> Nx.phase(Nx.tensor([Complex.new(1, 2), Complex.new(-2, 1)]))
+       #Nx.Tensor<
+         c64[2]
+         [1.1071487665176392+0.0i, 2.677945137023926+0.0i]
+       >
+  """
+  @doc type: :element
+  def phase(tensor) do
+    tensor = to_tensor(tensor)
+
+    impl!(tensor).phase(%{tensor | type: Nx.Type.to_floating(tensor.type)}, tensor)
+  end
+
+  @doc """
   Applies bitwise not to each element in the tensor.
 
   If you're using `Nx.Defn.defn/2`, you can use the `~~~` operator
