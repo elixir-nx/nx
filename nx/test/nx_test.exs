@@ -1938,33 +1938,32 @@ defmodule NxTest do
       )
     end
 
-    if Version.match?(System.version(), ">= 1.13.0-dev") do
-      test "evaluates with proper type" do
-        assert eval("~M[1 2 3 4]f32") == Nx.tensor([[1, 2, 3, 4]], type: {:f, 32})
-        assert eval("~M[4 3 2 1]u8") == Nx.tensor([[4, 3, 2, 1]], type: {:u, 8})
 
-        assert eval("~V[0 1 0 1]u8") == Nx.tensor([0, 1, 0, 1], type: {:u, 8})
-      end
+    test "evaluates with proper type" do
+      assert eval("~M[1 2 3 4]f32") == Nx.tensor([[1, 2, 3, 4]], type: {:f, 32})
+      assert eval("~M[4 3 2 1]u8") == Nx.tensor([[4, 3, 2, 1]], type: {:u, 8})
 
-      test "raises on invalid type" do
-        assert_raise(
-          ArgumentError,
-          "invalid numerical type: {:f, 8} (see Nx.Type docs for all supported types)",
-          fn ->
-            eval("~M[1 2 3 4]f8")
-          end
-        )
-      end
+      assert eval("~V[0 1 0 1]u8") == Nx.tensor([0, 1, 0, 1], type: {:u, 8})
+    end
 
-      test "raises on non-numerical values" do
-        assert_raise(
-          ArgumentError,
-          "expected a numerical value for tensor, got x",
-          fn ->
-            eval("~V[1 2 x 4]u8")
-          end
-        )
-      end
+    test "raises on invalid type" do
+      assert_raise(
+        ArgumentError,
+        "invalid numerical type: {:f, 8} (see Nx.Type docs for all supported types)",
+        fn ->
+          eval("~M[1 2 3 4]f8")
+        end
+      )
+    end
+
+    test "raises on non-numerical values" do
+      assert_raise(
+        ArgumentError,
+        "expected a numerical value for tensor, got x",
+        fn ->
+          eval("~V[1 2 x 4]u8")
+        end
+      )
     end
 
     defp eval(expression) do
