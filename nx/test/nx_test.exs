@@ -1938,7 +1938,6 @@ defmodule NxTest do
       )
     end
 
-
     test "evaluates with proper type" do
       assert eval("~M[1 2 3 4]f32") == Nx.tensor([[1, 2, 3, 4]], type: {:f, 32})
       assert eval("~M[4 3 2 1]u8") == Nx.tensor([[4, 3, 2, 1]], type: {:u, 8})
