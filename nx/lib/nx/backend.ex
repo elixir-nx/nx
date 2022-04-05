@@ -113,7 +113,7 @@ defmodule Nx.Backend do
   unary_ops =
     Enum.map(Nx.Shared.unary_math_funs(), &elem(&1, 0)) ++
       [:abs, :bitwise_not, :ceil, :conjugate, :floor, :negate, :round, :sign] ++
-      [:count_leading_zeros, :population_count]
+      [:count_leading_zeros, :population_count, :real, :imag]
 
   for unary_op <- unary_ops do
     @callback unquote(unary_op)(out :: tensor, tensor) :: tensor

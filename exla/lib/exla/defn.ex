@@ -759,7 +759,7 @@ defmodule EXLA.Defn do
   @unary_op [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
               [:bitwise_not, :count_leading_zeros, :population_count, :cosh, :sinh, :acos] ++
               [:asin, :atan, :floor, :ceil, :round, :acosh, :asinh, :atanh, :erf] ++
-              [:erfc, :erf_inv]
+              [:erfc, :erf_inv, :conjugate, :real, :imag]
 
   defp to_operator(op, [arg], %{type: type}, _state) when op in @unary_op do
     apply(EXLA.Op, op, [to_type(arg, type)])

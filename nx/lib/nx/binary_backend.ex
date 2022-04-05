@@ -830,6 +830,26 @@ defmodule Nx.BinaryBackend do
   def conjugate(out, tensor), do: element_wise_unary_op(out, tensor, &Complex.conjugate/1)
 
   @impl true
+  def real(out, tensor) do
+    real_fn = fn
+      %Complex{re: re} -> re
+      num -> num
+    end
+
+    element_wise_unary_op(out, tensor, real_fn)
+  end
+
+  @impl true
+  def imag(out, tensor) do
+    imag_fn = fn
+      %Complex{im: im} -> im
+      _ -> 0.0
+    end
+
+    element_wise_unary_op(out, tensor, imag_fn)
+  end
+
+  @impl true
   def bitwise_not(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.bnot/1)
 
   @impl true

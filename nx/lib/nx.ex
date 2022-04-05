@@ -5245,6 +5245,82 @@ defmodule Nx do
   end
 
   @doc """
+  Returns the real component of each entry in a complex tensor
+  as a floating point tensor.
+
+  ## Examples
+
+      iex> Nx.real(Complex.new(1, 2))
+      #Nx.Tensor<
+        f32
+        1.0
+      >
+
+      iex> Nx.real(Nx.tensor(1))
+      #Nx.Tensor<
+        f32
+        1.0
+      >
+
+      iex> Nx.real(Nx.tensor([Complex.new(1, 2), Complex.new(2, -4)]))
+      #Nx.Tensor<
+        f32[2]
+        [1.0, 2.0]
+      >
+  """
+  @doc type: :element
+  def real(tensor) do
+    tensor = to_tensor(tensor)
+
+    type =
+      case tensor.type do
+        {:f, _} = type -> type
+        {:c, size} -> {:f, div(size, 2)}
+        _ -> {:f, 32}
+      end
+
+    impl!(tensor).real(%{tensor | type: type}, tensor)
+  end
+
+  @doc """
+  Returns the imaginary component of each entry in a complex tensor
+  as a floating point tensor.
+
+  ## Examples
+
+      iex> Nx.imag(Complex.new(1, 2))
+      #Nx.Tensor<
+        f32
+        2.0
+      >
+
+      iex> Nx.imag(Nx.tensor(1))
+      #Nx.Tensor<
+        f32
+        0.0
+      >
+
+      iex> Nx.imag(Nx.tensor([Complex.new(1, 2), Complex.new(2, -4)]))
+      #Nx.Tensor<
+        f32[2]
+        [2.0, -4.0]
+      >
+  """
+  @doc type: :element
+  def imag(tensor) do
+    tensor = to_tensor(tensor)
+
+    type =
+      case tensor.type do
+        {:f, _} = type -> type
+        {:c, size} -> {:f, div(size, 2)}
+        _ -> {:f, 32}
+      end
+
+    impl!(tensor).imag(%{tensor | type: type}, tensor)
+  end
+
+  @doc """
   Applies bitwise not to each element in the tensor.
 
   If you're using `Nx.Defn.defn/2`, you can use the `~~~` operator
