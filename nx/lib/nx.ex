@@ -5253,8 +5253,8 @@ defmodule Nx do
 
        iex> Nx.phase(Complex.new(1, 2))
        #Nx.Tensor<
-         c64
-         1.1071487665176392+0.0i
+         f32
+         1.1071487665176392
        >
 
        iex> Nx.phase(1)
@@ -5263,17 +5263,18 @@ defmodule Nx do
          0.0
        >
 
-       iex> Nx.phase(Nx.tensor([Complex.new(1, 2), Complex.new(-2, 1)]))
+       iex> import Nx, only: [sigil_V: 2]
+       iex> Nx.phase(~V[1+2i -2+1i])
        #Nx.Tensor<
-         c64[2]
-         [1.1071487665176392+0.0i, 2.677945137023926+0.0i]
+         f32[2]
+         [1.1071487665176392, 2.677945137023926]
        >
   """
   @doc type: :element
   def phase(tensor) do
     tensor = to_tensor(tensor)
 
-    impl!(tensor).phase(%{tensor | type: Nx.Type.to_floating(tensor.type)}, tensor)
+    impl!(tensor).phase(%{tensor | type: Nx.Type.to_float(tensor.type)}, tensor)
   end
 
   @doc """
