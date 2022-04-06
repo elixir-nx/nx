@@ -1108,15 +1108,16 @@ defmodule Nx.DefnTest do
     test "complex numbers" do
       t = add_complex(1)
 
-      assert inspect(t) == """
-      #Nx.Tensor<
-        c64\n\s\s
-        Nx.Defn.Expr
-        parameter a:0         s64
-        b = add 0.0+2.0i, a   c64
-      >
-      """
-      |> String.trim()
+      assert inspect(t) ==
+               """
+               #Nx.Tensor<
+                 c64\n\s\s
+                 Nx.Defn.Expr
+                 parameter a:0         s64
+                 b = add 0.0+2.0i, a   c64
+               >
+               """
+               |> String.trim()
     end
 
     defn while_mixed_return(a, b) do
