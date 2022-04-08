@@ -51,7 +51,7 @@ defmodule Torchx.MixProject do
       {:nx, path: "../nx"},
       {:dll_loader_helper, "~> 0.1.0"},
       {:elixir_make, "~> 0.6"},
-      {:ex_doc, "~> 0.23", only: :dev}
+      {:ex_doc, "~> 0.28.3", only: :dev}
     ]
   end
 
