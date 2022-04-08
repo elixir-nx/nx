@@ -228,7 +228,7 @@ defmodule EXLA do
   end
 
   @doc """
-  A shortcut for `Nx.Defn.jit/4` with the EXLA compiler.
+  A shortcut for `Nx.Defn.jit/3` with the EXLA compiler.
 
       iex> EXLA.jit(&Nx.add(&1, &1), [Nx.tensor([1, 2, 3])])
       #Nx.Tensor<
