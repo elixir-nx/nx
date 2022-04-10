@@ -960,7 +960,11 @@ defmodule Nx.Defn.Expr do
   ## Constant helpers and related optimizations
 
   defp constant(%{type: type, shape: shape} = out, number) do
-    number = if is_integer(number) and Nx.Type.float?(type), do: Complex.multiply(1.0, number), else: number
+    number =
+      if is_integer(number) and Nx.Type.float?(type),
+        do: Complex.multiply(1.0, number),
+        else: number
+
     id = {number, type, shape}
     %{out | data: %Expr{id: id, op: :constant, args: [number], context: nil}}
   end
