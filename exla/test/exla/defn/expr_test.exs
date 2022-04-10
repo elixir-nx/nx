@@ -73,8 +73,8 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "complex" do
-    defn return_complex, do: Nx.Defn.Complex.new(1, 2)
-    defn return_complex_tensor, do: Nx.broadcast(Nx.Defn.Complex.new(1, 2), {3, 3, 3})
+    defn return_complex, do: Nx.complex(1, 2)
+    defn return_complex_tensor, do: Nx.broadcast(Nx.complex(1, 2), {3, 3, 3})
 
     test "supports complex return types" do
       assert return_complex() == Nx.tensor(Complex.new(1, 2))

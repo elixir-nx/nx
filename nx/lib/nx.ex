@@ -5343,14 +5343,14 @@ defmodule Nx do
 
       iex> Nx.complex(Nx.tensor(1), Nx.tensor(2))
       #Nx.Tensor<
-      c64
-      1.0+2.0i
+        c64
+        1.0+2.0i
       >
 
       iex> Nx.complex(Nx.tensor([1, 2]), Nx.tensor([3, 4]))
       #Nx.Tensor<
-      c64
-      [1.0+3.0i 2.0+4.0i]
+        c64[2]
+        [1.0+3.0i, 2.0+4.0i]
       >
   """
   def complex(real, imag) do
