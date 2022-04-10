@@ -200,7 +200,8 @@ namespace nx
 
     // Containers
 
-    int get_tuple(ErlNifEnv *env, ERL_NIF_TERM tuple, std::vector<int64_t> &var)
+    template <typename T = int64_t>
+    int get_tuple(ErlNifEnv *env, ERL_NIF_TERM tuple, std::vector<T> &var)
     {
       const ERL_NIF_TERM *terms;
       int length;
@@ -210,7 +211,7 @@ namespace nx
 
       for (int i = 0; i < length; i++)
       {
-        int data;
+        T data;
         if (!get(env, terms[i], &data))
           return 0;
         var.push_back(data);

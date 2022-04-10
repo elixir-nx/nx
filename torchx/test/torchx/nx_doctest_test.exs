@@ -23,10 +23,7 @@ defmodule Torchx.NxDoctestTest do
     # mean - Torchx does not support unsigned 64 bit integer
     mean: 2,
     # quotient - Torchx does not support unsigned 32 bit integer
-    quotient: 2,
-    # require complex numbers
-    sigil_M: 2,
-    sigil_V: 2
+    quotient: 2
   ]
 
   @rounding_error_doctests [
