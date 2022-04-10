@@ -708,16 +708,9 @@ defmodule Torchx.Backend do
     raise ArithmeticError, "Torchx does not support complex values for atan2"
   end
 
-  def atan2(out, left, right) do
-    left
-    |> from_nx()
-    |> Torchx.atan2(from_nx(right))
-    |> to_nx(out)
-  end
-
   binary_ops =
     [:add, :subtract, :multiply, :power, :remainder, :divide, :min, :max, :quotient] ++
-      [:left_shift, :right_shift] ++
+      [:left_shift, :right_shift, :atan2] ++
       [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] ++
       [:logical_and, :logical_or, :logical_xor]
 
