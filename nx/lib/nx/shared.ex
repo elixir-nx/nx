@@ -463,7 +463,7 @@ defmodule Nx.Shared do
 
   @doc false
   def raise_complex_not_supported(function, arity) do
-    raise ArgumentError, "Nx.#{function}/#{arity} does not support complex numbers"
+    raise ArgumentError, "Nx.#{function}/#{arity} does not support complex inputs"
   end
 
   @doc false

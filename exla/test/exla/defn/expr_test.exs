@@ -72,6 +72,49 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
+  describe "complex" do
+    defn return_complex, do: Nx.complex(1, 2)
+    defn return_complex_tensor, do: Nx.broadcast(Nx.complex(1, 2), {3, 3, 3})
+
+    test "supports complex return types" do
+      assert return_complex() == Nx.tensor(Complex.new(1, 2))
+      assert return_complex_tensor() == Nx.broadcast(Complex.new(1, 2), {3, 3, 3})
+    end
+  end
+
+  describe "conjugate" do
+    defn conjugate(x), do: Nx.conjugate(x)
+
+    test "correctly returns complex conjugate" do
+      assert conjugate(Nx.tensor(Complex.new(1, 2))) == Nx.tensor(Complex.new(1, -2))
+      # This differs from the Nx doctest, which I believe should also return -0
+      assert conjugate(Nx.tensor(1)) == Nx.tensor(Complex.new(1, -0.0))
+
+      assert conjugate(Nx.tensor([Complex.new(1, 2), Complex.new(2, -4)])) ==
+               Nx.tensor([Complex.new(1, -2), Complex.new(2, 4)])
+    end
+  end
+
+  describe "real" do
+    defn real(x), do: Nx.real(x)
+
+    test "correctly returns real part of complex" do
+      assert real(Nx.tensor(Complex.new(1, 2))) == Nx.tensor(1.0)
+      assert real(Nx.tensor(1)) == Nx.tensor(1.0)
+      assert real(Nx.tensor([Complex.new(1, 2), Complex.new(2, -4)])) == Nx.tensor([1.0, 2.0])
+    end
+  end
+
+  describe "imag" do
+    defn imag(x), do: Nx.imag(x)
+
+    test "correctly returns imaginary part of complex" do
+      assert imag(Nx.tensor(Complex.new(1, 2))) == Nx.tensor(2.0)
+      assert imag(Nx.tensor(1)) == Nx.tensor(0.0)
+      assert imag(Nx.tensor([Complex.new(1, 2), Complex.new(2, -4)])) == Nx.tensor([2.0, -4.0])
+    end
+  end
+
   describe "+/2" do
     defn add_two(a, b), do: a + b
 

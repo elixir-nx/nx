@@ -324,7 +324,7 @@ defmodule Nx.Defn.Expr do
     [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tan, :cosh, :sinh, :tanh] ++
       [:acosh, :asinh, :atanh, :sqrt, :rsqrt, :cbrt, :negate, :sign, :abs, :bitwise_not] ++
       [:conjugate, :population_count, :count_leading_zeros, :floor, :ceil, :round] ++
-      [:erf, :erfc, :erf_inv, :acos, :asin, :atan, :bitcast]
+      [:erf, :erfc, :erf_inv, :acos, :asin, :atan, :bitcast, :real, :imag]
 
   for op <- unary_ops do
     @impl true
@@ -348,10 +348,10 @@ defmodule Nx.Defn.Expr do
         ensure_compatible(t1, out)
 
       c1 && c2 ->
-        constant(out, c1 + c2)
+        constant(out, Complex.add(c1, c2))
 
       c2 ->
-        commute(out, context, :add, &+/2, c2, t2, t1)
+        commute(out, context, :add, &Complex.add/2, c2, t2, t1)
 
       true ->
         case t2 do
@@ -365,7 +365,7 @@ defmodule Nx.Defn.Expr do
             binary_expr(out, context, :subtract, t1, t2)
 
           %T{} ->
-            commute(out, context, :add, &+/2, c1, t1, t2)
+            commute(out, context, :add, &Complex.add/2, c1, t1, t2)
         end
     end
   end
@@ -378,7 +378,7 @@ defmodule Nx.Defn.Expr do
 
     cond do
       c2 == 0 -> ensure_compatible(t1, out)
-      c1 && c2 -> constant(out, c1 - c2)
+      c1 && c2 -> constant(out, Complex.subtract(c1, c2))
       true -> binary_expr(out, context, :subtract, t1, t2)
     end
   end
@@ -397,10 +397,10 @@ defmodule Nx.Defn.Expr do
         ensure_compatible(t1, out)
 
       c1 && c2 ->
-        constant(out, c1 * c2)
+        constant(out, Complex.multiply(c1, c2))
 
       c2 ->
-        commute(out, context, :multiply, &*/2, c2, t2, t1)
+        commute(out, context, :multiply, &Complex.multiply/2, c2, t2, t1)
 
       true ->
         case t2 do
@@ -411,7 +411,7 @@ defmodule Nx.Defn.Expr do
             binary_expr(out, context, :divide, t1, t2)
 
           %T{} ->
-            commute(out, context, :multiply, &*/2, c1, t1, t2)
+            commute(out, context, :multiply, &Complex.multiply/2, c1, t1, t2)
         end
     end
   end
@@ -424,7 +424,7 @@ defmodule Nx.Defn.Expr do
 
     cond do
       c2 == 1 -> ensure_compatible(t1, out)
-      c1 && c2 -> constant(out, c1 / c2)
+      c1 && c2 -> constant(out, Complex.divide(c1, c2))
       true -> binary_expr(out, context, :divide, t1, t2)
     end
   end
@@ -960,7 +960,11 @@ defmodule Nx.Defn.Expr do
   ## Constant helpers and related optimizations
 
   defp constant(%{type: type, shape: shape} = out, number) do
-    number = if is_integer(number) and Nx.Type.float?(type), do: 1.0 * number, else: number
+    number =
+      if is_integer(number) and Nx.Type.float?(type),
+        do: Complex.multiply(1.0, number),
+        else: number
+
     id = {number, type, shape}
     %{out | data: %Expr{id: id, op: :constant, args: [number], context: nil}}
   end

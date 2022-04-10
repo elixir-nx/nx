@@ -14,6 +14,19 @@ defmodule EXLA.Op do
   @doc """
   Creates a numeric constant.
   """
+  def constant_r0(%Builder{} = builder, %Complex{re: r, im: i}, dtype = {:c, size}) do
+    data =
+      case size do
+        64 ->
+          <<r::32-float-native, i::32-float-native>>
+
+        128 ->
+          <<r::64-float-native, i::64-float-native>>
+      end
+
+    constant_from_binary(builder, data, Shape.make_shape(dtype, {}))
+  end
+
   def constant_r0(%Builder{ref: builder}, value, dtype = {_, _}) when is_number(value) do
     value = cast_number!(dtype, value)
     ref = EXLA.NIF.constant_r0(builder, value, Shape.dtype_to_charlist(dtype)) |> unwrap!()
@@ -634,6 +647,21 @@ defmodule EXLA.Op do
       |> Enum.map(& &1.ref)
 
     ref = EXLA.NIF.concatenate(builder, operand_refs, dimension) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
+  def conjugate(%Op{builder: builder, ref: operand}) do
+    ref = EXLA.NIF.conj(operand) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
+  def real(%Op{builder: builder, ref: operand}) do
+    ref = EXLA.NIF.real(operand) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
+  def imag(%Op{builder: builder, ref: operand}) do
+    ref = EXLA.NIF.imag(operand) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 

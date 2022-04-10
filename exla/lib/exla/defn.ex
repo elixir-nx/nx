@@ -759,10 +759,26 @@ defmodule EXLA.Defn do
   @unary_op [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
               [:bitwise_not, :count_leading_zeros, :population_count, :cosh, :sinh, :acos] ++
               [:asin, :atan, :floor, :ceil, :round, :acosh, :asinh, :atanh, :erf] ++
-              [:erfc, :erf_inv]
+              [:erfc, :erf_inv, :conjugate]
 
   defp to_operator(op, [arg], %{type: type}, _state) when op in @unary_op do
     apply(EXLA.Op, op, [to_type(arg, type)])
+  end
+
+  # These operations do the type conversion implicitly, and so
+  # we cannot mess with the output type (e.g. the to_type conversion)
+  # because it will throw an error
+  @complex_op [:real, :imag]
+
+  defp to_operator(op, [arg], %{type: type}, _state) when op in @complex_op do
+    maybe_cast_arg =
+      if Nx.Type.integer?(op_type(arg)) do
+        to_type(arg, type)
+      else
+        arg
+      end
+
+    apply(EXLA.Op, op, [maybe_cast_arg])
   end
 
   @unary_lib_op [:tan]

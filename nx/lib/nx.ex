@@ -5246,6 +5246,125 @@ defmodule Nx do
   end
 
   @doc """
+  Returns the real component of each entry in a complex tensor
+  as a floating point tensor.
+
+  ## Examples
+
+      iex> Nx.real(Complex.new(1, 2))
+      #Nx.Tensor<
+        f32
+        1.0
+      >
+
+      iex> Nx.real(Nx.tensor(1))
+      #Nx.Tensor<
+        f32
+        1.0
+      >
+
+      iex> Nx.real(Nx.tensor(1, type: {:bf, 16}))
+      #Nx.Tensor<
+        bf16
+        1.0
+      >
+
+      iex> Nx.real(Nx.tensor([Complex.new(1, 2), Complex.new(2, -4)]))
+      #Nx.Tensor<
+        f32[2]
+        [1.0, 2.0]
+      >
+  """
+  @doc type: :element
+  def real(tensor) do
+    %{type: type} = tensor = to_tensor(tensor)
+
+    cond do
+      match?({:c, _}, type) ->
+        {:c, size} = type
+        impl!(tensor).real(%{tensor | type: {:f, div(size, 2)}}, tensor)
+
+      Nx.Type.float?(type) ->
+        tensor
+
+      tensor ->
+        as_type(tensor, {:f, 32})
+    end
+  end
+
+  @doc """
+  Returns the imaginary component of each entry in a complex tensor
+  as a floating point tensor.
+
+  ## Examples
+
+      iex> Nx.imag(Complex.new(1, 2))
+      #Nx.Tensor<
+        f32
+        2.0
+      >
+
+      iex> Nx.imag(Nx.tensor(1))
+      #Nx.Tensor<
+        f32
+        0.0
+      >
+
+      iex> Nx.imag(Nx.tensor(1, type: {:bf, 16}))
+      #Nx.Tensor<
+        bf16
+        0.0
+      >
+
+      iex> Nx.imag(Nx.tensor([Complex.new(1, 2), Complex.new(2, -4)]))
+      #Nx.Tensor<
+        f32[2]
+        [2.0, -4.0]
+      >
+  """
+  @doc type: :element
+  def imag(tensor) do
+    case to_tensor(tensor) do
+      %{type: {:c, size}} = tensor ->
+        impl!(tensor).imag(%{tensor | type: {:f, div(size, 2)}}, tensor)
+
+      tensor ->
+        floating = Nx.Type.to_floating(tensor.type)
+        zero = Nx.tensor(0.0, type: floating)
+        broadcast(zero, tensor)
+    end
+  end
+
+  @doc """
+  Constructs a complex tensor from two equally-shaped tensors.
+
+  Does not accept complex tensors as inputs.
+
+  ### Examples
+
+      iex> Nx.complex(Nx.tensor(1), Nx.tensor(2))
+      #Nx.Tensor<
+        c64
+        1.0+2.0i
+      >
+
+      iex> Nx.complex(Nx.tensor([1, 2]), Nx.tensor([3, 4]))
+      #Nx.Tensor<
+        c64[2]
+        [1.0+3.0i, 2.0+4.0i]
+      >
+  """
+  def complex(real, imag) do
+    if elem(type(real), 0) == :c or elem(type(imag), 0) == :c do
+      Nx.Shared.raise_complex_not_supported("complex", 2)
+    end
+
+    imag
+    |> multiply(Nx.Constants.i())
+    |> add(real)
+  end
+
+  @doc """
   Applies bitwise not to each element in the tensor.
 
   If you're using `Nx.Defn.defn/2`, you can use the `~~~` operator

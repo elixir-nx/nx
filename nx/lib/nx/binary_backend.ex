@@ -830,6 +830,30 @@ defmodule Nx.BinaryBackend do
   def conjugate(out, tensor), do: element_wise_unary_op(out, tensor, &Complex.conjugate/1)
 
   @impl true
+  def real(%{type: {_, component_size}} = out, %{type: {:c, _}} = tensor) do
+    data = to_binary(tensor)
+
+    result =
+      for <<real::bitstring-size(component_size), _::bitstring-size(component_size) <- data>>,
+        into: <<>>,
+        do: real
+
+    from_binary(out, result)
+  end
+
+  @impl true
+  def imag(%{type: {_, component_size}} = out, %{type: {:c, _}} = tensor) do
+    data = to_binary(tensor)
+
+    result =
+      for <<_::bitstring-size(component_size), imag::bitstring-size(component_size) <- data>>,
+        into: <<>>,
+        do: imag
+
+    from_binary(out, result)
+  end
+
+  @impl true
   def bitwise_not(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.bnot/1)
 
   @impl true
