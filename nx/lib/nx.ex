@@ -5262,6 +5262,12 @@ defmodule Nx do
         1.0
       >
 
+      iex> Nx.real(Nx.tensor(1, type: {:bf, 16}))
+      #Nx.Tensor<
+        bf16
+        1.0
+      >
+
       iex> Nx.real(Nx.tensor([Complex.new(1, 2), Complex.new(2, -4)]))
       #Nx.Tensor<
         f32[2]
@@ -5270,11 +5276,14 @@ defmodule Nx do
   """
   @doc type: :element
   def real(tensor) do
-    case to_tensor(tensor) do
-      %{type: {:c, size}} = tensor ->
+    %{type: type} = tensor = to_tensor(tensor)
+
+    cond do
+      match?({:c, _}, type) ->
+        {:c, size} = type
         impl!(tensor).real(%{tensor | type: {:f, div(size, 2)}}, tensor)
 
-      %{type: {:f, _}} = tensor ->
+      Nx.Type.float?(type) ->
         tensor
 
       tensor ->
@@ -5300,6 +5309,12 @@ defmodule Nx do
         0.0
       >
 
+      iex> Nx.imag(Nx.tensor(1, type: {:bf, 16}))
+      #Nx.Tensor<
+        bf16
+        0.0
+      >
+
       iex> Nx.imag(Nx.tensor([Complex.new(1, 2), Complex.new(2, -4)]))
       #Nx.Tensor<
         f32[2]
@@ -5317,6 +5332,35 @@ defmodule Nx do
         zero = Nx.tensor(0.0, type: floating)
         broadcast(zero, tensor)
     end
+  end
+
+  @doc """
+  Constructs a complex tensor from two equally-shaped tensors.
+
+  Does not accept complex tensors as inputs.
+
+  ### Examples
+
+      iex> Nx.complex(Nx.tensor(1), Nx.tensor(2))
+      #Nx.Tensor<
+      c64
+      1.0+2.0i
+      >
+
+      iex> Nx.complex(Nx.tensor([1, 2]), Nx.tensor([3, 4]))
+      #Nx.Tensor<
+      c64
+      [1.0+3.0i 2.0+4.0i]
+      >
+  """
+  def complex(real, imag) do
+    if elem(type(real), 0) == :c or elem(type(imag), 0) == :c do
+      Nx.Shared.raise_complex_not_supported("complex", 2)
+    end
+
+    imag
+    |> Nx.multiply(Nx.Constants.i())
+    |> Nx.add(real)
   end
 
   @doc """

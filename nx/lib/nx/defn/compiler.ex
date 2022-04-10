@@ -58,7 +58,7 @@ defmodule Nx.Defn.Compiler do
             when input: Nx.contained(), output: Nx.contained(), acc: Nx.contained()
 
   # Modules allowed in defn
-  @allowed_modules [Nx, Nx.Constants, Nx.Defn, Nx.Defn.Kernel, Nx.LinAlg, Nx.Defn.Complex]
+  @allowed_modules [Nx, Nx.Constants, Nx.Defn, Nx.Defn.Kernel, Nx.LinAlg]
 
   # These operations do not have valid meaning for Nx.Defn.Expr
   @forbidden_ops [:backend_copy, :backend_deallocate, :backend_transfer] ++

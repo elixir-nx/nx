@@ -143,7 +143,7 @@ defmodule Nx.Constants do
 
   ## Options
 
-    * `:backend` - a backend to allocate the tensor on. 
+    * `:backend` - a backend to allocate the tensor on.
 
   ## Examples
 
@@ -176,7 +176,7 @@ defmodule Nx.Constants do
 
   ## Options
 
-    * `:backend` - a backend to allocate the tensor on. 
+    * `:backend` - a backend to allocate the tensor on.
 
   ## Examples
 
@@ -202,6 +202,34 @@ defmodule Nx.Constants do
   def min_finite(type, opts \\ []) do
     type = Nx.Type.normalize!(type)
     from_binary(Nx.Type.min_finite_binary(type), type, opts)
+  end
+
+  @doc """
+  Returns the imaginary constant.
+
+  Accepts the same options as `Nx.tensor/2`
+
+  ### Examples
+
+      iex> Nx.Constants.i()
+      #Nx.Tensor<
+        c64
+        0.0+1.0i
+      >
+
+      iex> Nx.Constants.i(type: {:c, 128})
+      #Nx.Tensor<
+        c128
+        0.0+1.0i
+      >
+
+  ### Error cases
+
+      iex> Nx.Constants.i(type: {:f, 32})
+      ** (ArgumentError) invalid type for complex number. Expected {:c, 64} or {:c, 128}, got: {:f, 32}
+  """
+  def i(opts \\ []) do
+    Nx.tensor(Complex.new(0, 1), opts)
   end
 
   defp from_binary(binary, type, opts) do

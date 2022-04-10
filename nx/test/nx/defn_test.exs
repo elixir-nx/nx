@@ -1102,7 +1102,7 @@ defmodule Nx.DefnTest do
     end
 
     defn add_complex(t) do
-      complex(t, 2)
+      complex(t, t)
     end
 
     test "complex numbers" do
