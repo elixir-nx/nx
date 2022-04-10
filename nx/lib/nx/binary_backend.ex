@@ -830,9 +830,8 @@ defmodule Nx.BinaryBackend do
   def conjugate(out, tensor), do: element_wise_unary_op(out, tensor, &Complex.conjugate/1)
 
   @impl true
-  def real(out, %{type: {:c, s}} = tensor) do
+  def real(%{type: {_, component_size}} = out, %{type: {:c, _}} = tensor) do
     data = to_binary(tensor)
-    component_size = div(s, 2)
 
     result =
       for <<real::bitstring-size(component_size), _::bitstring-size(component_size) <- data>>,
@@ -843,9 +842,8 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def imag(out, %{type: {:c, s}} = tensor) do
+  def imag(%{type: {_, component_size}} = out, %{type: {:c, _}} = tensor) do
     data = to_binary(tensor)
-    component_size = div(s, 2)
 
     result =
       for <<_::bitstring-size(component_size), imag::bitstring-size(component_size) <- data>>,
