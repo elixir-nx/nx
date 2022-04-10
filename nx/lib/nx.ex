@@ -5359,8 +5359,8 @@ defmodule Nx do
     end
 
     imag
-    |> Nx.multiply(Nx.Constants.i())
-    |> Nx.add(real)
+    |> multiply(Nx.Constants.i())
+    |> add(real)
   end
 
   @doc """
