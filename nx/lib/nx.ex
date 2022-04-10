@@ -1784,6 +1784,28 @@ defmodule Nx do
         [0, 1, 2]
       >
 
+  Casting numbers as complex will return the corresponding complex with 0 imaginary component:
+
+      iex> Nx.as_type(Nx.tensor([1, -2]), {:c, 64})
+      #Nx.Tensor<
+        c64[2]
+        [1.0+0.0i, -2.0+0.0i]
+      >
+
+  Casting complex numbers will return their real parts as the target type:
+
+      iex> Nx.as_type(Nx.tensor([Complex.new(1, 2), Complex.new(0, 3), Complex.new(4, 5)]), {:f, 64})
+      #Nx.Tensor<
+        f64[3]
+        [1.0, 0.0, 4.0]
+      >
+
+      iex> Nx.as_type(Nx.tensor([Complex.new(-1, 2), Complex.new(-2, 3), Complex.new(3, -4)]), {:s, 64})
+      #Nx.Tensor<
+        s64[3]
+        [-1, -2, 3]
+      >
+
   Casting of non-finite values to integer types convert to pre-determined
   integer values:
 
@@ -5189,6 +5211,38 @@ defmodule Nx do
       {:c, size} -> impl!(tensor).abs(%{tensor | type: {:f, div(size, 2)}}, tensor)
       _ -> impl!(tensor).abs(tensor, tensor)
     end
+  end
+
+  @doc """
+  Calculates the complex conjugate of each element in the tensor.
+
+  If $z = a + bi = r e^\\theta$, $conjugate(z) = z^* = a - bi =  r e^{-\\theta}$
+
+  ## Examples
+
+       iex> Nx.conjugate(Complex.new(1, 2))
+       #Nx.Tensor<
+         c64
+         1.0-2.0i
+       >
+
+       iex> Nx.conjugate(1)
+       #Nx.Tensor<
+         c64
+         1.0+0.0i
+       >
+
+       iex> Nx.conjugate(Nx.tensor([Complex.new(1, 2), Complex.new(2, -4)]))
+       #Nx.Tensor<
+         c64[2]
+         [1.0-2.0i, 2.0+4.0i]
+       >
+  """
+  @doc type: :element
+  def conjugate(tensor) do
+    tensor = to_tensor(tensor)
+
+    impl!(tensor).conjugate(%{tensor | type: Nx.Type.to_complex(tensor.type)}, tensor)
   end
 
   @doc """
@@ -9780,10 +9834,6 @@ defmodule Nx do
 
   Before using sigils, you must first import them:
 
-      import Nx, only: [sigil_M: 2]
-
-  If you are using Elixir v1.13+, then you can write instead:
-
       import Nx, only: :sigils
 
   Then you use the sigil to create matrices. The sigil:
@@ -9804,9 +9854,10 @@ defmodule Nx do
         [0, 0, 0, 4]
       ])
 
+  If the tensor has any complex type, it defaults to c64.
   If the tensor has any float type, it defaults to f32.
-  Otherwise, it is s64. If you are using Elixir 1.13+,
-  you can specify the tensor type as a sigil modifier:
+  Otherwise, it is s64. You can specify the tensor type
+  as a sigil modifier:
 
       iex> import Nx
       iex> ~M[0.1 0.2 0.3 0.4]f16
@@ -9838,7 +9889,7 @@ defmodule Nx do
 
   Before using sigils, you must first import them:
 
-      import Nx, only: [sigil_V: 2]
+      import Nx, only: :sigils
 
   Then you use the sigil to create vectors. The sigil:
 
@@ -9848,9 +9899,10 @@ defmodule Nx do
 
       Nx.tensor([-1, 0, 0, 1])
 
+  If the tensor has any complex type, it defaults to c64.
   If the tensor has any float type, it defaults to f32.
-  Otherwise, it is s64. If you are using Elixir 1.13+,
-  you can specify the tensor type as a sigil modifier:
+  Otherwise, it is s64. You can specify the tensor type
+  as a sigil modifier:
 
       iex> import Nx
       iex> ~V[0.1 0.2 0.3 0.4]f16

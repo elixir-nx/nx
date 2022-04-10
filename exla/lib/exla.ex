@@ -15,10 +15,14 @@ defmodule EXLA do
   (JIT) compile a native implementation of the function above, tailored for
   the type and shape of the given tensor.
 
-  EXLA is able to compile to the CPU or GPU, by specifying another client:
+  EXLA is able to compile to the CPU/GPU/TPU, by specifying another client:
 
       import Config
       config :nx, :default_defn_options, [compiler: EXLA, client: :cuda]
+
+  To use the GPU or TPUs, don't forget to also set the appropriate value
+  for the [`XLA_TARGET`](https://github.com/elixir-nx/xla#xla_target)
+  environment variable.
 
   Read the "Client" section below for more information.
 
@@ -61,6 +65,10 @@ defmodule EXLA do
   available as the default `defn` options:
 
       EXLA.set_as_nx_default([:tpu, :cuda, :rocm, :host])
+
+  To use the GPU or TPUs, don't forget to also set the appropriate value
+  for the [`XLA_TARGET`](https://github.com/elixir-nx/xla#xla_target)
+  environment variable.
 
   > **Important!** you should avoid using multiple clients for the
   > same platform. If you have multiple clients per platform, they
@@ -203,6 +211,9 @@ defmodule EXLA do
         run_options: [keep_on_device: true]
       )
 
+  To use the GPU or TPUs, don't forget to also set the appropriate value
+  for the [`XLA_TARGET`](https://github.com/elixir-nx/xla#xla_target)
+  environment variable.
   """
   def set_as_nx_default(clients, opts \\ []) do
     supported_platforms = EXLA.Client.get_supported_platforms()
@@ -228,7 +239,7 @@ defmodule EXLA do
   end
 
   @doc """
-  A shortcut for `Nx.Defn.jit/4` with the EXLA compiler.
+  A shortcut for `Nx.Defn.jit/3` with the EXLA compiler.
 
       iex> EXLA.jit(&Nx.add(&1, &1), [Nx.tensor([1, 2, 3])])
       #Nx.Tensor<

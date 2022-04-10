@@ -66,7 +66,7 @@ defmodule EXLA.Client do
   end
 
   @doc """
-  Sends buffer from device outfeed to the given process tagged by `ref``.
+  Sends buffer from device outfeed to the given process tagged by `ref`.
 
   > Note: XLA does not support tuple outfeed shapes. Passing one will simply
   > block the operation indefinitely. Instead, convert the tuple into multiple
