@@ -211,7 +211,7 @@ namespace nx
 
       for (int i = 0; i < length; i++)
       {
-        int data;
+        T data;
         if (!get(env, terms[i], &data))
           return 0;
         var.push_back(data);

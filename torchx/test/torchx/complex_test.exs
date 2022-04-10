@@ -11,12 +11,24 @@ defmodule Torchx.ComplexTest do
   describe "creation" do
     @tag :focus
     test "constant" do
-      t =  Nx.tensor(@arg)
+      t = Nx.tensor(@arg)
       assert {:c, 64} == t.type
       assert @arg == Nx.to_number(t)
     end
-    test "complex-only list"
-    test "mixed list"
+
+    test "complex-only list" do
+      l = [@arg, @arg2]
+      t = Nx.tensor(l)
+      assert {:c, 64} == t.type
+      assert l == Nx.to_flat_list(t)
+    end
+
+    test "mixed list" do
+      l = [1, @arg, @arg2]
+      t = Nx.tensor(l)
+      assert {:c, 64} == t.type
+      assert [Complex.new(1), @arg, @arg2] == Nx.to_flat_list(t)
+    end
   end
 
   describe "unary operations" do
@@ -25,7 +37,9 @@ defmodule Torchx.ComplexTest do
     end
 
     test "expm1" do
-      assert_all_close(Nx.expm1(@arg), Complex.new(-8.315, 1.042))
+      assert_raise ArithmeticError, "Torchx does not support complex values for expm1", fn ->
+        Nx.expm1(@arg)
+      end
     end
 
     test "log" do
@@ -33,7 +47,9 @@ defmodule Torchx.ComplexTest do
     end
 
     test "log1p" do
-      assert_all_close(Nx.log1p(@arg), Complex.new(1.4451, 0.7854))
+      assert_raise ArithmeticError, "Torchx does not support complex values for log1p", fn ->
+        Nx.log1p(@arg)
+      end
     end
 
     test "logistic" do
@@ -145,14 +161,8 @@ defmodule Torchx.ComplexTest do
     end
 
     test "atan2" do
-      assert_all_close(Nx.atan2(Complex.new(7, 0), Complex.new(2.0, 0.0)), Complex.new(1.2925, 0))
-
-      assert_raise ArithmeticError, "Complex.atan2 only accepts real numbers as arguments", fn ->
+      assert_raise ArithmeticError, "Torchx does not support complex values for atan2", fn ->
         Nx.atan2(7, @arg)
-      end
-
-      assert_raise ArithmeticError, "Complex.atan2 only accepts real numbers as arguments", fn ->
-        Nx.atan2(@arg, 7)
       end
     end
 

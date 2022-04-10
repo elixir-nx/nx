@@ -103,27 +103,27 @@ private:
 
 #define NIF(NAME) ERL_NIF_TERM NAME(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 
-#define SCALAR_PARAM(ARGN, VAR)                                                         \
-  torch::Scalar VAR;                                                                    \
-  VAR.~Scalar();                                                                        \
-  double double_##VAR;                                                                  \
-  std::vector<double_t> complex_##VAR;                                                  \
-  if (nx::nif::get_tuple<double_t>(env, argv[ARGN], complex_##VAR))                  \
-  {                                                                                     \
-    new (&VAR) std::complex<torch::Scalar>( \
-      complex_##VAR[0], \
-      complex_##VAR[1] \
-    ); \
-  }                                                                                     \
-  else if (enif_get_double(env, argv[ARGN], &double_##VAR) == 0)                        \
-  {                                                                                     \
-    long long_##VAR;                                                                    \
-    enif_get_int64(env, argv[ARGN], (ErlNifSInt64 *)&long_##VAR);                       \
-    new (&VAR) torch::Scalar((int64_t)long_##VAR);                                      \
-  }                                                                                     \
-  else                                                                                  \
-  {                                                                                     \
-    new (&VAR) torch::Scalar(double_##VAR);                                             \
+#define SCALAR_PARAM(ARGN, VAR)                                     \
+  torch::Scalar VAR;                                                \
+  VAR.~Scalar();                                                    \
+  double double_##VAR;                                              \
+  std::vector<double> complex_##VAR;                              \
+  if (nx::nif::get_tuple<double>(env, argv[ARGN], complex_##VAR)) \
+  {                                                                 \
+    new (&VAR) torch::Scalar(c10::complex<double>(                  \
+        complex_##VAR[0],                                           \
+        complex_##VAR[1])                                           \
+    );                                                              \
+  }                                                                 \
+  else if (enif_get_double(env, argv[ARGN], &double_##VAR) == 0)    \
+  {                                                                 \
+    long long_##VAR;                                                \
+    enif_get_int64(env, argv[ARGN], (ErlNifSInt64 *)&long_##VAR);   \
+    new (&VAR) torch::Scalar((int64_t)long_##VAR);                  \
+  }                                                                 \
+  else                                                              \
+  {                                                                 \
+    new (&VAR) torch::Scalar(double_##VAR);                         \
   }
 
 #define SHAPE_PARAM(ARGN, VAR) TUPLE_PARAM(ARGN, std::vector<int64_t>, VAR)

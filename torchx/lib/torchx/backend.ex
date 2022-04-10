@@ -36,14 +36,23 @@ defmodule Torchx.Backend do
   @impl true
   def constant(%T{shape: {}, type: type} = out, scalar, backend_options) do
     scalar
+    |> constant_serialize_scalar()
     |> Torchx.scalar_tensor(to_torch_type(type), device_option(backend_options))
     |> to_nx(out)
   end
 
   def constant(%T{shape: shape, type: type} = out, scalar, backend_options) do
-    Torchx.full(shape, scalar, to_torch_type(type), device_option(backend_options))
+    shape
+    |> Torchx.full(
+      constant_serialize_scalar(scalar),
+      to_torch_type(type),
+      device_option(backend_options)
+    )
     |> to_nx(out)
   end
+
+  defp constant_serialize_scalar(%Complex{re: real, im: imag}), do: {real, imag}
+  defp constant_serialize_scalar(scalar), do: scalar
 
   @impl true
   def eye(%T{shape: {n, n}, type: type} = out, backend_options) do
@@ -98,13 +107,32 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
+  def random_uniform(%T{type: {:c, s}, shape: shape} = out, min, max, backend_options) do
+    rand_type = {:f, div(s, 2)}
+
+    real = random_uniform_float(min, max, shape, rand_type, backend_options)
+    imag = random_uniform_float(min, max, shape, rand_type, backend_options)
+
+    imag
+    |> Torchx.multiply(
+      Torchx.scalar_tensor(Complex.new(0, 1), :complex, device_option(backend_options))
+    )
+    |> Torchx.add(real)
+    |> to_nx(out)
+  end
+
   def random_uniform(%T{type: {f, _} = type, shape: shape} = out, min, max, backend_options)
       when f in [:f, :bf] do
+    min
+    |> random_uniform_float(max, shape, type, backend_options)
+    |> to_nx(out)
+  end
+
+  defp random_uniform_float(min, max, shape, type, backend_options) do
     min = to_number(min)
     max = to_number(max)
 
     Torchx.rand(min, max, shape, to_torch_type(type), device_option(backend_options))
-    |> to_nx(out)
   end
 
   @impl true
@@ -675,8 +703,13 @@ defmodule Torchx.Backend do
 
   ## Ops
 
+  @impl true
+  def atan2(%{type: {:c, _}}, _l, _r) do
+    raise ArithmeticError, "Torchx does not support complex values for atan2"
+  end
+
   binary_ops =
-    [:add, :subtract, :multiply, :power, :remainder, :divide, :atan2, :min, :max, :quotient] ++
+    [:add, :subtract, :multiply, :power, :remainder, :divide, :min, :max, :quotient] ++
       [:left_shift, :right_shift] ++
       [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] ++
       [:logical_and, :logical_or, :logical_xor]
@@ -720,8 +753,32 @@ defmodule Torchx.Backend do
     end
   end
 
+  @impl true
+  def expm1(%{type: {:c, _}}, _t) do
+    raise ArithmeticError, "Torchx does not support complex values for expm1"
+  end
+
+  def expm1(out, tensor) do
+    tensor
+    |> from_nx()
+    |> Torchx.expm1()
+    |> to_nx(out)
+  end
+
+  @impl true
+  def log1p(%{type: {:c, _}}, _t) do
+    raise ArithmeticError, "Torchx does not support complex values for log1p"
+  end
+
+  def log1p(out, tensor) do
+    tensor
+    |> from_nx()
+    |> Torchx.log1p()
+    |> to_nx(out)
+  end
+
   unary_ops =
-    [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tan, :cosh, :sinh] ++
+    [:exp, :log, :logistic, :cos, :sin, :tan, :cosh, :sinh] ++
       [:tanh, :acos, :asin, :atan, :acosh, :asinh, :atanh, :sqrt, :rsqrt] ++
       [:erf, :erfc, :erf_inv, :abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign] ++
       [:logical_not, :cbrt]
