@@ -118,7 +118,7 @@ defmodule Torchx.ComplexTest do
 
     for fun <- [:erf, :erfc, :erf_inv, :round, :floor, :ceil] do
       test "#{fun}" do
-        assert_raise ArgumentError, "Nx.#{unquote(fun)}/1 does not support complex numbers", fn ->
+        assert_raise ArgumentError, "Nx.#{unquote(fun)}/1 does not support complex inputs", fn ->
           Nx.unquote(fun)(@arg)
         end
       end
@@ -176,7 +176,7 @@ defmodule Torchx.ComplexTest do
 
     for op <- [:remainder, :max, :min] do
       test "#{op}" do
-        assert_raise ArgumentError, "Nx.#{unquote(op)}/2 does not support complex numbers", fn ->
+        assert_raise ArgumentError, "Nx.#{unquote(op)}/2 does not support complex inputs", fn ->
           Nx.unquote(op)(@arg, @arg2)
         end
       end
