@@ -25,8 +25,8 @@ If you are using Livebook or IEx, you can instead run:
 
 ```elixir
 Mix.install([
-    {:exla, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "exla"},
-    {:nx, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "nx", override: true}
+  {:exla, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "exla"},
+  {:nx, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "nx", override: true}
 ])
 ```
 
@@ -50,10 +50,15 @@ The main mechanism to use EXLA is by setting it as a compiler for your numerical
 import Config
 
 config :nx, :default_defn_options, [compiler: EXLA]
-
-# To use cuda/rocm/tpu, set the client too
-# config :nx, :default_defn_options, [compiler: EXLA, client: :cuda]
 ```
+
+You can also use cuda/rocm/tpu as the target by setting `:client` option:
+
+```elixir
+config :nx, :default_defn_options, [compiler: EXLA, client: :cuda]
+```
+
+Don't forget to also set the appropriate value for the [`XLA_TARGET`](https://github.com/elixir-nx/xla#xla_target) environment variable. For CUDA, setting `ELIXIR_ERL_OPTIONS="+sssdio 128"` is also required on more complex operations to increase CUDA's compiler stack size.
 
 You can also pass `EXLA` as a compiler to `Nx.Defn.jit/3` and friends:
 

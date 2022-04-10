@@ -5208,6 +5208,7 @@ defmodule Nx do
 
     case tensor.type do
       {:u, _} -> tensor
+      {:c, size} -> impl!(tensor).abs(%{tensor | type: {:f, div(size, 2)}}, tensor)
       _ -> impl!(tensor).abs(tensor, tensor)
     end
   end
@@ -9952,10 +9953,6 @@ defmodule Nx do
 
   Before using sigils, you must first import them:
 
-      import Nx, only: [sigil_M: 2]
-
-  If you are using Elixir v1.13+, then you can write instead:
-
       import Nx, only: :sigils
 
   Then you use the sigil to create matrices. The sigil:
@@ -9976,9 +9973,10 @@ defmodule Nx do
         [0, 0, 0, 4]
       ])
 
+  If the tensor has any complex type, it defaults to c64.
   If the tensor has any float type, it defaults to f32.
-  Otherwise, it is s64. If you are using Elixir 1.13+,
-  you can specify the tensor type as a sigil modifier:
+  Otherwise, it is s64. You can specify the tensor type
+  as a sigil modifier:
 
       iex> import Nx
       iex> ~M[0.1 0.2 0.3 0.4]f16
@@ -9990,9 +9988,9 @@ defmodule Nx do
       >
       iex> ~M[1+1i 2-2.0i -3]
       #Nx.Tensor<
-        c64[3]
+        c64[1][3]
         [
-          [1.0 + 1.0i, 2.0 - 2.0i, -3.0 + 0.0i]
+          [1.0+1.0i, 2.0-2.0i, -3.0+0.0i]
         ]
       >
 
@@ -10010,7 +10008,7 @@ defmodule Nx do
 
   Before using sigils, you must first import them:
 
-      import Nx, only: [sigil_V: 2]
+      import Nx, only: :sigils
 
   Then you use the sigil to create vectors. The sigil:
 
@@ -10020,9 +10018,10 @@ defmodule Nx do
 
       Nx.tensor([-1, 0, 0, 1])
 
+  If the tensor has any complex type, it defaults to c64.
   If the tensor has any float type, it defaults to f32.
-  Otherwise, it is s64. If you are using Elixir 1.13+,
-  you can specify the tensor type as a sigil modifier:
+  Otherwise, it is s64. You can specify the tensor type
+  as a sigil modifier:
 
       iex> import Nx
       iex> ~V[0.1 0.2 0.3 0.4]f16
@@ -10033,7 +10032,7 @@ defmodule Nx do
       iex> ~V[1+1i 2-2.0i -3]
       #Nx.Tensor<
         c64[3]
-        [1.0 + 1.0i, 2.0 - 2.0i, -3.0 + 0.0i]
+        [1.0+1.0i, 2.0-2.0i, -3.0+0.0i]
       >
 
   """

@@ -4,8 +4,8 @@
 
 #include "nx_nif_utils.hpp"
 
-std::map<const std::string, const torch::ScalarType> dtypes = {{"byte", torch::kByte}, {"char", torch::kChar}, {"short", torch::kShort}, {"int", torch::kInt}, {"long", torch::kLong}, {"half", torch::kHalf}, {"brain", torch::kBFloat16}, {"float", torch::kFloat}, {"double", torch::kDouble}, {"bool", torch::kBool}};
-std::map<const std::string, const int> dtype_sizes = {{"byte", 1}, {"char", 1}, {"short", 2}, {"int", 4}, {"long", 8}, {"half", 2}, {"brain", 2}, {"float", 4}, {"double", 8}};
+std::map<const std::string, const torch::ScalarType> dtypes = {{"byte", torch::kByte}, {"char", torch::kChar}, {"short", torch::kShort}, {"int", torch::kInt}, {"long", torch::kLong}, {"half", torch::kHalf}, {"brain", torch::kBFloat16}, {"float", torch::kFloat}, {"double", torch::kDouble}, {"bool", torch::kBool}, {"complex", at::ScalarType::ComplexFloat}, {"complex_double", at::ScalarType::ComplexDouble}};
+std::map<const std::string, const int> dtype_sizes = {{"byte", 1}, {"char", 1}, {"short", 2}, {"int", 4}, {"long", 8}, {"half", 2}, {"brain", 2}, {"float", 4}, {"double", 8}, {"complex", 8}, {"complex_double", 16}};
 
 inline torch::ScalarType string2type(const std::string &atom)
 {
@@ -103,16 +103,27 @@ private:
 
 #define NIF(NAME) ERL_NIF_TERM NAME(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 
-#define SCALAR_PARAM(ARGN, VAR) \
-  torch::Scalar VAR;            \
-  VAR.~Scalar();                \
-  double double_##VAR;          \
-  if (enif_get_double(env, argv[ARGN], &double_##VAR) == 0) { \
-    long long_##VAR;                                  \
-    enif_get_int64(env, argv[ARGN], (ErlNifSInt64*)&long_##VAR);     \
-    new (&VAR) torch::Scalar((int64_t)long_##VAR);             \
-  } else {                                            \
-    new (&VAR) torch::Scalar(double_##VAR);           \
+#define SCALAR_PARAM(ARGN, VAR)                                     \
+  torch::Scalar VAR;                                                \
+  VAR.~Scalar();                                                    \
+  double double_##VAR;                                              \
+  std::vector<double> complex_##VAR;                              \
+  if (nx::nif::get_tuple<double>(env, argv[ARGN], complex_##VAR)) \
+  {                                                                 \
+    new (&VAR) torch::Scalar(c10::complex<double>(                  \
+        complex_##VAR[0],                                           \
+        complex_##VAR[1])                                           \
+    );                                                              \
+  }                                                                 \
+  else if (enif_get_double(env, argv[ARGN], &double_##VAR) == 0)    \
+  {                                                                 \
+    long long_##VAR;                                                \
+    enif_get_int64(env, argv[ARGN], (ErlNifSInt64 *)&long_##VAR);   \
+    new (&VAR) torch::Scalar((int64_t)long_##VAR);                  \
+  }                                                                 \
+  else                                                              \
+  {                                                                 \
+    new (&VAR) torch::Scalar(double_##VAR);                         \
   }
 
 #define SHAPE_PARAM(ARGN, VAR) TUPLE_PARAM(ARGN, std::vector<int64_t>, VAR)
