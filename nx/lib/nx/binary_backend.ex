@@ -830,23 +830,27 @@ defmodule Nx.BinaryBackend do
   def conjugate(out, tensor), do: element_wise_unary_op(out, tensor, &Complex.conjugate/1)
 
   @impl true
-  def real(out, tensor) do
-    real_fn = fn
-      %Complex{re: re} -> re
-      num -> num
-    end
+  def real(out, %{type: {:c, s}} = tensor) do
+    data = to_binary(tensor)
 
-    element_wise_unary_op(out, tensor, real_fn)
+    result =
+      match_types [{:f, div(s, 2)}] do
+        for <<match!(real, 0), match!(_, 0) <- data>>, into: <<>>, do: real
+      end
+
+    from_binary(out, result)
   end
 
   @impl true
-  def imag(out, tensor) do
-    imag_fn = fn
-      %Complex{im: im} -> im
-      _ -> 0.0
-    end
+  def imag(out, %{type: {:c, s}} = tensor) do
+    data = to_binary(tensor)
 
-    element_wise_unary_op(out, tensor, imag_fn)
+    result =
+      match_types [{:f, div(s, 2)}] do
+        for <<match!(_, 0), match!(imag, 0) <- data>>, into: <<>>, do: imag
+      end
+
+    from_binary(out, result)
   end
 
   @impl true

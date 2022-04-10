@@ -5270,16 +5270,16 @@ defmodule Nx do
   """
   @doc type: :element
   def real(tensor) do
-    tensor = to_tensor(tensor)
+    case to_tensor(tensor) do
+      %{type: {:c, size}} = tensor ->
+        impl!(tensor).real(%{tensor | type: {:f, div(size, 2)}}, tensor)
 
-    type =
-      case tensor.type do
-        {:f, _} = type -> type
-        {:c, size} -> {:f, div(size, 2)}
-        _ -> {:f, 32}
-      end
+      %{type: {:f, _}} = tensor ->
+        tensor
 
-    impl!(tensor).real(%{tensor | type: type}, tensor)
+      tensor ->
+        as_type(tensor, {:f, 32})
+    end
   end
 
   @doc """
@@ -5308,16 +5308,15 @@ defmodule Nx do
   """
   @doc type: :element
   def imag(tensor) do
-    tensor = to_tensor(tensor)
+    case to_tensor(tensor) do
+      %{type: {:c, size}} = tensor ->
+        impl!(tensor).imag(%{tensor | type: {:f, div(size, 2)}}, tensor)
 
-    type =
-      case tensor.type do
-        {:f, _} = type -> type
-        {:c, size} -> {:f, div(size, 2)}
-        _ -> {:f, 32}
-      end
-
-    impl!(tensor).imag(%{tensor | type: type}, tensor)
+      tensor ->
+        floating = Nx.Type.to_floating(tensor.type)
+        zero = Nx.tensor(0.0, type: floating)
+        broadcast(zero, tensor)
+    end
   end
 
   @doc """
