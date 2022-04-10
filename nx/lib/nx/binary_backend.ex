@@ -832,11 +832,12 @@ defmodule Nx.BinaryBackend do
   @impl true
   def real(out, %{type: {:c, s}} = tensor) do
     data = to_binary(tensor)
+    component_size = div(s, 2)
 
     result =
-      match_types [{:f, div(s, 2)}] do
-        for <<match!(real, 0), match!(_, 0) <- data>>, into: <<>>, do: real
-      end
+      for <<real::bitstring-size(component_size), _::bitstring-size(component_size) <- data>>,
+        into: <<>>,
+        do: real
 
     from_binary(out, result)
   end
@@ -844,11 +845,12 @@ defmodule Nx.BinaryBackend do
   @impl true
   def imag(out, %{type: {:c, s}} = tensor) do
     data = to_binary(tensor)
+    component_size = div(s, 2)
 
     result =
-      match_types [{:f, div(s, 2)}] do
-        for <<match!(_, 0), match!(imag, 0) <- data>>, into: <<>>, do: imag
-      end
+      for <<_::bitstring-size(component_size), imag::bitstring-size(component_size) <- data>>,
+        into: <<>>,
+        do: imag
 
     from_binary(out, result)
   end
