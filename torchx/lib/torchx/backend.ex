@@ -758,27 +758,13 @@ defmodule Torchx.Backend do
     raise ArithmeticError, "Torchx does not support complex values for expm1"
   end
 
-  def expm1(out, tensor) do
-    tensor
-    |> from_nx()
-    |> Torchx.expm1()
-    |> to_nx(out)
-  end
-
   @impl true
   def log1p(%{type: {:c, _}}, _t) do
     raise ArithmeticError, "Torchx does not support complex values for log1p"
   end
 
-  def log1p(out, tensor) do
-    tensor
-    |> from_nx()
-    |> Torchx.log1p()
-    |> to_nx(out)
-  end
-
   unary_ops =
-    [:exp, :log, :logistic, :cos, :sin, :tan, :cosh, :sinh] ++
+    [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tan, :cosh, :sinh] ++
       [:tanh, :acos, :asin, :atan, :acosh, :asinh, :atanh, :sqrt, :rsqrt] ++
       [:erf, :erfc, :erf_inv, :abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign] ++
       [:logical_not, :cbrt]
@@ -788,6 +774,51 @@ defmodule Torchx.Backend do
     def unquote(op)(out, tensor) do
       Torchx.unquote(op)(from_nx(tensor)) |> to_nx(out)
     end
+  end
+
+  @impl true
+  def conjugate(out, tensor) do
+    tensor
+    |> from_nx()
+    |> Torchx.conjugate()
+    |> Torchx.to_type(to_torch_type(out.type))
+    |> to_nx(out)
+  end
+
+  @impl true
+  def real(out, tensor) do
+    get_complex_component(out, tensor, :real)
+  end
+
+  @impl true
+  def imag(out, tensor) do
+    get_complex_component(out, tensor, :imag)
+  end
+
+  defp get_complex_component(out, tensor, component) when component in [:real, :imag] do
+    as_real =
+      tensor
+      |> from_nx()
+      |> Torchx.view_as_real()
+
+    as_real_shape = Torchx.shape(as_real)
+
+    starts =
+      if component == :real do
+        List.duplicate(0, tuple_size(as_real_shape))
+      else
+        0
+        |> List.duplicate(tuple_size(as_real_shape))
+        |> List.replace_at(-1, 1)
+      end
+
+    lengths = as_real_shape |> Tuple.to_list() |> List.replace_at(-1, 1)
+    strides = List.duplicate(1, tuple_size(as_real_shape))
+
+    as_real
+    |> torchx_slice(as_real_shape, tensor.shape, starts, lengths, strides)
+    |> Torchx.reshape(tensor.shape)
+    |> to_nx(out)
   end
 
   @impl true

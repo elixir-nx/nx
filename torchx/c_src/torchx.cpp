@@ -692,6 +692,19 @@ UNARY_OP(erf)
 UNARY_OP(erfc)
 UNARY_OP2(erf_inv, erfinv)
 
+NIF(view_as_real)
+{
+  TENSOR_PARAM(0, tensor);
+  TENSOR(torch::view_as_real(*tensor));
+}
+
+NIF(conjugate)
+{
+  TENSOR_PARAM(0, tensor);
+  at::Tensor conjugated = tensor->conj();
+  TENSOR(conjugated.clone(conjugated.suggest_memory_format()));
+}
+
 NIF(triangular_solve)
 {
   TENSOR_PARAM(0, a);
@@ -1118,6 +1131,8 @@ static ErlNifFunc nif_functions[] = {
     DF(asin, 1),
     DF(sinh, 1),
     DF(asinh, 1),
+    DF(view_as_real, 1),
+    DF(conjugate, 1),
     DF(cos, 1),
     DF(acos, 1),
     DF(cosh, 1),
