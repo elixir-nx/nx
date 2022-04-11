@@ -198,7 +198,8 @@ defmodule Nx.Type do
   @doc """
   Converts the given type to a float with the minimum size
   necessary.
-  ### Examples
+
+  ## Examples
 
       iex> Nx.Type.to_float({:s, 8})
       {:f, 32}
