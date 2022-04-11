@@ -791,13 +791,13 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-    def conjugate(out, tensor) do
-      tensor
-      |> from_nx()
-      |> Torchx.conjugate()
-      |> Torchx.to_type(to_torch_type(out.type))
-      |> to_nx(out)
-    end
+  def conjugate(out, tensor) do
+    tensor
+    |> from_nx()
+    |> Torchx.conjugate()
+    |> Torchx.to_type(to_torch_type(out.type))
+    |> to_nx(out)
+  end
 
   @impl true
   def real(out, tensor) do
