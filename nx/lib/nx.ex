@@ -5269,10 +5269,13 @@ defmodule Nx do
   """
   def phase(tensor) do
     tensor = to_tensor(tensor)
+    output = %{tensor | type: Nx.Type.to_float(tensor.type)}
 
-    tensor
-    |> imag
-    |> atan2(real(tensor))
+    Nx.Shared.optional(:phase, [tensor], output, fn tensor ->
+      tensor
+      |> imag
+      |> atan2(real(tensor))
+    end)
   end
 
   @doc """

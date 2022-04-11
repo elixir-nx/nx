@@ -196,6 +196,29 @@ defmodule Nx.Type do
   def to_complex(_type), do: {:c, 64}
 
   @doc """
+  Converts the given type to a float with the minimum size
+  necessary.
+  ## Examples
+      iex> Nx.Type.to_float({:s, 8})
+      {:f, 32}
+      iex> Nx.Type.to_float({:s, 64})
+      {:f, 32}
+      iex> Nx.Type.to_float({:bf, 16})
+      {:f, 32}
+      iex> Nx.Type.to_float({:c, 64})
+      {:f, 32}
+      iex> Nx.Type.to_float({:c, 128})
+      {:f, 64}
+      iex> Nx.Type.to_float({:f, 32})
+      {:f, 32}
+      iex> Nx.Type.to_float({:f, 64})
+      {:f, 64}
+  """
+  def to_float({:f, size}), do: {:f, size}
+  def to_float({:c, 128}), do: {:f, 64}
+  def to_float(_type), do: {:f, 32}
+
+  @doc """
   Converts the given type to an aggregation precision.
 
   ## Examples
