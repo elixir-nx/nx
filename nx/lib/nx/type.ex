@@ -198,7 +198,8 @@ defmodule Nx.Type do
   @doc """
   Converts the given type to a float with the minimum size
   necessary.
-  ## Examples
+  ### Examples
+
       iex> Nx.Type.to_float({:s, 8})
       {:f, 32}
       iex> Nx.Type.to_float({:s, 64})
@@ -215,7 +216,7 @@ defmodule Nx.Type do
       {:f, 64}
   """
   def to_float({:f, size}), do: {:f, size}
-  def to_float({:c, 128}), do: {:f, 64}
+  def to_float({:c, s}), do: {:f, div(s, 2)}
   def to_float(_type), do: {:f, 32}
 
   @doc """
