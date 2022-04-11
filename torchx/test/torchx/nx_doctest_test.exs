@@ -16,8 +16,9 @@ defmodule Torchx.NxDoctestTest do
   @temporarily_broken_doctests [
     # broadcast - shape mismatch in one test
     broadcast: 3,
-    # conjugate, real, imag - Torchx does not support complex numbers
+    # conjugate, phase, real, imag - Torchx does not support complex numbers
     conjugate: 1,
+    phase: 1,
     real: 1,
     imag: 1,
     # dot - Batching not supported
