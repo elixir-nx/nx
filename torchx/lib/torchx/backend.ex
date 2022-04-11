@@ -758,27 +758,13 @@ defmodule Torchx.Backend do
     raise ArithmeticError, "Torchx does not support complex values for expm1"
   end
 
-  def expm1(out, tensor) do
-    tensor
-    |> from_nx()
-    |> Torchx.expm1()
-    |> to_nx(out)
-  end
-
   @impl true
   def log1p(%{type: {:c, _}}, _t) do
     raise ArithmeticError, "Torchx does not support complex values for log1p"
   end
 
-  def log1p(out, tensor) do
-    tensor
-    |> from_nx()
-    |> Torchx.log1p()
-    |> to_nx(out)
-  end
-
   unary_ops =
-    [:exp, :log, :logistic, :cos, :sin, :tan, :cosh, :sinh] ++
+    [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tan, :cosh, :sinh] ++
       [:tanh, :acos, :asin, :atan, :acosh, :asinh, :atanh, :sqrt, :rsqrt] ++
       [:erf, :erfc, :erf_inv, :abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign] ++
       [:logical_not, :cbrt]
