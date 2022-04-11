@@ -791,6 +791,51 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+    def conjugate(out, tensor) do
+      tensor
+      |> from_nx()
+      |> Torchx.conjugate()
+      |> Torchx.to_type(to_torch_type(out.type))
+      |> to_nx(out)
+    end
+
+  @impl true
+  def real(out, tensor) do
+    get_complex_component(out, tensor, :real)
+  end
+
+  @impl true
+  def imag(out, tensor) do
+    get_complex_component(out, tensor, :imag)
+  end
+
+  defp get_complex_component(out, tensor, component) when component in [:real, :imag] do
+    as_real =
+      tensor
+      |> from_nx()
+      |> Torchx.view_as_real()
+
+    as_real_shape = Torchx.shape(as_real)
+
+    starts =
+      if component == :real do
+        List.duplicate(0, tuple_size(as_real_shape))
+      else
+        0
+        |> List.duplicate(tuple_size(as_real_shape))
+        |> List.replace_at(-1, 1)
+      end
+
+    lengths = as_real_shape |> Tuple.to_list() |> List.replace_at(-1, 1)
+    strides = List.duplicate(1, tuple_size(as_real_shape))
+
+    as_real
+    |> torchx_slice(as_real_shape, tensor.shape, starts, lengths, strides)
+    |> Torchx.reshape(tensor.shape)
+    |> to_nx(out)
+  end
+
+  @impl true
   def dot(
         %T{type: out_type} = out,
         %T{type: left_type, data: %TB{ref: left_ref}},

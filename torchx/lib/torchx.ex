@@ -220,6 +220,8 @@ defmodule Torchx do
   deftensor log(tensor)
   deftensor log1p(tensor)
   deftensor logistic(tensor)
+  deftensor view_as_real(tensor)
+  deftensor conjugate(tensor)
   deftensor cos(tensor)
   deftensor sin(tensor)
   deftensor tan(tensor)
