@@ -362,7 +362,7 @@ defmodule Nx.LinAlgTest do
 
   describe "lu" do
     test "property" do
-      for _ <- 1..10 do
+      for _ <- 1..10, type <- [{:f, 32}, {:c, 64}] do
         # Generate random L and U matrices so we can construct
         # a factorizable A matrix:
         shape = {4, 4}
@@ -371,10 +371,10 @@ defmodule Nx.LinAlgTest do
 
         l_prime =
           shape
-          |> Nx.random_uniform()
+          |> Nx.random_uniform(type: type)
           |> Nx.multiply(lower_selector)
 
-        u_prime = shape |> Nx.random_uniform() |> Nx.multiply(upper_selector)
+        u_prime = shape |> Nx.random_uniform(type: type) |> Nx.multiply(upper_selector)
 
         a = Nx.dot(l_prime, u_prime)
 

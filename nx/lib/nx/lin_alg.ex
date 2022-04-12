@@ -991,8 +991,6 @@ defmodule Nx.LinAlg do
     opts = keyword!(opts, eps: @default_eps)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
-    Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.lu", 2)
-
     output_type = Nx.Type.to_floating(type)
     {p_shape, l_shape, u_shape} = Nx.Shape.lu(shape)
     names = [nil, nil]

@@ -7,6 +7,7 @@ defmodule Nx.BinaryBackend do
   The backend itself (and its data) is private and must
   not be accessed directly.
   """
+  use Complex.Kernel
 
   @behaviour Nx.Backend
 
@@ -2254,6 +2255,11 @@ defmodule Nx.BinaryBackend do
 
   defp scalar_to_number(n) when is_number(n), do: n
   defp scalar_to_number(t), do: binary_to_number(to_binary(t), t.type)
+
+  defp scalar_to_binary(%Complex{re: re, im: im}, type) do
+    real_type = Nx.Type.to_real(type)
+    number_to_binary(re, real_type) <> number_to_binary(im, real_type)
+  end
 
   defp scalar_to_binary(value, type) when is_number(value),
     do: number_to_binary(value, type)
