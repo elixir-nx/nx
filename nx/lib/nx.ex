@@ -5249,7 +5249,7 @@ defmodule Nx do
   Calculates the complex phase angle of each element in the tensor.
   $phase(z) = atan2(b, a), z = a + bi \\in \\Complex$
 
-  ### Examples
+  ## Examples
 
        iex> Nx.phase(Complex.new(1, 2))
        #Nx.Tensor<
