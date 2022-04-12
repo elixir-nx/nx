@@ -281,8 +281,8 @@ defmodule Torchx.NxLinAlgTest do
 
   describe "lu" do
     test "property" do
-      for _ <- 1..20 do
-        a = Nx.random_uniform({3, 3})
+      for _ <- 1..20, type <- [{:f, 32}, {:c, 64}] do
+        a = Nx.random_uniform({3, 3}, type: type)
         {p, l, u} = Nx.LinAlg.lu(a)
 
         a_reconstructed = p |> Nx.dot(l) |> Nx.dot(u)
