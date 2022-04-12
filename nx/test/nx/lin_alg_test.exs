@@ -371,10 +371,10 @@ defmodule Nx.LinAlgTest do
 
         l_prime =
           shape
-          |> Nx.random_uniform()
+          |> Nx.random_uniform(type: {:c, 64})
           |> Nx.multiply(lower_selector)
 
-        u_prime = shape |> Nx.random_uniform() |> Nx.multiply(upper_selector)
+        u_prime = shape |> Nx.random_uniform(type: {:c, 64}) |> Nx.multiply(upper_selector)
 
         a = Nx.dot(l_prime, u_prime)
 

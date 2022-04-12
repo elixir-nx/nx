@@ -541,6 +541,7 @@ defmodule Nx.BinaryBackend do
 
     bin_zip_reduce(left, left_contract_axes, right, right_contract_axes, type, 0, fn
       lhs, rhs, acc ->
+        use Complex.Kernel
         res = binary_to_number(lhs, t1) * binary_to_number(rhs, t2) + acc
         {res, res}
     end)
@@ -2254,6 +2255,11 @@ defmodule Nx.BinaryBackend do
 
   defp scalar_to_number(n) when is_number(n), do: n
   defp scalar_to_number(t), do: binary_to_number(to_binary(t), t.type)
+
+  defp scalar_to_binary(%Complex{re: re, im: im}, type) do
+    real_type = Nx.Type.to_real(type)
+    number_to_binary(re, real_type) <> number_to_binary(im, real_type)
+  end
 
   defp scalar_to_binary(value, type) when is_number(value),
     do: number_to_binary(value, type)

@@ -1,5 +1,9 @@
 defmodule Nx.BinaryBackend.Matrix do
   @moduledoc false
+  use Complex.Kernel
+  import Kernel, except: [abs: 1]
+  import Complex, only: [abs: 1]
+
   import Nx.Shared
 
   def ts(a_data, a_type, a_shape, b_data, b_type, b_shape, output_type, input_opts) do
