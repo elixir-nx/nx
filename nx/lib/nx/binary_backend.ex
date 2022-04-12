@@ -7,6 +7,7 @@ defmodule Nx.BinaryBackend do
   The backend itself (and its data) is private and must
   not be accessed directly.
   """
+  use Complex.Kernel
 
   @behaviour Nx.Backend
 
@@ -541,7 +542,6 @@ defmodule Nx.BinaryBackend do
 
     bin_zip_reduce(left, left_contract_axes, right, right_contract_axes, type, 0, fn
       lhs, rhs, acc ->
-        use Complex.Kernel
         res = binary_to_number(lhs, t1) * binary_to_number(rhs, t2) + acc
         {res, res}
     end)
