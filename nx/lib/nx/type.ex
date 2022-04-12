@@ -196,29 +196,30 @@ defmodule Nx.Type do
   def to_complex(_type), do: {:c, 64}
 
   @doc """
-  Converts the given type to a float with the minimum size
-  necessary.
+  Converts the given type to a real number representation
+  with the minimum size necessary.
 
   ## Examples
 
-      iex> Nx.Type.to_float({:s, 8})
+      iex> Nx.Type.to_real({:s, 8})
       {:f, 32}
-      iex> Nx.Type.to_float({:s, 64})
+      iex> Nx.Type.to_real({:s, 64})
       {:f, 32}
-      iex> Nx.Type.to_float({:bf, 16})
+      iex> Nx.Type.to_real({:bf, 16})
+      {:bf, 16}
+      iex> Nx.Type.to_real({:c, 64})
       {:f, 32}
-      iex> Nx.Type.to_float({:c, 64})
-      {:f, 32}
-      iex> Nx.Type.to_float({:c, 128})
+      iex> Nx.Type.to_real({:c, 128})
       {:f, 64}
-      iex> Nx.Type.to_float({:f, 32})
+      iex> Nx.Type.to_real({:f, 32})
       {:f, 32}
-      iex> Nx.Type.to_float({:f, 64})
+      iex> Nx.Type.to_real({:f, 64})
       {:f, 64}
   """
-  def to_float({:f, size}), do: {:f, size}
-  def to_float({:c, s}), do: {:f, div(s, 2)}
-  def to_float(_type), do: {:f, 32}
+  def to_real({:f, size}), do: {:f, size}
+  def to_real({:c, s}), do: {:f, div(s, 2)}
+  def to_real({:bf, size}), do: {:bf, size}
+  def to_real(_type), do: {:f, 32}
 
   @doc """
   Converts the given type to an aggregation precision.

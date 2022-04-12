@@ -5272,7 +5272,7 @@ defmodule Nx do
   """
   def phase(tensor) do
     tensor = to_tensor(tensor)
-    output = %{tensor | type: Nx.Type.to_float(tensor.type)}
+    output = %{tensor | type: Nx.Type.to_real(tensor.type)}
 
     Nx.Shared.optional(:phase, [tensor], output, fn tensor ->
       tensor
