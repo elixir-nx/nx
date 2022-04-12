@@ -95,6 +95,10 @@ defmodule Nx.ComplexTest do
       assert Nx.conjugate(@arg) == Nx.tensor(Complex.new(2, -3))
     end
 
+    test "phase" do
+      assert_all_close(Nx.phase(@arg), Complex.phase(@arg))
+    end
+
     for fun <- [:erf, :erfc, :erf_inv, :round, :floor, :ceil] do
       test "#{fun}" do
         assert_raise ArgumentError, "Nx.#{unquote(fun)}/1 does not support complex inputs", fn ->

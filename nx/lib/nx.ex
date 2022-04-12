@@ -5246,6 +5246,42 @@ defmodule Nx do
   end
 
   @doc """
+  Calculates the complex phase angle of each element in the tensor.
+  $phase(z) = atan2(b, a), z = a + bi \\in \\Complex$
+
+  ## Examples
+
+       iex> Nx.phase(Complex.new(1, 2))
+       #Nx.Tensor<
+         f32
+         1.1071487665176392
+       >
+
+       iex> Nx.phase(1)
+       #Nx.Tensor<
+         f32
+         0.0
+       >
+
+       iex> import Nx, only: [sigil_V: 2]
+       iex> Nx.phase(~V[1+2i -2+1i])
+       #Nx.Tensor<
+         f32[2]
+         [1.1071487665176392, 2.677945137023926]
+       >
+  """
+  def phase(tensor) do
+    tensor = to_tensor(tensor)
+    output = %{tensor | type: Nx.Type.to_real(tensor.type)}
+
+    Nx.Shared.optional(:phase, [tensor], output, fn tensor ->
+      tensor
+      |> imag
+      |> atan2(real(tensor))
+    end)
+  end
+
+  @doc """
   Returns the real component of each entry in a complex tensor
   as a floating point tensor.
 
@@ -8657,6 +8693,7 @@ defmodule Nx do
           [4, 3, 4]
         ]
       >
+
 
       iex> t = Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
       iex> Nx.take(t, Nx.tensor([1, 0, 1]), axis: :y)
