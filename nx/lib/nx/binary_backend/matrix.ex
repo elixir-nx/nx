@@ -537,31 +537,8 @@ defmodule Nx.BinaryBackend.Matrix do
     Enum.chunk_every(flat_list, target_k)
   end
 
-  defp householder_reflector([a_0 | tail] = a, target_k, eps) do
-    # This is a trick so we can both calculate the norm of a_reverse and extract the
-    # head a the same time we reverse the array
-    # receives a_reverse as a list of numbers and returns the reflector as a
-    # k x k matrix
-
-    norm_a_squared = Enum.reduce(a, 0, fn x, acc -> x * x + acc end)
-    norm_a_sq_1on = norm_a_squared - a_0 * a_0
-
-    {v, scale} =
-      if norm_a_sq_1on < eps do
-        {[1 | tail], 0}
-      else
-        v_0 =
-          if a_0 <= 0 do
-            a_0 - :math.sqrt(norm_a_squared)
-          else
-            -norm_a_sq_1on / (a_0 + :math.sqrt(norm_a_squared))
-          end
-
-        v_0_sq = v_0 * v_0
-        scale = 2 * v_0_sq / (norm_a_sq_1on + v_0_sq)
-        v = [1 | Enum.map(tail, &(&1 / v_0))]
-        {v, scale}
-      end
+  defp householder_reflector(a, target_k, eps) do
+    {v, scale, is_complex} = householder_reflector_pivot(a, eps)
 
     prefix_threshold = target_k - length(v)
     v = List.duplicate(0, prefix_threshold) ++ v
@@ -573,6 +550,8 @@ defmodule Nx.BinaryBackend.Matrix do
     {_, _, reflector_reversed} =
       for col_factor <- v, row_factor <- v, reduce: {0, 0, []} do
         {row, col, acc} ->
+          row_factor = if is_complex, do: Complex.conjugate(row_factor), else: row_factor
+
           # The current element in outer(v, v) is given by col_factor * row_factor
           # and the current I element is 1 when row == col
           identity_element = if row == col, do: 1, else: 0
@@ -608,6 +587,51 @@ defmodule Nx.BinaryBackend.Matrix do
       end
 
     reflector
+  end
+
+  defp householder_reflector_pivot([a_0 | tail] = a, eps) when is_number(a_0) do
+    # This is a trick so we can both calculate the norm of a_reverse and extract the
+    # head a the same time we reverse the array
+    # receives a_reverse as a list of numbers and returns the reflector as a
+    # k x k matrix
+
+    norm_a_squared = Enum.reduce(a, 0, fn x, acc -> x * x + acc end)
+    norm_a_sq_1on = norm_a_squared - a_0 * a_0
+
+    if norm_a_sq_1on < eps do
+      {[1 | tail], 0, false}
+    else
+      v_0 =
+        if a_0 <= 0 do
+          a_0 - :math.sqrt(norm_a_squared)
+        else
+          -norm_a_sq_1on / (a_0 + :math.sqrt(norm_a_squared))
+        end
+
+      v_0_sq = v_0 * v_0
+      scale = 2 * v_0_sq / (norm_a_sq_1on + v_0_sq)
+      v = [1 | Enum.map(tail, &(&1 / v_0))]
+      {v, scale, false}
+    end
+  end
+
+  defp householder_reflector_pivot([a_0 | tail], _eps) do
+    # complex case
+    norm_a_sq_1on = Enum.reduce(tail, 0, &(Complex.abs_squared(&1) + &2))
+    norm_a_sq = norm_a_sq_1on + Complex.abs_squared(a_0)
+    norm_a = :math.sqrt(norm_a_sq)
+
+    phase_a_0 = Complex.phase(a_0)
+    alfa = -1 * Complex.exp(Complex.new(0, phase_a_0)) * norm_a
+
+    # u = x - alfa * e1
+    u_0 = a_0 - alfa
+    u = [u_0 | tail]
+    norm_u_sq = norm_a_sq_1on + Complex.abs_squared(u_0)
+    norm_u = :math.sqrt(norm_u_sq)
+
+    v = Enum.map(u, &(&1 / norm_u))
+    {v, 2, true}
   end
 
   defp householder_bidiagonalization(tensor, {m, n}, eps) do

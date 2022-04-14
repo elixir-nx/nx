@@ -260,9 +260,9 @@ defmodule Torchx.NxLinAlgTest do
 
   describe "qr" do
     test "property" do
-      for _ <- 1..10 do
-        square = Nx.random_uniform({4, 4})
-        tall = Nx.random_uniform({4, 3})
+      for _ <- 1..10, type <- [{:f, 32}, {:c, 64}] do
+        square = Nx.random_uniform({4, 4}, type: type)
+        tall = Nx.random_uniform({4, 3}, type: type)
 
         assert {q, r} = Nx.LinAlg.qr(square)
         assert_all_close(Nx.dot(q, r), square, atol: 1.0e-6)

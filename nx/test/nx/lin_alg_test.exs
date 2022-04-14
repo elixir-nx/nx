@@ -2,6 +2,8 @@ defmodule Nx.LinAlgTest do
   use ExUnit.Case, async: true
 
   import Nx.Helpers
+  import Nx, only: :sigils
+
   doctest Nx.LinAlg
 
   describe "triangular_solve" do
@@ -159,10 +161,34 @@ defmodule Nx.LinAlgTest do
       assert_all_close(Nx.dot(q, r), t, atol: 1.0e-10)
     end
 
+    test "works with complex matrix" do
+      t = ~M[
+        1 0 1i
+        0 2 -1i
+        1 1 1
+      ]
+
+      {q, r} = Nx.LinAlg.qr(t)
+
+      assert_all_close(q, ~M[
+        -0.7070 0.2357  0.6666
+         0      -0.9428   0.3333
+        -0.7070 -0.2357  -0.6666
+      ])
+
+      assert_all_close(r, ~M[
+        -1.4142 -0.7071 -0.7071-0.7071i
+        0      -2.1213  -0.2357+1.1785i
+        0      0      -0.6666+0.3333i
+      ])
+
+      assert_all_close(Nx.dot(q, r), t)
+    end
+
     test "property" do
-      for _ <- 1..10 do
-        square = Nx.random_uniform({4, 4})
-        tall = Nx.random_uniform({4, 3})
+      for _ <- 1..10, type <- [{:f, 32}, {:c, 64}] do
+        square = Nx.random_uniform({4, 4}, type: type)
+        tall = Nx.random_uniform({4, 3}, type: type)
 
         assert {q, r} = Nx.LinAlg.qr(square)
         assert_all_close(Nx.dot(q, r), square, atol: 1.0e-6)

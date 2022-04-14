@@ -726,8 +726,6 @@ defmodule Nx.LinAlg do
     mode = opts[:mode]
     valid_modes = [:reduced, :complete]
 
-    Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.qr", 2)
-
     unless mode in valid_modes do
       raise ArgumentError,
             "invalid :mode received. Expected one of #{valid_modes}, received: #{mode}"
