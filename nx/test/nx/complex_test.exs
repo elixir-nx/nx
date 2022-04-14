@@ -231,14 +231,12 @@ defmodule Nx.ComplexTest do
                    end
     end
 
-    test "triangular_solve" do
-      t = Nx.broadcast(Nx.tensor(1, type: {:c, 64}), {3, 3})
+    test "triangular_solve fails with singular complex matrix" do
+      t = Nx.broadcast(Nx.tensor(0, type: {:c, 64}), {3, 3})
 
-      assert_raise ArgumentError,
-                   "Nx.LinAlg.triangular_solve/3 is not yet implemented for complex inputs",
-                   fn ->
-                     Nx.LinAlg.triangular_solve(t, t)
-                   end
+      assert_raise ArgumentError, "can't solve for singular matrix", fn ->
+        Nx.LinAlg.triangular_solve(t, t)
+      end
     end
 
     test "solve" do

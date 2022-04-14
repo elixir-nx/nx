@@ -396,6 +396,18 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> a = Nx.tensor([
+      ...> [1, 0, 0],
+      ...> [1, Complex.new(0, 1), 0],
+      ...> [Complex.new(0, 1), 1, 1]
+      ...>])
+      iex> b = Nx.tensor([1, -1, Complex.new(3, 3)])
+      iex> Nx.LinAlg.triangular_solve(a, b)
+      #Nx.Tensor<
+        c64[3]
+        [1.0+0.0i, 0.0+2.0i, 3.0+0.0i]
+      >
+
   ### Error cases
 
       iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]))
@@ -421,8 +433,6 @@ defmodule Nx.LinAlg do
     output_type = binary_type(a, b) |> Nx.Type.to_floating()
     %T{shape: a_shape = {m, _}} = a = Nx.to_tensor(a)
     %T{shape: b_shape} = b = Nx.to_tensor(b)
-
-    Nx.Shared.raise_complex_not_implemented_yet(output_type, "LinAlg.triangular_solve", 3)
 
     case opts[:transform_a] do
       t when t in [:none, :transpose] ->
