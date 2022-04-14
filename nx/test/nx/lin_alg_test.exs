@@ -37,6 +37,43 @@ defmodule Nx.LinAlgTest do
       assert Nx.LinAlg.solve(a, Nx.tensor([0, 2, 1], names: [:z])) |> Nx.round() ==
                Nx.tensor([1.0, 1.0, -1.0])
     end
+
+    test "works with complex tensors" do
+      a = ~M[
+        1 0 i
+       -1i 0 1i
+        1 1 1
+      ]
+
+      b = ~V[3+i 4 2-2i]
+
+      result = ~V[i 2 -3i]
+
+      assert_all_close(Nx.LinAlg.solve(a, b), result)
+    end
+  end
+
+  describe "invert" do
+    test "works with complex tensors" do
+      a = ~M[
+        1 0 i
+        0 -1i 0
+        0 0 2
+      ]
+
+      expected_result = ~M[
+        1 0 -0.5i
+        0 1i 0
+        0 0 0.5
+      ]
+
+      result = Nx.LinAlg.invert(a)
+
+      assert_all_close(result, expected_result)
+
+      assert_all_close(Nx.dot(a, result), Nx.eye(a))
+      assert_all_close(Nx.dot(result, a), Nx.eye(a))
+    end
   end
 
   describe "determinant/1" do

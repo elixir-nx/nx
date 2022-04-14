@@ -201,16 +201,6 @@ defmodule Nx.ComplexTest do
       end
     end
 
-    test "invert" do
-      t = Nx.broadcast(Nx.tensor(1, type: {:c, 64}), {3, 3})
-
-      assert_raise ArgumentError,
-                   "Nx.LinAlg.invert/1 is not yet implemented for complex inputs",
-                   fn ->
-                     Nx.LinAlg.invert(t)
-                   end
-    end
-
     test "determinant" do
       t = Nx.broadcast(Nx.tensor(1, type: {:c, 64}), {3, 3})
 
@@ -237,16 +227,6 @@ defmodule Nx.ComplexTest do
       assert_raise ArgumentError, "can't solve for singular matrix", fn ->
         Nx.LinAlg.triangular_solve(t, t)
       end
-    end
-
-    test "solve" do
-      t = Nx.broadcast(Nx.tensor(1, type: {:c, 64}), {3, 3})
-
-      assert_raise ArgumentError,
-                   "Nx.LinAlg.solve/2 is not yet implemented for complex inputs",
-                   fn ->
-                     Nx.LinAlg.solve(t, t)
-                   end
     end
 
     test "matrix_power" do
