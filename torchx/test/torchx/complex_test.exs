@@ -5,6 +5,8 @@ defmodule Torchx.ComplexTest do
   """
   use Torchx.Case, async: true
 
+  import Nx, only: :sigils
+
   @arg Complex.new(2, 3)
   @arg2 Complex.new(-2, 7)
 
@@ -213,13 +215,24 @@ defmodule Torchx.ComplexTest do
     end
 
     test "invert" do
-      t = Nx.broadcast(Nx.tensor(1, type: {:c, 64}), {3, 3})
+      a = ~M[
+        1 0 i
+        0 -1i 0
+        0 0 2
+      ]
 
-      assert_raise ArgumentError,
-                   "Nx.LinAlg.invert/1 is not yet implemented for complex inputs",
-                   fn ->
-                     Nx.LinAlg.invert(t)
-                   end
+      expected_result = ~M[
+        1 0 -0.5i
+        0 1i 0
+        0 0 0.5
+      ]
+
+      result = Nx.LinAlg.invert(a)
+
+      assert_all_close(result, expected_result)
+
+      assert_all_close(Nx.dot(a, result), Nx.eye(a))
+      assert_all_close(Nx.dot(result, a), Nx.eye(a))
     end
 
     test "determinant" do
@@ -243,13 +256,17 @@ defmodule Torchx.ComplexTest do
     end
 
     test "solve" do
-      t = Nx.broadcast(Nx.tensor(1, type: {:c, 64}), {3, 3})
+      a = ~M[
+        1 0 i
+       -1i 0 1i
+        1 1 1
+      ]
 
-      assert_raise ArgumentError,
-                   "Nx.LinAlg.solve/2 is not yet implemented for complex inputs",
-                   fn ->
-                     Nx.LinAlg.solve(t, t)
-                   end
+      b = ~V[3+i 4 2-2i]
+
+      result = ~V[i 2 -3i]
+
+      assert_all_close(Nx.LinAlg.solve(a, b), result)
     end
 
     test "matrix_power" do
