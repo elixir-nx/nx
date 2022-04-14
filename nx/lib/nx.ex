@@ -10034,7 +10034,7 @@ defmodule Nx do
   """
   @doc type: :creation
   defmacro sigil_M({:<<>>, _meta, [string]}, modifiers) do
-    {numbers, type} = binary_to_numbers(string)
+    {numbers, type} = string |> String.trim() |> binary_to_numbers()
     numbers_to_tensor(numbers, type, modifiers)
   end
 
@@ -10075,7 +10075,10 @@ defmodule Nx do
   """
   @doc type: :creation
   defmacro sigil_V({:<<>>, _meta, [string]}, modifiers) do
-    case binary_to_numbers(string) do
+    string
+    |> String.trim()
+    |> binary_to_numbers()
+    |> case do
       {[numbers], type} ->
         numbers_to_tensor(numbers, type, modifiers)
 
