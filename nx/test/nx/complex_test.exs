@@ -201,16 +201,6 @@ defmodule Nx.ComplexTest do
       end
     end
 
-    test "determinant" do
-      t = Nx.broadcast(Nx.tensor(1, type: {:c, 64}), {3, 3})
-
-      assert_raise ArgumentError,
-                   "Nx.LinAlg.determinant/1 is not yet implemented for complex inputs",
-                   fn ->
-                     Nx.LinAlg.determinant(t)
-                   end
-    end
-
     test "cholesky" do
       t = Nx.broadcast(Nx.tensor(1, type: {:c, 64}), {3, 3})
 

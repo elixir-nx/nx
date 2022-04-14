@@ -235,16 +235,6 @@ defmodule Torchx.ComplexTest do
       assert_all_close(Nx.dot(result, a), Nx.eye(a))
     end
 
-    test "determinant" do
-      t = Nx.broadcast(Nx.tensor(1, type: {:c, 64}), {3, 3})
-
-      assert_raise ArgumentError,
-                   "Nx.LinAlg.determinant/1 is not yet implemented for complex inputs",
-                   fn ->
-                     Nx.LinAlg.determinant(t)
-                   end
-    end
-
     test "cholesky" do
       t = Nx.broadcast(Nx.tensor(1, type: {:c, 64}), {3, 3})
 

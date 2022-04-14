@@ -1188,14 +1188,27 @@ defmodule Nx.LinAlg do
         48.0
       >
 
+  Also supports complex inputs:
+
+      iex> t = Nx.tensor([[1, 0, 0], [0, Complex.new(0, 2), 0], [0, 0, 3]])
+      iex> Nx.LinAlg.determinant(t)
+      #Nx.Tensor<
+        c64
+        0.0+6.0i
+      >
+
+      iex> t = Nx.tensor([[0, 0, 0, 1], [0, Complex.new(0, 2), 0, 0], [0, 0, 3, 0], [1, 0, 0, 0]])
+      iex> Nx.LinAlg.determinant(t)
+      #Nx.Tensor<
+        c64
+        -0.0-6.0i
+      >
+
   """
   defn determinant(tensor) do
     Nx.Defn.Kernel.assert_shape_pattern(tensor, {n, n})
 
     transform(tensor, fn tensor ->
-      type = Nx.type(tensor)
-      Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.determinant", 1)
-
       output = Nx.template({}, Nx.Type.to_floating(tensor.type))
 
       Nx.Shared.optional(:determinant, [tensor], output, fn tensor ->
@@ -1245,7 +1258,7 @@ defmodule Nx.LinAlg do
 
     diag = Nx.take_diagonal(l) * Nx.take_diagonal(u)
     is_zero = Nx.any(diag == 0)
-    transitions = Nx.dot(p, Nx.iota({n}))
+    transitions = p |> Nx.real() |> Nx.dot(Nx.iota({n}))
 
     upper_tri_mask = Nx.iota(nxn, axis: 0) |> Nx.less(Nx.iota(nxn, axis: 1))
 
