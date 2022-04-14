@@ -531,10 +531,8 @@ defmodule Nx.LinAlg do
     %T{shape: b_shape, type: b_type} = b = Nx.to_tensor(b)
 
     output_shape = Nx.Shape.solve(a_shape, b_shape)
-    output_type = a_type |> Nx.Type.merge(b_type) |> Nx.Type.to_floating()
+    {output_kind, _} = output_type = a_type |> Nx.Type.merge(b_type) |> Nx.Type.to_floating()
     output = Nx.template(output_shape, output_type)
-
-    Nx.Shared.raise_complex_not_implemented_yet(output_type, "LinAlg.solve", 2)
 
     Nx.Shared.optional(:solve, [a, b], output, fn a, b ->
       # We need to achieve an LQ decomposition for `a` (henceforth called A)
@@ -550,7 +548,12 @@ defmodule Nx.LinAlg do
       {qt, r_prime} = a |> Nx.transpose() |> qr()
       l = Nx.transpose(r_prime)
       y = triangular_solve(l, b)
-      Nx.dot(qt, y)
+
+      if output_kind == :c do
+        qt |> Nx.conjugate() |> Nx.dot(y)
+      else
+        Nx.dot(qt, y)
+      end
     end)
   end
 
@@ -605,10 +608,6 @@ defmodule Nx.LinAlg do
   @doc from_backend: false
   defn invert(tensor) do
     assert_shape_pattern(tensor, {n, n})
-
-    transform(tensor, fn t ->
-      Nx.Shared.raise_complex_not_implemented_yet(t.type, "LinAlg.invert", 1)
-    end)
 
     tensor
     |> invert_tensor()
