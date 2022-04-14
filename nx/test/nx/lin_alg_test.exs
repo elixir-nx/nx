@@ -118,6 +118,42 @@ defmodule Nx.LinAlgTest do
     end
   end
 
+  describe "matrix_power" do
+    test "supports complex with positive exponent" do
+      a = ~M[
+        1 1i
+        -1i 1
+      ]
+
+      n = 5
+
+      assert_all_close(Nx.LinAlg.matrix_power(a, n), Nx.multiply(2 ** (n - 1), a))
+    end
+
+    test "supports complex with 0 exponent" do
+      a = ~M[
+        1 1i
+        -1i 1
+      ]
+
+      assert_all_close(Nx.LinAlg.matrix_power(a, 0), Nx.eye(a))
+    end
+
+    test "supports complex with negative exponent" do
+      a = ~M[
+        1 -0.5i
+        0 0.5
+      ]
+
+      result = ~M[
+        1 15i
+        0 16
+      ]
+
+      assert_all_close(Nx.LinAlg.matrix_power(a, -4), result)
+    end
+  end
+
   describe "qr" do
     test "correctly factors a square matrix" do
       t = Nx.tensor([[2, -2, 18], [2, 1, 0], [1, 2, 0]])

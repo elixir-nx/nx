@@ -1073,9 +1073,6 @@ defmodule Nx.LinAlg do
   """
   @doc from_backend: false
   def matrix_power(tensor, power) when is_integer(power) and power < 0 do
-    type = Nx.type(tensor)
-    Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.matrix_power", 2)
-
     matrix_power(invert(tensor), abs(power))
   end
 
@@ -1083,16 +1080,11 @@ defmodule Nx.LinAlg do
     # We need a special-case for 0 since the code below
     # is optimized to not compute an initial eye.
     Nx.Defn.Kernel.assert_shape_pattern(tensor, {x, x})
-    type = Nx.type(tensor)
-    Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.matrix_power", 2)
-
     Nx.eye(tensor)
   end
 
   def matrix_power(tensor, power) when is_integer(power) do
     Nx.Defn.Kernel.assert_shape_pattern(tensor, {x, x})
-    type = Nx.type(tensor)
-    Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.matrix_power", 2)
 
     power
     |> Integer.digits(2)
