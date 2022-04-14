@@ -2,6 +2,8 @@ defmodule Nx.LinAlgTest do
   use ExUnit.Case, async: true
 
   import Nx.Helpers
+  import Nx, only: :sigils
+
   doctest Nx.LinAlg
 
   describe "triangular_solve" do
@@ -160,8 +162,6 @@ defmodule Nx.LinAlgTest do
     end
 
     test "works with complex matrix" do
-      import Nx, only: :sigils
-
       t = ~M[
         1 0 1i
         0 2 -1i
