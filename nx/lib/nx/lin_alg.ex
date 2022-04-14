@@ -180,6 +180,18 @@ defmodule Nx.LinAlg do
         [5.0, 4.0]
       >
 
+      iex> Nx.LinAlg.norm(Nx.tensor([[Complex.new(0, 3), 4], [4, 0]]), axes: [0])
+      #Nx.Tensor<
+        f32[2]
+        [5.0, 4.0]
+      >
+
+      iex> Nx.LinAlg.norm(Nx.tensor([[Complex.new(0, 3), 0], [4, 0]]), ord: :neg_inf)
+      #Nx.Tensor<
+        f32
+        3.0
+      >
+
   ### Error cases
 
       iex> Nx.LinAlg.norm(Nx.tensor([3, 4]), ord: :frobenius)
@@ -187,11 +199,9 @@ defmodule Nx.LinAlg do
   """
   @doc from_backend: false
   def norm(tensor, opts \\ []) when is_list(opts) do
-    %{shape: s, type: type} = t = Nx.to_tensor(tensor)
+    %{shape: s} = t = Nx.to_tensor(tensor)
     opts = keyword!(opts, [:ord, :axes])
     rank = Nx.rank(t)
-
-    Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.norm", 2)
 
     unless rank == 1 or rank == 2,
       do: raise(ArgumentError, "expected 1-D or 2-D tensor, got tensor with shape #{inspect(s)}")
@@ -221,7 +231,7 @@ defmodule Nx.LinAlg do
   end
 
   defp norm_inf(%{shape: shape, type: type} = t, ord, _opts) when ord in [:inf, :neg_inf] do
-    output_type = Nx.Type.to_floating(type)
+    output_type = Nx.Type.to_real(type)
     aggregate_axes = if tuple_size(shape) == 2, do: &Nx.sum(&1, axes: [1]), else: & &1
     reduce = if ord == :inf, do: &Nx.reduce_max/1, else: &Nx.reduce_min/1
 
@@ -233,7 +243,7 @@ defmodule Nx.LinAlg do
   end
 
   defp norm_integer(%{shape: {_}, type: type} = t, 0, _opts) do
-    output_type = Nx.Type.to_floating(type)
+    output_type = Nx.Type.to_real(type)
 
     t
     |> Nx.not_equal(0)
@@ -242,7 +252,7 @@ defmodule Nx.LinAlg do
   end
 
   defp norm_integer(%{shape: {_, _}, type: type} = t, ord, _opts) when ord in [1, -1] do
-    output_type = Nx.Type.to_floating(type)
+    output_type = Nx.Type.to_real(type)
     function = if ord == 1, do: &Nx.reduce_max/1, else: &Nx.reduce_min/1
 
     t
@@ -262,7 +272,7 @@ defmodule Nx.LinAlg do
   end
 
   defp norm_integer(%{type: type} = t, ord, opts) when is_integer(ord) do
-    output_type = Nx.Type.to_floating(type)
+    output_type = Nx.Type.to_real(type)
     inv_ord = Nx.tensor(1 / ord, type: output_type)
 
     # We extract this result to a variable because it's used both for
