@@ -228,13 +228,5 @@ defmodule Nx.ComplexTest do
         Nx.LinAlg.triangular_solve(t, t)
       end
     end
-
-    test "matrix_power" do
-      assert_raise ArgumentError,
-                   "Nx.LinAlg.matrix_power/2 is not yet implemented for complex inputs",
-                   fn ->
-                     Nx.LinAlg.matrix_power(Nx.broadcast(Nx.tensor(1, type: {:c, 64}), {3, 3}), 2)
-                   end
-    end
   end
 end
