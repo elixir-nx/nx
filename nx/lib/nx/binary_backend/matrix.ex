@@ -167,7 +167,7 @@ defmodule Nx.BinaryBackend.Matrix do
   defp do_ts([row | rows], [b | bs], idx, acc) do
     value = Enum.fetch!(row, idx)
 
-    if value == 0 do
+    if Complex.abs(value) == 0 do
       raise ArgumentError, "can't solve for singular matrix"
     end
 
