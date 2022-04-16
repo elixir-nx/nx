@@ -181,11 +181,11 @@ defmodule Nx.Defn.GradTest do
     test "computes gradient" do
       assert grad_division_rule(Nx.tensor(1.0)) == Nx.tensor(-0.3416198492050171)
 
-      for _ <- @iters do
+      for _ <- @iters, type <- [f: 64, c: 128] do
         check_grads!(
           &division_rule/1,
           &grad_division_rule/1,
-          Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
+          Nx.random_uniform({}, 0.0, 10.0, type: type)
         )
       end
     end
