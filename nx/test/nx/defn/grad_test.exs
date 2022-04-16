@@ -1812,12 +1812,10 @@ defmodule Nx.Defn.GradTest do
 
     test "computes lu_megapower_grad for complex tensor" do
       assert_all_close(
-        lu_megapower_grad(
-          ~M[
+        lu_megapower_grad(~M[
             1i 2
             1 4i
-          ]
-        ),
+          ]),
         ~M[
           6.1484942i 0.76084137
           5.0678897 6.7508316i
