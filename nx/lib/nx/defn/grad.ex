@@ -571,21 +571,32 @@ defmodule Nx.Defn.Grad do
   defp grad(:lu, [{p, l, u}, input, _opts], ans, [_dp, dl, du]) do
     # Definition taken from: https://sethaxen.com/blog/2021/02/differentiating-the-lu-decomposition/
     # Where dF = tril_strict(L^t . dL) + triu(dU . U^t)
-    # dA = P^t . (L^t)^-1 . dF . (U^t)^-1
+    # dA = P^t . (L^*)^-1 . dF . (U^*)^-1
 
     {p, l, u} = Nx.Defn.Expr.tuple(ans, [p, l, u])
 
-    u_t = Nx.transpose(u)
-    l_t = Nx.transpose(l)
+    {u_h, l_h} =
+      case ans.type do
+        {:c, _} ->
+          u_h = u |> Nx.transpose() |> Nx.conjugate()
+          l_h = l |> Nx.transpose() |> Nx.conjugate()
+          {u_h, l_h}
+
+        _ ->
+          u_h = Nx.transpose(u)
+          l_h = Nx.transpose(l)
+          {u_h, l_h}
+      end
+
     p_t = Nx.transpose(p)
 
-    lt_dl = Nx.dot(l_t, dl)
-    du_ut = Nx.dot(du, u_t)
+    lh_dl = Nx.dot(l_h, dl)
+    du_uh = Nx.dot(du, u_h)
 
-    lt_inv = Nx.LinAlg.invert(l_t)
-    ut_inv = Nx.LinAlg.invert(u_t)
+    lt_inv = Nx.LinAlg.invert(l_h)
+    ut_inv = Nx.LinAlg.invert(u_h)
 
-    df = lt_dl |> tril_strict() |> Nx.add(triu(du_ut))
+    df = lh_dl |> tril_strict() |> Nx.add(triu(du_uh))
     da = p_t |> Nx.dot(lt_inv) |> Nx.dot(df) |> Nx.dot(ut_inv)
 
     [{input, da}]
