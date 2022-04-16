@@ -578,8 +578,8 @@ defmodule Nx.Defn.Grad do
     {u_h, l_h} =
       case ans.type do
         {:c, _} ->
-          u_h = u |> Nx.transpose() |> Nx.conjugate()
-          l_h = l |> Nx.transpose() |> Nx.conjugate()
+          u_h = Nx.LinAlg.adjoint(u)
+          l_h = Nx.LinAlg.adjoint(l)
           {u_h, l_h}
 
         _ ->

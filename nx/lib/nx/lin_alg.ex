@@ -12,6 +12,39 @@ defmodule Nx.LinAlg do
   @default_eps 1.0e-10
 
   @doc """
+  Returns the adjoint of a given tensor.
+
+  If the input tensor is real, it is the same as `Nx.transpose/2`.
+  Otherwise, it is the same as `tensor |> Nx.transpose(opts) |> Nx.conjugate()`.
+
+  ## Examples
+
+      iex> Nx.LinAlg.adjoint(Nx.tensor([[1, 2], [3, 4]]))
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 3],
+          [2, 4]
+        ]
+      >
+
+      iex> Nx.LinAlg.adjoint(Nx.tensor([[1, Complex.new(0, 2)], [3, Complex.new(0, -4)]]))
+      #Nx.Tensor<
+        c64[2][2]
+        [
+          [1.0+0.0i, 3.0+0.0i],
+          [0.0-2.0i, 0.0+4.0i]
+        ]
+      >
+  """
+  defn adjoint(t, opts \\ []) do
+    transform(t, fn
+      %{type: {:c, _}} = t -> t |> Nx.transpose(opts) |> Nx.conjugate()
+      t -> Nx.transpose(t, opts)
+    end)
+  end
+
+  @doc """
   Performs a Cholesky decomposition of a square matrix.
 
   The matrix must be positive-definite and either Hermitian
@@ -531,29 +564,19 @@ defmodule Nx.LinAlg do
     %T{shape: b_shape, type: b_type} = b = Nx.to_tensor(b)
 
     output_shape = Nx.Shape.solve(a_shape, b_shape)
-    {output_kind, _} = output_type = a_type |> Nx.Type.merge(b_type) |> Nx.Type.to_floating()
+    output_type = a_type |> Nx.Type.merge(b_type) |> Nx.Type.to_floating()
     output = Nx.template(output_shape, output_type)
 
     Nx.Shared.optional(:solve, [a, b], output, fn a, b ->
-      # We need to achieve an LQ decomposition for `a` (henceforth called A)
-      # because triangular_solve only accepts lower_triangular matrices
-      # Therefore, we can use the fact that if we have M = Q'R' -> transpose(M) = LQ.
-      # If we set M = transpose(A), we can get A = LQ through transpose(qr(transpose(A)))
+      # Since we have triangular solve, which accepts upper
+      # triangular matrices with the `lower: false` option,
+      # we can solve a system as follows:
 
-      # Given A = LQ, we can then solve AX = B as shown below
-      # AX = B -> L(QX) = B -> LY = B, where Y = QX -> X = transpose(Q)Y
+      # A.X = B -> QR.X = B -> R.X = adjoint(Q).B
 
-      # Finally, it can be shown that when B is a matrix, X can be
-      # calculated by solving for each corresponding column in B
-      {qt, r_prime} = a |> Nx.transpose() |> qr()
-      l = Nx.transpose(r_prime)
-      y = triangular_solve(l, b)
+      {q, r} = Nx.LinAlg.qr(a)
 
-      if output_kind == :c do
-        qt |> Nx.conjugate() |> Nx.dot(y)
-      else
-        Nx.dot(qt, y)
-      end
+      triangular_solve(r, Nx.dot(adjoint(q), b), lower: false)
     end)
   end
 
@@ -564,15 +587,15 @@ defmodule Nx.LinAlg do
 
   ## Examples
 
-      iex> a = Nx.tensor([[1, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]])
+      iex> a = Nx.tensor([[1, 2, 1, 1], [0, 1, 0, 1], [0, 0, 1, 1], [0 , 0, 0, 1]])
       iex> a_inv = Nx.LinAlg.invert(a)
       #Nx.Tensor<
         f32[4][4]
         [
-          [1.0, 0.0, 0.0, 0.0],
-          [-2.0, 1.0, 0.0, 0.0],
-          [-1.0, 0.0, 1.0, 0.0],
-          [2.0, -1.0, -1.0, 1.0]
+          [1.0, -2.0, -1.0, 2.0],
+          [0.0, 1.0, 0.0, -1.0],
+          [0.0, 0.0, 1.0, -1.0],
+          [0.0, 0.0, 0.0, 1.0]
         ]
       >
       iex> Nx.dot(a, a_inv)
@@ -613,14 +636,7 @@ defmodule Nx.LinAlg do
     |> invert_tensor()
     |> custom_grad(fn ans, g ->
       # As defined in https://juliadiff.org/ChainRulesCore.jl/stable/maths/arrays.html#Matrix-inversion-2
-      ans_h =
-        transform(ans, fn
-          %{type: {:c, _}} = ans ->
-            ans |> Nx.transpose() |> Nx.conjugate()
-
-          ans ->
-            Nx.transpose(ans)
-        end)
+      ans_h = adjoint(ans)
 
       [{tensor, ans_h |> Nx.negate() |> Nx.dot(g) |> Nx.dot(ans_h)}]
     end)
