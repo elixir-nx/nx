@@ -921,6 +921,26 @@ defmodule Nx.Defn.Grad do
     [{x, g}]
   end
 
+  defp grad(:conjugate, [%{type: {type, _}} = t], _ans, g) do
+    if type == :c do
+      [{t, Nx.conjugate(g)}]
+    else
+      [{t, Nx.real(g)}]
+    end
+  end
+
+  defp grad(:real, [t], _ans, g) do
+    # real(z) = (z + conj(z))/2
+    # real'(z) = (z' + (conj(z))')/2 = (z' + conj(z'))/2 = real(z')
+    [{t, Nx.real(g)}]
+  end
+
+  defp grad(:imag, [t], _ans, g) do
+    # imag(z) = (z - z*) / 2i
+    # imag'(z) = z' - z'* / 2i = imag(z')
+    [{t, Nx.imag(g)}]
+  end
+
   defp grad(:quotient, _, _, _) do
     raise ArgumentError, """
     cannot compute gradient for Nx.quotient/2.
