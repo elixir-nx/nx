@@ -575,20 +575,10 @@ defmodule Nx.Defn.Grad do
 
     {p, l, u} = Nx.Defn.Expr.tuple(ans, [p, l, u])
 
-    {u_h, l_h} =
-      case ans.type do
-        {:c, _} ->
-          u_h = Nx.LinAlg.adjoint(u)
-          l_h = Nx.LinAlg.adjoint(l)
-          {u_h, l_h}
+    u_h = Nx.LinAlg.adjoint(u)
+    l_h = Nx.LinAlg.adjoint(l)
+    p_t = Nx.LinAlg.adjoint(p)
 
-        _ ->
-          u_h = Nx.transpose(u)
-          l_h = Nx.transpose(l)
-          {u_h, l_h}
-      end
-
-    p_t = Nx.transpose(p)
 
     lh_dl = Nx.dot(l_h, dl)
     du_uh = Nx.dot(du, u_h)
