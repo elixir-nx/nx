@@ -198,13 +198,17 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) expected a 2-D tensor for ord: :frobenius, got a 1-D tensor
   """
   @doc from_backend: false
-  def norm(tensor, opts \\ []) when is_list(opts) do
-    %{shape: s} = t = Nx.to_tensor(tensor)
+  defn norm(tensor, opts \\ []) do
     opts = keyword!(opts, [:ord, :axes])
+    transform(tensor, &norm_transform(&1, opts))
+  end
+
+  defp norm_transform(t, opts) do
     rank = Nx.rank(t)
 
-    unless rank == 1 or rank == 2,
-      do: raise(ArgumentError, "expected 1-D or 2-D tensor, got tensor with shape #{inspect(s)}")
+    unless rank == 1 or rank == 2 do
+      raise ArgumentError, "expected 1-D or 2-D tensor, got tensor with shape #{inspect(t.shape)}"
+    end
 
     axes_opts = Keyword.take(opts, [:axes])
 
@@ -526,9 +530,13 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) `a` tensor has incompatible dimensions, expected a 2-D tensor with as many rows as columns, got: {3, 4}
   """
   @doc from_backend: false
-  def solve(a, b) do
-    %T{shape: a_shape, type: a_type} = a = Nx.to_tensor(a)
-    %T{shape: b_shape, type: b_type} = b = Nx.to_tensor(b)
+  defn solve(a, b) do
+    transform({a, b}, &transform_solve/1)
+  end
+
+  defp transform_solve({a, b}) do
+    %T{shape: a_shape, type: a_type} = a
+    %T{shape: b_shape, type: b_type} = b
 
     output_shape = Nx.Shape.solve(a_shape, b_shape)
     {output_kind, _} = output_type = a_type |> Nx.Type.merge(b_type) |> Nx.Type.to_floating()
