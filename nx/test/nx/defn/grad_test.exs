@@ -136,14 +136,14 @@ defmodule Nx.Defn.GradTest do
     defn addition_rule(t), do: Nx.tanh(Nx.tanh(Nx.add(Nx.power(t, 2), Nx.power(t, 3))))
     defn grad_addition_rule(t), do: grad(t, &addition_rule/1)
 
-    test "computes gradient of complex rules" do
+    test "computes gradient of compound rules" do
       assert grad_addition_rule(Nx.tensor(1.0)) == Nx.tensor(0.15662670135498047)
 
-      for _ <- @iters do
+      for _ <- @iters, type <- [f: 64, c: 128] do
         check_grads!(
           &addition_rule/1,
           &grad_addition_rule/1,
-          Nx.random_uniform({}, 0.0, 1000.0, type: {:f, 64})
+          Nx.random_uniform({}, -5.0, 5.0, type: type)
         )
       end
     end
@@ -156,11 +156,11 @@ defmodule Nx.Defn.GradTest do
     test "computes gradient for scalars" do
       assert grad_product_rule(Nx.tensor(1.0)) == Nx.tensor(1.2343397629215758)
 
-      for _ <- @iters do
+      for _ <- @iters, type <- [f: 64, c: 128] do
         check_grads!(
           &product_rule/1,
           &grad_product_rule/1,
-          Nx.random_uniform({}, 0.0, 1000.0, type: {:f, 64})
+          Nx.random_uniform({}, -0.5, 0.5, type: type)
         )
       end
     end
