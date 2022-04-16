@@ -3,6 +3,7 @@ defmodule Nx.Defn.GradTest do
 
   import Nx.Defn
   import Nx.Helpers
+  import Nx, only: :sigils
 
   @iters 1..25
   @types [{:f, 64}, {:c, 128}]
@@ -1806,6 +1807,21 @@ defmodule Nx.Defn.GradTest do
           [-5.1563935, 1.3453956],
           [6.236998, 1.979985]
         ])
+      )
+    end
+
+    test "computes lu_megapower_grad for complex tensor" do
+      assert_all_close(
+        lu_megapower_grad(
+          ~M[
+            1i 2
+            1 4i
+          ]
+        ),
+        ~M[
+          6.1484942i 0.76084137
+          5.0678897 6.7508316i
+        ]
       )
     end
   end
