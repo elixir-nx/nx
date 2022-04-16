@@ -5,6 +5,7 @@ defmodule Nx.Defn.GradTest do
   import Nx.Helpers
 
   @iters 1..25
+  @types [{:f, 64}, {:c, 128}]
 
   describe "simple" do
     defn grad_itself(t), do: grad(t, fn t -> t end)
@@ -139,7 +140,7 @@ defmodule Nx.Defn.GradTest do
     test "computes gradient of compound rules" do
       assert grad_addition_rule(Nx.tensor(1.0)) == Nx.tensor(0.15662670135498047)
 
-      for _ <- @iters, type <- [f: 64, c: 128] do
+      for _ <- @iters, type <- @types do
         check_grads!(
           &addition_rule/1,
           &grad_addition_rule/1,
@@ -156,7 +157,7 @@ defmodule Nx.Defn.GradTest do
     test "computes gradient for scalars" do
       assert grad_product_rule(Nx.tensor(1.0)) == Nx.tensor(1.2343397629215758)
 
-      for _ <- @iters, type <- [f: 64, c: 128] do
+      for _ <- @iters, type <- @types do
         check_grads!(
           &product_rule/1,
           &grad_product_rule/1,
@@ -181,7 +182,7 @@ defmodule Nx.Defn.GradTest do
     test "computes gradient" do
       assert grad_division_rule(Nx.tensor(1.0)) == Nx.tensor(-0.3416198492050171)
 
-      for _ <- @iters, type <- [f: 64, c: 128] do
+      for _ <- @iters, type <- @types do
         check_grads!(
           &division_rule/1,
           &grad_division_rule/1,
@@ -267,11 +268,11 @@ defmodule Nx.Defn.GradTest do
     test "computes gradient" do
       assert grad_power_rule(Nx.tensor(5.0)) == Nx.tensor(75.0)
 
-      for _ <- @iters do
+      for _ <- @iters, type <- @types do
         check_grads!(
           &power_rule/1,
           &grad_power_rule/1,
-          Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
+          Nx.random_uniform({}, 0.0, 10.0, type: type)
         )
       end
     end
