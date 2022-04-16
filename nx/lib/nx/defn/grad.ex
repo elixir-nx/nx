@@ -579,7 +579,6 @@ defmodule Nx.Defn.Grad do
     l_h = Nx.LinAlg.adjoint(l)
     p_t = Nx.LinAlg.adjoint(p)
 
-
     lh_dl = Nx.dot(l_h, dl)
     du_uh = Nx.dot(du, u_h)
 
