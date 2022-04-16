@@ -611,14 +611,16 @@ defmodule Nx.LinAlg do
 
     tensor
     |> invert_tensor()
-    |> custom_grad(fn %{type: {type, _}} = ans, g ->
+    |> custom_grad(fn ans, g ->
       # As defined in https://juliadiff.org/ChainRulesCore.jl/stable/maths/arrays.html#Matrix-inversion-2
       ans_h =
-        if type == :c do
-          ans |> Nx.transpose() |> Nx.conjugate()
-        else
-          Nx.transpose(ans)
-        end
+        transform(ans, fn
+          %{type: {:c, _}} = ans ->
+            ans |> Nx.transpose() |> Nx.conjugate()
+
+          ans ->
+            Nx.transpose(ans)
+        end)
 
       [{tensor, ans_h |> Nx.negate() |> Nx.dot(g) |> Nx.dot(ans_h)}]
     end)
