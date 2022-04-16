@@ -330,6 +330,12 @@ defmodule Nx.Defn.GradTest do
                Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
              ) ==
                Nx.tensor([6.0, 15.0])
+
+      assert grad_dot_lhs_rule(
+               Nx.tensor([Complex.new(0, 3), -2, Complex.new(0, 1)]),
+               Nx.tensor([1.0, Complex.new(0, 2), 3.0])
+             ) ==
+               Nx.tensor([1, Complex.new(0, 2), 3])
     end
 
     defn grad_dot_rhs_rule(x, y), do: grad(y, &Nx.sum(Nx.dot(x, &1)))
