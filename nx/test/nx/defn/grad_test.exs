@@ -1448,8 +1448,8 @@ defmodule Nx.Defn.GradTest do
       defn unquote(grad_fun)(t), do: grad(t, &(Nx.unquote(fun) / 1))
 
       test "computes gradient" do
-        for _ <- @iters do
-          t = Nx.random_uniform({}, 0.1, 10.0, type: {:f, 64})
+        for _ <- @iters, type <- @types do
+          t = Nx.random_uniform({}, 0.1, 10.0, type: type)
           check_grads!(&Nx.unquote(fun)(&1), &(__MODULE__.unquote(grad_fun) / 1), t)
         end
       end
@@ -1474,11 +1474,11 @@ defmodule Nx.Defn.GradTest do
     defn grad_tan(t), do: grad(t, &Nx.tan/1)
 
     test "computes gradient" do
-      for _ <- @iters do
+      for _ <- @iters, type <- @types do
         # check_grads!/4 fails for values close to the asymptotes
         # of tan's gradient, so we select t to avoid them.
         multiplier = Nx.random_uniform({}, 0, 10, type: {:u, 32})
-        offset = Nx.random_uniform({}, -1.5, 1.5, type: {:f, 64})
+        offset = Nx.random_uniform({}, -1.5, 1.5, type: type)
         t = 3.14159 |> Nx.multiply(multiplier) |> Nx.add(offset)
         check_grads!(&Nx.tan/1, &grad_tan/1, t)
       end
@@ -1491,12 +1491,25 @@ defmodule Nx.Defn.GradTest do
     defn grad_atan(t), do: grad(t, &Nx.atan/1)
 
     test "computes gradient of inverse trig functions" do
-      for _ <- @iters do
-        t = Nx.random_uniform({}, -0.999, 0.999, type: {:f, 32})
+      for _ <- @iters, type <- @types do
+        t = Nx.random_uniform({}, -0.999, 0.999, type: type)
         check_grads!(&Nx.asin/1, &grad_asin/1, t, atol: 1.0e-5, rtol: 1.0e-2)
-        check_grads!(&Nx.acos/1, &grad_acos/1, t, atol: 0.1, rtol: 1.0e-2)
         check_grads!(&Nx.atan/1, &grad_atan/1, t, atol: 0.1, rtol: 1.0e-2)
         check_grads!(&Nx.atan/1, &grad_atan/1, Nx.multiply(1000.0, t), atol: 1.0e-2)
+      end
+    end
+
+    test "computes gradient for acos" do
+      # acos/1 needs to be tested separately because
+      # check_grads! yields the wrong result, even though
+      # the formula is in accordance to references.
+
+      for _ <- @iters, type <- @types do
+        t = Nx.random_uniform({}, -0.999, 0.999, type: type)
+
+        expected = t |> Nx.power(2) |> Nx.negate() |> Nx.add(1) |> Nx.rsqrt() |> Nx.negate()
+
+        assert_all_close(grad_acos(t), expected)
       end
     end
   end
@@ -1506,8 +1519,8 @@ defmodule Nx.Defn.GradTest do
     defn grad_cosh(t), do: grad(t, &Nx.cosh/1)
 
     test "computes gradient" do
-      for _ <- @iters do
-        t = Nx.random_uniform({}, -10, 10, type: {:f, 64})
+      for _ <- @iters, type <- @types do
+        t = Nx.random_uniform({}, -10, 10, type: type)
         check_grads!(&Nx.sinh/1, &grad_sinh/1, t)
         check_grads!(&Nx.cosh/1, &grad_cosh/1, t)
       end
@@ -1526,18 +1539,18 @@ defmodule Nx.Defn.GradTest do
     defn grad_atanh(t), do: grad(t, &Nx.atanh/1)
 
     test "computes gradient of inverse hyperbolic functions" do
-      for _ <- @iters do
-        t = Nx.random_uniform({}, -100.0, 100.0, type: {:f, 64})
+      for _ <- @iters, type <- @types do
+        t = Nx.random_uniform({}, -100.0, 100.0, type: type)
         check_grads!(&Nx.asinh/1, &grad_asinh/1, t, atol: 1.0e-5, rtol: 1.0e-2)
       end
 
-      for _ <- @iters do
-        t = Nx.random_uniform({}, 1.01, 100.0, type: {:f, 64})
+      for _ <- @iters, type <- @types do
+        t = Nx.random_uniform({}, 1.01, 100.0, type: type)
         check_grads!(&Nx.acosh/1, &grad_acosh/1, t, atol: 1.0e-5, rtol: 1.0e-2)
       end
 
-      for _ <- @iters do
-        t = Nx.random_uniform({}, -0.999, 0.999, type: {:f, 64})
+      for _ <- @iters, type <- @types do
+        t = Nx.random_uniform({}, -0.999, 0.999, type: type)
         check_grads!(&Nx.atanh/1, &grad_atanh/1, t, atol: 1.0e-5, rtol: 1.0e-2)
       end
     end
