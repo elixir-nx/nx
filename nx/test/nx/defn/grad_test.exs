@@ -1449,6 +1449,20 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  for fun <- [:real, :imag, :conjugate] do
+    describe "#{fun}" do
+      grad_fun = :"grad_#{fun}"
+      defn unquote(grad_fun)(t), do: grad(t, &(Nx.unquote(fun) / 1))
+
+      test "computes gradient" do
+        for _ <- @iters do
+          t = Nx.random_uniform({}, 0.1, 10.0, type: {:c, 128})
+          check_grads!(&Nx.unquote(fun)(&1), &(__MODULE__.unquote(grad_fun) / 1), t)
+        end
+      end
+    end
+  end
+
   describe "tan" do
     defn grad_tan(t), do: grad(t, &Nx.tan/1)
 
