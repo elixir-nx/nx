@@ -558,12 +558,12 @@ defmodule Nx.Defn.Grad do
     {q, r} = Nx.Defn.Expr.tuple(ans, [q, r])
     r_inv = Nx.LinAlg.invert(r)
 
-    m = Nx.dot(r, Nx.transpose(dr)) |> Nx.subtract(Nx.dot(Nx.transpose(dq), q))
+    m = Nx.dot(r, Nx.LinAlg.adjoint(dr)) |> Nx.subtract(Nx.dot(Nx.LinAlg.adjoint(dq), q))
 
     # copyltu
-    m_ltu = tril(m) |> Nx.add(m |> tril_strict() |> Nx.transpose())
+    m_ltu = tril(m) |> Nx.add(m |> tril_strict() |> Nx.LinAlg.adjoint())
 
-    da = dq |> Nx.add(Nx.dot(q, m_ltu)) |> Nx.dot(Nx.transpose(r_inv))
+    da = dq |> Nx.add(Nx.dot(q, m_ltu)) |> Nx.dot(Nx.LinAlg.adjoint(r_inv))
 
     [{input, da}]
   end
