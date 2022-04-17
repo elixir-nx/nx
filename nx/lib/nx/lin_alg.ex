@@ -80,15 +80,22 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> Nx.LinAlg.cholesky(Nx.tensor([[1.0, Complex.new(0, -2)], [Complex.new(0, 2), 5.0]]))
+      #Nx.Tensor<
+        c64[2][2]
+        [
+          [1.0+0.0i, 0.0+0.0i],
+          [0.0+2.0i, 1.0+0.0i]
+        ]
+      >
+
   ### Error cases
 
       iex> Nx.LinAlg.cholesky(Nx.tensor([[1.0, 2.0], [3.0, 4.0]]))
-      ** (ArgumentError) matrix must be symmetric, a matrix is symmetric iff X = X.T
+      ** (ArgumentError) matrix must be hermitian, a matrix is hermitian iff X = adjoint(X)
   """
   def cholesky(tensor) do
     %T{type: type, shape: shape, names: names} = tensor = Nx.to_tensor(tensor)
-
-    Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.cholesky", 1)
 
     output_type = Nx.Type.to_floating(type)
 

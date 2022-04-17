@@ -6,6 +6,8 @@ defmodule Nx.LinAlgTest do
 
   doctest Nx.LinAlg
 
+  @types [{:f, 32}, {:c, 64}]
+
   describe "triangular_solve" do
     test "property" do
       a = Nx.tensor([[1, 0, 0], [1, 1, 0], [0, 1, 1]])
@@ -485,7 +487,7 @@ defmodule Nx.LinAlgTest do
 
   describe "cholesky" do
     test "property" do
-      for _ <- 1..10 do
+      for _ <- 1..10, type <- @types do
         # Generate random L matrix so we can construct
         # a factorizable A matrix:
         shape = {4, 4}
@@ -493,13 +495,13 @@ defmodule Nx.LinAlgTest do
 
         l_prime =
           shape
-          |> Nx.random_uniform()
+          |> Nx.random_uniform(type: type)
           |> Nx.multiply(lower_selector)
 
-        a = Nx.dot(l_prime, Nx.transpose(l_prime))
+        a = Nx.dot(l_prime, Nx.LinAlg.adjoint(l_prime))
 
         assert l = Nx.LinAlg.cholesky(a)
-        assert_all_close(Nx.dot(l, Nx.transpose(l)), a, atol: 1.0e-2)
+        assert_all_close(Nx.dot(l, Nx.LinAlg.adjoint(l)), a, atol: 1.0e-2)
       end
     end
   end

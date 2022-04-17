@@ -1227,19 +1227,19 @@ defmodule Nx.BinaryBackend do
                     <<_::size(current_element_opp_offset)-bitstring, match!(y, 0), _::bitstring>> =
                       data
 
-                    if x != y do
+                    if to_complex(read!(x, 0)) != Complex.conjugate(to_complex(read!(y, 0))) do
                       raise ArgumentError,
-                            "matrix must be symmetric, a matrix is symmetric iff X = X.T"
+                            "matrix must be hermitian, a matrix is hermitian iff X = adjoint(X)"
                     end
 
                     fun = fn <<match!(left, 0)>>, <<match!(right, 0)>>, acc ->
-                      {<<>>, read!(left, 0) * read!(right, 0) + acc}
+                      {<<>>, read!(left, 0) * Complex.conjugate(read!(right, 0)) + acc}
                     end
 
                     {_, tmp_sum} = bin_zip_reduce_axis(lhs, rhs, size, size, <<>>, 0, fun)
 
                     if i == j - 1 do
-                      value = :math.sqrt(Kernel.max(read!(x, 0) - tmp_sum, 0))
+                      value = Complex.sqrt(Kernel.max(read!(x, 0) - tmp_sum, 0))
                       number_to_binary(value, output_type)
                     else
                       <<_::size(diagonal_element_offset)-bitstring, match!(diag, 0),
@@ -2469,4 +2469,7 @@ defmodule Nx.BinaryBackend do
 
     div(size, dilation_factor) * x + weighted_offset(dims, pos, dilation)
   end
+
+  defp to_complex(%Complex{} = z), do: z
+  defp to_complex(n), do: Complex.new(n)
 end
