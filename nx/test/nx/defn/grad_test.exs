@@ -1764,6 +1764,19 @@ defmodule Nx.Defn.GradTest do
         ])
       )
     end
+
+    test "computes qr_megapower_grad for complex tensor" do
+      assert_all_close(
+        qr_megapower_grad(~M[
+          1 2i
+          3 4i
+        ]),
+        ~M[
+          1.94476 2.72264i
+          4.98145 5.87086i
+        ]
+      )
+    end
   end
 
   describe "lu" do

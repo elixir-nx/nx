@@ -558,19 +558,19 @@ defmodule Nx.Defn.Grad do
     {q, r} = Nx.Defn.Expr.tuple(ans, [q, r])
     r_inv = Nx.LinAlg.invert(r)
 
-    m = Nx.dot(r, Nx.transpose(dr)) |> Nx.subtract(Nx.dot(Nx.transpose(dq), q))
+    m = Nx.dot(r, Nx.LinAlg.adjoint(dr)) |> Nx.subtract(Nx.dot(Nx.LinAlg.adjoint(dq), q))
 
     # copyltu
-    m_ltu = tril(m) |> Nx.add(m |> tril_strict() |> Nx.transpose())
+    m_ltu = tril(m) |> Nx.add(m |> tril_strict() |> Nx.LinAlg.adjoint())
 
-    da = dq |> Nx.add(Nx.dot(q, m_ltu)) |> Nx.dot(Nx.transpose(r_inv))
+    da = dq |> Nx.add(Nx.dot(q, m_ltu)) |> Nx.dot(Nx.LinAlg.adjoint(r_inv))
 
     [{input, da}]
   end
 
   defp grad(:lu, [{p, l, u}, input, _opts], ans, [_dp, dl, du]) do
     # Definition taken from: https://sethaxen.com/blog/2021/02/differentiating-the-lu-decomposition/
-    # Where dF = tril_strict(L^t . dL) + triu(dU . U^t)
+    # Where dF = tril_strict(L^* . dL) + triu(dU . U^*)
     # dA = P^t . (L^*)^-1 . dF . (U^*)^-1
 
     {p, l, u} = Nx.Defn.Expr.tuple(ans, [p, l, u])

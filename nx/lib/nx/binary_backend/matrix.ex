@@ -203,8 +203,11 @@ defmodule Nx.BinaryBackend.Matrix do
 
   defp qr_decomposition(matrix, m, n, eps) when m >= n do
     # QR decomposition is performed by using Householder transform
+
+    max_i = if m == n, do: n - 2, else: n - 1
+
     {q_matrix, r_matrix} =
-      for i <- 0..(n - 1), reduce: {nil, matrix} do
+      for i <- 0..max_i, reduce: {nil, matrix} do
         {q, r} ->
           h =
             r
@@ -622,10 +625,10 @@ defmodule Nx.BinaryBackend.Matrix do
     norm_a = :math.sqrt(norm_a_sq)
 
     phase_a_0 = Complex.phase(a_0)
-    alfa = -1 * Complex.exp(Complex.new(0, phase_a_0)) * norm_a
+    alfa = Complex.exp(Complex.new(0, phase_a_0)) * norm_a
 
     # u = x - alfa * e1
-    u_0 = a_0 - alfa
+    u_0 = a_0 + alfa
     u = [u_0 | tail]
     norm_u_sq = norm_a_sq_1on + Complex.abs_squared(u_0)
     norm_u = :math.sqrt(norm_u_sq)
