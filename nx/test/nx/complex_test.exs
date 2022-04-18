@@ -201,16 +201,6 @@ defmodule Nx.ComplexTest do
       end
     end
 
-    test "cholesky" do
-      t = Nx.broadcast(Nx.tensor(1, type: {:c, 64}), {3, 3})
-
-      assert_raise ArgumentError,
-                   "Nx.LinAlg.cholesky/1 is not yet implemented for complex inputs",
-                   fn ->
-                     Nx.LinAlg.cholesky(t)
-                   end
-    end
-
     test "triangular_solve fails with singular complex matrix" do
       t = Nx.broadcast(Nx.tensor(0, type: {:c, 64}), {3, 3})
 
