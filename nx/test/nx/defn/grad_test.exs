@@ -1627,19 +1627,40 @@ defmodule Nx.Defn.GradTest do
     defn grad_sum_broadcast(t), do: grad(t, &Nx.sum(Nx.broadcast(&1, {3, 2, 2})))
 
     test "computes gradient" do
-      assert grad_sum_broadcast(Nx.iota({3, 2, 2})) == Nx.broadcast(1.0, {3, 2, 2})
-      assert grad_sum_broadcast(Nx.iota({1, 2, 2})) == Nx.broadcast(3.0, {1, 2, 2})
-      assert grad_sum_broadcast(Nx.iota({3, 1, 2})) == Nx.broadcast(2.0, {3, 1, 2})
-      assert grad_sum_broadcast(Nx.iota({3, 2, 1})) == Nx.broadcast(2.0, {3, 2, 1})
-      assert grad_sum_broadcast(Nx.iota({3, 1, 1})) == Nx.broadcast(4.0, {3, 1, 1})
-      assert grad_sum_broadcast(Nx.iota({1, 1, 1})) == Nx.broadcast(12.0, {1, 1, 1})
+      for multiplier <- [1, Complex.new(0, 1)] do
+        assert grad_sum_broadcast({3, 2, 2} |> Nx.iota() |> Nx.multiply(multiplier)) ==
+                 Nx.broadcast(1.0, {3, 2, 2})
 
-      assert grad_sum_broadcast(Nx.iota({2, 2})) == Nx.broadcast(3.0, {2, 2})
-      assert grad_sum_broadcast(Nx.iota({1, 2})) == Nx.broadcast(6.0, {1, 2})
-      assert grad_sum_broadcast(Nx.iota({2, 1})) == Nx.broadcast(6.0, {2, 1})
+        assert grad_sum_broadcast({1, 2, 2} |> Nx.iota() |> Nx.multiply(multiplier)) ==
+                 Nx.broadcast(3.0, {1, 2, 2})
 
-      assert grad_sum_broadcast(Nx.iota({2})) == Nx.broadcast(6.0, {2})
-      assert grad_sum_broadcast(Nx.iota({})) == Nx.broadcast(12.0, {})
+        assert grad_sum_broadcast({3, 1, 2} |> Nx.iota() |> Nx.multiply(multiplier)) ==
+                 Nx.broadcast(2.0, {3, 1, 2})
+
+        assert grad_sum_broadcast({3, 2, 1} |> Nx.iota() |> Nx.multiply(multiplier)) ==
+                 Nx.broadcast(2.0, {3, 2, 1})
+
+        assert grad_sum_broadcast({3, 1, 1} |> Nx.iota() |> Nx.multiply(multiplier)) ==
+                 Nx.broadcast(4.0, {3, 1, 1})
+
+        assert grad_sum_broadcast({1, 1, 1} |> Nx.iota() |> Nx.multiply(multiplier)) ==
+                 Nx.broadcast(12.0, {1, 1, 1})
+
+        assert grad_sum_broadcast({2, 2} |> Nx.iota() |> Nx.multiply(multiplier)) ==
+                 Nx.broadcast(3.0, {2, 2})
+
+        assert grad_sum_broadcast({1, 2} |> Nx.iota() |> Nx.multiply(multiplier)) ==
+                 Nx.broadcast(6.0, {1, 2})
+
+        assert grad_sum_broadcast({2, 1} |> Nx.iota() |> Nx.multiply(multiplier)) ==
+                 Nx.broadcast(6.0, {2, 1})
+
+        assert grad_sum_broadcast({2} |> Nx.iota() |> Nx.multiply(multiplier)) ==
+                 Nx.broadcast(6.0, {2})
+
+        assert grad_sum_broadcast({} |> Nx.iota() |> Nx.multiply(multiplier)) ==
+                 Nx.broadcast(12.0, {})
+      end
     end
   end
 
@@ -1846,6 +1867,15 @@ defmodule Nx.Defn.GradTest do
       end)
     end
 
+    defn invert_abs_grad(t) do
+      grad(t, fn tensor ->
+        tensor
+        |> Nx.LinAlg.invert()
+        |> Nx.abs()
+        |> Nx.sum()
+      end)
+    end
+
     defn composed_invert_grad(t) do
       grad(t, fn tensor ->
         tensor
@@ -1866,6 +1896,19 @@ defmodule Nx.Defn.GradTest do
           [0.14583, 0.1146, -0.0417],
           [-0.0729, -0.0573, 0.0208]
         ])
+      )
+    end
+
+    test "computes grad for complex tensor" do
+      assert_all_close(
+        invert_grad(~M[
+          1i 1i
+          0 1
+        ]),
+        ~M[
+          1+i -1i
+          0 0
+        ]
       )
     end
 
@@ -2176,6 +2219,20 @@ defmodule Nx.Defn.GradTest do
           ],
           [2.718281828459045, 7.38905609893065, 0.0, 148.4131591025766, 0.8414709848078965]
         ])
+
+      assert_all_close(lhs, rhs)
+    end
+
+    test "computes gradient with sum+select for complex tensor" do
+      lhs = grad_sum_select(~M[
+          1+i 2+i
+          3+i -1-4i
+        ])
+
+      rhs = ~M[
+        1.4686+2.2873i 3.9923+6.2176i
+        10.8522+16.9013i 22.9790+14.7448i
+      ]
 
       assert_all_close(lhs, rhs)
     end
