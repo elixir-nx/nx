@@ -122,6 +122,59 @@ defmodule Nx.ComplexTest do
     end
   end
 
+  describe "aggregate operations" do
+    test "all" do
+      assert Nx.all(Nx.tensor([@arg, @arg2])) == Nx.tensor(1, type: {:u, 8})
+    end
+
+    test "all_close" do
+      assert Nx.all_close(Nx.tensor([@arg, @arg2]), 0) == Nx.tensor(0, type: {:u, 8})
+    end
+
+    test "any" do
+      assert Nx.any(Nx.tensor([@arg, @arg2])) == Nx.tensor(1, type: {:u, 8})
+    end
+
+    test "argmax" do
+      assert Nx.argmax(Nx.tensor([@arg, @arg2])) == Nx.tensor(1)
+    end
+
+    test "argmin" do
+      assert Nx.argmin(Nx.tensor([@arg, @arg2])) == Nx.tensor(0)
+    end
+
+    test "mean" do
+      t = Nx.tensor([@arg, @arg2])
+
+      mean =
+        t
+        |> Nx.sum()
+        |> Nx.divide(2)
+
+      assert Nx.mean(t) == mean
+    end
+
+    test "product" do
+      assert Nx.product(Nx.tensor([@arg, @arg2])) == Nx.multiply(@arg, @arg2)
+    end
+
+    test "reduce" do
+      assert Nx.reduce(Nx.tensor([@arg, @arg2]), 0, &Nx.add/2) == Nx.add(@arg, @arg2)
+    end
+
+    test "reduce_max" do
+      assert Nx.reduce_max(Nx.tensor([@arg, @arg2])) == Nx.tensor(@arg2)
+    end
+
+    test "reduce_min" do
+      assert Nx.reduce_min(Nx.tensor([@arg, @arg2])) == Nx.tensor(@arg)
+    end
+
+    test "sum" do
+      assert Nx.sum(Nx.tensor([@arg, @arg2])) == Nx.add(@arg, @arg2)
+    end
+  end
+
   describe "binary operations" do
     test "add" do
       assert_all_close(Nx.add(@arg, @arg2), Complex.new(0, 10))
