@@ -1846,6 +1846,15 @@ defmodule Nx.Defn.GradTest do
       end)
     end
 
+    defn invert_abs_grad(t) do
+      grad(t, fn tensor ->
+        tensor
+        |> Nx.LinAlg.invert()
+        |> Nx.abs()
+        |> Nx.sum()
+      end)
+    end
+
     defn composed_invert_grad(t) do
       grad(t, fn tensor ->
         tensor
@@ -1866,6 +1875,19 @@ defmodule Nx.Defn.GradTest do
           [0.14583, 0.1146, -0.0417],
           [-0.0729, -0.0573, 0.0208]
         ])
+      )
+    end
+
+    test "computes grad for complex tensor" do
+      assert_all_close(
+        invert_grad(~M[
+          1i 1i
+          0 1
+        ]),
+        ~M[
+          1+i -1i
+          0 0
+        ]
       )
     end
 
