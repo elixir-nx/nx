@@ -1627,19 +1627,21 @@ defmodule Nx.Defn.GradTest do
     defn grad_sum_broadcast(t), do: grad(t, &Nx.sum(Nx.broadcast(&1, {3, 2, 2})))
 
     test "computes gradient" do
-      assert grad_sum_broadcast(Nx.iota({3, 2, 2})) == Nx.broadcast(1.0, {3, 2, 2})
-      assert grad_sum_broadcast(Nx.iota({1, 2, 2})) == Nx.broadcast(3.0, {1, 2, 2})
-      assert grad_sum_broadcast(Nx.iota({3, 1, 2})) == Nx.broadcast(2.0, {3, 1, 2})
-      assert grad_sum_broadcast(Nx.iota({3, 2, 1})) == Nx.broadcast(2.0, {3, 2, 1})
-      assert grad_sum_broadcast(Nx.iota({3, 1, 1})) == Nx.broadcast(4.0, {3, 1, 1})
-      assert grad_sum_broadcast(Nx.iota({1, 1, 1})) == Nx.broadcast(12.0, {1, 1, 1})
+      for multiplier <- [1, Complex.new(0, 1)] do
+        assert grad_sum_broadcast({3, 2, 2} |> Nx.iota() |> Nx.multiply(multiplier)) == Nx.broadcast(1.0, {3, 2, 2})
+        assert grad_sum_broadcast({1, 2, 2} |> Nx.iota() |> Nx.multiply(multiplier)) == Nx.broadcast(3.0, {1, 2, 2})
+        assert grad_sum_broadcast({3, 1, 2} |> Nx.iota() |> Nx.multiply(multiplier)) == Nx.broadcast(2.0, {3, 1, 2})
+        assert grad_sum_broadcast({3, 2, 1} |> Nx.iota() |> Nx.multiply(multiplier)) == Nx.broadcast(2.0, {3, 2, 1})
+        assert grad_sum_broadcast({3, 1, 1} |> Nx.iota() |> Nx.multiply(multiplier)) == Nx.broadcast(4.0, {3, 1, 1})
+        assert grad_sum_broadcast({1, 1, 1} |> Nx.iota() |> Nx.multiply(multiplier)) == Nx.broadcast(12.0, {1, 1, 1})
 
-      assert grad_sum_broadcast(Nx.iota({2, 2})) == Nx.broadcast(3.0, {2, 2})
-      assert grad_sum_broadcast(Nx.iota({1, 2})) == Nx.broadcast(6.0, {1, 2})
-      assert grad_sum_broadcast(Nx.iota({2, 1})) == Nx.broadcast(6.0, {2, 1})
+        assert grad_sum_broadcast({2, 2} |> Nx.iota() |> Nx.multiply(multiplier)) == Nx.broadcast(3.0, {2, 2})
+        assert grad_sum_broadcast({1, 2} |> Nx.iota() |> Nx.multiply(multiplier)) == Nx.broadcast(6.0, {1, 2})
+        assert grad_sum_broadcast({2, 1} |> Nx.iota() |> Nx.multiply(multiplier)) == Nx.broadcast(6.0, {2, 1})
 
-      assert grad_sum_broadcast(Nx.iota({2})) == Nx.broadcast(6.0, {2})
-      assert grad_sum_broadcast(Nx.iota({})) == Nx.broadcast(12.0, {})
+        assert grad_sum_broadcast({2} |> Nx.iota() |> Nx.multiply(multiplier)) == Nx.broadcast(6.0, {2})
+        assert grad_sum_broadcast({} |> Nx.iota() |> Nx.multiply(multiplier)) == Nx.broadcast(12.0, {})
+      end
     end
   end
 
