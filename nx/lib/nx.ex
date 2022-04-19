@@ -6310,10 +6310,10 @@ defmodule Nx do
         1
       >
 
-     iex> Nx.argmax(Nx.tensor([Complex.new(1, 2), Complex.new(3,2)]))
+     iex> Nx.argmax(Nx.tensor([Complex.new(1, 2), Complex.new(3, 0)]))
      #Nx.Tensor<
        s64
-       1
+       0
      >
 
 
@@ -6429,10 +6429,10 @@ defmodule Nx do
         0
       >
 
-      iex> Nx.argmin(Nx.tensor([Complex.new(1, 2), Complex.new(3,2)]))
+      iex> Nx.argmin(Nx.tensor([Complex.new(1, 2), Complex.new(3, 0)]))
       #Nx.Tensor<
         s64
-        0
+        1
       >
 
   ### Aggregating over an axis
