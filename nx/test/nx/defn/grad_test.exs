@@ -2202,6 +2202,22 @@ defmodule Nx.Defn.GradTest do
       assert_all_close(lhs, rhs)
     end
 
+    test "computes gradient with sum+select for complex tensor" do
+      lhs = grad_sum_select(
+        ~M[
+          1+i 2+i
+          3+i -1-4i
+        ]
+      )
+
+      rhs = ~M[
+        1.4686+2.2873i 3.9923+6.2176i
+        10.8522+16.9013i 22.9790+14.7448i
+      ]
+
+      assert_all_close(lhs, rhs)
+    end
+
     test "computes the gradient with max+select" do
       lhs = grad_max_select(Nx.tensor([[-2.0, 1.0, 0.0, 3.0, -3.0], [1.0, 2.0, 0.0, 5.0, -1.0]]))
       rhs = Nx.tensor([[0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 148.4131591025766, 0.0]])
