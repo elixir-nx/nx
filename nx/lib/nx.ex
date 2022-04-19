@@ -6302,13 +6302,20 @@ defmodule Nx do
         10
       >
 
-  If a tensor of floats is given, it still returns integers:
+  If a tensor of floats or complex numbers is given, it still returns integers:
 
       iex> Nx.argmax(Nx.tensor([2.0, 4.0]))
       #Nx.Tensor<
         s64
         1
       >
+
+     iex> Nx.argmax(Nx.tensor([Complex.new(1, 2), Complex.new(3,2)]))
+     #Nx.Tensor<
+       s64
+       1
+     >
+
 
   ### Aggregating over an axis
 
@@ -6414,9 +6421,15 @@ defmodule Nx do
         4
       >
 
-  If a tensor of floats is given, it still returns integers:
+  If a tensor of floats or complex numbers is given, it still returns integers:
 
       iex> Nx.argmin(Nx.tensor([2.0, 4.0]))
+      #Nx.Tensor<
+        s64
+        0
+      >
+
+      iex> Nx.argmin(Nx.tensor([Complex.new(1, 2), Complex.new(3,2)]))
       #Nx.Tensor<
         s64
         0
@@ -8661,7 +8674,8 @@ defmodule Nx do
   and removing slices.
 
   Passing a multi-dimensional indices tensor only affects the
-  resulting shape. Specifically, the given axis in the input shape
+  resulting shape. Specif
+  ically, the given axis in the input shape
   gets replaced with the indices shape.
 
   See `gather/2`, `slice/3`, `slice_along_axis/4`, and `take_along_axis/3`
