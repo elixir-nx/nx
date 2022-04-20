@@ -175,6 +175,54 @@ defmodule Nx.ComplexTest do
     end
   end
 
+  describe "window operations" do
+    test "window_max" do
+      assert Nx.window_max(Nx.tensor([@arg, @arg2]), {2}) == Nx.reshape(Nx.tensor(@arg), {1})
+    end
+
+    test "window_mean" do
+      t = Nx.tensor([@arg, @arg2])
+      assert Nx.window_mean(t, {2}) == Nx.reshape(Nx.mean(t), {1})
+    end
+
+    test "window_min" do
+      assert Nx.window_min(Nx.tensor([@arg, @arg2]), {2}) == Nx.reshape(Nx.tensor(@arg2), {1})
+    end
+
+    test "window_product" do
+      t = Nx.tensor([@arg, @arg2])
+      assert Nx.window_product(t, {2}) == Nx.reshape(Nx.product(t), {1})
+    end
+
+    test "window_reduce" do
+      t = Nx.tensor([@arg, @arg2])
+      assert Nx.window_reduce(t, 0, {2}, &Nx.add/2) == Nx.reshape(Nx.sum(t), {1})
+    end
+
+    test "window_scatter_max" do
+      assert Nx.window_scatter_max(
+               Nx.tensor([@arg2, Complex.new(0, 0), @arg]),
+               Nx.tensor([0, 1]),
+               0,
+               {2}
+             ) == Nx.tensor([0, 0, 1])
+    end
+
+    test "window_scatter_min" do
+      assert Nx.window_scatter_min(
+               Nx.tensor([@arg2, Complex.new(0, 0), @arg]),
+               Nx.tensor([0, 1]),
+               0,
+               {2}
+             ) == Nx.tensor([0, 1, 0])
+    end
+
+    test "window_sum" do
+      t = Nx.tensor([@arg, @arg2])
+      assert Nx.window_sum(t, {2}) == Nx.reshape(Nx.sum(t), {1})
+    end
+  end
+
   describe "binary operations" do
     test "add" do
       assert_all_close(Nx.add(@arg, @arg2), Complex.new(0, 10))
