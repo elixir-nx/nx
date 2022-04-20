@@ -177,26 +177,26 @@ defmodule Nx.ComplexTest do
 
   describe "window operations" do
     test "window_max" do
-      assert Nx.window_max(Nx.tensor([@arg, @arg2]), {2}) == Nx.reshape(Nx.tensor(@arg), {1})
+      assert Nx.window_max(Nx.tensor([@arg, @arg2]), {2})[0] == Nx.tensor(@arg2)
     end
 
     test "window_mean" do
       t = Nx.tensor([@arg, @arg2])
-      assert Nx.window_mean(t, {2}) == Nx.reshape(Nx.mean(t), {1})
+      assert Nx.window_mean(t, {2})[0] == Nx.mean(t)
     end
 
     test "window_min" do
-      assert Nx.window_min(Nx.tensor([@arg, @arg2]), {2}) == Nx.reshape(Nx.tensor(@arg2), {1})
+      assert Nx.window_min(Nx.tensor([@arg, @arg2]), {2})[0] == Nx.tensor(@arg)
     end
 
     test "window_product" do
       t = Nx.tensor([@arg, @arg2])
-      assert Nx.window_product(t, {2}) == Nx.reshape(Nx.product(t), {1})
+      assert Nx.window_product(t, {2})[0] == Nx.product(t)
     end
 
     test "window_reduce" do
       t = Nx.tensor([@arg, @arg2])
-      assert Nx.window_reduce(t, 0, {2}, &Nx.add/2) == Nx.reshape(Nx.sum(t), {1})
+      assert Nx.window_reduce(t, 0, {2}, &Nx.add/2)[0] == Nx.sum(t)
     end
 
     test "window_scatter_max" do
@@ -219,7 +219,7 @@ defmodule Nx.ComplexTest do
 
     test "window_sum" do
       t = Nx.tensor([@arg, @arg2])
-      assert Nx.window_sum(t, {2}) == Nx.reshape(Nx.sum(t), {1})
+      assert Nx.window_sum(t, {2})[0] == Nx.sum(t)
     end
   end
 
