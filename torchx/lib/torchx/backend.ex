@@ -1270,13 +1270,12 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  def unfold_windows(%T{} = tensor, padding, pad_constant, window_dims_tuple, strides) do
+  defp unfold_windows(%T{} = tensor, padding, pad_constant, window_dims_tuple, strides) do
     unfold_windows(from_nx(tensor), padding, pad_constant, window_dims_tuple, strides)
   end
 
-  def unfold_windows(tensor, padding, pad_constant, window_dims_tuple, strides) do
+  defp unfold_windows(tensor, padding, pad_constant, window_dims_tuple, strides) do
     padding = flatten_padding(padding)
-
     padded = Torchx.pad(tensor, padding, pad_constant)
 
     {t_tx, _} =
@@ -1293,16 +1292,10 @@ defmodule Torchx.Backend do
     Enum.reduce(padding, [], fn {a, b}, acc -> [a, b | acc] end)
   end
 
-
   @impl true
   def inspect(%T{} = tensor, inspect_opts) do
-    binary =
-      case inspect_opts.limit do
-        :infinity -> Torchx.to_blob(from_nx(tensor))
-        limit -> Torchx.to_blob(from_nx(tensor), min(limit, Nx.size(tensor)))
-      end
-
     tensor
+    |> to_binary(min(inspect_opts.limit, Nx.size(tensor)))
     |> Nx.Backend.inspect(binary, inspect_opts)
     |> maybe_add_signature(tensor)
   end
@@ -1397,8 +1390,6 @@ defmodule Torchx.Backend do
 
   defp to_typed_ref(tensor, _ref_type, expected_type),
     do: Torchx.to_type(tensor, to_torch_type(expected_type))
-
-  defp device?(%T{data: %TB{ref: {actual, _}}}, expected), do: expected == actual
 
   defp device_option(nil), do: {:cpu, -1}
   defp device_option(backend_opts), do: backend_opts[:device] || {:cpu, -1}
