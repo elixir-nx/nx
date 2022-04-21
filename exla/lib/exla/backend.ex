@@ -77,10 +77,31 @@ defmodule EXLA.Backend do
   end
 
   @impl true
-  def inspect(tensor, inspect_opts) do
-    limit = inspect_opts.limit
-    binary = Nx.to_binary(tensor, if(limit == :infinity, do: [], else: [limit: limit + 1]))
-    Nx.Backend.inspect(tensor, binary, inspect_opts)
+  def inspect(%T{} = tensor, inspect_opts) do
+    result =
+      if platform(tensor) == :host do
+        binary = to_binary(tensor, Nx.size(tensor))
+        Nx.Backend.inspect(tensor, binary, inspect_opts)
+      else
+        "Tensors on the GPU cannot be inspected. Explicitly transfer the tensor by calling Nx.backend_transfer/1"
+      end
+
+    maybe_add_signature(result, tensor)
+  end
+
+  # TODO: Elixir v1.13 has a default_inspect_fun which
+  # we can use to customize this behaviour for tests.
+  if Application.compile_env(:exla, :add_backend_on_inspect, true) do
+    defp maybe_add_signature(result, %T{data: %B{buffer: buffer}}) do
+      %EXLA.DeviceBuffer{client_name: client_name, device_id: device_id, ref: ref} = buffer
+      '#Ref<' ++ rest = :erlang.ref_to_list(ref)
+      info = "EXLA.Backend<#{client_name}:#{device_id}, " <> List.to_string(rest)
+      Inspect.Algebra.concat([info, Inspect.Algebra.line(), result])
+    end
+  else
+    defp maybe_add_signature(result, _tensor) do
+      result
+    end
   end
 
   ## Helpers
@@ -104,6 +125,11 @@ defmodule EXLA.Backend do
   defp same_client_device?(buffer, opts) do
     {client, device_id} = client_and_device_id(opts)
     buffer.client_name == client.name and buffer.device_id == device_id
+  end
+
+  defp platform(%T{data: %B{buffer: buffer}}) do
+    client = EXLA.Client.fetch!(buffer.client_name)
+    client.platform
   end
 
   @impl true
