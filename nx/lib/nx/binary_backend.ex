@@ -2254,6 +2254,7 @@ defmodule Nx.BinaryBackend do
   @compile {:inline, number_to_binary: 2, binary_to_number: 2}
 
   defp scalar_to_number(n) when is_number(n), do: n
+  defp scalar_to_number(%Complex{} = n), do: n
   defp scalar_to_number(t), do: binary_to_number(to_binary(t), t.type)
 
   defp scalar_to_binary(%Complex{re: re, im: im}, type) do

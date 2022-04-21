@@ -15,7 +15,9 @@ defmodule Nx.TemplateBackend do
     "Nx.TemplateBackend"
   end
 
-  funs = Nx.Backend.behaviour_info(:callbacks) -- Module.definitions_in(__MODULE__, :def)
+  funs =
+    Nx.Backend.behaviour_info(:callbacks) --
+      (Nx.Backend.behaviour_info(:optional_callbacks) ++ Module.definitions_in(__MODULE__, :def))
 
   for {fun, arity} <- funs do
     args = Macro.generate_arguments(arity, __MODULE__)

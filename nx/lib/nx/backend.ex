@@ -121,11 +121,21 @@ defmodule Nx.Backend do
 
   ## Optional Callbacks
 
+  @doc """
+  Invoked for execution of optional callbacks with a default implementation.
+
+  First we will attempt to call the optional callback itself
+  (one of the many callbacks defined below), then we attempt
+  to call this callback (which is also optional), then we
+  fallback to the default iomplementation.
+  """
+  @callback optional(atom, fun, [term]) :: tensor
+
   @callback solve(out :: tensor, a :: tensor, b :: tensor) :: tensor
   @callback determinant(out :: tensor, t :: tensor) :: tensor
   @callback logical_not(out :: tensor, t :: tensor) :: tensor
 
-  @optional_callbacks [solve: 3, determinant: 2, logical_not: 2]
+  @optional_callbacks [optional: 3, solve: 3, determinant: 2, logical_not: 2]
 
   ## Inspect implementation
 

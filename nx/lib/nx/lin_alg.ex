@@ -5,7 +5,7 @@ defmodule Nx.LinAlg do
 
   import Nx.Shared
   import Nx.Defn, only: [defn: 2, defnp: 2]
-  import Nx.Defn.Kernel, only: [keyword!: 2, custom_grad: 2]
+  import Nx.Defn.Kernel, only: [keyword!: 2, custom_grad: 2, assert_shape_pattern: 2]
 
   alias Nx.Tensor, as: T
 
@@ -569,14 +569,12 @@ defmodule Nx.LinAlg do
       iex> Nx.LinAlg.solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1]]), Nx.tensor([4]))
       ** (ArgumentError) `a` tensor has incompatible dimensions, expected a 2-D tensor with as many rows as columns, got: {3, 4}
   """
+  # IMPORTANT: This function cannot be a defn because
+  # optional needs to work on the actual backend.
   @doc from_backend: false
-  defn solve(a, b) do
-    transform({a, b}, &transform_solve/1)
-  end
-
-  defp transform_solve({a, b}) do
-    %T{shape: a_shape, type: a_type} = a
-    %T{shape: b_shape, type: b_type} = b
+  def solve(a, b) do
+    %T{shape: a_shape, type: a_type} = a = Nx.to_tensor(a)
+    %T{shape: b_shape, type: b_type} = b = Nx.to_tensor(b)
 
     output_shape = Nx.Shape.solve(a_shape, b_shape)
     output_type = a_type |> Nx.Type.merge(b_type) |> Nx.Type.to_floating()
@@ -1119,12 +1117,12 @@ defmodule Nx.LinAlg do
   def matrix_power(tensor, 0) do
     # We need a special-case for 0 since the code below
     # is optimized to not compute an initial eye.
-    Nx.Defn.Kernel.assert_shape_pattern(tensor, {x, x})
+    assert_shape_pattern(tensor, {x, x})
     Nx.eye(tensor)
   end
 
   def matrix_power(tensor, power) when is_integer(power) do
-    Nx.Defn.Kernel.assert_shape_pattern(tensor, {x, x})
+    assert_shape_pattern(tensor, {x, x})
 
     power
     |> Integer.digits(2)
@@ -1237,21 +1235,21 @@ defmodule Nx.LinAlg do
       >
 
   """
-  defn determinant(tensor) do
-    Nx.Defn.Kernel.assert_shape_pattern(tensor, {n, n})
+  # IMPORTANT: This function cannot be a defn because
+  # optional needs to work on the actual backend.
+  def determinant(tensor) do
+    tensor = Nx.to_tensor(tensor)
+    output = Nx.template({}, Nx.Type.to_floating(tensor.type))
+    assert_shape_pattern(tensor, {n, n})
 
-    transform(tensor, fn tensor ->
-      output = Nx.template({}, Nx.Type.to_floating(tensor.type))
+    Nx.Shared.optional(:determinant, [tensor], output, fn tensor ->
+      {n, _} = Nx.shape(tensor)
 
-      Nx.Shared.optional(:determinant, [tensor], output, fn tensor ->
-        {n, _} = Nx.shape(tensor)
-
-        case n do
-          2 -> determinant_2by2(tensor)
-          3 -> determinant_3by3(tensor)
-          _ -> determinant_NbyN(tensor)
-        end
-      end)
+      case n do
+        2 -> determinant_2by2(tensor)
+        3 -> determinant_3by3(tensor)
+        _ -> determinant_NbyN(tensor)
+      end
     end)
   end
 

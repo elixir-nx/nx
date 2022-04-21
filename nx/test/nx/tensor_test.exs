@@ -5,16 +5,6 @@ defmodule Nx.TensorTest do
     @behaviour Nx.Backend
     defstruct [:key]
 
-    funs = Nx.Backend.behaviour_info(:callbacks) -- [from_binary: 3, backend_deallocate: 1]
-
-    for {fun, arity} <- funs do
-      args = Macro.generate_arguments(arity, __MODULE__)
-
-      def unquote(fun)(unquote_splicing(args)) do
-        raise "not supported"
-      end
-    end
-
     def from_binary(tensor, binary, opts) do
       key = Keyword.fetch!(opts, :key)
       Process.put(key, binary)
@@ -26,6 +16,18 @@ defmodule Nx.TensorTest do
         :ok
       else
         :already_deallocated
+      end
+    end
+
+    funs =
+      Nx.Backend.behaviour_info(:callbacks) --
+        (Nx.Backend.behaviour_info(:optional_callbacks) ++ Module.definitions_in(__MODULE__, :def))
+
+    for {fun, arity} <- funs do
+      args = Macro.generate_arguments(arity, __MODULE__)
+
+      def unquote(fun)(unquote_splicing(args)) do
+        raise "not supported"
       end
     end
   end
