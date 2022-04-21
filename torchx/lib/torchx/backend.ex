@@ -1293,21 +1293,20 @@ defmodule Torchx.Backend do
     Enum.reduce(padding, [], fn {a, b}, acc -> [a, b | acc] end)
   end
 
+
   @impl true
   def inspect(%T{} = tensor, inspect_opts) do
-    result =
-      if device?(tensor, :cpu) do
-        binary = Torchx.to_blob(from_nx(tensor))
-        Nx.Backend.inspect(tensor, binary, inspect_opts)
-      else
-        "Tensors on the GPU cannot be inspected. Explicitly transfer the tensor by calling Nx.backend_transfer/1"
+    binary =
+      case inspect_opts.limit do
+        :infinity -> Torchx.to_blob(from_nx(tensor))
+        limit -> Torchx.to_blob(from_nx(tensor), min(limit, Nx.size(tensor)))
       end
 
-    maybe_add_signature(result, tensor)
+    tensor
+    |> Nx.Backend.inspect(binary, inspect_opts)
+    |> maybe_add_signature(tensor)
   end
 
-  # TODO: Elixir v1.13 has a default_inspect_fun which
-  # we can use to customize this behaviour for tests.
   if Application.compile_env(:torchx, :add_backend_on_inspect, true) do
     defp maybe_add_signature(result, %T{data: %TB{ref: {device, _}}}) do
       Inspect.Algebra.concat([
