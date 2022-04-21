@@ -5,7 +5,9 @@ defmodule Nx.TensorTest do
     @behaviour Nx.Backend
     defstruct [:key]
 
-    funs = Nx.Backend.behaviour_info(:callbacks) -- [from_binary: 3, backend_deallocate: 1]
+    funs =
+      Nx.Backend.behaviour_info(:callbacks) --
+        (Nx.Backend.behaviour_info(:optional_callbacks) ++ Module.definitions_in(__MODULE__, :def))
 
     for {fun, arity} <- funs do
       args = Macro.generate_arguments(arity, __MODULE__)
