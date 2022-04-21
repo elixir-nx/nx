@@ -610,7 +610,7 @@ defmodule Nx do
   Although note it is impossible to perform any operation on a tensor template:
 
       iex> t = Nx.template({2, 3}, {:f, 32}, names: [:rows, :columns])
-      iex> Nx.add(t, 1)
+      iex> Nx.abs(t)
       ** (RuntimeError) cannot perform operations on a Nx.TemplateBackend tensor
 
   To convert existing tensors to templates, use `to_template/1`.
@@ -656,7 +656,7 @@ defmodule Nx do
   Although note it is impossible to perform any operation on a tensor template:
 
       iex> t = Nx.iota({2, 3}) |> Nx.to_template()
-      iex> Nx.add(t, 1)
+      iex> Nx.abs(t)
       ** (RuntimeError) cannot perform operations on a Nx.TemplateBackend tensor
 
   To build a template from scratch, use `template/3`.

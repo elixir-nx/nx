@@ -45,9 +45,7 @@ defmodule Torchx.NxDoctestTest do
   end
 
   @unrelated_doctests [
-    default_backend: 1,
-    template: 3,
-    to_template: 1
+    default_backend: 1
   ]
 
   @inherently_unsupported_doctests [

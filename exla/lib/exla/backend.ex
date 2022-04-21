@@ -72,6 +72,12 @@ defmodule EXLA.Backend do
   end
 
   @impl true
+  def to_batched_list(out, tensor, opts) do
+    binary_tensor = backend_copy(tensor, Nx.BinaryBackend, [])
+    Nx.BinaryBackend.to_batched_list(out, binary_tensor, opts)
+  end
+
+  @impl true
   def to_binary(%T{data: %B{buffer: buffer}, type: {_, size}}, limit) do
     EXLA.DeviceBuffer.read(buffer, limit * div(size, 8))
   end

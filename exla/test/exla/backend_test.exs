@@ -6,7 +6,43 @@ defmodule EXLA.BackendTest do
     :ok
   end
 
-  doctest Nx, except: [compatible?: 2, default_backend: 1]
+  @precision_error_doctests [
+    expm1: 1,
+    erfc: 1,
+    erf: 1,
+    cosh: 1,
+    tanh: 1,
+    asinh: 1,
+    atanh: 1,
+    ceil: 1,
+    logistic: 1
+  ]
+
+  @temporarily_broken_doctests [
+    # XLA currently doesn't support complex conversion
+    as_type: 2
+  ]
+
+  @inherently_unsupported_doctests [
+    # XLA requires signed and unsigned tensors to be at least of size 32
+    random_uniform: 4,
+    # XLA does not support complex number comparison
+    argmax: 2,
+    # XLA does not support complex number comparison
+    argmin: 2
+  ]
+
+  @unrelated_doctests [
+    default_backend: 1
+  ]
+
+  doctest Nx,
+    except:
+      [:moduledoc] ++
+        @precision_error_doctests ++
+        @temporarily_broken_doctests ++
+        @inherently_unsupported_doctests ++
+        @unrelated_doctests
 
   test "Nx.to_binary/1" do
     t = Nx.tensor([1, 2, 3, 4], backend: EXLA.Backend)
@@ -68,7 +104,6 @@ defmodule EXLA.BackendTest do
 
   test "Kernel.inspect/2" do
     t = Nx.tensor([1, 2, 3, 4], backend: EXLA.Backend)
-    client = EXLAHelpers.client()
 
     assert inspect(t) ==
              """
@@ -77,11 +112,6 @@ defmodule EXLA.BackendTest do
                [1, 2, 3, 4]
              >\
              """
-  end
-
-  test "raises on most operations" do
-    t = Nx.tensor([1, 2, 3, 4], backend: EXLA.Backend)
-    assert_raise RuntimeError, fn -> Nx.exp(t) end
   end
 
   test "raises on invalid client" do
