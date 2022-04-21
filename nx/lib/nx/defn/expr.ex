@@ -209,6 +209,7 @@ defmodule Nx.Defn.Expr do
     out
   end
 
+  @impl true
   def optional(name, args, fun) do
     %{data: %{context: context}} = res = apply(fun, args)
     expr(res, context, :optional, [expr(res, context, name, args), res])
