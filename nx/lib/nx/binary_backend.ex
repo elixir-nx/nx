@@ -718,6 +718,11 @@ defmodule Nx.BinaryBackend do
   defp element_remainder(_, a, b), do: :math.fmod(a, b)
 
   defp element_atan2(_, a, b), do: Complex.atan2(a, b)
+  # TODO: we need to handle :infinity, :neg_infinity and :nan in all other operations
+  defp element_max(_, :infinity, _b), do: :infinity
+  defp element_max(_, _a, :infinity), do: :infinity
+  defp element_max(_, :neg_infinity, b), do: b
+  defp element_max(_, a, :neg_infinity), do: a
   defp element_max(_, a, b), do: max(a, b)
   defp element_min(_, a, b), do: min(a, b)
 
