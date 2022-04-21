@@ -129,7 +129,7 @@ defmodule Nx.Backend do
   to call this callback (which is also optional), then we
   fallback to the default iomplementation.
   """
-  @callback optional(atom, fun, [term]) :: tensor
+  @callback optional(atom, [term], fun) :: tensor
 
   @callback solve(out :: tensor, a :: tensor, b :: tensor) :: tensor
   @callback determinant(out :: tensor, t :: tensor) :: tensor

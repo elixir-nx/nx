@@ -151,6 +151,11 @@ defmodule EXLA.Backend do
     EXLA.jit(expr_fn, [List.to_tuple(tensors)])
   end
 
+  @impl true
+  def optional(_name, args, fun) do
+    EXLA.jit(fun, args)
+  end
+
   binary_ops =
     [:add, :subtract, :multiply, :power, :remainder, :divide, :atan2, :min, :max, :quotient] ++
       [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++

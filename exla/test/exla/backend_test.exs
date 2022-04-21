@@ -70,12 +70,13 @@ defmodule EXLA.BackendTest do
     t = Nx.tensor([1, 2, 3, 4], backend: EXLA.Backend)
     client = EXLAHelpers.client()
 
-    assert inspect(t) =~ ~r"""
-           #Nx.Tensor<
-             s64\[4\]
-             EXLA.Backend<#{client.name}:#{client.default_device_id}, [\d\.]+>
-           >\
-           """
+    assert inspect(t) ==
+             """
+             #Nx.Tensor<
+               s64[4]
+               [1, 2, 3, 4]
+             >\
+             """
   end
 
   test "raises on most operations" do
