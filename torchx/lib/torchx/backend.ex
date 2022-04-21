@@ -1438,19 +1438,4 @@ defmodule Torchx.Backend do
       raise "operation #{unquote(fun)} is not supported on Torchx.Backend"
     end
   end
-
-  ## All remaining callbacks
-
-  funs =
-    (Nx.Backend.behaviour_info(:callbacks) -- Nx.Backend.behaviour_info(:optional_callbacks)) --
-      Module.definitions_in(__MODULE__, :def)
-
-  for {fun, arity} <- funs do
-    args = Macro.generate_arguments(arity, __MODULE__)
-
-    @impl true
-    def unquote(fun)(unquote_splicing(args)) do
-      raise "operation #{unquote(fun)} is not yet supported on Torchx.Backend"
-    end
-  end
 end
