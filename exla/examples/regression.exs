@@ -1,6 +1,5 @@
 defmodule LinReg do
   import Nx.Defn
-  @default_defn_compiler EXLA
 
   # y = mx + b
   defn init_random_params do
@@ -47,6 +46,8 @@ defmodule LinReg do
     end
   end
 end
+
+EXLA.set_as_nx_default([:tpu, :cuda, :rocm, :host])
 
 params = LinReg.init_random_params()
 m = :rand.normal(0.0, 10.0)

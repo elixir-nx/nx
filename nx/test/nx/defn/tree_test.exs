@@ -3,9 +3,38 @@ defmodule Nx.Defn.TreeTest do
 
   alias Nx.Defn.{Expr, Tree}
   alias Nx.Tensor, as: T
+  doctest Nx.Defn.Tree
 
   import Nx.Defn
-  @default_defn_compiler Nx.Defn.Identity
+
+  setup do
+    Nx.Defn.default_options(compiler: Nx.Defn.Identity)
+    :ok
+  end
+
+  defn factorial(x) do
+    {factorial, _} =
+      while {factorial = 1.0, x}, Nx.greater(x, 1) do
+        {factorial * x, x - 1}
+      end
+
+    factorial
+  end
+
+  defn with_hook(a, b), do: hook(a + b, :example)
+
+  defn hooked_factorial(a, b) do
+    {hook(factorial(with_hook(a, b)), :another), b}
+  end
+
+  describe "has_hooks?" do
+    test "returns true if there are hooks" do
+      refute Tree.has_hooks?(factorial(10), %{})
+      refute Tree.has_hooks?(hooked_factorial(1, 2), %{})
+      assert Tree.has_hooks?(hooked_factorial(1, 2), %{example: & &1})
+      assert Tree.has_hooks?(hooked_factorial(1, 2), %{another: & &1})
+    end
+  end
 
   describe "rewrite_types" do
     test "wraps root parameters" do
@@ -53,12 +82,12 @@ defmodule Nx.Defn.TreeTest do
     test "converts scalars" do
       expr = Expr.tensor(Nx.tensor(3, type: {:s, 64}))
 
-      assert %T{data: %Expr{op: :scalar}, type: {:s, 32}} =
+      assert %T{data: %Expr{op: :constant}, type: {:s, 32}} =
                Tree.rewrite_types(expr, max_signed_type: {:s, 32})
 
       expr = Expr.tensor(Nx.tensor(3.0, type: {:f, 64}))
 
-      assert %T{data: %Expr{op: :scalar}, type: {:f, 32}} =
+      assert %T{data: %Expr{op: :constant}, type: {:f, 32}} =
                Tree.rewrite_types(expr, max_float_type: {:f, 32})
     end
 
@@ -164,19 +193,10 @@ defmodule Nx.Defn.TreeTest do
       assert %T{data: %Expr{op: :as_type, args: [param({:s, 64})]}, type: {:f, 32}} = last
     end
 
-    defn factorial(x) do
-      {factorial, _} =
-        while {factorial = 1.0, x}, Nx.greater(x, 1) do
-          {factorial * x, x - 1}
-        end
-
-      factorial
-    end
-
     test "with while" do
       expr = factorial(Nx.template({}, {:s, 64}))
 
-      assert %T{data: %Expr{op: :elem, args: [while, 0, 2]}, type: {:f, 32}} =
+      assert %T{data: %Expr{op: :elem, args: [while, 0]}, type: {:f, 32}} =
                Tree.rewrite_types(expr, max_signed_type: {:s, 32}, max_float_type: {:f, 32})
 
       assert %T{data: %Expr{op: :while, args: [initial, arg, condition, body]}, type: {:tuple, 2}} =
@@ -192,18 +212,31 @@ defmodule Nx.Defn.TreeTest do
       assert {%T{data: %Expr{op: :multiply}, type: {:f, 32}},
               %T{data: %Expr{op: :subtract}, type: {:s, 32}}} = body
     end
+
+    test "with hook" do
+      expr = with_hook(Nx.template({}, {:s, 64}), Nx.template({}, {:s, 64}))
+
+      assert %T{data: %Expr{op: :attach_token, args: [token, expr]}, type: {:s, 32}} =
+               Tree.rewrite_types(expr, max_signed_type: {:s, 32})
+
+      assert %T{data: %Expr{op: :add, id: id}, type: {:s, 32}} = expr
+
+      %T{data: %Expr{op: :token, args: [token]}} = token
+      [%{name: :example, callback: nil, expr: hook}] = token.hooks
+      assert %T{data: %Expr{op: :add, id: ^id}, type: {:s, 32}} = hook
+    end
   end
 
-  describe "traverse_args" do
+  describe "apply_args" do
     test "handles regular operations" do
       expr = Expr.add(Nx.tensor([0, 1]), Nx.tensor([1, 2]), Nx.tensor([2, 3]))
-      {[arg1, arg2], acc} = Tree.traverse_args(expr, [], &{&1, [&1.data.id | &2]})
+      {[arg1, arg2], acc} = Tree.apply_args(expr, [], &{&1, [&1.data.id | &2]})
       assert acc == [arg2.data.id, arg1.data.id]
     end
 
     test "handles concatenate" do
       expr = Expr.concatenate(Nx.tensor(1), [Nx.tensor(2), Nx.tensor(3)], 0)
-      {[[arg1, arg2], 0], acc} = Tree.traverse_args(expr, [], &{&1, [&1.data.id | &2]})
+      {[[arg1, arg2], 0], acc} = Tree.apply_args(expr, [], &{&1, [&1.data.id | &2]})
       assert acc == [arg2.data.id, arg1.data.id]
     end
   end

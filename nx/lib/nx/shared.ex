@@ -81,7 +81,7 @@ defmodule Nx.Shared do
     end
   end
 
-  @all_types [:s, :f, :bf, :u]
+  @all_types [:s, :f, :bf, :u, :c]
 
   defp match_types([h | t]) do
     for type <- @all_types, t <- match_types(t) do
@@ -91,22 +91,25 @@ defmodule Nx.Shared do
 
   defp match_types([]), do: [[]]
 
-  defp match_bin_modifier(var, :bf, _),
-    do: quote(do: unquote(var) :: binary - size(2))
+  defp match_bin_modifier(var, type, size) when type in [:f, :bf, :c],
+    do: quote(do: unquote(var) :: bitstring - size(unquote(size)))
 
   defp match_bin_modifier(var, type, size),
     do: shared_bin_modifier(var, type, size)
 
+  defp read_bin_modifier(var, :c, size) do
+    quote do: Nx.Shared.read_complex(unquote(var), unquote(size))
+  end
+
   defp read_bin_modifier(var, :bf, _) do
-    if System.endianness() == :little do
-      quote do
-        <<x::float-little-32>> = <<0::16, unquote(var)::binary>>
-        x
-      end
-    else
-      quote do
-        <<x::float-big-32>> = <<unquote(var)::binary, 0::16>>
-        x
+    quote do: Nx.Shared.read_bf16(unquote(var))
+  end
+
+  defp read_bin_modifier(var, :f, size) do
+    quote do
+      case unquote(var) do
+        <<var::float-native-size(unquote(size))>> -> var
+        var -> Nx.Shared.read_non_finite(var, unquote(size))
       end
     end
   end
@@ -116,9 +119,45 @@ defmodule Nx.Shared do
 
   defp write_bin_modifier(var, :bf, _) do
     if System.endianness() == :little do
-      quote(do: binary_part(<<unquote(var)::float-native-32>>, 2, 2) :: binary)
+      quote do
+        case unquote(var) do
+          x when is_number(x) -> binary_part(<<x::float-native-32>>, 2, 2)
+          x -> Nx.Shared.write_bf16(x)
+        end :: binary
+      end
     else
-      quote(do: binary_part(<<unquote(var)::float-native-32>>, 0, 2) :: binary)
+      quote do
+        case unquote(var) do
+          x when is_number(x) -> binary_part(<<x::float-native-32>>, 0, 2)
+          x -> Nx.Shared.write_bf16(x)
+        end :: binary
+      end
+    end
+  end
+
+  defp write_bin_modifier(var, :c, size) do
+    quote do
+      case unquote(var) do
+        x when is_number(x) ->
+          elem_size = div(unquote(size), 2)
+          <<x::float-native-size(elem_size), 0::float-native-size(elem_size)>>
+
+        %Complex{re: re, im: im} ->
+          elem_size = div(unquote(size), 2)
+          <<re::float-native-size(elem_size), im::float-native-size(elem_size)>>
+
+        x ->
+          Nx.Shared.write_non_finite(x, unquote(size))
+      end :: binary
+    end
+  end
+
+  defp write_bin_modifier(var, :f, size) do
+    quote do
+      case unquote(var) do
+        x when is_number(x) -> <<x::float-native-size(unquote(size))>>
+        x -> Nx.Shared.write_non_finite(x, unquote(size))
+      end :: binary
     end
   end
 
@@ -131,15 +170,86 @@ defmodule Nx.Shared do
   defp shared_bin_modifier(var, :u, size),
     do: quote(do: unquote(var) :: unsigned - integer - native - size(unquote(size)))
 
-  defp shared_bin_modifier(var, :f, size),
-    do: quote(do: unquote(var) :: float - native - size(unquote(size)))
+  @doc """
+  BF16 read callback.
+  """
+  def read_bf16(<<0xFF80::16-native>>), do: :neg_infinity
+  def read_bf16(<<0x7F80::16-native>>), do: :infinity
+
+  if System.endianness() == :little do
+    def read_bf16(<<1::1, _::7, _sign::1, 127::7>>), do: :nan
+
+    def read_bf16(bf16) do
+      <<x::float-little-32>> = <<0::16, bf16::binary>>
+      x
+    end
+  else
+    def read_bf16(<<_sign::1, 255::8, _::7>>), do: :nan
+
+    def read_bf16(bf16) do
+      <<x::float-big-32>> = <<bf16::binary, 0::16>>
+      x
+    end
+  end
 
   @doc """
-  Converts an Erlang float (float64) to float32 precision.
+  C64 and C128 callback.
   """
-  def to_float32(float64) when is_float(float64) do
-    <<float32::float-32>> = <<float64::float-32>>
-    float32
+  def read_complex(val, size) do
+    elem_size = div(size, 2)
+    <<re::float-native-size(elem_size), im::float-native-size(elem_size)>> = val
+    Complex.new(re, im)
+  end
+
+  @doc """
+  BF16 write callback.
+  """
+  def write_bf16(data) do
+    case data do
+      :infinity -> unquote(Nx.Type.infinity_binary({:bf, 16}))
+      :neg_infinity -> unquote(Nx.Type.neg_infinity_binary({:bf, 16}))
+      :nan -> unquote(Nx.Type.nan_binary({:bf, 16}))
+    end
+  end
+
+  @doc """
+  Non-finite read callback.
+  """
+  def read_non_finite(data, 16) do
+    case data do
+      <<0xFC00::16-native>> -> :neg_infinity
+      <<0x7C00::16-native>> -> :infinity
+      _ -> :nan
+    end
+  end
+
+  def read_non_finite(data, 32) do
+    case data do
+      <<0xFF800000::32-native>> -> :neg_infinity
+      <<0x7F800000::32-native>> -> :infinity
+      _ -> :nan
+    end
+  end
+
+  def read_non_finite(data, 64) do
+    case data do
+      <<0xFFF0000000000000::64-native>> -> :neg_infinity
+      <<0x7FF0000000000000::64-native>> -> :infinity
+      _ -> :nan
+    end
+  end
+
+  @doc """
+  Non-finite write callback.
+  """
+  for size <- [16, 32, 64] do
+    def write_non_finite(data, unquote(size)) do
+      case data do
+        :infinity -> unquote(Nx.Type.infinity_binary({:f, size}))
+        :neg_infinity -> unquote(Nx.Type.neg_infinity_binary({:f, size}))
+        :nan -> unquote(Nx.Type.nan_binary({:f, size}))
+      end
+    end
   end
 
   ## Reflection
@@ -149,175 +259,71 @@ defmodule Nx.Shared do
   """
   def unary_math_funs,
     do: [
-      exp: {"exponential", quote(do: :math.exp(var!(x)))},
-      expm1: {"exponential minus one", quote(do: :math.exp(var!(x)) - 1)},
-      log: {"natural log", quote(do: :math.log(var!(x)))},
-      log1p: {"natural log plus one", quote(do: :math.log(var!(x) + 1))},
-      logistic: {"standard logistic (a sigmoid)", quote(do: 1 / (1 + :math.exp(-var!(x))))},
-      cos: {"cosine", quote(do: :math.cos(var!(x)))},
-      sin: {"sine", quote(do: :math.sin(var!(x)))},
-      tan: {"tangent", quote(do: :math.tan(var!(x)))},
-      cosh: {"hyperbolic cosine", quote(do: :math.cosh(var!(x)))},
-      sinh: {"hyperbolic sine", quote(do: :math.sinh(var!(x)))},
-      tanh: {"hyperbolic tangent", quote(do: :math.tanh(var!(x)))},
-      acos: {"inverse cosine", quote(do: :math.acos(var!(x)))},
-      asin: {"inverse sine", quote(do: :math.asin(var!(x)))},
-      atan: {"inverse tangent", quote(do: :math.atan(var!(x)))},
-      acosh: {"inverse hyperbolic cosine", acosh_formula()},
-      asinh: {"inverse hyperbolic sine", asinh_formula()},
-      atanh: {"inverse hyperbolic tangent", atanh_formula()},
-      sqrt: {"square root", quote(do: :math.sqrt(var!(x)))},
-      rsqrt: {"reverse square root", quote(do: 1 / :math.sqrt(var!(x)))},
-      cbrt: {"cube root", quote(do: :math.pow(var!(x), 1 / 3))},
-      erf: {"error function", erf_formula()},
-      erfc: {"one minus error function", erfc_formula()},
-      erf_inv: {"inverse error function", quote(do: Nx.Shared.erf_inv(var!(x)))}
+      exp: {"exponential", quote(do: Complex.exp(var!(x))), "$$exp(z) = e^z$$"},
+      expm1:
+        {"exponential minus one",
+         quote do
+           var!(x)
+           |> Complex.exp()
+           |> Complex.subtract(1)
+         end, "$$expm1(z) = e^z - 1$$"},
+      log:
+        {"natural log", quote(do: Complex.ln(var!(x))),
+         ~S"""
+         $log(z) = ln(z),\quad \text{if z} \in \Reals$
+
+         $log(z) = ln(r) + i\theta,\quad\text{if }z = re^{i\theta} \in \Complex$
+         """},
+      log1p:
+        {"natural log plus one", quote(do: Complex.ln(Complex.add(var!(x), 1))),
+         "$$log1p(z) = log(z + 1)$$"},
+      logistic:
+        {"standard logistic (a sigmoid)",
+         quote do
+           var!(x)
+           |> Complex.negate()
+           |> Complex.exp()
+           |> Complex.add(1)
+           |> then(&Complex.divide(1, &1))
+         end, "$$logistic(z) = \\frac{1}{1 + e^{-z}}$$"},
+      cos:
+        {"cosine", quote(do: Complex.cos(var!(x))), "$$cos(z) = \\frac{e^{iz} + e^{-iz}}{2}$$"},
+      sin: {"sine", quote(do: Complex.sin(var!(x))), "$$sin(z) = \\frac{e^{iz} - e^{-iz}}{2i}$$"},
+      tan: {"tangent", quote(do: Complex.tan(var!(x))), "$$tan(z) = \\frac{sin(z)}{cos(z)}$$"},
+      cosh:
+        {"hyperbolic cosine", quote(do: Complex.cosh(var!(x))),
+         "$$cosh(z) = \\frac{e^z + e^{-z}}{2}$$"},
+      sinh:
+        {"hyperbolic sine", quote(do: Complex.sinh(var!(x))),
+         "$$sinh(z) = \\frac{e^z - e^{-z}}{2}$$"},
+      tanh:
+        {"hyperbolic tangent", quote(do: Complex.tanh(var!(x))),
+         "$$sinh(z) = \\frac{e^z - e^{-z}}{e^z + e^{-z}}$$"},
+      acos: {"inverse cosine", quote(do: Complex.acos(var!(x))), "$$acos(cos(z)) = z$$"},
+      asin: {"inverse sine", quote(do: Complex.asin(var!(x))), "$$asin(sin(z)) = z$$"},
+      atan: {"inverse tangent", quote(do: Complex.atan(var!(x))), "$$atan(tan(z)) = z$$"},
+      acosh:
+        {"inverse hyperbolic cosine", quote(do: Complex.acosh(var!(x))), "$$acosh(cosh(z)) = z$$"},
+      asinh:
+        {"inverse hyperbolic sine", quote(do: Complex.asinh(var!(x))), "$$asinh(sinh(z)) = z$$"},
+      atanh:
+        {"inverse hyperbolic tangent", quote(do: Complex.atanh(var!(x))),
+         "$$atanh(tanh(z)) = z$$"},
+      sqrt: {"square root", quote(do: Complex.sqrt(var!(x))), "$$sqrt(z) = \\sqrt{z}$$"},
+      rsqrt:
+        {"reverse square root", quote(do: Complex.divide(1, Complex.sqrt(var!(x)))),
+         "$$rsqrt(z) = \\frac{1}{\\sqrt{z}}$$"},
+      cbrt:
+        {"cube root", quote(do: Complex.power(var!(x), 1 / 3)), "$$cbrt(z) = z^{\\frac{1}{3}}$$"},
+      erf:
+        {"error function", quote(do: Complex.erf(var!(x))),
+         "$$erf(z) = \\frac{2}{\\sqrt{\\pi}} \\int_{0}^{z} e^{-t^2}dt$$"},
+      erfc:
+        {"one minus error function", quote(do: Complex.erfc(var!(x))), "$$erfc(z) = 1 - erf(z)$$"},
+      erf_inv:
+        {"inverse error function", quote(do: Complex.erf_inv(var!(x))),
+         "$$erf\\text{\\textunderscore}inv(erf(z)) = z$$"}
     ]
-
-  defp atanh_formula do
-    if Code.ensure_loaded?(:math) and math_fun_supported?(:atanh, 1) do
-      quote(do: :math.atanh(var!(x)))
-    else
-      quote(do: :math.log((1 + var!(x)) / (1 - var!(x))) / 2)
-    end
-  end
-
-  defp asinh_formula do
-    if Code.ensure_loaded?(:math) and math_fun_supported?(:asinh, 1) do
-      quote(do: :math.asinh(var!(x)))
-    else
-      quote(do: :math.log(var!(x) + :math.sqrt(1 + var!(x) * var!(x))))
-    end
-  end
-
-  defp acosh_formula do
-    if Code.ensure_loaded?(:math) and math_fun_supported?(:acosh, 1) do
-      quote(do: :math.acosh(var!(x)))
-    else
-      quote(do: :math.log(var!(x) + :math.sqrt(var!(x) + 1) * :math.sqrt(var!(x) - 1)))
-    end
-  end
-
-  defp erf_formula do
-    if Code.ensure_loaded?(:math) and math_fun_supported?(:erf, 1) do
-      quote(do: :math.erf(var!(x)))
-    else
-      quote(do: Nx.Shared.erf(var!(x)))
-    end
-  end
-
-  defp erfc_formula do
-    if Code.ensure_loaded?(:math) and math_fun_supported?(:erfc, 1) do
-      quote(do: :math.erfc(var!(x)))
-    else
-      quote(do: 1.0 - Nx.Shared.erf(var!(x)))
-    end
-  end
-
-  @doc """
-  Checks if a given function is supported in the `:math` module.
-  """
-  def math_fun_supported?(fun, arity) do
-    args =
-      case {fun, arity} do
-        {:atan, 1} -> [3.14]
-        {:atanh, 1} -> [0.9]
-        {_, 1} -> [1.0]
-        {_, 2} -> [1.0, 1.0]
-      end
-
-    _ = apply(:math, fun, args)
-    true
-  rescue
-    UndefinedFunctionError ->
-      false
-  end
-
-  @doc """
-  Approximation for the error function.
-
-  ## Examples
-
-      iex> Nx.Shared.erf(0.999)
-      0.8422852791811658
-
-      iex> Nx.Shared.erf(0.01)
-      0.011283414826762329
-
-  """
-  def erf(x) do
-    x = x |> max(-4.0) |> min(4.0)
-    x2 = x * x
-
-    alpha =
-      0.0
-      |> muladd(x2, -2.72614225801306e-10)
-      |> muladd(x2, 2.77068142495902e-08)
-      |> muladd(x2, -2.10102402082508e-06)
-      |> muladd(x2, -5.69250639462346e-05)
-      |> muladd(x2, -7.34990630326855e-04)
-      |> muladd(x2, -2.95459980854025e-03)
-      |> muladd(x2, -1.60960333262415e-02)
-
-    beta =
-      0.0
-      |> muladd(x2, -1.45660718464996e-05)
-      |> muladd(x2, -2.13374055278905e-04)
-      |> muladd(x2, -1.68282697438203e-03)
-      |> muladd(x2, -7.37332916720468e-03)
-      |> muladd(x2, -1.42647390514189e-02)
-
-    min(x * alpha / beta, 1.0)
-  end
-
-  defp muladd(acc, t, n) do
-    acc * t + n
-  end
-
-  @doc """
-  Approximation for the inverse error function.
-
-  ## Examples
-
-      iex> Nx.Shared.erf_inv(0.999)
-      2.326753756865462
-
-      iex> Nx.Shared.erf_inv(0.01)
-      0.008862500728738846
-
-  """
-  def erf_inv(x) do
-    w = -:math.log((1 - x) * (1 + x))
-    erf_inv_p(w) * x
-  end
-
-  defp erf_inv_p(w) when w < 5 do
-    w = w - 2.5
-
-    2.81022636e-08
-    |> muladd(w, 3.43273939e-07)
-    |> muladd(w, -3.5233877e-06)
-    |> muladd(w, -4.39150654e-06)
-    |> muladd(w, 0.00021858087)
-    |> muladd(w, -0.00125372503)
-    |> muladd(w, -0.00417768164)
-    |> muladd(w, 0.246640727)
-    |> muladd(w, 1.50140941)
-  end
-
-  defp erf_inv_p(w) do
-    w = :math.sqrt(w) - 3
-
-    -0.000200214257
-    |> muladd(w, 0.000100950558)
-    |> muladd(w, 0.00134934322)
-    |> muladd(w, -0.00367342844)
-    |> muladd(w, 0.00573950773)
-    |> muladd(w, -0.0076224613)
-    |> muladd(w, 0.00943887047)
-    |> muladd(w, 1.00167406)
-    |> muladd(w, 2.83297682)
-  end
 
   ## Types
 
@@ -325,17 +331,46 @@ defmodule Nx.Shared do
   Builds the type of an element-wise binary operation.
   """
   def binary_type(a, b) when is_number(a) and is_number(b), do: Nx.Type.infer(a + b)
-  def binary_type(a, b) when is_number(a), do: Nx.Type.merge_scalar(type(b), a)
-  def binary_type(a, b) when is_number(b), do: Nx.Type.merge_scalar(type(a), b)
+  def binary_type(a, b) when is_number(a), do: Nx.Type.merge_number(type(b), a)
+  def binary_type(a, b) when is_number(b), do: Nx.Type.merge_number(type(a), b)
   def binary_type(a, b), do: Nx.Type.merge(type(a), type(b))
 
   # For unknown types, return {:f, 32} as the caller
   # should validate the input in a later pass.
   defp type(%T{type: type}), do: type
   defp type({_, _} = type), do: type
+  defp type(%Complex{}), do: {:c, 64}
   defp type(_other), do: {:f, 32}
 
   ## Helpers
+
+  @doc """
+  Extracts the backend from the given options.
+  """
+  def backend_from_options!(opts) do
+    case Keyword.fetch(opts, :backend) do
+      {:ok, backend} when is_atom(backend) ->
+        {backend, []}
+
+      {:ok, {backend, options}} when is_atom(backend) and is_list(options) ->
+        {backend, options}
+
+      {:ok, other} ->
+        raise ArgumentError,
+              ":backend must be an atom or a tuple {backend, options}, got: #{inspect(other)}"
+
+      :error ->
+        nil
+    end
+  end
+
+  @doc """
+  Converts an Erlang float (float64) to float32 precision.
+  """
+  def to_float32(float64) when is_float(float64) do
+    <<float32::float-32>> = <<float64::float-32>>
+    float32
+  end
 
   @doc """
   Asserts on the given keys.
@@ -371,7 +406,7 @@ defmodule Nx.Shared do
   @doc """
   Gets the implementation of a list of maybe tensors.
   """
-  def find_impl!(list) do
+  def list_impl!(list) do
     Enum.reduce(list, Nx.BinaryBackend, fn
       %T{data: %struct{}}, acc -> pick_struct(struct, acc)
       _, acc -> acc
@@ -387,4 +422,64 @@ defmodule Nx.Shared do
             "#{inspect(struct1)} and #{inspect(struct2)}. You may need to call Nx.backend_transfer/1 " <>
             "(or Nx.backend_copy/1) on one or both of them to transfer them to a common implementation"
   end
+
+  @doc """
+  Used to define an Nx callback with an optional implementation.
+
+  The given body is used as the default implementation otherwise.
+  """
+  def optional(function_name, args, output, default_impl)
+      when is_atom(function_name) and is_list(args) and is_function(default_impl) do
+    arity = length(args) + 1
+    backend = list_impl!(args)
+
+    cond do
+      backend == Nx.Defn.Expr ->
+        default_impl
+        |> apply(args)
+        |> ensure_optional_compatible!(output)
+        |> Nx.Defn.Expr.optional(function_name, args, output)
+
+      function_exported?(backend, function_name, arity) ->
+        apply(backend, function_name, [output | args])
+
+      :otherwise ->
+        default_impl
+        |> apply(args)
+        |> ensure_optional_compatible!(output)
+    end
+  end
+
+  defp ensure_optional_compatible!(
+         %{shape: shape, type: type, names: names} = left,
+         %{shape: shape, type: type, names: names}
+       ),
+       do: left
+
+  defp ensure_optional_compatible!(left, right) do
+    raise ArgumentError,
+          "expected default implementation to match template #{inspect(right)}, got: #{inspect(left)}"
+  end
+
+  @doc false
+  def raise_complex_not_supported(function, arity) do
+    raise ArgumentError, "Nx.#{function}/#{arity} does not support complex inputs"
+  end
+
+  @doc false
+  def raise_complex_not_supported({:c, _}, function, arity),
+    do: raise_complex_not_supported(function, arity)
+
+  def raise_complex_not_supported(_, _, _), do: nil
+
+  @doc false
+  def raise_complex_not_implemented_yet(function, arity) do
+    raise ArgumentError, "Nx.#{function}/#{arity} is not yet implemented for complex inputs"
+  end
+
+  @doc false
+  def raise_complex_not_implemented_yet({:c, _}, function, arity),
+    do: raise_complex_not_implemented_yet(function, arity)
+
+  def raise_complex_not_implemented_yet(_, _, _), do: nil
 end

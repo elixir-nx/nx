@@ -1,0 +1,217 @@
+# Rotating Image
+
+## Setup
+
+```elixir
+Mix.install([
+  {:req, "~> 0.2.0"},
+  {:kino, "~> 0.5.1"},
+  {:exla, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "exla"},
+  {:nx, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "nx", override: true},
+  # credits to https://github.com/cocoa-xu
+  {:evision, "~> 0.1.0-dev", github: "cocoa-xu/evision", branch: "main"}
+])
+```
+
+```elixir
+Nx.Defn.default_options(compiler: EXLA)
+```
+
+## Preprocessing
+
+Preprocessing a binary to the tensor representation and calculating shapes of the rotated image.
+
+```elixir
+defmodule Preprocess do
+  def image_to_tensor(file_or_url) do
+    case URI.parse(file_or_url) do
+      %URI{scheme: nil} ->
+        {:ok, mat} = OpenCV.imread(file_or_url)
+        OpenCV.Nx.to_nx(mat)
+
+      _ ->
+        %{body: binary_image} = Req.get!(file_or_url)
+        {:ok, mat} = OpenCV.imdecode(binary_image, OpenCV.cv_IMREAD_COLOR())
+        OpenCV.Nx.to_nx(mat)
+    end
+  end
+
+  # there is no pi const in Nx yet.
+  @pi 3.14159
+
+  defp calculate_new_side_length(side1, side2, angle, radians?) do
+    angle = if radians? == 0, do: angle |> Nx.divide(180) |> Nx.multiply(@pi), else: angle
+    sine = Nx.sin(angle)
+    cosine = Nx.cos(angle)
+
+    side1
+    |> Nx.multiply(cosine)
+    |> Nx.abs()
+    |> Nx.add(Nx.abs(Nx.multiply(side2, sine)))
+    |> Nx.add(1)
+    |> Nx.to_number()
+    |> round()
+  end
+
+  def get_new_height_and_width(height, width, angle, radians? \\ 1) do
+    new_height = calculate_new_side_length(height, width, angle, radians?)
+    new_width = calculate_new_side_length(width, height, angle, radians?)
+    {new_height, new_width}
+  end
+end
+```
+
+## Rotating image
+
+```elixir
+defmodule Rotate do
+  import Nx.Defn
+  @num_channels 3
+  # using three shears to avoid aliasing
+  # https://datagenetics.com/blog/august32013/index.html
+  defnp calculate_new_positions(
+          {y_image, x_image, _},
+          orig_ctr_height,
+          orig_ctr_width,
+          new_ctr_height,
+          new_ctr_width,
+          angle
+        ) do
+    k = Nx.iota({y_image * x_image})
+    i = Nx.as_type(Nx.divide(k, x_image), {:u, 32})
+    j = rem(k, x_image)
+
+    y =
+      orig_ctr_height
+      |> Nx.add(1)
+      |> Nx.add(i)
+      |> then(&Nx.subtract(y_image, &1))
+
+    x =
+      orig_ctr_width
+      |> Nx.add(1)
+      |> Nx.add(j)
+      |> then(&Nx.subtract(x_image, &1))
+
+    tangent =
+      angle
+      |> Nx.divide(2)
+      |> Nx.tan()
+
+    new_x =
+      y
+      |> Nx.multiply(tangent)
+      |> then(&Nx.subtract(x, &1))
+      |> Nx.round()
+
+    new_y =
+      angle
+      |> Nx.sin()
+      |> Nx.multiply(new_x)
+      |> Nx.add(y)
+      |> Nx.round()
+
+    new_x =
+      new_y
+      |> Nx.multiply(tangent)
+      |> then(&Nx.subtract(new_x, &1))
+      |> Nx.round()
+
+    new_y = Nx.subtract(new_ctr_height, new_y)
+    new_x = Nx.subtract(new_ctr_width, new_x)
+
+    new_y = Nx.as_type(Nx.round(new_y), {:u, 32})
+    new_x = Nx.as_type(Nx.round(new_x), {:u, 32})
+
+    Nx.stack([new_y, new_x], axis: 1)
+  end
+
+  defnp calculate_ctr(coordinate) do
+    coordinate
+    |> Nx.add(1)
+    |> Nx.divide(2)
+    |> Nx.subtract(1)
+    |> Nx.round()
+  end
+
+  defnp preprocess_position(pos, n) do
+    Nx.concatenate(
+      [
+        Nx.new_axis(pos, 1) |> Nx.tile([1, @num_channels, 1]),
+        Nx.iota({n, @num_channels, 1}, axis: 1)
+      ],
+      axis: 2
+    )
+    |> Nx.reshape({n * @num_channels, 3})
+  end
+
+  # there is no pi const in Nx yet.
+  @pi 3.14159
+
+  # new_image is a tensor with dims of rotated image filled with zeros
+
+  defn rotate_image_by_angle(image, angle, new_image, radians? \\ 1) do
+    # if radians? is set to false than assuming that angle is given in degrees
+    angle = if radians? == 0, do: angle |> Nx.divide(180) |> Nx.multiply(@pi), else: angle
+
+    {height, width, _} = image.shape
+    {new_height, new_width, _} = new_image.shape
+
+    orig_ctr_height = calculate_ctr(height)
+    orig_ctr_width = calculate_ctr(width)
+
+    new_ctr_height = calculate_ctr(new_height)
+    new_ctr_width = calculate_ctr(new_width)
+
+    pos =
+      calculate_new_positions(
+        image.shape,
+        orig_ctr_height,
+        orig_ctr_width,
+        new_ctr_height,
+        new_ctr_width,
+        angle
+      )
+
+    {n, 2} = Nx.shape(pos)
+
+    preprocessed_pos = preprocess_position(pos, n)
+    image = image |> Nx.reshape({n * @num_channels})
+
+    Nx.indexed_add(new_image, preprocessed_pos, image)
+  end
+end
+```
+
+## Example of usage
+
+```elixir
+num_channels = 3
+
+dir = File.cwd!()
+
+default_input =
+  "https://www.researchgate.net/publication/259521525/figure/fig8/AS:268024322195479@1440913386352/Original-standard-test-image-of-Peppers.png"
+
+input = Kino.Input.text("Image to rotate", default: default_input)
+Kino.render(input)
+path_to_file = Kino.Input.read(input)
+
+# set options
+radians? = 0
+angle = 70
+
+# rotate image by 70 degrees to the right
+image = Preprocess.image_to_tensor(path_to_file)
+{height, width, _} = image.shape
+{new_height, new_width} = Preprocess.get_new_height_and_width(height, width, angle, radians?)
+new_image = Nx.broadcast(Nx.tensor([0], type: {:u, 8}), {new_height, new_width, num_channels})
+rotated_image = Rotate.rotate_image_by_angle(image, angle, new_image, radians?)
+
+{:ok, rotated_image_mat} = OpenCV.Nx.to_mat(rotated_image)
+{:ok, content} = OpenCV.imencode(".png", rotated_image_mat)
+content = :binary.list_to_bin(content)
+
+# display the rotated image
+Kino.Image.new(content, "image/png")
+```

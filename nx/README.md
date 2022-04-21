@@ -1,8 +1,10 @@
 <h1><img src="https://github.com/elixir-nx/nx/raw/main/nx/nx.png" alt="Nx" width="400"></h1>
 
+[![Package](https://img.shields.io/badge/-Package-important)](https://hex.pm/packages/nx) [![Documentation](https://img.shields.io/badge/-Documentation-blueviolet)](https://hexdocs.pm/nx)
+
 Nx is a multi-dimensional tensors library for Elixir with multi-staged compilation to the CPU/GPU. Its high-level features are:
 
-  * Typed multi-dimensional tensors, where the tensors can be unsigned integers (`u8`, `u16`, `u32`, `u64`), signed integers (`s8`, `s16`, `s32`, `s64`), floats (`f32`, `f64`) and brain floats (`bf16`);
+  * Typed multi-dimensional tensors, where the tensors can be unsigned integers (`u8`, `u16`, `u32`, `u64`), signed integers (`s8`, `s16`, `s32`, `s64`), floats (`f16`, `f32`, `f64`), brain floats (`bf16`), and complex numbers (`c64`, `c128`);
 
   * Named tensors, allowing developers to give names to each dimension, leading to more readable and less error prone codebases;
 
@@ -10,7 +12,11 @@ Nx is a multi-dimensional tensors library for Elixir with multi-staged compilati
 
   * Tensors backends, which enables the main `Nx` API to be used to manipulate binary tensors, GPU-backed tensors, sparse matrices, and more;
 
-  * Numerical definitions, known as `defn`, provide multi-stage compilation of tensor operations to multiple targets, such as highly specialized CPU code or the GPU. The compilation can happen either ahead-of-time (AOT) or just-in-time (JIT) with a compiler of your choice;
+  * Numerical definitions, known as `defn`, is a subset of Elixir that is compilable to multiple targets, including GPUs. See [EXLA](https://github.com/elixir-nx/nx/tree/main/exla) for just-in-time (JIT) compilation for CPUs/GPUs/TPUs and [Torchx](https://github.com/elixir-nx/nx/tree/main/torchx) for CPUs/GPUs support;
+
+  * Support for data streaming and hooks, allowing developers to send and receive data from CPUs/GPUs/TPUs while computations are running;
+
+  * Support for linear algebra primitives via `Nx.LinAlg`;
 
 You can find planned enhancements and features in the issues tracker. If you need one particular feature to move forward, don't hesitate to let us know and give us feedback.
 
@@ -40,13 +46,15 @@ In order to support Nx, you might:
 
 Here are some introductory resources with more information on Nx as a whole:
 
-  * [A post by José Valim on Dashbit's blog announcing Nx, outlining some of the design decisions, benchmarks, and general direction](https://dashbit.co/blog/nx-numerical-elixir-is-now-publicly-available) (text)
+  * [A post by José Valim on Nx v0.1 release, discussing its goals, showing benchmarks, and general direction](https://dashbit.co/blog/elixir-and-machine-learning-nx-v0.1) (text)
 
   * [Sean Moriarity's blog](https://seanmoriarity.com/) containing tips on how to use Nx (text)
 
   * [The ThinkingElixir podcast where José Valim unveiled Nx](https://thinkingelixir.com/podcast-episodes/034-jose-valim-reveals-project-nx/) (audio - starts around 8 minutes in)
 
   * [A talk by José Valim at Lambda Days 2021 where he builds a neural network from scratch with Nx](https://www.youtube.com/watch?v=fPKMmJpAGWc) (video)
+
+  * [A screencast by José Valim announcing Livebook, where he also showcases Nx and Axon (a neural network library built on top of Nx)](https://www.youtube.com/watch?v=RKvqc-UEe34) (video)
 
 ## Installation
 
@@ -56,14 +64,22 @@ In order to use `Nx`, you will need Elixir installed. Then create an Elixir proj
 $ mix new my_app
 ```
 
-Then you can add `Nx` as dependency in your `mix.exs`. At the moment you will have to use a Git dependency while we work on our first release:
+Then you can add `Nx` as dependency in your `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:nx, "~> 0.1.0-dev", github: "elixir-nx/nx", branch: "main", sparse: "nx"}
+    {:nx, "~> 0.1"}
   ]
 end
+```
+
+If you are using Livebook or IEx, you can instead run:
+
+```elixir
+Mix.install([
+  {:nx, "~> 0.1"}
+])
 ```
 
 ## Examples
@@ -91,11 +107,11 @@ iex> Nx.divide(Nx.exp(t), Nx.sum(Nx.exp(t)))
 >
 ```
 
+By default, `Nx` uses pure Elixir code. Since Elixir is a functional and immutable language, each operation above makes a copy of the tensor, which is quite innefficient. You can use either [EXLA](https://github.com/elixir-nx/nx/tree/main/exla) or [Torchx](https://github.com/elixir-nx/nx/tree/main/torchx) backends for an improvement in performance, often over 3 orders of magnitude, as well as the ability to work on the data in the GPU. See the README of those projects for more information.
+
 ## Numerical definitions
 
-By default, `Nx` uses pure Elixir code. Since Elixir is a functional and immutable language, each operation above makes a copy of the tensor, which is quite innefficient.
-
-However, `Nx` also comes with numerical definitions, called `defn`, which is a subset of Elixir tailored for numerical computations. For example, it overrides Elixir's default operators so they are tensor-aware:
+`Nx` also comes with numerical definitions, called `defn`, which is a subset of Elixir tailored for numerical computations. For example, it overrides Elixir's default operators so they are tensor-aware:
 
 ```elixir
 defmodule MyModule do
@@ -107,13 +123,23 @@ defmodule MyModule do
 end
 ```
 
-`defn` supports multiple compiler backends, which can compile said functions to run on the CPU or in the GPU. For example, [using the `EXLA` compiler](https://github.com/elixir-nx/nx/tree/main/exla), which provides bindings to Google's XLA:
+You can now invoke it as:
 
 ```elixir
-@defn_compiler {EXLA, client: :host}
-defn softmax(t) do
-  Nx.exp(t) / Nx.sum(Nx.exp(t))
-end
+MyModule.softmax(Nx.tensor([1, 2, 3]))
+```
+
+`defn` relies on a technique called multi-stage programming, which is built on top of Elixir functional and meta-programming capabilities: we transform Elixir code to build a graph of your numerical definitions. This brings two important capabilities:
+
+  1. We can transform this graph to provide features such as automatic differentiation, type lowering, and more
+
+  2. We support custom compilers, which can compile said definitions to run on the CPU and GPU just-in-time
+
+For example, [using the `EXLA` compiler](https://github.com/elixir-nx/nx/tree/main/exla), which provides bindings to Google's XLA:
+
+```elixir
+Nx.Defn.default_options(compiler: EXLA)
+MyModule.softmax(some_tensor)
 ```
 
 Once `softmax` is called, `Nx.Defn` will invoke `EXLA` to emit a just-in-time and high-specialized compiled version of the code, tailored to the input tensors type and shape. By passing `client: :cuda` or `client: :rocm`, the code can be compiled for the GPU. For reference, here are some benchmarks of the function above when called with a tensor of one million random float values:
@@ -142,9 +168,7 @@ elixir f64                3.11 - 4924.56x slower +321.63 ms
 
 See the [`bench`](https://github.com/elixir-nx/nx/tree/main/exla/bench) and [`examples`](https://github.com/elixir-nx/nx/tree/main/exla/examples) directory inside the EXLA project for more information.
 
-`defn` relies on a technique called multi-stage programming, which is built on top of Elixir functional and meta-programming capabilities: we transform Elixir code to emit an AST that is then transformed to run on the CPU/GPU. Ultimately, the `defn` compiler is pluggable, which means developers can implement bindings for different tensor compiler technologies and choose the most appropriate one.
-
-Many of Elixir's features are supported inside `defn`, such as the pipe operator, aliases, conditionals, pattern-matching, and more. Other features such as loops and in-place updates are on the roadmap. `defn` also support `transforms`, which allows numerical definitions to be transformed at runtime. Automatic differentiation, via the `grad` function, is one example of transforms.
+Many of Elixir's features are supported inside `defn`, such as the pipe operator, aliases, conditionals, pattern-matching, and more. It also brings exclusive features to numerical definitions, such as `while` loops, automatic differentiation via the `grad` function, hooks to inspect data running on the GPU, and more.
 
 ## License
 

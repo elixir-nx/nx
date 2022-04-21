@@ -1,0 +1,31 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: 'Nx - Numerical Elixir'
+message: Please cite this software using these metadata.
+type: software
+authors:
+  - given-names: Sean
+    family-names: Moriarity
+    email: smoriarity.5@gmail.com
+    affiliation: Dockyard
+    orcid: 'https://orcid.org/0000-0002-5154-8194'
+  - given-names: José
+    family-names: Valim
+    email: jose.valim@dashbit.co
+    affiliation: Dashbit
+    orcid: 'https://orcid.org/0000-0001-8449-3997'
+  - given-names: Paulo
+    family-names: O. Lenzi Valente
+    email: paulovalente@ufrj.br
+    affiliation: Stone
+    orcid: 'https://orcid.org/0000-0002-9902-9860'
+repository-code: 'https://github.com/elixir-nx/nx'
+keywords:
+  - elixir
+  - tensors
+  - numerical expressions
+license: Apache-2.0
+version: v0.1
+date-released: '2022-01-06'

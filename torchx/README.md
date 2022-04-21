@@ -1,18 +1,21 @@
 <h1><img src="https://github.com/elixir-nx/nx/raw/main/torchx/torchx.png" alt="Torchx" width="400"></h1>
 
-Elixir client for LibTorch (from PyTorch). It includes a backend for `Nx` for native execution of tensor operations (inside and outside of `defn`).
+Elixir client for LibTorch (from PyTorch). It includes a backend for `Nx` for native
+execution of tensor operations (inside and outside of `defn`).
 
-This project is currently alpha and it supports only a fraction of `Nx`'s API.
+This project is currently alpha and it supports most of the Nx API, aside from a few functions and function options.
 
 ## Installation
 
-In order to use `Torchx`, you will need Elixir installed. Then create an Elixir project via the `mix` build tool:
+In order to use `Torchx`, you will need Elixir installed. Then create an Elixir project
+via the `mix` build tool:
 
 ```
 $ mix new my_app
 ```
 
-Then you can add `Torchx` as dependency in your `mix.exs`. At the moment you will have to use a Git dependency while we work on our first release:
+Then you can add `Torchx` as dependency in your `mix.exs`. At the moment you will have to
+use a Git dependency while we work on our first release:
 
 ```elixir
 def deps do
@@ -23,16 +26,51 @@ def deps do
 end
 ```
 
-To compile `Torchx`, you will need to download a precompiled version of `LibTorch` and tell `Torchx` how to use it:
+If you are using Livebook or IEx, you can instead run:
 
-  1. [Download `LibTorch` from PyTorch's official website](https://pytorch.org/get-started/locally/) - make sure you select "LibTorch" as the package option alongside your Operating System
-  2. Unpackage LibTorch to a directory of your choice
-  3. Set the `LIBTORCH_DIR` [environment variable](https://en.wikipedia.org/wiki/Environment_variable) to point to the `LibTorch` directory
+```elixir
+Mix.install([
+  {:exla, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "exla"},
+  {:nx, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "nx", override: true}
+])
+```
 
-If running on Windows, you will also need `make` and a `C++` compiler:
+We will automatically download a precompiled version of `LibTorch` that
+runs on the CPU. If you want to use another version, you can set `LIBTORCH_VERSION`
+to one of the supported values:
 
-  * [Microsoft Build Tools 2019](https://visualstudio.microsoft.com/downloads/)
-  * [Microsoft Visual C++ 2019 Redistributable](https://visualstudio.microsoft.com/downloads/)
+- 1.9.0
+- 1.9.1
+- 1.10.0
+- 1.10.1
+- 1.10.2
+
+If you want torch with CUDA support, please use `LIBTORCH_TARGET` to choose
+CUDA versions. The current supported targets are:
+
+- `cpu` default CPU only version
+- `cu102` CUDA 10.2 and CPU version (no OSX support)
+- `cu111` CUDA 11.1 and CPU version (no OSX support)
+
+Once downloaded, we will compile `Torchx` bindings. You will need `make`/`nmake`,
+`cmake` (3.12+) and a `C++` compiler. If building on Windows, you will need:
+
+- [Microsoft Build Tools 2019](https://visualstudio.microsoft.com/downloads/)
+- [Microsoft Visual C++ 2019 Redistributable](https://visualstudio.microsoft.com/downloads/)
+- [CMake](https://cmake.org/)
+
+For Apple M1-series, you can download precompiled LibTorch binaries with
+[Homebrew](https://brew.sh/):
+
+```shell
+brew install libtorch
+export LIBTORCH_DIR="$(brew --cellar libtorch)/$(brew list --versions libtorch | tr ' ' '\n' | tail -1)"
+# for convenience, the export above can be added to your .bashrc, .zshrc or equivalent
+# adding to .bashrc for example
+echo -e "\nexport LIBTORCH_DIR=\"${LIBTORCH_DIR}\"" >> .bashrc
+```
+
+Other platforms may require compiling `libtorch` from scratch.
 
 ## Usage
 
@@ -45,7 +83,8 @@ Nx.iota({100, 100}, backend: Torchx.Backend)
 
 Then you can proceed to use `Nx` functions as usual!
 
-You can also set `Torchx` as a default backend, which will apply to all tensors created by the current Elixir process:
+You can also set `Torchx` as a default backend, which will apply to all tensors created
+by the current Elixir process:
 
 ```elixir
 Nx.default_backend(Torchx.Backend)

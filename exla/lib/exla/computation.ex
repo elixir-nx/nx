@@ -13,26 +13,40 @@ defmodule EXLA.Computation do
 
   ## Options
 
+    * `:device_id` - the device id to compile to and run the executable on.
+      Defaults to the `:default_device_id` on the client. If `:num_replicas`
+      or `:num_partitions` are given, this option is ignored and the device
+      id is set to `-1`.
+
     * `:num_replicas` - the number of replicas this computation will run on.
       It defaults to 1 but you can set it if you want to enable single-program
-      multiple data
+      multiple data.
+
+    * `:use_spmd` - enables Single-Program Multiple-Data partioning.
+      This is set to true if `:num_partitions` is more than one, otherwise is `false`.
 
   Currently those options do not have an effect as they related to running the
   same compiled executable on multiple replicas.
 
-  Some options apply to TPU only and therefore are not currently supported:
+  Some options apply to TPU only:
 
-    * `:num_partitions` - the number of partitions this computation will run on
+    * `:num_partitions` - the number of partitions this computation will run on.
 
   """
   def compile(computation = %Computation{}, client = %Client{}, argument_shapes, options \\ []) do
     num_replicas = Keyword.get(options, :num_replicas, 1)
     num_partitions = Keyword.get(options, :num_partitions, 1)
 
-    use_spmd = if num_replicas >= 1 or num_partitions >= 1, do: 1, else: 0
-    output_shape = assert_output_shape!(computation)
+    # JAX comments say SPMD can lead to subtle bugs so they only enable
+    # when strictly necessary, which is when num_partitions is greater than 1.
+    use_spmd = if Keyword.get(options, :use_spmd, true) or num_partitions >= 1, do: 1, else: 0
 
-    # TODO: Validate replicas against the client
+    device_id =
+      if num_replicas > 1 or num_partitions > 1,
+        do: -1,
+        else: Keyword.get(options, :device_id, client.default_device_id)
+
+    output_shape = assert_output_shape!(computation)
 
     ref =
       EXLA.NIF.compile(
@@ -41,7 +55,8 @@ defmodule EXLA.Computation do
         Enum.map(argument_shapes, & &1.ref),
         num_replicas,
         num_partitions,
-        use_spmd
+        use_spmd,
+        device_id
       )
       |> unwrap!()
 
@@ -50,81 +65,9 @@ defmodule EXLA.Computation do
       ref: ref,
       output_shape: output_shape,
       num_replicas: num_replicas,
-      num_partitions: num_partitions
+      num_partitions: num_partitions,
+      device_id: device_id
     }
-  end
-
-  @doc """
-  Performs AOT compilation of the given computation.
-
-  It expects the following arguments:
-
-    * the `computation`
-    * the path for the input protobuf text file with
-      a description of the inputs and outputs
-    * the path to the output header file
-    * the path to the output object file
-    * the generated function name as a string
-    * the generated class name as a string
-
-  It writes to the output paths and returns `:ok`.
-
-  ## Options
-
-    * `:target_triple` - the target triple to compile to.
-      It defaults to the current target triple but one
-      can be set for cross-compilation. A list is available
-      here: https://github.com/tensorflow/tensorflow/blob/e687cab61615a95b8aea79120c9f168d4cc30955/tensorflow/compiler/aot/tfcompile.bzl
-
-          target_triple: "x86_64-pc-linux"
-
-    * `:target_features` - the default executable makes
-      no assumption about the target runtime, so special
-      instructions such as SIMD are not leveraged. But you
-      can specify those flags if desired:
-
-          target_features: "+sse4.1 +sse4.2 +avx +avx2 +fma"
-
-  """
-  def compile_aot(
-        %Computation{ref: ref} = comp,
-        pbtext_path,
-        header_path,
-        object_path,
-        function_name,
-        class_name,
-        options \\ []
-      ) do
-    assert_output_shape!(comp)
-
-    EXLA.NIF.compile_aot(
-      ref,
-      pbtext_path,
-      header_path,
-      object_path,
-      function_name,
-      class_name,
-      options[:target_triple] || target_triple(),
-      options[:target_features] || ""
-    )
-  end
-
-  @doc """
-  Returns the default target triplet for computations.
-  """
-  def target_triple() do
-    case :os.type() do
-      {:win32, _} ->
-        "x86_64-none-windows"
-
-      {:unix, :linux} ->
-        "x86_64-pc-linux"
-
-      {:unix, osname} ->
-        arch_str = :erlang.system_info(:system_architecture)
-        [arch, vendor | _] = arch_str |> List.to_string() |> String.split("-")
-        arch <> "-" <> vendor <> "-" <> Atom.to_string(osname)
-    end
   end
 
   defp assert_output_shape!(%{output_shape: output_shape}) do
@@ -139,7 +82,7 @@ defmodule EXLA.Computation do
 
   defp root_tuple_only?(shape) do
     case shape do
-      %{dtype: {:t, inner}} -> Enum.all?(inner, &(not match?({:t, _}, &1.dtype)))
+      %{dtype: {:tuple, inner}} -> Enum.all?(inner, &(not match?({:tuple, _}, &1.dtype)))
       %{} -> false
     end
   end

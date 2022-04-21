@@ -3,17 +3,6 @@ defmodule Nx.Defn.Kernel do
   All imported functionality available inside `defn` blocks.
   """
 
-  @special_forms [alias: 1, alias: 2, import: 1, import: 2, require: 1, require: 2, cond: 1]
-
-  @doc false
-  defmacro __using__(_opts) do
-    quote do
-      import Kernel, only: []
-      import Nx.Defn.Kernel, except: unquote(Kernel.@(special_forms))
-      alias Nx.Defn.Kernel, as: Kernel
-    end
-  end
-
   @doc """
   Defines an alias, as in `Kernel.SpecialForms.alias/2`.
 
@@ -105,8 +94,8 @@ defmodule Nx.Defn.Kernel do
   ## Examples
 
       cond do
-        Nx.all?(Nx.greater(a, 0)) -> b *
-        Nx.all?(Nx.less(a, 0)) -> b + c
+        Nx.all(Nx.greater(a, 0)) -> b *
+        Nx.all(Nx.less(a, 0)) -> b + c
         true -> b - c
       end
 
@@ -128,10 +117,8 @@ defmodule Nx.Defn.Kernel do
         Nx.tanh(a) + Nx.power(b, 2)
       end
 
-  Let's see a trivial example, which is `inspect_expr/1`. `inspect_expr/1`
-  can be used to debug the current expression during compilation.
-  It is implemented by using `transform/2` to invoke `IO.inspect/1` at
-  definition time:
+  Let's see a trivial example, which is to use `IO.inspect/1` to
+  print a tensor expression at definition time:
 
       defn tanh_power(a, b) do
         Nx.tanh(a) + Nx.power(b, 2) |> transform(&IO.inspect/1)
@@ -156,13 +143,15 @@ defmodule Nx.Defn.Kernel do
         e = add [ b, d ] ()
       >
 
+  Although, for convenience, you might use `inspect_expr/2` instead.
+
   ## Pitfalls
 
   Because `transform/2` is invoked inside `defn`, its scope is tied
   to `defn`. For example, if you do this:
 
       transform(tensor, fn tensor ->
-        if Nx.shape(tensor) != {2, 2} do
+        if Nx.type(tensor) != {:f, 32} do
           raise "bad"
         end
       end)
@@ -216,6 +205,40 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
+  Inspects the value at runtime to the terminal.
+
+  This function is implemented on top of `hook/3` and therefore
+  has the following restrictions:
+
+    * It can only inspect tensors and `Nx.Container`
+    * The return value of this function must be part of the output
+
+  All options are passed to `IO.inspect/2`.
+
+  ## Examples
+
+      defn tanh_grad(t) do
+        grad(t, fn t ->
+          t
+          |> Nx.tanh()
+          |> inspect_value()
+        end)
+      end
+
+      defn tanh_grad(t) do
+        grad(t, fn t ->
+          t
+          |> Nx.tanh()
+          |> inspect_value(label: "tanh")
+        end)
+      end
+
+  """
+  def inspect_value(expr, opts \\ []) do
+    hook(expr, &IO.inspect(&1, opts))
+  end
+
+  @doc """
   Rewrites the types of `expr` recursively according to `opts`
 
   ## Options
@@ -250,7 +273,7 @@ defmodule Nx.Defn.Kernel do
 
   """
   def stop_grad(expr) do
-    Nx.Defn.Expr.metadata(expr, %{stop_grad: true})
+    Nx.Defn.Expr.metadata(expr, %{stop_grad: true, inspect: :stop_grad})
   end
 
   @doc """
@@ -274,7 +297,7 @@ defmodule Nx.Defn.Kernel do
 
   """
   def custom_grad(expr, fun) when is_function(fun, 2) do
-    Nx.Defn.Expr.metadata(expr, %{custom_grad: fun})
+    Nx.Defn.Expr.metadata(expr, %{custom_grad: fun, inspect: :custom_grad})
   end
 
   @doc """
@@ -359,7 +382,7 @@ defmodule Nx.Defn.Kernel do
   def left + right, do: Nx.add(left, right)
 
   @doc """
-  Element-wise substraction operator.
+  Element-wise subtraction operator.
 
   It delegates to `Nx.subtract/2` (supports broadcasting).
 
@@ -389,6 +412,21 @@ defmodule Nx.Defn.Kernel do
   def left * right, do: Nx.multiply(left, right)
 
   @doc """
+  Element-wise multiplication operator.
+
+  It delegates to `Nx.power/2` (supports broadcasting).
+
+  ## Examples
+
+      defn power(a, b) do
+        a ** b
+      end
+
+  """
+  def left ** right when Kernel.and(is_number(left), is_number(right)), do: Kernel.**(left, right)
+  def left ** right, do: Nx.power(left, right)
+
+  @doc """
   Element-wise division operator.
 
   It delegates to `Nx.divide/2` (supports broadcasting).
@@ -402,6 +440,25 @@ defmodule Nx.Defn.Kernel do
   """
   def left / right when Kernel.and(is_number(left), is_number(right)), do: Kernel./(left, right)
   def left / right, do: Nx.divide(left, right)
+
+  @doc """
+  Element-wise remainder operation.
+
+  It delegates to `Nx.remainder/2` (supports broadcasting).
+
+  ## Examples
+
+      defn divides_by_5?(a) do
+        rem(a, 5)
+        |> Nx.any()
+        |> Nx.equal(Nx.tensor(1))
+      end
+
+  """
+  def rem(left, right) when Kernel.and(is_number(left), is_number(right)),
+    do: Kernel.rem(left, right)
+
+  def rem(left, right), do: Nx.remainder(left, right)
 
   @doc """
   Element-wise maximum operation.
@@ -517,23 +574,19 @@ defmodule Nx.Defn.Kernel do
   def not tensor when is_number(tensor), do: logical_not(tensor)
   def not tensor, do: Nx.logical_not(tensor)
 
-  defp logical_and(l, r) when Kernel.==(l, 0), do: zero(l, r)
-  defp logical_and(l, r) when Kernel.==(r, 0), do: zero(l, r)
-  defp logical_and(l, r), do: one(l, r)
+  defp logical_and(l, _) when Kernel.==(l, 0), do: zero()
+  defp logical_and(_, r) when Kernel.==(r, 0), do: zero()
+  defp logical_and(_, _), do: one()
 
-  defp logical_or(l, r) when Kernel.and(Kernel.==(l, 0), Kernel.==(r, 0)), do: zero(l, r)
-  defp logical_or(l, r), do: one(l, r)
+  defp logical_or(l, r) when Kernel.and(Kernel.==(l, 0), Kernel.==(r, 0)), do: zero()
+  defp logical_or(_, _), do: one()
 
-  defp logical_not(0), do: 1
-  defp logical_not(0.0), do: 1.0
-  defp logical_not(n) when is_float(n), do: 0.0
-  defp logical_not(n) when is_integer(n), do: 0
+  defp logical_not(0), do: one()
+  defp logical_not(0.0), do: one()
+  defp logical_not(_), do: zero()
 
-  defp zero(l, r) when Kernel.or(is_float(l), is_float(r)), do: 0.0
-  defp zero(_, _), do: 0
-
-  defp one(l, r) when Kernel.or(is_float(l), is_float(r)), do: 1.0
-  defp one(_, _), do: 1
+  defp zero(), do: Nx.tensor(0, type: {:u, 8})
+  defp one(), do: Nx.tensor(1, type: {:u, 8})
 
   @doc """
   Element-wise bitwise AND operation.
@@ -624,6 +677,8 @@ defmodule Nx.Defn.Kernel do
   @doc """
   Element-wise equality operation.
 
+  It delegates to `Nx.equal/2`.
+
   ## Examples
 
       defn check_equality(a, b) do
@@ -632,79 +687,97 @@ defmodule Nx.Defn.Kernel do
 
   """
   def left == right when Kernel.and(is_number(left), is_number(right)),
-    do: Kernel.==(left, right)
+    do: to_constant(Kernel.==(left, right))
 
   def left == right, do: Nx.equal(left, right)
 
   @doc """
   Element-wise inequality operation.
 
+  It delegates to `Nx.not_equal/2`.
+
   ## Examples
 
       defn check_inequality(a, b) do
         a != b
       end
+
   """
   def left != right when Kernel.and(is_number(left), is_number(right)),
-    do: Kernel.!=(left, right)
+    do: to_constant(Kernel.!=(left, right))
 
   def left != right, do: Nx.not_equal(left, right)
 
   @doc """
   Element-wise less than operation.
 
+  It delegates to `Nx.less/2`.
+
   ## Examples
 
       defn check_less_than(a, b) do
         a < b
       end
+
   """
   def left < right when Kernel.and(is_number(left), is_number(right)),
-    do: Kernel.<(left, right)
+    do: to_constant(Kernel.<(left, right))
 
   def left < right, do: Nx.less(left, right)
 
   @doc """
   Element-wise greater than operation.
 
+  It delegates to `Nx.greater/2`.
+
   ## Examples
 
       defn check_greater_than(a, b) do
         a > b
       end
+
   """
   def left > right when Kernel.and(is_number(left), is_number(right)),
-    do: Kernel.>(left, right)
+    do: to_constant(Kernel.>(left, right))
 
   def left > right, do: Nx.greater(left, right)
 
   @doc """
   Element-wise less-equal operation.
 
+  It delegates to `Nx.less_equal/2`.
+
   ## Examples
 
       defn check_less_equal(a, b) do
         a <= b
       end
+
   """
   def left <= right when Kernel.and(is_number(left), is_number(right)),
-    do: Kernel.<=(left, right)
+    do: to_constant(Kernel.<=(left, right))
 
   def left <= right, do: Nx.less_equal(left, right)
 
   @doc """
   Element-wise greater-equal operation.
 
+  It delegates to `Nx.greater_equal/2`.
+
   ## Examples
 
       defn check_greater_equal(a, b) do
         a >= b
       end
+
   """
   def left >= right when Kernel.and(is_number(left), is_number(right)),
-    do: Kernel.>=(left, right)
+    do: to_constant(Kernel.>=(left, right))
 
   def left >= right, do: Nx.greater_equal(left, right)
+
+  defp to_constant(true), do: one()
+  defp to_constant(false), do: zero()
 
   @doc """
   Ensures the first argument is a `keyword` with the given
@@ -837,7 +910,7 @@ defmodule Nx.Defn.Kernel do
 
   ## Examples
 
-      if Nx.any?(Nx.equal(t, 0)) do
+      if Nx.any(Nx.equal(t, 0)) do
         0.0
       else
         1 / t
@@ -896,7 +969,7 @@ defmodule Nx.Defn.Kernel do
 
   A simple loop that increments `x` until it is `10` can be written as:
 
-        while x = 0, Nx.less_than(x, 10) do
+        while x = 0, Nx.less(x, 10) do
           x + 1
         end
 
@@ -938,7 +1011,7 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc false
-  defdelegate __while__(file, line, pattern, condition, block), to: Nx.Defn.Expr, as: :while
+  defdelegate __while__(file, line, pattern, condition, block), to: Nx.Defn.Expr, as: :defn_while
 
   defp while_arg({left, right}, prelude) do
     {left, prelude} = while_arg(left, prelude)
@@ -984,6 +1057,49 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
+  Pipes `value` to the given `fun` and returns the `value` itself.
+
+  Useful for running synchronous side effects in a pipeline.
+
+  ## Examples
+
+  Let's suppose you want to inspect an expression in the middle of
+  a pipeline. You could write:
+
+      a
+      |> Nx.add(b)
+      |> tap(&inspect_expr/1)
+      |> Nx.multiply(c)
+
+  """
+  defmacro tap(value, fun) do
+    quote bind_quoted: [fun: fun, value: value] do
+      _ = fun.(value)
+      value
+    end
+  end
+
+  @doc """
+  Pipes `value` into the given `fun`.
+
+  In other words, it invokes `fun` with `value` as argument.
+  This is most commonly used in pipelines, allowing you
+  to pipe a value to a function outside of its first argument.
+
+  ### Examples
+
+      a
+      |> Nx.add(b)
+      |> then(&Nx.subtract(c, &1))
+
+  """
+  defmacro then(value, fun) do
+    quote do
+      unquote(fun).(unquote(value))
+    end
+  end
+
+  @doc """
   Gets the element at the zero-based index in tuple.
 
   It raises ArgumentError when index is negative or it
@@ -1012,5 +1128,356 @@ defmodule Nx.Defn.Kernel do
   """
   defmacro @expr do
     quote do: Kernel.@(unquote(expr))
+  end
+
+  @doc """
+  Shortcut for `hook/3`.
+  """
+  def hook(expr, name_or_function)
+
+  def hook(expr, name) when is_atom(name),
+    do: unguarded_hook(expr, name, nil)
+
+  def hook(expr, function) when is_function(function, 1),
+    do: unguarded_hook(expr, random_hook_name(), function)
+
+  @doc """
+  Defines a hook.
+
+  Hooks are a mechanism to execute an anonymous function for
+  side-effects with runtime tensor values.
+
+  Let's see an example:
+
+      defmodule Hooks do
+        import Nx.Defn
+
+        defn add_and_mult(a, b) do
+          add = hook(a + b, fn tensor -> IO.inspect({:add, tensor}) end)
+          mult = hook(a * b, fn tensor -> IO.inspect({:mult, tensor}) end)
+          {add, mult}
+        end
+      end
+
+  The `defn` above defines two hooks, one is called with the
+  value of `a + b` and another with `a * b`. Once you invoke
+  the function above, you should see this printed:
+
+      Hooks.add_and_mult(2, 3)
+      {:add, #Nx.Tensor<
+         s64
+         5
+      >}
+      {:mult, #Nx.Tensor<
+         s64
+         6
+      >}
+
+  In other words, the `hook` function accepts a tensor
+  expression as argument and it will invoke a custom
+  function with a tensor value at runtime. `hook` returns
+  the result of the given expression. The expression can
+  be any tensor or a `Nx.Container`.
+
+  Note **you must return the result of the `hook` call**.
+  For example, the code below won't inspect the `:add`
+  tuple, because the hook is not returned from `defn`:
+
+      defn add_and_mult(a, b) do
+        _add = hook(a + b, fn tensor -> IO.inspect({:add, tensor}) end)
+        mult = hook(a * b, fn tensor -> IO.inspect({:mult, tensor}) end)
+        mult
+      end
+
+  We will learn how to hook into a value that is not part
+  of the result in the "Hooks and tokens" section.
+
+  ## Named hooks
+
+  It is possible to give names to the hooks. This allows them
+  to be defined or overridden by calling `Nx.Defn.jit/3` or
+  `Nx.Defn.stream/3`. Let's see an example:
+
+      defmodule Hooks do
+        import Nx.Defn
+
+        defn add_and_mult(a, b) do
+          add = hook(a + b, :hooks_add)
+          mult = hook(a * b, :hooks_mult)
+          {add, mult}
+        end
+      end
+
+  Now you can pass the hook as argument as follows:
+
+      hooks = %{
+        hooks_add: fn tensor ->
+          IO.inspect {:add, tensor}
+        end
+      }
+
+      args = [Nx.tensor(2), Nx.tensor(3)]
+      Nx.Defn.jit(&Hooks.add_and_mult/2, args, hooks: hooks)
+
+  > **Important!** We recommend to prefix your hook names
+  > by the name of your project to avoid conflicts.
+
+  If a named hook is not given, compilers can optimize
+  that away and not transfer the tensor from the device
+  in the first place.
+
+  You can also mix named hooks with callbacks:
+
+      defn add_and_mult(a, b) do
+        add = hook(a + b, :hooks_add, fn tensor -> IO.inspect({:add, tensor}) end)
+        mult = hook(a * b, :hooks_mult, fn tensor -> IO.inspect({:mult, tensor}) end)
+        {add, mult}
+      end
+
+  If a hook with the same name is given to `Nx.Defn.jit/3`
+  or `Nx.Defn.stream/3`, then it will override the default
+  callback.
+
+  ## Hooks and tokens
+
+  So far, we have always returned the result of the `hook`
+  call. However, what happens if the values we want to
+  hook are not part of the return value, such as below?
+
+      defn add_and_mult(a, b) do
+        _add = hook(a + b, :hooks_add, &IO.inspect({:add, &1}))
+        mult = hook(a * b, :hooks_mult, &IO.inspect({:mult, &1}))
+        mult
+      end
+
+  In such cases, you must use tokens. Tokens are used to
+  create an ordering over hooks, ensuring hooks execute
+  in a certain sequence:
+
+      defn add_and_mult(a, b) do
+        token = create_token()
+        {token, _add} = hook_token(token, a + b, :hooks_add, &IO.inspect({:add, &1}))
+        {token, mult} = hook_token(token, a * b, :hooks_mult, &IO.inspect({:mult, &1}))
+        attach_token(token, mult)
+      end
+
+  The example above creates a token and uses `hook_token/4`
+  to create hooks attached to their respective tokens. By using a token,
+  we guarantee that those hooks will be invoked in the order
+  in which they were defined. Then, at the end of the function,
+  we attach the token (and its associated hooks) to the result `mult`.
+
+  In fact, the `hook/3` function is implemented roughly like this:
+
+      def hook(tensor_expr, name, function) do
+        {token, result} = hook_token(create_token(), tensor_expr, name, function)
+        attach_token(token, result)
+      end
+
+  Note you must attach the token at the end, otherwise the hooks
+  will be "lost", as if they were not defined. This also applies
+  to conditionals and loops. The token must be attached within
+  the branch they are used. For example, this won't work:
+
+      token = create_token()
+
+      {token, result} =
+        if Nx.any(value) do
+          hook_token(token, some_value)
+        else
+          hook_token(token, another_value)
+        end
+
+      attach_token(result)
+
+  Instead, you must write:
+
+      token = create_token()
+
+      if Nx.any(value) do
+        {token, result} = hook_token(token, some_value)
+        attach_token(token, result)
+      else
+        {token, result} = hook_token(token, another_value)
+        attach_token(token, result)
+      end
+
+  """
+  def hook(expr, name, function) when Kernel.and(is_atom(name), is_function(function, 1)),
+    do: unguarded_hook(expr, name, function)
+
+  defp unguarded_hook(expr, name, function) do
+    {token, result} = Nx.Defn.Expr.add_hook(create_token(), expr, name, function)
+    attach_token(token, result)
+  end
+
+  @doc """
+  Shortcut for `hook_token/4`.
+  """
+  def hook_token(token, expr, name_or_function)
+
+  def hook_token(%Nx.Defn.Token{} = token, expr, name) when is_atom(name),
+    do: Nx.Defn.Expr.add_hook(token, expr, name, nil)
+
+  def hook_token(%Nx.Defn.Token{} = token, expr, function) when is_function(function, 1),
+    do: Nx.Defn.Expr.add_hook(token, expr, random_hook_name(), function)
+
+  @doc """
+  Defines a hook with an existing token. See `hook/3`.
+  """
+  def hook_token(%Nx.Defn.Token{} = token, expr, name, function)
+      when Kernel.and(is_atom(name), is_function(function, 1)),
+      do: Nx.Defn.Expr.add_hook(token, expr, name, function)
+
+  defp random_hook_name(), do: :"hook_#{System.unique_integer([:positive])}"
+
+  @doc """
+  Creates a token for hooks. See `hook/3`.
+  """
+  def create_token do
+    Nx.Defn.Token.new()
+  end
+
+  @doc """
+  Attaches a token to an expression. See `hook/3`.
+  """
+  def attach_token(%Nx.Defn.Token{} = token, expr) do
+    Nx.Defn.Expr.attach_token(token, expr)
+  end
+
+  @doc """
+  Asserts the `tensor` has a certain `shape`.
+
+  If it succeeds, it returns the given tensor. Raises
+  an error otherwise.
+
+  ## Examples
+
+  To assert the tensor is a scalar, you can pass the empty tuple `shape`:
+
+      iex> assert_shape Nx.tensor(13), {}
+      #Nx.Tensor<
+        s64
+        13
+      >
+
+  If the shapes do not match, an error is raised:
+
+      iex> assert_shape Nx.tensor([1, 2, 3]), {}
+      ** (ArgumentError) expected tensor to be a scalar, got tensor with shape {3}
+
+      iex> assert_shape Nx.tensor([1, 2, 3]), {4}
+      ** (ArgumentError) expected tensor to have shape {4}, got tensor with shape {3}
+
+  If you want to assert on the rank or shape patterns, use
+  `assert_shape_pattern/2` instead.
+  """
+  def assert_shape(tensor, shape) when is_tuple(shape) do
+    case Nx.shape(tensor) do
+      ^shape ->
+        tensor
+
+      other ->
+        raise ArgumentError,
+              "expected tensor to #{shape_to_string(shape)}, got tensor with shape #{inspect(other)}"
+    end
+  end
+
+  defp shape_to_string({}), do: "be a scalar"
+  defp shape_to_string(shape), do: "have shape " <> inspect(shape)
+
+  @doc """
+  Asserts the `tensor` has a certain `shape` pattern.
+
+  If it succeeds, it returns the given tensor. Raises
+  an error otherwise.
+
+  ## Examples
+
+  Opposite to `assert_shape/2`, where the given shape is a value,
+  `assert_shape_pattern` allows the shape to be any Elixir pattern.
+  We can use this to match on ranks:
+
+      iex> assert_shape_pattern Nx.tensor([[1, 2], [3, 4]]), {_, _}
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 2],
+          [3, 4]
+        ]
+      >
+
+      iex> assert_shape_pattern Nx.tensor([1, 2, 3]), {_, _}
+      ** (ArgumentError) expected tensor to match shape {_, _}, got tensor with shape {3}
+
+  Or even use variables to assert on properties such as square matrices:
+
+      iex> assert_shape_pattern Nx.tensor([[1, 2], [3, 4]]), {x, x}
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 2],
+          [3, 4]
+        ]
+      >
+
+      iex> assert_shape_pattern Nx.tensor([1, 2, 3]), {x, x}
+      ** (ArgumentError) expected tensor to match shape {x, x}, got tensor with shape {3}
+
+  You can also use guards to specify tall matrices and so forth:
+
+      iex> assert_shape_pattern Nx.tensor([[1], [2]]), {x, y} when x > y
+      #Nx.Tensor<
+        s64[2][1]
+        [
+          [1],
+          [2]
+        ]
+      >
+
+      iex> assert_shape_pattern Nx.tensor([1, 2]), {x, y} when x > y
+      ** (ArgumentError) expected tensor to match shape {x, y} when x > y, got tensor with shape {2}
+
+  """
+  defmacro assert_shape_pattern(tensor, shape) do
+    shape_pattern_string = shape_pattern_to_string(shape)
+
+    quote do
+      Nx.Defn.Kernel.transform(unquote(tensor), fn tensor ->
+        # Revert scoping so guards work
+        import unquote(__MODULE__), only: []
+        import Kernel
+
+        case Nx.shape(tensor) do
+          unquote(shape) ->
+            tensor
+
+          shape ->
+            unquote(__MODULE__).__assert_shape_pattern__!(unquote(shape_pattern_string), shape)
+        end
+      end)
+    end
+  end
+
+  @doc false
+  def __assert_shape_pattern__!(shape_pattern_string, shape) do
+    raise ArgumentError,
+          "expected tensor to #{shape_pattern_string}, got tensor with shape #{inspect(shape)}"
+  end
+
+  defp shape_pattern_to_string({:{}, _, []}), do: "be a scalar"
+  defp shape_pattern_to_string(pattern), do: "match shape " <> Macro.to_string(pattern)
+
+  @definitions (Module.definitions_in(__MODULE__, :def) ++
+                  Module.definitions_in(__MODULE__, :defmacro)) --
+                 [alias: 1, alias: 2, import: 1, import: 2, require: 1, require: 2, cond: 1]
+
+  @doc false
+  defmacro __using__(_opts) do
+    quote do
+      import Kernel, only: []
+      import Nx.Defn.Kernel, only: unquote(Kernel.@(definitions))
+      alias Nx.Defn.Kernel, as: Kernel
+    end
   end
 end

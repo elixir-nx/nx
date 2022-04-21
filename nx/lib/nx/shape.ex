@@ -722,8 +722,18 @@ defmodule Nx.Shape do
 
   defp do_conv_spatial_dims([], [], []), do: []
 
-  defp do_conv_spatial_dims([cur | spatial], [f | filters], [s | strides]),
-    do: [floor((cur - f) / s) + 1 | do_conv_spatial_dims(spatial, filters, strides)]
+  defp do_conv_spatial_dims([cur | spatial], [f | filters], [s | strides]) do
+    dim = floor((cur - f) / s) + 1
+
+    if dim <= 0 do
+      raise ArgumentError,
+            "conv would result in empty tensor which is" <>
+              " not currently supported in Nx, please open an" <>
+              " issue if you'd like this behavior to change"
+    else
+      [dim | do_conv_spatial_dims(spatial, filters, strides)]
+    end
+  end
 
   @doc """
   Output shape after a pooling or reduce window operation.
@@ -807,6 +817,32 @@ defmodule Nx.Shape do
       )
 
   defp validate_strides!(_, _), do: :ok
+
+  @doc "Validates the input shapes for `Nx.indexed_add/3`"
+  def indexed_add(
+        %Nx.Tensor{shape: target_shape},
+        %Nx.Tensor{shape: indices_shape},
+        %Nx.Tensor{shape: updates_shape}
+      ) do
+    case {indices_shape, updates_shape} do
+      _ when tuple_size(indices_shape) != 2 ->
+        raise(ArgumentError, "indices must be a rank 2 tensor, got: #{tuple_size(indices_shape)}")
+
+      _ when tuple_size(updates_shape) != 1 ->
+        raise(ArgumentError, "updates must be a rank 1 tensor, got: #{tuple_size(updates_shape)}")
+
+      {{_, n}, _} when n != tuple_size(target_shape) ->
+        raise ArgumentError,
+              "expected indices to have shape {*, #{tuple_size(target_shape)}}, got: #{inspect(indices_shape)}"
+
+      {{n, _}, {m}} when n != m ->
+        raise ArgumentError,
+              "expected updates tensor to match the first axis of indices tensor with shape #{inspect(indices_shape)}, got {#{m}}"
+
+      _ ->
+        :ok
+    end
+  end
 
   @doc """
   Output shape after a squeeze operation.
@@ -1151,6 +1187,239 @@ defmodule Nx.Shape do
   defp do_put_slice([], [], [], [], acc), do: Enum.reverse(acc)
 
   @doc """
+  Returns the shape and names after a take.
+
+  In practice, `axis` in `shape` gets replaced by `indices_shape`.
+
+  ## Examples
+
+      iex> Nx.Shape.take({2, 3}, [nil, :data], {10}, [nil], 0)
+      {{10, 3}, [nil, :data]}
+
+      iex> Nx.Shape.take({2, 3}, [nil, :data], {10}, [nil], 1)
+      {{2, 10}, [nil, :data]}
+
+      iex> Nx.Shape.take({2, 3}, [nil, :data], {10}, [:reordered], 0)
+      {{10, 3}, [:reordered, :data]}
+
+      iex> Nx.Shape.take({2, 3, 4}, [:x, :y, :z], {10, 20}, [:a, :b], 1)
+      {{2, 10, 20, 4}, [:x, :a, :b, :z]}
+
+  ### Error cases
+
+      iex> Nx.Shape.take({2, 3}, [nil, :data], {10}, [:reordered], 1)
+      ** (ArgumentError) cannot merge names :data, :reordered
+  """
+  def take(shape, names, indices_shape, indices_names, axis) do
+    shape = Tuple.to_list(shape)
+    indices_shape = Tuple.to_list(indices_shape)
+
+    {leading_lengths, [_ | trailing_lengths]} = Enum.split(shape, axis)
+    {leading_names, [axis_name | trailing_names]} = Enum.split(names, axis)
+
+    indices_names =
+      case indices_names do
+        [name] -> [merge_names!(axis_name, name)]
+        names -> names
+      end
+
+    result_shape = leading_lengths ++ indices_shape ++ trailing_lengths
+    result_names = leading_names ++ indices_names ++ trailing_names
+    {List.to_tuple(result_shape), result_names}
+  end
+
+  @doc """
+  Returns shape if valid and raises error if not.
+  """
+  def take_diagonal(shape)
+
+  def take_diagonal({len, breadth}) do
+    {len, breadth}
+  end
+
+  def take_diagonal(invalid_shape) do
+    raise ArgumentError,
+          "take_diagonal/2 expects tensor of rank 2, got tensor of rank: #{tuple_size(invalid_shape)}"
+  end
+
+  @doc """
+  Returns shape if valid and raises error if not.
+  """
+  def make_diagonal(shape)
+
+  def make_diagonal({len}) do
+    {len}
+  end
+
+  def make_diagonal(invalid_shape) do
+    raise ArgumentError,
+          "make_diagonal/2 expects tensor of rank 1, got tensor of rank: #{tuple_size(invalid_shape)}"
+  end
+
+  @doc """
+  Validates an offset to extract or create a diagonal (tensor) for given shape
+
+  ## Examples
+
+      iex> Nx.Shape.validate_diag_offset!({3, 4}, 1)
+      :ok
+
+      iex> Nx.Shape.validate_diag_offset!({3, 4}, -1)
+      :ok
+
+  ## Error cases
+
+    iex> Nx.Shape.validate_diag_offset!({3, 4}, 4)
+    ** (ArgumentError) offset must be less than length of axis 1 when positive, got: 4
+
+    iex> Nx.Shape.validate_diag_offset!({3, 4}, -3)
+    ** (ArgumentError) absolute value of offset must be less than length of axis 0 when negative, got: -3
+
+    iex> Nx.Shape.validate_diag_offset!({3, 3, 3}, 0)
+    ** (ArgumentError) expected shape of rank 2 to be given, got shape of rank: 3
+  """
+  def validate_diag_offset!(shape, offset)
+
+  def validate_diag_offset!({len, breadth}, offset) do
+    cond do
+      offset >= 0 and offset < breadth ->
+        :ok
+
+      offset >= 0 ->
+        raise ArgumentError,
+              "offset must be less than length of axis 1 when positive, got: #{inspect(offset)}"
+
+      offset < 0 and -offset < len ->
+        :ok
+
+      offset < 0 ->
+        raise ArgumentError,
+              "absolute value of offset must be less than length of axis 0 when negative, got: #{inspect(offset)}"
+    end
+  end
+
+  def validate_diag_offset!(shape, _offset) when is_tuple(shape) do
+    raise ArgumentError,
+          "expected shape of rank 2 to be given, got shape of rank: #{tuple_size(shape)}"
+  end
+
+  @doc """
+  Returns the shape and names after a `take_along_axis` operation is performed.
+
+  In practice, `axis` in `shape` gets replaced by `indices_shape`.
+
+  ## Examples
+
+      iex> Nx.Shape.take_along_axis({2, 3}, {10, 3}, 0)
+      {10, 3}
+
+      iex> Nx.Shape.take_along_axis({2, 3}, {2, 10}, 1)
+      {2, 10}
+
+      iex> Nx.Shape.take_along_axis({2, 3, 4}, {10, 3, 4}, 0)
+      {10, 3, 4}
+
+  ### Error cases
+
+      iex> Nx.Shape.take_along_axis({2, 3, 4}, {3, 10, 4}, 1)
+      ** (ArgumentError) non-indexing dimensions must match. Expected {2, *, 4}, got: {3, 10, 4}
+
+      iex> Nx.Shape.take_along_axis({2, 3}, {1, 2, 3}, 0)
+      ** (ArgumentError) shapes must have the same number of dimensions. Expected {*, 3}, got: {1, 2, 3}
+  """
+  def take_along_axis(shape, indices_shape, axis) do
+    if axis >= tuple_size(shape) or axis < 0 do
+      raise ArgumentError, "axis must be a non-negative less than #{tuple_size(shape)}"
+    end
+
+    if tuple_size(shape) != tuple_size(indices_shape) do
+      raise ArgumentError,
+            "shapes must have the same number of dimensions. Expected #{take_along_axis_shape_template(shape, axis)}, got: #{inspect(indices_shape)}"
+    end
+
+    shape_list = Tuple.to_list(shape)
+    indices_shape_list = Tuple.to_list(indices_shape)
+
+    [shape_list, indices_shape_list]
+    |> Enum.zip()
+    |> Enum.with_index(fn
+      {_input_length, _output_length}, ^axis ->
+        :ok
+
+      {input_length, output_length}, _axis ->
+        unless input_length == output_length do
+          raise ArgumentError,
+                "non-indexing dimensions must match. Expected #{take_along_axis_shape_template(shape, axis)}, got: #{inspect(indices_shape)}"
+        end
+    end)
+
+    indices_shape
+  end
+
+  defp take_along_axis_shape_template(shape, axis) do
+    shape_list = Tuple.to_list(shape)
+
+    shape_template =
+      shape_list
+      |> Enum.with_index(fn
+        _, ^axis -> "*"
+        l, _ -> "#{l}"
+      end)
+      |> Enum.join(", ")
+
+    "{#{shape_template}}"
+  end
+
+  @doc """
+  Returns the shape after a gather.
+
+  ## Examples
+
+      iex> Nx.Shape.gather({2, 3}, {10, 2})
+      {{10}, [nil]}
+
+      iex> Nx.Shape.gather({2, 3}, {4, 5, 2})
+      {{4, 5}, [nil, nil]}
+
+      iex> Nx.Shape.gather({2}, {4, 5, 1})
+      {{4, 5}, [nil, nil]}
+
+      iex> Nx.Shape.gather({2, 2, 2, 2, 2}, {3, 3, 5})
+      {{3, 3}, [nil, nil]}
+
+      iex> Nx.Shape.gather({2, 2, 2}, {3})
+      {{}, []}
+
+  ### Error cases
+
+      iex> Nx.Shape.gather({2, 3}, {})
+      ** (ArgumentError) expected indices rank to be at least 1, got: 0
+
+      iex> Nx.Shape.gather({2, 3}, {1})
+      ** (ArgumentError) expected the last indices dimension size (1) to match the tensor rank (2)
+  """
+  def gather(shape, indices_shape) do
+    shape = Tuple.to_list(shape)
+    rank = length(shape)
+    indices_shape = Tuple.to_list(indices_shape)
+
+    if indices_shape == [] do
+      raise ArgumentError, "expected indices rank to be at least 1, got: 0"
+    end
+
+    {outer_shape, [last_size]} = Enum.split(indices_shape, -1)
+
+    if last_size != rank do
+      raise ArgumentError,
+            "expected the last indices dimension size (#{last_size}) to match the tensor rank (#{rank})"
+    end
+
+    shape = List.to_tuple(outer_shape)
+    names = List.duplicate(nil, tuple_size(shape))
+    {shape, names}
+  end
+
+  @doc """
   Returns the shape and names after a concat.
 
   ## Examples
@@ -1393,8 +1662,19 @@ defmodule Nx.Shape do
         "tensor must have rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
       )
 
+  def eigh({n, n}) do
+    {{n}, {n, n}}
+  end
+
+  def eigh(shape),
+    do:
+      raise(
+        ArgumentError,
+        "tensor must be a square matrix (a tensor with two equal axes), got shape: #{inspect(shape)}"
+      )
+
   def svd({m, n}) do
-    {{m, m}, {n}, {n, n}}
+    {{m, m}, {min(m, n)}, {n, n}}
   end
 
   def svd(shape),
@@ -1415,8 +1695,8 @@ defmodule Nx.Shape do
         "tensor must have as many rows as columns, got shape: #{inspect(shape)}"
       )
 
-  def solve({n, n}, {n}), do: :ok
-  def solve({n, n}, {n, _m}), do: :ok
+  def solve({n, n}, {n}), do: {n}
+  def solve({n, n}, {n, m}), do: {n, m}
 
   def solve({n, n}, b_shape) do
     raise(

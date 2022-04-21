@@ -163,9 +163,14 @@ defmodule Nx.Tensor do
       data = tensor.data.__struct__.inspect(tensor, opts)
       inner = concat([line(), type, shape, line(), data])
 
-      color("#Nx.Tensor<", :map, opts)
-      |> concat(nest(inner, 2))
-      |> concat(color("\n>", :map, opts))
+      force_unfit(
+        concat([
+          color("#Nx.Tensor<", :map, opts),
+          nest(inner, 2),
+          line(),
+          color(">", :map, opts)
+        ])
+      )
     end
   end
 end

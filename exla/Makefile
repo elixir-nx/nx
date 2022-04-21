@@ -1,60 +1,56 @@
-# System vars
-TEMP ?= $(HOME)/.cache
-
-# mix.exs vars
+# Environment variables passed via elixir_make
 # ERTS_INCLUDE_DIR
-ERTS_VERSION ?= $(shell erl -eval "io:fwrite(erlang:system_info(version))." -noshell -s erlang halt)
+# MIX_APP_PATH
 
-# Public configuration
-EXLA_MODE ?= opt # can also be dbg
-EXLA_CACHE ?= $(TEMP)/exla
-EXLA_TENSORFLOW_GIT_REPO ?= https://github.com/tensorflow/tensorflow.git
+# XLA extension installation location
+XLA_EXTENSION_DIR = cache/xla_extension
+XLA_EXTENSION_LIB = $(XLA_EXTENSION_DIR)/lib
+XLA_INCLUDE_PATH = $(XLA_EXTENSION_DIR)/include
 
-# Replicated public configuration
-# When changing this, also change:
-# * Makefile
-# * Makefile.win
-# * lib/exla/aot/compiler.ex
-EXLA_TENSORFLOW_GIT_REV ?= 54dee6dd8d47b6e597f4d3f85b6fb43fd5f50f82
+# Cache configuration
+EXLA_CACHE_SO = cache/libexla.so
 
 # Private configuration
-EXLA_SO = priv/libexla.so
 EXLA_DIR = c_src/exla
-ERTS_SYM_DIR = $(EXLA_DIR)/erts
-BAZEL_FLAGS = --define "framework_shared_object=false" -c $(EXLA_MODE)
+PRIV_DIR = $(MIX_APP_PATH)/priv
+EXLA_SO = $(PRIV_DIR)/libexla.so
+EXLA_LIB_DIR = $(PRIV_DIR)/lib
 
-TENSORFLOW_NS = tf-$(EXLA_TENSORFLOW_GIT_REV)
-TENSORFLOW_DIR = $(EXLA_CACHE)/$(TENSORFLOW_NS)/erts-$(ERTS_VERSION)
-TENSORFLOW_EXLA_NS = tensorflow/compiler/xla/exla
-TENSORFLOW_EXLA_DIR = $(TENSORFLOW_DIR)/$(TENSORFLOW_EXLA_NS)
+# Build flags
+CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -O3 -Wall -Wno-sign-compare \
+	 -Wno-unused-parameter -Wno-missing-field-initializers -Wno-comment \
+	 -shared -std=c++14
 
-all: symlinks
-	cd $(TENSORFLOW_DIR) && \
-		bazel build $(BAZEL_FLAGS) $(EXLA_FLAGS) //$(TENSORFLOW_EXLA_NS):libexla.so
-	mkdir -p priv
-	cp -f $(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla.so $(EXLA_SO)
+LDFLAGS = -L$(XLA_EXTENSION_LIB) -lxla_extension
 
-symlinks: $(TENSORFLOW_DIR)
-	@ rm -f $(TENSORFLOW_EXLA_DIR)
-	@ ln -s "$(MIX_CURRENT_PATH)/$(EXLA_DIR)" $(TENSORFLOW_EXLA_DIR)
-	@ rm -f $(ERTS_SYM_DIR)
-	@ ln -s "$(ERTS_INCLUDE_DIR)" $(ERTS_SYM_DIR)
+ifeq ($(shell uname -s), Darwin)
+	LDFLAGS += -flat_namespace -undefined suppress
+	POST_INSTALL = install_name_tool \
+		-change bazel-out/darwin_arm64-opt/bin/tensorflow/compiler/xla/extension/libxla_extension.so @loader_path/xla_extension/lib/libxla_extension.so \
+		-change bazel-out/darwin-opt/bin/tensorflow/compiler/xla/extension/libxla_extension.so @loader_path/lib/libxla_extension.so \
+		$(EXLA_CACHE_SO)
+else
+	# Use a relative RPATH, so at runtime libexla.so looks for libxla_extension.so
+	# in ./lib regardless of the absolute location. This way priv can be safely
+	# packed into an Elixir release. Also, we use $$ to escape Makefile variable
+	# and single quotes to escape shell variable
+	LDFLAGS += -Wl,-rpath,'$$ORIGIN/lib'
+	POST_INSTALL = $(NOOP)
+endif
 
-# Print Tensorflow Dir
-PTD:
-	@ echo $(TENSORFLOW_DIR)
+$(EXLA_SO): $(EXLA_CACHE_SO)
+	@ mkdir -p $(PRIV_DIR)
+	@ if [ "${MIX_BUILD_EMBEDDED}" = "true" ]; then \
+		cp -a $(abspath $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR) ; \
+		cp -a $(abspath $(EXLA_CACHE_SO)) $(EXLA_SO) ; \
+	else \
+		ln -sf $(abspath $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR) ; \
+		ln -sf $(abspath $(EXLA_CACHE_SO)) $(EXLA_SO) ; \
+	fi
 
-# Clones tensorflow
-$(TENSORFLOW_DIR):
-	mkdir -p $(TENSORFLOW_DIR)
-
-	cd $(TENSORFLOW_DIR) && \
-		git init && \
-		git remote add origin $(EXLA_TENSORFLOW_GIT_REPO) && \
-		git fetch --depth 1 origin $(EXLA_TENSORFLOW_GIT_REV) && \
-		git checkout FETCH_HEAD
+$(EXLA_CACHE_SO): $(XLA_EXTENSION_DIR) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h
+	$(CXX) $(CFLAGS) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/exla_client.cc -o $(EXLA_CACHE_SO) $(LDFLAGS)
+	$(POST_INSTALL)
 
 clean:
-	cd $(TENSORFLOW_DIR) && bazel clean --expunge
-	rm -f $(ERTS_SYM_DIR) $(TENSORFLOW_EXLA_DIR)
-	rm -rf $(EXLA_SO) $(TENSORFLOW_DIR)
+	rm -rf cache

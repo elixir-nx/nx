@@ -2,7 +2,7 @@ This repository currently holds the following projects:
 
   * [`Nx`](https://github.com/elixir-nx/nx/tree/main/nx#readme) - Multi-dimensional arrays (tensors) and numerical definitions for Elixir
 
-  * [`EXLA`](https://github.com/elixir-nx/nx/tree/main/exla#readme) - Elixir client for Google's XLA with Nx compiler integration and JIT/AOT compilation to the CPU/GPU
+  * [`EXLA`](https://github.com/elixir-nx/nx/tree/main/exla#readme) - Elixir client for Google's XLA with Nx compiler integration and JIT compilation to the CPU/GPU
 
   * [`Torchx`](https://github.com/elixir-nx/nx/tree/main/torchx#readme) - Elixir client to LibTorch with Nx backend integration
 

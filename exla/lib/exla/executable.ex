@@ -4,88 +4,59 @@ defmodule EXLA.Executable do
   """
 
   alias __MODULE__
-  alias EXLA.{Buffer, Shape}
+  alias EXLA.{BinaryBuffer, DeviceBuffer, Shape}
 
-  @enforce_keys [:client, :ref, :output_shape, :num_replicas, :num_partitions]
-  defstruct [:client, :ref, :output_shape, :num_replicas, :num_partitions, :async]
+  @enforce_keys [:client, :ref, :output_shape, :num_replicas, :num_partitions, :device_id]
+  defstruct [:client, :ref, :output_shape, :num_replicas, :num_partitions, :device_id]
 
   @doc """
-  Runs the given executable with arguments.
+  Runs the given executable with a list of lists as inputs and the given options.
 
   ## Options
-
-    *  `:run_id` - a positive integer identifier of this execution.
-      One is generated automatically if none is given.
 
     * `:keep_on_device` - if the data should be kept on the device
       after the computation (defaults to `false`).
 
-    * `:replica` - the replica to run the executable on
-
-  Some options apply to TPU only and therefore are not currently supported:
-
-    * `:launch_id` - the launch id used to coordinate multi-device launches
-
-    * `:rng_seed` - the seed for random numbers
-
-    * `:partition` - the partition within a replica to run the executable on
-
   """
-  def run(%Executable{} = executable, arguments, options \\ []) do
-    %{client: client, output_shape: output_shape} = executable
-    {data, _} = run(client, executable, arguments, options)
-    decompose_output(data, output_shape, client)
+  def run(%Executable{} = executable, [subinputs | _] = inputs, options \\ [])
+      when is_list(subinputs) do
+    %{client: client, device_id: device_id, output_shape: output_shape, ref: ref} = executable
+
+    for data_and_device_id <- run(client, ref, device_id, inputs, options) do
+      decompose_output(data_and_device_id, output_shape, client)
+    end
   end
 
-  defp run(client, executable, arguments, options) do
-    %{ref: exec} = executable
-
+  defp run(client, ref, device_id, inputs, options) do
     keep_on_device = Keyword.get(options, :keep_on_device, false)
     keep_on_device_int = if keep_on_device, do: 1, else: 0
 
-    # TODO: Validate replicas against the client
-    # TODO: Raise if buffers belong to different clients/ordinals
-
     inputs =
-      Enum.map(arguments, fn
-        %Buffer{ref: {ref, _}, data: nil} ->
-          ref
-
-        %Buffer{data: data, shape: shape, ref: nil} ->
-          {data, shape.ref}
-      end)
+      for subinputs <- inputs do
+        Enum.map(subinputs, fn
+          %DeviceBuffer{ref: ref} -> ref
+          %BinaryBuffer{data: data, shape: shape} -> {data, shape.ref}
+        end)
+      end
 
     data =
       case client.platform do
-        :host ->
-          EXLA.NIF.run_cpu(
-            client.ref,
-            exec,
-            inputs,
-            keep_on_device_int
-          )
-
-        _ ->
-          EXLA.NIF.run_io(
-            client.ref,
-            exec,
-            inputs,
-            keep_on_device_int
-          )
+        :host -> EXLA.NIF.run_cpu(client.ref, ref, inputs, keep_on_device_int, device_id)
+        _ -> EXLA.NIF.run_io(client.ref, ref, inputs, keep_on_device_int, device_id)
       end
 
     unwrap!(data)
   end
 
-  defp decompose_output(data, shape, client) do
-    %Shape{dtype: {:t, shapes}} = shape
+  defp decompose_output({data, device_id}, shape, client) do
+    %Shape{dtype: {:tuple, shapes}} = shape
 
     Enum.zip_with(data, shapes, fn
       buf, subshape when is_reference(buf) ->
-        Buffer.buffer({buf, client.name}, subshape)
+        DeviceBuffer.from_ref(buf, client, device_id, subshape)
 
-      buf, subshape ->
-        Buffer.buffer(buf, subshape)
+      buf, subshape when is_binary(buf) ->
+        BinaryBuffer.from_binary(buf, subshape)
     end)
   end
 

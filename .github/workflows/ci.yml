@@ -1,41 +1,97 @@
 name: Test
-
 on:
   push:
     branches:
       - main
   pull_request:
 jobs:
-  build_and_test:
+  main:
+    name: Linux
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        working_directory: ["nx", "exla", "torchx"]
+        elixir: ["1.13.0"]
+        otp: ["24.0"]
     defaults:
       run:
-        working-directory: "nx"
-    strategy:
-      matrix:
-        elixir: ["1.12.0-rc.1"]
-        otp: ["24.0"]
+        working-directory: ${{ matrix.working_directory }}
+    env:
+      MIX_ENV: test
+      XLA_FLAGS: --xla_force_host_platform_device_count=2
     steps:
       - uses: actions/checkout@v2
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{ matrix.otp }}
           elixir-version: ${{ matrix.elixir }}
-      - name: Retrieve Mix Dependencies Cache
+      - name: Retrieve dependencies cache
         uses: actions/cache@v1
         id: mix-cache # id to use in retrieve action
         with:
           path: deps
-          key: ${{ matrix.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
-      - name: Install Mix Dependencies
-        if: steps.mix-cache.outputs.cache-hit != 'true'
-        run: |
-          mix local.rebar --force
-          mix local.hex --force
-          mix deps.get
-      - name: Compile for Tests
-        run: MIX_ENV=test mix compile --warnings-as-errors
-      - name: Run Tests
-        run: mix test
-      - name: Ensure code is Formatted
+          key: v1-${{ matrix.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+      - name: Retrieve libtorch cache
+        if: ${{ matrix.working_directory == 'torchx' }}
+        uses: actions/cache@v1
+        id: libtorch-cache
+        with:
+          path: ./torchx/cache/libtorch-cpu
+          key: v1-libtorch-cpu.zip
+      - name: Install dependencies
+        if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
+        run: mix deps.get
+      - name: Compile and check warnings
+        run: mix compile --warnings-as-errors
+      - name: Check formatting
         run: mix format --check-formatted
+      - name: Run tests
+        run: mix test
+  win:
+    name: Windows
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        working_directory: ["nx", "torchx"]
+        elixir: ["1.13.0"]
+        otp: ["24.0"]
+    defaults:
+      run:
+        working-directory: ${{ matrix.working_directory }}
+    env:
+      MIX_ENV: test
+      XLA_FLAGS: --xla_force_host_platform_device_count=2
+    steps:
+      - name: Configure Git
+        run: git config --global core.autocrlf input
+        working-directory: .
+      - uses: actions/checkout@v2
+      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ matrix.otp }}
+          elixir-version: ${{ matrix.elixir }}
+      - name: Retrieve dependencies cache
+        uses: actions/cache@v1
+        id: mix-cache # id to use in retrieve action
+        with:
+          path: deps
+          key: v1-${{ matrix.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+      - name: Retrieve libtorch cache
+        if: ${{ matrix.working_directory == 'torchx' }}
+        uses: actions/cache@v1
+        id: libtorch-cache-win
+        with:
+          path: ./torchx/cache/libtorch-cpu
+          key: win-v1-libtorch-cpu.zip
+      - name: Install dependencies
+        if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
+        run: mix deps.get
+      - name: Compile and check warnings
+        run: mix compile --warnings-as-errors
+      - name: Check formatting
+        run: mix format --check-formatted
+      - name: Run tests
+        run: mix test

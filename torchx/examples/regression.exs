@@ -64,13 +64,13 @@ trained_m =
   trained_m
   |> Nx.squeeze()
   |> Nx.backend_transfer()
-  |> Nx.to_scalar()
+  |> Nx.to_number()
 
 trained_b =
   trained_b
   |> Nx.squeeze()
   |> Nx.backend_transfer()
-  |> Nx.to_scalar()
+  |> Nx.to_number()
 
 IO.puts("Trained in #{time / 1_000_000} sec.")
 IO.puts("Trained m: #{trained_m} Trained b: #{trained_b}\n")

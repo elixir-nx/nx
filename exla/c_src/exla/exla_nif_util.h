@@ -8,7 +8,7 @@
 #include <utility>
 #include <map>
 
-#include "tensorflow/compiler/xla/exla/erts/erl_nif.h"
+#include "erl_nif.h"
 #include "tensorflow/compiler/xla/xla_data.pb.h"
 #include "tensorflow/compiler/xla/types.h"
 #include "tensorflow/compiler/xla/shape.h"
@@ -322,7 +322,7 @@ T get_value(ErlNifEnv* env, ERL_NIF_TERM term) {
   return value;
 }
 
-// Extracts information from `GetShape` into a useable term.
+// Extracts information from `GetShape` into a usable term.
 ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape);
 
 }  // namespace nif
@@ -336,6 +336,30 @@ ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape);
   EXLA_STATUS_MACROS_CONCAT_NAME_IMPL(x, y)
 
 #define EXLA_STATUS_MACROS_CONCAT_NAME_IMPL(x, y) x##y
+
+// Macro to be used to consume Status from within a NIF.
+// Return `{:error, msg}` if not ok.
+#define EXLA_EFFECT_OR_RETURN_NIF(rexpr, env)                                \
+  EXLA_EFFECT_OR_RETURN_NIF_IMPL(                                            \
+    EXLA_STATUS_MACROS_CONCAT_NAME(_status, __COUNTER__), rexpr, env)
+
+#define EXLA_EFFECT_OR_RETURN_NIF_IMPL(status, rexpr, env)                   \
+  auto status = (rexpr);                                                     \
+  if (!status.ok()) {                                                        \
+    return exla::nif::error(env, status.error_message().c_str());            \
+  }
+
+// Macro to be used to consume Status from within a NIF.
+// Return status if not ok.
+#define EXLA_EFFECT_OR_RETURN(rexpr)                                         \
+  EXLA_EFFECT_OR_RETURN_IMPL(                                                \
+    EXLA_STATUS_MACROS_CONCAT_NAME(_status, __COUNTER__), rexpr)
+
+#define EXLA_EFFECT_OR_RETURN_IMPL(status, rexpr)                            \
+  auto status = (rexpr);                                                     \
+  if (!status.ok()) {                                                        \
+    return status;                                                           \
+  }
 
 // Macro to be used to consume StatusOr from within a NIF. Will
 // bind lhs to value if the status is OK, otherwise will return

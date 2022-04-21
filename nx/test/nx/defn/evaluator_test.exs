@@ -4,25 +4,6 @@ defmodule Nx.Defn.EvaluatorTest do
   alias Nx.Tensor, as: T
   import Nx.Defn
 
-  @defn_compiler Nx.Defn.Evaluator
-  defn add(a, b), do: {a + b, a - b}
-
-  # Check the attribute has been reset
-  nil = Module.get_attribute(__MODULE__, :defn_compiler)
-
-  test "can be set explicitly set" do
-    assert add(1, 2) == {Nx.tensor(3), Nx.tensor(-1)}
-  end
-
-  test "is the default compiler" do
-    defmodule DefaultCompiler do
-      import Nx.Defn
-      defn add(a, b), do: a + b
-    end
-
-    assert DefaultCompiler.add(1, 2) == Nx.tensor(3)
-  end
-
   defn add_two_int(t), do: Nx.add(t, 2)
   defn add_two_float(t), do: Nx.add(t, 2)
 
@@ -51,6 +32,13 @@ defmodule Nx.Defn.EvaluatorTest do
     assert %T{shape: {3, 2}, type: {:s, 64}} = reshape(Nx.iota({2, 3}))
   end
 
+  defn reduce_window(t1, acc),
+    do: Nx.window_reduce(t1, acc, {2}, [padding: :valid], fn x, acc -> x + acc end)
+
+  test "window reduce" do
+    assert reduce_window(Nx.tensor([1, 2, 3]), 0) == Nx.tensor([3, 5])
+  end
+
   describe "decompositions" do
     defn lu(t), do: Nx.LinAlg.lu(t)
 
@@ -65,8 +53,19 @@ defmodule Nx.Defn.EvaluatorTest do
 
     test "qr" do
       assert {q, r} = qr(Nx.iota({3, 2}))
-      assert q == Nx.tensor([[0.0, 1.0], [1.0, 0.0], [0.0, 0.0]])
-      assert r == Nx.tensor([[2.0, 3.0], [0.0, 1.0]])
+
+      assert q ==
+               Nx.tensor([
+                 [0.0, 0.9128709435462952],
+                 [0.4472135901451111, 0.3651483654975891],
+                 [0.8944271802902222, -0.18257418274879456]
+               ])
+
+      assert r ==
+               Nx.tensor([
+                 [4.4721360206604, 5.813776969909668],
+                 [0.0, 1.095445156097412]
+               ])
     end
 
     defn svd(t), do: Nx.LinAlg.svd(t)
@@ -271,6 +270,197 @@ defmodule Nx.Defn.EvaluatorTest do
 
     test "supports correct access" do
       assert slice1(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])) == Nx.tensor(4)
+    end
+  end
+
+  defn container_cond(var, cond) do
+    if cond do
+      %{var | a: var.a + 1}
+    else
+      %{var | b: var.b - 1}
+    end
+  end
+
+  describe "containers" do
+    test "input, output, and cond" do
+      container = %Container{a: 1, b: -1, c: :reset, d: :kept}
+
+      assert container_cond(container, 1) ==
+               %Container{a: Nx.tensor(2), b: Nx.tensor(-1), c: %{}, d: :kept}
+
+      assert container_cond(container, 0) ==
+               %Container{a: Nx.tensor(1), b: Nx.tensor(-2), c: %{}, d: :kept}
+    end
+  end
+
+  defn labelled_inspect(a, b), do: inspect_value(a + b, label: "add")
+
+  test "inspect_value/2" do
+    assert ExUnit.CaptureIO.capture_io(fn -> labelled_inspect(1, 2) end) ==
+             """
+             add: #Nx.Tensor<
+               s64
+               3
+             >
+             """
+  end
+
+  describe "hooks" do
+    defp send_to_self(value), do: send(self(), value)
+
+    defn basic_hook(a, b), do: hook(a + b, :example, &send_to_self({:default, &1}))
+
+    test "basic hook with overriddes" do
+      assert basic_hook(1, 2) == Nx.tensor(3)
+      assert_received {:default, tensor}
+      assert tensor == Nx.tensor(3)
+
+      assert Nx.Defn.jit(&basic_hook/2, [1, 2]) == Nx.tensor(3)
+      assert_received {:default, tensor}
+      assert tensor == Nx.tensor(3)
+
+      assert Nx.Defn.jit(&basic_hook/2, [1, 2], hooks: %{example: &send_to_self({:custom, &1})}) ==
+               Nx.tensor(3)
+
+      assert_received {:custom, tensor}
+      assert tensor == Nx.tensor(3)
+    end
+
+    defn container_hook(a, b), do: hook({a, b}, :example, &send_to_self({:default, &1}))
+
+    test "container hook with overriddes" do
+      assert container_hook(1, 2) == {Nx.tensor(1), Nx.tensor(2)}
+      assert_received {:default, tuple}
+      assert tuple == {Nx.tensor(1), Nx.tensor(2)}
+
+      assert Nx.Defn.jit(&container_hook/2, [1, 2]) == {Nx.tensor(1), Nx.tensor(2)}
+      assert_received {:default, tuple}
+      assert tuple == {Nx.tensor(1), Nx.tensor(2)}
+
+      assert Nx.Defn.jit(&container_hook/2, [1, 2],
+               hooks: %{example: &send_to_self({:custom, &1})}
+             ) == {Nx.tensor(1), Nx.tensor(2)}
+
+      assert_received {:custom, tuple}
+      assert tuple == {Nx.tensor(1), Nx.tensor(2)}
+    end
+
+    defn side_effect_hooks(a, b) do
+      token = create_token()
+      {token, _} = hook_token(token, b, :b)
+      {token, _} = hook_token(token, a, :a)
+      attach_token(token, {a, b})
+    end
+
+    test "side effect hooks" do
+      side_effect_hooks(1, 2)
+      refute_received _
+
+      hooks = %{a: &send_to_self({:a, &1})}
+      Nx.Defn.jit(&side_effect_hooks/2, [1, 2], hooks: hooks)
+      assert_received {:a, tensor}
+      assert tensor == Nx.tensor(1)
+      refute_received _
+
+      hooks = %{b: &send_to_self({:b, &1})}
+      Nx.Defn.jit(&side_effect_hooks/2, [1, 2], hooks: hooks)
+      assert_received {:b, tensor}
+      assert tensor == Nx.tensor(2)
+      refute_received _
+
+      hooks = %{a: &send_to_self({:a, &1}), b: &send_to_self({:b, &1})}
+      Nx.Defn.jit(&side_effect_hooks/2, [1, 2], hooks: hooks)
+      {:messages, [b: _, a: _]} = Process.info(self(), :messages)
+      assert_received {:b, tensor}
+      assert tensor == Nx.tensor(2)
+      assert_received {:a, tensor}
+      assert tensor == Nx.tensor(1)
+    end
+
+    defn side_effect_nested_hooks(a, b) do
+      token = create_token()
+      {token, _} = hook_token(token, b, :b)
+      a = attach_token(token, a)
+      hook(a, :a)
+    end
+
+    test "side effect nested hooks" do
+      side_effect_nested_hooks(1, 2)
+      refute_received _
+
+      hooks = %{a: &send_to_self({:a, &1})}
+      Nx.Defn.jit(&side_effect_nested_hooks/2, [1, 2], hooks: hooks)
+      assert_received {:a, tensor}
+      assert tensor == Nx.tensor(1)
+      refute_received _
+
+      hooks = %{b: &send_to_self({:b, &1})}
+      Nx.Defn.jit(&side_effect_nested_hooks/2, [1, 2], hooks: hooks)
+      assert_received {:b, tensor}
+      assert tensor == Nx.tensor(2)
+      refute_received _
+
+      hooks = %{a: &send_to_self({:a, &1}), b: &send_to_self({:b, &1})}
+      Nx.Defn.jit(&side_effect_nested_hooks/2, [1, 2], hooks: hooks)
+      {:messages, [b: _, a: _]} = Process.info(self(), :messages)
+      assert_received {:b, tensor}
+      assert tensor == Nx.tensor(2)
+      assert_received {:a, tensor}
+      assert tensor == Nx.tensor(1)
+    end
+
+    defn side_effect_nested_hook_with_default(a, b) do
+      token = create_token()
+      {token, _} = hook_token(token, b, :b, &send_to_self({:b, &1}))
+      a = attach_token(token, a)
+      hook(a, :a)
+    end
+
+    test "side effect nested hooks with default" do
+      side_effect_nested_hook_with_default(1, 2)
+      assert_received {:b, tensor}
+      assert tensor == Nx.tensor(2)
+
+      hooks = %{a: &send_to_self({:a, &1})}
+      Nx.Defn.jit(&side_effect_nested_hook_with_default/2, [1, 2], hooks: hooks)
+      {:messages, [b: _, a: _]} = Process.info(self(), :messages)
+      assert_received {:b, tensor}
+      assert tensor == Nx.tensor(2)
+      assert_received {:a, tensor}
+      assert tensor == Nx.tensor(1)
+
+      hooks = %{b: &send_to_self({:custom, &1})}
+      Nx.Defn.jit(&side_effect_nested_hook_with_default/2, [1, 2], hooks: hooks)
+      assert_received {:custom, tensor}
+      assert tensor == Nx.tensor(2)
+
+      refute_received _
+    end
+
+    defn hook_upto10(x) do
+      while x, Nx.less(x, 10) do
+        hook(x + 1, :while)
+      end
+    end
+
+    test "inside loops" do
+      assert hook_upto10(5) == Nx.tensor(10)
+      refute_received _
+
+      assert Nx.Defn.jit(&hook_upto10/1, [5], hooks: %{while: &send_to_self({:while, &1})}) ==
+               Nx.tensor(10)
+
+      assert_received {:while, tensor}
+      assert tensor == Nx.tensor(6)
+      assert_received {:while, tensor}
+      assert tensor == Nx.tensor(7)
+      assert_received {:while, tensor}
+      assert tensor == Nx.tensor(8)
+      assert_received {:while, tensor}
+      assert tensor == Nx.tensor(9)
+      assert_received {:while, tensor}
+      assert tensor == Nx.tensor(10)
+      refute_received _
     end
   end
 end

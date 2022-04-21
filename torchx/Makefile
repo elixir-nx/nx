@@ -1,38 +1,38 @@
-LIBTORCH_VERSION := $(shell head -c 3 $(LIBTORCH_DIR)/build-version)
-MINIMUM_LIBTORCH_VERSION := 1.8
+PRIV_DIR = $(MIX_APP_PATH)/priv
+TORCHX_SO = $(PRIV_DIR)/torchx.so
 
-LIBTORCH_INCLUDE_PATH = $(LIBTORCH_DIR)/include/
-LIBTORCH_API_INCLUDE_PATH = $(LIBTORCH_DIR)/include/torch/csrc/api/include
-LIBTORCH_LINK_PATH = $(LIBTORCH_DIR)/lib/
-CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(LIBTORCH_INCLUDE_PATH) -I$(LIBTORCH_API_INCLUDE_PATH) -O3 -Wall -Wextra \
-				 -Wno-unused-parameter -Wno-missing-field-initializers -shared -std=c++14
-LDFLAGS = -L$(LIBTORCH_LINK_PATH) -Wl,-rpath,$(LIBTORCH_LINK_PATH) -ltorch -lc10
-
-# MacOS needs extra flags to link successfully
-ifeq ($(shell uname -s), Darwin)
-	LDFLAGS += -flat_namespace -undefined suppress
-else  # Linux
-	LDFLAGS += -lm
+# If you want verbose output for debugging
+# CMAKE_BUILD_FLAGS = --verbose
+CMAKE_BUILD_DIR ?= $(MIX_APP_PATH)/cmake
+C_SRC = $(shell pwd)/c_src
+ifdef CMAKE_TOOLCHAIN_FILE
+	CMAKE_CONFIGURE_FLAGS=-DCMAKE_TOOLCHAIN_FILE="$(CMAKE_TOOLCHAIN_FILE)"
 endif
 
 .DEFAULT_GLOBAL := build
 
-build: check_version $(MIX_APP_PATH)/priv/torchx.so
+build: check_libtorch $(TORCHX_SO)
 
-check_version:
-	@ if [ -z "$(LIBTORCH_DIR)" ]; then \
-		echo "LIBTORCH_DIR env var is not set. It should point to the directory, where LibTorch is installed."; \
+check_libtorch:
+	@ if [ ! -d "$(LIBTORCH_DIR)" ]; then \
+		echo "LIBTORCH_DIR is not a valid directory. \
+		It should either point to the directory, where LibTorch is installed, \
+		or it should be unset so we download it automatically."; \
 		echo "You can download LibTorch here: https://pytorch.org/get-started/locally/"; \
 		exit 1; \
 	fi
 
-	@ if [ $(LIBTORCH_VERSION) >= $(MINIMUM_LIBTORCH_VERSION) ]; then \
-		echo "LibTorch version should be at least $(MINIMUM_LIBTORCH_VERSION). Got: $(LIBTORCH_VERSION)."; \
-		echo "You can download LibTorch here: https://pytorch.org/get-started/locally/"; \
-		exit 1; \
+$(TORCHX_SO): c_src/torchx.cpp c_src/nx_nif_utils.hpp
+	@ mkdir -p $(PRIV_DIR)
+	@ mkdir -p $(CMAKE_BUILD_DIR)
+	@ if [ "${MIX_BUILD_EMBEDDED}" = "true" ]; then \
+		cp -a $(abspath $(LIBTORCH_DIR)/lib) $(PRIV_DIR)/$(LIBTORCH_BASE) ; \
+	else \
+		ln -sf $(abspath $(LIBTORCH_DIR)/lib) $(PRIV_DIR)/$(LIBTORCH_BASE) ; \
 	fi
-
-$(MIX_APP_PATH)/priv/torchx.so: c_src/torchx.cpp c_src/nx_nif_utils.hpp
-	@echo 'Compiling: '$<
-	@mkdir -p $(MIX_APP_PATH)/priv
-	@$(CXX) $(CFLAGS) c_src/torchx.cpp -o $(MIX_APP_PATH)/priv/torchx.so $(LDFLAGS)
+	@ cd $(CMAKE_BUILD_DIR) && \
+		cmake -DCMAKE_PREFIX_PATH=$(LIBTORCH_DIR) -DC_SRC=$(C_SRC) \
+				-DLIBTORCH_BASE=$(LIBTORCH_BASE) -DERTS_INCLUDE_DIR=$(ERTS_INCLUDE_DIR) \
+				-S $(shell pwd) $(CMAKE_CONFIGURE_FLAGS) && \
+		cmake --build . $(CMAKE_BUILD_FLAGS)
+	@ mv $(CMAKE_BUILD_DIR)/torchx.so $(TORCHX_SO)

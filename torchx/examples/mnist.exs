@@ -131,12 +131,12 @@ defmodule MNIST do
         epoch_avg_loss =
           epoch_avg_loss
           |> Nx.backend_transfer()
-          |> Nx.to_scalar()
+          |> Nx.to_number()
 
         epoch_avg_acc =
           epoch_avg_acc
           |> Nx.backend_transfer()
-          |> Nx.to_scalar()
+          |> Nx.to_number()
 
         IO.puts("Epoch #{epoch} Time: #{time / 1_000_000}s")
         IO.puts("Epoch #{epoch} average loss: #{inspect(epoch_avg_loss)}")

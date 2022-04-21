@@ -1,24 +1,39 @@
-defmodule EXLA.LockedCache do
+defmodule EXLA.Defn.LockedCache do
   @moduledoc false
 
-  # EXLA has many singleton resources like clients
-  # and expensive resources like executable that we
-  # want to compute just once, this module provides
-  # a cache functionality so that those are done only
-  # once even in face of concurrency.
+  # EXLA has many expensive singleton resources such as
+  # the executable that we want to compute just once.
+  # This module provides a cache functionality so that
+  # those are done only once, even if concurrently.
+  #
+  # Since those resources can be created dynamically,
+  # multiple times, they are stored in ETS instead of
+  # persistent term.
   use GenServer
 
   @name __MODULE__
   @timeout :infinity
 
   @doc """
+  Reads the cache key.
+  """
+  def fetch(key) do
+    try do
+      {:ok, :ets.lookup_element(@name, key, 2)}
+    catch
+      :error, :badarg -> :error
+    end
+  end
+
+  @doc """
   Reads cache key or executes the given function if not
   cached yet.
   """
   def run(key, fun) do
-    # TODO: Move this to ETS once we add a process.
-    case :persistent_term.get(key, __MODULE__) do
-      __MODULE__ ->
+    try do
+      {nil, :ets.lookup_element(@name, key, 2)}
+    catch
+      :error, :badarg ->
         case GenServer.call(@name, {:lock, key}, @timeout) do
           {:uncached, ref} ->
             try do
@@ -29,19 +44,18 @@ defmodule EXLA.LockedCache do
                 :erlang.raise(kind, reason, __STACKTRACE__)
             else
               {return, result} ->
-                :persistent_term.put(key, result)
+                :ets.insert(@name, {key, result})
                 GenServer.cast(@name, {:cached, ref})
                 {return, result}
             end
 
           :cached ->
-            {nil, :persistent_term.get(key)}
+            {nil, :ets.lookup_element(@name, key, 2)}
         end
-
-      value ->
-        {nil, value}
     end
   end
+
+  ## Callbacks
 
   @doc false
   def start_link(_opts) do
@@ -50,6 +64,7 @@ defmodule EXLA.LockedCache do
 
   @impl true
   def init(:ok) do
+    :ets.new(@name, [:public, :set, :named_table, read_concurrency: true])
     {:ok, %{keys: %{}, ref_to_key: %{}}}
   end
 

@@ -34,6 +34,7 @@ defmodule EXLA.Lib do
   ## Options
 
     * `:axis` - the axis to reduce on
+    * `:keep_axis` - whether or not to keep reduced axis
     * `:tie_break` - how to break ties
   """
   def argmax(%Builder{} = builder, %Op{} = op, opts \\ []) do
@@ -46,6 +47,7 @@ defmodule EXLA.Lib do
   ## Options
 
     * `:axis` - the axis to reduce on
+    * `:keep_axis` - whether or not to keep reduced axis
     * `:tie_break` - how to break ties
   """
   def argmin(%Builder{} = builder, %Op{} = op, opts \\ []) do
@@ -54,13 +56,14 @@ defmodule EXLA.Lib do
 
   defp argmin_or_max(builder, op, is_min?, opts) do
     tie_break = opts[:tie_break] || :low
+    keep_axis = opts[:keep_axis] || false
     op_shape = Op.get_shape(op)
     type = opts[:type] || op_shape.dtype
 
     init_value =
       if is_min?,
-        do: max_value(builder, op_shape.dtype),
-        else: min_value(builder, op_shape.dtype)
+        do: max_finite(builder, op_shape.dtype),
+        else: min_finite(builder, op_shape.dtype)
 
     axis = opts[:axis]
     index_init_value = Op.constant_r0(builder, 0, type)
@@ -68,15 +71,20 @@ defmodule EXLA.Lib do
     reduction = create_min_max_computation(builder, op_shape.dtype, is_min?, tie_break)
 
     result =
-      Op.variadic_reduce(
-        builder,
+      builder
+      |> Op.variadic_reduce(
         [op, iota],
         [init_value, index_init_value],
         reduction,
         if(axis, do: {axis}, else: List.to_tuple(Nx.axes(op_shape.dims)))
       )
+      |> Op.get_tuple_element(1)
 
-    Op.get_tuple_element(result, 1)
+    if keep_axis do
+      Op.reshape(result, put_elem(op_shape.dims, axis, 1))
+    else
+      result
+    end
   end
 
   defp create_min_max_computation(builder, type, is_min?, tie_break) do
@@ -115,19 +123,19 @@ defmodule EXLA.Lib do
   @doc """
   Returns a minimum value scalar operator for the given type.
 
-  Minimum values are defined in `Nx.Type.min_value_binary/1`.
+  Minimum values are defined in `Nx.Type.min_finite_binary/1`.
   """
-  def min_value(%Builder{} = builder, type) do
-    Op.constant_from_binary(builder, min_value_binary(type), Shape.make_shape(type, {}))
+  def min_finite(%Builder{} = builder, type) do
+    Op.constant_from_binary(builder, min_finite_binary(type), Shape.make_shape(type, {}))
   end
 
   @doc """
   Returns a maximum value scalar operator for the given type.
 
-  Maximum values are defined in `Nx.Type.max_value_binary/1`.
+  Maximum values are defined in `Nx.Type.max_finite_binary/1`.
   """
-  def max_value(builder, type) do
-    Op.constant_from_binary(builder, max_value_binary(type), Shape.make_shape(type, {}))
+  def max_finite(builder, type) do
+    Op.constant_from_binary(builder, max_finite_binary(type), Shape.make_shape(type, {}))
   end
 
   defp subbuilder(%Builder{name: name} = builder, desc) do
@@ -135,11 +143,11 @@ defmodule EXLA.Lib do
     Builder.new(builder, name <> "-" <> desc <> "-" <> Integer.to_string(suffix))
   end
 
-  defp min_value_binary({:pred, 8}), do: <<0>>
-  defp min_value_binary(type), do: Nx.Type.min_value_binary(type)
+  defp min_finite_binary({:pred, 8}), do: <<0>>
+  defp min_finite_binary(type), do: Nx.Type.min_finite_binary(type)
 
-  defp max_value_binary({:pred, 8}), do: <<1>>
-  defp max_value_binary(type), do: Nx.Type.max_value_binary(type)
+  defp max_finite_binary({:pred, 8}), do: <<1>>
+  defp max_finite_binary(type), do: Nx.Type.max_finite_binary(type)
 
   @doc """
   Sorts a tensor and returns the corresponding indices in the new positions.
