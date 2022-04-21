@@ -718,11 +718,6 @@ defmodule Nx.BinaryBackend do
   defp element_remainder(_, a, b), do: :math.fmod(a, b)
 
   defp element_atan2(_, a, b), do: Complex.atan2(a, b)
-  # TODO: we need to handle :infinity, :neg_infinity and :nan in all other operations
-  defp element_max(_, :infinity, _b), do: :infinity
-  defp element_max(_, _a, :infinity), do: :infinity
-  defp element_max(_, :neg_infinity, b), do: b
-  defp element_max(_, a, :neg_infinity), do: a
   defp element_max(_, a, b), do: max(a, b)
   defp element_min(_, a, b), do: min(a, b)
 
@@ -1494,7 +1489,7 @@ defmodule Nx.BinaryBackend do
     init_value = number_to_binary(0, type)
     init_value = from_binary(%{out | shape: {}, names: []}, init_value)
 
-    fun = fn a, b -> Nx.add(a, b) end
+    fun = fn a, b -> element_add(type, a, b) end
     window_reduce(out, tensor, init_value, window_dimensions, opts, fun)
   end
 
@@ -1505,7 +1500,7 @@ defmodule Nx.BinaryBackend do
     init_value = Nx.Type.min_finite_binary(type)
     init_value = from_binary(%{out | shape: {}, names: []}, init_value)
 
-    fun = fn a, b -> Nx.max(a, b) end
+    fun = fn a, b -> element_max(type, a, b) end
     window_reduce(out, tensor, init_value, window_dimensions, opts, fun)
   end
 
@@ -1516,7 +1511,7 @@ defmodule Nx.BinaryBackend do
     init_value = Nx.Type.max_finite_binary(type)
     init_value = from_binary(%{out | shape: {}, names: []}, init_value)
 
-    fun = fn a, b -> Nx.min(a, b) end
+    fun = fn a, b -> element_min(type, a, b) end
     window_reduce(out, tensor, init_value, window_dimensions, opts, fun)
   end
 
@@ -1527,7 +1522,7 @@ defmodule Nx.BinaryBackend do
     init_value = number_to_binary(1, type)
     init_value = from_binary(%{out | shape: {}, names: []}, init_value)
 
-    fun = fn a, b -> Nx.multiply(a, b) end
+    fun = fn a, b -> element_multiply(type, a, b) end
     window_reduce(out, tensor, init_value, window_dimensions, opts, fun)
   end
 
