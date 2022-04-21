@@ -1442,8 +1442,7 @@ defmodule Torchx.Backend do
   ## All remaining callbacks
 
   funs =
-    Nx.Backend.behaviour_info(:callbacks) --
-      Nx.Backend.behaviour_info(:optional_callbacks) --
+    (Nx.Backend.behaviour_info(:callbacks) -- Nx.Backend.behaviour_info(:optional_callbacks)) --
       Module.definitions_in(__MODULE__, :def)
 
   for {fun, arity} <- funs do
