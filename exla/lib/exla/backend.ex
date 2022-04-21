@@ -1,64 +1,110 @@
 defmodule EXLA.Backend do
   @moduledoc """
-  EXLA Nx backend implementation for usage of EXLA outside of defn.
+  A Nx tensor backend for the data kept on the device.
 
-  The EXLA backend is designed for rapid prototyping of accelerated Nx programs
-  and ensures consistency from prototype to implementation. Generally, you'll want
-  to experiment with ideas before organizing them into a project. Backends allow
-  you to experiment with Nx in "eager mode" before utilizing the stricter, but
-  more performant constructs such as `defn` and JIT compilation.
+  You can directly transfer to this backend by calling
+  `Nx.backend_transfer/2` or `Nx.backend_copy/2`. It
+  allows the following options:
 
-  While you can also prototype with the BinaryBackend, the EXLA backend offers
-  the following advantages:
+    * `:client` - the client to store the data on.
+      Defaults to the client configured in `Nx.Defn`,
+      otherwise uses `:host`.
 
-    1) Performance - The EXLA backend executes functions on CPU/GPU/TPU.
+    * `:device_id` - which device to store it on
 
-    2) Consistency - You may encounter slight inconsistencies in behavior between
-    the BinaryBackend and the EXLA backend which leads to different behavior when
-    changing "eager mode" code to compiled code. Using EXLA in "eager mode" ensures
-    behavior is consistent when transitioning from eager mode to compiled.
+  To get the data out of the device backend into a regular
+  tensor, call `Nx.backend_transfer/1` (with the device
+  tensor as the single argument).
   """
 
-  defstruct [:state]
-
   @behaviour Nx.Backend
+  @enforce_keys [:buffer]
+  defstruct [:buffer]
 
+  alias Nx.Tensor, as: T
   alias EXLA.Backend, as: B
+
   import Nx.Shared
 
-  # For now this behaves like the BinaryBackend; however, we can switch this
-  # behavior to always make tensors as EXLA Buffers, and all of the backend
-  # stuff transfers between them
-
   @impl true
-  def constant(%{type: type, shape: shape} = out, constant, _backend_options) do
+  def constant(%{type: type, shape: shape} = out, constant, backend_options) do
     data = :binary.copy(number_to_binary(constant, type), Nx.size(shape))
-    from_binary(out, data)
+    from_binary(out, data, backend_options)
   end
 
   defp number_to_binary(number, type),
     do: match_types([type], do: <<write!(number, 0)>>)
 
   @impl true
-  def from_binary(t, binary, _backend_options), do: from_binary(t, binary)
-
-  defp from_binary(t, binary) when is_binary(binary), do: %{t | data: %B{state: binary}}
-  defp from_binary(t, other), do: %{t | data: %B{state: IO.iodata_to_binary(other)}}
-
-  @impl true
-  defdelegate backend_copy(tensor, backend, opts), to: Nx.BinaryBackend
-
-  @impl true
-  defdelegate backend_transfer(tensor, backend, opts), to: Nx.BinaryBackend
+  def from_binary(%T{shape: shape, type: type} = tensor, binary, opts) do
+    {client, device_id} = client_and_device_id(opts)
+    shape = EXLA.Shape.make_shape(type, shape)
+    buffer = EXLA.DeviceBuffer.place_on_device(binary, shape, client, device_id)
+    put_in(tensor.data, %B{buffer: buffer})
+  end
 
   @impl true
-  defdelegate backend_deallocate(tensor), to: Nx.BinaryBackend
+  def backend_copy(tensor, Nx.Tensor, opts) do
+    backend_copy(tensor, Nx.BinaryBackend, opts)
+  end
+
+  # TODO: Support direct transfers without going through Elixir
+  def backend_copy(%T{data: %B{buffer: buffer}} = tensor, backend, opts) do
+    backend.from_binary(tensor, EXLA.DeviceBuffer.read(buffer), opts)
+  end
 
   @impl true
-  defdelegate to_binary(t, limit), to: Nx.BinaryBackend
+  def backend_transfer(%T{data: %B{buffer: buffer}} = tensor, backend, opts) do
+    if backend == __MODULE__ and same_client_device?(buffer, opts) do
+      tensor
+    else
+      try do
+        backend_copy(tensor, backend, opts)
+      after
+        EXLA.DeviceBuffer.deallocate(buffer)
+      end
+    end
+  end
 
   @impl true
-  defdelegate to_batched_list(out, t, x), to: Nx.BinaryBackend
+  def backend_deallocate(%T{data: %B{buffer: buffer}}) do
+    EXLA.DeviceBuffer.deallocate(buffer)
+  end
+
+  @impl true
+  def to_binary(%T{data: %B{buffer: buffer}, type: {_, size}}, limit) do
+    EXLA.DeviceBuffer.read(buffer, limit * div(size, 8))
+  end
+
+  @impl true
+  def inspect(tensor, inspect_opts) do
+    limit = inspect_opts.limit
+    binary = Nx.to_binary(tensor, if(limit == :infinity, do: [], else: [limit: limit + 1]))
+    Nx.Backend.inspect(tensor, binary, inspect_opts)
+  end
+
+  ## Helpers
+
+  defp default_client_name do
+    opts = Nx.Defn.default_options()
+
+    if opts[:compiler] == EXLA do
+      opts[:client] || :host
+    else
+      :host
+    end
+  end
+
+  defp client_and_device_id(opts) do
+    client = EXLA.Client.fetch!(opts[:client] || default_client_name())
+    device_id = opts[:device_id] || client.default_device_id
+    {client, device_id}
+  end
+
+  defp same_client_device?(buffer, opts) do
+    {client, device_id} = client_and_device_id(opts)
+    buffer.client_name == client.name and buffer.device_id == device_id
+  end
 
   @impl true
   def eye(%{shape: shape, type: type, names: names}, _) do
@@ -94,13 +140,6 @@ defmodule EXLA.Backend do
     end
 
     EXLA.jit(fun, [])
-  end
-
-  @impl true
-  def inspect(tensor, inspect_opts) do
-    limit = inspect_opts.limit
-    binary = Nx.to_binary(tensor, if(limit == :infinity, do: [], else: [limit: limit + 1]))
-    Nx.Backend.inspect(tensor, binary, inspect_opts)
   end
 
   @impl true

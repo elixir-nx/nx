@@ -3087,7 +3087,7 @@ defmodule Nx do
 
   Transfer a tensor to an EXLA device backend, stored in the GPU:
 
-      device_tensor = Nx.backend_transfer(tensor, {EXLA.DeviceBackend, client: :cuda})
+      device_tensor = Nx.backend_transfer(tensor, {EXLA.Backend, client: :cuda})
 
   Transfer the device tensor back to an Elixir tensor:
 

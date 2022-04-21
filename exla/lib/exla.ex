@@ -107,7 +107,7 @@ defmodule EXLA do
 
   ## Device allocation
 
-  EXLA also ships with a `EXLA.DeviceBackend` that allows data
+  EXLA also ships with a `EXLA.Backend` that allows data
   to be either be explicitly allocated or kept on the EXLA device
   after a computation:
 
@@ -132,9 +132,9 @@ defmodule EXLA do
   device before invoking a `defn` function:
 
       # Explicitly move data to the device, useful for GPU
-      Nx.backend_transfer(Nx.tensor([1, 2, 3, 4]), EXLA.DeviceBackend)
+      Nx.backend_transfer(Nx.tensor([1, 2, 3, 4]), EXLA.Backend)
 
-  `EXLA.DeviceBackend` will use the same client as the one
+  `EXLA.Backend` will use the same client as the one
   configured for `Nx.Defn` by default.
 
   If instead you want to make a copy of the data, you can use

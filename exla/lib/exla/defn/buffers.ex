@@ -24,7 +24,7 @@ defmodule EXLA.Defn.Buffers do
 
   defp buffer_to_data(tensor, %EXLA.DeviceBuffer{shape: exla_shape} = buffer) do
     validate_shape!(tensor, exla_shape)
-    %EXLA.DeviceBackend{buffer: buffer}
+    %EXLA.Backend{buffer: buffer}
   end
 
   defp buffer_to_data(tensor, %EXLA.BinaryBuffer{data: data, shape: exla_shape}) do
@@ -58,7 +58,7 @@ defmodule EXLA.Defn.Buffers do
       %Nx.Tensor{data: data} = tensor
 
       case data do
-        %EXLA.DeviceBackend{buffer: buffer} -> buffer
+        %EXLA.Backend{buffer: buffer} -> buffer
         _ -> EXLA.BinaryBuffer.from_binary(Nx.to_binary(tensor), to_exla_shape(tensor))
       end
     end
