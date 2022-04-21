@@ -209,6 +209,11 @@ defmodule Nx.Defn.Expr do
     out
   end
 
+  def optional(name, args, fun) do
+    %{data: %{context: context}} = res = apply(fun, args)
+    expr(res, context, :optional, [expr(res, context, name, args), res])
+  end
+
   ## Nx.Defn AST callbacks
 
   @doc false
@@ -814,11 +819,6 @@ defmodule Nx.Defn.Expr do
       inside `defn` or inside JIT compiled code
       """
     end
-  end
-
-  def optional(%{data: %{context: context}} = default_impl_expr, name, args, out) do
-    expr = expr(default_impl_expr, context, name, args)
-    expr(out, context, :optional, [expr, default_impl_expr])
   end
 
   ## Helpers
