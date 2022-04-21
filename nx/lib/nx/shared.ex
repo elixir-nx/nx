@@ -434,12 +434,12 @@ defmodule Nx.Shared do
     backend = list_impl!(args)
 
     cond do
+      function_exported?(backend, function_name, arity) ->
+        apply(backend, function_name, [output | args])
+
       function_exported?(backend, :optional, 3) ->
         backend.optional(function_name, args, default_impl)
         |> ensure_optional_compatible!(output)
-
-      function_exported?(backend, function_name, arity) ->
-        apply(backend, function_name, [output | args])
 
       :otherwise ->
         default_impl
