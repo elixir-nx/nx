@@ -1296,7 +1296,7 @@ defmodule Torchx.Backend do
   def inspect(%T{} = tensor, inspect_opts) do
     tensor
     |> to_binary(min(inspect_opts.limit, Nx.size(tensor)))
-    |> Nx.Backend.inspect(binary, inspect_opts)
+    |> then(&Nx.Backend.inspect(tensor, &1, inspect_opts))
     |> maybe_add_signature(tensor)
   end
 
