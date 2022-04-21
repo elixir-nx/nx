@@ -31,8 +31,8 @@ defmodule EXLA.Backend do
   # stuff transfers between them
 
   @impl true
-  def scalar(%{type: type, shape: shape} = out, scalar, _backend_options) do
-    data = :binary.copy(number_to_binary(scalar, type), Nx.size(shape))
+  def constant(%{type: type, shape: shape} = out, constant, _backend_options) do
+    data = :binary.copy(number_to_binary(constant, type), Nx.size(shape))
     from_binary(out, data)
   end
 
@@ -103,162 +103,6 @@ defmodule EXLA.Backend do
     Nx.Backend.inspect(tensor, binary, inspect_opts)
   end
 
-
-  binary_ops =
-    [:add, :subtract, :multiply, :power, :remainder, :divide, :atan2, :min, :max, :quotient] ++
-      [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++
-      [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] ++
-      [:logical_and, :logical_or, :logical_xor] ++
-      [:outer]
-
-  for binary_op <- binary_ops do
-    @impl true
-    def unquote(binary_op)(out, t1, t2) do
-      expr_fn = fn lhs, rhs ->
-        apply(Nx.Defn.Expr, unquote(binary_op), [out, lhs, rhs])
-      end
-
-      EXLA.jit(expr_fn, [t1, t2])
-    end
-  end
-
-  unary_ops =
-    [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tan] ++
-     [:cosh, :sinh, :tanh, :acos, :asin, :atan, :acosh, :asinh] ++
-     [:atanh, :sqrt, :rsqrt, :cbrt, :erf, :erfc, :erf_inv] ++
-     [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign] ++
-     [:count_leading_zeros, :population_count]
-
-  for unary_op <- unary_ops do
-    @impl true
-    def unquote(unary_op)(out, t) do
-      expr_fn = fn x ->
-        apply(Nx.Defn.Expr, unquote(unary_op), [out, x])
-      end
-
-      EXLA.jit(expr_fn, [t])
-    end
-  end
-
-  window_aggregate_ops = [:window_sum, :window_product, :window_max, :window_min]
-
-  for window_op <- window_aggregate_ops do
-    @impl true
-    def unquote(window_op)(out, tensor, window_dimensions, opts) do
-      expr_fn = fn t ->
-        apply(Nx.Defn.Expr, unquote(window_op), [out, t, window_dimensions, opts])
-      end
-
-      EXLA.jit(expr_fn, [tensor])
-    end
-  end
-
-  aggregate_ops = [:all?, :any?, :argmax, :argmin, :sum, :product, :reduce_min, :reduce_max]
-
-  for aggregate_op <- aggregate_ops do
-    @impl true
-    def unquote(aggregate_op)(out, tensor, opts) do
-      expr_fn = fn t ->
-        apply(Nx.Defn.Expr, unquote(aggregate_op), [out, t, opts])
-      end
-
-      EXLA.jit(expr_fn, [tensor])
-    end
-  end
-
-  scatter_ops = [:scatter_window_min, :scatter_window_max]
-
-  for scatter_op <- scatter_ops do
-    @impl true
-    def unquote(scatter_op)(out, tensor, source, dims, opts, init_value) do
-      expr_fn = fn tensor, source, init_value ->
-        apply(Nx.Defn.Expr, unquote(scatter_op), [out, tensor, source, dims, opts, init_value])
-      end
-
-      EXLA.jit(expr_fn, [tensor, source, init_value])
-    end
-  end
-
-  conversion_ops = [:as_type, :bitcast]
-
-  for conversion_op <- conversion_ops do
-    @impl true
-    def unquote(conversion_op)(out, tensor) do
-      expr_fn = fn tensor ->
-        apply(Nx.Defn.Expr, unquote(conversion_op), [out, tensor])
-      end
-
-      EXLA.jit(expr_fn, [tensor])
-    end
-  end
-
-  shape_ops = [:reshape, :squeeze, :transpose, :reverse]
-
-  for shape_op <- shape_ops do
-    @impl true
-    def unquote(shape_op)(out, tensor, axes_or_shape) do
-      expr_fn = fn tensor ->
-        apply(Nx.Defn.Expr, unquote(shape_op), [out, tensor, axes_or_shape])
-      end
-
-      EXLA.jit(expr_fn, [tensor])
-    end
-  end
-
-  @impl true
-  def broadcast(out, tensor, shape, axes) do
-    expr_fn = fn tensor ->
-      apply(Nx.Defn.Expr, :broadcast, [out, tensor, shape, axes])
-    end
-
-    EXLA.jit(expr_fn, [tensor])
-  end
-
-  @impl true
-  def pad(out, tensor, pad_value, padding_config) do
-    expr_fn = fn tensor, pad_value ->
-      apply(Nx.Defn.Expr, :pad, [out, tensor, pad_value, padding_config])
-    end
-
-    EXLA.jit(expr_fn, [tensor, pad_value])
-  end
-
-  @impl true
-  def dot(out, left, c1, b1, right, c2, b2) do
-    expr_fn = fn left, right ->
-      apply(Nx.Defn.Expr, :dot, [out, left, c1, b1, right, c2, b2])
-    end
-
-    EXLA.jit(expr_fn, [left, right])
-  end
-
-  @impl true
-  def clip(out, tensor, min, max) do
-    expr_fn = fn tensor, min, max ->
-      apply(Nx.Defn.Expr, :clip, [out, tensor, min, max])
-    end
-
-    EXLA.jit(expr_fn, [tensor, min, max])
-  end
-
-  @impl true
-  def slice(out, tensor, start, limit, strides) do
-    expr_fn = fn tensor ->
-      apply(Nx.Defn.Expr, :slice, [out, tensor, start, limit, strides])
-    end
-
-    EXLA.jit(expr_fn, [tensor])
-  end
-
-  @impl true
-  def put_slice(out, tensor, put_tensor, location) do
-    expr_fn = fn tensor, put_tensor ->
-      apply(Nx.Defn.Expr, :put_slice, [out, tensor, put_tensor, location])
-    end
-
-    EXLA.jit(expr_fn, [tensor, put_tensor])
-  end
-
   @impl true
   def concatenate(out, tensors, axis) do
     expr_fn = fn tensors ->
@@ -268,111 +112,81 @@ defmodule EXLA.Backend do
     EXLA.jit(expr_fn, [List.to_tuple(tensors)])
   end
 
-  @impl true
-  def select(out, pred, on_true, on_false) do
-    expr_fn = fn pred, on_true, on_false ->
-      apply(Nx.Defn.Expr, :select, [out, pred, on_true, on_false])
+  binary_ops =
+    [:add, :subtract, :multiply, :power, :remainder, :divide, :atan2, :min, :max, :quotient] ++
+      [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++
+      [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] ++
+      [:logical_and, :logical_or, :logical_xor]
+
+  unary_ops =
+    [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tan] ++
+      [:cosh, :sinh, :tanh, :acos, :asin, :atan, :acosh, :asinh, :atanh] ++
+      [:sqrt, :rsqrt, :cbrt, :erf, :erfc, :erf_inv] ++
+      [:abs, :bitwise_not, :ceil, :conjugate, :floor, :negate, :round, :sign] ++
+      [:count_leading_zeros, :population_count, :real, :imag]
+
+  callbacks =
+    [
+      {:as_type, [:out, :tensor], [:tensor]},
+      {:bitcast, [:out, :tensor], [:tensor]},
+      {:reshape, [:out, :tensor], [:tensor]},
+      {:squeeze, [:out, :tensor, :axes], [:tensor]},
+      {:broadcast, [:out, :tensor, :shape, :axes], [:tensor]},
+      {:transpose, [:out, :tensor, :axes], [:tensor]},
+      {:pad, [:out, :tensor, :pad_value, :padding_config], [:tensor, :pad_value]},
+      {:reverse, [:out, :tensor, :axes], [:tensor]},
+      {:dot, [:out, :left, :c1, :b1, :right, :c2, :b2], [:left, :right]},
+      {:clip, [:out, :tensor, :min, :max], [:tensor, :min, :max]},
+      {:slice, [:out, :tensor, :start_indices, :lengths, :strides], [:tensor]},
+      {:put_slice, [:out, :tensor, :start, :slice], [:tensor, :slice]},
+      {:take, [:out, :tensor, :indices, :axis], [:tensor, :indices]},
+      {:take_along_axis, [:out, :tensor, :indices, :axis], [:tensor, :indices]},
+      {:gather, [:out, :input, :indices], [:input, :indices]},
+      {:select, [:out, :pred, :on_true, :on_false], [:pred, :on_true, :on_false]},
+      {:conv, [:out, :tensor, :kernel, :opts], [:tensor, :kernel]},
+      {:all, [:out, :tensor, :opts], [:tensor]},
+      {:any, [:out, :tensor, :opts], [:tensor]},
+      {:sum, [:out, :tensor, :opts], [:tensor]},
+      {:product, [:out, :tensor, :opts], [:tensor]},
+      {:reduce_max, [:out, :tensor, :opts], [:tensor]},
+      {:reduce_min, [:out, :tensor, :opts], [:tensor]},
+      {:argmax, [:out, :tensor, :opts], [:tensor]},
+      {:argmin, [:out, :tensor, :opts], [:tensor]},
+      {:reduce, [:out, :tensor, :acc, :opts, :fun], [:tensor, :acc]},
+      {:window_reduce, [:out, :tensor, :acc, :shape, :opts, :fun], [:tensor, :acc]},
+      {:window_sum, [:out, :tensor, :shape, :opts], [:tensor]},
+      {:window_product, [:out, :tensor, :shape, :opts], [:tensor]},
+      {:window_max, [:out, :tensor, :shape, :opts], [:tensor]},
+      {:window_min, [:out, :tensor, :shape, :opts], [:tensor]},
+      {:map, [:out, :tensor, :opts, :fun], [:tensor]},
+      {:sort, [:out, :tensor, :opts], [:tensor]},
+      {:argsort, [:out, :tensor, :opts], [:tensor]},
+      {:window_scatter_max, [:out, :tensor, :source, :init_value, :window_dims, :opts],
+       [:tensor, :source, :init_value]},
+      {:window_scatter_min, [:out, :tensor, :source, :init_value, :window_dims, :opts],
+       [:tensor, :source, :init_value]},
+      {:indexed_add, [:out, :tensor, :indices, :updates], [:indices, :updates]},
+      {:cholesky, [:out, :tensor], [:tensor]},
+      {:lu, [:out, :tensor, :opts], [:tensor]},
+      {:qr, [:out, :tensor, :opts], [:tensor]},
+      {:triangular_solve, [:out, :a, :b, :opts], [:a, :b]},
+      {:eigh, [:out, :tensor, :opts], [:tensor]},
+      {:svd, [:out, :tensor, :opts], [:tensor]}
+    ] ++
+      for(op <- binary_ops, do: {op, [:out, :left, :right], [:left, :right]}) ++
+      for(op <- unary_ops, do: {op, [:out, :tensor], [:tensor]})
+
+  for {name, args, tensor_args} <- callbacks do
+    args = Enum.map(args, &Macro.var(&1, __MODULE__))
+    tensor_args = Enum.map(tensor_args, &Macro.var(&1, __MODULE__))
+
+    @impl true
+    def unquote(name)(unquote_splicing(args)) do
+      expr_fn = fn unquote_splicing(tensor_args) ->
+        Nx.Defn.Expr.unquote(name)(unquote_splicing(args))
+      end
+
+      EXLA.jit(expr_fn, [unquote_splicing(tensor_args)])
     end
-
-    EXLA.jit(expr_fn, [pred, on_true, on_false])
-  end
-
-  @impl true
-  def conv(out, tensor, kernel, opts) do
-    expr_fn = fn tensor, kernel ->
-      apply(Nx.Defn.Expr, :conv, [out, tensor, kernel, opts])
-    end
-
-    EXLA.jit(expr_fn, [tensor, kernel])
-  end
-
-  @impl true
-  def reduce(out, tensor, acc, opts, fun) do
-    expr_fn = fn tensor, acc ->
-      apply(Nx.Defn.Expr, :reduce, [out, tensor, acc, opts, fun])
-    end
-
-    EXLA.jit(expr_fn, [tensor, acc])
-  end
-
-  @impl true
-  def reduce_window(out, tensor, acc, window, opts, fun) do
-    expr_fn = fn tensor, acc ->
-      apply(Nx.Defn.Expr, :reduce_window, [out, tensor, acc, window, opts, fun])
-    end
-
-    EXLA.jit(expr_fn, [tensor, acc])
-  end
-
-  @impl true
-  def map(out, tensor, fun) do
-    expr_fn = fn tensor ->
-      apply(Nx.Defn.Expr, :map, [out, tensor, fun])
-    end
-
-    EXLA.jit(expr_fn, [tensor])
-  end
-
-  @impl true
-  def sort(out, tensor, opts) do
-    expr_fn = fn tensor ->
-      apply(Nx.Defn.Expr, :sort, [out, tensor, opts])
-    end
-
-    EXLA.jit(expr_fn, [tensor])
-  end
-
-  @impl true
-  def argsort(out, tensor, opts) do
-    expr_fn = fn tensor ->
-      apply(Nx.Defn.Expr, :argsort, [out, tensor, opts])
-    end
-
-    EXLA.jit(expr_fn, [tensor])
-  end
-
-  @impl true
-  def cholesky(out, tensor) do
-    expr_fn = fn tensor ->
-      apply(Nx.Defn.Expr, :cholesky, [out, tensor])
-    end
-
-    EXLA.jit(expr_fn, [tensor])
-  end
-
-  @impl true
-  def lu(out, tensor, opts) do
-    expr_fn = fn tensor ->
-      apply(Nx.Defn.Expr, :lu, [out, tensor, opts])
-    end
-
-    EXLA.jit(expr_fn, [tensor])
-  end
-
-  @impl true
-  def qr(out, tensor, opts) do
-    expr_fn = fn tensor ->
-      apply(Nx.Defn.Expr, :qr, [out, tensor, opts])
-    end
-
-    EXLA.jit(expr_fn, [tensor])
-  end
-
-  @impl true
-  def triangular_solve(out, a, b, opts) do
-    expr_fn = fn a, b ->
-      apply(Nx.Defn.Expr, :triangular_solve, [out, a, b, opts])
-    end
-
-    EXLA.jit(expr_fn, [as_type(out, a), as_type(out, b)])
-  end
-
-  @impl true
-  def svd(out, tensor, opts) do
-    expr_fn = fn tensor ->
-      apply(Nx.Defn.Expr, :svd, [out, tensor, opts])
-    end
-
-    EXLA.jit(expr_fn, [tensor])
   end
 end
