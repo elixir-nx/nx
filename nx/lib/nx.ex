@@ -3129,7 +3129,6 @@ defmodule Nx do
 
   defp non_complex_element_wise_bin_op(left, right, op, fun) do
     type = binary_type(left, right) |> fun.()
-
     Nx.Shared.raise_complex_not_supported(type, op, 2)
     element_wise_bin_op(left, right, op, fun)
   end
@@ -6306,7 +6305,7 @@ defmodule Nx do
         10
       >
 
-  If a tensor of floats numbers is given, it still returns integers:
+  If a tensor of floats is given, it still returns integers:
 
       iex> Nx.argmax(Nx.tensor([2.0, 4.0]))
       #Nx.Tensor<
@@ -6418,7 +6417,7 @@ defmodule Nx do
         4
       >
 
-  If a tensor of floats numbers is given, it still returns integers:
+  If a tensor of floats is given, it still returns integers:
 
       iex> Nx.argmin(Nx.tensor([2.0, 4.0]))
       #Nx.Tensor<
@@ -9406,7 +9405,8 @@ defmodule Nx do
                 "unknown value for :direction, expected :asc or :desc, got: #{inspect(other)}"
       end
 
-    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
+    %T{shape: shape, names: names, type: type} = tensor = to_tensor(tensor)
+    Nx.Shared.raise_complex_not_supported(type, :sort, 2)
     axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
 
     impl!(tensor).sort(
