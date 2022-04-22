@@ -1294,8 +1294,10 @@ defmodule Torchx.Backend do
 
   @impl true
   def inspect(%T{} = tensor, inspect_opts) do
+    limit = if inspect_opts.limit == :infinity, do: :infinity, else: inspect_opts.limit + 1
+
     tensor
-    |> to_binary(min(inspect_opts.limit, Nx.size(tensor)))
+    |> to_binary(min(limit, Nx.size(tensor)))
     |> then(&Nx.Backend.inspect(tensor, &1, inspect_opts))
     |> maybe_add_signature(tensor)
   end
