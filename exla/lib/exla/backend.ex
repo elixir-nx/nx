@@ -95,8 +95,6 @@ defmodule EXLA.Backend do
     maybe_add_signature(result, tensor)
   end
 
-  # TODO: Elixir v1.13 has a default_inspect_fun which
-  # we can use to customize this behaviour for tests.
   if Application.compile_env(:exla, :add_backend_on_inspect, true) do
     defp maybe_add_signature(result, %T{data: %B{buffer: buffer}}) do
       %EXLA.DeviceBuffer{client_name: client_name, device_id: device_id, ref: ref} = buffer
@@ -138,6 +136,8 @@ defmodule EXLA.Backend do
     client.platform
   end
 
+  ## JIT callbacks
+
   @impl true
   def eye(%{shape: shape, type: type, names: names}, _) do
     fun = fn ->
@@ -177,7 +177,7 @@ defmodule EXLA.Backend do
   @impl true
   def concatenate(out, tensors, axis) do
     expr_fn = fn tensors ->
-      apply(Nx.Defn.Expr, :concatenate, [out, Tuple.to_list(tensors), axis])
+      Nx.Defn.Expr.concatenate(out, Tuple.to_list(tensors), axis)
     end
 
     EXLA.jit(expr_fn, [List.to_tuple(tensors)])
