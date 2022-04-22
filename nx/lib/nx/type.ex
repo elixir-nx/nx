@@ -48,10 +48,6 @@ defmodule Nx.Type do
   def min_finite_binary({:f, 16}), do: <<0xFBFF::16-native>>
   def min_finite_binary({:f, 32}), do: <<0xFF7FFFFF::32-native>>
   def min_finite_binary({:f, 64}), do: <<0xFFEFFFFFFFFFFFFF::64-native>>
-  def min_finite_binary({:c, 64}), do: <<0xFF7FFFFF::32-native, 0xFF7FFFFF::32-native>>
-
-  def min_finite_binary({:c, 128}),
-    do: <<0xFFEFFFFFFFFFFFFF::64-native, 0xFFEFFFFFFFFFFFFF::64-native>>
 
   @doc """
   Returns the maximum possible value for the given type.
@@ -70,10 +66,6 @@ defmodule Nx.Type do
   def max_finite_binary({:f, 16}), do: <<0x7BFF::16-native>>
   def max_finite_binary({:f, 32}), do: <<0x7F7FFFFF::32-native>>
   def max_finite_binary({:f, 64}), do: <<0x7FEFFFFFFFFFFFFF::64-native>>
-  def max_finite_binary({:c, 64}), do: <<0x7F7FFFFF::32-native, 0x7F7FFFFF::32-native>>
-
-  def max_finite_binary({:c, 128}),
-    do: <<0x7FEFFFFFFFFFFFFF::64-native, 0x7FEFFFFFFFFFFFFF::64-native>>
 
   @doc """
   Returns infinity as a binary for the given type.
