@@ -1673,7 +1673,7 @@ ERL_NIF_TERM sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Unable to get dimension.");
   }
 
-  xla::XlaOp op = xla::Sort({*operand}, *comparator, dimension);
+  xla::XlaOp op = xla::Sort({*operand}, *comparator, dimension, true);
 
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
@@ -1697,7 +1697,7 @@ ERL_NIF_TERM variadic_sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
     return exla::nif::error(env, "Unable to get dimension.");
   }
 
-  xla::XlaOp op = xla::Sort(operands, *comparator, dimension);
+  xla::XlaOp op = xla::Sort(operands, *comparator, dimension, true);
 
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }

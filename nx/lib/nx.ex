@@ -610,7 +610,7 @@ defmodule Nx do
   Although note it is impossible to perform any operation on a tensor template:
 
       iex> t = Nx.template({2, 3}, {:f, 32}, names: [:rows, :columns])
-      iex> Nx.add(t, 1)
+      iex> Nx.abs(t)
       ** (RuntimeError) cannot perform operations on a Nx.TemplateBackend tensor
 
   To convert existing tensors to templates, use `to_template/1`.
@@ -656,7 +656,7 @@ defmodule Nx do
   Although note it is impossible to perform any operation on a tensor template:
 
       iex> t = Nx.iota({2, 3}) |> Nx.to_template()
-      iex> Nx.add(t, 1)
+      iex> Nx.abs(t)
       ** (RuntimeError) cannot perform operations on a Nx.TemplateBackend tensor
 
   To build a template from scratch, use `template/3`.
@@ -3087,7 +3087,7 @@ defmodule Nx do
 
   Transfer a tensor to an EXLA device backend, stored in the GPU:
 
-      device_tensor = Nx.backend_transfer(tensor, {EXLA.DeviceBackend, client: :cuda})
+      device_tensor = Nx.backend_transfer(tensor, {EXLA.Backend, client: :cuda})
 
   Transfer the device tensor back to an Elixir tensor:
 
@@ -7213,7 +7213,7 @@ defmodule Nx do
 
       iex> init_value = Nx.Constants.min_finite({:s, 64})
       iex> t = Nx.tensor([[1, 2, 3, 4], [4, 5, 6, 7], [7, 8, 9, 10], [11, 12, 13, 14]])
-      iex> Nx.window_reduce(t, init_value, {2, 2}, fn x, acc -> max(x, acc) end)
+      iex> Nx.window_reduce(t, init_value, {2, 2}, fn x, acc -> Nx.max(x, acc) end)
       #Nx.Tensor<
         s64[3][3]
         [
@@ -7226,7 +7226,7 @@ defmodule Nx do
       iex> init_value = Nx.Constants.min_finite({:s, 64})
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
       iex> opts = [padding: :same, strides: [1, 1]]
-      iex> Nx.window_reduce(t, init_value, {2, 2}, opts, fn x, acc -> max(x, acc) end)
+      iex> Nx.window_reduce(t, init_value, {2, 2}, opts, fn x, acc -> Nx.max(x, acc) end)
       #Nx.Tensor<
         s64[3][3]
         [
@@ -7238,7 +7238,7 @@ defmodule Nx do
 
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
       iex> opts = [padding: :same, strides: [1, 1]]
-      iex> Nx.window_reduce(t, 0, {1, 2}, opts, fn x, acc -> x + acc end)
+      iex> Nx.window_reduce(t, 0, {1, 2}, opts, fn x, acc -> Nx.add(x, acc) end)
       #Nx.Tensor<
         s64[2][3]
         [
@@ -7249,7 +7249,7 @@ defmodule Nx do
 
       iex> t = Nx.tensor([[[4, 2, 1, 3], [4, 2, 1, 7]], [[1, 2, 5, 7], [1, 8, 9, 2]]])
       iex> opts = [padding: :valid, strides: [2, 1, 1], window_dilations: [1, 1, 2]]
-      iex> Nx.window_reduce(t, 0, {1, 1, 2}, opts, fn x, acc -> x + acc end)
+      iex> Nx.window_reduce(t, 0, {1, 1, 2}, opts, fn x, acc -> Nx.add(x, acc) end)
       #Nx.Tensor<
         s64[1][2][2]
         [

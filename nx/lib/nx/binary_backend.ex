@@ -1489,7 +1489,7 @@ defmodule Nx.BinaryBackend do
     init_value = number_to_binary(0, type)
     init_value = from_binary(%{out | shape: {}, names: []}, init_value)
 
-    fun = fn a, b -> a + b end
+    fun = fn a, b -> element_add(type, a, b) end
     window_reduce(out, tensor, init_value, window_dimensions, opts, fun)
   end
 
@@ -1500,7 +1500,7 @@ defmodule Nx.BinaryBackend do
     init_value = Nx.Type.min_finite_binary(type)
     init_value = from_binary(%{out | shape: {}, names: []}, init_value)
 
-    fun = fn a, b -> max(a, b) end
+    fun = fn a, b -> element_max(type, a, b) end
     window_reduce(out, tensor, init_value, window_dimensions, opts, fun)
   end
 
@@ -1511,7 +1511,7 @@ defmodule Nx.BinaryBackend do
     init_value = Nx.Type.max_finite_binary(type)
     init_value = from_binary(%{out | shape: {}, names: []}, init_value)
 
-    fun = fn a, b -> min(a, b) end
+    fun = fn a, b -> element_min(type, a, b) end
     window_reduce(out, tensor, init_value, window_dimensions, opts, fun)
   end
 
@@ -1522,7 +1522,7 @@ defmodule Nx.BinaryBackend do
     init_value = number_to_binary(1, type)
     init_value = from_binary(%{out | shape: {}, names: []}, init_value)
 
-    fun = fn a, b -> a * b end
+    fun = fn a, b -> element_multiply(type, a, b) end
     window_reduce(out, tensor, init_value, window_dimensions, opts, fun)
   end
 

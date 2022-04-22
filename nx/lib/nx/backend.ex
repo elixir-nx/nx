@@ -38,7 +38,7 @@ defmodule Nx.Backend do
   @type axes :: Nx.Tensor.axes()
   @type backend_options :: term()
 
-  @callback constant(out :: tensor, binary, backend_options) :: tensor
+  @callback constant(out :: tensor, number | Complex.t(), backend_options) :: tensor
   @callback from_binary(out :: tensor, binary, backend_options) :: tensor
   @callback eye(tensor, backend_options) :: tensor
   @callback iota(tensor, axis | nil, backend_options) :: tensor
@@ -129,7 +129,7 @@ defmodule Nx.Backend do
   to call this callback (which is also optional), then we
   fallback to the default iomplementation.
   """
-  @callback optional(atom, fun, [term]) :: tensor
+  @callback optional(atom, [term], fun) :: tensor
 
   @callback solve(out :: tensor, a :: tensor, b :: tensor) :: tensor
   @callback determinant(out :: tensor, t :: tensor) :: tensor
