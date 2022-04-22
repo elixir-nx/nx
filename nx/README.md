@@ -97,7 +97,7 @@ using this library:
 
 ```elixir
 iex> t = Nx.tensor([[1, 2], [3, 4]])
-iex> Nx.divide(Nx.exp(t), Nx.sum(Nx.exp(t)))
+iex> Nx.divide(Nx.exp(t), Nx.sum(Nx.exp(t))
 #Nx.Tensor<
   f32[2][2]
   [
