@@ -68,6 +68,7 @@ defmodule EXLA.Backend do
 
   @impl true
   def to_batched_list(_out, _tensor, _backend_options) do
+    # TODO: once implemented, enable the corresponding Nx doctests in EXLA.BackendTest
     raise "to_batched_list is not currently supported by EXLA.Backend, please call Nx.backend_copy/1"
   end
 
