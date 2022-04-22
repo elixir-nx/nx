@@ -11,6 +11,10 @@ defmodule Nx.ComplexTest do
   @arg2 Complex.new(-2, 7)
 
   describe "unary operations" do
+    test "abs" do
+      assert_all_close(Nx.abs(@arg), 3.605551275)
+    end
+
     test "exp" do
       assert_all_close(Nx.exp(@arg), Complex.new(-7.315, 1.042))
     end
