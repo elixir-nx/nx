@@ -7,8 +7,6 @@ defmodule EXLA.Defn do
   @doc false
   def __stream__(key, input, acc, vars, fun, [args], options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
-    keep_on_device? = Keyword.get(run_options, :keep_on_device, false)
-    run_options = Keyword.put(run_options, :keep_on_device, true)
 
     {client_name, compile_options} = Keyword.pop(compile_options, :client, :host)
     client = EXLA.Client.fetch!(client_name)
@@ -68,8 +66,7 @@ defmodule EXLA.Defn do
         input_shape,
         output,
         output_shapes,
-        acc_output,
-        keep_on_device?
+        acc_output
       )
 
     [stream]
@@ -278,20 +275,18 @@ defmodule EXLA.Defn do
 
     {:ok, runner} =
       EXLA.Defn.Runner.start_link(lock, fn ->
-        run_options = Keyword.put(run_options, :keep_on_device, true)
         EXLA.Executable.run(executable, [buffers], run_options)
       end)
 
     {:ok, outfeed} = EXLA.Defn.Outfeed.start_child(executable, hooks)
     _ = EXLA.Defn.Lock.transfer(lock, fn -> send(runner, lock) end, outfeed)
 
-    fun = if run_options[:keep_on_device], do: & &1, else: &Nx.backend_transfer/1
     ref = Process.monitor(outfeed)
 
     receive do
       {:DOWN, ^ref, _, _, _} ->
         [result] = EXLA.Defn.Runner.read(runner)
-        [EXLA.Defn.Buffers.to_nx!(result, outputs, fun)]
+        [EXLA.Defn.Buffers.to_nx!(result, outputs)]
     end
   end
 

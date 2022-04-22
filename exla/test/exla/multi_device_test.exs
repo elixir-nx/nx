@@ -11,7 +11,7 @@ defmodule EXLA.MultiDeviceTest do
     t2 = BinaryBuffer.from_binary(<<2::32-native>>, Shape.make_shape({:s, 32}, {}))
 
     assert [a = %DeviceBuffer{}, b = %DeviceBuffer{}, c = %DeviceBuffer{}] =
-             run_one([t1, t2], [keep_on_device: true, device_id: 1], fn b, x, y ->
+             run_one([t1, t2], [device_id: 1], fn b, x, y ->
                Op.tuple(b, [x, y, Op.add(x, y)])
              end)
 
@@ -33,8 +33,7 @@ defmodule EXLA.MultiDeviceTest do
 
     assert executable.device_id == -1
 
-    [[a1, a2, a3], [b1, b2, b3]] =
-      Executable.run(executable, [[t1, t2], [t3, t4]], keep_on_device: true)
+    [[a1, a2, a3], [b1, b2, b3]] = Executable.run(executable, [[t1, t2], [t3, t4]])
 
     assert <<1::32-native>> == DeviceBuffer.read(a1)
     assert <<2::32-native>> == DeviceBuffer.read(a2)

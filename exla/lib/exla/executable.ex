@@ -11,12 +11,6 @@ defmodule EXLA.Executable do
 
   @doc """
   Runs the given executable with a list of lists as inputs and the given options.
-
-  ## Options
-
-    * `:keep_on_device` - if the data should be kept on the device
-      after the computation (defaults to `false`).
-
   """
   def run(%Executable{} = executable, [subinputs | _] = inputs, options \\ [])
       when is_list(subinputs) do
@@ -27,10 +21,7 @@ defmodule EXLA.Executable do
     end
   end
 
-  defp run(client, ref, device_id, inputs, options) do
-    keep_on_device = Keyword.get(options, :keep_on_device, false)
-    keep_on_device_int = if keep_on_device, do: 1, else: 0
-
+  defp run(client, ref, device_id, inputs, _options) do
     inputs =
       for subinputs <- inputs do
         Enum.map(subinputs, fn
@@ -41,8 +32,8 @@ defmodule EXLA.Executable do
 
     data =
       case client.platform do
-        :host -> EXLA.NIF.run_cpu(client.ref, ref, inputs, keep_on_device_int, device_id)
-        _ -> EXLA.NIF.run_io(client.ref, ref, inputs, keep_on_device_int, device_id)
+        :host -> EXLA.NIF.run_cpu(client.ref, ref, inputs, device_id)
+        _ -> EXLA.NIF.run_io(client.ref, ref, inputs, device_id)
       end
 
     unwrap!(data)

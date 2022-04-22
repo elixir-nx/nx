@@ -4,10 +4,10 @@ defmodule EXLA.Defn.Buffers do
   @doc """
   binary + EXLA.DeviceBuffer + EXLA.BinaryBuffer -> Nx.
   """
-  def to_nx!(buffers, outputs, fun \\ & &1) do
+  def to_nx!(buffers, outputs) do
     {res, []} =
       Nx.Defn.Composite.traverse(outputs, buffers, fn %Nx.Tensor{} = hole, [buffer | acc] ->
-        {fun.(%{hole | data: buffer_to_data(hole, buffer)}), acc}
+        {%{hole | data: buffer_to_data(hole, buffer)}, acc}
       end)
 
     res
