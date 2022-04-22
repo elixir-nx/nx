@@ -31,30 +31,30 @@ defmodule EXLA.Backend do
   end
 
   @impl true
-  def from_binary(%T{shape: shape, type: type} = tensor, binary, opts) do
-    {client, device_id} = client_and_device_id(opts)
+  def from_binary(%T{shape: shape, type: type} = tensor, binary, backend_options) do
+    {client, device_id} = client_and_device_id(backend_options)
     shape = EXLA.Shape.make_shape(type, shape)
     buffer = EXLA.DeviceBuffer.place_on_device(binary, shape, client, device_id)
     put_in(tensor.data, %B{buffer: buffer})
   end
 
   @impl true
-  def backend_copy(tensor, Nx.Tensor, opts) do
-    backend_copy(tensor, Nx.BinaryBackend, opts)
+  def backend_copy(tensor, Nx.Tensor, backend_options) do
+    backend_copy(tensor, Nx.BinaryBackend, backend_options)
   end
 
   # TODO: Support direct transfers without going through Elixir
-  def backend_copy(%T{data: %B{buffer: buffer}} = tensor, backend, opts) do
-    backend.from_binary(tensor, EXLA.DeviceBuffer.read(buffer), opts)
+  def backend_copy(%T{data: %B{buffer: buffer}} = tensor, backend, backend_options) do
+    backend.from_binary(tensor, EXLA.DeviceBuffer.read(buffer), backend_options)
   end
 
   @impl true
-  def backend_transfer(%T{data: %B{buffer: buffer}} = tensor, backend, opts) do
-    if backend == __MODULE__ and same_client_device?(buffer, opts) do
+  def backend_transfer(%T{data: %B{buffer: buffer}} = tensor, backend, backend_options) do
+    if backend == __MODULE__ and same_client_device?(buffer, backend_options) do
       tensor
     else
       try do
-        backend_copy(tensor, backend, opts)
+        backend_copy(tensor, backend, backend_options)
       after
         EXLA.DeviceBuffer.deallocate(buffer)
       end
@@ -67,9 +67,9 @@ defmodule EXLA.Backend do
   end
 
   @impl true
-  def to_batched_list(out, tensor, opts) do
+  def to_batched_list(out, tensor, backend_options) do
     binary_tensor = backend_copy(tensor, Nx.BinaryBackend, [])
-    Nx.BinaryBackend.to_batched_list(out, binary_tensor, opts)
+    Nx.BinaryBackend.to_batched_list(out, binary_tensor, backend_options)
   end
 
   @impl true
@@ -152,10 +152,10 @@ defmodule EXLA.Backend do
 
   callbacks =
     [
-      {:eye, [:out, :opts], []},
-      {:iota, [:out, :axis, :opts], []},
-      {:random_uniform, [:out, :min, :max, :opts], [:min, :max]},
-      {:random_normal, [:out, :mu, :sigma, :opts], [:mu, :sigma]},
+      {:eye, [:out, :backend_options], []},
+      {:iota, [:out, :axis, :backend_options], []},
+      {:random_uniform, [:out, :min, :max, :backend_options], [:min, :max]},
+      {:random_normal, [:out, :mu, :sigma, :backend_options], [:mu, :sigma]},
       {:as_type, [:out, :tensor], [:tensor]},
       {:bitcast, [:out, :tensor], [:tensor]},
       {:reshape, [:out, :tensor], [:tensor]},
