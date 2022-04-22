@@ -68,8 +68,7 @@ defmodule EXLA.Backend do
 
   @impl true
   def to_batched_list(out, tensor, backend_options) do
-    binary_tensor = backend_copy(tensor, Nx.BinaryBackend, [])
-    Nx.BinaryBackend.to_batched_list(out, binary_tensor, backend_options)
+    raise "to_batched_list is not currently supported by EXLA.Backend, please call Nx.backend_copy/1"
   end
 
   @impl true
