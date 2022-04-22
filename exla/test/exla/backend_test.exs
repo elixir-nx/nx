@@ -12,6 +12,7 @@ defmodule EXLA.BackendTest do
     erf: 1,
     cosh: 1,
     tanh: 1,
+    asin: 1,
     asinh: 1,
     atanh: 1,
     ceil: 1,
