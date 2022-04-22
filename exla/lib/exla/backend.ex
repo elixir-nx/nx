@@ -24,16 +24,11 @@ defmodule EXLA.Backend do
   alias Nx.Tensor, as: T
   alias EXLA.Backend, as: B
 
-  import Nx.Shared
-
   @impl true
-  def constant(%{type: type, shape: shape} = out, constant, backend_options) do
-    data = :binary.copy(number_to_binary(constant, type), Nx.size(shape))
-    from_binary(out, data, backend_options)
+  def constant(out, constant, backend_options) do
+    binary_tensor = Nx.BinaryBackend.constant(out, constant, [])
+    Nx.BinaryBackend.backend_transfer(binary_tensor, __MODULE__, backend_options)
   end
-
-  defp number_to_binary(number, type),
-    do: match_types([type], do: <<write!(number, 0)>>)
 
   @impl true
   def from_binary(%T{shape: shape, type: type} = tensor, binary, opts) do
