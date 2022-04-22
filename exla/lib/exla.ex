@@ -36,12 +36,6 @@ defmodule EXLA do
     * `:device_id` - the default device id to run the computation
         on. Defaults to the `:default_device_id` on the client
 
-    * `:run_options` - options given when running the computation:
-
-      * `:keep_on_device` - if the data should be kept on the device,
-        useful if multiple computations are done in a row. See
-        "Device allocation" section
-
   ## Clients
 
   The `EXLA` library uses a client for compiling and executing code.
@@ -107,39 +101,44 @@ defmodule EXLA do
 
   ## Device allocation
 
-  EXLA also ships with a `EXLA.Backend` that allows data
-  to be either be explicitly allocated or kept on the EXLA device
-  after a computation:
+  EXLA also ships with a `EXLA.Backend` that allows data to be explicitly
+  allocated on the EXLA device. You can create tensors with `EXLA.Backend`
+  directly:
 
-      config :nx, :default_defn_options,
-        [compiler: EXLA, client: :cuda, run_options: [keep_on_device: true]]
+      Nx.tensor([1, 2, 3, 4], backend: EXLA.Backend)
 
-  Will keep the computation on the device, either the CPU or GPU.
-  For CPU, this is actually detrimental, as allocating an Elixir
-  binary has the same cost as keeping it on CPU, but this yields
-  important performance benefits on the GPU.
+  or you can configure `EXLA.Backend` as the default backend, so that
+  all tensors are allocated on the EXLA device by default.
 
-  If data is kept on the device, you can pipe it into other `defn`
-  computations running on the same compiler (in this case, the
-  `EXLA` compiler) but you cannot use the regular `Nx` operations,
-  unless you transfer it back:
+  In some cases you may want to explicitly move an existing tensor to
+  the device:
+
+      tensor = Nx.tensor([1, 2, 3, 4], backend: Nx.BinaryBackend)
+      Nx.backend_transfer(tensor, EXLA.Backend)
+
+  Note that you can use regular `Nx` operations, so the following works:
+
+      tensor = Nx.tensor([1, 2, 3, 4], backend: EXLA.Backend)
+      Nx.sum(tensor)
+
+  Under the hood, EXLA will create a computation for the sum operation
+  and invoke it on the device. This is essentially an "eager mode"
+  that provides acceleration during prototyping. However, eventually
+  you should wrap your computations in a `defn` to utilize the full
+  performance of JIT.
+
+  To bring the tensor data back to Elixir you need an explicit transfer:
 
       Nx.tensor([1, 2, 3, 4])
       |> softmax()
-      |> Nx.backend_transfer() # bring the data back to Elixir
-
-  You can also use `Nx.backend_transfer/1` to put data on a given
-  device before invoking a `defn` function:
-
-      # Explicitly move data to the device, useful for GPU
-      Nx.backend_transfer(Nx.tensor([1, 2, 3, 4]), EXLA.Backend)
-
-  `EXLA.Backend` will use the same client as the one
-  configured for `Nx.Defn` by default.
+      |> Nx.backend_transfer()
 
   If instead you want to make a copy of the data, you can use
   `Nx.backend_copy/1` instead. However, when working with large
   data, be mindful of memory allocations.
+
+  `EXLA.Backend` will use the same client as the one configured for
+  `Nx.Defn` by default.
 
   > **Important!** EXLA operations and the `defn` compiler do not
   > take the input devices into account when executing. So, if you
@@ -206,10 +205,7 @@ defmodule EXLA do
 
   If additional options are given, they are given as compiler options:
 
-      EXLA.set_as_nx_default(
-        [:tpu, :cuda, :rocm, :host],
-        run_options: [keep_on_device: true]
-      )
+      EXLA.set_as_nx_default([:tpu, :cuda, :rocm, :host])
 
   To use the GPU or TPUs, don't forget to also set the appropriate value
   for the [`XLA_TARGET`](https://github.com/elixir-nx/xla#xla_target)

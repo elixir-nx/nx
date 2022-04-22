@@ -125,21 +125,18 @@ defmodule EXLA.Backend do
 
   ## JIT callbacks
 
-  # TODO: remove keep_on_device entirely
-  @jit_opts [run_options: [keep_on_device: true]]
-
   @impl true
   def concatenate(out, tensors, axis) do
     expr_fn = fn tensors ->
       Nx.Defn.Expr.concatenate(out, Tuple.to_list(tensors), axis)
     end
 
-    EXLA.jit(expr_fn, [List.to_tuple(tensors)], @jit_opts)
+    EXLA.jit(expr_fn, [List.to_tuple(tensors)])
   end
 
   @impl true
   def optional(_name, args, fun) do
-    EXLA.jit(fun, args, @jit_opts)
+    EXLA.jit(fun, args)
   end
 
   binary_ops =
@@ -220,7 +217,7 @@ defmodule EXLA.Backend do
         Nx.Defn.Expr.unquote(name)(unquote_splicing(args))
       end
 
-      EXLA.jit(expr_fn, [unquote_splicing(tensor_args)], @jit_opts)
+      EXLA.jit(expr_fn, [unquote_splicing(tensor_args)])
     end
   end
 end

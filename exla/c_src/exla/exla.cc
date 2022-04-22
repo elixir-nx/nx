@@ -2205,13 +2205,12 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 // ExlaExecutable Functions
 
 ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 5) {
+  if (argc != 4) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   exla::ExlaClient** client;
   exla::ExlaExecutable** executable;
-  bool keep_on_device;
   int device_id;
 
   ERL_NIF_TERM arguments = argv[2];
@@ -2222,15 +2221,12 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get<exla::ExlaExecutable*>(env, argv[1], executable)) {
     return exla::nif::error(env, "Unable to get executable.");
   }
-  if (!exla::nif::get(env, argv[3], &keep_on_device)) {
-    return exla::nif::error(env, "Unable to get keep on device flag.");
-  }
-  if (!exla::nif::get(env, argv[4], &device_id)) {
+  if (!exla::nif::get(env, argv[3], &device_id)) {
     return exla::nif::error(env, "Unable to get device ID.");
   }
 
   EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM term,
-     (*executable)->Run(env, arguments, keep_on_device, device_id), env);
+     (*executable)->Run(env, arguments, device_id), env);
 
   return term;
 }
@@ -2281,8 +2277,8 @@ static ErlNifFunc exla_funcs[] = {
   {"transfer_from_outfeed", 5, transfer_from_outfeed, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"copy_buffer_to_device", 3, copy_buffer_to_device, ERL_NIF_DIRTY_JOB_IO_BOUND},
   // ExlaExecutable
-  {"run_io", 5, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"run_cpu", 5, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+  {"run_io", 4, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"run_cpu", 4, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
   // Shape
   {"make_shape", 2, make_shape},
   {"make_token_shape", 0, make_token_shape},
