@@ -84,15 +84,10 @@ defmodule EXLA.Backend do
 
   @impl true
   def inspect(%T{} = tensor, inspect_opts) do
-    result =
-      if platform(tensor) == :host do
-        binary = to_binary(tensor, Nx.size(tensor))
-        Nx.Backend.inspect(tensor, binary, inspect_opts)
-      else
-        "Tensors on the GPU cannot be inspected. Explicitly transfer the tensor by calling Nx.backend_transfer/1"
-      end
-
-    maybe_add_signature(result, tensor)
+    tensor
+    |> to_binary(min(inspect_opts.limit, Nx.size(tensor)))
+    |> then(&Nx.Backend.inspect(tensor, &1, inspect_opts))
+    |> maybe_add_signature(tensor)
   end
 
   if Application.compile_env(:exla, :add_backend_on_inspect, true) do
@@ -129,11 +124,6 @@ defmodule EXLA.Backend do
   defp same_client_device?(buffer, opts) do
     {client, device_id} = client_and_device_id(opts)
     buffer.client_name == client.name and buffer.device_id == device_id
-  end
-
-  defp platform(%T{data: %B{buffer: buffer}}) do
-    client = EXLA.Client.fetch!(buffer.client_name)
-    client.platform
   end
 
   ## JIT callbacks
