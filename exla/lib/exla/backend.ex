@@ -139,42 +139,6 @@ defmodule EXLA.Backend do
   ## JIT callbacks
 
   @impl true
-  def eye(%{shape: shape, type: type, names: names}, _) do
-    fun = fn ->
-      Nx.eye(shape, type: type, names: names, backend: Nx.Defn.Expr)
-    end
-
-    EXLA.jit(fun, [])
-  end
-
-  @impl true
-  def iota(%{shape: shape, type: type, names: names}, axis, _) do
-    fun = fn ->
-      Nx.iota(shape, type: type, names: names, axis: axis, backend: Nx.Defn.Expr)
-    end
-
-    EXLA.jit(fun, [])
-  end
-
-  @impl true
-  def random_uniform(%{shape: shape, type: type, names: names}, min, max, _) do
-    fun = fn ->
-      Nx.random_uniform(shape, min, max, type: type, names: names, backend: Nx.Defn.Expr)
-    end
-
-    EXLA.jit(fun, [])
-  end
-
-  @impl true
-  def random_normal(%{shape: shape, type: type, names: names}, mu, sigma, _) do
-    fun = fn ->
-      Nx.random_normal(shape, mu, sigma, type: type, names: names, backend: Nx.Defn.Expr)
-    end
-
-    EXLA.jit(fun, [])
-  end
-
-  @impl true
   def concatenate(out, tensors, axis) do
     expr_fn = fn tensors ->
       Nx.Defn.Expr.concatenate(out, Tuple.to_list(tensors), axis)
@@ -203,6 +167,10 @@ defmodule EXLA.Backend do
 
   callbacks =
     [
+      {:eye, [:out, :opts], []},
+      {:iota, [:out, :axis, :opts], []},
+      {:random_uniform, [:out, :min, :max, :opts], [:min, :max]},
+      {:random_normal, [:out, :mu, :sigma, :opts], [:mu, :sigma]},
       {:as_type, [:out, :tensor], [:tensor]},
       {:bitcast, [:out, :tensor], [:tensor]},
       {:reshape, [:out, :tensor], [:tensor]},
