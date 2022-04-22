@@ -135,14 +135,6 @@ defmodule Nx.ComplexTest do
       assert Nx.any(Nx.tensor([@arg, @arg2])) == Nx.tensor(1, type: {:u, 8})
     end
 
-    test "argmax" do
-      assert Nx.argmax(Nx.tensor([@arg, @arg2])) == Nx.tensor(1)
-    end
-
-    test "argmin" do
-      assert Nx.argmin(Nx.tensor([@arg, @arg2])) == Nx.tensor(0)
-    end
-
     test "mean" do
       t = Nx.tensor([@arg, @arg2])
 
@@ -162,31 +154,15 @@ defmodule Nx.ComplexTest do
       assert Nx.reduce(Nx.tensor([@arg, @arg2]), 0, &Nx.add/2) == Nx.add(@arg, @arg2)
     end
 
-    test "reduce_max" do
-      assert Nx.reduce_max(Nx.tensor([@arg, @arg2])) == Nx.tensor(@arg2)
-    end
-
-    test "reduce_min" do
-      assert Nx.reduce_min(Nx.tensor([@arg, @arg2])) == Nx.tensor(@arg)
-    end
-
     test "sum" do
       assert Nx.sum(Nx.tensor([@arg, @arg2])) == Nx.add(@arg, @arg2)
     end
   end
 
   describe "window operations" do
-    test "window_max" do
-      assert Nx.window_max(Nx.tensor([@arg, @arg2]), {2})[0] == Nx.tensor(@arg2)
-    end
-
     test "window_mean" do
       t = Nx.tensor([@arg, @arg2])
       assert Nx.window_mean(t, {2})[0] == Nx.mean(t)
-    end
-
-    test "window_min" do
-      assert Nx.window_min(Nx.tensor([@arg, @arg2]), {2})[0] == Nx.tensor(@arg)
     end
 
     test "window_product" do
@@ -197,24 +173,6 @@ defmodule Nx.ComplexTest do
     test "window_reduce" do
       t = Nx.tensor([@arg, @arg2])
       assert Nx.window_reduce(t, 0, {2}, &Nx.add/2)[0] == Nx.sum(t)
-    end
-
-    test "window_scatter_max" do
-      assert Nx.window_scatter_max(
-               Nx.tensor([@arg2, Complex.new(0, 0), @arg]),
-               Nx.tensor([0, 1]),
-               0,
-               {2}
-             ) == Nx.tensor([0, 0, 1])
-    end
-
-    test "window_scatter_min" do
-      assert Nx.window_scatter_min(
-               Nx.tensor([@arg2, Complex.new(0, 0), @arg]),
-               Nx.tensor([0, 1]),
-               0,
-               {2}
-             ) == Nx.tensor([0, 1, 0])
     end
 
     test "window_sum" do

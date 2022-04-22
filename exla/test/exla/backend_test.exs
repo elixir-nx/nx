@@ -27,11 +27,7 @@ defmodule EXLA.BackendTest do
 
   @inherently_unsupported_doctests [
     # XLA requires signed and unsigned tensors to be at least of size 32
-    random_uniform: 4,
-    # XLA does not support complex number comparison
-    argmax: 2,
-    # XLA does not support complex number comparison
-    argmin: 2
+    random_uniform: 4
   ]
 
   @unrelated_doctests [

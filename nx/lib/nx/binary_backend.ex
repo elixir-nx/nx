@@ -1422,15 +1422,15 @@ defmodule Nx.BinaryBackend do
     opts = if axis, do: [axes: [axis]], else: []
 
     data =
-      bin_reduce(tensor, out.type, {0, :first, -1}, opts, fn bin,
-                                                             {i, cur_extreme_x, cur_extreme_i} ->
-        x = binary_to_number(bin, type)
+      bin_reduce(tensor, out.type, {0, :first, -1}, opts, fn
+        bin, {i, cur_extreme_x, cur_extreme_i} ->
+          x = binary_to_number(bin, type)
 
-        if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
-          {i, {i + 1, x, i}}
-        else
-          {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}
-        end
+          if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
+            {i, {i + 1, x, i}}
+          else
+            {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}
+          end
       end)
 
     from_binary(out, data)

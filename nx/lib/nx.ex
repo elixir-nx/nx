@@ -4886,6 +4886,7 @@ defmodule Nx do
     end
 
     output_type = Nx.Type.merge(source_type, value_type)
+    Nx.Shared.raise_complex_not_supported(output_type, :window_scatter_max, 5)
 
     impl!(tensor, source).window_scatter_max(
       %{tensor | type: output_type},
@@ -4976,6 +4977,7 @@ defmodule Nx do
     end
 
     output_type = Nx.Type.merge(source_type, value_type)
+    Nx.Shared.raise_complex_not_supported(output_type, :window_scatter_min, 5)
 
     impl!(tensor, source).window_scatter_min(
       %{tensor | type: output_type},
@@ -6165,8 +6167,9 @@ defmodule Nx do
   """
   @doc type: :aggregation
   def reduce_max(tensor, opts \\ []) do
-    tensor = to_tensor(tensor)
-    aggregate_axes_op(tensor, :reduce_max, tensor.type, opts)
+    %{type: type} = tensor = to_tensor(tensor)
+    Nx.Shared.raise_complex_not_supported(type, :reduce_max, 2)
+    aggregate_axes_op(tensor, :reduce_max, type, opts)
   end
 
   @doc """
@@ -6243,8 +6246,9 @@ defmodule Nx do
   """
   @doc type: :aggregation
   def reduce_min(tensor, opts \\ []) do
-    tensor = to_tensor(tensor)
-    aggregate_axes_op(tensor, :reduce_min, tensor.type, opts)
+    %{type: type} = tensor = to_tensor(tensor)
+    Nx.Shared.raise_complex_not_supported(type, :reduce_min, 2)
+    aggregate_axes_op(tensor, :reduce_min, type, opts)
   end
 
   defp aggregate_axes_op(%T{shape: shape, names: names} = tensor, op, type, opts) do
@@ -6302,20 +6306,13 @@ defmodule Nx do
         10
       >
 
-  If a tensor of floats or complex numbers is given, it still returns integers:
+  If a tensor of floats numbers is given, it still returns integers:
 
       iex> Nx.argmax(Nx.tensor([2.0, 4.0]))
       #Nx.Tensor<
         s64
         1
       >
-
-     iex> Nx.argmax(Nx.tensor([Complex.new(1, 2), Complex.new(3, 0)]))
-     #Nx.Tensor<
-       s64
-       0
-     >
-
 
   ### Aggregating over an axis
 
@@ -6421,18 +6418,12 @@ defmodule Nx do
         4
       >
 
-  If a tensor of floats or complex numbers is given, it still returns integers:
+  If a tensor of floats numbers is given, it still returns integers:
 
       iex> Nx.argmin(Nx.tensor([2.0, 4.0]))
       #Nx.Tensor<
         s64
         0
-      >
-
-      iex> Nx.argmin(Nx.tensor([Complex.new(1, 2), Complex.new(3, 0)]))
-      #Nx.Tensor<
-        s64
-        1
       >
 
   ### Aggregating over an axis
@@ -6526,7 +6517,8 @@ defmodule Nx do
                 "unknown value for :tie_break, expected :high or :low, got: #{inspect(other)}"
       end
 
-    %{shape: shape, names: names} = tensor = to_tensor(tensor)
+    %{shape: shape, names: names, type: type} = tensor = to_tensor(tensor)
+    Nx.Shared.raise_complex_not_supported(type, op, 2)
 
     {shape, names, axis} =
       if axis = opts[:axis] do
@@ -6545,20 +6537,20 @@ defmodule Nx do
   defp aggregate_window_op(tensor, window_dimensions, opts, op) when is_list(opts) do
     opts = keyword!(opts, [:window_dilations, padding: :valid, strides: 1])
     Nx.Shape.validate!(window_dimensions, :window_dimensions)
-    %T{shape: shape} = tensor = to_tensor(tensor)
+    %{shape: shape} = tensor = to_tensor(tensor)
 
     strides = opts[:strides]
     padding = opts[:padding]
-    dilations = opts[:window_dilations] || List.duplicate(1, rank(tensor.shape))
+    dilations = opts[:window_dilations] || List.duplicate(1, rank(shape))
 
     strides =
       if is_integer(strides),
-        do: List.duplicate(strides, rank(tensor.shape)),
+        do: List.duplicate(strides, rank(shape)),
         else: strides
 
     dilations =
       if is_integer(dilations),
-        do: List.duplicate(dilations, rank(tensor.shape)),
+        do: List.duplicate(dilations, rank(shape)),
         else: dilations
 
     {output_shape, padding_config} =
@@ -6863,8 +6855,11 @@ defmodule Nx do
       >
   """
   @doc type: :window
-  def window_max(tensor, window_dimensions, opts \\ []),
-    do: aggregate_window_op(tensor, window_dimensions, opts, :window_max)
+  def window_max(tensor, window_dimensions, opts \\ []) do
+    tensor = to_tensor(tensor)
+    Nx.Shared.raise_complex_not_supported(tensor.type, :window_max, 3)
+    aggregate_window_op(tensor, window_dimensions, opts, :window_max)
+  end
 
   @doc """
   Returns the minimum over each window of size `window_dimensions`
@@ -6944,8 +6939,11 @@ defmodule Nx do
       >
   """
   @doc type: :window
-  def window_min(tensor, window_dimensions, opts \\ []),
-    do: aggregate_window_op(tensor, window_dimensions, opts, :window_min)
+  def window_min(tensor, window_dimensions, opts \\ []) do
+    tensor = to_tensor(tensor)
+    Nx.Shared.raise_complex_not_supported(tensor.type, :window_min, 3)
+    aggregate_window_op(tensor, window_dimensions, opts, :window_min)
+  end
 
   @doc """
   Returns the product over each window of size `window_dimensions`
