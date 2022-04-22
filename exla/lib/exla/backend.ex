@@ -67,7 +67,7 @@ defmodule EXLA.Backend do
   end
 
   @impl true
-  def to_batched_list(out, tensor, backend_options) do
+  def to_batched_list(_out, _tensor, _backend_options) do
     raise "to_batched_list is not currently supported by EXLA.Backend, please call Nx.backend_copy/1"
   end
 
@@ -122,18 +122,21 @@ defmodule EXLA.Backend do
 
   ## JIT callbacks
 
+  # TODO: remove keep_on_device entirely
+  @jit_opts [run_options: [keep_on_device: true]]
+
   @impl true
   def concatenate(out, tensors, axis) do
     expr_fn = fn tensors ->
       Nx.Defn.Expr.concatenate(out, Tuple.to_list(tensors), axis)
     end
 
-    EXLA.jit(expr_fn, [List.to_tuple(tensors)])
+    EXLA.jit(expr_fn, [List.to_tuple(tensors)], @jit_opts)
   end
 
   @impl true
   def optional(_name, args, fun) do
-    EXLA.jit(fun, args)
+    EXLA.jit(fun, args, @jit_opts)
   end
 
   binary_ops =
@@ -214,7 +217,7 @@ defmodule EXLA.Backend do
         Nx.Defn.Expr.unquote(name)(unquote_splicing(args))
       end
 
-      EXLA.jit(expr_fn, [unquote_splicing(tensor_args)])
+      EXLA.jit(expr_fn, [unquote_splicing(tensor_args)], @jit_opts)
     end
   end
 end

@@ -20,7 +20,9 @@ defmodule EXLA.BackendTest do
 
   @temporarily_broken_doctests [
     # XLA currently doesn't support complex conversion
-    as_type: 2
+    as_type: 2,
+    # EXLA.Backend.to_batched_list/3 is currently unimplemented
+    to_batched_list: 3
   ]
 
   @inherently_unsupported_doctests [
