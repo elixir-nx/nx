@@ -383,9 +383,6 @@ defmodule Nx.Defn do
   Receives an anonymous function and returns a new anonymous function
   that returns the gradient of the input function when invoked.
 
-  This function is typically used to compute the gradient outside of
-  `defn`. To compute them inside `defn`, prefer `grad/2` instead.
-
   ## Examples
 
       iex> fun = Nx.Defn.grad(fn x -> Nx.sin(x) end)
@@ -397,15 +394,15 @@ defmodule Nx.Defn do
 
   """
   def grad(fun) when is_function(fun, 1) do
-    fn t -> jit_or_apply(fn t -> grad(t, fun) end, [t]) end
+    fn t -> grad(t, fun) end
   end
 
   @doc """
   Computes the gradient of the given `var` on `fun`.
 
-  This is typically used inside `defn`. The result of the `grad`
-  function must be a scalar tensor. If a non-scalar tensor is given,
-  it is assumed the additional dimensions are batch dimensions.
+  The result of the `grad` function must be a scalar tensor.
+  If a non-scalar tensor is given, it is assumed the additional
+  dimensions are batch dimensions.
 
   ### Examples
 
@@ -419,20 +416,22 @@ defmodule Nx.Defn do
         grad({a, b}, fn {a, b} -> Nx.tanh(a) + Nx.power(b, 2) end)
       end
 
-  When a tuple is given, a tuple will be returned.
+  `var_or_vars` can be any `Nx.Container` with one or multiple
+  tensors.
   """
   def grad(var_or_vars, fun) when is_function(fun, 1) do
-    {_value, grad} = Nx.Defn.Grad.transform(var_or_vars, fun, & &1)
-    grad
+    jit_or_apply(
+      fn var_or_vars ->
+        {_value, grad} = Nx.Defn.Grad.transform(var_or_vars, fun, & &1)
+        grad
+      end,
+      [var_or_vars]
+    )
   end
 
   @doc """
   Receives an anonymous function and returns a new anonymous function
   that returns the value and gradient of the input function when invoked.
-
-  This function is typically used to compute the value and gradient
-  outside of `defn`. To compute them inside `defn`, prefer
-  `value_and_grad/2` instead.
 
   ## Examples
 
@@ -451,15 +450,14 @@ defmodule Nx.Defn do
 
   """
   def value_and_grad(fun) when is_function(fun, 1) do
-    fn t -> jit_or_apply(fn t -> value_and_grad(t, fun) end, [t]) end
+    fn t -> value_and_grad(t, fun) end
   end
 
   @doc """
   Computes the value and gradient of the given `var` on `fun`
   with an optional data transformation.
 
-  This is typically used inside `defn`. It returns a tuple with
-  the value and the gradient.
+  It returns a tuple with the value and the gradient.
 
   ### Examples
 
@@ -473,7 +471,8 @@ defmodule Nx.Defn do
         value_and_grad({a, b}, fn {a, b} -> Nx.tanh(a) + Nx.power(b, 2) end)
       end
 
-  When a tuple is given, a tuple will be returned.
+  `var_or_vars` can be any `Nx.Container` with one or multiple
+  tensors.
 
   `transform` allows you to transform the expression before the gradient is
   calculated. This enables optimizations that reuse parts of expressions. As
@@ -495,7 +494,10 @@ defmodule Nx.Defn do
   """
   def value_and_grad(var_or_vars, fun, transform \\ & &1)
       when Kernel.and(is_function(fun, 1), is_function(transform, 1)) do
-    Nx.Defn.Grad.transform(var_or_vars, fun, transform)
+    jit_or_apply(
+      fn var_or_vars -> Nx.Defn.Grad.transform(var_or_vars, fun, transform) end,
+      [var_or_vars]
+    )
   end
 
   @doc """

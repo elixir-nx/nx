@@ -151,7 +151,9 @@ defmodule Nx.Defn.Composite do
     flatten_compile_args(args, cache, [])
   end
 
-  defp flatten_compile_args([arg | args], cache, vars) when is_function(arg) do
+  defp flatten_compile_args([arg | args], cache, vars)
+       when is_function(arg)
+       when is_tuple(arg) and is_function(elem(arg, 0)) do
     flatten_compile_args(args, [arg | cache], vars)
   end
 
