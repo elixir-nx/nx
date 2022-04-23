@@ -2,13 +2,12 @@ defmodule EXLA do
   @moduledoc """
   Bindings and Nx integration for [Google's XLA](https://www.tensorflow.org/xla/).
 
-  ## defn compiler
-
-  Most often, this library will be used as `Nx.Defn` compiler.
-  To set it globally, add a `config/config.exs` (or `config/ENV.exs`)
-  with the following:
+  EXLA works both as a backend for Nx tensors and an optimized
+  `Nx.Defn` compiler. To enable both globally, add a `config/config.exs`
+  (or `config/ENV.exs`) with the following:
 
       import Config
+      config :nx, :default_backend, EXLA.Backend
       config :nx, :default_defn_options, [compiler: EXLA]
 
   Then, every time you call a numerical definition, EXLA will just-in-time
@@ -18,6 +17,7 @@ defmodule EXLA do
   EXLA is able to compile to the CPU/GPU/TPU, by specifying another client:
 
       import Config
+      config :nx, :default_backend, {EXLA.Backend, client: :cuda}
       config :nx, :default_defn_options, [compiler: EXLA, client: :cuda]
 
   To use the GPU or TPUs, don't forget to also set the appropriate value
@@ -223,7 +223,9 @@ defmodule EXLA do
       end)
 
     if chosen do
-      Nx.Defn.global_default_options(Keyword.merge(opts, compiler: EXLA, client: chosen))
+      opts = Keyword.put(opts, :client, chosen)
+      Nx.default_backend({EXLA.Backend, opts})
+      Nx.Defn.global_default_options([compiler: EXLA] ++ opts)
       chosen
     end
   end
