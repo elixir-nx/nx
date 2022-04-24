@@ -916,17 +916,27 @@ defmodule Nx.Defn.Expr do
       cannot build defn because expressions come from different contexts: \
       #{inspect(context)} and #{inspect(acc)}.
 
-      This typically happens on "while" and inside anonymous functions, which \
-      do not behave like closures inside defn. For example, this is not valid:
+      This typically happens on "while" and inside anonymous functions when you \
+      try to access an external variable. All variables you intend to use inside \
+      "while" or anonymous functions in defn must be explicitly given as arguments.
+      For example, this is not valid:
 
-          defn example(t, amplifier) do
-            Nx.reduce(t, 0, fn val, acc ->
-              val * amplifier + acc
-            end)
+          defn increment_by_y_while_less_than_10(y) do
+            while x = 0, Nx.less(x, 10) do
+              x + y
+            end
           end
 
-      In the example above, "amplifier" is a variable defined outside of \
-      the anonymous function, which is not allowed in defn.
+      In the example above, we want to increment "x" by "y" while it is less than 10. \
+      However, the code won't compile because "y" is used inside "while" but not \
+      explicitly defined as part of "while". You must fix it like so:
+
+          defn increment_by_y_while_less_than_10(y) do
+            while {x = 0, y}, Nx.less(x, 10) do
+              {x + y, y}
+            end
+          end
+
       """
     end
 

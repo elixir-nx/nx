@@ -969,9 +969,25 @@ defmodule Nx.Defn.Kernel do
 
   A simple loop that increments `x` until it is `10` can be written as:
 
-        while x = 0, Nx.less(x, 10) do
-          x + 1
-        end
+      while x = 0, Nx.less(x, 10) do
+        x + 1
+      end
+
+  However, it is important to note that all variables you intend
+  to use inside the "while" must be explicitly given as argument
+  to "while". For example, imagine the amount we want to increment
+  by in the example above is given by a variable `y`. The following
+  example is invalid:
+
+      while x = 0, Nx.less(x, 10) do
+        x + y
+      end
+
+  Instead, both `x` and `y` must be passed as variables to `while`:
+
+      while {x = 0, y}, Nx.less(x, 10) do
+        {x + y, y}
+      end
 
   Similarly, to compute the factorial of `x` using `while`:
 
@@ -984,9 +1000,6 @@ defmodule Nx.Defn.Kernel do
           factorial
         end
 
-  Note `while/3` does not behave as a closure. Therefore, all
-  variables used inside the `while` must be explicitly given
-  as an `initial` value to `while`.
   """
   defmacro while(initial, condition, do: block) do
     {pattern, {vars, values}} = while_arg(initial, {[], []})
