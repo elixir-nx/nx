@@ -1319,6 +1319,18 @@ defmodule Nx.DefnTest do
       end
     end
 
+    test "undefined local function" do
+      assert_raise CompileError, ~r"#{location(+5)}: undefined function do_add/2 \(there is no such import\)", fn ->
+        defmodule Sample do
+          import Nx.Defn
+
+          defn add(a, b) do
+            do_add(a, b)
+          end
+        end
+      end
+    end
+
     test "non-variables used as arguments" do
       assert_raise CompileError,
                    ~r"#{location(+4)}: only variables, tuples, maps, and structs are allowed as patterns in defn",
