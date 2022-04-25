@@ -11,19 +11,7 @@ defmodule Nx.Shape do
       {1, 2, 3}
 
       iex> Nx.Shape.validate!({0, 2, 3}, :window_dimensions)
-      ** (ArgumentError) invalid dimension in axis 0 in window_dimensions. Each dimension must be a positive integer, got 0 in shape {0, 2, 3}
-
-      iex> Nx.Shape.validate!({Nx.tensor(0), Nx.tensor(2)}, :shape)
-      ** (ArgumentError) invalid dimension in axis 1 in shape. Each dimension must be a positive integer, got #Nx.Tensor<
-        s64
-        2
-      > in shape {#Nx.Tensor<
-         s64
-         0
-       >, #Nx.Tensor<
-         s64
-         2
-       >}. If you are trying to pass shape as an argument to a defn function, note that the numbers are automatically converted to tensors. To avoid that, you need to pass the shape as an option
+      ** (ArgumentError) invalid dimension in axis 0 found in window_dimensions. Each dimension must be a positive integer, got 0 in shape {0, 2, 3}
 
   """
   def validate!(shape, kind) when is_tuple(shape) do
@@ -41,23 +29,37 @@ defmodule Nx.Shape do
   defp validate!(shape, pos, kind) do
     dim = :erlang.element(pos, shape)
 
-    if is_integer(dim) and dim > 0 do
-      validate!(shape, pos - 1, kind)
-    else
-      detail =
-        case dim do
-          %Nx.Tensor{} ->
-            ". If you are trying to pass shape as an argument to a defn function, " <>
-              "note that the numbers are automatically converted to tensors. " <>
-              "To avoid that, you need to pass the shape as an option"
+    cond do
+      is_integer(dim) and dim > 0 ->
+        validate!(shape, pos - 1, kind)
 
-          _ ->
-            ""
-        end
+      is_struct(dim, Nx.Tensor) ->
+        raise ArgumentError, """
+        invalid dimension in axis #{pos - 1} found in #{kind}. Each dimension must be a \
+        positive integer, but instead got a tensor as dimension: #{inspect(dim)}
 
-      raise ArgumentError,
-            "invalid dimension in axis #{pos - 1} in #{kind}. Each dimension must be a positive integer, " <>
-              "got #{inspect(dim)} in shape #{inspect(shape)}" <> detail
+        This may happen if you are trying to pass a dimension or a shape as an argument \
+        to a defn function, for example:
+
+            defn my_defn(dim) do
+              Nx.iota({dim})
+            end
+
+        However, defn treats all arguments as inputs. To address this, you can pass \
+        the dimension or the shape as an option instead:
+
+            defn my_defn(opts \\ []) do
+              opts = keyword(opts, dim: 1)
+              Nx.iota({opts[:dim]})
+            end
+
+        Invalid shape: #{inspect(shape)}
+        """
+
+      true ->
+        raise ArgumentError,
+              "invalid dimension in axis #{pos - 1} found in #{kind}. Each dimension must be " <>
+                "a positive integer, got #{inspect(dim)} in shape #{inspect(shape)}"
     end
   end
 

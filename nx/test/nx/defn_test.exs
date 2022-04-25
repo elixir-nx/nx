@@ -346,7 +346,7 @@ defmodule Nx.DefnTest do
 
     test "raise an error given a shape tuple with tensor values" do
       assert_raise ArgumentError,
-                   ~r"invalid dimension in axis 0 in shape.*If you are trying to pass shape as an argument to a defn function"s,
+                   ~r"invalid dimension in axis 0 found in shape.*if you are trying to pass a dimension or a shape as an argument to a defn function"s,
                    fn -> iota({10}) end
     end
   end
