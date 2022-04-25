@@ -343,6 +343,12 @@ defmodule Nx.DefnTest do
       assert %T{shape: {3}, data: %Expr{op: :random_normal, args: [%T{shape: {}}, %T{shape: {}}]}} =
                random_normal(Nx.tensor([1, 2, 3]))
     end
+
+    test "raise an error given a shape tuple with tensor values" do
+      assert_raise ArgumentError,
+                   ~r"invalid dimension in axis 0 in shape.*If you are trying to pass shape as an argument to a defn function"s,
+                   fn -> iota({10}) end
+    end
   end
 
   describe "tensor ops" do
