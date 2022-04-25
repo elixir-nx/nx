@@ -146,8 +146,12 @@ defmodule Nx.Defn.Compiler do
 
                 detail =
                   case module do
-                    IO -> ". Use inspect_value/2 or inspect_expr/2 instead"
-                    _ -> ""
+                    IO ->
+                      ". To print the runtime value of a tensor, use inspect_value/2. " <>
+                        "To print the tensor expression at compile time, use inspect_expr/2"
+
+                    _ ->
+                      ""
                   end
 
                 reraise message <> detail, stack
