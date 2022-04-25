@@ -141,8 +141,20 @@ defmodule Nx.Defn.Compiler do
               if function_exported?(module, function, length(args)) do
                 formatted = Exception.format_mfa(module, function, length(args))
 
-                reraise "cannot invoke #{formatted} inside defn because it was not defined with defn",
-                        stack
+                message =
+                  "cannot invoke #{formatted} inside defn because it was not defined with defn"
+
+                detail =
+                  case module do
+                    IO ->
+                      ". To print the runtime value of a tensor, use inspect_value/2. " <>
+                        "To print the tensor expression, use inspect_expr/2"
+
+                    _ ->
+                      ""
+                  end
+
+                reraise message <> detail, stack
               else
                 [{module, function, args_or_arity, info} | stack]
               end
