@@ -911,6 +911,8 @@ defmodule Nx.DefnTest do
     def not_defn(a, b), do: Nx.add(a, b)
     defn add_two_not_defn(a, b), do: Nx.DefnTest.not_defn(a, b)
 
+    defn add_two_io(a, b), do: IO.inspect({a, b})
+
     test "undefined remote" do
       assert_raise UndefinedFunctionError,
                    "function Nx.DefnTest.unknown/2 is undefined or private",
@@ -921,6 +923,13 @@ defmodule Nx.DefnTest do
       assert_raise RuntimeError,
                    "cannot invoke Nx.DefnTest.not_defn/2 inside defn because it was not defined with defn",
                    fn -> add_two_not_defn(1, 2) end
+    end
+
+    test "IO remote" do
+      assert_raise RuntimeError,
+                   "cannot invoke IO.inspect/1 inside defn because it was not defined with defn. " <>
+                     "Use inspect_value/2 or inspect_expr/2 instead",
+                   fn -> add_two_io(1, 2) end
     end
   end
 
