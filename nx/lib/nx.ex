@@ -7350,7 +7350,7 @@ defmodule Nx do
   def map(tensor, opts \\ [], fun) do
     %T{type: type} = tensor = to_tensor(tensor)
     opts = keyword!(opts, type: type)
-    output_type = opts[:type]
+    output_type = Nx.Type.normalize!(opts[:type])
     out = %{tensor | type: output_type}
     impl!(tensor).map(out, tensor, opts, fun)
   end

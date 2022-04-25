@@ -11,6 +11,11 @@ defmodule Nx.Type do
       * `:bf` - a brain floating point (16)
       * `:c` - a complex number, represented as a pair of floats (64, 128)
 
+  Each type has an equivalent atom representation, for example
+  `{:s, 8}` can be expressed as `:s8`. When working with user-given
+  types make sure to call `normalize!/1` to get the canonical
+  representation.
+
   Note: there is a special type used by the `defn` compiler
   which is `{:tuple, size}`, that represents a tuple. Said types
   do not appear on user code, only on compiler implementations,
@@ -33,6 +38,22 @@ defmodule Nx.Type do
           | {:c, 64}
           | {:c, 128}
           | {:tuple, non_neg_integer}
+
+  @type short_t ::
+          :s8
+          | :s16
+          | :s32
+          | :s64
+          | :u8
+          | :u16
+          | :u32
+          | :u64
+          | :f16
+          | :f32
+          | :f64
+          | :bf16
+          | :c64
+          | :c128
 
   @doc """
   Returns the minimum possible value for the given type.
@@ -112,13 +133,18 @@ defmodule Nx.Type do
   def infer(%Complex{}), do: {:c, 64}
 
   @doc """
-  Validates the given type tuple.
+  Validates and normalizes the given type tuple.
 
-  It returns the type itself or raises.
+  It returns the type tuple or raises.
+
+  Accepts both the tuple format and the short atom format.
 
   ## Examples
 
       iex> Nx.Type.normalize!({:u, 8})
+      {:u, 8}
+
+      iex> Nx.Type.normalize!(:u8)
       {:u, 8}
 
       iex> Nx.Type.normalize!({:u, 0})
@@ -139,11 +165,21 @@ defmodule Nx.Type do
     end
   end
 
-  defp validate({:s, size} = type) when size in [8, 16, 32, 64], do: type
-  defp validate({:u, size} = type) when size in [8, 16, 32, 64], do: type
-  defp validate({:f, size} = type) when size in [16, 32, 64], do: type
-  defp validate({:bf, size} = type) when size in [16], do: type
-  defp validate({:c, size} = type) when size in [64, 128], do: type
+  type_variants = [
+    s: [8, 16, 32, 64],
+    u: [8, 16, 32, 64],
+    f: [16, 32, 64],
+    bf: [16],
+    c: [64, 128]
+  ]
+
+  for {kind, sizes} <- type_variants, size <- sizes do
+    type = {kind, size}
+
+    defp validate(unquote(type)), do: unquote(type)
+    defp validate(unquote(:"#{kind}#{size}")), do: unquote(type)
+  end
+
   defp validate(_type), do: :error
 
   @doc """
