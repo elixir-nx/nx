@@ -1115,7 +1115,7 @@ defmodule Nx do
   @doc type: :creation
   def iota(tensor_or_shape, opts \\ []) do
     opts = keyword!(opts, [:axis, :names, :backend, type: {:s, 64}])
-    shape = Nx.shape(tensor_or_shape)
+    shape = shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type])
     {backend, backend_options} = backend_from_options!(opts) || default_backend()

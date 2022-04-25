@@ -13,6 +13,18 @@ defmodule Nx.Shape do
       iex> Nx.Shape.validate!({0, 2, 3}, :window_dimensions)
       ** (ArgumentError) invalid dimension in axis 0 in window_dimensions. Each dimension must be a positive integer, got 0 in shape {0, 2, 3}
 
+      iex> Nx.Shape.validate!({Nx.tensor(0), Nx.tensor(2)}, :shape)
+      ** (ArgumentError) invalid dimension in axis 1 in shape. Each dimension must be a positive integer, got #Nx.Tensor<
+        s64
+        2
+      > in shape {#Nx.Tensor<
+         s64
+         0
+       >, #Nx.Tensor<
+         s64
+         2
+       >}. If you are trying to pass shape as an argument to a defn function, note that the numbers are automatically converted to tensors. To avoid that, you need to pass the shape as an option
+
   """
   def validate!(shape, kind) when is_tuple(shape) do
     validate!(shape, tuple_size(shape), kind)
@@ -32,9 +44,20 @@ defmodule Nx.Shape do
     if is_integer(dim) and dim > 0 do
       validate!(shape, pos - 1, kind)
     else
+      detail =
+        case dim do
+          %Nx.Tensor{} ->
+            ". If you are trying to pass shape as an argument to a defn function, " <>
+              "note that the numbers are automatically converted to tensors. " <>
+              "To avoid that, you need to pass the shape as an option"
+
+          _ ->
+            ""
+        end
+
       raise ArgumentError,
             "invalid dimension in axis #{pos - 1} in #{kind}. Each dimension must be a positive integer, " <>
-              "got #{inspect(dim)} in shape #{inspect(shape)}"
+              "got #{inspect(dim)} in shape #{inspect(shape)}" <> detail
     end
   end
 
