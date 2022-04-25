@@ -1329,18 +1329,34 @@ defmodule Nx.DefnTest do
   end
 
   describe "compilation errors" do
-    test "invalid numerical expression" do
-      assert_raise CompileError, ~r"#{location(+5)}: invalid numerical expression", fn ->
-        defmodule Sample do
-          import Nx.Defn
+    test "undefined local function" do
+      assert_raise CompileError,
+                   ~r"#{location(+6)}: undefined function do_add/2 \(there is no such import\)",
+                   fn ->
+                     defmodule Sample do
+                       import Nx.Defn
 
-          defn add(_a, _b) do
-            receive do
-              :ok -> :ok
-            end
-          end
-        end
-      end
+                       defn add(a, b) do
+                         do_add(a, b)
+                       end
+                     end
+                   end
+    end
+
+    test "non-defn local function" do
+      assert_raise CompileError,
+                   ~r"#{location(+6)}: cannot use function do_add/2 inside defn because it was not defined with defn",
+                   fn ->
+                     defmodule Sample do
+                       import Nx.Defn
+
+                       defn add(a, b) do
+                         do_add(a, b)
+                       end
+
+                       defp do_add(a, b), do: a + b
+                     end
+                   end
     end
 
     test "non-variables used as arguments" do

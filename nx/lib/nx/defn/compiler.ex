@@ -350,14 +350,28 @@ defmodule Nx.Defn.Compiler do
     {ast, state}
   end
 
-  defp normalize({name, meta, args} = expr, state) when is_atom(name) and is_list(args) do
-    pair = {name, length(args)}
+  defp normalize({name, meta, args}, state) when is_atom(name) and is_list(args) do
+    arity = length(args)
+    pair = {name, arity}
 
-    if pair in state.defns do
-      {args, state} = normalize_list(args, state)
-      {{defn_name(name), meta, args}, state}
-    else
-      invalid_numerical_expression!(expr, state)
+    cond do
+      pair in state.defns ->
+        {args, state} = normalize_list(args, state)
+        {{defn_name(name), meta, args}, state}
+
+      Module.defines?(state.module, {name, arity}) ->
+        compile_error!(
+          meta,
+          state,
+          "cannot use function #{name}/#{arity} inside defn because it was not defined with defn"
+        )
+
+      true ->
+        compile_error!(
+          meta,
+          state,
+          "undefined function #{name}/#{arity} (there is no such import)"
+        )
     end
   end
 
