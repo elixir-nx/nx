@@ -1321,7 +1321,7 @@ defmodule Nx.DefnTest do
 
     test "undefined local function" do
       assert_raise CompileError,
-                   ~r"#{location(+5)}: undefined function do_add/2 \(there is no such import\)",
+                   ~r"#{location(+6)}: undefined function do_add/2 \(there is no such import\)",
                    fn ->
                      defmodule Sample do
                        import Nx.Defn
@@ -1335,7 +1335,7 @@ defmodule Nx.DefnTest do
 
     test "non-defn local function" do
       assert_raise CompileError,
-                   ~r"#{location(+5)}: cannot use function do_add/2 inside defn because it was not defined with defn",
+                   ~r"#{location(+6)}: cannot use function do_add/2 inside defn because it was not defined with defn",
                    fn ->
                      defmodule Sample do
                        import Nx.Defn
