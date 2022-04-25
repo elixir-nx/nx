@@ -929,7 +929,7 @@ defmodule Nx.DefnTest do
       assert_raise RuntimeError,
                    "cannot invoke IO.inspect/1 inside defn because it was not defined with defn. " <>
                      "To print the runtime value of a tensor, use inspect_value/2. " <>
-                     "To print the tensor expression at compile time, use inspect_expr/2",
+                     "To print the tensor expression, use inspect_expr/2",
                    fn -> add_two_io(1, 2) end
     end
   end

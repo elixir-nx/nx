@@ -148,7 +148,7 @@ defmodule Nx.Defn.Compiler do
                   case module do
                     IO ->
                       ". To print the runtime value of a tensor, use inspect_value/2. " <>
-                        "To print the tensor expression at compile time, use inspect_expr/2"
+                        "To print the tensor expression, use inspect_expr/2"
 
                     _ ->
                       ""
