@@ -2273,7 +2273,8 @@ defmodule Nx.Defn.GradTest do
     defn grad_as_type_downcast(t), do: grad(t, &Nx.sum(Nx.cos(Nx.as_type(&1, {:f, 32}))))
 
     test "as_type takes the real part when downcasting complex" do
-      # Note that as the call is defined the expected grad is the same as the grad for
+      # Note that, due to the way the grad_as_type_downcast defn is defined,
+      # the expected grad is the same as the grad for:
       # Nx.sum(Nx.cos(~V[1 2 3])), which is -sin(~V[1 2 3])
       t = ~V[1+i 2+i 3+i]
       grad = grad_as_type_downcast(t)
