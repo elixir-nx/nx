@@ -8381,6 +8381,9 @@ defmodule Nx do
     end
 
     output_type = Nx.Type.merge(type, Nx.Type.merge(min_type, max_type))
+
+    Nx.Shared.raise_complex_not_supported(output_type, :sort, 2)
+
     impl!(tensor).clip(%{tensor | type: output_type}, tensor, min, max)
   end
 
