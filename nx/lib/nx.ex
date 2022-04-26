@@ -3144,6 +3144,12 @@ defmodule Nx do
     apply(impl!(left, right), op, [%{left | type: type, shape: shape, names: names}, left, right])
   end
 
+  defp non_complex_element_wise_pred_op(left, right, op) do
+    Nx.Shared.raise_complex_not_supported(type(left), op, 2)
+    Nx.Shared.raise_complex_not_supported(type(right), op, 2)
+    element_wise_pred_op(left, right, op)
+  end
+
   defp element_wise_pred_op(left, right, op) do
     %T{shape: left_shape, names: left_names} = left = to_tensor(left)
     %T{shape: right_shape, names: right_names} = right = to_tensor(right)
@@ -4535,7 +4541,7 @@ defmodule Nx do
       >
   """
   @doc type: :element
-  def greater(left, right), do: element_wise_pred_op(left, right, :greater)
+  def greater(left, right), do: non_complex_element_wise_pred_op(left, right, :greater)
 
   @doc """
   Element-wise less than comparison of two tensors.
@@ -4585,7 +4591,7 @@ defmodule Nx do
 
   """
   @doc type: :element
-  def less(left, right), do: element_wise_pred_op(left, right, :less)
+  def less(left, right), do: non_complex_element_wise_pred_op(left, right, :less)
 
   @doc """
   Element-wise greater than or equal comparison of two tensors.
@@ -4639,7 +4645,8 @@ defmodule Nx do
 
   """
   @doc type: :element
-  def greater_equal(left, right), do: element_wise_pred_op(left, right, :greater_equal)
+  def greater_equal(left, right),
+    do: non_complex_element_wise_pred_op(left, right, :greater_equal)
 
   @doc """
   Element-wise less than or equal comparison of two tensors.
@@ -4693,7 +4700,7 @@ defmodule Nx do
 
   """
   @doc type: :element
-  def less_equal(left, right), do: element_wise_pred_op(left, right, :less_equal)
+  def less_equal(left, right), do: non_complex_element_wise_pred_op(left, right, :less_equal)
 
   @doc """
   Constructs a tensor from two tensors, based on a predicate.
@@ -9551,8 +9558,10 @@ defmodule Nx do
                 "unknown value for :direction, expected :asc or :desc, got: #{inspect(other)}"
       end
 
-    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
+    %T{type: type, shape: shape, names: names} = tensor = to_tensor(tensor)
     axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
+
+    Nx.Shared.raise_complex_not_supported(type, :argsort, 2)
 
     impl!(tensor).argsort(
       %{tensor | type: {:s, 64}},
