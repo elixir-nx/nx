@@ -744,42 +744,10 @@ defmodule Nx.BinaryBackend do
   defp element_logical_or(_, a, b), do: boolean_as_number(as_boolean(a) or as_boolean(b))
   defp element_logical_xor(_, a, b), do: boolean_as_number(as_boolean(a) != as_boolean(b))
 
-  defp element_greater(_, a, b) when is_number(a) and is_number(b), do: boolean_as_number(a > b)
-
-  defp element_greater(_, a, b) do
-    %Complex{re: a_re, im: a_im} = as_complex(a)
-    %Complex{re: b_re, im: b_im} = as_complex(b)
-    boolean_as_number(a_re > b_re and a_im > b_im)
-  end
-
-  defp element_less(_, a, b) when is_number(a) and is_number(b), do: boolean_as_number(a < b)
-
-  defp element_less(_, a, b) do
-    %Complex{re: a_re, im: a_im} = as_complex(a)
-    %Complex{re: b_re, im: b_im} = as_complex(b)
-
-    boolean_as_number(a_re < b_re and a_im < b_im)
-  end
-
-  defp element_greater_equal(_, a, b) when is_number(a) and is_number(b),
-    do: boolean_as_number(a >= b)
-
-  defp element_greater_equal(_, a, b) do
-    %{re: a_re, im: a_im} = as_complex(a)
-    %{re: b_re, im: b_im} = as_complex(b)
-
-    boolean_as_number(a_re >= b_re and a_im >= b_im)
-  end
-
-  defp element_less_equal(_, a, b) when is_number(a) and is_number(b),
-    do: boolean_as_number(a <= b)
-
-  defp element_less_equal(_, a, b) do
-    %{re: a_re, im: a_im} = as_complex(a)
-    %{re: b_re, im: b_im} = as_complex(b)
-
-    boolean_as_number(a_re <= b_re and a_im <= b_im)
-  end
+  defp element_greater(_, a, b), do: boolean_as_number(a > b)
+  defp element_less(_, a, b), do: boolean_as_number(a < b)
+  defp element_greater_equal(_, a, b), do: boolean_as_number(a >= b)
+  defp element_less_equal(_, a, b), do: boolean_as_number(a <= b)
 
   defp as_boolean(n) when n == 0, do: false
   defp as_boolean(%Complex{re: re, im: im}) when re == 0 and im == 0, do: false
@@ -787,9 +755,6 @@ defmodule Nx.BinaryBackend do
 
   defp boolean_as_number(true), do: 1
   defp boolean_as_number(false), do: 0
-
-  defp as_complex(%Complex{} = z), do: z
-  defp as_complex(n), do: Complex.new(n)
 
   ## Element wise unary ops
 
