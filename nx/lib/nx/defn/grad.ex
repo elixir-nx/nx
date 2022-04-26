@@ -783,6 +783,18 @@ defmodule Nx.Defn.Grad do
     [unbroadcast(x, Nx.multiply(g, lhs), ans), unbroadcast(y, Nx.multiply(g, rhs), ans)]
   end
 
+  defp grad(:as_type, [%{type: {:c, _}} = x], %{type: {output_type, _}}, g)
+       when output_type != :c do
+    # For downcasting complex to float or integer types, `as_type/2`
+    # behaves as: `x |> real() |> as_type(output_type)`
+    # Therefore, since as_type doesn't have an intrisic grad in itself,
+    # the grad for this case should be the same as `real/1`.
+    #
+    # For reference, the grad for `real/1` just takes the real part of
+    # the accumulated grad
+    [{x, Nx.real(g)}]
+  end
+
   defp grad(:as_type, [x], _ans, g) do
     [{x, g}]
   end

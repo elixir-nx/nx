@@ -2338,10 +2338,25 @@ defmodule Nx.Defn.GradTest do
 
   describe "as_type/bitcast" do
     defn grad_as_type(t), do: grad(t, &Nx.sum(Nx.as_type(&1, {:f, 32})))
+    defn grad_as_type_complex(t), do: grad(t, &Nx.sum(Nx.as_type(&1, {:c, 64})))
     defn grad_bitcast(t), do: grad(t, &Nx.sum(Nx.bitcast(&1, {:f, 32})))
 
-    test "as_type passes through" do
+    defn grad_as_type_downcast(t), do: grad(t, &Nx.sum(Nx.cos(Nx.as_type(&1, {:f, 32}))))
+
+    test "as_type takes the real part when downcasting complex" do
+      # Note that, due to the way the grad_as_type_downcast defn is defined,
+      # the expected grad is the same as the grad for:
+      # Nx.sum(Nx.cos(~V[1 2 3])), which is -sin(~V[1 2 3])
+      t = ~V[1+i 2+i 3+i]
+      grad = grad_as_type_downcast(t)
+
+      assert grad == grad_as_type_downcast(~V[1 2 3])
+      assert grad == Nx.negate(Nx.sin(Nx.real(t)))
+    end
+
+    test "as_type passes through for non-downcasting calls" do
       assert grad_as_type(Nx.tensor([1, 2, 3])) == Nx.tensor([1.0, 1.0, 1.0])
+      assert grad_as_type_complex(~V[1+i 2+i 3+i]) == Nx.tensor([1.0, 1.0, 1.0])
     end
 
     test "bitcast passes through" do
