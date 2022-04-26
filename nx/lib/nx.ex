@@ -1861,6 +1861,9 @@ defmodule Nx do
   Machines with different floating-point representations
   will give different results.
 
+  For complex numbers, the last axis will change in size
+  depending on whether you are upcasting or downcasting.
+
   ## Examples
 
       iex> t = Nx.bitcast(Nx.tensor([0, 0, 0], names: [:data], type: {:s, 32}), {:f, 32})
@@ -1878,11 +1881,20 @@ defmodule Nx do
 
       iex> Nx.bitcast(Nx.tensor([0, 1, 2], names: [:data], type: {:s, 16}), {:f, 32})
       ** (ArgumentError) input type width must match new type width, got input type {:s, 16} and output type {:f, 32}
+
+      iex> Nx.bitcast(Nx.tensor([0], type: {:c, 64}), {:s, 64})
+      ** (ArgumentError) Nx.bitcast/2 does not support complex inputs
+
+      iex> Nx.bitcast(Nx.tensor([0], type: {:s, 64}), {:c, 64})
+      ** (ArgumentError) Nx.bitcast/2 does not support complex inputs
   """
   @doc type: :type
   def bitcast(tensor, type) do
     %T{type: {_, bits} = input_type} = tensor = to_tensor(tensor)
     {_, new_bits} = new_type = Nx.Type.normalize!(type)
+
+    Nx.Shared.raise_complex_not_supported(input_type, :bitcast, 2)
+    Nx.Shared.raise_complex_not_supported(new_type, :bitcast, 2)
 
     unless new_bits == bits do
       raise ArgumentError,
