@@ -1702,6 +1702,14 @@ defmodule Nx.Defn.GradTest do
     test "computes grad for powers of a {2, 2}-tensor" do
       assert concatenate_grad_power(Nx.tensor([[1.0, 2.0], [3.0, 4.0]])) ==
                Nx.tensor([[5.0, 16.0], [33.0, 56.0]])
+
+      assert concatenate_grad_power(~M[
+        1i 2
+        3 4i
+      ]) == ~M[
+        -3+2i 16
+        33 -48+8i
+      ]
     end
 
     test "computes grad for composed functions on a multidim tensor" do
@@ -1942,6 +1950,38 @@ defmodule Nx.Defn.GradTest do
       assert grad_sum_squeeze_broadcast(Nx.iota({1})) == Nx.broadcast(12.0, {1})
       assert grad_sum_squeeze_broadcast(Nx.iota({})) == Nx.broadcast(12.0, {})
     end
+
+    test "computes gradient for complex" do
+      assert grad_sum_squeeze_broadcast(Nx.multiply(Nx.Constants.i(), Nx.iota({3, 2, 2}))) ==
+               Nx.broadcast(1.0, {3, 2, 2})
+
+      assert grad_sum_squeeze_broadcast(Nx.multiply(Nx.Constants.i(), Nx.iota({1, 2, 2}))) ==
+               Nx.broadcast(3.0, {1, 2, 2})
+
+      assert grad_sum_squeeze_broadcast(Nx.multiply(Nx.Constants.i(), Nx.iota({1, 1, 2}))) ==
+               Nx.broadcast(6.0, {1, 1, 2})
+
+      assert grad_sum_squeeze_broadcast(Nx.multiply(Nx.Constants.i(), Nx.iota({1, 1, 1}))) ==
+               Nx.broadcast(12.0, {1, 1, 1})
+
+      assert grad_sum_squeeze_broadcast(Nx.multiply(Nx.Constants.i(), Nx.iota({2, 2}))) ==
+               Nx.broadcast(3.0, {2, 2})
+
+      assert grad_sum_squeeze_broadcast(Nx.multiply(Nx.Constants.i(), Nx.iota({1, 2}))) ==
+               Nx.broadcast(6.0, {1, 2})
+
+      assert grad_sum_squeeze_broadcast(Nx.multiply(Nx.Constants.i(), Nx.iota({1, 1}))) ==
+               Nx.broadcast(12.0, {1, 1})
+
+      assert grad_sum_squeeze_broadcast(Nx.multiply(Nx.Constants.i(), Nx.iota({2}))) ==
+               Nx.broadcast(6.0, {2})
+
+      assert grad_sum_squeeze_broadcast(Nx.multiply(Nx.Constants.i(), Nx.iota({1}))) ==
+               Nx.broadcast(12.0, {1})
+
+      assert grad_sum_squeeze_broadcast(Nx.multiply(Nx.Constants.i(), Nx.iota({}))) ==
+               Nx.broadcast(12.0, {})
+    end
   end
 
   describe "pad" do
@@ -2017,6 +2057,12 @@ defmodule Nx.Defn.GradTest do
                Nx.tensor([[0.0, 1.0, 0.0], [0.0, 0.0, 0.0]])
 
       assert grad_sum_slice(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
+               Nx.tensor([[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]])
+
+      assert grad_sum_slice(
+               Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+               |> Nx.multiply(Nx.Constants.i())
+             ) ==
                Nx.tensor([[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]])
 
       assert grad_sum_dynamic_slice(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
@@ -2131,6 +2177,8 @@ defmodule Nx.Defn.GradTest do
                  [2.718281828459045, 7.38905609893065, 20.085536923187668],
                  [54.598150033144236, 148.4131591025766, 403.4287934927351]
                ])
+
+      assert_all_close(grad_sum_exp_reverse(~V[1 -2i 3]), ~V[2.7182 -0.4161-0.9092i 20.0855])
 
       assert grad_sum_reverse_exp(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
                Nx.tensor([
@@ -2501,6 +2549,11 @@ defmodule Nx.Defn.GradTest do
                  [0.08333333333333333, 0.06666666666666667, 0.05555555555555555]
                ])
 
+      assert_all_close(
+        grad_reshape_mean_0_sum(~V[1 2i 3 1 -2i -1]),
+        ~V[0.3333333 -0.166666i 0.111111 0.3333333 0.1666666i -0.333333]
+      )
+
       assert grad_reshape_mean_0_sum(Nx.tensor([1, 2, 3, 4, 5, 6])) ==
                Nx.tensor([
                  0.3333333333333333,
@@ -2527,6 +2580,11 @@ defmodule Nx.Defn.GradTest do
                  [0.3333333333333333, 0.16666666666666666, 0.1111111111111111],
                  [0.08333333333333333, 0.06666666666666667, 0.05555555555555555]
                ])
+
+      assert_all_close(
+        grad_transpose_mean_0_sum(~M[1 2i 3 1 -2i -1]),
+        ~M[0.1666 -0.0833i 0.0555 0.1666 0.0833i -0.1666]
+      )
 
       assert grad_transpose_mean_1_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
                Nx.tensor([[0.5, 0.25, 0.16666666666666666], [0.125, 0.1, 0.08333333333333333]])
@@ -2790,6 +2848,27 @@ defmodule Nx.Defn.GradTest do
                  ])
                )
 
+      assert Nx.tensor(
+               [
+                 [3.0, 0.0],
+                 [1.0, 2.0],
+                 [1.0, 2.0]
+               ],
+               type: {:c, 64}
+             ) ==
+               grad_sum_take_along_axis(
+                 ~M[
+                   0 1i
+                   2i 3
+                   4 5i
+                 ],
+                 Nx.tensor([
+                   [0, 0, 0],
+                   [1, 1, 0],
+                   [0, 1, 1]
+                 ])
+               )
+
       assert Nx.tensor([
                [0.0, 0.0],
                [4.0, 12.0],
@@ -2899,6 +2978,12 @@ defmodule Nx.Defn.GradTest do
                    [0, 1, 2, 2, 2],
                    [0, 1, 2, 2, 2]
                  ])
+               )
+
+      assert ~M[0 4i 24 -12i] ==
+               grad_sum_take_axis_1_power(
+                 ~M[0 1i 2 -3i],
+                 Nx.tensor([[0, 1, 2, 2, 2, 3], [0, 1, 2, 2, 2, 3]])
                )
 
       assert Nx.tensor([
@@ -3035,6 +3120,25 @@ defmodule Nx.Defn.GradTest do
                      [[2, 0], [1, 0], [0, 1]],
                      [[0, 1], [1, 1], [2, 2]],
                      [[2, 3], [2, 3], [2, 3]]
+                   ]
+                 ])
+               )
+
+      assert ~M[
+        0 2i 0 0
+        8i 0 0 0
+        16 0 0 0
+      ] ==
+               grad_sum_gather_power(
+                 ~M[
+                   0 1i 2 -3i
+                   4i 5 6i 7
+                   8 9i 10 11i
+                 ],
+                 Nx.tensor([
+                   [
+                     [[0, 0], [0, 1]],
+                     [[2, 0], [1, 0]]
                    ]
                  ])
                )
