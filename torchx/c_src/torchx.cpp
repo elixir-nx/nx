@@ -258,10 +258,14 @@ NIF(to_blob)
   ERL_NIF_TERM result;
   TENSOR_PARAM(0, t);
   size_t byte_size = t->nbytes();
+  int64_t limit = 0;
 
-  if (argc == 2)
+  bool has_received_limit = (argc == 2);
+
+  if (has_received_limit)
   {
-    PARAM(1, int64_t, limit);
+    PARAM(1, int64_t, param_limit);
+    limit = param_limit;
     byte_size = limit * t->itemsize();
   }
 
@@ -270,17 +274,27 @@ NIF(to_blob)
   // a column-major tensor. t->flatten() is a no-op if the tensor
   // is already row-major, which was verified by printing t->data_ptr
   // and reshaped.data_ptr and confirming they had the same value.
-  torch::Tensor reshaped = t->flatten();
-  void * data_ptr = reshaped.data_ptr();
+  // We also slice if a limit was received and it doesn't encompass the full tensor.
+  torch::Tensor reshaped = (has_received_limit && byte_size < t->nbytes()) ?  t->flatten().slice(0, 0, limit) : t->flatten();
+  void *data_ptr = reshaped.data_ptr();
 
   if (device.has_value() && device.value().type() == torch::kCPU && data_ptr == t->data_ptr())
   {
+    // case where we own the data_ptr and the data is in the CPU already
     return nx::nif::ok(env, enif_make_resource_binary(env, t, data_ptr, byte_size));
+  }
+  else if (device.has_value() && device.value().type() == torch::kCPU)
+  {
+    // case where we don't own the data_ptr but the data is in the CPU already
+    void *result_data = (void *)enif_make_new_binary(env, byte_size, &result);
+    memcpy(result_data, data_ptr, byte_size);
+    return nx::nif::ok(env, result);
   }
   else
   {
+    // case where the data isn't in the CPU, therefore we don't own the data_ptr
     void *result_data = (void *)enif_make_new_binary(env, byte_size, &result);
-    memcpy(result_data, data_ptr, byte_size);
+    memcpy(result_data, reshaped.to(torch::kCPU).data_ptr(), byte_size);
     return nx::nif::ok(env, result);
   }
 }

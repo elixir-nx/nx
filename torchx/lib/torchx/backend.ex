@@ -1270,13 +1270,12 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  def unfold_windows(%T{} = tensor, padding, pad_constant, window_dims_tuple, strides) do
+  defp unfold_windows(%T{} = tensor, padding, pad_constant, window_dims_tuple, strides) do
     unfold_windows(from_nx(tensor), padding, pad_constant, window_dims_tuple, strides)
   end
 
-  def unfold_windows(tensor, padding, pad_constant, window_dims_tuple, strides) do
+  defp unfold_windows(tensor, padding, pad_constant, window_dims_tuple, strides) do
     padding = flatten_padding(padding)
-
     padded = Torchx.pad(tensor, padding, pad_constant)
 
     {t_tx, _} =
@@ -1295,19 +1294,14 @@ defmodule Torchx.Backend do
 
   @impl true
   def inspect(%T{} = tensor, inspect_opts) do
-    result =
-      if device?(tensor, :cpu) do
-        binary = Torchx.to_blob(from_nx(tensor))
-        Nx.Backend.inspect(tensor, binary, inspect_opts)
-      else
-        "Tensors on the GPU cannot be inspected. Explicitly transfer the tensor by calling Nx.backend_transfer/1"
-      end
+    limit = if inspect_opts.limit == :infinity, do: :infinity, else: inspect_opts.limit + 1
 
-    maybe_add_signature(result, tensor)
+    tensor
+    |> to_binary(min(limit, Nx.size(tensor)))
+    |> then(&Nx.Backend.inspect(tensor, &1, inspect_opts))
+    |> maybe_add_signature(tensor)
   end
 
-  # TODO: Elixir v1.13 has a default_inspect_fun which
-  # we can use to customize this behaviour for tests.
   if Application.compile_env(:torchx, :add_backend_on_inspect, true) do
     defp maybe_add_signature(result, %T{data: %TB{ref: {device, _}}}) do
       Inspect.Algebra.concat([
@@ -1398,8 +1392,6 @@ defmodule Torchx.Backend do
 
   defp to_typed_ref(tensor, _ref_type, expected_type),
     do: Torchx.to_type(tensor, to_torch_type(expected_type))
-
-  defp device?(%T{data: %TB{ref: {actual, _}}}, expected), do: expected == actual
 
   defp device_option(nil), do: {:cpu, -1}
   defp device_option(backend_opts), do: backend_opts[:device] || {:cpu, -1}
