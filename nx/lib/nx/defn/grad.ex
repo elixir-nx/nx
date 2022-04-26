@@ -791,6 +791,37 @@ defmodule Nx.Defn.Grad do
     [{x, g}]
   end
 
+  defp grad(:abs, [%{type: {:c, _}} = z], ans, g) do
+    # For the complex variant of abs(z), we can define the forward-mode
+    # derivative abs'(z) as follows (for an element-wise function):
+    # abs(z)^2 = z.z*
+    # 2*abs(z)*abs'(z) = z'.z* + z.(z')* = 2*real(z*.z')
+    # abs'(z) = [2*real(z*.z')] / [2*abs(z)]
+    # Which is the same as f(z) / (2*abs(z)) where f(z) = d(abs(z)^2)/dz
+    # A similar definition can also be found as _abs_jvp_rule in Jax.
+
+    # Furthermore, abs(z) is always real, so conj(abs(z)) = abs(z).
+    # This allows us to use the definition at https://juliadiff.org/ChainRulesCore.jl/stable/maths/arrays.html
+    # for the abs_squared reverse-mode derivative:
+    # dz = re(g).conj(z)/(2.ans) (where . and / are element-wise multiplication and division)
+    # Where (2.ans) is the correction factor that appears from our adapted definition.
+    # Also note that we use conj(z) instead of z because we're not dealing with a real tensor.
+
+    # The final correction we need to apply is for the edge case where ans[i,j] = 0.
+    # In this scenario, the function dz is undefined, but we can work around this
+    # by taking inspiration from the real case below. This leads to the conclusion
+    # that abs(0) = 0 is the identity function. Having this in mind, we know that
+    # real(g) would be a number, but, more importantly, conj(0) = 0, which takes
+    # the numerator for our dz definition to 0.
+    # Finally, this allows us to replace the 0-elements in `ans` with 1 (or any number, really)
+    # taking dz to 0 at those positions.
+
+    mask = Nx.equal(ans, 0)
+    ans_no_zero = Nx.select(mask, 1, ans)
+    dz = g |> Nx.real() |> Nx.multiply(Nx.conjugate(z)) |> Nx.divide(ans_no_zero)
+    [{z, dz}]
+  end
+
   defp grad(:abs, [x], _ans, g) do
     [{x, Nx.select(Nx.greater_equal(x, 0.0), g, Nx.negate(g))}]
   end
