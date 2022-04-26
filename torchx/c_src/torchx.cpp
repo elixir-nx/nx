@@ -258,10 +258,14 @@ NIF(to_blob)
   ERL_NIF_TERM result;
   TENSOR_PARAM(0, t);
   size_t byte_size = t->nbytes();
+  int64_t limit = 0;
 
-  if (argc == 2)
+  bool has_received_limit = (argc == 2);
+
+  if (has_received_limit)
   {
-    PARAM(1, int64_t, limit);
+    PARAM(1, int64_t, param_limit);
+    limit = param_limit;
     byte_size = limit * t->itemsize();
   }
 
@@ -270,8 +274,9 @@ NIF(to_blob)
   // a column-major tensor. t->flatten() is a no-op if the tensor
   // is already row-major, which was verified by printing t->data_ptr
   // and reshaped.data_ptr and confirming they had the same value.
-  torch::Tensor reshaped = t->flatten();
-  void * data_ptr = reshaped.data_ptr();
+  // We also slice if a limit was received and it doesn't encompass the full tensor.
+  torch::Tensor reshaped = (has_received_limit and byte_size < t->nbytes()) ?  t->flatten().slice(0, 0, limit) : t->flatten();
+  void *data_ptr = reshaped.data_ptr();
 
   if (device.has_value() && device.value().type() == torch::kCPU && data_ptr == t->data_ptr())
   {
