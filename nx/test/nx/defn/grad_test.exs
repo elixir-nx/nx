@@ -2260,6 +2260,13 @@ defmodule Nx.Defn.GradTest do
     defn grad_sum_select(t),
       do: grad(t, &Nx.sum(Nx.select(Nx.greater(&1, 0.0), Nx.exp(&1), Nx.cos(&1))))
 
+    defn grad_sum_select_2by2(t),
+      do:
+        grad(
+          t,
+          &Nx.sum(Nx.select(Nx.tensor([[1, 1], [1, 0]], type: {:u, 8}), Nx.exp(&1), Nx.cos(&1)))
+        )
+
     defn grad_max_select(t),
       do: grad(t, &Nx.reduce_max(Nx.select(Nx.greater(&1, 0.0), Nx.exp(&1), Nx.cos(&1))))
 
@@ -2295,7 +2302,7 @@ defmodule Nx.Defn.GradTest do
     end
 
     test "computes gradient with sum+select for complex tensor" do
-      lhs = grad_sum_select(~M[
+      lhs = grad_sum_select_2by2(~M[
           1+i 2+i
           3+i -1-4i
         ])
