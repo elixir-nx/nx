@@ -1,6 +1,6 @@
 %{
   "benchee": {:hex, :benchee, "1.1.0", "f3a43817209a92a1fade36ef36b86e1052627fd8934a8b937ac9ab3a76c43062", [:mix], [{:deep_merge, "~> 1.0", [hex: :deep_merge, repo: "hexpm", optional: false]}, {:statistex, "~> 1.0", [hex: :statistex, repo: "hexpm", optional: false]}], "hexpm", "7da57d545003165a012b587077f6ba90b89210fd88074ce3c60ce239eb5e6d93"},
-  "complex": {:git, "https://github.com/elixir-nx/complex.git", "445f464440efa5cb601a6f6168554e1579e68934", [branch: "main"]},
+  "complex": {:hex, :complex, "0.4.0", "c4e0402efb587011cdbd73b3f188ec5a3dbd4d516530bedfb041b6d58ea0baea", [:mix], [], "hexpm", "ba7b7547a647dfc907cf0c50c906d16dd1ae879f7ec0d61786962c9cb41f793a"},
   "deep_merge": {:hex, :deep_merge, "1.0.0", "b4aa1a0d1acac393bdf38b2291af38cb1d4a52806cf7a4906f718e1feb5ee961", [:mix], [], "hexpm", "ce708e5f094b9cd4e8f2be4f00d2f4250c4095be93f8cd6d018c753894885430"},
   "earmark_parser": {:hex, :earmark_parser, "1.4.25", "2024618731c55ebfcc5439d756852ec4e85978a39d0d58593763924d9a15916f", [:mix], [], "hexpm", "56749c5e1c59447f7b7a23ddb235e4b3defe276afc220a6227237f3efe83f51e"},
   "elixir_make": {:hex, :elixir_make, "0.6.3", "bc07d53221216838d79e03a8019d0839786703129599e9619f4ab74c8c096eac", [:mix], [], "hexpm", "f5cbd651c5678bcaabdbb7857658ee106b12509cd976c2c2fca99688e1daf716"},

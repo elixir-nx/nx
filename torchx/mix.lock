@@ -1,5 +1,5 @@
 %{
-  "complex": {:git, "https://github.com/elixir-nx/complex.git", "445f464440efa5cb601a6f6168554e1579e68934", [branch: "main"]},
+  "complex": {:hex, :complex, "0.4.0", "c4e0402efb587011cdbd73b3f188ec5a3dbd4d516530bedfb041b6d58ea0baea", [:mix], [], "hexpm", "ba7b7547a647dfc907cf0c50c906d16dd1ae879f7ec0d61786962c9cb41f793a"},
   "dll_loader_helper": {:hex, :dll_loader_helper, "0.1.0", "904c3cec32e6e0fc5914e41989ce9350d2bfd06b32f952a658fe63342b993e83", [:make, :mix], [{:elixir_make, "~> 0.6", [hex: :elixir_make, repo: "hexpm", optional: false]}], "hexpm", "b9db9151af610a2db375af543e912b3dd9cad87377d829328888386c65681473"},
   "earmark_parser": {:hex, :earmark_parser, "1.4.25", "2024618731c55ebfcc5439d756852ec4e85978a39d0d58593763924d9a15916f", [:mix], [], "hexpm", "56749c5e1c59447f7b7a23ddb235e4b3defe276afc220a6227237f3efe83f51e"},
   "elixir_make": {:hex, :elixir_make, "0.6.2", "7dffacd77dec4c37b39af867cedaabb0b59f6a871f89722c25b28fcd4bd70530", [:mix], [], "hexpm", "03e49eadda22526a7e5279d53321d1cced6552f344ba4e03e619063de75348d9"},
