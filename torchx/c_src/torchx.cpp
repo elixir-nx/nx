@@ -277,10 +277,16 @@ NIF(to_blob)
   {
     return nx::nif::ok(env, enif_make_resource_binary(env, t, data_ptr, byte_size));
   }
-  else
+  else if (device.has_value() && device.value().type() == torch::kCPU)
   {
     void *result_data = (void *)enif_make_new_binary(env, byte_size, &result);
     memcpy(result_data, data_ptr, byte_size);
+    return nx::nif::ok(env, result);
+  }
+  else
+  {
+    void *result_data = (void *)enif_make_new_binary(env, byte_size, &result);
+    memcpy(result_data, reshaped.to(torch::kCPU).data_ptr(), byte_size);
     return nx::nif::ok(env, result);
   }
 }
