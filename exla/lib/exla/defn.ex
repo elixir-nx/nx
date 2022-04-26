@@ -1233,7 +1233,7 @@ defmodule EXLA.Defn do
         {arg, EXLA.Op.parameter(subbuilder, i, fun_shape, "p#{i}")}
       end)
 
-    {_, params} = Enum.reduce(arg_params, {0, []}, &computation_arg_param(&1, &2))
+    params = Enum.flat_map(arg_params, &computation_arg_param/1)
     state = %{state | builder: subbuilder, params: Map.new(params)}
 
     {res, _} = recur_composite(expr, state, no_token_cache())
@@ -1249,7 +1249,7 @@ defmodule EXLA.Defn do
 
     arg_token = EXLA.Op.get_tuple_element(param, 0)
     arg_param = EXLA.Op.get_tuple_element(param, 1)
-    {_, params} = computation_arg_param({arg, arg_param}, {0, []})
+    params = computation_arg_param({arg, arg_param})
     state = %{state | builder: subbuilder, params: Map.new(params)}
     {res, comp_cache} = recur_composite(expr, state, reset_cache(cache, arg_token))
 
@@ -1274,15 +1274,15 @@ defmodule EXLA.Defn do
     |> EXLA.Shape.make_tuple_shape()
   end
 
-  defp computation_arg_param({tuple, param}, counter_acc) when is_tuple(tuple) do
+  defp computation_arg_param({tuple, param}) when is_tuple(tuple) do
     tuple
     |> Tuple.to_list()
     |> Enum.with_index(fn arg, i -> {arg, EXLA.Op.get_tuple_element(param, i)} end)
-    |> Enum.reduce(counter_acc, &computation_arg_param/2)
+    |> Enum.flat_map(&computation_arg_param/1)
   end
 
-  defp computation_arg_param({_, param}, {counter, acc}) do
-    {counter + 1, [{counter, param} | acc]}
+  defp computation_arg_param({%T{data: %Expr{op: :parameter, args: [pos]}}, param}) do
+    [{pos, param}]
   end
 
   defp recur_composite(tuple, state, cache) when is_tuple(tuple) do

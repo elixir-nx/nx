@@ -3721,4 +3721,21 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
   end
+
+  defn while_in_cond(i) do
+    cond do
+      i < 5 ->
+        while {i}, i < 5 do
+          {i + 1}
+        end
+
+      true ->
+        {i}
+    end
+  end
+
+  test "computes while inside cond" do
+    assert {i} = while_in_cond(0)
+    assert_equal(i, Nx.tensor(5))
+  end
 end
