@@ -8065,7 +8065,7 @@ defmodule Nx do
   ## Conv
 
   @doc """
-  Computes an n-D convolution (n>=3) as used in neural networks.
+  Computes an n-D convolution (where `n >= 3`) as used in neural networks.
 
   This function can be thought of as sliding an n-D
   kernel across the input, producing a new tensor that

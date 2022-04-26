@@ -509,30 +509,40 @@ defmodule Nx.Shape do
 
   ## Examples
 
-      iex> Nx.Shape.to_padding_config({2, 3, 2}, {2, 3, 2}, [1, 1, 1], :valid)
+      iex> Nx.Shape.to_padding_config({2, 3, 2}, {2, 3, 2}, :valid)
       [{0, 0}, {0, 0}, {0, 0}]
 
-      iex> Nx.Shape.to_padding_config({2, 3, 2}, {2, 3, 2}, [1, 1, 1], :valid, true)
-      [{0, 0, 0}, {0, 0, 0}, {0, 0, 0}]
-
-      iex> Nx.Shape.to_padding_config({12, 12}, {2, 2}, [1, 1], :same)
+      iex> Nx.Shape.to_padding_config({12, 12}, {2, 2}, :same)
       [{0, 1}, {0, 1}]
 
   ### Error cases
 
-      iex> Nx.Shape.to_padding_config({2, 3, 2}, {2, 3, 2}, [1, 1, 2], :foo)
+      iex> Nx.Shape.to_padding_config({2, 3, 2}, {2, 3, 2}, :foo)
       ** (ArgumentError) invalid padding mode specified, padding must be one of :valid, :same, or a padding configuration, got: :foo
 
   """
-  def to_padding_config(shape, kernel_size, strides, mode, interior \\ false) do
+  def to_padding_config(shape, kernel_size, mode) do
     case mode do
       :valid ->
-        pad_valid(shape, kernel_size, strides, interior)
+        List.duplicate({0, 0}, tuple_size(shape))
 
       :same ->
-        pad_same(shape, kernel_size, strides, interior)
+        Enum.zip_with(Tuple.to_list(shape), Tuple.to_list(kernel_size), fn dim, k ->
+          padding_size = max(dim - 1 + k - dim, 0)
+          {floor(padding_size / 2), ceil(padding_size / 2)}
+        end)
 
       config when is_list(config) ->
+        Enum.each(config, fn
+          {x, y} when is_integer(x) and is_integer(y) ->
+            :ok
+
+          _other ->
+            raise ArgumentError,
+                  "padding must be a list of {high, low} tuples, where each element is an integer. " <>
+                    "Got: #{inspect(config)}"
+        end)
+
         config
 
       mode ->
@@ -541,21 +551,6 @@ defmodule Nx.Shape do
                 " of :valid, :same, or a padding configuration, got:" <>
                 " #{inspect(mode)}"
     end
-  end
-
-  defp pad_valid(shape, _, _, interior) do
-    if interior,
-      do: List.duplicate({0, 0, 0}, tuple_size(shape)),
-      else: List.duplicate({0, 0}, tuple_size(shape))
-  end
-
-  defp pad_same(shape, kernel_size, strides, interior) do
-    Enum.zip_with([Tuple.to_list(shape), Tuple.to_list(kernel_size), strides], fn [dim, k, s] ->
-      padding_size = max((dim - 1) * s + k - dim, 0)
-      lo = floor(padding_size / 2)
-      hi = ceil(padding_size / 2)
-      if interior, do: {lo, hi, 0}, else: {lo, hi}
-    end)
   end
 
   @doc """
@@ -642,13 +637,7 @@ defmodule Nx.Shape do
       |> Tuple.delete_at(0)
       |> Tuple.delete_at(0)
 
-    padding_config =
-      to_padding_config(
-        spatial_dims,
-        filter_shape,
-        List.duplicate(1, tuple_size(spatial_dims)),
-        padding
-      )
+    padding_config = to_padding_config(spatial_dims, filter_shape, padding)
 
     old_spatial_dims =
       spatial_dims
@@ -790,11 +779,8 @@ defmodule Nx.Shape do
 
     kernel_size = dilate(kernel_size, kernel_dilation)
 
-    padding_config =
-      to_padding_config(shape, kernel_size, List.duplicate(1, tuple_size(shape)), padding)
-
+    padding_config = to_padding_config(shape, kernel_size, padding)
     shape = pad(shape, Enum.map(padding_config, fn {x, y} -> {x, y, 0} end))
-
     {List.to_tuple(do_pool(strides, shape, kernel_size, 0)), padding_config}
   end
 
