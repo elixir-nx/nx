@@ -7048,6 +7048,182 @@ defmodule Nx do
     do: aggregate_window_op(tensor, window_dimensions, opts, :window_product)
 
   @doc """
+  Returns the cumulative sum of elements along an axis.
+
+  ## Options
+
+    * `:axis` - the axis to sum elements along. Defaults to `0`
+
+  ## Examples
+
+      iex> Nx.cumulative_sum(Nx.tensor([1, 2, 3, 4]))
+      #Nx.Tensor<
+        s64[4]
+        [1, 3, 6, 10]
+      >
+
+      iex> Nx.cumulative_sum(Nx.iota({3, 3}), axis: 0)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [0, 1, 2],
+          [3, 5, 7],
+          [9, 12, 15]
+        ]
+      >
+
+      iex> Nx.cumulative_sum(Nx.iota({3, 3}), axis: 1)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [0, 1, 3],
+          [3, 7, 12],
+          [6, 13, 21]
+        ]
+      >
+  """
+  @doc type: :cumulative
+  def cumulative_sum(tensor, opts \\ []),
+    do: cumulative_window_op(tensor, opts, :window_sum)
+
+  @doc """
+  Returns the cumulative product of elements along an axis.
+
+  ## Options
+
+    * `:axis` - the axis to multiply elements along. Defaults to `0`
+
+  ## Examples
+
+      iex> Nx.cumulative_product(Nx.tensor([1, 2, 3, 4]))
+      #Nx.Tensor<
+        s64[4]
+        [1, 2, 6, 24]
+      >
+
+      iex> Nx.cumulative_product(Nx.iota({3, 3}), axis: 0)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [0, 1, 2],
+          [0, 4, 10],
+          [0, 28, 80]
+        ]
+      >
+
+      iex> Nx.cumulative_product(Nx.iota({3, 3}), axis: 1)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [0, 0, 0],
+          [3, 12, 60],
+          [6, 42, 336]
+        ]
+      >
+  """
+  @doc type: :cumulative
+  def cumulative_product(tensor, opts \\ []),
+    do: cumulative_window_op(tensor, opts, :window_product)
+
+  @doc """
+  Returns the cumulative minimum of elements along an axis.
+
+  ## Options
+
+    * `:axis` - the axis to compare elements along. Defaults to `0`
+
+  ## Examples
+
+      iex> Nx.cumulative_min(Nx.tensor([3, 4, 2, 1]))
+      #Nx.Tensor<
+        s64[4]
+        [3, 3, 2, 1]
+      >
+
+      iex> Nx.cumulative_min(Nx.tensor([[2, 3, 1], [1, 3, 2], [2, 1, 3]]), axis: 0)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [2, 3, 1],
+          [1, 3, 1],
+          [1, 1, 1]
+        ]
+      >
+
+      iex> Nx.cumulative_min(Nx.tensor([[2, 3, 1], [1, 3, 2], [2, 1, 3]]), axis: 1)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [2, 2, 1],
+          [1, 1, 1],
+          [2, 1, 1]
+        ]
+      >
+  """
+  @doc type: :cumulative
+  def cumulative_min(tensor, opts \\ []),
+    do: cumulative_window_op(tensor, opts, :window_min)
+
+  @doc """
+  Returns the cumulative maximum of elements along an axis.
+
+  ## Options
+
+    * `:axis` - the axis to compare elements along. Defaults to `0`
+
+  ## Examples
+
+      iex> Nx.cumulative_max(Nx.tensor([3, 4, 2, 1]))
+      #Nx.Tensor<
+        s64[4]
+        [3, 4, 4, 4]
+      >
+
+      iex> Nx.cumulative_max(Nx.tensor([[2, 3, 1], [1, 3, 2], [2, 1, 3]]), axis: 0)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [2, 3, 1],
+          [2, 3, 2],
+          [2, 3, 3]
+        ]
+      >
+
+      iex> Nx.cumulative_max(Nx.tensor([[2, 3, 1], [1, 3, 2], [2, 1, 3]]), axis: 1)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [2, 3, 3],
+          [1, 3, 3],
+          [2, 2, 3]
+        ]
+      >
+  """
+  @doc type: :cumulative
+  def cumulative_max(tensor, opts \\ []),
+    do: cumulative_window_op(tensor, opts, :window_max)
+
+  defp cumulative_window_op(tensor, opts, window_op) do
+    opts = keyword!(opts, axis: 0)
+    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
+    axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
+
+    axis_size = elem(shape, axis)
+    rank = rank(shape)
+
+    padding =
+      List.duplicate({0, 0}, rank)
+      |> List.replace_at(axis, {axis_size - 1, 0})
+
+    window_shape =
+      List.duplicate(1, rank)
+      |> List.to_tuple()
+      |> put_elem(axis, axis_size)
+
+    aggregate_window_op(tensor, window_shape, [padding: padding], window_op)
+  end
+
+  @doc """
   Reduces over a tensor with the given accumulator.
 
   The given `fun` will receive two tensors and it must
