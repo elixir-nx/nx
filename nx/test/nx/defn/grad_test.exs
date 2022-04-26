@@ -2191,7 +2191,9 @@ defmodule Nx.Defn.GradTest do
   describe "abs" do
     defn abs_scalar(t), do: Nx.abs(t)
     defn grad_abs_scalar(t), do: grad(t, &Nx.abs(&1))
+    defn grad_abs_squared(t), do: grad(t, &(&1 |> Nx.abs() |> Nx.power(2)))
     defn grad_abs(t), do: grad(t, &Nx.sum(Nx.abs(&1)))
+    defn grad_cos_abs_sin(t), do: grad(t, &Nx.sum(Nx.cos(Nx.abs(Nx.sin(&1)))))
 
     test "computes gradient with scalars" do
       for _ <- @iters do
@@ -2208,6 +2210,27 @@ defmodule Nx.Defn.GradTest do
 
       assert grad_abs(Nx.tensor([[-1.0, 2.0], [-3.0, 4.0]])) ==
                Nx.tensor([[-1.0, 1.0], [-1.0, 1.0]])
+    end
+
+    test "works with complex" do
+      assert_all_close(grad_abs(~V[0 1i 2]), ~V[0 -1i 1])
+
+      # Ensure our definition is in accordance with the definition
+      # for abs_squared at the JuliaDiff reference: grad(sum(abs(t))) = 2conj(t)
+      assert_all_close(grad_abs_squared(~V[0 1 2]), ~V[0 2 4])
+      assert_all_close(grad_abs_squared(~V[0 1i 2 -3i]), ~V[0 -2i 4 6i])
+
+      t = ~V[0 1+i 2+2i 3+3i]
+
+      assert_all_close(
+        grad_abs(t),
+        ~V[0 0.7071-0.7071i 0.7071-0.7071i 0.7071-0.7071i]
+      )
+
+      assert_all_close(
+        grad_cos_abs_sin(t),
+        ~V[0 -0.3120795+1.2447729i -0.05693477-2.053038i  -0.00780554-5.6348686i]
+      )
     end
   end
 
