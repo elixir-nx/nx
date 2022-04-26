@@ -275,7 +275,7 @@ NIF(to_blob)
   // is already row-major, which was verified by printing t->data_ptr
   // and reshaped.data_ptr and confirming they had the same value.
   // We also slice if a limit was received and it doesn't encompass the full tensor.
-  torch::Tensor reshaped = (has_received_limit and byte_size < t->nbytes()) ?  t->flatten().slice(0, 0, limit) : t->flatten();
+  torch::Tensor reshaped = (has_received_limit && byte_size < t->nbytes()) ?  t->flatten().slice(0, 0, limit) : t->flatten();
   void *data_ptr = reshaped.data_ptr();
 
   if (device.has_value() && device.value().type() == torch::kCPU && data_ptr == t->data_ptr())
