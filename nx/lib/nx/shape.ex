@@ -581,6 +581,26 @@ defmodule Nx.Shape do
   end
 
   @doc """
+  Early validation of conv! before remaining values are computed.
+  """
+  def validate_conv!(input_shape, kernel_shape) do
+    cond do
+      tuple_size(input_shape) < 3 ->
+        raise ArgumentError,
+              "input shape in conv requires at least rank 3," <>
+                " shape #{inspect(input_shape)} has rank #{tuple_size(input_shape)}"
+
+      tuple_size(kernel_shape) < 3 ->
+        raise ArgumentError,
+              "kernel shape in conv requires at least rank 3," <>
+                " shape #{inspect(kernel_shape)} has rank #{tuple_size(kernel_shape)}"
+
+      true ->
+        :ok
+    end
+  end
+
+  @doc """
   Output shape after a convolution.
   """
   def conv(
@@ -598,7 +618,6 @@ defmodule Nx.Shape do
         kernel_permutation,
         output_permutation
       ) do
-    validate_conv_ranks!(input_shape, kernel_shape)
     validate_conv_strides!(input_shape, strides)
     validate_conv_dilations!(input_shape, kernel_shape, input_dilation, kernel_dilation)
 
@@ -648,23 +667,6 @@ defmodule Nx.Shape do
     {shape, names} = transpose(shape, inv_output_permutation, permuted_input_names)
 
     {shape, names, padding_config}
-  end
-
-  defp validate_conv_ranks!(input_shape, kernel_shape) do
-    cond do
-      tuple_size(input_shape) < 3 ->
-        raise ArgumentError,
-              "input shape in conv requires at least rank 3," <>
-                " shape #{inspect(input_shape)} has rank #{tuple_size(input_shape)}"
-
-      tuple_size(kernel_shape) < 3 ->
-        raise ArgumentError,
-              "kernel shape in conv requires at least rank 3," <>
-                " shape #{inspect(kernel_shape)} has rank #{tuple_size(kernel_shape)}"
-
-      true ->
-        :ok
-    end
   end
 
   defp validate_conv_strides!(input_shape, strides) do

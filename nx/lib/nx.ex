@@ -8065,8 +8065,7 @@ defmodule Nx do
   ## Conv
 
   @doc """
-  Computes an n-D convolution as used in neural
-  networks.
+  Computes an n-D convolution (n>=3) as used in neural networks.
 
   This function can be thought of as sliding an n-D
   kernel across the input, producing a new tensor that
@@ -8084,7 +8083,7 @@ defmodule Nx do
 
   Where `input_d0...input_dn` and `kernel_d0...kernel_dn` represent
   an arbitrary number of spatial dimensions. You can alter this configuration
-  using one of the `_permutation` configuration options. Permutations
+  using one of the `*_permutation` configuration options. Permutations
   are input, kernel, and output specifications for the layout of the
   convolution. For example, if your input tensor is configured with
   "channels last", you can specify the input permutation with:
@@ -8246,6 +8245,7 @@ defmodule Nx do
 
     %{shape: input_shape, names: input_names} = tensor = to_tensor(tensor)
     %{shape: kernel_shape, names: kernel_names} = kernel = to_tensor(kernel)
+    Nx.Shape.validate_conv!(input_shape, kernel_shape)
 
     input_permutation = opts[:input_permutation] || axes(input_shape)
     input_permutation = Nx.Shape.normalize_axes(input_shape, input_permutation, input_names)
