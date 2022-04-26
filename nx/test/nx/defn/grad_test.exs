@@ -2274,11 +2274,12 @@ defmodule Nx.Defn.GradTest do
 
     test "as_type takes the real part when downcasting complex" do
       # Note that as the call is defined the expected grad is the same as the grad for
-      # Nx.sum(Nx.cos(~V[1 2 3]))
-      grad = grad_as_type_downcast(~V[1+i 2+i 3+i])
+      # Nx.sum(Nx.cos(~V[1 2 3])), which is -sin(~V[1 2 3])
+      t = ~V[1+i 2+i 3+i]
+      grad = grad_as_type_downcast(t)
 
       assert grad == grad_as_type_downcast(~V[1 2 3])
-      assert grad == Nx.tensor([-0.8414709568023682, -0.9092974066734314, -0.14112000167369843])
+      assert grad == Nx.negate(Nx.sin(Nx.real(t)))
     end
 
     test "as_type passes through for non-downcasting calls" do
