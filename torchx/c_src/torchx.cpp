@@ -275,16 +275,19 @@ NIF(to_blob)
 
   if (device.has_value() && device.value().type() == torch::kCPU && data_ptr == t->data_ptr())
   {
+    // case where we own the data_ptr and the data is in the CPU already
     return nx::nif::ok(env, enif_make_resource_binary(env, t, data_ptr, byte_size));
   }
   else if (device.has_value() && device.value().type() == torch::kCPU)
   {
+    // case where we don't own the data_ptr but the data is in the CPU already
     void *result_data = (void *)enif_make_new_binary(env, byte_size, &result);
     memcpy(result_data, data_ptr, byte_size);
     return nx::nif::ok(env, result);
   }
   else
   {
+    // case where the data isn't in the CPU, therefore we don't own the data_ptr
     void *result_data = (void *)enif_make_new_binary(env, byte_size, &result);
     memcpy(result_data, reshaped.to(torch::kCPU).data_ptr(), byte_size);
     return nx::nif::ok(env, result);
