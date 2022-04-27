@@ -42,7 +42,7 @@ public:
     {
       // already deallocated
       ptr = nullptr;
-      err = enif_make_badarg(env);
+      err = nx::nif::error(env, "Tensor has been deallocated");
       return;
     }
 

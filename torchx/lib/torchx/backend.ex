@@ -203,9 +203,8 @@ defmodule Torchx.Backend do
   @impl true
   def backend_transfer(tensor, backend, opts) do
     backend_copy(tensor, backend, opts)
-    # TODO: implement deallocation after transfer
-    # after
-    #  backend_deallocate(tensor)
+  after
+    backend_deallocate(tensor)
   end
 
   @impl true

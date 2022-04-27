@@ -42,7 +42,7 @@ defmodule Torchx.NxTest do
     t = Nx.tensor(data, type: type)
     r = Kernel.apply(Nx, op, [t])
 
-    binary_t = Nx.backend_transfer(t, Nx.BinaryBackend)
+    binary_t = Nx.backend_copy(t, Nx.BinaryBackend)
     binary_r = Kernel.apply(Nx, op, [binary_t])
     assert_equal(r, binary_r)
   end
