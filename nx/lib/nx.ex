@@ -7084,7 +7084,7 @@ defmodule Nx do
   """
   @doc type: :cumulative
   def cumulative_sum(tensor, opts \\ []),
-    do: cumulative_window_op(tensor, opts, :window_sum)
+    do: cumulative_op(tensor, opts, :cumulative_sum, :window_sum)
 
   @doc """
   Returns the cumulative product of elements along an axis.
@@ -7123,7 +7123,7 @@ defmodule Nx do
   """
   @doc type: :cumulative
   def cumulative_product(tensor, opts \\ []),
-    do: cumulative_window_op(tensor, opts, :window_product)
+    do: cumulative_op(tensor, opts, :cumulative_product, :window_product)
 
   @doc """
   Returns the cumulative minimum of elements along an axis.
@@ -7162,7 +7162,7 @@ defmodule Nx do
   """
   @doc type: :cumulative
   def cumulative_min(tensor, opts \\ []),
-    do: cumulative_window_op(tensor, opts, :window_min)
+    do: cumulative_op(tensor, opts, :cumulative_min, :window_min)
 
   @doc """
   Returns the cumulative maximum of elements along an axis.
@@ -7201,26 +7201,29 @@ defmodule Nx do
   """
   @doc type: :cumulative
   def cumulative_max(tensor, opts \\ []),
-    do: cumulative_window_op(tensor, opts, :window_max)
+    do: cumulative_op(tensor, opts, :cumulative_max, :window_max)
 
-  defp cumulative_window_op(tensor, opts, window_op) do
+  defp cumulative_op(tensor, opts, op, window_op) do
     opts = keyword!(opts, axis: 0)
-    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
-    axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
+    tensor = to_tensor(tensor)
+    axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names)
 
-    axis_size = elem(shape, axis)
-    rank = rank(shape)
+    Nx.Shared.optional(op, [tensor, axis], tensor, fn tensor, axis ->
+      shape = shape(tensor)
+      axis_size = elem(shape, axis)
+      rank = rank(shape)
 
-    padding =
-      List.duplicate({0, 0}, rank)
-      |> List.replace_at(axis, {axis_size - 1, 0})
+      padding =
+        List.duplicate({0, 0}, rank)
+        |> List.replace_at(axis, {axis_size - 1, 0})
 
-    window_shape =
-      List.duplicate(1, rank)
-      |> List.to_tuple()
-      |> put_elem(axis, axis_size)
+      window_shape =
+        List.duplicate(1, rank)
+        |> List.to_tuple()
+        |> put_elem(axis, axis_size)
 
-    aggregate_window_op(tensor, window_shape, [padding: padding], window_op)
+      aggregate_window_op(tensor, window_shape, [padding: padding], window_op)
+    end)
   end
 
   @doc """
