@@ -1278,7 +1278,10 @@ defmodule Nx.Defn.GradTest do
     end
 
     test "works with complex" do
-      x = Nx.iota({2, 1, 3, 3}, type: {:c, 64})
+      x =
+        {2, 1, 3, 3}
+        |> Nx.iota(type: {:c, 64})
+        |> Nx.multiply(Nx.Constants.i())
 
       lhs = grad_sum_window_sum(x)
 
@@ -2030,8 +2033,15 @@ defmodule Nx.Defn.GradTest do
     end
 
     test "works on complex" do
-      assert grad_sum_pad(Nx.tensor([[1.0, 2.0], [1.0, 2.0]], type: {:c, 64})) ==
-               Nx.tensor([[0.0, 0.0], [1.0, 1.0]])
+      lhs =
+        [[1.0, 2.0], [1.0, 2.0]]
+        |> Nx.tensor(type: {:c, 64})
+        |> Nx.multiply(Nx.Constants.i())
+        |> grad_sum_pad
+
+      rhs = Nx.tensor([[0.0, 0.0], [1.0, 1.0]])
+
+      assert lhs == rhs
     end
   end
 
@@ -2186,22 +2196,22 @@ defmodule Nx.Defn.GradTest do
     end
 
     test "works on complex" do
-      lhs =
-        grad_mean_put_slice_operand(
-          Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], type: {:c, 64}),
-          Nx.tensor([[10.0, 11.0]], type: {:c, 64})
-        )
+      t1 =
+        [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]
+        |> Nx.tensor(type: {:c, 64})
+        |> Nx.multiply(Nx.Constants.i())
 
+      t2 =
+        [[10.0, 11.0]]
+        |> Nx.tensor(type: {:c, 64})
+        |> Nx.multiply(Nx.Constants.i())
+
+      lhs = grad_mean_put_slice_operand(t1, t2)
       rhs = Nx.tensor([[0.16666667, 0.0, 0.0], [0.16666667, 0.16666667, 0.16666667]])
 
       assert_all_close(lhs, rhs)
 
-      lhs =
-        grad_mean_put_slice_update(
-          Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], type: {:c, 64}),
-          Nx.tensor([[10.0, 11.0]], type: {:c, 64})
-        )
-
+      lhs = grad_mean_put_slice_update(t1, t2)
       rhs = Nx.tensor([[0.16666667, 0.16666667]])
 
       assert_all_close(lhs, rhs)
