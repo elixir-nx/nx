@@ -701,6 +701,42 @@ defmodule Torchx.Backend do
     end
   end
 
+  @impl true
+  def cumulative_sum(%T{type: out_type} = out, %T{} = t, axis) do
+    check_type!(out_type)
+
+    t
+    |> from_nx()
+    |> Torchx.cumulative_sum(axis)
+    |> to_nx(out)
+  end
+
+  @impl true
+  def cumulative_product(%T{type: out_type} = out, %T{} = t, axis) do
+    check_type!(out_type)
+
+    t
+    |> from_nx()
+    |> Torchx.cumulative_product(axis)
+    |> to_nx(out)
+  end
+
+  @impl true
+  def cumulative_min(%T{} = out, %T{} = t, axis) do
+    t
+    |> from_nx()
+    |> Torchx.cumulative_min(axis)
+    |> to_nx(out)
+  end
+
+  @impl true
+  def cumulative_max(%T{} = out, %T{} = t, axis) do
+    t
+    |> from_nx()
+    |> Torchx.cumulative_max(axis)
+    |> to_nx(out)
+  end
+
   ## Ops
 
   @impl true
