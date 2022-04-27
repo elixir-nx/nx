@@ -62,6 +62,7 @@ defmodule Nx.MixProject do
         "Functions: Backend": &(&1[:type] == :backend),
         "Functions: Conversion": &(&1[:type] == :conversion),
         "Functions: Creation": &(&1[:type] in [:creation, :random]),
+        "Functions: Cumulative": &(&1[:type] == :cumulative),
         "Functions: Element-wise": &(&1[:type] == :element),
         "Functions: Indexed": &(&1[:type] == :indexed),
         "Functions: N-dim": &(&1[:type] == :ndim),

@@ -135,7 +135,21 @@ defmodule Nx.Backend do
   @callback determinant(out :: tensor, t :: tensor) :: tensor
   @callback logical_not(out :: tensor, t :: tensor) :: tensor
 
-  @optional_callbacks [optional: 3, solve: 3, determinant: 2, logical_not: 2]
+  @callback cumulative_sum(out :: tensor, t :: tensor, axis) :: tensor
+  @callback cumulative_product(out :: tensor, t :: tensor, axis) :: tensor
+  @callback cumulative_min(out :: tensor, t :: tensor, axis) :: tensor
+  @callback cumulative_max(out :: tensor, t :: tensor, axis) :: tensor
+
+  @optional_callbacks [
+    optional: 3,
+    solve: 3,
+    determinant: 2,
+    logical_not: 2,
+    cumulative_sum: 3,
+    cumulative_product: 3,
+    cumulative_min: 3,
+    cumulative_max: 3
+  ]
 
   ## Inspect implementation
 

@@ -175,6 +175,11 @@ defmodule Torchx do
   deftensor all(tensor)
   deftensor all(tensor, axes, keep_axes)
 
+  deftensor cumulative_sum(tensor, axis)
+  deftensor cumulative_product(tensor, axis)
+  deftensor cumulative_min(tensor, axis)
+  deftensor cumulative_max(tensor, axis)
+
   ## Binary ops
 
   deftensor add(tensorA, tensorB)

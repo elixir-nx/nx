@@ -863,6 +863,40 @@ NIF(any)
   }
 }
 
+NIF(cumulative_sum)
+{
+  TENSOR_PARAM(0, t);
+  PARAM(1, int64_t, axis);
+
+  TENSOR(torch::cumsum(*t, axis));
+}
+
+NIF(cumulative_product)
+{
+  TENSOR_PARAM(0, t);
+  PARAM(1, int64_t, axis);
+
+  TENSOR(torch::cumprod(*t, axis));
+}
+
+NIF(cumulative_min)
+{
+  TENSOR_PARAM(0, t);
+  PARAM(1, int64_t, axis);
+
+  const std::tuple<torch::Tensor, torch::Tensor> &tt = torch::cummin(*t, axis);
+  TENSOR(std::get<0>(tt));
+}
+
+NIF(cumulative_max)
+{
+  TENSOR_PARAM(0, t);
+  PARAM(1, int64_t, axis);
+
+  const std::tuple<torch::Tensor, torch::Tensor> &tt = torch::cummax(*t, axis);
+  TENSOR(std::get<0>(tt));
+}
+
 NIF(cholesky)
 {
   TENSOR_PARAM(0, t);
@@ -1126,6 +1160,11 @@ static ErlNifFunc nif_functions[] = {
     DF(any, 3),
     DF(all, 1),
     DF(all, 3),
+
+    DF(cumulative_sum, 2),
+    DF(cumulative_product, 2),
+    DF(cumulative_min, 2),
+    DF(cumulative_max, 2),
 
     DF(abs, 1),
     DF(ceil, 1),
