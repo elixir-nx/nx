@@ -30,10 +30,10 @@ defmodule Nx.Defn.Compiler do
   @callback __jit__(
               key :: term,
               vars :: [Nx.t()],
-              fun :: ([Nx.t()] -> Nx.contained()),
+              fun :: ([Nx.t()] -> Nx.Container.t()),
               args_list :: [[Nx.t()]],
               opts :: keyword
-            ) :: [Nx.contained()]
+            ) :: [Nx.Container.t()]
 
   @doc """
   Callback for streaming (on top of JIT compilation).
@@ -55,7 +55,7 @@ defmodule Nx.Defn.Compiler do
               args_list :: [[Nx.t()]],
               opts :: keyword
             ) :: [Nx.Stream.t()]
-            when input: Nx.contained(), output: Nx.contained(), acc: Nx.contained()
+            when input: Nx.Container.t(), output: Nx.Container.t(), acc: Nx.Container.t()
 
   # Modules allowed in defn
   @allowed_modules [Nx, Nx.Constants, Nx.Defn, Nx.Defn.Kernel, Nx.LinAlg]
