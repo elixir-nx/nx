@@ -1488,7 +1488,7 @@ defmodule Nx do
   @doc type: :creation
   def from_binary(binary, type, opts \\ []) when is_binary(binary) do
     opts = keyword!(opts, [:backend])
-    {_, size} = Nx.Type.normalize!(type)
+    {_, size} = type = Nx.Type.normalize!(type)
     dim = div(bit_size(binary), size)
 
     if binary == "" do
