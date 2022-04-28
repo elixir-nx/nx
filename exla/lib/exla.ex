@@ -38,7 +38,7 @@ defmodule EXLA do
   ```
 
   Then EXLA will pick the first platform available for the current
-  notebook user. From them on, you can use `Nx` as usual and it will
+  notebook user. From then on, you can use `Nx` as usual and it will
   use `EXLA` by default.
 
   As in the project configuration above, you must also set the appropriate
