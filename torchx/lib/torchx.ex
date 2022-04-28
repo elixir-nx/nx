@@ -11,7 +11,7 @@ defmodule Torchx.Macro do
   @doc """
   Function that receives a device and allocates a tensor.
   """
-  defmacro defdevice(call) do
+  defmacro defdevice call) d
     {name, args} = Macro.decompose_call(call)
 
     unless has_device?(args) do
@@ -45,7 +45,7 @@ defmodule Torchx.Macro do
 
   All tensor variables must start with the name tensor.
   """
-  defmacro deftensor(call) do
+  defmacro deftensor call) d
     defcall(call, :unwrap_tensor!, [Macro.var(:device, __MODULE__)])
   end
 
@@ -54,7 +54,7 @@ defmodule Torchx.Macro do
 
   All tensor variables must start with the name tensor.
   """
-  defmacro defvalue(call) do
+  defmacro defvalue call) d
     defcall(call, :unwrap!, [])
   end
 
@@ -90,6 +90,22 @@ defmodule Torchx.Macro do
 end
 
 defmodule Torchx do
+  @valid_devices_md_list """
+    * `:cpu`
+    * `:cuda`
+    * `:mkldnn`
+    * `:opengl`
+    * `:opencl`
+    * `:ideep`
+    * `:hip`
+    * `:fpga`
+    * `:msnpu`
+    * `:xla`
+    * `:vulkan`
+    * `:metal`
+    * `:xpu`
+  """
+
   @moduledoc """
   Bindings and Nx integration for [PyTorch](https://pytorch.org/).
 
@@ -133,6 +149,12 @@ defmodule Torchx do
    `{:c, 64}`  | `:complex`        | 64-bit complex number, with two 32-bit float components
    `{:c, 128}` | `:complex_double` | 128-bit complex number, with two 64-bit float components
 
+  ### Torchx devices
+
+  PyTorch implements a variety of devices, which can be seen below.
+  For now, only `:cpu` and `:cuda` are supported.
+
+  #{@valid_devices_md_list}
   """
   use Torchx.Macro
   alias Torchx.NIF
@@ -143,19 +165,7 @@ defmodule Torchx do
   Check if device of the given type is available for Torchx.
   Device atom can be any of:
 
-    * :cpu
-    * :cuda
-    * :mkldnn
-    * :opengl
-    * :opencl
-    * :ideep
-    * :hip
-    * :fpga
-    * :msnpu
-    * :xla
-    * :vulkan
-    * :metal
-    * :xpu
+  #{@valid_devices_md_list}
 
   But only :cuda availability check is supported for now.
   """

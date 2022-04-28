@@ -25,8 +25,7 @@ defmodule Torchx.Backend do
   ### Options
 
     * `:device` - an atom representing the device for the allocation of a given tensor.
-                  Valid values available in the docs for `Torchx.device_available/1`.
-                  Defaults to `:cpu`.
+                  Defaults to `:cpu`. Valid values can be seen at the main `Torchx` docs.
   """
 
   @behaviour Nx.Backend
