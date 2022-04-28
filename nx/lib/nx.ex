@@ -1470,11 +1470,15 @@ defmodule Nx do
         [1, 2, 3, 4]
       >
 
-      iex> Nx.from_binary(<<12.3::float-64-native>>, {:f, 64})
+  The atom notation for types is also supported:
+
+      iex> Nx.from_binary(<<12.3::float-64-native>>, :f64)
       #Nx.Tensor<
         f64[1]
         [12.3]
       >
+
+  An error is raised for incompatible sizes:
 
       iex> Nx.from_binary(<<1, 2, 3, 4>>, {:f, 64})
       ** (ArgumentError) binary does not match the given size
