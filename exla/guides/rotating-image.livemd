@@ -6,15 +6,12 @@
 Mix.install([
   {:req, "~> 0.2.0"},
   {:kino, "~> 0.5.1"},
-  {:exla, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "exla"},
-  {:nx, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "nx", override: true},
-  # credits to https://github.com/cocoa-xu
+  {:exla, "~> 0.2"},
   {:evision, "~> 0.1.0-dev", github: "cocoa-xu/evision", branch: "main"}
 ])
-```
 
-```elixir
-Nx.Defn.default_options(compiler: EXLA)
+# To use TPU/CUDA/ROCM, you must also set the XLA_TARGET env var
+EXLA.set_as_nx_default([:tpu, :cuda, :rocm, :host])
 ```
 
 ## Preprocessing

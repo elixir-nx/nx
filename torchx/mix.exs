@@ -2,7 +2,7 @@ defmodule Torchx.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx"
-  @version "0.1.0-dev"
+  @version "0.2.0-dev"
 
   @valid_targets ["cpu", "cu102", "cu111"]
 
@@ -35,7 +35,6 @@ defmodule Torchx.MixProject do
     ]
   end
 
-  # Run "mix help compile.app" to learn about applications.
   def application do
     [
       extra_applications: [:logger]
@@ -45,10 +44,9 @@ defmodule Torchx.MixProject do
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
 
-  # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:nx, path: "../nx"},
+      {:nx, "~> 0.2.0"},
       {:dll_loader_helper, "~> 0.1.0"},
       {:elixir_make, "~> 0.6"},
       {:ex_doc, "~> 0.28.3", only: :dev}

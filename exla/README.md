@@ -1,6 +1,6 @@
 <h1><img src="https://github.com/elixir-nx/nx/raw/main/exla/exla.png" alt="EXLA" width="350"></h1>
 
-Elixir client for Google's XLA (Accelerated Linear Algebra). It includes integration with the `Nx` library to compile numerical definitions (`defn`) to the CPU/GPU/TPU.
+[Google's XLA](https://www.tensorflow.org/xla/) (Accelerated Linear Algebra) compiler/backend for Nx.
 
 ## Installation
 
@@ -15,8 +15,7 @@ Then you can add `EXLA` as dependency in your `mix.exs`. At the moment you will 
 ```elixir
 def deps do
   [
-    {:exla, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "exla"},
-    {:nx, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "nx", override: true}
+    {:exla, "~> 0.2"}
   ]
 end
 ```
@@ -25,8 +24,7 @@ If you are using Livebook or IEx, you can instead run:
 
 ```elixir
 Mix.install([
-  {:exla, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "exla"},
-  {:nx, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "nx", override: true}
+  {:exla, "~> 0.2"}
 ])
 ```
 

@@ -69,7 +69,7 @@ Then you can add `Nx` as dependency in your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:nx, "~> 0.1"}
+    {:nx, "~> 0.2"}
   ]
 end
 ```
@@ -78,7 +78,7 @@ If you are using Livebook or IEx, you can instead run:
 
 ```elixir
 Mix.install([
-  {:nx, "~> 0.1"}
+  {:nx, "~> 0.2"}
 ])
 ```
 

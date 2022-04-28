@@ -1,6 +1,6 @@
 defmodule EXLA do
   @moduledoc """
-  Bindings and Nx integration for [Google's XLA](https://www.tensorflow.org/xla/).
+  [Google's XLA](https://www.tensorflow.org/xla/) (Accelerated Linear Algebra) compiler/backend for Nx.
 
   EXLA works both as a backend for Nx tensors and an optimized
   `Nx.Defn` compiler. To enable both globally, add a `config/config.exs`

@@ -20,8 +20,7 @@ use a Git dependency while we work on our first release:
 ```elixir
 def deps do
   [
-    {:torchx, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "torchx"},
-    {:nx, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "nx", override: true}
+    {:torchx, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "torchx"}
   ]
 end
 ```
@@ -30,8 +29,7 @@ If you are using Livebook or IEx, you can instead run:
 
 ```elixir
 Mix.install([
-  {:exla, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "exla"},
-  {:nx, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "nx", override: true}
+  {:torchx, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "torchx"}
 ])
 ```
 
