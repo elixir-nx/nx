@@ -11,7 +11,7 @@ defmodule Torchx.Macro do
   @doc """
   Function that receives a device and allocates a tensor.
   """
-  defmacro defdevice call) d
+  defmacro defdevice(call) do
     {name, args} = Macro.decompose_call(call)
 
     unless has_device?(args) do
@@ -45,7 +45,7 @@ defmodule Torchx.Macro do
 
   All tensor variables must start with the name tensor.
   """
-  defmacro deftensor call) d
+  defmacro deftensor(call) do
     defcall(call, :unwrap_tensor!, [Macro.var(:device, __MODULE__)])
   end
 
@@ -54,7 +54,7 @@ defmodule Torchx.Macro do
 
   All tensor variables must start with the name tensor.
   """
-  defmacro defvalue call) d
+  defmacro defvalue(call) do
     defcall(call, :unwrap!, [])
   end
 
