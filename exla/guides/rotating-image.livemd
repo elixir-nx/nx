@@ -7,8 +7,7 @@ Mix.install([
   {:req, "~> 0.2.0"},
   {:kino, "~> 0.5.1"},
   {:exla, "~> 0.2"},
-  {:stb_image, "~> 0.2.0"},
-  {:nx, "~> 0.2"}
+  {:stb_image, "~> 0.2.0"}
 ])
 
 # To use TPU/CUDA/ROCM, you must also set the XLA_TARGET env var
@@ -25,14 +24,12 @@ defmodule Preprocess do
     case URI.parse(file_or_url) do
       %URI{scheme: nil} ->
         {:ok, img} = StbImage.from_file(file_or_url)
-        # TODO: remove normalize! call on Nx v0.3.0
-        Nx.from_binary(img.data, Nx.Type.normalize!(img.type)) |> Nx.reshape(img.shape)
+        Nx.from_binary(img.data, {:u, 8}) |> Nx.reshape(img.shape)
 
       _ ->
         %{body: binary_image} = Req.get!(file_or_url)
         {:ok, img} = StbImage.from_binary(binary_image)
-        # TODO: remove normalize! call on Nx v0.3.0
-        Nx.from_binary(img.data, Nx.Type.normalize!(img.type)) |> Nx.reshape(img.shape)
+        Nx.from_binary(img.data, {:u, 8}) |> Nx.reshape(img.shape)
     end
   end
 
