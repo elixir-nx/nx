@@ -113,6 +113,26 @@ defmodule Torchx do
   The `device_available?/1` function can be used to determine whether
   `:cuda` is available. If you have CUDA installed but it doesn't show
   as available, check out the _Installation_ README section.
+
+  ### Torchx types
+
+  Torchx implements specific names for PyTorch types, which have Nx
+  counterparts as in the following table:
+
+    Nx Type    |  Torchx Type    | Description
+   ----------- | --------------- | --------------------------------------------------------
+   `{:u, 8}`   | `:byte`           | Unsigned 8-bit integer
+   `{:s, 8}`   | `:char`           | Signed 8-bit integer
+   `{:s, 16}`  | `:short`          | Signed 16-bit integer
+   `{:s, 32}`  | `:int`            | Signed 32-bit integer
+   `{:s, 64}`  | `:long`           | Signed 64-bit integer
+   `{:bf, 16}` | `:brain`          | 16-bit brain floating-point number
+   `{:f, 16}`  | `:half`           | 16-bit floating-point number
+   `{:f, 32}`  | `:float`          | 32-bit floating-point number
+   `{:f, 64}`  | `:double`         | 64-bit floating-point number
+   `{:c, 64}`  | `:complex`        | 64-bit complex number, with two 32-bit float components
+   `{:c, 128}` | `:complex_double` | 128-bit complex number, with two 64-bit float components
+
   """
   use Torchx.Macro
   alias Torchx.NIF
