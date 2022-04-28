@@ -130,7 +130,7 @@ defmodule Torchx do
   `:cuda` is available. If you have CUDA installed but it doesn't show
   as available, check out the _Installation_ README section.
 
-  ### Torchx types
+  ## Types
 
   Torchx implements specific names for PyTorch types, which have Nx
   counterparts as in the following table:
@@ -149,7 +149,7 @@ defmodule Torchx do
    `{:c, 64}`  | `:complex`        | 64-bit complex number, with two 32-bit float components
    `{:c, 128}` | `:complex_double` | 128-bit complex number, with two 64-bit float components
 
-  ### Torchx devices
+  ## Devices
 
   PyTorch implements a variety of devices, which can be seen below.
   For now, only `:cpu` and `:cuda` are supported.
