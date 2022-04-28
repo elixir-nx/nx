@@ -2,7 +2,7 @@ defmodule Torchx.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx"
-  @version "0.2.0-dev"
+  @version "0.2.0"
 
   @valid_targets ["cpu", "cu102", "cu111"]
 
@@ -67,7 +67,10 @@ defmodule Torchx.MixProject do
   defp docs do
     [
       main: "Torchx",
-      source_url_pattern: "#{@source_url}/blob/v#{@version}/torchx/%{path}#L%{line}"
+      source_url_pattern: "#{@source_url}/blob/v#{@version}/torchx/%{path}#L%{line}",
+      extras: [
+        "CHANGELOG.md"
+      ]
     ]
   end
 
