@@ -8,18 +8,22 @@ defmodule EXLA.GlobalTest do
 
   @default Nx.Defn.global_default_options([])
 
-  test "set_preferred_defn_options" do
+  test "set_as_nx_default" do
     assert @default[:compiler] == EXLA
 
     Nx.Defn.global_default_options([])
+    assert Nx.default_backend() == {Nx.BinaryBackend, []}
     assert Nx.Defn.default_options() == []
 
-    assert EXLA.set_preferred_defn_options([:unknown]) == nil
+    assert EXLA.set_as_nx_default([:unknown]) == nil
+    assert Nx.default_backend() == {Nx.BinaryBackend, []}
     assert Nx.Defn.default_options() == []
 
-    assert EXLA.set_preferred_defn_options([:host]) == :host
+    assert EXLA.set_as_nx_default([:host]) == :host
+    assert Nx.default_backend() == {EXLA.Backend, client: :host}
     assert Nx.Defn.default_options() == [compiler: EXLA, client: :host]
   after
+    assert Nx.default_backend(Nx.BinaryBackend)
     assert Nx.Defn.global_default_options(@default)
   end
 end

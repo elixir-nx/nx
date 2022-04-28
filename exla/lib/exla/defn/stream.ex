@@ -3,9 +3,9 @@ defmodule EXLA.Defn.Stream do
 
   keys =
     [:lock, :outfeed, :pid, :runner, :send, :recv, :send_shape] ++
-      [:recv_length, :done, :client, :device_id, :keep_on_device]
+      [:recv_length, :done, :client, :device_id]
 
-  @derive {Inspect, only: [:pid, :client, :device_id, :keep_on_device, :send, :recv]}
+  @derive {Inspect, only: [:pid, :client, :device_id, :send, :recv]}
   @enforce_keys keys
   defstruct keys
 
@@ -18,8 +18,7 @@ defmodule EXLA.Defn.Stream do
         send_shape,
         recv,
         recv_shapes,
-        done,
-        keep_on_device?
+        done
       ) do
     %{client: client, device_id: device_id} = executable
 
@@ -44,8 +43,7 @@ defmodule EXLA.Defn.Stream do
       recv_length: length(recv_shapes),
       client: client,
       device_id: device_id,
-      done: done,
-      keep_on_device: keep_on_device?
+      done: done
     }
   end
 
@@ -122,7 +120,6 @@ defmodule EXLA.Defn.Stream do
           outfeed: outfeed,
           pid: pid,
           runner: runner,
-          keep_on_device: keep_on_device,
           done: done
         }) do
       if pid != self() do
@@ -146,8 +143,8 @@ defmodule EXLA.Defn.Stream do
           raise "cannot mark stream as done when there are recv messages pending"
 
         {:DOWN, ^outfeed_ref, _, _, _} ->
-          fun = if keep_on_device, do: & &1, else: &Nx.backend_transfer/1
-          EXLA.Defn.Buffers.to_nx!(EXLA.Defn.Runner.read(runner), done, fun)
+          [result] = EXLA.Defn.Runner.read(runner)
+          EXLA.Defn.Buffers.to_nx!(result, done)
       end
     end
   end

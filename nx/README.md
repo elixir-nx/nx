@@ -4,7 +4,7 @@
 
 Nx is a multi-dimensional tensors library for Elixir with multi-staged compilation to the CPU/GPU. Its high-level features are:
 
-  * Typed multi-dimensional tensors, where the tensors can be unsigned integers (`u8`, `u16`, `u32`, `u64`), signed integers (`s8`, `s16`, `s32`, `s64`), floats (`f16`, `f32`, `f64`), and brain floats (`bf16`);
+  * Typed multi-dimensional tensors, where the tensors can be unsigned integers (`u8`, `u16`, `u32`, `u64`), signed integers (`s8`, `s16`, `s32`, `s64`), floats (`f16`, `f32`, `f64`), brain floats (`bf16`), and complex numbers (`c64`, `c128`);
 
   * Named tensors, allowing developers to give names to each dimension, leading to more readable and less error prone codebases;
 
@@ -46,7 +46,7 @@ In order to support Nx, you might:
 
 Here are some introductory resources with more information on Nx as a whole:
 
-  * [A post by José Valim on Dashbit's blog announcing Nx, outlining some of the design decisions, benchmarks, and general direction](https://dashbit.co/blog/nx-numerical-elixir-is-now-publicly-available) (text)
+  * [A post by José Valim on Nx v0.1 release, discussing its goals, showing benchmarks, and general direction](https://dashbit.co/blog/elixir-and-machine-learning-nx-v0.1) (text)
 
   * [Sean Moriarity's blog](https://seanmoriarity.com/) containing tips on how to use Nx (text)
 
@@ -69,9 +69,17 @@ Then you can add `Nx` as dependency in your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:nx, "~> 0.1"}
+    {:nx, "~> 0.2"}
   ]
 end
+```
+
+If you are using Livebook or IEx, you can instead run:
+
+```elixir
+Mix.install([
+  {:nx, "~> 0.2"}
+])
 ```
 
 ## Examples

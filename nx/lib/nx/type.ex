@@ -9,6 +9,12 @@ defmodule Nx.Type do
       * `:u` - unsigned integer (8, 16, 32, 64)
       * `:f` - float (16, 32, 64)
       * `:bf` - a brain floating point (16)
+      * `:c` - a complex number, represented as a pair of floats (64, 128)
+
+  Each type has an equivalent atom representation, for example
+  `{:s, 8}` can be expressed as `:s8`. When working with user-given
+  types make sure to call `normalize!/1` to get the canonical
+  representation.
 
   Note: there is a special type used by the `defn` compiler
   which is `{:tuple, size}`, that represents a tuple. Said types
@@ -29,94 +35,116 @@ defmodule Nx.Type do
           | {:f, 32}
           | {:f, 64}
           | {:bf, 16}
+          | {:c, 64}
+          | {:c, 128}
           | {:tuple, non_neg_integer}
+
+  @type short_t ::
+          :s8
+          | :s16
+          | :s32
+          | :s64
+          | :u8
+          | :u16
+          | :u32
+          | :u64
+          | :f16
+          | :f32
+          | :f64
+          | :bf16
+          | :c64
+          | :c128
 
   @doc """
   Returns the minimum possible value for the given type.
   """
-  def min_value_binary(type)
+  def min_finite_binary(type)
 
-  def min_value_binary({:s, 8}), do: <<-128::8-signed-native>>
-  def min_value_binary({:s, 16}), do: <<-32678::16-signed-native>>
-  def min_value_binary({:s, 32}), do: <<-2_147_483_648::32-signed-native>>
-  def min_value_binary({:s, 64}), do: <<-9_223_372_036_854_775_808::64-signed-native>>
-  def min_value_binary({:u, size}), do: <<0::size(size)-native>>
-  def min_value_binary({:bf, 16}), do: <<0xFF80::16-native>>
-  def min_value_binary({:f, 16}), do: <<0xFBFF::16-native>>
-  def min_value_binary({:f, 32}), do: <<0xFF7FFFFF::32-native>>
-  def min_value_binary({:f, 64}), do: <<0xFFEFFFFFFFFFFFFF::64-native>>
+  def min_finite_binary({:s, 8}), do: <<-128::8-signed-native>>
+  def min_finite_binary({:s, 16}), do: <<-32678::16-signed-native>>
+  def min_finite_binary({:s, 32}), do: <<-2_147_483_648::32-signed-native>>
+  def min_finite_binary({:s, 64}), do: <<-9_223_372_036_854_775_808::64-signed-native>>
+  def min_finite_binary({:u, size}), do: <<0::size(size)-native>>
+  def min_finite_binary({:bf, 16}), do: <<0xFF80::16-native>>
+  def min_finite_binary({:f, 16}), do: <<0xFBFF::16-native>>
+  def min_finite_binary({:f, 32}), do: <<0xFF7FFFFF::32-native>>
+  def min_finite_binary({:f, 64}), do: <<0xFFEFFFFFFFFFFFFF::64-native>>
 
   @doc """
   Returns the maximum possible value for the given type.
   """
-  def max_value_binary(type)
+  def max_finite_binary(type)
 
-  def max_value_binary({:s, 8}), do: <<127::8-signed-native>>
-  def max_value_binary({:s, 16}), do: <<32677::16-signed-native>>
-  def max_value_binary({:s, 32}), do: <<2_147_483_647::32-signed-native>>
-  def max_value_binary({:s, 64}), do: <<9_223_372_036_854_775_807::64-signed-native>>
-  def max_value_binary({:u, 8}), do: <<255::8-native>>
-  def max_value_binary({:u, 16}), do: <<65535::16-native>>
-  def max_value_binary({:u, 32}), do: <<4_294_967_295::32-native>>
-  def max_value_binary({:u, 64}), do: <<18_446_744_073_709_551_615::64-native>>
-  def max_value_binary({:bf, 16}), do: <<0x7F80::16-native>>
-  def max_value_binary({:f, 16}), do: <<0x7BFF::16-native>>
-  def max_value_binary({:f, 32}), do: <<0x7F7FFFFF::32-native>>
-  def max_value_binary({:f, 64}), do: <<0x7FEFFFFFFFFFFFFF::64-native>>
+  def max_finite_binary({:s, 8}), do: <<127::8-signed-native>>
+  def max_finite_binary({:s, 16}), do: <<32677::16-signed-native>>
+  def max_finite_binary({:s, 32}), do: <<2_147_483_647::32-signed-native>>
+  def max_finite_binary({:s, 64}), do: <<9_223_372_036_854_775_807::64-signed-native>>
+  def max_finite_binary({:u, 8}), do: <<255::8-native>>
+  def max_finite_binary({:u, 16}), do: <<65535::16-native>>
+  def max_finite_binary({:u, 32}), do: <<4_294_967_295::32-native>>
+  def max_finite_binary({:u, 64}), do: <<18_446_744_073_709_551_615::64-native>>
+  def max_finite_binary({:bf, 16}), do: <<0x7F80::16-native>>
+  def max_finite_binary({:f, 16}), do: <<0x7BFF::16-native>>
+  def max_finite_binary({:f, 32}), do: <<0x7F7FFFFF::32-native>>
+  def max_finite_binary({:f, 64}), do: <<0x7FEFFFFFFFFFFFFF::64-native>>
 
   @doc """
-  Infers the type of the given value.
+  Returns infinity as a binary for the given type.
+  """
+  def nan_binary(type)
+  def nan_binary({:bf, 16}), do: <<0x7F81::16-native>>
+  def nan_binary({:f, 16}), do: <<0x7C01::16-native>>
+  def nan_binary({:f, 32}), do: <<0x7F800001::32-native>>
+  def nan_binary({:f, 64}), do: <<0x7FF0000000000001::64-native>>
 
-  The value may be a number, boolean, or an arbitrary list with
-  any of the above. Integers are by default signed and of size 64.
-  Floats have size of 64. Booleans are unsigned integers of size 1
-  (also known as predicates).
+  @doc """
+  Returns infinity as a binary for the given type.
+  """
+  def infinity_binary(type)
+  def infinity_binary({:bf, 16}), do: <<0x7F80::16-native>>
+  def infinity_binary({:f, 16}), do: <<0x7C00::16-native>>
+  def infinity_binary({:f, 32}), do: <<0x7F800000::32-native>>
+  def infinity_binary({:f, 64}), do: <<0x7FF0000000000000::64-native>>
 
-  In case mixed types are given, the one with highest space
-  requirements is used (i.e. float > brain floating > integer > boolean).
+  @doc """
+  Returns negative infinity as a binary for the given type.
+  """
+  def neg_infinity_binary(type)
+  def neg_infinity_binary({:bf, 16}), do: <<0xFF80::16-native>>
+  def neg_infinity_binary({:f, 16}), do: <<0xFC00::16-native>>
+  def neg_infinity_binary({:f, 32}), do: <<0xFF800000::32-native>>
+  def neg_infinity_binary({:f, 64}), do: <<0xFFF0000000000000::64-native>>
+
+  @doc """
+  Infers the type of the given number.
 
   ## Examples
 
-      iex> Nx.Type.infer([1, 2, 3])
+      iex> Nx.Type.infer(1)
       {:s, 64}
-      iex> Nx.Type.infer([[1, 2], [3, 4]])
-      {:s, 64}
-
-      iex> Nx.Type.infer([1.0, 2.0, 3.0])
+      iex> Nx.Type.infer(1.0)
       {:f, 32}
-      iex> Nx.Type.infer([1, 2.0])
-      {:f, 32}
-
-      iex> Nx.Type.infer([])
-      {:f, 32}
-
-      iex> Nx.Type.infer("string")
-      ** (ArgumentError) cannot infer the numerical type of "string"
+      iex> Nx.Type.infer(Complex.new(1))
+      {:c, 64}
 
   """
-  def infer(value) do
-    case infer(value, -1) do
-      -1 -> {:f, 32}
-      0 -> {:s, 64}
-      1 -> {:f, 32}
-    end
-  end
-
-  defp infer(arg, inferred) when is_list(arg), do: Enum.reduce(arg, inferred, &infer/2)
-  defp infer(arg, inferred) when is_integer(arg), do: max(inferred, 0)
-  defp infer(arg, inferred) when is_float(arg), do: max(inferred, 1)
-
-  defp infer(other, _inferred),
-    do: raise(ArgumentError, "cannot infer the numerical type of #{inspect(other)}")
+  def infer(value) when is_integer(value), do: {:s, 64}
+  def infer(value) when is_float(value), do: {:f, 32}
+  def infer(%Complex{}), do: {:c, 64}
 
   @doc """
-  Validates the given type tuple.
+  Validates and normalizes the given type tuple.
 
-  It returns the type itself or raises.
+  It returns the type tuple or raises.
+
+  Accepts both the tuple format and the short atom format.
 
   ## Examples
 
       iex> Nx.Type.normalize!({:u, 8})
+      {:u, 8}
+
+      iex> Nx.Type.normalize!(:u8)
       {:u, 8}
 
       iex> Nx.Type.normalize!({:u, 0})
@@ -137,10 +165,21 @@ defmodule Nx.Type do
     end
   end
 
-  defp validate({:s, size} = type) when size in [8, 16, 32, 64], do: type
-  defp validate({:u, size} = type) when size in [8, 16, 32, 64], do: type
-  defp validate({:f, size} = type) when size in [16, 32, 64], do: type
-  defp validate({:bf, size} = type) when size in [16], do: type
+  type_variants = [
+    s: [8, 16, 32, 64],
+    u: [8, 16, 32, 64],
+    f: [16, 32, 64],
+    bf: [16],
+    c: [64, 128]
+  ]
+
+  for {kind, sizes} <- type_variants, size <- sizes do
+    type = {kind, size}
+
+    defp validate(unquote(type)), do: unquote(type)
+    defp validate(unquote(:"#{kind}#{size}")), do: unquote(type)
+  end
+
   defp validate(_type), do: :error
 
   @doc """
@@ -159,11 +198,64 @@ defmodule Nx.Type do
       {:bf, 16}
       iex> Nx.Type.to_floating({:f, 32})
       {:f, 32}
+      iex> Nx.Type.to_floating({:c, 64})
+      {:c, 64}
 
   """
   def to_floating({:bf, size}), do: {:bf, size}
   def to_floating({:f, size}), do: {:f, size}
+  def to_floating({:c, size}), do: {:c, size}
   def to_floating(type), do: merge(type, {:f, 32})
+
+  @doc """
+  Converts the given type to a complex representation with
+  the minimum size necessary.
+
+  ## Examples
+
+      iex> Nx.Type.to_complex({:s, 64})
+      {:c, 64}
+      iex> Nx.Type.to_complex({:bf, 16})
+      {:c, 64}
+      iex> Nx.Type.to_complex({:f, 32})
+      {:c, 64}
+      iex> Nx.Type.to_complex({:c, 64})
+      {:c, 64}
+      iex> Nx.Type.to_complex({:f, 64})
+      {:c, 128}
+      iex> Nx.Type.to_complex({:c, 128})
+      {:c, 128}
+
+  """
+  def to_complex({:c, size}), do: {:c, size}
+  def to_complex({:f, 64}), do: {:c, 128}
+  def to_complex(_type), do: {:c, 64}
+
+  @doc """
+  Converts the given type to a real number representation
+  with the minimum size necessary.
+
+  ## Examples
+
+      iex> Nx.Type.to_real({:s, 8})
+      {:f, 32}
+      iex> Nx.Type.to_real({:s, 64})
+      {:f, 32}
+      iex> Nx.Type.to_real({:bf, 16})
+      {:bf, 16}
+      iex> Nx.Type.to_real({:c, 64})
+      {:f, 32}
+      iex> Nx.Type.to_real({:c, 128})
+      {:f, 64}
+      iex> Nx.Type.to_real({:f, 32})
+      {:f, 32}
+      iex> Nx.Type.to_real({:f, 64})
+      {:f, 64}
+  """
+  def to_real({:f, size}), do: {:f, size}
+  def to_real({:c, s}), do: {:f, div(s, 2)}
+  def to_real({:bf, size}), do: {:bf, size}
+  def to_real(_type), do: {:f, 32}
 
   @doc """
   Converts the given type to an aggregation precision.
@@ -178,6 +270,8 @@ defmodule Nx.Type do
       {:bf, 16}
       iex> Nx.Type.to_aggregate({:f, 32})
       {:f, 32}
+      iex> Nx.Type.to_aggregate({:c, 64})
+      {:c, 64}
 
   """
   def to_aggregate({:u, _size}), do: {:u, 64}
@@ -208,6 +302,9 @@ defmodule Nx.Type do
       iex> Nx.Type.cast_number!({:bf, 16}, -10.0)
       -10.0
 
+      iex> Nx.Type.cast_number!({:c, 64}, 10)
+      %Complex{im: 0.0, re: 10.0}
+
       iex> Nx.Type.cast_number!({:u, 8}, -10)
       ** (ArgumentError) cannot cast number -10 to {:u, 8}
 
@@ -218,6 +315,7 @@ defmodule Nx.Type do
   def cast_number!({type, _}, int) when type in [:s] and is_integer(int), do: int
   def cast_number!({type, _}, int) when type in [:f, :bf] and is_integer(int), do: int * 1.0
   def cast_number!({type, _}, float) when type in [:f, :bf] and is_float(float), do: float
+  def cast_number!({:c, _}, number), do: Complex.new(number)
 
   def cast_number!(type, other) do
     raise ArgumentError, "cannot cast number #{inspect(other)} to #{inspect(type)}"
@@ -228,12 +326,15 @@ defmodule Nx.Type do
 
   Types have the following precedence:
 
-      f > bf > s > u
+      c > f > bf > s > u
 
   If the types are the same, they are merged to the highest size.
   If they are different, the one with the highest precedence wins,
   as long as the size of the `max(big, small * 2))` fits under 64
   bits. Otherwise it casts to f64.
+
+  In the case of complex numbers, the maximum bit size is 128 bits
+  because they are composed of two floats.
 
   ## Examples
 
@@ -289,6 +390,12 @@ defmodule Nx.Type do
       iex> Nx.Type.merge({:f, 64}, {:bf, 16})
       {:f, 64}
 
+      iex> Nx.Type.merge({:c, 64}, {:f, 32})
+      {:c, 64}
+      iex> Nx.Type.merge({:c, 64}, {:c, 64})
+      {:c, 64}
+      iex> Nx.Type.merge({:c, 128}, {:c, 64})
+      {:c, 128}
   """
   def merge({type, left_size}, {type, right_size}) do
     {type, max(left_size, right_size)}
@@ -301,6 +408,7 @@ defmodule Nx.Type do
     end
   end
 
+  defp type_to_int(:c), do: 4
   defp type_to_int(:f), do: 3
   defp type_to_int(:bf), do: 2
   defp type_to_int(:s), do: 1
@@ -380,6 +488,8 @@ defmodule Nx.Type do
     {:f, size}
   end
 
+  def merge_number({:c, size}, _number), do: {:c, size}
+
   def merge_number(_, number) when is_number(number) do
     {:f, 32}
   end
@@ -414,6 +524,7 @@ defmodule Nx.Type do
   """
   def float?({:f, _}), do: true
   def float?({:bf, _}), do: true
+  def float?({:c, _}), do: true
   def float?({_, _}), do: false
 
   @doc """

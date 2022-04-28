@@ -14,26 +14,38 @@ defmodule EXLA.Computation do
   ## Options
 
     * `:device_id` - the device id to compile to and run the executable on.
-      Defaults to the `:default_device_id` on the client.
+      Defaults to the `:default_device_id` on the client. If `:num_replicas`
+      or `:num_partitions` are given, this option is ignored and the device
+      id is set to `-1`.
 
     * `:num_replicas` - the number of replicas this computation will run on.
       It defaults to 1 but you can set it if you want to enable single-program
-      multiple data
+      multiple data.
+
+    * `:use_spmd` - enables Single-Program Multiple-Data partioning.
+      This is set to true if `:num_partitions` is more than one, otherwise is `false`.
 
   Currently those options do not have an effect as they related to running the
   same compiled executable on multiple replicas.
 
   Some options apply to TPU only:
 
-    * `:num_partitions` - the number of partitions this computation will run on
+    * `:num_partitions` - the number of partitions this computation will run on.
 
   """
   def compile(computation = %Computation{}, client = %Client{}, argument_shapes, options \\ []) do
     num_replicas = Keyword.get(options, :num_replicas, 1)
     num_partitions = Keyword.get(options, :num_partitions, 1)
-    device_id = Keyword.get(options, :device_id, client.default_device_id)
 
-    use_spmd = if num_replicas >= 1 or num_partitions >= 1, do: 1, else: 0
+    # JAX comments say SPMD can lead to subtle bugs so they only enable
+    # when strictly necessary, which is when num_partitions is greater than 1.
+    use_spmd = if Keyword.get(options, :use_spmd, true) or num_partitions >= 1, do: 1, else: 0
+
+    device_id =
+      if num_replicas > 1 or num_partitions > 1,
+        do: -1,
+        else: Keyword.get(options, :device_id, client.default_device_id)
+
     output_shape = assert_output_shape!(computation)
 
     ref =

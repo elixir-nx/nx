@@ -11,7 +11,7 @@ defmodule Nx.Shape do
       {1, 2, 3}
 
       iex> Nx.Shape.validate!({0, 2, 3}, :window_dimensions)
-      ** (ArgumentError) invalid dimension in axis 0 in window_dimensions. Each dimension must be a positive integer, got 0 in shape {0, 2, 3}
+      ** (ArgumentError) invalid dimension in axis 0 found in window_dimensions. Each dimension must be a positive integer, got 0 in shape {0, 2, 3}
 
   """
   def validate!(shape, kind) when is_tuple(shape) do
@@ -29,12 +29,37 @@ defmodule Nx.Shape do
   defp validate!(shape, pos, kind) do
     dim = :erlang.element(pos, shape)
 
-    if is_integer(dim) and dim > 0 do
-      validate!(shape, pos - 1, kind)
-    else
-      raise ArgumentError,
-            "invalid dimension in axis #{pos - 1} in #{kind}. Each dimension must be a positive integer, " <>
-              "got #{inspect(dim)} in shape #{inspect(shape)}"
+    cond do
+      is_integer(dim) and dim > 0 ->
+        validate!(shape, pos - 1, kind)
+
+      is_struct(dim, Nx.Tensor) ->
+        raise ArgumentError, """
+        invalid dimension in axis #{pos - 1} found in #{kind}. Each dimension must be a \
+        positive integer, but instead got a tensor as dimension: #{inspect(dim)}
+
+        This may happen if you are trying to pass a dimension or a shape as an argument \
+        to a defn function, for example:
+
+            defn my_defn(dim) do
+              Nx.iota({dim})
+            end
+
+        However, defn treats all arguments as inputs. To address this, you can pass \
+        the dimension or the shape as an option instead:
+
+            defn my_defn(opts \\ []) do
+              opts = keyword(opts, dim: 1)
+              Nx.iota({opts[:dim]})
+            end
+
+        Invalid shape: #{inspect(shape)}
+        """
+
+      true ->
+        raise ArgumentError,
+              "invalid dimension in axis #{pos - 1} found in #{kind}. Each dimension must be " <>
+                "a positive integer, got #{inspect(dim)} in shape #{inspect(shape)}"
     end
   end
 
@@ -484,30 +509,40 @@ defmodule Nx.Shape do
 
   ## Examples
 
-      iex> Nx.Shape.to_padding_config({2, 3, 2}, {2, 3, 2}, [1, 1, 1], :valid)
+      iex> Nx.Shape.to_padding_config({2, 3, 2}, {2, 3, 2}, :valid)
       [{0, 0}, {0, 0}, {0, 0}]
 
-      iex> Nx.Shape.to_padding_config({2, 3, 2}, {2, 3, 2}, [1, 1, 1], :valid, true)
-      [{0, 0, 0}, {0, 0, 0}, {0, 0, 0}]
-
-      iex> Nx.Shape.to_padding_config({12, 12}, {2, 2}, [1, 1], :same)
+      iex> Nx.Shape.to_padding_config({12, 12}, {2, 2}, :same)
       [{0, 1}, {0, 1}]
 
   ### Error cases
 
-      iex> Nx.Shape.to_padding_config({2, 3, 2}, {2, 3, 2}, [1, 1, 2], :foo)
+      iex> Nx.Shape.to_padding_config({2, 3, 2}, {2, 3, 2}, :foo)
       ** (ArgumentError) invalid padding mode specified, padding must be one of :valid, :same, or a padding configuration, got: :foo
 
   """
-  def to_padding_config(shape, kernel_size, strides, mode, interior \\ false) do
+  def to_padding_config(shape, kernel_size, mode) do
     case mode do
       :valid ->
-        pad_valid(shape, kernel_size, strides, interior)
+        List.duplicate({0, 0}, tuple_size(shape))
 
       :same ->
-        pad_same(shape, kernel_size, strides, interior)
+        Enum.zip_with(Tuple.to_list(shape), Tuple.to_list(kernel_size), fn dim, k ->
+          padding_size = max(dim - 1 + k - dim, 0)
+          {floor(padding_size / 2), ceil(padding_size / 2)}
+        end)
 
       config when is_list(config) ->
+        Enum.each(config, fn
+          {x, y} when is_integer(x) and is_integer(y) ->
+            :ok
+
+          _other ->
+            raise ArgumentError,
+                  "padding must be a list of {high, low} tuples, where each element is an integer. " <>
+                    "Got: #{inspect(config)}"
+        end)
+
         config
 
       mode ->
@@ -516,21 +551,6 @@ defmodule Nx.Shape do
                 " of :valid, :same, or a padding configuration, got:" <>
                 " #{inspect(mode)}"
     end
-  end
-
-  defp pad_valid(shape, _, _, interior) do
-    if interior,
-      do: List.duplicate({0, 0, 0}, tuple_size(shape)),
-      else: List.duplicate({0, 0}, tuple_size(shape))
-  end
-
-  defp pad_same(shape, kernel_size, strides, interior) do
-    Enum.zip_with([Tuple.to_list(shape), Tuple.to_list(kernel_size), strides], fn [dim, k, s] ->
-      padding_size = max((dim - 1) * s + k - dim, 0)
-      lo = floor(padding_size / 2)
-      hi = ceil(padding_size / 2)
-      if interior, do: {lo, hi, 0}, else: {lo, hi}
-    end)
   end
 
   @doc """
@@ -556,6 +576,26 @@ defmodule Nx.Shape do
   end
 
   @doc """
+  Early validation of conv! before remaining values are computed.
+  """
+  def validate_conv!(input_shape, kernel_shape) do
+    cond do
+      tuple_size(input_shape) < 3 ->
+        raise ArgumentError,
+              "input shape in conv requires at least rank 3," <>
+                " shape #{inspect(input_shape)} has rank #{tuple_size(input_shape)}"
+
+      tuple_size(kernel_shape) < 3 ->
+        raise ArgumentError,
+              "kernel shape in conv requires at least rank 3," <>
+                " shape #{inspect(kernel_shape)} has rank #{tuple_size(kernel_shape)}"
+
+      true ->
+        :ok
+    end
+  end
+
+  @doc """
   Output shape after a convolution.
   """
   def conv(
@@ -573,7 +613,6 @@ defmodule Nx.Shape do
         kernel_permutation,
         output_permutation
       ) do
-    validate_conv_ranks!(input_shape, kernel_shape)
     validate_conv_strides!(input_shape, strides)
     validate_conv_dilations!(input_shape, kernel_shape, input_dilation, kernel_dilation)
 
@@ -598,13 +637,7 @@ defmodule Nx.Shape do
       |> Tuple.delete_at(0)
       |> Tuple.delete_at(0)
 
-    padding_config =
-      to_padding_config(
-        spatial_dims,
-        filter_shape,
-        List.duplicate(1, tuple_size(spatial_dims)),
-        padding
-      )
+    padding_config = to_padding_config(spatial_dims, filter_shape, padding)
 
     old_spatial_dims =
       spatial_dims
@@ -623,23 +656,6 @@ defmodule Nx.Shape do
     {shape, names} = transpose(shape, inv_output_permutation, permuted_input_names)
 
     {shape, names, padding_config}
-  end
-
-  defp validate_conv_ranks!(input_shape, kernel_shape) do
-    cond do
-      tuple_size(input_shape) < 3 ->
-        raise ArgumentError,
-              "input shape in conv requires at least rank 3," <>
-                " shape #{inspect(input_shape)} has rank #{tuple_size(input_shape)}"
-
-      tuple_size(kernel_shape) < 3 ->
-        raise ArgumentError,
-              "kernel shape in conv requires at least rank 3," <>
-                " shape #{inspect(kernel_shape)} has rank #{tuple_size(kernel_shape)}"
-
-      true ->
-        :ok
-    end
   end
 
   defp validate_conv_strides!(input_shape, strides) do
@@ -722,8 +738,18 @@ defmodule Nx.Shape do
 
   defp do_conv_spatial_dims([], [], []), do: []
 
-  defp do_conv_spatial_dims([cur | spatial], [f | filters], [s | strides]),
-    do: [floor((cur - f) / s) + 1 | do_conv_spatial_dims(spatial, filters, strides)]
+  defp do_conv_spatial_dims([cur | spatial], [f | filters], [s | strides]) do
+    dim = floor((cur - f) / s) + 1
+
+    if dim <= 0 do
+      raise ArgumentError,
+            "conv would result in empty tensor which is" <>
+              " not currently supported in Nx, please open an" <>
+              " issue if you'd like this behavior to change"
+    else
+      [dim | do_conv_spatial_dims(spatial, filters, strides)]
+    end
+  end
 
   @doc """
   Output shape after a pooling or reduce window operation.
@@ -753,11 +779,8 @@ defmodule Nx.Shape do
 
     kernel_size = dilate(kernel_size, kernel_dilation)
 
-    padding_config =
-      to_padding_config(shape, kernel_size, List.duplicate(1, tuple_size(shape)), padding)
-
+    padding_config = to_padding_config(shape, kernel_size, padding)
     shape = pad(shape, Enum.map(padding_config, fn {x, y} -> {x, y, 0} end))
-
     {List.to_tuple(do_pool(strides, shape, kernel_size, 0)), padding_config}
   end
 
@@ -1685,8 +1708,8 @@ defmodule Nx.Shape do
         "tensor must have as many rows as columns, got shape: #{inspect(shape)}"
       )
 
-  def solve({n, n}, {n}), do: :ok
-  def solve({n, n}, {n, _m}), do: :ok
+  def solve({n, n}, {n}), do: {n}
+  def solve({n, n}, {n, m}), do: {n, m}
 
   def solve({n, n}, b_shape) do
     raise(

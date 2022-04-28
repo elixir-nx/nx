@@ -1,5 +1,9 @@
 defmodule Nx.BinaryBackend.Matrix do
   @moduledoc false
+  use Complex.Kernel
+  import Kernel, except: [abs: 1]
+  import Complex, only: [abs: 1]
+
   import Nx.Shared
 
   def ts(a_data, a_type, a_shape, b_data, b_type, b_shape, output_type, input_opts) do
@@ -163,7 +167,7 @@ defmodule Nx.BinaryBackend.Matrix do
   defp do_ts([row | rows], [b | bs], idx, acc) do
     value = Enum.fetch!(row, idx)
 
-    if value == 0 do
+    if Complex.abs(value) == 0 do
       raise ArgumentError, "can't solve for singular matrix"
     end
 
@@ -199,8 +203,11 @@ defmodule Nx.BinaryBackend.Matrix do
 
   defp qr_decomposition(matrix, m, n, eps) when m >= n do
     # QR decomposition is performed by using Householder transform
+
+    max_i = if m == n, do: n - 2, else: n - 1
+
     {q_matrix, r_matrix} =
-      for i <- 0..(n - 1), reduce: {nil, matrix} do
+      for i <- 0..max_i, reduce: {nil, matrix} do
         {q, r} ->
           h =
             r
@@ -307,19 +314,14 @@ defmodule Nx.BinaryBackend.Matrix do
     {approximate_zeros(hess_matrix, eps), approximate_zeros(q_matrix, eps)}
   end
 
-  # TODO: Eliminate this function and use the binary implementation
   defp is_approximately_same?(a, b, eps) do
     # Determine if matrices `a` and `b` are equal in the range of eps
-    Enum.zip(a, b)
+    a
+    |> Enum.zip(b)
     |> Enum.all?(fn {a_row, b_row} ->
-      Enum.zip(a_row, b_row)
-      |> Enum.map(&Tuple.to_list(&1))
-      |> Enum.all?(
-        &Enum.reduce(
-          &1,
-          fn a_elem, b_elem -> abs(a_elem - b_elem) <= eps end
-        )
-      )
+      a_row
+      |> Enum.zip(b_row)
+      |> Enum.all?(fn {a_elem, b_elem} -> abs(a_elem - b_elem) <= eps end)
     end)
   end
 
@@ -466,9 +468,6 @@ defmodule Nx.BinaryBackend.Matrix do
 
     {s, [vt_row | _] = vt} = apply_singular_value_corrections(s, vt)
 
-    # TODO: complete the vt matrix with linearly independent rows
-    # requires solving a homogeneous equation system for non-homogenous
-    # solutions
     if length(vt) != vt_rows or length(vt_row) != vt_cols do
       raise "vt matrix completion for wide-matrices not implemented for Nx.BinaryBackend"
     end
@@ -541,31 +540,8 @@ defmodule Nx.BinaryBackend.Matrix do
     Enum.chunk_every(flat_list, target_k)
   end
 
-  defp householder_reflector([a_0 | tail] = a, target_k, eps) do
-    # This is a trick so we can both calculate the norm of a_reverse and extract the
-    # head a the same time we reverse the array
-    # receives a_reverse as a list of numbers and returns the reflector as a
-    # k x k matrix
-
-    norm_a_squared = Enum.reduce(a, 0, fn x, acc -> x * x + acc end)
-    norm_a_sq_1on = norm_a_squared - a_0 * a_0
-
-    {v, scale} =
-      if norm_a_sq_1on < eps do
-        {[1 | tail], 0}
-      else
-        v_0 =
-          if a_0 <= 0 do
-            a_0 - :math.sqrt(norm_a_squared)
-          else
-            -norm_a_sq_1on / (a_0 + :math.sqrt(norm_a_squared))
-          end
-
-        v_0_sq = v_0 * v_0
-        scale = 2 * v_0_sq / (norm_a_sq_1on + v_0_sq)
-        v = [1 | Enum.map(tail, &(&1 / v_0))]
-        {v, scale}
-      end
+  defp householder_reflector(a, target_k, eps) do
+    {v, scale, is_complex} = householder_reflector_pivot(a, eps)
 
     prefix_threshold = target_k - length(v)
     v = List.duplicate(0, prefix_threshold) ++ v
@@ -577,6 +553,8 @@ defmodule Nx.BinaryBackend.Matrix do
     {_, _, reflector_reversed} =
       for col_factor <- v, row_factor <- v, reduce: {0, 0, []} do
         {row, col, acc} ->
+          row_factor = if is_complex, do: Complex.conjugate(row_factor), else: row_factor
+
           # The current element in outer(v, v) is given by col_factor * row_factor
           # and the current I element is 1 when row == col
           identity_element = if row == col, do: 1, else: 0
@@ -612,6 +590,51 @@ defmodule Nx.BinaryBackend.Matrix do
       end
 
     reflector
+  end
+
+  defp householder_reflector_pivot([a_0 | tail] = a, eps) when is_number(a_0) do
+    # This is a trick so we can both calculate the norm of a_reverse and extract the
+    # head a the same time we reverse the array
+    # receives a_reverse as a list of numbers and returns the reflector as a
+    # k x k matrix
+
+    norm_a_squared = Enum.reduce(a, 0, fn x, acc -> x * x + acc end)
+    norm_a_sq_1on = norm_a_squared - a_0 * a_0
+
+    if norm_a_sq_1on < eps do
+      {[1 | tail], 0, false}
+    else
+      v_0 =
+        if a_0 <= 0 do
+          a_0 - :math.sqrt(norm_a_squared)
+        else
+          -norm_a_sq_1on / (a_0 + :math.sqrt(norm_a_squared))
+        end
+
+      v_0_sq = v_0 * v_0
+      scale = 2 * v_0_sq / (norm_a_sq_1on + v_0_sq)
+      v = [1 | Enum.map(tail, &(&1 / v_0))]
+      {v, scale, false}
+    end
+  end
+
+  defp householder_reflector_pivot([a_0 | tail], _eps) do
+    # complex case
+    norm_a_sq_1on = Enum.reduce(tail, 0, &(Complex.abs_squared(&1) + &2))
+    norm_a_sq = norm_a_sq_1on + Complex.abs_squared(a_0)
+    norm_a = :math.sqrt(norm_a_sq)
+
+    phase_a_0 = Complex.phase(a_0)
+    alfa = Complex.exp(Complex.new(0, phase_a_0)) * norm_a
+
+    # u = x - alfa * e1
+    u_0 = a_0 + alfa
+    u = [u_0 | tail]
+    norm_u_sq = norm_a_sq_1on + Complex.abs_squared(u_0)
+    norm_u = :math.sqrt(norm_u_sq)
+
+    v = Enum.map(u, &(&1 / norm_u))
+    {v, 2, true}
   end
 
   defp householder_bidiagonalization(tensor, {m, n}, eps) do

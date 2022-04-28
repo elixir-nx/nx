@@ -1,9 +1,8 @@
 <h1><img src="https://github.com/elixir-nx/nx/raw/main/torchx/torchx.png" alt="Torchx" width="400"></h1>
 
-Elixir client for LibTorch (from PyTorch). It includes a backend for `Nx` for native
-execution of tensor operations (inside and outside of `defn`).
-
-This project is currently alpha and it supports only a fraction of `Nx`'s API.
+Elixir client for PyTorch (through the LibTorch C++ frontend).
+It includes a backend for `Nx` for native execution of tensor
+operations (inside and outside of `defn`).
 
 ## Installation
 
@@ -20,28 +19,55 @@ use a Git dependency while we work on our first release:
 ```elixir
 def deps do
   [
-    {:torchx, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "torchx"},
-    {:nx, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "nx", override: true}
+    {:torchx, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "torchx"}
   ]
 end
 ```
 
-We will automatically download a precompiled version of `LibTorch` that runs on the CPU.
-If you want to use another version, [download the .zip file of another `LibTorch` version
-from the official website](https://pytorch.org/get-started/locally/), unpack it to a
-directory of your choice and set the `LIBTORCH_DIR` [environment variable](https://en.wikipedia.org/wiki/Environment_variable)
-to point to the unpacked directory.
+If you are using Livebook or IEx, you can instead run:
 
-Once downloaded, we will compile `Torchx` bindings. You will need `make`, `cmake` (3.12+)
-and a `C++` compiler. If running on Windows, you will need:
+```elixir
+Mix.install([
+  {:torchx, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "torchx"}
+])
+```
+
+We will automatically download a precompiled version of `LibTorch` that
+runs on the CPU. If you want to use another version, you can set `LIBTORCH_VERSION`
+to one of the supported values:
+
+- 1.9.0
+- 1.9.1
+- 1.10.0
+- 1.10.1
+- 1.10.2
+
+If you want torch with CUDA support, please use `LIBTORCH_TARGET` to choose
+CUDA versions. The current supported targets are:
+
+- `cpu` default CPU only version
+- `cu102` CUDA 10.2 and CPU version (no OSX support)
+- `cu111` CUDA 11.1 and CPU version (no OSX support)
+
+Once downloaded, we will compile `Torchx` bindings. You will need `make`/`nmake`,
+`cmake` (3.12+) and a `C++` compiler. If building on Windows, you will need:
 
 - [Microsoft Build Tools 2019](https://visualstudio.microsoft.com/downloads/)
 - [Microsoft Visual C++ 2019 Redistributable](https://visualstudio.microsoft.com/downloads/)
 - [CMake](https://cmake.org/)
 
-Currently there are no precompiled versions available for Apple M1. [See this issue
-for more context](https://github.com/elixir-nx/nx/issues/593). Other platforms may
-also require compiling `libtorch` from scratch.
+For Apple M1-series, you can download precompiled LibTorch binaries with
+[Homebrew](https://brew.sh/):
+
+```shell
+brew install libtorch
+export LIBTORCH_DIR="$(brew --cellar libtorch)/$(brew list --versions libtorch | tr ' ' '\n' | tail -1)"
+# for convenience, the export above can be added to your .bashrc, .zshrc or equivalent
+# adding to .bashrc for example
+echo -e "\nexport LIBTORCH_DIR=\"${LIBTORCH_DIR}\"" >> .bashrc
+```
+
+Other platforms may require compiling `libtorch` from scratch.
 
 ## Usage
 

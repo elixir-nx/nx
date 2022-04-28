@@ -38,7 +38,7 @@ defmodule Nx.Backend do
   @type axes :: Nx.Tensor.axes()
   @type backend_options :: term()
 
-  @callback constant(out :: tensor, binary, backend_options) :: tensor
+  @callback constant(out :: tensor, number | Complex.t(), backend_options) :: tensor
   @callback from_binary(out :: tensor, binary, backend_options) :: tensor
   @callback eye(tensor, backend_options) :: tensor
   @callback iota(tensor, axis | nil, backend_options) :: tensor
@@ -112,13 +112,48 @@ defmodule Nx.Backend do
 
   unary_ops =
     Enum.map(Nx.Shared.unary_math_funs(), &elem(&1, 0)) ++
-      [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign] ++
-      [:count_leading_zeros, :population_count]
+      [:abs, :bitwise_not, :ceil, :conjugate, :floor, :negate, :round, :sign] ++
+      [:count_leading_zeros, :population_count, :real, :imag]
 
   for unary_op <- unary_ops do
     @callback unquote(unary_op)(out :: tensor, tensor) :: tensor
   end
 
+  ## Optional Callbacks
+
+  @doc """
+  Invoked for execution of optional callbacks with a default implementation.
+
+  First we will attempt to call the optional callback itself
+  (one of the many callbacks defined below), then we attempt
+  to call this callback (which is also optional), then we
+  fallback to the default iomplementation.
+  """
+  @callback optional(atom, [term], fun) :: tensor
+
+  @callback solve(out :: tensor, a :: tensor, b :: tensor) :: tensor
+  @callback determinant(out :: tensor, t :: tensor) :: tensor
+  @callback logical_not(out :: tensor, t :: tensor) :: tensor
+
+  @callback cumulative_sum(out :: tensor, t :: tensor, axis) :: tensor
+  @callback cumulative_product(out :: tensor, t :: tensor, axis) :: tensor
+  @callback cumulative_min(out :: tensor, t :: tensor, axis) :: tensor
+  @callback cumulative_max(out :: tensor, t :: tensor, axis) :: tensor
+
+  @optional_callbacks [
+    optional: 3,
+    solve: 3,
+    determinant: 2,
+    logical_not: 2,
+    cumulative_sum: 3,
+    cumulative_product: 3,
+    cumulative_min: 3,
+    cumulative_max: 3
+  ]
+
+  ## Inspect implementation
+
+  require Nx.Shared
   alias Inspect.Algebra, as: IA
 
   @doc """
@@ -138,26 +173,11 @@ defmodule Nx.Backend do
     data
   end
 
-  defp chunk([], data, {kind, size}, limit, _docs) do
-    # TODO: Simplify inspection once nonfinite are officially supported in the VM
-
+  defp chunk([], data, type, limit, _docs) do
     {doc, tail} =
-      case kind do
-        :s ->
-          <<head::size(size)-signed-native, tail::binary>> = data
-          {Integer.to_string(head), tail}
-
-        :u ->
-          <<head::size(size)-unsigned-native, tail::binary>> = data
-          {Integer.to_string(head), tail}
-
-        :f ->
-          <<head::size(size)-bitstring, tail::binary>> = data
-          {inspect_float(head, size), tail}
-
-        :bf ->
-          <<head::16-bitstring, tail::binary>> = data
-          {inspect_bf16(head), tail}
+      Nx.Shared.match_types [type] do
+        <<match!(head, 0), tail::binary>> = data
+        {inspect_value(read!(head, 0)), tail}
       end
 
     if limit == :infinity, do: {doc, tail, limit}, else: {doc, tail, limit - 1}
@@ -198,47 +218,10 @@ defmodule Nx.Backend do
     chunk_each(dim - 1, rest, [doc | acc], limit, fun)
   end
 
-  defp inspect_bf16(<<0xFF80::16-native>>), do: "-Inf"
-  defp inspect_bf16(<<0x7F80::16-native>>), do: "Inf"
-  defp inspect_bf16(<<0xFFC1::16-native>>), do: "NaN"
-  defp inspect_bf16(<<0xFF81::16-native>>), do: "NaN"
-
-  if System.endianness() == :little do
-    defp inspect_bf16(bf16) do
-      <<x::float-little-32>> = <<0::16, bf16::binary>>
-      Float.to_string(x)
-    end
-  else
-    defp inspect_bf16(bf16) do
-      <<x::float-big-32>> = <<bf16::binary, 0::16>>
-      Float.to_string(x)
-    end
-  end
-
-  defp inspect_float(data, 16) do
-    case data do
-      <<0xFC00::16-native>> -> "-Inf"
-      <<0x7C00::16-native>> -> "Inf"
-      <<x::float-16-native>> -> Float.to_string(x)
-      _ -> "NaN"
-    end
-  end
-
-  defp inspect_float(data, 32) do
-    case data do
-      <<0xFF800000::32-native>> -> "-Inf"
-      <<0x7F800000::32-native>> -> "Inf"
-      <<x::float-32-native>> -> Float.to_string(x)
-      _ -> "NaN"
-    end
-  end
-
-  defp inspect_float(data, 64) do
-    case data do
-      <<0x7FF0000000000000::64-native>> -> "Inf"
-      <<0xFFF0000000000000::64-native>> -> "-Inf"
-      <<x::float-64-native>> -> Float.to_string(x)
-      _ -> "NaN"
-    end
-  end
+  defp inspect_value(%Complex{} = val), do: Complex.to_string(val)
+  defp inspect_value(integer) when is_integer(integer), do: Integer.to_string(integer)
+  defp inspect_value(float) when is_float(float), do: Float.to_string(float)
+  defp inspect_value(:neg_infinity), do: "-Inf"
+  defp inspect_value(:infinity), do: "Inf"
+  defp inspect_value(:nan), do: "NaN"
 end

@@ -1,5 +1,7 @@
 defmodule TorchxTest do
-  use ExUnit.Case, async: true
+  use Torchx.Case, async: true
+
+  doctest Torchx
 
   describe "creation" do
     test "arange" do
@@ -40,11 +42,43 @@ defmodule TorchxTest do
 
       slice = fn t -> Nx.slice(t, [1, 1, 1], [6, 5, 4], strides: [2, 3, 1]) end
 
-      expected = tensor |> Nx.backend_transfer(Nx.BinaryBackend) |> then(slice)
+      expected = tensor |> Nx.backend_copy(Nx.BinaryBackend) |> then(slice)
 
       result = slice.(tensor)
 
       assert expected |> Nx.equal(result) |> Nx.all() |> Nx.to_number() == 1
+    end
+  end
+
+  describe "indexed_add" do
+    test "clamps when out of bounds" do
+      t = Nx.tensor([[1, 2], [3, 4]])
+
+      result = Nx.indexed_add(t, Nx.tensor([[3, -10]]), Nx.tensor([50]))
+
+      assert_all_close(result, Nx.tensor([[1, 2], [53, 4]]))
+    end
+  end
+
+  describe "gather" do
+    test "raises when out of bounds" do
+      t = Nx.tensor([[1, 2], [3, 4]])
+
+      result = Nx.gather(t, Nx.tensor([[3, -10]]))
+      assert_all_close(result, Nx.tensor([3]))
+    end
+  end
+
+  describe "concatenate" do
+    test "works with mixed backends" do
+      backends = [Nx.BinaryBackend, Torchx.Backend]
+
+      for b1 <- backends, b2 <- backends do
+        t1 = Nx.tensor([1, 2], backend: b1)
+        t2 = Nx.tensor([3, 4], backend: b2)
+
+        assert_equal(Nx.tensor([1, 2, 3, 4]), Nx.concatenate([t1, t2]))
+      end
     end
   end
 end

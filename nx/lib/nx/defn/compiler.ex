@@ -3,21 +3,26 @@ defmodule Nx.Defn.Compiler do
   The specification and helper functions for custom `defn` compilers.
   """
 
-  @type expr :: Nx.t() | tuple() | %{optional(term()) => expr()}
-
   @doc """
   Callback for JIT compilation.
 
   It receives an opaque `key` used for caching, the function
-  `vars`, the function which builds an expression, and the compiler
-  options.
+  `vars`, the function `fun` which builds a defn expression,
+  a list of argument list in `args_list`, and the compiler options.
 
-  It must call `fun` with the vars as a list of arguments.
-  Note the `key` does not include the `vars` in its cache.
-  Therefore, if you want to cache the result of `fun.(vars)`,
-  you likely want to include the vars in the cache key.
-  Given `vars` are all tensors, it is often a matter of
-  retrieving its type, shape, and names.
+  It must call `fun` with the `vars` as arguments. Note the `key`
+  does not include the `vars` in its cache. Therefore, if you want
+  to cache the result of `fun.(vars)`, you likely want to include
+  the vars in the cache key. `vars` is a flat list of tensor
+  templates, so they can be added directly as part of the cache
+  key or, most often, in function of their type and shape.
+
+  Once the expression is built and compiled, it must be invoked
+  for each list of arguments in `args_list`. In a nutshell, `vars`
+  are used to build the expression from `fun` which is then
+  invoked for each list of arguments in `args_list`. All lists
+  in `args_list` are guaranteed to be flat lists of the same length,
+  containing tensors of the same type, shape, and name.
 
   The callback uses double underscores so it can be defined
   at root modules without affecting the module's main API.
@@ -25,31 +30,41 @@ defmodule Nx.Defn.Compiler do
   @callback __jit__(
               key :: term,
               vars :: [Nx.t()],
-              ([Nx.t()] -> expr()),
+              fun :: ([Nx.t()] -> Nx.Container.t()),
+              args_list :: [[Nx.t()]],
               opts :: keyword
-            ) :: expr
+            ) :: [Nx.Container.t()]
 
   @doc """
   Callback for streaming (on top of JIT compilation).
 
-  It receives the same arguments as `c:__jit__/4` with the addition
-  of the streaming and accumulator templates. It must return a struct
-  that implements the `Nx.Stream` protocol.
+  It receives the same arguments as `c:__jit__/5` with the addition
+  of the streaming input and accumulator templates. If the input
+  and accumulator are containers, they are kept in their container
+  shapes. As in `c:__jit__/5`, both `vars` and `args_list` are flat
+  lists of tensors (without their container shape).
+
+  It must return a struct that implements the `Nx.Stream` protocol.
   """
   @callback __stream__(
               key :: term,
-              stream,
+              input,
               acc,
               vars :: [Nx.t()],
-              ([Nx.t()] -> acc),
+              fun :: ([Nx.t()] -> {output, acc}),
+              args_list :: [[Nx.t()]],
               opts :: keyword
-            ) :: Nx.Stream.t()
-            when stream: expr(), acc: expr()
+            ) :: [Nx.Stream.t()]
+            when input: Nx.Container.t(), output: Nx.Container.t(), acc: Nx.Container.t()
+
+  # Modules allowed in defn
+  @allowed_modules [Nx, Nx.Constants, Nx.Defn, Nx.Defn.Kernel, Nx.LinAlg]
 
   # These operations do not have valid meaning for Nx.Defn.Expr
   @forbidden_ops [:backend_copy, :backend_deallocate, :backend_transfer] ++
                    [:to_binary, :to_number, :to_flat_list, :to_heatmap, :to_batched_list] ++
-                   [:from_numpy, :from_numpy_archive, :compatible?, :default_backend]
+                   [:from_numpy, :from_numpy_archive, :compatible?, :default_backend] ++
+                   [:save, :load]
 
   defguardp is_var(var)
             when is_tuple(var) and tuple_size(var) == 3 and is_atom(elem(var, 0)) and
@@ -71,31 +86,37 @@ defmodule Nx.Defn.Compiler do
   ## JIT/Stream
 
   @doc false
-  def __jit__(fun, args, opts) do
-    {compiler, tail} = runtime(fun, args, opts)
+  def __jit__(fun, args_list, opts) do
+    {compiler, tail} = runtime(fun, args_list, opts)
     Kernel.apply(compiler, :__jit__, [fun | tail])
   end
 
   @doc false
   def __stream__(fun, input, acc, args, opts) do
-    {compiler, tail} = runtime(fun, [input, acc | args], opts)
+    {compiler, tail} = runtime(fun, [[input, acc | args]], opts)
     Kernel.apply(compiler, :__stream__, [fun, input, acc | tail])
   end
 
-  defp runtime(fun, args, opts) do
+  defp runtime(fun, [container_template | _] = args_list, opts) do
     {compiler, opts} = Keyword.pop(opts, :compiler, Nx.Defn.Evaluator)
-    tensors = Nx.Defn.Composite.from_runtime_args(args, [])
-    runtime_fun = &runtime_fun(&1, fun, args, compiler)
-    {compiler, [tensors, runtime_fun, opts]}
+
+    # Flatten all arguments in the args list
+    args_list = Enum.map(args_list, &Nx.Defn.Composite.flatten_runtime_args(&1, []))
+
+    # And use the first one to act as a template
+    flat_template = args_list |> hd() |> Enum.map(&put_in(&1.data, %Nx.TemplateBackend{}))
+
+    runtime_fun = &runtime_fun(&1, fun, container_template, compiler)
+    {compiler, [flat_template, runtime_fun, args_list, opts]}
   end
 
-  defp runtime_fun(tensors, fun, args, compiler) do
+  defp runtime_fun(flat_template, fun, container_template, compiler) do
     tuple = Nx.default_backend()
     Nx.default_backend(Nx.Defn.Expr)
     Process.put(Nx.Defn.Compiler, compiler)
 
     try do
-      args = Nx.Defn.Composite.args_to_params(args, tensors)
+      args = Nx.Defn.Composite.flat_to_container_params(flat_template, container_template)
 
       fun
       |> apply(args)
@@ -120,8 +141,20 @@ defmodule Nx.Defn.Compiler do
               if function_exported?(module, function, length(args)) do
                 formatted = Exception.format_mfa(module, function, length(args))
 
-                reraise "cannot invoke #{formatted} inside defn because it was not defined with defn",
-                        stack
+                message =
+                  "cannot invoke #{formatted} inside defn because it was not defined with defn"
+
+                detail =
+                  case module do
+                    IO ->
+                      ". To print the runtime value of a tensor, use inspect_value/2. " <>
+                        "To print the tensor expression, use inspect_expr/2"
+
+                    _ ->
+                      ""
+                  end
+
+                reraise message <> detail, stack
               else
                 [{module, function, args_or_arity, info} | stack]
               end
@@ -206,14 +239,13 @@ defmodule Nx.Defn.Compiler do
     {compiler, compiler_opts} =
       Keyword.pop(Nx.Defn.default_options(), :compiler, Nx.Defn.Evaluator)
 
-    {cache, tensors} = Nx.Defn.Composite.from_compile_args(args, fun)
+    {cache, tensors} = Nx.Defn.Composite.flatten_compile_args(args, fun)
+    tensors = Nx.Defn.Composite.flatten_runtime_args(tensors, [])
+    vars = Enum.map(tensors, &put_in(&1.data, %Nx.TemplateBackend{}))
+    runtime_fun = &runtime_fun(&1, fun, args, compiler)
 
-    compiler.__jit__(
-      cache,
-      Nx.Defn.Composite.from_runtime_args(tensors, []),
-      &runtime_fun(&1, fun, args, compiler),
-      compiler_opts
-    )
+    [res] = compiler.__jit__(cache, vars, runtime_fun, [tensors], compiler_opts)
+    res
   end
 
   defp get_and_normalize_definition(def, state) do
@@ -318,14 +350,28 @@ defmodule Nx.Defn.Compiler do
     {ast, state}
   end
 
-  defp normalize({name, meta, args} = expr, state) when is_atom(name) and is_list(args) do
-    pair = {name, length(args)}
+  defp normalize({name, meta, args}, state) when is_atom(name) and is_list(args) do
+    arity = length(args)
+    pair = {name, arity}
 
-    if pair in state.defns do
-      {args, state} = normalize_list(args, state)
-      {{defn_name(name), meta, args}, state}
-    else
-      invalid_numerical_expression!(expr, state)
+    cond do
+      pair in state.defns ->
+        {args, state} = normalize_list(args, state)
+        {{defn_name(name), meta, args}, state}
+
+      Module.defines?(state.module, {name, arity}) ->
+        compile_error!(
+          meta,
+          state,
+          "cannot use function #{name}/#{arity} inside defn because it was not defined with defn"
+        )
+
+      true ->
+        compile_error!(
+          meta,
+          state,
+          "undefined function #{name}/#{arity} (there is no such import)"
+        )
     end
   end
 
@@ -369,8 +415,7 @@ defmodule Nx.Defn.Compiler do
     {{call, meta, [token, ast | rest]}, state}
   end
 
-  defp normalize({{:., dot_meta, [mod, name]}, meta, args}, state)
-       when mod in [Nx, Nx.LinAlg, Nx.Defn, Nx.Defn.Kernel] do
+  defp normalize({{:., dot_meta, [mod, name]}, meta, args}, state) when mod in @allowed_modules do
     if name in @forbidden_ops do
       mfa = Exception.format_mfa(mod, name, length(args))
       compile_error!(meta, state, "#{mfa} is not allowed inside defn")

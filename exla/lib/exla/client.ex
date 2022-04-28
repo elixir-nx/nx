@@ -66,7 +66,7 @@ defmodule EXLA.Client do
   end
 
   @doc """
-  Sends buffer from device outfeed to the given process tagged by `ref``.
+  Sends buffer from device outfeed to the given process tagged by `ref`.
 
   > Note: XLA does not support tuple outfeed shapes. Passing one will simply
   > block the operation indefinitely. Instead, convert the tuple into multiple
@@ -75,6 +75,14 @@ defmodule EXLA.Client do
   def from_outfeed(%EXLA.Client{ref: client}, device_id, shapes, pid, ref) when is_list(shapes) do
     shape_refs = Enum.map(shapes, fn %EXLA.Shape{ref: shape_ref} -> shape_ref end)
     EXLA.NIF.transfer_from_outfeed(client, device_id, shape_refs, pid, ref) |> unwrap!()
+  end
+
+  @doc """
+  Copies buffer to device with given device ID.
+  """
+  def copy_buffer_to_device(%EXLA.Client{ref: client}, %EXLA.DeviceBuffer{ref: buffer}, device_id)
+      when is_integer(device_id) do
+    EXLA.NIF.copy_buffer_to_device(client, buffer, device_id) |> unwrap!()
   end
 
   ## Callbacks

@@ -2,7 +2,11 @@ defmodule Nx.LinAlgTest do
   use ExUnit.Case, async: true
 
   import Nx.Helpers
+  import Nx, only: :sigils
+
   doctest Nx.LinAlg
+
+  @types [{:f, 32}, {:c, 64}]
 
   describe "triangular_solve" do
     test "property" do
@@ -25,6 +29,64 @@ defmodule Nx.LinAlgTest do
                Nx.transpose(a),
                Nx.LinAlg.triangular_solve(a, b, transform_a: :transpose)
              ) == b
+    end
+  end
+
+  describe "solve/2" do
+    test "does not preserve names" do
+      a = Nx.tensor([[1, 0, 1], [1, 1, 0], [1, 1, 1]], names: [:x, :y])
+
+      assert Nx.LinAlg.solve(a, Nx.tensor([0, 2, 1], names: [:z])) |> Nx.round() ==
+               Nx.tensor([1.0, 1.0, -1.0])
+    end
+
+    test "works with complex tensors" do
+      a = ~M[
+        1 0 i
+       -1i 0 1i
+        1 1 1
+      ]
+
+      b = ~V[3+i 4 2-2i]
+
+      result = ~V[i 2 -3i]
+
+      assert_all_close(Nx.LinAlg.solve(a, b), result)
+    end
+  end
+
+  describe "invert" do
+    test "works with complex tensors" do
+      a = ~M[
+        1 0 i
+        0 -1i 0
+        0 0 2
+      ]
+
+      expected_result = ~M[
+        1 0 -0.5i
+        0 1i 0
+        0 0 0.5
+      ]
+
+      result = Nx.LinAlg.invert(a)
+
+      assert_all_close(result, expected_result)
+
+      assert_all_close(Nx.dot(a, result), Nx.eye(a))
+      assert_all_close(Nx.dot(result, a), Nx.eye(a))
+    end
+  end
+
+  describe "determinant/1" do
+    test "does not preserve names" do
+      two_by_two = Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
+      assert Nx.LinAlg.determinant(two_by_two) == Nx.tensor(-2.0)
+
+      three_by_three =
+        Nx.tensor([[1.0, 2.0, 3.0], [1.0, -2.0, 3.0], [7.0, 8.0, 9.0]], names: [:x, :y])
+
+      assert Nx.LinAlg.determinant(three_by_three) == Nx.tensor(48.0)
     end
   end
 
@@ -55,6 +117,42 @@ defmodule Nx.LinAlgTest do
       assert_raise(ArgumentError, "invalid :ord for 2-D tensor, got: -3", fn ->
         Nx.LinAlg.norm(t, ord: -3)
       end)
+    end
+  end
+
+  describe "matrix_power" do
+    test "supports complex with positive exponent" do
+      a = ~M[
+        1 1i
+        -1i 1
+      ]
+
+      n = 5
+
+      assert_all_close(Nx.LinAlg.matrix_power(a, n), Nx.multiply(2 ** (n - 1), a))
+    end
+
+    test "supports complex with 0 exponent" do
+      a = ~M[
+        1 1i
+        -1i 1
+      ]
+
+      assert_all_close(Nx.LinAlg.matrix_power(a, 0), Nx.eye(a))
+    end
+
+    test "supports complex with negative exponent" do
+      a = ~M[
+        1 -0.5i
+        0 0.5
+      ]
+
+      result = ~M[
+        1 15i
+        0 16
+      ]
+
+      assert_all_close(Nx.LinAlg.matrix_power(a, -4), result)
     end
   end
 
@@ -138,11 +236,34 @@ defmodule Nx.LinAlgTest do
       assert_all_close(Nx.dot(q, r), t, atol: 1.0e-10)
     end
 
+    test "works with complex matrix" do
+      t = ~M[
+        1 0 1i
+        0 2 -1i
+        1 1 1
+      ]
+
+      {q, r} = Nx.LinAlg.qr(t)
+
+      assert_all_close(q, ~M[
+        -0.7071 0.2357  -0.6666
+         0      -0.9428   -0.3333
+        -0.7071 -0.2357  0.6666
+      ])
+
+      assert_all_close(r, ~M[
+        -1.4142 -0.7071 -0.7071-0.7071i
+        0      -2.1213  -0.2357+1.1785i
+        0      0      0.6666-0.3333i
+      ])
+
+      assert_all_close(Nx.dot(q, r), t)
+    end
+
     test "property" do
-      for _ <- 1..10 do
-        # TODO: Implement the case of wide-matrix QR
-        square = Nx.random_uniform({4, 4})
-        tall = Nx.random_uniform({4, 3})
+      for _ <- 1..10, type <- [{:f, 32}, {:c, 64}] do
+        square = Nx.random_uniform({4, 4}, type: type)
+        tall = Nx.random_uniform({4, 3}, type: type)
 
         assert {q, r} = Nx.LinAlg.qr(square)
         assert_all_close(Nx.dot(q, r), square, atol: 1.0e-6)
@@ -342,7 +463,7 @@ defmodule Nx.LinAlgTest do
 
   describe "lu" do
     test "property" do
-      for _ <- 1..10 do
+      for _ <- 1..10, type <- [{:f, 32}, {:c, 64}] do
         # Generate random L and U matrices so we can construct
         # a factorizable A matrix:
         shape = {4, 4}
@@ -351,10 +472,10 @@ defmodule Nx.LinAlgTest do
 
         l_prime =
           shape
-          |> Nx.random_uniform()
+          |> Nx.random_uniform(type: type)
           |> Nx.multiply(lower_selector)
 
-        u_prime = shape |> Nx.random_uniform() |> Nx.multiply(upper_selector)
+        u_prime = shape |> Nx.random_uniform(type: type) |> Nx.multiply(upper_selector)
 
         a = Nx.dot(l_prime, u_prime)
 
@@ -366,7 +487,7 @@ defmodule Nx.LinAlgTest do
 
   describe "cholesky" do
     test "property" do
-      for _ <- 1..10 do
+      for _ <- 1..10, type <- @types do
         # Generate random L matrix so we can construct
         # a factorizable A matrix:
         shape = {4, 4}
@@ -374,13 +495,13 @@ defmodule Nx.LinAlgTest do
 
         l_prime =
           shape
-          |> Nx.random_uniform()
+          |> Nx.random_uniform(type: type)
           |> Nx.multiply(lower_selector)
 
-        a = Nx.dot(l_prime, Nx.transpose(l_prime))
+        a = Nx.dot(l_prime, Nx.LinAlg.adjoint(l_prime))
 
         assert l = Nx.LinAlg.cholesky(a)
-        assert_all_close(Nx.dot(l, Nx.transpose(l)), a, atol: 1.0e-2)
+        assert_all_close(Nx.dot(l, Nx.LinAlg.adjoint(l)), a, atol: 1.0e-2)
       end
     end
   end

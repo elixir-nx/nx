@@ -1,6 +1,6 @@
-defmodule EXLA.Buffer do
+defmodule EXLA.DeviceBuffer do
   @moduledoc """
-  An EXLA Buffer for data allocated in the device.
+  An EXLA DeviceBuffer for data allocated in the device.
   """
 
   alias __MODULE__
@@ -11,7 +11,7 @@ defmodule EXLA.Buffer do
 
   @doc false
   def from_ref(ref, %Client{name: name}, device_id, shape) when is_reference(ref) do
-    %Buffer{ref: ref, client_name: name, device_id: device_id, shape: shape}
+    %DeviceBuffer{ref: ref, client_name: name, device_id: device_id, shape: shape}
   end
 
   @doc """
@@ -24,7 +24,7 @@ defmodule EXLA.Buffer do
       |> EXLA.NIF.binary_to_device_mem(data, shape.ref, device_id)
       |> unwrap!()
 
-    %Buffer{ref: ref, client_name: client.name, device_id: device_id, shape: shape}
+    %DeviceBuffer{ref: ref, client_name: client.name, device_id: device_id, shape: shape}
   end
 
   @doc """
@@ -34,7 +34,7 @@ defmodule EXLA.Buffer do
   without destroying it. If `size` is negative, then it
   reads the whole buffer.
   """
-  def read(%Buffer{ref: ref, client_name: client_name}, size \\ -1) do
+  def read(%DeviceBuffer{ref: ref, client_name: client_name}, size \\ -1) do
     client = EXLA.Client.fetch!(client_name)
     binary = EXLA.NIF.read_device_mem(client.ref, ref, size) |> unwrap!()
     binary
@@ -45,7 +45,7 @@ defmodule EXLA.Buffer do
 
   Returns `:ok` | `:already_deallocated`.
   """
-  def deallocate(%Buffer{ref: ref}),
+  def deallocate(%DeviceBuffer{ref: ref}),
     do: EXLA.NIF.deallocate_device_mem(ref) |> unwrap!()
 
   defp unwrap!({:ok, ref}), do: ref

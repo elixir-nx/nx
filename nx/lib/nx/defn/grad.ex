@@ -136,6 +136,9 @@ defmodule Nx.Defn.Grad do
   defp reduce_args(:while, %{data: %{args: [initial | _]}}, acc, fun),
     do: Composite.reduce(initial, acc, fun)
 
+  defp reduce_args(:optional, %{data: %{args: [_expr, default_impl_expr]}}, acc, fun),
+    do: fun.(default_impl_expr, acc)
+
   defp reduce_args(_op, t, acc, fun),
     do: Tree.apply_args(t, acc, &{&1, fun.(&1, &2)}) |> elem(1)
 
@@ -555,34 +558,34 @@ defmodule Nx.Defn.Grad do
     {q, r} = Nx.Defn.Expr.tuple(ans, [q, r])
     r_inv = Nx.LinAlg.invert(r)
 
-    m = Nx.dot(r, Nx.transpose(dr)) |> Nx.subtract(Nx.dot(Nx.transpose(dq), q))
+    m = Nx.dot(r, Nx.LinAlg.adjoint(dr)) |> Nx.subtract(Nx.dot(Nx.LinAlg.adjoint(dq), q))
 
     # copyltu
-    m_ltu = tril(m) |> Nx.add(m |> tril_strict() |> Nx.transpose())
+    m_ltu = tril(m) |> Nx.add(m |> tril_strict() |> Nx.LinAlg.adjoint())
 
-    da = dq |> Nx.add(Nx.dot(q, m_ltu)) |> Nx.dot(Nx.transpose(r_inv))
+    da = dq |> Nx.add(Nx.dot(q, m_ltu)) |> Nx.dot(Nx.LinAlg.adjoint(r_inv))
 
     [{input, da}]
   end
 
   defp grad(:lu, [{p, l, u}, input, _opts], ans, [_dp, dl, du]) do
     # Definition taken from: https://sethaxen.com/blog/2021/02/differentiating-the-lu-decomposition/
-    # Where dF = tril_strict(L^t . dL) + triu(dU . U^t)
-    # dA = P^t . (L^t)^-1 . dF . (U^t)^-1
+    # Where dF = tril_strict(L^* . dL) + triu(dU . U^*)
+    # dA = P^t . (L^*)^-1 . dF . (U^*)^-1
 
     {p, l, u} = Nx.Defn.Expr.tuple(ans, [p, l, u])
 
-    u_t = Nx.transpose(u)
-    l_t = Nx.transpose(l)
-    p_t = Nx.transpose(p)
+    u_h = Nx.LinAlg.adjoint(u)
+    l_h = Nx.LinAlg.adjoint(l)
+    p_t = Nx.LinAlg.adjoint(p)
 
-    lt_dl = Nx.dot(l_t, dl)
-    du_ut = Nx.dot(du, u_t)
+    lh_dl = Nx.dot(l_h, dl)
+    du_uh = Nx.dot(du, u_h)
 
-    lt_inv = Nx.LinAlg.invert(l_t)
-    ut_inv = Nx.LinAlg.invert(u_t)
+    lt_inv = Nx.LinAlg.invert(l_h)
+    ut_inv = Nx.LinAlg.invert(u_h)
 
-    df = lt_dl |> tril_strict() |> Nx.add(triu(du_ut))
+    df = lh_dl |> tril_strict() |> Nx.add(triu(du_uh))
     da = p_t |> Nx.dot(lt_inv) |> Nx.dot(df) |> Nx.dot(ut_inv)
 
     [{input, da}]
@@ -780,12 +783,55 @@ defmodule Nx.Defn.Grad do
     [unbroadcast(x, Nx.multiply(g, lhs), ans), unbroadcast(y, Nx.multiply(g, rhs), ans)]
   end
 
+  defp grad(:as_type, [%{type: {:c, _}} = x], %{type: {output_type, _}}, g)
+       when output_type != :c do
+    # For downcasting complex to float or integer types, `as_type/2`
+    # behaves as: `x |> real() |> as_type(output_type)`
+    # Therefore, since as_type doesn't have an intrisic grad in itself,
+    # the grad for this case should be the same as `real/1`.
+    #
+    # For reference, the grad for `real/1` just takes the real part of
+    # the accumulated grad
+    [{x, Nx.real(g)}]
+  end
+
   defp grad(:as_type, [x], _ans, g) do
     [{x, g}]
   end
 
   defp grad(:bitcast, [x], _ans, g) do
     [{x, g}]
+  end
+
+  defp grad(:abs, [%{type: {:c, _}} = z], ans, g) do
+    # For the complex variant of abs(z), we can define the forward-mode
+    # derivative abs'(z) as follows (for an element-wise function):
+    # abs(z)^2 = z.z*
+    # 2*abs(z)*abs'(z) = z'.z* + z.(z')* = 2*real(z*.z')
+    # abs'(z) = [2*real(z*.z')] / [2*abs(z)]
+    # Which is the same as f(z) / (2*abs(z)) where f(z) = d(abs(z)^2)/dz
+    # A similar definition can also be found as _abs_jvp_rule in Jax.
+
+    # Furthermore, abs(z) is always real, so conj(abs(z)) = abs(z).
+    # This allows us to use the definition at https://juliadiff.org/ChainRulesCore.jl/stable/maths/arrays.html
+    # for the abs_squared reverse-mode derivative:
+    # dz = re(g).conj(z)/(2.ans) (where . and / are element-wise multiplication and division)
+    # Where (2.ans) is the correction factor that appears from our adapted definition.
+    # Also note that we use conj(z) instead of z because we're not dealing with a real tensor.
+
+    # The final correction we need to apply is for the edge case where ans[i,j] = 0.
+    # In this scenario, the function dz is undefined, but we can work around this
+    # by taking inspiration from the real case below. This leads to the conclusion
+    # that abs(0) = 0 is the identity function. Having this in mind, we know that
+    # real(g) would be a number, but, more importantly, conj(0) = 0, which takes
+    # the numerator for our dz definition to 0.
+    # Finally, this allows us to replace the 0-elements in `ans` with 1 (or any number, really)
+    # taking dz to 0 at those positions.
+
+    mask = Nx.equal(ans, 0)
+    ans_no_zero = Nx.select(mask, 1, ans)
+    dz = g |> Nx.real() |> Nx.multiply(Nx.conjugate(z)) |> Nx.divide(ans_no_zero)
+    [{z, dz}]
   end
 
   defp grad(:abs, [x], _ans, g) do
@@ -916,6 +962,26 @@ defmodule Nx.Defn.Grad do
 
   defp grad(:attach_token, [_, x], _ans, g) do
     [{x, g}]
+  end
+
+  defp grad(:conjugate, [%{type: {type, _}} = t], _ans, g) do
+    if type == :c do
+      [{t, Nx.conjugate(g)}]
+    else
+      [{t, Nx.real(g)}]
+    end
+  end
+
+  defp grad(:real, [t], _ans, g) do
+    # real(z) = (z + conj(z))/2
+    # real'(z) = (z' + (conj(z))')/2 = (z' + conj(z'))/2 = real(z')
+    [{t, Nx.real(g)}]
+  end
+
+  defp grad(:imag, [t], _ans, g) do
+    # imag(z) = (z - z*) / 2i
+    # imag'(z) = z' - z'* / 2i = imag(z')
+    [{t, Nx.imag(g)}]
   end
 
   defp grad(:quotient, _, _, _) do

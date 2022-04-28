@@ -214,6 +214,20 @@ defmodule Nx.DefnTest do
       assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :reduce}} =
                calls_reduce_fun(&Nx.add/2, Nx.tensor([1, 2, 3]))
     end
+
+    defn calls_binary_funs({funa, funb}, a, b), do: {funa.(a, b), funb.(a, b)}
+
+    test "receives multiple anonymous functions in tuple" do
+      assert {fun_left, fun_right} = calls_binary_funs({&Nx.add/2, &Nx.subtract/2}, 1, 2.0)
+
+      %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} = fun_left
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
+
+      %T{shape: {}, type: {:f, 32}, data: %Expr{op: :subtract, args: [left, right]}} = fun_right
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
+    end
   end
 
   describe "unary ops" do
@@ -328,6 +342,12 @@ defmodule Nx.DefnTest do
     test "random normal" do
       assert %T{shape: {3}, data: %Expr{op: :random_normal, args: [%T{shape: {}}, %T{shape: {}}]}} =
                random_normal(Nx.tensor([1, 2, 3]))
+    end
+
+    test "raise an error given a shape tuple with tensor values" do
+      assert_raise ArgumentError,
+                   ~r"invalid dimension in axis 0 found in shape.*if you are trying to pass a dimension or a shape as an argument to a defn function"s,
+                   fn -> iota({10}) end
     end
   end
 
@@ -585,7 +605,8 @@ defmodule Nx.DefnTest do
     defn lnot_true(), do: not transform({}, fn _ -> true end)
 
     test "not" do
-      assert %T{data: %Expr{op: :equal, args: [_, _]}} = lnot(1)
+      assert %T{data: %Expr{op: :optional, args: [%T{data: %Expr{op: :logical_not}}, _]}} =
+               lnot(1)
 
       assert_raise ArgumentError, ~r/boolean value passed to Nx.Defn.Kernel.not\/1/, fn ->
         lnot_true()
@@ -910,6 +931,8 @@ defmodule Nx.DefnTest do
     def not_defn(a, b), do: Nx.add(a, b)
     defn add_two_not_defn(a, b), do: Nx.DefnTest.not_defn(a, b)
 
+    defn add_two_io(a, b), do: IO.inspect({a, b})
+
     test "undefined remote" do
       assert_raise UndefinedFunctionError,
                    "function Nx.DefnTest.unknown/2 is undefined or private",
@@ -920,6 +943,14 @@ defmodule Nx.DefnTest do
       assert_raise RuntimeError,
                    "cannot invoke Nx.DefnTest.not_defn/2 inside defn because it was not defined with defn",
                    fn -> add_two_not_defn(1, 2) end
+    end
+
+    test "IO remote" do
+      assert_raise RuntimeError,
+                   "cannot invoke IO.inspect/1 inside defn because it was not defined with defn. " <>
+                     "To print the runtime value of a tensor, use inspect_value/2. " <>
+                     "To print the tensor expression, use inspect_expr/2",
+                   fn -> add_two_io(1, 2) end
     end
   end
 
@@ -1098,6 +1129,25 @@ defmodule Nx.DefnTest do
       assert_raise CompileError,
                    ~r/the do-block in while must return the shape, type, and names as the initial arguments. Got body \{f32, f32\} and initial \{s64, f32\}/,
                    fn -> factorial(10.0) end
+    end
+
+    defn add_complex(t) do
+      Nx.complex(t, 2)
+    end
+
+    test "complex numbers" do
+      t = add_complex(1)
+
+      assert inspect(t) ==
+               """
+               #Nx.Tensor<
+                 c64\n\s\s
+                 Nx.Defn.Expr
+                 parameter a:0         s64
+                 b = add 0.0+2.0i, a   c64
+               >
+               """
+               |> String.trim()
     end
 
     defn while_mixed_return(a, b) do
@@ -1285,18 +1335,34 @@ defmodule Nx.DefnTest do
   end
 
   describe "compilation errors" do
-    test "invalid numerical expression" do
-      assert_raise CompileError, ~r"#{location(+5)}: invalid numerical expression", fn ->
-        defmodule Sample do
-          import Nx.Defn
+    test "undefined local function" do
+      assert_raise CompileError,
+                   ~r"#{location(+6)}: undefined function do_add/2 \(there is no such import\)",
+                   fn ->
+                     defmodule Sample do
+                       import Nx.Defn
 
-          defn add(_a, _b) do
-            receive do
-              :ok -> :ok
-            end
-          end
-        end
-      end
+                       defn add(a, b) do
+                         do_add(a, b)
+                       end
+                     end
+                   end
+    end
+
+    test "non-defn local function" do
+      assert_raise CompileError,
+                   ~r"#{location(+6)}: cannot use function do_add/2 inside defn because it was not defined with defn",
+                   fn ->
+                     defmodule Sample do
+                       import Nx.Defn
+
+                       defn add(a, b) do
+                         do_add(a, b)
+                       end
+
+                       defp do_add(a, b), do: a + b
+                     end
+                   end
     end
 
     test "non-variables used as arguments" do

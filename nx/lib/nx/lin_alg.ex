@@ -5,11 +5,44 @@ defmodule Nx.LinAlg do
 
   import Nx.Shared
   import Nx.Defn, only: [defn: 2, defnp: 2]
-  import Nx.Defn.Kernel, only: [keyword!: 2, custom_grad: 2]
+  import Nx.Defn.Kernel, only: [keyword!: 2, custom_grad: 2, assert_shape_pattern: 2]
 
   alias Nx.Tensor, as: T
 
   @default_eps 1.0e-10
+
+  @doc """
+  Returns the adjoint of a given tensor.
+
+  If the input tensor is real, it is the same as `Nx.transpose/2`.
+  Otherwise, it is the same as `tensor |> Nx.transpose(opts) |> Nx.conjugate()`.
+
+  ## Examples
+
+      iex> Nx.LinAlg.adjoint(Nx.tensor([[1, 2], [3, 4]]))
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 3],
+          [2, 4]
+        ]
+      >
+
+      iex> Nx.LinAlg.adjoint(Nx.tensor([[1, Complex.new(0, 2)], [3, Complex.new(0, -4)]]))
+      #Nx.Tensor<
+        c64[2][2]
+        [
+          [1.0+0.0i, 3.0+0.0i],
+          [0.0-2.0i, 0.0+4.0i]
+        ]
+      >
+  """
+  defn adjoint(t, opts \\ []) do
+    transform(t, fn
+      %{type: {:c, _}} = t -> t |> Nx.transpose(opts) |> Nx.conjugate()
+      t -> Nx.transpose(t, opts)
+    end)
+  end
 
   @doc """
   Performs a Cholesky decomposition of a square matrix.
@@ -47,10 +80,19 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> Nx.LinAlg.cholesky(Nx.tensor([[1.0, Complex.new(0, -2)], [Complex.new(0, 2), 5.0]]))
+      #Nx.Tensor<
+        c64[2][2]
+        [
+          [1.0+0.0i, 0.0+0.0i],
+          [0.0+2.0i, 1.0+0.0i]
+        ]
+      >
+
   ### Error cases
 
       iex> Nx.LinAlg.cholesky(Nx.tensor([[1.0, 2.0], [3.0, 4.0]]))
-      ** (ArgumentError) matrix must be symmetric, a matrix is symmetric iff X = X.T
+      ** (ArgumentError) matrix must be hermitian, a matrix is hermitian iff X = adjoint(X)
   """
   def cholesky(tensor) do
     %T{type: type, shape: shape, names: names} = tensor = Nx.to_tensor(tensor)
@@ -178,19 +220,35 @@ defmodule Nx.LinAlg do
         [5.0, 4.0]
       >
 
+      iex> Nx.LinAlg.norm(Nx.tensor([[Complex.new(0, 3), 4], [4, 0]]), axes: [0])
+      #Nx.Tensor<
+        f32[2]
+        [5.0, 4.0]
+      >
+
+      iex> Nx.LinAlg.norm(Nx.tensor([[Complex.new(0, 3), 0], [4, 0]]), ord: :neg_inf)
+      #Nx.Tensor<
+        f32
+        3.0
+      >
+
   ### Error cases
 
       iex> Nx.LinAlg.norm(Nx.tensor([3, 4]), ord: :frobenius)
       ** (ArgumentError) expected a 2-D tensor for ord: :frobenius, got a 1-D tensor
   """
   @doc from_backend: false
-  def norm(tensor, opts \\ []) when is_list(opts) do
-    %{shape: s} = t = Nx.to_tensor(tensor)
+  defn norm(tensor, opts \\ []) do
     opts = keyword!(opts, [:ord, :axes])
+    transform(tensor, &norm_transform(&1, opts))
+  end
+
+  defp norm_transform(t, opts) do
     rank = Nx.rank(t)
 
-    unless rank == 1 or rank == 2,
-      do: raise(ArgumentError, "expected 1-D or 2-D tensor, got tensor with shape #{inspect(s)}")
+    unless rank == 1 or rank == 2 do
+      raise ArgumentError, "expected 1-D or 2-D tensor, got tensor with shape #{inspect(t.shape)}"
+    end
 
     axes_opts = Keyword.take(opts, [:axes])
 
@@ -217,7 +275,7 @@ defmodule Nx.LinAlg do
   end
 
   defp norm_inf(%{shape: shape, type: type} = t, ord, _opts) when ord in [:inf, :neg_inf] do
-    output_type = Nx.Type.to_floating(type)
+    output_type = Nx.Type.to_real(type)
     aggregate_axes = if tuple_size(shape) == 2, do: &Nx.sum(&1, axes: [1]), else: & &1
     reduce = if ord == :inf, do: &Nx.reduce_max/1, else: &Nx.reduce_min/1
 
@@ -229,7 +287,7 @@ defmodule Nx.LinAlg do
   end
 
   defp norm_integer(%{shape: {_}, type: type} = t, 0, _opts) do
-    output_type = Nx.Type.to_floating(type)
+    output_type = Nx.Type.to_real(type)
 
     t
     |> Nx.not_equal(0)
@@ -238,7 +296,7 @@ defmodule Nx.LinAlg do
   end
 
   defp norm_integer(%{shape: {_, _}, type: type} = t, ord, _opts) when ord in [1, -1] do
-    output_type = Nx.Type.to_floating(type)
+    output_type = Nx.Type.to_real(type)
     function = if ord == 1, do: &Nx.reduce_max/1, else: &Nx.reduce_min/1
 
     t
@@ -258,7 +316,7 @@ defmodule Nx.LinAlg do
   end
 
   defp norm_integer(%{type: type} = t, ord, opts) when is_integer(ord) do
-    output_type = Nx.Type.to_floating(type)
+    output_type = Nx.Type.to_real(type)
     inv_ord = Nx.tensor(1 / ord, type: output_type)
 
     # We extract this result to a variable because it's used both for
@@ -382,6 +440,18 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> a = Nx.tensor([
+      ...> [1, 0, 0],
+      ...> [1, Complex.new(0, 1), 0],
+      ...> [Complex.new(0, 1), 1, 1]
+      ...>])
+      iex> b = Nx.tensor([1, -1, Complex.new(3, 3)])
+      iex> Nx.LinAlg.triangular_solve(a, b)
+      #Nx.Tensor<
+        c64[3]
+        [1.0+0.0i, 0.0+2.0i, 3.0+0.0i]
+      >
+
   ### Error cases
 
       iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]))
@@ -482,6 +552,15 @@ defmodule Nx.LinAlg do
         ]
       >
 
+  If the axes are named, their names are not preserved in the output:
+
+      iex> a = Nx.tensor([[1, 0, 1], [1, 1, 0], [1, 1, 1]], names: [:x, :y])
+      iex> Nx.LinAlg.solve(a, Nx.tensor([0, 2, 1], names: [:z])) |> Nx.round()
+      #Nx.Tensor<
+        f32[3]
+        [1.0, 1.0, -1.0]
+      >
+
   ### Error cases
 
       iex> Nx.LinAlg.solve(Nx.tensor([[1, 0], [0, 1]]), Nx.tensor([4, 2, 4, 2]))
@@ -490,27 +569,28 @@ defmodule Nx.LinAlg do
       iex> Nx.LinAlg.solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1]]), Nx.tensor([4]))
       ** (ArgumentError) `a` tensor has incompatible dimensions, expected a 2-D tensor with as many rows as columns, got: {3, 4}
   """
+  # IMPORTANT: This function cannot be a defn because
+  # optional needs to work on the actual backend.
   @doc from_backend: false
   def solve(a, b) do
-    %T{shape: a_shape} = a = Nx.to_tensor(a)
-    %T{shape: b_shape} = b = Nx.to_tensor(b)
+    %T{shape: a_shape, type: a_type} = a = Nx.to_tensor(a)
+    %T{shape: b_shape, type: b_type} = b = Nx.to_tensor(b)
 
-    Nx.Shape.solve(a_shape, b_shape)
+    output_shape = Nx.Shape.solve(a_shape, b_shape)
+    output_type = a_type |> Nx.Type.merge(b_type) |> Nx.Type.to_floating()
+    output = Nx.template(output_shape, output_type)
 
-    # We need to achieve an LQ decomposition for `a` (henceforth called A)
-    # because triangular_solve only accepts lower_triangular matrices
-    # Therefore, we can use the fact that if we have M = Q'R' -> transpose(M) = LQ.
-    # If we set M = transpose(A), we can get A = LQ through transpose(qr(transpose(A)))
+    Nx.Shared.optional(:solve, [a, b], output, fn a, b ->
+      # Since we have triangular solve, which accepts upper
+      # triangular matrices with the `lower: false` option,
+      # we can solve a system as follows:
 
-    # Given A = LQ, we can then solve AX = B as shown below
-    # AX = B -> L(QX) = B -> LY = B, where Y = QX -> X = transpose(Q)Y
+      # A.X = B -> QR.X = B -> R.X = adjoint(Q).B
 
-    # Finally, it can be shown that when B is a matrix, X can be
-    # calculated by solving for each corresponding column in B
-    {qt, r_prime} = a |> Nx.transpose() |> qr()
-    l = Nx.transpose(r_prime)
-    y = triangular_solve(l, b)
-    Nx.dot(qt, y)
+      {q, r} = Nx.LinAlg.qr(a)
+
+      triangular_solve(r, Nx.dot(adjoint(q), b), lower: false)
+    end)
   end
 
   @doc """
@@ -520,15 +600,15 @@ defmodule Nx.LinAlg do
 
   ## Examples
 
-      iex> a = Nx.tensor([[1, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]])
+      iex> a = Nx.tensor([[1, 2, 1, 1], [0, 1, 0, 1], [0, 0, 1, 1], [0 , 0, 0, 1]])
       iex> a_inv = Nx.LinAlg.invert(a)
       #Nx.Tensor<
         f32[4][4]
         [
-          [1.0, 0.0, 0.0, 0.0],
-          [-2.0, 1.0, 0.0, 0.0],
-          [-1.0, 0.0, 1.0, 0.0],
-          [2.0, -1.0, -1.0, 1.0]
+          [1.0, -2.0, -1.0, 2.0],
+          [0.0, 1.0, 0.0, -1.0],
+          [0.0, 0.0, 1.0, -1.0],
+          [0.0, 0.0, 0.0, 1.0]
         ]
       >
       iex> Nx.dot(a, a_inv)
@@ -568,8 +648,10 @@ defmodule Nx.LinAlg do
     tensor
     |> invert_tensor()
     |> custom_grad(fn ans, g ->
-      ans_t = Nx.transpose(ans)
-      [{tensor, ans_t |> Nx.negate() |> Nx.dot(g) |> Nx.dot(ans_t)}]
+      # As defined in https://juliadiff.org/ChainRulesCore.jl/stable/maths/arrays.html#Matrix-inversion-2
+      ans_h = adjoint(ans)
+
+      [{tensor, ans_h |> Nx.negate() |> Nx.dot(g) |> Nx.dot(ans_h)}]
     end)
   end
 
@@ -768,6 +850,8 @@ defmodule Nx.LinAlg do
     opts = keyword!(opts, max_iter: 50_000, eps: @default_eps)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
+    Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.eigh", 2)
+
     output_type = Nx.Type.to_floating(type)
     {eigenvals_shape, eigenvecs_shape} = Nx.Shape.eigh(shape)
 
@@ -853,6 +937,8 @@ defmodule Nx.LinAlg do
   def svd(tensor, opts \\ []) do
     opts = keyword!(opts, [:max_iter, eps: @default_eps])
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
+
+    Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.svd", 2)
 
     output_type = Nx.Type.to_floating(type)
     {u_shape, s_shape, v_shape} = Nx.Shape.svd(shape)
@@ -1031,13 +1117,12 @@ defmodule Nx.LinAlg do
   def matrix_power(tensor, 0) do
     # We need a special-case for 0 since the code below
     # is optimized to not compute an initial eye.
-    Nx.Defn.Kernel.assert_shape_pattern(tensor, {x, x})
-
+    assert_shape_pattern(tensor, {x, x})
     Nx.eye(tensor)
   end
 
   def matrix_power(tensor, power) when is_integer(power) do
-    Nx.Defn.Kernel.assert_shape_pattern(tensor, {x, x})
+    assert_shape_pattern(tensor, {x, x})
 
     power
     |> Integer.digits(2)
@@ -1102,7 +1187,7 @@ defmodule Nx.LinAlg do
       ...> ]))
       #Nx.Tensor<
         f32
-        -48.0
+        48.0
       >
 
       iex> Nx.LinAlg.determinant(Nx.tensor([
@@ -1116,21 +1201,55 @@ defmodule Nx.LinAlg do
         f32
         48.0
       >
+
+  If the axes are named, their names are not preserved in the output:
+
+      iex> two_by_two = Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
+      iex> Nx.LinAlg.determinant(two_by_two)
+      #Nx.Tensor<
+        f32
+        -2.0
+      >
+
+      iex> three_by_three = Nx.tensor([[1.0, 2.0, 3.0], [1.0, -2.0, 3.0], [7.0, 8.0, 9.0]], names: [:x, :y])
+      iex> Nx.LinAlg.determinant(three_by_three)
+      #Nx.Tensor<
+        f32
+        48.0
+      >
+
+  Also supports complex inputs:
+
+      iex> t = Nx.tensor([[1, 0, 0], [0, Complex.new(0, 2), 0], [0, 0, 3]])
+      iex> Nx.LinAlg.determinant(t)
+      #Nx.Tensor<
+        c64
+        0.0+6.0i
+      >
+
+      iex> t = Nx.tensor([[0, 0, 0, 1], [0, Complex.new(0, 2), 0, 0], [0, 0, 3, 0], [1, 0, 0, 0]])
+      iex> Nx.LinAlg.determinant(t)
+      #Nx.Tensor<
+        c64
+        -0.0-6.0i
+      >
+
   """
-  defn determinant(tensor) do
-    Nx.Defn.Kernel.assert_shape_pattern(tensor, {n, n})
+  # IMPORTANT: This function cannot be a defn because
+  # optional needs to work on the actual backend.
+  def determinant(tensor) do
+    tensor = Nx.to_tensor(tensor)
+    output = Nx.template({}, Nx.Type.to_floating(tensor.type))
+    assert_shape_pattern(tensor, {n, n})
 
-    {n, _} = Nx.shape(tensor)
+    Nx.Shared.optional(:determinant, [tensor], output, fn tensor ->
+      {n, _} = Nx.shape(tensor)
 
-    transform(n, fn
-      2 ->
-        determinant_2by2(tensor)
-
-      3 ->
-        determinant_3by3(tensor)
-
-      _ ->
-        determinant_NbyN(tensor)
+      case n do
+        2 -> determinant_2by2(tensor)
+        3 -> determinant_3by3(tensor)
+        _ -> determinant_NbyN(tensor)
+      end
     end)
   end
 
@@ -1162,18 +1281,23 @@ defmodule Nx.LinAlg do
   end
 
   defnp determinant_NbyN(t) do
-    {n, _} = Nx.shape(t)
+    nxn = {n, _} = Nx.shape(t)
 
     # Taken from slogdet at https://github.com/google/jax/blob/a3a6afcd5b8bf3d60aba94054bb0001c0fcc50d7/jax/_src/numpy/linalg.py#L134
     {p, l, u} = Nx.LinAlg.lu(t)
 
     diag = Nx.take_diagonal(l) * Nx.take_diagonal(u)
-
     is_zero = Nx.any(diag == 0)
+    transitions = p |> Nx.real() |> Nx.dot(Nx.iota({n}))
 
-    iota = Nx.iota({n})
+    upper_tri_mask = Nx.iota(nxn, axis: 0) |> Nx.less(Nx.iota(nxn, axis: 1))
 
-    parity = Nx.sum(Nx.dot(p, iota) != iota)
+    parity =
+      transitions
+      |> Nx.broadcast(nxn, axes: [0])
+      |> Nx.greater(transitions)
+      |> Nx.multiply(upper_tri_mask)
+      |> Nx.sum()
 
     sign =
       if is_zero do

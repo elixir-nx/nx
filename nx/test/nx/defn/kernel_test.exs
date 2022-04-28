@@ -25,6 +25,10 @@ defmodule Nx.Defn.KernelTest do
       assert Nx.Defn.Kernel.*(1, 2) == 2
     end
 
+    test "**" do
+      assert Nx.Defn.Kernel.**(1, 2) == 1
+    end
+
     test "/" do
       assert Nx.Defn.Kernel./(1, 2) == 0.5
     end

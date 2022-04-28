@@ -520,10 +520,10 @@ ERL_NIF_TERM gather(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   xla::XlaOp* operand;
   xla::XlaOp* start_indices;
   exla::int64 index_vector_dim;
-  std::vector<xla::int64> slice_sizes;
-  std::vector<xla::int64> offset_dims;
-  std::vector<xla::int64> collapsed_slice_dims;
-  std::vector<xla::int64> start_index_map;
+  std::vector<exla::int64> slice_sizes;
+  std::vector<exla::int64> offset_dims;
+  std::vector<exla::int64> collapsed_slice_dims;
+  std::vector<exla::int64> start_index_map;
 
   if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
     return exla::nif::error(env, "Unable to get operand.");
@@ -1673,7 +1673,7 @@ ERL_NIF_TERM sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Unable to get dimension.");
   }
 
-  xla::XlaOp op = xla::Sort({*operand}, *comparator, dimension);
+  xla::XlaOp op = xla::Sort({*operand}, *comparator, dimension, true);
 
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
@@ -1697,7 +1697,7 @@ ERL_NIF_TERM variadic_sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
     return exla::nif::error(env, "Unable to get dimension.");
   }
 
-  xla::XlaOp op = xla::Sort(operands, *comparator, dimension);
+  xla::XlaOp op = xla::Sort(operands, *comparator, dimension, true);
 
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
@@ -2043,6 +2043,33 @@ ERL_NIF_TERM transfer_from_outfeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
   return exla::nif::ok(env);
 }
 
+ERL_NIF_TERM copy_buffer_to_device(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::ExlaClient** client;
+  exla::ExlaBuffer** buffer;
+  int device_id;
+
+  if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
+    return exla::nif::error(env, "Unable to get client.");
+  }
+  if (!exla::nif::get<exla::ExlaBuffer*>(env, argv[1], buffer)) {
+    return exla::nif::error(env, "Unable to get buffer.");
+  }
+  if (!exla::nif::get(env, argv[2], &device_id)) {
+    return exla::nif::error(env, "Unable to get device ID.");
+  }
+
+  EXLA_ASSIGN_OR_RETURN_NIF(xla::PjRtDevice * device,
+    (*client)->client()->LookupDevice(device_id), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaBuffer * buf,
+    (*buffer)->CopyToDevice(device), env);
+
+  return exla::nif::ok(env, exla::nif::make<exla::ExlaBuffer*>(env, buf));
+}
+
 // ExlaClient Functions
 
 ERL_NIF_TERM get_host_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -2178,13 +2205,12 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 // ExlaExecutable Functions
 
 ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 5) {
+  if (argc != 4) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   exla::ExlaClient** client;
   exla::ExlaExecutable** executable;
-  bool keep_on_device;
   int device_id;
 
   ERL_NIF_TERM arguments = argv[2];
@@ -2195,15 +2221,12 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get<exla::ExlaExecutable*>(env, argv[1], executable)) {
     return exla::nif::error(env, "Unable to get executable.");
   }
-  if (!exla::nif::get(env, argv[3], &keep_on_device)) {
-    return exla::nif::error(env, "Unable to get keep on device flag.");
-  }
-  if (!exla::nif::get(env, argv[4], &device_id)) {
+  if (!exla::nif::get(env, argv[3], &device_id)) {
     return exla::nif::error(env, "Unable to get device ID.");
   }
 
   EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM term,
-     (*executable)->Run(env, arguments, keep_on_device, device_id), env);
+     (*executable)->Run(env, arguments, device_id), env);
 
   return term;
 }
@@ -2252,9 +2275,10 @@ static ErlNifFunc exla_funcs[] = {
   {"deallocate_device_mem", 1, deallocate_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"transfer_to_infeed", 3, transfer_to_infeed, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"transfer_from_outfeed", 5, transfer_from_outfeed, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"copy_buffer_to_device", 3, copy_buffer_to_device, ERL_NIF_DIRTY_JOB_IO_BOUND},
   // ExlaExecutable
-  {"run_io", 5, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"run_cpu", 5, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+  {"run_io", 4, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"run_cpu", 4, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
   // Shape
   {"make_shape", 2, make_shape},
   {"make_token_shape", 0, make_token_shape},

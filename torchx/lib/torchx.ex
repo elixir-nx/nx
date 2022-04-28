@@ -90,12 +90,72 @@ defmodule Torchx.Macro do
 end
 
 defmodule Torchx do
-  # TODO: Add moduledoc that documents the types and devices.
-  # Make it clear they are Torchx specific and that Torchx.Backend
-  # provides the mapping between Nx to the underlying Torchx types.
+  @valid_devices_md_list """
+    * `:cpu`
+    * `:cuda`
+    * `:mkldnn`
+    * `:opengl`
+    * `:opencl`
+    * `:ideep`
+    * `:hip`
+    * `:fpga`
+    * `:msnpu`
+    * `:xla`
+    * `:vulkan`
+    * `:metal`
+    * `:xpu`
+  """
 
-  # TODO: Automatically download libtorch like we do for esbuild/xla.
+  @moduledoc """
+  Bindings and Nx integration for [PyTorch](https://pytorch.org/).
 
+  Torchx provides an Nx backend through `Torchx.Backend`, which
+  allows for integration with both the CPU and GPU functionality
+  that PyTorch provides. To enable Torchx as the default backend
+  you can add the following line to your desired config environment (`config/config.exs`,
+  `config/test.exs`, etc):
+
+      import Config
+      config :nx, :default_backend, Torchx.Backend
+
+  This will ensure that by default all tensors are created PyTorch tensors.
+  It's important to keep in mind that the default device is the CPU. If you
+  wish to allocated tensors to the GPU by default, you can pass the `:device`
+  option to the config line, as follows:
+
+      import Config
+      config :nx, :default_backend, {Torchx.Backend, device: :cuda}
+
+  The `device_available?/1` function can be used to determine whether
+  `:cuda` is available. If you have CUDA installed but it doesn't show
+  as available, check out the _Installation_ README section.
+
+  ## Types
+
+  Torchx implements specific names for PyTorch types, which have Nx
+  counterparts as in the following table:
+
+    Nx Type    |  Torchx Type    | Description
+   ----------- | --------------- | --------------------------------------------------------
+   `{:u, 8}`   | `:byte`           | Unsigned 8-bit integer
+   `{:s, 8}`   | `:char`           | Signed 8-bit integer
+   `{:s, 16}`  | `:short`          | Signed 16-bit integer
+   `{:s, 32}`  | `:int`            | Signed 32-bit integer
+   `{:s, 64}`  | `:long`           | Signed 64-bit integer
+   `{:bf, 16}` | `:brain`          | 16-bit brain floating-point number
+   `{:f, 16}`  | `:half`           | 16-bit floating-point number
+   `{:f, 32}`  | `:float`          | 32-bit floating-point number
+   `{:f, 64}`  | `:double`         | 64-bit floating-point number
+   `{:c, 64}`  | `:complex`        | 64-bit complex number, with two 32-bit float components
+   `{:c, 128}` | `:complex_double` | 128-bit complex number, with two 64-bit float components
+
+  ## Devices
+
+  PyTorch implements a variety of devices, which can be seen below.
+  For now, only `:cpu` and `:cuda` are supported.
+
+  #{@valid_devices_md_list}
+  """
   use Torchx.Macro
   alias Torchx.NIF
 
@@ -105,19 +165,7 @@ defmodule Torchx do
   Check if device of the given type is available for Torchx.
   Device atom can be any of:
 
-    * :cpu
-    * :cuda
-    * :mkldnn
-    * :opengl
-    * :opencl
-    * :ideep
-    * :hip
-    * :fpga
-    * :msnpu
-    * :xla
-    * :vulkan
-    * :metal
-    * :xpu
+  #{@valid_devices_md_list}
 
   But only :cuda availability check is supported for now.
   """
@@ -162,8 +210,12 @@ defmodule Torchx do
   deftensor as_strided(tensor, size, strides, offset)
   deftensor concatenate(tensors, axis)
   deftensor gather(tensor_input, tensor_indices, axis)
+  deftensor indexed_add(tensor_input, tensor_indices, tensor_updates, axis)
   deftensor argsort(tensor, axis, is_descending)
   deftensor flip(tensor, axis)
+  deftensor unfold(tensor, dimension, size, step)
+  deftensor put(tensor_input, tensor_index, tensor_source)
+  deftensor where(tensorA, tensorB, tensorC)
 
   ## Aggregation
 
@@ -176,6 +228,11 @@ defmodule Torchx do
   deftensor argmin(tensor, axis, keep_axes)
   deftensor all(tensor)
   deftensor all(tensor, axes, keep_axes)
+
+  deftensor cumulative_sum(tensor, axis)
+  deftensor cumulative_product(tensor, axis)
+  deftensor cumulative_min(tensor, axis)
+  deftensor cumulative_max(tensor, axis)
 
   ## Binary ops
 
@@ -203,10 +260,14 @@ defmodule Torchx do
   deftensor logical_and(tensorA, tensorB)
   deftensor logical_or(tensorA, tensorB)
   deftensor logical_xor(tensorA, tensorB)
+  deftensor logical_not(tensorA)
 
   deftensor bitwise_and(tensorA, tensorB)
   deftensor bitwise_or(tensorA, tensorB)
   deftensor bitwise_xor(tensorA, tensorB)
+
+  deftensor amax(tensor, axes, keep_axes)
+  deftensor amin(tensor, axes, keep_axes)
 
   deftensor tensordot(tensorA, tensorB, axesA, axesB)
   deftensor matmul(tensorA, tensorB)
@@ -218,6 +279,8 @@ defmodule Torchx do
   deftensor log(tensor)
   deftensor log1p(tensor)
   deftensor logistic(tensor)
+  deftensor view_as_real(tensor)
+  deftensor conjugate(tensor)
   deftensor cos(tensor)
   deftensor sin(tensor)
   deftensor tan(tensor)
@@ -235,6 +298,7 @@ defmodule Torchx do
   deftensor erf(tensor)
   deftensor erfc(tensor)
   deftensor erf_inv(tensor)
+  deftensor cbrt(tensor)
 
   deftensor abs(tensor)
   deftensor bitwise_not(tensor)
@@ -244,10 +308,13 @@ defmodule Torchx do
   deftensor round(tensor)
   deftensor sign(tensor)
 
+  deftensor pad(tensor, config, constant)
+
   ## LinAlg
 
   deftensor cholesky(tensor)
   deftensor cholesky(tensor, upper)
+  deftensor eigh(tensor)
   deftensor qr(tensor)
   deftensor qr(tensor, reduced)
   deftensor svd(tensor)
@@ -257,6 +324,10 @@ defmodule Torchx do
   deftensor determinant(tensor)
   deftensor sort(tensor, axis, descending)
   deftensor clip(tensor, tensor_min, tensor_max)
+  deftensor solve(tensor_a, tensor_b)
+
+  deftensor conv(tensor_input, tensor_kernel, strides, padding, dilation, transposed, groups)
+  deftensor max_pool_3d(tensor_input, kernel_size, strides, padding, dilation)
 
   ## Dirty non-tensor return values
 
@@ -324,6 +395,7 @@ defmodule Torchx do
     {id, index}
   end
 
+  defp unwrap!(:ok), do: :ok
   defp unwrap!({:ok, result}), do: result
   defp unwrap!({:error, error}), do: raise("Torchx: " <> List.to_string(error))
 

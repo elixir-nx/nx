@@ -18,20 +18,17 @@ benches = %{
 
 benches =
   if System.get_env("EXLA_TARGET") == "cuda" do
-    dt32 = Nx.backend_transfer(t32, {EXLA.DeviceBackend, client: :cuda})
-    dt64 = Nx.backend_transfer(t64, {EXLA.DeviceBackend, client: :cuda})
+    dt32 = Nx.backend_transfer(t32, {EXLA.Backend, client: :cuda})
+    dt64 = Nx.backend_transfer(t64, {EXLA.Backend, client: :cuda})
 
     cuda = [client: :cuda]
-    cuda_keep = [client: :cuda, run_options: [keep_on_device: true]]
 
     Map.merge(benches, %{
-      "xla jit-gpu f32" => fn -> EXLA.jit(&Softmax.softmax/1, [t32], cuda) end,
-      "xla jit-gpu f64" => fn -> EXLA.jit(&Softmax.softmax/1, [t64], cuda) end,
-      "xla jit-gpu f32 keep" =>
-        {fn -> EXLA.jit(&Softmax.softmax/1, [dt32], cuda_keep) end,
+      "xla jit-gpu f32" =>
+        {fn -> EXLA.jit(&Softmax.softmax/1, [dt32], cuda) end,
          after_each: &Nx.backend_deallocate/1},
-      "xla jit-gpu f64 keep" =>
-        {fn -> EXLA.jit(&Softmax.softmax/1, [dt64], cuda_keep) end,
+      "xla jit-gpu f64" =>
+        {fn -> EXLA.jit(&Softmax.softmax/1, [dt64], cuda) end,
          after_each: &Nx.backend_deallocate/1}
     })
   else

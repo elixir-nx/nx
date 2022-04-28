@@ -12,27 +12,35 @@ defmodule Nx.Defn.Evaluator do
   @random_ops [:random_uniform, :random_normal]
 
   @impl true
-  def __stream__(key, input, acc, vars, fun, opts) do
+  def __stream__(_key, input, acc, vars, fun, [args], opts) do
     count = Nx.Defn.Composite.count(input) + Nx.Defn.Composite.count(acc)
-    vars = Enum.drop(vars, count)
+    hooks = Keyword.get(opts, :hooks, %{})
+    expr = fun.(vars)
 
-    Nx.Defn.Stream.start_link(input, acc, fn input, acc ->
-      vars = Nx.Defn.Composite.from_runtime_args([input, acc], vars)
-      __jit__(key, vars, fun, opts)
-    end)
+    [
+      Nx.Defn.Stream.start_link(input, acc, fn input, acc ->
+        params = Nx.Defn.Composite.flatten_runtime_args([input, acc], Enum.drop(args, count))
+
+        expr
+        |> composite_eval(%{params: params, hooks: hooks}, %{})
+        |> elem(0)
+      end)
+    ]
   end
 
   @impl true
-  def __jit__(_key, vars, fun, opts) do
+  def __jit__(_key, vars, fun, [params], opts) do
     hooks = Keyword.get(opts, :hooks, %{})
 
-    fun.(vars)
-    |> composite_eval(%{vars: vars, hooks: hooks}, %{})
-    |> elem(0)
+    [
+      fun.(vars)
+      |> composite_eval(%{params: params, hooks: hooks}, %{})
+      |> elem(0)
+    ]
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: :parameter, args: [i]}}, state, cache) do
-    {Enum.fetch!(state.vars, i), cache}
+    {Enum.fetch!(state.params, i), cache}
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: :tensor, args: [t]}}, _state, cache) do
@@ -74,15 +82,15 @@ defmodule Nx.Defn.Evaluator do
       case length(args) do
         1 ->
           fn arg1 ->
-            vars = [Nx.to_tensor(arg1)]
-            {result, _cache} = composite_eval(expr, %{state | vars: vars}, %{})
+            params = [Nx.to_tensor(arg1)]
+            {result, _cache} = composite_eval(expr, %{state | params: params}, %{})
             result
           end
 
         2 ->
           fn arg1, arg2 ->
-            vars = [Nx.to_tensor(arg1), Nx.to_tensor(arg2)]
-            {result, _cache} = composite_eval(expr, %{state | vars: vars}, %{})
+            params = [Nx.to_tensor(arg1), Nx.to_tensor(arg2)]
+            {result, _cache} = composite_eval(expr, %{state | params: params}, %{})
             result
           end
       end
@@ -110,12 +118,12 @@ defmodule Nx.Defn.Evaluator do
 
         cond do
           hook_fun ->
-            {expr, cache} = eval(expr, state, cache)
+            {expr, cache} = composite_eval(expr, state, cache)
             hook_fun.(expr)
             cache
 
           Tree.has_hooks?(expr, hooks) ->
-            {_expr, cache} = eval(expr, state, cache)
+            {_expr, cache} = composite_eval(expr, state, cache)
             cache
 
           true ->
@@ -124,6 +132,19 @@ defmodule Nx.Defn.Evaluator do
       end)
 
     {{}, cache}
+  end
+
+  defp eval_apply(:optional, %{data: %Expr{args: [expr, default_impl_expr]}}, state, cache) do
+    # The arguments are shared between expr and default_impl_expr nodes,
+    # so we don't do extra work regardless of the branch we choose.
+    {args, cache} = Tree.apply_args(expr, cache, &eval(&1, state, &2))
+    backend = Nx.Shared.list_impl!(args)
+
+    if function_exported?(backend, expr.data.op, length(args) + 1) do
+      {apply(backend, expr.data.op, [expr | args]), cache}
+    else
+      eval(default_impl_expr, state, cache)
+    end
   end
 
   defp eval_apply(op, ans, state, cache) do
@@ -150,7 +171,7 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp while(acc, condition, block, state, cache) do
-    state = %{state | vars: composite_to_vars(acc)}
+    state = %{state | params: composite_to_params(acc)}
     {pred, temp} = eval(condition, state, cache)
 
     if Nx.to_number(pred) != 0 do
@@ -165,15 +186,15 @@ defmodule Nx.Defn.Evaluator do
     Composite.traverse(composite, cache, &eval(&1, state, &2))
   end
 
-  defp composite_to_vars(composite) do
-    composite |> composite_to_vars([]) |> Enum.reverse()
+  defp composite_to_params(composite) do
+    composite |> composite_to_params([]) |> Enum.reverse()
   end
 
-  defp composite_to_vars(tuple, acc) when is_tuple(tuple) do
-    Enum.reduce(Tuple.to_list(tuple), acc, &composite_to_vars/2)
+  defp composite_to_params(tuple, acc) when is_tuple(tuple) do
+    Enum.reduce(Tuple.to_list(tuple), acc, &composite_to_params/2)
   end
 
-  defp composite_to_vars(other, acc) do
+  defp composite_to_params(other, acc) do
     [other | acc]
   end
 

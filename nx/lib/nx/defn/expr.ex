@@ -209,6 +209,12 @@ defmodule Nx.Defn.Expr do
     out
   end
 
+  @impl true
+  def optional(name, args, fun) do
+    %{data: %{context: context}} = res = apply(fun, args)
+    expr(res, context, :optional, [expr(res, context, name, args), res])
+  end
+
   ## Nx.Defn AST callbacks
 
   @doc false
@@ -323,8 +329,8 @@ defmodule Nx.Defn.Expr do
   unary_ops =
     [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tan, :cosh, :sinh, :tanh] ++
       [:acosh, :asinh, :atanh, :sqrt, :rsqrt, :cbrt, :negate, :sign, :abs, :bitwise_not] ++
-      [:population_count, :count_leading_zeros, :floor, :ceil, :round] ++
-      [:erf, :erfc, :erf_inv, :acos, :asin, :atan, :bitcast]
+      [:conjugate, :population_count, :count_leading_zeros, :floor, :ceil, :round] ++
+      [:erf, :erfc, :erf_inv, :acos, :asin, :atan, :bitcast, :real, :imag]
 
   for op <- unary_ops do
     @impl true
@@ -348,10 +354,10 @@ defmodule Nx.Defn.Expr do
         ensure_compatible(t1, out)
 
       c1 && c2 ->
-        constant(out, c1 + c2)
+        constant(out, Complex.add(c1, c2))
 
       c2 ->
-        commute(out, context, :add, &+/2, c2, t2, t1)
+        commute(out, context, :add, &Complex.add/2, c2, t2, t1)
 
       true ->
         case t2 do
@@ -365,7 +371,7 @@ defmodule Nx.Defn.Expr do
             binary_expr(out, context, :subtract, t1, t2)
 
           %T{} ->
-            commute(out, context, :add, &+/2, c1, t1, t2)
+            commute(out, context, :add, &Complex.add/2, c1, t1, t2)
         end
     end
   end
@@ -378,7 +384,7 @@ defmodule Nx.Defn.Expr do
 
     cond do
       c2 == 0 -> ensure_compatible(t1, out)
-      c1 && c2 -> constant(out, c1 - c2)
+      c1 && c2 -> constant(out, Complex.subtract(c1, c2))
       true -> binary_expr(out, context, :subtract, t1, t2)
     end
   end
@@ -397,10 +403,10 @@ defmodule Nx.Defn.Expr do
         ensure_compatible(t1, out)
 
       c1 && c2 ->
-        constant(out, c1 * c2)
+        constant(out, Complex.multiply(c1, c2))
 
       c2 ->
-        commute(out, context, :multiply, &*/2, c2, t2, t1)
+        commute(out, context, :multiply, &Complex.multiply/2, c2, t2, t1)
 
       true ->
         case t2 do
@@ -411,7 +417,7 @@ defmodule Nx.Defn.Expr do
             binary_expr(out, context, :divide, t1, t2)
 
           %T{} ->
-            commute(out, context, :multiply, &*/2, c1, t1, t2)
+            commute(out, context, :multiply, &Complex.multiply/2, c1, t1, t2)
         end
     end
   end
@@ -424,7 +430,7 @@ defmodule Nx.Defn.Expr do
 
     cond do
       c2 == 1 -> ensure_compatible(t1, out)
-      c1 && c2 -> constant(out, c1 / c2)
+      c1 && c2 -> constant(out, Complex.divide(c1, c2))
       true -> binary_expr(out, context, :divide, t1, t2)
     end
   end
@@ -910,17 +916,27 @@ defmodule Nx.Defn.Expr do
       cannot build defn because expressions come from different contexts: \
       #{inspect(context)} and #{inspect(acc)}.
 
-      This typically happens on "while" and inside anonymous functions, which \
-      do not behave like closures inside defn. For example, this is not valid:
+      This typically happens on "while" and inside anonymous functions when you \
+      try to access an external variable. All variables you intend to use inside \
+      "while" or anonymous functions in defn must be explicitly given as arguments.
+      For example, this is not valid:
 
-          defn example(t, amplifier) do
-            Nx.reduce(t, 0, fn val, acc ->
-              val * amplifier + acc
-            end)
+          defn increment_by_y_while_less_than_10(y) do
+            while x = 0, Nx.less(x, 10) do
+              x + y
+            end
           end
 
-      In the example above, "amplifier" is a variable defined outside of \
-      the anonymous function, which is not allowed in defn.
+      In the example above, we want to increment "x" by "y" while it is less than 10. \
+      However, the code won't compile because "y" is used inside "while" but not \
+      explicitly defined as part of "while". You must fix it like so:
+
+          defn increment_by_y_while_less_than_10(y) do
+            while {x = 0, y}, Nx.less(x, 10) do
+              {x + y, y}
+            end
+          end
+
       """
     end
 
@@ -955,7 +971,11 @@ defmodule Nx.Defn.Expr do
   ## Constant helpers and related optimizations
 
   defp constant(%{type: type, shape: shape} = out, number) do
-    number = if is_integer(number) and Nx.Type.float?(type), do: 1.0 * number, else: number
+    number =
+      if is_integer(number) and Nx.Type.float?(type),
+        do: Complex.multiply(1.0, number),
+        else: number
+
     id = {number, type, shape}
     %{out | data: %Expr{id: id, op: :constant, args: [number], context: nil}}
   end
@@ -1020,8 +1040,8 @@ defmodule Nx.Defn.Expr do
 
   @impl true
   def inspect(tensor, opts) do
-    {_, acc} = inspect_expr(tensor, {[], [], %{}, %{}})
-    {_, {exprs, params, _var_map, _cache}} = Tree.apply_args(tensor, acc, &inspect_expr/2)
+    {t, acc} = inspect_expr(tensor, {[], [], %{}, %{}})
+    {_, {exprs, params, _var_map, _cache}} = Tree.apply_args(t, acc, &inspect_expr/2)
 
     all = Enum.reverse(params, Enum.reverse(exprs))
     header = concat(line(), color("Nx.Defn.Expr", :map, opts))
@@ -1042,6 +1062,10 @@ defmodule Nx.Defn.Expr do
   defp inspect_expr(%T{data: %Expr{op: :metadata, args: [expr, metadata]}}, acc)
        when not is_map_key(metadata, :inspect),
        do: inspect_expr(expr, acc)
+
+  defp inspect_expr(%T{data: %Expr{op: :optional, args: [expr, _default]}}, acc) do
+    inspect_expr(expr, acc)
+  end
 
   defp inspect_expr(%T{data: %Expr{id: id}} = t, {exprs, params, var_map, cache} = acc) do
     case cache do

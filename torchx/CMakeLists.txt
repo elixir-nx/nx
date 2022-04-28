@@ -3,26 +3,43 @@ project(torchx)
 
 find_package(Torch REQUIRED)
 
+STRING(REGEX REPLACE "\\\\" "/" C_SRC ${C_SRC})
+
 file(GLOB torchx_sources CONFIGURE_DEPENDS "${C_SRC}/*.cpp" "${C_SRC}/*.hpp")
 
-add_executable(torchx.so ${torchx_sources})
-target_link_libraries(torchx.so "${TORCH_LIBRARIES}")
-set_property(TARGET torchx.so PROPERTY CXX_STANDARD 14)
+if (NOT APPLE)
+add_library(torchx SHARED ${torchx_sources})
+else()
+add_library(torchx MODULE ${torchx_sources})
+endif()
 
-set_target_properties(torchx.so PROPERTIES
+target_link_libraries(torchx "${TORCH_LIBRARIES}")
+set_property(TARGET torchx PROPERTY CXX_STANDARD 14)
+
+target_include_directories(torchx PUBLIC ${ERTS_INCLUDE_DIR})
+
+SET_TARGET_PROPERTIES(torchx PROPERTIES PREFIX "")
+
+if(UNIX)
+set_target_properties(torchx PROPERTIES
     INSTALL_RPATH_USE_LINK_PATH TRUE
     BUILD_WITH_INSTALL_RPATH TRUE
 )
 
-if(UNIX AND NOT APPLE)
+if(NOT APPLE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -shared")
-    set_target_properties(torchx.so PROPERTIES INSTALL_RPATH "\$ORIGIN/${LIBTORCH_BASE}")
+    set_target_properties(torchx PROPERTIES INSTALL_RPATH "\$ORIGIN/${LIBTORCH_BASE}")
 else()
     # Although the compiler complains about not using these,
     # things only work with them set
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -undefined dynamic_lookup -dynamiclib")
-    set(CMAKE_SHARED_LINKER_FLAGS "-bundle -flat_namespace -undefined suppress")
-    set_target_properties(torchx.so PROPERTIES INSTALL_RPATH "@loader_path/${LIBTORCH_BASE}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -undefined dynamic_lookup")
+    # set(CMAKE_SHARED_LINKER_FLAGS "-bundle -flat_namespace -undefined suppress")
+    set_target_properties(torchx PROPERTIES INSTALL_RPATH "@loader_path/${LIBTORCH_BASE}")
 endif()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -I${ERTS_INCLUDE_DIR} -O3 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -O3 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers")
+else()
+# On Windows
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4624")
+endif()
+
