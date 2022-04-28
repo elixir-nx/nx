@@ -192,6 +192,8 @@ defmodule EXLA do
   options globally. If you have a specific client that you want to use
   throughout your project, use configuration files instead:
 
+      import Config
+      config :nx, :default_backend, {EXLA.Backend, client: :cuda}
       config :nx, :default_defn_options, [compiler: EXLA, client: :cuda]
 
   ## Examples
