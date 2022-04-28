@@ -12,23 +12,10 @@ defmodule Nx do
       iex> Nx.shape(t)
       {2, 2}
 
-  To implement [the Softmax function](https://en.wikipedia.org/wiki/Softmax_function)
-  using this library:
-
-      iex> t = Nx.tensor([[1, 2], [3, 4]])
-      iex> Nx.divide(Nx.exp(t), Nx.sum(Nx.exp(t)))
-      #Nx.Tensor<
-        f32[2][2]
-        [
-          [0.032058604061603546, 0.08714432269334793],
-          [0.23688282072544098, 0.6439142227172852]
-        ]
-      >
-
-  The `Nx` library also provides the `Nx.Defn` functionality,
-  which provides a subset of Elixir tailored for numerical
-  computations. For example, it overrides Elixir's default
-  operators so they are tensor-aware:
+  `Nx` also provides the so-called numerical definitions under
+  the `Nx.Defn` module. They are a subset of Elixir tailored for
+  numerical computations. For example, it overrides Elixir's
+  default operators so they are tensor-aware:
 
       defn softmax(t) do
         Nx.exp(t) / Nx.sum(Nx.exp(t))
@@ -36,13 +23,89 @@ defmodule Nx do
 
   Code inside `defn` functions can also be given to custom compilers,
   which can compile said functions just-in-time (JIT) to run on the
-  CPU or on the GPU. See `Nx.Defn` for more information.
+  CPU or on the GPU.
+
+  ## References
+
+  Here is a general outline of the main references in this library:
+
+    * For an introduction, see our [Intro to Nx](intro-to-nx.livemd) guide
+
+    * This module provides the main API for working with tensors
+
+    * `Nx.Defn` provides numerical definitions, CPU/GPU compilation, gradients, and more
+
+    * `Nx.LinAlg` provides functions related to linear algebra
+
+    * `Nx.Constants` declares many constants commonly used in numerical code
+
+  Continue reading this documentation for an overview of creating,
+  broadcasting, and accessing/slicing Nx tensors.
 
   ## Creating tensors
 
   The main APIs for creating tensors are `tensor/2`, `from_binary/2`,
   `iota/2`, `eye/2`, `random_uniform/2`, `random_normal/2`, and
   `broadcast/3`.
+
+  The tensor types can be one of:
+
+    * unsigned integers (`u8`, `u16`, `u32`, `u64`)
+    * signed integers (`s8`, `s16`, `s32`, `s64`)
+    * floats (`f16`, `f32`, `f64`)
+    * brain floats (`bf16`)
+    * and complex numbers (`c64`, `c128`)
+
+  The types are tracked as tuples:
+
+      iex> Nx.tensor([1, 2, 3], type: {:f, 32})
+      #Nx.Tensor<
+        f32[3]
+        [1.0, 2.0, 3.0]
+      >
+
+  But a shortcut atom notation is also available:
+
+      iex> Nx.tensor([1, 2, 3], type: :f32)
+      #Nx.Tensor<
+        f32[3]
+        [1.0, 2.0, 3.0]
+      >
+
+  The tensor dimensions can also be named, via the `:names` option
+  available to all creation functions:
+
+      iex> Nx.iota({2, 3}, names: [:x, :y])
+      #Nx.Tensor<
+        s64[x: 2][y: 3]
+        [
+          [0, 1, 2],
+          [3, 4, 5]
+        ]
+      >
+
+  Finally, for creating vectors and matrices, a sigil notation
+  is available:
+
+      iex> import Nx, only: :sigils
+      iex> ~V[1 2 3]f32
+      #Nx.Tensor<
+        f32[3]
+        [1.0, 2.0, 3.0]
+      >
+
+      iex> import Nx, only: :sigils
+      iex> ~M'''
+      ...> 1 2 3
+      ...> 4 5 6
+      ...> '''s32
+      #Nx.Tensor<
+        s32[2][3]
+        [
+          [1, 2, 3],
+          [4, 5, 6]
+        ]
+      >
 
   All other APIs accept exclusively numbers or tensors, unless
   explicitly noted otherwise.
@@ -10230,7 +10293,7 @@ defmodule Nx do
   Otherwise, it is s64. You can specify the tensor type
   as a sigil modifier:
 
-      iex> import Nx
+      iex> import Nx, only: :sigils
       iex> ~M[0.1 0.2 0.3 0.4]f16
       #Nx.Tensor<
         f16[1][4]
@@ -10275,7 +10338,7 @@ defmodule Nx do
   Otherwise, it is s64. You can specify the tensor type
   as a sigil modifier:
 
-      iex> import Nx
+      iex> import Nx, only: :sigils
       iex> ~V[0.1 0.2 0.3 0.4]f16
       #Nx.Tensor<
         f16[4]
