@@ -90,6 +90,72 @@ defmodule Torchx.Macro do
 end
 
 defmodule Torchx do
+  @valid_devices_md_list """
+    * `:cpu`
+    * `:cuda`
+    * `:mkldnn`
+    * `:opengl`
+    * `:opencl`
+    * `:ideep`
+    * `:hip`
+    * `:fpga`
+    * `:msnpu`
+    * `:xla`
+    * `:vulkan`
+    * `:metal`
+    * `:xpu`
+  """
+
+  @moduledoc """
+  Bindings and Nx integration for [PyTorch](https://pytorch.org/).
+
+  Torchx provides an Nx backend through `Torchx.Backend`, which
+  allows for integration with both the CPU and GPU functionality
+  that PyTorch provides. To enable Torchx as the default backend
+  you can add the following line to your desired config environment (`config/config.exs`,
+  `config/test.exs`, etc):
+
+      import Config
+      config :nx, :default_backend, Torchx.Backend
+
+  This will ensure that by default all tensors are created PyTorch tensors.
+  It's important to keep in mind that the default device is the CPU. If you
+  wish to allocated tensors to the GPU by default, you can pass the `:device`
+  option to the config line, as follows:
+
+      import Config
+      config :nx, :default_backend, {Torchx.Backend, device: :cuda}
+
+  The `device_available?/1` function can be used to determine whether
+  `:cuda` is available. If you have CUDA installed but it doesn't show
+  as available, check out the _Installation_ README section.
+
+  ## Types
+
+  Torchx implements specific names for PyTorch types, which have Nx
+  counterparts as in the following table:
+
+    Nx Type    |  Torchx Type    | Description
+   ----------- | --------------- | --------------------------------------------------------
+   `{:u, 8}`   | `:byte`           | Unsigned 8-bit integer
+   `{:s, 8}`   | `:char`           | Signed 8-bit integer
+   `{:s, 16}`  | `:short`          | Signed 16-bit integer
+   `{:s, 32}`  | `:int`            | Signed 32-bit integer
+   `{:s, 64}`  | `:long`           | Signed 64-bit integer
+   `{:bf, 16}` | `:brain`          | 16-bit brain floating-point number
+   `{:f, 16}`  | `:half`           | 16-bit floating-point number
+   `{:f, 32}`  | `:float`          | 32-bit floating-point number
+   `{:f, 64}`  | `:double`         | 64-bit floating-point number
+   `{:c, 64}`  | `:complex`        | 64-bit complex number, with two 32-bit float components
+   `{:c, 128}` | `:complex_double` | 128-bit complex number, with two 64-bit float components
+
+  ## Devices
+
+  PyTorch implements a variety of devices, which can be seen below.
+  For now, only `:cpu` and `:cuda` are supported.
+
+  #{@valid_devices_md_list}
+  """
   use Torchx.Macro
   alias Torchx.NIF
 
@@ -99,19 +165,7 @@ defmodule Torchx do
   Check if device of the given type is available for Torchx.
   Device atom can be any of:
 
-    * :cpu
-    * :cuda
-    * :mkldnn
-    * :opengl
-    * :opencl
-    * :ideep
-    * :hip
-    * :fpga
-    * :msnpu
-    * :xla
-    * :vulkan
-    * :metal
-    * :xpu
+  #{@valid_devices_md_list}
 
   But only :cuda availability check is supported for now.
   """

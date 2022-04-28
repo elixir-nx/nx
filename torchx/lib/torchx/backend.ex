@@ -22,6 +22,10 @@ defmodule Torchx.Backend do
        and nan becomes zero. `Torchx` behaviour is type dependent with no clear
        rule across types.
 
+  ## Options
+
+    * `:device` - Defaults to `:cpu`. An atom representing the device for the allocation of a given tensor.
+    Valid values can be seen at the main [`Torchx`](Torchx.html#module-devices) docs.
   """
 
   @behaviour Nx.Backend
