@@ -7,7 +7,7 @@ Mix.install([
   {:req, "~> 0.2.0"},
   {:kino, "~> 0.5.1"},
   {:exla, "~> 0.2"},
-  {:evision, "~> 0.1.0-dev", github: "cocoa-xu/evision", branch: "main"}
+  {:stb_image, "~> 0.2.0"}
 ])
 
 # To use TPU/CUDA/ROCM, you must also set the XLA_TARGET env var
@@ -23,13 +23,13 @@ defmodule Preprocess do
   def image_to_tensor(file_or_url) do
     case URI.parse(file_or_url) do
       %URI{scheme: nil} ->
-        {:ok, mat} = OpenCV.imread(file_or_url)
-        OpenCV.Nx.to_nx(mat)
+        {:ok, img} = StbImage.from_file(file_or_url)
+        Nx.from_binary(img.data, {:u, 8}) |> Nx.reshape(img.shape)
 
       _ ->
         %{body: binary_image} = Req.get!(file_or_url)
-        {:ok, mat} = OpenCV.imdecode(binary_image, OpenCV.cv_IMREAD_COLOR())
-        OpenCV.Nx.to_nx(mat)
+        {:ok, img} = StbImage.from_binary(binary_image)
+        Nx.from_binary(img.data, {:u, 8}) |> Nx.reshape(img.shape)
     end
   end
 
@@ -205,10 +205,10 @@ image = Preprocess.image_to_tensor(path_to_file)
 new_image = Nx.broadcast(Nx.tensor([0], type: {:u, 8}), {new_height, new_width, num_channels})
 rotated_image = Rotate.rotate_image_by_angle(image, angle, new_image, radians?)
 
-{:ok, rotated_image_mat} = OpenCV.Nx.to_mat(rotated_image)
-{:ok, content} = OpenCV.imencode(".png", rotated_image_mat)
-content = :binary.list_to_bin(content)
+data = Nx.to_binary(rotated_image)
+img = %StbImage{data: data, shape: rotated_image.shape, type: :u8, color_mode: :rgb}
+{:ok, content} = StbImage.to_binary(img, :png)
 
 # display the rotated image
-Kino.Image.new(content, "image/png")
+Kino.Image.new(content, :png)
 ```
