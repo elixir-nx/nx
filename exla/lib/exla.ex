@@ -2,33 +2,52 @@ defmodule EXLA do
   @moduledoc """
   [Google's XLA](https://www.tensorflow.org/xla/) (Accelerated Linear Algebra) compiler/backend for Nx.
 
-  EXLA works both as a backend for Nx tensors and an optimized
-  `Nx.Defn` compiler. To enable both globally, add a `config/config.exs`
-  (or `config/ENV.exs`) with the following:
+  It supports just-in-time (JIT) compilation to GPU (both CUDA and ROCm) and TPUs.
+
+  ## Configuration
+
+  ### In projects
+
+  EXLA works both as a backend for `Nx` tensors and an optimized `Nx.Defn` compiler.
+  To enable both globally, add a `config/config.exs` (or `config/ENV.exs`) with the following:
 
       import Config
       config :nx, :default_backend, EXLA.Backend
       config :nx, :default_defn_options, [compiler: EXLA]
 
-  Then, every time you call a numerical definition, EXLA will just-in-time
-  (JIT) compile a native implementation of the function above, tailored for
-  the type and shape of the given tensor.
+  Now you can use `Nx` as usual and it will use `EXLA` by default.
 
-  EXLA is able to compile to the CPU/GPU/TPU, by specifying another client:
+  You can also use cuda/rocm/tpu as the target by setting `:client` option
+  in both configuration:
 
       import Config
       config :nx, :default_backend, {EXLA.Backend, client: :cuda}
       config :nx, :default_defn_options, [compiler: EXLA, client: :cuda]
 
-  To use the GPU or TPUs, don't forget to also set the appropriate value
-  for the [`XLA_TARGET`](https://github.com/elixir-nx/xla#xla_target)
-  environment variable.
+  To use GPUs/TPUs, you must also set the appropriate value for the
+  [`XLA_TARGET`](https://github.com/elixir-nx/xla#xla_target) environment
+  variable. For CUDA, setting `ELIXIR_ERL_OPTIONS="+sssdio 128"` is also
+  required on more complex operations to increase CUDA's compiler stack size.
 
-  Read the "Client" section below for more information.
+  ### In scripts/notebooks
+
+  The simplest way to configure EXLA in notebooks is by calling:
+
+  ```elixir
+  EXLA.set_as_nx_default([:tpu, :cuda, :rocm, :host])
+  ```
+
+  Then EXLA will pick the first platform available for the current
+  notebook user. From them on, you can use `Nx` as usual and it will
+  use `EXLA` by default.
+
+  As in the project configuration above, you must also set the appropriate
+  value for the [`XLA_TARGET`](https://github.com/elixir-nx/xla#xla_target)
+  environment variable if you intend to use GPU/TPUs.
 
   ### Options
 
-  The options accepted by the EXLA compiler are:
+  The options accepted by EXLA configuration are:
 
     * `:client` - an atom representing the client to use. Defaults
       to `:host`. See "Clients" section
@@ -52,17 +71,6 @@ defmodule EXLA do
         cuda: [platform: :cuda],
         rocm: [platform: :rocm],
         tpu: [platform: :tpu]
-
-  In scripts and code notebooks, you can call
-  `EXLA.set_as_nx_default/1`, which will traverse the list
-  of clients and enable the `EXLA` compiler with the first client
-  available as the default `defn` options:
-
-      EXLA.set_as_nx_default([:tpu, :cuda, :rocm, :host])
-
-  To use the GPU or TPUs, don't forget to also set the appropriate value
-  for the [`XLA_TARGET`](https://github.com/elixir-nx/xla#xla_target)
-  environment variable.
 
   > **Important!** you should avoid using multiple clients for the
   > same platform. If you have multiple clients per platform, they
@@ -126,25 +134,6 @@ defmodule EXLA do
   that provides acceleration during prototyping. However, eventually
   you should wrap your computations in a `defn` to utilize the full
   performance of JIT.
-
-  To bring the tensor data back to Elixir you need an explicit transfer:
-
-      Nx.tensor([1, 2, 3, 4])
-      |> softmax()
-      |> Nx.backend_transfer()
-
-  If instead you want to make a copy of the data, you can use
-  `Nx.backend_copy/1` instead. However, when working with large
-  data, be mindful of memory allocations.
-
-  `EXLA.Backend` will use the same client as the one configured for
-  `Nx.Defn` by default.
-
-  > **Important!** EXLA operations and the `defn` compiler do not
-  > take the input devices into account when executing. So, if you
-  > transfer a tensor to the GPU, by explicitly passing the client
-  > to be CUDA, but then your default client runs on the CPU, the
-  > tensors will be transferred back to CPU before execution.
 
   ## Docker considerations
 
