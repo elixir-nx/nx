@@ -19,13 +19,23 @@ defmodule Torchx.MixProject do
   def project do
     [
       app: :torchx,
-      name: "Torchx",
       version: @version,
       elixir: "~> 1.13",
+      elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       docs: docs(),
+
+      # Package
+      name: "Torchx",
+      description: "LibTorch bindings and backend for Nx",
+      package: package(),
+      preferred_cli_env: [
+        docs: :docs,
+        "hex.publish": :docs
+      ],
+
+      # Compilers
       compilers: @libtorch_compilers ++ Mix.compilers(),
-      elixirc_paths: elixirc_paths(Mix.env()),
       aliases: aliases(),
       make_env: %{
         "LIBTORCH_DIR" => @libtorch_dir,
@@ -46,18 +56,26 @@ defmodule Torchx.MixProject do
 
   defp deps do
     [
+      # {:nx, path: "../nx"},
       {:nx, "~> 0.2.0"},
       {:dll_loader_helper, "~> 0.1.0"},
       {:elixir_make, "~> 0.6"},
-      {:ex_doc, "~> 0.28.3", only: :dev}
+      {:ex_doc, "~> 0.28.3", only: :docs}
     ]
   end
 
   defp docs do
     [
       main: "Torchx",
-      source_ref: "v#{@version}",
-      source_url: @source_url
+      source_url_pattern: "#{@source_url}/blob/v#{@version}/torchx/%{path}#L%{line}"
+    ]
+  end
+
+  defp package do
+    [
+      maintainers: ["Paulo Valente", "José Valim"],
+      licenses: ["Apache-2.0"],
+      links: %{"GitHub" => @source_url}
     ]
   end
 
