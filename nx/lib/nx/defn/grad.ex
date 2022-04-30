@@ -548,7 +548,15 @@ defmodule Nx.Defn.Grad do
     phi_tril = num |> Nx.divide(den) |> tril()
 
     bm = Nx.LinAlg.triangular_solve(l, phi_tril, transform_a: :transpose)
-    dl = Nx.LinAlg.triangular_solve(l, bm, left_side: false)
+
+    dl =
+      l
+      |> conjugate_if_complex()
+      |> Nx.LinAlg.triangular_solve(bm, left_side: false)
+
+    # If we end up supporting the "make_symmetric" option for Nx.LinAlg.cholesky
+    # we need to apply: dl := (adjoint(dl) + dl)/2 when the option is true
+
     [{input, dl}]
   end
 
@@ -1302,4 +1310,7 @@ defmodule Nx.Defn.Grad do
     |> Nx.less_equal(Nx.iota(t, axis: 1))
     |> Nx.select(t, Nx.tensor(0, type: t.type))
   end
+
+  defp conjugate_if_complex(%{type: {:c, _}} = t), do: Nx.conjugate(t)
+  defp conjugate_if_complex(t), do: t
 end

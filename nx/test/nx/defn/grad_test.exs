@@ -1753,6 +1753,23 @@ defmodule Nx.Defn.GradTest do
       grad(t, fn x -> x |> Nx.exp() |> Nx.LinAlg.cholesky() |> Nx.sum() end)
     end
 
+    test "computes for 2x2 complex matrix" do
+      t = ~M[
+        1 -2i
+        2i 5
+      ]
+
+      assert cholesky_grad(t) == ~M[
+        2.5-1i -1i
+        1+1i 0.5
+      ]
+
+      assert_all_close(cholesky_cos_grad(t), ~M[
+        -5.7305   0.8414i
+        -4.4683i -0.4207
+      ])
+    end
+
     test "computes grad for {2, 2}-tensor" do
       t = Nx.tensor([[1.0, 2.0], [2.0, 5.0]])
       assert cholesky_grad(t) == Nx.tensor([[1.5, -1.0], [0.0, 0.5]])
