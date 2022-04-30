@@ -555,7 +555,11 @@ defmodule Nx.Defn.Grad do
       |> Nx.LinAlg.triangular_solve(bm, left_side: false)
 
     # If we end up supporting the "make_symmetric" option for Nx.LinAlg.cholesky
-    # we need to apply: dl := (adjoint(dl) + dl)/2 when the option is true
+    # we need to apply: dl := (adjoint(dl) + dl)/2 when the option is true.
+    # If the option is applied as Nx.add(tensor, adjoint(tensor)) |> Nx.divide(2)
+    # on the expression, no modifications are needed here, because
+    # the grad for the transformation is actually the same transformation
+    # applied on the grad
 
     [{input, dl}]
   end
