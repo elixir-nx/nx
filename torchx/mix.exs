@@ -2,7 +2,7 @@ defmodule Torchx.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx"
-  @version "0.2.0"
+  @version "0.2.1"
 
   @valid_targets ["cpu", "cu102", "cu111"]
 
@@ -78,7 +78,18 @@ defmodule Torchx.MixProject do
     [
       maintainers: ["Paulo Valente", "José Valim"],
       licenses: ["Apache-2.0"],
-      links: %{"GitHub" => @source_url}
+      links: %{"GitHub" => @source_url},
+      files: [
+        "lib",
+        "mix.exs",
+        "README.md",
+        "LICENSE",
+        "CHANGELOG.md",
+        "c_src",
+        "CMakeLists.txt",
+        "Makefile",
+        "Makefile.win"
+      ]
     ]
   end
 
