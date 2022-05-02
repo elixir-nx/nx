@@ -19,7 +19,7 @@ use a Git dependency while we work on our first release:
 ```elixir
 def deps do
   [
-    {:torchx, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "torchx"}
+    {:torchx, "~> 0.2"}
   ]
 end
 ```
