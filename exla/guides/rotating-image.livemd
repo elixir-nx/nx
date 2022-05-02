@@ -7,7 +7,7 @@ Mix.install([
   {:req, "~> 0.2.0"},
   {:kino, "~> 0.5.1"},
   {:exla, "~> 0.2"},
-  {:evision, "~> 0.1.0-dev", github: "cocoa-xu/evision", branch: "main"}
+  {:stb_image, "~> 0.2.1"}
 ])
 
 # To use TPU/CUDA/ROCM, you must also set the XLA_TARGET env var
@@ -23,13 +23,13 @@ defmodule Preprocess do
   def image_to_tensor(file_or_url) do
     case URI.parse(file_or_url) do
       %URI{scheme: nil} ->
-        {:ok, mat} = OpenCV.imread(file_or_url)
-        OpenCV.Nx.to_nx(mat)
+        {:ok, img} = StbImage.from_file(file_or_url)
+        Nx.from_binary(img.data, {:u, 8}) |> Nx.reshape(img.shape)
 
       _ ->
         %{body: binary_image} = Req.get!(file_or_url)
-        {:ok, mat} = OpenCV.imdecode(binary_image, OpenCV.cv_IMREAD_COLOR())
-        OpenCV.Nx.to_nx(mat)
+        {:ok, img} = StbImage.from_binary(binary_image)
+        Nx.from_binary(img.data, {:u, 8}) |> Nx.reshape(img.shape)
     end
   end
 
@@ -37,7 +37,7 @@ defmodule Preprocess do
   @pi 3.14159
 
   defp calculate_new_side_length(side1, side2, angle, radians?) do
-    angle = if radians? == 0, do: angle |> Nx.divide(180) |> Nx.multiply(@pi), else: angle
+    angle = if radians?, do: angle, else: angle |> Nx.divide(180) |> Nx.multiply(@pi)
     sine = Nx.sin(angle)
     cosine = Nx.cos(angle)
 
@@ -50,7 +50,7 @@ defmodule Preprocess do
     |> round()
   end
 
-  def get_new_height_and_width(height, width, angle, radians? \\ 1) do
+  def get_new_height_and_width(height, width, angle, radians? \\ true) do
     new_height = calculate_new_side_length(height, width, angle, radians?)
     new_width = calculate_new_side_length(width, height, angle, radians?)
     {new_height, new_width}
@@ -147,9 +147,9 @@ defmodule Rotate do
 
   # new_image is a tensor with dims of rotated image filled with zeros
 
-  defn rotate_image_by_angle(image, angle, new_image, radians? \\ 1) do
+  defn rotate_image_by_angle(image, angle, new_image, radians? \\ true) do
     # if radians? is set to false than assuming that angle is given in degrees
-    angle = if radians? == 0, do: angle |> Nx.divide(180) |> Nx.multiply(@pi), else: angle
+    angle = if radians?, do: angle, else: angle |> Nx.divide(180) |> Nx.multiply(@pi)
 
     {height, width, _} = image.shape
     {new_height, new_width, _} = new_image.shape
@@ -195,7 +195,7 @@ Kino.render(input)
 path_to_file = Kino.Input.read(input)
 
 # set options
-radians? = 0
+radians? = false
 angle = 70
 
 # rotate image by 70 degrees to the right
@@ -205,10 +205,10 @@ image = Preprocess.image_to_tensor(path_to_file)
 new_image = Nx.broadcast(Nx.tensor([0], type: {:u, 8}), {new_height, new_width, num_channels})
 rotated_image = Rotate.rotate_image_by_angle(image, angle, new_image, radians?)
 
-{:ok, rotated_image_mat} = OpenCV.Nx.to_mat(rotated_image)
-{:ok, content} = OpenCV.imencode(".png", rotated_image_mat)
-content = :binary.list_to_bin(content)
+# convert the tensor back to stb_image and render it as png
+img = StbImage.from_nx(rotated_image)
+{:ok, content} = StbImage.to_binary(img, :png)
 
 # display the rotated image
-Kino.Image.new(content, "image/png")
+Kino.Image.new(content, :png)
 ```
