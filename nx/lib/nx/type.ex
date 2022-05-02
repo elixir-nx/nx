@@ -5,11 +5,11 @@ defmodule Nx.Type do
   A type is a two-element tuple with the name and the size.
   The respective sizes for the types are the following:
 
-      * `:s` - signed integer (8, 16, 32, 64)
-      * `:u` - unsigned integer (8, 16, 32, 64)
-      * `:f` - float (16, 32, 64)
-      * `:bf` - a brain floating point (16)
-      * `:c` - a complex number, represented as a pair of floats (64, 128)
+    * `:s` - signed integer (8, 16, 32, 64)
+    * `:u` - unsigned integer (8, 16, 32, 64)
+    * `:f` - float (16, 32, 64)
+    * `:bf` - a brain floating point (16)
+    * `:c` - a complex number, represented as a pair of floats (64, 128)
 
   Each type has an equivalent atom representation, for example
   `{:s, 8}` can be expressed as `:s8`. When working with user-given

@@ -6,7 +6,7 @@ This version requires Elixir v1.13+.
 
   * [Nx] Support atom notation as the type option throughout the API (for example, `:u8`, `:f64`, etc)
   * [Nx] Add support for complex numbers (c64, c128)
-  * [Nx] Add `Nx.cummulative_sum/2`, `Nx.cummulative_product/2`, `Nx.cummulative_min/2`, `Nx.cummulative_max/2`
+  * [Nx] Add `Nx.cumulative_sum/2`, `Nx.cumulative_product/2`, `Nx.cumulative_min/2`, `Nx.cumulative_max/2`
   * [Nx] Add `Nx.conjugate/1`, `Nx.phase/1`, `Nx.real/1`, and `Nx.imag/1`
   * [Nx] Initial support for NaN and Infinity
   * [Nx] Add `:axis` option to `Nx.shuffle/2`
