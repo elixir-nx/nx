@@ -67,9 +67,35 @@ defmodule EXLA.Backend do
   end
 
   @impl true
-  def to_batched_list(_out, _tensor, _backend_options) do
-    # TODO: once implemented, enable the corresponding Nx doctests in EXLA.BackendTest
-    raise "to_batched_list is not currently supported by EXLA.Backend, please call Nx.backend_copy/1"
+  def to_batched_list(out, tensor, opts) do
+    leftover = opts[:leftover]
+
+    batch_size = elem(out.shape, 0)
+    axis_size = elem(tensor.shape, 0)
+
+    remainder = rem(axis_size, batch_size)
+    num_full_batches = div(axis_size, batch_size)
+
+    to_add = if remainder != 0, do: batch_size - remainder, else: 0
+
+    {num_batches, expr_fun} =
+      if to_add != 0 and leftover == :repeat do
+        {num_full_batches + 1,
+         fn tensor, start_idx ->
+           wrapped_tensor = Nx.concatenate([tensor, Nx.slice_along_axis(tensor, 0, to_add)])
+           Nx.slice_along_axis(wrapped_tensor, start_idx, batch_size)
+         end}
+      else
+        {num_full_batches,
+         fn tensor, start_idx ->
+           Nx.slice_along_axis(tensor, start_idx, batch_size)
+         end}
+      end
+
+    for i <- 0..(num_batches - 1) do
+      start_idx = i * batch_size
+      EXLA.jit(expr_fun, [tensor, start_idx])
+    end
   end
 
   @impl true
@@ -127,11 +153,11 @@ defmodule EXLA.Backend do
 
   @impl true
   def concatenate(out, tensors, axis) do
-    expr_fn = fn tensors ->
+    expr_fun = fn tensors ->
       Nx.Defn.Expr.concatenate(out, Tuple.to_list(tensors), axis)
     end
 
-    EXLA.jit(expr_fn, [List.to_tuple(tensors)])
+    EXLA.jit(expr_fun, [List.to_tuple(tensors)])
   end
 
   @impl true
@@ -221,11 +247,11 @@ defmodule EXLA.Backend do
 
     @impl true
     def unquote(name)(unquote_splicing(args)) do
-      expr_fn = fn unquote_splicing(tensor_args) ->
+      expr_fun = fn unquote_splicing(tensor_args) ->
         Nx.Defn.Expr.unquote(name)(unquote_splicing(args))
       end
 
-      EXLA.jit(expr_fn, [unquote_splicing(tensor_args)])
+      EXLA.jit(expr_fun, [unquote_splicing(tensor_args)])
     end
   end
 end
