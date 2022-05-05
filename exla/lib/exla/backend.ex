@@ -76,25 +76,28 @@ defmodule EXLA.Backend do
     remainder = rem(axis_size, batch_size)
     num_full_batches = div(axis_size, batch_size)
 
-    to_add = if remainder != 0, do: batch_size - remainder, else: 0
+    expr_fun = fn tensor, start_idx ->
+      Nx.slice_along_axis(tensor, start_idx, batch_size)
+    end
 
-    {num_batches, expr_fun} =
-      if to_add != 0 and leftover == :repeat do
-        {num_full_batches + 1,
-         fn tensor, start_idx ->
-           wrapped_tensor = Nx.concatenate([tensor, Nx.slice_along_axis(tensor, 0, to_add)])
-           Nx.slice_along_axis(wrapped_tensor, start_idx, batch_size)
-         end}
-      else
-        {num_full_batches,
-         fn tensor, start_idx ->
-           Nx.slice_along_axis(tensor, start_idx, batch_size)
-         end}
+    full_batches =
+      for i <- 0..(num_full_batches - 1) do
+        start_idx = i * batch_size
+        EXLA.jit(expr_fun, [tensor, start_idx])
       end
 
-    for i <- 0..(num_batches - 1) do
-      start_idx = i * batch_size
-      EXLA.jit(expr_fun, [tensor, start_idx])
+    if remainder != 0 and leftover == :repeat do
+      expr_fun = fn tensor ->
+        Nx.concatenate([
+          Nx.slice_along_axis(tensor, num_full_batches * batch_size, remainder),
+          Nx.slice_along_axis(tensor, 0, batch_size - remainder)
+        ])
+      end
+
+      last_batch = EXLA.jit(expr_fun, [tensor])
+      full_batches ++ [last_batch]
+    else
+      full_batches
     end
   end
 
