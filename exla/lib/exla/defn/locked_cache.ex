@@ -51,9 +51,17 @@ defmodule EXLA.Defn.LockedCache do
     end
   end
 
-  defp soft_read(key), do: :persistent_term.get({:exla, key}, nil)
-  defp hard_read(key), do: :persistent_term.get({:exla, key})
-  defp write(key, value), do: :persistent_term.put({:exla, key}, value)
+  defp init(), do: :ets.new(@name, [:public, :set, :named_table, read_concurrency: true])
+  defp write(key, value), do: :ets.insert(@name, {key, value})
+  defp hard_read(key), do: :ets.lookup_element(@name, key, 2)
+
+  defp soft_read(key) do
+    try do
+      :ets.lookup_element(@name, key, 2)
+    catch
+      :error, :badarg -> nil
+    end
+  end
 
   ## Callbacks
 
@@ -64,6 +72,7 @@ defmodule EXLA.Defn.LockedCache do
 
   @impl true
   def init(:ok) do
+    init()
     {:ok, %{keys: %{}, ref_to_key: %{}}}
   end
 
