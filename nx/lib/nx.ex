@@ -5357,6 +5357,7 @@ defmodule Nx do
          [1.1071487665176392, 2.677945137023926]
        >
   """
+  @doc type: :element
   def phase(tensor) do
     tensor = to_tensor(tensor)
     output = %{tensor | type: Nx.Type.to_real(tensor.type)}
@@ -5477,6 +5478,7 @@ defmodule Nx do
         [1.0+3.0i, 2.0+4.0i]
       >
   """
+  @doc type: :element
   def complex(real, imag) do
     if elem(type(real), 0) == :c or elem(type(imag), 0) == :c do
       Nx.Shared.raise_complex_not_supported("complex", 2)
@@ -8860,6 +8862,7 @@ defmodule Nx do
     slice(tensor, start_indices, lengths, strides: strides)
   end
 
+  @doc false
   @deprecated "Use slice_along_axis/4 instead"
   def slice_axis(tensor, start_index, len, axis, opts \\ []) when is_integer(len) do
     slice_along_axis(tensor, start_index, len, [axis: axis] ++ opts)
@@ -9871,6 +9874,7 @@ defmodule Nx do
         [4, 5, 6]
       >
   """
+  @doc type: :conversion
   def serialize(tensor_or_container, opts \\ []) do
     data_term = to_term(tensor_or_container)
     term = {@file_version, System.endianness(), data_term}
@@ -9944,6 +9948,7 @@ defmodule Nx do
         [4, 5, 6]
       >
   """
+  @doc type: :conversion
   def deserialize(data, opts \\ []) do
     data
     |> :erlang.binary_to_term(opts)
