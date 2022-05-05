@@ -67,9 +67,38 @@ defmodule EXLA.Backend do
   end
 
   @impl true
-  def to_batched_list(_out, _tensor, _backend_options) do
-    # TODO: once implemented, enable the corresponding Nx doctests in EXLA.BackendTest
-    raise "to_batched_list is not currently supported by EXLA.Backend, please call Nx.backend_copy/1"
+  def to_batched_list(out, tensor, opts) do
+    leftover = opts[:leftover]
+
+    batch_size = elem(out.shape, 0)
+    axis_size = elem(tensor.shape, 0)
+
+    remainder = rem(axis_size, batch_size)
+    num_full_batches = div(axis_size, batch_size)
+
+    expr_fun = fn tensor, start_idx ->
+      Nx.slice_along_axis(tensor, start_idx, batch_size)
+    end
+
+    full_batches =
+      for i <- 0..(num_full_batches - 1) do
+        start_idx = i * batch_size
+        EXLA.jit(expr_fun, [tensor, start_idx])
+      end
+
+    if remainder != 0 and leftover == :repeat do
+      expr_fun = fn tensor ->
+        Nx.concatenate([
+          Nx.slice_along_axis(tensor, num_full_batches * batch_size, remainder),
+          Nx.slice_along_axis(tensor, 0, batch_size - remainder)
+        ])
+      end
+
+      last_batch = EXLA.jit(expr_fun, [tensor])
+      full_batches ++ [last_batch]
+    else
+      full_batches
+    end
   end
 
   @impl true
@@ -127,11 +156,11 @@ defmodule EXLA.Backend do
 
   @impl true
   def concatenate(out, tensors, axis) do
-    expr_fn = fn tensors ->
+    expr_fun = fn tensors ->
       Nx.Defn.Expr.concatenate(out, Tuple.to_list(tensors), axis)
     end
 
-    EXLA.jit(expr_fn, [List.to_tuple(tensors)])
+    EXLA.jit(expr_fun, [List.to_tuple(tensors)])
   end
 
   @impl true
@@ -221,11 +250,11 @@ defmodule EXLA.Backend do
 
     @impl true
     def unquote(name)(unquote_splicing(args)) do
-      expr_fn = fn unquote_splicing(tensor_args) ->
+      expr_fun = fn unquote_splicing(tensor_args) ->
         Nx.Defn.Expr.unquote(name)(unquote_splicing(args))
       end
 
-      EXLA.jit(expr_fn, [unquote_splicing(tensor_args)])
+      EXLA.jit(expr_fun, [unquote_splicing(tensor_args)])
     end
   end
 end
