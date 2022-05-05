@@ -9988,7 +9988,7 @@ defmodule Nx do
   originally created or intended to be loaded from NumPy into
   Elixir.
   """
-  @doc type: :creation
+  @doc type: :conversion
   def from_numpy(file) do
     file
     |> File.read!()
@@ -10001,7 +10001,7 @@ defmodule Nx do
   An `.npz` file is a zipped, possibly compressed archive containing
   multiple `.npy` files.
   """
-  @doc type: :creation
+  @doc type: :conversion
   def from_numpy_archive(archive) do
     archive = File.read!(archive)
 
