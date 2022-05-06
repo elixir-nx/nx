@@ -456,14 +456,6 @@ defmodule Nx do
         ]
       >
 
-  It is possible to pass scalar tensors as part of a list too:
-
-      iex> Nx.tensor([1, Nx.tensor(2), 3])
-      #Nx.Tensor<
-        s64[3]
-        [1, 2, 3]
-      >
-
   Besides single-precision (32 bits), floats can also have
   half-precision (16) or double-precision (64):
 
@@ -561,10 +553,6 @@ defmodule Nx do
     Nx.Type.infer(number)
   end
 
-  defp infer_type(%Nx.Tensor{type: type, shape: {}}) do
-    type
-  end
-
   defp infer_type(value) do
     raise ArgumentError, "invalid value given to Nx.tensor/1, got: #{inspect(value)}"
   end
@@ -640,10 +628,6 @@ defmodule Nx do
   defp flatten_list(list, type, dimensions, acc) do
     {[length(list) | dimensions],
      Enum.reduce(list, acc, &[tensor_or_number_to_binary(&1, type) | &2])}
-  end
-
-  defp tensor_or_number_to_binary(%Nx.Tensor{shape: {}} = tensor, type) do
-    tensor |> as_type(type) |> to_binary()
   end
 
   defp tensor_or_number_to_binary(%Complex{re: re, im: im}, {:c, size}) do
@@ -1609,7 +1593,7 @@ defmodule Nx do
 
   Non-finite numbers are returned as atoms:
 
-      iex> t = Nx.tensor([Nx.Constants.neg_infinity(), Nx.Constants.nan(), Nx.Constants.infinity()])
+      iex> t = Nx.tensor([:neg_infinity, :nan, :infinity])
       iex> Nx.to_flat_list(t)
       [:neg_infinity, :nan, :infinity]
 
@@ -1890,7 +1874,7 @@ defmodule Nx do
   Casting of non-finite values to integer types convert to pre-determined
   integer values:
 
-      iex> non_finite = Nx.tensor([Nx.Constants.infinity(), Nx.Constants.nan(), Nx.Constants.neg_infinity()])
+      iex> non_finite = Nx.tensor([:infinity, :nan, :neg_infinity])
       iex> Nx.as_type(non_finite, {:u, 8})
       #Nx.Tensor<
         u8[3]
@@ -1904,7 +1888,7 @@ defmodule Nx do
 
   Non-finite values between float types are preserved:
 
-      iex> non_finite = Nx.tensor([Nx.Constants.infinity(), Nx.Constants.nan()])
+      iex> non_finite = Nx.tensor([:infinity, :nan])
       iex> Nx.as_type(non_finite, {:f, 64})
       #Nx.Tensor<
         f64[2]

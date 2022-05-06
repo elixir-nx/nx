@@ -15,9 +15,9 @@ defmodule EXLA.Op do
   Creates a numeric constant.
   """
   def constant_r0(%Builder{} = builder, non_finite, dtype) when is_atom(non_finite) do
-    binary = apply(Nx.Constants, non_finite, [dtype])
+    binary = apply(Nx.Type, :"#{non_finite}_binary", [dtype])
     shape = EXLA.Shape.make_shape(dtype, {})
-    constant_from_binary(builder, Nx.to_binary(binary), shape)
+    constant_from_binary(builder, binary, shape)
   end
 
   def constant_r0(%Builder{} = builder, %Complex{re: r, im: i}, dtype = {:c, size}) do

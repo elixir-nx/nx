@@ -1,12 +1,11 @@
 defmodule Nx.HeatmapTest do
   use ExUnit.Case, async: true
-  alias Nx.Constants, as: C
 
   @tensor0 Nx.tensor(0)
   @tensor1 Nx.tensor([1, 2, 3, 4, 5])
   @tensor2 Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]])
   @tensor3 Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
-  @non_finite Nx.tensor([C.neg_infinity(), -1, C.nan(), 1, C.infinity()])
+  @non_finite Nx.tensor([:neg_infinity, -1, :nan, 1, :infinity])
 
   test "rank 0" do
     assert_raise ArgumentError, fn -> Nx.to_heatmap(@tensor0) end
