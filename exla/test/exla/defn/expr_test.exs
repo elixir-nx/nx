@@ -71,22 +71,22 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "non finite" do
-    defn infinity, do: Nx.tensor(:infinity)
-    defn neg_infinity, do: Nx.tensor(:neg_infinity)
-    defn nan, do: Nx.tensor(:nan)
+    defn infinity, do: Nx.Constants.infinity()
+    defn neg_infinity, do: Nx.Constants.neg_infinity()
+    defn nan, do: Nx.Constants.nan()
 
     test "handles non-finite constants correctly" do
-      assert_equal(infinity(), Nx.tensor(:infinity))
-      assert_equal(neg_infinity(), Nx.tensor(:neg_infinity))
-      assert_equal(nan(), Nx.tensor(:nan))
+      assert_equal(infinity(), Nx.Constants.infinity())
+      assert_equal(neg_infinity(), Nx.Constants.neg_infinity())
+      assert_equal(nan(), Nx.Constants.nan())
     end
 
-    defn negate_infinity, do: Nx.negate(Nx.tensor(:infinity))
-    defn negate_neg_infinity, do: Nx.negate(Nx.tensor(:infinity))
+    defn negate_infinity, do: Nx.negate(Nx.Constants.infinity())
+    defn negate_neg_infinity, do: Nx.negate(Nx.Constants.infinity())
 
     test "sanity check constants" do
-      assert_equal(negate_infinity(), Nx.tensor(:neg_infinity))
-      assert_equal(infinity(), Nx.tensor(:infinity))
+      assert_equal(negate_infinity(), Nx.Constants.neg_infinity())
+      assert_equal(infinity(), Nx.Constants.infinity())
     end
   end
 
