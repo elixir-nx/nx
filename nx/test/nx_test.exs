@@ -854,12 +854,10 @@ defmodule NxTest do
   end
 
   describe "tensor/2" do
-    test "with mixed tensor scalars" do
-      assert Nx.tensor([Nx.tensor(1, type: {:u, 8}), Nx.tensor(2, type: {:u, 16})]) ==
-               Nx.tensor([1, 2], type: {:u, 16})
-
-      assert Nx.tensor([Nx.tensor(1, type: {:u, 8}), Nx.tensor(2, type: {:u, 16}), 3.0]) ==
-               Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32})
+    test "with non-finite" do
+      assert Nx.tensor(:neg_infinity) == Nx.Constants.neg_infinity()
+      assert Nx.tensor(:infinity) == Nx.Constants.infinity()
+      assert Nx.tensor(:nan) == Nx.Constants.nan()
     end
 
     test "raises for empty list" do

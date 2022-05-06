@@ -14,14 +14,17 @@ defmodule EXLA.Op do
   @doc """
   Creates a numeric constant.
   """
+  def constant_r0(%Builder{} = builder, non_finite, dtype) when is_atom(non_finite) do
+    binary = apply(Nx.Type, :"#{non_finite}_binary", [dtype])
+    shape = EXLA.Shape.make_shape(dtype, {})
+    constant_from_binary(builder, binary, shape)
+  end
+
   def constant_r0(%Builder{} = builder, %Complex{re: r, im: i}, dtype = {:c, size}) do
     data =
       case size do
-        64 ->
-          <<r::32-float-native, i::32-float-native>>
-
-        128 ->
-          <<r::64-float-native, i::64-float-native>>
+        64 -> <<r::32-float-native, i::32-float-native>>
+        128 -> <<r::64-float-native, i::64-float-native>>
       end
 
     constant_from_binary(builder, data, Shape.make_shape(dtype, {}))

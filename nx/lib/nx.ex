@@ -358,6 +358,8 @@ defmodule Nx do
 
   @file_version 1
 
+  @non_finite [:neg_infinity, :infinity, :nan]
+
   ## Creation API
 
   @doc """
@@ -454,14 +456,6 @@ defmodule Nx do
         ]
       >
 
-  It is possible to pass scalar tensors as part of a list too:
-
-      iex> Nx.tensor([1, Nx.tensor(2), 3])
-      #Nx.Tensor<
-        s64[3]
-        [1, 2, 3]
-      >
-
   Besides single-precision (32 bits), floats can also have
   half-precision (16) or double-precision (64):
 
@@ -554,12 +548,9 @@ defmodule Nx do
     Enum.reduce(tail, infer_type(head), &Nx.Type.merge(infer_type(&1), &2))
   end
 
-  defp infer_type(number) when is_number(number) or is_struct(number, Complex) do
+  defp infer_type(number)
+       when is_number(number) or is_struct(number, Complex) or number in @non_finite do
     Nx.Type.infer(number)
-  end
-
-  defp infer_type(%Nx.Tensor{type: type, shape: {}}) do
-    type
   end
 
   defp infer_type(value) do
@@ -581,6 +572,13 @@ defmodule Nx do
   defp tensor(%Complex{}, type, _) do
     raise ArgumentError,
           "invalid type for complex number. Expected {:c, 64} or {:c, 128}, got: #{inspect(type)}"
+  end
+
+  defp tensor(arg, type, opts) when arg in @non_finite do
+    names = Nx.Shape.named_axes!(opts[:names], {})
+    {backend, backend_options} = backend_from_options!(opts) || default_backend()
+    data = number_to_binary(arg, type)
+    backend.from_binary(%T{shape: {}, type: type, names: names}, data, backend_options)
   end
 
   defp tensor(arg, type, opts) when is_list(arg) do
@@ -632,15 +630,15 @@ defmodule Nx do
      Enum.reduce(list, acc, &[tensor_or_number_to_binary(&1, type) | &2])}
   end
 
-  defp tensor_or_number_to_binary(%Nx.Tensor{shape: {}} = tensor, type) do
-    tensor |> as_type(type) |> to_binary()
-  end
-
   defp tensor_or_number_to_binary(%Complex{re: re, im: im}, {:c, size}) do
     number_to_binary(re, {:f, div(size, 2)}) <> number_to_binary(im, {:f, div(size, 2)})
   end
 
   defp tensor_or_number_to_binary(number, type) when is_number(number) do
+    number_to_binary(number, type)
+  end
+
+  defp tensor_or_number_to_binary(number, type) when number in @non_finite do
     number_to_binary(number, type)
   end
 
@@ -1595,7 +1593,7 @@ defmodule Nx do
 
   Non-finite numbers are returned as atoms:
 
-      iex> t = Nx.tensor([Nx.Constants.neg_infinity(), Nx.Constants.nan(), Nx.Constants.infinity()])
+      iex> t = Nx.tensor([:neg_infinity, :nan, :infinity])
       iex> Nx.to_flat_list(t)
       [:neg_infinity, :nan, :infinity]
 
@@ -1876,7 +1874,7 @@ defmodule Nx do
   Casting of non-finite values to integer types convert to pre-determined
   integer values:
 
-      iex> non_finite = Nx.tensor([Nx.Constants.infinity(), Nx.Constants.nan(), Nx.Constants.neg_infinity()])
+      iex> non_finite = Nx.tensor([:infinity, :nan, :neg_infinity])
       iex> Nx.as_type(non_finite, {:u, 8})
       #Nx.Tensor<
         u8[3]
@@ -1890,7 +1888,7 @@ defmodule Nx do
 
   Non-finite values between float types are preserved:
 
-      iex> non_finite = Nx.tensor([Nx.Constants.infinity(), Nx.Constants.nan()])
+      iex> non_finite = Nx.tensor([:infinity, :nan])
       iex> Nx.as_type(non_finite, {:f, 64})
       #Nx.Tensor<
         f64[2]

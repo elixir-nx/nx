@@ -70,6 +70,26 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
+  describe "non finite" do
+    defn infinity, do: Nx.Constants.infinity()
+    defn neg_infinity, do: Nx.Constants.neg_infinity()
+    defn nan, do: Nx.Constants.nan()
+
+    test "handles non-finite constants correctly" do
+      assert_equal(infinity(), Nx.Constants.infinity())
+      assert_equal(neg_infinity(), Nx.Constants.neg_infinity())
+      assert_equal(nan(), Nx.Constants.nan())
+    end
+
+    defn negate_infinity, do: Nx.negate(Nx.Constants.infinity())
+    defn negate_neg_infinity, do: Nx.negate(Nx.Constants.infinity())
+
+    test "sanity check constants" do
+      assert_equal(negate_infinity(), Nx.Constants.neg_infinity())
+      assert_equal(infinity(), Nx.Constants.infinity())
+    end
+  end
+
   describe "float16" do
     defn return_float, do: Nx.tensor(1, type: {:f, 16})
 
