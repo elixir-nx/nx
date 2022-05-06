@@ -131,6 +131,7 @@ defmodule Nx.Type do
   def infer(value) when is_integer(value), do: {:s, 64}
   def infer(value) when is_float(value), do: {:f, 32}
   def infer(%Complex{}), do: {:c, 64}
+  def infer(value) when value in [:neg_infinity, :infinity, :nan], do: {:f, 32}
 
   @doc """
   Validates and normalizes the given type tuple.

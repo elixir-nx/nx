@@ -1498,7 +1498,9 @@ defmodule EXLA.Defn do
   defp to_nx_type(type), do: type
 
   defp to_constant(builder, constant, type) do
-    EXLA.Op.constant_r0(builder, constant, type)
+    bin = constant |> Nx.tensor() |> Nx.to_binary()
+    shape = EXLA.Shape.make_shape(type, {})
+    EXLA.Op.constant_from_binary(builder, bin, shape)
   end
 
   defp subbuilder(%EXLA.Builder{name: name} = builder, desc) do

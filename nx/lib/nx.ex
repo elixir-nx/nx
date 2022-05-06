@@ -358,6 +358,8 @@ defmodule Nx do
 
   @file_version 1
 
+  @non_finite [:neg_infinity, :infinity, :nan]
+
   ## Creation API
 
   @doc """
@@ -554,7 +556,8 @@ defmodule Nx do
     Enum.reduce(tail, infer_type(head), &Nx.Type.merge(infer_type(&1), &2))
   end
 
-  defp infer_type(number) when is_number(number) or is_struct(number, Complex) do
+  defp infer_type(number)
+       when is_number(number) or is_struct(number, Complex) or number in @non_finite do
     Nx.Type.infer(number)
   end
 
@@ -581,6 +584,13 @@ defmodule Nx do
   defp tensor(%Complex{}, type, _) do
     raise ArgumentError,
           "invalid type for complex number. Expected {:c, 64} or {:c, 128}, got: #{inspect(type)}"
+  end
+
+  defp tensor(arg, type, opts) when arg in @non_finite do
+    names = Nx.Shape.named_axes!(opts[:names], {})
+    {backend, backend_options} = backend_from_options!(opts) || default_backend()
+    data = number_to_binary(arg, type)
+    backend.from_binary(%T{shape: {}, type: type, names: names}, data, backend_options)
   end
 
   defp tensor(arg, type, opts) when is_list(arg) do
@@ -641,6 +651,10 @@ defmodule Nx do
   end
 
   defp tensor_or_number_to_binary(number, type) when is_number(number) do
+    number_to_binary(number, type)
+  end
+
+  defp tensor_or_number_to_binary(number, type) when number in @non_finite do
     number_to_binary(number, type)
   end
 
