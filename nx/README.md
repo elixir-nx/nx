@@ -50,11 +50,11 @@ Here are some introductory resources with more information on Nx as a whole:
 
   * [Sean Moriarity's blog](https://seanmoriarity.com/) containing tips on how to use Nx (text)
 
-  * [The ThinkingElixir podcast where José Valim unveiled Nx](https://thinkingelixir.com/podcast-episodes/034-jose-valim-reveals-project-nx/) (audio - starts around 8 minutes in)
-
   * [A talk by José Valim at Lambda Days 2021 where he builds a neural network from scratch with Nx](https://www.youtube.com/watch?v=fPKMmJpAGWc) (video)
 
   * [A screencast by José Valim announcing Livebook, where he also showcases Nx and Axon (a neural network library built on top of Nx)](https://www.youtube.com/watch?v=RKvqc-UEe34) (video)
+
+  * [An article by Philip Brown showing an end-to-end example of running a Machine Learning model with Elixir in production](https://fly.io/phoenix-files/recognize-digits-using-ml-in-elixir/) (text)
 
 ## Installation
 
