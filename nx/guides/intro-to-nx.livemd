@@ -47,7 +47,7 @@ arrays. For example, this is a two dimensional array:
 
 $$
 \begin{bmatrix}
-  1 & 2 \\
+  1 & 2 \\\\
   3 & 4
 \end{bmatrix}
 $$
@@ -315,15 +315,15 @@ another. Mathematically, the expression looks like this:
 
 $$
 \begin{bmatrix}
-  5 & 6 \\
+  5 & 6 \\\\
   7 & 8
 \end{bmatrix} -
 \begin{bmatrix}
-  1 & 2 \\
+  1 & 2 \\\\
   3 & 4
 \end{bmatrix} =
 \begin{bmatrix}
-  4 & 4 \\
+  4 & 4 \\\\
   4 & 4
 \end{bmatrix}
 $$
@@ -353,11 +353,11 @@ element of a `{2, 2}` tensor, like this:
 
 $$
 \begin{bmatrix}
-  1 & 2 \\
+  1 & 2 \\\\
   3 & 4
 \end{bmatrix} - 1 =
 \begin{bmatrix}
-  0 & 1 \\
+  0 & 1 \\\\
   2 & 3
 \end{bmatrix}
 $$
@@ -366,15 +366,15 @@ Mathematically, it's the same as this:
 
 $$
 \begin{bmatrix}
-  1 & 2 \\
+  1 & 2 \\\\
   3 & 4
 \end{bmatrix} -
 \begin{bmatrix}
-  1 & 1 \\
+  1 & 1 \\\\
   1 & 1
 \end{bmatrix} =
 \begin{bmatrix}
-  0 & 1 \\
+  0 & 1 \\\\
   2 & 3
 \end{bmatrix}
 $$
@@ -415,14 +415,14 @@ Or subtract a row or column. Mathematically, it would look like this:
 
 $$
 \begin{bmatrix}
-  1 & 2 \\
+  1 & 2 \\\\
   3 & 4
 \end{bmatrix} -
 \begin{bmatrix}
   1 & 2
 \end{bmatrix} =
 \begin{bmatrix}
-  0 & 0 \\
+  0 & 0 \\\\
   2 & 2
 \end{bmatrix}
 $$
@@ -431,15 +431,15 @@ which is the same as this:
 
 $$
 \begin{bmatrix}
-  1 & 2 \\
+  1 & 2 \\\\
   3 & 4
 \end{bmatrix} -
 \begin{bmatrix}
-  1 & 2 \\
+  1 & 2 \\\\
   1 & 2
 \end{bmatrix} =
 \begin{bmatrix}
-  0 & 0 \\
+  0 & 0 \\\\
   2 & 2
 \end{bmatrix}
 $$
@@ -596,7 +596,7 @@ is a simple numerical definitin, and `poly_slope_at/1` returns
 its gradient:
 
 $$
-  poly: f(x) = 3x^2 + 2x + 1 \\
+  poly: f(x) = 3x^2 + 2x + 1 \\\\
 $$
 
 $$
