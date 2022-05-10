@@ -656,6 +656,7 @@ defmodule Nx.BinaryBackend do
     data =
       match_types [right.type, type] do
         for <<match!(x, 0) <- to_binary(right)>>, into: <<>> do
+          IO.inspect({read!(x, 0), number})
           <<write!(fun.(type, number, read!(x, 0)), 1)>>
         end
       end

@@ -5779,6 +5779,9 @@ defmodule Nx do
     opts = keyword!(opts, rtol: 1.0e-5, atol: 1.0e-8)
     rtol = opts[:rtol]
     atol = opts[:atol]
+
+    # TO_DO: deal with non_finite entries by adding is_infinity and is_nan
+
     all(less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b)))))
   end
 
