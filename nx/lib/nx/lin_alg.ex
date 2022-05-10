@@ -1231,7 +1231,7 @@ defmodule Nx.LinAlg do
       iex> Nx.LinAlg.determinant(t)
       #Nx.Tensor<
         c64
-        -0.0-6.0i
+        0.0-6.0i
       >
 
   """
