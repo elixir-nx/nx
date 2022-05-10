@@ -10315,6 +10315,27 @@ defmodule Nx do
           [1.0+1.0i, 2.0-2.0i, -3.0+0.0i]
         ]
       >
+      iex> ~M[1 Inf NaN]
+      #Nx.Tensor<
+        f32[1][3]
+        [
+          [1.0, Inf, NaN]
+        ]
+      >
+      iex> ~M[1i Inf NaN]
+      #Nx.Tensor<
+        c64[1][3]
+        [
+          [0.0+1.0i, Inf+0.0i, NaN+0.0i]
+        ]
+      >
+      iex> ~M[1i Inf+2i NaN-Infi]
+      #Nx.Tensor<
+        c64[1][3]
+        [
+          [0.0+1.0i, Inf+2.0i, NaN-Infi]
+        ]
+      >
 
   """
   @doc type: :creation
