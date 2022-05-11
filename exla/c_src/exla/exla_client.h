@@ -25,6 +25,11 @@ class ExlaBuffer {
   ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer,
              bool can_be_released_after_run_ = false);
 
+  // Make sure the transfer has completed before we deallocate the buffer.
+  ~ExlaBuffer() {
+    buffer_->BlockHostUntilReady();
+  }
+
   bool release_after_run() { return can_be_released_after_run_; }
   xla::PjRtBuffer* buffer() { return buffer_.get(); }
   xla::StatusOr<ExlaBuffer*> CopyToDevice(xla::PjRtDevice * dst_device);
