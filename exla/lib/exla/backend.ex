@@ -156,6 +156,8 @@ defmodule EXLA.Backend do
 
   @impl true
   def concatenate(out, tensors, axis) do
+    out = Nx.to_template(out)
+
     expr_fun = fn tensors ->
       Nx.Defn.Expr.concatenate(out, Tuple.to_list(tensors), axis)
     end
@@ -191,67 +193,69 @@ defmodule EXLA.Backend do
 
   callbacks =
     [
-      {:eye, [:out, :backend_options], []},
-      {:iota, [:out, :axis, :backend_options], []},
-      {:random_uniform, [:out, :min, :max, :backend_options], [:min, :max]},
-      {:random_normal, [:out, :mu, :sigma, :backend_options], [:mu, :sigma]},
-      {:as_type, [:out, :tensor], [:tensor]},
-      {:bitcast, [:out, :tensor], [:tensor]},
-      {:reshape, [:out, :tensor], [:tensor]},
-      {:squeeze, [:out, :tensor, :axes], [:tensor]},
-      {:broadcast, [:out, :tensor, :shape, :axes], [:tensor]},
-      {:transpose, [:out, :tensor, :axes], [:tensor]},
-      {:pad, [:out, :tensor, :pad_value, :padding_config], [:tensor, :pad_value]},
-      {:reverse, [:out, :tensor, :axes], [:tensor]},
-      {:dot, [:out, :left, :c1, :b1, :right, :c2, :b2], [:left, :right]},
-      {:clip, [:out, :tensor, :min, :max], [:tensor, :min, :max]},
-      {:slice, [:out, :tensor, :start_indices, :lengths, :strides], [:tensor]},
-      {:put_slice, [:out, :tensor, :start, :slice], [:tensor, :slice]},
-      {:take, [:out, :tensor, :indices, :axis], [:tensor, :indices]},
-      {:take_along_axis, [:out, :tensor, :indices, :axis], [:tensor, :indices]},
-      {:gather, [:out, :input, :indices], [:input, :indices]},
-      {:select, [:out, :pred, :on_true, :on_false], [:pred, :on_true, :on_false]},
-      {:conv, [:out, :tensor, :kernel, :opts], [:tensor, :kernel]},
-      {:all, [:out, :tensor, :opts], [:tensor]},
-      {:any, [:out, :tensor, :opts], [:tensor]},
-      {:sum, [:out, :tensor, :opts], [:tensor]},
-      {:product, [:out, :tensor, :opts], [:tensor]},
-      {:reduce_max, [:out, :tensor, :opts], [:tensor]},
-      {:reduce_min, [:out, :tensor, :opts], [:tensor]},
-      {:argmax, [:out, :tensor, :opts], [:tensor]},
-      {:argmin, [:out, :tensor, :opts], [:tensor]},
-      {:reduce, [:out, :tensor, :acc, :opts, :fun], [:tensor, :acc]},
-      {:window_reduce, [:out, :tensor, :acc, :shape, :opts, :fun], [:tensor, :acc]},
-      {:window_sum, [:out, :tensor, :shape, :opts], [:tensor]},
-      {:window_product, [:out, :tensor, :shape, :opts], [:tensor]},
-      {:window_max, [:out, :tensor, :shape, :opts], [:tensor]},
-      {:window_min, [:out, :tensor, :shape, :opts], [:tensor]},
-      {:map, [:out, :tensor, :opts, :fun], [:tensor]},
-      {:sort, [:out, :tensor, :opts], [:tensor]},
-      {:argsort, [:out, :tensor, :opts], [:tensor]},
-      {:window_scatter_max, [:out, :tensor, :source, :init_value, :window_dims, :opts],
+      {:eye, [:backend_options], []},
+      {:iota, [:axis, :backend_options], []},
+      {:random_uniform, [:min, :max, :backend_options], [:min, :max]},
+      {:random_normal, [:mu, :sigma, :backend_options], [:mu, :sigma]},
+      {:as_type, [:tensor], [:tensor]},
+      {:bitcast, [:tensor], [:tensor]},
+      {:reshape, [:tensor], [:tensor]},
+      {:squeeze, [:tensor, :axes], [:tensor]},
+      {:broadcast, [:tensor, :shape, :axes], [:tensor]},
+      {:transpose, [:tensor, :axes], [:tensor]},
+      {:pad, [:tensor, :pad_value, :padding_config], [:tensor, :pad_value]},
+      {:reverse, [:tensor, :axes], [:tensor]},
+      {:dot, [:left, :c1, :b1, :right, :c2, :b2], [:left, :right]},
+      {:clip, [:tensor, :min, :max], [:tensor, :min, :max]},
+      {:slice, [:tensor, :start_indices, :lengths, :strides], [:tensor]},
+      {:put_slice, [:tensor, :start, :slice], [:tensor, :slice]},
+      {:take, [:tensor, :indices, :axis], [:tensor, :indices]},
+      {:take_along_axis, [:tensor, :indices, :axis], [:tensor, :indices]},
+      {:gather, [:input, :indices], [:input, :indices]},
+      {:select, [:pred, :on_true, :on_false], [:pred, :on_true, :on_false]},
+      {:conv, [:tensor, :kernel, :opts], [:tensor, :kernel]},
+      {:all, [:tensor, :opts], [:tensor]},
+      {:any, [:tensor, :opts], [:tensor]},
+      {:sum, [:tensor, :opts], [:tensor]},
+      {:product, [:tensor, :opts], [:tensor]},
+      {:reduce_max, [:tensor, :opts], [:tensor]},
+      {:reduce_min, [:tensor, :opts], [:tensor]},
+      {:argmax, [:tensor, :opts], [:tensor]},
+      {:argmin, [:tensor, :opts], [:tensor]},
+      {:reduce, [:tensor, :acc, :opts, :fun], [:tensor, :acc]},
+      {:window_reduce, [:tensor, :acc, :shape, :opts, :fun], [:tensor, :acc]},
+      {:window_sum, [:tensor, :shape, :opts], [:tensor]},
+      {:window_product, [:tensor, :shape, :opts], [:tensor]},
+      {:window_max, [:tensor, :shape, :opts], [:tensor]},
+      {:window_min, [:tensor, :shape, :opts], [:tensor]},
+      {:map, [:tensor, :opts, :fun], [:tensor]},
+      {:sort, [:tensor, :opts], [:tensor]},
+      {:argsort, [:tensor, :opts], [:tensor]},
+      {:window_scatter_max, [:tensor, :source, :init_value, :window_dims, :opts],
        [:tensor, :source, :init_value]},
-      {:window_scatter_min, [:out, :tensor, :source, :init_value, :window_dims, :opts],
+      {:window_scatter_min, [:tensor, :source, :init_value, :window_dims, :opts],
        [:tensor, :source, :init_value]},
-      {:indexed_add, [:out, :tensor, :indices, :updates], [:indices, :updates]},
-      {:cholesky, [:out, :tensor], [:tensor]},
-      {:lu, [:out, :tensor, :opts], [:tensor]},
-      {:qr, [:out, :tensor, :opts], [:tensor]},
-      {:triangular_solve, [:out, :a, :b, :opts], [:a, :b]},
-      {:eigh, [:out, :tensor, :opts], [:tensor]},
-      {:svd, [:out, :tensor, :opts], [:tensor]}
+      {:indexed_add, [:tensor, :indices, :updates], [:indices, :updates]},
+      {:cholesky, [:tensor], [:tensor]},
+      {:lu, [:tensor, :opts], [:tensor]},
+      {:qr, [:tensor, :opts], [:tensor]},
+      {:triangular_solve, [:a, :b, :opts], [:a, :b]},
+      {:eigh, [:tensor, :opts], [:tensor]},
+      {:svd, [:tensor, :opts], [:tensor]}
     ] ++
-      for(op <- binary_ops, do: {op, [:out, :left, :right], [:left, :right]}) ++
-      for(op <- unary_ops, do: {op, [:out, :tensor], [:tensor]})
+      for(op <- binary_ops, do: {op, [:left, :right], [:left, :right]}) ++
+      for(op <- unary_ops, do: {op, [:tensor], [:tensor]})
 
   for {name, args, tensor_args} <- callbacks do
     args = Enum.map(args, &Macro.var(&1, __MODULE__))
     tensor_args = Enum.map(tensor_args, &Macro.var(&1, __MODULE__))
 
     @impl true
-    def unquote(name)(unquote_splicing(args)) do
+    def unquote(name)(out, unquote_splicing(args)) do
+      out = Nx.to_template(out)
+
       expr_fun = fn unquote_splicing(tensor_args) ->
-        Nx.Defn.Expr.unquote(name)(unquote_splicing(args))
+        Nx.Defn.Expr.unquote(name)(out, unquote_splicing(args))
       end
 
       EXLA.jit(expr_fun, [unquote_splicing(tensor_args)])

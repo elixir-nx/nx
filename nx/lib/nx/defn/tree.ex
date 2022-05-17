@@ -1,6 +1,7 @@
 defmodule Nx.Defn.Tree do
   @moduledoc """
-  Helper functions to traverse expressions.
+  Helper functions to traverse expressions,
+  either as single nodes or recursively.
   """
 
   alias Nx.Defn.{Composite, Expr}
@@ -57,7 +58,8 @@ defmodule Nx.Defn.Tree do
   end
 
   @doc """
-  Applies the given function to the arguments of the node, with the given accumulator as a starting value.
+  Applies the given function to the arguments of the node,
+  with the given accumulator as a starting value.
 
   Warning: be very careful when using this function to traverse the expression
   recursively. If you plan to do so, you should consider also storing the visited
