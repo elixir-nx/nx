@@ -79,7 +79,7 @@ defmodule Nx.Defn.CompositeTest do
     end
   end
 
-  describe "flatten_list" do
+  describe "flatten_list/3" do
     test "flattens with default args" do
       assert [1, Complex.new(2), Nx.tensor(3)] ==
                Composite.flatten_list([1, {Complex.new(2), Nx.tensor(3)}])
