@@ -45,10 +45,10 @@ defmodule Nx.Defn.CompositeTest do
   describe "traverse/2" do
     test "works with mix of complex and tensor and number" do
       assert {
-                Nx.tensor(2),
-                Nx.tensor(3, type: {:c, 64}),
-                Nx.tensor(4)
-              } ==
+               Nx.tensor(2),
+               Nx.tensor(3, type: {:c, 64}),
+               Nx.tensor(4)
+             } ==
                Composite.traverse(
                  {1, Complex.new(2), Nx.tensor(3)},
                  &Nx.add(&1, 1)
@@ -74,7 +74,25 @@ defmodule Nx.Defn.CompositeTest do
 
   describe "reduce/3" do
     test "works with complex and tensor and number" do
-      assert Nx.tensor(6, type: {:c, 64}) == Composite.reduce({1, {Nx.tensor(3), {Complex.new(2)}}}, 1, &Nx.multiply/2)
+      assert Nx.tensor(6, type: {:c, 64}) ==
+               Composite.reduce({1, {Nx.tensor(3), {Complex.new(2)}}}, 1, &Nx.multiply/2)
+    end
+  end
+
+  describe "flatten_list" do
+    test "flattens with default args" do
+      assert [1, Complex.new(2), Nx.tensor(3)] ==
+               Composite.flatten_list([1, {Complex.new(2), Nx.tensor(3)}])
+    end
+
+    test "flattens with custom tail" do
+      assert [1, Complex.new(2), Nx.tensor(3), 4, 5, 6] ==
+               Composite.flatten_list([1, {Complex.new(2), Nx.tensor(3)}], [4, 5, 6])
+    end
+
+    test "flattens with custom function" do
+      assert [Nx.tensor(1), Nx.tensor(Complex.new(2)), Nx.tensor(3)] ==
+               Composite.flatten_list([1, {Complex.new(2), Nx.tensor(3)}], [], &Nx.tensor/1)
     end
   end
 end

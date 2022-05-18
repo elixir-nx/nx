@@ -111,7 +111,7 @@ defmodule Nx.Defn.Composite do
   @doc """
   Flattens the given list of composite types.
 
-  Elements that are not tensors (i.e. numbers) are kept as is
+  Elements that are not tensors (i.e. numbers and `Complex` numbers) are kept as is
   unless a custom function is given.
 
   ## Examples
@@ -135,7 +135,7 @@ defmodule Nx.Defn.Composite do
   defp flatten_each(%T{} = tensor, acc, _fun),
     do: [tensor | acc]
 
-  defp flatten_each(number, acc, fun) when is_number(number),
+  defp flatten_each(number, acc, fun) when is_number(number) or is_struct(number, Complex),
     do: [fun.(number) | acc]
 
   defp flatten_each(container, acc, fun),
