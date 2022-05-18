@@ -56,11 +56,12 @@ defmodule Nx.Defn.Composite do
       1
       iex> Nx.Defn.Composite.count({1, {2, 3}})
       3
+      iex> Nx.Defn.Composite.count({Complex.new(1), {Nx.tensor(2), 3}})
+      3
 
   """
   def count(tree), do: count(tree, 0)
-  defp count(%T{}, acc), do: acc + 1
-  defp count(number, acc) when is_number(number), do: acc + 1
+  defp count(tensor, acc) when is_tensor(tensor), do: acc + 1
   defp count(container, acc), do: Nx.Container.reduce(container, acc, &count/2)
 
   @doc """
@@ -86,11 +87,8 @@ defmodule Nx.Defn.Composite do
   If a non-composite tensor expression is given, the function
   is invoked for it but not for its arguments.
   """
-  def traverse(%T{} = expr, acc, fun) when is_function(fun, 2),
+  def traverse(expr, acc, fun) when is_tensor(expr) and is_function(fun, 2),
     do: fun.(expr, acc)
-
-  def traverse(number, acc, fun) when is_number(number) and is_function(fun, 2),
-    do: fun.(number, acc)
 
   def traverse(container, acc, fun),
     do: Nx.Container.traverse(container, acc, &traverse(&1, &2, fun))

@@ -5,7 +5,6 @@ defmodule Nx.Defn.CompositeTest do
 
   alias Nx.Defn.Composite
 
-
   doctest Nx.Defn.Composite
 
   describe "compatible?/3" do
@@ -19,7 +18,10 @@ defmodule Nx.Defn.CompositeTest do
       assert result == Composite.compatible?(~V[2i], 2, &Nx.add/2)
 
       assert result == Composite.compatible?(~V[2], ~V[2i], &Nx.add/2)
-      assert Nx.reshape(result, {}) == Composite.compatible?(Complex.new(2), Complex.new(0, 2), &Nx.add/2)
+
+      assert Nx.reshape(result, {}) ==
+               Composite.compatible?(Complex.new(2), Complex.new(0, 2), &Nx.add/2)
+
       assert Nx.tensor(2) == Composite.compatible?(2, 0, &Nx.add/2)
     end
 
@@ -40,4 +42,33 @@ defmodule Nx.Defn.CompositeTest do
     end
   end
 
+  describe "traverse/2" do
+    test "works with mix of complex and tensor and number" do
+      assert {
+                Nx.tensor(2),
+                Nx.tensor(3, type: {:c, 64}),
+                Nx.tensor(4)
+              } ==
+               Composite.traverse(
+                 {1, Complex.new(2), Nx.tensor(3)},
+                 &Nx.add(&1, 1)
+               )
+    end
+  end
+
+  describe "traverse/3" do
+    test "works with mix of complex and tensor and number" do
+      assert {{
+                Nx.tensor(1),
+                Nx.tensor(3, type: {:c, 64}),
+                Nx.tensor(4, type: {:c, 64})
+              },
+              Nx.tensor(2, type: {:c, 64})} ==
+               Composite.traverse(
+                 {1, Complex.new(2), Nx.tensor(3)},
+                 0,
+                 &{Nx.add(&1, &2), Nx.subtract(&1, &2)}
+               )
+    end
+  end
 end
