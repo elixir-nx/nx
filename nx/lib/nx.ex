@@ -351,14 +351,31 @@ defmodule Nx do
 
   alias Nx.Tensor, as: T
 
-  @type t :: number | Nx.Tensor.t()
-  @type shape :: t() | Nx.Tensor.shape()
+  @typedoc """
+  Represents a numerical value.
+
+  Can be a plain number, a `Complex` number or an `Nx.Tensor`.
+
+  See also: `is_tensor/1`
+  """
+  @type t :: number | Complex.t() | Nx.Tensor.t()
+  @type shape :: number() | Nx.Tensor.t() | Nx.Tensor.shape()
   @type axis :: Nx.Tensor.axis()
   @type axes :: Nx.Tensor.axes()
 
   @file_version 1
 
   @non_finite [:neg_infinity, :infinity, :nan]
+
+  @doc """
+  Checks whether the value is a valid numerical value.
+
+  Returns true if the value is a `number`, a `Complex` number or an `Nx.Tensor`.
+
+  See also: `t:t/0`
+  """
+  @doc type: :guards
+  defguard is_tensor(t) when is_number(t) or is_struct(t, T) or is_struct(t, Complex)
 
   ## Creation API
 

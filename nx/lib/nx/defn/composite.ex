@@ -8,6 +8,8 @@ defmodule Nx.Defn.Composite do
   alias Nx.Defn.Expr
   alias Nx.Tensor, as: T
 
+  import Nx, only: [is_tensor: 1]
+
   @doc """
   Traverses two composite types to see if they are compatible.
 
@@ -15,7 +17,7 @@ defmodule Nx.Defn.Composite do
   compare numbers/tensors pairwise.
   """
   def compatible?(left, right, fun)
-      when (is_number(left) or is_struct(left, T)) and (is_number(right) or is_struct(right, T)),
+      when is_tensor(left) and is_tensor(right),
       do: fun.(left, right)
 
   def compatible?(left, right, fun) when tuple_size(left) == tuple_size(right) do
@@ -54,11 +56,12 @@ defmodule Nx.Defn.Composite do
       1
       iex> Nx.Defn.Composite.count({1, {2, 3}})
       3
+      iex> Nx.Defn.Composite.count({Complex.new(1), {Nx.tensor(2), 3}})
+      3
 
   """
   def count(tree), do: count(tree, 0)
-  defp count(%T{}, acc), do: acc + 1
-  defp count(number, acc) when is_number(number), do: acc + 1
+  defp count(tensor, acc) when is_tensor(tensor), do: acc + 1
   defp count(container, acc), do: Nx.Container.reduce(container, acc, &count/2)
 
   @doc """
@@ -84,11 +87,8 @@ defmodule Nx.Defn.Composite do
   If a non-composite tensor expression is given, the function
   is invoked for it but not for its arguments.
   """
-  def traverse(%T{} = expr, acc, fun) when is_function(fun, 2),
+  def traverse(expr, acc, fun) when is_tensor(expr) and is_function(fun, 2),
     do: fun.(expr, acc)
-
-  def traverse(number, acc, fun) when is_number(number) and is_function(fun, 2),
-    do: fun.(number, acc)
 
   def traverse(container, acc, fun),
     do: Nx.Container.traverse(container, acc, &traverse(&1, &2, fun))
@@ -102,11 +102,8 @@ defmodule Nx.Defn.Composite do
   If a non-composite tensor expression is given, the function
   is invoked for it but not for its arguments.
   """
-  def reduce(%T{} = expr, acc, fun) when is_function(fun, 2),
+  def reduce(expr, acc, fun) when is_tensor(expr) and is_function(fun, 2),
     do: fun.(expr, acc)
-
-  def reduce(number, acc, fun) when is_number(number) and is_function(fun, 2),
-    do: fun.(number, acc)
 
   def reduce(container, acc, fun),
     do: Nx.Container.reduce(container, acc, &reduce(&1, &2, fun))
@@ -114,7 +111,7 @@ defmodule Nx.Defn.Composite do
   @doc """
   Flattens the given list of composite types.
 
-  Elements that are not tensors (i.e. numbers) are kept as is
+  Elements that are not tensors (i.e. numbers and `Complex` numbers) are kept as is
   unless a custom function is given.
 
   ## Examples
@@ -138,7 +135,7 @@ defmodule Nx.Defn.Composite do
   defp flatten_each(%T{} = tensor, acc, _fun),
     do: [tensor | acc]
 
-  defp flatten_each(number, acc, fun) when is_number(number),
+  defp flatten_each(number, acc, fun) when is_number(number) or is_struct(number, Complex),
     do: [fun.(number) | acc]
 
   defp flatten_each(container, acc, fun),

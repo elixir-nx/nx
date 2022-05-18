@@ -63,6 +63,7 @@ defmodule Nx.MixProject do
       ],
       skip_undefined_reference_warnings_on: ["CHANGELOG.md"],
       groups_for_functions: [
+        Guards: &(&1[:type] in [:guards]),
         "Functions: Aggregates": &(&1[:type] == :aggregation),
         "Functions: Backend": &(&1[:type] == :backend),
         "Functions: Conversion": &(&1[:type] == :conversion),
