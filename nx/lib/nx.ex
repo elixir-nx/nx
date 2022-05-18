@@ -360,6 +360,8 @@ defmodule Nx do
 
   @non_finite [:neg_infinity, :infinity, :nan]
 
+  defguard is_tensor(t) when is_number(t) or is_struct(t, T) or is_struct(t, Complex)
+
   ## Creation API
 
   @doc """

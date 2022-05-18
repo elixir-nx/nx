@@ -8,6 +8,8 @@ defmodule Nx.Defn.Composite do
   alias Nx.Defn.Expr
   alias Nx.Tensor, as: T
 
+  import Nx, only: [is_tensor: 1]
+
   @doc """
   Traverses two composite types to see if they are compatible.
 
@@ -15,7 +17,7 @@ defmodule Nx.Defn.Composite do
   compare numbers/tensors pairwise.
   """
   def compatible?(left, right, fun)
-      when (is_number(left) or is_struct(left, T)) and (is_number(right) or is_struct(right, T)),
+      when is_tensor(left) and is_tensor(right),
       do: fun.(left, right)
 
   def compatible?(left, right, fun) when tuple_size(left) == tuple_size(right) do
