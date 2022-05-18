@@ -71,4 +71,10 @@ defmodule Nx.Defn.CompositeTest do
                )
     end
   end
+
+  describe "reduce/3" do
+    test "works with complex and tensor and number" do
+      assert Nx.tensor(6, type: {:c, 64}) == Composite.reduce({1, {Nx.tensor(3), {Complex.new(2)}}}, 1, &Nx.multiply/2)
+    end
+  end
 end

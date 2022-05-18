@@ -102,11 +102,8 @@ defmodule Nx.Defn.Composite do
   If a non-composite tensor expression is given, the function
   is invoked for it but not for its arguments.
   """
-  def reduce(%T{} = expr, acc, fun) when is_function(fun, 2),
+  def reduce(expr, acc, fun) when is_tensor(expr) and is_function(fun, 2),
     do: fun.(expr, acc)
-
-  def reduce(number, acc, fun) when is_number(number) and is_function(fun, 2),
-    do: fun.(number, acc)
 
   def reduce(container, acc, fun),
     do: Nx.Container.reduce(container, acc, &reduce(&1, &2, fun))
