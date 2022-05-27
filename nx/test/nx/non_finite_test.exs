@@ -6,6 +6,7 @@ defmodule Nx.NonFiniteTest do
   use ExUnit.Case, async: true
 
   import Nx.Helpers
+  import Nx, only: :sigils
 
   @arg Complex.new(:infinity, 3)
   @arg2 Complex.new(-2, 4)
@@ -226,19 +227,43 @@ defmodule Nx.NonFiniteTest do
     end
 
     test "max" do
-      assert Nx.tensor(:infinity, type: {:f, 32}) ==
-               Nx.max(
-                 Nx.tensor(:neg_infinity, type: {:f, 32}),
-                 Nx.tensor(:infinity, type: {:f, 32})
-               )
+      # infinity as right arg
+      assert ~V[Inf] == Nx.max(~V[-Inf], ~V[Inf])
+      assert ~V[Inf] == Nx.max(~V[1], ~V[Inf])
+      assert ~V[NaN] == Nx.max(~V[NaN], ~V[Inf])
+      assert ~V[Inf] == Nx.max(~V[Inf], ~V[Inf])
+
+      # neg_inf as right arg
+      assert ~V[-Inf] == Nx.max(~V[-Inf], ~V[-Inf])
+      assert ~V[1.0] == Nx.max(~V[1], ~V[-Inf])
+      assert ~V[NaN] == Nx.max(~V[NaN], ~V[-Inf])
+      assert ~V[Inf] == Nx.max(~V[Inf], ~V[-Inf])
+
+      # nan as right arg
+      assert ~V[NaN] == Nx.max(~V[-Inf], ~V[NaN])
+      assert ~V[NaN] == Nx.max(~V[1], ~V[NaN])
+      assert ~V[NaN] == Nx.max(~V[NaN], ~V[NaN])
+      assert ~V[NaN] == Nx.max(~V[Inf], ~V[NaN])
     end
 
-    test "min" do
-      assert Nx.tensor(:neg_infinity, type: {:f, 32}) ==
-               Nx.min(
-                 Nx.tensor(:neg_infinity, type: {:f, 32}),
-                 Nx.tensor(:infinity, type: {:f, 32})
-               )
+     test "min" do
+      # infinity as right arg
+      assert ~V[-Inf] == Nx.min(~V[-Inf], ~V[Inf])
+      assert ~V[1.0] == Nx.min(~V[1], ~V[Inf])
+      assert ~V[NaN] == Nx.min(~V[NaN], ~V[Inf])
+      assert ~V[Inf] == Nx.min(~V[Inf], ~V[Inf])
+
+      # neg_inf as right arg
+      assert ~V[-Inf] == Nx.min(~V[-Inf], ~V[-Inf])
+      assert ~V[-Inf] == Nx.min(~V[1], ~V[-Inf])
+      assert ~V[NaN] == Nx.min(~V[NaN], ~V[-Inf])
+      assert ~V[-Inf] == Nx.min(~V[Inf], ~V[-Inf])
+
+      # nan as right arg
+      assert ~V[NaN] == Nx.min(~V[-Inf], ~V[NaN])
+      assert ~V[NaN] == Nx.min(~V[1], ~V[NaN])
+      assert ~V[NaN] == Nx.min(~V[NaN], ~V[NaN])
+      assert ~V[NaN] == Nx.min(~V[Inf], ~V[NaN])
     end
 
     test "remainder" do
