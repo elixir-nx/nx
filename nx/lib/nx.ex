@@ -10283,6 +10283,30 @@ defmodule Nx do
     sqrt(variance(tensor, opts))
   end
 
+  @doc """
+
+  ## Examples
+
+      iex> Nx.fft(Nx.tensor([1, 1, 0, 0]))
+      #Nx.Tensor<
+        c64[4]
+        [2.0+0.0i, 1.0-1.0i, 0.0+0.0i, 1.0+1.0i]
+      >
+
+      iex> Nx.fft(Nx.tensor([1, 1, 0, 0, 0]))
+      #Nx.Tensor<
+        c64[5]
+        [2.0+0.0i, 1.3090169429779053-0.9510565400123596i, 0.19098301231861115-0.5877852439880371i, 0.19098301231861115+0.5877852439880371i, 1.3090169429779053+0.9510565400123596i]
+      >
+  """
+  @doc type: :signal
+  def fft(tensor) do
+    tensor = to_tensor(tensor)
+
+    out = to_template(%{tensor | type: Nx.Type.to_complex(tensor.type)})
+    impl!(tensor).fft(out, tensor)
+  end
+
   ## Sigils
 
   @doc """

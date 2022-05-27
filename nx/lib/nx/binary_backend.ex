@@ -2153,6 +2153,72 @@ defmodule Nx.BinaryBackend do
     from_binary(output, new_data)
   end
 
+  @impl true
+  def fft(out, %{shape: {n}} = tensor) do
+    data =
+      match_types [tensor.type] do
+        for <<match!(x, 0) <- to_binary(tensor)>> do
+          read!(x, 0)
+        end
+      end
+
+    result =
+      if rem(n, 2) == 0 do
+        fft_list(data)
+      else
+        dft_list(data)
+      end
+
+    output_data =
+      match_types [out.type] do
+        for item <- result, into: <<>> do
+          <<write!(item, 0)>>
+        end
+      end
+
+    from_binary(out, output_data)
+  end
+
+  defp dft_list(data) do
+    bigN = length(data)
+
+    for k <- 0..(bigN - 1) do
+      {xk, _} =
+        Enum.reduce(data, {0, 0}, fn x, {acc, n} ->
+          {acc + x * Complex.exp(Complex.new(0, -2 * :math.pi() * k * n / bigN)), n + 1}
+        end)
+
+      xk
+    end
+  end
+
+  defp fft_list([]), do: []
+  defp fft_list([data]), do: [data]
+
+  defp fft_list([_ | tail] = data) do
+    n = length(data)
+
+    even = fft_list(Enum.take_every(data, 2))
+    odd = fft_list(Enum.take_every(tail, 2))
+
+    t =
+      Enum.with_index(odd, fn item, k ->
+        Complex.exp(Complex.new(0, -2 * :math.pi() * k / n)) * item
+      end)
+
+    left =
+      even
+      |> Enum.zip(t)
+      |> Enum.map(fn {x, y} -> x + y end)
+
+    right =
+      even
+      |> Enum.zip(t)
+      |> Enum.map(fn {x, y} -> x - y end)
+
+    left ++ right
+  end
+
   ## Binary reducers
 
   defp bin_reduce(tensor, type, acc, opts, fun) do
