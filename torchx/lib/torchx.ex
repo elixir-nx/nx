@@ -299,6 +299,7 @@ defmodule Torchx do
   deftensor erfc(tensor)
   deftensor erf_inv(tensor)
   deftensor cbrt(tensor)
+  deftensor fft(tensor)
 
   deftensor abs(tensor)
   deftensor bitwise_not(tensor)

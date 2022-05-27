@@ -1,6 +1,8 @@
 defmodule Torchx.NxTest do
   use Torchx.Case, async: true
 
+  import Nx, only: :sigils
+
   alias Torchx.Backend, as: TB
   doctest TB
 
@@ -100,6 +102,11 @@ defmodule Torchx.NxTest do
         ),
         Nx.tensor([[1]])
       )
+    end
+
+    test "fft" do
+      assert_all_close(Nx.fft(Nx.tensor([1, 1, 0, 0, 0])), ~V[2.0+0.0i 1.3090-0.9511i 0.1909-0.5877i 0.1909+0.5877i 1.3090+0.9510i])
+      assert_all_close(Nx.fft(Nx.tensor([1, 1, 0, 0])), ~V[2.0+0.0i 1.0-1.0i 0.0+0.0i 1.0+1.0i])
     end
   end
 
@@ -259,7 +266,7 @@ defmodule Torchx.NxTest do
 
     test "non-finite to integer conversions" do
       non_finite =
-        Nx.tensor([Nx.Constants.infinity(), Nx.Constants.nan(), Nx.Constants.neg_infinity()])
+        Nx.stack([Nx.Constants.infinity(), Nx.Constants.nan(), Nx.Constants.neg_infinity()])
 
       assert Nx.as_type(non_finite, {:u, 8}) |> Nx.backend_transfer() ==
                Nx.tensor([0, 0, 0], type: {:u, 8}, backend: Nx.BinaryBackend)
@@ -275,7 +282,7 @@ defmodule Torchx.NxTest do
     end
 
     test "non-finite to between floats conversions" do
-      non_finite = Nx.tensor([Nx.Constants.infinity(), Nx.Constants.neg_infinity()])
+      non_finite = Nx.stack([Nx.Constants.infinity(), Nx.Constants.neg_infinity()])
       non_finite_binary_backend = Nx.backend_copy(non_finite)
 
       assert Nx.as_type(non_finite, {:f, 16}) |> Nx.backend_transfer() ==
