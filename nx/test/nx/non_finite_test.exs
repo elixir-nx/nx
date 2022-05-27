@@ -246,7 +246,7 @@ defmodule Nx.NonFiniteTest do
       assert ~V[NaN] == Nx.max(~V[Inf], ~V[NaN])
     end
 
-     test "min" do
+    test "min" do
       # infinity as right arg
       assert ~V[-Inf] == Nx.min(~V[-Inf], ~V[Inf])
       assert ~V[1.0] == Nx.min(~V[1], ~V[Inf])
