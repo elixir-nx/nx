@@ -15,11 +15,11 @@ defmodule Nx.ComplexTest do
 
   describe "unary operations" do
     test "exp" do
-      assert_all_close(Nx.exp(@arg), @inf_inf)
+      assert Nx.exp(@arg) == Nx.tensor(@inf_inf)
     end
 
     test "expm1" do
-      assert_all_close(Nx.expm1(@arg), @inf_inf)
+      assert Nx.expm1(@arg) == Nx.tensor(@inf_inf)
     end
 
     test "log" do
@@ -47,11 +47,11 @@ defmodule Nx.ComplexTest do
     end
 
     test "cosh" do
-      assert_all_close(Nx.cosh(@arg), @inf_inf)
+      assert Nx.cosh(@arg) == Nx.tensor(@inf_inf)
     end
 
     test "sinh" do
-      assert_all_close(Nx.sinh(@arg), @inf_inf)
+      assert Nx.sinh(@arg) == Nx.tensor(@inf_inf)
     end
 
     test "tanh" do
@@ -194,7 +194,7 @@ defmodule Nx.ComplexTest do
     end
 
     test "multiply" do
-      assert_all_close(Nx.multiply(@arg, @arg2), Complex.new(:neg_infinity, :infinity))
+      assert Nx.multiply(@arg, @arg2) == Nx.tensor(Complex.new(:neg_infinity, :infinity))
     end
 
     test "power" do
@@ -202,7 +202,7 @@ defmodule Nx.ComplexTest do
     end
 
     test "divide" do
-      assert_all_close(Nx.divide(@arg, @arg2), Complex.new(:neg_infinity, :neg_infinity))
+      assert Nx.divide(@arg, @arg2) == Nx.tensor(Complex.new(:neg_infinity, :neg_infinity))
     end
 
     test "atan2" do
