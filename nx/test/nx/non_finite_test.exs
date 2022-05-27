@@ -225,12 +225,31 @@ defmodule Nx.NonFiniteTest do
                    end
     end
 
-    for op <- [:remainder, :max, :min] do
-      test "#{op}" do
-        assert_raise ArgumentError, "Nx.#{unquote(op)}/2 does not support complex inputs", fn ->
-          Nx.unquote(op)(@arg, @arg2)
-        end
-      end
+    test "max" do
+      assert Nx.tensor(:infinity, type: {:f, 32}) ==
+               Nx.max(
+                 Nx.tensor(:neg_infinity, type: {:f, 32}),
+                 Nx.tensor(:infinity, type: {:f, 32})
+               )
+    end
+
+    test "min" do
+      assert Nx.tensor(:neg_infinity, type: {:f, 32}) ==
+               Nx.min(
+                 Nx.tensor(:neg_infinity, type: {:f, 32}),
+                 Nx.tensor(:infinity, type: {:f, 32})
+               )
+    end
+
+    test "remainder" do
+      assert_raise ArgumentError,
+                   "errors were found at the given arguments:\n\n  * 1st argument: not a number\n  * 2nd argument: not a number\n",
+                   fn ->
+                     Nx.remainder(
+                       Nx.tensor(:neg_infinity, type: {:f, 32}),
+                       Nx.tensor(:infinity, type: {:f, 32})
+                     )
+                   end
     end
 
     for op <- [
@@ -242,32 +261,13 @@ defmodule Nx.NonFiniteTest do
         ] do
       test "#{op}" do
         assert_raise ArgumentError,
-                     "bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:c, 64}",
+                     "bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 32}",
                      fn ->
-                       Nx.unquote(op)(@arg, @arg2)
+                       Nx.unquote(op)(
+                         Nx.tensor(:infinity, type: {:f, 32}),
+                         Nx.tensor(:infinity, type: {:f, 32})
+                       )
                      end
-      end
-    end
-  end
-
-  describe "LinAlg not yet implemented" do
-    for function <- [:svd, :eigh] do
-      test "#{function}" do
-        t = Nx.broadcast(Nx.tensor(1, type: {:c, 64}), {3, 3})
-
-        assert_raise ArgumentError,
-                     "Nx.LinAlg.#{unquote(function)}/2 is not yet implemented for complex inputs",
-                     fn ->
-                       Nx.LinAlg.unquote(function)(t)
-                     end
-      end
-    end
-
-    test "triangular_solve fails with singular complex matrix" do
-      t = Nx.broadcast(Nx.tensor(0, type: {:c, 64}), {3, 3})
-
-      assert_raise ArgumentError, "can't solve for singular matrix", fn ->
-        Nx.LinAlg.triangular_solve(t, t)
       end
     end
   end
