@@ -718,8 +718,22 @@ defmodule Nx.BinaryBackend do
   defp element_remainder(_, a, b), do: :math.fmod(a, b)
 
   defp element_atan2(_, a, b), do: Complex.atan2(a, b)
-  defp element_max(_, a, b), do: max(a, b)
-  defp element_min(_, a, b), do: min(a, b)
+
+  defp element_max(_, :nan, _), do: :nan
+  defp element_max(_, _, :nan), do: :nan
+  defp element_max(_, :infinity, _), do: :infinity
+  defp element_max(_, _, :infinity), do: :infinity
+  defp element_max(_, :neg_infinity, x), do: x
+  defp element_max(_, x, :neg_infinity), do: x
+  defp element_max(_, a, b) when is_number(a) and is_number(b), do: max(a, b)
+
+  defp element_min(_, :nan, _), do: :nan
+  defp element_min(_, _, :nan), do: :nan
+  defp element_min(_, :infinity, x), do: x
+  defp element_min(_, x, :infinity), do: x
+  defp element_min(_, :neg_infinity, _), do: :neg_infinity
+  defp element_min(_, _, :neg_infinity), do: :neg_infinity
+  defp element_min(_, a, b) when is_number(a) and is_number(b), do: min(a, b)
 
   defp element_power({type, _}, a, b) when type in [:s, :u], do: Integer.pow(a, b)
   defp element_power(_, a, b), do: Complex.power(a, b)

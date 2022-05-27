@@ -5796,6 +5796,9 @@ defmodule Nx do
     opts = keyword!(opts, rtol: 1.0e-5, atol: 1.0e-8)
     rtol = opts[:rtol]
     atol = opts[:atol]
+
+    # TO_DO: deal with non_finite entries by adding is_infinity and is_nan
+
     all(less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b)))))
   end
 
@@ -10332,6 +10335,27 @@ defmodule Nx do
           [1.0+1.0i, 2.0-2.0i, -3.0+0.0i]
         ]
       >
+      iex> ~M[1 Inf NaN]
+      #Nx.Tensor<
+        f32[1][3]
+        [
+          [1.0, Inf, NaN]
+        ]
+      >
+      iex> ~M[1i Inf NaN]
+      #Nx.Tensor<
+        c64[1][3]
+        [
+          [0.0+1.0i, Inf+0.0i, NaN+0.0i]
+        ]
+      >
+      iex> ~M[1i Inf+2i NaN-Infi]
+      #Nx.Tensor<
+        c64[1][3]
+        [
+          [0.0+1.0i, Inf+2.0i, NaN-Infi]
+        ]
+      >
 
   """
   @doc type: :creation
@@ -10373,7 +10397,21 @@ defmodule Nx do
         c64[3]
         [1.0+1.0i, 2.0-2.0i, -3.0+0.0i]
       >
-
+      iex> ~V[1 Inf NaN]
+      #Nx.Tensor<
+        f32[3]
+        [1.0, Inf, NaN]
+      >
+      iex> ~V[1i Inf NaN]
+      #Nx.Tensor<
+        c64[3]
+        [0.0+1.0i, Inf+0.0i, NaN+0.0i]
+      >
+      iex> ~V[1i Inf+2i NaN-Infi]
+      #Nx.Tensor<
+        c64[3]
+        [0.0+1.0i, Inf+2.0i, NaN-Infi]
+      >
   """
   @doc type: :creation
   defmacro sigil_V({:<<>>, _meta, [string]}, modifiers) do
@@ -10418,6 +10456,7 @@ defmodule Nx do
         {module, type} =
           cond do
             elem(type, 0) == :c -> {Complex, type}
+            String.contains?(str, ["Inf", "NaN"]) -> {Complex, type}
             String.contains?(str, "i") -> {Complex, {:c, 64}}
             String.contains?(str, ".") -> {Float, {:f, 32}}
             :otherwise -> {Integer, type}
@@ -10428,7 +10467,7 @@ defmodule Nx do
     end)
   end
 
-  defp parse_string_to_number(Complex, str, type) do
+  defp parse_string_to_number(Complex, str, {type_class, _} = type) do
     apply_parse = fn fun ->
       case apply(fun, [str]) do
         :error -> false
@@ -10439,11 +10478,15 @@ defmodule Nx do
     result = Enum.find_value([&Complex.parse/1, &Float.parse/1, &Integer.parse/1], apply_parse)
 
     case result do
+      {%Complex{re: re, im: im}, ""}
+      when re in [:nan, :neg_infinity, :infinity] and im == 0 and type_class != :c ->
+        {re, Nx.Type.merge(type, {:f, 32})}
+
       {%Complex{} = num, ""} ->
-        {num, type}
+        {num, Nx.Type.merge(type, {:c, 64})}
 
       {num, ""} ->
-        {Complex.new(num), type}
+        {Complex.new(num), Nx.Type.merge(type, {:c, 64})}
 
       _ ->
         raise ArgumentError, "expected a numerical value for tensor, got #{str}"
