@@ -9856,7 +9856,7 @@ defmodule Nx do
   ## Utilities
 
   @doc """
-  Serializes the given tensor or container of tensors to a binary.
+  Serializes the given tensor or container of tensors to iodata.
 
   You may pass a tensor, tuple, or map to serialize.
 
@@ -9866,7 +9866,11 @@ defmodule Nx do
 
       Nx.serialize(tensor, compressed: 9)
 
-  Compression level corresponds to compression options in `:erlang.term_to_binary/2`.
+  Compression level corresponds to compression options in `:erlang.term_to_iovec/2`.
+
+  `iodata` is a list of binaries that can be written to any io device,
+  such as a file or a socket. You can ensure the result is a binary by
+  calling `IO.iodata_to_binary/1`.  
 
   ## Examples
 
@@ -9896,8 +9900,7 @@ defmodule Nx do
   def serialize(tensor_or_container, opts \\ []) do
     data_term = to_term(tensor_or_container)
     term = {@file_version, System.endianness(), data_term}
-
-    :erlang.term_to_binary(term, opts)
+    :erlang.term_to_iovec(term, opts)
   end
 
   defp to_term(tensor_or_container) do
@@ -9969,6 +9972,7 @@ defmodule Nx do
   @doc type: :conversion
   def deserialize(data, opts \\ []) do
     data
+    |> IO.iodata_to_binary()
     |> :erlang.binary_to_term(opts)
     |> from_term()
   end
