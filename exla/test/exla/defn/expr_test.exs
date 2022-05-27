@@ -802,7 +802,11 @@ defmodule EXLA.Defn.ExprTest do
 
   describe "complex ops" do
     test "fft" do
-      assert_all_close(Nx.fft(Nx.tensor([1, 1, 0, 0, 0])), ~V[2.0+0.0i 1.3090-0.9511i 0.1909-0.5877i 0.1909+0.5877i 1.3090+0.9510i])
+      assert_all_close(
+        Nx.fft(Nx.tensor([1, 1, 0, 0, 0])),
+        ~V[2.0+0.0i 1.3090-0.9511i 0.1909-0.5877i 0.1909+0.5877i 1.3090+0.9510i]
+      )
+
       assert_all_close(Nx.fft(Nx.tensor([1, 1, 0, 0])), ~V[2.0+0.0i 1.0-1.0i 0.0+0.0i 1.0+1.0i])
     end
   end
