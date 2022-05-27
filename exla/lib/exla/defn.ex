@@ -760,6 +760,10 @@ defmodule EXLA.Defn do
     apply(EXLA.Op, op, [to_type(arg, type)])
   end
 
+  defp to_operator(:fft, [tensor], %{shape: {n}, type: type}, _state) do
+    EXLA.Op.fft(to_type(tensor, Nx.Type.to_complex(type)), n)
+  end
+
   # These operations do the type conversion implicitly, and so
   # we cannot mess with the output type (e.g. the to_type conversion)
   # because it will throw an error

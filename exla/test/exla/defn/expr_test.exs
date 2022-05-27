@@ -1,6 +1,7 @@
 defmodule EXLA.Defn.ExprTest do
   use EXLA.Case, async: true
 
+  import Nx, only: :sigils
   import Nx.Defn
 
   setup do
@@ -799,6 +800,13 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
+  describe "complex ops" do
+    test "fft" do
+      assert_all_close(Nx.fft(Nx.tensor([1, 1, 0, 0, 0])), ~V[2.0+0.0i 1.3090-0.9511i 0.1909-0.5877i 0.1909+0.5877i 1.3090+0.9510i])
+      assert_all_close(Nx.fft(Nx.tensor([1, 1, 0, 0])), ~V[2.0+0.0i 1.0-1.0i 0.0+0.0i 1.0+1.0i])
+    end
+  end
+
   describe "unary float ops, restricted domain" do
     @int_tensor Nx.tensor([0.1, 0.5, 0.9])
     @float_tensor Nx.tensor([0.1, 0.5, 0.9])
@@ -864,7 +872,7 @@ defmodule EXLA.Defn.ExprTest do
 
     test "converts non-finite types" do
       non_finite =
-        Nx.tensor([Nx.Constants.infinity(), Nx.Constants.nan(), Nx.Constants.neg_infinity()])
+        Nx.stack([Nx.Constants.infinity(), Nx.Constants.nan(), Nx.Constants.neg_infinity()])
 
       assert_equal(
         generic_as_type(non_finite, Nx.template({}, {:u, 8})),

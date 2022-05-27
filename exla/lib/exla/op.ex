@@ -179,6 +179,11 @@ defmodule EXLA.Op do
     end
   end
 
+  def fft(%Op{ref: ref} = op, fft_size) do
+    ref = EXLA.NIF.fft(ref, fft_size) |> unwrap!()
+    %{op | ref: ref}
+  end
+
   ## Ops
 
   def get_tuple_element(%Op{ref: operand} = op, index) when is_integer(index) do
