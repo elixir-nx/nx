@@ -96,7 +96,6 @@ defmodule Nx.ComplexTest do
     end
 
     test "phase" do
-      IO.inspect(@arg, label: "arg")
       assert_all_close(Nx.phase(@arg), Complex.phase(@arg))
     end
 

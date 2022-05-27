@@ -1,4 +1,4 @@
-defmodule Nx.ComplexTest do
+defmodule Nx.NonFiniteTest do
   @moduledoc """
   Responsible for testing all basic Nx functionality with
   complex number arguments.
