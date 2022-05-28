@@ -874,7 +874,7 @@ defmodule Nx.Defn.Grad do
     [{x, Nx.divide(g, Nx.add(x, 1))}]
   end
 
-  defp grad(:logistic, [x], ans, g) do
+  defp grad(:sigmoid, [x], ans, g) do
     gs =
       x
       |> Nx.negate()

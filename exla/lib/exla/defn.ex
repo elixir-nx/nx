@@ -751,7 +751,7 @@ defmodule EXLA.Defn do
     end
   end
 
-  @unary_op [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
+  @unary_op [:exp, :expm1, :log, :log1p, :sigmoid, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
               [:bitwise_not, :count_leading_zeros, :population_count, :cosh, :sinh, :acos] ++
               [:asin, :atan, :floor, :ceil, :round, :acosh, :asinh, :atanh, :erf] ++
               [:erfc, :erf_inv, :conjugate]

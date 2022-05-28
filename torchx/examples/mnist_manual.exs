@@ -22,7 +22,7 @@ defmodule Torchx.MNIST do
     batch
     |> Nx.dot(w1)
     |> Nx.add(b1)
-    |> Nx.logistic()
+    |> Nx.sigmoid()
     |> Nx.dot(w2)
     |> Nx.add(b2)
     |> softmax()
@@ -37,7 +37,7 @@ defmodule Torchx.MNIST do
          total
        ) do
     z1 = Nx.dot(batch_images, w1) |> Nx.add(b1)
-    a1 = Nx.logistic(z1)
+    a1 = Nx.sigmoid(z1)
     z2 = Nx.dot(a1, w2) |> Nx.add(b2)
     preds = softmax(z2)
 

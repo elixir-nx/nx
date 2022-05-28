@@ -16,7 +16,7 @@ defmodule EXLA.BackendTest do
     asinh: 1,
     atanh: 1,
     ceil: 1,
-    logistic: 1
+    sigmoid: 1
   ]
 
   @temporarily_broken_doctests [

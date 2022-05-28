@@ -56,8 +56,8 @@ defmodule Torchx.MixProject do
 
   defp deps do
     [
-      # {:nx, path: "../nx"},
-      {:nx, "~> 0.2.0"},
+      {:nx, path: "../nx"},
+      # {:nx, "~> 0.2.0"},
       {:dll_loader_helper, "~> 0.1.0"},
       {:elixir_make, "~> 0.6"},
       {:ex_doc, "~> 0.28.3", only: :docs}

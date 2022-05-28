@@ -688,7 +688,7 @@ UNARY_OP(log)
 UNARY_OP(log1p)
 UNARY_OP(bitwise_not)
 UNARY_OP(logical_not)
-UNARY_OP2(logistic, sigmoid)
+UNARY_OP2(sigmoid, sigmoid)
 
 UNARY_OP(sin)
 UNARY_OP(asin)
@@ -1179,7 +1179,7 @@ static ErlNifFunc nif_functions[] = {
     DF(log, 1),
     DF(log1p, 1),
     DF(bitwise_not, 1),
-    DF(logistic, 1),
+    DF(sigmoid, 1),
     DF(sin, 1),
     DF(asin, 1),
     DF(sinh, 1),
