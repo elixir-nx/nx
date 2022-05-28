@@ -2206,15 +2206,8 @@ defmodule Nx.BinaryBackend do
         Complex.exp(Complex.new(0, -2 * :math.pi() * k / n)) * item
       end)
 
-    left =
-      even
-      |> Enum.zip(t)
-      |> Enum.map(fn {x, y} -> x + y end)
-
-    right =
-      even
-      |> Enum.zip(t)
-      |> Enum.map(fn {x, y} -> x - y end)
+    left = Enum.zip_with(even, t, fn {x, y} -> x + y end)
+    right = Enum.zip_with(even, t, fn {x, y} -> x - y end)
 
     left ++ right
   end
