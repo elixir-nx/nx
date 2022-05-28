@@ -40,7 +40,7 @@ defmodule EXLA.NIF do
   end
 
   unary_ops =
-    [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :real, :imag, :erf_inv] ++
+    [:exp, :expm1, :log, :log1p, :sigmoid, :cos, :sin, :tanh, :real, :imag, :erf_inv] ++
       [:is_finite, :conj, :acos, :asin, :atan, :cosh, :sinh, :erf, :erfc] ++
       [:acosh, :asinh, :atanh, :sqrt, :rsqrt, :cbrt, :negate, :sign, :abs] ++
       [:bitwise_not, :population_count, :count_leading_zeros, :floor, :ceil, :round]

@@ -27,8 +27,8 @@ defmodule Nx.ComplexTest do
       assert_all_close(Nx.log1p(@arg), Complex.new(1.4451, 0.7854))
     end
 
-    test "logistic" do
-      assert_all_close(Nx.logistic(@arg), Complex.new(1.1541, 0.0254))
+    test "sigmoid" do
+      assert_all_close(Nx.sigmoid(@arg), Complex.new(1.1541, 0.0254))
     end
 
     test "cos" do

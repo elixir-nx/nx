@@ -185,7 +185,7 @@ defmodule EXLA.Backend do
       [:logical_and, :logical_or, :logical_xor]
 
   unary_ops =
-    [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tan] ++
+    [:exp, :expm1, :log, :log1p, :sigmoid, :cos, :sin, :tan] ++
       [:cosh, :sinh, :tanh, :acos, :asin, :atan, :acosh, :asinh, :atanh] ++
       [:sqrt, :rsqrt, :cbrt, :erf, :erfc, :erf_inv] ++
       [:abs, :bitwise_not, :ceil, :conjugate, :floor, :negate, :round, :sign] ++

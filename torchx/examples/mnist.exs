@@ -18,7 +18,7 @@ defmodule MNIST do
     batch
     |> Nx.dot(w1)
     |> Nx.add(b1)
-    |> Nx.logistic()
+    |> Nx.sigmoid()
     |> Nx.dot(w2)
     |> Nx.add(b2)
     |> softmax()

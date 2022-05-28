@@ -31,8 +31,8 @@ defmodule Nx.NonFiniteTest do
       assert_all_close(Nx.log1p(@arg), Complex.new(:infinity, 0))
     end
 
-    test "logistic" do
-      assert_all_close(Nx.logistic(@arg), Complex.new(1.0, 0.0))
+    test "sigmoid" do
+      assert_all_close(Nx.sigmoid(@arg), Complex.new(1.0, 0.0))
     end
 
     test "cos" do

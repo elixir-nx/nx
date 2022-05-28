@@ -303,15 +303,15 @@ defmodule Nx.Shared do
       log1p:
         {"natural log plus one", quote(do: Complex.ln(Complex.add(var!(x), 1))),
          "$$log1p(z) = log(z + 1)$$"},
-      logistic:
-        {"standard logistic (a sigmoid)",
+      sigmoid:
+        {"sigmoid",
          quote do
            var!(x)
            |> Complex.negate()
            |> Complex.exp()
            |> Complex.add(1)
            |> then(&Complex.divide(1, &1))
-         end, "$$logistic(z) = \\frac{1}{1 + e^{-z}}$$"},
+         end, "$$sigmoid(z) = \\frac{1}{1 + e^{-z}}$$"},
       cos:
         {"cosine", quote(do: Complex.cos(var!(x))), "$$cos(z) = \\frac{e^{iz} + e^{-iz}}{2}$$"},
       sin: {"sine", quote(do: Complex.sin(var!(x))), "$$sin(z) = \\frac{e^{iz} - e^{-iz}}{2i}$$"},

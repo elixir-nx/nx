@@ -160,7 +160,7 @@ defmodule EXLA.Op do
   ## Element-wise unary ops
 
   returns_float =
-    [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
+    [:exp, :expm1, :log, :log1p, :sigmoid, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
       [:acosh, :asinh, :atanh, :acos, :asin, :atan, :cosh, :sinh] ++
       [:erf, :erfc, :erf_inv]
 

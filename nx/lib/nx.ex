@@ -8886,6 +8886,12 @@ defmodule Nx do
     slice_along_axis(tensor, start_index, len, [axis: axis] ++ opts)
   end
 
+  @doc false
+  @deprecated "Use sigmoid/1 instead"
+  def logistic(tensor) do
+    sigmoid(tensor)
+  end
+
   @doc """
   Puts the given slice into the given tensor at the given
   start indices.

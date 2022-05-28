@@ -237,10 +237,10 @@ defmodule Torchx.NxTest do
       )
     end
 
-    test "logistic/1" do
+    test "sigmoid/1" do
       assert_all_close(
         Nx.tensor([0.1824, 0.6224]),
-        Nx.logistic(Nx.tensor([-1.5, 0.5]))
+        Nx.sigmoid(Nx.tensor([-1.5, 0.5]))
       )
     end
   end
@@ -259,7 +259,7 @@ defmodule Torchx.NxTest do
 
     test "non-finite to integer conversions" do
       non_finite =
-        Nx.tensor([Nx.Constants.infinity(), Nx.Constants.nan(), Nx.Constants.neg_infinity()])
+        Nx.stack([Nx.Constants.infinity(), Nx.Constants.nan(), Nx.Constants.neg_infinity()])
 
       assert Nx.as_type(non_finite, {:u, 8}) |> Nx.backend_transfer() ==
                Nx.tensor([0, 0, 0], type: {:u, 8}, backend: Nx.BinaryBackend)
@@ -275,7 +275,7 @@ defmodule Torchx.NxTest do
     end
 
     test "non-finite to between floats conversions" do
-      non_finite = Nx.tensor([Nx.Constants.infinity(), Nx.Constants.neg_infinity()])
+      non_finite = Nx.stack([Nx.Constants.infinity(), Nx.Constants.neg_infinity()])
       non_finite_binary_backend = Nx.backend_copy(non_finite)
 
       assert Nx.as_type(non_finite, {:f, 16}) |> Nx.backend_transfer() ==

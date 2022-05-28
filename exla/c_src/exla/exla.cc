@@ -818,7 +818,7 @@ ERL_NIF_TERM log1p(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Log1p);
 }
 
-ERL_NIF_TERM logistic(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM sigmoid(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Logistic);
 }
 
@@ -2317,7 +2317,7 @@ static ErlNifFunc exla_funcs[] = {
   {"round", 1, round},
   {"log", 1, log},
   {"log1p", 1, log1p},
-  {"logistic", 1, logistic},
+  {"sigmoid", 1, sigmoid},
   {"sign", 1, sign},
   {"cos", 1, cos},
   {"sin", 1, sin},
