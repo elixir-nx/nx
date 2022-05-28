@@ -7,7 +7,7 @@ Mix.install([
   {:req, "~> 0.2.0"},
   {:kino, "~> 0.5.1"},
   {:exla, "~> 0.2"},
-  {:stb_image, "~> 0.2.1"}
+  {:stb_image, "~> 0.5"}
 ])
 
 # To use TPU/CUDA/ROCM, you must also set the XLA_TARGET env var
@@ -23,12 +23,12 @@ defmodule Preprocess do
   def image_to_tensor(file_or_url) do
     case URI.parse(file_or_url) do
       %URI{scheme: nil} ->
-        {:ok, img} = StbImage.from_file(file_or_url)
+        img = StbImage.read_file!(file_or_url)
         Nx.from_binary(img.data, {:u, 8}) |> Nx.reshape(img.shape)
 
       _ ->
         %{body: binary_image} = Req.get!(file_or_url)
-        {:ok, img} = StbImage.from_binary(binary_image)
+        img = StbImage.read_binary!(binary_image)
         Nx.from_binary(img.data, {:u, 8}) |> Nx.reshape(img.shape)
     end
   end
@@ -207,7 +207,7 @@ rotated_image = Rotate.rotate_image_by_angle(image, angle, new_image, radians?)
 
 # convert the tensor back to stb_image and render it as png
 img = StbImage.from_nx(rotated_image)
-{:ok, content} = StbImage.to_binary(img, :png)
+content = StbImage.to_binary(img, :png)
 
 # display the rotated image
 Kino.Image.new(content, :png)
