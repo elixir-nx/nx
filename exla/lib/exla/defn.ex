@@ -777,7 +777,6 @@ defmodule EXLA.Defn do
           EXLA.Op.pad(tensor, EXLA.Op.constant_r0(state.builder, Complex.new(0), output_type), [
             {0, n - m, 0}
           ])
-          |> IO.inspect(label: "exla/lib/exla/defn.ex:780")
       end
 
     EXLA.Op.fft(tensor, n)
