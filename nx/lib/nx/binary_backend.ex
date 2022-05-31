@@ -2204,6 +2204,7 @@ defmodule Nx.BinaryBackend do
   end
 
   defp fft_list(data, bigN) when bigN < 2, do: data
+
   defp fft_list(data, bigN) when rem(bigN, 2) != 0 do
     for k <- 0..(bigN - 1) do
       minus_two_pi_k_over_bigN = -2 * :math.pi() * k / bigN
