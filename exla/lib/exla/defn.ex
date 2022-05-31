@@ -774,9 +774,8 @@ defmodule EXLA.Defn do
           EXLA.Op.slice(tensor, [0], [n], [1])
 
         {m} when m < n ->
-          EXLA.Op.pad(tensor, EXLA.Op.constant_r0(state.builder, Complex.new(0), output_type), [
-            {0, n - m, 0}
-          ])
+          zero = EXLA.Op.constant_r0(state.builder, Complex.new(0), output_type)
+          EXLA.Op.pad(tensor, zero, [{0, n - m, 0}])
       end
 
     EXLA.Op.fft(tensor, n)
