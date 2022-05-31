@@ -10302,7 +10302,7 @@ defmodule Nx do
 
     * `:eps` - Threshold which backends can use for cleaning-up results. Defaults to `1.0e-10`.
     * `:length` - Either a positive integer or `:power_of_two`. Will pad or slice the tensor
-    accordingly. `:power_of_two` will automatically pad to the next power of two.
+      accordingly. `:power_of_two` will automatically pad to the next power of two.
 
   ## Examples
 
