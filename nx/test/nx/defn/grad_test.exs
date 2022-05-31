@@ -1459,7 +1459,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   for fun <-
-        [:cbrt, :cos, :exp, :expm1, :log, :log1p, :logistic] ++
+        [:cbrt, :cos, :exp, :expm1, :log, :log1p, :sigmoid] ++
           [:mean, :negate, :rsqrt, :sin, :sqrt, :sum, :tanh] do
     describe "#{fun}" do
       grad_fun = :"grad_#{fun}"

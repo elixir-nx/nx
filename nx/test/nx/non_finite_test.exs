@@ -1,4 +1,4 @@
-defmodule Nx.ComplexTest do
+defmodule Nx.NonFiniteTest do
   @moduledoc """
   Responsible for testing all basic Nx functionality with
   complex number arguments.
@@ -6,93 +6,97 @@ defmodule Nx.ComplexTest do
   use ExUnit.Case, async: true
 
   import Nx.Helpers
+  import Nx, only: :sigils
 
-  @arg Complex.new(2, 3)
-  @arg2 Complex.new(-2, 7)
+  @arg Complex.new(:infinity, 3)
+  @arg2 Complex.new(-2, 4)
+
+  @inf_inf Complex.new(:infinity, :infinity)
+  @nan_nan Complex.new(:nan, :nan)
 
   describe "unary operations" do
     test "exp" do
-      assert_all_close(Nx.exp(@arg), Complex.new(-7.315, 1.042))
+      assert Nx.exp(@arg) == Nx.tensor(@inf_inf)
     end
 
     test "expm1" do
-      assert_all_close(Nx.expm1(@arg), Complex.new(-8.315, 1.042))
+      assert Nx.expm1(@arg) == Nx.tensor(@inf_inf)
     end
 
     test "log" do
-      assert_all_close(Nx.log(@arg), Complex.new(1.2824, 0.98279))
+      assert_all_close(Nx.log(@arg), Complex.new(:infinity, 0))
     end
 
     test "log1p" do
-      assert_all_close(Nx.log1p(@arg), Complex.new(1.4451, 0.7854))
+      assert_all_close(Nx.log1p(@arg), Complex.new(:infinity, 0))
     end
 
     test "sigmoid" do
-      assert_all_close(Nx.sigmoid(@arg), Complex.new(1.1541, 0.0254))
+      assert_all_close(Nx.sigmoid(@arg), Complex.new(1.0, 0.0))
     end
 
     test "cos" do
-      assert_all_close(Nx.cos(@arg), Complex.new(-4.1896, -9.10925))
+      assert_all_close(Nx.cos(@arg), @nan_nan)
     end
 
     test "sin" do
-      assert_all_close(Nx.sin(@arg), Complex.new(9.1544, -4.1689))
+      assert_all_close(Nx.sin(@arg), @nan_nan)
     end
 
     test "tan" do
-      assert_all_close(Nx.tan(@arg), Complex.new(-0.00376, 1.00323))
+      assert_all_close(Nx.tan(@arg), @nan_nan)
     end
 
     test "cosh" do
-      assert_all_close(Nx.cosh(@arg), Complex.new(-3.72454, 0.51182))
+      assert Nx.cosh(@arg) == Nx.tensor(@inf_inf)
     end
 
     test "sinh" do
-      assert_all_close(Nx.sinh(@arg), Complex.new(-3.59056, 0.53092))
+      assert Nx.sinh(@arg) == Nx.tensor(@inf_inf)
     end
 
     test "tanh" do
-      assert_all_close(Nx.tanh(@arg), Complex.new(0.96538, -0.00988))
+      assert_all_close(Nx.tanh(@arg), @nan_nan)
     end
 
     test "acos" do
-      assert_all_close(Nx.acos(@arg), Complex.new(1.0001, -1.9833))
+      assert_all_close(Nx.acos(@arg), @nan_nan)
     end
 
     test "asin" do
-      assert_all_close(Nx.asin(@arg), Complex.new(0.57065, 1.98338))
+      assert_all_close(Nx.asin(@arg), @nan_nan)
     end
 
     test "atan" do
-      assert_all_close(Nx.atan(@arg), Complex.new(1.40992, 0.22907))
+      assert_all_close(Nx.atan(@arg), @nan_nan)
     end
 
     test "acosh" do
-      assert_all_close(Nx.acosh(@arg), Complex.new(1.9833, 1.0001))
+      assert_all_close(Nx.acosh(@arg), Complex.new(:infinity, :math.pi() / 4))
     end
 
     test "asinh" do
-      assert_all_close(Nx.asinh(@arg), Complex.new(1.9686, 0.96465))
+      assert_all_close(Nx.asinh(@arg), Complex.new(:infinity, :math.pi() / 4))
     end
 
     test "atanh" do
-      assert_all_close(Nx.atanh(@arg), Complex.new(0.14694, 1.3389))
+      assert_all_close(Nx.atanh(@arg), @nan_nan)
     end
 
     test "sqrt" do
-      assert_all_close(Nx.sqrt(@arg), Complex.new(1.6741, 0.8959))
+      assert_all_close(Nx.sqrt(@arg), Complex.new(:infinity, 0))
     end
 
     test "rsqrt" do
-      assert_all_close(Nx.rsqrt(@arg), Complex.new(0.4643, -0.2485))
+      assert_all_close(Nx.rsqrt(@arg), Complex.new(0.0, 0.0))
     end
 
     test "cbrt" do
-      assert_all_close(Nx.cbrt(@arg), Complex.new(1.4518, 0.4934))
+      assert_all_close(Nx.cbrt(@arg), @nan_nan)
     end
 
     test "conjugate" do
-      assert Nx.conjugate(@arg) == Nx.tensor(Complex.new(2, -3))
+      assert Nx.conjugate(@arg) == Nx.tensor(Complex.new(:infinity, -3))
     end
 
     test "phase" do
@@ -183,23 +187,23 @@ defmodule Nx.ComplexTest do
 
   describe "binary operations" do
     test "add" do
-      assert_all_close(Nx.add(@arg, @arg2), Complex.new(0, 10))
+      assert_all_close(Nx.add(@arg, @arg2), Complex.new(:infinity, 7))
     end
 
     test "subtract" do
-      assert_all_close(Nx.subtract(@arg, @arg2), Complex.new(4, -4))
+      assert_all_close(Nx.subtract(@arg, @arg2), Complex.new(:infinity, -1))
     end
 
     test "multiply" do
-      assert_all_close(Nx.multiply(@arg, @arg2), Complex.new(-25, 8))
+      assert Nx.multiply(@arg, @arg2) == Nx.tensor(Complex.new(:neg_infinity, :infinity))
     end
 
     test "power" do
-      assert_all_close(Nx.power(@arg, @arg2), Complex.new(5.90369e-5, 5.26792e-5))
+      assert_all_close(Nx.power(@arg, @arg2), @nan_nan)
     end
 
     test "divide" do
-      assert_all_close(Nx.divide(@arg, @arg2), Complex.new(0.32075, -0.37735))
+      assert Nx.divide(@arg, @arg2) == Nx.tensor(Complex.new(:neg_infinity, :neg_infinity))
     end
 
     test "atan2" do
@@ -222,12 +226,55 @@ defmodule Nx.ComplexTest do
                    end
     end
 
-    for op <- [:remainder, :max, :min] do
-      test "#{op}" do
-        assert_raise ArgumentError, "Nx.#{unquote(op)}/2 does not support complex inputs", fn ->
-          Nx.unquote(op)(@arg, @arg2)
-        end
-      end
+    test "max" do
+      # infinity as right arg
+      assert ~V[Inf] == Nx.max(~V[-Inf], ~V[Inf])
+      assert ~V[Inf] == Nx.max(~V[1], ~V[Inf])
+      assert ~V[NaN] == Nx.max(~V[NaN], ~V[Inf])
+      assert ~V[Inf] == Nx.max(~V[Inf], ~V[Inf])
+
+      # neg_inf as right arg
+      assert ~V[-Inf] == Nx.max(~V[-Inf], ~V[-Inf])
+      assert ~V[1.0] == Nx.max(~V[1], ~V[-Inf])
+      assert ~V[NaN] == Nx.max(~V[NaN], ~V[-Inf])
+      assert ~V[Inf] == Nx.max(~V[Inf], ~V[-Inf])
+
+      # nan as right arg
+      assert ~V[NaN] == Nx.max(~V[-Inf], ~V[NaN])
+      assert ~V[NaN] == Nx.max(~V[1], ~V[NaN])
+      assert ~V[NaN] == Nx.max(~V[NaN], ~V[NaN])
+      assert ~V[NaN] == Nx.max(~V[Inf], ~V[NaN])
+    end
+
+    test "min" do
+      # infinity as right arg
+      assert ~V[-Inf] == Nx.min(~V[-Inf], ~V[Inf])
+      assert ~V[1.0] == Nx.min(~V[1], ~V[Inf])
+      assert ~V[NaN] == Nx.min(~V[NaN], ~V[Inf])
+      assert ~V[Inf] == Nx.min(~V[Inf], ~V[Inf])
+
+      # neg_inf as right arg
+      assert ~V[-Inf] == Nx.min(~V[-Inf], ~V[-Inf])
+      assert ~V[-Inf] == Nx.min(~V[1], ~V[-Inf])
+      assert ~V[NaN] == Nx.min(~V[NaN], ~V[-Inf])
+      assert ~V[-Inf] == Nx.min(~V[Inf], ~V[-Inf])
+
+      # nan as right arg
+      assert ~V[NaN] == Nx.min(~V[-Inf], ~V[NaN])
+      assert ~V[NaN] == Nx.min(~V[1], ~V[NaN])
+      assert ~V[NaN] == Nx.min(~V[NaN], ~V[NaN])
+      assert ~V[NaN] == Nx.min(~V[Inf], ~V[NaN])
+    end
+
+    test "remainder" do
+      assert_raise ArgumentError,
+                   "errors were found at the given arguments:\n\n  * 1st argument: not a number\n  * 2nd argument: not a number\n",
+                   fn ->
+                     Nx.remainder(
+                       Nx.tensor(:neg_infinity, type: {:f, 32}),
+                       Nx.tensor(:infinity, type: {:f, 32})
+                     )
+                   end
     end
 
     for op <- [
@@ -239,32 +286,13 @@ defmodule Nx.ComplexTest do
         ] do
       test "#{op}" do
         assert_raise ArgumentError,
-                     "bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:c, 64}",
+                     "bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 32}",
                      fn ->
-                       Nx.unquote(op)(@arg, @arg2)
+                       Nx.unquote(op)(
+                         Nx.tensor(:infinity, type: {:f, 32}),
+                         Nx.tensor(:infinity, type: {:f, 32})
+                       )
                      end
-      end
-    end
-  end
-
-  describe "LinAlg not yet implemented" do
-    for function <- [:svd, :eigh] do
-      test "#{function}" do
-        t = Nx.broadcast(Nx.tensor(1, type: {:c, 64}), {3, 3})
-
-        assert_raise ArgumentError,
-                     "Nx.LinAlg.#{unquote(function)}/2 is not yet implemented for complex inputs",
-                     fn ->
-                       Nx.LinAlg.unquote(function)(t)
-                     end
-      end
-    end
-
-    test "triangular_solve fails with singular complex matrix" do
-      t = Nx.broadcast(Nx.tensor(0, type: {:c, 64}), {3, 3})
-
-      assert_raise ArgumentError, "can't solve for singular matrix", fn ->
-        Nx.LinAlg.triangular_solve(t, t)
       end
     end
   end

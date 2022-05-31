@@ -249,10 +249,10 @@ defmodule Torchx.NxTest do
       )
     end
 
-    test "logistic/1" do
+    test "sigmoid/1" do
       assert_all_close(
         Nx.tensor([0.1824, 0.6224]),
-        Nx.logistic(Nx.tensor([-1.5, 0.5]))
+        Nx.sigmoid(Nx.tensor([-1.5, 0.5]))
       )
     end
   end

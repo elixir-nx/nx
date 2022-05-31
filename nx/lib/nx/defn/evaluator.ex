@@ -69,6 +69,7 @@ defmodule Nx.Defn.Evaluator do
 
       %{} ->
         {res, cache} = eval_apply(op, ans, state, cache)
+        :erlang.garbage_collect(self())
         {res, Map.put(cache, id, res)}
     end
   end

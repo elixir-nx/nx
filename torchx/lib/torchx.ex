@@ -278,7 +278,7 @@ defmodule Torchx do
   deftensor expm1(tensor)
   deftensor log(tensor)
   deftensor log1p(tensor)
-  deftensor logistic(tensor)
+  deftensor sigmoid(tensor)
   deftensor view_as_real(tensor)
   deftensor conjugate(tensor)
   deftensor cos(tensor)

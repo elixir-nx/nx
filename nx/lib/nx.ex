@@ -5796,6 +5796,8 @@ defmodule Nx do
     opts = keyword!(opts, rtol: 1.0e-5, atol: 1.0e-8)
     rtol = opts[:rtol]
     atol = opts[:atol]
+
+    # TODO: deal with non_finite entries by adding is_infinity and is_nan
     all(less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b)))))
   end
 
@@ -8883,6 +8885,12 @@ defmodule Nx do
     slice_along_axis(tensor, start_index, len, [axis: axis] ++ opts)
   end
 
+  @doc false
+  @deprecated "Use sigmoid/1 instead"
+  def logistic(tensor) do
+    sigmoid(tensor)
+  end
+
   @doc """
   Puts the given slice into the given tensor at the given
   start indices.
@@ -9853,7 +9861,7 @@ defmodule Nx do
   ## Utilities
 
   @doc """
-  Serializes the given tensor or container of tensors to a binary.
+  Serializes the given tensor or container of tensors to iodata.
 
   You may pass a tensor, tuple, or map to serialize.
 
@@ -9863,7 +9871,11 @@ defmodule Nx do
 
       Nx.serialize(tensor, compressed: 9)
 
-  Compression level corresponds to compression options in `:erlang.term_to_binary/2`.
+  Compression level corresponds to compression options in `:erlang.term_to_iovec/2`.
+
+  `iodata` is a list of binaries that can be written to any io device,
+  such as a file or a socket. You can ensure the result is a binary by
+  calling `IO.iodata_to_binary/1`.  
 
   ## Examples
 
@@ -9893,8 +9905,7 @@ defmodule Nx do
   def serialize(tensor_or_container, opts \\ []) do
     data_term = to_term(tensor_or_container)
     term = {@file_version, System.endianness(), data_term}
-
-    :erlang.term_to_binary(term, opts)
+    :erlang.term_to_iovec(term, opts)
   end
 
   defp to_term(tensor_or_container) do
@@ -9966,6 +9977,7 @@ defmodule Nx do
   @doc type: :conversion
   def deserialize(data, opts \\ []) do
     data
+    |> IO.iodata_to_binary()
     |> :erlang.binary_to_term(opts)
     |> from_term()
   end
@@ -10412,6 +10424,27 @@ defmodule Nx do
           [1.0+1.0i, 2.0-2.0i, -3.0+0.0i]
         ]
       >
+      iex> ~M[1 Inf NaN]
+      #Nx.Tensor<
+        f32[1][3]
+        [
+          [1.0, Inf, NaN]
+        ]
+      >
+      iex> ~M[1i Inf NaN]
+      #Nx.Tensor<
+        c64[1][3]
+        [
+          [0.0+1.0i, Inf+0.0i, NaN+0.0i]
+        ]
+      >
+      iex> ~M[1i Inf+2i NaN-Infi]
+      #Nx.Tensor<
+        c64[1][3]
+        [
+          [0.0+1.0i, Inf+2.0i, NaN-Infi]
+        ]
+      >
 
   """
   @doc type: :creation
@@ -10453,7 +10486,21 @@ defmodule Nx do
         c64[3]
         [1.0+1.0i, 2.0-2.0i, -3.0+0.0i]
       >
-
+      iex> ~V[1 Inf NaN]
+      #Nx.Tensor<
+        f32[3]
+        [1.0, Inf, NaN]
+      >
+      iex> ~V[1i Inf NaN]
+      #Nx.Tensor<
+        c64[3]
+        [0.0+1.0i, Inf+0.0i, NaN+0.0i]
+      >
+      iex> ~V[1i Inf+2i NaN-Infi]
+      #Nx.Tensor<
+        c64[3]
+        [0.0+1.0i, Inf+2.0i, NaN-Infi]
+      >
   """
   @doc type: :creation
   defmacro sigil_V({:<<>>, _meta, [string]}, modifiers) do
@@ -10498,6 +10545,7 @@ defmodule Nx do
         {module, type} =
           cond do
             elem(type, 0) == :c -> {Complex, type}
+            String.contains?(str, ["Inf", "NaN"]) -> {Complex, type}
             String.contains?(str, "i") -> {Complex, {:c, 64}}
             String.contains?(str, ".") -> {Float, {:f, 32}}
             :otherwise -> {Integer, type}
@@ -10508,7 +10556,7 @@ defmodule Nx do
     end)
   end
 
-  defp parse_string_to_number(Complex, str, type) do
+  defp parse_string_to_number(Complex, str, {type_class, _} = type) do
     apply_parse = fn fun ->
       case apply(fun, [str]) do
         :error -> false
@@ -10519,11 +10567,15 @@ defmodule Nx do
     result = Enum.find_value([&Complex.parse/1, &Float.parse/1, &Integer.parse/1], apply_parse)
 
     case result do
+      {%Complex{re: re, im: im}, ""}
+      when re in [:nan, :neg_infinity, :infinity] and im == 0 and type_class != :c ->
+        {re, Nx.Type.merge(type, {:f, 32})}
+
       {%Complex{} = num, ""} ->
-        {num, type}
+        {num, Nx.Type.merge(type, {:c, 64})}
 
       {num, ""} ->
-        {Complex.new(num), type}
+        {Complex.new(num), Nx.Type.merge(type, {:c, 64})}
 
       _ ->
         raise ArgumentError, "expected a numerical value for tensor, got #{str}"

@@ -142,12 +142,25 @@ defmodule Nx.Shared do
           elem_size = div(unquote(size), 2)
           <<x::float-native-size(elem_size), 0::float-native-size(elem_size)>>
 
-        %Complex{re: re, im: im} ->
+        %Complex{re: re, im: im} when is_number(re) and is_number(im) ->
           elem_size = div(unquote(size), 2)
           <<re::float-native-size(elem_size), im::float-native-size(elem_size)>>
 
-        x ->
-          Nx.Shared.write_non_finite(x, unquote(size))
+        %Complex{re: re, im: im} when is_number(re) and not is_number(im) ->
+          elem_size = div(unquote(size), 2)
+          <<re::float-native-size(elem_size)>> <> write_non_finite(im, elem_size)
+
+        %Complex{re: re, im: im} when not is_number(re) and is_number(im) ->
+          elem_size = div(unquote(size), 2)
+          write_non_finite(re, elem_size) <> <<im::float-native-size(elem_size)>>
+
+        %Complex{re: re, im: im} when not is_number(re) and not is_number(im) ->
+          elem_size = div(unquote(size), 2)
+          write_non_finite(re, elem_size) <> write_non_finite(im, elem_size)
+
+        x when x in [:infinity, :neg_infinity, :nan] ->
+          elem_size = div(unquote(size), 2)
+          Nx.Shared.write_non_finite(x, elem_size) <> <<0::float-native-size(elem_size)>>
       end :: binary
     end
   end
@@ -197,7 +210,20 @@ defmodule Nx.Shared do
   """
   def read_complex(val, size) do
     elem_size = div(size, 2)
-    <<re::float-native-size(elem_size), im::float-native-size(elem_size)>> = val
+    <<real_part::bitstring-size(elem_size), imag_part::bitstring-size(elem_size)>> = val
+
+    re =
+      case real_part do
+        <<x::float-native-size(elem_size)>> -> x
+        _ -> read_non_finite(real_part, elem_size)
+      end
+
+    im =
+      case imag_part do
+        <<x::float-native-size(elem_size)>> -> x
+        _ -> read_non_finite(imag_part, elem_size)
+      end
+
     Complex.new(re, im)
   end
 
@@ -277,15 +303,15 @@ defmodule Nx.Shared do
       log1p:
         {"natural log plus one", quote(do: Complex.ln(Complex.add(var!(x), 1))),
          "$$log1p(z) = log(z + 1)$$"},
-      logistic:
-        {"standard logistic (a sigmoid)",
+      sigmoid:
+        {"sigmoid",
          quote do
            var!(x)
            |> Complex.negate()
            |> Complex.exp()
            |> Complex.add(1)
            |> then(&Complex.divide(1, &1))
-         end, "$$logistic(z) = \\frac{1}{1 + e^{-z}}$$"},
+         end, "$$sigmoid(z) = \\frac{1}{1 + e^{-z}}$$"},
       cos:
         {"cosine", quote(do: Complex.cos(var!(x))), "$$cos(z) = \\frac{e^{iz} + e^{-iz}}{2}$$"},
       sin: {"sine", quote(do: Complex.sin(var!(x))), "$$sin(z) = \\frac{e^{iz} - e^{-iz}}{2i}$$"},
