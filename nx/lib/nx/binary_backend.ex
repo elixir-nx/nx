@@ -2188,14 +2188,7 @@ defmodule Nx.BinaryBackend do
         :otherwise -> input_data
       end
 
-    log2_n = :math.log2(n)
-
-    result =
-      if floor(log2_n) == log2_n do
-        fft_power_of_two(data, n)
-      else
-        dft(data, n)
-      end
+    result = fft_list(data, n)
 
     output_data =
       match_types [out.type] do
@@ -2210,7 +2203,10 @@ defmodule Nx.BinaryBackend do
     from_binary(out, output_data)
   end
 
-  defp dft(data, bigN) do
+  defp fft_list(data, bigN) when bigN < 2, do: data
+
+  defp fft_list(data, bigN) when rem(bigN, 2) != 0 do
+    # Naive DFT case for when bigN is odd > 2
     for k <- 0..(bigN - 1) do
       minus_two_pi_k_over_bigN = -2 * :math.pi() * k / bigN
 
@@ -2222,15 +2218,17 @@ defmodule Nx.BinaryBackend do
     end
   end
 
-  defp fft_power_of_two(data, n) when n < 2, do: data
+  defp fft_list([_ | tail] = data, bigN) do
+    # Here bigN is guaranteed to be even, so the recursion will
+    # work on at least one level
+    bigN_over_2 = div(bigN, 2)
 
-  defp fft_power_of_two([_ | tail] = data, n) do
-    even = fft_power_of_two(Enum.take_every(data, 2), div(n, 2))
-    odd = fft_power_of_two(Enum.take_every(tail, 2), div(n, 2))
+    even = fft_list(Enum.take_every(data, 2), bigN_over_2)
+    odd = fft_list(Enum.take_every(tail, 2), bigN_over_2)
 
     t =
       Enum.with_index(odd, fn item, k ->
-        Complex.exp(Complex.new(0, -2 * :math.pi() * k / n)) * item
+        Complex.exp(Complex.new(0, -2 * :math.pi() * k / bigN)) * item
       end)
 
     left = Enum.zip_with([even, t], fn [x, y] -> x + y end)
