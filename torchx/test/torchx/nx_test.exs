@@ -1,6 +1,8 @@
 defmodule Torchx.NxTest do
   use Torchx.Case, async: true
 
+  import Nx, only: :sigils
+
   alias Torchx.Backend, as: TB
   doctest TB
 
@@ -99,6 +101,23 @@ defmodule Torchx.NxTest do
           axes: [0, 1]
         ),
         Nx.tensor([[1]])
+      )
+    end
+
+    test "fft" do
+      assert_all_close(
+        Nx.fft(Nx.tensor([1, 1, 0, 0]), length: 5),
+        ~V[2.0+0.0i 1.3090-0.9511i 0.1909-0.5877i 0.1909+0.5877i 1.3090+0.9510i]
+      )
+
+      assert_all_close(
+        Nx.fft(Nx.tensor([1, 1, 0, 0, 2, 3]), length: 4),
+        ~V[2.0+0.0i 1.0-1.0i 0.0+0.0i 1.0+1.0i]
+      )
+
+      assert_all_close(
+        Nx.fft(Nx.tensor([1, 1, 0]), length: :power_of_two),
+        ~V[2.0+0.0i 1.0-1.0i 0.0+0.0i 1.0+1.0i]
       )
     end
   end

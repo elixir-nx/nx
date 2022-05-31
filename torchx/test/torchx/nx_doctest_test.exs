@@ -36,7 +36,8 @@ defmodule Torchx.NxDoctestTest do
     erfc: 1,
     erf_inv: 1,
     round: 1,
-    sigmoid: 1
+    sigmoid: 1,
+    fft: 2
   ]
 
   case :os.type() do

@@ -2167,6 +2167,78 @@ defmodule Nx.BinaryBackend do
     from_binary(output, new_data)
   end
 
+  @impl true
+  def fft(%{shape: {n}} = out, tensor, opts) do
+    eps = opts[:eps]
+    len = opts[:length]
+
+    input_data =
+      match_types [tensor.type] do
+        for <<match!(x, 0) <- to_binary(tensor)>> do
+          read!(x, 0)
+        end
+      end
+
+    len_data = length(input_data)
+
+    data =
+      cond do
+        len_data < len -> input_data ++ List.duplicate(0, len - len_data)
+        len_data > len -> Enum.take(input_data, len)
+        :otherwise -> input_data
+      end
+
+    log2_n = :math.log2(n)
+
+    result =
+      if floor(log2_n) == log2_n do
+        fft_power_of_two(data, n)
+      else
+        dft(data, n)
+      end
+
+    output_data =
+      match_types [out.type] do
+        for %Complex{re: re, im: im} <- result, into: <<>> do
+          re = if abs(re) <= eps, do: 0, else: re
+          im = if abs(im) <= eps, do: 0, else: im
+
+          <<write!(Complex.new(re, im), 0)>>
+        end
+      end
+
+    from_binary(out, output_data)
+  end
+
+  defp dft(data, bigN) do
+    for k <- 0..(bigN - 1) do
+      minus_two_pi_k_over_bigN = -2 * :math.pi() * k / bigN
+
+      data
+      |> Enum.with_index(fn x, n ->
+        x * Complex.exp(Complex.new(0, minus_two_pi_k_over_bigN * n))
+      end)
+      |> Enum.reduce(&+/2)
+    end
+  end
+
+  defp fft_power_of_two(data, n) when n < 2, do: data
+
+  defp fft_power_of_two([_ | tail] = data, n) do
+    even = fft_power_of_two(Enum.take_every(data, 2), div(n, 2))
+    odd = fft_power_of_two(Enum.take_every(tail, 2), div(n, 2))
+
+    t =
+      Enum.with_index(odd, fn item, k ->
+        Complex.exp(Complex.new(0, -2 * :math.pi() * k / n)) * item
+      end)
+
+    left = Enum.zip_with([even, t], fn [x, y] -> x + y end)
+    right = Enum.zip_with([even, t], fn [x, y] -> x - y end)
+
+    left ++ right
+  end
+
   ## Binary reducers
 
   defp bin_reduce(tensor, type, acc, opts, fun) do

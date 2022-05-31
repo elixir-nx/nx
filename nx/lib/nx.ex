@@ -10295,6 +10295,86 @@ defmodule Nx do
     sqrt(variance(tensor, opts))
   end
 
+  @doc """
+  Calculates the DFT of the given 1D tensor.
+
+  ## Options
+
+    * `:eps` - Threshold which backends can use for cleaning-up results. Defaults to `1.0e-10`.
+    * `:length` - Either a positive integer or `:power_of_two`. Will pad or slice the tensor
+      accordingly. `:power_of_two` will automatically pad to the next power of two.
+
+  ## Examples
+
+      iex> Nx.fft(Nx.tensor([1, 1, 0, 0]))
+      #Nx.Tensor<
+        c64[4]
+        [2.0+0.0i, 1.0-1.0i, 0.0+0.0i, 1.0+1.0i]
+      >
+
+      iex> Nx.fft(Nx.tensor([1, 1, 0, 0, 0]))
+      #Nx.Tensor<
+        c64[5]
+        [2.0+0.0i, 1.3090169429779053-0.9510565400123596i, 0.19098301231861115-0.5877852439880371i, 0.19098301231861115+0.5877852439880371i, 1.3090169429779053+0.9510565400123596i]
+      >
+
+      iex> Nx.fft(Nx.tensor([1, 1, 1, 0, 1, 1]))
+      #Nx.Tensor<
+        c64[6]
+        [5.0+0.0i, 1.0+0.0i, -1.0+0.0i, 1.0+0.0i, -1.0+0.0i, 1.0+0.0i]
+      >
+
+  Padding and slicing can be introduced through `:length`:
+
+      iex> Nx.fft(Nx.tensor([1, 1]), length: 4)
+      #Nx.Tensor<
+        c64[4]
+        [2.0+0.0i, 1.0-1.0i, 0.0+0.0i, 1.0+1.0i]
+      >
+
+      iex> Nx.fft(Nx.tensor([1, 1, 0]), length: :power_of_two)
+      #Nx.Tensor<
+        c64[4]
+        [2.0+0.0i, 1.0-1.0i, 0.0+0.0i, 1.0+1.0i]
+      >
+
+      iex> Nx.fft(Nx.tensor([1, 1, 0, 0, 2, 3]), length: 4)
+      #Nx.Tensor<
+        c64[4]
+        [2.0+0.0i, 1.0-1.0i, 0.0+0.0i, 1.0+1.0i]
+      >
+
+  ## Error Cases
+
+      iex> Nx.fft(Nx.tensor([1, 1]), length: :invalid)
+      ** (RuntimeError) expected an integer or :power_of_two as length, got: :invalid
+  """
+  @doc type: :signal
+  def fft(tensor, opts \\ []) do
+    tensor = to_tensor(tensor)
+
+    {n} = Nx.Shape.fft(tensor.shape)
+
+    opts = Keyword.validate!(opts, length: n, eps: 1.0e-10)
+
+    length =
+      case opts[:length] do
+        :power_of_two ->
+          2 ** Kernel.ceil(:math.log2(n))
+
+        n when is_integer(n) and n > 0 ->
+          n
+
+        length ->
+          raise "expected an integer or :power_of_two as length, got: #{inspect(length)}"
+      end
+
+    opts = Keyword.put(opts, :length, length)
+
+    out = to_template(%{tensor | shape: {length}, type: Nx.Type.to_complex(tensor.type)})
+    impl!(tensor).fft(out, tensor, opts)
+  end
+
   ## Sigils
 
   @doc """

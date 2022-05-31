@@ -760,6 +760,27 @@ defmodule EXLA.Defn do
     apply(EXLA.Op, op, [to_type(arg, type)])
   end
 
+  defp to_operator(:fft, [tensor, opts], %{type: type}, state) do
+    n = opts[:length]
+    output_type = Nx.Type.to_complex(type)
+    tensor = to_type(tensor, output_type)
+
+    tensor =
+      case op_shape(tensor) do
+        {^n} ->
+          tensor
+
+        {m} when m > n ->
+          EXLA.Op.slice(tensor, [0], [n], [1])
+
+        {m} when m < n ->
+          zero = EXLA.Op.constant_r0(state.builder, Complex.new(0), output_type)
+          EXLA.Op.pad(tensor, zero, [{0, n - m, 0}])
+      end
+
+    EXLA.Op.fft(tensor, n)
+  end
+
   # These operations do the type conversion implicitly, and so
   # we cannot mess with the output type (e.g. the to_type conversion)
   # because it will throw an error
