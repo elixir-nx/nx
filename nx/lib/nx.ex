@@ -10298,13 +10298,20 @@ defmodule Nx do
         c64[5]
         [2.0+0.0i, 1.3090169429779053-0.9510565400123596i, 0.19098301231861115-0.5877852439880371i, 0.19098301231861115+0.5877852439880371i, 1.3090169429779053+0.9510565400123596i]
       >
+
+      iex> Nx.fft(Nx.tensor([1, 1, 1, 0, 1, 1]))
+      #Nx.Tensor<
+        c64[6]
+        [5.0+0.0i, 1.0+0.0i, -1.0+0.0i, 1.0+0.0i, -1.0+0.0i, 1.0+0.0i]
+      >
   """
   @doc type: :signal
-  def fft(tensor) do
+  def fft(tensor, opts \\ []) do
     tensor = to_tensor(tensor)
+    opts = Keyword.validate!(opts, eps: 1.0e-10)
 
     out = to_template(%{tensor | type: Nx.Type.to_complex(tensor.type)})
-    impl!(tensor).fft(out, tensor)
+    impl!(tensor).fft(out, tensor, opts)
   end
 
   ## Sigils

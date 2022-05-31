@@ -760,7 +760,7 @@ defmodule EXLA.Defn do
     apply(EXLA.Op, op, [to_type(arg, type)])
   end
 
-  defp to_operator(:fft, [tensor], %{shape: {n}, type: type}, _state) do
+  defp to_operator(:fft, [tensor, _opts], %{shape: {n}, type: type}, _state) do
     EXLA.Op.fft(to_type(tensor, Nx.Type.to_complex(type)), n)
   end
 

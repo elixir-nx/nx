@@ -806,7 +806,7 @@ defmodule Torchx.Backend do
     [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tan, :cosh, :sinh] ++
       [:tanh, :acos, :asin, :atan, :acosh, :asinh, :atanh, :sqrt, :rsqrt] ++
       [:erf, :erfc, :erf_inv, :abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign] ++
-      [:logical_not, :cbrt, :fft]
+      [:logical_not, :cbrt]
 
   for op <- unary_ops do
     @impl true
@@ -857,6 +857,14 @@ defmodule Torchx.Backend do
     as_real
     |> torchx_slice(as_real_shape, tensor.shape, starts, lengths, strides)
     |> Torchx.reshape(tensor.shape)
+    |> to_nx(out)
+  end
+
+  @impl true
+  def fft(out, tensor, _opts) do
+    tensor
+    |> from_nx()
+    |> Torchx.fft()
     |> to_nx(out)
   end
 

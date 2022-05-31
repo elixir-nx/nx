@@ -2154,7 +2154,9 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def fft(out, %{shape: {n}} = tensor) do
+  def fft(out, %{shape: {n}} = tensor, opts) do
+    eps = opts[:eps]
+
     data =
       match_types [tensor.type] do
         for <<match!(x, 0) <- to_binary(tensor)>> do
@@ -2162,52 +2164,53 @@ defmodule Nx.BinaryBackend do
         end
       end
 
+    log2_n = :math.log2(n)
+
     result =
-      if rem(n, 2) == 0 do
-        fft_list(data)
+      if floor(log2_n) == log2_n do
+        fft_power_of_two(data, n)
       else
-        dft_list(data)
+        dft(data, n)
       end
 
     output_data =
       match_types [out.type] do
-        for item <- result, into: <<>> do
-          <<write!(item, 0)>>
+        for %Complex{re: re, im: im} <- result, into: <<>> do
+          re = if abs(re) <= eps, do: 0, else: re
+          im = if abs(im) <= eps, do: 0, else: im
+
+          <<write!(Complex.new(re, im), 0)>>
         end
       end
 
     from_binary(out, output_data)
   end
 
-  defp dft_list(data) do
-    bigN = length(data)
-
+  defp dft(data, bigN) do
     for k <- 0..(bigN - 1) do
-      {xk, _} =
-        Enum.reduce(data, {0, 0}, fn x, {acc, n} ->
-          {acc + x * Complex.exp(Complex.new(0, -2 * :math.pi() * k * n / bigN)), n + 1}
-        end)
+      minus_two_pi_k_over_bigN = -2 * :math.pi() * k / bigN
 
-      xk
+      data
+      |> Enum.with_index(fn x, n ->
+        x * Complex.exp(Complex.new(0, minus_two_pi_k_over_bigN * n))
+      end)
+      |> Enum.reduce(&+/2)
     end
   end
 
-  defp fft_list([]), do: []
-  defp fft_list([data]), do: [data]
+  defp fft_power_of_two(data, n) when n < 2, do: data
 
-  defp fft_list([_ | tail] = data) do
-    n = length(data)
-
-    even = fft_list(Enum.take_every(data, 2))
-    odd = fft_list(Enum.take_every(tail, 2))
+  defp fft_power_of_two([_ | tail] = data, n) do
+    even = fft_power_of_two(Enum.take_every(data, 2), div(n, 2))
+    odd = fft_power_of_two(Enum.take_every(tail, 2), div(n, 2))
 
     t =
       Enum.with_index(odd, fn item, k ->
         Complex.exp(Complex.new(0, -2 * :math.pi() * k / n)) * item
       end)
 
-    left = Enum.zip_with(even, t, fn {x, y} -> x + y end)
-    right = Enum.zip_with(even, t, fn {x, y} -> x - y end)
+    left = Enum.zip_with([even, t], fn [x, y] -> x + y end)
+    right = Enum.zip_with([even, t], fn [x, y] -> x - y end)
 
     left ++ right
   end
