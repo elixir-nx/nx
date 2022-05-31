@@ -835,7 +835,8 @@ NIF(cbrt)
 NIF(fft)
 {
   TENSOR_PARAM(0, tensor);
-  TENSOR(torch::fft::fft(*tensor));
+  PARAM(1, int64_t, length);
+  TENSOR(torch::fft::fft(*tensor, length));
 }
 
 NIF(all)
@@ -1204,7 +1205,7 @@ static ErlNifFunc nif_functions[] = {
     DF(erfc, 1),
     DF(erf_inv, 1),
     DF(cbrt, 1),
-    DF(fft, 1),
+    DF(fft, 2),
 
     DF(tensordot, 4),
     DF(matmul, 2),

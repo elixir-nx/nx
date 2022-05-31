@@ -861,10 +861,12 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def fft(out, tensor, _opts) do
+  def fft(out, tensor, opts) do
+    length = opts[:length]
+
     tensor
     |> from_nx()
-    |> Torchx.fft()
+    |> Torchx.fft(length)
     |> to_nx(out)
   end
 

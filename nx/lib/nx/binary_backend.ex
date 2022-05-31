@@ -2154,14 +2154,24 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def fft(out, %{shape: {n}} = tensor, opts) do
+  def fft(%{shape: {n}} = out, tensor, opts) do
     eps = opts[:eps]
+    len = opts[:length]
 
-    data =
+    input_data =
       match_types [tensor.type] do
         for <<match!(x, 0) <- to_binary(tensor)>> do
           read!(x, 0)
         end
+      end
+
+    len_data = length(input_data)
+
+    data =
+      cond do
+        len_data < len -> input_data ++ List.duplicate(0, len - len_data)
+        len_data > len -> Enum.take(input_data, len)
+        :otherwise -> input_data
       end
 
     log2_n = :math.log2(n)
