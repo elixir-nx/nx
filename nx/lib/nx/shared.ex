@@ -433,10 +433,10 @@ defmodule Nx.Shared do
   Gets the implementation of a list of maybe tensors.
   """
   def list_impl!(list) do
-    Enum.reduce(list, Nx.BinaryBackend, fn
-      %T{data: %struct{}}, acc -> pick_struct(struct, acc)
-      _, acc -> acc
-    end)
+    case for(%T{data: %struct{}} <- list, do: struct) do
+      [] -> raise ArgumentError, "expected at least one tensor in list_impl!"
+      [head | tail] -> Enum.reduce(tail, head, &pick_struct/2)
+    end
   end
 
   defp pick_struct(Nx.BinaryBackend, struct), do: struct
