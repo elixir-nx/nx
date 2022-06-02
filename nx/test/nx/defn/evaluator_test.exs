@@ -24,6 +24,10 @@ defmodule Nx.Defn.EvaluatorTest do
   test "concatenate" do
     assert concatenate(Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])) ==
              Nx.tensor([1, 2, 3, 4, 5, 6])
+
+    assert_raise RuntimeError, "cannot perform operations on a Nx.TemplateBackend tensor", fn ->
+      concatenate(Nx.template({3}, {:f, 32}), Nx.template({3}, {:f, 32}))
+    end
   end
 
   defn reshape(t), do: Nx.reshape(t, {3, 2})
