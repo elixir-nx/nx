@@ -10296,7 +10296,7 @@ defmodule Nx do
   end
 
   @doc """
-  Calculates the DFT of the given 1D tensor.
+  Calculates the DFT of the given tensor.
 
   ## Options
 
@@ -10338,10 +10338,21 @@ defmodule Nx do
         [2.0+0.0i, 1.0-1.0i, 0.0+0.0i, 1.0+1.0i]
       >
 
+  If an N-dimensional tensor is passed, the DFT is applied to its last axis:
+
       iex> Nx.fft(Nx.tensor([1, 1, 0, 0, 2, 3]), length: 4)
       #Nx.Tensor<
         c64[4]
         [2.0+0.0i, 1.0-1.0i, 0.0+0.0i, 1.0+1.0i]
+      >
+
+      iex> Nx.fft(Nx.tensor([[1, 1, 0, 0, 2, 3], [1, 0, 0, 0, 2, 3]]), length: 4)
+      #Nx.Tensor<
+        c64[2][4]
+        [
+          [2.0+0.0i, 1.0-1.0i, 0.0+0.0i, 1.0+1.0i],
+          [1.0+0.0i, 1.0+0.0i, 1.0+0.0i, 1.0+0.0i]
+        ]
       >
 
   ## Error Cases
