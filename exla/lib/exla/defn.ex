@@ -796,7 +796,7 @@ defmodule EXLA.Defn do
           EXLA.Op.pad(tensor, zero, padding_config)
       end
 
-    EXLA.Op.fft(tensor, shape, n)
+    EXLA.Op.fft(tensor, n)
   end
 
   # These operations do the type conversion implicitly, and so
