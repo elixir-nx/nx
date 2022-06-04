@@ -10384,7 +10384,10 @@ defmodule Nx do
 
     opts = Keyword.put(opts, :length, length)
 
-    output_shape = shape |> Tuple.insert_at(tuple_size(shape) - 1, length) |> Tuple.delete_at(tuple_size(shape))
+    output_shape =
+      shape
+      |> Tuple.insert_at(tuple_size(shape) - 1, length)
+      |> Tuple.delete_at(tuple_size(shape))
 
     out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_complex(tensor.type)})
     impl!(tensor).fft(out, tensor, opts)
