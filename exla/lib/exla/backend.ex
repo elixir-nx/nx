@@ -83,7 +83,7 @@ defmodule EXLA.Backend do
     full_batches =
       for i <- 0..(num_full_batches - 1) do
         start_idx = i * batch_size
-        EXLA.jit(expr_fun, [tensor, start_idx])
+        jit(expr_fun, [tensor, start_idx])
       end
 
     if remainder != 0 and leftover == :repeat do
@@ -94,7 +94,7 @@ defmodule EXLA.Backend do
         ])
       end
 
-      last_batch = EXLA.jit(expr_fun, [tensor])
+      last_batch = jit(expr_fun, [tensor])
       full_batches ++ [last_batch]
     else
       full_batches
@@ -162,7 +162,7 @@ defmodule EXLA.Backend do
       Nx.Defn.Expr.concatenate(out, Tuple.to_list(tensors), axis)
     end
 
-    EXLA.jit(expr_fun, [List.to_tuple(tensors)])
+    jit(expr_fun, [List.to_tuple(tensors)])
   end
 
   @impl true
@@ -175,7 +175,7 @@ defmodule EXLA.Backend do
       apply(fun, tensors ++ rest)
     end
 
-    EXLA.jit(wrapper_fun, [List.to_tuple(tensors)])
+    jit(wrapper_fun, [List.to_tuple(tensors)])
   end
 
   binary_ops =
@@ -259,7 +259,9 @@ defmodule EXLA.Backend do
         Nx.Defn.Expr.unquote(name)(out, unquote_splicing(args))
       end
 
-      EXLA.jit(expr_fun, [unquote_splicing(tensor_args)])
+      jit(expr_fun, [unquote_splicing(tensor_args)])
     end
   end
+
+  defp jit(fun, args), do: EXLA.jit(fun, args, force: true)
 end

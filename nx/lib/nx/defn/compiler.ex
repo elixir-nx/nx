@@ -113,7 +113,7 @@ defmodule Nx.Defn.Compiler do
   defp runtime_fun(flat_template, fun, container_template, compiler) do
     tuple = Nx.default_backend()
     Nx.default_backend(Nx.Defn.Expr)
-    Process.put(Nx.Defn.Compiler, compiler)
+    previous = Process.put(Nx.Defn.Compiler, compiler)
 
     try do
       args = Nx.Defn.Composite.flat_to_container_params(flat_template, container_template)
@@ -123,7 +123,12 @@ defmodule Nx.Defn.Compiler do
       |> Nx.Defn.Composite.to_result()
     after
       Nx.default_backend(tuple)
-      Process.delete(Nx.Defn.Compiler)
+
+      if previous do
+        Process.put(Nx.Defn.Compiler, compiler)
+      else
+        Process.delete(Nx.Defn.Compiler)
+      end
     end
   end
 
