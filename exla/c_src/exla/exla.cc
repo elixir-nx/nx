@@ -893,7 +893,7 @@ ERL_NIF_TERM cbrt(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 
 ERL_NIF_TERM fft(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
-  if (argc != 2)
+  if (argc != 3)
   {
     return exla::nif::error(env, "Bad argument count.");
   }
@@ -906,10 +906,12 @@ ERL_NIF_TERM fft(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
     return exla::nif::error(env, "Unable to get operand.");
   }
 
-  if (!exla::nif::get(env, argv[1], &fft_size))
+  if (!exla::nif::get(env, argv[2], &fft_size))
   {
     return exla::nif::error(env, "Unable to get fft_size.");
   }
+
+
 
   xla::XlaOp op = xla::Fft(*operand, xla::FftType::FFT, {fft_size});
 
@@ -2352,7 +2354,7 @@ static ErlNifFunc exla_funcs[] = {
   {"asin", 1, asin},
   {"atan", 1, atan},
   {"cosh", 1, cosh},
-  {"fft", 2, fft},
+  {"fft", 3, fft},
   {"sinh", 1, sinh},
   {"tanh", 1, tanh},
   {"acosh", 1, acosh},

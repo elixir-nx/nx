@@ -9875,7 +9875,7 @@ defmodule Nx do
 
   `iodata` is a list of binaries that can be written to any io device,
   such as a file or a socket. You can ensure the result is a binary by
-  calling `IO.iodata_to_binary/1`.  
+  calling `IO.iodata_to_binary/1`.
 
   ## Examples
 
@@ -10353,7 +10353,9 @@ defmodule Nx do
   def fft(tensor, opts \\ []) do
     tensor = to_tensor(tensor)
 
-    {n} = Nx.Shape.fft(tensor.shape)
+    shape = Nx.Shape.fft(tensor.shape)
+
+    n = elem(shape, tuple_size(shape) - 1)
 
     opts = Keyword.validate!(opts, length: n, eps: 1.0e-10)
 
@@ -10371,7 +10373,9 @@ defmodule Nx do
 
     opts = Keyword.put(opts, :length, length)
 
-    out = to_template(%{tensor | shape: {length}, type: Nx.Type.to_complex(tensor.type)})
+    output_shape = shape |> Tuple.insert_at(tuple_size(shape) - 1, length) |> Tuple.delete_at(tuple_size(shape))
+
+    out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_complex(tensor.type)})
     impl!(tensor).fft(out, tensor, opts)
   end
 

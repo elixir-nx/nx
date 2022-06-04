@@ -179,8 +179,8 @@ defmodule EXLA.Op do
     end
   end
 
-  def fft(%Op{ref: ref} = op, fft_size) do
-    ref = EXLA.NIF.fft(ref, fft_size) |> unwrap!()
+  def fft(%Op{ref: ref} = op, shape, fft_size) do
+    ref = EXLA.NIF.fft(ref, shape, fft_size) |> unwrap!()
     %{op | ref: ref}
   end
 
