@@ -911,8 +911,6 @@ ERL_NIF_TERM fft(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
     return exla::nif::error(env, "Unable to get fft_size.");
   }
 
-
-
   xla::XlaOp op = xla::Fft(*operand, xla::FftType::FFT, {fft_size});
 
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
