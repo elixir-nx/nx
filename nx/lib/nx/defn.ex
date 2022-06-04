@@ -264,10 +264,13 @@ defmodule Nx.Defn do
 
     * `:hooks` - a map of hooks to execute. See `Nx.Defn.Kernel.hook/3`
 
+    * `:force` - force JIT compilation to happen, even if a JIT compilation
+      is already in place
+
   """
   def jit(fun, args, opts \\ [])
       when is_function(fun) and is_list(args) and is_list(opts) do
-    if Nx.Defn.Compiler.current() do
+    if Nx.Defn.Compiler.current() && opts[:force] != true do
       raise "cannot call Nx.Defn.jit/3 when there is already a JIT compilation happening"
     end
 

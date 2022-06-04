@@ -112,6 +112,19 @@ defmodule EXLA.BackendTest do
              """
   end
 
+  describe "within JIT" do
+    import Nx.Defn
+
+    # This is not really meant to work in practice,
+    # but it does work with the Nx.BinaryBackend so
+    # we make it work for EXLA too.
+    defn double(x \\ 0), do: x * x
+
+    test "invokes from within defn" do
+      assert double(Nx.tensor(11)) |> Nx.to_number() == 121
+    end
+  end
+
   test "raises on invalid client" do
     assert_raise ArgumentError,
                  ~r"could not find EXLA client named :unknown",

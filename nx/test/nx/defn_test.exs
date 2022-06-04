@@ -197,6 +197,16 @@ defmodule Nx.DefnTest do
     end
   end
 
+  describe "arguments" do
+    defn identity(t), do: t
+
+    test "raises on Nx.Defn.Expr as argument" do
+      message = ~r/cannot pass a tensor expression as argument to defn/
+      assert_raise ArgumentError, message, fn -> identity(Nx.Defn.Expr.tensor(1)) end
+      assert_raise ArgumentError, message, fn -> identity({Nx.Defn.Expr.tensor(1)}) end
+    end
+  end
+
   describe "anonymous functions args" do
     defn calls_binary_fun(fun, a, b), do: fun.(a, b)
 
@@ -1331,6 +1341,22 @@ defmodule Nx.DefnTest do
       Nx.default_backend(UnknownBackend)
       assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(&jit_iota/0, []) end
       assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(fn -> Nx.iota({3, 3}) end, []) end
+    end
+
+    defn nested_jit(opts \\ []) do
+      transform(opts, fn opts ->
+        eleven = Nx.tensor(11, backend: Nx.BinaryBackend)
+        Nx.Defn.jit(&*/2, [eleven, eleven], opts)
+      end)
+    end
+
+    @tag compiler: Evaluator
+    test "raises on nested JIT unless forcing" do
+      assert_raise RuntimeError,
+                   "cannot call Nx.Defn.jit/3 when there is already a JIT compilation happening",
+                   fn -> nested_jit() end
+
+      assert nested_jit(force: true) == Nx.tensor(11 * 11)
     end
   end
 

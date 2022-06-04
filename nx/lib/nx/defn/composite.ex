@@ -162,7 +162,14 @@ defmodule Nx.Defn.Composite do
 
   @doc false
   def flatten_runtime_args(args, tail) do
-    flatten_list(args, tail, &Nx.to_tensor/1)
+    list = flatten_list(args, tail, &Nx.to_tensor/1)
+
+    for %Nx.Tensor{data: %Nx.Defn.Expr{}} = tensor <- list do
+      raise ArgumentError,
+            "cannot pass a tensor expression as argument to defn, got: #{inspect(tensor)}"
+    end
+
+    list
   end
 
   @doc false
