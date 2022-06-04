@@ -863,8 +863,7 @@ defmodule EXLA.Defn.ExprTest do
     defn generic_as_type(t, template), do: Nx.as_type(t, template.type)
 
     test "converts non-finite types" do
-      non_finite =
-        Nx.tensor([Nx.Constants.infinity(), Nx.Constants.nan(), Nx.Constants.neg_infinity()])
+      non_finite = Nx.tensor([:infinity, :nan, :neg_infinity])
 
       assert_equal(
         generic_as_type(non_finite, Nx.template({}, {:u, 8})),
