@@ -913,7 +913,6 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
-
     test "ifft" do
       assert_all_close(
         ifft(~V[5 5 5 5 5],

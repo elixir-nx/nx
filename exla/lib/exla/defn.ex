@@ -799,7 +799,7 @@ defmodule EXLA.Defn do
           EXLA.Op.pad(tensor, zero, padding_config)
       end
 
-      apply(exla_op, [tensor, n])
+    apply(exla_op, [tensor, n])
   end
 
   # These operations do the type conversion implicitly, and so
