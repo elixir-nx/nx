@@ -760,7 +760,10 @@ defmodule EXLA.Defn do
     apply(EXLA.Op, op, [to_type(arg, type)])
   end
 
-  defp to_operator(:fft, [tensor, opts], %{type: type}, state) do
+  defp to_operator(:fft, args, out, state), do: fft(&EXLA.Op.fft/2, args, out, state)
+  defp to_operator(:ifft, args, out, state), do: fft(&EXLA.Op.ifft/2, args, out, state)
+
+  defp fft(exla_op, [tensor, opts], %{type: type}, state) do
     n = opts[:length]
     output_type = Nx.Type.to_complex(type)
     tensor = to_type(tensor, output_type)
@@ -796,7 +799,7 @@ defmodule EXLA.Defn do
           EXLA.Op.pad(tensor, zero, padding_config)
       end
 
-    EXLA.Op.fft(tensor, n)
+      apply(exla_op, [tensor, n])
   end
 
   # These operations do the type conversion implicitly, and so

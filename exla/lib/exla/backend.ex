@@ -242,7 +242,8 @@ defmodule EXLA.Backend do
       {:triangular_solve, [:a, :b, :opts], [:a, :b]},
       {:eigh, [:tensor, :opts], [:tensor]},
       {:svd, [:tensor, :opts], [:tensor]},
-      {:fft, [:tensor, :opts], [:tensor]}
+      {:fft, [:tensor, :opts], [:tensor]},
+      {:ifft, [:tensor, :opts], [:tensor]}
     ] ++
       for(op <- binary_ops, do: {op, [:left, :right], [:left, :right]}) ++
       for(op <- unary_ops, do: {op, [:tensor], [:tensor]})
