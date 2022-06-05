@@ -2168,31 +2168,41 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def fft(%{shape: {n}} = out, tensor, opts) do
+  def fft(out, %{shape: shape, type: {_, size}} = tensor, opts) do
     eps = opts[:eps]
-    len = opts[:length]
+    n = opts[:length]
 
-    input_data =
+    input_view = aggregate_axes(to_binary(tensor), [tuple_size(shape) - 1], shape, size)
+
+    [row | _] =
+      input_data =
       match_types [tensor.type] do
-        for <<match!(x, 0) <- to_binary(tensor)>> do
-          read!(x, 0)
+        for row <- input_view do
+          for <<match!(x, 0) <- row>> do
+            read!(x, 0)
+          end
         end
       end
 
-    len_data = length(input_data)
+    len_data = length(row)
 
     data =
-      cond do
-        len_data < len -> input_data ++ List.duplicate(0, len - len_data)
-        len_data > len -> Enum.take(input_data, len)
-        :otherwise -> input_data
+      for row <- input_data do
+        cond do
+          len_data < n -> row ++ List.duplicate(0, n - len_data)
+          len_data > n -> Enum.take(row, n)
+          :otherwise -> row
+        end
       end
 
-    result = fft_list(data, n)
+    result =
+      for row <- data do
+        fft_list(row, n)
+      end
 
     output_data =
       match_types [out.type] do
-        for %Complex{re: re, im: im} <- result, into: <<>> do
+        for row <- result, %Complex{re: re, im: im} <- row, into: <<>> do
           re = if abs(re) <= eps, do: 0, else: re
           im = if abs(im) <= eps, do: 0, else: im
 

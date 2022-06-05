@@ -765,17 +765,35 @@ defmodule EXLA.Defn do
     output_type = Nx.Type.to_complex(type)
     tensor = to_type(tensor, output_type)
 
+    shape = op_shape(tensor)
+    m = elem(shape, tuple_size(shape) - 1)
+
     tensor =
-      case op_shape(tensor) do
-        {^n} ->
+      cond do
+        m == n ->
           tensor
 
-        {m} when m > n ->
-          EXLA.Op.slice(tensor, [0], [n], [1])
+        m > n ->
+          lengths =
+            shape
+            |> Tuple.insert_at(tuple_size(shape), n)
+            |> Tuple.delete_at(tuple_size(shape) - 1)
+            |> Tuple.to_list()
 
-        {m} when m < n ->
+          starts = List.duplicate(0, tuple_size(shape))
+          strides = List.duplicate(1, tuple_size(shape))
+
+          EXLA.Op.slice(tensor, starts, lengths, strides)
+
+        m < n ->
           zero = EXLA.Op.constant_r0(state.builder, Complex.new(0), output_type)
-          EXLA.Op.pad(tensor, zero, [{0, n - m, 0}])
+
+          padding_config =
+            {0, 0, 0}
+            |> List.duplicate(tuple_size(shape))
+            |> List.replace_at(tuple_size(shape) - 1, {0, n - m, 0})
+
+          EXLA.Op.pad(tensor, zero, padding_config)
       end
 
     EXLA.Op.fft(tensor, n)

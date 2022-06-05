@@ -1736,11 +1736,11 @@ defmodule Nx.Shape do
     hd(names)
   end
 
-  def fft({n}), do: {n}
-
-  def fft(shape) do
-    raise ArgumentError, "expected 1D tensor, got tensor with rank #{inspect(tuple_size(shape))}"
+  def fft({}) do
+    raise ArgumentError, "expected a tensor with rank > 0, got tensor with rank 0"
   end
+
+  def fft(shape) when is_tuple(shape), do: shape
 
   ## Helpers
 
