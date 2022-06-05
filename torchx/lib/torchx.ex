@@ -300,6 +300,7 @@ defmodule Torchx do
   deftensor erf_inv(tensor)
   deftensor cbrt(tensor)
   deftensor fft(tensor, length)
+  deftensor ifft(tensor, length)
 
   deftensor abs(tensor)
   deftensor bitwise_not(tensor)
