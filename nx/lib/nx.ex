@@ -10338,13 +10338,13 @@ defmodule Nx do
         [2.0+0.0i, 1.0-1.0i, 0.0+0.0i, 1.0+1.0i]
       >
 
-  If an N-dimensional tensor is passed, the DFT is applied to its last axis:
-
       iex> Nx.fft(Nx.tensor([1, 1, 0, 0, 2, 3]), length: 4)
       #Nx.Tensor<
         c64[4]
         [2.0+0.0i, 1.0-1.0i, 0.0+0.0i, 1.0+1.0i]
       >
+
+  If an N-dimensional tensor is passed, the DFT is applied to its last axis:
 
       iex> Nx.fft(Nx.tensor([[1, 1, 0, 0, 2, 3], [1, 0, 0, 0, 2, 3]]), length: 4)
       #Nx.Tensor<
@@ -10391,6 +10391,98 @@ defmodule Nx do
 
     out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_complex(tensor.type)})
     impl!(tensor).fft(out, tensor, opts)
+  end
+
+  @doc """
+  Calculates the Inverse DFT of the given tensor.
+
+  ## Options
+
+    * `:eps` - Threshold which backends can use for cleaning-up results. Defaults to `1.0e-10`.
+    * `:length` - Either a positive integer or `:power_of_two`. Will pad or slice the tensor
+      accordingly. `:power_of_two` will automatically pad to the next power of two.
+
+  ## Examples
+
+      iex> Nx.ifft(Nx.tensor([2, Complex.new(1, -1), 0, Complex.new(1, 1)]))
+      #Nx.Tensor<
+        c64[4]
+        [1.0+0.0i, 1.0+0.0i, 0.0+0.0i, 0.0+0.0i]
+      >
+
+      iex> Nx.ifft(Nx.tensor([5, 1, -1, 1, -1, 1]))
+      #Nx.Tensor<
+        c64[6]
+        [1.0+0.0i, 1.0+0.0i, 1.0+0.0i, 0.0+0.0i, 1.0+0.0i, 1.0+0.0i]
+      >
+
+  Padding and slicing can be introduced through `:length`:
+
+      iex> Nx.ifft(Nx.tensor([1, 1]), length: 4)
+      #Nx.Tensor<
+        c64[4]
+        [0.5+0.0i, 0.25+0.25i, 0.0+0.0i, 0.25-0.25i]
+      >
+
+      iex> Nx.ifft(Nx.tensor([1, 1, 0]), length: :power_of_two)
+      #Nx.Tensor<
+        c64[4]
+        [0.5+0.0i, 0.25+0.25i, 0.0+0.0i, 0.25-0.25i]
+      >
+
+      iex> Nx.ifft(Nx.tensor([1, 1, 0, 0, 2, 3]), length: 4)
+      #Nx.Tensor<
+        c64[4]
+        [0.5+0.0i, 0.25+0.25i, 0.0+0.0i, 0.25-0.25i]
+      >
+
+  If an N-dimensional tensor is passed, the Inverse DFT is applied to its last axis:
+
+      iex> Nx.ifft(Nx.tensor([[1, 1, 0, 0, 2, 3], [1, 0, 0, 0, 2, 3]]), length: 4)
+      #Nx.Tensor<
+        c64[2][4]
+        [
+          [0.5+0.0i, 0.25+0.25i, 0.0+0.0i, 0.25-0.25i],
+          [0.25+0.0i, 0.25+0.0i, 0.25+0.0i, 0.25+0.0i]
+        ]
+      >
+
+  ## Error Cases
+
+      iex> Nx.ifft(Nx.tensor([1, 1]), length: :invalid)
+      ** (RuntimeError) expected an integer or :power_of_two as length, got: :invalid
+  """
+  @doc type: :signal
+  def ifft(tensor, opts \\ []) do
+    tensor = to_tensor(tensor)
+
+    shape = Nx.Shape.fft(tensor.shape)
+
+    n = elem(shape, tuple_size(shape) - 1)
+
+    opts = Keyword.validate!(opts, length: n, eps: 1.0e-10)
+
+    length =
+      case opts[:length] do
+        :power_of_two ->
+          2 ** Kernel.ceil(:math.log2(n))
+
+        n when is_integer(n) and n > 0 ->
+          n
+
+        length ->
+          raise "expected an integer or :power_of_two as length, got: #{inspect(length)}"
+      end
+
+    opts = Keyword.put(opts, :length, length)
+
+    output_shape =
+      shape
+      |> Tuple.insert_at(tuple_size(shape) - 1, length)
+      |> Tuple.delete_at(tuple_size(shape))
+
+    out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_complex(tensor.type)})
+    impl!(tensor).ifft(out, tensor, opts)
   end
 
   ## Sigils
