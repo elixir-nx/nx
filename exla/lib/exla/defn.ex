@@ -1166,7 +1166,7 @@ defmodule EXLA.Defn do
     EXLA.Lib.argsort(state.builder, tensor, dimension, comp, ans.type)
   end
 
-   defp fft(exla_op, [tensor, opts], %{type: type}, state) do
+  defp fft(exla_op, [tensor, opts], %{type: type}, state) do
     n = opts[:length]
     output_type = Nx.Type.to_complex(type)
     tensor = to_type(tensor, output_type)
