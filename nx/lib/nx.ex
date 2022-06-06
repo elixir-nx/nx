@@ -10361,37 +10361,7 @@ defmodule Nx do
       ** (RuntimeError) expected an integer or :power_of_two as length, got: :invalid
   """
   @doc type: :signal
-  def fft(tensor, opts \\ []) do
-    tensor = to_tensor(tensor)
-
-    shape = Nx.Shape.fft(tensor.shape)
-
-    n = elem(shape, tuple_size(shape) - 1)
-
-    opts = Keyword.validate!(opts, length: n, eps: 1.0e-10)
-
-    length =
-      case opts[:length] do
-        :power_of_two ->
-          2 ** Kernel.ceil(:math.log2(n))
-
-        n when is_integer(n) and n > 0 ->
-          n
-
-        length ->
-          raise "expected an integer or :power_of_two as length, got: #{inspect(length)}"
-      end
-
-    opts = Keyword.put(opts, :length, length)
-
-    output_shape =
-      shape
-      |> Tuple.insert_at(tuple_size(shape) - 1, length)
-      |> Tuple.delete_at(tuple_size(shape))
-
-    out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_complex(tensor.type)})
-    impl!(tensor).fft(out, tensor, opts)
-  end
+  def fft(tensor, opts \\ []), do: call_fft(tensor, opts, :fft)
 
   @doc """
   Calculates the Inverse DFT of the given tensor.
@@ -10453,7 +10423,9 @@ defmodule Nx do
       ** (RuntimeError) expected an integer or :power_of_two as length, got: :invalid
   """
   @doc type: :signal
-  def ifft(tensor, opts \\ []) do
+  def ifft(tensor, opts \\ []), do: call_fft(tensor, opts, :ifft)
+
+  defp call_fft(tensor, opts, kind) do
     tensor = to_tensor(tensor)
 
     shape = Nx.Shape.fft(tensor.shape)
@@ -10482,7 +10454,7 @@ defmodule Nx do
       |> Tuple.delete_at(tuple_size(shape))
 
     out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_complex(tensor.type)})
-    impl!(tensor).ifft(out, tensor, opts)
+    apply(impl!(tensor), kind, [out, tensor, opts])
   end
 
   ## Sigils
