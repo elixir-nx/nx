@@ -996,6 +996,14 @@ defmodule Nx.Defn.Grad do
     [{t, Nx.imag(g)}]
   end
 
+  defp grad(:fft, [t, opts], _ans, g) do
+    [{t, Nx.fft(g, opts)}]
+  end
+
+  defp grad(:ifft, [t, opts], _ans, g) do
+    [{t, Nx.ifft(g, opts)}]
+  end
+
   defp grad(:quotient, _, _, _) do
     raise ArgumentError, """
     cannot compute gradient for Nx.quotient/2.

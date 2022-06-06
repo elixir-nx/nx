@@ -3279,6 +3279,88 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "fft and ifft" do
+    defn fft_grad(t, opts \\ []) do
+      grad(t, fn t -> t |> Nx.fft(opts) |> Nx.sum() end)
+    end
+
+    defn ifft_grad(t, opts \\ []) do
+      grad(t, fn t -> t |> Nx.ifft(opts) |> Nx.sum() end)
+    end
+
+    defn fft_composed_grad(t, opts \\ []) do
+      grad(t, fn t ->
+        t
+        |> Nx.cos()
+        |> Nx.fft(opts)
+        |> Nx.exp()
+        |> Nx.sum()
+      end)
+    end
+
+    defn ifft_composed_grad(t, opts \\ []) do
+      grad(t, fn t ->
+        t
+        |> Nx.cos()
+        |> Nx.fft(opts)
+        |> Nx.exp()
+        |> Nx.sum()
+      end)
+    end
+
+    test "fft" do
+      t = Nx.tensor([
+        [5, 5, 0, 0],
+        [2, 2, 2, 2],
+        [0, Complex.new(0, 1), 0, 0]
+      ])
+
+      assert_all_close(
+        Nx.tensor([
+          [4, 0, 0, 0],
+          [4, 0, 0, 0],
+          [4, 0, 0, 0]
+        ]),
+        fft_grad(t)
+      )
+
+      assert_all_close(
+        ~M[
+          14.16124 12.1516 0 0
+          -2.89999 0.737196 0.737196 0.737196
+          0 -108.54785i 0 0
+        ],
+        fft_composed_grad(t)
+      )
+    end
+
+    test "ifft" do
+      t = Nx.tensor([
+        [5, 5, 0, 0],
+        [2, 2, 2, 2],
+        [0, Complex.new(0, 1), 0, 0]
+      ])
+
+      assert_all_close(
+        Nx.tensor([
+          [1, 0, 0, 0],
+          [1, 0, 0, 0],
+          [1, 0, 0, 0]
+        ]),
+        ifft_grad(t)
+      )
+
+      assert_all_close(
+        ~M[
+          14.1612 12.1519 0 0
+          -2.8999 0.73719 0.73719 0.73719
+          0 -108.54785i 0 0
+        ],
+        ifft_composed_grad(t)
+      )
+    end
+  end
+
   describe "not implemented" do
     defn grad_reduce(t), do: grad(t, &Nx.reduce(&1, 0, fn x, y -> x + y end))
 
