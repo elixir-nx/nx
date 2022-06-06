@@ -3309,11 +3309,12 @@ defmodule Nx.Defn.GradTest do
     end
 
     test "fft" do
-      t = Nx.tensor([
-        [5, 5, 0, 0],
-        [2, 2, 2, 2],
-        [0, Complex.new(0, 1), 0, 0]
-      ])
+      t =
+        Nx.tensor([
+          [5, 5, 0, 0],
+          [2, 2, 2, 2],
+          [0, Complex.new(0, 1), 0, 0]
+        ])
 
       assert_all_close(
         Nx.tensor([
@@ -3335,11 +3336,12 @@ defmodule Nx.Defn.GradTest do
     end
 
     test "ifft" do
-      t = Nx.tensor([
-        [5, 5, 0, 0],
-        [2, 2, 2, 2],
-        [0, Complex.new(0, 1), 0, 0]
-      ])
+      t =
+        Nx.tensor([
+          [5, 5, 0, 0],
+          [2, 2, 2, 2],
+          [0, Complex.new(0, 1), 0, 0]
+        ])
 
       assert_all_close(
         Nx.tensor([
