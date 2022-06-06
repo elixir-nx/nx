@@ -3302,7 +3302,7 @@ defmodule Nx.Defn.GradTest do
       grad(t, fn t ->
         t
         |> Nx.cos()
-        |> Nx.fft(opts)
+        |> Nx.ifft(opts)
         |> Nx.exp()
         |> Nx.sum()
       end)
@@ -3326,12 +3326,21 @@ defmodule Nx.Defn.GradTest do
       )
 
       assert_all_close(
+        Nx.tensor([
+          [8, 0, 0, 0],
+          [8, 0, 0, 0],
+          [8, 0, 0, 0]
+        ]),
+        fft_grad(t, length: 8)
+      )
+
+      assert_all_close(
         ~M[
-          14.16124 12.1516 0 0
-          -2.89999 0.737196 0.737196 0.737196
-          0 -108.54785i 0 0
+          14.16124 12.1516 0 0 0 0
+          -2.89999 0.737196 0.737196 0.737196 0 0
+          0 -108.54785i 0 0 0 0
         ],
-        fft_composed_grad(t)
+        fft_composed_grad(Nx.pad(t, 0, [{0, 0, 0}, {0, 2, 0}]), length: 4)
       )
     end
 
@@ -3353,12 +3362,21 @@ defmodule Nx.Defn.GradTest do
       )
 
       assert_all_close(
+        Nx.tensor([
+          [1, 0, 0, 0],
+          [1, 0, 0, 0],
+          [1, 0, 0, 0]
+        ]),
+        ifft_grad(t, length: 8)
+      )
+
+      assert_all_close(
         ~M[
-          14.1612 12.1519 0 0
-          -2.8999 0.73719 0.73719 0.73719
-          0 -108.54785i 0 0
+          1.0896463 0.28715 0 0 0 0
+          -0.8319124 0.077385 0.077385 0.077385 0 0
+          0 -0.57873374i 0 0 0 0
         ],
-        ifft_composed_grad(t)
+        ifft_composed_grad(Nx.pad(t, 0, [{0, 0, 0}, {0, 2, 0}]), length: 4)
       )
     end
   end
