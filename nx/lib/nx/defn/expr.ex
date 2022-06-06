@@ -133,8 +133,24 @@ defmodule Nx.Defn.Expr do
         clauses -> unzip_clauses(clauses)
       end
 
-    clauses = Enum.zip(preds, exprs)
-    flatten_to_composite(out, context, exprs, &expr(&1, context, :cond, [clauses, last]))
+    Enum.zip(preds, exprs)
+    |> Enum.reject(fn {pred, _expr} ->
+      # Eliminate all clauses that will never
+      match?(%T{data: %Expr{op: :constant, args: [number]}} when number == 0, pred)
+    end)
+    |> case do
+      # No clauses left, simply return last
+      [] ->
+        last
+
+      # We found a clause that always matches, return it instead
+      [{%T{data: %Expr{op: :constant, args: [number]}}, expr} | _] when number > 0 ->
+        expr
+
+      # Otherwise, keep it as a cond
+      clauses ->
+        flatten_to_composite(out, context, exprs, &expr(&1, context, :cond, [clauses, last]))
+    end
   end
 
   defp broadcast_clause([type = last | exprs]) do
