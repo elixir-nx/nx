@@ -891,7 +891,7 @@ ERL_NIF_TERM cbrt(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   return xla_unary_op(env, argc, argv, xla::Cbrt);
 }
 
-ERL_NIF_TERM fft(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+ERL_NIF_TERM execute_fft(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[], const xla::FftType fft_type)
 {
   if (argc != 2)
   {
@@ -911,13 +911,23 @@ ERL_NIF_TERM fft(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
     return exla::nif::error(env, "Unable to get fft_size.");
   }
 
-  xla::XlaOp op = xla::Fft(*operand, xla::FftType::FFT, {fft_size});
+  xla::XlaOp op = xla::Fft(*operand, fft_type, {fft_size});
 
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
+ERL_NIF_TERM fft(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+  return execute_fft(env, argc, argv, xla::FftType::FFT);
+}
 
-ERL_NIF_TERM rsqrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM ifft(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+  return execute_fft(env, argc, argv, xla::FftType::IFFT);
+}
+
+ERL_NIF_TERM rsqrt(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
   return xla_unary_op(env, argc, argv, xla::Rsqrt);
 }
 
@@ -2353,6 +2363,7 @@ static ErlNifFunc exla_funcs[] = {
   {"atan", 1, atan},
   {"cosh", 1, cosh},
   {"fft", 2, fft},
+  {"ifft", 2, ifft},
   {"sinh", 1, sinh},
   {"tanh", 1, tanh},
   {"acosh", 1, acosh},

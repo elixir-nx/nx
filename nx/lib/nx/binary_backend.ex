@@ -2168,7 +2168,12 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def fft(out, %{shape: shape, type: {_, size}} = tensor, opts) do
+  def fft(out, tensor, opts), do: calculate_fft(out, tensor, opts, :fft)
+
+  @impl true
+  def ifft(out, tensor, opts), do: calculate_fft(out, tensor, opts, :ifft)
+
+  defp calculate_fft(out, %{shape: shape, type: {_, size}} = tensor, opts, kind) do
     eps = opts[:eps]
     n = opts[:length]
 
@@ -2197,7 +2202,16 @@ defmodule Nx.BinaryBackend do
 
     result =
       for row <- data do
-        fft_list(row, n)
+        case kind do
+          :fft ->
+            fft_list(row, n)
+
+          :ifft ->
+            row
+            |> Enum.map(&Complex.conjugate/1)
+            |> fft_list(n)
+            |> Enum.map(&(Complex.conjugate(&1) / n))
+        end
       end
 
     output_data =

@@ -802,6 +802,7 @@ defmodule EXLA.Defn.ExprTest do
 
   describe "complex ops" do
     defn fft(t, opts \\ []), do: Nx.fft(t, opts)
+    defn ifft(t, opts \\ []), do: Nx.ifft(t, opts)
 
     test "fft" do
       assert_all_close(
@@ -907,6 +908,117 @@ defmodule EXLA.Defn.ExprTest do
                 1 -1i -1 1i
                 1 1 1 1
                 2 1.0-1.0i 0 1.0+1.0i
+              ]
+        ])
+      )
+    end
+
+    test "ifft" do
+      assert_all_close(
+        ifft(~V[5 5 5 5 5],
+          length: 5
+        ),
+        Nx.tensor([5, 0, 0, 0, 0])
+      )
+
+      assert_all_close(
+        ifft(~V[2.0+0.0i 1.0-1.0i 0.0+0.0i 1.0+1.0i 5 6], length: 4),
+        Nx.tensor([1, 1, 0, 0])
+      )
+
+      assert_all_close(
+        ifft(~V[2 0 0], length: :power_of_two),
+        Nx.tensor([0.5, 0.5, 0.5, 0.5])
+      )
+    end
+
+    test "ifft - n dim tensor" do
+      assert_all_close(
+        ifft(
+          Nx.stack([
+            ~M[
+                2 1.0-1.0i 0 1.0+1.0i
+                1 1 1 1
+                1 -1i -1 1i
+              ],
+            ~M[
+                1 -1i -1 1i
+                1 1 1 1
+                2 1.0-1.0i 0 1.0+1.0i
+              ]
+          ]),
+          length: :power_of_two
+        ),
+        Nx.tensor([
+          [
+            [1, 1, 0, 0],
+            [1, 0, 0, 0],
+            [0, 1, 0, 0]
+          ],
+          [
+            [0, 1, 0, 0],
+            [1, 0, 0, 0],
+            [1, 1, 0, 0]
+          ]
+        ])
+      )
+
+      assert_all_close(
+        ifft(
+          Nx.tensor([
+            [
+              [4, 4, 0, 0, 1, 2],
+              [4, 0, 0, 0, 3, 4],
+              [0, 4, 0, 0, 5, 6]
+            ],
+            [
+              [0, 4, 0, 0, 7, 8],
+              [4, 0, 0, 0, 9, 10],
+              [4, 4, 0, 0, 11, 12]
+            ]
+          ]),
+          length: 4
+        ),
+        Nx.stack([
+          ~M[
+                2 1.0+1.0i 0 1.0-1.0i
+                1 1 1 1
+                1 1i -1 -1i
+              ],
+          ~M[
+                1 1i -1 -1i
+                1 1 1 1
+                2 1.0+1.0i 0 1.0-1.0i
+              ]
+        ])
+      )
+
+      assert_all_close(
+        ifft(
+          Nx.tensor([
+            [
+              [4, 4, 0],
+              [4, 0, 0],
+              [0, 4, 0]
+            ],
+            [
+              [0, 4, 0],
+              [4, 0, 0],
+              [4, 4, 0]
+            ]
+          ]),
+          length: 4
+        ),
+        Nx.stack([
+          ~M[
+                2 1.0+1.0i 0 1.0-1.0i
+                1 1 1 1
+                1 1i -1 -1i
+              ],
+          ~M[
+                1 1i -1 -1i
+                1 1 1 1
+                2 1.0+1.0i 0 1.0-1.0i
               ]
         ])
       )

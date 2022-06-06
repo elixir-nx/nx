@@ -52,6 +52,7 @@ defmodule EXLA.NIF do
   end
 
   def fft(_tensor, _fft_size), do: :erlang.nif_error(:undef)
+  def ifft(_tensor, _fft_size), do: :erlang.nif_error(:undef)
 
   def dot(_a, _b, _precision),
     do: :erlang.nif_error(:undef)

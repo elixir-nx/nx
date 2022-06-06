@@ -4,7 +4,7 @@
 
 ### Enhancements
 
-  * [Nx] Add `Nx.fft/2`
+  * [Nx] Add `Nx.fft/2` and `Nx.ifft/2`
   * [Nx] Rename `Nx.logistic/1` to `Nx.sigmoid/1`
   * [Nx.Defn.Evaluator] Garbage collect after evaluation
 

@@ -801,6 +801,12 @@ defmodule Nx.Defn.Expr do
     expr(out, context, :fft, [tensor, opts])
   end
 
+  @impl true
+  def ifft(out, tensor, opts) do
+    %{data: %{context: context}} = tensor = to_expr(tensor)
+    expr(out, context, :ifft, [tensor, opts])
+  end
+
   ## Undefined
 
   @impl true
