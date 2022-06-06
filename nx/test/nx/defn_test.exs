@@ -1007,11 +1007,26 @@ defmodule Nx.DefnTest do
     end
 
     test "eliminates branches" do
-      assert %T{data: %Expr{op: :constant, args: [11]}} =
-               if_branch_elimination(Nx.tensor(0))
+      assert %T{data: %Expr{op: :constant, args: [11]}} = if_branch_elimination(Nx.tensor(0))
 
       assert %T{data: %Expr{op: :constant, args: [13]}} =
                if_branch_elimination(Nx.tensor([1, 2, 3]))
+    end
+
+    defn if_branch_elimination_complex(a) do
+      if elem(Nx.shape(a), Nx.rank(a) - 1) == 1 do
+        11
+      else
+        13
+      end
+    end
+
+    test "eliminates complex branches" do
+      assert %T{data: %Expr{op: :constant, args: [11]}} =
+               if_branch_elimination_complex(Nx.iota({1, 1}))
+
+      assert %T{data: %Expr{op: :constant, args: [13]}} =
+               if_branch_elimination_complex(Nx.iota({3, 3}))
     end
 
     defn if_branch_elimination_transform(a) do
