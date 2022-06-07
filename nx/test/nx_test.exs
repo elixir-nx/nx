@@ -804,6 +804,16 @@ defmodule NxTest do
         Nx.indexed_add(t, Nx.tensor([[0, -1]]), Nx.tensor([1]))
       end
     end
+
+    test "complex regression" do
+      # BinaryBackend used to break on Enum.sum over a complex-valued list
+      assert Nx.tensor([1, 2], type: {:c, 64}) ==
+               Nx.indexed_add(
+                 Nx.broadcast(0, {2}),
+                 Nx.tensor([[1], [0]]),
+                 Nx.tensor([Complex.new(2), 1])
+               )
+    end
   end
 
   describe "quotient/2" do
