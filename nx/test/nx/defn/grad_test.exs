@@ -1047,6 +1047,31 @@ defmodule Nx.Defn.GradTest do
 
       assert_all_close(lhs, rhs)
     end
+
+    test "works with complex numbers" do
+      t = Nx.reshape(~V[1+1i 2 3-3i], {1, 1, 3})
+      k = Nx.reshape(~V[1 2i 3i], {1, 1, 3})
+
+      assert_all_close(
+        Nx.reshape(~V[1 2i 3i], {1, 1, 3}),
+        grad_sum_conv_x(t, k)
+      )
+
+      assert_all_close(
+        Nx.reshape(~V[1+1i 2 3-3i], {1, 1, 3}),
+        grad_sum_conv_y(t, k)
+      )
+
+      assert_all_close(
+        Nx.reshape(~V[-1.0926-0.5343i -3.2978i 99.3534-14.2328i], {1, 1, 3}),
+        grad_sum_conv_x_cos_x_sin_y(t, k)
+      )
+
+      assert_all_close(
+        Nx.reshape(~V[0.45046-0.5343i -1.56562 -100.3435+14.2328i], {1, 1, 3}),
+        grad_sum_conv_y_cos_x_sin_y(t, k)
+      )
+    end
   end
 
   describe "window sum rule" do
