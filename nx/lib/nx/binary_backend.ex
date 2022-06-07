@@ -1698,7 +1698,7 @@ defmodule Nx.BinaryBackend do
         {{
            previous_offset + target_size,
            next_offset,
-           Enum.sum(upds)
+           Enum.reduce(upds, 0, &+/2)
          }, next_offset}
       end)
 
