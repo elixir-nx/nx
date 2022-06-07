@@ -8484,6 +8484,19 @@ defmodule Nx do
         ]
       >
 
+  Complex tensors are also supported:
+
+      iex> left = Nx.tensor([[[Complex.new(1, 1), 2, Complex.new(3, -3)]]])
+      iex> right = Nx.tensor([[[1, Complex.new(0, 2), Complex.new(0, 3)]]])
+      iex> Nx.conv(left, right, padding: [{2, 2}])
+      #Nx.Tensor<
+        c64[1][1][5]
+        [
+          [
+            [-3.0+3.0i, -2.0+8.0i, 10.0+14.0i, 8.0+6.0i, 3.0-3.0i]
+          ]
+        ]
+      >
   """
   @doc type: :ndim
   def conv(tensor, kernel, opts \\ []) when is_list(opts) do

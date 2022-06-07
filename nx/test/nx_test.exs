@@ -1,6 +1,8 @@
 defmodule NxTest do
   use ExUnit.Case, async: true
 
+  import Nx.Helpers
+
   defp commute(a, b, fun) do
     fun.(a, b)
     fun.(b, a)
@@ -1390,6 +1392,87 @@ defmodule NxTest do
     test "raises when :padding is an invalid type" do
       message = ~r/invalid padding/
       conv_raise_for_options(message, padding: :bad_value)
+    end
+
+    test "supports complex values" do
+      # These are basically the doctest but with combinations
+      # where either the tensor or the kernel (or both)
+      # are complex-typed
+
+      types = [f: 32, c: 64]
+
+      for tensor_type <- types,
+          kernel_type <- types,
+          tensor_type != {:f, 32} or kernel_type != {:f, 32} do
+        # first doctest
+        tensor = Nx.iota({1, 1, 3, 3}, type: tensor_type)
+        kernel = Nx.iota({4, 1, 1, 1}, type: kernel_type)
+
+        expected_output =
+          Nx.tensor(
+            [
+              [
+                [
+                  [0.0, 0.0, 0.0],
+                  [0.0, 0.0, 0.0],
+                  [0.0, 0.0, 0.0]
+                ],
+                [
+                  [0.0, 1.0, 2.0],
+                  [3.0, 4.0, 5.0],
+                  [6.0, 7.0, 8.0]
+                ],
+                [
+                  [0.0, 2.0, 4.0],
+                  [6.0, 8.0, 10.0],
+                  [12.0, 14.0, 16.0]
+                ],
+                [
+                  [0.0, 3.0, 6.0],
+                  [9.0, 12.0, 15.0],
+                  [18.0, 21.0, 24.0]
+                ]
+              ]
+            ],
+            type: Nx.Type.merge(tensor_type, kernel_type)
+          )
+
+        assert_all_close(expected_output, Nx.conv(tensor, kernel, strides: [1, 1]))
+
+        # second doctest
+        tensor = Nx.iota({1, 1, 3, 3}, type: tensor_type)
+        kernel = Nx.iota({4, 1, 2, 1}, type: kernel_type)
+
+        expected_output =
+          Nx.tensor(
+            [
+              [
+                [
+                  [3.0, 5.0],
+                  [0.0, 0.0]
+                ],
+                [
+                  [9.0, 15.0],
+                  [6.0, 10.0]
+                ],
+                [
+                  [15.0, 25.0],
+                  [12.0, 20.0]
+                ],
+                [
+                  [21.0, 35.0],
+                  [18.0, 30.0]
+                ]
+              ]
+            ],
+            type: Nx.Type.merge(tensor_type, kernel_type)
+          )
+
+        assert_all_close(
+          expected_output,
+          Nx.conv(tensor, kernel, strides: 2, padding: :same, kernel_dilation: [2, 1])
+        )
+      end
     end
   end
 
