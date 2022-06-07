@@ -8484,7 +8484,7 @@ defmodule Nx do
         ]
       >
 
-  Complex tensors are also supported
+  Complex tensors are also supported:
 
       iex> left = Nx.tensor([[[Complex.new(1, 1), 2, Complex.new(3, -3)]]])
       iex> right = Nx.tensor([[[1, Complex.new(0, 2), Complex.new(0, 3)]]])
