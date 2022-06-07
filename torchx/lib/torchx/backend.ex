@@ -834,11 +834,15 @@ defmodule Torchx.Backend do
     get_complex_component(out, tensor, :imag)
   end
 
-  defp get_complex_component(out, tensor, component) when component in [:real, :imag] do
-    as_real =
-      tensor
-      |> from_nx()
-      |> Torchx.view_as_real()
+  defp get_complex_component(out, tensor, component) do
+    tensor
+    |> from_nx()
+    |> get_complex_component_tx(tensor.shape, component)
+    |> to_nx(out)
+  end
+
+  defp get_complex_component_tx(tensor_tx, shape, component) when component in [:real, :imag] do
+    as_real = Torchx.view_as_real(tensor_tx)
 
     as_real_shape = Torchx.shape(as_real)
 
@@ -855,9 +859,8 @@ defmodule Torchx.Backend do
     strides = List.duplicate(1, tuple_size(as_real_shape))
 
     as_real
-    |> torchx_slice(as_real_shape, tensor.shape, starts, lengths, strides)
-    |> Torchx.reshape(tensor.shape)
-    |> to_nx(out)
+    |> torchx_slice(as_real_shape, shape, starts, lengths, strides)
+    |> Torchx.reshape(shape)
   end
 
   @impl true
@@ -1159,7 +1162,7 @@ defmodule Torchx.Backend do
 
     pad_config = flatten_padding(padding)
 
-    k_nx =
+    k_tx =
       k
       |> from_nx()
       |> Torchx.to_type(to_torch_type(type))
@@ -1170,9 +1173,64 @@ defmodule Torchx.Backend do
     |> permute.(input_permutation)
     |> Torchx.pad(pad_config, 0)
     |> Torchx.to_type(to_torch_type(type))
-    |> Torchx.conv(k_nx, strides, [0], kernel_dilation, false, feature_groups)
+    |> do_conv(k_tx, strides, kernel_dilation, feature_groups, type)
     |> permute.(output_permutation)
     |> to_nx(out)
+  end
+
+  defp do_conv(t_tx, k_tx, strides, kernel_dilation, feature_groups, {:c, _} = type) do
+    # Torch doesn't support complex inputs,
+    # so we rely on the fact that a convolution is basically
+    # a sliding dot product. We can then decompose the dot product
+    # of a complex-valued pair of tensors into dot products involving
+    # their real and imaginary components.
+
+    # For example, given a tensor v = [a1+b1i c1+d1i] and a
+    # kernel k = [a2+b2i c2+d2i], we can expand the dot product into
+    # (a1+b1i)(a2+b2i) + (c1+d1i)(c2+d2i)
+    # = (a1a2 - b1b2) + (a1b2+a2b1)i + (c1c2 - d1d2) + (c1d2+c2d1)i
+    # = (a1a2 + c1c2) - (b1b2 + d1d2) + i[(a1b2 + c1d2) + (a2b1  + c2d1)]
+    # = ([a1 c1].[a2 c2] - [b1 d1].[b2 d2]) + i([a1 c1].[b2 d2] + [a2 c2].[b1 d1])
+    # = (real(v).real(k) - imag(v).imag(k)) + i(real(v).imag(k) + imag(v).real(k))
+
+    # With the result above, we can turn z = conv(t, k) where either t or k are complex
+    # into:
+    # real_part = conv(real(t), real(k)) - conv(imag(t), imag(k))
+    # imag_part = conv(real(t), imag(k)) + conv(imag(t), real(k))
+    # z = complex(real_part, imag_part)
+
+    t_shape = Torchx.shape(t_tx)
+    k_shape = Torchx.shape(k_tx)
+
+    real_t = get_complex_component_tx(t_tx, t_shape, :real)
+    imag_t = get_complex_component_tx(t_tx, t_shape, :imag)
+    real_k = get_complex_component_tx(k_tx, k_shape, :real)
+    imag_k = get_complex_component_tx(k_tx, k_shape, :imag)
+
+    real_type = type |> Nx.Type.to_real() |> to_torch_type()
+
+    real_part =
+      Torchx.subtract(
+        do_conv(real_t, real_k, strides, kernel_dilation, feature_groups, real_type),
+        do_conv(imag_t, imag_k, strides, kernel_dilation, feature_groups, real_type)
+      )
+
+    {device, _} =
+      imag_part =
+      Torchx.add(
+        do_conv(real_t, imag_k, strides, kernel_dilation, feature_groups, real_type),
+        do_conv(imag_t, real_k, strides, kernel_dilation, feature_groups, real_type)
+      )
+
+    i = Torchx.scalar_tensor({0.0, 1.0}, :complex, {device, -1})
+
+    imag_part
+    |> Torchx.multiply(i)
+    |> Torchx.add(real_part)
+  end
+
+  defp do_conv(t_tx, k_tx, strides, kernel_dilation, feature_groups, _type) do
+    Torchx.conv(t_tx, k_tx, strides, [0], kernel_dilation, false, feature_groups)
   end
 
   @impl true
