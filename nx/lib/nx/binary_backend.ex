@@ -1133,7 +1133,7 @@ defmodule Nx.BinaryBackend do
             end
 
           match_types [output_type] do
-            sum = Enum.sum(List.flatten(values))
+            sum = Enum.reduce(List.flatten(values), &+/2)
             <<write!(sum, 0)>>
           end
         end
