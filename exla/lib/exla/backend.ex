@@ -166,6 +166,44 @@ defmodule EXLA.Backend do
   end
 
   @impl true
+  def slice(out, tensor, start_indices, lengths, strides) do
+    out = Nx.to_template(out)
+
+    if Enum.all?(start_indices, &is_integer/1) do
+      expr_fun = fn tensor ->
+        Nx.Defn.Expr.slice(out, tensor, start_indices, lengths, strides)
+      end
+
+      jit(expr_fun, [tensor])
+    else
+      expr_fun = fn tensor, start_indices  ->
+        Nx.Defn.Expr.slice(out, tensor, Tuple.to_list(start_indices), lengths, strides)
+      end
+
+      jit(expr_fun, [tensor, List.to_tuple(start_indices)])
+    end
+  end
+
+  @impl true
+  def put_slice(out, tensor, start_indices, slice) do
+    out = Nx.to_template(out)
+
+    if Enum.all?(start_indices, &is_integer/1) do
+      expr_fun = fn tensor, slice ->
+        Nx.Defn.Expr.put_slice(out, tensor, start_indices, slice)
+      end
+
+      jit(expr_fun, [tensor, slice])
+    else
+      expr_fun = fn tensor, start_indices, slice ->
+        Nx.Defn.Expr.put_slice(out, tensor, Tuple.to_list(start_indices), slice)
+      end
+
+      jit(expr_fun, [tensor, List.to_tuple(start_indices), slice])
+    end
+  end
+
+  @impl true
   def optional(_name, args, fun) do
     # Here we take the leading tensor arguments and pass them as JIT arguments
     {tensors, rest} = Enum.split_while(args, &is_struct(&1, Nx.Tensor))
@@ -207,8 +245,6 @@ defmodule EXLA.Backend do
       {:reverse, [:tensor, :axes], [:tensor]},
       {:dot, [:left, :c1, :b1, :right, :c2, :b2], [:left, :right]},
       {:clip, [:tensor, :min, :max], [:tensor, :min, :max]},
-      {:slice, [:tensor, :start_indices, :lengths, :strides], [:tensor]},
-      {:put_slice, [:tensor, :start, :slice], [:tensor, :slice]},
       {:take, [:tensor, :indices, :axis], [:tensor, :indices]},
       {:take_along_axis, [:tensor, :indices, :axis], [:tensor, :indices]},
       {:gather, [:input, :indices], [:input, :indices]},
@@ -235,7 +271,7 @@ defmodule EXLA.Backend do
        [:tensor, :source, :init_value]},
       {:window_scatter_min, [:tensor, :source, :init_value, :window_dims, :opts],
        [:tensor, :source, :init_value]},
-      {:indexed_add, [:tensor, :indices, :updates], [:indices, :updates]},
+      {:indexed_add, [:tensor, :indices, :updates], [:tensor, :indices, :updates]},
       {:cholesky, [:tensor], [:tensor]},
       {:lu, [:tensor, :opts], [:tensor]},
       {:qr, [:tensor, :opts], [:tensor]},
