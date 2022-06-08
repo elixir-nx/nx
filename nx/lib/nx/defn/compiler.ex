@@ -443,7 +443,9 @@ defmodule Nx.Defn.Compiler do
      state}
   end
 
-  defp normalize({{:., dot_meta, [remote, name]}, meta, []}, state) when is_atom(name) do
+  defp normalize({{:., dot_meta, [remote, name]}, meta, args}, state)
+       # TODO: Remove args == [] once we require Elixir version where args are nil
+       when is_atom(name) and (args == nil or args == []) do
     {remote, state} = normalize(remote, state)
     {{{:., dot_meta, [Map, :fetch!]}, meta, [remote, name]}, state}
   end

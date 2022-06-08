@@ -1172,6 +1172,10 @@ defmodule Nx.Defn.Kernel do
         end
       end
 
+  Note a hook can only access the variables passed as arguments
+  to the hook. It cannot access any other variable defined in
+  `defn` outside of the hook.
+
   The `defn` above defines two hooks, one is called with the
   value of `a + b` and another with `a * b`. Once you invoke
   the function above, you should see this printed:
