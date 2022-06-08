@@ -51,16 +51,17 @@ defmodule Nx.BinaryBackend do
   def random_normal(%{type: type, shape: shape} = out, mu, sigma, _backend_options) do
     mu = scalar_to_number(mu)
     sigma = scalar_to_number(sigma)
+    variance = sigma * sigma
 
     gen =
       case type do
         {:c, _} ->
           fn ->
-            Complex.new(:rand.normal(mu, sigma), :rand.normal(mu, sigma))
+            Complex.new(:rand.normal(mu, variance), :rand.normal(mu, variance))
           end
 
         _ ->
-          fn -> :rand.normal(mu, sigma) end
+          fn -> :rand.normal(mu, variance) end
       end
 
     data =
