@@ -523,6 +523,34 @@ defmodule Nx.Defn.Kernel do
   def left and right, do: Nx.logical_and(left, right)
 
   @doc """
+  Element-wise logical AND operation.
+
+  Zero is considered false, all other numbers
+  are considered true.
+
+  It delegates to `Nx.logical_and/2` (supports broadcasting).
+
+  ## Examples
+
+      defn and_or(a, b) do
+        {a && b, a || b}
+      end
+
+  """
+  def left && right when Kernel.or(is_boolean(left), is_boolean(right)) do
+    raise ArgumentError,
+          "boolean value passed to Nx.Defn.Kernel.and/2, " <>
+            "values passed to Nx.Defn.Kernel.and/2 must be " <>
+            "tensors or numbers, consider using 1 for true " <>
+            "and 0 for false as an alternative"
+  end
+
+  def left && right when Kernel.and(is_number(left), is_number(right)),
+    do: logical_and(left, right)
+
+  def left && right, do: Nx.logical_and(left, right)
+
+  @doc """
   Element-wise logical OR operation.
 
   Zero is considered false, all other numbers
@@ -549,6 +577,34 @@ defmodule Nx.Defn.Kernel do
     do: logical_or(left, right)
 
   def left or right, do: Nx.logical_or(left, right)
+
+  @doc """
+  Element-wise logical OR operation.
+
+  Zero is considered false, all other numbers
+  are considered true.
+
+  It delegates to `Nx.logical_or/2` (supports broadcasting).
+
+  ## Examples
+
+      defn and_or(a, b) do
+        {a && b, a || b}
+      end
+
+  """
+  def left || right when Kernel.or(is_boolean(left), is_boolean(right)) do
+    raise ArgumentError,
+          "boolean value passed to Nx.Defn.Kernel.or/2, " <>
+            "values passed to Nx.Defn.Kernel.or/2 must be " <>
+            "tensors or numbers, consider using 1 for true " <>
+            "and 0 for false as an alternative"
+  end
+
+  def left || right when Kernel.and(is_number(left), is_number(right)),
+    do: logical_or(left, right)
+
+  def left || right, do: Nx.logical_or(left, right)
 
   @doc """
   Element-wise logical NOT operation.
