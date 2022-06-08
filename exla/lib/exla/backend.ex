@@ -176,7 +176,7 @@ defmodule EXLA.Backend do
 
       jit(expr_fun, [tensor])
     else
-      expr_fun = fn tensor, start_indices  ->
+      expr_fun = fn tensor, start_indices ->
         Nx.Defn.Expr.slice(out, tensor, Tuple.to_list(start_indices), lengths, strides)
       end
 
