@@ -1747,7 +1747,7 @@ defmodule NxTest do
 
     test "property" do
       for _ <- 1..20 do
-        mean =  1.0 * :rand.uniform(1000)
+        mean = 1.0 * :rand.uniform(1000)
         std_dev = 1.0 * :rand.uniform(10)
 
         n = 10000
@@ -1811,6 +1811,19 @@ defmodule NxTest do
           Nx.random_uniform(1, Nx.tensor([1.0, 2.0, 3.0]), Nx.tensor([1.0, 2.0, 3.0]))
         end
       )
+    end
+
+    test "property" do
+      for _ <- 1..20 do
+        min = 1.0 * :rand.uniform(10)
+        max = min + :rand.uniform(100)
+
+        expected_avg = (max + min) / 2
+
+        n = 10000
+        t = Nx.random_uniform({n}, min, max)
+        assert_all_close(expected_avg, Nx.mean(t), atol: 1.0, rtol: 1.0e-3)
+      end
     end
   end
 
