@@ -996,6 +996,9 @@ defmodule Nx.Defn.Grad do
     [{t, Nx.imag(g)}]
   end
 
+  defp grad(:fft, args, ans, g), do: grad_fft(:fft, args, ans, g)
+  defp grad(:ifft, args, ans, g), do: grad_fft(:ifft, args, ans, g)
+
   defp grad(:quotient, _, _, _) do
     raise ArgumentError, """
     cannot compute gradient for Nx.quotient/2.
@@ -1317,4 +1320,27 @@ defmodule Nx.Defn.Grad do
 
   defp conjugate_if_complex(%{type: {:c, _}} = t), do: Nx.conjugate(t)
   defp conjugate_if_complex(t), do: t
+
+  defp grad_fft(kind, [t, opts], _ans, g) do
+    nfft = opts[:length]
+
+    grad = apply(Nx, kind, [g, opts])
+
+    formatted_grad =
+      case elem(t.shape, Nx.rank(t) - 1) do
+        size when size > nfft ->
+          # This means the tensor is sliced and we need to pad with zeros
+          padding = List.duplicate({0, 0, 0}, Nx.rank(t) - 1) ++ [{0, size - nfft, 0}]
+          Nx.pad(grad, 0, padding)
+
+        size when size < nfft ->
+          # This means the tensor was padded and we need to slice the result back
+          Nx.slice(grad, List.duplicate(0, Nx.rank(t)), Tuple.to_list(t.shape))
+
+        _ ->
+          grad
+      end
+
+    [{t, formatted_grad}]
+  end
 end
