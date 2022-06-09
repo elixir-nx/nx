@@ -1744,6 +1744,25 @@ defmodule NxTest do
         end
       )
     end
+
+    test "property" do
+      for _ <- 1..20 do
+        mean =  1.0 * :rand.uniform(1000)
+        std_dev = 1.0 * :rand.uniform(10)
+
+        n = 10000
+        t = Nx.random_normal({n}, mean, std_dev)
+        assert_all_close(mean, Nx.mean(t), atol: 1.0e-1, rtol: 1.0e-2)
+
+        calculated_std_dev =
+          t
+          |> Nx.subtract(mean)
+          |> Nx.LinAlg.norm()
+          |> Nx.divide(:math.sqrt(n))
+
+        assert_all_close(std_dev, calculated_std_dev, atol: 1.0e-1, rtol: 1.0e-2)
+      end
+    end
   end
 
   describe "random_uniform/3" do
