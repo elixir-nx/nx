@@ -1,4 +1,6 @@
 defmodule Nx.Defn.Kernel do
+  import Kernel, except: [raise: 1]
+
   @moduledoc """
   All imported functionality available inside `defn` blocks.
   """
@@ -540,7 +542,7 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  def left && right, do: boolean_and(left, right)
+  def left && right, do: Kernel.&&(left, right)
 
   @doc """
   Element-wise logical OR operation.
@@ -587,7 +589,7 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  def left || right, do: boolean_or(left, right)
+  def left || right, do: Kernel.||(left, right)
 
   @doc """
   Element-wise logical NOT operation.
@@ -616,10 +618,6 @@ defmodule Nx.Defn.Kernel do
   defp logical_and(l, _) when Kernel.==(l, 0), do: zero()
   defp logical_and(_, r) when Kernel.==(r, 0), do: zero()
   defp logical_and(_, _), do: one()
-
-  defp boolean_and(l, r), do: Kernel.||(Kernel.&&(l, r), zero())
-
-  defp boolean_or(l, r), do: Kernel.||(Kernel.||(l, r), zero())
 
   defp logical_or(l, r) when Kernel.and(Kernel.==(l, 0), Kernel.==(r, 0)), do: zero()
   defp logical_or(_, _), do: one()
@@ -821,6 +819,11 @@ defmodule Nx.Defn.Kernel do
 
   defp to_constant(true), do: one()
   defp to_constant(false), do: zero()
+
+  @doc """
+  It delegates to `Kernel.raise/2`.
+  """
+  def raise(msg), do: Elixir.Kernel.raise(msg)
 
   @doc """
   Ensures the first argument is a `keyword` with the given

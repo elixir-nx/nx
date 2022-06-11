@@ -420,6 +420,12 @@ defmodule Nx.Defn.Compiler do
     {{call, meta, [token, ast | rest]}, state}
   end
 
+  defp normalize({{:., dot_meta, [_mod, :||]}, meta, args}, state) do
+    {args, state} = normalize_list(args, state)
+    args = normalize_binary_op(args)
+    {{{:., dot_meta, [Elixir.Kernel, :||]}, meta, args}, state}
+  end
+
   defp normalize({{:., dot_meta, [mod, name]}, meta, args}, state) when mod in @allowed_modules do
     if name in @forbidden_ops do
       mfa = Exception.format_mfa(mod, name, length(args))
@@ -542,6 +548,15 @@ defmodule Nx.Defn.Compiler do
       "only variables, tuples, maps, and structs are allowed as patterns in defn, got: #{Macro.to_string(expr)}"
     )
   end
+
+  defp normalize_binary_op(args) when is_list(args), do: Enum.map(args, &normalize_binary_op/1)
+
+  defp normalize_binary_op({{:., dot_meta, [Nx.Defn.Kernel, :||]}, meta, args}) do
+    args = Enum.map(args, &normalize_binary_op/1)
+    {{:., dot_meta, [Elixir.Kernel, :||]}, meta, args}
+  end
+
+  defp normalize_binary_op(args), do: args
 
   defp assert_uniq_vars!(ast, state) do
     Macro.prewalk(ast, %{}, fn
