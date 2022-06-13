@@ -298,21 +298,14 @@ defmodule EXLA.Defn do
     {{expr_cache_fun, comp_cache_fun}, options} =
       Keyword.pop(options, EXLA, {&EXLA.Defn.LockedCache.run/2, &EXLA.Defn.LockedCache.run/2})
 
-    # Temporary work around to get the template from within the anonymous function
-    args_key =
-      case :erlang.fun_info(fun, :env) do
-        {:env, [fun, args, EXLA]} when is_function(fun) and is_list(args) ->
-          for arg <- args do
-            if is_function(arg) or (is_tuple(arg) and arg != {} and is_function(elem(arg, 0))) do
-              arg
-            else
-              Nx.Defn.Composite.traverse(arg, fn
-                %T{type: type, shape: shape, names: names} -> {type, shape, names}
-                number_or_guard -> {Nx.type(number_or_guard), {}, []}
-              end)
-            end
-          end
-      end
+    {args_key, reverse_args_triplet} =
+      Enum.map_reduce(vars, [], fn var, acc ->
+        Nx.Defn.Composite.traverse(var, acc, fn
+          %T{type: type, shape: shape, names: names}, acc ->
+            triplet = {type, shape, names}
+            {triplet, [triplet | acc]}
+        end)
+      end)
 
     {expr, {ref, used_inputs, defined_hooks, outputs}} =
       expr_cache_fun.({key, args_key}, fn ->
@@ -329,7 +322,12 @@ defmodule EXLA.Defn do
 
     {_, {executable, extra, outfeed_hooks}} =
       comp_cache_fun.(comp_key, fn ->
-        shapes = vars |> filter_inputs(used_inputs) |> Enum.map(&nx_to_shape!/1)
+        shapes =
+          reverse_args_triplet
+          |> Enum.reverse()
+          |> filter_inputs(used_inputs)
+          |> Enum.map(fn {type, shape, _names} -> EXLA.Shape.make_shape(type, shape) end)
+
         inputs_and_shapes = Enum.zip(used_inputs, shapes)
 
         {computation, extra, hooks} =

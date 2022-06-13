@@ -144,21 +144,37 @@ defmodule Nx.Defn.Composite do
   ## Nx.Defn callbacks
 
   @doc false
-  def flatten_compile_args(args, cache) do
-    flatten_compile_args(args, cache, [])
+  def split_compile_args(args, cache) do
+    split_compile_args(args, cache, [])
   end
 
-  defp flatten_compile_args([arg | args], cache, vars)
+  defp split_compile_args([arg | args], cache, vars)
        when is_function(arg)
        when is_tuple(arg) and is_function(elem(arg, 0)) do
-    flatten_compile_args(args, [arg | cache], vars)
+    split_compile_args(args, [arg | cache], vars)
   end
 
-  defp flatten_compile_args([arg | args], cache, vars) do
-    flatten_compile_args(args, cache, [arg | vars])
+  defp split_compile_args([arg | args], cache, vars) do
+    split_compile_args(args, cache, [arg | vars])
   end
 
-  defp flatten_compile_args([], cache, vars), do: {cache, Enum.reverse(vars)}
+  defp split_compile_args([], cache, vars), do: {cache, Enum.reverse(vars)}
+
+  @doc false
+  def join_compile_args(partial_args, full_args) do
+    {args, []} =
+      Enum.map_reduce(full_args, partial_args, fn
+        arg, acc
+        when is_function(arg)
+        when is_tuple(arg) and is_function(elem(arg, 0)) ->
+          {arg, acc}
+
+        _arg, [arg | acc] ->
+          {arg, acc}
+      end)
+
+    args
+  end
 
   @doc false
   def flatten_runtime_args(args, tail) do
@@ -173,25 +189,19 @@ defmodule Nx.Defn.Composite do
   end
 
   @doc false
-  def to_result(container) do
-    traverse(container, &Expr.tensor/1)
-  end
-
-  @doc false
-  def flat_to_container_params(params, args) do
-    {args, {[], _}} =
-      Enum.map_reduce(args, {params, 0}, fn
-        arg, acc
-        when is_function(arg)
-        when is_tuple(arg) and is_function(elem(arg, 0)) ->
-          {arg, acc}
-
-        arg, acc ->
-          traverse(arg, acc, fn _, {[param | params], i} ->
-            {Expr.parameter(param, :root, i), {params, i + 1}}
-          end)
+  def to_inputs(args) do
+    {args, _} =
+      Enum.map_reduce(args, 0, fn arg, i ->
+        traverse(arg, i, fn arg, i ->
+          {Expr.parameter(Nx.to_tensor(arg), :root, i), i + 1}
+        end)
       end)
 
     args
+  end
+
+  @doc false
+  def to_output(container) do
+    traverse(container, &Expr.tensor/1)
   end
 end

@@ -13,9 +13,7 @@ defmodule Nx.Defn.Compiler do
   It must call `fun` with the `vars` as arguments. Note the `key`
   does not include the `vars` in its cache. Therefore, if you want
   to cache the result of `fun.(vars)`, you likely want to include
-  the vars in the cache key. `vars` is a flat list of tensor
-  templates, so they can be added directly as part of the cache
-  key or, most often, in function of their type and shape.
+  the vars in the cache key. `vars` is a list of containers expressions.
 
   Once the expression is built and compiled, it must be invoked
   for each list of arguments in `args_list`. In a nutshell, `vars`
@@ -29,8 +27,8 @@ defmodule Nx.Defn.Compiler do
   """
   @callback __jit__(
               key :: term,
-              vars :: [Nx.t()],
-              fun :: ([Nx.t()] -> Nx.Container.t()),
+              vars :: [Nx.Container.t()],
+              fun :: ([Nx.Container.t()] -> Nx.Container.t()),
               args_list :: [[Nx.t()]],
               opts :: keyword
             ) :: [Nx.Container.t()]
@@ -97,30 +95,23 @@ defmodule Nx.Defn.Compiler do
     Kernel.apply(compiler, :__stream__, [fun, input, acc | tail])
   end
 
-  defp runtime(fun, [container_template | _] = args_list, opts) do
+  defp runtime(fun, [input_template | _] = args_list, opts) do
     {compiler, opts} = Keyword.pop(opts, :compiler, Nx.Defn.Evaluator)
-
-    # Flatten all arguments in the args list
+    input_template = Nx.Defn.Composite.to_inputs(input_template)
+    runtime_fun = &runtime_fun(&1, fun, compiler)
     args_list = Enum.map(args_list, &Nx.Defn.Composite.flatten_runtime_args(&1, []))
-
-    # And use the first one to act as a template
-    flat_template = args_list |> hd() |> Enum.map(&put_in(&1.data, %Nx.TemplateBackend{}))
-
-    runtime_fun = &runtime_fun(&1, fun, container_template, compiler)
-    {compiler, [flat_template, runtime_fun, args_list, opts]}
+    {compiler, [input_template, runtime_fun, args_list, opts]}
   end
 
-  defp runtime_fun(flat_template, fun, container_template, compiler) do
+  defp runtime_fun(args, fun, compiler) do
     tuple = Nx.default_backend()
     Nx.default_backend(Nx.Defn.Expr)
     previous = Process.put(Nx.Defn.Compiler, compiler)
 
     try do
-      args = Nx.Defn.Composite.flat_to_container_params(flat_template, container_template)
-
       fun
       |> apply(args)
-      |> Nx.Defn.Composite.to_result()
+      |> Nx.Defn.Composite.to_output()
     after
       Nx.default_backend(tuple)
 
@@ -244,12 +235,12 @@ defmodule Nx.Defn.Compiler do
     {compiler, compiler_opts} =
       Keyword.pop(Nx.Defn.default_options(), :compiler, Nx.Defn.Evaluator)
 
-    {cache, tensors} = Nx.Defn.Composite.flatten_compile_args(args, fun)
-    tensors = Nx.Defn.Composite.flatten_runtime_args(tensors, [])
-    vars = Enum.map(tensors, &put_in(&1.data, %Nx.TemplateBackend{}))
-    runtime_fun = &runtime_fun(&1, fun, args, compiler)
+    {cache, split_args} = Nx.Defn.Composite.split_compile_args(args, fun)
+    template = Nx.Defn.Composite.to_inputs(split_args)
+    flatten = Nx.Defn.Composite.flatten_runtime_args(split_args, [])
+    runtime_fun = &runtime_fun(Nx.Defn.Composite.join_compile_args(&1, args), fun, compiler)
 
-    [res] = compiler.__jit__(cache, vars, runtime_fun, [tensors], compiler_opts)
+    [res] = compiler.__jit__(cache, template, runtime_fun, [flatten], compiler_opts)
     res
   end
 
