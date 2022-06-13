@@ -63,6 +63,22 @@ defmodule EXLA.Defn.APITest do
     end
   end
 
+  describe "cache" do
+    defn merge(init_map) do
+      params = init()
+      transform({params, init_map}, fn {x, y} -> Map.merge(x, y) end)
+    end
+
+    defn init() do
+      %{"x" => Nx.random_uniform({}), "y" => Nx.random_uniform({})}
+    end
+
+    test "considers map keys in cache keys" do
+      assert_equal(merge(%{"x" => 10})["x"], Nx.tensor(10))
+      assert_equal(merge(%{"y" => 10})["y"], Nx.tensor(10))
+    end
+  end
+
   describe "stream" do
     defn defn_sum(entry, acc), do: {acc, entry + acc}
 

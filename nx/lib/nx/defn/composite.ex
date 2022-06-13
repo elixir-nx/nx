@@ -67,11 +67,11 @@ defmodule Nx.Defn.Composite do
   @doc """
   Traverses the given composite types with `fun`.
 
-  If composite tensor expressions are given, such as a tuple,
-  the composite type is recursively traversed and returned.
+  If a composite tensor is given, such as a tuple, the composite
+  type is recursively traversed and returned.
 
-  If a non-composite tensor expression is given, the function
-  is invoked for it but not for its arguments.
+  Otherwise the function is invoked with the tensor (be it a
+  number, complex, or actual tensor).
   """
   def traverse(expr, fun) when is_function(fun, 1) do
     {result, []} = traverse(expr, [], fn expr, [] -> {fun.(expr), []} end)
@@ -81,11 +81,11 @@ defmodule Nx.Defn.Composite do
   @doc """
   Traverses the given composite types with `acc` and `fun`.
 
-  If composite tensor expressions are given, such as a tuple,
-  the composite type is recursively traversed and returned.
+  If a composite tensor is given, such as a tuple, the composite
+  type is recursively traversed and returned.
 
-  If a non-composite tensor expression is given, the function
-  is invoked for it but not for its arguments.
+  Otherwise the function is invoked with the tensor (be it a
+  number, complex, or actual tensor).
   """
   def traverse(expr, acc, fun) when is_tensor(expr) and is_function(fun, 2),
     do: fun.(expr, acc)
