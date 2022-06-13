@@ -303,10 +303,14 @@ defmodule EXLA.Defn do
       case :erlang.fun_info(fun, :env) do
         {:env, [fun, args, EXLA]} when is_function(fun) and is_list(args) ->
           for arg <- args do
-            Nx.Defn.Composite.traverse(arg, fn
-              %T{type: type, shape: shape, names: names} -> {type, shape, names}
-              number_or_guard -> {Nx.type(number_or_guard), {}, []}
-            end)
+            if is_function(arg) or (is_tuple(arg) and arg != {} and is_function(elem(arg, 0))) do
+              arg
+            else
+              Nx.Defn.Composite.traverse(arg, fn
+                %T{type: type, shape: shape, names: names} -> {type, shape, names}
+                number_or_guard -> {Nx.type(number_or_guard), {}, []}
+              end)
+            end
           end
       end
 
