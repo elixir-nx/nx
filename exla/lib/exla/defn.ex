@@ -298,11 +298,20 @@ defmodule EXLA.Defn do
     {{expr_cache_fun, comp_cache_fun}, options} =
       Keyword.pop(options, EXLA, {&EXLA.Defn.LockedCache.run/2, &EXLA.Defn.LockedCache.run/2})
 
-    expr_args = for var <- vars, do: nx_to_expr_key!(var)
-    expr_key = {key, expr_args}
+    # Temporary work around to get the template from within the anonymous function
+    args_key =
+      case :erlang.fun_info(fun, :env) do
+        {:env, [fun, args, EXLA]} when is_function(fun) and is_list(args) ->
+          for arg <- args do
+            Nx.Defn.Composite.traverse(arg, fn
+              %T{type: type, shape: shape, names: names} -> {type, shape, names}
+              number_or_guard -> {Nx.type(number_or_guard), {}, []}
+            end)
+          end
+      end
 
-    {expr, {used_inputs, defined_hooks, outputs}} =
-      expr_cache_fun.(expr_key, fn ->
+    {expr, {ref, used_inputs, defined_hooks, outputs}} =
+      expr_cache_fun.({key, args_key}, fn ->
         expr = fun.(vars)
         {expr, used_inputs_and_hooks(expr)}
       end)
@@ -312,11 +321,10 @@ defmodule EXLA.Defn do
     used_hooks = Enum.sort(for {k, v} <- defined_hooks, v != nil or Map.has_key?(hooks, k), do: k)
 
     used_inputs = to_used.(used_inputs)
-    cache_args = Enum.map(vars, &nx_to_cache_key!/1)
-    cache_key = {key, cache_args, client.name, used_hooks, options}
+    comp_key = {ref, client.name, used_hooks, options}
 
     {_, {executable, extra, outfeed_hooks}} =
-      comp_cache_fun.(cache_key, fn ->
+      comp_cache_fun.(comp_key, fn ->
         shapes = vars |> filter_inputs(used_inputs) |> Enum.map(&nx_to_shape!/1)
         inputs_and_shapes = Enum.zip(used_inputs, shapes)
 
@@ -344,7 +352,7 @@ defmodule EXLA.Defn do
     {_, used_inputs, used_hooks} =
       Composite.reduce(expr, {%{}, %{}, %{}}, &used_inputs_and_hooks/2)
 
-    {used_inputs |> Map.keys() |> Enum.sort(), used_hooks, Nx.to_template(expr)}
+    {make_ref(), used_inputs |> Map.keys() |> Enum.sort(), used_hooks, Nx.to_template(expr)}
   end
 
   defp used_inputs_and_hooks(%T{data: %Expr{id: id} = expr} = t, {seen, inputs, hooks}) do
@@ -1561,9 +1569,8 @@ defmodule EXLA.Defn do
   defp filter_inputs([], _i, []),
     do: []
 
-  defp nx_to_shape!(%T{type: type, shape: shape}), do: EXLA.Shape.make_shape(type, shape)
-  defp nx_to_cache_key!(%T{type: type, shape: shape}), do: {type, shape}
-  defp nx_to_expr_key!(%T{type: type, shape: shape, names: names}), do: {type, shape, names}
+  defp nx_to_shape!(%T{type: type, shape: shape}),
+    do: EXLA.Shape.make_shape(type, shape)
 
   defp delete_slice(enumerable, index, length) do
     {left, right} = Enum.split(enumerable, index)
