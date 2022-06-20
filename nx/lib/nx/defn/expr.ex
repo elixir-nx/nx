@@ -984,9 +984,16 @@ defmodule Nx.Defn.Expr do
 
   defp constant(%{type: type, shape: shape} = out, number) do
     number =
-      if is_integer(number) and Nx.Type.float?(type),
-        do: Complex.multiply(1.0, number),
-        else: number
+      cond do
+        is_integer(number) and Nx.Type.float?(type) ->
+          Complex.multiply(1.0, number)
+
+        is_float(number) and Nx.Type.integer?(type) ->
+          floor(number)
+
+        number ->
+          number
+      end
 
     id = {number, type, shape}
     %{out | data: %Expr{id: id, op: :constant, args: [number], context: nil}}
