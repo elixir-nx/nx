@@ -35,6 +35,9 @@ defmodule Nx.Defn.ExprTest do
     test "as_type" do
       assert %T{data: %Expr{op: :constant, args: [1.0]}, type: {:f, 32}, shape: {}} =
                Nx.as_type(Expr.tensor(1), {:f, 32})
+
+      assert %T{data: %Expr{op: :constant, args: [1]}, type: {:s, 64}, shape: {}} =
+               Nx.as_type(Expr.tensor(1.0), {:s, 64})
     end
 
     test "add" do

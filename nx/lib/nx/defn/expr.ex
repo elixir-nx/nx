@@ -584,6 +584,13 @@ defmodule Nx.Defn.Expr do
     tensor = to_expr(tensor)
 
     if c = maybe_constant(tensor) do
+      c =
+        if is_float(c) and Nx.Type.integer?(out.type) do
+          trunc(c)
+        else
+          c
+        end
+
       constant(out, c)
     else
       expr(out, tensor.data.context, :as_type, [tensor])
@@ -972,9 +979,17 @@ defmodule Nx.Defn.Expr do
 
   defp constant(%{type: type, shape: shape} = out, number) do
     number =
-      if is_integer(number) and Nx.Type.float?(type),
-        do: Complex.multiply(1.0, number),
-        else: number
+      cond do
+        is_integer(number) and Nx.Type.float?(type) ->
+          Complex.multiply(1.0, number)
+
+        not is_integer(number) and Nx.Type.integer?(type) ->
+          raise ArgumentError,
+                "value #{inspect(number)} is not valid for constant of type #{inspect(type)}"
+
+        number ->
+          number
+      end
 
     id = {number, type, shape}
     %{out | data: %Expr{id: id, op: :constant, args: [number], context: nil}}
