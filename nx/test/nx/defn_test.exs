@@ -998,6 +998,53 @@ defmodule Nx.DefnTest do
                if_map(Nx.tensor(0), Nx.tensor(1), Nx.tensor(2))
     end
 
+    defn if_branch_elimination(a) do
+      if Nx.rank(a) == 0 do
+        11
+      else
+        13
+      end
+    end
+
+    test "eliminates branches" do
+      assert %T{data: %Expr{op: :constant, args: [11]}} = if_branch_elimination(Nx.tensor(0))
+
+      assert %T{data: %Expr{op: :constant, args: [13]}} =
+               if_branch_elimination(Nx.tensor([1, 2, 3]))
+    end
+
+    defn if_branch_elimination_complex(a) do
+      if elem(Nx.shape(a), Nx.rank(a) - 1) == 1 do
+        11
+      else
+        13
+      end
+    end
+
+    test "eliminates complex branches" do
+      assert %T{data: %Expr{op: :constant, args: [11]}} =
+               if_branch_elimination_complex(Nx.iota({1, 1}))
+
+      assert %T{data: %Expr{op: :constant, args: [13]}} =
+               if_branch_elimination_complex(Nx.iota({3, 3}))
+    end
+
+    defn if_branch_elimination_transform(a) do
+      if transform(a, &Kernel.==(Nx.rank(&1), 0)) do
+        11
+      else
+        13
+      end
+    end
+
+    test "eliminates branches from transform" do
+      assert %T{data: %Expr{op: :constant, args: [11]}} =
+               if_branch_elimination_transform(Nx.tensor(0))
+
+      assert %T{data: %Expr{op: :constant, args: [13]}} =
+               if_branch_elimination_transform(Nx.tensor([1, 2, 3]))
+    end
+
     test "raises correct error on incompatible shapes" do
       assert_raise CompileError, ~r/cond\/if expects all branches/, fn ->
         if_scalar_error(Nx.tensor(0))
@@ -1063,6 +1110,28 @@ defmodule Nx.DefnTest do
     test "handles empty maps in branches" do
       assert cond_empty_map(Nx.tensor(0)) == %{}
       assert cond_empty_map(Nx.tensor(0)) == %{}
+    end
+
+    defn cond_branch_elimination(a, b) do
+      cond do
+        Nx.rank(b) != 0 -> 7
+        Nx.rank(a) == 0 -> 11
+        true -> 13
+      end
+    end
+
+    test "eliminates branches" do
+      assert %T{data: %Expr{op: :constant, args: [7]}} =
+               cond_branch_elimination(Nx.tensor(0), Nx.tensor([1, 2, 3]))
+
+      assert %T{data: %Expr{op: :constant, args: [7]}} =
+               cond_branch_elimination(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2, 3]))
+
+      assert %T{data: %Expr{op: :constant, args: [11]}} =
+               cond_branch_elimination(Nx.tensor(0), Nx.tensor(0))
+
+      assert %T{data: %Expr{op: :constant, args: [13]}} =
+               cond_branch_elimination(Nx.tensor([1, 2, 3]), Nx.tensor(0))
     end
 
     test "raises if cond is missing last atom clause" do
