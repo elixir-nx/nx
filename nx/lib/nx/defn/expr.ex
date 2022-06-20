@@ -843,11 +843,22 @@ defmodule Nx.Defn.Expr do
   defp to_expr(%T{data: %Expr{}} = t),
     do: t
 
-  defp to_expr(%T{data: %Nx.BinaryBackend{}, shape: {}} = t),
-    do: constant(t, Nx.to_number(t))
+  defp to_expr(%T{data: %Nx.BinaryBackend{}, shape: shape} = t) do
+    case shape do
+      {} -> constant(t, Nx.to_number(t))
+      _ -> expr(t, nil, :tensor, [t])
+    end
+  end
 
-  defp to_expr(%T{} = t),
-    do: expr(t, nil, :tensor, [t])
+  defp to_expr(%T{data: %backend{}} = t) do
+    raise ArgumentError,
+          "cannot convert tensor allocated on #{inspect(backend)} to an expression. " <>
+            "This may mean you are passing a tensor to defn/jit as an optional argument " <>
+            "or as closure in an anonymous function. For efficiency, it is preferred " <>
+            "to always pass tensors as required arguments instead. Alternatively, you " <>
+            "could call Nx.backend_copy/1 on the tensor, however this will copy its " <>
+            "value and inline it inside the defn expression. Got: #{inspect(t)}"
+  end
 
   defp to_expr(number) when is_number(number),
     do: constant(%T{shape: {}, names: [], type: Nx.Type.infer(number)}, number)

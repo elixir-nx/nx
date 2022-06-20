@@ -445,8 +445,17 @@ defmodule Nx.Shared do
 
   defp pick_struct(struct1, struct2) do
     raise "cannot invoke Nx function because it relies on two incompatible tensor implementations: " <>
-            "#{inspect(struct1)} and #{inspect(struct2)}. You may need to call Nx.backend_transfer/1 " <>
-            "(or Nx.backend_copy/1) on one or both of them to transfer them to a common implementation"
+            "#{inspect(struct1)} and #{inspect(struct2)}. " <>
+            (if struct1 == Nx.Defn.Expr or struct2 == Nx.Defn.Expr do
+               "This may mean you are passing a tensor to defn/jit as an optional argument " <>
+                 "or as closure in an anonymous function. For efficiency, it is preferred " <>
+                 "to always pass tensors as required arguments instead. Alternatively, you " <>
+                 "could call Nx.backend_copy/1 on the tensor, however this will copy its " <>
+                 "value and inline it inside the defn expression"
+             else
+               "You may need to call Nx.backend_transfer/2 (or Nx.backend_copy/2) " <>
+                 "on one or both of them to transfer them to a common implementation"
+             end)
   end
 
   @doc """
