@@ -586,7 +586,7 @@ defmodule Nx.Defn.Expr do
     if c = maybe_constant(tensor) do
       c =
         if is_float(c) and Nx.Type.integer?(out.type) do
-          floor(c)
+          trunc(c)
         else
           c
         end
