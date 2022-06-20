@@ -584,6 +584,13 @@ defmodule Nx.Defn.Expr do
     tensor = to_expr(tensor)
 
     if c = maybe_constant(tensor) do
+      c =
+        if is_float(c) and Nx.Type.integer?(out.type) do
+          floor(c)
+        else
+          c
+        end
+
       constant(out, c)
     else
       expr(out, tensor.data.context, :as_type, [tensor])
@@ -988,8 +995,8 @@ defmodule Nx.Defn.Expr do
         is_integer(number) and Nx.Type.float?(type) ->
           Complex.multiply(1.0, number)
 
-        is_float(number) and Nx.Type.integer?(type) ->
-          floor(number)
+        not is_integer(number) and Nx.Type.integer?(type) ->
+          raise "value #{inspect(number)} is not valid for constant of type #{inspect(type)}"
 
         number ->
           number
