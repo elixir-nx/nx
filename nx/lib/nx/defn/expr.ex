@@ -996,7 +996,7 @@ defmodule Nx.Defn.Expr do
           Complex.multiply(1.0, number)
 
         not is_integer(number) and Nx.Type.integer?(type) ->
-          raise "value #{inspect(number)} is not valid for constant of type #{inspect(type)}"
+          raise ArgumentError, "value #{inspect(number)} is not valid for constant of type #{inspect(type)}"
 
         number ->
           number
