@@ -170,6 +170,40 @@ See the [`bench`](https://github.com/elixir-nx/nx/tree/main/exla/bench) and [`ex
 
 Many of Elixir's features are supported inside `defn`, such as the pipe operator, aliases, conditionals, pattern-matching, and more. It also brings exclusive features to numerical definitions, such as `while` loops, automatic differentiation via the `grad` function, hooks to inspect data running on the GPU, and more.
 
+## Why Elixir?
+
+The goal of the Nx project is to bring the power of numerical computing to those who are already leveraging the Erlang VM for building scalable and fault-tolerant systems.
+
+Elixir is a functional programming language that runs on the Erlang VM. And, at this point, you might ask: is functional programming a good fit for numerical computing? One of the main concerns is that immutability can lead to high memory usage when working with large blobs of memory. And that's true!
+
+However, it turns out that the most efficient way of executing numerical computations is by first building a graph of all computations, then compiling that graph to run on your CPUs/GPUs just-in-time. At this point, your numerical computing code becomes a function:
+
+    input -> [numerical computing] -> output 
+
+The `input` is an Elixir data-structure. Inside the function, the algorithm is highly optimized and free to mutate the data in any way it seems fit. Then we get an output that once again must obey Elixir semantics.
+
+To build those graphs, immutability becomes an indispensable tool both in terms of implementation and reasoning. As an example, the JAX library for Python, which has been one of the inspirations for Nx, also promotes functional and immutable principles:
+
+> JAX is intended to be used with a functional style of programming
+>
+> — JAX Docs
+
+> Unlike NumPy arrays, JAX arrays are always immutable
+>
+> — JAX Docs
+
+At the end of the day, Elixir provides the functional foundation and a powerful macro system that allows us to compile a subset of Elixir to the CPU/GPU.
+
+With time, we hope to see efforts that marry the benefits of the Erlang VM with numerical computing. Such as distributed computations, thanks to the Erlang VM's built-in ability of running in clusters, and federated learning, leverating the Erlang VM capabilities of handling data in and out of hundreds of thousands of devices concurrently.
+
+We also expect numerical computing to complement the Elixir ecosystem in different ways, such as:
+
+  * running Machine Learning models in real-time within your [Phoenix web application](https://phoenixframework.org/)
+
+  * deploying models, signal processing, and data modelling inside embedded systems [via Nerves](https://www.nerves-project.org/)
+
+  * incorporating data analysis and classification algorithms inside concurrent data pipelines powered [by Broadway](https://www.elixir-broadway.org/)
+
 ## License
 
 Copyright (c) 2020 Dashbit
