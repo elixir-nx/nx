@@ -473,6 +473,8 @@ defmodule Nx do
         ]
       >
 
+  ## Floats and complex numbers
+
   Besides single-precision (32 bits), floats can also have
   half-precision (16) or double-precision (64):
 
@@ -496,7 +498,27 @@ defmodule Nx do
         [1.0, 2.0, 3.0]
       >
 
-  You can also provide names for tensor dimensions. Names are either atoms or `nil`:
+  In all cases, the non-finite values negative infinity (-Inf),
+  infinity (Inf), and "not a number" (NaN) can be represented by
+  the atoms `:neg_infinity`, `:infinity`, and `:nan` respectively:
+
+      iex> Nx.tensor([:neg_infinity, :nan, :infinity])
+      #Nx.Tensor<
+        f32[3]
+        [-Inf, NaN, Inf]
+      >
+
+  Finally, complex numbers are also supported in tensors:
+
+      iex> Nx.tensor(Complex.new(1, -1))
+      #Nx.Tensor<
+        c64
+        1.0-1.0i
+      >
+
+  ## Naming dimensions
+
+  You can provide names for tensor dimensions. Names are atoms:
 
       iex> Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y])
       #Nx.Tensor<
@@ -1594,8 +1616,9 @@ defmodule Nx do
   @doc """
   Returns the underlying tensor as a flat list.
 
-  Negative infinity, infinity, and NaN will be respectively returned
-  as the atoms `:neg_infinity`, `:infinity`, and `:nan`.
+  Negative infinity (-Inf), infinity (Inf), and "not a number" (NaN)
+  will be represented by the atoms `:neg_infinity`, `:infinity`, and
+  `:nan` respectively.
 
   ## Examples
 
@@ -1755,6 +1778,10 @@ defmodule Nx do
 
   @doc """
   Returns the underlying tensor as a number.
+
+  Negative infinity (-Inf), infinity (Inf), and "not a number" (NaN)
+  will be represented by the atoms `:neg_infinity`, `:infinity`, and
+  `:nan` respectively.
 
   If the tensor has a dimension, it raises.
 
