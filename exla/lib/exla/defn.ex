@@ -1,6 +1,7 @@
 defmodule EXLA.Defn do
   @moduledoc false
 
+  require Logger
   alias Nx.Defn.{Composite, Expr, Tree}
   alias Nx.Tensor, as: T
 
@@ -20,7 +21,7 @@ defmodule EXLA.Defn do
     comp_fun =
       &to_stream_computation(client, key, input_shape, acc_vars, &1, &2, &3, compile_options)
 
-    {executable, used_inputs, {output, acc_output}, hooks, output_shapes} =
+    {executable, used_inputs, {output, acc_output}, hooks, output_shapes, debug?} =
       compile(client, {:stream, key}, vars, fun, compile_options, used_fun, comp_fun)
 
     # Execution of streams requires the coordination of
@@ -29,47 +30,63 @@ defmodule EXLA.Defn do
     # First, we get a lock on the executable, because we want
     # to avoid transfer to the device unless we know we are
     # ready to use the device.
-    lock = EXLA.Defn.Lock.lock(run_key(executable))
-
-    buffers =
-      args
-      |> filter_inputs(used_inputs)
-      |> EXLA.Defn.Buffers.from_nx!()
-
-    # Now that we have transferred to device, we spawn a runner process
-    # to execute the stream. We use a runner instead of a task to avoid
-    # leaking messages in the inbox. We also don't use a supervisor
-    # to keep them linked, which is safe because the agent is not used
-    # outside the scope of the current process.
-    #
-    # Finally, note the runner cannot start immediately, we need to
-    # setup the outfeed reader and register the on_unlock callback
-    # that cancels the stream atomically. This is done inside
-    # EXLA.Defn.Stream.run.
-    {:ok, runner} =
-      EXLA.Defn.Runner.start_link(lock, fn ->
-        EXLA.Executable.run(executable, [buffers], run_options)
+    {time, lock} =
+      :timer.tc(fn ->
+        EXLA.Defn.Lock.lock(run_key(executable))
       end)
 
-    # The outfeed reader will redirect all outputs with flag 1 to the current
-    # process. Once flag 0 is emitted, we know the stream is done.
-    hooks = Map.put(hooks, 1, {output_shapes, {self(), lock}})
-    {:ok, outfeed} = EXLA.Defn.Outfeed.start_child(executable, hooks)
+    if debug? do
+      Logger.debug("EXLA device #{executable.device_id} lock in #{us_to_ms(time)}ms")
+    end
 
-    stream =
-      EXLA.Defn.Stream.run(
-        executable,
-        lock,
-        runner,
-        outfeed,
-        input,
-        input_shape,
-        output,
-        output_shapes,
-        acc_output
-      )
+    {time, streams} =
+      :timer.tc(fn ->
+        buffers =
+          args
+          |> filter_inputs(used_inputs)
+          |> EXLA.Defn.Buffers.from_nx!()
 
-    [stream]
+        # Now that we have transferred to device, we spawn a runner process
+        # to execute the stream. We use a runner instead of a task to avoid
+        # leaking messages in the inbox. We also don't use a supervisor
+        # to keep them linked, which is safe because the agent is not used
+        # outside the scope of the current process.
+        #
+        # Finally, note the runner cannot start immediately, we need to
+        # setup the outfeed reader and register the on_unlock callback
+        # that cancels the stream atomically. This is done inside
+        # EXLA.Defn.Stream.run.
+        {:ok, runner} =
+          EXLA.Defn.Runner.start_link(lock, fn ->
+            EXLA.Executable.run(executable, [buffers], run_options)
+          end)
+
+        # The outfeed reader will redirect all outputs with flag 1 to the current
+        # process. Once flag 0 is emitted, we know the stream is done.
+        hooks = Map.put(hooks, 1, {output_shapes, {self(), lock}})
+        {:ok, outfeed} = EXLA.Defn.Outfeed.start_child(executable, hooks)
+
+        stream =
+          EXLA.Defn.Stream.run(
+            executable,
+            lock,
+            runner,
+            outfeed,
+            input,
+            input_shape,
+            output,
+            output_shapes,
+            acc_output
+          )
+
+        [stream]
+      end)
+
+    if debug? do
+      Logger.debug("EXLA stream start on device #{executable.device_id} in #{us_to_ms(time)}ms")
+    end
+
+    streams
   end
 
   defp stream_used_inputs(used, input_length, acc_length) do
@@ -220,10 +237,28 @@ defmodule EXLA.Defn do
     client = EXLA.Client.fetch!(client_name)
     callback = &to_root_computation(key, &1, &2, &3, compile_options)
 
-    {executable, used_inputs, outputs, hooks, :ok} =
+    {executable, used_inputs, outputs, hooks, :ok, debug?} =
       compile(client, key, vars, fun, compile_options, & &1, callback)
 
-    maybe_outfeed(executable, args, used_inputs, outputs, hooks, run_options)
+    {time, lock} =
+      :timer.tc(fn ->
+        EXLA.Defn.Lock.lock(run_key(executable))
+      end)
+
+    if debug? do
+      Logger.debug("EXLA device #{executable.device_id} lock in #{us_to_ms(time)}ms")
+    end
+
+    {time, res} =
+      :timer.tc(fn ->
+        maybe_outfeed(lock, executable, args, used_inputs, outputs, hooks, run_options)
+      end)
+
+    if debug? do
+      Logger.debug("EXLA execution on device #{executable.device_id} in #{us_to_ms(time)}ms")
+    end
+
+    res
   end
 
   defp to_root_computation(key, expr, used_shapes, used_hooks, options) do
@@ -247,10 +282,8 @@ defmodule EXLA.Defn do
     {EXLA.Builder.build(res), :ok, outfeed_hooks}
   end
 
-  defp maybe_outfeed(executable, args, used_inputs, outputs, hooks, run_options)
+  defp maybe_outfeed(lock, executable, args, used_inputs, outputs, hooks, run_options)
        when hooks == %{} do
-    lock = EXLA.Defn.Lock.lock(run_key(executable))
-
     try do
       buffers =
         args
@@ -265,9 +298,7 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp maybe_outfeed(executable, args, used_inputs, outputs, hooks, run_options) do
-    lock = EXLA.Defn.Lock.lock(run_key(executable))
-
+  defp maybe_outfeed(lock, executable, args, used_inputs, outputs, hooks, run_options) do
     buffers =
       args
       |> filter_inputs(used_inputs)
@@ -295,8 +326,16 @@ defmodule EXLA.Defn do
   ## Compile
 
   defp compile(client, key, vars, fun, options, to_used, to_computation) do
+    {debug?, options} = Keyword.pop(options, :debug, false)
+
     {{expr_cache_fun, comp_cache_fun}, options} =
-      Keyword.pop(options, EXLA, {&EXLA.Defn.LockedCache.run/2, &EXLA.Defn.LockedCache.run/2})
+      case Keyword.pop(options, EXLA) do
+        {{_, _}, _} = popped ->
+          popped
+
+        {nil, options} ->
+          {{&EXLA.Defn.LockedCache.run/2, &EXLA.Defn.LockedCache.run/2}, options}
+      end
 
     {args_key, reverse_args_triplet} =
       Enum.map_reduce(vars, [], fn var, acc ->
@@ -307,11 +346,18 @@ defmodule EXLA.Defn do
         end)
       end)
 
-    {expr, {ref, used_inputs, defined_hooks, outputs}} =
-      expr_cache_fun.({key, args_key}, fn ->
-        expr = fun.(vars)
-        {expr, used_inputs_and_hooks(expr)}
+    {time, {expr, {ref, used_inputs, defined_hooks, outputs}}} =
+      :timer.tc(fn ->
+        expr_cache_fun.({key, args_key}, fn ->
+          expr = fun.(vars)
+          {expr, used_inputs_and_hooks(expr)}
+        end)
       end)
+
+    if debug? do
+      hit_or_miss = if expr, do: "miss", else: "hit"
+      Logger.debug("EXLA expression cache lookup #{hit_or_miss} in #{us_to_ms(time)}ms")
+    end
 
     # Hooks with default callbacks or user callbacks are part of the cache key
     {hooks, options} = Keyword.pop(options, :hooks, %{})
@@ -320,21 +366,23 @@ defmodule EXLA.Defn do
     used_inputs = to_used.(used_inputs)
     comp_key = {ref, client.name, used_hooks, options}
 
-    {_, {executable, extra, outfeed_hooks}} =
-      comp_cache_fun.(comp_key, fn ->
-        shapes =
-          reverse_args_triplet
-          |> Enum.reverse()
-          |> filter_inputs(used_inputs)
-          |> Enum.map(fn {type, shape, _names} -> EXLA.Shape.make_shape(type, shape) end)
+    {time, {evaled, {executable, extra, outfeed_hooks}}} =
+      :timer.tc(fn ->
+        comp_cache_fun.(comp_key, fn ->
+          shapes =
+            reverse_args_triplet
+            |> Enum.reverse()
+            |> filter_inputs(used_inputs)
+            |> Enum.map(fn {type, shape, _names} -> EXLA.Shape.make_shape(type, shape) end)
 
-        inputs_and_shapes = Enum.zip(used_inputs, shapes)
+          inputs_and_shapes = Enum.zip(used_inputs, shapes)
 
-        {computation, extra, hooks} =
-          to_computation.(expr || fun.(vars), inputs_and_shapes, used_hooks)
+          {computation, extra, hooks} =
+            to_computation.(expr || fun.(vars), inputs_and_shapes, used_hooks)
 
-        executable = EXLA.Computation.compile(computation, client, shapes, options)
-        {nil, {executable, extra, hooks}}
+          executable = EXLA.Computation.compile(computation, client, shapes, options)
+          {:ok, {executable, extra, hooks}}
+        end)
       end)
 
     # Now finally compute the hooks to give to outfeed
@@ -343,8 +391,15 @@ defmodule EXLA.Defn do
           do: {flag, {shapes, compile_hook(key, hooks, defined_hooks, template)}},
           into: %{}
 
-    {executable, used_inputs, outputs, hooks, extra}
+    if debug? do
+      hit_or_miss = if evaled, do: "miss", else: "hit"
+      Logger.debug("EXLA compilation cache lookup #{hit_or_miss} in #{us_to_ms(time)}ms")
+    end
+
+    {executable, used_inputs, outputs, hooks, extra, debug?}
   end
+
+  defp us_to_ms(time), do: Float.round(time / 1000, 1)
 
   defp compile_hook(key, hooks, defined_hooks, template) do
     {hooks[key] || Map.fetch!(defined_hooks, key), template}
