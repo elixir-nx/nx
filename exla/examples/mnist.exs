@@ -144,7 +144,7 @@ defmodule MNIST do
   end
 end
 
-EXLA.set_as_nx_default([:tpu, :cuda, :rocm, :host])
+EXLA.set_as_nx_default()
 
 {train_images, train_labels} =
   MNIST.download('train-images-idx3-ubyte.gz', 'train-labels-idx1-ubyte.gz')

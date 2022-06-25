@@ -9,20 +9,25 @@ defmodule EXLA do
   ### In projects
 
   EXLA works both as a backend for `Nx` tensors and an optimized `Nx.Defn` compiler.
-  To enable both globally, add a `config/config.exs` (or `config/ENV.exs`) with the following:
+  Generally speaking, the backend is enabled globally in your `config/config.exs`
+  (or `config/ENV.exs`) with the following:
 
       import Config
       config :nx, :default_backend, EXLA.Backend
+
+  Now you can use `Nx` as usual and it will use `EXLA` by default. You can also enable
+  the compiler by default:
+
       config :nx, :default_defn_options, [compiler: EXLA]
 
-  Now you can use `Nx` as usual and it will use `EXLA` by default.
+  But explicit compilation is often preferred by passing the `:compiler` flag or
+  by using `EXLA.jit/3`:
 
-  You can also use cuda/rocm/tpu as the target by setting `:client` option
-  in both configuration:
+      Nx.Defn.jit(&some_function, my_tensors, compiler: EXLA)
+      EXLA.jit(&some_function, my_tensors)
 
-      import Config
-      config :nx, :default_backend, {EXLA.Backend, client: :cuda}
-      config :nx, :default_defn_options, [compiler: EXLA, client: :cuda]
+  The default client is chosen on this order: `:cuda`, `:rocm`, `:tpu`, and `:host`.
+  See the "Clients" section below for more information.
 
   To use GPUs/TPUs, you must also set the appropriate value for the
   [`XLA_TARGET`](https://github.com/elixir-nx/xla#xla_target) environment
@@ -34,7 +39,7 @@ defmodule EXLA do
   The simplest way to configure EXLA in notebooks is by calling:
 
   ```elixir
-  EXLA.set_as_nx_default([:tpu, :cuda, :rocm, :host])
+  EXLA.set_as_nx_default()
   ```
 
   Then EXLA will pick the first platform available for the current
@@ -49,8 +54,8 @@ defmodule EXLA do
 
   The options accepted by EXLA configuration are:
 
-    * `:client` - an atom representing the client to use. Defaults
-      to `:host`. See "Clients" section
+    * `:client` - an atom representing the client to use. The default
+      client is chosen on this order: `:cuda`, `:rocm`, `:tpu`, and `:host`.
 
     * `:device_id` - the default device id to run the computation
         on. Defaults to the `:default_device_id` on the client
@@ -64,13 +69,17 @@ defmodule EXLA do
   Those clients are singleton resources on Google's XLA library,
   therefore they are treated as a singleton resource on this library
   too. EXLA ships with the client configuration for each supported
-  platform, which would be the equivalent to this:
+  platform, in the order of preference listed below:
 
       config :exla, :clients,
-        host: [platform: :host],
         cuda: [platform: :cuda],
         rocm: [platform: :rocm],
-        tpu: [platform: :tpu]
+        tpu: [platform: :tpu],
+        host: [platform: :host]
+
+  The first client with a supported platform will be picked. You can
+  provide your own list of clients, replacing the list above or configuring
+  each client as listed below.
 
   > **Important!** you should avoid using multiple clients for the
   > same platform. If you have multiple clients per platform, they
@@ -83,7 +92,7 @@ defmodule EXLA do
   Each client configuration accepts the following options:
 
     * `:platform` - the platform the client runs on. It can be
-      `:host` (CPU), `:cuda`, `:rocm`, or `:tpu`.
+      `:host` (CPU), `:cuda`, `:rocm`, or `:tpu`. Defaults to `:host`.
 
     * `:default_device_id` - the default device ID to run on.
       For example, if you have two GPUs, you can choose a different
@@ -109,7 +118,7 @@ defmodule EXLA do
 
   ## Device allocation
 
-  EXLA also ships with a `EXLA.Backend` that allows data to be explicitly
+  EXLA ships with a `EXLA.Backend` that allows data to be explicitly
   allocated on the EXLA device. You can create tensors with `EXLA.Backend`
   directly:
 
@@ -172,36 +181,18 @@ defmodule EXLA do
   @behaviour Nx.Defn.Compiler
 
   @doc """
-  Sets the global defn options to the EXLA compiler with the preferred
-  client based on their availability.
+  Sets EXLA as the default backend for Nx.
 
-  This function is typically invoked at the top of scripts and code
-  notebooks which might be potentially executed from multiple platforms.
-  Do not invoke this function during runtime, as it changes `Nx.Defn`
-  options globally. If you have a specific client that you want to use
-  throughout your project, use configuration files instead:
-
-      import Config
-      config :nx, :default_backend, {EXLA.Backend, client: :cuda}
-      config :nx, :default_defn_options, [compiler: EXLA, client: :cuda]
-
-  ## Examples
-
-      EXLA.set_as_nx_default([:tpu, :cuda, :rocm, :host])
-
-  The above will try to find the first client available and set
-  the `EXLA` compiler with the client as the compilers for `Nx.Defn`.
-  If no client is found, `EXLA` is not set as compiler at all,
-  therefore it is common to add `:host` as the last option.
-
-  If additional options are given, they are given as compiler options:
-
-      EXLA.set_as_nx_default([:tpu, :cuda, :rocm, :host])
-
-  To use the GPU or TPUs, don't forget to also set the appropriate value
-  for the [`XLA_TARGET`](https://github.com/elixir-nx/xla#xla_target)
-  environment variable.
+  Note this function does not set EXLA as the default compiler. You
+  should pass `compiler: EXLA` to `Nx.Defn` functions instead.
   """
+  def set_as_nx_default() do
+    Nx.global_default_backend({EXLA.Backend, []})
+    :ok
+  end
+
+  @doc false
+  @deprecated "Use set_as_nx_default/0"
   def set_as_nx_default(clients, opts \\ []) do
     supported_platforms = EXLA.Client.get_supported_platforms()
     all_clients = Application.fetch_env!(:exla, :clients)
@@ -216,7 +207,6 @@ defmodule EXLA do
     if chosen do
       opts = Keyword.put(opts, :client, chosen)
       Nx.global_default_backend({EXLA.Backend, opts})
-      Nx.Defn.global_default_options([compiler: EXLA] ++ opts)
       chosen
     end
   end

@@ -11,7 +11,7 @@ Mix.install([
 ])
 
 # To use TPU/CUDA/ROCM, you must also set the XLA_TARGET env var
-EXLA.set_as_nx_default([:tpu, :cuda, :rocm, :host])
+EXLA.set_as_nx_default()
 ```
 
 ## Preprocessing

@@ -47,7 +47,7 @@ defmodule LinReg do
   end
 end
 
-EXLA.set_as_nx_default([:tpu, :cuda, :rocm, :host])
+EXLA.set_as_nx_default()
 
 params = LinReg.init_random_params()
 m = :rand.normal(0.0, 10.0)

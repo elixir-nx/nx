@@ -7,10 +7,9 @@ defmodule EXLA.Backend do
   allows the following options:
 
     * `:client` - the client to store the data on.
-      Defaults to the client configured in `Nx.Defn`,
-      otherwise uses `:host`.
+      Defaults to EXLA's default client.
 
-    * `:device_id` - which device to store it on
+    * `:device_id` - which device to store it on.
 
   To get the data out of the device backend into a regular
   tensor, call `Nx.backend_transfer/1` (with the device
@@ -131,18 +130,8 @@ defmodule EXLA.Backend do
 
   ## Helpers
 
-  defp default_client_name do
-    opts = Nx.Defn.default_options()
-
-    if opts[:compiler] == EXLA do
-      opts[:client] || :host
-    else
-      :host
-    end
-  end
-
   defp client_and_device_id(opts) do
-    client = EXLA.Client.fetch!(opts[:client] || default_client_name())
+    client = EXLA.Client.fetch!(opts[:client] || EXLA.Client.default_name())
     device_id = opts[:device_id] || client.default_device_id
     {client, device_id}
   end
