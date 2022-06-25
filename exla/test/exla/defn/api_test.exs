@@ -24,20 +24,20 @@ defmodule EXLA.Defn.APITest do
           EXLA.jit(&add_two/2, [2, 3], debug: true)
         end)
 
-      assert logs =~ ~r"EXLA expression cache lookup (hit|miss) in \d\.\d+ms"
-      assert logs =~ ~r"EXLA compilation cache lookup (hit|miss) in \d\.\d+ms"
-      assert logs =~ ~r"EXLA device \d lock in \d\.\d+ms"
-      assert logs =~ ~r"EXLA execution on device \d in \d\.\d+ms"
+      assert logs =~ ~r"EXLA defn evaluation( cache hit)? in \d+\.\dms"
+      assert logs =~ ~r"EXLA compilation( cache hit)? in \d+\.\dms"
+      assert logs =~ ~r"EXLA device \d lock in \d+\.\dms"
+      assert logs =~ ~r"EXLA execution on device \d in \d+\.\dms"
 
       logs =
         capture_log(fn ->
           EXLA.jit(&add_two/2, [2, 3], debug: true)
         end)
 
-      assert logs =~ ~r"EXLA expression cache lookup hit in \d\.\d+ms"
-      assert logs =~ ~r"EXLA compilation cache lookup hit in \d\.\d+ms"
-      assert logs =~ ~r"EXLA device \d lock in \d\.\d+ms"
-      assert logs =~ ~r"EXLA execution on device \d in \d\.\d+ms"
+      assert logs =~ ~r"EXLA defn evaluation cache hit in \d+\.\dms"
+      assert logs =~ ~r"EXLA compilation cache hit in \d+\.\dms"
+      assert logs =~ ~r"EXLA device \d lock in \d+\.\d+ms"
+      assert logs =~ ~r"EXLA execution on device \d in \d+\.\dms"
     end
   end
 

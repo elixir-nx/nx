@@ -355,8 +355,8 @@ defmodule EXLA.Defn do
       end)
 
     if debug? do
-      hit_or_miss = if expr, do: "miss", else: "hit"
-      Logger.debug("EXLA expression cache lookup #{hit_or_miss} in #{us_to_ms(time)}ms")
+      hit_or_miss = if expr, do: "", else: " cache hit"
+      Logger.debug("EXLA defn evaluation#{hit_or_miss} in #{us_to_ms(time)}ms")
     end
 
     # Hooks with default callbacks or user callbacks are part of the cache key
@@ -392,8 +392,8 @@ defmodule EXLA.Defn do
           into: %{}
 
     if debug? do
-      hit_or_miss = if evaled, do: "miss", else: "hit"
-      Logger.debug("EXLA compilation cache lookup #{hit_or_miss} in #{us_to_ms(time)}ms")
+      hit_or_miss = if evaled, do: "", else: " cache hit"
+      Logger.debug("EXLA compilation#{hit_or_miss} in #{us_to_ms(time)}ms")
     end
 
     {executable, used_inputs, outputs, hooks, extra, debug?}
