@@ -215,7 +215,7 @@ defmodule EXLA do
 
     if chosen do
       opts = Keyword.put(opts, :client, chosen)
-      Nx.default_backend({EXLA.Backend, opts})
+      Nx.global_default_backend({EXLA.Backend, opts})
       Nx.Defn.global_default_options([compiler: EXLA] ++ opts)
       chosen
     end
