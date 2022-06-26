@@ -1355,12 +1355,12 @@ defmodule Nx.DefnTest do
 
     test "compiles defn function" do
       assert %T{data: %Expr{op: :subtract}} =
-               Nx.Defn.jit(&defn_jit/2, [{1, 2}, 3], compiler: Identity)
+               Nx.Defn.jit(&defn_jit/2, compiler: Identity).({1, 2}, 3)
 
       Nx.Defn.default_options(compiler: Evaluator)
-      assert Nx.Defn.jit(&defn_jit/2, [{4, 5}, 3]) == Nx.tensor(6)
-      assert Nx.Defn.jit(&defn_jit/2, [{4, 5}, Nx.tensor(3)]) == Nx.tensor(6)
-      assert Nx.Defn.jit(&defn_jit(&1, 3), [{4, 5}]) == Nx.tensor(6)
+      assert Nx.Defn.jit(&defn_jit/2).({4, 5}, 3) == Nx.tensor(6)
+      assert Nx.Defn.jit(&defn_jit/2).({4, 5}, Nx.tensor(3)) == Nx.tensor(6)
+      assert Nx.Defn.jit(&defn_jit(&1, 3)).({4, 5}) == Nx.tensor(6)
     end
 
     defn defn_jit_or_apply(ab, c), do: Nx.Defn.jit_or_apply(&defn_jit/2, [ab, c])
@@ -1381,12 +1381,12 @@ defmodule Nx.DefnTest do
 
     test "compiles elixir function" do
       assert %T{data: %Expr{op: :subtract}} =
-               Nx.Defn.jit(&elixir_jit/2, [{4, 5}, 3], compiler: Identity)
+               Nx.Defn.jit(&elixir_jit/2, compiler: Identity).({4, 5}, 3)
 
       Nx.Defn.default_options(compiler: Evaluator)
-      assert Nx.Defn.jit(&elixir_jit/2, [{4, 5}, 3]) == Nx.tensor(6)
-      assert Nx.Defn.jit(&elixir_jit/2, [{4, 5}, Nx.tensor(3)]) == Nx.tensor(6)
-      assert Nx.Defn.jit(&elixir_jit(&1, 3), [{4, 5}]) == Nx.tensor(6)
+      assert Nx.Defn.jit(&elixir_jit/2).({4, 5}, 3) == Nx.tensor(6)
+      assert Nx.Defn.jit(&elixir_jit/2).({4, 5}, Nx.tensor(3)) == Nx.tensor(6)
+      assert Nx.Defn.jit(&elixir_jit(&1, 3)).({4, 5}) == Nx.tensor(6)
     end
 
     defp elixir_constant_jit() do
@@ -1394,12 +1394,12 @@ defmodule Nx.DefnTest do
     end
 
     test "compiles elixir function with default backend for constants" do
-      assert Nx.Defn.jit(&elixir_constant_jit/0, [], compiler: Evaluator) == Nx.tensor(0)
+      assert Nx.Defn.jit(&elixir_constant_jit/0, compiler: Evaluator).() == Nx.tensor(0)
     end
 
     test "raises if it doesn't return an expression" do
       assert_raise Protocol.UndefinedError,
-                   fn -> Nx.Defn.jit(fn -> :ok end, [], compiler: Evaluator).() end
+                   fn -> Nx.Defn.jit(fn -> :ok end, compiler: Evaluator).() end
     end
 
     defn jit_iota(), do: Nx.iota({3, 3})
@@ -1408,21 +1408,21 @@ defmodule Nx.DefnTest do
     @tag compiler: Evaluator
     test "uses the default backend on iota" do
       Nx.default_backend(UnknownBackend)
-      assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(&jit_iota/0, []) end
-      assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(fn -> Nx.iota({3, 3}) end, []) end
+      assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(&jit_iota/0).() end
+      assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(fn -> Nx.iota({3, 3}) end).() end
     end
 
     defn nested_jit(opts \\ []) do
       transform(opts, fn opts ->
         eleven = Nx.tensor(11, backend: Nx.BinaryBackend)
-        Nx.Defn.jit(&*/2, [eleven, eleven], opts)
+        Nx.Defn.jit(&*/2, opts).(eleven, eleven)
       end)
     end
 
     @tag compiler: Evaluator
     test "raises on nested JIT unless forcing" do
       assert_raise RuntimeError,
-                   "cannot call Nx.Defn.jit/3 when there is already a JIT compilation happening",
+                   "cannot invoke JITed function when there is already a JIT compilation happening",
                    fn -> nested_jit() end
 
       assert nested_jit(force: true) == Nx.tensor(11 * 11)

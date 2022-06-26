@@ -208,7 +208,8 @@ image = Preprocess.image_to_tensor(path_to_file)
 {height, width, _} = image.shape
 {new_height, new_width} = Preprocess.get_new_height_and_width(height, width, angle, radians?)
 new_image = Nx.broadcast(Nx.tensor([0], type: {:u, 8}), {new_height, new_width, num_channels})
-rotated_image = EXLA.jit(&Rotate.rotate_image_by_angle/4, [image, angle, new_image, radians?])
+rotate_image = EXLA.jit(&Rotate.rotate_image_by_angle/4)
+rotate_image.(image, angle, new_image, radians?)
 
 # convert the tensor back to stb_image and render it as png
 img = StbImage.from_nx(rotated_image)

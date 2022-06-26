@@ -54,8 +54,8 @@ defmodule EXLA do
   the `:compiler` option to `Nx.Defn` or by using the convenient `EXLA.jit/3`
   shortcut:
 
-      Nx.Defn.jit(&some_function, my_tensors, compiler: EXLA)
-      EXLA.jit(&some_function, my_tensors)
+      Nx.Defn.jit(&some_function/3, compiler: EXLA).(arg1, arg2, arg3)
+      EXLA.jit(&some_function/3).(arg1, arg2, arg3)
 
   ### Options
 
@@ -186,9 +186,9 @@ defmodule EXLA do
   end
 
   @doc """
-  A shortcut for `Nx.Defn.jit/3` with the EXLA compiler.
+  A shortcut for `Nx.Defn.jit/2` with the EXLA compiler.
 
-      iex> EXLA.jit(&Nx.add(&1, &1), [Nx.tensor([1, 2, 3])])
+      iex> EXLA.jit(&Nx.add(&1, &1)).(Nx.tensor([1, 2, 3]))
       #Nx.Tensor<
         s64[3]
         [2, 4, 6]
@@ -196,8 +196,8 @@ defmodule EXLA do
 
   See the moduledoc for options.
   """
-  def jit(function, args, options \\ []) do
-    Nx.Defn.jit(function, args, Keyword.put(options, :compiler, EXLA))
+  def jit(function, options \\ []) do
+    Nx.Defn.jit(function, Keyword.put(options, :compiler, EXLA))
   end
 
   @doc """
@@ -269,7 +269,7 @@ defmodule EXLA do
       iex> fun = fn a, b -> Nx.add(a, b) end
       iex> left = Nx.tensor(1, type: {:u, 8})
       iex> right = Nx.tensor([1, 2, 3], type: {:u, 16})
-      iex> EXLA.jit(fun, [left, right])
+      iex> EXLA.jit(fun).(left, right)
       iex> EXLA.jit_cached?(fun, [left, right])
       true
       iex> EXLA.jit_cached?(fun, [left, Nx.tensor([1, 2, 3, 4], type: {:u, 16})])
@@ -277,7 +277,7 @@ defmodule EXLA do
 
   """
   def jit_cached?(function, args, options \\ []) do
-    jit(function, args, [{EXLA, cached_check()} | options])
+    function |> jit([{EXLA, cached_check()} | options]) |> apply(args)
   catch
     {:cached?, bool} -> bool
   end

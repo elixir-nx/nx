@@ -63,14 +63,16 @@ defmodule Nx.Defn do
   ## JIT compilers
 
   The power of `Nx.Defn` is given by its compilers. The default
-  compiler is `Nx.Defn.Evaluator`, which executes the code in
-  pure Elixir. You can use `jit/3` to compile a function on the
-  fly using a different compiler, such as `EXLA`:
+  compiler is `Nx.Defn.Evaluator`, which evalutes the code.
+  You can use `jit/3` to compile a function on the fly using a
+  different compiler, such as `EXLA`:
 
-      Nx.Defn.jit(&MyModule.softmax/1, [my_tensor], compiler: EXLA)
+      fun = Nx.Defn.jit(&MyModule.softmax/1, compiler: EXLA)
+      fun.(my_tensor)
 
-  The above will optimize, compile, and run `softmax` on the fly
-  to the CPU (or the GPU) if available.
+  The above will return an anonymous function that optimizes,
+  compiles, and run `softmax` on the fly on the CPU (or the GPU)
+  if available.
 
   You can also change the default compiler for all numerical
   definitions (`defn`) by setting the default options. This can
@@ -79,12 +81,13 @@ defmodule Nx.Defn do
       config :nx, :default_defn_options, compiler: EXLA
 
   Now calling `MyModule.softmax(my_tensor)` will use `EXLA` even
-  without wrapping it in `jit/3`.
+  without wrapping it in `jit/2`.
 
   However, note that compilation may be quite time consuming on
   the first invocation, that's why it is often preferred to use
   the `compiler: EXLA` option when calling the functions in this
-  module instead.
+  module instead. EXLA, in particular, also exports a `EXLA.jit/2`
+  function for convenience.
 
   `defn` functions are compiled when they are invoked, based on
   the type and shapes of the tensors given as arguments. The
@@ -272,10 +275,23 @@ defmodule Nx.Defn do
       is already in place
 
   """
-  def jit(fun, args, opts \\ [])
-      when is_function(fun) and is_list(args) and is_list(opts) do
+  def jit(fun, opts \\ []) when is_function(fun) and is_list(opts) do
+    if Keyword.keyword?(opts) do
+      wrap(fun, &jit_now(fun, &1, opts))
+    else
+      IO.warn("jit/3 is deprecated, use jit/2 instead")
+      jit_now(fun, opts, [])
+    end
+  end
+
+  @deprecated "Use jit/2 instead"
+  def jit(fun, args, opts) when is_function(fun) and is_list(args) and is_list(opts) do
+    jit_now(fun, args, opts)
+  end
+
+  defp jit_now(fun, args, opts) do
     if Nx.Defn.Compiler.current() && opts[:force] != true do
-      raise "cannot call Nx.Defn.jit/3 when there is already a JIT compilation happening"
+      raise "cannot invoke JITed function when there is already a JIT compilation happening"
     end
 
     opts = prepare_options(opts)
@@ -384,6 +400,19 @@ defmodule Nx.Defn do
     end
 
     opts
+  end
+
+  defp wrap(fun, callback) do
+    {:arity, arity} = Function.info(fun, :arity)
+    wrap_arity(arity, callback)
+  end
+
+  for i <- 0..128 do
+    args = Macro.generate_arguments(i, __MODULE__)
+
+    defp wrap_arity(unquote(i), callback) do
+      fn unquote_splicing(args) -> callback.(unquote(args)) end
+    end
   end
 
   @doc """

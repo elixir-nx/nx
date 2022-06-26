@@ -319,12 +319,12 @@ defmodule Nx.Defn.EvaluatorTest do
       assert_received {:default, tensor}
       assert tensor == Nx.tensor(3)
 
-      assert Nx.Defn.jit(&basic_hook/2, [1, 2]) == Nx.tensor(3)
+      assert Nx.Defn.jit(&basic_hook/2).(1, 2) == Nx.tensor(3)
       assert_received {:default, tensor}
       assert tensor == Nx.tensor(3)
 
-      assert Nx.Defn.jit(&basic_hook/2, [1, 2], hooks: %{example: &send_to_self({:custom, &1})}) ==
-               Nx.tensor(3)
+      fun = Nx.Defn.jit(&basic_hook/2, hooks: %{example: &send_to_self({:custom, &1})})
+      assert fun.(1, 2) == Nx.tensor(3)
 
       assert_received {:custom, tensor}
       assert tensor == Nx.tensor(3)
@@ -337,13 +337,12 @@ defmodule Nx.Defn.EvaluatorTest do
       assert_received {:default, tuple}
       assert tuple == {Nx.tensor(1), Nx.tensor(2)}
 
-      assert Nx.Defn.jit(&container_hook/2, [1, 2]) == {Nx.tensor(1), Nx.tensor(2)}
+      assert Nx.Defn.jit(&container_hook/2).(1, 2) == {Nx.tensor(1), Nx.tensor(2)}
       assert_received {:default, tuple}
       assert tuple == {Nx.tensor(1), Nx.tensor(2)}
 
-      assert Nx.Defn.jit(&container_hook/2, [1, 2],
-               hooks: %{example: &send_to_self({:custom, &1})}
-             ) == {Nx.tensor(1), Nx.tensor(2)}
+      fun = Nx.Defn.jit(&container_hook/2, hooks: %{example: &send_to_self({:custom, &1})})
+      assert fun.(1, 2) == {Nx.tensor(1), Nx.tensor(2)}
 
       assert_received {:custom, tuple}
       assert tuple == {Nx.tensor(1), Nx.tensor(2)}
@@ -361,19 +360,19 @@ defmodule Nx.Defn.EvaluatorTest do
       refute_received _
 
       hooks = %{a: &send_to_self({:a, &1})}
-      Nx.Defn.jit(&side_effect_hooks/2, [1, 2], hooks: hooks)
+      Nx.Defn.jit(&side_effect_hooks/2, hooks: hooks).(1, 2)
       assert_received {:a, tensor}
       assert tensor == Nx.tensor(1)
       refute_received _
 
       hooks = %{b: &send_to_self({:b, &1})}
-      Nx.Defn.jit(&side_effect_hooks/2, [1, 2], hooks: hooks)
+      Nx.Defn.jit(&side_effect_hooks/2, hooks: hooks).(1, 2)
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
       refute_received _
 
       hooks = %{a: &send_to_self({:a, &1}), b: &send_to_self({:b, &1})}
-      Nx.Defn.jit(&side_effect_hooks/2, [1, 2], hooks: hooks)
+      Nx.Defn.jit(&side_effect_hooks/2, hooks: hooks).(1, 2)
       {:messages, [b: _, a: _]} = Process.info(self(), :messages)
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
@@ -393,19 +392,19 @@ defmodule Nx.Defn.EvaluatorTest do
       refute_received _
 
       hooks = %{a: &send_to_self({:a, &1})}
-      Nx.Defn.jit(&side_effect_nested_hooks/2, [1, 2], hooks: hooks)
+      Nx.Defn.jit(&side_effect_nested_hooks/2, hooks: hooks).(1, 2)
       assert_received {:a, tensor}
       assert tensor == Nx.tensor(1)
       refute_received _
 
       hooks = %{b: &send_to_self({:b, &1})}
-      Nx.Defn.jit(&side_effect_nested_hooks/2, [1, 2], hooks: hooks)
+      Nx.Defn.jit(&side_effect_nested_hooks/2, hooks: hooks).(1, 2)
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
       refute_received _
 
       hooks = %{a: &send_to_self({:a, &1}), b: &send_to_self({:b, &1})}
-      Nx.Defn.jit(&side_effect_nested_hooks/2, [1, 2], hooks: hooks)
+      Nx.Defn.jit(&side_effect_nested_hooks/2, hooks: hooks).(1, 2)
       {:messages, [b: _, a: _]} = Process.info(self(), :messages)
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
@@ -426,7 +425,7 @@ defmodule Nx.Defn.EvaluatorTest do
       assert tensor == Nx.tensor(2)
 
       hooks = %{a: &send_to_self({:a, &1})}
-      Nx.Defn.jit(&side_effect_nested_hook_with_default/2, [1, 2], hooks: hooks)
+      Nx.Defn.jit(&side_effect_nested_hook_with_default/2, hooks: hooks).(1, 2)
       {:messages, [b: _, a: _]} = Process.info(self(), :messages)
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
@@ -434,7 +433,7 @@ defmodule Nx.Defn.EvaluatorTest do
       assert tensor == Nx.tensor(1)
 
       hooks = %{b: &send_to_self({:custom, &1})}
-      Nx.Defn.jit(&side_effect_nested_hook_with_default/2, [1, 2], hooks: hooks)
+      Nx.Defn.jit(&side_effect_nested_hook_with_default/2, hooks: hooks).(1, 2)
       assert_received {:custom, tensor}
       assert tensor == Nx.tensor(2)
 
@@ -451,7 +450,7 @@ defmodule Nx.Defn.EvaluatorTest do
       assert hook_upto10(5) == Nx.tensor(10)
       refute_received _
 
-      assert Nx.Defn.jit(&hook_upto10/1, [5], hooks: %{while: &send_to_self({:while, &1})}) ==
+      assert Nx.Defn.jit(&hook_upto10/1, hooks: %{while: &send_to_self({:while, &1})}).(5) ==
                Nx.tensor(10)
 
       assert_received {:while, tensor}

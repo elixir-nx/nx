@@ -230,7 +230,7 @@ defmodule Nx.OptionalTest do
 
     test "works with direct call" do
       assert ExUnit.CaptureIO.capture_io(fn ->
-               Nx.Defn.jit(&det_inspect/1, [Nx.iota({3, 3})])
+               Nx.Defn.jit(&det_inspect/1).(Nx.iota({3, 3}))
              end) =~
                """
                #Nx.Tensor<
