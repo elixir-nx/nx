@@ -43,10 +43,10 @@ defmodule EXLA.MixProject do
       mod: {EXLA.Application, []},
       env: [
         clients: [
-          host: [platform: :host],
           cuda: [platform: :cuda],
           rocm: [platform: :rocm],
-          tpu: [platform: :tpu]
+          tpu: [platform: :tpu],
+          host: [platform: :host]
         ]
       ]
     ]

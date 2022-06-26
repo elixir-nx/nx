@@ -12,6 +12,32 @@ defmodule EXLA.Client do
   defstruct [:ref, :platform, :name, :device_count, :default_device_id]
 
   @doc """
+  Returns the name of the default client.
+  """
+  def default_name do
+    case Application.fetch_env(:exla, :default_client) do
+      {:ok, client} ->
+        client
+
+      :error ->
+        all_clients = Application.fetch_env!(:exla, :clients)
+        supported_platforms = get_supported_platforms()
+
+        {client, _config} =
+          Enum.find(all_clients, fn {_, config} ->
+            Map.has_key?(supported_platforms, config[:platform] || :host)
+          end) ||
+            raise(
+              "could not find default client for EXLA. " <>
+                "The configured EXLA clients are: #{inspect(all_clients)}"
+            )
+
+        Application.put_env(:exla, :default_client, client)
+        client
+    end
+  end
+
+  @doc """
   Fetches a client with the given `name` from configuration.
   """
   def fetch!(name) when is_atom(name) do

@@ -3,18 +3,23 @@
 ## Setup
 
 ```elixir
-Mix.install([
-  {:req, "~> 0.2.0"},
-  {:kino, "~> 0.5.1"},
-  {:exla, "~> 0.2"},
-  {:stb_image, "~> 0.5"}
-])
-
-# To use TPU/CUDA/ROCM, you must also set the XLA_TARGET env var
-EXLA.set_as_nx_default([:tpu, :cuda, :rocm, :host])
+Mix.install(
+  [
+    {:req, "~> 0.2.0"},
+    {:kino, "~> 0.5.1"},
+    {:exla, "~> 0.2"},
+    {:stb_image, "~> 0.5"}
+  ],
+  config: [
+    nx: [default_backend: EXLA.Backend]
+  ]
+)
 ```
 
 ## Preprocessing
+
+> Note: if you want to use TPUs/GPUs, you must set the XLA_TARGET environment variable.
+> See [`XLA_TARGET`](https://github.com/elixir-nx/xla#xla_target).
 
 Preprocessing a binary to the tensor representation and calculating shapes of the rotated image.
 
@@ -203,7 +208,8 @@ image = Preprocess.image_to_tensor(path_to_file)
 {height, width, _} = image.shape
 {new_height, new_width} = Preprocess.get_new_height_and_width(height, width, angle, radians?)
 new_image = Nx.broadcast(Nx.tensor([0], type: {:u, 8}), {new_height, new_width, num_channels})
-rotated_image = Rotate.rotate_image_by_angle(image, angle, new_image, radians?)
+rotate_image = EXLA.jit(&Rotate.rotate_image_by_angle/4)
+rotate_image.(image, angle, new_image, radians?)
 
 # convert the tensor back to stb_image and render it as png
 img = StbImage.from_nx(rotated_image)

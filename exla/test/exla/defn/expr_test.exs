@@ -10,7 +10,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   defp evaluate(fun, args) do
-    Nx.Defn.jit(fun, args, compiler: Nx.Defn.Evaluator)
+    fun |> Nx.Defn.jit(compiler: Nx.Defn.Evaluator) |> apply(args)
   end
 
   describe "tuples" do
@@ -3863,23 +3863,18 @@ defmodule EXLA.Defn.ExprTest do
                    "expected precision configuration to be one of" <>
                      " :default, :high, or :highest, got: :bad",
                    fn ->
-                     EXLA.jit(
-                       &precision/2,
-                       [
-                         Nx.tensor([1, 2, 3], type: {:bf, 16}),
-                         Nx.tensor([1, 2, 3], type: {:bf, 16})
-                       ],
-                       precision: :bad
+                     EXLA.jit(&precision/2, precision: :bad).(
+                       Nx.tensor([1, 2, 3], type: {:bf, 16}),
+                       Nx.tensor([1, 2, 3], type: {:bf, 16})
                      )
                    end
     end
 
     test "succeeds on good precision" do
       assert_equal(
-        EXLA.jit(
-          &precision/2,
-          [Nx.tensor([1, 2, 3], type: {:bf, 16}), Nx.tensor([1, 2, 3], type: {:bf, 16})],
-          precision: :high
+        EXLA.jit(&precision/2, precision: :high).(
+          Nx.tensor([1, 2, 3], type: {:bf, 16}),
+          Nx.tensor([1, 2, 3], type: {:bf, 16})
         ),
         Nx.tensor(14, type: {:bf, 16})
       )

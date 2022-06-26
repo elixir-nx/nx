@@ -9,7 +9,9 @@ defmodule EXLA.Defn do
   def __stream__(key, input, acc, vars, fun, [args], options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
 
-    {client_name, compile_options} = Keyword.pop(compile_options, :client, :host)
+    {client_name, compile_options} =
+      Keyword.pop_lazy(compile_options, :client, &EXLA.Client.default_name/0)
+
     client = EXLA.Client.fetch!(client_name)
 
     # The input vars should not be converted to buffers as they come from infeed
@@ -233,7 +235,10 @@ defmodule EXLA.Defn do
   @doc false
   def __jit__(key, vars, fun, [args], options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
-    {client_name, compile_options} = Keyword.pop(compile_options, :client, :host)
+
+    {client_name, compile_options} =
+      Keyword.pop_lazy(compile_options, :client, &EXLA.Client.default_name/0)
+
     client = EXLA.Client.fetch!(client_name)
     callback = &to_root_computation(key, &1, &2, &3, compile_options)
 

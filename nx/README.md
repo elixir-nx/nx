@@ -138,11 +138,11 @@ MyModule.softmax(Nx.tensor([1, 2, 3]))
 For example, [using the `EXLA` compiler](https://github.com/elixir-nx/nx/tree/main/exla), which provides bindings to Google's XLA:
 
 ```elixir
-Nx.Defn.default_options(compiler: EXLA)
-MyModule.softmax(some_tensor)
+will_jit = EXLA.jit(&MyModule.softmax/1)
+will_jit.(some_tensor)
 ```
 
-Once `softmax` is called, `Nx.Defn` will invoke `EXLA` to emit a just-in-time and high-specialized compiled version of the code, tailored to the input tensors type and shape. By passing `client: :cuda` or `client: :rocm`, the code can be compiled for the GPU. For reference, here are some benchmarks of the function above when called with a tensor of one million random float values:
+Once `softmax` is called, `EXLA` will emit a just-in-time and high-specialized compiled version of the code, tailored to the input tensors type and shape. By setting the `XLA_TARGET` environment variable to `cuda` or `rocm`, the code can be compiled for the GPU. For reference, here are some benchmarks of the function above when called with a tensor of one million random float values:
 
 ```
 Name                       ips        average  deviation         median         99th %

@@ -47,8 +47,6 @@ defmodule LinReg do
   end
 end
 
-EXLA.set_as_nx_default([:tpu, :cuda, :rocm, :host])
-
 params = LinReg.init_random_params()
 m = :rand.normal(0.0, 10.0)
 b = :rand.normal(0.0, 5.0)
@@ -58,4 +56,4 @@ lin_fn = fn x -> m * x + b end
 epochs = 100
 
 # These will be very close to the above coefficients
-IO.inspect(LinReg.train(params, epochs, lin_fn))
+IO.inspect(EXLA.jit(&LinReg.train/3).(params, epochs, lin_fn))

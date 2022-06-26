@@ -1,4 +1,4 @@
-defmodule EXLA.CLientTest do
+defmodule EXLA.ClientTest do
   use ExUnit.Case, async: true
 
   doctest EXLA.Client
