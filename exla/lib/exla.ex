@@ -51,7 +51,7 @@ defmodule EXLA do
 
   But compilation can be time consuming when first executing large numerical
   definitions. Therefore explicit compilation is often preferred by passing
-  the `:compiler` option to `Nx.Defn` or by using the convenient `EXLA.jit/3`
+  the `:compiler` option to `Nx.Defn.jit/2` or by using the convenient `EXLA.jit/2`
   shortcut:
 
       Nx.Defn.jit(&some_function/3, compiler: EXLA).(arg1, arg2, arg3)
