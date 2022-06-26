@@ -3873,7 +3873,8 @@ defmodule EXLA.Defn.ExprTest do
     test "succeeds on good precision" do
       assert_equal(
         EXLA.jit(&precision/2, precision: :high).(
-          Nx.tensor([1, 2, 3], type: {:bf, 16}), Nx.tensor([1, 2, 3], type: {:bf, 16})
+          Nx.tensor([1, 2, 3], type: {:bf, 16}),
+          Nx.tensor([1, 2, 3], type: {:bf, 16})
         ),
         Nx.tensor(14, type: {:bf, 16})
       )
