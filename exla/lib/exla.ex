@@ -6,53 +6,59 @@ defmodule EXLA do
 
   ## Configuration
 
-  ### In projects
+  ### As a backend
 
-  EXLA works both as a backend for `Nx` tensors and an optimized `Nx.Defn` compiler.
+  EXLA ships with a backend to store tensors and run computations on.
   Generally speaking, the backend is enabled globally in your `config/config.exs`
   (or `config/ENV.exs`) with the following:
 
       import Config
       config :nx, :default_backend, EXLA.Backend
 
-  Now you can use `Nx` as usual and it will use `EXLA` by default. You can also enable
-  the compiler by default:
+  In a script/notebook, you would do:
 
+      Mix.install(
+        [
+          {:exla, "~> 0.2"}
+        ],
+        config: [
+          nx: [default_backend: EXLA.Backend]
+        ]
+      )
+
+  From now on, all created tensors will be allocated directly on the given
+  `EXLA.Backend`. You can use functions such as `Nx.backend_transfer/3` to
+  explicitly transfer tensors.
+
+  EXLA will pick an available client to allocate and compute tensors, in this
+  order: `:cuda`, `:rocm`, `:tpu`, and `:host` (CPU). See the "Clients" section
+  below for more information.
+
+  To use GPUs/TPUs, you must also set the appropriate value for the
+  [`XLA_TARGET`](https://github.com/elixir-nx/xla#xla_target) environment
+  variable. If you have GPU/TPU enabled, we recommend setting the environment
+  variable for your machine altogether. For CUDA, setting
+  `ELIXIR_ERL_OPTIONS="+sssdio 128"` is also required on more complex operations
+  to increase CUDA's compiler stack size.
+
+  ### As a compiler
+
+  You can also use EXLA to compile your numerical definitions. One option is to
+  do so globally in your configuration:
+
+      import Config
       config :nx, :default_defn_options, [compiler: EXLA]
 
-  But explicit compilation is often preferred by passing the `:compiler` flag or
-  by using `EXLA.jit/3`:
+  But compilation can be time consuming for large numerical definitions. Therefore
+  an explicit compilation is often preferred by passing the `:compiler` flag to
+  `Nx.Defn` or using the convenient `EXLA.jit/3` shortcut:
 
       Nx.Defn.jit(&some_function, my_tensors, compiler: EXLA)
       EXLA.jit(&some_function, my_tensors)
 
-  The default client is chosen on this order: `:cuda`, `:rocm`, `:tpu`, and `:host`.
-  See the "Clients" section below for more information.
-
-  To use GPUs/TPUs, you must also set the appropriate value for the
-  [`XLA_TARGET`](https://github.com/elixir-nx/xla#xla_target) environment
-  variable. For CUDA, setting `ELIXIR_ERL_OPTIONS="+sssdio 128"` is also
-  required on more complex operations to increase CUDA's compiler stack size.
-
-  ### In scripts/notebooks
-
-  The simplest way to configure EXLA in notebooks is by calling:
-
-  ```elixir
-  EXLA.set_as_nx_default()
-  ```
-
-  Then EXLA will pick the first platform available for the current
-  notebook user. From then on, you can use `Nx` as usual and it will
-  use `EXLA` by default.
-
-  As in the project configuration above, you must also set the appropriate
-  value for the [`XLA_TARGET`](https://github.com/elixir-nx/xla#xla_target)
-  environment variable if you intend to use GPU/TPUs.
-
   ### Options
 
-  The options accepted by EXLA configuration are:
+  The options accepted by EXLA backend/compiler are:
 
     * `:client` - an atom representing the client to use. The default
       client is chosen on this order: `:cuda`, `:rocm`, `:tpu`, and `:host`.
@@ -116,34 +122,6 @@ defmodule EXLA do
   To increase the stack size of dirty IO threads from 40 kilowords to
   128 kilowords. In a release, you can set this flag in your `vm.args`.
 
-  ## Device allocation
-
-  EXLA ships with a `EXLA.Backend` that allows data to be explicitly
-  allocated on the EXLA device. You can create tensors with `EXLA.Backend`
-  directly:
-
-      Nx.tensor([1, 2, 3, 4], backend: EXLA.Backend)
-
-  or you can configure `EXLA.Backend` as the default backend, so that
-  all tensors are allocated on the EXLA device by default.
-
-  In some cases you may want to explicitly move an existing tensor to
-  the device:
-
-      tensor = Nx.tensor([1, 2, 3, 4], backend: Nx.BinaryBackend)
-      Nx.backend_transfer(tensor, EXLA.Backend)
-
-  Note that you can use regular `Nx` operations, so the following works:
-
-      tensor = Nx.tensor([1, 2, 3, 4], backend: EXLA.Backend)
-      Nx.sum(tensor)
-
-  Under the hood, EXLA will create a computation for the sum operation
-  and invoke it on the device. This is essentially an "eager mode"
-  that provides acceleration during prototyping. However, eventually
-  you should wrap your computations in a `defn` to utilize the full
-  performance of JIT.
-
   ## Docker considerations
 
   EXLA should run fine on Docker with one important consideration:
@@ -180,19 +158,8 @@ defmodule EXLA do
 
   @behaviour Nx.Defn.Compiler
 
-  @doc """
-  Sets EXLA as the default backend for Nx.
-
-  Note this function does not set EXLA as the default compiler. You
-  should pass `compiler: EXLA` to `Nx.Defn` functions instead.
-  """
-  def set_as_nx_default() do
-    Nx.global_default_backend({EXLA.Backend, []})
-    :ok
-  end
-
   @doc false
-  @deprecated "Use set_as_nx_default/0"
+  @deprecated "Configure the Nx backend directly"
   def set_as_nx_default(clients, opts \\ []) do
     supported_platforms = EXLA.Client.get_supported_platforms()
     all_clients = Application.fetch_env!(:exla, :clients)
@@ -212,7 +179,7 @@ defmodule EXLA do
   end
 
   @doc false
-  @deprecated "Use set_as_nx_default/2 instead"
+  @deprecated "Configure the Nx backend directly"
   def set_preferred_defn_options(clients, opts \\ []) do
     set_as_nx_default(clients, opts)
   end

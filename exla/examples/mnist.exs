@@ -144,7 +144,7 @@ defmodule MNIST do
   end
 end
 
-EXLA.set_as_nx_default()
+Nx.global_default_backend(EXLA.Backend)
 
 {train_images, train_labels} =
   MNIST.download('train-images-idx3-ubyte.gz', 'train-labels-idx1-ubyte.gz')
@@ -153,11 +153,11 @@ IO.puts("Initializing parameters...\n")
 params = MNIST.init_random_params()
 
 IO.puts("Training MNIST for 10 epochs...\n\n")
-final_params = MNIST.train(train_images, train_labels, params, epochs: 10)
+final_params = EXLA.jit(&MNIST.train/4, [train_images, train_labels, params, [epochs: 10]])
 
 IO.puts("Bring the parameters back from the device and print them")
 final_params = Nx.backend_transfer(final_params)
 IO.inspect(final_params)
 
 IO.puts("The result of the first batch against the trained network")
-IO.inspect(MNIST.predict(final_params, hd(train_images)))
+IO.inspect(EXLA.jit(&MNIST.predict/2, [final_params, hd(train_images)]))
