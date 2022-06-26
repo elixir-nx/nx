@@ -1651,8 +1651,14 @@ defmodule Nx do
     end
   end
 
+  @deprecated "Use to_batched/3 instead"
+  @doc type: :conversion
+  def to_batched_list(tensor, batch_size, opts \\ []) do
+    tensor |> to_batched(batch_size, opts) |> Enum.to_list()
+  end
+
   @doc """
-  Converts the underlying tensor to a list of tensors.
+  Converts the underlying tensor to a stream of tensor batches.
 
   The first dimension (axis 0) is divided by `batch_size`.
   In case the dimension cannot be evenly divided by
@@ -1664,7 +1670,12 @@ defmodule Nx do
 
   ## Examples
 
-      iex> [first, second] = Nx.to_batched_list(Nx.iota({2, 2, 2}), 1)
+  In the examples below we immediately pipe to `Enum.to_list/3`
+  for convenience, but in practice you want to lazily traverse
+  the batches to avoid allocating multiple tensors at once in
+  certain backends:
+
+      iex> [first, second] = Nx.to_batched(Nx.iota({2, 2, 2}), 1) |> Enum.to_list()
       iex> first
       #Nx.Tensor<
         s64[1][2][2]
@@ -1686,35 +1697,10 @@ defmodule Nx do
         ]
       >
 
-      iex> [first, second, third] = Nx.to_batched_list(Nx.iota({6, 2}, names: [:x, :y]), 2)
-      iex> first
-      #Nx.Tensor<
-        s64[x: 2][y: 2]
-        [
-          [0, 1],
-          [2, 3]
-        ]
-      >
-      iex> second
-      #Nx.Tensor<
-        s64[x: 2][y: 2]
-        [
-          [4, 5],
-          [6, 7]
-        ]
-      >
-      iex> third
-      #Nx.Tensor<
-        s64[x: 2][y: 2]
-        [
-          [8, 9],
-          [10, 11]
-        ]
-      >
+  If the batch size would result in uneven batches, you can repeat or discard excess data.
+  By default, we repeat:
 
-  If the batch size would result in uneven batches, you can repeat or discard excess data:
-
-      iex> [first, second, third] = Nx.to_batched_list(Nx.iota({5, 2}, names: [:x, :y]), 2)
+      iex> [first, second, third] = Nx.to_batched(Nx.iota({5, 2}, names: [:x, :y]), 2) |> Enum.to_list()
       iex> first
       #Nx.Tensor<
         s64[x: 2][y: 2]
@@ -1740,7 +1726,9 @@ defmodule Nx do
         ]
       >
 
-      iex> [first, second] = Nx.to_batched_list(Nx.iota({5, 2}, names: [:x, :y]), 2, leftover: :discard)
+  But you can also discard:
+
+      iex> [first, second] = Nx.to_batched(Nx.iota({5, 2}, names: [:x, :y]), 2, leftover: :discard) |> Enum.to_list()
       iex> first
       #Nx.Tensor<
         s64[x: 2][y: 2]
@@ -1759,7 +1747,7 @@ defmodule Nx do
       >
   """
   @doc type: :conversion
-  def to_batched_list(tensor, batch_size, opts \\ [])
+  def to_batched(tensor, batch_size, opts \\ [])
       when is_integer(batch_size) and batch_size >= 1 do
     opts = keyword!(opts, leftover: :repeat)
 
@@ -1773,7 +1761,8 @@ defmodule Nx do
       raise ArgumentError, "cannot batch beyond original tensor"
     end
 
-    impl!(tensor).to_batched_list(%{tensor | shape: put_elem(shape, 0, batch_size)}, tensor, opts)
+    new_shape = put_elem(shape, 0, batch_size)
+    impl!(tensor).to_batched(%{tensor | shape: new_shape}, tensor, opts)
   end
 
   @doc """

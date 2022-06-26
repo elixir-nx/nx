@@ -151,7 +151,7 @@ defmodule Torchx.Backend do
   ## Transfer
 
   @impl true
-  def to_batched_list(%T{shape: shape} = out, %T{} = t, opts) do
+  def to_batched(%T{shape: shape} = out, %T{} = t, opts) do
     leftover = opts[:leftover]
 
     batch_size = elem(shape, 0)
@@ -185,10 +185,10 @@ defmodule Torchx.Backend do
     # We need to drop the last chunk in this case
     case Torchx.split(to_batch, batch_size) do
       batches when remainder != 0 ->
-        batches |> Enum.take(num_batches) |> Enum.map(&to_nx(&1, out))
+        batches |> Enum.take(num_batches) |> Stream.map(&to_nx(&1, out))
 
       batches ->
-        Enum.map(batches, &to_nx(&1, out))
+        Stream.map(batches, &to_nx(&1, out))
     end
   end
 

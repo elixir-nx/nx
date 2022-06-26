@@ -60,7 +60,7 @@ defmodule Nx.Defn.Compiler do
 
   # These operations do not have valid meaning for Nx.Defn.Expr
   @forbidden_ops [:backend_copy, :backend_deallocate, :backend_transfer] ++
-                   [:to_binary, :to_number, :to_flat_list, :to_heatmap, :to_batched_list] ++
+                   [:to_binary, :to_number, :to_flat_list, :to_heatmap, :to_batched] ++
                    [:from_numpy, :from_numpy_archive, :compatible?, :default_backend] ++
                    [:serialize, :deserialize]
 
