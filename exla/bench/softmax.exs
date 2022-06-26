@@ -23,7 +23,7 @@ benches =
     dt32 = Nx.backend_transfer(t32, {EXLA.Backend, client: :cuda})
     dt64 = Nx.backend_transfer(t64, {EXLA.Backend, client: :cuda})
 
-    cude_jit = EXLA.jit(&Softmax.softmax/1, client: :cuda)
+    cuda_jit = EXLA.jit(&Softmax.softmax/1, client: :cuda)
 
     Map.merge(benches, %{
       "xla jit-gpu f32" => {fn -> cuda_jit(dt32) end, after_each: &Nx.backend_deallocate/1},
