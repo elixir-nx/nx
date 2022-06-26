@@ -289,5 +289,5 @@ defmodule EXLA.Backend do
     end
   end
 
-  defp jit(fun, args), do: fun |> EXLA.jit(force: true) |> apply(args)
+  defp jit(fun, args), do: EXLA.jit_apply(fun, args, on_conflict: :force)
 end

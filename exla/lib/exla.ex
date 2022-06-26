@@ -201,6 +201,21 @@ defmodule EXLA do
   end
 
   @doc """
+  A shortcut for `Nx.Defn.jit_apply/3` with the EXLA compiler.
+
+      iex> EXLA.jit_apply(&Nx.add(&1, &1), [Nx.tensor([1, 2, 3])])
+      #Nx.Tensor<
+        s64[3]
+        [2, 4, 6]
+      >
+
+  See the moduledoc for options.
+  """
+  def jit_apply(function, args, options \\ []) do
+    Nx.Defn.jit_apply(function, args, Keyword.put(options, :compiler, EXLA))
+  end
+
+  @doc """
   Starts streaming the given anonymous function with just-in-time
   compilation.
 

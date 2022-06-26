@@ -1363,14 +1363,18 @@ defmodule Nx.DefnTest do
       assert Nx.Defn.jit(&defn_jit(&1, 3)).({4, 5}) == Nx.tensor(6)
     end
 
-    defn defn_jit_or_apply(ab, c), do: Nx.Defn.jit_or_apply(&defn_jit/2, [ab, c])
+    defn defn_jit_or_apply(ab, c),
+      do: Nx.Defn.jit_apply(&defn_jit/2, [ab, c], on_conflict: :reuse)
 
     test "jits or applies" do
       assert %T{data: %Expr{op: :subtract}} =
-               Nx.Defn.jit_or_apply(&defn_jit_or_apply/2, [{1, 2}, 3], compiler: Identity)
+               Nx.Defn.jit_apply(&defn_jit_or_apply/2, [{1, 2}, 3],
+                 compiler: Identity,
+                 on_conflict: :reuse
+               )
 
       Nx.Defn.default_options(compiler: Evaluator)
-      assert Nx.Defn.jit_or_apply(&defn_jit/2, [{4, 5}, 3]) == Nx.tensor(6)
+      assert Nx.Defn.jit_apply(&defn_jit/2, [{4, 5}, 3], on_conflict: :reuse) == Nx.tensor(6)
       assert defn_jit_or_apply({4, 5}, 3) == Nx.tensor(6)
     end
 
@@ -1425,7 +1429,7 @@ defmodule Nx.DefnTest do
                    "cannot invoke JITed function when there is already a JIT compilation happening",
                    fn -> nested_jit() end
 
-      assert nested_jit(force: true) == Nx.tensor(11 * 11)
+      assert nested_jit(on_conflict: :force) == Nx.tensor(11 * 11)
     end
   end
 

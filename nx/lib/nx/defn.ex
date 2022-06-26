@@ -259,58 +259,87 @@ defmodule Nx.Defn do
   end
 
   @doc """
-  Invokes the anonymous function with just-in-time compilation.
+  Wraps an anonymous function with just-in-time compilation.
 
-  The anonymous function will be invoked with tensor expressions
-  which are JIT compiled and then invoked. For example, take the
-  following definition:
+  Once invoked, the wrapped anonymous function with perform just
+  in time compilation with the configured compiler. For example,
+  take the following definition:
 
       defn softmax(t), do: Nx.exp(t) / Nx.sum(Nx.exp(t))
 
+  You can jit and then apply it as:
+
+      fun = Nx.Defn.jit(&softmax/1)
+      fun.(Nx.tensor([1, 2, 3]))
+
   ## Options
+
+    * `:compiler` - the compiler for the JIT compilation
 
     * `:hooks` - a map of hooks to execute. See `Nx.Defn.Kernel.hook/3`
 
-    * `:force` - force JIT compilation to happen, even if a JIT compilation
-      is already in place
+    * `:on_conflict` - what to do if a JIT compilation is already in place.
+      It may be `:raise` (the default), `:force` (forces a new JIT compilation),
+      or `:reuse` (reuses the exiting JIT compilation). It is not recommended
+      to set the `:compiler` option when reusing.
 
   """
   def jit(fun, opts \\ []) when is_function(fun) and is_list(opts) do
     if Keyword.keyword?(opts) do
-      wrap(fun, &jit_now(fun, &1, opts))
+      wrap(fun, &jit_apply(fun, &1, opts))
     else
       IO.warn("jit/3 is deprecated, use jit/2 instead")
-      jit_now(fun, opts, [])
+      jit_apply(fun, opts, [])
     end
   end
 
   @deprecated "Use jit/2 instead"
   def jit(fun, args, opts) when is_function(fun) and is_list(args) and is_list(opts) do
-    jit_now(fun, args, opts)
+    jit_apply(fun, args, opts)
   end
 
-  defp jit_now(fun, args, opts) do
-    if Nx.Defn.Compiler.current() && opts[:force] != true do
-      raise "cannot invoke JITed function when there is already a JIT compilation happening"
-    end
+  @doc """
+  Invokes the anonymous function with just-in-time compilation.
 
+  This function is equivalent to calling `jit/2` and then applying
+  the given arguments to the anonymous function.
+
+  For example, take the following definition:
+
+      defn softmax(t), do: Nx.exp(t) / Nx.sum(Nx.exp(t))
+
+  You can `jit_apply/3` it as:
+
+      Nx.Defn.jit_apply(&softmax/1, [Nx.tensor([1, 2, 3])])
+
+  It accepts the same options as `jit/2`.
+  """
+  def jit_apply(fun, args, opts \\ [])
+      when is_function(fun) and is_list(args) and is_list(opts) do
+    {on_conflict, opts} = Keyword.pop(opts, :on_conflict, :raise)
+
+    cond do
+      Nx.Defn.Compiler.current() == nil ->
+        do_jit_apply(fun, args, opts)
+
+      on_conflict == :raise ->
+        raise "cannot invoke JITed function when there is already a JIT compilation happening"
+
+      on_conflict == :force ->
+        do_jit_apply(fun, args, opts)
+
+      on_conflict == :reuse ->
+        apply(fun, args)
+    end
+  end
+
+  defp do_jit_apply(fun, args, opts) do
     opts = prepare_options(opts)
     [res] = Nx.Defn.Compiler.__jit__(fun, [args], opts)
     res
   end
 
-  @doc """
-  JITs the given function if outside of `defn`, otherwise invokes it.
-
-  It is not possible to invoke `jit/3` inside `defn`, as all code inside
-  `defn` is already jitted. However, some libraries may want to provide
-  abstractions that can be invoked either inside `defn` or outside.
-  In such cases, `jit_or_apply/3` can be used to start jitting
-  if it has been invoked outside of a numerical definition.
-
-  The `opts` are the same as the ones given to `jit/3` and they are only
-  used if invoking this function outside of `defn`.
-  """
+  @deprecated "Use jit/2 or jit_apply/3 with the :on_conflict option"
   def jit_or_apply(fun, args, opts \\ [])
       when is_function(fun) and is_list(args) and is_list(opts) do
     if Nx.Defn.Compiler.current() do
@@ -456,12 +485,13 @@ defmodule Nx.Defn do
   tensors.
   """
   def grad(var_or_vars, fun) when is_function(fun, 1) do
-    jit_or_apply(
+    jit_apply(
       fn var_or_vars ->
         {_value, grad} = Nx.Defn.Grad.transform(var_or_vars, fun, & &1)
         grad
       end,
-      [var_or_vars]
+      [var_or_vars],
+      on_conflict: :reuse
     )
   end
 
@@ -530,9 +560,10 @@ defmodule Nx.Defn do
   """
   def value_and_grad(var_or_vars, fun, transform \\ & &1)
       when Kernel.and(is_function(fun, 1), is_function(transform, 1)) do
-    jit_or_apply(
+    jit_apply(
       fn var_or_vars -> Nx.Defn.Grad.transform(var_or_vars, fun, transform) end,
-      [var_or_vars]
+      [var_or_vars],
+      on_conflict: :reuse
     )
   end
 
