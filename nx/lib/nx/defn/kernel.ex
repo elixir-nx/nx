@@ -442,6 +442,22 @@ defmodule Nx.Defn.Kernel do
   def left / right, do: Nx.divide(left, right)
 
   @doc """
+  Element-wise quotient operator.
+
+  It delegates to `Nx.quotient/2` (supports broadcasting).
+
+  ## Examples
+
+     defn quotient(a, b) do
+       div(a, b)
+     end
+  """
+  def div(left, right) when Kernel.and(is_number(left), is_number(right)),
+    do: Kernel.div(left, right)
+
+  def div(left, right), do: Nx.quotient(left, right)
+
+  @doc """
   Element-wise remainder operation.
 
   It delegates to `Nx.remainder/2` (supports broadcasting).
