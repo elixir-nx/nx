@@ -238,6 +238,9 @@ defmodule Torchx.Backend do
   ## Shape
 
   @impl true
+  def flatten(out, %T{} = t), do: t |> from_nx() |> Torchx.flatten() |> to_nx(out)
+
+  @impl true
   def reshape(%T{shape: shape} = out, %T{} = t),
     do: Torchx.reshape(from_nx(t), shape) |> to_nx(out)
 

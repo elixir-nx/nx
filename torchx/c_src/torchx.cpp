@@ -354,6 +354,12 @@ NIF(split)
   TENSOR_LIST(torch::split(*t, batch_size));
 }
 
+NIF(flatten)
+{
+  TENSOR_PARAM(0, t);
+
+  TENSOR(torch::flatten(*t));
+}
 
 NIF(reshape)
 {
@@ -1116,6 +1122,7 @@ static ErlNifFunc nif_functions[] = {
     DF(to_blob, 1),
     DF(to_blob, 2),
     DF(delete_tensor, 1),
+    DF(flatten, 1),
     DF(reshape, 2),
     DF(split, 2),
     DF(to_type, 2),
