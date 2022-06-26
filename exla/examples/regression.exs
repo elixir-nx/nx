@@ -56,4 +56,4 @@ lin_fn = fn x -> m * x + b end
 epochs = 100
 
 # These will be very close to the above coefficients
-IO.inspect(EXLA.jit(&LinReg.train/3, [params, epochs, lin_fn])
+IO.inspect(EXLA.jit(&LinReg.train/3, [params, epochs, lin_fn]))
