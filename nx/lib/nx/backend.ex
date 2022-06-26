@@ -137,6 +137,7 @@ defmodule Nx.Backend do
   @callback solve(out :: tensor, a :: tensor, b :: tensor) :: tensor
   @callback determinant(out :: tensor, t :: tensor) :: tensor
   @callback logical_not(out :: tensor, t :: tensor) :: tensor
+  @callback phase(out :: tensor, t :: tensor) :: tensor
 
   @callback cumulative_sum(out :: tensor, t :: tensor, axis) :: tensor
   @callback cumulative_product(out :: tensor, t :: tensor, axis) :: tensor
@@ -148,6 +149,7 @@ defmodule Nx.Backend do
     solve: 3,
     determinant: 2,
     logical_not: 2,
+    phase: 2,
     cumulative_sum: 3,
     cumulative_product: 3,
     cumulative_min: 3,
