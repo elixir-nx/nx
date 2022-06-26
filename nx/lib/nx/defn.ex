@@ -79,8 +79,12 @@ defmodule Nx.Defn do
       config :nx, :default_defn_options, compiler: EXLA
 
   Now calling `MyModule.softmax(my_tensor)` will use `EXLA` even
-  without wrapping it in `jit/3`. For scripts, you may also call
-  `Nx.Defn.global_default_options(compiler: EXLA)`.
+  without wrapping it in `jit/3`.
+
+  However, note that compilation may be quite time consuming on
+  the first invocation, that's why it is often preferred to use
+  the `compiler: EXLA` option when calling the functions in this
+  module instead.
 
   `defn` functions are compiled when they are invoked, based on
   the type and shapes of the tensors given as arguments. The

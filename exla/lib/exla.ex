@@ -49,9 +49,10 @@ defmodule EXLA do
       import Config
       config :nx, :default_defn_options, [compiler: EXLA]
 
-  But compilation can be time consuming for large numerical definitions. Therefore
-  an explicit compilation is often preferred by passing the `:compiler` flag to
-  `Nx.Defn` or using the convenient `EXLA.jit/3` shortcut:
+  But compilation can be time consuming when first executing large numerical
+  definitions. Therefore explicit compilation is often preferred by passing
+  the `:compiler` option to `Nx.Defn` or by using the convenient `EXLA.jit/3`
+  shortcut:
 
       Nx.Defn.jit(&some_function, my_tensors, compiler: EXLA)
       EXLA.jit(&some_function, my_tensors)
