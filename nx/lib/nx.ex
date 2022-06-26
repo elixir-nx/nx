@@ -2160,7 +2160,17 @@ defmodule Nx do
   """
   @doc type: :shape
   def flatten(tensor) do
-    reshape(tensor, {size(tensor)})
+    tensor = to_tensor(tensor)
+    shape = {size(tensor)}
+
+    output =
+      tensor
+      |> Map.put(:shape, shape)
+      |> Map.put(:names, [nil])
+
+    Nx.Shared.optional(:flatten, [tensor], output, fn tensor ->
+      reshape(tensor, shape)
+    end)
   end
 
   @doc """
