@@ -7395,7 +7395,9 @@ defmodule Nx do
     tensor = to_tensor(tensor)
     axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names)
 
-    Nx.Shared.optional(op, [tensor, axis], tensor, fn tensor, axis ->
+    Nx.Shared.optional(op, [tensor, [axis: axis, reverse: reverse]], tensor, fn tensor,
+                                                                              axis: axis,
+                                                                              reverse: reverse ->
       shape = shape(tensor)
       axis_size = elem(shape, axis)
       rank = rank(shape)
