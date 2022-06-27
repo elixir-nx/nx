@@ -216,6 +216,22 @@ defmodule EXLA do
   end
 
   @doc """
+  A shortcut for `Nx.Defn.compile/3` with the EXLA compiler.
+
+      iex> fun = EXLA.compile(&Nx.add(&1, &1), [Nx.template({3}, {:s, 64})])
+      iex> fun.(Nx.tensor([1, 2, 3]))
+      #Nx.Tensor<
+        s64[3]
+        [2, 4, 6]
+      >
+
+  See the moduledoc for options.
+  """
+  def compile(function, args, options \\ []) do
+    Nx.Defn.compile(function, args, Keyword.put(options, :compiler, EXLA))
+  end
+
+  @doc """
   Starts streaming the given anonymous function with just-in-time
   compilation.
 
@@ -337,6 +353,9 @@ defmodule EXLA do
 
     {expr_cache_fun, comp_cache_fun}
   end
+
+  @impl true
+  defdelegate __compile__(vars, fun, opts), to: EXLA.Defn
 
   @impl true
   defdelegate __jit__(key, vars, fun, args, opts), to: EXLA.Defn

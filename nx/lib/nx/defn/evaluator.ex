@@ -30,14 +30,22 @@ defmodule Nx.Defn.Evaluator do
   end
 
   @impl true
-  def __jit__(_key, vars, fun, [params], opts) do
-    hooks = Keyword.get(opts, :hooks, %{})
+  def __jit__(_key, vars, fun, args_list, opts) do
+    __compile__(vars, fun, opts).(args_list)
+  end
 
-    [
-      fun.(vars)
-      |> composite_eval(%{params: params, hooks: hooks}, %{})
-      |> elem(0)
-    ]
+  @impl true
+  def __compile__(vars, fun, opts) do
+    hooks = Keyword.get(opts, :hooks, %{})
+    expr = fun.(vars)
+
+    fn [params] ->
+      [
+        expr
+        |> composite_eval(%{params: params, hooks: hooks}, %{})
+        |> elem(0)
+      ]
+    end
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: :parameter, args: [i]}}, state, cache) do

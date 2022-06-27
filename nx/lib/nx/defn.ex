@@ -259,6 +259,73 @@ defmodule Nx.Defn do
   end
 
   @doc """
+  Compiles the given anonymous function with the given tensor shapes.
+
+  While `jit/2` compiles a function just-in time based on the
+  input shapes, this function precompiles the given anonymous
+  function based on the input shapes. This can be beneficial for
+  large numerical definitions, where the cache mechanism in `jit/2`
+  may take miliseconds.
+
+  For example, take the following definition:
+
+      defn softmax(t), do: Nx.exp(t) / Nx.sum(Nx.exp(t))
+
+  You can jit and then apply it as:
+
+      fun = Nx.Defn.compile(&softmax/1, [Nx.template({3}, {:s, 64})], compiler: EXLA)
+      fun.(Nx.tensor([1, 2, 3]))
+
+  If the input tensors do not match the shape of the tensors
+  given on compilation, it will raise.
+
+  ## Options
+
+    * `:compiler` - the compiler for the JIT compilation
+
+    * `:hooks` - a map of hooks to execute. See `Nx.Defn.Kernel.hook/3`
+
+  """
+  def compile(fun, template_args, opts \\ [])
+      when is_function(fun) and is_list(template_args) and is_list(opts) do
+    template_args = Enum.map(template_args, &Nx.to_template/1)
+    opts = prepare_options(opts)
+    compiled_fun = Nx.Defn.Compiler.__compile__(fun, template_args, opts)
+
+    wrap(fun, fn args ->
+      if Nx.Defn.Compiler.current() do
+        raise "cannot invoke compiled function when there is a JIT compilation happening"
+      end
+
+      assert_compatible!(args, template_args, 1)
+      flatten = Nx.Defn.Composite.flatten_runtime_args(args, [])
+      [res] = compiled_fun.([flatten])
+      res
+    end)
+  end
+
+  defp assert_compatible!([arg | args], [template | templates], pos) do
+    if Nx.compatible?(arg, template) do
+      assert_compatible!(args, templates, pos + 1)
+    else
+      raise ArgumentError, """
+      argument at position #{pos} is not compatible with compiled function template.
+
+      Template:
+
+      #{inspect(template)}
+
+      Argument:
+
+      #{inspect(arg)}
+
+      """
+    end
+  end
+
+  defp assert_compatible!([], [], _pos), do: :ok
+
+  @doc """
   Wraps an anonymous function with just-in-time compilation.
 
   Once invoked, the wrapped anonymous function with perform just
@@ -269,7 +336,7 @@ defmodule Nx.Defn do
 
   You can jit and then apply it as:
 
-      fun = Nx.Defn.jit(&softmax/1)
+      fun = Nx.Defn.jit(&softmax/1, compiler: EXLA)
       fun.(Nx.tensor([1, 2, 3]))
 
   ## Options
@@ -310,7 +377,7 @@ defmodule Nx.Defn do
 
   You can `jit_apply/3` it as:
 
-      Nx.Defn.jit_apply(&softmax/1, [Nx.tensor([1, 2, 3])])
+      Nx.Defn.jit_apply(&softmax/1, [Nx.tensor([1, 2, 3])], compiler: EXLA)
 
   It accepts the same options as `jit/2`.
   """
@@ -323,7 +390,7 @@ defmodule Nx.Defn do
         do_jit_apply(fun, args, opts)
 
       on_conflict == :raise ->
-        raise "cannot invoke JITed function when there is already a JIT compilation happening"
+        raise "cannot invoke JITed function when there is a JIT compilation happening"
 
       on_conflict == :force ->
         do_jit_apply(fun, args, opts)
@@ -335,7 +402,8 @@ defmodule Nx.Defn do
 
   defp do_jit_apply(fun, args, opts) do
     opts = prepare_options(opts)
-    [res] = Nx.Defn.Compiler.__jit__(fun, [args], opts)
+    flatten = Nx.Defn.Composite.flatten_runtime_args(args, [])
+    [res] = Nx.Defn.Compiler.__jit__(fun, args, [flatten], opts)
     res
   end
 
@@ -406,14 +474,18 @@ defmodule Nx.Defn do
   def stream(fun, args, opts \\ [])
       when is_function(fun) and is_list(args) and is_list(opts) do
     if Nx.Defn.Compiler.current() do
-      raise "cannot call Nx.Defn.stream/3 when there is already a JIT compilation happening"
+      raise "cannot call Nx.Defn.stream/3 when there is a JIT compilation happening"
     end
 
     case args do
-      [input, acc | args] ->
+      [input, acc | _] ->
         acc = Nx.Defn.Composite.traverse(acc, &Nx.to_tensor/1)
         opts = prepare_options(opts)
-        [stream] = Nx.Defn.Compiler.__stream__(fun, Nx.to_template(input), acc, args, opts)
+        flatten = Nx.Defn.Composite.flatten_runtime_args(args, [])
+
+        [stream] =
+          Nx.Defn.Compiler.__stream__(fun, Nx.to_template(input), acc, args, [flatten], opts)
+
         stream
 
       _ ->

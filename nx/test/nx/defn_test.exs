@@ -1426,10 +1426,48 @@ defmodule Nx.DefnTest do
     @tag compiler: Evaluator
     test "raises on nested JIT unless forcing" do
       assert_raise RuntimeError,
-                   "cannot invoke JITed function when there is already a JIT compilation happening",
+                   "cannot invoke JITed function when there is a JIT compilation happening",
                    fn -> nested_jit() end
 
       assert nested_jit(on_conflict: :force) == Nx.tensor(11 * 11)
+    end
+  end
+
+  describe "compile" do
+    defn defn_compile({a, b}, c), do: a + b - c
+
+    @tag compiler: Evaluator
+    test "compiles defn function" do
+      fun = Nx.Defn.compile(&defn_compile/2, [{4, 5}, 3])
+      assert fun.({4, 5}, 3) == Nx.tensor(6)
+      assert fun.({40, 50}, 30) == Nx.tensor(60)
+
+      fun = Nx.Defn.compile(&defn_compile(&1, 3), [{4, 5}])
+      assert fun.({4, 5}) == Nx.tensor(6)
+      assert fun.({40, 50}) == Nx.tensor(87)
+    end
+
+    @tag compiler: Evaluator
+    test "raises on incompatible shape" do
+      fun = Nx.Defn.compile(&defn_compile/2, [{4, 5}, 3])
+
+      assert_raise ArgumentError,
+                   ~r"argument at position 1 is not compatible with compiled function template",
+                   fn -> fun.(3, {4, 5}) end
+    end
+
+    defn nested_compile(opts \\ []) do
+      transform(opts, fn opts ->
+        eleven = Nx.tensor(11, backend: Nx.BinaryBackend)
+        Nx.Defn.compile(&*/2, [eleven, eleven], opts).(eleven, eleven)
+      end)
+    end
+
+    @tag compiler: Evaluator
+    test "raises when nested on JIT" do
+      assert_raise RuntimeError,
+                   "cannot invoke compiled function when there is a JIT compilation happening",
+                   fn -> nested_compile() end
     end
   end
 

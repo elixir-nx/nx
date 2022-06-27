@@ -4,7 +4,7 @@ defmodule Nx.Defn.Compiler do
   """
 
   @doc """
-  Callback for JIT compilation.
+  Callback for compilation.
 
   It receives an opaque `key` used for caching, the function
   `vars`, the function `fun` which builds a defn expression,
@@ -32,6 +32,25 @@ defmodule Nx.Defn.Compiler do
               args_list :: [[Nx.t()]],
               opts :: keyword
             ) :: [Nx.Container.t()]
+
+  @doc """
+  Callback for compilation.
+
+  It receives the function `vars`, the function `fun` which builds
+  a defn expression, and the compiler options. It must call `fun`
+  with the `vars` as arguments.
+
+  It returns a function that receives a list of arguments and
+  returns a list of results.
+
+  The callback uses double underscores so it can be defined
+  at root modules without affecting the module's main API.
+  """
+  @callback __compile__(
+              vars :: [Nx.Container.t()],
+              fun :: ([Nx.Container.t()] -> Nx.Container.t()),
+              opts :: keyword
+            ) :: ([[Nx.t()]] -> [Nx.Container.t()])
 
   @doc """
   Callback for streaming (on top of JIT compilation).
@@ -84,23 +103,28 @@ defmodule Nx.Defn.Compiler do
   ## JIT/Stream
 
   @doc false
-  def __jit__(fun, args_list, opts) do
-    {compiler, tail} = runtime(fun, args_list, opts)
-    Kernel.apply(compiler, :__jit__, [fun | tail])
+  def __compile__(fun, template, opts) do
+    {compiler, inputs, runtime_fun, opts} = prepare_options(fun, template, opts)
+    compiler.__compile__(inputs, runtime_fun, opts)
   end
 
   @doc false
-  def __stream__(fun, input, acc, args, opts) do
-    {compiler, tail} = runtime(fun, [[input, acc | args]], opts)
-    Kernel.apply(compiler, :__stream__, [fun, input, acc | tail])
+  def __jit__(fun, template, args_list, opts) do
+    {compiler, inputs, runtime_fun, opts} = prepare_options(fun, template, opts)
+    Kernel.apply(compiler, :__jit__, [fun, inputs, runtime_fun, args_list, opts])
   end
 
-  defp runtime(fun, [input_template | _] = args_list, opts) do
+  @doc false
+  def __stream__(fun, input, acc, template, args_list, opts) do
+    {compiler, inputs, runtime_fun, opts} = prepare_options(fun, template, opts)
+    Kernel.apply(compiler, :__stream__, [fun, input, acc, inputs, runtime_fun, args_list, opts])
+  end
+
+  defp prepare_options(fun, template, opts) do
     {compiler, opts} = Keyword.pop(opts, :compiler, Nx.Defn.Evaluator)
-    input_template = Nx.Defn.Composite.to_inputs(input_template)
+    inputs = Nx.Defn.Composite.to_inputs(template)
     runtime_fun = &runtime_fun(&1, fun, compiler)
-    args_list = Enum.map(args_list, &Nx.Defn.Composite.flatten_runtime_args(&1, []))
-    {compiler, [input_template, runtime_fun, args_list, opts]}
+    {compiler, inputs, runtime_fun, opts}
   end
 
   defp runtime_fun(args, fun, compiler) do
