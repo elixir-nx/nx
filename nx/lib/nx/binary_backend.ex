@@ -196,6 +196,7 @@ defmodule Nx.BinaryBackend do
         before = num_full_batches * batch_bytes
         available = byte_size(binary) - before
         missing = batch_bytes - available
+
         from_binary(out, [binary_part(binary, before, available), binary_part(binary, 0, missing)])
 
       i ->
