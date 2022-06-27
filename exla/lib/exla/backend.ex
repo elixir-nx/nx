@@ -66,7 +66,7 @@ defmodule EXLA.Backend do
   end
 
   @impl true
-  def to_batched_list(out, tensor, opts) do
+  def to_batched(out, tensor, opts) do
     leftover = opts[:leftover]
 
     batch_size = elem(out.shape, 0)
@@ -75,29 +75,32 @@ defmodule EXLA.Backend do
     remainder = rem(axis_size, batch_size)
     num_full_batches = div(axis_size, batch_size)
 
-    expr_fun = fn tensor, start_idx ->
-      Nx.slice_along_axis(tensor, start_idx, batch_size)
-    end
+    range =
+      if remainder != 0 and leftover == :repeat do
+        0..num_full_batches
+      else
+        0..(num_full_batches - 1)
+      end
 
-    full_batches =
-      for i <- 0..(num_full_batches - 1) do
+    Stream.map(range, fn
+      ^num_full_batches ->
+        expr_fun = fn tensor ->
+          Nx.concatenate([
+            Nx.slice_along_axis(tensor, num_full_batches * batch_size, remainder),
+            Nx.slice_along_axis(tensor, 0, batch_size - remainder)
+          ])
+        end
+
+        jit(expr_fun, [tensor])
+
+      i ->
+        expr_fun = fn tensor, start_idx ->
+          Nx.slice_along_axis(tensor, start_idx, batch_size)
+        end
+
         start_idx = i * batch_size
         jit(expr_fun, [tensor, start_idx])
-      end
-
-    if remainder != 0 and leftover == :repeat do
-      expr_fun = fn tensor ->
-        Nx.concatenate([
-          Nx.slice_along_axis(tensor, num_full_batches * batch_size, remainder),
-          Nx.slice_along_axis(tensor, 0, batch_size - remainder)
-        ])
-      end
-
-      last_batch = jit(expr_fun, [tensor])
-      full_batches ++ [last_batch]
-    else
-      full_batches
-    end
+    end)
   end
 
   @impl true

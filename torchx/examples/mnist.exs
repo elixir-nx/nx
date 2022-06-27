@@ -90,7 +90,7 @@ defmodule MNIST do
       |> Nx.from_binary({:u, 8})
       |> Nx.reshape({n_images, n_rows * n_cols}, names: [:batch, :input])
       |> Nx.divide(255)
-      |> Nx.to_batched_list(30)
+      |> Nx.to_batched(30)
 
     IO.puts("#{n_images} #{n_rows}x#{n_cols} images\n")
 
@@ -102,7 +102,7 @@ defmodule MNIST do
       |> Nx.reshape({n_labels, 1}, names: [:batch, :output])
       |> Nx.equal(Nx.tensor(Enum.to_list(0..9)))
       |> Nx.as_type({:s, 8})
-      |> Nx.to_batched_list(30)
+      |> Nx.to_batched(30)
 
     IO.puts("#{n_labels} labels\n")
 
@@ -113,7 +113,7 @@ defmodule MNIST do
     total_batches = Enum.count(imgs)
 
     imgs
-    |> Enum.zip(labels)
+    |> Stream.zip(labels)
     |> Enum.reduce({cur_params, Nx.tensor(0.0), Nx.tensor(0.0)}, fn
       {imgs, tar}, {cur_params, avg_loss, avg_accuracy} ->
         update_with_averages(cur_params, imgs, tar, avg_loss, avg_accuracy, total_batches)

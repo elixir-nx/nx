@@ -840,7 +840,7 @@ defmodule Nx.Defn.Expr do
     backend_deallocate: 1,
     backend_transfer: 3,
     to_binary: 2,
-    to_batched_list: 3
+    to_batched: 3
   ]
 
   for {op, arity} <- ops do

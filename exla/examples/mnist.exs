@@ -88,7 +88,7 @@ defmodule MNIST do
       |> Nx.from_binary({:u, 8})
       |> Nx.reshape({n_images, n_rows * n_cols}, names: [:batch, :input])
       |> Nx.divide(255)
-      |> Nx.to_batched_list(30)
+      |> Nx.to_batched(30)
 
     IO.puts("#{n_images} #{n_rows}x#{n_cols} images\n")
 
@@ -99,31 +99,31 @@ defmodule MNIST do
       |> Nx.from_binary({:u, 8})
       |> Nx.reshape({n_labels, 1}, names: [:batch, :output])
       |> Nx.equal(Nx.tensor(Enum.to_list(0..9)))
-      |> Nx.to_batched_list(30)
+      |> Nx.to_batched(30)
 
     IO.puts("#{n_labels} labels\n")
 
     {train_images, train_labels}
   end
 
-  def train_epoch(cur_params, imgs, labels) do
+  def train_epoch(fun, cur_params, imgs, labels) do
     total_batches = Enum.count(imgs)
 
     imgs
-    |> Enum.zip(labels)
+    |> Stream.zip(labels)
     |> Enum.reduce({cur_params, Nx.tensor(0.0), Nx.tensor(0.0)}, fn
       {imgs, tar}, {cur_params, avg_loss, avg_accuracy} ->
-        update_with_averages(cur_params, imgs, tar, avg_loss, avg_accuracy, total_batches)
+        fun.(cur_params, imgs, tar, avg_loss, avg_accuracy, total_batches)
     end)
   end
 
-  def train(imgs, labels, params, opts \\ []) do
+  def train(fun, imgs, labels, params, opts \\ []) do
     epochs = opts[:epochs] || 5
 
     for epoch <- 1..epochs, reduce: params do
       cur_params ->
         {time, {new_params, epoch_avg_loss, epoch_avg_acc}} =
-          :timer.tc(__MODULE__, :train_epoch, [cur_params, imgs, labels])
+          :timer.tc(__MODULE__, :train_epoch, [fun, cur_params, imgs, labels])
 
         epoch_avg_loss =
           epoch_avg_loss
@@ -152,8 +152,11 @@ Nx.global_default_backend(EXLA.Backend)
 IO.puts("Initializing parameters...\n")
 params = MNIST.init_random_params()
 
+IO.puts("Wrap the training function in JIT")
+fun = EXLA.jit(&update_with_averages/6)
+
 IO.puts("Training MNIST for 10 epochs...\n\n")
-final_params = EXLA.jit(&MNIST.train/4).(train_images, train_labels, params, epochs: 10)
+final_params = MNIST.train(fun, train_images, train_labels, params, epochs: 10)
 
 IO.puts("Bring the parameters back from the device and print them")
 final_params = Nx.backend_transfer(final_params)

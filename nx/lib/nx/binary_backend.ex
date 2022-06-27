@@ -172,32 +172,36 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def to_batched_list(out, %{type: {_, size}} = tensor, opts) do
+  def to_batched(out, %{type: {_, size}} = tensor, opts) do
     leftover = opts[:leftover]
 
-    input_size = Nx.size(tensor)
+    batch_size = elem(out.shape, 0)
+    axis_size = elem(tensor.shape, 0)
 
-    batch_size = Nx.size(out)
-    batch_bitsize = batch_size * size
+    remainder = rem(axis_size, batch_size)
+    num_full_batches = div(axis_size, batch_size)
 
-    remainder = rem(input_size, batch_size)
-
-    to_add = if remainder != 0, do: batch_size - remainder, else: 0
-
-    tensor_bin =
-      case to_binary(tensor) do
-        bin when leftover == :repeat and to_add != 0 ->
-          diff = to_add * size
-          <<wrapped::size(diff)-bitstring, _::bitstring>> = bin
-          bin <> wrapped
-
-        bin ->
-          bin
+    range =
+      if remainder != 0 and leftover == :repeat do
+        0..num_full_batches
+      else
+        0..(num_full_batches - 1)
       end
 
-    for <<batch::size(batch_bitsize)-bitstring <- tensor_bin>> do
-      from_binary(out, batch)
-    end
+    binary = to_binary(tensor)
+    batch_bytes = Nx.size(out) * div(size, 8)
+
+    Stream.map(range, fn
+      ^num_full_batches ->
+        before = num_full_batches * batch_bytes
+        available = byte_size(binary) - before
+        missing = batch_bytes - available
+
+        from_binary(out, [binary_part(binary, before, available), binary_part(binary, 0, missing)])
+
+      i ->
+        from_binary(out, binary_part(binary, i * batch_bytes, batch_bytes))
+    end)
   end
 
   ## Shape
