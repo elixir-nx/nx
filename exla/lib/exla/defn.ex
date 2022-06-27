@@ -240,13 +240,7 @@ defmodule EXLA.Defn do
   end
 
   defp pop_cache_funs(options) do
-    case Keyword.pop(options, EXLA) do
-      {{_, _}, _} = popped ->
-        popped
-
-      {nil, options} ->
-        {{&EXLA.Defn.LockedCache.run/2, &EXLA.Defn.LockedCache.run/2}, options}
-    end
+    Keyword.pop(options, EXLA, {&EXLA.Defn.LockedCache.run/2, &EXLA.Defn.LockedCache.run/2})
   end
 
   @doc false
