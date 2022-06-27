@@ -7155,7 +7155,8 @@ defmodule Nx do
   ## Options
 
     * `:axis` - the axis to sum elements along. Defaults to `0`
-    * `:reverse` - if `true`, reverses the direction on the axis of accumulation. Defaults to `false`
+    * `:reverse` - a boolean which determines whether
+      to perform accumulation in the opposite direction. Defaults to `false`
 
   ## Examples
 
@@ -7215,7 +7216,7 @@ defmodule Nx do
   ## Options
 
     * `:axis` - the axis to multiply elements along. Defaults to `0`
-    * `:reverse` - if `true`, reverses the direction on the axis of accumulation. Defaults to `false`
+    * `:reverse` - a boolean which determines whether to perform accumulation in the opposite direction. Defaults to `false`
 
   ## Examples
 
@@ -7275,7 +7276,7 @@ defmodule Nx do
   ## Options
 
     * `:axis` - the axis to compare elements along. Defaults to `0`
-    * `:reverse` - if `true`, reverses the direction on the axis of accumulation. Defaults to `false`
+    * `:reverse` - a boolean which determines whether to perform accumulation in the opposite direction. Defaults to `false`
 
   ## Examples
 
@@ -7335,7 +7336,7 @@ defmodule Nx do
   ## Options
 
     * `:axis` - the axis to compare elements along. Defaults to `0`
-    * `:reverse` - if `true`, reverses the direction on the axis of accumulation. Defaults to `false`
+    * `:reverse` - a boolean which determines whether to perform accumulation in the opposite direction. Defaults to `false`
 
   ## Examples
 
@@ -7403,28 +7404,23 @@ defmodule Nx do
       rank = rank(shape)
 
       padding =
-        List.duplicate({0, 0}, rank)
-        |> List.replace_at(axis, {axis_size - 1, 0})
+        if reverse do
+          {0, 0}
+          |> List.duplicate(rank)
+          |> List.replace_at(axis, {0, axis_size - 1})
+        else
+          {0, 0}
+          |> List.duplicate(rank)
+          |> List.replace_at(axis, {axis_size - 1, 0})
+        end
 
       window_shape =
-        List.duplicate(1, rank)
+        1
+        |> List.duplicate(rank)
         |> List.to_tuple()
         |> put_elem(axis, axis_size)
 
-      t =
-        if reverse do
-          Nx.reverse(tensor, axes: [axis])
-        else
-          tensor
-        end
-
-      result = aggregate_window_op(t, window_shape, [padding: padding], window_op)
-
-      if reverse do
-        Nx.reverse(result, axes: [axis])
-      else
-        result
-      end
+      aggregate_window_op(tensor, window_shape, [padding: padding], window_op)
     end)
   end
 
