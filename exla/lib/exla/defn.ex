@@ -7,6 +7,7 @@ defmodule EXLA.Defn do
 
   @doc false
   def __stream__(key, input, acc, vars, fun, [args], options) do
+    {cache_funs, options} = pop_cache_funs(options)
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
 
     {client_name, compile_options} =
@@ -24,7 +25,7 @@ defmodule EXLA.Defn do
       &to_stream_computation(client, key, input_shape, acc_vars, &1, &2, &3, compile_options)
 
     {executable, used_inputs, {output, acc_output}, hooks, output_shapes, debug?} =
-      compile(client, {:stream, key}, vars, fun, compile_options, used_fun, comp_fun)
+      compile(client, {:stream, key}, cache_funs, vars, fun, compile_options, used_fun, comp_fun)
 
     # Execution of streams requires the coordination of
     # multiple processes which is outlined below.
@@ -233,7 +234,22 @@ defmodule EXLA.Defn do
   end
 
   @doc false
-  def __jit__(key, vars, fun, [args], options) do
+  def __jit__(key, vars, fun, args_list, options) do
+    {cache_funs, options} = pop_cache_funs(options)
+    __compile__(key, cache_funs, vars, fun, options).(args_list)
+  end
+
+  defp pop_cache_funs(options) do
+    Keyword.pop(options, EXLA, {&EXLA.Defn.LockedCache.run/2, &EXLA.Defn.LockedCache.run/2})
+  end
+
+  @doc false
+  def __compile__(vars, fun, options) do
+    cache_fun = fn _key, fun -> fun.() end
+    __compile__(:none, {cache_fun, cache_fun}, vars, fun, options)
+  end
+
+  defp __compile__(key, cache_funs, vars, fun, options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
 
     {client_name, compile_options} =
@@ -243,27 +259,29 @@ defmodule EXLA.Defn do
     callback = &to_root_computation(key, &1, &2, &3, compile_options)
 
     {executable, used_inputs, outputs, hooks, :ok, debug?} =
-      compile(client, key, vars, fun, compile_options, & &1, callback)
+      compile(client, key, cache_funs, vars, fun, compile_options, & &1, callback)
 
-    {time, lock} =
-      :timer.tc(fn ->
-        EXLA.Defn.Lock.lock(run_key(executable))
-      end)
+    fn [args] ->
+      {time, lock} =
+        :timer.tc(fn ->
+          EXLA.Defn.Lock.lock(run_key(executable))
+        end)
 
-    if debug? do
-      Logger.debug("EXLA device #{executable.device_id} lock in #{us_to_ms(time)}ms")
+      if debug? do
+        Logger.debug("EXLA device #{executable.device_id} lock in #{us_to_ms(time)}ms")
+      end
+
+      {time, res} =
+        :timer.tc(fn ->
+          maybe_outfeed(lock, executable, args, used_inputs, outputs, hooks, run_options)
+        end)
+
+      if debug? do
+        Logger.debug("EXLA execution on device #{executable.device_id} in #{us_to_ms(time)}ms")
+      end
+
+      res
     end
-
-    {time, res} =
-      :timer.tc(fn ->
-        maybe_outfeed(lock, executable, args, used_inputs, outputs, hooks, run_options)
-      end)
-
-    if debug? do
-      Logger.debug("EXLA execution on device #{executable.device_id} in #{us_to_ms(time)}ms")
-    end
-
-    res
   end
 
   defp to_root_computation(key, expr, used_shapes, used_hooks, options) do
@@ -330,17 +348,9 @@ defmodule EXLA.Defn do
 
   ## Compile
 
-  defp compile(client, key, vars, fun, options, to_used, to_computation) do
+  defp compile(client, key, cache_funs, vars, fun, options, to_used, to_computation) do
+    {expr_cache_fun, comp_cache_fun} = cache_funs
     {debug?, options} = Keyword.pop(options, :debug, false)
-
-    {{expr_cache_fun, comp_cache_fun}, options} =
-      case Keyword.pop(options, EXLA) do
-        {{_, _}, _} = popped ->
-          popped
-
-        {nil, options} ->
-          {{&EXLA.Defn.LockedCache.run/2, &EXLA.Defn.LockedCache.run/2}, options}
-      end
 
     {args_key, reverse_args_triplet} =
       Enum.map_reduce(vars, [], fn var, acc ->
