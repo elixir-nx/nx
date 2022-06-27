@@ -7189,9 +7189,9 @@ defmodule Nx do
       #Nx.Tensor<
         s64[3][3]
         [
-          [6, 7, 8],
+          [9, 12, 15],
           [9, 11, 13],
-          [9, 12, 15]
+          [6, 7, 8]
         ]
       >
 
@@ -7199,9 +7199,9 @@ defmodule Nx do
       #Nx.Tensor<
         s64[3][3]
         [
-          [2, 3, 3],
-          [5, 9, 12],
-          [8, 15, 21]
+          [3, 3, 2],
+          [12, 9, 5],
+          [21, 15, 8]
         ]
       >
   """
@@ -7249,9 +7249,9 @@ defmodule Nx do
       #Nx.Tensor<
         s64[3][3]
         [
-          [6, 7, 8],
+          [0, 28, 80],
           [18, 28, 40],
-          [0, 28, 80]
+          [6, 7, 8]
         ]
       >
 
@@ -7259,9 +7259,9 @@ defmodule Nx do
       #Nx.Tensor<
         s64[3][3]
         [
-          [2, 2, 0],
-          [5, 20, 60],
-          [8, 56, 336]
+          [0, 2, 2],
+          [60, 20, 5],
+          [336, 56, 8]
         ]
       >
   """
@@ -7309,9 +7309,9 @@ defmodule Nx do
       #Nx.Tensor<
         s64[3][3]
         [
-          [2, 1, 3],
+          [1, 1, 1],
           [1, 1, 2],
-          [1, 1, 1]
+          [2, 1, 3]
         ]
       >
 
@@ -7320,8 +7320,8 @@ defmodule Nx do
         s64[3][3]
         [
           [1, 1, 1],
-          [2, 2, 1],
-          [3, 1, 1]
+          [1, 2, 2],
+          [1, 1, 3]
         ]
       >
   """
@@ -7369,9 +7369,9 @@ defmodule Nx do
       #Nx.Tensor<
         s64[3][3]
         [
-          [2, 1, 3],
           [2, 3, 3],
-          [2, 3, 3]
+          [2, 3, 3],
+          [2, 1, 3]
         ]
       >
 
@@ -7379,8 +7379,8 @@ defmodule Nx do
       #Nx.Tensor<
         s64[3][3]
         [
-          [1, 3, 3],
-          [2, 3, 3],
+          [3, 3, 1],
+          [3, 3, 2],
           [3, 3, 3]
         ]
       >
@@ -7418,7 +7418,13 @@ defmodule Nx do
           tensor
         end
 
-      aggregate_window_op(t, window_shape, [padding: padding], window_op)
+      result = aggregate_window_op(t, window_shape, [padding: padding], window_op)
+
+      if reverse do
+        Nx.reverse(result, axes: [axis])
+      else
+        result
+      end
     end)
   end
 

@@ -720,9 +720,15 @@ defmodule Torchx.Backend do
         from_nx(t)
       end
 
-    t_tx
-    |> Torchx.cumulative_sum(axis)
-    |> to_nx(out)
+    result = Torchx.cumulative_sum(t_tx, axis)
+
+    if reverse do
+      result
+      |> Torchx.flip([axis])
+      |> to_nx(out)
+    else
+      to_nx(result, out)
+    end
   end
 
   @impl true
@@ -741,9 +747,15 @@ defmodule Torchx.Backend do
         from_nx(t)
       end
 
-    t_tx
-    |> Torchx.cumulative_product(axis)
-    |> to_nx(out)
+    result = Torchx.cumulative_product(t_tx, axis)
+
+    if reverse do
+      result
+      |> Torchx.flip([axis])
+      |> to_nx(out)
+    else
+      to_nx(result, out)
+    end
   end
 
   @impl true
@@ -760,9 +772,15 @@ defmodule Torchx.Backend do
         from_nx(t)
       end
 
-    t_tx
-    |> Torchx.cumulative_min(axis)
-    |> to_nx(out)
+    result = Torchx.cumulative_min(t_tx, axis)
+
+    if reverse do
+      result
+      |> Torchx.flip([axis])
+      |> to_nx(out)
+    else
+      to_nx(result, out)
+    end
   end
 
   @impl true
@@ -779,9 +797,15 @@ defmodule Torchx.Backend do
         from_nx(t)
       end
 
-    t_tx
-    |> Torchx.cumulative_max(axis)
-    |> to_nx(out)
+    result = Torchx.cumulative_max(t_tx, axis)
+
+    if reverse do
+      result
+      |> Torchx.flip([axis])
+      |> to_nx(out)
+    else
+      to_nx(result, out)
+    end
   end
 
   ## Ops
