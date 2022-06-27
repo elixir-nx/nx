@@ -804,6 +804,11 @@ defmodule Nx.Defn.Kernel do
   If any of the keys in the `keyword` is not defined on
   `values`, it raises an error.
 
+  This does not validate required keys. For such, use `assert_keys/2`
+  instead.
+
+  This is equivalent to Elixir's `Keyword.validate!/2`.
+
   ## Examples
 
       iex> keyword!([], [one: 1, two: 2]) |> Enum.sort()
@@ -1379,6 +1384,34 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
+  Asserts the keyword list has the given keys.
+
+  If it succeeds, it returns the given keyword list. Raises
+  an error otherwise.
+
+  ## Examples
+
+  To assert the tensor is a scalar, you can pass the empty tuple `shape`:
+
+      iex> assert_keys([one: 1, two: 2], [:one, :two])
+      [one: 1, two: 2]
+
+  If the keys are not available, an error is raised:
+
+      iex> assert_keys([one: 1, two: 2], [:three])
+      ** (ArgumentError) expected key :three in keyword list, got: [one: 1, two: 2]
+
+  """
+  def assert_keys(keyword, keys) when Kernel.and(is_list(keyword), is_list(keys)) do
+    for key <- keys, Kernel.not(Keyword.has_key?(keyword, key)) do
+      raise ArgumentError,
+            "expected key #{inspect(key)} in keyword list, got: #{inspect(keyword)}"
+    end
+
+    keyword
+  end
+
+  @doc """
   Asserts the `tensor` has a certain `shape`.
 
   If it succeeds, it returns the given tensor. Raises
@@ -1388,7 +1421,7 @@ defmodule Nx.Defn.Kernel do
 
   To assert the tensor is a scalar, you can pass the empty tuple `shape`:
 
-      iex> assert_shape Nx.tensor(13), {}
+      iex> assert_shape(Nx.tensor(13), {})
       #Nx.Tensor<
         s64
         13
@@ -1396,10 +1429,10 @@ defmodule Nx.Defn.Kernel do
 
   If the shapes do not match, an error is raised:
 
-      iex> assert_shape Nx.tensor([1, 2, 3]), {}
+      iex> assert_shape(Nx.tensor([1, 2, 3]), {})
       ** (ArgumentError) expected tensor to be a scalar, got tensor with shape {3}
 
-      iex> assert_shape Nx.tensor([1, 2, 3]), {4}
+      iex> assert_shape(Nx.tensor([1, 2, 3]), {4})
       ** (ArgumentError) expected tensor to have shape {4}, got tensor with shape {3}
 
   If you want to assert on the rank or shape patterns, use
