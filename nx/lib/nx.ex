@@ -7155,6 +7155,7 @@ defmodule Nx do
   ## Options
 
     * `:axis` - the axis to sum elements along. Defaults to `0`
+    * `:reverse` - whether to perform accumulation in the opposite direction. Defaults to `false`
 
   ## Examples
 
@@ -7183,6 +7184,26 @@ defmodule Nx do
           [6, 13, 21]
         ]
       >
+
+      iex> Nx.cumulative_sum(Nx.iota({3, 3}), axis: 0, reverse: true)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [9, 12, 15],
+          [9, 11, 13],
+          [6, 7, 8]
+        ]
+      >
+
+      iex> Nx.cumulative_sum(Nx.iota({3, 3}), axis: 1, reverse: true)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [3, 3, 2],
+          [12, 9, 5],
+          [21, 15, 8]
+        ]
+      >
   """
   @doc type: :cumulative
   def cumulative_sum(tensor, opts \\ []),
@@ -7194,6 +7215,7 @@ defmodule Nx do
   ## Options
 
     * `:axis` - the axis to multiply elements along. Defaults to `0`
+    * `:reverse` - whether to perform accumulation in the opposite direction. Defaults to `false`
 
   ## Examples
 
@@ -7222,6 +7244,26 @@ defmodule Nx do
           [6, 42, 336]
         ]
       >
+
+      iex> Nx.cumulative_product(Nx.iota({3, 3}), axis: 0, reverse: true)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [0, 28, 80],
+          [18, 28, 40],
+          [6, 7, 8]
+        ]
+      >
+
+      iex> Nx.cumulative_product(Nx.iota({3, 3}), axis: 1, reverse: true)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [0, 2, 2],
+          [60, 20, 5],
+          [336, 56, 8]
+        ]
+      >
   """
   @doc type: :cumulative
   def cumulative_product(tensor, opts \\ []),
@@ -7233,6 +7275,7 @@ defmodule Nx do
   ## Options
 
     * `:axis` - the axis to compare elements along. Defaults to `0`
+    * `:reverse` - whether to perform accumulation in the opposite direction. Defaults to `false`
 
   ## Examples
 
@@ -7261,6 +7304,26 @@ defmodule Nx do
           [2, 1, 1]
         ]
       >
+
+      iex> Nx.cumulative_min(Nx.tensor([[2, 3, 1], [1, 3, 2], [2, 1, 3]]), axis: 0, reverse: true)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [1, 1, 1],
+          [1, 1, 2],
+          [2, 1, 3]
+        ]
+      >
+
+      iex> Nx.cumulative_min(Nx.tensor([[2, 3, 1], [1, 3, 2], [2, 1, 3]]), axis: 1, reverse: true)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [1, 1, 1],
+          [1, 2, 2],
+          [1, 1, 3]
+        ]
+      >
   """
   @doc type: :cumulative
   def cumulative_min(tensor, opts \\ []),
@@ -7272,6 +7335,7 @@ defmodule Nx do
   ## Options
 
     * `:axis` - the axis to compare elements along. Defaults to `0`
+    * `:reverse` - whether to perform accumulation in the opposite direction. Defaults to `false`
 
   ## Examples
 
@@ -7300,27 +7364,58 @@ defmodule Nx do
           [2, 2, 3]
         ]
       >
+
+      iex> Nx.cumulative_max(Nx.tensor([[2, 3, 1], [1, 3, 2], [2, 1, 3]]), axis: 0, reverse: true)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [2, 3, 3],
+          [2, 3, 3],
+          [2, 1, 3]
+        ]
+      >
+
+      iex> Nx.cumulative_max(Nx.tensor([[2, 3, 1], [1, 3, 2], [2, 1, 3]]), axis: 1, reverse: true)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [3, 3, 1],
+          [3, 3, 2],
+          [3, 3, 3]
+        ]
+      >
   """
   @doc type: :cumulative
   def cumulative_max(tensor, opts \\ []),
     do: cumulative_op(tensor, opts, :cumulative_max, :window_max)
 
   defp cumulative_op(tensor, opts, op, window_op) do
-    opts = keyword!(opts, axis: 0)
+    opts = keyword!(opts, axis: 0, reverse: false)
+    reverse = opts[:reverse]
     tensor = to_tensor(tensor)
     axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names)
 
-    Nx.Shared.optional(op, [tensor, axis], tensor, fn tensor, axis ->
+    Nx.Shared.optional(op, [tensor, [axis: axis, reverse: reverse]], tensor, fn tensor,
+                                                                                axis: axis,
+                                                                                reverse: reverse ->
       shape = shape(tensor)
       axis_size = elem(shape, axis)
       rank = rank(shape)
 
       padding =
-        List.duplicate({0, 0}, rank)
-        |> List.replace_at(axis, {axis_size - 1, 0})
+        if reverse do
+          {0, 0}
+          |> List.duplicate(rank)
+          |> List.replace_at(axis, {0, axis_size - 1})
+        else
+          {0, 0}
+          |> List.duplicate(rank)
+          |> List.replace_at(axis, {axis_size - 1, 0})
+        end
 
       window_shape =
-        List.duplicate(1, rank)
+        1
+        |> List.duplicate(rank)
         |> List.to_tuple()
         |> put_elem(axis, axis_size)
 

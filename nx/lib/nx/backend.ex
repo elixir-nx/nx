@@ -139,10 +139,10 @@ defmodule Nx.Backend do
   @callback logical_not(out :: tensor, t :: tensor) :: tensor
   @callback phase(out :: tensor, t :: tensor) :: tensor
 
-  @callback cumulative_sum(out :: tensor, t :: tensor, axis) :: tensor
-  @callback cumulative_product(out :: tensor, t :: tensor, axis) :: tensor
-  @callback cumulative_min(out :: tensor, t :: tensor, axis) :: tensor
-  @callback cumulative_max(out :: tensor, t :: tensor, axis) :: tensor
+  @callback cumulative_sum(out :: tensor, t :: tensor, keyword) :: tensor
+  @callback cumulative_product(out :: tensor, t :: tensor, keyword) :: tensor
+  @callback cumulative_min(out :: tensor, t :: tensor, keyword) :: tensor
+  @callback cumulative_max(out :: tensor, t :: tensor, keyword) :: tensor
 
   @optional_callbacks [
     optional: 3,

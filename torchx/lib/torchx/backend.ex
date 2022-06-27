@@ -705,39 +705,49 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def cumulative_sum(%T{type: out_type} = out, %T{} = t, axis) do
+  def cumulative_sum(%T{type: out_type} = out, %T{} = t, opts) do
     check_type!(out_type)
-
-    t
-    |> from_nx()
-    |> Torchx.cumulative_sum(axis)
-    |> to_nx(out)
+    cumulative_op(out, t, opts, &Torchx.cumulative_sum/2)
   end
 
   @impl true
-  def cumulative_product(%T{type: out_type} = out, %T{} = t, axis) do
+  def cumulative_product(%T{type: out_type} = out, %T{} = t, opts) do
     check_type!(out_type)
-
-    t
-    |> from_nx()
-    |> Torchx.cumulative_product(axis)
-    |> to_nx(out)
+    cumulative_op(out, t, opts, &Torchx.cumulative_product/2)
   end
 
   @impl true
-  def cumulative_min(%T{} = out, %T{} = t, axis) do
-    t
-    |> from_nx()
-    |> Torchx.cumulative_min(axis)
-    |> to_nx(out)
+  def cumulative_min(%T{} = out, %T{} = t, opts) do
+    cumulative_op(out, t, opts, &Torchx.cumulative_min/2)
   end
 
   @impl true
-  def cumulative_max(%T{} = out, %T{} = t, axis) do
-    t
-    |> from_nx()
-    |> Torchx.cumulative_max(axis)
-    |> to_nx(out)
+  def cumulative_max(%T{} = out, %T{} = t, opts) do
+    cumulative_op(out, t, opts, &Torchx.cumulative_max/2)
+  end
+
+  defp cumulative_op(out, t, opts, fun) when is_function(fun, 2) do
+    axis = opts[:axis]
+    reverse = opts[:reverse]
+
+    t_tx =
+      if reverse do
+        t
+        |> from_nx()
+        |> Torchx.flip([axis])
+      else
+        from_nx(t)
+      end
+
+    result = apply(fun, [t_tx, axis])
+
+    if reverse do
+      result
+      |> Torchx.flip([axis])
+      |> to_nx(out)
+    else
+      to_nx(result, out)
+    end
   end
 
   ## Ops
