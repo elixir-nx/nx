@@ -7155,8 +7155,7 @@ defmodule Nx do
   ## Options
 
     * `:axis` - the axis to sum elements along. Defaults to `0`
-    * `:reverse` - a boolean which determines whether
-      to perform accumulation in the opposite direction. Defaults to `false`
+    * `:reverse` - whether to perform accumulation in the opposite direction. Defaults to `false`
 
   ## Examples
 
@@ -7216,7 +7215,7 @@ defmodule Nx do
   ## Options
 
     * `:axis` - the axis to multiply elements along. Defaults to `0`
-    * `:reverse` - a boolean which determines whether to perform accumulation in the opposite direction. Defaults to `false`
+    * `:reverse` - whether to perform accumulation in the opposite direction. Defaults to `false`
 
   ## Examples
 
@@ -7276,7 +7275,7 @@ defmodule Nx do
   ## Options
 
     * `:axis` - the axis to compare elements along. Defaults to `0`
-    * `:reverse` - a boolean which determines whether to perform accumulation in the opposite direction. Defaults to `false`
+    * `:reverse` - whether to perform accumulation in the opposite direction. Defaults to `false`
 
   ## Examples
 
@@ -7336,7 +7335,7 @@ defmodule Nx do
   ## Options
 
     * `:axis` - the axis to compare elements along. Defaults to `0`
-    * `:reverse` - a boolean which determines whether to perform accumulation in the opposite direction. Defaults to `false`
+    * `:reverse` - whether to perform accumulation in the opposite direction. Defaults to `false`
 
   ## Examples
 
