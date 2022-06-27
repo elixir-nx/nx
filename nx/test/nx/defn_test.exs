@@ -1154,6 +1154,29 @@ defmodule Nx.DefnTest do
     end
   end
 
+  describe "transform_if/2" do
+    defn raises_on_opts(opts \\ []) do
+      transform_if raise = opts[:raise] do
+        raise ArgumentError, "raise was set to #{inspect(raise)}"
+      else
+        1 + 2
+      end
+    end
+
+    @tag compiler: Evaluator
+    test "executes if at expression time" do
+      assert raises_on_opts() == Nx.tensor(3)
+
+      assert_raise ArgumentError, "raise was set to :oops", fn ->
+        raises_on_opts(raise: :oops)
+      end
+
+      assert_raise ArgumentError, ~r"a tensor was found as argument to transform_if/2", fn ->
+        raises_on_opts(raise: Nx.tensor(1))
+      end
+    end
+  end
+
   describe "while/3" do
     defn upto10(x) do
       while x, Nx.less(x, 10) do

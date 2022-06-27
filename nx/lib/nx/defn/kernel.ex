@@ -178,6 +178,64 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
+  Provides a transform-based if/else expression.
+
+  It behaves similar to Elixir's own `Kernel.if/2`, where `expr`
+  can be any Elixir expression, as it runs outside of `defn`.
+  This function is mostly useful for side-effects, for example:
+
+      transform_if Kernel.is_integer(opts[:foo]) do
+        raise ArgumentError, ":foo must be an integer"
+      end
+
+  If `expr` returns anything but nil or false, the `do` branch is
+  executed, otherwise it executes the `else` branch.
+  """
+  defmacro transform_if(expr, [do: when_true] ++ rest) do
+    when_false =
+      case rest do
+        [{:else, when_false}] -> when_false
+        [] -> nil
+        _ -> Kernel.raise(ArgumentError, "transform_if/2 expects do/end blocks")
+      end
+
+    annotate_case(
+      quote do
+        case unquote(expr) do
+          %Nx.Tensor{} = tensor -> unquote(__MODULE__).__raise_transform_if_tensor__!(tensor)
+          x when Kernel.or(Kernel.==(x, false), Kernel.==(x, nil)) -> unquote(when_false)
+          _ -> unquote(when_true)
+        end
+      end
+    )
+  end
+
+  defp annotate_case({:case, meta, args}), do: {:case, [defn: true] ++ meta, args}
+
+  @doc false
+  def __raise_transform_if_tensor__!(tensor) do
+    Kernel.raise(
+      ArgumentError,
+      "a tensor was found as argument to transform_if/2. This typically means that you are using " <>
+        "a numerical expression on transform_if/2. You may need to use Kernel operators directly " <>
+        "instead, such as Kernel.==(left, right). Got: #{inspect(tensor)}"
+    )
+  end
+
+  @doc """
+  Shortcut for `Kernel.raise/2` for raising exceptions.
+
+  Exceptions are always raised when building the numerical expression, never on device.
+  """
+  defmacro raise(exception, message) do
+    quote do
+      Nx.Defn.Kernel.transform(:ok, fn :ok ->
+        Kernel.raise(unquote(exception), unquote(message))
+      end)
+    end
+  end
+
+  @doc """
   Inspects the given expression to the terminal.
 
   It returns the given expressions.
@@ -526,11 +584,13 @@ defmodule Nx.Defn.Kernel do
 
   """
   def left and right when Kernel.or(is_boolean(left), is_boolean(right)) do
-    raise ArgumentError,
-          "boolean value passed to Nx.Defn.Kernel.and/2, " <>
-            "values passed to Nx.Defn.Kernel.and/2 must be " <>
-            "tensors or numbers, consider using 1 for true " <>
-            "and 0 for false as an alternative"
+    Kernel.raise(
+      ArgumentError,
+      "boolean value passed to Nx.Defn.Kernel.and/2, " <>
+        "values passed to Nx.Defn.Kernel.and/2 must be " <>
+        "tensors or numbers, consider using 1 for true " <>
+        "and 0 for false as an alternative"
+    )
   end
 
   def left and right when Kernel.and(is_number(left), is_number(right)),
@@ -554,11 +614,13 @@ defmodule Nx.Defn.Kernel do
 
   """
   def left or right when Kernel.or(is_boolean(left), is_boolean(right)) do
-    raise ArgumentError,
-          "boolean value passed to Nx.Defn.Kernel.or/2, " <>
-            "values passed to Nx.Defn.Kernel.or/2 must be " <>
-            "tensors or numbers, consider using 1 for true " <>
-            "and 0 for false as an alternative"
+    Kernel.raise(
+      ArgumentError,
+      "boolean value passed to Nx.Defn.Kernel.or/2, " <>
+        "values passed to Nx.Defn.Kernel.or/2 must be " <>
+        "tensors or numbers, consider using 1 for true " <>
+        "and 0 for false as an alternative"
+    )
   end
 
   def left or right when Kernel.and(is_number(left), is_number(right)),
@@ -580,11 +642,13 @@ defmodule Nx.Defn.Kernel do
 
   """
   def not tensor when is_boolean(tensor) do
-    raise ArgumentError,
-          "boolean value passed to Nx.Defn.Kernel.not/1, " <>
-            "values passed to Nx.Defn.Kernel.not/1 must be " <>
-            "tensors or numbers, consider using 1 for true " <>
-            "and 0 for false as an alternative"
+    Kernel.raise(
+      ArgumentError,
+      "boolean value passed to Nx.Defn.Kernel.not/1, " <>
+        "values passed to Nx.Defn.Kernel.not/1 must be " <>
+        "tensors or numbers, consider using 1 for true " <>
+        "and 0 for false as an alternative"
+    )
   end
 
   def not tensor when is_number(tensor), do: logical_not(tensor)
@@ -841,13 +905,17 @@ defmodule Nx.Defn.Kernel do
 
         case error do
           {:badkey, key} ->
-            raise ArgumentError,
-                  "unknown key #{inspect(key)} in #{inspect(keyword)}, " <>
-                    "expected one of #{inspect(keys)}"
+            Kernel.raise(
+              ArgumentError,
+              "unknown key #{inspect(key)} in #{inspect(keyword)}, " <>
+                "expected one of #{inspect(keys)}"
+            )
 
           :badkey ->
-            raise ArgumentError,
-                  "expected a keyword list with keys #{inspect(keys)}, got: #{inspect(keyword)}"
+            Kernel.raise(
+              ArgumentError,
+              "expected a keyword list with keys #{inspect(keys)}, got: #{inspect(keyword)}"
+            )
         end
     end
   end
@@ -891,9 +959,11 @@ defmodule Nx.Defn.Kernel do
     do: acc
 
   defp move_pairs!([other | _], _) do
-    raise ArgumentError,
-          "keyword!/2 expects the second argument to be a list of atoms or tuples, " <>
-            "got: #{inspect(other)}"
+    Kernel.raise(
+      ArgumentError,
+      "keyword!/2 expects the second argument to be a list of atoms or tuples, " <>
+        "got: #{inspect(other)}"
+    )
   end
 
   @doc """
@@ -915,7 +985,7 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
-  Provides if/else expressions.
+  Provides numerical if/else expressions.
 
   The first argument must be a scalar. Zero is considered false,
   any other number is considered true.
@@ -957,9 +1027,11 @@ defmodule Nx.Defn.Kernel do
   end
 
   defmacro if(_pred, other) do
-    raise ArgumentError,
-          "expected second argument to \"if\" to be a do/else block, " <>
-            "got: #{Macro.to_string(other)}"
+    Kernel.raise(
+      ArgumentError,
+      "expected second argument to \"if\" to be a do/else block, " <>
+        "got: #{Macro.to_string(other)}"
+    )
   end
 
   @doc """
@@ -1034,9 +1106,11 @@ defmodule Nx.Defn.Kernel do
   end
 
   defmacro while(_var, _cond, other) do
-    raise ArgumentError,
-          "expected third argument to \"while\" to be a do-block, " <>
-            "got: #{Macro.to_string(other)}"
+    Kernel.raise(
+      ArgumentError,
+      "expected third argument to \"while\" to be a do-block, " <>
+        "got: #{Macro.to_string(other)}"
+    )
   end
 
   @doc false
@@ -1064,7 +1138,7 @@ defmodule Nx.Defn.Kernel do
   end
 
   defp while_arg(other, _prelude) do
-    raise ArgumentError, """
+    Kernel.raise(ArgumentError, """
     invalid initial argument for \"while\". Expected a variable, a variable assignment, \
     or a tuple of the same. For example:
 
@@ -1082,7 +1156,7 @@ defmodule Nx.Defn.Kernel do
           end
 
     Got: #{Macro.to_string(other)}
-    """
+    """)
   end
 
   @doc """
@@ -1411,8 +1485,10 @@ defmodule Nx.Defn.Kernel do
         tensor
 
       other ->
-        raise ArgumentError,
-              "expected tensor to #{shape_to_string(shape)}, got tensor with shape #{inspect(other)}"
+        Kernel.raise(
+          ArgumentError,
+          "expected tensor to #{shape_to_string(shape)}, got tensor with shape #{inspect(other)}"
+        )
     end
   end
 
@@ -1494,8 +1570,10 @@ defmodule Nx.Defn.Kernel do
 
   @doc false
   def __assert_shape_pattern__!(shape_pattern_string, shape) do
-    raise ArgumentError,
-          "expected tensor to #{shape_pattern_string}, got tensor with shape #{inspect(shape)}"
+    Kernel.raise(
+      ArgumentError,
+      "expected tensor to #{shape_pattern_string}, got tensor with shape #{inspect(shape)}"
+    )
   end
 
   defp shape_pattern_to_string({:{}, _, []}), do: "be a scalar"
