@@ -747,7 +747,7 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def cumulative_min(%T{} = out, %T{} = t, axis, opts) do
+  def cumulative_min(%T{} = out, %T{} = t, opts) do
     axis = opts[:axis]
     reverse = opts[:reverse]
 
