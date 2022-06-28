@@ -643,7 +643,7 @@ defmodule Nx.Defn do
   Defines a public numerical function.
   """
   defmacro defn(call, do: block) do
-    define(:def, call, block, __CALLER__, :numerical)
+    define_defn(:def, call, block, __CALLER__)
   end
 
   @doc """
@@ -654,7 +654,7 @@ defmodule Nx.Defn do
   all local function calls within `defn`.
   """
   defmacro defnp(call, do: block) do
-    define(:defp, call, block, __CALLER__, :numerical)
+    define_defn(:defp, call, block, __CALLER__)
   end
 
   @doc """
@@ -700,20 +700,19 @@ defmodule Nx.Defn do
   Although, for convenience, you might use `inspect_expr/2` instead.
   """
   defmacro deftransform(call, do: block) do
-    define(:def, call, block, __CALLER__, :transform)
+    define_transform(:def, call, block, __CALLER__)
   end
 
   @doc """
   Private function version for `deftransform`
   """
   defmacro deftransformp(call, do: block) do
-    define(:defp, call, block, __CALLER__, :transform)
+    define_transform(:defp, call, block, __CALLER__)
   end
 
   ## Callbacks
 
-  defp define(kind, call, block, env, function_type)
-       when function_type in [:numerical, :transform] do
+  defp define_defn(kind, call, block, env) do
     assert_no_guards!(kind, call, env)
     # Note name here is not necessarily an atom due to unquote(name) support
     {name, args} = decompose_call!(kind, call, env)
@@ -725,24 +724,43 @@ defmodule Nx.Defn do
           into: []
 
     quote do
-      unquote(__MODULE__).__define__(
+      unquote(__MODULE__).__defn__(
         __MODULE__,
         unquote(kind),
         unquote(name),
         unquote(arity),
-        unquote(function_type),
         %{unquote_splicing(defaults)}
       )
 
-      if unquote(function_type) == :numerical do
-        unquote(kind)(unquote(call)) do
-          use Nx.Defn.Kernel
-          unquote(block)
-        end
-      else
-        unquote(kind)(unquote(call)) do
-          unquote(block)
-        end
+      unquote(kind)(unquote(call)) do
+        use Nx.Defn.Kernel
+        unquote(block)
+      end
+    end
+  end
+
+  defp define_transform(kind, call, block, env) do
+    # Note name here is not necessarily an atom due to unquote(name) support
+    {name, args} = decompose_call!(kind, call, env)
+    arity = length(args)
+
+    defaults =
+      for {{:\\, meta, [_, default]}, i} <- Enum.with_index(args), into: [] do
+        raise "no defaults pls"
+        {i, {meta, default}}
+      end
+
+    quote do
+      unquote(__MODULE__).__transform__(
+        __MODULE__,
+        unquote(kind),
+        unquote(name),
+        unquote(arity),
+        %{unquote_splicing(defaults)}
+      )
+
+      unquote(kind)(unquote(call)) do
+        unquote(block)
       end
     end
   end
@@ -771,13 +789,13 @@ defmodule Nx.Defn do
   defp assert_no_guards!(_kind, _call, _env), do: :ok
 
   # Internal attributes
-  @exports_key :__defn_exports__
+  @defn_exports_key :__defn_exports__
+  @transform_exports_key :__transform_exports__
 
   @doc false
-  def __define__(module, kind, name, arity, function_type, defaults)
-      when function_type in [:numerical, :transform] do
+  def __defn__(module, kind, name, arity, defaults) do
     exports =
-      if exports = Module.get_attribute(module, @exports_key) do
+      if exports = Module.get_attribute(module, @defn_exports_key) do
         exports
       else
         Module.put_attribute(module, :before_compile, __MODULE__)
@@ -786,12 +804,31 @@ defmodule Nx.Defn do
 
     exports =
       Map.put(exports, {name, arity}, %{
-        type: function_type,
         kind: kind,
         defaults: defaults
       })
 
-    Module.put_attribute(module, @exports_key, exports)
+    Module.put_attribute(module, @defn_exports_key, exports)
+    :ok
+  end
+
+  @doc false
+  def __transform__(module, kind, name, arity, defaults) do
+    exports =
+      if exports = Module.get_attribute(module, @transform_exports_key) do
+        exports
+      else
+        Module.put_attribute(module, :before_compile, __MODULE__)
+        %{}
+      end
+
+    exports =
+      Map.put(exports, {name, arity}, %{
+        kind: kind,
+        defaults: defaults
+      })
+
+    Module.put_attribute(module, @transform_exports_key, exports)
     :ok
   end
 
@@ -801,7 +838,8 @@ defmodule Nx.Defn do
 
   @doc false
   defmacro __before_compile__(env) do
-    exports = Module.get_attribute(env.module, @exports_key)
-    Nx.Defn.Compiler.__compile__(env, exports)
+    defn_exports = Module.get_attribute(env.module, @defn_exports_key) || []
+    transform_exports = Module.get_attribute(env.module, @transform_exports_key) || []
+    Nx.Defn.Compiler.__compile__(env, %{defn: defn_exports, transform: transform_exports})
   end
 end
