@@ -208,8 +208,8 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp compile_each({{name, arity} = def, def_meta}, state) do
-    %{defaults: defaults} = def_meta
-    {{kind, _meta, args, ast}, state} = get_and_normalize_definition(def, state)
+    %{defaults: defaults, function_type: function_type} = def_meta
+    {{kind, _meta, args, ast}, state} = get_and_normalize_definition(def, function_type, state)
 
     defn_name = defn_name(name)
 
@@ -268,11 +268,14 @@ defmodule Nx.Defn.Compiler do
     res
   end
 
-  defp get_and_normalize_definition(def, state) do
+  defp get_and_normalize_definition(def, function_type, state) do
     {:v1, kind, meta, clauses} = Module.get_definition(state.module, def)
     state = %{state | function: def, line: meta[:line] || state.line, rewrite_underscore?: true}
 
     case clauses do
+      [{meta, args, [], ast}] when function_type == :transform ->
+        {{kind, meta, args, ast}, state}
+
       [] ->
         compile_error!(meta, state, "cannot have #{kind}n without clauses")
 
@@ -282,7 +285,15 @@ defmodule Nx.Defn.Compiler do
         {{kind, meta, args, ast}, state}
 
       [_, _ | _] ->
-        compile_error!(meta, state, "cannot compile #{kind}n with multiple clauses")
+        type_str =
+          case {kind, function_type} do
+            {:def, :numerical} -> "defn"
+            {:defp, :numerical} -> "defnp"
+            {:def, :transform} -> "deftransform"
+            {:defp, :transform} -> "deftransformp"
+          end
+
+        compile_error!(meta, state, "cannot compile #{type_str} with multiple clauses")
     end
   end
 

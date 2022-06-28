@@ -1597,4 +1597,48 @@ defmodule Nx.DefnTest do
       assert calls_private(1, 2) == Nx.tensor(3)
     end
   end
+
+  describe "deftransform" do
+    defn deftransform_test(a, b, opts \\ []) do
+      {c, d} = deftransform_test_transformation(opts)
+
+      deftransform_test_send(c)
+      deftransform_test_send(d)
+
+      x = a + c
+      y = b + d
+
+      x * y
+    end
+
+    deftransform deftransform_test_transformation(opts) do
+      b = opts[:b] || raise "missing :b"
+      c = opts[:c] || raise "missing :c"
+      {b, c}
+    end
+
+    deftransformp deftransform_test_send(value) do
+      send(self(), {:deftransform, value})
+    end
+
+    test "can call deftransform and deftransformp functions from within defn" do
+      result = deftransform_test(Nx.tensor(1), Nx.tensor(2), b: 3, c: 4)
+
+      assert String.trim("""
+             #Nx.Tensor<
+               s64
+             \s\s
+               Nx.Defn.Expr
+               parameter a:0       s64
+               parameter c:1       s64
+               b = add 3, a        s64
+               d = add 4, c        s64
+               e = multiply b, d   s64
+             >
+             """) == inspect(result)
+
+      assert_received {:deftransform, 3}
+      assert_received {:deftransform, 4}
+    end
+  end
 end

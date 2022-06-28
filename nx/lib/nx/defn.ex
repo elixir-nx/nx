@@ -643,7 +643,7 @@ defmodule Nx.Defn do
   Defines a public numerical function.
   """
   defmacro defn(call, do: block) do
-    define(:def, call, block, __CALLER__)
+    define(:def, call, block, __CALLER__, :numerical)
   end
 
   @doc """
@@ -654,12 +654,21 @@ defmodule Nx.Defn do
   all local function calls within `defn`.
   """
   defmacro defnp(call, do: block) do
-    define(:defp, call, block, __CALLER__)
+    define(:defp, call, block, __CALLER__, :numerical)
+  end
+
+  defmacro deftransform(call, do: block) do
+    define(:def, call, block, __CALLER__, :transform)
+  end
+
+  defmacro deftransformp(call, do: block) do
+    define(:defp, call, block, __CALLER__, :transform)
   end
 
   ## Callbacks
 
-  defp define(kind, call, block, env) do
+  defp define(kind, call, block, env, function_type)
+       when function_type in [:numerical, :transform] do
     assert_no_guards!(kind, call, env)
     # Note name here is not necessarily an atom due to unquote(name) support
     {name, args} = decompose_call!(kind, call, env)
@@ -676,12 +685,19 @@ defmodule Nx.Defn do
         unquote(kind),
         unquote(name),
         unquote(arity),
+        unquote(function_type),
         %{unquote_splicing(defaults)}
       )
 
-      unquote(kind)(unquote(call)) do
-        use Nx.Defn.Kernel
-        unquote(block)
+      if unquote(function_type) == :numerical do
+        unquote(kind)(unquote(call)) do
+          use Nx.Defn.Kernel
+          unquote(block)
+        end
+      else
+        unquote(kind)(unquote(call)) do
+          unquote(block)
+        end
       end
     end
   end
@@ -713,7 +729,8 @@ defmodule Nx.Defn do
   @exports_key :__defn_exports__
 
   @doc false
-  def __define__(module, kind, name, arity, defaults) do
+  def __define__(module, kind, name, arity, function_type, defaults)
+      when function_type in [:numerical, :transform] do
     exports =
       if exports = Module.get_attribute(module, @exports_key) do
         exports
@@ -722,7 +739,13 @@ defmodule Nx.Defn do
         %{}
       end
 
-    exports = Map.put(exports, {name, arity}, %{kind: kind, defaults: defaults})
+    exports =
+      Map.put(exports, {name, arity}, %{
+        function_type: function_type,
+        kind: kind,
+        defaults: defaults
+      })
+
     Module.put_attribute(module, @exports_key, exports)
     :ok
   end
