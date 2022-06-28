@@ -698,13 +698,6 @@ defmodule Nx.Defn do
       >
 
   Although, for convenience, you might use `inspect_expr/2` instead.
-
-  ## Attention points
-
-  Because `deftransform` is defined outside of `defn`, its scope is tied
-  to the module's scope. This means that all common Elixir functions work,
-  although you need to keep in mind that the code will be executed at the
-  compilation for the caller `defn`.
   """
   defmacro deftransform(call, do: block) do
     define(:def, call, block, __CALLER__, :transform)
