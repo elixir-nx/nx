@@ -676,7 +676,7 @@ defmodule Nx.Defn do
         Nx.tanh(a) + Nx.power(b, 2) |> my_inspect()
       end
 
-      deftransform my_inspect(value), do: IO.inspect(value)
+      deftransformp my_inspect(expr), do: IO.inspect(expr)
 
   Or:
 
