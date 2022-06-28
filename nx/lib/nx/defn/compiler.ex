@@ -282,6 +282,18 @@ defmodule Nx.Defn.Compiler do
 
     case clauses do
       [{meta, args, [], ast}] when function_type == :transform ->
+        args =
+          Macro.prewalk(args, fn
+            var when is_var(var) -> normalize_var(var)
+            node -> node
+          end)
+
+        ast =
+          Macro.prewalk(ast, fn
+            var when is_var(var) -> normalize_var(var)
+            node -> node
+          end)
+
         {{kind, meta, args, ast}, state}
 
       [] ->
