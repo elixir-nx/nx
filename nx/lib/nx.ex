@@ -5188,7 +5188,22 @@ defmodule Nx do
   `indices` must be a fully qualified tensor of shape `{n, Nx.rank(target)}`, with `n`
   being an arbitrary number of indices, while `updates` must have a compatible `{n}` shape.
 
+  In case of repeating indices, the last occurence of index and its corresponding update
+  value wins.
+
   ### Examples
+
+      iex> Nx.indexed_set(Nx.tensor([0, 0, 0]), Nx.tensor([[1], [2]]), Nx.tensor([2, 4]))
+      #Nx.Tensor<
+        s64[3]
+        [0, 2, 4]
+      >
+
+      iex> Nx.indexed_set(Nx.tensor([0, 0, 0]), Nx.tensor([[1], [2], [1]]), Nx.tensor([3, 4, 2]))
+      #Nx.Tensor<
+        s64[3]
+        [0, 2, 4]
+      >
 
       iex> t = Nx.iota({1, 2, 3})
       #Nx.Tensor<
@@ -5200,8 +5215,8 @@ defmodule Nx do
           ]
         ]
       >
-      iex> indices = Nx.tensor([[0, 0, 0], [0, 1, 1], [0, 0, 0], [0, 0, 2], [0, 1, 2]])
-      iex> updates = Nx.tensor([1, 3, 1, -2, 5])
+      iex> indices = Nx.tensor([[0, 0, 0], [0, 1, 1], [0, 0, 0], [0, 0, 2]])
+      iex> updates = Nx.tensor([1, 3, 1, -2])
       iex> Nx.indexed_set(t, indices, updates)
       #Nx.Tensor<
         s64[1][2][3]
