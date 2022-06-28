@@ -173,7 +173,6 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  @deprecated "Use deftransform or deftransformp from Nx.Defn module instead."
   def transform(arg, fun) when is_function(fun, 1) do
     fun.(arg)
   end
