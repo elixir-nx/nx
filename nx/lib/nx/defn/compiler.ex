@@ -188,10 +188,12 @@ defmodule Nx.Defn.Compiler do
   end
 
   @doc false
-  def __compile__(%Macro.Env{module: module, file: file, line: line}, %{
-        defn: defn_exports,
-        transform: transform_exports
-      }) do
+  def __compile__(%Macro.Env{module: module, file: file, line: line}, exports) do
+    {defn_exports, transform_exports} =
+      Enum.split_with(exports, fn {_fun_arity, meta} -> meta.type == :numerical end)
+
+    IO.inspect(exports, label: "exports")
+
     defns =
       for {{name, arity}, %{defaults: defaults}} <- defn_exports,
           arity <- (arity - map_size(defaults))..arity,
@@ -215,11 +217,9 @@ defmodule Nx.Defn.Compiler do
     quoted =
       tap(Enum.map(transform_exports, &compile_each_transform(&1, state)), fn x ->
         x |> Macro.to_string() |> IO.puts()
-      end) ++ Enum.map(defn_exports, &compile_each_defn(&1, state))
-
-    IO.puts(
-      Macro.to_string({:__block__, [], Enum.map(defn_exports, &compile_each_defn(&1, state))})
-    )
+      end) ++ tap(Enum.map(defn_exports, &compile_each_defn(&1, state)), fn x ->
+        x |> Macro.to_string() |> IO.puts()
+      end)
 
     {:__block__, [], quoted}
   end
@@ -271,60 +271,19 @@ defmodule Nx.Defn.Compiler do
     end
   end
 
-  defp compile_each_transform({{name, arity} = definition, def_meta}, state) do
-    %{defaults: defaults} = def_meta
+  defp compile_each_transform({{name, arity} = definition, _def_meta}, state) do
+    # %{defaults: defaults} = def_meta
 
-    {{kind, _meta, args, ast}, state} =
-      get_and_normalize_definition_transform(definition, state)
-      |> IO.inspect(label: "get_and_normalize_definition_transform")
+    {{kind, _meta, args, ast}, state} = get_and_normalize_definition_transform(definition, state)
 
-    deftransform_name = deftransform_name(name)
-
-    deftransform_args = args
-    # Enum.with_index(args, fn arg, i ->
-    #   case defaults do
-    #     %{^i => {meta, default}} -> {:\\, meta, [arg, default]}
-    #     %{} -> arg
-    #   end
-    # end)
-
-    all_args = Macro.generate_arguments(arity, __MODULE__)
-
-    fn_args = args
-    # for {arg, i} <- Enum.with_index(all_args),
-    #     not Map.has_key?(defaults, i),
-    #     do: arg
-
-    fun =
-      if defaults == [] do
-        quote do
-          &(unquote(Macro.var(deftransform_name, __MODULE__)) / unquote(arity))
-        end
-      else
-        quote do
-          fn unquote_splicing(fn_args) ->
-            unquote(deftransform_name)(unquote_splicing(fn_args))
-          end
-        end
-      end
-
-    IO.inspect(binding(), label: "binding")
+    defn_name = defn_name(name)
 
     quote line: state.line do
-      Module.delete_definition(__MODULE__, unquote(definition))
-
-      Kernel.unquote(kind)(unquote(name)(unquote_splicing(all_args))) do
-        if Process.get(Nx.Defn.Compiler) do
-          unquote(deftransform_name)(unquote_splicing(all_args))
-        else
-          Nx.Defn.Compiler.__runtime__(unquote(fun), unquote(all_args))
-        end
-      end
-
-      Kernel.unquote(kind)(unquote(deftransform_name)(unquote_splicing(deftransform_args)),
-        do: unquote(ast)
+      Kernel.unquote(kind)(unquote(defn_name)(unquote_splicing(args)),
+        do: unquote(name)(unquote_splicing(args))
       )
     end
+    |> IO.inspect(label: "nx/lib/nx/defn/compiler.ex:283")
   end
 
   @doc false
@@ -372,6 +331,12 @@ defmodule Nx.Defn.Compiler do
         compile_error!(meta, state, "cannot have #{type_str} without clauses")
 
       [{meta, args, [], ast}] ->
+        args =
+          Macro.prewalk(args, fn
+            var when is_var(var) -> normalize_var(var)
+            node -> node
+          end)
+
         {{kind, meta, args, ast}, state}
 
       [_, _ | _] ->
@@ -470,10 +435,12 @@ defmodule Nx.Defn.Compiler do
     binding()
     |> IO.inspect(label: "nx/lib/nx/defn/compiler.ex:479")
 
+    IO.inspect(state.transforms)
+
     cond do
       pair in state.transforms ->
         IO.puts("pair in transforms")
-        {{deftransform_name(name), meta, args}, state}
+        {{defn_name(name), meta, args}, state}
 
       pair in state.defns ->
         IO.puts("pair in defns")
@@ -702,5 +669,4 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp defn_name(name), do: :"__defn:#{name}__"
-  defp deftransform_name(name), do: :"__deftransform:#{name}__"
 end

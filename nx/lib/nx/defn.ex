@@ -790,7 +790,6 @@ defmodule Nx.Defn do
 
   # Internal attributes
   @defn_exports_key :__defn_exports__
-  @transform_exports_key :__transform_exports__
 
   @doc false
   def __defn__(module, kind, name, arity, defaults) do
@@ -804,6 +803,7 @@ defmodule Nx.Defn do
 
     exports =
       Map.put(exports, {name, arity}, %{
+        type: :numerical,
         kind: kind,
         defaults: defaults
       })
@@ -815,7 +815,7 @@ defmodule Nx.Defn do
   @doc false
   def __transform__(module, kind, name, arity, defaults) do
     exports =
-      if exports = Module.get_attribute(module, @transform_exports_key) do
+      if exports = Module.get_attribute(module, @defn_exports_key) do
         exports
       else
         Module.put_attribute(module, :before_compile, __MODULE__)
@@ -824,11 +824,12 @@ defmodule Nx.Defn do
 
     exports =
       Map.put(exports, {name, arity}, %{
+        type: :transform,
         kind: kind,
         defaults: defaults
       })
 
-    Module.put_attribute(module, @transform_exports_key, exports)
+    Module.put_attribute(module, @defn_exports_key, exports)
     :ok
   end
 
@@ -838,8 +839,7 @@ defmodule Nx.Defn do
 
   @doc false
   defmacro __before_compile__(env) do
-    defn_exports = Module.get_attribute(env.module, @defn_exports_key) || []
-    transform_exports = Module.get_attribute(env.module, @transform_exports_key) || []
-    Nx.Defn.Compiler.__compile__(env, %{defn: defn_exports, transform: transform_exports})
+    defn_exports = Module.get_attribute(env.module, @defn_exports_key)
+    Nx.Defn.Compiler.__compile__(env, defn_exports)
   end
 end
