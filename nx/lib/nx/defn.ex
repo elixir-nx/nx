@@ -657,10 +657,62 @@ defmodule Nx.Defn do
     define(:defp, call, block, __CALLER__, :numerical)
   end
 
+  @doc """
+  Defines a transform that executes the given `fun` with `arg`
+  when building `defn` expressions.
+
+  ## Example
+
+  Take the following defn expression:
+
+      defn tanh_power(a, b) do
+        Nx.tanh(a) + Nx.power(b, 2)
+      end
+
+  Let's see a trivial example, which is to use `IO.inspect/1` to
+  print a tensor expression at definition time:
+
+      defn tanh_power(a, b) do
+        Nx.tanh(a) + Nx.power(b, 2) |> my_inspect()
+      end
+
+      deftransform my_inspect(value), do: IO.inspect(value)
+
+  Or:
+
+      defn tanh_power(a, b) do
+        res = Nx.tanh(a) + Nx.power(b, 2)
+        my_inspect(res)
+        res
+      end
+
+  When invoked in both cases, it will print the expression being built
+  by `defn`:
+
+      #Nx.Defn.Expr<
+        parameter a
+        parameter c
+        b = tanh [ a ] ()
+        d = power [ c, 2 ] ()
+        e = add [ b, d ] ()
+      >
+
+  Although, for convenience, you might use `inspect_expr/2` instead.
+
+  ## Attention points
+
+  Because `deftransform` is defined outside of `defn`, its scope is tied
+  to the module's scope. This means that all common Elixir functions work,
+  although you need to keep in mind that the code will be executed at the
+  compilation for the caller `defn`.
+  """
   defmacro deftransform(call, do: block) do
     define(:def, call, block, __CALLER__, :transform)
   end
 
+  @doc """
+  Private function version for `deftransform`
+  """
   defmacro deftransformp(call, do: block) do
     define(:defp, call, block, __CALLER__, :transform)
   end
