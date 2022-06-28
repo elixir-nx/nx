@@ -208,7 +208,7 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp compile_each({{name, arity} = def, def_meta}, state) do
-    %{defaults: defaults, function_type: function_type} = def_meta
+    %{defaults: defaults, type: function_type} = def_meta
     {{kind, _meta, args, ast}, state} = get_and_normalize_definition(def, function_type, state)
 
     defn_name = defn_name(name)
