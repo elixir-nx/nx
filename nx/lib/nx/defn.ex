@@ -786,7 +786,7 @@ defmodule Nx.Defn do
 
     exports =
       Map.put(exports, {name, arity}, %{
-        function_type: function_type,
+        type: function_type,
         kind: kind,
         defaults: defaults
       })
