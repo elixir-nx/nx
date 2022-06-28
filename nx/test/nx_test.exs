@@ -818,6 +818,88 @@ defmodule NxTest do
     end
   end
 
+  describe "indexed_set" do
+    test "property" do
+      n = 5
+
+      indices =
+        Nx.tensor(
+          for row <- 0..(n - 1), col <- 0..(n - 1) do
+            [row, col]
+          end
+        )
+
+      updates = 0..(n * n - 1) |> Enum.map(fn _ -> 1 end) |> Nx.tensor()
+
+      assert Nx.broadcast(1, {5, 5}) ==
+               0 |> Nx.broadcast({5, 5}) |> Nx.indexed_set(indices, updates)
+
+      indices =
+        Nx.tensor(
+          for row <- 0..(n - 1), col <- 0..(n - 1) do
+            [0, row, col]
+          end
+        )
+
+      assert Nx.broadcast(1, {1, 5, 5}) ==
+               0 |> Nx.broadcast({1, 5, 5}) |> Nx.indexed_set(indices, updates)
+    end
+
+    test "single-index regression" do
+      n = 5
+
+      # 1D case
+      zeros = List.duplicate(0, n)
+      upd = Nx.tensor([1])
+
+      for i <- 0..(n - 1) do
+        result = Nx.tensor(List.update_at(zeros, i, fn _ -> 1 end))
+
+        assert result == Nx.indexed_set(Nx.tensor(zeros), Nx.tensor([[i]]), upd)
+      end
+
+      # 2D case
+      zeros = List.duplicate(zeros, n)
+
+      for i <- 0..(n - 1) do
+        result =
+          Nx.tensor(
+            List.update_at(
+              zeros,
+              i,
+              fn row ->
+                List.update_at(row, i, fn _ -> 1 end)
+              end
+            )
+          )
+
+        assert result == Nx.indexed_set(Nx.tensor(zeros), Nx.tensor([[i, i]]), upd)
+      end
+    end
+
+    test "raises when out of bounds" do
+      t = Nx.tensor([[1, 2], [3, 4]])
+
+      assert_raise ArgumentError, "index 3 is out of bounds for axis 0 in shape {2, 2}", fn ->
+        Nx.indexed_set(t, Nx.tensor([[3, -10]]), Nx.tensor([1]))
+      end
+
+      assert_raise ArgumentError, "index -1 is out of bounds for axis 1 in shape {2, 2}", fn ->
+        Nx.indexed_set(t, Nx.tensor([[0, -1]]), Nx.tensor([1]))
+      end
+    end
+
+    test "complex regression" do
+      # BinaryBackend used to break on Enum.sum over a complex-valued list
+      assert Nx.tensor([1, 2], type: {:c, 64}) ==
+               Nx.indexed_set(
+                 Nx.broadcast(0, {2}),
+                 Nx.tensor([[1], [0]]),
+                 Nx.tensor([Complex.new(2), 1])
+               )
+    end
+  end
+
   describe "quotient/2" do
     test "raises for non-integer values" do
       msg =
