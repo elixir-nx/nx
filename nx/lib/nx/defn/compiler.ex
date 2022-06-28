@@ -272,12 +272,20 @@ defmodule Nx.Defn.Compiler do
     {:v1, kind, meta, clauses} = Module.get_definition(state.module, def)
     state = %{state | function: def, line: meta[:line] || state.line, rewrite_underscore?: true}
 
+    type_str =
+      case {kind, function_type} do
+        {:def, :numerical} -> "defn"
+        {:defp, :numerical} -> "defnp"
+        {:def, :transform} -> "deftransform"
+        {:defp, :transform} -> "deftransformp"
+      end
+
     case clauses do
       [{meta, args, [], ast}] when function_type == :transform ->
         {{kind, meta, args, ast}, state}
 
       [] ->
-        compile_error!(meta, state, "cannot have #{kind}n without clauses")
+        compile_error!(meta, state, "cannot have #{type_str} without clauses")
 
       [{meta, args, [], ast}] ->
         {args, state} = normalize_args(args, meta, state)
@@ -285,14 +293,6 @@ defmodule Nx.Defn.Compiler do
         {{kind, meta, args, ast}, state}
 
       [_, _ | _] ->
-        type_str =
-          case {kind, function_type} do
-            {:def, :numerical} -> "defn"
-            {:defp, :numerical} -> "defnp"
-            {:def, :transform} -> "deftransform"
-            {:defp, :transform} -> "deftransformp"
-          end
-
         compile_error!(meta, state, "cannot compile #{type_str} with multiple clauses")
     end
   end
