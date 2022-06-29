@@ -192,8 +192,6 @@ defmodule Nx.Defn.Compiler do
     {defn_exports, transform_exports} =
       Enum.split_with(exports, fn {_fun_arity, meta} -> meta.type == :numerical end)
 
-    IO.inspect(exports, label: "exports")
-
     defns =
       for {{name, arity}, %{defaults: defaults}} <- defn_exports,
           arity <- (arity - map_size(defaults))..arity,
@@ -215,11 +213,7 @@ defmodule Nx.Defn.Compiler do
     }
 
     quoted =
-      tap(Enum.map(transform_exports, &compile_each_transform(&1, state)), fn x ->
-        x |> Macro.to_string() |> IO.puts()
-      end) ++ tap(Enum.map(defn_exports, &compile_each_defn(&1, state)), fn x ->
-        x |> Macro.to_string() |> IO.puts()
-      end)
+      Enum.map(transform_exports, &compile_each_transform(&1, state)) ++ Enum.map(defn_exports, &compile_each_defn(&1, state))
 
     {:__block__, [], quoted}
   end
@@ -283,7 +277,6 @@ defmodule Nx.Defn.Compiler do
         do: unquote(name)(unquote_splicing(args))
       )
     end
-    |> IO.inspect(label: "nx/lib/nx/defn/compiler.ex:283")
   end
 
   @doc false
@@ -432,24 +425,12 @@ defmodule Nx.Defn.Compiler do
     arity = length(args)
     pair = {name, arity}
 
-    binding()
-    |> IO.inspect(label: "nx/lib/nx/defn/compiler.ex:479")
-
-    IO.inspect(state.transforms)
-
     cond do
-      pair in state.transforms ->
-        IO.puts("pair in transforms")
-        {{defn_name(name), meta, args}, state}
-
-      pair in state.defns ->
-        IO.puts("pair in defns")
+      pair in state.defns or pair in state.transforms ->
         {args, state} = normalize_list(args, state)
         {{defn_name(name), meta, args}, state}
 
       Module.defines?(state.module, {name, arity}) ->
-        IO.puts("function not defined with defn")
-
         compile_error!(
           meta,
           state,
@@ -457,8 +438,6 @@ defmodule Nx.Defn.Compiler do
         )
 
       true ->
-        IO.puts("else")
-
         compile_error!(
           meta,
           state,
