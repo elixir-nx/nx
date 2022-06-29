@@ -76,7 +76,7 @@ defmodule EXLA do
   Those clients are singleton resources on Google's XLA library,
   therefore they are treated as a singleton resource on this library
   too. EXLA ships with the client configuration for each supported
-  platform, in the order of preference listed below:
+  platform:
 
       config :exla, :clients,
         cuda: [platform: :cuda],
@@ -84,9 +84,11 @@ defmodule EXLA do
         tpu: [platform: :tpu],
         host: [platform: :host]
 
-  The first client with a supported platform will be picked. You can
-  provide your own list of clients, replacing the list above or configuring
-  each client as listed below.
+  You can provide your own list of clients, replacing the list above
+  or configuring each client as listed below. You can also specify
+  `:default_client` to set a particular client by default or
+  `:preferred_clients` to change the order of clients preference,
+  but those configurations are rarely set in practice.
 
   > **Important!** you should avoid using multiple clients for the
   > same platform. If you have multiple clients per platform, they
