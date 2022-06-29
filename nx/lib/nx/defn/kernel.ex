@@ -1510,9 +1510,9 @@ defmodule Nx.Defn.Kernel do
     shape_pattern_string = shape_pattern_to_string(shape)
 
     quote do
-      Nx.Defn.Kernel.transform(unquote(tensor), fn tensor ->
+      Nx.Defn.Assertions.__assert_shape_pattern__(unquote(tensor), fn tensor ->
         # Revert scoping so guards work
-        import unquote(__MODULE__), only: []
+        import Nx.Defn.Kernel, only: []
         import Kernel
 
         case Nx.shape(tensor) do
@@ -1520,7 +1520,7 @@ defmodule Nx.Defn.Kernel do
             tensor
 
           shape ->
-            unquote(__MODULE__).__assert_shape_pattern__!(unquote(shape_pattern_string), shape)
+            Nx.Defn.Kernel.__assert_shape_pattern__!(unquote(shape_pattern_string), shape)
         end
       end)
     end

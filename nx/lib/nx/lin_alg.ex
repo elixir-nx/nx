@@ -247,10 +247,10 @@ defmodule Nx.LinAlg do
   @doc from_backend: false
   defn norm(tensor, opts \\ []) do
     opts = keyword!(opts, [:ord, :axes])
-    transform(tensor, &norm_transform(&1, opts))
+    norm_transform(tensor, opts)
   end
 
-  defp norm_transform(t, opts) do
+  deftransformp norm_transform(t, opts) do
     rank = Nx.rank(t)
 
     unless rank == 1 or rank == 2 do

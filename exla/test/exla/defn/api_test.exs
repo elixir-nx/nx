@@ -89,8 +89,10 @@ defmodule EXLA.Defn.APITest do
   describe "cache" do
     defn merge(init_map) do
       params = init()
-      transform({params, init_map}, fn {x, y} -> Map.merge(x, y) end)
+      merge_transform(params, init_map)
     end
+
+    deftransformp merge_transform(params, init_map), do: Map.merge(params, init_map)
 
     defn init() do
       %{"x" => Nx.random_uniform({}), "y" => Nx.random_uniform({})}

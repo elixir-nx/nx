@@ -314,6 +314,7 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp get_and_normalize_definition_transform(def, state) do
+     Module.get_definition(state.module, def) || IO.inspect(def, label: "def")
     {:v1, kind, meta, clauses} = Module.get_definition(state.module, def)
     state = %{state | function: def, line: meta[:line] || state.line, rewrite_underscore?: true}
 
@@ -461,6 +462,18 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp normalize({{:., _, [Nx.Defn.Kernel, :transform]} = call, meta, [ast, fun]}, state) do
+    {ast, state} = normalize(ast, state)
+
+    fun =
+      Macro.prewalk(fun, fn
+        var when is_var(var) -> normalize_var(var)
+        node -> node
+      end)
+
+    {{call, meta, [ast, fun]}, state}
+  end
+
+  defp normalize({{:., _, [Nx.Defn.Assertions, _function]} = call, meta, [ast, fun]}, state) do
     {ast, state} = normalize(ast, state)
 
     fun =

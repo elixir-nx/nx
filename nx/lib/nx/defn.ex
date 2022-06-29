@@ -724,11 +724,12 @@ defmodule Nx.Defn do
           into: []
 
     quote do
-      unquote(__MODULE__).__defn__(
+      unquote(__MODULE__).__define__(
         __MODULE__,
         unquote(kind),
         unquote(name),
         unquote(arity),
+        :numerical,
         %{unquote_splicing(defaults)}
       )
 
@@ -751,11 +752,12 @@ defmodule Nx.Defn do
       end
 
     quote do
-      unquote(__MODULE__).__transform__(
+      unquote(__MODULE__).__define__(
         __MODULE__,
         unquote(kind),
         unquote(name),
         unquote(arity),
+        :transform,
         %{unquote_splicing(defaults)}
       )
 
@@ -792,7 +794,7 @@ defmodule Nx.Defn do
   @defn_exports_key :__defn_exports__
 
   @doc false
-  def __defn__(module, kind, name, arity, defaults) do
+  def __define__(module, kind, name, arity, type, defaults) do
     exports =
       if exports = Module.get_attribute(module, @defn_exports_key) do
         exports
@@ -803,28 +805,7 @@ defmodule Nx.Defn do
 
     exports =
       Map.put(exports, {name, arity}, %{
-        type: :numerical,
-        kind: kind,
-        defaults: defaults
-      })
-
-    Module.put_attribute(module, @defn_exports_key, exports)
-    :ok
-  end
-
-  @doc false
-  def __transform__(module, kind, name, arity, defaults) do
-    exports =
-      if exports = Module.get_attribute(module, @defn_exports_key) do
-        exports
-      else
-        Module.put_attribute(module, :before_compile, __MODULE__)
-        %{}
-      end
-
-    exports =
-      Map.put(exports, {name, arity}, %{
-        type: :transform,
+        type: type,
         kind: kind,
         defaults: defaults
       })
