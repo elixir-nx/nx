@@ -113,6 +113,7 @@ defmodule Nx.Defn.GradTest do
     end
 
     defn random_meta(t), do: grad(t, fn t -> t |> Nx.exp() |> random_meta_transform() end)
+
     deftransformp random_meta_transform(t) do
       Nx.Defn.Expr.metadata(t, %{oops: true})
     end

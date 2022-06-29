@@ -213,7 +213,8 @@ defmodule Nx.Defn.Compiler do
     }
 
     quoted =
-      Enum.map(transform_exports, &compile_each_transform(&1, state)) ++ Enum.map(defn_exports, &compile_each_defn(&1, state))
+      Enum.map(transform_exports, &compile_each_transform(&1, state)) ++
+        Enum.map(defn_exports, &compile_each_defn(&1, state))
 
     {:__block__, [], quoted}
   end
@@ -314,7 +315,7 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp get_and_normalize_definition_transform(def, state) do
-     Module.get_definition(state.module, def) || IO.inspect(def, label: "def")
+    Module.get_definition(state.module, def) || IO.inspect(def, label: "def")
     {:v1, kind, meta, clauses} = Module.get_definition(state.module, def)
     state = %{state | function: def, line: meta[:line] || state.line, rewrite_underscore?: true}
 
