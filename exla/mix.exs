@@ -47,7 +47,8 @@ defmodule EXLA.MixProject do
           rocm: [platform: :rocm],
           tpu: [platform: :tpu],
           host: [platform: :host]
-        ]
+        ],
+        preferred_clients: [:cuda, :rocm, :tpu, :host]
       ]
     ]
   end
