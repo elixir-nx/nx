@@ -818,7 +818,7 @@ defmodule NxTest do
     end
   end
 
-  describe "indexed_set" do
+  describe "indexed_put" do
     test "property" do
       n = 5
 
@@ -832,7 +832,7 @@ defmodule NxTest do
       updates = 0..(n * n - 1) |> Enum.map(fn _ -> 1 end) |> Nx.tensor()
 
       assert Nx.broadcast(1, {5, 5}) ==
-               0 |> Nx.broadcast({5, 5}) |> Nx.indexed_set(indices, updates)
+               0 |> Nx.broadcast({5, 5}) |> Nx.indexed_put(indices, updates)
 
       indices =
         Nx.tensor(
@@ -842,7 +842,7 @@ defmodule NxTest do
         )
 
       assert Nx.broadcast(1, {1, 5, 5}) ==
-               0 |> Nx.broadcast({1, 5, 5}) |> Nx.indexed_set(indices, updates)
+               0 |> Nx.broadcast({1, 5, 5}) |> Nx.indexed_put(indices, updates)
     end
 
     test "single-index regression" do
@@ -855,7 +855,7 @@ defmodule NxTest do
       for i <- 0..(n - 1) do
         result = Nx.tensor(List.update_at(zeros, i, fn _ -> 1 end))
 
-        assert result == Nx.indexed_set(Nx.tensor(zeros), Nx.tensor([[i]]), upd)
+        assert result == Nx.indexed_put(Nx.tensor(zeros), Nx.tensor([[i]]), upd)
       end
 
       # 2D case
@@ -873,7 +873,7 @@ defmodule NxTest do
             )
           )
 
-        assert result == Nx.indexed_set(Nx.tensor(zeros), Nx.tensor([[i, i]]), upd)
+        assert result == Nx.indexed_put(Nx.tensor(zeros), Nx.tensor([[i, i]]), upd)
       end
     end
 
@@ -881,18 +881,18 @@ defmodule NxTest do
       t = Nx.tensor([[1, 2], [3, 4]])
 
       assert_raise ArgumentError, "index 3 is out of bounds for axis 0 in shape {2, 2}", fn ->
-        Nx.indexed_set(t, Nx.tensor([[3, -10]]), Nx.tensor([1]))
+        Nx.indexed_put(t, Nx.tensor([[3, -10]]), Nx.tensor([1]))
       end
 
       assert_raise ArgumentError, "index -1 is out of bounds for axis 1 in shape {2, 2}", fn ->
-        Nx.indexed_set(t, Nx.tensor([[0, -1]]), Nx.tensor([1]))
+        Nx.indexed_put(t, Nx.tensor([[0, -1]]), Nx.tensor([1]))
       end
     end
 
     test "complex regression" do
       # BinaryBackend used to break on Enum.sum over a complex-valued list
       assert Nx.tensor([1, 2], type: {:c, 64}) ==
-               Nx.indexed_set(
+               Nx.indexed_put(
                  Nx.broadcast(0, {2}),
                  Nx.tensor([[1], [0]]),
                  Nx.tensor([Complex.new(2), 1])

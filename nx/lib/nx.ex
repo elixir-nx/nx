@@ -5193,13 +5193,13 @@ defmodule Nx do
 
   ### Examples
 
-      iex> Nx.indexed_set(Nx.tensor([0, 0, 0]), Nx.tensor([[1], [2]]), Nx.tensor([2, 4]))
+      iex> Nx.indexed_put(Nx.tensor([0, 0, 0]), Nx.tensor([[1], [2]]), Nx.tensor([2, 4]))
       #Nx.Tensor<
         s64[3]
         [0, 2, 4]
       >
 
-      iex> Nx.indexed_set(Nx.tensor([0, 0, 0]), Nx.tensor([[1], [2], [1]]), Nx.tensor([3, 4, 2]))
+      iex> Nx.indexed_put(Nx.tensor([0, 0, 0]), Nx.tensor([[1], [2], [1]]), Nx.tensor([3, 4, 2]))
       #Nx.Tensor<
         s64[3]
         [0, 2, 4]
@@ -5217,7 +5217,7 @@ defmodule Nx do
       >
       iex> indices = Nx.tensor([[0, 0, 0], [0, 1, 1], [0, 0, 0], [0, 0, 2]])
       iex> updates = Nx.tensor([1, 3, 1, -2])
-      iex> Nx.indexed_set(t, indices, updates)
+      iex> Nx.indexed_put(t, indices, updates)
       #Nx.Tensor<
         s64[1][2][3]
         [
@@ -5230,13 +5230,13 @@ defmodule Nx do
 
   Type promotions should happen automatically.
 
-      iex> Nx.indexed_set(Nx.tensor([1.0]), Nx.tensor([[0]]), Nx.tensor([3]))
+      iex> Nx.indexed_put(Nx.tensor([1.0]), Nx.tensor([[0]]), Nx.tensor([3]))
       #Nx.Tensor<
         f32[1]
         [3.0]
       >
 
-      iex> Nx.indexed_set(Nx.tensor([1]), Nx.tensor([[0]]), Nx.tensor([3.0]))
+      iex> Nx.indexed_put(Nx.tensor([1]), Nx.tensor([[0]]), Nx.tensor([3.0]))
       #Nx.Tensor<
         f32[1]
         [3.0]
@@ -5249,23 +5249,23 @@ defmodule Nx do
       >
 
   ### Error cases
-      iex> Nx.indexed_set(Nx.tensor([[1], [2]]), Nx.tensor([[[1, 2, 3]]]), Nx.tensor([0]))
+      iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([[[1, 2, 3]]]), Nx.tensor([0]))
       ** (ArgumentError) indices must be a rank 2 tensor, got: 3
 
-      iex> Nx.indexed_set(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2]]), Nx.tensor([[0]]))
+      iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2]]), Nx.tensor([[0]]))
       ** (ArgumentError) updates must be a rank 1 tensor, got: 2
 
-      iex> Nx.indexed_set(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2, 3]]), Nx.tensor([0]))
+      iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2, 3]]), Nx.tensor([0]))
       ** (ArgumentError) expected indices to have shape {*, 2}, got: {1, 3}
 
-      iex> Nx.indexed_set(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2]]), Nx.tensor([0, 1]))
+      iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2]]), Nx.tensor([0, 1]))
       ** (ArgumentError) expected updates tensor to match the first axis of indices tensor with shape {1, 2}, got {2}
   """
   @doc type: :indexed
-  def indexed_set(target, indices, updates) do
+  def indexed_put(target, indices, updates) do
     {target, indices, updates, type} = indexed_op(target, indices, updates)
 
-    impl!(target, indices, updates).indexed_set(%{target | type: type}, target, indices, updates)
+    impl!(target, indices, updates).indexed_put(%{target | type: type}, target, indices, updates)
   end
 
   defp indexed_op(target, indices, updates) do
