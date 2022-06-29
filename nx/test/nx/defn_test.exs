@@ -614,7 +614,7 @@ defmodule Nx.DefnTest do
     defn lnot(a), do: not a
     defn lnot_true(), do: not constant_boolean_transform()
 
-    deftransformp(constant_boolean_transform, do: true)
+    deftransformp constant_boolean_transform, do: true
 
     test "not" do
       assert %T{data: %Expr{op: :optional, args: [%T{data: %Expr{op: :logical_not}}, _]}} =
