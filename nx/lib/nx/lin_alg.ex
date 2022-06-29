@@ -4,7 +4,7 @@ defmodule Nx.LinAlg do
   """
 
   import Nx.Shared
-  import Nx.Defn, only: [defn: 2, defnp: 2]
+  import Nx.Defn, only: [defn: 2, defnp: 2, deftransformp: 2]
   import Nx.Defn.Kernel, only: [keyword!: 2, custom_grad: 2, assert_shape_pattern: 2]
 
   alias Nx.Tensor, as: T
@@ -38,10 +38,17 @@ defmodule Nx.LinAlg do
       >
   """
   defn adjoint(t, opts \\ []) do
-    transform(t, fn
-      %{type: {:c, _}} = t -> t |> Nx.transpose(opts) |> Nx.conjugate()
-      t -> Nx.transpose(t, opts)
-    end)
+    __adjoint__(t, opts)
+  end
+
+  deftransformp __adjoint__(t, opts) do
+    case t do
+      %{type: {:c, _}} ->
+        t |> Nx.transpose(opts) |> Nx.conjugate()
+
+      _ ->
+        Nx.transpose(t, opts)
+    end
   end
 
   @doc """

@@ -265,10 +265,10 @@ defmodule Nx.Defn.Compiler do
     end
   end
 
-  defp compile_each_transform({{name, arity} = definition, _def_meta}, state) do
+  defp compile_each_transform({{name, _arity} = definition, _def_meta}, state) do
     # %{defaults: defaults} = def_meta
 
-    {{kind, _meta, args, ast}, state} = get_and_normalize_definition_transform(definition, state)
+    {{kind, _meta, args, _ast}, state} = get_and_normalize_definition_transform(definition, state)
 
     defn_name = defn_name(name)
 

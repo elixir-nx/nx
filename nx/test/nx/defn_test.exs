@@ -175,14 +175,14 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = b
     end
 
-    defn verify_maps(map) do
-      transform(map, fn map ->
-        for {k, v} <- map do
-          assert Elixir.Kernel.==(v.shape, {String.to_integer(k)})
-        end
+    defn verify_maps(map), do: verify_maps_transform(map)
 
-        map
-      end)
+    deftransformp verify_maps_transform(map) do
+      for {k, v} <- map do
+        assert Elixir.Kernel.==(v.shape, {String.to_integer(k)})
+      end
+
+      map
     end
 
     test "keeps map ordering across different sizes" do
@@ -584,7 +584,7 @@ defmodule Nx.DefnTest do
     defn land_two(a, b), do: a and b
 
     defn land_true(a) do
-      val = transform({}, fn _ -> true end)
+      val = constant_boolean_transform()
       val and a
     end
 
@@ -599,7 +599,7 @@ defmodule Nx.DefnTest do
     defn lor_two(a, b), do: a or b
 
     defn lor_true(a) do
-      val = transform({}, fn _ -> true end)
+      val = constant_boolean_transform()
       val or a
     end
 
@@ -612,7 +612,9 @@ defmodule Nx.DefnTest do
     end
 
     defn lnot(a), do: not a
-    defn lnot_true(), do: not transform({}, fn _ -> true end)
+    defn lnot_true(), do: not constant_boolean_transform()
+
+    deftransformp constant_boolean_transform, do: true
 
     test "not" do
       assert %T{data: %Expr{op: :optional, args: [%T{data: %Expr{op: :logical_not}}, _]}} =
@@ -1030,11 +1032,15 @@ defmodule Nx.DefnTest do
     end
 
     defn if_branch_elimination_transform(a) do
-      if transform(a, &Kernel.==(Nx.rank(&1), 0)) do
+      if if_branch_elimination_transform_pred(a) do
         11
       else
         13
       end
+    end
+
+    deftransformp if_branch_elimination_transform_pred(a) do
+      Nx.Defn.Kernel.==(Nx.rank(a), 0)
     end
 
     test "eliminates branches from transform" do
@@ -1324,10 +1330,10 @@ defmodule Nx.DefnTest do
     end
 
     defn transform_back_and_forth(a) do
-      Nx.exp(transform(Nx.negate(a), &private_back_and_forth/1))
+      a |> Nx.negate() |> private_back_and_forth() |> Nx.exp()
     end
 
-    defp private_back_and_forth(a) do
+    deftransformp private_back_and_forth(a) do
       Evaluator = Nx.Defn.Compiler.current()
       final_back_and_forth(a)
     end
@@ -1338,15 +1344,6 @@ defmodule Nx.DefnTest do
     test "back and forth between Elixir and defn" do
       assert transform_back_and_forth(Nx.tensor(1)) ==
                Nx.tensor(1) |> Nx.negate() |> Nx.tanh() |> Nx.exp()
-    end
-
-    defn transform_variable_access(a, b) do
-      transform(:ok, fn :ok -> a + b end)
-    end
-
-    @tag compiler: Evaluator
-    test "supports variable access" do
-      assert transform_variable_access(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(3)
     end
   end
 
@@ -1416,11 +1413,11 @@ defmodule Nx.DefnTest do
       assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(fn -> Nx.iota({3, 3}) end).() end
     end
 
-    defn nested_jit(opts \\ []) do
-      transform(opts, fn opts ->
-        eleven = Nx.tensor(11, backend: Nx.BinaryBackend)
-        Nx.Defn.jit(&*/2, opts).(eleven, eleven)
-      end)
+    defn nested_jit(opts \\ []), do: nested_jit_transform(opts)
+
+    deftransformp nested_jit_transform(opts) do
+      eleven = Nx.tensor(11, backend: Nx.BinaryBackend)
+      Nx.Defn.jit(&Nx.Defn.Kernel.*/2, opts).(eleven, eleven)
     end
 
     @tag compiler: Evaluator
@@ -1456,11 +1453,11 @@ defmodule Nx.DefnTest do
                    fn -> fun.(3, {4, 5}) end
     end
 
-    defn nested_compile(opts \\ []) do
-      transform(opts, fn opts ->
-        eleven = Nx.tensor(11, backend: Nx.BinaryBackend)
-        Nx.Defn.compile(&*/2, [eleven, eleven], opts).(eleven, eleven)
-      end)
+    defn nested_compile(opts \\ []), do: nested_compile_transform(opts)
+
+    deftransformp nested_compile_transform(opts) do
+      eleven = Nx.tensor(11, backend: Nx.BinaryBackend)
+      Nx.Defn.compile(&Nx.Defn.Kernel.*/2, [eleven, eleven], opts).(eleven, eleven)
     end
 
     @tag compiler: Evaluator
