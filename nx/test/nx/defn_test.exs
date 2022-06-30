@@ -1630,9 +1630,16 @@ defmodule Nx.DefnTest do
       default_args(x, y, z)
     end
 
+    defn public_default_args1(x), do: public_default_args(x)
+    defn public_default_args2(x, y), do: public_default_args(x, y)
+
+    # Ensure that defp works with defaults
     deftransformp default_args(arg1 \\ 1, arg2, arg3 \\ 3) do
       {arg1, arg2, arg3}
     end
+
+    # Ensure that def works
+    deftransform public_default_args(arg1, arg2 \\ 2), do: {arg1, arg2}
 
     test "can call deftransform and deftransformp functions from within defn" do
       result = deftransform_test(Nx.tensor(1), Nx.tensor(2), b: 3, c: 4)
@@ -1655,10 +1662,16 @@ defmodule Nx.DefnTest do
     end
 
     @tag compiler: Evaluator
-    test "deftransform handles default arguments" do
+    test "deftransformp handles default arguments" do
       assert default_args1(20) == {Nx.tensor(1), Nx.tensor(20), Nx.tensor(3)}
       assert default_args2(10, 20) == {Nx.tensor(10), Nx.tensor(20), Nx.tensor(3)}
       assert default_args3(10, 20, 30) == {Nx.tensor(10), Nx.tensor(20), Nx.tensor(30)}
+    end
+
+    @tag compiler: Evaluator
+    test "deftransform handles default arguments" do
+      assert public_default_args1(10) == {Nx.tensor(10), Nx.tensor(2)}
+      assert public_default_args2(10, 20) == {Nx.tensor(10), Nx.tensor(20)}
     end
   end
 end
