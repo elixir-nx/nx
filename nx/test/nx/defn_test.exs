@@ -1622,7 +1622,6 @@ defmodule Nx.DefnTest do
       default_args(x)
     end
 
-
     defn default_args2(x, y) do
       default_args(x, y)
     end
