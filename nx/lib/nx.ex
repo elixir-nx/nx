@@ -5216,13 +5216,13 @@ defmodule Nx do
         ]
       >
       iex> indices = Nx.tensor([[0, 0, 0], [0, 1, 1], [0, 0, 0], [0, 0, 2]])
-      iex> updates = Nx.tensor([1, 3, 1, -2])
+      iex> updates = Nx.tensor([1, 3, 2, -2])
       iex> Nx.indexed_put(t, indices, updates)
       #Nx.Tensor<
         s64[1][2][3]
         [
           [
-            [1, 1, -2],
+            [2, 1, -2],
             [3, 3, 5]
           ]
         ]
@@ -5242,7 +5242,7 @@ defmodule Nx do
         [3.0]
       >
 
-      iex> Nx.indexed_add(Nx.tensor([1], type: {:s, 32}), Nx.tensor([[0]]), Nx.tensor([3], type: {:s, 64}))
+      iex> Nx.indexed_put(Nx.tensor([1], type: {:s, 32}), Nx.tensor([[0]]), Nx.tensor([3], type: {:s, 64}))
       #Nx.Tensor<
         s64[1]
         [3]
