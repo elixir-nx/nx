@@ -747,7 +747,7 @@ defmodule Nx.Defn do
 
     defaults =
       for {{:\\, meta, [_, default]}, i} <- Enum.with_index(args), into: [] do
-        raise "no defaults pls"
+        # raise "no defaults pls"
         {i, {meta, default}}
       end
 

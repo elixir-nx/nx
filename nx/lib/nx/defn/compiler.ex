@@ -192,23 +192,16 @@ defmodule Nx.Defn.Compiler do
     {defn_exports, transform_exports} =
       Enum.split_with(exports, fn {_fun_arity, meta} -> meta.type == :numerical end)
 
-    defns =
-      for {{name, arity}, %{defaults: defaults}} <- defn_exports,
-          arity <- (arity - map_size(defaults))..arity,
-          do: {name, arity}
-
-    transforms =
-      for {{name, arity}, %{defaults: defaults}} <- transform_exports,
-          arity <- (arity - map_size(defaults))..arity,
-          do: {name, arity}
+    defns = compile_prepare_arities(defn_exports)
+    transforms = compile_prepare_arities(transform_exports)
 
     state = %{
       module: module,
       file: file,
       line: line,
       function: nil,
-      defns: MapSet.new(defns),
-      transforms: MapSet.new(transforms),
+      defns: defns,
+      transforms: transforms,
       rewrite_underscore?: false
     }
 
@@ -219,19 +212,20 @@ defmodule Nx.Defn.Compiler do
     {:__block__, [], quoted}
   end
 
+  defp compile_prepare_arities(definitions) do
+    for {{name, arity}, %{defaults: defaults}} <- definitions,
+        arity <- (arity - map_size(defaults))..arity,
+        into: MapSet.new(),
+        do: {name, arity}
+  end
+
   defp compile_each_defn({{name, arity} = def, def_meta}, state) do
     %{defaults: defaults} = def_meta
     {{kind, _meta, args, ast}, state} = get_and_normalize_definition_defn(def, state)
 
     defn_name = defn_name(name)
 
-    defn_args =
-      Enum.with_index(args, fn arg, i ->
-        case defaults do
-          %{^i => {meta, default}} -> {:\\, meta, [arg, default]}
-          %{} -> arg
-        end
-      end)
+    defn_args = compile_each_default_args(args, defaults)
 
     all_args = Macro.generate_arguments(arity, __MODULE__)
 
@@ -266,18 +260,52 @@ defmodule Nx.Defn.Compiler do
     end
   end
 
-  defp compile_each_transform({{name, _arity} = definition, _def_meta}, state) do
-    # %{defaults: defaults} = def_meta
+  defp compile_each_transform({{name, _arity} = definition, def_meta}, state) do
+    %{defaults: defaults} = def_meta
 
-    {{kind, _meta, args, _ast}, state} = get_and_normalize_definition_transform(definition, state)
+    {{kind, _meta, args, ast}, state} = get_and_normalize_definition_transform(definition, state)
 
     defn_name = defn_name(name)
 
-    quote line: state.line do
-      Kernel.unquote(kind)(unquote(defn_name)(unquote_splicing(args)),
-        do: unquote(name)(unquote_splicing(args))
-      )
+    defn_args = compile_each_default_args(args, defaults)
+
+    case kind do
+      :def ->
+        # We split the path here because for defp there's an
+        # issue with the default-args clauses that needs to
+        # be handled.
+        # We could use the same code, but this means that
+        # even for public defs we would need to delete the
+        # definition.
+        quote line: state.line do
+          Kernel.def(unquote(defn_name)(unquote_splicing(defn_args)),
+            do: unquote(name)(unquote_splicing(args))
+          )
+        end
+
+      :defp ->
+        quote line: state.line do
+          Module.delete_definition(__MODULE__, unquote(definition))
+
+          # We need to redefine the function so that only the clause without default arguments is available
+          # This is because the `defn_name` definition below only calls this clause, which ends up
+          # generating warnings for `defp` definitions
+          Kernel.defp(unquote(name)(unquote_splicing(args)), do: unquote(ast))
+
+          Kernel.defp(unquote(defn_name)(unquote_splicing(defn_args)),
+            do: unquote(name)(unquote_splicing(args))
+          )
+        end
     end
+  end
+
+  defp compile_each_default_args(args, defaults) do
+    Enum.with_index(args, fn arg, i ->
+      case defaults do
+        %{^i => {meta, default}} -> {:\\, meta, [arg, default]}
+        %{} -> arg
+      end
+    end)
   end
 
   @doc false
@@ -328,6 +356,12 @@ defmodule Nx.Defn.Compiler do
       [{meta, args, [], ast}] ->
         args =
           Macro.prewalk(args, fn
+            var when is_var(var) -> normalize_var(var)
+            node -> node
+          end)
+
+        ast =
+          Macro.prewalk(ast, fn
             var when is_var(var) -> normalize_var(var)
             node -> node
           end)
