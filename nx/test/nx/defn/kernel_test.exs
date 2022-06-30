@@ -1,6 +1,7 @@
 defmodule Nx.Defn.KernelTest do
   use ExUnit.Case, async: true
 
+  require Nx.Defn.Kernel
   alias Nx.Tensor, as: T
   alias Nx.Defn.Expr
 
@@ -218,6 +219,78 @@ defmodule Nx.Defn.KernelTest do
 
       assert callback == (&Function.identity/1)
       assert "hook_" <> _ = Atom.to_string(name)
+    end
+  end
+
+  describe "case" do
+    import Nx.Defn
+
+    defn simple_rank(tensor) do
+      case Nx.shape(tensor) do
+        {} -> 0
+        {_} -> 1
+        {_, _} -> 2
+      end
+    end
+
+    defn tuple_rank(tensorA, tensorB) do
+      case {Nx.shape(tensorA), Nx.shape(tensorB)} do
+        {{}, {}} -> 0
+        {{_}, {}} -> -1
+        {{}, {_}} -> 1
+      end
+    end
+
+    defn guard_rank(tensor) do
+      case Nx.shape(tensor) do
+        {x, x} -> 0
+        {x, y} when x > y -> -1
+        {x, y} when x < y -> 1
+      end
+    end
+
+    defn invalid_case(tensor) do
+      case tensor do
+        _ -> 0
+      end
+    end
+
+    test "matches shapes" do
+      assert simple_rank(123) == Nx.tensor(0)
+      assert simple_rank(Nx.tensor([1, 2, 3])) == Nx.tensor(1)
+      assert simple_rank(Nx.tensor([[1, 2, 3]])) == Nx.tensor(2)
+    end
+
+    test "matches tuples shapes" do
+      assert tuple_rank(0, 0) == Nx.tensor(0)
+      assert tuple_rank(Nx.tensor([1, 2, 3]), 0) == Nx.tensor(-1)
+      assert tuple_rank(0, Nx.tensor([1, 2, 3])) == Nx.tensor(1)
+    end
+
+    test "matches using guards" do
+      assert guard_rank(Nx.iota({2, 2})) == Nx.tensor(0)
+      assert guard_rank(Nx.iota({3, 2})) == Nx.tensor(-1)
+      assert guard_rank(Nx.iota({2, 3})) == Nx.tensor(1)
+    end
+
+    test "raises if not tuple, atom, integer" do
+      assert_raise ArgumentError,
+                   ~r"only tuples, atoms, and numbers are allowed as arguments to case/2 inside defn",
+                   fn -> invalid_case(Nx.tensor(0)) end
+    end
+
+    test "raises on outside variables in guards" do
+      assert_raise CompileError,
+                   ~r"case/2 in defn allow guards to only access variables defined in patterns",
+                   fn ->
+                     defmodule Fail do
+                       defn invalid_case(y) do
+                         case y do
+                           x when x > y -> 1
+                         end
+                       end
+                     end
+                   end
     end
   end
 end

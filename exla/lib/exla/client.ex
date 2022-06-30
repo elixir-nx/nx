@@ -21,16 +21,23 @@ defmodule EXLA.Client do
 
       :error ->
         all_clients = Application.fetch_env!(:exla, :clients)
+        preferred_clients = Application.fetch_env!(:exla, :preferred_clients)
         supported_platforms = get_supported_platforms()
 
-        {client, _config} =
-          Enum.find(all_clients, fn {_, config} ->
+        client =
+          Enum.find(preferred_clients, fn client ->
+            config =
+              all_clients[client] ||
+                raise "unknown client #{inspect(client)} given as :preferred_clients"
+
             Map.has_key?(supported_platforms, config[:platform] || :host)
-          end) ||
-            raise(
-              "could not find default client for EXLA. " <>
-                "The configured EXLA clients are: #{inspect(all_clients)}"
-            )
+          end)
+
+        unless client do
+          raise(
+            "could not find default client for EXLA. The configured EXLA clients are: #{inspect(all_clients)}"
+          )
+        end
 
         Application.put_env(:exla, :default_client, client)
         client

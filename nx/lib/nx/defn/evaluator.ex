@@ -16,6 +16,7 @@ defmodule Nx.Defn.Evaluator do
   def __stream__(_key, input, acc, vars, fun, [args], opts) do
     count = Nx.Defn.Composite.count(input) + Nx.Defn.Composite.count(acc)
     hooks = Keyword.get(opts, :hooks, %{})
+    gc? = Keyword.get(opts, :garbage_collect, true)
     expr = fun.(vars)
 
     [
@@ -23,7 +24,7 @@ defmodule Nx.Defn.Evaluator do
         params = Nx.Defn.Composite.flatten_runtime_args([input, acc], Enum.drop(args, count))
 
         expr
-        |> composite_eval(%{params: params, hooks: hooks}, %{})
+        |> composite_eval(%{params: params, hooks: hooks, gc: gc?}, %{})
         |> elem(0)
       end)
     ]
@@ -37,12 +38,13 @@ defmodule Nx.Defn.Evaluator do
   @impl true
   def __compile__(vars, fun, opts) do
     hooks = Keyword.get(opts, :hooks, %{})
+    gc? = Keyword.get(opts, :garbage_collect, true)
     expr = fun.(vars)
 
     fn [params] ->
       [
         expr
-        |> composite_eval(%{params: params, hooks: hooks}, %{})
+        |> composite_eval(%{params: params, hooks: hooks, gc: gc?}, %{})
         |> elem(0)
       ]
     end
@@ -78,7 +80,7 @@ defmodule Nx.Defn.Evaluator do
 
       %{} ->
         {res, cache} = eval_apply(op, ans, state, cache)
-        :erlang.garbage_collect(self())
+        state.gc && :erlang.garbage_collect(self())
         {res, Map.put(cache, id, res)}
     end
   end

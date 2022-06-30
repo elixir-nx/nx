@@ -3,6 +3,8 @@ defmodule Nx.Defn.Kernel do
   All imported functionality available inside `defn` blocks.
   """
 
+  import Nx.Shared, only: [defnguard: 2]
+
   @doc """
   Defines an alias, as in `Kernel.SpecialForms.alias/2`.
 
@@ -89,18 +91,52 @@ defmodule Nx.Defn.Kernel do
 
   All clauses are normalized to the same type and are broadcast
   to the same shape. The last condition must always evaluate to
-  an atom, typically `:otherwise`.
+  an atom, typically `:otherwise`. All clauses are executed
+  in the device, unless they can be determined to always be
+  true/false always building the expression.
 
   ## Examples
 
       cond do
-        Nx.all(Nx.greater(a, 0)) -> b *
+        Nx.all(Nx.greater(a, 0)) -> b * c
         Nx.all(Nx.less(a, 0)) -> b + c
         true -> b - c
       end
 
   """
   defmacro cond(opts), do: special_form!([opts])
+
+  @doc """
+  Pattern matches the result of `expr` against the given clauses.
+
+  For example:
+
+      case Nx.shape(tensor) do
+        {_} -> implementation_for_rank_one(tensor)
+        {_, _} -> implementation_for_rank_two(tensor)
+        _ -> implementation_for_rank_n(tensor)
+      end
+
+  Opposite to `cond/2` and `if/2`, which can execute the branching
+  in the device, `case`s are always expanded when building the
+  expression, and never on the device. This allows `case/2` to work
+  very similarly to Elixir's own `Kernel.case/2`, with only the
+  following restrictions in place:
+
+    * `case` inside defn only accepts atoms, integers, and tuples as arguments
+    * guards in `case` inside defn can only access variables defined within the pattern
+
+  Here is an example of `case` with guards:
+
+      case Nx.shape(tensor) do
+        {x, y} when x > y -> implementation_for_tall(tensor)
+        {x, y} when x < y -> implementation_for_wide(tensor)
+        {x, x} -> implementation_for_square(tensor)
+      end
+
+  """
+  defmacro case(expr, do: block),
+    do: special_form!([expr, block])
 
   defp special_form!(_args),
     do: raise("special forms must not be imported and exist for documentation purposes")
@@ -526,7 +562,10 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  def left and right when Kernel.or(is_boolean(left), is_boolean(right)) do
+  defnguard(left and right, :__and__)
+
+  @doc false
+  def __and__(left, right) when Kernel.or(is_boolean(left), is_boolean(right)) do
     raise ArgumentError,
           "boolean value passed to Nx.Defn.Kernel.and/2, " <>
             "values passed to Nx.Defn.Kernel.and/2 must be " <>
@@ -534,10 +573,10 @@ defmodule Nx.Defn.Kernel do
             "and 0 for false as an alternative"
   end
 
-  def left and right when Kernel.and(is_number(left), is_number(right)),
+  def __and__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: logical_and(left, right)
 
-  def left and right, do: Nx.logical_and(left, right)
+  def __and__(left, right), do: Nx.logical_and(left, right)
 
   @doc """
   Element-wise logical OR operation.
@@ -554,7 +593,10 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  def left or right when Kernel.or(is_boolean(left), is_boolean(right)) do
+  defnguard(left or right, :__or__)
+
+  @doc false
+  def __or__(left, right) when Kernel.or(is_boolean(left), is_boolean(right)) do
     raise ArgumentError,
           "boolean value passed to Nx.Defn.Kernel.or/2, " <>
             "values passed to Nx.Defn.Kernel.or/2 must be " <>
@@ -562,10 +604,10 @@ defmodule Nx.Defn.Kernel do
             "and 0 for false as an alternative"
   end
 
-  def left or right when Kernel.and(is_number(left), is_number(right)),
+  def __or__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: logical_or(left, right)
 
-  def left or right, do: Nx.logical_or(left, right)
+  def __or__(left, right), do: Nx.logical_or(left, right)
 
   @doc """
   Element-wise logical NOT operation.
@@ -580,7 +622,10 @@ defmodule Nx.Defn.Kernel do
       defn logical_not(a), do: not a
 
   """
-  def not tensor when is_boolean(tensor) do
+  defnguard(not tensor, :__not__)
+
+  @doc false
+  def __not__(tensor) when is_boolean(tensor) do
     raise ArgumentError,
           "boolean value passed to Nx.Defn.Kernel.not/1, " <>
             "values passed to Nx.Defn.Kernel.not/1 must be " <>
@@ -588,8 +633,8 @@ defmodule Nx.Defn.Kernel do
             "and 0 for false as an alternative"
   end
 
-  def not tensor when is_number(tensor), do: logical_not(tensor)
-  def not tensor, do: Nx.logical_not(tensor)
+  def __not__(tensor) when is_number(tensor), do: logical_not(tensor)
+  def __not__(tensor), do: Nx.logical_not(tensor)
 
   defp logical_and(l, _) when Kernel.==(l, 0), do: zero()
   defp logical_and(_, r) when Kernel.==(r, 0), do: zero()
@@ -703,10 +748,13 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  def left == right when Kernel.and(is_number(left), is_number(right)),
+  defnguard(left == right, :__equal__)
+
+  @doc false
+  def __equal__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.==(left, right))
 
-  def left == right, do: Nx.equal(left, right)
+  def __equal__(left, right), do: Nx.equal(left, right)
 
   @doc """
   Element-wise inequality operation.
@@ -720,10 +768,13 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  def left != right when Kernel.and(is_number(left), is_number(right)),
+  defnguard(left != right, :__not_equal__)
+
+  @doc false
+  def __not_equal__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.!=(left, right))
 
-  def left != right, do: Nx.not_equal(left, right)
+  def __not_equal__(left, right), do: Nx.not_equal(left, right)
 
   @doc """
   Element-wise less than operation.
@@ -737,10 +788,13 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  def left < right when Kernel.and(is_number(left), is_number(right)),
+  defnguard(left < right, :__less_than__)
+
+  @doc false
+  def __less_than__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.<(left, right))
 
-  def left < right, do: Nx.less(left, right)
+  def __less_than__(left, right), do: Nx.less(left, right)
 
   @doc """
   Element-wise greater than operation.
@@ -754,10 +808,13 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  def left > right when Kernel.and(is_number(left), is_number(right)),
+  defnguard(left > right, :__more_than__)
+
+  @doc false
+  def __more_than__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.>(left, right))
 
-  def left > right, do: Nx.greater(left, right)
+  def __more_than__(left, right), do: Nx.greater(left, right)
 
   @doc """
   Element-wise less-equal operation.
@@ -771,10 +828,13 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  def left <= right when Kernel.and(is_number(left), is_number(right)),
+  defnguard(left <= right, :__less_than_equal_to__)
+
+  @doc false
+  def __less_than_equal_to__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.<=(left, right))
 
-  def left <= right, do: Nx.less_equal(left, right)
+  def __less_than_equal_to__(left, right), do: Nx.less_equal(left, right)
 
   @doc """
   Element-wise greater-equal operation.
@@ -788,10 +848,13 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  def left >= right when Kernel.and(is_number(left), is_number(right)),
+  defnguard(left >= right, :__more_than_equal_to__)
+
+  @doc false
+  def __more_than_equal_to__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.>=(left, right))
 
-  def left >= right, do: Nx.greater_equal(left, right)
+  def __more_than_equal_to__(left, right), do: Nx.greater_equal(left, right)
 
   defp to_constant(true), do: one()
   defp to_constant(false), do: zero()
@@ -1436,8 +1499,12 @@ defmodule Nx.Defn.Kernel do
       iex> assert_shape(Nx.tensor([1, 2, 3]), {4})
       ** (ArgumentError) expected tensor to have shape {4}, got tensor with shape {3}
 
+  Similarly, to assert two tensors have the same shape, you can:
+
+      assert_shape(tensor1, Nx.shape(tensor2))
+
   If you want to assert on the rank or shape patterns, use
-  `assert_shape_pattern/2` instead.
+  `assert_shape_pattern/2` or the more general `match_shape/2`.
   """
   def assert_shape(tensor, shape) when is_tuple(shape) do
     case Nx.shape(tensor) do
@@ -1510,19 +1577,15 @@ defmodule Nx.Defn.Kernel do
     shape_pattern_string = shape_pattern_to_string(shape)
 
     quote do
-      Nx.Defn.Assertions.__assert_shape_pattern__(unquote(tensor), fn tensor ->
-        # Revert scoping so guards work
-        import Nx.Defn.Kernel, only: []
-        import Kernel
+      tensor = unquote(tensor)
 
-        case Nx.shape(tensor) do
-          unquote(shape) ->
-            tensor
+      case Nx.shape(tensor) do
+        unquote(shape) ->
+          tensor
 
-          shape ->
-            Nx.Defn.Kernel.__assert_shape_pattern__!(unquote(shape_pattern_string), shape)
-        end
-      end)
+        shape ->
+          unquote(__MODULE__).__assert_shape_pattern__!(unquote(shape_pattern_string), shape)
+      end
     end
   end
 
@@ -1537,7 +1600,16 @@ defmodule Nx.Defn.Kernel do
 
   @definitions (Module.definitions_in(__MODULE__, :def) ++
                   Module.definitions_in(__MODULE__, :defmacro)) --
-                 [alias: 1, alias: 2, import: 1, import: 2, require: 1, require: 2, cond: 1]
+                 [
+                   alias: 1,
+                   alias: 2,
+                   import: 1,
+                   import: 2,
+                   require: 1,
+                   require: 2,
+                   case: 2,
+                   cond: 1
+                 ]
 
   @doc false
   defmacro __using__(_opts) do
