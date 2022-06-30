@@ -164,7 +164,7 @@ defmodule Nx.Defn.Compiler do
     only tuples, atoms, and numbers are allowed as arguments to case/2 inside defn.
     Got: #{inspect(arg)}
 
-    Consider using deftransform/2 if you need to handle more complex cases
+    Consider using deftransform/2 or deftransformp/2 if you need to handle more complex cases
     """
   end
 

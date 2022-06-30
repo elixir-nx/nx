@@ -38,12 +38,8 @@ defmodule Nx.LinAlg do
       >
   """
   defn adjoint(t, opts \\ []) do
-    __adjoint__(t, opts)
-  end
-
-  deftransformp __adjoint__(t, opts) do
-    case t do
-      %{type: {:c, _}} ->
+    case Nx.type(t) do
+      {:c, _} ->
         t |> Nx.transpose(opts) |> Nx.conjugate()
 
       _ ->
@@ -1250,17 +1246,19 @@ defmodule Nx.LinAlg do
     assert_shape_pattern(tensor, {n, n})
 
     Nx.Shared.optional(:determinant, [tensor], output, fn tensor ->
-      {n, _} = Nx.shape(tensor)
+      case Nx.shape(tensor) do
+        {2, 2} ->
+          determinant_2by2(tensor)
 
-      case n do
-        2 -> determinant_2by2(tensor)
-        3 -> determinant_3by3(tensor)
-        _ -> determinant_NbyN(tensor)
+        {3, 3} ->
+          determinant_3by3(tensor)
+
+        {n, n} ->
+          determinant_NbyN(tensor)
       end
     end)
   end
 
-  # for 2x2 and 3x3, use the algebraic closed formula
   defnp determinant_2by2(t) do
     t = Nx.tile(t, [1, 2])
 
