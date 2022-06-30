@@ -220,4 +220,103 @@ defmodule Nx.Defn.KernelTest do
       assert "hook_" <> _ = Atom.to_string(name)
     end
   end
+
+  describe "match_shape" do
+    import Nx.Defn
+    import Nx.Defn.Kernel, only: [match_shape: 2]
+
+    defn simple_rank(tensor) do
+      match_shape tensor do
+        {} -> 0
+        {_} -> 1
+        {_, _} -> 2
+      end
+    end
+
+    defn tuple_rank(tensorA, tensorB) do
+      match_shape {tensorA, tensorB} do
+        {{}, {}} -> 0
+        {{_}, {}} -> -1
+        {{}, {_}} -> 1
+      end
+    end
+
+    defn guard_rank(tensor) do
+      match_shape tensor do
+        {x, x} -> 0
+        {x, y} when x > y -> -1
+        {x, y} when x < y -> 1
+      end
+    end
+
+    test "matches shapes" do
+      assert simple_rank(123) == Nx.tensor(0)
+      assert simple_rank(Nx.tensor([1, 2, 3])) == Nx.tensor(1)
+      assert simple_rank(Nx.tensor([[1, 2, 3]])) == Nx.tensor(2)
+    end
+
+    test "matches tuples shapes" do
+      assert tuple_rank(0, 0) == Nx.tensor(0)
+      assert tuple_rank(Nx.tensor([1, 2, 3]), 0) == Nx.tensor(-1)
+      assert tuple_rank(0, Nx.tensor([1, 2, 3])) == Nx.tensor(1)
+    end
+
+    test "matches using guards" do
+      assert guard_rank(Nx.iota({2, 2})) == Nx.tensor(0)
+      assert guard_rank(Nx.iota({3, 2})) == Nx.tensor(-1)
+      assert guard_rank(Nx.iota({2, 3})) == Nx.tensor(1)
+    end
+
+    test "raises without clauses" do
+      assert_raise CompileError,
+                   ~r"match_shape/2 expects a do-end block with multiple clauses",
+                   fn ->
+                     defmodule Fail do
+                       match_shape(:foo, :bar)
+                     end
+                   end
+
+      assert_raise CompileError,
+                   ~r"match_shape/2 expects a do-end block with multiple clauses",
+                   fn ->
+                     defmodule Fail do
+                       match_shape(:foo, do: :bar)
+                     end
+                   end
+    end
+
+    test "raises on invalid patterns/guards" do
+      assert_raise CompileError,
+                   ~r"match_shape/2 expects patterns to have tuples, variables, atoms, and numbers",
+                   fn ->
+                     defmodule Fail do
+                       match_shape(1) do
+                         [_, _] -> 1
+                       end
+                     end
+                   end
+
+      assert_raise CompileError,
+                   ~r"match_shape/2 expects guards to have comparisons, and/or, variables, atoms, and numbers",
+                   fn ->
+                     defmodule Fail do
+                       match_shape(1) do
+                         x when is_binary(x) -> 1
+                       end
+                     end
+                   end
+
+      assert_raise CompileError,
+                   ~r"match_shape/2 guards can only access variables defined in patterns",
+                   fn ->
+                     defmodule Fail do
+                       y = 1
+
+                       match_shape(1) do
+                         x when x > y -> 1
+                       end
+                     end
+                   end
+    end
+  end
 end

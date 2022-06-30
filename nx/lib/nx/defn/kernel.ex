@@ -1384,7 +1384,7 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
-  Matches on the tensors shapes.
+  Matches on tensor shapes.
 
       match_shape tensor do
         {_} -> implementation_for_rank_one(tensor)
@@ -1393,8 +1393,6 @@ defmodule Nx.Defn.Kernel do
       end
 
   The left-side of the arrow expects an Elixir pattern, as found in `Kernel.case/2`.
-  However, given shapes are always tuples, we enforce the patterns to be tuples or
-  underscores.
 
   It is also possible to use guards to assert certain properties:
 
@@ -1404,16 +1402,37 @@ defmodule Nx.Defn.Kernel do
         {x, x} -> implementation_for_square(tensor)
       end
 
-  Or to match on multiple tensors at the same time:
+  To preserve proper behaviour under numerical definitions, the guards
+  are limited only to certain expressions and it can only access variables
+  defined in the pattern.
+
+  To match on multiple tensors at the same time, you can explicitly give a
+  tuple to `match_shape/2`:
 
       match_shape {tensor1, tensor2} do
         ...
       end
 
-  If you want to perform assertions on shapes, also consider
-  using `assert_shape/2` and `assert_shape_pattern/2` for convenience.
+  The tuple must be explicitly given to `match_shape/2`. This, for instance,
+  would raise:
+
+      tuple = {tensor1, tensor2}
+
+      match_shape tuple do
+        ...
+      end
+
+  As `match_shape/2` would expect `tuple` to be a tensor. As a rule of thumb,
+  `match_shape tensor do` is equivalent to the Elixir expression `case Nx.shape(tensor) do`
+  outside of `defn`.
   """
-  defmacro match_shape(expr, do: [{:->, _, _} | _] = clauses) when is_list(clauses) do
+  defmacro match_shape(expr, do_clauses) do
+    match(__CALLER__, :shape, expr, do_clauses)
+  end
+
+  ## Helper for defining match macros
+
+  defp match(env, name, expr, do: [{:->, _, _} | _] = clauses) when is_list(clauses) do
     clauses =
       Enum.map(clauses, fn
         {:->, clause_meta, [[head], body]} ->
@@ -1423,41 +1442,57 @@ defmodule Nx.Defn.Kernel do
               _ -> {clause_meta, head, true}
             end
 
-          case pattern do
-            {_, _} ->
-              :ok
+          {pattern, vars} =
+            Macro.postwalk(pattern, %{}, fn
+              {_, _} = tuple, acc ->
+                {tuple, acc}
 
-            {:{}, _, _} ->
-              :ok
+              {:{}, _, _} = tuple, acc ->
+                {tuple, acc}
 
-            {var, _, ctx} when Kernel.and(is_atom(var), is_atom(ctx)) ->
-              :ok
+              {var, meta, ctx}, acc when Kernel.and(is_atom(var), is_atom(ctx)) ->
+                {{var, meta, ctx}, Map.put(acc, {var, ctx}, true)}
 
-            _ ->
-              compile_error!(
-                clause_meta,
-                __CALLER__,
-                "match_shape/2 expects each clause to match on tensor shapes, " <>
-                  "which are tuples. Got: #{Macro.to_string(pattern)}"
-              )
-          end
+              literal, acc when Kernel.or(is_integer(literal), is_atom(literal)) ->
+                {literal, acc}
+
+              pattern, _acc ->
+                compile_error!(
+                  clause_meta,
+                  env,
+                  "match_#{name}/2 expects patterns to have tuples, variables, atoms, and numbers. " <>
+                    "Got: #{Macro.to_string(pattern)}"
+                )
+            end)
 
           guard =
             Macro.postwalk(guard, fn
-              {local, meta, [_ | _] = args} when local in ~w(> < == != >= <= === !== in and or)a ->
+              {local, meta, [_ | _] = args}
+              when local in ~w(> < == != >= <= === !== in and or)a ->
                 {{:., meta, [Kernel, local]}, meta, args}
 
               {var, meta, ctx} when Kernel.and(is_atom(var), is_atom(ctx)) ->
-                {var, meta, ctx}
+                case is_map_key(vars, {var, ctx}) do
+                  true ->
+                    {var, meta, ctx}
 
-              literal when Kernel.or(is_integer(literal), is_boolean(literal)) ->
+                  false ->
+                    compile_error!(
+                      clause_meta,
+                      env,
+                      "match_#{name}/2 guards can only access variables defined in patterns. " <>
+                        "Got: #{var}"
+                    )
+                end
+
+              literal when Kernel.or(is_integer(literal), is_atom(literal)) ->
                 literal
 
               guard ->
                 compile_error!(
                   clause_meta,
-                  __CALLER__,
-                  "match_shape/2 expects guards to have comparisons, and/or, variables, and numbers. " <>
+                  env,
+                  "match_#{name}/2 expects guards to have comparisons, and/or, variables, atoms, and numbers. " <>
                     "Got: #{Macro.to_string(guard)}"
                 )
             end)
@@ -1467,46 +1502,50 @@ defmodule Nx.Defn.Kernel do
         {:->, clause_meta, [head, _]} ->
           compile_error!(
             clause_meta,
-            __CALLER__,
-            "match_shape/2 expects each clause to have a single pattern. Got: #{length(head)} patterns"
+            env,
+            "#{name}/2 expects each clause to have a single pattern. Got: #{length(head)} patterns"
           )
       end)
 
-    annotate_case(
-      quote do
-        case Nx.Defn.Kernel.__shapes__(unquote(expr)), do: unquote(clauses)
+    wrapped =
+      case expr do
+        {left, right} ->
+          [left, right] = wrap_match_expr(name, [left, right])
+          {left, right}
+
+        {:{}, meta, args} ->
+          {:{}, meta, wrap_match_expr(name, args)}
+
+        _ ->
+          hd(wrap_match_expr(name, [expr]))
       end
+
+    {:case, [defn: true], [wrapped, [do: clauses]]}
+  end
+
+  defp wrap_match_expr(name, args) do
+    Enum.map(args, &quote(do: Nx.unquote(name)(unquote(&1))))
+  end
+
+  defp match(env, name, _expr, do: other) do
+    compile_error!(
+      [],
+      env,
+      "match_#{name}/2 expects a do-end block with multiple clauses. Got: #{Macro.to_string(other)}"
     )
   end
 
-  defmacro match_shape(_expr, do: other) do
+  defp match(env, name, _expr, other) do
     compile_error!(
       [],
-      __CALLER__,
-      "match_shape/2 expects a do-end block with multiple clauses. Got: #{Macro.to_string(other)}"
-    )
-  end
-
-  defmacro match_shape(_expr, other) do
-    compile_error!(
-      [],
-      __CALLER__,
-      "match_shape/2 expects a do-end block with multiple clauses. Got: #{Macro.to_string(other)}"
+      env,
+      "match_#{name}/2 expects a do-end block with multiple clauses. Got: #{Macro.to_string(other)}"
     )
   end
 
   defp compile_error!(meta, env, description) do
     raise CompileError, line: meta[:line] || env.line, file: env.file, description: description
   end
-
-  @doc false
-  def __shapes__(tuple) when is_tuple(tuple),
-    do: List.to_tuple(Enum.map(Tuple.to_list(tuple), &__shapes__/1))
-
-  def __shapes__(tensor),
-    do: Nx.shape(tensor)
-
-  defp annotate_case({:case, meta, args}), do: {:case, [defn: true] ++ meta, args}
 
   @doc """
   Asserts the keyword list has the given keys.
