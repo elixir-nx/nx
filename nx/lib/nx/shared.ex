@@ -4,7 +4,7 @@ defmodule Nx.Shared do
 
   alias Nx.Tensor, as: T
 
-  ## Macros
+  ## Type macros
 
   @doc """
   Match the cartesian product of all given types.
@@ -274,6 +274,27 @@ defmodule Nx.Shared do
         :infinity -> unquote(Nx.Type.infinity_binary({:f, size}))
         :neg_infinity -> unquote(Nx.Type.neg_infinity_binary({:f, size}))
         :nan -> unquote(Nx.Type.nan_binary({:f, size}))
+      end
+    end
+  end
+
+  ## Kernel helper macros
+
+  @doc """
+  Defines a macro that delegates to Elixir.Kernel when inside a guard.
+  """
+  defmacro defnguard(call, fallback) do
+    {name, args} = Macro.decompose_call(call)
+
+    quote do
+      defmacro unquote(name)(unquote_splicing(args)) do
+        {module, name} =
+          case __CALLER__.context do
+            :guard -> {Kernel, unquote(name)}
+            _ -> {__MODULE__, unquote(fallback)}
+          end
+
+        {{:., [], [module, name]}, [], unquote(args)}
       end
     end
   end

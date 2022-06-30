@@ -1,7 +1,6 @@
 # Used by "mix format"
 
 locals_without_parens = [
-  match_shape: 2,
   defn: 2,
   defnp: 2,
   while: 3
