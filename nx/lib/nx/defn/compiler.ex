@@ -150,6 +150,25 @@ defmodule Nx.Defn.Compiler do
   ## Compiler
 
   @doc false
+  def __case__(arg) when is_tuple(arg) do
+    arg |> Tuple.to_list() |> Enum.each(&__case__/1)
+    arg
+  end
+
+  def __case__(arg) when is_integer(arg) or is_atom(arg) do
+    arg
+  end
+
+  def __case__(arg) do
+    raise ArgumentError, """
+    only tuples, atoms, and numbers are allowed as arguments to case/2 inside defn.
+    Got: #{inspect(arg)}
+
+    Consider using deftransform/2 if you need to handle more complex cases
+    """
+  end
+
+  @doc false
   def __remote__(module, function, defn, args) do
     try do
       apply(module, defn, args)
@@ -335,6 +354,51 @@ defmodule Nx.Defn.Compiler do
       end)
 
     {{:fn, meta, clauses}, state}
+  end
+
+  defp normalize({:case, meta, [expr, [do: clauses]]}, state) do
+    {expr, state} = normalize(expr, state)
+
+    {clauses, state} =
+      Enum.map_reduce(clauses, state, fn {:->, clause_meta, [[head], body]}, state ->
+        {when_meta, pattern, guard} =
+          case head do
+            {:when, when_meta, [pattern, guard]} -> {when_meta, pattern, guard}
+            _ -> {clause_meta, head, true}
+          end
+
+        {pattern, vars} =
+          Macro.postwalk(pattern, %{}, fn
+            {var, _meta, ctx} = triplet, acc when is_atom(var) and is_atom(ctx) ->
+              {normalize_var(triplet), Map.put(acc, {var, ctx}, true)}
+
+            other, acc ->
+              {other, acc}
+          end)
+
+        guard =
+          Macro.postwalk(guard, fn
+            {var, _meta, ctx} = triplet when is_atom(var) and is_atom(ctx) ->
+              if is_map_key(vars, {var, ctx}) do
+                normalize_var(triplet)
+              else
+                compile_error!(
+                  clause_meta,
+                  state,
+                  "case/2 in defn allow guards to only access variables defined in patterns. Got: #{var}"
+                )
+              end
+
+            other ->
+              other
+          end)
+
+        {body, state} = normalize(body, state)
+        {{:->, clause_meta, [[{:when, when_meta, [pattern, guard]}], body]}, state}
+      end)
+
+    wrapped = {{:., meta, [__MODULE__, :__case__]}, meta, [expr]}
+    {{:case, meta, [wrapped, [do: clauses]]}, state}
   end
 
   defp normalize({:cond, meta, [[do: clauses]]}, state) do
