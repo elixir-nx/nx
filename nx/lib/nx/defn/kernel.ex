@@ -1384,6 +1384,131 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
+  Matches on the tensors shapes.
+
+      match_shape tensor do
+        {_} -> implementation_for_rank_one(tensor)
+        {_, _} -> implementation_for_rank_two(tensor)
+        _ -> implementation_for_rank_n(tensor)
+      end
+
+  The left-side of the arrow expects an Elixir pattern, as found in `Kernel.case/2`.
+  However, given shapes are always tuples, we enforce the patterns to be tuples or
+  underscores.
+
+  It is also possible to use guards to assert certain properties:
+
+      match_shape tensor do
+        {x, y} when x > y -> implementation_for_tall(tensor)
+        {x, y} when x < y -> implementation_for_wide(tensor)
+        {x, x} -> implementation_for_square(tensor)
+      end
+
+  Or to match on multiple tensors at the same time:
+
+      match_shape {tensor1, tensor2} do
+        ...
+      end
+
+  If you want to perform assertions on shapes, also consider
+  using `assert_shape/2` and `assert_shape_pattern/2` for convenience.
+  """
+  defmacro match_shape(expr, do: [{:->, _, _} | _] = clauses) when is_list(clauses) do
+    clauses =
+      Enum.map(clauses, fn
+        {:->, clause_meta, [[head], body]} ->
+          {when_meta, pattern, guard} =
+            case head do
+              {:when, when_meta, [pattern, guard]} -> {when_meta, pattern, guard}
+              _ -> {clause_meta, head, true}
+            end
+
+          case pattern do
+            {_, _} ->
+              :ok
+
+            {:{}, _, _} ->
+              :ok
+
+            {var, _, ctx} when Kernel.and(is_atom(var), is_atom(ctx)) ->
+              :ok
+
+            _ ->
+              compile_error!(
+                clause_meta,
+                __CALLER__,
+                "match_shape/2 expects each clause to match on tensor shapes, " <>
+                  "which are tuples. Got: #{Macro.to_string(pattern)}"
+              )
+          end
+
+          guard =
+            Macro.postwalk(guard, fn
+              {local, meta, [_ | _] = args} when local in ~w(> < == != >= <= === !== in and or)a ->
+                {{:., meta, [Kernel, local]}, meta, args}
+
+              {var, meta, ctx} when Kernel.and(is_atom(var), is_atom(ctx)) ->
+                {var, meta, ctx}
+
+              literal when Kernel.or(is_integer(literal), is_boolean(literal)) ->
+                literal
+
+              guard ->
+                compile_error!(
+                  clause_meta,
+                  __CALLER__,
+                  "match_shape/2 expects guards to have comparisons, and/or, variables, and numbers. " <>
+                    "Got: #{Macro.to_string(guard)}"
+                )
+            end)
+
+          {:->, clause_meta, [[{:when, when_meta, [pattern, guard]}], body]}
+
+        {:->, clause_meta, [head, _]} ->
+          compile_error!(
+            clause_meta,
+            __CALLER__,
+            "match_shape/2 expects each clause to have a single pattern. Got: #{length(head)} patterns"
+          )
+      end)
+
+    annotate_case(
+      quote do
+        case Nx.Defn.Kernel.__shapes__(unquote(expr)), do: unquote(clauses)
+      end
+    )
+  end
+
+  defmacro match_shape(_expr, do: other) do
+    compile_error!(
+      [],
+      __CALLER__,
+      "match_shape/2 expects a do-end block with multiple clauses. Got: #{Macro.to_string(other)}"
+    )
+  end
+
+  defmacro match_shape(_expr, other) do
+    compile_error!(
+      [],
+      __CALLER__,
+      "match_shape/2 expects a do-end block with multiple clauses. Got: #{Macro.to_string(other)}"
+    )
+  end
+
+  defp compile_error!(meta, env, description) do
+    raise CompileError, line: meta[:line] || env.line, file: env.file, description: description
+  end
+
+  @doc false
+  def __shapes__(tuple) when is_tuple(tuple),
+    do: List.to_tuple(Enum.map(Tuple.to_list(tuple), &__shapes__/1))
+
+  def __shapes__(tensor),
+    do: Nx.shape(tensor)
+
+  defp annotate_case({:case, meta, args}), do: {:case, [defn: true] ++ meta, args}
+
+  @doc """
   Asserts the keyword list has the given keys.
 
   If it succeeds, it returns the given keyword list. Raises
@@ -1435,8 +1560,12 @@ defmodule Nx.Defn.Kernel do
       iex> assert_shape(Nx.tensor([1, 2, 3]), {4})
       ** (ArgumentError) expected tensor to have shape {4}, got tensor with shape {3}
 
+  Similarly, to assert two tensors have the same shape, you can:
+
+      assert_shape(tensor1, Nx.shape(tensor2))
+
   If you want to assert on the rank or shape patterns, use
-  `assert_shape_pattern/2` instead.
+  `assert_shape_pattern/2` or the more general `match_shape/2`.
   """
   def assert_shape(tensor, shape) when is_tuple(shape) do
     case Nx.shape(tensor) do
@@ -1509,19 +1638,15 @@ defmodule Nx.Defn.Kernel do
     shape_pattern_string = shape_pattern_to_string(shape)
 
     quote do
-      Nx.Defn.Kernel.transform(unquote(tensor), fn tensor ->
-        # Revert scoping so guards work
-        import unquote(__MODULE__), only: []
-        import Kernel
+      tensor = unquote(tensor)
 
-        case Nx.shape(tensor) do
-          unquote(shape) ->
-            tensor
+      Nx.Defn.Kernel.match_shape tensor do
+        unquote(shape) ->
+          tensor
 
-          shape ->
-            unquote(__MODULE__).__assert_shape_pattern__!(unquote(shape_pattern_string), shape)
-        end
-      end)
+        shape ->
+          unquote(__MODULE__).__assert_shape_pattern__!(unquote(shape_pattern_string), shape)
+      end
     end
   end
 
