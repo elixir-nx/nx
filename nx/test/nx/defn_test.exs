@@ -622,7 +622,7 @@ defmodule Nx.DefnTest do
     defn(lnot(a), do: not a)
     defn(lnot_true(), do: not constant_boolean_transform())
 
-    deftransformp constant_boolean_transform, do: true
+    deftransformp(constant_boolean_transform, do: true)
 
     test "not" do
       assert %T{data: %Expr{op: :optional, args: [%T{data: %Expr{op: :logical_not}}, _]}} =
@@ -1648,7 +1648,19 @@ defmodule Nx.DefnTest do
     end
 
     # Ensure that def works
-    deftransform(public_default_args(arg1, arg2 \\ 2), do: {arg1, arg2})
+    deftransform public_default_args(arg1, arg2 \\ 2), do: {arg1, arg2}
+
+    # Ensure multi-clause and guards work
+    deftransform multi_clause_transform(number, fun) when is_function(fun, 1) do
+      fun.(number)
+    end
+
+    deftransform multi_clause_transform(x, y) when is_number(x) and is_number(y) and y > 0 do
+      x ** y
+    end
+
+    defn multi_clause_first(x), do: multi_clause_transform(x, &(&1 + &1))
+    defn multi_clause_second(opts \\ []), do: multi_clause_transform(opts[:x], opts[:y])
 
     test "can call deftransform and deftransformp functions from within defn" do
       result = deftransform_test(Nx.tensor(1), Nx.tensor(2), b: 3, c: 4)
@@ -1681,6 +1693,18 @@ defmodule Nx.DefnTest do
     test "deftransform handles default arguments" do
       assert public_default_args1(10) == {Nx.tensor(10), Nx.tensor(2)}
       assert public_default_args2(10, 20) == {Nx.tensor(10), Nx.tensor(20)}
+    end
+
+    @tag compiler: Evaluator
+    test "multi-clause and guards work for deftransform" do
+      assert multi_clause_first(2) == Nx.tensor(4)
+      assert multi_clause_second(x: 2, y: 3) == Nx.tensor(8)
+    end
+
+    test "multi-clause raises for no clause matching args" do
+      assert_raise FunctionClauseError, "no function clause matching in Nx.DefnTest.multi_clause_transform/2", fn ->
+        multi_clause_second(x: 2, y: -3)
+      end
     end
   end
 end

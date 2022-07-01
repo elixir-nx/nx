@@ -240,11 +240,17 @@ defmodule Nx.Defn.Compiler do
 
   defp compile_each_defn({{name, arity} = def, def_meta}, state) do
     %{defaults: defaults} = def_meta
-    {{kind, _meta, args, ast}, state} = get_and_normalize_definition_defn(def, state)
+    {{kind, _meta, args, ast}, state} = get_and_normalize_definition(def, state)
 
     defn_name = defn_name(name)
 
-    defn_args = compile_each_default_args(args, defaults)
+    defn_args =
+      Enum.with_index(args, fn arg, i ->
+        case defaults do
+          %{^i => {meta, default}} -> {:\\, meta, [arg, default]}
+          %{} -> arg
+        end
+      end)
 
     all_args = Macro.generate_arguments(arity, __MODULE__)
 
@@ -279,52 +285,25 @@ defmodule Nx.Defn.Compiler do
     end
   end
 
-  defp compile_each_transform({{name, _arity} = definition, def_meta}, state) do
+  defp compile_each_transform({{name, arity} = definition, def_meta}, state) do
     %{defaults: defaults} = def_meta
 
-    {{kind, _meta, args, ast}, state} = get_and_normalize_definition_transform(definition, state)
+    {:v1, kind, meta, _clauses} = Module.get_definition(state.module, definition)
 
     defn_name = defn_name(name)
 
-    defn_args = compile_each_default_args(args, defaults)
+    ast =
+      for defn_arity <- (arity - map_size(defaults))..arity//1 do
+        defn_args = Macro.generate_arguments(defn_arity, __MODULE__)
 
-    case kind do
-      :def ->
-        # We split the path here because for defp there's an
-        # issue with the default-args clauses that needs to
-        # be handled.
-        # We could use the same code, but this means that
-        # even for public defs we would need to delete the
-        # definition.
-        quote line: state.line do
-          Kernel.def(unquote(defn_name)(unquote_splicing(defn_args)),
-            do: unquote(name)(unquote_splicing(args))
+        quote line: meta[:line] do
+          Kernel.unquote(kind)(unquote(defn_name)(unquote_splicing(defn_args)),
+            do: unquote(name)(unquote_splicing(defn_args))
           )
         end
-
-      :defp ->
-        quote line: state.line do
-          Module.delete_definition(__MODULE__, unquote(definition))
-
-          # We need to redefine the function so that only the clause without default arguments is available
-          # This is because the `defn_name` definition below only calls this clause, which ends up
-          # generating warnings for `defp` definitions
-          Kernel.defp(unquote(name)(unquote_splicing(args)), do: unquote(ast))
-
-          Kernel.defp(unquote(defn_name)(unquote_splicing(defn_args)),
-            do: unquote(name)(unquote_splicing(args))
-          )
-        end
-    end
-  end
-
-  defp compile_each_default_args(args, defaults) do
-    Enum.with_index(args, fn arg, i ->
-      case defaults do
-        %{^i => {meta, default}} -> {:\\, meta, [arg, default]}
-        %{} -> arg
       end
-    end)
+
+    {:__block__, [], ast}
   end
 
   @doc false
@@ -341,7 +320,7 @@ defmodule Nx.Defn.Compiler do
     res
   end
 
-  defp get_and_normalize_definition_defn(def, state) do
+  defp get_and_normalize_definition(def, state) do
     {:v1, kind, meta, clauses} = Module.get_definition(state.module, def)
     state = %{state | function: def, line: meta[:line] || state.line, rewrite_underscore?: true}
 
@@ -354,37 +333,6 @@ defmodule Nx.Defn.Compiler do
       [{meta, args, [], ast}] ->
         {args, state} = normalize_args(args, meta, state)
         {ast, state} = normalize(ast, %{state | rewrite_underscore?: false})
-        {{kind, meta, args, ast}, state}
-
-      [_, _ | _] ->
-        compile_error!(meta, state, "cannot compile #{type_str} with multiple clauses")
-    end
-  end
-
-  defp get_and_normalize_definition_transform(def, state) do
-    Module.get_definition(state.module, def) || IO.inspect(def, label: "def")
-    {:v1, kind, meta, clauses} = Module.get_definition(state.module, def)
-    state = %{state | function: def, line: meta[:line] || state.line, rewrite_underscore?: true}
-
-    type_str = if kind == :def, do: "deftransform", else: "deftransformp"
-
-    case clauses do
-      [] ->
-        compile_error!(meta, state, "cannot have #{type_str} without clauses")
-
-      [{meta, args, [], ast}] ->
-        args =
-          Macro.prewalk(args, fn
-            var when is_var(var) -> normalize_var(var)
-            node -> node
-          end)
-
-        ast =
-          Macro.prewalk(ast, fn
-            var when is_var(var) -> normalize_var(var)
-            node -> node
-          end)
-
         {{kind, meta, args, ast}, state}
 
       [_, _ | _] ->

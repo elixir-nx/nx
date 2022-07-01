@@ -767,6 +767,9 @@ defmodule Nx.Defn do
     end
   end
 
+  defp decompose_call!(kind, {:when, _, [call, _guards]}, env),
+    do: decompose_call!(kind, call, env)
+
   defp decompose_call!(_kind, {{:unquote, _, [name]}, _, args}, _env) do
     {name, args}
   end
