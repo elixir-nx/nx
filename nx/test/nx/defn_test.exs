@@ -1662,6 +1662,13 @@ defmodule Nx.DefnTest do
     defn multi_clause_first(x), do: multi_clause_transform(x, &(&1 + &1))
     defn multi_clause_second(opts \\ []), do: multi_clause_transform(opts[:x], opts[:y])
 
+    deftransform multi_clause_bodiless_tf(x \\ 1, y)
+    deftransform multi_clause_bodiless_tf(1, y), do: y
+    deftransform multi_clause_bodiless_tf(x, _y), do: x
+
+    defn multi_clause_transform_bodiless1(a), do: multi_clause_bodiless_tf(a)
+    defn multi_clause_transform_bodiless2(opts \\ []), do: multi_clause_bodiless_tf(opts[:a], opts[:b])
+
     test "can call deftransform and deftransformp functions from within defn" do
       result = deftransform_test(Nx.tensor(1), Nx.tensor(2), b: 3, c: 4)
 
@@ -1705,6 +1712,13 @@ defmodule Nx.DefnTest do
       assert_raise FunctionClauseError, "no function clause matching in Nx.DefnTest.multi_clause_transform/2", fn ->
         multi_clause_second(x: 2, y: -3)
       end
+    end
+
+    @tag compiler: Evaluator
+    test "multi-clause transform with bodiless head" do
+      assert Nx.tensor(10) == multi_clause_transform_bodiless1(10)
+      assert Nx.tensor(10) == multi_clause_transform_bodiless2(a: 1, b: 10)
+      assert Nx.tensor(20) == multi_clause_transform_bodiless2(a: 20, b: 10)
     end
   end
 end

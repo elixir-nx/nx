@@ -285,15 +285,12 @@ defmodule Nx.Defn.Compiler do
     end
   end
 
-  defp compile_each_transform({{name, arity} = definition, def_meta}, state) do
-    %{defaults: defaults} = def_meta
-
-    {:v1, kind, meta, _clauses} = Module.get_definition(state.module, definition)
-
+  defp compile_each_transform({{name, max_arity}, _def_meta}, state) do
     defn_name = defn_name(name)
 
     ast =
-      for defn_arity <- (arity - map_size(defaults))..arity//1 do
+      for defn_arity <- 0..max_arity,
+          {:v1, kind, meta, _clauses} <- [Module.get_definition(state.module, {name, defn_arity})] do
         defn_args = Macro.generate_arguments(defn_arity, __MODULE__)
 
         quote line: meta[:line] do

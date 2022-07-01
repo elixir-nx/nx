@@ -699,14 +699,16 @@ defmodule Nx.Defn do
 
   Although, for convenience, you might use `inspect_expr/2` instead.
   """
-  defmacro deftransform(call, do: block) do
+  defmacro deftransform(call, body \\ []) do
+    block = body[:do]
     define_transform(:def, call, block, __CALLER__)
   end
 
   @doc """
   Private function version for `deftransform`
   """
-  defmacro deftransformp(call, do: block) do
+  defmacro deftransformp(call, body \\ []) do
+    block = body[:do]
     define_transform(:defp, call, block, __CALLER__)
   end
 
@@ -747,22 +749,34 @@ defmodule Nx.Defn do
 
     defaults =
       for {{:\\, meta, [_, default]}, i} <- Enum.with_index(args), into: [] do
-        # raise "no defaults pls"
         {i, {meta, default}}
       end
 
-    quote do
-      unquote(__MODULE__).__define__(
-        __MODULE__,
-        unquote(kind),
-        unquote(name),
-        unquote(arity),
-        :transform,
-        %{unquote_splicing(defaults)}
-      )
+    if block do
+      quote do
+        unquote(__MODULE__).__define__(
+          __MODULE__,
+          unquote(kind),
+          unquote(name),
+          unquote(arity),
+          :transform,
+          %{unquote_splicing(defaults)}
+        )
 
-      unquote(kind)(unquote(call)) do
-        unquote(block)
+        Kernel.unquote(kind)(unquote(call), do: unquote(block))
+      end
+    else
+      quote do
+        unquote(__MODULE__).__define__(
+          __MODULE__,
+          unquote(kind),
+          unquote(name),
+          unquote(arity),
+          :transform,
+          %{unquote_splicing(defaults)}
+        )
+
+        Kernel.unquote(kind)(unquote(call))
       end
     end
   end
@@ -806,12 +820,25 @@ defmodule Nx.Defn do
         %{}
       end
 
+    current_export = %{
+      type: type,
+      kind: kind,
+      defaults: defaults
+    }
+
     exports =
-      Map.put(exports, {name, arity}, %{
-        type: type,
-        kind: kind,
-        defaults: defaults
-      })
+      if type == :transform do
+        item =
+          Map.update(exports, {name, arity}, current_export, fn item ->
+            %{
+              type: item.type || current_export.type,
+              kind: item.kind || current_export.kind,
+              defaults: if(item.defaults == [], do: current_export.defaults, else: item.defaults)
+            }
+          end)
+      else
+        Map.put(exports, {name, arity}, current_export)
+      end
 
     Module.put_attribute(module, @defn_exports_key, exports)
     :ok
