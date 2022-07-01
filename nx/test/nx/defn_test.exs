@@ -1671,7 +1671,7 @@ defmodule Nx.DefnTest do
     defn multi_clause_transform_bodiless2(opts \\ []),
       do: multi_clause_bodiless_tf(opts[:a], opts[:b])
 
-    deftransformp multi_clause_bodiless_tf_private(x \\ 1, y)
+    deftransformp(multi_clause_bodiless_tf_private(x \\ 1, y))
     deftransformp multi_clause_bodiless_tf_private(1, y), do: y
     deftransformp multi_clause_bodiless_tf_private(x, _y), do: x
 
