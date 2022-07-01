@@ -435,6 +435,28 @@ defmodule Nx do
         [1.0, 2.0, 3.0]
       >
 
+  Boolean values are also accepted, where `true` is
+  converted to `1` and `false` to `0`, with the type
+  being inferred as `{:u, 8}`
+
+      iex> Nx.tensor(true)
+      #Nx.Tensor<
+        u8
+        1
+      >
+
+      iex> Nx.tensor(false)
+      #Nx.Tensor<
+        u8
+        0
+      >
+
+      iex> Nx.tensor([true, false])
+      #Nx.Tensor<
+        u8[2]
+        [1, 0]
+      >
+
   Multi-dimensional tensors are also possible:
 
       iex> Nx.tensor([[1, 2, 3], [4, 5, 6]])
@@ -587,6 +609,8 @@ defmodule Nx do
     Enum.reduce(tail, infer_type(head), &Nx.Type.merge(infer_type(&1), &2))
   end
 
+  defp infer_type(value) when is_boolean(value), do: {:u, 8}
+
   defp infer_type(number)
        when is_number(number) or is_struct(number, Complex) or number in @non_finite do
     Nx.Type.infer(number)
@@ -595,6 +619,9 @@ defmodule Nx do
   defp infer_type(value) do
     raise ArgumentError, "invalid value given to Nx.tensor/1, got: #{inspect(value)}"
   end
+
+  defp tensor(true, type, opts), do: tensor(1, type, opts)
+  defp tensor(false, type, opts), do: tensor(0, type, opts)
 
   defp tensor(arg, type, opts) when is_number(arg) do
     names = Nx.Shape.named_axes!(opts[:names], {})
@@ -669,6 +696,9 @@ defmodule Nx do
      Enum.reduce(list, acc, &[tensor_or_number_to_binary(&1, type) | &2])}
   end
 
+  defp tensor_or_number_to_binary(true, type), do: tensor_or_number_to_binary(1, type)
+  defp tensor_or_number_to_binary(false, type), do: tensor_or_number_to_binary(0, type)
+  
   defp tensor_or_number_to_binary(%Complex{re: re, im: im}, {:c, size}) do
     number_to_binary(re, {:f, div(size, 2)}) <> number_to_binary(im, {:f, div(size, 2)})
   end
