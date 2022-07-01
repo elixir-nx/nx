@@ -101,17 +101,39 @@ defmodule Nx.Defn do
 
   Inside `defn` you can only call other `defn` functions and
   the functions in the `Nx` module. However, it is possible
-  to use transforms to invoke any Elixir code:
+  to use transforms, defined with either `deftransform` or
+  `deftransformp` to invoke any Elixir code.
+
+  Calling code exposed from another module with `deftransform`:
+
+      defmodule MyRemoteModule do
+        deftransform remote_elixir_code(value) do
+          IO.inspect(value)
+        end
+      end
 
       defn add_and_mult(a, b, c) do
         res = a * b + c
-        transform(res, &IO.inspect/1)
+        MyRemoteModule.remote_elixir_code(res)
       end
 
-  For example, the code above invokes `&IO.inspect/1`, which is
+  Calling a private transform defined with `deftransformp`:
+
+      defn add_and_mult(a, b, c) do
+        res = a * b + c
+        custom_elixir_code(res)
+      end
+
+      deftransformp custom_elixir_code(value), do: IO.inspect(value)
+
+  For example, the two code snippets invoke `IO.inspect/1`, which is
   not a `defn` function, with the value of `res`. This is useful
   as it allows developers to transform `defn` code to optimize,
   add new properties, and so on.
+
+  The only difference between using `deftransform` and `deftransformp` is
+  wether you want to expose and share the code with other modules, just
+  like `def` and `defp`.
 
   Transforms can also be used to manipulate Elixir data structures,
   such as options. `defn` expects all inputs to be tensors, with the
@@ -124,9 +146,11 @@ defmodule Nx.Defn do
 
       defn sum_axis(t, opts \\ []) do
         opts = keyword!(opts, [:axis])
-        axis = transform(opts, &Keyword.fetch!(opts, :axis))
+        axis = get_axis(opts)
         Nx.sum(t, axes: [axis])
       end
+
+      deftransformp get_axis(opts), do: Keyword.fetch!(opts, :axis)
 
   ## Inputs and outputs types
 

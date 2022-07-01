@@ -518,18 +518,6 @@ defmodule Nx.Defn.Compiler do
     {{call, meta, [ast, fun]}, state}
   end
 
-  defp normalize({{:., _, [Nx.Defn.Assertions, _function]} = call, meta, [ast, fun]}, state) do
-    {ast, state} = normalize(ast, state)
-
-    fun =
-      Macro.prewalk(fun, fn
-        var when is_var(var) -> normalize_var(var)
-        node -> node
-      end)
-
-    {{call, meta, [ast, fun]}, state}
-  end
-
   defp normalize({{:., _, [Nx.Defn.Kernel, :hook]} = call, meta, [ast | rest]}, state) do
     {ast, state} = normalize(ast, state)
     {{call, meta, [ast | rest]}, state}
