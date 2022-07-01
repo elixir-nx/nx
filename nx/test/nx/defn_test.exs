@@ -583,45 +583,59 @@ defmodule Nx.DefnTest do
     defn land_two(a, b), do: a and b
 
     defn land_true(a) do
-      val = constant_boolean_transform()
-      val and a
+      true and a
     end
 
     test "and" do
       assert %T{data: %Expr{op: :logical_and, args: [_, _]}} = land_two(1, 2)
+    end
 
-      assert_raise ArgumentError, ~r/boolean value passed to Nx.Defn.Kernel.and\/2/, fn ->
-        land_true(2)
-      end
+    @tag compiler: Evaluator
+    test "and works with boolean" do
+      assert Nx.tensor(1, type: {:u, 8}) == land_true(2)
+      assert Nx.tensor(0, type: {:u, 8}) == land_true(0)
     end
 
     defn lor_two(a, b), do: a or b
 
     defn lor_true(a) do
-      val = constant_boolean_transform()
-      val or a
+      true or a
     end
 
     test "or" do
       assert %T{data: %Expr{op: :logical_or, args: [_, _]}} = lor_two(1, 2)
+    end
 
-      assert_raise ArgumentError, ~r/boolean value passed to Nx.Defn.Kernel.or\/2/, fn ->
-        lor_true(2)
-      end
+    @tag compiler: Evaluator
+    test "or works with boolean" do
+      assert Nx.tensor(1, type: {:u, 8}) == lor_true(false)
+      assert Nx.tensor(1, type: {:u, 8}) == lor_true(true)
+      assert Nx.tensor(1, type: {:u, 8}) == lor_two(true, false)
+      assert Nx.tensor(1, type: {:u, 8}) == lor_two(false, true)
+      assert Nx.tensor(1, type: {:u, 8}) == lor_two(true, true)
+      assert Nx.tensor(0, type: {:u, 8}) == lor_two(false, false)
     end
 
     defn lnot(a), do: not a
-    defn lnot_true(), do: not constant_boolean_transform()
+    defn lnot_boolean(opts \\ []), do: not constant_boolean_transform(opts)
 
-    deftransformp(constant_boolean_transform, do: true)
+    deftransformp constant_boolean_transform(opts) do
+      if opts[:value] == true do
+        true
+      else
+        false
+      end
+    end
 
     test "not" do
       assert %T{data: %Expr{op: :optional, args: [%T{data: %Expr{op: :logical_not}}, _]}} =
                lnot(1)
+    end
 
-      assert_raise ArgumentError, ~r/boolean value passed to Nx.Defn.Kernel.not\/1/, fn ->
-        lnot_true()
-      end
+    @tag compiler: Evaluator
+    test "not works with boolean" do
+      assert Nx.tensor(1, type: {:u, 8}) == lnot_boolean(value: false)
+      assert Nx.tensor(0, type: {:u, 8}) == lnot_boolean(value: true)
     end
 
     defn band_two(a, b), do: a &&& b

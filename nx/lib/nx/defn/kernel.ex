@@ -566,11 +566,7 @@ defmodule Nx.Defn.Kernel do
 
   @doc false
   def __and__(left, right) when Kernel.or(is_boolean(left), is_boolean(right)) do
-    raise ArgumentError,
-          "boolean value passed to Nx.Defn.Kernel.and/2, " <>
-            "values passed to Nx.Defn.Kernel.and/2 must be " <>
-            "tensors or numbers, consider using 1 for true " <>
-            "and 0 for false as an alternative"
+    __and__(boolean_to_number(left), boolean_to_number(right))
   end
 
   def __and__(left, right) when Kernel.and(is_number(left), is_number(right)),
@@ -596,13 +592,8 @@ defmodule Nx.Defn.Kernel do
   defnguard(left or right, :__or__)
 
   @doc false
-  def __or__(left, right) when Kernel.or(is_boolean(left), is_boolean(right)) do
-    raise ArgumentError,
-          "boolean value passed to Nx.Defn.Kernel.or/2, " <>
-            "values passed to Nx.Defn.Kernel.or/2 must be " <>
-            "tensors or numbers, consider using 1 for true " <>
-            "and 0 for false as an alternative"
-  end
+  def __or__(left, right) when Kernel.or(is_boolean(left), is_boolean(right)),
+    do: __or__(boolean_to_number(left), boolean_to_number(right))
 
   def __or__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: logical_or(left, right)
@@ -625,14 +616,7 @@ defmodule Nx.Defn.Kernel do
   defnguard(not tensor, :__not__)
 
   @doc false
-  def __not__(tensor) when is_boolean(tensor) do
-    raise ArgumentError,
-          "boolean value passed to Nx.Defn.Kernel.not/1, " <>
-            "values passed to Nx.Defn.Kernel.not/1 must be " <>
-            "tensors or numbers, consider using 1 for true " <>
-            "and 0 for false as an alternative"
-  end
-
+  def __not__(value) when is_boolean(value), do: to_constant(Kernel.not(value))
   def __not__(tensor) when is_number(tensor), do: logical_not(tensor)
   def __not__(tensor), do: Nx.logical_not(tensor)
 
@@ -858,6 +842,10 @@ defmodule Nx.Defn.Kernel do
 
   defp to_constant(true), do: one()
   defp to_constant(false), do: zero()
+
+  defp boolean_to_number(true), do: 1
+  defp boolean_to_number(false), do: 0
+  defp boolean_to_number(value), do: value
 
   @doc """
   Ensures the first argument is a `keyword` with the given

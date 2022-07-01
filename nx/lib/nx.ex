@@ -375,7 +375,7 @@ defmodule Nx do
   See also: `t:t/0`
   """
   @doc type: :guards
-  defguard is_tensor(t) when is_number(t) or is_struct(t, T) or is_struct(t, Complex)
+  defguard is_tensor(t) when is_number(t) or is_struct(t, T) or is_struct(t, Complex) or is_boolean(t)
 
   ## Creation API
 
@@ -698,7 +698,7 @@ defmodule Nx do
 
   defp tensor_or_number_to_binary(true, type), do: tensor_or_number_to_binary(1, type)
   defp tensor_or_number_to_binary(false, type), do: tensor_or_number_to_binary(0, type)
-  
+
   defp tensor_or_number_to_binary(%Complex{re: re, im: im}, {:c, size}) do
     number_to_binary(re, {:f, div(size, 2)}) <> number_to_binary(im, {:f, div(size, 2)})
   end
@@ -1638,6 +1638,9 @@ defmodule Nx do
     out = %T{shape: {}, type: {:c, size * 2}, names: []}
     backend.constant(out, number, options)
   end
+
+  def to_tensor(true), do: to_tensor(1)
+  def to_tensor(false), do: to_tensor(0)
 
   def to_tensor(t) do
     raise ArgumentError, "expected a %Nx.Tensor{} or a number, got: #{inspect(t)}"
