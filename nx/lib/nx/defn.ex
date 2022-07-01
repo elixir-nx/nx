@@ -658,6 +658,21 @@ defmodule Nx.Defn do
   end
 
   @doc """
+  Can be used to define bodiless clauses for multi-clause transforms.
+
+  See also: `deftransform/2`
+
+  ## Examples
+
+      deftransform foo(bar, baz \\ 1)
+      deftransform foo(bar, 1), do: bar
+      deftransform foo(bar, baz), do: bar + baz
+  """
+  defmacro deftransform(call) do
+    define_transform(:def, call, nil, __CALLER__)
+  end
+
+  @doc """
   Defines a transform that executes the given `fun` with `arg`
   when building `defn` expressions.
 
@@ -699,16 +714,21 @@ defmodule Nx.Defn do
 
   Although, for convenience, you might use `inspect_expr/2` instead.
   """
-  defmacro deftransform(call, body \\ []) do
-    block = body[:do]
+  defmacro deftransform(call, do: block) do
     define_transform(:def, call, block, __CALLER__)
   end
 
   @doc """
-  Private function version for `deftransform`
+  Private function version for `deftransform/1`
   """
-  defmacro deftransformp(call, body \\ []) do
-    block = body[:do]
+  defmacro deftransformp(call) do
+    define_transform(:defp, call, nil, __CALLER__)
+  end
+
+  @doc """
+  Private function version for `deftransform/2`
+  """
+  defmacro deftransformp(call, do: block) do
     define_transform(:defp, call, block, __CALLER__)
   end
 
