@@ -104,9 +104,11 @@ defmodule Nx.Defn do
   to use transforms, defined with either `deftransform` or
   `deftransformp` to invoke any Elixir code.
 
-  Calling code exposed from another module with `deftransform`:
+  You can call code which was defined with `deftransform` from another module:
 
       defmodule MyRemoteModule do
+        import Nx.Defn
+
         deftransform remote_elixir_code(value) do
           IO.inspect(value)
         end
@@ -117,7 +119,7 @@ defmodule Nx.Defn do
         MyRemoteModule.remote_elixir_code(res)
       end
 
-  Calling a private transform defined with `deftransformp`:
+  You can also define and call a private transform defined through `deftransformp`:
 
       defn add_and_mult(a, b, c) do
         res = a * b + c
