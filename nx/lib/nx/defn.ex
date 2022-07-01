@@ -752,7 +752,7 @@ defmodule Nx.Defn do
         {i, {meta, default}}
       end
 
-    if block do
+    define_ast =
       quote do
         unquote(__MODULE__).__define__(
           __MODULE__,
@@ -762,23 +762,20 @@ defmodule Nx.Defn do
           :transform,
           %{unquote_splicing(defaults)}
         )
-
-        Kernel.unquote(kind)(unquote(call), do: unquote(block))
       end
-    else
-      quote do
-        unquote(__MODULE__).__define__(
-          __MODULE__,
-          unquote(kind),
-          unquote(name),
-          unquote(arity),
-          :transform,
-          %{unquote_splicing(defaults)}
-        )
 
-        Kernel.unquote(kind)(unquote(call))
+    def_ast =
+      if block do
+        quote do
+          Kernel.unquote(kind)(unquote(call), do: unquote(block))
+        end
+      else
+        quote do
+          Kernel.unquote(kind)(unquote(call))
+        end
       end
-    end
+
+    {:__block__, [], [define_ast, def_ast]}
   end
 
   defp decompose_call!(kind, {:when, _, [call, _guards]}, env),
@@ -828,14 +825,13 @@ defmodule Nx.Defn do
 
     exports =
       if type == :transform do
-        item =
-          Map.update(exports, {name, arity}, current_export, fn item ->
-            %{
-              type: item.type || current_export.type,
-              kind: item.kind || current_export.kind,
-              defaults: if(item.defaults == [], do: current_export.defaults, else: item.defaults)
-            }
-          end)
+        Map.update(exports, {name, arity}, current_export, fn item ->
+          %{
+            type: item.type || current_export.type,
+            kind: item.kind || current_export.kind,
+            defaults: if(item.defaults == [], do: current_export.defaults, else: item.defaults)
+          }
+        end)
       else
         Map.put(exports, {name, arity}, current_export)
       end
