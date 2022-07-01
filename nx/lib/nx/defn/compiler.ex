@@ -288,6 +288,7 @@ defmodule Nx.Defn.Compiler do
   defp compile_each_transform({{name, max_arity}, _def_meta}, state) do
     defn_name = defn_name(name)
 
+    # {...} <- [Module...] is a trick so we can skip nil definitions for a given arity
     ast =
       for defn_arity <- 0..max_arity,
           {:v1, kind, meta, _clauses} <- [Module.get_definition(state.module, {name, defn_arity})] do
