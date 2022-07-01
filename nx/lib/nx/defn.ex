@@ -825,6 +825,8 @@ defmodule Nx.Defn do
 
     exports =
       if type == :transform do
+        # This will ensure that we capture the defaults for a bodiless head
+        # while keeping the definitions properly for the same arity
         Map.update(exports, {name, arity}, current_export, fn item ->
           %{
             type: item.type || current_export.type,
