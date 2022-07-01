@@ -175,14 +175,14 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = b
     end
 
-    defn verify_maps(map) do
-      transform(map, fn map ->
-        for {k, v} <- map do
-          assert Elixir.Kernel.==(v.shape, {String.to_integer(k)})
-        end
+    defn verify_maps(map), do: verify_maps_transform(map)
 
-        map
-      end)
+    deftransformp verify_maps_transform(map) do
+      for {k, v} <- map do
+        assert Elixir.Kernel.==(v.shape, {String.to_integer(k)})
+      end
+
+      map
     end
 
     test "keeps map ordering across different sizes" do
@@ -408,8 +408,7 @@ defmodule Nx.DefnTest do
                broadcast_axes(Nx.tensor([1, 2, 3]))
     end
 
-    defn broadcast_collapse1(t),
-      do: t |> Nx.broadcast({5, 3}) |> Nx.broadcast({7, 5, 3})
+    defn broadcast_collapse1(t), do: t |> Nx.broadcast({5, 3}) |> Nx.broadcast({7, 5, 3})
 
     defn broadcast_collapse2(t),
       do: t |> Nx.broadcast({3, 5}, axes: [0]) |> Nx.broadcast({3, 5, 7}, axes: [0, 1])
@@ -584,7 +583,7 @@ defmodule Nx.DefnTest do
     defn land_two(a, b), do: a and b
 
     defn land_true(a) do
-      val = transform({}, fn _ -> true end)
+      val = constant_boolean_transform()
       val and a
     end
 
@@ -599,7 +598,7 @@ defmodule Nx.DefnTest do
     defn lor_two(a, b), do: a or b
 
     defn lor_true(a) do
-      val = transform({}, fn _ -> true end)
+      val = constant_boolean_transform()
       val or a
     end
 
@@ -612,7 +611,9 @@ defmodule Nx.DefnTest do
     end
 
     defn lnot(a), do: not a
-    defn lnot_true(), do: not transform({}, fn _ -> true end)
+    defn lnot_true(), do: not constant_boolean_transform()
+
+    deftransformp(constant_boolean_transform, do: true)
 
     test "not" do
       assert %T{data: %Expr{op: :optional, args: [%T{data: %Expr{op: :logical_not}}, _]}} =
@@ -1030,11 +1031,15 @@ defmodule Nx.DefnTest do
     end
 
     defn if_branch_elimination_transform(a) do
-      if transform(a, &Kernel.==(Nx.rank(&1), 0)) do
+      if if_branch_elimination_transform_pred(a) do
         11
       else
         13
       end
+    end
+
+    deftransformp if_branch_elimination_transform_pred(a) do
+      if Nx.rank(a) == 0, do: 1, else: 0
     end
 
     test "eliminates branches from transform" do
@@ -1324,10 +1329,10 @@ defmodule Nx.DefnTest do
     end
 
     defn transform_back_and_forth(a) do
-      Nx.exp(transform(Nx.negate(a), &private_back_and_forth/1))
+      a |> Nx.negate() |> private_back_and_forth() |> Nx.exp()
     end
 
-    defp private_back_and_forth(a) do
+    deftransformp private_back_and_forth(a) do
       Evaluator = Nx.Defn.Compiler.current()
       final_back_and_forth(a)
     end
@@ -1338,15 +1343,6 @@ defmodule Nx.DefnTest do
     test "back and forth between Elixir and defn" do
       assert transform_back_and_forth(Nx.tensor(1)) ==
                Nx.tensor(1) |> Nx.negate() |> Nx.tanh() |> Nx.exp()
-    end
-
-    defn transform_variable_access(a, b) do
-      transform(:ok, fn :ok -> a + b end)
-    end
-
-    @tag compiler: Evaluator
-    test "supports variable access" do
-      assert transform_variable_access(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(3)
     end
   end
 
@@ -1416,11 +1412,11 @@ defmodule Nx.DefnTest do
       assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(fn -> Nx.iota({3, 3}) end).() end
     end
 
-    defn nested_jit(opts \\ []) do
-      transform(opts, fn opts ->
-        eleven = Nx.tensor(11, backend: Nx.BinaryBackend)
-        Nx.Defn.jit(&*/2, opts).(eleven, eleven)
-      end)
+    defn nested_jit(opts \\ []), do: nested_jit_transform(opts)
+
+    deftransformp nested_jit_transform(opts) do
+      eleven = Nx.tensor(11, backend: Nx.BinaryBackend)
+      Nx.Defn.jit(&Nx.Defn.Kernel.*/2, opts).(eleven, eleven)
     end
 
     @tag compiler: Evaluator
@@ -1456,11 +1452,11 @@ defmodule Nx.DefnTest do
                    fn -> fun.(3, {4, 5}) end
     end
 
-    defn nested_compile(opts \\ []) do
-      transform(opts, fn opts ->
-        eleven = Nx.tensor(11, backend: Nx.BinaryBackend)
-        Nx.Defn.compile(&*/2, [eleven, eleven], opts).(eleven, eleven)
-      end)
+    defn nested_compile(opts \\ []), do: nested_compile_transform(opts)
+
+    deftransformp nested_compile_transform(opts) do
+      eleven = Nx.tensor(11, backend: Nx.BinaryBackend)
+      Nx.Defn.compile(&Nx.Defn.Kernel.*/2, [eleven, eleven], opts).(eleven, eleven)
     end
 
     @tag compiler: Evaluator
@@ -1579,7 +1575,7 @@ defmodule Nx.DefnTest do
   end
 
   describe "private definitions" do
-    defnp private(a, b), do: a + b
+    defnp(private(a, b), do: a + b)
     defn calls_private(a, b), do: private(a, b)
 
     @tag compiler: Evaluator
@@ -1595,6 +1591,141 @@ defmodule Nx.DefnTest do
     @tag compiler: Evaluator
     test "are callable from defn" do
       assert calls_private(1, 2) == Nx.tensor(3)
+    end
+  end
+
+  describe "deftransform" do
+    defn deftransform_test(a, b, opts \\ []) do
+      {c, d} = deftransform_test_transformation(opts)
+
+      deftransform_test_send(c)
+      deftransform_test_send(d)
+
+      x = a + c
+      y = b + d
+
+      x * y
+    end
+
+    deftransform deftransform_test_transformation(opts) do
+      b = opts[:b] || raise "missing :b"
+      c = opts[:c] || raise "missing :c"
+      {b, c}
+    end
+
+    deftransformp deftransform_test_send(value) do
+      send(self(), {:deftransform, value})
+    end
+
+    defn default_args1(x) do
+      default_args(x)
+    end
+
+    defn default_args2(x, y) do
+      default_args(x, y)
+    end
+
+    defn default_args3(x, y, z) do
+      default_args(x, y, z)
+    end
+
+    defn public_default_args1(x), do: public_default_args(x)
+    defn public_default_args2(x, y), do: public_default_args(x, y)
+
+    # Ensure that defp works with defaults
+    deftransformp default_args(arg1 \\ 1, arg2, arg3 \\ 3) do
+      {arg1, arg2, arg3}
+    end
+
+    # Ensure that def works
+    deftransform public_default_args(arg1, arg2 \\ 2), do: {arg1, arg2}
+
+    # Ensure multi-clause and guards work
+    deftransform multi_clause_transform(number, fun) when is_function(fun, 1) do
+      fun.(number)
+    end
+
+    deftransform multi_clause_transform(x, y) when is_number(x) and is_number(y) and y > 0 do
+      x ** y
+    end
+
+    defn multi_clause_first(x), do: multi_clause_transform(x, &(&1 + &1))
+    defn multi_clause_second(opts \\ []), do: multi_clause_transform(opts[:x], opts[:y])
+
+    deftransform(multi_clause_bodiless_tf(x \\ 1, y))
+    deftransform multi_clause_bodiless_tf(1, y), do: y
+    deftransform multi_clause_bodiless_tf(x, _y), do: x
+
+    defn multi_clause_transform_bodiless1(a), do: multi_clause_bodiless_tf(a)
+
+    defn multi_clause_transform_bodiless2(opts \\ []),
+      do: multi_clause_bodiless_tf(opts[:a], opts[:b])
+
+    deftransformp(multi_clause_bodiless_tf_private(x \\ 1, y))
+    deftransformp multi_clause_bodiless_tf_private(1, y), do: y
+    deftransformp multi_clause_bodiless_tf_private(x, _y), do: x
+
+    defn multi_clause_transform_bodiless3(a), do: multi_clause_bodiless_tf_private(a)
+
+    defn multi_clause_transform_bodiless4(opts \\ []),
+      do: multi_clause_bodiless_tf_private(opts[:a], opts[:b])
+
+    test "can call deftransform and deftransformp functions from within defn" do
+      result = deftransform_test(Nx.tensor(1), Nx.tensor(2), b: 3, c: 4)
+
+      assert String.trim("""
+             #Nx.Tensor<
+               s64
+             \s\s
+               Nx.Defn.Expr
+               parameter a:0       s64
+               parameter c:1       s64
+               b = add 3, a        s64
+               d = add 4, c        s64
+               e = multiply b, d   s64
+             >
+             """) == inspect(result)
+
+      assert_received {:deftransform, 3}
+      assert_received {:deftransform, 4}
+    end
+
+    @tag compiler: Evaluator
+    test "deftransformp handles default arguments" do
+      assert default_args1(20) == {Nx.tensor(1), Nx.tensor(20), Nx.tensor(3)}
+      assert default_args2(10, 20) == {Nx.tensor(10), Nx.tensor(20), Nx.tensor(3)}
+      assert default_args3(10, 20, 30) == {Nx.tensor(10), Nx.tensor(20), Nx.tensor(30)}
+    end
+
+    @tag compiler: Evaluator
+    test "deftransform handles default arguments" do
+      assert public_default_args1(10) == {Nx.tensor(10), Nx.tensor(2)}
+      assert public_default_args2(10, 20) == {Nx.tensor(10), Nx.tensor(20)}
+    end
+
+    @tag compiler: Evaluator
+    test "multi-clause and guards work for deftransform" do
+      assert multi_clause_first(2) == Nx.tensor(4)
+      assert multi_clause_second(x: 2, y: 3) == Nx.tensor(8)
+    end
+
+    test "multi-clause raises for no clause matching args" do
+      assert_raise FunctionClauseError,
+                   "no function clause matching in Nx.DefnTest.multi_clause_transform/2",
+                   fn ->
+                     multi_clause_second(x: 2, y: -3)
+                   end
+    end
+
+    @tag compiler: Evaluator
+    test "multi-clause deftransform and deftransformp with bodiless head" do
+      assert Nx.tensor(10) == multi_clause_transform_bodiless1(10)
+      assert Nx.tensor(10) == multi_clause_transform_bodiless2(a: 1, b: 10)
+      assert Nx.tensor(20) == multi_clause_transform_bodiless2(a: 20, b: 10)
+
+      assert Nx.tensor(10) == multi_clause_transform_bodiless3(10)
+      assert Nx.tensor(10) == multi_clause_transform_bodiless4(a: 1, b: 10)
+      assert Nx.tensor(20) == multi_clause_transform_bodiless4(a: 20, b: 10)
     end
   end
 end

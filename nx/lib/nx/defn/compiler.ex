@@ -164,7 +164,7 @@ defmodule Nx.Defn.Compiler do
     only tuples, atoms, and numbers are allowed as arguments to case/2 inside defn.
     Got: #{inspect(arg)}
 
-    Consider using deftransform/2 if you need to handle more complex cases
+    Consider using deftransform/2 or deftransformp/2 if you need to handle more complex cases
     """
   end
 
@@ -208,25 +208,37 @@ defmodule Nx.Defn.Compiler do
 
   @doc false
   def __compile__(%Macro.Env{module: module, file: file, line: line}, exports) do
-    defns =
-      for {{name, arity}, %{defaults: defaults}} <- exports,
-          arity <- (arity - map_size(defaults))..arity,
-          do: {name, arity}
+    {defn_exports, transform_exports} =
+      Enum.split_with(exports, fn {_fun_arity, meta} -> meta.type == :numerical end)
+
+    defns = compile_prepare_arities(defn_exports)
+    transforms = compile_prepare_arities(transform_exports)
 
     state = %{
       module: module,
       file: file,
       line: line,
       function: nil,
-      defns: MapSet.new(defns),
+      defns: defns,
+      transforms: transforms,
       rewrite_underscore?: false
     }
 
-    quoted = Enum.map(exports, &compile_each(&1, state))
+    quoted =
+      Enum.map(transform_exports, &compile_each_transform(&1, state)) ++
+        Enum.map(defn_exports, &compile_each_defn(&1, state))
+
     {:__block__, [], quoted}
   end
 
-  defp compile_each({{name, arity} = def, def_meta}, state) do
+  defp compile_prepare_arities(definitions) do
+    for {{name, arity}, %{defaults: defaults}} <- definitions,
+        arity <- (arity - map_size(defaults))..arity,
+        into: MapSet.new(),
+        do: {name, arity}
+  end
+
+  defp compile_each_defn({{name, arity} = def, def_meta}, state) do
     %{defaults: defaults} = def_meta
     {{kind, _meta, args, ast}, state} = get_and_normalize_definition(def, state)
 
@@ -273,6 +285,25 @@ defmodule Nx.Defn.Compiler do
     end
   end
 
+  defp compile_each_transform({{name, max_arity}, _def_meta}, state) do
+    defn_name = defn_name(name)
+
+    # {...} <- [Module...] is a trick so we can skip nil definitions for a given arity
+    ast =
+      for defn_arity <- 0..max_arity,
+          {:v1, kind, meta, _clauses} <- [Module.get_definition(state.module, {name, defn_arity})] do
+        defn_args = Macro.generate_arguments(defn_arity, __MODULE__)
+
+        quote line: meta[:line] do
+          Kernel.unquote(kind)(unquote(defn_name)(unquote_splicing(defn_args)),
+            do: unquote(name)(unquote_splicing(defn_args))
+          )
+        end
+      end
+
+    {:__block__, [], ast}
+  end
+
   @doc false
   def __runtime__(fun, args) do
     {compiler, compiler_opts} =
@@ -291,9 +322,11 @@ defmodule Nx.Defn.Compiler do
     {:v1, kind, meta, clauses} = Module.get_definition(state.module, def)
     state = %{state | function: def, line: meta[:line] || state.line, rewrite_underscore?: true}
 
+    type_str = if kind == :def, do: "defn", else: "defnp"
+
     case clauses do
       [] ->
-        compile_error!(meta, state, "cannot have #{kind}n without clauses")
+        compile_error!(meta, state, "cannot have #{type_str} without clauses")
 
       [{meta, args, [], ast}] ->
         {args, state} = normalize_args(args, meta, state)
@@ -301,7 +334,7 @@ defmodule Nx.Defn.Compiler do
         {{kind, meta, args, ast}, state}
 
       [_, _ | _] ->
-        compile_error!(meta, state, "cannot compile #{kind}n with multiple clauses")
+        compile_error!(meta, state, "cannot compile #{type_str} with multiple clauses")
     end
   end
 
@@ -439,7 +472,7 @@ defmodule Nx.Defn.Compiler do
     pair = {name, arity}
 
     cond do
-      pair in state.defns ->
+      pair in state.defns or pair in state.transforms ->
         {args, state} = normalize_list(args, state)
         {{defn_name(name), meta, args}, state}
 

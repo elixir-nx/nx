@@ -3,6 +3,10 @@
 locals_without_parens = [
   defn: 2,
   defnp: 2,
+  deftransform: 1,
+  deftransform: 2,
+  deftransform: 1,
+  deftransformp: 2,
   while: 3
 ]
 

@@ -133,11 +133,11 @@ defmodule Nx.ContainerTest do
     end
 
     defn dot_assert_fields(var) do
-      transform(var, &assert_fields!/1)
+      assert_fields!(var)
       var.a + var.b
     end
 
-    defp assert_fields!(%C{c: %{}, d: :keep}), do: 1
+    deftransformp assert_fields!(%C{c: %{}, d: :keep}), do: 1
 
     test "keeps fields" do
       inp = %Container{a: 1, b: 2, c: :reset, d: :keep}
@@ -150,9 +150,11 @@ defmodule Nx.ContainerTest do
     end
 
     defn dot_assert_fields_2(var) do
-      transform(var, fn %C{c: %{}, d: %{}} -> 1 end)
+      dot_assert_fields_transform(var)
       var.a + var.b
     end
+
+    deftransformp dot_assert_fields_transform(%C{c: %{}, d: %{}}), do: 1
 
     test "keeps empty maps" do
       inp = %Container{a: 1, b: 2, c: :reset, d: %{}}

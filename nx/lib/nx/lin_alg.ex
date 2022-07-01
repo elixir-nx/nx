@@ -4,7 +4,7 @@ defmodule Nx.LinAlg do
   """
 
   import Nx.Shared
-  import Nx.Defn, only: [defn: 2, defnp: 2]
+  import Nx.Defn, only: [defn: 2, defnp: 2, deftransformp: 2]
   import Nx.Defn.Kernel, only: [keyword!: 2, custom_grad: 2, assert_shape_pattern: 2]
 
   alias Nx.Tensor, as: T
@@ -38,10 +38,13 @@ defmodule Nx.LinAlg do
       >
   """
   defn adjoint(t, opts \\ []) do
-    transform(t, fn
-      %{type: {:c, _}} = t -> t |> Nx.transpose(opts) |> Nx.conjugate()
-      t -> Nx.transpose(t, opts)
-    end)
+    case Nx.type(t) do
+      {:c, _} ->
+        t |> Nx.transpose(opts) |> Nx.conjugate()
+
+      _ ->
+        Nx.transpose(t, opts)
+    end
   end
 
   @doc """
@@ -240,10 +243,10 @@ defmodule Nx.LinAlg do
   @doc from_backend: false
   defn norm(tensor, opts \\ []) do
     opts = keyword!(opts, [:ord, :axes])
-    transform(tensor, &norm_transform(&1, opts))
+    norm_transform(tensor, opts)
   end
 
-  defp norm_transform(t, opts) do
+  deftransformp norm_transform(t, opts) do
     rank = Nx.rank(t)
 
     unless rank == 1 or rank == 2 do
@@ -1243,17 +1246,19 @@ defmodule Nx.LinAlg do
     assert_shape_pattern(tensor, {n, n})
 
     Nx.Shared.optional(:determinant, [tensor], output, fn tensor ->
-      {n, _} = Nx.shape(tensor)
+      case Nx.shape(tensor) do
+        {2, 2} ->
+          determinant_2by2(tensor)
 
-      case n do
-        2 -> determinant_2by2(tensor)
-        3 -> determinant_3by3(tensor)
-        _ -> determinant_NbyN(tensor)
+        {3, 3} ->
+          determinant_3by3(tensor)
+
+        {n, n} ->
+          determinant_NbyN(tensor)
       end
     end)
   end
 
-  # for 2x2 and 3x3, use the algebraic closed formula
   defnp determinant_2by2(t) do
     t = Nx.tile(t, [1, 2])
 

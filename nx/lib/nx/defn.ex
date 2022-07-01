@@ -101,17 +101,41 @@ defmodule Nx.Defn do
 
   Inside `defn` you can only call other `defn` functions and
   the functions in the `Nx` module. However, it is possible
-  to use transforms to invoke any Elixir code:
+  to use transforms, defined with either `deftransform` or
+  `deftransformp` to invoke any Elixir code.
+
+  You can call code which was defined with `deftransform` from another module:
+
+      defmodule MyRemoteModule do
+        import Nx.Defn
+
+        deftransform remote_elixir_code(value) do
+          IO.inspect(value)
+        end
+      end
 
       defn add_and_mult(a, b, c) do
         res = a * b + c
-        transform(res, &IO.inspect/1)
+        MyRemoteModule.remote_elixir_code(res)
       end
 
-  For example, the code above invokes `&IO.inspect/1`, which is
+  You can also define and call a private transform defined through `deftransformp`:
+
+      defn add_and_mult(a, b, c) do
+        res = a * b + c
+        custom_elixir_code(res)
+      end
+
+      deftransformp custom_elixir_code(value), do: IO.inspect(value)
+
+  For example, the two code snippets invoke `IO.inspect/1`, which is
   not a `defn` function, with the value of `res`. This is useful
   as it allows developers to transform `defn` code to optimize,
   add new properties, and so on.
+
+  The only difference between using `deftransform` and `deftransformp` is
+  wether you want to expose and share the code with other modules, just
+  like `def` and `defp`.
 
   Transforms can also be used to manipulate Elixir data structures,
   such as options. `defn` expects all inputs to be tensors, with the
@@ -124,9 +148,11 @@ defmodule Nx.Defn do
 
       defn sum_axis(t, opts \\ []) do
         opts = keyword!(opts, [:axis])
-        axis = transform(opts, &Keyword.fetch!(opts, :axis))
+        axis = get_axis(opts)
         Nx.sum(t, axes: [axis])
       end
+
+      deftransformp get_axis(opts), do: Keyword.fetch!(opts, :axis)
 
   ## Inputs and outputs types
 
@@ -643,7 +669,7 @@ defmodule Nx.Defn do
   Defines a public numerical function.
   """
   defmacro defn(call, do: block) do
-    define(:def, call, block, __CALLER__)
+    define_defn(:def, call, block, __CALLER__)
   end
 
   @doc """
@@ -654,12 +680,87 @@ defmodule Nx.Defn do
   all local function calls within `defn`.
   """
   defmacro defnp(call, do: block) do
-    define(:defp, call, block, __CALLER__)
+    define_defn(:defp, call, block, __CALLER__)
+  end
+
+  @doc """
+  Can be used to define bodiless clauses for multi-clause transforms.
+
+  See also: `deftransform/2`
+
+  ## Examples
+
+      deftransform foo(bar, baz \\ 1)
+      deftransform foo(bar, 1), do: bar
+      deftransform foo(bar, baz), do: bar + baz
+  """
+  defmacro deftransform(call) do
+    define_transform(:def, call, nil, __CALLER__)
+  end
+
+  @doc """
+  Defines a transform that executes the given `fun` with `arg`
+  when building `defn` expressions.
+
+  ## Example
+
+  Take the following defn expression:
+
+      defn tanh_power(a, b) do
+        Nx.tanh(a) + Nx.power(b, 2)
+      end
+
+  Let's see a trivial example, which is to use `IO.inspect/1` to
+  print a tensor expression at definition time:
+
+      defn tanh_power(a, b) do
+        Nx.tanh(a) + Nx.power(b, 2) |> my_inspect()
+      end
+
+      deftransformp my_inspect(expr), do: IO.inspect(expr)
+
+  Or:
+
+      defn tanh_power(a, b) do
+        res = Nx.tanh(a) + Nx.power(b, 2)
+        my_inspect(res)
+        res
+      end
+
+  When invoked in both cases, it will print the expression being built
+  by `defn`:
+
+      #Nx.Defn.Expr<
+        parameter a
+        parameter c
+        b = tanh [ a ] ()
+        d = power [ c, 2 ] ()
+        e = add [ b, d ] ()
+      >
+
+  Although, for convenience, you might use `inspect_expr/2` instead.
+  """
+  defmacro deftransform(call, do: block) do
+    define_transform(:def, call, block, __CALLER__)
+  end
+
+  @doc """
+  Private function version for `deftransform/1`
+  """
+  defmacro deftransformp(call) do
+    define_transform(:defp, call, nil, __CALLER__)
+  end
+
+  @doc """
+  Private function version for `deftransform/2`
+  """
+  defmacro deftransformp(call, do: block) do
+    define_transform(:defp, call, block, __CALLER__)
   end
 
   ## Callbacks
 
-  defp define(kind, call, block, env) do
+  defp define_defn(kind, call, block, env) do
     assert_no_guards!(kind, call, env)
     # Note name here is not necessarily an atom due to unquote(name) support
     {name, args} = decompose_call!(kind, call, env)
@@ -676,6 +777,7 @@ defmodule Nx.Defn do
         unquote(kind),
         unquote(name),
         unquote(arity),
+        :numerical,
         %{unquote_splicing(defaults)}
       )
 
@@ -685,6 +787,45 @@ defmodule Nx.Defn do
       end
     end
   end
+
+  defp define_transform(kind, call, block, env) do
+    # Note name here is not necessarily an atom due to unquote(name) support
+    {name, args} = decompose_call!(kind, call, env)
+    arity = length(args)
+
+    defaults =
+      for {{:\\, meta, [_, default]}, i} <- Enum.with_index(args), into: [] do
+        {i, {meta, default}}
+      end
+
+    define_ast =
+      quote do
+        unquote(__MODULE__).__define__(
+          __MODULE__,
+          unquote(kind),
+          unquote(name),
+          unquote(arity),
+          :transform,
+          %{unquote_splicing(defaults)}
+        )
+      end
+
+    def_ast =
+      if block do
+        quote do
+          Kernel.unquote(kind)(unquote(call), do: unquote(block))
+        end
+      else
+        quote do
+          Kernel.unquote(kind)(unquote(call))
+        end
+      end
+
+    {:__block__, [], [define_ast, def_ast]}
+  end
+
+  defp decompose_call!(kind, {:when, _, [call, _guards]}, env),
+    do: decompose_call!(kind, call, env)
 
   defp decompose_call!(_kind, {{:unquote, _, [name]}, _, args}, _env) do
     {name, args}
@@ -710,20 +851,40 @@ defmodule Nx.Defn do
   defp assert_no_guards!(_kind, _call, _env), do: :ok
 
   # Internal attributes
-  @exports_key :__defn_exports__
+  @defn_exports_key :__defn_exports__
 
   @doc false
-  def __define__(module, kind, name, arity, defaults) do
+  def __define__(module, kind, name, arity, type, defaults) do
     exports =
-      if exports = Module.get_attribute(module, @exports_key) do
+      if exports = Module.get_attribute(module, @defn_exports_key) do
         exports
       else
         Module.put_attribute(module, :before_compile, __MODULE__)
         %{}
       end
 
-    exports = Map.put(exports, {name, arity}, %{kind: kind, defaults: defaults})
-    Module.put_attribute(module, @exports_key, exports)
+    current_export = %{
+      type: type,
+      kind: kind,
+      defaults: defaults
+    }
+
+    exports =
+      if type == :transform do
+        # This will ensure that we capture the defaults for a bodiless head
+        # while keeping the definitions properly for the same arity
+        Map.update(exports, {name, arity}, current_export, fn item ->
+          %{
+            type: item.type || current_export.type,
+            kind: item.kind || current_export.kind,
+            defaults: if(item.defaults == [], do: current_export.defaults, else: item.defaults)
+          }
+        end)
+      else
+        Map.put(exports, {name, arity}, current_export)
+      end
+
+    Module.put_attribute(module, @defn_exports_key, exports)
     :ok
   end
 
@@ -733,7 +894,7 @@ defmodule Nx.Defn do
 
   @doc false
   defmacro __before_compile__(env) do
-    exports = Module.get_attribute(env.module, @exports_key)
-    Nx.Defn.Compiler.__compile__(env, exports)
+    defn_exports = Module.get_attribute(env.module, @defn_exports_key)
+    Nx.Defn.Compiler.__compile__(env, defn_exports)
   end
 end

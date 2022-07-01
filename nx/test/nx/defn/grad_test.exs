@@ -112,8 +112,11 @@ defmodule Nx.Defn.GradTest do
       assert {x, x} = custom_grad_meta(Nx.tensor(1))
     end
 
-    defn random_meta(t),
-      do: grad(t, fn t -> transform(Nx.exp(t), &Nx.Defn.Expr.metadata(&1, %{oops: true})) end)
+    defn random_meta(t), do: grad(t, fn t -> t |> Nx.exp() |> random_meta_transform() end)
+
+    deftransformp random_meta_transform(t) do
+      Nx.Defn.Expr.metadata(t, %{oops: true})
+    end
 
     test "ignores unknown metadata" do
       assert random_meta(Nx.tensor(1)) == Nx.exp(1)
