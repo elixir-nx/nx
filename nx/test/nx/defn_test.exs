@@ -1669,6 +1669,13 @@ defmodule Nx.DefnTest do
     defn multi_clause_transform_bodiless1(a), do: multi_clause_bodiless_tf(a)
     defn multi_clause_transform_bodiless2(opts \\ []), do: multi_clause_bodiless_tf(opts[:a], opts[:b])
 
+    deftransformp multi_clause_bodiless_tf_private(x \\ 1, y)
+    deftransformp multi_clause_bodiless_tf_private(1, y), do: y
+    deftransformp multi_clause_bodiless_tf_private(x, _y), do: x
+
+    defn multi_clause_transform_bodiless3(a), do: multi_clause_bodiless_tf_private(a)
+    defn multi_clause_transform_bodiless4(opts \\ []), do: multi_clause_bodiless_tf_private(opts[:a], opts[:b])
+
     test "can call deftransform and deftransformp functions from within defn" do
       result = deftransform_test(Nx.tensor(1), Nx.tensor(2), b: 3, c: 4)
 
@@ -1715,10 +1722,14 @@ defmodule Nx.DefnTest do
     end
 
     @tag compiler: Evaluator
-    test "multi-clause transform with bodiless head" do
+    test "multi-clause deftransform and deftransformp with bodiless head" do
       assert Nx.tensor(10) == multi_clause_transform_bodiless1(10)
       assert Nx.tensor(10) == multi_clause_transform_bodiless2(a: 1, b: 10)
       assert Nx.tensor(20) == multi_clause_transform_bodiless2(a: 20, b: 10)
+
+      assert Nx.tensor(10) == multi_clause_transform_bodiless3(10)
+      assert Nx.tensor(10) == multi_clause_transform_bodiless4(a: 1, b: 10)
+      assert Nx.tensor(20) == multi_clause_transform_bodiless4(a: 20, b: 10)
     end
   end
 end
