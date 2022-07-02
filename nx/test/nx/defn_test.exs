@@ -594,6 +594,11 @@ defmodule Nx.DefnTest do
     test "and works with boolean" do
       assert Nx.tensor(1, type: {:u, 8}) == land_true(2)
       assert Nx.tensor(0, type: {:u, 8}) == land_true(0)
+
+      assert Nx.tensor(1, type: {:u, 8}) == land_two(true, true)
+      assert Nx.tensor(0, type: {:u, 8}) == land_two(true, false)
+      assert Nx.tensor(0, type: {:u, 8}) == land_two(false, true)
+      assert Nx.tensor(0, type: {:u, 8}) == land_two(false, false)
     end
 
     defn lor_two(a, b), do: a or b
@@ -634,6 +639,8 @@ defmodule Nx.DefnTest do
 
     @tag compiler: Evaluator
     test "not works with boolean" do
+      assert Nx.tensor(0, type: {:u, 8}) == lnot(true)
+      assert Nx.tensor(1, type: {:u, 8}) == lnot(false)
       assert Nx.tensor(1, type: {:u, 8}) == lnot_boolean(value: false)
       assert Nx.tensor(0, type: {:u, 8}) == lnot_boolean(value: true)
     end
@@ -688,10 +695,27 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :equal, args: [_, _]}} = equality(1, 2)
     end
 
+    @tag compiler: Evaluator
+    test "== works with boolean" do
+      assert Nx.tensor(1, type: {:u, 8}) == equality(true, true)
+      assert Nx.tensor(1, type: {:u, 8}) == equality(false, false)
+      assert Nx.tensor(0, type: {:u, 8}) == equality(false, true)
+      assert Nx.tensor(0, type: {:u, 8}) == equality(true, false)
+    end
+
     defn inequality(a, b), do: a != b
 
     test "!=" do
       assert %T{data: %Expr{op: :not_equal, args: [_, _]}} = inequality(1, 2)
+    end
+
+
+    @tag compiler: Evaluator
+    test "!= works with boolean" do
+      assert Nx.tensor(0, type: {:u, 8}) == inequality(true, true)
+      assert Nx.tensor(0, type: {:u, 8}) == inequality(false, false)
+      assert Nx.tensor(1, type: {:u, 8}) == inequality(false, true)
+      assert Nx.tensor(1, type: {:u, 8}) == inequality(true, false)
     end
 
     defn less_than(a, b), do: a < b
@@ -700,10 +724,26 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :less, args: [_, _]}} = less_than(1, 2)
     end
 
+    @tag compiler: Evaluator
+    test "< (boolean)" do
+      assert Nx.tensor(1, type: {:u, 8}) == less_than(false, true)
+      assert Nx.tensor(0, type: {:u, 8}) == less_than(true, false)
+      assert Nx.tensor(0, type: {:u, 8}) == less_than(true, true)
+      assert Nx.tensor(0, type: {:u, 8}) == less_than(false, false)
+    end
+
     defn greater_than(a, b), do: a > b
 
     test ">" do
       assert %T{data: %Expr{op: :greater, args: [_, _]}} = greater_than(1, 2)
+    end
+
+    @tag compiler: Evaluator
+    test "> (boolean)" do
+      assert Nx.tensor(1, type: {:u, 8}) == greater_than(true, false)
+      assert Nx.tensor(0, type: {:u, 8}) == greater_than(false, true)
+      assert Nx.tensor(0, type: {:u, 8}) == greater_than(true, true)
+      assert Nx.tensor(0, type: {:u, 8}) == greater_than(false, false)
     end
 
     defn less_than_or_equal(a, b), do: a <= b
@@ -712,10 +752,26 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :less_equal, args: [_, _]}} = less_than_or_equal(1, 2)
     end
 
+    @tag compiler: Evaluator
+    test "<= (boolean)" do
+      assert Nx.tensor(1, type: {:u, 8}) == less_than_or_equal(false, true)
+      assert Nx.tensor(0, type: {:u, 8}) == less_than_or_equal(true, false)
+      assert Nx.tensor(1, type: {:u, 8}) == less_than_or_equal(true, true)
+      assert Nx.tensor(1, type: {:u, 8}) == less_than_or_equal(false, false)
+    end
+
     defn greater_than_or_equal(a, b), do: a >= b
 
     test ">=" do
       assert %T{data: %Expr{op: :greater_equal, args: [_, _]}} = greater_than_or_equal(1, 2)
+    end
+
+    @tag compiler: Evaluator
+    test ">= (boolean)" do
+      assert Nx.tensor(0, type: {:u, 8}) == greater_than_or_equal(false, true)
+      assert Nx.tensor(1, type: {:u, 8}) == greater_than_or_equal(true, false)
+      assert Nx.tensor(1, type: {:u, 8}) == greater_than_or_equal(true, true)
+      assert Nx.tensor(1, type: {:u, 8}) == greater_than_or_equal(false, false)
     end
   end
 

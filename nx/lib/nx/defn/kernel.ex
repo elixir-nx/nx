@@ -735,6 +735,9 @@ defmodule Nx.Defn.Kernel do
   defnguard(left == right, :__equal__)
 
   @doc false
+  def __equal__(left, right) when Kernel.or(is_boolean(left), is_boolean(right)),
+    do: __equal__(boolean_to_number(left), boolean_to_number(right))
+
   def __equal__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.==(left, right))
 
@@ -755,6 +758,9 @@ defmodule Nx.Defn.Kernel do
   defnguard(left != right, :__not_equal__)
 
   @doc false
+  def __not_equal__(left, right) when Kernel.or(is_boolean(left), is_boolean(right)),
+    do: __not_equal__(boolean_to_number(left), boolean_to_number(right))
+
   def __not_equal__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.!=(left, right))
 
@@ -775,6 +781,9 @@ defmodule Nx.Defn.Kernel do
   defnguard(left < right, :__less_than__)
 
   @doc false
+  def __less_than__(left, right) when Kernel.or(is_boolean(left), is_boolean(right)),
+    do: __less_than__(boolean_to_number(left), boolean_to_number(right))
+
   def __less_than__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.<(left, right))
 
@@ -795,6 +804,9 @@ defmodule Nx.Defn.Kernel do
   defnguard(left > right, :__more_than__)
 
   @doc false
+  def __more_than__(left, right) when Kernel.or(is_boolean(left), is_boolean(right)),
+    do: __more_than__(boolean_to_number(left), boolean_to_number(right))
+
   def __more_than__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.>(left, right))
 
@@ -815,6 +827,9 @@ defmodule Nx.Defn.Kernel do
   defnguard(left <= right, :__less_than_equal_to__)
 
   @doc false
+  def __less_than_equal_to__(left, right) when Kernel.or(is_boolean(left), is_boolean(right)),
+    do: __less_than_equal_to__(boolean_to_number(left), boolean_to_number(right))
+
   def __less_than_equal_to__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.<=(left, right))
 
@@ -835,6 +850,9 @@ defmodule Nx.Defn.Kernel do
   defnguard(left >= right, :__more_than_equal_to__)
 
   @doc false
+  def __more_than_equal_to__(left, right) when Kernel.or(is_boolean(left), is_boolean(right)),
+    do: __more_than_equal_to__(boolean_to_number(left), boolean_to_number(right))
+
   def __more_than_equal_to__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.>=(left, right))
 

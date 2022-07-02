@@ -135,8 +135,9 @@ defmodule Nx.Defn.Composite do
   defp flatten_each(%T{} = tensor, acc, _fun),
     do: [tensor | acc]
 
-  defp flatten_each(number, acc, fun) when is_number(number) or is_struct(number, Complex) or is_boolean(number),
-    do: [fun.(number) | acc]
+  defp flatten_each(number, acc, fun)
+       when is_number(number) or is_struct(number, Complex) or is_boolean(number),
+       do: [fun.(number) | acc]
 
   defp flatten_each(container, acc, fun),
     do: Nx.Container.reduce(container, acc, &flatten_each(&1, &2, fun))

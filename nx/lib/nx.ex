@@ -375,7 +375,8 @@ defmodule Nx do
   See also: `t:t/0`
   """
   @doc type: :guards
-  defguard is_tensor(t) when is_number(t) or is_struct(t, T) or is_struct(t, Complex) or is_boolean(t)
+  defguard is_tensor(t)
+           when is_number(t) or is_struct(t, T) or is_struct(t, Complex) or is_boolean(t)
 
   ## Creation API
 
