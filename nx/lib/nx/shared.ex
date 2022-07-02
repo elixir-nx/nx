@@ -377,9 +377,9 @@ defmodule Nx.Shared do
   @doc """
   Builds the type of an element-wise binary operation.
   """
-  def binary_type(a, b) when is_number(a) and is_number(b), do: Nx.Type.infer(a + b)
-  def binary_type(a, b) when is_number(a), do: Nx.Type.merge_number(type(b), a)
-  def binary_type(a, b) when is_number(b), do: Nx.Type.merge_number(type(a), b)
+  def binary_type(a, b) when (is_number(a) or is_boolean(a)) and (is_number(b) or is_boolean(b)), do: Nx.Type.infer(a + b)
+  def binary_type(a, b) when is_number(a) or is_boolean(a), do: Nx.Type.merge_number(type(b), a)
+  def binary_type(a, b) when is_number(b) or is_boolean(b), do: Nx.Type.merge_number(type(a), b)
   def binary_type(a, b), do: Nx.Type.merge(type(a), type(b))
 
   # For unknown types, return {:f, 32} as the caller
@@ -387,6 +387,7 @@ defmodule Nx.Shared do
   defp type(%T{type: type}), do: type
   defp type({_, _} = type), do: type
   defp type(%Complex{}), do: {:c, 64}
+  defp type(bool) when is_boolean(bool), do: {:u, 8}
   defp type(_other), do: {:f, 32}
 
   ## Helpers

@@ -610,10 +610,9 @@ defmodule Nx do
     Enum.reduce(tail, infer_type(head), &Nx.Type.merge(infer_type(&1), &2))
   end
 
-  defp infer_type(value) when is_boolean(value), do: {:u, 8}
-
   defp infer_type(number)
-       when is_number(number) or is_struct(number, Complex) or number in @non_finite do
+       when is_number(number) or is_struct(number, Complex) or number in @non_finite or
+              is_boolean(number) do
     Nx.Type.infer(number)
   end
 
@@ -1640,8 +1639,13 @@ defmodule Nx do
     backend.constant(out, number, options)
   end
 
-  def to_tensor(true), do: to_tensor(1)
-  def to_tensor(false), do: to_tensor(0)
+  def to_tensor(bool) when is_boolean(bool) do
+    {backend, options} = default_backend()
+    type = Nx.Type.infer(bool)
+    out = %T{shape: {}, type: type, names: []}
+    number = if bool == true, do: 1, else: 0
+    backend.constant(out, number, options)
+  end
 
   def to_tensor(t) do
     raise ArgumentError, "expected a %Nx.Tensor{} or a number, got: #{inspect(t)}"

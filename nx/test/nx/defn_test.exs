@@ -555,6 +555,22 @@ defmodule Nx.DefnTest do
     end
   end
 
+  describe "boolean constants" do
+    @tag compiler: Evaluator
+    test "upcast to numbers in tensor operations" do
+      # note: this is not extensive, it's just to ensure that
+      # both defn and the underlying functions cast properly
+      for fun <- [&add_two/2, &Nx.add/2], {sign, _} = type <- [s: 8, u: 8] do
+        width = if sign == :s, do: 16, else: 8
+
+        assert Nx.tensor(2, type: {sign, width}) == fun.(true, Nx.tensor(1, type: type))
+        assert Nx.tensor(1, type: {sign, width}) == fun.(false, Nx.tensor(1, type: type))
+        assert Nx.tensor(2, type: {sign, width}) == fun.(Nx.tensor(1, type: type), true)
+        assert Nx.tensor(1, type: {sign, width}) == fun.(Nx.tensor(1, type: type), false)
+      end
+    end
+  end
+
   describe "operators" do
     defn add_two(a, b), do: a + b
 
@@ -591,7 +607,7 @@ defmodule Nx.DefnTest do
     end
 
     @tag compiler: Evaluator
-    test "and works with boolean" do
+    test "and (boolean)" do
       assert Nx.tensor(1, type: {:u, 8}) == land_true(2)
       assert Nx.tensor(0, type: {:u, 8}) == land_true(0)
 
@@ -708,7 +724,6 @@ defmodule Nx.DefnTest do
     test "!=" do
       assert %T{data: %Expr{op: :not_equal, args: [_, _]}} = inequality(1, 2)
     end
-
 
     @tag compiler: Evaluator
     test "!= works with boolean" do

@@ -130,6 +130,7 @@ defmodule Nx.Type do
   """
   def infer(value) when is_integer(value), do: {:s, 64}
   def infer(value) when is_float(value), do: {:f, 32}
+  def infer(value) when is_boolean(value), do: {:u, 8}
   def infer(%Complex{}), do: {:c, 64}
   def infer(value) when value in [:neg_infinity, :infinity, :nan], do: {:f, 32}
 
@@ -493,6 +494,10 @@ defmodule Nx.Type do
 
   def merge_number(_, number) when is_number(number) do
     {:f, 32}
+  end
+
+  def merge_number(type, bool) when is_boolean(bool) do
+    merge(type, {:u, 8})
   end
 
   @doc """
