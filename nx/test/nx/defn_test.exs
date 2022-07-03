@@ -1910,20 +1910,19 @@ defmodule Nx.DefnTest do
         ln = if lb, do: 1, else: 0
         rn = if rb, do: 1, else: 0
 
-        expected_list = [
-          ln < rn,
-          ln <= rn,
-          ln > rn,
-          ln >= rn,
-          ln == rn,
-          ln != rn,
-          lb and rb,
-          lb or rb,
-          not lb,
-          not rb
-        ]
-
-        assert Nx.tensor(expected_list) == supports_booleans(l: l, r: r)
+        assert supports_booleans(l: l, r: r) ==
+                 Nx.tensor([
+                   ln < rn,
+                   ln <= rn,
+                   ln > rn,
+                   ln >= rn,
+                   ln == rn,
+                   ln != rn,
+                   lb and rb,
+                   lb or rb,
+                   not lb,
+                   not rb
+                 ])
       end
     end
   end
