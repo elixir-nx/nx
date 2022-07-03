@@ -5176,9 +5176,11 @@ defmodule Nx do
   """
   @doc type: :indexed
   def indexed_add(target, indices, updates) do
-    {target, indices, updates, type} = indexed_op(target, indices, updates)
+    impl = fn target, indices, updates, out ->
+      impl!(target, indices, updates).indexed_add(out, target, indices, updates)
+    end
 
-    impl!(target, indices, updates).indexed_add(%{target | type: type}, target, indices, updates)
+    indexed_op(target, indices, updates, impl)
   end
 
   @doc """
@@ -5263,12 +5265,14 @@ defmodule Nx do
   """
   @doc type: :indexed
   def indexed_put(target, indices, updates) do
-    {target, indices, updates, type} = indexed_op(target, indices, updates)
+    impl = fn target, indices, updates, out ->
+      impl!(target, indices, updates).indexed_put(out, target, indices, updates)
+    end
 
-    impl!(target, indices, updates).indexed_put(%{target | type: type}, target, indices, updates)
+    indexed_op(target, indices, updates, impl)
   end
 
-  defp indexed_op(target, indices, updates) do
+  defp indexed_op(target, indices, updates, impl) do
     target = to_tensor(target)
     indices = to_tensor(indices)
     updates = to_tensor(updates)
@@ -5277,7 +5281,9 @@ defmodule Nx do
 
     Nx.Shape.indexed(target, indices, updates)
 
-    {target, indices, updates, type}
+    out = %{target | type: type}
+
+    impl.(target, indices, updates, out)
   end
 
   ## Unary ops

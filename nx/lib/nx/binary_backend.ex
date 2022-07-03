@@ -1671,12 +1671,43 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def indexed_add(
-        %T{} = out,
-        %T{shape: shape, type: {_, target_size}} = target,
-        %T{shape: {indices_rows, _indices_cols} = indices_shape} = indices,
-        %T{shape: {indices_rows}} = updates
-      ) do
+  def indexed_add(out, target, indices, updates) do
+    resolve_updates = fn upds -> Enum.reduce(upds, 0, &+/2) end
+    update_element = fn cur, upd -> cur + upd end
+
+    indexed_op(out, target, indices, updates, resolve_updates, update_element)
+  end
+
+  @impl true
+  def indexed_put(out, target, indices, updates) do
+    resolve_updates = fn upds -> Enum.at(upds, -1) end
+    update_element = fn _cur, upd -> upd end
+
+    indexed_op(out, target, indices, updates, resolve_updates, update_element)
+  end
+
+  @doc """
+  Generalized `indexed_*` operation
+
+  # Parameters
+
+  - `out` - output tensor
+  - `target` - target tensor
+  - `indices` - tensor with indices to update
+  - `updates` - tensor with updates to make
+  - `resolve_updates` - anonymous function to resolve repeated updates
+  - `update_element` - anonymous function that updates an element, given
+     the current element and the update
+  """
+
+  defp indexed_op(
+         %T{} = out,
+         %T{shape: shape, type: {_, target_size}} = target,
+         %T{shape: {indices_rows, _indices_cols} = indices_shape} = indices,
+         %T{shape: {indices_rows}} = updates,
+         resolve_updates,
+         update_element
+       ) do
     indices_bin_list =
       indices |> to_binary() |> aggregate_axes([1], indices_shape, elem(indices.type, 1))
 
@@ -1703,7 +1734,7 @@ defmodule Nx.BinaryBackend do
         {{
            previous_offset + target_size,
            next_offset,
-           Enum.reduce(upds, 0, &+/2)
+           resolve_updates.(upds)
          }, next_offset}
       end)
 
@@ -1731,7 +1762,7 @@ defmodule Nx.BinaryBackend do
                 for <<match!(x, 0) <- before_offset>>, do: number_to_binary(read!(x, 0), out.type)
               end
 
-            updated_element = <<write!(read!(element, 0) + update, 1)>>
+            updated_element = <<write!(update_element.(read!(element, 0), update), 1)>>
 
             {[traversed | [before_offset, updated_element]], to_traverse}
           end
