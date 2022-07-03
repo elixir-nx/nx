@@ -565,10 +565,8 @@ defmodule Nx.Defn.Kernel do
   defnguard(left and right, :__and__)
 
   @doc false
-  def __and__(left, right) when Kernel.or(is_boolean(left), is_boolean(right)) do
-    __and__(boolean_to_number(left), boolean_to_number(right))
-  end
-
+  def __and__(left, right) when is_boolean(left), do: __and__(boolean_to_number(left), right)
+  def __and__(left, right) when is_boolean(right), do: __and__(left, boolean_to_number(right))
   def __and__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: logical_and(left, right)
 
@@ -592,9 +590,8 @@ defmodule Nx.Defn.Kernel do
   defnguard(left or right, :__or__)
 
   @doc false
-  def __or__(left, right) when Kernel.or(is_boolean(left), is_boolean(right)),
-    do: __or__(boolean_to_number(left), boolean_to_number(right))
-
+  def __or__(left, right) when is_boolean(left), do: __or__(boolean_to_number(left), right)
+  def __or__(left, right) when is_boolean(right), do: __or__(left, boolean_to_number(right))
   def __or__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: logical_or(left, right)
 
@@ -735,8 +732,8 @@ defmodule Nx.Defn.Kernel do
   defnguard(left == right, :__equal__)
 
   @doc false
-  def __equal__(left, right) when Kernel.or(is_boolean(left), is_boolean(right)),
-    do: __equal__(boolean_to_number(left), boolean_to_number(right))
+  def __equal__(left, right) when is_boolean(left), do: __equal__(boolean_to_number(left), right)
+  def __equal__(left, right) when is_boolean(right), do: __equal__(left, boolean_to_number(right))
 
   def __equal__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.==(left, right))
@@ -758,8 +755,8 @@ defmodule Nx.Defn.Kernel do
   defnguard(left != right, :__not_equal__)
 
   @doc false
-  def __not_equal__(left, right) when Kernel.or(is_boolean(left), is_boolean(right)),
-    do: __not_equal__(boolean_to_number(left), boolean_to_number(right))
+  def __not_equal__(left, right) when is_boolean(left), do: __not_equal__(boolean_to_number(left), right)
+  def __not_equal__(left, right) when is_boolean(right), do: __not_equal__(left, boolean_to_number(right))
 
   def __not_equal__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.!=(left, right))
@@ -781,8 +778,8 @@ defmodule Nx.Defn.Kernel do
   defnguard(left < right, :__less_than__)
 
   @doc false
-  def __less_than__(left, right) when Kernel.or(is_boolean(left), is_boolean(right)),
-    do: __less_than__(boolean_to_number(left), boolean_to_number(right))
+  def __less_than__(left, right) when is_boolean(left), do: __less_than__(boolean_to_number(left), right)
+  def __less_than__(left, right) when is_boolean(right), do: __less_than__(left, boolean_to_number(right))
 
   def __less_than__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.<(left, right))
@@ -830,8 +827,8 @@ defmodule Nx.Defn.Kernel do
   defnguard(left <= right, :__less_than_equal_to__)
 
   @doc false
-  def __less_than_equal_to__(left, right) when Kernel.or(is_boolean(left), is_boolean(right)),
-    do: __less_than_equal_to__(boolean_to_number(left), boolean_to_number(right))
+  def __less_than_equal_to__(left, right) when is_boolean(left), do: __less_than_equal_to__(boolean_to_number(left), right)
+  def __less_than_equal_to__(left, right) when is_boolean(right), do: __less_than_equal_to__(left, boolean_to_number(right))
 
   def __less_than_equal_to__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.<=(left, right))
@@ -853,8 +850,8 @@ defmodule Nx.Defn.Kernel do
   defnguard(left >= right, :__more_than_equal_to__)
 
   @doc false
-  def __more_than_equal_to__(left, right) when Kernel.or(is_boolean(left), is_boolean(right)),
-    do: __more_than_equal_to__(boolean_to_number(left), boolean_to_number(right))
+  def __more_than_equal_to__(left, right) when is_boolean(left), do: __more_than_equal_to__(boolean_to_number(left), right)
+  def __more_than_equal_to__(left, right) when is_boolean(right), do: __more_than_equal_to__(left, boolean_to_number(right))
 
   def __more_than_equal_to__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.>=(left, right))

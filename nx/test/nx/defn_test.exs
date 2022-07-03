@@ -1892,4 +1892,28 @@ defmodule Nx.DefnTest do
       assert Nx.tensor(20) == multi_clause_transform_bodiless4(a: 20, b: 10)
     end
   end
+
+  describe "boolean values" do
+    defn supports_booleans(opts \\ []) do
+      l = opts[:l]
+      r = opts[:r]
+
+      Nx.stack([l < r, l <= r, l > r, l >= r, l == r, l != r, l and r, l or r, not l, not r])
+    end
+
+    @tag compiler: Evaluator
+    test "supports booleans in some operations" do
+      for l <- [true, false, 1, 0], r <- [true, false, 1, 0] do
+        lb = l == 1 or l == true
+        rb = r == 1 or r == true
+
+        ln = if lb, do: 1, else: 0
+        rn = if rb, do: 1, else: 0
+
+        expected_list = [ln < rn, ln <= rn, ln > rn, ln >= rn, ln == rn, ln != rn, lb and rb, lb or rb, not lb, not rb]
+
+        assert Nx.tensor(expected_list) == supports_booleans(l: l, r: r)
+      end
+    end
+  end
 end
