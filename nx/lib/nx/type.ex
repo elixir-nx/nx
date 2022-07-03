@@ -496,10 +496,6 @@ defmodule Nx.Type do
     {:f, 32}
   end
 
-  def merge_number(type, bool) when is_boolean(bool) do
-    merge(type, {:u, 8})
-  end
-
   @doc """
   Returns true if the type is an integer in Elixir.
 

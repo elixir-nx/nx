@@ -804,8 +804,11 @@ defmodule Nx.Defn.Kernel do
   defnguard(left > right, :__more_than__)
 
   @doc false
-  def __more_than__(left, right) when Kernel.or(is_boolean(left), is_boolean(right)),
-    do: __more_than__(boolean_to_number(left), boolean_to_number(right))
+  def __more_than__(left, right) when is_boolean(left),
+    do: __more_than__(boolean_to_number(left), right)
+
+  def __more_than__(left, right) when is_boolean(right),
+    do: __more_than__(left, boolean_to_number(right))
 
   def __more_than__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.>(left, right))

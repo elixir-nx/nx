@@ -376,7 +376,7 @@ defmodule Nx do
   """
   @doc type: :guards
   defguard is_tensor(t)
-           when is_number(t) or is_struct(t, T) or is_struct(t, Complex) or is_boolean(t)
+           when is_number(t) or is_struct(t, T) or is_struct(t, Complex)
 
   ## Creation API
 
@@ -1636,14 +1636,6 @@ defmodule Nx do
     {backend, options} = default_backend()
     {_, size} = re |> Nx.Type.infer() |> Nx.Type.merge(Nx.Type.infer(im))
     out = %T{shape: {}, type: {:c, size * 2}, names: []}
-    backend.constant(out, number, options)
-  end
-
-  def to_tensor(bool) when is_boolean(bool) do
-    {backend, options} = default_backend()
-    type = Nx.Type.infer(bool)
-    out = %T{shape: {}, type: type, names: []}
-    number = if bool == true, do: 1, else: 0
     backend.constant(out, number, options)
   end
 
