@@ -560,6 +560,13 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
+  def indexed_put(out, target, indices, updates) do
+    {[target, indices, updates], context} = to_exprs([target, indices, updates])
+
+    expr(out, context, :indexed_put, [target, indices, updates])
+  end
+
+  @impl true
   def reshape(out, tensor) do
     tensor = to_expr(tensor)
     expr(out, tensor.data.context, :reshape, [tensor])
