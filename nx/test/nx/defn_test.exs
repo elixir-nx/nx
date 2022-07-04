@@ -1178,21 +1178,21 @@ defmodule Nx.DefnTest do
     end
 
     test "matches shapes" do
-      assert simple_rank(123) == Expr.tensor(Nx.tensor(0))
-      assert simple_rank(Nx.tensor([1, 2, 3])) == Expr.tensor(Nx.tensor(1))
-      assert simple_rank(Nx.tensor([[1, 2, 3]])) == Expr.tensor(Nx.tensor(2))
+      assert simple_rank(123) == Expr.tensor(0)
+      assert simple_rank(Nx.tensor([1, 2, 3])) == Expr.tensor(1)
+      assert simple_rank(Nx.tensor([[1, 2, 3]])) == Expr.tensor(2)
     end
 
     test "matches tuples shapes" do
-      assert tuple_rank(0, 0) == Expr.tensor(Nx.tensor(0))
-      assert tuple_rank(Nx.tensor([1, 2, 3]), 0) == Expr.tensor(Nx.tensor(-1))
-      assert tuple_rank(0, Nx.tensor([1, 2, 3])) == Expr.tensor(Nx.tensor(1))
+      assert tuple_rank(0, 0) == Expr.tensor(0)
+      assert tuple_rank(Nx.tensor([1, 2, 3]), 0) == Expr.tensor(-1)
+      assert tuple_rank(0, Nx.tensor([1, 2, 3])) == Expr.tensor(1)
     end
 
     test "matches using guards" do
-      assert guard_rank(Nx.iota({2, 2})) == Expr.tensor(Nx.tensor(0))
-      assert guard_rank(Nx.iota({3, 2})) == Expr.tensor(Nx.tensor(-1))
-      assert guard_rank(Nx.iota({2, 3})) == Expr.tensor(Nx.tensor(1))
+      assert guard_rank(Nx.iota({2, 2})) == Expr.tensor(0)
+      assert guard_rank(Nx.iota({3, 2})) == Expr.tensor(-1)
+      assert guard_rank(Nx.iota({2, 3})) == Expr.tensor(1)
     end
 
     test "raises if not tuple, atom, integer" do
@@ -1225,7 +1225,7 @@ defmodule Nx.DefnTest do
     end
 
     test "raises ArgumentError" do
-      assert raise_argument_error(Nx.iota({4, 4})) == Expr.tensor(Nx.tensor(4))
+      assert raise_argument_error(Nx.iota({4, 4})) == Expr.tensor(4)
 
       assert_raise ArgumentError, "expected a square tensor: {4, 3}", fn ->
         raise_argument_error(Nx.iota({4, 3}))
@@ -1240,7 +1240,7 @@ defmodule Nx.DefnTest do
     end
 
     test "raises RuntimeError" do
-      assert raise_runtime_error(Nx.iota({4, 4})) == Expr.tensor(Nx.tensor(4))
+      assert raise_runtime_error(Nx.iota({4, 4})) == Expr.tensor(4)
 
       assert_raise RuntimeError, "expected a square tensor: {4, 3}", fn ->
         raise_runtime_error(Nx.iota({4, 3}))
