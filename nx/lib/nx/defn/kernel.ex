@@ -139,90 +139,17 @@ defmodule Nx.Defn.Kernel do
     do: special_form!([expr, block])
 
   defp special_form!(_args),
-    do: raise("special forms must not be imported and exist for documentation purposes")
+    do: Kernel.raise("special forms must not be imported and exist for documentation purposes")
 
   @doc """
-  Defines a transform that executes the given `fun` with `arg`
-  when building `defn` expressions.
-
-  ## Example
-
-  Take the following defn expression:
-
-      defn tanh_power(a, b) do
-        Nx.tanh(a) + Nx.power(b, 2)
-      end
-
-  Let's see a trivial example, which is to use `IO.inspect/1` to
-  print a tensor expression at definition time:
-
-      defn tanh_power(a, b) do
-        Nx.tanh(a) + Nx.power(b, 2) |> transform(&IO.inspect/1)
-      end
-
-  Or:
-
-      defn tanh_power(a, b) do
-        res = Nx.tanh(a) + Nx.power(b, 2)
-        transform(res, &IO.inspect/1)
-        res
-      end
-
-  When invoked in both cases, it will print the expression being built
-  by `defn`:
-
-      #Nx.Defn.Expr<
-        parameter a
-        parameter c
-        b = tanh [ a ] ()
-        d = power [ c, 2 ] ()
-        e = add [ b, d ] ()
-      >
-
-  Although, for convenience, you might use `inspect_expr/2` instead.
-
-  ## Pitfalls
-
-  Because `transform/2` is invoked inside `defn`, its scope is tied
-  to `defn`. For example, if you do this:
-
-      transform(tensor, fn tensor ->
-        if Nx.type(tensor) != {:f, 32} do
-          raise "bad"
-        end
-      end)
-
-  it won't work because it will use the `!=` operator defined in
-  this module, which only works with tensors, instead of the operator
-  defined in Elixir's `Kernel`. Therefore, we recommend all `transform/2`
-  calls to simply dispatch to a separate function. The example above
-  could be rewritten as:
-
-      transform(tensor, &assert_2x2_shape(&1))
-
-  where:
-
-      defp assert_2x2_shape(tensor) do
-        if Nx.shape(tensor) != {2, 2} do
-          raise "bad"
-        end
-      end
-
-  """
-  @deprecated "use deftransform/2 or deftransformp/2 from Nx.Defn instead"
-  def transform(arg, fun) when is_function(fun, 1) do
-    fun.(arg)
-  end
-
-  @doc """
-  Inspects the given expression to the terminal.
+  Prints the given expression to the terminal.
 
   It returns the given expressions.
 
   ### Examples
 
       defn tanh_grad(t) do
-        grad(t, &Nx.tanh/1) |> inspect_expr()
+        grad(t, &Nx.tanh/1) |> print_expr()
       end
 
   When invoked, it will print the expression being built by `defn`:
@@ -237,12 +164,12 @@ defmodule Nx.Defn.Kernel do
       >
 
   """
-  def inspect_expr(expr, opts \\ []) do
+  def print_expr(expr, opts \\ []) do
     IO.inspect(expr, opts)
   end
 
   @doc """
-  Inspects the value at runtime to the terminal.
+  Prints the value at runtime to the terminal.
 
   This function is implemented on top of `hook/3` and therefore
   has the following restrictions:
@@ -258,7 +185,7 @@ defmodule Nx.Defn.Kernel do
         grad(t, fn t ->
           t
           |> Nx.tanh()
-          |> inspect_value()
+          |> print_value()
         end)
       end
 
@@ -266,12 +193,12 @@ defmodule Nx.Defn.Kernel do
         grad(t, fn t ->
           t
           |> Nx.tanh()
-          |> inspect_value(label: "tanh")
+          |> print_value(label: "tanh")
         end)
       end
 
   """
-  def inspect_value(expr, opts \\ []) do
+  def print_value(expr, opts \\ []) do
     hook(expr, &IO.inspect(&1, opts))
   end
 
@@ -930,13 +857,16 @@ defmodule Nx.Defn.Kernel do
 
         case error do
           {:badkey, key} ->
-            raise ArgumentError,
-                  "unknown key #{inspect(key)} in #{inspect(keyword)}, " <>
-                    "expected one of #{inspect(keys)}"
+            Kernel.raise(
+              ArgumentError,
+              "unknown key #{Kernel.inspect(key)} in #{Kernel.inspect(keyword)}, expected one of #{Kernel.inspect(keys)}"
+            )
 
           :badkey ->
-            raise ArgumentError,
-                  "expected a keyword list with keys #{inspect(keys)}, got: #{inspect(keyword)}"
+            Kernel.raise(
+              ArgumentError,
+              "expected a keyword list with keys #{Kernel.inspect(keys)}, got: #{Kernel.inspect(keyword)}"
+            )
         end
     end
   end
@@ -980,9 +910,10 @@ defmodule Nx.Defn.Kernel do
     do: acc
 
   defp move_pairs!([other | _], _) do
-    raise ArgumentError,
-          "keyword!/2 expects the second argument to be a list of atoms or tuples, " <>
-            "got: #{inspect(other)}"
+    Kernel.raise(
+      ArgumentError,
+      "keyword!/2 expects the second argument to be a list of atoms or tuples, got: #{Kernel.inspect(other)}"
+    )
   end
 
   @doc """
@@ -1046,9 +977,10 @@ defmodule Nx.Defn.Kernel do
   end
 
   defmacro if(_pred, other) do
-    raise ArgumentError,
-          "expected second argument to \"if\" to be a do/else block, " <>
-            "got: #{Macro.to_string(other)}"
+    Kernel.raise(
+      ArgumentError,
+      "expected second argument to \"if\" to be a do/else block, got: #{Macro.to_string(other)}"
+    )
   end
 
   @doc """
@@ -1123,9 +1055,10 @@ defmodule Nx.Defn.Kernel do
   end
 
   defmacro while(_var, _cond, other) do
-    raise ArgumentError,
-          "expected third argument to \"while\" to be a do-block, " <>
-            "got: #{Macro.to_string(other)}"
+    Kernel.raise(
+      ArgumentError,
+      "expected third argument to \"while\" to be a do-block, got: #{Macro.to_string(other)}"
+    )
   end
 
   @doc false
@@ -1153,7 +1086,7 @@ defmodule Nx.Defn.Kernel do
   end
 
   defp while_arg(other, _prelude) do
-    raise ArgumentError, """
+    Kernel.raise(ArgumentError, """
     invalid initial argument for \"while\". Expected a variable, a variable assignment, \
     or a tuple of the same. For example:
 
@@ -1171,7 +1104,7 @@ defmodule Nx.Defn.Kernel do
           end
 
     Got: #{Macro.to_string(other)}
-    """
+    """)
   end
 
   @doc """
@@ -1186,7 +1119,7 @@ defmodule Nx.Defn.Kernel do
 
       a
       |> Nx.add(b)
-      |> tap(&inspect_expr/1)
+      |> tap(&print_expr/1)
       |> Nx.multiply(c)
 
   """
@@ -1488,111 +1421,145 @@ defmodule Nx.Defn.Kernel do
   """
   def assert_keys(keyword, keys) when Kernel.and(is_list(keyword), is_list(keys)) do
     for key <- keys, Kernel.not(Keyword.has_key?(keyword, key)) do
-      raise ArgumentError,
-            "expected key #{inspect(key)} in keyword list, got: #{inspect(keyword)}"
+      Kernel.raise(
+        ArgumentError,
+        "expected key #{Kernel.inspect(key)} in keyword list, got: #{Kernel.inspect(keyword)}"
+      )
     end
 
     keyword
   end
 
   @doc """
-  Asserts the `tensor` has a certain `shape`.
+  Raises a runtime exception with the given `message`.
 
-  If it succeeds, it returns the given tensor. Raises
-  an error otherwise.
-
-  ## Examples
-
-  To assert the tensor is a scalar, you can pass the empty tuple `shape`:
-
-      iex> assert_shape(Nx.tensor(13), {})
-      #Nx.Tensor<
-        s64
-        13
-      >
-
-  If the shapes do not match, an error is raised:
-
-      iex> assert_shape(Nx.tensor([1, 2, 3]), {})
-      ** (ArgumentError) expected tensor to be a scalar, got tensor with shape {3}
-
-      iex> assert_shape(Nx.tensor([1, 2, 3]), {4})
-      ** (ArgumentError) expected tensor to have shape {4}, got tensor with shape {3}
-
-  Similarly, to assert two tensors have the same shape, you can:
-
-      assert_shape(tensor1, Nx.shape(tensor2))
-
-  If you want to assert on the rank or shape patterns, use
-  `assert_shape_pattern/2` or the more general `match_shape/2`.
+  See `raise/2` for more information on exceptions inside `defn`.
   """
+  # It needs to be a macro so we don't add stacktrace entries.
+  # Since there is no defdelegate for macros, we do it manually.
+  defmacro raise(message) do
+    quote do
+      Elixir.Kernel.raise(unquote(message))
+    end
+  end
+
+  @doc ~S"""
+  Raises an `exception` with the given `arguments`.
+
+  `raise/2` is invoked while building the numerical expression,
+  not inside the device. This means that `raise` may be invoked
+  on unexpected situations, as we build the numerical expression.
+  To better understand those cases, let's see some examples.
+
+  First, let's start with a valid use case for `raise/2`: raise
+  on mismatched shapes. Inside `defn`, we know the tensor shapes
+  and types, but not their values, so we can assert on the shape
+  while building the numerical expression:
+
+      defn square_shape(tensor) do
+        case Nx.shape(tensor) do
+          {n, n} -> n
+          shape -> raise ArgumentError, "expected a square tensor: #{inspect(shape)}"
+        end
+      end
+
+  In the example above, only the matching branch of the case is executed,
+  so if you give it a 2x2 tensor, it will return 2. However, if you give
+  it a non-square tensor, it will raise.
+
+  Now consider this code:
+
+      defn some_check(a, b) do
+        if a != b do
+          a * b
+        else
+          raise "expected different tensors, got: #{inspect(a)} and #{inspect(b)}"
+        end
+      end
+
+  In this case, both `a` and `b` are tensors and we are comparing their values.
+  However, their values are unknown, which means we need to convert the whole
+  `if` to a numerical expression and run it on the device. However, once we
+  convert the `else` branch, it will execute `raise/2`, making it so the code
+  above always raises!
+
+  In such cases, there are no alternatives. We can't execute exceptions in the
+  CPU/GPU, so you need to approach the problem under a different perspective.
+  """
+  defmacro raise(exception, arguments) do
+    quote do
+      Elixir.Kernel.raise(unquote(exception), unquote(arguments))
+    end
+  end
+
+  @doc ~S"""
+  Converts the given expression into a string.
+
+  `inspect/2` is used to convert expressions into strings, typically
+  to be used as part of error messages. If you want to inspect for
+  debugging, consider using `print_expr/2`, to print the underlying
+  expression, or `print_value/2` to print the value during execution.
+
+      defn square_shape(tensor) do
+        case Nx.shape(tensor) do
+          {n, n} -> n
+          shape -> raise ArgumentError, "expected a square tensor: #{inspect(shape)}"
+        end
+      end
+  """
+  def inspect(expr, opts \\ []) do
+    Kernel.inspect(expr, opts)
+  end
+
+  @doc """
+  Concatenates two strings.
+
+  Equivalent to `Kernel.<>/2`.
+  """
+  defmacro left <> right do
+    quote do
+      Elixir.Kernel.<>(unquote(left), unquote(right))
+    end
+  end
+
+  @doc false
+  @deprecated "use deftransform/2 or deftransformp/2 from Nx.Defn instead"
+  def transform(arg, fun) when is_function(fun, 1) do
+    fun.(arg)
+  end
+
+  @doc false
+  @deprecated "Use print_expr/2 instead"
+  def inspect_expr(expr, opts \\ []) do
+    IO.inspect(expr, opts)
+  end
+
+  @doc false
+  @deprecated "Use print_expr/2 instead"
+  def inspect_value(expr, opts \\ []) do
+    hook(expr, &IO.inspect(&1, opts))
+  end
+
+  @doc false
+  @deprecated "Use case+raise instead"
   def assert_shape(tensor, shape) when is_tuple(shape) do
     case Nx.shape(tensor) do
       ^shape ->
         tensor
 
       other ->
-        raise ArgumentError,
-              "expected tensor to #{shape_to_string(shape)}, got tensor with shape #{inspect(other)}"
+        Kernel.raise(
+          ArgumentError,
+          "expected tensor to #{shape_to_string(shape)}, got tensor with shape #{Kernel.inspect(other)}"
+        )
     end
   end
 
   defp shape_to_string({}), do: "be a scalar"
-  defp shape_to_string(shape), do: "have shape " <> inspect(shape)
+  defp shape_to_string(shape), do: "have shape #{Kernel.inspect(shape)}"
 
-  @doc """
-  Asserts the `tensor` has a certain `shape` pattern.
-
-  If it succeeds, it returns the given tensor. Raises
-  an error otherwise.
-
-  ## Examples
-
-  Opposite to `assert_shape/2`, where the given shape is a value,
-  `assert_shape_pattern` allows the shape to be any Elixir pattern.
-  We can use this to match on ranks:
-
-      iex> assert_shape_pattern Nx.tensor([[1, 2], [3, 4]]), {_, _}
-      #Nx.Tensor<
-        s64[2][2]
-        [
-          [1, 2],
-          [3, 4]
-        ]
-      >
-
-      iex> assert_shape_pattern Nx.tensor([1, 2, 3]), {_, _}
-      ** (ArgumentError) expected tensor to match shape {_, _}, got tensor with shape {3}
-
-  Or even use variables to assert on properties such as square matrices:
-
-      iex> assert_shape_pattern Nx.tensor([[1, 2], [3, 4]]), {x, x}
-      #Nx.Tensor<
-        s64[2][2]
-        [
-          [1, 2],
-          [3, 4]
-        ]
-      >
-
-      iex> assert_shape_pattern Nx.tensor([1, 2, 3]), {x, x}
-      ** (ArgumentError) expected tensor to match shape {x, x}, got tensor with shape {3}
-
-  You can also use guards to specify tall matrices and so forth:
-
-      iex> assert_shape_pattern Nx.tensor([[1], [2]]), {x, y} when x > y
-      #Nx.Tensor<
-        s64[2][1]
-        [
-          [1],
-          [2]
-        ]
-      >
-
-      iex> assert_shape_pattern Nx.tensor([1, 2]), {x, y} when x > y
-      ** (ArgumentError) expected tensor to match shape {x, y} when x > y, got tensor with shape {2}
-
-  """
+  @doc false
+  @deprecated "Use case+raise instead"
   defmacro assert_shape_pattern(tensor, shape) do
     shape_pattern_string = shape_pattern_to_string(shape)
 
@@ -1604,19 +1571,14 @@ defmodule Nx.Defn.Kernel do
           tensor
 
         shape ->
-          unquote(__MODULE__).__assert_shape_pattern__!(unquote(shape_pattern_string), shape)
+          raise ArgumentError,
+                "expected tensor to #{unquote(shape_pattern_string)}, got tensor with shape #{Nx.Defn.Kernel.inspect(shape)}"
       end
     end
   end
 
-  @doc false
-  def __assert_shape_pattern__!(shape_pattern_string, shape) do
-    raise ArgumentError,
-          "expected tensor to #{shape_pattern_string}, got tensor with shape #{inspect(shape)}"
-  end
-
   defp shape_pattern_to_string({:{}, _, []}), do: "be a scalar"
-  defp shape_pattern_to_string(pattern), do: "match shape " <> Macro.to_string(pattern)
+  defp shape_pattern_to_string(pattern), do: "match shape #{Macro.to_string(pattern)}"
 
   @definitions (Module.definitions_in(__MODULE__, :def) ++
                   Module.definitions_in(__MODULE__, :defmacro)) --

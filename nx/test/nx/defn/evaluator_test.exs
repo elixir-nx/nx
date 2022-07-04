@@ -297,9 +297,9 @@ defmodule Nx.Defn.EvaluatorTest do
     end
   end
 
-  defn labelled_inspect(a, b), do: inspect_value(a + b, label: "add")
+  defn labelled_inspect(a, b), do: print_value(a + b, label: "add")
 
-  test "inspect_value/2" do
+  test "print_value/2" do
     assert ExUnit.CaptureIO.capture_io(fn -> labelled_inspect(1, 2) end) ==
              """
              add: #Nx.Tensor<

@@ -186,8 +186,8 @@ defmodule Nx.Defn.Compiler do
                 detail =
                   case module do
                     IO ->
-                      ". To print the runtime value of a tensor, use inspect_value/2. " <>
-                        "To print the tensor expression, use inspect_expr/2"
+                      ". To print the runtime value of a tensor, use print_value/2. " <>
+                        "To print the tensor expression, use print_expr/2"
 
                     _ ->
                       ""
@@ -357,6 +357,25 @@ defmodule Nx.Defn.Compiler do
     {{:%{}, meta, [{:|, update_meta, [map, args]}]}, state}
   end
 
+  defp normalize({:<<>>, meta, args}, state) do
+    {args, state} =
+      Enum.map_reduce(args, state, fn {:"::", meta, [left, right]}, acc ->
+        {left, acc} =
+          case left do
+            {{:., _, [String.Chars, :to_string]} = dot, dot_meta, [left]} ->
+              {left, acc} = normalize(left, acc)
+              {{dot, dot_meta, [left]}, acc}
+
+            _ ->
+              normalize(left, acc)
+          end
+
+        {{:"::", meta, [left, right]}, acc}
+      end)
+
+    {{:<<>>, meta, args}, state}
+  end
+
   defp normalize({special_form, meta, args}, state)
        when special_form in [:{}, :%{}, :%, :__block__] do
     {args, state} = normalize_list(args, state)
@@ -506,6 +525,7 @@ defmodule Nx.Defn.Compiler do
     {{{:., dot_meta, [fun]}, meta, args}, state}
   end
 
+  # TODO: Remove me once transform/2 is removed.
   defp normalize({{:., _, [Nx.Defn.Kernel, :transform]} = call, meta, [ast, fun]}, state) do
     {ast, state} = normalize(ast, state)
 
@@ -530,6 +550,16 @@ defmodule Nx.Defn.Compiler do
     {token, state} = normalize(token, state)
     {ast, state} = normalize(ast, state)
     {{call, meta, [token, ast | rest]}, state}
+  end
+
+  defp normalize({{:., _, [:erlang, :error]} = dot, meta, args}, state) do
+    {args, state} = normalize_list(args, state)
+    {{dot, meta, args}, state}
+  end
+
+  defp normalize({{:., _, [_, :exception]} = dot, meta, [arg]}, state) do
+    {arg, state} = normalize(arg, state)
+    {{dot, meta, [arg]}, state}
   end
 
   defp normalize({{:., dot_meta, [mod, name]}, meta, args}, state) when mod in @allowed_modules do

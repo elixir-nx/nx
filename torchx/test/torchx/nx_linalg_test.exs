@@ -126,40 +126,6 @@ defmodule Torchx.NxLinAlgTest do
       )
     end
 
-    test "invalid a shape" do
-      assert_raise ArgumentError, "expected a square matrix, got matrix with shape: {2, 4}", fn ->
-        Nx.LinAlg.triangular_solve(
-          Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]),
-          Nx.tensor([4, 2, 4, 2])
-        )
-      end
-    end
-
-    test "incompatible dims" do
-      assert_raise ArgumentError, "incompatible dimensions for a and b on triangular solve", fn ->
-        Nx.LinAlg.triangular_solve(
-          Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1], [1, 1, 1, 1]]),
-          Nx.tensor([4])
-        )
-      end
-    end
-
-    test "singular matrix" do
-      assert_raise ArgumentError, "can't solve for singular matrix", fn ->
-        Nx.LinAlg.triangular_solve(
-          Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]),
-          Nx.tensor([4, 2, 4, 2])
-        )
-      end
-    end
-
-    test "complex numbers not supported" do
-      assert_raise ArgumentError, "complex numbers not supported yet", fn ->
-        a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
-        Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :conjugate)
-      end
-    end
-
     test "validates transform_a" do
       assert_raise ArgumentError,
                    "invalid value for :transform_a option, expected :none, :transpose, or :conjugate, got: :other",
@@ -199,33 +165,6 @@ defmodule Torchx.NxLinAlgTest do
 
       assert_all_close(result, expected)
     end
-
-    test "invalid a shape" do
-      assert_raise ArgumentError, "expected a square matrix, got matrix with shape: {2, 4}", fn ->
-        Nx.LinAlg.triangular_solve(
-          Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]),
-          Nx.tensor([4, 2, 4, 2])
-        )
-      end
-    end
-
-    test "incompatible dims" do
-      assert_raise ArgumentError, "incompatible dimensions for a and b on triangular solve", fn ->
-        Nx.LinAlg.triangular_solve(
-          Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1], [1, 1, 1, 1]]),
-          Nx.tensor([4])
-        )
-      end
-    end
-
-    test "singular matrix" do
-      assert_raise ArgumentError, "can't solve for singular matrix", fn ->
-        Nx.LinAlg.triangular_solve(
-          Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]),
-          Nx.tensor([4, 2, 4, 2])
-        )
-      end
-    end
   end
 
   describe "invert" do
@@ -241,20 +180,6 @@ defmodule Torchx.NxLinAlgTest do
       assert_raise ArgumentError, "can't solve for singular matrix", fn ->
         Nx.LinAlg.invert(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]))
       end
-    end
-
-    test "validates shape" do
-      assert_raise ArgumentError,
-                   "expected tensor to match shape {n, n}, got tensor with shape {2, 4}",
-                   fn ->
-                     Nx.LinAlg.invert(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]))
-                   end
-
-      assert_raise ArgumentError,
-                   "expected tensor to match shape {n, n}, got tensor with shape {1, 3, 3}",
-                   fn ->
-                     Nx.LinAlg.invert(Nx.iota({1, 3, 3}))
-                   end
     end
   end
 
@@ -290,14 +215,6 @@ defmodule Torchx.NxLinAlgTest do
         assert_all_close(a, a_reconstructed)
       end
     end
-
-    test "invalid a shape" do
-      assert_raise ArgumentError,
-                   "tensor must have as many rows as columns, got shape: {3, 4}",
-                   fn ->
-                     Nx.LinAlg.lu(Nx.tensor([[1, 1, 1, 1], [-1, 4, 4, -1], [4, -2, 2, 0]]))
-                   end
-    end
   end
 
   describe "eigh" do
@@ -311,14 +228,6 @@ defmodule Torchx.NxLinAlgTest do
 
         assert_all_close(a, a_reconstructed)
       end
-    end
-
-    test "invalid a shape" do
-      assert_raise ArgumentError,
-                   "tensor must be a square matrix (a tensor with two equal axes), got shape: {3, 4}",
-                   fn ->
-                     Nx.LinAlg.eigh(Nx.tensor([[1, 1, 1, 1], [-1, 4, 4, -1], [4, -2, 2, 0]]))
-                   end
     end
   end
 

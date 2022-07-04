@@ -1675,17 +1675,6 @@ defmodule Nx.Shape do
         "tensor must have rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
       )
 
-  def eigh({n, n}) do
-    {{n}, {n, n}}
-  end
-
-  def eigh(shape),
-    do:
-      raise(
-        ArgumentError,
-        "tensor must be a square matrix (a tensor with two equal axes), got shape: #{inspect(shape)}"
-      )
-
   def svd({m, n}) do
     {{m, m}, {min(m, n)}, {n, n}}
   end

@@ -946,8 +946,8 @@ defmodule Nx.DefnTest do
     test "IO remote" do
       assert_raise RuntimeError,
                    "cannot invoke IO.inspect/1 inside defn because it was not defined with defn. " <>
-                     "To print the runtime value of a tensor, use inspect_value/2. " <>
-                     "To print the tensor expression, use inspect_expr/2",
+                     "To print the runtime value of a tensor, use print_value/2. " <>
+                     "To print the tensor expression, use print_expr/2",
                    fn -> add_two_io(1, 2) end
     end
   end
@@ -1146,7 +1146,7 @@ defmodule Nx.DefnTest do
     end
   end
 
-  describe "case" do
+  describe "case/2" do
     defn simple_rank(tensor) do
       case Nx.shape(tensor) do
         {} -> 0
@@ -1213,6 +1213,38 @@ defmodule Nx.DefnTest do
                        end
                      end
                    end
+    end
+  end
+
+  describe "raise/2" do
+    defn raise_argument_error(tensor) do
+      case Nx.shape(tensor) do
+        {n, n} -> n
+        shape -> raise ArgumentError, "expected a square tensor: #{inspect(shape)}"
+      end
+    end
+
+    test "raises ArgumentError" do
+      assert raise_argument_error(Nx.iota({4, 4})) == Expr.tensor(Nx.tensor(4))
+
+      assert_raise ArgumentError, "expected a square tensor: {4, 3}", fn ->
+        raise_argument_error(Nx.iota({4, 3}))
+      end
+    end
+
+    defn raise_runtime_error(tensor) do
+      case Nx.shape(tensor) do
+        {n, n} -> n
+        shape -> raise "expected a square tensor: " <> inspect(shape)
+      end
+    end
+
+    test "raises RuntimeError" do
+      assert raise_runtime_error(Nx.iota({4, 4})) == Expr.tensor(Nx.tensor(4))
+
+      assert_raise RuntimeError, "expected a square tensor: {4, 3}", fn ->
+        raise_runtime_error(Nx.iota({4, 3}))
+      end
     end
   end
 
@@ -1350,11 +1382,11 @@ defmodule Nx.DefnTest do
 
   describe "transform" do
     defn transform_inspect(a, b) do
-      (Nx.tanh(a) + Nx.power(b, 3)) |> inspect_expr()
+      (Nx.tanh(a) + Nx.power(b, 3)) |> print_expr()
     end
 
     defn transform_inspect_label(a, b) do
-      (Nx.tanh(a) + Nx.power(b, 3)) |> inspect_expr(label: "HELLO")
+      (Nx.tanh(a) + Nx.power(b, 3)) |> print_expr(label: "HELLO")
     end
 
     test "executes the transformation" do

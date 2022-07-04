@@ -5,7 +5,7 @@ defmodule Nx.LinAlg do
 
   import Nx.Shared
   import Nx.Defn, only: [defn: 2, defnp: 2, deftransformp: 2]
-  import Nx.Defn.Kernel, only: [keyword!: 2, custom_grad: 2, assert_shape_pattern: 2]
+  import Nx.Defn.Kernel, only: [keyword!: 2, custom_grad: 2]
 
   alias Nx.Tensor, as: T
 
@@ -458,7 +458,7 @@ defmodule Nx.LinAlg do
   ### Error cases
 
       iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]))
-      ** (ArgumentError) expected a square matrix, got matrix with shape: {2, 4}
+      ** (ArgumentError) triangular_solve/3 expected a square tensor, got tensor with shape: {2, 4}
 
       iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1], [1, 1, 1, 1]]), Nx.tensor([4]))
       ** (ArgumentError) incompatible dimensions for a and b on triangular solve
@@ -499,7 +499,8 @@ defmodule Nx.LinAlg do
         nil
 
       other ->
-        raise ArgumentError, "expected a square matrix, got matrix with shape: #{inspect(other)}"
+        raise ArgumentError,
+              "triangular_solve/3 expected a square tensor, got tensor with shape: #{inspect(other)}"
     end
 
     left_side = opts[:left_side]
@@ -638,7 +639,7 @@ defmodule Nx.LinAlg do
   ### Error cases
 
       iex> Nx.LinAlg.invert(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]))
-      ** (ArgumentError) expected tensor to match shape {n, n}, got tensor with shape {2, 4}
+      ** (ArgumentError) invert/1 expects a square tensor, got tensor with shape: {2, 4}
 
       iex> Nx.LinAlg.invert(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]))
       ** (ArgumentError) can't solve for singular matrix
@@ -646,7 +647,14 @@ defmodule Nx.LinAlg do
   """
   @doc from_backend: false
   defn invert(tensor) do
-    assert_shape_pattern(tensor, {n, n})
+    case Nx.shape(tensor) do
+      {n, n} ->
+        :ok
+
+      shape ->
+        raise ArgumentError,
+              "invert/1 expects a square tensor, got tensor with shape: #{inspect(shape)}"
+    end
 
     tensor
     |> invert_tensor()
@@ -844,7 +852,7 @@ defmodule Nx.LinAlg do
   ## Error cases
 
       iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
-      ** (ArgumentError) tensor must be a square matrix (a tensor with two equal axes), got shape: {2, 3}
+      ** (ArgumentError) eigh/2 expects a square tensor, got tensor with shape: {2, 3}
 
       iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2], [3, 4]]))
       ** (ArgumentError) input tensor must be symmetric
@@ -856,7 +864,16 @@ defmodule Nx.LinAlg do
     Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.eigh", 2)
 
     output_type = Nx.Type.to_floating(type)
-    {eigenvals_shape, eigenvecs_shape} = Nx.Shape.eigh(shape)
+
+    {eigenvals_shape, eigenvecs_shape} =
+      case shape do
+        {n, n} ->
+          {{n}, {n, n}}
+
+        shape ->
+          raise ArgumentError,
+                "eigh/2 expects a square tensor, got tensor with shape: #{inspect(shape)}"
+      end
 
     impl!(tensor).eigh(
       {%{tensor | names: [nil], type: output_type, shape: eigenvals_shape},
@@ -1110,22 +1127,37 @@ defmodule Nx.LinAlg do
       >
 
       iex> Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4], [5, 6]]), 1)
-      ** (ArgumentError) expected tensor to match shape {x, x}, got tensor with shape {3, 2}
+      ** (ArgumentError) matrix_power/2 expects a square tensor, got tensor with shape: {3, 2}
   """
   @doc from_backend: false
   def matrix_power(tensor, power) when is_integer(power) and power < 0 do
     matrix_power(invert(tensor), abs(power))
   end
 
+  # We need a special-case for 0 since the code below
+  # is optimized to not compute an initial eye.
   def matrix_power(tensor, 0) do
-    # We need a special-case for 0 since the code below
-    # is optimized to not compute an initial eye.
-    assert_shape_pattern(tensor, {x, x})
+    case Nx.shape(tensor) do
+      {n, n} ->
+        :ok
+
+      shape ->
+        raise ArgumentError,
+              "matrix_power/2 expects a square tensor, got tensor with shape: #{inspect(shape)}"
+    end
+
     Nx.eye(tensor)
   end
 
   def matrix_power(tensor, power) when is_integer(power) do
-    assert_shape_pattern(tensor, {x, x})
+    case Nx.shape(tensor) do
+      {n, n} ->
+        :ok
+
+      shape ->
+        raise ArgumentError,
+              "matrix_power/2 expects a square tensor, got tensor with shape: #{inspect(shape)}"
+    end
 
     power
     |> Integer.digits(2)
@@ -1243,7 +1275,15 @@ defmodule Nx.LinAlg do
   def determinant(tensor) do
     tensor = Nx.to_tensor(tensor)
     output = Nx.template({}, Nx.Type.to_floating(tensor.type))
-    assert_shape_pattern(tensor, {n, n})
+
+    case Nx.shape(tensor) do
+      {n, n} ->
+        :ok
+
+      shape ->
+        raise ArgumentError,
+              "determinant/1 expects a square tensor, got tensor with shape: #{inspect(shape)}"
+    end
 
     Nx.Shared.optional(:determinant, [tensor], output, fn tensor ->
       case Nx.shape(tensor) do
