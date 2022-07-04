@@ -590,28 +590,6 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :logical_and, args: [_, _]}} = land_two(1, 2)
     end
 
-    @tag compiler: Evaluator
-    test "and (boolean)" do
-      assert Nx.tensor(1, type: {:u, 8}) == land_true(2)
-      assert Nx.tensor(0, type: {:u, 8}) == land_true(0)
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        land_two(true, true)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        land_two(true, false)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        land_two(false, true)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        land_two(false, false)
-      end
-    end
-
     defn lor_two(a, b), do: a or b
 
     defn lor_true(opts \\ []) do
@@ -620,28 +598,6 @@ defmodule Nx.DefnTest do
 
     test "or" do
       assert %T{data: %Expr{op: :logical_or, args: [_, _]}} = lor_two(1, 2)
-    end
-
-    @tag compiler: Evaluator
-    test "or (boolean)" do
-      assert Nx.tensor(1, type: {:u, 8}) == lor_true(value: false)
-      assert Nx.tensor(1, type: {:u, 8}) == lor_true(value: true)
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        lor_two(true, false)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        lor_two(false, true)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        lor_two(true, true)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        lor_two(false, false)
-      end
     end
 
     defn lnot(a), do: not a
@@ -653,25 +609,6 @@ defmodule Nx.DefnTest do
       else
         false
       end
-    end
-
-    test "not" do
-      assert %T{data: %Expr{op: :optional, args: [%T{data: %Expr{op: :logical_not}}, _]}} =
-               lnot(1)
-    end
-
-    @tag compiler: Evaluator
-    test "not works with boolean" do
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        lnot(true)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        lnot(false)
-      end
-
-      assert Nx.tensor(1, type: {:u, 8}) == lnot_boolean(value: false)
-      assert Nx.tensor(0, type: {:u, 8}) == lnot_boolean(value: true)
     end
 
     defn band_two(a, b), do: a &&& b
@@ -724,48 +661,10 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :equal, args: [_, _]}} = equality(1, 2)
     end
 
-    @tag compiler: Evaluator
-    test "== (boolean)" do
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        equality(true, true)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        equality(false, false)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        equality(false, true)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        equality(true, false)
-      end
-    end
-
     defn inequality(a, b), do: a != b
 
     test "!=" do
       assert %T{data: %Expr{op: :not_equal, args: [_, _]}} = inequality(1, 2)
-    end
-
-    @tag compiler: Evaluator
-    test "!= (boolean)" do
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        inequality(true, true)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        inequality(false, false)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        inequality(false, true)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        inequality(true, false)
-      end
     end
 
     defn less_than(a, b), do: a < b
@@ -774,48 +673,10 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :less, args: [_, _]}} = less_than(1, 2)
     end
 
-    @tag compiler: Evaluator
-    test "< (boolean)" do
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        less_than(false, true)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        less_than(true, false)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        less_than(true, true)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        less_than(false, false)
-      end
-    end
-
     defn greater_than(a, b), do: a > b
 
     test ">" do
       assert %T{data: %Expr{op: :greater, args: [_, _]}} = greater_than(1, 2)
-    end
-
-    @tag compiler: Evaluator
-    test "> (boolean)" do
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        greater_than(true, false)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        greater_than(false, true)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        greater_than(true, true)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        greater_than(false, false)
-      end
     end
 
     defn less_than_or_equal(a, b), do: a <= b
@@ -824,48 +685,10 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :less_equal, args: [_, _]}} = less_than_or_equal(1, 2)
     end
 
-    @tag compiler: Evaluator
-    test "<= (boolean)" do
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        less_than_or_equal(false, true)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        less_than_or_equal(true, false)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        less_than_or_equal(true, true)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        less_than_or_equal(false, false)
-      end
-    end
-
     defn greater_than_or_equal(a, b), do: a >= b
 
     test ">=" do
       assert %T{data: %Expr{op: :greater_equal, args: [_, _]}} = greater_than_or_equal(1, 2)
-    end
-
-    @tag compiler: Evaluator
-    test ">= (boolean)" do
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        Nx.tensor(0, type: {:u, 8}) == greater_than_or_equal(false, true)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        Nx.tensor(1, type: {:u, 8}) == greater_than_or_equal(true, false)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        Nx.tensor(1, type: {:u, 8}) == greater_than_or_equal(true, true)
-      end
-
-      assert_raise ArgumentError, "booleans are not supported as defn inputs", fn ->
-        Nx.tensor(1, type: {:u, 8}) == greater_than_or_equal(false, false)
-      end
     end
   end
 
