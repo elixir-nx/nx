@@ -278,19 +278,8 @@ defmodule Nx.DefnTest do
       for value <- [-2, 2] do
         expected = if value == -2, do: -1, else: 1
 
-        assert %T{
-                 data: %Expr{
-                   op: :constant,
-                   args: [^expected]
-                 }
-               } = unary_plus_minus_guards(value: value)
-
-        assert %T{
-                 data: %Expr{
-                   op: :constant,
-                   args: [^expected]
-                 }
-               } = unary_plus_minus_match(value: value)
+        assert Expr.tensor(expected) == unary_plus_minus_guards(value: value)
+        assert Expr.tensor(expected) == unary_plus_minus_match(value: value)
       end
     end
   end
