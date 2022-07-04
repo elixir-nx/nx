@@ -1673,7 +1673,7 @@ defmodule Nx.BinaryBackend do
   @impl true
   def indexed_add(out, target, indices, updates) do
     resolve_updates = fn upds -> Enum.reduce(upds, 0, &+/2) end
-    update_element = fn cur, upd -> cur + upd end
+    update_element = &+/2
 
     indexed_op(out, target, indices, updates, resolve_updates, update_element)
   end
