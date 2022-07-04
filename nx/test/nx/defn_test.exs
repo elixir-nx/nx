@@ -243,6 +243,24 @@ defmodule Nx.DefnTest do
   describe "unary ops" do
     defn exp(t), do: Nx.exp(t)
 
+    defn unary_plus_minus_guards(t, opts \\ []) do
+      case opts[:value] do
+        value when value == -2 ->
+          Nx.add(t, value)
+        value when value == +2 ->
+          Nx.add(t, value)
+      end
+    end
+
+    defn unary_plus_minus_match(t, opts \\ []) do
+      case value = opts[:value] do
+        -2 ->
+          Nx.add(t, value)
+        +2 ->
+          Nx.add(t, value)
+      end
+    end
+
     test "to expr" do
       assert %T{shape: {3}, type: {:f, 32}, data: %Expr{op: :exp, args: [_]}} =
                exp(Nx.tensor([1, 2, 3]))
@@ -252,6 +270,45 @@ defmodule Nx.DefnTest do
 
       assert %T{shape: {3}, type: {:bf, 16}, data: %Expr{op: :exp, args: [_]}} =
                exp(Nx.tensor([1, 2, 3], type: {:bf, 16}))
+    end
+
+    test "unary + and - work with guards and hard matches" do
+      t = Nx.tensor(1)
+      for value <- [-2, 2] do
+        assert %T{
+          shape: {},
+          type: {:s, 64},
+          data: %Expr{
+            op: :add,
+            args: [
+              %T{
+                data: %Expr{
+                  op: :constant,
+                  args: [^value]
+                }
+              },
+              %T{data: %Expr{op: :parameter, args: [0]}}
+              ]
+            }
+          } = unary_plus_minus_guards(t, value: value)
+
+          assert %T{
+          shape: {},
+          type: {:s, 64},
+          data: %Expr{
+            op: :add,
+            args: [
+              %T{
+                data: %Expr{
+                  op: :constant,
+                  args: [^value]
+                }
+              },
+              %T{data: %Expr{op: :parameter, args: [0]}}
+              ]
+            }
+          } = unary_plus_minus_match(t, value: value)
+      end
     end
   end
 
