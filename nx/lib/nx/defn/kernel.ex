@@ -1435,6 +1435,8 @@ defmodule Nx.Defn.Kernel do
 
   See `raise/2` for more information on exceptions inside `defn`.
   """
+  # It needs to be a macro so we don't add stacktrace entries.
+  # Since there is no defdelegate for macros, we do it manually.
   defmacro raise(message) do
     quote do
       Elixir.Kernel.raise(unquote(message))
