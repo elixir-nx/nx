@@ -87,7 +87,7 @@ defmodule Nx.Defn.Composite do
   Otherwise the function is invoked with the tensor (be it a
   number, complex, or actual tensor).
   """
-  def traverse(expr, acc, fun) when is_tensor(expr) and is_function(fun, 2),
+  def traverse(expr, acc, fun) when (is_tensor(expr) or is_boolean(expr)) and is_function(fun, 2),
     do: fun.(expr, acc)
 
   def traverse(container, acc, fun),
@@ -135,8 +135,9 @@ defmodule Nx.Defn.Composite do
   defp flatten_each(%T{} = tensor, acc, _fun),
     do: [tensor | acc]
 
-  defp flatten_each(number, acc, fun) when is_number(number) or is_struct(number, Complex),
-    do: [fun.(number) | acc]
+  defp flatten_each(number, acc, fun)
+       when is_number(number) or is_struct(number, Complex),
+       do: [fun.(number) | acc]
 
   defp flatten_each(container, acc, fun),
     do: Nx.Container.reduce(container, acc, &flatten_each(&1, &2, fun))
@@ -192,8 +193,12 @@ defmodule Nx.Defn.Composite do
   def to_inputs(args) do
     {args, _} =
       Enum.map_reduce(args, 0, fn arg, i ->
-        traverse(arg, i, fn arg, i ->
-          {Expr.parameter(Nx.to_tensor(arg), :root, i), i + 1}
+        traverse(arg, i, fn
+          arg, _i when is_boolean(arg) ->
+            raise ArgumentError, "booleans are not supported as defn inputs"
+
+          arg, i ->
+            {Expr.parameter(Nx.to_tensor(arg), :root, i), i + 1}
         end)
       end)
 

@@ -565,13 +565,8 @@ defmodule Nx.Defn.Kernel do
   defnguard(left and right, :__and__)
 
   @doc false
-  def __and__(left, right) when Kernel.or(is_boolean(left), is_boolean(right)) do
-    raise ArgumentError,
-          "boolean value passed to Nx.Defn.Kernel.and/2, " <>
-            "values passed to Nx.Defn.Kernel.and/2 must be " <>
-            "tensors or numbers, consider using 1 for true " <>
-            "and 0 for false as an alternative"
-  end
+  def __and__(left, right) when is_boolean(left), do: __and__(boolean_to_number(left), right)
+  def __and__(left, right) when is_boolean(right), do: __and__(left, boolean_to_number(right))
 
   def __and__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: logical_and(left, right)
@@ -596,13 +591,8 @@ defmodule Nx.Defn.Kernel do
   defnguard(left or right, :__or__)
 
   @doc false
-  def __or__(left, right) when Kernel.or(is_boolean(left), is_boolean(right)) do
-    raise ArgumentError,
-          "boolean value passed to Nx.Defn.Kernel.or/2, " <>
-            "values passed to Nx.Defn.Kernel.or/2 must be " <>
-            "tensors or numbers, consider using 1 for true " <>
-            "and 0 for false as an alternative"
-  end
+  def __or__(left, right) when is_boolean(left), do: __or__(boolean_to_number(left), right)
+  def __or__(left, right) when is_boolean(right), do: __or__(left, boolean_to_number(right))
 
   def __or__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: logical_or(left, right)
@@ -625,14 +615,7 @@ defmodule Nx.Defn.Kernel do
   defnguard(not tensor, :__not__)
 
   @doc false
-  def __not__(tensor) when is_boolean(tensor) do
-    raise ArgumentError,
-          "boolean value passed to Nx.Defn.Kernel.not/1, " <>
-            "values passed to Nx.Defn.Kernel.not/1 must be " <>
-            "tensors or numbers, consider using 1 for true " <>
-            "and 0 for false as an alternative"
-  end
-
+  def __not__(value) when is_boolean(value), do: to_constant(Kernel.not(value))
   def __not__(tensor) when is_number(tensor), do: logical_not(tensor)
   def __not__(tensor), do: Nx.logical_not(tensor)
 
@@ -751,6 +734,9 @@ defmodule Nx.Defn.Kernel do
   defnguard(left == right, :__equal__)
 
   @doc false
+  def __equal__(left, right) when is_boolean(left), do: __equal__(boolean_to_number(left), right)
+  def __equal__(left, right) when is_boolean(right), do: __equal__(left, boolean_to_number(right))
+
   def __equal__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.==(left, right))
 
@@ -771,6 +757,12 @@ defmodule Nx.Defn.Kernel do
   defnguard(left != right, :__not_equal__)
 
   @doc false
+  def __not_equal__(left, right) when is_boolean(left),
+    do: __not_equal__(boolean_to_number(left), right)
+
+  def __not_equal__(left, right) when is_boolean(right),
+    do: __not_equal__(left, boolean_to_number(right))
+
   def __not_equal__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.!=(left, right))
 
@@ -791,6 +783,12 @@ defmodule Nx.Defn.Kernel do
   defnguard(left < right, :__less_than__)
 
   @doc false
+  def __less_than__(left, right) when is_boolean(left),
+    do: __less_than__(boolean_to_number(left), right)
+
+  def __less_than__(left, right) when is_boolean(right),
+    do: __less_than__(left, boolean_to_number(right))
+
   def __less_than__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.<(left, right))
 
@@ -811,6 +809,12 @@ defmodule Nx.Defn.Kernel do
   defnguard(left > right, :__more_than__)
 
   @doc false
+  def __more_than__(left, right) when is_boolean(left),
+    do: __more_than__(boolean_to_number(left), right)
+
+  def __more_than__(left, right) when is_boolean(right),
+    do: __more_than__(left, boolean_to_number(right))
+
   def __more_than__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.>(left, right))
 
@@ -831,6 +835,12 @@ defmodule Nx.Defn.Kernel do
   defnguard(left <= right, :__less_than_equal_to__)
 
   @doc false
+  def __less_than_equal_to__(left, right) when is_boolean(left),
+    do: __less_than_equal_to__(boolean_to_number(left), right)
+
+  def __less_than_equal_to__(left, right) when is_boolean(right),
+    do: __less_than_equal_to__(left, boolean_to_number(right))
+
   def __less_than_equal_to__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.<=(left, right))
 
@@ -851,6 +861,12 @@ defmodule Nx.Defn.Kernel do
   defnguard(left >= right, :__more_than_equal_to__)
 
   @doc false
+  def __more_than_equal_to__(left, right) when is_boolean(left),
+    do: __more_than_equal_to__(boolean_to_number(left), right)
+
+  def __more_than_equal_to__(left, right) when is_boolean(right),
+    do: __more_than_equal_to__(left, boolean_to_number(right))
+
   def __more_than_equal_to__(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: to_constant(Kernel.>=(left, right))
 
@@ -858,6 +874,10 @@ defmodule Nx.Defn.Kernel do
 
   defp to_constant(true), do: one()
   defp to_constant(false), do: zero()
+
+  defp boolean_to_number(true), do: 1
+  defp boolean_to_number(false), do: 0
+  defp boolean_to_number(value), do: value
 
   @doc """
   Ensures the first argument is a `keyword` with the given

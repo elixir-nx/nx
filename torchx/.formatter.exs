@@ -1,5 +1,6 @@
 # Used by "mix format"
 [
-  locals_without_parens: [deftensor: 1, defdevice: 1, defvalue: 1, defn: 2, defnp: 2],
+  import_deps: [:nx],
+  locals_without_parens: [deftensor: 1, defdevice: 1, defvalue: 1],
   inputs: ["{mix,.formatter}.exs", "{bench,examples,config,lib,test}/**/*.{ex,exs}"]
 ]

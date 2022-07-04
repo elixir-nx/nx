@@ -583,44 +583,31 @@ defmodule Nx.DefnTest do
     defn land_two(a, b), do: a and b
 
     defn land_true(a) do
-      val = constant_boolean_transform()
-      val and a
+      true and a
     end
 
     test "and" do
       assert %T{data: %Expr{op: :logical_and, args: [_, _]}} = land_two(1, 2)
-
-      assert_raise ArgumentError, ~r/boolean value passed to Nx.Defn.Kernel.and\/2/, fn ->
-        land_true(2)
-      end
     end
 
     defn lor_two(a, b), do: a or b
 
-    defn lor_true(a) do
-      val = constant_boolean_transform()
-      val or a
+    defn lor_true(opts \\ []) do
+      true or opts[:value]
     end
 
     test "or" do
       assert %T{data: %Expr{op: :logical_or, args: [_, _]}} = lor_two(1, 2)
-
-      assert_raise ArgumentError, ~r/boolean value passed to Nx.Defn.Kernel.or\/2/, fn ->
-        lor_true(2)
-      end
     end
 
     defn lnot(a), do: not a
-    defn lnot_true(), do: not constant_boolean_transform()
+    defn lnot_boolean(opts \\ []), do: not constant_boolean_transform(opts)
 
-    deftransformp(constant_boolean_transform, do: true)
-
-    test "not" do
-      assert %T{data: %Expr{op: :optional, args: [%T{data: %Expr{op: :logical_not}}, _]}} =
-               lnot(1)
-
-      assert_raise ArgumentError, ~r/boolean value passed to Nx.Defn.Kernel.not\/1/, fn ->
-        lnot_true()
+    deftransformp constant_boolean_transform(opts) do
+      if opts[:value] == true do
+        true
+      else
+        false
       end
     end
 
@@ -1726,6 +1713,40 @@ defmodule Nx.DefnTest do
       assert Nx.tensor(10) == multi_clause_transform_bodiless3(10)
       assert Nx.tensor(10) == multi_clause_transform_bodiless4(a: 1, b: 10)
       assert Nx.tensor(20) == multi_clause_transform_bodiless4(a: 20, b: 10)
+    end
+  end
+
+  describe "boolean values" do
+    defn supports_booleans(opts \\ []) do
+      l = opts[:l]
+      r = opts[:r]
+
+      Nx.stack([l < r, l <= r, l > r, l >= r, l == r, l != r, l and r, l or r, not l, not r])
+    end
+
+    @tag compiler: Evaluator
+    test "supports booleans in some operations" do
+      for l <- [true, false, 1, 0], r <- [true, false, 1, 0] do
+        lb = l == 1 or l == true
+        rb = r == 1 or r == true
+
+        ln = if lb, do: 1, else: 0
+        rn = if rb, do: 1, else: 0
+
+        assert supports_booleans(l: l, r: r) ==
+                 Nx.tensor([
+                   ln < rn,
+                   ln <= rn,
+                   ln > rn,
+                   ln >= rn,
+                   ln == rn,
+                   ln != rn,
+                   lb and rb,
+                   lb or rb,
+                   not lb,
+                   not rb
+                 ])
+      end
     end
   end
 end
