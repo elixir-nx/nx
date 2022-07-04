@@ -852,7 +852,7 @@ defmodule Nx.LinAlg do
   ## Error cases
 
       iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
-      ** (ArgumentError) tensor must be a square matrix (a tensor with two equal axes), got shape: {2, 3}
+      ** (ArgumentError) eigh/2 expects a square tensor, got tensor with shape: {2, 3}
 
       iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2], [3, 4]]))
       ** (ArgumentError) input tensor must be symmetric
@@ -864,7 +864,16 @@ defmodule Nx.LinAlg do
     Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.eigh", 2)
 
     output_type = Nx.Type.to_floating(type)
-    {eigenvals_shape, eigenvecs_shape} = Nx.Shape.eigh(shape)
+
+    {eigenvals_shape, eigenvecs_shape} =
+      case shape do
+        {n, n} ->
+          {{n}, {n, n}}
+
+        shape ->
+          raise ArgumentError,
+                "eigh/2 expects a square tensor, got tensor with shape: #{inspect(shape)}"
+      end
 
     impl!(tensor).eigh(
       {%{tensor | names: [nil], type: output_type, shape: eigenvals_shape},
