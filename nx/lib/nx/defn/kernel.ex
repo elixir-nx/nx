@@ -276,7 +276,10 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  def +tensor, do: tensor
+  defnguard(+tensor, :__unary_plus__)
+
+  @doc false
+  def __unary_plus__(tensor), do: tensor
 
   @doc """
   Element-wise unary plus operator.
@@ -290,8 +293,11 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  def -tensor when is_number(tensor), do: Kernel.-(tensor)
-  def -tensor, do: Nx.negate(tensor)
+  defnguard(-tensor, :__unary_minus__)
+
+  @doc false
+  def __unary_minus__(tensor) when is_number(tensor), do: Kernel.-(tensor)
+  def __unary_minus__(tensor), do: Nx.negate(tensor)
 
   @doc """
   Builds a range.
