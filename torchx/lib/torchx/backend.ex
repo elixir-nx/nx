@@ -461,6 +461,24 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
+  @impl true
+  def indexed_put(out, tensor, indices, updates) do
+    linear_indices_tx = as_torchx_linear_indices(tensor.shape, indices)
+
+    updates_tx =
+      updates
+      |> from_nx()
+      |> Torchx.to_type(to_torch_type(out.type))
+
+    tensor
+    |> from_nx()
+    |> Torchx.to_type(to_torch_type(out.type))
+    |> Torchx.reshape({Tuple.product(tensor.shape)})
+    |> Torchx.indexed_put(linear_indices_tx, updates_tx, 0)
+    |> Torchx.reshape(out.shape)
+    |> to_nx(out)
+  end
+
   defp as_torchx_linear_indices(shape, idx) do
     # Nx provides indices as a tensor of shape {*, input_dims}
     # However, torch expects indices to be a tensor of indices along a given axis.

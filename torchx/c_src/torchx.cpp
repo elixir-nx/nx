@@ -457,6 +457,17 @@ NIF(indexed_add)
   TENSOR(torch::scatter_add(*input, axis, *indices, *updates));
 }
 
+NIF(indexed_put)
+{
+  TENSOR_PARAM(0, input);
+  TENSOR_PARAM(1, indices);
+  TENSOR_PARAM(2, updates);
+  PARAM(3, int64_t, axis);
+
+  TENSOR(torch::scatter(*input, axis, *indices, *updates));
+}
+
+
 NIF(argsort)
 {
   TENSOR_PARAM(0, input);
@@ -1130,6 +1141,7 @@ static ErlNifFunc nif_functions[] = {
     DF(concatenate, 2),
     DF(gather, 3),
     DF(indexed_add, 4),
+    DF(indexed_put, 4),
     DF(argsort, 3),
     DF(flip, 2),
     DF(unfold, 4),
