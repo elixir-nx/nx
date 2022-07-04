@@ -499,7 +499,7 @@ defmodule Nx.Shared do
         backend.optional(function_name, args, default_impl)
         |> ensure_optional_compatible!(output)
 
-      :otherwise ->
+      true ->
         default_impl
         |> apply(args)
         |> ensure_optional_compatible!(output)

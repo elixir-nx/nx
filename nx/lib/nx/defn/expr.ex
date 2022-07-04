@@ -119,6 +119,10 @@ defmodule Nx.Defn.Expr do
   @doc """
   Creates a `cond` tensor expression.
   """
+  def cond([], last) do
+    last
+  end
+
   def cond(clauses, last = out) do
     {preds, exprs} = Enum.unzip(clauses)
     {preds, context} = to_exprs(preds)
@@ -133,24 +137,8 @@ defmodule Nx.Defn.Expr do
         clauses -> unzip_clauses(clauses)
       end
 
-    Enum.zip(preds, exprs)
-    |> Enum.reject(fn {pred, _expr} ->
-      # Eliminate all clauses that will never
-      match?(%T{data: %Expr{op: :constant, args: [number]}} when number == 0, pred)
-    end)
-    |> case do
-      # No clauses left, simply return last
-      [] ->
-        last
-
-      # We found a clause that always matches, return it instead
-      [{%T{data: %Expr{op: :constant, args: [number]}}, expr} | _] when number > 0 ->
-        expr
-
-      # Otherwise, keep it as a cond
-      clauses ->
-        flatten_to_composite(out, context, exprs, &expr(&1, context, :cond, [clauses, last]))
-    end
+    clauses = Enum.zip(preds, exprs)
+    flatten_to_composite(out, context, exprs, &expr(&1, context, :cond, [clauses, last]))
   end
 
   defp broadcast_clause([type = last | exprs]) do
@@ -262,24 +250,58 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc false
-  def defn_cond(file, clauses, last) do
+  def defn_cond(file, [{meta, _} | _] = clauses) do
     clauses =
-      for {meta, {pred, expr}} <- clauses do
-        pred = to_pred(pred, meta[:line], file, :cond)
-
-        if not Composite.compatible?(last, expr, fn _, _ -> true end) do
-          raise CompileError,
-            line: meta[:line],
-            file: file,
-            description:
-              "cond/if expects all branches to return compatible types. " <>
-                "Got: #{to_type_shape_string(last)} and #{to_type_shape_string(expr)}"
-        end
-
-        {pred, expr}
+      for {meta, {pred, expr}} <- clauses,
+          pred = to_pred(pred, meta[:line], file, :cond),
+          # Eliminate all clauses that will never match
+          not match?(%T{data: %Expr{op: :constant, args: [number]}} when number == 0, pred) do
+        {meta, pred, expr}
       end
 
-    cond(clauses, last)
+    case clauses do
+      # At least one clause is expected
+      [] ->
+        raise CompileError,
+          line: meta[:line],
+          file: file,
+          description: "cond/if expects at least one branch to always evaluate to true"
+
+      # We found a clause that always matches, return it always
+      [{_meta, %T{data: %Expr{op: :constant, args: [number]}}, expr} | _] when number != 0 ->
+        expr.()
+
+      # Otherwise, keep it as a cond and validate the last clause always returns true
+      [{_, first_pred, first} | rest] ->
+        first = first.()
+
+        [{last_pred, last} | reverse] =
+          Enum.reduce(rest, [{first_pred, first}], fn {meta, pred, expr}, acc ->
+            expr = expr.()
+
+            if not Composite.compatible?(first, expr, fn _, _ -> true end) do
+              raise CompileError,
+                line: meta[:line],
+                file: file,
+                description:
+                  "cond/if expects all branches to return compatible types. " <>
+                    "Got: #{to_type_shape_string(first)} and #{to_type_shape_string(expr)}"
+            end
+
+            [{pred, expr} | acc]
+          end)
+
+        case last_pred do
+          %T{data: %Expr{op: :constant, args: [number]}} when number != 0 ->
+            cond(Enum.reverse(reverse), last)
+
+          _ ->
+            raise CompileError,
+              line: meta[:line],
+              file: file,
+              description: "cond/if expects at least one branch to always evaluate to true"
+        end
+    end
   end
 
   @doc false
@@ -929,17 +951,21 @@ defmodule Nx.Defn.Expr do
 
   defp to_pred(pred, line, file, op) do
     pred =
-      case pred do
-        pred when is_boolean(pred) ->
+      cond do
+        is_boolean(pred) ->
+          number = if pred == false, do: 0, else: 1
+          %T{data: constant_expr({}, {:u, 8}, number), shape: {}, type: {:u, 8}, names: []}
+
+        is_atom(pred) or is_binary(pred) or is_list(pred) ->
           raise CompileError,
             line: line,
             file: file,
             description:
-              "boolean predicate passed to #{Atom.to_string(op)}, expects" <>
-                " scalar tensor predicate, consider using 1 for true" <>
-                " or 0 for false as an alternative"
+              "#{Atom.to_string(op)} in defn expects the predicate to be true, false," <>
+                " or a scalar tensor where 0 is false and everything else is true." <>
+                " Unsupported value: #{inspect(pred)}"
 
-        pred ->
+        true ->
           to_expr(pred)
       end
 
@@ -1016,7 +1042,7 @@ defmodule Nx.Defn.Expr do
 
   ## Constant helpers and related optimizations
 
-  defp constant(%{type: type, shape: shape} = out, number) do
+  defp constant(%{shape: shape, type: type} = out, number) do
     number =
       cond do
         is_integer(number) and Nx.Type.float?(type) ->
@@ -1030,8 +1056,11 @@ defmodule Nx.Defn.Expr do
           number
       end
 
-    id = {number, type, shape}
-    %{out | data: %Expr{id: id, op: :constant, args: [number], context: nil}}
+    %{out | data: constant_expr(shape, type, number)}
+  end
+
+  defp constant_expr(shape, type, number) do
+    %Expr{id: {number, type, shape}, op: :constant, args: [number], context: nil}
   end
 
   defp maybe_constant(expr) do
@@ -1188,7 +1217,7 @@ defmodule Nx.Defn.Expr do
         [inspect_arg(pred, var_map), " -> ", inspect_arg(expr, var_map), ", "]
       end)
 
-    IO.iodata_to_binary([clauses, ":otherwise -> ", inspect_arg(last, var_map)])
+    IO.iodata_to_binary([clauses, "true -> ", inspect_arg(last, var_map)])
   end
 
   defp inspect_args(:metadata, [expr, %{inspect: inspect}], var_map) do

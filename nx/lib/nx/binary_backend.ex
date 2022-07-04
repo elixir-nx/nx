@@ -2201,7 +2201,7 @@ defmodule Nx.BinaryBackend do
         cond do
           len_data < n -> row ++ List.duplicate(0, n - len_data)
           len_data > n -> Enum.take(row, n)
-          :otherwise -> row
+          true -> row
         end
       end
 

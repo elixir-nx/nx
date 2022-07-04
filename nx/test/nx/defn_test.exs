@@ -1037,6 +1037,40 @@ defmodule Nx.DefnTest do
                if_branch_elimination_transform(Nx.tensor([1, 2, 3]))
     end
 
+    defn if_assignment(a, b) do
+      d =
+        if c = Nx.all(a) do
+          b
+        else
+          -b
+        end
+
+      c + d
+    end
+
+    @tag compiler: Evaluator
+    test "returns assignment from if" do
+      assert if_assignment(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2, 3])) == Nx.tensor([2, 3, 4])
+      assert if_assignment(Nx.tensor([0, 1, 2]), Nx.tensor([1, 2, 3])) == Nx.tensor([-1, -2, -3])
+    end
+
+    defn if_boolean(opts \\ []) do
+      if opts[:boolean] do
+        1
+      else
+        -1
+      end
+    end
+
+    test "evaluates boolean predicates" do
+      assert if_boolean(boolean: true) == Expr.tensor(1)
+      assert if_boolean(boolean: false) == Expr.tensor(-1)
+
+      assert_raise CompileError,
+                   ~r"cond in defn expects the predicate to be true, false, or a scalar tensor",
+                   fn -> if_boolean(boolean: nil) end
+    end
+
     test "raises correct error on incompatible shapes" do
       assert_raise CompileError, ~r/cond\/if expects all branches/, fn ->
         if_scalar_error(Nx.tensor(0))
@@ -1126,17 +1160,17 @@ defmodule Nx.DefnTest do
                cond_branch_elimination(Nx.tensor([1, 2, 3]), Nx.tensor(0))
     end
 
-    test "raises if cond is missing last atom clause" do
-      assert_raise CompileError, ~r"expected the last clause of cond to match on an atom", fn ->
-        defmodule InvalidCond do
-          defn badcond(a) do
-            cond do
-              Nx.any(a) -> +a
-              Nx.all(a) -> -a
-            end
-          end
-        end
+    defn bad_cond(a) do
+      cond do
+        Nx.any(a) -> +a
+        Nx.all(a) -> -a
       end
+    end
+
+    test "raises if cond is missing last atom clause" do
+      assert_raise CompileError,
+                   ~r"cond/if expects at least one branch to always evaluate to true",
+                   fn -> bad_cond(1) end
     end
 
     test "raises if given a non-scalar as condition" do

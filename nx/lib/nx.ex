@@ -10784,7 +10784,7 @@ defmodule Nx do
             String.contains?(str, ["Inf", "NaN"]) -> {Complex, type}
             String.contains?(str, "i") -> {Complex, {:c, 64}}
             String.contains?(str, ".") -> {Float, {:f, 32}}
-            :otherwise -> {Integer, type}
+            true -> {Integer, type}
           end
 
         parse_string_to_number(module, str, type)
