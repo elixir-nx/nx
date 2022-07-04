@@ -247,6 +247,7 @@ defmodule Nx.DefnTest do
       case opts[:value] do
         value when value == -2 ->
           Nx.add(t, value)
+
         value when value == +2 ->
           Nx.add(t, value)
       end
@@ -256,6 +257,7 @@ defmodule Nx.DefnTest do
       case value = opts[:value] do
         -2 ->
           Nx.add(t, value)
+
         +2 ->
           Nx.add(t, value)
       end
@@ -274,40 +276,41 @@ defmodule Nx.DefnTest do
 
     test "unary + and - work with guards and hard matches" do
       t = Nx.tensor(1)
+
       for value <- [-2, 2] do
         assert %T{
-          shape: {},
-          type: {:s, 64},
-          data: %Expr{
-            op: :add,
-            args: [
-              %T{
-                data: %Expr{
-                  op: :constant,
-                  args: [^value]
-                }
-              },
-              %T{data: %Expr{op: :parameter, args: [0]}}
-              ]
-            }
-          } = unary_plus_minus_guards(t, value: value)
+                 shape: {},
+                 type: {:s, 64},
+                 data: %Expr{
+                   op: :add,
+                   args: [
+                     %T{
+                       data: %Expr{
+                         op: :constant,
+                         args: [^value]
+                       }
+                     },
+                     %T{data: %Expr{op: :parameter, args: [0]}}
+                   ]
+                 }
+               } = unary_plus_minus_guards(t, value: value)
 
-          assert %T{
-          shape: {},
-          type: {:s, 64},
-          data: %Expr{
-            op: :add,
-            args: [
-              %T{
-                data: %Expr{
-                  op: :constant,
-                  args: [^value]
-                }
-              },
-              %T{data: %Expr{op: :parameter, args: [0]}}
-              ]
-            }
-          } = unary_plus_minus_match(t, value: value)
+        assert %T{
+                 shape: {},
+                 type: {:s, 64},
+                 data: %Expr{
+                   op: :add,
+                   args: [
+                     %T{
+                       data: %Expr{
+                         op: :constant,
+                         args: [^value]
+                       }
+                     },
+                     %T{data: %Expr{op: :parameter, args: [0]}}
+                   ]
+                 }
+               } = unary_plus_minus_match(t, value: value)
       end
     end
   end
