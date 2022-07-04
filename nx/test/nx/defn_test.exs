@@ -243,23 +243,23 @@ defmodule Nx.DefnTest do
   describe "unary ops" do
     defn exp(t), do: Nx.exp(t)
 
-    defn unary_plus_minus_guards(t, opts \\ []) do
+    defn unary_plus_minus_guards(opts \\ []) do
       case opts[:value] do
         value when value == -2 ->
-          Nx.add(t, value)
+          -1
 
         value when value == +2 ->
-          Nx.add(t, value)
+          1
       end
     end
 
-    defn unary_plus_minus_match(t, opts \\ []) do
-      case value = opts[:value] do
+    defn unary_plus_minus_match(opts \\ []) do
+      case opts[:value] do
         -2 ->
-          Nx.add(t, value)
+          -1
 
         +2 ->
-          Nx.add(t, value)
+          1
       end
     end
 
@@ -275,42 +275,22 @@ defmodule Nx.DefnTest do
     end
 
     test "unary + and - work with guards and hard matches" do
-      t = Nx.tensor(1)
-
       for value <- [-2, 2] do
-        assert %T{
-                 shape: {},
-                 type: {:s, 64},
-                 data: %Expr{
-                   op: :add,
-                   args: [
-                     %T{
-                       data: %Expr{
-                         op: :constant,
-                         args: [^value]
-                       }
-                     },
-                     %T{data: %Expr{op: :parameter, args: [0]}}
-                   ]
-                 }
-               } = unary_plus_minus_guards(t, value: value)
+        expected = if value == -2, do: -1, else: 1
 
         assert %T{
-                 shape: {},
-                 type: {:s, 64},
                  data: %Expr{
-                   op: :add,
-                   args: [
-                     %T{
-                       data: %Expr{
-                         op: :constant,
-                         args: [^value]
-                       }
-                     },
-                     %T{data: %Expr{op: :parameter, args: [0]}}
-                   ]
+                   op: :constant,
+                   args: [^expected]
                  }
-               } = unary_plus_minus_match(t, value: value)
+               } = unary_plus_minus_guards(value: value)
+
+        assert %T{
+                 data: %Expr{
+                   op: :constant,
+                   args: [^expected]
+                 }
+               } = unary_plus_minus_match(value: value)
       end
     end
   end
