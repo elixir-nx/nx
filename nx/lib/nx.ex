@@ -5116,6 +5116,8 @@ defmodule Nx do
   `indices` must be a fully qualified tensor of shape `{n, Nx.rank(target)}`, with `n`
   being an arbitrary number of indices, while `updates` must have a compatible `{n}` shape.
 
+  See also: `indexed_add/3`, `gather/2`, `take/3`, `take_along_axis/3`
+
   ### Examples
 
       iex> t = Nx.iota({1, 2, 3})
@@ -5141,7 +5143,8 @@ defmodule Nx do
         ]
       >
 
-  Type promotions should happen automatically.
+  Type promotions should happen automatically, with the resulting type being the combination
+  of the `target` type and the `updates` type.
 
       iex> Nx.indexed_add(Nx.tensor([1.0]), Nx.tensor([[0], [0]]), Nx.tensor([1, 1]))
       #Nx.Tensor<
@@ -5189,6 +5192,8 @@ defmodule Nx do
   In case of repeating indices, the last occurence of index and its corresponding update
   value wins.
 
+  See also: `indexed_add/3`, `gather/2`, `take/3`, `take_along_axis/3`
+
   ### Examples
 
       iex> Nx.indexed_put(Nx.tensor([0, 0, 0]), Nx.tensor([[1], [2]]), Nx.tensor([2, 4]))
@@ -5226,7 +5231,8 @@ defmodule Nx do
         ]
       >
 
-  Type promotions should happen automatically.
+  Type promotions should happen automatically, with the resulting type being the combination
+  of the `target` type and the `updates` type.
 
       iex> Nx.indexed_put(Nx.tensor([1.0]), Nx.tensor([[0]]), Nx.tensor([3]))
       #Nx.Tensor<

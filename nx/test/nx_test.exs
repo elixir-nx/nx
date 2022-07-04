@@ -747,7 +747,7 @@ defmodule NxTest do
           end
         )
 
-      updates = 0..(n * n - 1) |> Enum.map(fn _ -> 1 end) |> Nx.tensor()
+      updates = List.duplicate(1, n * n) |> Nx.tensor()
 
       assert Nx.broadcast(1, {5, 5}) ==
                0 |> Nx.broadcast({5, 5}) |> Nx.indexed_add(indices, updates)
@@ -771,7 +771,7 @@ defmodule NxTest do
       upd = Nx.tensor([1])
 
       for i <- 0..(n - 1) do
-        result = Nx.tensor(List.update_at(zeros, i, fn _ -> 1 end))
+        result = Nx.tensor(List.replace_at(zeros, i, 1))
 
         assert result == Nx.indexed_add(Nx.tensor(zeros), Nx.tensor([[i]]), upd)
       end
@@ -829,7 +829,7 @@ defmodule NxTest do
           end
         )
 
-      updates = 0..(n * n - 1) |> Enum.map(fn _ -> 1 end) |> Nx.tensor()
+      updates = List.duplicate(1, n * n) |> Nx.tensor()
 
       assert Nx.broadcast(1, {5, 5}) ==
                0 |> Nx.broadcast({5, 5}) |> Nx.indexed_put(indices, updates)
@@ -853,7 +853,7 @@ defmodule NxTest do
       upd = Nx.tensor([1])
 
       for i <- 0..(n - 1) do
-        result = Nx.tensor(List.update_at(zeros, i, fn _ -> 1 end))
+        result = Nx.tensor(List.replace_at(zeros, i, 1))
 
         assert result == Nx.indexed_put(Nx.tensor(zeros), Nx.tensor([[i]]), upd)
       end
