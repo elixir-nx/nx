@@ -5183,14 +5183,13 @@ defmodule Nx do
   end
 
   @doc """
-  Performs an indexed `set` operation on the `target` tensor,
-  setting the `updates` into the corresponding `indices` positions.
+  Puts individual values from `updates` into the given tensor at the corresponding `indices`.
 
   `indices` must be a fully qualified tensor of shape `{n, Nx.rank(target)}`, with `n`
   being an arbitrary number of indices, while `updates` must have a compatible `{n}` shape.
 
   In case of repeating indices, the last occurence of index and its corresponding update
-  value wins.
+  value takes precedence.
 
   See also: `indexed_add/3`, `gather/2`, `take/3`, `take_along_axis/3`
 
