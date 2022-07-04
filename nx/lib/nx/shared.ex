@@ -290,8 +290,8 @@ defmodule Nx.Shared do
       defmacro unquote(name)(unquote_splicing(args)) do
         {module, name} =
           case __CALLER__.context do
-            ctx when ctx not in [:guard, :match] -> {__MODULE__, unquote(fallback)}
-            _ -> {Kernel, unquote(name)}
+            ctx when ctx in [:guard, :match] -> {Kernel, unquote(name)}
+            _ -> {__MODULE__, unquote(fallback)}
           end
 
         {{:., [], [module, name]}, [], unquote(args)}
