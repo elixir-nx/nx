@@ -275,12 +275,10 @@ defmodule Nx.DefnTest do
     end
 
     test "unary + and - work with guards and hard matches" do
-      for value <- [-2, 2] do
-        expected = if value == -2, do: -1, else: 1
-
-        assert Expr.tensor(expected) == unary_plus_minus_guards(value: value)
-        assert Expr.tensor(expected) == unary_plus_minus_match(value: value)
-      end
+      assert Expr.tensor(-1) == unary_plus_minus_guards(value: -2)
+      assert Expr.tensor(1) == unary_plus_minus_guards(value: 2)
+      assert Expr.tensor(-1) == unary_plus_minus_match(value: -2)
+      assert Expr.tensor(1) == unary_plus_minus_match(value: 2)
     end
   end
 
