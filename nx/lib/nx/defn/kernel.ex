@@ -1486,7 +1486,7 @@ defmodule Nx.Defn.Kernel do
   above always raises!
 
   In such cases, there are no alternatives. We can't execute exceptions in the
-  CPU/GPU, so you need to reapproach the problem under a different perspective.
+  CPU/GPU, so you need to approach the problem under a different perspective.
   """
   defmacro raise(exception, arguments) do
     quote do

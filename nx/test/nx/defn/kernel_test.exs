@@ -123,18 +123,6 @@ defmodule Nx.Defn.KernelTest do
   describe "inside defn" do
     import Nx.Defn
 
-    defn assert_square_matrix(tensor) do
-      assert_shape_pattern(tensor, {x, x})
-    end
-
-    test "assert_shape_pattern" do
-      assert_square_matrix(Nx.tensor([[1, 2], [3, 4]]))
-
-      assert_raise ArgumentError,
-                   "expected tensor to match shape {x, x}, got tensor with shape {1, 2}",
-                   fn -> assert_square_matrix(Nx.tensor([[1, 2]])) end
-    end
-
     defn tap_and_then(a, b, c) do
       a
       |> Nx.add(b)

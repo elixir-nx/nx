@@ -552,14 +552,14 @@ defmodule Nx.Defn.Compiler do
     {{call, meta, [token, ast | rest]}, state}
   end
 
-  defp normalize({{:., _, [_, :exception]} = dot, meta, [arg]}, state) do
-    {arg, state} = normalize(arg, state)
-    {{dot, meta, [arg]}, state}
-  end
-
   defp normalize({{:., _, [:erlang, :error]} = dot, meta, args}, state) do
     {args, state} = normalize_list(args, state)
     {{dot, meta, args}, state}
+  end
+
+  defp normalize({{:., _, [_, :exception]} = dot, meta, [arg]}, state) do
+    {arg, state} = normalize(arg, state)
+    {{dot, meta, [arg]}, state}
   end
 
   defp normalize({{:., dot_meta, [mod, name]}, meta, args}, state) when mod in @allowed_modules do
