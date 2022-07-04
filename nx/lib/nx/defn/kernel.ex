@@ -859,8 +859,7 @@ defmodule Nx.Defn.Kernel do
           {:badkey, key} ->
             Kernel.raise(
               ArgumentError,
-              "unknown key #{Kernel.inspect(key)} in #{Kernel.inspect(keyword)}, " <>
-                "expected one of #{Kernel.inspect(keys)}"
+              "unknown key #{Kernel.inspect(key)} in #{Kernel.inspect(keyword)}, expected one of #{Kernel.inspect(keys)}"
             )
 
           :badkey ->
@@ -913,8 +912,7 @@ defmodule Nx.Defn.Kernel do
   defp move_pairs!([other | _], _) do
     Kernel.raise(
       ArgumentError,
-      "keyword!/2 expects the second argument to be a list of atoms or tuples, " <>
-        "got: #{Kernel.inspect(other)}"
+      "keyword!/2 expects the second argument to be a list of atoms or tuples, got: #{Kernel.inspect(other)}"
     )
   end
 
@@ -981,8 +979,7 @@ defmodule Nx.Defn.Kernel do
   defmacro if(_pred, other) do
     Kernel.raise(
       ArgumentError,
-      "expected second argument to \"if\" to be a do/else block, " <>
-        "got: #{Macro.to_string(other)}"
+      "expected second argument to \"if\" to be a do/else block, got: #{Macro.to_string(other)}"
     )
   end
 
@@ -1060,8 +1057,7 @@ defmodule Nx.Defn.Kernel do
   defmacro while(_var, _cond, other) do
     Kernel.raise(
       ArgumentError,
-      "expected third argument to \"while\" to be a do-block, " <>
-        "got: #{Macro.to_string(other)}"
+      "expected third argument to \"while\" to be a do-block, got: #{Macro.to_string(other)}"
     )
   end
 
@@ -1513,6 +1509,17 @@ defmodule Nx.Defn.Kernel do
     Kernel.inspect(expr, opts)
   end
 
+  @doc """
+  Concatenates two strings.
+
+  Equivalent to `Kernel.<>/2`.
+  """
+  defmacro left <> right do
+    quote do
+      Elixir.Kernel.<>(unquote(left), unquote(right))
+    end
+  end
+
   @doc false
   @deprecated "use deftransform/2 or deftransformp/2 from Nx.Defn instead"
   def transform(arg, fun) when is_function(fun, 1) do
@@ -1547,7 +1554,7 @@ defmodule Nx.Defn.Kernel do
   end
 
   defp shape_to_string({}), do: "be a scalar"
-  defp shape_to_string(shape), do: "have shape " <> Kernel.inspect(shape)
+  defp shape_to_string(shape), do: "have shape #{Kernel.inspect(shape)}"
 
   @doc false
   @deprecated "Use case+raise instead"
@@ -1569,7 +1576,7 @@ defmodule Nx.Defn.Kernel do
   end
 
   defp shape_pattern_to_string({:{}, _, []}), do: "be a scalar"
-  defp shape_pattern_to_string(pattern), do: "match shape " <> Macro.to_string(pattern)
+  defp shape_pattern_to_string(pattern), do: "match shape #{Macro.to_string(pattern)}"
 
   @definitions (Module.definitions_in(__MODULE__, :def) ++
                   Module.definitions_in(__MODULE__, :defmacro)) --

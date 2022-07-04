@@ -1146,7 +1146,7 @@ defmodule Nx.DefnTest do
     end
   end
 
-  describe "case" do
+  describe "case/2" do
     defn simple_rank(tensor) do
       case Nx.shape(tensor) do
         {} -> 0
@@ -1213,6 +1213,38 @@ defmodule Nx.DefnTest do
                        end
                      end
                    end
+    end
+  end
+
+  describe "raise/2" do
+    defn raise_argument_error(tensor) do
+      case Nx.shape(tensor) do
+        {n, n} -> n
+        shape -> raise ArgumentError, "expected a square tensor: #{inspect(shape)}"
+      end
+    end
+
+    test "raises ArgumentError" do
+      assert raise_argument_error(Nx.iota({4, 4})) == Expr.tensor(Nx.tensor(4))
+
+      assert_raise ArgumentError, "expected a square tensor: {4, 3}", fn ->
+        raise_argument_error(Nx.iota({4, 3}))
+      end
+    end
+
+    defn raise_runtime_error(tensor) do
+      case Nx.shape(tensor) do
+        {n, n} -> n
+        shape -> raise "expected a square tensor: " <> inspect(shape)
+      end
+    end
+
+    test "raises RuntimeError" do
+      assert raise_runtime_error(Nx.iota({4, 4})) == Expr.tensor(Nx.tensor(4))
+
+      assert_raise RuntimeError, "expected a square tensor: {4, 3}", fn ->
+        raise_runtime_error(Nx.iota({4, 3}))
+      end
     end
   end
 
