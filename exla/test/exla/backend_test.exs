@@ -121,7 +121,7 @@ defmodule EXLA.BackendTest do
     # we make it work for EXLA too.
     defn double(x \\ 0), do: double_transform(x)
 
-    deftransformp double_transform(x), do: Nx.backend_transfer(Nx.Defn.Kernel.*(x, x))
+    deftransformp(double_transform(x), do: Nx.backend_transfer(Nx.Defn.Kernel.*(x, x)))
 
     test "invokes from within defn" do
       assert double(Nx.tensor(11)) |> Nx.to_number() == 121

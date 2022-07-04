@@ -1311,6 +1311,18 @@ defmodule EXLA.Defn.ExprTest do
       assert_equal(nested_cond(Nx.tensor(10)), Nx.tensor(1))
       assert_equal(nested_cond(Nx.tensor(-10)), Nx.tensor(0))
     end
+
+    defn cond_predicate(a, b) do
+      cond do
+        Nx.all(Nx.greater(a, 0)) -> Nx.greater(b, 0)
+        true -> 0
+      end
+    end
+
+    test "with predicate" do
+      assert_equal(cond_predicate(Nx.tensor(1), Nx.tensor(2)), Nx.tensor(1, type: {:u, 8}))
+      assert_equal(cond_predicate(Nx.tensor(1), Nx.tensor(-2)), Nx.tensor(0, type: {:u, 8}))
+    end
   end
 
   describe "while/3" do
@@ -1367,6 +1379,19 @@ defmodule EXLA.Defn.ExprTest do
     test "factorial map input" do
       assert_equal(factorial_map_input(%{factorial: 1, x: 5}), Nx.tensor(120))
       assert_equal(factorial_map_input(%{factorial: 1.0, x: 10.0}), Nx.tensor(3_628_800.0))
+    end
+
+    defn while_predicate(x) do
+      while {exit_condition = Nx.tensor(true), x}, exit_condition do
+        res = Nx.multiply(x, x)
+        {not Nx.all(res >= 0), res}
+      end
+    end
+
+    test "with predicate" do
+      {truth, double} = while_predicate(Nx.tensor([1.0, -2.0, 3.0]))
+      assert_equal(truth, Nx.tensor(0, type: {:u, 8}))
+      assert_equal(double, Nx.tensor([1.0, 4.0, 9.0]))
     end
   end
 

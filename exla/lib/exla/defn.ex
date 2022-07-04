@@ -479,9 +479,13 @@ defmodule EXLA.Defn do
   defp cached_recur_operator(:while, %T{data: %Expr{args: args}}, state, cache) do
     [initial, arg, pred, body] = args
 
-    {initial, cache} = recur_composite({get_token(cache), initial}, state, cache)
-    {pred, cache} = token_computation(:while_pred, arg, pred, {:pred, 8}, state, cache)
-    {body, cache} = token_computation(:while_body, arg, body, :with_token, state, cache)
+    {initial, cache} =
+      recur_composite({get_token(cache), initial}, &cast_pred_to_u8/1, state, cache)
+
+    {pred, cache} = token_computation(:while_pred, arg, pred, {:pred, 8}, & &1, state, cache)
+
+    {body, cache} =
+      token_computation(:while_body, arg, body, :with_token, &cast_pred_to_u8/1, state, cache)
 
     while = EXLA.Op.while(pred, body, initial)
     token = EXLA.Op.get_tuple_element(while, 0)
@@ -1362,7 +1366,7 @@ defmodule EXLA.Defn do
     EXLA.Builder.build(to_type(res, type))
   end
 
-  defp token_computation(name, arg, expr, type, state, cache) do
+  defp token_computation(name, arg, expr, type, transform, state, cache) do
     subbuilder = subbuilder(state.builder, Atom.to_string(name))
     arg_shape = computation_arg_shape(arg)
 
@@ -1373,7 +1377,7 @@ defmodule EXLA.Defn do
     arg_param = EXLA.Op.get_tuple_element(param, 1)
     params = computation_arg_param({arg, arg_param})
     state = %{state | builder: subbuilder, params: Map.new(params)}
-    {res, comp_cache} = recur_composite(expr, state, reset_cache(cache, arg_token))
+    {res, comp_cache} = recur_composite(expr, transform, state, reset_cache(cache, arg_token))
 
     res =
       if type == :with_token do
@@ -1407,23 +1411,28 @@ defmodule EXLA.Defn do
     [{pos, param}]
   end
 
-  defp recur_composite(tuple, state, cache) when is_tuple(tuple) do
+  defp recur_composite(composite, state, cache) do
+    recur_composite(composite, & &1, state, cache)
+  end
+
+  defp recur_composite(tuple, transform, state, cache) when is_tuple(tuple) do
     list = Tuple.to_list(tuple)
 
     if expr = full_tuple(list) do
-      recur_composite(expr, state, cache)
+      recur_composite(expr, transform, state, cache)
     else
-      {elements, cache} = Enum.map_reduce(list, cache, &recur_composite(&1, state, &2))
+      {elements, cache} = Enum.map_reduce(list, cache, &recur_composite(&1, transform, state, &2))
       {EXLA.Op.tuple(state.builder, elements), cache}
     end
   end
 
-  defp recur_composite(%EXLA.Op{} = op, _state, cache) do
-    {op, cache}
+  defp recur_composite(%EXLA.Op{} = op, transform, _state, cache) do
+    {transform.(op), cache}
   end
 
-  defp recur_composite(expr, state, cache) do
-    recur_operator(expr, state, cache)
+  defp recur_composite(expr, transform, state, cache) do
+    {op, cache} = recur_operator(expr, state, cache)
+    {transform.(op), cache}
   end
 
   # If each element of the tuple is just a reference to the parent expression,
@@ -1567,7 +1576,8 @@ defmodule EXLA.Defn do
 
     comp_token = EXLA.Op.get_tuple_element(param, 0)
     comp_state = %{state | builder: subbuilder, params: Map.new(params)}
-    {res, comp_cache} = recur_composite(expr, comp_state, reset_cache(cache, comp_token))
+    comp_cache = reset_cache(cache, comp_token)
+    {res, comp_cache} = recur_composite(expr, &cast_pred_to_u8/1, comp_state, comp_cache)
 
     args = EXLA.Op.tuple(state.builder, [get_token(cache) | args])
     comp = EXLA.Builder.build(EXLA.Op.tuple(subbuilder, [get_token(comp_cache), res]))
@@ -1611,6 +1621,17 @@ defmodule EXLA.Defn do
 
   defp to_type(op, type) do
     if op_type(op) == type, do: op, else: EXLA.Op.convert_element_type(op, type)
+  end
+
+  # Inside cond/while, we need to convert pred to u8.
+  # We could do so lazily by comparing the versions of
+  # the branches, but that gets tricky with cond/if,
+  # so we always perform the operation.
+  defp cast_pred_to_u8(op) do
+    case EXLA.Op.get_shape(op).dtype do
+      {:pred, 8} -> EXLA.Op.convert_element_type(op, {:u, 8})
+      _ -> op
+    end
   end
 
   defp merge_type({:pred, 8}, {:pred, 8}), do: {:pred, 8}
