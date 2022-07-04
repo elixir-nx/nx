@@ -1686,17 +1686,6 @@ defmodule Nx.BinaryBackend do
     indexed_op(out, target, indices, updates, resolve_updates, update_element)
   end
 
-  # Generalized `indexed_*` operation
-
-  # # Parameters
-
-  # - `out` - output tensor
-  # - `target` - target tensor
-  # - `indices` - tensor with indices to update
-  # - `updates` - tensor with updates to make
-  # - `resolve_updates` - anonymous function to resolve repeated updates
-  # - `update_element` - anonymous function that updates an element, given
-  #    the current element and the update
   defp indexed_op(
          %T{} = out,
          %T{shape: shape, type: {_, target_size}} = target,
