@@ -946,8 +946,8 @@ defmodule Nx.DefnTest do
     test "IO remote" do
       assert_raise RuntimeError,
                    "cannot invoke IO.inspect/1 inside defn because it was not defined with defn. " <>
-                     "To print the runtime value of a tensor, use inspect_value/2. " <>
-                     "To print the tensor expression, use inspect_expr/2",
+                     "To print the runtime value of a tensor, use print_value/2. " <>
+                     "To print the tensor expression, use print_expr/2",
                    fn -> add_two_io(1, 2) end
     end
   end
@@ -1350,11 +1350,11 @@ defmodule Nx.DefnTest do
 
   describe "transform" do
     defn transform_inspect(a, b) do
-      (Nx.tanh(a) + Nx.power(b, 3)) |> inspect_expr()
+      (Nx.tanh(a) + Nx.power(b, 3)) |> print_expr()
     end
 
     defn transform_inspect_label(a, b) do
-      (Nx.tanh(a) + Nx.power(b, 3)) |> inspect_expr(label: "HELLO")
+      (Nx.tanh(a) + Nx.power(b, 3)) |> print_expr(label: "HELLO")
     end
 
     test "executes the transformation" do

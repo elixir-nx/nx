@@ -738,7 +738,7 @@ defmodule Nx.Defn do
         e = add [ b, d ] ()
       >
 
-  Although, for convenience, you might use `inspect_expr/2` instead.
+  Although, for convenience, you might use `print_expr/2` instead.
   """
   defmacro deftransform(call, do: block) do
     define_transform(:def, call, block, __CALLER__)

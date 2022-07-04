@@ -161,10 +161,10 @@ defmodule Nx.OptionalTest do
     end
   end
 
-  defn det_inspect(t) do
+  defn det_print(t) do
     t
     |> Nx.LinAlg.determinant()
-    |> inspect_expr()
+    |> print_expr()
   end
 
   describe "optional callbacks (def)" do
@@ -212,7 +212,7 @@ defmodule Nx.OptionalTest do
                  assert 0 ==
                           {3, 3}
                           |> Nx.iota(backend: unquote(backend))
-                          |> det_inspect()
+                          |> det_print()
                           |> Nx.backend_transfer(Nx.BinaryBackend)
                           |> Nx.sum()
                           |> Nx.to_number()
@@ -230,7 +230,7 @@ defmodule Nx.OptionalTest do
 
     test "works with direct call" do
       assert ExUnit.CaptureIO.capture_io(fn ->
-               Nx.Defn.jit(&det_inspect/1).(Nx.iota({3, 3}))
+               Nx.Defn.jit(&det_print/1).(Nx.iota({3, 3}))
              end) =~
                """
                #Nx.Tensor<
