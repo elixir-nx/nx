@@ -465,8 +465,7 @@ defmodule Torchx.Backend do
     |> from_nx()
     |> Torchx.to_type(to_torch_type(out.type))
     |> Torchx.reshape({Tuple.product(tensor.shape)})
-    |> then(&List.insert_at([linear_indices_tx, updates_tx, 0], 0, &1))
-    |> then(&apply(Torchx, function, &1))
+    |> then(&apply(Torchx, function, [&1, linear_indices_tx, updates_tx, 0]))
     |> Torchx.reshape(out.shape)
     |> to_nx(out)
   end
