@@ -2,6 +2,28 @@
 
 ## v0.3.0-dev
 
+### Enhancements
+
+  * Support `debug: true` option on `defn` compiler
+  * Allow specifying preferred clients via the application environment
+
+### Deprecations
+
+  * Deprecate `set_as_nx_default`
+
+## v0.2.3 (2022-07-05)
+
+### Bug fixes
+
+  * Fix predicate handling inside `cond`/`while`
+  * Set Nx backend globally
+
+## v0.2.2 (2022-06-15)
+
+### Bug fixes
+
+  * Fix invalid cache expiration when defn received functions as arguments
+
 ## v0.2.1 (2022-06-04)
 
 ### Enhancements
