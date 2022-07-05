@@ -5146,6 +5146,8 @@ defmodule Nx do
   `indices` must be a fully qualified tensor of shape `{n, Nx.rank(target)}`, with `n`
   being an arbitrary number of indices, while `updates` must have a compatible `{n}` shape.
 
+  See also: `indexed_add/3`, `gather/2`, `take/3`, `take_along_axis/3`
+
   ### Examples
 
       iex> t = Nx.iota({1, 2, 3})
@@ -5171,7 +5173,8 @@ defmodule Nx do
         ]
       >
 
-  Type promotions should happen automatically.
+  Type promotions should happen automatically, with the resulting type being the combination
+  of the `target` type and the `updates` type.
 
       iex> Nx.indexed_add(Nx.tensor([1.0]), Nx.tensor([[0], [0]]), Nx.tensor([1, 1]))
       #Nx.Tensor<
@@ -5206,15 +5209,108 @@ defmodule Nx do
   """
   @doc type: :indexed
   def indexed_add(target, indices, updates) do
+    indexed_op(target, indices, updates, :indexed_add)
+  end
+
+  @doc """
+  Puts individual values from `updates` into the given tensor at the corresponding `indices`.
+
+  `indices` must be a fully qualified tensor of shape `{n, Nx.rank(target)}`, with `n`
+  being an arbitrary number of indices, while `updates` must have a compatible `{n}` shape.
+
+  In case of repeating indices, the last occurence of index and its corresponding update
+  value takes precedence.
+
+  See also: `indexed_add/3`, `gather/2`, `take/3`, `take_along_axis/3`
+
+  ### Examples
+
+      iex> Nx.indexed_put(Nx.tensor([0, 0, 0]), Nx.tensor([[1], [2]]), Nx.tensor([2, 4]))
+      #Nx.Tensor<
+        s64[3]
+        [0, 2, 4]
+      >
+
+      iex> Nx.indexed_put(Nx.tensor([0, 0, 0]), Nx.tensor([[1], [2], [1]]), Nx.tensor([3, 4, 2]))
+      #Nx.Tensor<
+        s64[3]
+        [0, 2, 4]
+      >
+
+      iex> t = Nx.iota({1, 2, 3})
+      #Nx.Tensor<
+        s64[1][2][3]
+        [
+          [
+            [0, 1, 2],
+            [3, 4, 5]
+          ]
+        ]
+      >
+      iex> indices = Nx.tensor([[0, 0, 0], [0, 1, 1], [0, 0, 0], [0, 0, 2]])
+      iex> updates = Nx.tensor([1, 3, 2, -2])
+      iex> Nx.indexed_put(t, indices, updates)
+      #Nx.Tensor<
+        s64[1][2][3]
+        [
+          [
+            [2, 1, -2],
+            [3, 3, 5]
+          ]
+        ]
+      >
+
+  Type promotions should happen automatically, with the resulting type being the combination
+  of the `target` type and the `updates` type.
+
+      iex> Nx.indexed_put(Nx.tensor([1.0]), Nx.tensor([[0]]), Nx.tensor([3]))
+      #Nx.Tensor<
+        f32[1]
+        [3.0]
+      >
+
+      iex> Nx.indexed_put(Nx.tensor([1]), Nx.tensor([[0]]), Nx.tensor([3.0]))
+      #Nx.Tensor<
+        f32[1]
+        [3.0]
+      >
+
+      iex> Nx.indexed_put(Nx.tensor([1], type: {:s, 32}), Nx.tensor([[0]]), Nx.tensor([3], type: {:s, 64}))
+      #Nx.Tensor<
+        s64[1]
+        [3]
+      >
+
+  ### Error cases
+      iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([[[1, 2, 3]]]), Nx.tensor([0]))
+      ** (ArgumentError) indices must be a rank 2 tensor, got: 3
+
+      iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2]]), Nx.tensor([[0]]))
+      ** (ArgumentError) updates must be a rank 1 tensor, got: 2
+
+      iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2, 3]]), Nx.tensor([0]))
+      ** (ArgumentError) expected indices to have shape {*, 2}, got: {1, 3}
+
+      iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2]]), Nx.tensor([0, 1]))
+      ** (ArgumentError) expected updates tensor to match the first axis of indices tensor with shape {1, 2}, got {2}
+  """
+  @doc type: :indexed
+  def indexed_put(target, indices, updates) do
+    indexed_op(target, indices, updates, :indexed_put)
+  end
+
+  defp indexed_op(target, indices, updates, op) do
     target = to_tensor(target)
     indices = to_tensor(indices)
     updates = to_tensor(updates)
 
     type = binary_type(target, updates)
 
-    Nx.Shape.indexed_add(target, indices, updates)
+    Nx.Shape.indexed(target, indices, updates)
 
-    impl!(target, indices, updates).indexed_add(%{target | type: type}, target, indices, updates)
+    out = %{target | type: type}
+
+    apply(impl!(target, indices, updates), op, [out, target, indices, updates])
   end
 
   ## Unary ops

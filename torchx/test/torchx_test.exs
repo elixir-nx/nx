@@ -60,6 +60,16 @@ defmodule TorchxTest do
     end
   end
 
+  describe "indexed_put" do
+    test "clamps when out of bounds" do
+      t = Nx.tensor([[1, 2], [3, 4]])
+
+      result = Nx.indexed_put(t, Nx.tensor([[3, -10]]), Nx.tensor([50]))
+
+      assert_all_close(result, Nx.tensor([[1, 2], [50, 4]]))
+    end
+  end
+
   describe "gather" do
     test "raises when out of bounds" do
       t = Nx.tensor([[1, 2], [3, 4]])

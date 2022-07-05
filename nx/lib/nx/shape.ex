@@ -831,8 +831,8 @@ defmodule Nx.Shape do
 
   defp validate_strides!(_, _), do: :ok
 
-  @doc "Validates the input shapes for `Nx.indexed_add/3`"
-  def indexed_add(
+  @doc "Validates the input shapes for `Nx.indexed_*/3`"
+  def indexed(
         %Nx.Tensor{shape: target_shape},
         %Nx.Tensor{shape: indices_shape},
         %Nx.Tensor{shape: updates_shape}

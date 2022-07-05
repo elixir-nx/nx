@@ -445,6 +445,15 @@ defmodule Torchx.Backend do
 
   @impl true
   def indexed_add(out, tensor, indices, updates) do
+    indexed(out, tensor, indices, updates, :indexed_add)
+  end
+
+  @impl true
+  def indexed_put(out, tensor, indices, updates) do
+    indexed(out, tensor, indices, updates, :indexed_put)
+  end
+
+  defp indexed(out, tensor, indices, updates, function) do
     linear_indices_tx = as_torchx_linear_indices(tensor.shape, indices)
 
     updates_tx =
@@ -456,7 +465,7 @@ defmodule Torchx.Backend do
     |> from_nx()
     |> Torchx.to_type(to_torch_type(out.type))
     |> Torchx.reshape({Tuple.product(tensor.shape)})
-    |> Torchx.indexed_add(linear_indices_tx, updates_tx, 0)
+    |> then(&apply(Torchx, function, [&1, linear_indices_tx, updates_tx, 0]))
     |> Torchx.reshape(out.shape)
     |> to_nx(out)
   end

@@ -264,6 +264,7 @@ defmodule EXLA.Backend do
       {:window_scatter_min, [:tensor, :source, :init_value, :window_dims, :opts],
        [:tensor, :source, :init_value]},
       {:indexed_add, [:tensor, :indices, :updates], [:tensor, :indices, :updates]},
+      {:indexed_put, [:tensor, :indices, :updates], [:tensor, :indices, :updates]},
       {:cholesky, [:tensor], [:tensor]},
       {:lu, [:tensor, :opts], [:tensor]},
       {:qr, [:tensor, :opts], [:tensor]},

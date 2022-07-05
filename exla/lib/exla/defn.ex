@@ -1022,50 +1022,28 @@ defmodule EXLA.Defn do
 
   defp to_operator(
          :indexed_add,
-         [target, indices, updates],
-         %{type: type},
+         tensors,
+         %{type: type} = out,
          state
        ) do
-    target = to_type(target, type)
-    updates = to_type(updates, type)
-
     args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
     scatter_fn = op_computation(:add, args, state)
 
-    rank = target |> op_shape() |> tuple_size()
-    # indices_rank is guaranteed to be 2 by Nx.Shape
-    indices_rank = 2
-    rank_diff = rank - indices_rank + 1
+    scatter(scatter_fn, tensors, out)
+  end
 
-    indices_shape = op_shape(indices)
+  defp to_operator(:indexed_put, tensors, out, state) do
+    # Build update computation
 
-    indices_shape =
-      [List.duplicate(1, rank_diff) | Tuple.to_list(indices_shape)]
-      |> List.flatten()
-      |> List.to_tuple()
+    subbuilder = subbuilder(state.builder, "scatter_reduction")
 
-    indices = EXLA.Op.reshape(indices, indices_shape)
+    param_shape = EXLA.Shape.make_shape(out.type, {})
+    _left = EXLA.Op.parameter(subbuilder, 0, param_shape, "left")
+    right = EXLA.Op.parameter(subbuilder, 1, param_shape, "right")
 
-    # If indices has shape {x, y}, updates is guaranteed by Nx.Shape to
-    # have shape {x}, so if we reshaped indices to {..., x, y}, we need to
-    # reshape updates to {..., x}
+    scatter_fn = EXLA.Builder.build(right)
 
-    updates_shape = Tuple.delete_at(indices_shape, tuple_size(indices_shape) - 1)
-
-    updates = EXLA.Op.reshape(updates, updates_shape)
-
-    axes = axes_for_rank(rank)
-
-    EXLA.Op.scatter(
-      target,
-      indices,
-      updates,
-      scatter_fn,
-      rank,
-      [],
-      axes,
-      axes
-    )
+    scatter(scatter_fn, tensors, out)
   end
 
   defp to_operator(:map, [arg, _opts, fun], %{shape: shape, type: type}, _state) do
@@ -1287,6 +1265,46 @@ defmodule EXLA.Defn do
       end
 
     apply(exla_op, [tensor, n])
+  end
+
+  defp scatter(scatter_fn, [target, indices, updates], %{type: type}) do
+    target = to_type(target, type)
+    updates = to_type(updates, type)
+
+    rank = target |> op_shape() |> tuple_size()
+    # indices_rank is guaranteed to be 2 by Nx.Shape
+    indices_rank = 2
+    rank_diff = rank - indices_rank + 1
+
+    indices_shape = op_shape(indices)
+
+    indices_shape =
+      [List.duplicate(1, rank_diff) | Tuple.to_list(indices_shape)]
+      |> List.flatten()
+      |> List.to_tuple()
+
+    indices = EXLA.Op.reshape(indices, indices_shape)
+
+    # If indices has shape {x, y}, updates is guaranteed by Nx.Shape to
+    # have shape {x}, so if we reshaped indices to {..., x, y}, we need to
+    # reshape updates to {..., x}
+
+    updates_shape = Tuple.delete_at(indices_shape, tuple_size(indices_shape) - 1)
+
+    updates = EXLA.Op.reshape(updates, updates_shape)
+
+    axes = axes_for_rank(rank)
+
+    EXLA.Op.scatter(
+      target,
+      indices,
+      updates,
+      scatter_fn,
+      rank,
+      [],
+      axes,
+      axes
+    )
   end
 
   ## Cache and hook helpers helpers
