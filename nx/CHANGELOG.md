@@ -4,9 +4,25 @@
 
 ### Enhancements
 
+  * [Nx] Support booleans in `Nx.tensor/2`
   * [Nx] Add `Nx.fft/2` and `Nx.ifft/2`
   * [Nx] Rename `Nx.logistic/1` to `Nx.sigmoid/1`
-  * [Nx.Defn.Evaluator] Garbage collect after evaluation
+  * [Nx] Add `:reverse` to cummulative functions
+  * [Nx] Add `Nx.to_batched/3` which returns a stream
+  * [Nx.Defn] Add `Nx.Defn.compile/3` for precompiling expressions
+  * [Nx.Defn] Add `deftransform/2` and `deftransformp/2` for easier to define transforms
+  * [Nx.Defn] Add `div/2`
+  * [Nx.Defn] Support `case/2`, `raise/1`, and `raise/2`
+  * [Nx.Defn] Support booleans in `if`, `cond`, and boolean operators
+  * [Nx.Defn] Perform branch elimitation in `if` and `cond` and execute branches lazily
+  * [Nx.Defn.Evaluator] Garbage collect after evaluation (it can be disabled by setting the `:garbage_collect` compiler option to false)
+
+### Deprecations
+
+  * [Nx] `Nx.to_batched_list/3` is deprecated in favor of `Nx.to_batched/3`
+  * [Nx.Defn] `transform/2` is deprecated in favor of `deftransform/2` and `deftransformp/2`
+  * [Nx.Defn] `assert_shape/2` and `assert_shape_pattern/2` are deprecated in favor of `case/2` + `raise/2`
+  * [Nx.Defn] `inspect_expr/1` and `inspect_value/1` are deprecated in favor of `print_expr/1` and `print_value/1` respectively
 
 ## v0.2.1 (2022-06-04)
 
