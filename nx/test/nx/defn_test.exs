@@ -1160,6 +1160,21 @@ defmodule Nx.DefnTest do
                cond_branch_elimination(Nx.tensor([1, 2, 3]), Nx.tensor(0))
     end
 
+    defn cond_branch_variable_access(a) do
+      cond do
+        b = Nx.all(a > 0) -> a + b
+        b = Nx.all(a < 0) -> a - b
+        true -> a
+      end
+    end
+
+    @tag compiler: Evaluator
+    test "access variable from condition" do
+      assert cond_branch_variable_access(Nx.tensor([1, 2, 3])) == Nx.tensor([2, 3, 4])
+      assert cond_branch_variable_access(Nx.tensor([-1, -2, -3])) == Nx.tensor([-2, -3, -4])
+      assert cond_branch_variable_access(Nx.tensor([-1, 0, 1])) == Nx.tensor([-1, 0, 1])
+    end
+
     defn bad_cond(a) do
       cond do
         Nx.any(a) -> +a

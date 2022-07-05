@@ -453,7 +453,7 @@ defmodule Nx.Defn.Compiler do
     {{:case, meta, [wrapped, [do: clauses]]}, state}
   end
 
-  @var {:condition, [], __MODULE__}
+  @cond_var_ast {:condition, [], __MODULE__}
 
   defp normalize({:cond, _meta, [[do: clauses]]}, state) do
     {clauses, state} =
@@ -463,8 +463,8 @@ defmodule Nx.Defn.Compiler do
 
         pair =
           quote do
-            unquote(@var) = unquote(condition)
-            {unquote(@var), fn -> unquote(expr) end}
+            unquote(@cond_var_ast) = unquote(condition)
+            {unquote(@cond_var_ast), fn -> unquote(expr) end}
           end
 
         {{meta, pair}, state}
