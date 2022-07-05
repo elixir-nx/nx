@@ -1071,6 +1071,19 @@ defmodule Nx.DefnTest do
                    fn -> if_boolean(boolean: nil) end
     end
 
+    defn if_boolean_raise(opts \\ []) do
+      if opts[:boolean] do
+        1
+      else
+        raise ArgumentError, "oops"
+      end
+    end
+
+    test "raises lazily" do
+      assert if_boolean_raise(boolean: true) == Expr.tensor(1)
+      assert_raise ArgumentError, "oops", fn -> if_boolean_raise(boolean: false) end
+    end
+
     test "raises correct error on incompatible shapes" do
       assert_raise CompileError, ~r/cond\/if expects all branches/, fn ->
         if_scalar_error(Nx.tensor(0))
