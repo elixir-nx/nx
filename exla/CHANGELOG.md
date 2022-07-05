@@ -1,11 +1,17 @@
 # Changelog
 
+## v0.2.3 (2022-07-05)
+
+### Bug fixes
+
+  * Fix predicate handling inside `cond`/`while`
+  * Set Nx backend globally
+
 ## v0.2.2 (2022-06-15)
 
 ### Bug fixes
 
-  * Consider input structure as cache keys for EXLA
-  * Pass tensors as arguments on `EXLA.Backend` during `indexed_add`, `slice`, and `put_slice`
+  * Fix invalid cache expiration when defn received functions as arguments
 
 ## v0.2.1 (2022-06-04)
 
