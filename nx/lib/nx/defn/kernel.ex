@@ -82,18 +82,19 @@ defmodule Nx.Defn.Kernel do
         condition2 ->
           expr2
 
-        :otherwise ->
+        true ->
           expr3
       end
 
   The conditions must be a scalar. Zero is considered false,
-  any other number is considered true.
+  any other number is considered true. The booleans `false` and
+  `true` are supported, but any other value will raise.
 
   All clauses are normalized to the same type and are broadcast
   to the same shape. The last condition must always evaluate to
-  an atom, typically `:otherwise`. All clauses are executed
-  in the device, unless they can be determined to always be
-  true/false always building the expression.
+  true. All clauses are executed in the device, unless they can
+  be determined to always be true/false while building the numerical
+  expression.
 
   ## Examples
 
@@ -944,7 +945,8 @@ defmodule Nx.Defn.Kernel do
   Provides if/else expressions.
 
   The first argument must be a scalar. Zero is considered false,
-  any other number is considered true.
+  any other number is considered true. The booleans `false` and
+  `true` are supported, but any other value will raise.
 
   The second argument is a keyword list with `do` and `else`
   blocks. The sides are broadcast to return the same shape
@@ -966,18 +968,22 @@ defmodule Nx.Defn.Kernel do
 
   defmacro if(pred, do: on_true) do
     quote do
+      pred = unquote(pred)
+
       cond do
-        unquote(pred) -> unquote(on_true)
-        :otherwise -> 0
+        pred -> unquote(on_true)
+        true -> 0
       end
     end
   end
 
   defmacro if(pred, do: on_true, else: on_false) do
     quote do
+      pred = unquote(pred)
+
       cond do
-        unquote(pred) -> unquote(on_true)
-        :otherwise -> unquote(on_false)
+        pred -> unquote(on_true)
+        true -> unquote(on_false)
       end
     end
   end

@@ -453,33 +453,28 @@ defmodule Nx.Defn.Compiler do
     {{:case, meta, [wrapped, [do: clauses]]}, state}
   end
 
-  defp normalize({:cond, meta, [[do: clauses]]}, state) do
-    {[{last_meta, {last_condition, last_expr}} | rest], state} =
-      Enum.reduce(clauses, {[], state}, fn {:->, meta, [[condition], expr]}, {acc, state} ->
+  @cond_var_ast {:condition, [], __MODULE__}
+
+  defp normalize({:cond, _meta, [[do: clauses]]}, state) do
+    {clauses, state} =
+      Enum.map_reduce(clauses, state, fn {:->, meta, [[condition], expr]}, state ->
         {condition, state} = normalize(condition, state)
         {expr, state} = normalize(expr, state)
-        {[{meta, {condition, expr}} | acc], state}
+
+        pair =
+          quote do
+            unquote(@cond_var_ast) = unquote(condition)
+            {unquote(@cond_var_ast), fn -> unquote(expr) end}
+          end
+
+        {{meta, pair}, state}
       end)
-
-    if rest == [] do
-      compile_error!(meta, state, "cond must have at least 2 clauses, got 1")
-    end
-
-    if not is_atom(last_condition) or last_condition == nil or last_condition == false do
-      compile_error!(
-        last_meta,
-        state,
-        "expected the last clause of cond to match on an atom, " <>
-          "such as true or :otherwise, got: #{Macro.to_string(last_condition)}"
-      )
-    end
 
     ast =
       quote do
         Nx.Defn.Expr.defn_cond(
           unquote(state.file),
-          unquote(Enum.reverse(rest)),
-          unquote(last_expr)
+          unquote(clauses)
         )
       end
 
