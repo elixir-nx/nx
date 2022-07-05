@@ -1073,8 +1073,15 @@ defmodule EXLA.Defn do
     target = to_type(target, type)
     updates = to_type(updates, type)
 
-    args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
-    scatter_fn = op_computation(:add, args, state)
+    # Build update computation
+
+    subbuilder = subbuilder(state.builder, "scatter_reduction")
+
+    param_shape = EXLA.Shape.make_shape(type, {})
+    _left = EXLA.Op.parameter(subbuilder, 0, param_shape, "left")
+    right = EXLA.Op.parameter(subbuilder, 1, param_shape, "right")
+
+    scatter_fn = EXLA.Builder.build(right)
 
     rank = target |> op_shape() |> tuple_size()
     # indices_rank is guaranteed to be 2 by Nx.Shape
