@@ -1744,7 +1744,7 @@ defmodule EXLA.Defn.ExprTest do
       assert_equal(
         Nx.tensor([
           [
-            [0, 1, 0, 0],
+            [-1, 1, 0, 0],
             [0, 2, 0, 0],
             [0, 0, 0, 0]
           ],
