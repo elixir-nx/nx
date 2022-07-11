@@ -11,9 +11,10 @@ defmodule Nx.Random do
   defp assert_key(tensor) do
     assert_shape(tensor, {1, 2})
     type = Nx.type(tensor)
+
     if not Nx.Type.integer?(type) do
       raise ArgumentError,
-              "expected tensor with integer type, got tensor with type #{inspect(type)}"
+            "expected tensor with integer type, got tensor with type #{inspect(type)}"
     end
   end
 
@@ -21,6 +22,7 @@ defmodule Nx.Random do
   def threefry_seed(seed) when is_integer(seed) do
     k1 = Nx.right_shift(seed, 32) |> Nx.reshape({1})
     k2 = Nx.bitwise_and(seed, 0xFFFFFFFF) |> Nx.reshape({1})
+
     Nx.concatenate([k1, k2])
     |> Nx.reshape({1, 2})
     |> Nx.as_type({:u, 32})
@@ -33,7 +35,7 @@ defmodule Nx.Random do
     impl(key, Nx.iota({num, 2}))
   end
 
-  #Check data requirements
+  # Check data requirements
   @spec fold_in(T, integer()) :: T
   def fold_in(key, data) when is_integer(data) do
     assert_key(key)
@@ -52,13 +54,14 @@ defmodule Nx.Random do
     assert_key(key)
 
     shape =
-    if shape == {} do
-      Nx.shape(count)
-    else
-      shape
-    end
+      if shape == {} do
+        Nx.shape(count)
+      else
+        shape
+      end
 
     reshaped_key = Nx.reshape(key, {2, 1})
+
     reshaped_count =
       Nx.reshape(count, {:auto})
       |> Nx.as_type({:u, 32})
@@ -67,9 +70,8 @@ defmodule Nx.Random do
     |> Nx.reshape(shape)
   end
 
-  #Check count
-  defp threefry2x32(key, count) do
-
+  # Check count
+  def threefry2x32(key, count) do
     even? = rem(Nx.axis_size(count, 0), 2) == 0
 
     if even? do
@@ -81,15 +83,15 @@ defmodule Nx.Random do
     |> Nx.as_type({:u, 32})
     |> threefry2x32_20(key)
     |> then(fn output ->
-      if even?, do: output, else:
-      output
-      |> Nx.to_flat_list()
-      |> tl()
-      |> Nx.tensor()
+      if even?,
+        do: output,
+        else:
+          output
+          |> Nx.to_flat_list()
+          |> tl()
+          |> Nx.tensor()
     end)
   end
-
-
 
   defnp threefry2x32_20(xs, ks) do
     rotations = Nx.tensor([[13, 15, 26, 6], [17, 29, 16, 24]], type: {:u, 8})
@@ -98,27 +100,28 @@ defmodule Nx.Random do
 
     xs = Nx.add(ks, xs)
 
-    ks = Nx.stack(
-      [
-      key2,
-      Nx.bitwise_xor(key1, key2)
-      |> Nx.bitwise_xor(0x1BD11BDA),
-      key1
-      ]
-    )
-    |> Nx.as_type({:u, 32})
+    ks =
+      Nx.stack([
+        key2,
+        Nx.bitwise_xor(key1, key2)
+        |> Nx.bitwise_xor(0x1BD11BDA),
+        key1
+      ])
+      |> Nx.as_type({:u, 32})
 
     state = {xs, ks, rotations}
 
     {_, {nxs, _, _}} =
-    while {x = 0, state}, Nx.less(x, 5) do
-      {x + 1, rolled_loop_step(x, state)}
-    end
+      while {x = 0, state}, Nx.less(x, 5) do
+        {x + 1, rolled_loop_step(x, state)}
+      end
+
     nxs
   end
 
   defnp apply_round(xs, rot) do
     y1 = Nx.add(xs[0], xs[1])
+
     y2 =
       rotate_left(xs[1], rot)
       |> Nx.bitwise_xor(y1)
@@ -128,14 +131,13 @@ defmodule Nx.Random do
   end
 
   defnp rolled_loop_step(i, {xs, ks, rs}) do
-
     {k1, k2, k3} = {ks[0], ks[1], ks[2]}
     {r1, r2} = {rs[0], rs[1]}
 
     {_, xs, _} =
-    while {x = 0, xs, rs}, Nx.less(x, 4) do
-      {x + 1, apply_round(xs, rs[0][x]), rs}
-    end
+      while {x = 0, xs, rs}, Nx.less(x, 4) do
+        {x + 1, apply_round(xs, rs[0][x]), rs}
+      end
 
     xs1 =
       Nx.broadcast(k1, xs[0])
@@ -148,6 +150,7 @@ defmodule Nx.Random do
     new_x =
       Nx.stack([xs1, xs2])
       |> Nx.as_type({:u, 32})
+
     new_k = Nx.stack([k2, k3, k1])
     new_r = Nx.stack([r2, r1])
 
