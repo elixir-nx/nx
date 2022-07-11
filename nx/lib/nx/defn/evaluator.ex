@@ -31,12 +31,12 @@ defmodule Nx.Defn.Evaluator do
   end
 
   @impl true
-  def __jit__(_key, vars, fun, args_list, opts) do
-    __compile__(vars, fun, opts).(args_list)
+  def __jit__(key, vars, fun, args_list, opts) do
+    __compile__(key, vars, fun, opts).(args_list)
   end
 
   @impl true
-  def __compile__(vars, fun, opts) do
+  def __compile__(_key, vars, fun, opts) do
     hooks = Keyword.get(opts, :hooks, %{})
     gc? = Keyword.get(opts, :garbage_collect, true)
     expr = fun.(vars)

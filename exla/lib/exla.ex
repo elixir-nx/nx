@@ -196,7 +196,20 @@ defmodule EXLA do
         [2, 4, 6]
       >
 
-  See the moduledoc for options.
+  ## Options
+
+  It accepts the same option as `Nx.Defn.jit/2` plus:
+
+    * `:debug` - print compile and debugging information, defaults to `false`.
+
+    * `:cache` - cache the results of compilation, defaults to `true`.
+
+    * `:client` - an atom representing the client to use. The default
+      client is chosen on this order: `:cuda`, `:rocm`, `:tpu`, and `:host`.
+
+    * `:device_id` - the default device id to run the computation on.
+      Defaults to the `:default_device_id` on the client
+
   """
   def jit(function, options \\ []) do
     Nx.Defn.jit(function, Keyword.put(options, :compiler, EXLA))
@@ -211,7 +224,7 @@ defmodule EXLA do
         [2, 4, 6]
       >
 
-  See the moduledoc for options.
+  See `jit/2` for supported options.
   """
   def jit_apply(function, args, options \\ []) do
     Nx.Defn.jit_apply(function, args, Keyword.put(options, :compiler, EXLA))
@@ -227,7 +240,22 @@ defmodule EXLA do
         [2, 4, 6]
       >
 
-  See the moduledoc for options.
+  ## Options
+
+  It accepts the same option as `Nx.Defn.compile/3` plus:
+
+    * `:debug` - print compile and debugging information, defaults to `false`.
+
+    * `:cache` - cache the results of compilation, defaults to `true`.
+      You can set it to false if you plan to compile the function only
+      once and store the compile contents somewhere.
+
+    * `:client` - an atom representing the client to use. The default
+      client is chosen on this order: `:cuda`, `:rocm`, `:tpu`, and `:host`.
+
+    * `:device_id` - the default device id to run the computation on.
+      Defaults to the `:default_device_id` on the client
+
   """
   def compile(function, args, options \\ []) do
     Nx.Defn.compile(function, args, Keyword.put(options, :compiler, EXLA))
@@ -285,14 +313,15 @@ defmodule EXLA do
   **Note:** While any process can call `Nx.Stream.send/2`, EXLA
   expects the process that starts the streaming to be the one
   calling `Nx.Stream.recv/1` and `Nx.Stream.done/1`.
+
+  See `jit/2` for supported options.
   """
   def stream(function, args, options \\ []) do
     Nx.Defn.stream(function, args, Keyword.put(options, :compiler, EXLA))
   end
 
   @doc """
-  Checks if the JIT compilation of function with
-  args is cached.
+  Checks if the compilation of function with args is cached.
 
   Note that hooks are part of the cache, and
   therefore they must be included in the options.
@@ -303,13 +332,25 @@ defmodule EXLA do
       iex> left = Nx.tensor(1, type: {:u, 8})
       iex> right = Nx.tensor([1, 2, 3], type: {:u, 16})
       iex> EXLA.jit(fun).(left, right)
-      iex> EXLA.jit_cached?(fun, [left, right])
+      iex> EXLA.cached?(fun, [left, right])
       true
-      iex> EXLA.jit_cached?(fun, [left, Nx.tensor([1, 2, 3, 4], type: {:u, 16})])
+      iex> EXLA.cached?(fun, [left, Nx.tensor([1, 2, 3, 4], type: {:u, 16})])
       false
 
+  Compiled functions are also cached, unless cache is set to false:
+
+      iex> fun = fn a, b -> Nx.subtract(a, b) end
+      iex> left = Nx.tensor(1, type: {:u, 8})
+      iex> right = Nx.tensor([1, 2, 3], type: {:u, 16})
+      iex> EXLA.compile(fun, [left, right], cache: false)
+      iex> EXLA.cached?(fun, [left, right])
+      false
+      iex> EXLA.compile(fun, [left, right])
+      iex> EXLA.cached?(fun, [left, right])
+      true
+
   """
-  def jit_cached?(function, args, options \\ []) do
+  def cached?(function, args, options \\ []) do
     function |> jit([{EXLA, cached_check()} | options]) |> apply(args)
   catch
     {:cached?, bool} -> bool
@@ -357,7 +398,7 @@ defmodule EXLA do
   end
 
   @impl true
-  defdelegate __compile__(vars, fun, opts), to: EXLA.Defn
+  defdelegate __compile__(key, vars, fun, opts), to: EXLA.Defn
 
   @impl true
   defdelegate __jit__(key, vars, fun, args, opts), to: EXLA.Defn

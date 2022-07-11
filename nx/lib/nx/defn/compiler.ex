@@ -36,9 +36,10 @@ defmodule Nx.Defn.Compiler do
   @doc """
   Callback for compilation.
 
-  It receives the function `vars`, the function `fun` which builds
-  a defn expression, and the compiler options. It must call `fun`
-  with the `vars` as arguments.
+  It receives an opaque `key` used for caching, the function
+  `vars`, the function `fun` which builds a defn expression,
+  and the compiler options. It must call `fun` with the `vars`
+  as arguments.
 
   It returns a function that receives a list of arguments and
   returns a list of results.
@@ -47,6 +48,7 @@ defmodule Nx.Defn.Compiler do
   at root modules without affecting the module's main API.
   """
   @callback __compile__(
+              key :: term,
               vars :: [Nx.Container.t()],
               fun :: ([Nx.Container.t()] -> Nx.Container.t()),
               opts :: keyword
@@ -105,19 +107,19 @@ defmodule Nx.Defn.Compiler do
   @doc false
   def __compile__(fun, template, opts) do
     {compiler, inputs, runtime_fun, opts} = prepare_options(fun, template, opts)
-    compiler.__compile__(inputs, runtime_fun, opts)
+    compiler.__compile__(fun, inputs, runtime_fun, opts)
   end
 
   @doc false
   def __jit__(fun, template, args_list, opts) do
     {compiler, inputs, runtime_fun, opts} = prepare_options(fun, template, opts)
-    Kernel.apply(compiler, :__jit__, [fun, inputs, runtime_fun, args_list, opts])
+    compiler.__jit__(fun, inputs, runtime_fun, args_list, opts)
   end
 
   @doc false
   def __stream__(fun, input, acc, template, args_list, opts) do
     {compiler, inputs, runtime_fun, opts} = prepare_options(fun, template, opts)
-    Kernel.apply(compiler, :__stream__, [fun, input, acc, inputs, runtime_fun, args_list, opts])
+    compiler.__stream__(fun, input, acc, inputs, runtime_fun, args_list, opts)
   end
 
   defp prepare_options(fun, template, opts) do
