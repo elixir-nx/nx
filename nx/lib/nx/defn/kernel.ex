@@ -1535,7 +1535,8 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc false
-  @deprecated "use deftransform/2 or deftransformp/2 from Nx.Defn instead"
+  # TODO: Deprecate this in Nx v0.4
+  # @deprecated "use deftransform/2 or deftransformp/2 from Nx.Defn instead"
   def transform(arg, fun) when is_function(fun, 1) do
     fun.(arg)
   end
