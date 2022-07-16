@@ -1270,6 +1270,93 @@ defmodule Nx.Shape do
   end
 
   @doc """
+  Validates the tensor, diagonal, and offset given to `Nx.put_diagonal/3`.
+
+  ## Examples
+
+    Given a 2D tensor and a 1D diagonal:
+
+      iex> Nx.Shape.put_diagonal({4, 4}, {4}, 0)
+      :ok
+
+      iex> Nx.Shape.put_diagonal({4, 3}, {3}, 0)
+      :ok
+
+    Given a 2D tensor and a 1D diagonal with a positive offset:
+
+      iex> Nx.Shape.put_diagonal({4, 4}, {3}, 1)
+      :ok
+
+      iex> Nx.Shape.put_diagonal({4, 3}, {2}, 1)
+      :ok
+
+    Given a 2D tensor and a 1D diagonal with a negative offset:
+
+      iex> Nx.Shape.put_diagonal({4, 4}, {3}, -1)
+      :ok
+
+      iex> Nx.Shape.put_diagonal({4, 3}, {3}, -1)
+      :ok
+
+  ## Error cases
+
+    Given and invalid tensor:
+
+      iex> Nx.Shape.put_diagonal({3, 3, 3}, {3}, 0)
+      ** (ArgumentError) put_diagonal/3 expects tensor of rank 2, got tensor of rank: 3
+
+    Given invalid diagonals:
+
+      iex> Nx.Shape.put_diagonal({3, 3}, {3, 3}, 0)
+      ** (ArgumentError) put_diagonal/3 expects diagonal of rank 1, got tensor of rank: 2
+
+      iex> Nx.Shape.put_diagonal({3, 3}, {2}, 0)
+      ** (ArgumentError) expected diagonal tensor of length: 3, got diagonal tensor of length: 2
+
+      iex> Nx.Shape.put_diagonal({3, 3}, {3}, 1)
+      ** (ArgumentError) expected diagonal tensor of length: 2, got diagonal tensor of length: 3
+
+   Given invalid offsets:
+
+      iex> Nx.Shape.put_diagonal({3, 3}, {3}, 4)
+      ** (ArgumentError) offset must be less than length of axis 1 when positive, got: 4
+
+      iex> Nx.Shape.put_diagonal({3, 3}, {3}, -3)
+      ** (ArgumentError) absolute value of offset must be less than length of axis 0 when negative, got: -3
+  """
+  def put_diagonal(tensor, diagonal, offset)
+
+  def put_diagonal({len, breadth} = tensor, {given_len}, offset) do
+    validate_diag_offset!(tensor, offset)
+
+    {len, breadth} =
+      if offset > 0 do
+        {len, breadth - offset}
+      else
+        {len + offset, breadth}
+      end
+
+    expected_len = min(len, breadth)
+
+    if expected_len == given_len do
+      :ok
+    else
+      raise ArgumentError,
+            "expected diagonal tensor of length: #{expected_len}, got diagonal tensor of length: #{given_len}"
+    end
+  end
+
+  def put_diagonal(tensor, {_len}, _offset) do
+    raise ArgumentError,
+          "put_diagonal/3 expects tensor of rank 2, got tensor of rank: #{tuple_size(tensor)}"
+  end
+
+  def put_diagonal({_len, _breadth}, diagonal, _offset) do
+    raise ArgumentError,
+          "put_diagonal/3 expects diagonal of rank 1, got tensor of rank: #{tuple_size(diagonal)}"
+  end
+
+  @doc """
   Validates an offset to extract or create a diagonal (tensor) for given shape
 
   ## Examples

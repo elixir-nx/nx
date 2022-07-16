@@ -1505,7 +1505,151 @@ defmodule Nx do
 
     0
     |> Nx.broadcast(diag_shape)
-    |> Nx.indexed_add(diag_indices(diag_shape, offset), tensor)
+    |> Nx.indexed_put(diag_indices(diag_shape, offset), tensor)
+  end
+
+  @doc """
+  Puts the individual values from a 1D diagonal into the diagonal indices
+  of the given 2D tensor.
+
+  See also: `take_diagonal/2`, `make_diagonal/2`.
+
+  ## Examples
+
+  Given a 2D tensor and a 1D diagonal:
+
+      iex> t = Nx.broadcast(0, {4, 4})
+      #Nx.Tensor<
+        s64[4][4]
+        [
+          [0, 0, 0, 0],
+          [0, 0, 0, 0],
+          [0, 0, 0, 0],
+          [0, 0, 0, 0]
+        ]
+      >
+      iex> Nx.put_diagonal(t, Nx.tensor([1, 2, 3, 4]))
+      #Nx.Tensor<
+        s64[4][4]
+        [
+          [1, 0, 0, 0],
+          [0, 2, 0, 0],
+          [0, 0, 3, 0],
+          [0, 0, 0, 4]
+        ]
+      >
+
+      iex> t = Nx.broadcast(0, {4, 3})
+      #Nx.Tensor<
+        s64[4][3]
+        [
+          [0, 0, 0],
+          [0, 0, 0],
+          [0, 0, 0],
+          [0, 0, 0]
+        ]
+      >
+      iex> Nx.put_diagonal(t, Nx.tensor([1, 2, 3]))
+      #Nx.Tensor<
+        s64[4][3]
+        [
+          [1, 0, 0],
+          [0, 2, 0],
+          [0, 0, 3],
+          [0, 0, 0]
+        ]
+      >
+
+  Given a 2D tensor and a 1D diagonal with a positive offset:
+
+      iex> Nx.put_diagonal(Nx.broadcast(0, {4, 4}), Nx.tensor([1, 2, 3]), offset: 1)
+      #Nx.Tensor<
+        s64[4][4]
+        [
+          [0, 1, 0, 0],
+          [0, 0, 2, 0],
+          [0, 0, 0, 3],
+          [0, 0, 0, 0]
+        ]
+      >
+
+      iex> Nx.put_diagonal(Nx.broadcast(0, {4, 3}), Nx.tensor([1, 2]), offset: 1)
+      #Nx.Tensor<
+        s64[4][3]
+        [
+          [0, 1, 0],
+          [0, 0, 2],
+          [0, 0, 0],
+          [0, 0, 0]
+        ]
+      >
+
+  Given a 2D tensor and a 1D diagonal with a negative offset:
+
+      iex> Nx.put_diagonal(Nx.broadcast(0, {4, 4}), Nx.tensor([1, 2, 3]), offset: -1)
+      #Nx.Tensor<
+        s64[4][4]
+        [
+          [0, 0, 0, 0],
+          [1, 0, 0, 0],
+          [0, 2, 0, 0],
+          [0, 0, 3, 0]
+        ]
+      >
+
+      iex> Nx.put_diagonal(Nx.broadcast(0, {4, 3}), Nx.tensor([1, 2, 3]), offset: -1)
+      #Nx.Tensor<
+        s64[4][3]
+        [
+          [0, 0, 0],
+          [1, 0, 0],
+          [0, 2, 0],
+          [0, 0, 3]
+        ]
+      >
+
+  ## Options
+
+    * `:offset` - offset used for putting the diagonal.
+      Use offset > 0 for diagonals above the main diagonal,
+      and offset < 0 for diagonals below the main diagonal.
+      Defaults to 0.
+
+
+  ## Error cases
+
+  Given an invalid tensor:
+
+      iex> Nx.put_diagonal(Nx.iota({3, 3, 3}), Nx.iota({3}))
+      ** (ArgumentError) put_diagonal/3 expects tensor of rank 2, got tensor of rank: 3
+
+  Given invalid diagonals:
+
+      iex> Nx.put_diagonal(Nx.iota({3, 3}), Nx.iota({3, 3}))
+      ** (ArgumentError) put_diagonal/3 expects diagonal of rank 1, got tensor of rank: 2
+
+      iex> Nx.put_diagonal(Nx.iota({3, 3}), Nx.iota({2}))
+      ** (ArgumentError) expected diagonal tensor of length: 3, got diagonal tensor of length: 2
+
+      iex> Nx.put_diagonal(Nx.iota({3, 3}), Nx.iota({3}), offset: 1)
+      ** (ArgumentError) expected diagonal tensor of length: 2, got diagonal tensor of length: 3
+
+  Given invalid offsets:
+
+      iex> Nx.put_diagonal(Nx.iota({3, 3}), Nx.iota({3}), offset: 4)
+      ** (ArgumentError) offset must be less than length of axis 1 when positive, got: 4
+
+      iex> Nx.put_diagonal(Nx.iota({3, 3}), Nx.iota({3}), offset: -3)
+      ** (ArgumentError) absolute value of offset must be less than length of axis 0 when negative, got: -3
+  """
+  @doc type: :creation
+  def put_diagonal(tensor, diagonal, opts \\ []) do
+    %{shape: shape} = tensor = to_tensor(tensor)
+    offset = opts |> keyword!(offset: 0) |> Keyword.fetch!(:offset)
+
+    Nx.Shape.put_diagonal(shape, diagonal.shape, offset)
+
+    Nx.indexed_put(tensor, diag_indices(shape, offset), diagonal)
   end
 
   # Returns the indices of the diagonal of a tensor of the given shape

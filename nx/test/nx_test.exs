@@ -2068,6 +2068,107 @@ defmodule NxTest do
     end
   end
 
+  describe "put_diagonal/2" do
+    test "puts valid diagonal given no offset" do
+      target = Nx.iota({3, 3})
+
+      diag =
+        [1, 2, 3]
+        |> Nx.tensor()
+        |> then(&Nx.put_diagonal(target, &1))
+
+      assert diag == Nx.tensor([[1, 1, 2], [3, 2, 5], [6, 7, 3]])
+    end
+
+    test "puts valid diagonal given positive offset" do
+      target = Nx.broadcast(0, {4, 4})
+
+      diag =
+        [1, 2, 3]
+        |> Nx.tensor()
+        |> then(&Nx.put_diagonal(target, &1, offset: 1))
+
+      assert diag == Nx.tensor([[0, 1, 0, 0], [0, 0, 2, 0], [0, 0, 0, 3], [0, 0, 0, 0]])
+    end
+
+    test "puts valid diagonal given negative offset" do
+      target = Nx.broadcast(0, {4, 4})
+
+      diag =
+        [1, 2, 3]
+        |> Nx.tensor()
+        |> then(&Nx.put_diagonal(target, &1, offset: -1))
+
+      assert diag == Nx.tensor([[0, 0, 0, 0], [1, 0, 0, 0], [0, 2, 0, 0], [0, 0, 3, 0]])
+    end
+
+    test "raises error given tensor with invalid rank" do
+      t = Nx.iota({3, 3, 3})
+      u = Nx.iota({3})
+
+      assert_raise(
+        ArgumentError,
+        "put_diagonal/3 expects tensor of rank 2, got tensor of rank: 3",
+        fn -> Nx.put_diagonal(t, u) end
+      )
+    end
+
+    test "raises error given diagonal with invalid rank" do
+      t = Nx.iota({3, 3})
+      u = Nx.iota({3, 3})
+
+      assert_raise(
+        ArgumentError,
+        "put_diagonal/3 expects diagonal of rank 1, got tensor of rank: 2",
+        fn -> Nx.put_diagonal(t, u) end
+      )
+    end
+
+    test "raises error given diagonal tensor with invalid length, given no offset" do
+      t = Nx.iota({3, 3})
+      u = Nx.iota({2})
+
+      assert_raise(
+        ArgumentError,
+        "expected diagonal tensor of length: 3, got diagonal tensor of length: 2",
+        fn -> Nx.put_diagonal(t, u) end
+      )
+    end
+
+    test "raises error given diagonal tensor with invalid length, given a valid offset" do
+      t = Nx.iota({3, 3})
+      u = Nx.iota({3})
+
+      assert_raise(
+        ArgumentError,
+        "expected diagonal tensor of length: 2, got diagonal tensor of length: 3",
+        fn -> Nx.put_diagonal(t, u, offset: 1) end
+      )
+    end
+
+    test "raises error given an invalid positive offset" do
+      t = Nx.iota({3, 3})
+      u = Nx.iota({3})
+
+      assert_raise(
+        ArgumentError,
+        "offset must be less than length of axis 1 when positive, got: 4",
+        fn -> Nx.put_diagonal(t, u, offset: 4) end
+      )
+    end
+
+    test "raises error given an invalid negative offset" do
+      t = Nx.iota({3, 3})
+      u = Nx.iota({3})
+
+      assert_raise(
+        ArgumentError,
+        "absolute value of offset must be less than length of axis 0 when negative, got: -3",
+        fn -> Nx.put_diagonal(t, u, offset: -3) end
+      )
+    end
+  end
+
   describe "indexed_add/3" do
     test "can emulate take_along_axis" do
       # One can also convert the indices produced by argsort into suitable
