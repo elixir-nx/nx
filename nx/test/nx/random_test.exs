@@ -1,21 +1,21 @@
 defmodule Nx.RandomTest do
   use ExUnit.Case, async: true
 
-  describe "threefry_seed/1" do
+  describe "seed/1" do
     test "transforms given integer into PRNG key" do
-      key = Nx.Random.threefry_seed(44)
+      key = Nx.Random.seed(44)
 
       assert key |> Nx.type() |> Nx.Type.integer?()
       assert Nx.shape(key) == {2}
     end
   end
 
-  describe "threefry_split/2" do
+  describe "split/2" do
     test "splits key into multiple keys" do
-      key = Nx.Random.threefry_seed(33)
+      key = Nx.Random.seed(33)
 
-      two_keys = Nx.Random.threefry_split(key)
-      multiple_keys = Nx.Random.threefry_split(key, 12)
+      two_keys = Nx.Random.split(key)
+      multiple_keys = Nx.Random.split(key, 12)
 
       assert Nx.shape(two_keys) == {2, 2}
       assert Nx.shape(multiple_keys) == {12, 2}
@@ -24,14 +24,14 @@ defmodule Nx.RandomTest do
 
   describe "fold_in/2" do
     test "incorporates integer data into PRNG key" do
-      key = Nx.Random.threefry_seed(22)
+      key = Nx.Random.seed(22)
 
       keys = Enum.map(1..10, &Nx.Random.fold_in(key, &1))
       assert keys |> Enum.uniq() |> length() == 10
     end
 
     test "bigger data" do
-      key = Nx.Random.threefry_seed(23)
+      key = Nx.Random.seed(23)
 
       data = [2 ** 32 - 2, 2 ** 32 - 1]
       keys = Enum.map(data, &Nx.Random.fold_in(key, &1))
@@ -41,7 +41,7 @@ defmodule Nx.RandomTest do
 
   describe "random_bits/2" do
     test "generates random 32 bit numbers from a key" do
-      key = Nx.Random.threefry_seed(1701)
+      key = Nx.Random.seed(1701)
 
       bits = Nx.Random.random_bits(key)
       expected = Nx.tensor([741_045_208], type: :u32)
@@ -49,7 +49,7 @@ defmodule Nx.RandomTest do
     end
 
     test "accepts custom shape" do
-      key = Nx.Random.threefry_seed(1701)
+      key = Nx.Random.seed(1701)
 
       bits = Nx.Random.random_bits(key, {3})
       expected = Nx.tensor([56_197_195, 4_200_222_568, 961_309_823], type: :u32)

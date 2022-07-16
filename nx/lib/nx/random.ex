@@ -3,13 +3,13 @@ defmodule Nx.Random do
   Nx conveniences for random number generator.
   """
 
-  import Nx.Defn, only: [defnp: 2]
+  import Nx.Defn, only: [defn: 2, defnp: 2]
   import Nx.Defn.Kernel, only: [assert_shape: 2]
 
   alias Nx.Tensor, as: T
 
   defp assert_key(tensor) do
-    assert_shape(tensor, {1, 2})
+    assert_shape(tensor, {2})
     type = Nx.type(tensor)
 
     if not Nx.Type.integer?(type) do
@@ -18,47 +18,53 @@ defmodule Nx.Random do
     end
   end
 
-  @spec threefry_seed(integer()) :: T
-  def threefry_seed(seed) when is_integer(seed) do
+  def seed!(seed) when is_integer(seed) do
+
+  end
+
+  def seed(seed) do
     k1 = Nx.right_shift(seed, 32) |> Nx.reshape({1})
     k2 = Nx.bitwise_and(seed, 0xFFFFFFFF) |> Nx.reshape({1})
 
     Nx.concatenate([k1, k2])
-    |> Nx.reshape({1, 2})
+    |> Nx.reshape({2})
     |> Nx.as_type({:u, 32})
   end
 
-  @spec threefry_split(T, pos_integer()) :: T
-  def threefry_split(key, num \\ 2) when num > 1 do
+  def split!(key, num \\ 2) when num > 1 do
     assert_key(key)
 
+    split(key, num)
+  end
+
+  def split(key, num \\ 2) do
     impl(key, Nx.iota({num, 2}))
   end
 
-  # Check data requirements
-  @spec fold_in(T, integer()) :: T
-  def fold_in(key, data) when is_integer(data) do
+  def fold_in!(key, data) when is_integer(data) do
     assert_key(key)
 
-    impl(key, threefry_seed(data))
+    fold_in(key, data)
   end
 
-  @spec random_bits(T, T) :: T
-  def random_bits(key, shape \\ {1}) do
+  def fold_in(key, data) do
+    impl(key, seed(data))
+  end
+
+  def random_bits!(key, shape \\ {1}) do
     assert_key(key)
 
+    random_bits(key, shape)
+  end
+
+  def random_bits(key, shape \\ {1}) do
+    #opts = Nx.keyword!(opts, shape: {1})
     impl(key, Nx.iota(shape))
   end
 
-  defp impl(key, count, shape \\ {}) do
-    assert_key(key)
+  def impl(key, count) do
 
-    shape =
-      if shape == {} do
-        Nx.shape(count)
-      else
-        shape
-      end
+    shape = Nx.shape(count)
 
     reshaped_key = Nx.reshape(key, {2, 1})
 
@@ -68,32 +74,41 @@ defmodule Nx.Random do
 
     threefry2x32(reshaped_key, reshaped_count)
     |> Nx.reshape(shape)
+    |> Nx.as_type({:u, 32})
+  end
+
+  defn divides_by_2?(a) do
+    rem(a, 2)
+    |> Nx.any()
+    |> Nx.equal(Nx.tensor(1))
   end
 
   # Check count
   def threefry2x32(key, count) do
-    even? = rem(Nx.axis_size(count, 0), 2) == 0
+    count_size = Nx.axis_size(count, 0)
+    even? = rem(count_size, 2) == 0
 
     if even? do
       count
     else
-      Nx.concatenate([Nx.tensor([0]), Nx.flatten(count)])
+      Nx.concatenate([count, Nx.tensor([0])])
     end
     |> Nx.reshape({2, :auto})
     |> Nx.as_type({:u, 32})
     |> threefry2x32_20(key)
     |> then(fn output ->
+
+      #transform(output, &IO.inspect/1)
       if even?,
         do: output,
         else:
           output
-          |> Nx.to_flat_list()
-          |> tl()
-          |> Nx.tensor()
+          |> Nx.flatten()
+          |> Nx.slice_along_axis(0, count_size, axis: 0)
     end)
   end
 
-  defnp threefry2x32_20(xs, ks) do
+  defn threefry2x32_20(xs, ks) do
     rotations = Nx.tensor([[13, 15, 26, 6], [17, 29, 16, 24]], type: {:u, 8})
     key1 = ks[0]
     key2 = ks[1]
@@ -147,18 +162,55 @@ defmodule Nx.Random do
       Nx.broadcast(k2 + i + 1, xs[1])
       |> Nx.add(xs[1])
 
-    new_x =
+    new_xs =
       Nx.stack([xs1, xs2])
       |> Nx.as_type({:u, 32})
 
-    new_k = Nx.stack([k2, k3, k1])
-    new_r = Nx.stack([r2, r1])
+    new_ks = Nx.stack([k2, k3, k1])
+    new_rs = Nx.stack([r2, r1])
 
-    {new_x, new_k, new_r}
+    {new_xs, new_ks, new_rs}
   end
 
   defnp rotate_left(x, rot) do
     nbits = 32
     x <<< rot ||| x >>> (nbits - rot)
+  end
+
+  defp finfo(type) do
+    case type do
+      {:bf, 16} -> [exp: 8, mant: 7]
+      {:f, 16} -> [exp: 5, mant: 11]
+      {:f, 32} -> [exp: 8, mant: 23]
+      {:f, 64} -> [exp: 11, mant: 52]
+    end
+  end
+
+  def uniform(key, shape \\ {1}, type \\ {:f, 32}, minval \\ 0.0, maxval \\ 1.0) do
+
+    bits = random_bits(key, shape)
+
+    if not Nx.Type.float?(type) do
+      raise ArgumentError,
+            "expected float type, got type #{inspect(type)}"
+    end
+
+    info = finfo(type)
+
+    _uniform(key, shape, type, minval, maxval, bits, info)
+  end
+
+  defp _uniform(_key, shape, type = {_dtype, nbits}, minval, maxval, bits, info) do
+    u_one = Nx.tensor(1.0, type: type) |> Nx.bitcast({:u, nbits})
+
+    bits
+    |> Nx.right_shift(Nx.tensor(nbits - info[:mant], type: {:u, nbits}))
+    |> Nx.bitwise_or(u_one)
+    |> Nx.bitcast(type)
+    |> Nx.subtract(Nx.tensor(1.0, type: type))
+    |> Nx.multiply(maxval-minval)
+    |> Nx.add(minval)
+    |> Nx.reshape(shape)
+    |> Nx.max(minval)
   end
 end
