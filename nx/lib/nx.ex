@@ -1505,7 +1505,7 @@ defmodule Nx do
 
     0
     |> Nx.broadcast(diag_shape)
-    |> Nx.indexed_add(diag_indices(diag_shape, offset), tensor)
+    |> Nx.indexed_put(diag_indices(diag_shape, offset), tensor)
   end
 
   @doc """
