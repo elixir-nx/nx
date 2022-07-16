@@ -1644,15 +1644,13 @@ defmodule Nx do
       ** (ArgumentError) absolute value of offset must be less than length of axis 0 when negative, got: -3
   """
   @doc type: :creation
-  def put_diagonal(tensor, diagonal, opts \\ [offset: 0]) do
-    shape = tensor |> to_tensor |> Map.get(:shape)
-    offset = opts[:offset]
+  def put_diagonal(tensor, diagonal, opts \\ []) do
+    %{shape: shape} = tensor = to_tensor(tensor)
+    offset = opts[:offset] || 0
 
     Nx.Shape.put_diagonal(shape, diagonal.shape, offset)
 
-    indices = diag_indices(shape, offset)
-
-    Nx.indexed_put(tensor, indices, diagonal)
+    Nx.indexed_put(tensor, diag_indices(shape, offset), diagonal)
   end
 
   # Returns the indices of the diagonal of a tensor of the given shape
