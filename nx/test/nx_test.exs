@@ -2092,7 +2092,7 @@ defmodule NxTest do
     end
 
     test "puts valid diagonal given negative offset" do
-      target = Nx.iota({4, 4})
+      target = Nx.broadcast(0, {4, 4})
 
       diag =
         [1, 2, 3]

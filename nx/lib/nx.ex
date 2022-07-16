@@ -1551,7 +1551,7 @@ defmodule Nx do
       >
       iex> Nx.put_diagonal(t, Nx.tensor([1, 2, 3]))
       #Nx.Tensor<
-        s64[4][4]
+        s64[4][3]
         [
           [1, 0, 0],
           [0, 2, 0],
@@ -1595,7 +1595,7 @@ defmodule Nx do
       >
       iex> Nx.put_diagonal(t, Nx.tensor([1, 2]), offset: 1)
       #Nx.Tensor<
-        s64[4][4]
+        s64[4][3]
         [
           [0, 1, 0],
           [0, 0, 2],
@@ -1639,7 +1639,7 @@ defmodule Nx do
       >
       iex> Nx.put_diagonal(t, Nx.tensor([1, 2, 3]), offset: -1)
       #Nx.Tensor<
-        s64[4][4]
+        s64[4][3]
         [
           [0, 0, 0],
           [1, 0, 0],
@@ -1670,7 +1670,7 @@ defmodule Nx do
       ** (ArgumentError) put_diagonal/3 expects diagonal of rank 1, got tensor of rank: 2
 
       iex> Nx.put_diagonal(Nx.iota({3, 3}), Nx.iota({2}))
-      ** (ArgumentError) expected diagonal tensor of length: 2, got diagonal tensor of length: 3
+      ** (ArgumentError) expected diagonal tensor of length: 3, got diagonal tensor of length: 2
 
       iex> Nx.put_diagonal(Nx.iota({3, 3}), Nx.iota({3}), offset: 1)
       ** (ArgumentError) expected diagonal tensor of length: 2, got diagonal tensor of length: 3
@@ -1684,7 +1684,16 @@ defmodule Nx do
       ** (ArgumentError) absolute value of offset must be less than length of axis 0 when negative, got: -3
   """
   @doc type: :creation
-  def put_diagonal(tensor, _diagonal, opts \\ []), do: make_diagonal(tensor, opts)
+  def put_diagonal(tensor, diagonal, opts \\ [offset: 0]) do
+    shape = tensor |> to_tensor |> Map.get(:shape)
+    offset = opts[:offset]
+
+    Nx.Shape.put_diagonal(shape, diagonal.shape, offset)
+
+    indices = diag_indices(shape, offset)
+
+    Nx.indexed_put(tensor, indices, diagonal)
+  end
 
   # Returns the indices of the diagonal of a tensor of the given shape
   defp diag_indices(shape, offset) do
