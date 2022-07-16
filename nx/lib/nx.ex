@@ -1645,7 +1645,7 @@ defmodule Nx do
   @doc type: :creation
   def put_diagonal(tensor, diagonal, opts \\ []) do
     %{shape: shape} = tensor = to_tensor(tensor)
-    offset = opts |> keyword!(offset: 0) |> Keyword.get(:offset)
+    offset = opts |> keyword!(offset: 0) |> Keyword.fetch!(:offset)
 
     Nx.Shape.put_diagonal(shape, diagonal.shape, offset)
 
