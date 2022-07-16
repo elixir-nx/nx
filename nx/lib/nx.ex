@@ -1516,7 +1516,7 @@ defmodule Nx do
 
   ## Examples
 
-     Given a 2D tensor and a 1D diagonal:
+  Given a 2D tensor and a 1D diagonal:
 
       iex> t = Nx.broadcast(0, {4, 4})
       #Nx.Tensor<
@@ -1560,7 +1560,7 @@ defmodule Nx do
         ]
       >
 
-    Given a 2D tensor and a 1D diagonal with a positive offset:
+  Given a 2D tensor and a 1D diagonal with a positive offset:
 
       iex> Nx.put_diagonal(Nx.broadcast(0, {4, 4}), Nx.tensor([1, 2, 3]), offset: 1)
       #Nx.Tensor<
@@ -1584,7 +1584,7 @@ defmodule Nx do
         ]
       >
 
-    Given a 2D tensor and a 1D diagonal with a negative offset:
+  Given a 2D tensor and a 1D diagonal with a negative offset:
 
       iex> Nx.put_diagonal(Nx.broadcast(0, {4, 4}), Nx.tensor([1, 2, 3]), offset: -1)
       #Nx.Tensor<
@@ -1608,7 +1608,6 @@ defmodule Nx do
         ]
       >
 
-
   ## Options
 
     * `:offset` - offset used for putting the diagonal.
@@ -1619,12 +1618,12 @@ defmodule Nx do
 
   ## Error cases
 
-    Given an invalid tensor:
+  Given an invalid tensor:
 
       iex> Nx.put_diagonal(Nx.iota({3, 3, 3}), Nx.iota({3}))
       ** (ArgumentError) put_diagonal/3 expects tensor of rank 2, got tensor of rank: 3
 
-    Given invalid diagonals:
+  Given invalid diagonals:
 
       iex> Nx.put_diagonal(Nx.iota({3, 3}), Nx.iota({3, 3}))
       ** (ArgumentError) put_diagonal/3 expects diagonal of rank 1, got tensor of rank: 2
@@ -1635,7 +1634,7 @@ defmodule Nx do
       iex> Nx.put_diagonal(Nx.iota({3, 3}), Nx.iota({3}), offset: 1)
       ** (ArgumentError) expected diagonal tensor of length: 2, got diagonal tensor of length: 3
 
-   Given invalid offsets:
+  Given invalid offsets:
 
       iex> Nx.put_diagonal(Nx.iota({3, 3}), Nx.iota({3}), offset: 4)
       ** (ArgumentError) offset must be less than length of axis 1 when positive, got: 4
