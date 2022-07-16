@@ -1270,7 +1270,7 @@ defmodule Nx.Shape do
   end
 
   @doc """
-  Validates the tensor, diagonal and offset given to Nx.put_diagonal/3.
+  Validates the tensor, diagonal, and offset given to `Nx.put_diagonal/3`.
 
   ## Examples
 
