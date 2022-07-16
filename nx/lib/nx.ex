@@ -1562,17 +1562,7 @@ defmodule Nx do
 
     Given a 2D tensor and a 1D diagonal with a positive offset:
 
-      iex> t = Nx.broadcast(0, {4, 4})
-      #Nx.Tensor<
-        s64[4][4]
-        [
-          [0, 0, 0, 0],
-          [0, 0, 0, 0],
-          [0, 0, 0, 0],
-          [0, 0, 0, 0]
-        ]
-      >
-      iex> Nx.put_diagonal(t, Nx.tensor([1, 2, 3]), offset: 1)
+      iex> Nx.put_diagonal(Nx.broadcast(0, {4, 4}), Nx.tensor([1, 2, 3]), offset: 1)
       #Nx.Tensor<
         s64[4][4]
         [
@@ -1583,17 +1573,7 @@ defmodule Nx do
         ]
       >
 
-      iex> t = Nx.broadcast(0, {4, 3})
-      #Nx.Tensor<
-        s64[4][3]
-        [
-          [0, 0, 0],
-          [0, 0, 0],
-          [0, 0, 0],
-          [0, 0, 0]
-        ]
-      >
-      iex> Nx.put_diagonal(t, Nx.tensor([1, 2]), offset: 1)
+      iex> Nx.put_diagonal(Nx.broadcast(0, {4, 3}), Nx.tensor([1, 2]), offset: 1)
       #Nx.Tensor<
         s64[4][3]
         [
@@ -1606,17 +1586,7 @@ defmodule Nx do
 
     Given a 2D tensor and a 1D diagonal with a negative offset:
 
-      iex> t = Nx.broadcast(0, {4, 4})
-      #Nx.Tensor<
-        s64[4][4]
-        [
-          [0, 0, 0, 0],
-          [0, 0, 0, 0],
-          [0, 0, 0, 0],
-          [0, 0, 0, 0]
-        ]
-      >
-      iex> Nx.put_diagonal(t, Nx.tensor([1, 2, 3]), offset: -1)
+      iex> Nx.put_diagonal(Nx.broadcast(0, {4, 4}), Nx.tensor([1, 2, 3]), offset: -1)
       #Nx.Tensor<
         s64[4][4]
         [
@@ -1627,17 +1597,7 @@ defmodule Nx do
         ]
       >
 
-      iex> t = Nx.broadcast(0, {4, 3})
-      #Nx.Tensor<
-        s64[4][3]
-        [
-          [0, 0, 0],
-          [0, 0, 0],
-          [0, 0, 0],
-          [0, 0, 0]
-        ]
-      >
-      iex> Nx.put_diagonal(t, Nx.tensor([1, 2, 3]), offset: -1)
+      iex> Nx.put_diagonal(Nx.broadcast(0, {4, 3}), Nx.tensor([1, 2, 3]), offset: -1)
       #Nx.Tensor<
         s64[4][3]
         [
