@@ -6,8 +6,6 @@ defmodule Nx.Random do
   import Nx.Defn, only: [defn: 2, defnp: 2]
   import Nx.Defn.Kernel, only: [assert_shape: 2]
 
-  alias Nx.Tensor, as: T
-
   defp assert_key(tensor) do
     assert_shape(tensor, {2})
     type = Nx.type(tensor)
@@ -18,11 +16,7 @@ defmodule Nx.Random do
     end
   end
 
-  def seed!(seed) when is_integer(seed) do
-
-  end
-
-  def seed(seed) do
+  def key(seed) do
     k1 = Nx.right_shift(seed, 32) |> Nx.reshape({1})
     k2 = Nx.bitwise_and(seed, 0xFFFFFFFF) |> Nx.reshape({1})
 
@@ -48,7 +42,7 @@ defmodule Nx.Random do
   end
 
   def fold_in(key, data) do
-    impl(key, seed(data))
+    impl(key, key(data))
   end
 
   def random_bits!(key, shape \\ {1}) do
@@ -58,12 +52,10 @@ defmodule Nx.Random do
   end
 
   def random_bits(key, shape \\ {1}) do
-    #opts = Nx.keyword!(opts, shape: {1})
     impl(key, Nx.iota(shape))
   end
 
   def impl(key, count) do
-
     shape = Nx.shape(count)
 
     reshaped_key = Nx.reshape(key, {2, 1})
@@ -77,13 +69,6 @@ defmodule Nx.Random do
     |> Nx.as_type({:u, 32})
   end
 
-  defn divides_by_2?(a) do
-    rem(a, 2)
-    |> Nx.any()
-    |> Nx.equal(Nx.tensor(1))
-  end
-
-  # Check count
   def threefry2x32(key, count) do
     count_size = Nx.axis_size(count, 0)
     even? = rem(count_size, 2) == 0
@@ -97,14 +82,13 @@ defmodule Nx.Random do
     |> Nx.as_type({:u, 32})
     |> threefry2x32_20(key)
     |> then(fn output ->
-
-      #transform(output, &IO.inspect/1)
-      if even?,
-        do: output,
-        else:
-          output
-          |> Nx.flatten()
-          |> Nx.slice_along_axis(0, count_size, axis: 0)
+      if even? do
+        output
+      else
+        output
+        |> Nx.flatten()
+        |> Nx.slice_along_axis(0, count_size, axis: 0)
+      end
     end)
   end
 
@@ -187,7 +171,6 @@ defmodule Nx.Random do
   end
 
   def uniform(key, shape \\ {1}, type \\ {:f, 32}, minval \\ 0.0, maxval \\ 1.0) do
-
     bits = random_bits(key, shape)
 
     if not Nx.Type.float?(type) do
@@ -208,7 +191,7 @@ defmodule Nx.Random do
     |> Nx.bitwise_or(u_one)
     |> Nx.bitcast(type)
     |> Nx.subtract(Nx.tensor(1.0, type: type))
-    |> Nx.multiply(maxval-minval)
+    |> Nx.multiply(maxval - minval)
     |> Nx.add(minval)
     |> Nx.reshape(shape)
     |> Nx.max(minval)
