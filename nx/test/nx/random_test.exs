@@ -113,14 +113,26 @@ defmodule Nx.RandomTest do
   end
 
   describe "distributions" do
-    test "uniform" do
-      key = Nx.Random.key(1_338_574_713)
-
-      actual = Nx.Random.uniform(key, shape: {5})
-
-      expected = Nx.tensor([0.298671, 0.073213, 0.873356, 0.260549, 0.412797], type: :f32)
+    defp distribution_case(name, args: args, expected: expected) do
+      seed = :erlang.adler32("#{name}threefry2x32")
+      key = Nx.Random.key(seed)
+      actual = apply(Nx.Random, name, [key | args])
 
       assert_all_close(actual, expected)
+    end
+
+    test "randint" do
+      distribution_case(:randint,
+        args: [0, 10, [shape: {5}]],
+        expected: Nx.tensor([0, 5, 7, 7, 5], type: :s32)
+      )
+    end
+
+    test "uniform" do
+      distribution_case(:uniform,
+        args: [[shape: {5}]],
+        expected: Nx.tensor([0.298671, 0.073213, 0.873356, 0.260549, 0.412797], type: :f32)
+      )
     end
   end
 end

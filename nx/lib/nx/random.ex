@@ -114,7 +114,7 @@ defmodule Nx.Random do
 
   # Check count
   defn threefry2x32(key, count) do
-    transform(count, &threefry2x32_in_transform(&1))
+    transform(count, &threefry2x32_in_transform/1)
     |> Nx.reshape({2, :auto})
     |> Nx.as_type({:u, 32})
     |> threefry2x32_20(key)
@@ -223,6 +223,47 @@ defmodule Nx.Random do
     end
   end
 
+  defn randint(key, minval, maxval, opts \\ []) do
+    opts = keyword!(opts, shape: {1}, type: {:s, 32})
+    shape = opts[:shape]
+    type = {_, nbits} = opts[:type]
+
+    transform(key, &randint_transform(&1, type))
+
+    keys = transform(key, &split/1)
+
+    minval = Nx.broadcast(minval, shape)
+    maxval = Nx.broadcast(maxval, shape)
+
+    higher_bits = transform(keys[0], &random_bits(&1, shape))
+    lower_bits = transform(keys[1], &random_bits(&1, shape))
+    span = maxval - minval
+
+    multiplier =
+      Nx.power(2, Nx.quotient(nbits, 2))
+      |> Nx.remainder(span)
+      |> Nx.power(2)
+      |> Nx.remainder(span)
+
+    offset =
+      higher_bits
+      |> Nx.remainder(span)
+      |> Nx.multiply(multiplier)
+      |> Nx.add(Nx.remainder(lower_bits, span))
+      |> Nx.remainder(span)
+
+    Nx.as_type(minval + offset, type)
+  end
+
+  defp randint_transform(key, type) do
+    assert_key(key)
+
+    if not Nx.Type.integer?(type) do
+      raise ArgumentError,
+            "expected integer type, got type #{inspect(type)}"
+    end
+  end
+
   defn uniform(key, opts \\ []) do
     opts = keyword!(opts, shape: {1}, type: {:f, 32}, minval: 0.0, maxval: 1.0)
 
@@ -237,7 +278,7 @@ defmodule Nx.Random do
 
     u_one = Nx.tensor(1.0, type: type) |> Nx.bitcast({:u, nbits})
 
-    transform(key, &random_bits(&1, opts[:shape]))
+    transform(key, &random_bits(&1, shape))
     |> Nx.as_type({:u, nbits})
     |> Nx.right_shift(Nx.tensor(nbits - info[:mant], type: {:u, nbits}))
     |> Nx.bitwise_or(u_one)
