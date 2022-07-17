@@ -116,7 +116,7 @@ defmodule Nx.RandomTest do
     test "uniform" do
       key = Nx.Random.key(1_338_574_713)
 
-      actual = Nx.Random.uniform(key, {5})
+      actual = Nx.Random.uniform(key, shape: {5})
 
       expected = Nx.tensor([0.298671, 0.073213, 0.873356, 0.260549, 0.412797], type: :f32)
 
