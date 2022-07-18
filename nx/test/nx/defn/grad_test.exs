@@ -3491,7 +3491,7 @@ defmodule Nx.Defn.GradTest do
     end
 
     test "grad wrt to indices" do
-       t = Nx.iota({3, 4})
+      t = Nx.iota({3, 4})
       i = Nx.tensor([[0, 0], [2, 2], [1, 0], [0, 1], [2, 3]])
       u = Nx.tensor([1, -1, 2, -2, 3])
 
@@ -3509,7 +3509,7 @@ defmodule Nx.Defn.GradTest do
 
       expected = t |> Nx.cos() |> Nx.cos() |> Nx.multiply(Nx.sin(t)) |> Nx.negate()
 
-      assert_all_close expected, grad_indexed_put_simultaneous_composite(t, i)
+      assert_all_close(expected, grad_indexed_put_simultaneous_composite(t, i))
     end
   end
 
@@ -3590,7 +3590,7 @@ defmodule Nx.Defn.GradTest do
 
       assert_all_close(
         Nx.tensor([
-          [0,  -0.0932, -0.8316, -0.0774],
+          [0, -0.0932, -0.8316, -0.0774],
           [0.1684, 0.9206, 0.1602, -0.4789],
           [-0.9789, -0.2525, -0.1442, -0.9905]
         ]),
@@ -3616,7 +3616,7 @@ defmodule Nx.Defn.GradTest do
     end
 
     test "grad wrt to indices" do
-       t = Nx.iota({3, 4})
+      t = Nx.iota({3, 4})
       i = Nx.tensor([[0, 0], [2, 2], [1, 0], [0, 1], [2, 3]])
       u = Nx.tensor([1, -1, 2, -2, 3])
 
@@ -3635,7 +3635,7 @@ defmodule Nx.Defn.GradTest do
       cosx_tn = t |> Nx.cos() |> Nx.add(t)
       expected = cosx_tn |> Nx.cos() |> Nx.multiply(Nx.subtract(1, Nx.sin(t)))
 
-      assert_all_close expected, grad_indexed_add_simultaneous_composite(t, i)
+      assert_all_close(expected, grad_indexed_add_simultaneous_composite(t, i))
     end
   end
 
