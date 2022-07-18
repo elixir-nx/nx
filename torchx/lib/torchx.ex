@@ -310,6 +310,7 @@ defmodule Torchx do
   deftensor negate(tensor)
   deftensor round(tensor)
   deftensor sign(tensor)
+  deftensor is_nan(tensor)
 
   deftensor pad(tensor, config, constant)
 
