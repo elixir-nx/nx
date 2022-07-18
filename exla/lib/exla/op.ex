@@ -198,7 +198,7 @@ defmodule EXLA.Op do
     %{op | ref: result_ref}
   end
 
-  def is_nan(%{ref: ref} = op, type) do
+  def is_nan(op, type) do
     %{ref: ref} =
       case type do
         {t, _} when t in [:f, :bf] ->
