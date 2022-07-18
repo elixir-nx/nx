@@ -418,6 +418,26 @@ defmodule Nx.Defn.Grad do
     [{x, operand_t}, {update, update_t}]
   end
 
+  defp grad(:indexed_put, [target, indices, updates], _ans, g) do
+    zeros = Nx.broadcast(Expr.tensor(0.0), updates)
+
+    target_g = Nx.indexed_put(g, indices, zeros)
+    updates_g = g |> Nx.gather(indices) |> Nx.reshape(updates.shape)
+    indices_g = Nx.broadcast(Expr.tensor(0.0), indices)
+
+    [{target, target_g}, {indices, indices_g}, {updates, updates_g}]
+  end
+
+  defp grad(:indexed_add, [target, indices, updates], _ans, g) do
+    zeros = Nx.broadcast(Expr.tensor(0.0), updates)
+
+    target_g = Nx.indexed_add(g, indices, zeros)
+    updates_g = g |> Nx.gather(indices) |> Nx.reshape(updates.shape)
+    indices_g = Nx.broadcast(Expr.tensor(0.0), indices)
+
+    [{target, target_g}, {indices, indices_g}, {updates, updates_g}]
+  end
+
   defp grad(:reverse, [x, axes], _ans, g) do
     [{x, Nx.reverse(g, axes: axes)}]
   end

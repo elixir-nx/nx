@@ -3409,6 +3409,236 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "indexed_put" do
+    defn grad_indexed_put_target(t, i, u), do: grad(t, &Nx.sum(Nx.indexed_put(&1, i, u)))
+
+    defn grad_indexed_put_target_composite(t, i, u) do
+      grad(t, fn t ->
+        t
+        |> Nx.cos()
+        |> Nx.indexed_put(i, u)
+        |> Nx.sin()
+        |> Nx.sum()
+      end)
+    end
+
+    defn grad_indexed_put_updates(t, i, u), do: grad(u, &Nx.sum(Nx.indexed_put(t, i, &1)))
+
+    defn grad_indexed_put_updates_composite(t, i, u) do
+      grad(u, fn u ->
+        t
+        |> Nx.indexed_put(i, Nx.cos(u))
+        |> Nx.sin()
+        |> Nx.sum()
+      end)
+    end
+
+    defn grad_indexed_put_indices(t, i, u), do: grad(i, &Nx.sum(Nx.indexed_put(t, &1, u)))
+
+    defn grad_indexed_put_indices_composite(t, i, u) do
+      grad(i, fn i ->
+        t
+        |> Nx.indexed_put(Nx.multiply(i, 2), u)
+        |> Nx.sin()
+        |> Nx.sum()
+      end)
+    end
+
+    defn grad_indexed_put_simultaneous_composite(t, i) do
+      grad(t, fn t ->
+        t
+        |> Nx.indexed_put(i, Nx.cos(t))
+        |> Nx.sin()
+        |> Nx.sum()
+      end)
+    end
+
+    test "grad wrt to target" do
+      t = Nx.iota({3, 4})
+      i = Nx.tensor([[0, 0], [2, 2], [1, 0], [0, 1], [2, 3]])
+      u = Nx.tensor([1, -1, 2, -2, 3])
+
+      assert_all_close(
+        Nx.tensor([
+          [0, 0, 1, 1],
+          [0, 1, 1, 1],
+          [1, 1, 0, 0]
+        ]),
+        grad_indexed_put_target(t, i, u)
+      )
+
+      assert_all_close(
+        Nx.tensor([
+          [0, 0, -0.8316, -0.0774],
+          [0, 0.9206, 0.1602, -0.4789],
+          [-0.9789, -0.2525, 0, 0]
+        ]),
+        grad_indexed_put_target_composite(t, i, u)
+      )
+    end
+
+    test "grad wrt to source" do
+      t = Nx.iota({3, 4})
+      i = Nx.tensor([[0, 0], [2, 2], [1, 0], [0, 1], [2, 3]])
+      u = Nx.tensor([1, -1, 2, -2, 3])
+
+      assert_all_close(Nx.broadcast(1, u), grad_indexed_put_updates(t, i, u))
+
+      # u entries pass through the composite function f(x) = sin(cos(x));
+      # f'(x) = cos(cos(x)) * (-sin(x))
+      expected = u |> Nx.cos() |> Nx.cos() |> Nx.multiply(Nx.sin(u)) |> Nx.negate()
+      assert_all_close(expected, grad_indexed_put_updates_composite(t, i, u))
+    end
+
+    test "grad wrt to indices" do
+      t = Nx.iota({3, 4})
+      i = Nx.tensor([[0, 0], [2, 2], [1, 0], [0, 1], [2, 3]])
+      u = Nx.tensor([1, -1, 2, -2, 3])
+
+      assert_all_close(Nx.broadcast(0, i), grad_indexed_put_indices(t, i, u))
+      assert_all_close(Nx.broadcast(0, i), grad_indexed_put_indices_composite(t, i, u))
+    end
+
+    test "grad wrt to both source and target simultaneously" do
+      # This isn't really a practical case, but we need to ensure it works
+      t = Nx.iota({2})
+      i = Nx.tensor([[0], [1]])
+
+      # u entries pass through the composite function f(x) = sin(cos(x))
+      # therefore: f'(x) = cos(cos(x)) * (-sin(x))
+
+      expected = t |> Nx.cos() |> Nx.cos() |> Nx.multiply(Nx.sin(t)) |> Nx.negate()
+
+      assert_all_close(expected, grad_indexed_put_simultaneous_composite(t, i))
+    end
+  end
+
+  describe "indexed_add" do
+    defn grad_indexed_add_target(t, i, u) do
+      grad(t, fn t ->
+        t
+        |> Nx.indexed_add(i, u)
+        |> Nx.indexed_add(i, u)
+        |> Nx.sum()
+      end)
+    end
+
+    defn grad_indexed_add_target_composite(t, i, u) do
+      grad(t, fn t ->
+        t
+        |> Nx.cos()
+        |> Nx.indexed_add(i, u)
+        |> Nx.sin()
+        |> Nx.sum()
+      end)
+    end
+
+    defn grad_indexed_add_updates(t, i, u) do
+      grad(u, fn u ->
+        t
+        |> Nx.indexed_add(i, u)
+        |> Nx.indexed_add(i, u)
+        |> Nx.sum()
+      end)
+    end
+
+    defn grad_indexed_add_updates_composite(t, i, u) do
+      grad(u, fn u ->
+        t
+        |> Nx.indexed_add(i, Nx.cos(u))
+        |> Nx.sin()
+        |> Nx.sum()
+      end)
+    end
+
+    defn grad_indexed_add_indices(t, i, u), do: grad(i, &Nx.sum(Nx.indexed_add(t, &1, u)))
+
+    defn grad_indexed_add_indices_composite(t, i, u) do
+      grad(i, fn i ->
+        t
+        |> Nx.indexed_add(Nx.multiply(i, 2), u)
+        |> Nx.sin()
+        |> Nx.sum()
+      end)
+    end
+
+    defn grad_indexed_add_simultaneous_composite(t, i) do
+      grad(t, fn t ->
+        t
+        |> Nx.indexed_add(i, Nx.cos(t))
+        |> Nx.sin()
+        |> Nx.sum()
+      end)
+    end
+
+    test "grad wrt to target" do
+      t = Nx.iota({3, 4})
+      i = Nx.tensor([[0, 0], [2, 2], [1, 0], [0, 1], [2, 3]])
+      u = Nx.tensor([1, -1, 2, -2, 3])
+
+      # The entries aren't overwritten, so the grad isn't killed on update
+      # and f(x, y) = x + y implies f'(x, y) = f'(x) + f'(y)
+
+      assert_all_close(
+        Nx.tensor([
+          [1, 1, 1, 1],
+          [1, 1, 1, 1],
+          [1, 1, 1, 1]
+        ]),
+        grad_indexed_add_target(t, i, u)
+      )
+
+      assert_all_close(
+        Nx.tensor([
+          [0, -0.0932, -0.8316, -0.0774],
+          [0.1684, 0.9206, 0.1602, -0.4789],
+          [-0.9789, -0.2525, -0.1442, -0.9905]
+        ]),
+        grad_indexed_add_target_composite(t, i, u)
+      )
+    end
+
+    test "grad wrt to source" do
+      t = Nx.iota({3, 4})
+      i = Nx.tensor([[0, 0], [2, 2], [1, 0], [0, 1], [2, 3]])
+      u = Nx.tensor([1, -1, 2, -2, 3])
+
+      assert_all_close(Nx.broadcast(2, u), grad_indexed_add_updates(t, i, u))
+
+      # u entries pass through the composite function f(x) = sin(cos(x) + tn)
+      # where tn is the entry in `t` corresponding to `x`; tn is constant w.r.t to x
+      # therefore: f'(x) = cos(cos(x) + tn) * (-sin(x) + 0)
+
+      cosx_tn = u |> Nx.cos() |> Nx.add(Nx.gather(t, i))
+      expected = cosx_tn |> Nx.cos() |> Nx.multiply(Nx.sin(u)) |> Nx.negate()
+
+      assert_all_close(expected, grad_indexed_add_updates_composite(t, i, u))
+    end
+
+    test "grad wrt to indices" do
+      t = Nx.iota({3, 4})
+      i = Nx.tensor([[0, 0], [2, 2], [1, 0], [0, 1], [2, 3]])
+      u = Nx.tensor([1, -1, 2, -2, 3])
+
+      assert_all_close(Nx.broadcast(0, i), grad_indexed_add_indices(t, i, u))
+      assert_all_close(Nx.broadcast(0, i), grad_indexed_add_indices_composite(t, i, u))
+    end
+
+    test "grad wrt to both source and target simultaneously" do
+      # This isn't really a practical case, but we need to ensure it works
+      t = Nx.iota({2})
+      i = Nx.tensor([[0], [1]])
+
+      # u entries pass through the composite function f(x) = sin(cos(x) + x)
+      # therefore: f'(x) = cos(cos(x) + x) * (-sin(x) + 1)
+
+      cosx_tn = t |> Nx.cos() |> Nx.add(t)
+      expected = cosx_tn |> Nx.cos() |> Nx.multiply(Nx.subtract(1, Nx.sin(t)))
+
+      assert_all_close(expected, grad_indexed_add_simultaneous_composite(t, i))
+    end
+  end
+
   describe "not implemented" do
     defn grad_reduce(t), do: grad(t, &Nx.reduce(&1, 0, fn x, y -> x + y end))
 
