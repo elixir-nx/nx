@@ -5515,6 +5515,39 @@ defmodule Nx do
   end
 
   @doc """
+  Determines if each element in `tensor` is a `NaN`.
+
+  For complex tensors, if either of the components is `NaN`,
+  the entry is deemed `NaN` as well.
+
+  ## Examples
+
+      iex> Nx.is_nan(Nx.tensor([:nan, 1, 0]))
+      #Nx.Tensor<
+        u8[3]
+        [1, 0, 0]
+      >
+
+      iex> Nx.is_nan(Nx.tensor([:nan, 1, Complex.new(0, :nan)]))
+      #Nx.Tensor<
+        u8[3]
+        [1, 0, 1]
+      >
+
+      iex> Nx.is_nan(Nx.tensor([1, 0]))
+      #Nx.Tensor<
+        u8[2]
+        [0, 0]
+      >
+  """
+  @doc type: :element
+  def is_nan(tensor) do
+    tensor = to_tensor(tensor)
+
+    impl!(tensor).is_nan(%{tensor | type: {:u, 8}}, tensor)
+  end
+
+  @doc """
   Negates each element in the tensor.
 
   If you're using `Nx.Defn.defn/2`, you can use the `-` unary operator

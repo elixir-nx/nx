@@ -189,6 +189,29 @@ defmodule EXLA.Op do
     %{op | ref: ref}
   end
 
+  def is_nan(%{ref: ref} = op, {:c, _}) do
+    re_part = ref |> EXLA.NIF.real() |> unwrap!() |> EXLA.NIF.is_nan() |> unwrap!()
+    im_part = ref |> EXLA.NIF.imag() |> unwrap!() |> EXLA.NIF.is_nan() |> unwrap!()
+
+    result_ref = EXLA.NIF.bitwise_or(re_part, im_part, {}) |> unwrap!()
+
+    %{op | ref: result_ref}
+  end
+
+  def is_nan(op, type) do
+    %{ref: ref} =
+      case type do
+        {t, _} when t in [:f, :bf] ->
+          op
+
+        _ ->
+          convert_element_type(op, Nx.Type.to_floating(type))
+      end
+
+    result_ref = EXLA.NIF.is_nan(ref) |> unwrap!()
+    %{op | ref: result_ref}
+  end
+
   ## Ops
 
   def get_tuple_element(%Op{ref: operand} = op, index) when is_integer(index) do

@@ -780,7 +780,7 @@ defmodule EXLA.Defn.ExprTest do
     @float_tensor Nx.tensor([1.0, 2.0, 3.0])
 
     for fun <-
-          [:exp, :expm1, :log, :log1p, :sigmoid, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
+          [:exp, :expm1, :log, :log1p, :sigmoid, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt, :is_nan] ++
             [:tan, :acosh, :asinh, :cosh, :sinh, :erf, :erfc] do
       defn_fun = :"unary_#{fun}"
       defn_var = Macro.var(defn_fun, __MODULE__)
