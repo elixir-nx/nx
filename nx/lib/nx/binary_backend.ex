@@ -846,7 +846,7 @@ defmodule Nx.BinaryBackend do
     # integers cannot represent nans, so we can just create
     # a zero boolean tensor
 
-    size = Tuple.product(out.shape) * div(n_bits, 8)
+    size = Nx.size(out.shape) * div(n_bits, 8)
     from_binary(out, <<0::size(size)>>)
   end
 
