@@ -369,7 +369,7 @@ defmodule Nx.Shared do
         {"one minus error function", quote(do: Complex.erfc(var!(x))), "$$erfc(z) = 1 - erf(z)$$"},
       erf_inv:
         {"inverse error function", quote(do: Complex.erf_inv(var!(x))),
-         "$$erf\\text{\\textunderscore}inv(erf(z)) = z$$"},
+         "$$erf\\text{\\textunderscore}inv(erf(z)) = z$$"}
     ]
 
   ## Types

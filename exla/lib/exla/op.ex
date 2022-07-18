@@ -206,7 +206,7 @@ defmodule EXLA.Op do
 
         _ ->
           convert_element_type(op, Nx.Type.to_floating(type))
-        end
+      end
 
     result_ref = EXLA.NIF.is_nan(ref) |> unwrap!()
     %{op | ref: result_ref}

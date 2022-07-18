@@ -859,7 +859,6 @@ defmodule Nx.BinaryBackend do
     end)
   end
 
-
   @impl true
   def ceil(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.ceil/1)
 

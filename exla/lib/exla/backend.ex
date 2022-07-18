@@ -289,7 +289,7 @@ defmodule EXLA.Backend do
         Nx.Defn.Expr.unquote(name)(out, unquote_splicing(args))
       end
 
-     jit(expr_fun, [unquote_splicing(tensor_args)])
+      jit(expr_fun, [unquote_splicing(tensor_args)])
     end
   end
 
