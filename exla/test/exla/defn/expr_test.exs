@@ -781,7 +781,7 @@ defmodule EXLA.Defn.ExprTest do
 
     for fun <-
           [:exp, :expm1, :log, :log1p, :sigmoid, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt, :is_nan] ++
-            [:tan, :acosh, :asinh, :cosh, :sinh, :erf, :erfc] do
+            [:is_infinity, :tan, :acosh, :asinh, :cosh, :sinh, :erf, :erfc] do
       defn_fun = :"unary_#{fun}"
       defn_var = Macro.var(defn_fun, __MODULE__)
       defn unquote(defn_fun)(t), do: Nx.unquote(fun)(t)

@@ -5528,7 +5528,7 @@ defmodule Nx do
         [1, 0, 0]
       >
 
-      iex> Nx.is_nan(Nx.tensor([:nan, 1, Complex.new(0, :nan)]))
+      iex> Nx.is_nan(Nx.tensor([:nan, :infinity, Complex.new(0, :nan)]))
       #Nx.Tensor<
         u8[3]
         [1, 0, 1]
@@ -5545,6 +5545,39 @@ defmodule Nx do
     tensor = to_tensor(tensor)
 
     impl!(tensor).is_nan(%{tensor | type: {:u, 8}}, tensor)
+  end
+
+  @doc """
+  Determines if each element in `tensor` is a `Inf` or `-Inf`.
+
+  For complex tensors, if either of the components is infinity,
+  the entry is deemed infinity as well.
+
+  ## Examples
+
+      iex> Nx.is_infinity(Nx.tensor([:infinity, :neg_infinity, 1, 0]))
+      #Nx.Tensor<
+        u8[4]
+        [1, 1, 0, 0]
+      >
+
+      iex> Nx.is_infinity(Nx.tensor([:infinity, 1, Complex.new(0, :infinity), :neg_infinity]))
+      #Nx.Tensor<
+        u8[4]
+        [1, 0, 1, 1]
+      >
+
+      iex> Nx.is_infinity(Nx.tensor([1, 0]))
+      #Nx.Tensor<
+        u8[2]
+        [0, 0]
+      >
+  """
+  @doc type: :element
+  def is_infinity(tensor) do
+    tensor = to_tensor(tensor)
+
+    impl!(tensor).is_infinity(%{tensor | type: {:u, 8}}, tensor)
   end
 
   @doc """
