@@ -8,3 +8,9 @@ defmodule EmptyContainer do
   @derive {Nx.Container, containers: []}
   defstruct [:var, :fun, :acc]
 end
+
+# Assert underscored fields emit no warnings
+defmodule UnderscoredContainer do
+  @derive {Nx.Container, containers: [], keep: [:__special__]}
+  defstruct [:__special__]
+end

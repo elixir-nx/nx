@@ -104,7 +104,7 @@ defimpl Nx.Container, for: Any do
     updates =
       for field <- containers do
         # Use nil for the scope so it does not conflict with quoted variables.
-        var = Macro.var(field, nil)
+        var = Macro.var(field, Nx.Container)
 
         quote do
           {unquote(var), acc} = fun.(unquote(var), acc)
@@ -113,7 +113,7 @@ defimpl Nx.Container, for: Any do
 
     reduces =
       for field <- containers do
-        var = Macro.var(field, nil)
+        var = Macro.var(field, Nx.Container)
 
         quote do
           acc = fun.(unquote(var), acc)
@@ -149,7 +149,7 @@ defimpl Nx.Container, for: Any do
               "because it does not have field #{inspect(field)}"
     end
 
-    {field, Macro.var(field, nil)}
+    {field, Macro.var(field, Nx.Container)}
   end
 
   def traverse(data, _acc, _fun) do
