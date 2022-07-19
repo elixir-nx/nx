@@ -55,12 +55,12 @@ defmodule Nx.RandomTest do
     test "accepts custom shape" do
       key = Nx.Random.key(1701)
 
-      bits = Nx.Random.random_bits(key, {3})
+      bits = Nx.Random.random_bits(key, shape: {3})
       expected = Nx.tensor([56_197_195, 4_200_222_568, 961_309_823], type: :u32)
 
       assert bits == expected
 
-      bits = Nx.Random.random_bits(key, {3, 2})
+      bits = Nx.Random.random_bits(key, shape: {3, 2})
 
       expected =
         Nx.tensor(
