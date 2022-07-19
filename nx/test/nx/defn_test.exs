@@ -1260,6 +1260,17 @@ defmodule Nx.DefnTest do
       end
     end
 
+    defn struct_case(opts \\ []) do
+      case opts[:struct] do
+        %URI{} -> 0
+        %Regex{} -> 1
+        %Nx.Tensor{} -> 2
+        _ -> 3
+      end
+    end
+
+    deftransformp uri, do: %URI{}
+
     defn invalid_case(tensor) do
       case tensor do
         _ -> 0
@@ -1278,16 +1289,23 @@ defmodule Nx.DefnTest do
       assert tuple_rank(0, Nx.tensor([1, 2, 3])) == Expr.tensor(1)
     end
 
+    test "matches struct names" do
+      assert struct_case(struct: %URI{}) == Expr.tensor(0)
+      assert struct_case(struct: ~r/foo/) == Expr.tensor(1)
+      assert struct_case(struct: Nx.tensor([1, 2, 3])) == Expr.tensor(2)
+      assert struct_case(struct: 123) == Expr.tensor(3)
+    end
+
     test "matches using guards" do
       assert guard_rank(Nx.iota({2, 2})) == Expr.tensor(0)
       assert guard_rank(Nx.iota({3, 2})) == Expr.tensor(-1)
       assert guard_rank(Nx.iota({2, 3})) == Expr.tensor(1)
     end
 
-    test "raises if not tuple, atom, integer" do
+    test "raises if not tuple, atom, integer, or struct" do
       assert_raise ArgumentError,
-                   ~r"only tuples, atoms, and numbers are allowed as arguments to case/2 inside defn",
-                   fn -> invalid_case(Nx.tensor(0)) end
+                   ~r"only tuples, atoms, numbers, and structs are allowed as arguments to case/2 inside defn",
+                   fn -> invalid_case(%{}) end
     end
 
     test "raises on outside variables in guards" do

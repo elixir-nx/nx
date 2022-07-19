@@ -9392,8 +9392,7 @@ defmodule Nx do
   and removing slices.
 
   Passing a multi-dimensional indices tensor only affects the
-  resulting shape. Specif
-  ically, the given axis in the input shape
+  resulting shape. Specifically, the given axis in the input shape
   gets replaced with the indices shape.
 
   See `gather/2`, `slice/3`, `slice_along_axis/4`, and `take_along_axis/3`

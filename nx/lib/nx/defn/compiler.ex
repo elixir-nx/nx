@@ -161,9 +161,13 @@ defmodule Nx.Defn.Compiler do
     arg
   end
 
+  def __case__(%_{} = arg) do
+    arg
+  end
+
   def __case__(arg) do
     raise ArgumentError, """
-    only tuples, atoms, and numbers are allowed as arguments to case/2 inside defn.
+    only tuples, atoms, numbers, and structs are allowed as arguments to case/2 inside defn.
     Got: #{inspect(arg)}
 
     Consider using deftransform/2 or deftransformp/2 if you need to handle more complex cases
@@ -423,6 +427,13 @@ defmodule Nx.Defn.Compiler do
 
         {pattern, vars} =
           Macro.postwalk(pattern, %{}, fn
+            {:%{}, meta, [_ | _]} = map, _acc ->
+              compile_error!(
+                meta,
+                state,
+                "case/2 in defn does not allow matching on keys of maps and structs in patterns. Got: #{Macro.to_string(map)}"
+              )
+
             {var, _meta, ctx} = triplet, acc when is_atom(var) and is_atom(ctx) ->
               {normalize_var(triplet), Map.put(acc, {var, ctx}, true)}
 
@@ -432,12 +443,12 @@ defmodule Nx.Defn.Compiler do
 
         guard =
           Macro.postwalk(guard, fn
-            {var, _meta, ctx} = triplet when is_atom(var) and is_atom(ctx) ->
+            {var, meta, ctx} = triplet when is_atom(var) and is_atom(ctx) ->
               if is_map_key(vars, {var, ctx}) do
                 normalize_var(triplet)
               else
                 compile_error!(
-                  clause_meta,
+                  meta,
                   state,
                   "case/2 in defn allow guards to only access variables defined in patterns. Got: #{var}"
                 )
