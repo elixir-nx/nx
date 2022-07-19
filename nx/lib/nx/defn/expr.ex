@@ -366,7 +366,20 @@ defmodule Nx.Defn.Expr do
 
   unary_ops =
     [:exp, :expm1, :log, :log1p, :sigmoid, :cos, :sin, :tan, :cosh, :sinh, :tanh] ++
-      [:acosh, :asinh, :atanh, :sqrt, :rsqrt, :cbrt, :is_nan, :is_infinity, :negate, :sign, :abs, :bitwise_not] ++
+      [
+        :acosh,
+        :asinh,
+        :atanh,
+        :sqrt,
+        :rsqrt,
+        :cbrt,
+        :is_nan,
+        :is_infinity,
+        :negate,
+        :sign,
+        :abs,
+        :bitwise_not
+      ] ++
       [:conjugate, :population_count, :count_leading_zeros, :floor, :ceil, :round] ++
       [:erf, :erfc, :erf_inv, :acos, :asin, :atan, :bitcast, :real, :imag]
 
