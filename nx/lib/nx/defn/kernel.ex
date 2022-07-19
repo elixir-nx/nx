@@ -1548,7 +1548,7 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc false
-  @deprecated "Use print_expr/2 instead"
+  @deprecated "Use print_value/2 instead"
   def inspect_value(expr, opts \\ []) do
     hook(expr, &IO.inspect(&1, opts))
   end
