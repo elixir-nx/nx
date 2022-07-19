@@ -3,6 +3,8 @@ defmodule Nx.RandomTest do
 
   import Nx.Helpers, only: [assert_all_close: 2]
 
+  doctest Nx.Random
+
   describe "key/1" do
     test "transforms given integer into PRNG key" do
       key = Nx.Random.key(44)
