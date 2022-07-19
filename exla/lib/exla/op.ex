@@ -212,7 +212,7 @@ defmodule EXLA.Op do
     %{op | ref: result_ref}
   end
 
-  def is_infinity(%{ref: ref} = op, {:c, _}) do
+  def is_infinity(%{ref: ref} = op, {:c, _}, _shape, _axes, _state) do
     re_part = ref |> EXLA.NIF.real() |> unwrap!() |> EXLA.NIF.is_infinity() |> unwrap!()
     im_part = ref |> EXLA.NIF.imag() |> unwrap!() |> EXLA.NIF.is_infinity() |> unwrap!()
 
@@ -221,18 +221,19 @@ defmodule EXLA.Op do
     %{op | ref: result_ref}
   end
 
-  def is_infinity(op, type) do
-    %{ref: ref} =
-      case type do
-        {t, _} when t in [:f, :bf] ->
-          op
-
-        _ ->
-          convert_element_type(op, Nx.Type.to_floating(type))
-      end
-
+  def is_infinity(op, {t, _}, _shape, _axes, _state) when t in [:f, :bf] do
+    %{ref: ref} = op
     result_ref = EXLA.NIF.is_infinity(ref) |> unwrap!()
     %{op | ref: result_ref}
+  end
+
+  def is_infinity(_op, _type, shape, axes, %{builder: builder}) do
+    # For non-floating types, we can just return
+    # a boolean 0 tensor in the output shape
+    builder
+    |> constant_r0(0, {:u, 8})
+    |> reshape(Tuple.duplicate(1, tuple_size(shape)))
+    |> broadcast_in_dim(shape, List.to_tuple(axes))
   end
 
   ## Ops
