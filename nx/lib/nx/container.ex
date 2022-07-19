@@ -103,7 +103,6 @@ defimpl Nx.Container, for: Any do
 
     updates =
       for field <- containers do
-        # Use nil for the scope so it does not conflict with quoted variables.
         var = Macro.var(field, Nx.Container)
 
         quote do
