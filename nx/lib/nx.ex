@@ -6142,6 +6142,41 @@ defmodule Nx do
         1
       >
 
+  Although `NaN` by definition isn't equal to itself, this implementation
+  considers all `NaN`s equal to each other and only to each other:
+
+      iex> Nx.all_close(Nx.tensor(:nan), Nx.tensor(:nan))
+      #Nx.Tensor<
+        u8
+        1
+      >
+
+      iex> Nx.all_close(Nx.tensor(:nan), Nx.tensor(0))
+      #Nx.Tensor<
+        u8
+        0
+      >
+
+  Infinities behave as expected, being "close" to themselves but not
+  to other numbers:
+
+      iex> Nx.all_close(Nx.tensor(:infinity), Nx.tensor(:infinity))
+      #Nx.Tensor<
+        u8
+        1
+      >
+
+      iex> Nx.all_close(Nx.tensor(:infinity), Nx.tensor(:neg_infinity))
+      #Nx.Tensor<
+        u8
+        0
+      >
+
+      iex> Nx.all_close(Nx.tensor(1.0e30), Nx.tensor(:infinity))
+      #Nx.Tensor<
+        u8
+        0
+      >
   """
   @doc type: :aggregation
   def all_close(a, b, opts \\ []) do
