@@ -898,7 +898,7 @@ ERL_NIF_TERM is_nan(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 
 ERL_NIF_TERM is_infinity(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
-  return xla_unary_op(env, argc, argv, [](xla::XlaOp op){return xla::Not(xla::IsFinite(op));});
+  return xla_unary_op(env, argc, argv, [](xla::XlaOp op){return xla::IsInf(op);});
 }
 
 ERL_NIF_TERM execute_fft(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[], const xla::FftType fft_type)
