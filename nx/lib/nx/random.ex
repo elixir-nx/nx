@@ -266,7 +266,7 @@ defmodule Nx.Random do
     shape = opts[:shape]
     type = {_, nbits} = opts[:type]
 
-    transform(key, &randint_transform(&1, type))
+    randint_transform(key, type)
 
     keys = split(key)
 
@@ -293,7 +293,7 @@ defmodule Nx.Random do
     Nx.as_type(minval + offset, type)
   end
 
-  defp randint_transform(key, type) do
+  deftransformp randint_transform(key, type) do
     assert_key(key)
 
     if not Nx.Type.integer?(type) do
@@ -319,7 +319,15 @@ defmodule Nx.Random do
   defn uniform(key, opts \\ []) do
     opts = keyword!(opts, shape: {1}, type: {:f, 32}, minval: 0.0, maxval: 1.0)
 
-    transform(key, &uniform_transform(&1, opts))
+    assert_key(key)
+
+    type = opts[:type]
+    case type do
+      {:f, _} -> :ok
+
+      _ -> raise ArgumentError,
+            "expected float type, got type #{inspect(type)}"
+    end
 
     info = transform(opts[:type], &float_info(&1))
 
@@ -335,7 +343,7 @@ defmodule Nx.Random do
     |> Nx.as_type({:u, nbits})
     |> Nx.right_shift(Nx.tensor(nbits - info[:mantissa], type: {:u, nbits}))
     |> Nx.bitwise_or(u_one)
-    |> Nx.bitcast(type)
+    |> bitcast(type)
     |> Nx.subtract(Nx.tensor(1.0, type: type))
     |> Nx.multiply(maxval - minval)
     |> Nx.add(minval)
@@ -343,33 +351,25 @@ defmodule Nx.Random do
     |> Nx.max(minval)
   end
 
-  defp uniform_transform(key, opts) do
-    assert_key(key)
+  deftransformp bitcast(tensor, type), do: Nx.bitcast(tensor, type)
 
-    type = opts[:type]
+  defnp assert_key(tensor) do
+    %{shape: shape, type: type} = tensor
+    #shape = Nx.shape(tensor)
+    case shape do
+      {2} -> :ok
 
-    if not Nx.Type.float?(type) do
-      raise ArgumentError,
-            "expected float type, got type #{inspect(type)}"
-    end
-  end
-
-  deftransformp assert_key(tensor) do
-    case Nx.shape(tensor) do
-      {2} ->
-        :ok
-
-      other ->
-        raise(
-          ArgumentError,
-          "expected key to have shape {2}, got tensor with shape #{Kernel.inspect(other)}"
-        )
+      _ -> raise(
+        ArgumentError,
+        "expected key to have shape {2}, got tensor with shape #{inspect(shape)}"
+      )
     end
 
-    type = Nx.type(tensor)
+    #type = Nx.type(tensor)
+    case type do
+      {:u, 32} -> :ok
 
-    if not Nx.Type.integer?(type) do
-      raise ArgumentError,
+      _ -> raise ArgumentError,
             "expected key with integer type, got key with type #{inspect(type)}"
     end
   end
