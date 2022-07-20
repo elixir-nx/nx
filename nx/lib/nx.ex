@@ -6128,6 +6128,13 @@ defmodule Nx do
 
   is true for all elements of a and b.
 
+  ## Options
+
+    * `:rtol` - relative tolerance between numbers, as described above. Defaults to 1.0e-5
+    * `:atol` - absolute tolerance between numbers, as described above. Defaults to 1.0e-8
+    * `:equal_nan` - if `false`, NaN will always compare as false.  
+      Otherwise `NaN` will only equal `NaN`. Defaults to `true`
+
   ## Examples
 
       iex> Nx.all_close(Nx.tensor([1.0e10, 1.0e-7]), Nx.tensor([1.00001e10, 1.0e-8]))
@@ -6143,7 +6150,7 @@ defmodule Nx do
       >
 
   Although `NaN` by definition isn't equal to itself, this implementation
-  considers all `NaN`s equal to each other and only to each other:
+  considers all `NaN`s equal to each other and only to each other by default:
 
       iex> Nx.all_close(Nx.tensor(:nan), Nx.tensor(:nan))
       #Nx.Tensor<
@@ -6156,6 +6163,21 @@ defmodule Nx do
         u8
         0
       >
+
+  We can change this behavior with the `:equal_nan` option:
+
+      iex> t = Nx.tensor([:nan, 1])
+      iex> Nx.all_close(t, t, equal_nan: true) # default behavior
+      #Nx.Tensor<
+        u8
+        1
+      >
+      iex> Nx.all_close(t, t, equal_nan: false) # nan == nan -> false
+      #Nx.Tensor<
+        u8
+        0
+      >
+
 
   Infinities behave as expected, being "close" to themselves but not
   to other numbers:
@@ -6180,37 +6202,45 @@ defmodule Nx do
   """
   @doc type: :aggregation
   def all_close(a, b, opts \\ []) do
-    opts = keyword!(opts, rtol: 1.0e-5, atol: 1.0e-8)
+    opts = keyword!(opts, equal_nan: true, rtol: 1.0e-5, atol: 1.0e-8)
     rtol = opts[:rtol]
     atol = opts[:atol]
+    equal_nan = opts[:equal_nan]
 
     a = to_tensor(a)
     b = to_tensor(b)
 
-    nan_a = is_nan(a)
-    nan_b = is_nan(b)
-    nan_selector = logical_or(nan_a, nan_b)
-    nan_entries = logical_and(nan_a, nan_b)
+    finite_entries_comparison = less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b))))
 
-    inf_a = is_infinity(a)
-    inf_b = is_infinity(b)
-    inf_selector = logical_or(inf_a, inf_b)
+    if Nx.Type.integer?(a.type) and Nx.Type.integer?(b.type) do
 
-    inf_entries = logical_and(inf_selector, equal(a, b))
+      all(finite_entries_comparison)
+    else
+      nan_a = is_nan(a)
+      nan_b = is_nan(b)
+      nan_selector = logical_or(nan_a, nan_b)
+      nan_entries = if equal_nan, do: logical_and(nan_a, nan_b), else: broadcast(0, nan_selector)
 
-    non_finite_selector = logical_or(inf_selector, nan_selector)
+      inf_a = is_infinity(a)
+      inf_b = is_infinity(b)
+      inf_selector = logical_or(inf_a, inf_b)
 
-    finite_entries =
-      select(
-        non_finite_selector,
-        non_finite_selector,
-        less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b))))
-      )
+      inf_entries = logical_and(inf_selector, equal(a, b))
 
-    # get all infinity entries from inf_entries,
-    # all nan entries from nan_entries and fill
-    # the rest with 'finite_entries'
-    all(select(inf_selector, inf_entries, select(nan_selector, nan_entries, finite_entries)))
+      non_finite_selector = logical_or(inf_selector, nan_selector)
+
+      finite_entries =
+        select(
+          non_finite_selector,
+          non_finite_selector,
+          finite_entries_comparison
+        )
+
+      # get all nan entries from nan_entries
+      # all infinity entries from inf_entries
+      # and fill the rest with 'finite_entries'
+      all(select(nan_selector, nan_entries, select(inf_selector, inf_entries, finite_entries)))
+    end
   end
 
   @doc """
