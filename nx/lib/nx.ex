@@ -6165,10 +6165,16 @@ defmodule Nx do
 
     non_finite_selector = logical_or(inf_selector, nan_selector)
 
-    a = multiply(non_finite_selector, a)
-    b = multiply(non_finite_selector, b)
-    finite_entries = all(less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b)))))
+    finite_entries =
+      select(
+        non_finite_selector,
+        non_finite_selector,
+        less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b))))
+      )
 
+    # get all infinity entries from inf_entries,
+    # all nan entries from nan_entries and fill
+    # the rest with 'finite_entries'
     all(select(inf_selector, inf_entries, select(nan_selector, nan_entries, finite_entries)))
   end
 

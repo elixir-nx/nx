@@ -1356,6 +1356,7 @@ defmodule Nx.BinaryBackend do
     data =
       bin_reduce(tensor, out.type, 1, opts, fn bin, acc ->
         res = if binary_to_number(bin, type) != 0, do: acc, else: 0
+
         {res, res}
       end)
 
