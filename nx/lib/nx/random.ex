@@ -73,7 +73,8 @@ defmodule Nx.Random do
   """
 
   import Nx.Defn, only: [deftransformp: 2, defn: 2, defnp: 2]
-  import Nx.Defn.Kernel, only: [assert_shape: 2, keyword!: 2]
+
+  @nbits 32
 
   @doc """
   Create a pseudo-random number generator (PRNG) key given an integer seed.
@@ -188,6 +189,7 @@ defmodule Nx.Random do
         key1
       ])
       |> Nx.as_type({:u, 32})
+    #we lose precision on purpose
 
     state = {xs, ks, rotations}
 
@@ -238,8 +240,7 @@ defmodule Nx.Random do
   end
 
   defnp rotate_left(x, rot) do
-    nbits = 32
-    x <<< rot ||| x >>> (nbits - rot)
+    x <<< rot ||| x >>> (@nbits - rot)
   end
 
   defp float_info(type) do
@@ -252,7 +253,7 @@ defmodule Nx.Random do
   end
 
   @doc """
-  Sample uniform random integer values in [minval, maxval).
+  Sample uniform random integer values in [min_val, max_val).
 
   ## Options
 
@@ -261,21 +262,27 @@ defmodule Nx.Random do
     * `:shape` - shape of the returned tensor
 
   """
-  defn randint(key, minval, maxval, opts \\ []) do
+  defn randint(key, min_val, max_val, opts \\ []) do
     opts = keyword!(opts, shape: {1}, type: {:s, 32})
+    assert_key(key)
+
     shape = opts[:shape]
     type = {_, nbits} = opts[:type]
-
-    randint_transform(key, type)
+    case type do
+      {:u, _} -> :ok
+      {:s, _} -> :ok
+      _ -> raise ArgumentError,
+            "expected integer type, got type #{inspect(type)}"
+    end
 
     keys = split(key)
 
-    minval = Nx.broadcast(minval, shape)
-    maxval = Nx.broadcast(maxval, shape)
+    min_val = Nx.broadcast(min_val, shape)
+    max_val = Nx.broadcast(max_val, shape)
 
     higher_bits = random_bits(keys[0], shape: shape)
     lower_bits = random_bits(keys[1], shape: shape)
-    span = maxval - minval
+    span = max_val - min_val
 
     multiplier =
       Nx.power(2, Nx.quotient(nbits, 2))
@@ -290,20 +297,11 @@ defmodule Nx.Random do
       |> Nx.add(Nx.remainder(lower_bits, span))
       |> Nx.remainder(span)
 
-    Nx.as_type(minval + offset, type)
-  end
-
-  deftransformp randint_transform(key, type) do
-    assert_key(key)
-
-    if not Nx.Type.integer?(type) do
-      raise ArgumentError,
-            "expected integer type, got type #{inspect(type)}"
-    end
+    Nx.as_type(min_val + offset, type)
   end
 
   @doc """
-  Sample uniform float values in [minval, maxval).
+  Sample uniform float values in [min_val, max_val).
 
   ## Options
 
@@ -311,13 +309,13 @@ defmodule Nx.Random do
 
     * `:shape` - shape of the returned tensor
 
-    * `:minval` - minimum value, default is 0.0
+    * `:min_val` - minimum value, default is 0.0
 
-    * `:maxval` - maximum value, default is 1.0
+    * `:max_val` - maximum value, default is 1.0
 
   """
   defn uniform(key, opts \\ []) do
-    opts = keyword!(opts, shape: {1}, type: {:f, 32}, minval: 0.0, maxval: 1.0)
+    opts = keyword!(opts, shape: {1}, type: {:f, 32}, min_val: 0.0, max_val: 1.0)
 
     assert_key(key)
 
@@ -333,8 +331,8 @@ defmodule Nx.Random do
 
     shape = opts[:shape]
     type = {_dtype, nbits} = opts[:type]
-    minval = opts[:minval]
-    maxval = opts[:maxval]
+    min_val = opts[:min_val]
+    max_val = opts[:max_val]
 
     u_one = Nx.tensor(1065353216, type: {:u, nbits})
     #Equivalent of constant - Nx.tensor(1.0, type: type) |> Nx.bitcast({:u, nbits})
@@ -345,10 +343,10 @@ defmodule Nx.Random do
     |> Nx.bitwise_or(u_one)
     |> bitcast(type)
     |> Nx.subtract(Nx.tensor(1.0, type: type))
-    |> Nx.multiply(maxval - minval)
-    |> Nx.add(minval)
+    |> Nx.multiply(max_val - min_val)
+    |> Nx.add(min_val)
     |> Nx.reshape(shape)
-    |> Nx.max(minval)
+    |> Nx.max(min_val)
   end
 
   deftransformp bitcast(tensor, type), do: Nx.bitcast(tensor, type)
