@@ -6144,7 +6144,7 @@ defmodule Nx do
       >
 
       iex> Nx.all_close(Nx.tensor([1.0e-8, 1.0e-8]), Nx.tensor([1.0e-8, 1.0e-9]))
-      #Nx.Tensor<m
+      #Nx.Tensor<
         u8
         1
       >
