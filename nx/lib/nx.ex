@@ -5064,11 +5064,11 @@ defmodule Nx do
   """
   @doc type: :element
   def select(pred, on_true, on_false) do
-    output_type = binary_type(on_true, on_false)
-
     %T{shape: pred_shape, names: pred_names} = pred = to_tensor(pred)
     %T{shape: true_shape, names: true_names} = on_true = to_tensor(on_true)
     %T{shape: false_shape, names: false_names} = on_false = to_tensor(on_false)
+
+    output_type = binary_type(on_true, on_false)
 
     {output_shape, output_names} =
       case pred_shape do
@@ -6149,8 +6149,27 @@ defmodule Nx do
     rtol = opts[:rtol]
     atol = opts[:atol]
 
-    # TODO: deal with non_finite entries by adding is_infinity and is_nan
-    all(less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b)))))
+    a = to_tensor(a)
+    b = to_tensor(b)
+
+    nan_a = is_nan(a)
+    nan_b = is_nan(b)
+    nan_selector = logical_or(nan_a, nan_b)
+    nan_entries = logical_and(nan_a, nan_b)
+
+    inf_a = is_infinity(a)
+    inf_b = is_infinity(b)
+    inf_selector = logical_or(inf_a, inf_b)
+
+    inf_entries = logical_and(inf_selector, equal(a, b))
+
+    non_finite_selector = logical_or(inf_selector, nan_selector)
+
+    a = multiply(non_finite_selector, a)
+    b = multiply(non_finite_selector, b)
+    finite_entries = all(less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b)))))
+
+    all(select(inf_selector, inf_entries, select(nan_selector, nan_entries, finite_entries)))
   end
 
   @doc """
