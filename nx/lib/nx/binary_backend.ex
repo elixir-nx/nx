@@ -860,6 +860,25 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
+  def is_infinity(out, %{type: {t, n_bits}}) when t in [:u, :s] do
+    # integers cannot represent nans, so we can just create
+    # a zero boolean tensor
+
+    size = Nx.size(out.shape) * div(n_bits, 8)
+    from_binary(out, <<0::size(size)>>)
+  end
+
+  def is_infinity(out, tensor) do
+    element_wise_unary_op(out, tensor, fn
+      %Complex{re: re} when re in [:infinity, :neg_infinity] -> 1
+      %Complex{im: im} when im in [:infinity, :neg_infinity] -> 1
+      :infinity -> 1
+      :neg_infinity -> 1
+      _ -> 0
+    end)
+  end
+
+  @impl true
   def ceil(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.ceil/1)
 
   @impl true

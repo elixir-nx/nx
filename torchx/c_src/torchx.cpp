@@ -864,6 +864,13 @@ NIF(is_nan)
   TENSOR(torch::isnan(*tensor));
 }
 
+NIF(is_infinity)
+{
+  TENSOR_PARAM(0, tensor);
+
+  TENSOR(torch::isinf(*tensor));
+}
+
 NIF(all)
 {
   TENSOR_PARAM(0, t);
@@ -1232,6 +1239,7 @@ static ErlNifFunc nif_functions[] = {
     DF(erf_inv, 1),
     DF(cbrt, 1),
     DF(is_nan, 1),
+    DF(is_infinity, 1),
     DF(fft, 2),
     DF(ifft, 2),
 

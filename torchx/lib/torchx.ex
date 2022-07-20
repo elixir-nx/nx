@@ -311,6 +311,7 @@ defmodule Torchx do
   deftensor round(tensor)
   deftensor sign(tensor)
   deftensor is_nan(tensor)
+  deftensor is_infinity(tensor)
 
   deftensor pad(tensor, config, constant)
 
