@@ -6132,7 +6132,7 @@ defmodule Nx do
 
     * `:rtol` - relative tolerance between numbers, as described above. Defaults to 1.0e-5
     * `:atol` - absolute tolerance between numbers, as described above. Defaults to 1.0e-8
-    * `:equal_nan` - if `false`, NaN will always compare as false.  
+    * `:equal_nan` - if `false`, NaN will always compare as false.
       Otherwise `NaN` will only equal `NaN`. Defaults to `true`
 
   ## Examples
@@ -6144,7 +6144,7 @@ defmodule Nx do
       >
 
       iex> Nx.all_close(Nx.tensor([1.0e-8, 1.0e-8]), Nx.tensor([1.0e-8, 1.0e-9]))
-      #Nx.Tensor<
+      #Nx.Tensor<m
         u8
         1
       >
@@ -6210,10 +6210,10 @@ defmodule Nx do
     a = to_tensor(a)
     b = to_tensor(b)
 
-    finite_entries_comparison = less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b))))
+    finite_entries_comparison =
+      less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b))))
 
     if Nx.Type.integer?(a.type) and Nx.Type.integer?(b.type) do
-
       all(finite_entries_comparison)
     else
       nan_a = is_nan(a)
