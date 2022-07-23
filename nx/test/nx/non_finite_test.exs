@@ -36,15 +36,15 @@ defmodule Nx.NonFiniteTest do
     end
 
     test "cos" do
-      assert_all_close(Nx.cos(@arg), @nan_nan)
+      assert_all_close(Nx.cos(@arg), @nan_nan, equal_nan: true)
     end
 
     test "sin" do
-      assert_all_close(Nx.sin(@arg), @nan_nan)
+      assert_all_close(Nx.sin(@arg), @nan_nan, equal_nan: true)
     end
 
     test "tan" do
-      assert_all_close(Nx.tan(@arg), @nan_nan)
+      assert_all_close(Nx.tan(@arg), @nan_nan, equal_nan: true)
     end
 
     test "cosh" do
@@ -56,19 +56,19 @@ defmodule Nx.NonFiniteTest do
     end
 
     test "tanh" do
-      assert_all_close(Nx.tanh(@arg), @nan_nan)
+      assert_all_close(Nx.tanh(@arg), @nan_nan, equal_nan: true)
     end
 
     test "acos" do
-      assert_all_close(Nx.acos(@arg), @nan_nan)
+      assert_all_close(Nx.acos(@arg), @nan_nan, equal_nan: true)
     end
 
     test "asin" do
-      assert_all_close(Nx.asin(@arg), @nan_nan)
+      assert_all_close(Nx.asin(@arg), @nan_nan, equal_nan: true)
     end
 
     test "atan" do
-      assert_all_close(Nx.atan(@arg), @nan_nan)
+      assert_all_close(Nx.atan(@arg), @nan_nan, equal_nan: true)
     end
 
     test "acosh" do
@@ -80,7 +80,7 @@ defmodule Nx.NonFiniteTest do
     end
 
     test "atanh" do
-      assert_all_close(Nx.atanh(@arg), @nan_nan)
+      assert_all_close(Nx.atanh(@arg), @nan_nan, equal_nan: true)
     end
 
     test "sqrt" do
@@ -92,7 +92,7 @@ defmodule Nx.NonFiniteTest do
     end
 
     test "cbrt" do
-      assert_all_close(Nx.cbrt(@arg), @nan_nan)
+      assert_all_close(Nx.cbrt(@arg), @nan_nan, equal_nan: true)
     end
 
     test "conjugate" do
@@ -199,7 +199,7 @@ defmodule Nx.NonFiniteTest do
     end
 
     test "power" do
-      assert_all_close(Nx.power(@arg, @arg2), @nan_nan)
+      assert_all_close(Nx.power(@arg, @arg2), @nan_nan, equal_nan: true)
     end
 
     test "divide" do

@@ -6133,7 +6133,7 @@ defmodule Nx do
     * `:rtol` - relative tolerance between numbers, as described above. Defaults to 1.0e-5
     * `:atol` - absolute tolerance between numbers, as described above. Defaults to 1.0e-8
     * `:equal_nan` - if `false`, NaN will always compare as false.
-      Otherwise `NaN` will only equal `NaN`. Defaults to `true`
+      Otherwise `NaN` will only equal `NaN`. Defaults to `false`
 
   ## Examples
 
@@ -6149,13 +6149,13 @@ defmodule Nx do
         1
       >
 
-  Although `NaN` by definition isn't equal to itself, this implementation
-  considers all `NaN`s equal to each other and only to each other by default:
+  Although `NaN` by definition isn't equal to itself, so this implementation
+  also considers all `NaN`s different from each other by default:
 
       iex> Nx.all_close(Nx.tensor(:nan), Nx.tensor(:nan))
       #Nx.Tensor<
         u8
-        1
+        0
       >
 
       iex> Nx.all_close(Nx.tensor(:nan), Nx.tensor(0))
@@ -6167,12 +6167,12 @@ defmodule Nx do
   We can change this behavior with the `:equal_nan` option:
 
       iex> t = Nx.tensor([:nan, 1])
-      iex> Nx.all_close(t, t, equal_nan: true) # default behavior
+      iex> Nx.all_close(t, t, equal_nan: true) # nan == nan -> true
       #Nx.Tensor<
         u8
         1
       >
-      iex> Nx.all_close(t, t, equal_nan: false) # nan == nan -> false
+      iex> Nx.all_close(t, t, equal_nan: false) # nan == nan -> false, default behavior
       #Nx.Tensor<
         u8
         0
@@ -6202,7 +6202,7 @@ defmodule Nx do
   """
   @doc type: :aggregation
   def all_close(a, b, opts \\ []) do
-    opts = keyword!(opts, equal_nan: true, rtol: 1.0e-5, atol: 1.0e-8)
+    opts = keyword!(opts, equal_nan: false, rtol: 1.0e-5, atol: 1.0e-8)
     rtol = opts[:rtol]
     atol = opts[:atol]
     equal_nan = opts[:equal_nan]
@@ -6219,7 +6219,7 @@ defmodule Nx do
       nan_a = is_nan(a)
       nan_b = is_nan(b)
       nan_selector = logical_or(nan_a, nan_b)
-      nan_entries = if equal_nan, do: logical_and(nan_a, nan_b), else: broadcast(0, nan_selector)
+      nan_entries = if equal_nan, do: logical_and(nan_a, nan_b), else: broadcast(Nx.tensor(0, type: {:u, 8}), nan_selector)
 
       inf_a = is_infinity(a)
       inf_b = is_infinity(b)
