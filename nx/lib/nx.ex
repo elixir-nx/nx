@@ -6219,7 +6219,11 @@ defmodule Nx do
       nan_a = is_nan(a)
       nan_b = is_nan(b)
       nan_selector = logical_or(nan_a, nan_b)
-      nan_entries = if equal_nan, do: logical_and(nan_a, nan_b), else: broadcast(Nx.tensor(0, type: {:u, 8}), nan_selector)
+
+      nan_entries =
+        if equal_nan,
+          do: logical_and(nan_a, nan_b),
+          else: broadcast(Nx.tensor(0, type: {:u, 8}), nan_selector)
 
       inf_a = is_infinity(a)
       inf_b = is_infinity(b)
