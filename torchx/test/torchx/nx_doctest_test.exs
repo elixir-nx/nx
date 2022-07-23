@@ -53,6 +53,7 @@ defmodule Torchx.NxDoctestTest do
   @inherently_unsupported_doctests [
     # as_type - the rules change per type
     as_type: 2,
+    # no API available - bit based
     count_leading_zeros: 1,
     population_count: 1,
     # no API available - function based
