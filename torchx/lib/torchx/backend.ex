@@ -1428,17 +1428,12 @@ defmodule Torchx.Backend do
     Enum.reduce(padding, [], fn {a, b}, acc -> [a, b | acc] end)
   end
 
-
   @impl true
   def bitcast(out, %T{data: %TB{ref: {device, _}}} = tensor) do
-    blob = Torchx.to_blob(from_nx(tensor))
-
-    Torchx.from_blob(
-      blob,
-      out.shape,
-      to_torch_type(out.type),
-      device_option(device: device)
-    )
+    tensor
+    |> from_nx()
+    |> Torchx.to_blob()
+    |> Torchx.from_blob(out.shape, to_torch_type(out.type), device_option(device: device))
     |> to_nx(out)
   end
 
