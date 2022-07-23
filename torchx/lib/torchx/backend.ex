@@ -1429,6 +1429,15 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def bitcast(out, %T{data: %TB{ref: {device, _}}} = tensor) do
+    tensor
+    |> from_nx()
+    |> Torchx.to_blob()
+    |> Torchx.from_blob(out.shape, to_torch_type(out.type), device_option(device: device))
+    |> to_nx(out)
+  end
+
+  @impl true
   def inspect(%T{} = tensor, inspect_opts) do
     limit = if inspect_opts.limit == :infinity, do: :infinity, else: inspect_opts.limit + 1
 
@@ -1555,7 +1564,7 @@ defmodule Torchx.Backend do
   ## Functionality we can't provide
 
   not_possible =
-    [bitcast: 2, count_leading_zeros: 2, population_count: 2] ++
+    [count_leading_zeros: 2, population_count: 2] ++
       [map: 4, reduce: 5, window_reduce: 6]
 
   for {fun, arity} <- not_possible do

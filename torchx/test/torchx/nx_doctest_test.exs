@@ -54,7 +54,6 @@ defmodule Torchx.NxDoctestTest do
     # as_type - the rules change per type
     as_type: 2,
     # no API available - bit based
-    bitcast: 2,
     count_leading_zeros: 1,
     population_count: 1,
     # no API available - function based
