@@ -5064,11 +5064,11 @@ defmodule Nx do
   """
   @doc type: :element
   def select(pred, on_true, on_false) do
-    output_type = binary_type(on_true, on_false)
-
     %T{shape: pred_shape, names: pred_names} = pred = to_tensor(pred)
     %T{shape: true_shape, names: true_names} = on_true = to_tensor(on_true)
     %T{shape: false_shape, names: false_names} = on_false = to_tensor(on_false)
+
+    output_type = binary_type(on_true, on_false)
 
     {output_shape, output_names} =
       case pred_shape do
@@ -6128,6 +6128,13 @@ defmodule Nx do
 
   is true for all elements of a and b.
 
+  ## Options
+
+    * `:rtol` - relative tolerance between numbers, as described above. Defaults to 1.0e-5
+    * `:atol` - absolute tolerance between numbers, as described above. Defaults to 1.0e-8
+    * `:equal_nan` - if `false`, NaN will always compare as false.
+      Otherwise `NaN` will only equal `NaN`. Defaults to `false`
+
   ## Examples
 
       iex> Nx.all_close(Nx.tensor([1.0e10, 1.0e-7]), Nx.tensor([1.00001e10, 1.0e-8]))
@@ -6142,15 +6149,102 @@ defmodule Nx do
         1
       >
 
+  Although `NaN` by definition isn't equal to itself, so this implementation
+  also considers all `NaN`s different from each other by default:
+
+      iex> Nx.all_close(Nx.tensor(:nan), Nx.tensor(:nan))
+      #Nx.Tensor<
+        u8
+        0
+      >
+
+      iex> Nx.all_close(Nx.tensor(:nan), Nx.tensor(0))
+      #Nx.Tensor<
+        u8
+        0
+      >
+
+  We can change this behavior with the `:equal_nan` option:
+
+      iex> t = Nx.tensor([:nan, 1])
+      iex> Nx.all_close(t, t, equal_nan: true) # nan == nan -> true
+      #Nx.Tensor<
+        u8
+        1
+      >
+      iex> Nx.all_close(t, t, equal_nan: false) # nan == nan -> false, default behavior
+      #Nx.Tensor<
+        u8
+        0
+      >
+
+
+  Infinities behave as expected, being "close" to themselves but not
+  to other numbers:
+
+      iex> Nx.all_close(Nx.tensor(:infinity), Nx.tensor(:infinity))
+      #Nx.Tensor<
+        u8
+        1
+      >
+
+      iex> Nx.all_close(Nx.tensor(:infinity), Nx.tensor(:neg_infinity))
+      #Nx.Tensor<
+        u8
+        0
+      >
+
+      iex> Nx.all_close(Nx.tensor(1.0e30), Nx.tensor(:infinity))
+      #Nx.Tensor<
+        u8
+        0
+      >
   """
   @doc type: :aggregation
   def all_close(a, b, opts \\ []) do
-    opts = keyword!(opts, rtol: 1.0e-5, atol: 1.0e-8)
+    opts = keyword!(opts, equal_nan: false, rtol: 1.0e-5, atol: 1.0e-8)
     rtol = opts[:rtol]
     atol = opts[:atol]
+    equal_nan = opts[:equal_nan]
 
-    # TODO: deal with non_finite entries by adding is_infinity and is_nan
-    all(less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b)))))
+    a = to_tensor(a)
+    b = to_tensor(b)
+
+    finite_entries_comparison =
+      less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b))))
+
+    if Nx.Type.integer?(a.type) and Nx.Type.integer?(b.type) do
+      all(finite_entries_comparison)
+    else
+      nan_a = is_nan(a)
+      nan_b = is_nan(b)
+      nan_selector = logical_or(nan_a, nan_b)
+
+      nan_entries =
+        if equal_nan,
+          do: logical_and(nan_a, nan_b),
+          else: logical_and(nan_selector, 0)
+
+      inf_a = is_infinity(a)
+      inf_b = is_infinity(b)
+      inf_selector = logical_or(inf_a, inf_b)
+
+      inf_entries = logical_and(inf_selector, equal(a, b))
+
+      non_finite_selector = logical_or(inf_selector, nan_selector)
+
+      finite_entries =
+        select(
+          non_finite_selector,
+          non_finite_selector,
+          finite_entries_comparison
+        )
+
+      # get all nan entries from nan_entries
+      # all infinity entries from inf_entries
+      # and fill the rest with 'finite_entries'
+      all(select(nan_selector, nan_entries, select(inf_selector, inf_entries, finite_entries)))
+    end
   end
 
   @doc """

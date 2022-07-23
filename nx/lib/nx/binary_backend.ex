@@ -842,11 +842,12 @@ defmodule Nx.BinaryBackend do
   def bitwise_not(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.bnot/1)
 
   @impl true
-  def is_nan(out, %{type: {t, n_bits}}) when t in [:u, :s] do
+  def is_nan(out, %{type: {t, _}}) when t in [:u, :s] do
     # integers cannot represent nans, so we can just create
     # a zero boolean tensor
 
-    size = Nx.size(out.shape) * div(n_bits, 8)
+    # 8 bits per entry because we return u8
+    size = Nx.size(out.shape) * 8
     from_binary(out, <<0::size(size)>>)
   end
 
@@ -860,11 +861,12 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def is_infinity(out, %{type: {t, n_bits}}) when t in [:u, :s] do
+  def is_infinity(out, %{type: {t, _}}) when t in [:u, :s] do
     # integers cannot represent nans, so we can just create
     # a zero boolean tensor
 
-    size = Nx.size(out.shape) * div(n_bits, 8)
+    # 8 bits per entry because we return u8
+    size = Nx.size(out.shape) * 8
     from_binary(out, <<0::size(size)>>)
   end
 
@@ -1354,6 +1356,7 @@ defmodule Nx.BinaryBackend do
     data =
       bin_reduce(tensor, out.type, 1, opts, fn bin, acc ->
         res = if binary_to_number(bin, type) != 0, do: acc, else: 0
+
         {res, res}
       end)
 
