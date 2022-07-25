@@ -21,14 +21,8 @@ defmodule EXLA.MixProject do
         docs: :docs,
         "hex.publish": :docs
       ],
-
-      # Compiler
-      # We want to always trigger XLA compilation when XLA_BUILD is set,
-      # otherwise its Makefile will run only upon the initial compilation
-      compilers:
-        if(xla_build?(), do: [:xla], else: []) ++ [:exla, :elixir_make] ++ Mix.compilers(),
+      compilers: [:exla, :elixir_make] ++ Mix.compilers(),
       aliases: [
-        "compile.xla": "deps.compile xla",
         "compile.exla": &compile/1
       ],
       make_env: %{
@@ -131,9 +125,5 @@ defmodule EXLA.MixProject do
     end
 
     {:ok, []}
-  end
-
-  defp xla_build?() do
-    System.get_env("XLA_BUILD") == "true"
   end
 end
