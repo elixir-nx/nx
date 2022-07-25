@@ -21,7 +21,6 @@ defmodule EXLA.MixProject do
         docs: :docs,
         "hex.publish": :docs
       ],
-
       compilers: [:exla, :elixir_make] ++ Mix.compilers(),
       aliases: [
         "compile.exla": &compile/1
