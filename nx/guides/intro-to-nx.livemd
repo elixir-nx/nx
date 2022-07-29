@@ -328,8 +328,8 @@ $$
 \end{bmatrix}
 $$
 
-To solve this problem, add each integer on the left with the
-corresponding integer on the right. Unfortunately, we cannot
+To solve this problem, subtract each right-hand integer from the
+corresponding left-hand integer. Unfortunately, we cannot
 use Elixir's built-in subtraction operator as it is not tensor-aware.
 Luckily, we can use the `Nx.subtract/2` function to solve the
 problem:
