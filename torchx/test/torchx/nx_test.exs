@@ -368,6 +368,70 @@ defmodule Torchx.NxTest do
       assert_equal(t, Nx.tensor([[0, 1, 2], [3, 4, 5]]))
     end
 
+    test "dot with vectors" do
+      t1 = Nx.tensor([1, 2, 3])
+      t2 = Nx.tensor([4, 5, 6])
+
+      out = Nx.dot(t1, t2)
+
+      assert_equal(out, Nx.tensor(32))
+    end
+
+    test "dot with matrices" do
+      t1 = Nx.tensor([[1, 2], [3, 4]])
+      t2 = Nx.tensor([[5, 6], [7, 8]])
+
+      out = Nx.dot(t1, t2)
+
+      assert_equal(out, Nx.tensor([[19, 22], [43, 50]]))
+    end
+
+    test "dot with vector and scalar" do
+      t = Nx.tensor([[1, 2, 3]])
+      assert Nx.shape(t) == {1, 3}
+      out = Nx.dot(t, 3)
+
+      assert Nx.shape(out) == {1, 3}
+      assert_equal(out, Nx.tensor([[3, 6, 9]]))
+    end
+
+    test "dot does not re-sort the contracting axes" do
+      t1 = Nx.iota({2, 7, 8, 3, 1})
+      t2 = Nx.iota({1, 8, 3, 7, 3})
+
+      out = Nx.dot(t1, [3, 1, 2], t2, [2, 3, 1])
+
+      assert {2, 1, 1, 3} == out.shape
+
+      assert_equal(
+        out,
+        Nx.tensor([
+          [
+            [
+              [3_731_448, 3_745_476, 3_759_504]
+            ]
+          ],
+          [
+            [
+              [10_801_560, 10_843_812, 10_886_064]
+            ]
+          ]
+        ])
+      )
+    end
+
+    test "dot currently raises when using batching" do
+      # Batching not supported for now. Once it is
+      # supported doctests for dot should be restablished
+
+      t1 = Nx.iota({3, 2, 4, 1})
+      t2 = Nx.iota({3, 4, 2, 2})
+
+      assert_raise(FunctionClauseError, fn ->
+        Nx.dot(t1, [1, 2], [0], t2, [2, 1], [0])
+      end)
+    end
+
     test "make_diagonal" do
       t =
         [1, 2, 3]
