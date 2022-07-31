@@ -403,20 +403,33 @@ defmodule Torchx.NxTest do
 
       assert {2, 1, 1, 3} == out.shape
 
-      assert_equal(out,
-               Nx.tensor([
-                 [
-                   [
-                     [3_731_448, 3_745_476, 3_759_504]
-                   ]
-                 ],
-                 [
-                   [
-                     [10_801_560, 10_843_812, 10_886_064]
-                   ]
-                 ]
-               ])
+      assert_equal(
+        out,
+        Nx.tensor([
+          [
+            [
+              [3_731_448, 3_745_476, 3_759_504]
+            ]
+          ],
+          [
+            [
+              [10_801_560, 10_843_812, 10_886_064]
+            ]
+          ]
+        ])
       )
+    end
+
+    test "dot currently raises when using batching" do
+      # Batching not supported for now. Once it is
+      # supported doctests for dot should be restablished
+
+      t1 = Nx.iota({3, 2, 4, 1})
+      t2 = Nx.iota({3, 4, 2, 2})
+
+      assert_raise(FunctionClauseError, fn ->
+        Nx.dot(t1, [1, 2], [0], t2, [2, 1], [0])
+      end)
     end
 
     test "make_diagonal" do
