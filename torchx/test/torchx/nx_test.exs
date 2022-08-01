@@ -441,6 +441,44 @@ defmodule Torchx.NxTest do
       assert_equal(t, Nx.tensor([[1, 0, 0], [0, 2, 0], [0, 0, 3]]))
     end
 
+    test "mean with a scalar" do
+      t = Nx.tensor(42)
+      out = Nx.mean(t)
+
+      assert_equal(out, t)
+    end
+
+    test "mean with a vector" do
+      t = Nx.tensor([1, 2, 3])
+      out = Nx.mean(t)
+
+      assert_equal(out, Nx.tensor(2))
+    end
+
+    test "mean aggregating over an axis" do
+      t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      out = Nx.mean(t, axes: [:x])
+
+      assert_equal(out, Nx.tensor([[4, 5, 6], [7, 8, 9]]))
+    end
+
+    test "mean keeping axes" do
+      t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      out = Nx.mean(t, axes: [-1], keep_axes: true)
+
+      assert_equal(out, Nx.tensor([[[2], [5]], [[8], [11]]]))
+    end
+
+    test "mean fails when using unsigned integers" do
+      t = Nx.tensor([1, 2, 3], type: {:u, 8}, names: [:x])
+
+      assert_raise(
+        ArgumentError,
+        "Torchx does not support unsigned 64 bit integer (explicitly cast the input tensor to a signed integer before taking sum)",
+        fn -> Nx.mean(t, axes: [:x]) end
+      )
+    end
+
     test "random_uniform" do
       t = Nx.random_uniform({30, 50})
 
