@@ -1,4 +1,5 @@
 #include <torch/torch.h>
+#include <ATen/BatchedTensorImpl.h>
 #include <iostream>
 #include <atomic>
 
@@ -682,6 +683,35 @@ NIF(tensordot)
   TENSOR(torch::tensordot(*t1, *t2, axes1, axes2));
 }
 
+NIF(batched_tensordot)
+{
+  TENSOR_PARAM(0, t1);
+  TENSOR_PARAM(1, t2);
+  LIST_PARAM(2, std::vector<int64_t>, axes1);
+  LIST_PARAM(3, std::vector<int64_t>, batch_axes1);
+  LIST_PARAM(4, std::vector<int64_t>, axes2);
+  LIST_PARAM(5, std::vector<int64_t>, batch_axes2);
+
+  std::vector<at::BatchDim> batch_dims1, batch_dims2;
+
+  for (auto dim : batch_axes1)
+  {
+    batch_dims1.push_back(at::BatchDim(0, dim));
+  }
+
+  for (auto dim : batch_axes2)
+  {
+    batch_dims2.push_back(at::BatchDim(0, dim));
+  }
+
+  auto batched_1 = at::makeBatched(*t1, at::BatchDims(batch_dims1.begin(), batch_dims1.end()));
+  auto batched_2 = at::makeBatched(*t2, at::BatchDims(batch_dims2.begin(), batch_dims2.end()));
+
+  torch::Tensor batched_result = torch::tensordot(batched_1, batched_2, axes1, axes2);
+
+  TENSOR(torch::clone(at::unsafeGetBatchedImpl(batched_result)->value()));
+}
+
 
 /* Unary Ops */
 
@@ -1244,6 +1274,7 @@ static ErlNifFunc nif_functions[] = {
     DF(ifft, 2),
 
     DF(tensordot, 4),
+    DF(batched_tensordot, 6),
     DF(matmul, 2),
     DF(pad, 3),
 

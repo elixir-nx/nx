@@ -921,6 +921,29 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
+  def dot(
+        %T{type: out_type} = out,
+        %T{type: left_type, data: %TB{ref: left_ref}},
+        left_axes,
+        left_batched_axes,
+        %T{type: right_type, data: %TB{ref: right_ref}},
+        right_axes,
+        right_batched_axes
+      ) do
+    left_axes = Enum.map(left_axes, fn x -> x - Enum.count(left_batched_axes, &(&1 < x)) end)
+    right_axes = Enum.map(right_axes, fn x -> x - Enum.count(right_batched_axes, &(&1 < x)) end)
+
+    Torchx.batched_tensordot(
+      to_typed_ref(left_ref, left_type, out_type),
+      to_typed_ref(right_ref, right_type, out_type),
+      left_axes,
+      left_batched_axes,
+      right_axes,
+      right_batched_axes
+    )
+    |> to_nx(out)
+  end
+
   @impl true
   def cholesky(%T{} = out, %T{} = t) do
     t

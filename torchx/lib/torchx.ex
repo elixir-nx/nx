@@ -271,6 +271,7 @@ defmodule Torchx do
   deftensor amin(tensor, axes, keep_axes)
 
   deftensor tensordot(tensorA, tensorB, axesA, axesB)
+  deftensor batched_tensordot(tensorA, tensorB, axesA, batchA, axesB, batchB)
   deftensor matmul(tensorA, tensorB)
 
   ## Unary ops
