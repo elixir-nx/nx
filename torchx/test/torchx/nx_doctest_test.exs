@@ -21,11 +21,7 @@ defmodule Torchx.NxDoctestTest do
     # mean - Torchx does not support unsigned 64 bit integer
     mean: 2,
     # quotient - Torchx does not support unsigned 32 bit integer
-    quotient: 2,
-    # argmax - Torchx does not support complex numbers as parameters
-    argmax: 2,
-    # argmin - Torchx does not support complex numbers as parameters
-    argmin: 2
+    quotient: 2
   ]
 
   @rounding_error_doctests [

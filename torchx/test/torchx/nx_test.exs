@@ -479,6 +479,29 @@ defmodule Torchx.NxTest do
       )
     end
 
+    test "quotient when dividing scalars" do
+      out = Nx.quotient(11, 2)
+
+      assert_equal(out, Nx.tensor(5))
+    end
+
+    test "quotient when dividing tensors and scalars" do
+      t1 = Nx.tensor([2, 4, 5])
+
+      out = Nx.quotient(t1, 2)
+
+      assert_equal(out, Nx.tensor([1, 2, 2]))
+    end
+
+    test "quotient when dividing tensors" do
+      left = Nx.tensor([[10, 20]])
+      right = Nx.tensor([[1], [2]])
+
+      out = Nx.quotient(left, right)
+
+      assert_equal(out, Nx.tensor([[10, 20], [5, 10]]))
+    end
+
     test "random_uniform" do
       t = Nx.random_uniform({30, 50})
 
