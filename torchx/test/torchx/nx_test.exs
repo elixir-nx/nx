@@ -368,6 +368,26 @@ defmodule Torchx.NxTest do
       assert_equal(t, Nx.tensor([[0, 1, 2], [3, 4, 5]]))
     end
 
+    test "broadcast without axes" do
+      out = Nx.broadcast(1, {1, 2, 3})
+      assert_equal(out, Nx.tensor([[[1, 1, 1], [1, 1, 1]]]))
+    end
+
+    test "broadcast with axes" do
+      t = Nx.tensor([1, 2, 3])
+      out = Nx.broadcast(t, {3, 2}, axes: [0])
+      assert_equal(out, Nx.tensor([[1, 1], [2, 2], [3, 3]]))
+    end
+
+    test "broadcast raises when expanded and existing sizes do not match" do
+      t = Nx.tensor([1, 2, 3])
+
+      assert_raise(
+        RuntimeError,
+        fn -> Nx.broadcast(t, {2, 3, 2}, axes: [1]) end
+      )
+    end
+
     test "dot with vectors" do
       t1 = Nx.tensor([1, 2, 3])
       t2 = Nx.tensor([4, 5, 6])
