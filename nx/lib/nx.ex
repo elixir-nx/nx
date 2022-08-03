@@ -3159,8 +3159,7 @@ defmodule Nx do
   @doc """
   Returns the number of elements in the tensor.
 
-  If a tuple is given as a shape, it computes the size
-  of the given tuple.
+  If a tuple is given, it returns the number of elements in a tensor with that shape.
 
   ### Examples
 
@@ -3170,8 +3169,8 @@ defmodule Nx do
       iex> Nx.size(1)
       1
 
-      iex> Nx.size({1, 2, 3})
-      6
+      iex> Nx.size({1, 2, 3, 2})
+      12
 
   """
   @doc type: :shape
