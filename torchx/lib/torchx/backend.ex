@@ -935,9 +935,10 @@ defmodule Torchx.Backend do
 
   defp do_translate_to_inner_axes(axes, []), do: axes
 
-  defp do_translate_to_inner_axes(axes, [axis | batch_axes]) do
-    translated_axes = Enum.map(axes, fn x -> if x > axis, do: x - 1, else: x end)
-    translate_to_inner_axes(translated_axes, batch_axes)
+  defp do_translate_to_inner_axes(axes, [batch_axis | batch_axes]) do
+    axes
+    |> Enum.map(fn axis -> if axis > batch_axis, do: axis - 1, else: axis end)
+    |> translate_to_inner_axes(batch_axes)
   end
 
   @impl true
