@@ -1,4 +1,5 @@
 #include <torch/torch.h>
+#include <ATen/BatchedTensorImpl.h>
 #include <iostream>
 #include <atomic>
 
@@ -677,9 +678,41 @@ NIF(tensordot)
   TENSOR_PARAM(0, t1);
   TENSOR_PARAM(1, t2);
   LIST_PARAM(2, std::vector<int64_t>, axes1);
-  LIST_PARAM(3, std::vector<int64_t>, axes2);
+  LIST_PARAM(3, std::vector<int64_t>, batch_axes1);
+  LIST_PARAM(4, std::vector<int64_t>, axes2);
+  LIST_PARAM(5, std::vector<int64_t>, batch_axes2);
 
-  TENSOR(torch::tensordot(*t1, *t2, axes1, axes2));
+  bool is_batched = batch_axes1.size() > 0 || batch_axes2.size() > 0;
+
+  torch::Tensor result;
+
+  if (is_batched){
+    // if any of the tensors is batched, we need to apply some transformations
+    // on the inputs and on the result to wrap the batched APIs that torch exposes
+    std::vector<at::BatchDim> batch_dims1, batch_dims2;
+    for (auto dim : batch_axes1)
+    {
+      batch_dims1.push_back(at::BatchDim(0, dim));
+    }
+    torch::Tensor batched_1 = at::makeBatched(*t1, at::BatchDims(batch_dims1.begin(), batch_dims1.end()));
+
+    for (auto dim : batch_axes2)
+    {
+      batch_dims2.push_back(at::BatchDim(0, dim));
+    }
+    torch::Tensor batched_2 = at::makeBatched(*t2, at::BatchDims(batch_dims2.begin(), batch_dims2.end()));
+
+    torch::Tensor batched_result = torch::tensordot(batched_1, batched_2, axes1, axes2);
+    auto impl = at::maybeGetBatchedImpl(batched_result);
+    if (!impl) {
+      return nx::nif::error(env, "unable to get tensordot result");
+    }
+    result = torch::clone(impl->value());
+  } else {
+    result = torch::tensordot(*t1, *t2, axes1, axes2);
+  }
+
+  TENSOR(result);
 }
 
 
@@ -1243,7 +1276,7 @@ static ErlNifFunc nif_functions[] = {
     DF(fft, 2),
     DF(ifft, 2),
 
-    DF(tensordot, 4),
+    DF(tensordot, 6),
     DF(matmul, 2),
     DF(pad, 3),
 

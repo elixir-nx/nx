@@ -420,18 +420,6 @@ defmodule Torchx.NxTest do
       )
     end
 
-    test "dot currently raises when using batching" do
-      # Batching not supported for now. Once it is
-      # supported doctests for dot should be restablished
-
-      t1 = Nx.iota({3, 2, 4, 1})
-      t2 = Nx.iota({3, 4, 2, 2})
-
-      assert_raise(FunctionClauseError, fn ->
-        Nx.dot(t1, [1, 2], [0], t2, [2, 1], [0])
-      end)
-    end
-
     test "make_diagonal" do
       t =
         [1, 2, 3]

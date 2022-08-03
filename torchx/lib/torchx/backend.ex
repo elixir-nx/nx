@@ -907,18 +907,38 @@ defmodule Torchx.Backend do
         %T{type: out_type} = out,
         %T{type: left_type, data: %TB{ref: left_ref}},
         left_axes,
-        [],
+        left_batched_axes,
         %T{type: right_type, data: %TB{ref: right_ref}},
         right_axes,
-        []
+        right_batched_axes
       ) do
+    # since these lists aren't that big, we're probably fine
+    # doing this but optimization is welcome
+    left_axes = translate_to_inner_axes(left_axes, left_batched_axes)
+    right_axes = translate_to_inner_axes(right_axes, right_batched_axes)
+
     Torchx.tensordot(
       to_typed_ref(left_ref, left_type, out_type),
       to_typed_ref(right_ref, right_type, out_type),
       left_axes,
-      right_axes
+      left_batched_axes,
+      right_axes,
+      right_batched_axes
     )
     |> to_nx(out)
+  end
+
+  defp translate_to_inner_axes(axes, []), do: axes
+  # sort the batched_axes so we don't need to keep translating them as well
+  defp translate_to_inner_axes(axes, batched_axes),
+    do: do_translate_to_inner_axes(axes, Enum.sort(batched_axes, :desc))
+
+  defp do_translate_to_inner_axes(axes, []), do: axes
+
+  defp do_translate_to_inner_axes(axes, [batch_axis | batch_axes]) do
+    axes
+    |> Enum.map(fn axis -> if axis > batch_axis, do: axis - 1, else: axis end)
+    |> translate_to_inner_axes(batch_axes)
   end
 
   @impl true
