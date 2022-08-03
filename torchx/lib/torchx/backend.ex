@@ -930,8 +930,11 @@ defmodule Torchx.Backend do
 
   defp translate_to_inner_axes(axes, []), do: axes
   # sort the batched_axes so we don't need to keep translating them as well
-  defp translate_to_inner_axes(axes, batched_axes), do: do_translate_to_inner_axes(axes, Enum.sort(batched_axes, :desc))
+  defp translate_to_inner_axes(axes, batched_axes),
+    do: do_translate_to_inner_axes(axes, Enum.sort(batched_axes, :desc))
+
   defp do_translate_to_inner_axes(axes, []), do: axes
+
   defp do_translate_to_inner_axes(axes, [axis | batch_axes]) do
     translated_axes = Enum.map(axes, fn x -> if x > axis, do: x - 1, else: x end)
     translate_to_inner_axes(translated_axes, batch_axes)
