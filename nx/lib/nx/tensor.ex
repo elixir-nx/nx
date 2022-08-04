@@ -149,10 +149,7 @@ defmodule Nx.Tensor do
   end
 
   def get_and_update(tensor, index, update) do
-    if index < 0 or index >= elem(tensor.shape, 0) do
-      raise ArgumentError,
-            "index #{index} is out of bounds for axis 0 in shape #{inspect(tensor.shape)}"
-    end
+    index = normalize_index(index, 0, tensor.shape)
 
     {:ok, current_value} = fetch(tensor, index)
     {_, new_value} = update.(current_value)

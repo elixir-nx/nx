@@ -336,10 +336,24 @@ defmodule Nx do
         [1, 2, 2]
       >
 
+  The access update syntax also supports negative values, which will access the
+  element from the back:
+
+      iex> t = Nx.tensor([1, 2, 3])
+      iex> put_in(t, [-1], Nx.tensor(4))
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 4]
+      >
+
+  The length of the path list should always be equal or less than the rank
+  of the tensor.
+
   In a multi-dimensional array, the path will determine at which level
   the update will be made.
 
-  A whole tensor can be updated:
+  The update value can also be a tensor with multiple entries as long
+  as the shape matches the target to be updated:
 
       iex> t = Nx.tensor([[1, 2], [3, 4]])
       iex> put_in(t, [1], Nx.tensor([4, 5]))
@@ -351,7 +365,7 @@ defmodule Nx do
         ]
       >
 
-  Or a scalar in a deeper level:
+  We can also update a single tensor entry at a deeper level:
 
       iex> t = Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
       iex> put_in(t, [0, 1, 1], Nx.tensor(99))
@@ -369,8 +383,8 @@ defmodule Nx do
         ]
       >
 
-  As long as the update value is the same shape as the target one
-  to be substituted it will replace it, if not it will raise:
+  If the update value is not the same shape as the target one
+  it will raise:
 
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
       iex> put_in(t, [0], Nx.tensor([1, 2]))
@@ -380,8 +394,6 @@ defmodule Nx do
       iex> t = Nx.tensor([[1, 2], [3, 4]])
       iex> put_in(t, [2], Nx.tensor([5, 6]))
       ** (ArgumentError) index 2 is out of bounds for axis 0 in shape {2, 2}
-
-  Unlike the access get syntax, it does not accept negative indices.
 
   As for the update_in function, it accepts any function that can take
   the tensor as an argument and will apply it to the target:
