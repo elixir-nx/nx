@@ -193,6 +193,7 @@ defmodule Nx.Tensor do
   end
 
   defp get_slice(_tensor, _indices, [0 | _]), do: nil
+
   defp get_slice(tensor, indices, lengths) do
     impl = Nx.Shared.impl!(tensor)
 
