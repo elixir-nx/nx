@@ -162,12 +162,6 @@ defmodule Nx.Tensor do
             "the shape #{inspect(new_value.shape)} of the new value does not match the current value shape #{inspect(current_value.shape)}"
     end
 
-    {before_indices, after_indices} = get_indices(index, tensor.shape)
-    {before_lengths, after_lengths} = get_lengths(index, tensor.shape)
-
-    slice_before = get_slice(tensor, before_indices, before_lengths)
-    slice_after = get_slice(tensor, after_indices, after_lengths)
-
     wrapper_shape =
       tensor.shape
       |> Tuple.delete_at(0)
@@ -175,30 +169,21 @@ defmodule Nx.Tensor do
 
     new_value_wrapped = Nx.broadcast(new_value, wrapper_shape)
 
-    slices = Enum.reject([slice_before, new_value_wrapped, slice_after], &is_nil/1)
+    indices = get_slice_indices(index, tensor.shape)
 
-    {current_value, Nx.concatenate(slices)}
-  end
-
-  defp get_indices(index, shape) do
-    before_indices = List.duplicate(0, Nx.rank(shape))
-    after_indices = List.replace_at(before_indices, 0, index + 1)
-
-    {before_indices, after_indices}
-  end
-
-  defp get_lengths(index, shape) do
-    [m | lengths_tail] = Tuple.to_list(shape)
-    {[index | lengths_tail], [m - (index + 1) | lengths_tail]}
-  end
-
-  defp get_slice(_tensor, _indices, [0 | _]), do: nil
-
-  defp get_slice(tensor, indices, lengths) do
     impl = Nx.Shared.impl!(tensor)
 
-    %{tensor | shape: List.to_tuple(lengths)}
-    |> impl.slice(tensor, indices, lengths, List.duplicate(1, Nx.rank(tensor.shape)))
+    updated_tensor =
+      tensor
+      |> impl.put_slice(tensor, indices, new_value_wrapped)
+
+    {current_value, updated_tensor}
+  end
+
+  defp get_slice_indices(index, shape) do
+    0
+    |> List.duplicate(Nx.rank(shape))
+    |> List.replace_at(0, index)
   end
 
   @impl true
