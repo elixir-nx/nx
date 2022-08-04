@@ -143,8 +143,61 @@ defmodule Nx.Tensor do
   end
 
   @impl true
-  def get_and_update(_tensor, _index, _update) do
-    raise "Access.get_and_update/3 is not yet supported by Nx.Tensor"
+  def get_and_update(%Nx.Tensor{shape: {}} = tensor, _index, _update) do
+    raise ArgumentError,
+          "cannot use the tensor[index] syntax on scalar tensor #{inspect(tensor)}"
+  end
+
+  def get_and_update(tensor, index, update) do
+    if index < 0 or index >= elem(tensor.shape, 0) do
+      raise ArgumentError,
+            "index #{index} is out of bounds for axis 0 in shape #{inspect(tensor.shape)}"
+    end
+
+    {:ok, current_value} = fetch(tensor, index)
+    {_, new_value} = update.(current_value)
+
+    if current_value.shape != new_value.shape do
+      raise ArgumentError,
+            "the shape #{inspect(new_value.shape)} of the new value does not match the current value shape #{inspect(current_value.shape)}"
+    end
+
+    {before_indices, after_indices} = get_indices(index, tensor.shape)
+    {before_lengths, after_lengths} = get_lengths(index, tensor.shape)
+
+    slice_before = get_slice(tensor, before_indices, before_lengths)
+    slice_after = get_slice(tensor, after_indices, after_lengths)
+
+    wrapper_shape =
+      tensor.shape
+      |> Tuple.delete_at(0)
+      |> Tuple.insert_at(0, 1)
+
+    new_value_wrapped = Nx.broadcast(new_value, wrapper_shape)
+
+    slices = Enum.reject([slice_before, new_value_wrapped, slice_after], &is_nil/1)
+
+    {current_value, Nx.concatenate(slices)}
+  end
+
+  defp get_indices(index, shape) do
+    before_indices = List.duplicate(0, Nx.rank(shape))
+    after_indices = List.replace_at(before_indices, 0, index + 1)
+
+    {before_indices, after_indices}
+  end
+
+  defp get_lengths(index, shape) do
+    [m | lengths_tail] = Tuple.to_list(shape)
+    {[index | lengths_tail], [m - (index + 1) | lengths_tail]}
+  end
+
+  defp get_slice(_tensor, _indices, [0 | _]), do: nil
+  defp get_slice(tensor, indices, lengths) do
+    impl = Nx.Shared.impl!(tensor)
+
+    %{tensor | shape: List.to_tuple(lengths)}
+    |> impl.slice(tensor, indices, lengths, List.duplicate(1, Nx.rank(tensor.shape)))
   end
 
   @impl true

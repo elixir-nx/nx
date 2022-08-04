@@ -323,6 +323,79 @@ defmodule Nx do
   For a more complex slicing rules, including strides, you
   can always fallback to `Nx.slice/4`.
 
+  Access also supports updating values with put_in/3 and update_in/3,
+  where the path to the value is a list of integers indicating the sub-dimensions.
+
+  The value that will be used to substitute should be a tensor of the same
+  shape as the one being updated.
+
+      iex> t = Nx.tensor([1, 2, 3])
+      iex> put_in(t, [2], Nx.tensor(2))
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 2]
+      >
+
+  In a multi-dimensional array, the path will determine at which level
+  the update will be made.
+
+  A whole tensor can be updated:
+
+      iex> t = Nx.tensor([[1, 2], [3, 4]])
+      iex> put_in(t, [1], Nx.tensor([4, 5]))
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 2],
+          [4, 5]
+        ]
+      >
+
+  Or a scalar in a deeper level:
+
+      iex> t = Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
+      iex> put_in(t, [0, 1, 1], Nx.tensor(99))
+      #Nx.Tensor<
+        s64[2][2][2]
+        [
+          [
+            [1, 2],
+            [3, 99]
+          ],
+          [
+            [5, 6],
+            [7, 8]
+          ]
+        ]
+      >
+
+  As long as the update value is the same shape as the target one
+  to be substituted it will replace it, if not it will raise:
+
+      iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      iex> put_in(t, [0], Nx.tensor([1, 2]))
+      ** (ArgumentError) the shape {2} of the new value does not match the current value shape {3}
+
+  Out of bound attempts to update will also raise:
+      iex> t = Nx.tensor([[1, 2], [3, 4]])
+      iex> put_in(t, [2], Nx.tensor([5, 6]))
+      ** (ArgumentError) index 2 is out of bounds for axis 0 in shape {2, 2}
+
+  Unlike the access get syntax, it does not accept negative indices.
+
+  As for the update_in function, it accepts any function that can take
+  the tensor as an argument and will apply it to the target:
+
+      iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      iex> update_in(t, [0], fn t -> Nx.multiply(t, 2) end)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [2, 4, 6],
+          [4, 5, 6]
+        ]
+      >
+
   ## Backends
 
   The `Nx` library has built-in support for multiple backends.
