@@ -258,16 +258,39 @@ defmodule Nx do
       >
 
   As you can see, accessing with a range does not eliminate the
-  accessed axis, therefore, when wanting to slice across multiple
-  axes with ranges, it is often desired to use a list:
+  accessed axis. This means that, if you try to cascade ranges,
+  you will always be filtering the highest dimension:
 
-      iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]])
-      iex> t[[1..2, 1..2]]
+      iex> t = Nx.tensor([[1, 2], [3, 4], [5, 6], [7, 8]])
+      iex> t[1..-1//1] # Drop the first "row"
+      #Nx.Tensor<
+        s64[3][2]
+        [
+          [3, 4],
+          [5, 6],
+          [7, 8]
+        ]
+      >
+      iex> t[1..-1//1][1..-1//1] # Drop the first "row" twice
       #Nx.Tensor<
         s64[2][2]
         [
           [5, 6],
-          [8, 9]
+          [7, 8]
+        ]
+      >
+
+  Therefore, if you want to slice across multiple dimensions, you can wrap
+  the ranges in a list:
+
+      iex> t = Nx.tensor([[1, 2], [3, 4], [5, 6], [7, 8]])
+      iex> t[[1..-1//1, 1..-1//1]] # Drop the first "row" and the first "column"
+      #Nx.Tensor<
+        s64[3][1]
+        [
+          [4],
+          [6],
+          [8]
         ]
       >
 
@@ -293,9 +316,9 @@ defmodule Nx do
         ]
       >
 
-  The access syntax also pairs nicely with named tensors. By
-  using named tensors, you can pass only the axis you want to
-  slice, leaving the other axis intact:
+  The access syntax also pairs nicely with named tensors. By using named
+  tensors, you can pass only the axis you want to slice, leaving the other
+  axes intact:
 
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]], names: [:x, :y])
       iex> t[x: 1..2]
