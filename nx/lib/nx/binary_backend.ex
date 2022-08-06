@@ -757,15 +757,52 @@ defmodule Nx.BinaryBackend do
 
   defp element_right_shift(_, _, b), do: raise(ArgumentError, "cannot right shift by #{b}")
 
+  defp element_equal(_, :nan, _), do: 0
+  defp element_equal(_, _, :nan), do: 0
   defp element_equal(_, a, b), do: boolean_as_number(a == b)
+
+  defp element_not_equal(_, :nan, _), do: 1
+  defp element_not_equal(_, _, :nan), do: 1
   defp element_not_equal(_, a, b), do: boolean_as_number(a != b)
+
   defp element_logical_and(_, a, b), do: boolean_as_number(as_boolean(a) and as_boolean(b))
   defp element_logical_or(_, a, b), do: boolean_as_number(as_boolean(a) or as_boolean(b))
   defp element_logical_xor(_, a, b), do: boolean_as_number(as_boolean(a) != as_boolean(b))
 
+  defp element_greater(_, :nan, _), do: 0
+  defp element_greater(_, _, :nan), do: 0
+  defp element_greater(_, x, x), do: 0
+  defp element_greater(_, :infinity, _), do: 1
+  defp element_greater(_, _, :neg_infinity), do: 1
+  defp element_greater(_, :neg_infinity, _), do: 0
+  defp element_greater(_, _, :infinity), do: 0
   defp element_greater(_, a, b), do: boolean_as_number(a > b)
+
+  defp element_less(_, :nan, _), do: 0
+  defp element_less(_, _, :nan), do: 0
+  defp element_less(_, :infinity, _), do: 0
+  defp element_less(_, _, :neg_infinity), do: 0
+  defp element_less(_, x, x), do: 0
+  defp element_less(_, _, :infinity), do: 1
+  defp element_less(_, :neg_infinity, _), do: 1
   defp element_less(_, a, b), do: boolean_as_number(a < b)
+
+  defp element_greater_equal(_, :nan, _), do: 0
+  defp element_greater_equal(_, _, :nan), do: 0
+  defp element_greater_equal(_, x, x), do: 1
+  defp element_greater_equal(_, :neg_infinity, _), do: 0
+  defp element_greater_equal(_, _, :infinity), do: 0
+  defp element_greater_equal(_, :infinity, _), do: 1
+  defp element_greater_equal(_, _, :neg_infinity), do: 1
   defp element_greater_equal(_, a, b), do: boolean_as_number(a >= b)
+
+  defp element_less_equal(_, :nan, _), do: 0
+  defp element_less_equal(_, _, :nan), do: 0
+  defp element_less_equal(_, _, :infinity), do: 1
+  defp element_less_equal(_, :neg_infinity, _), do: 1
+  defp element_less_equal(_, x, x), do: 1
+  defp element_less_equal(_, :infinity, _), do: 0
+  defp element_less_equal(_, _, :neg_infinity), do: 0
   defp element_less_equal(_, a, b), do: boolean_as_number(a <= b)
 
   defp as_boolean(n) when n == 0, do: false
