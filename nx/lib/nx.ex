@@ -9372,6 +9372,17 @@ defmodule Nx do
         ]
       >
 
+  This also applies when the start index is given by tensors:
+
+      iex> Nx.slice(Nx.iota({3, 3}), [Nx.tensor(2), Nx.tensor(2)], [2, 2])
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [4, 5],
+          [7, 8]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.slice(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [Nx.tensor([1, 2]), Nx.tensor(1)], [1, 1])
@@ -9394,7 +9405,7 @@ defmodule Nx do
         do: List.duplicate(strides, rank(shape)),
         else: strides
 
-    output_shape = Nx.Shape.slice(shape, start_indices, lengths, strides)
+    {start_indices, output_shape} = Nx.Shape.slice(shape, start_indices, lengths, strides)
     out = %{tensor | shape: output_shape}
     impl!(tensor).slice(out, tensor, start_indices, lengths, strides)
   end

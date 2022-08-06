@@ -1099,7 +1099,10 @@ defmodule Nx.Shape do
   ## Examples
 
       iex> Nx.Shape.slice({2, 15, 30}, [1, 4, 10], [1, 1, 10], [1, 1, 3])
-      {1, 1, 4}
+      {[1, 4, 10], {1, 1, 4}}
+
+      iex> Nx.Shape.slice({2, 15, 30}, [1, 4, 25], [1, 1, 10], [1, 1, 1])
+      {[1, 4, 20], {1, 1, 10}}
 
   ### Error cases
 
@@ -1122,12 +1125,10 @@ defmodule Nx.Shape do
       raise ArgumentError, "invalid limit indices rank for shape of rank #{rank}"
     end
 
-    shape
-    |> do_slice(0, lengths, strides)
-    |> List.to_tuple()
+    do_slice(shape, 0, start_indices, lengths, strides, [], [])
   end
 
-  defp do_slice(shape, pos, [len | lengths], [s | strides]) do
+  defp do_slice(shape, pos, [i | indices], [len | lengths], [s | strides], acc_indices, acc_shape) do
     dim = elem(shape, pos)
 
     if not is_integer(len) or len < 1 do
@@ -1145,10 +1146,14 @@ defmodule Nx.Shape do
             "length at axis #{pos} must be less than axis size of #{dim}, got: #{len}"
     end
 
-    [Kernel.ceil(len / s) | do_slice(shape, pos + 1, lengths, strides)]
+    out = Kernel.ceil(len / s)
+    i = if is_integer(i), do: min(i, dim - len), else: i
+    do_slice(shape, pos + 1, indices, lengths, strides, [i | acc_indices], [out | acc_shape])
   end
 
-  defp do_slice(_shape, _pos, [], []), do: []
+  defp do_slice(_shape, _pos, [], [], [], acc_indices, acc_shape) do
+    {Enum.reverse(acc_indices), acc_shape |> Enum.reverse() |> List.to_tuple()}
+  end
 
   @doc """
   Returns the shape and names after a put_slice.
