@@ -6230,8 +6230,7 @@ defmodule Nx do
     a = to_tensor(a)
     b = to_tensor(b)
 
-    finite_entries =
-      less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b))))
+    finite_entries = less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b))))
 
     if Nx.Type.integer?(a.type) and Nx.Type.integer?(b.type) do
       all(finite_entries)
