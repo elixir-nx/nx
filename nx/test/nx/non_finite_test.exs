@@ -14,6 +14,9 @@ defmodule Nx.NonFiniteTest do
   @inf_inf Complex.new(:infinity, :infinity)
   @nan_nan Complex.new(:nan, :nan)
 
+  @one Nx.tensor(1, type: {:u, 8})
+  @zero Nx.tensor(0, type: {:u, 8})
+
   describe "unary operations" do
     test "exp" do
       assert Nx.exp(@arg) == Nx.tensor(@inf_inf)
@@ -128,15 +131,15 @@ defmodule Nx.NonFiniteTest do
 
   describe "aggregate operations" do
     test "all" do
-      assert Nx.all(Nx.tensor([@arg, @arg2])) == Nx.tensor(1, type: {:u, 8})
+      assert Nx.all(Nx.tensor([@arg, @arg2])) == @one
     end
 
     test "all_close" do
-      assert Nx.all_close(Nx.tensor([@arg, @arg2]), 0) == Nx.tensor(0, type: {:u, 8})
+      assert Nx.all_close(Nx.tensor([@arg, @arg2]), 0) == @zero
     end
 
     test "any" do
-      assert Nx.any(Nx.tensor([@arg, @arg2])) == Nx.tensor(1, type: {:u, 8})
+      assert Nx.any(Nx.tensor([@arg, @arg2])) == @one
     end
 
     test "mean" do
@@ -298,8 +301,6 @@ defmodule Nx.NonFiniteTest do
   end
 
   describe "comparison operators" do
-    @one Nx.tensor(1, type: {:u, 8})
-    @zero Nx.tensor(0, type: {:u, 8})
     test "less" do
       assert @zero == Nx.less(:infinity, :neg_infinity)
       assert @zero == Nx.less(:infinity, :nan)
