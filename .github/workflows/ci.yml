@@ -20,7 +20,7 @@ jobs:
     env:
       MIX_ENV: test
       XLA_FLAGS: --xla_force_host_platform_device_count=2
-      LIBTORCH_DIR: ./cache/libtorch.zip
+      LIBTORCH_DIR: ./cache/libtorch
     steps:
       - uses: actions/checkout@v2
       - uses: erlef/setup-beam@v1
