@@ -771,15 +771,15 @@ defmodule Nx.BinaryBackend do
 
   defp element_greater(_, :nan, _), do: 0
   defp element_greater(_, _, :nan), do: 0
-  defp element_greater(_, :infinity, _), do: 0
-  defp element_greater(_, _, :neg_infinity), do: 0
   defp element_greater(_, x, x), do: 0
-  defp element_greater(_, :neg_infinity, _), do: 1
-  defp element_greater(_, _, :infinity), do: 1
+  defp element_greater(_, :infinity, _), do: 1
+  defp element_greater(_, _, :neg_infinity), do: 1
+  defp element_greater(_, :neg_infinity, _), do: 0
+  defp element_greater(_, _, :infinity), do: 0
   defp element_greater(_, a, b), do: boolean_as_number(a > b)
 
-  defp element_less(_, :nan, _), do: 1
-  defp element_less(_, _, :nan), do: 1
+  defp element_less(_, :nan, _), do: 0
+  defp element_less(_, _, :nan), do: 0
   defp element_less(_, :infinity, _), do: 0
   defp element_less(_, _, :neg_infinity), do: 0
   defp element_less(_, x, x), do: 0
@@ -789,11 +789,11 @@ defmodule Nx.BinaryBackend do
 
   defp element_greater_equal(_, :nan, _), do: 0
   defp element_greater_equal(_, _, :nan), do: 0
-  defp element_greater_equal(_, :neg_infinity, _), do: 1
-  defp element_greater_equal(_, _, :infinity), do: 1
   defp element_greater_equal(_, x, x), do: 1
-  defp element_greater_equal(_, :infinity, _), do: 0
-  defp element_greater_equal(_, _, :neg_infinity), do: 0
+  defp element_greater_equal(_, :neg_infinity, _), do: 0
+  defp element_greater_equal(_, _, :infinity), do: 0
+  defp element_greater_equal(_, :infinity, _), do: 1
+  defp element_greater_equal(_, _, :neg_infinity), do: 1
   defp element_greater_equal(_, a, b), do: boolean_as_number(a >= b)
 
   defp element_less_equal(_, :nan, _), do: 0

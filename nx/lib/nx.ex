@@ -1806,6 +1806,11 @@ defmodule Nx do
     backend.constant(out, number, options)
   end
 
+  def to_tensor(n) when n in [:infinity, :neg_infinity, :nan] do
+    {backend, options} = default_backend()
+    backend.constant(%T{shape: {}, type: {:f, 32}, names: []}, n, options)
+  end
+
   def to_tensor(t) do
     raise ArgumentError, "expected a %Nx.Tensor{} or a number, got: #{inspect(t)}"
   end
