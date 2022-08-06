@@ -1792,7 +1792,7 @@ defmodule Nx do
   def to_tensor(%T{} = t),
     do: t
 
-  def to_tensor(number) when is_number(number) do
+  def to_tensor(number) when is_number(number) or number in [:infinity, :neg_infinity, :nan] do
     {backend, options} = default_backend()
     type = Nx.Type.infer(number)
     out = %T{shape: {}, type: type, names: []}
@@ -1804,11 +1804,6 @@ defmodule Nx do
     {_, size} = re |> Nx.Type.infer() |> Nx.Type.merge(Nx.Type.infer(im))
     out = %T{shape: {}, type: {:c, size * 2}, names: []}
     backend.constant(out, number, options)
-  end
-
-  def to_tensor(n) when n in [:infinity, :neg_infinity, :nan] do
-    {backend, options} = default_backend()
-    backend.constant(%T{shape: {}, type: {:f, 32}, names: []}, n, options)
   end
 
   def to_tensor(t) do
