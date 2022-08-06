@@ -39,7 +39,7 @@ jobs:
         id: libtorch-cache
         with:
           path: ${{ env.LIBTORCH_DIR }}
-          key: v1-libtorch-cpu
+          key: v1-libtorch-cpu-zip
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
