@@ -37,8 +37,8 @@ jobs:
         uses: actions/cache@v1
         id: libtorch-cache
         with:
-          path: ./torchx/cache/libtorch-cpu
-          key: v1-libtorch-cpu.zip
+          path: ./cache/libtorch-cpu
+          key: v1-libtorch-cpu
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
