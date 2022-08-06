@@ -11,8 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        working_directory: ["torchx"]
-        # working_directory: ["nx", "exla", "torchx"]
+        working_directory: ["nx", "exla", "torchx"]
         elixir: ["1.13.0"]
         otp: ["24.0"]
     defaults:
@@ -33,14 +32,14 @@ jobs:
         id: mix-cache # id to use in retrieve action
         with:
           path: deps
-          key: v1-${{ matrix.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+          key: v1-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}{2}', github.workspace, matrix.working_directory, '/mix.lock')) }}
       - name: Retrieve libtorch cache
         if: ${{ matrix.working_directory == 'torchx' }}
         uses: actions/cache@v1
         id: libtorch-cache
         with:
           path: torchx/${{ env.LIBTORCH_DIR }}
-          key: v3-libtorch-cpu-zip
+          key: linux-v1-libtorch-cpu
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
@@ -65,6 +64,7 @@ jobs:
     env:
       MIX_ENV: test
       XLA_FLAGS: --xla_force_host_platform_device_count=2
+      LIBTORCH_DIR: ./cache/libtorch
     steps:
       - name: Configure Git
         run: git config --global core.autocrlf input
@@ -80,14 +80,14 @@ jobs:
         id: mix-cache # id to use in retrieve action
         with:
           path: deps
-          key: v1-${{ matrix.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+          key: v1-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}{2}', github.workspace, matrix.working_directory, '/mix.lock')) }}
       - name: Retrieve libtorch cache
         if: ${{ matrix.working_directory == 'torchx' }}
         uses: actions/cache@v1
         id: libtorch-cache-win
         with:
-          path: ./torchx/cache/libtorch-cpu
-          key: win-v1-libtorch-cpu.zip
+          path: torchx/${{ env.LIBTORCH_DIR }}
+          key: win-v1-libtorch-cpu
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
