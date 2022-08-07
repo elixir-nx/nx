@@ -270,7 +270,10 @@ defmodule Torchx do
   deftensor amax(tensor, axes, keep_axes)
   deftensor amin(tensor, axes, keep_axes)
 
-  deftensor tensordot(tensorA, tensorB, axesA, axesB)
+  def tensordot(tensorA, tensorB, axesA, axesB),
+    do: tensordot(tensorA, tensorB, axesA, [], axesB, [])
+
+  deftensor tensordot(tensorA, tensorB, axesA, batchA, axesB, batchB)
   deftensor matmul(tensorA, tensorB)
 
   ## Unary ops
@@ -311,6 +314,7 @@ defmodule Torchx do
   deftensor round(tensor)
   deftensor sign(tensor)
   deftensor is_nan(tensor)
+  deftensor is_infinity(tensor)
 
   deftensor pad(tensor, config, constant)
 

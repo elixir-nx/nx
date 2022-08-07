@@ -328,8 +328,8 @@ $$
 \end{bmatrix}
 $$
 
-To solve this problem, add each integer on the left with the
-corresponding integer on the right. Unfortunately, we cannot
+To solve this problem, subtract each right-hand integer from the
+corresponding left-hand integer. Unfortunately, we cannot
 use Elixir's built-in subtraction operator as it is not tensor-aware.
 Luckily, we can use the `Nx.subtract/2` function to solve the
 problem:
@@ -592,7 +592,7 @@ We'll build a module with a few functions,
 and then create another function to create the gradients of those
 functions. The function `grad/1` takes a function, and returns
 a function returning the gradient. We have two functions: `poly/1`
-is a simple numerical definitin, and `poly_slope_at/1` returns
+is a simple numerical definition, and `poly_slope_at/1` returns
 its gradient:
 
 $$
@@ -611,7 +611,7 @@ defmodule Funs do
     3 * Nx.power(x, 2) + 2 * x + 1
   end
 
-  def poly_slope_at(x) do
+  defn poly_slope_at(x) do
     grad(&poly/1).(x)
   end
 end

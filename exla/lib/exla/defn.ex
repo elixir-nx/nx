@@ -844,7 +844,12 @@ defmodule EXLA.Defn do
 
   defp to_operator(:fft, args, out, state), do: fft(&EXLA.Op.fft/2, args, out, state)
   defp to_operator(:ifft, args, out, state), do: fft(&EXLA.Op.ifft/2, args, out, state)
-  defp to_operator(:is_nan, [arg], _out, _state), do: EXLA.Op.is_nan(arg, op_type(arg))
+
+  defp to_operator(:is_nan, [arg], out, state),
+    do: EXLA.Op.is_nan(arg, op_type(arg), out.shape, Nx.axes(out), state)
+
+  defp to_operator(:is_infinity, [arg], out, state),
+    do: EXLA.Op.is_infinity(arg, op_type(arg), out.shape, Nx.axes(out), state)
 
   # These operations do the type conversion implicitly, and so
   # we cannot mess with the output type (e.g. the to_type conversion)

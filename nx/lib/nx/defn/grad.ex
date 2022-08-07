@@ -74,7 +74,7 @@ defmodule Nx.Defn.Grad do
                [:bitwise_and, :bitwise_or, :bitwise_xor, :bitwise_not] ++
                [:logical_and, :logical_or, :logical_xor, :logical_not] ++
                [:left_shift, :right_shift, :count_leading_zeros, :population_count] ++
-               [:floor, :round, :ceil, :sign, :is_nan] ++
+               [:floor, :round, :ceil, :sign, :is_nan, :is_infinity] ++
                [:equal, :greater, :greater_equal, :less, :less_equal, :not_equal, :argsort]
 
   defp parents_tree(expr, nodes) do

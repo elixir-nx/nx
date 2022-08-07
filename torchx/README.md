@@ -13,8 +13,7 @@ via the `mix` build tool:
 $ mix new my_app
 ```
 
-Then you can add `Torchx` as dependency in your `mix.exs`. At the moment you will have to
-use a Git dependency while we work on our first release:
+Then you can add `Torchx` as dependency in your `mix.exs`:
 
 ```elixir
 def deps do

@@ -368,6 +368,78 @@ defmodule Torchx.NxTest do
       assert_equal(t, Nx.tensor([[0, 1, 2], [3, 4, 5]]))
     end
 
+    test "broadcast without axes" do
+      out = Nx.broadcast(1, {1, 2, 3})
+      assert_equal(out, Nx.tensor([[[1, 1, 1], [1, 1, 1]]]))
+    end
+
+    test "broadcast with axes" do
+      t = Nx.tensor([1, 2, 3])
+      out = Nx.broadcast(t, {3, 2}, axes: [0])
+      assert_equal(out, Nx.tensor([[1, 1], [2, 2], [3, 3]]))
+    end
+
+    test "broadcast raises when expanded and existing sizes do not match" do
+      t = Nx.tensor([1, 2, 3])
+
+      assert_raise(
+        RuntimeError,
+        fn -> Nx.broadcast(t, {2, 3, 2}, axes: [1]) end
+      )
+    end
+
+    test "dot with vectors" do
+      t1 = Nx.tensor([1, 2, 3])
+      t2 = Nx.tensor([4, 5, 6])
+
+      out = Nx.dot(t1, t2)
+
+      assert_equal(out, Nx.tensor(32))
+    end
+
+    test "dot with matrices" do
+      t1 = Nx.tensor([[1, 2], [3, 4]])
+      t2 = Nx.tensor([[5, 6], [7, 8]])
+
+      out = Nx.dot(t1, t2)
+
+      assert_equal(out, Nx.tensor([[19, 22], [43, 50]]))
+    end
+
+    test "dot with vector and scalar" do
+      t = Nx.tensor([[1, 2, 3]])
+      assert Nx.shape(t) == {1, 3}
+      out = Nx.dot(t, 3)
+
+      assert Nx.shape(out) == {1, 3}
+      assert_equal(out, Nx.tensor([[3, 6, 9]]))
+    end
+
+    test "dot does not re-sort the contracting axes" do
+      t1 = Nx.iota({2, 7, 8, 3, 1})
+      t2 = Nx.iota({1, 8, 3, 7, 3})
+
+      out = Nx.dot(t1, [3, 1, 2], t2, [2, 3, 1])
+
+      assert {2, 1, 1, 3} == out.shape
+
+      assert_equal(
+        out,
+        Nx.tensor([
+          [
+            [
+              [3_731_448, 3_745_476, 3_759_504]
+            ]
+          ],
+          [
+            [
+              [10_801_560, 10_843_812, 10_886_064]
+            ]
+          ]
+        ])
+      )
+    end
+
     test "make_diagonal" do
       t =
         [1, 2, 3]
@@ -375,6 +447,80 @@ defmodule Torchx.NxTest do
         |> Nx.make_diagonal()
 
       assert_equal(t, Nx.tensor([[1, 0, 0], [0, 2, 0], [0, 0, 3]]))
+    end
+
+    test "mean with a scalar" do
+      t = Nx.tensor(42)
+      out = Nx.mean(t)
+
+      assert_equal(out, t)
+    end
+
+    test "mean with a vector" do
+      t = Nx.tensor([1, 2, 3])
+      out = Nx.mean(t)
+
+      assert_equal(out, Nx.tensor(2))
+    end
+
+    test "mean aggregating over an axis" do
+      t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      out = Nx.mean(t, axes: [:x])
+
+      assert_equal(out, Nx.tensor([[4, 5, 6], [7, 8, 9]]))
+    end
+
+    test "mean keeping axes" do
+      t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      out = Nx.mean(t, axes: [-1], keep_axes: true)
+
+      assert_equal(out, Nx.tensor([[[2], [5]], [[8], [11]]]))
+    end
+
+    test "mean fails when using unsigned integers" do
+      t = Nx.tensor([1, 2, 3], type: {:u, 8}, names: [:x])
+
+      assert_raise(
+        ArgumentError,
+        "Torchx does not support unsigned 64 bit integer (explicitly cast the input tensor to a signed integer before taking sum)",
+        fn -> Nx.mean(t, axes: [:x]) end
+      )
+    end
+
+    test "quotient when dividing scalars" do
+      out = Nx.quotient(11, 2)
+
+      assert_equal(out, Nx.tensor(5))
+    end
+
+    test "quotient when dividing tensors and scalars" do
+      t1 = Nx.tensor([2, 4, 5])
+
+      out = Nx.quotient(t1, 2)
+
+      assert_equal(out, Nx.tensor([1, 2, 2]))
+    end
+
+    test "quotient when dividing tensors" do
+      left = Nx.tensor([[10, 20]])
+      right = Nx.tensor([[1], [2]])
+
+      out = Nx.quotient(left, right)
+
+      assert_equal(out, Nx.tensor([[10, 20], [5, 10]]))
+    end
+
+    test "quotient fails when using unsigned integers" do
+      assert_raise(
+        ArgumentError,
+        "Torchx does not support unsigned 32 bit integer",
+        fn ->
+          Nx.quotient(
+            Nx.tensor([[10, 20]], type: {:u, 8}),
+            Nx.tensor([[1], [2]], type: {:u, 32})
+          )
+        end
+      )
     end
 
     test "random_uniform" do

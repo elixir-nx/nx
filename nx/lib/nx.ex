@@ -258,16 +258,39 @@ defmodule Nx do
       >
 
   As you can see, accessing with a range does not eliminate the
-  accessed axis, therefore, when wanting to slice across multiple
-  axes with ranges, it is often desired to use a list:
+  accessed axis. This means that, if you try to cascade ranges,
+  you will always be filtering the highest dimension:
 
-      iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]])
-      iex> t[[1..2, 1..2]]
+      iex> t = Nx.tensor([[1, 2], [3, 4], [5, 6], [7, 8]])
+      iex> t[1..-1//1] # Drop the first "row"
+      #Nx.Tensor<
+        s64[3][2]
+        [
+          [3, 4],
+          [5, 6],
+          [7, 8]
+        ]
+      >
+      iex> t[1..-1//1][1..-1//1] # Drop the first "row" twice
       #Nx.Tensor<
         s64[2][2]
         [
           [5, 6],
-          [8, 9]
+          [7, 8]
+        ]
+      >
+
+  Therefore, if you want to slice across multiple dimensions, you can wrap
+  the ranges in a list:
+
+      iex> t = Nx.tensor([[1, 2], [3, 4], [5, 6], [7, 8]])
+      iex> t[[1..-1//1, 1..-1//1]] # Drop the first "row" and the first "column"
+      #Nx.Tensor<
+        s64[3][1]
+        [
+          [4],
+          [6],
+          [8]
         ]
       >
 
@@ -293,9 +316,9 @@ defmodule Nx do
         ]
       >
 
-  The access syntax also pairs nicely with named tensors. By
-  using named tensors, you can pass only the axis you want to
-  slice, leaving the other axis intact:
+  The access syntax also pairs nicely with named tensors. By using named
+  tensors, you can pass only the axis you want to slice, leaving the other
+  axes intact:
 
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]], names: [:x, :y])
       iex> t[x: 1..2]
@@ -1769,7 +1792,7 @@ defmodule Nx do
   def to_tensor(%T{} = t),
     do: t
 
-  def to_tensor(number) when is_number(number) do
+  def to_tensor(number) when is_number(number) or number in [:infinity, :neg_infinity, :nan] do
     {backend, options} = default_backend()
     type = Nx.Type.infer(number)
     out = %T{shape: {}, type: type, names: []}
@@ -3159,8 +3182,7 @@ defmodule Nx do
   @doc """
   Returns the number of elements in the tensor.
 
-  If a tuple is given as a shape, it computes the size
-  of the given tuple.
+  If a tuple is given, it returns the number of elements in a tensor with that shape.
 
   ### Examples
 
@@ -3170,8 +3192,8 @@ defmodule Nx do
       iex> Nx.size(1)
       1
 
-      iex> Nx.size({1, 2, 3})
-      6
+      iex> Nx.size({1, 2, 3, 2})
+      12
 
   """
   @doc type: :shape
@@ -5064,11 +5086,11 @@ defmodule Nx do
   """
   @doc type: :element
   def select(pred, on_true, on_false) do
-    output_type = binary_type(on_true, on_false)
-
     %T{shape: pred_shape, names: pred_names} = pred = to_tensor(pred)
     %T{shape: true_shape, names: true_names} = on_true = to_tensor(on_true)
     %T{shape: false_shape, names: false_names} = on_false = to_tensor(on_false)
+
+    output_type = binary_type(on_true, on_false)
 
     {output_shape, output_names} =
       case pred_shape do
@@ -5528,7 +5550,7 @@ defmodule Nx do
         [1, 0, 0]
       >
 
-      iex> Nx.is_nan(Nx.tensor([:nan, 1, Complex.new(0, :nan)]))
+      iex> Nx.is_nan(Nx.tensor([:nan, :infinity, Complex.new(0, :nan)]))
       #Nx.Tensor<
         u8[3]
         [1, 0, 1]
@@ -5545,6 +5567,39 @@ defmodule Nx do
     tensor = to_tensor(tensor)
 
     impl!(tensor).is_nan(%{tensor | type: {:u, 8}}, tensor)
+  end
+
+  @doc """
+  Determines if each element in `tensor` is `Inf` or `-Inf`.
+
+  For complex tensors, if either of the components is infinity,
+  the entry is deemed infinity as well.
+
+  ## Examples
+
+      iex> Nx.is_infinity(Nx.tensor([:infinity, :nan, :neg_infinity, 1, 0]))
+      #Nx.Tensor<
+        u8[5]
+        [1, 0, 1, 0, 0]
+      >
+
+      iex> Nx.is_infinity(Nx.tensor([:infinity, 1, Complex.new(0, :infinity), :neg_infinity]))
+      #Nx.Tensor<
+        u8[4]
+        [1, 0, 1, 1]
+      >
+
+      iex> Nx.is_infinity(Nx.tensor([1, 0]))
+      #Nx.Tensor<
+        u8[2]
+        [0, 0]
+      >
+  """
+  @doc type: :element
+  def is_infinity(tensor) do
+    tensor = to_tensor(tensor)
+
+    impl!(tensor).is_infinity(%{tensor | type: {:u, 8}}, tensor)
   end
 
   @doc """
@@ -6095,6 +6150,13 @@ defmodule Nx do
 
   is true for all elements of a and b.
 
+  ## Options
+
+    * `:rtol` - relative tolerance between numbers, as described above. Defaults to 1.0e-5
+    * `:atol` - absolute tolerance between numbers, as described above. Defaults to 1.0e-8
+    * `:equal_nan` - if `false`, NaN will always compare as false.
+      Otherwise `NaN` will only equal `NaN`. Defaults to `false`
+
   ## Examples
 
       iex> Nx.all_close(Nx.tensor([1.0e10, 1.0e-7]), Nx.tensor([1.00001e10, 1.0e-8]))
@@ -6109,15 +6171,85 @@ defmodule Nx do
         1
       >
 
+  Although `NaN` by definition isn't equal to itself, so this implementation
+  also considers all `NaN`s different from each other by default:
+
+      iex> Nx.all_close(Nx.tensor(:nan), Nx.tensor(:nan))
+      #Nx.Tensor<
+        u8
+        0
+      >
+
+      iex> Nx.all_close(Nx.tensor(:nan), Nx.tensor(0))
+      #Nx.Tensor<
+        u8
+        0
+      >
+
+  We can change this behavior with the `:equal_nan` option:
+
+      iex> t = Nx.tensor([:nan, 1])
+      iex> Nx.all_close(t, t, equal_nan: true) # nan == nan -> true
+      #Nx.Tensor<
+        u8
+        1
+      >
+      iex> Nx.all_close(t, t, equal_nan: false) # nan == nan -> false, default behavior
+      #Nx.Tensor<
+        u8
+        0
+      >
+
+  Infinities behave as expected, being "close" to themselves but not
+  to other numbers:
+
+      iex> Nx.all_close(Nx.tensor(:infinity), Nx.tensor(:infinity))
+      #Nx.Tensor<
+        u8
+        1
+      >
+
+      iex> Nx.all_close(Nx.tensor(:infinity), Nx.tensor(:neg_infinity))
+      #Nx.Tensor<
+        u8
+        0
+      >
+
+      iex> Nx.all_close(Nx.tensor(1.0e30), Nx.tensor(:infinity))
+      #Nx.Tensor<
+        u8
+        0
+      >
   """
   @doc type: :aggregation
   def all_close(a, b, opts \\ []) do
-    opts = keyword!(opts, rtol: 1.0e-5, atol: 1.0e-8)
+    opts = keyword!(opts, equal_nan: false, rtol: 1.0e-5, atol: 1.0e-8)
     rtol = opts[:rtol]
     atol = opts[:atol]
 
-    # TODO: deal with non_finite entries by adding is_infinity and is_nan
-    all(less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b)))))
+    a = to_tensor(a)
+    b = to_tensor(b)
+
+    finite_entries = less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b))))
+
+    if Nx.Type.integer?(a.type) and Nx.Type.integer?(b.type) do
+      all(finite_entries)
+    else
+      # inf - inf is a nan, however, they are equal,
+      # so we explicitly check for equal entries.
+      inf_a = is_infinity(a)
+      inf_b = is_infinity(b)
+      inf_entries = select(logical_or(inf_a, inf_b), equal(a, b), finite_entries)
+
+      if opts[:equal_nan] do
+        nan_a = is_nan(a)
+        nan_b = is_nan(b)
+        nan_entries = logical_and(nan_a, nan_b)
+        all(select(nan_entries, 1, inf_entries))
+      else
+        all(inf_entries)
+      end
+    end
   end
 
   @doc """
@@ -9100,8 +9232,9 @@ defmodule Nx do
   Both start indices and lengths must match the rank of the
   input tensor shape. All start indexes must be greater than
   or equal to zero. All lengths must be strictly greater than
-  zero. `start_index + length` must not exceed the respective
-  tensor dimension.
+  zero. If `start_index + length` exceeds the tensor dimension,
+  the `start_index` will be clipped in order to guarantee the
+  `length` is the requested one. See the "Clipping" section below.
 
   It is possible for `start_indices` to be a list of tensors.
   However, `lengths` must always be a list of integers. If you
@@ -9115,7 +9248,7 @@ defmodule Nx do
   `slice_along_axis/4`, `take/3`, and `take_along_axis/3` for other ways
   to retrieve values from a tensor.
 
-  ### Examples
+  ## Examples
 
       iex> Nx.slice(Nx.tensor([1, 2, 3, 4, 5, 6]), [0], [3])
       #Nx.Tensor<
@@ -9166,6 +9299,8 @@ defmodule Nx do
         ]
       >
 
+  ## Tensors as `start_indices`
+
   The `start_indices` list can be made of scalar tensors:
 
       iex> Nx.slice(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [Nx.tensor(1), Nx.tensor(2)], [1, 1])
@@ -9193,7 +9328,45 @@ defmodule Nx do
         ]
       >
 
-  ### Error cases
+  ## Clipping
+
+  `slice/3` will always guarantee the return tensor has the
+  given `lengths`. See the following example:
+
+      iex> Nx.slice(Nx.iota({3, 3}), [2, 2], [1, 1])
+      #Nx.Tensor<
+        s64[1][1]
+        [
+          [8]
+        ]
+      >
+
+  In the example above, `start_index + length <= dimension`,
+  so there is no clipping. However, if the `start_index + length`
+  is to exceed the dimension, the index will be clipped in order
+  to guarantee the given lengths:
+
+      iex> Nx.slice(Nx.iota({3, 3}), [2, 2], [2, 2])
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [4, 5],
+          [7, 8]
+        ]
+      >
+
+  This also applies when the start index is given by tensors:
+
+      iex> Nx.slice(Nx.iota({3, 3}), [Nx.tensor(2), Nx.tensor(2)], [2, 2])
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [4, 5],
+          [7, 8]
+        ]
+      >
+
+  ## Error cases
 
       iex> Nx.slice(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [Nx.tensor([1, 2]), Nx.tensor(1)], [1, 1])
       ** (ArgumentError) index must be scalar, got shape {2} for axis 0
@@ -9215,7 +9388,7 @@ defmodule Nx do
         do: List.duplicate(strides, rank(shape)),
         else: strides
 
-    output_shape = Nx.Shape.slice(shape, start_indices, lengths, strides)
+    {start_indices, output_shape} = Nx.Shape.slice(shape, start_indices, lengths, strides)
     out = %{tensor | shape: output_shape}
     impl!(tensor).slice(out, tensor, start_indices, lengths, strides)
   end
@@ -9336,7 +9509,7 @@ defmodule Nx do
       >
 
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
-      iex> Nx.put_slice(t, [1, 2], Nx.tensor([[7, 8], [9, 10]]))
+      iex> Nx.put_slice(t, [1, 1], Nx.tensor([[7, 8], [9, 10]]))
       #Nx.Tensor<
         s64[2][3]
         [
@@ -9345,15 +9518,7 @@ defmodule Nx do
         ]
       >
 
-      iex> t = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
-      iex> Nx.put_slice(t, [2, 2], Nx.tensor([[7.0, 8.0, 9.0], [10.0, 11.0, 12.0]]))
-      #Nx.Tensor<
-        f32[2][3]
-        [
-          [7.0, 8.0, 9.0],
-          [10.0, 11.0, 12.0]
-        ]
-      >
+  Similar to `slice/3`, dynamic start indexes are also supported:
 
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
       iex> Nx.put_slice(t, [Nx.tensor(0), Nx.tensor(2)], Nx.tensor([[10.0, 11.0]]))
@@ -9362,6 +9527,19 @@ defmodule Nx do
         [
           [1.0, 10.0, 11.0],
           [4.0, 5.0, 6.0]
+        ]
+      >
+
+  Also similar to `slice/3`, if `start_index + slice_dimension > dimension`,
+  the start index will be clipped in order to put the whole slice:
+
+      iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      iex> Nx.put_slice(t, [2, 2], Nx.tensor([[7, 8], [9, 10]]))
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [1, 7, 8],
+          [4, 9, 10]
         ]
       >
   """

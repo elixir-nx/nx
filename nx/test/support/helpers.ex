@@ -23,7 +23,8 @@ defmodule Nx.Helpers do
     atol = opts[:atol] || 1.0e-4
     rtol = opts[:rtol] || 1.0e-4
 
-    unless Nx.all_close(lhs, rhs, atol: atol, rtol: rtol) == Nx.tensor(1, type: {:u, 8}) do
+    unless Nx.all_close(lhs, rhs, atol: atol, rtol: rtol, equal_nan: opts[:equal_nan]) ==
+             Nx.tensor(1, type: {:u, 8}) do
       flunk("""
       expected
 

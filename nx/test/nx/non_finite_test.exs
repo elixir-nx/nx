@@ -14,6 +14,9 @@ defmodule Nx.NonFiniteTest do
   @inf_inf Complex.new(:infinity, :infinity)
   @nan_nan Complex.new(:nan, :nan)
 
+  @one Nx.tensor(1, type: {:u, 8})
+  @zero Nx.tensor(0, type: {:u, 8})
+
   describe "unary operations" do
     test "exp" do
       assert Nx.exp(@arg) == Nx.tensor(@inf_inf)
@@ -36,15 +39,15 @@ defmodule Nx.NonFiniteTest do
     end
 
     test "cos" do
-      assert_all_close(Nx.cos(@arg), @nan_nan)
+      assert_all_close(Nx.cos(@arg), @nan_nan, equal_nan: true)
     end
 
     test "sin" do
-      assert_all_close(Nx.sin(@arg), @nan_nan)
+      assert_all_close(Nx.sin(@arg), @nan_nan, equal_nan: true)
     end
 
     test "tan" do
-      assert_all_close(Nx.tan(@arg), @nan_nan)
+      assert_all_close(Nx.tan(@arg), @nan_nan, equal_nan: true)
     end
 
     test "cosh" do
@@ -56,19 +59,19 @@ defmodule Nx.NonFiniteTest do
     end
 
     test "tanh" do
-      assert_all_close(Nx.tanh(@arg), @nan_nan)
+      assert_all_close(Nx.tanh(@arg), @nan_nan, equal_nan: true)
     end
 
     test "acos" do
-      assert_all_close(Nx.acos(@arg), @nan_nan)
+      assert_all_close(Nx.acos(@arg), @nan_nan, equal_nan: true)
     end
 
     test "asin" do
-      assert_all_close(Nx.asin(@arg), @nan_nan)
+      assert_all_close(Nx.asin(@arg), @nan_nan, equal_nan: true)
     end
 
     test "atan" do
-      assert_all_close(Nx.atan(@arg), @nan_nan)
+      assert_all_close(Nx.atan(@arg), @nan_nan, equal_nan: true)
     end
 
     test "acosh" do
@@ -80,7 +83,7 @@ defmodule Nx.NonFiniteTest do
     end
 
     test "atanh" do
-      assert_all_close(Nx.atanh(@arg), @nan_nan)
+      assert_all_close(Nx.atanh(@arg), @nan_nan, equal_nan: true)
     end
 
     test "sqrt" do
@@ -92,7 +95,7 @@ defmodule Nx.NonFiniteTest do
     end
 
     test "cbrt" do
-      assert_all_close(Nx.cbrt(@arg), @nan_nan)
+      assert_all_close(Nx.cbrt(@arg), @nan_nan, equal_nan: true)
     end
 
     test "conjugate" do
@@ -128,15 +131,15 @@ defmodule Nx.NonFiniteTest do
 
   describe "aggregate operations" do
     test "all" do
-      assert Nx.all(Nx.tensor([@arg, @arg2])) == Nx.tensor(1, type: {:u, 8})
+      assert Nx.all(Nx.tensor([@arg, @arg2])) == @one
     end
 
     test "all_close" do
-      assert Nx.all_close(Nx.tensor([@arg, @arg2]), 0) == Nx.tensor(0, type: {:u, 8})
+      assert Nx.all_close(Nx.tensor([@arg, @arg2]), 0) == @zero
     end
 
     test "any" do
-      assert Nx.any(Nx.tensor([@arg, @arg2])) == Nx.tensor(1, type: {:u, 8})
+      assert Nx.any(Nx.tensor([@arg, @arg2])) == @one
     end
 
     test "mean" do
@@ -199,7 +202,7 @@ defmodule Nx.NonFiniteTest do
     end
 
     test "power" do
-      assert_all_close(Nx.power(@arg, @arg2), @nan_nan)
+      assert_all_close(Nx.power(@arg, @arg2), @nan_nan, equal_nan: true)
     end
 
     test "divide" do
@@ -294,6 +297,110 @@ defmodule Nx.NonFiniteTest do
                        )
                      end
       end
+    end
+  end
+
+  describe "comparison operators" do
+    test "less" do
+      assert @zero == Nx.less(:infinity, :neg_infinity)
+      assert @zero == Nx.less(:infinity, :nan)
+      assert @zero == Nx.less(:infinity, 1)
+      assert @zero == Nx.less(:infinity, :infinity)
+
+      assert @zero == Nx.less(:neg_infinity, :neg_infinity)
+      assert @zero == Nx.less(:neg_infinity, :nan)
+      assert @one == Nx.less(:neg_infinity, 1)
+      assert @one == Nx.less(:neg_infinity, :infinity)
+
+      assert @zero == Nx.less(:nan, :neg_infinity)
+      assert @zero == Nx.less(:nan, :nan)
+      assert @zero == Nx.less(:nan, 1)
+      assert @zero == Nx.less(:nan, :infinity)
+    end
+
+    test "less_equal" do
+      assert @zero == Nx.less_equal(:infinity, :neg_infinity)
+      assert @zero == Nx.less_equal(:infinity, :nan)
+      assert @zero == Nx.less_equal(:infinity, 1)
+      assert @one == Nx.less_equal(:infinity, :infinity)
+
+      assert @one == Nx.less_equal(:neg_infinity, :neg_infinity)
+      assert @zero == Nx.less_equal(:neg_infinity, :nan)
+      assert @one == Nx.less_equal(:neg_infinity, 1)
+      assert @one == Nx.less_equal(:neg_infinity, :infinity)
+
+      assert @zero == Nx.less_equal(:nan, :neg_infinity)
+      assert @zero == Nx.less_equal(:nan, :nan)
+      assert @zero == Nx.less_equal(:nan, 1)
+      assert @zero == Nx.less_equal(:nan, :infinity)
+    end
+
+    test "greater" do
+      assert @one == Nx.greater(:infinity, :neg_infinity)
+      assert @zero == Nx.greater(:infinity, :nan)
+      assert @one == Nx.greater(:infinity, 1)
+      assert @zero == Nx.greater(:infinity, :infinity)
+
+      assert @zero == Nx.greater(:neg_infinity, :neg_infinity)
+      assert @zero == Nx.greater(:neg_infinity, :nan)
+      assert @zero == Nx.greater(:neg_infinity, 1)
+      assert @zero == Nx.greater(:neg_infinity, :infinity)
+
+      assert @zero == Nx.greater(:nan, :neg_infinity)
+      assert @zero == Nx.greater(:nan, :nan)
+      assert @zero == Nx.greater(:nan, 1)
+      assert @zero == Nx.greater(:nan, :infinity)
+    end
+
+    test "greater_equal" do
+      assert @one == Nx.greater_equal(:infinity, :neg_infinity)
+      assert @zero == Nx.greater_equal(:infinity, :nan)
+      assert @one == Nx.greater_equal(:infinity, 1)
+      assert @one == Nx.greater_equal(:infinity, :infinity)
+
+      assert @one == Nx.greater_equal(:neg_infinity, :neg_infinity)
+      assert @zero == Nx.greater_equal(:neg_infinity, :nan)
+      assert @zero == Nx.greater_equal(:neg_infinity, 1)
+      assert @zero == Nx.greater_equal(:neg_infinity, :infinity)
+
+      assert @zero == Nx.greater_equal(:nan, :neg_infinity)
+      assert @zero == Nx.greater_equal(:nan, :nan)
+      assert @zero == Nx.greater_equal(:nan, 1)
+      assert @zero == Nx.greater_equal(:nan, :infinity)
+    end
+
+    test "equal" do
+      assert @zero == Nx.equal(:infinity, :neg_infinity)
+      assert @zero == Nx.equal(:infinity, :nan)
+      assert @zero == Nx.equal(:infinity, 1)
+      assert @one == Nx.equal(:infinity, :infinity)
+
+      assert @one == Nx.equal(:neg_infinity, :neg_infinity)
+      assert @zero == Nx.equal(:neg_infinity, :nan)
+      assert @zero == Nx.equal(:neg_infinity, 1)
+      assert @zero == Nx.equal(:neg_infinity, :infinity)
+
+      assert @zero == Nx.equal(:nan, :neg_infinity)
+      assert @zero == Nx.equal(:nan, :nan)
+      assert @zero == Nx.equal(:nan, 1)
+      assert @zero == Nx.equal(:nan, :infinity)
+    end
+
+    test "not_equal" do
+      assert @one == Nx.not_equal(:infinity, :neg_infinity)
+      assert @one == Nx.not_equal(:infinity, :nan)
+      assert @one == Nx.not_equal(:infinity, 1)
+      assert @zero == Nx.not_equal(:infinity, :infinity)
+
+      assert @zero == Nx.not_equal(:neg_infinity, :neg_infinity)
+      assert @one == Nx.not_equal(:neg_infinity, :nan)
+      assert @one == Nx.not_equal(:neg_infinity, 1)
+      assert @one == Nx.not_equal(:neg_infinity, :infinity)
+
+      assert @one == Nx.not_equal(:nan, :neg_infinity)
+      assert @one == Nx.not_equal(:nan, :nan)
+      assert @one == Nx.not_equal(:nan, 1)
+      assert @one == Nx.not_equal(:nan, :infinity)
     end
   end
 end

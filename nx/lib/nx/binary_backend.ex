@@ -757,15 +757,52 @@ defmodule Nx.BinaryBackend do
 
   defp element_right_shift(_, _, b), do: raise(ArgumentError, "cannot right shift by #{b}")
 
+  defp element_equal(_, :nan, _), do: 0
+  defp element_equal(_, _, :nan), do: 0
   defp element_equal(_, a, b), do: boolean_as_number(a == b)
+
+  defp element_not_equal(_, :nan, _), do: 1
+  defp element_not_equal(_, _, :nan), do: 1
   defp element_not_equal(_, a, b), do: boolean_as_number(a != b)
+
   defp element_logical_and(_, a, b), do: boolean_as_number(as_boolean(a) and as_boolean(b))
   defp element_logical_or(_, a, b), do: boolean_as_number(as_boolean(a) or as_boolean(b))
   defp element_logical_xor(_, a, b), do: boolean_as_number(as_boolean(a) != as_boolean(b))
 
+  defp element_greater(_, :nan, _), do: 0
+  defp element_greater(_, _, :nan), do: 0
+  defp element_greater(_, x, x), do: 0
+  defp element_greater(_, :infinity, _), do: 1
+  defp element_greater(_, _, :neg_infinity), do: 1
+  defp element_greater(_, :neg_infinity, _), do: 0
+  defp element_greater(_, _, :infinity), do: 0
   defp element_greater(_, a, b), do: boolean_as_number(a > b)
+
+  defp element_less(_, :nan, _), do: 0
+  defp element_less(_, _, :nan), do: 0
+  defp element_less(_, :infinity, _), do: 0
+  defp element_less(_, _, :neg_infinity), do: 0
+  defp element_less(_, x, x), do: 0
+  defp element_less(_, _, :infinity), do: 1
+  defp element_less(_, :neg_infinity, _), do: 1
   defp element_less(_, a, b), do: boolean_as_number(a < b)
+
+  defp element_greater_equal(_, :nan, _), do: 0
+  defp element_greater_equal(_, _, :nan), do: 0
+  defp element_greater_equal(_, x, x), do: 1
+  defp element_greater_equal(_, :neg_infinity, _), do: 0
+  defp element_greater_equal(_, _, :infinity), do: 0
+  defp element_greater_equal(_, :infinity, _), do: 1
+  defp element_greater_equal(_, _, :neg_infinity), do: 1
   defp element_greater_equal(_, a, b), do: boolean_as_number(a >= b)
+
+  defp element_less_equal(_, :nan, _), do: 0
+  defp element_less_equal(_, _, :nan), do: 0
+  defp element_less_equal(_, _, :infinity), do: 1
+  defp element_less_equal(_, :neg_infinity, _), do: 1
+  defp element_less_equal(_, x, x), do: 1
+  defp element_less_equal(_, :infinity, _), do: 0
+  defp element_less_equal(_, _, :neg_infinity), do: 0
   defp element_less_equal(_, a, b), do: boolean_as_number(a <= b)
 
   defp as_boolean(n) when n == 0, do: false
@@ -842,11 +879,12 @@ defmodule Nx.BinaryBackend do
   def bitwise_not(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.bnot/1)
 
   @impl true
-  def is_nan(out, %{type: {t, n_bits}}) when t in [:u, :s] do
+  def is_nan(out, %{type: {t, _}}) when t in [:u, :s] do
     # integers cannot represent nans, so we can just create
     # a zero boolean tensor
 
-    size = Nx.size(out.shape) * div(n_bits, 8)
+    # 8 bits per entry because we return u8
+    size = Nx.size(out.shape) * 8
     from_binary(out, <<0::size(size)>>)
   end
 
@@ -855,6 +893,26 @@ defmodule Nx.BinaryBackend do
       %Complex{re: :nan} -> 1
       %Complex{im: :nan} -> 1
       :nan -> 1
+      _ -> 0
+    end)
+  end
+
+  @impl true
+  def is_infinity(out, %{type: {t, _}}) when t in [:u, :s] do
+    # integers cannot represent nans, so we can just create
+    # a zero boolean tensor
+
+    # 8 bits per entry because we return u8
+    size = Nx.size(out.shape) * 8
+    from_binary(out, <<0::size(size)>>)
+  end
+
+  def is_infinity(out, tensor) do
+    element_wise_unary_op(out, tensor, fn
+      %Complex{re: re} when re in [:infinity, :neg_infinity] -> 1
+      %Complex{im: im} when im in [:infinity, :neg_infinity] -> 1
+      :infinity -> 1
+      :neg_infinity -> 1
       _ -> 0
     end)
   end
@@ -1335,6 +1393,7 @@ defmodule Nx.BinaryBackend do
     data =
       bin_reduce(tensor, out.type, 1, opts, fn bin, acc ->
         res = if binary_to_number(bin, type) != 0, do: acc, else: 0
+
         {res, res}
       end)
 

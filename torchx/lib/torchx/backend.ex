@@ -272,20 +272,9 @@ defmodule Torchx.Backend do
         lengths,
         strides
       ) do
-    starts =
-      [Tuple.to_list(input_shape), start_indices, lengths]
-      |> Enum.zip()
-      |> Enum.map(fn
-        {axis_size, start, len} when start + len >= axis_size ->
-          axis_size - len
-
-        {_, start, _} ->
-          start
-      end)
-
     t
     |> from_nx()
-    |> torchx_slice(input_shape, output_shape, starts, lengths, strides)
+    |> torchx_slice(input_shape, output_shape, start_indices, lengths, strides)
     |> to_nx(out)
   end
 
@@ -297,8 +286,8 @@ defmodule Torchx.Backend do
 
   defp narrow(ref, [start | starts], [length | lengths], axis, shape) do
     dim = elem(shape, axis)
-
     start = to_number(start)
+    start = min(start, dim - length)
 
     # Nothing to narrow
     if start == 0 and length == dim do
@@ -825,7 +814,7 @@ defmodule Torchx.Backend do
     [:exp, :expm1, :log, :log1p, :sigmoid, :cos, :sin, :tan, :cosh, :sinh] ++
       [:tanh, :acos, :asin, :atan, :acosh, :asinh, :atanh, :sqrt, :rsqrt] ++
       [:erf, :erfc, :erf_inv, :abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign] ++
-      [:logical_not, :cbrt, :is_nan]
+      [:logical_not, :cbrt, :is_nan, :is_infinity]
 
   for op <- unary_ops do
     @impl true
@@ -907,18 +896,38 @@ defmodule Torchx.Backend do
         %T{type: out_type} = out,
         %T{type: left_type, data: %TB{ref: left_ref}},
         left_axes,
-        [],
+        left_batched_axes,
         %T{type: right_type, data: %TB{ref: right_ref}},
         right_axes,
-        []
+        right_batched_axes
       ) do
+    # since these lists aren't that big, we're probably fine
+    # doing this but optimization is welcome
+    left_axes = translate_to_inner_axes(left_axes, left_batched_axes)
+    right_axes = translate_to_inner_axes(right_axes, right_batched_axes)
+
     Torchx.tensordot(
       to_typed_ref(left_ref, left_type, out_type),
       to_typed_ref(right_ref, right_type, out_type),
       left_axes,
-      right_axes
+      left_batched_axes,
+      right_axes,
+      right_batched_axes
     )
     |> to_nx(out)
+  end
+
+  defp translate_to_inner_axes(axes, []), do: axes
+  # sort the batched_axes so we don't need to keep translating them as well
+  defp translate_to_inner_axes(axes, batched_axes),
+    do: do_translate_to_inner_axes(axes, Enum.sort(batched_axes, :desc))
+
+  defp do_translate_to_inner_axes(axes, []), do: axes
+
+  defp do_translate_to_inner_axes(axes, [batch_axis | batch_axes]) do
+    axes
+    |> Enum.map(fn axis -> if axis > batch_axis, do: axis - 1, else: axis end)
+    |> translate_to_inner_axes(batch_axes)
   end
 
   @impl true
@@ -1429,6 +1438,15 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def bitcast(out, %T{data: %TB{ref: {device, _}}} = tensor) do
+    tensor
+    |> from_nx()
+    |> Torchx.to_blob()
+    |> Torchx.from_blob(out.shape, to_torch_type(out.type), device_option(device: device))
+    |> to_nx(out)
+  end
+
+  @impl true
   def inspect(%T{} = tensor, inspect_opts) do
     limit = if inspect_opts.limit == :infinity, do: :infinity, else: inspect_opts.limit + 1
 
@@ -1555,7 +1573,7 @@ defmodule Torchx.Backend do
   ## Functionality we can't provide
 
   not_possible =
-    [bitcast: 2, count_leading_zeros: 2, population_count: 2] ++
+    [count_leading_zeros: 2, population_count: 2] ++
       [map: 4, reduce: 5, window_reduce: 6]
 
   for {fun, arity} <- not_possible do

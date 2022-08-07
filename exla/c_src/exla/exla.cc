@@ -896,6 +896,11 @@ ERL_NIF_TERM is_nan(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   return xla_unary_op(env, argc, argv, xla::IsNan);
 }
 
+ERL_NIF_TERM is_infinity(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+  return xla_unary_op(env, argc, argv, [](xla::XlaOp op){return xla::IsInf(op);});
+}
+
 ERL_NIF_TERM execute_fft(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[], const xla::FftType fft_type)
 {
   if (argc != 2)
@@ -2380,6 +2385,7 @@ static ErlNifFunc exla_funcs[] = {
   {"rsqrt", 1, rsqrt},
   {"cbrt", 1, cbrt},
   {"is_nan", 1, is_nan},
+  {"is_infinity", 1, is_infinity},
   {"erf", 1, erf},
   {"erfc", 1, erfc},
   {"erf_inv", 1, erf_inv},

@@ -217,7 +217,7 @@ defmodule EXLA.Backend do
   unary_ops =
     [:exp, :expm1, :log, :log1p, :sigmoid, :cos, :sin, :tan] ++
       [:cosh, :sinh, :tanh, :acos, :asin, :atan, :acosh, :asinh, :atanh] ++
-      [:sqrt, :rsqrt, :cbrt, :is_nan, :erf, :erfc, :erf_inv] ++
+      [:sqrt, :rsqrt, :cbrt, :is_nan, :is_infinity, :erf, :erfc, :erf_inv] ++
       [:abs, :bitwise_not, :ceil, :conjugate, :floor, :negate, :round, :sign] ++
       [:count_leading_zeros, :population_count, :real, :imag]
 

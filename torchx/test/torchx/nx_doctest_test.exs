@@ -16,16 +16,10 @@ defmodule Torchx.NxDoctestTest do
   @temporarily_broken_doctests [
     # broadcast - shape mismatch in one test
     broadcast: 3,
-    # dot - Batching not supported
-    dot: 6,
     # mean - Torchx does not support unsigned 64 bit integer
     mean: 2,
     # quotient - Torchx does not support unsigned 32 bit integer
-    quotient: 2,
-    # argmax - Torchx does not support complex numbers as parameters
-    argmax: 2,
-    # argmin - Torchx does not support complex numbers as parameters
-    argmin: 2
+    quotient: 2
   ]
 
   @rounding_error_doctests [
@@ -54,7 +48,6 @@ defmodule Torchx.NxDoctestTest do
     # as_type - the rules change per type
     as_type: 2,
     # no API available - bit based
-    bitcast: 2,
     count_leading_zeros: 1,
     population_count: 1,
     # no API available - function based
