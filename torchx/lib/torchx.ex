@@ -229,6 +229,7 @@ defmodule Torchx do
   deftensor argmin(tensor, axis, keep_axes)
   deftensor all(tensor)
   deftensor all(tensor, axes, keep_axes)
+  deftensor all_close(tensor_a, tensor_b, rtol, atol, equal_nan)
 
   deftensor cumulative_sum(tensor, axis)
   deftensor cumulative_product(tensor, axis)

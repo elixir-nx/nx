@@ -935,6 +935,20 @@ NIF(any)
   }
 }
 
+NIF(all_close)
+{
+  TENSOR_PARAM(0, a);
+  TENSOR_PARAM(1, b);
+  PARAM(2, double, rtol);
+  PARAM(3, double, atol);
+  PARAM(4, bool, equal_nan);
+
+  bool all_close = torch::allclose(*a, *b, rtol, atol, equal_nan);
+
+  auto init_opts = torch::device(torch::kCPU).dtype(torch::kBool);
+  TENSOR(torch::scalar_tensor(all_close, init_opts));
+}
+
 NIF(cumulative_sum)
 {
   TENSOR_PARAM(0, t);
@@ -1233,6 +1247,7 @@ static ErlNifFunc nif_functions[] = {
     DF(any, 3),
     DF(all, 1),
     DF(all, 3),
+    DF(all_close, 5),
 
     DF(cumulative_sum, 2),
     DF(cumulative_product, 2),
