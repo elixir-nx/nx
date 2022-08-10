@@ -1323,13 +1323,30 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def qr(
-        {%{shape: {m, k}, type: output_type} = q_holder,
-         %{shape: {k, n}, type: output_type} = r_holder},
+        {%{shape: q_holder_shape, type: output_type} = q_holder,
+         %{shape: r_holder_shape, type: output_type} = r_holder},
         %{type: input_type, shape: input_shape} = tensor,
         opts
       ) do
     bin = to_binary(tensor)
-    {q, r} = B.Matrix.qr(bin, input_type, input_shape, output_type, m, k, n, opts)
+    rank = tuple_size(input_shape)
+
+    {m, k, n} =
+      {elem(q_holder_shape, rank - 2), elem(q_holder_shape, rank - 1),
+       elem(r_holder_shape, rank - 1)}
+
+    {_, type_size} = input_type
+    matrix_byte_size = (m * n * type_size) |> div(8)
+    matrices = Tuple.product(input_shape) |> div(m * n)
+
+    {q, r} =
+      for i <- 0..(matrices - 1), reduce: {<<>>, <<>>} do
+        {q_acc, r_acc} ->
+          matrix = binary_part(bin, i * matrix_byte_size, matrix_byte_size)
+          {q, r} = B.Matrix.qr(matrix, input_type, {m, n}, output_type, m, k, n, opts)
+          {<<q_acc::bitstring, q::bitstring>>, <<r_acc::bitstring, r::bitstring>>}
+      end
+
     {from_binary(q_holder, q), from_binary(r_holder, r)}
   end
 
