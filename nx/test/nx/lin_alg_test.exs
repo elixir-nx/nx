@@ -260,16 +260,60 @@ defmodule Nx.LinAlgTest do
       assert_all_close(Nx.dot(q, r), t)
     end
 
+    test "works with batches of matrices" do
+      t =
+        Nx.tensor([
+          [[1.0, 2.0, 3.0], [0.0, 4.0, 5.0], [0.0, 0.0, 6.0]],
+          [[1.0, 2.0, 3.0], [0.0, 10.0, 5.0], [0.0, 0.0, 20.0]]
+        ])
+
+      {q, r} = Nx.LinAlg.qr(t)
+
+      expected_q =
+        Nx.tensor([
+          [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0]
+          ],
+          [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0]
+          ]
+        ])
+
+      assert_all_close(q, expected_q, atol: 1.0e-10)
+
+      expected_r =
+        Nx.tensor([
+          [
+            [1.0, 2.0, 3.0],
+            [0.0, 4.0, 5.0],
+            [0.0, 0.0, 6.0]
+          ],
+          [
+            [1.0, 2.0, 3.0],
+            [0.0, 10.0, 5.0],
+            [0.0, 0.0, 20.0]
+          ]
+        ])
+
+      assert_all_close(r, expected_r, atol: 1.0e-10)
+
+      assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), t, atol: 1.0e-10)
+    end
+
     test "property" do
       for _ <- 1..10, type <- [{:f, 32}, {:c, 64}] do
-        square = Nx.random_uniform({4, 4}, type: type)
-        tall = Nx.random_uniform({4, 3}, type: type)
+        square = Nx.random_uniform({2, 4, 4}, type: type)
+        tall = Nx.random_uniform({2, 4, 3}, type: type)
 
         assert {q, r} = Nx.LinAlg.qr(square)
-        assert_all_close(Nx.dot(q, r), square, atol: 1.0e-6)
+        assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), square, atol: 1.0e-6)
 
         assert {q, r} = Nx.LinAlg.qr(tall)
-        assert_all_close(Nx.dot(q, r), tall, atol: 1.0e-6)
+        assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), tall, atol: 1.0e-6)
       end
     end
   end

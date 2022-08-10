@@ -730,7 +730,7 @@ defmodule Nx.LinAlg do
       iex> {qs, rs} = Nx.LinAlg.qr(Nx.tensor([[[-3, 2, 1], [0, 1, 1], [0, 0, -1]],[[3, 2, 1], [0, 1, 1], [0, 0, 1]]]))
       iex> qs
       #Nx.Tensor<
-        f32[2][3]
+        f32[2][3][3]
         [
           [
             [1.0, 0.0, 0.0],
@@ -746,7 +746,7 @@ defmodule Nx.LinAlg do
       >
       iex> rs
       #Nx.Tensor<
-        f32[2][3]
+        f32[2][3][3]
         [
           [
             [-3.0, 2.0, 1.0],
@@ -830,8 +830,18 @@ defmodule Nx.LinAlg do
     {q_shape, r_shape} = Nx.Shape.qr(shape, opts)
 
     impl!(tensor).qr(
-      {%{tensor | type: output_type, shape: q_shape, names: [nil, nil]},
-       %{tensor | type: output_type, shape: r_shape, names: [nil, nil]}},
+      {%{
+         tensor
+         | type: output_type,
+           shape: q_shape,
+           names: List.duplicate(nil, tuple_size(q_shape))
+       },
+       %{
+         tensor
+         | type: output_type,
+           shape: r_shape,
+           names: List.duplicate(nil, tuple_size(r_shape))
+       }},
       tensor,
       opts
     )
