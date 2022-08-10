@@ -1773,7 +1773,7 @@ defmodule Nx.Shape do
     do:
       raise(
         ArgumentError,
-        "tensor must have at least as many rows as columns in the last two axes, got shape: #{inspect({m, n})}"
+        "tensor must have at least as many rows as columns in the last two axes, got #{m} rows and #{n} columns"
       )
 
   def qr(shape, _opts),
