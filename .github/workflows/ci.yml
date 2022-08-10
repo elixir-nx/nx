@@ -20,6 +20,7 @@ jobs:
     env:
       MIX_ENV: test
       XLA_FLAGS: --xla_force_host_platform_device_count=2
+      LIBTORCH_DIR: ./cache/libtorch
     steps:
       - uses: actions/checkout@v2
       - uses: erlef/setup-beam@v1
@@ -37,8 +38,8 @@ jobs:
         uses: actions/cache@v1
         id: libtorch-cache
         with:
-          path: ./torchx/cache/libtorch-cpu
-          key: v1-libtorch-cpu.zip
+          path: torchx/${{ env.LIBTORCH_DIR }}
+          key: linux-v1-libtorch-cpu
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
@@ -63,6 +64,7 @@ jobs:
     env:
       MIX_ENV: test
       XLA_FLAGS: --xla_force_host_platform_device_count=2
+      LIBTORCH_DIR: ./cache/libtorch
     steps:
       - name: Configure Git
         run: git config --global core.autocrlf input
@@ -84,8 +86,8 @@ jobs:
         uses: actions/cache@v1
         id: libtorch-cache-win
         with:
-          path: ./torchx/cache/libtorch-cpu
-          key: win-v1-libtorch-cpu.zip
+          path: torchx/${{ env.LIBTORCH_DIR }}
+          key: win-v1-libtorch-cpu
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
