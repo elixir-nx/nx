@@ -613,6 +613,23 @@ defmodule Torchx.Backend do
     to_nx(result, out)
   end
 
+  @impl true
+  def all_close(%T{} = out, %T{} = a, %T{} = b, opts) do
+    equal_nan = opts[:equal_nan]
+    rtol = opts[:rtol]
+    atol = opts[:atol]
+
+    # Torch raises a cryptic error if the types are different,
+    # so we need to upcast the tensors to the merged type
+    type = a.type |> Nx.Type.merge(b.type) |> to_torch_type()
+    a_tx = a |> from_nx() |> Torchx.to_type(type)
+    b_tx = b |> from_nx() |> Torchx.to_type(type)
+
+    a_tx
+    |> Torchx.all_close(b_tx, rtol, atol, !!equal_nan)
+    |> to_nx(out)
+  end
+
   defp aggregate_whole_tensor(t, keep_axes, fun) when is_function(fun, 1) do
     result =
       t

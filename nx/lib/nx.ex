@@ -6224,32 +6224,39 @@ defmodule Nx do
   @doc type: :aggregation
   def all_close(a, b, opts \\ []) do
     opts = keyword!(opts, equal_nan: false, rtol: 1.0e-5, atol: 1.0e-8)
-    rtol = opts[:rtol]
-    atol = opts[:atol]
 
     a = to_tensor(a)
     b = to_tensor(b)
 
-    finite_entries = less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b))))
+    Nx.Shared.optional(
+      :all_close,
+      [a, b, opts],
+      %{a | names: [], shape: {}, type: {:u, 8}},
+      fn a, b, opts ->
+        atol = opts[:atol]
+        rtol = opts[:rtol]
+        finite_entries = less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b))))
 
-    if Nx.Type.integer?(a.type) and Nx.Type.integer?(b.type) do
-      all(finite_entries)
-    else
-      # inf - inf is a nan, however, they are equal,
-      # so we explicitly check for equal entries.
-      inf_a = is_infinity(a)
-      inf_b = is_infinity(b)
-      inf_entries = select(logical_or(inf_a, inf_b), equal(a, b), finite_entries)
+        if Nx.Type.integer?(a.type) and Nx.Type.integer?(b.type) do
+          all(finite_entries)
+        else
+          # inf - inf is a nan, however, they are equal,
+          # so we explicitly check for equal entries.
+          inf_a = is_infinity(a)
+          inf_b = is_infinity(b)
+          inf_entries = select(logical_or(inf_a, inf_b), equal(a, b), finite_entries)
 
-      if opts[:equal_nan] do
-        nan_a = is_nan(a)
-        nan_b = is_nan(b)
-        nan_entries = logical_and(nan_a, nan_b)
-        all(select(nan_entries, 1, inf_entries))
-      else
-        all(inf_entries)
+          if opts[:equal_nan] do
+            nan_a = is_nan(a)
+            nan_b = is_nan(b)
+            nan_entries = logical_and(nan_a, nan_b)
+            all(select(nan_entries, 1, inf_entries))
+          else
+            all(inf_entries)
+          end
+        end
       end
-    end
+    )
   end
 
   @doc """
