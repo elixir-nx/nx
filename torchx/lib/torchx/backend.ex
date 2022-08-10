@@ -619,8 +619,9 @@ defmodule Torchx.Backend do
     rtol = opts[:rtol]
     atol = opts[:atol]
 
+    # Torch raises a cryptic error if the types are different,
+    # so we need to upcast the tensors to the merged type
     type = a.type |> Nx.Type.merge(b.type) |> to_torch_type()
-
     a_tx = a |> from_nx() |> Torchx.to_type(type)
     b_tx = b |> from_nx() |> Torchx.to_type(type)
 
