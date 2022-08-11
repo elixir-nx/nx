@@ -152,14 +152,6 @@ defmodule Nx.Random do
     shape = opts[:shape]
     bit_width = opts[:bit_width]
 
-    # {_, key} =
-    #   while {x = 0, key}, x <  Nx.rank(opts[:shape]) do
-    #     {x + 1, fold_in(key, x)}
-    #   end
-
-
-    #bits = impl(key, Nx.iota(max_count_size(shape, bit_width)[:shape]))
-
     bits = case bit_width do
       64 -> bits =
             impl(key, Nx.concatenate([Nx.iota(shape), Nx.iota(shape)+Nx.size(shape)]))
@@ -168,14 +160,7 @@ defmodule Nx.Random do
             (bits[0] <<< 32) ||| bits[1]
       32 -> impl(key, Nx.iota(shape))
       _ ->  impl(key, Nx.iota(shape))
-        # |> Nx.reshape({1, :auto})
-        # |> Nx.right_shift(Nx.multiply(
-        #   Nx.tensor(bit_width, type: {:u, 32}),
-        #   Nx.iota({2})
-        #   |> Nx.as_type({:u, 32})
-        # ))
-        # |> Nx.bitwise_and(Nx.Constants.max_finite({:u, bit_width}))
-        |> Nx.as_type({:u, bit_width})
+            |> Nx.as_type({:u, bit_width})
     end
 
     Nx.reshape(bits, shape)
@@ -386,7 +371,6 @@ defmodule Nx.Random do
 
   defnp assert_key(tensor) do
     %{shape: shape, type: type} = tensor
-    #shape = Nx.shape(tensor)
     case shape do
       {2} -> :ok
 
@@ -396,7 +380,6 @@ defmodule Nx.Random do
       )
     end
 
-    #type = Nx.type(tensor)
     case type do
       {:u, _} -> :ok
       {:s, _} -> :ok
