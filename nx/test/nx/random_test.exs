@@ -1,7 +1,7 @@
 defmodule Nx.RandomTest do
   use ExUnit.Case, async: true
 
-  import Nx.Helpers, only: [assert_all_close: 2]
+  import Nx.Helpers
 
   doctest Nx.Random
 
@@ -76,20 +76,14 @@ defmodule Nx.RandomTest do
     end
   end
 
-  defp to_hex(tensor) do
-    tensor
-    |> Nx.to_flat_list()
-    |> Enum.map(&Integer.to_string(&1, 16))
-  end
-
   describe "threefry2x32/2" do
     test "matches known results from reference implementation" do
       # values from https://github.com/DEShawResearch/Random123-Boost/blob/65e3d874b67aa7b3e02d5ad8306462f52d2079c0/libs/random/test/test_threefry.cpp#L30-L32
 
       expected_results = [
-        ["6B200159", "99BA4EFE"],
-        ["1CB996FC", "BB002BE7"],
-        ["C4923A9C", "483DF7A0"]
+        Nx.tensor([0x6B200159, 0x99BA4EFE], type: :u32),
+        Nx.tensor([0x1CB996FC, 0xBB002BE7], type: :u32),
+        Nx.tensor([0xC4923A9C, 0x483DF7A0], type: :u32)
       ]
 
       inputs = [
@@ -109,7 +103,7 @@ defmodule Nx.RandomTest do
 
       for {expected, {key, count}} <- Enum.zip(expected_results, inputs) do
         result = Nx.Random.threefry2x32(key, count)
-        assert to_hex(result) == expected
+        assert result == expected
       end
     end
   end
@@ -137,4 +131,66 @@ defmodule Nx.RandomTest do
       )
     end
   end
+
+  describe "properties" do
+    defp continuous_uniform_variance(a, b) do
+      ((b - a) ** 2) / 12
+    end
+
+    #about the mean
+    defp discrete_uniform_second_moment(count) do
+      (count-1)*(count+1)/12
+    end
+
+    defp property_case(name, args: args, moment: moment, expected_func: expected_func, expected_args: expected_args) do
+      seed = :erlang.adler32("uniformthreefry2x32")
+      key = Nx.Random.key(Nx.tensor(seed, type: :s64))
+      t = apply(Nx.Random, name, [key | args])
+      apply(Nx, moment, [t])
+      |> assert_all_close(apply(expected_func, expected_args), rtol: 0.1)
+
+      seed = :erlang.adler32("uniformthreefry2x32")
+      key = Nx.Random.key(Nx.tensor(seed, type: :u64))
+      t = apply(Nx.Random, name, [key | args])
+      apply(Nx, moment, [t])
+      |> assert_all_close(apply(expected_func, expected_args), rtol: 0.1)
+    end
+
+    test "uniform mean property" do
+      property_case(:uniform,
+        args: [[min_val: 10, max_val: 15, shape: {10000}]],
+        moment: :mean,
+        expected_func: fn x -> Nx.tensor(x) end,
+        expected_args: [12.5]
+      )
+    end
+
+    test "randint mean property" do
+      property_case(:randint,
+        args: [10, 95, [shape: {10000}]],
+        moment: :mean,
+        expected_func: fn x -> Nx.tensor(x) end,
+        expected_args: [52.5]
+      )
+    end
+
+    test "uniform variance property" do
+      property_case(:uniform,
+        args: [[min_val: 10, max_val: 15, shape: {10000}]],
+        moment: :variance,
+        expected_func: fn a, b -> continuous_uniform_variance(a,b) end,
+        expected_args: [10, 15]
+      )
+    end
+
+    test "randint variance property" do
+      property_case(:randint,
+        args: [10, 95, [shape: {10000}]],
+        moment: :variance,
+        expected_func: fn x -> discrete_uniform_second_moment(x) end,
+        expected_args: [85]
+      )
+    end
+  end
+
 end

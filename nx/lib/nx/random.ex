@@ -140,11 +140,45 @@ defmodule Nx.Random do
     impl(key, key(data))
   end
 
+  deftransformp max_count_size(shape, bit_width) do
+    [shape: {rem(Nx.size(shape) * bit_width, 32)
+      |> Nx.any()
+      |> Nx.add(Nx.size(shape) * bit_width / 32)}]
+  end
+
   defn random_bits(key, opts \\ []) do
     assert_key(key)
-    opts = keyword!(opts, shape: {1})
+    opts = keyword!(opts, shape: {1}, bit_width: 32)
+    shape = opts[:shape]
+    bit_width = opts[:bit_width]
 
-    impl(key, Nx.iota(opts[:shape]))
+    # {_, key} =
+    #   while {x = 0, key}, x <  Nx.rank(opts[:shape]) do
+    #     {x + 1, fold_in(key, x)}
+    #   end
+
+
+    #bits = impl(key, Nx.iota(max_count_size(shape, bit_width)[:shape]))
+
+    bits = case bit_width do
+      64 -> bits =
+            impl(key, Nx.concatenate([Nx.iota(shape), Nx.iota(shape)+Nx.size(shape)]))
+            |> Nx.reshape({2, :auto})
+            |> Nx.as_type({:u, bit_width})
+            (bits[0] <<< 32) ||| bits[1]
+      32 -> impl(key, Nx.iota(shape))
+      _ ->  impl(key, Nx.iota(shape))
+        # |> Nx.reshape({1, :auto})
+        # |> Nx.right_shift(Nx.multiply(
+        #   Nx.tensor(bit_width, type: {:u, 32}),
+        #   Nx.iota({2})
+        #   |> Nx.as_type({:u, 32})
+        # ))
+        # |> Nx.bitwise_and(Nx.Constants.max_finite({:u, bit_width}))
+        |> Nx.as_type({:u, bit_width})
+    end
+
+    Nx.reshape(bits, shape)
   end
 
   defnp impl(key, count) do
@@ -243,10 +277,10 @@ defmodule Nx.Random do
     x <<< rot ||| x >>> (@nbits - rot)
   end
 
-  defp float_info(type) do
+  defnp float_info(type) do
     case type do
       {:bf, 16} -> [exp: 8, mantissa: 7]
-      {:f, 16} -> [exp: 5, mantissa: 11]
+      {:f, 16} -> [exp: 6, mantissa: 10]
       {:f, 32} -> [exp: 8, mantissa: 23]
       {:f, 64} -> [exp: 11, mantissa: 52]
     end
@@ -267,7 +301,7 @@ defmodule Nx.Random do
     assert_key(key)
 
     shape = opts[:shape]
-    type = {_, nbits} = opts[:type]
+    type = {_, nbits} = normalize(opts[:type])
     case type do
       {:u, _} -> :ok
       {:s, _} -> :ok
@@ -280,8 +314,8 @@ defmodule Nx.Random do
     min_val = Nx.broadcast(min_val, shape)
     max_val = Nx.broadcast(max_val, shape)
 
-    higher_bits = random_bits(keys[0], shape: shape)
-    lower_bits = random_bits(keys[1], shape: shape)
+    higher_bits = random_bits(keys[0], shape: shape, bit_width: nbits)
+    lower_bits = random_bits(keys[1], shape: shape, bit_width: nbits)
     span = max_val - min_val
 
     multiplier =
@@ -305,7 +339,7 @@ defmodule Nx.Random do
 
   ## Options
 
-    * `:type` - an float type for the returned tensor
+    * `:type` - a float type for the returned tensor
 
     * `:shape` - shape of the returned tensor
 
@@ -319,29 +353,28 @@ defmodule Nx.Random do
 
     assert_key(key)
 
-    type = opts[:type]
+    type = {_type, nbits} = normalize(opts[:type])
     case type do
       {:f, _} -> :ok
+      {:bf, _} -> :ok
 
       _ -> raise ArgumentError,
             "expected float type, got type #{inspect(type)}"
     end
 
-    info = transform(opts[:type], &float_info(&1))
+    info = float_info(type)
 
     shape = opts[:shape]
-    type = {_dtype, nbits} = opts[:type]
     min_val = opts[:min_val]
     max_val = opts[:max_val]
 
-    u_one = Nx.tensor(1065353216, type: {:u, nbits})
-    #Equivalent of constant - Nx.tensor(1.0, type: type) |> Nx.bitcast({:u, nbits})
+    u_one = Nx.tensor(1.0, type: type) |> Nx.bitcast({:u, nbits})
 
-    random_bits(key, shape: shape)
+    random_bits(key, shape: shape, bit_width: nbits)
     |> Nx.as_type({:u, nbits})
     |> Nx.right_shift(Nx.tensor(nbits - info[:mantissa], type: {:u, nbits}))
     |> Nx.bitwise_or(u_one)
-    |> bitcast(type)
+    |> Nx.bitcast(type)
     |> Nx.subtract(Nx.tensor(1.0, type: type))
     |> Nx.multiply(max_val - min_val)
     |> Nx.add(min_val)
@@ -349,7 +382,7 @@ defmodule Nx.Random do
     |> Nx.max(min_val)
   end
 
-  deftransformp bitcast(tensor, type), do: Nx.bitcast(tensor, type)
+  deftransformp normalize(type), do: Nx.Type.normalize!(type)
 
   defnp assert_key(tensor) do
     %{shape: shape, type: type} = tensor
@@ -365,8 +398,8 @@ defmodule Nx.Random do
 
     #type = Nx.type(tensor)
     case type do
-      {:u, 32} -> :ok
-
+      {:u, _} -> :ok
+      {:s, _} -> :ok
       _ -> raise ArgumentError,
             "expected key with integer type, got key with type #{inspect(type)}"
     end
