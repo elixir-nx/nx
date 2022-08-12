@@ -131,14 +131,17 @@ defmodule Nx.NonFiniteTest do
 
   describe "aggregate operations" do
     test "all" do
+      assert Nx.all(Nx.tensor(:infinity)) == @one
       assert Nx.all(Nx.tensor([@arg, @arg2])) == @one
     end
 
     test "all_close" do
+      assert Nx.all_close(Nx.tensor(:infinity), Nx.tensor(:neg_infinity)) == @zero
       assert Nx.all_close(Nx.tensor([@arg, @arg2]), 0) == @zero
     end
 
     test "any" do
+      assert Nx.all_close(Nx.tensor(:infinity), Nx.tensor(:neg_infinity)) == @zero
       assert Nx.any(Nx.tensor([@arg, @arg2])) == @one
     end
 
@@ -151,18 +154,23 @@ defmodule Nx.NonFiniteTest do
         |> Nx.divide(2)
 
       assert Nx.mean(t) == mean
+
+      assert Nx.mean(Nx.tensor(:infinity)) == Nx.tensor(:infinity)
     end
 
     test "product" do
       assert Nx.product(Nx.tensor([@arg, @arg2])) == Nx.multiply(@arg, @arg2)
+      assert Nx.product(Nx.tensor(:infinity)) == Nx.tensor(:infinity)
     end
 
     test "reduce" do
       assert Nx.reduce(Nx.tensor([@arg, @arg2]), 0, &Nx.add/2) == Nx.add(@arg, @arg2)
+      assert Nx.reduce(Nx.tensor(:infinity), 0, &Nx.add/2) == Nx.tensor(:infinity)
     end
 
     test "sum" do
       assert Nx.sum(Nx.tensor([@arg, @arg2])) == Nx.add(@arg, @arg2)
+      assert Nx.sum(Nx.tensor([:infinity, :neg_infinity])) == Nx.tensor(:nan)
     end
   end
 
