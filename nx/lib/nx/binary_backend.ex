@@ -2434,8 +2434,9 @@ defmodule Nx.BinaryBackend do
     number_to_binary(re, real_type) <> number_to_binary(im, real_type)
   end
 
-  defp scalar_to_binary(value, type) when is_number(value),
-    do: number_to_binary(value, type)
+  defp scalar_to_binary(value, type)
+       when is_number(value) or value in [:nan, :neg_infinity, :infinity],
+       do: number_to_binary(value, type)
 
   defp scalar_to_binary(%T{shape: {}, type: type} = t, type),
     do: to_binary(t)
