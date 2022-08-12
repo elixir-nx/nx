@@ -1023,7 +1023,9 @@ defmodule Nx.Defn.Grad do
     # We can model the triangular solve function as X = triangular_solve(a, b)
     # where the function itself depends on the options passed.
 
-    # We can ignore the 'lower' option because in all cases we are operating on some form of triangular_solve(A, B) === inv(A).B or B.inv(A)
+    # We can ignore in our calculations the 'lower' option because in all cases we are operating on some form of triangular_solve(A, B) === inv(A).B or B.inv(A)
+    # This only needs to be taken into account for the result `da`
+
     # Therefore, we need to account for left_side and transform_a.
     # The transformations are :none, :transpose and :conjugate,
     # all of which can be applied beforehand to the a matrix.
@@ -1031,8 +1033,8 @@ defmodule Nx.Defn.Grad do
     # This means we can bifurcate the code through the left_side option
     a =
       case opts[:transform_a] do
-        :transpose -> Nx.transpose(a)
         :none -> a
+        _ -> raise ArgumentError, "grad only supports transform_a: :none for now"
       end
 
     a_inv_hermitian = Nx.LinAlg.invert(Nx.LinAlg.adjoint(a))
@@ -1074,14 +1076,18 @@ defmodule Nx.Defn.Grad do
         {da, db}
       end
 
-    da = triu(da)
-    
+    da =
+      if opts[:lower] do
+        tril(da)
+      else
+        triu(da)
+      end
+
     db =
       case Nx.shape(x_input) do
         {n} -> Nx.reshape(db, {n})
         _ -> db
       end
-
 
     [{a, da}, {b, db}]
   end

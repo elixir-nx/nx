@@ -3728,6 +3728,26 @@ defmodule Nx.Defn.GradTest do
       )
     end
 
+    test "computes the composed grad for tensor wrt a lower: true" do
+      a =
+        Nx.tensor([
+          [1, 0, 0],
+          [1, 1, 0],
+          [1, 1, 1]
+        ])
+
+      b = Nx.tensor([2, 3, 4])
+
+      assert_all_close(
+        triangular_solve_composed_grad_wrt_a(a, b, lower: true),
+        Nx.tensor([
+          [0.03297454, 0.0, 0.0],
+          [-0.04599008, -0.06341801, 0.0],
+          [0.29251346, 0.40336132, -0.23642266]
+        ])
+      )
+    end
+
     test "computes the composed grad for tensor wrt b" do
       a =
         Nx.tensor([
