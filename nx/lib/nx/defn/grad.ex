@@ -1040,15 +1040,17 @@ defmodule Nx.Defn.Grad do
     a_inv_hermitian = Nx.LinAlg.invert(Nx.LinAlg.adjoint(a))
 
     x =
-      case Nx.shape(x_input) do
-        {n} -> Nx.reshape(x_input, {n, 1})
-        {_, _} -> x_input
+      case {Nx.shape(x_input), opts[:left_side]} do
+        {{n}, true} -> Nx.reshape(x_input, {n, 1})
+        {{n}, false} -> Nx.reshape(x_input, {1, n})
+        _ -> x_input
       end
 
     g =
-      case Nx.shape(g) do
-        {n} -> Nx.reshape(g, {n, 1})
-        {_, _} -> g
+      case {Nx.shape(g), opts[:left_side]} do
+        {{n}, true} -> Nx.reshape(g, {n, 1})
+        {{n}, false} -> Nx.reshape(g, {1, n})
+        _ -> g
       end
 
     {da, db} =
