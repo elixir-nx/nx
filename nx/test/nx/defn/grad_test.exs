@@ -3656,6 +3656,26 @@ defmodule Nx.Defn.GradTest do
       end)
     end
 
+    defn triangular_solve_composed_grad_wrt_a(a, b, opts \\ []) do
+      grad(a, fn a ->
+        a
+        |> Nx.sin()
+        |> Nx.LinAlg.triangular_solve(Nx.cos(b), opts)
+        |> Nx.sin()
+        |> Nx.sum()
+      end)
+    end
+
+    defn triangular_solve_composed_grad_wrt_b(a, b, opts \\ []) do
+      grad(b, fn b ->
+        a
+        |> Nx.sin()
+        |> Nx.LinAlg.triangular_solve(Nx.cos(b), opts)
+        |> Nx.sin()
+        |> Nx.sum()
+      end)
+    end
+
     test "computes the simple grad for tensor wrt a" do
       a =
         Nx.tensor([
@@ -3687,8 +3707,42 @@ defmodule Nx.Defn.GradTest do
         Nx.tensor([1, 0, 0])
       )
     end
-    test "computes the composed grad for tensor wrt a"
-    test "computes the composed grad for tensor wrt b"
+
+    test "computes the composed grad for tensor wrt a" do
+      a =
+        Nx.tensor([
+          [1, 1, 1],
+          [0, 1, 1],
+          [0, 0, 1]
+        ])
+
+      b = Nx.tensor([4, 3, 2])
+
+      assert_all_close(
+        triangular_solve_composed_grad_wrt_a(a, b, lower: false),
+        Nx.tensor([
+          [-0.23642, 0.40336, 0.29251],
+          [0.0, -0.06342, -0.04599],
+          [0.0, 0.0, 0.03297]
+        ])
+      )
+    end
+
+    test "computes the composed grad for tensor wrt b" do
+      a =
+        Nx.tensor([
+          [1, 1, 1],
+          [0, 1, 1],
+          [0, 0, 1]
+        ])
+
+      b = Nx.tensor([4, 3, 2])
+
+      assert_all_close(
+        triangular_solve_composed_grad_wrt_b(a, b, lower: false),
+        Nx.tensor([0.8284839, 0.02428892, -0.11221229])
+      )
+    end
   end
 
   describe "not implemented" do

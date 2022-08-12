@@ -1037,8 +1037,6 @@ defmodule Nx.Defn.Grad do
 
     a_inv_hermitian = Nx.LinAlg.invert(Nx.LinAlg.adjoint(a))
 
-    IO.inspect(opts, label: "opts")
-
     x =
       case Nx.shape(x_input) do
         {n} -> Nx.reshape(x_input, {n, 1})
@@ -1076,11 +1074,14 @@ defmodule Nx.Defn.Grad do
         {da, db}
       end
 
+    da = triu(da)
+    
     db =
       case Nx.shape(x_input) do
         {n} -> Nx.reshape(db, {n})
         _ -> db
       end
+
 
     [{a, da}, {b, db}]
   end
