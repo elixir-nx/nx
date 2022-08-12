@@ -1741,6 +1741,22 @@ defmodule Nx.Shape do
         "tensor must have rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
       )
 
+  def qr(shape, opts) when tuple_size(shape) > 2 do
+    rank = tuple_size(shape)
+    matrix_shape = {elem(shape, rank - 2), elem(shape, rank - 1)}
+    {{m1, n1}, {m2, n2}} = qr(matrix_shape, opts)
+
+    put_rows_and_columns = fn m, n ->
+      shape
+      |> Tuple.to_list()
+      |> List.replace_at(-2, m)
+      |> List.replace_at(-1, n)
+      |> List.to_tuple()
+    end
+
+    {put_rows_and_columns.(m1, n1), put_rows_and_columns.(m2, n2)}
+  end
+
   def qr({m, n}, opts) when m >= n do
     mode = opts[:mode]
 
@@ -1757,14 +1773,14 @@ defmodule Nx.Shape do
     do:
       raise(
         ArgumentError,
-        "tensor must have at least as many rows as columns, got shape: #{inspect({m, n})}"
+        "tensor must have at least as many rows as columns in the last two axes, got #{m} rows and #{n} columns"
       )
 
   def qr(shape, _opts),
     do:
       raise(
         ArgumentError,
-        "tensor must have rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
+        "tensor must have at least rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
       )
 
   def svd({m, n}) do
