@@ -3639,6 +3639,58 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "triangular_solve" do
+    defn triangular_solve_grad_wrt_a(a, b, opts \\ []) do
+      grad(a, fn a ->
+        a
+        |> Nx.LinAlg.triangular_solve(b, opts)
+        |> Nx.sum()
+      end)
+    end
+
+    defn triangular_solve_grad_wrt_b(a, b, opts \\ []) do
+      grad(b, fn b ->
+        a
+        |> Nx.LinAlg.triangular_solve(b, opts)
+        |> Nx.sum()
+      end)
+    end
+
+    test "computes the simple grad for tensor wrt a" do
+      a =
+        Nx.tensor([
+          [1, 1, 1],
+          [0, 1, 1],
+          [0, 0, 1]
+        ])
+
+      b = Nx.tensor([4, 3, 2])
+
+      assert_all_close(
+        triangular_solve_grad_wrt_a(a, b, lower: false),
+        Nx.tensor([[-1, -1, -2], [0, 0, 0], [0, 0, 0]])
+      )
+    end
+
+    test "computes the simple grad for tensor wrt b" do
+      a =
+        Nx.tensor([
+          [1, 1, 1],
+          [0, 1, 1],
+          [0, 0, 1]
+        ])
+
+      b = Nx.tensor([4, 3, 2])
+
+      assert_all_close(
+        triangular_solve_grad_wrt_b(a, b, lower: false),
+        Nx.tensor([1, 0, 0])
+      )
+    end
+    test "computes the composed grad for tensor wrt a"
+    test "computes the composed grad for tensor wrt b"
+  end
+
   describe "not implemented" do
     defn grad_reduce(t), do: grad(t, &Nx.reduce(&1, 0, fn x, y -> x + y end))
 
