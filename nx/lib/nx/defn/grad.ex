@@ -1019,7 +1019,7 @@ defmodule Nx.Defn.Grad do
   defp grad(:fft, args, ans, g), do: grad_fft(:fft, args, ans, g)
   defp grad(:ifft, args, ans, g), do: grad_fft(:ifft, args, ans, g)
 
-  defp grad(:triangular_solve, [a, b, opts], x_input, g) do
+  defp grad(:triangular_solve, [a_input, b, opts], x_input, g) do
     # We can model the triangular solve function as X = triangular_solve(a, b)
     # where the function itself depends on the options passed.
 
@@ -1033,8 +1033,8 @@ defmodule Nx.Defn.Grad do
     # This means we can bifurcate the code through the left_side option
     a =
       case opts[:transform_a] do
-        :none -> a
-        _ -> raise ArgumentError, "grad only supports transform_a: :none for now"
+        :none -> a_input
+        :transpose -> Nx.transpose(a_input)
       end
 
     a_inv_hermitian = Nx.LinAlg.invert(Nx.LinAlg.adjoint(a))
@@ -1077,6 +1077,12 @@ defmodule Nx.Defn.Grad do
       end
 
     da =
+      case opts[:transform_a] do
+        :none -> da
+        :transpose -> Nx.transpose(da)
+      end
+
+    da =
       if opts[:lower] do
         tril(da)
       else
@@ -1089,7 +1095,7 @@ defmodule Nx.Defn.Grad do
         _ -> db
       end
 
-    [{a, da}, {b, db}]
+    [{a_input, da}, {b, db}]
   end
 
   defp grad(:quotient, _, _, _) do

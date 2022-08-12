@@ -3748,6 +3748,26 @@ defmodule Nx.Defn.GradTest do
       )
     end
 
+    test "computes the grad for tensor wrt a lower: true, transform_a: :transpose" do
+      a =
+        Nx.tensor([
+          [1, 0, 0],
+          [1, 1, 0],
+          [1, 1, 1]
+        ])
+
+      b = Nx.tensor([2, 3, 4])
+
+      assert_all_close(
+        triangular_solve_grad_wrt_a(a, b, transform_a: :transpose, lower: true),
+        Nx.tensor([
+          [1, 0, 0],
+          [1, 0, 0],
+          [-4, 0, 0]
+        ])
+      )
+    end
+
     test "computes the composed grad for tensor wrt b" do
       a =
         Nx.tensor([
