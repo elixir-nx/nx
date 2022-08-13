@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.3.0-dev
+## v0.3.0 (2022-08-13)
 
 ### Enhancements
 

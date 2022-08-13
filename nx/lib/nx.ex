@@ -1867,7 +1867,7 @@ defmodule Nx do
 
   ## Examples
 
-  In the examples below we immediately pipe to `Enum.to_list/3`
+  In the examples below we immediately pipe to `Enum.to_list/1`
   for convenience, but in practice you want to lazily traverse
   the batches to avoid allocating multiple tensors at once in
   certain backends:
@@ -10971,7 +10971,7 @@ defmodule Nx do
       iex> Nx.fft(Nx.tensor([1, 1]), length: :invalid)
       ** (RuntimeError) expected an integer or :power_of_two as length, got: :invalid
   """
-  @doc type: :signal
+  @doc type: :ndim
   def fft(tensor, opts \\ []), do: call_fft(tensor, opts, :fft)
 
   @doc """
@@ -11033,7 +11033,7 @@ defmodule Nx do
       iex> Nx.ifft(Nx.tensor([1, 1]), length: :invalid)
       ** (RuntimeError) expected an integer or :power_of_two as length, got: :invalid
   """
-  @doc type: :signal
+  @doc type: :ndim
   def ifft(tensor, opts \\ []), do: call_fft(tensor, opts, :ifft)
 
   defp call_fft(tensor, opts, kind) do

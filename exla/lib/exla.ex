@@ -27,7 +27,7 @@ defmodule EXLA do
       )
 
   From now on, all created tensors will be allocated directly on the given
-  `EXLA.Backend`. You can use functions such as `Nx.backend_transfer/3` to
+  `EXLA.Backend`. You can use functions such as `Nx.backend_transfer/2` to
   explicitly transfer tensors.
 
   EXLA will pick an available client to allocate and compute tensors, in this

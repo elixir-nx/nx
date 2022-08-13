@@ -121,10 +121,11 @@ defmodule Nx.Defn.Kernel do
   Opposite to `cond/2` and `if/2`, which can execute the branching
   in the device, `case`s are always expanded when building the
   expression, and never on the device. This allows `case/2` to work
-  very similarly to Elixir's own `Kernel.case/2`, with only the
-  following restrictions in place:
+  very similarly to Elixir's own `Kernel.SpecialForms.case/2`,
+  with only the following restrictions in place:
 
-    * `case` inside defn only accepts atoms, integers, and tuples as arguments
+    * `case` inside defn only accepts structs, atoms, integers, and tuples as arguments
+    * `case` can match on struct names but not on its fields
     * guards in `case` inside defn can only access variables defined within the pattern
 
   Here is an example of `case` with guards:
