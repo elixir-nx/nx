@@ -1232,74 +1232,15 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def cholesky(%{type: output_type, shape: {rows, cols}} = out, tensor) do
-    %T{type: {_, size} = input_type} = tensor
-
-    row_chunk_size = size * cols
+  def cholesky(
+        %T{type: output_type, shape: {m, n}} = out,
+        %T{type: input_type} = tensor
+      ) do
     data = to_binary(tensor)
 
-    output_data =
-      for i <- 0..(rows - 1), reduce: <<>> do
-        cur_binary ->
-          lower_triangle_part =
-            for j <- 1..(i + 1), reduce: cur_binary do
-              acc ->
-                current_element_offset = i * row_chunk_size + (j - 1) * size
-                current_element_opp_offset = (j - 1) * row_chunk_size + i * size
-                diagonal_element_offset = (j - 1) * row_chunk_size + (j - 1) * size
+    l = B.Matrix.cholesky(data, input_type, {m, n}, output_type)
 
-                lhs_dot_offset = i * row_chunk_size
-                lhs_dot_size = (j - 1) * size
-
-                <<_::size(lhs_dot_offset)-bitstring, lhs::size(lhs_dot_size)-bitstring,
-                  _::bitstring>> = acc
-
-                rhs_dot_offset = (j - 1) * row_chunk_size
-                rhs_dot_size = (j - 1) * size
-
-                <<_::size(rhs_dot_offset)-bitstring, rhs::size(rhs_dot_size)-bitstring,
-                  _::bitstring>> = acc
-
-                elem =
-                  match_types [input_type] do
-                    <<_::size(current_element_offset)-bitstring, match!(x, 0), _::bitstring>> =
-                      data
-
-                    <<_::size(current_element_opp_offset)-bitstring, match!(y, 0), _::bitstring>> =
-                      data
-
-                    if to_complex(read!(x, 0)) != Complex.conjugate(to_complex(read!(y, 0))) do
-                      raise ArgumentError,
-                            "matrix must be hermitian, a matrix is hermitian iff X = adjoint(X)"
-                    end
-
-                    fun = fn <<match!(left, 0)>>, <<match!(right, 0)>>, acc ->
-                      {<<>>, read!(left, 0) * Complex.conjugate(read!(right, 0)) + acc}
-                    end
-
-                    {_, tmp_sum} = bin_zip_reduce_axis(lhs, rhs, size, size, <<>>, 0, fun)
-
-                    if i == j - 1 do
-                      value = Complex.sqrt(Kernel.max(read!(x, 0) - tmp_sum, 0))
-                      number_to_binary(value, output_type)
-                    else
-                      <<_::size(diagonal_element_offset)-bitstring, match!(diag, 0),
-                        _::bitstring>> = acc
-
-                      value = 1.0 / read!(diag, 0) * (read!(x, 0) - tmp_sum)
-                      number_to_binary(value, output_type)
-                    end
-                  end
-
-                <<acc::bitstring, elem::bitstring>>
-            end
-
-          col_zeros = IO.iodata_to_binary(List.duplicate(<<0::size(size)>>, cols - i - 1))
-
-          <<lower_triangle_part::bitstring, col_zeros::bitstring>>
-      end
-
-    from_binary(out, output_data)
+    from_binary(out, l)
   end
 
   @impl true
@@ -2616,7 +2557,4 @@ defmodule Nx.BinaryBackend do
 
     div(size, dilation_factor) * x + weighted_offset(dims, pos, dilation)
   end
-
-  defp to_complex(%Complex{} = z), do: z
-  defp to_complex(n), do: Complex.new(n)
 end

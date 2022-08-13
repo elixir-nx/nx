@@ -233,6 +233,86 @@ defmodule Nx.BinaryBackend.Matrix do
     raise ArgumentError, "tensor must have at least as many rows as columns"
   end
 
+  def cholesky(data, {_, type_size} = type, {n, n} = shape, output_type) do
+    matrix = binary_to_matrix(data, type, shape)
+
+    # From wikipedia (https://en.wikipedia.org/wiki/Cholesky_decomposition#The_Cholesky%E2%80%93Banachiewicz_and_Cholesky%E2%80%93Crout_algorithms)
+    # adapted to 0-indexing
+    # Ljj := sqrt(Ajj - sum(k=0..j-1)[Complex.abs_squared(Ljk)])
+    # Lij := 1/Ljj * (Aij - sum(k=0..j-1)[Lik * Complex.conjugate(Ljk)])
+
+    zeros_size = n * n * type_size
+    zeros = binary_to_matrix(<<0::size(zeros_size)>>, type, shape)
+
+    # check if matrix is hermitian
+    eps = 1.0e-10
+
+    for i <- 0..(n - 1) do
+      row = matrix |> get_matrix_rows([i]) |> List.flatten()
+      col = matrix |> get_matrix_columns([i]) |> List.flatten()
+
+      Enum.zip_with(row, col, fn a_ij, a_ji ->
+        re_ij = Complex.real(a_ij)
+        im_ij = Complex.imag(a_ij)
+
+        re_ji = Complex.real(a_ji)
+        im_ji = Complex.imag(a_ji)
+
+        # Conj(a + bi) = a - bi
+
+        if abs(re_ij - re_ji) > eps do
+          raise_not_hermitian()
+        end
+
+        case {im_ij, im_ji} do
+          {:infinity, :neg_infinity} ->
+            :ok
+
+          {:neg_infinity, :infinity} ->
+            :ok
+
+          {x, y} ->
+            if Complex.abs(x + y) > eps do
+              raise_not_hermitian()
+            end
+        end
+      end)
+    end
+
+    l =
+      for i <- 0..(n - 1), j <- 0..i, i >= j, reduce: zeros do
+        l ->
+          [a_ij] = get_matrix_elements(matrix, [[i, j]])
+
+          k_len = max(j, 0)
+          slice_i = slice_matrix(l, [i, 0], [1, k_len])
+          slice_j = slice_matrix(l, [j, 0], [1, k_len])
+
+          sum =
+            slice_i
+            |> Enum.zip_with(slice_j, fn l_ik, l_jk -> l_ik * Complex.conjugate(l_jk) end)
+            |> Enum.reduce(0, &+/2)
+
+          l_ij =
+            if i == j do
+              Complex.sqrt(a_ij - sum)
+            else
+              [l_jj] = get_matrix_elements(l, [[j, j]])
+
+              (a_ij - sum) / l_jj
+            end
+
+          replace_matrix_element(l, i, j, l_ij)
+      end
+
+    matrix_to_binary(l, output_type)
+  end
+
+  defp raise_not_hermitian do
+    raise ArgumentError,
+          "matrix must be hermitian, a matrix is hermitian iff X = adjoint(X)"
+  end
+
   def eigh(input_data, input_type, {n, n} = input_shape, output_type, opts) do
     # The input symmetric matrix A reduced to Hessenberg matrix H by Householder transform.
     # Then, by using QR iteration it converges to AQ = QΛ,
