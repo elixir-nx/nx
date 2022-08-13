@@ -144,7 +144,7 @@ defmodule Nx.Tensor do
 
   @impl true
   def get_and_update(_tensor, _index, _update) do
-    raise "Access.get_and_update/3 is not yet supported by Nx.Tensor"
+    raise "Access.get_and_update/3 is not supported. Please use Nx.put_slice/3 instead"
   end
 
   @impl true

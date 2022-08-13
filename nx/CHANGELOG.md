@@ -4,11 +4,15 @@
 
 ### Enhancements
 
+  * [Nx] Improve support for non-finite values in `Nx.broadcast/2`, `Nx.all_close/2`, and more
+  * [Nx] Add `Nx.is_nan/1` and `Nx.is_infinite/1`
   * [Nx] Support booleans in `Nx.tensor/2`
   * [Nx] Add `Nx.fft/2` and `Nx.ifft/2`
   * [Nx] Rename `Nx.logistic/1` to `Nx.sigmoid/1`
+  * [Nx] Add `Nx.put_diagonal/3` and `Nx.indexed_put/3`
   * [Nx] Add `:reverse` to cummulative functions
   * [Nx] Add `Nx.to_batched/3` which returns a stream
+  * [Nx] Support batched tensors in `Nx.LinAlg.qr/1`
   * [Nx.Defn] Add `Nx.Defn.compile/3` for precompiling expressions
   * [Nx.Defn] Add `deftransform/2` and `deftransformp/2` for easier to define transforms
   * [Nx.Defn] Add `div/2`
