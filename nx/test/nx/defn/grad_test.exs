@@ -2936,6 +2936,20 @@ defmodule Nx.Defn.GradTest do
         Nx.tensor([[[[24, 12, 8, 6], [-3, -6, -2, 6]]]])
       )
     end
+
+    test "computes gradient (keep_axes: true)" do
+      assert_all_close(
+        grad_product(Nx.tensor([[[[1, 2, 3, 4], [2, 1, 3, -1]]]]), keep_axes: true),
+        Nx.tensor([[[[-144, -72, -48, -36], [-72, -144, -48, 144]]]])
+      )
+    end
+
+    test "computes gradient with axes option (keep_axes: true)" do
+      assert_all_close(
+        grad_product(Nx.tensor([[[[1, 2, 3, 4], [2, 1, 3, -1]]]]), axes: [3], keep_axes: true),
+        Nx.tensor([[[[24, 12, 8, 6], [-3, -6, -2, 6]]]])
+      )
+    end
   end
 
   describe "sort" do
