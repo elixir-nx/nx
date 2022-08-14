@@ -2923,6 +2923,16 @@ defmodule Nx.Defn.GradTest do
       end)
     end
 
+    defn composed_grad_product(t, opts \\ []) do
+      grad(t, fn t ->
+        t
+        |> Nx.cos()
+        |> Nx.product(opts)
+        |> Nx.sin()
+        |> Nx.sum()
+      end)
+    end
+
     test "computes gradient" do
       assert_all_close(
         grad_product(Nx.tensor([[[[1, 2, 3, 4], [2, 1, 3, -1]]]])),
@@ -2948,6 +2958,20 @@ defmodule Nx.Defn.GradTest do
       assert_all_close(
         grad_product(Nx.tensor([[[[1, 2, 3, 4], [2, 1, 3, -1]]]]), axes: [3], keep_axes: true),
         Nx.tensor([[[[24, 12, 8, 6], [-3, -6, -2, 6]]]])
+      )
+    end
+
+    test "computes composed gradient" do
+      assert_all_close(
+        composed_grad_product(Nx.tensor([[[[1, 2, 3, 4], [2, 1, 3, -1]]]])),
+        Nx.tensor([
+          [
+            [
+              [0.0272486, -0.03822973, -0.00249401, 0.02025739],
+              [-0.03822973, 0.0272486, -0.00249401, -0.0272486]
+            ]
+          ]
+        ])
       )
     end
   end

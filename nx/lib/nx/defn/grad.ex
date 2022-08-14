@@ -463,6 +463,10 @@ defmodule Nx.Defn.Grad do
     # First, let's condition our input matrix by substituting 0s with 1s
     # Then, we move the reducing axes into a condensed innermost axis.
 
+    # After we have our matrix well conditioned, we can operate on the
+    # innermost axis as described above, and then we transpose the items
+    # back into place
+
     axes =
       case opts[:axes] do
         [] -> Nx.axes(x.shape)
