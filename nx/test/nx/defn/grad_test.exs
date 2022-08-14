@@ -1928,6 +1928,61 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "svd" do
+    defn svd_grad(t) do
+      grad(t, fn tensor ->
+        {u, s, vt} = Nx.LinAlg.svd(tensor)
+
+        s
+        |> Nx.make_diagonal()
+        |> Nx.add(u)
+        |> Nx.add(vt)
+        |> Nx.sum()
+      end)
+    end
+
+    defn svd_composed_grad(t) do
+      grad(t, fn tensor ->
+        {u, s, vt} = Nx.LinAlg.svd(tensor)
+
+        s
+        |> Nx.make_diagonal()
+        |> Nx.exp()
+        |> Nx.sum()
+        |> Nx.add(Nx.cos(u) |> Nx.sum())
+        |> Nx.add(Nx.sin(vt) |> Nx.sum())
+      end)
+    end
+
+    test "computes grad for tensor" do
+      assert_all_close(
+        svd_grad(Nx.tensor([[3, 0], [1, 2]])),
+        Nx.tensor([
+          [1.8970632553100586, -1.130002737045288],
+          [-0.7087637782096863, 0.05829668045043945]
+        ])
+      )
+    end
+
+    test "computes the composed grad for tensor" do
+      assert_all_close(
+        svd_composed_grad(Nx.tensor([[3, 0], [1, 2]])),
+        Nx.tensor([[23.213549, 3.1363947], [9.804395, 8.365231]])
+      )
+    end
+
+    test "computes the composed grad for tall tensor" do
+      assert_all_close(
+        svd_composed_grad(Nx.tensor([[3, 0], [1, 2], [1, 1]])),
+        Nx.tensor([
+          [25.680400848388672, 6.340582847595215],
+          [12.773930549621582, 11.075220108032227],
+          [10.668397903442383, 6.5805983543396]
+        ])
+      )
+    end
+  end
+
   describe "invert" do
     defn invert_grad(t) do
       grad(t, fn tensor ->
