@@ -1948,19 +1948,6 @@ defmodule Nx.Defn.GradTest do
         s
         |> Nx.make_diagonal()
         |> Nx.exp()
-        |> Nx.add(Nx.cos(u))
-        |> Nx.add(Nx.sin(vt))
-        |> Nx.sum()
-      end)
-    end
-
-    defn svd_composed_tall_grad(t) do
-      grad(t, fn tensor ->
-        {u, s, vt} = Nx.LinAlg.svd(tensor)
-
-        s
-        |> Nx.make_diagonal()
-        |> Nx.exp()
         |> Nx.sum()
         |> Nx.add(Nx.cos(u) |> Nx.sum())
         |> Nx.add(Nx.sin(vt) |> Nx.sum())
@@ -1986,7 +1973,7 @@ defmodule Nx.Defn.GradTest do
 
     test "computes the composed grad for tall tensor" do
       assert_all_close(
-        svd_composed_tall_grad(Nx.tensor([[3, 0], [1, 2], [1, 1]])),
+        svd_composed_grad(Nx.tensor([[3, 0], [1, 2], [1, 1]])),
         Nx.tensor([
           [25.680400848388672, 6.340582847595215],
           [12.773930549621582, 11.075220108032227],
