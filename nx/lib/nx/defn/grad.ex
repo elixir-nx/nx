@@ -623,6 +623,56 @@ defmodule Nx.Defn.Grad do
     [{input, da}]
   end
 
+  defp grad(:svd, [{u, s, vt}, %T{shape: {m, n}} = input, _opts], ans, [du, ds, dvt]) do
+    {u, s, vt} = Nx.Defn.Expr.tuple(ans, [u, s, vt])
+
+    if m != n do
+      raise ArgumentError, "grad for Nx.LinAlg.svd/2 not yet implemented for the non-square case"
+    end
+
+    # https://j-towns.github.io/papers/svd-derivative.pdf
+
+    eye = Nx.eye({m, n})
+
+    s_sq = Nx.power(s, 2)
+    sub = s_sq |> Nx.new_axis(1) |> Nx.subtract(s_sq) |> Nx.negate() |> Nx.add(eye)
+    f = Nx.select(eye, 0, Nx.divide(1, sub))
+
+    ut_du =
+      u |> Nx.LinAlg.adjoint() |> Nx.dot(du) |> Nx.subtract(Nx.dot(Nx.LinAlg.adjoint(du), u))
+
+    first_component_du = u |> Nx.dot(Nx.multiply(f, ut_du)) |> Nx.multiply(s)
+
+    s_inv = 1 |> Nx.divide(s) |> Nx.make_diagonal()
+
+    second_component_du =
+      eye
+      |> Nx.subtract(Nx.dot(u, Nx.LinAlg.adjoint(u)))
+      |> Nx.dot(du)
+      |> Nx.dot(s_inv)
+
+    du_component = first_component_du |> Nx.add(second_component_du) |> Nx.dot(vt)
+
+    ds_component = u |> Nx.dot(Nx.multiply(eye, ds)) |> Nx.dot(vt)
+
+    first_dvt_component =
+      vt
+      |> Nx.dot(Nx.LinAlg.adjoint(dvt))
+      |> Nx.subtract(Nx.dot(dvt, Nx.LinAlg.adjoint(vt)))
+      |> Nx.multiply(f)
+
+    first_dvt_component = s |> Nx.make_diagonal() |> Nx.dot(first_dvt_component) |> Nx.dot(vt)
+
+    second_dvt_component =
+      s_inv |> Nx.dot(dvt) |> Nx.dot(Nx.subtract(eye, Nx.dot(Nx.LinAlg.adjoint(vt), vt)))
+
+    dvt_component = Nx.dot(u, Nx.add(first_dvt_component, second_dvt_component))
+
+    da = du_component |> Nx.add(ds_component) |> Nx.add(dvt_component)
+
+    [{input, da}]
+  end
+
   defp grad(:sort, [t, opts], _ans, g) do
     idx = Nx.argsort(t, opts)
     take_along_opts = Keyword.take(opts, [:axis])
