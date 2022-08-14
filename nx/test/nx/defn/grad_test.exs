@@ -2914,6 +2914,30 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "product" do
+    defn grad_product(t, opts \\ []) do
+      grad(t, fn t ->
+        t
+        |> Nx.product(opts)
+        |> Nx.sum()
+      end)
+    end
+
+    test "computes gradient" do
+      assert_all_close(
+        grad_product(Nx.tensor([[[[1, 2, 3, 4], [2, 1, 3, -1]]]])),
+        Nx.tensor([[[[-144, -72, -48, -36], [-72, -144, -48, 144]]]])
+      )
+    end
+
+    test "computes gradient with axes option" do
+      assert_all_close(
+        grad_product(Nx.tensor([[[[1, 2, 3, 4], [2, 1, 3, -1]]]]), axes: [3]),
+        Nx.tensor([[[[24, 12, 8, 6], [-3, -6, -2, 6]]]])
+      )
+    end
+  end
+
   describe "sort" do
     defn grad_sum_sort(t) do
       grad(

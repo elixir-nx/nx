@@ -446,6 +446,72 @@ defmodule Nx.Defn.Grad do
     [{x, reduce_g(x, opts, g)}]
   end
 
+  defp grad(:product, [x, opts], ans, g) do
+    # From https://people.maths.ox.ac.uk/gilesm/files/NA-08-01.pdf
+    # 2.2.4 we take that the reverse-mode gradient of a determinant
+    # is A_bar = C_bar . C . inv(A^T)
+
+    # We also know that the determinant of a diagonal matrix is the
+    # product of the diagonal items. This means that we can imagine
+    # our condensed product axes as being the diagonal of a matrix
+    # and apply the determinant grad on it.
+
+    # Also, if A is diagonal, A^T = A and inv(A) is as trivial
+    # as inverting the items. Also, C_bar and C are scalars.
+    # This means that a_bar = c_bar |> Nx.multiply(c) |> Nx.divide(a).
+
+    # First, let's condition our input matrix by substituting 0s with 1s
+    # Then, we move the reducing axes into a condensed innermost axis.
+
+    axes =
+      case opts[:axes] do
+        [] -> Nx.axes(x.shape)
+        nil -> Nx.axes(x.shape)
+        axes -> axes
+      end
+
+    outermost_axes = Nx.axes(x.shape) -- axes
+    permutation = outermost_axes ++ axes
+
+    inverse_permutation =
+      permutation
+      |> Enum.with_index()
+      |> Enum.sort_by(fn {x, _} -> x end)
+      |> Enum.map(fn {_, i} -> i end)
+
+    zero_selector = Nx.equal(x, 0)
+
+    reduce_axes_size = axes |> Enum.reduce(1, fn axis, acc -> acc * elem(x.shape, axis) end)
+
+    reduced_shape =
+      outermost_axes
+      |> Enum.map(&elem(x.shape, &1))
+      |> List.insert_at(-1, reduce_axes_size)
+      |> List.to_tuple()
+
+    formatted_x =
+      zero_selector
+      |> Nx.select(1, x)
+      |> Nx.transpose(axes: permutation)
+      |> Nx.reshape(reduced_shape)
+
+    g_ans_new_axes = Tuple.to_list(g.shape) ++ List.duplicate(1, Nx.rank(x) - Nx.rank(g))
+
+    g_ans =
+      g
+      |> Nx.multiply(ans)
+      |> Nx.reshape(List.to_tuple(g_ans_new_axes))
+      |> Nx.tile(List.duplicate(1, tuple_size(g.shape)) ++ [reduce_axes_size])
+      |> Nx.reshape(x.shape)
+
+    dx =
+      g_ans
+      |> Nx.divide(formatted_x |> Nx.reshape(x.shape))
+      |> Nx.transpose(axes: inverse_permutation)
+
+    [{x, dx}]
+  end
+
   @reduce_min_max_ops [:reduce_max, :reduce_min]
 
   defp grad(op, [x, opts], ans, g) when op in @reduce_min_max_ops do
