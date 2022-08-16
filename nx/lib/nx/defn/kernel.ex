@@ -939,7 +939,9 @@ defmodule Nx.Defn.Kernel do
 
   """
   defmacro left |> right do
-    quote do: Kernel.|>(unquote(left), unquote(right))
+    Enum.reduce(Macro.unpipe(right), left, fn {x, pos}, acc ->
+      Macro.pipe(acc, x, pos)
+    end)
   end
 
   @doc """
