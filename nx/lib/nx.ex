@@ -10907,6 +10907,43 @@ defmodule Nx do
   end
 
   @doc """
+  Remove all duplicate elements from 1D tensor.
+  ## Examples
+
+      iex> Nx.unique(Nx.tensor([1,1,2,3]))
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+
+     iex> Nx.unique(Nx.tensor([1,2,1,2,4,8]))
+     #Nx.Tensor<
+       s64[4]
+       [1, 2, 4, 8]
+     >
+
+     iex> Nx.unique(Nx.tensor([[1,2,3], [1,2,3]]))
+     ** (RuntimeError) expected a 1D tensor, got: 2D tensor
+  """
+  @doc type: :creation
+  @spec unique(tensor :: T.t()) :: T.t()
+  def unique(tensor) do
+    t = to_tensor(tensor)
+    t_rank = rank(tensor)
+
+    if t_rank == 1 do
+      t_items =
+        t
+        |> to_flat_list()
+        |> Enum.uniq()
+
+      Nx.tensor(t_items)
+    else
+      raise "expected a 1D tensor, got: #{t_rank}D tensor"
+    end
+  end
+
+  @doc """
   Calculates the DFT of the given tensor.
 
   ## Options

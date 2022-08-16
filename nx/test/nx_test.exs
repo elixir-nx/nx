@@ -2344,4 +2344,19 @@ defmodule NxTest do
       assert Nx.standard_deviation(t, keep_axes: true) == Nx.tensor([[1.7078251838684082]])
     end
   end
+
+  describe "unique/1" do
+    test "Removes all duplicate elements from 1D tensor" do
+      t_1 = Nx.tensor([1, 2, 1, 2, 4, 8])
+      t_2 = Nx.tensor([1, 2, 1, 2, 3])
+
+      assert Nx.unique(t_1) == Nx.tensor([1, 2, 4, 8])
+      assert Nx.unique(t_2) == Nx.tensor([1, 2, 3])
+    end
+
+    test "raises exception when it's not a 1D tensor" do
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+      assert_raise RuntimeError, ~r"expected a 1D tensor, got: 2D tensor", fn -> Nx.unique(t) end
+    end
+  end
 end
