@@ -38,12 +38,26 @@ defmodule Nx.LinAlg do
       >
   """
   defn adjoint(t, opts \\ []) do
-    case Nx.type(t) do
+    tensor = Nx.to_tensor(t)
+    opts = adjoint_opts(tensor.shape, opts)
+
+    case Nx.type(tensor) do
       {:c, _} ->
-        t |> Nx.transpose(opts) |> Nx.conjugate()
+        tensor |> Nx.transpose(opts) |> Nx.conjugate()
 
       _ ->
-        Nx.transpose(t, opts)
+        Nx.transpose(tensor, opts)
+    end
+  end
+
+  deftransformp adjoint_opts(shape, opts) do
+    rank = tuple_size(shape)
+
+    if rank > 2 do
+      axes = Enum.concat(0..(rank - 3), [rank - 1, rank - 2])
+      Keyword.put(opts, :axes, axes)
+    else
+      opts
     end
   end
 
