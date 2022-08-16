@@ -534,18 +534,18 @@ defmodule Nx.LinAlgTest do
       for _ <- 1..10, type <- @types do
         # Generate random L matrix so we can construct
         # a factorizable A matrix:
-        shape = {4, 4}
-        lower_selector = Nx.iota(shape, axis: 0) |> Nx.greater_equal(Nx.iota(shape, axis: 1))
+        shape = {3, 4, 4}
+        lower_selector = Nx.iota(shape, axis: 1) |> Nx.greater_equal(Nx.iota(shape, axis: 2))
 
         l_prime =
           shape
           |> Nx.random_uniform(type: type)
           |> Nx.multiply(lower_selector)
 
-        a = Nx.dot(l_prime, Nx.LinAlg.adjoint(l_prime))
+        a = Nx.dot(l_prime, [2], [0], Nx.LinAlg.adjoint(l_prime), [1], [0])
 
         assert l = Nx.LinAlg.cholesky(a)
-        assert_all_close(Nx.dot(l, Nx.LinAlg.adjoint(l)), a, atol: 1.0e-2)
+        assert_all_close(Nx.dot(l, [2], [0], Nx.LinAlg.adjoint(l), [1], [0]), a, atol: 1.0e-2)
       end
     end
   end
