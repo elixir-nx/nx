@@ -48,21 +48,27 @@ defmodule Nx.LinAlg do
   end
 
   @doc """
-  Performs a Cholesky decomposition of a square matrix.
+  Performs a Cholesky decomposition of a batch of square matrices.
 
-  The matrix must be positive-definite and either Hermitian
+  The matrices must be positive-definite and either Hermitian
   if complex or symmetric if real. An error is raised by the
   default backend if those conditions are not met. Other
   backends may emit undefined behaviour.
 
   ### Examples
 
-      iex> Nx.LinAlg.cholesky(Nx.tensor([[20.0, 17.6], [17.6, 16.0]]))
+      iex> Nx.LinAlg.cholesky(Nx.tensor([[[20.0, 17.6], [17.6, 16.0]], [[1.0, 0.0], [0.0, 1.0]]]))
       #Nx.Tensor<
-        f32[2][2]
+        f32[2][2][2]
         [
-          [4.4721360206604, 0.0],
-          [3.9354796409606934, 0.7155413031578064]
+          [
+            [4.4721360206604, 0.0],
+            [3.9354796409606934, 0.7155413031578064]
+          ],
+          [
+            [1.0, 0.0],
+            [0.0, 1.0]
+          ]
         ]
       >
 
