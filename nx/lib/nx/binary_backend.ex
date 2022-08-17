@@ -1307,7 +1307,21 @@ defmodule Nx.BinaryBackend do
         opts
       ) do
     bin = to_binary(tensor)
-    {p, l, u} = B.Matrix.lu(bin, input_type, input_shape, p_type, l_type, u_type, opts)
+    rank = tuple_size(input_shape)
+    n = elem(input_shape, rank - 1)
+
+    {p, l, u} =
+      bin_batch_reduce(bin, n * n, input_type, {<<>>, <<>>, <<>>}, fn matrix,
+                                                                      {p_acc, l_acc, u_acc} ->
+        {p, l, u} = B.Matrix.lu(matrix, input_type, {n, n}, p_type, l_type, u_type, opts)
+
+        {
+          <<p_acc::bitstring, p::bitstring>>,
+          <<l_acc::bitstring, l::bitstring>>,
+          <<u_acc::bitstring, u::bitstring>>
+        }
+      end)
+
     {from_binary(p_holder, p), from_binary(l_holder, l), from_binary(u_holder, u)}
   end
 

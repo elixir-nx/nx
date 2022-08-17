@@ -1806,15 +1806,25 @@ defmodule Nx.Shape do
         "tensor must have rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
       )
 
-  def lu({n, n}) do
-    {{n, n}, {n, n}, {n, n}}
+  def lu(shape) when tuple_size(shape) > 1 do
+    rank = tuple_size(shape)
+    matrix_shape = {elem(shape, rank - 2), elem(shape, rank - 1)}
+
+    unless match?({n, n}, matrix_shape) do
+      raise(
+        ArgumentError,
+        "tensor must be a batch of square matrices, got shape: #{inspect(shape)}"
+      )
+    end
+
+    {shape, shape, shape}
   end
 
   def lu(shape),
     do:
       raise(
         ArgumentError,
-        "tensor must have as many rows as columns, got shape: #{inspect(shape)}"
+        "tensor must have at least rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
       )
 
   def solve({n, n}, {n}), do: {n}

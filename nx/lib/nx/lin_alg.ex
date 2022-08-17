@@ -1048,86 +1048,76 @@ defmodule Nx.LinAlg do
 
   ## Examples
 
-      iex> {p, l, u} = Nx.LinAlg.lu(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]))
+      iex> {p, l, u} = Nx.LinAlg.lu(Nx.tensor([[[1, 2, 3], [4, 5, 6], [7, 8, 9]], [[1, 0, 1], [-1, 0, -1], [1, 1, 1]]]))
       iex> p
       #Nx.Tensor<
-        s64[3][3]
+        s64[2][3][3]
         [
-          [0, 0, 1],
-          [0, 1, 0],
-          [1, 0, 0]
+          [
+            [0, 0, 1],
+            [0, 1, 0],
+            [1, 0, 0]
+          ],
+          [
+            [1, 0, 0],
+            [0, 0, 1],
+            [0, 1, 0]
+          ]
         ]
       >
       iex> l
       #Nx.Tensor<
-        f32[3][3]
+        f32[2][3][3]
         [
-          [1.0, 0.0, 0.0],
-          [0.5714285969734192, 1.0, 0.0],
-          [0.1428571492433548, 2.0, 1.0]
+          [
+            [1.0, 0.0, 0.0],
+            [0.5714285969734192, 1.0, 0.0],
+            [0.1428571492433548, 2.0, 1.0]
+          ],
+          [
+            [1.0, 0.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [-1.0, 0.0, 1.0]
+          ]
         ]
       >
       iex> u
       #Nx.Tensor<
-        f32[3][3]
+        f32[2][3][3]
         [
-          [7.0, 8.0, 9.0],
-          [0.0, 0.4285714328289032, 0.8571428656578064],
-          [0.0, 0.0, 0.0]
+          [
+            [7.0, 8.0, 9.0],
+            [0.0, 0.4285714328289032, 0.8571428656578064],
+            [0.0, 0.0, 0.0]
+          ],
+          [
+            [1.0, 0.0, 1.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0]
+          ]
         ]
       >
-      iex> p |> Nx.dot(l) |> Nx.dot(u)
+      iex> p |> Nx.dot([2], [0], l, [1], [0]) |> Nx.dot([2], [0], u, [1], [0])
       #Nx.Tensor<
-        f32[3][3]
+        f32[2][3][3]
         [
-          [1.0, 2.0, 3.0],
-          [4.0, 5.0, 6.0],
-          [7.0, 8.0, 9.0]
-        ]
-      >
-
-      iex> {p, l, u} = Nx.LinAlg.lu(Nx.tensor([[1, 0, 1], [-1, 0, -1], [1, 1, 1]]))
-      iex> p
-      #Nx.Tensor<
-        s64[3][3]
-        [
-          [1, 0, 0],
-          [0, 0, 1],
-          [0, 1, 0]
-        ]
-      >
-      iex> l
-      #Nx.Tensor<
-        f32[3][3]
-        [
-          [1.0, 0.0, 0.0],
-          [1.0, 1.0, 0.0],
-          [-1.0, 0.0, 1.0]
-        ]
-      >
-      iex> u
-      #Nx.Tensor<
-        f32[3][3]
-        [
-          [1.0, 0.0, 1.0],
-          [0.0, 1.0, 0.0],
-          [0.0, 0.0, 0.0]
-        ]
-      >
-      iex> p |> Nx.dot(l) |> Nx.dot(u)
-      #Nx.Tensor<
-        f32[3][3]
-        [
-          [1.0, 0.0, 1.0],
-          [-1.0, 0.0, -1.0],
-          [1.0, 1.0, 1.0]
+          [
+            [1.0, 2.0, 3.0],
+            [4.0, 5.0, 6.0],
+            [7.0, 8.0, 9.0]
+          ],
+          [
+            [1.0, 0.0, 1.0],
+            [-1.0, 0.0, -1.0],
+            [1.0, 1.0, 1.0]
+          ]
         ]
       >
 
   ## Error cases
 
       iex> Nx.LinAlg.lu(Nx.tensor([[1, 1, 1, 1], [-1, 4, 4, -1], [4, -2, 2, 0]]))
-      ** (ArgumentError) tensor must have as many rows as columns, got shape: {3, 4}
+      ** (ArgumentError) tensor must be a batch of square matrices, got shape: {3, 4}
   """
   def lu(tensor, opts \\ []) do
     opts = keyword!(opts, eps: @default_eps)
@@ -1135,7 +1125,7 @@ defmodule Nx.LinAlg do
 
     output_type = Nx.Type.to_floating(type)
     {p_shape, l_shape, u_shape} = Nx.Shape.lu(shape)
-    names = [nil, nil]
+    names = List.duplicate(nil, tuple_size(shape))
 
     impl!(tensor).lu(
       {%{tensor | type: type, shape: p_shape, names: names},

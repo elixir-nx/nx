@@ -510,9 +510,9 @@ defmodule Nx.LinAlgTest do
       for _ <- 1..10, type <- [{:f, 32}, {:c, 64}] do
         # Generate random L and U matrices so we can construct
         # a factorizable A matrix:
-        shape = {4, 4}
-        lower_selector = Nx.iota(shape, axis: 0) |> Nx.greater_equal(Nx.iota(shape, axis: 1))
-        upper_selector = Nx.transpose(lower_selector)
+        shape = {3, 4, 4}
+        lower_selector = Nx.iota(shape, axis: 1) |> Nx.greater_equal(Nx.iota(shape, axis: 2))
+        upper_selector = Nx.LinAlg.adjoint(lower_selector)
 
         l_prime =
           shape
@@ -521,10 +521,10 @@ defmodule Nx.LinAlgTest do
 
         u_prime = shape |> Nx.random_uniform(type: type) |> Nx.multiply(upper_selector)
 
-        a = Nx.dot(l_prime, u_prime)
+        a = Nx.dot(l_prime, [2], [0], u_prime, [1], [0])
 
         assert {p, l, u} = Nx.LinAlg.lu(a)
-        assert_all_close(p |> Nx.dot(l) |> Nx.dot(u), a)
+        assert_all_close(p |> Nx.dot([2], [0], l, [1], [0]) |> Nx.dot([2], [0], u, [1], [0]), a)
       end
     end
   end
