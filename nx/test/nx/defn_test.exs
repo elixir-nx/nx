@@ -1233,6 +1233,20 @@ defmodule Nx.DefnTest do
         cond4(Nx.tensor([0, 0]), Nx.tensor(1), Nx.tensor(2), Nx.tensor(3))
       end
     end
+
+    defn non_tensor_cond(a) do
+      if Nx.any(a) do
+        :foo
+      else
+        :bar
+      end
+    end
+
+    test "raises on non-tensor return" do
+      assert_raise CompileError,
+                   ~r"cond/if expects all branches to return compatible tensor types. Got: :foo and :bar",
+                   fn -> non_tensor_cond(1) end
+    end
   end
 
   describe "case/2" do
@@ -1407,7 +1421,7 @@ defmodule Nx.DefnTest do
       assert %T{} = factorial(5)
 
       assert_raise CompileError,
-                   ~r/the do-block in while must return the shape, type, and names as the initial arguments. Got body \{f32, f32\} and initial \{s64, f32\}/,
+                   ~r/the do-block in while must return tensors with the same shape, type, and names as the initial arguments. Got body \{f32, f32\} and initial \{s64, f32\}/,
                    fn -> factorial(10.0) end
     end
 
@@ -1438,7 +1452,7 @@ defmodule Nx.DefnTest do
 
     test "raises on mixed return" do
       assert_raise CompileError,
-                   ~r/the do-block in while must return the shape, type, and names as the initial arguments. Got body %\{:a => s64, :b => s64\} and initial \{s64, s64\}/,
+                   ~r/the do-block in while must return tensors with the same shape, type, and names as the initial arguments. Got body %\{:a => s64, :b => s64\} and initial \{s64, s64\}/,
                    fn -> while_mixed_return(Nx.tensor(0), Nx.tensor(1)) end
     end
 

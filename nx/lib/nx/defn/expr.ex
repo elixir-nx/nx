@@ -284,8 +284,8 @@ defmodule Nx.Defn.Expr do
                 line: meta[:line],
                 file: file,
                 description:
-                  "cond/if expects all branches to return compatible types. " <>
-                    "Got: #{to_type_shape_string(first)} and #{to_type_shape_string(expr)}"
+                  "cond/if expects all branches to return compatible tensor types. " <>
+                    "Got: #{maybe_type_shape_string(first)} and #{maybe_type_shape_string(expr)}"
             end
 
             [{pred, expr} | acc]
@@ -321,8 +321,8 @@ defmodule Nx.Defn.Expr do
         line: line,
         file: file,
         description:
-          "the do-block in while must return the shape, type, and names as the initial arguments. " <>
-            "Got body #{to_type_shape_string(body)} and initial #{to_type_shape_string(initial)}"
+          "the do-block in while must return tensors with the same shape, type, and names as the initial arguments. " <>
+            "Got body #{maybe_type_shape_string(body)} and initial #{maybe_type_shape_string(initial)}"
     end
 
     while(initial, context, arg, condition, body)
@@ -1023,30 +1023,32 @@ defmodule Nx.Defn.Expr do
     context || acc
   end
 
-  defp to_type_shape_string(%{type: type, shape: shape, names: names}) do
+  defp maybe_type_shape_string(%{type: type, shape: shape, names: names}) do
     Nx.Type.to_string(type) <> Nx.Shape.to_string(shape, names)
   end
 
-  defp to_type_shape_string(tuple) when is_tuple(tuple) do
+  defp maybe_type_shape_string(tuple) when is_tuple(tuple) do
     list = Tuple.to_list(tuple)
-    IO.iodata_to_binary(["{", Enum.map_intersperse(list, ", ", &to_type_shape_string/1), "}"])
+    IO.iodata_to_binary(["{", Enum.map_intersperse(list, ", ", &maybe_type_shape_string/1), "}"])
   end
 
-  defp to_type_shape_string(map) when is_map(map) do
+  defp maybe_type_shape_string(map) when is_map(map) do
     pairs =
       Enum.map_intersperse(map, ", ", fn {k, v} ->
-        [inspect(k), " => ", to_type_shape_string(v)]
+        [inspect(k), " => ", maybe_type_shape_string(v)]
       end)
 
     IO.iodata_to_binary(["%{", pairs, "}"])
   end
 
-  defp to_type_shape_string(number) when is_number(number) do
+  defp maybe_type_shape_string(number) when is_number(number) do
     shape = {}
     names = []
     type = Nx.Type.infer(number)
     Nx.Type.to_string(type) <> Nx.Shape.to_string(shape, names)
   end
+
+  defp maybe_type_shape_string(other), do: inspect(other)
 
   ## Constant helpers and related optimizations
 
