@@ -1286,17 +1286,31 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def svd(
-        {%{shape: {m, _}} = u_holder, s_holder, %{shape: {_, n}} = v_holder} = outputs,
+        {u_holder, %{type: output_type} = s_holder, v_holder},
         %{type: input_type, shape: input_shape} = tensor,
         opts
       ) do
+    bin = to_binary(tensor)
+    rank = tuple_size(input_shape)
+    {m, n} = {elem(input_shape, rank - 2), elem(input_shape, rank - 1)}
+
     if m < n do
       raise ArgumentError,
-            "SVD not implemented for wide matrices (tensors with shape {m, n} where m < n)"
+            "SVD not implemented for batches of wide matrices (matrices with shape {m, n} where m < n)"
     end
 
-    bin = to_binary(tensor)
-    {u, s, v} = B.Matrix.svd(bin, input_type, input_shape, outputs, opts)
+    {u, s, v} =
+      bin_batch_reduce(bin, m * n, input_type, {<<>>, <<>>, <<>>}, fn matrix,
+                                                                      {u_acc, s_acc, v_acc} ->
+        {u, s, v} = B.Matrix.svd(matrix, input_type, {m, n}, output_type, opts)
+
+        {
+          <<u_acc::bitstring, u::bitstring>>,
+          <<s_acc::bitstring, s::bitstring>>,
+          <<v_acc::bitstring, v::bitstring>>
+        }
+      end)
+
     {from_binary(u_holder, u), from_binary(s_holder, s), from_binary(v_holder, v)}
   end
 

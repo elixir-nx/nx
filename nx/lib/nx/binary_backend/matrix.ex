@@ -500,7 +500,7 @@ defmodule Nx.BinaryBackend.Matrix do
         input_data,
         input_type,
         input_shape,
-        {_u_holder, %{type: output_type}, %{shape: {vt_rows, vt_cols}}},
+        output_type,
         opts
       ) do
     # This implementation is a mixture of concepts described in [1] and the
@@ -546,11 +546,7 @@ defmodule Nx.BinaryBackend.Matrix do
       |> Enum.map(fn {row, idx} -> Enum.at(row, idx) end)
       |> Enum.reject(&is_nil/1)
 
-    {s, [vt_row | _] = vt} = apply_singular_value_corrections(s, vt)
-
-    if length(vt) != vt_rows or length(vt_row) != vt_cols do
-      raise "vt matrix completion for wide-matrices not implemented for Nx.BinaryBackend"
-    end
+    {s, vt} = apply_singular_value_corrections(s, vt)
 
     {u |> approximate_zeros(eps) |> matrix_to_binary(output_type),
      s |> approximate_zeros(eps) |> matrix_to_binary(output_type),

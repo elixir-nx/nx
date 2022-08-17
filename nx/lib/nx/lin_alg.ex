@@ -951,7 +951,7 @@ defmodule Nx.LinAlg do
   end
 
   @doc """
-  Calculates the Singular Value Decomposition of 2-D tensors.
+  Calculates the Singular Value Decomposition of batched 2-D matrices.
 
   It returns `{u, s, vt}` where the elements of `s` are sorted
   from highest to lowest.
@@ -1029,18 +1029,19 @@ defmodule Nx.LinAlg do
 
     output_type = Nx.Type.to_floating(type)
     {u_shape, s_shape, v_shape} = Nx.Shape.svd(shape)
+    rank = tuple_size(shape)
 
     impl!(tensor).svd(
-      {%{tensor | names: [nil, nil], type: output_type, shape: u_shape},
-       %{tensor | names: [nil], type: output_type, shape: s_shape},
-       %{tensor | names: [nil, nil], type: output_type, shape: v_shape}},
+      {%{tensor | names: List.duplicate(nil, rank), type: output_type, shape: u_shape},
+       %{tensor | names: List.duplicate(nil, rank - 1), type: output_type, shape: s_shape},
+       %{tensor | names: List.duplicate(nil, rank), type: output_type, shape: v_shape}},
       tensor,
       opts
     )
   end
 
   @doc """
-  Calculates the A = PLU decomposition of a 2-D tensor A with shape `{N, N}`.
+  Calculates the A = PLU decomposition of batched square 2-D matrices A.
 
   ## Options
 

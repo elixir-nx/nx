@@ -503,6 +503,28 @@ defmodule Nx.LinAlgTest do
              ])
              |> round(3) == round(v, 3)
     end
+
+    test "works with batched matrices" do
+      t =
+        Nx.tensor([
+          [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]],
+          [[1.0, 2.0, 3.0], [0.0, 4.0, 0.0], [0.0, 0.0, 9.0]]
+        ])
+
+      assert {u, s, v} = Nx.LinAlg.svd(t)
+
+      s_matrix =
+        Nx.stack([
+          Nx.broadcast(0, {3, 3}) |> Nx.put_diagonal(s[0]),
+          Nx.broadcast(0, {3, 3}) |> Nx.put_diagonal(s[1])
+        ])
+
+      assert round(t, 2) ==
+               u
+               |> Nx.dot([2], [0], s_matrix, [1], [0])
+               |> Nx.dot([2], [0], v, [1], [0])
+               |> round(2)
+    end
   end
 
   describe "lu" do
