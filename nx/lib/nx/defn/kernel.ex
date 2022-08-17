@@ -971,6 +971,7 @@ defmodule Nx.Defn.Kernel do
 
   defmacro if(pred, do: on_true) do
     quote do
+      Nx.Defn.Kernel.__defn__!(:if, 2)
       pred = unquote(pred)
 
       cond do
@@ -982,6 +983,7 @@ defmodule Nx.Defn.Kernel do
 
   defmacro if(pred, do: on_true, else: on_false) do
     quote do
+      Nx.Defn.Kernel.__defn__!(:if, 2)
       pred = unquote(pred)
 
       cond do
@@ -1057,6 +1059,7 @@ defmodule Nx.Defn.Kernel do
     {pattern, {vars, values}} = while_arg(initial, {[], []})
 
     quote do
+      Nx.Defn.Kernel.__defn__!(:if, 2)
       {unquote_splicing(vars)} = {unquote_splicing(values)}
 
       Nx.Defn.Kernel.__while__(
@@ -1539,7 +1542,7 @@ defmodule Nx.Defn.Kernel do
 
   @doc false
   # TODO: Deprecate this in Nx v0.4
-  # @deprecated "use deftransform/2 or deftransformp/2 from Nx.Defn instead"
+  # @deprecated "Use deftransform/2 or deftransformp/2 from Nx.Defn instead"
   def transform(arg, fun) when is_function(fun, 1) do
     fun.(arg)
   end
@@ -1616,5 +1619,13 @@ defmodule Nx.Defn.Kernel do
       import Nx.Defn.Kernel, only: unquote(Kernel.@(definitions))
       alias Nx.Defn.Kernel, as: Kernel
     end
+  end
+
+  @doc false
+  def __defn__!(fun, arity) do
+    Nx.Defn.Compiler.current() ||
+      Kernel.raise(
+        "cannot invoke Nx.Defn.Kernel.#{fun}/#{arity} because you are not inside a defn"
+      )
   end
 end
