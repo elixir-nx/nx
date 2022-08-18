@@ -1294,6 +1294,9 @@ defmodule Nx.BinaryBackend do
     m = elem(input_shape, rank - 2)
     n = elem(input_shape, rank - 1)
 
+    vt_rows = elem(v_holder.shape, rank - 2)
+    vt_cols = elem(v_holder.shape, rank - 1)
+
     if m < n do
       error_msg =
         if rank == 2 do
@@ -1308,7 +1311,9 @@ defmodule Nx.BinaryBackend do
     {u, s, v} =
       bin_batch_reduce(bin, m * n, input_type, {<<>>, <<>>, <<>>}, fn matrix,
                                                                       {u_acc, s_acc, v_acc} ->
-        {u, s, v} = B.Matrix.svd(matrix, input_type, {m, n}, output_type, opts)
+        {u, s, v} =
+          B.Matrix.svd(matrix, input_type, {m, n}, output_type, {vt_rows, vt_cols}, opts)
+
         {u_acc <> u, s_acc <> s, v_acc <> v}
       end)
 
