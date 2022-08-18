@@ -14,8 +14,8 @@ defmodule Nx.LinAlg do
   @doc """
   Returns the adjoint of a given tensor.
 
-  If the input tensor is real, it is the same as `Nx.transpose/2`.
-  Otherwise, it is the same as `tensor |> Nx.transpose(opts) |> Nx.conjugate()`.
+  If the input tensor is real it transposes it's two inner-most axes.
+  If the input tensor is complex, it additionally applies `Nx.conjugate/1` to it.
 
   ## Examples
 
@@ -37,9 +37,9 @@ defmodule Nx.LinAlg do
         ]
       >
   """
-  defn adjoint(t, opts \\ []) do
+  defn adjoint(t) do
     tensor = Nx.to_tensor(t)
-    opts = adjoint_opts(tensor.shape, opts)
+    opts = adjoint_opts(tensor.shape)
 
     case Nx.type(tensor) do
       {:c, _} ->
@@ -50,14 +50,14 @@ defmodule Nx.LinAlg do
     end
   end
 
-  deftransformp adjoint_opts(shape, opts) do
+  deftransformp adjoint_opts(shape) do
     rank = tuple_size(shape)
 
     if rank > 2 do
       axes = Enum.concat(0..(rank - 3), [rank - 1, rank - 2])
-      Keyword.put(opts, :axes, axes)
+      [axes: axes]
     else
-      opts
+      []
     end
   end
 
