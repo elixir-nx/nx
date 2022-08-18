@@ -1243,7 +1243,7 @@ defmodule Nx.BinaryBackend do
     l =
       bin_batch_reduce(data, n * n, input_type, <<>>, fn matrix, acc ->
         l = B.Matrix.cholesky(matrix, input_type, {n, n}, output_type)
-        <<acc::bitstring, l::bitstring>>
+        acc <> l
       end)
 
     from_binary(out, l)
@@ -1258,15 +1258,14 @@ defmodule Nx.BinaryBackend do
       ) do
     bin = to_binary(tensor)
     rank = tuple_size(input_shape)
-
-    {m, k, n} =
-      {elem(q_holder_shape, rank - 2), elem(q_holder_shape, rank - 1),
-       elem(r_holder_shape, rank - 1)}
+    m = elem(q_holder_shape, rank - 2)
+    k = elem(q_holder_shape, rank - 1)
+    n = elem(r_holder_shape, rank - 1)
 
     {q, r} =
       bin_batch_reduce(bin, m * n, input_type, {<<>>, <<>>}, fn matrix, {q_acc, r_acc} ->
         {q, r} = B.Matrix.qr(matrix, input_type, {m, n}, output_type, m, k, n, opts)
-        {<<q_acc::bitstring, q::bitstring>>, <<r_acc::bitstring, r::bitstring>>}
+        {q_acc <> q, r_acc <> r}
       end)
 
     {from_binary(q_holder, q), from_binary(r_holder, r)}
@@ -1292,7 +1291,8 @@ defmodule Nx.BinaryBackend do
       ) do
     bin = to_binary(tensor)
     rank = tuple_size(input_shape)
-    {m, n} = {elem(input_shape, rank - 2), elem(input_shape, rank - 1)}
+    m = elem(input_shape, rank - 2)
+    n = elem(input_shape, rank - 1)
 
     if m < n do
       raise ArgumentError,
@@ -1303,12 +1303,7 @@ defmodule Nx.BinaryBackend do
       bin_batch_reduce(bin, m * n, input_type, {<<>>, <<>>, <<>>}, fn matrix,
                                                                       {u_acc, s_acc, v_acc} ->
         {u, s, v} = B.Matrix.svd(matrix, input_type, {m, n}, output_type, opts)
-
-        {
-          <<u_acc::bitstring, u::bitstring>>,
-          <<s_acc::bitstring, s::bitstring>>,
-          <<v_acc::bitstring, v::bitstring>>
-        }
+        {u_acc <> u, s_acc <> s, v_acc <> v}
       end)
 
     {from_binary(u_holder, u), from_binary(s_holder, s), from_binary(v_holder, v)}
@@ -1328,12 +1323,7 @@ defmodule Nx.BinaryBackend do
       bin_batch_reduce(bin, n * n, input_type, {<<>>, <<>>, <<>>}, fn matrix,
                                                                       {p_acc, l_acc, u_acc} ->
         {p, l, u} = B.Matrix.lu(matrix, input_type, {n, n}, p_type, l_type, u_type, opts)
-
-        {
-          <<p_acc::bitstring, p::bitstring>>,
-          <<l_acc::bitstring, l::bitstring>>,
-          <<u_acc::bitstring, u::bitstring>>
-        }
+        {p_acc <> p, l_acc <> l, u_acc <> u}
       end)
 
     {from_binary(p_holder, p), from_binary(l_holder, l), from_binary(u_holder, u)}
