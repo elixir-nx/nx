@@ -1727,7 +1727,7 @@ defmodule Nx.Shape do
   ## Error Cases
 
       iex> Nx.Shape.cholesky({2, 3, 2}, [:x, :y, :z])
-      ** (ArgumentError) tensor must be a batch of square matrices, got shape: {2, 3, 2}
+      ** (ArgumentError) tensor must be a square matrix or a batch of square matrices, got shape: {2, 3, 2}
 
       iex> Nx.Shape.cholesky({3}, [:x])
       ** (ArgumentError) tensor must have at least rank 2, got rank 1 with shape {3}
@@ -1739,7 +1739,7 @@ defmodule Nx.Shape do
     unless match?({n, n}, matrix_shape) do
       raise(
         ArgumentError,
-        "tensor must be a batch of square matrices, got shape: #{inspect(shape)}"
+        "tensor must be a square matrix or a batch of square matrices, got shape: #{inspect(shape)}"
       )
     end
 
@@ -1824,7 +1824,7 @@ defmodule Nx.Shape do
     unless match?({n, n}, matrix_shape) do
       raise(
         ArgumentError,
-        "tensor must be a batch of square matrices, got shape: #{inspect(shape)}"
+        "tensor must be a square matrix or a batch of square matrices, got shape: #{inspect(shape)}"
       )
     end
 

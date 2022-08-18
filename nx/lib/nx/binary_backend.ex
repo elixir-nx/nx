@@ -1295,8 +1295,14 @@ defmodule Nx.BinaryBackend do
     n = elem(input_shape, rank - 1)
 
     if m < n do
-      raise ArgumentError,
-            "SVD not implemented for batches of wide matrices (matrices with shape {m, n} where m < n)"
+      error_msg =
+        if rank == 2 do
+          "SVD not implemented for wide matrices (tensors with shape {m, n} where m < n)"
+        else
+          "SVD not implemented for batches of wide matrices (tensors with shape {..., m, n} where m < n)"
+        end
+
+      raise ArgumentError, error_msg
     end
 
     {u, s, v} =
