@@ -500,7 +500,8 @@ defmodule Nx.BinaryBackend.Matrix do
         input_data,
         input_type,
         input_shape,
-        {_u_holder, %{type: output_type}, %{shape: {vt_rows, vt_cols}}},
+        output_type,
+        {vt_rows, vt_cols},
         opts
       ) do
     # This implementation is a mixture of concepts described in [1] and the

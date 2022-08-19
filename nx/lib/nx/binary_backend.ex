@@ -1233,12 +1233,18 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def cholesky(
-        %T{type: output_type, shape: {m, n}} = out,
+        %T{type: output_type, shape: output_shape} = out,
         %T{type: input_type} = tensor
       ) do
     data = to_binary(tensor)
+    rank = tuple_size(output_shape)
+    n = elem(output_shape, rank - 1)
 
-    l = B.Matrix.cholesky(data, input_type, {m, n}, output_type)
+    l =
+      bin_batch_reduce(data, n * n, input_type, <<>>, fn matrix, acc ->
+        l = B.Matrix.cholesky(matrix, input_type, {n, n}, output_type)
+        acc <> l
+      end)
 
     from_binary(out, l)
   end
@@ -1252,22 +1258,15 @@ defmodule Nx.BinaryBackend do
       ) do
     bin = to_binary(tensor)
     rank = tuple_size(input_shape)
-
-    {m, k, n} =
-      {elem(q_holder_shape, rank - 2), elem(q_holder_shape, rank - 1),
-       elem(r_holder_shape, rank - 1)}
-
-    {_, type_size} = input_type
-    matrix_byte_size = (m * n * type_size) |> div(8)
-    matrices = Tuple.product(input_shape) |> div(m * n)
+    m = elem(q_holder_shape, rank - 2)
+    k = elem(q_holder_shape, rank - 1)
+    n = elem(r_holder_shape, rank - 1)
 
     {q, r} =
-      for i <- 0..(matrices - 1), reduce: {<<>>, <<>>} do
-        {q_acc, r_acc} ->
-          matrix = binary_part(bin, i * matrix_byte_size, matrix_byte_size)
-          {q, r} = B.Matrix.qr(matrix, input_type, {m, n}, output_type, m, k, n, opts)
-          {<<q_acc::bitstring, q::bitstring>>, <<r_acc::bitstring, r::bitstring>>}
-      end
+      bin_batch_reduce(bin, m * n, input_type, {<<>>, <<>>}, fn matrix, {q_acc, r_acc} ->
+        {q, r} = B.Matrix.qr(matrix, input_type, {m, n}, output_type, m, k, n, opts)
+        {q_acc <> q, r_acc <> r}
+      end)
 
     {from_binary(q_holder, q), from_binary(r_holder, r)}
   end
@@ -1286,17 +1285,38 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def svd(
-        {%{shape: {m, _}} = u_holder, s_holder, %{shape: {_, n}} = v_holder} = outputs,
+        {u_holder, %{type: output_type} = s_holder, v_holder},
         %{type: input_type, shape: input_shape} = tensor,
         opts
       ) do
+    bin = to_binary(tensor)
+    rank = tuple_size(input_shape)
+    m = elem(input_shape, rank - 2)
+    n = elem(input_shape, rank - 1)
+
+    vt_rows = elem(v_holder.shape, rank - 2)
+    vt_cols = elem(v_holder.shape, rank - 1)
+
     if m < n do
-      raise ArgumentError,
-            "SVD not implemented for wide matrices (tensors with shape {m, n} where m < n)"
+      error_msg =
+        if rank == 2 do
+          "SVD not implemented for wide matrices (tensors with shape {m, n} where m < n)"
+        else
+          "SVD not implemented for batches of wide matrices (tensors with shape {..., m, n} where m < n)"
+        end
+
+      raise ArgumentError, error_msg
     end
 
-    bin = to_binary(tensor)
-    {u, s, v} = B.Matrix.svd(bin, input_type, input_shape, outputs, opts)
+    {u, s, v} =
+      bin_batch_reduce(bin, m * n, input_type, {<<>>, <<>>, <<>>}, fn matrix,
+                                                                      {u_acc, s_acc, v_acc} ->
+        {u, s, v} =
+          B.Matrix.svd(matrix, input_type, {m, n}, output_type, {vt_rows, vt_cols}, opts)
+
+        {u_acc <> u, s_acc <> s, v_acc <> v}
+      end)
+
     {from_binary(u_holder, u), from_binary(s_holder, s), from_binary(v_holder, v)}
   end
 
@@ -1307,7 +1327,16 @@ defmodule Nx.BinaryBackend do
         opts
       ) do
     bin = to_binary(tensor)
-    {p, l, u} = B.Matrix.lu(bin, input_type, input_shape, p_type, l_type, u_type, opts)
+    rank = tuple_size(input_shape)
+    n = elem(input_shape, rank - 1)
+
+    {p, l, u} =
+      bin_batch_reduce(bin, n * n, input_type, {<<>>, <<>>, <<>>}, fn matrix,
+                                                                      {p_acc, l_acc, u_acc} ->
+        {p, l, u} = B.Matrix.lu(matrix, input_type, {n, n}, p_type, l_type, u_type, opts)
+        {p_acc <> p, l_acc <> l, u_acc <> u}
+      end)
+
     {from_binary(p_holder, p), from_binary(l_holder, l), from_binary(u_holder, u)}
   end
 
@@ -2324,6 +2353,17 @@ defmodule Nx.BinaryBackend do
     <<y::size(s2)-bitstring, rest2::bitstring>> = b2
     {bin, acc} = fun.(x, y, acc)
     bin_zip_reduce_axis(rest1, rest2, s1, s2, bin, acc, fun)
+  end
+
+  defp bin_batch_reduce(bin, batch_size, {_, size}, acc, fun) do
+    batch_byte_size = (batch_size * size) |> div(8)
+    batches = byte_size(bin) |> div(batch_byte_size)
+
+    for i <- 0..(batches - 1), reduce: acc do
+      acc ->
+        batch = binary_part(bin, i * batch_byte_size, batch_byte_size)
+        fun.(batch, acc)
+    end
   end
 
   ## Conversion helpers

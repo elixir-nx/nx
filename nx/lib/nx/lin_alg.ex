@@ -14,8 +14,8 @@ defmodule Nx.LinAlg do
   @doc """
   Returns the adjoint of a given tensor.
 
-  If the input tensor is real, it is the same as `Nx.transpose/2`.
-  Otherwise, it is the same as `tensor |> Nx.transpose(opts) |> Nx.conjugate()`.
+  If the input tensor is real it transposes it's two inner-most axes.
+  If the input tensor is complex, it additionally applies `Nx.conjugate/1` to it.
 
   ## Examples
 
@@ -37,32 +37,60 @@ defmodule Nx.LinAlg do
         ]
       >
   """
-  defn adjoint(t, opts \\ []) do
-    case Nx.type(t) do
+  defn adjoint(t) do
+    tensor = Nx.to_tensor(t)
+    opts = adjoint_opts(tensor.shape)
+
+    case Nx.type(tensor) do
       {:c, _} ->
-        t |> Nx.transpose(opts) |> Nx.conjugate()
+        tensor |> Nx.transpose(opts) |> Nx.conjugate()
 
       _ ->
-        Nx.transpose(t, opts)
+        Nx.transpose(tensor, opts)
+    end
+  end
+
+  deftransformp adjoint_opts(shape) do
+    rank = tuple_size(shape)
+
+    if rank > 2 do
+      axes = Enum.concat(0..(rank - 3), [rank - 1, rank - 2])
+      [axes: axes]
+    else
+      []
     end
   end
 
   @doc """
-  Performs a Cholesky decomposition of a square matrix.
+  Performs a Cholesky decomposition of a batch of square matrices.
 
-  The matrix must be positive-definite and either Hermitian
+  The matrices must be positive-definite and either Hermitian
   if complex or symmetric if real. An error is raised by the
   default backend if those conditions are not met. Other
   backends may emit undefined behaviour.
 
   ### Examples
-
       iex> Nx.LinAlg.cholesky(Nx.tensor([[20.0, 17.6], [17.6, 16.0]]))
       #Nx.Tensor<
         f32[2][2]
         [
           [4.4721360206604, 0.0],
           [3.9354796409606934, 0.7155413031578064]
+        ]
+      >
+
+      iex> Nx.LinAlg.cholesky(Nx.tensor([[[2.0, 3.0], [3.0, 5.0]], [[1.0, 0.0], [0.0, 1.0]]]))
+      #Nx.Tensor<
+        f32[2][2][2]
+        [
+          [
+            [1.4142135381698608, 0.0],
+            [2.1213202476501465, 0.7071067690849304]
+          ],
+          [
+            [1.0, 0.0],
+            [0.0, 1.0]
+          ]
         ]
       >
 
@@ -931,7 +959,7 @@ defmodule Nx.LinAlg do
   end
 
   @doc """
-  Calculates the Singular Value Decomposition of 2-D tensors.
+  Calculates the Singular Value Decomposition of batched 2-D matrices.
 
   It returns `{u, s, vt}` where the elements of `s` are sorted
   from highest to lowest.
@@ -1009,18 +1037,19 @@ defmodule Nx.LinAlg do
 
     output_type = Nx.Type.to_floating(type)
     {u_shape, s_shape, v_shape} = Nx.Shape.svd(shape)
+    rank = tuple_size(shape)
 
     impl!(tensor).svd(
-      {%{tensor | names: [nil, nil], type: output_type, shape: u_shape},
-       %{tensor | names: [nil], type: output_type, shape: s_shape},
-       %{tensor | names: [nil, nil], type: output_type, shape: v_shape}},
+      {%{tensor | names: List.duplicate(nil, rank), type: output_type, shape: u_shape},
+       %{tensor | names: List.duplicate(nil, rank - 1), type: output_type, shape: s_shape},
+       %{tensor | names: List.duplicate(nil, rank), type: output_type, shape: v_shape}},
       tensor,
       opts
     )
   end
 
   @doc """
-  Calculates the A = PLU decomposition of a 2-D tensor A with shape `{N, N}`.
+  Calculates the A = PLU decomposition of batched square 2-D matrices A.
 
   ## Options
 
@@ -1104,10 +1133,76 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> {p, l, u} = Nx.LinAlg.lu(Nx.tensor([[[9, 8, 7], [6, 5, 4], [3, 2, 1]], [[-1, 0, -1], [1, 0, 1], [1, 1, 1]]]))
+      iex> p
+      #Nx.Tensor<
+        s64[2][3][3]
+        [
+          [
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1]
+          ],
+          [
+            [1, 0, 0],
+            [0, 0, 1],
+            [0, 1, 0]
+          ]
+        ]
+      >
+      iex> l
+      #Nx.Tensor<
+        f32[2][3][3]
+        [
+          [
+            [1.0, 0.0, 0.0],
+            [0.6666666865348816, 1.0, 0.0],
+            [0.3333333432674408, 2.0, 1.0]
+          ],
+          [
+            [1.0, 0.0, 0.0],
+            [-1.0, 1.0, 0.0],
+            [-1.0, 0.0, 1.0]
+          ]
+        ]
+      >
+      iex> u
+      #Nx.Tensor<
+        f32[2][3][3]
+        [
+          [
+            [9.0, 8.0, 7.0],
+            [0.0, -0.3333333432674408, -0.6666666865348816],
+            [0.0, 0.0, 0.0]
+          ],
+          [
+            [-1.0, 0.0, -1.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0]
+          ]
+        ]
+      >
+      iex> p |> Nx.dot([2], [0], l, [1], [0]) |> Nx.dot([2], [0], u, [1], [0])
+      #Nx.Tensor<
+        f32[2][3][3]
+        [
+          [
+            [9.0, 8.0, 7.0],
+            [6.0, 5.0, 4.0],
+            [3.0, 2.0, 1.0]
+          ],
+          [
+            [-1.0, 0.0, -1.0],
+            [1.0, 0.0, 1.0],
+            [1.0, 1.0, 1.0]
+          ]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.LinAlg.lu(Nx.tensor([[1, 1, 1, 1], [-1, 4, 4, -1], [4, -2, 2, 0]]))
-      ** (ArgumentError) tensor must have as many rows as columns, got shape: {3, 4}
+      ** (ArgumentError) tensor must be a square matrix or a batch of square matrices, got shape: {3, 4}
   """
   def lu(tensor, opts \\ []) do
     opts = keyword!(opts, eps: @default_eps)
@@ -1115,7 +1210,7 @@ defmodule Nx.LinAlg do
 
     output_type = Nx.Type.to_floating(type)
     {p_shape, l_shape, u_shape} = Nx.Shape.lu(shape)
-    names = [nil, nil]
+    names = List.duplicate(nil, tuple_size(shape))
 
     impl!(tensor).lu(
       {%{tensor | type: type, shape: p_shape, names: names},
