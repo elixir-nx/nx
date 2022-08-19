@@ -1056,6 +1056,7 @@ defmodule Nx.LinAlg do
     * `:eps` - Rounding error threshold that can be applied during the factorization
 
   ## Examples
+
       iex> {p, l, u} = Nx.LinAlg.lu(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]))
       iex> p
       #Nx.Tensor<
@@ -1093,6 +1094,7 @@ defmodule Nx.LinAlg do
           [7.0, 8.0, 9.0]
         ]
       >
+
       iex> {p, l, u} = Nx.LinAlg.lu(Nx.tensor([[1, 0, 1], [-1, 0, -1], [1, 1, 1]]))
       iex> p
       #Nx.Tensor<
