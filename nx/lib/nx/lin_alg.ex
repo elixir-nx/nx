@@ -262,7 +262,7 @@ defmodule Nx.LinAlg do
         f32
         3.0
       >
-      
+
       iex> Nx.LinAlg.norm(Nx.tensor([[0, 0], [0, 0]]))
       #Nx.Tensor<
         f32
@@ -364,10 +364,8 @@ defmodule Nx.LinAlg do
     # The idea is that by dividing the tensor by it, large values of
     # tensor entries and large values of p are reduced, which in turn
     # avoids numerical overflow.
-    numerical_stability_coefficient = Nx.reduce_max(abs_t)
-    # In case if all values are zeros
-    numerical_stability_coefficient =
-      if numerical_stability_coefficient > 0, do: numerical_stability_coefficient, else: 1.0
+    # The second max prevents from division by zero.
+    numerical_stability_coefficient = Nx.reduce_max(abs_t) |> Nx.max(1.0e-16)
 
     abs_t
     |> Nx.divide(numerical_stability_coefficient)
