@@ -364,9 +364,9 @@ defmodule Nx.LinAlg do
     # The idea is that by dividing the tensor by it, large values of
     # tensor entries and large values of p are reduced, which in turn
     # avoids numerical overflow.
-    # The second max prevents from division by zero.
     numerical_stability_coefficient = Nx.reduce_max(abs_t)
 
+    # This code prevents from division by zero.
     numerical_stability_coefficient =
       Nx.select(
         Nx.greater(numerical_stability_coefficient, 0),
