@@ -263,6 +263,12 @@ defmodule Nx.LinAlg do
         3.0
       >
 
+      iex> Nx.LinAlg.norm(Nx.tensor([[0, 0], [0, 0]]))
+      #Nx.Tensor<
+        f32
+        0.0
+      >
+
   ### Error cases
 
       iex> Nx.LinAlg.norm(Nx.tensor([3, 4]), ord: :frobenius)
@@ -359,6 +365,14 @@ defmodule Nx.LinAlg do
     # tensor entries and large values of p are reduced, which in turn
     # avoids numerical overflow.
     numerical_stability_coefficient = Nx.reduce_max(abs_t)
+
+    # This code prevents from division by zero.
+    numerical_stability_coefficient =
+      Nx.select(
+        Nx.greater(numerical_stability_coefficient, 0),
+        numerical_stability_coefficient,
+        1
+      )
 
     abs_t
     |> Nx.divide(numerical_stability_coefficient)
