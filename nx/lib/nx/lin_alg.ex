@@ -359,6 +359,8 @@ defmodule Nx.LinAlg do
     # tensor entries and large values of p are reduced, which in turn
     # avoids numerical overflow.
     numerical_stability_coefficient = Nx.reduce_max(abs_t)
+    # In case if all values are zeros
+    numerical_stability_coefficient = if numerical_stability_coefficient > 0, do: numerical_stability_coefficient, else: 1.0
 
     abs_t
     |> Nx.divide(numerical_stability_coefficient)
