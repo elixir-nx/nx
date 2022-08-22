@@ -365,7 +365,14 @@ defmodule Nx.LinAlg do
     # tensor entries and large values of p are reduced, which in turn
     # avoids numerical overflow.
     # The second max prevents from division by zero.
-    numerical_stability_coefficient = calculate_numerical_stability_coefficient(abs_t)
+    numerical_stability_coefficient = Nx.reduce_max(abs_t)
+
+    numerical_stability_coefficient =
+      Nx.select(
+        Nx.greater(numerical_stability_coefficient, 0),
+        numerical_stability_coefficient,
+        1
+      )
 
     abs_t
     |> Nx.divide(numerical_stability_coefficient)
@@ -373,11 +380,6 @@ defmodule Nx.LinAlg do
     |> Nx.sum(opts)
     |> Nx.power(inv_ord)
     |> Nx.multiply(numerical_stability_coefficient)
-  end
-
-  defnp calculate_numerical_stability_coefficient(t) do
-    numerical_stability_coefficient = Nx.reduce_max(t)
-    if numerical_stability_coefficient == 0, do: 1.0, else: numerical_stability_coefficient
   end
 
   @doc """
