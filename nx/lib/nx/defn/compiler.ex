@@ -157,7 +157,7 @@ defmodule Nx.Defn.Compiler do
     arg
   end
 
-  def __case__(arg) when is_integer(arg) or is_atom(arg) do
+  def __case__(arg) when is_number(arg) or is_atom(arg) do
     arg
   end
 
