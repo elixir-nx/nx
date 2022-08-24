@@ -353,7 +353,7 @@ defmodule Nx.LinAlgTest do
 
       for _ <- 1..10 do
         # Orthogonal matrix from a random matrix
-        {q, _} = Nx.random_uniform({3, 3}) |> Nx.LinAlg.qr()
+        {q, _} = Nx.random_uniform({3, 3, 3}) |> Nx.LinAlg.qr()
 
         # Different eigenvalues from random values
         evals_test =
@@ -374,9 +374,9 @@ defmodule Nx.LinAlgTest do
         # using A = A^t = Q^t.Λ.Q.
         a =
           q
-          |> Nx.transpose()
+          |> Nx.LinAlg.adjoint()
           |> Nx.multiply(evals_test)
-          |> Nx.dot(q)
+          |> Nx.dot([2], [0], q, [1], [0])
 
         # Eigenvalues and eigenvectors
         assert {evals, evecs} = Nx.LinAlg.eigh(a)
@@ -384,7 +384,7 @@ defmodule Nx.LinAlgTest do
 
         # Eigenvalue equation
         evecs_evals = Nx.multiply(evecs, evals)
-        a_evecs = Nx.dot(a, evecs)
+        a_evecs = Nx.dot(a, [2], [0], evecs, [1], [0])
 
         assert_all_close(evecs_evals, a_evecs, atol: 1.0e-3)
       end
@@ -396,7 +396,7 @@ defmodule Nx.LinAlgTest do
 
       for _ <- 1..10 do
         # Orthogonal matrix from a random matrix
-        {q, _} = Nx.random_uniform({3, 3}) |> Nx.LinAlg.qr()
+        {q, _} = Nx.random_uniform({3, 3, 3}) |> Nx.LinAlg.qr()
 
         # ensure that eval1 is far apart from the other two eigenvals
         eval1 = :rand.uniform() * 10 + 10
@@ -404,15 +404,16 @@ defmodule Nx.LinAlgTest do
         eval2 = :rand.uniform() * 0.01 + 1
         # eval3 also in the same range as eval2
         eval3 = :rand.uniform() * 0.01 + 1
+
         evals_test = Nx.tensor([eval1, eval2, eval3])
 
         # Symmetric matrix with different eigenvalues
         # using A = A^t = Q^tΛQ.
         a =
           q
-          |> Nx.transpose()
+          |> Nx.LinAlg.adjoint()
           |> Nx.multiply(evals_test)
-          |> Nx.dot(q)
+          |> Nx.dot([2], [0], q, [1], [0])
           |> round(3)
 
         # Eigenvalues and eigenvectors
@@ -421,7 +422,7 @@ defmodule Nx.LinAlgTest do
 
         # Eigenvalue equation
         evecs_evals = Nx.multiply(evecs, evals)
-        a_evecs = Nx.dot(a, evecs)
+        a_evecs = Nx.dot(a, [2], [0], evecs, [1], [0])
         assert_all_close(evecs_evals, a_evecs, atol: 1.0e-2)
       end
     end

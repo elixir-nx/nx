@@ -1278,7 +1278,14 @@ defmodule Nx.BinaryBackend do
         opts
       ) do
     bin = to_binary(tensor)
-    {eigenvals, eigenvecs} = B.Matrix.eigh(bin, input_type, input_shape, output_type, opts)
+    rank = tuple_size(input_shape)
+    n = elem(input_shape, rank - 1)
+
+    {eigenvals, eigenvecs} =
+      bin_batch_reduce(bin, n * n, input_type, {<<>>, <<>>}, fn matrix, {vals_acc, vecs_acc} ->
+        {vals, vecs} = B.Matrix.eigh(matrix, input_type, {n, n}, output_type, opts)
+        {vals_acc <> vals, vecs_acc <> vecs}
+      end)
 
     {from_binary(eigenvals_holder, eigenvals), from_binary(eigenvecs_holder, eigenvecs)}
   end

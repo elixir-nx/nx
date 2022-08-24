@@ -941,7 +941,7 @@ defmodule Nx.LinAlg do
   ## Error cases
 
       iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
-      ** (ArgumentError) eigh/2 expects a square tensor, got tensor with shape: {2, 3}
+      ** (ArgumentError) tensor must be a square matrix or a batch of square matrices, got shape: {2, 3}
 
       iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2], [3, 4]]))
       ** (ArgumentError) input tensor must be symmetric
@@ -954,19 +954,14 @@ defmodule Nx.LinAlg do
 
     output_type = Nx.Type.to_floating(type)
 
-    {eigenvals_shape, eigenvecs_shape} =
-      case shape do
-        {n, n} ->
-          {{n}, {n, n}}
-
-        shape ->
-          raise ArgumentError,
-                "eigh/2 expects a square tensor, got tensor with shape: #{inspect(shape)}"
-      end
+    {eigenvals_shape, eigenvecs_shape} = Nx.Shape.eigh(shape)
+    rank = tuple_size(shape)
+    eigenvals_name = List.duplicate(nil, rank - 1)
+    eigenvecs_name = List.duplicate(nil, rank)
 
     impl!(tensor).eigh(
-      {%{tensor | names: [nil], type: output_type, shape: eigenvals_shape},
-       %{tensor | names: [nil, nil], type: output_type, shape: eigenvecs_shape}},
+      {%{tensor | names: eigenvals_name, type: output_type, shape: eigenvals_shape},
+       %{tensor | names: eigenvecs_name, type: output_type, shape: eigenvecs_shape}},
       tensor,
       opts
     )
