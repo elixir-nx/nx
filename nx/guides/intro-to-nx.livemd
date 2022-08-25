@@ -525,7 +525,7 @@ Just as the Elixir language supports `def`, `defmacro`, and `defp`,
 Nx supports `defn`. There are a few restrictions. It allows only
 numerical arguments in the form of primitives or tensors as arguments
 or return values, and has a subset of the language within
-the `defn` block.
+the `def` block.
 
 The subset of Elixir allowed within `defn` is quite broad, though. We can
 use macros, pipes, and even conditionals, so we're not giving up
