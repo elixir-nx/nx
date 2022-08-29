@@ -48,8 +48,8 @@ defmodule Nx.Shape do
         However, defn treats all arguments as inputs. To address this, you can pass \
         the dimension or the shape as an option instead:
 
-            defn my_defn(opts \\ []) do
-              opts = keyword(opts, dim: 1)
+            defn my_defn(opts \\\\ []) do
+              opts = keyword!(opts, dim: 1)
               Nx.iota({opts[:dim]})
             end
 
