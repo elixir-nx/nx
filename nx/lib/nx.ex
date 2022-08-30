@@ -8713,7 +8713,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.transpose(Nx.tensor(1))
+      iex> Nx.transpose(Nx.tensor(1), axes: [])
       #Nx.Tensor<
         s64
         1
