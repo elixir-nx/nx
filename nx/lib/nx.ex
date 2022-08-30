@@ -2607,14 +2607,12 @@ defmodule Nx do
       iex> Nx.squeeze(Nx.tensor([[[[[1]]]]]), axes: [0, 0])
       ** (ArgumentError) axes [0, 0] must be unique integers between 0 and 4
 
-      iex> Nx.squeeze(Nx.tensor([[1]]), axes: [])
-      ** (ArgumentError) :axes must be a non-empty list, got: []
   """
   @doc type: :shape
   def squeeze(tensor, opts \\ []) do
     opts = keyword!(opts, [:axes])
     %T{shape: old_shape, names: names} = tensor = to_tensor(tensor)
-    axes = assert_axes!(opts[:axes]) || Nx.Shape.squeeze_axes(old_shape)
+    axes = opts[:axes] || Nx.Shape.squeeze_axes(old_shape)
     axes = Nx.Shape.normalize_axes(old_shape, axes, names)
     {new_shape, new_names} = Nx.Shape.squeeze(old_shape, axes, names)
 
@@ -6403,9 +6401,6 @@ defmodule Nx do
       iex> Nx.sum(Nx.tensor([[1, 2]]), axes: [2])
       ** (ArgumentError) given axis (2) invalid for shape with rank 2
 
-      iex> Nx.sum(Nx.tensor([[1, 2]]), axes: [])
-      ** (ArgumentError) :axes must be a non-empty list, got: []
-
   """
   @doc type: :aggregation
   def sum(tensor, opts \\ []) do
@@ -6507,7 +6502,7 @@ defmodule Nx do
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
 
     mean_den =
-      if axes = assert_axes!(opts[:axes]) do
+      if axes = opts[:axes] do
         mean_den(shape, Nx.Shape.normalize_axes(shape, axes, names))
       else
         size(shape)
@@ -6654,8 +6649,6 @@ defmodule Nx do
       iex> Nx.product(Nx.tensor([[1, 2]]), axes: [2])
       ** (ArgumentError) given axis (2) invalid for shape with rank 2
 
-      iex> Nx.product(Nx.tensor([[1, 2]]), axes: [])
-      ** (ArgumentError) :axes must be a non-empty list, got: []
   """
   @doc type: :aggregation
   def product(tensor, opts \\ []) do
@@ -6828,7 +6821,7 @@ defmodule Nx do
 
     {shape, names, axes} =
       cond do
-        axes = assert_axes!(opts[:axes]) ->
+        axes = opts[:axes] ->
           axes = Nx.Shape.normalize_axes(shape, axes, names)
           {new_shape, new_names} = Nx.Shape.contract(shape, axes, names, keep_axes)
           {new_shape, new_names, axes}
@@ -6841,11 +6834,15 @@ defmodule Nx do
           {{}, [], nil}
       end
 
-    apply(impl!(tensor), op, [
-      %{tensor | type: type, shape: shape, names: names},
-      tensor,
-      [axes: axes, keep_axes: keep_axes]
-    ])
+    if axes == [] do
+      tensor
+    else
+      apply(impl!(tensor), op, [
+        %{tensor | type: type, shape: shape, names: names},
+        tensor,
+        [axes: axes, keep_axes: keep_axes]
+      ])
+    end
   end
 
   @doc """
@@ -8013,7 +8010,7 @@ defmodule Nx do
     acc = to_tensor(acc)
 
     {shape, names, axes} =
-      if axes = assert_axes!(opts[:axes]) do
+      if axes = opts[:axes] do
         axes = Nx.Shape.normalize_axes(shape, axes, names)
         {new_shape, new_names} = Nx.Shape.contract(shape, axes, names, keep_axes)
         {new_shape, new_names, axes}
@@ -8026,8 +8023,12 @@ defmodule Nx do
         end
       end
 
-    out = %{tensor | type: type, shape: shape, names: names}
-    impl!(tensor).reduce(out, tensor, acc, [axes: axes, keep_axes: keep_axes], fun)
+    if axes == [] do
+      tensor
+    else
+      out = %{tensor | type: type, shape: shape, names: names}
+      impl!(tensor).reduce(out, tensor, acc, [axes: axes, keep_axes: keep_axes], fun)
+    end
   end
 
   @doc """
@@ -8881,7 +8882,7 @@ defmodule Nx do
   def reverse(tensor, opts \\ []) do
     opts = keyword!(opts, [:axes])
     %{shape: shape, names: names} = tensor = to_tensor(tensor)
-    axes = assert_axes!(opts[:axes]) || axes(shape)
+    axes = opts[:axes] || axes(shape)
 
     case Nx.Shape.normalize_axes(shape, axes, names) do
       [] -> tensor
@@ -10835,7 +10836,7 @@ defmodule Nx do
   def variance(tensor, opts \\ []) do
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
     opts = keyword!(opts, [:axes, ddof: 0, keep_axes: false])
-    axes = assert_axes!(opts[:axes])
+    axes = opts[:axes]
     {ddof, opts} = Keyword.pop!(opts, :ddof)
 
     total =
@@ -11335,13 +11336,5 @@ defmodule Nx do
         t
       end)
     end
-  end
-
-  defp assert_axes!(nil), do: nil
-
-  defp assert_axes!([_ | _] = axes), do: axes
-
-  defp assert_axes!(axes) do
-    raise ArgumentError, ":axes must be a non-empty list, got: #{inspect(axes)}"
   end
 end
