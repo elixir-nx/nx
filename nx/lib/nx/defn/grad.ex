@@ -447,26 +447,6 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:product, [x, opts], ans, g) do
-    # From https://people.maths.ox.ac.uk/gilesm/files/NA-08-01.pdf
-    # 2.2.4 we take that the reverse-mode gradient of a determinant
-    # is A_bar = C_bar . C . inv(A^T)
-
-    # We also know that the determinant of a diagonal matrix is the
-    # product of the diagonal items. This means that we can imagine
-    # our condensed product axes as being the diagonal of a matrix
-    # and apply the determinant grad on it.
-
-    # Also, if A is diagonal, A^T = A and inv(A) is as trivial
-    # as inverting the items. Also, C_bar and C are scalars.
-    # This means that a_bar = c_bar |> Nx.multiply(c) |> Nx.divide(a).
-
-    # First, let's condition our input matrix by substituting 0s with 1s
-    # Then, we move the reducing axes into a condensed innermost axis.
-
-    # After we have our matrix well conditioned, we can operate on the
-    # innermost axis as described above, and then we transpose the items
-    # back into place
-
     axes =
       case opts[:axes] do
         [] -> Nx.axes(x.shape)
@@ -474,97 +454,35 @@ defmodule Nx.Defn.Grad do
         axes -> axes
       end
 
-    outermost_axes = Nx.axes(x.shape) -- axes
-    permutation = outermost_axes ++ axes
+    unsqueezed_shape = Enum.reduce(axes, Nx.shape(x), &put_elem(&2, &1, 1))
+    g = Nx.reshape(g, unsqueezed_shape)
+    ans = Nx.reshape(ans, unsqueezed_shape)
 
-    inverse_permutation =
-      permutation
-      |> Enum.with_index()
-      |> Enum.sort_by(fn {x, _} -> x end)
-      |> Enum.map(fn {_, i} -> i end)
+    # The derivative of a product with respect to element x_i, is that
+    # product with element x_i removed. Having the total product already
+    # computed, we can divide it by x_i to effectively remove it. This
+    # works as long as x_i is other than 0.
+    #
+    # For products with a single zero element, the derivative with respect
+    # to that particular element is the product of the non-zero elements.
+    #
+    # For products with more zeros, the derivative with respect to any of
+    # the elements is always 0.
 
-    zero_selector = Nx.equal(x, 0)
+    zero? = Nx.equal(x, 0)
 
-    reduce_axes_size = axes |> Enum.reduce(1, fn axis, acc -> acc * elem(x.shape, axis) end)
-
-    reduced_shape =
-      outermost_axes
-      |> Enum.map(&elem(x.shape, &1))
-      |> List.insert_at(-1, reduce_axes_size)
-      |> List.to_tuple()
-
-    formatted_x =
-      zero_selector
+    ans_removed_zero =
+      zero?
       |> Nx.select(1, x)
-      |> Nx.transpose(axes: permutation)
-      |> Nx.reshape(reduced_shape)
+      |> Nx.product(axes: axes, keep_axes: true)
 
-    g_ans_new_axes = Tuple.to_list(g.shape) ++ List.duplicate(1, Nx.rank(x) - Nx.rank(g))
+    zeros_in_product = Nx.sum(zero?, axes: axes, keep_axes: true)
+    one_zero? = Nx.equal(zeros_in_product, 1)
+    many_zeros? = Nx.greater(zeros_in_product, 1)
 
-    g_ans =
-      g
-      |> Nx.multiply(ans)
-      |> Nx.reshape(List.to_tuple(g_ans_new_axes))
-      |> Nx.tile(List.duplicate(1, tuple_size(g.shape)) ++ [reduce_axes_size])
-
-    # Now we need to deal with the case where a given element is zero
-    # There are 2 possibilities. If in the same product there are two elements
-    # which evaluate to zero, then we set the correspoding grad to zero (because
-    # the product with that element removed is zero anyway due to the other(s) zero(s)).
-    # If there's a single zero, then we need to calculate the product replacing that zero
-    # with 1. Fortunately, this is already the value of the `formatted_x` variable.
-
-    # For ease of processing, we can reshape the `dx` and `formatted_x` tensors into
-    # k (products) x reduce_axes_size
-
-    k = div(Tuple.product(x.shape), reduce_axes_size)
-    intermediate_shape = {k, reduce_axes_size}
-
-    formatted_x = Nx.reshape(formatted_x, intermediate_shape)
-
-    dx =
-      g_ans
-      |> Nx.reshape(intermediate_shape)
-      |> Nx.divide(formatted_x)
-
-    # First lets turn the `zeros_selector` into the same shape. Keep in mind that
-    # we also need to transpose it first
-
-    zero_selector_t =
-      zero_selector |> Nx.transpose(axes: permutation) |> Nx.reshape(intermediate_shape)
-
-    zeros_per_product = Nx.sum(zero_selector_t, axes: [1])
-
-    two_zeros_per_product_selector =
-      zeros_per_product
-      |> Nx.greater(1)
-      |> Nx.new_axis(1)
-      |> Nx.tile([1, reduce_axes_size])
-      |> Nx.select(zero_selector_t, 0)
-
-    single_zero_per_product_selector =
-      zeros_per_product
-      |> Nx.equal(1)
-      |> Nx.new_axis(1)
-      |> Nx.tile([1, reduce_axes_size])
-      |> Nx.select(zero_selector_t, 0)
-
-    # set zero for the first case (2 zeros in the product)
-    dx = Nx.select(two_zeros_per_product_selector, 0, dx)
-
-    ans_removed_zero = Nx.product(formatted_x, axes: [1], keep_axes: opts[:keep_axes])
-
-    # this is the equivalent of g * (ans / x) where the parens are "pre-evaluated" for the zero elements
-    g_ans_removed_zero =
-      g
-      |> Nx.multiply(ans_removed_zero)
-      |> Nx.reshape(List.to_tuple(g_ans_new_axes))
-      |> Nx.tile(List.duplicate(1, tuple_size(g.shape)) ++ [reduce_axes_size])
-      |> Nx.reshape(intermediate_shape)
-
-    dx = Nx.select(single_zero_per_product_selector, g_ans_removed_zero, dx)
-
-    dx = dx |> Nx.reshape(x.shape) |> Nx.transpose(axes: inverse_permutation)
+    dx = Nx.multiply(g, Nx.divide(ans, x))
+    dx = Nx.select(Nx.logical_and(zero?, one_zero?), Nx.multiply(g, ans_removed_zero), dx)
+    dx = Nx.select(Nx.logical_and(zero?, many_zeros?), 0, dx)
 
     [{x, dx}]
   end
