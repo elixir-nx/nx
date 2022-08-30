@@ -447,13 +447,7 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:product, [x, opts], ans, g) do
-    axes =
-      case opts[:axes] do
-        [] -> Nx.axes(x.shape)
-        nil -> Nx.axes(x.shape)
-        axes -> axes
-      end
-
+    axes = opts[:axes] || Nx.axes(x)
     unsqueezed_shape = Enum.reduce(axes, Nx.shape(x), &put_elem(&2, &1, 1))
     g = Nx.reshape(g, unsqueezed_shape)
     ans = Nx.reshape(ans, unsqueezed_shape)
