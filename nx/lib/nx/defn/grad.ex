@@ -471,16 +471,14 @@ defmodule Nx.Defn.Grad do
 
     zero? = Nx.equal(x, 0)
 
-    ans_removed_zero =
-      zero?
-      |> Nx.select(1, x)
-      |> Nx.product(axes: axes, keep_axes: true)
+    x_without_zeros = Nx.select(zero?, 1, x)
+    ans_removed_zero = Nx.product(x_without_zeros, axes: axes, keep_axes: true)
 
     zeros_in_product = Nx.sum(zero?, axes: axes, keep_axes: true)
     one_zero? = Nx.equal(zeros_in_product, 1)
     many_zeros? = Nx.greater(zeros_in_product, 1)
 
-    dx = Nx.multiply(g, Nx.divide(ans, x))
+    dx = Nx.multiply(g, Nx.divide(ans, x_without_zeros))
     dx = Nx.select(Nx.logical_and(zero?, one_zero?), Nx.multiply(g, ans_removed_zero), dx)
     dx = Nx.select(Nx.logical_and(zero?, many_zeros?), 0, dx)
 
