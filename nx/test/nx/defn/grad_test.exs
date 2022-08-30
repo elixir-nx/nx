@@ -2914,6 +2914,75 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "product" do
+    defn grad_product(t, opts \\ []) do
+      grad(t, fn t ->
+        t
+        |> Nx.product(opts)
+        |> Nx.sum()
+      end)
+    end
+
+    defn composed_grad_product(t, opts \\ []) do
+      grad(t, fn t ->
+        t
+        |> Nx.cos()
+        |> Nx.product(opts)
+        |> Nx.sin()
+        |> Nx.sum()
+      end)
+    end
+
+    test "computes gradient" do
+      assert_all_close(
+        grad_product(Nx.tensor([[[[1, 2, 3, 4], [2, 1, 3, -1]]]])),
+        Nx.tensor([[[[-144, -72, -48, -36], [-72, -144, -48, 144]]]])
+      )
+
+      assert_all_close(
+        grad_product(Nx.tensor([[[[1, 2, 3, 4], [2, 1, 3, -1], [3, 2, 3, 0]]]])),
+        Nx.tensor([[[[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, -2592]]]])
+      )
+    end
+
+    test "computes gradient with axes option" do
+      assert_all_close(
+        grad_product(Nx.tensor([[[[1, 2, 3, 4], [2, 1, 3, -1], [3, 2, 3, 0], [0, 2, 3, 0]]]]),
+          axes: [3]
+        ),
+        Nx.tensor([[[[24, 12, 8, 6], [-3, -6, -2, 6], [0, 0, 0, 18], [0, 0, 0, 0]]]])
+      )
+    end
+
+    test "computes gradient (keep_axes: true)" do
+      assert_all_close(
+        grad_product(Nx.tensor([[[[1, 2, 3, 4], [2, 1, 3, -1]]]]), keep_axes: true),
+        Nx.tensor([[[[-144, -72, -48, -36], [-72, -144, -48, 144]]]])
+      )
+    end
+
+    test "computes gradient with axes option (keep_axes: true)" do
+      assert_all_close(
+        grad_product(Nx.tensor([[[[1, 2, 3, 4], [2, 1, 3, -1]]]]), axes: [3], keep_axes: true),
+        Nx.tensor([[[[24, 12, 8, 6], [-3, -6, -2, 6]]]])
+      )
+    end
+
+    test "computes composed gradient" do
+      assert_all_close(
+        composed_grad_product(Nx.tensor([[[[1, 2, 3, 4], [2, 1, 3, -1]]]])),
+        Nx.tensor([
+          [
+            [
+              [0.0272486, -0.03822973, -0.00249401, 0.02025739],
+              [-0.03822973, 0.0272486, -0.00249401, -0.0272486]
+            ]
+          ]
+        ])
+      )
+    end
+  end
+
   describe "sort" do
     defn grad_sum_sort(t) do
       grad(
