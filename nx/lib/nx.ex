@@ -2606,6 +2606,7 @@ defmodule Nx do
 
       iex> Nx.squeeze(Nx.tensor([[[[[1]]]]]), axes: [0, 0])
       ** (ArgumentError) axes [0, 0] must be unique integers between 0 and 4
+
   """
   @doc type: :shape
   def squeeze(tensor, opts \\ []) do
@@ -6647,6 +6648,7 @@ defmodule Nx do
 
       iex> Nx.product(Nx.tensor([[1, 2]]), axes: [2])
       ** (ArgumentError) given axis (2) invalid for shape with rank 2
+
   """
   @doc type: :aggregation
   def product(tensor, opts \\ []) do
@@ -6832,11 +6834,15 @@ defmodule Nx do
           {{}, [], nil}
       end
 
-    apply(impl!(tensor), op, [
-      %{tensor | type: type, shape: shape, names: names},
-      tensor,
-      [axes: axes, keep_axes: keep_axes]
-    ])
+    if axes == [] do
+      tensor
+    else
+      apply(impl!(tensor), op, [
+        %{tensor | type: type, shape: shape, names: names},
+        tensor,
+        [axes: axes, keep_axes: keep_axes]
+      ])
+    end
   end
 
   @doc """
@@ -8017,8 +8023,12 @@ defmodule Nx do
         end
       end
 
-    out = %{tensor | type: type, shape: shape, names: names}
-    impl!(tensor).reduce(out, tensor, acc, [axes: axes, keep_axes: keep_axes], fun)
+    if axes == [] do
+      tensor
+    else
+      out = %{tensor | type: type, shape: shape, names: names}
+      impl!(tensor).reduce(out, tensor, acc, [axes: axes, keep_axes: keep_axes], fun)
+    end
   end
 
   @doc """
