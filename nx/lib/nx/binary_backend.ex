@@ -2446,10 +2446,6 @@ defmodule Nx.BinaryBackend do
     {chunk_size, read_size, path}
   end
 
-  defp aggregate_axes(axes, _shape, _size) do
-    raise ArgumentError, ":axes must be a non empty list, got: #{inspect(axes)}"
-  end
-
   defp aggregate_path([pair | shape], [i | axes], i, pre, pos),
     do: aggregate_path(shape, axes, i + 1, pre, [pair | pos])
 
