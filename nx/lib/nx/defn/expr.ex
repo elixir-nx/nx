@@ -724,9 +724,13 @@ defmodule Nx.Defn.Expr do
         |> merge_slice(axes, inner_start, start, inner_lengths, lengths)
         |> Enum.unzip()
 
-      tensor
-      |> Nx.slice(start, lengths)
-      |> Nx.squeeze(axes: axes)
+      sliced = Nx.slice(tensor, start, lengths)
+
+      if axes == [] do
+        sliced
+      else
+        Nx.squeeze(sliced, axes: axes)
+      end
     else
       _ ->
         expr(out, context, :slice, [tensor, start, lengths, strides])

@@ -85,9 +85,15 @@ defmodule Nx.Tensor do
     impl = Nx.Shared.impl!(tensor)
     {start, lengths, squeeze} = fetch_axes(rank - 1, axes, shape, [], [], [])
 
-    %{tensor | shape: List.to_tuple(lengths)}
-    |> impl.slice(tensor, start, lengths, List.duplicate(1, rank))
-    |> Nx.squeeze(axes: squeeze)
+    sliced =
+      %{tensor | shape: List.to_tuple(lengths)}
+      |> impl.slice(tensor, start, lengths, List.duplicate(1, rank))
+
+    if squeeze == [] do
+      sliced
+    else
+      Nx.squeeze(sliced, axes: squeeze)
+    end
   end
 
   defp fetch_axes(axis, axes, shape, start, lengths, squeeze) when axis >= 0 do
