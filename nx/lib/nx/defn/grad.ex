@@ -506,12 +506,65 @@ defmodule Nx.Defn.Grad do
       |> Nx.multiply(ans)
       |> Nx.reshape(List.to_tuple(g_ans_new_axes))
       |> Nx.tile(List.duplicate(1, tuple_size(g.shape)) ++ [reduce_axes_size])
-      |> Nx.reshape(x.shape)
+
+    # Now we need to deal with the case where a given element is zero
+    # There are 2 possibilities. If in the same product there are two elements
+    # which evaluate to zero, then we set the correspoding grad to zero (because
+    # the product with that element removed is zero anyway due to the other(s) zero(s)).
+    # If there's a single zero, then we need to calculate the product replacing that zero
+    # with 1. Fortunately, this is already the value of the `formatted_x` variable.
+
+    # For ease of processing, we can reshape the `dx` and `formatted_x` tensors into
+    # k (products) x reduce_axes_size
+
+    k = div(Tuple.product(x.shape), reduce_axes_size)
+    intermediate_shape = {k, reduce_axes_size}
+
+    formatted_x = Nx.reshape(formatted_x, intermediate_shape)
 
     dx =
       g_ans
-      |> Nx.divide(formatted_x |> Nx.reshape(x.shape))
-      |> Nx.transpose(axes: inverse_permutation)
+      |> Nx.reshape(intermediate_shape)
+      |> Nx.divide(formatted_x)
+
+    # First lets turn the `zeros_selector` into the same shape. Keep in mind that
+    # we also need to transpose it first
+
+    zero_selector_t =
+      zero_selector |> Nx.transpose(axes: permutation) |> Nx.reshape(intermediate_shape)
+
+    zeros_per_product = Nx.sum(zero_selector_t, axes: [1])
+
+    two_zeros_per_product_selector =
+      zeros_per_product
+      |> Nx.greater(1)
+      |> Nx.new_axis(1)
+      |> Nx.tile([1, reduce_axes_size])
+      |> Nx.select(zero_selector_t, 0)
+
+    single_zero_per_product_selector =
+      zeros_per_product
+      |> Nx.equal(1)
+      |> Nx.new_axis(1)
+      |> Nx.tile([1, reduce_axes_size])
+      |> Nx.select(zero_selector_t, 0)
+
+    # set zero for the first case (2 zeros in the product)
+    dx = Nx.select(two_zeros_per_product_selector, 0, dx)
+
+    ans_removed_zero = Nx.product(formatted_x, axes: [1], keep_axes: opts[:keep_axes])
+
+    # this is the equivalent of g * (ans / x) where the parens are "pre-evaluated" for the zero elements
+    g_ans_removed_zero =
+      g
+      |> Nx.multiply(ans_removed_zero)
+      |> Nx.reshape(List.to_tuple(g_ans_new_axes))
+      |> Nx.tile(List.duplicate(1, tuple_size(g.shape)) ++ [reduce_axes_size])
+      |> Nx.reshape(intermediate_shape)
+
+    dx = Nx.select(single_zero_per_product_selector, g_ans_removed_zero, dx)
+
+    dx = dx |> Nx.reshape(x.shape) |> Nx.transpose(axes: inverse_permutation)
 
     [{x, dx}]
   end
