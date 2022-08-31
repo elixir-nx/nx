@@ -196,13 +196,12 @@ defmodule EXLA.Backend do
   end
 
   @impl true
-  def optional(_name, args, fun) do
+  def optional(name, args, fun) do
     # Here we take the leading tensor arguments and pass them as JIT arguments
     {tensors, rest} = Enum.split_while(args, &is_struct(&1, Nx.Tensor))
 
     wrapper_fun = fn tensors ->
-      tensors = Tuple.to_list(tensors)
-      apply(fun, tensors ++ rest)
+      Nx.Defn.Expr.optional(name, Tuple.to_list(tensors) ++ rest, fun)
     end
 
     jit(wrapper_fun, [List.to_tuple(tensors)])
