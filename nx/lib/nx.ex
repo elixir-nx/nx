@@ -5388,7 +5388,7 @@ defmodule Nx do
   In case of repeating indices, the last occurence of index and its corresponding update
   value takes precedence.
 
-  See also: `indexed_add/3`, `gather/2`, `take/3`, `take_along_axis/3`
+  See also: `indexed_add/3`, `put_slice/3`.
 
   ### Examples
 
@@ -5449,6 +5449,7 @@ defmodule Nx do
       >
 
   ### Error cases
+
       iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([[[1, 2, 3]]]), Nx.tensor([0]))
       ** (ArgumentError) indices must be a rank 2 tensor, got: 3
 
@@ -9509,12 +9510,17 @@ defmodule Nx do
   end
 
   @doc """
-  Puts the given slice into the given tensor at the given
-  start indices.
+  Puts the given `slice` into the given `tensor` at the given
+  `start_indices`.
 
-  The given slice shape must be less than or equal to the
-  shape of the given tensor. All start indices must be less
-  than their respective dimensions.
+  The given slice must be of the same rank as tensor. Each axis
+  must be less than or equal to the size to the equivalent axis
+  in the tensor.
+
+  The number of elements in `start_indices` should match the
+  rank of the tensor.
+
+  See also: `indexed_add/3`, `put_slice/3`.
 
   ## Examples
 
@@ -9526,7 +9532,7 @@ defmodule Nx do
       >
 
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
-      iex> Nx.put_slice(t, [1, 1], Nx.tensor([[7, 8], [9, 10]]))
+      iex> Nx.put_slice(t, [0, 1], Nx.tensor([[7, 8], [9, 10]]))
       #Nx.Tensor<
         s64[2][3]
         [
@@ -9538,7 +9544,7 @@ defmodule Nx do
   Similar to `slice/3`, dynamic start indexes are also supported:
 
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
-      iex> Nx.put_slice(t, [Nx.tensor(0), Nx.tensor(2)], Nx.tensor([[10.0, 11.0]]))
+      iex> Nx.put_slice(t, [Nx.tensor(0), Nx.tensor(1)], Nx.tensor([[10.0, 11.0]]))
       #Nx.Tensor<
         f32[2][3]
         [
@@ -9551,7 +9557,7 @@ defmodule Nx do
   the start index will be clipped in order to put the whole slice:
 
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
-      iex> Nx.put_slice(t, [2, 2], Nx.tensor([[7, 8], [9, 10]]))
+      iex> Nx.put_slice(t, [1, 1], Nx.tensor([[7, 8], [9, 10]]))
       #Nx.Tensor<
         s64[2][3]
         [
