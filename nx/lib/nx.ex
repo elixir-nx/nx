@@ -371,7 +371,6 @@ defmodule Nx do
 
   import Nx.Shared
   import Nx.Defn.Kernel, only: [keyword!: 2]
-  import Nx.Defn
 
   alias Nx.Tensor, as: T
 
@@ -7900,7 +7899,7 @@ defmodule Nx do
   #       ]
   #     >
   #
-  defnp associative_scan(tensor, fun, opts \\ []) do
+  defp associative_scan(tensor, fun, opts) do
     opts = keyword!(opts, axis: 0, reverse: false)
 
     tensor
@@ -7909,8 +7908,8 @@ defmodule Nx do
     |> maybe_reverse(opts[:reverse])
   end
 
-  deftransformp maybe_reverse(tensor, true), do: Nx.reverse(tensor)
-  deftransformp maybe_reverse(tensor, false), do: tensor
+  defp maybe_reverse(tensor, true), do: Nx.reverse(tensor)
+  defp maybe_reverse(tensor, false), do: tensor
 
   # Let's assume addition as the reduction function. The algorithm is based
   # on two observations:
@@ -7924,7 +7923,7 @@ defmodule Nx do
   #      original tensor.
   #
   # Also see https://en.wikipedia.org/wiki/Prefix_sum#Algorithm_2:_Work-efficient.
-  defnp do_associative_scan(tensor, fun, opts \\ []) do
+  defp do_associative_scan(tensor, fun, opts) do
     axis = opts[:axis]
 
     axis_size = Nx.axis_size(tensor, axis)
@@ -7977,7 +7976,7 @@ defmodule Nx do
   end
 
   # Interleaves elements from same-shaped tensors along an axis
-  defnp interleave(left, right, opts \\ []) do
+  defp interleave(left, right, opts) do
     opts = keyword!(opts, axis: 0)
     axis = opts[:axis]
 
@@ -7994,7 +7993,7 @@ defmodule Nx do
   end
 
   # Merges the given axis with the preceding one
-  deftransformp flatten_axis(tensor, axis) do
+  defp flatten_axis(tensor, axis) do
     shape = Nx.shape(tensor)
     new_shape = shape |> Tuple.delete_at(axis) |> put_elem(axis - 1, :auto)
     Nx.reshape(tensor, new_shape)
