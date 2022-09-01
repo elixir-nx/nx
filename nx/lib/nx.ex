@@ -7656,7 +7656,7 @@ defmodule Nx do
   """
   @doc type: :cumulative
   def cumulative_sum(tensor, opts \\ []),
-    do: cumulative_op(tensor, opts, :cumulative_sum, :window_sum)
+    do: cumulative_op(tensor, opts, :cumulative_sum, &Nx.add/2)
 
   @doc """
   Returns the cumulative product of elements along an axis.
@@ -7716,7 +7716,7 @@ defmodule Nx do
   """
   @doc type: :cumulative
   def cumulative_product(tensor, opts \\ []),
-    do: cumulative_op(tensor, opts, :cumulative_product, :window_product)
+    do: cumulative_op(tensor, opts, :cumulative_product, &Nx.multiply/2)
 
   @doc """
   Returns the cumulative minimum of elements along an axis.
@@ -7776,7 +7776,7 @@ defmodule Nx do
   """
   @doc type: :cumulative
   def cumulative_min(tensor, opts \\ []),
-    do: cumulative_op(tensor, opts, :cumulative_min, :window_min)
+    do: cumulative_op(tensor, opts, :cumulative_min, &Nx.min/2)
 
   @doc """
   Returns the cumulative maximum of elements along an axis.
@@ -7836,40 +7836,168 @@ defmodule Nx do
   """
   @doc type: :cumulative
   def cumulative_max(tensor, opts \\ []),
-    do: cumulative_op(tensor, opts, :cumulative_max, :window_max)
+    do: cumulative_op(tensor, opts, :cumulative_max, &Nx.max/2)
 
-  defp cumulative_op(tensor, opts, op, window_op) do
+  defp cumulative_op(tensor, opts, op, reduce_fun) do
     opts = keyword!(opts, axis: 0, reverse: false)
     reverse = opts[:reverse]
     tensor = to_tensor(tensor)
     axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names)
 
-    Nx.Shared.optional(op, [tensor, [axis: axis, reverse: reverse]], tensor, fn tensor,
-                                                                                axis: axis,
-                                                                                reverse: reverse ->
-      shape = shape(tensor)
-      axis_size = elem(shape, axis)
-      rank = rank(shape)
-
-      padding =
-        if reverse do
-          {0, 0}
-          |> List.duplicate(rank)
-          |> List.replace_at(axis, {0, axis_size - 1})
-        else
-          {0, 0}
-          |> List.duplicate(rank)
-          |> List.replace_at(axis, {axis_size - 1, 0})
-        end
-
-      window_shape =
-        1
-        |> List.duplicate(rank)
-        |> List.to_tuple()
-        |> put_elem(axis, axis_size)
-
-      aggregate_window_op(tensor, window_shape, [padding: padding], window_op)
+    Nx.Shared.optional(op, [tensor, [axis: axis, reverse: reverse]], tensor, fn tensor, opts ->
+      associative_scan(tensor, reduce_fun, opts)
     end)
+  end
+
+  # Scans the given tensor using an associative binary operator.
+  #
+  # The scanning function must be associative and perform an element-wise
+  # operation over the `:axis` dimension.
+  #
+  # ## Options
+  #
+  #   * `:axis` - the axis to scan along. Defaults to `0`
+  #
+  #   * `:reverse` - whether to scan in the opposite direction. Defaults to `false`
+  #
+  # ## Examples
+  #
+  # A cumulative sum of numbers can be expressed as:
+  #
+  #     iex> Nx.associative_scan(Nx.tensor([1, 2, 3, 4]), &Nx.add/2)
+  #     #Nx.Tensor<
+  #       s64[4]
+  #       [1, 3, 6, 10]
+  #     >
+  #
+  # Or a reversed one:
+  #
+  #     iex> Nx.associative_scan(Nx.tensor([1, 2, 3, 4]), &Nx.add/2, reverse: true)
+  #     #Nx.Tensor<
+  #       s64[4]
+  #       [10, 9, 7, 4]
+  #     >
+  #
+  # A cumulative product of a sequence of matrices:
+  #
+  #     iex> matrices = Nx.tensor([[2, 0], [0, 2]]) |> Nx.tile([3, 1, 1])
+  #     iex> Nx.associative_scan(matrices, &Nx.dot(&1, [2], [0], &2, [1], [0]))
+  #     #Nx.Tensor<
+  #       s64[3][2][2]
+  #       [
+  #         [
+  #           [2, 0],
+  #           [0, 2]
+  #         ],
+  #         [
+  #           [4, 0],
+  #           [0, 4]
+  #         ],
+  #         [
+  #           [8, 0],
+  #           [0, 8]
+  #         ]
+  #       ]
+  #     >
+  #
+  defp associative_scan(tensor, fun, opts) do
+    opts = keyword!(opts, axis: 0, reverse: false)
+
+    tensor
+    |> maybe_reverse(opts[:reverse])
+    |> do_associative_scan(fun, axis: opts[:axis])
+    |> maybe_reverse(opts[:reverse])
+  end
+
+  defp maybe_reverse(tensor, true), do: Nx.reverse(tensor)
+  defp maybe_reverse(tensor, false), do: tensor
+
+  # Let's assume addition as the reduction function. The algorithm is based
+  # on two observations:
+  #
+  #   1. Elements at odd indices in the final result can be computed by first
+  #      summing consecutive pairs of elements and performing a scan on that
+  #      half-sized tensor (recursively).
+  #
+  #   2. Elements at even indices in the final result can be computed from those
+  #      at odd indices (from 1.) by adding a corresponding even element from the
+  #      original tensor.
+  #
+  # Also see https://en.wikipedia.org/wiki/Prefix_sum#Algorithm_2:_Work-efficient.
+  defp do_associative_scan(tensor, fun, opts) do
+    axis = opts[:axis]
+
+    axis_size = Nx.axis_size(tensor, axis)
+
+    if axis_size < 2 do
+      tensor
+    else
+      even = Nx.slice_along_axis(tensor, 0, axis_size - 1, axis: axis, strides: 2)
+      odd = Nx.slice_along_axis(tensor, 1, axis_size - 1, axis: axis, strides: 2)
+
+      reduced_pairs = fun.(odd, even)
+
+      scanned_odd = do_associative_scan(reduced_pairs, fun, opts)
+
+      cond do
+        axis_size == 2 ->
+          Nx.concatenate([even, reduced_pairs], axis: axis)
+
+        rem(axis_size, 2) == 0 ->
+          scanned_even =
+            fun.(
+              Nx.slice_along_axis(scanned_odd, 0, div(axis_size, 2) - 1, axis: axis),
+              Nx.slice_along_axis(even, 1, div(axis_size, 2) - 1, axis: axis)
+            )
+
+          scanned_even =
+            Nx.concatenate(
+              [Nx.slice_along_axis(even, 0, 1, axis: axis), scanned_even],
+              axis: axis
+            )
+
+          interleave(scanned_even, scanned_odd, axis: axis)
+
+        true ->
+          scanned_even =
+            fun.(
+              scanned_odd,
+              Nx.slice_along_axis(tensor, 2, axis_size - 2, axis: axis, strides: 2)
+            )
+
+          Nx.concatenate(
+            [
+              Nx.slice_along_axis(tensor, 0, 1, axis: axis),
+              interleave(scanned_odd, scanned_even, axis: axis)
+            ],
+            axis: axis
+          )
+      end
+    end
+  end
+
+  # Interleaves elements from same-shaped tensors along an axis
+  defp interleave(left, right, opts) do
+    opts = keyword!(opts, axis: 0)
+    axis = opts[:axis]
+
+    interleave_axis = axis + 1
+
+    Nx.concatenate(
+      [
+        Nx.new_axis(left, interleave_axis),
+        Nx.new_axis(right, interleave_axis)
+      ],
+      axis: interleave_axis
+    )
+    |> flatten_axis(interleave_axis)
+  end
+
+  # Merges the given axis with the preceding one
+  defp flatten_axis(tensor, axis) do
+    shape = Nx.shape(tensor)
+    new_shape = shape |> Tuple.delete_at(axis) |> put_elem(axis - 1, :auto)
+    Nx.reshape(tensor, new_shape)
   end
 
   @doc """
