@@ -612,7 +612,23 @@ defmodule Nx.LinAlg do
 
       {q, r} = Nx.LinAlg.qr(a)
 
-      triangular_solve(r, Nx.dot(adjoint(q), b), lower: false)
+      qb =
+        case {Nx.rank(q), Nx.rank(b)} do
+          {2, b_rank} when b_rank in [1, 2] ->
+            Nx.dot(adjoint(q), b)
+
+          {q_rank, _} ->
+            Nx.dot(
+              adjoint(q),
+              [q_rank - 1],
+              Enum.to_list(0..(q_rank - 3)),
+              b,
+              [q_rank - 2],
+              Enum.to_list(0..(q_rank - 3))
+            )
+        end
+
+      triangular_solve(r, qb, lower: false)
     end)
   end
 
@@ -666,16 +682,8 @@ defmodule Nx.LinAlg do
   """
   @doc from_backend: false
   defn invert(tensor) do
-    case Nx.shape(tensor) do
-      {n, n} ->
-        :ok
-
-      shape ->
-        raise ArgumentError,
-              "invert/1 expects a square tensor, got tensor with shape: #{inspect(shape)}"
-    end
-
     tensor
+    |> invert_shape()
     |> invert_tensor()
     |> custom_grad(fn ans, g ->
       # As defined in https://juliadiff.org/ChainRulesCore.jl/stable/maths/arrays.html#Matrix-inversion-2
@@ -686,8 +694,25 @@ defmodule Nx.LinAlg do
   end
 
   defnp invert_tensor(tensor) do
-    identity = Nx.eye(tensor)
+    n = elem(Nx.shape(tensor), Nx.rank(tensor) - 1)
+    identity = Nx.broadcast(Nx.eye(n), Nx.shape(tensor))
     Nx.LinAlg.solve(tensor, identity)
+  end
+
+  deftransformp invert_shape(tensor) do
+    shape = Nx.shape(tensor)
+
+    shape
+    |> Tuple.to_list()
+    |> Enum.split(-2)
+    |> case do
+      {_, [n, n]} ->
+        tensor
+
+      _ ->
+        raise ArgumentError,
+              "invert/1 expects a square tensor, got tensor with shape: #{inspect(shape)}"
+    end
   end
 
   @doc """

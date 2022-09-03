@@ -1055,12 +1055,17 @@ defmodule Torchx.Backend do
       raise ArgumentError, "left_side: false option not supported in Torchx"
     end
 
-    batched_a_shape = Tuple.insert_at(a.shape, 0, 1)
+    batched_a_shape =
+      case a.shape do
+        {m, m} -> {1, m, m}
+        shape -> shape
+      end
 
     batched_b_shape =
       case b.shape do
         {n} -> {1, n, 1}
         {m, n} -> {1, m, n}
+        shape -> shape
       end
 
     out_type = to_torch_type(out.type)
@@ -1106,8 +1111,8 @@ defmodule Torchx.Backend do
       tensor
       |> Torchx.determinant()
       |> Torchx.abs()
-      |> Torchx.reshape({})
       |> Torchx.less_equal(eps)
+      |> Torchx.all()
       |> Torchx.to_nx()
       |> Nx.to_number()
       |> Kernel.==(1)

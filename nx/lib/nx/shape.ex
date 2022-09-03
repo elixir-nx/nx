@@ -1917,6 +1917,38 @@ defmodule Nx.Shape do
     )
   end
 
+  def solve(a_shape, b_shape) when tuple_size(a_shape) > 1 and tuple_size(b_shape) > 1 do
+    {a_batch_shape, [a_m, a_n]} = a_shape |> Tuple.to_list() |> Enum.split(-2)
+    {b_1d_batch_shape, [b_n]} = b_shape |> Tuple.to_list() |> Enum.split(-1)
+    {b_2d_batch_shape, [b_m, ^b_n]} = b_shape |> Tuple.to_list() |> Enum.split(-2)
+
+    unless a_m == a_n do
+      raise(
+        ArgumentError,
+        "`a` tensor has incompatible dimensions, expected a 2-D tensor with as many rows as columns, got: " <>
+          inspect(a_shape)
+      )
+    end
+
+    cond do
+      a_batch_shape == b_1d_batch_shape and a_n == b_n ->
+        b_shape
+
+      a_batch_shape == b_2d_batch_shape and a_n == b_m ->
+        b_shape
+
+      true ->
+        expected_1d = [a_batch_shape, a_n] |> List.flatten() |> List.to_tuple()
+        expected_2d = [a_batch_shape, a_n, "m"] |> List.flatten() |> List.to_tuple()
+
+        raise(
+          ArgumentError,
+          "`b` tensor has incompatible dimensions, expected #{expected_2d} or #{expected_1d}, got: " <>
+            inspect(b_shape)
+        )
+    end
+  end
+
   def solve(a_shape, _b_shape) do
     raise(
       ArgumentError,
