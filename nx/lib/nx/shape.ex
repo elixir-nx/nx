@@ -1866,6 +1866,46 @@ defmodule Nx.Shape do
         "tensor must have at least rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
       )
 
+  def triangular_solve({n, n}, {n}, _left_side), do: :ok
+  def triangular_solve({n, n}, {n, _}, true), do: :ok
+  def triangular_solve({n, n}, {_, n}, false), do: :ok
+
+  def triangular_solve({m, n}, _, _) when m != n do
+    raise(
+      ArgumentError,
+      "triangular_solve/3 expected a square tensor, got tensor with shape: #{inspect({m, n})}"
+    )
+  end
+
+  def triangular_solve(a_shape, b_shape, left_side)
+      when tuple_size(a_shape) > 1 and tuple_size(b_shape) > 1 do
+    {a_batch_shape, [a_m, a_n]} = a_shape |> Tuple.to_list() |> Enum.split(-2)
+    {b_1d_batch_shape, [b_n]} = b_shape |> Tuple.to_list() |> Enum.split(-1)
+    {b_2d_batch_shape, [b_m, ^b_n]} = b_shape |> Tuple.to_list() |> Enum.split(-2)
+
+    unless a_m == a_n do
+      raise ArgumentError,
+            "triangular_solve/3 expected a square tensor, got tensor with shape: #{inspect(a_shape)}"
+    end
+
+    cond do
+      a_batch_shape == b_1d_batch_shape and a_n == b_n ->
+        :ok
+
+      a_batch_shape == b_2d_batch_shape and a_n == b_m and left_side ->
+        :ok
+
+      a_batch_shape == b_2d_batch_shape and a_n == b_n and not left_side ->
+        :ok
+
+      true ->
+        raise ArgumentError, "incompatible dimensions for a and b on triangular solve"
+    end
+  end
+
+  def triangular_solve(_, _, _),
+    do: raise(ArgumentError, "incompatible dimensions for a and b on triangular solve")
+
   def solve({n, n}, {n}), do: {n}
   def solve({n, n}, {n, m}), do: {n, m}
 

@@ -1350,15 +1350,51 @@ defmodule Nx.BinaryBackend do
   @impl true
   def triangular_solve(
         %{type: output_type} = out,
-        %{type: a_type, shape: {rows, rows} = a_shape} = a,
+        %{type: {_, a_size} = a_type, shape: a_shape} = a,
         %{type: b_type, shape: b_shape} = b,
         opts
-      )
-      when tuple_size(b_shape) == 2 or b_shape == {rows} do
+      ) do
     a_data = to_binary(a)
     b_data = to_binary(b)
-    out_bin = B.Matrix.ts(a_data, a_type, a_shape, b_data, b_type, b_shape, output_type, opts)
-    from_binary(out, out_bin)
+
+    m = elem(a_shape, tuple_size(a_shape) - 1)
+
+    a_batch_byte_size = (m * m * a_size) |> div(8)
+    batches_num = byte_size(a_data) |> div(a_batch_byte_size)
+
+    a_batches =
+      Enum.map(
+        0..(batches_num - 1),
+        &binary_part(a_data, &1 * a_batch_byte_size, a_batch_byte_size)
+      )
+
+    b_batch_byte_size = byte_size(b_data) |> div(batches_num)
+
+    b_batches =
+      Enum.map(
+        0..(batches_num - 1),
+        &binary_part(b_data, &1 * b_batch_byte_size, b_batch_byte_size)
+      )
+
+    b_batch_shape =
+      if tuple_size(b_shape) == 1 do
+        b_shape
+      else
+        {a_batch_shape, _} = a_shape |> Tuple.to_list() |> Enum.split(-2)
+        {b_1d_batch_shape, [b_n]} = b_shape |> Tuple.to_list() |> Enum.split(-1)
+        {b_2d_batch_shape, [b_m, ^b_n]} = b_shape |> Tuple.to_list() |> Enum.split(-2)
+
+        case a_batch_shape do
+          ^b_1d_batch_shape -> {b_n}
+          ^b_2d_batch_shape -> {b_m, b_n}
+        end
+      end
+
+    [a_batches, b_batches]
+    |> Enum.zip_reduce(<<>>, fn [a, b], acc ->
+      acc <> B.Matrix.ts(a, a_type, {m, m}, b, b_type, b_batch_shape, output_type, opts)
+    end)
+    |> then(&from_binary(out, &1))
   end
 
   ## Aggregation
