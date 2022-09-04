@@ -9,6 +9,13 @@ defmodule Nx.LinAlgTest do
   @types [{:f, 32}, {:c, 64}]
 
   describe "triangular_solve" do
+    test "works with batched input" do
+      a = Nx.tensor([[[-1, 0, 0], [1, 1, 0], [1, 1, 1]], [[2, 0, 0], [4, -2, 0], [-5, 1, 3]]])
+      b = Nx.tensor([[1.0, 2.0, 3.0], [6, 10, 1]])
+
+      assert Nx.dot(a, [2], [0], Nx.LinAlg.triangular_solve(a, b), [1], [0]) == b
+    end
+
     test "property" do
       a = Nx.tensor([[1, 0, 0], [1, 1, 0], [0, 1, 1]])
       b = Nx.tensor([[1.0, 2.0, 3.0], [2.0, 2.0, 4.0], [2.0, 0.0, 1.0]])
@@ -40,6 +47,13 @@ defmodule Nx.LinAlgTest do
                Nx.tensor([1.0, 1.0, -1.0])
     end
 
+    test "works with batched input" do
+      a = Nx.tensor([[[1, 3, -2], [3, 5, 6], [2, 4, 3]], [[1, 1, 1], [6, -4, 5], [5, 2, 2]]])
+      b = Nx.tensor([[5, 7, 8], [2, 31, 13]])
+
+      assert_all_close(Nx.dot(a, [2], [0], Nx.LinAlg.solve(a, b), [1], [0]), b)
+    end
+
     test "works with complex tensors" do
       a = ~M[
         1 0 i
@@ -56,6 +70,25 @@ defmodule Nx.LinAlgTest do
   end
 
   describe "invert" do
+    test "works with batched input" do
+      a = Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
+      expected_result = Nx.tensor([[[-2, 1], [1.5, -0.5]], [[-4, 3], [3.5, -2.5]]])
+
+      result = Nx.LinAlg.invert(a)
+
+      assert_all_close(result, expected_result)
+
+      assert_all_close(
+        Nx.dot(a, [2], [0], result, [1], [0]),
+        Nx.broadcast(Nx.eye(2), Nx.shape(a))
+      )
+
+      assert_all_close(
+        Nx.dot(result, [2], [0], a, [1], [0]),
+        Nx.broadcast(Nx.eye(2), Nx.shape(a))
+      )
+    end
+
     test "works with complex tensors" do
       a = ~M[
         1 0 i
