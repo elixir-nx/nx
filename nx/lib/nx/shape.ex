@@ -1873,7 +1873,7 @@ defmodule Nx.Shape do
   def triangular_solve({m, n}, _, _) when m != n do
     raise(
       ArgumentError,
-      "triangular_solve/3 expected a square tensor, got tensor with shape: #{inspect({m, n})}"
+      "triangular_solve/3 expected a square matrix or a batch of square matrices, got tensor with shape: #{inspect({m, n})}"
     )
   end
 
@@ -1885,7 +1885,7 @@ defmodule Nx.Shape do
 
     unless a_m == a_n do
       raise ArgumentError,
-            "triangular_solve/3 expected a square tensor, got tensor with shape: #{inspect(a_shape)}"
+            "triangular_solve/3 expected a square matrix or a batch of square matrices, got tensor with shape: #{inspect(a_shape)}"
     end
 
     cond do
@@ -1925,7 +1925,7 @@ defmodule Nx.Shape do
     unless a_m == a_n do
       raise(
         ArgumentError,
-        "`a` tensor has incompatible dimensions, expected a 2-D tensor with as many rows as columns, got: " <>
+        "`a` tensor has incompatible dimensions, expected a square matrix or a batch of square matrices, got: " <>
           inspect(a_shape)
       )
     end
@@ -1952,7 +1952,7 @@ defmodule Nx.Shape do
   def solve(a_shape, _b_shape) do
     raise(
       ArgumentError,
-      "`a` tensor has incompatible dimensions, expected a 2-D tensor with as many rows as columns, got: " <>
+      "`a` tensor has incompatible dimensions, expected a square matrix or a batch of square matrices, got: " <>
         inspect(a_shape)
     )
   end

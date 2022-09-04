@@ -383,11 +383,11 @@ defmodule Nx.LinAlg do
   end
 
   @doc """
-  Solve the equation `a x = b` for x, assuming `a` is a triangular matrix.
+  Solve the equation `a x = b` for x, assuming `a` is a batch of triangular matrices.
   Can also solve `x a = b` for x. See the `:left_side` option below.
 
-  `b` must either be a square matrix with the same dimensions as `a` or a 1-D tensor
-  with as many rows as `a`.
+  `b` must either be a batch of square matrices with the same dimensions as `a` or a batch of 1-D tensors
+  with as many rows as `a`. Batch dimensions of `a` and `b` must be the same.
 
   ## Options
 
@@ -497,10 +497,21 @@ defmodule Nx.LinAlg do
         [1.0+0.0i, 0.0+2.0i, 3.0+0.0i]
       >
 
+      iex> a = Nx.tensor([[[1, 0], [2, 3]], [[4, 0], [5, 6]]])
+      iex> b = Nx.tensor([[2, -1], [3, 7]])
+      iex> Nx.LinAlg.triangular_solve(a, b)
+      #Nx.Tensor<
+        f32[2][2]
+        [
+          [2.0, -1.6666666269302368],
+          [0.75, 0.5416666865348816]
+        ]
+      >
+
   ### Error cases
 
       iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]))
-      ** (ArgumentError) triangular_solve/3 expected a square tensor, got tensor with shape: {2, 4}
+      ** (ArgumentError) triangular_solve/3 expected a square matrix or a batch of square matrices, got tensor with shape: {2, 4}
 
       iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1], [1, 1, 1, 1]]), Nx.tensor([4]))
       ** (ArgumentError) incompatible dimensions for a and b on triangular solve
@@ -544,7 +555,7 @@ defmodule Nx.LinAlg do
   @doc """
   Solves the system `AX = B`.
 
-  `A` must have shape `{n, n}` and `B` must have shape `{n, m}` or `{n}`.
+  `A` must have shape `{..., n, n}` and `B` must have shape `{..., n, m}` or `{..., n}`.
   `X` has the same shape as `B`.
 
   ## Examples
@@ -575,6 +586,23 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> a = Nx.tensor([[[14, 10], [9, 9]], [[4, 11], [2, 3]]])
+      iex> b = Nx.tensor([[[2, 4], [3, 2]], [[1, 5], [-3, -1]]])
+      iex> Nx.LinAlg.solve(a, b) |> Nx.round()
+      #Nx.Tensor<
+        f32[2][2][2]
+        [
+          [
+            [0.0, 0.0],
+            [1.0, 0.0]
+          ],
+          [
+            [-4.0, -3.0],
+            [1.0, 1.0]
+          ]
+        ]
+      >
+
   If the axes are named, their names are not preserved in the output:
 
       iex> a = Nx.tensor([[1, 0, 1], [1, 1, 0], [1, 1, 1]], names: [:x, :y])
@@ -590,7 +618,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) `b` tensor has incompatible dimensions, expected {2, 2} or {2}, got: {4}
 
       iex> Nx.LinAlg.solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1]]), Nx.tensor([4]))
-      ** (ArgumentError) `a` tensor has incompatible dimensions, expected a 2-D tensor with as many rows as columns, got: {3, 4}
+      ** (ArgumentError) `a` tensor has incompatible dimensions, expected a square matrix or a batch of square matrices, got: {3, 4}
   """
   # IMPORTANT: This function cannot be a defn because
   # optional needs to work on the actual backend.
@@ -633,9 +661,9 @@ defmodule Nx.LinAlg do
   end
 
   @doc """
-  Inverts a square 2-D tensor.
+  Inverts a batch of square matrices.
 
-  For non-square tensors, use `svd/2` for pseudo-inverse calculations.
+  For non-square matrices, use `svd/2` for pseudo-inverse calculations.
 
   ## Examples
 
@@ -671,10 +699,54 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> a = Nx.tensor([[[1, 2], [0, 1]], [[1, 1], [0, 1]]])
+      iex> a_inv = Nx.LinAlg.invert(a)
+      #Nx.Tensor<
+        f32[2][2][2]
+        [
+          [
+            [1.0, -2.0],
+            [0.0, 1.0]
+          ],
+          [
+            [1.0, -1.0],
+            [0.0, 1.0]
+          ]
+        ]
+      >
+      iex> Nx.dot(a, [2], [0], a_inv, [1], [0])
+      #Nx.Tensor<
+        f32[2][2][2]
+        [
+          [
+            [1.0, 0.0],
+            [0.0, 1.0]
+          ],
+          [
+            [1.0, 0.0],
+            [0.0, 1.0]
+          ]
+        ]
+      >
+      iex> Nx.dot(a_inv, [2], [0], a, [1], [0])
+      #Nx.Tensor<
+        f32[2][2][2]
+        [
+          [
+            [1.0, 0.0],
+            [0.0, 1.0]
+          ],
+          [
+            [1.0, 0.0],
+            [0.0, 1.0]
+          ]
+        ]
+      >
+
   ### Error cases
 
       iex> Nx.LinAlg.invert(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]))
-      ** (ArgumentError) invert/1 expects a square tensor, got tensor with shape: {2, 4}
+      ** (ArgumentError) invert/1 expects a square matrix or a batch of square matrices, got tensor with shape: {2, 4}
 
       iex> Nx.LinAlg.invert(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]))
       ** (ArgumentError) can't solve for singular matrix
@@ -711,7 +783,7 @@ defmodule Nx.LinAlg do
 
       _ ->
         raise ArgumentError,
-              "invert/1 expects a square tensor, got tensor with shape: #{inspect(shape)}"
+              "invert/1 expects a square matrix or a batch of square matrices, got tensor with shape: #{inspect(shape)}"
     end
   end
 
@@ -892,7 +964,7 @@ defmodule Nx.LinAlg do
   end
 
   @doc """
-  Calculates the Eigenvalues and Eigenvectors of symmetric 2-D tensors.
+  Calculates the Eigenvalues and Eigenvectors of batched symmetric 2-D matrices.
 
   It returns `{eigenvals, eigenvecs}`.
 
@@ -937,6 +1009,30 @@ defmodule Nx.LinAlg do
           [0.4082472324371338, 0.9128734469413757, 0.0],
           [0.40824851393699646, -0.18257413804531097, 0.8944271802902222],
           [0.8164970278739929, -0.36514827609062195, -0.4472135901451111]
+        ]
+      >
+
+      iex> {eigenvals, eigenvecs} = Nx.LinAlg.eigh(Nx.tensor([[[2, 5],[5, 6]], [[1, 0], [0, 4]]]))
+      iex> Nx.round(eigenvals)
+      #Nx.Tensor<
+        f32[2][2]
+        [
+          [9.0, -1.0],
+          [1.0, 4.0]
+        ]
+      >
+      iex> eigenvecs
+      #Nx.Tensor<
+        f32[2][2][2]
+        [
+          [
+            [0.5606290698051453, -0.828070342540741],
+            [0.8280670642852783, 0.5606313347816467]
+          ],
+          [
+            [1.0, 0.0],
+            [0.0, 1.0]
+          ]
         ]
       >
 
