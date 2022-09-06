@@ -23,7 +23,7 @@ defmodule Nx.Defn.ExprTest do
                data: %Expr{
                  op: :add,
                  args: [
-                   %T{shape: {}, data: %Expr{op: :constant, args: [1.0]}},
+                   %T{shape: {2, 2}, data: %Expr{op: :constant, args: [1.0]}},
                    %T{shape: {2, 2}, data: %Expr{op: :parameter}}
                  ]
                },
@@ -182,6 +182,11 @@ defmodule Nx.Defn.ExprTest do
                |> Nx.add(Expr.tensor(1.0))
                |> Nx.add(param3)
                |> Nx.add(Nx.broadcast(Expr.tensor(2), {2, 2}))
+    end
+
+    test "preserves names" do
+      named = Nx.tensor([4], names: [:dim])
+      assert %T{type: {:f, 32}, names: [:dim]} = Nx.multiply(Expr.tensor(named), Expr.tensor(1.0))
     end
   end
 
