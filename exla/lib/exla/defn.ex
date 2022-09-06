@@ -1544,12 +1544,26 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp collect_args(%T{data: %Expr{id: id, op: op}} = expr, {cache, ids}, pred_ids) do
+  defp collect_arg?(_id, :parameter, _args, _pred_ids),
+    do: true
+
+  # We never pass reference to tuples around, only through their elements,
+  # so if a tuple is in a predicate, then it all must be in a predicate.
+  defp collect_arg?(_id, :elem, [%T{data: %Expr{id: tuple_id}}, _pos], pred_ids)
+       when is_map_key(pred_ids, tuple_id),
+       do: true
+
+  defp collect_arg?(id, _op, _args, pred_ids) when is_map_key(pred_ids, id),
+    do: true
+
+  defp collect_arg?(_id, _op, _args, _pred_ids), do: false
+
+  defp collect_args(%T{data: %Expr{id: id, op: op, args: args}} = expr, {cache, ids}, pred_ids) do
     cond do
       op == :constant ->
         {expr, {cache, ids}}
 
-      Map.has_key?(pred_ids, id) or op == :parameter ->
+      collect_arg?(id, op, args, pred_ids) ->
         case ids do
           %{^id => {_, _, new}} ->
             {new, {cache, ids}}
