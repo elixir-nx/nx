@@ -1524,16 +1524,32 @@ defmodule EXLA.Defn do
   ## Cond
 
   defp to_if(pred, on_true, on_false, state, cache) do
-    # Collect all predicate parameters, as those are evaluated
-    # outside of the conditional. All other graphs are evaluated
-    # only if necessary inside the conditional.
+    # Collect all predicate parameters, as those are evaluated outside of the conditional.
     {_, pred_ids} = collect_ids(pred, %{})
+
+    # Get all nodes shared between on_true/on_false so we compile them only once.
+    on_true_ids = Composite.reduce(on_true, %{}, &collect_ids(&1, &2) |> elem(1))
+    on_false_ids = Composite.reduce(on_false, %{}, &collect_ids(&1, &2) |> elem(1))
+
+    {small_ids, large_ids} =
+      if map_size(on_true_ids) > map_size(on_false_ids),
+        do: {on_false_ids, on_true_ids},
+        else: {on_true_ids, on_false_ids}
+
+    shared_ids =
+      Enum.reduce(small_ids, pred_ids, fn {id, _}, acc ->
+        if Map.has_key?(large_ids, id) do
+          Map.put(acc, id, true)
+        else
+          acc
+        end
+      end)
 
     {pred_op, cache} = recur_operator(pred, state, cache)
     pred_op = to_type(pred_op, {:pred, 8})
 
-    {true_args, true_comp, cache} = to_if_branch(true, on_true, pred_ids, state, cache)
-    {false_args, false_comp, cache} = to_if_branch(false, on_false, pred_ids, state, cache)
+    {true_args, true_comp, cache} = to_if_branch(true, on_true, shared_ids, state, cache)
+    {false_args, false_comp, cache} = to_if_branch(false, on_false, shared_ids, state, cache)
     {EXLA.Op.conditional(pred_op, true_args, true_comp, false_args, false_comp), cache}
   end
 
