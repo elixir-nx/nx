@@ -1909,11 +1909,10 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def put_slice(out, tensor, start_indices, slice, combine_fn \\ fn _prev, new -> new end) do
-    %T{type: {_, size}, shape: shape} = tensor = as_type(out, tensor)
-    %T{shape: slice_shape} = slice = as_type(out, slice)
+    %T{type: {_, size} = type, shape: shape} = tensor = as_type(out, tensor)
+    %T{shape: slice_shape} = slice = as_type(%{slice | type: type}, slice)
 
     start_indices = clamp_indices(start_indices, shape, Tuple.to_list(slice_shape))
-
     weighted_shape = weighted_shape(shape, size)
 
     rank = Nx.rank(shape)

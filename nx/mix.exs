@@ -1,4 +1,4 @@
-if :erlang.system_info(:otp_release) < '24' do
+if :erlang.system_info(:otp_release) < ~c"24" do
   Mix.raise("Nx requires Erlang/OTP 24+")
 end
 

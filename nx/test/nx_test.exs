@@ -705,6 +705,12 @@ defmodule NxTest do
     end
   end
 
+  describe "put_slice" do
+    test "with mixed types and sizes" do
+      assert Nx.put_slice(Nx.tensor([0.0, 0.0]), [0], Nx.tensor([1])) == Nx.tensor([1.0, 0.0])
+    end
+  end
+
   describe "access" do
     test "supports an empty list" do
       tensor = Nx.tensor([1, 2, 3])
