@@ -1795,6 +1795,31 @@ defmodule Nx.Shape do
         "tensor must have at least rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
       )
 
+  def eigh(shape) when tuple_size(shape) > 1 do
+    rank = tuple_size(shape)
+    {m, n} = {elem(shape, rank - 2), elem(shape, rank - 1)}
+    {unchanged_shape, _} = Tuple.to_list(shape) |> Enum.split(-2)
+
+    unless m == n do
+      raise(
+        ArgumentError,
+        "tensor must be a square matrix or a batch of square matrices, got shape: #{inspect(shape)}"
+      )
+    end
+
+    {
+      List.to_tuple(unchanged_shape ++ [m]),
+      List.to_tuple(unchanged_shape ++ [m, m])
+    }
+  end
+
+  def eigh(shape),
+    do:
+      raise(
+        ArgumentError,
+        "tensor must have at least rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
+      )
+
   def svd(shape) when tuple_size(shape) > 1 do
     rank = tuple_size(shape)
     {m, n} = {elem(shape, rank - 2), elem(shape, rank - 1)}
@@ -1838,6 +1863,46 @@ defmodule Nx.Shape do
         "tensor must have at least rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
       )
 
+  def triangular_solve({n, n}, {n}, _left_side), do: :ok
+  def triangular_solve({n, n}, {n, _}, true), do: :ok
+  def triangular_solve({n, n}, {_, n}, false), do: :ok
+
+  def triangular_solve({m, n}, _, _) when m != n do
+    raise(
+      ArgumentError,
+      "triangular_solve/3 expected a square matrix or a batch of square matrices, got tensor with shape: #{inspect({m, n})}"
+    )
+  end
+
+  def triangular_solve(a_shape, b_shape, left_side)
+      when tuple_size(a_shape) > 1 and tuple_size(b_shape) > 1 do
+    {a_batch_shape, [a_m, a_n]} = a_shape |> Tuple.to_list() |> Enum.split(-2)
+    {b_1d_batch_shape, [b_n]} = b_shape |> Tuple.to_list() |> Enum.split(-1)
+    {b_2d_batch_shape, [b_m, ^b_n]} = b_shape |> Tuple.to_list() |> Enum.split(-2)
+
+    unless a_m == a_n do
+      raise ArgumentError,
+            "triangular_solve/3 expected a square matrix or a batch of square matrices, got tensor with shape: #{inspect(a_shape)}"
+    end
+
+    cond do
+      a_batch_shape == b_1d_batch_shape and a_n == b_n ->
+        :ok
+
+      a_batch_shape == b_2d_batch_shape and a_n == b_m and left_side ->
+        :ok
+
+      a_batch_shape == b_2d_batch_shape and a_n == b_n and not left_side ->
+        :ok
+
+      true ->
+        raise ArgumentError, "incompatible dimensions for a and b on triangular solve"
+    end
+  end
+
+  def triangular_solve(_, _, _),
+    do: raise(ArgumentError, "incompatible dimensions for a and b on triangular solve")
+
   def solve({n, n}, {n}), do: {n}
   def solve({n, n}, {n, m}), do: {n, m}
 
@@ -1849,10 +1914,42 @@ defmodule Nx.Shape do
     )
   end
 
+  def solve(a_shape, b_shape) when tuple_size(a_shape) > 1 and tuple_size(b_shape) > 1 do
+    {a_batch_shape, [a_m, a_n]} = a_shape |> Tuple.to_list() |> Enum.split(-2)
+    {b_1d_batch_shape, [b_n]} = b_shape |> Tuple.to_list() |> Enum.split(-1)
+    {b_2d_batch_shape, [b_m, ^b_n]} = b_shape |> Tuple.to_list() |> Enum.split(-2)
+
+    unless a_m == a_n do
+      raise(
+        ArgumentError,
+        "`a` tensor has incompatible dimensions, expected a square matrix or a batch of square matrices, got: " <>
+          inspect(a_shape)
+      )
+    end
+
+    cond do
+      a_batch_shape == b_1d_batch_shape and a_n == b_n ->
+        b_shape
+
+      a_batch_shape == b_2d_batch_shape and a_n == b_m ->
+        b_shape
+
+      true ->
+        expected_1d = List.to_tuple(a_batch_shape ++ [a_n])
+        expected_2d = List.to_tuple(a_batch_shape ++ [a_n, "m"])
+
+        raise(
+          ArgumentError,
+          "`b` tensor has incompatible dimensions, expected #{expected_2d} or #{expected_1d}, got: " <>
+            inspect(b_shape)
+        )
+    end
+  end
+
   def solve(a_shape, _b_shape) do
     raise(
       ArgumentError,
-      "`a` tensor has incompatible dimensions, expected a 2-D tensor with as many rows as columns, got: " <>
+      "`a` tensor has incompatible dimensions, expected a square matrix or a batch of square matrices, got: " <>
         inspect(a_shape)
     )
   end

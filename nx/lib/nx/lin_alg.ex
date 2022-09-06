@@ -383,11 +383,11 @@ defmodule Nx.LinAlg do
   end
 
   @doc """
-  Solve the equation `a x = b` for x, assuming `a` is a triangular matrix.
+  Solve the equation `a x = b` for x, assuming `a` is a batch of triangular matrices.
   Can also solve `x a = b` for x. See the `:left_side` option below.
 
-  `b` must either be a square matrix with the same dimensions as `a` or a 1-D tensor
-  with as many rows as `a`.
+  `b` must either be a batch of square matrices with the same dimensions as `a` or a batch of 1-D tensors
+  with as many rows as `a`. Batch dimensions of `a` and `b` must be the same.
 
   ## Options
 
@@ -497,10 +497,21 @@ defmodule Nx.LinAlg do
         [1.0+0.0i, 0.0+2.0i, 3.0+0.0i]
       >
 
+      iex> a = Nx.tensor([[[1, 0], [2, 3]], [[4, 0], [5, 6]]])
+      iex> b = Nx.tensor([[2, -1], [3, 7]])
+      iex> Nx.LinAlg.triangular_solve(a, b)
+      #Nx.Tensor<
+        f32[2][2]
+        [
+          [2.0, -1.6666666269302368],
+          [0.75, 0.5416666865348816]
+        ]
+      >
+
   ### Error cases
 
       iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]))
-      ** (ArgumentError) triangular_solve/3 expected a square tensor, got tensor with shape: {2, 4}
+      ** (ArgumentError) triangular_solve/3 expected a square matrix or a batch of square matrices, got tensor with shape: {2, 4}
 
       iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1], [1, 1, 1, 1]]), Nx.tensor([4]))
       ** (ArgumentError) incompatible dimensions for a and b on triangular solve
@@ -520,7 +531,7 @@ defmodule Nx.LinAlg do
   def triangular_solve(a, b, opts \\ []) do
     opts = keyword!(opts, lower: true, left_side: true, transform_a: :none)
     output_type = binary_type(a, b) |> Nx.Type.to_floating()
-    %T{shape: a_shape = {m, _}} = a = Nx.to_tensor(a)
+    %T{shape: a_shape} = a = Nx.to_tensor(a)
     %T{shape: b_shape} = b = Nx.to_tensor(b)
 
     case opts[:transform_a] do
@@ -536,30 +547,7 @@ defmodule Nx.LinAlg do
                 "got: #{inspect(t)}"
     end
 
-    case a_shape do
-      {n, n} ->
-        nil
-
-      other ->
-        raise ArgumentError,
-              "triangular_solve/3 expected a square tensor, got tensor with shape: #{inspect(other)}"
-    end
-
-    left_side = opts[:left_side]
-
-    case b_shape do
-      {^m, _} when left_side ->
-        nil
-
-      {_, ^m} when not left_side ->
-        nil
-
-      {^m} ->
-        nil
-
-      _ ->
-        raise ArgumentError, "incompatible dimensions for a and b on triangular solve"
-    end
+    :ok = Nx.Shape.triangular_solve(a_shape, b_shape, opts[:left_side])
 
     impl!(a, b).triangular_solve(%{b | type: output_type}, a, b, opts)
   end
@@ -567,7 +555,7 @@ defmodule Nx.LinAlg do
   @doc """
   Solves the system `AX = B`.
 
-  `A` must have shape `{n, n}` and `B` must have shape `{n, m}` or `{n}`.
+  `A` must have shape `{..., n, n}` and `B` must have shape `{..., n, m}` or `{..., n}`.
   `X` has the same shape as `B`.
 
   ## Examples
@@ -598,6 +586,23 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> a = Nx.tensor([[[14, 10], [9, 9]], [[4, 11], [2, 3]]])
+      iex> b = Nx.tensor([[[2, 4], [3, 2]], [[1, 5], [-3, -1]]])
+      iex> Nx.LinAlg.solve(a, b) |> Nx.round()
+      #Nx.Tensor<
+        f32[2][2][2]
+        [
+          [
+            [0.0, 0.0],
+            [1.0, 0.0]
+          ],
+          [
+            [-4.0, -3.0],
+            [1.0, 1.0]
+          ]
+        ]
+      >
+
   If the axes are named, their names are not preserved in the output:
 
       iex> a = Nx.tensor([[1, 0, 1], [1, 1, 0], [1, 1, 1]], names: [:x, :y])
@@ -613,7 +618,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) `b` tensor has incompatible dimensions, expected {2, 2} or {2}, got: {4}
 
       iex> Nx.LinAlg.solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1]]), Nx.tensor([4]))
-      ** (ArgumentError) `a` tensor has incompatible dimensions, expected a 2-D tensor with as many rows as columns, got: {3, 4}
+      ** (ArgumentError) `a` tensor has incompatible dimensions, expected a square matrix or a batch of square matrices, got: {3, 4}
   """
   # IMPORTANT: This function cannot be a defn because
   # optional needs to work on the actual backend.
@@ -634,15 +639,17 @@ defmodule Nx.LinAlg do
       # A.X = B -> QR.X = B -> R.X = adjoint(Q).B
 
       {q, r} = Nx.LinAlg.qr(a)
-
-      triangular_solve(r, Nx.dot(adjoint(q), b), lower: false)
+      q_rank = Nx.rank(q)
+      batches = Enum.to_list(0..(q_rank - 3)//1)
+      qb = Nx.dot(adjoint(q), [q_rank - 1], batches, b, [q_rank - 2], batches)
+      triangular_solve(r, qb, lower: false)
     end)
   end
 
   @doc """
-  Inverts a square 2-D tensor.
+  Inverts a batch of square matrices.
 
-  For non-square tensors, use `svd/2` for pseudo-inverse calculations.
+  For non-square matrices, use `svd/2` for pseudo-inverse calculations.
 
   ## Examples
 
@@ -678,10 +685,54 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> a = Nx.tensor([[[1, 2], [0, 1]], [[1, 1], [0, 1]]])
+      iex> a_inv = Nx.LinAlg.invert(a)
+      #Nx.Tensor<
+        f32[2][2][2]
+        [
+          [
+            [1.0, -2.0],
+            [0.0, 1.0]
+          ],
+          [
+            [1.0, -1.0],
+            [0.0, 1.0]
+          ]
+        ]
+      >
+      iex> Nx.dot(a, [2], [0], a_inv, [1], [0])
+      #Nx.Tensor<
+        f32[2][2][2]
+        [
+          [
+            [1.0, 0.0],
+            [0.0, 1.0]
+          ],
+          [
+            [1.0, 0.0],
+            [0.0, 1.0]
+          ]
+        ]
+      >
+      iex> Nx.dot(a_inv, [2], [0], a, [1], [0])
+      #Nx.Tensor<
+        f32[2][2][2]
+        [
+          [
+            [1.0, 0.0],
+            [0.0, 1.0]
+          ],
+          [
+            [1.0, 0.0],
+            [0.0, 1.0]
+          ]
+        ]
+      >
+
   ### Error cases
 
       iex> Nx.LinAlg.invert(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]))
-      ** (ArgumentError) invert/1 expects a square tensor, got tensor with shape: {2, 4}
+      ** (ArgumentError) invert/1 expects a square matrix or a batch of square matrices, got tensor with shape: {2, 4}
 
       iex> Nx.LinAlg.invert(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]))
       ** (ArgumentError) can't solve for singular matrix
@@ -689,16 +740,8 @@ defmodule Nx.LinAlg do
   """
   @doc from_backend: false
   defn invert(tensor) do
-    case Nx.shape(tensor) do
-      {n, n} ->
-        :ok
-
-      shape ->
-        raise ArgumentError,
-              "invert/1 expects a square tensor, got tensor with shape: #{inspect(shape)}"
-    end
-
     tensor
+    |> invert_shape()
     |> invert_tensor()
     |> custom_grad(fn ans, g ->
       # As defined in https://juliadiff.org/ChainRulesCore.jl/stable/maths/arrays.html#Matrix-inversion-2
@@ -709,8 +752,25 @@ defmodule Nx.LinAlg do
   end
 
   defnp invert_tensor(tensor) do
-    identity = Nx.eye(tensor)
+    n = elem(Nx.shape(tensor), Nx.rank(tensor) - 1)
+    identity = Nx.broadcast(Nx.eye(n), Nx.shape(tensor))
     Nx.LinAlg.solve(tensor, identity)
+  end
+
+  deftransformp invert_shape(tensor) do
+    shape = Nx.shape(tensor)
+
+    shape
+    |> Tuple.to_list()
+    |> Enum.split(-2)
+    |> case do
+      {_, [n, n]} ->
+        tensor
+
+      _ ->
+        raise ArgumentError,
+              "invert/1 expects a square matrix or a batch of square matrices, got tensor with shape: #{inspect(shape)}"
+    end
   end
 
   @doc """
@@ -890,7 +950,7 @@ defmodule Nx.LinAlg do
   end
 
   @doc """
-  Calculates the Eigenvalues and Eigenvectors of symmetric 2-D tensors.
+  Calculates the Eigenvalues and Eigenvectors of batched symmetric 2-D matrices.
 
   It returns `{eigenvals, eigenvecs}`.
 
@@ -938,10 +998,34 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> {eigenvals, eigenvecs} = Nx.LinAlg.eigh(Nx.tensor([[[2, 5],[5, 6]], [[1, 0], [0, 4]]]))
+      iex> Nx.round(eigenvals)
+      #Nx.Tensor<
+        f32[2][2]
+        [
+          [9.0, -1.0],
+          [1.0, 4.0]
+        ]
+      >
+      iex> eigenvecs
+      #Nx.Tensor<
+        f32[2][2][2]
+        [
+          [
+            [0.5606290698051453, -0.828070342540741],
+            [0.8280670642852783, 0.5606313347816467]
+          ],
+          [
+            [1.0, 0.0],
+            [0.0, 1.0]
+          ]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
-      ** (ArgumentError) eigh/2 expects a square tensor, got tensor with shape: {2, 3}
+      ** (ArgumentError) tensor must be a square matrix or a batch of square matrices, got shape: {2, 3}
 
       iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2], [3, 4]]))
       ** (ArgumentError) input tensor must be symmetric
@@ -954,19 +1038,15 @@ defmodule Nx.LinAlg do
 
     output_type = Nx.Type.to_floating(type)
 
-    {eigenvals_shape, eigenvecs_shape} =
-      case shape do
-        {n, n} ->
-          {{n}, {n, n}}
+    {eigenvals_shape, eigenvecs_shape} = Nx.Shape.eigh(shape)
+    rank = tuple_size(shape)
 
-        shape ->
-          raise ArgumentError,
-                "eigh/2 expects a square tensor, got tensor with shape: #{inspect(shape)}"
-      end
+    eigenvecs_name = List.duplicate(nil, rank)
+    eigenvals_name = tl(eigenvecs_name)
 
     impl!(tensor).eigh(
-      {%{tensor | names: [nil], type: output_type, shape: eigenvals_shape},
-       %{tensor | names: [nil, nil], type: output_type, shape: eigenvecs_shape}},
+      {%{tensor | names: eigenvals_name, type: output_type, shape: eigenvals_shape},
+       %{tensor | names: eigenvecs_name, type: output_type, shape: eigenvecs_shape}},
       tensor,
       opts
     )
