@@ -184,7 +184,8 @@ defmodule EXLA.Defn do
           state = %{
             precision: Keyword.get(options, :precision, :highest),
             builder: body_b,
-            params: Map.new(input_params ++ acc_params ++ constant_params)
+            params: Map.new(input_params ++ acc_params ++ constant_params),
+            scope_ids: collect_ids(expr)
           }
 
           {output, cache} = recur_flatten(output_expr, state, new_cache(token, used_hooks))
@@ -284,7 +285,8 @@ defmodule EXLA.Defn do
     state = %{
       precision: Keyword.get(options, :precision, :highest),
       builder: builder,
-      params: Map.new(params)
+      params: Map.new(params),
+      scope_ids: collect_ids(expr)
     }
 
     token = EXLA.Op.create_token(builder)
@@ -504,7 +506,9 @@ defmodule EXLA.Defn do
             clauses
             |> Enum.reverse()
             |> Enum.reduce(last, fn {pred, on_true}, on_false ->
-              put_in(t.data.args, [[{pred, on_true}], on_false])
+              update_in(t.data, fn data ->
+                %{data | args: [[{pred, on_true}], on_false], id: make_ref()}
+              end)
             end)
 
           to_if(pred, on_true, on_false, state, cache)
@@ -1386,7 +1390,7 @@ defmodule EXLA.Defn do
       end)
 
     params = Enum.flat_map(arg_params, &computation_arg_param/1)
-    state = %{state | builder: subbuilder, params: Map.new(params)}
+    state = %{state | builder: subbuilder, params: Map.new(params), scope_ids: collect_ids(expr)}
 
     {res, _} = recur_composite(expr, state, no_token_cache())
     EXLA.Builder.build(to_type(res, type))
@@ -1402,7 +1406,7 @@ defmodule EXLA.Defn do
     arg_token = EXLA.Op.get_tuple_element(param, 0)
     arg_param = EXLA.Op.get_tuple_element(param, 1)
     params = computation_arg_param({arg, arg_param})
-    state = %{state | builder: subbuilder, params: Map.new(params)}
+    state = %{state | builder: subbuilder, params: Map.new(params), scope_ids: collect_ids(expr)}
     {res, comp_cache} = recur_composite(expr, transform, state, reset_token(cache, arg_token))
 
     res =
@@ -1528,40 +1532,12 @@ defmodule EXLA.Defn do
   ## Cond
 
   defp to_if(pred, on_true, on_false, state, cache) do
-    # Collect all predicate parameters, as those are evaluated outside of the conditional.
-    {_, pred_ids} = collect_ids(pred, %{})
-
-    # Get all nodes shared between on_true/on_false so we compile them only once.
-    on_true_ids = Composite.reduce(on_true, %{}, &(collect_ids(&1, &2) |> elem(1)))
-    on_false_ids = Composite.reduce(on_false, %{}, &(collect_ids(&1, &2) |> elem(1)))
-
-    {small_ids, large_ids} =
-      if map_size(on_true_ids) > map_size(on_false_ids),
-        do: {on_false_ids, on_true_ids},
-        else: {on_true_ids, on_false_ids}
-
-    shared_ids =
-      Enum.reduce(small_ids, pred_ids, fn {id, _}, acc ->
-        if Map.has_key?(large_ids, id) do
-          Map.put(acc, id, true)
-        else
-          acc
-        end
-      end)
-
     {pred_op, cache} = recur_operator(pred, state, cache)
     pred_op = to_type(pred_op, {:pred, 8})
 
-    {true_args, true_comp, cache} = to_if_branch(true, on_true, shared_ids, state, cache)
-    {false_args, false_comp, cache} = to_if_branch(false, on_false, shared_ids, state, cache)
+    {true_args, true_comp, cache} = to_if_branch(true, on_true, state, cache)
+    {false_args, false_comp, cache} = to_if_branch(false, on_false, state, cache)
     {EXLA.Op.conditional(pred_op, true_args, true_comp, false_args, false_comp), cache}
-  end
-
-  defp collect_ids(%T{data: %Expr{id: id}} = t, ids) do
-    case ids do
-      %{^id => true} -> {t, ids}
-      %{} -> Tree.apply_args(t, Map.put(ids, id, true), &collect_ids/2)
-    end
   end
 
   defp collect_arg?(_id, :parameter, _args, _pred_ids),
@@ -1606,7 +1582,7 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp to_if_branch(bool, expr, ids, state, cache) do
+  defp to_if_branch(bool, expr, %{scope_ids: ids} = state, cache) do
     {expr, {_, ids_args}} = Composite.traverse(expr, {%{}, %{}}, &collect_args(&1, &2, ids))
     sorted_ids_args = Enum.sort_by(ids_args, fn {_id, {i, _old, _new}} -> i end)
 
@@ -1619,7 +1595,13 @@ defmodule EXLA.Defn do
 
     {args, comp, comp_cache} =
       if_branch_computation(subbuilder, args, cache, fn params, comp_cache ->
-        comp_state = %{state | builder: subbuilder, params: Map.new(params)}
+        comp_state = %{
+          state
+          | builder: subbuilder,
+            params: Map.new(params),
+            scope_ids: collect_ids(expr)
+        }
+
         recur_composite(expr, &cast_pred_to_u8/1, comp_state, comp_cache)
       end)
 
@@ -1715,6 +1697,28 @@ defmodule EXLA.Defn do
   end
 
   # Helpers
+
+  defp collect_ids(expr) do
+    Composite.reduce(expr, %{}, &(collect_ids(&1, &2) |> elem(1)))
+  end
+
+  defp collect_ids(%T{data: %Expr{id: id} = expr} = t, ids) do
+    case ids do
+      %{^id => true} ->
+        {t, ids}
+
+      %{} ->
+        ids = Map.put(ids, id, true)
+
+        # Do not collect ids when a new lexical construct starts
+        case expr do
+          %{op: :cond, args: [[{pred, _expr} | _], _last]} -> collect_ids(pred, ids)
+          %{op: :while, args: [initial | _]} -> Composite.traverse(initial, ids, &collect_ids/2)
+          %{op: op} when op in [:cond, :fun] -> {t, ids}
+          %{} -> Tree.apply_args(t, ids, &collect_ids/2)
+        end
+    end
+  end
 
   defp filter_inputs(args, inputs), do: filter_inputs(args, 0, inputs)
 
