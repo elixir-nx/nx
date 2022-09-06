@@ -480,10 +480,10 @@ defmodule EXLA.Defn do
     {initial, cache} =
       recur_composite({get_token(cache), initial}, &cast_pred_to_u8/1, state, cache)
 
-    {pred, cache} = token_computation(:while_pred, arg, pred, {:pred, 8}, & &1, state, cache)
+    {pred, cache} = while_computation(:while_pred, arg, pred, {:pred, 8}, & &1, state, cache)
 
     {body, cache} =
-      token_computation(:while_body, arg, body, :with_token, &cast_pred_to_u8/1, state, cache)
+      while_computation(:while_body, arg, body, :with_token, &cast_pred_to_u8/1, state, cache)
 
     while = EXLA.Op.while(pred, body, initial)
     token = EXLA.Op.get_tuple_element(while, 0)
@@ -510,8 +510,12 @@ defmodule EXLA.Defn do
           to_if(pred, on_true, on_false, state, cache)
       end
 
-    token = EXLA.Op.get_tuple_element(cond, 0)
-    {EXLA.Op.get_tuple_element(cond, 1), update_token(cache, token)}
+    if get_token(cache) do
+      token = EXLA.Op.get_tuple_element(cond, 0)
+      {EXLA.Op.get_tuple_element(cond, 1), update_token(cache, token)}
+    else
+      {cond, cache}
+    end
   end
 
   defp cached_recur_operator(:parameter, %T{data: %Expr{args: [i]}}, state, cache) do
@@ -520,7 +524,7 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(:fun, %T{data: %Expr{args: args}, type: type}, state, cache) do
     [args, expr, {_, name, _}] = args
-    {no_token_computation(name, args, expr, type, state), cache}
+    {fun_computation(name, args, expr, type, state), cache}
   end
 
   defp cached_recur_operator(:optional, %T{data: %Expr{args: [_, default]}}, state, cache) do
@@ -1372,7 +1376,7 @@ defmodule EXLA.Defn do
     EXLA.Builder.build(apply(EXLA.Op, op, prepare_args.(args)))
   end
 
-  defp no_token_computation(name, args, expr, type, state) do
+  defp fun_computation(name, args, expr, type, state) do
     subbuilder = subbuilder(state.builder, Atom.to_string(name))
 
     arg_params =
@@ -1388,7 +1392,7 @@ defmodule EXLA.Defn do
     EXLA.Builder.build(to_type(res, type))
   end
 
-  defp token_computation(name, arg, expr, type, transform, state, cache) do
+  defp while_computation(name, arg, expr, type, transform, state, cache) do
     subbuilder = subbuilder(state.builder, Atom.to_string(name))
     arg_shape = computation_arg_shape(arg)
 
@@ -1613,27 +1617,36 @@ defmodule EXLA.Defn do
 
     subbuilder = subbuilder(state.builder, "if-#{Atom.to_string(bool)}")
 
-    shapes =
-      for {_, {_, _, %{type: type, shape: shape}}} <- sorted_ids_args do
-        EXLA.Shape.make_shape(type, shape)
-      end
+    {args, comp, comp_cache} =
+      if_branch_computation(subbuilder, args, cache, fn params, comp_cache ->
+        comp_state = %{state | builder: subbuilder, params: Map.new(params)}
+        recur_composite(expr, &cast_pred_to_u8/1, comp_state, comp_cache)
+      end)
 
-    tuple_shape = EXLA.Shape.make_tuple_shape([EXLA.Shape.make_token_shape() | shapes])
-    param = EXLA.Op.parameter(subbuilder, 0, tuple_shape, "p")
-
-    params =
-      for {_, {i, _, _}} <- sorted_ids_args do
-        {i, EXLA.Op.get_tuple_element(param, i + 1)}
-      end
-
-    comp_token = EXLA.Op.get_tuple_element(param, 0)
-    comp_state = %{state | builder: subbuilder, params: Map.new(params)}
-    comp_cache = reset_token(cache, comp_token)
-    {res, comp_cache} = recur_composite(expr, &cast_pred_to_u8/1, comp_state, comp_cache)
-
-    args = EXLA.Op.tuple(state.builder, [get_token(cache) | args])
-    comp = EXLA.Builder.build(EXLA.Op.tuple(subbuilder, [get_token(comp_cache), res]))
+    args = EXLA.Op.tuple(state.builder, args)
     {args, comp, update_outfeed(cache, comp_cache)}
+  end
+
+  defp if_branch_computation(subbuilder, args, cache, fun) do
+    shapes = Enum.map(args, &EXLA.Op.get_shape/1)
+
+    if token = get_token(cache) do
+      tuple_shape = EXLA.Shape.make_tuple_shape([EXLA.Shape.make_token_shape() | shapes])
+      param = EXLA.Op.parameter(subbuilder, 0, tuple_shape, "p")
+      params = Enum.with_index(args, fn _, i -> {i, EXLA.Op.get_tuple_element(param, i + 1)} end)
+
+      comp_token = EXLA.Op.get_tuple_element(param, 0)
+      comp_cache = reset_token(cache, comp_token)
+      {res, comp_cache} = fun.(params, comp_cache)
+      comp = EXLA.Builder.build(EXLA.Op.tuple(subbuilder, [get_token(comp_cache), res]))
+      {[token | args], comp, comp_cache}
+    else
+      tuple_shape = EXLA.Shape.make_tuple_shape(shapes)
+      param = EXLA.Op.parameter(subbuilder, 0, tuple_shape, "p")
+      params = Enum.with_index(args, fn _, i -> {i, EXLA.Op.get_tuple_element(param, i)} end)
+      {res, comp_cache} = fun.(params, cache)
+      {args, EXLA.Builder.build(res), comp_cache}
+    end
   end
 
   ## Axes helpers

@@ -74,15 +74,15 @@ defmodule EXLA.Shape do
   @doc """
   Converts a charlist type into Nx' tuple format.
   """
-  def charlist_to_dtype('token'), do: :token
-  def charlist_to_dtype('bf16'), do: {:bf, 16}
-  def charlist_to_dtype('pred'), do: {:pred, 8}
+  def charlist_to_dtype(~c"token"), do: :token
+  def charlist_to_dtype(~c"bf16"), do: {:bf, 16}
+  def charlist_to_dtype(~c"pred"), do: {:pred, 8}
   def charlist_to_dtype([letter | int]), do: {List.to_atom([letter]), List.to_integer(int)}
 
   @doc """
   Converts Nx's tuple format into charlist.
   """
-  def dtype_to_charlist({:pred, _}), do: 'pred'
+  def dtype_to_charlist({:pred, _}), do: ~c"pred"
   def dtype_to_charlist({type, size}), do: Atom.to_charlist(type) ++ Integer.to_charlist(size)
 
   defp unwrap!({:ok, ref}), do: ref

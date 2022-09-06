@@ -3,7 +3,7 @@ defmodule EXLA.NIF do
   @on_load :__on_load__
 
   def __on_load__ do
-    path = :filename.join(:code.priv_dir(:exla), 'libexla')
+    path = :filename.join(:code.priv_dir(:exla), ~c"libexla")
     :erlang.load_nif(path, 0)
   end
 

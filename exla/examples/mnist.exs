@@ -57,7 +57,7 @@ defmodule MNIST do
   end
 
   defp unzip_cache_or_download(zip) do
-    base_url = 'https://storage.googleapis.com/cvdf-datasets/mnist/'
+    base_url = ~c"https://storage.googleapis.com/cvdf-datasets/mnist/"
     path = Path.join("tmp", zip)
 
     data =
@@ -147,7 +147,7 @@ end
 Nx.global_default_backend(EXLA.Backend)
 
 {train_images, train_labels} =
-  MNIST.download('train-images-idx3-ubyte.gz', 'train-labels-idx1-ubyte.gz')
+  MNIST.download(~c"train-images-idx3-ubyte.gz", ~c"train-labels-idx1-ubyte.gz")
 
 IO.puts("Initializing parameters...\n")
 params = MNIST.init_random_params()

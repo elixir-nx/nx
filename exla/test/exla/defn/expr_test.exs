@@ -1433,6 +1433,16 @@ defmodule EXLA.Defn.ExprTest do
         )
       )
     end
+
+    defn map_conditional(t), do: Nx.map(t, fn x -> if x > 0, do: x, else: -x end)
+
+    @tag :unsupported_64_bit_op
+    test "maps a function with conditional" do
+      assert_equal(
+        map_conditional(Nx.tensor([-2, -1, 0, 1, 2])),
+        Nx.tensor([2, 1, 0, 1, 2])
+      )
+    end
   end
 
   describe "reduce" do

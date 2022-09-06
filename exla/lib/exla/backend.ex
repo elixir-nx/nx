@@ -121,7 +121,7 @@ defmodule EXLA.Backend do
   if Application.compile_env(:exla, :add_backend_on_inspect, true) do
     defp maybe_add_signature(result, %T{data: %B{buffer: buffer}}) do
       %EXLA.DeviceBuffer{client_name: client_name, device_id: device_id, ref: ref} = buffer
-      '#Ref<' ++ rest = :erlang.ref_to_list(ref)
+      ~c"#Ref<" ++ rest = :erlang.ref_to_list(ref)
       info = "EXLA.Backend<#{client_name}:#{device_id}, " <> List.to_string(rest)
       Inspect.Algebra.concat([info, Inspect.Algebra.line(), result])
     end
