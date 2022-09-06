@@ -1319,11 +1319,11 @@ defmodule EXLA.Defn do
   defp new_cache(token, used),
     do: %{__MODULE__ => {token, used, %{}}}
 
-  defp reset_cache(%{__MODULE__ => {_, used, outfeed}}, token),
-    do: %{__MODULE__ => {token, used, outfeed}}
-
   defp update_outfeed(%{__MODULE__ => {token, used, _}} = cache, %{__MODULE__ => {_, _, outfeed}}),
     do: %{cache | __MODULE__ => {token, used, outfeed}}
+
+  defp reset_token(%{__MODULE__ => {_, used, outfeed}}, token),
+    do: %{__MODULE__ => {token, used, outfeed}}
 
   defp update_token(%{__MODULE__ => {_token, used, outfeed}} = cache, token),
     do: %{cache | __MODULE__ => {token, used, outfeed}}
@@ -1399,7 +1399,7 @@ defmodule EXLA.Defn do
     arg_param = EXLA.Op.get_tuple_element(param, 1)
     params = computation_arg_param({arg, arg_param})
     state = %{state | builder: subbuilder, params: Map.new(params)}
-    {res, comp_cache} = recur_composite(expr, transform, state, reset_cache(cache, arg_token))
+    {res, comp_cache} = recur_composite(expr, transform, state, reset_token(cache, arg_token))
 
     res =
       if type == :with_token do
@@ -1628,7 +1628,7 @@ defmodule EXLA.Defn do
 
     comp_token = EXLA.Op.get_tuple_element(param, 0)
     comp_state = %{state | builder: subbuilder, params: Map.new(params)}
-    comp_cache = reset_cache(cache, comp_token)
+    comp_cache = reset_token(cache, comp_token)
     {res, comp_cache} = recur_composite(expr, &cast_pred_to_u8/1, comp_state, comp_cache)
 
     args = EXLA.Op.tuple(state.builder, [get_token(cache) | args])
