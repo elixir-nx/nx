@@ -1807,13 +1807,10 @@ defmodule Nx.Shape do
       )
     end
 
-    [
-      [unchanged_shape, [m]],
-      [unchanged_shape, [m, m]]
-    ]
-    |> Enum.map(&List.flatten/1)
-    |> Enum.map(&List.to_tuple/1)
-    |> List.to_tuple()
+    {
+      List.to_tuple(unchanged_shape ++ [m]),
+      List.to_tuple(unchanged_shape ++ [m, m])
+    }
   end
 
   def eigh(shape),
@@ -1938,8 +1935,8 @@ defmodule Nx.Shape do
         b_shape
 
       true ->
-        expected_1d = [a_batch_shape, a_n] |> List.flatten() |> List.to_tuple()
-        expected_2d = [a_batch_shape, a_n, "m"] |> List.flatten() |> List.to_tuple()
+        expected_1d = List.to_tuple(a_batch_shape ++ [a_n])
+        expected_2d = List.to_tuple(a_batch_shape ++ [a_n, "m"])
 
         raise(
           ArgumentError,

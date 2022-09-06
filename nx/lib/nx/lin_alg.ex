@@ -639,23 +639,9 @@ defmodule Nx.LinAlg do
       # A.X = B -> QR.X = B -> R.X = adjoint(Q).B
 
       {q, r} = Nx.LinAlg.qr(a)
-
-      qb =
-        case {Nx.rank(q), Nx.rank(b)} do
-          {2, b_rank} when b_rank in [1, 2] ->
-            Nx.dot(adjoint(q), b)
-
-          {q_rank, _} ->
-            Nx.dot(
-              adjoint(q),
-              [q_rank - 1],
-              Enum.to_list(0..(q_rank - 3)),
-              b,
-              [q_rank - 2],
-              Enum.to_list(0..(q_rank - 3))
-            )
-        end
-
+      q_rank = Nx.rank(q)
+      batches = Enum.to_list(0..(q_rank - 3)//1)
+      qb = Nx.dot(adjoint(q), [q_rank - 1], batches, b, [q_rank - 2], batches)
       triangular_solve(r, qb, lower: false)
     end)
   end
@@ -1054,8 +1040,9 @@ defmodule Nx.LinAlg do
 
     {eigenvals_shape, eigenvecs_shape} = Nx.Shape.eigh(shape)
     rank = tuple_size(shape)
-    eigenvals_name = List.duplicate(nil, rank - 1)
+
     eigenvecs_name = List.duplicate(nil, rank)
+    eigenvals_name = tl(eigenvecs_name)
 
     impl!(tensor).eigh(
       {%{tensor | names: eigenvals_name, type: output_type, shape: eigenvals_shape},
