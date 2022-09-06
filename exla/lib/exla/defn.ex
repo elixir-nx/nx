@@ -1528,8 +1528,8 @@ defmodule EXLA.Defn do
     {_, pred_ids} = collect_ids(pred, %{})
 
     # Get all nodes shared between on_true/on_false so we compile them only once.
-    on_true_ids = Composite.reduce(on_true, %{}, &collect_ids(&1, &2) |> elem(1))
-    on_false_ids = Composite.reduce(on_false, %{}, &collect_ids(&1, &2) |> elem(1))
+    on_true_ids = Composite.reduce(on_true, %{}, &(collect_ids(&1, &2) |> elem(1)))
+    on_false_ids = Composite.reduce(on_false, %{}, &(collect_ids(&1, &2) |> elem(1)))
 
     {small_ids, large_ids} =
       if map_size(on_true_ids) > map_size(on_false_ids),
