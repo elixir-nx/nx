@@ -187,6 +187,22 @@ defmodule Nx.LinAlgTest do
 
       assert_all_close(Nx.LinAlg.matrix_power(a, -4), result)
     end
+
+    test "supports batched matrices" do
+      a =
+        Nx.tensor([
+          [[5, 3], [1, 2]],
+          [[9, 0], [4, 7]]
+        ])
+
+      result =
+        Nx.tensor([
+          [[161, 126], [42, 35]],
+          [[729, 0], [772, 343]]
+        ])
+
+      assert_all_close(Nx.LinAlg.matrix_power(a, 3), result)
+    end
   end
 
   describe "qr" do

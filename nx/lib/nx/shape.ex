@@ -1867,6 +1867,27 @@ defmodule Nx.Shape do
         "tensor must have at least rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
       )
 
+  def matrix_power(shape) when tuple_size(shape) > 1 do
+    rank = tuple_size(shape)
+    matrix_shape = {elem(shape, rank - 2), elem(shape, rank - 1)}
+
+    unless match?({n, n}, matrix_shape) do
+      raise(
+        ArgumentError,
+        "matrix_power/2 expects a square matrix or a batch of square matrices, got tensor with shape: #{inspect(shape)}"
+      )
+    end
+
+    :ok
+  end
+
+  def matrix_power(shape) do
+    raise(
+      ArgumentError,
+      "matrix_power/2 expects a square matrix or a batch of square matrices, got tensor with shape: #{inspect(shape)}"
+    )
+  end
+
   def triangular_solve({n, n}, {n}, _left_side), do: :ok
   def triangular_solve({n, n}, {n, _}, true), do: :ok
   def triangular_solve({n, n}, {_, n}, false), do: :ok

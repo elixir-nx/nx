@@ -1316,10 +1316,10 @@ defmodule Nx.LinAlg do
   end
 
   @doc """
-  Produces the tensor taken to the given power by dot-product.
+  Produces the tensor taken to the given power by matrix dot-product.
 
-  The input is always a square tensor and a non-negative integer,
-  and the output is a square tensor of the same dimensions as the input tensor.
+  The input is always a tensor of batched square matrices and an integer,
+  and the output is a tensor of the same dimensions as the input tensor.
 
   The dot-products are unrolled inside `defn`.
 
@@ -1362,8 +1362,38 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> Nx.LinAlg.matrix_power(Nx.iota({2, 2, 2}), 3)
+      #Nx.Tensor<
+        s64[2][2][2]
+        [
+          [
+            [6, 11],
+            [22, 39]
+          ],
+          [
+            [514, 615],
+            [738, 883]
+          ]
+        ]
+      >
+
+      iex> Nx.LinAlg.matrix_power(Nx.iota({2, 2, 2}), -3)
+      #Nx.Tensor<
+        f32[2][2][2]
+        [
+          [
+            [-4.875, 1.375],
+            [2.75, -0.75]
+          ],
+          [
+            [-110.375, 76.875],
+            [92.25, -64.25]
+          ]
+        ]
+      >
+
       iex> Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4], [5, 6]]), 1)
-      ** (ArgumentError) matrix_power/2 expects a square tensor, got tensor with shape: {3, 2}
+      ** (ArgumentError) matrix_power/2 expects a square matrix or a batch of square matrices, got tensor with shape: {3, 2}
   """
   @doc from_backend: false
   def matrix_power(tensor, power) when is_integer(power) and power < 0 do
@@ -1373,46 +1403,40 @@ defmodule Nx.LinAlg do
   # We need a special-case for 0 since the code below
   # is optimized to not compute an initial eye.
   def matrix_power(tensor, 0) do
-    case Nx.shape(tensor) do
-      {n, n} ->
-        :ok
+    shape = Nx.shape(tensor)
 
-      shape ->
-        raise ArgumentError,
-              "matrix_power/2 expects a square tensor, got tensor with shape: #{inspect(shape)}"
+    with :ok <- Nx.Shape.matrix_power(shape) do
+      Nx.eye(tensor)
     end
-
-    Nx.eye(tensor)
   end
 
   def matrix_power(tensor, power) when is_integer(power) do
-    case Nx.shape(tensor) do
-      {n, n} ->
-        :ok
+    shape = Nx.shape(tensor)
 
-      shape ->
-        raise ArgumentError,
-              "matrix_power/2 expects a square tensor, got tensor with shape: #{inspect(shape)}"
+    with :ok <- Nx.Shape.matrix_power(shape) do
+      rank = Nx.rank(tensor)
+      batches = Enum.to_list(0..(rank - 3)//1)
+      dot_product = &Nx.dot(&1, [rank - 1], batches, &2, [rank - 2], batches)
+
+      power
+      |> Integer.digits(2)
+      |> tl()
+      |> Enum.reverse()
+      |> Enum.reduce({nil, tensor}, fn
+        1, {nil, exp_tensor} ->
+          {exp_tensor, dot_product.(exp_tensor, exp_tensor)}
+
+        1, {result_tensor, exp_tensor} ->
+          {dot_product.(result_tensor, exp_tensor), dot_product.(exp_tensor, exp_tensor)}
+
+        0, {result_tensor, exp_tensor} ->
+          {result_tensor, dot_product.(exp_tensor, exp_tensor)}
+      end)
+      |> then(fn
+        {nil, exp_tensor} -> exp_tensor
+        {result, exp_tensor} -> dot_product.(result, exp_tensor)
+      end)
     end
-
-    power
-    |> Integer.digits(2)
-    |> tl()
-    |> Enum.reverse()
-    |> Enum.reduce({nil, tensor}, fn
-      1, {nil, exp_tensor} ->
-        {exp_tensor, Nx.dot(exp_tensor, exp_tensor)}
-
-      1, {result_tensor, exp_tensor} ->
-        {Nx.dot(result_tensor, exp_tensor), Nx.dot(exp_tensor, exp_tensor)}
-
-      0, {result_tensor, exp_tensor} ->
-        {result_tensor, Nx.dot(exp_tensor, exp_tensor)}
-    end)
-    |> then(fn
-      {nil, exp_tensor} -> exp_tensor
-      {result, exp_tensor} -> Nx.dot(result, exp_tensor)
-    end)
   end
 
   @doc """
