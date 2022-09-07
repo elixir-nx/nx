@@ -134,24 +134,31 @@ defmodule Nx.RandomTest do
 
   describe "properties" do
     defp continuous_uniform_variance(a, b) do
-      ((b - a) ** 2) / 12
+      (b - a) ** 2 / 12
     end
 
-    #about the mean
+    # about the mean
     defp discrete_uniform_second_moment(count) do
-      (count-1)*(count+1)/12
+      (count - 1) * (count + 1) / 12
     end
 
-    defp property_case(name, args: args, moment: moment, expected_func: expected_func, expected_args: expected_args) do
+    defp property_case(name,
+           args: args,
+           moment: moment,
+           expected_func: expected_func,
+           expected_args: expected_args
+         ) do
       seed = :erlang.adler32("uniformthreefry2x32")
       key = Nx.Random.key(Nx.tensor(seed, type: :s64))
       t = apply(Nx.Random, name, [key | args])
+
       apply(Nx, moment, [t])
       |> assert_all_close(apply(expected_func, expected_args), rtol: 0.1)
 
       seed = :erlang.adler32("uniformthreefry2x32")
       key = Nx.Random.key(Nx.tensor(seed, type: :u64))
       t = apply(Nx.Random, name, [key | args])
+
       apply(Nx, moment, [t])
       |> assert_all_close(apply(expected_func, expected_args), rtol: 0.1)
     end
@@ -178,7 +185,7 @@ defmodule Nx.RandomTest do
       property_case(:uniform,
         args: [[min_val: 10, max_val: 15, shape: {10000}]],
         moment: :variance,
-        expected_func: fn a, b -> continuous_uniform_variance(a,b) end,
+        expected_func: fn a, b -> continuous_uniform_variance(a, b) end,
         expected_args: [10, 15]
       )
     end
@@ -192,5 +199,4 @@ defmodule Nx.RandomTest do
       )
     end
   end
-
 end
