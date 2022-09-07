@@ -1,9 +1,7 @@
 defmodule Nx.Random do
   @moduledoc """
   
-  ## PRNG
-(Pseudo-Random Number Generator)
-  (Pseudo-Random Number Generator)
+  ## PRNG (Pseudo-Random Number Generator)
   
   Unlike the stateful pseudo-random number
   generators (PRNGs) that users of most programming
@@ -219,9 +217,8 @@ defmodule Nx.Random do
         |> Nx.bitwise_xor(0x1BD11BDA),
         key1
       ])
+      # we lose precision on purpose
       |> Nx.as_type({:u, 32})
-
-    # we lose precision on purpose
 
     state = {xs, ks, rotations}
 
@@ -292,7 +289,7 @@ defmodule Nx.Random do
     * `:type` - the integer type for the returned tensor
     * `:shape` - shape of the returned tensor
   
-
+  
   """
   defn randint(key, min_val, max_val, opts \\ []) do
     opts = keyword!(opts, shape: {1}, type: {:s, 32})
