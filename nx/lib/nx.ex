@@ -1783,10 +1783,12 @@ defmodule Nx do
   @doc """
   Converts the given number (or tensor) to a tensor.
 
-  This function exists for data normalization. If your
-  goal is to create tensors from lists, see `tensor/2`.
-  If you want to create a tensor from binary, see
-  `from_binary/3`.
+  The Nx API works with numbers, complex numbers, and tensors.
+  This function exists to normalize those values into tensors
+  (i.e. `Nx.Tensor` structs).
+
+  If your goal is to create tensors from lists, see `tensor/2`.
+  If you want to create a tensor from binary, see `from_binary/3`.
   """
   @doc type: :conversion
   def to_tensor(%T{} = t),

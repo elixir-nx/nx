@@ -296,7 +296,7 @@ defmodule Nx.Shape do
       ** (ArgumentError) cannot broadcast tensor of dimensions {4, 2, 5} to {3, 2, 5}
 
       iex> Nx.Shape.binary_broadcast({1, 2, 5}, [:batch, :x, :y], {3, 2, 5}, [:time, :x, :y])
-      ** (ArgumentError) cannot merge names :batch, :time
+      ** (ArgumentError) cannot merge name :batch on axis 0 with name :time on axis 0
   """
   def binary_broadcast(left_shape, left_names, right_shape, right_names)
 
@@ -327,8 +327,8 @@ defmodule Nx.Shape do
     {left_lower, left_names} = Enum.unzip(left_lower_and_names)
     {right_lower, right_names} = Enum.unzip(right_lower_and_names)
 
-    case binary_broadcast(left_lower, left_names, right_lower, right_names, [], []) do
-      {:ok, new_shape, new_names} ->
+    case binary_broadcast(left_lower, left_names, right_lower, right_names, [], [], rank) do
+      {new_shape, new_names} ->
         {new_shape, new_names}
 
       :error ->
@@ -344,17 +344,20 @@ defmodule Nx.Shape do
          [rdim | rdims],
          [rname | rnames],
          shape_acc,
-         names_acc
+         names_acc,
+         axis
        )
        when rdim == 1 or ldim == 1 or rdim == ldim do
-    names_acc = [merge_names!(lname, rname) | names_acc]
-    binary_broadcast(ldims, lnames, rdims, rnames, [max(rdim, ldim) | shape_acc], names_acc)
+    axis = axis - 1
+    shape_acc = [max(rdim, ldim) | shape_acc]
+    names_acc = [merge_names!(lname, rname, axis, axis) | names_acc]
+    binary_broadcast(ldims, lnames, rdims, rnames, shape_acc, names_acc, axis)
   end
 
-  defp binary_broadcast([], [], [], [], shape_acc, names_acc),
-    do: {:ok, List.to_tuple(shape_acc), names_acc}
+  defp binary_broadcast([], [], [], [], shape_acc, names_acc, 0),
+    do: {List.to_tuple(shape_acc), names_acc}
 
-  defp binary_broadcast(_, _, _, _, _, _),
+  defp binary_broadcast(_, _, _, _, _, _, _),
     do: :error
 
   defp shape_and_names_to_lower_ranked_list(_tuple, _names, 0, 0),
@@ -1182,7 +1185,7 @@ defmodule Nx.Shape do
 
     shape
     |> Tuple.to_list()
-    |> do_put_slice(names, Tuple.to_list(slice_shape), slice_names, [])
+    |> do_put_slice(names, Tuple.to_list(slice_shape), slice_names, [], 0)
     |> case do
       :error ->
         raise ArgumentError,
@@ -1194,15 +1197,16 @@ defmodule Nx.Shape do
     end
   end
 
-  defp do_put_slice([s | _], _, [slice | _], _, _) when slice > s do
+  defp do_put_slice([s | _], _, [slice | _], _, _, _) when slice > s do
     :error
   end
 
-  defp do_put_slice([_ | shape], [n | names], [_ | s_shape], [s_name | s_names], acc) do
-    do_put_slice(shape, names, s_shape, s_names, [merge_names!(n, s_name) | acc])
+  defp do_put_slice([_ | shape], [n | names], [_ | s_shape], [s_name | s_names], acc, axis) do
+    acc = [merge_names!(n, s_name, axis, axis) | acc]
+    do_put_slice(shape, names, s_shape, s_names, acc, axis + 1)
   end
 
-  defp do_put_slice([], [], [], [], acc), do: Enum.reverse(acc)
+  defp do_put_slice([], [], [], [], acc, _axis), do: Enum.reverse(acc)
 
   @doc """
   Returns the shape and names after a take.
@@ -1226,7 +1230,7 @@ defmodule Nx.Shape do
   ### Error cases
 
       iex> Nx.Shape.take({2, 3}, [nil, :data], {10}, [:reordered], 1)
-      ** (ArgumentError) cannot merge names :data, :reordered
+      ** (ArgumentError) cannot merge name :data on axis 1 with name :reordered on axis 0
   """
   def take(shape, names, indices_shape, indices_names, axis) do
     shape = Tuple.to_list(shape)
@@ -1237,7 +1241,7 @@ defmodule Nx.Shape do
 
     indices_names =
       case indices_names do
-        [name] -> [merge_names!(axis_name, name)]
+        [name] -> [merge_names!(axis_name, name, axis, 0)]
         names -> names
       end
 
@@ -1533,7 +1537,7 @@ defmodule Nx.Shape do
       {{7, 3, 2}, [:x, :y, :z]}
   """
   def concatenate(shapes, names, axis) do
-    names = validate_concat_names!(names)
+    names = validate_concat_names!(names, axis)
     {concat_dims(shapes, axis), names}
   end
 
@@ -1954,10 +1958,10 @@ defmodule Nx.Shape do
     )
   end
 
-  defp validate_concat_names!(names) do
+  defp validate_concat_names!(names, axis) do
     _ =
-      Enum.zip_with(names, fn [name | rest] ->
-        Enum.reduce(rest, name, &merge_names!(&1, &2))
+      Enum.zip_with(names, fn zipped ->
+        Enum.reduce(zipped, &merge_names!(&1, &2, axis, axis))
       end)
 
     hd(names)
@@ -1977,11 +1981,14 @@ defmodule Nx.Shape do
   defp count_down(0, _n), do: []
   defp count_down(i, n), do: [n | count_down(i - 1, n - 1)]
 
-  defp merge_names!(nil, nil), do: nil
-  defp merge_names!(nil, name) when is_atom(name), do: name
-  defp merge_names!(name, nil) when is_atom(name), do: name
-  defp merge_names!(name, name) when is_atom(name), do: name
+  defp merge_names!(nil, nil, _, _), do: nil
+  defp merge_names!(nil, name, _, _) when is_atom(name), do: name
+  defp merge_names!(name, nil, _, _) when is_atom(name), do: name
+  defp merge_names!(name, name, _, _) when is_atom(name), do: name
 
-  defp merge_names!(lhs, rhs),
-    do: raise(ArgumentError, "cannot merge names #{inspect(lhs)}, #{inspect(rhs)}")
+  defp merge_names!(l_name, r_name, l_axis, r_axis) do
+    raise ArgumentError,
+          "cannot merge name #{inspect(l_name)} on axis #{l_axis} " <>
+            "with name #{inspect(r_name)} on axis #{r_axis}"
+  end
 end
