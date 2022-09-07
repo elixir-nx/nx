@@ -288,10 +288,10 @@ defmodule Nx.Random do
   
   ## Options
   
-    * `:type` - an int type for the returned tensor
-  
+    * `:type` - the integer type for the returned tensor
     * `:shape` - shape of the returned tensor
   
+
   """
   defn randint(key, min_val, max_val, opts \\ []) do
     opts = keyword!(opts, shape: {1}, type: {:s, 32})
