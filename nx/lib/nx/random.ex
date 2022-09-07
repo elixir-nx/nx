@@ -2,6 +2,7 @@ defmodule Nx.Random do
   @moduledoc """
   
   ## PRNG
+(Pseudo-Random Number Generator)
   (Pseudo-Random Number Generator)
   
   Unlike the stateful pseudo-random number
