@@ -196,8 +196,7 @@ ERL_NIF_TERM binary_to_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   }
 
   EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaBuffer* buffer,
-    (*client)->BufferFromBinary(bin, *shape, device_id, false), env);
-  EXLA_EFFECT_OR_RETURN_NIF(buffer->BlockHostUntilReady(), env);
+    (*client)->BufferFromBinary(env, argv[1], *shape, device_id, false), env);
   return exla::nif::ok(env, exla::nif::make<exla::ExlaBuffer*>(env, buffer));
 }
 
