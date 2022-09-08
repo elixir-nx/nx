@@ -27,7 +27,7 @@ class ExlaBuffer {
 
   // Make sure the transfer has completed before we deallocate the buffer.
   ~ExlaBuffer() {
-    buffer_->BlockHostUntilReady();
+    (void)buffer_->BlockHostUntilReady();
   }
 
   bool release_after_run() { return can_be_released_after_run_; }

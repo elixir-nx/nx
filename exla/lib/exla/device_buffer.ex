@@ -34,9 +34,8 @@ defmodule EXLA.DeviceBuffer do
   without destroying it. If `size` is negative, then it
   reads the whole buffer.
   """
-  def read(%DeviceBuffer{ref: ref, client_name: client_name}, size \\ -1) do
-    client = EXLA.Client.fetch!(client_name)
-    binary = EXLA.NIF.read_device_mem(client.ref, ref, size) |> unwrap!()
+  def read(%DeviceBuffer{ref: ref}, size \\ -1) do
+    binary = EXLA.NIF.read_device_mem(ref, size) |> unwrap!()
     binary
   end
 
