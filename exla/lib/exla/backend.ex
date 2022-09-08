@@ -14,6 +14,11 @@ defmodule EXLA.Backend do
   To get the data out of the device backend into a regular
   tensor, call `Nx.backend_transfer/1` (with the device
   tensor as the single argument).
+
+  Note that the `EXLA.Backend` is asynchronous: operations
+  on its tensors *may* return immediately, before the tensor
+  data is available. The backend will then block only when
+  trying to read the data or when passing it to another operation.
   """
 
   @behaviour Nx.Backend
