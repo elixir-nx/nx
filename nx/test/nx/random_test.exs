@@ -11,6 +11,7 @@ defmodule Nx.RandomTest do
 
       assert key |> Nx.type() |> Nx.Type.integer?()
       assert Nx.shape(key) == {2}
+      assert key == Nx.tensor([0, 44], type: :u32)
     end
   end
 
@@ -22,7 +23,25 @@ defmodule Nx.RandomTest do
       multiple_keys = Nx.Random.split(key, 12)
 
       assert Nx.shape(two_keys) == {2, 2}
+      assert two_keys == Nx.tensor([
+        [671281441, 790285293],
+        [234515160, 3878582434]
+      ], type: :u32)
       assert Nx.shape(multiple_keys) == {12, 2}
+      assert multiple_keys == Nx.tensor([
+        [966561810, 334783285],
+        [1262072629, 1899563600],
+        [3750833143, 3406870597],
+        [2539864401, 3552854032],
+        [201687315, 590048257],
+        [3348546826, 4091268549],
+        [1610907819, 3073378539],
+        [3054273782, 2286163366],
+        [4120769120, 1468859077],
+        [2405343452, 1650615538],
+        [4063810472, 2490879298],
+        [259087434, 3260250733]
+      ], type: :u32)
     end
   end
 
