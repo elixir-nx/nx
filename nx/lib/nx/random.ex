@@ -148,8 +148,10 @@ defmodule Nx.Random do
     case bit_width do
       64 ->
         bits =
-          impl(key,
-          Nx.iota({Nx.size(shape) * 2}))
+          impl(
+            key,
+            Nx.iota({Nx.size(shape) * 2})
+          )
           |> Nx.reshape({2, :auto})
           |> Nx.as_type({:u, 64})
 
@@ -190,8 +192,9 @@ defmodule Nx.Random do
   end
 
   defnp threefry2x32_20(xs, ks) do
-    rotations = {Nx.tensor([13, 15, 26, 6], type: {:u, 8}),
-    Nx.tensor([17, 29, 16, 24], type: {:u, 8})}
+    rotations =
+      {Nx.tensor([13, 15, 26, 6], type: {:u, 8}), Nx.tensor([17, 29, 16, 24], type: {:u, 8})}
+
     key1 = ks[0]
     key2 = ks[1]
 
@@ -199,13 +202,12 @@ defmodule Nx.Random do
     xs2 = xs[1] + key2
     xs = {xs1, xs2}
 
-    ks =
-      {
-        key2,
-        Nx.bitwise_xor(key1, key2)
-        |> Nx.bitwise_xor(0x1BD11BDA),
-        key1
-      }
+    ks = {
+      key2,
+      Nx.bitwise_xor(key1, key2)
+      |> Nx.bitwise_xor(0x1BD11BDA),
+      key1
+    }
 
     state = {xs, ks, rotations}
 
@@ -225,9 +227,7 @@ defmodule Nx.Random do
       |> Nx.bitwise_xor(y1)
 
     # losing precision on purpose due to upcasts
-    {y1 |> Nx.as_type({:u, 32}),
-    y2 |> Nx.as_type({:u, 32})}
-
+    {y1 |> Nx.as_type({:u, 32}), y2 |> Nx.as_type({:u, 32})}
   end
 
   defnp rolled_loop_step(i, {{_xs1, _xs2} = xs, {k1, k2, k3}, {r1, r2}}) do
@@ -240,8 +240,7 @@ defmodule Nx.Random do
 
     xs2 = k2 + i + 1 + xs2
 
-    new_xs = {xs1 |> Nx.as_type({:u, 32}),
-       xs2 |> Nx.as_type({:u, 32})}
+    new_xs = {xs1 |> Nx.as_type({:u, 32}), xs2 |> Nx.as_type({:u, 32})}
 
     new_ks = {k2, k3, k1}
     new_rs = {r2, r1}
