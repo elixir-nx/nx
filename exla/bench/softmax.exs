@@ -9,7 +9,7 @@ defmodule Softmax do
   defn softmax(n), do: Nx.exp(n) / Nx.sum(Nx.exp(n))
 end
 
-host_jit = EXLA.jit(&Softmax.softmax/1)
+will_jit = EXLA.jit(&Softmax.softmax/1)
 
 benches = %{
   "elixir f32" => fn -> Softmax.softmax(t32) end,
@@ -26,8 +26,8 @@ benches =
     cuda_jit = EXLA.jit(&Softmax.softmax/1, client: :cuda)
 
     Map.merge(benches, %{
-      "xla jit-gpu f32" => {fn -> cuda_jit(dt32) end, after_each: &Nx.backend_deallocate/1},
-      "xla jit-gpu f64" => {fn -> cuda_jit(dt64) end, after_each: &Nx.backend_deallocate/1}
+      "xla jit-gpu f32" => {fn -> cuda_jit.(dt32) end, after_each: &Nx.backend_deallocate/1},
+      "xla jit-gpu f64" => {fn -> cuda_jit.(dt64) end, after_each: &Nx.backend_deallocate/1}
     })
   else
     benches
