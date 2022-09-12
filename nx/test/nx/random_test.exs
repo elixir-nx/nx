@@ -8,9 +8,6 @@ defmodule Nx.RandomTest do
   describe "key/1" do
     test "transforms given integer into PRNG key" do
       key = Nx.Random.key(44)
-
-      assert key |> Nx.type() |> Nx.Type.integer?()
-      assert Nx.shape(key) == {2}
       assert key == Nx.tensor([0, 44], type: :u32)
     end
   end
@@ -22,12 +19,10 @@ defmodule Nx.RandomTest do
       two_keys = Nx.Random.split(key)
       multiple_keys = Nx.Random.split(key, 12)
 
-      assert Nx.shape(two_keys) == {2, 2}
       assert two_keys == Nx.tensor([
         [671281441, 790285293],
         [234515160, 3878582434]
       ], type: :u32)
-      assert Nx.shape(multiple_keys) == {12, 2}
       assert multiple_keys == Nx.tensor([
         [966561810, 334783285],
         [1262072629, 1899563600],

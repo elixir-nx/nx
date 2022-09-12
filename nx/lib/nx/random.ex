@@ -139,15 +139,6 @@ defmodule Nx.Random do
     impl(key, key(data))
   end
 
-  deftransformp max_count_size(shape, bit_width) do
-    [
-      shape:
-        {rem(Nx.size(shape) * bit_width, 32)
-         |> Nx.any()
-         |> Nx.add(Nx.size(shape) * bit_width / 32)}
-    ]
-  end
-
   defnp random_bits(key, opts \\ []) do
     assert_key(key)
     opts = keyword!(opts, shape: {}, bit_width: 32)
