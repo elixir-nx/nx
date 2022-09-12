@@ -43,8 +43,6 @@ xla::Status ExlaBuffer::Deallocate() {
 }
 
 xla::StatusOr<ExlaBuffer *> ExlaBuffer::CopyToDevice(xla::PjRtDevice * dst_device) {
-  // TODO: On TPUs buffers might reside on different hosts which requires
-  // a different API
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtBuffer> buf,
       buffer_->CopyToDevice(dst_device));
   return new ExlaBuffer(std::move(buf));
