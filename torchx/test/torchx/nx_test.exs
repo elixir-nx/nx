@@ -1191,4 +1191,14 @@ defmodule Torchx.NxTest do
       )
     end
   end
+
+  describe "take_along_axis" do
+    test "accepts signed and unsigned indices" do
+      t = Nx.iota({10})
+      i = Nx.iota({3}, type: {:s, 8})
+      result = Nx.iota({3})
+      assert_equal(result, Nx.take_along_axis(t, i))
+      assert_equal(result, Nx.take_along_axis(t, Nx.as_type(i, {:u, 8})))
+    end
+  end
 end

@@ -526,9 +526,11 @@ defmodule Torchx.Backend do
 
   @impl true
   def take_along_axis(out, tensor, idx, axis) do
+    idx_tx = idx |> from_nx() |> Torchx.to_type(:long)
+
     tensor
     |> from_nx()
-    |> Torchx.gather(from_nx(idx), axis)
+    |> Torchx.gather(idx_tx, axis)
     |> to_nx(out)
   end
 
