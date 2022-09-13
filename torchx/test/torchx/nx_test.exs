@@ -62,24 +62,29 @@ defmodule Torchx.NxTest do
 
         test_binary_op(op, type_a, type_b)
       end
+    end
 
-      test "#{op}(#{Nx.Type.to_string(type_a)}, #{Nx.Type.to_string(type_b)}) broadcast" do
+    # to avoid exploding numbers, we'll not test broadcast with type mixing
+    for op <- @ops ++ @logical_ops,
+        type <- @types,
+        not (op in (@ops_unimplemented_for_bfloat ++ @ops_with_bfloat_specific_result) and
+               type == {:bf, 16}) do
+      test "#{op}(#{Nx.Type.to_string(type)}, #{Nx.Type.to_string(type)}) broadcast" do
         op = unquote(op)
-        type_a = unquote(type_a)
-        type_b = unquote(type_b)
+        type = unquote(type)
 
         data_a = 1
         data_b = [1, 2, 3]
 
         # assert that scalars broadcast both on the left and the right
-        test_binary_op(op, data_a, data_b, type_a, type_b)
-        test_binary_op(op, data_b, data_a, type_b, type_a)
+        test_binary_op(op, data_a, data_b, type, type)
+        test_binary_op(op, data_b, data_a, type, type)
 
         # assert that multi-dim tensors will broadcast as well
         data_a = [[1], [2]]
         data_b = [[1, 2, 3], [4, 5, 6]]
-        test_binary_op(op, data_a, data_b, type_a, type_b)
-        test_binary_op(op, data_b, data_a, type_b, type_a)
+        test_binary_op(op, data_a, data_b, type, type)
+        test_binary_op(op, data_b, data_a, type, type)
       end
     end
   end
