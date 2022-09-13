@@ -1251,17 +1251,18 @@ defmodule Nx.Shape do
   end
 
   @doc """
-  Returns shape if valid and raises error if not.
+  Returns {batch_shape, matrix_shape} if valid and raises error if not.
   """
   def take_diagonal(shape)
 
-  def take_diagonal({len, breadth}) do
-    {len, breadth}
+  def take_diagonal(shape) when tuple_size(shape) > 1 do
+    {batch_shape, matrix_shape} = shape |> Tuple.to_list() |> Enum.split(-2)
+    {List.to_tuple(batch_shape), List.to_tuple(matrix_shape)}
   end
 
   def take_diagonal(invalid_shape) do
     raise ArgumentError,
-          "take_diagonal/2 expects tensor of rank 2, got tensor of rank: #{tuple_size(invalid_shape)}"
+          "take_diagonal/2 expects tensor of rank 2 or higher, got tensor of rank: #{tuple_size(invalid_shape)}"
   end
 
   @doc """
