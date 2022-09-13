@@ -1361,13 +1361,13 @@ defmodule Nx do
   end
 
   @doc """
-  Extracts the diagonal of a 2D tensor.
+  Extracts the diagonal of batched matrices.
 
   Converse of `make_diagonal/2`.
 
   ## Examples
 
-  Given a 2D tensor without offset:
+  Given a matrix without offset:
 
       iex> Nx.take_diagonal(Nx.tensor([
       ...> [0, 1, 2],
@@ -1379,7 +1379,7 @@ defmodule Nx do
         [0, 4, 8]
       >
 
-  And if given a 2D tensor along with an offset:
+  And if given a matrix along with an offset:
 
       iex> Nx.take_diagonal(Nx.iota({3, 3}), offset: 1)
       #Nx.Tensor<
@@ -1393,6 +1393,28 @@ defmodule Nx do
         [3, 7]
       >
 
+  Given batched matrix:
+
+      iex> Nx.take_diagonal(Nx.iota({3, 2, 2}))
+      #Nx.Tensor<
+        s64[3][2]
+        [
+          [0, 3],
+          [4, 7],
+          [8, 11]
+        ]
+      >
+
+      iex> Nx.take_diagonal(Nx.iota({3, 2, 2}), offset: -1)
+      #Nx.Tensor<
+        s64[3][1]
+        [
+          [2],
+          [6],
+          [10]
+        ]
+      >
+
   ## Options
 
     * `:offset` - offset used for extracting the diagonal.
@@ -1403,7 +1425,7 @@ defmodule Nx do
   ## Error cases
 
       iex> Nx.take_diagonal(Nx.tensor([0, 1, 2]))
-      ** (ArgumentError) take_diagonal/2 expects tensor of rank 2, got tensor of rank: 1
+      ** (ArgumentError) take_diagonal/2 expects tensor of rank 2 or higher, got tensor of rank: 1
 
       iex> Nx.take_diagonal(Nx.iota({3, 3}), offset: 3)
       ** (ArgumentError) offset must be less than length of axis 1 when positive, got: 3
@@ -1417,12 +1439,19 @@ defmodule Nx do
 
     opts = keyword!(opts, offset: 0)
 
-    shape = Nx.Shape.take_diagonal(tensor.shape)
+    {batch_shape, matrix_shape} = Nx.Shape.take_diagonal(tensor.shape)
     offset = opts[:offset]
 
-    Nx.Shape.validate_diag_offset!(shape, offset)
+    Nx.Shape.validate_diag_offset!(matrix_shape, offset)
 
-    Nx.gather(tensor, diag_indices(shape, offset))
+    t = Nx.gather(tensor, diag_indices(tensor.shape, offset))
+
+    if batch_shape == {} do
+      t
+    else
+      diag_length = div(Nx.size(t), Tuple.product(batch_shape))
+      Nx.reshape(t, Tuple.append(batch_shape, diag_length))
+    end
   end
 
   @doc """
@@ -1678,7 +1707,7 @@ defmodule Nx do
 
   # Returns the indices of the diagonal of a tensor of the given shape
   defp diag_indices(shape, offset) do
-    {len, breadth} = shape
+    {batch_shape, [len, breadth]} = Enum.split(Tuple.to_list(shape), -2)
 
     indices =
       case offset do
@@ -1689,7 +1718,22 @@ defmodule Nx do
           Enum.zip_with(-i..(len - 1), 0..(breadth - 1), fn x, y -> [x, y] end)
       end
 
-    Nx.tensor(indices)
+    case batch_indices(batch_shape) do
+      [] ->
+        indices
+
+      batch_indices ->
+        Enum.flat_map(batch_indices, fn batch_index -> Enum.map(indices, &(batch_index ++ &1)) end)
+    end
+    |> Nx.tensor()
+  end
+
+  defp batch_indices([]), do: []
+
+  defp batch_indices([n]), do: Enum.map(0..(n - 1), &[&1])
+
+  defp batch_indices([axis_length | shape]) do
+    for i <- 0..(axis_length - 1), n <- batch_indices(shape), do: [i | n]
   end
 
   @doc """
