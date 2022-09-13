@@ -385,6 +385,7 @@ defmodule Nx do
   @type shape :: number() | Nx.Tensor.t() | Nx.Tensor.shape()
   @type axis :: Nx.Tensor.axis()
   @type axes :: Nx.Tensor.axes()
+  @type template :: Nx.Tensor.t(%Nx.TemplateBackend{})
 
   @file_version 1
 
@@ -816,9 +817,9 @@ defmodule Nx do
   """
   @doc type: :conversion
   def to_template(tensor_or_container) do
-    Nx.Defn.Composite.traverse(tensor_or_container, fn tensor ->
-      %{to_tensor(tensor) | data: %Nx.TemplateBackend{}}
-    end)
+    tensor_or_container
+    |> Nx.Defn.Composite.lazy_traverse(:ok, fn template, _fun, :ok -> {template, :ok} end)
+    |> then(fn {template, :ok} -> template end)
   end
 
   @doc """
@@ -3425,12 +3426,9 @@ defmodule Nx do
   """
   @doc type: :backend
   def backend_deallocate(tensor_or_container) do
-    Nx.Defn.Composite.reduce(tensor_or_container, :ok, fn tensor, :ok ->
-      if is_number(tensor) do
-        :ok
-      else
-        impl!(tensor).backend_deallocate(tensor)
-      end
+    Nx.Defn.Composite.reduce(tensor_or_container, :ok, fn
+      %Nx.Tensor{} = tensor, :ok -> impl!(tensor).backend_deallocate(tensor)
+      _, :ok -> :ok
     end)
   end
 

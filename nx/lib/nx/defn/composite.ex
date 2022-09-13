@@ -94,6 +94,25 @@ defmodule Nx.Defn.Composite do
     do: Nx.Container.traverse(container, acc, &traverse(&1, &2, fun))
 
   @doc """
+  Traverses the given composite types with `acc` and `fun` using `Nx.LazyContainer`.
+
+  If a composite tensor is given, such as a tuple, the composite
+  type is recursively traversed and returned.
+
+  `fun` receives the tensor template, a function that builds the tensor,
+  and the accumulator.
+  """
+  def lazy_traverse(expr, acc, fun) when is_tensor(expr) and is_function(fun, 3) do
+    tensor = Nx.to_tensor(expr)
+    fun.(%{tensor | data: %Nx.TemplateBackend{}}, fn -> tensor end, acc)
+  end
+
+  def lazy_traverse(container, acc, fun) do
+    # Nx.LazyContainer is by default recursive over this function.
+    Nx.LazyContainer.traverse(container, acc, fun)
+  end
+
+  @doc """
   Reduces the given composite types with `acc` and `fun`.
 
   If composite tensor expressions are given, such as a tuple,
