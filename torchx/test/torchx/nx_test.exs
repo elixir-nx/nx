@@ -938,6 +938,32 @@ defmodule Torchx.NxTest do
         ])
       )
     end
+
+    test "output_permutation" do
+      assert_all_close(
+        Nx.conv(Nx.iota({1, 3, 3, 6}), Nx.broadcast(1, {2, 6, 1, 1}),
+          input_permutation: [0, 3, 1, 2],
+          output_permutation: [0, 3, 1, 2]
+        ),
+        Nx.tensor([
+          [
+            [15.0, 15.0],
+            [51.0, 51.0],
+            [87.0, 87.0]
+          ],
+          [
+            [123.0, 123.0],
+            [159.0, 159.0],
+            [195.0, 195.0]
+          ],
+          [
+            [231.0, 231.0],
+            [267.0, 267.0],
+            [303.0, 303.0]
+          ]
+        ])
+      )
+    end
   end
 
   describe "window_max" do

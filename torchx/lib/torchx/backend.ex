@@ -783,7 +783,9 @@ defmodule Torchx.Backend do
     def unquote(op)(out, l, r) do
       {left, right} = maybe_cast_u8(l, r)
 
-      Torchx.unquote(op)(from_nx(left), from_nx(right))
+      {left_tx, right_tx} = maybe_broadcast_bin_args(out.shape, left, right)
+
+      Torchx.unquote(op)(left_tx, right_tx)
       |> to_nx(out)
     end
   end
@@ -799,6 +801,28 @@ defmodule Torchx.Backend do
 
   defp maybe_cast_u8(left, right),
     do: {left, right}
+
+  defp maybe_broadcast_bin_args(_out_shape, %{shape: {}} = l, r), do: {from_nx(l), from_nx(r)}
+  defp maybe_broadcast_bin_args(_out_shape, l, %{shape: {}} = r), do: {from_nx(l), from_nx(r)}
+
+  defp maybe_broadcast_bin_args(out_shape, l, r) do
+    l_tx =
+      case l.shape do
+        ^out_shape ->
+          from_nx(l)
+
+        _ ->
+          l |> from_nx() |> Torchx.broadcast_to(out_shape)
+      end
+
+    r_tx =
+      case r.shape do
+        ^out_shape -> from_nx(r)
+        _ -> r |> from_nx() |> Torchx.broadcast_to(out_shape)
+      end
+
+    {l_tx, r_tx}
+  end
 
   for op <- [:bitwise_and, :bitwise_or, :bitwise_xor] do
     @impl true
@@ -1203,7 +1227,17 @@ defmodule Torchx.Backend do
 
     input_permutation = opts[:input_permutation]
     kernel_permutation = opts[:kernel_permutation]
-    output_permutation = opts[:output_permutation]
+
+    output_permutation =
+      case opts[:output_permutation] do
+        nil ->
+          nil
+
+        l ->
+          # The permutation that Nx.Shape expects is actually the reverse permutation
+          # for the given input
+          l |> Enum.with_index() |> Enum.sort() |> Enum.map(&elem(&1, 1))
+      end
 
     pad_config = flatten_padding(padding)
 
