@@ -34,10 +34,10 @@ defmodule Torchx.NxTest do
     binary_a = Nx.backend_copy(a, Nx.BinaryBackend)
     binary_b = Nx.backend_transfer(b, Nx.BinaryBackend)
     binary_c = Kernel.apply(Nx, op, [binary_a, binary_b])
-    assert_equal(c, binary_c)
+    assert_all_close(c, binary_c)
 
     mixed_c = Kernel.apply(Nx, op, [a, binary_b])
-    assert_equal(mixed_c, binary_c)
+    assert_all_close(mixed_c, binary_c)
   end
 
   defp test_unary_op(op, data \\ [[1, 2], [3, 4]], type) do
@@ -61,6 +61,30 @@ defmodule Torchx.NxTest do
         type_b = unquote(type_b)
 
         test_binary_op(op, type_a, type_b)
+      end
+    end
+
+    # to avoid exploding numbers, we'll not test broadcast with type mixing
+    for op <- @ops ++ @logical_ops,
+        type <- @types,
+        not (op in (@ops_unimplemented_for_bfloat ++ @ops_with_bfloat_specific_result) and
+               type == {:bf, 16}) do
+      test "#{op}(#{Nx.Type.to_string(type)}, #{Nx.Type.to_string(type)}) broadcast" do
+        op = unquote(op)
+        type = unquote(type)
+
+        data_a = 1
+        data_b = [1, 2, 3]
+
+        # assert that scalars broadcast both on the left and the right
+        test_binary_op(op, data_a, data_b, type, type)
+        test_binary_op(op, data_b, data_a, type, type)
+
+        # assert that multi-dim tensors will broadcast as well
+        data_a = [[1], [2]]
+        data_b = [[1, 2, 3], [4, 5, 6]]
+        test_binary_op(op, data_a, data_b, type, type)
+        test_binary_op(op, data_b, data_a, type, type)
       end
     end
   end
@@ -934,6 +958,32 @@ defmodule Torchx.NxTest do
               [35.0],
               [30.0]
             ]
+          ]
+        ])
+      )
+    end
+
+    test "output_permutation" do
+      assert_all_close(
+        Nx.conv(Nx.iota({1, 3, 3, 6}), Nx.broadcast(1, {2, 6, 1, 1}),
+          input_permutation: [0, 3, 1, 2],
+          output_permutation: [0, 3, 1, 2]
+        ),
+        Nx.tensor([
+          [
+            [15.0, 15.0],
+            [51.0, 51.0],
+            [87.0, 87.0]
+          ],
+          [
+            [123.0, 123.0],
+            [159.0, 159.0],
+            [195.0, 195.0]
+          ],
+          [
+            [231.0, 231.0],
+            [267.0, 267.0],
+            [303.0, 303.0]
           ]
         ])
       )
