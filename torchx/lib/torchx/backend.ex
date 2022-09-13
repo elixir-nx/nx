@@ -781,26 +781,29 @@ defmodule Torchx.Backend do
   for op <- binary_ops do
     @impl true
     def unquote(op)(out, l, r) do
-      {left, right} = maybe_cast_u8(l, r)
+      {left, right} = maybe_upcast(l, r)
 
       {left_tx, right_tx} = maybe_broadcast_bin_args(out.shape, left, right)
 
       Torchx.unquote(op)(left_tx, right_tx)
+      |> Torchx.to_type(to_torch_type(out.type))
       |> to_nx(out)
     end
   end
 
-  defp maybe_cast_u8(%T{type: {t, _}} = left, %T{type: {t, _}} = right),
+  defp maybe_upcast(%T{type: t} = left, %T{type: t} = right),
     do: {left, right}
 
-  defp maybe_cast_u8(%T{type: {:u, 8}} = left, %T{} = right),
-    do: {Nx.as_type(left, {:s, 16}), right}
+  defp maybe_upcast(%T{type: {:u, 8}} = left, %T{} = right),
+    do: maybe_upcast(Nx.as_type(left, {:s, 16}), right)
 
-  defp maybe_cast_u8(%T{} = left, %T{type: {:u, 8}} = right),
-    do: {left, Nx.as_type(right, {:s, 16})}
+  defp maybe_upcast(%T{} = left, %T{type: {:u, 8}} = right),
+    do: maybe_upcast(left, Nx.as_type(right, {:s, 16}))
 
-  defp maybe_cast_u8(left, right),
-    do: {left, right}
+  defp maybe_upcast(left, right) do
+    type = Nx.Type.merge(left.type, right.type)
+    {Nx.as_type(left, type), Nx.as_type(right, type)}
+  end
 
   defp maybe_broadcast_bin_args(_out_shape, %{shape: {}} = l, r), do: {from_nx(l), from_nx(r)}
   defp maybe_broadcast_bin_args(_out_shape, l, %{shape: {}} = r), do: {from_nx(l), from_nx(r)}
@@ -827,7 +830,7 @@ defmodule Torchx.Backend do
   for op <- [:bitwise_and, :bitwise_or, :bitwise_xor] do
     @impl true
     def unquote(op)(out, l, r) do
-      {left, right} = maybe_cast_u8(l, r)
+      {left, right} = maybe_upcast(l, r)
 
       %T{type: {_, size_left}} = left
       %T{type: {_, size_right}} = right
