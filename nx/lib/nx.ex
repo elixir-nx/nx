@@ -4016,10 +4016,10 @@ defmodule Nx do
       >
 
       iex> left = Nx.tensor([[10, 20]], type: {:u, 8}, names: [:x, :y])
-      iex> right = Nx.tensor([[1], [2]], type: {:u, 32})
+      iex> right = Nx.tensor([[1], [2]], type: {:u, 64})
       iex> Nx.quotient(left, right)
       #Nx.Tensor<
-        u32[x: 2][y: 2]
+        u64[x: 2][y: 2]
         [
           [10, 20],
           [5, 10]
