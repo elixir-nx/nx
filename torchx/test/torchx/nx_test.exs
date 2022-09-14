@@ -1201,4 +1201,13 @@ defmodule Torchx.NxTest do
       assert_equal(result, Nx.take_along_axis(t, Nx.as_type(i, {:u, 8})))
     end
   end
+
+  describe "squeeze" do
+    test "squeezes only the given axes" do
+      t = Nx.iota({1, 1, 1, 2, 3, 1})
+      result = Nx.iota({1, 2, 3, 1})
+
+      assert_equal(result, Nx.squeeze(t, axes: [1, 2]))
+    end
+  end
 end

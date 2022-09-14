@@ -246,8 +246,15 @@ defmodule Torchx.Backend do
     do: Torchx.to_type(from_nx(t), to_torch_type(type)) |> to_nx(out)
 
   @impl true
-  def squeeze(out, %T{} = t, _axes) do
-    Torchx.squeeze(from_nx(t)) |> to_nx(out)
+  def squeeze(out, %T{} = t, axes) do
+    # sort the axes desc so we don't have to decrease the axis numbers after each squeeze
+    result =
+      for axis <- Enum.sort(axes, :desc), reduce: from_nx(t) do
+        t_tx ->
+          Torchx.squeeze(t_tx, axis)
+      end
+
+    to_nx(result, out)
   end
 
   @impl true
