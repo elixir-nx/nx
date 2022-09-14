@@ -3063,9 +3063,8 @@ defmodule Nx do
     end
   end
 
-  def compatible?(left, right) when is_number(left), do: compatible?(to_tensor(left), right)
-  def compatible?(left, right) when is_number(right), do: compatible?(left, to_tensor(right))
-  def compatible?(left, right), do: Nx.Defn.Composite.compatible?(left, right, &compatible?/2)
+  def compatible?(left, right),
+    do: Nx.Defn.Composite.compatible?(left, right, &compatible?(to_tensor(&1), to_tensor(&2)))
 
   defp compatible_names?([name | lnames], [name | rnames]), do: compatible_names?(lnames, rnames)
   defp compatible_names?([nil | lnames], [_ | rnames]), do: compatible_names?(lnames, rnames)

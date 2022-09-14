@@ -504,8 +504,10 @@ defmodule Nx.Defn do
     end
 
     case args do
-      [input, acc | _] ->
+      [input, acc | rest] ->
         acc = Nx.Defn.Composite.traverse(acc, &Nx.to_tensor/1)
+        args = [input, acc | rest]
+
         opts = prepare_options(opts)
         flatten = Nx.Defn.Composite.flatten_runtime_args(args, [])
 

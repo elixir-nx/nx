@@ -17,7 +17,7 @@ defprotocol Nx.LazyContainer do
   @fallback_to_any true
 
   @doc """
-  Traverses tensors in a data structure with `acc` and `fun`.
+  Traverses recursively tensors in a data structure with `acc` and `fun`.
 
   For each tensor in the container, `fun` receives a tensor
   template, an anonymous function to build the actual tensor,

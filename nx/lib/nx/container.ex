@@ -38,7 +38,7 @@ defprotocol Nx.Container do
   @fallback_to_any true
 
   @doc """
-  Traverses tensors in a data structure with `acc` and `fun`.
+  Traverses non-recursively tensors in a data structure with `acc` and `fun`.
 
   `fun` is invoked with each tensor or tensor container in the
   data structure plus an accumulator. It must return a two element
@@ -53,7 +53,7 @@ defprotocol Nx.Container do
   def traverse(data, acc, fun)
 
   @doc """
-  Reduces tensors in a data structure with `acc` and `fun`.
+  Reduces non-recursively tensors in a data structure with `acc` and `fun`.
 
   `fun` is invoked with each tensor or tensor container in the
   data structure plus an accumulator. It must return the new

@@ -3,6 +3,10 @@ defmodule Nx.Defn.Composite do
   Functions to deal with composite data types according to `Nx.Container`.
 
   The functions in this module can be used both inside and outside `defn`.
+  Note the functions in this module traverses tensors, but it does not
+  automatically convert values to tensors. For example, the tuple `{1, 2, 3}`
+  once traversed will emit the numbers `1`, `2`, and `3`. If desired,
+  you can invoke `Nx.to_tensor/1` to normalize them.
   """
 
   alias Nx.Defn.Expr
@@ -27,8 +31,21 @@ defmodule Nx.Defn.Composite do
   end
 
   def compatible?(%mod{} = left, %mod{} = right, fun) do
-    left = Nx.Container.reduce(left, [], &[&1 | &2])
-    right = Nx.Container.reduce(right, [], &[&1 | &2])
+    # LazyContainer is fully recursive but we don't want to go full recursive
+    # unless we have to, so we can also compare structures along the way.
+    {left, right} =
+      case Nx.LazyContainer.impl_for(left) do
+        Nx.LazyContainer.Any ->
+          left = Nx.Container.reduce(left, [], &[&1 | &2])
+          right = Nx.Container.reduce(right, [], &[&1 | &2])
+          {left, right}
+
+        impl ->
+          {_, left} = impl.traverse(left, [], fn template, _fun, acc -> [template | acc] end)
+          {_, right} = impl.traverse(right, [], fn template, _fun, acc -> [template | acc] end)
+          {left, right}
+      end
+
     Enum.zip(left, right) |> Enum.all?(fn {l, r} -> compatible?(l, r, fun) end)
   end
 
@@ -65,7 +82,7 @@ defmodule Nx.Defn.Composite do
   defp count(container, acc), do: Nx.Container.reduce(container, acc, &count/2)
 
   @doc """
-  Traverses the given composite types with `fun`.
+  Traverses recursively the given composite types with `fun`.
 
   If a composite tensor is given, such as a tuple, the composite
   type is recursively traversed and returned.
@@ -79,7 +96,7 @@ defmodule Nx.Defn.Composite do
   end
 
   @doc """
-  Traverses the given composite types with `acc` and `fun`.
+  Traverses recursively the given composite types with `acc` and `fun`.
 
   If a composite tensor is given, such as a tuple, the composite
   type is recursively traversed and returned.
@@ -94,7 +111,7 @@ defmodule Nx.Defn.Composite do
     do: Nx.Container.traverse(container, acc, &traverse(&1, &2, fun))
 
   @doc """
-  Traverses the given composite types with `acc` and `fun` using `Nx.LazyContainer`.
+  Traverses recursively the given composite types with `acc` and `fun` using `Nx.LazyContainer`.
 
   If a composite tensor is given, such as a tuple, the composite
   type is recursively traversed and returned.
@@ -113,7 +130,7 @@ defmodule Nx.Defn.Composite do
   end
 
   @doc """
-  Reduces the given composite types with `acc` and `fun`.
+  Reduces recursively the given composite types with `acc` and `fun`.
 
   If composite tensor expressions are given, such as a tuple,
   the composite type is recursively traversed and returned.
@@ -128,7 +145,7 @@ defmodule Nx.Defn.Composite do
     do: Nx.Container.reduce(container, acc, &reduce(&1, &2, fun))
 
   @doc """
-  Flattens the given list of composite types.
+  Flattens recursively the given list of composite types.
 
   Elements that are not tensors (i.e. numbers and `Complex` numbers) are kept as is
   unless a custom function is given.
