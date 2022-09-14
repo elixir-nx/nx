@@ -241,7 +241,7 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  defp maybe_pad_binary(bin, {_, size} = type) when type in [{:u, 16}, {:u, 32}] do
+  defp maybe_pad_binary(bin, {:u, size}) when size in [16, 32] do
     double_size = size * 2
     for <<x::native-size(size) <- bin>>, into: <<>>, do: <<x::native-size(double_size)>>
   end
