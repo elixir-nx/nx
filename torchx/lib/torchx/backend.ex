@@ -9,10 +9,20 @@ defmodule Torchx.Backend do
         iex> Nx.tensor([1, 2, 3], type: {:u, 16}, backend: Torchx.Backend)
         ** (ArgumentError) Torchx does not support unsigned 16 bit integer
 
-    2. Torchx doesn't support u8 on sums, you should convert input to signed integer.
+    2. Torchx emulates the u64 type by using s64, because Pytorch doesn't provide an u64 integer type.
+       Overflows will appear to work correctly during inspection, but keep in mind that the underlying
+       value is actually negative. The actual positive values are only kept until the maximum u32 integer.
 
-        iex> Nx.sum(Nx.tensor([1, 2, 3], type: {:u, 8}, backend: Torchx.Backend))
-        ** (ArgumentError) Torchx does not support unsigned 64 bit integer (explicitly cast the input tensor to a signed integer before taking sum)
+        iex> t = Nx.Constants.max_finite({:u, 64})
+        #Nx.Tensor<
+          u64
+          18446744073709551615
+        >
+        iex> t |> Torchx.from_nx() |> Torchx.to_nx()
+        #Nx.Tensor<
+          s64
+          -1
+        >
 
     3. Torchx rounds half-to-even, while Elixir rounds half-away-from-zero.
        So in Elixir `round(0.5) == 1.0` while in Torchx `round(0.5) == 0.0`.
@@ -564,8 +574,6 @@ defmodule Torchx.Backend do
 
   @impl true
   def sum(%T{type: out_type} = out, %T{} = t, opts) do
-    check_type!(out_type)
-
     axes = opts[:axes] || []
     keep_axes = opts[:keep_axes] || false
 
@@ -577,8 +585,6 @@ defmodule Torchx.Backend do
 
   @impl true
   def product(%T{type: out_type} = out, %T{} = t, opts) do
-    check_type!(out_type)
-
     axes = opts[:axes] || []
     keep_axes = opts[:keep_axes] || false
 
@@ -730,13 +736,11 @@ defmodule Torchx.Backend do
 
   @impl true
   def cumulative_sum(%T{type: out_type} = out, %T{} = t, opts) do
-    check_type!(out_type)
     cumulative_op(out, t, opts, &Torchx.cumulative_sum/2)
   end
 
   @impl true
   def cumulative_product(%T{type: out_type} = out, %T{} = t, opts) do
-    check_type!(out_type)
     cumulative_op(out, t, opts, &Torchx.cumulative_product/2)
   end
 
@@ -1569,6 +1573,7 @@ defmodule Torchx.Backend do
   defp to_torch_type({:s, 8}, _), do: :char
   defp to_torch_type({:s, 16}, _), do: :short
   defp to_torch_type({:s, 32}, _), do: :int
+  defp to_torch_type({:u, 64}, _), do: :long
   defp to_torch_type({:s, 64}, _), do: :long
   defp to_torch_type({:bf, 16}, _), do: :brain
   defp to_torch_type({:f, 16}, _), do: :half
@@ -1586,7 +1591,7 @@ defmodule Torchx.Backend do
     defp check_shape_and_type!(device_ref, shape, type) do
       current_type = Torchx.scalar_type(device_ref) |> from_torch_type()
 
-      if current_type != type do
+      if not (current_type == {:s, 64} and type == {:u, 64}) and current_type != type do
         raise "type mismatch in Torchx: expected #{inspect(type)}, got: #{inspect(current_type)}. " <>
                 "Please report this bug"
       end
@@ -1629,13 +1634,6 @@ defmodule Torchx.Backend do
       Process.info(self(), :current_stacktrace) |> elem(1) |> Enum.fetch!(depth)
 
     "#{inspect(module)}.#{func}/#{arity - 1}"
-  end
-
-  defp check_type!(type) do
-    to_torch_type(
-      type,
-      " (explicitly cast the input tensor to a signed integer before taking sum)"
-    )
   end
 
   ## Functionality we can't provide
