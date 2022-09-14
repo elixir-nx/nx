@@ -20,20 +20,11 @@ void CopyLiteralToBinary(xla::Literal* literal, ErlNifBinary* binary, exla::int6
 }
 
 xla::StatusOr<ERL_NIF_TERM> ExlaBuffer::ToBinary(ErlNifEnv* env, exla::int64 size) {
-  EXLA_EFFECT_OR_RETURN(buffer_->BlockHostUntilReady());
+  // ToLiteral() is as synchronous operation (renamed to ToLiteralSync()
+  // in XLA 2.9+) that uses the host shape by default.
   EXLA_ASSIGN_OR_RETURN(std::shared_ptr<xla::Literal> literal, buffer_->ToLiteral());
-
   ErlNifBinary binary;
-
-  xla::Shape host_shape = xla::ShapeUtil::MakeShape(buffer_->on_device_shape().element_type(), buffer_->on_device_shape().dimensions());
-
-  if (xla::LayoutUtil::LayoutsInShapesEqual(host_shape, literal->shape())) {
-    CopyLiteralToBinary(literal.get(), &binary, size);
-  } else {
-    xla::Literal new_literal = literal->Relayout(host_shape);
-    CopyLiteralToBinary(&new_literal, &binary, size);
-  }
-
+  CopyLiteralToBinary(literal.get(), &binary, size);
   return nif::make(env, binary);
 }
 
@@ -52,8 +43,6 @@ xla::Status ExlaBuffer::Deallocate() {
 }
 
 xla::StatusOr<ExlaBuffer *> ExlaBuffer::CopyToDevice(xla::PjRtDevice * dst_device) {
-  // TODO: On TPUs buffers might reside on different hosts which requires
-  // a different API
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtBuffer> buf,
       buffer_->CopyToDevice(dst_device));
   return new ExlaBuffer(std::move(buf));

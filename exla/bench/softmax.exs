@@ -9,7 +9,7 @@ defmodule Softmax do
   defn softmax(n), do: Nx.exp(n) / Nx.sum(Nx.exp(n))
 end
 
-host_jit = EXLA.jit(&Softmax.softmax/1)
+will_jit = EXLA.jit(&Softmax.softmax/1)
 
 benches = %{
   "elixir f32" => fn -> Softmax.softmax(t32) end,
