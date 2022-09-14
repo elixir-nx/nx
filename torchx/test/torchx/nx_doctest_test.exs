@@ -13,11 +13,6 @@ defmodule Torchx.NxDoctestTest do
     :ok
   end
 
-  @temporarily_broken_doctests [
-    # broadcast - shape mismatch in one test
-    broadcast: 3
-  ]
-
   @rounding_error_doctests [
     atanh: 1,
     ceil: 1,
@@ -67,7 +62,6 @@ defmodule Torchx.NxDoctestTest do
   doctest Nx,
     except:
       @unimplemented_window_dilations_doctests
-      |> Kernel.++(@temporarily_broken_doctests)
       |> Kernel.++(@rounding_error_doctests)
       |> Kernel.++(@os_rounding_error_doctests)
       |> Kernel.++(@inherently_unsupported_doctests)

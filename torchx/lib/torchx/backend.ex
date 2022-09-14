@@ -269,12 +269,33 @@ defmodule Torchx.Backend do
 
   @impl true
   def broadcast(out, %T{} = t, shape, axes) do
-    Torchx.broadcast_to(maybe_reshape(t, shape, axes) |> from_nx(), shape)
+    t
+    |> maybe_reshape(shape, axes)
+    |> from_nx()
+    |> Torchx.broadcast_to(shape)
     |> to_nx(out)
   end
 
-  defp maybe_reshape(%T{shape: {n}} = t, {n, _}, [0]), do: Nx.reshape(t, {n, 1})
-  defp maybe_reshape(%T{} = t, _, _), do: t
+  defp maybe_reshape(%T{shape: {}} = t, target_shape, _axes) do
+    shape = 1 |> List.duplicate(tuple_size(target_shape)) |> List.to_tuple()
+    Nx.reshape(t, shape)
+  end
+
+  defp maybe_reshape(%T{shape: shape} = t, target_shape, axes) do
+    base_broadcast_shape = 1 |> List.duplicate(tuple_size(target_shape)) |> List.to_tuple()
+
+    new_shape =
+      shape
+      |> Tuple.to_list()
+      |> Enum.zip(axes)
+      |> Enum.reduce(base_broadcast_shape, fn {dim_size, target_axis}, shape_acc ->
+        shape_acc
+        |> Tuple.delete_at(target_axis)
+        |> Tuple.insert_at(target_axis, dim_size)
+      end)
+
+    Nx.reshape(t, new_shape)
+  end
 
   @impl true
   def transpose(out, %T{} = t, axes) do
