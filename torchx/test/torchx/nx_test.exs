@@ -455,6 +455,15 @@ defmodule Torchx.NxTest do
       )
     end
 
+    test "dot with mixed backends" do
+      t1 = Nx.tensor([1, 2, 3], backend: Torchx.Backend)
+      t2 = Nx.tensor([4, 5, 6], backend: Nx.BinaryBackend)
+
+      assert_equal(Nx.dot(t1, t2), Nx.tensor(32))
+
+      assert_equal(Nx.dot(t2, t1), Nx.tensor(32))
+    end
+
     test "make_diagonal" do
       t =
         [1, 2, 3]

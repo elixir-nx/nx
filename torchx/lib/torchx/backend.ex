@@ -972,10 +972,10 @@ defmodule Torchx.Backend do
   @impl true
   def dot(
         %T{type: out_type} = out,
-        %T{type: left_type, data: %TB{ref: left_ref}},
+        %T{type: left_type} = left,
         left_axes,
         left_batched_axes,
-        %T{type: right_type, data: %TB{ref: right_ref}},
+        %T{type: right_type} = right,
         right_axes,
         right_batched_axes
       ) do
@@ -984,9 +984,12 @@ defmodule Torchx.Backend do
     left_axes = translate_to_inner_axes(left_axes, left_batched_axes)
     right_axes = translate_to_inner_axes(right_axes, right_batched_axes)
 
+    left_tx = from_nx(left)
+    right_tx = from_nx(right)
+
     Torchx.tensordot(
-      to_typed_ref(left_ref, left_type, out_type),
-      to_typed_ref(right_ref, right_type, out_type),
+      to_typed_ref(left_tx, left_type, out_type),
+      to_typed_ref(right_tx, right_type, out_type),
       left_axes,
       left_batched_axes,
       right_axes,
