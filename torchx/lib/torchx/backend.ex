@@ -4,30 +4,25 @@ defmodule Torchx.Backend do
 
   Torchx behaviour that is different from BinaryBackend:
 
-    1. Torchx doesn't support u16/u32/u64. Only u8 is supported.
+    1. Torchx emulates the u16/u32/u64 unsigned integers using signed integers.
+       In practice this means u64 actually overflows at u32. When accessing the
+       underlying tensor, you will get signed integers back.
 
-        iex> Nx.tensor([1, 2, 3], type: {:u, 16}, backend: Torchx.Backend)
-        ** (ArgumentError) Torchx does not support unsigned 16 bit integer
-
-    2. Torchx emulates the u64 type by using s64, because Pytorch doesn't provide an u64 integer type.
-       Overflows will appear to work correctly during inspection, but keep in mind that the underlying
-       value is actually negative. The actual positive values are only kept until the maximum u32 integer.
-
-        iex> t = Nx.Constants.max_finite({:u, 64})
+        iex> t = Nx.Constants.max_finite({:u, 32})
         #Nx.Tensor<
-          u64
-          18446744073709551615
+          u32
+          4294967295
         >
         iex> t |> Torchx.from_nx() |> Torchx.to_nx()
         #Nx.Tensor<
           s64
-          -1
+          4294967295
         >
 
-    3. Torchx rounds half-to-even, while Elixir rounds half-away-from-zero.
+    2. Torchx rounds half-to-even, while Elixir rounds half-away-from-zero.
        So in Elixir `round(0.5) == 1.0` while in Torchx `round(0.5) == 0.0`.
 
-    4. `Nx.as_type/2` converts non-finite values such as infinity becomes the
+    3. `Nx.as_type/2` converts non-finite values such as infinity becomes the
        maximum value for a type, negative infinity becomes the minimum value,
        and nan becomes zero. `Torchx` behaviour is type dependent with no clear
        rule across types.
@@ -236,14 +231,22 @@ defmodule Torchx.Backend do
 
   @impl true
   def from_binary(%T{type: type, shape: shape} = out, binary, backend_options) do
-    Torchx.from_blob(
-      binary,
+    binary
+    |> maybe_pad_binary(type)
+    |> Torchx.from_blob(
       shape,
       to_torch_type(type),
       device_option(backend_options)
     )
     |> to_nx(out)
   end
+
+  defp maybe_pad_binary(bin, {_, size} = type) when type in [{:u, 16}, {:u, 32}] do
+    double_size = size * 2
+    for <<x::native-size(size) <- bin>>, into: <<>>, do: <<x::native-size(double_size)>>
+  end
+
+  defp maybe_pad_binary(bin, _), do: bin
 
   ## Shape
 
@@ -1546,9 +1549,18 @@ defmodule Torchx.Backend do
   def inspect(%T{} = tensor, inspect_opts) do
     limit = if inspect_opts.limit == :infinity, do: :infinity, else: inspect_opts.limit + 1
 
+    type =
+      case tensor.type do
+        {:u, 8} -> {:u, 8}
+        {:u, 16} -> {:s, 32}
+        {:u, 32} -> {:s, 64}
+        {:u, 64} -> {:s, 64}
+        t -> t
+      end
+
     tensor
     |> to_binary(min(limit, Nx.size(tensor)))
-    |> then(&Nx.Backend.inspect(tensor, &1, inspect_opts))
+    |> then(&Nx.Backend.inspect(%{tensor | type: type}, &1, inspect_opts))
     |> maybe_add_signature(tensor)
   end
 
@@ -1594,10 +1606,12 @@ defmodule Torchx.Backend do
 
   defp to_torch_type(nx_type, hint \\ "")
   defp to_torch_type({:u, 8}, _), do: :byte
+  defp to_torch_type({:u, 16}, _), do: :int
+  defp to_torch_type({:u, 32}, _), do: :long
+  defp to_torch_type({:u, 64}, _), do: :long
   defp to_torch_type({:s, 8}, _), do: :char
   defp to_torch_type({:s, 16}, _), do: :short
   defp to_torch_type({:s, 32}, _), do: :int
-  defp to_torch_type({:u, 64}, _), do: :long
   defp to_torch_type({:s, 64}, _), do: :long
   defp to_torch_type({:bf, 16}, _), do: :brain
   defp to_torch_type({:f, 16}, _), do: :half
@@ -1615,9 +1629,22 @@ defmodule Torchx.Backend do
     defp check_shape_and_type!(device_ref, shape, type) do
       current_type = Torchx.scalar_type(device_ref) |> from_torch_type()
 
-      if not (current_type == {:s, 64} and type == {:u, 64}) and current_type != type do
-        raise "type mismatch in Torchx: expected #{inspect(type)}, got: #{inspect(current_type)}. " <>
-                "Please report this bug"
+      case {current_type, type} do
+        {{:s, 32}, {:u, 16}} ->
+          :ok
+
+        {{:s, 64}, {:u, 32}} ->
+          :ok
+
+        {{:s, 64}, {:u, 64}} ->
+          :ok
+
+        _ when current_type != type ->
+          raise "type mismatch in Torchx: expected #{inspect(type)}, got: #{inspect(current_type)}. " <>
+                  "Please report this bug"
+
+        _ ->
+          :ok
       end
 
       current_shape = Torchx.shape(device_ref)

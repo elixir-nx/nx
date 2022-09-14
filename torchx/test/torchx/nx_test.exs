@@ -531,15 +531,12 @@ defmodule Torchx.NxTest do
     end
 
     test "quotient fails when using unsigned integers" do
-      assert_raise(
-        ArgumentError,
-        "Torchx does not support unsigned 32 bit integer",
-        fn ->
-          Nx.quotient(
-            Nx.tensor([[10, 20]], type: {:u, 8}),
-            Nx.tensor([[1], [2]], type: {:u, 32})
-          )
-        end
+      assert_equal(
+        Nx.tensor([[10, 20], [5, 10]], type: {:u, 32}),
+        Nx.quotient(
+          Nx.tensor([[10, 20]], type: {:u, 8}),
+          Nx.tensor([[1], [2]], type: {:u, 32})
+        )
       )
     end
 
