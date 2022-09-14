@@ -14,7 +14,6 @@ defmodule Torchx.NxDoctestTest do
   end
 
   @temporarily_broken_doctests [
-    # broadcast - shape mismatch in one test
     # mean - Torchx does not support unsigned 64 bit integer
     mean: 2,
     # quotient - Torchx does not support unsigned 32 bit integer
