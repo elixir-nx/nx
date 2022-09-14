@@ -4,11 +4,6 @@ defmodule EXLA.Defn.APITest do
   import Nx.Defn
   import ExUnit.CaptureLog
 
-  setup do
-    Nx.Defn.default_options(compiler: EXLA)
-    :ok
-  end
-
   describe "options" do
     defn add_two(a, b), do: a + b
 

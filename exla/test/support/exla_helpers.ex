@@ -2,7 +2,7 @@ defmodule EXLAHelpers do
   @doc """
   Returns the default EXLA client.
   """
-  def client(), do: EXLA.Client.fetch!(String.to_atom(System.get_env("EXLA_TARGET", "host")))
+  def client(), do: EXLA.Client.fetch!(EXLA.Client.default_name())
 
   @doc """
   Compiles the given function.

@@ -4,11 +4,6 @@ defmodule EXLA.Defn.ExprTest do
   import Nx, only: :sigils
   import Nx.Defn
 
-  setup do
-    Nx.Defn.default_options(compiler: EXLA)
-    :ok
-  end
-
   defp evaluate(fun, args) do
     fun |> Nx.Defn.jit(compiler: Nx.Defn.Evaluator) |> apply(args)
   end
