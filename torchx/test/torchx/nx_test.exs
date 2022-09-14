@@ -501,14 +501,10 @@ defmodule Torchx.NxTest do
       assert_equal(out, Nx.tensor([[[2], [5]], [[8], [11]]]))
     end
 
-    test "mean fails when using unsigned integers" do
+    test "mean works with emulated u64 when using unsigned integers" do
       t = Nx.tensor([1, 2, 3], type: {:u, 8}, names: [:x])
 
-      assert_raise(
-        ArgumentError,
-        "Torchx does not support unsigned 64 bit integer (explicitly cast the input tensor to a signed integer before taking sum)",
-        fn -> Nx.mean(t, axes: [:x]) end
-      )
+      assert_equal(Nx.mean(t, axes: [:x]), Nx.tensor(2))
     end
 
     test "quotient when dividing scalars" do
@@ -535,15 +531,12 @@ defmodule Torchx.NxTest do
     end
 
     test "quotient fails when using unsigned integers" do
-      assert_raise(
-        ArgumentError,
-        "Torchx does not support unsigned 32 bit integer",
-        fn ->
-          Nx.quotient(
-            Nx.tensor([[10, 20]], type: {:u, 8}),
-            Nx.tensor([[1], [2]], type: {:u, 32})
-          )
-        end
+      assert_equal(
+        Nx.tensor([[10, 20], [5, 10]], type: {:u, 32}),
+        Nx.quotient(
+          Nx.tensor([[10, 20]], type: {:u, 8}),
+          Nx.tensor([[1], [2]], type: {:u, 32})
+        )
       )
     end
 

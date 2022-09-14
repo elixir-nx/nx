@@ -13,13 +13,6 @@ defmodule Torchx.NxDoctestTest do
     :ok
   end
 
-  @temporarily_broken_doctests [
-    # mean - Torchx does not support unsigned 64 bit integer
-    mean: 2,
-    # quotient - Torchx does not support unsigned 32 bit integer
-    quotient: 2
-  ]
-
   @rounding_error_doctests [
     atanh: 1,
     ceil: 1,
@@ -69,7 +62,6 @@ defmodule Torchx.NxDoctestTest do
   doctest Nx,
     except:
       @unimplemented_window_dilations_doctests
-      |> Kernel.++(@temporarily_broken_doctests)
       |> Kernel.++(@rounding_error_doctests)
       |> Kernel.++(@os_rounding_error_doctests)
       |> Kernel.++(@inherently_unsupported_doctests)

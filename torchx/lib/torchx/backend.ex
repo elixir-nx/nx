@@ -4,20 +4,25 @@ defmodule Torchx.Backend do
 
   Torchx behaviour that is different from BinaryBackend:
 
-    1. Torchx doesn't support u16/u32/u64. Only u8 is supported.
+    1. Torchx emulates the u16/u32/u64 unsigned integers using signed integers.
+       In practice this means u64 actually overflows at u32. When accessing the
+       underlying tensor, you will get signed integers back.
 
-        iex> Nx.tensor([1, 2, 3], type: {:u, 16}, backend: Torchx.Backend)
-        ** (ArgumentError) Torchx does not support unsigned 16 bit integer
+        iex> t = Nx.Constants.max_finite({:u, 32})
+        #Nx.Tensor<
+          u32
+          4294967295
+        >
+        iex> t |> Torchx.from_nx() |> Torchx.to_nx()
+        #Nx.Tensor<
+          s64
+          4294967295
+        >
 
-    2. Torchx doesn't support u8 on sums, you should convert input to signed integer.
-
-        iex> Nx.sum(Nx.tensor([1, 2, 3], type: {:u, 8}, backend: Torchx.Backend))
-        ** (ArgumentError) Torchx does not support unsigned 64 bit integer (explicitly cast the input tensor to a signed integer before taking sum)
-
-    3. Torchx rounds half-to-even, while Elixir rounds half-away-from-zero.
+    2. Torchx rounds half-to-even, while Elixir rounds half-away-from-zero.
        So in Elixir `round(0.5) == 1.0` while in Torchx `round(0.5) == 0.0`.
 
-    4. `Nx.as_type/2` converts non-finite values such as infinity becomes the
+    3. `Nx.as_type/2` converts non-finite values such as infinity becomes the
        maximum value for a type, negative infinity becomes the minimum value,
        and nan becomes zero. `Torchx` behaviour is type dependent with no clear
        rule across types.
@@ -226,14 +231,22 @@ defmodule Torchx.Backend do
 
   @impl true
   def from_binary(%T{type: type, shape: shape} = out, binary, backend_options) do
-    Torchx.from_blob(
-      binary,
+    binary
+    |> maybe_pad_binary(type)
+    |> Torchx.from_blob(
       shape,
       to_torch_type(type),
       device_option(backend_options)
     )
     |> to_nx(out)
   end
+
+  defp maybe_pad_binary(bin, {:u, size}) when size in [16, 32] do
+    double_size = size * 2
+    for <<x::native-size(size) <- bin>>, into: <<>>, do: <<x::native-size(double_size)>>
+  end
+
+  defp maybe_pad_binary(bin, _), do: bin
 
   ## Shape
 
@@ -584,9 +597,7 @@ defmodule Torchx.Backend do
   ## Aggregators
 
   @impl true
-  def sum(%T{type: out_type} = out, %T{} = t, opts) do
-    check_type!(out_type)
-
+  def sum(%T{} = out, %T{} = t, opts) do
     axes = opts[:axes] || []
     keep_axes = opts[:keep_axes] || false
 
@@ -597,9 +608,7 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def product(%T{type: out_type} = out, %T{} = t, opts) do
-    check_type!(out_type)
-
+  def product(%T{} = out, %T{} = t, opts) do
     axes = opts[:axes] || []
     keep_axes = opts[:keep_axes] || false
 
@@ -750,14 +759,12 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def cumulative_sum(%T{type: out_type} = out, %T{} = t, opts) do
-    check_type!(out_type)
+  def cumulative_sum(%T{} = out, %T{} = t, opts) do
     cumulative_op(out, t, opts, &Torchx.cumulative_sum/2)
   end
 
   @impl true
-  def cumulative_product(%T{type: out_type} = out, %T{} = t, opts) do
-    check_type!(out_type)
+  def cumulative_product(%T{} = out, %T{} = t, opts) do
     cumulative_op(out, t, opts, &Torchx.cumulative_product/2)
   end
 
@@ -1542,9 +1549,18 @@ defmodule Torchx.Backend do
   def inspect(%T{} = tensor, inspect_opts) do
     limit = if inspect_opts.limit == :infinity, do: :infinity, else: inspect_opts.limit + 1
 
+    type =
+      case tensor.type do
+        {:u, 8} -> {:u, 8}
+        {:u, 16} -> {:s, 32}
+        {:u, 32} -> {:s, 64}
+        {:u, 64} -> {:s, 64}
+        t -> t
+      end
+
     tensor
     |> to_binary(min(limit, Nx.size(tensor)))
-    |> then(&Nx.Backend.inspect(tensor, &1, inspect_opts))
+    |> then(&Nx.Backend.inspect(%{tensor | type: type}, &1, inspect_opts))
     |> maybe_add_signature(tensor)
   end
 
@@ -1590,6 +1606,9 @@ defmodule Torchx.Backend do
 
   defp to_torch_type(nx_type, hint \\ "")
   defp to_torch_type({:u, 8}, _), do: :byte
+  defp to_torch_type({:u, 16}, _), do: :int
+  defp to_torch_type({:u, 32}, _), do: :long
+  defp to_torch_type({:u, 64}, _), do: :long
   defp to_torch_type({:s, 8}, _), do: :char
   defp to_torch_type({:s, 16}, _), do: :short
   defp to_torch_type({:s, 32}, _), do: :int
@@ -1610,9 +1629,22 @@ defmodule Torchx.Backend do
     defp check_shape_and_type!(device_ref, shape, type) do
       current_type = Torchx.scalar_type(device_ref) |> from_torch_type()
 
-      if current_type != type do
-        raise "type mismatch in Torchx: expected #{inspect(type)}, got: #{inspect(current_type)}. " <>
-                "Please report this bug"
+      case {current_type, type} do
+        {{:s, 32}, {:u, 16}} ->
+          :ok
+
+        {{:s, 64}, {:u, 32}} ->
+          :ok
+
+        {{:s, 64}, {:u, 64}} ->
+          :ok
+
+        _ when current_type != type ->
+          raise "type mismatch in Torchx: expected #{inspect(type)}, got: #{inspect(current_type)}. " <>
+                  "Please report this bug"
+
+        _ ->
+          :ok
       end
 
       current_shape = Torchx.shape(device_ref)
@@ -1653,13 +1685,6 @@ defmodule Torchx.Backend do
       Process.info(self(), :current_stacktrace) |> elem(1) |> Enum.fetch!(depth)
 
     "#{inspect(module)}.#{func}/#{arity - 1}"
-  end
-
-  defp check_type!(type) do
-    to_torch_type(
-      type,
-      " (explicitly cast the input tensor to a signed integer before taking sum)"
-    )
   end
 
   ## Functionality we can't provide
