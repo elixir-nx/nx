@@ -573,7 +573,7 @@ defmodule Torchx.Backend do
   ## Aggregators
 
   @impl true
-  def sum(%T{type: out_type} = out, %T{} = t, opts) do
+  def sum(%T{} = out, %T{} = t, opts) do
     axes = opts[:axes] || []
     keep_axes = opts[:keep_axes] || false
 
@@ -584,7 +584,7 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def product(%T{type: out_type} = out, %T{} = t, opts) do
+  def product(%T{} = out, %T{} = t, opts) do
     axes = opts[:axes] || []
     keep_axes = opts[:keep_axes] || false
 
@@ -735,12 +735,12 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def cumulative_sum(%T{type: out_type} = out, %T{} = t, opts) do
+  def cumulative_sum(%T{} = out, %T{} = t, opts) do
     cumulative_op(out, t, opts, &Torchx.cumulative_sum/2)
   end
 
   @impl true
-  def cumulative_product(%T{type: out_type} = out, %T{} = t, opts) do
+  def cumulative_product(%T{} = out, %T{} = t, opts) do
     cumulative_op(out, t, opts, &Torchx.cumulative_product/2)
   end
 
