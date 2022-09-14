@@ -25,16 +25,10 @@ class ExlaBuffer {
   ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer,
              bool can_be_released_after_run_ = false);
 
-  // Make sure the transfer has completed before we deallocate the buffer.
-  ~ExlaBuffer() {
-    (void)buffer_->BlockHostUntilReady();
-  }
-
   bool release_after_run() { return can_be_released_after_run_; }
   xla::PjRtBuffer* buffer() { return buffer_.get(); }
   xla::StatusOr<ExlaBuffer*> CopyToDevice(xla::PjRtDevice * dst_device);
   xla::StatusOr<ERL_NIF_TERM> ToBinary(ErlNifEnv* env, exla::int64 size);
-  xla::Status BlockHostUntilReady();
   xla::Status Deallocate();
 
  private:
@@ -74,7 +68,8 @@ class ExlaClient {
                                          xla::ExecutableBuildOptions& options,
                                          bool compile_portable_executable);
 
-  xla::StatusOr<ExlaBuffer*> BufferFromBinary(const ErlNifBinary& binary,
+  xla::StatusOr<ExlaBuffer*> BufferFromBinary(ErlNifEnv* env,
+                                              ERL_NIF_TERM binary_term,
                                               xla::Shape& shape,
                                               int device_id,
                                               bool can_be_released_after_run);
