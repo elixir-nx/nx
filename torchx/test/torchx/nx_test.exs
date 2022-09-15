@@ -24,7 +24,7 @@ defmodule Torchx.NxTest do
     :logical_or,
     :logical_xor
   ]
-  @unary_ops [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign]
+  @unary_ops [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign, :argmax, :argmin]
 
   defp test_binary_op(op, data_a \\ [[5, 6], [7, 8]], data_b \\ [[1, 2], [3, 4]], type_a, type_b) do
     a = Nx.tensor(data_a, type: type_a)

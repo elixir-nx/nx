@@ -91,4 +91,34 @@ defmodule TorchxTest do
       end
     end
   end
+
+  describe "bool type" do
+    test "adds correctly" do
+      t_tx =
+        {2, 3}
+        |> Nx.iota(type: {:u, 8})
+        |> Torchx.from_nx()
+        |> Torchx.to_type(:bool)
+
+      t = Torchx.to_nx(t_tx)
+
+      # Show that bools don't add as expected for u8
+      # This is why we add the cast to byte in Torchx.to_nx
+      assert_equal(Torchx.to_nx(t_tx), t_tx |> Torchx.add(t_tx) |> Torchx.to_nx())
+
+      assert_equal(Nx.add(t, t), Nx.tensor([[0, 2, 2], [2, 2, 2]]))
+    end
+
+    test "works with argmax and argmin" do
+      t =
+        {2, 3}
+        |> Nx.iota(type: {:u, 8})
+        |> Torchx.from_nx()
+        |> Torchx.to_type(:bool)
+        |> Torchx.to_nx()
+
+      assert_equal(0, Nx.argmin(t))
+      assert_equal(1, Nx.argmax(t))
+    end
+  end
 end

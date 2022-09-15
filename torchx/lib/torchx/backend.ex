@@ -738,17 +738,16 @@ defmodule Torchx.Backend do
     axis = opts[:axis] || -1
     keep_axis = opts[:keep_axis] || false
 
+    t_tx = from_nx(t)
+
     if tie_break == :low do
-      apply(Torchx, fun, [from_nx(t), axis, keep_axis])
+      apply(Torchx, fun, [t_tx, axis, keep_axis])
       |> to_nx(out)
     else
       %{data: %{ref: {device, _}}, shape: shape} = t
       scalar = Torchx.scalar_tensor(elem(shape, axis) - 1, to_torch_type(out.type), device)
 
-      flipped =
-        t
-        |> from_nx()
-        |> Torchx.flip([axis])
+      flipped = Torchx.flip(t_tx, [axis])
 
       result = apply(Torchx, fun, [flipped, axis, keep_axis])
 
@@ -830,12 +829,6 @@ defmodule Torchx.Backend do
 
   defp maybe_upcast(%T{type: t} = left, %T{type: t} = right),
     do: {left, right}
-
-  defp maybe_upcast(%T{type: {:u, 8}} = left, %T{} = right),
-    do: maybe_upcast(Nx.as_type(left, {:s, 16}), right)
-
-  defp maybe_upcast(%T{} = left, %T{type: {:u, 8}} = right),
-    do: maybe_upcast(left, Nx.as_type(right, {:s, 16}))
 
   defp maybe_upcast(left, right) do
     type = Nx.Type.merge(left.type, right.type)
@@ -1587,7 +1580,19 @@ defmodule Torchx.Backend do
   @doc false
   def to_nx({device, ref} = device_ref, %T{type: type, shape: shape} = t)
       when is_atom(device) and is_reference(ref) do
-    %{t | data: %__MODULE__{ref: check_shape_and_type!(device_ref, shape, type)}}
+    cast_to_byte = type == {:u, 8} and Torchx.scalar_type(device_ref) == :bool
+
+    # This cast is added because if the u8 type is bool, we get
+    # boolean algebra instead of common arithmetic rules when
+    # operating on a seemingly normal u8 tensor
+    t_tx =
+      if cast_to_byte do
+        Torchx.to_type(device_ref, :byte)
+      else
+        device_ref
+      end
+
+    %{t | data: %__MODULE__{ref: check_shape_and_type!(t_tx, shape, type)}}
   end
 
   @doc false
