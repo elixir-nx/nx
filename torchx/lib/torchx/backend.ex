@@ -1128,11 +1128,19 @@ defmodule Torchx.Backend do
       final_sizes =
         Enum.zip_with(shape_list, pad_sizes, fn size, pad -> size + pad * (size - 1) end)
 
+      rank = Nx.rank(t)
+
       t_expanded
       |> Nx.pad(pad_value, pads)
-      |> Nx.reshape(shape_after_pad)
-      |> Nx.slice(List.duplicate(0, Nx.rank(t)), final_sizes)
       |> from_nx()
+      |> Torchx.reshape(shape_after_pad)
+      |> torchx_slice(
+        shape_after_pad,
+        List.to_tuple(final_sizes),
+        List.duplicate(0, rank),
+        final_sizes,
+        List.duplicate(1, rank)
+      )
     end
   end
 
