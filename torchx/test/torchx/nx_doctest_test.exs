@@ -45,8 +45,8 @@ defmodule Torchx.NxDoctestTest do
     map: 3,
     window_reduce: 5,
     reduce: 4,
-    # incomplete support
-    pad: 3,
+    # # incomplete support
+    # pad: 3,
     # product - some output/input types are unsupported by libtorch
     product: 2
   ]

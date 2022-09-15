@@ -1085,28 +1085,29 @@ defmodule Torchx.Backend do
     config =
       input_config
       |> Enum.map(fn {a, b, c} ->
-        if a < 0 or b < 0 or c < 0 do
+        if c < 0 do
           raise ArgumentError, "{#{a}, #{b}, #{c}} padding is not supported"
         end
 
-        [a, b]
+        [max(a, 0), max(b, 0)]
       end)
       |> Enum.reverse()
       |> List.flatten()
 
-    internal_config = Enum.map(input_config, fn {_a, _b, c} -> c + 1 end)
-
     constant = Nx.to_number(constant)
 
     tensor
-    |> pad_internal(internal_config)
+    |> pad_internal(input_config)
+    |> slice_negative_padding(input_config, tensor.shape, out.shape)
     |> Torchx.pad(config, constant)
     |> to_nx(out)
   end
 
   defp pad_internal(t, []), do: from_nx(t)
 
-  defp pad_internal(t, config) do
+  defp pad_internal(t, input_config) do
+    config = Enum.map(input_config, fn {_a, _b, c} -> c + 1 end)
+
     {_, dest_indices} =
       config
       |> Enum.reduce({0, []}, fn
@@ -1137,6 +1138,35 @@ defmodule Torchx.Backend do
     |> Nx.broadcast(dest_shape)
     |> Nx.indexed_put(dest_indices, Nx.flatten(t))
     |> from_nx()
+  end
+
+  defp slice_negative_padding(t_tx, input_config, shape, output_shape) do
+    {slice_starts, slice_lengths} =
+      input_config
+      |> Enum.with_index(fn {prev, post, _inner}, axis ->
+        start =
+          if prev < 0 do
+            -prev
+          else
+            0
+          end
+
+        axis_size = elem(shape, axis)
+
+        len =
+          if post < 0 do
+            axis_size + post - start
+          else
+            axis_size - start
+          end
+
+        {start, len}
+      end)
+      |> Enum.unzip()
+
+    strides = List.duplicate(1, tuple_size(shape))
+
+    torchx_slice(t_tx, shape, output_shape, slice_starts, slice_lengths, strides)
   end
 
   @impl true
