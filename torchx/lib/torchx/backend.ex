@@ -1115,7 +1115,7 @@ defmodule Torchx.Backend do
 
       t_expanded = Enum.reduce(extra_axes, t, &Nx.new_axis(&2, &1))
 
-      pads = pad_sizes |> Enum.reduce([], fn size, acc -> [0, size, 0, 0 | acc] end)
+      pads = Enum.reduce(pad_sizes, [], fn size, acc -> [0, size, 0, 0 | acc] end)
 
       shape_list = t |> Nx.shape() |> Tuple.to_list()
 
