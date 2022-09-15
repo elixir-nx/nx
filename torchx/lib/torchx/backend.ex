@@ -1081,11 +1081,11 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def pad(out, tensor, constant, config) do
+  def pad(out, tensor, constant, input_config) do
     config =
-      config
+      input_config
       |> Enum.map(fn {a, b, c} ->
-        if a < 0 or b < 0 or c != 0 do
+        if a < 0 or b < 0 or c < 0 do
           raise ArgumentError, "{#{a}, #{b}, #{c}} padding is not supported"
         end
 
@@ -1094,12 +1094,49 @@ defmodule Torchx.Backend do
       |> Enum.reverse()
       |> List.flatten()
 
+    internal_config = Enum.map(input_config, fn {_a, _b, c} -> c + 1 end)
+
     constant = Nx.to_number(constant)
 
     tensor
-    |> from_nx()
+    |> pad_internal(internal_config)
     |> Torchx.pad(config, constant)
     |> to_nx(out)
+  end
+
+  defp pad_internal(t, []), do: from_nx(t)
+
+  defp pad_internal(t, config) do
+    {_, dest_indices} =
+      config
+      |> Enum.reduce({0, []}, fn
+        1, {axis, iotas} ->
+          iota = Nx.iota(t, axis: axis) |> Nx.flatten() |> Nx.new_axis(1)
+          {axis + 1, [iota | iotas]}
+
+        padding, {axis, iotas} ->
+          iota = Nx.iota(t, axis: axis) |> Nx.multiply(padding) |> Nx.flatten() |> Nx.new_axis(1)
+          {axis + 1, [iota | iotas]}
+      end)
+
+    dest_indices =
+      dest_indices
+      |> Enum.reverse()
+      |> Nx.concatenate(axis: 1)
+
+    dest_shape =
+      t.shape
+      |> Tuple.to_list()
+      |> Enum.zip(config)
+      |> Enum.map(fn {axis_size, pad} ->
+        pad * (axis_size - 1) + 1
+      end)
+      |> List.to_tuple()
+
+    0
+    |> Nx.broadcast(dest_shape)
+    |> Nx.indexed_put(dest_indices, Nx.flatten(t))
+    |> from_nx()
   end
 
   @impl true
