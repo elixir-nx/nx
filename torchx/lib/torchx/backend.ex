@@ -738,17 +738,23 @@ defmodule Torchx.Backend do
     axis = opts[:axis] || -1
     keep_axis = opts[:keep_axis] || false
 
+    t_tx = from_nx(t)
+
+    # amax and amin don't deal with :bool, so we need to cast those to byte
+    t_tx =
+      case Torchx.scalar_type(t_tx) do
+        :bool -> Torchx.to_type(t_tx, :byte)
+        _ -> t_tx
+      end
+
     if tie_break == :low do
-      apply(Torchx, fun, [from_nx(t), axis, keep_axis])
+      apply(Torchx, fun, [t_tx, axis, keep_axis])
       |> to_nx(out)
     else
       %{data: %{ref: {device, _}}, shape: shape} = t
       scalar = Torchx.scalar_tensor(elem(shape, axis) - 1, to_torch_type(out.type), device)
 
-      flipped =
-        t
-        |> from_nx()
-        |> Torchx.flip([axis])
+      flipped = Torchx.flip(t_tx, [axis])
 
       result = apply(Torchx, fun, [flipped, axis, keep_axis])
 

@@ -91,4 +91,18 @@ defmodule TorchxTest do
       end
     end
   end
+
+  describe "argminmax" do
+    test "works with bool inputs" do
+      t =
+        {2, 3}
+        |> Nx.iota(type: {:u, 8})
+        |> Torchx.from_nx()
+        |> Torchx.to_type(:bool)
+        |> Torchx.to_nx()
+
+      assert_equal(0, Nx.argmin(t))
+      assert_equal(1, Nx.argmax(t))
+    end
+  end
 end
