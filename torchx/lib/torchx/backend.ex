@@ -319,7 +319,7 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  defp torchx_slice(t, input_shape, output_shape, start_indices, lengths, strides) do
+  def torchx_slice(t, input_shape, output_shape, start_indices, lengths, strides) do
     t
     |> narrow(start_indices, lengths, 0, input_shape)
     |> stride(output_shape, lengths, strides)
@@ -1098,7 +1098,7 @@ defmodule Torchx.Backend do
 
     tensor
     |> pad_internal(input_config)
-    |> slice_negative_padding(input_config, tensor.shape, out.shape)
+    |> slice_negative_padding(input_config)
     |> Torchx.pad(config, constant)
     |> to_nx(out)
   end
@@ -1140,33 +1140,38 @@ defmodule Torchx.Backend do
     |> from_nx()
   end
 
-  defp slice_negative_padding(t_tx, input_config, shape, output_shape) do
-    {slice_starts, slice_lengths} =
-      input_config
-      |> Enum.with_index(fn {prev, post, _inner}, axis ->
-        start =
-          if prev < 0 do
-            -prev
-          else
-            0
-          end
+  defp slice_negative_padding(t_tx, input_config) do
+    shape = Torchx.shape(t_tx)
 
-        axis_size = elem(shape, axis)
+    if Enum.any?(input_config, fn {prev, post, _} -> prev < 0 or post < 0 end) do
+      {starts, lengths} =
+        input_config
+        |> Enum.with_index(fn {prev, post, _inner}, axis ->
+          start =
+            if prev < 0 do
+              -prev
+            else
+              0
+            end
 
-        len =
-          if post < 0 do
-            axis_size + post - start
-          else
-            axis_size - start
-          end
+          axis_size = elem(shape, axis)
 
-        {start, len}
-      end)
-      |> Enum.unzip()
+          len =
+            if post < 0 do
+              axis_size + post - start
+            else
+              axis_size - start
+            end
 
-    strides = List.duplicate(1, tuple_size(shape))
+          {start, len}
+        end)
+        |> Enum.unzip()
 
-    torchx_slice(t_tx, shape, output_shape, slice_starts, slice_lengths, strides)
+      strides = List.duplicate(1, tuple_size(shape))
+      torchx_slice(t_tx, shape, List.to_tuple(lengths), starts, lengths, strides)
+    else
+      t_tx
+    end
   end
 
   @impl true
