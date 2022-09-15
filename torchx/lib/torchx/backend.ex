@@ -1106,44 +1106,40 @@ defmodule Torchx.Backend do
   defp pad_internal(t, []), do: from_nx(t)
 
   defp pad_internal(t, input_config) do
-    config = Enum.map(input_config, fn {_a, _b, c} -> c + 1 end)
+    pad_value = 0
+    pad_sizes = Enum.map(input_config, &elem(&1, 2))
 
-    {_, dest_indices} =
-      config
-      |> Enum.reduce({0, []}, fn
-        1, {axis, iotas} ->
-          iota = Nx.iota(t, axis: axis) |> Nx.flatten() |> Nx.new_axis(1)
-          {axis + 1, [iota | iotas]}
+    if Enum.all?(pad_sizes, &(&1 == 0)) do
+      from_nx(t)
+    else
+      extra_axes = t |> Nx.axes() |> Enum.map(fn axis -> 2 * axis + 1 end)
 
-        padding, {axis, iotas} ->
-          iota = Nx.iota(t, axis: axis) |> Nx.multiply(padding) |> Nx.flatten() |> Nx.new_axis(1)
-          {axis + 1, [iota | iotas]}
-      end)
+      t_expanded = Enum.reduce(extra_axes, t, &Nx.new_axis(&2, &1))
 
-    dest_indices =
-      dest_indices
-      |> Enum.reverse()
-      |> Nx.concatenate(axis: 1)
+      pads = Enum.flat_map(pad_sizes, &[{0, 0, 0}, {0, &1, 0}])
 
-    dest_shape =
-      t.shape
-      |> Tuple.to_list()
-      |> Enum.zip(config)
-      |> Enum.map(fn {axis_size, pad} ->
-        pad * (axis_size - 1) + 1
-      end)
-      |> List.to_tuple()
+      shape_list = t |> Nx.shape() |> Tuple.to_list()
 
-    0
-    |> Nx.broadcast(dest_shape)
-    |> Nx.indexed_put(dest_indices, Nx.flatten(t))
-    |> from_nx()
+      shape_after_pad =
+        shape_list
+        |> Enum.zip_with(pad_sizes, fn size, pad -> size + pad * size end)
+        |> List.to_tuple()
+
+      final_sizes =
+        Enum.zip_with(shape_list, pad_sizes, fn size, pad -> size + pad * (size - 1) end)
+
+      t_expanded
+      |> Nx.pad(pad_value, pads)
+      |> Nx.reshape(shape_after_pad)
+      |> Nx.slice(List.duplicate(0, Nx.rank(t)), final_sizes)
+      |> from_nx()
+    end
   end
 
   defp slice_negative_padding(t_tx, input_config) do
-    shape = Torchx.shape(t_tx)
-
     if Enum.any?(input_config, fn {prev, post, _} -> prev < 0 or post < 0 end) do
+      shape = Torchx.shape(t_tx)
+
       {starts, lengths} =
         input_config
         |> Enum.with_index(fn {prev, post, _inner}, axis ->
