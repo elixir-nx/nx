@@ -1106,7 +1106,6 @@ defmodule Torchx.Backend do
   defp pad_internal(t, []), do: from_nx(t)
 
   defp pad_internal(t, input_config) do
-    pad_value = 0
     pad_sizes = Enum.map(input_config, &elem(&1, 2))
 
     if Enum.all?(pad_sizes, &(&1 == 0)) do
@@ -1116,7 +1115,7 @@ defmodule Torchx.Backend do
 
       t_expanded = Enum.reduce(extra_axes, t, &Nx.new_axis(&2, &1))
 
-      pads = Enum.flat_map(pad_sizes, &[{0, 0, 0}, {0, &1, 0}])
+      pads = pad_sizes |> Enum.reduce([], fn size, acc -> [0, size, 0, 0 | acc] end)
 
       shape_list = t |> Nx.shape() |> Tuple.to_list()
 
@@ -1131,8 +1130,8 @@ defmodule Torchx.Backend do
       rank = Nx.rank(t)
 
       t_expanded
-      |> Nx.pad(pad_value, pads)
       |> from_nx()
+      |> Torchx.pad(pads, 0)
       |> Torchx.reshape(shape_after_pad)
       |> torchx_slice(
         shape_after_pad,
