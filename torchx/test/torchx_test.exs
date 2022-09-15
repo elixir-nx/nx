@@ -100,7 +100,6 @@ defmodule TorchxTest do
         |> Torchx.from_nx()
         |> Torchx.to_type(:bool)
 
-      # t = Torchx.Backend.to_nx(t_tx, %Nx.Tensor{names: [nil, nil], shape: {2, 3}, type: {:u, 8}})
       t = Torchx.to_nx(t_tx)
 
       # Show that bools don't add as expected for u8
