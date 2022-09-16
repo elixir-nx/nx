@@ -1426,30 +1426,30 @@ defmodule Torchx.Backend do
 
   @impl true
   def window_max(out, tensor, window_dims_tuple, opts) do
-    pad = Nx.reduce_min(tensor)
-
     window_op(
       out,
       tensor,
       window_dims_tuple,
       opts,
-      # tensor.type |> Nx.Constants.min_finite() |> Nx.to_number(),
-      pad,
+      tensor.type
+      |> Nx.Constants.min_finite()
+      |> Nx.to_number()
+      |> IO.inspect(label: "min finite"),
       &Torchx.amax(&1, &2, false)
     )
   end
 
   @impl true
   def window_min(out, tensor, window_dims_tuple, opts) do
-    pad = Nx.reduce_max(tensor)
-
     window_op(
       out,
       tensor,
       window_dims_tuple,
       opts,
-      # tensor.type |> Nx.Constants.max_finite() |> Nx.to_number(),
-      pad,
+      tensor.type
+      |> Nx.Constants.max_finite()
+      |> Nx.to_number()
+      |> IO.inspect(label: "max finite"),
       &Torchx.amin(&1, &2, false)
     )
   end
