@@ -319,7 +319,7 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  def torchx_slice(t, input_shape, output_shape, start_indices, lengths, strides) do
+  defp torchx_slice(t, input_shape, output_shape, start_indices, lengths, strides) do
     t
     |> narrow(start_indices, lengths, 0, input_shape)
     |> stride(output_shape, lengths, strides)
