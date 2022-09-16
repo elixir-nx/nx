@@ -51,18 +51,9 @@ defmodule Torchx.NxDoctestTest do
     product: 2
   ]
 
-  @unimplemented_window_dilations_doctests [
-    window_max: 3,
-    window_min: 3,
-    window_product: 3,
-    window_sum: 3,
-    window_mean: 3
-  ]
-
   doctest Nx,
     except:
-      @unimplemented_window_dilations_doctests
-      |> Kernel.++(@rounding_error_doctests)
+      @rounding_error_doctests
       |> Kernel.++(@os_rounding_error_doctests)
       |> Kernel.++(@inherently_unsupported_doctests)
       |> Kernel.++(@unrelated_doctests)
