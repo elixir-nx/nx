@@ -1317,12 +1317,7 @@ defmodule Torchx.Backend do
 
     input_dilation = opts[:input_dilation]
 
-    Enum.each(input_dilation, fn a ->
-      if a != 1 do
-        raise ArgumentError,
-              "input_dilation other than 1 is not supported, got: #{inspect(input_dilation)}"
-      end
-    end)
+    input_inner_pads = [{0, 0, 0}, {0, 0, 0}] ++ Enum.map(input_dilation, &{0, 0, &1 - 1})
 
     padding = opts[:padding]
     strides = opts[:strides]
@@ -1362,6 +1357,7 @@ defmodule Torchx.Backend do
     t
     |> from_nx()
     |> permute.(input_permutation)
+    |> pad_internal(input_inner_pads)
     |> Torchx.pad(pad_config, 0)
     |> Torchx.to_type(to_torch_type(type))
     |> do_conv(k_tx, strides, kernel_dilation, feature_groups, type)
