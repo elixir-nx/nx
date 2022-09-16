@@ -1464,7 +1464,7 @@ defmodule Nx.DefnTest do
 
     test "raises on mixed context" do
       assert_raise RuntimeError,
-                   ~r"cannot build defn because expressions come from different contexts: :root and :while",
+                   ~r"cannot build defn because expressions come from different contexts: :root and {:while, #Reference<[^>]+>}",
                    fn -> while_mixed_context(Nx.tensor(0), Nx.tensor(1)) end
     end
 

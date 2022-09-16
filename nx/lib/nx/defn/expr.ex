@@ -307,10 +307,11 @@ defmodule Nx.Defn.Expr do
   @doc false
   def defn_while(file, line, initial, condition, body) do
     initial = to_container_expr(initial)
+    context = new_context(:while)
 
     {arg, {_, context}} =
       Composite.traverse(initial, {0, nil}, fn expr, {counter, acc} ->
-        {parameter(expr, :while, counter), {counter + 1, merge_context!(expr, acc)}}
+        {parameter(expr, context, counter), {counter + 1, merge_context!(expr, acc)}}
       end)
 
     condition = to_pred(condition.(arg), line, file, :while)
@@ -513,7 +514,8 @@ defmodule Nx.Defn.Expr do
 
   @impl true
   def reduce(%{type: type} = out, tensor, acc, opts, fun) do
-    args = [parameter(:reduce, type, {}, 0), parameter(:reduce, type, {}, 1)]
+    context = new_context(:reduce)
+    args = [parameter(context, type, {}, 0), parameter(context, type, {}, 1)]
     {[tensor, acc], context} = to_exprs([tensor, acc])
     fun = apply_fun(context, fun, args, type)
 
@@ -533,7 +535,8 @@ defmodule Nx.Defn.Expr do
         opts,
         fun
       ) do
-    args = [parameter(:window_reduce, type, {}, 0), parameter(:window_reduce, type, {}, 1)]
+    context = new_context(:window_reduce)
+    args = [parameter(context, type, {}, 0), parameter(context, type, {}, 1)]
     {[tensor, acc], context} = to_exprs([tensor, acc])
     fun = apply_fun(context, fun, args, type)
 
@@ -546,7 +549,7 @@ defmodule Nx.Defn.Expr do
 
   @impl true
   def map(%{type: type} = out, tensor, opts, fun) do
-    args = [parameter(:map, type, {}, 0)]
+    args = [parameter(new_context(:map), type, {}, 0)]
     %{data: %{context: context}} = tensor = to_expr(tensor)
     expr(out, context, :map, [tensor, opts, apply_fun(context, fun, args, type)])
   end
@@ -868,6 +871,11 @@ defmodule Nx.Defn.Expr do
   end
 
   ## Helpers
+
+  @compile {:inline, new_context: 1}
+  defp new_context(atom) when is_atom(atom) do
+    {atom, make_ref()}
+  end
 
   defp expr(tensor, context, op, args) do
     %{tensor | data: %Expr{id: id(), op: op, args: args, context: context}}
