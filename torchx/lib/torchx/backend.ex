@@ -1637,6 +1637,10 @@ defmodule Torchx.Backend do
 
     window_pad_constant = Torchx.scalar_tensor(pad_constant, output_type, device)
 
+    IO.inspect(window_pad_constant |> Torchx.to_nx())
+    IO.inspect(window |> Torchx.to_nx())
+    IO.inspect(Torchx.to_type(t_tx, output_type) |> Torchx.to_nx())
+
     Torchx.where(
       window,
       Torchx.to_type(t_tx, output_type),
