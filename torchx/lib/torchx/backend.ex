@@ -1628,7 +1628,7 @@ defmodule Torchx.Backend do
 
     window_shape = Torchx.shape(window)
 
-    IO.inspect(padded, label: "padded")
+    IO.inspect(padded |> Torchx.to_nx(), label: "padded")
 
     {t_tx, _} =
       for {window_dim, stride} <- Enum.zip(Tuple.to_list(window_shape), strides),
