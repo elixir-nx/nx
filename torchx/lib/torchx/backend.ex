@@ -1503,7 +1503,14 @@ defmodule Torchx.Backend do
 
       unfolded =
         tensor
-        |> unfold_windows(opts[:padding], 0, window_dims_tuple, opts[:strides], window_dilations)
+        |> unfold_windows(
+          opts[:padding],
+          0,
+          window_dims_tuple,
+          opts[:strides],
+          window_dilations,
+          to_torch_type(out.type)
+        )
         |> Torchx.to_nx()
 
       {to_keep, to_flatten} =
@@ -1523,7 +1530,7 @@ defmodule Torchx.Backend do
     arg_idx =
       tensor
       |> from_nx()
-      |> Torchx.to_type(intermediate_type)
+      # |> Torchx.to_type(intermediate_type)
       |> then(unfold_flat)
       |> then(function)
 
@@ -1561,7 +1568,8 @@ defmodule Torchx.Backend do
         pad_constant,
         window_dims_tuple,
         opts[:strides],
-        opts[:window_dilations]
+        opts[:window_dilations],
+        to_torch_type(out.type)
       )
 
     axes =
@@ -1582,7 +1590,8 @@ defmodule Torchx.Backend do
          pad_constant,
          window_dims_tuple,
          strides,
-         window_dilations
+         window_dilations,
+         output_type
        ) do
     unfold_windows(
       from_nx(tensor),
@@ -1590,11 +1599,20 @@ defmodule Torchx.Backend do
       pad_constant,
       window_dims_tuple,
       strides,
-      window_dilations
+      window_dilations,
+      output_type
     )
   end
 
-  defp unfold_windows(tensor, padding, pad_constant, window_dims_tuple, strides, window_dilations) do
+  defp unfold_windows(
+         tensor,
+         padding,
+         pad_constant,
+         window_dims_tuple,
+         strides,
+         window_dilations,
+         output_type
+       ) do
     padding = flatten_padding(padding)
     padded = Torchx.pad(tensor, padding, pad_constant)
 
@@ -1617,11 +1635,11 @@ defmodule Torchx.Backend do
           {Torchx.unfold(t_tx, dim, window_dim, stride), dim + 1}
       end
 
-    window_pad_constant = Torchx.scalar_tensor(pad_constant, Torchx.scalar_type(t_tx), device)
+    window_pad_constant = Torchx.scalar_tensor(pad_constant, output_type, device)
 
     Torchx.where(
       window,
-      t_tx,
+      Torchx.to_type(t_tx, output_type),
       window_pad_constant
     )
     |> tap(fn tx -> tx |> Torchx.to_nx() |> IO.inspect() end)
