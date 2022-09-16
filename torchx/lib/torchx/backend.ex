@@ -1547,15 +1547,9 @@ defmodule Torchx.Backend do
 
   defp window_op(out, tensor, window_dims_tuple, opts, pad_constant, reduce_fun)
        when is_function(reduce_fun, 2) do
-    intermediate_type =
-      tensor.type
-      |> Nx.Type.to_floating()
-      |> to_torch_type()
-
     t_tx =
       tensor
       |> from_nx()
-      |> Torchx.to_type(intermediate_type)
       |> unfold_windows(
         opts[:padding],
         pad_constant,
