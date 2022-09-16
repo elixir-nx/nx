@@ -1081,15 +1081,15 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def pad(out, tensor, constant, config) do
+  def pad(out, tensor, constant, input_config) do
     config =
-      config
+      input_config
       |> Enum.map(fn {a, b, c} ->
-        if a < 0 or b < 0 or c != 0 do
+        if c < 0 do
           raise ArgumentError, "{#{a}, #{b}, #{c}} padding is not supported"
         end
 
-        [a, b]
+        [max(a, 0), max(b, 0)]
       end)
       |> Enum.reverse()
       |> List.flatten()
@@ -1098,8 +1098,79 @@ defmodule Torchx.Backend do
 
     tensor
     |> from_nx()
+    |> pad_internal(input_config)
+    |> slice_negative_padding(input_config)
     |> Torchx.pad(config, constant)
     |> to_nx(out)
+  end
+
+  defp pad_internal(t_tx, input_config) do
+    pad_sizes = Enum.map(input_config, &elem(&1, 2))
+
+    if Enum.all?(pad_sizes, &(&1 == 0)) do
+      t_tx
+    else
+      pads = Enum.reduce(pad_sizes, [], fn size, acc -> [0, size, 0, 0 | acc] end)
+
+      shape = Torchx.shape(t_tx)
+      rank = tuple_size(shape)
+      shape_list = Tuple.to_list(shape)
+      expanded_shape = shape_list |> Enum.flat_map(&[&1, 1]) |> List.to_tuple()
+
+      shape_after_pad =
+        shape_list
+        |> Enum.zip_with(pad_sizes, fn size, pad -> size + pad * size end)
+        |> List.to_tuple()
+
+      final_sizes =
+        Enum.zip_with(shape_list, pad_sizes, fn size, pad -> size + pad * (size - 1) end)
+
+      t_tx
+      |> Torchx.reshape(expanded_shape)
+      |> Torchx.pad(pads, 0)
+      |> Torchx.reshape(shape_after_pad)
+      |> torchx_slice(
+        shape_after_pad,
+        List.to_tuple(final_sizes),
+        List.duplicate(0, rank),
+        final_sizes,
+        List.duplicate(1, rank)
+      )
+    end
+  end
+
+  defp slice_negative_padding(t_tx, input_config) do
+    if Enum.any?(input_config, fn {pre, post, _} -> pre < 0 or post < 0 end) do
+      shape = Torchx.shape(t_tx)
+
+      {starts, lengths} =
+        input_config
+        |> Enum.with_index(fn {pre, post, _inner}, axis ->
+          start =
+            if pre < 0 do
+              -pre
+            else
+              0
+            end
+
+          axis_size = elem(shape, axis)
+
+          len =
+            if post < 0 do
+              axis_size + post - start
+            else
+              axis_size - start
+            end
+
+          {start, len}
+        end)
+        |> Enum.unzip()
+
+      strides = List.duplicate(1, tuple_size(shape))
+      torchx_slice(t_tx, shape, List.to_tuple(lengths), starts, lengths, strides)
+    else
+      t_tx
+    end
   end
 
   @impl true
