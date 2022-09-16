@@ -96,4 +96,4 @@ jobs:
       - name: Check formatting
         run: mix format --check-formatted
       - name: Run tests
-        run: mix test test/torchx/nx_test.exs:1113
+        run: mix test
