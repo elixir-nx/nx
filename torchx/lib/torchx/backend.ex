@@ -1097,27 +1097,25 @@ defmodule Torchx.Backend do
     constant = Nx.to_number(constant)
 
     tensor
+    |> from_nx()
     |> pad_internal(input_config)
     |> slice_negative_padding(input_config)
     |> Torchx.pad(config, constant)
     |> to_nx(out)
   end
 
-  defp pad_internal(t, []), do: from_nx(t)
-
-  defp pad_internal(t, input_config) do
+  defp pad_internal(t_tx, input_config) do
     pad_sizes = Enum.map(input_config, &elem(&1, 2))
 
     if Enum.all?(pad_sizes, &(&1 == 0)) do
-      from_nx(t)
+      t_tx
     else
-      extra_axes = t |> Nx.axes() |> Enum.map(fn axis -> 2 * axis + 1 end)
-
-      t_expanded = Enum.reduce(extra_axes, t, &Nx.new_axis(&2, &1))
-
       pads = Enum.reduce(pad_sizes, [], fn size, acc -> [0, size, 0, 0 | acc] end)
 
-      shape_list = t |> Nx.shape() |> Tuple.to_list()
+      shape = Torchx.shape(t_tx)
+      rank = tuple_size(shape)
+      shape_list = Tuple.to_list(shape)
+      expanded_shape = shape_list |> Enum.flat_map(&[&1, 1]) |> List.to_tuple()
 
       shape_after_pad =
         shape_list
@@ -1127,10 +1125,8 @@ defmodule Torchx.Backend do
       final_sizes =
         Enum.zip_with(shape_list, pad_sizes, fn size, pad -> size + pad * (size - 1) end)
 
-      rank = Nx.rank(t)
-
-      t_expanded
-      |> from_nx()
+      t_tx
+      |> Torchx.reshape(expanded_shape)
       |> Torchx.pad(pads, 0)
       |> Torchx.reshape(shape_after_pad)
       |> torchx_slice(
@@ -1144,15 +1140,15 @@ defmodule Torchx.Backend do
   end
 
   defp slice_negative_padding(t_tx, input_config) do
-    if Enum.any?(input_config, fn {prev, post, _} -> prev < 0 or post < 0 end) do
+    if Enum.any?(input_config, fn {pre, post, _} -> pre < 0 or post < 0 end) do
       shape = Torchx.shape(t_tx)
 
       {starts, lengths} =
         input_config
-        |> Enum.with_index(fn {prev, post, _inner}, axis ->
+        |> Enum.with_index(fn {pre, post, _inner}, axis ->
           start =
-            if prev < 0 do
-              -prev
+            if pre < 0 do
+              -pre
             else
               0
             end
