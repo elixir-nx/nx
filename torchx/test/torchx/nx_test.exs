@@ -1050,8 +1050,6 @@ defmodule Torchx.NxTest do
       )
     end
 
-    # window dilations temporarily broken
-    @tag :skip
     test "works with non-default options" do
       t = Nx.tensor([[[4, 2, 1, 3], [4, 2, 1, 7]], [[1, 2, 5, 7], [1, 8, 9, 2]]])
       opts = [strides: [2, 1, 1], padding: :valid, window_dilations: [1, 2, 2]]
@@ -1112,8 +1110,6 @@ defmodule Torchx.NxTest do
       )
     end
 
-    # window dilations temporarily broken
-    @tag :skip
     test "works with non-default options" do
       t = Nx.tensor([[[4, 2, 1, 3], [4, 2, 1, 7]], [[1, 2, 5, 7], [1, 8, 9, 2]]])
       opts = [strides: [2, 1, 1], padding: :valid, window_dilations: [1, 2, 2]]
@@ -1167,6 +1163,18 @@ defmodule Torchx.NxTest do
         ])
       )
     end
+
+    test "supports window dilations" do
+      result = Nx.window_sum(Nx.iota({4, 4}), {2, 2}, window_dilations: [2, 1])
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [18, 22, 26],
+          [34, 38, 42]
+        ])
+      )
+    end
   end
 
   describe "window_product" do
@@ -1204,6 +1212,18 @@ defmodule Torchx.NxTest do
             [1, 1],
             [1, 18]
           ]
+        ])
+      )
+    end
+
+    test "supports window dilations" do
+      result = Nx.window_product(Nx.iota({4, 4}), {2, 2}, window_dilations: [2, 1])
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [0, 180, 660],
+          [3120, 5460, 8820]
         ])
       )
     end

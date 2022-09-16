@@ -1104,7 +1104,7 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  defp pad_internal(t_tx, input_config) do
+  defp pad_internal(t_tx, input_config, pad_value \\ 0) do
     pad_sizes = Enum.map(input_config, &elem(&1, 2))
 
     if Enum.all?(pad_sizes, &(&1 == 0)) do
@@ -1127,7 +1127,7 @@ defmodule Torchx.Backend do
 
       t_tx
       |> Torchx.reshape(expanded_shape)
-      |> Torchx.pad(pads, 0)
+      |> Torchx.pad(pads, pad_value)
       |> Torchx.reshape(shape_after_pad)
       |> torchx_slice(
         shape_after_pad,
@@ -1427,7 +1427,9 @@ defmodule Torchx.Backend do
       tensor,
       window_dims_tuple,
       opts,
-      tensor.type |> Nx.Constants.min_finite() |> Nx.to_number(),
+      tensor.type
+      |> Nx.Constants.min_finite()
+      |> Nx.to_number(),
       &Torchx.amax(&1, &2, false)
     )
   end
@@ -1439,7 +1441,9 @@ defmodule Torchx.Backend do
       tensor,
       window_dims_tuple,
       opts,
-      tensor.type |> Nx.Constants.max_finite() |> Nx.to_number(),
+      tensor.type
+      |> Nx.Constants.max_finite()
+      |> Nx.to_number(),
       &Torchx.amin(&1, &2, false)
     )
   end
@@ -1483,15 +1487,19 @@ defmodule Torchx.Backend do
   end
 
   defp window_scatter_function(function, out, tensor, source, init_value, window_dims_tuple, opts) do
-    intermediate_type =
-      tensor.type
-      |> Nx.Type.to_floating()
-      |> to_torch_type()
-
     unfold_flat = fn tensor ->
+      window_dilations = List.duplicate(1, tuple_size(window_dims_tuple))
+
       unfolded =
         tensor
-        |> unfold_windows(opts[:padding], 0, window_dims_tuple, opts[:strides])
+        |> unfold_windows(
+          opts[:padding],
+          0,
+          window_dims_tuple,
+          opts[:strides],
+          window_dilations,
+          to_torch_type(out.type)
+        )
         |> Torchx.to_nx()
 
       {to_keep, to_flatten} =
@@ -1511,7 +1519,6 @@ defmodule Torchx.Backend do
     arg_idx =
       tensor
       |> from_nx()
-      |> Torchx.to_type(intermediate_type)
       |> then(unfold_flat)
       |> then(function)
 
@@ -1541,26 +1548,17 @@ defmodule Torchx.Backend do
 
   defp window_op(out, tensor, window_dims_tuple, opts, pad_constant, reduce_fun)
        when is_function(reduce_fun, 2) do
-    window_dilations = opts[:window_dilations]
-
-    if window_dilations && window_dilations != List.duplicate(1, tuple_size(tensor.shape)) do
-      raise ArgumentError, "window_dilations unsupported"
-    end
-
-    # if Enum.any?(opts[:padding], fn conf -> conf |> Tuple.to_list() |> Enum.any?(&(&1 != 0)) end) do
-    #   raise ArgumentError, "padding unsupported"
-    # end
-
-    intermediate_type =
-      tensor.type
-      |> Nx.Type.to_floating()
-      |> to_torch_type()
-
     t_tx =
       tensor
       |> from_nx()
-      |> Torchx.to_type(intermediate_type)
-      |> unfold_windows(opts[:padding], pad_constant, window_dims_tuple, opts[:strides])
+      |> unfold_windows(
+        opts[:padding],
+        pad_constant,
+        window_dims_tuple,
+        opts[:strides],
+        opts[:window_dilations],
+        to_torch_type(out.type)
+      )
 
     axes =
       Enum.map(tuple_size(window_dims_tuple)..1//-1, fn axis ->
@@ -1574,22 +1572,64 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  defp unfold_windows(%T{} = tensor, padding, pad_constant, window_dims_tuple, strides) do
-    unfold_windows(from_nx(tensor), padding, pad_constant, window_dims_tuple, strides)
+  defp unfold_windows(
+         %T{} = tensor,
+         padding,
+         pad_constant,
+         window_dims_tuple,
+         strides,
+         window_dilations,
+         output_type
+       ) do
+    unfold_windows(
+      from_nx(tensor),
+      padding,
+      pad_constant,
+      window_dims_tuple,
+      strides,
+      window_dilations,
+      output_type
+    )
   end
 
-  defp unfold_windows(tensor, padding, pad_constant, window_dims_tuple, strides) do
+  defp unfold_windows(
+         tensor,
+         padding,
+         pad_constant,
+         window_dims_tuple,
+         strides,
+         window_dilations,
+         output_type
+       ) do
     padding = flatten_padding(padding)
     padded = Torchx.pad(tensor, padding, pad_constant)
 
+    {device, _} = tensor
+
+    window_pad_config = Enum.map(window_dilations, &{0, 0, &1 - 1})
+
+    window =
+      1
+      |> Torchx.scalar_tensor(:bool, device)
+      |> Torchx.broadcast_to(window_dims_tuple)
+      |> pad_internal(window_pad_config, 0)
+
+    window_shape = Torchx.shape(window)
+
     {t_tx, _} =
-      for {window_dim, stride} <- Enum.zip(Tuple.to_list(window_dims_tuple), strides),
+      for {window_dim, stride} <- Enum.zip(Tuple.to_list(window_shape), strides),
           reduce: {padded, 0} do
         {t_tx, dim} ->
           {Torchx.unfold(t_tx, dim, window_dim, stride), dim + 1}
       end
 
-    t_tx
+    window_pad_constant = Torchx.scalar_tensor(pad_constant, output_type, device)
+
+    Torchx.where(
+      window,
+      Torchx.to_type(t_tx, output_type),
+      window_pad_constant
+    )
   end
 
   defp flatten_padding(padding) do
