@@ -1431,7 +1431,7 @@ defmodule Torchx.Backend do
       tensor,
       window_dims_tuple,
       opts,
-      tensor.type |> Nx.Constants.min_finite() |> Nx.to_number(),
+      tensor.type |> Nx.Constants.min_finite() |> Nx.to_number() |> dbg(),
       &Torchx.amax(&1, &2, false)
     )
   end
@@ -1443,7 +1443,7 @@ defmodule Torchx.Backend do
       tensor,
       window_dims_tuple,
       opts,
-      tensor.type |> Nx.Constants.max_finite() |> Nx.to_number(),
+      tensor.type |> Nx.Constants.max_finite() |> Nx.to_number() |> dbg(),
       &Torchx.amin(&1, &2, false)
     )
   end
