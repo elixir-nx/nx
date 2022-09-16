@@ -890,13 +890,18 @@ defmodule Torchx.NxTest do
       right = Nx.iota({8})
       right = Nx.reshape(right, {4, 1, 2, 1})
 
-      Nx.conv(left, right,
-        strides: 2,
-        padding: :same,
-        kernel_dilation: [2, 1],
-        input_permutation: [3, 1, 2, 0]
-      )
-      |> assert_all_close(
+      result =
+        Nx.conv(left, right,
+          strides: 2,
+          padding: :same,
+          kernel_dilation: [2, 1],
+          input_permutation: [3, 1, 2, 0]
+        )
+
+      assert result.shape == {3, 4, 2, 1}
+
+      assert_all_close(
+        result,
         Nx.tensor([
           [
             [
@@ -957,11 +962,16 @@ defmodule Torchx.NxTest do
     end
 
     test "output_permutation" do
-      assert_all_close(
+      result =
         Nx.conv(Nx.iota({1, 3, 3, 6}), Nx.broadcast(1, {2, 6, 1, 1}),
           input_permutation: [0, 3, 1, 2],
           output_permutation: [0, 3, 1, 2]
-        ),
+        )
+
+      assert result.shape == {1, 3, 3, 2}
+
+      assert_all_close(
+        result,
         Nx.tensor([
           [
             [15.0, 15.0],
@@ -979,6 +989,20 @@ defmodule Torchx.NxTest do
             [303.0, 303.0]
           ]
         ])
+      )
+    end
+
+    test "input_dilation" do
+      t = Nx.iota({1, 1, 1, 2, 3})
+      k = Nx.tensor([[[[[1, -1], [-1, 1]]]]])
+
+      result = Nx.conv(t, k, input_dilation: [1, 2, 3])
+
+      assert result.shape == {1, 1, 1, 2, 6}
+
+      assert_equal(
+        result,
+        Nx.tensor([[0, 0, -1, 1, 0, -2], [-3, 0, 4, -4, 0, 5]])
       )
     end
   end
