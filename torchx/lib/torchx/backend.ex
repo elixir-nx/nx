@@ -1641,6 +1641,8 @@ defmodule Torchx.Backend do
     IO.inspect(window |> Torchx.to_nx())
     IO.inspect(Torchx.to_type(t_tx, output_type) |> Torchx.to_nx())
 
+    window = Torchx.broadcast_to(window, Torchx.shape(t_tx))
+
     Torchx.where(
       window,
       Torchx.to_type(t_tx, output_type),
