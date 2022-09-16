@@ -1491,11 +1491,6 @@ defmodule Torchx.Backend do
   end
 
   defp window_scatter_function(function, out, tensor, source, init_value, window_dims_tuple, opts) do
-    # intermediate_type =
-    #   tensor.type
-    #   |> Nx.Type.to_floating()
-    #   |> to_torch_type()
-
     unfold_flat = fn tensor ->
       window_dilations = List.duplicate(1, tuple_size(window_dims_tuple))
 
@@ -1528,7 +1523,6 @@ defmodule Torchx.Backend do
     arg_idx =
       tensor
       |> from_nx()
-      # |> Torchx.to_type(intermediate_type)
       |> then(unfold_flat)
       |> then(function)
 

@@ -108,8 +108,8 @@ private:
   torch::Scalar VAR;                                                \
   VAR.~Scalar();                                                    \
   double double_##VAR;                                              \
-  std::vector<double> complex_##VAR;                              \
-  if (nx::nif::get_tuple<double>(env, argv[ARGN], complex_##VAR)) \
+  std::vector<double> complex_##VAR;                                \
+  if (nx::nif::get_tuple<double>(env, argv[ARGN], complex_##VAR))   \
   {                                                                 \
     new (&VAR) torch::Scalar(c10::complex<double>(                  \
         complex_##VAR[0],                                           \
