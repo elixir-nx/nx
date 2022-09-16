@@ -116,7 +116,7 @@ private:
   }                                                               \
   else if (enif_get_double(env, argv[ARGN], &double_##VAR) == 0)  \
   {                                                               \
-    long long_##VAR;                                              \
+    long long long_##VAR;                                         \
     enif_get_int64(env, argv[ARGN], (ErlNifSInt64 *)&long_##VAR); \
     new (&VAR) torch::Scalar((int64_t)long_##VAR);                \
   }                                                               \
@@ -518,8 +518,6 @@ NIF(scalar_tensor)
   SCALAR_PARAM(0, scalar);
   TYPE_PARAM(1, type);
   DEVICE_PARAM(2, device);
-
-  std::cout << "scalar: " << scalar << std::endl;
 
   TENSOR(torch::scalar_tensor(scalar, OPTS(type, device)));
 }
