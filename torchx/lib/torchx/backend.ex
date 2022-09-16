@@ -1433,8 +1433,7 @@ defmodule Torchx.Backend do
       opts,
       tensor.type
       |> Nx.Constants.min_finite()
-      |> Nx.to_number()
-      |> IO.inspect(label: "min finite"),
+      |> Nx.to_number(),
       &Torchx.amax(&1, &2, false)
     )
   end
@@ -1448,8 +1447,7 @@ defmodule Torchx.Backend do
       opts,
       tensor.type
       |> Nx.Constants.max_finite()
-      |> Nx.to_number()
-      |> IO.inspect(label: "max finite"),
+      |> Nx.to_number(),
       &Torchx.amin(&1, &2, false)
     )
   end
@@ -1642,7 +1640,6 @@ defmodule Torchx.Backend do
       Torchx.to_type(t_tx, output_type),
       window_pad_constant
     )
-    |> tap(fn tx -> tx |> Torchx.to_nx() |> IO.inspect() end)
   end
 
   defp flatten_padding(padding) do
