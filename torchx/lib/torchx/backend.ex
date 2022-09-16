@@ -1624,6 +1624,7 @@ defmodule Torchx.Backend do
       t_tx,
       window_pad_constant
     )
+    |> tap(fn tx -> tx |> Torchx.to_nx() |> IO.inspect() end)
   end
 
   defp flatten_padding(padding) do
