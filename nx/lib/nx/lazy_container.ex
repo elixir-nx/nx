@@ -6,10 +6,15 @@ defprotocol Nx.LazyContainer do
   operation, so we want to allow that to happen lazily.
 
   This module provides a single traverse implementation
-  that emits the tensor template and their contents as two
-  distinct values.
+  that emits the tensor template and a function that computes
+  the tensor as two distinct values. Then a tensor is only
+  allocated if necessary.
 
-  If a data structures does not implement this protocol,
+  This protocol is used throughout `Nx.Defn` API. This means
+  compilation, jitting, and streaming will only realized lazy
+  tensors when necessary.
+
+  If a data structure does not implement this protocol,
   a default implementation that converts eager to lazy is
   done by default.
   """

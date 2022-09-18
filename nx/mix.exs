@@ -85,6 +85,7 @@ defmodule Nx.MixProject do
 
         Protocols: [
           Nx.Container,
+          Nx.LazyContainer,
           Nx.Stream
         ],
         Structs: [
