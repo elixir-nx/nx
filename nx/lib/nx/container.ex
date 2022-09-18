@@ -49,7 +49,9 @@ defprotocol Nx.Container do
   Given `fun` may receive containers, it is not recursive by default.
   See `Nx.Defn.Composite.traverse/3` for a recursive variant.
   """
-  @spec traverse(t(), acc, (Nx.t() | Nx.Container.t(), acc -> {Nx.t() | Nx.Container.t(), acc})) :: acc when acc: term()
+  @spec traverse(t(), acc, (Nx.t() | Nx.Container.t(), acc -> {Nx.t() | Nx.Container.t(), acc})) ::
+          acc
+        when acc: term()
   def traverse(data, acc, fun)
 
   @doc """

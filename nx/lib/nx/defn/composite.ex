@@ -41,8 +41,12 @@ defmodule Nx.Defn.Composite do
           {left, right}
 
         impl ->
-          {_, left} = impl.traverse(left, [], fn template, _fun, acc -> [template | acc] end)
-          {_, right} = impl.traverse(right, [], fn template, _fun, acc -> [template | acc] end)
+          {_, left} =
+            impl.traverse(left, [], fn template, _fun, acc -> {template, [template | acc]} end)
+
+          {_, right} =
+            impl.traverse(right, [], fn template, _fun, acc -> {template, [template | acc]} end)
+
           {left, right}
       end
 
@@ -111,14 +115,24 @@ defmodule Nx.Defn.Composite do
     do: Nx.Container.traverse(container, acc, &traverse(&1, &2, fun))
 
   @doc """
-  Traverses recursively the given composite types with `acc` and `fun` using `Nx.LazyContainer`.
+  Traverses recursively the given composite types with `acc` and
+  `fun` using `Nx.LazyContainer`.
 
   If a composite tensor is given, such as a tuple, the composite
   type is recursively traversed and returned.
 
   `fun` receives the tensor template, a function that builds the tensor,
   and the accumulator.
+
+  This function is typically not invoked inside `defn`. Instead, it is
+  invoked when converting data to be sent to `defn` and by implementations
+  of `Nx.LazyContainer` themselves.
   """
+  def lazy_traverse(arg, _acc, _fun) when is_boolean(arg) do
+    raise ArgumentError,
+          "booleans are not valid tensors (and therefore not supported as defn inputs)"
+  end
+
   def lazy_traverse(expr, acc, fun) when is_tensor(expr) and is_function(fun, 3) do
     tensor = Nx.to_tensor(expr)
     fun.(%{tensor | data: %Nx.TemplateBackend{}}, fn -> tensor end, acc)
@@ -158,25 +172,22 @@ defmodule Nx.Defn.Composite do
       iex> Nx.Defn.Composite.flatten_list([1, {2, 3}], [Nx.tensor(4)])
       [1, 2, 3, Nx.tensor(4)]
 
-      iex> Nx.Defn.Composite.flatten_list([1, {2, 3}], [Nx.tensor(4)], &Nx.tensor/1)
-      [Nx.tensor(1), Nx.tensor(2), Nx.tensor(3), Nx.tensor(4)]
-
   """
-  def flatten_list(args, tail \\ [], fun \\ & &1) when is_list(args) do
+  def flatten_list(args, tail \\ []) when is_list(args) do
     args
-    |> Enum.reduce([], &flatten_each(&1, &2, fun))
+    |> Enum.reduce([], &flatten_each/2)
     |> Enum.reverse(tail)
   end
 
-  defp flatten_each(%T{} = tensor, acc, _fun),
+  defp flatten_each(%T{} = tensor, acc),
     do: [tensor | acc]
 
-  defp flatten_each(number, acc, fun)
+  defp flatten_each(number, acc)
        when is_number(number) or is_struct(number, Complex),
-       do: [fun.(number) | acc]
+       do: [number | acc]
 
-  defp flatten_each(container, acc, fun),
-    do: Nx.Container.reduce(container, acc, &flatten_each(&1, &2, fun))
+  defp flatten_each(container, acc),
+    do: Nx.Container.reduce(container, acc, &flatten_each/2)
 
   ## Nx.Defn callbacks
 
@@ -214,19 +225,7 @@ defmodule Nx.Defn.Composite do
   end
 
   @doc false
-  def flatten_runtime_args(args, tail) do
-    list = flatten_list(args, tail, &Nx.to_tensor/1)
-
-    for %Nx.Tensor{data: %Nx.Defn.Expr{}} = tensor <- list do
-      raise ArgumentError,
-            "cannot pass a tensor expression as argument to defn, got: #{inspect(tensor)}"
-    end
-
-    list
-  end
-
-  @doc false
-  def to_inputs(args) do
+  def to_compile_params(args) do
     {args, _} =
       Enum.map_reduce(args, 0, fn arg, i ->
         traverse(arg, i, fn
@@ -239,6 +238,28 @@ defmodule Nx.Defn.Composite do
       end)
 
     args
+  end
+
+  @doc false
+  def to_lazy_params(args) do
+    {template_args, {funs, _}} =
+      Enum.map_reduce(args, {[], 0}, fn container, acc ->
+        lazy_traverse(container, acc, fn template, fun, {acc, i} ->
+          {Expr.parameter(template, :root, i), {[fun | acc], i + 1}}
+        end)
+      end)
+
+    {template_args, Enum.reverse(funs)}
+  end
+
+  @doc false
+  def to_lazy_template(args, tail \\ []) do
+    {template_args, funs} =
+      Enum.map_reduce(args, [], fn container, acc ->
+        lazy_traverse(container, acc, fn template, fun, acc -> {template, [fun | acc]} end)
+      end)
+
+    {template_args, Enum.reverse(funs, tail)}
   end
 
   @doc false

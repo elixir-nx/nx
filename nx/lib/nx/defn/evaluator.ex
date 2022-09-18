@@ -21,7 +21,7 @@ defmodule Nx.Defn.Evaluator do
 
     [
       Nx.Defn.Stream.start_link(input, acc, fn input, acc ->
-        params = Nx.Defn.Composite.flatten_runtime_args([input, acc], Enum.drop(args, count))
+        {_, params} = Nx.Defn.Composite.to_lazy_template([input, acc], Enum.drop(args, count))
 
         expr
         |> composite_eval(%{params: params, hooks: hooks, gc: gc?}, %{})
@@ -48,10 +48,6 @@ defmodule Nx.Defn.Evaluator do
         |> elem(0)
       ]
     end
-  end
-
-  defp eval(%Nx.Tensor{data: %Expr{op: :parameter, args: [i]}}, state, cache) do
-    {Enum.fetch!(state.params, i), cache}
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: :tensor, args: [t]}}, _state, cache) do
@@ -89,19 +85,30 @@ defmodule Nx.Defn.Evaluator do
     {other, cache}
   end
 
+  defp eval_apply(:parameter, %{data: %Expr{args: [i]}}, state, cache) do
+    case Enum.fetch!(state.params, i).() do
+      %Nx.Tensor{data: %Nx.Defn.Expr{}} = tensor ->
+        raise ArgumentError,
+              "cannot pass a tensor expression as argument to defn, got: #{inspect(tensor)}"
+
+      %Nx.Tensor{} = tensor ->
+        {tensor, cache}
+    end
+  end
+
   defp eval_apply(:fun, %{data: %Expr{args: [args, expr, _mfa]}}, state, cache) do
     fun =
       case length(args) do
         1 ->
           fn arg1 ->
-            params = [Nx.to_tensor(arg1)]
+            params = [fn -> Nx.to_tensor(arg1) end]
             {result, _cache} = composite_eval(expr, %{state | params: params}, %{})
             result
           end
 
         2 ->
           fn arg1, arg2 ->
-            params = [Nx.to_tensor(arg1), Nx.to_tensor(arg2)]
+            params = [fn -> Nx.to_tensor(arg1) end, fn -> Nx.to_tensor(arg2) end]
             {result, _cache} = composite_eval(expr, %{state | params: params}, %{})
             result
           end
@@ -210,7 +217,7 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp composite_to_params(other, acc) do
-    [other | acc]
+    [fn -> other end | acc]
   end
 
   defp cond_clause([{pred, clause} | clauses], last, state, cache) do

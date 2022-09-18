@@ -22,6 +22,19 @@ defmodule Nx.Defn.StreamTest do
     assert Nx.Stream.done(stream) == Nx.tensor(3)
   end
 
+  defn defn_sum_with_args(entry, acc, a, b), do: {acc, entry + acc + (a - b)}
+
+  test "runs defn stream with args" do
+    %_{} = stream = Nx.Defn.stream(&defn_sum_with_args/4, [0, 0, 2, 1])
+    assert Nx.Stream.send(stream, 1) == :ok
+    assert Nx.Stream.recv(stream) == Nx.tensor(0)
+
+    assert Nx.Stream.send(stream, 2) == :ok
+    assert Nx.Stream.recv(stream) == Nx.tensor(2)
+
+    assert Nx.Stream.done(stream) == Nx.tensor(5)
+  end
+
   test "runs elixir stream" do
     %_{} = stream = Nx.Defn.stream(&elixir_sum/2, [0, 0])
     assert Nx.Stream.send(stream, 1) == :ok

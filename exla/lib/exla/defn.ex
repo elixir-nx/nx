@@ -128,7 +128,6 @@ defmodule EXLA.Defn do
     flag_shape = EXLA.Shape.make_shape({:pred, 8}, {})
     token_shape = EXLA.Shape.make_token_shape()
     infeed_shape = EXLA.Shape.make_tuple_shape([flag_shape, token_shape])
-
     arg_shape = EXLA.Shape.make_tuple_shape([infeed_shape, acc_shape, constant_shape])
 
     pred_b = EXLA.Builder.new(builder, "while-pred-" <> inspected_key)

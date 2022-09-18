@@ -197,16 +197,6 @@ defmodule Nx.DefnTest do
     end
   end
 
-  describe "arguments" do
-    defn identity(t), do: t
-
-    test "raises on Nx.Defn.Expr as argument" do
-      message = ~r/cannot pass a tensor expression as argument to defn/
-      assert_raise ArgumentError, message, fn -> identity(Nx.Defn.Expr.tensor(1)) end
-      assert_raise ArgumentError, message, fn -> identity({Nx.Defn.Expr.tensor(1)}) end
-    end
-  end
-
   describe "anonymous functions args" do
     defn calls_binary_fun(fun, a, b), do: fun.(a, b)
 
