@@ -503,18 +503,13 @@ defmodule Nx.Defn do
       raise "cannot call Nx.Defn.stream/3 when there is a JIT compilation happening"
     end
 
+    opts = prepare_options(opts)
+    {params, flatten} = Nx.Defn.Composite.to_lazy_params(args)
+
     case args do
-      [input, acc | rest] ->
+      [_input, acc | _] ->
         acc = Nx.Defn.Composite.traverse(acc, &Nx.to_tensor/1)
-        args = [input, acc | rest]
-
-        opts = prepare_options(opts)
-        input_template = Nx.to_template(input)
-        {template_args, flatten} = Nx.Defn.Composite.to_lazy_template(args)
-
-        [stream] =
-          Nx.Defn.Compiler.__stream__(fun, input_template, acc, template_args, [flatten], opts)
-
+        [stream] = Nx.Defn.Compiler.__stream__(fun, hd(params), acc, params, [flatten], opts)
         stream
 
       _ ->

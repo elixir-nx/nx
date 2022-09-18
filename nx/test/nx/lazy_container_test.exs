@@ -31,16 +31,16 @@ defmodule Nx.LazyLazyOnlyTest do
 
   import Nx.Defn
 
-  defn match_signature(%LazyWrapped{a: a, b: b}) do
-    a + b
+  defn match_signature(%LazyWrapped{a: a, c: c}) do
+    a + c
   end
 
   test "matches defn signature and does not invoke :c" do
-    assert match_signature(%LazyOnly{a: 1, b: 2, c: 3}) == Nx.tensor(3)
+    assert match_signature(%LazyOnly{a: 1, b: 2, c: 3}) == Nx.tensor(4)
   end
 
   test "matches jit signature and does not invoke :c" do
-    fun = Nx.Defn.jit(fn %LazyWrapped{a: a, b: b} -> Nx.add(a, b) end)
-    assert fun.(%LazyOnly{a: 1, b: 2, c: 3}) == Nx.tensor(3)
+    fun = Nx.Defn.jit(fn %LazyWrapped{a: a, c: c} -> Nx.add(a, c) end)
+    assert fun.(%LazyOnly{a: 1, b: 2, c: 3}) == Nx.tensor(4)
   end
 end

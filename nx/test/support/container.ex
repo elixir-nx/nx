@@ -17,6 +17,7 @@ end
 
 # The result of lazy container traversal
 defmodule LazyWrapped do
+  @derive {Nx.Container, containers: [:a, :b, :c]}
   defstruct [:a, :b, :c]
 end
 
@@ -27,8 +28,8 @@ defmodule LazyOnly do
   defimpl Nx.LazyContainer do
     def traverse(%LazyOnly{a: a, b: b, c: c}, acc, fun) do
       {a, acc} = fun.(Nx.to_template(a), fn -> Nx.tensor(a) end, acc)
-      {b, acc} = fun.(Nx.to_template(b), fn -> Nx.tensor(b) end, acc)
-      {c, acc} = fun.(Nx.to_template(c), fn -> raise "don't call c" end, acc)
+      {b, acc} = fun.(Nx.to_template(b), fn -> raise "don't call b" end, acc)
+      {c, acc} = fun.(Nx.to_template(c), fn -> Nx.tensor(c) end, acc)
       {%LazyWrapped{a: a, b: b, c: c}, acc}
     end
   end

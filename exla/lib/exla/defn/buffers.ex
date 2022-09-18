@@ -2,6 +2,20 @@ defmodule EXLA.Defn.Buffers do
   @moduledoc false
 
   @doc """
+  Filter inputs based on index.
+  """
+  def filter_by_indexes(args, inputs), do: filter_by_indexes(args, 0, inputs)
+
+  defp filter_by_indexes([var | vars], i, [i | inputs]),
+    do: [var | filter_by_indexes(vars, i + 1, inputs)]
+
+  defp filter_by_indexes([_var | vars], i, inputs),
+    do: filter_by_indexes(vars, i + 1, inputs)
+
+  defp filter_by_indexes([], _i, []),
+    do: []
+
+  @doc """
   binary + EXLA.DeviceBuffer + EXLA.BinaryBuffer -> Nx.
   """
   def to_nx!(buffers, outputs) do

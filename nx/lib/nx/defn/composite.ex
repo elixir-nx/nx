@@ -225,22 +225,6 @@ defmodule Nx.Defn.Composite do
   end
 
   @doc false
-  def to_compile_params(args) do
-    {args, _} =
-      Enum.map_reduce(args, 0, fn arg, i ->
-        traverse(arg, i, fn
-          arg, _i when is_boolean(arg) ->
-            raise ArgumentError, "booleans are not supported as defn inputs"
-
-          arg, i ->
-            {Expr.parameter(Nx.to_tensor(arg), :root, i), i + 1}
-        end)
-      end)
-
-    args
-  end
-
-  @doc false
   def to_lazy_params(args) do
     {template_args, {funs, _}} =
       Enum.map_reduce(args, {[], 0}, fn container, acc ->
@@ -253,13 +237,13 @@ defmodule Nx.Defn.Composite do
   end
 
   @doc false
-  def to_lazy_template(args, tail \\ []) do
+  def to_lazy_template(args) do
     {template_args, funs} =
       Enum.map_reduce(args, [], fn container, acc ->
         lazy_traverse(container, acc, fn template, fun, acc -> {template, [fun | acc]} end)
       end)
 
-    {template_args, Enum.reverse(funs, tail)}
+    {template_args, Enum.reverse(funs)}
   end
 
   @doc false

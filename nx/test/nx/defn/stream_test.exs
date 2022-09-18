@@ -144,4 +144,21 @@ defmodule Nx.Defn.StreamTest do
 
     assert Nx.Stream.done(stream) == %Container{a: Nx.tensor(0), b: Nx.tensor(3), d: :acc}
   end
+
+  defn lazy_container_stream(%LazyWrapped{a: a, c: c}, acc) do
+    {acc, acc + a - c}
+  end
+
+  test "lazy container in" do
+    args = [%LazyOnly{a: 0, b: 0, c: 0}, 0]
+    %_{} = stream = Nx.Defn.stream(&lazy_container_stream/2, args)
+
+    assert Nx.Stream.send(stream, %LazyOnly{a: 3, b: 0, c: -1}) == :ok
+    assert Nx.Stream.recv(stream) == Nx.tensor(0)
+
+    assert Nx.Stream.send(stream, %LazyOnly{a: 5, b: 0, c: 2}) == :ok
+    assert Nx.Stream.recv(stream) == Nx.tensor(4)
+
+    assert Nx.Stream.done(stream) == Nx.tensor(7)
+  end
 end
