@@ -120,7 +120,7 @@ private:
   {                                                                 \
     int64_t long_##VAR;                                           \
     enif_get_int64(env, argv[ARGN], (ErlNifSInt64 *)&long_##VAR);   \
-    new (&VAR) torch::Scalar((int64_t)long_##VAR);                  \
+    new (&VAR) torch::Scalar(long_##VAR);                  \
   }                                                                 \
   else                                                              \
   {                                                                 \
