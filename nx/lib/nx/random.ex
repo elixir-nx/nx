@@ -468,16 +468,16 @@ defmodule Nx.Random do
     >
 
     iex> key = Nx.Random.key(1337)
-    iex> normal = Nx.Random.normal(key, 10, 5, shape: {100_000})
+    iex> normal = Nx.Random.normal(key, 10, 5, shape: {1_000})
     iex> Nx.mean(normal)
     #Nx.Tensor<
       f32
-      10.014178276062012
+      9.897998809814453
     >
     iex> Nx.standard_deviation(normal)
     #Nx.Tensor<
       f32
-      4.997608184814453
+      4.988009929656982
     >
   """
   defn normal(key, mean \\ 0, standard_deviation \\ 1, opts \\ []) do
