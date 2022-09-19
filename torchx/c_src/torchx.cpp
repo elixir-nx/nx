@@ -118,9 +118,9 @@ private:
   }                                                                 \
   else if (enif_get_double(env, argv[ARGN], &double_##VAR) == 0)    \
   {                                                                 \
-    int64_t long_##VAR;                                           \
-    enif_get_int64(env, argv[ARGN], (ErlNifSInt64 *)&long_##VAR);   \
-    new (&VAR) torch::Scalar(long_##VAR);                  \
+    int64_t int64_##VAR;                                           \
+    enif_get_int64(env, argv[ARGN], (ErlNifSInt64 *)&int64_##VAR);   \
+    new (&VAR) torch::Scalar(int64_##VAR);                  \
   }                                                                 \
   else                                                              \
   {                                                                 \
@@ -162,7 +162,7 @@ private:
     if (c10::isFloatingType(S.type()))                       \
       return nx::nif::ok(env, nx::nif::make(env, S.toDouble())); \
     else                                                     \
-      return nx::nif::ok(env, nx::nif::make(env, (long)S.toLong())); \
+      return nx::nif::ok(env, nx::nif::make(env, (int64_t) S.toLong())); \
   }                                                          \
   CATCH()
 
@@ -235,7 +235,7 @@ NIF(delete_tensor)
   return tensor.deallocate() ? nx::nif::ok(env) : enif_make_badarg(env);
 }
 
-unsigned long elem_count(std::vector<int64_t> shape)
+uint64_t elem_count(std::vector<int64_t> shape)
 {
   return std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<>{});
 }
@@ -325,7 +325,7 @@ NIF(shape)
 
   std::vector<ERL_NIF_TERM> sizes;
   for (int dim = 0; dim < t->dim(); dim++ )
-    sizes.push_back(nx::nif::make(env, ((long)t->size(dim))));
+    sizes.push_back(nx::nif::make(env, (t->size(dim))));
 
   return nx::nif::ok(env, enif_make_tuple_from_array(env, sizes.data(), sizes.size()));
 }
