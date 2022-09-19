@@ -1,6 +1,6 @@
 defmodule Nx.Defn.Tree do
   @moduledoc """
-  Helper functions to traverse expressions,
+  Helper functions to traverse defn expressions,
   either as single nodes or recursively.
   """
 

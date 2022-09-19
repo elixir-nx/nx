@@ -89,10 +89,5 @@ defmodule Nx.Defn.CompositeTest do
       assert [1, Complex.new(2), Nx.tensor(3), 4, 5, 6] ==
                Composite.flatten_list([1, {Complex.new(2), Nx.tensor(3)}], [4, 5, 6])
     end
-
-    test "flattens with custom function" do
-      assert [Nx.tensor(1), Nx.tensor(Complex.new(2)), Nx.tensor(3)] ==
-               Composite.flatten_list([1, {Complex.new(2), Nx.tensor(3)}], [], &Nx.tensor/1)
-    end
   end
 end

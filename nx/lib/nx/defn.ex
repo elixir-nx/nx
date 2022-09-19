@@ -314,17 +314,17 @@ defmodule Nx.Defn do
   """
   def compile(fun, template_args, opts \\ [])
       when is_function(fun) and is_list(template_args) and is_list(opts) do
-    template_args = Enum.map(template_args, &Nx.to_template/1)
+    {params, _flatten} = Nx.Defn.Composite.to_lazy_params(template_args)
     opts = prepare_options(opts)
-    compiled_fun = Nx.Defn.Compiler.__compile__(fun, template_args, opts)
+    compiled_fun = Nx.Defn.Compiler.__compile__(fun, params, opts)
 
     wrap(fun, fn args ->
       if Nx.Defn.Compiler.current() do
         raise "cannot invoke compiled function when there is a JIT compilation happening"
       end
 
-      assert_compatible!(args, template_args, 1)
-      flatten = Nx.Defn.Composite.flatten_runtime_args(args, [])
+      {templates, flatten} = Nx.Defn.Composite.to_lazy_template(args)
+      assert_compatible!(templates, params, 1)
       [res] = compiled_fun.([flatten])
       res
     end)
@@ -428,8 +428,8 @@ defmodule Nx.Defn do
 
   defp do_jit_apply(fun, args, opts) do
     opts = prepare_options(opts)
-    flatten = Nx.Defn.Composite.flatten_runtime_args(args, [])
-    [res] = Nx.Defn.Compiler.__jit__(fun, args, [flatten], opts)
+    {params, flatten} = Nx.Defn.Composite.to_lazy_params(args)
+    [res] = Nx.Defn.Compiler.__jit__(fun, params, [flatten], opts)
     res
   end
 
@@ -503,15 +503,13 @@ defmodule Nx.Defn do
       raise "cannot call Nx.Defn.stream/3 when there is a JIT compilation happening"
     end
 
+    opts = prepare_options(opts)
+    {params, flatten} = Nx.Defn.Composite.to_lazy_params(args)
+
     case args do
-      [input, acc | _] ->
+      [_input, acc | _] ->
         acc = Nx.Defn.Composite.traverse(acc, &Nx.to_tensor/1)
-        opts = prepare_options(opts)
-        flatten = Nx.Defn.Composite.flatten_runtime_args(args, [])
-
-        [stream] =
-          Nx.Defn.Compiler.__stream__(fun, Nx.to_template(input), acc, args, [flatten], opts)
-
+        [stream] = Nx.Defn.Compiler.__stream__(fun, hd(params), acc, params, [flatten], opts)
         stream
 
       _ ->

@@ -25,7 +25,9 @@ defmodule Nx.Tensor do
   @type axis :: name | integer
   @type axes :: [axis]
   @type name :: atom
+
   @type t :: %Nx.Tensor{data: data, type: type, shape: shape, names: [name]}
+  @type t(data) :: %Nx.Tensor{data: data, type: type, shape: shape, names: [name]}
 
   @enforce_keys [:type, :shape, :names]
   defstruct [:data, :type, :shape, :names]
