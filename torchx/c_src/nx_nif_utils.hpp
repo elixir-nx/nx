@@ -125,7 +125,7 @@ namespace nx
       return enif_make_atom(env, "false");
     }
 
-    ERL_NIF_TERM make(ErlNifEnv *env, long var)
+    ERL_NIF_TERM make(ErlNifEnv *env, int64_t var)
     {
       return enif_make_int64(env, var);
     }
