@@ -1142,6 +1142,34 @@ defmodule Nx.LinAlg do
     )
   end
 
+
+  @doc """
+  Calculates the psuedoinverse of a matrix (e.g. in cases when the matrix is non-square.)
+
+  ## Options
+    * `:eps` - Rounding error threshold that can be applied during the factorization
+
+  ## Examples
+
+    WRITE THE PINV CODE IN HERE!!! LMAO
+  """
+
+
+  def pinv(tensor, opts \\ []) do
+
+    opts = keyword!(opts, eps: @default_eps)
+
+    # {u, s, vt} = svd(tensor)
+
+    # IO.inspect(u)
+    # IO.inspect(s)
+    # IO.inspect(vt)
+
+    # adjusted_s = Nx.map(s, fn x -> if Nx.to_number(Nx.abs(x)) < opts[:eps] do 0 else Nx.divide(1, x) end end)
+
+    Nx.dot(invert(Nx.dot(Nx.transpose(tensor), tensor)), Nx.transpose(tensor))
+  end
+
   @doc """
   Calculates the A = PLU decomposition of batched square 2-D matrices A.
 
