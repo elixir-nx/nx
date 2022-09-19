@@ -78,6 +78,32 @@ defimpl Nx.LazyContainer, for: Map do
   end
 end
 
+defimpl Nx.LazyContainer, for: Atom do
+  def traverse(bool, _acc, _fun) when is_boolean(bool) do
+    raise Protocol.UndefinedError,
+      protocol: @protocol,
+      value: bool,
+      description: "booleans are not valid tensors (and therefore not supported as defn inputs). " <>
+      "However, you can convert them to tensors using Nx.tensor/1"
+  end
+
+  def traverse(atom, _acc, _fun) do
+    raise Protocol.UndefinedError,
+      protocol: @protocol,
+      value: atom
+  end
+end
+
+defimpl Nx.LazyContainer, for: List do
+  def traverse(list, _acc, _fun) do
+    raise Protocol.UndefinedError,
+      protocol: @protocol,
+      value: list,
+      description: "lists are not valid tensors (and therefore not supported as defn inputs). " <>
+      "However, you can convert them to tensors using Nx.tensor/1"
+  end
+end
+
 defimpl Nx.LazyContainer, for: Any do
   def traverse(data, acc, fun) do
     Nx.Container.traverse(data, acc, &Nx.LazyContainer.traverse(&1, &2, fun))
