@@ -413,6 +413,110 @@ defmodule Nx.Random do
     |> Nx.reshape(shape, take_names(opts))
   end
 
+  @doc """
+  Returns a normal distribution with the given `mean` and `standard_deviation`.
+
+  ## Options
+
+    * `:type` - a float or complex type for the returned tensor
+
+    * `:shape` - shape of the returned tensor
+
+    * `:names` - the names of the returned tensor
+
+  ## Examples
+
+    iex> key = Nx.Random.key(42)
+    iex> Nx.Random.normal(key)
+    #Nx.Tensor<
+      f32
+      -0.18471182882785797
+    >
+
+    iex> key = Nx.Random.key(42)
+    iex> Nx.Random.normal(key, 0, 1, shape: {3, 3, 2}, type: :f16)
+    #Nx.Tensor<
+      f16[3][3][2]
+      [
+        [
+          [-0.6201171875, -1.017578125],
+          [-0.1424560546875, 0.1005859375],
+          [-0.513671875, 0.308349609375]
+        ],
+        [
+          [-1.423828125, -1.9873046875],
+          [-0.599609375, 0.662109375],
+          [-0.54150390625, -2.3359375]
+        ],
+        [
+          [-0.1448974609375, -0.4560546875],
+          [0.2802734375, 0.2548828125],
+          [-1.1044921875, -1.359375]
+        ]
+      ]
+    >
+
+    iex> key = Nx.Random.key(42)
+    iex> Nx.Random.normal(key, 0, 1, shape: {3,3}, type: :c64)
+    #Nx.Tensor<
+      c64[3][3]
+      [
+        [-0.7446164488792419-1.6652092933654785i, -1.2271071672439575+0.23443973064422607i, -0.053599901497364044-0.24498997628688812i],
+        [0.9805877208709717+0.4470720589160919i, 0.44665536284446716-0.3771430552005768i, 0.7519879341125488+0.2825981676578522i],
+        [0.4686059355735779-0.11017023772001266i, 0.4970967769622803+0.5699526071548462i, 0.15884320437908173+0.3396047353744507i]
+      ]
+    >
+
+    iex> key = Nx.Random.key(1337)
+    iex> normal = Nx.Random.normal(key, 10, 5, shape: {100_000})
+    iex> Nx.mean(normal)
+    #Nx.Tensor<
+      f32
+      10.014178276062012
+    >
+    iex> Nx.standard_deviation(normal)
+    #Nx.Tensor<
+      f32
+      4.997608184814453
+    >
+  """
+  defn normal(key, mean \\ 0, standard_deviation \\ 1, opts \\ []) do
+    opts = keyword!(opts, [:names, shape: {}, type: {:f, 32}])
+    assert_key!(key)
+
+    type = normalize(opts[:type])
+
+    case type do
+      {:c, _} ->
+        k = split(key, 2)
+        opts = as_real_type(opts)
+        real = normal_real(k[0], mean, standard_deviation, opts)
+        imag = normal_real(k[1], mean, standard_deviation, opts)
+        real + Nx.Constants.i() * imag
+
+      {t, _} when t == :f or t == :bf ->
+        normal_real(key, mean, standard_deviation, opts)
+
+      _ ->
+        raise ArgumentError,
+              "expected float or complex type, got type #{inspect(type)}"
+    end
+  end
+
+  defn normal_real(key, mean, standard_deviation, opts \\ []) do
+    u = uniform(key, -1, 1, opts)
+
+    normal = Nx.sqrt(2) * Nx.erf_inv(u)
+
+    result = standard_deviation * normal + mean
+    Nx.as_type(result, opts[:type])
+  end
+
+  deftransformp as_real_type(opts) do
+    real = Nx.Type.to_real(opts[:type])
+    Keyword.put(opts, :type, real)
+  end
+
   deftransformp take_names(opts), do: Keyword.take(opts, [:names])
   deftransformp normalize(type), do: Nx.Type.normalize!(type)
 
