@@ -1063,7 +1063,7 @@ defmodule Nx.LinAlg do
     * `:max_iter` - `integer`. Defaults to `1000`
       Number of maximum iterations before stopping the decomposition
 
-    * `:eps` - `float`. Defaults to 1.0e-12
+    * `:eps` - `float`. Defaults to 1.0e-10
       Tolerance applied during the decomposition
 
   Note not all options apply to all backends, as backends may have
