@@ -76,6 +76,12 @@ defmodule Nx.RandomTest do
   describe "types" do
     test "randint" do
       key = Nx.Random.key(44)
+
+      # Default
+      assert Nx.Random.randint(key, Nx.tensor(0, type: :u8), Nx.tensor(100, type: :u8)) ==
+               Nx.tensor(86, type: :u8)
+
+      # Explicit
       assert Nx.Random.randint(key, 0, 100, type: :u8) == Nx.tensor(86, type: :u8)
       assert Nx.Random.randint(key, 0, 100, type: :u64) == Nx.tensor(23, type: :u64)
       assert Nx.Random.randint(key, 0, 100, type: :s64) == Nx.tensor(23, type: :s64)
@@ -83,10 +89,44 @@ defmodule Nx.RandomTest do
 
     test "uniform" do
       key = Nx.Random.key(44)
+
+      # default
+      assert Nx.Random.uniform(key, 0, 100) == Nx.tensor(0.9405970573425293, type: :f32)
+
+      # inference
+      assert Nx.Random.uniform(key, Nx.tensor(0, type: :bf16), Nx.tensor(100, type: :bf16)) ==
+               Nx.tensor(42.75, type: :bf16)
+
+      # int to float cast
       assert Nx.Random.uniform(key, 0, 100, type: :bf16) == Nx.tensor(42.75, type: :bf16)
 
-      assert Nx.Random.uniform(key, 0, 100, type: :f64) ==
+      # f32 to bf16 downcast
+      assert Nx.Random.uniform(key, 0.0, 100.0, type: :bf16) == Nx.tensor(42.75, type: :bf16)
+
+      # upcast
+      assert Nx.Random.uniform(key, 0.0, 100.0, type: :f64) ==
                Nx.tensor(49.70372348385783, type: :f64)
+    end
+
+    test "normal" do
+      key = Nx.Random.key(44)
+
+      # default
+      assert Nx.Random.uniform(key, 0, 100) == Nx.tensor(0.9405970573425293, type: :f32)
+
+      # inference
+      assert Nx.Random.normal(key, Nx.tensor(0, type: :bf16), Nx.tensor(100, type: :bf16)) ==
+               Nx.tensor(-17.625, type: :bf16)
+
+      # int to float cast
+      assert Nx.Random.normal(key, 0, 100, type: :bf16) == Nx.tensor(-17.625, type: :bf16)
+
+      # f32 to bf16 downcast
+      assert Nx.Random.normal(key, 0.0, 100.0, type: :bf16) == Nx.tensor(-17.625, type: :bf16)
+
+      # upcast
+      assert Nx.Random.normal(key, 0, 100, type: :f64) ==
+               Nx.tensor(-0.74266187285454, type: :f64)
     end
   end
 
