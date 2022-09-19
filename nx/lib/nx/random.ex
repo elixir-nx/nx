@@ -401,6 +401,9 @@ defmodule Nx.Random do
     shape = Nx.shape(opts[:shape])
     u_one = Nx.tensor(1.0, type: type) |> Nx.bitcast({:u, nbits})
 
+    min_value = Nx.as_type(min_value, type)
+    max_value = Nx.as_type(max_value, type)
+
     random_bits(key, shape: shape, bit_width: nbits)
     |> Nx.as_type({:u, nbits})
     |> Nx.right_shift(Nx.tensor(nbits - info[:mantissa], type: {:u, nbits}))
