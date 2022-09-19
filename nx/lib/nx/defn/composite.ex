@@ -7,6 +7,10 @@ defmodule Nx.Defn.Composite do
   automatically convert values to tensors. For example, the tuple `{1, 2, 3}`
   once traversed will emit the numbers `1`, `2`, and `3`. If desired,
   you can invoke `Nx.to_tensor/1` to normalize them.
+
+  Note that, when a value is given to `defn`, it is first converted to
+  tensors and containers via `Nx.LazyContainer`. Inside `defn`, there are
+  no lazy containers, only containers.
   """
 
   alias Nx.Defn.Expr
@@ -115,35 +119,6 @@ defmodule Nx.Defn.Composite do
     do: Nx.Container.traverse(container, acc, &traverse(&1, &2, fun))
 
   @doc """
-  Traverses recursively the given composite types with `acc` and
-  `fun` using `Nx.LazyContainer`.
-
-  If a composite tensor is given, such as a tuple, the composite
-  type is recursively traversed and returned.
-
-  `fun` receives the tensor template, a function that builds the tensor,
-  and the accumulator.
-
-  This function is typically not invoked inside `defn`. Instead, it is
-  invoked when converting data to be sent to `defn` and by implementations
-  of `Nx.LazyContainer` themselves.
-  """
-  def lazy_traverse(arg, _acc, _fun) when is_boolean(arg) do
-    raise ArgumentError,
-          "booleans are not valid tensors (and therefore not supported as defn inputs)"
-  end
-
-  def lazy_traverse(expr, acc, fun) when is_tensor(expr) and is_function(fun, 3) do
-    tensor = Nx.to_tensor(expr)
-    fun.(%{tensor | data: %Nx.TemplateBackend{}}, fn -> tensor end, acc)
-  end
-
-  def lazy_traverse(container, acc, fun) do
-    # Nx.LazyContainer is by default recursive over this function.
-    Nx.LazyContainer.traverse(container, acc, fun)
-  end
-
-  @doc """
   Reduces recursively the given composite types with `acc` and `fun`.
 
   If composite tensor expressions are given, such as a tuple,
@@ -228,7 +203,7 @@ defmodule Nx.Defn.Composite do
   def to_lazy_params(args) do
     {template_args, {funs, _}} =
       Enum.map_reduce(args, {[], 0}, fn container, acc ->
-        lazy_traverse(container, acc, fn template, fun, {acc, i} ->
+        Nx.LazyContainer.traverse(container, acc, fn template, fun, {acc, i} ->
           {Expr.parameter(template, :root, i), {[fun | acc], i + 1}}
         end)
       end)
@@ -240,7 +215,9 @@ defmodule Nx.Defn.Composite do
   def to_lazy_template(args) do
     {template_args, funs} =
       Enum.map_reduce(args, [], fn container, acc ->
-        lazy_traverse(container, acc, fn template, fun, acc -> {template, [fun | acc]} end)
+        Nx.LazyContainer.traverse(container, acc, fn template, fun, acc ->
+          {template, [fun | acc]}
+        end)
       end)
 
     {template_args, Enum.reverse(funs)}

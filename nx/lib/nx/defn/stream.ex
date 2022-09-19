@@ -61,7 +61,7 @@ defmodule Nx.Defn.Stream do
   defimpl Nx.Stream do
     def send(%{pid: pid, input: input}, data) do
       {template, funs} =
-        Nx.Defn.Composite.lazy_traverse(data, [], fn template, fun, acc ->
+        Nx.LazyContainer.traverse(data, [], fn template, fun, acc ->
           {template, [fun | acc]}
         end)
 

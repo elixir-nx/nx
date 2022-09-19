@@ -33,7 +33,7 @@ defprotocol Nx.LazyContainer do
 
   Note this function is recursive by default. Therefore if you
   are implementing this function and one of your arguments may
-  be containers, you must call `Nx.Defn.Composite.lazy_traverse/3`
+  be containers, you must call `Nx.LazyContainer.traverse/3`
   on said arguments so they are recursively traversed.
   """
   @spec traverse(t(), acc, (Nx.template(), (() -> Nx.Tensor.t()), acc -> {term(), acc})) :: acc
@@ -41,22 +41,37 @@ defprotocol Nx.LazyContainer do
   def traverse(data, acc, fun)
 end
 
+defimpl Nx.LazyContainer, for: Nx.Tensor do
+  def traverse(tensor, acc, fun) do
+    fun.(%{tensor | data: %Nx.TemplateBackend{}}, fn -> tensor end, acc)
+  end
+end
+
+defimpl Nx.LazyContainer, for: [Integer, Float, Complex] do
+  def traverse(number, acc, fun) do
+    tensor = Nx.to_tensor(number)
+    fun.(%{tensor | data: %Nx.TemplateBackend{}}, fn -> tensor end, acc)
+  end
+end
+
+# Implement to speed up fallback to container.
 defimpl Nx.LazyContainer, for: Tuple do
   def traverse(tuple, acc, fun) do
     tuple
     |> Tuple.to_list()
-    |> Enum.map_reduce(acc, &Nx.Defn.Composite.lazy_traverse(&1, &2, fun))
+    |> Enum.map_reduce(acc, &Nx.LazyContainer.traverse(&1, &2, fun))
     |> then(fn {list, acc} -> {List.to_tuple(list), acc} end)
   end
 end
 
+# Implement to speed up fallback to container.
 defimpl Nx.LazyContainer, for: Map do
   def traverse(map, acc, fun) do
     map
     |> Map.to_list()
     |> Enum.sort()
     |> Enum.map_reduce(acc, fn {k, v}, acc ->
-      {v, acc} = Nx.Defn.Composite.lazy_traverse(v, acc, fun)
+      {v, acc} = Nx.LazyContainer.traverse(v, acc, fun)
       {{k, v}, acc}
     end)
     |> then(fn {list, acc} -> {Map.new(list), acc} end)
@@ -65,6 +80,6 @@ end
 
 defimpl Nx.LazyContainer, for: Any do
   def traverse(data, acc, fun) do
-    Nx.Container.traverse(data, acc, &Nx.Defn.Composite.lazy_traverse(&1, &2, fun))
+    Nx.Container.traverse(data, acc, &Nx.LazyContainer.traverse(&1, &2, fun))
   end
 end

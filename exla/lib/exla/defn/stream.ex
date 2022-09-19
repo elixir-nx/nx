@@ -100,7 +100,7 @@ defmodule EXLA.Defn.Stream do
 
     defp nx_to_io(container, indexes) do
       {template, buffers} =
-        Nx.Defn.Composite.lazy_traverse(container, [], fn template, fun, acc ->
+        Nx.LazyContainer.traverse(container, [], fn template, fun, acc ->
           {template, [fun | acc]}
         end)
 

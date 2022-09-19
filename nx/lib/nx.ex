@@ -818,7 +818,7 @@ defmodule Nx do
   @doc type: :conversion
   def to_template(tensor_or_container) do
     tensor_or_container
-    |> Nx.Defn.Composite.lazy_traverse(:ok, fn template, _fun, :ok -> {template, :ok} end)
+    |> Nx.LazyContainer.traverse(:ok, fn template, _fun, :ok -> {template, :ok} end)
     |> then(fn {template, :ok} -> template end)
   end
 
