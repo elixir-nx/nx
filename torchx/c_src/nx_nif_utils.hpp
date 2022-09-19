@@ -130,11 +130,6 @@ namespace nx
       return enif_make_int64(env, var);
     }
 
-    ERL_NIF_TERM make(ErlNifEnv *env, long var)
-    {
-      return enif_make_int64(env, var);
-    }
-
     ERL_NIF_TERM make(ErlNifEnv *env, int var)
     {
       return enif_make_int(env, var);
