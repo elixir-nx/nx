@@ -324,7 +324,7 @@ NIF(shape)
   TENSOR_PARAM(0, t);
 
   std::vector<ERL_NIF_TERM> sizes;
-  for (int dim = 0; dim < t->dim(); dim++ )
+  for (int64_t dim = 0; dim < t->dim(); dim++ )
     sizes.push_back(nx::nif::make(env, (t->size(dim))));
 
   return nx::nif::ok(env, enif_make_tuple_from_array(env, sizes.data(), sizes.size()));
