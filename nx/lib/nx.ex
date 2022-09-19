@@ -825,7 +825,7 @@ defmodule Nx do
   @doc """
   Shortcut for `random_uniform(shape, 0.0, 1.0, opts)`.
   """
-  @doc type: :random
+  @doc type: :random, deprecated: "Use Nx.Random.uniform/2 instead"
   def random_uniform(tensor_or_shape, opts \\ []) do
     random_uniform(tensor_or_shape, 0.0, 1.0, opts)
   end
@@ -951,7 +951,7 @@ defmodule Nx do
       is ignored inside `defn`
 
   """
-  @doc type: :random
+  @doc type: :random, deprecated: "Use Nx.Random.uniform/2 instead"
   def random_uniform(tensor_or_shape, min, max, opts \\ []) do
     opts = keyword!(opts, [:type, :names, :backend])
     %T{type: min_type, shape: min_shape} = min = to_tensor(min)
@@ -981,7 +981,7 @@ defmodule Nx do
   @doc """
   Shortcut for `random_normal(shape, 0.0, 1.0, opts)`.
   """
-  @doc type: :random
+  @doc type: :random, deprecated: "Use Nx.Random instead"
   def random_normal(tensor_or_shape, opts \\ []) do
     random_normal(tensor_or_shape, 0.0, 1.0, opts)
   end
@@ -1067,7 +1067,7 @@ defmodule Nx do
       is ignored inside `defn`
 
   """
-  @doc type: :random
+  @doc type: :random, deprecated: "Use Nx.Random instead"
   def random_normal(tensor_or_shape, mu, sigma, opts \\ []) do
     opts = keyword!(opts, [:type, :names, :backend])
     %T{type: mu_type, shape: mu_shape} = mu = to_tensor(mu)
@@ -1338,17 +1338,17 @@ defmodule Nx do
 
   """
   @doc type: :creation
-  def eye(n_or_shape_or_tensor, opts \\ [])
+  def eye(n_or_tensor_or_shape, opts \\ [])
 
   def eye(n, opts) when is_integer(n) and n > 0 do
     eye({n, n}, opts)
   end
 
-  def eye(shape_or_tensor, opts) do
+  def eye(tensor_or_shape, opts) do
     opts = keyword!(opts, [:names, :backend, type: {:s, 64}])
 
     shape =
-      case shape(shape_or_tensor) do
+      case shape(tensor_or_shape) do
         {n, n} -> {n, n}
         other -> raise ArgumentError, "eye/2 expects a square matrix, got: #{inspect(other)}"
       end
@@ -2290,6 +2290,27 @@ defmodule Nx do
     else
       impl!(tensor).reshape(%{tensor | shape: new_shape, names: names}, tensor)
     end
+  end
+
+  @doc """
+  Adds (or overrides) the given names to the tensor.
+
+  ## Examples
+
+      iex> Nx.rename(Nx.iota({2, 3}), [:foo, :bar])
+      #Nx.Tensor<
+        s64[foo: 2][bar: 3]
+        [
+          [0, 1, 2],
+          [3, 4, 5]
+        ]
+      >
+
+  """
+  @doc type: :shape
+  def rename(tensor, names) do
+    tensor = to_tensor(tensor)
+    %{tensor | names: Nx.Shape.named_axes!(names, tensor.shape)}
   end
 
   @doc """

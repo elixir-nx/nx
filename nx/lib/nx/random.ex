@@ -124,7 +124,9 @@ defmodule Nx.Random do
   defn split(key, num \\ 2) do
     assert_key!(key)
 
-    threefry2x32(key, Nx.iota({num, 2}))
+    key
+    |> threefry2x32(Nx.iota({num, 2}))
+    |> Nx.as_type({:u, 32})
   end
 
   defnp random_bits(key, opts \\ []) do
@@ -146,6 +148,7 @@ defmodule Nx.Random do
 
       32 ->
         threefry2x32(key, Nx.iota(shape, type: {:s, 64}))
+        |> Nx.as_type({:u, 32})
 
       _ ->
         threefry2x32(key, Nx.iota(shape, type: {:s, 64}))
@@ -166,7 +169,6 @@ defmodule Nx.Random do
     |> Nx.flatten()
     |> Nx.pad(0, [{0, -padding, 0}])
     |> Nx.reshape(count)
-    |> Nx.as_type({:u, 32})
   end
 
   defnp threefry2x32_20(xs, ks) do
@@ -240,50 +242,52 @@ defmodule Nx.Random do
   end
 
   @doc """
-  Sample uniform random integer values in `[min_val, max_val)`.
+  Sample uniform random integer values in `[min_value, max_value)`.
 
   ## Options
 
     * `:type` - the integer type for the returned tensor
     * `:shape` - shape of the returned tensor
+    * `:names` - the names of the returned tensor
 
   ## Examples
 
-  iex> key = Nx.Random.key(1701)
-  iex> Nx.Random.randint(key, 1, 100)
-  #Nx.Tensor<
-    s64
-    91
-  >
+      iex> key = Nx.Random.key(1701)
+      iex> Nx.Random.randint(key, 1, 100)
+      #Nx.Tensor<
+        s64
+        91
+      >
 
-  iex> key = Nx.Random.key(1701)
-  iex> Nx.Random.randint(key, 1, 100, shape: {3,3,2}, type: :u32)
-  #Nx.Tensor<
-    u32[3][3][2]
-    [
-      [
-        [68, 4],
-        [76, 75],
-        [11, 75]
-      ],
-      [
-        [6, 85],
-        [17, 42],
-        [16, 33]
-      ],
-      [
-        [15, 12],
-        [3, 88],
-        [16, 92]
-      ]
-    ]
-  >
+      iex> key = Nx.Random.key(1701)
+      iex> Nx.Random.randint(key, 1, 100, shape: {3,3,2}, type: :u32)
+      #Nx.Tensor<
+        u32[3][3][2]
+        [
+          [
+            [68, 4],
+            [76, 75],
+            [11, 75]
+          ],
+          [
+            [6, 85],
+            [17, 42],
+            [16, 33]
+          ],
+          [
+            [15, 12],
+            [3, 88],
+            [16, 92]
+          ]
+        ]
+      >
+
   """
   defn randint(key, min_val, max_val, opts \\ []) do
-    opts = keyword!(opts, shape: {}, type: {:s, 64})
+    opts = keyword!(opts, [:names, shape: {}, type: {:s, 64}])
     assert_key!(key)
 
-    shape = opts[:shape]
+    shape = Nx.shape(opts[:shape])
     type = {_, nbits} = normalize(opts[:type])
 
     case type do
@@ -320,11 +324,20 @@ defmodule Nx.Random do
       |> Nx.add(Nx.remainder(lower_bits, span))
       |> Nx.remainder(span)
 
-    Nx.as_type(min_val + offset, type)
+    (min_val + offset)
+    |> Nx.as_type(type)
+    |> Nx.reshape(shape, take_names(opts))
   end
 
   @doc """
-  Sample uniform float values in [min_val, max_val).
+  Shortcut for `uniform(key, 0.0, 1.0, opts)`.
+  """
+  defn uniform(key, opts \\ []) do
+    uniform(key, 0.0, 1.0, opts)
+  end
+
+  @doc """
+  Sample uniform float values in `[min_val, max_val)`.
 
   ## Options
 
@@ -332,9 +345,7 @@ defmodule Nx.Random do
 
     * `:shape` - shape of the returned tensor
 
-    * `:min_val` - minimum value, default is 0.0
-
-    * `:max_val` - maximum value, default is 1.0
+    * `:names` - the names of the returned tensor
 
   ## Examples
 
@@ -368,9 +379,8 @@ defmodule Nx.Random do
       ]
     >
   """
-  defn uniform(key, opts \\ []) do
-    opts = keyword!(opts, shape: {}, type: {:f, 32}, min_val: 0.0, max_val: 1.0)
-
+  defn uniform(key, min_value, max_value, opts \\ []) do
+    opts = keyword!(opts, [:names, shape: {}, type: {:f, 32}])
     assert_key!(key)
 
     type = {_type, nbits} = normalize(opts[:type])
@@ -388,11 +398,7 @@ defmodule Nx.Random do
     end
 
     info = float_info(type)
-
-    shape = opts[:shape]
-    min_val = opts[:min_val]
-    max_val = opts[:max_val]
-
+    shape = Nx.shape(opts[:shape])
     u_one = Nx.tensor(1.0, type: type) |> Nx.bitcast({:u, nbits})
 
     random_bits(key, shape: shape, bit_width: nbits)
@@ -401,13 +407,13 @@ defmodule Nx.Random do
     |> Nx.bitwise_or(u_one)
     |> Nx.bitcast(type)
     |> Nx.subtract(Nx.tensor(1.0, type: type))
-    |> Nx.multiply(max_val - min_val)
-    |> Nx.add(min_val)
-    |> Nx.reshape(shape)
-    |> Nx.max(min_val)
-    |> Nx.as_type(type)
+    |> Nx.multiply(max_value - min_value)
+    |> Nx.add(min_value)
+    |> Nx.max(min_value)
+    |> Nx.reshape(shape, take_names(opts))
   end
 
+  deftransformp take_names(opts), do: Keyword.take(opts, [:names])
   deftransformp normalize(type), do: Nx.Type.normalize!(type)
 
   defnp assert_key!(tensor) do

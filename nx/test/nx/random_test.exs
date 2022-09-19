@@ -73,6 +73,39 @@ defmodule Nx.RandomTest do
     end
   end
 
+  describe "types" do
+    test "randint" do
+      key = Nx.Random.key(44)
+      assert Nx.Random.randint(key, 0, 100, type: :u8) == Nx.tensor(86, type: :u8)
+      assert Nx.Random.randint(key, 0, 100, type: :u64) == Nx.tensor(23, type: :u64)
+      assert Nx.Random.randint(key, 0, 100, type: :s64) == Nx.tensor(23, type: :s64)
+    end
+
+    test "uniform" do
+      key = Nx.Random.key(44)
+      assert Nx.Random.uniform(key, 0, 100, type: :bf16) == Nx.tensor(42.75, type: :bf16)
+
+      assert Nx.Random.uniform(key, 0, 100, type: :f64) ==
+               Nx.tensor(49.70372348385783, type: :f64)
+    end
+  end
+
+  describe "names" do
+    test "randint" do
+      key = Nx.Random.key(44)
+      tensor = Nx.Random.randint(key, 0, 100, names: [:foo, :bar], shape: {10, 10})
+      assert tensor.names == [:foo, :bar]
+      assert tensor.shape == {10, 10}
+    end
+
+    test "uniform" do
+      key = Nx.Random.key(44)
+      tensor = Nx.Random.uniform(key, 0, 100, names: [:foo, :bar], shape: {10, 10})
+      assert tensor.names == [:foo, :bar]
+      assert tensor.shape == {10, 10}
+    end
+  end
+
   describe "properties" do
     defp continuous_uniform_variance(a, b) do
       (b - a) ** 2 / 12
@@ -106,7 +139,7 @@ defmodule Nx.RandomTest do
 
     test "uniform mean property" do
       property_case(:uniform,
-        args: [[min_val: 10, max_val: 15, shape: {10000}]],
+        args: [10, 15, [shape: {10000}]],
         moment: :mean,
         expected_func: fn x -> Nx.tensor(x) end,
         expected_args: [12.5]
@@ -124,7 +157,7 @@ defmodule Nx.RandomTest do
 
     test "uniform variance property" do
       property_case(:uniform,
-        args: [[min_val: 10, max_val: 15, shape: {10000}]],
+        args: [Nx.tensor(10), Nx.tensor(15), [shape: {10000}]],
         moment: :variance,
         expected_func: fn a, b -> continuous_uniform_variance(a, b) end,
         expected_args: [10, 15]
@@ -133,7 +166,7 @@ defmodule Nx.RandomTest do
 
     test "randint variance property" do
       property_case(:randint,
-        args: [10, 95, [shape: {10000}]],
+        args: [Nx.tensor(10), Nx.tensor(95), [shape: {10000}]],
         moment: :variance,
         expected_func: fn x -> discrete_uniform_second_moment(x) end,
         expected_args: [85]
