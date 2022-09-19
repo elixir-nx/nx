@@ -503,7 +503,7 @@ defmodule Nx.Random do
     end
   end
 
-  defn normal_real(key, mean, standard_deviation, opts \\ []) do
+  defnp normal_real(key, mean, standard_deviation, opts \\ []) do
     u = uniform(key, -1, 1, opts)
 
     normal = Nx.sqrt(2) * Nx.erf_inv(u)
