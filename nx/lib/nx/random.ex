@@ -232,12 +232,12 @@ defmodule Nx.Random do
     x <<< rot ||| x >>> (@nbits - rot)
   end
 
-  defnp float_info(type) do
+  defnp mantissa(type) do
     case type do
-      {:bf, 16} -> [exp: 8, mantissa: 7]
-      {:f, 16} -> [exp: 6, mantissa: 10]
-      {:f, 32} -> [exp: 8, mantissa: 23]
-      {:f, 64} -> [exp: 11, mantissa: 52]
+      {:bf, 16} -> 7
+      {:f, 16} -> 10
+      {:f, 32} -> 23
+      {:f, 64} -> 52
     end
   end
 
@@ -284,22 +284,16 @@ defmodule Nx.Random do
 
   """
   defn randint(key, min_val, max_val, opts \\ []) do
-    opts = keyword!(opts, [:names, shape: {}, type: {:s, 64}])
+    opts = keyword!(opts, [:names, :type, shape: {}])
     assert_key!(key)
 
     shape = Nx.shape(opts[:shape])
-    type = {_, nbits} = normalize(opts[:type])
+    type = {_, nbits} = infer_type(min_val, max_val, opts)
 
     case type do
-      {:u, _} ->
-        :ok
-
-      {:s, _} ->
-        :ok
-
-      _ ->
-        raise ArgumentError,
-              "expected integer type, got type #{inspect(type)}"
+      {:u, _} -> :ok
+      {:s, _} -> :ok
+      _ -> raise ArgumentError, "expected integer type, got type #{inspect(type)}"
     end
 
     keys = split(key)
@@ -357,60 +351,56 @@ defmodule Nx.Random do
       >
 
       iex> key = Nx.Random.key(1701)
-      iex> Nx.Random.uniform(key, shape: {3,3,2}, type: :f16)
+      iex> Nx.Random.uniform(key, shape: {3, 2}, type: :f16)
       #Nx.Tensor<
-        f16[3][3][2]
+        f16[3][2]
         [
-          [
-            [0.5712890625, 0.318359375],
-            [0.744140625, 0.576171875],
-            [0.2412109375, 0.9833984375]
-          ],
-          [
-            [0.0556640625, 0.42578125],
-            [0.0263671875, 0.0634765625],
-            [0.12890625, 0.9306640625]
-          ],
-          [
-            [0.46484375, 0.087890625],
-            [0.3857421875, 0.169921875],
-            [0.0419921875, 0.53125]
-          ]
+          [0.076171875, 0.18359375],
+          [0.8125, 0.65625],
+          [0.53125, 0.30078125]
+        ]
+      >
+
+      iex> key = Nx.Random.key(1701)
+      iex> Nx.Random.uniform(key, shape: {2, 2}, type: :c64)
+      #Nx.Tensor<
+        c64[2][2]
+        [
+          [0.453627347946167+0.021928906440734863i, 0.004293918609619141+0.37733662128448486i],
+          [0.8398897647857666+0.8947794437408447i, 0.3494793176651001+0.5728099346160889i]
         ]
       >
   """
   defn uniform(key, min_value, max_value, opts \\ []) do
-    opts = keyword!(opts, [:names, shape: {}, type: {:f, 32}])
     assert_key!(key)
+    opts = keyword!(opts, [:names, :type, shape: {}])
+    type = infer_float_type(min_value, max_value, opts)
 
-    type = {_type, nbits} = normalize(opts[:type])
+    float_or_complex(key, type, fn key, {_type, nbits} = type ->
+      shape = Nx.shape(opts[:shape])
+      u_one = Nx.tensor(1.0, type: type) |> Nx.bitcast({:u, nbits})
 
-    case type do
-      {:f, _} ->
-        :ok
+      min_value = Nx.as_type(min_value, type)
+      max_value = Nx.as_type(max_value, type)
 
-      {:bf, _} ->
-        :ok
+      random_bits(key, shape: shape, bit_width: nbits)
+      |> Nx.as_type({:u, nbits})
+      |> Nx.right_shift(Nx.tensor(nbits - mantissa(type), type: {:u, nbits}))
+      |> Nx.bitwise_or(u_one)
+      |> Nx.bitcast(type)
+      |> Nx.subtract(Nx.tensor(1.0, type: type))
+      |> Nx.multiply(max_value - min_value)
+      |> Nx.add(min_value)
+      |> Nx.max(min_value)
+      |> Nx.reshape(shape, take_names(opts))
+    end)
+  end
 
-      _ ->
-        raise ArgumentError,
-              "expected float type, got type #{inspect(type)}"
-    end
-
-    info = float_info(type)
-    shape = Nx.shape(opts[:shape])
-    u_one = Nx.tensor(1.0, type: type) |> Nx.bitcast({:u, nbits})
-
-    random_bits(key, shape: shape, bit_width: nbits)
-    |> Nx.as_type({:u, nbits})
-    |> Nx.right_shift(Nx.tensor(nbits - info[:mantissa], type: {:u, nbits}))
-    |> Nx.bitwise_or(u_one)
-    |> Nx.bitcast(type)
-    |> Nx.subtract(Nx.tensor(1.0, type: type))
-    |> Nx.multiply(max_value - min_value)
-    |> Nx.add(min_value)
-    |> Nx.max(min_value)
-    |> Nx.reshape(shape, take_names(opts))
+  @doc """
+  Shortcut for `normal(key, 0.0, 1.0, opts)`.
+  """
+  defn normal(key, opts \\ []) do
+    normal(key, 0.0, 1.0, opts)
   end
 
   @doc """
@@ -457,13 +447,12 @@ defmodule Nx.Random do
       >
 
       iex> key = Nx.Random.key(42)
-      iex> Nx.Random.normal(key, 0, 1, shape: {3,3}, type: :c64)
+      iex> Nx.Random.normal(key, 0, 1, shape: {2,2}, type: :c64)
       #Nx.Tensor<
-        c64[3][3]
+        c64[2][2]
         [
-          [-0.7446164488792419-1.6652092933654785i, -1.2271071672439575+0.23443973064422607i, -0.053599901497364044-0.24498997628688812i],
-          [0.9805877208709717+0.4470720589160919i, 0.44665536284446716-0.3771430552005768i, 0.7519879341125488+0.2825981676578522i],
-          [0.4686059355735779-0.11017023772001266i, 0.4970967769622803+0.5699526071548462i, 0.15884320437908173+0.3396047353744507i]
+          [0.6333005428314209-0.5675503015518188i, 1.4589507579803467+0.8856306076049805i],
+          [1.3625764846801758-0.932060956954956i, -0.47287389636039734+1.464116096496582i]
         ]
       >
 
@@ -480,44 +469,56 @@ defmodule Nx.Random do
         4.988009929656982
       >
   """
-  defn normal(key, mean \\ 0, standard_deviation \\ 1, opts \\ []) do
-    opts = keyword!(opts, [:names, shape: {}, type: {:f, 32}])
+  defn normal(key, mean, standard_deviation, opts \\ []) do
     assert_key!(key)
+    opts = keyword!(opts, [:names, :type, shape: {}])
+    type = infer_float_type(mean, standard_deviation, opts)
 
-    type = normalize(opts[:type])
+    float_or_complex(key, type, fn key, type ->
+      min_value = -1 + Nx.Constants.smallest_positive_normal_number(type)
+      u = uniform(key, min_value, 1, put_type(opts, type))
 
+      normal = Nx.sqrt(Nx.tensor(2, type: type)) * Nx.erf_inv(u)
+      Nx.as_type(standard_deviation, type) * normal + Nx.as_type(mean, type)
+    end)
+  end
+
+  deftransformp float_or_complex(key, type, fun) do
     case type do
       {:c, _} ->
         k = split(key, 2)
-        opts = as_real_type(opts)
-        real = normal_real(k[0], mean, standard_deviation, opts)
-        imag = normal_real(k[1], mean, standard_deviation, opts)
-        real + Nx.Constants.i() * imag
+        type = Nx.Type.to_real(type)
+        real = fun.(k[0], type)
+        imag = fun.(k[1], type)
+        Nx.add(real, Nx.multiply(Nx.Constants.i(), imag))
 
       {t, _} when t == :f or t == :bf ->
-        normal_real(key, mean, standard_deviation, opts)
+        fun.(key, type)
 
       _ ->
-        raise ArgumentError,
-              "expected float or complex type, got type #{inspect(type)}"
+        raise ArgumentError, "expected float or complex type, got type #{inspect(type)}"
     end
   end
 
-  defnp normal_real(key, mean, standard_deviation, opts \\ []) do
-    min_value = -1 + Nx.Constants.smallest_positive_normal_number(opts[:type])
-    u = uniform(key, min_value, 1, opts)
-
-    normal = Nx.sqrt(Nx.tensor(2, type: opts[:type])) * Nx.erf_inv(u)
-    standard_deviation * normal + mean
-  end
-
-  deftransformp as_real_type(opts) do
-    real = Nx.Type.to_real(opts[:type])
-    Keyword.put(opts, :type, real)
-  end
-
   deftransformp take_names(opts), do: Keyword.take(opts, [:names])
-  deftransformp normalize(type), do: Nx.Type.normalize!(type)
+
+  deftransformp infer_type(left, right, opts) do
+    if type = opts[:type] do
+      Nx.Type.normalize!(type)
+    else
+      Nx.Type.merge(Nx.type(left), Nx.type(right))
+    end
+  end
+
+  deftransformp infer_float_type(left, right, opts) do
+    if type = opts[:type] do
+      Nx.Type.normalize!(type)
+    else
+      Nx.Type.to_floating(Nx.Type.merge(Nx.type(left), Nx.type(right)))
+    end
+  end
+
+  deftransformp put_type(opts, type), do: Keyword.put(opts, :type, type)
 
   defnp assert_key!(tensor) do
     %{shape: shape, type: type} = tensor

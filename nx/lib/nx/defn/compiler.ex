@@ -78,7 +78,7 @@ defmodule Nx.Defn.Compiler do
             when input: Nx.Container.t(), output: Nx.Container.t(), acc: Nx.Container.t()
 
   # Modules allowed in defn
-  @allowed_modules [Nx, Nx.Constants, Nx.Defn, Nx.Defn.Kernel, Nx.LinAlg]
+  @allowed_modules [Nx, Nx.Constants, Nx.Defn, Nx.Defn.Kernel, Nx.LinAlg, Nx.Type]
 
   # These operations do not have valid meaning for Nx.Defn.Expr
   @forbidden_ops [:backend_copy, :backend_deallocate, :backend_transfer] ++
