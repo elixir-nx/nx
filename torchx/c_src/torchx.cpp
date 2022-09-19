@@ -118,7 +118,7 @@ private:
   }                                                                 \
   else if (enif_get_double(env, argv[ARGN], &double_##VAR) == 0)    \
   {                                                                 \
-    long long long_##VAR;                                           \
+    int64_t long_##VAR;                                           \
     enif_get_int64(env, argv[ARGN], (ErlNifSInt64 *)&long_##VAR);   \
     new (&VAR) torch::Scalar((int64_t)long_##VAR);                  \
   }                                                                 \
