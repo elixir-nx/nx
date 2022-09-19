@@ -410,7 +410,7 @@ defmodule Nx.LinAlg do
         [1.3333333730697632, -0.6666666865348816, 2.6666667461395264, -1.3333333730697632]
       >
 
-      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: :f64)
       iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]))
       #Nx.Tensor<
         f64[3]
@@ -448,14 +448,14 @@ defmodule Nx.LinAlg do
         ]
       >
 
-      iex> a = Nx.tensor([[1, 1, 1], [0, 1, 1], [0, 0, 1]], type: {:f, 64})
+      iex> a = Nx.tensor([[1, 1, 1], [0, 1, 1], [0, 0, 1]], type: :f64)
       iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :transpose, lower: false)
       #Nx.Tensor<
         f64[3]
         [1.0, 1.0, -1.0]
       >
 
-      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: :f64)
       iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :none)
       #Nx.Tensor<
         f64[3]
@@ -519,11 +519,11 @@ defmodule Nx.LinAlg do
       iex> Nx.LinAlg.triangular_solve(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]), Nx.tensor([4, 2, 4, 2]))
       ** (ArgumentError) can't solve for singular matrix
 
-      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: :f64)
       iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :conjugate)
       ** (ArgumentError) complex numbers not supported yet
 
-      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: :f64)
       iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :other)
       ** (ArgumentError) invalid value for :transform_a option, expected :none, :transpose, or :conjugate, got: :other
 
@@ -567,7 +567,7 @@ defmodule Nx.LinAlg do
         [1.0, -2.0, 3.0, -4.0]
       >
 
-      iex> a = Nx.tensor([[1, 0, 1], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+      iex> a = Nx.tensor([[1, 0, 1], [1, 1, 0], [1, 1, 1]], type: :f64)
       iex> Nx.LinAlg.solve(a, Nx.tensor([0, 2, 1])) |> Nx.round()
       #Nx.Tensor<
         f64[3]
@@ -863,7 +863,7 @@ defmodule Nx.LinAlg do
         ]
       >
 
-      iex> t = Nx.tensor([[3, 2, 1], [0, 1, 1], [0, 0, 1], [0, 0, 1]], type: {:f, 32})
+      iex> t = Nx.tensor([[3, 2, 1], [0, 1, 1], [0, 0, 1], [0, 0, 1]], type: :f32)
       iex> {q, r} = Nx.LinAlg.qr(t, mode: :reduced)
       iex> q
       #Nx.Tensor<
@@ -885,7 +885,7 @@ defmodule Nx.LinAlg do
         ]
       >
 
-      iex> t = Nx.tensor([[3, 2, 1], [0, 1, 1], [0, 0, 1], [0, 0, 0]], type: {:f, 32})
+      iex> t = Nx.tensor([[3, 2, 1], [0, 1, 1], [0, 0, 1], [0, 0, 0]], type: :f32)
       iex> {q, r} = Nx.LinAlg.qr(t, mode: :complete)
       iex> q
       #Nx.Tensor<

@@ -137,14 +137,14 @@ up the tensor. If all of our data only uses positive numbers from
 `0..255`, we could save space with a different type:
 
 ```elixir
-Nx.tensor([[1, 2], [3, 4]], type: {:u, 8}) |> Nx.to_binary()
+Nx.tensor([[1, 2], [3, 4]], type: :u8) |> Nx.to_binary()
 ```
 
 If you have already have binary, you can directly convert it to a tensor
 by passing the binary and the type:
 
 ```elixir
-Nx.from_binary(<<0, 1, 2>>, {:u, 8})
+Nx.from_binary(<<0, 1, 2>>, :u8)
 ```
 
 This function comes in handy when working with published datasets
@@ -233,7 +233,7 @@ can have names. We can specify the tensor type and dimension names
 with options, like this:
 
 ```elixir
-Nx.tensor([[1, 2, 3]], names: [:rows, :cols], type: {:u, 8})
+Nx.tensor([[1, 2, 3]], names: [:rows, :cols], type: :u8)
 ```
 
 We created a tensor of the shape `{1, 3}`, with the type `u8`,
@@ -264,7 +264,7 @@ suggest that they would work on primitive values, called scalars.
 Indeed, a tensor can be a scalar:
 
 ```elixir
-pi = Nx.tensor(3.1415, type: {:f, 32})
+pi = Nx.tensor(3.1415, type: :f32)
 ```
 
 Take the cosine:
