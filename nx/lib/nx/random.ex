@@ -440,12 +440,12 @@ defmodule Nx.Random do
         [
           [
             [-0.6201171875, -1.017578125],
-            [-0.1424560546875, 0.1005859375],
+            [-0.1424560546875, 0.10052490234375],
             [-0.513671875, 0.308349609375]
           ],
           [
             [-1.423828125, -1.9873046875],
-            [-0.599609375, 0.662109375],
+            [-0.59912109375, 0.662109375],
             [-0.54150390625, -2.3359375]
           ],
           [
@@ -504,9 +504,10 @@ defmodule Nx.Random do
   end
 
   defnp normal_real(key, mean, standard_deviation, opts \\ []) do
-    u = uniform(key, -1, 1, opts)
+    min_value = -1 + Nx.Constants.smallest_positive_normal_number(opts[:type])
+    u = uniform(key, min_value, 1, opts)
 
-    normal = Nx.sqrt(Nx.type(2, type: opts[:type]) * Nx.erf_inv(u)
+    normal = Nx.sqrt(Nx.tensor(2, type: opts[:type])) * Nx.erf_inv(u)
     standard_deviation * normal + mean
   end
 
