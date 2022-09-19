@@ -503,13 +503,11 @@ defmodule Nx.Random do
     end
   end
 
-  defn normal_real(key, mean, standard_deviation, opts \\ []) do
+  defnp normal_real(key, mean, standard_deviation, opts \\ []) do
     u = uniform(key, -1, 1, opts)
 
-    normal = Nx.sqrt(2) * Nx.erf_inv(u)
-
-    result = standard_deviation * normal + mean
-    Nx.as_type(result, opts[:type])
+    normal = Nx.sqrt(Nx.type(2, type: opts[:type]) * Nx.erf_inv(u)
+    standard_deviation * normal + mean
   end
 
   deftransformp as_real_type(opts) do
