@@ -11,12 +11,12 @@ defprotocol Nx.LazyContainer do
   allocated if necessary.
 
   This protocol is used throughout `Nx.Defn` API. This means
-  compilation, jitting, and streaming will only realized lazy
+  compilation, jitting, and streaming will only realize lazy
   tensors when necessary.
 
   If a data structure does not implement this protocol,
-  a default implementation that converts eager to lazy is
-  done by default.
+  a default implementation converts eager to lazy using
+  `Nx.Container`.
   """
 
   @fallback_to_any true
