@@ -1404,39 +1404,37 @@ defmodule Nx.LinAlg do
   # is optimized to not compute an initial eye.
   def matrix_power(tensor, 0) do
     shape = Nx.shape(tensor)
+    :ok = Nx.Shape.matrix_power(shape)
 
-    with :ok <- Nx.Shape.matrix_power(shape) do
-      Nx.eye(tensor)
-    end
+    Nx.eye(tensor)
   end
 
   def matrix_power(tensor, power) when is_integer(power) do
     shape = Nx.shape(tensor)
+    :ok = Nx.Shape.matrix_power(shape)
 
-    with :ok <- Nx.Shape.matrix_power(shape) do
-      rank = Nx.rank(tensor)
-      batches = Enum.to_list(0..(rank - 3)//1)
-      dot_product = &Nx.dot(&1, [rank - 1], batches, &2, [rank - 2], batches)
+    rank = Nx.rank(tensor)
+    batches = Enum.to_list(0..(rank - 3)//1)
+    dot_product = &Nx.dot(&1, [rank - 1], batches, &2, [rank - 2], batches)
 
-      power
-      |> Integer.digits(2)
-      |> tl()
-      |> Enum.reverse()
-      |> Enum.reduce({nil, tensor}, fn
-        1, {nil, exp_tensor} ->
-          {exp_tensor, dot_product.(exp_tensor, exp_tensor)}
+    power
+    |> Integer.digits(2)
+    |> tl()
+    |> Enum.reverse()
+    |> Enum.reduce({nil, tensor}, fn
+      1, {nil, exp_tensor} ->
+        {exp_tensor, dot_product.(exp_tensor, exp_tensor)}
 
-        1, {result_tensor, exp_tensor} ->
-          {dot_product.(result_tensor, exp_tensor), dot_product.(exp_tensor, exp_tensor)}
+      1, {result_tensor, exp_tensor} ->
+        {dot_product.(result_tensor, exp_tensor), dot_product.(exp_tensor, exp_tensor)}
 
-        0, {result_tensor, exp_tensor} ->
-          {result_tensor, dot_product.(exp_tensor, exp_tensor)}
-      end)
-      |> then(fn
-        {nil, exp_tensor} -> exp_tensor
-        {result, exp_tensor} -> dot_product.(result, exp_tensor)
-      end)
-    end
+      0, {result_tensor, exp_tensor} ->
+        {result_tensor, dot_product.(exp_tensor, exp_tensor)}
+    end)
+    |> then(fn
+      {nil, exp_tensor} -> exp_tensor
+      {result, exp_tensor} -> dot_product.(result, exp_tensor)
+    end)
   end
 
   @doc """
