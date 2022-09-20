@@ -11,6 +11,7 @@ defmodule Nx.Defn.Evaluator do
   @creation_ops [:constant, :eye, :iota, :from_binary]
   @random_ops [:random_uniform, :random_normal]
   @list_ops [:concatenate]
+  @indices_ops [:slice, :put_slice]
 
   @impl true
   def __stream__(_key, input, acc, vars, fun, [args], opts) do
@@ -178,11 +179,15 @@ defmodule Nx.Defn.Evaluator do
           {backend, [ans | args] ++ [backend_options]}
 
         op in @random_ops ->
-          {_, backend_options} = Nx.default_backend()
+          {_backend, backend_options} = Nx.default_backend()
           {Nx.Shared.list_impl!(args), [ans | args] ++ [backend_options]}
 
         op in @list_ops ->
           {Nx.Shared.list_impl!(hd(args)), [ans | args]}
+
+        op in @indices_ops ->
+          [tensor, indices | _] = args
+          {Nx.Shared.list_impl!([tensor | indices]), [ans | args]}
 
         match?({:tuple, _}, ans.type) ->
           {Nx.Shared.list_impl!(args), args}
