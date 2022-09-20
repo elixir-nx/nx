@@ -61,7 +61,7 @@ defmodule Nx.RandomTest do
     test "randint" do
       distribution_case(:randint,
         args: [0, 10, [shape: {5}]],
-        expected: Nx.tensor([9, 9, 5, 8, 7], type: :s64)
+        expected: Nx.tensor([9, 2, 8, 0, 0], type: :s64)
       )
     end
 
@@ -79,12 +79,12 @@ defmodule Nx.RandomTest do
 
       # Default
       assert Nx.Random.randint(key, Nx.tensor(0, type: :u8), Nx.tensor(100, type: :u8)) ==
-               Nx.tensor(86, type: :u8)
+               Nx.tensor(12, type: :u8)
 
       # Explicit
-      assert Nx.Random.randint(key, 0, 100, type: :u8) == Nx.tensor(86, type: :u8)
-      assert Nx.Random.randint(key, 0, 100, type: :u64) == Nx.tensor(23, type: :u64)
-      assert Nx.Random.randint(key, 0, 100, type: :s64) == Nx.tensor(23, type: :s64)
+      assert Nx.Random.randint(key, 0, 100, type: :u8) == Nx.tensor(12, type: :u8)
+      assert Nx.Random.randint(key, 0, 100, type: :u64) == Nx.tensor(10, type: :u64)
+      assert Nx.Random.randint(key, 0, 100, type: :s64) == Nx.tensor(10, type: :s64)
     end
 
     test "uniform" do
