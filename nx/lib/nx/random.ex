@@ -256,7 +256,7 @@ defmodule Nx.Random do
       iex> Nx.Random.randint(key, 1, 100)
       #Nx.Tensor<
         s64
-        91
+        10
       >
 
       iex> key = Nx.Random.key(1701)
@@ -265,19 +265,19 @@ defmodule Nx.Random do
         u32[3][3][2]
         [
           [
-            [68, 4],
-            [76, 75],
-            [11, 75]
+            [77, 54],
+            [50, 77],
+            [83, 53]
           ],
           [
-            [6, 85],
-            [17, 42],
-            [16, 33]
+            [65, 68],
+            [98, 69],
+            [27, 95]
           ],
           [
-            [15, 12],
-            [3, 88],
-            [16, 92]
+            [50, 18],
+            [32, 60],
+            [83, 50]
           ]
         ]
       >
@@ -296,13 +296,14 @@ defmodule Nx.Random do
       _ -> raise ArgumentError, "expected integer type, got type #{inspect(type)}"
     end
 
-    keys = split(key)
-
     min_val = Nx.broadcast(min_val, shape)
     max_val = Nx.broadcast(max_val, shape)
 
-    higher_bits = random_bits(keys[0], shape: shape, bit_width: nbits)
-    lower_bits = random_bits(keys[1], shape: shape, bit_width: nbits)
+    random_bits = random_bits(key, shape: randint_random_bits_shape(shape), bit_width: nbits)
+
+    higher_bits = random_bits[0]
+    lower_bits = random_bits[1]
+
     span = max_val - min_val
 
     multiplier =
@@ -322,6 +323,8 @@ defmodule Nx.Random do
     |> Nx.as_type(type)
     |> Nx.reshape(shape, take_names(opts))
   end
+
+  deftransformp randint_random_bits_shape(shape), do: Tuple.insert_at(shape, 0, 2)
 
   @doc """
   Shortcut for `uniform(key, 0.0, 1.0, opts)`.
@@ -366,8 +369,8 @@ defmodule Nx.Random do
       #Nx.Tensor<
         c64[2][2]
         [
-          [0.453627347946167+0.021928906440734863i, 0.004293918609619141+0.37733662128448486i],
-          [0.8398897647857666+0.8947794437408447i, 0.3494793176651001+0.5728099346160889i]
+          [0.9313580989837646+0.4727839231491089i, 0.5327110290527344+0.6050407886505127i],
+          [0.5649927854537964+0.13510417938232422i, 0.730334997177124+0.1008983850479126i]
         ]
       >
   """
@@ -376,8 +379,7 @@ defmodule Nx.Random do
     opts = keyword!(opts, [:names, :type, shape: {}])
     type = infer_float_type(min_value, max_value, opts)
 
-    float_or_complex(key, type, fn key, {_type, nbits} = type ->
-      shape = Nx.shape(opts[:shape])
+    float_or_complex(key, type, Nx.shape(opts[:shape]), fn key, {_type, nbits} = type, shape ->
       u_one = Nx.tensor(1.0, type: type) |> Nx.bitcast({:u, nbits})
 
       min_value = Nx.as_type(min_value, type)
@@ -447,12 +449,12 @@ defmodule Nx.Random do
       >
 
       iex> key = Nx.Random.key(42)
-      iex> Nx.Random.normal(key, 0, 1, shape: {2,2}, type: :c64)
+      iex> Nx.Random.normal(key, 0, 1, shape: {2, 2}, type: :c64)
       #Nx.Tensor<
         c64[2][2]
         [
-          [0.6333005428314209-0.5675503015518188i, 1.4589507579803467+0.8856306076049805i],
-          [1.3625764846801758-0.932060956954956i, -0.47287389636039734+1.464116096496582i]
+          [0.48962485790252686+0.25225749611854553i, -0.6273903846740723-0.7026026844978333i],
+          [0.715733528137207-0.5684993863105774i, -1.7461833953857422-2.725870370864868i]
         ]
       >
 
@@ -474,26 +476,25 @@ defmodule Nx.Random do
     opts = keyword!(opts, [:names, :type, shape: {}])
     type = infer_float_type(mean, standard_deviation, opts)
 
-    float_or_complex(key, type, fn key, type ->
+    float_or_complex(key, type, Nx.shape(opts[:shape]), fn key, type, shape ->
       min_value = -1 + Nx.Constants.smallest_positive_normal_number(type)
-      u = uniform(key, min_value, 1, put_type(opts, type))
+      u = uniform(key, min_value, 1, opts |> put_type(type) |> put_shape(shape))
 
       normal = Nx.sqrt(Nx.tensor(2, type: type)) * Nx.erf_inv(u)
       Nx.as_type(standard_deviation, type) * normal + Nx.as_type(mean, type)
     end)
   end
 
-  deftransformp float_or_complex(key, type, fun) do
+  deftransformp float_or_complex(key, type, shape, fun) do
     case type do
       {:c, _} ->
-        k = split(key, 2)
         type = Nx.Type.to_real(type)
-        real = fun.(k[0], type)
-        imag = fun.(k[1], type)
-        Nx.add(real, Nx.multiply(Nx.Constants.i(), imag))
+        data = fun.(key, type, Tuple.append(shape, 2))
+        to_complex = Nx.stack([1, Nx.Constants.i()])
+        Nx.dot(data, to_complex)
 
       {t, _} when t == :f or t == :bf ->
-        fun.(key, type)
+        fun.(key, type, shape)
 
       _ ->
         raise ArgumentError, "expected float or complex type, got type #{inspect(type)}"
@@ -519,6 +520,7 @@ defmodule Nx.Random do
   end
 
   deftransformp put_type(opts, type), do: Keyword.put(opts, :type, type)
+  deftransformp put_shape(opts, shape), do: Keyword.put(opts, :shape, shape)
 
   defnp assert_key!(tensor) do
     %{shape: shape, type: type} = tensor
