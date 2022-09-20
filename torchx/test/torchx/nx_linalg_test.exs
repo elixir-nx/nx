@@ -190,10 +190,10 @@ defmodule Torchx.NxLinAlgTest do
         tall = Nx.random_uniform({4, 3}, type: type)
 
         assert {q, r} = Nx.LinAlg.qr(square)
-        assert_all_close(Nx.dot(q, r), square, atol: 1.0e-6)
+        assert_all_close(Nx.dot(q, r), square, atol: 1.0e-4)
 
         assert {q, r} = Nx.LinAlg.qr(tall)
-        assert_all_close(Nx.dot(q, r), tall, atol: 1.0e-6)
+        assert_all_close(Nx.dot(q, r), tall, atol: 1.0e-4)
       end
     end
 
