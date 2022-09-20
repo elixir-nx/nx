@@ -8714,6 +8714,17 @@ defmodule Nx do
         ]
       >
 
+      iex> u = Nx.tensor([[[1, 1]], [[2, 2]]])
+      iex> v = Nx.tensor([[[1, 2]], [[1, 2]]])
+      iex> Nx.dot(u, [2], [0, 1], v, [2], [0, 1])
+      #Nx.Tensor<
+        s64[2][1]
+        [
+          [3],
+          [6]
+        ]
+      >
+
   ### Error cases
 
       iex> u = Nx.tensor([[[1, 1]], [[2, 2]]])

@@ -690,15 +690,19 @@ NIF(tensordot)
     // if any of the tensors is batched, we need to apply some transformations
     // on the inputs and on the result to wrap the batched APIs that torch exposes
     std::vector<at::BatchDim> batch_dims1, batch_dims2;
+    int64_t vmap_level = 0;
+
     for (auto dim : batch_axes1)
     {
-      batch_dims1.push_back(at::BatchDim(0, dim));
+      batch_dims1.push_back(at::BatchDim(vmap_level++, dim));
     }
     torch::Tensor batched_1 = at::makeBatched(*t1, at::BatchDims(batch_dims1.begin(), batch_dims1.end()));
 
+    vmap_level = 0;
+
     for (auto dim : batch_axes2)
     {
-      batch_dims2.push_back(at::BatchDim(0, dim));
+      batch_dims2.push_back(at::BatchDim(vmap_level++, dim));
     }
     torch::Tensor batched_2 = at::makeBatched(*t2, at::BatchDims(batch_dims2.begin(), batch_dims2.end()));
 
