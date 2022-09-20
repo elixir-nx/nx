@@ -501,7 +501,7 @@ defmodule Nx.Random do
     end
   end
 
-  deftransformp(take_names(opts), do: Keyword.take(opts, [:names]))
+  deftransformp take_names(opts), do: Keyword.take(opts, [:names])
 
   deftransformp infer_type(left, right, opts) do
     if type = opts[:type] do
@@ -519,8 +519,8 @@ defmodule Nx.Random do
     end
   end
 
-  deftransformp(put_type(opts, type), do: Keyword.put(opts, :type, type))
-  deftransformp(put_shape(opts, shape), do: Keyword.put(opts, :shape, shape))
+  deftransformp put_type(opts, type), do: Keyword.put(opts, :type, type)
+  deftransformp put_shape(opts, shape), do: Keyword.put(opts, :shape, shape)
 
   defnp assert_key!(tensor) do
     %{shape: shape, type: type} = tensor
