@@ -1775,7 +1775,7 @@ defmodule Nx.DefnTest do
   end
 
   describe "private definitions" do
-    defnp(private(a, b), do: a + b)
+    defnp private(a, b), do: a + b
     defn calls_private(a, b), do: private(a, b)
 
     @tag compiler: Evaluator
@@ -1791,6 +1791,15 @@ defmodule Nx.DefnTest do
     @tag compiler: Evaluator
     test "are callable from defn" do
       assert calls_private(1, 2) == Nx.tensor(3)
+    end
+
+    test "warns when unused" do
+      assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
+               defmodule Example do
+                 import Nx.Defn
+                 defnp add(a, b), do: a + b
+               end
+             end) =~ "function add/2 is unused"
     end
   end
 

@@ -275,19 +275,31 @@ defmodule Nx.Defn.Compiler do
         end
       end
 
-    quote line: state.line do
-      Module.delete_definition(__MODULE__, unquote(def))
+    Module.delete_definition(state.module, def)
 
-      Kernel.unquote(kind)(unquote(name)(unquote_splicing(all_args))) do
-        if Process.get(Nx.Defn.Compiler) do
-          unquote(defn_name)(unquote_splicing(all_args))
-        else
-          Nx.Defn.Compiler.__runtime__(unquote(fun), unquote(fn_args))
+    entrypoint =
+      quote line: state.line do
+        Kernel.unquote(kind)(unquote(name)(unquote_splicing(all_args))) do
+          if Process.get(Nx.Defn.Compiler) do
+            unquote(defn_name)(unquote_splicing(all_args))
+          else
+            Nx.Defn.Compiler.__runtime__(unquote(fun), unquote(fn_args))
+          end
         end
       end
 
-      Kernel.unquote(kind)(unquote(defn_name)(unquote_splicing(defn_args)), do: unquote(ast))
-    end
+    impl =
+      quote line: state.line do
+        Kernel.unquote(kind)(unquote(defn_name)(unquote_splicing(defn_args)), do: unquote(ast))
+      end
+
+    {strip_definition_context(entrypoint), impl}
+  end
+
+  # If the definition has a context, we don't warn when it goes unused,
+  # so we remove the context as we want to keep the original semantics.
+  defp strip_definition_context({kind, meta, [signature, block]}) do
+    {kind, meta, [Macro.update_meta(signature, &Keyword.delete(&1, :context)), block]}
   end
 
   defp compile_each_transform({{name, max_arity}, _def_meta}, state) do
@@ -499,7 +511,7 @@ defmodule Nx.Defn.Compiler do
     cond do
       pair in state.defns or pair in state.transforms ->
         {args, state} = normalize_list(args, state)
-        {{defn_name(name), meta, args}, state}
+        {{name, meta, args}, state}
 
       Module.defines?(state.module, {name, arity}) ->
         compile_error!(
