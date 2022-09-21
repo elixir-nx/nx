@@ -1767,11 +1767,6 @@ defmodule Torchx.Backend do
   defp to_torch_type({:c, 64}, _), do: :complex
   defp to_torch_type({:c, 128}, _), do: :complex_double
 
-  defp to_torch_type({:u, size}, hint) when size in [16, 32, 64] do
-    raise ArgumentError,
-          String.trim("Torchx does not support unsigned #{size} bit integer#{hint}")
-  end
-
   if Application.compile_env(:torchx, :check_shape_and_type, false) do
     defp check_shape_and_type!(device_ref, shape, type) do
       current_type = Torchx.scalar_type(device_ref) |> from_torch_type()
