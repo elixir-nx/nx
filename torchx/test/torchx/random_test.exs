@@ -294,11 +294,13 @@ defmodule Torchx.Nx.RandomTest do
     end
 
     test "property" do
-      key = Nx.Random.key(:rand.uniform(10_000))
-      normal = Nx.Random.normal(key, 10, 5, shape: {1_000})
+      for _ <- 1..10 do
+        key = Nx.Random.key(:rand.uniform(10_000))
+        normal = Nx.Random.normal(key, 10, 5, shape: {1_000})
 
-      assert_all_close(Nx.mean(normal), 10, rtol: 0.1)
-      assert_all_close(Nx.standard_deviation(normal), 5, rtol: 0.1)
+        assert_all_close(Nx.mean(normal), 10, rtol: 0.1)
+        assert_all_close(Nx.standard_deviation(normal), 5, rtol: 0.1)
+      end
     end
   end
 end
