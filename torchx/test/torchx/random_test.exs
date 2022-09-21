@@ -1,7 +1,7 @@
 defmodule Torchx.Nx.RandomTest do
   use Torchx.Case, async: true
 
-  doctest Nx.Random
+  doctest Nx.Random, except: [normal: 2, normal: 4]
 
   describe "key/1" do
     test "transforms given integer into PRNG key" do
@@ -63,7 +63,7 @@ defmodule Torchx.Nx.RandomTest do
     test "randint" do
       distribution_case(:randint,
         args: [0, 10, [shape: {5}]],
-        expected: Nx.tensor([9, 2, 8, 0, 0], type: :s64)
+        expected: Nx.tensor([3, 2, 6, 4, 0], type: :s64)
       )
     end
 
@@ -100,14 +100,14 @@ defmodule Torchx.Nx.RandomTest do
       # inference
       assert_equal(
         Nx.Random.uniform(key, Nx.tensor(0, type: :bf16), Nx.tensor(100, type: :bf16)),
-        Nx.tensor(42.75, type: :bf16)
+        Nx.tensor(43.0, type: :bf16)
       )
 
       # int to float cast
-      assert_equal(Nx.Random.uniform(key, 0, 100, type: :bf16), Nx.tensor(42.75, type: :bf16))
+      assert_equal(Nx.Random.uniform(key, 0, 100, type: :bf16), Nx.tensor(43.0, type: :bf16))
 
       # f32 to bf16 downcast
-      assert_equal(Nx.Random.uniform(key, 0.0, 100.0, type: :bf16), Nx.tensor(42.75, type: :bf16))
+      assert_equal(Nx.Random.uniform(key, 0.0, 100.0, type: :bf16), Nx.tensor(43.0, type: :bf16))
 
       # upcast
       assert_equal(
@@ -140,7 +140,7 @@ defmodule Torchx.Nx.RandomTest do
       # upcast
       assert_equal(
         Nx.Random.normal(key, 0, 100, type: :f64),
-        Nx.tensor(-0.74266187285454, type: :f64)
+        Nx.tensor(-0.7426619192938216, type: :f64)
       )
     end
   end
@@ -226,6 +226,57 @@ defmodule Torchx.Nx.RandomTest do
         expected_func: fn x -> discrete_uniform_second_moment(x) end,
         expected_args: [85]
       )
+    end
+  end
+
+  describe "normal" do
+    test "outputs scalar" do
+      key = Nx.Random.key(42)
+      assert_equal(Nx.Random.normal(key), -0.18471182882785797)
+    end
+
+    test "outputs f16 tensors" do
+      key = Nx.Random.key(42)
+
+      assert_equal(
+        Nx.Random.normal(key, 0, 1, shape: {3, 3, 2}, type: :f16),
+        Nx.tensor([
+          [
+            [-0.6201171875, -1.017578125],
+            [-0.1424560546875, 0.10052490234375],
+            [-0.513671875, 0.308349609375]
+          ],
+          [
+            [-1.423828125, -1.9873046875],
+            [-0.59912109375, 0.662109375],
+            [-0.54150390625, -2.3359375]
+          ],
+          [
+            [-0.1448974609375, -0.4560546875],
+            [0.2802734375, 0.2548828125],
+            [-1.1044921875, -1.359375]
+          ]
+        ])
+      )
+    end
+
+    test "outputs c64" do
+      key = Nx.Random.key(42)
+
+      result = Nx.Random.normal(key, 0, 1, shape: {2, 2}, type: :c64)
+      float_result = Nx.Random.normal(key, 0, 1, shape: {4, 2}, type: :f32) |> Nx.transpose()
+
+      real = Nx.reshape(float_result[0], {2, 2})
+      imag = Nx.reshape(float_result[1], {2, 2})
+      assert_equal(result, Nx.complex(real, imag))
+    end
+
+    test "property" do
+      key = Nx.Random.key(:rand.uniform(10_000))
+      normal = Nx.Random.normal(key, 10, 5, shape: {1_000})
+
+      assert_all_close(Nx.mean(normal), 10, rtol: 0.1)
+      assert_all_close(Nx.standard_deviation(normal), 5, rtol: 0.1)
     end
   end
 end

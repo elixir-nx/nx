@@ -887,7 +887,7 @@ defmodule Torchx.Backend do
   unary_ops =
     [:exp, :expm1, :log, :log1p, :sigmoid, :cos, :sin, :tan, :cosh, :sinh] ++
       [:tanh, :acos, :asin, :atan, :acosh, :asinh, :atanh, :sqrt, :rsqrt] ++
-      [:erf, :erfc, :erf_inv, :abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign] ++
+      [:erf, :erfc, :abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign] ++
       [:logical_not, :cbrt, :is_nan, :is_infinity]
 
   for op <- unary_ops do
@@ -895,6 +895,24 @@ defmodule Torchx.Backend do
     def unquote(op)(out, tensor) do
       Torchx.unquote(op)(from_nx(tensor)) |> to_nx(out)
     end
+  end
+
+  @impl true
+  def erf_inv(out, %{type: {:f, 16}} = tensor) do
+    tensor
+    |> from_nx()
+    |> Torchx.to_type(:float)
+    |> Torchx.erf_inv()
+    |> Torchx.to_type(:half)
+    |> to_nx(out)
+  end
+
+  @impl true
+  def erf_inv(out, tensor) do
+    tensor
+    |> from_nx()
+    |> Torchx.erf_inv()
+    |> to_nx(out)
   end
 
   @impl true
