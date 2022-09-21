@@ -262,7 +262,7 @@ defmodule Torchx.Backend do
 
   @impl true
   def as_type(%T{type: type} = out, %T{} = t),
-    do: Torchx.to_type(from_nx(t), to_torch_type(type)) |> to_nx(out)
+    do: from_nx(t) |> bitmask(t.type) |> Torchx.to_type(to_torch_type(type)) |> to_nx(out)
 
   @impl true
   def squeeze(out, %T{} = t, axes) do
@@ -851,8 +851,7 @@ defmodule Torchx.Backend do
 
   binary_ops =
     [:add, :subtract, :multiply, :power, :remainder, :divide, :quotient] ++
-      [:left_shift, :atan2] ++
-      [:logical_and, :logical_or, :logical_xor]
+      [:left_shift, :atan2, :logical_and, :logical_or, :logical_xor]
 
   for op <- binary_ops do
     @impl true
@@ -921,6 +920,16 @@ defmodule Torchx.Backend do
   @impl true
   def log1p(%{type: {:c, _}}, _t) do
     raise ArithmeticError, "Torchx does not support complex values for log1p"
+  end
+
+  @impl true
+  def erf_inv(out, %{type: {:f, 16}} = tensor) do
+    tensor
+    |> from_nx()
+    |> Torchx.to_type(:float)
+    |> Torchx.erf_inv()
+    |> Torchx.to_type(:half)
+    |> to_nx(out)
   end
 
   unary_ops =
@@ -1678,8 +1687,7 @@ defmodule Torchx.Backend do
   @impl true
   def bitcast(out, %T{data: %TB{ref: {device, _}}} = tensor) do
     tensor
-    |> from_nx()
-    |> Torchx.to_blob()
+    |> to_binary(Nx.size(tensor))
     |> Torchx.from_blob(out.shape, to_torch_type(out.type), device_option(device: device))
     |> to_nx(out)
   end

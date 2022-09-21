@@ -216,7 +216,6 @@ defmodule Nx.Random do
           |> Nx.as_type({:u, 64})
 
         bits = bits[0] <<< 32 ||| bits[1]
-
         Nx.reshape(bits, shape)
 
       32 ->
