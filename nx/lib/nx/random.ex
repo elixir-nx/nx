@@ -166,6 +166,8 @@ defmodule Nx.Random do
     |> Nx.reshape({2, :auto})
     |> Nx.as_type({:u, 32})
     |> threefry2x32_20(key)
+    # slightly different representations (such as representing u32 as s64),
+    #
     |> mask32()
     |> Nx.flatten()
     |> Nx.pad(0, [{0, -padding, 0}])
@@ -179,7 +181,11 @@ defmodule Nx.Random do
     key1 = ks[0]
     key2 = ks[1]
 
+    # slightly different representations (such as representing u32 as s64),
+    #
     xs1 = mask32(xs[0] + key1)
+    # slightly different representations (such as representing u32 as s64),
+    #
     xs2 = mask32(xs[1] + key2)
     xs = {xs1, xs2}
 
@@ -187,6 +193,8 @@ defmodule Nx.Random do
       key2,
       Nx.bitwise_xor(key1, key2)
       |> Nx.bitwise_xor(0x1BD11BDA)
+      # slightly different representations (such as representing u32 as s64),
+      #
       |> mask32(),
       key1
     }
@@ -198,15 +206,21 @@ defmodule Nx.Random do
         {x + 1, rolled_loop_step(x, state)}
       end
 
+    # slightly different representations (such as representing u32 as s64),
+    #
     Nx.stack([nx1, nx2]) |> mask32
   end
 
   defnp apply_round({xs1, xs2}, rot) do
+    # slightly different representations (such as representing u32 as s64),
+    #
     y1 = mask32(xs1 + xs2)
 
     y2 =
       rotate_left(xs2, rot)
       |> Nx.bitwise_xor(y1)
+      # slightly different representations (such as representing u32 as s64),
+      #
       |> mask32()
 
     # losing precision on purpose due to upcasts
@@ -232,6 +246,8 @@ defmodule Nx.Random do
   end
 
   defnp rotate_left(x, rot) do
+    # slightly different representations (such as representing u32 as s64),
+    #
     mask32(x) <<< rot ||| mask32(x) >>> (@nbits - rot)
   end
 
@@ -327,7 +343,7 @@ defmodule Nx.Random do
     |> Nx.reshape(shape, take_names(opts))
   end
 
-  deftransformp randint_random_bits_shape(shape), do: Tuple.insert_at(shape, 0, 2)
+  deftransformp(randint_random_bits_shape(shape), do: Tuple.insert_at(shape, 0, 2))
 
   @doc """
   Shortcut for `uniform(key, 0.0, 1.0, opts)`.
@@ -415,8 +431,6 @@ defmodule Nx.Random do
   defn normal(key, opts \\ []) do
     normal(key, 0.0, 1.0, opts)
   end
-
-  defnp mask32(tensor), do: Nx.bitwise_and(tensor, 0xFFFFFFFF)
 
   @doc """
   Returns a normal distribution with the given `mean` and `standard_deviation`.
@@ -514,7 +528,7 @@ defmodule Nx.Random do
     end
   end
 
-  deftransformp take_names(opts), do: Keyword.take(opts, [:names])
+  deftransformp(take_names(opts), do: Keyword.take(opts, [:names]))
 
   deftransformp infer_type(left, right, opts) do
     if type = opts[:type] do
@@ -532,8 +546,8 @@ defmodule Nx.Random do
     end
   end
 
-  deftransformp put_type(opts, type), do: Keyword.put(opts, :type, type)
-  deftransformp put_shape(opts, shape), do: Keyword.put(opts, :shape, shape)
+  deftransformp(put_type(opts, type), do: Keyword.put(opts, :type, type))
+  deftransformp(put_shape(opts, shape), do: Keyword.put(opts, :shape, shape))
 
   defnp assert_key!(tensor) do
     %{shape: shape, type: type} = tensor
@@ -558,4 +572,10 @@ defmodule Nx.Random do
               "expected key with 32-bit unsigned integer type, got key with type #{inspect(type)}"
     end
   end
+
+  # We need to mask tensors because some of the algorithms expect
+  # the value to be bounded to 32-bits. Some backends might have
+  # slightly different representations (such as representing u32 as s64),
+  # so this protects our code from that.
+  defnp(mask32(tensor), do: Nx.bitwise_and(tensor, 0xFFFFFFFF))
 end
