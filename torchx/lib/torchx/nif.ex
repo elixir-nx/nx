@@ -8,7 +8,7 @@ defmodule Torchx.NIF do
       _ -> :ok
     end
 
-    path = :filename.join(:code.priv_dir(:torchx), 'torchx')
+    path = :filename.join(:code.priv_dir(:torchx), ~c"torchx")
     :erlang.load_nif(path, 0)
   end
 

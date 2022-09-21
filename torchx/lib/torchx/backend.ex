@@ -820,9 +820,6 @@ defmodule Torchx.Backend do
   defp bitmask(tensor, {:u, 32}),
     do: Torchx.bitwise_and(tensor, Torchx.scalar_tensor(0xFFFF_FFFF, :long, :cpu))
 
-  defp bitmask(tensor, {:u, 64}),
-    do: Torchx.bitwise_and(tensor, Torchx.scalar_tensor(0x7FFF_FFFF_FFFF_FFFF, :long, :cpu))
-
   defp bitmask(tensor, _),
     do: tensor
 
