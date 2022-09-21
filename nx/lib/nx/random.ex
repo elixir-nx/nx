@@ -166,6 +166,7 @@ defmodule Nx.Random do
     |> Nx.reshape({2, :auto})
     |> Nx.as_type({:u, 32})
     |> threefry2x32_20(key)
+    |> mask32()
     |> Nx.flatten()
     |> Nx.pad(0, [{0, -padding, 0}])
     |> Nx.reshape(count)
@@ -178,14 +179,15 @@ defmodule Nx.Random do
     key1 = ks[0]
     key2 = ks[1]
 
-    xs1 = xs[0] + key1
-    xs2 = xs[1] + key2
+    xs1 = mask32(xs[0] + key1)
+    xs2 = mask32(xs[1] + key2)
     xs = {xs1, xs2}
 
     ks = {
       key2,
       Nx.bitwise_xor(key1, key2)
-      |> Nx.bitwise_xor(0x1BD11BDA),
+      |> Nx.bitwise_xor(0x1BD11BDA)
+      |> mask32(),
       key1
     }
 
@@ -196,15 +198,16 @@ defmodule Nx.Random do
         {x + 1, rolled_loop_step(x, state)}
       end
 
-    Nx.stack([nx1, nx2])
+    Nx.stack([nx1, nx2]) |> mask32
   end
 
   defnp apply_round({xs1, xs2}, rot) do
-    y1 = xs1 + xs2
+    y1 = mask32(xs1 + xs2)
 
     y2 =
       rotate_left(xs2, rot)
       |> Nx.bitwise_xor(y1)
+      |> mask32()
 
     # losing precision on purpose due to upcasts
     {y1 |> Nx.as_type({:u, 32}), y2 |> Nx.as_type({:u, 32})}
@@ -229,7 +232,7 @@ defmodule Nx.Random do
   end
 
   defnp rotate_left(x, rot) do
-    x <<< rot ||| x >>> (@nbits - rot)
+    mask32(x) <<< rot ||| mask32(x) >>> (@nbits - rot)
   end
 
   defnp mantissa(type) do
@@ -324,7 +327,7 @@ defmodule Nx.Random do
     |> Nx.reshape(shape, take_names(opts))
   end
 
-  deftransformp randint_random_bits_shape(shape), do: Tuple.insert_at(shape, 0, 2)
+  deftransformp(randint_random_bits_shape(shape), do: Tuple.insert_at(shape, 0, 2))
 
   @doc """
   Shortcut for `uniform(key, 0.0, 1.0, opts)`.
@@ -380,15 +383,23 @@ defmodule Nx.Random do
     type = infer_float_type(min_value, max_value, opts)
 
     float_or_complex(key, type, Nx.shape(opts[:shape]), fn key, {_type, nbits} = type, shape ->
-      u_one = Nx.tensor(1.0, type: type) |> Nx.bitcast({:u, nbits})
+      s_one = Nx.tensor(1.0, type: type) |> Nx.bitcast({:s, nbits})
+
+      shift = Nx.tensor(nbits - mantissa(type), type: {:s, nbits})
+
+      minus_one =
+        Nx.tensor(-1, type: {:u, nbits})
+        |> Nx.right_shift(nbits - mantissa(type))
+        |> Nx.bitcast({:s, nbits})
 
       min_value = Nx.as_type(min_value, type)
       max_value = Nx.as_type(max_value, type)
 
       random_bits(key, shape: shape, bit_width: nbits)
-      |> Nx.as_type({:u, nbits})
-      |> Nx.right_shift(Nx.tensor(nbits - mantissa(type), type: {:u, nbits}))
-      |> Nx.bitwise_or(u_one)
+      |> Nx.as_type({:s, nbits})
+      |> Nx.right_shift(shift)
+      |> Nx.bitwise_and(minus_one)
+      |> Nx.bitwise_or(s_one)
       |> Nx.bitcast(type)
       |> Nx.subtract(Nx.tensor(1.0, type: type))
       |> Nx.multiply(max_value - min_value)
@@ -404,6 +415,8 @@ defmodule Nx.Random do
   defn normal(key, opts \\ []) do
     normal(key, 0.0, 1.0, opts)
   end
+
+  defnp mask32(tensor), do: Nx.bitwise_and(tensor, 0xFFFFFFFF)
 
   @doc """
   Returns a normal distribution with the given `mean` and `standard_deviation`.
@@ -501,7 +514,7 @@ defmodule Nx.Random do
     end
   end
 
-  deftransformp take_names(opts), do: Keyword.take(opts, [:names])
+  deftransformp(take_names(opts), do: Keyword.take(opts, [:names]))
 
   deftransformp infer_type(left, right, opts) do
     if type = opts[:type] do
@@ -519,8 +532,8 @@ defmodule Nx.Random do
     end
   end
 
-  deftransformp put_type(opts, type), do: Keyword.put(opts, :type, type)
-  deftransformp put_shape(opts, shape), do: Keyword.put(opts, :shape, shape)
+  deftransformp(put_type(opts, type), do: Keyword.put(opts, :type, type))
+  deftransformp(put_shape(opts, shape), do: Keyword.put(opts, :shape, shape))
 
   defnp assert_key!(tensor) do
     %{shape: shape, type: type} = tensor
