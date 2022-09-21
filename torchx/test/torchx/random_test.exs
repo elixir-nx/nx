@@ -73,6 +73,28 @@ defmodule Torchx.Nx.RandomTest do
         expected: Nx.tensor([0.298671, 0.073213, 0.873356, 0.260549, 0.412797], type: :f32)
       )
     end
+
+    test "randint property" do
+      for _ <- 1..10 do
+        key = Nx.Random.key(:rand.uniform(10_000))
+        t = Nx.Random.randint(key, 1, 10, shape: {100_000})
+
+        n = 10 - 1
+
+        assert_all_close(Nx.mean(t), (n + 1) / 2, rtol: 0.1)
+        assert_all_close(Nx.standard_deviation(t), :math.sqrt((n + 1) * (n - 1) / 12), rtol: 0.1)
+      end
+    end
+
+    test "uniform property" do
+      for _ <- 1..10 do
+        key = Nx.Random.key(:rand.uniform(10_000))
+        t = Nx.Random.uniform(key, 1, 10, shape: {100_000})
+
+        assert_all_close(Nx.mean(t), (10 + 1) / 2, rtol: 0.1)
+        assert_all_close(Nx.standard_deviation(t), (10 - 1) / :math.sqrt(12), rtol: 0.1)
+      end
+    end
   end
 
   describe "types" do
