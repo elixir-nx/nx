@@ -199,7 +199,13 @@ defmodule Torchx.Backend do
 
   @impl true
   def to_binary(tensor, limit) do
-    Torchx.to_blob(from_nx(tensor), limit)
+    blob = Torchx.to_blob(from_nx(tensor), limit)
+
+    case tensor.type do
+      {:u, 16} -> for <<x::32-native <- blob>>, do: <<x::16-native>>, into: <<>>
+      {:u, 32} -> for <<x::64-native <- blob>>, do: <<x::32-native>>, into: <<>>
+      _ -> blob
+    end
   end
 
   @impl true
@@ -808,17 +814,50 @@ defmodule Torchx.Backend do
     raise ArithmeticError, "Torchx does not support complex values for atan2"
   end
 
+  defp bitmask(tensor, {:u, 16}),
+    do: Torchx.bitwise_and(tensor, Torchx.scalar_tensor(0xFFFF, :int, :cpu))
+
+  defp bitmask(tensor, {:u, 32}),
+    do: Torchx.bitwise_and(tensor, Torchx.scalar_tensor(0xFFFF_FFFF, :long, :cpu))
+
+  defp bitmask(tensor, {:u, 64}),
+    do: Torchx.bitwise_and(tensor, Torchx.scalar_tensor(0x7FFF_FFFF_FFFF_FFFF, :long, :cpu))
+
+  defp bitmask(tensor, _),
+    do: tensor
+
+  # Those operations require bitmasking for emulated types
+  ops =
+    [:right_shift, :min, :max] ++
+      [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
+
+  for op <- ops do
+    @impl true
+    def unquote(op)(out, l, r) do
+      {left, right} = maybe_upcast(l, r)
+      {left_tx, right_tx} = maybe_broadcast_bin_args(out.shape, left, right)
+
+      result =
+        Torchx.unquote(op)(
+          left_tx |> bitmask(left.type),
+          right_tx |> bitmask(left.type)
+        )
+
+      result
+      |> Torchx.to_type(to_torch_type(out.type))
+      |> to_nx(out)
+    end
+  end
+
   binary_ops =
-    [:add, :subtract, :multiply, :power, :remainder, :divide, :min, :max, :quotient] ++
-      [:left_shift, :right_shift, :atan2] ++
-      [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] ++
+    [:add, :subtract, :multiply, :power, :remainder, :divide, :quotient] ++
+      [:left_shift, :atan2] ++
       [:logical_and, :logical_or, :logical_xor]
 
   for op <- binary_ops do
     @impl true
     def unquote(op)(out, l, r) do
       {left, right} = maybe_upcast(l, r)
-
       {left_tx, right_tx} = maybe_broadcast_bin_args(out.shape, left, right)
 
       Torchx.unquote(op)(left_tx, right_tx)
@@ -1649,18 +1688,9 @@ defmodule Torchx.Backend do
   def inspect(%T{} = tensor, inspect_opts) do
     limit = if inspect_opts.limit == :infinity, do: :infinity, else: inspect_opts.limit + 1
 
-    type =
-      case tensor.type do
-        {:u, 8} -> {:u, 8}
-        {:u, 16} -> {:s, 32}
-        {:u, 32} -> {:s, 64}
-        {:u, 64} -> {:s, 64}
-        t -> t
-      end
-
     tensor
     |> to_binary(min(limit, Nx.size(tensor)))
-    |> then(&Nx.Backend.inspect(%{tensor | type: type}, &1, inspect_opts))
+    |> then(&Nx.Backend.inspect(tensor, &1, inspect_opts))
     |> maybe_add_signature(tensor)
   end
 
