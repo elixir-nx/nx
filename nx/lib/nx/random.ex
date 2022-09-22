@@ -129,33 +129,6 @@ defmodule Nx.Random do
     |> Nx.as_type({:u, 32})
   end
 
-  defnp random_bits(key, opts \\ []) do
-    assert_key!(key)
-    opts = keyword!(opts, shape: {}, bit_width: 32)
-    shape = opts[:shape]
-    bit_width = opts[:bit_width]
-
-    case bit_width do
-      64 ->
-        bits =
-          threefry2x32(key, Nx.iota({Nx.size(shape) * 2}))
-          |> Nx.reshape({2, :auto})
-          |> Nx.as_type({:u, 64})
-
-        bits = bits[0] <<< 32 ||| bits[1]
-
-        Nx.reshape(bits, shape)
-
-      32 ->
-        threefry2x32(key, Nx.iota(shape, type: {:s, 64}))
-        |> Nx.as_type({:u, 32})
-
-      _ ->
-        threefry2x32(key, Nx.iota(shape, type: {:s, 64}))
-        |> Nx.as_type({:u, bit_width})
-    end
-  end
-
   defnp threefry2x32(key, count) do
     padding =
       Nx.size(count)
@@ -192,8 +165,8 @@ defmodule Nx.Random do
     state = {xs, ks, rotations}
 
     {_, {{nx1, nx2}, _, _}} =
-      while {x = 0, state}, x < 5 do
-        {x + 1, rolled_loop_step(x, state)}
+      while {x = Nx.tensor(0, type: :u32), state}, x < 5 do
+        {x + Nx.tensor(1, type: :u32), rolled_loop_step(x, state)}
       end
 
     Nx.stack([nx1, nx2])
@@ -206,22 +179,19 @@ defmodule Nx.Random do
       rotate_left(xs2, rot)
       |> Nx.bitwise_xor(y1)
 
-    # losing precision on purpose due to upcasts
-    {y1 |> Nx.as_type({:u, 32}), y2 |> Nx.as_type({:u, 32})}
+    {y1, y2}
   end
 
   defnp rolled_loop_step(i, {{_xs1, _xs2} = xs, {k1, k2, k3}, {r1, r2}}) do
     {_, {xs1, xs2}, _} =
-      while {x = 0, xs, r1}, x < 4 do
-        {x + 1, apply_round(xs, r1[x]), r1}
+      while {x = Nx.tensor(0, type: :u32), xs, r1}, x < 4 do
+        {x + Nx.tensor(1, type: :u32), apply_round(xs, r1[x]), r1}
       end
 
     xs1 = k1 + xs1
+    xs2 = k2 + i + Nx.tensor(1, type: :u32) + xs2
 
-    xs2 = k2 + i + 1 + xs2
-
-    new_xs = {xs1 |> Nx.as_type({:u, 32}), xs2 |> Nx.as_type({:u, 32})}
-
+    new_xs = {xs1, xs2}
     new_ks = {k2, k3, k1}
     new_rs = {r2, r1}
 
@@ -229,7 +199,33 @@ defmodule Nx.Random do
   end
 
   defnp rotate_left(x, rot) do
-    x <<< rot ||| x >>> (@nbits - rot)
+    x <<< rot ||| x >>> (Nx.tensor(@nbits, type: :u32) - rot)
+  end
+
+  defnp random_bits(key, opts \\ []) do
+    assert_key!(key)
+    opts = keyword!(opts, shape: {}, bit_width: 32)
+    shape = opts[:shape]
+    bit_width = opts[:bit_width]
+
+    case bit_width do
+      64 ->
+        bits =
+          threefry2x32(key, Nx.iota({Nx.size(shape) * 2}))
+          |> Nx.reshape({2, :auto})
+          |> Nx.as_type({:u, 64})
+
+        bits = bits[0] <<< 32 ||| bits[1]
+        Nx.reshape(bits, shape)
+
+      32 ->
+        threefry2x32(key, Nx.iota(shape, type: {:s, 64}))
+        |> Nx.as_type({:u, 32})
+
+      _ ->
+        threefry2x32(key, Nx.iota(shape, type: {:s, 64}))
+        |> Nx.as_type({:u, bit_width})
+    end
   end
 
   defnp mantissa(type) do
@@ -287,7 +283,7 @@ defmodule Nx.Random do
     opts = keyword!(opts, [:names, :type, shape: {}])
     assert_key!(key)
 
-    shape = Nx.shape(opts[:shape])
+    shape = opts[:shape]
     type = {_, nbits} = infer_type(min_val, max_val, opts)
 
     case type do
@@ -379,14 +375,13 @@ defmodule Nx.Random do
     opts = keyword!(opts, [:names, :type, shape: {}])
     type = infer_float_type(min_value, max_value, opts)
 
-    float_or_complex(key, type, Nx.shape(opts[:shape]), fn key, {_type, nbits} = type, shape ->
+    float_or_complex(key, type, opts[:shape], fn key, {_type, nbits} = type, shape ->
       u_one = Nx.tensor(1.0, type: type) |> Nx.bitcast({:u, nbits})
 
       min_value = Nx.as_type(min_value, type)
       max_value = Nx.as_type(max_value, type)
 
       random_bits(key, shape: shape, bit_width: nbits)
-      |> Nx.as_type({:u, nbits})
       |> Nx.right_shift(Nx.tensor(nbits - mantissa(type), type: {:u, nbits}))
       |> Nx.bitwise_or(u_one)
       |> Nx.bitcast(type)
@@ -476,7 +471,7 @@ defmodule Nx.Random do
     opts = keyword!(opts, [:names, :type, shape: {}])
     type = infer_float_type(mean, standard_deviation, opts)
 
-    float_or_complex(key, type, Nx.shape(opts[:shape]), fn key, type, shape ->
+    float_or_complex(key, type, opts[:shape], fn key, type, shape ->
       min_value = -1 + Nx.Constants.smallest_positive_normal_number(type)
       u = uniform(key, min_value, 1, opts |> put_type(type) |> put_shape(shape))
 

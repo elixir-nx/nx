@@ -1247,4 +1247,13 @@ defmodule Torchx.NxTest do
       assert_equal(result, Nx.squeeze(t, axes: [1, 2]))
     end
   end
+
+  describe "to_binary" do
+    test "for unsigned integers" do
+      assert Nx.tensor(1, type: :u8) |> Nx.to_binary() == <<1::native>>
+      assert Nx.tensor(1, type: :u16) |> Nx.to_binary() == <<1::native-16>>
+      assert Nx.tensor(1, type: :u32) |> Nx.to_binary() == <<1::native-32>>
+      assert Nx.tensor(1, type: :u64) |> Nx.to_binary() == <<1::native-64>>
+    end
+  end
 end

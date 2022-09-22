@@ -199,7 +199,13 @@ defmodule Torchx.Backend do
 
   @impl true
   def to_binary(tensor, limit) do
-    Torchx.to_blob(from_nx(tensor), limit)
+    blob = Torchx.to_blob(from_nx(tensor), limit)
+
+    case tensor.type do
+      {:u, 16} -> for <<x::32-native <- blob>>, do: <<x::16-native>>, into: <<>>
+      {:u, 32} -> for <<x::64-native <- blob>>, do: <<x::32-native>>, into: <<>>
+      _ -> blob
+    end
   end
 
   @impl true
@@ -256,7 +262,7 @@ defmodule Torchx.Backend do
 
   @impl true
   def as_type(%T{type: type} = out, %T{} = t),
-    do: Torchx.to_type(from_nx(t), to_torch_type(type)) |> to_nx(out)
+    do: from_nx(t) |> Torchx.to_type(to_torch_type(type)) |> bitmask(type) |> to_nx(out)
 
   @impl true
   def squeeze(out, %T{} = t, axes) do
@@ -808,17 +814,40 @@ defmodule Torchx.Backend do
     raise ArithmeticError, "Torchx does not support complex values for atan2"
   end
 
-  binary_ops =
-    [:add, :subtract, :multiply, :power, :remainder, :divide, :min, :max, :quotient] ++
-      [:left_shift, :right_shift, :atan2] ++
-      [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] ++
-      [:logical_and, :logical_or, :logical_xor]
+  ops = [:add, :subtract, :multiply, :power, :left_shift]
 
-  for op <- binary_ops do
+  for op <- ops do
     @impl true
     def unquote(op)(out, l, r) do
       {left, right} = maybe_upcast(l, r)
+      {left_tx, right_tx} = maybe_broadcast_bin_args(out.shape, left, right)
+      result = Torchx.unquote(op)(left_tx, right_tx)
 
+      result
+      |> bitmask(out.type)
+      |> Torchx.to_type(to_torch_type(out.type))
+      |> to_nx(out)
+    end
+  end
+
+  defp bitmask({device, _} = tensor, {:u, 16}),
+    do: Torchx.bitwise_and(tensor, Torchx.scalar_tensor(0xFFFF, :int, device))
+
+  defp bitmask({device, _} = tensor, {:u, 32}),
+    do: Torchx.bitwise_and(tensor, Torchx.scalar_tensor(0xFFFF_FFFF, :long, device))
+
+  defp bitmask(tensor, {_, _}),
+    do: tensor
+
+  ops =
+    [:min, :max, :remainder, :divide, :quotient, :atan2] ++
+      [:right_shift, :logical_and, :logical_or, :logical_xor] ++
+      [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
+
+  for op <- ops do
+    @impl true
+    def unquote(op)(out, l, r) do
+      {left, right} = maybe_upcast(l, r)
       {left_tx, right_tx} = maybe_broadcast_bin_args(out.shape, left, right)
 
       Torchx.unquote(op)(left_tx, right_tx)
@@ -882,6 +911,16 @@ defmodule Torchx.Backend do
   @impl true
   def log1p(%{type: {:c, _}}, _t) do
     raise ArithmeticError, "Torchx does not support complex values for log1p"
+  end
+
+  @impl true
+  def erf_inv(out, %{type: {:f, 16}} = tensor) do
+    tensor
+    |> from_nx()
+    |> Torchx.to_type(:float)
+    |> Torchx.erf_inv()
+    |> Torchx.to_type(:half)
+    |> to_nx(out)
   end
 
   unary_ops =
@@ -1639,8 +1678,7 @@ defmodule Torchx.Backend do
   @impl true
   def bitcast(out, %T{data: %TB{ref: {device, _}}} = tensor) do
     tensor
-    |> from_nx()
-    |> Torchx.to_blob()
+    |> to_binary(Nx.size(tensor))
     |> Torchx.from_blob(out.shape, to_torch_type(out.type), device_option(device: device))
     |> to_nx(out)
   end
@@ -1649,18 +1687,9 @@ defmodule Torchx.Backend do
   def inspect(%T{} = tensor, inspect_opts) do
     limit = if inspect_opts.limit == :infinity, do: :infinity, else: inspect_opts.limit + 1
 
-    type =
-      case tensor.type do
-        {:u, 8} -> {:u, 8}
-        {:u, 16} -> {:s, 32}
-        {:u, 32} -> {:s, 64}
-        {:u, 64} -> {:s, 64}
-        t -> t
-      end
-
     tensor
     |> to_binary(min(limit, Nx.size(tensor)))
-    |> then(&Nx.Backend.inspect(%{tensor | type: type}, &1, inspect_opts))
+    |> then(&Nx.Backend.inspect(tensor, &1, inspect_opts))
     |> maybe_add_signature(tensor)
   end
 
@@ -1731,11 +1760,6 @@ defmodule Torchx.Backend do
   defp to_torch_type({:f, 64}, _), do: :double
   defp to_torch_type({:c, 64}, _), do: :complex
   defp to_torch_type({:c, 128}, _), do: :complex_double
-
-  defp to_torch_type({:u, size}, hint) when size in [16, 32, 64] do
-    raise ArgumentError,
-          String.trim("Torchx does not support unsigned #{size} bit integer#{hint}")
-  end
 
   if Application.compile_env(:torchx, :check_shape_and_type, false) do
     defp check_shape_and_type!(device_ref, shape, type) do
