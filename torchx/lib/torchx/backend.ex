@@ -861,10 +861,11 @@ defmodule Torchx.Backend do
     {left, right} = maybe_upcast(l, r)
     {left_tx, right_tx} = maybe_broadcast_bin_args(out.shape, left, right)
 
-    mod_fun = case l.type do
-      {:u, s} when s in [16, 32, 64] -> &Torchx.remainder/2
-      _ -> &Torchx.fmod/2
-    end
+    mod_fun =
+      case l.type do
+        {:u, s} when s in [16, 32, 64] -> &Torchx.remainder/2
+        _ -> &Torchx.fmod/2
+      end
 
     mod_fun
     |> apply([left_tx, right_tx])
