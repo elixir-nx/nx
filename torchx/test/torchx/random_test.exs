@@ -62,40 +62,19 @@ defmodule Torchx.Nx.RandomTest do
     end
 
     test "randint" do
-      # Output does not match Nx because of sign of remainder.
-      distribution_case(:randint,
+      # Output does not match Nx because of the sign of the remainder.
+      distribution_case(:randint_split,
         args: [0, 10, [shape: {5}]],
-        expected: Nx.tensor([3, 2, 6, 4, 0], type: :s64)
+        expected: Nx.tensor([3, 0, 4, 4, 4], type: :s64)
       )
     end
 
     test "uniform" do
-      distribution_case(:uniform,
-        args: [[shape: {5}]],
-        expected: Nx.tensor([0.298671, 0.073213, 0.873356, 0.260549, 0.412797], type: :f32)
+      distribution_case(:uniform_split,
+        args: [0.0, 1.0, [shape: {5}]],
+        expected:
+          Nx.tensor([0.40235483, 0.86897706, 0.87899947, 0.98497891, 0.83098864], type: :f32)
       )
-    end
-
-    test "randint property" do
-      for _ <- 1..10 do
-        key = Nx.Random.key(:rand.uniform(10_000))
-        t = Nx.Random.randint(key, 1, 10, shape: {100_000})
-
-        n = 10 - 1
-
-        assert_all_close(Nx.mean(t), (n + 1) / 2, rtol: 0.1)
-        assert_all_close(Nx.standard_deviation(t), :math.sqrt((n + 1) * (n - 1) / 12), rtol: 0.1)
-      end
-    end
-
-    test "uniform property" do
-      for _ <- 1..10 do
-        key = Nx.Random.key(:rand.uniform(10_000))
-        t = Nx.Random.uniform(key, 1, 10, shape: {100_000})
-
-        assert_all_close(Nx.mean(t), (10 + 1) / 2, rtol: 0.1)
-        assert_all_close(Nx.standard_deviation(t), (10 - 1) / :math.sqrt(12), rtol: 0.1)
-      end
     end
   end
 
@@ -105,37 +84,46 @@ defmodule Torchx.Nx.RandomTest do
 
       # Default
       assert_equal(
-        Nx.Random.randint(key, Nx.tensor(0, type: :u8), Nx.tensor(100, type: :u8)),
+        Nx.Random.randint_split(key, Nx.tensor(0, type: :u8), Nx.tensor(100, type: :u8)),
         Nx.tensor(12, type: :u8)
       )
 
       # Explicit
-      assert_equal(Nx.Random.randint(key, 0, 100, type: :u8), Nx.tensor(12, type: :u8))
-      assert_equal(Nx.Random.randint(key, 0, 100, type: :u64), Nx.tensor(10, type: :u64))
-      assert_equal(Nx.Random.randint(key, 0, 100, type: :s64), Nx.tensor(10, type: :s64))
+      assert_equal(Nx.Random.randint_split(key, 0, 100, type: :u8), Nx.tensor(12, type: :u8))
+      assert_equal(Nx.Random.randint_split(key, 0, 100, type: :u64), Nx.tensor(10, type: :u64))
+      assert_equal(Nx.Random.randint_split(key, 0, 100, type: :s64), Nx.tensor(10, type: :s64))
     end
 
     test "uniform" do
       key = Nx.Random.key(44)
 
       # default
-      assert_equal(Nx.Random.uniform(key, 0, 100), Nx.tensor(0.9405970573425293, type: :f32))
+      assert_equal(
+        Nx.Random.uniform_split(key, 0, 100),
+        Nx.tensor(0.9405970573425293, type: :f32)
+      )
 
       # inference
       assert_equal(
-        Nx.Random.uniform(key, Nx.tensor(0, type: :bf16), Nx.tensor(100, type: :bf16)),
+        Nx.Random.uniform_split(key, Nx.tensor(0, type: :bf16), Nx.tensor(100, type: :bf16)),
         Nx.tensor(43.0, type: :bf16)
       )
 
       # int to float cast
-      assert_equal(Nx.Random.uniform(key, 0, 100, type: :bf16), Nx.tensor(43.0, type: :bf16))
+      assert_equal(
+        Nx.Random.uniform_split(key, 0, 100, type: :bf16),
+        Nx.tensor(43.0, type: :bf16)
+      )
 
       # f32 to bf16 downcast
-      assert_equal(Nx.Random.uniform(key, 0.0, 100.0, type: :bf16), Nx.tensor(43.0, type: :bf16))
+      assert_equal(
+        Nx.Random.uniform_split(key, 0.0, 100.0, type: :bf16),
+        Nx.tensor(43.0, type: :bf16)
+      )
 
       # upcast
       assert_equal(
-        Nx.Random.uniform(key, 0.0, 100.0, type: :f64),
+        Nx.Random.uniform_split(key, 0.0, 100.0, type: :f64),
         Nx.tensor(49.70372348385783, type: :f64)
       )
     end
@@ -144,44 +132,43 @@ defmodule Torchx.Nx.RandomTest do
       key = Nx.Random.key(44)
 
       # default
-      assert_equal(Nx.Random.uniform(key, 0, 100), Nx.tensor(0.9405970573425293, type: :f32))
+      assert_equal(Nx.Random.normal_split(key, 0, 100), Nx.tensor(-234.9236602783203, type: :f32))
 
       # inference
       assert_equal(
-        Nx.Random.normal(key, Nx.tensor(0, type: :bf16), Nx.tensor(100, type: :bf16)),
+        Nx.Random.normal_split(key, Nx.tensor(0, type: :bf16), Nx.tensor(100, type: :bf16)),
         Nx.tensor(-17.625, type: :bf16)
       )
 
       # int to float cast
-      assert_equal(Nx.Random.normal(key, 0, 100, type: :bf16), Nx.tensor(-17.625, type: :bf16))
+      assert_equal(
+        Nx.Random.normal_split(key, 0, 100, type: :bf16),
+        Nx.tensor(-17.625, type: :bf16)
+      )
 
       # f32 to bf16 downcast
       assert_equal(
-        Nx.Random.normal(key, 0.0, 100.0, type: :bf16),
+        Nx.Random.normal_split(key, 0.0, 100.0, type: :bf16),
         Nx.tensor(-17.625, type: :bf16)
+      )
+
+      # f32 to f16 downcast
+      assert_equal(
+        Nx.Random.normal_split(key, 0.0, 100.0, type: :f16),
+        Nx.tensor(-17.21875, type: :f16)
       )
 
       # upcast
       assert_equal(
-        Nx.Random.normal(key, 0, 100, type: :f64),
+        Nx.Random.normal_split(key, 0, 100, type: :f64),
         Nx.tensor(-0.7426619192938216, type: :f64)
       )
-    end
-  end
 
-  describe "names" do
-    test "randint" do
-      key = Nx.Random.key(44)
-      tensor = Nx.Random.randint(key, 0, 100, names: [:foo, :bar], shape: {10, 10})
-      assert tensor.names == [:foo, :bar]
-      assert tensor.shape == {10, 10}
-    end
-
-    test "uniform" do
-      key = Nx.Random.key(44)
-      tensor = Nx.Random.uniform(key, 0, 100, names: [:foo, :bar], shape: {10, 10})
-      assert tensor.names == [:foo, :bar]
-      assert tensor.shape == {10, 10}
+      # complex
+      assert_all_close(
+        Nx.Random.normal_split(key, 0.0, 100.0, type: :c64),
+        Nx.complex(-0.74267750, 6.5133848)
+      )
     end
   end
 
@@ -190,7 +177,6 @@ defmodule Torchx.Nx.RandomTest do
       (b - a) ** 2 / 12
     end
 
-    # about the mean
     defp discrete_uniform_second_moment(count) do
       (count - 1) * (count + 1) / 12
     end
@@ -201,14 +187,14 @@ defmodule Torchx.Nx.RandomTest do
            expected_func: expected_func,
            expected_args: expected_args
          ) do
-      seed = :erlang.adler32("uniformthreefry2x32")
+      seed = :erlang.adler32("#{name}threefry2x32")
       key = Nx.Random.key(Nx.tensor(seed, type: :s64))
       t = apply(Nx.Random, name, [key | args])
 
       apply(Nx, moment, [t])
       |> assert_all_close(apply(expected_func, expected_args), rtol: 0.1)
 
-      seed = :erlang.adler32("uniformthreefry2x32")
+      seed = :erlang.adler32("#{name}threefry2x32")
       key = Nx.Random.key(Nx.tensor(seed, type: :u64))
       t = apply(Nx.Random, name, [key | args])
 
@@ -217,7 +203,7 @@ defmodule Torchx.Nx.RandomTest do
     end
 
     test "uniform mean property" do
-      property_case(:uniform,
+      property_case(:uniform_split,
         args: [10, 15, [shape: {10000}]],
         moment: :mean,
         expected_func: fn x -> Nx.tensor(x) end,
@@ -226,7 +212,7 @@ defmodule Torchx.Nx.RandomTest do
     end
 
     test "randint mean property" do
-      property_case(:randint,
+      property_case(:randint_split,
         args: [10, 95, [shape: {10000}]],
         moment: :mean,
         expected_func: fn x -> Nx.tensor(x) end,
@@ -235,7 +221,7 @@ defmodule Torchx.Nx.RandomTest do
     end
 
     test "uniform variance property" do
-      property_case(:uniform,
+      property_case(:uniform_split,
         args: [Nx.tensor(10), Nx.tensor(15), [shape: {10000}]],
         moment: :variance,
         expected_func: fn a, b -> continuous_uniform_variance(a, b) end,
@@ -244,65 +230,20 @@ defmodule Torchx.Nx.RandomTest do
     end
 
     test "randint variance property" do
-      property_case(:randint,
+      property_case(:randint_split,
         args: [Nx.tensor(10), Nx.tensor(95), [shape: {10000}]],
         moment: :variance,
         expected_func: fn x -> discrete_uniform_second_moment(x) end,
         expected_args: [85]
       )
     end
-  end
 
-  describe "normal" do
-    test "outputs scalar" do
-      key = Nx.Random.key(42)
-      assert_equal(Nx.Random.normal(key), -0.18471182882785797)
-    end
+    test "normal properties" do
+      key = Nx.Random.key(:rand.uniform(10_000))
+      normal = Nx.Random.normal_split(key, 10, 5, shape: {1_000})
 
-    test "outputs f16 tensors" do
-      key = Nx.Random.key(42)
-
-      assert_equal(
-        Nx.Random.normal(key, 0, 1, shape: {3, 3, 2}, type: :f16),
-        Nx.tensor([
-          [
-            [-0.6201171875, -1.017578125],
-            [-0.1424560546875, 0.10052490234375],
-            [-0.513671875, 0.308349609375]
-          ],
-          [
-            [-1.423828125, -1.9873046875],
-            [-0.59912109375, 0.662109375],
-            [-0.54150390625, -2.3359375]
-          ],
-          [
-            [-0.1448974609375, -0.4560546875],
-            [0.2802734375, 0.2548828125],
-            [-1.1044921875, -1.359375]
-          ]
-        ])
-      )
-    end
-
-    test "outputs c64" do
-      key = Nx.Random.key(42)
-
-      result = Nx.Random.normal(key, 0, 1, shape: {2, 2}, type: :c64)
-      float_result = Nx.Random.normal(key, 0, 1, shape: {4, 2}, type: :f32) |> Nx.transpose()
-
-      real = Nx.reshape(float_result[0], {2, 2})
-      imag = Nx.reshape(float_result[1], {2, 2})
-      assert_equal(result, Nx.complex(real, imag))
-    end
-
-    test "property" do
-      for _ <- 1..10 do
-        key = Nx.Random.key(:rand.uniform(10_000))
-        normal = Nx.Random.normal(key, 10, 5, shape: {1_000})
-
-        assert_all_close(Nx.mean(normal), 10, rtol: 0.1)
-        assert_all_close(Nx.standard_deviation(normal), 5, rtol: 0.1)
-      end
+      assert_all_close(Nx.mean(normal), 10, rtol: 0.1)
+      assert_all_close(Nx.standard_deviation(normal), 5, rtol: 0.1)
     end
   end
 end
