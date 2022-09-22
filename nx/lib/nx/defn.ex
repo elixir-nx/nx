@@ -354,7 +354,7 @@ defmodule Nx.Defn do
   @doc """
   Wraps an anonymous function with just-in-time compilation.
 
-  Once invoked, the wrapped anonymous function with perform just
+  Once invoked, the wrapped anonymous function will perform just
   in time compilation with the configured compiler. For example,
   take the following definition:
 
@@ -441,6 +441,34 @@ defmodule Nx.Defn do
     else
       jit(fun, args, opts)
     end
+  end
+
+  @doc """
+  Wraps an anonymous function to return its underlying defn expression.
+
+  This function must be invoked only for debugging purposes only.
+
+  ## Options
+
+    * `:hooks` - a map of hooks to execute. See `Nx.Defn.Kernel.hook/3`
+
+  """
+  def debug_expr(fun, opts \\ []) when is_function(fun) and is_list(opts) do
+    wrap(fun, &debug_expr_apply(fun, &1, opts))
+  end
+
+  @doc """
+  Invokes the anonymous function to return its underlying defn expression.
+
+  This function must be invoked only for debugging purposes only.
+
+  It accepts the same options as `debug_expr/2`.
+  """
+  def debug_expr_apply(fun, args, opts \\ []) when is_function(fun) and is_list(args) do
+    opts = opts |> prepare_options() |> Keyword.put(:compiler, Nx.Defn.Debug)
+    {params, flatten} = Nx.Defn.Composite.to_lazy_params(args)
+    [res] = Nx.Defn.Compiler.__jit__(fun, params, [flatten], opts)
+    res
   end
 
   @doc """

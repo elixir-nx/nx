@@ -7,7 +7,7 @@ defmodule Nx.Defn.StreamTest do
   defn defn_sum(entry, acc), do: {acc, entry + acc}
 
   def elixir_sum(entry, acc) do
-    true = Process.get(Nx.Defn.Compiler) in [Nx.Defn.Evaluator, Nx.Defn.Identity]
+    true = Process.get(Nx.Defn.Compiler) in [Nx.Defn.Evaluator, Nx.Defn.Debug]
     {acc, Nx.add(entry, acc)}
   end
 

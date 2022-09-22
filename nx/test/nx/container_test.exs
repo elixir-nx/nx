@@ -43,7 +43,7 @@ defmodule Nx.ContainerTest do
     alias Container, as: C
 
     setup do
-      Nx.Defn.default_options(compiler: Nx.Defn.Identity)
+      Nx.Defn.default_options(compiler: Nx.Defn.Debug)
       :ok
     end
 

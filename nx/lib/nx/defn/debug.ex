@@ -1,4 +1,4 @@
-defmodule Nx.Defn.Identity do
+defmodule Nx.Defn.Debug do
   @behaviour Nx.Defn.Compiler
 
   def __stream__(_, _, _, _, _, _, _), do: raise("not implemented")
