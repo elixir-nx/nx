@@ -2,7 +2,7 @@ defmodule Nx.DefnTest do
   use ExUnit.Case, async: true
 
   alias Nx.Tensor, as: T
-  alias Nx.Defn.{Expr, Identity, Evaluator}
+  alias Nx.Defn.{Expr, Debug, Evaluator}
   alias Nx.DefnTest.Sample
   import Nx.Defn
 
@@ -12,7 +12,7 @@ defmodule Nx.DefnTest do
   end
 
   setup context do
-    Nx.Defn.default_options(compiler: context[:compiler] || Identity)
+    Nx.Defn.default_options(compiler: context[:compiler] || Debug)
     :ok
   end
 
@@ -1546,12 +1546,32 @@ defmodule Nx.DefnTest do
     end
   end
 
+  describe "debug expression" do
+    defn defn_debug(a, b), do: a + b
+
+    test "debug_expr/2" do
+      assert %Nx.Tensor{data: %Nx.Defn.Expr{op: :add, args: [left, right]}} =
+               Nx.Defn.debug_expr(&defn_debug/2).(1, 2)
+
+      assert %Nx.Tensor{data: %Nx.Defn.Expr{op: :parameter, args: [0]}} = left
+      assert %Nx.Tensor{data: %Nx.Defn.Expr{op: :parameter, args: [1]}} = right
+    end
+
+    test "debug_expr_apply/3" do
+      assert %Nx.Tensor{data: %Nx.Defn.Expr{op: :add, args: [left, right]}} =
+               Nx.Defn.debug_expr_apply(&defn_debug/2, [1, 2])
+
+      assert %Nx.Tensor{data: %Nx.Defn.Expr{op: :parameter, args: [0]}} = left
+      assert %Nx.Tensor{data: %Nx.Defn.Expr{op: :parameter, args: [1]}} = right
+    end
+  end
+
   describe "jit" do
     defn defn_jit({a, b}, c), do: a + b - c
 
     test "compiles defn function" do
       assert %T{data: %Expr{op: :subtract}} =
-               Nx.Defn.jit(&defn_jit/2, compiler: Identity).({1, 2}, 3)
+               Nx.Defn.jit(&defn_jit/2, compiler: Debug).({1, 2}, 3)
 
       Nx.Defn.default_options(compiler: Evaluator)
       assert Nx.Defn.jit(&defn_jit/2).({4, 5}, 3) == Nx.tensor(6)
@@ -1565,7 +1585,7 @@ defmodule Nx.DefnTest do
     test "jits or applies" do
       assert %T{data: %Expr{op: :subtract}} =
                Nx.Defn.jit_apply(&defn_jit_or_apply/2, [{1, 2}, 3],
-                 compiler: Identity,
+                 compiler: Debug,
                  on_conflict: :reuse
                )
 
@@ -1575,13 +1595,13 @@ defmodule Nx.DefnTest do
     end
 
     def elixir_jit({a, b}, c) do
-      true = Process.get(Nx.Defn.Compiler) in [Evaluator, Identity]
+      true = Process.get(Nx.Defn.Compiler) in [Evaluator, Debug]
       a |> Nx.add(b) |> Nx.subtract(c)
     end
 
     test "compiles elixir function" do
       assert %T{data: %Expr{op: :subtract}} =
-               Nx.Defn.jit(&elixir_jit/2, compiler: Identity).({4, 5}, 3)
+               Nx.Defn.jit(&elixir_jit/2, compiler: Debug).({4, 5}, 3)
 
       Nx.Defn.default_options(compiler: Evaluator)
       assert Nx.Defn.jit(&elixir_jit/2).({4, 5}, 3) == Nx.tensor(6)
@@ -1762,15 +1782,15 @@ defmodule Nx.DefnTest do
 
     test "have their own cache key" do
       sum_axis_expr(Nx.tensor([[1, 2], [3, 4]]), axes: [0])
-      key0 = Process.get(Identity)
+      key0 = Process.get(Debug)
       assert is_function(key0, 1)
 
       sum_axis_expr(Nx.tensor([[1, 2], [3, 4]]), axes: [1])
-      key1 = Process.get(Identity)
+      key1 = Process.get(Debug)
       assert is_function(key1, 1)
 
       sum_axis_expr(Nx.tensor([[1, 2], [3, 4]]), axes: [0])
-      assert Process.get(Identity) == key0
+      assert Process.get(Debug) == key0
     end
   end
 

@@ -8,7 +8,7 @@ defmodule Nx.Defn.TreeTest do
   import Nx.Defn
 
   setup do
-    Nx.Defn.default_options(compiler: Nx.Defn.Identity)
+    Nx.Defn.default_options(compiler: Nx.Defn.Debug)
     :ok
   end
 
