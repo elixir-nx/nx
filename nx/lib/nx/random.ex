@@ -283,7 +283,7 @@ defmodule Nx.Random do
     opts = keyword!(opts, [:names, :type, shape: {}])
     assert_key!(key)
 
-    shape = Nx.shape(opts[:shape])
+    shape = opts[:shape]
     type = {_, nbits} = infer_type(min_val, max_val, opts)
 
     case type do
@@ -375,14 +375,13 @@ defmodule Nx.Random do
     opts = keyword!(opts, [:names, :type, shape: {}])
     type = infer_float_type(min_value, max_value, opts)
 
-    float_or_complex(key, type, Nx.shape(opts[:shape]), fn key, {_type, nbits} = type, shape ->
+    float_or_complex(key, type, opts[:shape], fn key, {_type, nbits} = type, shape ->
       u_one = Nx.tensor(1.0, type: type) |> Nx.bitcast({:u, nbits})
 
       min_value = Nx.as_type(min_value, type)
       max_value = Nx.as_type(max_value, type)
 
       random_bits(key, shape: shape, bit_width: nbits)
-      |> Nx.as_type({:u, nbits})
       |> Nx.right_shift(Nx.tensor(nbits - mantissa(type), type: {:u, nbits}))
       |> Nx.bitwise_or(u_one)
       |> Nx.bitcast(type)
@@ -472,7 +471,7 @@ defmodule Nx.Random do
     opts = keyword!(opts, [:names, :type, shape: {}])
     type = infer_float_type(mean, standard_deviation, opts)
 
-    float_or_complex(key, type, Nx.shape(opts[:shape]), fn key, type, shape ->
+    float_or_complex(key, type, opts[:shape], fn key, type, shape ->
       min_value = -1 + Nx.Constants.smallest_positive_normal_number(type)
       u = uniform(key, min_value, 1, opts |> put_type(type) |> put_shape(shape))
 

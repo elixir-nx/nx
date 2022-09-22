@@ -262,7 +262,7 @@ defmodule Torchx.Backend do
 
   @impl true
   def as_type(%T{type: type} = out, %T{} = t),
-    do: from_nx(t) |> bitmask(t.type) |> Torchx.to_type(to_torch_type(type)) |> to_nx(out)
+    do: from_nx(t) |> Torchx.to_type(to_torch_type(type)) |> bitmask(type) |> to_nx(out)
 
   @impl true
   def squeeze(out, %T{} = t, axes) do
@@ -814,43 +814,38 @@ defmodule Torchx.Backend do
     raise ArithmeticError, "Torchx does not support complex values for atan2"
   end
 
-  defp bitmask(tensor, {:u, 16}),
-    do: Torchx.bitwise_and(tensor, Torchx.scalar_tensor(0xFFFF, :int, :cpu))
-
-  defp bitmask(tensor, {:u, 32}),
-    do: Torchx.bitwise_and(tensor, Torchx.scalar_tensor(0xFFFF_FFFF, :long, :cpu))
-
-  defp bitmask(tensor, _),
-    do: tensor
-
-  # Those operations require bitmasking for emulated types
   ops =
-    [:right_shift, :min, :max] ++
-      [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
+    [:add, :subtract, :multiply, :power, :left_shift]
 
   for op <- ops do
     @impl true
     def unquote(op)(out, l, r) do
       {left, right} = maybe_upcast(l, r)
       {left_tx, right_tx} = maybe_broadcast_bin_args(out.shape, left, right)
-
-      result =
-        Torchx.unquote(op)(
-          left_tx |> bitmask(left.type),
-          right_tx |> bitmask(left.type)
-        )
+      result = Torchx.unquote(op)(left_tx, right_tx)
 
       result
+      |> bitmask(out.type)
       |> Torchx.to_type(to_torch_type(out.type))
       |> to_nx(out)
     end
   end
 
-  binary_ops =
-    [:add, :subtract, :multiply, :power, :remainder, :divide, :quotient] ++
-      [:left_shift, :atan2, :logical_and, :logical_or, :logical_xor]
+  defp bitmask({device, _} = tensor, {:u, 16}),
+    do: Torchx.bitwise_and(tensor, Torchx.scalar_tensor(0xFFFF, :int, device))
 
-  for op <- binary_ops do
+  defp bitmask({device, _} = tensor, {:u, 32}),
+    do: Torchx.bitwise_and(tensor, Torchx.scalar_tensor(0xFFFF_FFFF, :long, device))
+
+  defp bitmask(tensor, {_, _}),
+    do: tensor
+
+  ops =
+    [:min, :max, :remainder, :divide, :quotient, :atan2] ++
+    [:right_shift, :logical_and, :logical_or, :logical_xor] ++
+      [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
+
+  for op <- ops do
     @impl true
     def unquote(op)(out, l, r) do
       {left, right} = maybe_upcast(l, r)
