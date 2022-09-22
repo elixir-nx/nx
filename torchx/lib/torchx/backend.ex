@@ -861,6 +861,8 @@ defmodule Torchx.Backend do
     {left, right} = maybe_upcast(l, r)
     {left_tx, right_tx} = maybe_broadcast_bin_args(out.shape, left, right)
 
+    right_tx = Torchx.abs(right_tx)
+
     left_tx
     |> Torchx.remainder(right_tx)
     |> apply_remainder_image_correction(left_tx, l.type, right_tx)
