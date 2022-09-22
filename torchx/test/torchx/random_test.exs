@@ -62,9 +62,10 @@ defmodule Torchx.Nx.RandomTest do
     end
 
     test "randint" do
+      # Output does not match Nx because of the sign of the remainder.
       distribution_case(:randint_split,
         args: [0, 10, [shape: {5}]],
-        expected: Nx.tensor([3, 2, 6, 0, 0], type: :s64)
+        expected: Nx.tensor([3, 0, 4, 4, 4], type: :s64)
       )
     end
 
@@ -157,16 +158,16 @@ defmodule Torchx.Nx.RandomTest do
         Nx.tensor(-17.21875, type: :f16)
       )
 
-      # complex
-      assert_equal(
-        Nx.Random.normal_split(key, 0.0, 100.0, type: :c64),
-        Nx.complex(-0.7426775097846985, 6.513384819030762)
-      )
-
       # upcast
       assert_equal(
         Nx.Random.normal_split(key, 0, 100, type: :f64),
         Nx.tensor(-0.7426619192938216, type: :f64)
+      )
+
+      # complex
+      assert_all_close(
+        Nx.Random.normal_split(key, 0.0, 100.0, type: :c64),
+        Nx.complex(-0.74267750, 6.5133848)
       )
     end
   end
