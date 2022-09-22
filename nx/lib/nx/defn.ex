@@ -446,7 +446,7 @@ defmodule Nx.Defn do
   @doc """
   Wraps an anonymous function to return its underlying defn expression.
 
-  This function must be invoked only for debugging purposes only.
+  This function must be invoked for debugging purposes only.
 
   ## Options
 
@@ -460,7 +460,7 @@ defmodule Nx.Defn do
   @doc """
   Invokes the anonymous function to return its underlying defn expression.
 
-  This function must be invoked only for debugging purposes only.
+  This function must be invoked for debugging purposes only.
 
   It accepts the same options as `debug_expr/2`.
   """
