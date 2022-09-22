@@ -840,7 +840,7 @@ defmodule Torchx.Backend do
     do: tensor
 
   ops =
-    [:min, :max, :remainder, :divide, :quotient, :atan2] ++
+    [:min, :max, :divide, :quotient, :atan2] ++
       [:right_shift, :logical_and, :logical_or, :logical_xor] ++
       [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
 
@@ -854,6 +854,23 @@ defmodule Torchx.Backend do
       |> Torchx.to_type(to_torch_type(out.type))
       |> to_nx(out)
     end
+  end
+
+  @impl true
+  def remainder(out, l, r) do
+    {left, right} = maybe_upcast(l, r)
+    {left_tx, right_tx} = maybe_broadcast_bin_args(out.shape, left, right)
+
+    mod_fun =
+      case l.type do
+        {:u, s} when s in [16, 32, 64] -> &Torchx.remainder/2
+        _ -> &Torchx.fmod/2
+      end
+
+    mod_fun
+    |> apply([left_tx, right_tx])
+    |> Torchx.to_type(to_torch_type(out.type))
+    |> to_nx(out)
   end
 
   defp maybe_upcast(%T{type: t} = left, %T{type: t} = right),
