@@ -242,7 +242,7 @@ defmodule Torchx do
   deftensor subtract(tensorA, tensorB)
   deftensor multiply(tensorA, tensorB)
   deftensor power(tensorA, tensorB)
-  deftensor remainder(tensorA, tensorB)
+  deftensor fmod(tensorA, tensorB)
   deftensor divide(tensorA, tensorB)
   deftensor atan2(tensorA, tensorB)
   deftensor min(tensorA, tensorB)

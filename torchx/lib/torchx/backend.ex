@@ -861,28 +861,10 @@ defmodule Torchx.Backend do
     {left, right} = maybe_upcast(l, r)
     {left_tx, right_tx} = maybe_broadcast_bin_args(out.shape, left, right)
 
-    right_tx = Torchx.abs(right_tx)
-
     left_tx
-    |> Torchx.remainder(right_tx)
-    |> apply_remainder_image_correction(left_tx, l.type, right_tx)
+    |> Torchx.fmod(right_tx)
     |> Torchx.to_type(to_torch_type(out.type))
     |> to_nx(out)
-  end
-
-  defp apply_remainder_image_correction(result_tx, _left_tx, {:u, _}, _right_tx), do: result_tx
-
-  defp apply_remainder_image_correction(
-         result_tx,
-         {device, _} = left_tx,
-         left_type,
-         right_tx
-       ) do
-    zero = Torchx.scalar_tensor(0, to_torch_type(left_type), device)
-
-    left_tx
-    |> Torchx.less(zero)
-    |> Torchx.where(Torchx.subtract(result_tx, right_tx), result_tx)
   end
 
   defp maybe_upcast(%T{type: t} = left, %T{type: t} = right),
