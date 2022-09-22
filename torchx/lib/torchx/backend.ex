@@ -889,9 +889,7 @@ defmodule Torchx.Backend do
       # s64 numbers.
 
       max_s64_tx =
-        Nx.Constants.max_finite(:s64, backend: Nx.BinaryBackend)
-        |> Nx.to_number()
-        |> Torchx.scalar_tensor(to_torch_type(l.type), device)
+        Nx.Constants.max_finite(:s64, backend: {Nx.BinaryBackend, device: device}) |> from_nx()
 
       rest_tx = Torchx.subtract(left_tx, max_s64_tx)
 
