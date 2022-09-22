@@ -869,7 +869,7 @@ defmodule Torchx.Backend do
       # Numbers smaller than max_s64 are kept as positive s64 and fmod
       # works fine for those.
 
-      reminder_from_positive = Torchx.fmod(left_tx, right_tx)
+      remainder_from_positive = Torchx.fmod(left_tx, right_tx)
 
       # Numbers bigger than max_s64 are kept as negative s64. Consider
       # such s64 number denoted as x. We can decompose x into two
@@ -895,7 +895,7 @@ defmodule Torchx.Backend do
 
       rest_tx = Torchx.subtract(left_tx, max_s64_tx)
 
-      reminder_from_negative =
+      remainder_from_negative =
         Torchx.fmod(
           Torchx.add(
             Torchx.fmod(rest_tx, right_tx),
@@ -908,7 +908,7 @@ defmodule Torchx.Backend do
 
       left_tx
       |> Torchx.less(zero)
-      |> Torchx.where(reminder_from_negative, reminder_from_positive)
+      |> Torchx.where(remainder_from_negative, remainder_from_positive)
       |> Torchx.to_type(to_torch_type(out.type))
       |> to_nx(out)
     else
