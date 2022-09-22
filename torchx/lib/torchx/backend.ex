@@ -814,8 +814,7 @@ defmodule Torchx.Backend do
     raise ArithmeticError, "Torchx does not support complex values for atan2"
   end
 
-  ops =
-    [:add, :subtract, :multiply, :power, :left_shift]
+  ops = [:add, :subtract, :multiply, :power, :left_shift]
 
   for op <- ops do
     @impl true
@@ -842,7 +841,7 @@ defmodule Torchx.Backend do
 
   ops =
     [:min, :max, :remainder, :divide, :quotient, :atan2] ++
-    [:right_shift, :logical_and, :logical_or, :logical_xor] ++
+      [:right_shift, :logical_and, :logical_or, :logical_xor] ++
       [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
 
   for op <- ops do
