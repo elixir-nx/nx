@@ -65,7 +65,7 @@ defmodule Torchx.Nx.RandomTest do
       # Output does not match Nx because of the sign of the remainder.
       distribution_case(:randint_split,
         args: [0, 10, [shape: {5}]],
-        expected: Nx.tensor([3, 0, 4, 4, 4], type: :s64)
+        expected: Nx.tensor([3, 2, 6, 0, 0], type: :s64)
       )
     end
 

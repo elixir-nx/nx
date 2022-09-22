@@ -21,13 +21,6 @@ defmodule TorchxTest do
       {:cpu, ref} = Torchx.tensordot(a, b, [0], [0])
       assert is_reference(ref)
     end
-
-    test "dot with multiple batch axes" do
-      u = Nx.tensor([[[1, 1]], [[2, 2]]])
-      v = Nx.tensor([[[1, 2]], [[1, 2]]])
-
-      assert_equal(Nx.tensor([[3], [6]]), Nx.dot(u, [2], [0, 1], v, [2], [0, 1]))
-    end
   end
 
   describe "torchx<->nx" do

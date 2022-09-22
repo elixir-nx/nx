@@ -861,16 +861,62 @@ defmodule Torchx.Backend do
     {left, right} = maybe_upcast(l, r)
     {left_tx, right_tx} = maybe_broadcast_bin_args(out.shape, left, right)
 
-    mod_fun =
-      case l.type do
-        {:u, s} when s in [16, 32, 64] -> &Torchx.remainder/2
-        _ -> &Torchx.fmod/2
-      end
+    {device, _} = left_tx
 
-    mod_fun
-    |> apply([left_tx, right_tx])
-    |> Torchx.to_type(to_torch_type(out.type))
-    |> to_nx(out)
+    if l.type == {:u, 64} do
+      # We emulate u64 numbers with s64.
+
+      # Numbers smaller than max_s64 are kept as positive s64 and fmod
+      # works fine for those.
+
+      reminder_from_positive = Torchx.fmod(left_tx, right_tx)
+
+      # Numbers bigger than max_s64 are kept as negative s64. Consider
+      # such s64 number denoted as x. We can decompose x into two
+      # positive s64 numbers:
+      #
+      #   x = max_s64 + rest
+      #
+      # We can obtain rest as follows:
+      #
+      #   rest = x - max_s64
+      #
+      # We also know that the following holds:
+      #
+      #   x mod y = ((max_s64 mod y) + (rest mod y)) mod y
+      #
+      # We can safely compute operations on the right hand side using
+      # s64 numbers.
+
+      max_s64_tx =
+        Nx.Constants.max_finite(:s64, backend: Nx.BinaryBackend)
+        |> Nx.to_number()
+        |> Torchx.scalar_tensor(to_torch_type(l.type), device)
+
+      rest_tx = Torchx.subtract(left_tx, max_s64_tx)
+
+      reminder_from_negative =
+        Torchx.fmod(
+          Torchx.add(
+            Torchx.fmod(rest_tx, right_tx),
+            Torchx.fmod(max_s64_tx, right_tx)
+          ),
+          right_tx
+        )
+
+      zero = Torchx.scalar_tensor(0, to_torch_type(l.type), device)
+
+      left_tx
+      |> Torchx.less(zero)
+      |> Torchx.where(reminder_from_negative, reminder_from_positive)
+      |> Torchx.to_type(to_torch_type(out.type))
+      |> to_nx(out)
+    else
+      left_tx
+      |> Torchx.fmod(right_tx)
+      |> Torchx.to_type(to_torch_type(out.type))
+      |> to_nx(out)
+    end
   end
 
   defp maybe_upcast(%T{type: t} = left, %T{type: t} = right),
