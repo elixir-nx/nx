@@ -1693,10 +1693,35 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  # u64 is emulated with s64
+  def bitcast(%{type: {:s, 64}} = out, %T{type: {:u, 64}, data: data}) do
+    %{out | data: data}
+  end
+
+  def bitcast(%{type: {:u, 64}} = out, %T{type: {:s, 64}, data: data}) do
+    %{out | data: data}
+  end
+
+  # u16/u32 are double the size of s16/u32
+  def bitcast(%{type: {:u, bit}} = out, %T{type: {:s, bit}, data: %TB{ref: {device, _}}} = tensor)
+      when bit in [16, 32] do
+    output_size = 2 * bit
+
+    blob =
+      for <<x::size(bit)-signed-native <- to_binary(tensor, Nx.size(tensor))>>,
+        into: <<>>,
+        do: <<x::size(output_size)-signed-native>>
+
+    blob
+    |> Torchx.from_blob(out.shape, to_torch_type(out.type), device)
+    |> to_nx(out)
+  end
+
+  # s16/s32 are half the size of s16/u32 but that's handled in to_binary
   def bitcast(out, %T{data: %TB{ref: {device, _}}} = tensor) do
     tensor
     |> to_binary(Nx.size(tensor))
-    |> Torchx.from_blob(out.shape, to_torch_type(out.type), device_option(device: device))
+    |> Torchx.from_blob(out.shape, to_torch_type(out.type), device)
     |> to_nx(out)
   end
 
