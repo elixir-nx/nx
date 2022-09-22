@@ -658,6 +658,7 @@ BINARY_OP(logical_xor)
 BINARY_OP(add)
 BINARY_OP(subtract)
 BINARY_OP(divide)
+BINARY_OP(remainder)
 BINARY_OP(multiply)
 BINARY_OP(matmul)
 BINARY_OP2(power, pow)
@@ -1221,6 +1222,7 @@ static ErlNifFunc nif_functions[] = {
     DF(add, 2),
     DF(subtract, 2),
     DF(divide, 2),
+    DF(remainder, 2),
     DF(fmod, 2),
     DF(quotient, 2),
     DF(multiply, 2),
