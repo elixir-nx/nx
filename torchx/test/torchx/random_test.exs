@@ -153,14 +153,14 @@ defmodule Torchx.Nx.RandomTest do
 
       # f32 to f16 downcast
       assert_equal(
-        Nx.Random.normal_split(key, 0.0, 100.0, type: :f16) ==
-          Nx.tensor(-17.21875, type: :f16)
+        Nx.Random.normal_split(key, 0.0, 100.0, type: :f16),
+        Nx.tensor(-17.21875, type: :f16)
       )
 
       # complex
       assert_equal(
-        Nx.Random.normal_split(key, 0.0, 100.0, type: :c64) ==
-          Nx.complex(-0.7426775097846985, 6.513384819030762)
+        Nx.Random.normal_split(key, 0.0, 100.0, type: :c64),
+        Nx.complex(-0.7426775097846985, 6.513384819030762)
       )
 
       # upcast
