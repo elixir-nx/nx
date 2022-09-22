@@ -4,20 +4,25 @@ defmodule Torchx.Backend do
 
   Torchx behaviour that is different from BinaryBackend:
 
-    1. Torchx doesn't support u16/u32/u64. Only u8 is supported.
+    1. Torchx emulates the u16/u32/u64 unsigned integers using signed integers.
+       In practice this means u64 actually overflows at u32. When accessing the
+       underlying tensor, you will get signed integers back.
 
-        iex> Nx.tensor([1, 2, 3], type: {:u, 16}, backend: Torchx.Backend)
-        ** (ArgumentError) Torchx does not support unsigned 16 bit integer
+        iex> t = Nx.Constants.max_finite({:u, 32})
+        #Nx.Tensor<
+          u32
+          4294967295
+        >
+        iex> t |> Torchx.from_nx() |> Torchx.to_nx()
+        #Nx.Tensor<
+          s64
+          4294967295
+        >
 
-    2. Torchx doesn't support u8 on sums, you should convert input to signed integer.
-
-        iex> Nx.sum(Nx.tensor([1, 2, 3], type: {:u, 8}, backend: Torchx.Backend))
-        ** (ArgumentError) Torchx does not support unsigned 64 bit integer (explicitly cast the input tensor to a signed integer before taking sum)
-
-    3. Torchx rounds half-to-even, while Elixir rounds half-away-from-zero.
+    2. Torchx rounds half-to-even, while Elixir rounds half-away-from-zero.
        So in Elixir `round(0.5) == 1.0` while in Torchx `round(0.5) == 0.0`.
 
-    4. `Nx.as_type/2` converts non-finite values such as infinity becomes the
+    3. `Nx.as_type/2` converts non-finite values such as infinity becomes the
        maximum value for a type, negative infinity becomes the minimum value,
        and nan becomes zero. `Torchx` behaviour is type dependent with no clear
        rule across types.
@@ -194,7 +199,13 @@ defmodule Torchx.Backend do
 
   @impl true
   def to_binary(tensor, limit) do
-    Torchx.to_blob(from_nx(tensor), limit)
+    blob = Torchx.to_blob(from_nx(tensor), limit)
+
+    case tensor.type do
+      {:u, 16} -> for <<x::32-native <- blob>>, do: <<x::16-native>>, into: <<>>
+      {:u, 32} -> for <<x::64-native <- blob>>, do: <<x::32-native>>, into: <<>>
+      _ -> blob
+    end
   end
 
   @impl true
@@ -226,14 +237,22 @@ defmodule Torchx.Backend do
 
   @impl true
   def from_binary(%T{type: type, shape: shape} = out, binary, backend_options) do
-    Torchx.from_blob(
-      binary,
+    binary
+    |> maybe_pad_binary(type)
+    |> Torchx.from_blob(
       shape,
       to_torch_type(type),
       device_option(backend_options)
     )
     |> to_nx(out)
   end
+
+  defp maybe_pad_binary(bin, {:u, size}) when size in [16, 32] do
+    double_size = size * 2
+    for <<x::native-size(size) <- bin>>, into: <<>>, do: <<x::native-size(double_size)>>
+  end
+
+  defp maybe_pad_binary(bin, _), do: bin
 
   ## Shape
 
@@ -243,21 +262,49 @@ defmodule Torchx.Backend do
 
   @impl true
   def as_type(%T{type: type} = out, %T{} = t),
-    do: Torchx.to_type(from_nx(t), to_torch_type(type)) |> to_nx(out)
+    do: from_nx(t) |> Torchx.to_type(to_torch_type(type)) |> bitmask(type) |> to_nx(out)
 
   @impl true
-  def squeeze(out, %T{} = t, _axes) do
-    Torchx.squeeze(from_nx(t)) |> to_nx(out)
+  def squeeze(out, %T{} = t, axes) do
+    # sort the axes desc so we don't have to decrease the axis numbers after each squeeze
+    result =
+      for axis <- Enum.sort(axes, :desc), reduce: from_nx(t) do
+        t_tx ->
+          Torchx.squeeze(t_tx, axis)
+      end
+
+    to_nx(result, out)
   end
 
   @impl true
   def broadcast(out, %T{} = t, shape, axes) do
-    Torchx.broadcast_to(maybe_reshape(t, shape, axes) |> from_nx(), shape)
+    t
+    |> maybe_reshape(shape, axes)
+    |> from_nx()
+    |> Torchx.broadcast_to(shape)
     |> to_nx(out)
   end
 
-  defp maybe_reshape(%T{shape: {n}} = t, {n, _}, [0]), do: Nx.reshape(t, {n, 1})
-  defp maybe_reshape(%T{} = t, _, _), do: t
+  defp maybe_reshape(%T{shape: {}} = t, target_shape, _axes) do
+    shape = 1 |> List.duplicate(tuple_size(target_shape)) |> List.to_tuple()
+    Nx.reshape(t, shape)
+  end
+
+  defp maybe_reshape(%T{shape: shape} = t, target_shape, axes) do
+    base_broadcast_shape = 1 |> List.duplicate(tuple_size(target_shape)) |> List.to_tuple()
+
+    new_shape =
+      shape
+      |> Tuple.to_list()
+      |> Enum.zip(axes)
+      |> Enum.reduce(base_broadcast_shape, fn {dim_size, target_axis}, shape_acc ->
+        shape_acc
+        |> Tuple.delete_at(target_axis)
+        |> Tuple.insert_at(target_axis, dim_size)
+      end)
+
+    Nx.reshape(t, new_shape)
+  end
 
   @impl true
   def transpose(out, %T{} = t, axes) do
@@ -526,9 +573,11 @@ defmodule Torchx.Backend do
 
   @impl true
   def take_along_axis(out, tensor, idx, axis) do
+    idx_tx = idx |> from_nx() |> Torchx.to_type(:long)
+
     tensor
     |> from_nx()
-    |> Torchx.gather(from_nx(idx), axis)
+    |> Torchx.gather(idx_tx, axis)
     |> to_nx(out)
   end
 
@@ -554,9 +603,7 @@ defmodule Torchx.Backend do
   ## Aggregators
 
   @impl true
-  def sum(%T{type: out_type} = out, %T{} = t, opts) do
-    check_type!(out_type)
-
+  def sum(%T{} = out, %T{} = t, opts) do
     axes = opts[:axes] || []
     keep_axes = opts[:keep_axes] || false
 
@@ -567,9 +614,7 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def product(%T{type: out_type} = out, %T{} = t, opts) do
-    check_type!(out_type)
-
+  def product(%T{} = out, %T{} = t, opts) do
     axes = opts[:axes] || []
     keep_axes = opts[:keep_axes] || false
 
@@ -699,17 +744,16 @@ defmodule Torchx.Backend do
     axis = opts[:axis] || -1
     keep_axis = opts[:keep_axis] || false
 
+    t_tx = from_nx(t)
+
     if tie_break == :low do
-      apply(Torchx, fun, [from_nx(t), axis, keep_axis])
+      apply(Torchx, fun, [t_tx, axis, keep_axis])
       |> to_nx(out)
     else
       %{data: %{ref: {device, _}}, shape: shape} = t
       scalar = Torchx.scalar_tensor(elem(shape, axis) - 1, to_torch_type(out.type), device)
 
-      flipped =
-        t
-        |> from_nx()
-        |> Torchx.flip([axis])
+      flipped = Torchx.flip(t_tx, [axis])
 
       result = apply(Torchx, fun, [flipped, axis, keep_axis])
 
@@ -720,14 +764,12 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def cumulative_sum(%T{type: out_type} = out, %T{} = t, opts) do
-    check_type!(out_type)
+  def cumulative_sum(%T{} = out, %T{} = t, opts) do
     cumulative_op(out, t, opts, &Torchx.cumulative_sum/2)
   end
 
   @impl true
-  def cumulative_product(%T{type: out_type} = out, %T{} = t, opts) do
-    check_type!(out_type)
+  def cumulative_product(%T{} = out, %T{} = t, opts) do
     cumulative_op(out, t, opts, &Torchx.cumulative_product/2)
   end
 
@@ -772,38 +814,82 @@ defmodule Torchx.Backend do
     raise ArithmeticError, "Torchx does not support complex values for atan2"
   end
 
-  binary_ops =
-    [:add, :subtract, :multiply, :power, :remainder, :divide, :min, :max, :quotient] ++
-      [:left_shift, :right_shift, :atan2] ++
-      [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] ++
-      [:logical_and, :logical_or, :logical_xor]
+  ops = [:add, :subtract, :multiply, :power, :left_shift]
 
-  for op <- binary_ops do
+  for op <- ops do
     @impl true
     def unquote(op)(out, l, r) do
-      {left, right} = maybe_cast_u8(l, r)
+      {left, right} = maybe_upcast(l, r)
+      {left_tx, right_tx} = maybe_broadcast_bin_args(out.shape, left, right)
+      result = Torchx.unquote(op)(left_tx, right_tx)
 
-      Torchx.unquote(op)(from_nx(left), from_nx(right))
+      result
+      |> bitmask(out.type)
+      |> Torchx.to_type(to_torch_type(out.type))
       |> to_nx(out)
     end
   end
 
-  defp maybe_cast_u8(%T{type: {t, _}} = left, %T{type: {t, _}} = right),
+  defp bitmask({device, _} = tensor, {:u, 16}),
+    do: Torchx.bitwise_and(tensor, Torchx.scalar_tensor(0xFFFF, :int, device))
+
+  defp bitmask({device, _} = tensor, {:u, 32}),
+    do: Torchx.bitwise_and(tensor, Torchx.scalar_tensor(0xFFFF_FFFF, :long, device))
+
+  defp bitmask(tensor, {_, _}),
+    do: tensor
+
+  ops =
+    [:min, :max, :remainder, :divide, :quotient, :atan2] ++
+      [:right_shift, :logical_and, :logical_or, :logical_xor] ++
+      [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
+
+  for op <- ops do
+    @impl true
+    def unquote(op)(out, l, r) do
+      {left, right} = maybe_upcast(l, r)
+      {left_tx, right_tx} = maybe_broadcast_bin_args(out.shape, left, right)
+
+      Torchx.unquote(op)(left_tx, right_tx)
+      |> Torchx.to_type(to_torch_type(out.type))
+      |> to_nx(out)
+    end
+  end
+
+  defp maybe_upcast(%T{type: t} = left, %T{type: t} = right),
     do: {left, right}
 
-  defp maybe_cast_u8(%T{type: {:u, 8}} = left, %T{} = right),
-    do: {Nx.as_type(left, {:s, 16}), right}
+  defp maybe_upcast(left, right) do
+    type = Nx.Type.merge(left.type, right.type)
+    {Nx.as_type(left, type), Nx.as_type(right, type)}
+  end
 
-  defp maybe_cast_u8(%T{} = left, %T{type: {:u, 8}} = right),
-    do: {left, Nx.as_type(right, {:s, 16})}
+  defp maybe_broadcast_bin_args(_out_shape, %{shape: {}} = l, r), do: {from_nx(l), from_nx(r)}
+  defp maybe_broadcast_bin_args(_out_shape, l, %{shape: {}} = r), do: {from_nx(l), from_nx(r)}
 
-  defp maybe_cast_u8(left, right),
-    do: {left, right}
+  defp maybe_broadcast_bin_args(out_shape, l, r) do
+    l_tx =
+      case l.shape do
+        ^out_shape ->
+          from_nx(l)
+
+        _ ->
+          l |> from_nx() |> Torchx.broadcast_to(out_shape)
+      end
+
+    r_tx =
+      case r.shape do
+        ^out_shape -> from_nx(r)
+        _ -> r |> from_nx() |> Torchx.broadcast_to(out_shape)
+      end
+
+    {l_tx, r_tx}
+  end
 
   for op <- [:bitwise_and, :bitwise_or, :bitwise_xor] do
     @impl true
     def unquote(op)(out, l, r) do
-      {left, right} = maybe_cast_u8(l, r)
+      {left, right} = maybe_upcast(l, r)
 
       %T{type: {_, size_left}} = left
       %T{type: {_, size_right}} = right
@@ -825,6 +911,16 @@ defmodule Torchx.Backend do
   @impl true
   def log1p(%{type: {:c, _}}, _t) do
     raise ArithmeticError, "Torchx does not support complex values for log1p"
+  end
+
+  @impl true
+  def erf_inv(out, %{type: {:f, 16}} = tensor) do
+    tensor
+    |> from_nx()
+    |> Torchx.to_type(:float)
+    |> Torchx.erf_inv()
+    |> Torchx.to_type(:half)
+    |> to_nx(out)
   end
 
   unary_ops =
@@ -911,10 +1007,10 @@ defmodule Torchx.Backend do
   @impl true
   def dot(
         %T{type: out_type} = out,
-        %T{type: left_type, data: %TB{ref: left_ref}},
+        %T{type: left_type} = left,
         left_axes,
         left_batched_axes,
-        %T{type: right_type, data: %TB{ref: right_ref}},
+        %T{type: right_type} = right,
         right_axes,
         right_batched_axes
       ) do
@@ -923,9 +1019,12 @@ defmodule Torchx.Backend do
     left_axes = translate_to_inner_axes(left_axes, left_batched_axes)
     right_axes = translate_to_inner_axes(right_axes, right_batched_axes)
 
+    left_tx = from_nx(left)
+    right_tx = from_nx(right)
+
     Torchx.tensordot(
-      to_typed_ref(left_ref, left_type, out_type),
-      to_typed_ref(right_ref, right_type, out_type),
+      to_typed_ref(left_tx, left_type, out_type),
+      to_typed_ref(right_tx, right_type, out_type),
       left_axes,
       left_batched_axes,
       right_axes,
@@ -1021,15 +1120,15 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def pad(out, tensor, constant, config) do
+  def pad(out, tensor, constant, input_config) do
     config =
-      config
+      input_config
       |> Enum.map(fn {a, b, c} ->
-        if a < 0 or b < 0 or c != 0 do
+        if c < 0 do
           raise ArgumentError, "{#{a}, #{b}, #{c}} padding is not supported"
         end
 
-        [a, b]
+        [max(a, 0), max(b, 0)]
       end)
       |> Enum.reverse()
       |> List.flatten()
@@ -1038,8 +1137,79 @@ defmodule Torchx.Backend do
 
     tensor
     |> from_nx()
+    |> pad_internal(input_config)
+    |> slice_negative_padding(input_config)
     |> Torchx.pad(config, constant)
     |> to_nx(out)
+  end
+
+  defp pad_internal(t_tx, input_config, pad_value \\ 0) do
+    pad_sizes = Enum.map(input_config, &elem(&1, 2))
+
+    if Enum.all?(pad_sizes, &(&1 == 0)) do
+      t_tx
+    else
+      pads = Enum.reduce(pad_sizes, [], fn size, acc -> [0, size, 0, 0 | acc] end)
+
+      shape = Torchx.shape(t_tx)
+      rank = tuple_size(shape)
+      shape_list = Tuple.to_list(shape)
+      expanded_shape = shape_list |> Enum.flat_map(&[&1, 1]) |> List.to_tuple()
+
+      shape_after_pad =
+        shape_list
+        |> Enum.zip_with(pad_sizes, fn size, pad -> size + pad * size end)
+        |> List.to_tuple()
+
+      final_sizes =
+        Enum.zip_with(shape_list, pad_sizes, fn size, pad -> size + pad * (size - 1) end)
+
+      t_tx
+      |> Torchx.reshape(expanded_shape)
+      |> Torchx.pad(pads, pad_value)
+      |> Torchx.reshape(shape_after_pad)
+      |> torchx_slice(
+        shape_after_pad,
+        List.to_tuple(final_sizes),
+        List.duplicate(0, rank),
+        final_sizes,
+        List.duplicate(1, rank)
+      )
+    end
+  end
+
+  defp slice_negative_padding(t_tx, input_config) do
+    if Enum.any?(input_config, fn {pre, post, _} -> pre < 0 or post < 0 end) do
+      shape = Torchx.shape(t_tx)
+
+      {starts, lengths} =
+        input_config
+        |> Enum.with_index(fn {pre, post, _inner}, axis ->
+          start =
+            if pre < 0 do
+              -pre
+            else
+              0
+            end
+
+          axis_size = elem(shape, axis)
+
+          len =
+            if post < 0 do
+              axis_size + post - start
+            else
+              axis_size - start
+            end
+
+          {start, len}
+        end)
+        |> Enum.unzip()
+
+      strides = List.duplicate(1, tuple_size(shape))
+      torchx_slice(t_tx, shape, List.to_tuple(lengths), starts, lengths, strides)
+    else
+      t_tx
+    end
   end
 
   @impl true
@@ -1055,12 +1225,17 @@ defmodule Torchx.Backend do
       raise ArgumentError, "left_side: false option not supported in Torchx"
     end
 
-    batched_a_shape = Tuple.insert_at(a.shape, 0, 1)
+    batched_a_shape =
+      case a.shape do
+        {m, m} -> {1, m, m}
+        shape -> shape
+      end
 
     batched_b_shape =
       case b.shape do
         {n} -> {1, n, 1}
         {m, n} -> {1, m, n}
+        shape -> shape
       end
 
     out_type = to_torch_type(out.type)
@@ -1106,8 +1281,8 @@ defmodule Torchx.Backend do
       tensor
       |> Torchx.determinant()
       |> Torchx.abs()
-      |> Torchx.reshape({})
       |> Torchx.less_equal(eps)
+      |> Torchx.all()
       |> Torchx.to_nx()
       |> Nx.to_number()
       |> Kernel.==(1)
@@ -1181,12 +1356,7 @@ defmodule Torchx.Backend do
 
     input_dilation = opts[:input_dilation]
 
-    Enum.each(input_dilation, fn a ->
-      if a != 1 do
-        raise ArgumentError,
-              "input_dilation other than 1 is not supported, got: #{inspect(input_dilation)}"
-      end
-    end)
+    input_inner_pads = [{0, 0, 0}, {0, 0, 0}] ++ Enum.map(input_dilation, &{0, 0, &1 - 1})
 
     padding = opts[:padding]
     strides = opts[:strides]
@@ -1203,7 +1373,17 @@ defmodule Torchx.Backend do
 
     input_permutation = opts[:input_permutation]
     kernel_permutation = opts[:kernel_permutation]
-    output_permutation = opts[:output_permutation]
+
+    output_permutation =
+      case opts[:output_permutation] do
+        nil ->
+          nil
+
+        l ->
+          # The permutation that Nx.Shape expects is actually the reverse permutation
+          # for the given input
+          l |> Enum.with_index() |> Enum.sort() |> Enum.map(&elem(&1, 1))
+      end
 
     pad_config = flatten_padding(padding)
 
@@ -1216,6 +1396,7 @@ defmodule Torchx.Backend do
     t
     |> from_nx()
     |> permute.(input_permutation)
+    |> pad_internal(input_inner_pads)
     |> Torchx.pad(pad_config, 0)
     |> Torchx.to_type(to_torch_type(type))
     |> do_conv(k_tx, strides, kernel_dilation, feature_groups, type)
@@ -1285,7 +1466,9 @@ defmodule Torchx.Backend do
       tensor,
       window_dims_tuple,
       opts,
-      tensor.type |> Nx.Constants.min_finite() |> Nx.to_number(),
+      tensor.type
+      |> Nx.Constants.min_finite()
+      |> Nx.to_number(),
       &Torchx.amax(&1, &2, false)
     )
   end
@@ -1297,7 +1480,9 @@ defmodule Torchx.Backend do
       tensor,
       window_dims_tuple,
       opts,
-      tensor.type |> Nx.Constants.max_finite() |> Nx.to_number(),
+      tensor.type
+      |> Nx.Constants.max_finite()
+      |> Nx.to_number(),
       &Torchx.amin(&1, &2, false)
     )
   end
@@ -1341,15 +1526,19 @@ defmodule Torchx.Backend do
   end
 
   defp window_scatter_function(function, out, tensor, source, init_value, window_dims_tuple, opts) do
-    intermediate_type =
-      tensor.type
-      |> Nx.Type.to_floating()
-      |> to_torch_type()
-
     unfold_flat = fn tensor ->
+      window_dilations = List.duplicate(1, tuple_size(window_dims_tuple))
+
       unfolded =
         tensor
-        |> unfold_windows(opts[:padding], 0, window_dims_tuple, opts[:strides])
+        |> unfold_windows(
+          opts[:padding],
+          0,
+          window_dims_tuple,
+          opts[:strides],
+          window_dilations,
+          to_torch_type(out.type)
+        )
         |> Torchx.to_nx()
 
       {to_keep, to_flatten} =
@@ -1369,7 +1558,6 @@ defmodule Torchx.Backend do
     arg_idx =
       tensor
       |> from_nx()
-      |> Torchx.to_type(intermediate_type)
       |> then(unfold_flat)
       |> then(function)
 
@@ -1399,26 +1587,17 @@ defmodule Torchx.Backend do
 
   defp window_op(out, tensor, window_dims_tuple, opts, pad_constant, reduce_fun)
        when is_function(reduce_fun, 2) do
-    window_dilations = opts[:window_dilations]
-
-    if window_dilations && window_dilations != List.duplicate(1, tuple_size(tensor.shape)) do
-      raise ArgumentError, "window_dilations unsupported"
-    end
-
-    # if Enum.any?(opts[:padding], fn conf -> conf |> Tuple.to_list() |> Enum.any?(&(&1 != 0)) end) do
-    #   raise ArgumentError, "padding unsupported"
-    # end
-
-    intermediate_type =
-      tensor.type
-      |> Nx.Type.to_floating()
-      |> to_torch_type()
-
     t_tx =
       tensor
       |> from_nx()
-      |> Torchx.to_type(intermediate_type)
-      |> unfold_windows(opts[:padding], pad_constant, window_dims_tuple, opts[:strides])
+      |> unfold_windows(
+        opts[:padding],
+        pad_constant,
+        window_dims_tuple,
+        opts[:strides],
+        opts[:window_dilations],
+        to_torch_type(out.type)
+      )
 
     axes =
       Enum.map(tuple_size(window_dims_tuple)..1//-1, fn axis ->
@@ -1432,22 +1611,64 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  defp unfold_windows(%T{} = tensor, padding, pad_constant, window_dims_tuple, strides) do
-    unfold_windows(from_nx(tensor), padding, pad_constant, window_dims_tuple, strides)
+  defp unfold_windows(
+         %T{} = tensor,
+         padding,
+         pad_constant,
+         window_dims_tuple,
+         strides,
+         window_dilations,
+         output_type
+       ) do
+    unfold_windows(
+      from_nx(tensor),
+      padding,
+      pad_constant,
+      window_dims_tuple,
+      strides,
+      window_dilations,
+      output_type
+    )
   end
 
-  defp unfold_windows(tensor, padding, pad_constant, window_dims_tuple, strides) do
+  defp unfold_windows(
+         tensor,
+         padding,
+         pad_constant,
+         window_dims_tuple,
+         strides,
+         window_dilations,
+         output_type
+       ) do
     padding = flatten_padding(padding)
     padded = Torchx.pad(tensor, padding, pad_constant)
 
+    {device, _} = tensor
+
+    window_pad_config = Enum.map(window_dilations, &{0, 0, &1 - 1})
+
+    window =
+      1
+      |> Torchx.scalar_tensor(:bool, device)
+      |> Torchx.broadcast_to(window_dims_tuple)
+      |> pad_internal(window_pad_config, 0)
+
+    window_shape = Torchx.shape(window)
+
     {t_tx, _} =
-      for {window_dim, stride} <- Enum.zip(Tuple.to_list(window_dims_tuple), strides),
+      for {window_dim, stride} <- Enum.zip(Tuple.to_list(window_shape), strides),
           reduce: {padded, 0} do
         {t_tx, dim} ->
           {Torchx.unfold(t_tx, dim, window_dim, stride), dim + 1}
       end
 
-    t_tx
+    window_pad_constant = Torchx.scalar_tensor(pad_constant, output_type, device)
+
+    Torchx.where(
+      window,
+      Torchx.to_type(t_tx, output_type),
+      window_pad_constant
+    )
   end
 
   defp flatten_padding(padding) do
@@ -1457,8 +1678,7 @@ defmodule Torchx.Backend do
   @impl true
   def bitcast(out, %T{data: %TB{ref: {device, _}}} = tensor) do
     tensor
-    |> from_nx()
-    |> Torchx.to_blob()
+    |> to_binary(Nx.size(tensor))
     |> Torchx.from_blob(out.shape, to_torch_type(out.type), device_option(device: device))
     |> to_nx(out)
   end
@@ -1496,7 +1716,19 @@ defmodule Torchx.Backend do
   @doc false
   def to_nx({device, ref} = device_ref, %T{type: type, shape: shape} = t)
       when is_atom(device) and is_reference(ref) do
-    %{t | data: %__MODULE__{ref: check_shape_and_type!(device_ref, shape, type)}}
+    cast_to_byte = type == {:u, 8} and Torchx.scalar_type(device_ref) == :bool
+
+    # This cast is added because if the u8 type is bool, we get
+    # boolean algebra instead of common arithmetic rules when
+    # operating on a seemingly normal u8 tensor
+    t_tx =
+      if cast_to_byte do
+        Torchx.to_type(device_ref, :byte)
+      else
+        device_ref
+      end
+
+    %{t | data: %__MODULE__{ref: check_shape_and_type!(t_tx, shape, type)}}
   end
 
   @doc false
@@ -1515,6 +1747,9 @@ defmodule Torchx.Backend do
 
   defp to_torch_type(nx_type, hint \\ "")
   defp to_torch_type({:u, 8}, _), do: :byte
+  defp to_torch_type({:u, 16}, _), do: :int
+  defp to_torch_type({:u, 32}, _), do: :long
+  defp to_torch_type({:u, 64}, _), do: :long
   defp to_torch_type({:s, 8}, _), do: :char
   defp to_torch_type({:s, 16}, _), do: :short
   defp to_torch_type({:s, 32}, _), do: :int
@@ -1526,18 +1761,26 @@ defmodule Torchx.Backend do
   defp to_torch_type({:c, 64}, _), do: :complex
   defp to_torch_type({:c, 128}, _), do: :complex_double
 
-  defp to_torch_type({:u, size}, hint) when size in [16, 32, 64] do
-    raise ArgumentError,
-          String.trim("Torchx does not support unsigned #{size} bit integer#{hint}")
-  end
-
   if Application.compile_env(:torchx, :check_shape_and_type, false) do
     defp check_shape_and_type!(device_ref, shape, type) do
       current_type = Torchx.scalar_type(device_ref) |> from_torch_type()
 
-      if current_type != type do
-        raise "type mismatch in Torchx: expected #{inspect(type)}, got: #{inspect(current_type)}. " <>
-                "Please report this bug"
+      case {current_type, type} do
+        {{:s, 32}, {:u, 16}} ->
+          :ok
+
+        {{:s, 64}, {:u, 32}} ->
+          :ok
+
+        {{:s, 64}, {:u, 64}} ->
+          :ok
+
+        _ when current_type != type ->
+          raise "type mismatch in Torchx: expected #{inspect(type)}, got: #{inspect(current_type)}. " <>
+                  "Please report this bug"
+
+        _ ->
+          :ok
       end
 
       current_shape = Torchx.shape(device_ref)
@@ -1578,13 +1821,6 @@ defmodule Torchx.Backend do
       Process.info(self(), :current_stacktrace) |> elem(1) |> Enum.fetch!(depth)
 
     "#{inspect(module)}.#{func}/#{arity - 1}"
-  end
-
-  defp check_type!(type) do
-    to_torch_type(
-      type,
-      " (explicitly cast the input tensor to a signed integer before taking sum)"
-    )
   end
 
   ## Functionality we can't provide

@@ -20,7 +20,8 @@ defmodule Nx.Defn.Compiler do
   are used to build the expression from `fun` which is then
   invoked for each list of arguments in `args_list`. All lists
   in `args_list` are guaranteed to be flat lists of the same length,
-  containing tensors of the same type, shape, and name.
+  containing zero-arity functions that return tensors of the same type,
+  shape, and name.
 
   The callback uses double underscores so it can be defined
   at root modules without affecting the module's main API.
@@ -29,7 +30,7 @@ defmodule Nx.Defn.Compiler do
               key :: term,
               vars :: [Nx.Container.t()],
               fun :: ([Nx.Container.t()] -> Nx.Container.t()),
-              args_list :: [[Nx.t()]],
+              args_list :: [[(() -> Nx.t())]],
               opts :: keyword
             ) :: [Nx.Container.t()]
 
@@ -71,13 +72,13 @@ defmodule Nx.Defn.Compiler do
               acc,
               vars :: [Nx.t()],
               fun :: ([Nx.t()] -> {output, acc}),
-              args_list :: [[Nx.t()]],
+              args_list :: [[(() -> Nx.t())]],
               opts :: keyword
             ) :: [Nx.Stream.t()]
             when input: Nx.Container.t(), output: Nx.Container.t(), acc: Nx.Container.t()
 
   # Modules allowed in defn
-  @allowed_modules [Nx, Nx.Constants, Nx.Defn, Nx.Defn.Kernel, Nx.LinAlg]
+  @allowed_modules [Nx, Nx.Constants, Nx.Defn, Nx.Defn.Kernel, Nx.LinAlg, Nx.Type]
 
   # These operations do not have valid meaning for Nx.Defn.Expr
   @forbidden_ops [:backend_copy, :backend_deallocate, :backend_transfer] ++
@@ -105,28 +106,26 @@ defmodule Nx.Defn.Compiler do
   ## JIT/Stream
 
   @doc false
-  def __compile__(fun, template, opts) do
-    {compiler, inputs, runtime_fun, opts} = prepare_options(fun, template, opts)
-    compiler.__compile__(fun, inputs, runtime_fun, opts)
+  def __compile__(fun, params, opts) do
+    {compiler, runtime_fun, opts} = prepare_options(fun, opts)
+    compiler.__compile__(fun, params, runtime_fun, opts)
   end
 
   @doc false
-  def __jit__(fun, template, args_list, opts) do
-    {compiler, inputs, runtime_fun, opts} = prepare_options(fun, template, opts)
-    compiler.__jit__(fun, inputs, runtime_fun, args_list, opts)
+  def __jit__(fun, params, args_list, opts) do
+    {compiler, runtime_fun, opts} = prepare_options(fun, opts)
+    compiler.__jit__(fun, params, runtime_fun, args_list, opts)
   end
 
   @doc false
-  def __stream__(fun, input, acc, template, args_list, opts) do
-    {compiler, inputs, runtime_fun, opts} = prepare_options(fun, template, opts)
-    compiler.__stream__(fun, input, acc, inputs, runtime_fun, args_list, opts)
+  def __stream__(fun, input, acc, params, args_list, opts) do
+    {compiler, runtime_fun, opts} = prepare_options(fun, opts)
+    compiler.__stream__(fun, input, acc, params, runtime_fun, args_list, opts)
   end
 
-  defp prepare_options(fun, template, opts) do
+  defp prepare_options(fun, opts) do
     {compiler, opts} = Keyword.pop(opts, :compiler, Nx.Defn.Evaluator)
-    inputs = Nx.Defn.Composite.to_inputs(template)
-    runtime_fun = &runtime_fun(&1, fun, compiler)
-    {compiler, inputs, runtime_fun, opts}
+    {compiler, &runtime_fun(&1, fun, compiler), opts}
   end
 
   defp runtime_fun(args, fun, compiler) do
@@ -276,19 +275,31 @@ defmodule Nx.Defn.Compiler do
         end
       end
 
-    quote line: state.line do
-      Module.delete_definition(__MODULE__, unquote(def))
+    Module.delete_definition(state.module, def)
 
-      Kernel.unquote(kind)(unquote(name)(unquote_splicing(all_args))) do
-        if Process.get(Nx.Defn.Compiler) do
-          unquote(defn_name)(unquote_splicing(all_args))
-        else
-          Nx.Defn.Compiler.__runtime__(unquote(fun), unquote(fn_args))
+    entrypoint =
+      quote line: state.line do
+        Kernel.unquote(kind)(unquote(name)(unquote_splicing(all_args))) do
+          if Process.get(Nx.Defn.Compiler) do
+            unquote(defn_name)(unquote_splicing(all_args))
+          else
+            Nx.Defn.Compiler.__runtime__(unquote(fun), unquote(fn_args))
+          end
         end
       end
 
-      Kernel.unquote(kind)(unquote(defn_name)(unquote_splicing(defn_args)), do: unquote(ast))
-    end
+    impl =
+      quote line: state.line do
+        Kernel.unquote(kind)(unquote(defn_name)(unquote_splicing(defn_args)), do: unquote(ast))
+      end
+
+    {strip_definition_context(entrypoint), impl}
+  end
+
+  # If the definition has a context, we don't warn when it goes unused,
+  # so we remove the context as we want to keep the original semantics.
+  defp strip_definition_context({kind, meta, [signature, block]}) do
+    {kind, meta, [Macro.update_meta(signature, &Keyword.delete(&1, :context)), block]}
   end
 
   defp compile_each_transform({{name, max_arity}, _def_meta}, state) do
@@ -316,11 +327,10 @@ defmodule Nx.Defn.Compiler do
       Keyword.pop(Nx.Defn.default_options(), :compiler, Nx.Defn.Evaluator)
 
     {cache, split_args} = Nx.Defn.Composite.split_compile_args(args, fun)
-    template = Nx.Defn.Composite.to_inputs(split_args)
-    flatten = Nx.Defn.Composite.flatten_runtime_args(split_args, [])
+    {params, flatten} = Nx.Defn.Composite.to_lazy_params(split_args)
     runtime_fun = &runtime_fun(Nx.Defn.Composite.join_compile_args(&1, args), fun, compiler)
 
-    [res] = compiler.__jit__(cache, template, runtime_fun, [flatten], compiler_opts)
+    [res] = compiler.__jit__(cache, params, runtime_fun, [flatten], compiler_opts)
     res
   end
 
@@ -501,7 +511,7 @@ defmodule Nx.Defn.Compiler do
     cond do
       pair in state.defns or pair in state.transforms ->
         {args, state} = normalize_list(args, state)
-        {{defn_name(name), meta, args}, state}
+        {{name, meta, args}, state}
 
       Module.defines?(state.module, {name, arity}) ->
         compile_error!(

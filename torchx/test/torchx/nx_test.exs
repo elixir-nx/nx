@@ -24,7 +24,7 @@ defmodule Torchx.NxTest do
     :logical_or,
     :logical_xor
   ]
-  @unary_ops [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign]
+  @unary_ops [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign, :argmax, :argmin]
 
   defp test_binary_op(op, data_a \\ [[5, 6], [7, 8]], data_b \\ [[1, 2], [3, 4]], type_a, type_b) do
     a = Nx.tensor(data_a, type: type_a)
@@ -34,10 +34,10 @@ defmodule Torchx.NxTest do
     binary_a = Nx.backend_copy(a, Nx.BinaryBackend)
     binary_b = Nx.backend_transfer(b, Nx.BinaryBackend)
     binary_c = Kernel.apply(Nx, op, [binary_a, binary_b])
-    assert_equal(c, binary_c)
+    assert_all_close(c, binary_c)
 
     mixed_c = Kernel.apply(Nx, op, [a, binary_b])
-    assert_equal(mixed_c, binary_c)
+    assert_all_close(mixed_c, binary_c)
   end
 
   defp test_unary_op(op, data \\ [[1, 2], [3, 4]], type) do
@@ -61,6 +61,30 @@ defmodule Torchx.NxTest do
         type_b = unquote(type_b)
 
         test_binary_op(op, type_a, type_b)
+      end
+    end
+
+    # to avoid exploding numbers, we'll not test broadcast with type mixing
+    for op <- @ops ++ @logical_ops,
+        type <- @types,
+        not (op in (@ops_unimplemented_for_bfloat ++ @ops_with_bfloat_specific_result) and
+               type == {:bf, 16}) do
+      test "#{op}(#{Nx.Type.to_string(type)}, #{Nx.Type.to_string(type)}) broadcast" do
+        op = unquote(op)
+        type = unquote(type)
+
+        data_a = 1
+        data_b = [1, 2, 3]
+
+        # assert that scalars broadcast both on the left and the right
+        test_binary_op(op, data_a, data_b, type, type)
+        test_binary_op(op, data_b, data_a, type, type)
+
+        # assert that multi-dim tensors will broadcast as well
+        data_a = [[1], [2]]
+        data_b = [[1, 2, 3], [4, 5, 6]]
+        test_binary_op(op, data_a, data_b, type, type)
+        test_binary_op(op, data_b, data_a, type, type)
       end
     end
   end
@@ -379,15 +403,6 @@ defmodule Torchx.NxTest do
       assert_equal(out, Nx.tensor([[1, 1], [2, 2], [3, 3]]))
     end
 
-    test "broadcast raises when expanded and existing sizes do not match" do
-      t = Nx.tensor([1, 2, 3])
-
-      assert_raise(
-        RuntimeError,
-        fn -> Nx.broadcast(t, {2, 3, 2}, axes: [1]) end
-      )
-    end
-
     test "dot with vectors" do
       t1 = Nx.tensor([1, 2, 3])
       t2 = Nx.tensor([4, 5, 6])
@@ -440,6 +455,15 @@ defmodule Torchx.NxTest do
       )
     end
 
+    test "dot with mixed backends" do
+      t1 = Nx.tensor([1, 2, 3], backend: Torchx.Backend)
+      t2 = Nx.tensor([4, 5, 6], backend: Nx.BinaryBackend)
+
+      assert_equal(Nx.dot(t1, t2), Nx.tensor(32))
+
+      assert_equal(Nx.dot(t2, t1), Nx.tensor(32))
+    end
+
     test "make_diagonal" do
       t =
         [1, 2, 3]
@@ -477,14 +501,10 @@ defmodule Torchx.NxTest do
       assert_equal(out, Nx.tensor([[[2], [5]], [[8], [11]]]))
     end
 
-    test "mean fails when using unsigned integers" do
+    test "mean works with emulated u64 when using unsigned integers" do
       t = Nx.tensor([1, 2, 3], type: {:u, 8}, names: [:x])
 
-      assert_raise(
-        ArgumentError,
-        "Torchx does not support unsigned 64 bit integer (explicitly cast the input tensor to a signed integer before taking sum)",
-        fn -> Nx.mean(t, axes: [:x]) end
-      )
+      assert_equal(Nx.mean(t, axes: [:x]), Nx.tensor(2))
     end
 
     test "quotient when dividing scalars" do
@@ -511,15 +531,12 @@ defmodule Torchx.NxTest do
     end
 
     test "quotient fails when using unsigned integers" do
-      assert_raise(
-        ArgumentError,
-        "Torchx does not support unsigned 32 bit integer",
-        fn ->
-          Nx.quotient(
-            Nx.tensor([[10, 20]], type: {:u, 8}),
-            Nx.tensor([[1], [2]], type: {:u, 32})
-          )
-        end
+      assert_equal(
+        Nx.tensor([[10, 20], [5, 10]], type: {:u, 32}),
+        Nx.quotient(
+          Nx.tensor([[10, 20]], type: {:u, 8}),
+          Nx.tensor([[1], [2]], type: {:u, 32})
+        )
       )
     end
 
@@ -873,13 +890,18 @@ defmodule Torchx.NxTest do
       right = Nx.iota({8})
       right = Nx.reshape(right, {4, 1, 2, 1})
 
-      Nx.conv(left, right,
-        strides: 2,
-        padding: :same,
-        kernel_dilation: [2, 1],
-        input_permutation: [3, 1, 2, 0]
-      )
-      |> assert_all_close(
+      result =
+        Nx.conv(left, right,
+          strides: 2,
+          padding: :same,
+          kernel_dilation: [2, 1],
+          input_permutation: [3, 1, 2, 0]
+        )
+
+      assert result.shape == {3, 4, 2, 1}
+
+      assert_all_close(
+        result,
         Nx.tensor([
           [
             [
@@ -938,6 +960,51 @@ defmodule Torchx.NxTest do
         ])
       )
     end
+
+    test "output_permutation" do
+      result =
+        Nx.conv(Nx.iota({1, 3, 3, 6}), Nx.broadcast(1, {2, 6, 1, 1}),
+          input_permutation: [0, 3, 1, 2],
+          output_permutation: [0, 3, 1, 2]
+        )
+
+      assert result.shape == {1, 3, 3, 2}
+
+      assert_all_close(
+        result,
+        Nx.tensor([
+          [
+            [15.0, 15.0],
+            [51.0, 51.0],
+            [87.0, 87.0]
+          ],
+          [
+            [123.0, 123.0],
+            [159.0, 159.0],
+            [195.0, 195.0]
+          ],
+          [
+            [231.0, 231.0],
+            [267.0, 267.0],
+            [303.0, 303.0]
+          ]
+        ])
+      )
+    end
+
+    test "input_dilation" do
+      t = Nx.iota({1, 1, 1, 2, 3})
+      k = Nx.tensor([[[[[1, -1], [-1, 1]]]]])
+
+      result = Nx.conv(t, k, input_dilation: [1, 2, 3])
+
+      assert result.shape == {1, 1, 1, 2, 6}
+
+      assert_equal(
+        result,
+        Nx.tensor([[0, 0, -1, 1, 0, -2], [-3, 0, 4, -4, 0, 5]])
+      )
+    end
   end
 
   describe "window_max" do
@@ -983,8 +1050,6 @@ defmodule Torchx.NxTest do
       )
     end
 
-    # window dilations temporarily broken
-    @tag :skip
     test "works with non-default options" do
       t = Nx.tensor([[[4, 2, 1, 3], [4, 2, 1, 7]], [[1, 2, 5, 7], [1, 8, 9, 2]]])
       opts = [strides: [2, 1, 1], padding: :valid, window_dilations: [1, 2, 2]]
@@ -1045,8 +1110,6 @@ defmodule Torchx.NxTest do
       )
     end
 
-    # window dilations temporarily broken
-    @tag :skip
     test "works with non-default options" do
       t = Nx.tensor([[[4, 2, 1, 3], [4, 2, 1, 7]], [[1, 2, 5, 7], [1, 8, 9, 2]]])
       opts = [strides: [2, 1, 1], padding: :valid, window_dilations: [1, 2, 2]]
@@ -1100,6 +1163,18 @@ defmodule Torchx.NxTest do
         ])
       )
     end
+
+    test "supports window dilations" do
+      result = Nx.window_sum(Nx.iota({4, 4}), {2, 2}, window_dilations: [2, 1])
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [18, 22, 26],
+          [34, 38, 42]
+        ])
+      )
+    end
   end
 
   describe "window_product" do
@@ -1139,6 +1214,46 @@ defmodule Torchx.NxTest do
           ]
         ])
       )
+    end
+
+    test "supports window dilations" do
+      result = Nx.window_product(Nx.iota({4, 4}), {2, 2}, window_dilations: [2, 1])
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [0, 180, 660],
+          [3120, 5460, 8820]
+        ])
+      )
+    end
+  end
+
+  describe "take_along_axis" do
+    test "accepts signed and unsigned indices" do
+      t = Nx.iota({10})
+      i = Nx.iota({3}, type: {:s, 8})
+      result = Nx.iota({3})
+      assert_equal(result, Nx.take_along_axis(t, i))
+      assert_equal(result, Nx.take_along_axis(t, Nx.as_type(i, {:u, 8})))
+    end
+  end
+
+  describe "squeeze" do
+    test "squeezes only the given axes" do
+      t = Nx.iota({1, 1, 1, 2, 3, 1})
+      result = Nx.iota({1, 2, 3, 1})
+
+      assert_equal(result, Nx.squeeze(t, axes: [1, 2]))
+    end
+  end
+
+  describe "to_binary" do
+    test "for unsigned integers" do
+      assert Nx.tensor(1, type: :u8) |> Nx.to_binary() == <<1::native>>
+      assert Nx.tensor(1, type: :u16) |> Nx.to_binary() == <<1::native-16>>
+      assert Nx.tensor(1, type: :u32) |> Nx.to_binary() == <<1::native-32>>
+      assert Nx.tensor(1, type: :u64) |> Nx.to_binary() == <<1::native-64>>
     end
   end
 end

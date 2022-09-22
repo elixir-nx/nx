@@ -2,7 +2,7 @@ defmodule Nx.DefnTest do
   use ExUnit.Case, async: true
 
   alias Nx.Tensor, as: T
-  alias Nx.Defn.{Expr, Identity, Evaluator}
+  alias Nx.Defn.{Expr, Debug, Evaluator}
   alias Nx.DefnTest.Sample
   import Nx.Defn
 
@@ -12,7 +12,7 @@ defmodule Nx.DefnTest do
   end
 
   setup context do
-    Nx.Defn.default_options(compiler: context[:compiler] || Identity)
+    Nx.Defn.default_options(compiler: context[:compiler] || Debug)
     :ok
   end
 
@@ -194,16 +194,6 @@ defmodule Nx.DefnTest do
       for {k, v} <- map do
         assert v.shape == {String.to_integer(k)}
       end
-    end
-  end
-
-  describe "arguments" do
-    defn identity(t), do: t
-
-    test "raises on Nx.Defn.Expr as argument" do
-      message = ~r/cannot pass a tensor expression as argument to defn/
-      assert_raise ArgumentError, message, fn -> identity(Nx.Defn.Expr.tensor(1)) end
-      assert_raise ArgumentError, message, fn -> identity({Nx.Defn.Expr.tensor(1)}) end
     end
   end
 
@@ -1464,7 +1454,7 @@ defmodule Nx.DefnTest do
 
     test "raises on mixed context" do
       assert_raise RuntimeError,
-                   ~r"cannot build defn because expressions come from different contexts: :root and :while",
+                   ~r"cannot build defn because expressions come from different contexts: :root and {:while, #Reference<[^>]+>}",
                    fn -> while_mixed_context(Nx.tensor(0), Nx.tensor(1)) end
     end
 
@@ -1556,12 +1546,32 @@ defmodule Nx.DefnTest do
     end
   end
 
+  describe "debug expression" do
+    defn defn_debug(a, b), do: a + b
+
+    test "debug_expr/2" do
+      assert %Nx.Tensor{data: %Nx.Defn.Expr{op: :add, args: [left, right]}} =
+               Nx.Defn.debug_expr(&defn_debug/2).(1, 2)
+
+      assert %Nx.Tensor{data: %Nx.Defn.Expr{op: :parameter, args: [0]}} = left
+      assert %Nx.Tensor{data: %Nx.Defn.Expr{op: :parameter, args: [1]}} = right
+    end
+
+    test "debug_expr_apply/3" do
+      assert %Nx.Tensor{data: %Nx.Defn.Expr{op: :add, args: [left, right]}} =
+               Nx.Defn.debug_expr_apply(&defn_debug/2, [1, 2])
+
+      assert %Nx.Tensor{data: %Nx.Defn.Expr{op: :parameter, args: [0]}} = left
+      assert %Nx.Tensor{data: %Nx.Defn.Expr{op: :parameter, args: [1]}} = right
+    end
+  end
+
   describe "jit" do
     defn defn_jit({a, b}, c), do: a + b - c
 
     test "compiles defn function" do
       assert %T{data: %Expr{op: :subtract}} =
-               Nx.Defn.jit(&defn_jit/2, compiler: Identity).({1, 2}, 3)
+               Nx.Defn.jit(&defn_jit/2, compiler: Debug).({1, 2}, 3)
 
       Nx.Defn.default_options(compiler: Evaluator)
       assert Nx.Defn.jit(&defn_jit/2).({4, 5}, 3) == Nx.tensor(6)
@@ -1575,7 +1585,7 @@ defmodule Nx.DefnTest do
     test "jits or applies" do
       assert %T{data: %Expr{op: :subtract}} =
                Nx.Defn.jit_apply(&defn_jit_or_apply/2, [{1, 2}, 3],
-                 compiler: Identity,
+                 compiler: Debug,
                  on_conflict: :reuse
                )
 
@@ -1585,13 +1595,13 @@ defmodule Nx.DefnTest do
     end
 
     def elixir_jit({a, b}, c) do
-      true = Process.get(Nx.Defn.Compiler) in [Evaluator, Identity]
+      true = Process.get(Nx.Defn.Compiler) in [Evaluator, Debug]
       a |> Nx.add(b) |> Nx.subtract(c)
     end
 
     test "compiles elixir function" do
       assert %T{data: %Expr{op: :subtract}} =
-               Nx.Defn.jit(&elixir_jit/2, compiler: Identity).({4, 5}, 3)
+               Nx.Defn.jit(&elixir_jit/2, compiler: Debug).({4, 5}, 3)
 
       Nx.Defn.default_options(compiler: Evaluator)
       assert Nx.Defn.jit(&elixir_jit/2).({4, 5}, 3) == Nx.tensor(6)
@@ -1772,20 +1782,20 @@ defmodule Nx.DefnTest do
 
     test "have their own cache key" do
       sum_axis_expr(Nx.tensor([[1, 2], [3, 4]]), axes: [0])
-      key0 = Process.get(Identity)
+      key0 = Process.get(Debug)
       assert is_function(key0, 1)
 
       sum_axis_expr(Nx.tensor([[1, 2], [3, 4]]), axes: [1])
-      key1 = Process.get(Identity)
+      key1 = Process.get(Debug)
       assert is_function(key1, 1)
 
       sum_axis_expr(Nx.tensor([[1, 2], [3, 4]]), axes: [0])
-      assert Process.get(Identity) == key0
+      assert Process.get(Debug) == key0
     end
   end
 
   describe "private definitions" do
-    defnp(private(a, b), do: a + b)
+    defnp private(a, b), do: a + b
     defn calls_private(a, b), do: private(a, b)
 
     @tag compiler: Evaluator
@@ -1801,6 +1811,15 @@ defmodule Nx.DefnTest do
     @tag compiler: Evaluator
     test "are callable from defn" do
       assert calls_private(1, 2) == Nx.tensor(3)
+    end
+
+    test "warns when unused" do
+      assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
+               defmodule Example do
+                 import Nx.Defn
+                 defnp add(a, b), do: a + b
+               end
+             end) =~ "function add/2 is unused"
     end
   end
 

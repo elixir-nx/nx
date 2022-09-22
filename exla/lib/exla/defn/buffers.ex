@@ -2,6 +2,20 @@ defmodule EXLA.Defn.Buffers do
   @moduledoc false
 
   @doc """
+  Filter inputs based on index.
+  """
+  def filter_by_indexes(args, inputs), do: filter_by_indexes(args, 0, inputs)
+
+  defp filter_by_indexes([var | vars], i, [i | inputs]),
+    do: [var | filter_by_indexes(vars, i + 1, inputs)]
+
+  defp filter_by_indexes([_var | vars], i, inputs),
+    do: filter_by_indexes(vars, i + 1, inputs)
+
+  defp filter_by_indexes([], _i, []),
+    do: []
+
+  @doc """
   binary + EXLA.DeviceBuffer + EXLA.BinaryBuffer -> Nx.
   """
   def to_nx!(buffers, outputs) do
@@ -53,13 +67,20 @@ defmodule EXLA.Defn.Buffers do
   @doc """
   Nx -> EXLA.DeviceBuffer + EXLA.BinaryBuffer.
   """
-  def from_nx!(tensors) do
-    for tensor <- tensors do
-      %Nx.Tensor{data: data} = tensor
+  def from_nx!(funs) do
+    for fun <- funs do
+      %Nx.Tensor{data: data} = tensor = fun.()
 
       case data do
-        %EXLA.Backend{buffer: buffer} -> buffer
-        _ -> EXLA.BinaryBuffer.from_binary(Nx.to_binary(tensor), to_exla_shape(tensor))
+        %EXLA.Backend{buffer: buffer} ->
+          buffer
+
+        %Nx.Defn.Expr{} ->
+          raise ArgumentError,
+                "cannot pass a tensor expression as argument to defn, got: #{inspect(tensor)}"
+
+        _ ->
+          EXLA.BinaryBuffer.from_binary(Nx.to_binary(tensor), to_exla_shape(tensor))
       end
     end
   end

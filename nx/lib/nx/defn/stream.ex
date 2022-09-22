@@ -21,8 +21,8 @@ defmodule Nx.Defn.Stream do
   end
 
   @impl true
-  def handle_cast({:send, input}, {output, waiting, acc, fun}) do
-    {data, acc} = fun.(input, acc)
+  def handle_cast({:send, params}, {output, waiting, acc, fun}) do
+    {data, acc} = fun.(params, acc)
 
     case :queue.out(waiting) do
       {:empty, waiting} ->
@@ -60,7 +60,12 @@ defmodule Nx.Defn.Stream do
 
   defimpl Nx.Stream do
     def send(%{pid: pid, input: input}, data) do
-      unless Nx.compatible?(input, data) do
+      {template, funs} =
+        Nx.LazyContainer.traverse(data, [], fn template, fun, acc ->
+          {template, [fun | acc]}
+        end)
+
+      unless Nx.compatible?(input, template) do
         raise ArgumentError, """
         Nx stream expected a tensor of type, shape, and names on send:
 
@@ -68,11 +73,11 @@ defmodule Nx.Defn.Stream do
 
         But got tensor:
 
-        #{inspect(data)}
+        #{inspect(template)}
         """
       end
 
-      GenServer.cast(pid, {:send, data})
+      GenServer.cast(pid, {:send, Enum.reverse(funs)})
     end
 
     def recv(%{pid: pid, output: output}) do

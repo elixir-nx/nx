@@ -2,8 +2,8 @@ defmodule EXLA.Defn.Stream do
   @moduledoc false
 
   keys =
-    [:lock, :outfeed, :pid, :runner, :send, :recv, :send_shape] ++
-      [:recv_length, :done, :client, :device_id]
+    [:lock, :outfeed, :pid, :runner, :send, :send_shape, :send_indexes] ++
+      [:recv, :recv_length, :done, :client, :device_id]
 
   @derive {Inspect, only: [:pid, :client, :device_id, :send, :recv]}
   @enforce_keys keys
@@ -16,6 +16,7 @@ defmodule EXLA.Defn.Stream do
         outfeed,
         send,
         send_shape,
+        send_indexes,
         recv,
         recv_shapes,
         done
@@ -39,6 +40,7 @@ defmodule EXLA.Defn.Stream do
       lock: lock,
       send: send,
       send_shape: send_shape,
+      send_indexes: send_indexes,
       recv: recv,
       recv_length: length(recv_shapes),
       client: client,
@@ -56,15 +58,23 @@ defmodule EXLA.Defn.Stream do
   end
 
   defimpl Nx.Stream do
-    def send(
-          %{pid: pid, client: client, device_id: device_id, send: send, send_shape: send_shape},
-          data
-        ) do
+    def send(stream, data) do
+      %{
+        pid: pid,
+        client: client,
+        device_id: device_id,
+        send: send,
+        send_shape: send_shape,
+        send_indexes: send_indexes
+      } = stream
+
       if pid != self() do
         raise "EXLA streams require recv to be called from the process that started the stream"
       end
 
-      unless Nx.compatible?(send, data) do
+      {template, buffers} = nx_to_io(data, send_indexes)
+
+      unless Nx.compatible?(send, template) do
         raise ArgumentError, """
         Nx stream expected a tensor of type, shape, and names on send:
 
@@ -72,28 +82,33 @@ defmodule EXLA.Defn.Stream do
 
         But got tensor:
 
-        #{inspect(data)}
+        #{inspect(template)}
         """
       end
 
       data_and_shapes =
         if client.platform == :host do
           %EXLA.Shape{dtype: {:tuple, shapes}} = send_shape
-          Enum.zip(nx_to_io(data), shapes)
+          Enum.zip(buffers, shapes)
         else
-          [{nx_to_io(data), send_shape}]
+          [{buffers, send_shape}]
         end
 
       pred = EXLA.Shape.make_shape({:pred, 8}, {})
       :ok = EXLA.Client.to_infeed(client, device_id, [{<<1::8-native>>, pred} | data_and_shapes])
     end
 
-    defp nx_to_io(container) do
-      container
-      |> Nx.Defn.Composite.reduce([], fn tensor, acc ->
-        [tensor |> Nx.to_tensor() |> Nx.to_binary() | acc]
-      end)
-      |> Enum.reverse()
+    defp nx_to_io(container, indexes) do
+      {template, buffers} =
+        Nx.LazyContainer.traverse(container, [], fn template, fun, acc ->
+          {template, [fun | acc]}
+        end)
+
+      {template,
+       buffers
+       |> Enum.reverse()
+       |> EXLA.Defn.Buffers.filter_by_indexes(indexes)
+       |> Enum.map(fn fun -> Nx.to_binary(fun.()) end)}
     end
 
     def recv(%{pid: pid, outfeed: outfeed, lock: lock, recv: recv, recv_length: length}) do

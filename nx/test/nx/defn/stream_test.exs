@@ -7,7 +7,7 @@ defmodule Nx.Defn.StreamTest do
   defn defn_sum(entry, acc), do: {acc, entry + acc}
 
   def elixir_sum(entry, acc) do
-    true = Process.get(Nx.Defn.Compiler) in [Nx.Defn.Evaluator, Nx.Defn.Identity]
+    true = Process.get(Nx.Defn.Compiler) in [Nx.Defn.Evaluator, Nx.Defn.Debug]
     {acc, Nx.add(entry, acc)}
   end
 
@@ -20,6 +20,19 @@ defmodule Nx.Defn.StreamTest do
     assert Nx.Stream.recv(stream) == Nx.tensor(1)
 
     assert Nx.Stream.done(stream) == Nx.tensor(3)
+  end
+
+  defn defn_sum_with_args(entry, acc, a, b), do: {acc, entry + acc + (a - b)}
+
+  test "runs defn stream with args" do
+    %_{} = stream = Nx.Defn.stream(&defn_sum_with_args/4, [0, 0, 2, 1])
+    assert Nx.Stream.send(stream, 1) == :ok
+    assert Nx.Stream.recv(stream) == Nx.tensor(0)
+
+    assert Nx.Stream.send(stream, 2) == :ok
+    assert Nx.Stream.recv(stream) == Nx.tensor(2)
+
+    assert Nx.Stream.done(stream) == Nx.tensor(5)
   end
 
   test "runs elixir stream" do
@@ -130,5 +143,22 @@ defmodule Nx.Defn.StreamTest do
     assert Nx.Stream.recv(stream) == %Container{a: Nx.tensor(3), b: Nx.tensor(-2), d: :elem}
 
     assert Nx.Stream.done(stream) == %Container{a: Nx.tensor(0), b: Nx.tensor(3), d: :acc}
+  end
+
+  defn lazy_container_stream(%LazyWrapped{a: a, c: c}, acc) do
+    {acc, acc + a - c}
+  end
+
+  test "lazy container in" do
+    args = [%LazyOnly{a: 0, b: 0, c: 0}, 0]
+    %_{} = stream = Nx.Defn.stream(&lazy_container_stream/2, args)
+
+    assert Nx.Stream.send(stream, %LazyOnly{a: 3, b: 0, c: -1}) == :ok
+    assert Nx.Stream.recv(stream) == Nx.tensor(0)
+
+    assert Nx.Stream.send(stream, %LazyOnly{a: 5, b: 0, c: 2}) == :ok
+    assert Nx.Stream.recv(stream) == Nx.tensor(4)
+
+    assert Nx.Stream.done(stream) == Nx.tensor(7)
   end
 end

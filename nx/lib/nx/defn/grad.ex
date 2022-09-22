@@ -446,6 +446,39 @@ defmodule Nx.Defn.Grad do
     [{x, reduce_g(x, opts, g)}]
   end
 
+  defp grad(:product, [x, opts], ans, g) do
+    axes = opts[:axes] || Nx.axes(x)
+    unsqueezed_shape = Enum.reduce(axes, Nx.shape(x), &put_elem(&2, &1, 1))
+    g = Nx.reshape(g, unsqueezed_shape)
+    ans = Nx.reshape(ans, unsqueezed_shape)
+
+    # The derivative of a product with respect to element x_i, is that
+    # product with element x_i removed. Having the total product already
+    # computed, we can divide it by x_i to effectively remove it. This
+    # works as long as x_i is other than 0.
+    #
+    # For products with a single zero element, the derivative with respect
+    # to that particular element is the product of the non-zero elements.
+    #
+    # For products with more zeros, the derivative with respect to any of
+    # the elements is always 0.
+
+    zero? = Nx.equal(x, 0)
+
+    x_without_zeros = Nx.select(zero?, 1, x)
+    ans_removed_zero = Nx.product(x_without_zeros, axes: axes, keep_axes: true)
+
+    zeros_in_product = Nx.sum(zero?, axes: axes, keep_axes: true)
+    one_zero? = Nx.equal(zeros_in_product, 1)
+    many_zeros? = Nx.greater(zeros_in_product, 1)
+
+    dx = Nx.multiply(g, Nx.divide(ans, x_without_zeros))
+    dx = Nx.select(Nx.logical_and(zero?, one_zero?), Nx.multiply(g, ans_removed_zero), dx)
+    dx = Nx.select(Nx.logical_and(zero?, many_zeros?), 0, dx)
+
+    [{x, dx}]
+  end
+
   @reduce_min_max_ops [:reduce_max, :reduce_min]
 
   defp grad(op, [x, opts], ans, g) when op in @reduce_min_max_ops do

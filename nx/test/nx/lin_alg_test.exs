@@ -9,6 +9,13 @@ defmodule Nx.LinAlgTest do
   @types [{:f, 32}, {:c, 64}]
 
   describe "triangular_solve" do
+    test "works with batched input" do
+      a = Nx.tensor([[[-1, 0, 0], [1, 1, 0], [1, 1, 1]], [[2, 0, 0], [4, -2, 0], [-5, 1, 3]]])
+      b = Nx.tensor([[1.0, 2.0, 3.0], [6, 10, 1]])
+
+      assert Nx.dot(a, [2], [0], Nx.LinAlg.triangular_solve(a, b), [1], [0]) == b
+    end
+
     test "property" do
       a = Nx.tensor([[1, 0, 0], [1, 1, 0], [0, 1, 1]])
       b = Nx.tensor([[1.0, 2.0, 3.0], [2.0, 2.0, 4.0], [2.0, 0.0, 1.0]])
@@ -40,6 +47,13 @@ defmodule Nx.LinAlgTest do
                Nx.tensor([1.0, 1.0, -1.0])
     end
 
+    test "works with batched input" do
+      a = Nx.tensor([[[1, 3, -2], [3, 5, 6], [2, 4, 3]], [[1, 1, 1], [6, -4, 5], [5, 2, 2]]])
+      b = Nx.tensor([[5, 7, 8], [2, 31, 13]])
+
+      assert_all_close(Nx.dot(a, [2], [0], Nx.LinAlg.solve(a, b), [1], [0]), b)
+    end
+
     test "works with complex tensors" do
       a = ~M[
         1 0 i
@@ -56,6 +70,25 @@ defmodule Nx.LinAlgTest do
   end
 
   describe "invert" do
+    test "works with batched input" do
+      a = Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
+      expected_result = Nx.tensor([[[-2, 1], [1.5, -0.5]], [[-4, 3], [3.5, -2.5]]])
+
+      result = Nx.LinAlg.invert(a)
+
+      assert_all_close(result, expected_result)
+
+      assert_all_close(
+        Nx.dot(a, [2], [0], result, [1], [0]),
+        Nx.broadcast(Nx.eye(2), Nx.shape(a))
+      )
+
+      assert_all_close(
+        Nx.dot(result, [2], [0], a, [1], [0]),
+        Nx.broadcast(Nx.eye(2), Nx.shape(a))
+      )
+    end
+
     test "works with complex tensors" do
       a = ~M[
         1 0 i
@@ -87,6 +120,37 @@ defmodule Nx.LinAlgTest do
         Nx.tensor([[1.0, 2.0, 3.0], [1.0, -2.0, 3.0], [7.0, 8.0, 9.0]], names: [:x, :y])
 
       assert Nx.LinAlg.determinant(three_by_three) == Nx.tensor(48.0)
+    end
+
+    test "supports batched matrices" do
+      two_by_two = Nx.tensor([[[2, 3], [4, 5]], [[6, 3], [4, 8]]])
+      assert Nx.LinAlg.determinant(two_by_two) == Nx.tensor([-2.0, 36.0])
+
+      three_by_three =
+        Nx.tensor([
+          [[1.0, 2.0, 3.0], [1.0, 5.0, 3.0], [7.0, 6.0, 9.0]],
+          [[5.0, 2.0, 3.0], [8.0, 5.0, 4.0], [3.0, 1.0, -9.0]]
+        ])
+
+      assert Nx.LinAlg.determinant(three_by_three) == Nx.tensor([-36.0, -98.0])
+
+      four_by_four =
+        Nx.tensor([
+          [
+            [1.0, 2.0, 3.0, 0.0],
+            [1.0, 5.0, 3.0, 0.0],
+            [7.0, 6.0, 9.0, 0.0],
+            [0.0, -11.0, 2.0, 3.0]
+          ],
+          [
+            [5.0, 2.0, 3.0, 0.0],
+            [8.0, 5.0, 4.0, 0.0],
+            [3.0, 1.0, -9.0, 0.0],
+            [8.0, 2.0, -4.0, 5.0]
+          ]
+        ])
+
+      assert_all_close(Nx.LinAlg.determinant(four_by_four), Nx.tensor([-108.0, -490]))
     end
   end
 
@@ -153,6 +217,22 @@ defmodule Nx.LinAlgTest do
       ]
 
       assert_all_close(Nx.LinAlg.matrix_power(a, -4), result)
+    end
+
+    test "supports batched matrices" do
+      a =
+        Nx.tensor([
+          [[5, 3], [1, 2]],
+          [[9, 0], [4, 7]]
+        ])
+
+      result =
+        Nx.tensor([
+          [[161, 126], [42, 35]],
+          [[729, 0], [772, 343]]
+        ])
+
+      assert_all_close(Nx.LinAlg.matrix_power(a, 3), result)
     end
   end
 
@@ -353,7 +433,7 @@ defmodule Nx.LinAlgTest do
 
       for _ <- 1..10 do
         # Orthogonal matrix from a random matrix
-        {q, _} = Nx.random_uniform({3, 3}) |> Nx.LinAlg.qr()
+        {q, _} = Nx.random_uniform({3, 3, 3}) |> Nx.LinAlg.qr()
 
         # Different eigenvalues from random values
         evals_test =
@@ -374,9 +454,9 @@ defmodule Nx.LinAlgTest do
         # using A = A^t = Q^t.Λ.Q.
         a =
           q
-          |> Nx.transpose()
+          |> Nx.LinAlg.adjoint()
           |> Nx.multiply(evals_test)
-          |> Nx.dot(q)
+          |> Nx.dot([2], [0], q, [1], [0])
 
         # Eigenvalues and eigenvectors
         assert {evals, evecs} = Nx.LinAlg.eigh(a)
@@ -384,7 +464,7 @@ defmodule Nx.LinAlgTest do
 
         # Eigenvalue equation
         evecs_evals = Nx.multiply(evecs, evals)
-        a_evecs = Nx.dot(a, evecs)
+        a_evecs = Nx.dot(a, [2], [0], evecs, [1], [0])
 
         assert_all_close(evecs_evals, a_evecs, atol: 1.0e-3)
       end
@@ -396,7 +476,7 @@ defmodule Nx.LinAlgTest do
 
       for _ <- 1..10 do
         # Orthogonal matrix from a random matrix
-        {q, _} = Nx.random_uniform({3, 3}) |> Nx.LinAlg.qr()
+        {q, _} = Nx.random_uniform({3, 3, 3}) |> Nx.LinAlg.qr()
 
         # ensure that eval1 is far apart from the other two eigenvals
         eval1 = :rand.uniform() * 10 + 10
@@ -404,25 +484,26 @@ defmodule Nx.LinAlgTest do
         eval2 = :rand.uniform() * 0.01 + 1
         # eval3 also in the same range as eval2
         eval3 = :rand.uniform() * 0.01 + 1
+
         evals_test = Nx.tensor([eval1, eval2, eval3])
 
         # Symmetric matrix with different eigenvalues
         # using A = A^t = Q^tΛQ.
         a =
           q
-          |> Nx.transpose()
+          |> Nx.LinAlg.adjoint()
           |> Nx.multiply(evals_test)
-          |> Nx.dot(q)
+          |> Nx.dot([2], [0], q, [1], [0])
           |> round(3)
 
         # Eigenvalues and eigenvectors
         assert {evals, evecs} = Nx.LinAlg.eigh(a)
-        assert_all_close(evals_test, evals, atol: 1.0e-2)
+        assert_all_close(evals_test, evals, atol: 0.1)
 
         # Eigenvalue equation
         evecs_evals = Nx.multiply(evecs, evals)
-        a_evecs = Nx.dot(a, evecs)
-        assert_all_close(evecs_evals, a_evecs, atol: 1.0e-2)
+        a_evecs = Nx.dot(a, [2], [0], evecs, [1], [0])
+        assert_all_close(evecs_evals, a_evecs, atol: 0.1)
       end
     end
   end

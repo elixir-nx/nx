@@ -705,6 +705,12 @@ defmodule NxTest do
     end
   end
 
+  describe "put_slice" do
+    test "with mixed types and sizes" do
+      assert Nx.put_slice(Nx.tensor([0.0, 0.0]), [0], Nx.tensor([1])) == Nx.tensor([1.0, 0.0])
+    end
+  end
+
   describe "access" do
     test "supports an empty list" do
       tensor = Nx.tensor([1, 2, 3])
@@ -1998,12 +2004,21 @@ defmodule NxTest do
       assert diag == Nx.tensor([3, 7])
     end
 
+    test "extracts valid diagonal given batched matrices" do
+      diag =
+        {2, 3, 3}
+        |> Nx.iota()
+        |> Nx.take_diagonal()
+
+      assert diag == Nx.tensor([[0, 4, 8], [9, 13, 17]])
+    end
+
     test "raises error given tensor with invalid rank" do
-      t = Nx.iota({3, 3, 3})
+      t = Nx.iota({3})
 
       assert_raise(
         ArgumentError,
-        "take_diagonal/2 expects tensor of rank 2, got tensor of rank: 3",
+        "take_diagonal/2 expects tensor of rank 2 or higher, got tensor of rank: 1",
         fn -> Nx.take_diagonal(t) end
       )
     end

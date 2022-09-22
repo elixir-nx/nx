@@ -14,6 +14,11 @@ defmodule EXLA.Backend do
   To get the data out of the device backend into a regular
   tensor, call `Nx.backend_transfer/1` (with the device
   tensor as the single argument).
+
+  Note that the `EXLA.Backend` is asynchronous: operations
+  on its tensors *may* return immediately, before the tensor
+  data is available. The backend will then block only when
+  trying to read the data or when passing it to another operation.
   """
 
   @behaviour Nx.Backend
@@ -121,7 +126,7 @@ defmodule EXLA.Backend do
   if Application.compile_env(:exla, :add_backend_on_inspect, true) do
     defp maybe_add_signature(result, %T{data: %B{buffer: buffer}}) do
       %EXLA.DeviceBuffer{client_name: client_name, device_id: device_id, ref: ref} = buffer
-      '#Ref<' ++ rest = :erlang.ref_to_list(ref)
+      ~c"#Ref<" ++ rest = :erlang.ref_to_list(ref)
       info = "EXLA.Backend<#{client_name}:#{device_id}, " <> List.to_string(rest)
       Inspect.Algebra.concat([info, Inspect.Algebra.line(), result])
     end
@@ -196,13 +201,12 @@ defmodule EXLA.Backend do
   end
 
   @impl true
-  def optional(_name, args, fun) do
+  def optional(name, args, fun) do
     # Here we take the leading tensor arguments and pass them as JIT arguments
     {tensors, rest} = Enum.split_while(args, &is_struct(&1, Nx.Tensor))
 
     wrapper_fun = fn tensors ->
-      tensors = Tuple.to_list(tensors)
-      apply(fun, tensors ++ rest)
+      Nx.Defn.Expr.optional(name, Tuple.to_list(tensors) ++ rest, fun)
     end
 
     jit(wrapper_fun, [List.to_tuple(tensors)])

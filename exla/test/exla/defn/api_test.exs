@@ -4,11 +4,6 @@ defmodule EXLA.Defn.APITest do
   import Nx.Defn
   import ExUnit.CaptureLog
 
-  setup do
-    Nx.Defn.default_options(compiler: EXLA)
-    :ok
-  end
-
   describe "options" do
     defn add_two(a, b), do: a + b
 
@@ -243,6 +238,23 @@ defmodule EXLA.Defn.APITest do
       assert_equal(Nx.Stream.recv(stream), %Container{a: Nx.tensor(3), b: Nx.tensor(-2), d: :elem})
 
       assert_equal(Nx.Stream.done(stream), %Container{a: Nx.tensor(0), b: Nx.tensor(3), d: :acc})
+    end
+
+    defn lazy_container_stream(%LazyWrapped{a: a, c: c}, acc) do
+      {acc, acc + a - c}
+    end
+
+    test "lazy container in" do
+      args = [%LazyOnly{a: 0, b: 0, c: 0}, 0]
+      %_{} = stream = EXLA.stream(&lazy_container_stream/2, args)
+
+      assert Nx.Stream.send(stream, %LazyOnly{a: 3, b: 0, c: -1}) == :ok
+      assert_equal(Nx.Stream.recv(stream), Nx.tensor(0))
+
+      assert Nx.Stream.send(stream, %LazyOnly{a: 5, b: 0, c: 2}) == :ok
+      assert_equal(Nx.Stream.recv(stream), Nx.tensor(4))
+
+      assert_equal(Nx.Stream.done(stream), Nx.tensor(7))
     end
   end
 

@@ -21,6 +21,13 @@ defmodule TorchxTest do
       {:cpu, ref} = Torchx.tensordot(a, b, [0], [0])
       assert is_reference(ref)
     end
+
+    test "dot with multiple batch axes" do
+      u = Nx.tensor([[[1, 1]], [[2, 2]]])
+      v = Nx.tensor([[[1, 2]], [[1, 2]]])
+
+      assert_equal(Nx.tensor([[3], [6]]), Nx.dot(u, [2], [0, 1], v, [2], [0, 1]))
+    end
   end
 
   describe "torchx<->nx" do
@@ -89,6 +96,192 @@ defmodule TorchxTest do
 
         assert_equal(Nx.tensor([1, 2, 3, 4]), Nx.concatenate([t1, t2]))
       end
+    end
+  end
+
+  describe "bool type" do
+    test "adds correctly" do
+      t_tx =
+        {2, 3}
+        |> Nx.iota(type: {:u, 8})
+        |> Torchx.from_nx()
+        |> Torchx.to_type(:bool)
+
+      t = Torchx.to_nx(t_tx)
+
+      # Show that bools don't add as expected for u8
+      # This is why we add the cast to byte in Torchx.to_nx
+      assert_equal(Torchx.to_nx(t_tx), t_tx |> Torchx.add(t_tx) |> Torchx.to_nx())
+
+      assert_equal(Nx.add(t, t), Nx.tensor([[0, 2, 2], [2, 2, 2]]))
+    end
+
+    test "works with argmax and argmin" do
+      t =
+        {2, 3}
+        |> Nx.iota(type: {:u, 8})
+        |> Torchx.from_nx()
+        |> Torchx.to_type(:bool)
+        |> Torchx.to_nx()
+
+      assert_equal(0, Nx.argmin(t))
+      assert_equal(1, Nx.argmax(t))
+    end
+  end
+
+  describe "pad" do
+    test "works with inner and outer padding" do
+      t = Nx.iota({2, 4, 3})
+      padding_config = [{1, 1, 1}, {1, 1, 1}, {1, 1, 1}]
+
+      all_zeros = [
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0]
+      ]
+
+      assert_equal(
+        Nx.pad(t, 0, padding_config),
+        Nx.tensor([
+          all_zeros,
+          [
+            [0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 1, 0, 2, 0],
+            [0, 0, 0, 0, 0, 0, 0],
+            [0, 3, 0, 4, 0, 5, 0],
+            [0, 0, 0, 0, 0, 0, 0],
+            [0, 6, 0, 7, 0, 8, 0],
+            [0, 0, 0, 0, 0, 0, 0],
+            [0, 9, 0, 10, 0, 11, 0],
+            [0, 0, 0, 0, 0, 0, 0]
+          ],
+          all_zeros,
+          [
+            [0, 0, 0, 0, 0, 0, 0],
+            [0, 12, 0, 13, 0, 14, 0],
+            [0, 0, 0, 0, 0, 0, 0],
+            [0, 15, 0, 16, 0, 17, 0],
+            [0, 0, 0, 0, 0, 0, 0],
+            [0, 18, 0, 19, 0, 20, 0],
+            [0, 0, 0, 0, 0, 0, 0],
+            [0, 21, 0, 22, 0, 23, 0],
+            [0, 0, 0, 0, 0, 0, 0]
+          ],
+          all_zeros
+        ])
+      )
+    end
+
+    # [
+    #     [0, 1, 2]
+    #     [3, 4, 5],
+    #     [6, 7, 8],
+    #     [9, 10, 11]
+    #   ],
+    #   [
+    #     [12, 13, 14],
+    #     [15, 16, 17],
+    #     [18, 19, 20],
+    #     [21, 22, 23]
+    #   ]
+
+    test "works with inner padding and left negative pading" do
+      t = Nx.iota({2, 4, 3})
+      padding_config = [{-1, 1, 1}, {-2, 1, 1}, {-2, 1, 1}]
+
+      assert_equal(
+        Nx.pad(t, 0, padding_config),
+        Nx.tensor([
+          [
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0]
+          ],
+          [
+            [16, 0, 17, 0],
+            [0, 0, 0, 0],
+            [19, 0, 20, 0],
+            [0, 0, 0, 0],
+            [22, 0, 23, 0],
+            [0, 0, 0, 0]
+          ],
+          [
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0]
+          ]
+        ])
+      )
+    end
+
+    test "works with inner padding and right negative pading" do
+      t = Nx.iota({2, 4, 3})
+      padding_config = [{1, -1, 1}, {1, -2, 1}, {1, -2, 1}]
+
+      assert_equal(
+        Nx.pad(t, 0, padding_config),
+        Nx.tensor([
+          [
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0]
+          ],
+          [
+            [0, 0, 0, 0],
+            [0, 0, 0, 1],
+            [0, 0, 0, 0],
+            [0, 3, 0, 4],
+            [0, 0, 0, 0],
+            [0, 6, 0, 7]
+          ],
+          [
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0]
+          ]
+        ])
+      )
+    end
+
+    test "works with inner padding and left and right negative pading" do
+      t = Nx.iota({2, 4, 3})
+      padding_config = [{1, -2, 1}, {-1, -2, 1}, {-1, -2, 1}]
+
+      assert_equal(
+        Nx.pad(t, 0, padding_config),
+        Nx.tensor([
+          [
+            [0, 0],
+            [0, 0],
+            [0, 0],
+            [0, 0]
+          ],
+          [
+            [0, 0],
+            [0, 4],
+            [0, 0],
+            [0, 7]
+          ]
+        ])
+      )
     end
   end
 end

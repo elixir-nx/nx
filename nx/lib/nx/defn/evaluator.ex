@@ -11,17 +11,20 @@ defmodule Nx.Defn.Evaluator do
   @creation_ops [:constant, :eye, :iota, :from_binary]
   @random_ops [:random_uniform, :random_normal]
   @list_ops [:concatenate]
+  @indices_ops [:slice, :put_slice]
 
   @impl true
   def __stream__(_key, input, acc, vars, fun, [args], opts) do
     count = Nx.Defn.Composite.count(input) + Nx.Defn.Composite.count(acc)
+    rest_params = Enum.drop(args, count)
     hooks = Keyword.get(opts, :hooks, %{})
     gc? = Keyword.get(opts, :garbage_collect, true)
     expr = fun.(vars)
 
     [
-      Nx.Defn.Stream.start_link(input, acc, fn input, acc ->
-        params = Nx.Defn.Composite.flatten_runtime_args([input, acc], Enum.drop(args, count))
+      Nx.Defn.Stream.start_link(input, acc, fn input_params, acc ->
+        acc_params = [acc] |> Nx.Defn.Composite.flatten_list() |> Enum.map(&fn -> &1 end)
+        params = input_params ++ acc_params ++ rest_params
 
         expr
         |> composite_eval(%{params: params, hooks: hooks, gc: gc?}, %{})
@@ -48,10 +51,6 @@ defmodule Nx.Defn.Evaluator do
         |> elem(0)
       ]
     end
-  end
-
-  defp eval(%Nx.Tensor{data: %Expr{op: :parameter, args: [i]}}, state, cache) do
-    {Enum.fetch!(state.params, i), cache}
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: :tensor, args: [t]}}, _state, cache) do
@@ -89,19 +88,30 @@ defmodule Nx.Defn.Evaluator do
     {other, cache}
   end
 
+  defp eval_apply(:parameter, %{data: %Expr{args: [i]}}, state, cache) do
+    case Enum.fetch!(state.params, i).() do
+      %Nx.Tensor{data: %Nx.Defn.Expr{}} = tensor ->
+        raise ArgumentError,
+              "cannot pass a tensor expression as argument to defn, got: #{inspect(tensor)}"
+
+      %Nx.Tensor{} = tensor ->
+        {tensor, cache}
+    end
+  end
+
   defp eval_apply(:fun, %{data: %Expr{args: [args, expr, _mfa]}}, state, cache) do
     fun =
       case length(args) do
         1 ->
           fn arg1 ->
-            params = [Nx.to_tensor(arg1)]
+            params = [fn -> Nx.to_tensor(arg1) end]
             {result, _cache} = composite_eval(expr, %{state | params: params}, %{})
             result
           end
 
         2 ->
           fn arg1, arg2 ->
-            params = [Nx.to_tensor(arg1), Nx.to_tensor(arg2)]
+            params = [fn -> Nx.to_tensor(arg1) end, fn -> Nx.to_tensor(arg2) end]
             {result, _cache} = composite_eval(expr, %{state | params: params}, %{})
             result
           end
@@ -169,11 +179,15 @@ defmodule Nx.Defn.Evaluator do
           {backend, [ans | args] ++ [backend_options]}
 
         op in @random_ops ->
-          {_, backend_options} = Nx.default_backend()
+          {_backend, backend_options} = Nx.default_backend()
           {Nx.Shared.list_impl!(args), [ans | args] ++ [backend_options]}
 
         op in @list_ops ->
           {Nx.Shared.list_impl!(hd(args)), [ans | args]}
+
+        op in @indices_ops ->
+          [tensor, indices | _] = args
+          {Nx.Shared.list_impl!([tensor | indices]), [ans | args]}
 
         match?({:tuple, _}, ans.type) ->
           {Nx.Shared.list_impl!(args), args}
@@ -210,7 +224,7 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp composite_to_params(other, acc) do
-    [other | acc]
+    [fn -> other end | acc]
   end
 
   defp cond_clause([{pred, clause} | clauses], last, state, cache) do

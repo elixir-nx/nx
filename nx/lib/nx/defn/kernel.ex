@@ -420,9 +420,10 @@ defmodule Nx.Defn.Kernel do
 
   ## Examples
 
-     defn quotient(a, b) do
-       div(a, b)
-     end
+      defn quotient(a, b) do
+        div(a, b)
+      end
+
   """
   def div(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: Kernel.div(left, right)

@@ -3,6 +3,14 @@ defmodule Nx.Defn.Composite do
   Functions to deal with composite data types according to `Nx.Container`.
 
   The functions in this module can be used both inside and outside `defn`.
+  Note the functions in this module traverses tensors, but it does not
+  automatically convert values to tensors. For example, the tuple `{1, 2, 3}`
+  once traversed will emit the numbers `1`, `2`, and `3`. If desired,
+  you can invoke `Nx.to_tensor/1` to normalize them.
+
+  Note that, when a value is given to `defn`, it is first converted to
+  tensors and containers via `Nx.LazyContainer`. Inside `defn`, there are
+  no lazy containers, only containers.
   """
 
   alias Nx.Defn.Expr
@@ -27,8 +35,25 @@ defmodule Nx.Defn.Composite do
   end
 
   def compatible?(%mod{} = left, %mod{} = right, fun) do
-    left = Nx.Container.reduce(left, [], &[&1 | &2])
-    right = Nx.Container.reduce(right, [], &[&1 | &2])
+    # LazyContainer is fully recursive but we don't want to go full recursive
+    # unless we have to, so we can also compare structures along the way.
+    {left, right} =
+      case Nx.LazyContainer.impl_for(left) do
+        Nx.LazyContainer.Any ->
+          left = Nx.Container.reduce(left, [], &[&1 | &2])
+          right = Nx.Container.reduce(right, [], &[&1 | &2])
+          {left, right}
+
+        impl ->
+          {_, left} =
+            impl.traverse(left, [], fn template, _fun, acc -> {template, [template | acc]} end)
+
+          {_, right} =
+            impl.traverse(right, [], fn template, _fun, acc -> {template, [template | acc]} end)
+
+          {left, right}
+      end
+
     Enum.zip(left, right) |> Enum.all?(fn {l, r} -> compatible?(l, r, fun) end)
   end
 
@@ -65,7 +90,7 @@ defmodule Nx.Defn.Composite do
   defp count(container, acc), do: Nx.Container.reduce(container, acc, &count/2)
 
   @doc """
-  Traverses the given composite types with `fun`.
+  Traverses recursively the given composite types with `fun`.
 
   If a composite tensor is given, such as a tuple, the composite
   type is recursively traversed and returned.
@@ -79,7 +104,7 @@ defmodule Nx.Defn.Composite do
   end
 
   @doc """
-  Traverses the given composite types with `acc` and `fun`.
+  Traverses recursively the given composite types with `acc` and `fun`.
 
   If a composite tensor is given, such as a tuple, the composite
   type is recursively traversed and returned.
@@ -94,7 +119,7 @@ defmodule Nx.Defn.Composite do
     do: Nx.Container.traverse(container, acc, &traverse(&1, &2, fun))
 
   @doc """
-  Reduces the given composite types with `acc` and `fun`.
+  Reduces recursively the given composite types with `acc` and `fun`.
 
   If composite tensor expressions are given, such as a tuple,
   the composite type is recursively traversed and returned.
@@ -109,7 +134,7 @@ defmodule Nx.Defn.Composite do
     do: Nx.Container.reduce(container, acc, &reduce(&1, &2, fun))
 
   @doc """
-  Flattens the given list of composite types.
+  Flattens recursively the given list of composite types.
 
   Elements that are not tensors (i.e. numbers and `Complex` numbers) are kept as is
   unless a custom function is given.
@@ -122,25 +147,22 @@ defmodule Nx.Defn.Composite do
       iex> Nx.Defn.Composite.flatten_list([1, {2, 3}], [Nx.tensor(4)])
       [1, 2, 3, Nx.tensor(4)]
 
-      iex> Nx.Defn.Composite.flatten_list([1, {2, 3}], [Nx.tensor(4)], &Nx.tensor/1)
-      [Nx.tensor(1), Nx.tensor(2), Nx.tensor(3), Nx.tensor(4)]
-
   """
-  def flatten_list(args, tail \\ [], fun \\ & &1) when is_list(args) do
+  def flatten_list(args, tail \\ []) when is_list(args) do
     args
-    |> Enum.reduce([], &flatten_each(&1, &2, fun))
+    |> Enum.reduce([], &flatten_each/2)
     |> Enum.reverse(tail)
   end
 
-  defp flatten_each(%T{} = tensor, acc, _fun),
+  defp flatten_each(%T{} = tensor, acc),
     do: [tensor | acc]
 
-  defp flatten_each(number, acc, fun)
+  defp flatten_each(number, acc)
        when is_number(number) or is_struct(number, Complex),
-       do: [fun.(number) | acc]
+       do: [number | acc]
 
-  defp flatten_each(container, acc, fun),
-    do: Nx.Container.reduce(container, acc, &flatten_each(&1, &2, fun))
+  defp flatten_each(container, acc),
+    do: Nx.Container.reduce(container, acc, &flatten_each/2)
 
   ## Nx.Defn callbacks
 
@@ -178,31 +200,27 @@ defmodule Nx.Defn.Composite do
   end
 
   @doc false
-  def flatten_runtime_args(args, tail) do
-    list = flatten_list(args, tail, &Nx.to_tensor/1)
-
-    for %Nx.Tensor{data: %Nx.Defn.Expr{}} = tensor <- list do
-      raise ArgumentError,
-            "cannot pass a tensor expression as argument to defn, got: #{inspect(tensor)}"
-    end
-
-    list
-  end
-
-  @doc false
-  def to_inputs(args) do
-    {args, _} =
-      Enum.map_reduce(args, 0, fn arg, i ->
-        traverse(arg, i, fn
-          arg, _i when is_boolean(arg) ->
-            raise ArgumentError, "booleans are not supported as defn inputs"
-
-          arg, i ->
-            {Expr.parameter(Nx.to_tensor(arg), :root, i), i + 1}
+  def to_lazy_params(args) do
+    {template_args, {funs, _}} =
+      Enum.map_reduce(args, {[], 0}, fn container, acc ->
+        Nx.LazyContainer.traverse(container, acc, fn template, fun, {acc, i} ->
+          {Expr.parameter(template, :root, i), {[fun | acc], i + 1}}
         end)
       end)
 
-    args
+    {template_args, Enum.reverse(funs)}
+  end
+
+  @doc false
+  def to_lazy_template(args) do
+    {template_args, funs} =
+      Enum.map_reduce(args, [], fn container, acc ->
+        Nx.LazyContainer.traverse(container, acc, fn template, fun, acc ->
+          {template, [fun | acc]}
+        end)
+      end)
+
+    {template_args, Enum.reverse(funs)}
   end
 
   @doc false

@@ -3,7 +3,7 @@ defmodule EXLA.NIF do
   @on_load :__on_load__
 
   def __on_load__ do
-    path = :filename.join(:code.priv_dir(:exla), 'libexla')
+    path = :filename.join(:code.priv_dir(:exla), ~c"libexla")
     :erlang.load_nif(path, 0)
   end
 
@@ -273,7 +273,7 @@ defmodule EXLA.NIF do
   def binary_to_device_mem(_client, _binary, _shape, _device_ordinal),
     do: :erlang.nif_error(:undef)
 
-  def read_device_mem(_client, _buffer, _size),
+  def read_device_mem(_buffer, _size),
     do: :erlang.nif_error(:undef)
 
   def deallocate_device_mem(_buffer),

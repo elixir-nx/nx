@@ -1278,7 +1278,14 @@ defmodule Nx.BinaryBackend do
         opts
       ) do
     bin = to_binary(tensor)
-    {eigenvals, eigenvecs} = B.Matrix.eigh(bin, input_type, input_shape, output_type, opts)
+    rank = tuple_size(input_shape)
+    n = elem(input_shape, rank - 1)
+
+    {eigenvals, eigenvecs} =
+      bin_batch_reduce(bin, n * n, input_type, {<<>>, <<>>}, fn matrix, {vals_acc, vecs_acc} ->
+        {vals, vecs} = B.Matrix.eigh(matrix, input_type, {n, n}, output_type, opts)
+        {vals_acc <> vals, vecs_acc <> vecs}
+      end)
 
     {from_binary(eigenvals_holder, eigenvals), from_binary(eigenvecs_holder, eigenvecs)}
   end
@@ -1343,15 +1350,51 @@ defmodule Nx.BinaryBackend do
   @impl true
   def triangular_solve(
         %{type: output_type} = out,
-        %{type: a_type, shape: {rows, rows} = a_shape} = a,
+        %{type: {_, a_size} = a_type, shape: a_shape} = a,
         %{type: b_type, shape: b_shape} = b,
         opts
-      )
-      when tuple_size(b_shape) == 2 or b_shape == {rows} do
+      ) do
     a_data = to_binary(a)
     b_data = to_binary(b)
-    out_bin = B.Matrix.ts(a_data, a_type, a_shape, b_data, b_type, b_shape, output_type, opts)
-    from_binary(out, out_bin)
+
+    m = elem(a_shape, tuple_size(a_shape) - 1)
+
+    a_batch_byte_size = (m * m * a_size) |> div(8)
+    batches_num = byte_size(a_data) |> div(a_batch_byte_size)
+
+    a_batches =
+      Enum.map(
+        0..(batches_num - 1),
+        &binary_part(a_data, &1 * a_batch_byte_size, a_batch_byte_size)
+      )
+
+    b_batch_byte_size = byte_size(b_data) |> div(batches_num)
+
+    b_batches =
+      Enum.map(
+        0..(batches_num - 1),
+        &binary_part(b_data, &1 * b_batch_byte_size, b_batch_byte_size)
+      )
+
+    b_batch_shape =
+      if tuple_size(b_shape) == 1 do
+        b_shape
+      else
+        {a_batch_shape, _} = a_shape |> Tuple.to_list() |> Enum.split(-2)
+        {b_1d_batch_shape, [b_n]} = b_shape |> Tuple.to_list() |> Enum.split(-1)
+        {b_2d_batch_shape, [b_m, ^b_n]} = b_shape |> Tuple.to_list() |> Enum.split(-2)
+
+        case a_batch_shape do
+          ^b_1d_batch_shape -> {b_n}
+          ^b_2d_batch_shape -> {b_m, b_n}
+        end
+      end
+
+    [a_batches, b_batches]
+    |> Enum.zip_reduce(<<>>, fn [a, b], acc ->
+      acc <> B.Matrix.ts(a, a_type, {m, m}, b, b_type, b_batch_shape, output_type, opts)
+    end)
+    |> then(&from_binary(out, &1))
   end
 
   ## Aggregation
@@ -1866,11 +1909,10 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def put_slice(out, tensor, start_indices, slice, combine_fn \\ fn _prev, new -> new end) do
-    %T{type: {_, size}, shape: shape} = tensor = as_type(out, tensor)
-    %T{shape: slice_shape} = slice = as_type(out, slice)
+    %T{type: {_, size} = type, shape: shape} = tensor = as_type(out, tensor)
+    %T{shape: slice_shape} = slice = as_type(%{slice | type: type}, slice)
 
     start_indices = clamp_indices(start_indices, shape, Tuple.to_list(slice_shape))
-
     weighted_shape = weighted_shape(shape, size)
 
     rank = Nx.rank(shape)
@@ -2444,10 +2486,6 @@ defmodule Nx.BinaryBackend do
 
     path = Enum.reverse(reverse_pre, [(&IO.iodata_to_binary/1) | Enum.reverse(reverse_pos)])
     {chunk_size, read_size, path}
-  end
-
-  defp aggregate_axes(axes, _shape, _size) do
-    raise ArgumentError, ":axes must be a non empty list, got: #{inspect(axes)}"
   end
 
   defp aggregate_path([pair | shape], [i | axes], i, pre, pos),

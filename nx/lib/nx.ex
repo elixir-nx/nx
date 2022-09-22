@@ -58,7 +58,7 @@ defmodule Nx do
 
   The types are tracked as tuples:
 
-      iex> Nx.tensor([1, 2, 3], type: {:f, 32})
+      iex> Nx.tensor([1, 2, 3], type: :f32)
       #Nx.Tensor<
         f32[3]
         [1.0, 2.0, 3.0]
@@ -385,6 +385,7 @@ defmodule Nx do
   @type shape :: number() | Nx.Tensor.t() | Nx.Tensor.shape()
   @type axis :: Nx.Tensor.axis()
   @type axes :: Nx.Tensor.axes()
+  @type template :: Nx.Tensor.t(%Nx.TemplateBackend{})
 
   @file_version 1
 
@@ -445,7 +446,7 @@ defmodule Nx do
   The type can be explicitly given. Integers and floats
   bigger than the given size overflow:
 
-      iex> Nx.tensor([300, 301, 302], type: {:s, 8})
+      iex> Nx.tensor([300, 301, 302], type: :s8)
       #Nx.Tensor<
         s8[3]
         [44, 45, 46]
@@ -524,13 +525,13 @@ defmodule Nx do
   Besides single-precision (32 bits), floats can also have
   half-precision (16) or double-precision (64):
 
-      iex> Nx.tensor([1, 2, 3], type: {:f, 16})
+      iex> Nx.tensor([1, 2, 3], type: :f16)
       #Nx.Tensor<
         f16[3]
         [1.0, 2.0, 3.0]
       >
 
-      iex> Nx.tensor([1, 2, 3], type: {:f, 64})
+      iex> Nx.tensor([1, 2, 3], type: :f64)
       #Nx.Tensor<
         f64[3]
         [1.0, 2.0, 3.0]
@@ -538,7 +539,7 @@ defmodule Nx do
 
   Brain-floating points are also supported:
 
-      iex> Nx.tensor([1, 2, 3], type: {:bf, 16})
+      iex> Nx.tensor([1, 2, 3], type: :bf16)
       #Nx.Tensor<
         bf16[3]
         [1.0, 2.0, 3.0]
@@ -748,7 +749,7 @@ defmodule Nx do
 
   ## Examples
 
-      iex> Nx.template({2, 3}, {:f, 32})
+      iex> Nx.template({2, 3}, :f32)
       #Nx.Tensor<
         f32[2][3]
         Nx.TemplateBackend
@@ -816,15 +817,15 @@ defmodule Nx do
   """
   @doc type: :conversion
   def to_template(tensor_or_container) do
-    Nx.Defn.Composite.traverse(tensor_or_container, fn tensor ->
-      %{to_tensor(tensor) | data: %Nx.TemplateBackend{}}
-    end)
+    tensor_or_container
+    |> Nx.LazyContainer.traverse(:ok, fn template, _fun, :ok -> {template, :ok} end)
+    |> then(fn {template, :ok} -> template end)
   end
 
   @doc """
   Shortcut for `random_uniform(shape, 0.0, 1.0, opts)`.
   """
-  @doc type: :random
+  @doc type: :random, deprecated: "Use Nx.Random.uniform/2 instead"
   def random_uniform(tensor_or_shape, opts \\ []) do
     random_uniform(tensor_or_shape, 0.0, 1.0, opts)
   end
@@ -853,7 +854,7 @@ defmodule Nx do
       iex> Nx.type(t)
       {:f, 32}
 
-      iex> t = Nx.random_uniform({5, 5}, type: {:bf, 16})
+      iex> t = Nx.random_uniform({5, 5}, type: :bf16)
       iex> byte_size(Nx.to_binary(t))
       50
       iex> Nx.shape(t)
@@ -861,7 +862,7 @@ defmodule Nx do
       iex> Nx.type(t)
       {:bf, 16}
 
-      iex> t = Nx.random_uniform({5, 5}, -1.0, 1.0, type: {:f, 64})
+      iex> t = Nx.random_uniform({5, 5}, -1.0, 1.0, type: :f64)
       iex> for <<x::float-64-native <- Nx.to_binary(t)>> do
       ...>   true = x >= -1.0 and x < 1.0
       ...> end
@@ -872,7 +873,7 @@ defmodule Nx do
 
   ### Generating Integers
 
-      iex> t = Nx.random_uniform({10}, 5, 10, type: {:u, 8})
+      iex> t = Nx.random_uniform({10}, 5, 10, type: :u8)
       iex> for <<x::8-unsigned-native <- Nx.to_binary(t)>> do
       ...>   true = x >= 5 and x < 10
       ...> end
@@ -881,7 +882,7 @@ defmodule Nx do
       iex> Nx.type(t)
       {:u, 8}
 
-      iex> t = Nx.random_uniform({5, 5}, -5, 5, type: {:s, 64})
+      iex> t = Nx.random_uniform({5, 5}, -5, 5, type: :s64)
       iex> for <<x::64-signed-native <- Nx.to_binary(t)>> do
       ...>   true = x >= -5 and x < 5
       ...> end
@@ -904,7 +905,7 @@ defmodule Nx do
       [:batch, :data]
 
       iex> t = Nx.tensor([[1, 2], [3, 4]])
-      iex> t = Nx.random_uniform(t, type: {:f, 32})
+      iex> t = Nx.random_uniform(t, type: :f32)
       iex> Nx.shape(t)
       {2, 2}
       iex> Nx.type(t)
@@ -950,7 +951,7 @@ defmodule Nx do
       is ignored inside `defn`
 
   """
-  @doc type: :random
+  @doc type: :random, deprecated: "Use Nx.Random.uniform/2 instead"
   def random_uniform(tensor_or_shape, min, max, opts \\ []) do
     opts = keyword!(opts, [:type, :names, :backend])
     %T{type: min_type, shape: min_shape} = min = to_tensor(min)
@@ -980,7 +981,7 @@ defmodule Nx do
   @doc """
   Shortcut for `random_normal(shape, 0.0, 1.0, opts)`.
   """
-  @doc type: :random
+  @doc type: :random, deprecated: "Use Nx.Random instead"
   def random_normal(tensor_or_shape, opts \\ []) do
     random_normal(tensor_or_shape, 0.0, 1.0, opts)
   end
@@ -1001,13 +1002,13 @@ defmodule Nx do
       iex> Nx.type(t)
       {:f, 32}
 
-      iex> t = Nx.random_normal({5, 5}, 2.0, 1.0, type: {:bf, 16})
+      iex> t = Nx.random_normal({5, 5}, 2.0, 1.0, type: :bf16)
       iex> Nx.shape(t)
       {5, 5}
       iex> Nx.type(t)
       {:bf, 16}
 
-      iex> t = Nx.random_normal({3, 3, 3}, -1.0, 1.0, type: {:f, 32})
+      iex> t = Nx.random_normal({3, 3, 3}, -1.0, 1.0, type: :f32)
       iex> Nx.shape(t)
       {3, 3, 3}
       iex> Nx.type(t)
@@ -1026,7 +1027,7 @@ defmodule Nx do
       [:batch, :data]
 
       iex> t = Nx.tensor([[1.0, 2.0], [3.0, 4.0]])
-      iex> t = Nx.random_normal(t, type: {:f, 32})
+      iex> t = Nx.random_normal(t, type: :f32)
       iex> Nx.shape(t)
       {2, 2}
       iex> Nx.type(t)
@@ -1066,7 +1067,7 @@ defmodule Nx do
       is ignored inside `defn`
 
   """
-  @doc type: :random
+  @doc type: :random, deprecated: "Use Nx.Random instead"
   def random_normal(tensor_or_shape, mu, sigma, opts \\ []) do
     opts = keyword!(opts, [:type, :names, :backend])
     %T{type: mu_type, shape: mu_shape} = mu = to_tensor(mu)
@@ -1215,7 +1216,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.iota({3, 4, 3}, axis: 0, type: {:f, 64})
+      iex> Nx.iota({3, 4, 3}, axis: 0, type: :f64)
       #Nx.Tensor<
         f64[3][4][3]
         [
@@ -1295,7 +1296,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.eye(3, type: {:f, 32}, names: [:height, :width])
+      iex> Nx.eye(3, type: :f32, names: [:height, :width])
       #Nx.Tensor<
         f32[height: 3][width: 3]
         [
@@ -1337,17 +1338,17 @@ defmodule Nx do
 
   """
   @doc type: :creation
-  def eye(n_or_shape_or_tensor, opts \\ [])
+  def eye(n_or_tensor_or_shape, opts \\ [])
 
   def eye(n, opts) when is_integer(n) and n > 0 do
     eye({n, n}, opts)
   end
 
-  def eye(shape_or_tensor, opts) do
+  def eye(tensor_or_shape, opts) do
     opts = keyword!(opts, [:names, :backend, type: {:s, 64}])
 
     shape =
-      case shape(shape_or_tensor) do
+      case shape(tensor_or_shape) do
         {n, n} -> {n, n}
         other -> raise ArgumentError, "eye/2 expects a square matrix, got: #{inspect(other)}"
       end
@@ -1360,13 +1361,13 @@ defmodule Nx do
   end
 
   @doc """
-  Extracts the diagonal of a 2D tensor.
+  Extracts the diagonal of batched matrices.
 
   Converse of `make_diagonal/2`.
 
   ## Examples
 
-  Given a 2D tensor without offset:
+  Given a matrix without offset:
 
       iex> Nx.take_diagonal(Nx.tensor([
       ...> [0, 1, 2],
@@ -1378,7 +1379,7 @@ defmodule Nx do
         [0, 4, 8]
       >
 
-  And if given a 2D tensor along with an offset:
+  And if given a matrix along with an offset:
 
       iex> Nx.take_diagonal(Nx.iota({3, 3}), offset: 1)
       #Nx.Tensor<
@@ -1392,6 +1393,28 @@ defmodule Nx do
         [3, 7]
       >
 
+  Given batched matrix:
+
+      iex> Nx.take_diagonal(Nx.iota({3, 2, 2}))
+      #Nx.Tensor<
+        s64[3][2]
+        [
+          [0, 3],
+          [4, 7],
+          [8, 11]
+        ]
+      >
+
+      iex> Nx.take_diagonal(Nx.iota({3, 2, 2}), offset: -1)
+      #Nx.Tensor<
+        s64[3][1]
+        [
+          [2],
+          [6],
+          [10]
+        ]
+      >
+
   ## Options
 
     * `:offset` - offset used for extracting the diagonal.
@@ -1402,7 +1425,7 @@ defmodule Nx do
   ## Error cases
 
       iex> Nx.take_diagonal(Nx.tensor([0, 1, 2]))
-      ** (ArgumentError) take_diagonal/2 expects tensor of rank 2, got tensor of rank: 1
+      ** (ArgumentError) take_diagonal/2 expects tensor of rank 2 or higher, got tensor of rank: 1
 
       iex> Nx.take_diagonal(Nx.iota({3, 3}), offset: 3)
       ** (ArgumentError) offset must be less than length of axis 1 when positive, got: 3
@@ -1416,12 +1439,19 @@ defmodule Nx do
 
     opts = keyword!(opts, offset: 0)
 
-    shape = Nx.Shape.take_diagonal(tensor.shape)
+    {batch_shape, matrix_shape} = Nx.Shape.take_diagonal(tensor.shape)
     offset = opts[:offset]
 
-    Nx.Shape.validate_diag_offset!(shape, offset)
+    Nx.Shape.validate_diag_offset!(matrix_shape, offset)
 
-    Nx.gather(tensor, diag_indices(shape, offset))
+    t = Nx.gather(tensor, diag_indices(tensor.shape, offset))
+
+    if batch_shape == {} do
+      t
+    else
+      diag_length = div(Nx.size(t), Tuple.product(batch_shape))
+      Nx.reshape(t, Tuple.append(batch_shape, diag_length))
+    end
   end
 
   @doc """
@@ -1677,7 +1707,7 @@ defmodule Nx do
 
   # Returns the indices of the diagonal of a tensor of the given shape
   defp diag_indices(shape, offset) do
-    {len, breadth} = shape
+    {batch_shape, [len, breadth]} = Enum.split(Tuple.to_list(shape), -2)
 
     indices =
       case offset do
@@ -1688,7 +1718,22 @@ defmodule Nx do
           Enum.zip_with(-i..(len - 1), 0..(breadth - 1), fn x, y -> [x, y] end)
       end
 
-    Nx.tensor(indices)
+    case batch_indices(batch_shape) do
+      [] ->
+        indices
+
+      batch_indices ->
+        Enum.flat_map(batch_indices, fn batch_index -> Enum.map(indices, &(batch_index ++ &1)) end)
+    end
+    |> Nx.tensor()
+  end
+
+  defp batch_indices([]), do: []
+
+  defp batch_indices([n]), do: Enum.map(0..(n - 1), &[&1])
+
+  defp batch_indices([axis_length | shape]) do
+    for i <- 0..(axis_length - 1), n <- batch_indices(shape), do: [i | n]
   end
 
   @doc """
@@ -1698,7 +1743,7 @@ defmodule Nx do
 
   ## Examples
 
-      iex> Nx.from_binary(<<1, 2, 3, 4>>, {:s, 8})
+      iex> Nx.from_binary(<<1, 2, 3, 4>>, :s8)
       #Nx.Tensor<
         s8[4]
         [1, 2, 3, 4]
@@ -1714,7 +1759,7 @@ defmodule Nx do
 
   An error is raised for incompatible sizes:
 
-      iex> Nx.from_binary(<<1, 2, 3, 4>>, {:f, 64})
+      iex> Nx.from_binary(<<1, 2, 3, 4>>, :f64)
       ** (ArgumentError) binary does not match the given size
 
   ## Options
@@ -1783,10 +1828,12 @@ defmodule Nx do
   @doc """
   Converts the given number (or tensor) to a tensor.
 
-  This function exists for data normalization. If your
-  goal is to create tensors from lists, see `tensor/2`.
-  If you want to create a tensor from binary, see
-  `from_binary/3`.
+  The Nx API works with numbers, complex numbers, and tensors.
+  This function exists to normalize those values into tensors
+  (i.e. `Nx.Tensor` structs).
+
+  If your goal is to create tensors from lists, see `tensor/2`.
+  If you want to create a tensor from binary, see `from_binary/3`.
   """
   @doc type: :conversion
   def to_tensor(%T{} = t),
@@ -2061,19 +2108,19 @@ defmodule Nx do
 
   ## Examples
 
-      iex> Nx.as_type(Nx.tensor([0, 1, 2], names: [:data]), {:f, 32})
+      iex> Nx.as_type(Nx.tensor([0, 1, 2], names: [:data]), :f32)
       #Nx.Tensor<
         f32[data: 3]
         [0.0, 1.0, 2.0]
       >
 
-      iex> Nx.as_type(Nx.tensor([0.0, 1.0, 2.0], names: [:data]), {:bf, 16})
+      iex> Nx.as_type(Nx.tensor([0.0, 1.0, 2.0], names: [:data]), :bf16)
       #Nx.Tensor<
         bf16[data: 3]
         [0.0, 1.0, 2.0]
       >
 
-      iex> Nx.as_type(Nx.tensor([0.0, 1.0, 2.0], names: [:data]), {:s, 64})
+      iex> Nx.as_type(Nx.tensor([0.0, 1.0, 2.0], names: [:data]), :s64)
       #Nx.Tensor<
         s64[data: 3]
         [0, 1, 2]
@@ -2081,7 +2128,7 @@ defmodule Nx do
 
   Casting numbers as complex will return the corresponding complex with 0 imaginary component:
 
-      iex> Nx.as_type(Nx.tensor([1, -2]), {:c, 64})
+      iex> Nx.as_type(Nx.tensor([1, -2]), :c64)
       #Nx.Tensor<
         c64[2]
         [1.0+0.0i, -2.0+0.0i]
@@ -2089,13 +2136,13 @@ defmodule Nx do
 
   Casting complex numbers will return their real parts as the target type:
 
-      iex> Nx.as_type(Nx.tensor([Complex.new(1, 2), Complex.new(0, 3), Complex.new(4, 5)]), {:f, 64})
+      iex> Nx.as_type(Nx.tensor([Complex.new(1, 2), Complex.new(0, 3), Complex.new(4, 5)]), :f64)
       #Nx.Tensor<
         f64[3]
         [1.0, 0.0, 4.0]
       >
 
-      iex> Nx.as_type(Nx.tensor([Complex.new(-1, 2), Complex.new(-2, 3), Complex.new(3, -4)]), {:s, 64})
+      iex> Nx.as_type(Nx.tensor([Complex.new(-1, 2), Complex.new(-2, 3), Complex.new(3, -4)]), :s64)
       #Nx.Tensor<
         s64[3]
         [-1, -2, 3]
@@ -2105,12 +2152,12 @@ defmodule Nx do
   integer values:
 
       iex> non_finite = Nx.tensor([:infinity, :nan, :neg_infinity])
-      iex> Nx.as_type(non_finite, {:u, 8})
+      iex> Nx.as_type(non_finite, :u8)
       #Nx.Tensor<
         u8[3]
         [255, 0, 0]
       >
-      iex> Nx.as_type(non_finite, {:s, 32})
+      iex> Nx.as_type(non_finite, :s32)
       #Nx.Tensor<
         s32[3]
         [2147483647, 0, -2147483648]
@@ -2119,12 +2166,12 @@ defmodule Nx do
   Non-finite values between float types are preserved:
 
       iex> non_finite = Nx.tensor([:infinity, :nan])
-      iex> Nx.as_type(non_finite, {:f, 64})
+      iex> Nx.as_type(non_finite, :f64)
       #Nx.Tensor<
         f64[2]
         [Inf, NaN]
       >
-      iex> Nx.as_type(non_finite, {:f, 16})
+      iex> Nx.as_type(non_finite, :f16)
       #Nx.Tensor<
         f16[2]
         [Inf, NaN]
@@ -2161,12 +2208,12 @@ defmodule Nx do
 
   ## Examples
 
-      iex> t = Nx.bitcast(Nx.tensor([0, 0, 0], names: [:data], type: {:s, 32}), {:f, 32})
+      iex> t = Nx.bitcast(Nx.tensor([0, 0, 0], names: [:data], type: :s32), :f32)
       #Nx.Tensor<
         f32[data: 3]
         [0.0, 0.0, 0.0]
       >
-      iex> Nx.bitcast(t, {:s, 32})
+      iex> Nx.bitcast(t, :s32)
       #Nx.Tensor<
         s32[data: 3]
         [0, 0, 0]
@@ -2174,13 +2221,13 @@ defmodule Nx do
 
   ### Error cases
 
-      iex> Nx.bitcast(Nx.tensor([0, 1, 2], names: [:data], type: {:s, 16}), {:f, 32})
+      iex> Nx.bitcast(Nx.tensor([0, 1, 2], names: [:data], type: :s16), :f32)
       ** (ArgumentError) input type width must match new type width, got input type {:s, 16} and output type {:f, 32}
 
-      iex> Nx.bitcast(Nx.tensor([0], type: {:c, 64}), {:s, 64})
+      iex> Nx.bitcast(Nx.tensor([0], type: :c64), :s64)
       ** (ArgumentError) Nx.bitcast/2 does not support complex inputs
 
-      iex> Nx.bitcast(Nx.tensor([0], type: {:s, 64}), {:c, 64})
+      iex> Nx.bitcast(Nx.tensor([0], type: :s64), :c64)
       ** (ArgumentError) Nx.bitcast/2 does not support complex inputs
   """
   @doc type: :type
@@ -2195,7 +2242,7 @@ defmodule Nx do
       raise ArgumentError,
             "input type width must match new type width," <>
               " got input type #{inspect(input_type)} and" <>
-              " output type #{inspect(type)}"
+              " output type #{inspect(new_type)}"
     end
 
     impl!(tensor).bitcast(%{tensor | type: new_type}, tensor)
@@ -2287,6 +2334,27 @@ defmodule Nx do
     else
       impl!(tensor).reshape(%{tensor | shape: new_shape, names: names}, tensor)
     end
+  end
+
+  @doc """
+  Adds (or overrides) the given names to the tensor.
+
+  ## Examples
+
+      iex> Nx.rename(Nx.iota({2, 3}), [:foo, :bar])
+      #Nx.Tensor<
+        s64[foo: 2][bar: 3]
+        [
+          [0, 1, 2],
+          [3, 4, 5]
+        ]
+      >
+
+  """
+  @doc type: :shape
+  def rename(tensor, names) do
+    tensor = to_tensor(tensor)
+    %{tensor | names: Nx.Shape.named_axes!(names, tensor.shape)}
   end
 
   @doc """
@@ -2606,6 +2674,7 @@ defmodule Nx do
 
       iex> Nx.squeeze(Nx.tensor([[[[[1]]]]]), axes: [0, 0])
       ** (ArgumentError) axes [0, 0] must be unique integers between 0 and 4
+
   """
   @doc type: :shape
   def squeeze(tensor, opts \\ []) do
@@ -2941,7 +3010,7 @@ defmodule Nx do
         ]
       >
 
-      iex> tensor = Nx.tensor([[0, 1, 2], [3, 4, 5]], type: {:f, 32})
+      iex> tensor = Nx.tensor([[0, 1, 2], [3, 4, 5]], type: :f32)
       iex> Nx.pad(tensor, 0, [{-1, 2, 0}, {1, -1, 0}])
       #Nx.Tensor<
         f32[3][3]
@@ -2981,7 +3050,7 @@ defmodule Nx do
       iex> Nx.type(Nx.tensor([1, 2, 3]))
       {:s, 64}
 
-      iex> Nx.type(Nx.tensor([1, 2, 3], type: {:f, 32}))
+      iex> Nx.type(Nx.tensor([1, 2, 3], type: :f32))
       {:f, 32}
 
       iex> Nx.type(1)
@@ -3029,7 +3098,7 @@ defmodule Nx do
       iex> Nx.compatible?(Nx.iota({3, 2}), Nx.iota({2, 3}))
       false
 
-      iex> Nx.compatible?(Nx.iota({2, 2}), Nx.iota({2, 2}, type: {:f, 32}))
+      iex> Nx.compatible?(Nx.iota({2, 2}), Nx.iota({2, 2}, type: :f32))
       false
 
   Using collections:
@@ -3059,9 +3128,8 @@ defmodule Nx do
     end
   end
 
-  def compatible?(left, right) when is_number(left), do: compatible?(to_tensor(left), right)
-  def compatible?(left, right) when is_number(right), do: compatible?(left, to_tensor(right))
-  def compatible?(left, right), do: Nx.Defn.Composite.compatible?(left, right, &compatible?/2)
+  def compatible?(left, right),
+    do: Nx.Defn.Composite.compatible?(left, right, &compatible?(to_tensor(&1), to_tensor(&2)))
 
   defp compatible_names?([name | lnames], [name | rnames]), do: compatible_names?(lnames, rnames)
   defp compatible_names?([nil | lnames], [_ | rnames]), do: compatible_names?(lnames, rnames)
@@ -3210,7 +3278,7 @@ defmodule Nx do
       48
       iex> Nx.byte_size(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]))
       24
-      iex> Nx.byte_size(Nx.tensor([[1, 2, 3], [4, 5, 6]], type: {:u, 8}))
+      iex> Nx.byte_size(Nx.tensor([[1, 2, 3], [4, 5, 6]], type: :u8))
       6
       iex> Nx.byte_size(1)
       8
@@ -3422,12 +3490,9 @@ defmodule Nx do
   """
   @doc type: :backend
   def backend_deallocate(tensor_or_container) do
-    Nx.Defn.Composite.reduce(tensor_or_container, :ok, fn tensor, :ok ->
-      if is_number(tensor) do
-        :ok
-      else
-        impl!(tensor).backend_deallocate(tensor)
-      end
+    Nx.Defn.Composite.reduce(tensor_or_container, :ok, fn
+      %Nx.Tensor{} = tensor, :ok -> impl!(tensor).backend_deallocate(tensor)
+      _, :ok -> :ok
     end)
   end
 
@@ -3521,7 +3586,7 @@ defmodule Nx do
         [2.0, 3.0, 4.0]
       >
 
-      iex> Nx.add(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}, names: [:data]), 1)
+      iex> Nx.add(Nx.tensor([1.0, 2.0, 3.0], type: :f32, names: [:data]), 1)
       #Nx.Tensor<
         f32[data: 3]
         [2.0, 3.0, 4.0]
@@ -3530,7 +3595,7 @@ defmodule Nx do
   Unsigned tensors become signed and double their size if a
   negative number is given:
 
-      iex> Nx.add(Nx.tensor([0, 1, 2], type: {:u, 8}, names: [:data]), -1)
+      iex> Nx.add(Nx.tensor([0, 1, 2], type: :u8, names: [:data]), -1)
       #Nx.Tensor<
         s16[data: 3]
         [-1, 0, 1]
@@ -3647,8 +3712,8 @@ defmodule Nx do
         ]
       >
 
-      iex> left = Nx.tensor([[1], [2]], type: {:s, 8}, names: [:x, nil])
-      iex> right = Nx.tensor([[10, 20]], type: {:s, 8}, names: [nil, :y])
+      iex> left = Nx.tensor([[1], [2]], type: :s8, names: [:x, nil])
+      iex> right = Nx.tensor([[10, 20]], type: :s8, names: [nil, :y])
       iex> Nx.subtract(left, right)
       #Nx.Tensor<
         s8[x: 2][y: 2]
@@ -3658,8 +3723,8 @@ defmodule Nx do
         ]
       >
 
-      iex> left = Nx.tensor([[1], [2]], type: {:f, 32}, names: [nil, :y])
-      iex> right = Nx.tensor([[10, 20]], type: {:f, 32}, names: [:x, nil])
+      iex> left = Nx.tensor([[1], [2]], type: :f32, names: [nil, :y])
+      iex> right = Nx.tensor([[10, 20]], type: :f32, names: [:x, nil])
       iex> Nx.subtract(left, right)
       #Nx.Tensor<
         f32[x: 2][y: 2]
@@ -3721,8 +3786,8 @@ defmodule Nx do
         ]
       >
 
-      iex> left = Nx.tensor([[1], [2]], type: {:s, 8}, names: [:x, nil])
-      iex> right = Nx.tensor([[10, 20]], type: {:s, 8}, names: [nil, :y])
+      iex> left = Nx.tensor([[1], [2]], type: :s8, names: [:x, nil])
+      iex> right = Nx.tensor([[10, 20]], type: :s8, names: [nil, :y])
       iex> Nx.multiply(left, right)
       #Nx.Tensor<
         s8[x: 2][y: 2]
@@ -3732,8 +3797,8 @@ defmodule Nx do
         ]
       >
 
-      iex> left = Nx.tensor([[1], [2]], type: {:f, 32}, names: [nil, :y])
-      iex> right = Nx.tensor([[10, 20]], type: {:f, 32}, names: [:x, nil])
+      iex> left = Nx.tensor([[1], [2]], type: :f32, names: [nil, :y])
+      iex> right = Nx.tensor([[10, 20]], type: :f32, names: [:x, nil])
       iex> Nx.multiply(left, right)
       #Nx.Tensor<
         f32[x: 2][y: 2]
@@ -3903,8 +3968,8 @@ defmodule Nx do
         ]
       >
 
-      iex> left = Nx.tensor([[1], [2]], type: {:s, 8})
-      iex> right = Nx.tensor([[10, 20]], type: {:s, 8}, names: [:x, :y])
+      iex> left = Nx.tensor([[1], [2]], type: :s8)
+      iex> right = Nx.tensor([[10, 20]], type: :s8, names: [:x, :y])
       iex> Nx.divide(left, right)
       #Nx.Tensor<
         f32[x: 2][y: 2]
@@ -3914,8 +3979,8 @@ defmodule Nx do
         ]
       >
 
-      iex> left = Nx.tensor([[1], [2]], type: {:f, 32}, names: [:x, nil])
-      iex> right = Nx.tensor([[10, 20]], type: {:f, 32}, names: [nil, :y])
+      iex> left = Nx.tensor([[1], [2]], type: :f32, names: [:x, nil])
+      iex> right = Nx.tensor([[10, 20]], type: :f32, names: [nil, :y])
       iex> Nx.divide(left, right)
       #Nx.Tensor<
         f32[x: 2][y: 2]
@@ -4001,8 +4066,8 @@ defmodule Nx do
         ]
       >
 
-      iex> left = Nx.tensor([[10, 20]], type: {:s, 8}, names: [:x, :y])
-      iex> right = Nx.tensor([[1], [2]], type: {:s, 8})
+      iex> left = Nx.tensor([[10, 20]], type: :s8, names: [:x, :y])
+      iex> right = Nx.tensor([[1], [2]], type: :s8)
       iex> Nx.quotient(left, right)
       #Nx.Tensor<
         s8[x: 2][y: 2]
@@ -4012,8 +4077,8 @@ defmodule Nx do
         ]
       >
 
-      iex> left = Nx.tensor([[10, 20]], type: {:u, 8}, names: [:x, :y])
-      iex> right = Nx.tensor([[1], [2]], type: {:u, 32})
+      iex> left = Nx.tensor([[10, 20]], type: :u8, names: [:x, :y])
+      iex> right = Nx.tensor([[1], [2]], type: :u32)
       iex> Nx.quotient(left, right)
       #Nx.Tensor<
         u32[x: 2][y: 2]
@@ -4065,8 +4130,8 @@ defmodule Nx do
 
   ### Arc tangent between tensors
 
-      iex> neg_and_pos_zero_columns = Nx.tensor([[-0.0], [0.0]], type: {:f, 64})
-      iex> neg_and_pos_zero_rows = Nx.tensor([-0.0, 0.0], type: {:f, 64})
+      iex> neg_and_pos_zero_columns = Nx.tensor([[-0.0], [0.0]], type: :f64)
+      iex> neg_and_pos_zero_rows = Nx.tensor([-0.0, 0.0], type: :f64)
       iex> Nx.atan2(neg_and_pos_zero_columns, neg_and_pos_zero_rows)
       #Nx.Tensor<
         f64[2][2]
@@ -4128,8 +4193,8 @@ defmodule Nx do
         ]
       >
 
-      iex> left = Nx.tensor([[1], [2]], type: {:s, 8}, names: [:x, nil])
-      iex> right = Nx.tensor([[10, 20]], type: {:s, 8})
+      iex> left = Nx.tensor([[1], [2]], type: :s8, names: [:x, nil])
+      iex> right = Nx.tensor([[10, 20]], type: :s8)
       iex> Nx.max(left, right)
       #Nx.Tensor<
         s8[x: 2][2]
@@ -4139,8 +4204,8 @@ defmodule Nx do
         ]
       >
 
-      iex> left = Nx.tensor([[1], [2]], type: {:f, 32}, names: [:x, nil])
-      iex> right = Nx.tensor([[10, 20]], type: {:f, 32}, names: [nil, :y])
+      iex> left = Nx.tensor([[1], [2]], type: :f32, names: [:x, nil])
+      iex> right = Nx.tensor([[10, 20]], type: :f32, names: [nil, :y])
       iex> Nx.max(left, right)
       #Nx.Tensor<
         f32[x: 2][y: 2]
@@ -4202,8 +4267,8 @@ defmodule Nx do
         ]
       >
 
-      iex> left = Nx.tensor([[1], [2]], type: {:s, 8}, names: [:x, :y])
-      iex> right = Nx.tensor([[10, 20]], type: {:s, 8})
+      iex> left = Nx.tensor([[1], [2]], type: :s8, names: [:x, :y])
+      iex> right = Nx.tensor([[10, 20]], type: :s8)
       iex> Nx.min(left, right)
       #Nx.Tensor<
         s8[x: 2][y: 2]
@@ -4213,8 +4278,8 @@ defmodule Nx do
         ]
       >
 
-      iex> left = Nx.tensor([[1], [2]], type: {:f, 32}, names: [:x, nil])
-      iex> right = Nx.tensor([[10, 20]], type: {:f, 32}, names: [nil, :y])
+      iex> left = Nx.tensor([[1], [2]], type: :f32, names: [:x, nil])
+      iex> right = Nx.tensor([[10, 20]], type: :f32, names: [nil, :y])
       iex> Nx.min(left, right)
       #Nx.Tensor<
         f32[x: 2][y: 2]
@@ -5072,7 +5137,7 @@ defmodule Nx do
 
   If the tensor has other values, any non-zero value is considered true:
 
-      iex> Nx.select(Nx.tensor([0, 1, 2], type: {:u, 8}), Nx.tensor([0, 0, 0]), Nx.tensor([1, 1, 1]))
+      iex> Nx.select(Nx.tensor([0, 1, 2], type: :u8), Nx.tensor([0, 0, 0]), Nx.tensor([1, 1, 1]))
       #Nx.Tensor<
         s64[3]
         [1, 0, 0]
@@ -5354,7 +5419,7 @@ defmodule Nx do
         [3.0]
       >
 
-      iex> Nx.indexed_add(Nx.tensor([1], type: {:s, 32}), Nx.tensor([[0], [0]]), Nx.tensor([1, 1], type: {:s, 64}))
+      iex> Nx.indexed_add(Nx.tensor([1], type: :s32), Nx.tensor([[0], [0]]), Nx.tensor([1, 1], type: :s64))
       #Nx.Tensor<
         s64[1]
         [3]
@@ -5387,7 +5452,7 @@ defmodule Nx do
   In case of repeating indices, the last occurence of index and its corresponding update
   value takes precedence.
 
-  See also: `indexed_add/3`, `gather/2`, `take/3`, `take_along_axis/3`
+  See also: `indexed_add/3`, `put_slice/3`.
 
   ### Examples
 
@@ -5441,13 +5506,14 @@ defmodule Nx do
         [3.0]
       >
 
-      iex> Nx.indexed_put(Nx.tensor([1], type: {:s, 32}), Nx.tensor([[0]]), Nx.tensor([3], type: {:s, 64}))
+      iex> Nx.indexed_put(Nx.tensor([1], type: :s32), Nx.tensor([[0]]), Nx.tensor([3], type: :s64))
       #Nx.Tensor<
         s64[1]
         [3]
       >
 
   ### Error cases
+
       iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([[[1, 2, 3]]]), Nx.tensor([0]))
       ** (ArgumentError) indices must be a rank 2 tensor, got: 3
 
@@ -5622,7 +5688,7 @@ defmodule Nx do
         [1, 0, -1]
       >
 
-      iex> Nx.negate(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}))
+      iex> Nx.negate(Nx.tensor([1.0, 2.0, 3.0], type: :f32))
       #Nx.Tensor<
         f32[3]
         [-1.0, -2.0, -3.0]
@@ -5630,7 +5696,7 @@ defmodule Nx do
 
   If an unsigned tensor is given, it works as `bitwise_not`:
 
-      iex> Nx.negate(Nx.tensor([0, 1, 2], type: {:u, 8}, names: [:x]))
+      iex> Nx.negate(Nx.tensor([0, 1, 2], type: :u8, names: [:x]))
       #Nx.Tensor<
         u8[x: 3]
         [0, 255, 254]
@@ -5776,7 +5842,7 @@ defmodule Nx do
         1.0
       >
 
-      iex> Nx.real(Nx.tensor(1, type: {:bf, 16}))
+      iex> Nx.real(Nx.tensor(1, type: :bf16))
       #Nx.Tensor<
         bf16
         1.0
@@ -5823,7 +5889,7 @@ defmodule Nx do
         0.0
       >
 
-      iex> Nx.imag(Nx.tensor(1, type: {:bf, 16}))
+      iex> Nx.imag(Nx.tensor(1, type: :bf16))
       #Nx.Tensor<
         bf16
         0.0
@@ -5892,13 +5958,13 @@ defmodule Nx do
         -2
       >
 
-      iex> Nx.bitwise_not(Nx.tensor([-1, 0, 1], type: {:s, 8}, names: [:x]))
+      iex> Nx.bitwise_not(Nx.tensor([-1, 0, 1], type: :s8, names: [:x]))
       #Nx.Tensor<
         s8[x: 3]
         [0, -1, -2]
       >
 
-      iex> Nx.bitwise_not(Nx.tensor([0, 1, 254, 255], type: {:u, 8}, names: [:x]))
+      iex> Nx.bitwise_not(Nx.tensor([0, 1, 254, 255], type: :u8, names: [:x]))
       #Nx.Tensor<
         u8[x: 4]
         [255, 254, 1, 0]
@@ -5939,7 +6005,7 @@ defmodule Nx do
         [0, 1, 7, 8]
       >
 
-      iex> Nx.population_count(Nx.tensor([0, 1, 126, 127, -1, -127, -128], type: {:s, 8}, names: [:x]))
+      iex> Nx.population_count(Nx.tensor([0, 1, 126, 127, -1, -127, -128], type: :s8, names: [:x]))
       #Nx.Tensor<
         s8[x: 7]
         [0, 1, 6, 7, 8, 2, 1]
@@ -5986,25 +6052,25 @@ defmodule Nx do
         [0, 4]
       >
 
-      iex> Nx.count_leading_zeros(Nx.tensor([0, 0xF, 0xFF, 0xFFFF], type: {:s, 32}, names: [:x]))
+      iex> Nx.count_leading_zeros(Nx.tensor([0, 0xF, 0xFF, 0xFFFF], type: :s32, names: [:x]))
       #Nx.Tensor<
         s32[x: 4]
         [32, 28, 24, 16]
       >
 
-      iex> Nx.count_leading_zeros(Nx.tensor([0, 0xF, 0xFF, 0xFFFF], type: {:s, 16}, names: [:x]))
+      iex> Nx.count_leading_zeros(Nx.tensor([0, 0xF, 0xFF, 0xFFFF], type: :s16, names: [:x]))
       #Nx.Tensor<
         s16[x: 4]
         [16, 12, 8, 0]
       >
 
-      iex> Nx.count_leading_zeros(Nx.tensor([0, 1, 2, 4, 8, 16, 32, 64, -1, -128], type: {:s, 8}, names: [:x]))
+      iex> Nx.count_leading_zeros(Nx.tensor([0, 1, 2, 4, 8, 16, 32, 64, -1, -128], type: :s8, names: [:x]))
       #Nx.Tensor<
         s8[x: 10]
         [8, 7, 6, 5, 4, 3, 2, 1, 0, 0]
       >
 
-      iex> Nx.count_leading_zeros(Nx.tensor([0, 1, 2, 4, 8, 16, 32, 64, 128], type: {:u, 8}, names: [:x]))
+      iex> Nx.count_leading_zeros(Nx.tensor([0, 1, 2, 4, 8, 16, 32, 64, 128], type: :u8, names: [:x]))
       #Nx.Tensor<
         u8[x: 9]
         [8, 7, 6, 5, 4, 3, 2, 1, 0]
@@ -6296,13 +6362,13 @@ defmodule Nx do
   Giving a tensor with low precision casts it to a higher
   precision to make sure the sum does not overflow:
 
-      iex> Nx.sum(Nx.tensor([[101, 102], [103, 104]], type: {:s, 8}, names: [:x, :y]))
+      iex> Nx.sum(Nx.tensor([[101, 102], [103, 104]], type: :s8, names: [:x, :y]))
       #Nx.Tensor<
         s64
         410
       >
 
-      iex> Nx.sum(Nx.tensor([[101, 102], [103, 104]], type: {:s, 16}, names: [:x, :y]))
+      iex> Nx.sum(Nx.tensor([[101, 102], [103, 104]], type: :s16, names: [:x, :y]))
       #Nx.Tensor<
         s64
         410
@@ -6444,7 +6510,7 @@ defmodule Nx do
         2.0
       >
 
-      iex> Nx.mean(Nx.tensor([1, 2, 3], type: {:u, 8}, names: [:x]), axes: [:x])
+      iex> Nx.mean(Nx.tensor([1, 2, 3], type: :u8, names: [:x]), axes: [:x])
       #Nx.Tensor<
         f32
         2.0
@@ -6552,13 +6618,13 @@ defmodule Nx do
   Giving a tensor with low precision casts it to a higher
   precision to make sure the sum does not overflow:
 
-      iex> Nx.product(Nx.tensor([[10, 20], [30, 40]], type: {:u, 8}, names: [:x, :y]))
+      iex> Nx.product(Nx.tensor([[10, 20], [30, 40]], type: :u8, names: [:x, :y]))
       #Nx.Tensor<
         u64
         240000
       >
 
-      iex> Nx.product(Nx.tensor([[10, 20], [30, 40]], type: {:s, 8}, names: [:x, :y]))
+      iex> Nx.product(Nx.tensor([[10, 20], [30, 40]], type: :s8, names: [:x, :y]))
       #Nx.Tensor<
         s64
         240000
@@ -6647,6 +6713,7 @@ defmodule Nx do
 
       iex> Nx.product(Nx.tensor([[1, 2]]), axes: [2])
       ** (ArgumentError) given axis (2) invalid for shape with rank 2
+
   """
   @doc type: :aggregation
   def product(tensor, opts \\ []) do
@@ -6832,11 +6899,15 @@ defmodule Nx do
           {{}, [], nil}
       end
 
-    apply(impl!(tensor), op, [
-      %{tensor | type: type, shape: shape, names: names},
-      tensor,
-      [axes: axes, keep_axes: keep_axes]
-    ])
+    if axes == [] do
+      tensor
+    else
+      apply(impl!(tensor), op, [
+        %{tensor | type: type, shape: shape, names: names},
+        tensor,
+        [axes: axes, keep_axes: keep_axes]
+      ])
+    end
   end
 
   @doc """
@@ -7649,7 +7720,7 @@ defmodule Nx do
   """
   @doc type: :cumulative
   def cumulative_sum(tensor, opts \\ []),
-    do: cumulative_op(tensor, opts, :cumulative_sum, :window_sum)
+    do: cumulative_op(tensor, opts, :cumulative_sum, &Nx.add/2)
 
   @doc """
   Returns the cumulative product of elements along an axis.
@@ -7709,7 +7780,7 @@ defmodule Nx do
   """
   @doc type: :cumulative
   def cumulative_product(tensor, opts \\ []),
-    do: cumulative_op(tensor, opts, :cumulative_product, :window_product)
+    do: cumulative_op(tensor, opts, :cumulative_product, &Nx.multiply/2)
 
   @doc """
   Returns the cumulative minimum of elements along an axis.
@@ -7769,7 +7840,7 @@ defmodule Nx do
   """
   @doc type: :cumulative
   def cumulative_min(tensor, opts \\ []),
-    do: cumulative_op(tensor, opts, :cumulative_min, :window_min)
+    do: cumulative_op(tensor, opts, :cumulative_min, &Nx.min/2)
 
   @doc """
   Returns the cumulative maximum of elements along an axis.
@@ -7829,40 +7900,168 @@ defmodule Nx do
   """
   @doc type: :cumulative
   def cumulative_max(tensor, opts \\ []),
-    do: cumulative_op(tensor, opts, :cumulative_max, :window_max)
+    do: cumulative_op(tensor, opts, :cumulative_max, &Nx.max/2)
 
-  defp cumulative_op(tensor, opts, op, window_op) do
+  defp cumulative_op(tensor, opts, op, reduce_fun) do
     opts = keyword!(opts, axis: 0, reverse: false)
     reverse = opts[:reverse]
     tensor = to_tensor(tensor)
     axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names)
 
-    Nx.Shared.optional(op, [tensor, [axis: axis, reverse: reverse]], tensor, fn tensor,
-                                                                                axis: axis,
-                                                                                reverse: reverse ->
-      shape = shape(tensor)
-      axis_size = elem(shape, axis)
-      rank = rank(shape)
-
-      padding =
-        if reverse do
-          {0, 0}
-          |> List.duplicate(rank)
-          |> List.replace_at(axis, {0, axis_size - 1})
-        else
-          {0, 0}
-          |> List.duplicate(rank)
-          |> List.replace_at(axis, {axis_size - 1, 0})
-        end
-
-      window_shape =
-        1
-        |> List.duplicate(rank)
-        |> List.to_tuple()
-        |> put_elem(axis, axis_size)
-
-      aggregate_window_op(tensor, window_shape, [padding: padding], window_op)
+    Nx.Shared.optional(op, [tensor, [axis: axis, reverse: reverse]], tensor, fn tensor, opts ->
+      associative_scan(tensor, reduce_fun, opts)
     end)
+  end
+
+  # Scans the given tensor using an associative binary operator.
+  #
+  # The scanning function must be associative and perform an element-wise
+  # operation over the `:axis` dimension.
+  #
+  # ## Options
+  #
+  #   * `:axis` - the axis to scan along. Defaults to `0`
+  #
+  #   * `:reverse` - whether to scan in the opposite direction. Defaults to `false`
+  #
+  # ## Examples
+  #
+  # A cumulative sum of numbers can be expressed as:
+  #
+  #     iex> Nx.associative_scan(Nx.tensor([1, 2, 3, 4]), &Nx.add/2)
+  #     #Nx.Tensor<
+  #       s64[4]
+  #       [1, 3, 6, 10]
+  #     >
+  #
+  # Or a reversed one:
+  #
+  #     iex> Nx.associative_scan(Nx.tensor([1, 2, 3, 4]), &Nx.add/2, reverse: true)
+  #     #Nx.Tensor<
+  #       s64[4]
+  #       [10, 9, 7, 4]
+  #     >
+  #
+  # A cumulative product of a sequence of matrices:
+  #
+  #     iex> matrices = Nx.tensor([[2, 0], [0, 2]]) |> Nx.tile([3, 1, 1])
+  #     iex> Nx.associative_scan(matrices, &Nx.dot(&1, [2], [0], &2, [1], [0]))
+  #     #Nx.Tensor<
+  #       s64[3][2][2]
+  #       [
+  #         [
+  #           [2, 0],
+  #           [0, 2]
+  #         ],
+  #         [
+  #           [4, 0],
+  #           [0, 4]
+  #         ],
+  #         [
+  #           [8, 0],
+  #           [0, 8]
+  #         ]
+  #       ]
+  #     >
+  #
+  defp associative_scan(tensor, fun, opts) do
+    opts = keyword!(opts, axis: 0, reverse: false)
+
+    tensor
+    |> maybe_reverse(opts[:reverse])
+    |> do_associative_scan(fun, axis: opts[:axis])
+    |> maybe_reverse(opts[:reverse])
+  end
+
+  defp maybe_reverse(tensor, true), do: Nx.reverse(tensor)
+  defp maybe_reverse(tensor, false), do: tensor
+
+  # Let's assume addition as the reduction function. The algorithm is based
+  # on two observations:
+  #
+  #   1. Elements at odd indices in the final result can be computed by first
+  #      summing consecutive pairs of elements and performing a scan on that
+  #      half-sized tensor (recursively).
+  #
+  #   2. Elements at even indices in the final result can be computed from those
+  #      at odd indices (from 1.) by adding a corresponding even element from the
+  #      original tensor.
+  #
+  # Also see https://en.wikipedia.org/wiki/Prefix_sum#Algorithm_2:_Work-efficient.
+  defp do_associative_scan(tensor, fun, opts) do
+    axis = opts[:axis]
+
+    axis_size = Nx.axis_size(tensor, axis)
+
+    if axis_size < 2 do
+      tensor
+    else
+      even = Nx.slice_along_axis(tensor, 0, axis_size - 1, axis: axis, strides: 2)
+      odd = Nx.slice_along_axis(tensor, 1, axis_size - 1, axis: axis, strides: 2)
+
+      reduced_pairs = fun.(odd, even)
+
+      scanned_odd = do_associative_scan(reduced_pairs, fun, opts)
+
+      cond do
+        axis_size == 2 ->
+          Nx.concatenate([even, reduced_pairs], axis: axis)
+
+        rem(axis_size, 2) == 0 ->
+          scanned_even =
+            fun.(
+              Nx.slice_along_axis(scanned_odd, 0, div(axis_size, 2) - 1, axis: axis),
+              Nx.slice_along_axis(even, 1, div(axis_size, 2) - 1, axis: axis)
+            )
+
+          scanned_even =
+            Nx.concatenate(
+              [Nx.slice_along_axis(even, 0, 1, axis: axis), scanned_even],
+              axis: axis
+            )
+
+          interleave(scanned_even, scanned_odd, axis: axis)
+
+        true ->
+          scanned_even =
+            fun.(
+              scanned_odd,
+              Nx.slice_along_axis(tensor, 2, axis_size - 2, axis: axis, strides: 2)
+            )
+
+          Nx.concatenate(
+            [
+              Nx.slice_along_axis(tensor, 0, 1, axis: axis),
+              interleave(scanned_odd, scanned_even, axis: axis)
+            ],
+            axis: axis
+          )
+      end
+    end
+  end
+
+  # Interleaves elements from same-shaped tensors along an axis
+  defp interleave(left, right, opts) do
+    opts = keyword!(opts, axis: 0)
+    axis = opts[:axis]
+
+    interleave_axis = axis + 1
+
+    Nx.concatenate(
+      [
+        Nx.new_axis(left, interleave_axis),
+        Nx.new_axis(right, interleave_axis)
+      ],
+      axis: interleave_axis
+    )
+    |> flatten_axis(interleave_axis)
+  end
+
+  # Merges the given axis with the preceding one
+  defp flatten_axis(tensor, axis) do
+    shape = Nx.shape(tensor)
+    new_shape = shape |> Tuple.delete_at(axis) |> put_elem(axis - 1, :auto)
+    Nx.reshape(tensor, new_shape)
   end
 
   @doc """
@@ -8017,8 +8216,12 @@ defmodule Nx do
         end
       end
 
-    out = %{tensor | type: type, shape: shape, names: names}
-    impl!(tensor).reduce(out, tensor, acc, [axes: axes, keep_axes: keep_axes], fun)
+    if axes == [] do
+      tensor
+    else
+      out = %{tensor | type: type, shape: shape, names: names}
+      impl!(tensor).reduce(out, tensor, acc, [axes: axes, keep_axes: keep_axes], fun)
+    end
   end
 
   @doc """
@@ -8045,7 +8248,7 @@ defmodule Nx do
 
   ### Examples
 
-      iex> init_value = Nx.Constants.min_finite({:s, 64})
+      iex> init_value = Nx.Constants.min_finite(:s64)
       iex> t = Nx.tensor([[1, 2, 3, 4], [4, 5, 6, 7], [7, 8, 9, 10], [11, 12, 13, 14]])
       iex> Nx.window_reduce(t, init_value, {2, 2}, fn x, acc -> Nx.max(x, acc) end)
       #Nx.Tensor<
@@ -8057,7 +8260,7 @@ defmodule Nx do
         ]
       >
 
-      iex> init_value = Nx.Constants.min_finite({:s, 64})
+      iex> init_value = Nx.Constants.min_finite(:s64)
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
       iex> opts = [padding: :same, strides: [1, 1]]
       iex> Nx.window_reduce(t, init_value, {2, 2}, opts, fn x, acc -> Nx.max(x, acc) end)
@@ -8139,7 +8342,7 @@ defmodule Nx do
   You need to explicitly pass the output type in such cases:
 
       iex> tensor = Nx.tensor([[1, 2, 3], [4, 5, 6]])
-      iex> Nx.map(tensor, [type: {:f, 32}], fn x -> Nx.multiply(x, 1.0) end)
+      iex> Nx.map(tensor, [type: :f32], fn x -> Nx.multiply(x, 1.0) end)
       #Nx.Tensor<
         f32[2][3]
         [
@@ -8173,7 +8376,7 @@ defmodule Nx do
         2
       >
 
-      iex> Nx.map(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [type: {:f, 64}], fn x -> Nx.add(x, 1) end)
+      iex> Nx.map(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [type: :f64], fn x -> Nx.add(x, 1) end)
       #Nx.Tensor<
         f64[2][3]
         [
@@ -8853,7 +9056,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.reverse(Nx.iota({2, 2, 2}, type: {:f, 32}, names: [:x, :y, :z]), axes: [:x, :z])
+      iex> Nx.reverse(Nx.iota({2, 2, 2}, type: :f32, names: [:x, :y, :z]), axes: [:x, :z])
       #Nx.Tensor<
         f32[x: 2][y: 2][z: 2]
         [
@@ -9199,7 +9402,7 @@ defmodule Nx do
         ]
       >
 
-      iex> t = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], type: {:f, 32}, names: [:x, :y])
+      iex> t = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], type: :f32, names: [:x, :y])
       iex> Nx.clip(t, 1, 4)
       #Nx.Tensor<
         f32[x: 2][y: 3]
@@ -9499,12 +9702,17 @@ defmodule Nx do
   end
 
   @doc """
-  Puts the given slice into the given tensor at the given
-  start indices.
+  Puts the given `slice` into the given `tensor` at the given
+  `start_indices`.
 
-  The given slice shape must be less than or equal to the
-  shape of the given tensor. All start indices must be less
-  than their respective dimensions.
+  The given slice must be of the same rank as tensor. Each axis
+  must be less than or equal to the size to the equivalent axis
+  in the tensor.
+
+  The number of elements in `start_indices` should match the
+  rank of the tensor.
+
+  See also: `indexed_add/3`, `put_slice/3`.
 
   ## Examples
 
@@ -9516,7 +9724,7 @@ defmodule Nx do
       >
 
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
-      iex> Nx.put_slice(t, [1, 1], Nx.tensor([[7, 8], [9, 10]]))
+      iex> Nx.put_slice(t, [0, 1], Nx.tensor([[7, 8], [9, 10]]))
       #Nx.Tensor<
         s64[2][3]
         [
@@ -9528,7 +9736,7 @@ defmodule Nx do
   Similar to `slice/3`, dynamic start indexes are also supported:
 
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
-      iex> Nx.put_slice(t, [Nx.tensor(0), Nx.tensor(2)], Nx.tensor([[10.0, 11.0]]))
+      iex> Nx.put_slice(t, [Nx.tensor(0), Nx.tensor(1)], Nx.tensor([[10.0, 11.0]]))
       #Nx.Tensor<
         f32[2][3]
         [
@@ -9541,7 +9749,7 @@ defmodule Nx do
   the start index will be clipped in order to put the whole slice:
 
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
-      iex> Nx.put_slice(t, [2, 2], Nx.tensor([[7, 8], [9, 10]]))
+      iex> Nx.put_slice(t, [1, 1], Nx.tensor([[7, 8], [9, 10]]))
       #Nx.Tensor<
         s64[2][3]
         [
@@ -9703,7 +9911,7 @@ defmodule Nx do
 
   ### Error cases
 
-      iex> Nx.take(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([1, 0, 1], type: {:f, 32}))
+      iex> Nx.take(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([1, 0, 1], type: :f32))
       ** (ArgumentError) indices must be an integer tensor, got {:f, 32}
   """
   @doc type: :indexed
@@ -9822,7 +10030,7 @@ defmodule Nx do
   ### Error cases
 
       iex> tensor = Nx.iota({3, 3})
-      iex> idx = Nx.tensor([[2.0], [1.0], [2.0]], type: {:f, 32})
+      iex> idx = Nx.tensor([[2.0], [1.0], [2.0]], type: :f32)
       iex> Nx.take_along_axis(tensor, idx, axis: 1)
       ** (ArgumentError) indices must be an integer tensor, got {:f, 32}
   """
@@ -9878,7 +10086,7 @@ defmodule Nx do
 
   ### Error cases
 
-      iex> Nx.gather(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[0, 0]], type: {:f, 32}))
+      iex> Nx.gather(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[0, 0]], type: :f32))
       ** (ArgumentError) indices must be an integer tensor, got {:f, 32}
   """
   @doc type: :indexed
@@ -9923,9 +10131,9 @@ defmodule Nx do
         [1, 2, 3, 4, 5, 6]
       >
 
-      iex> t1 = Nx.iota({2, 2, 2}, names: [:x, :y, :z], type: {:f, 32})
-      iex> t2 = Nx.iota({1, 2, 2}, names: [:x, :y, :z], type: {:u, 8})
-      iex> t3 = Nx.iota({1, 2, 2}, names: [:x, :y, :z], type: {:s, 64})
+      iex> t1 = Nx.iota({2, 2, 2}, names: [:x, :y, :z], type: :f32)
+      iex> t2 = Nx.iota({1, 2, 2}, names: [:x, :y, :z], type: :u8)
+      iex> t3 = Nx.iota({1, 2, 2}, names: [:x, :y, :z], type: :s64)
       iex> Nx.concatenate([t1, t2, t3], axis: :x)
       #Nx.Tensor<
         f32[x: 4][y: 2][z: 2]

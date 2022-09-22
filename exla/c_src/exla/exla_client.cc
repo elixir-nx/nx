@@ -20,25 +20,12 @@ void CopyLiteralToBinary(xla::Literal* literal, ErlNifBinary* binary, exla::int6
 }
 
 xla::StatusOr<ERL_NIF_TERM> ExlaBuffer::ToBinary(ErlNifEnv* env, exla::int64 size) {
-  EXLA_EFFECT_OR_RETURN(buffer_->BlockHostUntilReady());
+  // ToLiteral() is as synchronous operation (renamed to ToLiteralSync()
+  // in XLA 2.9+) that uses the host shape by default.
   EXLA_ASSIGN_OR_RETURN(std::shared_ptr<xla::Literal> literal, buffer_->ToLiteral());
-
   ErlNifBinary binary;
-
-  xla::Shape host_shape = xla::ShapeUtil::MakeShape(buffer_->on_device_shape().element_type(), buffer_->on_device_shape().dimensions());
-
-  if (xla::LayoutUtil::LayoutsInShapesEqual(host_shape, literal->shape())) {
-    CopyLiteralToBinary(literal.get(), &binary, size);
-  } else {
-    xla::Literal new_literal = literal->Relayout(host_shape);
-    CopyLiteralToBinary(&new_literal, &binary, size);
-  }
-
+  CopyLiteralToBinary(literal.get(), &binary, size);
   return nif::make(env, binary);
-}
-
-xla::Status ExlaBuffer::BlockHostUntilReady() {
-  return buffer_->BlockHostUntilReady();
 }
 
 xla::Status ExlaBuffer::Deallocate() {
@@ -52,8 +39,6 @@ xla::Status ExlaBuffer::Deallocate() {
 }
 
 xla::StatusOr<ExlaBuffer *> ExlaBuffer::CopyToDevice(xla::PjRtDevice * dst_device) {
-  // TODO: On TPUs buffers might reside on different hosts which requires
-  // a different API
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtBuffer> buf,
       buffer_->CopyToDevice(dst_device));
   return new ExlaBuffer(std::move(buf));
@@ -92,19 +77,15 @@ UnpackRunArguments(ErlNifEnv* env,
       ExlaBuffer** buffer;
 
       if (enif_get_tuple(env, inner_head, &arity, &tuple)) {
-        ErlNifBinary data;
         xla::Shape* shape;
 
-        if (!nif::get_binary(env, tuple[0], &data)) {
-          return xla::InvalidArgument("Expected argument to be binary.");
-        }
         if (!nif::get<xla::Shape>(env, tuple[1], shape)) {
           return xla::InvalidArgument("Expected argument to be shape reference.");
         }
 
         int device = device_id >= 0 ? device_id : device_assignment(replica, 0);
 
-        EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf, client->BufferFromBinary(data, *shape, device, true));
+        EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf, client->BufferFromBinary(env, tuple[0], *shape, device, true));
 
         device_buffers.push_back(buf);
 
@@ -194,7 +175,6 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
       // so it's tracked and GC'ed along with other buffers that are no
       // longer in use
       if (buf->release_after_run()) {
-        EXLA_EFFECT_OR_RETURN(buf->BlockHostUntilReady());
         terms.push_back(nif::make<ExlaBuffer*>(env, buf));
       }
     }
@@ -220,15 +200,26 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
 
 ExlaClient::ExlaClient(std::shared_ptr<xla::PjRtClient> client) : client_(std::move(client)) {}
 
-xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromBinary(const ErlNifBinary& binary,
+xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromBinary(ErlNifEnv* env,
+                                                        ERL_NIF_TERM source_term,
                                                         xla::Shape& shape,
                                                         int device_id,
                                                         bool can_be_released_after_run) {
-  xla::PjRtClient::HostBufferSemantics semantics = xla::PjRtClient::HostBufferSemantics::kImmutableUntilTransferCompletes;
+
+  ErlNifEnv* copy_env = enif_alloc_env();
+  ERL_NIF_TERM dest_term = enif_make_copy(copy_env, source_term);
+  ErlNifBinary binary;
+
+  if (!nif::get_binary(copy_env, dest_term, &binary)) {
+    return xla::InvalidArgument("Expected buffer to be binary.");
+  }
+
+  xla::PjRtClient::HostBufferSemantics semantics = xla::PjRtClient::HostBufferSemantics::kZeroCopy;
+  std::function<void()> on_done_with_host_buffer = [copy_env]() { enif_free_env(copy_env); };
 
   EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->LookupDevice(device_id));
   EXLA_ASSIGN_OR_RETURN(auto buffer, client_->BufferFromHostBuffer(
-    binary.data, shape.element_type(), shape.dimensions(), absl::nullopt, semantics, nullptr, device));
+    binary.data, shape.element_type(), shape.dimensions(), absl::nullopt, semantics, on_done_with_host_buffer, device));
 
   return new ExlaBuffer(std::move(buffer), can_be_released_after_run);
 }

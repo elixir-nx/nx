@@ -38,22 +38,35 @@ defprotocol Nx.Container do
   @fallback_to_any true
 
   @doc """
-  Traverse receives a data structure with `acc` and `fun`.
+  Traverses non-recursively tensors in a data structure with `acc` and `fun`.
 
-  The function receives a tensor and the accumulator for each
-  tensor in the container. It returns a two element tuple
-  with the updated container and the accumulator.
+  `fun` is invoked with each tensor or tensor container in the
+  data structure plus an accumulator. It must return a two element
+  tuple with the updated value and accumulator.
+
+  This function returns the updated container and the accumulator.
+
+  Given `fun` may receive containers, it is not recursive by default.
+  See `Nx.Defn.Composite.traverse/3` for a recursive variant.
   """
-  @spec traverse(t(), acc, (Nx.Tensor.t(), acc -> {term(), acc})) :: acc when acc: term()
+  @spec traverse(t(), acc, (Nx.t() | Nx.Container.t(), acc -> {Nx.t() | Nx.Container.t(), acc})) ::
+          acc
+        when acc: term()
   def traverse(data, acc, fun)
 
   @doc """
-  Reduces a data structure with `acc` and `fun`.
+  Reduces non-recursively tensors in a data structure with `acc` and `fun`.
 
-  The function receives a tensor and the accumulator for each
-  tensor in the container. It returns the update accumulator.
+  `fun` is invoked with each tensor or tensor container in the
+  data structure plus an accumulator. It must return the new
+  accumulator.
+
+  This function the final accumulator.
+
+  Given `fun` may receive containers, it is not recursive by default.
+  See `Nx.Defn.Composite.reduce/3` for a recursive variant.
   """
-  @spec reduce(t(), acc, (Nx.Tensor.t(), acc -> acc)) :: acc when acc: term()
+  @spec reduce(t(), acc, (Nx.t() | Nx.Container.t(), acc -> acc)) :: acc when acc: term()
   def reduce(data, acc, fun)
 end
 

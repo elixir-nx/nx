@@ -30,6 +30,11 @@ defmodule EXLA do
   `EXLA.Backend`. You can use functions such as `Nx.backend_transfer/2` to
   explicitly transfer tensors.
 
+  Note that the `EXLA.Backend` is asynchronous: operations on its tensors
+  *may* return immediately, before the tensor data is available. The backend
+  will then block only when trying to read the data or when passing it to
+  another operation.
+
   EXLA will pick an available client to allocate and compute tensors, in this
   order: `:cuda`, `:rocm`, `:tpu`, and `:host` (CPU). See the "Clients" section
   below for more information.
@@ -196,6 +201,12 @@ defmodule EXLA do
         [2, 4, 6]
       >
 
+  Results are allocated on the `EXLA.Backend`. Note that the
+  `EXLA.Backend` is asynchronous: operations on its tensors
+  *may* return immediately, before the tensor data is available.
+  The backend will then block only when trying to read the data
+  or when passing it to another operation.
+
   ## Options
 
   It accepts the same option as `Nx.Defn.jit/2` plus:
@@ -239,6 +250,12 @@ defmodule EXLA do
         s64[3]
         [2, 4, 6]
       >
+
+  Results are allocated on the `EXLA.Backend`. Note that the
+  `EXLA.Backend` is asynchronous: operations on its tensors
+  *may* return immediately, before the tensor data is available.
+  The backend will then block only when trying to read the data
+  or when passing it to another operation.
 
   ## Options
 

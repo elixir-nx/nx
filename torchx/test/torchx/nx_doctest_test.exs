@@ -13,15 +13,6 @@ defmodule Torchx.NxDoctestTest do
     :ok
   end
 
-  @temporarily_broken_doctests [
-    # broadcast - shape mismatch in one test
-    broadcast: 3,
-    # mean - Torchx does not support unsigned 64 bit integer
-    mean: 2,
-    # quotient - Torchx does not support unsigned 32 bit integer
-    quotient: 2
-  ]
-
   @rounding_error_doctests [
     atanh: 1,
     ceil: 1,
@@ -53,26 +44,12 @@ defmodule Torchx.NxDoctestTest do
     # no API available - function based
     map: 3,
     window_reduce: 5,
-    reduce: 4,
-    # incomplete support
-    pad: 3,
-    # product - some output/input types are unsupported by libtorch
-    product: 2
-  ]
-
-  @unimplemented_window_dilations_doctests [
-    window_max: 3,
-    window_min: 3,
-    window_product: 3,
-    window_sum: 3,
-    window_mean: 3
+    reduce: 4
   ]
 
   doctest Nx,
     except:
-      @unimplemented_window_dilations_doctests
-      |> Kernel.++(@temporarily_broken_doctests)
-      |> Kernel.++(@rounding_error_doctests)
+      @rounding_error_doctests
       |> Kernel.++(@os_rounding_error_doctests)
       |> Kernel.++(@inherently_unsupported_doctests)
       |> Kernel.++(@unrelated_doctests)

@@ -307,10 +307,11 @@ defmodule Nx.Defn.Expr do
   @doc false
   def defn_while(file, line, initial, condition, body) do
     initial = to_container_expr(initial)
+    context = new_context(:while)
 
     {arg, {_, context}} =
       Composite.traverse(initial, {0, nil}, fn expr, {counter, acc} ->
-        {parameter(expr, :while, counter), {counter + 1, merge_context!(expr, acc)}}
+        {parameter(expr, context, counter), {counter + 1, merge_context!(expr, acc)}}
       end)
 
     condition = to_pred(condition.(arg), line, file, :while)
@@ -375,7 +376,7 @@ defmodule Nx.Defn.Expr do
     @impl true
     def unquote(op)(out, tensor) do
       tensor = to_expr(tensor)
-      expr(out, tensor.data.context, unquote(op), [tensor])
+      unary_expr(out, tensor.data.context, unquote(op), tensor)
     end
   end
 
@@ -391,9 +392,6 @@ defmodule Nx.Defn.Expr do
 
       c2 == 0 ->
         ensure_compatible(t1, out)
-
-      c1 && c2 ->
-        constant(out, Complex.add(c1, c2))
 
       c2 ->
         commute(out, context, :add, &Complex.add/2, c2, t2, t1)
@@ -441,9 +439,6 @@ defmodule Nx.Defn.Expr do
       c2 == 1 ->
         ensure_compatible(t1, out)
 
-      c1 && c2 ->
-        constant(out, Complex.multiply(c1, c2))
-
       c2 ->
         commute(out, context, :multiply, &Complex.multiply/2, c2, t2, t1)
 
@@ -464,12 +459,10 @@ defmodule Nx.Defn.Expr do
   @impl true
   def divide(out, t1, t2) do
     {[t1, t2], context} = to_exprs([t1, t2])
-    c1 = maybe_constant(t1)
     c2 = maybe_constant(t2)
 
     cond do
       c2 == 1 -> ensure_compatible(t1, out)
-      c1 && c2 -> constant(out, Complex.divide(c1, c2))
       true -> binary_expr(out, context, :divide, t1, t2)
     end
   end
@@ -521,7 +514,8 @@ defmodule Nx.Defn.Expr do
 
   @impl true
   def reduce(%{type: type} = out, tensor, acc, opts, fun) do
-    args = [parameter(:reduce, type, {}, 0), parameter(:reduce, type, {}, 1)]
+    context = new_context(:reduce)
+    args = [parameter(context, type, {}, 0), parameter(context, type, {}, 1)]
     {[tensor, acc], context} = to_exprs([tensor, acc])
     fun = apply_fun(context, fun, args, type)
 
@@ -541,7 +535,8 @@ defmodule Nx.Defn.Expr do
         opts,
         fun
       ) do
-    args = [parameter(:window_reduce, type, {}, 0), parameter(:window_reduce, type, {}, 1)]
+    context = new_context(:window_reduce)
+    args = [parameter(context, type, {}, 0), parameter(context, type, {}, 1)]
     {[tensor, acc], context} = to_exprs([tensor, acc])
     fun = apply_fun(context, fun, args, type)
 
@@ -554,7 +549,7 @@ defmodule Nx.Defn.Expr do
 
   @impl true
   def map(%{type: type} = out, tensor, opts, fun) do
-    args = [parameter(:map, type, {}, 0)]
+    args = [parameter(new_context(:map), type, {}, 0)]
     %{data: %{context: context}} = tensor = to_expr(tensor)
     expr(out, context, :map, [tensor, opts, apply_fun(context, fun, args, type)])
   end
@@ -628,19 +623,7 @@ defmodule Nx.Defn.Expr do
   @impl true
   def as_type(out, tensor) do
     tensor = to_expr(tensor)
-
-    if c = maybe_constant(tensor) do
-      c =
-        if is_float(c) and Nx.Type.integer?(out.type) do
-          trunc(c)
-        else
-          c
-        end
-
-      constant(out, c)
-    else
-      expr(out, tensor.data.context, :as_type, [tensor])
-    end
+    unary_expr(out, tensor.data.context, :as_type, tensor)
   end
 
   @impl true
@@ -889,6 +872,11 @@ defmodule Nx.Defn.Expr do
 
   ## Helpers
 
+  @compile {:inline, new_context: 1}
+  defp new_context(atom) when is_atom(atom) do
+    {atom, make_ref()}
+  end
+
   defp expr(tensor, context, op, args) do
     %{tensor | data: %Expr{id: id(), op: op, args: args, context: context}}
   end
@@ -1073,6 +1061,10 @@ defmodule Nx.Defn.Expr do
     %Expr{id: {number, type, shape}, op: :constant, args: [number], context: nil}
   end
 
+  defp constant_binary(tensor, c) do
+    Nx.BinaryBackend.constant(%T{type: tensor.type, names: [], shape: {}}, c, [])
+  end
+
   defp maybe_constant(expr) do
     case expr do
       %T{data: %Expr{op: :constant, args: [number]}} -> number
@@ -1081,7 +1073,10 @@ defmodule Nx.Defn.Expr do
   end
 
   defp ensure_compatible(t, out) do
-    t |> Nx.as_type(out.type) |> Nx.broadcast(out.shape)
+    t
+    |> Nx.as_type(out.type)
+    |> Nx.broadcast(out.shape)
+    |> Map.replace!(:names, out.names)
   end
 
   # Rewrite commutative operations so the constant always come on the left
@@ -1111,20 +1106,31 @@ defmodule Nx.Defn.Expr do
     binary_expr(out, context, op, a1, a2)
   end
 
-  defp binary_expr(tensor, context, op, arg1, arg2) do
-    {arg1, arg2} =
-      case {arg1, arg2} do
-        {%T{data: %Expr{op: :constant, args: [s]}, shape: shape}, %T{shape: shape}} ->
-          {constant(%{arg1 | shape: {}, names: []}, s), arg2}
+  defp binary_expr(out, context, op, arg1, arg2) do
+    c1 = maybe_constant(arg1)
+    c2 = maybe_constant(arg2)
 
-        {%T{shape: shape}, %T{data: %Expr{op: :constant, args: [s]}, shape: shape}} ->
-          {arg1, constant(%{arg2 | shape: {}, names: []}, s)}
+    if c1 && c2 do
+      apply(Nx.BinaryBackend, op, [
+        %{out | shape: {}, names: []},
+        constant_binary(arg1, c1),
+        constant_binary(arg2, c2)
+      ])
+      |> Nx.to_number()
+      |> then(&constant(out, &1))
+    else
+      expr(out, context, op, [arg1, arg2])
+    end
+  end
 
-        {_, _} ->
-          {arg1, arg2}
-      end
-
-    expr(tensor, context, op, [arg1, arg2])
+  defp unary_expr(out, context, op, arg) do
+    if c = maybe_constant(arg) do
+      apply(Nx.BinaryBackend, op, [%{out | shape: {}, names: []}, constant_binary(arg, c)])
+      |> Nx.to_number()
+      |> then(&constant(out, &1))
+    else
+      expr(out, context, op, [arg])
+    end
   end
 
   ## Inspect

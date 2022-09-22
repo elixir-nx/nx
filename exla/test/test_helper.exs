@@ -1,5 +1,6 @@
 target = System.get_env("EXLA_TARGET", "host")
 client = EXLAHelpers.client()
+Nx.Defn.global_default_options(compiler: EXLA)
 
 multi_device =
   if client.device_count > 1 and client.platform == :host, do: [], else: [:multi_device]
