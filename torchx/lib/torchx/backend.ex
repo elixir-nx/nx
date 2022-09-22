@@ -1676,25 +1676,37 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def bitcast(out, %T{data: %TB{ref: {device, _}}} = tensor) do
-    tensor
-    |> to_binary(Nx.size(tensor))
-    |> maybe_pad_binary_bitcast(tensor.type, out.type)
-    |> Torchx.from_blob(out.shape, to_torch_type(out.type), device_option(device: device))
+  # u64 is emulated with s64
+  def bitcast(%{type: {:s, 64}} = out, %T{type: {:u, 64}, data: data}) do
+    %{out | data: data}
+  end
+
+  def bitcast(%{type: {:u, 64}} = out, %T{type: {:s, 64}, data: data}) do
+    %{out | data: data}
+  end
+
+  # u16/u32 are double the size of s16/u32
+  def bitcast(%{type: {:u, bit}} = out, %T{type: {:s, bit}, data: %TB{ref: {device, _}}} = tensor)
+      when bit in [16, 32] do
+    output_size = 2 * bit
+
+    blob =
+      for <<x::size(bit)-signed-native <- to_binary(tensor, Nx.size(tensor))>>,
+        into: <<>>,
+        do: <<x::size(output_size)-signed-native>>
+
+    blob
+    |> Torchx.from_blob(out.shape, to_torch_type(out.type), device)
     |> to_nx(out)
   end
 
-  defp maybe_pad_binary_bitcast(blob, input_type, output_type)
-
-  defp maybe_pad_binary_bitcast(blob, {:s, s}, {:u, s}) when s in [16, 32] do
-    output_size = 2 * s
-
-    for <<x::size(s)-signed-native <- blob>>,
-      into: <<>>,
-      do: <<x::size(output_size)-signed-native>>
+  # s16/s32 are half the size of s16/u32 but that's handled in to_binary
+  def bitcast(out, %T{data: %TB{ref: {device, _}}} = tensor) do
+    tensor
+    |> to_binary(Nx.size(tensor))
+    |> Torchx.from_blob(out.shape, to_torch_type(out.type), device)
+    |> to_nx(out)
   end
-
-  defp maybe_pad_binary_bitcast(blob, _, _), do: blob
 
   @impl true
   def inspect(%T{} = tensor, inspect_opts) do
