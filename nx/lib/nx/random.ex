@@ -161,9 +161,9 @@ defmodule Nx.Random do
   end
 
   defnp rolled_loop_step(i, {{_xs1, _xs2} = xs, {k1, k2, k3}, {r1, r2}}) do
-    {_, {xs1, xs2}, _} =
-      while {x = Nx.tensor(0, type: :u32), xs, r1}, x < 4 do
-        {x + Nx.tensor(1, type: :u32), apply_round(xs, r1[x]), r1}
+    {xs1, xs2} =
+      while xs, r <- r1 do
+        apply_round(xs, r)
       end
 
     xs1 = k1 + xs1

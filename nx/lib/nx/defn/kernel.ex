@@ -1056,19 +1056,27 @@ defmodule Nx.Defn.Kernel do
         end
 
   """
+  defmacro while(initial, {:<-, _, [variable, expression]}, do: block) do
+    {pattern, {vars, values}} = while_arg(initial, {[], []})
+    build_while(pattern, {variable, pattern}, vars, values, {:while, expression}, true, block)
+  end
+
   defmacro while(initial, condition, do: block) do
     {pattern, {vars, values}} = while_arg(initial, {[], []})
+    build_while(pattern, pattern, vars, values, :none, condition, block)
+  end
 
+  defp build_while(initial, pattern, vars, values, generator, condition, block) do
     quote do
-      Nx.Defn.Kernel.__defn__!(:if, 2)
+      Nx.Defn.Kernel.__defn__!(:while, 2)
       {unquote_splicing(vars)} = {unquote_splicing(values)}
 
       Nx.Defn.Kernel.__while__(
         __ENV__.file,
         __ENV__.line,
-        unquote(pattern),
-        fn unquote(pattern) -> unquote(condition) end,
-        fn unquote(pattern) -> unquote(block) end
+        unquote(initial),
+        unquote(generator),
+        fn unquote(pattern) -> {unquote(condition), unquote(block)} end
       )
     end
   end
@@ -1081,7 +1089,9 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc false
-  defdelegate __while__(file, line, pattern, condition, block), to: Nx.Defn.Expr, as: :defn_while
+  defdelegate __while__(file, line, initial, generator, condition_block),
+    to: Nx.Defn.Expr,
+    as: :defn_while
 
   defp while_arg({left, right}, prelude) do
     {left, prelude} = while_arg(left, prelude)
@@ -1094,14 +1104,14 @@ defmodule Nx.Defn.Kernel do
     {{:{}, meta, args}, prelude}
   end
 
-  defp while_arg({:=, _meta, [{name, meta, ctx} = var, value]}, {vars, values})
+  defp while_arg({:=, _, [{name, _, ctx} = var, value]}, {vars, values})
        when Kernel.and(is_atom(name), is_atom(ctx)) do
-    {{name, [generated: true] ++ meta, ctx}, {[var | vars], [value | values]}}
+    {var, {[var | vars], [value | values]}}
   end
 
-  defp while_arg({name, meta, ctx}, prelude)
+  defp while_arg({name, _, ctx} = var, prelude)
        when Kernel.and(is_atom(name), is_atom(ctx)) do
-    {{name, [generated: true] ++ meta, ctx}, prelude}
+    {var, prelude}
   end
 
   defp while_arg(other, _prelude) do
