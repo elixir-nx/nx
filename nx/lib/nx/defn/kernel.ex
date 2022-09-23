@@ -1046,15 +1046,27 @@ defmodule Nx.Defn.Kernel do
 
   Similarly, to compute the factorial of `x` using `while`:
 
-        defn factorial(x) do
-          {factorial, _} =
-            while {factorial = 1, x}, Nx.greater(x, 1) do
-              {factorial * x, x - 1}
-            end
+      defn factorial(x) do
+        {factorial, _} =
+          while {factorial = 1, x}, Nx.greater(x, 1) do
+            {factorial * x, x - 1}
+          end
 
-          factorial
-        end
+        factorial
+      end
 
+  ## Generators
+
+  Inspired by Elixir's [for-comprehensions](`Kernel.SpecialForms.for/1`),
+  `while` in `defn` supports generators. For example, you could sum a one
+  dimensional tensor as follows:
+
+      while acc = 0, i <- tensor do
+        acc + i
+      end
+
+  You can give any non-scalar tensor and it will traverse the highest dimension
+  by default.
   """
   defmacro while(initial, {:<-, _, [variable, expression]}, do: block) do
     {pattern, {vars, values}} = while_arg(initial, {[], []})
@@ -1084,7 +1096,7 @@ defmodule Nx.Defn.Kernel do
   defmacro while(_var, _cond, other) do
     Kernel.raise(
       ArgumentError,
-      "expected third argument to \"while\" to be a do-block, got: #{Macro.to_string(other)}"
+      "expected last argument of \"while\" to be a do-block, got: #{Macro.to_string(other)}"
     )
   end
 

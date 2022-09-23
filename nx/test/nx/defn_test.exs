@@ -1435,7 +1435,7 @@ defmodule Nx.DefnTest do
     end
 
     defn while_generator_sum(tensor) do
-      while acc = 0, part <- tensor do
+      while acc = tensor[0] * 0, part <- tensor do
         acc + part
       end
     end
@@ -1443,6 +1443,7 @@ defmodule Nx.DefnTest do
     @tag compiler: Evaluator
     test "tensor generator" do
       assert while_generator_sum(Nx.tensor([0, 1, 2, 3, 4])) == Nx.tensor(10)
+      assert while_generator_sum(Nx.iota({3, 3})) == Nx.tensor([9, 12, 15])
     end
 
     defn while_mixed_return(a, b) do
@@ -1485,7 +1486,7 @@ defmodule Nx.DefnTest do
 
     test "raises if non-block is given" do
       assert_raise ArgumentError,
-                   ~r"expected third argument to \"while\" to be a do-block, got: a \+ 1",
+                   ~r"expected last argument of \"while\" to be a do-block, got: a \+ 1",
                    fn ->
                      defmodule InvalidWhile do
                        defn upto(a) do

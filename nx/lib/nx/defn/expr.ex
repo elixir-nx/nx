@@ -341,13 +341,9 @@ defmodule Nx.Defn.Expr do
         {{{index_param, generator_param}, arg}, context} = to_param_expr(gen_initial, :while)
 
         arg = {generator_param[index_param], arg}
-        {condition, body} = condition_body.(arg)
+        {true, body} = condition_body.(arg)
 
-        condition =
-          Nx.less(index_param, tensor(limit))
-          |> merge_condition(condition)
-          |> to_pred(line, file, :while)
-
+        condition = Nx.less(index_param, tensor(limit))
         body = to_container_expr(body)
         compatible_while!(file, line, initial, body)
 
@@ -367,9 +363,6 @@ defmodule Nx.Defn.Expr do
             "Got body #{maybe_type_shape_string(body)} and initial #{maybe_type_shape_string(initial)}"
     end
   end
-
-  defp merge_condition(left, true), do: left
-  defp merge_condition(left, right), do: Nx.logical_and(left, right)
 
   ## Nx.Backend Callbacks
 
