@@ -305,11 +305,19 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc false
-  def defn_while(file, line, initial, generator, condition_body) do
+  def defn_while(file, line, initial, generator, condition_body, opts) do
     initial = to_container_expr(initial)
 
     case generator do
       :none ->
+        if opts != [] do
+          raise CompileError,
+            line: line,
+            file: file,
+            description:
+              "options are not supported when while is using a condition, got: #{inspect(opts)}"
+        end
+
         {arg, context} = to_param_expr(initial, :while)
         {condition, body} = condition_body.(arg)
         condition = to_pred(condition, line, file, :while)
@@ -327,7 +335,9 @@ defmodule Nx.Defn.Expr do
         while(initial, context, arg, condition, body)
 
       {:while, %T{} = generator} ->
-        limit =
+        opts = Keyword.validate!(opts, unroll: false)
+
+        length =
           case Nx.shape(generator) do
             {} ->
               message = "cannot have a scalar tensor as generator"
@@ -337,19 +347,32 @@ defmodule Nx.Defn.Expr do
               Nx.axis_size(generator, 0)
           end
 
-        gen_initial = {{tensor(0), generator}, initial}
-        {{{index_param, generator_param}, arg}, context} = to_param_expr(gen_initial, :while)
+        case opts[:unroll] do
+          true ->
+            Enum.reduce(0..(length - 1)//1, initial, fn index, acc ->
+              {true, body} = condition_body.({generator[index], acc})
+              index == 0 and compatible_while!(file, line, initial, body)
+              body
+            end)
 
-        arg = {generator_param[index_param], arg}
-        {true, body} = condition_body.(arg)
+          false ->
+            gen_initial = {{tensor(0), generator}, initial}
+            {{{index_param, generator_param}, arg}, context} = to_param_expr(gen_initial, :while)
+            arg = {generator_param[index_param], arg}
+            {true, body} = condition_body.(arg)
 
-        condition = Nx.less(index_param, tensor(limit))
-        body = to_container_expr(body)
-        compatible_while!(file, line, initial, body)
+            condition = Nx.less(index_param, tensor(length))
+            body = to_container_expr(body)
+            compatible_while!(file, line, initial, body)
 
-        gen_body = {{Nx.add(index_param, 1), generator_param}, body}
-        {_, result} = while(gen_initial, context, arg, condition, gen_body)
-        result
+            gen_body = {{Nx.add(index_param, 1), generator_param}, body}
+            {_, result} = while(gen_initial, context, arg, condition, gen_body)
+            result
+
+          unroll ->
+            message = ":unroll must be a boolean, got: #{inspect(unroll)}"
+            raise CompileError, line: line, file: file, description: message
+        end
     end
   end
 

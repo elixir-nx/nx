@@ -1446,6 +1446,31 @@ defmodule Nx.DefnTest do
       assert while_generator_sum(Nx.iota({3, 3})) == Nx.tensor([9, 12, 15])
     end
 
+    defn while_generator_sum_unroll(tensor) do
+      while acc = 0, part <- tensor, unroll: true do
+        acc + part
+      end
+    end
+
+    test "tensor generator unrolled" do
+      assert while_generator_sum_unroll(Nx.tensor([1, 2, 3])) |> inspect() == """
+             #Nx.Tensor<
+               s64
+             \s\s
+               Nx.Defn.Expr
+               parameter a:0                s64[3]
+               b = slice a, [0], [1], [1]   s64[1]
+               c = squeeze b, [0]           s64
+               d = slice a, [1], [1], [1]   s64[1]
+               e = squeeze d, [0]           s64
+               f = add c, e                 s64
+               g = slice a, [2], [1], [1]   s64[1]
+               h = squeeze g, [0]           s64
+               i = add f, h                 s64
+             >\
+             """
+    end
+
     defn while_mixed_return(a, b) do
       while {a, b}, Nx.less(a, 10) do
         %{a: a, b: b}

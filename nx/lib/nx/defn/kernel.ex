@@ -1066,19 +1066,33 @@ defmodule Nx.Defn.Kernel do
       end
 
   You can give any non-scalar tensor and it will traverse the highest dimension
-  by default.
+  by default. One advantage of using generators is that you can also unroll the
+  loop for performance:
+
+      while acc = 0, i <- tensor, unroll: true do
+        acc + i
+      end
+
+  Or unroll it in batches:
+
+      while acc = 0, i <- tensor, unroll: 4 do
+        acc + i
+      end
+
   """
-  defmacro while(initial, {:<-, _, [variable, expression]}, do: block) do
+  defmacro while(initial, condition_or_generator, opts \\ [], do_block)
+
+  defmacro while(initial, {:<-, _, [variable, expression]}, opts, do: block) do
     {pattern, {vars, values}} = while_arg(initial, {[], []})
-    build_while(pattern, {variable, pattern}, vars, values, {:while, expression}, true, block)
+    while(pattern, {variable, pattern}, vars, values, {:while, expression}, true, block, opts)
   end
 
-  defmacro while(initial, condition, do: block) do
+  defmacro while(initial, condition, opts, do: block) do
     {pattern, {vars, values}} = while_arg(initial, {[], []})
-    build_while(pattern, pattern, vars, values, :none, condition, block)
+    while(pattern, pattern, vars, values, :none, condition, block, opts)
   end
 
-  defp build_while(initial, pattern, vars, values, generator, condition, block) do
+  defp while(initial, pattern, vars, values, generator, condition, block, opts) do
     quote do
       Nx.Defn.Kernel.__defn__!(:while, 2)
       {unquote_splicing(vars)} = {unquote_splicing(values)}
@@ -1088,12 +1102,13 @@ defmodule Nx.Defn.Kernel do
         __ENV__.line,
         unquote(initial),
         unquote(generator),
-        fn unquote(pattern) -> {unquote(condition), unquote(block)} end
+        fn unquote(pattern) -> {unquote(condition), unquote(block)} end,
+        unquote(opts)
       )
     end
   end
 
-  defmacro while(_var, _cond, other) do
+  defmacro while(_var, _cond, _opts, other) do
     Kernel.raise(
       ArgumentError,
       "expected last argument of \"while\" to be a do-block, got: #{Macro.to_string(other)}"
@@ -1101,7 +1116,7 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc false
-  defdelegate __while__(file, line, initial, generator, condition_block),
+  defdelegate __while__(file, line, initial, generator, condition_block, opts),
     to: Nx.Defn.Expr,
     as: :defn_while
 
