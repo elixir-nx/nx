@@ -31,7 +31,7 @@ jobs:
         uses: actions/cache@v1
         id: mix-cache # id to use in retrieve action
         with:
-          path: ${{ matrix.working_directory }}/deps
+          path: deps
           key: v1-${{ matrix.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}{2}', github.workspace, matrix.working_directory, '/mix.lock')) }}
       - name: Retrieve libtorch cache
         if: ${{ matrix.working_directory == 'torchx' }}
@@ -79,7 +79,7 @@ jobs:
         uses: actions/cache@v1
         id: mix-cache # id to use in retrieve action
         with:
-          path: ${{ matrix.working_directory }}/deps
+          path: deps
           key: v1-${{ matrix.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}{2}', github.workspace, matrix.working_directory, '/mix.lock')) }}
       - name: Retrieve libtorch cache
         if: ${{ matrix.working_directory == 'torchx' }}
