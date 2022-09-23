@@ -1078,7 +1078,7 @@ defmodule Nx.Defn.Kernel do
       while acc = 0, i <- tensor, unroll: 4 do
         acc + i
       end
-  
+
   Unrolling means that the the `while` body is automatically duplicated
   a certain amount of times, as if you wrote all iterations by hand. This
   makes the final expression larger, which causes a longer compilation
