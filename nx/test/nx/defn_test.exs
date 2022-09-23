@@ -1495,6 +1495,18 @@ defmodule Nx.DefnTest do
                    fn -> while_mixed_context(Nx.tensor(0), Nx.tensor(1)) end
     end
 
+    defn while_condition_opts(a) do
+      while a, Nx.less(a, 10), unroll: true do
+        a + 1
+      end
+    end
+
+    test "raises on options given to condition" do
+      assert_raise CompileError,
+                   ~r"options are only supported on while with conditions, only with generators, got: \[unroll: true\]",
+                   fn -> while_condition_opts(Nx.tensor(0)) end
+    end
+
     test "raises if non-variable is given as pattern" do
       assert_raise ArgumentError,
                    ~r"invalid initial argument for \"while\". Expected a variable, a variable assignment, or a tuple of the same",

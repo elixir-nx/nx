@@ -315,7 +315,7 @@ defmodule Nx.Defn.Expr do
             line: line,
             file: file,
             description:
-              "options are not supported when while is using a condition, got: #{inspect(opts)}"
+              "options are only supported on while with conditions, only with generators, got: #{inspect(opts)}"
         end
 
         {arg, context} = to_param_expr(initial, :while)
