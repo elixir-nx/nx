@@ -347,32 +347,53 @@ defmodule Nx.Defn.Expr do
               Nx.axis_size(generator, 0)
           end
 
-        case opts[:unroll] do
-          true ->
-            Enum.reduce(0..(length - 1)//1, initial, fn index, acc ->
-              {true, body} = condition_body.({generator[index], acc})
-              index == 0 and compatible_while!(file, line, initial, body)
-              body
-            end)
+        {internal_length, internal_unroll, external_unroll} =
+          case opts[:unroll] do
+            true ->
+              {0, 0, length}
 
-          false ->
+            false ->
+              {length, 1, 0}
+
+            unroll when is_integer(unroll) and unroll >= length ->
+              {0, 0, length}
+
+            unroll when is_integer(unroll) and unroll > 0 ->
+              external_unroll = rem(length, unroll)
+              {length - external_unroll, unroll, external_unroll}
+
+            unroll ->
+              message = ":unroll must be a boolean, got: #{inspect(unroll)}"
+              raise CompileError, line: line, file: file, description: message
+          end
+
+        result =
+          if internal_length == 0 do
+            initial
+          else
             gen_initial = {{tensor(0), generator}, initial}
             {{{index_param, generator_param}, arg}, context} = to_param_expr(gen_initial, :while)
-            arg = {generator_param[index_param], arg}
-            {true, body} = condition_body.(arg)
 
-            condition = Nx.less(index_param, tensor(length))
-            body = to_container_expr(body)
-            compatible_while!(file, line, initial, body)
+            body =
+              Enum.reduce(0..(internal_unroll - 1)//1, arg, fn index, acc ->
+                {true, body} = condition_body.({generator_param[Nx.add(index_param, index)], acc})
+                body = to_container_expr(body)
+                index == 0 and compatible_while!(file, line, initial, body)
+                body
+              end)
 
-            gen_body = {{Nx.add(index_param, 1), generator_param}, body}
+            condition = Nx.less(index_param, tensor(internal_length))
+            gen_body = {{Nx.add(index_param, internal_unroll), generator_param}, body}
             {_, result} = while(gen_initial, context, arg, condition, gen_body)
             result
+          end
 
-          unroll ->
-            message = ":unroll must be a boolean, got: #{inspect(unroll)}"
-            raise CompileError, line: line, file: file, description: message
-        end
+        Enum.reduce(0..(external_unroll - 1)//1, result, fn index, acc ->
+          {true, body} = condition_body.({generator[index + internal_length], acc})
+          body = to_container_expr(body)
+          index == 0 and compatible_while!(file, line, initial, body)
+          body
+        end)
     end
   end
 

@@ -1471,6 +1471,121 @@ defmodule Nx.DefnTest do
              """
     end
 
+    defn while_generator_sum_unroll_int(tensor) do
+      while acc = 0, part <- tensor, unroll: 3 do
+        acc + part
+      end
+    end
+
+    @tag compiler: Evaluator
+    test "tensor generator unrolled integer result" do
+      assert while_generator_sum_unroll_int(Nx.tensor([1, 2, 3])) == Nx.tensor(6)
+      assert while_generator_sum_unroll_int(Nx.tensor([1, 2, 3, 4, 5, 6])) == Nx.tensor(21)
+      assert while_generator_sum_unroll_int(Nx.tensor([1, 2, 3, 4, 5, 6, 7, 8])) == Nx.tensor(36)
+    end
+
+    test "tensor generator unrolled integer expression exact" do
+      expr = while_generator_sum_unroll_int(Nx.tensor([1, 2, 3, 4, 5, 6]))
+
+      assert inspect(expr) == """
+             #Nx.Tensor<
+               s64
+             \s\s
+               Nx.Defn.Expr
+               parameter a:0         s64[6]
+               b = while {0, a, 0}   tuple3
+               c = elem b, 2         s64
+             >\
+             """
+
+      %T{
+        data: %Expr{
+          op: :elem,
+          args: [%T{data: %Expr{op: :while, args: [_, _, _, while_body]}}, 2]
+        }
+      } = expr
+
+      {counter, param, body} = while_body
+
+      assert inspect(counter) == """
+             #Nx.Tensor<
+               s64
+             \s\s
+               Nx.Defn.Expr
+               parameter a:0   s64
+               b = add 3, a    s64
+             >\
+             """
+
+      assert inspect(param) == """
+             #Nx.Tensor<
+               s64[6]
+             \s\s
+               Nx.Defn.Expr
+               parameter a:1   s64[6]
+             >\
+             """
+
+      assert inspect(body) == """
+             #Nx.Tensor<
+               s64
+             \s\s
+               Nx.Defn.Expr
+               parameter a:2                s64
+               parameter b:1                s64[6]
+               parameter c:0                s64
+               d = slice b, [c], [1], [1]   s64[1]
+               e = squeeze d, [0]           s64
+               f = add a, e                 s64
+               g = add 1, c                 s64
+               h = slice b, [g], [1], [1]   s64[1]
+               i = squeeze h, [0]           s64
+               j = add f, i                 s64
+               k = add 2, c                 s64
+               l = slice b, [k], [1], [1]   s64[1]
+               m = squeeze l, [0]           s64
+               n = add j, m                 s64
+             >\
+             """
+    end
+
+    test "tensor generator unrolled integer expression left-over" do
+      assert while_generator_sum_unroll_int(Nx.tensor([1, 2, 3])) |> inspect() == """
+             #Nx.Tensor<
+               s64
+             \s\s
+               Nx.Defn.Expr
+               parameter a:0                s64[3]
+               b = slice a, [0], [1], [1]   s64[1]
+               c = squeeze b, [0]           s64
+               d = slice a, [1], [1], [1]   s64[1]
+               e = squeeze d, [0]           s64
+               f = add c, e                 s64
+               g = slice a, [2], [1], [1]   s64[1]
+               h = squeeze g, [0]           s64
+               i = add f, h                 s64
+             >\
+             """
+
+      assert while_generator_sum_unroll_int(Nx.tensor([1, 2, 3, 4, 5, 6, 7, 8])) |> inspect() ==
+               """
+               #Nx.Tensor<
+                 s64
+               \s\s
+                 Nx.Defn.Expr
+                 parameter a:0                s64[8]
+                 b = while {0, a, 0}          tuple3
+                 c = elem b, 2                s64
+                 d = slice a, [6], [1], [1]   s64[1]
+                 e = squeeze d, [0]           s64
+                 f = add c, e                 s64
+                 g = slice a, [7], [1], [1]   s64[1]
+                 h = squeeze g, [0]           s64
+                 i = add f, h                 s64
+               >\
+               """
+    end
+
     defn while_mixed_return(a, b) do
       while {a, b}, Nx.less(a, 10) do
         %{a: a, b: b}
