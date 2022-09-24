@@ -1618,7 +1618,7 @@ defmodule Nx.DefnTest do
 
     test "raises on options given to condition" do
       assert_raise CompileError,
-                   ~r"options are only supported on while with conditions, only with generators, got: \[unroll: true\]",
+                   ~r"options are not supported on while with conditions, only with generators, got: \[unroll: true\]",
                    fn -> while_condition_opts(Nx.tensor(0)) end
     end
 
