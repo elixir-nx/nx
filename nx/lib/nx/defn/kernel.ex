@@ -1065,6 +1065,10 @@ defmodule Nx.Defn.Kernel do
         acc + i
       end
 
+  > Note: implementing `sum` using `while`, as above, is done as an example.
+  > In practice, you must prefer to use the operations in the `Nx` module,
+  > whenever available, instead of writing your own loops.
+
   You can give any non-scalar tensor and it will traverse the highest dimension
   by default. One advantage of using generators is that you can also unroll the
   loop for performance:
@@ -1084,7 +1088,6 @@ defmodule Nx.Defn.Kernel do
   makes the final expression larger, which causes a longer compilation
   time, however it enables additional compile-time optimizations (such as
   fusion), improving the runtime efficiency.
-
   """
   defmacro while(initial, condition_or_generator, opts \\ [], do_block)
 
