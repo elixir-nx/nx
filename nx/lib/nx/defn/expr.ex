@@ -305,18 +305,99 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc false
-  def defn_while(file, line, initial, condition, body) do
+  def defn_while(file, line, initial, generator, condition_body, opts) do
     initial = to_container_expr(initial)
-    context = new_context(:while)
 
-    {arg, {_, context}} =
-      Composite.traverse(initial, {0, nil}, fn expr, {counter, acc} ->
-        {parameter(expr, context, counter), {counter + 1, merge_context!(expr, acc)}}
-      end)
+    case generator do
+      :none ->
+        if opts != [] do
+          raise CompileError,
+            line: line,
+            file: file,
+            description:
+              "options are not supported on while with conditions, only with generators, got: #{inspect(opts)}"
+        end
 
-    condition = to_pred(condition.(arg), line, file, :while)
-    body = arg |> body.() |> to_container_expr()
+        {arg, context} = to_param_expr(initial, :while)
+        {condition, body} = condition_body.(arg)
+        condition = to_pred(condition, line, file, :while)
+        body = to_container_expr(body)
 
+        if not Composite.compatible?(initial, body, &Nx.compatible?/2) do
+          raise CompileError,
+            line: line,
+            file: file,
+            description:
+              "the do-block in while must return tensors with the same shape, type, and names as the initial arguments. " <>
+                "Got body #{maybe_type_shape_string(body)} and initial #{maybe_type_shape_string(initial)}"
+        end
+
+        while(initial, context, arg, condition, body)
+
+      {:while, %T{} = generator} ->
+        opts = Keyword.validate!(opts, unroll: false)
+
+        length =
+          case Nx.shape(generator) do
+            {} ->
+              message = "cannot have a scalar tensor as generator"
+              raise CompileError, line: line, file: file, description: message
+
+            _ ->
+              Nx.axis_size(generator, 0)
+          end
+
+        {internal_length, internal_unroll, external_unroll} =
+          case opts[:unroll] do
+            true ->
+              {0, 0, length}
+
+            false ->
+              {length, 1, 0}
+
+            unroll when is_integer(unroll) and unroll >= length ->
+              {0, 0, length}
+
+            unroll when is_integer(unroll) and unroll > 0 ->
+              external_unroll = rem(length, unroll)
+              {length - external_unroll, unroll, external_unroll}
+
+            unroll ->
+              message = ":unroll must be a boolean, got: #{inspect(unroll)}"
+              raise CompileError, line: line, file: file, description: message
+          end
+
+        result =
+          if internal_length == 0 do
+            initial
+          else
+            gen_initial = {{tensor(0), generator}, initial}
+            {{{index_param, generator_param}, arg}, context} = to_param_expr(gen_initial, :while)
+
+            body =
+              Enum.reduce(0..(internal_unroll - 1)//1, arg, fn index, acc ->
+                {true, body} = condition_body.({generator_param[Nx.add(index_param, index)], acc})
+                body = to_container_expr(body)
+                index == 0 and compatible_while!(file, line, initial, body)
+                body
+              end)
+
+            condition = Nx.less(index_param, tensor(internal_length))
+            gen_body = {{Nx.add(index_param, internal_unroll), generator_param}, body}
+            {_, result} = while(gen_initial, context, arg, condition, gen_body)
+            result
+          end
+
+        Enum.reduce(0..(external_unroll - 1)//1, result, fn index, acc ->
+          {true, body} = condition_body.({generator[index + internal_length], acc})
+          body = to_container_expr(body)
+          index == 0 and compatible_while!(file, line, initial, body)
+          body
+        end)
+    end
+  end
+
+  defp compatible_while!(file, line, initial, body) do
     if not Composite.compatible?(initial, body, &Nx.compatible?/2) do
       raise CompileError,
         line: line,
@@ -325,8 +406,6 @@ defmodule Nx.Defn.Expr do
           "the do-block in while must return tensors with the same shape, type, and names as the initial arguments. " <>
             "Got body #{maybe_type_shape_string(body)} and initial #{maybe_type_shape_string(initial)}"
     end
-
-    while(initial, context, arg, condition, body)
   end
 
   ## Nx.Backend Callbacks
@@ -919,6 +998,17 @@ defmodule Nx.Defn.Expr do
 
   defp to_container_expr(container_or_tensor) do
     Composite.traverse(container_or_tensor, &to_expr/1)
+  end
+
+  defp to_param_expr(container_or_tensor, context_label) do
+    context = new_context(context_label)
+
+    {arg, {_, context}} =
+      Composite.traverse(container_or_tensor, {0, nil}, fn expr, {counter, acc} ->
+        {parameter(expr, context, counter), {counter + 1, merge_context!(expr, acc)}}
+      end)
+
+    {arg, context}
   end
 
   defp tuple_out(size) do
