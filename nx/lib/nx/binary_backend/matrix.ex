@@ -314,23 +314,24 @@ defmodule Nx.BinaryBackend.Matrix do
   end
 
   def eigh(input_data, input_type, {n, n} = input_shape, output_type, opts) do
-    # The input symmetric matrix A reduced to Hessenberg matrix H by Householder transform.
+    # The input Hermitian matrix A reduced to Hessenberg matrix H by Householder transform.
     # Then, by using QR iteration it converges to AQ = QΛ,
     # where Λ is the diagonal matrix of eigenvalues and the columns of Q are the eigenvectors.
 
     eps = opts[:eps]
     max_iter = opts[:max_iter]
 
-    # Validate that the input is a symmetric matrix using the relation A^t = A.
+    # Validate that the input is a Hermitian matrix using the relation A^* = A.
     a = binary_to_matrix(input_data, input_type, input_shape)
 
-    is_sym =
+    is_hermitian =
       a
       |> transpose_matrix()
+      |> Enum.map(fn a_row -> Enum.map(a_row, &Complex.conjugate(&1)) end)
       |> is_approximately_same?(a, eps)
 
-    unless is_sym do
-      raise ArgumentError, "input tensor must be symmetric"
+    unless is_hermitian do
+      raise_not_hermitian()
     end
 
     # Hessenberg decomposition
@@ -357,8 +358,11 @@ defmodule Nx.BinaryBackend.Matrix do
     indices_diag = for idx <- 0..(n - 1), do: [idx, idx]
     eigenvals = get_matrix_elements(eigenvals_diag, indices_diag)
 
+    # In general, the eigenvalues of a Hermitian matrix are real numbers
+    eigenvals_real = eigenvals |> Enum.map(&Complex.real(&1))
+
     # Reduce the elements smaller than eps to zero
-    {eigenvals |> approximate_zeros(eps) |> matrix_to_binary(output_type),
+    {eigenvals_real |> approximate_zeros(eps) |> matrix_to_binary(output_type),
      eigenvecs |> approximate_zeros(eps) |> matrix_to_binary(output_type)}
   end
 
@@ -381,12 +385,15 @@ defmodule Nx.BinaryBackend.Matrix do
             end
 
           # Hessenberg matrix H updating
-          h_t = transpose_matrix(h)
+          h_cc =
+            h
+            |> transpose_matrix()
+            |> Enum.map(fn a_row -> Enum.map(a_row, &Complex.conjugate(&1)) end)
 
           hess =
             h
             |> dot_matrix(hess)
-            |> dot_matrix(h_t)
+            |> dot_matrix(h_cc)
 
           {hess, q}
       end
@@ -401,7 +408,7 @@ defmodule Nx.BinaryBackend.Matrix do
     |> Enum.all?(fn {a_row, b_row} ->
       a_row
       |> Enum.zip(b_row)
-      |> Enum.all?(fn {a_elem, b_elem} -> abs(a_elem - b_elem) <= eps end)
+      |> Enum.all?(fn {a_elem, b_elem} -> Complex.abs(a_elem - b_elem) <= eps end)
     end)
   end
 
@@ -679,7 +686,7 @@ defmodule Nx.BinaryBackend.Matrix do
     # receives a_reverse as a list of numbers and returns the reflector as a
     # k x k matrix
 
-    norm_a_squared = Enum.reduce(a, 0, fn x, acc -> x * x + acc end)
+    norm_a_squared = Enum.reduce(a, 0, fn x, acc -> Complex.abs(x) * Complex.abs(x) + acc end)
     norm_a_sq_1on = norm_a_squared - a_0 * a_0
 
     if norm_a_sq_1on < eps do
@@ -849,7 +856,7 @@ defmodule Nx.BinaryBackend.Matrix do
       |> Enum.map(fn col ->
         row
         |> Enum.zip(col)
-        |> Enum.reduce(0, fn {x, y}, acc -> acc + x * y end)
+        |> Enum.reduce(0, fn {x, y}, acc -> acc + Complex.multiply(x, y) end)
       end)
     end)
   end
@@ -941,7 +948,7 @@ defmodule Nx.BinaryBackend.Matrix do
   end
 
   defp approximate_zeros(matrix, tol) do
-    do_round = fn x -> if abs(x) < tol, do: 0, else: x end
+    do_round = fn x -> if Complex.abs(x) < tol, do: 0, else: x end
 
     Enum.map(matrix, fn
       row when is_list(row) -> Enum.map(row, do_round)
