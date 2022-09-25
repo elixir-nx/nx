@@ -67,7 +67,7 @@ defmodule EXLA.Defn do
         # The outfeed reader will redirect all outputs with flag 1 to the current
         # process. Once flag 0 is emitted, we know the stream is done.
         hooks = Map.put(hooks, 1, {output_shapes, {self(), lock}})
-        {:ok, outfeed} = EXLA.Defn.Outfeed.start_child(executable, hooks)
+        {:ok, outfeed} = EXLA.Defn.Outfeed.start_child(executable, hooks, Process.group_leader())
 
         stream =
           EXLA.Defn.Stream.run(
@@ -333,7 +333,7 @@ defmodule EXLA.Defn do
         EXLA.Executable.run(executable, [buffers], run_options)
       end)
 
-    {:ok, outfeed} = EXLA.Defn.Outfeed.start_child(executable, hooks)
+    {:ok, outfeed} = EXLA.Defn.Outfeed.start_child(executable, hooks, Process.group_leader())
     _ = EXLA.Defn.Lock.transfer(lock, fn -> send(runner, lock) end, outfeed)
 
     ref = Process.monitor(outfeed)

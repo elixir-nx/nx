@@ -3,6 +3,7 @@ defmodule EXLA.Defn.APITest do
 
   import Nx.Defn
   import ExUnit.CaptureLog
+  import ExUnit.CaptureIO
 
   describe "options" do
     defn add_two(a, b), do: a + b
@@ -260,6 +261,21 @@ defmodule EXLA.Defn.APITest do
 
   describe "hooks" do
     require Logger
+
+    defn print_add(a, b) do
+      print_value(a + b)
+    end
+
+    test "prints value" do
+      assert capture_io(fn ->
+               assert_equal(print_add(Nx.tensor(1), Nx.tensor(2)), Nx.tensor(3))
+             end) =~ """
+             #Nx.Tensor<
+               s64
+               3
+             >\
+             """
+    end
 
     defp send_to_self(tag) do
       parent = self()
