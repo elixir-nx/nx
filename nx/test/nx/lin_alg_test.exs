@@ -664,6 +664,7 @@ defmodule Nx.LinAlgTest do
   defp complex_round(tensor, places) do
     round_real = fn x -> Float.round(Complex.real(Nx.to_number(x)), places) end
     round_imag = fn x -> Float.round(Complex.imag(Nx.to_number(x)), places) end
+
     Nx.map(tensor, fn x ->
       Complex.new(round_real.(x), round_imag.(x))
     end)
