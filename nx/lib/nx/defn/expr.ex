@@ -335,65 +335,124 @@ defmodule Nx.Defn.Expr do
         while(initial, context, arg, condition, body)
 
       {:while, %T{} = generator} ->
-        opts = Keyword.validate!(opts, unroll: false)
-
-        length =
+        range =
           case Nx.shape(generator) do
             {} ->
               message = "cannot have a scalar tensor as generator"
               raise CompileError, line: line, file: file, description: message
 
             _ ->
-              Nx.axis_size(generator, 0)
+              0..(Nx.axis_size(generator, 0) - 1)//1
           end
 
-        {internal_length, internal_unroll, external_unroll} =
-          case opts[:unroll] do
-            true ->
-              {0, 0, length}
+        condition_body = fn {{index, generator_expr}, acc} ->
+          condition_body.({generator_expr[index], acc})
+        end
 
-            false ->
-              {length, 1, 0}
+        while_range(range, file, line, initial, generator, condition_body, opts)
 
-            unroll when is_integer(unroll) and unroll >= length ->
-              {0, 0, length}
+      {:while, _.._//_ = range} ->
+        condition_body = fn {{index, {}}, acc} ->
+          condition_body.({index, acc})
+        end
 
-            unroll when is_integer(unroll) and unroll > 0 ->
-              external_unroll = rem(length, unroll)
-              {length - external_unroll, unroll, external_unroll}
+        while_range(range, file, line, initial, {}, condition_body, opts)
 
-            unroll ->
-              message = ":unroll must be a boolean, got: #{inspect(unroll)}"
-              raise CompileError, line: line, file: file, description: message
-          end
+      {:while, other} ->
+        raise CompileError,
+          line: line,
+          file: file,
+          description: "generators in while expect a range or a tensor, got: #{inspect(other)}"
+    end
+  end
 
-        result =
-          if internal_length == 0 do
-            initial
-          else
-            gen_initial = {{tensor(0), generator}, initial}
-            {{{index_param, generator_param}, arg}, context} = to_param_expr(gen_initial, :while)
+  defp while_range(range, file, line, initial, generator, condition_body, opts) do
+    opts = Keyword.validate!(opts, unroll: false)
+    size = Range.size(range)
 
-            body =
-              Enum.reduce(0..(internal_unroll - 1)//1, arg, fn index, acc ->
-                {true, body} = condition_body.({generator_param[Nx.add(index_param, index)], acc})
-                body = to_container_expr(body)
-                index == 0 and compatible_while!(file, line, initial, body)
-                body
-              end)
+    {internal, external} =
+      case opts[:unroll] do
+        true ->
+          {nil, range}
 
-            condition = Nx.less(index_param, tensor(internal_length))
-            gen_body = {{Nx.add(index_param, internal_unroll), generator_param}, body}
-            {_, result} = while(gen_initial, context, arg, condition, gen_body)
-            result
-          end
+        false ->
+          {{range, 0..0//1}, 0..-1//1}
 
-        Enum.reduce(0..(external_unroll - 1)//1, result, fn index, acc ->
-          {true, body} = condition_body.({generator[index + internal_length], acc})
-          body = to_container_expr(body)
-          index == 0 and compatible_while!(file, line, initial, body)
-          body
-        end)
+        unroll when is_integer(unroll) and unroll >= size ->
+          {nil, range}
+
+        unroll when is_integer(unroll) and unroll > 0 ->
+          {internal, external} = split_range(range, size - rem(size, unroll))
+          {{internal, 0..(unroll - 1)//1}, external}
+
+        unroll ->
+          message = ":unroll must be a boolean, got: #{inspect(unroll)}"
+          raise CompileError, line: line, file: file, description: message
+      end
+
+    result =
+      case internal do
+        {first..last//step, internal_unroll} ->
+          gen_initial = {{tensor(first), generator}, initial}
+          {{{index_param, generator_param}, arg}, context} = to_param_expr(gen_initial, :while)
+
+          condition =
+            if step > 0 do
+              Nx.less_equal(index_param, tensor(last))
+            else
+              Nx.greater_equal(index_param, tensor(last))
+            end
+
+          body =
+            Enum.reduce(internal_unroll, arg, fn index, acc ->
+              next = Nx.add(index_param, step * index)
+              {true, body} = condition_body.({{next, generator_param}, acc})
+              body = to_container_expr(body)
+              index == 0 and compatible_while!(file, line, initial, body)
+              body
+            end)
+
+          next = Range.size(internal_unroll) * step
+          gen_body = {{Nx.add(index_param, next), generator_param}, body}
+          {_, result} = while(gen_initial, context, arg, condition, gen_body)
+          result
+
+        nil ->
+          initial
+      end
+
+    Enum.reduce(external, result, fn index, acc ->
+      {true, body} = condition_body.({{index, generator}, acc})
+      body = to_container_expr(body)
+      index == external.first and compatible_while!(file, line, initial, body)
+      body
+    end)
+  end
+
+  # TODO: Use Range.split/2 when we require Elixir v1.15+
+  defp split_range(first..last//step = range, split) when is_integer(split) do
+    if split >= 0 do
+      split_range(first, last, step, split)
+    else
+      split_range(first, last, step, Range.size(range) + split)
+    end
+  end
+
+  defp split_range(first, last, step, split) when first < last or (first == last and step > 0) do
+    if step > 0 do
+      mid = max(min(first + step * (split - 1), last), first - step)
+      {first..mid//step, (mid + step)..last//step}
+    else
+      {first..(first - step)//step, (last + step)..last//step}
+    end
+  end
+
+  defp split_range(last, first, step, split) do
+    if step < 0 do
+      mid = min(max(last + step * (split - 1), first), last - step)
+      {last..mid//step, (mid + step)..first//step}
+    else
+      {last..(last - step)//step, (first + step)..first//step}
     end
   end
 

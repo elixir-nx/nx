@@ -1586,6 +1586,140 @@ defmodule Nx.DefnTest do
                """
     end
 
+    defn while_generator_range(acc, opts \\ []) do
+      opts = keyword!(opts, [:range, unroll: false])
+
+      while acc, part <- opts[:range], unroll: opts[:unroll] do
+        acc + part
+      end
+    end
+
+    @tag compiler: Evaluator
+    test "range generator" do
+      # Increasing ranges
+      assert while_generator_range(0, range: 0..4) == Nx.tensor(10)
+      assert while_generator_range(100, range: 1..10) == Nx.tensor(155)
+      assert while_generator_range(0, range: 0..4, unroll: true) == Nx.tensor(10)
+      assert while_generator_range(100, range: 1..10, unroll: true) == Nx.tensor(155)
+      assert while_generator_range(0, range: 0..4, unroll: 3) == Nx.tensor(10)
+      assert while_generator_range(100, range: 1..10, unroll: 3) == Nx.tensor(155)
+
+      # Empty ranges
+      assert while_generator_range(0, range: 0..-1//1) == Nx.tensor(0)
+      assert while_generator_range(100, range: 0..-1//1) == Nx.tensor(100)
+      assert while_generator_range(0, range: 0..-1//1, unroll: true) == Nx.tensor(0)
+      assert while_generator_range(100, range: 0..-1//1, unroll: true) == Nx.tensor(100)
+      assert while_generator_range(0, range: 0..-1//1, unroll: 3) == Nx.tensor(0)
+      assert while_generator_range(100, range: 0..-1//1, unroll: 3) == Nx.tensor(100)
+
+      # Decreasing ranges
+      assert while_generator_range(0, range: 4..0//-1) == Nx.tensor(10)
+      assert while_generator_range(100, range: 10..1//-1) == Nx.tensor(155)
+      assert while_generator_range(0, range: 4..0//-1, unroll: true) == Nx.tensor(10)
+      assert while_generator_range(100, range: 10..1//-1, unroll: true) == Nx.tensor(155)
+      assert while_generator_range(0, range: 4..0//-1, unroll: 3) == Nx.tensor(10)
+      assert while_generator_range(100, range: 10..1//-1, unroll: 3) == Nx.tensor(155)
+    end
+
+    test "range generator unrolled" do
+      assert while_generator_range(0, range: 1..3, unroll: true) |> inspect() == """
+             #Nx.Tensor<
+               s64
+             \s\s
+               Nx.Defn.Expr
+               parameter a:0   s64
+               b = add 6, a    s64
+             >\
+             """
+    end
+
+    test "range generator unrolled integer expression exact" do
+      expr = while_generator_range(0, range: 1..6, unroll: 3)
+
+      assert inspect(expr) == """
+             #Nx.Tensor<
+               s64
+             \s\s
+               Nx.Defn.Expr
+               parameter a:0      s64
+               b = while {1, a}   tuple2
+               c = elem b, 1      s64
+             >\
+             """
+
+      %T{
+        data: %Expr{
+          op: :elem,
+          args: [%T{data: %Expr{op: :while, args: [_, _, _, while_body]}}, 1]
+        }
+      } = expr
+
+      {counter, body} = while_body
+
+      assert inspect(counter) == """
+             #Nx.Tensor<
+               s64
+             \s\s
+               Nx.Defn.Expr
+               parameter a:0   s64
+               b = add 3, a    s64
+             >\
+             """
+
+      assert inspect(body) == """
+             #Nx.Tensor<
+               s64
+             \s\s
+               Nx.Defn.Expr
+               parameter a:0   s64
+               parameter b:1   s64
+               c = add b, a    s64
+               d = add c, a    s64
+               e = add a, d    s64
+               f = add 1, e    s64
+               g = add 2, f    s64
+             >\
+             """
+    end
+
+    test "range generator unrolled integer expression left-over" do
+      assert while_generator_range(0, range: 1..3, unroll: 3) |> inspect() == """
+             #Nx.Tensor<
+               s64
+             \s\s
+               Nx.Defn.Expr
+               parameter a:0   s64
+               b = add 6, a    s64
+             >\
+             """
+
+      assert while_generator_range(0, range: 1..8, unroll: 3) |> inspect() ==
+               """
+               #Nx.Tensor<
+                 s64
+               \s\s
+                 Nx.Defn.Expr
+                 parameter a:0      s64
+                 b = while {1, a}   tuple2
+                 c = elem b, 1      s64
+                 d = add 15, c      s64
+               >\
+               """
+
+      assert while_generator_range(0, range: 8..1//-1, unroll: 3) |> inspect() ==
+               """
+               #Nx.Tensor<
+                 s64
+               \s\s
+                 Nx.Defn.Expr
+                 parameter a:0      s64
+                 b = while {8, a}   tuple2
+                 c = elem b, 1      s64
+                 d = add 3, c       s64
+               >\
+               """
+    end
+
     defn while_mixed_return(a, b) do
       while {a, b}, Nx.less(a, 10) do
         %{a: a, b: b}

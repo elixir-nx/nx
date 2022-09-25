@@ -1020,6 +1020,9 @@ defmodule Nx.Defn.Kernel do
   If `block` is never executed because the initial `condition` is
   false, it returns `initial`.
 
+  > Note: you must prefer to use the operations in the `Nx` module,
+  > whenever available, instead of writing your own loops.
+
   ## Examples
 
   A simple loop that increments `x` until it is `10` can be written as:
@@ -1058,8 +1061,12 @@ defmodule Nx.Defn.Kernel do
   ## Generators
 
   Inspired by Elixir's [for-comprehensions](`Kernel.SpecialForms.for/1`),
-  `while` in `defn` supports generators. For example, you could sum a one
-  dimensional tensor as follows:
+  `while` in `defn` supports generators. Generators may be tensors or ranges.
+
+  ### Tensor generators
+
+  When the generator is a tensor, Nx will traverse its highest dimension.
+  For example, you could sum a one dimensional tensor as follows:
 
       while acc = 0, i <- tensor do
         acc + i
@@ -1069,9 +1076,8 @@ defmodule Nx.Defn.Kernel do
   > In practice, you must prefer to use the operations in the `Nx` module,
   > whenever available, instead of writing your own loops.
 
-  You can give any non-scalar tensor and it will traverse the highest dimension
-  by default. One advantage of using generators is that you can also unroll the
-  loop for performance:
+  One advantage of using generators is that you can also unroll the loop
+  for performance:
 
       while acc = 0, i <- tensor, unroll: true do
         acc + i
@@ -1088,6 +1094,18 @@ defmodule Nx.Defn.Kernel do
   makes the final expression larger, which causes a longer compilation
   time, however it enables additional compile-time optimizations (such as
   fusion), improving the runtime efficiency.
+
+  ### Range generators
+
+  A range can also be given as a generator. The range may be increasing or
+  decreasing. Also remember that ranges in Elixir are inclusive on both
+  begin and end. The sum example from the previous section could also be
+  written with ranges:
+
+      while {tensor, acc = 0}, i <- 0..Nx.axis_size(tensor, 0)-1 do
+        acc + tensor[i]
+      end
+
   """
   defmacro while(initial, condition_or_generator, opts \\ [], do_block)
 
@@ -1588,7 +1606,7 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc false
-  # TODO: Deprecate this in Nx v0.4
+  # TODO: Deprecate this in Nx v0.5
   # @deprecated "Use deftransform/2 or deftransformp/2 from Nx.Defn instead"
   def transform(arg, fun) when is_function(fun, 1) do
     fun.(arg)
