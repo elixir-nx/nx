@@ -1434,6 +1434,20 @@ defmodule Nx.DefnTest do
                |> String.trim()
     end
 
+    defn while_last(t) do
+      {_, last, _} =
+        while {i = 0, _last = 0, t}, i <= t do
+          {i + 1, i, t}
+        end
+
+      last
+    end
+
+    @tag compiler: Evaluator
+    test "underscored vars" do
+      assert while_last(10) == Nx.tensor(10)
+    end
+
     defn while_generator_sum(tensor) do
       while acc = tensor[0] * 0, part <- tensor do
         acc + part
