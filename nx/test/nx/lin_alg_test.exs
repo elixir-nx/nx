@@ -606,6 +606,13 @@ defmodule Nx.LinAlgTest do
                |> Nx.dot([2], [0], v, [1], [0])
                |> round(2)
     end
+
+    test "works with vectors" do
+      t = Nx.tensor([[-2], [1]])
+
+      {u, s, vt} = Nx.LinAlg.svd(t)
+      assert_all_close(u |> Nx.dot(Nx.stack([s, Nx.tensor([0])])) |> Nx.dot(vt), t)
+    end
   end
 
   describe "lu" do
