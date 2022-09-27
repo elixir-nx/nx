@@ -720,8 +720,9 @@ defmodule Nx.BinaryBackend.Matrix do
   end
 
   defp householder_bidiagonalization(a, {m, 1}, eps) do
-    u = householder_reflector(List.flatten(a), m, eps)
-    s = Enum.reduce(a |> List.flatten(), 0, fn x, acc -> x * Complex.conjugate(x) + acc end)
+    a = List.flatten(a)
+    u = householder_reflector(, m, eps)
+    s = Enum.reduce(a, 0, fn x, acc -> x * Complex.conjugate(x) + acc end)
     s = [[Complex.sqrt(s)]]
     vt = [[1]]
 
