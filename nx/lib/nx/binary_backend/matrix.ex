@@ -603,6 +603,7 @@ defmodule Nx.BinaryBackend.Matrix do
 
     # This function also sorts singular values from highest to lowest,
     # as this can be convenient.
+
     s
     |> Enum.zip_with(transpose_matrix(v), fn
       singular_value, row when singular_value < 0 ->
@@ -723,6 +724,16 @@ defmodule Nx.BinaryBackend.Matrix do
 
     v = Enum.map(u, &(&1 / norm_u))
     {v, 2, true}
+  end
+
+  defp householder_bidiagonalization(a, {m, 1}, eps) do
+    a = List.flatten(a)
+    u = householder_reflector(a, m, eps)
+    s = Enum.reduce(a, 0, fn x, acc -> x * Complex.conjugate(x) + acc end)
+    s = [[Complex.sqrt(s)]]
+    vt = [[1]]
+
+    {u, s, vt}
   end
 
   defp householder_bidiagonalization(tensor, {m, n}, eps) do

@@ -1120,6 +1120,15 @@ defmodule Nx.Defn.Kernel do
   end
 
   defp while(initial, pattern, vars, values, generator, condition, block, opts) do
+    initial =
+      Macro.prewalk(initial, fn
+        {name, meta, ctx} when Kernel.and(is_atom(name), is_atom(ctx)) ->
+          {name, [generated: true] ++ meta, ctx}
+
+        node ->
+          node
+      end)
+
     quote do
       Nx.Defn.Kernel.__defn__!(:while, 2)
       {unquote_splicing(vars)} = {unquote_splicing(values)}
