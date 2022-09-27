@@ -686,7 +686,7 @@ defmodule Nx.BinaryBackend.Matrix do
     # receives a_reverse as a list of numbers and returns the reflector as a
     # k x k matrix
 
-    norm_a_squared = Enum.reduce(a, 0, fn x, acc -> Complex.abs(x) * Complex.abs(x) + acc end)
+    norm_a_squared = Enum.reduce(a, 0, fn x, acc -> x * Complex.conjugate(x) + acc end)
     norm_a_sq_1on = norm_a_squared - a_0 * a_0
 
     if norm_a_sq_1on < eps do
@@ -856,7 +856,7 @@ defmodule Nx.BinaryBackend.Matrix do
       |> Enum.map(fn col ->
         row
         |> Enum.zip(col)
-        |> Enum.reduce(0, fn {x, y}, acc -> acc + Complex.multiply(x, y) end)
+        |> Enum.reduce(0, fn {x, y}, acc -> acc + x * Complex.conjugate(y) end)
       end)
     end)
   end
