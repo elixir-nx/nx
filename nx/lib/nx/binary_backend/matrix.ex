@@ -391,6 +391,7 @@ defmodule Nx.BinaryBackend.Matrix do
             h
             |> dot_matrix_real(hess)
             |> dot_matrix_real(h_adj)
+
           {hess, q}
       end
 
