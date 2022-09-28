@@ -867,7 +867,7 @@ defmodule Nx.BinaryBackend.Matrix do
       |> Enum.map(fn col ->
         row
         |> Enum.zip(col)
-        |> Enum.reduce(0, fn {x, y}, acc -> acc + x * Complex.conjugate(y) end)
+        |> Enum.reduce(0, fn {x, y}, acc -> acc + Complex.multiply(x, y) end)
       end)
     end)
   end

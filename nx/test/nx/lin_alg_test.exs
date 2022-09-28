@@ -427,6 +427,33 @@ defmodule Nx.LinAlgTest do
                ])
     end
 
+    test "correctly a eigenvalues and eigenvectors for a Hermitian matrix case" do
+      # Hermitian matrix
+      t = Nx.tensor(
+        [
+          [1, Complex.new(0, 2), 2],
+          [Complex.new(0, -2), -3, Complex.new(0, 2)],
+          [2, Complex.new(0, -2), 1]
+        ]
+      )
+
+      assert {eigenvals, eigenvecs} = Nx.LinAlg.eigh(t)
+
+      # Eigenvalues
+      assert eigenvals ==
+                Nx.tensor([Complex.new(-5, 0), Complex.new(3, 0), Complex.new(1, 0)])
+
+      # Eigenvectors
+      assert complex_round(eigenvecs, 3) ==
+                Nx.tensor(
+                  [
+                    [Complex.new(-0.40799999237060547, 0.0), Complex.new(0.0, 0.7070000171661377), Complex.new(0.5770000219345093, 0.0)],
+                    [Complex.new(0.0, -0.8159999847412109), Complex.new(0.0, 0.0), Complex.new(0.0, -0.5770000219345093)],
+                    [Complex.new(0.40799999237060547, 0.0), Complex.new(0.0, 0.7070000171661377), Complex.new(-0.5770000219345093, 0.0)]
+                  ]
+                )
+    end
+
     test "property for matrices with different eigenvalues" do
       # Generate real Hermitian matrices with different eigenvalues
       # from random matrices based on the relation A = Q.Λ.Q^*
