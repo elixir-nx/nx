@@ -872,7 +872,7 @@ defmodule Nx.BinaryBackend.Matrix do
     end)
   end
 
-  defp multiply_matrix(m1, m2) do
+  defp dot_matrix_real(m1, m2) do
     Enum.map(m1, fn row ->
       m2
       |> transpose_matrix()
