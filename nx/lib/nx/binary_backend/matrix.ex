@@ -219,10 +219,10 @@ defmodule Nx.BinaryBackend.Matrix do
             if is_nil(q) do
               h
             else
-              dot_matrix(q, h)
+              multiply_matrix(q, h)
             end
 
-          r = dot_matrix(h, r)
+          r = multiply_matrix(h, r)
           {q, r}
       end
 
@@ -344,8 +344,8 @@ defmodule Nx.BinaryBackend.Matrix do
         {q_now, r_now} = qr_decomposition(a_old, n, n, eps)
 
         # Update matrix A, Q
-        a_new = dot_matrix(r_now, q_now)
-        q_new = dot_matrix(q_old, q_now)
+        a_new = multiply_matrix(r_now, q_now)
+        q_new = multiply_matrix(q_old, q_now)
 
         if is_approximately_same?(q_old, q_new, eps) do
           {:halt, {a_new, q_new}}
@@ -381,7 +381,7 @@ defmodule Nx.BinaryBackend.Matrix do
             if is_nil(q) do
               h
             else
-              dot_matrix(q, h)
+              multiply_matrix(q, h)
             end
 
           # Hessenberg matrix H updating
@@ -392,8 +392,8 @@ defmodule Nx.BinaryBackend.Matrix do
 
           hess =
             h
-            |> dot_matrix(hess)
-            |> dot_matrix(h_cc)
+            |> multiply_matrix(hess)
+            |> multiply_matrix(h_cc)
 
           {hess, q}
       end
@@ -867,7 +867,19 @@ defmodule Nx.BinaryBackend.Matrix do
       |> Enum.map(fn col ->
         row
         |> Enum.zip(col)
-        |> Enum.reduce(0, fn {x, y}, acc -> acc + Complex.multiply(x, y) end)
+        |> Enum.reduce(0, fn {x, y}, acc -> acc + x * Complex.conjugate(y) end)
+      end)
+    end)
+  end
+
+  defp multiply_matrix(m1, m2) do
+    Enum.map(m1, fn row ->
+      m2
+      |> transpose_matrix()
+      |> Enum.map(fn col ->
+        row
+        |> Enum.zip(col)
+        |> Enum.reduce(0, fn {x, y}, acc -> acc + x * y end)
       end)
     end)
   end
