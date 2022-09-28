@@ -384,6 +384,7 @@ defmodule Nx.BinaryBackend.Matrix do
             end
 
           h_cc = conjugate_matrix(h)
+
           hess =
             h
             |> dot_matrix(hess)
