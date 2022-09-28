@@ -2358,7 +2358,8 @@ defmodule Nx.DefnTest do
                  y_value,
                  x_value,
                  y_value
-               ]) |> String.replace(~r/\s/, "")
+               ])
+               |> String.replace(~r/\s/, "")
     end
   end
 end
