@@ -468,9 +468,9 @@ defmodule Nx.LinAlgTest do
       # from random matrices based on the relation A = Q.Λ.Q^*
       # where Λ is the diagonal matrix of eigenvalues and Q is unitary matrix.
 
-      for _ <- 1..3 do
+      for _ <- 1..3, type <- [f: 32, c: 64] do
         # Unitary matrix from a random matrix
-        {q, _} = Nx.random_uniform({3, 3, 3}, type: {:c, 64}) |> Nx.LinAlg.qr()
+        {q, _} = Nx.random_uniform({3, 3, 3}, type: type) |> Nx.LinAlg.qr()
 
         # Different eigenvalues from random values
         evals_test =
@@ -512,9 +512,9 @@ defmodule Nx.LinAlgTest do
       # Generate real Hermitian matrices with close eigenvalues
       # from random matrices based on the relation A = Q.Λ.Q^*
 
-      for _ <- 1..3 do
+      for _ <- 1..3, type <- [f: 32, c: 64] do
         # Unitary matrix from a random matrix
-        {q, _} = Nx.random_uniform({3, 3, 3}, type: {:c, 64}) |> Nx.LinAlg.qr()
+        {q, _} = Nx.random_uniform({3, 3, 3}, type: type) |> Nx.LinAlg.qr()
 
         # ensure that eval1 is far apart from the other two eigenvals
         eval1 = :rand.uniform() * 10 + 10
