@@ -971,7 +971,7 @@ defmodule Nx.BinaryBackend.Matrix do
   end
 
   defp approximate_zeros(matrix, tol) do
-    do_round = fn x -> if Complex.abs(x) < tol, do: 0, else: x end
+    do_round = fn x -> if Complex.abs(x) < tol, do: 0 * x, else: x end
 
     Enum.map(matrix, fn
       row when is_list(row) -> Enum.map(row, do_round)
