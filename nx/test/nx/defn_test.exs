@@ -2345,7 +2345,7 @@ defmodule Nx.DefnTest do
       z_expr =
         "#Nx.Tensor<\n  s64\n  \n  Nx.Defn.Expr\n  parameter a:0            s64\n  b = add 3, a             s64\n  c = token hook_*: b   tuple1\n  d = attach_token c, b    s64\n>\n"
 
-      io = String.replace(io, ~r/token hook_\d+/, "token hook_*")
+      io = io |> String.replace(~r/token hook_\d+/, "token hook_*") |> String.replace(~r/\s/, "")
 
       assert io ==
                Enum.join([
@@ -2358,7 +2358,7 @@ defmodule Nx.DefnTest do
                  y_value,
                  x_value,
                  y_value
-               ])
+               ]) |> String.replace(~r/\s/, "")
     end
   end
 end
