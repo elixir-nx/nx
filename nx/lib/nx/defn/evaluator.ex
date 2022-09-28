@@ -68,19 +68,30 @@ defmodule Nx.Defn.Evaluator do
     eval(expr, state, cache)
   end
 
-  defp eval(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, _meta]}}, state, cache) do
-    eval(expr, state, cache)
+  defp eval(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, meta]}}, state, cache) do
+    next_state = Map.put(state, :checkpoint, !!meta[:checkpoint])
+    eval(expr, next_state, cache)
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}} = ans, state, cache) do
+    checkpoint = state[:checkpoint]
+
     case cache do
       %{^id => res} ->
         {res, cache}
 
       %{} ->
-        {res, cache} = eval_apply(op, ans, state, cache)
+        {res, updated_cache} = eval_apply(op, ans, state, cache)
         state.gc && :erlang.garbage_collect(self())
-        {res, Map.put(cache, id, res)}
+
+        next_cache =
+          if checkpoint do
+            cache
+          else
+            Map.put(updated_cache, id, res)
+          end
+
+        {res, next_cache}
     end
   end
 

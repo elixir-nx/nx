@@ -88,10 +88,6 @@ defmodule Nx.Defn.Grad do
     end
   end
 
-  defp parents_args(:metadata, %{data: %{args: [_, %{stop_grad: true}]}}, _id, acc) do
-    acc
-  end
-
   # We register cond as a special node to avoid pretraversing it.
   # Instead we traverse it early on on the grad computation.
   defp parents_args(:cond, _, id, {parents, nodes}) do

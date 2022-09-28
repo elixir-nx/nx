@@ -2303,4 +2303,62 @@ defmodule Nx.DefnTest do
       end
     end
   end
+
+  describe "checkpoints" do
+    defn defn_checkpoint(t) do
+      x = checkpoint(print_expr(print_value(t + 1)))
+
+      y = checkpoint(print_expr(print_value(t + 2)))
+
+      z = print_expr(print_value(t + 3))
+
+      z + z + z + z + x + y * y + x + y
+    end
+
+    @tag compiler: Evaluator
+    test "does not cache checkpoint results" do
+      io =
+        ExUnit.CaptureIO.capture_io(fn ->
+          fun = Nx.Defn.compile(&defn_checkpoint/1, [1])
+          assert fun.(1) == Nx.tensor(32)
+        end)
+
+      # The expression  z + z + z + z + x + y + y + x + y contains
+      # 4 occurences of z, 3 occurences of y and 2 occurences of x
+      # since z is not checkpointed, the `print_value` associated with it
+      # should only be printed once.
+      # For the other ones, the prints should occur once for each occurence,
+      # all in order of appearance in the expression
+
+      # All print_expr should only be printed once because we don't touch expr compilation caches through checkpoints
+
+      x_value = "#Nx.Tensor<\n  s64\n  2\n>\n"
+      y_value = "#Nx.Tensor<\n  s64\n  3\n>\n"
+      z_value = "#Nx.Tensor<\n  s64\n  4\n>\n"
+
+      x_expr =
+        "#Nx.Tensor<\n  s64\n  \n  Nx.Defn.Expr\n  parameter a:0            s64\n  b = add 1, a             s64\n  c = token hook_*: b   tuple1\n  d = attach_token c, b    s64\n>\n"
+
+      y_expr =
+        "#Nx.Tensor<\n  s64\n  \n  Nx.Defn.Expr\n  parameter a:0            s64\n  b = add 2, a             s64\n  c = token hook_*: b   tuple1\n  d = attach_token c, b    s64\n>\n"
+
+      z_expr =
+        "#Nx.Tensor<\n  s64\n  \n  Nx.Defn.Expr\n  parameter a:0            s64\n  b = add 3, a             s64\n  c = token hook_*: b   tuple1\n  d = attach_token c, b    s64\n>\n"
+
+      io = String.replace(io, ~r/token hook_\d+/, "token hook_*")
+
+      assert io ==
+               Enum.join([
+                 x_expr,
+                 y_expr,
+                 z_expr,
+                 z_value,
+                 x_value,
+                 y_value,
+                 y_value,
+                 x_value,
+                 y_value
+               ])
+    end
+  end
 end

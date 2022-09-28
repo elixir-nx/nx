@@ -243,6 +243,17 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
+  Marks the given expression as a checkpoint.
+
+  Checkpoints are always computed and never cached,
+  so this provides a way to exchange memory footprint
+  with computational time.
+  """
+  def checkpoint(expr) do
+    Nx.Defn.Expr.metadata(expr, %{checkpoint: true, inspect: :checkpoint})
+  end
+
+  @doc """
   Defines a custom gradient for the given expression.
 
   It expects a `fun` to compute the gradient. The function
