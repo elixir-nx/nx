@@ -2305,6 +2305,21 @@ defmodule Nx.DefnTest do
   end
 
   describe "checkpoints" do
+    defn defn_checkpoint2(a, b) do
+      c = print_value(a + b)
+      checkpoint(c * c) + c * c
+    end
+
+    @tag compiler: Evaluator
+    test "abobrinha" do
+            io =
+        ExUnit.CaptureIO.capture_io(fn ->
+          assert Nx.Defn.jit(&defn_checkpoint2/2).(1, 2) == Nx.tensor(18)
+        end)
+
+        IO.inspect io
+    end
+
     defn defn_checkpoint(t) do
       x = checkpoint(print_expr(print_value(t + 1)))
 
