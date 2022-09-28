@@ -446,19 +446,19 @@ defmodule Nx.LinAlgTest do
       assert complex_round(eigenvecs, 3) ==
                Nx.tensor([
                  [
-                   Complex.new(-0.40799999237060547, 0.0),
-                   Complex.new(0.0, 0.7070000171661377),
-                   Complex.new(0.5770000219345093, 0.0)
+                   Complex.new(-0.408, 0.0),
+                   Complex.new(0.0, 0.707),
+                   Complex.new(0.577, 0.0)
                  ],
                  [
-                   Complex.new(0.0, -0.8159999847412109),
+                   Complex.new(0.0, -0.816),
                    Complex.new(0.0, 0.0),
-                   Complex.new(0.0, -0.5770000219345093)
+                   Complex.new(0.0, -0.577)
                  ],
                  [
-                   Complex.new(0.40799999237060547, 0.0),
-                   Complex.new(0.0, 0.7070000171661377),
-                   Complex.new(-0.5770000219345093, 0.0)
+                   Complex.new(0.408, 0.0),
+                   Complex.new(0.0, 0.707),
+                   Complex.new(-0.577, 0.0)
                  ]
                ])
     end
