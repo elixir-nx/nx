@@ -1,6 +1,5 @@
 defmodule Nx.LinAlgTest do
   use ExUnit.Case, async: true
-  use Complex.Kernel
 
   import Nx.Helpers
   import Nx, only: :sigils
@@ -443,7 +442,7 @@ defmodule Nx.LinAlgTest do
                Nx.tensor([Complex.new(-5, 0), Complex.new(3, 0), Complex.new(1, 0)])
 
       # Eigenvectors
-      assert complex_round(eigenvecs, 3) ==
+      assert round(eigenvecs, 3, {:c, 64}) ==
                Nx.tensor([
                  [
                    Complex.new(-0.408, 0.0),
@@ -494,7 +493,7 @@ defmodule Nx.LinAlgTest do
           |> Nx.LinAlg.adjoint()
           |> Nx.multiply(evals_test)
           |> Nx.dot([2], [0], q, [1], [0])
-          |> complex_round(3)
+          |> round(3, type)
 
         # Eigenvalues and eigenvectors
         assert {evals, evecs} = Nx.LinAlg.eigh(a)
@@ -532,7 +531,7 @@ defmodule Nx.LinAlgTest do
           |> Nx.LinAlg.adjoint()
           |> Nx.multiply(evals_test)
           |> Nx.dot([2], [0], q, [1], [0])
-          |> complex_round(3)
+          |> round(3, type)
 
         # Eigenvalues and eigenvectors
         assert {evals, evecs} = Nx.LinAlg.eigh(a)
@@ -698,18 +697,18 @@ defmodule Nx.LinAlgTest do
     end
   end
 
-  defp round(tensor, places) do
-    Nx.map(tensor, fn x ->
-      Float.round(Nx.to_number(x), places)
-    end)
-  end
-
-  defp complex_round(tensor, places) do
+  defp round(tensor, places, type) when type == {:c, 64} or type == {:c, 128} do
     round_real = fn x -> Float.round(Complex.real(Nx.to_number(x)), places) end
     round_imag = fn x -> Float.round(Complex.imag(Nx.to_number(x)), places) end
 
     Nx.map(tensor, fn x ->
       Complex.new(round_real.(x), round_imag.(x))
+    end)
+  end
+
+  defp round(tensor, places, type \\ {:f, 32}) do
+    Nx.map(tensor, fn x ->
+      Float.round(Nx.to_number(x), places)
     end)
   end
 end
