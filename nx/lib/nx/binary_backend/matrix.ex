@@ -885,10 +885,12 @@ defmodule Nx.BinaryBackend.Matrix do
     end)
   end
 
+  defp adjoint_matrix([x | _] = m) when not is_list(x) do
+    Enum.map(m, &[Complex.conjugate(&1)])
+  end
+
   defp adjoint_matrix(m) do
-    m
-    |> transpose_matrix()
-    |> Enum.map(fn row -> Enum.map(row, &Complex.conjugate(&1)) end)
+    Enum.zip_with(m, fn cols -> Enum.map(cols, &Complex.conjugate/1) end)
   end
 
   defp transpose_matrix([x | _] = m) when not is_list(x) do

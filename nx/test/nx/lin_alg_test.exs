@@ -435,7 +435,7 @@ defmodule Nx.LinAlgTest do
           [2, Complex.new(0, -2), 1]
         ])
 
-      assert {eigenvals, eigenvecs} = Nx.LinAlg.eigh(t)
+      assert {eigenvals, eigenvecs} = Nx.LinAlg.eigh(t, max_iter: 10_000)
 
       # Eigenvalues
       assert eigenvals ==
@@ -496,7 +496,7 @@ defmodule Nx.LinAlgTest do
           |> round(3)
 
         # Eigenvalues and eigenvectors
-        assert {evals, evecs} = Nx.LinAlg.eigh(a)
+        assert {evals, evecs} = Nx.LinAlg.eigh(a, max_iter: 10_000)
         assert_all_close(evals_test, evals, atol: 1.0e-2)
 
         # Eigenvalue equation
@@ -511,9 +511,9 @@ defmodule Nx.LinAlgTest do
       # Generate real Hermitian matrices with close eigenvalues
       # from random matrices based on the relation A = Q.Λ.Q^*
 
-      for _ <- 1..3, type <- [f: 32, c: 64] do
+      for _ <- 1..3 do
         # Unitary matrix from a random matrix
-        {q, _} = Nx.random_uniform({3, 3, 3}, type: type) |> Nx.LinAlg.qr()
+        {q, _} = Nx.random_uniform({3, 3, 3}) |> Nx.LinAlg.qr()
 
         # ensure that eval1 is far apart from the other two eigenvals
         eval1 = :rand.uniform() * 10 + 10
