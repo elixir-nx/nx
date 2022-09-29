@@ -202,7 +202,7 @@ defmodule Torchx.ComplexTest do
   end
 
   describe "LinAlg not yet implemented" do
-    for function <- [:svd, :eigh] do
+    for function <- [:svd] do
       test "#{function}" do
         t = Nx.broadcast(Nx.tensor(1, type: {:c, 64}), {3, 3})
 
