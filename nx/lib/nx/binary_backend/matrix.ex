@@ -215,11 +215,13 @@ defmodule Nx.BinaryBackend.Matrix do
             |> householder_reflector(m, eps)
 
           # If we haven't allocated Q yet, let Q = H1
+          # TODO: Resolve inconsistent with the Householder reflector.
+          # cf. https://github.com/elixir-nx/nx/pull/933#discussion_r982772063
           q =
             if is_nil(q) do
               h
             else
-              dot_matrix(q, h)
+              dot_matrix_real(q, h)
             end
 
           r = dot_matrix_real(h, r)
@@ -377,11 +379,13 @@ defmodule Nx.BinaryBackend.Matrix do
             |> householder_reflector(n, eps)
 
           # If we haven't allocated Q yet, let Q = H1
+          # TODO: Resolve inconsistent with the Householder reflector.
+          # cf. https://github.com/elixir-nx/nx/pull/933#discussion_r982772063
           q =
             if is_nil(q) do
               h
             else
-              dot_matrix(q, h)
+              dot_matrix_real(q, h)
             end
 
           # Hessenberg matrix H updating
