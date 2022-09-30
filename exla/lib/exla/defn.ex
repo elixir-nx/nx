@@ -541,8 +541,14 @@ defmodule EXLA.Defn do
     {fun_computation(name, args, expr, type, state), cache}
   end
 
-  defp cached_recur_operator(:optional, %T{data: %Expr{args: [_, default]}}, state, cache) do
-    recur_operator(default, state, cache)
+  defp cached_recur_operator(:optional, %T{data: %Expr{args: [expr, default]}}, state, cache) do
+    {args, cache} =
+      expr.data.args
+      |> Enum.take_while(&not is_list(&1))
+      |> Enum.map_reduce(cache, &recur_operator(&1, state, &2))
+
+    params = Enum.with_index(args, fn arg, index -> {index, arg} end)
+    recur_operator(default, %{state | params: Map.new(params)}, cache)
   end
 
   defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do

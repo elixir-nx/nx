@@ -19,7 +19,7 @@ defmodule Nx.Defn.Evaluator do
     rest_params = Enum.drop(args, count)
     hooks = Keyword.get(opts, :hooks, %{})
     gc? = Keyword.get(opts, :garbage_collect, true)
-    expr = fun.(vars)
+    {expr, state, cache} = precompile(fun, vars, hooks, gc?)
 
     [
       Nx.Defn.Stream.start_link(input, acc, fn input_params, acc ->
@@ -27,7 +27,7 @@ defmodule Nx.Defn.Evaluator do
         params = input_params ++ acc_params ++ rest_params
 
         expr
-        |> composite_eval(%{params: params, hooks: hooks, gc: gc?}, %{})
+        |> composite_eval(%{state | params: params}, cache)
         |> elem(0)
       end)
     ]
@@ -42,16 +42,120 @@ defmodule Nx.Defn.Evaluator do
   def __compile__(_key, vars, fun, opts) do
     hooks = Keyword.get(opts, :hooks, %{})
     gc? = Keyword.get(opts, :garbage_collect, true)
-    expr = fun.(vars)
+    {expr, state, cache} = precompile(fun, vars, hooks, gc?)
 
     fn [params] ->
-      [
-        expr
-        |> composite_eval(%{params: params, hooks: hooks, gc: gc?}, %{})
-        |> elem(0)
-      ]
+      [expr |> composite_eval(%{state | params: params}, cache) |> elem(0)]
     end
   end
+
+  defp precompile(fun, vars, hooks, gc?) do
+    expr = fun.(vars)
+    state = %{params: nil, hooks: hooks, gc: gc?, scope: nil}
+    composite_compute_cache(expr, state, %{})
+    cache = %{}
+    {expr, state, cache}
+  end
+
+  defp composite_compute_cache(expr, state, cache) do
+    Composite.reduce(expr, cache, &compute_cache(&1, state, &2))
+  end
+
+  defp compute_cache(%Nx.Tensor{data: %Expr{id: id, op: op}} = tensor, state, cache) do
+    # Every time we see a reference, we bump its counter.
+    #
+    # Some expressions, such as while and fun, require their
+    # own cache and those are precomputed too. However, given
+    # those constructs do not act like closures, recomputing
+    # them is straight-forward.
+    #
+    # The only complex construct are conds. Each reference
+    # seen in a cond is bumped by one, regardless of how many
+    # times it shows up in the cond, and then we keep a counter
+    # specific for said cond. Once the cond counter reaches zero,
+    # we decrease the actual reference by one. Furthermore,
+    # different branches of a cond depend on different variables,
+    # we need to keep track of all branches and immediatelly
+    # decrease values that are seen in other branches but not the
+    # one currently chosen.
+    case cache do
+      %{^id => counter} ->
+        case state.scope do
+          nil ->
+            %{cache | id => counter + 1}
+
+          scope ->
+            cache = bump_counter(cache, [id | scope])
+
+            case cache do
+              # We have seen this element in this branch
+              %{^scope => %{^id => _}} -> cache
+              # We have not seen this element yet
+              %{^scope => set} -> %{cache | scope => Map.put(set, id, [])}
+            end
+        end
+
+      %{} ->
+        cache = compute_cache(op, tensor, state, cache)
+
+        case state.scope do
+          nil ->
+            Map.put(cache, id, 1)
+
+          scope ->
+            cache
+            # We set it to zero because it will be incremented later by cond
+            |> Map.put(id, 0)
+            |> Map.put([id | scope], 1)
+            |> Map.update!(scope, &Map.put(&1, id, []))
+        end
+    end
+  end
+
+  defp bump_counter(cache, key) do
+    case cache do
+      %{^key => counter} -> %{cache | key => counter + 1}
+      %{} -> Map.put(cache, key, 1)
+    end
+  end
+
+  defp compute_cache(:fun, %{data: %Expr{id: id, args: args}}, state, cache) do
+    [_args, expr, _mfa] = args
+    fun_cache = composite_compute_cache(expr, state, %{})
+    Map.put(cache, [:fun | id], fun_cache)
+  end
+
+  defp compute_cache(:while, %{data: %Expr{args: args, id: id}}, state, cache) do
+    [initial, _arg, pred, block] = args
+    cache = composite_compute_cache(initial, state, cache)
+
+    while_cache = %{}
+    while_cache = compute_cache(pred, state, while_cache)
+    while_cache = composite_compute_cache(block, state, while_cache)
+
+    Map.put(cache, [:while | id], while_cache)
+  end
+
+  # defp compute_cache(:optional, %{data: %Expr{args: [expr, default_impl_expr]}}, state, cache) do
+  #   # The arguments are shared between expr and default_impl_expr nodes,
+  #   # so we don't do extra work regardless of the branch we choose.
+  #   {args, cache} = Tree.apply_args(expr, cache, &compute_cache(&1, state, &2))
+  #   backend = Nx.Shared.list_impl!(args.)
+
+  #   if function_exported?(backend, expr.data.op, length(args) + 1) do
+  #     {apply(backend, expr.data.op, [expr | args]), cache}
+  #   else
+  #     eval(default_impl_expr, state, cache)
+  #   end
+
+  # :cond :token
+
+  defp compute_cache(_op, tensor, state, cache) do
+    {_, cache} = Tree.apply_args(tensor, cache, &{&1, compute_cache(&1, state, &2)})
+    cache
+  end
+
+  ## Evaluation
 
   defp eval(%Nx.Tensor{data: %Expr{op: :tensor, args: [t]}}, _state, cache) do
     {t, cache}
@@ -165,7 +269,8 @@ defmodule Nx.Defn.Evaluator do
     if function_exported?(backend, expr.data.op, length(args) + 1) do
       {apply(backend, expr.data.op, [expr | args]), cache}
     else
-      eval(default_impl_expr, state, cache)
+      params = Enum.map(args, &fn -> &1 end)
+      eval(default_impl_expr, %{state | params: params}, cache)
     end
   end
 
@@ -199,6 +304,8 @@ defmodule Nx.Defn.Evaluator do
     {apply(mod, op, args), cache}
   end
 
+  ## Control flow helpers
+
   defp while(acc, condition, block, state, cache) do
     state = %{state | params: composite_to_params(acc)}
     {pred, temp} = eval(condition, state, cache)
@@ -210,6 +317,20 @@ defmodule Nx.Defn.Evaluator do
       acc
     end
   end
+
+  defp cond_clause([{pred, clause} | clauses], last, state, cache) do
+    {pred, cache} = eval(pred, state, cache)
+
+    if Nx.to_number(pred) != 0,
+      do: {clause, cache},
+      else: cond_clause(clauses, last, state, cache)
+  end
+
+  defp cond_clause([], last, _state, cache) do
+    {last, cache}
+  end
+
+  ## Composite
 
   defp composite_eval(composite, state, cache) do
     Composite.traverse(composite, cache, &eval(&1, state, &2))
@@ -225,17 +346,5 @@ defmodule Nx.Defn.Evaluator do
 
   defp composite_to_params(other, acc) do
     [fn -> other end | acc]
-  end
-
-  defp cond_clause([{pred, clause} | clauses], last, state, cache) do
-    {pred, cache} = eval(pred, state, cache)
-
-    if Nx.to_number(pred) != 0,
-      do: {clause, cache},
-      else: cond_clause(clauses, last, state, cache)
-  end
-
-  defp cond_clause([], last, _state, cache) do
-    {last, cache}
   end
 end
