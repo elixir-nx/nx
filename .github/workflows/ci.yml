@@ -34,7 +34,7 @@ jobs:
         id: mix-cache # id to use in retrieve action
         with:
           path: ${{ github.workspace }}/${{ matrix.working_directory }}/deps
-          key: ${{ runner.os }}-Elixir-v${{ matrix.elixir }}-OTP-${{ matrix.otp }}-backend-${{ matrix.working_directory }}
+          key: ${{ runner.os }}-Elixir-v${{ matrix.elixir }}-OTP-${{ matrix.otp }}-${{ hashFiles(format('{0}/{1}/mix.lock', github.workspace, matrix.working_directory)) }}
       - name: Retrieve libtorch cache
         if: ${{ matrix.working_directory == 'torchx' }}
         uses: actions/cache@v1
