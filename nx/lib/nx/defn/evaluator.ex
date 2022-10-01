@@ -19,7 +19,7 @@ defmodule Nx.Defn.Evaluator do
     rest_params = Enum.drop(args, count)
     hooks = Keyword.get(opts, :hooks, %{})
     gc? = Keyword.get(opts, :garbage_collect, true)
-    {expr, state, cache} = precompile(fun, vars, hooks, gc?)
+    {expr, meta, cache} = precompile(fun, vars, hooks)
 
     [
       Nx.Defn.Stream.start_link(input, acc, fn input_params, acc ->
@@ -27,7 +27,7 @@ defmodule Nx.Defn.Evaluator do
         params = input_params ++ acc_params ++ rest_params
 
         expr
-        |> composite_eval(%{state | params: params}, cache)
+        |> composite_eval(%{params: params, gc: gc?, parent: nil, meta: meta}, cache)
         |> elem(0)
       end)
     ]
@@ -42,37 +42,32 @@ defmodule Nx.Defn.Evaluator do
   def __compile__(_key, vars, fun, opts) do
     hooks = Keyword.get(opts, :hooks, %{})
     gc? = Keyword.get(opts, :garbage_collect, true)
-    {expr, state, cache} = precompile(fun, vars, hooks, gc?)
+    {expr, meta, cache} = precompile(fun, vars, hooks)
 
     fn [params] ->
-      [expr |> composite_eval(%{state | params: params}, cache) |> elem(0)]
+      [expr |> composite_eval(%{params: params, gc: gc?, parent: nil, meta: meta}, cache) |> elem(0)]
     end
   end
 
-  defp precompile(fun, vars, hooks, gc?) do
+  defp precompile(fun, vars, hooks) do
     expr = fun.(vars)
-    state = %{params: nil, hooks: hooks, gc: gc?}
-    cache = composite_compute_cache(expr, state, %{})
-    {expr, state, cache}
+    state = %{hooks: hooks}
+    {meta, cache} = composite_compute_cache(expr, state, {%{}, %{}})
+    {expr, meta, cache}
   end
 
-  defp composite_compute_cache(expr, state, cache) do
-    Composite.reduce(expr, cache, &compute_cache(&1, state, &2))
+  defp composite_compute_cache(expr, state, acc) do
+    Composite.reduce(expr, acc, &compute_cache(&1, state, &2))
   end
 
-  defp compute_cache(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, _meta]}}, state, cache) do
-    compute_cache(expr, state, cache)
+  defp compute_cache(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, _meta]}}, state, acc) do
+    compute_cache(expr, state, acc)
   end
 
-  defp compute_cache(%Nx.Tensor{data: %Expr{id: id, op: op}} = tensor, state, cache) do
+  defp compute_cache(%Nx.Tensor{data: %Expr{id: id, op: op}} = tensor, state, {meta, cache}) do
     case cache do
-      %{^id => counter} ->
-        %{cache | id => counter + 1}
-
-      %{} ->
-        op
-        |> compute_cache(tensor, state, cache)
-        |> Map.put(id, 1)
+      %{^id => counter} -> {meta, %{cache | id => counter + 1}}
+      %{} -> compute_cache(op, tensor, state, meta, Map.put(cache, id, 1))
     end
   end
 
@@ -83,51 +78,56 @@ defmodule Nx.Defn.Evaluator do
     end
   end
 
-  defp compute_cache(:fun, %{data: %Expr{id: id, args: args}}, state, cache) do
+  defp compute_cache(:fun, %{data: %Expr{id: id, args: args}}, state, meta, cache) do
     [_args, expr, _mfa] = args
-    fun_cache = composite_compute_cache(expr, state, %{})
-    Map.put(cache, [:fun | id], fun_cache)
+    {meta, fun_cache} = composite_compute_cache(expr, state, {meta, %{}})
+    {Map.put(meta, id, fun_cache), cache}
   end
 
-  defp compute_cache(:while, %{data: %Expr{args: args, id: id}}, state, cache) do
+  defp compute_cache(:while, %{data: %Expr{args: args, id: id}}, state, meta, cache) do
     [initial, _arg, pred, block] = args
-    cache = composite_compute_cache(initial, state, cache)
+    {meta, cache} = composite_compute_cache(initial, state, {meta, cache})
 
     while_cache = %{}
-    while_cache = compute_cache(pred, state, while_cache)
-    while_cache = composite_compute_cache(block, state, while_cache)
+    {meta, while_cache} = compute_cache(pred, state, {meta, while_cache})
+    {meta, while_cache} = composite_compute_cache(block, state, {meta, while_cache})
 
-    Map.put(cache, [:while | id], while_cache)
+    {Map.put(meta, id, while_cache), cache}
   end
 
-  defp compute_cache(:optional, %{data: %Expr{args: args, id: id}}, state, cache) do
+  defp compute_cache(:optional, %{data: %Expr{args: args, id: id}}, state, meta, cache) do
     [expr, default_impl_expr] = args
-    cache = Enum.reduce(expr.data.args, cache, &compute_cache(&1, state, &2))
-    optional_cache = composite_compute_cache(default_impl_expr, state, %{})
-    Map.put(cache, [:optional | id], optional_cache)
+    {meta, cache} = Enum.reduce(expr.data.args, {meta, cache}, &compute_cache(&1, state, &2))
+    {meta, optional_cache} = composite_compute_cache(default_impl_expr, state, {meta, %{}})
+    {Map.put(meta, id, optional_cache), cache}
   end
 
-  defp compute_cache(:token, %{data: %Expr{args: [token], id: id}}, state, cache) do
+  defp compute_cache(:token, %{data: %Expr{args: [token], id: id}}, state, meta, cache) do
     hooks = state.hooks
 
-    {hooks, cache} =
-      Enum.map_reduce(token.hooks, cache, fn
-        %{callback: callback, expr: expr, name: name}, cache ->
+    {hooks, {meta, cache}} =
+      Enum.map_reduce(token.hooks, {meta, cache}, fn
+        %{callback: callback, expr: expr, name: name}, acc ->
           hook_fun = hooks[name] || callback
 
           cond do
-            hook_fun -> {hook_fun, composite_compute_cache(expr, state, cache)}
-            Tree.has_hooks?(expr, hooks) -> {true, composite_compute_cache(expr, state, cache)}
-            true -> {false, cache}
+            hook_fun -> {hook_fun, composite_compute_cache(expr, state, acc)}
+            Tree.has_hooks?(expr, hooks) -> {true, composite_compute_cache(expr, state, acc)}
+            true -> {false, acc}
           end
       end)
 
-    Map.put(cache, [:token | id], hooks)
+    {Map.put(meta, id, hooks), cache}
   end
 
-  defp compute_cache(:cond, %{data: %Expr{args: [clauses, last], id: id}}, state, cache) do
-    clauses_cache = Enum.map(clauses, &composite_compute_cache(&1, state, %{}))
-    last_cache = composite_compute_cache(last, state, %{})
+  defp compute_cache(:cond, %{data: %Expr{args: [clauses, last], id: id}}, state, meta, cache) do
+    {clauses_cache, meta} = Enum.map_reduce(clauses, meta, fn clause, meta ->
+      # TODO: We should be able to reuse the cache somehow here
+      {meta, cache} = composite_compute_cache(clause, state, {meta, %{}})
+      {cache, meta}
+    end)
+
+    {meta, last_cache} = composite_compute_cache(last, state, {meta, %{}})
 
     # Now compute all IDs used in the if (but remove cons pairs which are used for metadata).
     # They are incremented by one now and decremented by one at the end of every cond.
@@ -138,12 +138,12 @@ defmodule Nx.Defn.Evaluator do
       |> Enum.reject(&is_list/1)
 
     cache = Enum.reduce(all_ids, cache, &bump_counter(&2, &1))
-    Map.put(cache, [:cond | id], {clauses_cache, last_cache, all_ids})
+    {Map.put(meta, id, {clauses_cache, last_cache, all_ids}), cache}
   end
 
-  defp compute_cache(_op, tensor, state, cache) do
-    {_, cache} = Tree.apply_args(tensor, cache, &{&1, compute_cache(&1, state, &2)})
-    cache
+  defp compute_cache(_op, tensor, state, meta, cache) do
+    {_, acc} = Tree.apply_args(tensor, {meta, cache}, &{&1, compute_cache(&1, state, &2)})
+    acc
   end
 
   ## Evaluation
@@ -165,10 +165,10 @@ defmodule Nx.Defn.Evaluator do
       %{^id => count} when is_integer(count) ->
         {res, cache} = eval_apply(op, ans, state, cache)
         state.gc && :erlang.garbage_collect(self())
-        {res, update_cache(cache, id, count, res)}
+        {res, decrement_cache(cache, id, count, res)}
 
       %{^id => {count, res}} ->
-        {res, update_cache(cache, id, count, res)}
+        {res, decrement_cache(cache, id, count, res)}
     end
   end
 
@@ -176,8 +176,8 @@ defmodule Nx.Defn.Evaluator do
     {other, cache}
   end
 
-  defp update_cache(cache, id, 1, _res), do: %{cache | id => 0}
-  defp update_cache(cache, id, counter, res), do: %{cache | id => {counter - 1, res}}
+  defp decrement_cache(cache, id, 1, _res), do: %{cache | id => 0}
+  defp decrement_cache(cache, id, counter, res), do: %{cache | id => {counter - 1, res}}
 
   defp eval_apply(:parameter, %{data: %Expr{args: [i]}}, state, cache) do
     case Enum.fetch!(state.params, i).() do
@@ -201,7 +201,7 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp eval_apply(:fun, %{data: %Expr{args: [args, expr, _mfa], id: id}}, state, cache) do
-    fun_cache = Map.fetch!(cache, [:fun | id])
+    fun_cache = Map.fetch!(state.meta, id)
 
     fun =
       case length(args) do
@@ -224,22 +224,42 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp eval_apply(:cond, %{data: %Expr{args: [clauses, last], id: id}}, state, cache) do
-    {clauses_cache, last_cache, add_ids} = Map.fetch!(cache, [:cond | id])
+    {clauses_cache, last_cache, add_ids} = Map.fetch!(state.meta, id)
+    state = %{state | parent: cache}
     {chosen, chosen_cache} = cond_clause(clauses, clauses_cache, last, last_cache, state)
-    {res, _} = composite_eval(chosen, state, chosen_cache)
-    # TODO: GC add_ids and integrate caches
+    {res, res_cache} = composite_eval(chosen, state, chosen_cache)
+
+    cache =
+      Enum.reduce(add_ids, cache, fn id, cache ->
+        case cache do
+          # Value was cached, decrement it after cond
+          %{^id => {count, value}} -> decrement_cache(cache, id, count, value)
+          # Value was not cached but it was only used in cond
+          %{^id => 1} -> %{cache | id => 0}
+          # Value was not cached but it is meant to be used elsewhere...
+          %{^id => count} when is_integer(count) ->
+            case res_cache do
+              # and we computed it in cond, so we cache it!
+              # TODO: Do not expire cond caches if value is used upstream
+              %{^id => {_, value}} -> decrement_cache(cache, id, count, value)
+              # and we did not compute it in cond, so we only decrement it!
+              %{} -> %{cache | id => count - 1}
+            end
+        end
+      end)
+
     {res, cache}
   end
 
   defp eval_apply(:while, %{data: %Expr{args: args, id: id}}, state, cache) do
     [initial, _arg, condition, block] = args
     {initial, cache} = composite_eval(initial, state, cache)
-    while_cache = Map.fetch!(cache, [:while | id])
+    while_cache = Map.fetch!(state.meta, id)
     {while(initial, condition, block, state, while_cache), cache}
   end
 
   defp eval_apply(:token, %{data: %Expr{args: [token], id: id}}, state, cache) do
-    hooks = Map.fetch!(cache, [:token | id])
+    hooks = Map.fetch!(state.meta, id)
 
     cache =
       token.hooks
@@ -271,7 +291,7 @@ defmodule Nx.Defn.Evaluator do
       {apply(backend, expr.data.op, [expr | args]), cache}
     else
       params = Enum.map(args, &fn -> &1 end)
-      optional_cache = Map.fetch!(cache, [:optional | id])
+      optional_cache = Map.fetch!(state.meta, id)
       {res, _cache} = eval(default_impl_expr, %{state | params: params}, optional_cache)
       {res, cache}
     end
