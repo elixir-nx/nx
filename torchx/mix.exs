@@ -6,7 +6,7 @@ defmodule Torchx.MixProject do
 
   @valid_targets ["cpu", "cu102", "cu111"]
 
-  @libtorch_version System.get_env("LIBTORCH_VERSION", "1.10.2")
+  @libtorch_version System.get_env("LIBTORCH_VERSION", "1.12.1")
   @libtorch_target System.get_env("LIBTORCH_TARGET", "cpu")
 
   @libtorch_base "libtorch"
@@ -145,7 +145,7 @@ defmodule Torchx.MixProject do
 
               _ ->
                 Mix.raise(
-                  "Please download pre-built/compile LibTorch and set environment variable LIBTORCH_DIR"
+                  "Please install PyTorch 1.12+ via Python and point LIBTORCH_DIR to the installation directory"
                 )
             end
 

@@ -104,6 +104,7 @@ defmodule Torchx do
     * `:vulkan`
     * `:metal`
     * `:xpu`
+    * `:mps`
   """
 
   @moduledoc """
@@ -171,6 +172,7 @@ defmodule Torchx do
   """
   def device_available?(:cuda), do: NIF.cuda_is_available()
   def device_available?(:cpu), do: true
+  def device_available?(:mps), do: true
   def device_available?(_), do: raise("Only CUDA device availability check is supported for now.")
 
   @doc """
@@ -388,7 +390,8 @@ defmodule Torchx do
     xla: 9,
     vulkan: 10,
     metal: 11,
-    xpu: 12
+    xpu: 12,
+    mps: 13
   }
 
   defp normalize_device!({device, index}) when is_atom(device) and is_integer(index),
