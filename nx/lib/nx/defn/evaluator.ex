@@ -156,7 +156,7 @@ defmodule Nx.Defn.Evaluator do
         {Map.new(clause_cache), seen_ids_acc}
       end)
 
-    {Map.put(meta, id, {clauses_cache, last_cache, all_ids}), cache}
+    {Map.put(meta, id, {clauses_cache, last_cache, Map.keys(all_ids)}), cache}
   end
 
   defp compute_cache(:token, %{data: %Expr{args: [token], id: id}}, state, meta, cache) do
@@ -215,6 +215,9 @@ defmodule Nx.Defn.Evaluator do
     {other, caches}
   end
 
+  defp decrement_cache(cache, id, 1, _res), do: Map.delete(cache, id)
+  defp decrement_cache(cache, id, counter, res), do: %{cache | id => {counter - 1, res}}
+
   defp eval_parent([cache | caches], id, op, ans, state, acc) do
     case cache do
       %{^id => {_count, res}} ->
@@ -235,8 +238,13 @@ defmodule Nx.Defn.Evaluator do
             "Please report this bug with the relevant code that triggers it: https://github.com/elixir-nx/nx"
   end
 
-  defp decrement_cache(cache, id, 1, _res), do: Map.delete(cache, id)
-  defp decrement_cache(cache, id, counter, res), do: %{cache | id => {counter - 1, res}}
+  defp decrement_parents([cache | caches], id) do
+    case cache do
+      %{^id => {count, value}} -> [decrement_cache(cache, id, count, value) | caches]
+      %{^id => count} -> [%{cache | id => count - 1} | caches]
+      %{} -> [cache | decrement_parents(caches, id)]
+    end
+  end
 
   defp eval_apply(:parameter, %{data: %Expr{args: [i]}}, state, caches) do
     case Enum.fetch!(state.params, i).() do
@@ -283,7 +291,7 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp eval_apply(:cond, %{data: %Expr{args: [clauses, last], id: id}}, state, caches) do
-    {clauses_cache, last_cache, add_ids} = Map.fetch!(state.meta, id)
+    {clauses_cache, last_cache, parent_ids} = Map.fetch!(state.meta, id)
 
     {chosen, chosen_cache} =
       clauses
@@ -291,30 +299,7 @@ defmodule Nx.Defn.Evaluator do
       |> cond_clause(last, last_cache, state, caches)
 
     {res, [_ | caches]} = composite_eval(chosen, state, chosen_cache)
-
-    # caches =
-    #   Enum.reduce(all_ids, caches, fn id, caches ->
-    #     case caches do
-    #       # Value was cached, decrement it after cond
-    #       %{^id => {count, value}} ->
-    #         decrement_cache(cache, id, count, value)
-
-    #       # Value was not cached but it was only used in cond
-    #       %{^id => 1} ->
-    #         Map.delete(cache, id)
-
-    #       # Value was not cached but it is meant to be used elsewhere...
-    #       %{^id => count} when is_integer(count) ->
-    #         case res_cache do
-    #           # and we computed it in cond, so we cache it!
-    #           # TODO: Do not expire cond caches if value is used upstream
-    #           %{^id => {_, value}} -> decrement_cache(cache, id, count, value)
-    #           # and we did not compute it in cond, so we only decrement it!
-    #           %{} -> %{cache | id => count - 1}
-    #         end
-    #     end
-    #   end)
-
+    caches = Enum.reduce(parent_ids, caches, &decrement_parents(&2, &1))
     {res, caches}
   end
 
