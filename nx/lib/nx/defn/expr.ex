@@ -215,7 +215,7 @@ defmodule Nx.Defn.Expr do
 
   @impl true
   def optional(name, args, fun) do
-    {args, opts} = Enum.split_while(args, &not is_list(&1))
+    {args, opts} = Enum.split_while(args, &(not is_list(&1)))
     params = Enum.with_index(args, &parameter/2)
     %{data: %{context: context}} = res = apply(fun, params ++ opts)
     expr(res, context, :optional, [expr(res, context, name, args), res])
