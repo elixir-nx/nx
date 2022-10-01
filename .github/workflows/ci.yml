@@ -46,6 +46,8 @@ jobs:
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
+      - name: List file contents
+        run: ls -lah
       - name: Compile and check warnings
         run: mix compile --warnings-as-errors
       - name: Check formatting
