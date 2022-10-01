@@ -87,6 +87,13 @@ defmodule Torchx.NxTest do
         test_binary_op(op, data_b, data_a, type, type)
       end
     end
+
+    test "remainder with emulated u64 operands" do
+      a = Nx.tensor([9_223_372_036_854_775_808, 18_446_744_073_709_551_321], type: :u64)
+      b = Nx.tensor(10, type: :u64)
+
+      assert_equal(Nx.remainder(a, b), Nx.tensor([8, 1]))
+    end
   end
 
   # quotient/2 works only with integers, so we put it here.
@@ -428,6 +435,13 @@ defmodule Torchx.NxTest do
 
       assert Nx.shape(out) == {1, 3}
       assert_equal(out, Nx.tensor([[3, 6, 9]]))
+    end
+
+    test "dot with multiple batch axes" do
+      u = Nx.tensor([[[1, 1]], [[2, 2]]])
+      v = Nx.tensor([[[1, 2]], [[1, 2]]])
+
+      assert_equal(Nx.tensor([[3], [6]]), Nx.dot(u, [2], [0, 1], v, [2], [0, 1]))
     end
 
     test "dot does not re-sort the contracting axes" do

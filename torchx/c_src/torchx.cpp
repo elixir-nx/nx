@@ -666,6 +666,13 @@ BINARY_OP(atan2)
 BINARY_OP(min)
 BINARY_OP(max)
 
+NIF(fmod)
+{
+  TENSOR_PARAM(0, a);
+  TENSOR_PARAM(1, b);
+  TENSOR(at::fmod(*a, *b));
+}
+
 NIF(quotient)
 {
   TENSOR_PARAM(0, a);
@@ -1216,6 +1223,7 @@ static ErlNifFunc nif_functions[] = {
     DF(subtract, 2),
     DF(divide, 2),
     DF(remainder, 2),
+    DF(fmod, 2),
     DF(quotient, 2),
     DF(multiply, 2),
     DF(power, 2),

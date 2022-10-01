@@ -305,18 +305,158 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc false
-  def defn_while(file, line, initial, condition, body) do
+  def defn_while(file, line, initial, generator, condition_body, opts) do
     initial = to_container_expr(initial)
-    context = new_context(:while)
 
-    {arg, {_, context}} =
-      Composite.traverse(initial, {0, nil}, fn expr, {counter, acc} ->
-        {parameter(expr, context, counter), {counter + 1, merge_context!(expr, acc)}}
-      end)
+    case generator do
+      :none ->
+        if opts != [] do
+          raise CompileError,
+            line: line,
+            file: file,
+            description:
+              "options are not supported on while with conditions, only with generators, got: #{inspect(opts)}"
+        end
 
-    condition = to_pred(condition.(arg), line, file, :while)
-    body = arg |> body.() |> to_container_expr()
+        {arg, context} = to_param_expr(initial, :while)
+        {condition, body} = condition_body.(arg)
+        condition = to_pred(condition, line, file, :while)
+        body = to_container_expr(body)
 
+        if not Composite.compatible?(initial, body, &Nx.compatible?/2) do
+          raise CompileError,
+            line: line,
+            file: file,
+            description:
+              "the do-block in while must return tensors with the same shape, type, and names as the initial arguments. " <>
+                "Got body #{maybe_type_shape_string(body)} and initial #{maybe_type_shape_string(initial)}"
+        end
+
+        while(initial, context, arg, condition, body)
+
+      {:while, %T{} = generator} ->
+        range =
+          case Nx.shape(generator) do
+            {} ->
+              message = "cannot have a scalar tensor as generator"
+              raise CompileError, line: line, file: file, description: message
+
+            _ ->
+              0..(Nx.axis_size(generator, 0) - 1)//1
+          end
+
+        condition_body = fn {{index, generator_expr}, acc} ->
+          condition_body.({generator_expr[index], acc})
+        end
+
+        while_range(range, file, line, initial, generator, condition_body, opts)
+
+      {:while, _.._//_ = range} ->
+        condition_body = fn {{index, {}}, acc} ->
+          condition_body.({index, acc})
+        end
+
+        while_range(range, file, line, initial, {}, condition_body, opts)
+
+      {:while, other} ->
+        raise CompileError,
+          line: line,
+          file: file,
+          description: "generators in while expect a range or a tensor, got: #{inspect(other)}"
+    end
+  end
+
+  defp while_range(range, file, line, initial, generator, condition_body, opts) do
+    opts = Keyword.validate!(opts, unroll: false)
+    size = Range.size(range)
+
+    {internal, external} =
+      case opts[:unroll] do
+        true ->
+          {nil, range}
+
+        false ->
+          {{range, 0..0//1}, 0..-1//1}
+
+        unroll when is_integer(unroll) and unroll >= size ->
+          {nil, range}
+
+        unroll when is_integer(unroll) and unroll > 0 ->
+          {internal, external} = split_range(range, size - rem(size, unroll))
+          {{internal, 0..(unroll - 1)//1}, external}
+
+        unroll ->
+          message = ":unroll must be a boolean, got: #{inspect(unroll)}"
+          raise CompileError, line: line, file: file, description: message
+      end
+
+    result =
+      case internal do
+        {first..last//step, internal_unroll} ->
+          gen_initial = {{tensor(first), generator}, initial}
+          {{{index_param, generator_param}, arg}, context} = to_param_expr(gen_initial, :while)
+
+          condition =
+            if step > 0 do
+              Nx.less_equal(index_param, tensor(last))
+            else
+              Nx.greater_equal(index_param, tensor(last))
+            end
+
+          body =
+            Enum.reduce(internal_unroll, arg, fn index, acc ->
+              next = Nx.add(index_param, step * index)
+              {true, body} = condition_body.({{next, generator_param}, acc})
+              body = to_container_expr(body)
+              index == 0 and compatible_while!(file, line, initial, body)
+              body
+            end)
+
+          next = Range.size(internal_unroll) * step
+          gen_body = {{Nx.add(index_param, next), generator_param}, body}
+          {_, result} = while(gen_initial, context, arg, condition, gen_body)
+          result
+
+        nil ->
+          initial
+      end
+
+    Enum.reduce(external, result, fn index, acc ->
+      {true, body} = condition_body.({{index, generator}, acc})
+      body = to_container_expr(body)
+      index == external.first and compatible_while!(file, line, initial, body)
+      body
+    end)
+  end
+
+  # TODO: Use Range.split/2 when we require Elixir v1.15+
+  defp split_range(first..last//step = range, split) when is_integer(split) do
+    if split >= 0 do
+      split_range(first, last, step, split)
+    else
+      split_range(first, last, step, Range.size(range) + split)
+    end
+  end
+
+  defp split_range(first, last, step, split) when first < last or (first == last and step > 0) do
+    if step > 0 do
+      mid = max(min(first + step * (split - 1), last), first - step)
+      {first..mid//step, (mid + step)..last//step}
+    else
+      {first..(first - step)//step, (last + step)..last//step}
+    end
+  end
+
+  defp split_range(last, first, step, split) do
+    if step < 0 do
+      mid = min(max(last + step * (split - 1), first), last - step)
+      {last..mid//step, (mid + step)..first//step}
+    else
+      {last..(last - step)//step, (first + step)..first//step}
+    end
+  end
+
+  defp compatible_while!(file, line, initial, body) do
     if not Composite.compatible?(initial, body, &Nx.compatible?/2) do
       raise CompileError,
         line: line,
@@ -325,8 +465,6 @@ defmodule Nx.Defn.Expr do
           "the do-block in while must return tensors with the same shape, type, and names as the initial arguments. " <>
             "Got body #{maybe_type_shape_string(body)} and initial #{maybe_type_shape_string(initial)}"
     end
-
-    while(initial, context, arg, condition, body)
   end
 
   ## Nx.Backend Callbacks
@@ -919,6 +1057,17 @@ defmodule Nx.Defn.Expr do
 
   defp to_container_expr(container_or_tensor) do
     Composite.traverse(container_or_tensor, &to_expr/1)
+  end
+
+  defp to_param_expr(container_or_tensor, context_label) do
+    context = new_context(context_label)
+
+    {arg, {_, context}} =
+      Composite.traverse(container_or_tensor, {0, nil}, fn expr, {counter, acc} ->
+        {parameter(expr, context, counter), {counter + 1, merge_context!(expr, acc)}}
+      end)
+
+    {arg, context}
   end
 
   defp tuple_out(size) do

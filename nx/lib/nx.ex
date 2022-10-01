@@ -3911,6 +3911,37 @@ defmodule Nx do
         ]
       >
 
+  ### Remainder involving negative values
+
+  If given a negative value as the right operand, the operation
+  will return the negative image of the remainder.
+
+  For the example below, note that in modulo-10, adding 20 shouldn't
+  change the result, but in this case it does because the sign changes.
+
+      iex> left = Nx.tensor(-11, type: :s8)
+      iex> right = Nx.tensor(10, type: :u8)
+      iex> Nx.remainder(left, right)
+      #Nx.Tensor<
+        s16
+        -1
+      >
+      iex> Nx.remainder(Nx.add(left, Nx.tensor(20, type: :s8)), right)
+      #Nx.Tensor<
+        s16
+        9
+      >
+      iex> positive_left = Nx.tensor(9, type: :u8)
+      iex> Nx.remainder(positive_left, right)
+      #Nx.Tensor<
+        u8
+        9
+      >
+      iex> Nx.remainder(Nx.add(positive_left, Nx.tensor(20, type: :u8)), right)
+      #Nx.Tensor<
+        u8
+        9
+      >
   """
   @doc type: :element
   def remainder(left, right), do: non_complex_element_wise_bin_op(left, right, :remainder, & &1)
@@ -5758,7 +5789,7 @@ defmodule Nx do
   @doc """
   Calculates the complex conjugate of each element in the tensor.
 
-  If $z = a + bi = r e^\\theta$, $conjugate(z) = z^* = a - bi =  r e^{-\\theta}$
+  If $$z = a + bi = r e^\\theta$$, $$conjugate(z) = z^* = a - bi =  r e^{-\\theta}$$
 
   ## Examples
 
@@ -5789,7 +5820,7 @@ defmodule Nx do
 
   @doc """
   Calculates the complex phase angle of each element in the tensor.
-  $phase(z) = atan2(b, a), z = a + bi \\in \\Complex$
+  $$phase(z) = atan2(b, a), z = a + bi \\in \\Complex$$
 
   ## Examples
 

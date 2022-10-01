@@ -7,14 +7,16 @@ defmodule EXLA.Defn.Outfeed do
   deliver/execute the outputs. The computation must emit
   a 0 flag on exit.
   """
-  def start_child(%EXLA.Executable{client: client, device_id: device_id}, hooks) do
+  def start_child(%EXLA.Executable{client: client, device_id: device_id}, hooks, group_leader) do
     Task.Supervisor.start_child(EXLA.Defn.TaskSupervisor, fn ->
-      init(client, device_id, hooks)
+      init(client, device_id, hooks, group_leader)
     end)
   end
 
-  defp init(client, device_id, hooks) do
+  defp init(client, device_id, hooks, group_leader) do
     Process.flag(:trap_exit, true)
+    # Copy the group leader so we report to the proper device
+    Process.group_leader(self(), group_leader)
     ref = make_ref()
     shape = EXLA.Shape.make_shape({:u, 16}, {})
     loop(client, device_id, ref, shape, hooks)

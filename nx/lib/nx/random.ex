@@ -19,37 +19,15 @@ defmodule Nx.Random do
   routines:
 
       iex> key = Nx.Random.key(12)
-      iex> Nx.Random.uniform(key)
-      #Nx.Tensor<
-        f32
-        0.3037703037261963
-      >
-
-  Note that using a key does not modify it, so reusing the same key
-  will lead to the same result:
-
-      iex> key = Nx.Random.key(12)
-      iex> Nx.Random.uniform(key)
-      #Nx.Tensor<
-        f32
-        0.3037703037261963
-      >
-
-  If you need a new random number, you can use `Nx.Random.split/2` to
-  generate new subkeys:
-
-      iex> key = Nx.Random.key(12)
-      iex> keys = Nx.Random.split(key)
-      iex> Nx.Random.uniform(keys[0])
-      #Nx.Tensor<
-        f32
-        0.1531379222869873
-      >
-      iex> Nx.Random.uniform(keys[1])
+      iex> {_new_key, uniform} = Nx.Random.uniform(key)
+      iex> uniform
       #Nx.Tensor<
         f32
         0.7691127061843872
       >
+
+  Now, when generating a new random number, you pass the `new_key`
+  to get a different number.
 
   ## Design and Context
 
@@ -183,9 +161,9 @@ defmodule Nx.Random do
   end
 
   defnp rolled_loop_step(i, {{_xs1, _xs2} = xs, {k1, k2, k3}, {r1, r2}}) do
-    {_, {xs1, xs2}, _} =
-      while {x = Nx.tensor(0, type: :u32), xs, r1}, x < 4 do
-        {x + Nx.tensor(1, type: :u32), apply_round(xs, r1[x]), r1}
+    {xs1, xs2} =
+      while xs, r <- r1 do
+        apply_round(xs, r)
       end
 
     xs1 = k1 + xs1
@@ -249,37 +227,35 @@ defmodule Nx.Random do
   ## Examples
 
       iex> key = Nx.Random.key(1701)
-      iex> Nx.Random.randint(key, 1, 100)
+      iex> {_new_key, randint} = Nx.Random.randint(key, 1, 100)
+      iex> randint
       #Nx.Tensor<
         s64
-        10
+        66
       >
 
       iex> key = Nx.Random.key(1701)
-      iex> Nx.Random.randint(key, 1, 100, shape: {3,3,2}, type: :u32)
+      iex> {_new_key, randint} = Nx.Random.randint(key, 1, 100, shape: {3, 2}, type: :u32)
+      iex> randint
       #Nx.Tensor<
-        u32[3][3][2]
+        u32[3][2]
         [
-          [
-            [77, 54],
-            [50, 77],
-            [83, 53]
-          ],
-          [
-            [65, 68],
-            [98, 69],
-            [27, 95]
-          ],
-          [
-            [50, 18],
-            [32, 60],
-            [83, 50]
-          ]
+          [9, 20],
+          [19, 6],
+          [71, 15]
         ]
       >
 
   """
   defn randint(key, min_val, max_val, opts \\ []) do
+    keys = split(key)
+    {keys[0], randint_split(keys[1], min_val, max_val, opts)}
+  end
+
+  @doc """
+  Same as `randint/4` but assumes the key has already been split.
+  """
+  defn randint_split(key, min_val, max_val, opts \\ []) do
     opts = keyword!(opts, [:names, :type, shape: {}])
     assert_key!(key)
 
@@ -343,34 +319,45 @@ defmodule Nx.Random do
   ## Examples
 
       iex> key = Nx.Random.key(1701)
-      iex> Nx.Random.uniform(key)
+      iex> {_new_key, uniform} = Nx.Random.uniform(key)
+      iex> uniform
       #Nx.Tensor<
         f32
-        0.1725379228591919
+        0.9728643894195557
       >
 
       iex> key = Nx.Random.key(1701)
-      iex> Nx.Random.uniform(key, shape: {3, 2}, type: :f16)
+      iex> {_new_key, uniform} = Nx.Random.uniform(key, shape: {3, 2}, type: :f16)
+      iex> uniform
       #Nx.Tensor<
         f16[3][2]
         [
-          [0.076171875, 0.18359375],
-          [0.8125, 0.65625],
-          [0.53125, 0.30078125]
+          [0.75390625, 0.6484375],
+          [0.7294921875, 0.21484375],
+          [0.09765625, 0.0693359375]
         ]
       >
 
       iex> key = Nx.Random.key(1701)
-      iex> Nx.Random.uniform(key, shape: {2, 2}, type: :c64)
+      iex> {_new_key, uniform} = Nx.Random.uniform(key, shape: {2, 2}, type: :c64)
+      iex> uniform
       #Nx.Tensor<
         c64[2][2]
         [
-          [0.9313580989837646+0.4727839231491089i, 0.5327110290527344+0.6050407886505127i],
-          [0.5649927854537964+0.13510417938232422i, 0.730334997177124+0.1008983850479126i]
+          [0.18404805660247803+0.6546461582183838i, 0.5525915622711182+0.11568140983581543i],
+          [0.6074584722518921+0.8104375600814819i, 0.247686505317688+0.21975469589233398i]
         ]
       >
   """
-  defn uniform(key, min_value, max_value, opts \\ []) do
+  defn uniform(key, min_val, max_val, opts \\ []) do
+    keys = split(key)
+    {keys[0], uniform_split(keys[1], min_val, max_val, opts)}
+  end
+
+  @doc """
+  Same as `uniform/4` but assumes the key has already been split.
+  """
+  defn uniform_split(key, min_value, max_value, opts \\ []) do
     assert_key!(key)
     opts = keyword!(opts, [:names, :type, shape: {}])
     type = infer_float_type(min_value, max_value, opts)
@@ -414,66 +401,65 @@ defmodule Nx.Random do
   ## Examples
 
       iex> key = Nx.Random.key(42)
-      iex> Nx.Random.normal(key)
+      iex> {_new_key, normal} = Nx.Random.normal(key)
+      iex> normal
       #Nx.Tensor<
         f32
-        -0.18471182882785797
+        1.3694692850112915
       >
 
       iex> key = Nx.Random.key(42)
-      iex> Nx.Random.normal(key, 0, 1, shape: {3, 3, 2}, type: :f16)
+      iex> {_new_key, normal} = Nx.Random.normal(key, 0, 1, shape: {3, 2}, type: :f16)
+      iex> normal
       #Nx.Tensor<
-        f16[3][3][2]
+        f16[3][2]
         [
-          [
-            [-0.6201171875, -1.017578125],
-            [-0.1424560546875, 0.10052490234375],
-            [-0.513671875, 0.308349609375]
-          ],
-          [
-            [-1.423828125, -1.9873046875],
-            [-0.59912109375, 0.662109375],
-            [-0.54150390625, -2.3359375]
-          ],
-          [
-            [-0.1448974609375, -0.4560546875],
-            [0.2802734375, 0.2548828125],
-            [-1.1044921875, -1.359375]
-          ]
+          [-0.326416015625, -0.7734375],
+          [0.3916015625, 0.533203125],
+          [0.27001953125, -2.083984375]
         ]
       >
 
       iex> key = Nx.Random.key(42)
-      iex> Nx.Random.normal(key, 0, 1, shape: {2, 2}, type: :c64)
+      iex> {_new_key, normal} = Nx.Random.normal(key, 0, 1, shape: {2, 2}, type: :c64)
+      iex> normal
       #Nx.Tensor<
         c64[2][2]
         [
-          [0.48962485790252686+0.25225749611854553i, -0.6273903846740723-0.7026026844978333i],
-          [0.715733528137207-0.5684993863105774i, -1.7461833953857422-2.725870370864868i]
+          [-0.763276219367981+0.8661126494407654i, -0.14282897114753723-0.7384797930717468i],
+          [0.6784614324569702+0.4118310213088989i, -2.2695391178131104-0.3689095377922058i]
         ]
       >
 
       iex> key = Nx.Random.key(1337)
-      iex> normal = Nx.Random.normal(key, 10, 5, shape: {1_000})
+      iex> {_new_key, normal} = Nx.Random.normal(key, 10, 5, shape: {1_000})
       iex> Nx.mean(normal)
       #Nx.Tensor<
         f32
-        9.897998809814453
+        9.70021915435791
       >
       iex> Nx.standard_deviation(normal)
       #Nx.Tensor<
         f32
-        4.988009929656982
+        5.051421642303467
       >
   """
   defn normal(key, mean, standard_deviation, opts \\ []) do
+    keys = split(key)
+    {keys[0], normal_split(keys[1], mean, standard_deviation, opts)}
+  end
+
+  @doc """
+  Same as `normal/4` but assumes the key has already been split.
+  """
+  defn normal_split(key, mean, standard_deviation, opts \\ []) do
     assert_key!(key)
     opts = keyword!(opts, [:names, :type, shape: {}])
     type = infer_float_type(mean, standard_deviation, opts)
 
     float_or_complex(key, type, opts[:shape], fn key, type, shape ->
       min_value = -1 + Nx.Constants.smallest_positive_normal_number(type)
-      u = uniform(key, min_value, 1, opts |> put_type(type) |> put_shape(shape))
+      u = uniform_split(key, min_value, 1, opts |> put_type(type) |> put_shape(shape))
 
       normal = Nx.sqrt(Nx.tensor(2, type: type)) * Nx.erf_inv(u)
       Nx.as_type(standard_deviation, type) * normal + Nx.as_type(mean, type)

@@ -840,7 +840,7 @@ defmodule Torchx.Backend do
     do: tensor
 
   ops =
-    [:min, :max, :remainder, :divide, :quotient, :atan2] ++
+    [:min, :max, :divide, :quotient, :atan2] ++
       [:right_shift, :logical_and, :logical_or, :logical_xor] ++
       [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
 
@@ -851,6 +851,67 @@ defmodule Torchx.Backend do
       {left_tx, right_tx} = maybe_broadcast_bin_args(out.shape, left, right)
 
       Torchx.unquote(op)(left_tx, right_tx)
+      |> Torchx.to_type(to_torch_type(out.type))
+      |> to_nx(out)
+    end
+  end
+
+  @impl true
+  def remainder(out, l, r) do
+    {left, right} = maybe_upcast(l, r)
+    {left_tx, right_tx} = maybe_broadcast_bin_args(out.shape, left, right)
+
+    {device, _} = left_tx
+
+    if l.type == {:u, 64} do
+      # We emulate u64 numbers with s64.
+
+      # Numbers smaller than max_s64 are kept as positive s64 and fmod
+      # works fine for those.
+
+      remainder_from_positive = Torchx.fmod(left_tx, right_tx)
+
+      # Numbers bigger than max_s64 are kept as negative s64. Consider
+      # such s64 number denoted as x. We can decompose x into two
+      # positive s64 numbers:
+      #
+      #   x = max_s64 + rest
+      #
+      # We can obtain rest as follows:
+      #
+      #   rest = x - max_s64
+      #
+      # We also know that the following holds:
+      #
+      #   x mod y = ((max_s64 mod y) + (rest mod y)) mod y
+      #
+      # We can safely compute operations on the right hand side using
+      # s64 numbers.
+
+      max_s64_tx =
+        Nx.Constants.max_finite(:s64, backend: {Nx.BinaryBackend, device: device}) |> from_nx()
+
+      rest_tx = Torchx.subtract(left_tx, max_s64_tx)
+
+      remainder_from_negative =
+        Torchx.fmod(
+          Torchx.add(
+            Torchx.fmod(rest_tx, right_tx),
+            Torchx.fmod(max_s64_tx, right_tx)
+          ),
+          right_tx
+        )
+
+      zero = Torchx.scalar_tensor(0, to_torch_type(l.type), device)
+
+      left_tx
+      |> Torchx.less(zero)
+      |> Torchx.where(remainder_from_negative, remainder_from_positive)
+      |> Torchx.to_type(to_torch_type(out.type))
+      |> to_nx(out)
+    else
+      left_tx
+      |> Torchx.fmod(right_tx)
       |> Torchx.to_type(to_torch_type(out.type))
       |> to_nx(out)
     end
@@ -1676,10 +1737,35 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  # u64 is emulated with s64
+  def bitcast(%{type: {:s, 64}} = out, %T{type: {:u, 64}, data: data}) do
+    %{out | data: data}
+  end
+
+  def bitcast(%{type: {:u, 64}} = out, %T{type: {:s, 64}, data: data}) do
+    %{out | data: data}
+  end
+
+  # u16/u32 are double the size of s16/u32
+  def bitcast(%{type: {:u, bit}} = out, %T{type: {:s, bit}, data: %TB{ref: {device, _}}} = tensor)
+      when bit in [16, 32] do
+    output_size = 2 * bit
+
+    blob =
+      for <<x::size(bit)-signed-native <- to_binary(tensor, Nx.size(tensor))>>,
+        into: <<>>,
+        do: <<x::size(output_size)-signed-native>>
+
+    blob
+    |> Torchx.from_blob(out.shape, to_torch_type(out.type), device)
+    |> to_nx(out)
+  end
+
+  # s16/s32 are half the size of s16/u32 but that's handled in to_binary
   def bitcast(out, %T{data: %TB{ref: {device, _}}} = tensor) do
     tensor
     |> to_binary(Nx.size(tensor))
-    |> Torchx.from_blob(out.shape, to_torch_type(out.type), device_option(device: device))
+    |> Torchx.from_blob(out.shape, to_torch_type(out.type), device)
     |> to_nx(out)
   end
 

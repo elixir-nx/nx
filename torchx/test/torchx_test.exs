@@ -21,13 +21,6 @@ defmodule TorchxTest do
       {:cpu, ref} = Torchx.tensordot(a, b, [0], [0])
       assert is_reference(ref)
     end
-
-    test "dot with multiple batch axes" do
-      u = Nx.tensor([[[1, 1]], [[2, 2]]])
-      v = Nx.tensor([[[1, 2]], [[1, 2]]])
-
-      assert_equal(Nx.tensor([[3], [6]]), Nx.dot(u, [2], [0, 1], v, [2], [0, 1]))
-    end
   end
 
   describe "torchx<->nx" do
@@ -282,6 +275,28 @@ defmodule TorchxTest do
           ]
         ])
       )
+    end
+  end
+
+  describe "bitcast" do
+    for {size, byte_size} <- [{8, 1}, {16, 4}, {32, 8}, {64, 8}] do
+      test "converts s#{size} to u#{size}" do
+        t = Nx.tensor(127, type: {:s, unquote(size)})
+        out = Nx.bitcast(t, {:u, unquote(size)})
+        assert out.type == {:u, unquote(size)}
+        assert out |> Torchx.from_nx() |> Torchx.to_blob() |> byte_size() == unquote(byte_size)
+        assert_equal(out, t)
+      end
+    end
+
+    for {size, byte_size} <- [{8, 1}, {16, 2}, {32, 4}, {64, 8}] do
+      test "converts u#{size} to s#{size}" do
+        t = Nx.tensor(127, type: {:u, unquote(size)})
+        out = Nx.bitcast(t, {:s, unquote(size)})
+        assert out.type == {:s, unquote(size)}
+        assert out |> Torchx.from_nx() |> Torchx.to_blob() |> byte_size() == unquote(byte_size)
+        assert_equal(out, t)
+      end
     end
   end
 end

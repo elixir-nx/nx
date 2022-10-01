@@ -426,14 +426,50 @@ defmodule Nx.LinAlgTest do
                ])
     end
 
-    test "property for matrices with different eigenvalues" do
-      # Generate real symmetric matrices with different eigenvalues
-      # from random matrices based on the relation A = Q.Λ.Q^t
-      # where Λ is the diagonal matrix of eigenvalues and Q is orthogonal matrix.
+    test "correctly a eigenvalues and eigenvectors for a Hermitian matrix case" do
+      # Hermitian matrix
+      t =
+        Nx.tensor([
+          [1, Complex.new(0, 2), 2],
+          [Complex.new(0, -2), -3, Complex.new(0, 2)],
+          [2, Complex.new(0, -2), 1]
+        ])
 
-      for _ <- 1..10 do
-        # Orthogonal matrix from a random matrix
-        {q, _} = Nx.random_uniform({3, 3, 3}) |> Nx.LinAlg.qr()
+      assert {eigenvals, eigenvecs} = Nx.LinAlg.eigh(t, max_iter: 10_000)
+
+      # Eigenvalues
+      assert eigenvals ==
+               Nx.tensor([Complex.new(-5, 0), Complex.new(3, 0), Complex.new(1, 0)])
+
+      # Eigenvectors
+      assert round(eigenvecs, 3) ==
+               Nx.tensor([
+                 [
+                   Complex.new(-0.408, 0.0),
+                   Complex.new(0.0, 0.707),
+                   Complex.new(0.577, 0.0)
+                 ],
+                 [
+                   Complex.new(0.0, -0.816),
+                   Complex.new(0.0, 0.0),
+                   Complex.new(0.0, -0.577)
+                 ],
+                 [
+                   Complex.new(0.408, 0.0),
+                   Complex.new(0.0, 0.707),
+                   Complex.new(-0.577, 0.0)
+                 ]
+               ])
+    end
+
+    test "property for matrices with different eigenvalues" do
+      # Generate real Hermitian matrices with different eigenvalues
+      # from random matrices based on the relation A = Q.Λ.Q^*
+      # where Λ is the diagonal matrix of eigenvalues and Q is unitary matrix.
+
+      for _ <- 1..3, type <- [f: 32, c: 64] do
+        # Unitary matrix from a random matrix
+        {q, _} = Nx.random_uniform({3, 3, 3}, type: type) |> Nx.LinAlg.qr()
 
         # Different eigenvalues from random values
         evals_test =
@@ -450,32 +486,33 @@ defmodule Nx.LinAlgTest do
           end)
           |> Nx.concatenate()
 
-        # Symmetric matrix with different eigenvalues
-        # using A = A^t = Q^t.Λ.Q.
+        # Hermitian matrix with different eigenvalues
+        # using A = A^* = Q^*.Λ.Q.
         a =
           q
           |> Nx.LinAlg.adjoint()
           |> Nx.multiply(evals_test)
           |> Nx.dot([2], [0], q, [1], [0])
+          |> round(3)
 
         # Eigenvalues and eigenvectors
-        assert {evals, evecs} = Nx.LinAlg.eigh(a)
-        assert_all_close(evals_test, evals, atol: 1.0e-3)
+        assert {evals, evecs} = Nx.LinAlg.eigh(a, max_iter: 10_000)
+        assert_all_close(evals_test, evals, atol: 1.0e-2)
 
         # Eigenvalue equation
         evecs_evals = Nx.multiply(evecs, evals)
         a_evecs = Nx.dot(a, [2], [0], evecs, [1], [0])
 
-        assert_all_close(evecs_evals, a_evecs, atol: 1.0e-3)
+        assert_all_close(evecs_evals, a_evecs, atol: 1.0e-2)
       end
     end
 
     test "properties for matrices with close eigenvalues" do
-      # Generate real symmetric matrices with close eigenvalues
-      # from random matrices based on the relation A = Q.Λ.Q^t
+      # Generate real Hermitian matrices with close eigenvalues
+      # from random matrices based on the relation A = Q.Λ.Q^*
 
-      for _ <- 1..10 do
-        # Orthogonal matrix from a random matrix
+      for _ <- 1..3 do
+        # Unitary matrix from a random matrix
         {q, _} = Nx.random_uniform({3, 3, 3}) |> Nx.LinAlg.qr()
 
         # ensure that eval1 is far apart from the other two eigenvals
@@ -487,8 +524,8 @@ defmodule Nx.LinAlgTest do
 
         evals_test = Nx.tensor([eval1, eval2, eval3])
 
-        # Symmetric matrix with different eigenvalues
-        # using A = A^t = Q^tΛQ.
+        # Hermitian matrix with different eigenvalues
+        # using A = A^* = Q^*ΛQ.
         a =
           q
           |> Nx.LinAlg.adjoint()
@@ -606,6 +643,13 @@ defmodule Nx.LinAlgTest do
                |> Nx.dot([2], [0], v, [1], [0])
                |> round(2)
     end
+
+    test "works with vectors" do
+      t = Nx.tensor([[-2], [1]])
+
+      {u, s, vt} = Nx.LinAlg.svd(t)
+      assert_all_close(u |> Nx.dot(Nx.stack([s, Nx.tensor([0])])) |> Nx.dot(vt), t)
+    end
   end
 
   describe "lu" do
@@ -654,8 +698,17 @@ defmodule Nx.LinAlgTest do
   end
 
   defp round(tensor, places) do
+    round_real = fn x -> Float.round(Complex.real(Nx.to_number(x)), places) end
+    round_imag = fn x -> Float.round(Complex.imag(Nx.to_number(x)), places) end
+
     Nx.map(tensor, fn x ->
-      Float.round(Nx.to_number(x), places)
+      if is_float(Nx.to_number(x)) do
+        # Float case
+        Float.round(Nx.to_number(x), places)
+      else
+        # Complex case
+        Complex.new(round_real.(x), round_imag.(x))
+      end
     end)
   end
 end

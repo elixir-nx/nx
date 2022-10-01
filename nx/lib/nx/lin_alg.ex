@@ -956,7 +956,7 @@ defmodule Nx.LinAlg do
   end
 
   @doc """
-  Calculates the Eigenvalues and Eigenvectors of batched symmetric 2-D matrices.
+  Calculates the Eigenvalues and Eigenvectors of batched Hermitian 2-D matrices.
 
   It returns `{eigenvals, eigenvecs}`.
 
@@ -1034,13 +1034,11 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) tensor must be a square matrix or a batch of square matrices, got shape: {2, 3}
 
       iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2], [3, 4]]))
-      ** (ArgumentError) input tensor must be symmetric
+      ** (ArgumentError) matrix must be hermitian, a matrix is hermitian iff X = adjoint(X)
   """
   def eigh(tensor, opts \\ []) do
     opts = keyword!(opts, max_iter: 50_000, eps: @default_eps)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
-
-    Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.eigh", 2)
 
     output_type = Nx.Type.to_floating(type)
 

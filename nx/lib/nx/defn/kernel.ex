@@ -1020,6 +1020,9 @@ defmodule Nx.Defn.Kernel do
   If `block` is never executed because the initial `condition` is
   false, it returns `initial`.
 
+  > Note: you must prefer to use the operations in the `Nx` module,
+  > whenever available, instead of writing your own loops.
+
   ## Examples
 
   A simple loop that increments `x` until it is `10` can be written as:
@@ -1046,42 +1049,112 @@ defmodule Nx.Defn.Kernel do
 
   Similarly, to compute the factorial of `x` using `while`:
 
-        defn factorial(x) do
-          {factorial, _} =
-            while {factorial = 1, x}, Nx.greater(x, 1) do
-              {factorial * x, x - 1}
-            end
+      defn factorial(x) do
+        {factorial, _} =
+          while {factorial = 1, x}, Nx.greater(x, 1) do
+            {factorial * x, x - 1}
+          end
 
-          factorial
-        end
+        factorial
+      end
+
+  ## Generators
+
+  Inspired by Elixir's [for-comprehensions](`Kernel.SpecialForms.for/1`),
+  `while` in `defn` supports generators. Generators may be tensors or ranges.
+
+  ### Tensor generators
+
+  When the generator is a tensor, Nx will traverse its highest dimension.
+  For example, you could sum a one dimensional tensor as follows:
+
+      while acc = 0, i <- tensor do
+        acc + i
+      end
+
+  > Note: implementing `sum` using `while`, as above, is done as an example.
+  > In practice, you must prefer to use the operations in the `Nx` module,
+  > whenever available, instead of writing your own loops.
+
+  One advantage of using generators is that you can also unroll the loop
+  for performance:
+
+      while acc = 0, i <- tensor, unroll: true do
+        acc + i
+      end
+
+  Or unroll it in batches:
+
+      while acc = 0, i <- tensor, unroll: 4 do
+        acc + i
+      end
+
+  Unrolling means that the the `while` body is automatically duplicated
+  a certain amount of times, as if you wrote all iterations by hand. This
+  makes the final expression larger, which causes a longer compilation
+  time, however it enables additional compile-time optimizations (such as
+  fusion), improving the runtime efficiency.
+
+  ### Range generators
+
+  A range can also be given as a generator. The range may be increasing or
+  decreasing. Also remember that ranges in Elixir are inclusive on both
+  begin and end. The sum example from the previous section could also be
+  written with ranges:
+
+      while {tensor, acc = 0}, i <- 0..Nx.axis_size(tensor, 0)-1 do
+        acc + tensor[i]
+      end
 
   """
-  defmacro while(initial, condition, do: block) do
+  defmacro while(initial, condition_or_generator, opts \\ [], do_block)
+
+  defmacro while(initial, {:<-, _, [variable, expression]}, opts, do: block) do
     {pattern, {vars, values}} = while_arg(initial, {[], []})
+    while(pattern, {variable, pattern}, vars, values, {:while, expression}, true, block, opts)
+  end
+
+  defmacro while(initial, condition, opts, do: block) do
+    {pattern, {vars, values}} = while_arg(initial, {[], []})
+    while(pattern, pattern, vars, values, :none, condition, block, opts)
+  end
+
+  defp while(initial, pattern, vars, values, generator, condition, block, opts) do
+    initial =
+      Macro.prewalk(initial, fn
+        {name, meta, ctx} when Kernel.and(is_atom(name), is_atom(ctx)) ->
+          {name, [generated: true] ++ meta, ctx}
+
+        node ->
+          node
+      end)
 
     quote do
-      Nx.Defn.Kernel.__defn__!(:if, 2)
+      Nx.Defn.Kernel.__defn__!(:while, 2)
       {unquote_splicing(vars)} = {unquote_splicing(values)}
 
       Nx.Defn.Kernel.__while__(
         __ENV__.file,
         __ENV__.line,
-        unquote(pattern),
-        fn unquote(pattern) -> unquote(condition) end,
-        fn unquote(pattern) -> unquote(block) end
+        unquote(initial),
+        unquote(generator),
+        fn unquote(pattern) -> {unquote(condition), unquote(block)} end,
+        unquote(opts)
       )
     end
   end
 
-  defmacro while(_var, _cond, other) do
+  defmacro while(_var, _cond, _opts, other) do
     Kernel.raise(
       ArgumentError,
-      "expected third argument to \"while\" to be a do-block, got: #{Macro.to_string(other)}"
+      "expected last argument of \"while\" to be a do-block, got: #{Macro.to_string(other)}"
     )
   end
 
   @doc false
-  defdelegate __while__(file, line, pattern, condition, block), to: Nx.Defn.Expr, as: :defn_while
+  defdelegate __while__(file, line, initial, generator, condition_block, opts),
+    to: Nx.Defn.Expr,
+    as: :defn_while
 
   defp while_arg({left, right}, prelude) do
     {left, prelude} = while_arg(left, prelude)
@@ -1094,14 +1167,14 @@ defmodule Nx.Defn.Kernel do
     {{:{}, meta, args}, prelude}
   end
 
-  defp while_arg({:=, _meta, [{name, meta, ctx} = var, value]}, {vars, values})
+  defp while_arg({:=, _, [{name, _, ctx} = var, value]}, {vars, values})
        when Kernel.and(is_atom(name), is_atom(ctx)) do
-    {{name, [generated: true] ++ meta, ctx}, {[var | vars], [value | values]}}
+    {var, {[var | vars], [value | values]}}
   end
 
-  defp while_arg({name, meta, ctx}, prelude)
+  defp while_arg({name, _, ctx} = var, prelude)
        when Kernel.and(is_atom(name), is_atom(ctx)) do
-    {{name, [generated: true] ++ meta, ctx}, prelude}
+    {var, prelude}
   end
 
   defp while_arg(other, _prelude) do
@@ -1542,7 +1615,7 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc false
-  # TODO: Deprecate this in Nx v0.4
+  # TODO: Deprecate this in Nx v0.5
   # @deprecated "Use deftransform/2 or deftransformp/2 from Nx.Defn instead"
   def transform(arg, fun) when is_function(fun, 1) do
     fun.(arg)
