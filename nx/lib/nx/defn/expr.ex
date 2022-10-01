@@ -413,8 +413,9 @@ defmodule Nx.Defn.Expr do
             end)
 
           next = Range.size(internal_unroll) * step
+          gen_arg = {{index_param, generator_param}, arg}
           gen_body = {{Nx.add(index_param, next), generator_param}, body}
-          {_, result} = while(gen_initial, context, arg, condition, gen_body)
+          {_, result} = while(gen_initial, context, gen_arg, condition, gen_body)
           result
 
         nil ->
