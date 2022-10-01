@@ -32,7 +32,8 @@ jobs:
         id: mix-cache # id to use in retrieve action
         with:
           path: deps
-          key: v1-${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles('**/mix.lock') }}
+          key: v1-${{ runner.os }}-${{ matrix.elixir }}-${{ matrix.otp }}-mix-${{ hashFiles('**/mix.lock') }}
+          restore-keys: v1-${{ runner.os }}-${{ matrix.elixir }}-${{ matrix.otp }}-mix-
       - name: Retrieve libtorch cache
         if: ${{ matrix.working_directory == 'torchx' }}
         uses: actions/cache@v1
