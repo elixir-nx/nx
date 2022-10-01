@@ -81,11 +81,13 @@ jobs:
           otp-version: ${{ matrix.otp }}
           elixir-version: ${{ matrix.elixir }}
       - name: Retrieve dependencies cache
-        uses: actions/cache@v1
+        env:
+          cache-name: cache-mix-deps
+        uses: actions/cache@v3
         id: mix-cache # id to use in retrieve action
         with:
-          path: deps
-          key: v1-${{ matrix.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+          path: ${{ github.workspace }}\${{ matrix.working_directory }}\deps
+          key: ${{ runner.os }}-Elixir-v${{ matrix.elixir }}-OTP-${{ matrix.otp }}-${{ hashFiles(format('{0}\{1}\mix.lock', github.workspace, matrix.working_directory)) }}
       - name: Retrieve libtorch cache
         if: ${{ matrix.working_directory == 'torchx' }}
         uses: actions/cache@v1
