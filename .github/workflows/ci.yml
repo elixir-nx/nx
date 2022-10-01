@@ -33,7 +33,7 @@ jobs:
         uses: actions/cache@v3
         id: mix-cache # id to use in retrieve action
         with:
-          path: deps
+          path: ${{ github.workspace }}/deps
           key: deps
       - name: Retrieve libtorch cache
         if: ${{ matrix.working_directory == 'torchx' }}
