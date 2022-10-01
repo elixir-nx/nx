@@ -495,12 +495,35 @@ defmodule Nx.Defn.EvaluatorTest do
       cond * res
     end
 
-    test "cond cache on lhs" do
-      assert cond_cache_left(0, 1, 2) == Nx.tensor(3)
+    test "on lhs" do
+      assert cond_cache_left(0, 1, 2) == Nx.tensor(0)
       assert_received {:hook, _}
       refute_received {:hook, _}
 
-      assert cond_cache_left(1, 1, 2) == Nx.tensor(6)
+      assert cond_cache_left(1, 1, 2) == Nx.tensor(9)
+      assert_received {:hook, _}
+      refute_received {:hook, _}
+    end
+
+    defn cond_cache_right(bool, a, b) do
+      res = hook(a + b, :example, &send_to_self({:hook, &1}))
+
+      cond =
+        if bool do
+          res
+        else
+          0
+        end
+
+      res * cond
+    end
+
+    test "on rhs" do
+      assert cond_cache_right(0, 1, 2) == Nx.tensor(0)
+      assert_received {:hook, _}
+      refute_received {:hook, _}
+
+      assert cond_cache_right(1, 1, 2) == Nx.tensor(9)
       assert_received {:hook, _}
       refute_received {:hook, _}
     end

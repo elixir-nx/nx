@@ -548,7 +548,8 @@ defmodule EXLA.Defn do
       |> Enum.map_reduce(cache, &recur_operator(&1, state, &2))
 
     params = Enum.with_index(args, fn arg, index -> {index, arg} end)
-    recur_operator(default, %{state | params: Map.new(params)}, cache)
+    state = %{state | params: Map.new(params), scope_ids: collect_ids(default)}
+    recur_operator(default, state, cache)
   end
 
   defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do
@@ -1590,8 +1591,10 @@ defmodule EXLA.Defn do
         {expr, {cache, ids}}
 
       true ->
+        type = if op == :cond, do: :all, else: :lexical
+
         {args, {cache, ids}} =
-          Tree.apply_args(expr, {cache, ids}, &collect_args(&1, &2, pred_ids))
+          Tree.apply_args(expr, type, {cache, ids}, &collect_args(&1, &2, pred_ids))
 
         expr = put_in(expr.data.args, args)
         {expr, {Map.put(cache, id, expr), ids}}
@@ -1715,24 +1718,18 @@ defmodule EXLA.Defn do
   # Helpers
 
   defp collect_ids(expr) do
-    Composite.reduce(expr, %{}, &(collect_ids(&1, &2) |> elem(1)))
+    Composite.reduce(expr, %{}, &collect_ids/2)
   end
 
-  defp collect_ids(%T{data: %Expr{id: id} = expr} = t, ids) do
+  defp collect_ids(%T{data: %Expr{id: id}} = t, ids) do
     case ids do
       %{^id => true} ->
-        {t, ids}
+        ids
 
       %{} ->
         ids = Map.put(ids, id, true)
-
         # Do not collect ids when a new lexical construct starts
-        case expr do
-          %{op: :cond, args: [[{pred, _expr} | _], _last]} -> collect_ids(pred, ids)
-          %{op: :while, args: [initial | _]} -> Composite.traverse(initial, ids, &collect_ids/2)
-          %{op: op} when op in [:cond, :fun] -> {t, ids}
-          %{} -> Tree.apply_args(t, ids, &collect_ids/2)
-        end
+        Tree.apply_args(t, :lexical, ids, &{&1, collect_ids(&1, &2)}) |> elem(1)
     end
   end
 

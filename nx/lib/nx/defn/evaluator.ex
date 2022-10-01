@@ -27,7 +27,7 @@ defmodule Nx.Defn.Evaluator do
         params = input_params ++ acc_params ++ rest_params
 
         expr
-        |> composite_eval(%{params: params, gc: gc?, parent: nil, meta: meta}, cache)
+        |> composite_eval(%{params: params, gc: gc?, meta: meta}, [cache])
         |> elem(0)
       end)
     ]
@@ -45,15 +45,40 @@ defmodule Nx.Defn.Evaluator do
     {expr, meta, cache} = precompile(fun, vars, hooks)
 
     fn [params] ->
-      [expr |> composite_eval(%{params: params, gc: gc?, parent: nil, meta: meta}, cache) |> elem(0)]
+      [
+        expr
+        |> composite_eval(%{params: params, gc: gc?, meta: meta}, [cache])
+        |> elem(0)
+      ]
     end
   end
 
   defp precompile(fun, vars, hooks) do
     expr = fun.(vars)
-    state = %{hooks: hooks}
-    {meta, cache} = composite_compute_cache(expr, state, {%{}, %{}})
+    state = %{hooks: hooks, parent_ids: nil, current_ids: nil}
+    {meta, cache} = init_compute_cache(expr, state, %{}, %{})
     {expr, meta, cache}
+  end
+
+  defp init_compute_cache(expr, state, meta, parent_ids) do
+    state = %{state | parent_ids: parent_ids, current_ids: collect_ids(expr, parent_ids)}
+    composite_compute_cache(expr, state, {meta, %{}})
+  end
+
+  defp collect_ids(expr, ids) do
+    Composite.reduce(expr, ids, &collect_ids_each/2)
+  end
+
+  defp collect_ids_each(%Nx.Tensor{data: %Expr{id: id}} = t, ids) do
+    case ids do
+      %{^id => _} ->
+        ids
+
+      %{} ->
+        ids = Map.put(ids, id, 0)
+        # Do not collect ids when a new lexical construct starts
+        Tree.apply_args(t, :lexical, ids, &{&1, collect_ids_each(&1, &2)}) |> elem(1)
+    end
   end
 
   defp composite_compute_cache(expr, state, acc) do
@@ -65,41 +90,73 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp compute_cache(%Nx.Tensor{data: %Expr{id: id, op: op}} = tensor, state, {meta, cache}) do
-    case cache do
-      %{^id => counter} -> {meta, %{cache | id => counter + 1}}
-      %{} -> compute_cache(op, tensor, state, meta, Map.put(cache, id, 1))
-    end
-  end
+    case state.parent_ids do
+      # If the id exists in the parent, the parent will compute it.
+      %{^id => _} ->
+        {meta, Map.put_new(cache, id, tensor)}
 
-  defp bump_counter(cache, key) do
-    case cache do
-      %{^key => counter} -> %{cache | key => counter + 1}
-      %{} -> Map.put(cache, key, 1)
+      %{} ->
+        case cache do
+          %{^id => counter} -> {meta, %{cache | id => counter + 1}}
+          %{} -> compute_cache(op, tensor, state, meta, Map.put(cache, id, 1))
+        end
     end
   end
 
   defp compute_cache(:fun, %{data: %Expr{id: id, args: args}}, state, meta, cache) do
     [_args, expr, _mfa] = args
-    {meta, fun_cache} = composite_compute_cache(expr, state, {meta, %{}})
+    {meta, fun_cache} = init_compute_cache(expr, state, meta, %{})
     {Map.put(meta, id, fun_cache), cache}
   end
 
   defp compute_cache(:while, %{data: %Expr{args: args, id: id}}, state, meta, cache) do
     [initial, _arg, pred, block] = args
     {meta, cache} = composite_compute_cache(initial, state, {meta, cache})
-
-    while_cache = %{}
-    {meta, while_cache} = compute_cache(pred, state, {meta, while_cache})
-    {meta, while_cache} = composite_compute_cache(block, state, {meta, while_cache})
-
+    {meta, while_cache} = init_compute_cache({pred, block}, state, meta, %{})
     {Map.put(meta, id, while_cache), cache}
   end
 
   defp compute_cache(:optional, %{data: %Expr{args: args, id: id}}, state, meta, cache) do
     [expr, default_impl_expr] = args
     {meta, cache} = Enum.reduce(expr.data.args, {meta, cache}, &compute_cache(&1, state, &2))
-    {meta, optional_cache} = composite_compute_cache(default_impl_expr, state, {meta, %{}})
+    {meta, optional_cache} = init_compute_cache(default_impl_expr, state, meta, %{})
     {Map.put(meta, id, optional_cache), cache}
+  end
+
+  defp compute_cache(:cond, %{data: %Expr{args: [clauses, last], id: id}}, state, meta, cache) do
+    current_ids = state.current_ids
+
+    {clause_caches, meta} =
+      Enum.map_reduce([last | clauses], meta, fn clause, meta ->
+        state = %{state | parent_ids: current_ids, current_ids: collect_ids(clause, current_ids)}
+        {meta, cache} = composite_compute_cache(clause, state, {meta, %{}})
+        {cache, meta}
+      end)
+
+    # Now, for each cache, split the IDs from parents from the actual cond IDs
+    {[last_cache | clauses_cache], {all_ids, {meta, cache}}} =
+      Enum.map_reduce(clause_caches, {%{}, {meta, cache}}, fn clause_cache, seen_ids_acc ->
+        {clause_cache, seen_ids_acc} =
+          Enum.flat_map_reduce(clause_cache, seen_ids_acc, fn
+            {id, %_{} = tensor}, {seen_ids, acc} ->
+              case seen_ids do
+                # We have already processed this id for the whole cond
+                %{^id => _} ->
+                  {[], {seen_ids, acc}}
+
+                # Process the ID which exists outside of cond
+                %{} ->
+                  {[], {Map.put(seen_ids, id, true), composite_compute_cache(tensor, state, acc)}}
+              end
+
+            {id, counter}, seen_ids_acc ->
+              {[{id, counter}], seen_ids_acc}
+          end)
+
+        {Map.new(clause_cache), seen_ids_acc}
+      end)
+
+    {Map.put(meta, id, {clauses_cache, last_cache, all_ids}), cache}
   end
 
   defp compute_cache(:token, %{data: %Expr{args: [token], id: id}}, state, meta, cache) do
@@ -120,27 +177,6 @@ defmodule Nx.Defn.Evaluator do
     {Map.put(meta, id, hooks), cache}
   end
 
-  defp compute_cache(:cond, %{data: %Expr{args: [clauses, last], id: id}}, state, meta, cache) do
-    {clauses_cache, meta} = Enum.map_reduce(clauses, meta, fn clause, meta ->
-      # TODO: We should be able to reuse the cache somehow here
-      {meta, cache} = composite_compute_cache(clause, state, {meta, %{}})
-      {cache, meta}
-    end)
-
-    {meta, last_cache} = composite_compute_cache(last, state, {meta, %{}})
-
-    # Now compute all IDs used in the if (but remove cons pairs which are used for metadata).
-    # They are incremented by one now and decremented by one at the end of every cond.
-    all_ids =
-      clauses_cache
-      |> Enum.reduce(last_cache, &Map.merge/2)
-      |> Map.keys()
-      |> Enum.reject(&is_list/1)
-
-    cache = Enum.reduce(all_ids, cache, &bump_counter(&2, &1))
-    {Map.put(meta, id, {clauses_cache, last_cache, all_ids}), cache}
-  end
-
   defp compute_cache(_op, tensor, state, meta, cache) do
     {_, acc} = Tree.apply_args(tensor, {meta, cache}, &{&1, compute_cache(&1, state, &2)})
     acc
@@ -148,59 +184,82 @@ defmodule Nx.Defn.Evaluator do
 
   ## Evaluation
 
-  defp eval(%Nx.Tensor{data: %Expr{op: :tensor, args: [t]}}, _state, cache) do
-    {t, cache}
+  defp eval(%Nx.Tensor{data: %Expr{op: :tensor, args: [t]}}, _state, caches) do
+    {t, caches}
   end
 
-  defp eval(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, _meta]}}, state, cache) do
-    eval(expr, state, cache)
+  defp eval(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, _meta]}}, state, caches) do
+    eval(expr, state, caches)
   end
 
-  defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}} = ans, state, cache) do
+  defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}} = ans, state, [cache | caches]) do
     case cache do
-      %{^id => 0} ->
-        raise "trying to read evaluator cache that has expired during expression:\n\n#{inspect(ans)}\n\n" <>
-                "Please report this bug with the relevant code that triggers it: https://github.com/elixir-nx/nx"
-
       %{^id => count} when is_integer(count) ->
-        {res, cache} = eval_apply(op, ans, state, cache)
+        {res, [cache | caches]} = eval_apply(op, ans, state, [cache | caches])
         state.gc && :erlang.garbage_collect(self())
-        {res, decrement_cache(cache, id, count, res)}
+        {res, [decrement_cache(cache, id, count, res) | caches]}
 
       %{^id => {count, res}} ->
-        {res, decrement_cache(cache, id, count, res)}
+        {res, [decrement_cache(cache, id, count, res) | caches]}
+
+      %{} ->
+        # If we don't find the tensor in the current scope,
+        # it may be in a parent scope, so look up. If we find
+        # it in the parent, we don't decrement it, as that will
+        # be done at the end of processing the current scope.
+        eval_parent(caches, id, op, ans, state, [cache])
     end
   end
 
-  defp eval(other, _state, cache) do
-    {other, cache}
+  defp eval(other, _state, [_ | _] = caches) do
+    {other, caches}
   end
 
-  defp decrement_cache(cache, id, 1, _res), do: %{cache | id => 0}
+  defp eval_parent([cache | caches], id, op, ans, state, acc) do
+    case cache do
+      %{^id => {_count, res}} ->
+        {res, Enum.reverse(acc, [cache | caches])}
+
+      %{^id => count} when is_integer(count) ->
+        {res, [cache | caches]} = eval_apply(op, ans, state, [cache | caches])
+        state.gc && :erlang.garbage_collect(self())
+        {res, Enum.reverse(acc, [Map.put(cache, id, {count, res}) | caches])}
+
+      %{} ->
+        eval_parent(caches, id, op, ans, state, [cache | acc])
+    end
+  end
+
+  defp eval_parent([], _id, _op, ans, _state, _acc) do
+    raise "trying to read evaluator cache that has expired during expression:\n\n#{inspect(ans)}\n\n" <>
+            "Please report this bug with the relevant code that triggers it: https://github.com/elixir-nx/nx"
+  end
+
+  defp decrement_cache(cache, id, 1, _res), do: Map.delete(cache, id)
   defp decrement_cache(cache, id, counter, res), do: %{cache | id => {counter - 1, res}}
 
-  defp eval_apply(:parameter, %{data: %Expr{args: [i]}}, state, cache) do
+  defp eval_apply(:parameter, %{data: %Expr{args: [i]}}, state, caches) do
     case Enum.fetch!(state.params, i).() do
       %Nx.Tensor{data: %Nx.Defn.Expr{}} = tensor ->
         raise ArgumentError,
               "cannot pass a tensor expression as argument to defn, got: #{inspect(tensor)}"
 
       %Nx.Tensor{} = tensor ->
-        {tensor, cache}
+        {tensor, caches}
     end
   end
 
-  defp eval_apply(:elem, %Nx.Tensor{data: %Expr{args: [tuple, i]}}, state, cache) do
-    {tuple, cache} = composite_eval(tuple, state, cache)
-    {elem(tuple, i), cache}
+  defp eval_apply(:elem, %Nx.Tensor{data: %Expr{args: [tuple, i]}}, state, caches) do
+    {tuple, caches} = composite_eval(tuple, state, caches)
+    {elem(tuple, i), caches}
   end
 
-  defp eval_apply(:attach_token, %Nx.Tensor{data: %Expr{args: [token, expr]}}, state, cache) do
-    {_, cache} = eval(token, state, cache)
-    eval(expr, state, cache)
+  defp eval_apply(:attach_token, %Nx.Tensor{data: %Expr{args: [token, expr]}}, state, caches) do
+    {_, caches} = eval(token, state, caches)
+    eval(expr, state, caches)
   end
 
-  defp eval_apply(:fun, %{data: %Expr{args: [args, expr, _mfa], id: id}}, state, cache) do
+  defp eval_apply(:fun, %{data: %Expr{args: [args, expr, _mfa], id: id}}, state, caches) do
     fun_cache = Map.fetch!(state.meta, id)
 
     fun =
@@ -208,97 +267,105 @@ defmodule Nx.Defn.Evaluator do
         1 ->
           fn arg1 ->
             params = [fn -> Nx.to_tensor(arg1) end]
-            {result, _cache} = composite_eval(expr, %{state | params: params}, fun_cache)
+            {result, _} = composite_eval(expr, %{state | params: params}, [fun_cache])
             result
           end
 
         2 ->
           fn arg1, arg2 ->
             params = [fn -> Nx.to_tensor(arg1) end, fn -> Nx.to_tensor(arg2) end]
-            {result, _cache} = composite_eval(expr, %{state | params: params}, fun_cache)
+            {result, _} = composite_eval(expr, %{state | params: params}, [fun_cache])
             result
           end
       end
 
-    {fun, cache}
+    {fun, caches}
   end
 
-  defp eval_apply(:cond, %{data: %Expr{args: [clauses, last], id: id}}, state, cache) do
+  defp eval_apply(:cond, %{data: %Expr{args: [clauses, last], id: id}}, state, caches) do
     {clauses_cache, last_cache, add_ids} = Map.fetch!(state.meta, id)
-    state = %{state | parent: cache}
-    {chosen, chosen_cache} = cond_clause(clauses, clauses_cache, last, last_cache, state)
-    {res, res_cache} = composite_eval(chosen, state, chosen_cache)
 
-    cache =
-      Enum.reduce(add_ids, cache, fn id, cache ->
-        case cache do
-          # Value was cached, decrement it after cond
-          %{^id => {count, value}} -> decrement_cache(cache, id, count, value)
-          # Value was not cached but it was only used in cond
-          %{^id => 1} -> %{cache | id => 0}
-          # Value was not cached but it is meant to be used elsewhere...
-          %{^id => count} when is_integer(count) ->
-            case res_cache do
-              # and we computed it in cond, so we cache it!
-              # TODO: Do not expire cond caches if value is used upstream
-              %{^id => {_, value}} -> decrement_cache(cache, id, count, value)
-              # and we did not compute it in cond, so we only decrement it!
-              %{} -> %{cache | id => count - 1}
-            end
-        end
-      end)
+    {chosen, chosen_cache} =
+      clauses
+      |> Enum.zip(clauses_cache)
+      |> cond_clause(last, last_cache, state, caches)
 
-    {res, cache}
+    {res, [_ | caches]} = composite_eval(chosen, state, chosen_cache)
+
+    # caches =
+    #   Enum.reduce(all_ids, caches, fn id, caches ->
+    #     case caches do
+    #       # Value was cached, decrement it after cond
+    #       %{^id => {count, value}} ->
+    #         decrement_cache(cache, id, count, value)
+
+    #       # Value was not cached but it was only used in cond
+    #       %{^id => 1} ->
+    #         Map.delete(cache, id)
+
+    #       # Value was not cached but it is meant to be used elsewhere...
+    #       %{^id => count} when is_integer(count) ->
+    #         case res_cache do
+    #           # and we computed it in cond, so we cache it!
+    #           # TODO: Do not expire cond caches if value is used upstream
+    #           %{^id => {_, value}} -> decrement_cache(cache, id, count, value)
+    #           # and we did not compute it in cond, so we only decrement it!
+    #           %{} -> %{cache | id => count - 1}
+    #         end
+    #     end
+    #   end)
+
+    {res, caches}
   end
 
-  defp eval_apply(:while, %{data: %Expr{args: args, id: id}}, state, cache) do
+  defp eval_apply(:while, %{data: %Expr{args: args, id: id}}, state, caches) do
     [initial, _arg, condition, block] = args
-    {initial, cache} = composite_eval(initial, state, cache)
+    {initial, caches} = composite_eval(initial, state, caches)
     while_cache = Map.fetch!(state.meta, id)
-    {while(initial, condition, block, state, while_cache), cache}
+    {while(initial, condition, block, state, [while_cache]), caches}
   end
 
-  defp eval_apply(:token, %{data: %Expr{args: [token], id: id}}, state, cache) do
+  defp eval_apply(:token, %{data: %Expr{args: [token], id: id}}, state, caches) do
     hooks = Map.fetch!(state.meta, id)
 
-    cache =
+    caches =
       token.hooks
       |> Enum.zip(hooks)
-      |> List.foldr(cache, fn
-        {%{expr: expr}, true}, cache ->
-          {_expr, cache} = composite_eval(expr, state, cache)
-          cache
+      |> List.foldr(caches, fn
+        {%{expr: expr}, true}, caches ->
+          {_expr, caches} = composite_eval(expr, state, caches)
+          caches
 
-        {%{}, false}, cache ->
-          cache
+        {%{}, false}, caches ->
+          caches
 
-        {%{expr: expr}, hook_fun}, cache ->
-          {res, cache} = composite_eval(expr, state, cache)
+        {%{expr: expr}, hook_fun}, caches ->
+          {res, caches} = composite_eval(expr, state, caches)
           hook_fun.(res)
-          cache
+          caches
       end)
 
-    {{}, cache}
+    {{}, caches}
   end
 
-  defp eval_apply(:optional, %{data: %Expr{args: args, id: id}}, state, cache) do
+  defp eval_apply(:optional, %{data: %Expr{args: args, id: id}}, state, caches) do
     [expr, default_impl_expr] = args
 
-    {args, cache} = Tree.apply_args(expr, cache, &eval(&1, state, &2))
+    {args, caches} = Tree.apply_args(expr, caches, &eval(&1, state, &2))
     backend = Nx.Shared.list_impl!(args)
 
     if function_exported?(backend, expr.data.op, length(args) + 1) do
-      {apply(backend, expr.data.op, [expr | args]), cache}
+      {apply(backend, expr.data.op, [expr | args]), caches}
     else
       params = Enum.map(args, &fn -> &1 end)
       optional_cache = Map.fetch!(state.meta, id)
-      {res, _cache} = eval(default_impl_expr, %{state | params: params}, optional_cache)
-      {res, cache}
+      {res, _} = eval(default_impl_expr, %{state | params: params}, [optional_cache])
+      {res, caches}
     end
   end
 
-  defp eval_apply(op, ans, state, cache) do
-    {args, cache} = Tree.apply_args(ans, cache, &eval(&1, state, &2))
+  defp eval_apply(op, ans, state, caches) do
+    {args, caches} = Tree.apply_args(ans, caches, &eval(&1, state, &2))
 
     {mod, args} =
       cond do
@@ -324,39 +391,39 @@ defmodule Nx.Defn.Evaluator do
           {Nx.Shared.list_impl!(args), [ans | args]}
       end
 
-    {apply(mod, op, args), cache}
+    {apply(mod, op, args), caches}
   end
 
   ## Control flow helpers
 
-  defp while(acc, condition, block, state, cache) do
+  defp while(acc, condition, block, state, caches) do
     state = %{state | params: composite_to_params(acc)}
-    {pred, temp} = eval(condition, state, cache)
+    {pred, temp} = eval(condition, state, caches)
 
     if Nx.to_number(pred) != 0 do
       {acc, _} = composite_eval(block, state, temp)
-      while(acc, condition, block, state, cache)
+      while(acc, condition, block, state, caches)
     else
       acc
     end
   end
 
-  defp cond_clause([{pred, clause} | clauses], [cache | caches], last, last_cache, state) do
-    {pred, cache} = eval(pred, state, cache)
+  defp cond_clause([{{pred, body}, cache} | clauses], last, last_cache, state, caches) do
+    {pred, pred_caches} = eval(pred, state, [cache | caches])
 
     if Nx.to_number(pred) != 0,
-      do: {clause, cache},
-      else: cond_clause(clauses, caches, last, last_cache, state)
+      do: {body, pred_caches},
+      else: cond_clause(clauses, last, last_cache, state, caches)
   end
 
-  defp cond_clause([], [], last, last_cache, _state) do
-    {last, last_cache}
+  defp cond_clause([], last, last_cache, _state, caches) do
+    {last, [last_cache | caches]}
   end
 
   ## Composite
 
-  defp composite_eval(composite, state, cache) do
-    Composite.traverse(composite, cache, &eval(&1, state, &2))
+  defp composite_eval(composite, state, caches) do
+    Composite.traverse(composite, caches, &eval(&1, state, &2))
   end
 
   defp composite_to_params(composite) do
