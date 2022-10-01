@@ -30,7 +30,7 @@ jobs:
       - name: Retrieve dependencies cache
         env:
           cache-name: cache-mix-deps
-        uses: actions/cache@v1
+        uses: actions/cache@v3
         id: mix-cache # id to use in retrieve action
         with:
           path: deps
