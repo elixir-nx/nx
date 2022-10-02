@@ -41,14 +41,21 @@ defmodule Nx.Defn.Tree do
   @doc """
   Gets all IDs of all elements in the same scope.
 
-  `while`'s condition, `fun`'s and similar are considered different
-  scopes. When it comes to `cond`, an ID will only be considered if
-  it is used outside of the `cond` or used in several distinct conds.
+  `while`'s condition and body, `fun`'s body and similar are
+  considered different scopes. When it comes to `cond`, an ID will
+  only be considered if it is used outside of the `cond` or used
+  in several distinct conds. Constants are also ignored, as they
+  have global IDs based on the constants themselves.
 
   An existing maps of `ids` can be given to accumulate on top of it.
   """
   def scope_ids(expr, ids \\ %{}) do
     Composite.reduce(expr, {ids, %{}}, &scope_ids_each(&1, nil, &2)) |> elem(0)
+  end
+
+  # Ignore constants
+  defp scope_ids_each(%Nx.Tensor{data: %Expr{op: :constant}}, _scope, {ids, cond_ids}) do
+    {ids, cond_ids}
   end
 
   # We are at the root.
@@ -59,7 +66,7 @@ defmodule Nx.Defn.Tree do
 
       %{} ->
         scope = if op == :cond, do: id, else: nil
-        ids = Map.put(ids, id, [])
+        ids = Map.put(ids, id, op)
 
         t
         |> apply_args(:scope, {ids, cond_ids}, &{&1, scope_ids_each(&1, scope, &2)})

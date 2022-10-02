@@ -557,5 +557,40 @@ defmodule Nx.Defn.EvaluatorTest do
       assert_received {:hook, _}
       refute_received {:hook, _}
     end
+
+    defn cond_cache_map(state) do
+      state =
+        if state.iteration < 4 do
+          if state.iteration != 1 do
+            state
+          else
+            state
+          end
+        else
+          state
+        end
+
+      %{state | iteration: state.iteration + 1}
+    end
+
+    test "with nested map" do
+      assert cond_cache_map(%{iteration: 0}) ==
+               %{iteration: Nx.tensor(1)}
+
+      assert cond_cache_map(%{iteration: 0, abc: 1}) ==
+               %{iteration: Nx.tensor(1), abc: Nx.tensor(1)}
+
+      assert cond_cache_map(%{iteration: 0, xyz: 1}) ==
+               %{iteration: Nx.tensor(1), xyz: Nx.tensor(1)}
+
+      assert cond_cache_map(%{iteration: 4}) ==
+               %{iteration: Nx.tensor(5)}
+
+      assert cond_cache_map(%{iteration: 4, abc: 1}) ==
+               %{iteration: Nx.tensor(5), abc: Nx.tensor(1)}
+
+      assert cond_cache_map(%{iteration: 4, xyz: 1}) ==
+               %{iteration: Nx.tensor(5), xyz: Nx.tensor(1)}
+    end
   end
 end
