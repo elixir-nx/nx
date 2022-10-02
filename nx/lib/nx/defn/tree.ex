@@ -42,7 +42,8 @@ defmodule Nx.Defn.Tree do
   Gets all IDs of all elements in the same scope.
 
   `while`'s condition, `fun`'s and similar are considered different
-  scopes. See `apply_args/4` for more information.
+  scopes. When it comes to `cond`, an ID will only be considered if
+  it is used outside of the `cond` or used in several distinct conds.
 
   An existing maps of `ids` can be given to accumulate on top of it.
   """
@@ -102,8 +103,10 @@ defmodule Nx.Defn.Tree do
   that are in the same scope are traversed. Therefore,
   expressions such as `while`'s condition and body, 
   `optional`'s default implementation, functions, and so forth
-  are not traversed. Note `cond`s are not considered a new
-  scope because they can access all parent scopes directly.
+  are not traversed. Note `cond`s are always traversed because,
+  while they introduce a new scope, they can also access its
+  parents directly, so you must take `cond`s into account
+  accordingly.
 
   Warning: be very careful when using this function to traverse
   the expression recursively. If you plan to do so, you should

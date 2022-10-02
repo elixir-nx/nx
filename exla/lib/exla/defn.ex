@@ -1604,10 +1604,8 @@ defmodule EXLA.Defn do
         {expr, {cache, ids}}
 
       true ->
-        type = if op == :cond, do: :all, else: :scope
-
         {args, {cache, ids}} =
-          Tree.apply_args(expr, type, {cache, ids}, &collect_args(&1, &2, pred_ids))
+          Tree.apply_args(expr, :scope, {cache, ids}, &collect_args(&1, &2, pred_ids))
 
         expr = put_in(expr.data.args, args)
         {expr, {Map.put(cache, id, expr), ids}}
