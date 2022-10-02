@@ -112,7 +112,12 @@ defmodule Nx.Defn.Evaluator do
 
     clause_caches =
       Enum.map([last | clauses], fn clause ->
-        state = %{state | parent_ids: current_ids, current_ids: Tree.scope_ids(clause, current_ids)}
+        state = %{
+          state
+          | parent_ids: current_ids,
+            current_ids: Tree.scope_ids(clause, current_ids)
+        }
+
         composite_compute_cache(clause, state, %{})
       end)
 

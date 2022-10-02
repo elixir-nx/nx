@@ -1407,7 +1407,13 @@ defmodule EXLA.Defn do
       end)
 
     params = Enum.flat_map(arg_params, &computation_arg_param/1)
-    state = %{state | builder: subbuilder, params: Map.new(params), scope_ids: Tree.scope_ids(expr)}
+
+    state = %{
+      state
+      | builder: subbuilder,
+        params: Map.new(params),
+        scope_ids: Tree.scope_ids(expr)
+    }
 
     {res, _} = recur_composite(expr, state, no_token_cache())
     EXLA.Builder.build(to_type(res, type))
@@ -1423,7 +1429,14 @@ defmodule EXLA.Defn do
     arg_token = EXLA.Op.get_tuple_element(param, 0)
     arg_param = EXLA.Op.get_tuple_element(param, 1)
     params = computation_arg_param({arg, arg_param})
-    state = %{state | builder: subbuilder, params: Map.new(params), scope_ids: Tree.scope_ids(expr)}
+
+    state = %{
+      state
+      | builder: subbuilder,
+        params: Map.new(params),
+        scope_ids: Tree.scope_ids(expr)
+    }
+
     {res, comp_cache} = recur_composite(expr, transform, state, reset_token(cache, arg_token))
 
     res =
