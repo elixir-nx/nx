@@ -577,6 +577,7 @@ defmodule Nx.Defn.EvaluatorTest do
       assert cond_cache_map(%{iteration: 0}) ==
                %{iteration: Nx.tensor(1)}
 
+      # Use :abc/:xyz so we try different key orderings.
       assert cond_cache_map(%{iteration: 0, abc: 1}) ==
                %{iteration: Nx.tensor(1), abc: Nx.tensor(1)}
 
@@ -586,6 +587,7 @@ defmodule Nx.Defn.EvaluatorTest do
       assert cond_cache_map(%{iteration: 4}) ==
                %{iteration: Nx.tensor(5)}
 
+      # Use :abc/:xyz so we try different key orderings.
       assert cond_cache_map(%{iteration: 4, abc: 1}) ==
                %{iteration: Nx.tensor(5), abc: Nx.tensor(1)}
 
