@@ -1060,7 +1060,7 @@ NIF(amax)
   LIST_PARAM(1, std::vector<int64_t>, axes);
   PARAM(2, bool, keep_axes);
 
-  TENSOR(at::native::amax(*tensor, axes, keep_axes));
+  TENSOR(at::amax(*tensor, axes, keep_axes));
 }
 
 NIF(amin)
@@ -1069,7 +1069,7 @@ NIF(amin)
   LIST_PARAM(1, std::vector<int64_t>, axes);
   PARAM(2, bool, keep_axes);
 
-  TENSOR(at::native::amin(*tensor, axes, keep_axes));
+  TENSOR(at::amin(*tensor, axes, keep_axes));
 }
 
 NIF(eigh)
