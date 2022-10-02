@@ -257,7 +257,7 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp eval_apply(:fun, %{data: %Expr{args: [args, expr, _mfa], id: id}}, state, caches) do
-    fun_cache = Map.fetch!(hd(caches), [:fun | id])
+    {fun_cache, caches} = pop_cache!(caches, [:fun | id])
 
     fun =
       case length(args) do
@@ -280,7 +280,7 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp eval_apply(:cond, %{data: %Expr{args: [clauses, last], id: id}}, state, caches) do
-    {clauses_cache, last_cache, parent_ids} = Map.fetch!(hd(caches), [:cond | id])
+    {{clauses_cache, last_cache, parent_ids}, caches} = pop_cache!(caches, [:cond | id])
 
     {chosen, chosen_cache} =
       clauses
@@ -295,12 +295,12 @@ defmodule Nx.Defn.Evaluator do
   defp eval_apply(:while, %{data: %Expr{args: args, id: id}}, state, caches) do
     [initial, _arg, condition, block] = args
     {initial, caches} = composite_eval(initial, state, caches)
-    while_cache = Map.fetch!(hd(caches), [:while | id])
+    {while_cache, caches} = pop_cache!(caches, [:while | id])
     {while(initial, condition, block, state, [while_cache]), caches}
   end
 
   defp eval_apply(:token, %{data: %Expr{args: [token], id: id}}, state, caches) do
-    hooks = Map.fetch!(hd(caches), [:token | id])
+    {hooks, caches} = pop_cache!(caches, [:token | id])
 
     caches =
       token.hooks
@@ -332,7 +332,7 @@ defmodule Nx.Defn.Evaluator do
       {apply(backend, expr.data.op, [expr | args]), caches}
     else
       params = Enum.map(args, &fn -> &1 end)
-      optional_cache = Map.fetch!(hd(caches), [:optional | id])
+      {optional_cache, caches} = pop_cache!(caches, [:optional | id])
       {res, _} = eval(default_impl_expr, %{state | params: params}, [optional_cache])
       {res, caches}
     end
@@ -366,6 +366,11 @@ defmodule Nx.Defn.Evaluator do
       end
 
     {apply(mod, op, args), caches}
+  end
+
+  defp pop_cache!([cache | caches], key) do
+    {value, cache} = Map.pop!(cache, key)
+    {value, [cache | caches]}
   end
 
   ## Control flow helpers
