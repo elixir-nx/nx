@@ -1251,6 +1251,28 @@ defmodule EXLA.Defn.ExprTest do
       assert_equal(if_map_match(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)), Nx.tensor(200))
       assert_equal(if_map_match(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)), Nx.tensor(-10))
     end
+
+    defn grad_if_tuple(t) do
+      grad(t, fn t ->
+        {{a, b}, c} =
+          if t > 0 do
+            {{Nx.power(t, 2), Nx.power(t, 3)}, Nx.power(t, 4)}
+          else
+            {{Nx.power(t, 4), Nx.power(t, 3)}, Nx.power(t, 2)}
+          end
+
+        d = if t > 0, do: 123, else: 456
+
+        a * b + c - d
+      end)
+    end
+
+    test "grad with tuple" do
+      assert_equal(grad_if_tuple(Nx.tensor(1)), Nx.tensor(9.0))
+      assert_equal(grad_if_tuple(Nx.tensor(2)), Nx.tensor(112.0))
+      assert_equal(grad_if_tuple(Nx.tensor(-1)), Nx.tensor(5.0))
+      assert_equal(grad_if_tuple(Nx.tensor(-2)), Nx.tensor(444.0))
+    end
   end
 
   describe "metadata" do

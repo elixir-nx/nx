@@ -527,5 +527,35 @@ defmodule Nx.Defn.EvaluatorTest do
       assert_received {:hook, _}
       refute_received {:hook, _}
     end
+
+    defn cond_cache_both(bool, a, b) do
+      res = hook(a + b, :example, &send_to_self({:hook, &1}))
+
+      left =
+        if bool do
+          res
+        else
+          -res
+        end
+
+      right =
+        if bool do
+          res * 2
+        else
+          res
+        end
+
+      left * right
+    end
+
+    test "on both" do
+      assert cond_cache_both(0, 4, 5) == Nx.tensor(-81)
+      assert_received {:hook, _}
+      refute_received {:hook, _}
+
+      assert cond_cache_both(1, 4, 5) == Nx.tensor(162)
+      assert_received {:hook, _}
+      refute_received {:hook, _}
+    end
   end
 end

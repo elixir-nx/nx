@@ -64,9 +64,10 @@ defmodule Nx.Defn.Tree do
   By default, `type` is `:all`, which means all arguments
   are traversed. If `type` is `:lexical`, only expressions
   that are in the same lexical scope are traversed. Therefore,
-  expressions such as `while`'s condition and body, `cond`,
+  expressions such as `while`'s condition and body, 
   `optional`'s default implementation, functions, and so forth
-  are not traversed.
+  are not traversed. Note `cond`s are not considered a new lexical
+  scope because they can access all parent scopes directly.
 
   Warning: be very careful when using this function to traverse
   the expression recursively. If you plan to do so, you should
@@ -87,22 +88,16 @@ defmodule Nx.Defn.Tree do
     {[args, expr, mfa], acc}
   end
 
-  def apply_args(%T{data: %Expr{op: :cond, args: [clauses, last]}}, type, acc, fun) do
-    case type do
-      :all ->
-        {clauses, acc} =
-          Enum.map_reduce(clauses, acc, fn {pred, expr}, acc ->
-            {pred, acc} = fun.(pred, acc)
-            {expr, acc} = Composite.traverse(expr, acc, fun)
-            {{pred, expr}, acc}
-          end)
+  def apply_args(%T{data: %Expr{op: :cond, args: [clauses, last]}}, _type, acc, fun) do
+    {clauses, acc} =
+      Enum.map_reduce(clauses, acc, fn {pred, expr}, acc ->
+        {pred, acc} = fun.(pred, acc)
+        {expr, acc} = Composite.traverse(expr, acc, fun)
+        {{pred, expr}, acc}
+      end)
 
-        {last, acc} = Composite.traverse(last, acc, fun)
-        {[clauses, last], acc}
-
-      :lexical ->
-        {[clauses, last], acc}
-    end
+    {last, acc} = Composite.traverse(last, acc, fun)
+    {[clauses, last], acc}
   end
 
   def apply_args(%T{data: %Expr{op: :while, args: args}}, type, acc, fun) do

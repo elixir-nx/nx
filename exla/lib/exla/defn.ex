@@ -544,7 +544,7 @@ defmodule EXLA.Defn do
   defp cached_recur_operator(:optional, %T{data: %Expr{args: [expr, default]}}, state, cache) do
     {args, cache} =
       expr.data.args
-      |> Enum.take_while(&not is_list(&1))
+      |> Enum.take_while(&(not is_list(&1)))
       |> Enum.map_reduce(cache, &recur_operator(&1, state, &2))
 
     params = Enum.with_index(args, fn arg, index -> {index, arg} end)
