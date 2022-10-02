@@ -56,12 +56,12 @@ defmodule Nx.Defn.Evaluator do
   defp precompile(fun, vars, hooks) do
     expr = fun.(vars)
     state = %{hooks: hooks, parent_ids: nil, current_ids: nil}
-    cache = init_compute_cache(expr, state, %{})
+    cache = init_compute_cache(expr, state)
     {expr, cache}
   end
 
-  defp init_compute_cache(expr, state, parent_ids) do
-    state = %{state | parent_ids: parent_ids, current_ids: Tree.scope_ids(expr, parent_ids)}
+  defp init_compute_cache(expr, state) do
+    state = %{state | parent_ids: %{}, current_ids: Tree.scope_ids(expr, %{})}
     composite_compute_cache(expr, state, %{})
   end
 
@@ -89,21 +89,21 @@ defmodule Nx.Defn.Evaluator do
 
   defp compute_cache(:fun, %{data: %Expr{id: id, args: args}}, state, cache) do
     [_args, expr, _mfa] = args
-    fun_cache = init_compute_cache(expr, state, %{})
+    fun_cache = init_compute_cache(expr, state)
     Map.put(cache, [:fun | id], fun_cache)
   end
 
   defp compute_cache(:while, %{data: %Expr{args: args, id: id}}, state, cache) do
     [initial, _arg, pred, block] = args
     cache = composite_compute_cache(initial, state, cache)
-    while_cache = init_compute_cache({pred, block}, state, %{})
+    while_cache = init_compute_cache({pred, block}, state)
     Map.put(cache, [:while | id], while_cache)
   end
 
   defp compute_cache(:optional, %{data: %Expr{args: args, id: id}}, state, cache) do
     [expr, default_impl_expr] = args
     cache = Enum.reduce(expr.data.args, cache, &compute_cache(&1, state, &2))
-    optional_cache = init_compute_cache(default_impl_expr, state, %{})
+    optional_cache = init_compute_cache(default_impl_expr, state)
     Map.put(cache, [:optional | id], optional_cache)
   end
 
