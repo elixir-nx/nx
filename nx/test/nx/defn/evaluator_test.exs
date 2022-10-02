@@ -478,4 +478,146 @@ defmodule Nx.Defn.EvaluatorTest do
       refute_received _
     end
   end
+
+  describe "cond cache" do
+    # The goal of those tests is to show that expressions inside cond are cached,
+    # regardless of evaluation order.
+    defn cond_cache_left(bool, a, b) do
+      res = hook(a + b, :example, &send_to_self({:hook, &1}))
+
+      cond =
+        if bool do
+          res
+        else
+          0
+        end
+
+      cond * res
+    end
+
+    test "on lhs" do
+      assert cond_cache_left(0, 1, 2) == Nx.tensor(0)
+      assert_received {:hook, _}
+      refute_received {:hook, _}
+
+      assert cond_cache_left(1, 1, 2) == Nx.tensor(9)
+      assert_received {:hook, _}
+      refute_received {:hook, _}
+    end
+
+    defn cond_cache_right(bool, a, b) do
+      res = hook(a + b, :example, &send_to_self({:hook, &1}))
+
+      cond =
+        if bool do
+          res
+        else
+          0
+        end
+
+      res * cond
+    end
+
+    test "on rhs" do
+      assert cond_cache_right(0, 1, 2) == Nx.tensor(0)
+      assert_received {:hook, _}
+      refute_received {:hook, _}
+
+      assert cond_cache_right(1, 1, 2) == Nx.tensor(9)
+      assert_received {:hook, _}
+      refute_received {:hook, _}
+    end
+
+    defn cond_cache_both(bool, a, b) do
+      res = hook(a + b, :example, &send_to_self({:hook, &1}))
+
+      left =
+        if bool do
+          res
+        else
+          -res
+        end
+
+      right =
+        if bool do
+          res * 2
+        else
+          res
+        end
+
+      left * right
+    end
+
+    test "on both" do
+      assert cond_cache_both(0, 4, 5) == Nx.tensor(-81)
+      assert_received {:hook, _}
+      refute_received {:hook, _}
+
+      assert cond_cache_both(1, 4, 5) == Nx.tensor(162)
+      assert_received {:hook, _}
+      refute_received {:hook, _}
+    end
+
+    defn cond_cache_map(state) do
+      state =
+        if state.iteration < 4 do
+          if state.iteration != 1 do
+            state
+          else
+            state
+          end
+        else
+          state
+        end
+
+      %{state | iteration: state.iteration + 1}
+    end
+
+    test "with nested map" do
+      assert cond_cache_map(%{iteration: 0}) ==
+               %{iteration: Nx.tensor(1)}
+
+      # Use :abc/:xyz so we try different key orderings.
+      assert cond_cache_map(%{iteration: 0, abc: 1}) ==
+               %{iteration: Nx.tensor(1), abc: Nx.tensor(1)}
+
+      assert cond_cache_map(%{iteration: 0, xyz: 1}) ==
+               %{iteration: Nx.tensor(1), xyz: Nx.tensor(1)}
+
+      assert cond_cache_map(%{iteration: 4}) ==
+               %{iteration: Nx.tensor(5)}
+
+      # Use :abc/:xyz so we try different key orderings.
+      assert cond_cache_map(%{iteration: 4, abc: 1}) ==
+               %{iteration: Nx.tensor(5), abc: Nx.tensor(1)}
+
+      assert cond_cache_map(%{iteration: 4, xyz: 1}) ==
+               %{iteration: Nx.tensor(5), xyz: Nx.tensor(1)}
+    end
+
+    defn cond_nested_condition_cache(state) do
+      {state, prev} =
+        if state.iteration < 12 do
+          sign = if(state.iteration < 2, do: 1, else: -1)
+
+          factor =
+            if sign >= 0 do
+              2
+            else
+              1
+            end
+
+          {state, factor}
+        else
+          {state, 1}
+        end
+
+      %{state | iteration: state.iteration + prev}
+    end
+
+    test "with nested condition" do
+      assert cond_nested_condition_cache(%{iteration: 0}) == %{iteration: Nx.tensor(2)}
+      assert cond_nested_condition_cache(%{iteration: 12}) == %{iteration: Nx.tensor(13)}
+    end
+  end
 end

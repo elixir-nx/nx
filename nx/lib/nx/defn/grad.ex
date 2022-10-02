@@ -78,36 +78,51 @@ defmodule Nx.Defn.Grad do
                [:equal, :greater, :greater_equal, :less, :less_equal, :not_equal, :argsort]
 
   defp parents_tree(expr, nodes) do
-    Composite.reduce(expr, {%{}, nodes}, &recur_parents_tree/2)
+    Composite.reduce(expr, {%{}, nodes}, &recur_parents_tree(&1, &2, nil))
   end
 
-  defp recur_parents_tree(%T{data: %Expr{id: id, op: op}} = t, {parents, nodes}) do
+  defp recur_parents_tree(%T{data: %Expr{id: id, op: op}} = t, {parents, nodes}, params) do
     case nodes do
       %{^id => _} -> {parents, nodes}
-      %{} -> parents_args(op, t, id, {parents, Map.put(nodes, id, t)})
+      %{} -> parents_args(op, t, id, {parents, Map.put(nodes, id, t)}, params)
     end
   end
 
-  defp parents_args(:metadata, %{data: %{args: [_, %{stop_grad: true}]}}, _id, acc) do
+  defp parents_args(:metadata, %{data: %{args: [_, %{stop_grad: true}]}}, _id, acc, _params) do
     acc
   end
 
   # We register cond as a special node to avoid pretraversing it.
   # Instead we traverse it early on on the grad computation.
-  defp parents_args(:cond, _, id, {parents, nodes}) do
+  defp parents_args(:cond, _, id, {parents, nodes}, _params) do
     {Map.update(parents, __MODULE__, [id], &[id | &1]), nodes}
   end
 
-  defp parents_args(op, t, parent_id, acc) do
-    reduce_args(op, t, acc, fn %T{data: %{id: id, op: op}} = arg, {parents, nodes} ->
-      if op in @constants do
-        {parents, nodes}
-      else
-        parents = Map.update(parents, id, [parent_id], &[parent_id | &1])
-        recur_parents_tree(arg, {parents, nodes})
+  defp parents_args(op, t, parent_id, acc, params) do
+    reduce_args(op, t, acc, fn arg, {parents, nodes} ->
+      case bypass_arg(arg, params) do
+        :constant ->
+          {parents, nodes}
+
+        {arg, params} ->
+          parents = Map.update(parents, arg.data.id, [parent_id], &[parent_id | &1])
+          recur_parents_tree(arg, {parents, nodes}, params)
       end
     end)
   end
+
+  # Those nodes can be ignored.
+  defp bypass_arg(%{data: %{op: op}}, _params) when op in @constants, do: :constant
+
+  # Those nodes are always bypassed in favor of actual values and implementations.
+  defp bypass_arg(%{data: %{op: :optional, args: [expr, default_impl_expr]}}, _params),
+    do: {default_impl_expr, expr.data.args}
+
+  defp bypass_arg(%{data: %{op: :parameter, args: [i]}}, [_ | _] = params),
+    do: {Enum.fetch!(params, i), nil}
+
+  defp bypass_arg(arg, params),
+    do: {arg, params}
 
   # For some functions, only a subset of the args participate in the grad,
   # so we handle them accordingly here.
@@ -135,9 +150,6 @@ defmodule Nx.Defn.Grad do
 
   defp reduce_args(:while, %{data: %{args: [initial | _]}}, acc, fun),
     do: Composite.reduce(initial, acc, fun)
-
-  defp reduce_args(:optional, %{data: %{args: [_expr, default_impl_expr]}}, acc, fun),
-    do: fun.(default_impl_expr, acc)
 
   defp reduce_args(_op, t, acc, fun),
     do: Tree.apply_args(t, acc, &{&1, fun.(&1, &2)}) |> elem(1)
