@@ -153,7 +153,6 @@ defmodule Torchx do
   ## Devices
 
   PyTorch implements a variety of devices, which can be seen below.
-  For now, only `:cpu` and `:cuda` are supported.
 
   #{@valid_devices_md_list}
   """
@@ -164,22 +163,53 @@ defmodule Torchx do
 
   @doc """
   Check if device of the given type is available for Torchx.
-  Device atom can be any of:
 
-  #{@valid_devices_md_list}
+  You can currently check the availability of:
 
-  But only :cuda availability check is supported for now.
+  * `:cuda`
+  * `:mps`
+  * `:cpu`
+
   """
   def device_available?(:cuda), do: NIF.cuda_is_available()
+  def device_available?(:mps), do: NIF.mps_is_available()
   def device_available?(:cpu), do: true
-  def device_available?(:mps), do: true
-  def device_available?(_), do: raise("Only CUDA device availability check is supported for now.")
+
+  def device_available?(device),
+    do: raise(ArgumentError, "Cannot check availability for device #{inspect(device)}.")
 
   @doc """
-  Return devices quantity for the given device type. Only :cuda is supported for now.
+  Return devices quantity for the given device type.
+
+  You can check the device count of `:cuda` for now.
   """
   def device_count(:cuda), do: NIF.cuda_device_count()
-  def device_count(_), do: raise("Only CUDA devices can be counted for now.")
+  def device_count(_), do: raise(ArgumentError, "Only CUDA devices can be counted for now.")
+
+  @doc """
+  Returns the default device.
+
+  Here is the priority in the order of availability:
+
+  * `:cuda`
+  * `:cpu`
+
+  The default can also be set (albeit not recommended)
+  via the application environment by setting the
+  `:default_device` option under the `:torchx` application.
+  """
+  @default_devices [:cuda]
+  def default_device do
+    case Application.fetch_env(:torchx, :default_device) do
+      {:ok, device} ->
+        device
+
+      :error ->
+        device = Enum.find(@default_devices, {:cpu, -1}, &device_available?/1)
+        Application.put_env(:torchx, :default_device, device)
+        device
+    end
+  end
 
   # LibTorch API bindings
 

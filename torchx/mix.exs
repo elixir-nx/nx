@@ -144,9 +144,21 @@ defmodule Torchx.MixProject do
                 "https://download.pytorch.org/libtorch/#{@libtorch_target}/libtorch-macos-#{@libtorch_version}.zip"
 
               _ ->
-                Mix.raise(
-                  "Please install PyTorch 1.12+ via Python and point LIBTORCH_DIR to the installation directory"
-                )
+                Mix.raise("""
+                LibTorch does not yet provide precompiled binaries for Apple Silicon.
+
+                You can install Torch 1.12+ using pip3:
+
+                    pip3 install torch
+
+                Then find where Torch was installed under the "Location" metadata:
+
+                    pip3 show torch
+
+                And then set LIBTORCH_DIR to its installation directory. For example:
+
+                    export LIBTORCH_DIR=~/Library/Python/3.8/lib/python/site-packages/torch
+                """)
             end
 
           {:win32, :nt} ->

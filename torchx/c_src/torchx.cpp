@@ -330,6 +330,11 @@ NIF(shape)
   return nx::nif::ok(env, enif_make_tuple_from_array(env, sizes.data(), sizes.size()));
 }
 
+NIF(mps_is_available)
+{
+  return nx::nif::make(env, (bool)at::hasMPS());
+}
+
 NIF(cuda_is_available)
 {
   return nx::nif::make(env, (bool)torch::cuda::is_available());
@@ -1326,6 +1331,7 @@ static ErlNifFunc nif_functions[] = {
     DF(conv, 7),
     DF(max_pool_3d, 5),
 
+    F(mps_is_available, 0),
     F(cuda_is_available, 0),
     F(cuda_device_count, 0),
     F(scalar_type, 1),

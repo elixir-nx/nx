@@ -29,8 +29,9 @@ defmodule Torchx.Backend do
 
   ## Options
 
-    * `:device` - Defaults to `:cpu`. An atom representing the device for the allocation of a given tensor.
-    Valid values can be seen at the main [`Torchx`](Torchx.html#module-devices) docs.
+    * `:device` - Defaults to `Torchx.default_device/0`. An atom representing the
+      device for the allocation of a given tensor. Valid values can be seen at the
+      main `Torchx` docs.
   """
 
   @behaviour Nx.Backend
@@ -1893,8 +1894,8 @@ defmodule Torchx.Backend do
   defp to_typed_ref(tensor, _ref_type, expected_type),
     do: Torchx.to_type(tensor, to_torch_type(expected_type))
 
-  defp device_option(nil), do: {:cpu, -1}
-  defp device_option(backend_opts), do: backend_opts[:device] || {:cpu, -1}
+  defp device_option(nil), do: Torchx.default_device()
+  defp device_option(backend_opts), do: backend_opts[:device] || Torchx.default_device()
 
   defp unsupported_option!(opts, key, acceptable_default) do
     if opts[key] != nil and opts[key] != acceptable_default do
