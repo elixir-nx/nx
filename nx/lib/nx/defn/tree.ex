@@ -39,6 +39,54 @@ defmodule Nx.Defn.Tree do
   end
 
   @doc """
+  Gets all IDs of all elements in the same scope.
+
+  `while`'s condition, `fun`'s and similar are considered different
+  scopes. See `apply_args/4` for more information.
+
+  An existing maps of `ids` can be given to accumulate on top of it.
+  """
+  def scope_ids(expr, ids \\ %{}) do
+    Composite.reduce(expr, {ids, %{}}, &scope_ids_each(&1, nil, &2)) |> elem(0)
+  end
+
+  # We are at the root.
+  defp scope_ids_each(%Nx.Tensor{data: %Expr{id: id, op: op}} = t, nil, {ids, cond_ids}) do
+    case ids do
+      %{^id => _} ->
+        {ids, cond_ids}
+
+      %{} ->
+        scope = if op == :cond, do: id, else: nil
+        ids = Map.put(ids, id, [])
+
+        t
+        |> apply_args(:scope, {ids, cond_ids}, &{&1, scope_ids_each(&1, scope, &2)})
+        |> elem(1)
+    end
+  end
+
+  # If we are inside a cond, we want to collect all of the IDs inside that
+  # cond separately and, in case it is present in more than one direct cond,
+  # move it to the parent scope.
+  defp scope_ids_each(%Nx.Tensor{data: %Expr{id: id}} = t, scope, {ids, cond_ids}) do
+    case cond_ids do
+      %{^id => ^scope} ->
+        {ids, cond_ids}
+
+      %{^id => _} ->
+        scope_ids_each(t, nil, {ids, cond_ids})
+
+      %{} ->
+        cond_ids = Map.put(cond_ids, id, scope)
+
+        t
+        |> apply_args(:scope, {ids, cond_ids}, &{&1, scope_ids_each(&1, scope, &2)})
+        |> elem(1)
+    end
+  end
+
+  @doc """
   Puts new args in the given tensor expression and gives it a new id.
   """
   def put_args(%T{data: %Expr{} = expr} = t, args) do
@@ -46,27 +94,15 @@ defmodule Nx.Defn.Tree do
   end
 
   @doc """
-  Replaces args in the given tensor expression.
-
-  Use this function with extreme care. Changing the args but keeping
-  the same id may mean you have different versions of the same node.
-  Do this change only if you guarante all nodes in the tree have been
-  replaced equally.
-  """
-  def replace_args(%T{data: %Expr{} = expr} = t, args) do
-    %{t | data: %{expr | args: args}}
-  end
-
-  @doc """
   Applies the given function to the arguments of the node,
   with the given accumulator as a starting value.
 
   By default, `type` is `:all`, which means all arguments
-  are traversed. If `type` is `:lexical`, only expressions
-  that are in the same lexical scope are traversed. Therefore,
+  are traversed. If `type` is `:scope`, only expressions
+  that are in the same scope are traversed. Therefore,
   expressions such as `while`'s condition and body, 
   `optional`'s default implementation, functions, and so forth
-  are not traversed. Note `cond`s are not considered a new lexical
+  are not traversed. Note `cond`s are not considered a new
   scope because they can access all parent scopes directly.
 
   Warning: be very careful when using this function to traverse
@@ -82,7 +118,7 @@ defmodule Nx.Defn.Tree do
     {expr, acc} =
       case type do
         :all -> Composite.traverse(expr, acc, fun)
-        :lexical -> {expr, acc}
+        :scope -> {expr, acc}
       end
 
     {[args, expr, mfa], acc}
@@ -111,7 +147,7 @@ defmodule Nx.Defn.Tree do
         {block, acc} = Composite.traverse(block, acc, fun)
         {[initial, arg, pred, block], acc}
 
-      :lexical ->
+      :scope ->
         {[initial, arg, pred, block], acc}
     end
   end
@@ -123,7 +159,7 @@ defmodule Nx.Defn.Tree do
     {default_impl_expr, acc} =
       case type do
         :all -> fun.(default_impl_expr, acc)
-        :lexical -> {[expr, default_impl_expr], acc}
+        :scope -> {[expr, default_impl_expr], acc}
       end
 
     {[expr, default_impl_expr], acc}

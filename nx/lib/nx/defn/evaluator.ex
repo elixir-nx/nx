@@ -61,48 +61,8 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp init_compute_cache(expr, state, parent_ids) do
-    state = %{state | parent_ids: parent_ids, current_ids: collect_ids(expr, parent_ids)}
+    state = %{state | parent_ids: parent_ids, current_ids: Tree.scope_ids(expr, parent_ids)}
     composite_compute_cache(expr, state, %{})
-  end
-
-  defp collect_ids(expr, ids) do
-    Composite.reduce(expr, {ids, %{}}, &collect_ids_each(&1, nil, &2)) |> elem(0)
-  end
-
-  # We are at the root.
-  defp collect_ids_each(%Nx.Tensor{data: %Expr{id: id, op: op}} = t, nil, {ids, cond_ids}) do
-    case ids do
-      %{^id => _} ->
-        {ids, cond_ids}
-
-      %{} ->
-        scope = if op == :cond, do: id, else: nil
-        ids = Map.put(ids, id, [])
-
-        t
-        |> Tree.apply_args(:lexical, {ids, cond_ids}, &{&1, collect_ids_each(&1, scope, &2)})
-        |> elem(1)
-    end
-  end
-
-  # If we are inside a cond, we want to collect all of the IDs inside that
-  # cond separately and, in case it is present in more than one direct cond,
-  # move it to the parent scope.
-  defp collect_ids_each(%Nx.Tensor{data: %Expr{id: id}} = t, scope, {ids, cond_ids}) do
-    case cond_ids do
-      %{^id => ^scope} ->
-        {ids, cond_ids}
-
-      %{^id => _} ->
-        collect_ids_each(t, nil, {ids, cond_ids})
-
-      %{} ->
-        cond_ids = Map.put(cond_ids, id, scope)
-
-        t
-        |> Tree.apply_args(:lexical, {ids, cond_ids}, &{&1, collect_ids_each(&1, scope, &2)})
-        |> elem(1)
-    end
   end
 
   defp composite_compute_cache(expr, state, cache) do
@@ -152,7 +112,7 @@ defmodule Nx.Defn.Evaluator do
 
     clause_caches =
       Enum.map([last | clauses], fn clause ->
-        state = %{state | parent_ids: current_ids, current_ids: collect_ids(clause, current_ids)}
+        state = %{state | parent_ids: current_ids, current_ids: Tree.scope_ids(clause, current_ids)}
         composite_compute_cache(clause, state, %{})
       end)
 
