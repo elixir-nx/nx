@@ -596,10 +596,10 @@ defmodule Nx.Defn.EvaluatorTest do
     defn cond_nested_condition_cache(state) do
       {state, prev} =
         if state.iteration < 12 do
-          prev_timestep = if(state.iteration < 2, do: 1, else: -1)
+          sign = if(state.iteration < 2, do: 1, else: -1)
 
           factor =
-            if prev_timestep >= 0 do
+            if sign >= 0 do
               2
             else
               1
