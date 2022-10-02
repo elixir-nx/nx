@@ -592,5 +592,30 @@ defmodule Nx.Defn.EvaluatorTest do
       assert cond_cache_map(%{iteration: 4, xyz: 1}) ==
                %{iteration: Nx.tensor(5), xyz: Nx.tensor(1)}
     end
+
+    defn cond_nested_condition_cache(state) do
+      {state, prev} =
+        if state.iteration < 12 do
+          prev_timestep = if(state.iteration < 2, do: 1, else: -1)
+
+          factor =
+            if prev_timestep >= 0 do
+              2
+            else
+              1
+            end
+
+          {state, factor}
+        else
+          {state, 1}
+        end
+
+      %{state | iteration: state.iteration + prev}
+    end
+
+    test "with nested condition" do
+      assert cond_nested_condition_cache(%{iteration: 0}) == %{iteration: Nx.tensor(2)}
+      assert cond_nested_condition_cache(%{iteration: 12}) == %{iteration: Nx.tensor(13)}
+    end
   end
 end

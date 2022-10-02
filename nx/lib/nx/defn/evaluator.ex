@@ -8,7 +8,7 @@ defmodule Nx.Defn.Evaluator do
   @behaviour Nx.Defn.Compiler
   alias Nx.Defn.{Composite, Expr, Tree}
 
-  @creation_ops [:constant, :eye, :iota, :from_binary]
+  @creation_ops [:eye, :iota, :from_binary]
   @random_ops [:random_uniform, :random_normal]
   @list_ops [:concatenate]
   @indices_ops [:slice, :put_slice]
@@ -69,6 +69,10 @@ defmodule Nx.Defn.Evaluator do
     Composite.reduce(expr, cache, &compute_cache(&1, state, &2))
   end
 
+  defp compute_cache(%Nx.Tensor{data: %Expr{op: :constant}}, _state, cache) do
+    cache
+  end
+
   defp compute_cache(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, _meta]}}, state, cache) do
     compute_cache(expr, state, cache)
   end
@@ -108,7 +112,7 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp compute_cache(:cond, %{data: %Expr{args: [clauses, last], id: id}}, state, cache) do
-    current_ids = state.current_ids
+    %{parent_ids: parent_ids, current_ids: current_ids} = state
 
     clause_caches =
       Enum.map([last | clauses], fn clause ->
@@ -132,7 +136,11 @@ defmodule Nx.Defn.Evaluator do
                 %{^id => _} ->
                   {[], {seen_ids, cache}}
 
-                # Process the ID which exists outside of cond
+                # The ID belongs to our own parents
+                %{} when is_map_key(parent_ids, id) ->
+                  {[], {seen_ids, Map.put_new(cache, id, tensor)}}
+
+                # The ID belongs to us
                 %{} ->
                   cache = composite_compute_cache(tensor, state, cache)
                   {[], {Map.put(seen_ids, id, true), cache}}
@@ -175,6 +183,11 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval(%Nx.Tensor{data: %Expr{op: :tensor, args: [t]}}, _state, caches) do
     {t, caches}
+  end
+
+  defp eval(%Nx.Tensor{data: %Expr{op: :constant, args: [constant]}} = ans, _state, caches) do
+    {backend, backend_options} = Nx.default_backend()
+    {backend.constant(ans, constant, backend_options), caches}
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, _meta]}}, state, caches) do
