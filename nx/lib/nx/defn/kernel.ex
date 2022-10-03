@@ -243,14 +243,14 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
-  Marks the given expression as a checkpoint.
+  Marks the given expression as a boundary.
 
   Checkpoints are always computed and never cached,
   so this provides a way to exchange memory footprint
   with computational time.
   """
-  def checkpoint(expr) do
-    Nx.Defn.Expr.metadata(expr, %{checkpoint: true, inspect: :checkpoint})
+  def boundary(expr) do
+    Nx.Defn.Expr.boundary(expr)
   end
 
   @doc """

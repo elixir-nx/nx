@@ -68,13 +68,13 @@ defmodule Nx.Defn.Evaluator do
     eval(expr, state, cache)
   end
 
-  defp eval(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, meta]}}, state, cache) do
-    if meta[:checkpoint] do
-      {res, _cache} = eval(expr, state, %{})
-      {res, cache}
-    else
-      eval(expr, state, cache)
-    end
+  defp eval(%Nx.Tensor{data: %Expr{op: :boundary, args: [expr]}}, state, cache) do
+    {res, _cache} = eval(expr, state, %{})
+    {res, cache}
+  end
+
+  defp eval(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, _meta]}}, state, cache) do
+    eval(expr, state, cache)
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}} = ans, state, cache) do

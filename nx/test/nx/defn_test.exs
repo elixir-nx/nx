@@ -2304,77 +2304,54 @@ defmodule Nx.DefnTest do
     end
   end
 
-  describe "checkpoints" do
-    defn defn_checkpoint2(a, b) do
-      c = print_value(a + b)
-      checkpoint(c * c) + c * c
+  describe "boundary" do
+    defn defn_boundary(a, b) do
+      c = hook(a + b, fn _ -> send self(), :boundary_c end)
+      boundary(c * c) + c * c
     end
 
     @tag compiler: Evaluator
-    test "abobrinha" do
-            io =
-        ExUnit.CaptureIO.capture_io(fn ->
-          assert Nx.Defn.jit(&defn_checkpoint2/2).(1, 2) == Nx.tensor(18)
-        end)
+    test "base boundary case" do
+      assert Nx.Defn.jit(&defn_boundary/2).(1, 2) == Nx.tensor(18)
 
-        IO.inspect io
+      assert_received :boundary_c
+      assert_received :boundary_c
+      refute_received :boundary_c
     end
 
-    defn defn_checkpoint(t) do
-      x = checkpoint(print_expr(print_value(t + 1)))
+    defn defn_boundary_composed(t) do
+      x = hook(t + 1, fn _ -> send self(), :boundary_x end)
 
-      y = checkpoint(print_expr(print_value(t + 2)))
+      y = boundary(hook(t + x + x, fn _ -> send self(), :boundary_y end))
 
-      z = print_expr(print_value(t + 3))
+      z = hook(y + y + t, fn _ -> send self(), :out_of_boundary_z end)
 
-      z + z + z + z + x + y * y + x + y
+      x + z + z + z
     end
 
     @tag compiler: Evaluator
-    test "does not cache checkpoint results" do
-      io =
-        ExUnit.CaptureIO.capture_io(fn ->
-          fun = Nx.Defn.compile(&defn_checkpoint/1, [1])
-          assert fun.(1) == Nx.tensor(32)
-        end)
+    test "composed boundaries" do
+      assert Nx.Defn.jit(&defn_boundary_composed/1).(1) == Nx.tensor(35)
 
-      # The expression  z + z + z + z + x + y + y + x + y contains
-      # 4 occurences of z, 3 occurences of y and 2 occurences of x
-      # since z is not checkpointed, the `print_value` associated with it
-      # should only be printed once.
-      # For the other ones, the prints should occur once for each occurence,
-      # all in order of appearance in the expression
 
-      # All print_expr should only be printed once because we don't touch expr compilation caches through checkpoints
+      # boundary_x hook will occur once in each first appearance of x
+      # inside each boundary. Since y appears twice in z and x appears once
+      # outside z, we expect to receive exactly 3 ocurrences of :boundary_x
+      assert_received :boundary_x
+      assert_received :boundary_x
+      assert_received :boundary_x
+      refute_received :boundary_x
 
-      x_value = "#Nx.Tensor<\n  s64\n  2\n>\n"
-      y_value = "#Nx.Tensor<\n  s64\n  3\n>\n"
-      z_value = "#Nx.Tensor<\n  s64\n  4\n>\n"
+      # likewise, boundary_y should occur 2 times because z occurs 2 times in the final expression
+      # but hits the cache in the second execution
+      assert_received :boundary_y
+      assert_received :boundary_y
+      refute_received :boundary_y
 
-      x_expr =
-        "#Nx.Tensor<\n  s64\n  \n  Nx.Defn.Expr\n  parameter a:0            s64\n  b = add 1, a             s64\n  c = token hook_*: b   tuple1\n  d = attach_token c, b    s64\n>\n"
-
-      y_expr =
-        "#Nx.Tensor<\n  s64\n  \n  Nx.Defn.Expr\n  parameter a:0            s64\n  b = add 2, a             s64\n  c = token hook_*: b   tuple1\n  d = attach_token c, b    s64\n>\n"
-
-      z_expr =
-        "#Nx.Tensor<\n  s64\n  \n  Nx.Defn.Expr\n  parameter a:0            s64\n  b = add 3, a             s64\n  c = token hook_*: b   tuple1\n  d = attach_token c, b    s64\n>\n"
-
-      io = io |> String.replace(~r/token hook_\d+/, "token hook_*") |> String.replace(~r/\s/, "")
-
-      assert io ==
-               Enum.join([
-                 x_expr,
-                 y_expr,
-                 z_expr,
-                 z_value,
-                 x_value,
-                 y_value,
-                 y_value,
-                 x_value,
-                 y_value
-               ])
-               |> String.replace(~r/\s/, "")
+      # finally the z out-of-boundary should be executed once because z occurs only outside of boundaries
+      # and thus, is cached
+      assert_received :out_of_boundary_z
+      refute_received :out_of_boundary_z
     end
   end
 end

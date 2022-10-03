@@ -97,6 +97,20 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
+  Creates a tensor expression boundary node wrapping the
+  given tensor expression.
+
+  An expression boundary will make it so that the cache
+  inside it is not leaked to the outside. In effect, it
+  will re-execute each node inside the boundary at least
+  once instead of relying on the cache accumulated so far.
+  """
+  def boundary(expr) do
+    expr = to_expr(expr)
+    expr(expr, expr.data.context, :boundary, [expr])
+  end
+
+  @doc """
   Creates a tuple with elements in `list` that points to tuple
   expression `expr`.
 
