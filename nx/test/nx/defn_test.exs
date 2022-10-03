@@ -2387,7 +2387,7 @@ defmodule Nx.DefnTest do
 
   describe "boundary" do
     defn defn_boundary(a, b) do
-      c = hook(a + b, fn _ -> send self(), :boundary_c end)
+      c = hook(a + b, fn _ -> send(self(), :boundary_c) end)
       boundary(c * c) + c * c
     end
 
@@ -2401,11 +2401,11 @@ defmodule Nx.DefnTest do
     end
 
     defn defn_boundary_composed(t) do
-      x = hook(t + 1, fn _ -> send self(), :boundary_x end)
+      x = hook(t + 1, fn _ -> send(self(), :boundary_x) end)
 
-      y = boundary(hook(t + x + x, fn _ -> send self(), :boundary_y end))
+      y = boundary(hook(t + x + x, fn _ -> send(self(), :boundary_y) end))
 
-      z = hook(y + y + t, fn _ -> send self(), :out_of_boundary_z end)
+      z = hook(y + y + t, fn _ -> send(self(), :out_of_boundary_z) end)
 
       x + z + z + z
     end
@@ -2413,7 +2413,6 @@ defmodule Nx.DefnTest do
     @tag compiler: Evaluator
     test "composed boundaries" do
       assert Nx.Defn.jit(&defn_boundary_composed/1).(1) == Nx.tensor(35)
-
 
       # boundary_x hook will occur once in each first appearance of x
       # inside each boundary. Since y appears twice in z and x appears once
