@@ -458,7 +458,7 @@ defmodule Nx.Random do
     type = infer_float_type(mean, standard_deviation, opts)
 
     float_or_complex(key, type, opts[:shape], fn key, type, shape ->
-      min_value = -1 + Nx.Constants.smallest_positive_normal_number(type)
+      min_value = -1 + Nx.Constants.smallest_positive_normal(type)
       u = uniform_split(key, min_value, 1, opts |> put_type(type) |> put_shape(shape))
 
       normal = Nx.sqrt(Nx.tensor(2, type: type)) * Nx.erf_inv(u)

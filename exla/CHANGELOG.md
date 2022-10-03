@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.4.0
+
+### Enhancements
+
+  * Support zero copy binaries
+  * Redirect group leader for EXLA hooks
+
+### Bug fixes
+
+  * Always hoist `cond` expressions
+  * Fix conditional inside `Nx.map`
+
 ## v0.3.0 (2022-08-13)
 
 ### Enhancements
