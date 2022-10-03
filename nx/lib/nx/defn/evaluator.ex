@@ -73,6 +73,23 @@ defmodule Nx.Defn.Evaluator do
     cache
   end
 
+  defp compute_cache(
+         %Nx.Tensor{data: %Expr{id: id, op: :boundary, args: [expr]}},
+         state,
+         cache
+       ) do
+    boundary_cache = init_compute_cache(expr, state)
+
+    case state.parent_ids do
+      # If the id exists in the parent, the parent will compute it.
+      %{^id => _} ->
+        Map.put_new(cache, id, boundary_cache)
+
+      %{} ->
+        Map.put(cache, id, boundary_cache)
+    end
+  end
+
   defp compute_cache(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, _meta]}}, state, cache) do
     compute_cache(expr, state, cache)
   end
@@ -191,7 +208,10 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: :boundary, args: [expr]}}, state, cache) do
-    {res, _cache} = eval(expr, state, %{})
+    boundary_cache =
+      init_compute_cache(expr, Map.merge(%{current_ids: %{}, hooks: %{}, parent_ids: %{}}, state))
+
+    {res, _cache} = eval(expr, state, [boundary_cache])
     {res, cache}
   end
 
