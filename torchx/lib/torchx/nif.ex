@@ -20,6 +20,7 @@ defmodule Torchx.NIF do
       do: :erlang.nif_error(:undef)
   end
 
+  def mps_is_available(), do: :erlang.nif_error(:undef)
   def cuda_is_available(), do: :erlang.nif_error(:undef)
   def cuda_device_count(), do: :erlang.nif_error(:undef)
 
