@@ -1466,6 +1466,87 @@ defmodule Nx.DefnTest do
       end
     end
 
+    test "tensor generator expression exact" do
+      expr = while_generator_sum(Nx.tensor([0, 1, 2, 3, 4]))
+
+      assert inspect(expr) == """
+             #Nx.Tensor<
+               s64
+             \s\s
+               Nx.Defn.Expr
+               parameter a:0                s64[5]
+               b = slice a, [0], [1], [1]   s64[1]
+               c = squeeze b, [0]           s64
+               d = multiply 0, c            s64
+               e = while {0, a, d}          tuple3
+               f = elem e, 2                s64
+             >\
+             """
+
+      %T{
+        data: %Expr{
+          op: :elem,
+          args: [%T{data: %Expr{op: :while, args: [_, arg, _, while_body]}}, 2]
+        }
+      } = expr
+
+      assert inspect(arg) == """
+             {#Nx.Tensor<
+                s64
+              \s\s
+                Nx.Defn.Expr
+                parameter a:0   s64
+              >, #Nx.Tensor<
+                s64[5]
+              \s\s
+                Nx.Defn.Expr
+                parameter a:1   s64[5]
+              >, #Nx.Tensor<
+                s64
+              \s\s
+                Nx.Defn.Expr
+                parameter a:2   s64
+              >}\
+             """
+
+      {counter, param, body} = while_body
+
+      assert inspect(counter) == """
+             #Nx.Tensor<
+               s64
+             \s\s
+               Nx.Defn.Expr
+               parameter a:0   s64
+               b = add 1, a    s64
+             >\
+             """
+
+      assert inspect(param) ==
+               """
+               #Nx.Tensor<
+                 s64[5]
+               \s\s
+                 Nx.Defn.Expr
+                 parameter a:1   s64[5]
+               >\
+               """
+
+      assert inspect(body) ==
+               """
+               #Nx.Tensor<
+                 s64
+               \s\s
+                 Nx.Defn.Expr
+                 parameter a:2                s64
+                 parameter b:1                s64[5]
+                 parameter c:0                s64
+                 d = slice b, [c], [1], [1]   s64[1]
+                 e = squeeze d, [0]           s64
+                 f = add a, e                 s64
+               >\
+               """
+    end
+
     test "tensor generator unrolled" do
       assert while_generator_sum_unroll(Nx.tensor([1, 2, 3])) |> inspect() == """
              #Nx.Tensor<

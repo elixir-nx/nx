@@ -195,7 +195,7 @@ defmodule EXLA.Defn do
             precision: Keyword.get(options, :precision, :highest),
             builder: body_b,
             params: Map.new(input_params ++ acc_params ++ constant_params),
-            scope_ids: collect_ids(expr)
+            scope_ids: Tree.scope_ids(expr)
           }
 
           {output, cache} = recur_flatten(output_expr, state, new_cache(token, used_hooks))
@@ -296,7 +296,7 @@ defmodule EXLA.Defn do
       precision: Keyword.get(options, :precision, :highest),
       builder: builder,
       params: Map.new(params),
-      scope_ids: collect_ids(expr)
+      scope_ids: Tree.scope_ids(expr)
     }
 
     token = EXLA.Op.create_token(builder)
@@ -541,7 +541,14 @@ defmodule EXLA.Defn do
     {fun_computation(name, args, expr, type, state), cache}
   end
 
-  defp cached_recur_operator(:optional, %T{data: %Expr{args: [_, default]}}, state, cache) do
+  defp cached_recur_operator(:optional, %T{data: %Expr{args: [expr, default]}}, state, cache) do
+    {args, cache} =
+      expr.data.args
+      |> Enum.take_while(&(not is_list(&1)))
+      |> Enum.map_reduce(cache, &recur_operator(&1, state, &2))
+
+    params = Enum.with_index(args, fn arg, index -> {index, arg} end)
+    state = %{state | params: Map.new(params), scope_ids: Tree.scope_ids(default)}
     recur_operator(default, state, cache)
   end
 
@@ -1400,7 +1407,13 @@ defmodule EXLA.Defn do
       end)
 
     params = Enum.flat_map(arg_params, &computation_arg_param/1)
-    state = %{state | builder: subbuilder, params: Map.new(params), scope_ids: collect_ids(expr)}
+
+    state = %{
+      state
+      | builder: subbuilder,
+        params: Map.new(params),
+        scope_ids: Tree.scope_ids(expr)
+    }
 
     {res, _} = recur_composite(expr, state, no_token_cache())
     EXLA.Builder.build(to_type(res, type))
@@ -1416,7 +1429,14 @@ defmodule EXLA.Defn do
     arg_token = EXLA.Op.get_tuple_element(param, 0)
     arg_param = EXLA.Op.get_tuple_element(param, 1)
     params = computation_arg_param({arg, arg_param})
-    state = %{state | builder: subbuilder, params: Map.new(params), scope_ids: collect_ids(expr)}
+
+    state = %{
+      state
+      | builder: subbuilder,
+        params: Map.new(params),
+        scope_ids: Tree.scope_ids(expr)
+    }
+
     {res, comp_cache} = recur_composite(expr, transform, state, reset_token(cache, arg_token))
 
     res =
@@ -1585,7 +1605,7 @@ defmodule EXLA.Defn do
 
       true ->
         {args, {cache, ids}} =
-          Tree.apply_args(expr, {cache, ids}, &collect_args(&1, &2, pred_ids))
+          Tree.apply_args(expr, :scope, {cache, ids}, &collect_args(&1, &2, pred_ids))
 
         expr = put_in(expr.data.args, args)
         {expr, {Map.put(cache, id, expr), ids}}
@@ -1609,7 +1629,7 @@ defmodule EXLA.Defn do
           state
           | builder: subbuilder,
             params: Map.new(params),
-            scope_ids: collect_ids(expr)
+            scope_ids: Tree.scope_ids(expr)
         }
 
         recur_composite(expr, &cast_pred_to_u8/1, comp_state, comp_cache)
@@ -1707,28 +1727,6 @@ defmodule EXLA.Defn do
   end
 
   # Helpers
-
-  defp collect_ids(expr) do
-    Composite.reduce(expr, %{}, &(collect_ids(&1, &2) |> elem(1)))
-  end
-
-  defp collect_ids(%T{data: %Expr{id: id} = expr} = t, ids) do
-    case ids do
-      %{^id => true} ->
-        {t, ids}
-
-      %{} ->
-        ids = Map.put(ids, id, true)
-
-        # Do not collect ids when a new lexical construct starts
-        case expr do
-          %{op: :cond, args: [[{pred, _expr} | _], _last]} -> collect_ids(pred, ids)
-          %{op: :while, args: [initial | _]} -> Composite.traverse(initial, ids, &collect_ids/2)
-          %{op: op} when op in [:cond, :fun] -> {t, ids}
-          %{} -> Tree.apply_args(t, ids, &collect_ids/2)
-        end
-    end
-  end
 
   defp nx_to_shape!(%T{type: type, shape: shape}),
     do: EXLA.Shape.make_shape(type, shape)

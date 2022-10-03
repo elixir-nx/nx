@@ -317,9 +317,9 @@ defmodule Nx.Shared do
       log:
         {"natural log", quote(do: Complex.ln(var!(x))),
          ~S"""
-         $log(z) = ln(z),\quad \text{if z} \in \Reals$
+         $$log(z) = ln(z),\quad \text{if z} \in \Reals$$
 
-         $log(z) = ln(r) + i\theta,\quad\text{if }z = re^{i\theta} \in \Complex$
+         $$log(z) = ln(r) + i\theta,\quad\text{if }z = re^{i\theta} \in \Complex$$
          """},
       log1p:
         {"natural log plus one", quote(do: Complex.ln(Complex.add(var!(x), 1))),

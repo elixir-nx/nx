@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.4.0
+
+### Enhancements
+
+  * [Nx] Add `Nx.rename/2`
+  * [Nx] Implement cumulative operations using associative scan for improved performance
+  * [Nx.Constants] Add `smallest_positive_normal`
+  * [Nx.Defn] Add `Nx.LazyContainer` that allows a data-structure to lazily define tensors
+  * [Nx.Defn] Allow tensors and ranges as generators inside `while`
+  * [Nx.Defn] Add `debug_expr/2` and `debug_expr_apply/3`
+  * [Nx.Defn.Evaluator] Calculate cache lifetime to reduce memory usage on large numerical programs
+  * [Nx.LinAlg] Handle Hermitian matrices in `eigh`
+  * [Nx.LinAlg] Support batched operations in `adjoint`, `cholesky`, `determinant`, `eigh`, `invert`, `lu`, `matrix_power`, `solve`, `svd`, and `triangular_solve`
+  * [Nx.Random] Support pseudo random number generators algorithms
+
+### Bug fixes
+
+  * [Nx.Defn] Ensure `defnp` emits warnings when unused
+  * [Nx.Defn] Warn on unused variables in `while`
+
 ## v0.3.0 (2022-08-13)
 
 ### Enhancements

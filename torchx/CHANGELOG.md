@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.4.0
+
+### Enhancements
+
+  * Support `bitcast`
+  * Support window dilations
+  * Support conv input dilations
+  * Support for Apple Silicon
+  * Emulate u16/u32/u64 types
+
+### Bug fixes
+
+  * Fix dot product with multiple batches
+
 ## v0.3.0 (2022-08-13)
 
 ### Enhancements

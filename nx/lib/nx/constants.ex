@@ -180,36 +180,36 @@ defmodule Nx.Constants do
 
   ## Examples
 
-      iex> Nx.Constants.smallest_positive_normal_number({:f, 64})
+      iex> Nx.Constants.smallest_positive_normal({:f, 64})
       #Nx.Tensor<
         f64
         2.2250738585072014e-308
       >
 
-      iex> Nx.Constants.smallest_positive_normal_number({:f, 32})
+      iex> Nx.Constants.smallest_positive_normal({:f, 32})
       #Nx.Tensor<
         f32
         1.1754943508222875e-38
       >
 
-      iex> Nx.Constants.smallest_positive_normal_number({:f, 16})
+      iex> Nx.Constants.smallest_positive_normal({:f, 16})
       #Nx.Tensor<
         f16
         6.103515625e-5
       >
 
-      iex> Nx.Constants.smallest_positive_normal_number(:bf16)
+      iex> Nx.Constants.smallest_positive_normal(:bf16)
       #Nx.Tensor<
         bf16
         1.1754943508222875e-38
       >
 
-      iex> Nx.Constants.smallest_positive_normal_number({:s, 32})
+      iex> Nx.Constants.smallest_positive_normal({:s, 32})
       ** (ArgumentError) only floating types are supported, got: {:s, 32}
   """
-  def smallest_positive_normal_number(type, opts \\ []) do
+  def smallest_positive_normal(type, opts \\ []) do
     type = Nx.Type.normalize!(type)
-    from_binary(Nx.Type.smallest_positive_normal_number_binary(type), type, opts)
+    from_binary(Nx.Type.smallest_positive_normal_binary(type), type, opts)
   end
 
   @doc """

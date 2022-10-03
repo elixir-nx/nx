@@ -5480,8 +5480,8 @@ defmodule Nx do
   `indices` must be a fully qualified tensor of shape `{n, Nx.rank(target)}`, with `n`
   being an arbitrary number of indices, while `updates` must have a compatible `{n}` shape.
 
-  In case of repeating indices, the last occurence of index and its corresponding update
-  value takes precedence.
+  In case of repeating indices, the result is non-determinstic, since the operation happens
+  in parallel when running on devices such as the GPU.
 
   See also: `indexed_add/3`, `put_slice/3`.
 
@@ -5509,14 +5509,14 @@ defmodule Nx do
           ]
         ]
       >
-      iex> indices = Nx.tensor([[0, 0, 0], [0, 1, 1], [0, 0, 0], [0, 0, 2]])
-      iex> updates = Nx.tensor([1, 3, 2, -2])
+      iex> indices = Nx.tensor([[0, 0, 0], [0, 1, 1], [0, 0, 2]])
+      iex> updates = Nx.tensor([1, 3, -2])
       iex> Nx.indexed_put(t, indices, updates)
       #Nx.Tensor<
         s64[1][2][3]
         [
           [
-            [2, 1, -2],
+            [1, 1, -2],
             [3, 3, 5]
           ]
         ]
@@ -5789,7 +5789,7 @@ defmodule Nx do
   @doc """
   Calculates the complex conjugate of each element in the tensor.
 
-  If $z = a + bi = r e^\\theta$, $conjugate(z) = z^* = a - bi =  r e^{-\\theta}$
+  If $$z = a + bi = r e^\\theta$$, $$conjugate(z) = z^* = a - bi =  r e^{-\\theta}$$
 
   ## Examples
 
@@ -5820,7 +5820,7 @@ defmodule Nx do
 
   @doc """
   Calculates the complex phase angle of each element in the tensor.
-  $phase(z) = atan2(b, a), z = a + bi \\in \\Complex$
+  $$phase(z) = atan2(b, a), z = a + bi \\in \\Complex$$
 
   ## Examples
 

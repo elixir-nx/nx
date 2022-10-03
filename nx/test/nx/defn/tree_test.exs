@@ -36,6 +36,67 @@ defmodule Nx.Defn.TreeTest do
     end
   end
 
+  describe "scope_ids" do
+    defn plus_constant(a), do: a + 10
+
+    test "ignores constants" do
+      a = Expr.parameter(:root, {:u, 64}, {}, 0)
+      assert [{_, :parameter}, {_, :add}] = plus_constant(a) |> Tree.scope_ids() |> Enum.sort()
+    end
+
+    defn inside_cond(bool, a, b) do
+      if bool do
+        a + b
+      else
+        0
+      end
+    end
+
+    test "ignores expressions inside cond" do
+      bool = Expr.parameter(:root, {:u, 64}, {}, 0)
+      a = Expr.parameter(:root, {:u, 64}, {}, 1)
+      b = Expr.parameter(:root, {:u, 64}, {}, 2)
+
+      assert [{_, :cond}] = inside_cond(bool, a, b) |> Tree.scope_ids() |> Enum.sort()
+    end
+
+    defn inside_both_cond(bool, a, b) do
+      add = a + b
+
+      left =
+        if bool do
+          add
+        else
+          1
+        end
+
+      right =
+        if bool do
+          1
+        else
+          add
+        end
+
+      left * right
+    end
+
+    test "keeps expressions shared across conds" do
+      bool = Expr.parameter(:root, {:u, 64}, {}, 0)
+      a = Expr.parameter(:root, {:u, 64}, {}, 1)
+      b = Expr.parameter(:root, {:u, 64}, {}, 2)
+
+      assert [
+               {_, :parameter},
+               {_, :parameter},
+               {_, :parameter},
+               {_, :add},
+               {_, :cond},
+               {_, :cond},
+               {_, :multiply}
+             ] = inside_both_cond(bool, a, b) |> Tree.scope_ids() |> Enum.sort()
+    end
+  end
+
   describe "rewrite_types" do
     test "wraps root parameters" do
       u64_param = Expr.parameter(:root, {:u, 64}, {}, 0)

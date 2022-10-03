@@ -39,6 +39,62 @@ defmodule Nx.Defn.Tree do
   end
 
   @doc """
+  Gets all IDs of all elements in the same scope.
+
+  `while`'s condition and body, `fun`'s body and similar are
+  considered different scopes. When it comes to `cond`, an ID will
+  only be considered if it is used outside of the `cond` or used
+  in several distinct conds. Constants are also ignored, as they
+  have global IDs based on the constants themselves.
+
+  An existing maps of `ids` can be given to accumulate on top of it.
+  """
+  def scope_ids(expr, ids \\ %{}) do
+    Composite.reduce(expr, {ids, %{}}, &scope_ids_each(&1, nil, &2)) |> elem(0)
+  end
+
+  # Ignore constants
+  defp scope_ids_each(%Nx.Tensor{data: %Expr{op: :constant}}, _scope, {ids, cond_ids}) do
+    {ids, cond_ids}
+  end
+
+  # We are at the root.
+  defp scope_ids_each(%Nx.Tensor{data: %Expr{id: id, op: op}} = t, nil, {ids, cond_ids}) do
+    case ids do
+      %{^id => _} ->
+        {ids, cond_ids}
+
+      %{} ->
+        scope = if op == :cond, do: id, else: nil
+        ids = Map.put(ids, id, op)
+
+        t
+        |> apply_args(:scope, {ids, cond_ids}, &{&1, scope_ids_each(&1, scope, &2)})
+        |> elem(1)
+    end
+  end
+
+  # If we are inside a cond, we want to collect all of the IDs inside that
+  # cond separately and, in case it is present in more than one direct cond,
+  # move it to the parent scope.
+  defp scope_ids_each(%Nx.Tensor{data: %Expr{id: id}} = t, scope, {ids, cond_ids}) do
+    case cond_ids do
+      %{^id => ^scope} ->
+        {ids, cond_ids}
+
+      %{^id => _} ->
+        scope_ids_each(t, nil, {ids, cond_ids})
+
+      %{} ->
+        cond_ids = Map.put(cond_ids, id, scope)
+
+        t
+        |> apply_args(:scope, {ids, cond_ids}, &{&1, scope_ids_each(&1, scope, &2)})
+        |> elem(1)
+    end
+  end
+
+  @doc """
   Puts new args in the given tensor expression and gives it a new id.
   """
   def put_args(%T{data: %Expr{} = expr} = t, args) do
@@ -46,44 +102,39 @@ defmodule Nx.Defn.Tree do
   end
 
   @doc """
-  Replaces args in the given tensor expression.
-
-  Use this function with extreme care. Changing the args but keeping
-  the same id may mean you have different versions of the same node.
-  Do this change only if you guarante all nodes in the tree have been
-  replaced equally.
-  """
-  def replace_args(%T{data: %Expr{} = expr} = t, args) do
-    %{t | data: %{expr | args: args}}
-  end
-
-  @doc """
   Applies the given function to the arguments of the node,
   with the given accumulator as a starting value.
 
-  Warning: be very careful when using this function to traverse the expression
-  recursively. If you plan to do so, you should consider also storing the visited
-  nodes to avoid multiple traversals.
+  By default, `type` is `:all`, which means all arguments
+  are traversed. If `type` is `:scope`, only expressions
+  that are in the same scope are traversed. Therefore,
+  expressions such as `while`'s condition and body, 
+  `optional`'s default implementation, functions, and so forth
+  are not traversed. Note `cond`s are always traversed because,
+  while they introduce a new scope, they can also access its
+  parents directly, so you must take `cond`s into account
+  accordingly.
+
+  Warning: be very careful when using this function to traverse
+  the expression recursively. If you plan to do so, you should
+  consider also storing the visited nodes to avoid multiple
+  traversals by using `tensor.data.expr.id` as cache key.
   """
-  def apply_args(expr, acc, fun)
+  def apply_args(expr, type \\ :all, acc, fun)
 
-  def apply_args(%T{data: %Expr{op: :token, args: [token]}}, acc, fun) do
-    {hooks, acc} =
-      Enum.map_reduce(token.hooks, acc, fn %{expr: expr} = token, acc ->
-        {expr, acc} = Composite.traverse(expr, acc, fun)
-        {%{token | expr: expr}, acc}
-      end)
-
-    {[%{token | hooks: hooks}], acc}
-  end
-
-  def apply_args(%T{data: %Expr{op: :fun, args: [args, expr, mfa]}}, acc, fun) do
+  def apply_args(%T{data: %Expr{op: :fun, args: [args, expr, mfa]}}, type, acc, fun) do
     {args, acc} = Enum.map_reduce(args, acc, &Composite.traverse(&1, &2, fun))
-    {expr, acc} = Composite.traverse(expr, acc, fun)
+
+    {expr, acc} =
+      case type do
+        :all -> Composite.traverse(expr, acc, fun)
+        :scope -> {expr, acc}
+      end
+
     {[args, expr, mfa], acc}
   end
 
-  def apply_args(%T{data: %Expr{op: :cond, args: [clauses, last]}}, acc, fun) do
+  def apply_args(%T{data: %Expr{op: :cond, args: [clauses, last]}}, _type, acc, fun) do
     {clauses, acc} =
       Enum.map_reduce(clauses, acc, fn {pred, expr}, acc ->
         {pred, acc} = fun.(pred, acc)
@@ -95,21 +146,52 @@ defmodule Nx.Defn.Tree do
     {[clauses, last], acc}
   end
 
-  def apply_args(%T{data: %Expr{op: :while, args: args}}, acc, fun) do
+  def apply_args(%T{data: %Expr{op: :while, args: args}}, type, acc, fun) do
     [initial, arg, pred, block] = args
     {initial, acc} = Composite.traverse(initial, acc, fun)
-    {arg, acc} = Composite.traverse(arg, acc, fun)
-    {pred, acc} = fun.(pred, acc)
-    {block, acc} = Composite.traverse(block, acc, fun)
-    {[initial, arg, pred, block], acc}
+
+    case type do
+      :all ->
+        {arg, acc} = Composite.traverse(arg, acc, fun)
+        {pred, acc} = fun.(pred, acc)
+        {block, acc} = Composite.traverse(block, acc, fun)
+        {[initial, arg, pred, block], acc}
+
+      :scope ->
+        {[initial, arg, pred, block], acc}
+    end
   end
 
-  def apply_args(%T{data: %Expr{op: :concatenate, args: [list | args]}}, acc, fun) do
+  def apply_args(%T{data: %Expr{op: :optional, args: args}}, type, acc, fun) do
+    [expr, default_impl_expr] = args
+    {expr, acc} = fun.(expr, acc)
+
+    {default_impl_expr, acc} =
+      case type do
+        :all -> fun.(default_impl_expr, acc)
+        :scope -> {[expr, default_impl_expr], acc}
+      end
+
+    {[expr, default_impl_expr], acc}
+  end
+
+  def apply_args(%T{data: %Expr{op: :token, args: [token]}}, _type, acc, fun) do
+    {hooks, acc} =
+      Enum.map_reduce(token.hooks, acc, fn %{expr: expr} = token, acc ->
+        {expr, acc} = Composite.traverse(expr, acc, fun)
+        {%{token | expr: expr}, acc}
+      end)
+
+    {[%{token | hooks: hooks}], acc}
+  end
+
+  def apply_args(%T{data: %Expr{op: :concatenate, args: [list | args]}}, _type, acc, fun) do
     {list, acc} = Enum.map_reduce(list, acc, fun)
     {[list | args], acc}
   end
 
-  def apply_args(%T{data: %Expr{op: :slice, args: [tensor, start_indices | args]}}, acc, fun) do
+  def apply_args(%T{data: %Expr{op: :slice, args: args}}, _type, acc, fun) do
+    [tensor, start_indices | args] = args
     {tensor, acc} = fun.(tensor, acc)
 
     {start_indices, acc} =
@@ -121,11 +203,8 @@ defmodule Nx.Defn.Tree do
     {[tensor, start_indices | args], acc}
   end
 
-  def apply_args(
-        %T{data: %Expr{op: :put_slice, args: [tensor, start_indices, slice]}},
-        acc,
-        fun
-      ) do
+  def apply_args(%T{data: %Expr{op: :put_slice, args: args}}, _type, acc, fun) do
+    [tensor, start_indices, slice] = args
     {tensor, acc} = fun.(tensor, acc)
     {slice, acc} = fun.(slice, acc)
 
@@ -138,13 +217,7 @@ defmodule Nx.Defn.Tree do
     {[tensor, start_indices, slice], acc}
   end
 
-  def apply_args(%T{data: %Expr{op: :optional, args: [expr, default_impl_expr]}}, acc, fun) do
-    {expr, acc} = fun.(expr, acc)
-    {default_impl_expr, acc} = fun.(default_impl_expr, acc)
-    {[expr, default_impl_expr], acc}
-  end
-
-  def apply_args(%T{data: %Expr{args: args}}, acc, fun) do
+  def apply_args(%T{data: %Expr{args: args}}, _type, acc, fun) do
     Enum.map_reduce(args, acc, fn
       %T{data: %Expr{}} = arg, acc -> fun.(arg, acc)
       arg, acc -> {arg, acc}
