@@ -6613,6 +6613,152 @@ defmodule Nx do
     do: elem(shape, axis) * mean_den(shape, axes)
 
   @doc """
+  Returns the weighted mean for the tensor and the weights.
+
+  If the `:axis` option is given, it aggregates over
+  that dimension, effectively removing it. `axes: [0]`
+  implies aggregating over the highest order dimension
+  and so forth. If the axis is negative, then counts
+  the axis from the back. For example, `axis: [-1]` will
+  always aggregate all rows. You can only aggregate over
+  one axis.
+
+  You may optionally set `:keep_axis` to true, which will
+  retain the rank of the input tensor by setting the averaged
+  axis to size 1.
+
+  ## Examples
+
+      iex> Nx.weighted_mean(Nx.tensor(42), Nx.tensor(2))
+      #Nx.Tensor<
+        f32
+        42.0
+      >
+
+      iex> Nx.weighted_mean(Nx.tensor([1, 2, 3]), Nx.tensor([3, 2, 1]))
+      #Nx.Tensor<
+        f32
+        1.6666666269302368
+      >
+
+  ### Aggregating over an axis
+
+      iex> Nx.weighted_mean(Nx.tensor([1, 2, 3], names: [:x]), Nx.tensor([4, 5, 6]), axis: 0)
+      #Nx.Tensor<
+        f32
+        2.133333444595337
+      >
+
+      iex> Nx.weighted_mean(Nx.tensor([1,2,3], type: :u8, names: [:x]), Nx.tensor([1,3,5]), axis: :x)
+      #Nx.Tensor<
+        f32
+        2.444444417953491
+      >
+
+      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      iex> weights = Nx.tensor([[[8, 2, 4], [0, 3, 5]], [[4, 2, 6], [3, 1, 5]]])
+      iex> Nx.weighted_mean(t, weights, axis: :x)
+      #Nx.Tensor<
+        f32[y: 2][z: 3]
+        [
+          [3.0, 5.0, 6.599999904632568],
+          [10.0, 6.5, 9.0]
+        ]
+      >
+
+      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      iex> weights = Nx.tensor([[[8, 2, 4], [0, 3, 5]], [[4, 2, 6], [3, 1, 5]]])
+      iex> Nx.weighted_mean(t, weights, axis: -1)
+      #Nx.Tensor<
+        f32[x: 2][y: 2]
+        [
+          [1.7142857313156128, 5.625],
+          [8.166666984558105, 11.222222328186035]
+        ]
+      >
+
+  ### Keeping axis
+
+      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      iex> weights = Nx.tensor([[[8, 2, 4], [0, 3, 5]], [[4, 2, 6], [3, 1, 5]]])
+      iex> Nx.weighted_mean(t, weights, axis: -1, keep_axis: true)
+      #Nx.Tensor<
+        f32[x: 2][y: 2][z: 1]
+        [
+          [
+            [1.7142857313156128],
+            [5.625]
+          ],
+          [
+            [8.166666984558105],
+            [11.222222328186035]
+          ]
+        ]
+      >
+  """
+  @doc type: :aggregation, from_backend: false
+  def weighted_mean(tensor, weights, opts \\ []) do
+    opts = keyword!(opts, axis: nil, keep_axis: false)
+    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
+    %T{shape: weights_shape} = weights = to_tensor(weights)
+
+    axis =
+      if opts[:axis] != nil,
+        do: Nx.Shape.normalize_axes(shape, [opts[:axis]], names),
+        else: opts[:axis]
+
+    weights =
+      if shape != weights_shape do
+        cond do
+          axis == nil ->
+            raise ArgumentError, "Axis must be specified when shapes of input and weights differ."
+
+          tuple_size(weights_shape) != 1 ->
+            raise ArgumentError, "1D weights expected when shapes of a and weights differ."
+
+          elem(weights_shape, 0) != elem(shape, axis) ->
+            raise ArgumentError, "Length of weights not compatible with specified axis."
+
+          true ->
+            nil
+        end
+
+        dims_to_broadcast =
+          for(_ <- 0..(tuple_size(shape) - 2), do: 1) ++ Tuple.to_list(weights_shape)
+
+        dims_to_broadcast = List.to_tuple(dims_to_broadcast)
+        weights = broadcast(weights, dims_to_broadcast)
+        dims_to_swap = for i <- 0..(tuple_size(shape) + tuple_size(weights_shape) - 2), do: i
+
+        dims_to_swap = swap(dims_to_swap, axis, tuple_size(shape) + tuple_size(weights_shape) - 2)
+
+        transpose(weights, axes: dims_to_swap)
+      else
+        weights
+      end
+
+    weights_sum = sum(weights, axes: axis, keep_axes: opts[:keep_axis])
+
+    if to_number(any(equal(weights_sum, 0.0))) == 1 do
+      raise ArgumentError, "Weights sum to zero, can't be normalized"
+    end
+
+    divide(
+      sum(multiply(tensor, weights), axes: axis, keep_axes: opts[:keep_axis]),
+      weights_sum
+    )
+  end
+
+  defp swap(a, i1, i2) do
+    e1 = Enum.at(a, i1)
+    e2 = Enum.at(a, i2)
+
+    a
+    |> List.replace_at(i1, e2)
+    |> List.replace_at(i2, e1)
+  end
+
+  @doc """
   Returns the product for the tensor.
 
   If the `:axes` option is given, it aggregates over
