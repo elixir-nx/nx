@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 project(torchx)
+include(CheckCCompilerFlag)
 
 find_package(Torch REQUIRED)
 
@@ -33,6 +34,10 @@ else()
     # Although the compiler complains about not using these,
     # things only work with them set
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -undefined dynamic_lookup")
+    check_c_compiler_flag("-arch arm64" ARM64_SUPPORTED)
+    if(ARM64_SUPPORTED)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DMAC_ARM64")
+    endif()
     # set(CMAKE_SHARED_LINKER_FLAGS "-bundle -flat_namespace -undefined suppress")
     set_target_properties(torchx PROPERTIES INSTALL_RPATH "@loader_path/${LIBTORCH_BASE}")
 endif()

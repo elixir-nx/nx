@@ -19,7 +19,7 @@ defmodule Nx.Random do
   routines:
 
       iex> key = Nx.Random.key(12)
-      iex> {_new_key, uniform} = Nx.Random.uniform(key)
+      iex> {uniform, _new_key} = Nx.Random.uniform(key)
       iex> uniform
       #Nx.Tensor<
         f32
@@ -227,7 +227,7 @@ defmodule Nx.Random do
   ## Examples
 
       iex> key = Nx.Random.key(1701)
-      iex> {_new_key, randint} = Nx.Random.randint(key, 1, 100)
+      iex> {randint, _new_key} = Nx.Random.randint(key, 1, 100)
       iex> randint
       #Nx.Tensor<
         s64
@@ -235,7 +235,7 @@ defmodule Nx.Random do
       >
 
       iex> key = Nx.Random.key(1701)
-      iex> {_new_key, randint} = Nx.Random.randint(key, 1, 100, shape: {3, 2}, type: :u32)
+      iex> {randint, _new_key} = Nx.Random.randint(key, 1, 100, shape: {3, 2}, type: :u32)
       iex> randint
       #Nx.Tensor<
         u32[3][2]
@@ -249,7 +249,7 @@ defmodule Nx.Random do
   """
   defn randint(key, min_val, max_val, opts \\ []) do
     keys = split(key)
-    {keys[0], randint_split(keys[1], min_val, max_val, opts)}
+    {randint_split(keys[1], min_val, max_val, opts), keys[0]}
   end
 
   @doc """
@@ -319,7 +319,7 @@ defmodule Nx.Random do
   ## Examples
 
       iex> key = Nx.Random.key(1701)
-      iex> {_new_key, uniform} = Nx.Random.uniform(key)
+      iex> {uniform, _new_key} = Nx.Random.uniform(key)
       iex> uniform
       #Nx.Tensor<
         f32
@@ -327,7 +327,7 @@ defmodule Nx.Random do
       >
 
       iex> key = Nx.Random.key(1701)
-      iex> {_new_key, uniform} = Nx.Random.uniform(key, shape: {3, 2}, type: :f16)
+      iex> {uniform, _new_key} = Nx.Random.uniform(key, shape: {3, 2}, type: :f16)
       iex> uniform
       #Nx.Tensor<
         f16[3][2]
@@ -339,7 +339,7 @@ defmodule Nx.Random do
       >
 
       iex> key = Nx.Random.key(1701)
-      iex> {_new_key, uniform} = Nx.Random.uniform(key, shape: {2, 2}, type: :c64)
+      iex> {uniform, _new_key} = Nx.Random.uniform(key, shape: {2, 2}, type: :c64)
       iex> uniform
       #Nx.Tensor<
         c64[2][2]
@@ -351,7 +351,7 @@ defmodule Nx.Random do
   """
   defn uniform(key, min_val, max_val, opts \\ []) do
     keys = split(key)
-    {keys[0], uniform_split(keys[1], min_val, max_val, opts)}
+    {uniform_split(keys[1], min_val, max_val, opts), keys[0]}
   end
 
   @doc """
@@ -401,7 +401,7 @@ defmodule Nx.Random do
   ## Examples
 
       iex> key = Nx.Random.key(42)
-      iex> {_new_key, normal} = Nx.Random.normal(key)
+      iex> {normal, _new_key} = Nx.Random.normal(key)
       iex> normal
       #Nx.Tensor<
         f32
@@ -409,7 +409,7 @@ defmodule Nx.Random do
       >
 
       iex> key = Nx.Random.key(42)
-      iex> {_new_key, normal} = Nx.Random.normal(key, 0, 1, shape: {3, 2}, type: :f16)
+      iex> {normal, _new_key} = Nx.Random.normal(key, 0, 1, shape: {3, 2}, type: :f16)
       iex> normal
       #Nx.Tensor<
         f16[3][2]
@@ -421,7 +421,7 @@ defmodule Nx.Random do
       >
 
       iex> key = Nx.Random.key(42)
-      iex> {_new_key, normal} = Nx.Random.normal(key, 0, 1, shape: {2, 2}, type: :c64)
+      iex> {normal, _new_key} = Nx.Random.normal(key, 0, 1, shape: {2, 2}, type: :c64)
       iex> normal
       #Nx.Tensor<
         c64[2][2]
@@ -432,7 +432,7 @@ defmodule Nx.Random do
       >
 
       iex> key = Nx.Random.key(1337)
-      iex> {_new_key, normal} = Nx.Random.normal(key, 10, 5, shape: {1_000})
+      iex> {normal, _new_key} = Nx.Random.normal(key, 10, 5, shape: {1_000})
       iex> Nx.mean(normal)
       #Nx.Tensor<
         f32
@@ -446,7 +446,7 @@ defmodule Nx.Random do
   """
   defn normal(key, mean, standard_deviation, opts \\ []) do
     keys = split(key)
-    {keys[0], normal_split(keys[1], mean, standard_deviation, opts)}
+    {normal_split(keys[1], mean, standard_deviation, opts), keys[0]}
   end
 
   @doc """
@@ -458,7 +458,7 @@ defmodule Nx.Random do
     type = infer_float_type(mean, standard_deviation, opts)
 
     float_or_complex(key, type, opts[:shape], fn key, type, shape ->
-      min_value = -1 + Nx.Constants.smallest_positive_normal_number(type)
+      min_value = -1 + Nx.Constants.smallest_positive_normal(type)
       u = uniform_split(key, min_value, 1, opts |> put_type(type) |> put_shape(shape))
 
       normal = Nx.sqrt(Nx.tensor(2, type: type)) * Nx.erf_inv(u)

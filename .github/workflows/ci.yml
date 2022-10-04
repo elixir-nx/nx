@@ -20,7 +20,7 @@ jobs:
     env:
       MIX_ENV: test
       XLA_FLAGS: --xla_force_host_platform_device_count=2
-      LIBTORCH_DIR: ./cache/libtorch
+      LIBTORCH_DIR: ${{ github.workspace }}/torchx/cache/libtorch
     steps:
       - uses: actions/checkout@v2
       - uses: erlef/setup-beam@v1
@@ -28,17 +28,19 @@ jobs:
           otp-version: ${{ matrix.otp }}
           elixir-version: ${{ matrix.elixir }}
       - name: Retrieve dependencies cache
-        uses: actions/cache@v1
+        env:
+          cache-name: cache-mix-deps
+        uses: actions/cache@v3
         id: mix-cache # id to use in retrieve action
         with:
-          path: deps
-          key: v1-${{ matrix.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+          path: ${{ github.workspace }}/${{ matrix.working_directory }}/deps
+          key: ${{ runner.os }}-Elixir-v${{ matrix.elixir }}-OTP-${{ matrix.otp }}-${{ hashFiles(format('{0}/{1}/mix.lock', github.workspace, matrix.working_directory)) }}
       - name: Retrieve libtorch cache
         if: ${{ matrix.working_directory == 'torchx' }}
-        uses: actions/cache@v1
+        uses: actions/cache@v3
         id: libtorch-cache
         with:
-          path: torchx/${{ env.LIBTORCH_DIR }}
+          path: ${{ env.LIBTORCH_DIR }}
           key: linux-v1-libtorch-cpu
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
@@ -49,6 +51,7 @@ jobs:
         run: mix format --check-formatted
       - name: Run tests
         run: mix test
+
   win:
     name: Windows
     runs-on: windows-latest
@@ -64,7 +67,7 @@ jobs:
     env:
       MIX_ENV: test
       XLA_FLAGS: --xla_force_host_platform_device_count=2
-      LIBTORCH_DIR: ./cache/libtorch
+      LIBTORCH_DIR: ${{ github.workspace }}\torchx\cache\libtorch
     steps:
       - name: Configure Git
         run: git config --global core.autocrlf input
@@ -76,17 +79,19 @@ jobs:
           otp-version: ${{ matrix.otp }}
           elixir-version: ${{ matrix.elixir }}
       - name: Retrieve dependencies cache
-        uses: actions/cache@v1
+        env:
+          cache-name: cache-mix-deps
+        uses: actions/cache@v3
         id: mix-cache # id to use in retrieve action
         with:
-          path: deps
-          key: v1-${{ matrix.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+          path: ${{ github.workspace }}\${{ matrix.working_directory }}\deps
+          key: ${{ runner.os }}-Elixir-v${{ matrix.elixir }}-OTP-${{ matrix.otp }}-${{ hashFiles(format('{0}\{1}\mix.lock', github.workspace, matrix.working_directory)) }}
       - name: Retrieve libtorch cache
         if: ${{ matrix.working_directory == 'torchx' }}
-        uses: actions/cache@v1
+        uses: actions/cache@v3
         id: libtorch-cache-win
         with:
-          path: torchx/${{ env.LIBTORCH_DIR }}
+          path: ${{ env.LIBTORCH_DIR }}
           key: win-v1-libtorch-cpu
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}

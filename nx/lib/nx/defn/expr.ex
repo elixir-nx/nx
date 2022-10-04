@@ -215,7 +215,9 @@ defmodule Nx.Defn.Expr do
 
   @impl true
   def optional(name, args, fun) do
-    %{data: %{context: context}} = res = apply(fun, args)
+    {args, opts} = Enum.split_while(args, &(not is_list(&1)))
+    params = Enum.with_index(args, &parameter/2)
+    %{data: %{context: context}} = res = apply(fun, params ++ opts)
     expr(res, context, :optional, [expr(res, context, name, args), res])
   end
 
@@ -413,8 +415,9 @@ defmodule Nx.Defn.Expr do
             end)
 
           next = Range.size(internal_unroll) * step
+          gen_arg = {{index_param, generator_param}, arg}
           gen_body = {{Nx.add(index_param, next), generator_param}, body}
-          {_, result} = while(gen_initial, context, arg, condition, gen_body)
+          {_, result} = while(gen_initial, context, gen_arg, condition, gen_body)
           result
 
         nil ->

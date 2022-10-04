@@ -237,7 +237,7 @@ defmodule Nx.LinAlgTest do
   end
 
   describe "qr" do
-    test "correctly factors a square matrix" do
+    test "factors a square matrix" do
       t = Nx.tensor([[2, -2, 18], [2, 1, 0], [1, 2, 0]])
       assert {q, %{type: output_type} = r} = Nx.LinAlg.qr(t)
       assert t |> Nx.round() |> Nx.as_type(output_type) == q |> Nx.dot(r) |> Nx.round()
@@ -399,7 +399,7 @@ defmodule Nx.LinAlgTest do
   end
 
   describe "eigh" do
-    test "correctly a eigenvalues and eigenvectors" do
+    test "computes eigenvalues and eigenvectors" do
       t =
         Nx.tensor([
           [5, -1, 0, 1, 2],
@@ -426,7 +426,7 @@ defmodule Nx.LinAlgTest do
                ])
     end
 
-    test "correctly a eigenvalues and eigenvectors for a Hermitian matrix case" do
+    test "computes eigenvalues and eigenvectors for a Hermitian matrix case" do
       # Hermitian matrix
       t =
         Nx.tensor([
@@ -462,12 +462,12 @@ defmodule Nx.LinAlgTest do
                ])
     end
 
-    test "property for matrices with different eigenvalues" do
+    test "properties for matrices with different eigenvalues" do
       # Generate real Hermitian matrices with different eigenvalues
       # from random matrices based on the relation A = Q.Λ.Q^*
       # where Λ is the diagonal matrix of eigenvalues and Q is unitary matrix.
 
-      for _ <- 1..3, type <- [f: 32, c: 64] do
+      for type <- [f: 32, c: 64] do
         # Unitary matrix from a random matrix
         {q, _} = Nx.random_uniform({3, 3, 3}, type: type) |> Nx.LinAlg.qr()
 
@@ -546,7 +546,7 @@ defmodule Nx.LinAlgTest do
   end
 
   describe "svd" do
-    test "correctly finds the singular values of full matrices" do
+    test "finds the singular values of full matrices" do
       t = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0], [10.0, 11.0, 12.0]])
 
       assert {%{type: output_type} = u, %{type: output_type} = s, %{type: output_type} = v} =
@@ -584,7 +584,7 @@ defmodule Nx.LinAlgTest do
              |> round(3) == round(v, 3)
     end
 
-    test "correctly finds the singular values triangular matrices" do
+    test "finds the singular values triangular matrices" do
       t = Nx.tensor([[1.0, 2.0, 3.0], [0.0, 4.0, 0.0], [0.0, 0.0, 9.0]])
 
       assert {%{type: output_type} = u, %{type: output_type} = s, %{type: output_type} = v} =
