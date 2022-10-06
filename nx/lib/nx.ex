@@ -6655,42 +6655,50 @@ defmodule Nx do
       >
 
       iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
-      iex> weights = Nx.tensor([[[8, 2, 4], [0, 3, 5]], [[4, 2, 6], [3, 1, 5]]])
+      iex> weights = Nx.tensor([[[0, 1, 2], [1, 1, 0]], [[-1, 1, -1], [1, 1, -1]]])
       iex> Nx.weighted_mean(t, weights, axis: :x)
       #Nx.Tensor<
         f32[y: 2][z: 3]
         [
-          [3.0, 5.0, 6.599999904632568],
-          [10.0, 6.5, 9.0]
+          [7.0, 5.0, -3.0],
+          [7.0, 8.0, 12.0]
         ]
       >
 
       iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
-      iex> weights = Nx.tensor([[[8, 2, 4], [0, 3, 5]], [[4, 2, 6], [3, 1, 5]]])
+      iex> weights = Nx.tensor([[[0, 1, 2], [1, 1, 0]], [[-1, 1, -1], [1, 1, -1]]])
       iex> Nx.weighted_mean(t, weights, axis: -1)
       #Nx.Tensor<
         f32[x: 2][y: 2]
         [
-          [1.7142857313156128, 5.625],
-          [8.166666984558105, 11.222222328186035]
+          [2.6666667461395264, 4.5],
+          [8.0, 9.0]
         ]
+      >
+
+      iex> t = Nx.iota({3,4})
+      iex> weights = Nx.tensor([1, 2, 3, 4])
+      iex> Nx.weighted_mean(t, weights, axis: 1)
+      #Nx.Tensor<
+        f32[3]
+        [2.0, 6.0, 10.0]
       >
 
   ### Keeping axis
 
       iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
-      iex> weights = Nx.tensor([[[8, 2, 4], [0, 3, 5]], [[4, 2, 6], [3, 1, 5]]])
+      iex> weights = Nx.tensor([[[0, 1, 2], [1, 1, 0]], [[-1, 1, -1], [1, 1, -1]]])
       iex> Nx.weighted_mean(t, weights, axis: -1, keep_axis: true)
       #Nx.Tensor<
         f32[x: 2][y: 2][z: 1]
         [
           [
-            [1.7142857313156128],
-            [5.625]
+            [2.6666667461395264],
+            [4.5]
           ],
           [
-            [8.166666984558105],
-            [11.222222328186035]
+            [8.0],
+            [9.0]
           ]
         ]
       >
@@ -6701,7 +6709,7 @@ defmodule Nx do
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
     %T{shape: weights_shape} = weights = to_tensor(weights)
 
-    axis =
+    axes =
       if opts[:axis] != nil,
         do: Nx.Shape.normalize_axes(shape, [opts[:axis]], names),
         else: opts[:axis]
@@ -6709,13 +6717,13 @@ defmodule Nx do
     weights =
       if shape != weights_shape do
         cond do
-          axis == nil ->
+          axes == nil ->
             raise ArgumentError, "axis must be specified when shapes of input and weights differ."
 
           tuple_size(weights_shape) != 1 ->
             raise ArgumentError, "rank-1 weights tensor expected when input shapes differ."
 
-          elem(weights_shape, 0) != elem(shape, axis) ->
+          elem(weights_shape, 0) != elem(shape, List.first(axes)) ->
             raise ArgumentError, "length of weights not compatible with specified axis."
 
           true ->
@@ -6726,35 +6734,17 @@ defmodule Nx do
           List.duplicate(1, tuple_size(shape) - 1) ++ Tuple.to_list(weights_shape)
 
         dims_to_broadcast = List.to_tuple(dims_to_broadcast)
-        weights = broadcast(weights, dims_to_broadcast)
-        dims_to_swap = Enum.to_list(0..(tuple_size(shape) + tuple_size(weights_shape) - 2))
-
-        dims_to_swap = swap(dims_to_swap, axis, tuple_size(shape) + tuple_size(weights_shape) - 2)
-
-        transpose(weights, axes: dims_to_swap)
+        broadcast(weights, dims_to_broadcast)
       else
         weights
       end
 
-    weights_sum = sum(weights, axes: axis, keep_axes: opts[:keep_axis])
+    weights_sum = sum(weights, axes: axes, keep_axes: opts[:keep_axis])
 
-    if to_number(any(equal(weights_sum, 0.0))) == 1 do
-      raise ArgumentError, "Weights sum to zero, can't be normalized"
-    end
-
-    divide(
-      sum(multiply(tensor, weights), axes: axis, keep_axes: opts[:keep_axis]),
-      weights_sum
-    )
-  end
-
-  defp swap(a, i1, i2) do
-    e1 = Enum.at(a, i1)
-    e2 = Enum.at(a, i2)
-
-    a
-    |> List.replace_at(i1, e2)
-    |> List.replace_at(i2, e1)
+    tensor
+    |> multiply(weights)
+    |> sum(axes: axes, keep_axes: opts[:keep_axis])
+    |> divide(weights_sum)
   end
 
   @doc """
