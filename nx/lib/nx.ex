@@ -6616,12 +6616,11 @@ defmodule Nx do
   Returns the weighted mean for the tensor and the weights.
 
   If the `:axis` option is given, it aggregates over
-  that dimension, effectively removing it. `axes: [0]`
+  that dimension, effectively removing it. `axis: 0`
   implies aggregating over the highest order dimension
-  and so forth. If the axis is negative, then counts
-  the axis from the back. For example, `axis: [-1]` will
-  always aggregate all rows. You can only aggregate over
-  one axis.
+  and so forth. If the axis is negative, then the axis will
+  be counted from the back. For example, `axis: -1` will
+  always aggregate over the last dimension.
 
   You may optionally set `:keep_axis` to true, which will
   retain the rank of the input tensor by setting the averaged
@@ -6711,24 +6710,24 @@ defmodule Nx do
       if shape != weights_shape do
         cond do
           axis == nil ->
-            raise ArgumentError, "Axis must be specified when shapes of input and weights differ."
+            raise ArgumentError, "axis must be specified when shapes of input and weights differ."
 
           tuple_size(weights_shape) != 1 ->
-            raise ArgumentError, "1D weights expected when shapes of a and weights differ."
+            raise ArgumentError, "rank-1 weights tensor expected when input shapes differ."
 
           elem(weights_shape, 0) != elem(shape, axis) ->
-            raise ArgumentError, "Length of weights not compatible with specified axis."
+            raise ArgumentError, "length of weights not compatible with specified axis."
 
           true ->
             nil
         end
 
         dims_to_broadcast =
-          for(_ <- 0..(tuple_size(shape) - 2), do: 1) ++ Tuple.to_list(weights_shape)
+          List.duplicate(1, tuple_size(shape) - 1) ++ Tuple.to_list(weights_shape)
 
         dims_to_broadcast = List.to_tuple(dims_to_broadcast)
         weights = broadcast(weights, dims_to_broadcast)
-        dims_to_swap = for i <- 0..(tuple_size(shape) + tuple_size(weights_shape) - 2), do: i
+        dims_to_swap = Enum.to_list(0..(tuple_size(shape) + tuple_size(weights_shape) - 2))
 
         dims_to_swap = swap(dims_to_swap, axis, tuple_size(shape) + tuple_size(weights_shape) - 2)
 
