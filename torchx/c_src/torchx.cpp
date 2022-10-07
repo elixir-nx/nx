@@ -250,8 +250,13 @@ NIF(from_blob)
   if (blob.size / dtype_sizes[type_atom] < elem_count(shape))
     return nx::nif::error(env, "Binary size is too small for the requested shape");
 
-  // Clone here to copy data from blob, which will be GCed.
-  TENSOR(torch::clone(torch::from_blob(blob.data, shape, OPTS(type, device))));
+  auto tensor = torch::from_blob(blob.data, shape, torch::device(torch::kCPU).dtype(type));
+
+  if(DEVICE(device).device().type() == torch::kCPU) {
+    TENSOR(tensor.clone());
+  } else {
+    TENSOR(tensor.to(DEVICE(device)));
+  }
 }
 
 NIF(to_blob)
