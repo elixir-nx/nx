@@ -6613,6 +6613,141 @@ defmodule Nx do
     do: elem(shape, axis) * mean_den(shape, axes)
 
   @doc """
+  Returns the weighted mean for the tensor and the weights.
+
+  If the `:axis` option is given, it aggregates over
+  that dimension, effectively removing it. `axis: 0`
+  implies aggregating over the highest order dimension
+  and so forth. If the axis is negative, then the axis will
+  be counted from the back. For example, `axis: -1` will
+  always aggregate over the last dimension.
+
+  You may optionally set `:keep_axis` to true, which will
+  retain the rank of the input tensor by setting the averaged
+  axis to size 1.
+
+  ## Examples
+
+      iex> Nx.weighted_mean(Nx.tensor(42), Nx.tensor(2))
+      #Nx.Tensor<
+        f32
+        42.0
+      >
+
+      iex> Nx.weighted_mean(Nx.tensor([1, 2, 3]), Nx.tensor([3, 2, 1]))
+      #Nx.Tensor<
+        f32
+        1.6666666269302368
+      >
+
+  ### Aggregating over an axis
+
+      iex> Nx.weighted_mean(Nx.tensor([1, 2, 3], names: [:x]), Nx.tensor([4, 5, 6]), axis: 0)
+      #Nx.Tensor<
+        f32
+        2.133333444595337
+      >
+
+      iex> Nx.weighted_mean(Nx.tensor([1,2,3], type: :u8, names: [:x]), Nx.tensor([1,3,5]), axis: :x)
+      #Nx.Tensor<
+        f32
+        2.444444417953491
+      >
+
+      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      iex> weights = Nx.tensor([[[0, 1, 2], [1, 1, 0]], [[-1, 1, -1], [1, 1, -1]]])
+      iex> Nx.weighted_mean(t, weights, axis: :x)
+      #Nx.Tensor<
+        f32[y: 2][z: 3]
+        [
+          [7.0, 5.0, -3.0],
+          [7.0, 8.0, 12.0]
+        ]
+      >
+
+      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      iex> weights = Nx.tensor([[[0, 1, 2], [1, 1, 0]], [[-1, 1, -1], [1, 1, -1]]])
+      iex> Nx.weighted_mean(t, weights, axis: -1)
+      #Nx.Tensor<
+        f32[x: 2][y: 2]
+        [
+          [2.6666667461395264, 4.5],
+          [8.0, 9.0]
+        ]
+      >
+
+      iex> t = Nx.iota({3,4})
+      iex> weights = Nx.tensor([1, 2, 3, 4])
+      iex> Nx.weighted_mean(t, weights, axis: 1)
+      #Nx.Tensor<
+        f32[3]
+        [2.0, 6.0, 10.0]
+      >
+
+  ### Keeping axis
+
+      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      iex> weights = Nx.tensor([[[0, 1, 2], [1, 1, 0]], [[-1, 1, -1], [1, 1, -1]]])
+      iex> Nx.weighted_mean(t, weights, axis: -1, keep_axis: true)
+      #Nx.Tensor<
+        f32[x: 2][y: 2][z: 1]
+        [
+          [
+            [2.6666667461395264],
+            [4.5]
+          ],
+          [
+            [8.0],
+            [9.0]
+          ]
+        ]
+      >
+  """
+  @doc type: :aggregation, from_backend: false
+  def weighted_mean(tensor, weights, opts \\ []) do
+    opts = keyword!(opts, axis: nil, keep_axis: false)
+    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
+    %T{shape: weights_shape} = weights = to_tensor(weights)
+
+    axes =
+      if opts[:axis] != nil,
+        do: Nx.Shape.normalize_axes(shape, [opts[:axis]], names),
+        else: opts[:axis]
+
+    weights =
+      if shape != weights_shape do
+        cond do
+          axes == nil ->
+            raise ArgumentError, "axis must be specified when shapes of input and weights differ"
+
+          tuple_size(weights_shape) != 1 ->
+            raise ArgumentError, "rank-1 weights tensor expected when input shapes differ"
+
+          elem(weights_shape, 0) != elem(shape, List.first(axes)) ->
+            raise ArgumentError, "length of weights not compatible with specified axis"
+
+          true ->
+            nil
+        end
+
+        dims_to_broadcast =
+          List.duplicate(1, tuple_size(shape) - 1) ++ Tuple.to_list(weights_shape)
+
+        dims_to_broadcast = List.to_tuple(dims_to_broadcast)
+        broadcast(weights, dims_to_broadcast)
+      else
+        weights
+      end
+
+    weights_sum = sum(weights, axes: axes, keep_axes: opts[:keep_axis])
+
+    tensor
+    |> multiply(weights)
+    |> sum(axes: axes, keep_axes: opts[:keep_axis])
+    |> divide(weights_sum)
+  end
+
+  @doc """
   Returns the product for the tensor.
 
   If the `:axes` option is given, it aggregates over
