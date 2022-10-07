@@ -4,7 +4,7 @@ defmodule Torchx.MixProject do
   @source_url "https://github.com/elixir-nx/nx"
   @version "0.3.0"
 
-  @valid_targets ["cpu", "cu102", "cu111"]
+  @valid_targets ["cpu", "cu102", "cu113", "cu116"]
 
   @libtorch_version System.get_env("LIBTORCH_VERSION", "1.12.1")
   @libtorch_target System.get_env("LIBTORCH_TARGET", "cpu")
