@@ -6718,13 +6718,13 @@ defmodule Nx do
       if shape != weights_shape do
         cond do
           axes == nil ->
-            raise ArgumentError, "axis must be specified when shapes of input and weights differ."
+            raise ArgumentError, "axis must be specified when shapes of input and weights differ"
 
           tuple_size(weights_shape) != 1 ->
-            raise ArgumentError, "rank-1 weights tensor expected when input shapes differ."
+            raise ArgumentError, "rank-1 weights tensor expected when input shapes differ"
 
           elem(weights_shape, 0) != elem(shape, List.first(axes)) ->
-            raise ArgumentError, "length of weights not compatible with specified axis."
+            raise ArgumentError, "length of weights not compatible with specified axis"
 
           true ->
             nil
