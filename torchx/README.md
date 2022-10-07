@@ -18,7 +18,7 @@ Then you can add `Torchx` as dependency in your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:torchx, "~> 0.2"}
+    {:torchx, "~> 0.3"}
   ]
 end
 ```
@@ -27,7 +27,7 @@ If you are using Livebook or IEx, you can instead run:
 
 ```elixir
 Mix.install([
-  {:torchx, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "torchx"}
+  {:torchx, "~> 0.3"}
 ])
 ```
 
