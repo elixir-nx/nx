@@ -6748,6 +6748,131 @@ defmodule Nx do
   end
 
   @doc """
+  Returns the median for the tensor.
+
+  If the `:axis` option is given, it aggregates over
+  that dimension, effectively removing it. `axis: 0`
+  implies aggregating over the highest order dimension
+  and so forth. If the axis is negative, then the axis will
+  be counted from the back. For example, `axis: -1` will
+  always aggregate over the last dimension.
+
+  You may optionally set `:keep_axis` to true, which will
+  retain the rank of the input tensor by setting the reduced
+  axis to size 1.
+
+  ## Examples
+
+      iex> Nx.median(Nx.tensor(42))
+      #Nx.Tensor<
+        s64
+        42
+      >
+
+      iex> Nx.median(Nx.tensor([1, 2, 3]))
+      #Nx.Tensor<
+        s64
+        2
+      >
+
+      iex> Nx.median(Nx.tensor([1, 2]))
+      #Nx.Tensor<
+        f32
+        1.5
+      >
+
+  ### Aggregating over an axis
+
+      iex> Nx.median(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), axis: 0)
+      #Nx.Tensor<
+        f32[y: 3]
+        [2.5, 3.5, 4.5]
+      >
+
+      iex> Nx.median(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), axis: :y)
+      #Nx.Tensor<
+        s64[x: 2]
+        [2, 5]
+      >
+
+      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      iex> weights = Nx.tensor([[[0, 1, 2], [1, 1, 0]], [[-1, 1, -1], [1, 1, -1]]])
+      iex> Nx.weighted_mean(t, weights, axis: :x)
+      #Nx.Tensor<
+        f32[y: 2][z: 3]
+        [
+          [7.0, 5.0, -3.0],
+          [7.0, 8.0, 12.0]
+        ]
+      >
+
+      iex> t = Nx.tensor([[[1, 2, 2], [3, 4, 2]], [[4, 5, 2], [7, 9, 2]]])
+      iex> Nx.median(t, axis: -1)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [2, 3],
+          [4, 7]
+        ]
+      >
+
+  ### Keeping axis
+
+      iex> t = Nx.tensor([[[1, 2, 2], [3, 4, 2]], [[4, 5, 2], [7, 9, 2]]])
+      iex> Nx.median(t, axis: -1, keep_axis: true)
+      #Nx.Tensor<
+        s64[2][2][1]
+        [
+          [
+            [2],
+            [3]
+          ],
+          [
+            [4],
+            [7]
+          ]
+        ]
+      >
+  """
+  @doc type: :aggregation, from_backend: false
+  def median(tensor, opts \\ []) do
+    opts = keyword!(opts, axis: nil, keep_axis: false)
+    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
+
+    axis =
+      if opts[:axis] != nil,
+        do: Nx.Shape.normalize_axis(shape, opts[:axis], names),
+        else: opts[:axis]
+
+    if axis != nil do
+      axis_size = axis_size(tensor, axis)
+      tensor = sort(tensor, axis: axis)
+
+      if rem(axis_size, 2) == 1 do
+        res = slice_along_axis(tensor, div(axis_size, 2), 1, axis: axis)
+        if opts[:keep_axis], do: res, else: squeeze(res, axes: [axis])
+      else
+        two_elems = slice_along_axis(tensor, div(axis_size, 2) - 1, 2, axis: axis)
+        mean(two_elems, axes: [axis], keep_axes: opts[:keep_axis])
+      end
+    else
+      tensor =
+        flatten(tensor)
+        |> sort()
+
+      {tensor_size} = shape(tensor)
+
+      if rem(tensor_size, 2) == 1 do
+        tensor[[div(tensor_size, 2)]]
+      else
+        tensor[[div(tensor_size, 2) - 1]]
+        |> add(tensor[[div(tensor_size, 2)]])
+        |> divide(2)
+      end
+    end
+  end
+
+  @doc """
   Returns the product for the tensor.
 
   If the `:axes` option is given, it aggregates over
