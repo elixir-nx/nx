@@ -262,12 +262,6 @@ defmodule Nx.LinAlg do
         f32
         3.0
       >
-      
-      iex> Nx.LinAlg.norm(Nx.tensor([[0, 0], [0, 0]]))
-      #Nx.Tensor<
-        f32
-        0.0
-      >
 
       iex> Nx.LinAlg.norm(Nx.tensor([[0, 0], [0, 0]]))
       #Nx.Tensor<
