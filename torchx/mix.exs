@@ -4,7 +4,7 @@ defmodule Torchx.MixProject do
   @source_url "https://github.com/elixir-nx/nx"
   @version "0.3.0"
 
-  @valid_targets ["cpu", "cu102", "cu111"]
+  @valid_targets ["cpu", "cu102", "cu113", "cu116"]
 
   @libtorch_version System.get_env("LIBTORCH_VERSION", "1.12.1")
   @libtorch_target System.get_env("LIBTORCH_TARGET", "cpu")
@@ -144,21 +144,7 @@ defmodule Torchx.MixProject do
                 "https://download.pytorch.org/libtorch/#{@libtorch_target}/libtorch-macos-#{@libtorch_version}.zip"
 
               _ ->
-                Mix.raise("""
-                LibTorch does not yet provide precompiled binaries for Apple Silicon.
-
-                You can install Torch 1.12+ using pip3:
-
-                    pip3 install torch
-
-                Then find where Torch was installed under the "Location" metadata:
-
-                    pip3 show torch
-
-                And then set LIBTORCH_DIR to its installation directory. For example:
-
-                    export LIBTORCH_DIR=~/Library/Python/3.8/lib/python/site-packages/torch
-                """)
+                "https://github.com/mlverse/libtorch-mac-m1/releases/download/LibTorch/libtorch-v#{@libtorch_version}.zip"
             end
 
           {:win32, :nt} ->

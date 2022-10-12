@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 project(torchx)
 include(CheckCCompilerFlag)
 
+if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+  set(CMAKE_CUDA_ARCHITECTURES 75)
+endif()
+
 find_package(Torch REQUIRED)
 
 STRING(REGEX REPLACE "\\\\" "/" C_SRC ${C_SRC})
