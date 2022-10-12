@@ -282,19 +282,18 @@ defmodule Nx.Defn.Tree do
 
   defp rewrite_type(:tensor, [arg], t, type_fun) do
     type = type_fun.(t.type)
-    rewrite_type_args(t, type, [Nx.as_type(arg, type)])
+    rewrite_type_args(:tensor, t, type, [Nx.as_type(arg, type)])
   end
 
-  defp rewrite_type(:constant, [arg], t, type_fun) do
-    type = type_fun.(t.type)
-    rewrite_type_args(t, type, [arg])
+  defp rewrite_type(op, args, t, type_fun) do
+    rewrite_type_args(op, t, type_fun.(t.type), args)
   end
 
-  defp rewrite_type(_op, args, t, type_fun) do
-    rewrite_type_args(t, type_fun.(t.type), args)
+  defp rewrite_type_args(:constant, t, type, [arg]) do
+    Expr.constant(%{t | type: type}, arg, [])
   end
 
-  defp rewrite_type_args(%{data: data} = t, type, args) do
+  defp rewrite_type_args(_op, %{data: data} = t, type, args) do
     %{t | data: %{data | id: Expr.id(), args: args}, type: type}
   end
 end

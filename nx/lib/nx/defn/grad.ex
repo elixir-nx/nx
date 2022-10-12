@@ -115,8 +115,8 @@ defmodule Nx.Defn.Grad do
   defp bypass_arg(%{data: %{op: op}}, _params) when op in @constants, do: :constant
 
   # Those nodes are always bypassed in favor of actual values and implementations.
-  defp bypass_arg(%{data: %{op: :optional, args: [expr, default_impl_expr]}}, _params),
-    do: {default_impl_expr, expr.data.args}
+  defp bypass_arg(%{data: %{op: :optional, args: [call, expr]}}, _params),
+    do: {expr, call.data.args}
 
   defp bypass_arg(%{data: %{op: :parameter, args: [i]}}, [_ | _] = params),
     do: {Enum.fetch!(params, i), nil}
