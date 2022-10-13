@@ -541,15 +541,38 @@ defmodule EXLA.Defn do
     {fun_computation(name, args, expr, type, state), cache}
   end
 
-  defp cached_recur_operator(:optional, %T{data: %Expr{args: [expr, default]}}, state, cache) do
-    {args, cache} =
+  defp cached_recur_operator(:optional, %T{data: %Expr{args: args}}, state, cache) do
+    [expr, default_body] = args
+
+    computation_args =
       expr.data.args
       |> Enum.take_while(&(not is_list(&1)))
-      |> Enum.map_reduce(cache, &recur_operator(&1, state, &2))
 
-    params = Enum.with_index(args, fn arg, index -> {index, arg} end)
-    state = %{state | params: Map.new(params), scope_ids: Tree.scope_ids(default)}
-    recur_operator(default, state, cache)
+    {call_args, cache} =
+      computation_args |> Enum.map_reduce(cache, &recur_operator(&1, state, &2))
+
+    {call_body, cache} =
+      optional_computation(
+        :optional_body,
+        List.to_tuple(computation_args),
+        default_body,
+        :with_token,
+        state,
+        cache
+      )
+
+    builder =
+      case call_args do
+        [%{builder: builder} | _] ->
+          builder
+
+        _ ->
+          state.builder
+      end
+
+    call = EXLA.Op.call(builder, call_args, call_body)
+    token = EXLA.Op.get_tuple_element(call, 0)
+    {EXLA.Op.get_tuple_element(call, 1), update_token(cache, token)}
   end
 
   defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do
@@ -1447,6 +1470,10 @@ defmodule EXLA.Defn do
       end
 
     {EXLA.Builder.build(res), update_outfeed(cache, comp_cache)}
+  end
+
+  defp optional_computation(name, arg, expr, type, state, cache) do
+    raise "not implemented"
   end
 
   defp computation_arg_shape(%{type: type, shape: shape}) do

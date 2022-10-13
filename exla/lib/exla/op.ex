@@ -659,6 +659,18 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def call(
+        builder,
+        args,
+        %Computation{ref: body_fn}
+      ) do
+
+    fn_args = Enum.map(List.wrap(args), & &1.ref)
+    # wrap args in an n-tuple to avoid nif variadic limitations
+    ref = EXLA.NIF.call(builder, fn_args, body_fn) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
   def convert_element_type(%Op{builder: builder, ref: operand}, dtype) do
     ref = EXLA.NIF.convert_element_type(operand, Shape.dtype_to_charlist(dtype)) |> unwrap!()
     %Op{builder: builder, ref: ref}

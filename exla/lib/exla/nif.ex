@@ -162,6 +162,9 @@ defmodule EXLA.NIF do
   def while(_cond_fn, _body_fn, _init_value),
     do: :erlang.nif_error(:undef)
 
+  def call(_builder, _args, _body_fn),
+    do: :erlang.nif_error(:undef)
+
   def reshape(_operand, _dimensions),
     do: :erlang.nif_error(:undef)
 
