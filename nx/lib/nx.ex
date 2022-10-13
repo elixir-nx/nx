@@ -6844,15 +6844,16 @@ defmodule Nx do
         do: Nx.Shape.normalize_axis(shape, opts[:axis], names),
         else: opts[:axis]
 
-    if axis != nil do
+    if axis do
       axis_size = axis_size(tensor, axis)
       tensor = sort(tensor, axis: axis)
+      half_idx = div(axis_size, 2)
 
       if rem(axis_size, 2) == 1 do
-        res = slice_along_axis(tensor, div(axis_size, 2), 1, axis: axis)
+        res = slice_along_axis(tensor, half_idx, 1, axis: axis)
         if opts[:keep_axis], do: res, else: squeeze(res, axes: [axis])
       else
-        two_elems = slice_along_axis(tensor, div(axis_size, 2) - 1, 2, axis: axis)
+        two_elems = slice_along_axis(tensor, half_idx - 1, 2, axis: axis)
         mean(two_elems, axes: [axis], keep_axes: opts[:keep_axis])
       end
     else
@@ -6861,12 +6862,13 @@ defmodule Nx do
         |> sort()
 
       {tensor_size} = shape(tensor)
+      half_idx = div(tensor_size, 2)
 
       if rem(tensor_size, 2) == 1 do
-        tensor[[div(tensor_size, 2)]]
+        tensor[[half_idx]]
       else
-        tensor[[div(tensor_size, 2) - 1]]
-        |> add(tensor[[div(tensor_size, 2)]])
+        tensor[[half_idx - 1]]
+        |> add(tensor[[half_idx]])
         |> divide(2)
       end
     end
