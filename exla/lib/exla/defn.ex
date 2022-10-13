@@ -551,12 +551,13 @@ defmodule EXLA.Defn do
     {call_args, cache} =
       computation_args |> Enum.map_reduce(cache, &recur_operator(&1, state, &2))
 
+    token = get_token(cache)
+
     {call_body, cache} =
       optional_computation(
         :optional_body,
         List.to_tuple(computation_args),
         default_body,
-        :with_token,
         state,
         cache
       )
@@ -570,7 +571,7 @@ defmodule EXLA.Defn do
           state.builder
       end
 
-    call = EXLA.Op.call(builder, call_args, call_body)
+    call = EXLA.Op.call(builder, token, call_args, call_body)
     token = EXLA.Op.get_tuple_element(call, 0)
     {EXLA.Op.get_tuple_element(call, 1), update_token(cache, token)}
   end
@@ -1472,8 +1473,30 @@ defmodule EXLA.Defn do
     {EXLA.Builder.build(res), update_outfeed(cache, comp_cache)}
   end
 
-  defp optional_computation(name, arg, expr, type, state, cache) do
-    raise "not implemented"
+  defp optional_computation(name, arg, expr, state, cache) do
+    dbg(arg)
+    subbuilder = subbuilder(state.builder, Atom.to_string(name))
+    arg_shape = computation_arg_shape(arg)
+
+    tuple_shape = EXLA.Shape.make_tuple_shape([EXLA.Shape.make_token_shape(), arg_shape])
+    param = EXLA.Op.parameter(subbuilder, 0, tuple_shape, "p0")
+
+    arg_token = EXLA.Op.get_tuple_element(param, 0)
+    arg_param = EXLA.Op.get_tuple_element(param, 1)
+    params = computation_arg_param({arg, arg_param})
+
+    state = %{
+      state
+      | builder: subbuilder,
+        params: Map.new(params),
+        scope_ids: Tree.scope_ids(expr)
+    }
+
+    {res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
+
+    res = EXLA.Op.tuple(subbuilder, [arg_token, res])
+
+    {EXLA.Builder.build(res), update_outfeed(cache, comp_cache)}
   end
 
   defp computation_arg_shape(%{type: type, shape: shape}) do

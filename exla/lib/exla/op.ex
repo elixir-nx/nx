@@ -661,13 +661,19 @@ defmodule EXLA.Op do
 
   def call(
         builder,
+        token,
         args,
         %Computation{ref: body_fn}
       ) do
 
+    %{ref: token_ref} = token
     fn_args = Enum.map(List.wrap(args), & &1.ref)
+
+    args_tuple_ref = EXLA.NIF.tuple(builder, fn_args) |> unwrap!()
+    args_with_token_ref = EXLA.NIF.tuple(builder, [token_ref, args_tuple_ref]) |> unwrap!()
+
     # wrap args in an n-tuple to avoid nif variadic limitations
-    ref = EXLA.NIF.call(builder, fn_args, body_fn) |> unwrap!()
+    ref = EXLA.NIF.call(builder, [args_with_token_ref], body_fn) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
