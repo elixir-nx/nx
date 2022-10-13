@@ -1474,7 +1474,6 @@ defmodule EXLA.Defn do
   end
 
   defp optional_computation(name, arg, expr, state, cache) do
-    dbg(arg)
     subbuilder = subbuilder(state.builder, Atom.to_string(name))
     arg_shape = computation_arg_shape(arg)
 
