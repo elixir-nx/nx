@@ -6748,6 +6748,110 @@ defmodule Nx do
   end
 
   @doc """
+  Returns the mode for the tensor.
+
+  If the `:axis` option is given, it aggregates over
+  that dimension, effectively removing it. `axis: 0`
+  implies aggregating over the highest order dimension
+  and so forth. If the axis is negative, then the axis will
+  be counted from the back. For example, `axis: -1` will
+  always aggregate over the last dimension.
+
+  You may optionally set `:keep_axis` to true, which will
+  retain the rank of the input tensor by setting the averaged
+  axis to size 1.
+
+  ## Examples
+
+      iex> Nx.weighted_mean(Nx.tensor(42), Nx.tensor(2))
+      #Nx.Tensor<
+        f32
+        42.0
+      >
+
+      iex> Nx.weighted_mean(Nx.tensor([1, 2, 3]), Nx.tensor([3, 2, 1]))
+      #Nx.Tensor<
+        f32
+        1.6666666269302368
+      >
+
+  ### Aggregating over an axis
+
+      iex> Nx.weighted_mean(Nx.tensor([1, 2, 3], names: [:x]), Nx.tensor([4, 5, 6]), axis: 0)
+      #Nx.Tensor<
+        f32
+        2.133333444595337
+      >
+
+      iex> Nx.weighted_mean(Nx.tensor([1,2,3], type: :u8, names: [:x]), Nx.tensor([1,3,5]), axis: :x)
+      #Nx.Tensor<
+        f32
+        2.444444417953491
+      >
+
+      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      iex> weights = Nx.tensor([[[0, 1, 2], [1, 1, 0]], [[-1, 1, -1], [1, 1, -1]]])
+      iex> Nx.weighted_mean(t, weights, axis: :x)
+      #Nx.Tensor<
+        f32[y: 2][z: 3]
+        [
+          [7.0, 5.0, -3.0],
+          [7.0, 8.0, 12.0]
+        ]
+      >
+
+      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      iex> weights = Nx.tensor([[[0, 1, 2], [1, 1, 0]], [[-1, 1, -1], [1, 1, -1]]])
+      iex> Nx.weighted_mean(t, weights, axis: -1)
+      #Nx.Tensor<
+        f32[x: 2][y: 2]
+        [
+          [2.6666667461395264, 4.5],
+          [8.0, 9.0]
+        ]
+      >
+
+      iex> t = Nx.iota({3,4})
+      iex> weights = Nx.tensor([1, 2, 3, 4])
+      iex> Nx.weighted_mean(t, weights, axis: 1)
+      #Nx.Tensor<
+        f32[3]
+        [2.0, 6.0, 10.0]
+      >
+
+  ### Keeping axis
+
+      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      iex> weights = Nx.tensor([[[0, 1, 2], [1, 1, 0]], [[-1, 1, -1], [1, 1, -1]]])
+      iex> Nx.weighted_mean(t, weights, axis: -1, keep_axis: true)
+      #Nx.Tensor<
+        f32[x: 2][y: 2][z: 1]
+        [
+          [
+            [2.6666667461395264],
+            [4.5]
+          ],
+          [
+            [8.0],
+            [9.0]
+          ]
+        ]
+      >
+  """
+  @doc type: :aggregation, from_backend: false
+  def mode(tensor, opts \\ []) do
+    opts = keyword!(opts, axis: nil, keep_axis: false)
+    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
+
+    axis =
+      if opts[:axis] != nil,
+        do: Nx.Shape.normalize_axis(shape, opts[:axis], names),
+        else: opts[:axis]
+
+
+  end
+
+  @doc """
   Returns the product for the tensor.
 
   If the `:axes` option is given, it aggregates over
