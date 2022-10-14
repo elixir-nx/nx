@@ -549,7 +549,7 @@ defmodule EXLA.Defn do
     {call_args, cache} = Enum.map_reduce(params, cache, &recur_operator(&1, state, &2))
 
     {call_body, cache} =
-      optional_computation(
+      call_computation_with_token(
         call_args,
         default_body,
         state,
@@ -1458,7 +1458,7 @@ defmodule EXLA.Defn do
     {EXLA.Builder.build(res), update_outfeed(cache, comp_cache)}
   end
 
-  defp optional_computation(arg, expr, state, cache) do
+  defp call_computation_with_token(arg, expr, state, cache) do
     subbuilder = subbuilder(state.builder, "optional_body")
 
     arg_token = EXLA.Op.parameter(subbuilder, 0, EXLA.Shape.make_token_shape(), "p0")
