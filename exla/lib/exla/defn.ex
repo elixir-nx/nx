@@ -547,19 +547,16 @@ defmodule EXLA.Defn do
     params = Enum.take_while(expr.data.args, &(not is_list(&1)))
 
     {call_args, cache} = Enum.map_reduce(params, cache, &recur_operator(&1, state, &2))
-    token = get_token(cache)
 
     {call_body, cache} =
       optional_computation(
-        :optional_body,
         call_args,
-        params,
         default_body,
         state,
         cache
       )
 
-    call = EXLA.Op.call(state.builder.ref, token, call_args, call_body)
+    call = EXLA.Op.call(state.builder, [get_token(cache) | call_args], call_body)
     token = EXLA.Op.get_tuple_element(call, 0)
     {EXLA.Op.get_tuple_element(call, 1), update_token(cache, token)}
   end
@@ -1461,18 +1458,17 @@ defmodule EXLA.Defn do
     {EXLA.Builder.build(res), update_outfeed(cache, comp_cache)}
   end
 
-  defp optional_computation(name, arg, params, expr, state, cache) do
-    subbuilder = subbuilder(state.builder, Atom.to_string(name))
+  defp optional_computation(arg, expr, state, cache) do
+    subbuilder = subbuilder(state.builder, "optional_body")
 
-    arg_shape = arg |> Enum.map(&EXLA.Op.get_shape/1) |> EXLA.Shape.make_tuple_shape()
-    tuple_shape = EXLA.Shape.make_tuple_shape([EXLA.Shape.make_token_shape(), arg_shape])
-    param = EXLA.Op.parameter(subbuilder, 0, tuple_shape, "p0")
-
-    arg_token = EXLA.Op.get_tuple_element(param, 0)
-    arg_param = EXLA.Op.get_tuple_element(param, 1)
+    arg_token = EXLA.Op.parameter(subbuilder, 0, EXLA.Shape.make_token_shape(), "p0")
 
     params =
-      Enum.with_index(arg, fn _, idx -> {idx, EXLA.Op.get_tuple_element(arg_param, idx)} end)
+      arg
+      |> Enum.map(&EXLA.Op.get_shape/1)
+      |> Enum.with_index(fn arg_shape, idx ->
+        {idx, EXLA.Op.parameter(subbuilder, idx + 1, arg_shape, "p#{idx + 1}")}
+      end)
 
     state = %{
       state
