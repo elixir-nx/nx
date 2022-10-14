@@ -542,23 +542,25 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(:optional, %T{data: %Expr{args: args}}, state, cache) do
-    [expr, default_body] = args
+    [call, expr] = args
+    %{data: %{args: args, op: op}} = call
+    key = computation_key(op, args)
 
-    params = expr.data.args
-
-    {call_args, cache} = Enum.map_reduce(params, cache, &recur_operator(&1, state, &2))
+    {call_args, cache} = Enum.map_reduce(args, cache, &recur_operator(&1, state, &2))
 
     {call_body, cache} =
-      call_computation_with_token(
-        call_args,
-        default_body,
-        state,
-        cache
-      )
+      case cache do
+        %{^key => computation} ->
+          {computation, cache}
 
-    call = EXLA.Op.call(state.builder, [get_token(cache) | call_args], call_body)
-    token = EXLA.Op.get_tuple_element(call, 0)
-    {EXLA.Op.get_tuple_element(call, 1), update_token(cache, token)}
+        %{} ->
+          {computation, cache} = token_computation(call_args, expr, state, cache)
+          {computation, Map.put(cache, key, computation)}
+      end
+
+    result = EXLA.Op.call(state.builder, [get_token(cache) | call_args], call_body)
+    token = EXLA.Op.get_tuple_element(result, 0)
+    {EXLA.Op.get_tuple_element(result, 1), update_token(cache, token)}
   end
 
   defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do
@@ -1458,7 +1460,7 @@ defmodule EXLA.Defn do
     {EXLA.Builder.build(res), update_outfeed(cache, comp_cache)}
   end
 
-  defp call_computation_with_token(arg, expr, state, cache) do
+  defp token_computation(arg, expr, state, cache) do
     subbuilder = subbuilder(state.builder, "optional_body")
 
     arg_token = EXLA.Op.parameter(subbuilder, 0, EXLA.Shape.make_token_shape(), "p0")
@@ -1482,6 +1484,16 @@ defmodule EXLA.Defn do
     res = EXLA.Op.tuple(subbuilder, [arg_token, res])
 
     {EXLA.Builder.build(res), update_outfeed(cache, comp_cache)}
+  end
+
+  defp computation_key(op, args) do
+    keys =
+      Enum.map(args, fn
+        %Nx.Tensor{shape: shape, names: names, type: type} -> {type, shape, names}
+        opts -> opts
+      end)
+
+    {op, keys}
   end
 
   defp computation_arg_shape(%{type: type, shape: shape}) do
