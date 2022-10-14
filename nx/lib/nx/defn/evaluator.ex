@@ -104,24 +104,14 @@ defmodule Nx.Defn.Evaluator do
     Map.put(cache, [:while | id], while_cache)
   end
 
-  defp compute_cache(:optional, %{data: %Expr{args: args, id: id}}, state, cache) do
-    [call, expr] = args
+  defp compute_cache(:optional, %{data: %Expr{args: [call, expr], id: id}}, state, cache) do
     %{data: %{args: call_args, op: call_name}} = call
+    computation_cache(:optional, id, call_name, call_args, expr, state, cache)
+  end
 
-    cache = Enum.reduce(call.data.args, cache, &compute_cache(&1, state, &2))
-    key = computation_key(call_name, call_args)
-
-    {optional_expr_cache, cache} =
-      case cache do
-        %{^key => optional_expr_cache} ->
-          {optional_expr_cache, cache}
-
-        %{} ->
-          optional_expr_cache = {expr, init_compute_cache(expr, state)}
-          {optional_expr_cache, Map.put(cache, key, optional_expr_cache)}
-      end
-
-    Map.put(cache, [:optional | id], optional_expr_cache)
+  defp compute_cache(:boundary, %{data: %Expr{args: args, id: id}}, state, cache) do
+    [_soft_hard, key, args, expr] = args
+    computation_cache(:boundary, id, key, args, expr, state, cache)
   end
 
   defp compute_cache(:cond, %{data: %Expr{args: [clauses, last], id: id}}, state, cache) do
@@ -190,6 +180,23 @@ defmodule Nx.Defn.Evaluator do
   defp compute_cache(_op, tensor, state, cache) do
     {_, acc} = Tree.apply_args(tensor, cache, &{&1, compute_cache(&1, state, &2)})
     acc
+  end
+
+  defp computation_cache(op, id, cache_key, args, expr, state, cache) do
+    cache = Enum.reduce(args, cache, &compute_cache(&1, state, &2))
+    key = computation_key(cache_key, args)
+
+    {expr_cache, cache} =
+      case cache do
+        %{^key => expr_cache} ->
+          {expr_cache, cache}
+
+        %{} ->
+          expr_cache = {expr, init_compute_cache(expr, state)}
+          {expr_cache, Map.put(cache, key, expr_cache)}
+      end
+
+    Map.put(cache, [op | id], expr_cache)
   end
 
   defp computation_key(op, args) do
@@ -370,6 +377,15 @@ defmodule Nx.Defn.Evaluator do
       {res, _} = eval(expr, %{state | params: params}, [optional_cache])
       {res, caches}
     end
+  end
+
+  defp eval_apply(:boundary, %{data: %Expr{args: [_, _, args, _], id: id}}, state, caches) do
+    {args, caches} = Enum.map_reduce(args, caches, &eval(&1, state, &2))
+
+    params = Enum.map(args, &fn -> &1 end)
+    {{expr, boundary_cache}, caches} = pop_cache!(caches, [:boundary | id])
+    {res, _} = eval(expr, %{state | params: params}, [boundary_cache])
+    {res, caches}
   end
 
   defp eval_apply(op, ans, state, caches) do

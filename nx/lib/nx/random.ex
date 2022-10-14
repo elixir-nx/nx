@@ -99,6 +99,7 @@ defmodule Nx.Random do
         ]
       >
   """
+  @reuse true
   defn split(key, opts \\ []) do
     assert_key!(key)
     opts = keyword!(opts, parts: 2)

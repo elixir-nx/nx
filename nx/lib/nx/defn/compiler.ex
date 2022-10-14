@@ -244,7 +244,7 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp compile_each_defn({{name, arity} = def, def_meta}, state) do
-    %{defaults: defaults} = def_meta
+    %{defaults: defaults, reuse: reuse} = def_meta
     {{kind, _meta, args, ast}, state} = get_and_normalize_definition(def, state)
 
     defn_name = defn_name(name)
@@ -277,11 +277,32 @@ defmodule Nx.Defn.Compiler do
 
     Module.delete_definition(state.module, def)
 
+    defn_call =
+      if reuse do
+        cache_args =
+          for {arg, i} <- Enum.with_index(all_args),
+              Map.has_key?(defaults, i),
+              do: arg
+
+        quote do
+          Nx.Defn.Expr.boundary(
+            :soft,
+            {unquote(state.module), unquote(name), unquote(arity), unquote(cache_args)},
+            unquote(fun),
+            unquote(fn_args)
+          )
+        end
+      else
+        quote do
+          unquote(defn_name)(unquote_splicing(all_args))
+        end
+      end
+
     entrypoint =
       quote line: state.line do
         Kernel.unquote(kind)(unquote(name)(unquote_splicing(all_args))) do
           if Process.get(Nx.Defn.Compiler) do
-            unquote(defn_name)(unquote_splicing(all_args))
+            unquote(defn_call)
           else
             Nx.Defn.Compiler.__runtime__(unquote(fun), unquote(fn_args))
           end

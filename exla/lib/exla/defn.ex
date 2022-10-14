@@ -563,6 +563,27 @@ defmodule EXLA.Defn do
     {EXLA.Op.get_tuple_element(result, 1), update_token(cache, token)}
   end
 
+  defp cached_recur_operator(:boundary, %T{data: %Expr{args: args}}, state, cache) do
+    [_, key, args, expr] = args
+    key = computation_key(key, args)
+
+    {call_args, cache} = Enum.map_reduce(args, cache, &recur_operator(&1, state, &2))
+
+    {call_body, cache} =
+      case cache do
+        %{^key => computation} ->
+          {computation, cache}
+
+        %{} ->
+          {computation, cache} = token_computation(call_args, expr, state, cache)
+          {computation, Map.put(cache, key, computation)}
+      end
+
+    result = EXLA.Op.call(state.builder, [get_token(cache) | call_args], call_body)
+    token = EXLA.Op.get_tuple_element(result, 0)
+    {EXLA.Op.get_tuple_element(result, 1), update_token(cache, token)}
+  end
+
   defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do
     {op, cache} = recur_operator(expr, state, cache)
     {_, cache} = recur_operator(token, state, cache)

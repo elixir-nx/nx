@@ -3946,6 +3946,48 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
+  describe "boundary" do
+    # split uses @reuse true which is a boundary
+    test "Nx.Random.split/2" do
+      key = Nx.Random.key(33)
+
+      two_keys = EXLA.jit(&Nx.Random.split/1).(key)
+      multiple_keys = EXLA.jit(&Nx.Random.split(&1, 12)).(key)
+
+      assert_equal(
+        two_keys,
+        Nx.tensor(
+          [
+            [671_281_441, 790_285_293],
+            [234_515_160, 3_878_582_434]
+          ],
+          type: :u32
+        )
+      )
+
+      assert_equal(
+        multiple_keys,
+        Nx.tensor(
+          [
+            [966_561_810, 334_783_285],
+            [1_262_072_629, 1_899_563_600],
+            [3_750_833_143, 3_406_870_597],
+            [2_539_864_401, 3_552_854_032],
+            [201_687_315, 590_048_257],
+            [3_348_546_826, 4_091_268_549],
+            [1_610_907_819, 3_073_378_539],
+            [3_054_273_782, 2_286_163_366],
+            [4_120_769_120, 1_468_859_077],
+            [2_405_343_452, 1_650_615_538],
+            [4_063_810_472, 2_490_879_298],
+            [259_087_434, 3_260_250_733]
+          ],
+          type: :u32
+        )
+      )
+    end
+  end
+
   describe "cholesky" do
     defn cholesky(t), do: Nx.LinAlg.cholesky(t)
 

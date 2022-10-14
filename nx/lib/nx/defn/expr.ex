@@ -138,7 +138,7 @@ defmodule Nx.Defn.Expr do
       end
 
     clauses = Enum.zip(preds, exprs)
-    flatten_to_composite(out, context, exprs, &expr(&1, context, :cond, [clauses, last]))
+    flatten_to_composite(out, context, last, &expr(&1, context, :cond, [clauses, last]))
   end
 
   defp broadcast_clause([type = last | exprs]) do
@@ -182,9 +182,9 @@ defmodule Nx.Defn.Expr do
   Creates a `while` tensor expression.
   """
   def while(initial, context, arg, condition, body) do
-    [flatten_initial, flatten_arg, flatten_body] = clauses = flatten_clauses([initial, arg, body])
+    [flatten_initial, flatten_arg, flatten_body] = flatten_clauses([initial, arg, body])
     args = [flatten_initial, flatten_arg, condition, flatten_body]
-    flatten_to_composite(initial, context, clauses, &expr(&1, context, :while, args))
+    flatten_to_composite(initial, context, flatten_initial, &expr(&1, context, :while, args))
   end
 
   defp flatten_clauses(clauses) do
@@ -196,20 +196,20 @@ defmodule Nx.Defn.Expr do
     end)
   end
 
-  defp flatten_to_composite(out, context, [head | _], fun) when is_tuple(head) do
-    size = tuple_size(head)
+  defp flatten_to_composite(out, context, flatten, fun) when is_tuple(flatten) do
+    size = tuple_size(flatten)
     expr = fun.(tuple_out(size))
 
     {out, {[], ^size}} =
-      Composite.traverse(out, {Tuple.to_list(head), 0}, fn _, {[head | tail], i} ->
+      Composite.traverse(out, {Tuple.to_list(flatten), 0}, fn _, {[head | tail], i} ->
         {expr(head, context, :elem, [expr, i]), {tail, i + 1}}
       end)
 
     out
   end
 
-  defp flatten_to_composite(out, _context, [head | _], fun) do
-    {out, []} = Composite.traverse(out, [fun.(head)], fn _, [head | tail] -> {head, tail} end)
+  defp flatten_to_composite(out, _context, flatten, fun) do
+    {out, []} = Composite.traverse(out, [fun.(flatten)], fn _, [head | tail] -> {head, tail} end)
     out
   end
 
@@ -249,6 +249,15 @@ defmodule Nx.Defn.Expr do
     size = length(token.hooks)
     token = expr(%T{shape: {}, type: {:tuple, size}, names: []}, nil, :token, [token])
     attach_token(token, expr)
+  end
+
+  @doc false
+  def boundary(type, key, fun, args) do
+    {params, context} = Enum.map_reduce(args, nil, &to_param_expr(&1, :root, &2))
+    result = apply(fun, params)
+    [flatten_result] = flatten_clauses([result])
+    args = [type, key, Composite.flatten_list(args), flatten_result]
+    flatten_to_composite(result, context, flatten_result, &expr(&1, context, :boundary, args))
   end
 
   @doc false
@@ -1062,11 +1071,11 @@ defmodule Nx.Defn.Expr do
     Composite.traverse(container_or_tensor, &to_expr/1)
   end
 
-  defp to_param_expr(container_or_tensor, context_label) do
+  defp to_param_expr(container_or_tensor, context_label, context_acc \\ nil) do
     context = new_context(context_label)
 
     {arg, {_, context}} =
-      Composite.traverse(container_or_tensor, {0, nil}, fn expr, {counter, acc} ->
+      Composite.traverse(container_or_tensor, {0, context_acc}, fn expr, {counter, acc} ->
         {parameter(expr, context, counter), {counter + 1, merge_context!(expr, acc)}}
       end)
 

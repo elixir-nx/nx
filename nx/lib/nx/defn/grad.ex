@@ -118,6 +118,9 @@ defmodule Nx.Defn.Grad do
   defp bypass_arg(%{data: %{op: :optional, args: [call, expr]}}, _params),
     do: {expr, call.data.args}
 
+  defp bypass_arg(%{data: %{op: :boundary, args: [_, _, args, expr]}}, _params),
+    do: {expr, args}
+
   defp bypass_arg(%{data: %{op: :parameter, args: [i]}}, [_ | _] = params),
     do: {Enum.fetch!(params, i), nil}
 

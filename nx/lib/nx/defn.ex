@@ -41,11 +41,11 @@ defmodule Nx.Defn do
   ## Operators
 
   `defn` attempts to keep as close to the Elixir semantics as
-  possible but that's not achievable. For example, mathematical
-  and bitwise operators (`+`, `-`, `&&&`, `<<<`, etc.) in Elixir
-  work on numbers, which means mapping them to tensors is
-  straight-forward and they largely preserve the same semantics,
-  except they are now multi-dimensional.
+  possible. For example, mathematical and bitwise operators
+  (`+`, `-`, `&&&`, `<<<`, etc.) in Elixir work on numbers,
+  which means mapping them to tensors is straight-forward and
+  they largely preserve the same semantics, except they are
+  now multi-dimensional.
 
   On the other hand, the logical operators `and`, `or`, and `not`
   work with booleans in Elixir (`true` and `false`), which map
@@ -97,6 +97,32 @@ defmodule Nx.Defn do
 
   For those interested in writing custom compilers, see `Nx.Defn.Compiler`.
 
+  ### Reuse
+
+  `defn` expressions are inlined by default. For example, if you
+  define your own `softmax` function:
+
+      defn softmax(t) do
+        t
+        |> Nx.exp(t)
+        |> then(& &1 / Nx.sum(&1))
+      end
+
+  Every time you call `softmax`, its contents will be inlined when
+  JIT compiled. Typically compilers can perform more optimizations
+  when all code is inlined, but inlining all functions can increase
+  the size of the code drastically, which increases compilation time.
+
+  In such cases, you may consider tagging a numerical definition with
+  `@reuse true`:
+
+      @reuse true
+      defn softmax do
+        ...
+      end
+
+  Now `Nx` will attempt to reuse nodes whenever possible.
+
   ## Invoking custom Elixir code
 
   Inside `defn` you can only call other `defn` functions and
@@ -141,18 +167,6 @@ defmodule Nx.Defn do
   such as options. `defn` expects all inputs to be tensors, with the
   exception of a default argument (declared with `\\`) which will be
   treated as options.
-
-  For example, imagine you want to support options where the :axis
-  key is required. While you can't invoke `Keyword` directly, you
-  can do it via a transform:
-
-      defn sum_axis(t, opts \\ []) do
-        opts = keyword!(opts, [:axis])
-        axis = get_axis(opts)
-        Nx.sum(t, axes: [axis])
-      end
-
-      deftransformp get_axis(opts), do: Keyword.fetch!(opts, :axis)
 
   ## Inputs and outputs types
 
@@ -893,10 +907,21 @@ defmodule Nx.Defn do
         %{}
       end
 
+    reuse = Module.delete_attribute(module, :reuse)
+
+    if reuse && type != :numerical do
+      IO.warn(
+        "@reuse true is not available for #{name}/#{arity}. " <>
+          "@reuse true is only available before defn and defnp",
+        []
+      )
+    end
+
     current_export = %{
       type: type,
       kind: kind,
-      defaults: defaults
+      defaults: defaults,
+      reuse: reuse == true
     }
 
     exports =

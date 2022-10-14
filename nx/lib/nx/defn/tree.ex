@@ -175,6 +175,19 @@ defmodule Nx.Defn.Tree do
     {[call, expr], acc}
   end
 
+  def apply_args(%T{data: %Expr{op: :boundary, args: args}}, type, acc, fun) do
+    [soft_or_hard, key, args, expr] = args
+    {args, acc} = Enum.map_reduce(args, acc, fun)
+
+    {expr, acc} =
+      case type do
+        :all -> fun.(expr, acc)
+        :scope -> {expr, acc}
+      end
+
+    {[soft_or_hard, key, args, expr], acc}
+  end
+
   def apply_args(%T{data: %Expr{op: :token, args: [token]}}, _type, acc, fun) do
     {hooks, acc} =
       Enum.map_reduce(token.hooks, acc, fn %{expr: expr} = token, acc ->
