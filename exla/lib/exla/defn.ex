@@ -541,15 +541,24 @@ defmodule EXLA.Defn do
     {fun_computation(name, args, expr, type, state), cache}
   end
 
-  defp cached_recur_operator(:optional, %T{data: %Expr{args: [expr, default]}}, state, cache) do
-    {args, cache} =
-      expr.data.args
-      |> Enum.take_while(&(not is_list(&1)))
-      |> Enum.map_reduce(cache, &recur_operator(&1, state, &2))
+  defp cached_recur_operator(:optional, %T{data: %Expr{args: args}}, state, cache) do
+    [expr, default_body] = args
 
-    params = Enum.with_index(args, fn arg, index -> {index, arg} end)
-    state = %{state | params: Map.new(params), scope_ids: Tree.scope_ids(default)}
-    recur_operator(default, state, cache)
+    params = expr.data.args
+
+    {call_args, cache} = Enum.map_reduce(params, cache, &recur_operator(&1, state, &2))
+
+    {call_body, cache} =
+      call_computation_with_token(
+        call_args,
+        default_body,
+        state,
+        cache
+      )
+
+    call = EXLA.Op.call(state.builder, [get_token(cache) | call_args], call_body)
+    token = EXLA.Op.get_tuple_element(call, 0)
+    {EXLA.Op.get_tuple_element(call, 1), update_token(cache, token)}
   end
 
   defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do
@@ -1445,6 +1454,32 @@ defmodule EXLA.Defn do
       else
         to_type(res, type)
       end
+
+    {EXLA.Builder.build(res), update_outfeed(cache, comp_cache)}
+  end
+
+  defp call_computation_with_token(arg, expr, state, cache) do
+    subbuilder = subbuilder(state.builder, "optional_body")
+
+    arg_token = EXLA.Op.parameter(subbuilder, 0, EXLA.Shape.make_token_shape(), "p0")
+
+    params =
+      arg
+      |> Enum.map(&EXLA.Op.get_shape/1)
+      |> Enum.with_index(fn arg_shape, idx ->
+        {idx, EXLA.Op.parameter(subbuilder, idx + 1, arg_shape, "p#{idx + 1}")}
+      end)
+
+    state = %{
+      state
+      | builder: subbuilder,
+        params: Map.new(params),
+        scope_ids: Tree.scope_ids(expr)
+    }
+
+    {res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
+
+    res = EXLA.Op.tuple(subbuilder, [arg_token, res])
 
     {EXLA.Builder.build(res), update_outfeed(cache, comp_cache)}
   end

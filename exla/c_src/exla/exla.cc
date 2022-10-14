@@ -1370,6 +1370,33 @@ ERL_NIF_TERM while_loop(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
+ERL_NIF_TERM call(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  xla::XlaBuilder **builder;
+  xla::XlaComputation *fn;
+  // We will always wrap fn to expect a single tuple-arg
+  // which contains all args because we can't call xla::Call
+  // in a dynamically variadic way.
+  std::vector<xla::XlaOp> args;
+
+  if (!exla::nif::get<xla::XlaBuilder*>(env, argv[0], builder)) {
+    return exla::nif::error(env, "Unable to get call builder.");
+  }
+  if (!exla::nif::get_list<xla::XlaOp>(env, argv[1], args)) {
+    return exla::nif::error(env, "Unable to get call args.");
+  }
+  if (!exla::nif::get<xla::XlaComputation>(env, argv[2], fn)) {
+    return exla::nif::error(env, "Unable to get body computation.");
+  }
+
+  xla::XlaOp op = xla::Call(*builder, *fn, args);
+
+  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
+}
+
 // Shape/Type Manipulation
 
 ERL_NIF_TERM reshape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -2417,6 +2444,7 @@ static ErlNifFunc exla_funcs[] = {
   {"scatter", 8, scatter},
   {"map", 4, map},
   {"while", 3, while_loop},
+  {"call", 3, call},
   // Shape/Type Manipulation
   {"broadcast_in_dim", 3, broadcast_in_dim},
   {"reshape", 2, reshape},
