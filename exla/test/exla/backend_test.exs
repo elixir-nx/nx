@@ -1,5 +1,5 @@
 defmodule EXLA.BackendTest do
-  use ExUnit.Case, async: true
+  use EXLA.Case, async: true
 
   setup do
     Nx.default_backend(EXLA.Backend)
@@ -113,7 +113,7 @@ defmodule EXLA.BackendTest do
              """
   end
 
-  describe "within JIT" do
+  describe "within EXLA compiler" do
     import Nx.Defn
 
     # This is not really meant to work in practice,
@@ -123,8 +123,15 @@ defmodule EXLA.BackendTest do
 
     deftransformp(double_transform(x), do: Nx.backend_transfer(Nx.Defn.Kernel.*(x, x)))
 
-    test "invokes from within defn" do
+    test "works within defn" do
       assert double(Nx.tensor(11)) |> Nx.to_number() == 121
+    end
+  end
+
+  describe "within Nx evaluator" do
+    test "works with optional" do
+      fun = Nx.Defn.jit(&Nx.LinAlg.determinant/1, compiler: Nx.Defn.Evaluator)
+      assert_equal(fun.(Nx.tensor([[1, 2], [3, 4]])), Nx.tensor(-2.0))
     end
   end
 

@@ -368,12 +368,12 @@ defmodule Nx.Defn.Evaluator do
   defp eval_apply(:optional, %{data: %Expr{args: [call, _], id: id}}, state, caches) do
     {args, caches} = Tree.apply_args(call, caches, &eval(&1, state, &2))
     backend = Nx.Shared.list_impl!(args)
+    {{expr, optional_cache}, caches} = pop_cache!(caches, [:optional | id])
 
     if function_exported?(backend, call.data.op, length(args) + 1) do
       {apply(backend, call.data.op, [call | args]), caches}
     else
       params = Enum.map(args, &fn -> &1 end)
-      {{expr, optional_cache}, caches} = pop_cache!(caches, [:optional | id])
       {res, _} = eval(expr, %{state | params: params}, [optional_cache])
       {res, caches}
     end
