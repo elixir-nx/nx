@@ -105,6 +105,25 @@ defmodule Nx.Random do
     threefry2x32(key, {num, 2})
   end
 
+  @doc """
+  Folds in new data to a PRNG key.
+  """
+  defn fold_in(key, data) do
+    assert_key!(key)
+
+    count = key(data)
+    reshaped_key = Nx.reshape(key, {2, 1})
+
+    reshaped_count =
+      count
+      |> Nx.reshape({:auto})
+      |> Nx.as_type({:u, 32})
+
+    threefry2x32(reshaped_key, reshaped_count)
+    |> Nx.reshape(Nx.shape(count))
+    |> Nx.as_type({:u, 32})
+  end
+
   defnp threefry2x32(key, shape) do
     case shape |> Nx.size() |> rem(2) do
       0 ->
