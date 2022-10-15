@@ -406,7 +406,9 @@ defmodule Nx.Defn.Expr do
       case internal do
         {first..last//step, internal_unroll} ->
           gen_initial = {{tensor(first), generator}, initial}
-          {{{index_param, generator_param}, arg}, context} = to_param_expr(gen_initial, new_context(:while))
+
+          {{{index_param, generator_param}, arg}, context} =
+            to_param_expr(gen_initial, new_context(:while))
 
           condition =
             if step > 0 do
