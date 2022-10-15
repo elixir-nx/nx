@@ -253,7 +253,8 @@ defmodule Nx.Defn.Expr do
 
   @doc false
   def boundary(type, key, fun, args) do
-    {params, context} = Enum.map_reduce(args, nil, &to_param_expr(&1, :root, &2))
+    param_context = new_context(:boundary)
+    {params, context} = Enum.map_reduce(args, nil, &to_param_expr(&1, param_context, &2))
     result = apply(fun, params)
     [flatten_result] = flatten_clauses([result])
     args = [type, key, Composite.flatten_list(args), flatten_result]
@@ -329,7 +330,7 @@ defmodule Nx.Defn.Expr do
               "options are not supported on while with conditions, only with generators, got: #{inspect(opts)}"
         end
 
-        {arg, context} = to_param_expr(initial, :while)
+        {arg, context} = to_param_expr(initial, new_context(:while))
         {condition, body} = condition_body.(arg)
         condition = to_pred(condition, line, file, :while)
         body = to_container_expr(body)
@@ -405,7 +406,7 @@ defmodule Nx.Defn.Expr do
       case internal do
         {first..last//step, internal_unroll} ->
           gen_initial = {{tensor(first), generator}, initial}
-          {{{index_param, generator_param}, arg}, context} = to_param_expr(gen_initial, :while)
+          {{{index_param, generator_param}, arg}, context} = to_param_expr(gen_initial, new_context(:while))
 
           condition =
             if step > 0 do
@@ -1071,15 +1072,14 @@ defmodule Nx.Defn.Expr do
     Composite.traverse(container_or_tensor, &to_expr/1)
   end
 
-  defp to_param_expr(container_or_tensor, context_label, context_acc \\ nil) do
-    context = new_context(context_label)
-
-    {arg, {_, context}} =
+  defp to_param_expr(container_or_tensor, context_param, context_acc \\ nil) do
+    {arg, {_, context_acc}} =
       Composite.traverse(container_or_tensor, {0, context_acc}, fn expr, {counter, acc} ->
-        {parameter(expr, context, counter), {counter + 1, merge_context!(expr, acc)}}
+        expr = to_expr(expr)
+        {parameter(expr, context_param, counter), {counter + 1, merge_context!(expr, acc)}}
       end)
 
-    {arg, context}
+    {arg, context_acc}
   end
 
   defp tuple_out(size) do
