@@ -6840,37 +6840,44 @@ defmodule Nx do
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
 
     axis =
-      if opts[:axis] != nil,
-        do: Nx.Shape.normalize_axis(shape, opts[:axis], names),
-        else: opts[:axis]
-
-    if axis do
-      axis_size = axis_size(tensor, axis)
-      tensor = sort(tensor, axis: axis)
-      half_idx = div(axis_size, 2)
-
-      if rem(axis_size, 2) == 1 do
-        res = slice_along_axis(tensor, half_idx, 1, axis: axis)
-        if opts[:keep_axis], do: res, else: squeeze(res, axes: [axis])
-      else
-        two_elems = slice_along_axis(tensor, half_idx - 1, 2, axis: axis)
-        mean(two_elems, axes: [axis], keep_axes: opts[:keep_axis])
+      if axis_opt = opts[:axis] do
+        Nx.Shape.normalize_axis(shape, axis_opt, names)
       end
-    else
-      tensor =
-        flatten(tensor)
-        |> sort()
 
-      {tensor_size} = shape(tensor)
-      half_idx = div(tensor_size, 2)
-
-      if rem(tensor_size, 2) == 1 do
-        tensor[[half_idx]]
+    t =
+      if axis do
+        sort(tensor, axis: axis)
       else
-        tensor[[half_idx - 1]]
+        tensor |> flatten() |> sort()
+      end
+
+    axis_size =
+      if axis do
+        axis_size(tensor, axis)
+      else
+        size(tensor)
+      end
+
+    half_idx = div(axis_size, 2)
+
+    axis_size_is_odd = rem(axis_size, 2) == 1
+
+    cond do
+      axis != nil and axis_size_is_odd ->
+        res = slice_along_axis(t, half_idx, 1, axis: axis)
+        if opts[:keep_axis], do: res, else: squeeze(res, axes: [axis])
+
+      axis != nil ->
+        two_elems = slice_along_axis(t, half_idx - 1, 2, axis: axis)
+        mean(two_elems, axes: [axis], keep_axes: opts[:keep_axis])
+
+      axis == nil and axis_size_is_odd ->
+        t[[half_idx]]
+
+      :otherwise ->
+        t[[half_idx - 1]]
         |> add(tensor[[half_idx]])
         |> divide(2)
-      end
     end
   end
 
