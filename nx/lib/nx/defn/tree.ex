@@ -181,7 +181,7 @@ defmodule Nx.Defn.Tree do
 
     {expr, acc} =
       case type do
-        :all -> fun.(expr, acc)
+        :all -> Composite.traverse(expr, acc, fun)
         :scope -> {expr, acc}
       end
 

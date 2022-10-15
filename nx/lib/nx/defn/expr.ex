@@ -257,7 +257,7 @@ defmodule Nx.Defn.Expr do
     {params, context} = Enum.map_reduce(args, nil, &to_param_expr(&1, param_context, &2))
     result = apply(fun, params)
     [flatten_result] = flatten_clauses([result])
-    args = [type, key, Composite.flatten_list(args), flatten_result]
+    args = [type, key, args |> Composite.flatten_list() |> Enum.map(&to_expr/1), flatten_result]
     flatten_to_composite(result, context, flatten_result, &expr(&1, context, :boundary, args))
   end
 
