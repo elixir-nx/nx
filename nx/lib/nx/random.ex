@@ -127,10 +127,16 @@ defmodule Nx.Random do
   defn fold_in(key, data) do
     assert_key!(key)
 
-    key(data)
-    |> Nx.reshape({2, 1})
-    |> threefry2x32_20(key)
-    |> Nx.reshape({2})
+    case Nx.shape(data) do
+      {} ->
+        key(data)
+        |> Nx.reshape({2, 1})
+        |> threefry2x32_20(key)
+
+      shape ->
+        raise ArgumentError,
+              "expected data to be a scalar, got tensor with shape #{inspect(shape)}"
+    end
   end
 
   defnp threefry2x32(key, shape) do
@@ -155,10 +161,7 @@ defmodule Nx.Random do
 
     key1 = ks[0]
     key2 = ks[1]
-
-    xs1 = xs[0] + key1
-    xs2 = xs[1] + key2
-    xs = {xs1, xs2}
+    xs = {xs[0] + key1, xs[1] + key2}
 
     ks = {
       key2,
@@ -174,7 +177,7 @@ defmodule Nx.Random do
         {x + Nx.tensor(1, type: :u32), rolled_loop_step(x, state)}
       end
 
-    Nx.stack([nx1, nx2])
+    Nx.concatenate([nx1, nx2], axis: 0)
   end
 
   defnp apply_round({xs1, xs2}, rot) do
@@ -536,10 +539,8 @@ defmodule Nx.Random do
         :ok
 
       _ ->
-        raise(
-          ArgumentError,
-          "expected key to have shape {2}, got tensor with shape #{inspect(shape)}"
-        )
+        raise ArgumentError,
+              "expected key to have shape {2}, got tensor with shape #{inspect(shape)}"
     end
 
     case type do
