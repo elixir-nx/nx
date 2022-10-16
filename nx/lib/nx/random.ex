@@ -127,28 +127,19 @@ defmodule Nx.Random do
   defn fold_in(key, data) do
     assert_key!(key)
 
-    count = key(data)
-    reshaped_key = Nx.reshape(key, {2, 1})
-
-    reshaped_count =
-      count
-      |> Nx.reshape({:auto})
-      |> Nx.as_type({:u, 32})
-
-    threefry2x32(reshaped_key, reshaped_count)
-    |> Nx.reshape(Nx.shape(count))
-    |> Nx.as_type({:u, 32})
+    threefry2x32(key, key(data))
   end
 
   defnp threefry2x32(key, shape) do
     case shape |> Nx.size() |> rem(2) do
       0 ->
-        Nx.iota({2, div(Nx.size(shape), 2)}, type: :u32)
+        shape
+        |> Nx.reshape({2, :auto})
         |> threefry2x32_20(key)
         |> Nx.reshape(shape)
 
       1 ->
-        Nx.concatenate([Nx.iota({Nx.size(shape)}, type: :u32), Nx.tensor([0], type: :u32)])
+        Nx.concatenate([Nx.flatten(shape), Nx.tensor([0], type: :u32)])
         |> Nx.reshape({2, :auto})
         |> threefry2x32_20(key)
         |> Nx.flatten()
