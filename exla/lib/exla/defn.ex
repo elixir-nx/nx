@@ -599,6 +599,22 @@ defmodule EXLA.Defn do
     {EXLA.Op.tuple(state.builder, []), cache}
   end
 
+  # There is a bug in XLA where a reshape after a iota yields slow
+  # to compile trees. So we merge them when there is no axis on iota.
+  defp cached_recur_operator(
+      :reshape,
+         %T{
+           type: type,
+           shape: shape,
+           data: %Expr{args: [%T{data: %Expr{op: :iota, args: [nil]}}]}
+         },
+         state,
+         cache
+       ) do
+    shape = EXLA.Shape.make_shape(type, shape)
+    {EXLA.Lib.iota(state.builder, shape, nil), cache}
+  end
+
   defp cached_recur_operator(op, expr, state, cache) do
     {args, cache} = Tree.apply_args(expr, cache, &recur_operator(&1, state, &2))
     {to_operator(op, args, expr, state), cache}
