@@ -602,7 +602,7 @@ defmodule EXLA.Defn do
   # There is a bug in XLA where a reshape after a iota yields slow
   # to compile trees. So we merge them when there is no axis on iota.
   defp cached_recur_operator(
-      :reshape,
+         :reshape,
          %T{
            type: type,
            shape: shape,
