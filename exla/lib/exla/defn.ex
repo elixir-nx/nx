@@ -599,8 +599,7 @@ defmodule EXLA.Defn do
     {EXLA.Op.tuple(state.builder, []), cache}
   end
 
-  # There is a bug in XLA where a reshape after a iota yields slow
-  # to compile trees. So we merge them when there is no axis on iota.
+  # Avoid double reshape of iotas.
   defp cached_recur_operator(
          :reshape,
          %T{
