@@ -104,7 +104,7 @@ defmodule Nx.Random do
 
     Nx.iota({2, num}, type: :u32)
     |> threefry2x32_20(key)
-    |> Nx.reshape({:auto, 2})
+    |> Nx.reshape({num, 2})
   end
 
   defnp threefry2x32(key, count) do
