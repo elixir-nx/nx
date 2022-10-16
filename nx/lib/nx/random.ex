@@ -105,6 +105,41 @@ defmodule Nx.Random do
     threefry2x32(key, {num, 2})
   end
 
+  @doc """
+  Folds in new data to a PRNG key.
+
+  ## Examples
+
+      iex> key = Nx.Random.key(0)
+      iex> Nx.Random.fold_in(key, 100)
+      #Nx.Tensor<
+        u32[2]
+        [928981903, 3453687069]
+      >
+
+      iex> key = Nx.Random.key(0)
+      iex> Nx.Random.fold_in(key, 1000)
+      #Nx.Tensor<
+        u32[2]
+        [928981903, 3453687069]
+      >
+  """
+  defn fold_in(key, data) do
+    assert_key!(key)
+
+    count = key(data)
+    reshaped_key = Nx.reshape(key, {2, 1})
+
+    reshaped_count =
+      count
+      |> Nx.reshape({:auto})
+      |> Nx.as_type({:u, 32})
+
+    threefry2x32(reshaped_key, reshaped_count)
+    |> Nx.reshape(Nx.shape(count))
+    |> Nx.as_type({:u, 32})
+  end
+
   defnp threefry2x32(key, shape) do
     case shape |> Nx.size() |> rem(2) do
       0 ->
@@ -123,8 +158,7 @@ defmodule Nx.Random do
   end
 
   defnp threefry2x32_20(xs, ks) do
-    rotations =
-      {Nx.tensor([13, 15, 26, 6], type: :u8), Nx.tensor([17, 29, 16, 24], type: :u8)}
+    rotations = {Nx.tensor([13, 15, 26, 6], type: :u8), Nx.tensor([17, 29, 16, 24], type: :u8)}
 
     key1 = ks[0]
     key2 = ks[1]
