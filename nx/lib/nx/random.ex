@@ -110,34 +110,27 @@ defmodule Nx.Random do
 
   ## Examples
 
-      iex> key = Nx.Random.key(0)
-      iex> Nx.Random.fold_in(key, 100)
+      iex> key = Nx.Random.key(42)
+      iex> Nx.Random.fold_in(key, 99)
       #Nx.Tensor<
         u32[2]
-        [928981903, 3453687069]
+        [2015327502, 1351855566]
       >
 
-      iex> key = Nx.Random.key(0)
-      iex> Nx.Random.fold_in(key, 1000)
+      iex> key = Nx.Random.key(42)
+      iex> Nx.Random.fold_in(key, 1234)
       #Nx.Tensor<
         u32[2]
-        [928981903, 3453687069]
+        [1356445167, 2917756949]
       >
   """
   defn fold_in(key, data) do
     assert_key!(key)
 
-    count = key(data)
-    reshaped_key = Nx.reshape(key, {2, 1})
-
-    reshaped_count =
-      count
-      |> Nx.reshape({:auto})
-      |> Nx.as_type({:u, 32})
-
-    threefry2x32(reshaped_key, reshaped_count)
-    |> Nx.reshape(Nx.shape(count))
-    |> Nx.as_type({:u, 32})
+    key(data)
+    |> Nx.reshape({2, 1})
+    |> threefry2x32_20(key)
+    |> Nx.reshape({2})
   end
 
   defnp threefry2x32(key, shape) do
