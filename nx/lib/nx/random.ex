@@ -102,24 +102,28 @@ defmodule Nx.Random do
   defn split(key, num \\ 2) do
     assert_key!(key)
 
-    key
-    |> threefry2x32(Nx.iota({num, 2}))
-    |> Nx.as_type({:u, 32})
+    Nx.iota({2, num}, type: :u32)
+    |> threefry2x32_20(key)
+    |> Nx.reshape({:auto, 2})
   end
 
   defnp threefry2x32(key, count) do
-    padding =
-      Nx.size(count)
-      |> rem(2)
+    case count |> Nx.size() |> rem(2) do
+      0 ->
+        count
+        |> Nx.reshape({2, :auto})
+        |> threefry2x32_20(key)
+        |> Nx.reshape(count)
 
-    Nx.flatten(count)
-    |> Nx.pad(0, [{0, padding, 0}])
-    |> Nx.reshape({2, :auto})
-    |> Nx.as_type({:u, 32})
-    |> threefry2x32_20(key)
-    |> Nx.flatten()
-    |> Nx.pad(0, [{0, -padding, 0}])
-    |> Nx.reshape(count)
+      1 ->
+        Nx.flatten(count)
+        |> Nx.pad(0, [{0, 1, 0}])
+        |> Nx.reshape({2, :auto})
+        |> threefry2x32_20(key)
+        |> Nx.flatten()
+        |> Nx.pad(0, [{0, -1, 0}])
+        |> Nx.reshape(count)
+    end
   end
 
   defnp threefry2x32_20(xs, ks) do
@@ -189,7 +193,7 @@ defmodule Nx.Random do
     case bit_width do
       64 ->
         bits =
-          threefry2x32(key, Nx.iota({Nx.size(shape) * 2}))
+          threefry2x32(key, Nx.iota({Nx.size(shape) * 2}, type: {:u, 32}))
           |> Nx.reshape({2, :auto})
           |> Nx.as_type({:u, 64})
 
@@ -197,11 +201,10 @@ defmodule Nx.Random do
         Nx.reshape(bits, shape)
 
       32 ->
-        threefry2x32(key, Nx.iota(shape, type: {:s, 64}))
-        |> Nx.as_type({:u, 32})
+        threefry2x32(key, Nx.iota(shape, type: {:u, 32}))
 
       _ ->
-        threefry2x32(key, Nx.iota(shape, type: {:s, 64}))
+        threefry2x32(key, Nx.iota(shape, type: {:u, 32}))
         |> Nx.as_type({:u, bit_width})
     end
   end
