@@ -78,7 +78,7 @@ defmodule Nx.Random do
   ## Examples
 
       iex> key = Nx.Random.key(1701)
-      iex> Nx.Random.split(key, 2)
+      iex> Nx.Random.split(key)
       #Nx.Tensor<
         u32[2][2]
         [
@@ -88,7 +88,7 @@ defmodule Nx.Random do
       >
 
       iex> key = Nx.Random.key(999999999999)
-      iex> Nx.Random.split(key, 4)
+      iex> Nx.Random.split(key, parts: 4)
       #Nx.Tensor<
         u32[4][2]
         [
@@ -99,10 +99,10 @@ defmodule Nx.Random do
         ]
       >
   """
-  defn split(key, num \\ 2) do
+  defn split(key, opts \\ []) do
     assert_key!(key)
-
-    threefry2x32(key, {num, 2})
+    opts = keyword!(opts, parts: 2)
+    threefry2x32(key, {opts[:parts], 2})
   end
 
   @doc """
@@ -123,40 +123,67 @@ defmodule Nx.Random do
         u32[2]
         [1356445167, 2917756949]
       >
+
+      iex> key = Nx.Random.key(42)
+      iex> Nx.Random.fold_in(key, Nx.tensor([[1, 99], [1234, 13]]))
+      #Nx.Tensor<
+        u32[2][2][2]
+        [
+          [
+            [64467757, 2916123636],
+            [2015327502, 1351855566]
+          ],
+          [
+            [1356445167, 2917756949],
+            [3514951389, 229662949]
+          ]
+        ]
+      >
   """
+
   defn fold_in(key, data) do
     assert_key!(key)
 
-    case Nx.shape(data) do
-      {} ->
-        key(data)
-        |> Nx.reshape({2, 1})
-        |> threefry2x32_20(key)
+    k1 = Nx.right_shift(data, 32)
+    k2 = Nx.bitwise_and(data, 0xFFFFFFFF)
 
-      shape ->
-        raise ArgumentError,
-              "expected data to be a scalar, got tensor with shape #{inspect(shape)}"
-    end
+    {x1, x2} =
+      Nx.stack([k1, k2])
+      |> Nx.reshape({2, :auto})
+      |> Nx.as_type(:u32)
+      |> threefry2x32_20_pair(key)
+
+    [x1, x2]
+    |> Nx.stack(axis: -1)
+    |> Nx.reshape(fold_shape(Nx.shape(data)))
+  end
+
+  deftransformp fold_shape(shape) do
+    Tuple.insert_at(shape, tuple_size(shape), 2)
   end
 
   defnp threefry2x32(key, shape) do
     case shape |> Nx.size() |> rem(2) do
       0 ->
         Nx.iota({2, div(Nx.size(shape), 2)}, type: :u32)
-        |> threefry2x32_20(key)
+        |> threefry2x32_20_concat(key)
         |> Nx.reshape(shape)
 
       1 ->
         Nx.concatenate([Nx.iota({Nx.size(shape)}, type: :u32), Nx.tensor([0], type: :u32)])
         |> Nx.reshape({2, :auto})
-        |> threefry2x32_20(key)
-        |> Nx.flatten()
+        |> threefry2x32_20_concat(key)
         |> Access.get(0..-2//1)
         |> Nx.reshape(shape)
     end
   end
 
-  defnp threefry2x32_20(xs, ks) do
+  defn threefry2x32_20_concat(xs, ks) do
+    {nx1, nx2} = threefry2x32_20_pair(xs, ks)
+    Nx.concatenate([nx1, nx2], axis: 0)
+  end
+
+  defnp threefry2x32_20_pair(xs, ks) do
     rotations = {Nx.tensor([13, 15, 26, 6], type: :u8), Nx.tensor([17, 29, 16, 24], type: :u8)}
 
     key1 = ks[0]
@@ -177,7 +204,7 @@ defmodule Nx.Random do
         {x + Nx.tensor(1, type: :u32), rolled_loop_step(x, state)}
       end
 
-    Nx.concatenate([nx1, nx2], axis: 0)
+    {nx1, nx2}
   end
 
   defnp apply_round({xs1, xs2}, rot) do

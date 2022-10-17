@@ -17,7 +17,7 @@ defmodule Nx.RandomTest do
       key = Nx.Random.key(33)
 
       two_keys = Nx.Random.split(key)
-      multiple_keys = Nx.Random.split(key, 12)
+      multiple_keys = Nx.Random.split(key, parts: 12)
 
       assert two_keys ==
                Nx.tensor(

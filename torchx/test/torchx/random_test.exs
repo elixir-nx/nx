@@ -27,7 +27,7 @@ defmodule Torchx.Nx.RandomTest do
         )
       )
 
-      multiple_keys = Nx.Random.split(key, 12)
+      multiple_keys = Nx.Random.split(key, parts: 12)
 
       assert_equal(
         multiple_keys,
