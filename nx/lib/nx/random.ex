@@ -200,7 +200,7 @@ defmodule Nx.Random do
     state = {xs, ks, rotations}
 
     {_, {{nx1, nx2}, _, _}} =
-      while {x = Nx.tensor(0, type: :u32), state}, x < 5 do
+      while {x = Nx.tensor(1, type: :u32), state}, x < 6 do
         {x + Nx.tensor(1, type: :u32), rolled_loop_step(x, state)}
       end
 
@@ -224,7 +224,7 @@ defmodule Nx.Random do
       end
 
     xs1 = k1 + xs1
-    xs2 = k2 + i + Nx.tensor(1, type: :u32) + xs2
+    xs2 = k2 + i + xs2
 
     new_xs = {xs1, xs2}
     new_ks = {k2, k3, k1}
