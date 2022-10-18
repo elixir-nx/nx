@@ -6999,7 +6999,7 @@ defmodule Nx do
 
       tensor_size == 1 and axis == nil ->
         tensor = flatten(tensor)
-        res = take(tensor, Nx.tensor([0]))
+        res = take(tensor, tensor([0]))
         if opts[:keep_axis], do: res, else: squeeze(res)
 
       tensor_size == 1 and axis != nil ->
