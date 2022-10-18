@@ -3936,6 +3936,14 @@ defmodule EXLA.Defn.ExprTest do
       two_by_two = Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
       assert_equal(determinant(two_by_two), Nx.tensor(-2.0))
     end
+
+    defn double_determinant(a, b), do: Nx.LinAlg.determinant(a) * Nx.LinAlg.determinant(b)
+
+    test "multiple determinant" do
+      from_one = Nx.tensor([[1, 2], [3, 4]])
+      from_ten = Nx.tensor([[10, 20], [30, 40]])
+      assert_equal(double_determinant(from_one, from_ten), Nx.tensor(400.0))
+    end
   end
 
   describe "cholesky" do

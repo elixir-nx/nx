@@ -143,12 +143,12 @@ defmodule Nx.Defn.TreeTest do
     test "converts scalars" do
       expr = Expr.tensor(Nx.tensor(3, type: {:s, 64}))
 
-      assert %T{data: %Expr{op: :constant}, type: {:s, 32}} =
+      assert %T{data: %Expr{op: :constant, id: {3, {:s, 32}, {}}}, type: {:s, 32}} =
                Tree.rewrite_types(expr, max_signed_type: {:s, 32})
 
       expr = Expr.tensor(Nx.tensor(3.0, type: {:f, 64}))
 
-      assert %T{data: %Expr{op: :constant}, type: {:f, 32}} =
+      assert %T{data: %Expr{op: :constant, id: {3.0, {:f, 32}, {}}}, type: {:f, 32}} =
                Tree.rewrite_types(expr, max_float_type: {:f, 32})
     end
 

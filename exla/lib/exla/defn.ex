@@ -541,15 +541,26 @@ defmodule EXLA.Defn do
     {fun_computation(name, args, expr, type, state), cache}
   end
 
-  defp cached_recur_operator(:optional, %T{data: %Expr{args: [expr, default]}}, state, cache) do
-    {args, cache} =
-      expr.data.args
-      |> Enum.take_while(&(not is_list(&1)))
-      |> Enum.map_reduce(cache, &recur_operator(&1, state, &2))
+  defp cached_recur_operator(:optional, %T{data: %Expr{args: args}}, state, cache) do
+    [call, expr] = args
+    %{data: %{args: args, op: op}} = call
+    key = computation_key(op, args)
 
-    params = Enum.with_index(args, fn arg, index -> {index, arg} end)
-    state = %{state | params: Map.new(params), scope_ids: Tree.scope_ids(default)}
-    recur_operator(default, state, cache)
+    {call_args, cache} = Enum.map_reduce(args, cache, &recur_operator(&1, state, &2))
+
+    {call_body, cache} =
+      case cache do
+        %{^key => computation} ->
+          {computation, cache}
+
+        %{} ->
+          {computation, cache} = token_computation(call_args, expr, state, cache)
+          {computation, Map.put(cache, key, computation)}
+      end
+
+    result = EXLA.Op.call(state.builder, [get_token(cache) | call_args], call_body)
+    token = EXLA.Op.get_tuple_element(result, 0)
+    {EXLA.Op.get_tuple_element(result, 1), update_token(cache, token)}
   end
 
   defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do
@@ -1447,6 +1458,42 @@ defmodule EXLA.Defn do
       end
 
     {EXLA.Builder.build(res), update_outfeed(cache, comp_cache)}
+  end
+
+  defp token_computation(arg, expr, state, cache) do
+    subbuilder = subbuilder(state.builder, "optional_body")
+
+    arg_token = EXLA.Op.parameter(subbuilder, 0, EXLA.Shape.make_token_shape(), "p0")
+
+    params =
+      arg
+      |> Enum.map(&EXLA.Op.get_shape/1)
+      |> Enum.with_index(fn arg_shape, idx ->
+        {idx, EXLA.Op.parameter(subbuilder, idx + 1, arg_shape, "p#{idx + 1}")}
+      end)
+
+    state = %{
+      state
+      | builder: subbuilder,
+        params: Map.new(params),
+        scope_ids: Tree.scope_ids(expr)
+    }
+
+    {res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
+
+    res = EXLA.Op.tuple(subbuilder, [arg_token, res])
+
+    {EXLA.Builder.build(res), update_outfeed(cache, comp_cache)}
+  end
+
+  defp computation_key(op, args) do
+    keys =
+      Enum.map(args, fn
+        %Nx.Tensor{shape: shape, names: names, type: type} -> {type, shape, names}
+        opts -> opts
+      end)
+
+    {op, keys}
   end
 
   defp computation_arg_shape(%{type: type, shape: shape}) do

@@ -9,8 +9,8 @@
 namespace exla {
 
 ExlaBuffer::ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer,
-                       bool can_be_released_after_run): buffer_(std::move(buffer)),
-                                                        can_be_released_after_run_(can_be_released_after_run) {}
+                       bool erlang_managed): buffer_(std::move(buffer)),
+                                             erlang_managed_(erlang_managed) {}
 
 void CopyLiteralToBinary(xla::Literal* literal, ErlNifBinary* binary, exla::int64 size) {
   exla::int64 actual_size = literal->size_bytes();
@@ -85,7 +85,7 @@ UnpackRunArguments(ErlNifEnv* env,
 
         int device = device_id >= 0 ? device_id : device_assignment(replica, 0);
 
-        EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf, client->BufferFromBinary(env, tuple[0], *shape, device, true));
+        EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf, client->BufferFromBinary(env, tuple[0], *shape, device, false));
 
         device_buffers.push_back(buf);
 
@@ -159,24 +159,13 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
   }
 
   std::vector<std::vector<xla::PjRtBuffer*>> pjrt_buffers;
-  std::vector<ERL_NIF_TERM> terms;
   pjrt_buffers.reserve(input_buffers.size());
-  terms.reserve(input_buffers.size());
 
   for (auto device_buf : input_buffers) {
     std::vector<xla::PjRtBuffer*> arg_buffers;
 
     for (auto buf : device_buf) {
       arg_buffers.push_back(buf->buffer());
-
-      // If the buffer was not received as a resource (e.g. we converted
-      // it from a binary to a buffer), we need to make sure it has been
-      // fully transferred before we exit the NIF and make it a resource
-      // so it's tracked and GC'ed along with other buffers that are no
-      // longer in use
-      if (buf->release_after_run()) {
-        terms.push_back(nif::make<ExlaBuffer*>(env, buf));
-      }
     }
 
     pjrt_buffers.push_back(arg_buffers);
@@ -204,7 +193,7 @@ xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromBinary(ErlNifEnv* env,
                                                         ERL_NIF_TERM source_term,
                                                         xla::Shape& shape,
                                                         int device_id,
-                                                        bool can_be_released_after_run) {
+                                                        bool erlang_managed) {
 
   ErlNifEnv* copy_env = enif_alloc_env();
   ERL_NIF_TERM dest_term = enif_make_copy(copy_env, source_term);
@@ -221,7 +210,7 @@ xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromBinary(ErlNifEnv* env,
   EXLA_ASSIGN_OR_RETURN(auto buffer, client_->BufferFromHostBuffer(
     binary.data, shape.element_type(), shape.dimensions(), absl::nullopt, semantics, on_done_with_host_buffer, device));
 
-  return new ExlaBuffer(std::move(buffer), can_be_released_after_run);
+  return new ExlaBuffer(std::move(buffer), erlang_managed);
 }
 
 xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& computation,

@@ -2359,4 +2359,13 @@ defmodule NxTest do
       assert Nx.standard_deviation(t, keep_axes: true) == Nx.tensor([[1.7078251838684082]])
     end
   end
+
+  describe "median/2" do
+    test "uses optional keep axis with unsorted tensor" do
+      t = Nx.tensor([[[4, 5, 8], [1, 6, 7]], [[3, 9, 2], [7, 5, 6]]])
+
+      assert Nx.median(t, axis: -1, keep_axis: true) ==
+               Nx.tensor([[[5], [6]], [[3], [6]]])
+    end
+  end
 end

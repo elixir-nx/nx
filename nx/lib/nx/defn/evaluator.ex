@@ -105,10 +105,23 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp compute_cache(:optional, %{data: %Expr{args: args, id: id}}, state, cache) do
-    [expr, default_impl_expr] = args
-    cache = Enum.reduce(expr.data.args, cache, &compute_cache(&1, state, &2))
-    optional_cache = init_compute_cache(default_impl_expr, state)
-    Map.put(cache, [:optional | id], optional_cache)
+    [call, expr] = args
+    %{data: %{args: call_args, op: call_name}} = call
+
+    cache = Enum.reduce(call.data.args, cache, &compute_cache(&1, state, &2))
+    key = computation_key(call_name, call_args)
+
+    {optional_expr_cache, cache} =
+      case cache do
+        %{^key => optional_expr_cache} ->
+          {optional_expr_cache, cache}
+
+        %{} ->
+          optional_expr_cache = {expr, init_compute_cache(expr, state)}
+          {optional_expr_cache, Map.put(cache, key, optional_expr_cache)}
+      end
+
+    Map.put(cache, [:optional | id], optional_expr_cache)
   end
 
   defp compute_cache(:cond, %{data: %Expr{args: [clauses, last], id: id}}, state, cache) do
@@ -177,6 +190,16 @@ defmodule Nx.Defn.Evaluator do
   defp compute_cache(_op, tensor, state, cache) do
     {_, acc} = Tree.apply_args(tensor, cache, &{&1, compute_cache(&1, state, &2)})
     acc
+  end
+
+  defp computation_key(op, args) do
+    keys =
+      Enum.map(args, fn
+        %Nx.Tensor{shape: shape, names: names, type: type} -> {type, shape, names}
+        opts -> opts
+      end)
+
+    {op, keys}
   end
 
   ## Evaluation
@@ -335,18 +358,16 @@ defmodule Nx.Defn.Evaluator do
     {{}, caches}
   end
 
-  defp eval_apply(:optional, %{data: %Expr{args: args, id: id}}, state, caches) do
-    [expr, default_impl_expr] = args
-
-    {args, caches} = Tree.apply_args(expr, caches, &eval(&1, state, &2))
+  defp eval_apply(:optional, %{data: %Expr{args: [call, _], id: id}}, state, caches) do
+    {args, caches} = Tree.apply_args(call, caches, &eval(&1, state, &2))
     backend = Nx.Shared.list_impl!(args)
 
-    if function_exported?(backend, expr.data.op, length(args) + 1) do
-      {apply(backend, expr.data.op, [expr | args]), caches}
+    if function_exported?(backend, call.data.op, length(args) + 1) do
+      {apply(backend, call.data.op, [call | args]), caches}
     else
       params = Enum.map(args, &fn -> &1 end)
-      {optional_cache, caches} = pop_cache!(caches, [:optional | id])
-      {res, _} = eval(default_impl_expr, %{state | params: params}, [optional_cache])
+      {{expr, optional_cache}, caches} = pop_cache!(caches, [:optional | id])
+      {res, _} = eval(expr, %{state | params: params}, [optional_cache])
       {res, caches}
     end
   end
