@@ -1612,31 +1612,35 @@ defmodule EXLA.Defn do
     {pred_op, cache} = recur_operator(pred, state, cache)
     pred_op = to_type(pred_op, {:pred, 8})
 
-    {true_args, true_comp, cache} = to_if_branch(true, on_true, state, cache)
-    {false_args, false_comp, cache} = to_if_branch(false, on_false, state, cache)
+    true_ids = Tree.scope_ids(on_true)
+    false_ids = Tree.scope_ids(on_false)
+
+    {true_args, true_comp, cache} = to_if_branch(true, on_true, true_ids, false_ids, state, cache)
+
+    {false_args, false_comp, cache} =
+      to_if_branch(false, on_false, false_ids, true_ids, state, cache)
+
     {EXLA.Op.conditional(pred_op, true_args, true_comp, false_args, false_comp), cache}
   end
 
-  defp collect_arg?(_id, :parameter, _args, _pred_ids),
+  defp collect_arg?(_id, :parameter, _args, _shared_ids),
     do: true
 
   # We never pass reference to tuples around, only through their elements,
   # so if a tuple is in a predicate, then it all must be in a predicate.
-  defp collect_arg?(_id, :elem, [%T{data: %Expr{id: tuple_id}}, _pos], pred_ids)
-       when is_map_key(pred_ids, tuple_id),
+  defp collect_arg?(_id, :elem, [%T{data: %Expr{id: tuple_id}}, _pos], {parent_ids, sibling_ids})
+       when is_map_key(parent_ids, tuple_id) or is_map_key(sibling_ids, tuple_id),
        do: true
 
-  defp collect_arg?(id, _op, _args, pred_ids) when is_map_key(pred_ids, id),
-    do: true
+  defp collect_arg?(id, _op, _args, {parent_ids, sibling_ids}),
+    do: is_map_key(parent_ids, id) or is_map_key(sibling_ids, id)
 
-  defp collect_arg?(_id, _op, _args, _pred_ids), do: false
-
-  defp collect_args(%T{data: %Expr{id: id, op: op, args: args}} = expr, {cache, ids}, pred_ids) do
+  defp collect_args(%T{data: %Expr{id: id, op: op, args: args}} = expr, {cache, ids}, shared_ids) do
     cond do
       op == :constant ->
         {expr, {cache, ids}}
 
-      collect_arg?(id, op, args, pred_ids) ->
+      collect_arg?(id, op, args, shared_ids) ->
         case ids do
           %{^id => {_, _, new}} ->
             {new, {cache, ids}}
@@ -1652,15 +1656,17 @@ defmodule EXLA.Defn do
 
       true ->
         {args, {cache, ids}} =
-          Tree.apply_args(expr, :scope, {cache, ids}, &collect_args(&1, &2, pred_ids))
+          Tree.apply_args(expr, :scope, {cache, ids}, &collect_args(&1, &2, shared_ids))
 
         expr = put_in(expr.data.args, args)
         {expr, {Map.put(cache, id, expr), ids}}
     end
   end
 
-  defp to_if_branch(bool, expr, %{scope_ids: ids} = state, cache) do
-    {expr, {_, ids_args}} = Composite.traverse(expr, {%{}, %{}}, &collect_args(&1, &2, ids))
+  defp to_if_branch(bool, expr, current_ids, other_ids, %{scope_ids: ids} = state, cache) do
+    {expr, {_, ids_args}} =
+      Composite.traverse(expr, {%{}, %{}}, &collect_args(&1, &2, {ids, other_ids}))
+
     sorted_ids_args = Enum.sort_by(ids_args, fn {_id, {i, _old, _new}} -> i end)
 
     {args, cache} =
@@ -1676,7 +1682,7 @@ defmodule EXLA.Defn do
           state
           | builder: subbuilder,
             params: Map.new(params),
-            scope_ids: Tree.scope_ids(expr)
+            scope_ids: current_ids
         }
 
         recur_composite(expr, &cast_pred_to_u8/1, comp_state, comp_cache)
