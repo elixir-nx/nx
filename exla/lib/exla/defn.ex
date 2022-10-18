@@ -575,7 +575,7 @@ defmodule EXLA.Defn do
           {computation, cache}
 
         %{} ->
-          {computation, cache} = token_computation(call_args, expr, state, cache)
+          {computation, cache} = token_computation("boundary", call_args, expr, state, cache)
           {computation, Map.put(cache, key, computation)}
       end
 

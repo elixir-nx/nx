@@ -3952,7 +3952,7 @@ defmodule EXLA.Defn.ExprTest do
       key = Nx.Random.key(33)
 
       two_keys = EXLA.jit(&Nx.Random.split/1).(key)
-      multiple_keys = EXLA.jit(&Nx.Random.split(&1, 12)).(key)
+      multiple_keys = EXLA.jit(&Nx.Random.split(&1, parts: 12)).(key)
 
       assert_equal(
         two_keys,
