@@ -6748,7 +6748,7 @@ defmodule Nx do
   end
 
   @doc """
-  Returns the mode for the tensor.
+  Returns the mode for the tensor and the weights.
 
   If the `:axis` option is given, it aggregates over
   that dimension, effectively removing it. `axis: 0`
@@ -6758,82 +6758,90 @@ defmodule Nx do
   always aggregate over the last dimension.
 
   You may optionally set `:keep_axis` to true, which will
-  retain the rank of the input tensor by setting the averaged
+  retain the rank of the input tensor by setting the reduced
   axis to size 1.
 
   ## Examples
 
-      iex> Nx.weighted_mean(Nx.tensor(42), Nx.tensor(2))
+      iex> Nx.mode(Nx.tensor(42))
       #Nx.Tensor<
-        f32
-        42.0
+        s64
+        42
       >
 
-      iex> Nx.weighted_mean(Nx.tensor([1, 2, 3]), Nx.tensor([3, 2, 1]))
+      iex> Nx.mode(Nx.tensor([[1]]))
       #Nx.Tensor<
-        f32
-        1.6666666269302368
+        s64
+        1
+      >
+
+      iex> Nx.mode(Nx.tensor([1, 2, 2, 3, 5]))
+      #Nx.Tensor<
+        s64
+        2
+      >
+
+      iex> Nx.mode(Nx.tensor([[1, 2, 2, 3, 5], [1, 1, 76, 8, 1]]))
+      #Nx.Tensor<
+        s64
+        1
       >
 
   ### Aggregating over an axis
 
-      iex> Nx.weighted_mean(Nx.tensor([1, 2, 3], names: [:x]), Nx.tensor([4, 5, 6]), axis: 0)
+      iex> Nx.mode(Nx.tensor([[1, 2, 2, 3, 5], [1, 1, 76, 8, 1]]), axis: 0)
       #Nx.Tensor<
-        f32
-        2.133333444595337
+        s64[5]
+        [1, 1, 2, 3, 1]
       >
 
-      iex> Nx.weighted_mean(Nx.tensor([1,2,3], type: :u8, names: [:x]), Nx.tensor([1,3,5]), axis: :x)
+      iex> Nx.mode(Nx.tensor([[1, 2, 2, 3, 5], [1, 1, 76, 8, 1]]), axis: 1)
       #Nx.Tensor<
-        f32
-        2.444444417953491
+        s64[2]
+        [2, 1]
       >
 
-      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
-      iex> weights = Nx.tensor([[[0, 1, 2], [1, 1, 0]], [[-1, 1, -1], [1, 1, -1]]])
-      iex> Nx.weighted_mean(t, weights, axis: :x)
+      iex> Nx.mode(Nx.tensor([[[[1]]]]), axis: 1)
       #Nx.Tensor<
-        f32[y: 2][z: 3]
+        s64[1][1][1]
         [
-          [7.0, 5.0, -3.0],
-          [7.0, 8.0, 12.0]
+          [
+            [1]
+          ]
         ]
-      >
-
-      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
-      iex> weights = Nx.tensor([[[0, 1, 2], [1, 1, 0]], [[-1, 1, -1], [1, 1, -1]]])
-      iex> Nx.weighted_mean(t, weights, axis: -1)
-      #Nx.Tensor<
-        f32[x: 2][y: 2]
-        [
-          [2.6666667461395264, 4.5],
-          [8.0, 9.0]
-        ]
-      >
-
-      iex> t = Nx.iota({3,4})
-      iex> weights = Nx.tensor([1, 2, 3, 4])
-      iex> Nx.weighted_mean(t, weights, axis: 1)
-      #Nx.Tensor<
-        f32[3]
-        [2.0, 6.0, 10.0]
       >
 
   ### Keeping axis
 
-      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
-      iex> weights = Nx.tensor([[[0, 1, 2], [1, 1, 0]], [[-1, 1, -1], [1, 1, -1]]])
-      iex> Nx.weighted_mean(t, weights, axis: -1, keep_axis: true)
+      iex> Nx.mode(Nx.tensor([[1, 2, 2, 3, 5], [1, 1, 76, 8, 1]]), axis: 1, keep_axis: true)
       #Nx.Tensor<
-        f32[x: 2][y: 2][z: 1]
+        s64[2][1]
+        [
+          [2],
+          [1]
+        ]
+      >
+
+      iex> Nx.mode(Nx.tensor(1), keep_axis: true)
+      #Nx.Tensor<
+        s64[1]
+        [1]
+      >
+
+      iex> Nx.mode(Nx.tensor([[[1]]]), keep_axis: true)
+      #Nx.Tensor<
+        s64[1]
+        [1]
+      >
+
+      iex> Nx.mode(Nx.tensor([[[[1]]]]), axis: 1, keep_axis: true)
+      #Nx.Tensor<
+        s64[1][1][1][1]
         [
           [
-            [2.6666667461395264],
-            [4.5]
-          ],
-          [
-            [8.0],
-            [9.0]
+            [
+              [1]
+            ]
           ]
         ]
       >
@@ -6848,7 +6856,105 @@ defmodule Nx do
         do: Nx.Shape.normalize_axis(shape, opts[:axis], names),
         else: opts[:axis]
 
+    tensor_rank = rank(tensor)
+    tensor_size = size(tensor)
 
+    cond do
+      tensor_rank == 0 ->
+        if opts[:keep_axis], do: new_axis(tensor, -1), else: tensor
+
+      tensor_size == 1 and axis == nil ->
+        tensor = flatten(tensor)
+        res = take(tensor, Nx.tensor([0]))
+        if opts[:keep_axis], do: res, else: squeeze(res)
+
+      tensor_size == 1 and axis != nil ->
+        if opts[:keep_axis], do: tensor, else: squeeze(tensor, axes: [axis])
+
+      size(tensor) == 1 ->
+        res = take(tensor, broadcast(0, {tensor_rank}))
+        if opts[:keep_axis], do: res, else: squeeze(res, axes: [axis])
+
+      axis == nil ->
+        tensor = flatten(tensor)
+        mode_1d(tensor, keep_axis: opts[:keep_axis])
+
+      true ->
+        mode_general(tensor, axis: axis, keep_axis: opts[:keep_axis])
+    end
+  end
+
+  defp mode_general(tensor, opts) do
+    tensor_shape = shape(tensor)
+    axis = opts[:axis]
+
+    sorted = sort(tensor, axis: axis)
+
+    size_to_broadcast = tensor_shape |> put_elem(axis, 1)
+
+    group_indices =
+      concatenate(
+        [
+          broadcast(0, size_to_broadcast),
+          not_equal(
+            slice_along_axis(sorted, 0, axis_size(sorted, axis) - 1, axis: axis),
+            slice_along_axis(sorted, 1, axis_size(sorted, axis) - 1, axis: axis)
+          )
+        ],
+        axis: axis
+      )
+      |> cumulative_sum(axis: axis)
+
+    num_elements = tensor_shape |> Tuple.product()
+
+    gen_indices =
+      0..(rank(group_indices) - 1)//1
+      |> Enum.map(fn
+        ^axis ->
+          reshape(group_indices, {num_elements, 1})
+
+        axis ->
+          group_indices
+          |> iota(axis: axis)
+          |> reshape({num_elements, 1})
+      end)
+      |> concatenate(axis: 1)
+
+    {n, _} = shape(gen_indices)
+
+    largest_group_indices =
+      broadcast(0, sorted)
+      |> indexed_add(gen_indices, broadcast(1, {n}))
+      |> argmax(axis: opts[:axis], keep_axis: true)
+
+    indices =
+      largest_group_indices
+      |> broadcast(shape(group_indices))
+      |> equal(group_indices)
+      |> argmax(axis: axis, keep_axis: true)
+
+    res = take_along_axis(sorted, indices, axis: axis)
+    if opts[:keep_axis], do: res, else: squeeze(res, axes: [axis])
+  end
+
+  defp mode_1d(tensor, opts) do
+    sorted = sort(tensor)
+
+    group_idx =
+      concatenate([
+        tensor([0]),
+        not_equal(sorted[0..-2//1], sorted[1..-1//1])
+      ])
+      |> cumulative_sum()
+
+    largest_group_idx =
+      broadcast(0, tensor)
+      |> indexed_add(new_axis(group_idx, -1), broadcast(1, tensor))
+      |> argmax()
+
+    idx = group_idx |> equal(largest_group_idx) |> argmax()
+    res = take(sorted, idx)
+    if opts[:keep_axis], do: new_axis(res, -1), else: res
   end
 
   @doc """
