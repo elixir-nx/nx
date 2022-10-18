@@ -163,16 +163,16 @@ defmodule Nx.Defn.Tree do
   end
 
   def apply_args(%T{data: %Expr{op: :optional, args: args}}, type, acc, fun) do
-    [expr, default_impl_expr] = args
-    {expr, acc} = fun.(expr, acc)
+    [call, expr] = args
+    {call, acc} = fun.(call, acc)
 
-    {default_impl_expr, acc} =
+    {expr, acc} =
       case type do
-        :all -> fun.(default_impl_expr, acc)
-        :scope -> {[expr, default_impl_expr], acc}
+        :all -> Composite.traverse(expr, acc, fun)
+        :scope -> {expr, acc}
       end
 
-    {[expr, default_impl_expr], acc}
+    {[call, expr], acc}
   end
 
   def apply_args(%T{data: %Expr{op: :token, args: [token]}}, _type, acc, fun) do

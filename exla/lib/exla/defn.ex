@@ -554,7 +554,7 @@ defmodule EXLA.Defn do
           {computation, cache}
 
         %{} ->
-          {computation, cache} = token_computation(call_args, expr, state, cache)
+          {computation, cache} = token_computation("optional", call_args, expr, state, cache)
           {computation, Map.put(cache, key, computation)}
       end
 
@@ -1460,8 +1460,8 @@ defmodule EXLA.Defn do
     {EXLA.Builder.build(res), update_outfeed(cache, comp_cache)}
   end
 
-  defp token_computation(arg, expr, state, cache) do
-    subbuilder = subbuilder(state.builder, "optional_body")
+  defp token_computation(name, arg, expr, state, cache) do
+    subbuilder = subbuilder(state.builder, name)
 
     arg_token = EXLA.Op.parameter(subbuilder, 0, EXLA.Shape.make_token_shape(), "p0")
 
