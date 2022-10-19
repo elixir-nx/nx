@@ -4,7 +4,7 @@
 
 ### Enhancements
 
-  * [Nx] Add `Nx.rename/2`
+  * [Nx] Add `Nx.rename/2`, `Nx.median/2`, and `Nx.weighted_mean/3`
   * [Nx] Implement cumulative operations using associative scan for improved performance
   * [Nx.Constants] Add `smallest_positive_normal`
   * [Nx.Defn] Add `Nx.LazyContainer` that allows a data-structure to lazily define tensors
