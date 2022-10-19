@@ -271,16 +271,7 @@ defmodule EXLA.Defn do
         Logger.debug("EXLA device #{executable.device_id} lock in #{us_to_ms(time)}ms")
       end
 
-      {time, res} =
-        :timer.tc(fn ->
-          maybe_outfeed(lock, executable, args, used_inputs, outputs, hooks, run_options)
-        end)
-
-      if debug? do
-        Logger.debug("EXLA execution on device #{executable.device_id} in #{us_to_ms(time)}ms")
-      end
-
-      res
+      maybe_outfeed(lock, executable, args, used_inputs, outputs, hooks, run_options)
     end
   end
 
