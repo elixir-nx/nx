@@ -6882,7 +6882,7 @@ defmodule Nx do
   end
 
   @doc """
-  Returns the mode for the tensor and the weights.
+  Returns the mode (the values that appear most often) of a tensor.
 
   If the `:axis` option is given, it aggregates over
   that dimension, effectively removing it. `axis: 0`
