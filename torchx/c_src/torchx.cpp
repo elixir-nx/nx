@@ -1118,16 +1118,12 @@ NIF(conv)
   std::vector<int64_t> output_padding;
   output_padding.push_back(0);
 
-  // aten::_convolution(Tensor input, Tensor weight, Tensor? bias,
+  // aten::convolution(Tensor input, Tensor weight, Tensor? bias,
   //      int[] stride, int[] padding, int[] dilation, bool transposed,
-  //      int[] output_padding, int groups, bool benchmark, bool deterministic, bool cudnn_enabled, bool allow_tf32) -> Tensor
-  TENSOR(at::_convolution(*tensor, *kernel, bias_tensor,
-    stride, padding, dilation, transposed, output_padding, groups,
-    true,   // benchmark
-    false,   // deterministic
-    false,  // cudnn_enabled
-    false   // allow_tf32
-  ));
+  //      int[] output_padding, int groups) -> Tensor
+  TENSOR(at::convolution(*tensor, *kernel, bias_tensor,
+    stride, padding, dilation, transposed, output_padding, groups)
+  );
 }
 
 NIF(max_pool_3d)
