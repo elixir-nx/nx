@@ -1025,8 +1025,8 @@ NIF(cholesky)
 NIF(pad)
 {
   TENSOR_PARAM(0, tensor);
-  LIST_PARAM(1, std::vector<int64_t>, config)
-  SCALAR_PARAM(2, constant)
+  SCALAR_PARAM(1, constant)
+  LIST_PARAM(2, std::vector<int64_t>, config)
 
   TENSOR(torch::constant_pad_nd(*tensor, config, constant));
 }

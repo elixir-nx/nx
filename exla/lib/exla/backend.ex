@@ -47,7 +47,7 @@ defmodule EXLA.Backend do
     backend_copy(tensor, Nx.BinaryBackend, backend_options)
   end
 
-  # TODO: Support direct transfers without going through Elixir
+  # TODO: Support direct transfers between EXLA without going through Elixir
   def backend_copy(%T{data: %B{buffer: buffer}} = tensor, backend, backend_options) do
     backend.from_binary(tensor, EXLA.DeviceBuffer.read(buffer), backend_options)
   end

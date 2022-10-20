@@ -2129,6 +2129,10 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
+    test "computes the minimum across nan" do
+      assert_equal(Nx.tensor([:nan, :nan, :nan]) |> reduce_min(), Nx.tensor(:nan))
+    end
+
     defn reduce_min_pos_axis(t), do: Nx.reduce_min(t, axes: [1])
     defn reduce_min_neg_axis(t), do: Nx.reduce_min(t, axes: [-3])
     defn reduce_min_pos_neg_axis(t), do: Nx.reduce_min(t, axes: [1, -3])
@@ -2364,12 +2368,12 @@ defmodule EXLA.Defn.ExprTest do
         ),
         Nx.tensor([
           [
-            [-3.4028234663852886e38, 4.0, 2.0, 3.0, -3.4028234663852886e38],
-            [-3.4028234663852886e38, 2.0, 5.0, 6.5, -3.4028234663852886e38]
+            [:neg_infinity, 4.0, 2.0, 3.0, :neg_infinity],
+            [:neg_infinity, 2.0, 5.0, 6.5, :neg_infinity]
           ],
           [
-            [-3.4028234663852886e38, 1.2, 2.2, 3.2, -3.4028234663852886e38],
-            [-3.4028234663852886e38, 4.0, 5.0, 6.2, -3.4028234663852886e38]
+            [:neg_infinity, 1.2, 2.2, 3.2, :neg_infinity],
+            [:neg_infinity, 4.0, 5.0, 6.2, :neg_infinity]
           ]
         ])
       )
@@ -2429,12 +2433,12 @@ defmodule EXLA.Defn.ExprTest do
         ),
         Nx.tensor([
           [
-            [3.4028234663852886e38, 4.0, 2.0, 3.0, 3.4028234663852886e38],
-            [3.4028234663852886e38, 2.0, 5.0, 6.5, 3.4028234663852886e38]
+            [:infinity, 4.0, 2.0, 3.0, :infinity],
+            [:infinity, 2.0, 5.0, 6.5, :infinity]
           ],
           [
-            [3.4028234663852886e38, 1.2, 2.2, 3.2, 3.4028234663852886e38],
-            [3.4028234663852886e38, 4.0, 5.0, 6.2, 3.4028234663852886e38]
+            [:infinity, 1.2, 2.2, 3.2, :infinity],
+            [:infinity, 4.0, 5.0, 6.2, :infinity]
           ]
         ])
       )

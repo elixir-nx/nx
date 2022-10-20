@@ -1547,7 +1547,7 @@ defmodule Nx.BinaryBackend do
               reduce: acc,
               do: (acc -> fun.(read!(x, 0), acc))
 
-          <<write!(scalar_to_number(window_val), 0)>>
+          scalar_to_binary!(window_val, type)
         end
       end
 
@@ -1569,7 +1569,7 @@ defmodule Nx.BinaryBackend do
   def window_max(out, tensor, window_dimensions, opts) do
     %{type: type} = out
 
-    init_value = Nx.Type.min_finite_binary(type)
+    init_value = Nx.Type.min_binary(type)
     init_value = from_binary(%{out | shape: {}, names: []}, init_value)
 
     fun = fn a, b -> element_max(type, a, b) end
@@ -1580,7 +1580,7 @@ defmodule Nx.BinaryBackend do
   def window_min(out, tensor, window_dimensions, opts) do
     %{type: type} = out
 
-    init_value = Nx.Type.max_finite_binary(type)
+    init_value = Nx.Type.max_binary(type)
     init_value = from_binary(%{out | shape: {}, names: []}, init_value)
 
     fun = fn a, b -> element_min(type, a, b) end
