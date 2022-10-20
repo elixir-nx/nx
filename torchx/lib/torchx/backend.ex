@@ -1199,8 +1199,7 @@ defmodule Torchx.Backend do
     |> from_nx()
     |> pad_internal(input_config)
     |> slice_negative_padding(input_config)
-    #|> Torchx.pad(from_nx(constant), config)
-    |> Torchx.pad(Nx.to_number(constant), config)
+    |> Torchx.pad(from_nx(constant), config)
     |> to_nx(out)
   end
 
@@ -1240,7 +1239,7 @@ defmodule Torchx.Backend do
   end
 
   defp pad_zero({device, _} = t_tx, pads) do
-    pad_value = 0 # Torchx.scalar_tensor(0, Torchx.scalar_type(t_tx), device)
+    pad_value = Torchx.scalar_tensor(0, Torchx.scalar_type(t_tx), device)
     Torchx.pad(t_tx, pad_value, pads)
   end
 
@@ -1532,7 +1531,7 @@ defmodule Torchx.Backend do
       tensor,
       window_dims_tuple,
       opts,
-      Nx.Constants.min_finite(tensor.type) |> Nx.to_number(),
+      Nx.Constants.min(tensor.type) |> from_nx(),
       &Torchx.amax(&1, &2, false)
     )
   end
@@ -1544,7 +1543,7 @@ defmodule Torchx.Backend do
       tensor,
       window_dims_tuple,
       opts,
-      Nx.Constants.max_finite(tensor.type) |> Nx.to_number(),
+      Nx.Constants.max(tensor.type) |> from_nx(),
       &Torchx.amin(&1, &2, false)
     )
   end
@@ -1589,7 +1588,7 @@ defmodule Torchx.Backend do
 
   defp window_scatter_function(function, out, tensor, source, init_value, window_dims_tuple, opts) do
     {device, _} = t_tx = from_nx(tensor)
-    pad_constant = 0 # Torchx.scalar_tensor(0, Torchx.scalar_type(t_tx), device)
+    pad_constant = Torchx.scalar_tensor(0, Torchx.scalar_type(t_tx), device)
 
     unfold_flat = fn tensor ->
       window_dilations = List.duplicate(1, tuple_size(window_dims_tuple))
@@ -1653,12 +1652,12 @@ defmodule Torchx.Backend do
        when is_function(reduce_fun, 2) do
     {device, _} = t_tx = from_nx(tensor)
 
-    # pad_constant =
-    #   if is_number(pad_constant) do
-    #     Torchx.scalar_tensor(pad_constant, Torchx.scalar_type(t_tx), device)
-    #   else
-    #     pad_constant
-    #   end
+    pad_constant =
+      if is_number(pad_constant) do
+        Torchx.scalar_tensor(pad_constant, Torchx.scalar_type(t_tx), device)
+      else
+        pad_constant
+      end
 
     t_tx =
       unfold_windows(

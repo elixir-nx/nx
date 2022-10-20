@@ -350,7 +350,7 @@ defmodule Torchx do
   deftensor is_nan(tensor)
   deftensor is_infinity(tensor)
 
-  deftensor pad(tensor, scalar, config)
+  deftensor pad(tensor, tensor_scalar, config)
 
   ## LinAlg
 
