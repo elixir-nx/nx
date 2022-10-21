@@ -172,6 +172,35 @@ defmodule Nx.Constants do
   end
 
   @doc """
+  Returns a scalar tensor with the maximum value for the given type.
+
+  It is infinity for floating point tensors.
+
+  ## Options
+
+    * `:backend` - a backend to allocate the tensor on.
+
+  ## Examples
+
+      iex> Nx.Constants.max({:u, 8})
+      #Nx.Tensor<
+        u8
+        255
+      >
+
+      iex> Nx.Constants.max({:f, 32})
+      #Nx.Tensor<
+        f32
+        Inf
+      >
+
+  """
+  def max(type, opts \\ []) do
+    type = Nx.Type.normalize!(type)
+    from_binary(Nx.Type.max_binary(type), type, opts)
+  end
+
+  @doc """
   Returns a scalar tensor with the maximum finite value for the given type.
 
   ## Options
@@ -243,6 +272,35 @@ defmodule Nx.Constants do
   def min_finite(type, opts \\ []) do
     type = Nx.Type.normalize!(type)
     from_binary(Nx.Type.min_finite_binary(type), type, opts)
+  end
+
+  @doc """
+  Returns a scalar tensor with the minimum value for the given type.
+
+  It is negative infinity for floating point tensors.
+
+  ## Options
+
+    * `:backend` - a backend to allocate the tensor on.
+
+  ## Examples
+
+      iex> Nx.Constants.min({:u, 8})
+      #Nx.Tensor<
+        u8
+        0
+      >
+
+      iex> Nx.Constants.min({:f, 32})
+      #Nx.Tensor<
+        f32
+        -Inf
+      >
+
+  """
+  def min(type, opts \\ []) do
+    type = Nx.Type.normalize!(type)
+    from_binary(Nx.Type.min_binary(type), type, opts)
   end
 
   @doc """

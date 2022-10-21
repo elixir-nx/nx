@@ -56,7 +56,7 @@ defmodule Nx.Type do
           | :c128
 
   @doc """
-  Returns the minimum possible value for the given type.
+  Returns the minimum possible finite value for the given type.
   """
   def min_finite_binary(type)
 
@@ -71,7 +71,14 @@ defmodule Nx.Type do
   def min_finite_binary({:f, 64}), do: <<0xFFEFFFFFFFFFFFFF::64-native>>
 
   @doc """
-  Returns the maximum possible value for the given type.
+  Returns the minimum possible value for the given type.
+  """
+  def min_binary(type) do
+    if float?(type), do: neg_infinity_binary(type), else: min_finite_binary(type)
+  end
+
+  @doc """
+  Returns the maximum possible finite value for the given type.
   """
   def max_finite_binary(type)
 
@@ -89,13 +96,20 @@ defmodule Nx.Type do
   def max_finite_binary({:f, 64}), do: <<0x7FEFFFFFFFFFFFFF::64-native>>
 
   @doc """
+  Returns the maximum possible value for the given type.
+  """
+  def max_binary(type) do
+    if float?(type), do: infinity_binary(type), else: max_finite_binary(type)
+  end
+
+  @doc """
   Returns infinity as a binary for the given type.
   """
   def nan_binary(type)
-  def nan_binary({:bf, 16}), do: <<0x7F81::16-native>>
-  def nan_binary({:f, 16}), do: <<0x7C01::16-native>>
-  def nan_binary({:f, 32}), do: <<0x7F800001::32-native>>
-  def nan_binary({:f, 64}), do: <<0x7FF0000000000001::64-native>>
+  def nan_binary({:bf, 16}), do: <<0x7FC0::16-native>>
+  def nan_binary({:f, 16}), do: <<0x7E00::16-native>>
+  def nan_binary({:f, 32}), do: <<0x7FC00000::32-native>>
+  def nan_binary({:f, 64}), do: <<0x7FF8000000000000::64-native>>
 
   @doc """
   Returns infinity as a binary for the given type.

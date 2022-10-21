@@ -931,13 +931,13 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(:reduce_max, [arg, opts], %{type: type, shape: shape}, state) do
-    min_finite = EXLA.Lib.min_finite(state.builder, type)
-    to_aggregate(:max, type, shape, arg, min_finite, opts, state)
+    min_number = EXLA.Lib.min_number(state.builder, type)
+    to_aggregate(:max, type, shape, arg, min_number, opts, state)
   end
 
   defp to_operator(:reduce_min, [arg, opts], %{type: type, shape: shape}, state) do
-    max_finite = EXLA.Lib.max_finite(state.builder, type)
-    to_aggregate(:min, type, shape, arg, max_finite, opts, state)
+    max_number = EXLA.Lib.max_number(state.builder, type)
+    to_aggregate(:min, type, shape, arg, max_number, opts, state)
   end
 
   defp to_operator(:reduce, [arg, acc, opts, fun], %{type: type, shape: shape}, _state) do
@@ -957,13 +957,13 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(:window_max, [arg, window_dims, opts], %{type: type}, state) do
-    min_finite = EXLA.Lib.min_finite(state.builder, type)
-    to_window_aggregate(:max, type, arg, min_finite, window_dims, opts, state)
+    min_number = EXLA.Lib.min_number(state.builder, type)
+    to_window_aggregate(:max, type, arg, min_number, window_dims, opts, state)
   end
 
   defp to_operator(:window_min, [arg, window_dims, opts], %{type: type}, state) do
-    max_finite = EXLA.Lib.max_finite(state.builder, type)
-    to_window_aggregate(:min, type, arg, max_finite, window_dims, opts, state)
+    max_number = EXLA.Lib.max_number(state.builder, type)
+    to_window_aggregate(:min, type, arg, max_number, window_dims, opts, state)
   end
 
   defp to_operator(:window_product, [arg, window_dims, opts], %{type: type}, state) do
@@ -1556,15 +1556,16 @@ defmodule EXLA.Defn do
 
     acc =
       case initial do
-        %EXLA.Op{} = initial ->
-          initial
-
-        initial when is_number(initial) ->
-          EXLA.Op.constant_r0(state.builder, initial, type)
+        %EXLA.Op{} = initial -> initial
+        initial when is_number(initial) -> EXLA.Op.constant_r0(state.builder, initial, type)
       end
 
     args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
-    comp = op_computation(op, args, state)
+    # We reverse the argument order because :nan + :infinity
+    # returns :nan but :infinity + :nan returns :infinity.
+    # So we want to keep the current value as first argument
+    # to preserve such properties.
+    comp = op_computation(op, args, state, &Enum.reverse/1)
     keep_axes = opts[:keep_axes]
     result = EXLA.Op.reduce(arg, acc, comp, reduce_axes(arg, opts[:axes]))
 
