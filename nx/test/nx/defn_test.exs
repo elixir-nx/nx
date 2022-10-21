@@ -1972,6 +1972,12 @@ defmodule Nx.DefnTest do
       assert Nx.Defn.jit(&defn_jit(&1, 3)).({4, 5}) == Nx.tensor(6)
     end
 
+    @tag compiler: Evaluator
+    test "applies with options" do
+      fun = Nx.Defn.jit(&Nx.sum/2)
+      assert fun.(Nx.iota({2, 2}), axes: [1]) == Nx.tensor([1, 5])
+    end
+
     defn defn_jit_or_apply(ab, c),
       do: Nx.Defn.jit_apply(&defn_jit/2, [ab, c], on_conflict: :reuse)
 
@@ -2054,6 +2060,12 @@ defmodule Nx.DefnTest do
       fun = Nx.Defn.compile(&defn_compile(&1, 3), [{4, 5}])
       assert fun.({4, 5}) == Nx.tensor(6)
       assert fun.({40, 50}) == Nx.tensor(87)
+    end
+
+    @tag compiler: Evaluator
+    test "compiles defn function with options" do
+      fun = Nx.Defn.compile(&Nx.sum/2, [Nx.template({2, 2}, :s64), [axes: [1]]])
+      assert fun.(Nx.iota({2, 2})) == Nx.tensor([1, 5])
     end
 
     @tag compiler: Evaluator
