@@ -800,7 +800,7 @@ defmodule Nx.Defn do
 
     defaults =
       for {{:\\, meta, [_, default]}, i} <- Enum.with_index(args),
-          do: {i, {meta, default}},
+          do: {i, {meta, Macro.escape(default)}},
           into: []
 
     quote do
@@ -826,9 +826,9 @@ defmodule Nx.Defn do
     arity = length(args)
 
     defaults =
-      for {{:\\, meta, [_, default]}, i} <- Enum.with_index(args), into: [] do
-        {i, {meta, default}}
-      end
+      for {{:\\, meta, [_, default]}, i} <- Enum.with_index(args),
+          do: {i, {meta, Macro.escape(default)}},
+          into: []
 
     define_ast =
       quote do

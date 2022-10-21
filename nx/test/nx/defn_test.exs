@@ -2158,6 +2158,7 @@ defmodule Nx.DefnTest do
   end
 
   describe "default arguments" do
+    defn id_default(empty \\ {}), do: empty
     defn sum_axis_opts(a, opts \\ []), do: Nx.sum(a, opts)
     defn local_calls_sum_axis_opts(a), do: sum_axis_opts(a)
     defn remote_calls_sum_axis_opts(a), do: __MODULE__.sum_axis_opts(a)
@@ -2167,6 +2168,13 @@ defmodule Nx.DefnTest do
       assert sum_axis_opts(Nx.tensor([[1, 2], [3, 4]])) == Nx.tensor(10)
       assert sum_axis_opts(Nx.tensor([[1, 2], [3, 4]]), axes: [0]) == Nx.tensor([4, 6])
       assert sum_axis_opts(Nx.tensor([[1, 2], [3, 4]]), axes: [1]) == Nx.tensor([3, 7])
+    end
+
+    @tag compiler: Evaluator
+    test "accept any valid defn value" do
+      assert id_default() == {}
+      assert id_default(1) == Nx.tensor(1)
+      assert id_default({1}) == {Nx.tensor(1)}
     end
 
     @tag compiler: Evaluator
