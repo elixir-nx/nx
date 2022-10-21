@@ -346,7 +346,7 @@ defmodule Nx.DefnTest do
   end
 
   describe "creation ops" do
-    defn iota(t), do: Nx.iota(t)
+    defn iota(t), do: Nx.iota(Nx.shape(t))
     defn eye, do: Nx.eye(2)
     defn random_uniform(t), do: Nx.random_uniform(t, 0.0, 2.0)
     defn random_normal(t), do: Nx.random_normal(t, 0.0, 1.0)

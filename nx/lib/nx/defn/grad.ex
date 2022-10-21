@@ -609,7 +609,7 @@ defmodule Nx.Defn.Grad do
 
   defp grad(:cholesky, [input], l, g) do
     num = g |> tril() |> Nx.dot([0], l, [0]) |> Nx.transpose()
-    den = l |> Nx.eye() |> Nx.add(1)
+    den = l |> Nx.shape() |> Nx.eye() |> Nx.add(1)
     phi_tril = num |> Nx.divide(den) |> tril()
 
     bm = Nx.LinAlg.triangular_solve(l, phi_tril, transform_a: :transpose)
@@ -767,6 +767,7 @@ defmodule Nx.Defn.Grad do
 
         axis ->
           i
+          |> Nx.shape()
           |> Nx.iota(axis: axis)
           |> Nx.reshape({num_elements, 1})
       end)
@@ -829,11 +830,13 @@ defmodule Nx.Defn.Grad do
 
         current when current < axis ->
           indices_for_axis
+          |> Nx.shape()
           |> Nx.iota(axis: current)
           |> Nx.reshape({num_elements, 1})
 
         current when current > axis ->
           indices_for_axis
+          |> Nx.shape()
           |> Nx.iota(axis: current + axis_offset)
           |> Nx.reshape({num_elements, 1})
       end)
@@ -1521,22 +1524,25 @@ defmodule Nx.Defn.Grad do
 
   defp tril(t) do
     t
+    |> Nx.shape()
     |> Nx.iota(axis: 0)
-    |> Nx.greater_equal(Nx.iota(t, axis: 1))
+    |> Nx.greater_equal(Nx.iota(Nx.shape(t), axis: 1))
     |> Nx.select(t, Nx.tensor(0, type: t.type))
   end
 
   defp tril_strict(t) do
     t
+    |> Nx.shape()
     |> Nx.iota(axis: 0)
-    |> Nx.greater(Nx.iota(t, axis: 1))
+    |> Nx.greater(Nx.iota(Nx.shape(t), axis: 1))
     |> Nx.select(t, Nx.tensor(0, type: t.type))
   end
 
   defp triu(t) do
     t
+    |> Nx.shape()
     |> Nx.iota(axis: 0)
-    |> Nx.less_equal(Nx.iota(t, axis: 1))
+    |> Nx.less_equal(Nx.iota(Nx.shape(t), axis: 1))
     |> Nx.select(t, Nx.tensor(0, type: t.type))
   end
 

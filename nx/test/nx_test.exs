@@ -1589,7 +1589,7 @@ defmodule NxTest do
 
     test "raises when max arg is non-scalar" do
       t = Nx.iota({4})
-      min = Nx.iota(2)
+      min = Nx.iota({})
       max = Nx.iota({3})
 
       assert_raise(ArgumentError, "max value must be a scalar shape, got: {3}", fn ->
@@ -1941,19 +1941,9 @@ defmodule NxTest do
   end
 
   describe "eye/2" do
-    test "raises for non-square rank 2 tensor" do
-      t = Nx.iota({2, 3})
-
-      assert_raise(ArgumentError, "eye/2 expects a square matrix, got: {2, 3}", fn ->
-        Nx.eye(t)
-      end)
-    end
-
-    test "raises for tensor that is not rank 2" do
-      t = Nx.iota({2, 3, 2})
-
-      assert_raise(ArgumentError, "eye/2 expects a square matrix, got: {2, 3, 2}", fn ->
-        Nx.eye(t)
+    test "raises for non-square shape" do
+      assert_raise(ArgumentError, "eye/2 expects a square shape or an integer as argument, got: {2, 3}", fn ->
+        Nx.eye({2, 3})
       end)
     end
   end
@@ -2204,7 +2194,7 @@ defmodule NxTest do
 
       iotas =
         Enum.map(0..(Nx.rank(t) - 1)//1, fn axis ->
-          t |> Nx.iota(axis: axis) |> Nx.reshape({num_elements, 1})
+          t |> Nx.shape() |> Nx.iota(axis: axis) |> Nx.reshape({num_elements, 1})
         end)
 
       iotas = List.replace_at(iotas, axis, Nx.reshape(i, {num_elements, 1}))

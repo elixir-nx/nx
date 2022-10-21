@@ -455,11 +455,13 @@ defmodule Torchx.Backend do
 
         current when current < axis ->
           indices_for_axis
+          |> Nx.shape()
           |> Nx.iota(axis: current, backend: __MODULE__)
           |> Nx.reshape({num_elements, 1})
 
         current when current > axis ->
           indices_for_axis
+          |> Nx.shape()
           |> Nx.iota(axis: current + axis_offset, backend: __MODULE__)
           |> Nx.reshape({num_elements, 1})
       end)
@@ -1628,6 +1630,7 @@ defmodule Torchx.Backend do
       |> Nx.axes()
       |> Enum.map(fn axis ->
         tensor
+        |> Nx.shape()
         |> Nx.iota(axis: axis, backend: Torchx.Backend)
         |> then(unfold_flat)
         |> Nx.take_along_axis(Nx.new_axis(arg_idx, -1), axis: -1)

@@ -825,6 +825,7 @@ defmodule Nx do
   @doc """
   Shortcut for `random_uniform(shape, 0.0, 1.0, opts)`.
   """
+  # TODO: Deprecate this in Nx v0.5
   @doc type: :random, deprecated: "Use Nx.Random.uniform/2 instead"
   def random_uniform(tensor_or_shape, opts \\ []) do
     random_uniform(tensor_or_shape, 0.0, 1.0, opts)
@@ -951,6 +952,7 @@ defmodule Nx do
       is ignored inside `defn`
 
   """
+  # TODO: Deprecate this in Nx v0.5
   @doc type: :random, deprecated: "Use Nx.Random.uniform/2 instead"
   def random_uniform(tensor_or_shape, min, max, opts \\ []) do
     opts = keyword!(opts, [:type, :names, :backend])
@@ -981,6 +983,7 @@ defmodule Nx do
   @doc """
   Shortcut for `random_normal(shape, 0.0, 1.0, opts)`.
   """
+  # TODO: Deprecate this in Nx v0.5
   @doc type: :random, deprecated: "Use Nx.Random instead"
   def random_normal(tensor_or_shape, opts \\ []) do
     random_normal(tensor_or_shape, 0.0, 1.0, opts)
@@ -1067,6 +1070,7 @@ defmodule Nx do
       is ignored inside `defn`
 
   """
+  # TODO: Deprecate this in Nx v0.5
   @doc type: :random, deprecated: "Use Nx.Random instead"
   def random_normal(tensor_or_shape, mu, sigma, opts \\ []) do
     opts = keyword!(opts, [:type, :names, :backend])
@@ -1269,6 +1273,11 @@ defmodule Nx do
   @doc type: :creation
   def iota(tensor_or_shape, opts \\ []) do
     opts = keyword!(opts, [:axis, :names, :backend, type: {:s, 64}])
+
+    if not is_tuple(tensor_or_shape) do
+      IO.warn("passing a tensor as shape to iota/2 is deprecated. Please call Nx.shape/2 before")
+    end
+
     shape = shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type])
@@ -1306,17 +1315,7 @@ defmodule Nx do
         ]
       >
 
-  The first argument can also be a tensor or a shape of a square
-  matrix:
-
-      iex> Nx.eye(Nx.iota({2, 2}))
-      #Nx.Tensor<
-        s64[2][2]
-        [
-          [1, 0],
-          [0, 1]
-        ]
-      >
+  The first argument can also be a shape of a square matrix:
 
       iex> Nx.eye({1, 1})
       #Nx.Tensor<
@@ -1344,20 +1343,23 @@ defmodule Nx do
     eye({n, n}, opts)
   end
 
-  def eye(tensor_or_shape, opts) do
+  def eye({n, n} = shape, opts) do
     opts = keyword!(opts, [:names, :backend, type: {:s, 64}])
-
-    shape =
-      case shape(tensor_or_shape) do
-        {n, n} -> {n, n}
-        other -> raise ArgumentError, "eye/2 expects a square matrix, got: #{inspect(other)}"
-      end
-
     names = Nx.Shape.named_axes!(opts[:names], shape)
     type = Nx.Type.normalize!(opts[:type] || {:s, 64})
 
     {backend, backend_options} = backend_from_options!(opts) || default_backend()
     backend.eye(%T{type: type, shape: shape, names: names}, backend_options)
+  end
+
+  def eye(shape, _opts) when is_tuple(shape) do
+    raise ArgumentError,
+          "eye/2 expects a square shape or an integer as argument, got: #{inspect(shape)}"
+  end
+
+  def eye(tensor, opts) do
+    IO.warn("passing a tensor as shape to eye/2 is deprecated. Please call Nx.shape/2 before")
+    eye(Nx.shape(tensor), opts)
   end
 
   @doc """

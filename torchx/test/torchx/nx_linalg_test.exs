@@ -172,8 +172,8 @@ defmodule Torchx.NxLinAlgTest do
       a = Nx.tensor([[1, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]])
       a_inv = Nx.LinAlg.invert(a)
 
-      assert_all_close(Nx.dot(a, a_inv), Nx.eye(a))
-      assert_all_close(Nx.dot(a_inv, a), Nx.eye(a))
+      assert_all_close(Nx.dot(a, a_inv), Nx.eye(Nx.shape(a)))
+      assert_all_close(Nx.dot(a_inv, a), Nx.eye(Nx.shape(a)))
     end
 
     test "fails for singular matrix" do

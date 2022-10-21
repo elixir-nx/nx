@@ -1404,7 +1404,7 @@ defmodule Nx.LinAlg do
     shape = Nx.shape(tensor)
     :ok = Nx.Shape.matrix_power(shape)
 
-    Nx.eye(tensor)
+    Nx.eye(shape)
   end
 
   def matrix_power(tensor, power) when is_integer(power) do

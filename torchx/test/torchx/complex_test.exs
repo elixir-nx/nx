@@ -231,8 +231,8 @@ defmodule Torchx.ComplexTest do
 
       assert_all_close(result, expected_result)
 
-      assert_all_close(Nx.dot(a, result), Nx.eye(a))
-      assert_all_close(Nx.dot(result, a), Nx.eye(a))
+      assert_all_close(Nx.dot(a, result), Nx.eye(Nx.shape(a)))
+      assert_all_close(Nx.dot(result, a), Nx.eye(Nx.shape(a)))
     end
 
     test "solve" do
@@ -268,7 +268,7 @@ defmodule Torchx.ComplexTest do
         -1i 1
       ]
 
-      assert_all_close(Nx.LinAlg.matrix_power(a, 0), Nx.eye(a))
+      assert_all_close(Nx.LinAlg.matrix_power(a, 0), Nx.eye(Nx.shape(a)))
     end
 
     test "supports complex with negative exponent" do

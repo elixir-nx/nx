@@ -3984,7 +3984,7 @@ defmodule EXLA.Defn.ExprTest do
     test "works on a 50x50 matrix" do
       tensor = Nx.random_normal({50, 50})
       tensor = Nx.dot(tensor, Nx.transpose(tensor))
-      tensor = Nx.add(tensor, Nx.multiply(50, Nx.eye(tensor)))
+      tensor = Nx.add(tensor, Nx.multiply(50, Nx.eye(Nx.shape(tensor))))
 
       l = cholesky(tensor)
       assert_all_close(Nx.dot(l, Nx.transpose(l)), tensor, atol: 1.0e-4, rtol: 1.0e-2)
