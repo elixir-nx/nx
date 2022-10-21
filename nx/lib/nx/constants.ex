@@ -274,7 +274,6 @@ defmodule Nx.Constants do
     from_binary(Nx.Type.min_finite_binary(type), type, opts)
   end
 
-
   @doc """
   Returns a scalar tensor with the minimum value for the given type.
 

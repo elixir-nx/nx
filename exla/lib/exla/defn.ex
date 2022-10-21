@@ -1561,6 +1561,10 @@ defmodule EXLA.Defn do
       end
 
     args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
+    # We reverse the argument order because :nan + :infinity
+    # returns :nan but :infinity + :nan returns :infinity.
+    # So we want to keep the current value as first argument
+    # to preserve such properties.
     comp = op_computation(op, args, state, &Enum.reverse/1)
     keep_axes = opts[:keep_axes]
     result = EXLA.Op.reduce(arg, acc, comp, reduce_axes(arg, opts[:axes]))
