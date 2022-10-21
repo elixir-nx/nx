@@ -13,7 +13,6 @@ defmodule Nx.Defn.Composite do
   no lazy containers, only containers.
   """
 
-  alias Nx.Defn.Expr
   alias Nx.Tensor, as: T
 
   import Nx, only: [is_tensor: 1]
@@ -163,68 +162,4 @@ defmodule Nx.Defn.Composite do
 
   defp flatten_each(container, acc),
     do: Nx.Container.reduce(container, acc, &flatten_each/2)
-
-  ## Nx.Defn callbacks
-
-  @doc false
-  def split_compile_args(args, cache) do
-    split_compile_args(args, cache, [])
-  end
-
-  defp split_compile_args([arg | args], cache, vars)
-       when is_function(arg)
-       when is_tuple(arg) and is_function(elem(arg, 0)) do
-    split_compile_args(args, [arg | cache], vars)
-  end
-
-  defp split_compile_args([arg | args], cache, vars) do
-    split_compile_args(args, cache, [arg | vars])
-  end
-
-  defp split_compile_args([], cache, vars), do: {cache, Enum.reverse(vars)}
-
-  @doc false
-  def join_compile_args(partial_args, full_args) do
-    {args, []} =
-      Enum.map_reduce(full_args, partial_args, fn
-        arg, acc
-        when is_function(arg)
-        when is_tuple(arg) and is_function(elem(arg, 0)) ->
-          {arg, acc}
-
-        _arg, [arg | acc] ->
-          {arg, acc}
-      end)
-
-    args
-  end
-
-  @doc false
-  def to_lazy_params(args) do
-    {template_args, {funs, _}} =
-      Enum.map_reduce(args, {[], 0}, fn container, acc ->
-        Nx.LazyContainer.traverse(container, acc, fn template, fun, {acc, i} ->
-          {Expr.parameter(template, :root, i), {[fun | acc], i + 1}}
-        end)
-      end)
-
-    {template_args, Enum.reverse(funs)}
-  end
-
-  @doc false
-  def to_lazy_template(args) do
-    {template_args, funs} =
-      Enum.map_reduce(args, [], fn container, acc ->
-        Nx.LazyContainer.traverse(container, acc, fn template, fun, acc ->
-          {template, [fun | acc]}
-        end)
-      end)
-
-    {template_args, Enum.reverse(funs)}
-  end
-
-  @doc false
-  def to_output(container) do
-    traverse(container, &Expr.tensor/1)
-  end
 end

@@ -157,16 +157,21 @@ defmodule Nx.Defn do
   ## Inputs and outputs types
 
   `Nx` and `defn` expect the arguments to be numbers, tensors,
-  or one of the following composite data types:
+  or one composite data type that implements `Nx.LazyContainer`.
+  Tuples and maps implement `Nx.LazyContainer` by default.
+  As previously described, `defn` are cached based on the shape,
+  type, and names of the input tensors, but not their values.
 
-    1. tuples of numbers/tensors
-    2. maps of any key with numbers/tensors as values
-    3. any struct that implements `Nx.Container`
+  `defn` also accepts two special arguments: functions (or tuples
+  of functions) and lists (most commonly as keyword lists). Those
+  values are passed as is to numerical definitions and cached as
+  a whole. For this reason, you must never capture tensors in
+  functions or pass tensors in keyword lists.
 
   When numbers are given as arguments, they are always immediately
   converted to tensors on invocation. If you want to keep numbers
   as is or if you want to pass any other value to numerical definitions,
-  they must be given as default arguments (see next subsection).
+  they must be given as keyword lists.
 
   ### Default arguments
 
@@ -188,14 +193,11 @@ defmodule Nx.Defn do
   you have to use transforms, as described in the "Invoking custom Elixir
   code" section.
 
-  Additionally, `defn` supports anonymous as a direct input, without wrapping
-  in a default argument.
-
   > **Important!** When it comes to JIT compilation, each different set of
-  > options and anonymous functions will lead to a different compilation of
-  > the numerical function.
+  > options (as well as anonymous functions) will lead to a different
+  > compilation of the numerical function.
   >
-  > Furthermore, if tensors are given through default arguments, they won't
+  > Furthermore, if tensors are given through keyword lists, they won't
   > be cached effectively. Tensors in `defn` are cached based on their shape
   > and type, not their value, but this is not true if the tensor is given
   > via a default argument or captured by an anonymous function. For this
@@ -302,6 +304,14 @@ defmodule Nx.Defn do
       fun = Nx.Defn.compile(&softmax/1, [Nx.template({3}, {:s, 64})], compiler: EXLA)
       fun.(Nx.tensor([1, 2, 3]))
 
+  You can also pass a mixture of templates and options when
+  compiling a function. In such cases, you must only pass
+  the inputs when invoking the compiled function, as the options
+  will already be embedded in its compiled value:
+
+      fun = Nx.Defn.compile(&Nx.sum/2, [Nx.template({2, 2}, {:s, 64}), [axes: [1]]])
+      fun.(Nx.iota({2, 2}))
+
   If the input tensors do not match the shape of the tensors
   given on compilation, it will raise.
 
@@ -314,7 +324,7 @@ defmodule Nx.Defn do
   """
   def compile(fun, template_args, opts \\ [])
       when is_function(fun) and is_list(template_args) and is_list(opts) do
-    {params, _flatten} = Nx.Defn.Composite.to_lazy_params(template_args)
+    {fun, params, _flatten} = Nx.Defn.Compiler.to_lazy_params(fun, template_args)
     opts = prepare_options(opts)
     compiled_fun = Nx.Defn.Compiler.__compile__(fun, params, opts)
 
@@ -323,7 +333,7 @@ defmodule Nx.Defn do
         raise "cannot invoke compiled function when there is a JIT compilation happening"
       end
 
-      {templates, flatten} = Nx.Defn.Composite.to_lazy_template(args)
+      {templates, flatten} = Nx.Defn.Compiler.to_lazy_template(args)
       assert_compatible!(templates, params, 1)
       [res] = compiled_fun.([flatten])
       res
@@ -428,7 +438,7 @@ defmodule Nx.Defn do
 
   defp do_jit_apply(fun, args, opts) do
     opts = prepare_options(opts)
-    {params, flatten} = Nx.Defn.Composite.to_lazy_params(args)
+    {fun, params, flatten} = Nx.Defn.Compiler.to_lazy_params(fun, args)
     [res] = Nx.Defn.Compiler.__jit__(fun, params, [flatten], opts)
     res
   end
@@ -470,7 +480,7 @@ defmodule Nx.Defn do
   """
   def debug_expr_apply(fun, args, opts \\ []) when is_function(fun) and is_list(args) do
     opts = opts |> prepare_options() |> Keyword.put(:compiler, Nx.Defn.Debug)
-    {params, flatten} = Nx.Defn.Composite.to_lazy_params(args)
+    {fun, params, flatten} = Nx.Defn.Compiler.to_lazy_params(fun, args)
     [res] = Nx.Defn.Compiler.__jit__(fun, params, [flatten], opts)
     res
   end
@@ -536,7 +546,7 @@ defmodule Nx.Defn do
     end
 
     opts = prepare_options(opts)
-    {params, flatten} = Nx.Defn.Composite.to_lazy_params(args)
+    {fun, params, flatten} = Nx.Defn.Compiler.to_lazy_params(fun, args)
 
     case args do
       [_input, acc | _] ->
@@ -561,15 +571,7 @@ defmodule Nx.Defn do
 
   defp wrap(fun, callback) do
     {:arity, arity} = Function.info(fun, :arity)
-    wrap_arity(arity, callback)
-  end
-
-  for i <- 0..128 do
-    args = Macro.generate_arguments(i, __MODULE__)
-
-    defp wrap_arity(unquote(i), callback) do
-      fn unquote_splicing(args) -> callback.(unquote(args)) end
-    end
+    Nx.Defn.Compiler.fun(arity, callback)
   end
 
   @doc """
@@ -798,7 +800,7 @@ defmodule Nx.Defn do
 
     defaults =
       for {{:\\, meta, [_, default]}, i} <- Enum.with_index(args),
-          do: {i, {meta, default}},
+          do: {i, {meta, Macro.escape(default)}},
           into: []
 
     quote do
@@ -824,9 +826,9 @@ defmodule Nx.Defn do
     arity = length(args)
 
     defaults =
-      for {{:\\, meta, [_, default]}, i} <- Enum.with_index(args), into: [] do
-        {i, {meta, default}}
-      end
+      for {{:\\, meta, [_, default]}, i} <- Enum.with_index(args),
+          do: {i, {meta, Macro.escape(default)}},
+          into: []
 
     define_ast =
       quote do

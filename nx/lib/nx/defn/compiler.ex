@@ -136,7 +136,7 @@ defmodule Nx.Defn.Compiler do
     try do
       fun
       |> apply(args)
-      |> Nx.Defn.Composite.to_output()
+      |> Nx.Defn.Composite.traverse(&Nx.Defn.Expr.tensor/1)
     after
       Nx.default_backend(tuple)
 
@@ -258,23 +258,6 @@ defmodule Nx.Defn.Compiler do
       end)
 
     all_args = Macro.generate_arguments(arity, __MODULE__)
-
-    fn_args =
-      for {arg, i} <- Enum.with_index(all_args),
-          not Map.has_key?(defaults, i),
-          do: arg
-
-    fun =
-      if defaults == [] do
-        quote do
-          &(unquote(Macro.var(defn_name, __MODULE__)) / unquote(arity))
-        end
-      else
-        quote do
-          fn unquote_splicing(fn_args) -> unquote(defn_name)(unquote_splicing(all_args)) end
-        end
-      end
-
     Module.delete_definition(state.module, def)
 
     entrypoint =
@@ -283,7 +266,10 @@ defmodule Nx.Defn.Compiler do
           if Process.get(Nx.Defn.Compiler) do
             unquote(defn_name)(unquote_splicing(all_args))
           else
-            Nx.Defn.Compiler.__runtime__(unquote(fun), unquote(fn_args))
+            Nx.Defn.Compiler.__runtime__(
+              &(unquote(Macro.var(defn_name, __MODULE__)) / unquote(arity)),
+              unquote(all_args)
+            )
           end
         end
       end
@@ -326,11 +312,9 @@ defmodule Nx.Defn.Compiler do
     {compiler, compiler_opts} =
       Keyword.pop(Nx.Defn.default_options(), :compiler, Nx.Defn.Evaluator)
 
-    {cache, split_args} = Nx.Defn.Composite.split_compile_args(args, fun)
-    {params, flatten} = Nx.Defn.Composite.to_lazy_params(split_args)
-    runtime_fun = &runtime_fun(Nx.Defn.Composite.join_compile_args(&1, args), fun, compiler)
-
-    [res] = compiler.__jit__(cache, params, runtime_fun, [flatten], compiler_opts)
+    {fun, params, flatten} = to_lazy_params(fun, args)
+    runtime_fun = &runtime_fun(&1, fun, compiler)
+    [res] = compiler.__jit__(fun, params, runtime_fun, [flatten], compiler_opts)
     res
   end
 
@@ -729,6 +713,60 @@ defmodule Nx.Defn.Compiler do
     end)
 
     :ok
+  end
+
+  ## Params manipulation
+
+  for i <- 0..128 do
+    args = Macro.generate_arguments(i, __MODULE__)
+
+    def fun(unquote(i), callback) do
+      fn unquote_splicing(args) -> callback.(unquote(args)) end
+    end
+  end
+
+  @doc false
+  def to_lazy_params(fun, args) do
+    {params, cache, {funs, _}} =
+      Enum.reduce(args, {[], [], {[], 0}}, fn
+        arg, {params, cache, acc}
+        when is_list(arg)
+        when is_function(arg)
+        when is_tuple(arg) and is_function(elem(arg, 0)) ->
+          {params, [arg | cache], acc}
+
+        container, {params, cache, acc} ->
+          {param, acc} =
+            Nx.LazyContainer.traverse(container, acc, fn template, fun, {acc, i} ->
+              {Nx.Defn.Expr.parameter(template, :root, i), {[fun | acc], i + 1}}
+            end)
+
+          {[param | params], [nil | cache], acc}
+      end)
+
+    if Enum.all?(cache, &is_nil/1) do
+      {fun, Enum.reverse(params), Enum.reverse(funs)}
+    else
+      cache = Enum.reverse(cache)
+      fun = fun(length(params), &apply(fun, merge_cache(cache, &1)))
+      {fun, Enum.reverse(params), Enum.reverse(funs)}
+    end
+  end
+
+  defp merge_cache([nil | cache], [head | tail]), do: [head | merge_cache(cache, tail)]
+  defp merge_cache([head | tail], params), do: [head | merge_cache(tail, params)]
+  defp merge_cache([], []), do: []
+
+  @doc false
+  def to_lazy_template(args) do
+    {template_args, funs} =
+      Enum.map_reduce(args, [], fn container, acc ->
+        Nx.LazyContainer.traverse(container, acc, fn template, fun, acc ->
+          {template, [fun | acc]}
+        end)
+      end)
+
+    {template_args, Enum.reverse(funs)}
   end
 
   ## Helpers

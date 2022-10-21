@@ -1972,6 +1972,12 @@ defmodule Nx.DefnTest do
       assert Nx.Defn.jit(&defn_jit(&1, 3)).({4, 5}) == Nx.tensor(6)
     end
 
+    @tag compiler: Evaluator
+    test "applies with options" do
+      fun = Nx.Defn.jit(&Nx.sum/2)
+      assert fun.(Nx.iota({2, 2}), axes: [1]) == Nx.tensor([1, 5])
+    end
+
     defn defn_jit_or_apply(ab, c),
       do: Nx.Defn.jit_apply(&defn_jit/2, [ab, c], on_conflict: :reuse)
 
@@ -2054,6 +2060,12 @@ defmodule Nx.DefnTest do
       fun = Nx.Defn.compile(&defn_compile(&1, 3), [{4, 5}])
       assert fun.({4, 5}) == Nx.tensor(6)
       assert fun.({40, 50}) == Nx.tensor(87)
+    end
+
+    @tag compiler: Evaluator
+    test "compiles defn function with options" do
+      fun = Nx.Defn.compile(&Nx.sum/2, [Nx.template({2, 2}, :s64), [axes: [1]]])
+      assert fun.(Nx.iota({2, 2})) == Nx.tensor([1, 5])
     end
 
     @tag compiler: Evaluator
@@ -2146,6 +2158,7 @@ defmodule Nx.DefnTest do
   end
 
   describe "default arguments" do
+    defn id_default(empty \\ {}), do: empty
     defn sum_axis_opts(a, opts \\ []), do: Nx.sum(a, opts)
     defn local_calls_sum_axis_opts(a), do: sum_axis_opts(a)
     defn remote_calls_sum_axis_opts(a), do: __MODULE__.sum_axis_opts(a)
@@ -2155,6 +2168,13 @@ defmodule Nx.DefnTest do
       assert sum_axis_opts(Nx.tensor([[1, 2], [3, 4]])) == Nx.tensor(10)
       assert sum_axis_opts(Nx.tensor([[1, 2], [3, 4]]), axes: [0]) == Nx.tensor([4, 6])
       assert sum_axis_opts(Nx.tensor([[1, 2], [3, 4]]), axes: [1]) == Nx.tensor([3, 7])
+    end
+
+    @tag compiler: Evaluator
+    test "accept any valid defn value" do
+      assert id_default() == {}
+      assert id_default(1) == Nx.tensor(1)
+      assert id_default({1}) == {Nx.tensor(1)}
     end
 
     @tag compiler: Evaluator

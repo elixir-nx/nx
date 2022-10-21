@@ -3173,12 +3173,12 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "take" do
-    defn grad_sum_take(t, i, axis \\ 0) do
+    defn grad_sum_take(t, i, opts \\ [axis: 0]) do
       grad(
         t,
         fn t ->
           t
-          |> Nx.take(i, axis: axis)
+          |> Nx.take(i, opts)
           |> Nx.sum()
         end
       )
@@ -3307,7 +3307,7 @@ defmodule Nx.Defn.GradTest do
                      [[2], [1]]
                    ]
                  ]),
-                 1
+                 axis: 1
                )
     end
   end
