@@ -6,7 +6,8 @@
 
   * [Nx] Add `Nx.rename/2`, `Nx.median/2`, and `Nx.weighted_mean/3`
   * [Nx] Implement cumulative operations using associative scan for improved performance
-  * [Nx.Constants] Add `smallest_positive_normal`
+  * [Nx.Constants] Add `smallest_positive_normal`, `min`, and `max`
+  * [Nx.Defn] Allow lists and functions anywhere as arguments in `defn`, `jit` and `compile`
   * [Nx.Defn] Add `Nx.LazyContainer` that allows a data-structure to lazily define tensors
   * [Nx.Defn] Allow tensors and ranges as generators inside `while`
   * [Nx.Defn] Add `debug_expr/2` and `debug_expr_apply/3`
@@ -17,8 +18,14 @@
 
 ### Bug fixes
 
+  * [Nx] Perform `window_reduce`/`reduce` operations from infinity and negative infinity
   * [Nx.Defn] Ensure `defnp` emits warnings when unused
   * [Nx.Defn] Warn on unused variables in `while`
+
+### Deprecations
+
+  * [Nx] Deprecate tensor as shape in `Nx.eye/2` and `Nx.iota/2`
+  * [Nx] Deprecate `Nx.random_uniform/2` and `Nx.random_normal/2`
 
 ## v0.3.0 (2022-08-13)
 

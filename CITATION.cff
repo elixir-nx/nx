@@ -19,7 +19,7 @@ authors:
   - given-names: Paulo
     family-names: O. Lenzi Valente
     email: paulovalente@ufrj.br
-    affiliation: Stone
+    affiliation: Dockyard
     orcid: 'https://orcid.org/0000-0002-9902-9860'
 repository-code: 'https://github.com/elixir-nx/nx'
 keywords:
@@ -27,5 +27,5 @@ keywords:
   - tensors
   - numerical expressions
 license: Apache-2.0
-version: v0.1
+version: v0.4
 date-released: '2022-01-06'
