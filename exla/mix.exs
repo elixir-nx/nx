@@ -56,7 +56,7 @@ defmodule EXLA.MixProject do
       {:xla, "~> 0.3.0", runtime: false},
       {:elixir_make, "~> 0.6", runtime: false},
       {:benchee, "~> 1.0", only: :dev},
-      {:ex_doc, "~> 0.28.3", only: :docs}
+      {:ex_doc, "~> 0.29.0", only: :docs}
     ]
   end
 
