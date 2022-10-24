@@ -7070,8 +7070,6 @@ defmodule Nx do
   defp mode_1d(tensor, opts) do
     sorted = sort(tensor)
 
-    IO.inspect(not_equal(sorted[0..-2//1], sorted[1..-1//1]))
-
     group_idx =
       concatenate([
         tensor([0]),
