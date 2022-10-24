@@ -7070,9 +7070,11 @@ defmodule Nx do
   defp mode_1d(tensor, opts) do
     sorted = sort(tensor)
 
+    IO.inspect(not_equal(sorted[0..-2//1], sorted[1..-1//1]))
+
     group_idx =
       concatenate([
-        tensor(0),
+        tensor([0]),
         not_equal(sorted[0..-2//1], sorted[1..-1//1])
       ])
       |> cumulative_sum()
@@ -7083,8 +7085,8 @@ defmodule Nx do
       |> argmax()
 
     idx = group_idx |> equal(largest_group_idx) |> argmax()
-    res = take(sorted, idx)
-    if opts[:keep_axis], do: new_axis(res, -1), else: res
+    res = take(sorted, Nx.new_axis(idx, 0))
+    if opts[:keep_axis], do: res, else: squeeze(res)
   end
 
   @doc """
