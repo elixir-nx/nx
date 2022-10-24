@@ -6964,8 +6964,12 @@ defmodule Nx do
 
       iex> Nx.mode(Nx.tensor([[[1]]]), keep_axis: true)
       #Nx.Tensor<
-        s64[1]
-        [1]
+        s64[1][1][1]
+        [
+          [
+            [1]
+          ]
+        ]
       >
 
       iex> Nx.mode(Nx.tensor([[[[1]]]]), axis: 1, keep_axis: true)
@@ -7035,7 +7039,7 @@ defmodule Nx do
 
     num_elements = Tuple.product(tensor_shape)
 
-    gen_indices =
+    counting_indices =
       0..(rank(group_indices) - 1)//1
       |> Enum.map(fn
         ^axis ->
@@ -7050,7 +7054,7 @@ defmodule Nx do
 
     largest_group_indices =
       broadcast(0, sorted)
-      |> indexed_add(gen_indices, broadcast(1, {num_elements}))
+      |> indexed_add(counting_indices, broadcast(1, {num_elements}))
       |> argmax(axis: axis, keep_axis: true)
 
     indices =
