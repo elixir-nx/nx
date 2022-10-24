@@ -7005,10 +7005,6 @@ defmodule Nx do
       tensor_size == 1 and axis != nil ->
         if opts[:keep_axis], do: tensor, else: squeeze(tensor, axes: [axis])
 
-      size(tensor) == 1 ->
-        res = take(tensor, broadcast(0, {tensor_rank}))
-        if opts[:keep_axis], do: res, else: squeeze(res, axes: [axis])
-
       axis == nil ->
         tensor = flatten(tensor)
         mode_1d(tensor, keep_axis: opts[:keep_axis])
