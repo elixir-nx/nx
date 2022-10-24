@@ -7083,7 +7083,7 @@ defmodule Nx do
       |> argmax()
 
     idx = group_idx |> equal(largest_group_idx) |> argmax()
-    res = take(sorted, Nx.new_axis(idx, 0))
+    res = take(sorted, new_axis(idx, 0))
     if opts[:keep_axis], do: res, else: squeeze(res)
   end
 
