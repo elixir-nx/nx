@@ -7059,7 +7059,7 @@ defmodule Nx do
     largest_group_indices =
       broadcast(0, sorted)
       |> indexed_add(gen_indices, broadcast(1, {n}))
-      |> argmax(axis: opts[:axis], keep_axis: true)
+      |> argmax(axis: axis, keep_axis: true)
 
     indices =
       largest_group_indices
