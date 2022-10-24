@@ -7069,6 +7069,7 @@ defmodule Nx do
 
   defp mode_1d(tensor, opts) do
     sorted = sort(tensor)
+    sorted = if rank(sorted) == 0, do: new_axis(sorted, 0), else: sorted
 
     group_idx =
       concatenate([
