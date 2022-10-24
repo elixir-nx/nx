@@ -7069,11 +7069,10 @@ defmodule Nx do
 
   defp mode_1d(tensor, opts) do
     sorted = sort(tensor)
-    tensor = if rank(tensor) == 0, do: new_axis(tensor, 0), else: tensor
 
     group_idx =
       concatenate([
-        tensor([0]),
+        tensor(0),
         not_equal(sorted[0..-2//1], sorted[1..-1//1])
       ])
       |> cumulative_sum()
