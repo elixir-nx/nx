@@ -7046,7 +7046,7 @@ defmodule Nx do
           reshape(group_indices, {num_elements, 1})
 
         axis ->
-          group_indices
+          shape(group_indices)
           |> iota(axis: axis)
           |> reshape({num_elements, 1})
       end)
