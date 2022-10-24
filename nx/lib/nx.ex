@@ -6882,7 +6882,7 @@ defmodule Nx do
   end
 
   @doc """
-  Returns the mode (the values that appear most often) of a tensor.
+  Returns the mode of a tensor (the value that appear most often).
 
   If the `:axis` option is given, it aggregates over
   that dimension, effectively removing it. `axis: 0`
@@ -7039,7 +7039,7 @@ defmodule Nx do
       )
       |> cumulative_sum(axis: axis)
 
-    num_elements = tensor_shape |> Tuple.product()
+    num_elements = Tuple.product(tensor_shape)
 
     gen_indices =
       0..(rank(group_indices) - 1)//1
@@ -7054,11 +7054,9 @@ defmodule Nx do
       end)
       |> concatenate(axis: 1)
 
-    {n, _} = shape(gen_indices)
-
     largest_group_indices =
       broadcast(0, sorted)
-      |> indexed_add(gen_indices, broadcast(1, {n}))
+      |> indexed_add(gen_indices, broadcast(1, {num_elements}))
       |> argmax(axis: axis, keep_axis: true)
 
     indices =
