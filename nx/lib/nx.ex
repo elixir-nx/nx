@@ -7009,7 +7009,8 @@ defmodule Nx do
 
       axis == nil ->
         tensor = flatten(tensor)
-        mode_1d(tensor, keep_axis: opts[:keep_axis])
+        res = mode_general(tensor, axis: 0)
+        if opts[:keep_axis], do: reshape(res, Tuple.duplicate(1, tensor_rank)), else: res
 
       true ->
         mode_general(tensor, axis: axis, keep_axis: opts[:keep_axis])
@@ -7065,26 +7066,6 @@ defmodule Nx do
 
     res = take_along_axis(sorted, indices, axis: axis)
     if opts[:keep_axis], do: res, else: squeeze(res, axes: [axis])
-  end
-
-  defp mode_1d(tensor, opts) do
-    sorted = sort(tensor)
-
-    group_idx =
-      concatenate([
-        tensor([0]),
-        not_equal(sorted[0..-2//1], sorted[1..-1//1])
-      ])
-      |> cumulative_sum()
-
-    largest_group_idx =
-      broadcast(0, tensor)
-      |> indexed_add(new_axis(group_idx, -1), broadcast(1, tensor))
-      |> argmax()
-
-    idx = group_idx |> equal(largest_group_idx) |> argmax()
-    res = take(sorted, new_axis(idx, 0))
-    if opts[:keep_axis], do: res, else: squeeze(res)
   end
 
   @doc """
