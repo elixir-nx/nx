@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.4.0
+## v0.4.0 (2022-10-25)
 
 ### Enhancements
 

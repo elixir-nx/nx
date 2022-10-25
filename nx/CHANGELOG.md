@@ -1,10 +1,10 @@
 # Changelog
 
-## v0.4.0
+## v0.4.0 (2022-10-25)
 
 ### Enhancements
 
-  * [Nx] Add `Nx.rename/2`, `Nx.median/2`, and `Nx.weighted_mean/3`
+  * [Nx] Add `Nx.rename/2`, `Nx.median/2`, `Nx.weighted_mean/3`, and `Nx.mode/2`
   * [Nx] Implement cumulative operations using associative scan for improved performance
   * [Nx.Constants] Add `smallest_positive_normal`, `min`, and `max`
   * [Nx.Defn] Allow lists and functions anywhere as arguments in `defn`, `jit` and `compile`
