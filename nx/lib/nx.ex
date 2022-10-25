@@ -6884,6 +6884,193 @@ defmodule Nx do
   end
 
   @doc """
+  Returns the mode of a tensor (the value that appears most often).
+
+  If the `:axis` option is given, it aggregates over
+  that dimension, effectively removing it. `axis: 0`
+  implies aggregating over the highest order dimension
+  and so forth. If the axis is negative, then the axis will
+  be counted from the back. For example, `axis: -1` will
+  always aggregate over the last dimension.
+
+  You may optionally set `:keep_axis` to true, which will
+  retain the rank of the input tensor by setting the reduced
+  axis to size 1.
+
+  ## Examples
+
+      iex> Nx.mode(Nx.tensor(42))
+      #Nx.Tensor<
+        s64
+        42
+      >
+
+      iex> Nx.mode(Nx.tensor([[1]]))
+      #Nx.Tensor<
+        s64
+        1
+      >
+
+      iex> Nx.mode(Nx.tensor([1, 2, 2, 3, 5]))
+      #Nx.Tensor<
+        s64
+        2
+      >
+
+      iex> Nx.mode(Nx.tensor([[1, 2, 2, 3, 5], [1, 1, 76, 8, 1]]))
+      #Nx.Tensor<
+        s64
+        1
+      >
+
+  ### Aggregating over an axis
+
+      iex> Nx.mode(Nx.tensor([[1, 2, 2, 3, 5], [1, 1, 76, 8, 1]]), axis: 0)
+      #Nx.Tensor<
+        s64[5]
+        [1, 1, 2, 3, 1]
+      >
+
+      iex> Nx.mode(Nx.tensor([[1, 2, 2, 3, 5], [1, 1, 76, 8, 1]]), axis: 1)
+      #Nx.Tensor<
+        s64[2]
+        [2, 1]
+      >
+
+      iex> Nx.mode(Nx.tensor([[[[1]]]]), axis: 1)
+      #Nx.Tensor<
+        s64[1][1][1]
+        [
+          [
+            [1]
+          ]
+        ]
+      >
+
+  ### Keeping axis
+
+      iex> Nx.mode(Nx.tensor([[1, 2, 2, 3, 5], [1, 1, 76, 8, 1]]), axis: 1, keep_axis: true)
+      #Nx.Tensor<
+        s64[2][1]
+        [
+          [2],
+          [1]
+        ]
+      >
+
+      iex> Nx.mode(Nx.tensor(1), keep_axis: true)
+      #Nx.Tensor<
+        s64[1]
+        [1]
+      >
+
+      iex> Nx.mode(Nx.tensor([[[1]]]), keep_axis: true)
+      #Nx.Tensor<
+        s64[1][1][1]
+        [
+          [
+            [1]
+          ]
+        ]
+      >
+
+      iex> Nx.mode(Nx.tensor([[[[1]]]]), axis: 1, keep_axis: true)
+      #Nx.Tensor<
+        s64[1][1][1][1]
+        [
+          [
+            [
+              [1]
+            ]
+          ]
+        ]
+      >
+  """
+  @doc type: :aggregation, from_backend: false
+  def mode(tensor, opts \\ []) do
+    opts = keyword!(opts, axis: nil, keep_axis: false)
+    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
+
+    axis =
+      if opts[:axis] != nil,
+        do: Nx.Shape.normalize_axis(shape, opts[:axis], names),
+        else: opts[:axis]
+
+    tensor_rank = rank(tensor)
+    tensor_size = size(tensor)
+
+    cond do
+      tensor_rank == 0 ->
+        if opts[:keep_axis], do: new_axis(tensor, -1), else: tensor
+
+      tensor_size == 1 and axis == nil ->
+        if opts[:keep_axis], do: tensor, else: squeeze(tensor)
+
+      tensor_size == 1 and axis != nil ->
+        if opts[:keep_axis], do: tensor, else: squeeze(tensor, axes: [axis])
+
+      axis == nil ->
+        tensor = flatten(tensor)
+        res = mode_general(tensor, axis: 0)
+        if opts[:keep_axis], do: reshape(res, Tuple.duplicate(1, tensor_rank)), else: res
+
+      true ->
+        mode_general(tensor, axis: axis, keep_axis: opts[:keep_axis])
+    end
+  end
+
+  defp mode_general(tensor, opts) do
+    tensor_shape = shape(tensor)
+    axis = opts[:axis]
+
+    sorted = sort(tensor, axis: axis)
+
+    size_to_broadcast = tensor_shape |> put_elem(axis, 1)
+
+    group_indices =
+      concatenate(
+        [
+          broadcast(0, size_to_broadcast),
+          not_equal(
+            slice_along_axis(sorted, 0, axis_size(sorted, axis) - 1, axis: axis),
+            slice_along_axis(sorted, 1, axis_size(sorted, axis) - 1, axis: axis)
+          )
+        ],
+        axis: axis
+      )
+      |> cumulative_sum(axis: axis)
+
+    num_elements = Tuple.product(tensor_shape)
+
+    counting_indices =
+      0..(rank(group_indices) - 1)//1
+      |> Enum.map(fn
+        ^axis ->
+          reshape(group_indices, {num_elements, 1})
+
+        axis ->
+          shape(group_indices)
+          |> iota(axis: axis)
+          |> reshape({num_elements, 1})
+      end)
+      |> concatenate(axis: 1)
+
+    largest_group_indices =
+      broadcast(0, sorted)
+      |> indexed_add(counting_indices, broadcast(1, {num_elements}))
+      |> argmax(axis: axis, keep_axis: true)
+
+    indices =
+      largest_group_indices
+      |> broadcast(shape(group_indices))
+      |> equal(group_indices)
+      |> argmax(axis: axis, keep_axis: true)
+
+    res = take_along_axis(sorted, indices, axis: axis)
+    if opts[:keep_axis], do: res, else: squeeze(res, axes: [axis])
+  end
+
+  @doc """
   Returns the product for the tensor.
 
   If the `:axes` option is given, it aggregates over
