@@ -114,12 +114,22 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def eye(%{shape: {n, n}, type: type} = out, _backend_options) do
+  def eye(%{shape: shape, type: type} = out, _backend_options) do
     one = number_to_binary(1, type)
     zero = number_to_binary(0, type)
 
+    shape_size = tuple_size(shape)
+    m = elem(shape, shape_size - 2)
+    n = elem(shape, shape_size - 1)
+
+    count =
+      shape
+      |> Tuple.delete_at(shape_size - 1)
+      |> Tuple.delete_at(shape_size - 2)
+      |> Tuple.product()
+
     data =
-      for i <- 1..n, j <- 1..n, into: <<>> do
+      for _ <- 1..count, i <- 1..m, j <- 1..n, into: <<>> do
         if i == j, do: one, else: zero
       end
 

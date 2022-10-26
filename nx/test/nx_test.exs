@@ -1940,18 +1940,6 @@ defmodule NxTest do
     end
   end
 
-  describe "eye/2" do
-    test "raises for non-square shape" do
-      assert_raise(
-        ArgumentError,
-        "eye/2 expects a square shape or an integer as argument, got: {2, 3}",
-        fn ->
-          Nx.eye({2, 3})
-        end
-      )
-    end
-  end
-
   describe "take_diagonal/2" do
     test "extracts valid diagonal given no offset" do
       diag =

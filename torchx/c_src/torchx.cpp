@@ -603,11 +603,12 @@ NIF(ones)
 
 NIF(eye)
 {
-  PARAM(0, int64_t, size);
-  TYPE_PARAM(1, type);
-  DEVICE_PARAM(2, device);
+  PARAM(0, int64_t, m);
+  PARAM(1, int64_t, n);
+  TYPE_PARAM(2, type);
+  DEVICE_PARAM(3, device);
 
-  TENSOR(torch::eye(size, OPTS(type, device)));
+  TENSOR(torch::eye(m, n, OPTS(type, device)));
 }
 
 NIF(full)
@@ -1202,7 +1203,7 @@ static ErlNifFunc nif_functions[] = {
     DF(arange, 6),
     DF(scalar_tensor, 3),
     DF(ones, 3),
-    DF(eye, 3),
+    DF(eye, 4),
     DF(full, 4),
 
     DF(item, 1),
