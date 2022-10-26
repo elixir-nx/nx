@@ -70,8 +70,6 @@ defmodule Torchx.Backend do
     m = elem(shape, rank - 2)
     n = elem(shape, rank - 1)
 
-    count = shape |> Tuple.delete_at(rank - 1) |> Tuple.delete_at(rank - 2)
-
     m
     |> Torchx.eye(n, to_torch_type(type), device_option(backend_options))
     |> Torchx.broadcast_to(shape)
