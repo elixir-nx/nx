@@ -914,12 +914,12 @@ defmodule EXLA.Defn do
 
   ## to_operator reduction
 
-  defp to_operator(:all, [arg, opts], _ans, state) do
-    to_aggregate(:bitwise_and, {:pred, 8}, {}, arg, 1, opts, state)
+  defp to_operator(:all, [arg, opts], %{shape: shape}, state) do
+    to_aggregate(:bitwise_and, {:pred, 8}, shape, arg, 1, opts, state)
   end
 
-  defp to_operator(:any, [arg, opts], _ans, state) do
-    to_aggregate(:bitwise_or, {:pred, 8}, {}, arg, 0, opts, state)
+  defp to_operator(:any, [arg, opts], %{shape: shape}, state) do
+    to_aggregate(:bitwise_or, {:pred, 8}, shape, arg, 0, opts, state)
   end
 
   defp to_operator(:sum, [arg, opts], %{type: type, shape: shape}, state) do
