@@ -1315,13 +1315,35 @@ defmodule Nx do
         ]
       >
 
-  The first argument can also be a shape of a square matrix:
+  The first argument can also be a shape of a matrix:
 
-      iex> Nx.eye({1, 1})
+      iex> Nx.eye({1, 2})
       #Nx.Tensor<
-        s64[1][1]
+        s64[1][2]
         [
-          [1]
+          [1, 0]
+        ]
+      >
+
+  The shape can also represent a tensor batch. In this case,
+  the last two axes will represent the same identity matrix.
+
+      iex> Nx.eye({2, 4, 3})
+      #Nx.Tensor<
+        s64[2][4][3]
+        [
+          [
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1],
+            [0, 0, 0]
+          ],
+          [
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1],
+            [0, 0, 0]
+          ]
         ]
       >
 
@@ -1343,7 +1365,7 @@ defmodule Nx do
     eye({n, n}, opts)
   end
 
-  def eye({n, n} = shape, opts) do
+  def eye(shape, opts) when is_tuple(shape) and tuple_size(shape) >= 2 do
     opts = keyword!(opts, [:names, :backend, type: {:s, 64}])
     names = Nx.Shape.named_axes!(opts[:names], shape)
     type = Nx.Type.normalize!(opts[:type] || {:s, 64})
@@ -1354,7 +1376,7 @@ defmodule Nx do
 
   def eye(shape, _opts) when is_tuple(shape) do
     raise ArgumentError,
-          "eye/2 expects a square shape or an integer as argument, got: #{inspect(shape)}"
+          "eye/2 expects a shape with at least 2 dimensions or an integer, got: #{inspect(shape)}"
   end
 
   def eye(tensor, opts) do

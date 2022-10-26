@@ -224,7 +224,8 @@ defmodule Torchx do
   defdevice full(shape, scalar, type, device)
   defdevice scalar_tensor(scalar, type, device)
   defdevice ones(shape, type, device)
-  defdevice eye(size, type, device)
+  def eye(size, type, device), do: eye(size, size, type, device)
+  defdevice eye(m, n, type, device)
   defdevice from_blob(blob, shape, type, device)
   defdevice to_device(tensor, device)
 

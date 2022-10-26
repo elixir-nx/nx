@@ -65,8 +65,15 @@ defmodule Torchx.Backend do
   defp constant_serialize_scalar(scalar), do: scalar
 
   @impl true
-  def eye(%T{shape: {n, n}, type: type} = out, backend_options) do
-    Torchx.eye(n, to_torch_type(type), device_option(backend_options)) |> to_nx(out)
+  def eye(%T{shape: shape, type: type} = out, backend_options) do
+    rank = tuple_size(shape)
+    m = elem(shape, rank - 2)
+    n = elem(shape, rank - 1)
+
+    m
+    |> Torchx.eye(n, to_torch_type(type), device_option(backend_options))
+    |> Torchx.broadcast_to(shape)
+    |> to_nx(out)
   end
 
   @impl true
