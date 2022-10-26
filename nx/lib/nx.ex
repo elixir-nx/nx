@@ -6192,6 +6192,18 @@ defmodule Nx do
         u8[x: 2]
         [0, 1]
       >
+
+  ### Keeping axes
+
+      iex> Nx.all(Nx.tensor([[-1, 0, 1], [2, 3, 4]], names: [:x, :y]), axes: [:y], keep_axes: true)
+      #Nx.Tensor<
+        u8[x: 2][y: 1]
+        [
+          [0],
+          [1]
+        ]
+      >
+
   """
   @doc type: :aggregation
   def all(tensor, opts \\ []) do
@@ -6232,6 +6244,18 @@ defmodule Nx do
         u8[x: 2]
         [1, 1]
       >
+
+  ### Keeping axes
+
+      iex> Nx.any(Nx.tensor([[0, 1, 0], [0, 1, 2]], names: [:x, :y]), axes: [:y], keep_axes: true)
+      #Nx.Tensor<
+        u8[x: 2][y: 1]
+        [
+          [1],
+          [1]
+        ]
+      >
+
   """
   @doc type: :aggregation
   def any(tensor, opts \\ []) do
