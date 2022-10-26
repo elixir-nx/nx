@@ -1853,6 +1853,7 @@ defmodule EXLA.Defn.ExprTest do
     defn all(t), do: Nx.all(t)
     defn all_axis_0(t), do: Nx.all(t, axes: [0])
     defn all_axis_1(t), do: Nx.all(t, axes: [1])
+    defn all_keep_axes(t), do: Nx.all(t, keep_axes: true)
 
     test "computes the bitwise and across types" do
       assert_equal(all(Nx.tensor([1, 2, 3])), Nx.tensor(1, type: {:u, 8}))
@@ -1869,6 +1870,13 @@ defmodule EXLA.Defn.ExprTest do
       assert_equal(
         all_axis_1(Nx.tensor([[-1, 0, 1], [2, 3, 4]])),
         Nx.tensor([0, 1], type: {:u, 8})
+      )
+    end
+
+    test "computes the bitwise and keeps axes" do
+      assert_equal(
+        all_keep_axes(Nx.tensor([[-1, 0, 1], [2, 3, 4]])),
+        Nx.tensor([[0]], type: {:u, 8})
       )
     end
   end
