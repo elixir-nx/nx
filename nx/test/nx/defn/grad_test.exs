@@ -2790,9 +2790,20 @@ defmodule Nx.Defn.GradTest do
   describe "clip" do
     defn grad_sum_clip(t), do: grad(t, &Nx.sum(Nx.clip(&1, Nx.tensor(1.0), Nx.tensor(4.0))))
 
+    defn grad_sum_clip_wrt_to_lower_lim(t, lim), do: grad(lim, &Nx.sum(Nx.clip(t, &1, 10)))
+    defn grad_sum_clip_wrt_to_upper_lim(t, lim), do: grad(lim, &Nx.sum(Nx.clip(t, -10, &1)))
+
     test "computes gradient with sum" do
       assert grad_sum_clip(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
                Nx.tensor([[0.0, 1.0, 1.0], [0.0, 0.0, 0.0]])
+    end
+
+    test "computes gradient wrt to lower lim" do
+      assert grad_sum_clip_wrt_to_lower_lim(Nx.iota({5}), 2.5) == Nx.tensor(3.0)
+    end
+
+    test "computes gradient wrt to upper lim" do
+      assert grad_sum_clip_wrt_to_upper_lim(Nx.iota({5}), 2.5) == Nx.tensor(2.0)
     end
   end
 
