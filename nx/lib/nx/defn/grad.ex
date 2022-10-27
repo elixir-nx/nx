@@ -381,8 +381,8 @@ defmodule Nx.Defn.Grad do
 
     [
       {operand, Nx.multiply(g, w_operand)},
-      {min, Nx.multiply(g, w_min)},
-      {max, Nx.multiply(g, w_max)}
+      {min, Nx.sum(Nx.multiply(g, w_min))},
+      {max, Nx.sum(Nx.multiply(g, w_max))}
     ]
   end
 
