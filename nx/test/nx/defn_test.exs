@@ -807,6 +807,16 @@ defmodule Nx.DefnTest do
     end
   end
 
+  describe "optional" do
+    defn cumsum(t), do: Nx.cumulative_sum(t)
+
+    @tag compiler: Evaluator
+    test "cummulative" do
+      assert cumsum(Nx.tensor([1, 2, 3, 4])) == Nx.tensor([1, 3, 6, 10])
+      assert cumsum(Nx.tensor([1, 2, 3, 4], names: [:x])) == Nx.tensor([1, 3, 6, 10], names: [:x])
+    end
+  end
+
   describe "lu" do
     defn lu(t), do: Nx.LinAlg.lu(t)
 

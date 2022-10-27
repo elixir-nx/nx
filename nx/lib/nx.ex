@@ -8506,6 +8506,7 @@ defmodule Nx do
     |> maybe_reverse(opts[:reverse])
     |> do_associative_scan(fun, axis: opts[:axis])
     |> maybe_reverse(opts[:reverse])
+    |> rename(tensor.names)
   end
 
   defp maybe_reverse(tensor, true), do: Nx.reverse(tensor)
