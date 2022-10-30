@@ -362,7 +362,7 @@ defmodule EXLA.Defn do
         end)
       end)
 
-    {time, {expr, {ref, used_inputs, defined_hooks, outputs}}} =
+    {eval_time, {expr, {ref, used_inputs, defined_hooks, outputs}}} =
       :timer.tc(fn ->
         expr_cache_fun.({key, args_key}, fn ->
           expr = fun.(vars)
@@ -372,7 +372,10 @@ defmodule EXLA.Defn do
 
     if debug? do
       hit_or_miss = if expr, do: "", else: " cache hit"
-      Logger.debug("EXLA defn evaluation #{inspect(key)}#{hit_or_miss} in #{us_to_ms(time)}ms")
+
+      Logger.debug(
+        "EXLA defn evaluation #{inspect(key)}#{hit_or_miss} in #{us_to_ms(eval_time)}ms"
+      )
     end
 
     # Hooks with default callbacks or user callbacks are part of the cache key
@@ -382,7 +385,7 @@ defmodule EXLA.Defn do
     {out_inputs, in_inputs} = to_used.(used_inputs)
     comp_key = {ref, client.name, used_hooks, options}
 
-    {time, {evaled, {executable, extra, outfeed_hooks}}} =
+    {comp_time, {evaled, {executable, extra, outfeed_hooks}}} =
       :timer.tc(fn ->
         comp_cache_fun.(comp_key, fn ->
           shapes =
@@ -409,7 +412,17 @@ defmodule EXLA.Defn do
 
     if debug? do
       hit_or_miss = if evaled, do: "", else: " cache hit"
-      Logger.debug("EXLA compilation #{inspect(key)}#{hit_or_miss} in #{us_to_ms(time)}ms")
+      Logger.debug("EXLA compilation #{inspect(key)}#{hit_or_miss} in #{us_to_ms(comp_time)}ms")
+    end
+
+    if expr || evaled do
+      measurements = %{
+        eval_time: eval_time,
+        compile_time: comp_time,
+        total_time: eval_time + comp_time
+      }
+
+      :telemetry.execute([:exla, :compilation], measurements)
     end
 
     {executable, in_inputs, outputs, hooks, extra, debug?}

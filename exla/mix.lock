@@ -11,5 +11,6 @@
   "nimble_parsec": {:hex, :nimble_parsec, "1.2.3", "244836e6e3f1200c7f30cb56733fd808744eca61fd182f731eac4af635cc6d0b", [:mix], [], "hexpm", "c8d789e39b9131acf7b99291e93dae60ab48ef14a7ee9d58c6964f59efb570b0"},
   "nx": {:hex, :nx, "0.4.0", "2ec2cebec6a9ac8a3d5ae8ef79345cf92f37f9018d50817684e51e97b86f3d36", [:mix], [{:complex, "~> 0.4.2", [hex: :complex, repo: "hexpm", optional: false]}], "hexpm", "bab955768dadfe2208723fbffc9255341b023291f2aabcbd25bf98167dd3399e"},
   "statistex": {:hex, :statistex, "1.0.0", "f3dc93f3c0c6c92e5f291704cf62b99b553253d7969e9a5fa713e5481cd858a5", [:mix], [], "hexpm", "ff9d8bee7035028ab4742ff52fc80a2aa35cece833cf5319009b52f1b5a86c27"},
+  "telemetry": {:hex, :telemetry, "1.1.0", "a589817034a27eab11144ad24d5c0f9fab1f58173274b1e9bae7074af9cbee51", [:rebar3], [], "hexpm", "b727b2a1f75614774cff2d7565b64d0dfa5bd52ba517f16543e6fc7efcc0df48"},
   "xla": {:hex, :xla, "0.3.0", "7f40d3d799447bd745e6e61985c922821e355eca37c25754bac299d11f137f2e", [:make, :mix], [{:elixir_make, "~> 0.4", [hex: :elixir_make, repo: "hexpm", optional: false]}], "hexpm", "0de304f5624ea2f2ae1afdcbd72d33855364be36fed2cc5de8d6d2ec8950926e"},
 }

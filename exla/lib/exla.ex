@@ -162,6 +162,18 @@ defmodule EXLA do
   Alternatively, you can pass the `--init` flag to `docker run`, so
   it runs an `init` inside the container that forwards signals and
   reaps processes.
+
+  ## Telemetry events
+
+  EXLA executes a telemetry event every time a function is JIT-compiled.
+  The events are named `[:exla, :compilation]` and include the following
+  measurements, given in microseconds:
+
+    * `:eval_time` - the time spent on turning the function into XLA
+      computation
+    * `:compile_time` - the time spent on compiling the XLA computation
+      into an executable
+    * `:total_time` - the sum of `:eval_time` and `:compile_time`
   """
 
   @behaviour Nx.Defn.Compiler
