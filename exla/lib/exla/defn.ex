@@ -1590,7 +1590,11 @@ defmodule EXLA.Defn do
       end
 
     args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
-    comp = op_computation(op, args, state)
+    # We reverse the argument order because :nan + :infinity
+    # returns :nan but :infinity + :nan returns :infinity.
+    # So we want to keep the current value as first argument
+    # to preserve such properties.
+    comp = op_computation(op, args, state, &Enum.reverse/1)
 
     strides = opts[:strides]
     padding = opts[:padding]

@@ -2403,6 +2403,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "window min" do
+    defn window_min0(t), do: Nx.window_min(t, {2})
     defn window_min1(t), do: Nx.window_min(t, {1, 2, 1})
 
     defn window_min2(t),
@@ -2464,6 +2465,10 @@ defmodule EXLA.Defn.ExprTest do
           window_dilations: [1, 2, 2]
         )
       )
+    end
+
+    test "computes the minimum across nan" do
+      assert_equal(Nx.tensor([:nan, :nan, :nan]) |> window_min0(), Nx.tensor([:nan, :nan]))
     end
   end
 
