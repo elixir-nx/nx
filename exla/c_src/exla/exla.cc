@@ -2025,7 +2025,6 @@ ERL_NIF_TERM transfer_to_infeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM arg
     return exla::nif::error(env, "Bad argument count.");
   }
 
-  // TODO(seanmor5): Maybe this should be a reference to the device?
   exla::ExlaClient** client;
   int device_id;
   ERL_NIF_TERM data = argv[2];

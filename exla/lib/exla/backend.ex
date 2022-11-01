@@ -159,7 +159,7 @@ defmodule EXLA.Backend do
       Nx.Defn.Expr.concatenate(out, Tuple.to_list(tensors), axis)
     end
 
-    jit(expr_fun, [List.to_tuple(tensors)])
+    jit(expr_fun, tensors, [List.to_tuple(tensors)])
   end
 
   @impl true
@@ -177,7 +177,7 @@ defmodule EXLA.Backend do
         Nx.Defn.Expr.slice(out, tensor, Tuple.to_list(start_indices), lengths, strides)
       end
 
-      jit(expr_fun, [tensor, List.to_tuple(start_indices)])
+      jit(expr_fun, [tensor | start_indices], [tensor, List.to_tuple(start_indices)])
     end
   end
 
@@ -196,7 +196,7 @@ defmodule EXLA.Backend do
         Nx.Defn.Expr.put_slice(out, tensor, Tuple.to_list(start_indices), slice)
       end
 
-      jit(expr_fun, [tensor, List.to_tuple(start_indices), slice])
+      jit(expr_fun, [tensor, slice | start_indices], [tensor, List.to_tuple(start_indices), slice])
     end
   end
 
@@ -209,7 +209,7 @@ defmodule EXLA.Backend do
       Nx.Defn.Expr.optional(name, Tuple.to_list(tensors) ++ rest, fun)
     end
 
-    jit(wrapper_fun, [List.to_tuple(tensors)])
+    jit(wrapper_fun, tensors, [List.to_tuple(tensors)])
   end
 
   binary_ops =
@@ -297,5 +297,24 @@ defmodule EXLA.Backend do
     end
   end
 
-  defp jit(fun, args), do: EXLA.jit_apply(fun, args, on_conflict: :force)
+  defp jit(fun, args), do: jit(fun, args, args)
+
+  # TODO: Should we automatically transfer between devices?
+  defp jit(fun, tensors, args) do
+    client =
+      for %T{data: %B{buffer: %EXLA.DeviceBuffer{client_name: client_name}}} <- tensors,
+          reduce: nil do
+        acc when acc != nil and acc != client_name ->
+          raise ArgumentError, """
+          cannot perform Nx operation using EXLA tensors from different clients. Got:
+
+          #{inspect(tensors)}
+          """
+
+        _ ->
+          client_name
+      end
+
+    EXLA.jit_apply(fun, args, on_conflict: :force, client: client || EXLA.Client.default_name())
+  end
 end
