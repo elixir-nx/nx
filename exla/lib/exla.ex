@@ -174,6 +174,10 @@ defmodule EXLA do
     * `:compile_time` - the time spent on compiling the XLA computation
       into an executable
     * `:total_time` - the sum of `:eval_time` and `:compile_time`
+
+  The metadata is:
+
+    * `:key` - the compilation key for debugging
   """
 
   @behaviour Nx.Defn.Compiler

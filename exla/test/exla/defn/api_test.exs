@@ -435,7 +435,7 @@ defmodule EXLA.Defn.APITest do
       assert %{compile_time: compile_time, eval_time: eval_time, total_time: total_time} =
                measurements
 
-      assert metadata == %{}
+      assert metadata == %{key: fun}
 
       assert is_integer(compile_time)
       assert eval_time > 0
@@ -455,7 +455,7 @@ defmodule EXLA.Defn.APITest do
       assert %{compile_time: compile_time, eval_time: eval_time, total_time: total_time} =
                measurements
 
-      assert metadata == %{}
+      assert metadata == %{key: fun}
 
       assert is_integer(compile_time)
       assert eval_time > 0

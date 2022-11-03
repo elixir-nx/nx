@@ -422,7 +422,7 @@ defmodule EXLA.Defn do
         total_time: eval_time + comp_time
       }
 
-      :telemetry.execute([:exla, :compilation], measurements)
+      :telemetry.execute([:exla, :compilation], measurements, %{key: key})
     end
 
     {executable, in_inputs, outputs, hooks, extra, debug?}
