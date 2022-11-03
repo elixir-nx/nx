@@ -38,6 +38,8 @@ defmodule Nx.Backend do
   @type axes :: Nx.Tensor.axes()
   @type backend_options :: term()
 
+  @callback init(keyword()) :: backend_options
+
   @callback constant(out :: tensor, number | Complex.t(), backend_options) :: tensor
   @callback from_binary(out :: tensor, binary, backend_options) :: tensor
   @callback eye(tensor, backend_options) :: tensor

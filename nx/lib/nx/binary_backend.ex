@@ -20,6 +20,15 @@ defmodule Nx.BinaryBackend do
   import Nx.Shared
   import Bitwise, only: [>>>: 2, &&&: 2]
 
+  @impl true
+  def init(opts) do
+    if opts != [] do
+      raise ArgumentError, "Nx.BinaryBackend accepts no options"
+    end
+
+    opts
+  end
+
   ## Creation
 
   @impl true

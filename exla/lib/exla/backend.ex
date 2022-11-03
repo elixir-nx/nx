@@ -29,6 +29,11 @@ defmodule EXLA.Backend do
   alias EXLA.Backend, as: B
 
   @impl true
+  def init(opts) do
+    Keyword.validate!(opts, [:client, :device_id])
+  end
+
+  @impl true
   def constant(out, constant, backend_options) do
     binary_tensor = Nx.BinaryBackend.constant(out, constant, [])
     Nx.BinaryBackend.backend_transfer(binary_tensor, __MODULE__, backend_options)

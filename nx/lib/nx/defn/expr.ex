@@ -475,6 +475,15 @@ defmodule Nx.Defn.Expr do
   @behaviour Nx.Backend
 
   @impl true
+  def init(opts) do
+    if opts != [] do
+      raise ArgumentError, "Nx.BinaryBackend accepts no options"
+    end
+
+    opts
+  end
+
+  @impl true
   def from_binary(binary, type, _options) do
     to_expr(Nx.BinaryBackend.from_binary(binary, type, []))
   end

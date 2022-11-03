@@ -12031,11 +12031,18 @@ defmodule Nx do
 
   ## Helpers
 
-  defp backend!(backend) when is_atom(backend),
-    do: {backend, []}
+  defp backend!(backend) when is_atom(backend) do
+    backend!({backend, []})
+  end
 
-  defp backend!({backend, options}) when is_atom(backend) and is_list(options),
-    do: {backend, options}
+  # TODO: Remove function exported check on Nx v0.5
+  defp backend!({backend, options}) when is_atom(backend) and is_list(options) do
+    if Code.ensure_loaded?(backend) and function_exported?(backend, :init, 1) do
+      {backend, backend.init(options)}
+    else
+      {backend, options}
+    end
+  end
 
   defp backend!(other) do
     raise ArgumentError,

@@ -5,6 +5,8 @@ defmodule Nx.TensorTest do
     @behaviour Nx.Backend
     defstruct [:key]
 
+    def init(opts), do: opts
+
     def from_binary(tensor, binary, opts) do
       key = Keyword.fetch!(opts, :key)
       Process.put(key, binary)

@@ -41,6 +41,11 @@ defmodule Torchx.Backend do
   alias Nx.Tensor, as: T
   alias Torchx.Backend, as: TB
 
+  @impl true
+  def init(opts) do
+    Keyword.validate!(opts, [:device])
+  end
+
   ## Creation
 
   @impl true
