@@ -2350,4 +2350,16 @@ defmodule NxTest do
                Nx.tensor([[[5], [6]], [[3], [6]]])
     end
   end
+
+  describe "complex/2" do
+    test "preserves precision of real and imaginary parts" do
+      t = Nx.tensor(Complex.new(1, 2), type: :c128)
+      c = Nx.complex(Nx.real(t), Nx.imag(t))
+      assert Nx.type(c) == {:c, 128}
+
+      t = Nx.tensor(Complex.new(1, 3), type: :c64)
+      c = Nx.complex(Nx.real(t), Nx.imag(t))
+      assert Nx.type(c) == {:c, 64}
+    end
+  end
 end
