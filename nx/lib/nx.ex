@@ -5976,7 +5976,19 @@ defmodule Nx do
 
   ### Examples
 
-      iex> Nx.complex(Nx.tensor(1), Nx.tensor(2))
+      iex> Nx.complex(Nx.tensor(1, type: :f32), Nx.tensor(2, type: :f32))
+      #Nx.Tensor<
+        c64
+        1.0+2.0i
+      >
+
+      iex> Nx.complex(Nx.tensor(1, type: :f64), Nx.tensor(2, type: :f64))
+      #Nx.Tensor<
+        c128
+        1.0+2.0i
+      >
+
+      iex> Nx.complex(Nx.tensor(1, type: :f32), Nx.tensor(2, type: :f64))
       #Nx.Tensor<
         c64
         1.0+2.0i
@@ -5984,7 +5996,7 @@ defmodule Nx do
 
       iex> Nx.complex(Nx.tensor([1, 2]), Nx.tensor([3, 4]))
       #Nx.Tensor<
-        c64[2]
+        c128[2]
         [1.0+3.0i, 2.0+4.0i]
       >
   """
@@ -5994,8 +6006,12 @@ defmodule Nx do
       Nx.Shared.raise_complex_not_supported("complex", 2)
     end
 
+    {_, realprecision} = type(real)
+    {_, imagprecision} = type(imag)
+    precision = Kernel.max(64, Kernel.min(realprecision, imagprecision) * 2)
+
     imag
-    |> multiply(Nx.Constants.i())
+    |> multiply(Nx.Constants.i(type: {:c, precision}))
     |> add(real)
   end
 

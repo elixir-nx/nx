@@ -1435,10 +1435,10 @@ defmodule Nx.DefnTest do
       assert inspect(t) ==
                """
                #Nx.Tensor<
-                 c64\n\s\s
+                 c128\n\s\s
                  Nx.Defn.Expr
                  parameter a:0         s64
-                 b = add 0.0+2.0i, a   c64
+                 b = add 0.0+2.0i, a   c128
                >
                """
                |> String.trim()
