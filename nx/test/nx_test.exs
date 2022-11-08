@@ -2352,6 +2352,9 @@ defmodule NxTest do
   end
 
   describe "complex/2" do
+    @t32 Nx.tensor(1, type: :f32)
+    @t64 Nx.tensor(2, type: :f64)
+
     test "preserves precision of real and imaginary parts" do
       t = Nx.tensor(Complex.new(1, 2), type: :c128)
       c = Nx.complex(Nx.real(t), Nx.imag(t))
@@ -2360,6 +2363,19 @@ defmodule NxTest do
       t = Nx.tensor(Complex.new(1, 3), type: :c64)
       c = Nx.complex(Nx.real(t), Nx.imag(t))
       assert Nx.type(c) == {:c, 64}
+    end
+
+    test "returns a tensor with type :c128 for 64 bit inputs" do
+      t = Nx.complex(@t64, @t64)
+      assert Nx.type(t) == {:c, 128}
+    end
+
+    test "returns a tensor with type :c128 for mixed 32 and 64 bit inputs" do
+      t = Nx.complex(@t32, @t64)
+      assert Nx.type(t) == {:c, 128}
+
+      t = Nx.complex(@t64, @t32)
+      assert Nx.type(t) == {:c, 128}
     end
   end
 end
