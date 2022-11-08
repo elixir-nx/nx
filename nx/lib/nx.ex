@@ -5994,7 +5994,7 @@ defmodule Nx do
       Nx.Shared.raise_complex_not_supported("complex", 2)
     end
 
-    t = type(real) |> Nx.Type.merge(type(imag)) |> Nx.Type.to_complex
+    t = type(real) |> Nx.Type.merge(type(imag)) |> Nx.Type.to_complex()
 
     imag
     |> multiply(Nx.Constants.i(type: t))
