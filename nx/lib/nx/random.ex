@@ -530,7 +530,7 @@ defmodule Nx.Random do
 
     # Decrement the precision by one (decrement because the sign is separate)
     # and convert it back to a float
-    <<f::float-size(bits)-big>> = <<x-1::integer-size(bits)-big>>
+    <<f::float-size(bits)-big>> = <<x - 1::integer-size(bits)-big>>
 
     f
   end
