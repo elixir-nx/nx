@@ -6,7 +6,7 @@
 
   * [Nx] Add `Nx.rename/2`, `Nx.median/2`, `Nx.weighted_mean/3`, and `Nx.mode/2`
   * [Nx] Implement cumulative operations using associative scan for improved performance
-  * [Nx.Constants] Add `smallest_positive_normal`, `min`, and `max`
+  * [Nx.Constants] Add `min` and `max`
   * [Nx.Defn] Allow lists and functions anywhere as arguments in `defn`, `jit` and `compile`
   * [Nx.Defn] Add `Nx.LazyContainer` that allows a data-structure to lazily define tensors
   * [Nx.Defn] Allow tensors and ranges as generators inside `while`
