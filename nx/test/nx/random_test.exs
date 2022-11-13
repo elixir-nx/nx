@@ -114,7 +114,7 @@ defmodule Nx.RandomTest do
       key = Nx.Random.key(44)
 
       # default
-      assert Nx.Random.normal_split(key, 0, 100) == Nx.tensor(-234.9236602783203, type: :f32)
+      assert Nx.Random.normal_split(key, 0, 100) == Nx.tensor(-234.9235382080078, type: :f32)
 
       # inference
       assert Nx.Random.normal_split(key, Nx.tensor(0, type: :bf16), Nx.tensor(100, type: :bf16)) ==
@@ -129,11 +129,11 @@ defmodule Nx.RandomTest do
 
       # f32 to f16 downcast
       assert Nx.Random.normal_split(key, 0.0, 100.0, type: :f16) ==
-               Nx.tensor(-17.21875, type: :f16)
+               Nx.tensor(-17.15625, type: :f16)
 
       # complex
       assert Nx.Random.normal_split(key, 0.0, 100.0, type: :c64) ==
-               Nx.complex(-0.7426775097846985, 6.513384819030762)
+               Nx.complex(-0.7426699995994568, 6.513391971588135)
 
       # upcast
       assert Nx.Random.normal_split(key, 0, 100, type: :f64) ==

@@ -29,6 +29,9 @@ defmodule Nx.Random do
   Now, when generating a new random number, you pass the `new_key`
   to get a different number.
 
+  The function in this module also have a `*_split` variant, which
+  is used when the key has been split before hand.
+
   ## Design and Context
 
   In short, Nx's PRNGs are based on a Threefry counter PRNG
@@ -140,7 +143,6 @@ defmodule Nx.Random do
         ]
       >
   """
-
   defn fold_in(key, data) do
     assert_key!(key)
 
@@ -460,7 +462,7 @@ defmodule Nx.Random do
       iex> normal
       #Nx.Tensor<
         f32
-        1.3694692850112915
+        1.3694695234298706
       >
 
       iex> key = Nx.Random.key(42)
@@ -469,9 +471,9 @@ defmodule Nx.Random do
       #Nx.Tensor<
         f16[3][2]
         [
-          [-0.326416015625, -0.7734375],
-          [0.3916015625, 0.533203125],
-          [0.27001953125, -2.083984375]
+          [-0.32568359375, -0.77197265625],
+          [0.39208984375, 0.5341796875],
+          [0.270751953125, -2.080078125]
         ]
       >
 
@@ -481,8 +483,8 @@ defmodule Nx.Random do
       #Nx.Tensor<
         c64[2][2]
         [
-          [-0.763276219367981+0.8661126494407654i, -0.14282897114753723-0.7384797930717468i],
-          [0.6784614324569702+0.4118310213088989i, -2.2695391178131104-0.3689095377922058i]
+          [-0.7632761001586914+0.8661127686500549i, -0.14282889664173126-0.7384796142578125i],
+          [0.678461492061615+0.4118310809135437i, -2.269538402557373-0.3689095079898834i]
         ]
       >
 
@@ -491,12 +493,12 @@ defmodule Nx.Random do
       iex> Nx.mean(normal)
       #Nx.Tensor<
         f32
-        9.70021915435791
+        9.70022201538086
       >
       iex> Nx.standard_deviation(normal)
       #Nx.Tensor<
         f32
-        5.051421642303467
+        5.051416397094727
       >
   """
   defn normal(key, mean, standard_deviation, opts \\ []) do
@@ -513,12 +515,24 @@ defmodule Nx.Random do
     type = infer_float_type(mean, standard_deviation, opts)
 
     float_or_complex(key, type, opts[:shape], fn key, type, shape ->
-      min_value = -1 + Nx.Constants.smallest_positive_normal(type)
+      min_value = next_after_minus_1(type)
       u = uniform_split(key, min_value, 1, opts |> put_type(type) |> put_shape(shape))
 
       normal = Nx.sqrt(Nx.tensor(2, type: type)) * Nx.erf_inv(u)
       Nx.as_type(standard_deviation, type) * normal + Nx.as_type(mean, type)
     end)
+  end
+
+  deftransformp next_after_minus_1({_, bits}) do
+    # Get the floating point representation of -1 and
+    # convert it to a big integer so the precision comes last (after exponent)
+    <<x::size(bits)-big>> = <<-1::float-size(bits)-big>>
+
+    # Decrement the precision by one (decrement because the sign is separate)
+    # and convert it back to a float
+    <<f::float-size(bits)-big>> = <<x-1::integer-size(bits)-big>>
+
+    f
   end
 
   deftransformp float_or_complex(key, type, shape, fun) do
