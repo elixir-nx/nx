@@ -268,4 +268,28 @@ defmodule Nx.ComplexTest do
       end
     end
   end
+
+  describe "as_type" do
+    test "keeps imaginary and real parts when going between complex types" do
+      t64 = Nx.tensor(@arg, type: :c64)
+      t128 = Nx.tensor(@arg, type: :c128)
+
+      assert Nx.as_type(t64, :c128) == t128
+      assert Nx.as_type(t128, :c64) == t64
+    end
+
+    test "keeps only real part when downcasting to reals" do
+      t64 = Nx.tensor(@arg, type: :c64)
+
+      for type <- [f: 32, f: 64, s: 64, s: 32, s: 16, s: 8, u: 64, u: 32, u: 16, u: 8] do
+        real_part =
+          case type do
+            {:f, _} -> @arg.re
+            _ -> trunc(@arg.re)
+          end
+
+        assert Nx.as_type(t64, type) == Nx.tensor(real_part, type: type)
+      end
+    end
+  end
 end
