@@ -2137,6 +2137,7 @@ defmodule Nx.BinaryBackend do
 
       %T{type: input_type} ->
         float_output? = Nx.Type.float?(output_type)
+        real_output? = not Nx.Type.complex?(output_type)
         data = to_binary(tensor)
 
         output_data =
@@ -2145,7 +2146,7 @@ defmodule Nx.BinaryBackend do
               x = read!(x, 0)
 
               case x do
-                %Complex{re: re} when float_output? ->
+                %Complex{re: re} when float_output? and real_output? ->
                   number_to_binary(re, output_type)
 
                 _ when float_output? ->

@@ -2378,4 +2378,14 @@ defmodule NxTest do
       assert Nx.type(t) == {:c, 128}
     end
   end
+
+  describe "as_type/2" do
+    test "preserves the imaginary part when casting between :c68 and :c128" do
+      t64 = Nx.tensor(Complex.new(1, 2), type: :c64)
+      t128 = Nx.tensor(Complex.new(1, 2), type: :c128)
+
+      assert Nx.as_type(t128, :c64) == t64
+      assert Nx.as_type(t64, :c128) == t128
+    end
+  end
 end

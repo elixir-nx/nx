@@ -544,6 +544,19 @@ defmodule Nx.Type do
   def float?({_, _}), do: false
 
   @doc """
+  Returns true if the type is a complex number.
+
+  ## Examples
+
+      iex> Nx.Type.complex?({:c, 64})
+      true
+      iex> Nx.Type.complex?({:f, 64})
+      false
+  """
+  def complex?({:c, _}), do: true
+  def complex?({_, _}), do: false
+
+  @doc """
   Returns a string representation of the given type.
 
   ## Examples
