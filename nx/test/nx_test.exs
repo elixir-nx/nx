@@ -2387,5 +2387,18 @@ defmodule NxTest do
       assert Nx.as_type(t128, :c64) == t64
       assert Nx.as_type(t64, :c128) == t128
     end
+
+    test "keeps only real part when downcasting complex to real" do
+      z = Complex.new(1, 2)
+      t64 = Nx.tensor(z, type: :c64)
+
+      for type <- [f: 32, f: 64] do
+        assert Nx.as_type(t64, type) == Nx.tensor(z.re, type: type)
+      end
+
+      for type <- [s: 64, s: 32, s: 16, s: 8, u: 64, u: 32, u: 16, u: 8] do
+        assert Nx.as_type(t64, type) == Nx.tensor(trunc(z.re), type: type)
+      end
+    end
   end
 end
