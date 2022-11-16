@@ -757,18 +757,6 @@ defmodule Nx.Defn.Compiler do
   defp merge_cache([head | tail], params), do: [head | merge_cache(tail, params)]
   defp merge_cache([], []), do: []
 
-  @doc false
-  def to_lazy_template(args) do
-    {template_args, funs} =
-      Enum.map_reduce(args, [], fn container, acc ->
-        Nx.LazyContainer.traverse(container, acc, fn template, fun, acc ->
-          {template, [fun | acc]}
-        end)
-      end)
-
-    {template_args, Enum.reverse(funs)}
-  end
-
   ## Helpers
 
   defp maybe_meta({_, meta, _}), do: meta

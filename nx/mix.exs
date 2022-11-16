@@ -89,6 +89,7 @@ defmodule Nx.MixProject do
           Nx.Stream
         ],
         Structs: [
+          Nx.Batch,
           Nx.Heatmap,
           Nx.Tensor
         ],
