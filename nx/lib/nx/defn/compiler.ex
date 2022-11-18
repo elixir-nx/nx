@@ -30,7 +30,7 @@ defmodule Nx.Defn.Compiler do
               key :: term,
               vars :: [Nx.Container.t()],
               fun :: ([Nx.Container.t()] -> Nx.Container.t()),
-              args_list :: [[(() -> Nx.t())]],
+              args_list :: [[(-> Nx.t())]],
               opts :: keyword
             ) :: [Nx.Container.t()]
 
@@ -72,7 +72,7 @@ defmodule Nx.Defn.Compiler do
               acc,
               vars :: [Nx.t()],
               fun :: ([Nx.t()] -> {output, acc}),
-              args_list :: [[(() -> Nx.t())]],
+              args_list :: [[(-> Nx.t())]],
               opts :: keyword
             ) :: [Nx.Stream.t()]
             when input: Nx.Container.t(), output: Nx.Container.t(), acc: Nx.Container.t()

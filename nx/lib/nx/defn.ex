@@ -287,24 +287,6 @@ defmodule Nx.Defn do
   end
 
   @doc """
-  Creates a batch of tensors 6f `size` that are lazily traversed, concatenated,
-  and padded upon `defn` invocation.
-  """
-  def batch([], _size) do
-    raise ArgumentError, "cannot have an empty list as a batch"
-  end
-
-  def batch(list, size) when is_list(list) and is_integer(size) and size > 0 do
-    length = length(list)
-
-    if length > size do
-      raise ArgumentError, "cannot have batch with more elements than the batch size"
-    end
-
-    %Nx.Batch{list: list, pad: size - length}
-  end
-
-  @doc """
   Compiles the given anonymous function with the given tensor shapes.
 
   While `jit/2` compiles a function just-in time based on the

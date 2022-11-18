@@ -2102,19 +2102,6 @@ defmodule Nx.DefnTest do
     end
   end
 
-  describe "batch" do
-    defn batch_id(x), do: x
-
-    @tag compiler: Evaluator
-    test "batches tensors" do
-      assert batch_id(Nx.Defn.batch([Nx.tensor(1), Nx.tensor(2), Nx.tensor(3)], 3)) ==
-               Nx.tensor([1, 2, 3])
-
-      assert batch_id(Nx.Defn.batch([Nx.tensor(1), Nx.tensor(2), Nx.tensor(3)], 5)) ==
-               Nx.tensor([1, 2, 3, 0, 0])
-    end
-  end
-
   describe "compilation errors" do
     test "undefined local function" do
       assert_raise CompileError,
