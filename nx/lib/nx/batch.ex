@@ -5,6 +5,11 @@ defmodule Nx.Batch do
   A batch is lazily traversed, concatenated, and padded upon `defn` invocation.
   """
 
+  @doc """
+  A Nx.Batch struct.
+
+  The `:size` field is public.
+  """
   @derive {Inspect, only: [:size, :pad]}
   defstruct stack: [], size: 0, template: nil, pad: 0
 
@@ -31,6 +36,10 @@ defmodule Nx.Batch do
 
   @doc """
   Concatenates the given entries to the batch.
+
+  Entries are concatenated based on their first axis.
+  If the first axis has multiple entries, each entry
+  is added to the size of the batch.
 
   You can either concatenate to an existing batch
   or skip the batch argument to create a new batch.
@@ -59,6 +68,18 @@ defmodule Nx.Batch do
         [1, 2, 3, 4]
       >
 
+  If the first axis has multiple entries, each entry counts
+  towards the size of the batch:
+
+      iex> batch = Nx.Batch.concatenate([Nx.tensor([1, 2]), Nx.tensor([3, 4, 5])])
+      iex> batch.size
+      5
+      iex> Nx.Defn.jit_apply(&Function.identity/1, [batch])
+      #Nx.Tensor<
+        s64[5]
+        [1, 2, 3, 4, 5]
+      >
+
   What makes batches powerful is that they can concatenate
   across containers:
 
@@ -83,6 +104,7 @@ defmodule Nx.Batch do
   @doc """
   Stacks the given entries to the batch.
 
+  Each entry counts exactly as a single entry.
   You can either stack to an existing batch
   or skip the batch argument to create a new batch.
 
@@ -94,6 +116,8 @@ defmodule Nx.Batch do
   If no batch is given, one is automatically created:
 
       iex> batch = Nx.Batch.stack([Nx.tensor(1), Nx.tensor(2), Nx.tensor(3)])
+      iex> batch.size
+      3
       iex> Nx.Defn.jit_apply(&Function.identity/1, [batch])
       #Nx.Tensor<
         s64[3]
@@ -104,6 +128,8 @@ defmodule Nx.Batch do
 
       iex> batch = Nx.Batch.stack([Nx.tensor(1), Nx.tensor(2)])
       iex> batch = Nx.Batch.stack(batch, [Nx.tensor(3), Nx.tensor(4)])
+      iex> batch.size
+      4
       iex> Nx.Defn.jit_apply(&Function.identity/1, [batch])
       #Nx.Tensor<
         s64[4]
@@ -135,11 +161,11 @@ defmodule Nx.Batch do
 
   defp add(batch, [head | tail], new_axis?) do
     %{template: template, stack: stack, size: size} = batch
-    {head_template, head_funs} = traverse(head, new_axis?)
+    {head_template, head_size, head_funs} = traverse(head, new_axis?)
 
-    stack =
-      Enum.reduce(tail, [head_funs | stack], fn arg, acc ->
-        {arg_template, arg_funs} = traverse(arg, new_axis?)
+    {size, stack} =
+      Enum.reduce(tail, {head_size + size, [head_funs | stack]}, fn arg, {acc_size, acc_stack} ->
+        {arg_template, size, arg_funs} = traverse(arg, new_axis?)
 
         unless Nx.compatible?(arg_template, head_template) do
           raise ArgumentError, """
@@ -159,11 +185,11 @@ defmodule Nx.Batch do
           """
         end
 
-        [arg_funs | acc]
+        {size + acc_size, [arg_funs | acc_stack]}
       end)
 
     if template == nil or Nx.compatible?(template, head_template) do
-      %{batch | template: head_template, stack: stack, size: length(tail) + 1 + size}
+      %{batch | template: head_template, stack: stack, size: size}
     else
       raise ArgumentError, """
       cannot add to batch due to incompatible tensors/containers.
@@ -183,8 +209,37 @@ defmodule Nx.Batch do
     end
   end
 
-  defp traverse(container, new_axis?) do
-    Nx.LazyContainer.traverse(container, [], &{&1, [{&2, new_axis?} | &3]})
+  defp traverse(container, true) do
+    {template, funs} = Nx.LazyContainer.traverse(container, [], &{&1, [{&2, true} | &3]})
+    {template, 1, funs}
+  end
+
+  defp traverse(container, false) do
+    {template, {size, funs}} =
+      Nx.LazyContainer.traverse(container, {nil, []}, fn template, fun, {acc_size, acc_funs} ->
+        %Nx.Tensor{shape: shape, names: names} = template
+
+        if shape == {} do
+          raise ArgumentError, "cannot concatenate scalar tensor in #{inspect(container)}"
+        end
+
+        size = elem(shape, 0)
+
+        if acc_size != nil and size != acc_size do
+          raise ArgumentError,
+                "concatenate expects all tensors in the same container to have the same value " <>
+                  "for first axis, got #{size} and #{acc_size} in #{inspect(container)}"
+        end
+
+        template = %{template | shape: Tuple.delete_at(shape, 0), names: tl(names)}
+        {template, {size, [{fun, false} | acc_funs]}}
+      end)
+
+    if size == nil do
+      raise ArgumentError, "cannot have an empty container in concatenate: #{inspect(container)}"
+    end
+
+    {template, size, funs}
   end
 end
 
