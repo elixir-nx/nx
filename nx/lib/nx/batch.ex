@@ -5,6 +5,8 @@ defmodule Nx.Batch do
   A batch is lazily traversed, concatenated, and padded upon `defn` invocation.
   """
 
+  @axis 0
+
   @doc """
   A Nx.Batch struct.
 
@@ -52,7 +54,7 @@ defmodule Nx.Batch do
   def merge([]), do: new()
 
   def merge([%Nx.Batch{} = head | tail]) do
-    %Nx.Batch{template: template, stack: stack, pad: pad, size: size} = head
+    %{template: template, stack: stack, pad: pad, size: size} = head
 
     {template, stack, pad, size} =
       Enum.reduce(tail, {template, stack, pad, size}, fn batch, acc ->
@@ -75,6 +77,71 @@ defmodule Nx.Batch do
       end)
 
     %Nx.Batch{template: template, stack: stack, pad: pad, size: size}
+  end
+
+  @doc """
+  Splits a batch in two, where the first one has at most `n` elements.
+
+  If there is any padding and the batch is not full, the amount of padding
+  necessary will be moved to the first batch and the remaining stays in the
+  second batch.
+
+  ## Examples
+
+      iex> batch = Nx.Batch.concatenate([Nx.tensor([1, 2]), Nx.tensor([3, 4, 5])])
+      iex> {left, right} = Nx.Defn.jit_apply(&Function.identity/1, [Nx.Batch.split(batch, 3)])
+      iex> left
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+      iex> right
+      #Nx.Tensor<
+        s64[2]
+        [4, 5]
+      >
+  """
+  def split(%Nx.Batch{} = batch, n) when is_integer(n) and n > 0 do
+    %{template: template, stack: stack, pad: pad, size: size} = batch
+
+    if n < size do
+      {left, right} = drop_split(stack, size - n, [])
+
+      {%{batch | stack: left, size: n, pad: 0},
+       %Nx.Batch{template: template, pad: pad, size: size - n, stack: right}}
+    else
+      right_pad = max(size + pad - n, 0)
+      left_pad = pad - right_pad
+      {%{batch | pad: left_pad}, %Nx.Batch{template: template, pad: right_pad}}
+    end
+  end
+
+  defp drop_split([{funs, size} | stack], n, acc) when size < n do
+    drop_split(stack, n - size, [{funs, size} | acc])
+  end
+
+  defp drop_split([{funs, size} | stack], n, acc) when size == n do
+    {stack, Enum.reverse([{funs, size} | acc])}
+  end
+
+  defp drop_split([{funs, size} | stack], n, acc) when size > n do
+    left_start = 0
+    left_size = size - n
+
+    left_funs =
+      Enum.map(funs, fn fun ->
+        fn -> Nx.slice_along_axis(fun.(), left_start, left_size, axis: @axis) end
+      end)
+
+    right_start = size - n
+    right_size = n
+
+    right_funs =
+      Enum.map(funs, fn fun ->
+        fn -> Nx.slice_along_axis(fun.(), right_start, right_size, axis: @axis) end
+      end)
+
+    {[{left_funs, left_size} | stack], Enum.reverse([{right_funs, right_size} | acc])}
   end
 
   @doc """
@@ -221,9 +288,10 @@ defmodule Nx.Batch do
   defp add(batch, [head | tail], new_axis?) do
     %{template: template, stack: stack, size: size} = batch
     {head_template, head_size, head_funs} = traverse(head, new_axis?)
+    acc = {head_size + size, [{head_funs, head_size} | stack]}
 
     {size, stack} =
-      Enum.reduce(tail, {head_size + size, [head_funs | stack]}, fn arg, {acc_size, acc_stack} ->
+      Enum.reduce(tail, acc, fn arg, {acc_size, acc_stack} ->
         {arg_template, size, arg_funs} = traverse(arg, new_axis?)
 
         unless Nx.compatible?(arg_template, head_template) do
@@ -244,7 +312,7 @@ defmodule Nx.Batch do
           """
         end
 
-        {size + acc_size, [arg_funs | acc_stack]}
+        {size + acc_size, [{arg_funs, size} | acc_stack]}
       end)
 
     if template == nil or Nx.compatible?(template, head_template) do
@@ -269,7 +337,11 @@ defmodule Nx.Batch do
   end
 
   defp traverse(container, true) do
-    {template, funs} = Nx.LazyContainer.traverse(container, [], &{&1, [{&2, true} | &3]})
+    {template, funs} =
+      Nx.LazyContainer.traverse(container, [], fn template, fun, acc ->
+        {template, [fn -> Nx.new_axis(fun.(), @axis) end | acc]}
+      end)
+
     {template, 1, funs}
   end
 
@@ -282,7 +354,7 @@ defmodule Nx.Batch do
           raise ArgumentError, "cannot concatenate scalar tensor in #{inspect(container)}"
         end
 
-        size = elem(shape, 0)
+        size = elem(shape, @axis)
 
         if acc_size != nil and size != acc_size do
           raise ArgumentError,
@@ -290,8 +362,8 @@ defmodule Nx.Batch do
                   "for first axis, got #{size} and #{acc_size} in #{inspect(container)}"
         end
 
-        template = %{template | shape: Tuple.delete_at(shape, 0), names: tl(names)}
-        {template, {size, [{fun, false} | acc_funs]}}
+        template = %{template | shape: Tuple.delete_at(shape, @axis), names: tl(names)}
+        {template, {size, [fun | acc_funs]}}
       end)
 
     if size == nil do
@@ -303,18 +375,21 @@ defmodule Nx.Batch do
 end
 
 defimpl Nx.LazyContainer, for: Nx.Batch do
-  def traverse(%{template: nil}, _acc, _acc_fun) do
+  @axis 0
+
+  def traverse(%{stack: []}, _acc, _acc_fun) do
     raise ArgumentError, "cannot traverse/jit/compile Nx.Batch without entries"
   end
 
-  def traverse(%{stack: funs_new_axis, pad: pad, template: template}, acc, acc_fun) do
+  def traverse(%{stack: funs_size, pad: pad, template: template}, acc, acc_fun) do
     funs =
-      funs_new_axis
+      funs_size
+      |> first_reverse([])
       |> Enum.zip_with(fn funs ->
         fn ->
           funs
-          |> apply_fun_new_axis([])
-          |> Nx.concatenate(axis: 0)
+          |> apply_each()
+          |> Nx.concatenate(axis: @axis)
           |> maybe_pad(pad)
         end
       end)
@@ -329,19 +404,20 @@ defimpl Nx.LazyContainer, for: Nx.Batch do
     {template, acc}
   end
 
-  defp apply_fun_new_axis([{fun, true} | funs], acc),
-    do: apply_fun_new_axis(funs, [Nx.new_axis(fun.(), 0) | acc])
+  defp first_reverse([{fun, _} | funs], acc), do: first_reverse(funs, [fun | acc])
+  defp first_reverse([], acc), do: acc
 
-  defp apply_fun_new_axis([{fun, false} | funs], acc),
-    do: apply_fun_new_axis(funs, [fun.() | acc])
-
-  defp apply_fun_new_axis([], acc), do: acc
+  defp apply_each([fun | funs]), do: [fun.() | apply_each(funs)]
+  defp apply_each([]), do: []
 
   defp maybe_pad(tensor, 0), do: tensor
 
   defp maybe_pad(tensor, pad_size) do
-    first_axis_pad = {0, pad_size, 0}
-    rest_axes_pad = List.duplicate({0, 0, 0}, Nx.rank(tensor) - 1)
-    Nx.pad(tensor, Nx.tensor(0, type: Nx.type(tensor)), [first_axis_pad | rest_axes_pad])
+    padding =
+      {0, 0, 0}
+      |> List.duplicate(Nx.rank(tensor))
+      |> List.replace_at(@axis, {0, pad_size, 0})
+
+    Nx.pad(tensor, Nx.tensor(0, type: Nx.type(tensor)), padding)
   end
 end
