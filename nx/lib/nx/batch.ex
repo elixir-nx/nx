@@ -19,6 +19,65 @@ defmodule Nx.Batch do
   def new, do: %Nx.Batch{}
 
   @doc """
+  Merges two batches.
+
+  The tensors on the left will appear before the tensors on the right.
+
+  The size and padding of both batches are summed. The padding still
+  applies only at the end of batch.
+
+  It will raise if the batch templates are incompatible.
+
+  ## Examples
+
+      iex> batch1 = Nx.Batch.stack([Nx.tensor(1), Nx.tensor(2), Nx.tensor(3)])
+      iex> batch2 = Nx.Batch.concatenate([Nx.tensor([4, 5]), Nx.tensor([6, 7, 8])])
+      iex> batch = Nx.Batch.merge(batch1, batch2)
+      iex> batch.size
+      8
+      iex> Nx.Defn.jit_apply(&Function.identity/1, [batch])
+      #Nx.Tensor<
+        s64[8]
+        [1, 2, 3, 4, 5, 6, 7, 8]
+      >
+
+  """
+  def merge(left, right), do: merge([left, right])
+
+  @doc """
+  Merges a list of batches.
+
+  See `merge/2`.
+  """
+  def merge([]), do: new()
+
+  def merge([%Nx.Batch{} = head | tail]) do
+    %Nx.Batch{template: template, stack: stack, pad: pad, size: size} = head
+
+    {template, stack, pad, size} =
+      Enum.reduce(tail, {template, stack, pad, size}, fn batch, acc ->
+        %Nx.Batch{template: template, stack: stack, pad: pad, size: size} = batch
+        {acc_template, acc_stack, acc_pad, acc_size} = acc
+
+        if template != nil and acc_template != nil and not Nx.compatible?(template, acc_template) do
+          raise ArgumentError, """
+          cannot merge batches due to incompatible templates:
+
+              #{inspect(template)}
+
+          and:
+
+              #{inspect(acc_template)}
+          """
+        end
+
+        {acc_template || template, stack ++ acc_stack, pad + acc_pad, size + acc_size}
+      end)
+
+    %Nx.Batch{template: template, stack: stack, pad: pad, size: size}
+  end
+
+  @doc """
   Configures the batch with the given padding.
 
   The batch will be padded when consumed:
@@ -244,6 +303,10 @@ defmodule Nx.Batch do
 end
 
 defimpl Nx.LazyContainer, for: Nx.Batch do
+  def traverse(%{template: nil}, _acc, _acc_fun) do
+    raise ArgumentError, "cannot traverse/jit/compile Nx.Batch without entries"
+  end
+
   def traverse(%{stack: funs_new_axis, pad: pad, template: template}, acc, acc_fun) do
     funs =
       funs_new_axis
