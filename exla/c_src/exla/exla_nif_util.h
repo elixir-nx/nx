@@ -374,7 +374,7 @@ ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape);
   if (!statusor.ok()) {                                                      \
     return exla::nif::error(env, statusor.status().error_message().c_str()); \
   }                                                                          \
-  lhs = std::move(statusor.ValueOrDie());
+  lhs = std::move(statusor.value());
 
 // Macro to be used to consume StatusOr. Will bind lhs
 // to value if the status is OK, otherwise will return
@@ -390,6 +390,6 @@ ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape);
   if (!statusor.ok()) {                                                      \
     return statusor.status();                                                \
   }                                                                          \
-  lhs = std::move(statusor.ValueOrDie());
+  lhs = std::move(statusor.value());
 
 #endif

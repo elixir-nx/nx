@@ -1,10 +1,10 @@
 #include "exla_client.h"
 #include "exla_nif_util.h"
 #include "tensorflow/compiler/xla/layout_util.h"
-#include "tensorflow/compiler/xla/pjrt/gpu_device.h"
-#include "tensorflow/compiler/xla/pjrt/cpu_device.h"
+#include "tensorflow/compiler/xla/pjrt/gpu/gpu_helpers.h"
+#include "tensorflow/compiler/xla/pjrt/tfrt_cpu_pjrt_client.h"
+#include "tensorflow/compiler/xla/pjrt/gpu/se_gpu_pjrt_client.h"
 #include "tensorflow/compiler/xla/pjrt/tpu_client.h"
-#include "tensorflow/stream_executor/tpu/tpu_transfer_manager.h"
 
 namespace exla {
 
@@ -20,9 +20,7 @@ void CopyLiteralToBinary(xla::Literal* literal, ErlNifBinary* binary, exla::int6
 }
 
 xla::StatusOr<ERL_NIF_TERM> ExlaBuffer::ToBinary(ErlNifEnv* env, exla::int64 size) {
-  // ToLiteral() is as synchronous operation (renamed to ToLiteralSync()
-  // in XLA 2.9+) that uses the host shape by default.
-  EXLA_ASSIGN_OR_RETURN(std::shared_ptr<xla::Literal> literal, buffer_->ToLiteral());
+  EXLA_ASSIGN_OR_RETURN(std::shared_ptr<xla::Literal> literal, buffer_->ToLiteralSync());
   ErlNifBinary binary;
   CopyLiteralToBinary(literal.get(), &binary, size);
   return nif::make(env, binary);
@@ -133,7 +131,7 @@ xla::StatusOr<ERL_NIF_TERM> UnpackResult(ErlNifEnv* env,
   return nif::ok(env, per_replica_term);
 }
 
-ExlaExecutable::ExlaExecutable(std::unique_ptr<xla::PjRtExecutable> executable,
+ExlaExecutable::ExlaExecutable(std::unique_ptr<xla::PjRtLoadedExecutable> executable,
 			                         absl::optional<std::string> fingerprint,
 			                         ExlaClient* client) : executable_(std::move(executable)),
                                                      fingerprint_(std::move(fingerprint)),
@@ -173,16 +171,11 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
 
   ERL_NIF_TERM ret;
 
-  if (device_id >= 0) {
-    EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->client()->LookupDevice(device_id));
-    EXLA_ASSIGN_OR_RETURN(auto result, executable_->ExecutePortable(pjrt_buffers.at(0), device, options));
-    std::vector<std::vector<std::unique_ptr<xla::PjRtBuffer>>> per_replica_results;
-    per_replica_results.push_back(std::move(result));
-    EXLA_ASSIGN_OR_RETURN(ret, UnpackResult(env, std::move(per_replica_results), device_assignment, device_id));
-  } else {
-    EXLA_ASSIGN_OR_RETURN(auto result, executable_->Execute(pjrt_buffers, options));
-    EXLA_ASSIGN_OR_RETURN(ret, UnpackResult(env, std::move(result), device_assignment, device_id));
-  }
+  EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->client()->LookupDevice(device_id));
+  EXLA_ASSIGN_OR_RETURN(auto result, executable_->ExecutePortable(pjrt_buffers.at(0), device, options));
+  std::vector<std::vector<std::unique_ptr<xla::PjRtBuffer>>> per_replica_results;
+  per_replica_results.push_back(std::move(result));
+  EXLA_ASSIGN_OR_RETURN(ret, UnpackResult(env, std::move(per_replica_results), device_assignment, device_id));
 
   return ret;
 }
@@ -231,7 +224,7 @@ xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& co
   compile_opts.executable_build_options = options;
   compile_opts.compile_portable_executable = compile_portable_executable;
 
-  EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtExecutable> executable,
+  EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtLoadedExecutable> executable,
     client_->Compile(computation, std::move(compile_opts)));
   EXLA_ASSIGN_OR_RETURN(absl::optional<std::string> fingerprint,
     client_->ExecutableFingerprint(*executable));
@@ -314,7 +307,7 @@ xla::StatusOr<ERL_NIF_TERM> ExlaClient::TransferFromOutfeed(ErlNifEnv* env, int 
 
 xla::StatusOr<ExlaClient*> GetHostClient() {
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtClient> client,
-    xla::GetCpuClient(false));
+    xla::GetTfrtCpuClient(false));
 
   return new ExlaClient(std::move(client));
 }
@@ -329,7 +322,7 @@ xla::StatusOr<ExlaClient*> GetGpuClient(double memory_fraction,
   };
 
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtClient> client,
-    xla::GetGpuClient(false, allocator_config, nullptr, 0));
+    xla::GetStreamExecutorGpuClient(false, allocator_config, nullptr, 0));
 
   return new ExlaClient(std::move(client));
 }
