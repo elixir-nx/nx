@@ -15,6 +15,13 @@ defmodule Nx.Batch do
   @derive {Inspect, only: [:size, :pad]}
   defstruct stack: [], size: 0, template: nil, pad: 0
 
+  @type t :: %Nx.Batch{
+          stack: list(),
+          size: non_neg_integer(),
+          template: Nx.Container.t() | Nx.Tensor.t() | nil,
+          pad: non_neg_integer()
+        }
+
   @doc """
   Returns a new empty batch.
   """
@@ -225,7 +232,8 @@ defmodule Nx.Batch do
       >
 
   """
-  def concatenate(%Nx.Batch{} = batch \\ new(), entries), do: add(batch, entries, false)
+  def concatenate(%Nx.Batch{} = batch \\ new(), entries) when is_list(entries),
+    do: add(batch, entries, false)
 
   @doc """
   Stacks the given entries to the batch.
@@ -281,7 +289,8 @@ defmodule Nx.Batch do
       >
 
   """
-  def stack(%Nx.Batch{} = batch \\ new(), entries), do: add(batch, entries, true)
+  def stack(%Nx.Batch{} = batch \\ new(), entries) when is_list(entries),
+    do: add(batch, entries, true)
 
   defp add(batch, [], _new_axis?), do: batch
 

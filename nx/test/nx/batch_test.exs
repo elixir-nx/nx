@@ -112,8 +112,10 @@ defmodule Nx.BatchTest do
 
     test "composite" do
       batch =
-        [{Nx.tensor([11, 12]), Nx.tensor([21, 22])},
-         {Nx.tensor([13, 14, 15]), Nx.tensor([23, 24, 25])}]
+        [
+          {Nx.tensor([11, 12]), Nx.tensor([21, 22])},
+          {Nx.tensor([13, 14, 15]), Nx.tensor([23, 24, 25])}
+        ]
         |> Nx.Batch.concatenate()
         |> Nx.Batch.pad(1)
 

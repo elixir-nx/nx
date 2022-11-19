@@ -294,6 +294,21 @@ defmodule Nx do
         ]
       >
 
+  You can also use `..` as the full-slice range, which means you want to
+  keep a given dimension as is:
+
+      iex> t = Nx.tensor([[1, 2], [3, 4], [5, 6], [7, 8]])
+      iex> t[[.., 1..-1//1]] # Drop only the first "column"
+      #Nx.Tensor<
+        s64[4][1]
+        [
+          [2],
+          [4],
+          [6],
+          [8]
+        ]
+      >
+
   You can mix both ranges and integers in the list too:
 
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]])

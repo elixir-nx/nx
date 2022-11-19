@@ -12,7 +12,7 @@ jobs:
       fail-fast: false
       matrix:
         working_directory: ["nx", "exla", "torchx"]
-        elixir: ["1.13.0"]
+        elixir: ["1.14.2"]
         otp: ["24.0"]
     defaults:
       run:
@@ -59,7 +59,7 @@ jobs:
       fail-fast: false
       matrix:
         working_directory: ["nx", "torchx"]
-        elixir: ["1.13.0"]
+        elixir: ["1.14.2"]
         otp: ["24.0"]
     defaults:
       run:

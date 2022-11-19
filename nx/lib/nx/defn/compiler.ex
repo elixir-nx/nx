@@ -28,11 +28,12 @@ defmodule Nx.Defn.Compiler do
   """
   @callback __jit__(
               key :: term,
-              vars :: [Nx.Container.t()],
-              fun :: ([Nx.Container.t()] -> Nx.Container.t()),
-              args_list :: [[(() -> Nx.t())]],
+              vars,
+              fun :: (vars -> Nx.t() | Nx.Container.t()),
+              args_list :: [[(-> Nx.t())]],
               opts :: keyword
-            ) :: [Nx.Container.t()]
+            ) :: [Nx.t() | Nx.Container.t()]
+            when vars: [Nx.t() | Nx.Container.t()]
 
   @doc """
   Callback for compilation.
@@ -50,10 +51,11 @@ defmodule Nx.Defn.Compiler do
   """
   @callback __compile__(
               key :: term,
-              vars :: [Nx.Container.t()],
-              fun :: ([Nx.Container.t()] -> Nx.Container.t()),
+              vars :: vars,
+              fun :: (vars -> Nx.t() | Nx.Container.t()),
               opts :: keyword
-            ) :: ([[Nx.t()]] -> [Nx.Container.t()])
+            ) :: ([[Nx.t()]] -> [Nx.t() | Nx.Container.t()])
+            when vars: [Nx.t() | Nx.Container.t()]
 
   @doc """
   Callback for streaming (on top of JIT compilation).
@@ -70,12 +72,15 @@ defmodule Nx.Defn.Compiler do
               key :: term,
               input,
               acc,
-              vars :: [Nx.t()],
-              fun :: ([Nx.t()] -> {output, acc}),
-              args_list :: [[(() -> Nx.t())]],
+              vars,
+              fun :: (vars -> {output, acc}),
+              args_list :: [[(-> Nx.t())]],
               opts :: keyword
             ) :: [Nx.Stream.t()]
-            when input: Nx.Container.t(), output: Nx.Container.t(), acc: Nx.Container.t()
+            when input: Nx.t() | Nx.Container.t(),
+                 output: Nx.t() | Nx.Container.t(),
+                 acc: Nx.t() | Nx.Container.t(),
+                 vars: [Nx.t() | Nx.Container.t()]
 
   # Modules allowed in defn
   @allowed_modules [Nx, Nx.Constants, Nx.Defn, Nx.Defn.Kernel, Nx.LinAlg, Nx.Type]
@@ -716,6 +721,9 @@ defmodule Nx.Defn.Compiler do
   end
 
   ## Params manipulation
+
+  @doc false
+  def fun(arity, callback)
 
   for i <- 0..128 do
     args = Macro.generate_arguments(i, __MODULE__)
