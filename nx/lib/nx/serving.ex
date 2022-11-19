@@ -45,17 +45,22 @@ defmodule Nx.Serving do
   then running it:
 
       iex> serving = Nx.Serving.new(MyServing, :unused_arg)
-      iex> Nx.Serving.run(serving, Nx.tensor([1, 2, 3]))
+      iex> batch = Nx.Batchs.stack([Nx.tensor([1, 2, 3])])
+      iex> Nx.Serving.run(serving, batch)
       {:debug, #Nx.Tensor<
         s64[1][3]
-        [1, 2, 3]
+        [
+          [1, 2, 3]
+        ]
       >}
       #Nx.Tensor<
-        s64[3]
-        [2, 4, 6]
+        s64[1][3]
+        [
+          [2, 4, 6]
+        ]
       >
 
-  You should see two results. The first is the result of our inspection,
+  You should see two values printed. The first is the result of our inspection,
   which shows the tensor that was actually part of the computation and
   how it was batched. Then we see the result of the computation.
 
@@ -89,8 +94,7 @@ defmodule Nx.Serving do
   `client_preprocessing` function stacks those tensors into a batch of two
   entries. With the `client_preprocessing` function, you can transform the
   input in any way you desire before batching. It must return a `Nx.Batch`
-  struct. The default client preprocessing expects a single tensor/container
-  which becomes a single batch entry.
+  struct. The default client preprocessing simply enforces a batch was given.
 
   Then the result is a `{:postprocessing, ..., ...}` tuple containing the
   result and the execution metadata as second and third elements respectively.
@@ -159,6 +163,9 @@ defmodule Nx.Serving do
     %{serving | client_postprocessing: function}
   end
 
+  @doc """
+  Runs `serving` with the given `input` inline with the current process.
+  """
   def run(%Nx.Serving{} = serving, input) do
     %{
       module: module,
@@ -192,7 +199,7 @@ defmodule Nx.Serving do
   end
 
   defp handle_batch(module, batch, state) do
-    case module.handle_batch.(batch, state) do
+    case module.handle_batch(batch, state) do
       {:execute, function, _} = pair when is_function(function, 0) ->
         pair
 
@@ -204,12 +211,15 @@ defmodule Nx.Serving do
   end
 
   defp handle_preprocessing(nil, input) do
-    if is_list(input) do
-      raise ArgumentError,
-            "the default client_preprocessing function only accepts tensors or containers as arguments"
-    end
+    case input do
+      %Nx.Batch{} ->
+        input
 
-    Nx.Batch.stack([input])
+      _ ->
+        raise ArgumentError,
+              "the default client_preprocessing expects a `Nx.Batch` as input. " <>
+                "Give a batch or use a custom preprocessing"
+    end
   end
 
   defp handle_preprocessing(preprocessing, input) do

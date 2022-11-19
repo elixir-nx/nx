@@ -390,7 +390,9 @@ defimpl Nx.LazyContainer, for: Nx.Batch do
     raise ArgumentError, "cannot traverse/jit/compile Nx.Batch without entries"
   end
 
-  def traverse(%{stack: funs_size, pad: pad, template: template}, acc, acc_fun) do
+  def traverse(%{stack: funs_size, pad: pad, template: template, size: size}, acc, acc_fun) do
+    total = size + pad
+
     funs =
       funs_size
       |> first_reverse([])
@@ -406,6 +408,8 @@ defimpl Nx.LazyContainer, for: Nx.Batch do
 
     {template, {acc, []}} =
       Nx.Defn.Composite.traverse(template, {acc, funs}, fn template, {acc, [fun | funs]} ->
+        %{shape: shape, names: names} = template
+        template = %{template | shape: Tuple.insert_at(shape, 0, total), names: [nil | names]}
         {template, acc} = acc_fun.(template, fun, acc)
         {template, {acc, funs}}
       end)
