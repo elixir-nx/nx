@@ -36,16 +36,16 @@ defmodule Nx.Serving do
   as a jitted function.
 
   The second function is called `handle_batch/2`. This function
-  receives a batch and it must return a function to execute.
+  receives a `Nx.Batch` and it must return a function to execute.
   The function itself must return a two element-tuple: the batched
   results and some metadata. The metadata can be any value and we
   set it to the atom `:metadata`.
 
   Now let's give it a try by defining a serving with our module and
-  then running it:
+  then running it on a batch:
 
       iex> serving = Nx.Serving.new(MyServing, :unused_arg)
-      iex> batch = Nx.Batchs.stack([Nx.tensor([1, 2, 3])])
+      iex> batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
       iex> Nx.Serving.run(serving, batch)
       {:debug, #Nx.Tensor<
         s64[1][3]
@@ -60,9 +60,10 @@ defmodule Nx.Serving do
         ]
       >
 
-  You should see two values printed. The first is the result of our inspection,
-  which shows the tensor that was actually part of the computation and
-  how it was batched. Then we see the result of the computation.
+  You should see two values printed. The first is the result of
+  `Nx.Defn.Kernel.print_value/1`, which shows the tensor that was
+  actually part of the computation and how it was batched.
+  Then we see the result of the computation.
 
   When defining a `Nx.Serving`, we can also customize how the data is
   batched by using the `client_preprocessing` as well as the result by
