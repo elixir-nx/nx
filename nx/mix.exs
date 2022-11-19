@@ -12,7 +12,7 @@ defmodule Nx.MixProject do
     [
       app: :nx,
       version: @version,
-      elixir: "~> 1.13",
+      elixir: "~> 1.14",
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       docs: docs(),
@@ -82,6 +82,7 @@ defmodule Nx.MixProject do
         # Nx.Defn,
         # Nx.Defn.Kernel,
         # Nx.LinAlg,
+        # Nx.Serving,
 
         Protocols: [
           Nx.Container,
@@ -89,6 +90,7 @@ defmodule Nx.MixProject do
           Nx.Stream
         ],
         Structs: [
+          Nx.Batch,
           Nx.Heatmap,
           Nx.Tensor
         ],

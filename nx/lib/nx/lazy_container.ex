@@ -1,6 +1,6 @@
 defprotocol Nx.LazyContainer do
   @moduledoc """
-  Converts a data structure to a lazy container.
+  Converts a data structure to a container lazily.
 
   Sometimes building tensors for a container is an expensive
   operation, so we want to allow that to happen lazily.
@@ -16,7 +16,9 @@ defprotocol Nx.LazyContainer do
 
   If a data structure does not implement this protocol,
   a default implementation converts eager to lazy using
-  `Nx.Container`.
+  `Nx.Container`. When a value is given to `defn`, it is
+  first converted to tensors and containers via `Nx.LazyContainer`.
+  Inside `defn`, there are no lazy containers, only containers.
   """
 
   @fallback_to_any true
@@ -27,7 +29,7 @@ defprotocol Nx.LazyContainer do
   For each tensor in the container, `fun` receives a tensor
   template, an anonymous function to build the actual tensor,
   and the accumulator . It returns a two element tuple with
-  the updated container and the accumulator.
+  a non-lazy Nx.Container and the accumulator.
 
   This function returns the updated container and the accumulator.
 
@@ -36,7 +38,8 @@ defprotocol Nx.LazyContainer do
   be containers, you must call `Nx.LazyContainer.traverse/3`
   on said arguments so they are recursively traversed.
   """
-  @spec traverse(t(), acc, (Nx.template(), (() -> Nx.Tensor.t()), acc -> {term(), acc})) :: acc
+  @spec traverse(t(), acc, (Nx.template(), (() -> Nx.Tensor.t()), acc -> {term(), acc})) ::
+          {Nx.Container.t(), acc}
         when acc: term()
   def traverse(data, acc, fun)
 end

@@ -324,42 +324,46 @@ defmodule Nx.Defn do
   """
   def compile(fun, template_args, opts \\ [])
       when is_function(fun) and is_list(template_args) and is_list(opts) do
-    {fun, params, _flatten} = Nx.Defn.Compiler.to_lazy_params(fun, template_args)
+    {fun, templates, _flatten} = Nx.Defn.Compiler.to_lazy_params(fun, template_args)
     opts = prepare_options(opts)
-    compiled_fun = Nx.Defn.Compiler.__compile__(fun, params, opts)
+    compiled_fun = Nx.Defn.Compiler.__compile__(fun, templates, opts)
 
     wrap(fun, fn args ->
       if Nx.Defn.Compiler.current() do
         raise "cannot invoke compiled function when there is a JIT compilation happening"
       end
 
-      {templates, flatten} = Nx.Defn.Compiler.to_lazy_template(args)
-      assert_compatible!(templates, params, 1)
+      flatten = compile_flattten(args, templates, 1, [])
       [res] = compiled_fun.([flatten])
       res
     end)
   end
 
-  defp assert_compatible!([arg | args], [template | templates], pos) do
-    if Nx.compatible?(arg, template) do
-      assert_compatible!(args, templates, pos + 1)
+  defp compile_flattten([arg | args], [template | templates], pos, acc) do
+    {arg_template, acc} = Nx.LazyContainer.traverse(arg, acc, &{&1, [&2 | &3]})
+
+    if Nx.compatible?(arg_template, template) do
+      compile_flattten(args, templates, pos + 1, acc)
     else
       raise ArgumentError, """
       argument at position #{pos} is not compatible with compiled function template.
 
-      Template:
+      Expected template:
 
       #{inspect(template)}
 
-      Argument:
+      Argument template:
+
+      #{inspect(arg_template)}
+
+      Retrieved from argument:
 
       #{inspect(arg)}
-
       """
     end
   end
 
-  defp assert_compatible!([], [], _pos), do: :ok
+  defp compile_flattten([], [], _pos, acc), do: Enum.reverse(acc)
 
   @doc """
   Wraps an anonymous function with just-in-time compilation.
