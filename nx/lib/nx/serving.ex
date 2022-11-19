@@ -136,4 +136,96 @@ defmodule Nx.Serving do
   def new(module, arg) when is_atom(module) do
     %Nx.Serving{module: module, arg: arg}
   end
+
+  @doc """
+  Sets the client preprocessing function.
+
+  The default implementation creates a single element batch
+  with the given argument and is equivalent to `&Nx.Batch.stack([&1])`.
+  """
+  def client_preprocessing(%Nx.Serving{} = serving, function)
+      when is_function(function, 1) or is_nil(function) do
+    %{serving | client_preprocessing: function}
+  end
+
+  @doc """
+  Sets the client postprocessing function.
+
+  The default implementation returns the first element given
+  to the function.
+  """
+  def client_postprocessing(%Nx.Serving{} = serving, function)
+      when is_function(function, 2) or is_nil(function) do
+    %{serving | client_postprocessing: function}
+  end
+
+  def run(%Nx.Serving{} = serving, input) do
+    %{
+      module: module,
+      arg: arg,
+      client_preprocessing: preprocessing,
+      client_postprocessing: postprocessing
+    } = serving
+
+    {:ok, state} = handle_init(module, :inline, arg)
+    batch = handle_preprocessing(preprocessing, input)
+    {:execute, function, _} = handle_batch(module, batch, state)
+
+    case function.() do
+      {output, metadata} ->
+        handle_postprocessing(postprocessing, output, metadata)
+
+      other ->
+        raise "the function returned by #{inspect(module)}.handle_batch/2 must return {output, metadata}. " <>
+                "Got: #{inspect(other)}"
+    end
+  end
+
+  defp handle_init(module, type, arg) do
+    case module.init(type, arg) do
+      {:ok, _} = pair ->
+        pair
+
+      other ->
+        raise "#{inspect(module)}.init/2 must return {:ok, state}. Got: #{inspect(other)}"
+    end
+  end
+
+  defp handle_batch(module, batch, state) do
+    case module.handle_batch.(batch, state) do
+      {:execute, function, _} = pair when is_function(function, 0) ->
+        pair
+
+      other ->
+        raise "#{inspect(module)}.handle_batch/2 must return {:execute, function, state}, " <>
+                "where function is a function that receives no arguments and returns a tuple. " <>
+                "Got: #{inspect(other)}"
+    end
+  end
+
+  defp handle_preprocessing(nil, input) do
+    if is_list(input) do
+      raise ArgumentError,
+            "the default client_preprocessing function only accepts tensors or containers as arguments"
+    end
+
+    Nx.Batch.stack([input])
+  end
+
+  defp handle_preprocessing(preprocessing, input) do
+    case preprocessing.(input) do
+      %Nx.Batch{} = batch ->
+        batch
+
+      other ->
+        raise "client_preprocessing function #{inspect(preprocessing)} must return a Nx.Batch. " <>
+                "Got: #{inspect(other)}"
+    end
+  end
+
+  defp handle_postprocessing(nil, output, _metadata),
+    do: output
+
+  defp handle_postprocessing(postprocessing, output, metadata),
+    do: postprocessing.(output, metadata)
 end
