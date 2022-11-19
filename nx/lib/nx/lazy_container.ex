@@ -16,7 +16,9 @@ defprotocol Nx.LazyContainer do
 
   If a data structure does not implement this protocol,
   a default implementation converts eager to lazy using
-  `Nx.Container`.
+  `Nx.Container`. When a value is given to `defn`, it is
+  first converted to tensors and containers via `Nx.LazyContainer`.
+  Inside `defn`, there are no lazy containers, only containers.
   """
 
   @fallback_to_any true

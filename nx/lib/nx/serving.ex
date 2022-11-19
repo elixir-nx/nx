@@ -6,7 +6,7 @@ defmodule Nx.Serving do
   often it is used to run servers that batch requests until a given size
   or timeout is reached.
 
-  ## Serverless workflow
+  ## Inline/serverless workflow
 
   First, let's create a simple serving module:
 
@@ -97,8 +97,12 @@ defmodule Nx.Serving do
   From this, we can infer the default implementation of `client_postprocessing`
   simply returns the result, discarding the metadata.
 
-  Why these functions have a `client_` prefix will become clearer in the next
-  section.
+  Why these functions have a `client_` prefix in their name will become clearer
+  in the next section.
+
+  ## Stateful/process workflow
+
+  TODO.
   """
 
   defstruct [:module, :arg, :client_preprocessing, :client_postprocessing]
@@ -121,7 +125,7 @@ defmodule Nx.Serving do
   separate process.
   """
   @callback handle_batch(Nx.Batch.t(), state) ::
-              {:execute, (() -> {Nx.t() | Nx.Container.t(), term}), state}
+              {:execute, (() -> {Nx.Container.t(), term}), state}
             when state: term()
 
   @doc """

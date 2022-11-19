@@ -3158,7 +3158,7 @@ defmodule Nx do
   def compatible?(%T{} = left, %T{} = right) do
     %{type: type, shape: shape, names: left_names} = left
 
-    case to_tensor(right) do
+    case right do
       %{type: ^type, shape: ^shape, names: right_names} ->
         compatible_names?(left_names, right_names)
 

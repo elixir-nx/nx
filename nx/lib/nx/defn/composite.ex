@@ -111,7 +111,7 @@ defmodule Nx.Defn.Composite do
   Otherwise the function is invoked with the tensor (be it a
   number, complex, or actual tensor).
   """
-  def traverse(expr, acc, fun) when (is_tensor(expr) or is_boolean(expr)) and is_function(fun, 2),
+  def traverse(expr, acc, fun) when is_tensor(expr) and is_function(fun, 2),
     do: fun.(expr, acc)
 
   def traverse(container, acc, fun),

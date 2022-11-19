@@ -2,6 +2,7 @@ defmodule NxTest do
   use ExUnit.Case, async: true
 
   import Nx.Helpers
+  import Nx, only: :sigils
 
   defp commute(a, b, fun) do
     fun.(a, b)
@@ -1016,6 +1017,26 @@ defmodule NxTest do
       assert_raise(ArgumentError, ~r/cannot batch scalar tensor/, fn ->
         Nx.to_batched(t, 1)
       end)
+    end
+  end
+
+  describe "compatible?/2" do
+    test "non-composite types" do
+      refute Nx.compatible?(Complex.new(0, 2), 2)
+      refute Nx.compatible?(2, Complex.new(0, 2))
+      refute Nx.compatible?(Complex.new(0, 2), ~V[2])
+      refute Nx.compatible?(~V[2], Complex.new(0, 2))
+      refute Nx.compatible?(2, ~V[2i])
+      refute Nx.compatible?(~V[2i], 2)
+      refute Nx.compatible?(~V[2], ~V[2i])
+      assert Nx.compatible?(Complex.new(2), Complex.new(0, 2))
+      assert Nx.compatible?(2, 0)
+    end
+
+    test "structs" do
+      args = {1, Complex.new(1), Nx.tensor(1)}
+      c = %Container{a: args, b: args}
+      assert Nx.compatible?(c, c)
     end
   end
 

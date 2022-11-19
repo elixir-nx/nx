@@ -281,7 +281,7 @@ defmodule Nx.Defn.Expr do
           Enum.reduce(rest, [{first_pred, first}], fn {meta, pred, expr}, acc ->
             expr = expr.()
 
-            if not Composite.compatible?(first, expr, fn _, _ -> true end) do
+            if not Nx.Defn.Composite.compatible?(first, expr, fn _, _ -> true end) do
               raise CompileError,
                 line: meta[:line],
                 file: file,
@@ -325,7 +325,7 @@ defmodule Nx.Defn.Expr do
         condition = to_pred(condition, line, file, :while)
         body = to_container_expr(body)
 
-        if not Composite.compatible?(initial, body, &Nx.compatible?/2) do
+        if not Nx.compatible?(initial, body) do
           raise CompileError,
             line: line,
             file: file,
@@ -460,7 +460,7 @@ defmodule Nx.Defn.Expr do
   end
 
   defp compatible_while!(file, line, initial, body) do
-    if not Composite.compatible?(initial, body, &Nx.compatible?/2) do
+    if not Nx.compatible?(initial, body) do
       raise CompileError,
         line: line,
         file: file,

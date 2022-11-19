@@ -30,9 +30,9 @@ defprotocol Nx.Container do
   > **Careful!**: If you keep a field, its value will be part
   > of the `Nx.Defn` compiler cache key (i.e. therefore if you
   > give a struct with two different values for a kept field,
-  > `Nx.Defn` will have to compile and cache it twice). You
-  > must only keep fields that you are certain to be used inside
-  > `defn` during compilation time.
+  > `Nx.Defn` will have to compile and cache it twice).
+  > You must only keep fields that you are certain to be used
+  > inside `defn` during compilation time.
   """
 
   @fallback_to_any true
@@ -49,8 +49,7 @@ defprotocol Nx.Container do
   Given `fun` may receive containers, it is not recursive by default.
   See `Nx.Defn.Composite.traverse/3` for a recursive variant.
   """
-  @spec traverse(t(), acc, (Nx.t() | Nx.Container.t(), acc -> {Nx.t() | Nx.Container.t(), acc})) ::
-          acc
+  @spec traverse(t(), acc, (t(), acc -> {Nx.t(), acc})) :: {Nx.t(), acc}
         when acc: term()
   def traverse(data, acc, fun)
 
@@ -66,7 +65,7 @@ defprotocol Nx.Container do
   Given `fun` may receive containers, it is not recursive by default.
   See `Nx.Defn.Composite.reduce/3` for a recursive variant.
   """
-  @spec reduce(t(), acc, (Nx.t() | Nx.Container.t(), acc -> acc)) :: acc when acc: term()
+  @spec reduce(t(), acc, (t(), acc -> acc)) :: acc when acc: term()
   def reduce(data, acc, fun)
 end
 
@@ -103,6 +102,11 @@ defimpl Nx.Container, for: Map do
     |> Enum.sort()
     |> Enum.reduce(acc, fn {_, v}, acc -> fun.(v, acc) end)
   end
+end
+
+defimpl Nx.Container, for: [Integer, Float, Complex, Nx.Tensor] do
+  def traverse(tensor, acc, fun), do: {tensor, fun.(tensor, acc)}
+  def reduce(tensor, acc, fun), do: fun.(tensor, acc)
 end
 
 defimpl Nx.Container, for: Any do
