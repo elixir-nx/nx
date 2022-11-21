@@ -255,7 +255,6 @@ defmodule Nx.Serving do
         slice = Nx.slice_along_axis(output, start, size, axis: @axis)
         receive_batched(total_size - size, ref, [slice | acc], metadata, name, input)
 
-      # TODO: Test me
       {:DOWN, ^ref, _, _, reason} ->
         # We fake monitor messages, so still demonitor and flush.
         Process.demonitor(ref, [:flush])
@@ -464,7 +463,6 @@ defmodule Nx.Serving do
   defp server_timeout(%{task: :none, queue: @empty_queue} = state),
     do: server_execute(%{state | timer: :done})
 
-  # TODO: Test by blocking the task
   # Otherwise continue batching until the queue is empty or it is full.
   defp server_timeout(%{task: {_, _}} = state),
     do: %{state | timer: :done}

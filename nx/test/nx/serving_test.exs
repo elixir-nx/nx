@@ -23,6 +23,31 @@ defmodule Nx.ServingTest do
     end
   end
 
+  defmodule ExecuteSync do
+    @behaviour Nx.Serving
+
+    @impl true
+    def init(_type, pid) do
+      {:ok, pid}
+    end
+
+    @impl true
+    def handle_batch(batch, pid) do
+      send(pid, :batch)
+
+      fun = fn ->
+        send(pid, {:execute, self()})
+
+        receive do
+          :crash -> raise "oops"
+          :continue -> {Nx.Defn.jit_apply(&Nx.multiply(&1, 2), [batch]), :metadata}
+        end
+      end
+
+      {:execute, fun, pid}
+    end
+  end
+
   describe "run/2" do
     test "with default callbacks" do
       serving = Nx.Serving.new(Simple, self())
@@ -46,12 +71,12 @@ defmodule Nx.ServingTest do
         end)
         |> Nx.Serving.client_postprocessing(fn result, metadata, info ->
           send(self(), {:post, result, metadata, info})
-          {result, metadata}
+          {result, metadata, info}
         end)
 
       pre = [Nx.tensor([1, 2]), Nx.tensor([3, 4])]
       post = Nx.tensor([[2, 4], [6, 8]])
-      assert Nx.Serving.run(serving, pre) == {post, :metadata}
+      assert Nx.Serving.run(serving, pre) == {post, :metadata, :preprocessing!}
 
       assert_received {:init, :inline}
       assert_received {:pre, ^pre}
@@ -66,8 +91,8 @@ defmodule Nx.ServingTest do
 
   describe "batched_run" do
     defp simple_supervised!(config, opts \\ []) do
-      serving = Nx.Serving.new(Simple, self())
-      start_supervised!({Nx.Serving, [name: config.test, serving: serving] ++ opts})
+      opts = Keyword.put_new(opts, :serving, Nx.Serving.new(Simple, self()))
+      start_supervised!({Nx.Serving, [name: config.test] ++ opts})
     end
 
     test "1=1", config do
@@ -96,6 +121,44 @@ defmodule Nx.ServingTest do
         Task.async(fn ->
           batch = Nx.Batch.stack([Nx.tensor([21, 22]), Nx.tensor([23, 24])])
           assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([[42, 44], [46, 48]])
+        end)
+
+      Task.await(t1, :infinity)
+      Task.await(t2, :infinity)
+
+      assert_received {:init, :process}
+      assert_received {:batch, batch}
+      assert_received :execute
+      assert batch.size == 4
+      assert batch.pad == 0
+    end
+
+    test "2+2=4 with pre and post", config do
+      serving =
+        Nx.Serving.new(Simple, self())
+        |> Nx.Serving.client_preprocessing(fn entry ->
+          {Nx.Batch.stack(entry), :preprocessing!}
+        end)
+        |> Nx.Serving.client_postprocessing(fn result, metadata, info ->
+          {result, metadata, info}
+        end)
+
+      simple_supervised!(config, serving: serving, batch_size: 4, batch_timeout: 10_000)
+
+      t1 =
+        Task.async(fn ->
+          batch = [Nx.tensor([11, 12]), Nx.tensor([13, 14])]
+
+          assert Nx.Serving.batched_run(config.test, batch) ==
+                   {Nx.tensor([[22, 24], [26, 28]]), :metadata, :preprocessing!}
+        end)
+
+      t2 =
+        Task.async(fn ->
+          batch = [Nx.tensor([21, 22]), Nx.tensor([23, 24])]
+
+          assert Nx.Serving.batched_run(config.test, batch) ==
+                   {Nx.tensor([[42, 44], [46, 48]]), :metadata, :preprocessing!}
         end)
 
       Task.await(t1, :infinity)
@@ -148,7 +211,6 @@ defmodule Nx.ServingTest do
           assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([42, 44, 46, 48])
         end)
 
-
       t3 =
         Task.async(fn ->
           batch = Nx.Batch.concatenate([Nx.tensor([31, 32, 33, 34, 35])])
@@ -167,6 +229,113 @@ defmodule Nx.ServingTest do
       assert_received {:batch, batch}
       assert_received :execute
       assert batch.size == 6
+    end
+
+    defp execute_sync_supervised!(config, opts \\ []) do
+      serving = Nx.Serving.new(ExecuteSync, self())
+      start_supervised!({Nx.Serving, [name: config.test, serving: serving] ++ opts})
+    end
+
+    @tag :capture_log
+    test "1=crash", config do
+      execute_sync_supervised!(config)
+
+      {_pid, ref} =
+        spawn_monitor(fn ->
+          batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
+          Nx.Serving.batched_run(config.test, batch)
+        end)
+
+      assert_receive {:execute, executor}
+      send(executor, :crash)
+
+      assert_receive {:DOWN, ^ref, _, _,
+                      {{%RuntimeError{}, _}, {Nx.Serving, :batched_run, [_, _]}}}
+    end
+
+    @tag :capture_log
+    test "2+3=crash", config do
+      execute_sync_supervised!(config, batch_timeout: 100, batch_size: 4)
+
+      {_pid, ref1} =
+        spawn_monitor(fn ->
+          batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
+          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([2, 4])
+        end)
+
+      {_pid, ref2} =
+        spawn_monitor(fn ->
+          batch = Nx.Batch.concatenate([Nx.tensor([3, 4, 5])])
+          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([6, 8, 10])
+        end)
+
+      assert_receive {:execute, executor}
+      send(executor, :continue)
+
+      assert_receive {:execute, executor}
+      send(executor, :crash)
+
+      assert_receive {:DOWN, ref, _, _,
+                      {{%RuntimeError{}, _}, {Nx.Serving, :batched_run, [_, _]}}}
+                     when ref in [ref1, ref2]
+    end
+
+    test "2=>2=>1+timeout", config do
+      execute_sync_supervised!(config, batch_timeout: 100, batch_size: 2)
+
+      task1 =
+        Task.async(fn ->
+          batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
+          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([2, 4])
+        end)
+
+      assert_receive :batch
+
+      task2 =
+        Task.async(fn ->
+          batch = Nx.Batch.concatenate([Nx.tensor([3, 4])])
+          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([6, 8])
+        end)
+
+      assert_receive :batch
+
+      task3 =
+        Task.async(fn ->
+          batch = Nx.Batch.concatenate([Nx.tensor([5])])
+          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([10])
+        end)
+
+      Process.sleep(100)
+
+      assert_receive {:execute, executor1}
+      send(executor1, :continue)
+      Task.await(task1)
+
+      assert_receive {:execute, executor2}
+      send(executor2, :continue)
+      Task.await(task2)
+
+      assert_receive :batch
+      assert_receive {:execute, executor3}
+      send(executor3, :continue)
+      Task.await(task3)
+    end
+
+    test "errors on batch size", config do
+      simple_supervised!(config, batch_size: 2)
+
+      assert_raise ArgumentError, "cannot run with empty Nx.Batch", fn ->
+        Nx.Serving.batched_run(config.test, Nx.Batch.new())
+      end
+
+      assert_raise ArgumentError,
+                   "batch size (3) cannot exceed Nx.Serving server batch size of 2",
+                   fn ->
+                     Nx.Serving.batched_run(
+                       config.test,
+                       Nx.Batch.concatenate([Nx.tensor([1, 2, 3])])
+                     )
+                   end
     end
   end
 end
