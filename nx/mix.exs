@@ -12,7 +12,7 @@ defmodule Nx.MixProject do
     [
       app: :nx,
       version: @version,
-      elixir: "~> 1.14",
+      elixir: "~> 1.13",
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       docs: docs(),
@@ -29,7 +29,6 @@ defmodule Nx.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {Nx.Application, []},
       env: [default_backend: {Nx.BinaryBackend, []}, default_defn_options: []]
     ]
   end

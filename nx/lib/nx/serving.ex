@@ -20,7 +20,7 @@ defmodule Nx.Serving do
         end
 
         @impl true
-        def init(_inline_or_process, :unused_arg) do            
+        def init(_inline_or_process, :unused_arg) do
           {:ok, Nx.Defn.jit(&print_and_multiply/1)}
         end
 
@@ -200,15 +200,36 @@ defmodule Nx.Serving do
 
   ## Process API
 
+  @doc false
+  def child_spec(opts) when is_list(opts) do
+    name = opts[:name]
+
+    if name == nil or not is_atom(name) do
+      raise ArgumentError, ":name option is expected when starting Nx.Serving and must be an atom"
+    end
+
+    opts[:serving] ||
+      raise ArgumentError, ":serving option is expected when starting Nx.Serving"
+
+    %{
+      id: name,
+      start: {__MODULE__, :start_link, [opts]},
+      type: :supervisor
+    }
+  end
+
   @doc """
   TODO
   """
   def start_link(opts) do
-    {serving, opts} = Keyword.pop!(opts, :serving)
-    {batch_size, opts} = Keyword.pop(opts, :batch_size, 1)
-    {batch_timeout, opts} = Keyword.pop(opts, :batch_timeout, 100)
-    name = Keyword.fetch!(opts, :name)
-    GenServer.start_link(__MODULE__, {name, serving, batch_size, batch_timeout}, opts)
+    children = [
+      %{
+        id: __MODULE__,
+        start: {__MODULE__, :start_child, [opts]}
+      }
+    ]
+
+    Supervisor.start_link(children, strategy: :one_for_all, max_restarts: 0)
   end
 
   @doc """
@@ -264,32 +285,24 @@ defmodule Nx.Serving do
 
   ## Process callbacks
 
-  use GenServer
   require Logger
-
-  @doc false
-  def child_spec(opts) when is_list(opts) do
-    name = opts[:name]
-
-    if name == nil or not is_atom(name) do
-      raise ArgumentError, ":name option is expected when starting Nx.Serving and must be an atom"
-    end
-
-    opts[:serving] ||
-      raise ArgumentError, ":serving option is expected when starting Nx.Serving"
-
-    %{
-      id: name,
-      start: {__MODULE__, :start_link, [opts]}
-    }
-  end
+  @behaviour GenServer
 
   @empty_stack {[], 0}
   @empty_queue :queue.new()
   @timeout_message {__MODULE__, :timeout}
 
+  @doc false
+  def start_child(opts) do
+    {serving, opts} = Keyword.pop!(opts, :serving)
+    {batch_size, opts} = Keyword.pop(opts, :batch_size, 1)
+    {batch_timeout, opts} = Keyword.pop(opts, :batch_timeout, 100)
+    name = Keyword.fetch!(opts, :name)
+    GenServer.start_link(__MODULE__, {self(), name, serving, batch_size, batch_timeout}, opts)
+  end
+
   @impl true
-  def init({name, serving, batch_size, batch_timeout}) do
+  def init({parent, name, serving, batch_size, batch_timeout}) do
     {:ok, module_state} = handle_init(serving.module, :process, serving.arg)
 
     :persistent_term.put(
@@ -312,10 +325,17 @@ defmodule Nx.Serving do
       timeout: batch_timeout,
       timer: :none,
       queue: @empty_queue,
-      task: :none
+      task: :none,
+      task_supervisor: nil
     }
 
-    {:ok, state}
+    {:ok, state, {:continue, {:task_supervisor, parent}}}
+  end
+
+  @impl true
+  def handle_continue({:task_supervisor, parent}, state) do
+    {:ok, task_supervisor} = Supervisor.start_child(parent, Task.Supervisor)
+    {:noreply, %{state | task_supervisor: task_supervisor}}
   end
 
   @impl true
@@ -434,8 +454,7 @@ defmodule Nx.Serving do
   end
 
   defp server_task_or_enqueue(%{task: :none} = state, function, ref_sizes) do
-    # TODO: Use Task.Supervisor.async_nolink()
-    task = Task.async(function)
+    task = Task.Supervisor.async_nolink(state.task_supervisor, function)
     %{state | task: {task, ref_sizes}}
   end
 
