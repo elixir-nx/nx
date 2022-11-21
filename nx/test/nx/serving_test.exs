@@ -40,10 +40,10 @@ defmodule Nx.ServingTest do
       Nx.Serving.new(Simple, self())
       |> Nx.Serving.client_preprocessing(fn entry ->
         send(self(), {:pre, entry})
-        Nx.Batch.stack(entry)
+        {Nx.Batch.stack(entry), :preprocessing!}
       end)
-      |> Nx.Serving.client_postprocessing(fn result, metadata ->
-        send(self(), {:post, result, metadata})
+      |> Nx.Serving.client_postprocessing(fn result, metadata, info ->
+        send(self(), {:post, result, metadata, info})
         {result, metadata}
       end)
 
@@ -55,7 +55,7 @@ defmodule Nx.ServingTest do
     assert_received {:pre, ^pre}
     assert_received {:batch, batch}
     assert_received :execute
-    assert_received {:post, ^post, :metadata}
+    assert_received {:post, ^post, :metadata, :preprocessing!}
     assert batch.size == 2
     assert Nx.Defn.jit_apply(&Function.identity/1, [batch]) == Nx.tensor([[1, 2], [3, 4]])
   end

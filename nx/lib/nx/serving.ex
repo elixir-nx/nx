@@ -71,8 +71,8 @@ defmodule Nx.Serving do
 
       iex> serving = (
       ...>   Nx.Serving.new(MyServing, :unused_arg)
-      ...>   |> Nx.Serving.client_preprocessing(&Nx.Batch.stack/1)
-      ...>   |> Nx.Serving.client_postprocessing(&{:postprocessing, &1, &2})
+      ...>   |> Nx.Serving.client_preprocessing(fn input -> {Nx.Batch.stack(input), :client_info} end)
+      ...>   |> Nx.Serving.client_postprocessing(&{&1, &2, &3})
       ...> )
       iex> Nx.Serving.run(serving, [Nx.tensor([1, 2]), Nx.tensor([3, 4])])
       {:debug, #Nx.Tensor<
@@ -82,25 +82,28 @@ defmodule Nx.Serving do
           [3, 4]
         ]
       >}
-      {:post_processing, #Nx.Tensor<
+      {#Nx.Tensor<
          s64[2][2]
          [
            [2, 4],
            [6, 8]
          ]
-       >, :metadata}
+       >,
+       :metadata,
+       :info}
 
   You can see the results are a bit different now. First of all, notice we
   were able to run the serving passing a list of tensors. Our custom
   `client_preprocessing` function stacks those tensors into a batch of two
-  entries. With the `client_preprocessing` function, you can transform the
-  input in any way you desire before batching. It must return a `Nx.Batch`
-  struct. The default client preprocessing simply enforces a batch was given.
+  entries and returns a tuple with a `Nx.Batch` struct and additional client
+  information which we represent as the atom `:client_info`. The default
+  client preprocessing simply enforces a batch was given and returns no client
+  information.
 
-  Then the result is a `{:postprocessing, ..., ...}` tuple containing the
-  result and the execution metadata as second and third elements respectively.
+  Then the result is a `{..., ..., ...}` tuple, returned by the client postprocessing
+  function, containing the result, the execution metadata, and the client information.
   From this, we can infer the default implementation of `client_postprocessing`
-  simply returns the result, discarding the metadata.
+  simply returns the result, discarding the metadata and client information.
 
   Why these functions have a `client_` prefix in their name will become clearer
   in the next section.
@@ -114,8 +117,9 @@ defmodule Nx.Serving do
   defstruct [:module, :arg, :client_preprocessing, :client_postprocessing]
 
   @type metadata() :: term()
-  @type client_preprocessing() :: (term() -> Nx.Batch.t())
-  @type client_postprocessing() :: (Nx.Container.t(), metadata() -> Nx.Batch.t())
+  @type client_info() :: term()
+  @type client_preprocessing() :: (term() -> {Nx.Batch.t(), client_info()})
+  @type client_postprocessing() :: (Nx.Container.t(), metadata(), client_info() -> term())
 
   @type t :: %__MODULE__{
           module: atom(),
@@ -142,7 +146,7 @@ defmodule Nx.Serving do
   separate process.
   """
   @callback handle_batch(Nx.Batch.t(), state) ::
-              {:execute, (-> {Nx.Container.t(), metadata()}), state}
+              {:execute, (() -> {Nx.Container.t(), metadata()}), state}
             when state: term()
 
   @doc """
@@ -172,7 +176,7 @@ defmodule Nx.Serving do
   to the function.
   """
   def client_postprocessing(%Nx.Serving{} = serving, function)
-      when is_function(function, 2) or is_nil(function) do
+      when is_function(function, 3) or is_nil(function) do
     %{serving | client_postprocessing: function}
   end
 
@@ -188,10 +192,10 @@ defmodule Nx.Serving do
     } = serving
 
     {:ok, state} = handle_init(module, :inline, arg)
-    batch = handle_preprocessing(preprocessing, input)
+    {batch, info} = handle_preprocessing(preprocessing, input)
     {:execute, function, _} = handle_batch(module, batch, state)
     {output, metadata} = handle_executed(module, function.())
-    handle_postprocessing(postprocessing, output, metadata)
+    handle_postprocessing(postprocessing, output, metadata, info)
   end
 
   ## Process API
@@ -219,7 +223,7 @@ defmodule Nx.Serving do
       limit: limit
     } = :persistent_term.get(persistent_key(name))
 
-    batch = handle_preprocessing(preprocessing, input)
+    {batch, info} = handle_preprocessing(preprocessing, input)
 
     if batch.size > limit do
       raise ArgumentError,
@@ -233,7 +237,8 @@ defmodule Nx.Serving do
     receive do
       {^ref, {size, output, metadata}} ->
         Process.demonitor(ref, [:flush])
-        # TODO: handle size and postprocessing
+
+      # TODO: handle size and postprocessing
 
       {:DOWN, ^ref, _, _, reason} ->
         # We fake monitor messages, so still demonitor and flush.
@@ -484,7 +489,7 @@ defmodule Nx.Serving do
   defp handle_preprocessing(nil, input) do
     case input do
       %Nx.Batch{} ->
-        input
+        {input, :none}
 
       _ ->
         raise ArgumentError,
@@ -495,18 +500,18 @@ defmodule Nx.Serving do
 
   defp handle_preprocessing(preprocessing, input) do
     case preprocessing.(input) do
-      %Nx.Batch{} = batch ->
-        batch
+      {%Nx.Batch{} = batch, info} ->
+        {batch, info}
 
       other ->
-        raise "client_preprocessing function #{inspect(preprocessing)} must return a Nx.Batch. " <>
-                "Got: #{inspect(other)}"
+        raise "client_preprocessing function #{inspect(preprocessing)} must return a two element tuple " <>
+                "where the first element is a Nx.Batch and the second is any value. Got: #{inspect(other)}"
     end
   end
 
-  defp handle_postprocessing(nil, output, _metadata),
+  defp handle_postprocessing(nil, output, _metadata, _info),
     do: output
 
-  defp handle_postprocessing(postprocessing, output, metadata),
-    do: postprocessing.(output, metadata)
+  defp handle_postprocessing(postprocessing, output, metadata, info),
+    do: postprocessing.(output, metadata, info)
 end
