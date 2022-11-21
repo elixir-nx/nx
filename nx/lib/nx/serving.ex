@@ -146,7 +146,7 @@ defmodule Nx.Serving do
   separate process.
   """
   @callback handle_batch(Nx.Batch.t(), state) ::
-              {:execute, (() -> {Nx.Container.t(), metadata()}), state}
+              {:execute, (-> {Nx.Container.t(), metadata()}), state}
             when state: term()
 
   @doc """
@@ -234,12 +234,28 @@ defmodule Nx.Serving do
     ref = :erlang.monitor(:process, pid, alias: :demonitor)
     Process.send(pid, {__MODULE__, :batched_run, ref, batch}, [:noconnect])
 
+    {tensor, metadata} = receive_batched(batch.size, ref, [], nil, name, input)
+    handle_postprocessing(postprocessing, tensor, metadata, info)
+  end
+
+  @axis 0
+
+  defp receive_batched(0, ref, acc, metadata, _name, _input) do
+    Process.demonitor(ref, [:flush])
+
+    case acc do
+      [slice] -> {slice, metadata}
+      _ -> {acc |> Enum.reverse() |> Nx.concatenate(axis: @axis), metadata}
+    end
+  end
+
+  defp receive_batched(total_size, ref, acc, _metadata, name, input) do
     receive do
-      {^ref, {size, output, metadata}} ->
-        Process.demonitor(ref, [:flush])
+      {^ref, {start, size, output, metadata}} ->
+        slice = Nx.slice_along_axis(output, start, size, axis: @axis)
+        receive_batched(total_size - size, ref, [slice | acc], metadata, name, input)
 
-      # TODO: handle size and postprocessing
-
+      # TODO: Test me
       {:DOWN, ^ref, _, _, reason} ->
         # We fake monitor messages, so still demonitor and flush.
         Process.demonitor(ref, [:flush])
@@ -269,7 +285,8 @@ defmodule Nx.Serving do
     }
   end
 
-  @empty {[], 0}
+  @empty_stack {[], 0}
+  @empty_queue :queue.new()
   @timeout_message {__MODULE__, :timeout}
 
   @impl true
@@ -291,11 +308,11 @@ defmodule Nx.Serving do
       name: name,
       module: serving.module,
       module_state: module_state,
-      stack: @empty,
+      stack: @empty_stack,
       limit: batch_size,
       timeout: batch_timeout,
       timer: :none,
-      queue: :queue.new(),
+      queue: @empty_queue,
       task: :none
     }
 
@@ -351,10 +368,11 @@ defmodule Nx.Serving do
   end
 
   def handle_info({ref, reply}, %{task: {task, ref_sizes}} = state) when task.ref == ref do
+    Process.demonitor(ref, [:flush])
     {output, metadata} = handle_executed(state.module, reply)
 
-    for {ref, size} <- ref_sizes do
-      send(ref, {ref, {size, output, metadata}})
+    for {ref, start, size} <- ref_sizes do
+      send(ref, {ref, {start, size, output, metadata}})
     end
 
     {:noreply, server_task_done(state)}
@@ -362,7 +380,7 @@ defmodule Nx.Serving do
 
   def handle_info({:DOWN, ref, type, _process, reason}, %{task: {task, ref_sizes}} = state)
       when task.ref == ref do
-    for {ref, _size} <- ref_sizes do
+    for {ref, _start, _size} <- ref_sizes do
       send(ref, {:DOWN, ref, type, self(), reason})
     end
 
@@ -376,13 +394,13 @@ defmodule Nx.Serving do
 
   defp server_stack(%{stack: {stack, count}, limit: limit} = state, ref, batch)
        when batch.size + count <= limit do
-    %{state | stack: {[{ref, batch} | stack]}, count: count + batch.size}
+    %{state | stack: {[{ref, batch} | stack], count + batch.size}}
   end
 
   defp server_timer(%{timeout: timeout, timer: :none} = state),
     do: %{state | timer: Process.send_after(self(), @timeout_message, timeout)}
 
-  defp server_execute(%{stack: @empty} = state), do: state
+  defp server_execute(%{stack: @empty_stack} = state), do: state
 
   defp server_execute(state) do
     %{
@@ -399,9 +417,10 @@ defmodule Nx.Serving do
       end
     end
 
-    {ref_sizes, batches} =
-      Enum.reduce(stack, {[], []}, fn {ref, batch}, {ref_sizes, batches} ->
-        {[{ref, batch.size} | ref_sizes], [batch | batches]}
+    {ref_sizes, batches, _} =
+      Enum.reduce(stack, {[], [], count}, fn {ref, batch}, {ref_sizes, batches, ending} ->
+        size = batch.size
+        {[{ref, ending - size, size} | ref_sizes], [batch | batches], ending - size}
       end)
 
     batch =
@@ -411,7 +430,7 @@ defmodule Nx.Serving do
 
     {:execute, function, module_state} = handle_batch(module, batch, module_state)
 
-    state = %{state | timer: :none, stack: @empty, module_state: module_state}
+    state = %{state | timer: :none, stack: @empty_stack, module_state: module_state}
     server_task_or_enqueue(state, function, ref_sizes)
   end
 
@@ -436,16 +455,19 @@ defmodule Nx.Serving do
         %{state | task: :none}
 
       # Execute the next one in queue.
-      {{function, ref_sizes}, queue} ->
+      {{:value, {function, ref_sizes}}, queue} ->
         server_task_or_enqueue(%{state | task: :none, queue: queue}, function, ref_sizes)
     end
   end
 
-  # It timed out and there is no task, continue batching.
-  defp server_timeout(%{task: {_, _}} = state), do: %{state | timer: :done}
+  # It timed out and there is no task and the queue is empty, execute it now.
+  defp server_timeout(%{task: :none, queue: @empty_queue} = state),
+    do: server_execute(%{state | timer: :done})
 
-  # It timed out and there is no task, execute it now.
-  defp server_timeout(%{task: :none} = state), do: server_execute(%{state | timer: :done})
+  # TODO: Test by blocking the task
+  # Otherwise continue batching until the queue is empty or it is full.
+  defp server_timeout(%{task: {_, _}} = state),
+    do: %{state | timer: :done}
 
   ## Shared helpers
 
@@ -489,7 +511,7 @@ defmodule Nx.Serving do
   defp handle_preprocessing(nil, input) do
     case input do
       %Nx.Batch{} ->
-        {input, :none}
+        {no_empty_batch!(input), :none}
 
       _ ->
         raise ArgumentError,
@@ -501,13 +523,16 @@ defmodule Nx.Serving do
   defp handle_preprocessing(preprocessing, input) do
     case preprocessing.(input) do
       {%Nx.Batch{} = batch, info} ->
-        {batch, info}
+        {no_empty_batch!(batch), info}
 
       other ->
         raise "client_preprocessing function #{inspect(preprocessing)} must return a two element tuple " <>
                 "where the first element is a Nx.Batch and the second is any value. Got: #{inspect(other)}"
     end
   end
+
+  defp no_empty_batch!(%{size: 0}), do: raise(ArgumentError, "cannot run with empty Nx.Batch")
+  defp no_empty_batch!(%{size: _} = batch), do: batch
 
   defp handle_postprocessing(nil, output, _metadata, _info),
     do: output
