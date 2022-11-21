@@ -146,7 +146,7 @@ defmodule Nx.Serving do
   separate process.
   """
   @callback handle_batch(Nx.Batch.t(), state) ::
-              {:execute, (-> {Nx.Container.t(), metadata()}), state}
+              {:execute, (() -> {Nx.Container.t(), metadata()}), state}
             when state: term()
 
   @doc """
