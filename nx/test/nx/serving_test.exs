@@ -147,7 +147,7 @@ defmodule Nx.ServingTest do
 
     test "2+2=4 with pre and post", config do
       serving =
-        Nx.Serving.new(Simple, self())
+        Nx.Serving.new(Simple, self(), batch_size: 4)
         |> Nx.Serving.client_preprocessing(fn entry ->
           {Nx.Batch.stack(entry), :preprocessing!}
         end)
@@ -155,7 +155,7 @@ defmodule Nx.ServingTest do
           {result, metadata, info}
         end)
 
-      simple_supervised!(config, serving: serving, batch_size: 4, batch_timeout: 10_000)
+      simple_supervised!(config, serving: serving, batch_timeout: 10_000)
 
       t1 =
         Task.async(fn ->
@@ -209,8 +209,12 @@ defmodule Nx.ServingTest do
     end
 
     test "3+4+5=6+6 (container)", config do
-      serving = Nx.Serving.new(Nx.Defn.jit(fn {a, b} -> {Nx.multiply(a, 2), Nx.divide(b, 2)} end))
-      simple_supervised!(config, batch_size: 6, batch_timeout: 100, serving: serving)
+      serving =
+        Nx.Serving.new(Nx.Defn.jit(fn {a, b} -> {Nx.multiply(a, 2), Nx.divide(b, 2)} end),
+          batch_size: 6
+        )
+
+      simple_supervised!(config, batch_timeout: 100, serving: serving)
 
       t1 =
         Task.async(fn ->
@@ -333,6 +337,15 @@ defmodule Nx.ServingTest do
       assert_receive {:execute, executor3}
       send(executor3, :continue)
       Task.await(task3)
+    end
+
+    test "conflict on batch size" do
+      assert_raise ArgumentError,
+                   ~r":batch_size has been set when starting an Nx.Serving process \(15\) but a conflicting value was already set on the Nx.Serving struct \(30\)",
+                   fn ->
+                     serving = Nx.Serving.new(Simple, self(), batch_size: 30)
+                     Nx.Serving.start_link(name: :unused, serving: serving, batch_size: 15)
+                   end
     end
 
     test "errors on batch size", config do

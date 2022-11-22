@@ -199,7 +199,8 @@ defmodule Nx.Serving do
   """
 
   @doc false
-  defstruct [:module, :arg, :client_preprocessing, :client_postprocessing]
+  @enforce_keys [:module, :arg]
+  defstruct [:module, :arg, :client_preprocessing, :client_postprocessing, process_options: []]
 
   @type metadata() :: term()
   @type client_info() :: term()
@@ -241,18 +242,32 @@ defmodule Nx.Serving do
   (via `Nx.Defn.compile/3`) one-arity function as argument.
   The function will be called with the arguments returned by
   the `client_preprocessing` callback.
+
+  A second argument called `process_options`, which is optional,
+  can be given to customize the options when starting the serving
+  under a process.
   """
-  def new(function) when is_function(function, 1) do
-    new(Nx.Serving.Default, function)
+  def new(function, process_options \\ [])
+
+  def new(function, process_options) when is_function(function, 1) and is_list(process_options) do
+    new(Nx.Serving.Default, function, process_options)
+  end
+
+  def new(module, arg) when is_atom(module) do
+    new(module, arg, [])
   end
 
   @doc """
   Creates a new module-based serving.
 
   It expects a module and an argument that is given to its `init` callback.
+
+  A third argument called `process_options`, which is optional,
+  can be given to customize the options when starting the serving
+  under a process.
   """
-  def new(module, arg) when is_atom(module) do
-    %Nx.Serving{module: module, arg: arg}
+  def new(module, arg, process_options) when is_atom(module) and is_list(process_options) do
+    %Nx.Serving{module: module, arg: arg, process_options: process_options}
   end
 
   @doc """
@@ -321,21 +336,47 @@ defmodule Nx.Serving do
   ## Options
 
     * `:name` - an atom with the name of the process
+
     * `:serving` - a `Nx.Serving` struct with the serving configuration
-    * `:batch_size` - the maximum size to batch for (defaults to `1`)
+
+    * `:batch_size` - the maximum size to batch for. A value is first read
+      from the `Nx.Serving` struct and then it falls back to this option
+      (which defaults to `1`)
+
     * `:batch_timeout` - the maximum time to wait, in milliseconds,
-      before executing the batch (defaults to `100`ms)
+      before executing the batch. A value is first read from the `Nx.Serving`
+      struct and then it falls back to this option (which defaults to `100`ms)
 
   """
   def start_link(opts) do
+    name = Keyword.fetch!(opts, :name)
+    {%Nx.Serving{process_options: serving_opts} = serving, opts} = Keyword.pop!(opts, :serving)
+    {batch_size, opts} = process_option(:batch_size, serving_opts, opts, 1)
+    {batch_timeout, opts} = process_option(:batch_timeout, serving_opts, opts, 100)
+    arg = {self(), name, serving, batch_size, batch_timeout}
+
     children = [
       %{
         id: __MODULE__,
-        start: {__MODULE__, :start_child, [opts]}
+        start: {GenServer, :start_link, [__MODULE__, arg, opts]}
       }
     ]
 
     Supervisor.start_link(children, strategy: :one_for_all, max_restarts: 0)
+  end
+
+  defp process_option(key, serving_opts, opts, default) do
+    serving_value = serving_opts[key]
+    {value, opts} = Keyword.pop(opts, key)
+
+    if serving_value && value && serving_value != value do
+      raise ArgumentError,
+            "#{inspect(key)} has been set when starting an Nx.Serving process (#{inspect(value)}) " <>
+              "but a conflicting value was already set on the Nx.Serving struct (#{inspect(serving_value)}). " <>
+              "Please remove the option given to the Nx.Serving process"
+    end
+
+    {serving_value || value || default, opts}
   end
 
   @doc """
@@ -429,15 +470,6 @@ defmodule Nx.Serving do
   @empty_stack {[], 0}
   @empty_queue :queue.new()
   @timeout_message {__MODULE__, :timeout}
-
-  @doc false
-  def start_child(opts) do
-    {serving, opts} = Keyword.pop!(opts, :serving)
-    {batch_size, opts} = Keyword.pop(opts, :batch_size, 1)
-    {batch_timeout, opts} = Keyword.pop(opts, :batch_timeout, 100)
-    name = Keyword.fetch!(opts, :name)
-    GenServer.start_link(__MODULE__, {self(), name, serving, batch_size, batch_timeout}, opts)
-  end
 
   @impl true
   def init({parent, name, serving, batch_size, batch_timeout}) do
