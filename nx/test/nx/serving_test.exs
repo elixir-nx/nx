@@ -183,7 +183,7 @@ defmodule Nx.ServingTest do
       assert batch.pad == 0
     end
 
-    test "2+2+pad=8", config do
+    test "2+2+timeout=8", config do
       simple_supervised!(config, batch_size: 8, batch_timeout: 100)
 
       t1 =
@@ -205,7 +205,7 @@ defmodule Nx.ServingTest do
       assert_received {:batch, batch}
       assert_received :execute
       assert batch.size == 4
-      assert batch.pad == 4
+      assert batch.pad == 0
     end
 
     test "3+4+5=6+6 (container)", config do

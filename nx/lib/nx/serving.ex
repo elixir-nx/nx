@@ -93,9 +93,46 @@ defmodule Nx.Serving do
   ## Stateful/process workflow
 
   `Nx.Serving` allows us to define a process that will batch requests up to
-  a certain size or within a certain time.
+  a certain size or within a certain time. To do so, we need to start a
+  `Nx.Serving` process with a serving inside a supervision tree:
 
-  TODO.
+      children = [
+        {Nx.Serving,
+         serving: Nx.Serving.new(Nx.Defn.jit(&print_and_multiply/1)),
+         name: MyServing,
+         batch_size: 10,
+         batch_timeout: 100}
+      ]
+
+      Supervisor.start_child(children, strategy: :one_for_one)
+
+  Now you can send batched runs to said process:
+
+      iex> batch = Nx.Batch.stack([Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])])
+      iex> Nx.Serving.batched_run(MyServing, batch)
+      {:debug, #Nx.Tensor<
+        s64[2][3]
+        [
+          [1, 2, 3],
+          [4, 5, 6]
+        ]
+      >}
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [2, 4, 6],
+          [8, 10, 12]
+        ]
+      >
+
+  In the example, we pushed a batch of 2 and eventually got a reply.
+  The process will wait up for requests from other processes, up to
+  100 milliseconds or until it gets 10 entries.
+
+  If there is any `client_preprocessing` function, it will be executed
+  before the batch is sent to the server. If there is any `client_postprocessing`
+  function, it will be executed after getting the response from the
+  server.
 
   ## Module-based serving
 
@@ -279,7 +316,16 @@ defmodule Nx.Serving do
   end
 
   @doc """
-  TODO
+  Starts a `Nx.Serving` process to batch requests to a given serving.
+
+  ## Options
+
+    * `:name` - an atom with the name of the process
+    * `:serving` - a `Nx.Serving` struct with the serving configuration
+    * `:batch_size` - the maximum size to batch for (defaults to `1`)
+    * `:batch_timeout` - the maximum time to wait, in milliseconds,
+      before executing the batch (defaults to `100`ms)
+
   """
   def start_link(opts) do
     children = [
@@ -293,7 +339,14 @@ defmodule Nx.Serving do
   end
 
   @doc """
-  TODO
+  Runs the given `input` on the process given by `name`.
+
+  The process `name` will batch requests and send a response
+  either when the batch is full or on timeout. See the module
+  documentation for more information.
+
+  Note you cannot batch an `input` larger than the configured
+  `:batch_size` in the server.
   """
   def batched_run(name, input) when is_atom(name) do
     pid = GenServer.whereis(name) || exit({:noproc, {__MODULE__, :batched_run, [name, input]}})
@@ -507,13 +560,7 @@ defmodule Nx.Serving do
   defp server_execute(%{stack: @empty_stack} = state), do: state
 
   defp server_execute(state) do
-    %{
-      module: module,
-      module_state: module_state,
-      stack: {stack, count},
-      limit: limit,
-      timer: timer
-    } = state
+    %{module: module, module_state: module_state, stack: {stack, count}, timer: timer} = state
 
     if is_reference(timer) and Process.cancel_timer(timer) == false do
       receive do
@@ -527,11 +574,7 @@ defmodule Nx.Serving do
         {[{ref, ending - size, size} | ref_sizes], [batch | batches], ending - size}
       end)
 
-    batch =
-      batches
-      |> Nx.Batch.merge()
-      |> Nx.Batch.pad(limit - count)
-
+    batch = Nx.Batch.merge(batches)
     {:execute, function, module_state} = handle_batch(module, batch, module_state)
 
     state = %{state | timer: :none, stack: @empty_stack, module_state: module_state}
