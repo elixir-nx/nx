@@ -2336,7 +2336,7 @@ static ErlNifFunc exla_funcs[] = {
   {"get_tpu_client", 0, get_tpu_client},
   {"get_device_count", 1, get_device_count},
   {"get_supported_platforms", 0, get_supported_platforms},
-  {"compile", 7, compile},
+  {"compile", 7, compile, ERL_NIF_DIRTY_JOB_CPU_BOUND},
   // ExlaBuffer
   {"binary_to_device_mem", 4, binary_to_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"read_device_mem", 2, read_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
