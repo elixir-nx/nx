@@ -10234,12 +10234,16 @@ defmodule Nx do
     strides = Keyword.fetch!(opts, :strides)
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
     axis = Nx.Shape.normalize_axis(shape, axis, names)
-    rank = rank(shape)
 
-    start_indices = List.duplicate(0, rank) |> List.replace_at(axis, start_index)
-    lengths = shape |> put_elem(axis, len) |> Tuple.to_list()
-    strides = List.duplicate(1, rank) |> List.replace_at(axis, strides)
-    slice(tensor, start_indices, lengths, strides: strides)
+    if start_index == 0 and strides == 1 and elem(shape, axis) == len do
+      tensor
+    else
+      rank = rank(shape)
+      start_indices = List.duplicate(0, rank) |> List.replace_at(axis, start_index)
+      lengths = shape |> put_elem(axis, len) |> Tuple.to_list()
+      strides = List.duplicate(1, rank) |> List.replace_at(axis, strides)
+      slice(tensor, start_indices, lengths, strides: strides)
+    end
   end
 
   @doc false

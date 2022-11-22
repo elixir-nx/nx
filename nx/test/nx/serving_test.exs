@@ -49,7 +49,19 @@ defmodule Nx.ServingTest do
   end
 
   describe "run/2" do
-    test "with default callbacks" do
+    test "with function" do
+      serving = Nx.Serving.new(Nx.Defn.jit(&Nx.multiply(&1, 2)))
+      batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
+      assert Nx.Serving.run(serving, batch) == Nx.tensor([[2, 4, 6]])
+    end
+
+    test "with container" do
+      serving = Nx.Serving.new(Nx.Defn.jit(fn {a, b} -> {Nx.multiply(a, 2), Nx.divide(b, 2)} end))
+      batch = Nx.Batch.concatenate([{Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])}])
+      assert Nx.Serving.run(serving, batch) == {Nx.tensor([2, 4, 6]), Nx.tensor([2, 2.5, 3])}
+    end
+
+    test "with module callbacks" do
       serving = Nx.Serving.new(Simple, self())
       batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
 
@@ -196,39 +208,41 @@ defmodule Nx.ServingTest do
       assert batch.pad == 4
     end
 
-    test "3+4+5=6+6", config do
-      simple_supervised!(config, batch_size: 6, batch_timeout: 100)
+    test "3+4+5=6+6 (container)", config do
+      serving = Nx.Serving.new(Nx.Defn.jit(fn {a, b} -> {Nx.multiply(a, 2), Nx.divide(b, 2)} end))
+      simple_supervised!(config, batch_size: 6, batch_timeout: 100, serving: serving)
 
       t1 =
         Task.async(fn ->
-          batch = Nx.Batch.concatenate([Nx.tensor([11, 12, 13])])
-          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([22, 24, 26])
+          batch = Nx.Batch.concatenate([{Nx.tensor([11, 12, 13]), Nx.tensor([14, 15, 16])}])
+
+          assert Nx.Serving.batched_run(config.test, batch) ==
+                   {Nx.tensor([22, 24, 26]), Nx.tensor([7, 7.5, 8])}
         end)
 
       t2 =
         Task.async(fn ->
-          batch = Nx.Batch.concatenate([Nx.tensor([21, 22, 23, 24])])
-          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([42, 44, 46, 48])
+          batch =
+            Nx.Batch.concatenate([{Nx.tensor([21, 22, 23, 24]), Nx.tensor([25, 26, 27, 28])}])
+
+          assert Nx.Serving.batched_run(config.test, batch) ==
+                   {Nx.tensor([42, 44, 46, 48]), Nx.tensor([12.5, 13, 13.5, 14])}
         end)
 
       t3 =
         Task.async(fn ->
-          batch = Nx.Batch.concatenate([Nx.tensor([31, 32, 33, 34, 35])])
-          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([62, 64, 66, 68, 70])
+          batch =
+            Nx.Batch.concatenate([
+              {Nx.tensor([31, 32, 33, 34, 35]), Nx.tensor([36, 37, 38, 39, 40])}
+            ])
+
+          assert Nx.Serving.batched_run(config.test, batch) ==
+                   {Nx.tensor([62, 64, 66, 68, 70]), Nx.tensor([18, 18.5, 19, 19.5, 20])}
         end)
 
       Task.await(t1, :infinity)
       Task.await(t2, :infinity)
       Task.await(t3, :infinity)
-
-      assert_received {:init, :process}
-      assert_received {:batch, batch}
-      assert_received :execute
-      assert batch.size == 6
-
-      assert_received {:batch, batch}
-      assert_received :execute
-      assert batch.size == 6
     end
 
     defp execute_sync_supervised!(config, opts \\ []) do

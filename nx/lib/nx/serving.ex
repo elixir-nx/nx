@@ -8,43 +8,22 @@ defmodule Nx.Serving do
 
   ## Inline/serverless workflow
 
-  First, let's create a simple serving module:
+  First, let's define a simple numerical definition function:
 
-      defmodule MyServing do
-        @behaviour Nx.Serving
+      defmodule MyDefn do
         import Nx.Defn
 
         defnp print_and_multiply(x) do
           print_value({:debug, x})
           x * 2
         end
-
-        @impl true
-        def init(_inline_or_process, :unused_arg) do
-          {:ok, Nx.Defn.jit(&print_and_multiply/1)}
-        end
-
-        @impl true
-        def handle_batch(batch, function) do
-          {:execute, fn -> {function.(batch), :metadata} end, function}
-        end
       end
 
-  It has two functions: `c:init/2`, which receives some metadata
-  about the type of serving (`:inline` or `:process`) and the
-  serving argument. In this step, we capture `print_and_multiply/1`
-  as a jitted function.
+  The function prints the given tensor and double its contents.
+  We can use `new/1` to create a serving that will execute the
+  given function on batches of tensors:
 
-  The second function is called `handle_batch/2`. This function
-  receives a `Nx.Batch` and it must return a function to execute.
-  The function itself must return a two element-tuple: the batched
-  results and some metadata. The metadata can be any value and we
-  set it to the atom `:metadata`.
-
-  Now let's give it a try by defining a serving with our module and
-  then running it on a batch:
-
-      iex> serving = Nx.Serving.new(MyServing, :unused_arg)
+      iex> serving = Nx.Serving.new(Nx.Defn.jit(&print_and_multiply/1))
       iex> batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
       iex> Nx.Serving.run(serving, batch)
       {:debug, #Nx.Tensor<
@@ -70,7 +49,7 @@ defmodule Nx.Serving do
   using `client_postprocessing` hooks. Let's give it another try:
 
       iex> serving = (
-      ...>   Nx.Serving.new(MyServing, :unused_arg)
+      ...>   Nx.Serving.new(Nx.Defn.jit(&print_and_multiply/1))
       ...>   |> Nx.Serving.client_preprocessing(fn input -> {Nx.Batch.stack(input), :client_info} end)
       ...>   |> Nx.Serving.client_postprocessing(&{&1, &2, &3})
       ...> )
@@ -89,8 +68,8 @@ defmodule Nx.Serving do
            [6, 8]
          ]
        >,
-       :metadata,
-       :info}
+       :server_info,
+       :client_info}
 
   You can see the results are a bit different now. First of all, notice we
   were able to run the serving passing a list of tensors. Our custom
@@ -100,17 +79,86 @@ defmodule Nx.Serving do
   client preprocessing simply enforces a batch was given and returns no client
   information.
 
-  Then the result is a `{..., ..., ...}` tuple, returned by the client postprocessing
-  function, containing the result, the execution metadata, and the client information.
+  Then the result is a `{..., ..., ...}` tuple, returned by the client
+  postprocessing function, containing the result, the server information
+  (which we will learn later how to customize it), and the client information.
   From this, we can infer the default implementation of `client_postprocessing`
-  simply returns the result, discarding the metadata and client information.
+  simply returns the result, discarding the server and client information.
 
-  Why these functions have a `client_` prefix in their name will become clearer
-  in the next section.
+  So far, `Nx.Serving` has not given us much. It has simply encapsulated the
+  execution of a function. Its full power comes when we start running our own
+  `Nx.Serving` process. That's when we will also learn why we have a `client_`
+  prefix in some of the function names.
 
   ## Stateful/process workflow
 
+  `Nx.Serving` allows us to define a process that will batch requests up to
+  a certain size or within a certain time.
+
   TODO.
+
+  ## Module-based serving
+
+  In the examples so far, we have been using the default version of
+  `Nx.Serving`, which executes the given function for each batch.
+
+  However, we can also use `new/2` to start a module-based version of
+  `Nx.Serving`, which acts similar to an Elixir `GenServer` and gives
+  us more control over both inline and process workflows. A simple
+  module implementation of a `Nx.Serving` could look like this:
+
+      defmodule MyServing do
+        @behaviour Nx.Serving
+
+        defnp print_and_multiply(x) do
+          print_value({:debug, x})
+          x * 2
+        end
+
+        @impl true
+        def init(_inline_or_process, :unused_arg) do
+          {:ok, Nx.Defn.jit(&print_and_multiply/1)}
+        end
+
+        @impl true
+        def handle_batch(batch, function) do
+          {:execute, fn -> {function.(batch), :server_info} end, function}
+        end
+      end
+
+  It has two functions: `c:init/2`, which receives the type of serving
+  (`:inline` or `:process`) and the serving argument. In this step,
+  we capture `print_and_multiply/1`as a jitted function.
+
+  The second function is called `handle_batch/2`. This function
+  receives a `Nx.Batch` and it must return a function to execute.
+  The function itself must return a two element-tuple: the batched
+  results and some server information. The server information can
+  be any value and we set it to the atom `:server_info`.
+
+  Now let's give it a try by defining a serving with our module and
+  then running it on a batch:
+
+      iex> serving = Nx.Serving.new(MyServing, :unused_arg)
+      iex> batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
+      iex> Nx.Serving.run(serving, batch)
+      {:debug, #Nx.Tensor<
+        s64[1][3]
+        [
+          [1, 2, 3]
+        ]
+      >}
+      #Nx.Tensor<
+        s64[1][3]
+        [
+          [2, 4, 6]
+        ]
+      >
+
+  From here on, you use `start_link/1` to start this serving in your
+  supervision and even customize `client_preprocessing/1` and
+  `client_postprocessing/1` callbacks to this serving, as seen in the
+  previous sections.
   """
 
   @doc false
@@ -150,7 +198,19 @@ defmodule Nx.Serving do
             when state: term()
 
   @doc """
-  Creates a new serving.
+  Creates a new function serving.
+
+  It expects either a JITted (via `Nx.Defn.jit/2`) or compiled
+  (via `Nx.Defn.compile/3`) one-arity function as argument.
+  The function will be called with the arguments returned by
+  the `client_preprocessing` callback.
+  """
+  def new(function) when is_function(function, 1) do
+    new(Nx.Serving.Default, function)
+  end
+
+  @doc """
+  Creates a new module-based serving.
 
   It expects a module and an argument that is given to its `init` callback.
   """
@@ -261,20 +321,45 @@ defmodule Nx.Serving do
 
   @axis 0
 
-  defp receive_batched(0, ref, acc, metadata, _name, _input) do
+  defp receive_batched(0, ref, acc, {template, metadata}, _name, _input) do
     Process.demonitor(ref, [:flush])
 
-    case acc do
-      [slice] -> {slice, metadata}
-      _ -> {acc |> Enum.reverse() |> Nx.concatenate(axis: @axis), metadata}
-    end
+    tensors =
+      acc
+      |> Enum.reverse()
+      |> Enum.zip_with(&Nx.concatenate(&1, axis: @axis))
+
+    {output, []} =
+      Nx.Defn.Composite.traverse(template, tensors, fn _template, [tensor | tensors] ->
+        {tensor, tensors}
+      end)
+
+    {output, metadata}
   end
 
-  defp receive_batched(total_size, ref, acc, _metadata, name, input) do
+  defp receive_batched(total_size, ref, acc, _template_metadata, name, input) do
     receive do
       {^ref, {start, size, output, metadata}} ->
-        slice = Nx.slice_along_axis(output, start, size, axis: @axis)
-        receive_batched(total_size - size, ref, [slice | acc], metadata, name, input)
+        # If we have a single response, slice and return immediately.
+        # Otherwise we collect their contents and build the concatenated result later.
+        if acc == [] and size == total_size do
+          Process.demonitor(ref, [:flush])
+
+          output =
+            Nx.Defn.Composite.traverse(output, &Nx.slice_along_axis(&1, start, size, axis: @axis))
+
+          {output, metadata}
+        else
+          funs =
+            output
+            |> Nx.Defn.Composite.reduce(
+              [],
+              &[Nx.slice_along_axis(&1, start, size, axis: @axis) | &2]
+            )
+            |> Enum.reverse()
+
+          receive_batched(total_size - size, ref, [funs | acc], {output, metadata}, name, input)
+        end
 
       {:DOWN, ^ref, _, _, reason} ->
         # We fake monitor messages, so still demonitor and flush.
@@ -528,7 +613,7 @@ defmodule Nx.Serving do
   defp handle_preprocessing(nil, input) do
     case input do
       %Nx.Batch{} ->
-        {no_empty_batch!(input), :none}
+        {no_empty_batch!(input), :client_info}
 
       _ ->
         raise ArgumentError,
@@ -556,4 +641,19 @@ defmodule Nx.Serving do
 
   defp handle_postprocessing(postprocessing, output, metadata, info),
     do: postprocessing.(output, metadata, info)
+end
+
+defmodule Nx.Serving.Default do
+  @moduledoc false
+  @behaviour Nx.Serving
+
+  @impl true
+  def init(_type, fun) do
+    {:ok, fun}
+  end
+
+  @impl true
+  def handle_batch(batch, fun) do
+    {:execute, fn -> {fun.(batch), :server_info} end, fun}
+  end
 end
