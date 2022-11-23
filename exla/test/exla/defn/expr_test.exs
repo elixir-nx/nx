@@ -3810,7 +3810,7 @@ defmodule EXLA.Defn.ExprTest do
       assert vt.shape == {3, 3}
       s_full = Nx.multiply(s, Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
 
-      assert_all_close(u |> Nx.dot(s_full) |> Nx.dot(Nx.transpose(vt)), output,
+      assert_all_close(u |> Nx.dot(s_full) |> Nx.dot(vt), output,
         atol: 1.0e-5,
         rtol: 1.0e-2
       )
@@ -3826,7 +3826,7 @@ defmodule EXLA.Defn.ExprTest do
       assert vt.shape == {2, 2}
       s_full = Nx.multiply(s, Nx.tensor([[1, 0], [0, 1], [0, 0]]))
 
-      assert_all_close(u |> Nx.dot(s_full) |> Nx.dot(Nx.transpose(vt)), output,
+      assert_all_close(u |> Nx.dot(s_full) |> Nx.dot(vt), output,
         atol: 1.0e-5,
         rtol: 1.0e-2
       )

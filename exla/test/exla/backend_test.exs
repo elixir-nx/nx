@@ -1,5 +1,5 @@
 defmodule EXLA.BackendTest do
-  use ExUnit.Case, async: true
+  use EXLA.Case, async: true
 
   setup do
     Nx.default_backend(EXLA.Backend)
@@ -119,7 +119,7 @@ defmodule EXLA.BackendTest do
     # This is not really meant to work in practice,
     # but it does work with the Nx.BinaryBackend so
     # we make it work for EXLA too.
-    defn double(fun), do: double_transform(fun.())
+    defn(double(fun), do: double_transform(fun.()))
 
     deftransformp(double_transform(x), do: Nx.backend_transfer(Nx.Defn.Kernel.*(x, x)))
 
@@ -135,5 +135,16 @@ defmodule EXLA.BackendTest do
                  fn ->
                    Nx.backend_transfer(Nx.tensor([1, 2]), {EXLA.Backend, client: :unknown})
                  end
+  end
+
+  describe "svd" do
+    test "reconstructs original matrix" do
+      t = Nx.iota({4, 4})
+
+      assert {u, s, vt} = Nx.LinAlg.svd(t)
+
+      reconstructed = u |> Nx.multiply(s) |> Nx.dot(vt)
+      assert_all_close(t, reconstructed, atol: 1.0e-6)
+    end
   end
 end

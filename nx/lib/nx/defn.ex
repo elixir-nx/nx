@@ -387,7 +387,7 @@ defmodule Nx.Defn do
 
     * `:on_conflict` - what to do if a JIT compilation is already in place.
       It may be `:raise` (the default), `:force` (forces a new JIT compilation),
-      or `:reuse` (reuses the exiting JIT compilation). It is not recommended
+  n`:reuse` (reuses the exiting JIT compilation). It is not recommended
       to set the `:compiler` option when reusing.
 
   """

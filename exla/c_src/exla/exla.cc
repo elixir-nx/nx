@@ -1893,11 +1893,24 @@ ERL_NIF_TERM svd(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   xla::SVDResult svd_result = xla::SVD(*operand, /*max_iter=*/100, /*epsilon=*/1.0e-6, precision);
 
+  xla::XlaOp v = svd_result.v;
+  EXLA_ASSIGN_OR_RETURN_NIF(xla::Shape v_shape,
+                            v.builder()->GetShape(v), env);
+  size_t v_num_axes = v_shape.rank();
+  std::vector<exla::int64> last_axes_permutation(v_num_axes);
+  for(size_t i = 0; i < v_num_axes; i++) {
+    last_axes_permutation[i] = i;
+  }
+  last_axes_permutation[v_num_axes - 1] = v_num_axes - 2;
+  last_axes_permutation[v_num_axes - 2] = v_num_axes - 1;
+
+  xla::XlaOp vt_op = xla::Transpose(v, last_axes_permutation);
+
   ERL_NIF_TERM u = exla::nif::make<xla::XlaOp>(env, svd_result.u);
   ERL_NIF_TERM d = exla::nif::make<xla::XlaOp>(env, svd_result.d);
-  ERL_NIF_TERM v = exla::nif::make<xla::XlaOp>(env, svd_result.v);
+  ERL_NIF_TERM vt = exla::nif::make<xla::XlaOp>(env, vt_op);
 
-  return exla::nif::ok(env, enif_make_tuple3(env, u, d, v));
+  return exla::nif::ok(env, enif_make_tuple3(env, u, d, vt));
 }
 
 ERL_NIF_TERM triangular_solve(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
