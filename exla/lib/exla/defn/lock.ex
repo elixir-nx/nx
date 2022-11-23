@@ -68,9 +68,9 @@ defmodule EXLA.Defn.Lock do
   @impl true
   def handle_call({:lock, key}, {pid, _} = from, {refs, devices}) do
     {refs, devices} =
-      # If this PID already has a lock, we allow it to go ahead using a :nested_lock.
-      # The :nested_lock can only be unlocked, never transferred or customized.
       get_and_update_in(devices[key], fn
+        # If this PID already has a lock, we allow it to go ahead using a :nested_lock.
+        # The :nested_lock can only be unlocked, never transferred or customized.
         {{_to_unlock, ^pid}, _queue} = device ->
           GenServer.reply(from, :nested_lock)
           {refs, device}
@@ -94,14 +94,20 @@ defmodule EXLA.Defn.Lock do
     _ = Process.demonitor(ref, [:flush])
     _ = prepare.()
     ref = Process.monitor(pid)
-    devices = update_in(devices[key], fn {{to_unlock, _pid}, queue} -> {{to_unlock, pid}, queue} end)
+
+    devices =
+      update_in(devices[key], fn {{to_unlock, _pid}, queue} -> {{to_unlock, pid}, queue} end)
+
     {:reply, ref, {Map.put(refs, ref, key), devices}}
   end
 
   def handle_call({:on_unlock, ref, prepare, to_unlock}, _from, {refs, devices}) do
     key = Map.fetch!(refs, ref)
     _ = prepare.()
-    devices = update_in(devices[key], fn {{_to_unlock, pid}, queue} -> {{to_unlock, pid}, queue} end)
+
+    devices =
+      update_in(devices[key], fn {{_to_unlock, pid}, queue} -> {{to_unlock, pid}, queue} end)
+
     {:reply, ref, {refs, devices}}
   end
 
