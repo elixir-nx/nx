@@ -43,6 +43,14 @@ defmodule EXLA.Defn.LockeTest do
     assert Task.await(task)
   end
 
+  test "supports nested locks", config do
+    parent = self()
+    ref = L.lock(config.test)
+    :nested_lock = L.lock(config.test)
+    :ok = L.unlock(:nested_lock)
+    :ok = L.unlock(ref)
+  end
+
   test "registers on unlock callback", config do
     parent = self()
 

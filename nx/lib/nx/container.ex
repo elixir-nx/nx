@@ -1,6 +1,7 @@
 defprotocol Nx.Container do
   @moduledoc """
-  A protocol that teaches Nx how to traverse data structures.
+  A protocol that teaches Nx how to traverse data structures
+  non-recursively.
 
   `Nx` and `defn` expect the arguments to be numbers, tensors,
   or one of the following composite data types:
@@ -26,6 +27,10 @@ defprotocol Nx.Container do
                containers: [:field_name, :other_field],
                keep: [:another_field]}
       defstruct [:field_name, :other_fields, ...]
+
+  Note the functions in this module are not recursive.
+  If you want to deeply traverse and reduce containers,
+  use the functions in `Nx.Defn.Composite` instead.
 
   > **Careful!**: If you keep a field, its value will be part
   > of the `Nx.Defn` compiler cache key (i.e. therefore if you

@@ -1,6 +1,6 @@
 defprotocol Nx.LazyContainer do
   @moduledoc """
-  Converts a data structure to a container lazily.
+  Converts a data structure to a container lazily and recursively.
 
   Sometimes building tensors for a container is an expensive
   operation, so we want to allow that to happen lazily.

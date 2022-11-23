@@ -80,6 +80,15 @@ defmodule EXLA.Defn.APITest do
     end
   end
 
+  describe "batch" do
+    test "when padded" do
+      input = Nx.tensor([[1, 2, 3]], backend: EXLA.Backend)
+      batch = [input] |> Nx.Batch.concatenate() |> Nx.Batch.pad(1)
+      predict = Nx.Defn.jit(fn input -> input end, compiler: EXLA)
+      assert_equal(predict.(batch), Nx.tensor([[1, 2, 3], [0, 0, 0]]))
+    end
+  end
+
   describe "cache" do
     defn merge(init_map) do
       params = init()

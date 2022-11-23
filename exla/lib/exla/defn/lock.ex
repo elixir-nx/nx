@@ -12,6 +12,10 @@ defmodule EXLA.Defn.Lock do
 
   It will wait until the key becomes available.
   """
+  # TODO: Once we support multiple devices, what happens if we are trying
+  # to run on a device and the Nx.LazyContainer operations happen in another
+  # one? Perhaps we should track pid => device and force all operations on
+  # a certain device?
   def lock(key) do
     GenServer.call(@name, {:lock, key}, @timeout)
   end
@@ -40,6 +44,10 @@ defmodule EXLA.Defn.Lock do
 
   It will execute the registered `to_unlock` callback, if any.
   """
+  def unlock(:nested_lock) do
+    :ok
+  end
+
   def unlock(ref) when is_reference(ref) do
     GenServer.call(@name, {:unlock, ref}, @timeout)
   end
@@ -58,12 +66,19 @@ defmodule EXLA.Defn.Lock do
   end
 
   @impl true
-  def handle_call({:lock, key}, from, {refs, devices}) do
+  def handle_call({:lock, key}, {pid, _} = from, {refs, devices}) do
     {refs, devices} =
-      get_and_update_in(devices[key], fn device ->
-        device
-        |> enqueue(from)
-        |> dequeue_if_possible(key, refs)
+      get_and_update_in(devices[key], fn
+        # If this PID already has a lock, we allow it to go ahead using a :nested_lock.
+        # The :nested_lock can only be unlocked, never transferred or customized.
+        {{_to_unlock, ^pid}, _queue} = device ->
+          GenServer.reply(from, :nested_lock)
+          {refs, device}
+
+        device ->
+          device
+          |> enqueue(from)
+          |> dequeue_if_possible(key, refs)
       end)
 
     {:noreply, {refs, devices}}
@@ -79,13 +94,20 @@ defmodule EXLA.Defn.Lock do
     _ = Process.demonitor(ref, [:flush])
     _ = prepare.()
     ref = Process.monitor(pid)
+
+    devices =
+      update_in(devices[key], fn {{to_unlock, _pid}, queue} -> {{to_unlock, pid}, queue} end)
+
     {:reply, ref, {Map.put(refs, ref, key), devices}}
   end
 
   def handle_call({:on_unlock, ref, prepare, to_unlock}, _from, {refs, devices}) do
     key = Map.fetch!(refs, ref)
     _ = prepare.()
-    devices = update_in(devices[key], fn {_to_unlock, queue} -> {to_unlock, queue} end)
+
+    devices =
+      update_in(devices[key], fn {{_to_unlock, pid}, queue} -> {{to_unlock, pid}, queue} end)
+
     {:reply, ref, {refs, devices}}
   end
 
@@ -103,11 +125,11 @@ defmodule EXLA.Defn.Lock do
         {refs, devices}
 
       {key, refs} ->
-        get_and_update_in(devices[key], fn {to_unlock, queue} ->
+        get_and_update_in(devices[key], fn {{to_unlock, _pid}, queue} ->
           case run_to_unlock(key, to_unlock) do
-            {:transfer, new} ->
+            {:transfer, new} when is_pid(new) ->
               ref = Process.monitor(new)
-              {Map.put(refs, ref, key), {fn -> :unlock end, queue}}
+              {Map.put(refs, ref, key), {{fn -> :unlock end, new}, queue}}
 
             :unlock ->
               dequeue_if_possible({:unlocked, queue}, key, refs)
@@ -133,14 +155,14 @@ defmodule EXLA.Defn.Lock do
       {{:value, {pid, _} = from}, queue} ->
         ref = Process.monitor(pid)
         GenServer.reply(from, ref)
-        {Map.put(refs, ref, key), {fn -> :unlock end, queue}}
+        {Map.put(refs, ref, key), {{fn -> :unlock end, pid}, queue}}
 
       {:empty, queue} ->
         {refs, {:unlocked, queue}}
     end
   end
 
-  defp dequeue_if_possible({to_unlock, queue}, _key, refs) do
-    {refs, {to_unlock, queue}}
+  defp dequeue_if_possible({to_unlock_pid, queue}, _key, refs) do
+    {refs, {to_unlock_pid, queue}}
   end
 end
