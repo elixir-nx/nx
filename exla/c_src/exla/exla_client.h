@@ -8,8 +8,8 @@
 #include "exla_nif_util.h"
 #include "tensorflow/core/platform/types.h"
 #include "tensorflow/core/platform/status.h"
+#include "tensorflow/compiler/xla/pjrt/gpu/gpu_helpers.h"
 #include "tensorflow/compiler/xla/pjrt/pjrt_client.h"
-#include "tensorflow/compiler/xla/pjrt/gpu_device.h"
 
 // The implementations in this module are designed after implementations
 // in the XLA runtime, PjRt. Deviations are made where it makes sense
@@ -47,18 +47,18 @@ class ExlaBuffer {
 
 class ExlaExecutable {
  public:
-  ExlaExecutable(std::unique_ptr<xla::PjRtExecutable> executable,
+  ExlaExecutable(std::unique_ptr<xla::PjRtLoadedExecutable> executable,
                  absl::optional<std::string> fingerprint,
                  ExlaClient* client);
 
-  xla::PjRtExecutable* executable() { return executable_.get(); }
+  xla::PjRtLoadedExecutable* executable() { return executable_.get(); }
 
   xla::StatusOr<ERL_NIF_TERM> Run(ErlNifEnv* env,
                                   ERL_NIF_TERM arguments,
                                   int device_id);
 
  private:
-  std::unique_ptr<xla::PjRtExecutable> executable_;
+  std::unique_ptr<xla::PjRtLoadedExecutable> executable_;
   absl::optional<std::string> fingerprint_;
   ExlaClient* client_;
 };

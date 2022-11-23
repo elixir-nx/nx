@@ -9,7 +9,8 @@ defmodule EXLA.Defn.APITest do
     defn add_two(a, b), do: a + b
 
     test "raises on invalid device_id" do
-      assert_raise RuntimeError, ~r"Invalid device ordinal value \(1024\)", fn ->
+      # the message is different between backends
+      assert_raise RuntimeError, ~r/1024/, fn ->
         EXLA.jit(&add_two/2, device_id: 1024).(2, 3)
       end
     end

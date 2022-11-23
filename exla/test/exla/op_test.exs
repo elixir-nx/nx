@@ -279,9 +279,8 @@ defmodule EXLA.OpTest do
     assert %Shape{dims: {1, 1}, dtype: {:c, 64}} = Op.get_shape(d)
     assert %Shape{dims: {1, 1}, dtype: {:c, 128}} = Op.get_shape(e)
 
-    assert_raise RuntimeError,
-                 "Conversion from complex to real type c128[1,1] => S32 is not implemented.",
-                 fn -> Op.get_shape(Op.convert_element_type(e, {:s, 32})) end
+    assert %Shape{dims: {1, 1}, dtype: {:s, 32}} =
+             Op.get_shape(Op.convert_element_type(e, {:s, 32}))
   end
 
   test "rng_normal/3" do

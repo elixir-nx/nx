@@ -451,7 +451,7 @@ namespace nif {
     if (!type_status.ok()) {
       return 0;
     }
-    *type = type_status.ConsumeValueOrDie();
+    *type = type_status.value();
     return 1;
   }
 

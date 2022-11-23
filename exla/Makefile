@@ -19,7 +19,7 @@ EXLA_LIB_DIR = $(PRIV_DIR)/lib
 # Build flags
 CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -O3 -Wall -Wno-sign-compare \
 	 -Wno-unused-parameter -Wno-missing-field-initializers -Wno-comment \
-	 -shared -std=c++14
+	 -shared -std=c++17 -w -DLLVM_ON_UNIX=1
 
 LDFLAGS = -L$(XLA_EXTENSION_LIB) -lxla_extension
 
