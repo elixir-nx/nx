@@ -20,10 +20,10 @@ defmodule Nx.Serving do
       end
 
   The function prints the given tensor and double its contents.
-  We can use `new/1` to create a serving that will execute the
-  given function on batches of tensors:
+  We can use `new/1` to create a serving that will return a JITted
+  or compiled function to execute on batches of tensors:
 
-      iex> serving = Nx.Serving.new(Nx.Defn.jit(&print_and_multiply/1))
+      iex> serving = Nx.Serving.new(fn -> Nx.Defn.jit(&print_and_multiply/1) end)
       iex> batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
       iex> Nx.Serving.run(serving, batch)
       {:debug, #Nx.Tensor<
@@ -49,7 +49,7 @@ defmodule Nx.Serving do
   using `client_postprocessing` hooks. Let's give it another try:
 
       iex> serving = (
-      ...>   Nx.Serving.new(Nx.Defn.jit(&print_and_multiply/1))
+      ...>   Nx.Serving.new(fn -> Nx.Defn.jit(&print_and_multiply/1) end)
       ...>   |> Nx.Serving.client_preprocessing(fn input -> {Nx.Batch.stack(input), :client_info} end)
       ...>   |> Nx.Serving.client_postprocessing(&{&1, &2, &3})
       ...> )
@@ -238,10 +238,10 @@ defmodule Nx.Serving do
   @doc """
   Creates a new function serving.
 
-  It expects either a JITted (via `Nx.Defn.jit/2`) or compiled
-  (via `Nx.Defn.compile/3`) one-arity function as argument.
-  The function will be called with the arguments returned by
-  the `client_preprocessing` callback.
+  It expects a function that returns a JITted (via `Nx.Defn.jit/2`)
+  or compiled (via `Nx.Defn.compile/3`) one-arity function as argument.
+  The JITted/compiled function will be called with the arguments
+  returned by the `client_preprocessing` callback.
 
   A second argument called `process_options`, which is optional,
   can be given to customize the options when starting the serving
@@ -249,7 +249,7 @@ defmodule Nx.Serving do
   """
   def new(function, process_options \\ [])
 
-  def new(function, process_options) when is_function(function, 1) and is_list(process_options) do
+  def new(function, process_options) when is_function(function, 0) and is_list(process_options) do
     new(Nx.Serving.Default, function, process_options)
   end
 
@@ -725,11 +725,18 @@ defmodule Nx.Serving.Default do
 
   @impl true
   def init(_type, fun) do
-    {:ok, fun}
+    case fun.() do
+      batch_fun when is_function(batch_fun, 1) ->
+        {:ok, batch_fun}
+
+      other ->
+        raise "anonymous function given to Nx.Serving.new/2 should return a compiled or " <>
+                "JITted function that expects one argument, got: #{inspect(other)}"
+    end
   end
 
   @impl true
-  def handle_batch(batch, fun) do
-    {:execute, fn -> {fun.(batch), :server_info} end, fun}
+  def handle_batch(batch, batch_fun) do
+    {:execute, fn -> {batch_fun.(batch), :server_info} end, batch_fun}
   end
 end
