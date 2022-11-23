@@ -44,7 +44,6 @@ defmodule EXLA.Defn.LockeTest do
   end
 
   test "supports nested locks", config do
-    parent = self()
     ref = L.lock(config.test)
     :nested_lock = L.lock(config.test)
     :ok = L.unlock(:nested_lock)
