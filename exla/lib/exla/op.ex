@@ -825,6 +825,11 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def outfeed(%Op{builder: builder, ref: operand}) do
+    ref = EXLA.NIF.optimization_barrier(operand) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
   ## Helpers
 
   defp get_precision_config_int(precision_config) do

@@ -2033,6 +2033,22 @@ ERL_NIF_TERM create_token(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, token));
 }
 
+ERL_NIF_TERM optimization_barrier(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+
+  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+
+  xla::XlaOp op = xla::OptimizationBarrier(*operand);
+
+  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
+}
+
 ERL_NIF_TERM transfer_to_infeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");
@@ -2485,6 +2501,8 @@ static ErlNifFunc exla_funcs[] = {
   {"infeed", 2, infeed},
   {"outfeed", 3, outfeed},
   {"create_token", 1, create_token},
+  // Special
+  {"optimization_barrier", 1, optimization_barrier},
   // Log Sink
   {"start_log_sink", 1, start_log_sink}
 };

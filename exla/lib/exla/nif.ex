@@ -227,6 +227,8 @@ defmodule EXLA.NIF do
 
   def create_token(_builder), do: :erlang.nif_error(:undef)
 
+  def optimization_barrier(_operand), do: :erlang.nif_error(:undef)
+
   def get_host_client(),
     do: :erlang.nif_error(:undef)
 

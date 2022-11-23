@@ -2296,7 +2296,11 @@ defmodule EXLA.Defn.ExprTest do
       do: Nx.window_mean(t, {2, 1, 1}, strides: [2, 1, 1], padding: [{1, 1}, {0, 0}, {1, 1}])
 
     defn dilated_window_mean(t) do
-      Nx.window_mean(t, {3, 2, 1}, strides: [1, 1, 1], padding: :same, window_dilations: [1, 2, 2])
+      Nx.window_mean(t, {3, 2, 1},
+        strides: [1, 1, 1],
+        padding: :same,
+        window_dilations: [1, 2, 2]
+      )
     end
 
     test "computes the mean of a window" do
@@ -2690,7 +2694,11 @@ defmodule EXLA.Defn.ExprTest do
     end
 
     defn batch_grouped_conv_padding_dilated(inp, kernel) do
-      Nx.conv(inp, kernel, batch_group_size: 4, padding: [{2, -1}, {1, 0}], input_dilation: [2, 1])
+      Nx.conv(inp, kernel,
+        batch_group_size: 4,
+        padding: [{2, -1}, {1, 0}],
+        input_dilation: [2, 1]
+      )
     end
 
     test "computes a convolution with channels last" do
