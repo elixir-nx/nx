@@ -113,6 +113,7 @@ defmodule Nx.ServingTest do
 
     test "supervision tree", config do
       pid = simple_supervised!(config)
+      :sys.get_status(config.test)
       [_, _] = Supervisor.which_children(pid)
     end
 
