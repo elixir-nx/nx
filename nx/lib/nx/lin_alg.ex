@@ -1069,7 +1069,7 @@ defmodule Nx.LinAlg do
 
   ## Examples
 
-      iex> {u, s, v} = Nx.LinAlg.svd(Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]))
+      iex> {u, s, vt} = Nx.LinAlg.svd(Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]))
       iex> u
       #Nx.Tensor<
         f32[3][3]
@@ -1084,7 +1084,7 @@ defmodule Nx.LinAlg do
         f32[3]
         [1.0, 1.0, 1.0]
       >
-      iex> v
+      iex> vt
       #Nx.Tensor<
         f32[3][3]
         [
