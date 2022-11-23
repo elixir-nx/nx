@@ -353,7 +353,7 @@ defmodule Nx.Serving do
     {%Nx.Serving{process_options: serving_opts} = serving, opts} = Keyword.pop!(opts, :serving)
     {batch_size, opts} = process_option(:batch_size, serving_opts, opts, 1)
     {batch_timeout, opts} = process_option(:batch_timeout, serving_opts, opts, 100)
-    arg = {self(), name, serving, batch_size, batch_timeout}
+    arg = {name, serving, batch_size, batch_timeout}
 
     children = [
       %{
@@ -472,7 +472,8 @@ defmodule Nx.Serving do
   @timeout_message {__MODULE__, :timeout}
 
   @impl true
-  def init({parent, name, serving, batch_size, batch_timeout}) do
+  def init({name, serving, batch_size, batch_timeout}) do
+    [parent | _] = Process.get(:"$ancestors")
     {:ok, module_state} = handle_init(serving.module, :process, serving.arg)
 
     :persistent_term.put(

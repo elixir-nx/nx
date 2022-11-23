@@ -107,6 +107,11 @@ defmodule Nx.ServingTest do
       start_supervised!({Nx.Serving, [name: config.test] ++ opts})
     end
 
+    test "supervision tree", config do
+      pid = simple_supervised!(config)
+      [_, _] = Supervisor.which_children(pid)
+    end
+
     test "1=1", config do
       simple_supervised!(config)
 
