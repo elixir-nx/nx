@@ -144,7 +144,7 @@ defmodule EXLA.BackendTest do
       assert {u, s, vt} = Nx.LinAlg.svd(t)
 
       reconstructed = u |> Nx.multiply(s) |> Nx.dot(vt)
-      assert_all_close(t, reconstructed, atol: 1.0e-6)
+      assert_all_close(t, reconstructed, atol: 1.0e-5)
     end
   end
 end
