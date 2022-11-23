@@ -20,6 +20,7 @@ defmodule EXLA.MultiDeviceTest do
     assert <<3::32-native>> == DeviceBuffer.read(c)
   end
 
+  @tag :skip
   test "succeeds with num_replicas > 1" do
     t1 = BinaryBuffer.from_binary(<<1::32-native>>, Shape.make_shape({:s, 32}, {}))
     t2 = BinaryBuffer.from_binary(<<2::32-native>>, Shape.make_shape({:s, 32}, {}))
