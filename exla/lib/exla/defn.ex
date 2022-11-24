@@ -815,9 +815,8 @@ defmodule EXLA.Defn do
     EXLA.Op.tuple(state.builder, [u, s, vt])
   end
 
-  defp to_operator(:eigh, [_out, tensor, opts], _ans, state) do
+  defp to_operator(:eigh, [out, tensor, opts], _ans, state) do
     {eigvec, eigval} = EXLA.Op.eigh(tensor, 0)
-
     EXLA.Op.tuple(state.builder, [eigval, eigvec])
   end
 
