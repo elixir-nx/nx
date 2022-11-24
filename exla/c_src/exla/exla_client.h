@@ -25,6 +25,7 @@ class ExlaBuffer {
   ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer,
              bool erlang_managed = true);
 
+  int device_id() { return buffer_->device()->id(); }
   xla::PjRtBuffer* buffer() { return buffer_.get(); }
   xla::StatusOr<ExlaBuffer*> CopyToDevice(xla::PjRtDevice * dst_device);
   xla::StatusOr<ERL_NIF_TERM> ToBinary(ErlNifEnv* env, exla::int64 size);
@@ -37,7 +38,7 @@ class ExlaBuffer {
     // to notify that the buffer should be kept around until the
     // reference is released.
     // https://github.com/tensorflow/tensorflow/blob/b8eb820d6cb27cfa8ab65c40ce9a161de314533c/tensorflow/compiler/xla/pjrt/pjrt_client.h#L763-L780
-    if(erlang_managed_) (void)buffer_->BlockHostUntilReady();
+    (void)buffer_->BlockHostUntilReady();
   }
 
  private:

@@ -42,6 +42,69 @@ xla::StatusOr<ExlaBuffer *> ExlaBuffer::CopyToDevice(xla::PjRtDevice * dst_devic
   return new ExlaBuffer(std::move(buf));
 }
 
+ExlaExecutable::ExlaExecutable(std::unique_ptr<xla::PjRtLoadedExecutable> executable,
+			                         absl::optional<std::string> fingerprint,
+			                         ExlaClient* client) : executable_(std::move(executable)),
+                                                     fingerprint_(std::move(fingerprint)),
+                                                     client_(client) {}
+
+xla::StatusOr<std::vector<ExlaBuffer*>>
+UnpackReplicaArguments(ErlNifEnv* env,
+                       ERL_NIF_TERM replica_arguments,
+                       ExlaClient* client,
+                       int device) {
+  unsigned int length;
+  if (!enif_get_list_length(env, replica_arguments, &length)) {
+    return xla::InvalidArgument("Argument is not a list.");
+  }
+
+  ERL_NIF_TERM head, tail;
+  std::vector<ExlaBuffer*> replica_buffers;
+  replica_buffers.reserve(length);
+
+  // for a single replica, the argument is a flat list of buffers where
+  // each buffer can either be an erlang binary or a reference to another
+  // EXLA buffer, it is not possible for any of the arguments to be nested
+  // tuples because we handle normalization/flattening of tuples on the
+  // Elixir side
+  while (enif_get_list_cell(env, replica_arguments, &head, &tail)) {
+    int arity;
+    const ERL_NIF_TERM * tuple;
+    ExlaBuffer** buffer;
+
+    if (enif_get_tuple(env, head, &arity, &tuple)) {
+      // if the term is a tuple, that means it represents a {shape, binary}
+      // tuple which we must convert into an exla buffer for use in the computation
+      xla::Shape* shape;
+
+      if (!nif::get<xla::Shape>(env, tuple[1], shape)) {
+        return xla::InvalidArgument("Expected argument to be shape reference.");
+      }
+
+      // we convert the binary into a buffer and transfer it to the correct device,
+      // this buffer is not managed by the erlang vm so it must be deallocated explicitly
+      // after use by the execution
+      EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf, client->BufferFromBinary(env, tuple[0], *shape, device, false));
+      replica_buffers.push_back(buf);
+    } else if (nif::get<ExlaBuffer*>(env, head, buffer)) {
+      // if the buffer is not a tuple it must be a reference to an exla buffer
+      // which means the resource is already managed by the vm, and should already
+      // be on the correct device, if it is not, we will not do any implicit transfers
+      // and instead raise an error
+      if ((*buffer)->device_id() != device) {
+        return xla::InvalidArgument("Expected buffer to be placed on device %d", device);
+      }
+      replica_buffers.push_back(*buffer);
+    } else {
+      return xla::InvalidArgument("Expected argument to be buffer reference.");
+    }
+
+    replica_arguments = tail;
+  }
+
+  return replica_buffers;
+}
+
 xla::StatusOr<std::vector<std::vector<ExlaBuffer*>>>
 UnpackRunArguments(ErlNifEnv* env,
                    ERL_NIF_TERM arguments,
@@ -53,55 +116,42 @@ UnpackRunArguments(ErlNifEnv* env,
     return xla::InvalidArgument("Argument is not a list.");
   }
 
+  ERL_NIF_TERM head, tail;
   std::vector<std::vector<ExlaBuffer*>> arg_buffers;
   arg_buffers.reserve(length);
 
-  ERL_NIF_TERM head, tail;
   int replica = 0;
+  int device;
 
   while (enif_get_list_cell(env, arguments, &head, &tail)) {
-    ERL_NIF_TERM inner_head, inner_tail;
-    unsigned int inner_length;
+    device = device_id >= 0 ? device_id : device_assignment(replica, 0);
 
-    if (!enif_get_list_length(env, head, &inner_length)) {
-      return xla::InvalidArgument("Argument is not a list.");
-    }
-    std::vector<ExlaBuffer*> device_buffers;
-    device_buffers.reserve(inner_length);
+    EXLA_ASSIGN_OR_RETURN(std::vector<ExlaBuffer*> replica_buffers,
+      UnpackReplicaArguments(env, head, client, device));
 
-    while (enif_get_list_cell(env, head, &inner_head, &inner_tail)) {
-      const ERL_NIF_TERM* tuple;
-      int arity;
-      ExlaBuffer** buffer;
-
-      if (enif_get_tuple(env, inner_head, &arity, &tuple)) {
-        xla::Shape* shape;
-
-        if (!nif::get<xla::Shape>(env, tuple[1], shape)) {
-          return xla::InvalidArgument("Expected argument to be shape reference.");
-        }
-
-        int device = device_id >= 0 ? device_id : device_assignment(replica, 0);
-
-        EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf, client->BufferFromBinary(env, tuple[0], *shape, device, false));
-
-        device_buffers.push_back(buf);
-
-      } else if (nif::get<ExlaBuffer*>(env, inner_head, buffer)) {
-        // XLA already raises if the device_ids do not match, so we don't need to check it.
-        device_buffers.push_back(*buffer);
-      } else {
-        return xla::InvalidArgument("Expected argument to be buffer reference.");
-      }
-      head = inner_tail;
-    }
-
-    arg_buffers.push_back(device_buffers);
+    arg_buffers.push_back(replica_buffers);
     replica++;
     arguments = tail;
   }
 
   return arg_buffers;
+}
+
+std::vector<std::vector<xla::PjRtBuffer*>> GetPjRtArguments(std::vector<std::vector<ExlaBuffer*>> input_buffers) {
+  std::vector<std::vector<xla::PjRtBuffer*>> pjrt_buffers;
+  pjrt_buffers.reserve(input_buffers.size());
+
+  for (auto device_buf : input_buffers) {
+    std::vector<xla::PjRtBuffer*> arg_buffers;
+
+    for (auto buf : device_buf) {
+      arg_buffers.push_back(buf->buffer());
+    }
+
+    pjrt_buffers.push_back(arg_buffers);
+  }
+
+  return pjrt_buffers;
 }
 
 xla::StatusOr<ERL_NIF_TERM> UnpackResult(ErlNifEnv* env,
@@ -131,51 +181,99 @@ xla::StatusOr<ERL_NIF_TERM> UnpackResult(ErlNifEnv* env,
   return nif::ok(env, per_replica_term);
 }
 
-ExlaExecutable::ExlaExecutable(std::unique_ptr<xla::PjRtLoadedExecutable> executable,
-			                         absl::optional<std::string> fingerprint,
-			                         ExlaClient* client) : executable_(std::move(executable)),
-                                                     fingerprint_(std::move(fingerprint)),
-                                                     client_(client) {}
-
 xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
                                                 ERL_NIF_TERM arguments,
                                                 int device_id) {
   xla::ExecuteOptions options;
+  // arguments are not passed as a single PjRt tuple buffer, but instead
+  // as multiple pjrt buffers
+  options.arguments_are_tupled = false;
+  // result is a tuple, which pjrt decomposes into a vector of buffers for
+  // us to handle ourselves
   options.untuple_result = true;
-  options.strict_shape_checking = false;
+  // we do not handle multi-device launches at this time, so this must always
+  // be set to 0
+  options.launch_id = 0;
+  // enable strict shape checking which ensures shapes of buffers match exact
+  // shape (with layout) expected be compiled executable
+  options.strict_shape_checking = true;
+  // execution mode determines whether or not to launch the executable in the
+  // calling thread or in a separate thread, default mode is either-or, here
+  // we specify synchronous because the Elixir side ensures execution is always
+  // synchronous
+  options.execution_mode = xla::ExecuteOptions::ExecutionMode::kSynchronous;
 
+  // the number of replicas will equal the number of devices involved in
+  // a pmap, but in all other cases it will be equal to 1
   int num_replicas = executable_->num_replicas();
-
+  
+  // input buffers are a list of lists, where each list maps to the args
+  // to pass to one of the replicas in a computation, e.g. [replica_args1, replica_args2, ...]
   std::vector<std::vector<ExlaBuffer*>> input_buffers;
+
+  // the device assignment is a 2d array which maps coordinates (replica, partition)
+  // to a device; or in this case just maps a replica to a device
   EXLA_ASSIGN_OR_RETURN(xla::DeviceAssignment device_assignment,
     client_->client()->GetDefaultDeviceAssignment(num_replicas, 1));
 
-  if (device_id >= 0) {
-    EXLA_ASSIGN_OR_RETURN(input_buffers, UnpackRunArguments(env, arguments, client_, device_assignment, device_id));
+  if (device_id >= 0 && num_replicas > 1) {
+    // if the device id is greater than or equal to 1, that means we've specified
+    // a portable executable which cannot be pmapped, this code path should never
+    // be reached as it should be controlled from Elixir
+    return xla::InvalidArgument("Cannot specify a device for replicated executable.");
   } else {
-    EXLA_ASSIGN_OR_RETURN(input_buffers, UnpackRunArguments(env, arguments, client_, device_assignment, -1));
+    // else we handle unpacking/validating the run arguments to the correct devices
+    // according to the device id and the device assignment
+    EXLA_ASSIGN_OR_RETURN(input_buffers, UnpackRunArguments(env, arguments, client_, device_assignment, device_id));
   }
 
-  std::vector<std::vector<xla::PjRtBuffer*>> pjrt_buffers;
-  pjrt_buffers.reserve(input_buffers.size());
-
-  for (auto device_buf : input_buffers) {
-    std::vector<xla::PjRtBuffer*> arg_buffers;
-
-    for (auto buf : device_buf) {
-      arg_buffers.push_back(buf->buffer());
-    }
-
-    pjrt_buffers.push_back(arg_buffers);
+  // at this point input buffers is a vector of arguments per replica
+  // and the size of that vector should equal the number of replicas in the
+  // executable, otherwise it is invalid
+  if (num_replicas != input_buffers.size()) {
+    return xla::InvalidArgument("Got %d replica arguments for %d replicas", input_buffers.size(), num_replicas);
   }
 
-  ERL_NIF_TERM ret;
+  // now we convert per replica arguments to pjrt buffers by accessing each
+  // exla buffer's underlying pjrt buffer
+  std::vector<std::vector<xla::PjRtBuffer*>> pjrt_buffers = GetPjRtArguments(input_buffers);
 
-  EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->client()->LookupDevice(device_id));
-  EXLA_ASSIGN_OR_RETURN(auto result, executable_->ExecutePortable(pjrt_buffers.at(0), device, options));
+
   std::vector<std::vector<std::unique_ptr<xla::PjRtBuffer>>> per_replica_results;
-  per_replica_results.push_back(std::move(result));
-  EXLA_ASSIGN_OR_RETURN(ret, UnpackResult(env, std::move(per_replica_results), device_assignment, device_id));
+
+  if (device_id >= 0) {
+    // if we specified a device id, then we need to execute the executable as a portable
+    // executable, meaning we need to find the device corresponding to the specific device
+    // id and execute on that device, we've already guaranteed this executable only has 1
+    // replica
+    EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->client()->LookupDevice(device_id));
+    // because this is a portable executable, it only has 1 replica and so we only need
+    // to get the arguments at the first position of the input buffers
+    std::vector<xla::PjRtBuffer *> portable_args = pjrt_buffers.at(0);
+    EXLA_ASSIGN_OR_RETURN(auto portable_result,
+      executable_->ExecutePortable(portable_args, device, options));
+    // the logic for handling unpacking of results is shared between portable code path
+    // and the replicated code-path, so we take ownership of the result buffers to unpack
+    per_replica_results.push_back(std::move(portable_result));
+  } else {
+    // no device ID is present, so it may be a replicated executable which means we need
+    // to use the replica execution path
+    // TODO: This now exposes a `returned_futures` API, does this make sense for us?
+    EXLA_ASSIGN_OR_RETURN(per_replica_results, executable_->Execute(pjrt_buffers, options));
+  }
+
+  // sanity check
+  if (per_replica_results.size() != num_replicas) {
+    return xla::FailedPrecondition("Invalid execution.");
+  }
+
+  // finally, we need to unpack the results into Erlang terms, the result is a vector
+  // of vectors of unique ptrs to pjrt buffers, where the size of the output equals
+  // the number of replicas and each individual replica is a vector of buffers, the
+  // inner buffer represents a flattened output because we told PjRt we would always
+  // return a tuple from the computation
+  EXLA_ASSIGN_OR_RETURN(ERL_NIF_TERM ret,
+    UnpackResult(env, std::move(per_replica_results), device_assignment, device_id));
 
   return ret;
 }
@@ -203,7 +301,20 @@ xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromBinary(ErlNifEnv* env,
   EXLA_ASSIGN_OR_RETURN(auto buffer, client_->BufferFromHostBuffer(
     binary.data, shape.element_type(), shape.dimensions(), absl::nullopt, semantics, on_done_with_host_buffer, device));
 
-  return new ExlaBuffer(std::move(buffer), erlang_managed);
+  ExlaBuffer * exla_buffer = new ExlaBuffer(std::move(buffer), erlang_managed);
+
+  if (!erlang_managed) {
+    // if the buffer is not erlang managed, it was passed as a binary to run
+    // we use a copy environment to copy the binary over with zero copy semantics
+    // and use the on done callback to free the environment when the buffer is
+    // no longer in use, this is enough on cpu to ensure the resource is completely
+    // freed because we only have to worry about the underlying aliased binary memory
+    // being freed --- on gpu this is not enough because we only free the binary memory,
+    // not the gpu memory, and the buffer is not managed anywhere else
+    (void) nif::make<ExlaBuffer*>(env, exla_buffer);
+  }
+
+  return exla_buffer;
 }
 
 xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& computation,
