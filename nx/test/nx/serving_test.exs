@@ -65,6 +65,18 @@ defmodule Nx.ServingTest do
       assert Nx.Serving.run(serving, batch) == {Nx.tensor([2, 4, 6]), Nx.tensor([2, 2.5, 3])}
     end
 
+    test "with padding" do
+      serving =
+        Nx.Serving.new(fn ->
+          fn batch ->
+            Nx.Defn.jit_apply(&Nx.multiply(&1, 2), [Nx.Batch.pad(batch, 4)])
+          end
+        end)
+
+      batch = Nx.Batch.stack([Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])])
+      assert Nx.Serving.run(serving, batch) == Nx.tensor([[2, 4, 6], [8, 10, 12]])
+    end
+
     test "with module callbacks" do
       serving = Nx.Serving.new(Simple, self())
       batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
@@ -181,31 +193,6 @@ defmodule Nx.ServingTest do
 
           assert Nx.Serving.batched_run(config.test, batch) ==
                    {Nx.tensor([[42, 44], [46, 48]]), :metadata, :preprocessing!}
-        end)
-
-      Task.await(t1, :infinity)
-      Task.await(t2, :infinity)
-
-      assert_received {:init, :process}
-      assert_received {:batch, batch}
-      assert_received :execute
-      assert batch.size == 4
-      assert batch.pad == 0
-    end
-
-    test "2+2+timeout=8", config do
-      simple_supervised!(config, batch_size: 8, batch_timeout: 100)
-
-      t1 =
-        Task.async(fn ->
-          batch = Nx.Batch.stack([Nx.tensor([11, 12]), Nx.tensor([13, 14])])
-          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([[22, 24], [26, 28]])
-        end)
-
-      t2 =
-        Task.async(fn ->
-          batch = Nx.Batch.stack([Nx.tensor([21, 22]), Nx.tensor([23, 24])])
-          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([[42, 44], [46, 48]])
         end)
 
       Task.await(t1, :infinity)
@@ -348,6 +335,38 @@ defmodule Nx.ServingTest do
       assert_receive {:execute, executor3}
       send(executor3, :continue)
       Task.await(task3)
+    end
+
+    test "with padding", config do
+      serving =
+        Nx.Serving.new(fn ->
+          fn batch ->
+            Nx.Defn.jit_apply(&Nx.multiply(&1, 2), [Nx.Batch.pad(batch, 4)])
+          end
+        end)
+
+      simple_supervised!(config, serving: serving, batch_size: 4, batch_timeout: 100)
+
+      # Partial batch
+      t1 =
+        Task.async(fn ->
+          batch = Nx.Batch.stack([Nx.tensor([11, 12])])
+          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([[22, 24]])
+        end)
+
+      t2 =
+        Task.async(fn ->
+          batch = Nx.Batch.stack([Nx.tensor([21, 22])])
+          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([[42, 44]])
+        end)
+
+      Task.await(t1, :infinity)
+      Task.await(t2, :infinity)
+
+      batch = Nx.Batch.concatenate([Nx.tensor([[11, 12], [13, 14], [15, 16], [17, 18]])])
+
+      assert Nx.Serving.batched_run(config.test, batch) ==
+               Nx.tensor([[22, 24], [26, 28], [30, 32], [34, 36]])
     end
 
     test "conflict on batch size" do
