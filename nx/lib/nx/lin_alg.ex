@@ -1121,23 +1121,24 @@ defmodule Nx.LinAlg do
       >
 
   """
-  def svd(tensor, opts \\ []) do
-    opts = keyword!(opts, [:max_iter, eps: @default_eps])
-    %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
+  defn svd(tensor, opts \\ []) do
+    # opts = keyword!(opts, [:max_iter, eps: @default_eps])
+    # %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
-    Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.svd", 2)
+    # Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.svd", 2)
 
-    output_type = Nx.Type.to_floating(type)
-    {u_shape, s_shape, v_shape} = Nx.Shape.svd(shape)
-    rank = tuple_size(shape)
+    # output_type = Nx.Type.to_floating(type)
+    # {u_shape, s_shape, v_shape} = Nx.Shape.svd(shape)
+    # rank = tuple_size(shape)
 
-    impl!(tensor).svd(
-      {%{tensor | names: List.duplicate(nil, rank), type: output_type, shape: u_shape},
-       %{tensor | names: List.duplicate(nil, rank - 1), type: output_type, shape: s_shape},
-       %{tensor | names: List.duplicate(nil, rank), type: output_type, shape: v_shape}},
-      tensor,
-      opts
-    )
+    # impl!(tensor).svd(
+    #   {%{tensor | names: List.duplicate(nil, rank), type: output_type, shape: u_shape},
+    #    %{tensor | names: List.duplicate(nil, rank - 1), type: output_type, shape: s_shape},
+    #    %{tensor | names: List.duplicate(nil, rank), type: output_type, shape: v_shape}},
+    #   tensor,
+    #   opts
+    # )
+    Nx.LinAlg.SVD.svd(tensor, opts)
   end
 
   @doc """
