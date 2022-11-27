@@ -1144,30 +1144,49 @@ defmodule Nx.LinAlg do
 
 
   @doc """
-  Calculates the psuedoinverse of a matrix (e.g. in cases when the matrix is non-square.)
+  Calculates the Moore-Penrose inverse, or the pseudoinverse, of a matrix.
 
   ## Options
-    * `:eps` - Rounding error threshold that can be applied during the factorization
+    * `:eps` - Rounding error threshold used to assume values to 0 in the calculation of the psuedoinverse.
 
   ## Examples
 
-    WRITE THE PINV CODE IN HERE!!! LMAO
+      iex> pinv = Nx.LinAlg.pinv(Nx.tensor([[1, 1], [3, 4]]))
+      iex> pinv
+      #Nx.Tensor<
+        f32[2][2]
+        [
+          [4.0, -1.0000001192092896],
+          [-3.0, 1.0000001192092896]
+        ]
+      >
+      iex> pinv = Nx.LinAlg.pinv(Nx.tensor([[1, 3], [5, 4], [4, 9]]))
+      iex> pinv
+      #Nx.Tensor<
+        f32[2][3]
+        [
+          [-0.07312049716711044, 0.3027806580066681, -0.11019568890333176],
+          [0.06900102645158768, -0.1307930052280426, 0.1462409943342209]
+        ]
+      >
   """
 
 
-  def pinv(tensor, opts \\ []) do
+  defn pinv(tensor, opts \\ []) do
 
     opts = keyword!(opts, eps: @default_eps)
 
-    # {u, s, vt} = svd(tensor)
+    {u, s, vt} = Nx.LinAlg.svd(tensor)
 
-    # IO.inspect(u)
-    # IO.inspect(s)
-    # IO.inspect(vt)
+    s_shape = {elem(Nx.shape(s), 0), elem(Nx.shape(Nx.transpose(u)), 0)}
+    adjusted_s = Nx.map(s, fn x -> if Nx.abs(x) < opts[:eps] do 0 else Nx.divide(1, x) end end)
+    s_matrix = Nx.broadcast(0, s_shape) |> Nx.put_diagonal(adjusted_s)
 
-    # adjusted_s = Nx.map(s, fn x -> if Nx.to_number(Nx.abs(x)) < opts[:eps] do 0 else Nx.divide(1, x) end end)
+    Nx.transpose(vt) |> Nx.dot(s_matrix) |> Nx.dot(Nx.transpose(u))
 
-    Nx.dot(invert(Nx.dot(Nx.transpose(tensor), tensor)), Nx.transpose(tensor))
+    #adjusted_s = Nx.map(s, fn x -> if Nx.abs(x) < opts[:eps] do 0 else Nx.divide(1, x) end end)
+
+    # Nx.dot(Nx.transpose(vt) * adjusted_s, Nx.transpose(u)) # conventional solution doesn't work.
   end
 
   @doc """
