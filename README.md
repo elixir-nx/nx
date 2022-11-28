@@ -6,4 +6,4 @@ This repository currently holds the following projects:
 
   * [`Torchx`](https://github.com/elixir-nx/nx/tree/main/torchx#readme) - LibTorch backend for Nx
 
-Each has their own README, which you can access above to learn more. They will be extracted to their own repository in the future. Examples and benchmarks are available in the `EXLA` project.
+Each has their own README, which you can access above to learn more. They will be extracted to their own repository in the future. Examples and benchmarks are available in the `EXLA` project.how
