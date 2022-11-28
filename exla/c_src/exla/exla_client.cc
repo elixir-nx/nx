@@ -8,9 +8,7 @@
 
 namespace exla {
 
-ExlaBuffer::ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer,
-                       bool erlang_managed): buffer_(std::move(buffer)),
-                                             erlang_managed_(erlang_managed) {}
+ExlaBuffer::ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer): buffer_(std::move(buffer)) {}
 
 void CopyLiteralToBinary(xla::Literal* literal, ErlNifBinary* binary, exla::int64 size) {
   exla::int64 actual_size = literal->size_bytes();
@@ -48,7 +46,30 @@ ExlaExecutable::ExlaExecutable(std::unique_ptr<xla::PjRtLoadedExecutable> execut
                                                      fingerprint_(std::move(fingerprint)),
                                                      client_(client) {}
 
-xla::StatusOr<std::vector<ExlaBuffer*>>
+xla::StatusOr<std::unique_ptr<xla::PjRtBuffer>> PjRtBufferFromBinary(xla::PjRtClient * client,
+                                                                     ErlNifEnv * env,
+                                                                     ERL_NIF_TERM source_term,
+                                                                     const xla::Shape& shape,
+                                                                     int device_id) {
+  ErlNifEnv* copy_env = enif_alloc_env();
+  ERL_NIF_TERM dest_term = enif_make_copy(copy_env, source_term);
+  ErlNifBinary binary;
+
+  if (!nif::get_binary(copy_env, dest_term, &binary)) {
+    return xla::InvalidArgument("Expected buffer to be binary.");
+  }
+
+  xla::PjRtClient::HostBufferSemantics semantics = xla::PjRtClient::HostBufferSemantics::kZeroCopy;
+  std::function<void()> on_done_with_host_buffer = [copy_env]() { enif_free_env(copy_env); };
+
+  EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client->LookupDevice(device_id));
+  EXLA_ASSIGN_OR_RETURN(auto buffer, client->BufferFromHostBuffer(
+    binary.data, shape.element_type(), shape.dimensions(), std::nullopt, semantics, on_done_with_host_buffer, device));
+
+  return std::move(buffer);
+}
+
+xla::StatusOr<std::vector<xla::PjRtBuffer*>>
 UnpackReplicaArguments(ErlNifEnv* env,
                        ERL_NIF_TERM replica_arguments,
                        ExlaClient* client,
@@ -59,7 +80,7 @@ UnpackReplicaArguments(ErlNifEnv* env,
   }
 
   ERL_NIF_TERM head, tail;
-  std::vector<ExlaBuffer*> replica_buffers;
+  std::vector<xla::PjRtBuffer*> replica_buffers;
   replica_buffers.reserve(length);
 
   // for a single replica, the argument is a flat list of buffers where
@@ -84,8 +105,9 @@ UnpackReplicaArguments(ErlNifEnv* env,
       // we convert the binary into a buffer and transfer it to the correct device,
       // this buffer is not managed by the erlang vm so it must be deallocated explicitly
       // after use by the execution
-      EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf, client->BufferFromBinary(env, tuple[0], *shape, device, false));
-      replica_buffers.push_back(buf);
+      EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtBuffer> buf,
+        PjRtBufferFromBinary(client->client(), env, tuple[0], *shape, device));
+      replica_buffers.push_back(buf.release());
     } else if (nif::get<ExlaBuffer*>(env, head, buffer)) {
       // if the buffer is not a tuple it must be a reference to an exla buffer
       // which means the resource is already managed by the vm, and should already
@@ -94,7 +116,7 @@ UnpackReplicaArguments(ErlNifEnv* env,
       if ((*buffer)->device_id() != device) {
         return xla::InvalidArgument("Expected buffer to be placed on device %d", device);
       }
-      replica_buffers.push_back(*buffer);
+      replica_buffers.push_back((*buffer)->buffer());
     } else {
       return xla::InvalidArgument("Expected argument to be buffer reference.");
     }
@@ -105,7 +127,7 @@ UnpackReplicaArguments(ErlNifEnv* env,
   return replica_buffers;
 }
 
-xla::StatusOr<std::vector<std::vector<ExlaBuffer*>>>
+xla::StatusOr<std::vector<std::vector<xla::PjRtBuffer*>>>
 UnpackRunArguments(ErlNifEnv* env,
                    ERL_NIF_TERM arguments,
                    ExlaClient* client,
@@ -117,7 +139,7 @@ UnpackRunArguments(ErlNifEnv* env,
   }
 
   ERL_NIF_TERM head, tail;
-  std::vector<std::vector<ExlaBuffer*>> arg_buffers;
+  std::vector<std::vector<xla::PjRtBuffer*>> arg_buffers;
   arg_buffers.reserve(length);
 
   int replica = 0;
@@ -126,7 +148,7 @@ UnpackRunArguments(ErlNifEnv* env,
   while (enif_get_list_cell(env, arguments, &head, &tail)) {
     device = device_id >= 0 ? device_id : device_assignment(replica, 0);
 
-    EXLA_ASSIGN_OR_RETURN(std::vector<ExlaBuffer*> replica_buffers,
+    EXLA_ASSIGN_OR_RETURN(std::vector<xla::PjRtBuffer*> replica_buffers,
       UnpackReplicaArguments(env, head, client, device));
 
     arg_buffers.push_back(replica_buffers);
@@ -135,23 +157,6 @@ UnpackRunArguments(ErlNifEnv* env,
   }
 
   return arg_buffers;
-}
-
-std::vector<std::vector<xla::PjRtBuffer*>> GetPjRtArguments(std::vector<std::vector<ExlaBuffer*>> input_buffers) {
-  std::vector<std::vector<xla::PjRtBuffer*>> pjrt_buffers;
-  pjrt_buffers.reserve(input_buffers.size());
-
-  for (auto device_buf : input_buffers) {
-    std::vector<xla::PjRtBuffer*> arg_buffers;
-
-    for (auto buf : device_buf) {
-      arg_buffers.push_back(buf->buffer());
-    }
-
-    pjrt_buffers.push_back(arg_buffers);
-  }
-
-  return pjrt_buffers;
 }
 
 xla::StatusOr<ERL_NIF_TERM> UnpackResult(ErlNifEnv* env,
@@ -179,6 +184,43 @@ xla::StatusOr<ERL_NIF_TERM> UnpackResult(ErlNifEnv* env,
   ERL_NIF_TERM per_replica_term = enif_make_list_from_array(env, per_replica_results.data(), per_replica_results.size());
 
   return nif::ok(env, per_replica_term);
+}
+
+void FreeReplicaArguments(ErlNifEnv * env, ERL_NIF_TERM replica_arguments, std::vector<xla::PjRtBuffer *> buffers) {
+  unsigned int length;
+  if (!enif_get_list_length(env, replica_arguments, &length)) {
+    return;
+  }
+
+  ERL_NIF_TERM head, tail;
+  int arg = 0;
+
+  while (enif_get_list_cell(env, replica_arguments, &head, &tail)) {
+    xla::PjRtBuffer * buffer = buffers.at(arg);
+
+    if (enif_is_tuple(env, head)) {
+      delete buffer;
+    }
+
+    arg++;
+    replica_arguments = tail;
+  }
+}
+
+void FreeRunArguments(ErlNifEnv * env, ERL_NIF_TERM arguments, std::vector<std::vector<xla::PjRtBuffer *>> buffers) {
+  unsigned int length;
+  if (!enif_get_list_length(env, arguments, &length)) {
+    return;
+  }
+
+  ERL_NIF_TERM head, tail;
+  int replica = 0;
+
+  while (enif_get_list_cell(env, arguments, &head, &tail)) {
+    FreeReplicaArguments(env, head, buffers.at(replica));
+    arguments = tail;
+    replica++;
+  }
 }
 
 xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
@@ -209,7 +251,7 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
   
   // input buffers are a list of lists, where each list maps to the args
   // to pass to one of the replicas in a computation, e.g. [replica_args1, replica_args2, ...]
-  std::vector<std::vector<ExlaBuffer*>> input_buffers;
+  std::vector<std::vector<xla::PjRtBuffer*>> input_buffers;
 
   // the device assignment is a 2d array which maps coordinates (replica, partition)
   // to a device; or in this case just maps a replica to a device
@@ -234,11 +276,6 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
     return xla::InvalidArgument("Got %d replica arguments for %d replicas", input_buffers.size(), num_replicas);
   }
 
-  // now we convert per replica arguments to pjrt buffers by accessing each
-  // exla buffer's underlying pjrt buffer
-  std::vector<std::vector<xla::PjRtBuffer*>> pjrt_buffers = GetPjRtArguments(input_buffers);
-
-
   std::vector<std::vector<std::unique_ptr<xla::PjRtBuffer>>> per_replica_results;
 
   if (device_id >= 0) {
@@ -249,7 +286,7 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
     EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->client()->LookupDevice(device_id));
     // because this is a portable executable, it only has 1 replica and so we only need
     // to get the arguments at the first position of the input buffers
-    std::vector<xla::PjRtBuffer *> portable_args = pjrt_buffers.at(0);
+    std::vector<xla::PjRtBuffer *> portable_args = input_buffers.at(0);
     EXLA_ASSIGN_OR_RETURN(auto portable_result,
       executable_->ExecutePortable(portable_args, device, options));
     // the logic for handling unpacking of results is shared between portable code path
@@ -259,7 +296,7 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
     // no device ID is present, so it may be a replicated executable which means we need
     // to use the replica execution path
     // TODO: This now exposes a `returned_futures` API, does this make sense for us?
-    EXLA_ASSIGN_OR_RETURN(per_replica_results, executable_->Execute(pjrt_buffers, options));
+    EXLA_ASSIGN_OR_RETURN(per_replica_results, executable_->Execute(input_buffers, options));
   }
 
   // sanity check
@@ -267,13 +304,16 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
     return xla::FailedPrecondition("Invalid execution.");
   }
 
-  // finally, we need to unpack the results into Erlang terms, the result is a vector
+  // we need to unpack the results into Erlang terms, the result is a vector
   // of vectors of unique ptrs to pjrt buffers, where the size of the output equals
   // the number of replicas and each individual replica is a vector of buffers, the
   // inner buffer represents a flattened output because we told PjRt we would always
   // return a tuple from the computation
   EXLA_ASSIGN_OR_RETURN(ERL_NIF_TERM ret,
     UnpackResult(env, std::move(per_replica_results), device_assignment, device_id));
+
+  // finally, we need to free any of the arguments we created for this computation
+  FreeRunArguments(env, arguments, input_buffers);
 
   return ret;
 }
@@ -283,37 +323,9 @@ ExlaClient::ExlaClient(std::shared_ptr<xla::PjRtClient> client) : client_(std::m
 xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromBinary(ErlNifEnv* env,
                                                         ERL_NIF_TERM source_term,
                                                         xla::Shape& shape,
-                                                        int device_id,
-                                                        bool erlang_managed) {
-
-  ErlNifEnv* copy_env = enif_alloc_env();
-  ERL_NIF_TERM dest_term = enif_make_copy(copy_env, source_term);
-  ErlNifBinary binary;
-
-  if (!nif::get_binary(copy_env, dest_term, &binary)) {
-    return xla::InvalidArgument("Expected buffer to be binary.");
-  }
-
-  xla::PjRtClient::HostBufferSemantics semantics = xla::PjRtClient::HostBufferSemantics::kZeroCopy;
-  std::function<void()> on_done_with_host_buffer = [copy_env]() { enif_free_env(copy_env); };
-
-  EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->LookupDevice(device_id));
-  EXLA_ASSIGN_OR_RETURN(auto buffer, client_->BufferFromHostBuffer(
-    binary.data, shape.element_type(), shape.dimensions(), absl::nullopt, semantics, on_done_with_host_buffer, device));
-
-  ExlaBuffer * exla_buffer = new ExlaBuffer(std::move(buffer), erlang_managed);
-
-  if (!erlang_managed) {
-    // if the buffer is not erlang managed, it was passed as a binary to run
-    // we use a copy environment to copy the binary over with zero copy semantics
-    // and use the on done callback to free the environment when the buffer is
-    // no longer in use, this is enough on cpu to ensure the resource is completely
-    // freed because we only have to worry about the underlying aliased binary memory
-    // being freed --- on gpu this is not enough because we only free the binary memory,
-    // not the gpu memory, and the buffer is not managed anywhere else
-    (void) nif::make<ExlaBuffer*>(env, exla_buffer);
-  }
-
+                                                        int device_id) {
+  EXLA_ASSIGN_OR_RETURN(auto buffer, PjRtBufferFromBinary(client(), env, source_term, shape, device_id));
+  ExlaBuffer * exla_buffer = new ExlaBuffer(std::move(buffer));
   return exla_buffer;
 }
 
