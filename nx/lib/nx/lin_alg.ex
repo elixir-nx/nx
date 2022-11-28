@@ -1147,7 +1147,7 @@ defmodule Nx.LinAlg do
   Calculates the Moore-Penrose inverse, or the pseudoinverse, of a matrix.
 
   ## Options
-    * `:eps` - Rounding error threshold used to assume values to 0 in the calculation of the psuedoinverse.
+    * `:eps` - Rounding error threshold used to assume values as 0.
 
   ## Examples
 
