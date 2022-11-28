@@ -236,9 +236,10 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
   // we do not handle multi-device launches at this time, so this must always
   // be set to 0
   options.launch_id = 0;
-  // enable strict shape checking which ensures shapes of buffers match exact
-  // shape (with layout) expected be compiled executable
-  options.strict_shape_checking = true;
+  // disable strict shape checking which ensures shapes of buffers match exact
+  // shape (with layout) expected be compiled executable, we have mismatches
+  // on gpu
+  options.strict_shape_checking = false;
   // execution mode determines whether or not to launch the executable in the
   // calling thread or in a separate thread, default mode is either-or, here
   // we specify synchronous because the Elixir side ensures execution is always
@@ -248,7 +249,7 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
   // the number of replicas will equal the number of devices involved in
   // a pmap, but in all other cases it will be equal to 1
   int num_replicas = executable_->num_replicas();
-  
+
   // input buffers are a list of lists, where each list maps to the args
   // to pass to one of the replicas in a computation, e.g. [replica_args1, replica_args2, ...]
   std::vector<std::vector<xla::PjRtBuffer*>> input_buffers;
