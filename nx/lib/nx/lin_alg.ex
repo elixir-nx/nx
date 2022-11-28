@@ -1178,7 +1178,7 @@ defmodule Nx.LinAlg do
 
     {u, s, vt} = Nx.LinAlg.svd(tensor)
 
-    s_shape = {elem(Nx.shape(s), 0), elem(Nx.shape(Nx.transpose(u)), 0)}
+    s_shape = {elem(Nx.shape(s), 0), elem(Nx.shape(u, 1)}
     adjusted_s = Nx.map(s, fn x -> if Nx.abs(x) < opts[:eps] do 0 else Nx.divide(1, x) end end)
     s_matrix = Nx.broadcast(0, s_shape) |> Nx.put_diagonal(adjusted_s)
 
