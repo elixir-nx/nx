@@ -1183,10 +1183,6 @@ defmodule Nx.LinAlg do
     s_matrix = Nx.broadcast(0, s_shape) |> Nx.put_diagonal(adjusted_s)
 
     Nx.transpose(vt) |> Nx.dot(s_matrix) |> Nx.dot(Nx.transpose(u))
-
-    #adjusted_s = Nx.map(s, fn x -> if Nx.abs(x) < opts[:eps] do 0 else Nx.divide(1, x) end end)
-
-    # Nx.dot(Nx.transpose(vt) * adjusted_s, Nx.transpose(u)) # conventional solution doesn't work.
   end
 
   @doc """
