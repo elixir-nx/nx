@@ -966,6 +966,7 @@ defmodule Nx.LinAlg do
           [-3.0, 1.0000001192092896]
         ]
       >
+
       iex> pinv = Nx.LinAlg.pinv(Nx.tensor([[1, 3], [5, 4], [4, 9]]))
       iex> pinv
       #Nx.Tensor<
