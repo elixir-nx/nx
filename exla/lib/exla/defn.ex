@@ -816,7 +816,7 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(:eigh, [out, tensor, opts], _ans, state) do
-    {eigvec, eigval} = EXLA.Op.eigh(tensor, 0)
+    {eigvec, eigval} = EXLA.Op.eigh(tensor, 1, opts[:eps] || 1.0e-6, opts[:max_iter] || 10_000)
     EXLA.Op.tuple(state.builder, [eigval, eigvec])
   end
 

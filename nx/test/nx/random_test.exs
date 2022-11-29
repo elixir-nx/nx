@@ -116,7 +116,7 @@ defmodule Nx.RandomTest do
       # default
       assert Nx.Random.normal_split(key, 0, 100) == Nx.tensor(-234.9235382080078, type: :f32)
 
-      # inference
+      # inferenceww
       assert Nx.Random.normal_split(key, Nx.tensor(0, type: :bf16), Nx.tensor(100, type: :bf16)) ==
                Nx.tensor(-17.625, type: :bf16)
 

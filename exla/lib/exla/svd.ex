@@ -2,27 +2,67 @@ defmodule Nx.LinAlg.SVD do
   import Nx.Defn
   @default_eps 1.1920929e-07
 
-  defn svd(tensor, opts \\ []) do
+  defn svd(input_tensor, opts \\ []) do
     opts = keyword!(opts, max_iter: 10_000, eps: @default_eps)
-    {m, n} = Nx.shape(tensor)
+    {m, n} = Nx.shape(input_tensor)
 
-    {u, h} = qdwh(tensor, opts)
-    {s, v} = Nx.LinAlg.eigh(h)
+    tensor =
+      case Nx.shape(input_tensor) do
+        {m, n} when m < n ->
+          Nx.LinAlg.adjoint(input_tensor)
+
+        _ ->
+          input_tensor
+      end
+
+    {reduce_to_square, q, a} =
+      if m > 1.15 * n do
+        {q, a} = Nx.LinAlg.qr(tensor)
+        {true, q, a}
+      else
+        {false, tensor, tensor}
+      end
+
+    {u, s, v} = svd_tall_and_square(a, opts)
+
+    vt = Nx.LinAlg.adjoint(v)
+
+    case reduce_to_square do
+      true ->
+        {Nx.dot(q, u), s, vt}
+
+      false ->
+        {u, s, vt}
+    end
+  end
+
+  defnp svd_tall_and_square(a, opts \\ []) do
+    {m, n} = Nx.shape(a)
+    {u, h} = qdwh(a, opts)
+    # ensure H is hermitian
+    h = (h + Nx.LinAlg.adjoint(h)) / 2
+    {s, v} = Nx.LinAlg.eigh(h, max_iter: opts[:max_iter], eps: opts[:eps])
+
+    sign = Nx.select(s < 0, -1, 1)
+    v = sign * v
+    s = sign * s
+
+    # sort s and v according to
     sort_idx = Nx.argsort(s, direction: :desc)
     s_out = Nx.take(s, sort_idx)
-    v_out = Nx.transpose(v) |> Nx.take(sort_idx)
-    u_out = Nx.dot(u, [1], v_out, [1])
+    v_out = Nx.take(v, sort_idx, axis: 1)
+    u_out = Nx.dot(u, v_out)
 
-    u_out = Nx.select(s[0] < m * opts[:eps] * s[0], correct_rank_deficiency(u_out), u_out)
+    u_out = Nx.select(s[0] < n * opts[:eps] * s_out[0], correct_rank_deficiency(u_out), u_out)
     {u_out, s_out, v_out}
   end
 
-  defnp qdwh(x, opts \\ []) do
+  defn qdwh(x, opts \\ []) do
     # {m, n} = Nx.shape(x)
     alpha = Nx.sqrt(Nx.LinAlg.norm(x, ord: 1)) * Nx.sqrt(Nx.LinAlg.norm(x, ord: :inf))
     l = opts[:eps]
     u = x / alpha
-    tol_l = 5 * opts[:eps]
+    tol_l = 10 * opts[:eps] / 2
     tol_norm = Nx.cbrt(tol_l)
 
     one_u8 = Nx.tensor(1, type: :u8)
@@ -38,12 +78,16 @@ defmodule Nx.LinAlg.SVD do
         sqd = Nx.sqrt(1.0 + dd)
         a = sqd + Nx.sqrt(8.0 - 4.0 * dd + 8.0 * (2.0 - l2) / (l2 * sqd)) / 2
         a = Nx.real(a)
-        b = (a - 1.0) ** 2 / 4.0
+        b = ((a - 1.0) ** 2) / 4.0
         c = a + b - 1.0
 
         l = l * (a + b * l2) / (1.0 + c * l2)
 
-        u = Nx.select(c > 100, qdwh_use_qr(u, x, a, b, c), qdwh_use_cholesky(u, x, a, b, c))
+        u = if c > 100 do
+          qdwh_use_qr(u, x, a, b, c)
+        else
+          qdwh_use_cholesky(u, x, a, b, c)
+        end
 
         iterating_l = Nx.abs(1.0 - l) > tol_l
         iterating_u = Nx.LinAlg.norm(u - u_prev) > tol_norm
@@ -52,7 +96,7 @@ defmodule Nx.LinAlg.SVD do
         {u, l, iter_idx + 1, is_unconverged, is_not_max_iteration, max_iter}
       end
 
-    # u = 1.5 * u - 0.5 * Nx.dot(u, Nx.dot(Nx.LinAlg.adjoint(u), u))
+    u = 1.5 * u - 0.5 * Nx.dot(u, Nx.dot(Nx.LinAlg.adjoint(u), u))
     h = u |> Nx.LinAlg.adjoint() |> Nx.dot(x)
     h = (h + Nx.LinAlg.adjoint(h)) / 2
     {u, h}
@@ -73,22 +117,33 @@ defmodule Nx.LinAlg.SVD do
 
   defn qdwh_use_cholesky(u, _x, a, b, c) do
     {_, u_n} = Nx.shape(u)
-    x = c * Nx.dot(Nx.LinAlg.adjoint(u), u) + Nx.eye(u_n)
+    uh = Nx.LinAlg.adjoint(u)
+    x = c * Nx.dot(uh, u) + Nx.eye(u_n)
     y = Nx.LinAlg.cholesky(x)
 
-    z =
+    ybar =
+      case Nx.type(y) do
+        {:c, _} -> Nx.conjugate(y)
+        _ -> y
+      end
+
+    zbar =
       Nx.LinAlg.triangular_solve(
-        Nx.conjugate(y),
+        ybar,
         Nx.transpose(u),
         left_side: true,
         lower: true
       )
-      |> Nx.conjugate()
 
-    z =
-      Nx.LinAlg.triangular_solve(Nx.LinAlg.adjoint(y), z, left_side: true, lower: false)
+    z = case Nx.type(zbar) do
+      {:c, _} -> Nx.conjugate(zbar)
+      _ -> zbar
+    end
+
+    # z = Nx.LinAlg.solve(y, Nx.LinAlg.adjoint(z))
+      z = Nx.LinAlg.triangular_solve(Nx.LinAlg.adjoint(y), z, left_side: true, lower: false)
       |> Nx.LinAlg.adjoint()
-      |> Nx.real()
+      # # |> Nx.real()
 
     e = b / c
 
@@ -100,9 +155,12 @@ defmodule Nx.LinAlg.SVD do
 
     diag_r = Nx.take_diagonal(r) < 0
     sign_r = Nx.select(diag_r, -1, 1)
-    sign_r = Nx.select(diag_r == 0, 0, sign_r)
+    # sign_r = Nx.select(diag_r == 0, 0, sign_r)
 
     # same as Nx.dot(u_out, Nx.make_diagonal(sign_r))
     u_out * sign_r
+    # # Nx.dot(u_out, Nx.make_diagonal(sign_r))
+    # u_out
+    # u_out
   end
 end

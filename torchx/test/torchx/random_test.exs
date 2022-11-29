@@ -132,7 +132,7 @@ defmodule Torchx.Nx.RandomTest do
       key = Nx.Random.key(44)
 
       # default
-      assert_equal(Nx.Random.normal_split(key, 0, 100), Nx.tensor(-234.9235382080078, type: :f32))
+      assert_equal(Nx.Random.normal_split(key, 0, 100), Nx.tensor(-234.9235382080078s, type: :f32))
 
       # inference
       assert_equal(

@@ -210,7 +210,7 @@ defmodule EXLA.NIF do
 
   def cholesky(_operand), do: :erlang.nif_error(:undef)
 
-  def eigh(_operand, _lower), do: :erlang.nif_error(:undef)
+  def eigh(_operand, _lower, _eps, _max_iter), do: :erlang.nif_error(:undef)
 
   def lu(_operand), do: :erlang.nif_error(:undef)
 
