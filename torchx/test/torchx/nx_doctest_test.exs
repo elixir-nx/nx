@@ -26,9 +26,13 @@ defmodule Torchx.NxDoctestTest do
     ifft: 2
   ]
 
-  case :os.type() do
-    {:win32, _} -> @os_rounding_error_doctests [expm1: 1, erf: 1]
-    _ -> @os_rounding_error_doctests []
+  if Application.get_env(:torchx, :is_apple_arm64) do
+    @os_rounding_error_doctests [sin: 1]
+  else
+    case :os.type() do
+      {:win32, _} -> @os_rounding_error_doctests [expm1: 1, erf: 1]
+      _ -> @os_rounding_error_doctests []
+    end
   end
 
   @unrelated_doctests [
