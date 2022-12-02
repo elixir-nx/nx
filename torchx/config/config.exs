@@ -2,7 +2,7 @@ import Config
 
 is_apple_arm64 =
   :os.type() == {:unix, :darwin} and
-    not String.starts_with?(List.to_string(:erlang.system_info(:system_architecture)), "x86_64")
+    not List.starts_with?(:erlang.system_info(:system_architecture), ~c"x86_64")
 
 config :torchx,
   add_backend_on_inspect: config_env() != :test,
