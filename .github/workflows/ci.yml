@@ -74,8 +74,6 @@ jobs:
         working-directory: .
       - uses: actions/checkout@v2
       - uses: ilammy/msvc-dev-cmd@v1
-        with:
-          toolset: 14.11
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{ matrix.otp }}
