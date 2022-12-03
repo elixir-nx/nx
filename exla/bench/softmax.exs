@@ -26,10 +26,8 @@ benches =
     cuda_jit = EXLA.jit(&Softmax.softmax/1, client: :cuda)
 
     Map.merge(benches, %{
-      "xla jit-gpu f32" =>
-        {fn -> cuda_jit.(dt32) end, after_each: &Nx.backend_deallocate/1},
-      "xla jit-gpu f64" =>
-        {fn -> cuda_jit.(dt64) end, after_each: &Nx.backend_deallocate/1}
+      "xla jit-gpu f32" => {fn -> cuda_jit.(dt32) end, after_each: &Nx.backend_deallocate/1},
+      "xla jit-gpu f64" => {fn -> cuda_jit.(dt64) end, after_each: &Nx.backend_deallocate/1}
     })
   else
     benches
