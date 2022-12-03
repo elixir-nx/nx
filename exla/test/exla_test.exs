@@ -6,7 +6,7 @@ defmodule EXLATest do
     @describetag :integration
 
     test "memory leak test" do
-      test_data = Nx.random_uniform({1000, 1000}) |> Nx.backend_transfer(Nx.BinaryBackend)
+      test_data = Nx.broadcast(0.0, {1000, 1000}) |> Nx.backend_transfer(Nx.BinaryBackend)
       fun = EXLA.jit(fn x -> Nx.tan(x) end)
 
       for _ <- 1..2000 do
