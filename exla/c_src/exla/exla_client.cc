@@ -171,6 +171,7 @@ xla::StatusOr<ERL_NIF_TERM> UnpackResult(ErlNifEnv* env,
     int device = device_id >= 0 ? device_id : device_assignment(i, 0);
 
     for (auto& pjrt_buf : result.at(i)) {
+      pjrt_buf->BlockHostUntilReady();
       ExlaBuffer* buf = new ExlaBuffer(std::move(pjrt_buf));
       ERL_NIF_TERM term = nif::make<ExlaBuffer*>(env, buf);
       terms.push_back(term);
