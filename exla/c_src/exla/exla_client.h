@@ -31,11 +31,8 @@ class ExlaBuffer {
   xla::Status Deallocate();
 
   ~ExlaBuffer() {
-    // TODO: We likely want to keep the buffer as a shared pointer
-    // between Erlang VM and XLA and use AcquireExternalReference
-    // to notify that the buffer should be kept around until the
-    // reference is released.
-    // https://github.com/tensorflow/tensorflow/blob/b8eb820d6cb27cfa8ab65c40ce9a161de314533c/tensorflow/compiler/xla/pjrt/pjrt_client.h#L763-L780
+    // Theoretically this may block if a computation is running
+    // but we always block the host until the computation is done.
   }
 
  private:
