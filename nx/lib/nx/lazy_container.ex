@@ -38,7 +38,7 @@ defprotocol Nx.LazyContainer do
   be containers, you must call `Nx.LazyContainer.traverse/3`
   on said arguments so they are recursively traversed.
   """
-  @spec traverse(t(), acc, (Nx.template(), (() -> Nx.Tensor.t()), acc -> {term(), acc})) ::
+  @spec traverse(t(), acc, (Nx.template(), (-> Nx.Tensor.t()), acc -> {term(), acc})) ::
           {Nx.Container.t(), acc}
         when acc: term()
   def traverse(data, acc, fun)
@@ -111,6 +111,14 @@ end
 
 defimpl Nx.LazyContainer, for: Any do
   def traverse(data, acc, fun) do
-    Nx.Container.traverse(data, acc, &Nx.LazyContainer.traverse(&1, &2, fun))
+    if impl = Nx.Container.impl_for(data) do
+      impl.traverse(data, acc, &Nx.LazyContainer.traverse(&1, &2, fun))
+    else
+      raise Protocol.UndefinedError,
+        protocol: @protocol,
+        value: data,
+        description:
+          "data-structures given to defn/Nx must implement either Nx.LazyContainer or Nx.Container"
+    end
   end
 end
