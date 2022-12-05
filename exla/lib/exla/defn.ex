@@ -371,10 +371,10 @@ defmodule EXLA.Defn do
       end)
 
     if debug? do
-      hit_or_miss = if expr, do: "", else: " cache hit"
+      hit_or_miss = if expr, do: "miss", else: "hit"
 
       Logger.debug(
-        "EXLA defn evaluation #{inspect(key)}#{hit_or_miss} in #{us_to_ms(eval_time)}ms"
+        "EXLA defn evaluation #{inspect(key)} cache #{hit_or_miss} in #{us_to_ms(eval_time)}ms"
       )
     end
 
@@ -411,8 +411,8 @@ defmodule EXLA.Defn do
           into: %{}
 
     if debug? do
-      hit_or_miss = if evaled, do: "", else: " cache hit"
-      Logger.debug("EXLA compilation #{inspect(key)}#{hit_or_miss} in #{us_to_ms(comp_time)}ms")
+      hit_or_miss = if evaled, do: "miss", else: "hit"
+      Logger.debug("EXLA compilation #{inspect(key)} cache #{hit_or_miss} in #{us_to_ms(comp_time)}ms")
     end
 
     if expr || evaled do

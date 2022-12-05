@@ -21,8 +21,8 @@ defmodule EXLA.Defn.APITest do
           EXLA.jit(&add_two/2, debug: true).(2, 3)
         end)
 
-      assert logs =~ ~r"EXLA defn evaluation #Function<[^>]+>( cache hit)? in \d+\.\dms"
-      assert logs =~ ~r"EXLA compilation #Function<[^>]+>( cache hit)? in \d+\.\dms"
+      assert logs =~ ~r"EXLA defn evaluation #Function<[^>]+> cache (hit|miss) in \d+\.\dms"
+      assert logs =~ ~r"EXLA compilation #Function<[^>]+> cache (hit|miss) in \d+\.\dms"
       assert logs =~ ~r"EXLA device \d lock in \d+\.\dms"
 
       logs =
