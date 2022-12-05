@@ -271,7 +271,16 @@ defmodule EXLA.Defn do
         Logger.debug("EXLA device #{executable.device_id} lock in #{us_to_ms(time)}ms")
       end
 
-      maybe_outfeed(lock, executable, args, used_inputs, outputs, hooks, run_options)
+      {time, res} =
+        :timer.tc(fn ->
+          maybe_outfeed(lock, executable, args, used_inputs, outputs, hooks, run_options)
+        end)
+
+      if debug? do
+        Logger.debug("EXLA execution on device #{executable.device_id} in #{us_to_ms(time)}ms")
+      end
+
+      res
     end
   end
 
@@ -412,7 +421,10 @@ defmodule EXLA.Defn do
 
     if debug? do
       hit_or_miss = if evaled, do: "miss", else: "hit"
-      Logger.debug("EXLA compilation #{inspect(key)} cache #{hit_or_miss} in #{us_to_ms(comp_time)}ms")
+
+      Logger.debug(
+        "EXLA compilation #{inspect(key)} cache #{hit_or_miss} in #{us_to_ms(comp_time)}ms"
+      )
     end
 
     if expr || evaled do
