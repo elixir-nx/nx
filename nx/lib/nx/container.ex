@@ -40,8 +40,6 @@ defprotocol Nx.Container do
   > inside `defn` during compilation time.
   """
 
-  @fallback_to_any true
-
   @doc """
   Traverses non-recursively tensors in a data structure with `acc` and `fun`.
 

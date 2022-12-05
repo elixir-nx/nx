@@ -1,6 +1,10 @@
 defmodule Nx.ContainerTest do
   use ExUnit.Case, async: true
 
+  test "for any" do
+    assert Nx.Container.impl_for("string") == nil
+  end
+
   test "to_template" do
     assert Nx.to_template(%Container{a: 1, b: 2, c: 3, d: 4}) ==
              %Container{a: Nx.template({}, {:s, 64}), b: Nx.template({}, {:s, 64}), c: %{}, d: 4}
