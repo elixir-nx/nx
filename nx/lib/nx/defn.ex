@@ -341,7 +341,7 @@ defmodule Nx.Defn do
 
         Compiled with:
 
-        #{inspect(params)}
+        #{inspect(template_args)}
 
         Got:
 
