@@ -2084,7 +2084,11 @@ defmodule Nx.DefnTest do
 
       assert_raise ArgumentError,
                    ~r"argument at position 1 is not compatible with compiled function template",
-                   fn -> fun.(3, {4, 5}) end
+                   fn -> fun.({Nx.iota({4}), 5}, 3) end
+
+      assert_raise ArgumentError,
+                   ~r"cannot invoke compiled function because the given arguments do not match compiled arguments",
+                   fn -> fun.(3, 4) end
     end
 
     defn nested_compile(opts \\ []), do: nested_compile_transform(opts)

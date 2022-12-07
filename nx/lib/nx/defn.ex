@@ -324,46 +324,65 @@ defmodule Nx.Defn do
   """
   def compile(fun, template_args, opts \\ [])
       when is_function(fun) and is_list(template_args) and is_list(opts) do
-    {fun, templates, _flatten} = Nx.Defn.Compiler.to_lazy_params(fun, template_args)
+    {fun, params, templates, _flatten} = Nx.Defn.Compiler.to_lazy_params(fun, template_args)
     opts = prepare_options(opts)
-    compiled_fun = Nx.Defn.Compiler.__compile__(fun, templates, opts)
+    compiled_fun = Nx.Defn.Compiler.__compile__(fun, params, opts)
 
     wrap(fun, fn args ->
       if Nx.Defn.Compiler.current() do
         raise "cannot invoke compiled function when there is a JIT compilation happening"
       end
 
-      flatten = compile_flattten(args, templates, 1, [])
+      {templates, flatten} = compile_flatten(args, templates, 1, [])
+
+      if templates != [] do
+        raise ArgumentError, """
+        cannot invoke compiled function because the given arguments do not match compiled arguments
+
+        Compiled with:
+
+        #{inspect(params)}
+
+        Got:
+
+        #{inspect(args)}
+        """
+      end
+
       [res] = compiled_fun.([flatten])
       res
     end)
   end
 
-  defp compile_flattten([arg | args], [template | templates], pos, acc) do
-    {arg_template, acc} = Nx.LazyContainer.traverse(arg, acc, &{&1, [&2 | &3]})
+  defp compile_flatten([arg | args], templates, pos, acc) do
+    {_, {templates, acc}} =
+      Nx.LazyContainer.traverse(arg, {templates, acc}, fn
+        arg_template, fun, {[template | templates], acc} ->
+          unless Nx.compatible?(arg_template, template) do
+            raise ArgumentError, """
+            argument at position #{pos} is not compatible with compiled function template.
 
-    if Nx.compatible?(arg_template, template) do
-      compile_flattten(args, templates, pos + 1, acc)
-    else
-      raise ArgumentError, """
-      argument at position #{pos} is not compatible with compiled function template.
+            Expected template:
 
-      Expected template:
+            #{inspect(template)}
 
-      #{inspect(template)}
+            Argument template:
 
-      Argument template:
+            #{inspect(arg_template)}
 
-      #{inspect(arg_template)}
+            Within argument:
 
-      Retrieved from argument:
+            #{inspect(arg)}
+            """
+          end
 
-      #{inspect(arg)}
-      """
-    end
+          {:ok, {templates, [fun | acc]}}
+      end)
+
+    compile_flatten(args, templates, pos + 1, acc)
   end
 
-  defp compile_flattten([], [], _pos, acc), do: Enum.reverse(acc)
+  defp compile_flatten([], templates, _pos, acc), do: {templates, Enum.reverse(acc)}
 
   @doc """
   Wraps an anonymous function with just-in-time compilation.
@@ -442,7 +461,7 @@ defmodule Nx.Defn do
 
   defp do_jit_apply(fun, args, opts) do
     opts = prepare_options(opts)
-    {fun, params, flatten} = Nx.Defn.Compiler.to_lazy_params(fun, args)
+    {fun, params, _templates, flatten} = Nx.Defn.Compiler.to_lazy_params(fun, args)
     [res] = Nx.Defn.Compiler.__jit__(fun, params, [flatten], opts)
     res
   end
@@ -484,7 +503,7 @@ defmodule Nx.Defn do
   """
   def debug_expr_apply(fun, args, opts \\ []) when is_function(fun) and is_list(args) do
     opts = opts |> prepare_options() |> Keyword.put(:compiler, Nx.Defn.Debug)
-    {fun, params, flatten} = Nx.Defn.Compiler.to_lazy_params(fun, args)
+    {fun, params, _templates, flatten} = Nx.Defn.Compiler.to_lazy_params(fun, args)
     [res] = Nx.Defn.Compiler.__jit__(fun, params, [flatten], opts)
     res
   end
@@ -550,7 +569,7 @@ defmodule Nx.Defn do
     end
 
     opts = prepare_options(opts)
-    {fun, params, flatten} = Nx.Defn.Compiler.to_lazy_params(fun, args)
+    {fun, params, _templates, flatten} = Nx.Defn.Compiler.to_lazy_params(fun, args)
 
     case args do
       [_input, acc | _] ->
