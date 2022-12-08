@@ -58,7 +58,7 @@ defmodule Nx do
 
   The types are tracked as tuples:
 
-      iex> Nx.tensor([1, 2, 3], type: :f32)
+      iex> Nx.tensor([1, 2, 3], type: {:f, 32})
       #Nx.Tensor<
         f32[3]
         [1.0, 2.0, 3.0]
