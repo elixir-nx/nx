@@ -5,7 +5,10 @@ defmodule EXLA.Client do
   See `EXLA` module docs for a general introduction.
   """
   require Logger
+
+  @doc false
   use GenServer
+
   @name __MODULE__
 
   @enforce_keys [:ref, :platform, :name, :device_count, :default_device_id]
