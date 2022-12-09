@@ -383,12 +383,17 @@ defmodule Nx do
         [
           {:nx, ">= 0.0.0"}
         ],
-        config: [nx: [default_backend: {EXLA.Backend, device: :cuda}]]
+        config: [nx: [default_backend: EXLA.Backend]]
       )
 
   Or by calling `Nx.global_default_backend/1` (less preferrable):
 
-      Nx.global_default_backend({EXLA.Backend, device: :cuda})
+      Nx.global_default_backend(EXLA.Backend)
+
+  To pass options to the backend, replacing `EXLA.Backend` by
+  `{EXLA.Backend, client: :cuda}` or similar. See the documentation
+  for [EXLA](https://hexdocs.pm/exla) and [Torchx](https://hexdocs.pm/torchx)
+  for installation and GPU support.
 
   To implement your own backend, check the `Nx.Tensor` behaviour.
   """

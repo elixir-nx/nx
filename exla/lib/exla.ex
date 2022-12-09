@@ -4,6 +4,14 @@ defmodule EXLA do
 
   It supports just-in-time (JIT) compilation to GPU (both CUDA and ROCm) and TPUs.
 
+  ## XLA binaries
+
+  EXLA relies on the [XLA](https://github.com/elixir-nx/xla) package to
+  provide the necessary XLA binaries. Whenever possible it tries to download
+  precompiled builds, but you may need to build from source if there is no
+  version matching your target environment. For more details, including
+  GPU/TPU support see [the usage section](https://github.com/elixir-nx/xla#usage).
+
   ## Configuration
 
   ### As a backend (recommended)
