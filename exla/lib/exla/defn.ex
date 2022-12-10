@@ -394,7 +394,7 @@ defmodule EXLA.Defn do
     {out_inputs, in_inputs} = to_used.(used_inputs)
     comp_key = {ref, client.name, used_hooks, options}
 
-    {comp_time, {evaled, {executable, extra, outfeed_hooks}}} =
+    {comp_time, {evaled, {xla_time, executable, extra, outfeed_hooks}}} =
       :timer.tc(fn ->
         comp_cache_fun.(comp_key, fn ->
           shapes =
@@ -408,8 +408,12 @@ defmodule EXLA.Defn do
           {computation, extra, hooks} =
             to_computation.(expr || fun.(vars), out_inputs, inputs_and_shapes, used_hooks)
 
-          executable = EXLA.Computation.compile(computation, client, shapes, options)
-          {:ok, {executable, extra, hooks}}
+          {xla_time, executable} =
+            :timer.tc(fn ->
+              EXLA.Computation.compile(computation, client, shapes, options)
+            end)
+
+          {:ok, {xla_time, executable, extra, hooks}}
         end)
       end)
 
@@ -419,12 +423,17 @@ defmodule EXLA.Defn do
           do: {flag, {shapes, compile_hook(key, hooks, defined_hooks, template)}},
           into: %{}
 
-    if debug? do
-      hit_or_miss = if evaled, do: "miss", else: "hit"
+    cond do
+      not debug? ->
+        :ok
 
-      Logger.debug(
-        "EXLA compilation #{inspect(key)} cache #{hit_or_miss} in #{us_to_ms(comp_time)}ms"
-      )
+      evaled ->
+        Logger.debug(
+          "EXLA compilation #{inspect(key)} cache miss in #{us_to_ms(comp_time)}ms (#{us_to_ms(xla_time)}ms in XLA)"
+        )
+
+      true ->
+        Logger.debug("EXLA compilation #{inspect(key)} cache hit in #{us_to_ms(comp_time)}ms")
     end
 
     if expr || evaled do
