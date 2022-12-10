@@ -11428,51 +11428,36 @@ defmodule Nx do
   NumPy library. This function can be useful for loading data
   originally created or intended to be loaded from NumPy into
   Elixir.
+
+  ## Examples
+
+      "array.npy"
+      |> File.read!()
+      |> Nx.from_numpy()
+      #=>
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
   """
   @doc type: :conversion
-  def from_numpy(file) do
-    file
-    |> File.read!()
-    |> parse_numpy()
+  def from_numpy(data)
+
+  def from_numpy(<<"\x93NUMPY"::binary, major::size(8), minor::size(8), rest::binary>>) do
+    from_numpy(rest, major, minor)
   end
 
-  @doc """
-  Loads a `.npz` archive into a list of tensors.
-
-  An `.npz` file is a zipped, possibly compressed archive containing
-  multiple `.npy` files.
-  """
-  @doc type: :conversion
-  def from_numpy_archive(archive) do
-    archive = File.read!(archive)
-
-    case :zip.unzip(archive, [:memory]) do
-      {:ok, files} ->
-        files
-        |> Enum.map(fn {_, data} -> parse_numpy(data) end)
-
-      _ ->
-        raise ArgumentError,
-              "unable to parse NumPy archive, it may be corrupted" <>
-                " or invalid"
-    end
-  end
-
-  defp parse_numpy(<<"\x93NUMPY"::binary, major::size(8), minor::size(8), rest::binary>>) do
-    parse_numpy(rest, major, minor)
-  end
-
-  defp parse_numpy(_) do
+  def from_numpy(_) do
     raise ArgumentError,
           "unable to parse NumPy file, it may be corrupted" <>
             " or invalid"
   end
 
-  defp parse_numpy(<<header_size::size(16)-little-unsigned, rest::binary>>, 1, 0) do
+  defp from_numpy(<<header_size::size(16)-little-unsigned, rest::binary>>, 1, 0) do
     do_numpy_to_tensor(rest, header_size)
   end
 
-  defp parse_numpy(<<header_size::size(32)-little-unsigned, rest::binary>>, _, _) do
+  defp from_numpy(<<header_size::size(32)-little-unsigned, rest::binary>>, _, _) do
     do_numpy_to_tensor(rest, header_size)
   end
 
@@ -11564,6 +11549,43 @@ defmodule Nx do
         end
 
       IO.iodata_to_binary(data)
+    end
+  end
+
+  @doc """
+  Loads a `.npz` archive into a list of tensors.
+
+  An `.npz` file is a zipped, possibly compressed archive containing
+  multiple `.npy` files.
+
+  ## Examples
+
+      "archive.npz"
+      |> File.read!()
+      |> Nx.from_numpy_archive()
+      #=>
+      [
+        #Nx.Tensor<
+          s64[3]
+          [1, 2, 3]
+        >,
+        #Nx.Tensor<
+          f32[5]
+          [-1.0, -0.5, 0.0, 0.5, 1.0]
+        >
+      ]
+  """
+  @doc type: :conversion
+  def from_numpy_archive(archive) do
+    case :zip.unzip(archive, [:memory]) do
+      {:ok, files} ->
+        files
+        |> Enum.map(fn {_, data} -> from_numpy(data) end)
+
+      _ ->
+        raise ArgumentError,
+              "unable to parse NumPy archive, it may be corrupted" <>
+                " or invalid"
     end
   end
 
