@@ -130,7 +130,7 @@ We can easily convert it to a binary:
 binary = Nx.to_binary(tensor)
 ```
 
-A tensor of type s64 uses four bytes for each integer. The binary
+A tensor of type s64 uses eight bytes for each integer. The binary
 shows the individual bytes that make up the tensor, so you can see
 the integers `1..4` interspersed among the zeros that make
 up the tensor. If all of our data only uses positive numbers from
