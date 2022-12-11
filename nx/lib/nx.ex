@@ -11441,6 +11441,7 @@ defmodule Nx do
       >
   """
   @doc type: :conversion
+  @spec from_numpy(data :: binary) :: Nx.Tensor.t()
   def from_numpy(data)
 
   def from_numpy(<<"\x93NUMPY"::binary, major::size(8), minor::size(8), rest::binary>>) do
@@ -11565,22 +11566,36 @@ defmodule Nx do
       |> Nx.from_numpy_archive()
       #=>
       [
-        #Nx.Tensor<
-          s64[3]
-          [1, 2, 3]
-        >,
-        #Nx.Tensor<
-          f32[5]
-          [-1.0, -0.5, 0.0, 0.5, 1.0]
-        >
+        {"foo",
+         #Nx.Tensor<
+           s64[3]
+           [1, 2, 3]
+         >},
+        {"bar",
+         #Nx.Tensor<
+           f64[5]
+           [-1.0, -0.5, 0.0, 0.5, 1.0]
+         >}
       ]
   """
   @doc type: :conversion
+  @spec from_numpy_archive(data :: binary) :: [{name :: binary, Nx.Tensor.t()}]
   def from_numpy_archive(archive) do
     case :zip.unzip(archive, [:memory]) do
       {:ok, files} ->
         files
-        |> Enum.map(fn {_, data} -> from_numpy(data) end)
+        |> Enum.map(fn {name, data} ->
+          name = to_string(name)
+
+          name =
+            if String.ends_with?(name, ".npy") do
+              binary_part(name, 0, Kernel.byte_size(name) - 4)
+            else
+              name
+            end
+
+          {name, from_numpy(data)}
+        end)
 
       _ ->
         raise ArgumentError,
