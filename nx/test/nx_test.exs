@@ -2236,6 +2236,34 @@ defmodule NxTest do
     end
   end
 
+  describe "from_numpy/1" do
+    test "loads array" do
+      assert Nx.from_numpy(File.read!("test/fixtures/numpy/no_dims_int64.npy")) ==
+               Nx.tensor(123, type: {:s, 64})
+
+      assert Nx.from_numpy(File.read!("test/fixtures/numpy/1d_int64.npy")) ==
+               Nx.tensor([1, 2, 3, 4], type: {:s, 64})
+
+      assert Nx.from_numpy(File.read!("test/fixtures/numpy/2d_float32.npy")) ==
+               Nx.tensor([[1, 2], [3, 4], [5, 6]], type: {:f, 32})
+    end
+  end
+
+  describe "from_numpy_archive/1" do
+    test "loads archive" do
+      expected = [
+        {"foo", Nx.tensor([1, 2, 3], type: {:s, 64})},
+        {"bar", Nx.tensor([-1, 1], type: {:f, 32})},
+        {"a_longer_name", Nx.tensor([123], type: {:s, 64})}
+      ]
+
+      assert Nx.from_numpy_archive(File.read!("test/fixtures/numpy/archive.npz")) == expected
+
+      assert Nx.from_numpy_archive(File.read!("test/fixtures/numpy/archive_compressed.npz")) ==
+               expected
+    end
+  end
+
   describe "sigils" do
     test "evaluates to tensor" do
       import Nx
