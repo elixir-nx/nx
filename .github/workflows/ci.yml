@@ -61,6 +61,7 @@ jobs:
         working_directory: ["nx", "torchx"]
         elixir: ["1.14.2"]
         otp: ["24.0"]
+        target_platforms: [x64]
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}
@@ -78,6 +79,10 @@ jobs:
         with:
           otp-version: ${{ matrix.otp }}
           elixir-version: ${{ matrix.elixir }}
+      - name: Setup Virtual Studio
+        run: cmd /K "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" $env:target_platform
+        env:
+          target_platform: ${{ matrix.target_platforms }}
       - name: Retrieve dependencies cache
         env:
           cache-name: cache-mix-deps
