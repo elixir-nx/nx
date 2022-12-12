@@ -33,7 +33,11 @@ defmodule EXLA.Client do
               all_clients[client] ||
                 raise "unknown client #{inspect(client)} given as :preferred_clients"
 
-            Map.has_key?(supported_platforms, config[:platform] || :host)
+            platform = config[:platform] || :host
+
+            # If you install XLA with CUDA/ROCm but there are no devices,
+            # we don't want to pick them by default.
+            match?(%{^platform => devices} when devices >= 0, supported_platforms)
           end)
 
         unless client do
