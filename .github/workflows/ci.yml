@@ -75,14 +75,14 @@ jobs:
         working-directory: .
       - uses: actions/checkout@v2
       - uses: ilammy/msvc-dev-cmd@v1
+      - uses: microsoft/setup-msbuild@v1.1
+        with:
+          vs-version: '14.34'
+          msbuild-architecture: ${{ matrix.target_platforms }}
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{ matrix.otp }}
           elixir-version: ${{ matrix.elixir }}
-      - name: Setup Virtual Studio
-        run: cmd /K "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" $env:target_platform
-        env:
-          target_platform: ${{ matrix.target_platforms }}
       - name: Retrieve dependencies cache
         env:
           cache-name: cache-mix-deps
