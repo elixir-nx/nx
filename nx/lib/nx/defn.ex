@@ -333,28 +333,13 @@ defmodule Nx.Defn do
         raise "cannot invoke compiled function when there is a JIT compilation happening"
       end
 
-      {templates, flatten} = compile_flatten(args, templates, 1, [])
-
-      if templates != [] do
-        raise ArgumentError, """
-        cannot invoke compiled function because the given arguments do not match compiled arguments
-
-        Compiled with:
-
-        #{inspect(template_args)}
-
-        Got:
-
-        #{inspect(args)}
-        """
-      end
-
+      flatten = compile_flatten(args, templates, template_args, 1, [])
       [res] = compiled_fun.([flatten])
       res
     end)
   end
 
-  defp compile_flatten([arg | args], templates, pos, acc) do
+  defp compile_flatten([arg | args], templates, template_args, pos, acc) do
     {_, {templates, acc}} =
       Nx.LazyContainer.traverse(arg, {templates, acc}, fn
         arg_template, fun, {[template | templates], acc} ->
@@ -370,7 +355,11 @@ defmodule Nx.Defn do
 
             #{inspect(arg_template)}
 
-            Within argument:
+            Expected argument:
+
+            #{inspect(Enum.fetch!(template_args, pos - 1))}
+
+            Actual argument:
 
             #{inspect(arg)}
             """
@@ -379,10 +368,24 @@ defmodule Nx.Defn do
           {:ok, {templates, [fun | acc]}}
       end)
 
-    compile_flatten(args, templates, pos + 1, acc)
+    compile_flatten(args, templates, template_args, pos + 1, acc)
   end
 
-  defp compile_flatten([], templates, _pos, acc), do: {templates, Enum.reverse(acc)}
+  defp compile_flatten([], [], _template_args, _pos, acc), do: Enum.reverse(acc)
+
+  defp compile_flatten([], _templates, template_args, _pos, acc) do
+    raise ArgumentError, """
+    cannot invoke compiled function because the given arguments do not match compiled arguments
+
+    Compiled with:
+
+    #{inspect(template_args)}
+
+    Got:
+
+    #{inspect(Enum.reverse(acc))}
+    """
+  end
 
   @doc """
   Wraps an anonymous function with just-in-time compilation.
