@@ -3,7 +3,7 @@ defmodule Nx.LinAlg.SVD do
   @default_eps 1.1920929e-07
 
   defn svd(input_tensor, opts \\ []) do
-    opts = keyword!(opts, max_iter: 10_000, eps: @default_eps)
+    opts = keyword!(opts, max_iter: 100, eps: @default_eps)
     {m, n} = Nx.shape(input_tensor)
 
     tensor =
@@ -37,11 +37,11 @@ defmodule Nx.LinAlg.SVD do
   end
 
   defnp svd_tall_and_square(a, opts \\ []) do
-    {m, n} = Nx.shape(a)
+    {_m, n} = Nx.shape(a)
     {u, h} = qdwh(a, opts)
     # ensure H is hermitian
     h = (h + Nx.LinAlg.adjoint(h)) / 2
-    {s, v} = Nx.LinAlg.eigh(h, max_iter: opts[:max_iter], eps: opts[:eps])
+    {s, v} = Nx.LinAlg.eigh(h, max_iter: opts[:max_iter], eps: 1.0e-4)
 
     sign = Nx.select(s < 0, -1, 1)
     v = sign * v
@@ -103,7 +103,7 @@ defmodule Nx.LinAlg.SVD do
   end
 
   defn qdwh_use_qr(u, x, a, b, c) do
-    {m, n} = Nx.shape(x)
+    {m, _n} = Nx.shape(x)
     {_u_m, u_n} = Nx.shape(u)
 
     y = Nx.concatenate([Nx.sqrt(c) * u, Nx.eye(u_n)], axis: 0)
