@@ -895,12 +895,16 @@ defmodule Nx.BinaryBackend do
   end
 
   def is_nan(out, tensor) do
-    element_wise_unary_op(out, tensor, fn
+    element_wise_unary_op(out, tensor, &do_is_nan/1)
+  end
+
+  defp do_is_nan(x) do
+    case x do
       %Complex{re: :nan} -> 1
       %Complex{im: :nan} -> 1
       :nan -> 1
       _ -> 0
-    end)
+    end
   end
 
   @impl true
@@ -951,7 +955,11 @@ defmodule Nx.BinaryBackend do
   defp element_popcount(n, count), do: element_popcount(n &&& n - 1, count + 1)
 
   defp element_wise_unary_op(out, tensor, fun) do
-    data = binary_to_binary(to_binary(tensor), tensor.type, out.type, fun)
+    data =
+      tensor
+      |> to_binary()
+      |> binary_to_binary(tensor.type, out.type, fun)
+
     from_binary(out, data)
   end
 
@@ -1255,17 +1263,30 @@ defmodule Nx.BinaryBackend do
         %T{type: output_type, shape: output_shape} = out,
         %T{type: input_type} = tensor
       ) do
+    IO.inspect(tensor)
     data = to_binary(tensor)
     rank = tuple_size(output_shape)
     n = elem(output_shape, rank - 1)
 
-    l =
-      bin_batch_reduce(data, n * n, input_type, <<>>, fn matrix, acc ->
-        l = B.Matrix.cholesky(matrix, input_type, {n, n}, output_type)
-        acc <> l
-      end)
+    all_nans =
+      match_types [tensor.type] do
+        for <<match!(x, 0) <- data>>, reduce: true do
+          false -> false
+          acc -> acc and do_is_nan(read!(x, 0)) == 1
+        end
+      end
 
-    from_binary(out, l)
+    if all_nans do
+      as_type(out, tensor)
+    else
+      l =
+        bin_batch_reduce(data, n * n, input_type, <<>>, fn matrix, acc ->
+          l = B.Matrix.cholesky(matrix, input_type, {n, n}, output_type)
+          acc <> l
+        end)
+
+      from_binary(out, l)
+    end
   end
 
   @impl true
@@ -1307,43 +1328,6 @@ defmodule Nx.BinaryBackend do
       end)
 
     {from_binary(eigenvals_holder, eigenvals), from_binary(eigenvecs_holder, eigenvecs)}
-  end
-
-  @impl true
-  def svd(
-        {u_holder, %{type: output_type} = s_holder, v_holder},
-        %{type: input_type, shape: input_shape} = tensor,
-        opts
-      ) do
-    bin = to_binary(tensor)
-    rank = tuple_size(input_shape)
-    m = elem(input_shape, rank - 2)
-    n = elem(input_shape, rank - 1)
-
-    vt_rows = elem(v_holder.shape, rank - 2)
-    vt_cols = elem(v_holder.shape, rank - 1)
-
-    if m < n do
-      error_msg =
-        if rank == 2 do
-          "SVD not implemented for wide matrices (tensors with shape {m, n} where m < n)"
-        else
-          "SVD not implemented for batches of wide matrices (tensors with shape {..., m, n} where m < n)"
-        end
-
-      raise ArgumentError, error_msg
-    end
-
-    {u, s, v} =
-      bin_batch_reduce(bin, m * n, input_type, {<<>>, <<>>, <<>>}, fn matrix,
-                                                                      {u_acc, s_acc, v_acc} ->
-        {u, s, v} =
-          B.Matrix.svd(matrix, input_type, {m, n}, output_type, {vt_rows, vt_cols}, opts)
-
-        {u_acc <> u, s_acc <> s, v_acc <> v}
-      end)
-
-    {from_binary(u_holder, u), from_binary(s_holder, s), from_binary(v_holder, v)}
   end
 
   @impl true
