@@ -2089,6 +2089,10 @@ defmodule Nx.DefnTest do
       assert_raise ArgumentError,
                    ~r"cannot invoke compiled function because the given arguments do not match compiled arguments",
                    fn -> fun.(3, 4) end
+
+      assert_raise ArgumentError,
+                   ~r"cannot invoke compiled function because the given arguments do not match compiled arguments",
+                   fn -> fun.({3, 4, 5}, {6, 7, 8}) end
     end
 
     defn nested_compile(opts \\ []), do: nested_compile_transform(opts)

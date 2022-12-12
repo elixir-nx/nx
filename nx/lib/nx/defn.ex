@@ -366,6 +366,19 @@ defmodule Nx.Defn do
           end
 
           {:ok, {templates, [fun | acc]}}
+
+        _arg_template, _fun, {[], acc} ->
+          raise ArgumentError, """
+          cannot invoke compiled function because the given arguments do not match compiled arguments
+
+          Compiled with:
+
+          #{inspect(template_args)}
+
+          Got:
+
+          #{inspect(Enum.reverse(acc, [arg | args]))}
+          """
       end)
 
     compile_flatten(args, templates, template_args, pos + 1, acc)
