@@ -27,13 +27,14 @@ defmodule Nx.LinAlg.SVD do
 
     vt = Nx.LinAlg.adjoint(v)
 
-    case reduce_to_square do
-      true ->
-        {Nx.dot(q, u), s, vt}
+    {u, s, vt} =
+      case reduce_to_square do
+        true ->
+          {Nx.dot(q, u), s, vt}
 
-      false ->
-        {u, s, vt}
-    end
+        false ->
+          {u, s, vt}
+      end
   end
 
   defnp svd_tall_and_square(a, opts \\ []) do
@@ -61,6 +62,8 @@ defmodule Nx.LinAlg.SVD do
     # {m, n} = Nx.shape(x)
     alpha = Nx.sqrt(Nx.LinAlg.norm(x, ord: 1)) * Nx.sqrt(Nx.LinAlg.norm(x, ord: :inf))
     l = opts[:eps]
+    x = print_value(x, label: "x")
+    alpha = print_value(alpha, label: "alpha")
     u = x / alpha
     tol_l = 10 * opts[:eps] / 2
     tol_norm = Nx.cbrt(tol_l)
@@ -78,16 +81,18 @@ defmodule Nx.LinAlg.SVD do
         sqd = Nx.sqrt(1.0 + dd)
         a = sqd + Nx.sqrt(8.0 - 4.0 * dd + 8.0 * (2.0 - l2) / (l2 * sqd)) / 2
         a = Nx.real(a)
-        b = ((a - 1.0) ** 2) / 4.0
+        b = (a - 1.0) ** 2 / 4.0
         c = a + b - 1.0
 
-        l = l * (a + b * l2) / (1.0 + c * l2)
+        l = print_value(l * (a + b * l2) / (1.0 + c * l2), label: "l")
 
-        u = if c > 100 do
-          qdwh_use_qr(u, x, a, b, c)
-        else
-          qdwh_use_cholesky(u, x, a, b, c)
-        end
+        u =
+          if c > 100 do
+            qdwh_use_qr(u, x, a, b, c)
+          else
+            qdwh_use_cholesky(u, x, a, b, c)
+          end
+          |> print_value(label: "u")
 
         iterating_l = Nx.abs(1.0 - l) > tol_l
         iterating_u = Nx.LinAlg.norm(u - u_prev) > tol_norm
@@ -135,15 +140,18 @@ defmodule Nx.LinAlg.SVD do
         lower: true
       )
 
-    z = case Nx.type(zbar) do
-      {:c, _} -> Nx.conjugate(zbar)
-      _ -> zbar
-    end
+    z =
+      case Nx.type(zbar) do
+        {:c, _} -> Nx.conjugate(zbar)
+        _ -> zbar
+      end
 
     # z = Nx.LinAlg.solve(y, Nx.LinAlg.adjoint(z))
-      z = Nx.LinAlg.triangular_solve(Nx.LinAlg.adjoint(y), z, left_side: true, lower: false)
+    z =
+      Nx.LinAlg.triangular_solve(Nx.LinAlg.adjoint(y), z, left_side: true, lower: false)
       |> Nx.LinAlg.adjoint()
-      # # |> Nx.real()
+
+    # # |> Nx.real()
 
     e = b / c
 

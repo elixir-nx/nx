@@ -552,7 +552,9 @@ defmodule Nx.LinAlgTest do
       assert {%{type: output_type} = u, %{type: output_type} = s, %{type: output_type} = v} =
                Nx.LinAlg.svd(t, max_iter: 1000)
 
-      assert round(t, 2) == u |> Nx.multiply(s) |> Nx.dot(v) |> round(2)
+      s_matrix = 0 |> Nx.broadcast({4, 3}) |> Nx.put_diagonal(s)
+
+      assert round(t, 2) == u |> Nx.dot(s_matrix) |> Nx.dot(v) |> round(2)
 
       assert round(u, 3) ==
                Nx.tensor([
@@ -581,12 +583,14 @@ defmodule Nx.LinAlgTest do
       assert round(t, 2) == u |> Nx.multiply(s) |> Nx.dot(vt) |> round(2)
     end
 
-    test "finds the singular values of wide matrices" do
-      t = Nx.iota({3, 5})
-
-      assert {u, s, vt} = Nx.LinAlg.svd(t)
-
-      assert round(t, 2) == u |> Nx.multiply(s) |> Nx.dot(vt) |> round(2)
+    test "does not support wide matrices" do
+      # This is due to the fact that we don't provide solutions
+      # for "wide" matrix systems in triangular_solve
+      assert_raise ArgumentError,
+                   "SVD not implemented for wide matrices (tensors with shape {m, n} where m < n)",
+                   fn ->
+                     Nx.LinAlg.svd(Nx.iota({3, 5}))
+                   end
     end
 
     test "finds the singular values triangular matrices" do
@@ -704,16 +708,25 @@ defmodule Nx.LinAlgTest do
   end
 
   defp round(tensor, places) do
-    round_real = fn x -> Float.round(Complex.real(Nx.to_number(x)), places) end
-    round_imag = fn x -> Float.round(Complex.imag(Nx.to_number(x)), places) end
+    round_real = fn x -> Float.round(Complex.real(x), places) end
+    round_imag = fn x -> Float.round(Complex.imag(x), places) end
 
     Nx.map(tensor, fn x ->
-      if is_float(Nx.to_number(x)) do
-        # Float case
-        Float.round(Nx.to_number(x), places)
-      else
-        # Complex case
-        Complex.new(round_real.(x), round_imag.(x))
+      x = Nx.to_number(x)
+
+      cond do
+        is_integer(x) ->
+          x
+
+        is_float(x) ->
+          Float.round(x, places)
+
+        x in [:nan, :neg_infinity, :infinity] ->
+          x
+
+        true ->
+          # Complex case
+          Complex.new(round_real.(x), round_imag.(x))
       end
     end)
   end

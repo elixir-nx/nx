@@ -506,6 +506,13 @@ defmodule Nx.Shared do
     end
   end
 
+  defp ensure_optional_compatible!(left, right) when tuple_size(left) == tuple_size(right) do
+    [Tuple.to_list(left), Tuple.to_list(right)]
+    |> Enum.zip_with(fn [l, r] -> ensure_optional_compatible!(l, r) end)
+
+    left
+  end
+
   defp ensure_optional_compatible!(
          %{shape: shape, type: type, names: names} = left,
          %{shape: shape, type: type, names: names}

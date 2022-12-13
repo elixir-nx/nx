@@ -150,8 +150,17 @@ defmodule Nx.BinaryBackend do
   @impl true
   def from_binary(t, binary, _backend_options), do: from_binary(t, binary)
 
-  defp from_binary(t, binary) when is_binary(binary), do: %{t | data: %B{state: binary}}
-  defp from_binary(t, other), do: %{t | data: %B{state: IO.iodata_to_binary(other)}}
+  defp from_binary(%{type: {_, bitsize}, shape: shape} = t, binary) when is_binary(binary) do
+    expected_size = Tuple.product(shape) * div(bitsize, 8)
+
+    if byte_size(binary) != expected_size do
+      raise "unexpected size for tensor data"
+    end
+
+    %{t | data: %B{state: binary}}
+  end
+
+  defp from_binary(t, other), do: from_binary(t, IO.iodata_to_binary(other))
 
   @impl true
   def to_binary(%{type: {_backend_options, size}} = t, limit) do
@@ -615,9 +624,17 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def select(out, %{shape: {}} = pred, on_true, on_false) do
+    dbg()
+
+    on_false =
+      on_false |> broadcast_data(out.shape) |> binary_to_binary(on_false.type, out.type, & &1)
+
+    on_true =
+      on_true |> broadcast_data(out.shape) |> binary_to_binary(on_true.type, out.type, & &1)
+
     if scalar_to_number(pred) == 0,
-      do: from_binary(out, broadcast_data(on_false, out.shape)),
-      else: from_binary(out, broadcast_data(on_true, out.shape))
+      do: from_binary(out, on_false),
+      else: from_binary(out, on_true)
   end
 
   def select(%{shape: shape, type: type} = out, pred, on_true, on_false) do
@@ -686,6 +703,8 @@ defmodule Nx.BinaryBackend do
   end
 
   defp element_wise_bin_op(%{type: type} = out, left, %{shape: {}} = right, fun) do
+    dbg({right}, structs: false)
+
     number = scalar_to_number(right)
 
     data =
@@ -895,16 +914,12 @@ defmodule Nx.BinaryBackend do
   end
 
   def is_nan(out, tensor) do
-    element_wise_unary_op(out, tensor, &do_is_nan/1)
-  end
-
-  defp do_is_nan(x) do
-    case x do
+    element_wise_unary_op(out, tensor, fn
       %Complex{re: :nan} -> 1
       %Complex{im: :nan} -> 1
       :nan -> 1
       _ -> 0
-    end
+    end)
   end
 
   @impl true
@@ -955,11 +970,7 @@ defmodule Nx.BinaryBackend do
   defp element_popcount(n, count), do: element_popcount(n &&& n - 1, count + 1)
 
   defp element_wise_unary_op(out, tensor, fun) do
-    data =
-      tensor
-      |> to_binary()
-      |> binary_to_binary(tensor.type, out.type, fun)
-
+    data = binary_to_binary(to_binary(tensor), tensor.type, out.type, fun)
     from_binary(out, data)
   end
 
@@ -1263,30 +1274,17 @@ defmodule Nx.BinaryBackend do
         %T{type: output_type, shape: output_shape} = out,
         %T{type: input_type} = tensor
       ) do
-    IO.inspect(tensor)
     data = to_binary(tensor)
     rank = tuple_size(output_shape)
     n = elem(output_shape, rank - 1)
 
-    all_nans =
-      match_types [tensor.type] do
-        for <<match!(x, 0) <- data>>, reduce: true do
-          false -> false
-          acc -> acc and do_is_nan(read!(x, 0)) == 1
-        end
-      end
+    l =
+      bin_batch_reduce(data, n * n, input_type, <<>>, fn matrix, acc ->
+        l = B.Matrix.cholesky(matrix, input_type, {n, n}, output_type)
+        acc <> l
+      end)
 
-    if all_nans do
-      as_type(out, tensor)
-    else
-      l =
-        bin_batch_reduce(data, n * n, input_type, <<>>, fn matrix, acc ->
-          l = B.Matrix.cholesky(matrix, input_type, {n, n}, output_type)
-          acc <> l
-        end)
-
-      from_binary(out, l)
-    end
+    from_binary(out, l)
   end
 
   @impl true
@@ -1455,6 +1453,8 @@ defmodule Nx.BinaryBackend do
         res = if acc == :first, do: val, else: Kernel.max(acc, val)
         {res, res}
       end)
+
+    dbg(data)
 
     from_binary(out, data)
   end
@@ -2414,7 +2414,7 @@ defmodule Nx.BinaryBackend do
 
   ## Conversion helpers
 
-  defp scalar_to_number(n) when is_number(n), do: n
+  defp scalar_to_number(n) when is_number(n) or n in [:nan, :neg_infinity, :infinity], do: n
   defp scalar_to_number(%Complex{} = n), do: n
   defp scalar_to_number(t), do: binary_to_number(to_binary(t), t.type)
 
