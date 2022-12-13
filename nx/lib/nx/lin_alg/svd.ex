@@ -27,14 +27,13 @@ defmodule Nx.LinAlg.SVD do
 
     vt = Nx.LinAlg.adjoint(v)
 
-    {u, s, vt} =
-      case reduce_to_square do
-        true ->
-          {Nx.dot(q, u), s, vt}
+    case reduce_to_square do
+      true ->
+        {Nx.dot(q, u), s, vt}
 
-        false ->
-          {u, s, vt}
-      end
+      false ->
+        {u, s, vt}
+    end
   end
 
   defnp svd_tall_and_square(a, opts \\ []) do
@@ -62,10 +61,8 @@ defmodule Nx.LinAlg.SVD do
     # {m, n} = Nx.shape(x)
     alpha = Nx.sqrt(Nx.LinAlg.norm(x, ord: 1)) * Nx.sqrt(Nx.LinAlg.norm(x, ord: :inf))
     l = opts[:eps]
-    x = print_value(x, label: "x")
-    alpha = print_value(alpha, label: "alpha")
     u = x / alpha
-    tol_l = 10 * opts[:eps] / 2
+    tol_l = 5 * opts[:eps]
     tol_norm = Nx.cbrt(tol_l)
 
     one_u8 = Nx.tensor(1, type: :u8)
@@ -77,6 +74,7 @@ defmodule Nx.LinAlg.SVD do
         u_prev = u
 
         l2 = l ** 2
+        l2 = Nx.select(l2 < opts[:eps], opts[:eps], l2)
         dd = Nx.cbrt(4.0 * (1.0 / l2 - 1.0) / l2)
         sqd = Nx.sqrt(1.0 + dd)
         a = sqd + Nx.sqrt(8.0 - 4.0 * dd + 8.0 * (2.0 - l2) / (l2 * sqd)) / 2
@@ -84,7 +82,7 @@ defmodule Nx.LinAlg.SVD do
         b = (a - 1.0) ** 2 / 4.0
         c = a + b - 1.0
 
-        l = print_value(l * (a + b * l2) / (1.0 + c * l2), label: "l")
+        l = l * (a + b * l2) / (1.0 + c * l2)
 
         u =
           if c > 100 do
@@ -92,7 +90,6 @@ defmodule Nx.LinAlg.SVD do
           else
             qdwh_use_cholesky(u, x, a, b, c)
           end
-          |> print_value(label: "u")
 
         iterating_l = Nx.abs(1.0 - l) > tol_l
         iterating_u = Nx.LinAlg.norm(u - u_prev) > tol_norm

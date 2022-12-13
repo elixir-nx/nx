@@ -624,8 +624,6 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def select(out, %{shape: {}} = pred, on_true, on_false) do
-    dbg()
-
     on_false =
       on_false |> broadcast_data(out.shape) |> binary_to_binary(on_false.type, out.type, & &1)
 
@@ -703,8 +701,6 @@ defmodule Nx.BinaryBackend do
   end
 
   defp element_wise_bin_op(%{type: type} = out, left, %{shape: {}} = right, fun) do
-    dbg({right}, structs: false)
-
     number = scalar_to_number(right)
 
     data =
@@ -1453,8 +1449,6 @@ defmodule Nx.BinaryBackend do
         res = if acc == :first, do: val, else: Kernel.max(acc, val)
         {res, res}
       end)
-
-    dbg(data)
 
     from_binary(out, data)
   end

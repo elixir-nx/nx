@@ -580,7 +580,7 @@ defmodule Nx.LinAlgTest do
 
       assert {u, s, vt} = Nx.LinAlg.svd(t)
 
-      assert round(t, 2) == u |> Nx.multiply(s) |> Nx.dot(vt) |> round(2)
+      assert round(Nx.as_type(t, :f32), 2) == u |> Nx.multiply(s) |> Nx.dot(vt) |> round(2)
     end
 
     test "does not support wide matrices" do
@@ -597,25 +597,21 @@ defmodule Nx.LinAlgTest do
       t = Nx.tensor([[1.0, 2.0, 3.0], [0.0, 4.0, 0.0], [0.0, 0.0, 9.0]])
 
       assert {%{type: output_type} = u, %{type: output_type} = s, %{type: output_type} = v} =
-               Nx.LinAlg.svd(t)
-
-      zero_row = List.duplicate(0, 3)
+               Nx.LinAlg.svd(t, eps: 1.0e-10)
 
       # turn s into a {4, 3} tensor
       s_matrix =
-        s
-        |> Nx.to_flat_list()
-        |> Enum.with_index()
-        |> Enum.map(fn {x, idx} -> List.replace_at(zero_row, idx, x) end)
-        |> Nx.tensor()
+        0
+        |> Nx.broadcast({3, 3})
+        |> Nx.put_diagonal(s)
 
-      assert round(t, 2) == u |> Nx.dot(s_matrix) |> Nx.dot(v) |> round(2)
+      assert round(t, 1) == u |> Nx.dot(s_matrix) |> Nx.dot(v) |> round(1)
 
       assert round(u, 3) ==
                Nx.tensor([
-                 [-0.335, 0.408, -0.849],
-                 [-0.036, 0.895, 0.445],
-                 [-0.941, -0.18, 0.286]
+                 [0.336, -0.407, -0.849],
+                 [0.037, -0.895, 0.444],
+                 [0.941, 0.181, 0.286]
                ])
                |> round(3)
 
@@ -624,9 +620,9 @@ defmodule Nx.LinAlgTest do
       assert Nx.tensor([9.52, 4.433, 0.853]) |> round(3) == round(s, 3)
 
       assert Nx.tensor([
-               [-0.035, -0.086, -0.996],
-               [0.092, 0.992, -0.089],
-               [-0.995, 0.095, 0.027]
+               [0.035, 0.0869, 0.996],
+               [-0.091, -0.992, 0.09],
+               [-0.995, 0.094, 0.027]
              ])
              |> round(3) == round(v, 3)
     end

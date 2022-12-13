@@ -348,7 +348,7 @@ defmodule Nx.LinAlg do
   end
 
   defp norm_integer(%{shape: {_, _}} = t, -2, _opts) do
-    {_u, s, _v} = svd(t)
+    {_u, s, _v} = Nx.LinAlg.svd(t)
     Nx.reduce_min(s)
   end
 
@@ -1076,7 +1076,7 @@ defmodule Nx.LinAlg do
         [
           [1.0, 0.0, 0.0],
           [0.0, 1.0, 0.0],
-          [0.0, 0.0, 1.0]
+          [0.0, 0.0, -1.0]
         ]
       >
       iex> s
@@ -1090,7 +1090,7 @@ defmodule Nx.LinAlg do
         [
           [1.0, 0.0, 0.0],
           [0.0, 1.0, 0.0],
-          [0.0, 0.0, -1.0]
+          [0.0, 0.0, 1.0]
         ]
       >
 
