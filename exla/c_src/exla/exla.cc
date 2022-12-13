@@ -2128,7 +2128,7 @@ ERL_NIF_TERM transfer_from_outfeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
       return exla::nif::error(env, statusor.status().error_message().c_str());
     }
 
-    ERL_NIF_TERM msg = std::move(statusor.ValueOrDie());
+    ERL_NIF_TERM msg = std::move(statusor.value());
 
     if(!enif_send(env, &pid, penv, enif_make_tuple(penv, 2, ref, msg))) {
       enif_clear_env(penv);
