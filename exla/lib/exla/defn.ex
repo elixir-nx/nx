@@ -826,18 +826,10 @@ defmodule EXLA.Defn do
     EXLA.Op.tuple(state.builder, [q, r])
   end
 
-  defp to_operator(
-         :svd,
-         [{%{type: type}, %{type: type}, %{type: type}}, tensor, _opts],
-         _ans,
-         state
-       ) do
-    {u, s, vt} = EXLA.Op.svd(to_type(tensor, type), state.precision)
-    EXLA.Op.tuple(state.builder, [u, s, vt])
-  end
+  defp to_operator(:eigh, [{%{type: type}, %{type: type}}, tensor, opts], _ans, state) do
+    {eigvec, eigval} =
+      EXLA.Op.eigh(to_type(tensor, type), 1, opts[:eps] || 1.0e-4, opts[:max_iter] || 100)
 
-  defp to_operator(:eigh, [out, tensor, opts], _ans, state) do
-    {eigvec, eigval} = EXLA.Op.eigh(tensor, 1, opts[:eps] || 1.0e-6, opts[:max_iter] || 10_000)
     EXLA.Op.tuple(state.builder, [eigval, eigvec])
   end
 

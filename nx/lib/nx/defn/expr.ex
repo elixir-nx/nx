@@ -217,8 +217,23 @@ defmodule Nx.Defn.Expr do
   def optional(name, args, fun) do
     {args, opts} = Enum.split_while(args, &(not is_list(&1)))
     params = Enum.with_index(args, &parameter/2)
-    %{data: %{context: context}} = res = apply(fun, params ++ opts)
-    expr(res, context, :optional, [expr(res, context, name, args), res])
+    res = apply(fun, params ++ opts)
+
+    {context, out, out_fn} =
+      case res do
+        %{data: %{context: context}} ->
+          {context, res, & &1}
+
+        tuple when is_tuple(tuple) ->
+          IO.inspect(tuple)
+          %{data: %{context: context}} = elem(tuple, 0)
+          out = %T{names: [], shape: {}, type: {:tuple, tuple_size(tuple)}}
+          {context, out, &tuple(&1, Tuple.to_list(tuple))}
+      end
+
+    expr = expr(out, context, :optional, [expr(out, context, name, args), res])
+
+    out_fn.(expr)
   end
 
   ## Nx.Defn AST callbacks

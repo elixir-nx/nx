@@ -1874,59 +1874,6 @@ ERL_NIF_TERM qr(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, enif_make_tuple2(env, q_term, r_term));
 }
 
-ERL_NIF_TERM svd(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 2) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  xla::XlaOp* operand;
-  int config_int;
-
-  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
-    return exla::nif::error(env, "Unable to get operand.");
-  }
-  if (!exla::nif::get(env, argv[1], &config_int)) {
-    return exla::nif::error(env, "Unable to get precision config flag.");
-  }
-
-  xla::PrecisionConfig::Precision precision;
-  switch (config_int) {
-    case 0:
-      precision = xla::PrecisionConfig::DEFAULT;
-      break;
-    case 1:
-      precision = xla::PrecisionConfig::HIGH;
-      break;
-    case 2:
-      precision = xla::PrecisionConfig::HIGHEST;
-      break;
-    default:
-      LOG(ERROR) << "Invalid precision configuration";
-      return exla::nif::error(env, "Invalid precision configuration");
-  }
-
-  xla::SVDResult svd_result = xla::SVD(*operand, /*max_iter=*/100, /*epsilon=*/1.0e-6, precision);
-
-  xla::XlaOp v = svd_result.v;
-  EXLA_ASSIGN_OR_RETURN_NIF(xla::Shape v_shape,
-                            v.builder()->GetShape(v), env);
-  size_t v_num_axes = v_shape.rank();
-  std::vector<exla::int64> last_axes_permutation(v_num_axes);
-  for(size_t i = 0; i < v_num_axes; i++) {
-    last_axes_permutation[i] = i;
-  }
-  last_axes_permutation[v_num_axes - 1] = v_num_axes - 2;
-  last_axes_permutation[v_num_axes - 2] = v_num_axes - 1;
-
-  xla::XlaOp vt_op = xla::Transpose(v, last_axes_permutation);
-
-  ERL_NIF_TERM u = exla::nif::make<xla::XlaOp>(env, svd_result.u);
-  ERL_NIF_TERM d = exla::nif::make<xla::XlaOp>(env, svd_result.d);
-  ERL_NIF_TERM vt = exla::nif::make<xla::XlaOp>(env, vt_op);
-
-  return exla::nif::ok(env, enif_make_tuple3(env, u, d, vt));
-}
-
 ERL_NIF_TERM triangular_solve(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 6) {
     return exla::nif::error(env, "Bad argument count.");
@@ -2510,7 +2457,6 @@ static ErlNifFunc exla_funcs[] = {
   {"lu", 1, lu},
   {"qr", 2, qr},
   {"triangular_solve", 6, triangular_solve},
-  {"svd", 2, svd},
   // Infeed/Outfeed
   {"infeed", 2, infeed},
   {"outfeed", 3, outfeed},

@@ -216,7 +216,7 @@ defmodule EXLA.NIF do
 
   def qr(_operand, _full_matrices), do: :erlang.nif_error(:undef)
 
-  def svd(_a, _precision_config), do: :erlang.nif_error(:undef)
+  # def svd(_a, _precision_config), do: :erlang.nif_error(:undef)
 
   def triangular_solve(_a, _b, _left_side, _lower, _unit_diagonal, _transpose_a),
     do: :erlang.nif_error(:undef)
