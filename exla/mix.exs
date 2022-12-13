@@ -143,7 +143,6 @@ defmodule EXLA.MixProject do
     if cached? do
       Mix.shell().info("Using libexla.so from #{cached_so}")
       File.cp!(cached_so, "cache/libexla.so")
-      Mix.Tasks.Compile.ElixirMake.run([])
     end
 
     result = Mix.Tasks.Compile.ElixirMake.run([])
