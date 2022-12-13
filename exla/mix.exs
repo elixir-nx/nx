@@ -137,7 +137,7 @@ defmodule EXLA.MixProject do
     cache_key =
       "elixir-#{System.version()}-erts-#{:erlang.system_info(:version)}-xla-#{Application.spec(:xla, :vsn)}-exla-#{@version}-#{md5}"
 
-    cached_so = Path.join([xla_cache_dir(), cache_key, "libexla.so"])
+    cached_so = Path.join([xla_cache_dir(), "exla", cache_key, "libexla.so"])
     cached? = File.exists?(cached_so)
 
     if cached? do
