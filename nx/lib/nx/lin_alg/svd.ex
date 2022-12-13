@@ -74,6 +74,9 @@ defmodule Nx.LinAlg.SVD do
         u_prev = u
 
         l2 = l ** 2
+        # if l2 is too small, dd will tend to infinity.
+        # keeping it at the `eps` noise floor helps
+        # avoid this problem.
         l2 = Nx.select(l2 < opts[:eps], opts[:eps], l2)
         dd = Nx.cbrt(4.0 * (1.0 / l2 - 1.0) / l2)
         sqd = Nx.sqrt(1.0 + dd)

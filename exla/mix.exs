@@ -52,8 +52,8 @@ defmodule EXLA.MixProject do
 
   defp deps do
     [
-      {:nx, "~> 0.4.1"},
-      # {:nx, path: "../nx"},
+      # {:nx, "~> 0.4.1"},
+      {:nx, path: "../nx"},
       {:telemetry, "~> 0.4.0 or ~> 1.0"},
       {:xla, "~> 0.4.0", runtime: false},
       {:elixir_make, "~> 0.6", runtime: false},
