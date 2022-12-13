@@ -61,7 +61,6 @@ jobs:
         working_directory: ["nx", "torchx"]
         elixir: ["1.14.2"]
         otp: ["24.0"]
-        target_platforms: [x64]
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}
@@ -75,10 +74,6 @@ jobs:
         working-directory: .
       - uses: actions/checkout@v2
       - uses: ilammy/msvc-dev-cmd@v1
-      - uses: microsoft/setup-msbuild@v1.1
-        with:
-          vs-version: '14.34'
-          msbuild-architecture: ${{ matrix.target_platforms }}
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{ matrix.otp }}
