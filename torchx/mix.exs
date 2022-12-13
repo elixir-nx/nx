@@ -2,7 +2,7 @@ defmodule Torchx.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx"
-  @version "0.4.0"
+  @version "0.4.1"
 
   @valid_targets ["cpu", "cu102", "cu113", "cu116"]
 
@@ -10,17 +10,15 @@ defmodule Torchx.MixProject do
   @libtorch_target System.get_env("LIBTORCH_TARGET", "cpu")
 
   @libtorch_base "libtorch"
-  @libtorch_dir System.get_env(
-                  "LIBTORCH_DIR",
+  @libtorch_dir System.get_env("LIBTORCH_DIR") ||
                   Path.join(__DIR__, "cache/libtorch-#{@libtorch_version}-#{@libtorch_target}")
-                )
   @libtorch_compilers [:torchx, :elixir_make]
 
   def project do
     [
       app: :torchx,
       version: @version,
-      elixir: "~> 1.14",
+      elixir: "~> 1.13",
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       docs: docs(),
@@ -56,8 +54,8 @@ defmodule Torchx.MixProject do
 
   defp deps do
     [
-      # {:nx, "~> 0.4.0"},
-      {:nx, path: "../nx"},
+      {:nx, "~> 0.4.1"},
+      # {:nx, path: "../nx"},
       {:dll_loader_helper, "~> 0.1.0"},
       {:elixir_make, "~> 0.6"},
       {:ex_doc, "~> 0.29.0", only: :docs}
@@ -100,23 +98,30 @@ defmodule Torchx.MixProject do
   end
 
   defp download_and_unzip(args) do
-    libtorch_cache = @libtorch_dir
-    cache_dir = Path.dirname(libtorch_cache)
+    libtorch_dir = @libtorch_dir
+
+    cache_dir =
+      if dir = System.get_env("LIBTORCH_CACHE") do
+        Path.expand(dir)
+      else
+        :filename.basedir(:user_cache, "libtorch")
+      end
 
     if "--force" in args do
-      File.rm_rf!(cache_dir)
+      File.rm_rf(libtorch_dir)
+      File.rm_rf(cache_dir)
     end
 
-    if File.dir?(libtorch_cache) do
+    if File.dir?(libtorch_dir) do
       {:ok, []}
     else
-      download_and_unzip(cache_dir, libtorch_cache)
+      download_and_unzip(cache_dir, libtorch_dir)
     end
   end
 
-  defp download_and_unzip(cache_dir, libtorch_cache) do
+  defp download_and_unzip(cache_dir, libtorch_dir) do
     File.mkdir_p!(cache_dir)
-    libtorch_zip = libtorch_cache <> ".zip"
+    libtorch_zip = Path.join(cache_dir, "libtorch-#{@libtorch_version}-#{@libtorch_target}.zip")
 
     unless File.exists?(libtorch_zip) do
       # Download libtorch
@@ -159,12 +164,17 @@ defmodule Torchx.MixProject do
     end
 
     # Unpack libtorch and move to the target cache dir
+    parent_libtorch_dir = Path.dirname(libtorch_dir)
+    File.mkdir_p!(parent_libtorch_dir)
 
+    # Extract to the parent directory (it will be inside the libtorch directory)
     {:ok, _} =
-      libtorch_zip |> String.to_charlist() |> :zip.unzip(cwd: String.to_charlist(cache_dir))
+      libtorch_zip
+      |> String.to_charlist()
+      |> :zip.unzip(cwd: String.to_charlist(parent_libtorch_dir))
 
-    # Keep libtorch cache scoped by version and target
-    File.rename!(Path.join(cache_dir, "libtorch"), libtorch_cache)
+    # And then rename
+    File.rename!(Path.join(parent_libtorch_dir, "libtorch"), libtorch_dir)
 
     :ok
   end

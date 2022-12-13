@@ -40,8 +40,6 @@ defprotocol Nx.Container do
   > inside `defn` during compilation time.
   """
 
-  @fallback_to_any true
-
   @doc """
   Traverses non-recursively tensors in a data structure with `acc` and `fun`.
 
@@ -174,16 +172,10 @@ defimpl Nx.Container, for: Any do
   end
 
   def traverse(data, _acc, _fun) do
-    raise Protocol.UndefinedError,
-      protocol: @protocol,
-      value: data,
-      description: "check the docs for Nx.Container for more information"
+    raise Protocol.UndefinedError, protocol: @protocol, value: data
   end
 
   def reduce(data, _acc, _fun) do
-    raise Protocol.UndefinedError,
-      protocol: @protocol,
-      value: data,
-      description: "check the docs for Nx.Container for more information"
+    raise Protocol.UndefinedError, protocol: @protocol, value: data
   end
 end

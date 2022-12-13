@@ -127,7 +127,9 @@ defmodule Nx.Serving do
 
   In the example, we pushed a batch of 2 and eventually got a reply.
   The process will wait up for requests from other processes, up to
-  100 milliseconds or until it gets 10 entries.
+  100 milliseconds or until it gets 10 entries. Then it merges all
+  batches together and, once the result is computed, it slices and
+  distributed those responses to each caller.
 
   If there is any `client_preprocessing` function, it will be executed
   before the batch is sent to the server. If there is any `client_postprocessing`
@@ -214,6 +216,8 @@ defmodule Nx.Serving do
           client_postprocessing: client_postprocessing()
         }
 
+  @axis 0
+
   @doc """
   The callback used to initialize the serving.
 
@@ -223,7 +227,7 @@ defmodule Nx.Serving do
 
   It must return `{:ok, state}`, where the `state` can be any term.
   """
-  @callback init(:inline | :process, arg :: term()) :: {:ok, state :: term()}
+  @callback init(type :: :inline | :process, arg :: term()) :: {:ok, state :: term()}
 
   @doc """
   Receives a batch and returns a function to execute the batch.
@@ -304,9 +308,10 @@ defmodule Nx.Serving do
     } = serving
 
     {:ok, state} = handle_init(module, :inline, arg)
-    {batch, info} = handle_preprocessing(preprocessing, input)
+    {%{size: size} = batch, info} = handle_preprocessing(preprocessing, input)
     {:execute, function, _} = handle_batch(module, batch, state)
     {output, metadata} = handle_executed(module, function.())
+    output = Nx.Defn.Composite.traverse(output, &Nx.slice_along_axis(&1, 0, size, axis: @axis))
     handle_postprocessing(postprocessing, output, metadata, info)
   end
 
@@ -412,8 +417,6 @@ defmodule Nx.Serving do
     {tensor, metadata} = receive_batched(batch.size, ref, [], nil, name, input)
     handle_postprocessing(postprocessing, tensor, metadata, info)
   end
-
-  @axis 0
 
   defp receive_batched(0, ref, acc, {template, metadata}, _name, _input) do
     Process.demonitor(ref, [:flush])

@@ -150,14 +150,20 @@ defmodule Nx.BinaryBackend do
   @impl true
   def from_binary(t, binary, _backend_options), do: from_binary(t, binary)
 
-  defp from_binary(%{type: {_, bitsize}, shape: shape} = t, binary) when is_binary(binary) do
-    expected_size = Tuple.product(shape) * div(bitsize, 8)
+  if Application.compile_env(:nx, :verify_binary_size) do
+    defp from_binary(%{type: {_, bitsize}, shape: shape} = t, binary) when is_binary(binary) do
+      actual = byte_size(binary)
+      expected = Tuple.product(shape) * div(bitsize, 8)
 
-    if byte_size(binary) != expected_size do
-      raise "unexpected size for tensor data"
+      unless actual == expected do
+        raise ArgumentError,
+              "unexpected size for tensor data, expected #{expected} bytes got: #{actual} bytes"
+      end
+
+      %{t | data: %B{state: binary}}
     end
-
-    %{t | data: %B{state: binary}}
+  else
+    defp from_binary(t, binary) when is_binary(binary), do: %{t | data: %B{state: binary}}
   end
 
   defp from_binary(t, other), do: from_binary(t, IO.iodata_to_binary(other))
@@ -346,7 +352,7 @@ defmodule Nx.BinaryBackend do
   # as we transpose and build the rest.
   @impl true
   def pad(out, t, pad_value, padding_config) do
-    pad_value = to_binary(as_type(out, pad_value))
+    pad_value = %{pad_value | type: out.type} |> as_type(pad_value) |> to_binary()
 
     case t.shape do
       {} ->

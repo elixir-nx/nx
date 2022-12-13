@@ -4,9 +4,17 @@ defmodule EXLA do
 
   It supports just-in-time (JIT) compilation to GPU (both CUDA and ROCm) and TPUs.
 
+  ## XLA binaries
+
+  EXLA relies on the [XLA](https://github.com/elixir-nx/xla) package to
+  provide the necessary XLA binaries. Whenever possible it tries to download
+  precompiled builds, but you may need to build from source if there is no
+  version matching your target environment. For more details, including
+  GPU/TPU support see [the usage section](https://github.com/elixir-nx/xla#usage).
+
   ## Configuration
 
-  ### As a backend
+  ### As a backend (recommended)
 
   EXLA ships with a backend to store tensors and run computations on.
   Generally speaking, the backend is enabled globally in your `config/config.exs`
@@ -30,11 +38,6 @@ defmodule EXLA do
   `EXLA.Backend`. You can use functions such as `Nx.backend_transfer/2` to
   explicitly transfer tensors.
 
-  Note that the `EXLA.Backend` is asynchronous: operations on its tensors
-  *may* return immediately, before the tensor data is available. The backend
-  will then block only when trying to read the data or when passing it to
-  another operation.
-
   EXLA will pick an available client to allocate and compute tensors, in this
   order: `:cuda`, `:rocm`, `:tpu`, and `:host` (CPU). See the "Clients" section
   below for more information.
@@ -46,7 +49,7 @@ defmodule EXLA do
   `ELIXIR_ERL_OPTIONS="+sssdio 128"` is also required on more complex operations
   to increase CUDA's compiler stack size.
 
-  ### As a compiler
+  ### As a compiler (optional)
 
   You can also use EXLA to compile your numerical definitions. One option is to
   do so globally in your configuration:

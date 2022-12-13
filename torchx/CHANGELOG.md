@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.1 (2022-12-07)
+
+### Enhancements
+
+  * Require Nx ~> 0.4.1
+
 ## v0.4.0 (2022-10-25)
 
 ### Enhancements

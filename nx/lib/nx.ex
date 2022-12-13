@@ -58,7 +58,7 @@ defmodule Nx do
 
   The types are tracked as tuples:
 
-      iex> Nx.tensor([1, 2, 3], type: :f32)
+      iex> Nx.tensor([1, 2, 3], type: {:f, 32})
       #Nx.Tensor<
         f32[3]
         [1.0, 2.0, 3.0]
@@ -375,11 +375,25 @@ defmodule Nx do
 
       # config/runtime.exs
       import Config
-      config :nx, default_backend: Lib.CustomBackend
+      config :nx, default_backend: EXLA.Backend
 
-  Or by calling `Nx.default_backend/1`:
+  In your notebooks and on `Mix.install/2`, you might:
 
-      Nx.default_backend({Lib.CustomBackend, device: :cuda})
+      Mix.install(
+        [
+          {:nx, ">= 0.0.0"}
+        ],
+        config: [nx: [default_backend: EXLA.Backend]]
+      )
+
+  Or by calling `Nx.global_default_backend/1` (less preferrable):
+
+      Nx.global_default_backend(EXLA.Backend)
+
+  To pass options to the backend, replacing `EXLA.Backend` by
+  `{EXLA.Backend, client: :cuda}` or similar. See the documentation
+  for [EXLA](https://hexdocs.pm/exla) and [Torchx](https://hexdocs.pm/torchx)
+  for installation and GPU support.
 
   To implement your own backend, check the `Nx.Tensor` behaviour.
   """
@@ -425,7 +439,7 @@ defmodule Nx do
   The argument is either a number, which means the tensor is a scalar
   (zero-dimensions), a list of those (the tensor is a vector) or
   a list of n-lists of those, leading to n-dimensional tensors.
-  The tensor will be allocated in `Nx.default_backend/1`, unless the
+  The tensor will be allocated in `Nx.default_backend/0`, unless the
   `:backend` option is given, which overrides the default one.
 
   ## Examples
@@ -3375,23 +3389,36 @@ defmodule Nx do
   @backend_key {Nx, :default_backend}
 
   @doc """
-  Sets the current process default backend to `backend` with the given `opts`.
+  Sets the given `backend` as default in the **current process**.
 
   The default backend is stored only in the process dictionary.
   This means if you start a separate process, such as `Task`,
   the default backend must be set on the new process too.
 
-  This function is mostly used for scripting and testing. In your
-  applications, you typically set the backend in your config files:
+  This function is mostly used for scripting and testing.
+  In your applications, you must prefer to set the backend
+  in your config files:
 
-      config :nx, :default_backend, {Lib.CustomBackend, device: :cuda}
+      config :nx, :default_backend, {EXLA.Backend, device: :cuda}
+
+  In your notebooks and on `Mix.install/2`, you might:
+
+      Mix.install(
+        [
+          {:nx, ">= 0.0.0"}
+        ],
+        config: [nx: [default_backend: {EXLA.Backend, device: :cuda}]]
+      )
+
+  Or use `Nx.global_default_backend/1` as it changes the
+  default backend on all processes.
 
   ## Examples
 
-      iex> Nx.default_backend({Lib.CustomBackend, device: :cuda})
+      iex> Nx.default_backend({EXLA.Backend, device: :cuda})
       {Nx.BinaryBackend, []}
       iex> Nx.default_backend()
-      {Lib.CustomBackend, device: :cuda}
+      {EXLA.Backend, device: :cuda}
 
   """
   @doc type: :backend
@@ -3405,10 +3432,21 @@ defmodule Nx do
 
   You must avoid calling this function at runtime. It is mostly
   useful during scripts or code notebooks to set a default.
-  If you need to configure a global default backend in your
-  applications, you can do so in your `config/*.exs` files:
 
-      config :nx, :default_backend, {Lib.CustomBackend, []}
+  If you need to configure a global default backend in your
+  applications, it is generally preferred to do so in your
+  `config/*.exs` files:
+
+      config :nx, :default_backend, {EXLA.Backend, []}
+
+  In your notebooks and on `Mix.install/2`, you might:
+
+      Mix.install(
+        [
+          {:nx, ">= 0.0.0"}
+        ],
+        config: [nx: [default_backend: {EXLA.Backend, device: :cuda}]]
+      )
 
   """
   @doc type: :backend
