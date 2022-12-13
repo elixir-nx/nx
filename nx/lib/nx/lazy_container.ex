@@ -111,6 +111,14 @@ end
 
 defimpl Nx.LazyContainer, for: Any do
   def traverse(data, acc, fun) do
-    Nx.Container.traverse(data, acc, &Nx.LazyContainer.traverse(&1, &2, fun))
+    if impl = Nx.Container.impl_for(data) do
+      impl.traverse(data, acc, &Nx.LazyContainer.traverse(&1, &2, fun))
+    else
+      raise Protocol.UndefinedError,
+        protocol: @protocol,
+        value: data,
+        description:
+          "data-structures given to defn/Nx must implement either Nx.LazyContainer or Nx.Container"
+    end
   end
 end

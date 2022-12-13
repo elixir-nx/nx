@@ -50,48 +50,65 @@ defmodule Nx.Defn.Tree do
   An existing maps of `ids` can be given to accumulate on top of it.
   """
   def scope_ids(expr, ids \\ %{}) do
-    Composite.reduce(expr, {ids, %{}}, &scope_ids_each(&1, nil, &2)) |> elem(0)
+    Composite.reduce(expr, {ids, %{}}, &scope_ids_each(&1, &2, nil)) |> elem(0)
   end
 
   # Ignore constants
-  defp scope_ids_each(%Nx.Tensor{data: %Expr{op: :constant}}, _scope, {ids, cond_ids}) do
+  defp scope_ids_each(%Nx.Tensor{data: %Expr{op: :constant}}, {ids, cond_ids}, _scope) do
     {ids, cond_ids}
   end
 
   # We are at the root.
-  defp scope_ids_each(%Nx.Tensor{data: %Expr{id: id, op: op}} = t, nil, {ids, cond_ids}) do
+  defp scope_ids_each(%Nx.Tensor{data: %Expr{id: id, op: op} = expr} = t, {ids, cond_ids}, nil) do
     case ids do
       %{^id => _} ->
         {ids, cond_ids}
 
-      %{} ->
-        scope = if op == :cond, do: id, else: nil
+      %{} when op == :cond ->
         ids = Map.put(ids, id, op)
+        acc = {ids, cond_ids}
 
-        t
-        |> apply_args(:scope, {ids, cond_ids}, &{&1, scope_ids_each(&1, scope, &2)})
-        |> elem(1)
+        # We will treat the predicate as part of the scope to avoid executing it more than once
+        [[{pred, body} | clauses], last] = expr.args
+        acc = scope_ids_each(pred, acc, nil)
+        acc = Composite.reduce(body, acc, &scope_ids_each(&1, &2, id))
+
+        # Now we traverse as in apply_args
+        acc =
+          Enum.reduce(clauses, acc, fn {pred, body}, acc ->
+            acc = scope_ids_each(pred, acc, id)
+            Composite.reduce(body, acc, &scope_ids_each(&1, &2, id))
+          end)
+
+        Composite.reduce(last, acc, &scope_ids_each(&1, &2, id))
+
+      %{} ->
+        ids = Map.put(ids, id, op)
+        scope_ids_args(t, {ids, cond_ids}, nil)
     end
   end
 
   # If we are inside a cond, we want to collect all of the IDs inside that
   # cond separately and, in case it is present in more than one direct cond,
   # move it to the parent scope.
-  defp scope_ids_each(%Nx.Tensor{data: %Expr{id: id}} = t, scope, {ids, cond_ids}) do
+  defp scope_ids_each(%Nx.Tensor{data: %Expr{id: id}} = t, {ids, cond_ids}, scope) do
     case cond_ids do
       %{^id => ^scope} ->
         {ids, cond_ids}
 
       %{^id => _} ->
-        scope_ids_each(t, nil, {ids, cond_ids})
+        scope_ids_each(t, {ids, cond_ids}, nil)
 
       %{} ->
         cond_ids = Map.put(cond_ids, id, scope)
-
-        t
-        |> apply_args(:scope, {ids, cond_ids}, &{&1, scope_ids_each(&1, scope, &2)})
-        |> elem(1)
+        scope_ids_args(t, {ids, cond_ids}, scope)
     end
+  end
+
+  defp scope_ids_args(t, acc, scope) do
+    t
+    |> apply_args(:scope, acc, &{&1, scope_ids_each(&1, &2, scope)})
+    |> elem(1)
   end
 
   @doc """

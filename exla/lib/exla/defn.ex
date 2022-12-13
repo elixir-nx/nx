@@ -271,7 +271,16 @@ defmodule EXLA.Defn do
         Logger.debug("EXLA device #{executable.device_id} lock in #{us_to_ms(time)}ms")
       end
 
-      maybe_outfeed(lock, executable, args, used_inputs, outputs, hooks, run_options)
+      {time, res} =
+        :timer.tc(fn ->
+          maybe_outfeed(lock, executable, args, used_inputs, outputs, hooks, run_options)
+        end)
+
+      if debug? do
+        Logger.debug("EXLA execution on device #{executable.device_id} in #{us_to_ms(time)}ms")
+      end
+
+      res
     end
   end
 
@@ -371,10 +380,10 @@ defmodule EXLA.Defn do
       end)
 
     if debug? do
-      hit_or_miss = if expr, do: "", else: " cache hit"
+      hit_or_miss = if expr, do: "miss", else: "hit"
 
       Logger.debug(
-        "EXLA defn evaluation #{inspect(key)}#{hit_or_miss} in #{us_to_ms(eval_time)}ms"
+        "EXLA defn evaluation #{inspect(key)} cache #{hit_or_miss} in #{us_to_ms(eval_time)}ms"
       )
     end
 
@@ -385,7 +394,7 @@ defmodule EXLA.Defn do
     {out_inputs, in_inputs} = to_used.(used_inputs)
     comp_key = {ref, client.name, used_hooks, options}
 
-    {comp_time, {evaled, {executable, extra, outfeed_hooks}}} =
+    {comp_time, {evaled, {xla_time, executable, extra, outfeed_hooks}}} =
       :timer.tc(fn ->
         comp_cache_fun.(comp_key, fn ->
           shapes =
@@ -399,8 +408,12 @@ defmodule EXLA.Defn do
           {computation, extra, hooks} =
             to_computation.(expr || fun.(vars), out_inputs, inputs_and_shapes, used_hooks)
 
-          executable = EXLA.Computation.compile(computation, client, shapes, options)
-          {:ok, {executable, extra, hooks}}
+          {xla_time, executable} =
+            :timer.tc(fn ->
+              EXLA.Computation.compile(computation, client, shapes, options)
+            end)
+
+          {:ok, {xla_time, executable, extra, hooks}}
         end)
       end)
 
@@ -410,9 +423,17 @@ defmodule EXLA.Defn do
           do: {flag, {shapes, compile_hook(key, hooks, defined_hooks, template)}},
           into: %{}
 
-    if debug? do
-      hit_or_miss = if evaled, do: "", else: " cache hit"
-      Logger.debug("EXLA compilation #{inspect(key)}#{hit_or_miss} in #{us_to_ms(comp_time)}ms")
+    cond do
+      not debug? ->
+        :ok
+
+      evaled ->
+        Logger.debug(
+          "EXLA compilation #{inspect(key)} cache miss in #{us_to_ms(comp_time)}ms (#{us_to_ms(xla_time)}ms in XLA)"
+        )
+
+      true ->
+        Logger.debug("EXLA compilation #{inspect(key)} cache hit in #{us_to_ms(comp_time)}ms")
     end
 
     if expr || evaled do

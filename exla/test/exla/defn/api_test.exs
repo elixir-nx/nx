@@ -21,9 +21,10 @@ defmodule EXLA.Defn.APITest do
           EXLA.jit(&add_two/2, debug: true).(2, 3)
         end)
 
-      assert logs =~ ~r"EXLA defn evaluation #Function<[^>]+>( cache hit)? in \d+\.\dms"
-      assert logs =~ ~r"EXLA compilation #Function<[^>]+>( cache hit)? in \d+\.\dms"
+      assert logs =~ ~r"EXLA defn evaluation #Function<[^>]+> cache (hit|miss) in \d+\.\dms"
+      assert logs =~ ~r"EXLA compilation #Function<[^>]+> cache (hit|miss) in \d+\.\dms"
       assert logs =~ ~r"EXLA device \d lock in \d+\.\dms"
+      assert logs =~ ~r"EXLA execution on device \d in \d+\.\dms"
 
       logs =
         capture_log(fn ->
@@ -33,6 +34,7 @@ defmodule EXLA.Defn.APITest do
       assert logs =~ ~r"EXLA defn evaluation #Function<[^>]+> cache hit in \d+\.\dms"
       assert logs =~ ~r"EXLA compilation #Function<[^>]+> cache hit in \d+\.\dms"
       assert logs =~ ~r"EXLA device \d lock in \d+\.\d+ms"
+      assert logs =~ ~r"EXLA execution on device \d in \d+\.\dms"
     end
   end
 

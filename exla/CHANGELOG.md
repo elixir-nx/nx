@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.4.1 (2022-12-07)
+
+### Enhancements
+
+  * [EXLA] Require Nx ~> 0.4.1
+  * [EXLA] Update `XLA` to TF2.11
+  * [EXLA.Defn] Send telemetry event after XLA compilation
+  * [EXLA.Op] Add optimization barriers as operations
+
+### Bug fixes
+
+  * [EXLA] Validate backend options
+  * [EXLA.Backend] Fix `Nx.{any,all}` with `:keep_axes`
+  * [EXLA.Backend] Make SVD return `V` instead of `transpose(V)`
+  * [EXLA.Backend] Preserve NaNs in `window` and `reduce` operations
+
 ## v0.4.0 (2022-10-25)
 
 ### Enhancements

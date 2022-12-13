@@ -53,11 +53,10 @@ defmodule Nx.Defn.TreeTest do
     end
 
     test "ignores expressions inside cond" do
-      bool = Expr.parameter(:root, {:u, 64}, {}, 0)
-      a = Expr.parameter(:root, {:u, 64}, {}, 1)
-      b = Expr.parameter(:root, {:u, 64}, {}, 2)
+      {bool, cond} = Nx.Defn.jit(&{&1, inside_cond(&1, &2, &3)}).(0, 1, 2)
 
-      assert [{_, :cond}] = inside_cond(bool, a, b) |> Tree.scope_ids() |> Enum.sort()
+      assert cond |> Tree.scope_ids() |> Enum.sort() ==
+               [{bool.data.id, :parameter}, {cond.data.id, :cond}]
     end
 
     defn inside_both_cond(bool, a, b) do

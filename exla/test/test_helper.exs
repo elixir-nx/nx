@@ -17,7 +17,7 @@ if client.platform == :host and client.device_count == 1 and System.schedulers_o
 end
 
 ExUnit.start(
-  exclude: [:platform] ++ multi_device ++ skip_tpu_tests,
+  exclude: [:platform, :integration] ++ multi_device ++ skip_tpu_tests,
   include: [platform: String.to_atom(target)],
   assert_receive_timeout: 1000
 )

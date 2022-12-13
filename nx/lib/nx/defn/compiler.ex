@@ -317,7 +317,7 @@ defmodule Nx.Defn.Compiler do
     {compiler, compiler_opts} =
       Keyword.pop(Nx.Defn.default_options(), :compiler, Nx.Defn.Evaluator)
 
-    {fun, params, flatten} = to_lazy_params(fun, args)
+    {fun, params, _templates, flatten} = to_lazy_params(fun, args)
     runtime_fun = &runtime_fun(&1, fun, compiler)
     [res] = compiler.__jit__(fun, params, runtime_fun, [flatten], compiler_opts)
     res
@@ -735,8 +735,8 @@ defmodule Nx.Defn.Compiler do
 
   @doc false
   def to_lazy_params(fun, args) do
-    {params, cache, {funs, _}} =
-      Enum.reduce(args, {[], [], {[], 0}}, fn
+    {params, cache, {templates, funs, _}} =
+      Enum.reduce(args, {[], [], {[], [], 0}}, fn
         arg, {params, cache, acc}
         when is_list(arg)
         when is_function(arg)
@@ -745,19 +745,21 @@ defmodule Nx.Defn.Compiler do
 
         container, {params, cache, acc} ->
           {param, acc} =
-            Nx.LazyContainer.traverse(container, acc, fn template, fun, {acc, i} ->
-              {Nx.Defn.Expr.parameter(template, :root, i), {[fun | acc], i + 1}}
+            Nx.LazyContainer.traverse(container, acc, fn
+              template, fun, {acc_templates, acc_funs, i} ->
+                acc = {[template | acc_templates], [fun | acc_funs], i + 1}
+                {Nx.Defn.Expr.parameter(template, :root, i), acc}
             end)
 
           {[param | params], [nil | cache], acc}
       end)
 
     if Enum.all?(cache, &is_nil/1) do
-      {fun, Enum.reverse(params), Enum.reverse(funs)}
+      {fun, Enum.reverse(params), Enum.reverse(templates), Enum.reverse(funs)}
     else
       cache = Enum.reverse(cache)
       fun = fun(length(params), &apply(fun, merge_cache(cache, &1)))
-      {fun, Enum.reverse(params), Enum.reverse(funs)}
+      {fun, Enum.reverse(params), Enum.reverse(templates), Enum.reverse(funs)}
     end
   end
 

@@ -22,27 +22,21 @@ class ExlaClient;
 
 class ExlaBuffer {
  public:
-  ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer,
-             bool erlang_managed = true);
+  ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer);
 
+  int device_id() { return buffer_->device()->id(); }
   xla::PjRtBuffer* buffer() { return buffer_.get(); }
   xla::StatusOr<ExlaBuffer*> CopyToDevice(xla::PjRtDevice * dst_device);
   xla::StatusOr<ERL_NIF_TERM> ToBinary(ErlNifEnv* env, exla::int64 size);
   xla::Status Deallocate();
 
   ~ExlaBuffer() {
-    // If the Erlang VM wants to GC, block it until the host uses it.
-    // TODO: We likely want to keep the buffer as a shared pointer
-    // between Erlang VM and XLA and use AcquireExternalReference
-    // to notify that the buffer should be kept around until the
-    // reference is released.
-    // https://github.com/tensorflow/tensorflow/blob/b8eb820d6cb27cfa8ab65c40ce9a161de314533c/tensorflow/compiler/xla/pjrt/pjrt_client.h#L763-L780
-    if(erlang_managed_) (void)buffer_->BlockHostUntilReady();
+    // Theoretically this may block if a computation is running
+    // but we always block the host until the computation is done.
   }
 
  private:
   std::unique_ptr<xla::PjRtBuffer> buffer_;
-  bool erlang_managed_;
 };
 
 class ExlaExecutable {
@@ -80,8 +74,7 @@ class ExlaClient {
   xla::StatusOr<ExlaBuffer*> BufferFromBinary(ErlNifEnv* env,
                                               ERL_NIF_TERM binary_term,
                                               xla::Shape& shape,
-                                              int device_id,
-                                              bool can_be_released_after_run);
+                                              int device_id);
 
   // TODO(seanmor5): This is device logic and should be refactored
   xla::Status TransferToInfeed(ErlNifEnv* env,

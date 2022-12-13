@@ -1,6 +1,20 @@
 # Changelog
 
-## v0.4.1-dev
+## v0.4.1 (2022-12-07)
+
+### Enhancements
+
+  * [Nx] Add `Nx.Batch` and `Nx.Serving`
+  * [Nx] Implement `Nx.Container` for numbers, complex, and tensors for completeness
+  * [Nx] Support batches in `Nx.eye/2`
+
+### Bug fixes
+
+  * [Nx] Keep input tensor names on associative scan
+  * [Nx.BinaryBackend] Differentiate between complex and real output in `as_type`
+  * [Nx.BinaryBackend] Fix loss of precision in `Nx.complex/2`
+  * [Nx.BinaryBackend] Preserve NaNs in `window` and `reduce` operations
+  * [Nx.Random] Do not return infinity on `normal/2` for f16
 
 ## v0.4.0 (2022-10-25)
 

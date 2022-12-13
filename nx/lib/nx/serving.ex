@@ -227,7 +227,7 @@ defmodule Nx.Serving do
 
   It must return `{:ok, state}`, where the `state` can be any term.
   """
-  @callback init(:inline | :process, arg :: term()) :: {:ok, state :: term()}
+  @callback init(type :: :inline | :process, arg :: term()) :: {:ok, state :: term()}
 
   @doc """
   Receives a batch and returns a function to execute the batch.

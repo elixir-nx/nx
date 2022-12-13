@@ -196,7 +196,7 @@ ERL_NIF_TERM binary_to_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   }
 
   EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaBuffer* buffer,
-    (*client)->BufferFromBinary(env, argv[1], *shape, device_id, true), env);
+    (*client)->BufferFromBinary(env, argv[1], *shape, device_id), env);
   return exla::nif::ok(env, exla::nif::make<exla::ExlaBuffer*>(env, buffer));
 }
 
@@ -2128,7 +2128,7 @@ ERL_NIF_TERM transfer_from_outfeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
       return exla::nif::error(env, statusor.status().error_message().c_str());
     }
 
-    ERL_NIF_TERM msg = std::move(statusor.ValueOrDie());
+    ERL_NIF_TERM msg = std::move(statusor.value());
 
     if(!enif_send(env, &pid, penv, enif_make_tuple(penv, 2, ref, msg))) {
       enif_clear_env(penv);
