@@ -132,7 +132,10 @@ defmodule EXLA.MixProject do
           {:ok, contents} <- [File.read(path)],
           do: contents
 
-    md5 = [XLA.archive_path!() | contents] |> :erlang.md5() |> Base.encode32(padding: false, case: :lower)
+    md5 =
+      [XLA.archive_path!() | contents]
+      |> :erlang.md5()
+      |> Base.encode32(padding: false, case: :lower)
 
     cache_key =
       "elixir-#{System.version()}-erts-#{:erlang.system_info(:version)}-xla-#{Application.spec(:xla, :vsn)}-exla-#{@version}-#{md5}"
