@@ -538,4 +538,9 @@ defmodule Nx.Shared do
     do: raise_complex_not_implemented_yet(function, arity)
 
   def raise_complex_not_implemented_yet(_, _, _), do: nil
+
+  @doc """
+  The process dictionary key to store default backend under.
+  """
+  def backend_pdict_key, do: {Nx, :default_backend}
 end
