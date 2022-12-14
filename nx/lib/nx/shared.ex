@@ -360,8 +360,7 @@ defmodule Nx.Shared do
       rsqrt:
         {"reverse square root", quote(do: Complex.divide(1, Complex.sqrt(var!(x)))),
          "$$rsqrt(z) = \\frac{1}{\\sqrt{z}}$$"},
-      cbrt:
-        {"cube root", quote(do: Complex.cbrt(var!(x))), "$$cbrt(z) = z^{\\frac{1}{3}}$$"},
+      cbrt: {"cube root", quote(do: Complex.cbrt(var!(x))), "$$cbrt(z) = z^{\\frac{1}{3}}$$"},
       erf:
         {"error function", quote(do: Complex.erf(var!(x))),
          "$$erf(z) = \\frac{2}{\\sqrt{\\pi}} \\int_{0}^{z} e^{-t^2}dt$$"},
