@@ -1134,13 +1134,7 @@ defmodule Nx.LinAlg do
        %{tensor | names: List.duplicate(nil, rank - 1), type: output_type, shape: s_shape},
        %{tensor | names: List.duplicate(nil, rank), type: output_type, shape: v_shape}}
 
-    Nx.Shared.optional(:svd, [tensor, opts], output, fn tensor, opts ->
-      {u, s, vt} = Nx.LinAlg.SVD.svd(tensor, opts)
-
-      {Nx.reshape(u, u.shape, names: List.duplicate(nil, rank)),
-       Nx.reshape(s, s.shape, names: List.duplicate(nil, rank - 1)),
-       Nx.reshape(vt, vt.shape, names: List.duplicate(nil, rank))}
-    end)
+    Nx.Shared.optional(:svd, [tensor, opts], output, &Nx.LinAlg.SVD.svd/2)
   end
 
   @doc """
