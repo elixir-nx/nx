@@ -95,7 +95,7 @@ defmodule Nx.NonFiniteTest do
     end
 
     test "cbrt" do
-      assert_all_close(Nx.cbrt(@arg), @nan_nan, equal_nan: true)
+      assert_all_close(Nx.cbrt(@arg), Complex.new(:infinity, 0))
     end
 
     test "conjugate" do

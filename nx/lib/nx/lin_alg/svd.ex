@@ -4,35 +4,51 @@ defmodule Nx.LinAlg.SVD do
 
   defn svd(input_tensor, opts \\ []) do
     opts = keyword!(opts, max_iter: 100, eps: @default_eps)
-    {m, n} = Nx.shape(input_tensor)
 
-    tensor =
+    {is_flipped, tensor} =
       case Nx.shape(input_tensor) do
         {m, n} when m < n ->
-          Nx.LinAlg.adjoint(input_tensor)
+          {true, Nx.LinAlg.adjoint(input_tensor)}
 
         _ ->
-          input_tensor
+          {false, input_tensor}
       end
 
-    {reduce_to_square, q, a} =
-      if m > 1.15 * n do
-        {q, a} = Nx.LinAlg.qr(tensor)
-        {true, q, a}
-      else
-        {false, tensor, tensor}
+    # We always return full matrices for retrocompatibility.
+    # Original Jax code has extensions if we want to add that
+    # as an option (i.e. mode: :complete | :reduced)
+
+    {reduce_to_square, q, u_null, a} =
+      case Nx.shape(tensor) do
+        {m, n} when m > n ->
+          {q_full, a_full} = Nx.LinAlg.qr(tensor, mode: :complete)
+          q = q_full[[0..-1//1, 0..(n - 1)//1]]
+          u_null = q_full[[0..-1//1, n..-1//1]]
+          a = a_full[0..(n - 1)//1]
+          {true, q, u_null, a}
+
+        {n, n} ->
+          {false, tensor, tensor, tensor}
       end
 
     {u, s, v} = svd_tall_and_square(a, opts)
 
-    vt = Nx.LinAlg.adjoint(v)
+    u =
+      case reduce_to_square do
+        true ->
+          u = Nx.dot(q, u)
+          Nx.concatenate([u, u_null], axis: -1)
 
-    case reduce_to_square do
+        false ->
+          u
+      end
+
+    case is_flipped do
       true ->
-        {Nx.dot(q, u), s, vt}
+        {v, s, Nx.LinAlg.adjoint(u)}
 
       false ->
-        {u, s, vt}
+        {u, s, Nx.LinAlg.adjoint(v)}
     end
   end
 
@@ -167,5 +183,77 @@ defmodule Nx.LinAlg.SVD do
 
     # same as Nx.dot(u_out, Nx.make_diagonal(sign_r))
     u_out * sign_r
+  end
+
+  def grad(
+        {%{shape: {m, m}} = u, %{shape: {k}} = s, %{shape: {n, n}} = vt},
+        %{shape: {m, n}} = input,
+        ans,
+        [du, ds, dvt]
+      ) do
+    {u, s_input, vt} = Nx.Defn.Expr.tuple(ans, [u, s, vt])
+
+    if m < n do
+      raise "grad for Nx.LinAlg.svd/2 not implemented for the wide matrix case"
+    end
+
+    u =
+      if m == n do
+        u
+      else
+        Nx.slice(u, [0, 0], [m, k])
+      end
+
+    du =
+      if m == n do
+        du
+      else
+        Nx.slice(du, [0, 0], [m, k])
+      end
+
+    # https://j-towns.github.io/papers/svd-derivative.pdf
+
+    eye_k = Nx.eye(k)
+    eye_m = Nx.eye(m)
+    eye_n = Nx.eye(n)
+
+    s_sq = Nx.power(s_input, 2)
+    sub = s_sq |> Nx.new_axis(1) |> Nx.subtract(s_sq) |> Nx.negate() |> Nx.add(eye_k)
+    f = Nx.select(eye_k, 0, Nx.divide(1, sub))
+
+    s = s_input |> Nx.make_diagonal()
+    s_inv = 1 |> Nx.divide(s_input) |> Nx.make_diagonal()
+
+    ut_du =
+      u |> Nx.LinAlg.adjoint() |> Nx.dot(du) |> Nx.subtract(Nx.dot(Nx.LinAlg.adjoint(du), u))
+
+    first_component_du = u |> Nx.dot(Nx.multiply(f, ut_du)) |> Nx.dot(s)
+
+    second_component_du =
+      eye_m
+      |> Nx.subtract(Nx.dot(u, Nx.LinAlg.adjoint(u)))
+      |> Nx.dot(du)
+      |> Nx.dot(s_inv)
+
+    du_component = first_component_du |> Nx.add(second_component_du) |> Nx.dot(vt)
+
+    ds_component = u |> Nx.dot(Nx.multiply(eye_k, ds)) |> Nx.dot(vt)
+
+    first_dvt_component =
+      vt
+      |> Nx.dot(Nx.LinAlg.adjoint(dvt))
+      |> Nx.subtract(Nx.dot(dvt, Nx.LinAlg.adjoint(vt)))
+      |> Nx.multiply(f)
+
+    first_dvt_component = s |> Nx.dot(first_dvt_component) |> Nx.dot(vt)
+
+    second_dvt_component =
+      s_inv |> Nx.dot(dvt) |> Nx.dot(Nx.subtract(eye_n, Nx.dot(Nx.LinAlg.adjoint(vt), vt)))
+
+    dvt_component = Nx.dot(u, Nx.add(first_dvt_component, second_dvt_component))
+
+    da = du_component |> Nx.add(ds_component) |> Nx.add(dvt_component)
+
+    [{input, da}]
   end
 end

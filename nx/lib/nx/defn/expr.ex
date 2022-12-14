@@ -225,7 +225,6 @@ defmodule Nx.Defn.Expr do
           {context, res, & &1}
 
         tuple when is_tuple(tuple) ->
-          IO.inspect(tuple)
           %{data: %{context: context}} = elem(tuple, 0)
           out = %T{names: [], shape: {}, type: {:tuple, tuple_size(tuple)}}
           {context, out, &tuple(&1, Tuple.to_list(tuple))}

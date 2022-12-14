@@ -9,8 +9,6 @@ defmodule Nx.LinAlg do
 
   alias Nx.Tensor, as: T
 
-  @default_eps 1.0e-10
-
   @doc """
   Returns the adjoint of a given tensor.
 
@@ -917,7 +915,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) tensor must have at least rank 2, got rank 1 with shape {5}
   """
   def qr(tensor, opts \\ []) do
-    opts = keyword!(opts, mode: :reduced, eps: @default_eps)
+    opts = keyword!(opts, mode: :reduced, eps: 1.0e-10)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
     mode = opts[:mode]
@@ -992,9 +990,9 @@ defmodule Nx.LinAlg do
       #Nx.Tensor<
         f32[3][3]
         [
-          [0.4082472324371338, 0.9128734469413757, 0.0],
-          [0.40824851393699646, -0.18257413804531097, 0.8944271802902222],
-          [0.8164970278739929, -0.36514827609062195, -0.4472135901451111]
+          [0.4075949788093567, 0.9131628274917603, 0.0],
+          [0.40837883949279785, -0.18228201568126678, 0.8944271802902222],
+          [0.8167576789855957, -0.36456403136253357, -0.4472135901451111]
         ]
       >
 
@@ -1012,8 +1010,8 @@ defmodule Nx.LinAlg do
         f32[2][2][2]
         [
           [
-            [0.5606290698051453, -0.828070342540741],
-            [0.8280670642852783, 0.5606313347816467]
+            [0.5612090229988098, -0.8276740908622742],
+            [0.8276740908622742, 0.5612090229988098]
           ],
           [
             [1.0, 0.0],
@@ -1031,7 +1029,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) matrix must be hermitian, a matrix is hermitian iff X = adjoint(X)
   """
   def eigh(tensor, opts \\ []) do
-    opts = keyword!(opts, max_iter: 50_000, eps: @default_eps)
+    opts = keyword!(opts, max_iter: 1_000, eps: 1.0e-4)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
     output_type = Nx.Type.to_floating(type)
@@ -1099,16 +1097,16 @@ defmodule Nx.LinAlg do
       #Nx.Tensor<
         f32[4][4]
         [
+          [0.0, 0.9999999403953552, 0.0, 0.0],
           [1.0, 0.0, 0.0, 0.0],
-          [0.0, 1.0, 0.0, 0.0],
-          [0.0, 0.0, 1.0, 0.0],
+          [0.0, 0.0, -1.0, 0.0],
           [0.0, 0.0, 0.0, 1.0]
         ]
       >
       iex> s
       #Nx.Tensor<
         f32[3]
-        [3.0, 2.0, 1.0]
+        [3.0, 1.9999998807907104, 1.0]
       >
       iex> vt
       #Nx.Tensor<
@@ -1116,13 +1114,13 @@ defmodule Nx.LinAlg do
         [
           [0.0, 1.0, 0.0],
           [1.0, 0.0, 0.0],
-          [0.0, 0.0, -1.0]
+          [0.0, 0.0, 1.0]
         ]
       >
 
   """
   def svd(tensor, opts \\ []) do
-    opts = keyword!(opts, [:max_iter, eps: @default_eps])
+    opts = keyword!(opts, max_iter: 100, eps: 1.1920929e-07)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
     Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.svd", 2)
@@ -1302,7 +1300,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) tensor must be a square matrix or a batch of square matrices, got shape: {3, 4}
   """
   def lu(tensor, opts \\ []) do
-    opts = keyword!(opts, eps: @default_eps)
+    opts = keyword!(opts, eps: 1.0e-10)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
     output_type = Nx.Type.to_floating(type)

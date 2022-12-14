@@ -413,16 +413,16 @@ defmodule Nx.LinAlgTest do
 
       # Eigenvalues
       assert round(eigenvals, 3) ==
-               Nx.tensor([16.394, -9.739, 5.901, 4.334, -0.892])
+               Nx.tensor([16.394, -9.738, 5.901, 4.334, -0.892])
 
       # Eigenvectors
       assert round(eigenvecs, 3) ==
                Nx.tensor([
-                 [0.112, -0.004, -0.828, 0.440, 0.328],
-                 [0.395, 0.163, 0.533, 0.534, 0.497],
-                 [0.427, 0.326, -0.137, -0.699, 0.452],
-                 [0.603, -0.783, -0.008, -0.079, -0.130],
-                 [0.534, 0.504, -0.103, 0.160, -0.651]
+                 [0.112, -0.005, -0.831, -0.436, -0.328],
+                 [0.395, 0.163, 0.530, -0.537, -0.497],
+                 [0.427, 0.326, -0.133, 0.700, -0.452],
+                 [0.603, -0.783, -0.007, 0.079, 0.130],
+                 [0.534, 0.504, -0.104, -0.160, 0.651]
                ])
     end
 
@@ -558,18 +558,18 @@ defmodule Nx.LinAlgTest do
 
       assert round(u, 3) ==
                Nx.tensor([
-                 [-0.141, -0.825, -0.547, 0.019],
-                 [-0.344, -0.426, 0.744, 0.382],
-                 [-0.547, -0.028, 0.153, -0.822],
-                 [-0.75, 0.371, -0.35, 0.421]
+                 [0.141, 0.825, 0.0, 0.019],
+                 [0.344, 0.426, 0.0, 0.382],
+                 [0.547, 0.028, 0.0, -0.822],
+                 [0.75, -0.370, 0.0, 0.421]
                ])
                |> round(3)
 
       assert Nx.tensor([25.462, 1.291, 0.0]) |> round(3) == round(s, 3)
 
       assert Nx.tensor([
-               [-0.505, -0.575, -0.644],
-               [0.761, 0.057, -0.646],
+               [0.505, 0.575, 0.644],
+               [-0.761, -0.057, 0.647],
                [-0.408, 0.816, -0.408]
              ])
              |> round(3) == round(v, 3)
@@ -583,14 +583,13 @@ defmodule Nx.LinAlgTest do
       assert round(Nx.as_type(t, :f32), 2) == u |> Nx.multiply(s) |> Nx.dot(vt) |> round(2)
     end
 
-    test "does not support wide matrices" do
-      # This is due to the fact that we don't provide solutions
-      # for "wide" matrix systems in triangular_solve
-      assert_raise ArgumentError,
-                   "SVD not implemented for wide matrices (tensors with shape {m, n} where m < n)",
-                   fn ->
-                     Nx.LinAlg.svd(Nx.iota({3, 5}))
-                   end
+    test "finds the singular values of wide matrices" do
+      t = Nx.iota({3, 5})
+
+      assert {u, s, vt} = Nx.LinAlg.svd(t)
+
+      assert round(Nx.as_type(t, :f32), 1) ==
+               u |> Nx.dot(t.shape |> Nx.eye() |> Nx.put_diagonal(s)) |> Nx.dot(vt) |> round(1)
     end
 
     test "finds the singular values triangular matrices" do
