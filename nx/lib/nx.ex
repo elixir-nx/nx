@@ -3386,8 +3386,6 @@ defmodule Nx do
 
   ## Backend API
 
-  @backend_key {Nx, :default_backend}
-
   @doc """
   Sets the given `backend` as default in the **current process**.
 
@@ -3423,7 +3421,7 @@ defmodule Nx do
   """
   @doc type: :backend
   def default_backend(backend) do
-    Process.put(@backend_key, backend!(backend)) ||
+    Process.put(backend_pdict_key(), backend!(backend)) ||
       backend!(Application.fetch_env!(:nx, :default_backend))
   end
 
@@ -3461,7 +3459,7 @@ defmodule Nx do
   """
   @doc type: :backend
   def default_backend() do
-    Process.get(@backend_key) || backend!(Application.fetch_env!(:nx, :default_backend))
+    Process.get(backend_pdict_key()) || backend!(Application.fetch_env!(:nx, :default_backend))
   end
 
   @doc """

@@ -134,8 +134,7 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp runtime_fun(args, fun, compiler) do
-    tuple = Nx.default_backend()
-    Nx.default_backend(Nx.Defn.Expr)
+    previous_backend = Process.put(Nx.Shared.backend_pdict_key(), {Nx.Defn.Expr, []})
     previous = Process.put(Nx.Defn.Compiler, compiler)
 
     try do
@@ -143,7 +142,11 @@ defmodule Nx.Defn.Compiler do
       |> apply(args)
       |> Nx.Defn.Composite.traverse(&Nx.Defn.Expr.tensor/1)
     after
-      Nx.default_backend(tuple)
+      if previous_backend do
+        Process.put(Nx.Shared.backend_pdict_key(), previous_backend)
+      else
+        Process.delete(Nx.Shared.backend_pdict_key())
+      end
 
       if previous do
         Process.put(Nx.Defn.Compiler, compiler)
