@@ -134,8 +134,7 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp runtime_fun(args, fun, compiler) do
-    default_backend = Process.get(Nx.Shared.backend_pdict_key())
-    Process.put(Nx.Shared.backend_pdict_key(), {Nx.Defn.Expr, []})
+    previous_backend = Process.put(Nx.Shared.backend_pdict_key(), {Nx.Defn.Expr, []})
     previous = Process.put(Nx.Defn.Compiler, compiler)
 
     try do
@@ -143,8 +142,8 @@ defmodule Nx.Defn.Compiler do
       |> apply(args)
       |> Nx.Defn.Composite.traverse(&Nx.Defn.Expr.tensor/1)
     after
-      if default_backend do
-        Process.put(Nx.Shared.backend_pdict_key(), default_backend)
+      if previous_backend do
+        Process.put(Nx.Shared.backend_pdict_key(), previous_backend)
       else
         Process.delete(Nx.Shared.backend_pdict_key())
       end
