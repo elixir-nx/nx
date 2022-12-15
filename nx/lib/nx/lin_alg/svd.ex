@@ -43,13 +43,15 @@ defmodule Nx.LinAlg.SVD do
           u
       end
 
-    case is_flipped do
-      true ->
-        {v, s, Nx.LinAlg.adjoint(u)}
+    res =
+      case is_flipped do
+        true -> {v, s, Nx.LinAlg.adjoint(u)}
+        false -> {u, s, Nx.LinAlg.adjoint(v)}
+      end
 
-      false ->
-        {u, s, Nx.LinAlg.adjoint(v)}
-    end
+    custom_grad(res, [input_tensor], fn g ->
+      grad(res, input_tensor, g)
+    end)
   end
 
   defnp svd_tall_and_square(a, opts \\ []) do
@@ -185,13 +187,9 @@ defmodule Nx.LinAlg.SVD do
     u_out * sign_r
   end
 
-  def grad(
-        {%{shape: {m, m}} = u, %{shape: {k}} = s, %{shape: {n, n}} = vt},
-        %{shape: {m, n}} = input,
-        ans,
-        [du, ds, dvt]
-      ) do
-    {u, s_input, vt} = Nx.Defn.Expr.tuple(ans, [u, s, vt])
+  defnp grad({u, s_input, vt}, input, {du, ds, dvt}) do
+    {k} = Nx.shape(s_input)
+    {m, n} = Nx.shape(input)
 
     if m < n do
       raise "grad for Nx.LinAlg.svd/2 not implemented for the wide matrix case"

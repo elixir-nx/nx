@@ -197,6 +197,7 @@ defmodule Nx.Defn.ExprTest do
                s64
              \s\s
                Nx.Defn.Expr
+               0
              >\
              """
     end

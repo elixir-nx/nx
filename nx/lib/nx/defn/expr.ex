@@ -1306,6 +1306,11 @@ defmodule Nx.Defn.Expr do
   import Inspect.Algebra
 
   @impl true
+  # Special case for constants since we show them inline in regular printing
+  def inspect(%T{data: %Expr{op: :constant, args: [constant]}}, opts) do
+    concat([line(), color("Nx.Defn.Expr", :map, opts), line(), to_string(constant)])
+  end
+
   def inspect(tensor, opts) do
     {t, acc} = inspect_expr(tensor, {[], [], %{}, %{}})
     {_, {exprs, params, _var_map, _cache}} = Tree.apply_args(t, acc, &inspect_expr/2)

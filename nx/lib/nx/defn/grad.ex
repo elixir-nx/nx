@@ -92,6 +92,26 @@ defmodule Nx.Defn.Grad do
     acc
   end
 
+  defp parents_args(:optional, %{data: %{args: [call, expr]}}, id, acc, params) do
+    args = call.data.args
+
+    # First traverse through all arguments
+    acc = Enum.reduce(args, acc, &recur_parents_tree(&1, &2, params))
+
+    # Now traverse over the optional expression where args are the new parameters.
+    # Once we access the parameter itself, we point the parameter to the arg.
+    Composite.reduce(expr, acc, fn expr, {parents, nodes} ->
+      parents = Map.update(parents, expr.data.id, [id], &[id | &1])
+      recur_parents_tree(expr, {parents, nodes}, args)
+    end)
+  end
+
+  defp parents_args(:parameter, %{data: %{args: [pos]}} = t, id, {parents, nodes}, [_ | _] = params) do
+    arg = Enum.fetch!(params, pos)
+    {Map.update(parents, arg.data.id, [id], &[id | &1]),
+     Map.put(nodes, id, put_in(t.data.args, [arg]))}
+  end
+
   # We register cond as a special node to avoid pretraversing it.
   # Instead we traverse it early on on the grad computation.
   defp parents_args(:cond, _, id, {parents, nodes}, _params) do
@@ -100,31 +120,14 @@ defmodule Nx.Defn.Grad do
 
   defp parents_args(op, t, parent_id, acc, params) do
     reduce_args(op, t, acc, fn arg, {parents, nodes} ->
-      case bypass_arg(arg, params) do
-        :constant ->
-          {parents, nodes}
-
-        {arg, params} ->
-          Composite.reduce(arg, {parents, nodes}, fn arg, {parents, nodes} ->
-            parents = Map.update(parents, arg.data.id, [parent_id], &[parent_id | &1])
-            recur_parents_tree(arg, {parents, nodes}, params)
-          end)
+      if arg.data.op in @constants do
+        {parents, nodes}
+      else
+        parents = Map.update(parents, arg.data.id, [parent_id], &[parent_id | &1])
+        recur_parents_tree(arg, {parents, nodes}, params)
       end
     end)
   end
-
-  # Those nodes can be ignored.
-  defp bypass_arg(%{data: %{op: op}}, _params) when op in @constants, do: :constant
-
-  # Those nodes are always bypassed in favor of actual values and implementations.
-  defp bypass_arg(%{data: %{op: :optional, args: [call, expr]}}, _params),
-    do: {expr, call.data.args}
-
-  defp bypass_arg(%{data: %{op: :parameter, args: [i]}}, [_ | _] = params),
-    do: {Enum.fetch!(params, i), nil}
-
-  defp bypass_arg(arg, params),
-    do: {arg, params}
 
   # For some functions, only a subset of the args participate in the grad,
   # so we handle them accordingly here.
@@ -152,6 +155,9 @@ defmodule Nx.Defn.Grad do
 
   defp reduce_args(:while, %{data: %{args: [initial | _]}}, acc, fun),
     do: Composite.reduce(initial, acc, fun)
+
+  defp reduce_args(:metadata, %{data: %{args: [_, %{custom_grad: {inputs, _fun}}]}}, acc, fun),
+    do: Enum.reduce(inputs, acc, fun)
 
   defp reduce_args(_op, t, acc, fun),
     do: Tree.apply_args(t, acc, &{&1, fun.(&1, &2)}) |> elem(1)
@@ -208,6 +214,15 @@ defmodule Nx.Defn.Grad do
       tuple = tuple || Tuple.duplicate([], size)
       put_elem(tuple, pos, [g | elem(tuple, pos)])
     end)
+  end
+
+  defp update_grads(:optional, [_call, expr], _ans, gs, _to_grad_ids, grads) do
+    {grads, []} =
+      Composite.reduce(expr, {grads, gs}, fn child, {grads, [g | gs]} ->
+        {Map.update(grads, child.data.id, [g], &[g | &1]), gs}
+      end)
+
+    grads
   end
 
   defp update_grads(:while, [initial, arg, condition, body], _ans, gs, _to_grad_ids, grads) do
@@ -335,6 +350,25 @@ defmodule Nx.Defn.Grad do
 
   ## Gradients
 
+  defp grad(:parameter, [arg], _ans, g) do
+    [{arg, g}]
+  end
+
+  defp grad(:metadata, [_expr, %{custom_grad: {_, fun}}], _ans, g) do
+    # We don't expose the internal list representation to users
+    g = if is_list(g), do: List.to_tuple(g), else: g
+    args = fun.(g)
+
+    unless is_list(args) and Enum.all?(args, &match?({_, _}, &1)) do
+      raise "custom_grad/2 must return a list of tuples, " <>
+              "where the first element is the expression to continue computing grad " <>
+              "and the second element is the updated g"
+    end
+
+    args
+  end
+
+  # TODO: Remove this clause when custom_grad/2 from Nx.Defn.Kernel is removed
   defp grad(:metadata, [expr, %{custom_grad: fun}], _ans, g) do
     args = fun.(expr, g)
 

@@ -234,6 +234,11 @@ defmodule Nx.Defn.Tree do
     {[tensor, start_indices, slice], acc}
   end
 
+  def apply_args(%T{data: %Expr{op: :metadata, args: [expr, metadata]}}, _type, acc, fun) do
+    {expr, acc} = Composite.traverse(expr, acc, fun)
+    {[expr, metadata], acc}
+  end
+
   def apply_args(%T{data: %Expr{args: args}}, _type, acc, fun) do
     Enum.map_reduce(args, acc, fn
       %T{data: %Expr{}} = arg, acc -> fun.(arg, acc)
