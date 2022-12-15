@@ -76,7 +76,6 @@ defmodule Nx.LinAlg.SVD do
   end
 
   defn qdwh(x, opts \\ []) do
-    # {m, n} = Nx.shape(x)
     alpha = Nx.sqrt(Nx.LinAlg.norm(x, ord: 1)) * Nx.sqrt(Nx.LinAlg.norm(x, ord: :inf))
     l = opts[:eps]
     u = x / alpha
@@ -164,12 +163,11 @@ defmodule Nx.LinAlg.SVD do
         _ -> zbar
       end
 
-    # z = Nx.LinAlg.solve(y, Nx.LinAlg.adjoint(z))
     z =
-      Nx.LinAlg.triangular_solve(Nx.LinAlg.adjoint(y), z, left_side: true, lower: false)
+      y
       |> Nx.LinAlg.adjoint()
-
-    # # |> Nx.real()
+      |> Nx.LinAlg.triangular_solve(z, left_side: true, lower: false)
+      |> Nx.LinAlg.adjoint()
 
     e = b / c
 
