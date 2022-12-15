@@ -828,7 +828,12 @@ defmodule EXLA.Defn do
 
   defp to_operator(:eigh, [{%{type: type}, %{type: type}}, tensor, opts], _ans, state) do
     {eigvec, eigval} =
-      EXLA.Op.eigh(to_type(tensor, type), 1, opts[:eps] || 1.0e-4, opts[:max_iter] || 100)
+      EXLA.Op.eigh(
+        to_type(tensor, type),
+        1,
+        Keyword.fetch!(opts, :eps),
+        Keyword.fetch!(opts, :max_iter)
+      )
 
     EXLA.Op.tuple(state.builder, [eigval, eigvec])
   end

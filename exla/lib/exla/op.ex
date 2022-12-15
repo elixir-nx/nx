@@ -755,17 +755,6 @@ defmodule EXLA.Op do
     }
   end
 
-  # def svd(%Op{builder: builder, ref: operand}, precision) do
-  #   precision_config = get_precision_config_int(precision)
-  #   {u_ref, d_ref, v_ref} = EXLA.NIF.svd(operand, precision_config) |> unwrap!()
-
-  #   {
-  #     %Op{builder: builder, ref: u_ref},
-  #     %Op{builder: builder, ref: d_ref},
-  #     %Op{builder: builder, ref: v_ref}
-  #   }
-  # end
-
   def triangular_solve(
         %Op{builder: builder, ref: a},
         %Op{builder: builder, ref: b},
