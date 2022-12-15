@@ -5,7 +5,7 @@ defmodule Nx.LinAlg do
 
   import Nx.Shared
   import Nx.Defn, only: [defn: 2, defnp: 2, deftransformp: 2]
-  import Nx.Defn.Kernel, only: [keyword!: 2, custom_grad: 2]
+  import Nx.Defn.Kernel, only: [keyword!: 2]
 
   alias Nx.Tensor, as: T
 
@@ -738,13 +738,14 @@ defmodule Nx.LinAlg do
   """
   @doc from_backend: false
   defn invert(tensor) do
-    tensor
-    |> invert_shape()
-    |> invert_tensor()
-    |> custom_grad(fn ans, g ->
+    ans =
+      tensor
+      |> invert_shape()
+      |> invert_tensor()
+
+    custom_grad(ans, [tensor], fn g ->
       # As defined in https://juliadiff.org/ChainRulesCore.jl/stable/maths/arrays.html#Matrix-inversion-2
       ans_h = adjoint(ans)
-
       [{tensor, ans_h |> Nx.negate() |> Nx.dot(g) |> Nx.dot(ans_h)}]
     end)
   end

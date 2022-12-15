@@ -360,7 +360,7 @@ defmodule Nx.Defn.Grad do
     args = fun.(g)
 
     unless is_list(args) and Enum.all?(args, &match?({_, _}, &1)) do
-      raise "custom_grad/2 must return a list of tuples, " <>
+      raise "custom_grad/3 must return a list of tuples, " <>
               "where the first element is the expression to continue computing grad " <>
               "and the second element is the updated g"
     end
@@ -1201,7 +1201,7 @@ defmodule Nx.Defn.Grad do
     If you are computing the sum, product, or similar, use the \
     appropriate Nx functions instead. If you have a custom usage \
     of reduce, consider using stop_grad/1 (making it equivalent \
-    to the identify function) or using custom_grad/2 (giving it \
+    to the identify function) or using custom_grad/3 (giving it \
     a proper gradient implementation).
     """
   end
@@ -1213,7 +1213,7 @@ defmodule Nx.Defn.Grad do
     If you are computing the sum, max, or similar of a window, use \
     the appropriate Nx functions instead. If you have a custom usage \
     of window_reduce, consider using stop_grad/1 (making it equivalent \
-    to the identify function) or using custom_grad/2 (giving it \
+    to the identify function) or using custom_grad/3 (giving it \
     a proper gradient implementation).
     """
   end
@@ -1225,7 +1225,7 @@ defmodule Nx.Defn.Grad do
     cannot compute gradient for Nx.#{op}/#{length(args)}.
 
     Consider using stop_grad/1 to make the gradient equivalent to \
-    the identity function or use custom_grad/2 to define a proper \
+    the identity function or use custom_grad/3 to define a proper \
     gradient implementation
     """
   end
