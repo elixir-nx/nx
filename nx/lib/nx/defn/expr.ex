@@ -219,20 +219,18 @@ defmodule Nx.Defn.Expr do
     params = Enum.with_index(args, &parameter/2)
     res = apply(fun, params ++ opts)
 
-    {context, out, out_fn} =
-      case res do
-        %{data: %{context: context}} ->
-          {context, res, & &1}
+    case res do
+      %{data: %{context: context}} ->
+        expr(res, context, :optional, [expr(res, context, name, args), res])
 
-        tuple when is_tuple(tuple) ->
-          %{data: %{context: context}} = elem(tuple, 0)
-          out = %T{names: [], shape: {}, type: {:tuple, tuple_size(tuple)}}
-          {context, out, &tuple(&1, Tuple.to_list(tuple))}
-      end
+      t when is_tuple(t) ->
+        # we want to return an optional node
+        context = elem(t, 0).data.context
 
-    expr = expr(out, context, :optional, [expr(out, context, name, args), res])
+        out = expr(%T{names: [], shape: {}, type: {:tuple, tuple_size(t)}}, context, name, args)
 
-    out_fn.(expr)
+        expr(out, context, :optional, [out, t])
+    end
   end
 
   ## Nx.Defn AST callbacks
@@ -960,8 +958,8 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def qr({q, r}, tensor, opts) do
-    tensor = to_expr(tensor)
+  def qr({q, r}, t, opts) do
+    tensor = to_expr(t)
     context = tensor.data.context
     out = %T{names: [], shape: {}, type: {:tuple, 2}}
     tuple(expr(out, context, :qr, [{q, r}, tensor, opts]), [q, r])
@@ -973,14 +971,6 @@ defmodule Nx.Defn.Expr do
     context = tensor.data.context
     out = %T{names: [], shape: {}, type: {:tuple, 2}}
     tuple(expr(out, context, :eigh, [{evals, evecs}, tensor, opts]), [evals, evecs])
-  end
-
-  @impl true
-  def svd({u, s, vt}, tensor, opts) do
-    tensor = to_expr(tensor)
-    context = tensor.data.context
-    out = %T{names: [], shape: {}, type: {:tuple, 3}}
-    tuple(expr(out, context, :svd, [{u, s, vt}, tensor, opts]), [u, s, vt])
   end
 
   @impl true

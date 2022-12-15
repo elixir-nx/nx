@@ -841,10 +841,8 @@ defmodule Nx.DefnTest do
   end
 
   describe "svd" do
-    defn svd(t), do: Nx.LinAlg.svd(t)
+    # defn svd(t), do: Nx.LinAlg.svd(t)
 
-    # TODO: this hangs somehow
-    @tag :skip
     test "returns tuples" do
       assert {u, s, vt} = Nx.LinAlg.svd(Nx.iota({3, 3}))
 

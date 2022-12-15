@@ -513,6 +513,15 @@ defmodule Nx.Shared do
   end
 
   defp ensure_optional_compatible!(
+         %T{type: {:tuple, left_size}, data: %{op: :optional, args: [x, result] = args}} = left,
+         right
+       )
+       when tuple_size(right) == left_size do
+    ensure_optional_compatible!(result, right)
+    # left
+  end
+
+  defp ensure_optional_compatible!(
          %{shape: shape, type: type, names: names} = left,
          %{shape: shape, type: type, names: names}
        ),
