@@ -259,7 +259,6 @@ defmodule Nx.Defn do
   ## Examples
 
       iex> Nx.Defn.default_options(compiler: EXLA, client: :cuda)
-      []
       iex> Nx.Defn.default_options()
       [compiler: EXLA, client: :cuda]
   """
