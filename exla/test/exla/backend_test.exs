@@ -144,7 +144,7 @@ defmodule EXLA.BackendTest do
     test "reconstructs original matrix" do
       t = Nx.iota({4, 4})
 
-      assert {u, s, vt} = Nx.LinAlg.svd(t)
+      assert {u, s, vt} = Nx.LinAlg.svd(t, max_iter: 10_000)
 
       reconstructed = u |> Nx.multiply(s) |> Nx.dot(vt)
       assert_all_close(t, reconstructed, atol: 1.0e-5)

@@ -74,7 +74,7 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp compute_cache(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, _meta]}}, state, cache) do
-    compute_cache(expr, state, cache)
+    composite_compute_cache(expr, state, cache)
   end
 
   defp compute_cache(%Nx.Tensor{data: %Expr{id: id, op: op}} = tensor, state, cache) do
@@ -214,7 +214,7 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, _meta]}}, state, caches) do
-    eval(expr, state, caches)
+    composite_eval(expr, state, caches)
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}} = ans, state, [cache | caches]) do
@@ -367,7 +367,7 @@ defmodule Nx.Defn.Evaluator do
     else
       params = Enum.map(args, &fn -> &1 end)
       {{expr, optional_cache}, caches} = pop_cache!(caches, [:optional | id])
-      {res, _} = eval(expr, %{state | params: params}, [optional_cache])
+      {res, _} = composite_eval(expr, %{state | params: params}, [optional_cache])
       {res, caches}
     end
   end

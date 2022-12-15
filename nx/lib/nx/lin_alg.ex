@@ -5,11 +5,9 @@ defmodule Nx.LinAlg do
 
   import Nx.Shared
   import Nx.Defn, only: [defn: 2, defnp: 2, deftransformp: 2]
-  import Nx.Defn.Kernel, only: [keyword!: 2, custom_grad: 2]
+  import Nx.Defn.Kernel, only: [keyword!: 2]
 
   alias Nx.Tensor, as: T
-
-  @default_eps 1.0e-10
 
   @doc """
   Returns the adjoint of a given tensor.
@@ -348,7 +346,7 @@ defmodule Nx.LinAlg do
   end
 
   defp norm_integer(%{shape: {_, _}} = t, -2, _opts) do
-    {_u, s, _v} = svd(t)
+    {_u, s, _v} = Nx.LinAlg.svd(t)
     Nx.reduce_min(s)
   end
 
@@ -740,13 +738,14 @@ defmodule Nx.LinAlg do
   """
   @doc from_backend: false
   defn invert(tensor) do
-    tensor
-    |> invert_shape()
-    |> invert_tensor()
-    |> custom_grad(fn ans, g ->
+    ans =
+      tensor
+      |> invert_shape()
+      |> invert_tensor()
+
+    custom_grad(ans, [tensor], fn g ->
       # As defined in https://juliadiff.org/ChainRulesCore.jl/stable/maths/arrays.html#Matrix-inversion-2
       ans_h = adjoint(ans)
-
       [{tensor, ans_h |> Nx.negate() |> Nx.dot(g) |> Nx.dot(ans_h)}]
     end)
   end
@@ -784,7 +783,7 @@ defmodule Nx.LinAlg do
       * `:reduced` - returns `q` and `r` with shapes `{..., M, K}` and `{..., K, N}`
       * `:complete` - returns `q` and `r` with shapes `{..., M, M}` and `{..., M, N}`
 
-    * `:eps` - Rounding error threshold that can be applied during the triangularization
+    * `:eps` - Rounding error threshold that can be applied during the triangularization. Defaults to `1.0e-10`
 
   ## Examples
 
@@ -917,7 +916,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) tensor must have at least rank 2, got rank 1 with shape {5}
   """
   def qr(tensor, opts \\ []) do
-    opts = keyword!(opts, mode: :reduced, eps: @default_eps)
+    opts = keyword!(opts, mode: :reduced, eps: 1.0e-10)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
     mode = opts[:mode]
@@ -956,10 +955,10 @@ defmodule Nx.LinAlg do
 
   ## Options
 
-    * `:max_iter` - `integer`. Defaults to `50_000`
+    * `:max_iter` - `integer`. Defaults to `1_000`
       Number of maximum iterations before stopping the decomposition
 
-    * `:eps` - `float`. Defaults to 1.0e-10
+    * `:eps` - `float`. Defaults to 1.0e-4
       Tolerance applied during the decomposition
 
   Note not all options apply to all backends, as backends may have
@@ -992,9 +991,9 @@ defmodule Nx.LinAlg do
       #Nx.Tensor<
         f32[3][3]
         [
-          [0.4082472324371338, 0.9128734469413757, 0.0],
-          [0.40824851393699646, -0.18257413804531097, 0.8944271802902222],
-          [0.8164970278739929, -0.36514827609062195, -0.4472135901451111]
+          [0.4075949788093567, 0.9131628274917603, 0.0],
+          [0.40837883949279785, -0.18228201568126678, 0.8944271802902222],
+          [0.8167576789855957, -0.36456403136253357, -0.4472135901451111]
         ]
       >
 
@@ -1012,8 +1011,8 @@ defmodule Nx.LinAlg do
         f32[2][2][2]
         [
           [
-            [0.5606290698051453, -0.828070342540741],
-            [0.8280670642852783, 0.5606313347816467]
+            [0.5612090229988098, -0.8276740908622742],
+            [0.8276740908622742, 0.5612090229988098]
           ],
           [
             [1.0, 0.0],
@@ -1031,7 +1030,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) matrix must be hermitian, a matrix is hermitian iff X = adjoint(X)
   """
   def eigh(tensor, opts \\ []) do
-    opts = keyword!(opts, max_iter: 50_000, eps: @default_eps)
+    opts = keyword!(opts, max_iter: 1_000, eps: 1.0e-4)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
     output_type = Nx.Type.to_floating(type)
@@ -1058,11 +1057,8 @@ defmodule Nx.LinAlg do
 
   ## Options
 
-    * `:max_iter` - `integer`. Defaults to `1000`
+    * `:max_iter` - `integer`. Defaults to `100`
       Number of maximum iterations before stopping the decomposition
-
-    * `:eps` - `float`. Defaults to 1.0e-10
-      Tolerance applied during the decomposition
 
   Note not all options apply to all backends, as backends may have
   specific optimizations that render these mechanisms unnecessary.
@@ -1076,7 +1072,7 @@ defmodule Nx.LinAlg do
         [
           [1.0, 0.0, 0.0],
           [0.0, 1.0, 0.0],
-          [0.0, 0.0, 1.0]
+          [0.0, 0.0, -1.0]
         ]
       >
       iex> s
@@ -1090,7 +1086,7 @@ defmodule Nx.LinAlg do
         [
           [1.0, 0.0, 0.0],
           [0.0, 1.0, 0.0],
-          [0.0, 0.0, -1.0]
+          [0.0, 0.0, 1.0]
         ]
       >
 
@@ -1099,16 +1095,16 @@ defmodule Nx.LinAlg do
       #Nx.Tensor<
         f32[4][4]
         [
+          [0.0, 0.9999999403953552, 0.0, 0.0],
           [1.0, 0.0, 0.0, 0.0],
-          [0.0, 1.0, 0.0, 0.0],
-          [0.0, 0.0, 1.0, 0.0],
+          [0.0, 0.0, -1.0, 0.0],
           [0.0, 0.0, 0.0, 1.0]
         ]
       >
       iex> s
       #Nx.Tensor<
         f32[3]
-        [3.0, 2.0, 1.0]
+        [3.0, 1.9999998807907104, 1.0]
       >
       iex> vt
       #Nx.Tensor<
@@ -1116,13 +1112,13 @@ defmodule Nx.LinAlg do
         [
           [0.0, 1.0, 0.0],
           [1.0, 0.0, 0.0],
-          [0.0, 0.0, -1.0]
+          [0.0, 0.0, 1.0]
         ]
       >
 
   """
   def svd(tensor, opts \\ []) do
-    opts = keyword!(opts, [:max_iter, eps: @default_eps])
+    opts = keyword!(opts, max_iter: 100)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
     Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.svd", 2)
@@ -1131,13 +1127,12 @@ defmodule Nx.LinAlg do
     {u_shape, s_shape, v_shape} = Nx.Shape.svd(shape)
     rank = tuple_size(shape)
 
-    impl!(tensor).svd(
+    output =
       {%{tensor | names: List.duplicate(nil, rank), type: output_type, shape: u_shape},
        %{tensor | names: List.duplicate(nil, rank - 1), type: output_type, shape: s_shape},
-       %{tensor | names: List.duplicate(nil, rank), type: output_type, shape: v_shape}},
-      tensor,
-      opts
-    )
+       %{tensor | names: List.duplicate(nil, rank), type: output_type, shape: v_shape}}
+
+    Nx.Shared.optional(:svd, [tensor, opts], output, &Nx.LinAlg.SVD.svd/2)
   end
 
   @doc """
@@ -1297,7 +1292,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) tensor must be a square matrix or a batch of square matrices, got shape: {3, 4}
   """
   def lu(tensor, opts \\ []) do
-    opts = keyword!(opts, eps: @default_eps)
+    opts = keyword!(opts, eps: 1.0e-10)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
     output_type = Nx.Type.to_floating(type)

@@ -725,8 +725,8 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def eigh(%Op{builder: builder, ref: operand}, lower) do
-    {v_ref, w_ref} = EXLA.NIF.eigh(operand, lower) |> unwrap!()
+  def eigh(%Op{builder: builder, ref: operand}, lower, eps, max_iter) do
+    {v_ref, w_ref} = EXLA.NIF.eigh(operand, lower, eps, max_iter) |> unwrap!()
 
     {
       %Op{builder: builder, ref: v_ref},
@@ -752,17 +752,6 @@ defmodule EXLA.Op do
     {
       %Op{builder: builder, ref: q_ref},
       %Op{builder: builder, ref: r_ref}
-    }
-  end
-
-  def svd(%Op{builder: builder, ref: operand}, precision) do
-    precision_config = get_precision_config_int(precision)
-    {u_ref, d_ref, v_ref} = EXLA.NIF.svd(operand, precision_config) |> unwrap!()
-
-    {
-      %Op{builder: builder, ref: u_ref},
-      %Op{builder: builder, ref: d_ref},
-      %Op{builder: builder, ref: v_ref}
     }
   end
 

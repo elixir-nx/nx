@@ -88,9 +88,9 @@ defmodule Nx.Defn.EvaluatorTest do
 
     test "svd" do
       assert {u, s, vt} = svd(Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]))
-      assert u == Nx.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+      assert u == Nx.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]])
       assert s == Nx.tensor([1.0, 1.0, 1.0])
-      assert vt == Nx.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]])
+      assert vt == Nx.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
     end
   end
 

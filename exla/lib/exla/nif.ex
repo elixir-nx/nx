@@ -210,13 +210,11 @@ defmodule EXLA.NIF do
 
   def cholesky(_operand), do: :erlang.nif_error(:undef)
 
-  def eigh(_operand, _lower), do: :erlang.nif_error(:undef)
+  def eigh(_operand, _lower, _eps, _max_iter), do: :erlang.nif_error(:undef)
 
   def lu(_operand), do: :erlang.nif_error(:undef)
 
   def qr(_operand, _full_matrices), do: :erlang.nif_error(:undef)
-
-  def svd(_a, _precision_config), do: :erlang.nif_error(:undef)
 
   def triangular_solve(_a, _b, _left_side, _lower, _unit_diagonal, _transpose_a),
     do: :erlang.nif_error(:undef)

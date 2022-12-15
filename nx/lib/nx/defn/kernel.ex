@@ -242,12 +242,17 @@ defmodule Nx.Defn.Kernel do
     Nx.Defn.Expr.metadata(expr, %{stop_grad: true, inspect: :stop_grad})
   end
 
+  @deprecated "custom_grad/2 is deprecated, use custom_grad/3 instead"
+  def custom_grad(expr, fun) when is_function(fun, 2) do
+    Nx.Defn.Expr.metadata(expr, %{custom_grad: fun, inspect: :custom_grad})
+  end
+
   @doc """
   Defines a custom gradient for the given expression.
 
-  It expects a `fun` to compute the gradient. The function
-  will be called with the expression itself and the current
-  gradient. It must return a list of arguments and their
+  It also expects a list of inputs of the gradient and a `fun`
+  to compute the gradient. The function will be called with the
+  current gradient. It must return a list of arguments and their
   updated gradient to continue applying `grad` on.
 
   ## Examples
@@ -256,14 +261,14 @@ defmodule Nx.Defn.Kernel do
   implemented by hand:
 
       def cos(t) do
-        custom_grad(Nx.cos(t), fn _ans, g ->
+        custom_grad(Nx.cos(t), [t], fn g ->
           [{t, -g * Nx.sin(t)}]
         end)
       end
 
   """
-  def custom_grad(expr, fun) when is_function(fun, 2) do
-    Nx.Defn.Expr.metadata(expr, %{custom_grad: fun, inspect: :custom_grad})
+  def custom_grad(expr, inputs, fun) when Kernel.and(is_list(inputs), is_function(fun, 1)) do
+    Nx.Defn.Expr.metadata(expr, %{custom_grad: {inputs, fun}, inspect: :custom_grad})
   end
 
   @doc """

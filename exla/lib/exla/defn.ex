@@ -711,8 +711,11 @@ defmodule EXLA.Defn do
 
   ## to_operator others
 
-  defp to_operator(:metadata, [op, _metadata], _ans, _state) do
-    op
+  defp to_operator(:metadata, [op, _metadata], _ans, state) do
+    case op do
+      %EXLA.Op{} -> op
+      _ -> EXLA.Op.tuple(state.builder, Tuple.to_list(op))
+    end
   end
 
   defp to_operator(:elem, [op, index], _ans, _state) do
@@ -826,14 +829,16 @@ defmodule EXLA.Defn do
     EXLA.Op.tuple(state.builder, [q, r])
   end
 
-  defp to_operator(
-         :svd,
-         [{%{type: type}, %{type: type}, %{type: type}}, tensor, _opts],
-         _ans,
-         state
-       ) do
-    {u, s, vt} = EXLA.Op.svd(to_type(tensor, type), state.precision)
-    EXLA.Op.tuple(state.builder, [u, s, vt])
+  defp to_operator(:eigh, [{%{type: type}, %{type: type}}, tensor, opts], _ans, state) do
+    {eigvec, eigval} =
+      EXLA.Op.eigh(
+        to_type(tensor, type),
+        1,
+        Keyword.fetch!(opts, :eps),
+        Keyword.fetch!(opts, :max_iter)
+      )
+
+    EXLA.Op.tuple(state.builder, [eigval, eigvec])
   end
 
   ## to_operator element-wise

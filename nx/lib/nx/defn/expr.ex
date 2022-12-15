@@ -92,8 +92,18 @@ defmodule Nx.Defn.Expr do
   inspection.
   """
   def metadata(expr, metadata) when is_map(metadata) do
-    expr = to_expr(expr)
-    expr(expr, expr.data.context, :metadata, [expr, metadata])
+    case to_container_expr(expr) do
+      %{data: %{context: context}} = res ->
+        expr(res, context, :metadata, [expr, metadata])
+
+      t when is_tuple(t) ->
+        context = elem(t, 0).data.context
+
+        tuple(
+          expr(tuple_out(tuple_size(t)), context, :metadata, [expr, metadata]),
+          Tuple.to_list(t)
+        )
+    end
   end
 
   @doc """
@@ -217,8 +227,16 @@ defmodule Nx.Defn.Expr do
   def optional(name, args, fun) do
     {args, opts} = Enum.split_while(args, &(not is_list(&1)))
     params = Enum.with_index(args, &parameter/2)
-    %{data: %{context: context}} = res = apply(fun, params ++ opts)
-    expr(res, context, :optional, [expr(res, context, name, args), res])
+
+    case apply(fun, params ++ opts) do
+      %{data: %{context: context}} = res ->
+        expr(res, context, :optional, [expr(res, context, name, args), res])
+
+      t when is_tuple(t) ->
+        context = elem(t, 0).data.context
+        out = expr(tuple_out(tuple_size(t)), context, name, args)
+        tuple(expr(out, context, :optional, [out, t]), Tuple.to_list(t))
+    end
   end
 
   ## Nx.Defn AST callbacks
@@ -946,8 +964,8 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def qr({q, r}, tensor, opts) do
-    tensor = to_expr(tensor)
+  def qr({q, r}, t, opts) do
+    tensor = to_expr(t)
     context = tensor.data.context
     out = %T{names: [], shape: {}, type: {:tuple, 2}}
     tuple(expr(out, context, :qr, [{q, r}, tensor, opts]), [q, r])
@@ -959,14 +977,6 @@ defmodule Nx.Defn.Expr do
     context = tensor.data.context
     out = %T{names: [], shape: {}, type: {:tuple, 2}}
     tuple(expr(out, context, :eigh, [{evals, evecs}, tensor, opts]), [evals, evecs])
-  end
-
-  @impl true
-  def svd({u, s, vt}, tensor, opts) do
-    tensor = to_expr(tensor)
-    context = tensor.data.context
-    out = %T{names: [], shape: {}, type: {:tuple, 3}}
-    tuple(expr(out, context, :svd, [{u, s, vt}, tensor, opts]), [u, s, vt])
   end
 
   @impl true
@@ -1299,6 +1309,11 @@ defmodule Nx.Defn.Expr do
   import Inspect.Algebra
 
   @impl true
+  # Special case for constants since we show them inline in regular printing
+  def inspect(%T{data: %Expr{op: :constant, args: [constant]}}, opts) do
+    concat([line(), color("Nx.Defn.Expr", :map, opts), line(), to_string(constant)])
+  end
+
   def inspect(tensor, opts) do
     {t, acc} = inspect_expr(tensor, {[], [], %{}, %{}})
     {_, {exprs, params, _var_map, _cache}} = Tree.apply_args(t, acc, &inspect_expr/2)

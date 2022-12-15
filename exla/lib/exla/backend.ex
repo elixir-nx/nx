@@ -279,7 +279,6 @@ defmodule EXLA.Backend do
       {:qr, [:tensor, :opts], [:tensor]},
       {:triangular_solve, [:a, :b, :opts], [:a, :b]},
       {:eigh, [:tensor, :opts], [:tensor]},
-      {:svd, [:tensor, :opts], [:tensor]},
       {:fft, [:tensor, :opts], [:tensor]},
       {:ifft, [:tensor, :opts], [:tensor]}
     ] ++

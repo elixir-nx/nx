@@ -100,7 +100,7 @@ defmodule Nx.Defn.GradTest do
 
       custom_cos =
         grad(t, fn t ->
-          custom_grad(Nx.cos(t), fn _ans, g ->
+          custom_grad(Nx.cos(t), [t], fn g ->
             [{t, g * -Nx.sin(t)}]
           end)
         end)
@@ -1958,8 +1958,8 @@ defmodule Nx.Defn.GradTest do
       assert_all_close(
         svd_grad(Nx.tensor([[3, 0], [1, 2]])),
         Nx.tensor([
-          [1.8970632553100586, -1.130002737045288],
-          [-0.7087637782096863, 0.05829668045043945]
+          [0.07228553295135498, 0.7500489950180054],
+          [1.113668441772461, 1.8945982456207275]
         ])
       )
     end
@@ -1967,7 +1967,10 @@ defmodule Nx.Defn.GradTest do
     test "computes the composed grad for tensor" do
       assert_all_close(
         svd_composed_grad(Nx.tensor([[3, 0], [1, 2]])),
-        Nx.tensor([[23.213549, 3.1363947], [9.804395, 8.365231]])
+        Nx.tensor([
+          [22.44730567932129, 4.334394931793213],
+          [10.295409202575684, 9.27196216583252]
+        ])
       )
     end
 
@@ -1975,9 +1978,9 @@ defmodule Nx.Defn.GradTest do
       assert_all_close(
         svd_composed_grad(Nx.tensor([[3, 0], [1, 2], [1, 1]])),
         Nx.tensor([
-          [25.680400848388672, 6.340582847595215],
-          [12.773930549621582, 11.075220108032227],
-          [10.668397903442383, 6.5805983543396]
+          [25.990453720092773, 6.061026096343994],
+          [12.646490097045898, 10.775838851928711],
+          [10.656349182128906, 6.384178638458252]
         ])
       )
     end
