@@ -128,31 +128,14 @@ defmodule Nx.Defn do
 
       deftransformp custom_elixir_code(value), do: IO.inspect(value)
 
-  For example, the two code snippets invoke `IO.inspect/1`, which is
-  not a `defn` function, with the value of `res`. This is useful
-  as it allows developers to transform `defn` code to optimize,
-  add new properties, and so on.
-
   The only difference between using `deftransform` and `deftransformp` is
   wether you want to expose and share the code with other modules, just
   like `def` and `defp`.
 
-  Transforms can also be used to manipulate Elixir data structures,
-  such as options. `defn` expects all inputs to be tensors, with the
-  exception of a default argument (declared with `\\`) which will be
-  treated as options.
-
-  For example, imagine you want to support options where the :axis
-  key is required. While you can't invoke `Keyword` directly, you
-  can do it via a transform:
-
-      defn sum_axis(t, opts \\ []) do
-        opts = keyword!(opts, [:axis])
-        axis = get_axis(opts)
-        Nx.sum(t, axes: [axis])
-      end
-
-      deftransformp get_axis(opts), do: Keyword.fetch!(opts, :axis)
+  Transforms are useful to manipulate tensor expressions or
+  Elixir data structures without the constraints of `defn`.
+  Calling a transform function outside of a `jit/2` or `defn`
+  will enable JIT (as it behaves in `defn`).
 
   ## Inputs and outputs types
 
@@ -773,6 +756,9 @@ defmodule Nx.Defn do
   Defines a transform that executes the given `fun` with `arg`
   when building `defn` expressions.
 
+  A JIT context is automatically started if not inside `defn`
+  or `jit/2`.
+
   ## Example
 
   Take the following defn expression:
@@ -834,7 +820,7 @@ defmodule Nx.Defn do
   defp define_defn(kind, call, block, env) do
     assert_no_guards!(kind, call, env)
     # Note name here is not necessarily an atom due to unquote(name) support
-    {name, args} = decompose_call!(kind, call, env)
+    {name, _meta, args} = decompose_call!(kind, call, env)
     arity = length(args)
 
     defaults =
@@ -861,8 +847,12 @@ defmodule Nx.Defn do
 
   defp define_transform(kind, call, block, env) do
     # Note name here is not necessarily an atom due to unquote(name) support
-    {name, args} = decompose_call!(kind, call, env)
+    {name, meta, args, recomposer} = decompose_guarded_call!(kind, call, env)
     arity = length(args)
+
+    # At this moment we will actually the defn version
+    defn_name = quote(do: :"__defn:#{unquote(name)}__")
+    call = recomposer.({{:unquote, meta, [defn_name]}, meta, args})
 
     defaults =
       for {{:\\, meta, [_, default]}, i} <- Enum.with_index(args),
@@ -895,19 +885,26 @@ defmodule Nx.Defn do
     {:__block__, [], [define_ast, def_ast]}
   end
 
-  defp decompose_call!(kind, {:when, _, [call, _guards]}, env),
-    do: decompose_call!(kind, call, env)
+  defp decompose_guarded_call!(kind, {:when, meta, [call, guards]}, env) do
+    {name, call_meta, args} = decompose_call!(kind, call, env)
+    {name, call_meta, args, &{:when, meta, [&1, guards]}}
+  end
 
-  defp decompose_call!(_kind, {{:unquote, _, [name]}, _, args}, _env) do
-    {name, args}
+  defp decompose_guarded_call!(kind, call, env) do
+    {name, call_meta, args} = decompose_call!(kind, call, env)
+    {name, call_meta, args, & &1}
+  end
+
+  defp decompose_call!(_kind, {{:unquote, _, [name]}, meta, args}, _env) do
+    {name, meta, args}
   end
 
   defp decompose_call!(kind, call, env) do
-    case Macro.decompose_call(call) do
-      {name, args} ->
-        {name, args}
-
-      :error ->
+    with {_, meta, _} <- call,
+         {name, args} <- Macro.decompose_call(call) do
+      {name, meta, args}
+    else
+      _ ->
         compile_error!(
           env,
           "first argument of #{kind}n must be a call, got: #{Macro.to_string(call)}"

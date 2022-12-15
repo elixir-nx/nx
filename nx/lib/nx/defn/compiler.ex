@@ -220,6 +220,17 @@ defmodule Nx.Defn.Compiler do
   end
 
   @doc false
+  def __runtime__(fun, args) do
+    {compiler, compiler_opts} =
+      Keyword.pop(Nx.Defn.default_options(), :compiler, Nx.Defn.Evaluator)
+
+    {fun, params, _templates, flatten} = to_lazy_params(fun, args)
+    runtime_fun = &runtime_fun(&1, fun, compiler)
+    [res] = compiler.__jit__(fun, params, runtime_fun, [flatten], compiler_opts)
+    res
+  end
+
+  @doc false
   def __compile__(%Macro.Env{module: module, file: file, line: line}, exports) do
     {defn_exports, transform_exports} =
       Enum.split_with(exports, fn {_fun_arity, meta} -> meta.type == :numerical end)
@@ -253,7 +264,7 @@ defmodule Nx.Defn.Compiler do
 
   defp compile_each_defn({{name, arity} = def, def_meta}, state) do
     %{defaults: defaults} = def_meta
-    {{kind, _meta, args, ast}, state} = get_and_normalize_definition(def, state)
+    {{kind, _meta, args, ast}, state} = get_and_normalize_defn(def, state)
 
     defn_name = defn_name(name)
 
@@ -296,37 +307,38 @@ defmodule Nx.Defn.Compiler do
     {kind, meta, [Macro.update_meta(signature, &Keyword.delete(&1, :context)), block]}
   end
 
-  defp compile_each_transform({{name, max_arity}, _def_meta}, state) do
+  defp compile_each_transform({{name, arity}, %{defaults: defaults}}, state) do
     defn_name = defn_name(name)
 
-    # {...} <- [Module...] is a trick so we can skip nil definitions for a given arity
     ast =
-      for defn_arity <- 0..max_arity,
-          {:v1, kind, meta, _clauses} <- [Module.get_definition(state.module, {name, defn_arity})] do
-        defn_args = Macro.generate_arguments(defn_arity, __MODULE__)
+      for defn_arity <- (arity - map_size(defaults))..arity do
+        {:v1, kind, meta, clauses} = Module.get_definition(state.module, {defn_name, defn_arity})
+
+        if clauses == [] do
+          type_str = if kind == :def, do: "deftransform", else: "deftransformp"
+          compile_error!(meta, state, "cannot have #{type_str} #{name}/#{arity} without clauses")
+        end
+
+        args = Macro.generate_arguments(defn_arity, __MODULE__)
 
         quote line: meta[:line] do
-          Kernel.unquote(kind)(unquote(defn_name)(unquote_splicing(defn_args)),
-            do: unquote(name)(unquote_splicing(defn_args))
-          )
+          Kernel.unquote(kind)(unquote(name)(unquote_splicing(args))) do
+            if Process.get(Nx.Defn.Compiler) do
+              unquote(defn_name)(unquote_splicing(args))
+            else
+              Nx.Defn.Compiler.__runtime__(
+                &(unquote(Macro.var(defn_name, __MODULE__)) / unquote(arity)),
+                unquote(args)
+              )
+            end
+          end
         end
       end
 
     {:__block__, [], ast}
   end
 
-  @doc false
-  def __runtime__(fun, args) do
-    {compiler, compiler_opts} =
-      Keyword.pop(Nx.Defn.default_options(), :compiler, Nx.Defn.Evaluator)
-
-    {fun, params, _templates, flatten} = to_lazy_params(fun, args)
-    runtime_fun = &runtime_fun(&1, fun, compiler)
-    [res] = compiler.__jit__(fun, params, runtime_fun, [flatten], compiler_opts)
-    res
-  end
-
-  defp get_and_normalize_definition(def, state) do
+  defp get_and_normalize_defn({name, arity} = def, state) do
     {:v1, kind, meta, clauses} = Module.get_definition(state.module, def)
     state = %{state | function: def, line: meta[:line] || state.line, rewrite_underscore?: true}
 
@@ -334,7 +346,7 @@ defmodule Nx.Defn.Compiler do
 
     case clauses do
       [] ->
-        compile_error!(meta, state, "cannot have #{type_str} without clauses")
+        compile_error!(meta, state, "cannot have #{type_str} #{name}/#{arity} without clauses")
 
       [{meta, args, [], ast}] ->
         {args, state} = normalize_args(args, meta, state)
@@ -342,7 +354,11 @@ defmodule Nx.Defn.Compiler do
         {{kind, meta, args, ast}, state}
 
       [_, _ | _] ->
-        compile_error!(meta, state, "cannot compile #{type_str} with multiple clauses")
+        compile_error!(
+          meta,
+          state,
+          "cannot compile #{type_str} #{name}/#{arity} with multiple clauses"
+        )
     end
   end
 

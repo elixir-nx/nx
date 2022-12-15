@@ -35,11 +35,19 @@ defmodule Nx.LazyLazyOnlyTest do
     a + c
   end
 
-  test "matches defn signature and does not invoke :c" do
+  deftransform transform_signature(%LazyWrapped{a: a, c: c}) do
+    Nx.add(a, c)
+  end
+
+  test "matches defn signature and does not invoke :b" do
     assert match_signature(%LazyOnly{a: 1, b: 2, c: 3}) == Nx.tensor(4)
   end
 
-  test "matches jit signature and does not invoke :c" do
+  test "matches transform signature and does not invoke :b" do
+    assert transform_signature(%LazyOnly{a: 1, b: 2, c: 3}) == Nx.tensor(4)
+  end
+
+  test "matches jit signature and does not invoke :b" do
     fun = Nx.Defn.jit(fn %LazyWrapped{a: a, c: c} -> Nx.add(a, c) end)
     assert fun.(%LazyOnly{a: 1, b: 2, c: 3}) == Nx.tensor(4)
   end

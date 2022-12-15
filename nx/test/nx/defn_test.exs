@@ -2371,7 +2371,7 @@ defmodule Nx.DefnTest do
 
     test "multi-clause raises for no clause matching args" do
       assert_raise FunctionClauseError,
-                   "no function clause matching in Nx.DefnTest.multi_clause_transform/2",
+                   "no function clause matching in Nx.DefnTest.\"__defn:multi_clause_transform__\"/2",
                    fn ->
                      multi_clause_second(x: 2, y: -3)
                    end
