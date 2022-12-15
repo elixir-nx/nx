@@ -1,9 +1,9 @@
 defmodule Nx.LinAlg.SVD do
   import Nx.Defn
-  @default_eps 1.1920929e-07
+  @eps 1.1920929e-07
 
   defn svd(input_tensor, opts \\ []) do
-    opts = keyword!(opts, max_iter: 100, eps: @default_eps)
+    validate_opts(opts)
 
     {is_flipped, tensor} =
       case Nx.shape(input_tensor) do
@@ -54,12 +54,16 @@ defmodule Nx.LinAlg.SVD do
     end)
   end
 
+  deftransformp validate_opts(opts \\ []) do
+    opts[:max_iter] || raise ArgumentError, "missing option :max_iter"
+  end
+
   defnp svd_tall_and_square(a, opts \\ []) do
     {_m, n} = Nx.shape(a)
     {u, h} = qdwh(a, opts)
     # ensure H is hermitian
     h = (h + Nx.LinAlg.adjoint(h)) / 2
-    {s, v} = Nx.LinAlg.eigh(h, max_iter: opts[:max_iter], eps: 1.0e-4)
+    {s, v} = Nx.LinAlg.eigh(h, max_iter: opts[:max_iter])
 
     sign = Nx.select(s < 0, -1, 1)
     v = sign * v
@@ -71,15 +75,15 @@ defmodule Nx.LinAlg.SVD do
     v_out = Nx.take(v, sort_idx, axis: 1)
     u_out = Nx.dot(u, v_out)
 
-    u_out = Nx.select(s[0] < n * opts[:eps] * s_out[0], correct_rank_deficiency(u_out), u_out)
+    u_out = Nx.select(s[0] < n * @eps * s_out[0], correct_rank_deficiency(u_out), u_out)
     {u_out, s_out, v_out}
   end
 
   defn qdwh(x, opts \\ []) do
     alpha = Nx.sqrt(Nx.LinAlg.norm(x, ord: 1)) * Nx.sqrt(Nx.LinAlg.norm(x, ord: :inf))
-    l = opts[:eps]
+    l = @eps
     u = x / alpha
-    tol_l = 5 * opts[:eps]
+    tol_l = 5 * @eps
     tol_norm = Nx.cbrt(tol_l)
 
     one_u8 = Nx.tensor(1, type: :u8)
@@ -94,7 +98,7 @@ defmodule Nx.LinAlg.SVD do
         # if l2 is too small, dd will tend to infinity.
         # keeping it at the `eps` noise floor helps
         # avoid this problem.
-        l2 = Nx.select(l2 < opts[:eps], opts[:eps], l2)
+        l2 = Nx.select(l2 < @eps, @eps, l2)
         dd = Nx.cbrt(4.0 * (1.0 / l2 - 1.0) / l2)
         sqd = Nx.sqrt(1.0 + dd)
         a = sqd + Nx.sqrt(8.0 - 4.0 * dd + 8.0 * (2.0 - l2) / (l2 * sqd)) / 2
@@ -197,14 +201,14 @@ defmodule Nx.LinAlg.SVD do
       if m == n do
         u
       else
-        Nx.slice(u, [0, 0], [m, k])
+        u[[0..(m - 1), 0..(k - 1)]]
       end
 
     du =
       if m == n do
         du
       else
-        Nx.slice(du, [0, 0], [m, k])
+        du[[0..(m - 1), 0..(k - 1)]]
       end
 
     # https://j-towns.github.io/papers/svd-derivative.pdf
@@ -213,42 +217,34 @@ defmodule Nx.LinAlg.SVD do
     eye_m = Nx.eye(m)
     eye_n = Nx.eye(n)
 
-    s_sq = Nx.power(s_input, 2)
-    sub = s_sq |> Nx.new_axis(1) |> Nx.subtract(s_sq) |> Nx.negate() |> Nx.add(eye_k)
-    f = Nx.select(eye_k, 0, Nx.divide(1, sub))
+    s_sq = s_input ** 2
+    sub = -(Nx.new_axis(s_sq, 1) - s_sq) + eye_k
+    f = Nx.select(eye_k, 0, 1 / sub)
 
-    s = s_input |> Nx.make_diagonal()
-    s_inv = 1 |> Nx.divide(s_input) |> Nx.make_diagonal()
+    s = Nx.make_diagonal(s_input)
+    s_inv = Nx.make_diagonal(1 / s_input)
 
-    ut_du =
-      u |> Nx.LinAlg.adjoint() |> Nx.dot(du) |> Nx.subtract(Nx.dot(Nx.LinAlg.adjoint(du), u))
+    ut_du = Nx.dot(Nx.LinAlg.adjoint(u), du) - Nx.dot(Nx.LinAlg.adjoint(du), u)
 
-    first_component_du = u |> Nx.dot(Nx.multiply(f, ut_du)) |> Nx.dot(s)
+    first_component_du = u |> Nx.dot(f * ut_du) |> Nx.dot(s)
 
-    second_component_du =
-      eye_m
-      |> Nx.subtract(Nx.dot(u, Nx.LinAlg.adjoint(u)))
-      |> Nx.dot(du)
-      |> Nx.dot(s_inv)
+    second_component_du = (eye_m - Nx.dot(u, Nx.LinAlg.adjoint(u))) |> Nx.dot(du) |> Nx.dot(s_inv)
 
-    du_component = first_component_du |> Nx.add(second_component_du) |> Nx.dot(vt)
+    du_component = Nx.dot(first_component_du + second_component_du, vt)
 
-    ds_component = u |> Nx.dot(Nx.multiply(eye_k, ds)) |> Nx.dot(vt)
+    ds_component = u |> Nx.dot(eye_k * ds) |> Nx.dot(vt)
 
     first_dvt_component =
-      vt
-      |> Nx.dot(Nx.LinAlg.adjoint(dvt))
-      |> Nx.subtract(Nx.dot(dvt, Nx.LinAlg.adjoint(vt)))
-      |> Nx.multiply(f)
+      (Nx.dot(vt, Nx.LinAlg.adjoint(dvt)) - Nx.dot(dvt, Nx.LinAlg.adjoint(vt))) * f
 
     first_dvt_component = s |> Nx.dot(first_dvt_component) |> Nx.dot(vt)
 
     second_dvt_component =
-      s_inv |> Nx.dot(dvt) |> Nx.dot(Nx.subtract(eye_n, Nx.dot(Nx.LinAlg.adjoint(vt), vt)))
+      s_inv |> Nx.dot(dvt) |> Nx.dot(eye_n - Nx.dot(Nx.LinAlg.adjoint(vt), vt))
 
-    dvt_component = Nx.dot(u, Nx.add(first_dvt_component, second_dvt_component))
+    dvt_component = Nx.dot(u, first_dvt_component + second_dvt_component)
 
-    da = du_component |> Nx.add(ds_component) |> Nx.add(dvt_component)
+    da = du_component + ds_component + dvt_component
 
     [{input, da}]
   end

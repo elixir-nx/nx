@@ -596,7 +596,7 @@ defmodule Nx.LinAlgTest do
       t = Nx.tensor([[1.0, 2.0, 3.0], [0.0, 4.0, 0.0], [0.0, 0.0, 9.0]])
 
       assert {%{type: output_type} = u, %{type: output_type} = s, %{type: output_type} = v} =
-               Nx.LinAlg.svd(t, eps: 1.0e-10)
+               Nx.LinAlg.svd(t)
 
       # turn s into a {4, 3} tensor
       s_matrix =

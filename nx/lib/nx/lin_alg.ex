@@ -783,7 +783,7 @@ defmodule Nx.LinAlg do
       * `:reduced` - returns `q` and `r` with shapes `{..., M, K}` and `{..., K, N}`
       * `:complete` - returns `q` and `r` with shapes `{..., M, M}` and `{..., M, N}`
 
-    * `:eps` - Rounding error threshold that can be applied during the triangularization
+    * `:eps` - Rounding error threshold that can be applied during the triangularization. Defaults to `1.0e-10`
 
   ## Examples
 
@@ -955,10 +955,10 @@ defmodule Nx.LinAlg do
 
   ## Options
 
-    * `:max_iter` - `integer`. Defaults to `50_000`
+    * `:max_iter` - `integer`. Defaults to `1_000`
       Number of maximum iterations before stopping the decomposition
 
-    * `:eps` - `float`. Defaults to 1.0e-10
+    * `:eps` - `float`. Defaults to 1.0e-4
       Tolerance applied during the decomposition
 
   Note not all options apply to all backends, as backends may have
@@ -1057,11 +1057,8 @@ defmodule Nx.LinAlg do
 
   ## Options
 
-    * `:max_iter` - `integer`. Defaults to `1000`
+    * `:max_iter` - `integer`. Defaults to `100`
       Number of maximum iterations before stopping the decomposition
-
-    * `:eps` - `float`. Defaults to 1.0e-10
-      Tolerance applied during the decomposition
 
   Note not all options apply to all backends, as backends may have
   specific optimizations that render these mechanisms unnecessary.
@@ -1121,7 +1118,7 @@ defmodule Nx.LinAlg do
 
   """
   def svd(tensor, opts \\ []) do
-    opts = keyword!(opts, max_iter: 100, eps: 1.1920929e-07)
+    opts = keyword!(opts, max_iter: 100)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
     Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.svd", 2)

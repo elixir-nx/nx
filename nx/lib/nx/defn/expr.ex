@@ -229,7 +229,6 @@ defmodule Nx.Defn.Expr do
         expr(res, context, :optional, [expr(res, context, name, args), res])
 
       t when is_tuple(t) ->
-        # we want to return an optional node
         context = elem(t, 0).data.context
         out = expr(tuple_out(tuple_size(t)), context, name, args)
         tuple(expr(out, context, :optional, [out, t]), Tuple.to_list(t))
