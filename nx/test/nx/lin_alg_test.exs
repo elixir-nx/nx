@@ -493,7 +493,7 @@ defmodule Nx.LinAlgTest do
           |> Nx.LinAlg.adjoint()
           |> Nx.multiply(evals_test)
           |> Nx.dot([2], [0], q, [1], [0])
-          |> round(3)
+          |> round(2)
 
         # Eigenvalues and eigenvectors
         assert {evals, evecs} = Nx.LinAlg.eigh(a, max_iter: 10_000)
