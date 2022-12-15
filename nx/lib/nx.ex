@@ -3411,6 +3411,8 @@ defmodule Nx do
   Or use `Nx.global_default_backend/1` as it changes the
   default backend on all processes.
 
+  The function returns the value that was previously set as backend.
+
   ## Examples
 
       iex> Nx.default_backend({EXLA.Backend, device: :cuda})
@@ -3446,6 +3448,7 @@ defmodule Nx do
         config: [nx: [default_backend: {EXLA.Backend, device: :cuda}]]
       )
 
+  The function returns the value that was previously set as global backend.
   """
   @doc type: :backend
   def global_default_backend(backend) do
