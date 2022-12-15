@@ -98,7 +98,11 @@ defmodule Nx.Defn.Expr do
 
       t when is_tuple(t) ->
         context = elem(t, 0).data.context
-        tuple(expr(tuple_out(tuple_size(t)), context, :metadata, [expr, metadata]), Tuple.to_list(t))
+
+        tuple(
+          expr(tuple_out(tuple_size(t)), context, :metadata, [expr, metadata]),
+          Tuple.to_list(t)
+        )
     end
   end
 

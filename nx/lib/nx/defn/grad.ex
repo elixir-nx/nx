@@ -106,8 +106,15 @@ defmodule Nx.Defn.Grad do
     end)
   end
 
-  defp parents_args(:parameter, %{data: %{args: [pos]}} = t, id, {parents, nodes}, [_ | _] = params) do
+  defp parents_args(
+         :parameter,
+         %{data: %{args: [pos]}} = t,
+         id,
+         {parents, nodes},
+         [_ | _] = params
+       ) do
     arg = Enum.fetch!(params, pos)
+
     {Map.update(parents, arg.data.id, [id], &[id | &1]),
      Map.put(nodes, id, put_in(t.data.args, [arg]))}
   end

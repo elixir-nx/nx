@@ -80,6 +80,7 @@ defmodule Nx.LinAlg.SVD do
   end
 
   defn qdwh(x, opts \\ []) do
+    # reference implementation taken from Jax
     alpha = Nx.sqrt(Nx.LinAlg.norm(x, ord: 1)) * Nx.sqrt(Nx.LinAlg.norm(x, ord: :inf))
     l = @eps
     u = x / alpha
