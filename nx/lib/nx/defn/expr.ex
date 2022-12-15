@@ -217,19 +217,16 @@ defmodule Nx.Defn.Expr do
   def optional(name, args, fun) do
     {args, opts} = Enum.split_while(args, &(not is_list(&1)))
     params = Enum.with_index(args, &parameter/2)
-    res = apply(fun, params ++ opts)
 
-    case res do
-      %{data: %{context: context}} ->
+    case apply(fun, params ++ opts) do
+      %{data: %{context: context}} = res ->
         expr(res, context, :optional, [expr(res, context, name, args), res])
 
       t when is_tuple(t) ->
         # we want to return an optional node
         context = elem(t, 0).data.context
-
         out = expr(%T{names: [], shape: {}, type: {:tuple, tuple_size(t)}}, context, name, args)
-
-        expr(out, context, :optional, [out, t])
+        tuple(expr(out, context, :optional, [out, t]), Tuple.to_list(t))
     end
   end
 
