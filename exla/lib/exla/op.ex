@@ -734,8 +734,8 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def eigh(%Op{builder: builder, ref: operand}, lower, eps, max_iter) do
-    {v_ref, w_ref} = EXLA.NIF.eigh(operand, lower, eps, max_iter) |> unwrap!()
+  def eigh(%Op{builder: builder, ref: operand}, lower, _eps, max_iter) do
+    {v_ref, w_ref} = EXLA.NIF.eigh(operand, lower, 1.0e-9, max_iter) |> unwrap!()
 
     {
       %Op{builder: builder, ref: v_ref},

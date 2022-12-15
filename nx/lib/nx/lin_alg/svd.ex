@@ -184,7 +184,6 @@ defmodule Nx.LinAlg.SVD do
 
     diag_r = Nx.take_diagonal(r) < 0
     sign_r = Nx.select(diag_r, -1, 1)
-    sign_r = Nx.select(diag_r == 0, 0, sign_r)
 
     # same as Nx.dot(u_out, Nx.make_diagonal(sign_r))
     u_out * sign_r
