@@ -630,15 +630,14 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def select(out, %{shape: {}} = pred, on_true, on_false) do
-    on_false =
-      on_false |> broadcast_data(out.shape) |> binary_to_binary(on_false.type, out.type, & &1)
+    result =
+      if scalar_to_number(pred) == 0 do
+        on_false |> broadcast_data(out.shape) |> binary_to_binary(on_false.type, out.type, & &1)
+      else
+        on_true |> broadcast_data(out.shape) |> binary_to_binary(on_true.type, out.type, & &1)
+      end
 
-    on_true =
-      on_true |> broadcast_data(out.shape) |> binary_to_binary(on_true.type, out.type, & &1)
-
-    if scalar_to_number(pred) == 0,
-      do: from_binary(out, on_false),
-      else: from_binary(out, on_true)
+    from_binary(out, result)
   end
 
   def select(%{shape: shape, type: type} = out, pred, on_true, on_false) do
