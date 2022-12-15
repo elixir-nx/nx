@@ -92,8 +92,14 @@ defmodule Nx.Defn.Expr do
   inspection.
   """
   def metadata(expr, metadata) when is_map(metadata) do
-    expr = to_expr(expr)
-    expr(expr, expr.data.context, :metadata, [expr, metadata])
+    case to_container_expr(expr) do
+      %{data: %{context: context}} = res ->
+        expr(res, context, :metadata, [expr, metadata])
+
+      t when is_tuple(t) ->
+        context = elem(t, 0).data.context
+        tuple(expr(tuple_out(tuple_size(t)), context, :metadata, [expr, metadata]), Tuple.to_list(t))
+    end
   end
 
   @doc """
@@ -225,7 +231,7 @@ defmodule Nx.Defn.Expr do
       t when is_tuple(t) ->
         # we want to return an optional node
         context = elem(t, 0).data.context
-        out = expr(%T{names: [], shape: {}, type: {:tuple, tuple_size(t)}}, context, name, args)
+        out = expr(tuple_out(tuple_size(t)), context, name, args)
         tuple(expr(out, context, :optional, [out, t]), Tuple.to_list(t))
     end
   end
