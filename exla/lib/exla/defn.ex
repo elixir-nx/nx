@@ -711,8 +711,11 @@ defmodule EXLA.Defn do
 
   ## to_operator others
 
-  defp to_operator(:metadata, [op, _metadata], _ans, _state) do
-    op
+  defp to_operator(:metadata, [op, _metadata], _ans, state) do
+    case op do
+      %EXLA.Op{} -> op
+      _ -> EXLA.Op.tuple(state.builder, Tuple.to_list(op))
+    end
   end
 
   defp to_operator(:elem, [op, index], _ans, _state) do
