@@ -253,6 +253,15 @@ defmodule Nx.Defn do
 
         config :nx, :#{@app_key}, [compiler: EXLA, client: :cuda]
 
+  The function returns the values that were previously set as default
+  options.
+
+  ## Examples
+
+      iex> Nx.Defn.default_options(compiler: EXLA, client: :cuda)
+      []
+      iex> Nx.Defn.default_options()
+      [compiler: EXLA, client: :cuda]
   """
   def default_options(options) when is_list(options) do
     Process.put(@compiler_key, options) || Application.fetch_env!(:nx, @app_key)
@@ -272,6 +281,8 @@ defmodule Nx.Defn do
 
       config :nx, :#{@app_key}, [compiler: EXLA, client: :cuda]
 
+  The function returns the values that were previously set as global
+  default options.
   """
   def global_default_options(options) when is_list(options) do
     current = Application.fetch_env!(:nx, @app_key)
