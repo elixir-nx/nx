@@ -95,11 +95,10 @@ defmodule Nx.LinAlg.SVD do
           u
       end
 
-    res =
-      case is_flipped do
-        true -> {v, s, Nx.LinAlg.adjoint(u)}
-        false -> {u, s, Nx.LinAlg.adjoint(v)}
-      end
+    case is_flipped do
+      true -> {v, s, Nx.LinAlg.adjoint(u)}
+      false -> {u, s, Nx.LinAlg.adjoint(v)}
+    end
   end
 
   defnp svd_tall_and_square(a, opts \\ []) do
