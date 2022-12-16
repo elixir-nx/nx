@@ -656,7 +656,7 @@ defmodule Nx.LinAlgTest do
       assert_all_close(u |> Nx.dot(Nx.stack([s, Nx.tensor([0])])) |> Nx.dot(vt), t)
     end
 
-    test "works with zero-tensor do
+    test "works with zero-tensor" do
       for {m, n, k} <- [{3, 3, 3}, {3, 4, 3}, {4, 3, 3}] do
         t = Nx.broadcast(0, {3, 3})
         {u, s, vt} = Nx.LinAlg.svd(t)
