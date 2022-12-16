@@ -319,6 +319,15 @@ defmodule EXLA.Backend do
           client_name
       end
 
-    EXLA.jit_apply(fun, args, on_conflict: :force, client: client || EXLA.Client.default_name())
+    default_backend_client =
+      case Nx.default_backend() do
+        {EXLA.Backend, opts} -> opts[:client]
+        _ -> nil
+      end
+
+    EXLA.jit_apply(fun, args,
+      on_conflict: :force,
+      client: client || default_backend_client || EXLA.Client.default_name()
+    )
   end
 end
