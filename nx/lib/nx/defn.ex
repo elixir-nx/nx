@@ -128,14 +128,12 @@ defmodule Nx.Defn do
 
       deftransformp custom_elixir_code(value), do: IO.inspect(value)
 
-  The only difference between using `deftransform` and `deftransformp` is
-  wether you want to expose and share the code with other modules, just
-  like `def` and `defp`.
+  The only difference between using `deftransform` and `deftransformp`
+  is wether you want to expose and share the code with other modules,
+  just like `def` and `defp`.
 
   Transforms are useful to manipulate tensor expressions or
   Elixir data structures without the constraints of `defn`.
-  Calling a transform function outside of a `jit/2` or `defn`
-  will enable JIT (as it behaves in `defn`).
 
   ## Inputs and outputs types
 
@@ -766,9 +764,6 @@ defmodule Nx.Defn do
   Defines a transform that executes the given `fun` with `arg`
   when building `defn` expressions.
 
-  A JIT context is automatically started if not inside `defn`
-  or `jit/2`.
-
   ## Example
 
   Take the following defn expression:
@@ -830,7 +825,7 @@ defmodule Nx.Defn do
   defp define_defn(kind, call, block, env) do
     assert_no_guards!(kind, call, env)
     # Note name here is not necessarily an atom due to unquote(name) support
-    {name, _meta, args} = decompose_call!(kind, call, env)
+    {name, args} = decompose_call!(kind, call, env)
     arity = length(args)
 
     defaults =
@@ -857,12 +852,8 @@ defmodule Nx.Defn do
 
   defp define_transform(kind, call, block, env) do
     # Note name here is not necessarily an atom due to unquote(name) support
-    {name, meta, args, recomposer} = decompose_guarded_call!(kind, call, env)
+    {name, args} = decompose_call!(kind, call, env)
     arity = length(args)
-
-    # At this moment we will actually the defn version
-    defn_name = quote(do: :"__defn:#{unquote(name)}__")
-    call = recomposer.({{:unquote, meta, [defn_name]}, meta, args})
 
     defaults =
       for {{:\\, meta, [_, default]}, i} <- Enum.with_index(args),
@@ -895,26 +886,19 @@ defmodule Nx.Defn do
     {:__block__, [], [define_ast, def_ast]}
   end
 
-  defp decompose_guarded_call!(kind, {:when, meta, [call, guards]}, env) do
-    {name, call_meta, args} = decompose_call!(kind, call, env)
-    {name, call_meta, args, &{:when, meta, [&1, guards]}}
-  end
+  defp decompose_call!(kind, {:when, _, [call, _guards]}, env),
+    do: decompose_call!(kind, call, env)
 
-  defp decompose_guarded_call!(kind, call, env) do
-    {name, call_meta, args} = decompose_call!(kind, call, env)
-    {name, call_meta, args, & &1}
-  end
-
-  defp decompose_call!(_kind, {{:unquote, _, [name]}, meta, args}, _env) do
-    {name, meta, args}
+  defp decompose_call!(_kind, {{:unquote, _, [name]}, _, args}, _env) do
+    {name, args}
   end
 
   defp decompose_call!(kind, call, env) do
-    with {_, meta, _} <- call,
-         {name, args} <- Macro.decompose_call(call) do
-      {name, meta, args}
-    else
-      _ ->
+    case Macro.decompose_call(call) do
+      {name, args} ->
+        {name, args}
+
+      :error ->
         compile_error!(
           env,
           "first argument of #{kind}n must be a call, got: #{Macro.to_string(call)}"
