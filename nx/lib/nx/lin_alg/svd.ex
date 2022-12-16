@@ -37,11 +37,13 @@ defmodule Nx.LinAlg.SVD do
 
   defnp svd_all_zeros(a) do
     {m, n} = Nx.shape(a)
+
     k =
       case {m, n} do
         {m, n} when m > n -> n
         _ -> m
       end
+
     s = Nx.broadcast(0, {k}, type: Nx.type(a))
     u = Nx.eye({m, m}, type: Nx.type(a))
     v = Nx.eye({n, n}, type: Nx.type(a))

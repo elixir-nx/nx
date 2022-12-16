@@ -342,7 +342,11 @@ defmodule Nx.Defn.Compiler do
         {{kind, meta, args, ast}, state}
 
       [_, _ | _] ->
-        compile_error!(meta, state, "cannot compile #{type_str} #{name}/#{arity} with multiple clauses")
+        compile_error!(
+          meta,
+          state,
+          "cannot compile #{type_str} #{name}/#{arity} with multiple clauses"
+        )
     end
   end
 
