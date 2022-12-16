@@ -25,9 +25,9 @@ defmodule Nx.LinAlg.SVD do
     validate_opts(opts)
 
     if Nx.all(input_tensor == 0) do
-      zero_svd(input_tensor)
+      svd_all_zeros(input_tensor)
     else
-      non_zero_svd(input_tensor, opts)
+      svd_non_zero(input_tensor, opts)
     end
   end
 
@@ -49,7 +49,7 @@ defmodule Nx.LinAlg.SVD do
     {u, s, v}
   end
 
-  defn non_zero_svd(input_tensor, opts \\ []) do
+  defn svd_non_zero(input_tensor, opts \\ []) do
     {is_flipped, tensor} =
       case Nx.shape(input_tensor) do
         {m, n} when m < n ->
