@@ -24,6 +24,39 @@ defmodule Nx.LinAlg.SVD do
   defn svd(input_tensor, opts \\ []) do
     validate_opts(opts)
 
+    result =
+      if Nx.all(input_tensor == 0) do
+        svd_all_zeros(input_tensor)
+      else
+        svd_non_zero(input_tensor, opts)
+      end
+
+    custom_grad(result, [input_tensor], fn g ->
+      grad(result, input_tensor, g)
+    end)
+  end
+
+  deftransformp validate_opts(opts \\ []) do
+    opts[:max_iter] || raise ArgumentError, "missing option :max_iter"
+  end
+
+  defnp svd_all_zeros(a) do
+    {m, n} = Nx.shape(a)
+
+    k =
+      case {m, n} do
+        {m, n} when m > n -> n
+        _ -> m
+      end
+
+    s = Nx.broadcast(Nx.tensor(0, type: Nx.type(a)), {k})
+    u = Nx.eye({m, m}, type: Nx.type(a))
+    v = Nx.eye({n, n}, type: Nx.type(a))
+
+    {u, s, v}
+  end
+
+  defn svd_non_zero(input_tensor, opts \\ []) do
     {is_flipped, tensor} =
       case Nx.shape(input_tensor) do
         {m, n} when m < n ->
@@ -62,19 +95,10 @@ defmodule Nx.LinAlg.SVD do
           u
       end
 
-    res =
-      case is_flipped do
-        true -> {v, s, Nx.LinAlg.adjoint(u)}
-        false -> {u, s, Nx.LinAlg.adjoint(v)}
-      end
-
-    custom_grad(res, [input_tensor], fn g ->
-      grad(res, input_tensor, g)
-    end)
-  end
-
-  deftransformp validate_opts(opts \\ []) do
-    opts[:max_iter] || raise ArgumentError, "missing option :max_iter"
+    case is_flipped do
+      true -> {v, s, Nx.LinAlg.adjoint(u)}
+      false -> {u, s, Nx.LinAlg.adjoint(v)}
+    end
   end
 
   defnp svd_tall_and_square(a, opts \\ []) do

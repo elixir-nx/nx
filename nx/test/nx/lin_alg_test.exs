@@ -473,7 +473,7 @@ defmodule Nx.LinAlgTest do
 
         # Different eigenvalues from random values
         evals_test =
-          [{1, 3}, {0.4, 0.6}, {0.07, 0.09}]
+          [{100, 30}, {4, 6}, {0.7, 0.9}]
           |> Enum.map(fn {low, up} ->
             if :rand.uniform() - 0.5 > 0 do
               {low, up}
@@ -497,13 +497,13 @@ defmodule Nx.LinAlgTest do
 
         # Eigenvalues and eigenvectors
         assert {evals, evecs} = Nx.LinAlg.eigh(a, max_iter: 10_000)
-        assert_all_close(evals_test, evals, atol: 1.0e-2)
+        assert_all_close(evals_test, evals, atol: 1.0e-1)
 
         # Eigenvalue equation
         evecs_evals = Nx.multiply(evecs, evals)
         a_evecs = Nx.dot(a, [2], [0], evecs, [1], [0])
 
-        assert_all_close(evecs_evals, a_evecs, atol: 1.0e-2)
+        assert_all_close(evecs_evals, a_evecs, atol: 1.0e-1)
       end
     end
 
@@ -654,6 +654,16 @@ defmodule Nx.LinAlgTest do
 
       {u, s, vt} = Nx.LinAlg.svd(t)
       assert_all_close(u |> Nx.dot(Nx.stack([s, Nx.tensor([0])])) |> Nx.dot(vt), t)
+    end
+
+    test "works with zero-tensor" do
+      for {m, n, k} <- [{3, 3, 3}, {3, 4, 3}, {4, 3, 3}] do
+        t = Nx.broadcast(0, {m, n})
+        {u, s, vt} = Nx.LinAlg.svd(t)
+        assert_all_close(u, Nx.eye({m, m}))
+        assert_all_close(s, Nx.broadcast(0, {k}))
+        assert_all_close(vt, Nx.eye({n, n}))
+      end
     end
   end
 
