@@ -1,4 +1,23 @@
 defmodule Nx.LinAlg.SVD do
+  @moduledoc false
+
+  # Implementation of Singular Value Decompositon
+  # Inspired by the Jax code in https://github.com/google/jax/blob/ba557d5e1beb480851117a003ebf76c0ed2249e0/jax/_src/lax/svd.py
+  # QDWH is QR-based Dynamically Weighted Halley iteration
+  #
+  # References (same as Jax, above):
+  #
+  # * Nakatsukasa, Yuji, and Nicholas J. Higham.
+  #   "Stable and efficient spectral divide and conquer algorithms for the symmetric
+  #   eigenvalue decomposition and the SVD." SIAM Journal on Scientific Computing 35,
+  #   no. 3 (2013): A1325-A1349.
+  #   https://epubs.siam.org/doi/abs/10.1137/120876605
+  #
+  # * Nakatsukasa, Yuji, Zhaojun Bai, and François Gygi.
+  #   "Optimizing Halley's iteration for computing the matrix polar decomposition."
+  #   SIAM Journal on Matrix Analysis and Applications 31, no. 5 (2010): 2700-2720.
+  #   https://epubs.siam.org/doi/abs/10.1137/090774999
+
   import Nx.Defn
   @eps 1.1920929e-07
 
@@ -182,8 +201,10 @@ defmodule Nx.LinAlg.SVD do
   defnp correct_rank_deficiency(u_out) do
     {u_out, r} = Nx.LinAlg.qr(u_out)
 
-    diag_r = Nx.take_diagonal(r) < 0
+    diagonal = Nx.take_diagonal(r)
+    diag_r = diagonal < 0
     sign_r = Nx.select(diag_r, -1, 1)
+    sign_r = Nx.select(diagonal == 0, 0, sign_r)
 
     # same as Nx.dot(u_out, Nx.make_diagonal(sign_r))
     u_out * sign_r
