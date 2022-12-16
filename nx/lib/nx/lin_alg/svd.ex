@@ -24,11 +24,16 @@ defmodule Nx.LinAlg.SVD do
   defn svd(input_tensor, opts \\ []) do
     validate_opts(opts)
 
-    if Nx.all(input_tensor == 0) do
-      svd_all_zeros(input_tensor)
-    else
-      svd_non_zero(input_tensor, opts)
-    end
+    result =
+      if Nx.all(input_tensor == 0) do
+        svd_all_zeros(input_tensor)
+      else
+        svd_non_zero(input_tensor, opts)
+      end
+
+    custom_grad(result, [input_tensor], fn g ->
+      grad(result, input_tensor, g)
+    end)
   end
 
   deftransformp validate_opts(opts \\ []) do
@@ -44,7 +49,7 @@ defmodule Nx.LinAlg.SVD do
         _ -> m
       end
 
-    s = Nx.broadcast(0, {k}, type: Nx.type(a))
+    s = Nx.broadcast(Nx.tensor(0, type: Nx.type(a)), {k})
     u = Nx.eye({m, m}, type: Nx.type(a))
     v = Nx.eye({n, n}, type: Nx.type(a))
 
@@ -95,10 +100,6 @@ defmodule Nx.LinAlg.SVD do
         true -> {v, s, Nx.LinAlg.adjoint(u)}
         false -> {u, s, Nx.LinAlg.adjoint(v)}
       end
-
-    custom_grad(res, [input_tensor], fn g ->
-      grad(res, input_tensor, g)
-    end)
   end
 
   defnp svd_tall_and_square(a, opts \\ []) do
