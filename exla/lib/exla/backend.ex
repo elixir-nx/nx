@@ -101,7 +101,7 @@ defmodule EXLA.Backend do
           ])
         end
 
-        jit(expr_fun, [tensor])
+        jit([], expr_fun, [tensor])
 
       i ->
         expr_fun = fn tensor, start_idx ->
@@ -109,7 +109,7 @@ defmodule EXLA.Backend do
         end
 
         start_idx = i * batch_size
-        jit(expr_fun, [tensor, start_idx])
+        jit([], expr_fun, [tensor, start_idx])
     end)
   end
 
@@ -164,7 +164,7 @@ defmodule EXLA.Backend do
       Nx.Defn.Expr.concatenate(out, Tuple.to_list(tensors), axis)
     end
 
-    jit(expr_fun, tensors, [List.to_tuple(tensors)])
+    jit([], expr_fun, tensors, [List.to_tuple(tensors)])
   end
 
   @impl true
@@ -176,13 +176,13 @@ defmodule EXLA.Backend do
         Nx.Defn.Expr.slice(out, tensor, start_indices, lengths, strides)
       end
 
-      jit(expr_fun, [tensor])
+      jit([], expr_fun, [tensor])
     else
       expr_fun = fn tensor, start_indices ->
         Nx.Defn.Expr.slice(out, tensor, Tuple.to_list(start_indices), lengths, strides)
       end
 
-      jit(expr_fun, [tensor | start_indices], [tensor, List.to_tuple(start_indices)])
+      jit([], expr_fun, [tensor | start_indices], [tensor, List.to_tuple(start_indices)])
     end
   end
 
@@ -195,13 +195,18 @@ defmodule EXLA.Backend do
         Nx.Defn.Expr.put_slice(out, tensor, start_indices, slice)
       end
 
-      jit(expr_fun, [tensor, slice])
+      jit([], expr_fun, [tensor, slice])
     else
       expr_fun = fn tensor, start_indices, slice ->
         Nx.Defn.Expr.put_slice(out, tensor, Tuple.to_list(start_indices), slice)
       end
 
-      jit(expr_fun, [tensor, slice | start_indices], [tensor, List.to_tuple(start_indices), slice])
+      jit(
+        [],
+        expr_fun,
+        [tensor, slice | start_indices],
+        [tensor, List.to_tuple(start_indices), slice]
+      )
     end
   end
 
@@ -214,7 +219,7 @@ defmodule EXLA.Backend do
       Nx.Defn.Expr.optional(name, Tuple.to_list(tensors) ++ rest, fun)
     end
 
-    jit(wrapper_fun, tensors, [List.to_tuple(tensors)])
+    jit([], wrapper_fun, tensors, [List.to_tuple(tensors)])
   end
 
   binary_ops =
@@ -289,6 +294,8 @@ defmodule EXLA.Backend do
     args = Enum.map(args, &Macro.var(&1, __MODULE__))
     tensor_args = Enum.map(tensor_args, &Macro.var(&1, __MODULE__))
 
+    backend_options = Enum.find(args, [], &match?({:backend_options, _, _}, &1))
+
     @impl true
     def unquote(name)(out, unquote_splicing(args)) do
       out = Nx.to_template(out)
@@ -297,14 +304,14 @@ defmodule EXLA.Backend do
         Nx.Defn.Expr.unquote(name)(out, unquote_splicing(args))
       end
 
-      jit(expr_fun, [unquote_splicing(tensor_args)])
+      jit(unquote(backend_options), expr_fun, [unquote_splicing(tensor_args)])
     end
   end
 
-  defp jit(fun, args), do: jit(fun, args, args)
+  defp jit(backend_options, fun, args), do: jit(backend_options, fun, args, args)
 
   # TODO: Should we automatically transfer between devices?
-  defp jit(fun, tensors, args) do
+  defp jit(backend_options, fun, tensors, args) do
     client =
       for %T{data: %B{buffer: %EXLA.DeviceBuffer{client_name: client_name}}} <- tensors,
           reduce: nil do
@@ -319,15 +326,8 @@ defmodule EXLA.Backend do
           client_name
       end
 
-    default_backend_client =
-      case Nx.default_backend() do
-        {EXLA.Backend, opts} -> opts[:client]
-        _ -> nil
-      end
+    client = backend_options[:client] || client
 
-    EXLA.jit_apply(fun, args,
-      on_conflict: :force,
-      client: client || default_backend_client || EXLA.Client.default_name()
-    )
+    EXLA.jit_apply(fun, args, on_conflict: :force, client: client || EXLA.Client.default_name())
   end
 end
