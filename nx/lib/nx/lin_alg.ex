@@ -976,7 +976,6 @@ defmodule Nx.LinAlg do
       >
   """
   defn pinv(tensor, opts \\ []) do
-
     opts = keyword!(opts, eps: @default_eps)
 
     {u, s, vt} = Nx.LinAlg.svd(tensor)
