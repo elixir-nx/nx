@@ -953,7 +953,7 @@ defmodule Nx.LinAlg do
   Calculates the Moore-Penrose inverse, or the pseudoinverse, of a matrix.
 
   ## Options
-    * `:eps` - Rounding error threshold used to assume values as 0.
+    * `:eps` - Rounding error threshold used to assume values as 0. Defaults to `1.0e-10`
 
   ## Examples
 
@@ -961,8 +961,8 @@ defmodule Nx.LinAlg do
       #Nx.Tensor<
         f32[2][2]
         [
-          [4.0, -1.0000001192092896],
-          [-3.0, 1.0000001192092896]
+          [3.9924840927124023, -1.0052788257598877],
+          [-3.005120038986206, 1.0071183443069458]
         ]
       >
 
@@ -970,13 +970,13 @@ defmodule Nx.LinAlg do
       #Nx.Tensor<
         f32[2][3]
         [
-          [1.0, 0.0, 1.0],
+          [0.9999999403953552, 0.0, 0.9999999403953552],
           [0.0, 1.0, 0.0]
         ]
       >
   """
   defn pinv(tensor, opts \\ []) do
-    opts = keyword!(opts, eps: @default_eps)
+    opts = keyword!(opts, eps: 1.0e-10)
 
     {u, s, vt} = Nx.LinAlg.svd(tensor)
 
