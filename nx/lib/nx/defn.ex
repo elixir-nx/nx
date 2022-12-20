@@ -568,6 +568,25 @@ defmodule Nx.Defn do
 
     * `:hooks` - a map of hooks to execute. See `Nx.Defn.Kernel.hook/3`
 
+  ## Beware: deadlocks
+
+  Some backends (such as XLA) place locks around devices. For example,
+  if you start streaming on the GPU, you cannot perform any other
+  operation on the GPU until streaming is over.
+
+  This means if we modify the loop above to the following:
+
+      for i <- 1..5 do
+        Nx.Stream.send(stream, Nx.tensor(i) |> Nx.multiply(2))
+        IO.inspect {:chunk, Nx.Stream.recv(stream)}
+      end
+
+  The loop may deadlock at the time it performs the multiplication.
+  In practice, this means you should perform the streaming on the GPU
+  and the remaining operations on the CPU. If you only have a single
+  device (i.e. only a CPU), then it may not be possible to perform the
+  above and you will have to restructure your code to manipulate the
+  input before streaming starts.
   """
   def stream(fun, args, opts \\ [])
       when is_function(fun) and is_list(args) and is_list(opts) do
