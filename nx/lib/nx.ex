@@ -6752,7 +6752,7 @@ defmodule Nx do
         2.133333444595337
       >
 
-      iex> Nx.weighted_mean(Nx.tensor([1,2,3], type: :u8, names: [:x]), Nx.tensor([1,3,5]), axis: :x)
+      iex> Nx.weighted_mean(Nx.tensor([1, 2, 3], type: :u8, names: [:x]), Nx.tensor([1, 3, 5]), axis: :x)
       #Nx.Tensor<
         f32
         2.444444417953491
@@ -6780,7 +6780,7 @@ defmodule Nx do
         ]
       >
 
-      iex> t = Nx.iota({3,4})
+      iex> t = Nx.iota({3, 4})
       iex> weights = Nx.tensor([1, 2, 3, 4])
       iex> Nx.weighted_mean(t, weights, axis: 1)
       #Nx.Tensor<
@@ -6834,11 +6834,15 @@ defmodule Nx do
             nil
         end
 
-        dims_to_broadcast =
-          List.duplicate(1, tuple_size(shape) - 1) ++ Tuple.to_list(weights_shape)
+        dims_to_reshape = List.duplicate(1, tuple_size(shape) - 1) ++ Tuple.to_list(weights_shape)
 
-        dims_to_broadcast = List.to_tuple(dims_to_broadcast)
-        broadcast(weights, dims_to_broadcast)
+        dims_to_reshape = List.to_tuple(dims_to_reshape)
+        weights = reshape(weights, dims_to_reshape)
+        dims_to_swap = for i <- 0..(tuple_size(dims_to_reshape) - 1), do: i
+        checked_axes = if is_list(axes), do: Enum.at(axes, 0), else: axes
+        dims_to_swap = swap(dims_to_swap, checked_axes, -1)
+
+        transpose(weights, axes: dims_to_swap)
       else
         weights
       end
@@ -6849,6 +6853,15 @@ defmodule Nx do
     |> multiply(weights)
     |> sum(axes: axes, keep_axes: opts[:keep_axis])
     |> divide(weights_sum)
+  end
+
+  defp swap(a, i1, i2) do
+    e1 = Enum.fetch!(a, i1)
+    e2 = Enum.fetch!(a, i2)
+
+    a
+    |> List.replace_at(i1, e2)
+    |> List.replace_at(i2, e1)
   end
 
   @doc """
