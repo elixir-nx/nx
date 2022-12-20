@@ -6856,8 +6856,8 @@ defmodule Nx do
   end
 
   defp swap(a, i1, i2) do
-    e1 = Enum.at(a, i1)
-    e2 = Enum.at(a, i2)
+    e1 = Enum.fetch!(a, i1)
+    e2 = Enum.fetch!(a, i2)
 
     a
     |> List.replace_at(i1, e2)
