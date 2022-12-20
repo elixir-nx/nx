@@ -949,6 +949,43 @@ defmodule Nx.LinAlg do
   end
 
   @doc """
+  Calculates the Moore-Penrose inverse, or the pseudoinverse, of a matrix.
+
+  ## Options
+    * `:eps` - Rounding error threshold used to assume values as 0. Defaults to `1.0e-10`
+
+  ## Examples
+
+      iex> Nx.LinAlg.pinv(Nx.tensor([[1, 1], [3, 4]]))
+      #Nx.Tensor<
+        f32[2][2]
+        [
+          [3.9924840927124023, -1.0052788257598877],
+          [-3.005120038986206, 1.0071183443069458]
+        ]
+      >
+
+      iex> Nx.LinAlg.pinv(Nx.tensor([[0.5, 0], [0, 1], [0.5, 0]]))
+      #Nx.Tensor<
+        f32[2][3]
+        [
+          [0.9999999403953552, 0.0, 0.9999999403953552],
+          [0.0, 1.0, 0.0]
+        ]
+      >
+  """
+  defn pinv(tensor, opts \\ []) do
+    opts = keyword!(opts, eps: 1.0e-10)
+
+    {u, s, vt} = Nx.LinAlg.svd(tensor)
+
+    s_shape = {elem(Nx.shape(s), 0), elem(Nx.shape(u), 1)}
+    adjusted_s = Nx.select(Nx.greater(opts[:eps], Nx.abs(s)), Nx.broadcast(0, Nx.shape(s)), Nx.divide(1, s))
+    s_matrix = Nx.broadcast(0, s_shape) |> Nx.put_diagonal(adjusted_s)
+    adjoint(vt) |> Nx.dot(s_matrix) |> Nx.dot(adjoint(u))
+  end
+
+  @doc """
   Calculates the Eigenvalues and Eigenvectors of batched Hermitian 2-D matrices.
 
   It returns `{eigenvals, eigenvecs}`.
