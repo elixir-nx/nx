@@ -957,7 +957,7 @@ defmodule Nx.LinAlg do
 
   ## Examples
 
-      iex> pinv = Nx.LinAlg.pinv(Nx.tensor([[1, 1], [3, 4]]))
+      iex> Nx.LinAlg.pinv(Nx.tensor([[1, 1], [3, 4]]))
       #Nx.Tensor<
         f32[2][2]
         [
