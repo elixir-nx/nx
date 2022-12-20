@@ -6788,15 +6788,6 @@ defmodule Nx do
         [2.0, 6.0, 10.0]
       >
 
-      iex> t = Nx.iota({4, 6})
-      iex> weights = Nx.tensor([1, 2, 3, 4])
-      iex> Nx.weighted_mean(t, weights, axis: 0)
-      #Nx.Tensor<
-        f32[6]
-        [12.0, 13.0, 14.0, 15.0, 16.0, 17.0]
-      >
-
-
   ### Keeping axis
 
       iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
