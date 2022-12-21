@@ -1017,7 +1017,28 @@ defmodule Nx.LinAlg do
   defnp pinv_zero(tensor) do
     # the tensor is already zero and the pseudo-inverse
     # is defined to be zero in this case
-    Nx.transpose(tensor)
+    0
+    |> Nx.tensor(type: Nx.type(tensor))
+    |> Nx.broadcast(pinv_zero_shape(tensor))
+  end
+
+  deftransformp pinv_zero_shape(tensor) do
+    shape = Nx.shape(tensor)
+    rank = tuple_size(shape)
+
+    if rank < 2 do
+      shape
+    else
+      [n, m | tl] =
+        shape
+        |> Tuple.to_list()
+        |> Enum.reverse()
+
+      tl
+      |> List.to_tuple()
+      |> Tuple.insert_at(rank - 2, n)
+      |> Tuple.insert_at(rank - 1, m)
+    end
   end
 
   defnp pinv_non_zero(tensor, opts \\ []) do
