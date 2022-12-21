@@ -956,6 +956,36 @@ defmodule Nx.LinAlg do
 
   ## Examples
 
+  Scalar case:
+
+      iex> Nx.LinAlg.pinv(2)
+      #Nx.Tensor<
+        f32
+        0.5
+      >
+
+      iex> Nx.LinAlg.pinv(0)
+      #Nx.Tensor<
+        f32
+        0.0
+      >
+
+  Vector case:
+
+      iex> Nx.LinAlg.pinv(Nx.tensor([0, 1, 2]))
+      #Nx.Tensor<
+        f32[3]
+        [0.0, 0.20000000298023224, 0.4000000059604645]
+      >
+
+      iex> Nx.LinAlg.pinv(Nx.tensor([0, 0, 0]))
+      #Nx.Tensor<
+        f32[3]
+        [0.0, 0.0, 0.0]
+      >
+
+  Matrix case:
+
       iex> Nx.LinAlg.pinv(Nx.tensor([[1, 1], [3, 4]]))
       #Nx.Tensor<
         f32[2][2]
@@ -977,15 +1007,42 @@ defmodule Nx.LinAlg do
   defn pinv(tensor, opts \\ []) do
     opts = keyword!(opts, eps: 1.0e-10)
 
-    {u, s, vt} = Nx.LinAlg.svd(tensor)
+    if Nx.all(Nx.abs(tensor) <= opts[:eps]) do
+      pinv_zero(tensor)
+    else
+      pinv_non_zero(tensor, opts)
+    end
+  end
 
-    s_shape = {elem(Nx.shape(s), 0), elem(Nx.shape(u), 1)}
+  defnp pinv_zero(tensor) do
+    # the tensor is already zero and the pseudo-inverse
+    # is defined to be zero in this case
+    Nx.transpose(tensor)
+  end
 
-    adjusted_s =
-      Nx.select(Nx.greater(opts[:eps], Nx.abs(s)), Nx.broadcast(0, Nx.shape(s)), Nx.divide(1, s))
+  defnp pinv_non_zero(tensor, opts \\ []) do
+    case Nx.rank(tensor) do
+      0 ->
+        1 / tensor
 
-    s_matrix = Nx.broadcast(0, s_shape) |> Nx.put_diagonal(adjusted_s)
-    adjoint(vt) |> Nx.dot(s_matrix) |> Nx.dot(adjoint(u))
+      1 ->
+        adjoint(tensor) / norm(tensor) ** 2
+
+      _ ->
+        {u, s, vt} = Nx.LinAlg.svd(tensor)
+        v = adjoint(vt)
+        ut = adjoint(u)
+
+        s_idx = Nx.abs(s) < opts[:eps]
+        adjusted_s = Nx.select(s_idx, 1, s)
+        s_shape = {Nx.axis_size(v, -1), Nx.axis_size(ut, -2)}
+
+        s_inv_matrix =
+          Nx.broadcast(0, s_shape)
+          |> Nx.put_diagonal(Nx.select(s_idx, 0, 1 / adjusted_s))
+
+        v |> Nx.dot(s_inv_matrix) |> Nx.dot(ut)
+    end
   end
 
   @doc """
