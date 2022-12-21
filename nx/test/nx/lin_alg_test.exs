@@ -712,6 +712,25 @@ defmodule Nx.LinAlgTest do
     end
   end
 
+  describe "pinv" do
+    test "does not raise for 0 singular values" do
+      for {m, n} <- [{3, 4}, {3, 3}, {4, 3}] do
+        {u, _} = Nx.random_uniform({m, m}) |> Nx.LinAlg.qr()
+        zeros = Nx.broadcast(0, {m, n})
+        s = Nx.put_diagonal(zeros, Nx.tensor([1, 4, 0]))
+        s_inv = Nx.put_diagonal(Nx.transpose(zeros), Nx.tensor([1, 0.25, 0]))
+        {vt, _} = Nx.random_uniform({n, n}) |> Nx.LinAlg.qr()
+
+        t = u |> Nx.dot(s) |> Nx.dot(vt)
+        pinv = Nx.LinAlg.pinv(t)
+
+        assert_all_close(pinv, Nx.transpose(vt) |> Nx.dot(s_inv) |> Nx.dot(Nx.transpose(u)),
+          atol: 1.0e-2
+        )
+      end
+    end
+  end
+
   defp round(tensor, places) do
     round_real = fn x -> Float.round(Complex.real(x), places) end
     round_imag = fn x -> Float.round(Complex.imag(x), places) end
