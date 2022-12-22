@@ -31,7 +31,9 @@ defmodule EXLA.Client do
           Enum.find(preferred_clients, fn client ->
             config =
               all_clients[client] ||
-                raise "unknown client #{inspect(client)} given as :preferred_clients"
+                raise "unknown client #{inspect(client)} given as :preferred_clients. " <>
+                        "If you plan to use :cuda or :rocm, make sure the XLA_TARGET environment variable " <>
+                        "is appropriately set. Currently it is set to #{inspect(System.get_env("XLA_TARGET"))}"
 
             platform = config[:platform] || :host
 
