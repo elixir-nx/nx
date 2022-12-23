@@ -11492,7 +11492,7 @@ defmodule Nx do
 
   defp do_numpy_to_tensor(rest, header_size) when is_binary(rest) do
     <<header::size(header_size)-binary, array::binary>> = rest
-    {byte_order, {_, size} = type, shape} = parse_header(header)
+    {byte_order, {_, size} = type, shape, fortran_order?} = parse_header(header)
     byte_size_of_array = div(size, 8) * Nx.size(shape)
 
     <<data::size(byte_size_of_array)-binary>> = array
@@ -11500,7 +11500,7 @@ defmodule Nx do
     data
     |> new_byte_order(size, byte_order)
     |> Nx.from_binary(type)
-    |> Nx.reshape(shape)
+    |> reshape_with_order(shape, fortran_order?)
   end
 
   defp parse_header(header) do
@@ -11509,11 +11509,11 @@ defmodule Nx do
     case header do
       "'descr': " <> <<dtype::size(5)-binary>> <> ", 'fortran_order': False, 'shape': " <> shape ->
         {byte_order, type} = parse_type(dtype)
-        {byte_order, type, parse_shape(shape)}
+        {byte_order, type, parse_shape(shape), false}
 
       "'descr': " <> <<dtype::size(5)-binary>> <> ", 'fortran_order': True, 'shape': " <> shape ->
         {byte_order, type} = parse_type(dtype)
-        {byte_order, type, parse_shape(shape)}
+        {byte_order, type, parse_shape(shape), true}
     end
   end
 
@@ -11579,6 +11579,13 @@ defmodule Nx do
 
       IO.iodata_to_binary(data)
     end
+  end
+
+  defp reshape_with_order(tensor, shape, false), do: Nx.reshape(tensor, shape)
+  defp reshape_with_order(tensor, shape, true) do
+    shape = shape |> Tuple.to_list() |> Enum.reverse() |> List.to_tuple()
+
+    Nx.reshape(tensor, shape) |> Nx.transpose()
   end
 
   @doc """
