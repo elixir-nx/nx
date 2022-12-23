@@ -20,6 +20,8 @@ defmodule Nx.Type do
   which is `{:tuple, size}`, that represents a tuple. Said types
   do not appear on user code, only on compiler implementations,
   and therefore are not handled by the functions in this module.
+
+  This module can be used in `defn`.
   """
 
   @type t ::

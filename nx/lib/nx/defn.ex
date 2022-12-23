@@ -38,6 +38,8 @@ defmodule Nx.Defn do
 
   Please consult `Nx.Defn.Kernel` for a complete reference.
 
+  This module can be used in `defn`.
+
   ## Operators
 
   `defn` attempts to keep as close to the Elixir semantics as

@@ -1,6 +1,8 @@
 defmodule Nx.LinAlg do
   @moduledoc """
   Nx conveniences for linear algebra.
+
+  This module can be used in `defn`.
   """
 
   import Nx.Shared

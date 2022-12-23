@@ -1,6 +1,8 @@
 defmodule Nx.Constants do
   @moduledoc """
   Common constants used in computations.
+
+  This module can be used in `defn`.
   """
 
   import Nx.Shared
