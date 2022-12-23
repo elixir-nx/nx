@@ -1854,6 +1854,8 @@ defmodule Nx do
   account if the binary is meant to be serialized to
   other systems.
 
+  Note: This function cannot be used in `defn`.
+
   ## Options
 
     * `:limit` - limit the number of entries represented in the binary
@@ -1917,6 +1919,8 @@ defmodule Nx do
   will be represented by the atoms `:neg_infinity`, `:infinity`, and
   `:nan` respectively.
 
+  Note: This function cannot be used in `defn`.
+
   ## Examples
 
       iex> Nx.to_flat_list(1)
@@ -1964,6 +1968,8 @@ defmodule Nx do
   or `:discard`. `:repeat` repeats the first `n` values to
   make the last batch match the desired batch size. `:discard`
   discards excess elements.
+
+  Note: This function cannot be used in `defn`.
 
   ## Examples
 
@@ -2070,6 +2076,8 @@ defmodule Nx do
   `:nan` respectively.
 
   If the tensor has a dimension, it raises.
+
+  Note: This function cannot be used in `defn`.
 
   ## Examples
 
@@ -3128,6 +3136,8 @@ defmodule Nx do
   and recursively compares them, observing their container data
   structures are also the same.
 
+  Note: This function cannot be used in `defn`.
+
   ## Examples
 
       iex> Nx.compatible?(Nx.iota({3, 2}), Nx.iota({3, 2}))
@@ -3413,6 +3423,8 @@ defmodule Nx do
 
   The function returns the value that was previously set as backend.
 
+  Note: This function cannot be used in `defn`.
+
   ## Examples
 
       iex> Nx.default_backend({EXLA.Backend, device: :cuda})
@@ -3459,6 +3471,8 @@ defmodule Nx do
 
   @doc """
   Gets the default backend for the current process.
+
+  Note: This function cannot be used in `defn`.
   """
   @doc type: :backend
   def default_backend() do
@@ -3483,8 +3497,11 @@ defmodule Nx do
   and recursively copies all tensors in them. This behaviour exists
   as it is common to transfer data before and after `defn` functions.
 
-  *Note: `Nx.default_backend/1` does not affect the behaviour of
+  Note:
+
+  * `Nx.default_backend/1` does not affect the behaviour of
   this function.
+  * This function cannot be used in `defn`.
 
   ### Examples
 
@@ -3532,8 +3549,11 @@ defmodule Nx do
   common to transfer data from tuples and maps before and after `defn`
   functions.
 
-  *Note: `Nx.default_backend/1` does not affect the behaviour of
+  Note:
+
+  * `Nx.default_backend/1` does not affect the behaviour of
   this function.
+  * This function cannot be used in `defn`.
 
   ## Examples
 
@@ -3565,6 +3585,8 @@ defmodule Nx do
   (such as maps and tuples as defined by the `Nx.Container` protocol)
   and deallocates all devices in them. This behaviour exists as it is
   common to deallocate data after `defn` functions.
+
+  Note: This function cannot be used in `defn`.
   """
   @doc type: :backend
   def backend_deallocate(tensor_or_container) do
@@ -11305,6 +11327,8 @@ defmodule Nx do
   such as a file or a socket. You can ensure the result is a binary by
   calling `IO.iodata_to_binary/1`.
 
+  Note: This function cannot be used in `defn`.
+
   ## Examples
 
       iex> a = Nx.tensor([1, 2, 3])
@@ -11378,6 +11402,8 @@ defmodule Nx do
 
   It is the opposite of `Nx.serialize/2`.
 
+  Note: This function cannot be used in `defn`.
+
   ## Examples
 
       iex> a = Nx.tensor([1, 2, 3])
@@ -11442,6 +11468,8 @@ defmodule Nx do
   NumPy library. This function can be useful for loading data
   originally created or intended to be loaded from NumPy into
   Elixir.
+
+  Note: This function cannot be used in `defn`.
   """
   @doc type: :conversion
   def from_numpy(file) do
@@ -11455,6 +11483,8 @@ defmodule Nx do
 
   An `.npz` file is a zipped, possibly compressed archive containing
   multiple `.npy` files.
+
+  Note: This function cannot be used in `defn`.
   """
   @doc type: :conversion
   def from_numpy_archive(archive) do

@@ -1,6 +1,8 @@
 defmodule Nx.Defn.Kernel do
   @moduledoc """
   All imported functionality available inside `defn` blocks.
+
+  This module can be used in `defn`.
   """
 
   import Nx.Shared, only: [defnguard: 2]
@@ -33,7 +35,6 @@ defmodule Nx.Defn.Kernel do
       defn some_fun(t) do
         MH.fft(t)
       end
-
   """
   defmacro alias(module, opts \\ []), do: special_form!([module, opts])
 
