@@ -3393,9 +3393,9 @@ defmodule Nx do
   This means if you start a separate process, such as `Task`,
   the default backend must be set on the new process too.
 
-  This function is mostly used for scripting and testing.
-  In your applications, you must prefer to set the backend
-  in your config files:
+  Due to this reason, this function is mostly used for scripting
+  and testing. In your applications, you must prefer to set the
+  backend in your config files:
 
       config :nx, :default_backend, {EXLA.Backend, device: :cuda}
 

@@ -72,28 +72,16 @@ defmodule Nx.Defn do
 
   The above will return an anonymous function that optimizes,
   compiles, and run `softmax` on the fly on the CPU (or the GPU)
-  if available.
-
-  You can also change the default compiler for all numerical
-  definitions (`defn`) by setting the default options. This can
-  be done in your `config/*.exs` files as follows:
-
-      config :nx, :default_defn_options, compiler: EXLA
-
-  Now calling `MyModule.softmax(my_tensor)` will use `EXLA` even
-  without wrapping it in `jit/2`.
-
-  However, note that compilation may be quite time consuming on
-  the first invocation, that's why it is often preferred to use
-  the `compiler: EXLA` option when calling the functions in this
-  module instead. EXLA, in particular, also exports a `EXLA.jit/2`
+  if available. EXLA, in particular, also exports a `EXLA.jit/2`
   function for convenience.
 
   `defn` functions are compiled when they are invoked, based on
-  the type and shapes of the tensors given as arguments. The
-  compilation is then cached based on the tensors shapes and types.
-  Calling the same function with a tensor of different values but
-  same shape and type means no recompilation is performed.
+  the type and shapes of the tensors given as arguments.
+  Therefore compilation may be quite time consuming on the first
+  invocation. The compilation is then cached based on the tensors
+  shapes and types. Calling the same function with a tensor of
+  different values but same shape and type means no recompilation
+  is performed.
 
   For those interested in writing custom compilers, see `Nx.Defn.Compiler`.
 
@@ -228,14 +216,10 @@ defmodule Nx.Defn do
   separate process, such as `Task`, the default options must be
   set on the new process too.
 
-  This function is mostly used for scripting and testing. In your
-  applications, you typically set the default options in your
-  config files:
-
-        config :nx, :#{@app_key}, [compiler: EXLA, client: :cuda]
-
   The function returns the values that were previously set as default
   options.
+
+  This function must be used only for scripting and testing.
 
   ## Examples
 
@@ -254,10 +238,9 @@ defmodule Nx.Defn do
   `defn`. It also applies to calls to the `jit/3` and `stream/3`
   functions in this module.
 
-  You must avoid calling this function at runtime. It is mostly
-  useful during scripts or code notebooks to set a default.
-  If you need to configure a global default options in your
-  applications, you can do so in your `config/*.exs` files:
+  You must avoid calling this function at runtime and mostly for
+  testing purposes. You may also set in your test environment using
+  configuration:
 
       config :nx, :#{@app_key}, [compiler: EXLA, client: :cuda]
 
