@@ -11582,6 +11582,7 @@ defmodule Nx do
   end
 
   defp reshape_with_order(tensor, shape, false), do: Nx.reshape(tensor, shape)
+
   defp reshape_with_order(tensor, shape, true) do
     shape = shape |> Tuple.to_list() |> Enum.reverse() |> List.to_tuple()
 
