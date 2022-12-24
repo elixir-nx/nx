@@ -20,8 +20,8 @@ defmodule Nx.Serving do
       end
 
   The function prints the given tensor and double its contents.
-  We can use `new/1` to create a serving that will return a JITted
-  or compiled function to execute on batches of tensors:
+  We can use `new/1` to create a serving that will return a JIT
+  or AOT compiled function to execute on batches of tensors:
 
       iex> serving = Nx.Serving.new(fn -> Nx.Defn.jit(&print_and_multiply/1) end)
       iex> batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
@@ -242,10 +242,10 @@ defmodule Nx.Serving do
   @doc """
   Creates a new function serving.
 
-  It expects a function that returns a JITted (via `Nx.Defn.jit/2`)
-  or compiled (via `Nx.Defn.compile/3`) one-arity function as argument.
-  The JITted/compiled function will be called with the arguments
-  returned by the `client_preprocessing` callback.
+  It expects a function that returns a JIT (via `Nx.Defn.jit/2`) or
+  AOT compiled (via `Nx.Defn.compile/3`) one-arity function as argument.
+  The function will be called with the arguments returned by the
+  `client_preprocessing` callback.
 
   A second argument called `process_options`, which is optional,
   can be given to customize the options when starting the serving
@@ -733,8 +733,8 @@ defmodule Nx.Serving.Default do
         {:ok, batch_fun}
 
       other ->
-        raise "anonymous function given to Nx.Serving.new/2 should return a compiled or " <>
-                "JITted function that expects one argument, got: #{inspect(other)}"
+        raise "anonymous function given to Nx.Serving.new/2 should return an AOT or " <>
+                "JIT compiled function that expects one argument, got: #{inspect(other)}"
     end
   end
 
