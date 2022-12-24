@@ -6766,15 +6766,15 @@ defmodule Nx do
         1.6666666269302368
       >
 
-  ### Aggregating over an axis
+  ### Aggregating over axes
 
-      iex> Nx.weighted_mean(Nx.tensor([1, 2, 3], names: [:x]), Nx.tensor([4, 5, 6]), axis: 0)
+      iex> Nx.weighted_mean(Nx.tensor([1, 2, 3], names: [:x]), Nx.tensor([4, 5, 6]), axes: [0])
       #Nx.Tensor<
         f32
         2.133333444595337
       >
 
-      iex> Nx.weighted_mean(Nx.tensor([1, 2, 3], type: :u8, names: [:x]), Nx.tensor([1, 3, 5]), axis: :x)
+      iex> Nx.weighted_mean(Nx.tensor([1, 2, 3], type: :u8, names: [:x]), Nx.tensor([1, 3, 5]), axes: [:x])
       #Nx.Tensor<
         f32
         2.444444417953491
@@ -6782,7 +6782,7 @@ defmodule Nx do
 
       iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
       iex> weights = Nx.tensor([[[0, 1, 2], [1, 1, 0]], [[-1, 1, -1], [1, 1, -1]]])
-      iex> Nx.weighted_mean(t, weights, axis: :x)
+      iex> Nx.weighted_mean(t, weights, axes: [:x])
       #Nx.Tensor<
         f32[y: 2][z: 3]
         [
@@ -6793,7 +6793,7 @@ defmodule Nx do
 
       iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
       iex> weights = Nx.tensor([[[0, 1, 2], [1, 1, 0]], [[-1, 1, -1], [1, 1, -1]]])
-      iex> Nx.weighted_mean(t, weights, axis: -1)
+      iex> Nx.weighted_mean(t, weights, axes: [-1])
       #Nx.Tensor<
         f32[x: 2][y: 2]
         [
@@ -6804,17 +6804,30 @@ defmodule Nx do
 
       iex> t = Nx.iota({3, 4})
       iex> weights = Nx.tensor([1, 2, 3, 4])
-      iex> Nx.weighted_mean(t, weights, axis: 1)
+      iex> Nx.weighted_mean(t, weights, axes: [1])
       #Nx.Tensor<
         f32[3]
         [2.0, 6.0, 10.0]
       >
 
-  ### Keeping axis
+      iex> t = Nx.iota({2, 4, 4, 1})
+      iex> weights = Nx.broadcast(2, {4, 4})
+      iex> Nx.weighted_mean(t, weights, axes: [1, 2])
+      #Nx.Tensor<
+        f32[2][1]
+        [
+          [7.5],
+          [23.5]
+        ]
+      >
+
+
+
+  ### Keeping axes
 
       iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
       iex> weights = Nx.tensor([[[0, 1, 2], [1, 1, 0]], [[-1, 1, -1], [1, 1, -1]]])
-      iex> Nx.weighted_mean(t, weights, axis: -1, keep_axis: true)
+      iex> Nx.weighted_mean(t, weights, axes: [-1], keep_axes: true)
       #Nx.Tensor<
         f32[x: 2][y: 2][z: 1]
         [
@@ -6831,32 +6844,31 @@ defmodule Nx do
   """
   @doc type: :aggregation, from_backend: false
   def weighted_mean(tensor, weights, opts \\ []) do
-    opts = keyword!(opts, axis: nil, keep_axis: false)
+    opts = keyword!(opts, [:axes, keep_axes: false])
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
     %T{shape: weights_shape} = weights = to_tensor(weights)
 
     axes =
-      if opts[:axis] != nil,
-        do: Nx.Shape.normalize_axes(shape, [opts[:axis]], names),
-        else: opts[:axis]
+      if opts[:axes] do
+        Nx.Shape.normalize_axes(shape, opts[:axes], names)
+      end
 
     weights =
       if shape != weights_shape do
         cond do
           axes == nil ->
-            raise ArgumentError, "axis must be specified when shapes of input and weights differ"
+            raise ArgumentError, "axes must be specified when shapes of input and weights differ"
 
-          tuple_size(weights_shape) != 1 ->
-            raise ArgumentError, "rank-1 weights tensor expected when input shapes differ"
-
-          elem(weights_shape, 0) != elem(shape, List.first(axes)) ->
-            raise ArgumentError, "length of weights not compatible with specified axis"
+          tuple_size(weights_shape) != length(axes) ->
+            raise ArgumentError,
+                  "weights tensor must have rank equal to the number of aggregation axes when input shapes differ"
 
           true ->
             nil
         end
 
-        dims_to_reshape = List.duplicate(1, tuple_size(shape) - 1) ++ Tuple.to_list(weights_shape)
+        dims_to_reshape =
+          List.duplicate(1, tuple_size(shape) - length(axes)) ++ Tuple.to_list(weights_shape)
 
         dims_to_reshape = List.to_tuple(dims_to_reshape)
         weights = reshape(weights, dims_to_reshape)
@@ -6869,11 +6881,11 @@ defmodule Nx do
         weights
       end
 
-    weights_sum = sum(weights, axes: axes, keep_axes: opts[:keep_axis])
+    weights_sum = sum(weights, axes: axes, keep_axes: opts[:keep_axes])
 
     tensor
     |> multiply(weights)
-    |> sum(axes: axes, keep_axes: opts[:keep_axis])
+    |> sum(axes: axes, keep_axes: opts[:keep_axes])
     |> divide(weights_sum)
   end
 
@@ -6935,13 +6947,12 @@ defmodule Nx do
       >
 
       iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
-      iex> weights = Nx.tensor([[[0, 1, 2], [1, 1, 0]], [[-1, 1, -1], [1, 1, -1]]])
-      iex> Nx.weighted_mean(t, weights, axis: :x)
+      iex> Nx.median(t, axis: :x)
       #Nx.Tensor<
         f32[y: 2][z: 3]
         [
-          [7.0, 5.0, -3.0],
-          [7.0, 8.0, 12.0]
+          [4.0, 5.0, 6.0],
+          [7.0, 8.0, 9.0]
         ]
       >
 

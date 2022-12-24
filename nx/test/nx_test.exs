@@ -2368,7 +2368,7 @@ defmodule NxTest do
       t = Nx.iota({4, 6})
       weights = Nx.tensor([1, 2, 3, 4])
 
-      assert Nx.weighted_mean(t, weights, axis: 0) ==
+      assert Nx.weighted_mean(t, weights, axes: [0]) ==
                Nx.tensor([12.0, 13.0, 14.0, 15.0, 16.0, 17.0])
     end
   end
