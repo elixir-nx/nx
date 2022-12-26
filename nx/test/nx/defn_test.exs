@@ -2331,7 +2331,7 @@ defmodule Nx.DefnTest do
       do: multi_clause_bodiless_tf_private(opts[:a], opts[:b])
 
     # Multi-clause deftransform with guards
-    deftransform multi_clause_multi_arity_transform(x, y), do: {x, y}
+    deftransform multi_clause_multi_arity_transform(x, y \\ 10, z \\ 20)
 
     deftransform multi_clause_multi_arity_transform(x, y, opts) when is_list(opts),
       do: {x, y, opts[:value]}
@@ -2434,7 +2434,8 @@ defmodule Nx.DefnTest do
 
     @tag compiler: Evaluator
     test "deftransform supports multi-clause + multi-arity at the same time" do
-      assert multi_clause_multi_arity_transform(1, 2) == {1, 2}
+      assert multi_clause_multi_arity_transform(1) == {1, 10, 20}
+      assert multi_clause_multi_arity_transform(1, 2) == {1, 2, 20}
       assert multi_clause_multi_arity_transform(1, 2, 3) == {1, 2, 3}
       assert multi_clause_multi_arity_transform(1, 2, value: 4) == {1, 2, 4}
       assert multi_clause_multi_arity_transform(1, 2, 3, value: 4) == {1, 2, 3, 4}
