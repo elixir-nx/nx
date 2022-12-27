@@ -2432,4 +2432,17 @@ defmodule NxTest do
       end
     end
   end
+
+  describe "with_default_backend/2" do
+    test "implicitly uses the given backend inside the given function" do
+      left =
+        Nx.with_default_backend(Nx.Defn.Expr, fn ->
+          Nx.iota({4}) |> Nx.sin()
+        end)
+
+      right = Nx.iota({4}, backend: Nx.Defn.Expr) |> Nx.sin()
+
+      assert inspect(left) == inspect(right)
+    end
+  end
 end
