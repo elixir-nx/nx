@@ -3484,10 +3484,6 @@ defmodule Nx do
   default backend.
   """
   @doc type: :backend
-  def with_default_backend(backend, fun)
-
-  def with_default_backend(nil, fun), do: fun.()
-
   def with_default_backend(backend, fun) do
     backend = backend!(backend)
 
