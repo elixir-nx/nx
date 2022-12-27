@@ -2,15 +2,14 @@ defmodule Nx.Serving do
   @moduledoc """
   Serving encapsulates client and server work to perform batched requests.
 
-  In other words, they are a mechanism to apply a computation on a `Nx.Batch`,
-  with hooks for preprocessing input from and postprocessing output for the
-  client. Thus, we can think of an instance of `Nx.Serving.t()` as something
-  that serves batches of Nx Computations. We call such instances "servings",
-  which is short for "Nx Computation Serving".
-
   Servings can be executed on the fly, without starting a server, but most
   often they are used to run servers that batch requests until a given size
   or timeout is reached.
+
+  More specifically, servings are a mechanism to apply a computation on a
+  `Nx.Batch`, with hooks for preprocessing input from and postprocessing
+  output for the client. Thus we can think of an instance of `Nx.Serving.t()`
+  (a serving) as something that encapsulates batches of Nx computations.
 
   ## Inline/serverless workflow
 
