@@ -25,7 +25,7 @@ defmodule Nx.Serving do
         end
       end
 
-  The function prints the given tensor and double its contents.
+  The function prints the given tensor and doubles its contents.
   We can use `new/1` to create a serving that will return a JIT
   or AOT compiled function to execute on batches of tensors:
 
@@ -45,10 +45,10 @@ defmodule Nx.Serving do
         ]
       >
 
-  You should see two values printed. The first is the result of
+  You should see two values printed. The former is the result of
   `Nx.Defn.Kernel.print_value/1`, which shows the tensor that was
   actually part of the computation and how it was batched.
-  Then we see the result of the computation.
+  The latter is the result of the computation.
 
   When defining a `Nx.Serving`, we can also customize how the data is
   batched by using the `client_preprocessing` as well as the result by
@@ -77,17 +77,17 @@ defmodule Nx.Serving do
        :server_info,
        :client_info}
 
-  You can see the results are a bit different now. First of all, notice we
-  were able to run the serving passing a list of tensors. Our custom
+  You can see the results are a bit different now. First of all, notice that
+  we were able to run the serving passing a list of tensors. Our custom
   `client_preprocessing` function stacks those tensors into a batch of two
   entries and returns a tuple with a `Nx.Batch` struct and additional client
   information which we represent as the atom `:client_info`. The default
   client preprocessing simply enforces a batch was given and returns no client
   information.
 
-  Then the result is a `{..., ..., ...}` tuple, returned by the client
+  Then the result is a triplet tuple, returned by the client
   postprocessing function, containing the result, the server information
-  (which we will learn later how to customize it), and the client information.
+  (which we will later learn how to customize), and the client information.
   From this, we can infer the default implementation of `client_postprocessing`
   simply returns the result, discarding the server and client information.
 
@@ -99,8 +99,8 @@ defmodule Nx.Serving do
   ## Stateful/process workflow
 
   `Nx.Serving` allows us to define a process that will batch requests up to
-  a certain size or within a certain time. To do so, we need to start a
-  `Nx.Serving` process with a serving inside a supervision tree:
+  a certain size or time. To do so, we need to start a `Nx.Serving` process
+  with a serving inside a supervision tree:
 
       children = [
         {Nx.Serving,
@@ -132,10 +132,10 @@ defmodule Nx.Serving do
       >
 
   In the example, we pushed a batch of 2 and eventually got a reply.
-  The process will wait up for requests from other processes, up to
+  The process will wait for requests from other processes, for up to
   100 milliseconds or until it gets 10 entries. Then it merges all
-  batches together and, once the result is computed, it slices and
-  distributed those responses to each caller.
+  batches together and once the result is computed, it slices and
+  distributes those responses to each caller.
 
   If there is any `client_preprocessing` function, it will be executed
   before the batch is sent to the server. If there is any `client_postprocessing`
@@ -171,12 +171,12 @@ defmodule Nx.Serving do
         end
       end
 
-  It has two functions: `c:init/2`, which receives the type of serving
+  It has two functions. The first, `c:init/2`, receives the type of serving
   (`:inline` or `:process`) and the serving argument. In this step,
   we capture `print_and_multiply/1`as a jitted function.
 
   The second function is called `handle_batch/2`. This function
-  receives a `Nx.Batch` and it must return a function to execute.
+  receives a `Nx.Batch` and returns a function to execute.
   The function itself must return a two element-tuple: the batched
   results and some server information. The server information can
   be any value and we set it to the atom `:server_info`.
@@ -253,9 +253,8 @@ defmodule Nx.Serving do
   The function will be called with the arguments returned by the
   `client_preprocessing` callback.
 
-  A second argument called `process_options`, which is optional,
-  can be given to customize the options when starting the serving
-  under a process.
+  A second optional argument called `process_options`, can be given
+  to customize the options when starting the serving under a process.
   """
   def new(function, process_options \\ [])
 
@@ -272,9 +271,8 @@ defmodule Nx.Serving do
 
   It expects a module and an argument that is given to its `init` callback.
 
-  A third argument called `process_options`, which is optional,
-  can be given to customize the options when starting the serving
-  under a process.
+  A third optional argument called `process_options`, can be given to
+  customize the options when starting the serving  under a process.
   """
   def new(module, arg, process_options) when is_atom(module) and is_list(process_options) do
     %Nx.Serving{module: module, arg: arg, process_options: process_options}
@@ -350,7 +348,7 @@ defmodule Nx.Serving do
 
     * `:serving` - a `Nx.Serving` struct with the serving configuration
 
-    * `:batch_size` - the maximum size to batch for. A value is first read
+    * `:batch_size` - the maximum batch size. A value is first read
       from the `Nx.Serving` struct and then it falls back to this option
       (which defaults to `1`)
 
@@ -397,7 +395,7 @@ defmodule Nx.Serving do
   either when the batch is full or on timeout. See the module
   documentation for more information.
 
-  Note you cannot batch an `input` larger than the configured
+  Note that you cannot batch an `input` larger than the configured
   `:batch_size` in the server.
   """
   def batched_run(name, input) when is_atom(name) do
@@ -740,7 +738,7 @@ defmodule Nx.Serving.Default do
 
       other ->
         raise "anonymous function given to Nx.Serving.new/2 should return an AOT or " <>
-                "JIT compiled function that expects one argument, got: #{inspect(other)}"
+                "JIT compiled function that expects one argument. Got: #{inspect(other)}"
     end
   end
 
