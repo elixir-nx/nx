@@ -3480,6 +3480,27 @@ defmodule Nx do
   end
 
   @doc """
+  Invokes the given function temporarily setting `backend` as the
+  default backend.
+  """
+  @doc type: :backend
+  def with_default_backend(backend, fun) do
+    backend = backend!(backend)
+
+    previous_backend = Process.put(backend_pdict_key(), backend)
+
+    try do
+      fun.()
+    after
+      if previous_backend do
+        Process.put(backend_pdict_key(), previous_backend)
+      else
+        Process.delete(backend_pdict_key())
+      end
+    end
+  end
+
+  @doc """
   Copies data to the given backend.
 
   If a backend is not given, `Nx.Tensor` is used, which means
