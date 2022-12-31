@@ -436,9 +436,13 @@ defmodule Nx do
   @doc """
   Builds a tensor.
 
-  The argument is either a number, which means the tensor is a scalar
-  (zero-dimensions), a list of those (the tensor is a vector) or
-  a list of n-lists of those, leading to n-dimensional tensors.
+  The argument must be one of:
+
+    * a tensor
+    * a number (which means the tensor is scalar/zero-dimensional)
+    * a boolean (also scalar/zero-dimensional)
+    * an arbitraly nested list of numbers and booleans
+
   The tensor will be allocated in `Nx.default_backend/0`, unless the
   `:backend` option is given, which overrides the default one.
 
@@ -592,6 +596,25 @@ defmodule Nx do
         1.0-1.0i
       >
 
+  ## Tensors
+
+  Tensors can also be given as inputs:
+
+      iex> Nx.tensor(Nx.tensor([1, 2, 3]))
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+
+  If the `:type` and `:names` option are given, the tensor
+  will be cast and renamed:
+
+      iex> Nx.tensor(Nx.tensor([1, 2, 3]), type: :f32, names: [:row])
+      #Nx.Tensor<
+        f32[row: 3]
+        [1.0, 2.0, 3.0]
+      >
+
   ## Naming dimensions
 
   You can provide names for tensor dimensions. Names are atoms:
@@ -648,12 +671,42 @@ defmodule Nx do
       Only `nil` and atoms are supported as dimension names.
 
     * `:backend` - the backend to allocate the tensor on. It is either
-      an atom or a tuple in the shape `{backend, options}`. This option
-      is ignored inside `defn`
+      an atom or a tuple in the shape `{backend, options}`. In case
+      a tensor and the `:backend` option are given, the tensor will be
+      copied to the given backend.
 
   """
   @doc type: :creation
-  def tensor(arg, opts \\ []) do
+  def tensor(arg, opts \\ [])
+
+  def tensor(%Nx.Tensor{} = tensor, opts) do
+    opts = keyword!(opts, [:type, :names, :backend])
+
+    tensor =
+      if backend = opts[:backend] do
+        backend_copy(tensor, backend)
+      else
+        tensor
+      end
+
+    tensor =
+      if names = opts[:names] do
+        rename(tensor, names)
+      else
+        tensor
+      end
+
+    tensor =
+      if type = opts[:type] do
+        as_type(tensor, type)
+      else
+        tensor
+      end
+
+    tensor
+  end
+
+  def tensor(arg, opts) do
     opts = keyword!(opts, [:type, :names, :backend])
     type = Nx.Type.normalize!(opts[:type] || infer_type(arg))
     tensor(arg, type, opts)
@@ -1883,9 +1936,9 @@ defmodule Nx do
   @doc """
   Converts the given number (or tensor) to a tensor.
 
-  The Nx API works with numbers, complex numbers, and tensors.
-  This function exists to normalize those values into tensors
-  (i.e. `Nx.Tensor` structs).
+  This function only converts types which are automatically
+  cast to tensors throughout Nx API: numbers, complex numbers,
+  and tensors themselves.
 
   If your goal is to create tensors from lists, see `tensor/2`.
   If you want to create a tensor from binary, see `from_binary/3`.
