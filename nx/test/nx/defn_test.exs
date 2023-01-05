@@ -2340,6 +2340,23 @@ defmodule Nx.DefnTest do
 
     deftransform multi_clause_multi_arity_transform(x, y, w, opts), do: {x, y, w, opts[:value]}
 
+    defmodule RemoteTransform do
+      import Nx.Defn
+
+      deftransform remote_with_defaults(x, opts \\ [], z \\ 0), do: x |> Nx.add(opts[:y] || 0) |> Nx.add(z)
+    end
+
+    defn call_remote_transform_1(x), do: RemoteTransform.remote_with_defaults(x)
+    defn call_remote_transform_2(x), do: RemoteTransform.remote_with_defaults(x, [y: x + 1])
+    defn call_remote_transform_3(x), do: RemoteTransform.remote_with_defaults(x, [y: x + 1], x + 2)
+
+    @tag compiler: Evaluator
+    test "can call remote deftransform with defaults from within defn" do
+      assert Nx.tensor(1) == call_remote_transform_1(1)
+      assert Nx.tensor(3) == call_remote_transform_2(1)
+      assert Nx.tensor(6) == call_remote_transform_3(1)
+    end
+
     test "can call deftransform and deftransformp functions from within defn" do
       result = deftransform_test(Nx.tensor(1), Nx.tensor(2), b: 3, c: 4)
 
