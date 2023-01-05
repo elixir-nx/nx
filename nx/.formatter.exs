@@ -5,7 +5,7 @@ locals_without_parens = [
   defnp: 2,
   deftransform: 1,
   deftransform: 2,
-  deftransform: 1,
+  deftransformp: 1,
   deftransformp: 2,
   while: 3
 ]
