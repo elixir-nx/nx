@@ -296,16 +296,26 @@ defmodule Nx.Defn.Compiler do
     {kind, meta, [Macro.update_meta(signature, &Keyword.delete(&1, :context)), block]}
   end
 
-  defp compile_each_transform({{name, defn_arity}, _def_meta}, state) do
+  defp compile_each_transform({{name, defn_arity}, def_meta}, state) do
     defn_name = defn_name(name)
+
+    %{defaults: defaults} = def_meta
 
     case Module.get_definition(state.module, {name, defn_arity}) do
       {:v1, kind, meta, _clauses} ->
-        defn_args = Macro.generate_arguments(defn_arity, __MODULE__)
+        all_args = Macro.generate_arguments(defn_arity, __MODULE__)
+
+        defn_args =
+          Enum.with_index(all_args, fn arg, i ->
+            case defaults do
+              %{^i => {meta, default}} -> {:\\, meta, [arg, default]}
+              %{} -> arg
+            end
+          end)
 
         quote line: meta[:line] do
           Kernel.unquote(kind)(unquote(defn_name)(unquote_splicing(defn_args)),
-            do: unquote(name)(unquote_splicing(defn_args))
+            do: unquote(name)(unquote_splicing(all_args))
           )
         end
 
