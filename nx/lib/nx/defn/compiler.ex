@@ -313,8 +313,6 @@ defmodule Nx.Defn.Compiler do
             end
           end)
 
-        # defn_args = Macro.generate_arguments(defn_arity, __MODULE__)
-
         quote line: meta[:line] do
           Kernel.unquote(kind)(unquote(defn_name)(unquote_splicing(defn_args)),
             do: unquote(name)(unquote_splicing(all_args))
