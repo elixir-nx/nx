@@ -2343,12 +2343,15 @@ defmodule Nx.DefnTest do
     defmodule RemoteTransform do
       import Nx.Defn
 
-      deftransform remote_with_defaults(x, opts \\ [], z \\ 0), do: x |> Nx.add(opts[:y] || 0) |> Nx.add(z)
+      deftransform remote_with_defaults(x, opts \\ [], z \\ 0),
+        do: x |> Nx.add(opts[:y] || 0) |> Nx.add(z)
     end
 
     defn call_remote_transform_1(x), do: RemoteTransform.remote_with_defaults(x)
-    defn call_remote_transform_2(x), do: RemoteTransform.remote_with_defaults(x, [y: x + 1])
-    defn call_remote_transform_3(x), do: RemoteTransform.remote_with_defaults(x, [y: x + 1], x + 2)
+    defn call_remote_transform_2(x), do: RemoteTransform.remote_with_defaults(x, y: x + 1)
+
+    defn call_remote_transform_3(x),
+      do: RemoteTransform.remote_with_defaults(x, [y: x + 1], x + 2)
 
     @tag compiler: Evaluator
     test "can call remote deftransform with defaults from within defn" do
