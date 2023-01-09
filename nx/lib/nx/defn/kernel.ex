@@ -390,7 +390,7 @@ defmodule Nx.Defn.Kernel do
   def left * right, do: Nx.multiply(left, right)
 
   @doc """
-  Element-wise multiplication operator.
+  Element-wise power operator.
 
   It delegates to `Nx.power/2` (supports broadcasting).
 
