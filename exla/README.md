@@ -54,8 +54,7 @@ For example, if you're building an app called `:hello_nx`, you set:
 config :hello_nx, build_embedded: true
 ```
 
-You also need to set your `XLA_ARCHIVE_URL` variable to the correct `aarch64` archive.
-The URL can be found in the [releases page for XLA](XLA_ARCHIVE_URL=https://github.com/elixir-nx/xla/releases), by copying the link for the corresponding archive, and will be similar to the following: `https://github.com/elixir-nx/xla/releases/download/<VERSION>/xla_extension-aarch64-linux-gnu-cpu.tar.gz`
+You also need to set your [`XLA_TARGET_PLATFORM`](https://github.com/elixir-nx/xla#xla_target_platform) variable to the correct target platform value (i.e. `aarch64-linux-gcc` for the Raspberry Pi 4).
 
 ## Contributing
 
