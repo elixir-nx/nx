@@ -9,9 +9,9 @@ defmodule EXLA.Defn.APITest do
 
   describe "multi-client" do
     test "converts from host to separate client" do
-      a = Nx.tensor(1, backend: {EXLA.Backend, client: :other_host})
-      b = Nx.tensor(2, backend: {EXLA.Backend, client: :other_host})
-      assert_equal(EXLA.jit(&add_two/2, client: :host).(a, b), Nx.tensor(3))
+      a = Nx.tensor(1, backend: {EXLA.Backend, client: :host})
+      b = Nx.tensor(2, backend: {EXLA.Backend, client: :host})
+      assert_equal(EXLA.jit(&add_two/2, client: :other_host).(a, b), Nx.tensor(3))
     end
   end
 
