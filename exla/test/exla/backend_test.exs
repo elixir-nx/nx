@@ -104,6 +104,20 @@ defmodule EXLA.BackendTest do
     assert Nx.to_binary(nt) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
   end
 
+  test "Nx.LinAlg.svg/2" do
+    t = Nx.iota({4, 4})
+    assert {u, s, vt} = Nx.LinAlg.svd(t, max_iter: 10_000)
+
+    reconstructed = u |> Nx.multiply(s) |> Nx.dot(vt)
+    assert_all_close(t, reconstructed, atol: 1.0e-5)
+  end
+
+  test "multi-client" do
+    a = Nx.tensor(1, backend: {EXLA.Backend, client: :host})
+    b = Nx.tensor(2, backend: {EXLA.Backend, client: :other_host})
+    assert_equal(Nx.add(a, b), Nx.tensor(3))
+  end
+
   test "Kernel.inspect/2" do
     t = Nx.tensor([1, 2, 3, 4], backend: EXLA.Backend)
 
@@ -138,16 +152,5 @@ defmodule EXLA.BackendTest do
                  fn ->
                    Nx.backend_transfer(Nx.tensor([1, 2]), {EXLA.Backend, client: :unknown})
                  end
-  end
-
-  describe "svd" do
-    test "reconstructs original matrix" do
-      t = Nx.iota({4, 4})
-
-      assert {u, s, vt} = Nx.LinAlg.svd(t, max_iter: 10_000)
-
-      reconstructed = u |> Nx.multiply(s) |> Nx.dot(vt)
-      assert_all_close(t, reconstructed, atol: 1.0e-5)
-    end
   end
 end

@@ -47,7 +47,7 @@ defmodule EXLA.Defn do
         buffers =
           args
           |> EXLA.Defn.Buffers.filter_by_indexes(used_inputs)
-          |> EXLA.Defn.Buffers.from_nx!()
+          |> EXLA.Defn.Buffers.from_nx!(executable)
 
         # Now that we have transferred to device, we spawn a runner process
         # to execute the stream. We use a runner instead of a task to avoid
@@ -312,7 +312,7 @@ defmodule EXLA.Defn do
       buffers =
         args
         |> EXLA.Defn.Buffers.filter_by_indexes(used_inputs)
-        |> EXLA.Defn.Buffers.from_nx!()
+        |> EXLA.Defn.Buffers.from_nx!(executable)
 
       EXLA.Executable.run(executable, [buffers], run_options)
     else
@@ -326,7 +326,7 @@ defmodule EXLA.Defn do
     buffers =
       args
       |> EXLA.Defn.Buffers.filter_by_indexes(used_inputs)
-      |> EXLA.Defn.Buffers.from_nx!()
+      |> EXLA.Defn.Buffers.from_nx!(executable)
 
     {:ok, runner} =
       EXLA.Defn.Runner.start_link(lock, fn ->
