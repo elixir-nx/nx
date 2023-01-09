@@ -1191,15 +1191,8 @@ defmodule Nx.Defn.Expr do
     IO.iodata_to_binary(["{", Enum.map_intersperse(list, ", ", &maybe_type_shape_string/1), "}"])
   end
 
-  defp maybe_type_shape_string(%struct_name{} = struct) do
-    map = Map.from_struct(struct)
-
-    pairs =
-      Enum.map_intersperse(map, ", ", fn {k, v} ->
-        [inspect(k), " => ", maybe_type_shape_string(v)]
-      end)
-
-    IO.iodata_to_binary(["%", Macro.to_string(struct_name), "{", pairs, "}"])
+  defp maybe_type_shape_string(struct) when is_struct(struct) do
+    Kernel.inspect(Nx.to_template(struct), add_backend_on_inspect: false)
   end
 
   defp maybe_type_shape_string(map) when is_map(map) do
