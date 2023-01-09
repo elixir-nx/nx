@@ -46,15 +46,7 @@ EXLA relies on the [XLA](https://github.com/elixir-nx/xla) package to provide th
 
 ### Usage with Nerves
 
-To get EXLA to work on your target Nerves device, you need to add `build_embedded: true` to your app's config.
-
-For example, if you're building an app called `:hello_nx`, you set:
-
-```elixir
-config :hello_nx, build_embedded: true
-```
-
-You also need to set your [`XLA_TARGET_PLATFORM`](https://github.com/elixir-nx/xla#xla_target_platform) variable to the correct target platform value (i.e. `aarch64-linux-gcc` for the Raspberry Pi 4).
+For cross-compilation, you need to [set your `XLA_TARGET_PLATFORM` variable](https://github.com/elixir-nx/xla#xla_target_platform) to the correct target platform value (i.e. `aarch64-linux-gnu` for the Raspberry Pi 4).
 
 ## Contributing
 
