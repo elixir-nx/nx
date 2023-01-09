@@ -13,7 +13,7 @@ defmodule Nx.TemplateBackend do
   @impl true
   def inspect(%Nx.Tensor{}, opts) do
     if opts.custom_options[:skip_template_backend_header] do
-      ""
+      Inspect.Algebra.empty()
     else
       "Nx.TemplateBackend"
     end

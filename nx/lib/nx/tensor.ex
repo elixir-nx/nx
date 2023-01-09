@@ -165,7 +165,7 @@ defmodule Nx.Tensor do
       data = tensor.data.__struct__.inspect(tensor, opts)
 
       inner =
-        if data == "" do
+        if data == empty() do
           concat([line(), type, shape, data])
         else
           concat([line(), type, shape, line(), data])
