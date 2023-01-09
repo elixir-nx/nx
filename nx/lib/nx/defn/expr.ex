@@ -1191,7 +1191,7 @@ defmodule Nx.Defn.Expr do
     IO.iodata_to_binary(["{", Enum.map_intersperse(list, ", ", &maybe_type_shape_string/1), "}"])
   end
 
-  defp maybe_type_shape_string(map) when is_map(map) do
+  defp maybe_type_shape_string(map) when is_map(map) and not is_struct(map) do
     pairs =
       Enum.map_intersperse(map, ", ", fn {k, v} ->
         [inspect(k), " => ", maybe_type_shape_string(v)]

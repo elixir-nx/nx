@@ -141,7 +141,7 @@ defmodule Nx.ContainerTest do
       var.a + var.b
     end
 
-    deftransformp assert_fields!(%C{c: %{}, d: :keep}), do: 1
+    deftransformp(assert_fields!(%C{c: %{}, d: :keep}), do: 1)
 
     test "keeps fields" do
       inp = %Container{a: 1, b: 2, c: :reset, d: :keep}
@@ -158,7 +158,7 @@ defmodule Nx.ContainerTest do
       var.a + var.b
     end
 
-    deftransformp dot_assert_fields_transform(%C{c: %{}, d: %{}}), do: 1
+    deftransformp(dot_assert_fields_transform(%C{c: %{}, d: %{}}), do: 1)
 
     test "keeps empty maps" do
       inp = %Container{a: 1, b: 2, c: :reset, d: %{}}
@@ -168,6 +168,32 @@ defmodule Nx.ContainerTest do
 
       assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 64}} = right
+    end
+
+    defn container_in_raise_type_mismatching(x) do
+      container = %Container{a: 1, b: 2}
+
+      while {i = 0, container, x = Nx.as_type(x, :u8)}, i < 10 do
+        {i + 1, container, Nx.as_type(x, :s16)}
+      end
+    end
+
+    test "renders correctly in raises" do
+      expected_error =
+        [
+          "the do-block in while must return tensors with the same shape, type, and names as the initial arguments.",
+          " Got body {s64, %Container{a: #Nx.Tensor<\n    s64\n    \n    Nx.Defn.Expr\n    parameter a:1   s64\n  >,",
+          " b: #Nx.Tensor<\n    s64\n    \n    Nx.Defn.Expr\n    parameter a:2   s64\n  >, c: %{}, d: %{}}, s16}",
+          " and initial {s64, %Container{a: #Nx.Tensor<\n    s64\n    \n    Nx.Defn.Expr\n    1\n  >,",
+          " b: #Nx.Tensor<\n    s64\n    \n    Nx.Defn.Expr\n    2\n  >, c: %{}, d: %{}}, u8}",
+          "$"
+        ]
+        |> IO.iodata_to_binary()
+        |> Regex.compile!()
+
+      assert_raise CompileError, expected_error, fn ->
+        container_in_raise_type_mismatching(1)
+      end
     end
   end
 end
