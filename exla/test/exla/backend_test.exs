@@ -115,7 +115,7 @@ defmodule EXLA.BackendTest do
   test "multi-client" do
     a = Nx.tensor(1, backend: {EXLA.Backend, client: :host})
     b = Nx.tensor(2, backend: {EXLA.Backend, client: :other_host})
-    assert_equal Nx.add(a, b), Nx.tensor(3)
+    assert_equal(Nx.add(a, b), Nx.tensor(3))
   end
 
   test "Kernel.inspect/2" do
