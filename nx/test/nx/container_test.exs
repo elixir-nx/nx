@@ -158,7 +158,7 @@ defmodule Nx.ContainerTest do
       var.a + var.b
     end
 
-    deftransformp(dot_assert_fields_transform(%C{c: %{}, d: %{}}), do: 1)
+    deftransformp dot_assert_fields_transform(%C{c: %{}, d: %{}}), do: 1
 
     test "keeps empty maps" do
       inp = %Container{a: 1, b: 2, c: :reset, d: %{}}
