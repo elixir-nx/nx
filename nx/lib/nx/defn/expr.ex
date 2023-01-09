@@ -1197,7 +1197,7 @@ defmodule Nx.Defn.Expr do
        when Nx.is_tensor(tensor_or_container) or is_map(tensor_or_container) or
               is_tuple(tensor_or_container) do
     Kernel.inspect(Nx.to_template(tensor_or_container),
-      custom_options: [add_backend_on_inspect: false]
+      custom_options: [skip_template_backend_header: true]
     )
   end
 

@@ -12,7 +12,7 @@ defmodule Nx.TemplateBackend do
 
   @impl true
   def inspect(%Nx.Tensor{}, opts) do
-    if opts.custom_options[:add_backend_on_inspect] == false do
+    if opts.custom_options[:skip_template_backend_header] do
       ""
     else
       "Nx.TemplateBackend"
