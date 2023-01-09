@@ -593,13 +593,13 @@ defmodule Nx.Shape do
     shape = Tuple.to_list(shape)
     shape_and_names = Enum.zip(shape, names)
 
-    {rev_shape, rev_names, flatten_size} =
-      for {{size, name}, i} <- Enum.with_index(shape_and_names), reduce: {[], [], 1} do
-        {cur_shape, cur_names, cur_size} ->
+    {rev_shape, rev_names, flatten_size, _} =
+      for {size, name} <- shape_and_names, reduce: {[], [], 1, 0} do
+        {cur_shape, cur_names, cur_size, i} ->
           if i in axes do
-            {cur_shape, cur_names, size * cur_size}
+            {cur_shape, cur_names, size * cur_size, i + 1}
           else
-            {[size | cur_shape], [name | cur_names], cur_size}
+            {[size | cur_shape], [name | cur_names], cur_size, i + 1}
           end
       end
 
