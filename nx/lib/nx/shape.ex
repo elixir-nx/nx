@@ -617,16 +617,9 @@ defmodule Nx.Shape do
     {shape, names}
   end
 
-  defp consecutive?([]), do: true
-
-  defp consecutive?([last | next]) do
-    {res, _} =
-      Enum.reduce(next, {true, last}, fn cur, {cons?, last} ->
-        {cons? and last == cur - 1, cur}
-      end)
-
-    res
-  end
+  defp consecutive?([cur, next | rest]) when next == cur + 1, do: consecutive?([next | rest])
+  defp consecutive?([_last]), do: true
+  defp consecutive?(_), do: false
 
   @doc """
   Dilates the given input shape according to dilation.
