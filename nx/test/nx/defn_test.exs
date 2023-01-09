@@ -1244,7 +1244,7 @@ defmodule Nx.DefnTest do
 
     test "raises on non-tensor return" do
       assert_raise CompileError,
-                   ~r"cond/if expects all branches to return compatible tensor types. Got: :foo and :bar",
+                   ~r"cond/if expects all branches to return compatible tensor types.\n\nGot mismatching templates:\n\n:foo\n\nand\n\n:bar\n",
                    fn -> non_tensor_cond(1) end
     end
   end
@@ -1420,8 +1420,17 @@ defmodule Nx.DefnTest do
     test "factorial" do
       assert %T{} = factorial(5)
 
+      expected_error =
+        [
+          "the do-block in while must return tensors with the same shape, type, and names as the initial arguments.",
+          "\n\nBody matches template:\n\n{#Nx.Tensor<\n   f32\n >, #Nx.Tensor<\n   f32\n >}",
+          "\n\nand initial argument has template:\n\n{#Nx.Tensor<\n   s64\n >, #Nx.Tensor<\n   f32\n >}\n"
+        ]
+        |> IO.iodata_to_binary()
+        |> Regex.compile!()
+
       assert_raise CompileError,
-                   ~r/the do-block in while must return tensors with the same shape, type, and names as the initial arguments. Got body \{f32, f32\} and initial \{s64, f32\}/,
+                   expected_error,
                    fn -> factorial(10.0) end
     end
 
@@ -1832,8 +1841,17 @@ defmodule Nx.DefnTest do
     end
 
     test "raises on mixed return" do
+      expected_error =
+        [
+          "the do-block in while must return tensors with the same shape, type, and names as the initial arguments.",
+          "\n\nBody matches template:\n\n%{a: #Nx.Tensor<\n    s64\n  >, b: #Nx.Tensor<\n    s64\n  >}",
+          "\n\nand initial argument has template:\n\n{#Nx.Tensor<\n   s64\n >, #Nx.Tensor<\n   s64\n >}\n"
+        ]
+        |> IO.iodata_to_binary()
+        |> Regex.compile!()
+
       assert_raise CompileError,
-                   ~r/the do-block in while must return tensors with the same shape, type, and names as the initial arguments. Got body %\{:a => s64, :b => s64\} and initial \{s64, s64\}/,
+                   expected_error,
                    fn -> while_mixed_return(Nx.tensor(0), Nx.tensor(1)) end
     end
 
