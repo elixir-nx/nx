@@ -119,14 +119,6 @@ defmodule EXLA.Client do
     EXLA.NIF.transfer_from_outfeed(client, device_id, shape_refs, pid, ref) |> unwrap!()
   end
 
-  @doc """
-  Copies buffer to device with given device ID.
-  """
-  def copy_buffer_to_device(%EXLA.Client{ref: client}, %EXLA.DeviceBuffer{ref: buffer}, device_id)
-      when is_integer(device_id) do
-    EXLA.NIF.copy_buffer_to_device(client, buffer, device_id) |> unwrap!()
-  end
-
   ## Callbacks
 
   @doc false

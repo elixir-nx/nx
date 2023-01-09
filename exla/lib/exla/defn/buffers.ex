@@ -67,11 +67,28 @@ defmodule EXLA.Defn.Buffers do
   @doc """
   Nx -> EXLA.DeviceBuffer + EXLA.BinaryBuffer.
   """
-  def from_nx!(funs) do
+  def from_nx!(funs, executable) do
     for fun <- funs do
       %Nx.Tensor{data: data} = tensor = fun.()
 
       case data do
+        %EXLA.Backend{buffer: %EXLA.DeviceBuffer{} = buffer}
+        when buffer.client_name != executable.client.name ->
+          buffer_client = EXLA.Client.fetch!(buffer.client_name)
+
+          if buffer_client.platform == :host do
+            EXLA.DeviceBuffer.copy_to_device(buffer, executable.client, executable.device_id)
+          else
+            raise ArgumentError, """
+            EXLA computation (defn) is allocated on client #{executable.client.name} (#{executable.client.platform})
+            but one of the input tensors are allocated on #{buffer_client.name} (#{buffer_client.platform}).
+
+            EXLA only automatically transfers allocated on host to other client.
+            You need to either transfer your tensors to the same client as the executable
+            or compile the defn with a client that matches your input tensors
+            """
+          end
+
         %EXLA.Backend{buffer: buffer} ->
           buffer
 

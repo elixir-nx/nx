@@ -310,17 +310,16 @@ defmodule EXLA.Backend do
 
   defp jit(backend_options, fun, args), do: jit(backend_options, fun, args, args)
 
-  # TODO: Should we automatically transfer between devices?
   defp jit(backend_options, fun, tensors, args) do
     client =
       for %T{data: %B{buffer: %EXLA.DeviceBuffer{client_name: client_name}}} <- tensors,
           reduce: nil do
         acc when acc != nil and acc != client_name ->
-          raise ArgumentError, """
-          cannot perform Nx operation using EXLA tensors from different clients. Got:
-
-          #{inspect(tensors)}
-          """
+          if EXLA.Client.fetch!(client_name).platform == :host do
+            acc
+          else
+            client_name
+          end
 
         _ ->
           client_name

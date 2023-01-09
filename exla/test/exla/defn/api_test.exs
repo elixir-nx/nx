@@ -5,9 +5,17 @@ defmodule EXLA.Defn.APITest do
   import ExUnit.CaptureLog
   import ExUnit.CaptureIO
 
-  describe "options" do
-    defn add_two(a, b), do: a + b
+  defn add_two(a, b), do: a + b
 
+  describe "multi-client" do
+    test "converts from host to separate client" do
+      a = Nx.tensor(1, backend: {EXLA.Backend, client: :other_host})
+      b = Nx.tensor(2, backend: {EXLA.Backend, client: :other_host})
+      assert_equal EXLA.jit(&add_two/2, client: :host).(a, b), Nx.tensor(3)
+    end
+  end
+
+  describe "options" do
     test "raises on invalid device_id" do
       # the message is different between backends
       assert_raise RuntimeError, ~r/1024/, fn ->

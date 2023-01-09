@@ -19,11 +19,16 @@ defmodule EXLA.DeviceBuffer do
   """
   def place_on_device(data, %Shape{} = shape, client = %Client{}, device_id)
       when is_integer(device_id) and is_binary(data) do
-    ref =
-      client.ref
-      |> EXLA.NIF.binary_to_device_mem(data, shape.ref, device_id)
-      |> unwrap!()
+    ref = client.ref |> EXLA.NIF.binary_to_device_mem(data, shape.ref, device_id) |> unwrap!()
+    %DeviceBuffer{ref: ref, client_name: client.name, device_id: device_id, shape: shape}
+  end
 
+  @doc """
+  Copies buffer to device with given device ID.
+  """
+  def copy_to_device(%DeviceBuffer{ref: buffer, shape: shape}, %Client{} = client, device_id)
+      when is_integer(device_id) do
+    ref = client.ref |> EXLA.NIF.copy_buffer_to_device(buffer, device_id) |> unwrap!()
     %DeviceBuffer{ref: ref, client_name: client.name, device_id: device_id, shape: shape}
   end
 

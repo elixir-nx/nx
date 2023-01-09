@@ -2,13 +2,15 @@ target = System.get_env("EXLA_TARGET", "host")
 client = EXLAHelpers.client()
 Nx.Defn.global_default_options(compiler: EXLA)
 
-multi_device =
+exclude_multi_device =
   if client.device_count > 1 and client.platform == :host, do: [], else: [:multi_device]
 
-skip_tpu_tests =
-  if client.platform == :tpu,
-    do: [:unsupported_dilated_window_reduce, :unsupported_64_bit_op],
-    else: []
+exclude =
+  case client.platform do
+    :tpu -> [:unsupported_dilated_window_reduce, :unsupported_64_bit_op]
+    :host -> []
+    _ -> [:conditional_inside_map_reduce]
+  end
 
 if client.platform == :host and client.device_count == 1 and System.schedulers_online() > 1 do
   IO.puts(
@@ -17,7 +19,7 @@ if client.platform == :host and client.device_count == 1 and System.schedulers_o
 end
 
 ExUnit.start(
-  exclude: [:platform, :integration] ++ multi_device ++ skip_tpu_tests,
+  exclude: [:platform, :integration] ++ exclude_multi_device ++ exclude,
   include: [platform: String.to_atom(target)],
   assert_receive_timeout: 1000
 )
