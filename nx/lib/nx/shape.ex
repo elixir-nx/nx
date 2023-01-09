@@ -578,8 +578,6 @@ defmodule Nx.Shape do
   """
   def flatten(shape, names, axes)
 
-  def flatten({}, _, _), do: {{}, []}
-
   def flatten(shape, names, []), do: {shape, names}
 
   def flatten(shape, names, axes) do
