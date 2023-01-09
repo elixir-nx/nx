@@ -578,7 +578,7 @@ defmodule Nx.Shape do
   """
   def flatten(shape, names, axes)
 
-  def flatten(shape, names, nil), do: {{Tuple.product(shape)}, [nil]}
+  def flatten(shape, _names, nil), do: {{Tuple.product(shape)}, [nil]}
 
   def flatten(shape, names, []), do: {shape, names}
 

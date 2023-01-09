@@ -7054,15 +7054,10 @@ defmodule Nx do
       end
 
     t =
-      case {shape, axis} do
-        {{}, _} ->
-          reshape(tensor, {1})
-
-        {_, nil} ->
-          tensor |> flatten() |> sort()
-
-        {_, axis} ->
-          sort(tensor, axis: axis)
+      if axis do
+        sort(tensor, axis: axis)
+      else
+        tensor |> flatten() |> sort()
       end
 
     axis_size =
