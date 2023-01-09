@@ -2472,10 +2472,48 @@ defmodule Nx do
         s64[16]
         [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
       >
+
+  You may also pass `:axes` to `Nx.flatten/2`, to specify which consecutive
+  axes to flatten:
+
+      iex> t = Nx.iota({1, 2, 3})
+      #Nx.Tensor<
+        s64[1][2][3]
+        [
+          [
+            [0, 1, 2],
+            [3, 4, 5]
+          ]
+        ]
+      >
+      iex> Nx.flatten(t, axes: [1, 2])
+      #Nx.Tensor<
+        s64[1][6]
+        [
+          [0, 1, 2, 3, 4, 5]
+        ]
+      >
+
+  `:axes` must be consecutive, otherwise it will raise:
+
+      iex> t = Nx.iota({1, 2, 3})
+      #Nx.Tensor<
+        s64[1][2][3]
+        [
+          [
+            [0, 1, 2],
+            [3, 4, 5]
+          ]
+        ]
+      >
+      iex> Nx.flatten(t, axes: [0, 2])
+      ** (ArgumentError) flatten axes must be consecutive
   """
   @doc type: :shape
-  def flatten(tensor) do
-    reshape(tensor, {size(tensor)})
+  def flatten(tensor, opts \\ []) do
+    opts = Keyword.validate!(opts, [:axes])
+    {shape, names} = Nx.Shape.flatten(tensor.shape, tensor.names, opts[:axes])
+    reshape(tensor, shape, names: names)
   end
 
   @doc """
@@ -7016,10 +7054,15 @@ defmodule Nx do
       end
 
     t =
-      if axis do
-        sort(tensor, axis: axis)
-      else
-        tensor |> flatten() |> sort()
+      case {shape, axis} do
+        {{}, _} ->
+          reshape(tensor, {1})
+
+        {_, nil} ->
+          tensor |> flatten() |> sort()
+
+        {_, axis} ->
+          sort(tensor, axis: axis)
       end
 
     axis_size =

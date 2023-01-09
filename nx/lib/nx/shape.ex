@@ -557,6 +557,78 @@ defmodule Nx.Shape do
   end
 
   @doc """
+  Flattens the given axes of the given input shape into a
+  single axis.
+
+  ## Examples
+
+      iex> Nx.Shape.flatten({1, 2, 3}, [nil, nil, nil], nil)
+      {{6}, [nil]}
+
+      iex> Nx.Shape.flatten({1, 2, 3}, [:batch, nil, nil], [1, 2])
+      {{1, 6}, [:batch, nil]}
+
+      iex> Nx.Shape.flatten({1, 2, 3}, [nil, nil, nil], [])
+      {{1, 2, 3}, [nil, nil, nil]}
+
+  ### Error cases
+
+      iex> Nx.Shape.flatten({1, 2, 3}, [:batch, nil, nil], [0, 2])
+      ** (ArgumentError) flatten axes must be consecutive
+  """
+  def flatten(shape, names, axes)
+
+  def flatten({}, _, _), do: {{}, []}
+
+  def flatten(shape, names, []), do: {shape, names}
+
+  def flatten(shape, names, axes) do
+    axes = axes || Enum.to_list(0..(tuple_size(shape) - 1))
+    [insert_axis | _] = axes = normalize_axes(shape, axes, names)
+
+    unless consecutive?(axes) do
+      raise ArgumentError, "flatten axes must be consecutive"
+    end
+
+    shape = Tuple.to_list(shape)
+    shape_and_names = Enum.zip(shape, names)
+
+    {rev_shape, rev_names, flatten_size} =
+      for {{size, name}, i} <- Enum.with_index(shape_and_names), reduce: {[], [], 1} do
+        {cur_shape, cur_names, cur_size} ->
+          if i in axes do
+            {cur_shape, cur_names, size * cur_size}
+          else
+            {[size | cur_shape], [name | cur_names], cur_size}
+          end
+      end
+
+    shape =
+      rev_shape
+      |> Enum.reverse()
+      |> List.to_tuple()
+      |> Tuple.insert_at(insert_axis, flatten_size)
+
+    names =
+      rev_names
+      |> Enum.reverse()
+      |> List.insert_at(insert_axis, nil)
+
+    {shape, names}
+  end
+
+  defp consecutive?([]), do: true
+
+  defp consecutive?([last | next]) do
+    {res, _} =
+      Enum.reduce(next, {true, last}, fn cur, {cons?, last} ->
+        {cons? and last == cur - 1, cur}
+      end)
+
+    res
+  end
+
+  @doc """
   Dilates the given input shape according to dilation.
 
   ## Examples
