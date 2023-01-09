@@ -182,10 +182,8 @@ defmodule Nx.ContainerTest do
       expected_error =
         [
           "the do-block in while must return tensors with the same shape, type, and names as the initial arguments.",
-          " Got body {s64, %Container{a: #Nx.Tensor<\n    s64\n    \n    Nx.Defn.Expr\n    parameter a:1   s64\n  >,",
-          " b: #Nx.Tensor<\n    s64\n    \n    Nx.Defn.Expr\n    parameter a:2   s64\n  >, c: %{}, d: %{}}, s16}",
-          " and initial {s64, %Container{a: #Nx.Tensor<\n    s64\n    \n    Nx.Defn.Expr\n    1\n  >,",
-          " b: #Nx.Tensor<\n    s64\n    \n    Nx.Defn.Expr\n    2\n  >, c: %{}, d: %{}}, u8}",
+          " Got body {s64, %Container{:a => s64, :b => s64, :c => %{}, :d => %{}}, s16}",
+          " and initial {s64, %Container{:a => s64, :b => s64, :c => %{}, :d => %{}}, u8}",
           "$"
         ]
         |> IO.iodata_to_binary()
