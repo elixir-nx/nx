@@ -441,7 +441,7 @@ defmodule Nx do
     * a tensor
     * a number (which means the tensor is scalar/zero-dimensional)
     * a boolean (also scalar/zero-dimensional)
-    * an arbitraly nested list of numbers and booleans
+    * an arbitrarily nested list of numbers and booleans
 
   If a new tensor has to be allocated, it will be allocated in
   `Nx.default_backend/0`, unless the `:backend` option is given,
