@@ -9,7 +9,7 @@ defmodule Nx.Constants do
   import Nx.Defn.Kernel, only: [keyword!: 2]
 
   @doc """
-  Returns infinity in f32.
+  Returns NaN in f32.
   """
   def nan, do: nan({:f, 32}, [])
 
