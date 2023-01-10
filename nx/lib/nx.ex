@@ -656,15 +656,17 @@ defmodule Nx do
   If the `:backend` and `:type` options are given, the tensor will
   compared against those values and raise in case of mismatch:
 
-      iex> Nx.tensor(Nx.tensor([1, 2, 3]), backend: EXLA.Backend)
-      ** (ArgumentError) Nx.tensor/2 wants to allocate on backend EXLA.Backend but it was given a tensor allocated on Nx.BinaryBackend
-
       iex> Nx.tensor(Nx.tensor([1, 2, 3]), type: :f32)
       ** (ArgumentError) Nx.tensor/2 expects a tensor with type :f32 but it was given a tensor of type {:s, 64}
 
-  If names are given, they will be assigned to the tensor, but Nx
-  will raise in case the tensor already has names that conflict with
-  the assigned ones:
+  The `:backend` option will check only against the backend name
+  and not specific backend configuration such as device and client:
+
+      iex> Nx.tensor(Nx.tensor([1, 2, 3]), backend: EXLA.Backend)
+      ** (ArgumentError) Nx.tensor/2 wants to allocate on backend EXLA.Backend but it was given a tensor allocated on Nx.BinaryBackend
+
+  The names in the given tensor are always discarded but Nx will raise
+  in case the tensor already has names that conflict with the assigned ones:
 
       iex> Nx.tensor(Nx.tensor([1, 2, 3]), names: [:row])
       #Nx.Tensor<
@@ -672,8 +674,14 @@ defmodule Nx do
         [1, 2, 3]
       >
 
-      iex> Nx.tensor(Nx.tensor([1, 2, 3], names: [:row]), names: [:column])
-      ** (ArgumentError)  cannot merge name :row on axis 0 with name :column on axis 0
+      iex> Nx.tensor(Nx.tensor([1, 2, 3], names: [:column]))
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+
+      iex> Nx.tensor(Nx.tensor([1, 2, 3], names: [:column]), names: [:row])
+      ** (ArgumentError)  cannot merge name :column on axis 0 with name :row on axis 0
 
   ## Options
 
@@ -685,7 +693,8 @@ defmodule Nx do
       Only `nil` and atoms are supported as dimension names.
 
     * `:backend` - the backend to allocate the tensor on. It is either
-      an atom or a tuple in the shape `{backend, options}`.
+      an atom or a tuple in the shape `{backend, options}`. It defaults
+      to `Nx.default_backend/0` for new tensors
 
   """
   @doc type: :creation
@@ -722,9 +731,16 @@ defmodule Nx do
         tensor
       end
 
-    # We merge to check for conflicts but the value in `:names` should always match
-    names = Nx.Shape.named_axes!(opts[:names], tensor.shape)
-    _ = Nx.Shape.merge_names!(tensor.names, names)
+    # We merge to check for conflicts but ultimately discard the tensor.names for consistency
+    names =
+      if names = opts[:names] do
+        names = Nx.Shape.named_axes!(names, tensor.shape)
+        _ = Nx.Shape.merge_names!(tensor.names, names)
+        names
+      else
+        List.duplicate(nil, tuple_size(tensor.shape))
+      end
+
     %{tensor | names: names}
   end
 
