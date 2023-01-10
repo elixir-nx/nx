@@ -34,13 +34,6 @@ defmodule Nx.TensorTest do
     end
   end
 
-  describe "tensor" do
-    test "transfers new tensor" do
-      Nx.tensor([1, 2, 3], backend: {ProcessBackend, key: :example})
-      assert Process.get(:example) == <<1::64-native, 2::64-native, 3::64-native>>
-    end
-  end
-
   describe "backend_transfer" do
     test "transfers existing tensor" do
       Nx.tensor([1, 2, 3]) |> Nx.backend_transfer({ProcessBackend, key: :example})

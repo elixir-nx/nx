@@ -2060,6 +2060,21 @@ defmodule Nx.Shape do
 
   def fft(shape) when is_tuple(shape), do: shape
 
+  @doc """
+  Merges names, raising on mismatch.
+
+  It assumes their length match.
+  """
+  def merge_names!(left, right) do
+    merge_names!(left, right, 0)
+  end
+
+  defp merge_names!([left_head | left], [right_head | right], axis),
+    do: [merge_names!(left_head, right_head, axis, axis) | merge_names!(left, right, axis + 1)]
+
+  defp merge_names!([], [], _axis),
+    do: []
+
   ## Helpers
 
   defp count_up(0, _n), do: []
