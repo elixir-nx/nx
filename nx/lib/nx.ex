@@ -443,8 +443,9 @@ defmodule Nx do
     * a boolean (also scalar/zero-dimensional)
     * an arbitraly nested list of numbers and booleans
 
-  The tensor will be allocated in `Nx.default_backend/0`, unless the
-  `:backend` option is given, which overrides the default one.
+  If a new tensor has to be allocated, it will be allocated in
+  `Nx.default_backend/0`, unless the `:backend` option is given,
+  which overrides the default one.
 
   ## Examples
 
@@ -596,25 +597,6 @@ defmodule Nx do
         1.0-1.0i
       >
 
-  ## Tensors
-
-  Tensors can also be given as inputs:
-
-      iex> Nx.tensor(Nx.tensor([1, 2, 3]))
-      #Nx.Tensor<
-        s64[3]
-        [1, 2, 3]
-      >
-
-  If the `:type` and `:names` option are given, the tensor
-  will be cast and renamed:
-
-      iex> Nx.tensor(Nx.tensor([1, 2, 3]), type: :f32, names: [:row])
-      #Nx.Tensor<
-        f32[row: 3]
-        [1.0, 2.0, 3.0]
-      >
-
   ## Naming dimensions
 
   You can provide names for tensor dimensions. Names are atoms:
@@ -661,6 +643,38 @@ defmodule Nx do
       iex> Nx.tensor([[[1, 2, 3], [4, 5, 6], [7, 8, 9]]], names: [:batch])
       ** (ArgumentError) invalid names for tensor of rank 3, when specifying names every dimension must have a name or be nil
 
+  ## Tensors
+
+  Tensors can also be given as inputs:
+
+      iex> Nx.tensor(Nx.tensor([1, 2, 3]))
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+
+  If the `:backend` and `:type` options are given, the tensor will
+  compared against those values and raise in case of mismatch:
+
+      iex> Nx.tensor(Nx.tensor([1, 2, 3]), backend: EXLA.Backend)
+      ** (ArgumentError) Nx.tensor/2 wants to allocate on backend EXLA.Backend but it was given a tensor allocated on Nx.BinaryBackend
+
+      iex> Nx.tensor(Nx.tensor([1, 2, 3]), type: :f32)
+      ** (ArgumentError) Nx.tensor/2 expects a tensor with type :f32 but it was given a tensor of type {:s, 64}
+
+  If names are given, they will be assigned to the tensor, but Nx
+  will raise in case the tensor already has names that conflict with
+  the assigned ones:
+
+      iex> Nx.tensor(Nx.tensor([1, 2, 3]), names: [:row])
+      #Nx.Tensor<
+        s64[row: 3]
+        [1, 2, 3]
+      >
+
+      iex> Nx.tensor(Nx.tensor([1, 2, 3], names: [:row]), names: [:column])
+      ** (ArgumentError)  cannot merge name :row on axis 0 with name :column on axis 0
+
   ## Options
 
     * `:type` - sets the type of the tensor. If one is not given,
@@ -671,9 +685,7 @@ defmodule Nx do
       Only `nil` and atoms are supported as dimension names.
 
     * `:backend` - the backend to allocate the tensor on. It is either
-      an atom or a tuple in the shape `{backend, options}`. In case
-      a tensor and the `:backend` option are given, the tensor will be
-      copied to the given backend.
+      an atom or a tuple in the shape `{backend, options}`.
 
   """
   @doc type: :creation
@@ -684,26 +696,36 @@ defmodule Nx do
 
     tensor =
       if backend = opts[:backend] do
-        backend_copy(tensor, backend)
-      else
-        tensor
-      end
+        case backend!(backend) do
+          {backend, _options} when tensor.data.__struct__ == backend ->
+            :ok
 
-    tensor =
-      if names = opts[:names] do
-        rename(tensor, names)
+          {backend, _} ->
+            raise ArgumentError,
+                  "Nx.tensor/2 wants to allocate on backend #{inspect(backend)} " <>
+                    "but it was given a tensor allocated on #{inspect(tensor.data.__struct__)}"
+        end
       else
         tensor
       end
 
     tensor =
       if type = opts[:type] do
-        as_type(tensor, type)
+        if tensor.type == Nx.Type.normalize!(type) do
+          tensor
+        else
+          raise ArgumentError,
+                "Nx.tensor/2 expects a tensor with type #{inspect(type)} " <>
+                  "but it was given a tensor of type #{inspect(tensor.type)}"
+        end
       else
         tensor
       end
 
-    tensor
+    # We merge to check for conflicts but the value in `:names` should always match
+    names = Nx.Shape.named_axes!(opts[:names], tensor.shape)
+    _ = Nx.Shape.merge_names!(tensor.names, names)
+    %{tensor | names: names}
   end
 
   def tensor(arg, opts) do
