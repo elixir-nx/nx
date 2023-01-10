@@ -662,7 +662,7 @@ defmodule Nx do
   The `:backend` option will check only against the backend name
   and not specific backend configuration such as device and client:
 
-      iex> Nx.tensor(Nx.tensor([1, 2, 3]), backend: EXLA.Backend)
+      iex> Nx.tensor(Nx.tensor([1, 2, 3], backend: Nx.BinaryBackend), backend: EXLA.Backend)
       ** (ArgumentError) Nx.tensor/2 wants to allocate on backend EXLA.Backend but it was given a tensor allocated on Nx.BinaryBackend
 
   The names in the given tensor are always discarded but Nx will raise
@@ -707,7 +707,7 @@ defmodule Nx do
       if backend = opts[:backend] do
         case backend!(backend) do
           {backend, _options} when tensor.data.__struct__ == backend ->
-            :ok
+            tensor
 
           {backend, _} ->
             raise ArgumentError,
