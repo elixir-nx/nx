@@ -938,6 +938,14 @@ defmodule NxTest do
       assert Nx.flatten(t) |> Nx.shape() == {Nx.size(t)}
     end
 
+    test "returns a flattened tensor given N-Dimensional tensor with axes" do
+      t = Nx.iota({1, 2, 3, 4, 5, 6})
+
+      expected = Nx.iota({1, 2, 60, 6})
+
+      assert expected == Nx.flatten(t, axes: [2, 3, 4])
+    end
+
     test "returns tensor unchanged given a 1 Dimensional tensor" do
       t = Nx.iota({10})
 
