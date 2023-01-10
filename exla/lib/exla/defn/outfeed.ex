@@ -138,21 +138,19 @@ defmodule EXLA.Defn.Outfeed do
 
           {:function, shapes, fun, template} ->
             length = length(shapes)
-            feed_ref = make_ref()
-
-            {hook_pid, hook_ref} =
-              spawn_monitor(fn -> apply_hook(feed_ref, length, fun, template) end)
-
-            :ok = EXLA.Client.from_outfeed(client, device_id, shapes, hook_pid, feed_ref)
+            parent = self()
+            ref = make_ref()
+            pid = spawn(fn -> apply_hook(parent, ref, length, fun, template) end)
+            :ok = EXLA.Client.from_outfeed(client, device_id, shapes, pid, ref)
 
             receive do
-              {:DOWN, ^hook_ref, _, _, _} -> loop(client, device_id, ref, shape, hooks)
+              ^ref -> loop(client, device_id, ref, shape, hooks)
             end
         end
     end
   end
 
-  defp apply_hook(ref, length, fun, template) do
+  defp apply_hook(parent, ref, length, fun, template) do
     buffers =
       for _ <- 1..length//1 do
         receive do
@@ -160,6 +158,7 @@ defmodule EXLA.Defn.Outfeed do
         end
       end
 
+    send(parent, ref)
     fun.(EXLA.Defn.Buffers.to_nx!(buffers, template))
   end
 end
