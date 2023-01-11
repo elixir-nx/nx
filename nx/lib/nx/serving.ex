@@ -310,12 +310,17 @@ defmodule Nx.Serving do
       client_postprocessing: postprocessing
     } = serving
 
-    {:ok, state} = handle_init(module, :inline, arg)
-    {%{size: size} = batch, info} = handle_preprocessing(preprocessing, input)
-    {:execute, function, _} = handle_batch(module, batch, state)
-    {output, metadata} = handle_executed(module, function.())
-    output = Nx.Defn.Composite.traverse(output, &Nx.slice_along_axis(&1, 0, size, axis: @axis))
-    handle_postprocessing(postprocessing, output, metadata, info)
+    meta = %{arg: arg, input: input, module: module}
+
+    :telemetry.span([:nx, :serving, :run], meta, fn ->
+      {:ok, state} = handle_init(module, :inline, arg)
+      {%{size: size} = batch, info} = handle_preprocessing(preprocessing, input)
+      {:execute, function, _} = handle_batch(module, batch, state)
+      {output, metadata} = handle_executed(module, function.())
+      output = Nx.Defn.Composite.traverse(output, &Nx.slice_along_axis(&1, 0, size, axis: @axis))
+
+      {handle_postprocessing(postprocessing, output, metadata, info), meta}
+    end)
   end
 
   ## Process API
@@ -692,37 +697,42 @@ defmodule Nx.Serving do
     end
   end
 
-  defp handle_preprocessing(nil, input) do
-    case input do
-      %Nx.Batch{} ->
-        {no_empty_batch!(input), :client_info}
-
-      _ ->
-        raise ArgumentError,
-              "the default client_preprocessing expects a `Nx.Batch` as input. " <>
-                "Give a batch or use a custom preprocessing"
-    end
-  end
-
   defp handle_preprocessing(preprocessing, input) do
-    case preprocessing.(input) do
-      {%Nx.Batch{} = batch, info} ->
-        {no_empty_batch!(batch), info}
+    meta = %{input: input}
 
-      other ->
-        raise "client_preprocessing function #{inspect(preprocessing)} must return a two element tuple " <>
-                "where the first element is a Nx.Batch and the second is any value. Got: #{inspect(other)}"
-    end
+    :telemetry.span([:nx, :serving, :preprocessing], meta, fn ->
+      preprocessing = preprocessing || fn _ -> {input, :client_info} end
+
+      case preprocessing.(input) do
+        {%Nx.Batch{size: size} = batch, info} when size > 0 ->
+          {{batch, info}, Map.put(meta, :info, info)}
+
+        {%Nx.Batch{}, _info} ->
+          raise ArgumentError, "cannot run with empty Nx.Batch"
+
+        {^input, :client_info} ->
+          raise ArgumentError,
+                "the default client_preprocessing expects a `Nx.Batch` as input. " <>
+                  "Give a batch or use a custom preprocessing"
+
+        other ->
+          raise "client_preprocessing function #{inspect(preprocessing)} must return a two element tuple " <>
+                  "where the first element is a Nx.Batch and the second is any value. Got: #{inspect(other)}"
+      end
+    end)
   end
 
-  defp no_empty_batch!(%{size: 0}), do: raise(ArgumentError, "cannot run with empty Nx.Batch")
-  defp no_empty_batch!(%{size: _} = batch), do: batch
+  defp handle_postprocessing(postprocessing, output, metadata, info) do
+    meta = %{info: info, metadata: metadata, output: output}
 
-  defp handle_postprocessing(nil, output, _metadata, _info),
-    do: output
-
-  defp handle_postprocessing(postprocessing, output, metadata, info),
-    do: postprocessing.(output, metadata, info)
+    :telemetry.span([:nx, :serving, :postprocessing], meta, fn ->
+      if is_nil(postprocessing) do
+        {output, meta}
+      else
+        {postprocessing.(output, metadata, info), meta}
+      end
+    end)
+  end
 end
 
 defmodule Nx.Serving.Default do

@@ -115,6 +115,34 @@ defmodule Nx.ServingTest do
       assert batch.pad == 0
       assert Nx.Defn.jit_apply(&Function.identity/1, [batch]) == Nx.tensor([[1, 2], [3, 4]])
     end
+
+    @tag :capture_log
+    test "instrumenting with telemetry" do
+      ref =
+        :telemetry_test.attach_event_handlers(
+          self(),
+          [
+            [:nx, :serving, :run, :stop],
+            [:nx, :serving, :preprocessing, :stop],
+            [:nx, :serving, :postprocessing, :stop]
+          ]
+        )
+
+      batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
+
+      fn -> Nx.Defn.jit(&Nx.multiply(&1, 2)) end
+      |> Nx.Serving.new()
+      |> Nx.Serving.run(batch)
+
+      assert_receive {[:nx, :serving, :run, :stop], ^ref, _measure, meta}
+      assert %{arg: _, input: %Nx.Batch{}, module: Nx.Serving.Default} = meta
+
+      assert_receive {[:nx, :serving, :preprocessing, :stop], ^ref, _measure, meta}
+      assert %{info: :client_info, input: %Nx.Batch{}} = meta
+
+      assert_receive {[:nx, :serving, :postprocessing, :stop], ^ref, _measure, meta}
+      assert %{info: _, metadata: _, output: _} = meta
+    end
   end
 
   describe "batched_run" do
