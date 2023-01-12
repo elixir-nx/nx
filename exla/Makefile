@@ -44,14 +44,10 @@ $(EXLA_SO): $(EXLA_CACHE_SO)
 		cp -a $(abspath $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR) ; \
 		cp -a $(abspath $(EXLA_CACHE_SO)) $(EXLA_SO) ; \
 	else \
-		if ! [ -x "$(shell which realpath)" ]; then \
-			echo "realpath not found, falling back to absolute symlinks" ; \
-			ln -sf $(abspath $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR) ; \
-			ln -sf $(abspath $(EXLA_CACHE_SO)) $(EXLA_SO) ; \
-		else \
-			ln -sf $(shell realpath --relative-to=$(PRIV_DIR) $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR) ; \
-			ln -sf $(shell realpath --relative-to=$(PRIV_DIR) $(EXLA_CACHE_SO)) $(EXLA_SO) ; \
-		fi \
+		xla_extension_path="${shell which realpath && realpath --relative-to=$(PRIV_DIR) $(XLA_EXTENSION_LIB) || echo ${abspath $(XLA_EXTENSION_LIB)} }" ; \
+		exla_so_path="${shell which realpath && realpath --relative-to=$(PRIV_DIR) $(EXLA_CACHE_SO) || echo ${abspath $(EXLA_CACHE_SO)} }" ; \
+		ln -sf $$xla_extension_path $(EXLA_LIB_DIR) ; \
+		ln -sf $$exla_so_path $(EXLA_SO) ; \
 	fi
 
 $(EXLA_CACHE_SO): $(XLA_EXTENSION_DIR) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h
