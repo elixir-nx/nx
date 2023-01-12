@@ -44,7 +44,8 @@ $(EXLA_SO): $(EXLA_CACHE_SO)
 		cp -a $(abspath $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR) ; \
 		cp -a $(abspath $(EXLA_CACHE_SO)) $(EXLA_SO) ; \
 	else \
-		if ! command -v realpath &> /dev/null; then \
+		if ! [ -x "$(shell which realpath)" ]; then \
+			echo "realpath not found, falling back to absolute symlinks" ; \
 			ln -sf $(abspath $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR) ; \
 			ln -sf $(abspath $(EXLA_CACHE_SO)) $(EXLA_SO) ; \
 		else \
