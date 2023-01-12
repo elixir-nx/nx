@@ -67,27 +67,6 @@ defmodule EXLA.Defn.Outfeed do
   defp used_hooks(_, hooks),
     do: hooks
 
-  @doc """
-  Splits the given args by depth and returns buffers and infeeds.
-  """
-  def split_buffers_by_depth(args, %{} = depths, executable) do
-    {_i, buffers, infeeds} =
-      Enum.reduce(args, {0, [], []}, fn arg, {i, buffers, infeeds} ->
-        case depths do
-          %{^i => nil} ->
-            {i + 1, [EXLA.Defn.Buffers.from_nx!(arg, executable, true) | buffers], infeeds}
-
-          %{^i => _} ->
-            {i + 1, buffers, [{i, EXLA.Defn.Buffers.from_nx!(arg, executable, false)} | infeeds]}
-
-          %{} ->
-            {i + 1, buffers, infeeds}
-        end
-      end)
-
-    {Enum.reverse(buffers), Map.new(infeeds)}
-  end
-
   ## Struct API
 
   defguard will_outfeed(outfeed) when outfeed.compiled_hooks != %{}
