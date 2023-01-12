@@ -67,7 +67,7 @@ defmodule EXLA.Defn do
 
         # The outfeed reader will redirect all outputs with flag 1 to the current
         # process. Once flag 0 is emitted, we know the stream is done.
-        {outfeed, output_shapes} = Outfeed.configure_stream_hook(outfeed, self(), lock)
+        {output_shapes, outfeed} = Outfeed.configure_stream_hook(outfeed, self(), lock)
         {:ok, outfeed_pid} = Outfeed.start_child(executable, outfeed, Process.group_leader())
 
         stream =
@@ -135,7 +135,7 @@ defmodule EXLA.Defn do
     # The input will be read as part of the infeed.
     acc_shapes = Enum.map(acc_vars, &nx_to_shape!/1)
     acc_shape = EXLA.Shape.make_tuple_shape(acc_shapes)
-    constant_shape = EXLA.Shape.make_tuple_shape(Enum.map(used_shapes, &elem(&1, 1)))
+    constant_shape = EXLA.Shape.make_tuple_shape(Enum.map(used_shapes, &elem(&1, 2)))
 
     flag_shape = EXLA.Shape.make_shape({:pred, 8}, {})
     token_shape = EXLA.Shape.make_token_shape()
@@ -188,7 +188,7 @@ defmodule EXLA.Defn do
             end)
 
           constant_params =
-            Enum.with_index(used_shapes, fn {pos, _shape}, index ->
+            Enum.with_index(used_shapes, fn {pos, false, _shape}, index ->
               {pos, EXLA.Op.get_tuple_element(constant, index)}
             end)
 
@@ -199,7 +199,8 @@ defmodule EXLA.Defn do
             scope_ids: Tree.scope_ids(expr)
           }
 
-          {output, cache} = recur_flatten(output_expr, state, new_cache(token, outfeed))
+          outfeed = Outfeed.with_token(outfeed, token)
+          {output, cache} = recur_flatten(output_expr, state, new_cache(outfeed))
           {acc, cache} = recur_flatten(acc_expr, state, cache)
           {output, acc, cache}
 
@@ -222,7 +223,7 @@ defmodule EXLA.Defn do
       end)
 
     {constant_params, _} =
-      Enum.map_reduce(used_shapes, counter, fn {_pos, shape}, i ->
+      Enum.map_reduce(used_shapes, counter, fn {_pos, false, shape}, i ->
         {EXLA.Op.parameter(builder, i, shape, "p#{i}"), i + 1}
       end)
 
@@ -287,10 +288,16 @@ defmodule EXLA.Defn do
 
   defp to_root_computation(key, expr, [] = _out_inputs, used_shapes, outfeed, options) do
     builder = EXLA.Builder.new(inspect(key))
+    outfeed = Outfeed.with_token(outfeed, EXLA.Op.create_token(builder))
 
-    params =
-      Enum.with_index(used_shapes, fn {pos, shape}, i ->
-        {pos, EXLA.Op.parameter(builder, i, shape, "p#{i}")}
+    {params, {outfeed, _}} =
+      Enum.map_reduce(used_shapes, {outfeed, 0}, fn
+        {pos, false, shape}, {outfeed, i} ->
+          {{pos, EXLA.Op.parameter(builder, i, shape, "p#{i}")}, {outfeed, i + 1}}
+
+        {pos, true, shape}, {outfeed, i} ->
+          {infeed, outfeed} = Outfeed.add_infeed_hook(outfeed, builder, pos, shape)
+          {{pos, infeed}, {outfeed, i}}
       end)
 
     state = %{
@@ -300,8 +307,7 @@ defmodule EXLA.Defn do
       scope_ids: Tree.scope_ids(expr)
     }
 
-    token = EXLA.Op.create_token(builder)
-    {res, cache} = recur_flatten(expr, state, new_cache(token, outfeed))
+    {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
     outfeed = cache |> get_outfeed() |> Outfeed.close(builder)
     {EXLA.Builder.build(res), :ok, outfeed}
   end
@@ -315,14 +321,13 @@ defmodule EXLA.Defn do
 
     {:ok, runner} =
       EXLA.Defn.Runner.start_link(lock, fn ->
+        # TODO: Compute this based on actual input laziness
+        buffers = if outfeed.infeeds == %{}, do: buffers, else: []
         EXLA.Executable.run(executable, [buffers], run_options)
       end)
 
-    {:ok, outfeed_pid} =
-      EXLA.Defn.Outfeed.start_child(executable, outfeed, Process.group_leader())
-
+    {:ok, outfeed_pid} = Outfeed.start_child(executable, outfeed, Process.group_leader(), buffers)
     _ = EXLA.Defn.Lock.transfer(lock, fn -> send(runner, lock) end, outfeed_pid)
-
     ref = Process.monitor(outfeed_pid)
 
     receive do
@@ -389,12 +394,13 @@ defmodule EXLA.Defn do
       )
     end
 
-    # Hooks with default callbacks or user callbacks are part of the cache key
+    # TODO: Compute this based on actual input laziness
+    {lazy?, options} = Keyword.pop(options, :lazy_transfer, false)
     {hooks, options} = Keyword.pop(options, :hooks, %{})
-    outfeed = Outfeed.new(hooks, defined_hooks)
 
+    outfeed = Outfeed.new(hooks, defined_hooks)
     {out_inputs, in_inputs} = to_used.(used_inputs)
-    comp_key = {ref, client.name, outfeed.used_hooks, options}
+    comp_key = {ref, client.name, outfeed.used_hooks, lazy?, options}
 
     {comp_time, {evaled, {xla_time, executable, extra, outfeed}}} =
       :timer.tc(fn ->
@@ -405,13 +411,18 @@ defmodule EXLA.Defn do
             |> EXLA.Defn.Buffers.filter_by_indexes(in_inputs)
             |> Enum.map(fn {type, shape, _names} -> EXLA.Shape.make_shape(type, shape) end)
 
-          inputs_and_shapes = Enum.zip(in_inputs, shapes)
+          inputs_and_shapes =
+            Enum.zip_with(in_inputs, shapes, fn input, shape ->
+              {input, lazy?, shape}
+            end)
 
           {computation, extra, outfeed} =
             to_computation.(expr || fun.(vars), out_inputs, inputs_and_shapes, outfeed)
 
           {xla_time, executable} =
             :timer.tc(fn ->
+              # TODO: Compute this based on actual input laziness
+              shapes = if lazy?, do: [], else: shapes
               EXLA.Computation.compile(computation, client, shapes, options)
             end)
 
@@ -1363,8 +1374,8 @@ defmodule EXLA.Defn do
   defp no_token_cache(),
     do: %{__MODULE__ => Outfeed.empty()}
 
-  defp new_cache(token, outfeed),
-    do: %{__MODULE__ => Outfeed.with_token(outfeed, token)}
+  defp new_cache(outfeed),
+    do: %{__MODULE__ => outfeed}
 
   defp merge_outfeed(%{__MODULE__ => outfeed} = cache, %{__MODULE__ => new_outfeed}),
     do: %{cache | __MODULE__ => Outfeed.with_token(new_outfeed, outfeed.token)}

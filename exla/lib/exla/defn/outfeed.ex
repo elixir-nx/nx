@@ -2,7 +2,13 @@ defmodule EXLA.Defn.Outfeed do
   @moduledoc false
 
   alias EXLA.Defn.Outfeed
-  defstruct user_hooks: %{}, default_hooks: %{}, used_hooks: [], compiled_hooks: %{}, token: nil
+
+  defstruct user_hooks: %{},
+            default_hooks: %{},
+            used_hooks: [],
+            compiled_hooks: %{},
+            token: nil,
+            infeeds: %{}
 
   ## Functional API
 
@@ -54,6 +60,26 @@ defmodule EXLA.Defn.Outfeed do
   end
 
   @doc """
+  Adds an infeed hook.
+  """
+  def add_infeed_hook(%Outfeed{} = outfeed, builder, pos, shape) do
+    %{compiled_hooks: compiled_hooks, infeeds: infeeds, token: token} = outfeed
+
+    next_infeed = map_size(infeeds)
+    infeeds = Map.put(infeeds, pos, pos)
+
+    next_flag = next_hook(compiled_hooks)
+    compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed, next_infeed})
+
+    token = EXLA.Op.outfeed(EXLA.Op.constant_r0(builder, next_flag, {:u, 16}), token)
+    infeed = EXLA.Op.infeed(token, shape)
+    input = EXLA.Op.get_tuple_element(infeed, 0)
+    token = EXLA.Op.get_tuple_element(infeed, 1)
+
+    {input, %{outfeed | compiled_hooks: compiled_hooks, infeeds: infeeds, token: token}}
+  end
+
+  @doc """
   Adds a stream hook.
 
   Used by streams. Only one is allowed. Requires configuration.
@@ -67,7 +93,7 @@ defmodule EXLA.Defn.Outfeed do
 
   def configure_stream_hook(%Outfeed{} = outfeed, pid, ref) when is_pid(pid) do
     {{flag, shapes}, outfeed} = pop_in(outfeed.compiled_hooks[:stream])
-    {put_in(outfeed.compiled_hooks[flag], {:stream, shapes, pid, ref}), shapes}
+    {shapes, put_in(outfeed.compiled_hooks[flag], {:stream, shapes, pid, ref})}
   end
 
   @doc """
@@ -81,8 +107,8 @@ defmodule EXLA.Defn.Outfeed do
   def close(%Outfeed{} = outfeed, _builder),
     do: outfeed
 
-  defp outfeed_flat_tuple(%Outfeed{token: token} = outfeed, builder, tuple) do
-    flag = next_hook(outfeed)
+  defp outfeed_flat_tuple(%Outfeed{token: token, compiled_hooks: ch} = outfeed, builder, tuple) do
+    flag = next_hook(ch)
     token = EXLA.Op.outfeed(EXLA.Op.constant_r0(builder, flag, {:u, 16}), token)
     %EXLA.Shape{dims: {size}, dtype: {:tuple, shapes}} = EXLA.Op.get_shape(tuple)
 
@@ -95,7 +121,7 @@ defmodule EXLA.Defn.Outfeed do
   end
 
   # The index 0 is served for closing streams
-  defp next_hook(%{compiled_hooks: compiled_hooks}), do: map_size(compiled_hooks) + 1
+  defp next_hook(compiled_hooks), do: map_size(compiled_hooks) + 1
 
   ## Process API
 
@@ -105,25 +131,31 @@ defmodule EXLA.Defn.Outfeed do
   deliver/execute the outputs. The computation must emit
   a 0 flag on exit.
   """
-  def start_child(%EXLA.Executable{} = executable, %Outfeed{} = outfeed, group_leader) do
+  def start_child(%EXLA.Executable{} = executable, %Outfeed{} = outfeed, group_leader, buffers \\ []) do
     %{client: client, device_id: device_id} = executable
-    %{compiled_hooks: compiled_hooks} = outfeed
+    %{compiled_hooks: compiled_hooks, infeeds: infeeds} = outfeed
+
+    infeeds =
+      infeeds
+      |> Map.keys()
+      |> Enum.sort()
+      |> then(&EXLA.Defn.Buffers.filter_by_indexes(buffers, &1))
 
     Task.Supervisor.start_child(EXLA.Defn.TaskSupervisor, fn ->
-      init(client, device_id, compiled_hooks, group_leader)
+      init(client, device_id, compiled_hooks, infeeds, group_leader)
     end)
   end
 
-  defp init(client, device_id, hooks, group_leader) do
+  defp init(client, device_id, hooks, infeeds, group_leader) do
     Process.flag(:trap_exit, true)
     # Copy the group leader so we report to the proper device
     Process.group_leader(self(), group_leader)
     ref = make_ref()
     shape = EXLA.Shape.make_shape({:u, 16}, {})
-    loop(client, device_id, ref, shape, hooks)
+    loop(client, device_id, ref, shape, hooks, infeeds)
   end
 
-  defp loop(client, device_id, ref, shape, hooks) do
+  defp loop(client, device_id, ref, shape, hooks, infeeds) do
     :ok = EXLA.Client.from_outfeed(client, device_id, [shape], self(), ref)
 
     receive do
@@ -132,9 +164,19 @@ defmodule EXLA.Defn.Outfeed do
 
       {^ref, <<flag::native-unsigned-16>>} ->
         case Map.fetch!(hooks, flag) do
+          {:infeed, index} ->
+            pair =
+              case Enum.fetch!(infeeds, index) do
+                %EXLA.DeviceBuffer{shape: shape} = buffer -> {EXLA.DeviceBuffer.read(buffer), shape}
+                %EXLA.BinaryBuffer{data: data, shape: shape} -> {data, shape}
+              end
+
+            EXLA.Client.to_infeed(client, device_id, [pair])
+            loop(client, device_id, ref, shape, hooks, infeeds)
+
           {:stream, shapes, recv_pid, recv_ref} ->
             :ok = EXLA.Client.from_outfeed(client, device_id, shapes, recv_pid, recv_ref)
-            loop(client, device_id, ref, shape, hooks)
+            loop(client, device_id, ref, shape, hooks, infeeds)
 
           {:function, shapes, fun, template} ->
             length = length(shapes)
@@ -144,7 +186,7 @@ defmodule EXLA.Defn.Outfeed do
             :ok = EXLA.Client.from_outfeed(client, device_id, shapes, pid, ref)
 
             receive do
-              ^ref -> loop(client, device_id, ref, shape, hooks)
+              ^ref -> loop(client, device_id, ref, shape, hooks, infeeds)
             end
         end
     end

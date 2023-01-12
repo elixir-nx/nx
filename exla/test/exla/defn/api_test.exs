@@ -11,7 +11,7 @@ defmodule EXLA.Defn.APITest do
     test "converts from host to separate client" do
       a = Nx.tensor(1, backend: {EXLA.Backend, client: :host})
       b = Nx.tensor(2, backend: {EXLA.Backend, client: :host})
-      assert_equal(EXLA.jit(&add_two/2, client: :other_host).(a, b), Nx.tensor(3))
+      assert_equal(EXLA.jit(&add_two/2, client: :other_host, lazy_transfer: true).(a, b), Nx.tensor(3))
     end
   end
 
