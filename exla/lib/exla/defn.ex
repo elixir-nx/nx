@@ -42,7 +42,7 @@ defmodule EXLA.Defn do
 
     # Also discard the stream inputs from used inputs, similar to how it is done to buffers
     # Note we discard all lazy transfers too, as they are not possible with streams
-    used_inputs = for {i, nil} <- used_inputs, i >= used_buffers, do: {i, nil}, into: %{}
+    used_inputs = Enum.sort(for {i, nil} <- used_inputs, i >= used_buffers, do: i)
 
     # Execution of streams requires the coordination of
     # multiple processes which is outlined below.

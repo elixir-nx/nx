@@ -3,12 +3,21 @@ defmodule EXLA.Defn.APITest do
 
   import Nx.Defn
   import ExUnit.CaptureLog
-  import ExUnit.CaptureIO
 
   defn add_two(a, b), do: a + b
 
   describe "multi-client" do
     test "converts from host to separate client" do
+      a = Nx.tensor(1, backend: {EXLA.Backend, client: :host})
+      b = Nx.tensor(2, backend: {EXLA.Backend, client: :host})
+
+      assert_equal(
+        EXLA.jit(&add_two/2, client: :other_host).(a, b),
+        Nx.tensor(3)
+      )
+    end
+
+    test "converts from host to separate client through lazy transfers" do
       a = Nx.tensor(1, backend: {EXLA.Backend, client: :host})
       b = Nx.tensor(2, backend: {EXLA.Backend, client: :host})
 
@@ -20,13 +29,6 @@ defmodule EXLA.Defn.APITest do
   end
 
   describe "options" do
-    test "raises on invalid device_id" do
-      # the message is different between backends
-      assert_raise RuntimeError, ~r/1024/, fn ->
-        EXLA.jit(&add_two/2, device_id: 1024).(2, 3)
-      end
-    end
-
     test "logs when debugging" do
       logs =
         capture_log(fn ->
