@@ -69,7 +69,7 @@ defmodule EXLA.Defn.Outfeed do
     infeeds = Map.put(infeeds, pos, pos)
 
     next_flag = next_hook(compiled_hooks)
-    compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed, next_infeed})
+    compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed, next_infeed, shape})
 
     token = EXLA.Op.outfeed(EXLA.Op.constant_r0(builder, next_flag, {:u, 16}), token)
     infeed = EXLA.Op.infeed(token, shape)
@@ -164,14 +164,14 @@ defmodule EXLA.Defn.Outfeed do
 
       {^ref, <<flag::native-unsigned-16>>} ->
         case Map.fetch!(hooks, flag) do
-          {:infeed, index} ->
-            pair =
+          {:infeed, index, data_shape} ->
+            data =
               case Enum.fetch!(infeeds, index) do
-                %EXLA.DeviceBuffer{shape: shape} = buffer -> {EXLA.DeviceBuffer.read(buffer), shape}
-                %EXLA.BinaryBuffer{data: data, shape: shape} -> {data, shape}
+                %EXLA.DeviceBuffer{} = buffer -> EXLA.DeviceBuffer.read(buffer)
+                %EXLA.BinaryBuffer{data: data} -> data
               end
 
-            EXLA.Client.to_infeed(client, device_id, [pair])
+            EXLA.Client.to_infeed(client, device_id, [{data, data_shape}])
             loop(client, device_id, ref, shape, hooks, infeeds)
 
           {:stream, shapes, recv_pid, recv_ref} ->
