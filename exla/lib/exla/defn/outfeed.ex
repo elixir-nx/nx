@@ -9,7 +9,8 @@ defmodule EXLA.Defn.Outfeed do
             default_hooks: %{},
             used_hooks: [],
             compiled_hooks: %{},
-            token: nil
+            token: nil,
+            infeeds: []
 
   ## Functional API
 
@@ -119,6 +120,33 @@ defmodule EXLA.Defn.Outfeed do
   def with_token(%Outfeed{} = outfeed, token), do: %{outfeed | token: token}
 
   @doc """
+  Adds an infeed hook.
+  """
+  def add_infeeds(%Outfeed{} = outfeed, builder, entries) do
+    %{compiled_hooks: compiled_hooks, token: token} = outfeed
+
+    # Reversed because higher depth comes first
+    # TODO: Use List.keysort/3 with :desc on Elixir v1.14
+    {infeeds, {compiled_hooks, token}} =
+      entries
+      |> List.keysort(1)
+      |> Enum.reverse()
+      |> Enum.map_reduce({compiled_hooks, token}, fn {pos, _, shape}, {compiled_hooks, token} ->
+        next_flag = next_hook(compiled_hooks)
+        compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed, pos, shape})
+
+        token = EXLA.Op.outfeed(EXLA.Op.constant_r0(builder, next_flag, {:u, 16}), token)
+        infeed = EXLA.Op.infeed(token, shape)
+        input = EXLA.Op.get_tuple_element(infeed, 0)
+        token = EXLA.Op.get_tuple_element(infeed, 1)
+
+        {{pos, input}, {compiled_hooks, token}}
+      end)
+
+    %{outfeed | compiled_hooks: compiled_hooks, token: token, infeeds: infeeds}
+  end
+
+  @doc """
   Adds a function hook if it has a callback defined for it.
   """
   def maybe_add_function_hook(%Outfeed{} = outfeed, builder, tuple, name, expr) do
@@ -134,23 +162,6 @@ defmodule EXLA.Defn.Outfeed do
       true ->
         raise "hooks are not supported inside #{builder.name}"
     end
-  end
-
-  @doc """
-  Adds an infeed hook.
-  """
-  def add_infeed_hook(%Outfeed{} = outfeed, builder, pos, shape) do
-    %{compiled_hooks: compiled_hooks, token: token} = outfeed
-
-    next_flag = next_hook(compiled_hooks)
-    compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed, pos, shape})
-
-    token = EXLA.Op.outfeed(EXLA.Op.constant_r0(builder, next_flag, {:u, 16}), token)
-    infeed = EXLA.Op.infeed(token, shape)
-    input = EXLA.Op.get_tuple_element(infeed, 0)
-    token = EXLA.Op.get_tuple_element(infeed, 1)
-
-    {input, %{outfeed | compiled_hooks: compiled_hooks, token: token}}
   end
 
   @doc """

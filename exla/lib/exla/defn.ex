@@ -120,7 +120,7 @@ defmodule EXLA.Defn do
          outfeed,
          options
        ) do
-    %{token: root_token} = outfeed
+    %{token: root_token, infeeds: []} = outfeed
     %{platform: platform} = client
 
     {input_shapes, used_shapes} =
@@ -286,20 +286,15 @@ defmodule EXLA.Defn do
   end
 
   defp to_root_computation(builder, expr, used_shapes, outfeed, options) do
-    {params, {outfeed, _}} =
-      Enum.map_reduce(used_shapes, {outfeed, 0}, fn
-        {pos, nil, shape}, {outfeed, i} ->
-          {{pos, EXLA.Op.parameter(builder, i, shape, "p#{i}")}, {outfeed, i + 1}}
-
-        {pos, _depth, shape}, {outfeed, i} ->
-          {infeed, outfeed} = Outfeed.add_infeed_hook(outfeed, builder, pos, shape)
-          {{pos, infeed}, {outfeed, i}}
+    params =
+      Enum.with_index(used_shapes, fn {pos, nil, shape}, i ->
+        {pos, EXLA.Op.parameter(builder, i, shape, "p#{i}")}
       end)
 
     state = %{
       precision: Keyword.get(options, :precision, :highest),
       builder: builder,
-      params: Map.new(params),
+      params: Map.new(params ++ outfeed.infeeds),
       scope_ids: Tree.scope_ids(expr)
     }
 
@@ -388,10 +383,6 @@ defmodule EXLA.Defn do
       )
     end
 
-    # TODO: Optimize me
-    # used_inputs = for {i, nil} <- used_inputs, do: i
-    # used_infeeds = for {i, depth} <- used_inputs, do: {i, depth}
-
     {hooks, options} = Keyword.pop(options, :hooks, %{})
     outfeed = Outfeed.new(hooks, defined_hooks)
     comp_key = {ref, client.name, outfeed.used_hooks, lazy?, options}
@@ -399,16 +390,29 @@ defmodule EXLA.Defn do
     {comp_time, {evaled, {xla_time, executable, extra, outfeed}}} =
       :timer.tc(fn ->
         comp_cache_fun.(comp_key, fn ->
+          # TODO: Return me from this function
+          ordered_inputs = Enum.sort(for {i, nil} <- used_inputs, do: i)
+          ordered_infeeds = Map.new(for {i, depth} <- used_inputs, depth != nil, do: {i, depth})
+          args_triplet = Enum.reverse(reverse_args_triplet)
+
           inputs_and_shapes =
-            reverse_args_triplet
-            |> Enum.reverse()
-            |> EXLA.Defn.Buffers.filter_by_indexes(used_inputs, fn {type, shape, _names}, i ->
-              depth = Map.fetch!(used_inputs, i)
-              {i, depth, EXLA.Shape.make_shape(type, shape)}
+            EXLA.Defn.Buffers.filter_by_indexes(args_triplet, ordered_inputs, fn {type, shape, _names}, i ->
+              # TODO: Remove nil entry
+              {i, nil, EXLA.Shape.make_shape(type, shape)}
+            end)
+
+          infeeds =
+            EXLA.Defn.Buffers.filter_by_indexes(args_triplet, ordered_infeeds, fn {type, shape, _names}, i ->
+              # TODO: Optimize depth retrieval
+              {i, Map.fetch!(ordered_infeeds, i), EXLA.Shape.make_shape(type, shape)}
             end)
 
           builder = EXLA.Builder.new(inspect(key))
-          outfeed = Outfeed.with_token(outfeed, EXLA.Op.create_token(builder))
+
+          outfeed =
+            outfeed
+            |> Outfeed.with_token(EXLA.Op.create_token(builder))
+            |> Outfeed.add_infeeds(builder, infeeds)
 
           {computation, extra, outfeed} =
             to_computation.(builder, expr || fun.(vars), inputs_and_shapes, outfeed)
