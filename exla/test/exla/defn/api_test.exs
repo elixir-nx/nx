@@ -301,17 +301,13 @@ defmodule EXLA.Defn.APITest do
     end
 
     defn hook_default(a, b) do
-      hook(a + b, :default, &Logger.error("add: #{inspect(&1)}"))
+      hook(a + b, :default, send_to_self(:default))
     end
 
     test "executes hook with default" do
-      assert ExUnit.CaptureLog.capture_log(fn -> hook_default(2, 3) end) =~
-               """
-               add: #Nx.Tensor<
-                 s64
-                 5
-               >
-               """
+      assert hook_default(2, 3)
+      assert_receive {:default, tensor}
+      assert_equal(tensor, Nx.tensor(5))
     end
 
     test "executes hook with callback" do
