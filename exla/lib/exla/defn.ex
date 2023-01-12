@@ -396,13 +396,17 @@ defmodule EXLA.Defn do
           args_triplet = Enum.reverse(reverse_args_triplet)
 
           inputs_and_shapes =
-            EXLA.Defn.Buffers.filter_by_indexes(args_triplet, ordered_inputs, fn {type, shape, _names}, i ->
+            EXLA.Defn.Buffers.filter_by_indexes(args_triplet, ordered_inputs, fn {type, shape,
+                                                                                  _names},
+                                                                                 i ->
               # TODO: Remove nil entry
               {i, nil, EXLA.Shape.make_shape(type, shape)}
             end)
 
           infeeds =
-            EXLA.Defn.Buffers.filter_by_indexes(args_triplet, ordered_infeeds, fn {type, shape, _names}, i ->
+            EXLA.Defn.Buffers.filter_by_indexes(args_triplet, ordered_infeeds, fn {type, shape,
+                                                                                   _names},
+                                                                                  i ->
               # TODO: Optimize depth retrieval
               {i, Map.fetch!(ordered_infeeds, i), EXLA.Shape.make_shape(type, shape)}
             end)
