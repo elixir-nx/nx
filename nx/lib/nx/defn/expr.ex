@@ -1191,17 +1191,16 @@ defmodule Nx.Defn.Expr do
     context || acc
   end
 
-  require Nx
-
-  defp inspect_as_template(tensor_or_container)
-       when Nx.is_tensor(tensor_or_container) or is_map(tensor_or_container) or
-              is_tuple(tensor_or_container) do
-    Kernel.inspect(Nx.to_template(tensor_or_container),
-      custom_options: [skip_template_backend_header: true]
-    )
+  defp inspect_as_template(data) do
+    if is_number(data) or is_tuple(data) or
+         (is_map(data) and Nx.Container.impl_for(data) != Nx.Container.Any) do
+      data
+      |> Nx.to_template()
+      |> Kernel.inspect(custom_options: [skip_template_backend_header: true])
+    else
+      inspect(data)
+    end
   end
-
-  defp inspect_as_template(value), do: inspect(value)
 
   ## Constant helpers and related optimizations
 
