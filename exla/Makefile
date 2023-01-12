@@ -44,8 +44,13 @@ $(EXLA_SO): $(EXLA_CACHE_SO)
 		cp -a $(abspath $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR) ; \
 		cp -a $(abspath $(EXLA_CACHE_SO)) $(EXLA_SO) ; \
 	else \
-		ln -srf $(abspath $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR) ; \
-		ln -srf $(abspath $(EXLA_CACHE_SO)) $(EXLA_SO) ; \
+		if ! command -v realpath &> /dev/null; then \
+			ln -sf $(abspath $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR) ; \
+			ln -sf $(abspath $(EXLA_CACHE_SO)) $(EXLA_SO) ; \
+		else \
+			ln -sf $(realpath --relative-to=$(EXLA_LIB_DIR) $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR) ; \
+			ln -sf $(realpath --relative-to=$(EXLA_SO) $(EXLA_CACHE_SO)) $(EXLA_SO) ; \
+		fi \
 	fi
 
 $(EXLA_CACHE_SO): $(XLA_EXTENSION_DIR) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h
