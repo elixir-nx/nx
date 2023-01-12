@@ -163,7 +163,13 @@ defmodule Nx.Tensor do
       type = color(Nx.Type.to_string(type), :atom, opts)
       shape = Nx.Shape.to_algebra(shape, names, open, close)
       data = tensor.data.__struct__.inspect(tensor, opts)
-      inner = concat([line(), type, shape, line(), data])
+
+      inner =
+        if data == empty() do
+          concat([line(), type, shape, data])
+        else
+          concat([line(), type, shape, line(), data])
+        end
 
       force_unfit(
         concat([
