@@ -48,8 +48,8 @@ $(EXLA_SO): $(EXLA_CACHE_SO)
 			ln -sf $(abspath $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR) ; \
 			ln -sf $(abspath $(EXLA_CACHE_SO)) $(EXLA_SO) ; \
 		else \
-			ln -sf $(realpath --relative-to=$(EXLA_LIB_DIR) $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR) ; \
-			ln -sf $(realpath --relative-to=$(EXLA_SO) $(EXLA_CACHE_SO)) $(EXLA_SO) ; \
+			ln -sf $(shell realpath --relative-to=$(PRIV_DIR) $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR) ; \
+			ln -sf $(shell realpath --relative-to=$(PRIV_DIR) $(EXLA_CACHE_SO)) $(EXLA_SO) ; \
 		fi \
 	fi
 
