@@ -38,7 +38,7 @@ defmodule Nx.MixProject do
 
   defp deps do
     [
-      {:complex, "~> 0.4.2", github: "elixir-nx/complex", branch: "main"},
+      {:complex, "~> 0.4.3"},
       {:ex_doc, "~> 0.29.0", only: :docs}
     ]
   end
