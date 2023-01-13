@@ -35,6 +35,14 @@ defmodule Nx.DefnTest do
     test "from binary" do
       assert %T{data: %Expr{op: :tensor}} = binary_constant()
     end
+
+    test "Nx.tensor/2 warns if not constant" do
+      assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
+               defmodule NotConstant do
+                 defn not_constant(opts), do: Nx.tensor(opts[:rate])
+               end
+             end) =~ "Nx.tensor/2 inside defn expects the first argument to be a literal"
+    end
   end
 
   describe "tuple" do
