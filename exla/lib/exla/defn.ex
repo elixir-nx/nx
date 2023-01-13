@@ -14,6 +14,7 @@ defmodule EXLA.Defn do
       Keyword.pop_lazy(compile_options, :client, &EXLA.Client.default_name/0)
 
     client = EXLA.Client.fetch!(client_name)
+    compile_options = Keyword.put(compile_options, :lazy_transfers, :never)
 
     input_length = length(Nx.Defn.Composite.flatten_list([input]))
     acc_length = length(Nx.Defn.Composite.flatten_list([acc]))
@@ -369,13 +370,13 @@ defmodule EXLA.Defn do
         end)
       end)
 
-    {lazy?, options} = Keyword.pop(options, :lazy_transfer, false)
+    {lazy_transfers, options} = Keyword.pop(options, :lazy_transfers, :opt_in)
 
     {eval_time, {expr, {ref, outputs, {used_inputs, defined_hooks}}}} =
       :timer.tc(fn ->
         expr_cache_fun.({key, args_key}, fn ->
           expr = fun.(vars)
-          inputs_and_hooks = Outfeed.used_inputs_and_hooks(expr, used_inputs, lazy?)
+          inputs_and_hooks = Outfeed.used_inputs_and_hooks(expr, used_inputs, lazy_transfers)
           {expr, {make_ref(), Nx.to_template(expr), inputs_and_hooks}}
         end)
       end)
@@ -390,7 +391,7 @@ defmodule EXLA.Defn do
 
     {hooks, options} = Keyword.pop(options, :hooks, %{})
     outfeed = Outfeed.new(hooks, defined_hooks)
-    comp_key = {ref, client.name, outfeed.used_hooks, lazy?, options}
+    comp_key = {ref, client.name, outfeed.used_hooks, lazy_transfers, options}
 
     {comp_time, {evaled, {xla_time, executable, extra, outfeed}}} =
       :timer.tc(fn ->

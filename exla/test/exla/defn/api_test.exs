@@ -22,7 +22,7 @@ defmodule EXLA.Defn.APITest do
       b = Nx.tensor(2, backend: {EXLA.Backend, client: :host})
 
       assert_equal(
-        EXLA.jit(&add_two/2, client: :other_host, lazy_transfer: true).(a, b),
+        EXLA.jit(&add_two/2, client: :other_host, lazy_transfers: :always).(a, b),
         Nx.tensor(3)
       )
     end

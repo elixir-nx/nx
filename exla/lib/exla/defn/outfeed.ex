@@ -18,7 +18,13 @@ defmodule EXLA.Defn.Outfeed do
   Computes used inputs by depth and used hooks.
   """
   # TODO: Support lazy transfer from metadata (but disabled for inputs)
-  def used_inputs_and_hooks(expr, force_inputs, lazy?) do
+  def used_inputs_and_hooks(expr, force_inputs, lazy_transfers) do
+    if lazy_transfers not in [:always, :never, :opt_in] do
+      raise ArgumentError, ":lazy_transfers must be either :always or :never, got: #{inspect(lazy_transfers)}"
+    end
+
+    lazy? = lazy_transfers == :always
+
     # TODO: Use Map.from_keys on Elixir v1.14+
     inputs = Map.new(force_inputs, &{&1, nil})
 
