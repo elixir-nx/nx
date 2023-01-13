@@ -227,8 +227,8 @@ defmodule EXLA do
       Defaults to the `:default_device_id` on the client
 
     * `:lazy_transfers` - when `:always`, it lazily transfers data to the device
-      upfront. This is useful to reduce memory allocation on GPU/TPU devices
-      at the cost of increased latency. **It is recommended to only enable
+      instead of upfront. This is useful to reduce memory allocation on GPU/TPU
+      devices at the cost of increased latency. **It is recommended to only enable
       this if the input tensors are allocated on host and the computation is
       running on GPU/TPU with a limited amount of memory**
 
