@@ -26,7 +26,7 @@ defmodule Torchx.NxDoctestTest do
     ifft: 2
   ]
 
-  if Application.get_env(:torchx, :is_apple_arm64) do
+  if Application.compile_env(:torchx, :is_apple_arm64) do
     @os_rounding_error_doctests [sin: 1]
   else
     case :os.type() do
