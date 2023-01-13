@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.4.2 (2023-01-13)
+
+### Enhancements
+
+  * Automatically transfer from `:host` to other devices
+  * Support `lazy_transfers: :always` on `EXLA.jit/3` and `EXLA.compile/2`
+  * Run hooks concurrently once they have received the data
+
+### Bug fixes
+
+  * Respect default `EXLA.Backend` client when jitting argumentless operations
+  * Do not pick client without devices when loading initial client
+  * Consider the first conditional of a `cond` part of the current scope
+
 ## v0.4.1 (2022-12-07)
 
 ### Enhancements
