@@ -20,7 +20,8 @@ defmodule EXLA.Defn.Outfeed do
   # TODO: Support lazy transfer from metadata (but disabled for inputs)
   def used_inputs_and_hooks(expr, force_inputs, lazy_transfers) do
     if lazy_transfers not in [:always, :never, :opt_in] do
-      raise ArgumentError, ":lazy_transfers must be either :always or :never, got: #{inspect(lazy_transfers)}"
+      raise ArgumentError,
+            ":lazy_transfers must be either :always or :never, got: #{inspect(lazy_transfers)}"
     end
 
     lazy? = lazy_transfers == :always
