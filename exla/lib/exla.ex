@@ -216,15 +216,21 @@ defmodule EXLA do
 
   It accepts the same option as `Nx.Defn.jit/2` plus:
 
-    * `:debug` - print compile and debugging information, defaults to `false`.
-
     * `:cache` - cache the results of compilation, defaults to `true`.
 
     * `:client` - an atom representing the client to use. The default
       client is chosen on this order: `:cuda`, `:rocm`, `:tpu`, and `:host`.
 
+    * `:debug` - print compile and debugging information, defaults to `false`.
+
     * `:device_id` - the default device id to run the computation on.
       Defaults to the `:default_device_id` on the client
+
+    * `:lazy_transfers` - when `:always`, it lazily transfers data to the device
+      instead of upfront. This is useful to reduce memory allocation on GPU/TPU
+      devices at the cost of increased latency. **It is recommended to only enable
+      this if the input tensors are allocated on host and the computation is
+      running on GPU/TPU with a limited amount of memory**
 
   """
   def jit(function, options \\ []) do
