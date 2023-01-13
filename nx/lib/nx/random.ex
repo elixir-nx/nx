@@ -271,6 +271,7 @@ defmodule Nx.Random do
         {:f, 32} -> 23
         {:f, 64} -> 52
       end
+
     Nx.tensor(nbits - mantissa, type: {:u, nbits})
   end
 
