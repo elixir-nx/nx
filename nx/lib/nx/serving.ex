@@ -623,8 +623,16 @@ defmodule Nx.Serving do
     batch = Nx.Batch.merge(batches)
     {:execute, function, module_state} = handle_batch(module, batch, module_state)
 
+    wrapped_function = fn ->
+      :telemetry.span([:nx, :serving, :execute], %{module: module}, fn ->
+        {output, metadata} = function.()
+
+        {{output, metadata}, %{metadata: metadata, module: module}}
+      end)
+    end
+
     state = %{state | timer: :none, stack: @empty_stack, module_state: module_state}
-    server_task_or_enqueue(state, function, ref_sizes)
+    server_task_or_enqueue(state, wrapped_function, ref_sizes)
   end
 
   defp server_task_or_enqueue(%{task: :none} = state, function, ref_sizes) do

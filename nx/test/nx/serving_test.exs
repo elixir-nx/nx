@@ -276,6 +276,19 @@ defmodule Nx.ServingTest do
       Task.await(t3, :infinity)
     end
 
+    test "instrumenting with telemetry", config do
+      ref = :telemetry_test.attach_event_handlers(self(), [[:nx, :serving, :execute, :stop]])
+
+      simple_supervised!(config)
+
+      batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
+
+      Nx.Serving.batched_run(config.test, batch)
+
+      assert_receive {[:nx, :serving, :execute, :stop], ^ref, _measure, meta}
+      assert %{metadata: :metadata, module: Nx.ServingTest.Simple} = meta
+    end
+
     defp execute_sync_supervised!(config, opts \\ []) do
       serving = Nx.Serving.new(ExecuteSync, self())
       start_supervised!({Nx.Serving, [name: config.test, serving: serving] ++ opts})
