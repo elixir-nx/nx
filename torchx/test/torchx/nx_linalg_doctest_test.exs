@@ -16,7 +16,8 @@ defmodule Torchx.NxLinAlgDoctestTest do
     triangular_solve: 3,
     solve: 2,
     invert: 1,
-    determinant: 1
+    determinant: 1,
+    pinv: 2
   ]
 
   # Results do not match but properties are respected
