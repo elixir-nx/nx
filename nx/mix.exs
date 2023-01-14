@@ -39,6 +39,7 @@ defmodule Nx.MixProject do
   defp deps do
     [
       {:complex, "~> 0.4.3"},
+      {:telemetry, "~> 0.4.0 or ~> 1.0"},
       {:ex_doc, "~> 0.29.0", only: :docs}
     ]
   end
