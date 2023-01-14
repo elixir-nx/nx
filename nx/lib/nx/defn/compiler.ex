@@ -83,7 +83,7 @@ defmodule Nx.Defn.Compiler do
                  vars: [Nx.Container.t()]
 
   # Modules allowed in defn
-  @allowed_modules [Nx, Nx.Constants, Nx.Defn, Nx.Defn.Kernel, Nx.LinAlg, Nx.Type]
+  @allowed_modules [Nx.Constants, Nx.Defn, Nx.Defn.Kernel, Nx.LinAlg, Nx.Type]
 
   # These operations do not have valid meaning for Nx.Defn.Expr
   @forbidden_ops [:backend_copy, :backend_deallocate, :backend_transfer] ++
@@ -585,12 +585,31 @@ defmodule Nx.Defn.Compiler do
     {{dot, meta, [arg]}, state}
   end
 
-  defp normalize({{:., dot_meta, [mod, name]}, meta, args}, state) when mod in @allowed_modules do
+  defp normalize({{:., dot_meta, [Nx, name]}, meta, args}, state) do
     if name in @forbidden_ops do
-      mfa = Exception.format_mfa(mod, name, length(args))
+      mfa = Exception.format_mfa(Nx, name, length(args))
       compile_error!(meta, state, "#{mfa} is not allowed inside defn")
     end
 
+    if name == :tensor and args != [] and not Macro.quoted_literal?(hd(args)) do
+      warn(meta, state, """
+      Nx.tensor/2 inside defn expects the first argument to be a literal (such as a list)
+
+      You must avoid code such as:
+
+          Nx.tensor(opts[:key])
+
+      As that will JIT compile a different function for each different key.
+      Those values must be literals or be converted to tensors by explicitly \
+      calling Nx.tensor/2 outside of a defn
+      """)
+    end
+
+    {args, state} = normalize_list(args, state)
+    {{{:., dot_meta, [Nx, name]}, meta, args}, state}
+  end
+
+  defp normalize({{:., dot_meta, [mod, name]}, meta, args}, state) when mod in @allowed_modules do
     {args, state} = normalize_list(args, state)
     {{{:., dot_meta, [mod, name]}, meta, args}, state}
   end
@@ -791,6 +810,13 @@ defmodule Nx.Defn.Compiler do
   defp compile_error!(meta, state, description) do
     line = meta[:line] || state.line
     raise CompileError, line: line, file: state.file, description: description
+  end
+
+  defp warn(meta, state, message) do
+    line = meta[:line] || state.line
+    {name, arity} = state.function
+    entry = {state.module, name, arity, [file: String.to_charlist(state.file), line: line]}
+    IO.warn(message, [entry])
   end
 
   defp defn_name(name), do: :"__defn:#{name}__"

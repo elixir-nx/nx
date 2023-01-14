@@ -303,9 +303,17 @@ defmodule Nx.Defn.Expr do
               raise CompileError,
                 line: meta[:line],
                 file: file,
-                description:
-                  "cond/if expects all branches to return compatible tensor types. " <>
-                    "Got: #{maybe_type_shape_string(first)} and #{maybe_type_shape_string(expr)}"
+                description: """
+                cond/if expects all branches to return compatible tensor types.
+
+                Got mismatching templates:
+
+                #{inspect_as_template(first)}
+
+                and
+
+                #{inspect_as_template(expr)}
+                """
             end
 
             [{pred, expr} | acc]
@@ -343,14 +351,7 @@ defmodule Nx.Defn.Expr do
         condition = to_pred(condition, line, file, :while)
         body = to_container_expr(body)
 
-        if not Nx.compatible?(initial, body) do
-          raise CompileError,
-            line: line,
-            file: file,
-            description:
-              "the do-block in while must return tensors with the same shape, type, and names as the initial arguments. " <>
-                "Got body #{maybe_type_shape_string(body)} and initial #{maybe_type_shape_string(initial)}"
-        end
+        compatible_while!(file, line, initial, body)
 
         while(initial, context, arg, condition, body)
 
@@ -482,9 +483,17 @@ defmodule Nx.Defn.Expr do
       raise CompileError,
         line: line,
         file: file,
-        description:
-          "the do-block in while must return tensors with the same shape, type, and names as the initial arguments. " <>
-            "Got body #{maybe_type_shape_string(body)} and initial #{maybe_type_shape_string(initial)}"
+        description: """
+        the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
+
+        Body matches template:
+
+        #{inspect_as_template(body)}
+
+        and initial argument has template:
+
+        #{inspect_as_template(initial)}
+        """
     end
   end
 
@@ -1182,32 +1191,16 @@ defmodule Nx.Defn.Expr do
     context || acc
   end
 
-  defp maybe_type_shape_string(%{type: type, shape: shape, names: names}) do
-    Nx.Type.to_string(type) <> Nx.Shape.to_string(shape, names)
+  defp inspect_as_template(data) do
+    if is_number(data) or is_tuple(data) or
+         (is_map(data) and Nx.Container.impl_for(data) != Nx.Container.Any) do
+      data
+      |> Nx.to_template()
+      |> Kernel.inspect(custom_options: [skip_template_backend_header: true])
+    else
+      inspect(data)
+    end
   end
-
-  defp maybe_type_shape_string(tuple) when is_tuple(tuple) do
-    list = Tuple.to_list(tuple)
-    IO.iodata_to_binary(["{", Enum.map_intersperse(list, ", ", &maybe_type_shape_string/1), "}"])
-  end
-
-  defp maybe_type_shape_string(map) when is_map(map) do
-    pairs =
-      Enum.map_intersperse(map, ", ", fn {k, v} ->
-        [inspect(k), " => ", maybe_type_shape_string(v)]
-      end)
-
-    IO.iodata_to_binary(["%{", pairs, "}"])
-  end
-
-  defp maybe_type_shape_string(number) when is_number(number) do
-    shape = {}
-    names = []
-    type = Nx.Type.infer(number)
-    Nx.Type.to_string(type) <> Nx.Shape.to_string(shape, names)
-  end
-
-  defp maybe_type_shape_string(other), do: inspect(other)
 
   ## Constant helpers and related optimizations
 

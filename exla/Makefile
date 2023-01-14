@@ -38,14 +38,22 @@ else
 	POST_INSTALL = $(NOOP)
 endif
 
+ifeq (, $(shell which realpath))
+	XLA_EXTENSION_LIB_LINK_PATH = $(abspath $(XLA_EXTENSION_LIB))
+	EXLA_CACHE_SO_LINK_PATH = $(abspath $(EXLA_CACHE_SO))
+else
+	XLA_EXTENSION_LIB_LINK_PATH = $(shell realpath --relative-to=$(PRIV_DIR) $(XLA_EXTENSION_LIB))
+	EXLA_CACHE_SO_LINK_PATH = $(shell realpath --relative-to=$(PRIV_DIR) $(EXLA_CACHE_SO))
+endif
+
 $(EXLA_SO): $(EXLA_CACHE_SO)
 	@ mkdir -p $(PRIV_DIR)
 	@ if [ "${MIX_BUILD_EMBEDDED}" = "true" ]; then \
 		cp -a $(abspath $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR) ; \
 		cp -a $(abspath $(EXLA_CACHE_SO)) $(EXLA_SO) ; \
 	else \
-		ln -sf $(abspath $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR) ; \
-		ln -sf $(abspath $(EXLA_CACHE_SO)) $(EXLA_SO) ; \
+		ln -sf $(XLA_EXTENSION_LIB_LINK_PATH) $(EXLA_LIB_DIR) ; \
+		ln -sf $(EXLA_CACHE_SO_LINK_PATH) $(EXLA_SO) ; \
 	fi
 
 $(EXLA_CACHE_SO): $(XLA_EXTENSION_DIR) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h

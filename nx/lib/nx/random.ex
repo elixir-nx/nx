@@ -263,13 +263,16 @@ defmodule Nx.Random do
     end
   end
 
-  defnp mantissa(type) do
-    case type do
-      {:bf, 16} -> 7
-      {:f, 16} -> 10
-      {:f, 32} -> 23
-      {:f, 64} -> 52
-    end
+  deftransformp mantissa_shift(nbits, type) do
+    mantissa =
+      case type do
+        {:bf, 16} -> 7
+        {:f, 16} -> 10
+        {:f, 32} -> 23
+        {:f, 64} -> 52
+      end
+
+    Nx.tensor(nbits - mantissa, type: {:u, nbits})
   end
 
   @doc """
@@ -426,7 +429,7 @@ defmodule Nx.Random do
       max_value = Nx.as_type(max_value, type)
 
       random_bits(key, shape: shape, bit_width: nbits)
-      |> Nx.right_shift(Nx.tensor(nbits - mantissa(type), type: {:u, nbits}))
+      |> Nx.right_shift(mantissa_shift(nbits, type))
       |> Nx.bitwise_or(u_one)
       |> Nx.bitcast(type)
       |> Nx.subtract(Nx.tensor(1.0, type: type))

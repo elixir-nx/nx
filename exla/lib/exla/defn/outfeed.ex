@@ -2,9 +2,79 @@ defmodule EXLA.Defn.Outfeed do
   @moduledoc false
 
   alias EXLA.Defn.Outfeed
-  defstruct user_hooks: %{}, default_hooks: %{}, used_hooks: [], compiled_hooks: %{}, token: nil
+  alias Nx.Defn.{Expr, Tree, Composite}
+  alias Nx.Tensor, as: T
+
+  defstruct user_hooks: %{},
+            default_hooks: %{},
+            used_hooks: [],
+            compiled_hooks: %{},
+            token: nil,
+            infeeds: []
 
   ## Functional API
+
+  @doc """
+  Computes used inputs by depth and used hooks.
+  """
+  # TODO: Support lazy transfer from metadata (but disabled for inputs)
+  def used_inputs_and_hooks(expr, force_inputs, lazy_transfers) do
+    if lazy_transfers not in [:always, :never, :opt_in] do
+      raise ArgumentError,
+            ":lazy_transfers must be either :always or :never, got: #{inspect(lazy_transfers)}"
+    end
+
+    lazy? = lazy_transfers == :always
+
+    # TODO: Use Map.from_keys on Elixir v1.14+
+    inputs = Map.new(force_inputs, &{&1, nil})
+
+    {_, used_inputs, used_hooks} =
+      Composite.reduce(expr, {%{}, inputs, %{}}, &used_inputs_and_hooks(&1, &2, 0, lazy?))
+
+    {used_inputs, used_hooks}
+  end
+
+  defp used_inputs_and_hooks(%T{data: %Expr{id: id} = expr} = t, acc, depth, lazy?) do
+    {seen, inputs, hooks} = acc
+
+    case seen do
+      %{^id => true} ->
+        acc
+
+      %{} ->
+        depth = depth + 1
+        seen = Map.put(seen, id, true)
+        inputs = used_inputs(expr, inputs, depth, lazy?)
+        hooks = used_hooks(expr, hooks)
+        acc = {seen, inputs, hooks}
+
+        t
+        |> Tree.apply_args(acc, &{&1, used_inputs_and_hooks(&1, &2, depth, lazy?)})
+        |> elem(1)
+    end
+  end
+
+  defp used_inputs(%Expr{op: :parameter, args: [i], context: :root}, inputs, depth, lazy?) do
+    case inputs do
+      %{^i => nil} when lazy? -> Map.put(inputs, i, depth)
+      %{^i => nil} -> inputs
+      %{^i => current} when current >= depth -> inputs
+      %{^i => _current} -> Map.put(inputs, i, depth)
+      %{} -> Map.put(inputs, i, if(lazy?, do: depth, else: nil))
+    end
+  end
+
+  defp used_inputs(_, inputs, _depth, _lazy?),
+    do: inputs
+
+  defp used_hooks(%Expr{op: :token, args: [token]}, hooks),
+    do: Enum.reduce(token.hooks, hooks, &Map.put(&2, &1.name, &1.callback))
+
+  defp used_hooks(_, hooks),
+    do: hooks
+
+  ## Struct API
 
   defguard will_outfeed(outfeed) when outfeed.compiled_hooks != %{}
 
@@ -34,6 +104,33 @@ defmodule EXLA.Defn.Outfeed do
   Sets the token to outfeed.
   """
   def with_token(%Outfeed{} = outfeed, token), do: %{outfeed | token: token}
+
+  @doc """
+  Adds an infeed hook.
+  """
+  def add_infeeds(%Outfeed{} = outfeed, builder, entries) do
+    %{compiled_hooks: compiled_hooks, token: token} = outfeed
+
+    # Reversed because higher depth comes first
+    # TODO: Use List.keysort/3 with :desc on Elixir v1.14
+    {infeeds, {compiled_hooks, token}} =
+      entries
+      |> List.keysort(1)
+      |> Enum.reverse()
+      |> Enum.map_reduce({compiled_hooks, token}, fn {pos, _, shape}, {compiled_hooks, token} ->
+        next_flag = next_hook(compiled_hooks)
+        compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed, pos, shape})
+
+        token = EXLA.Op.outfeed(EXLA.Op.constant_r0(builder, next_flag, {:u, 16}), token)
+        infeed = EXLA.Op.infeed(token, shape)
+        input = EXLA.Op.get_tuple_element(infeed, 0)
+        token = EXLA.Op.get_tuple_element(infeed, 1)
+
+        {{pos, input}, {compiled_hooks, token}}
+      end)
+
+    %{outfeed | compiled_hooks: compiled_hooks, token: token, infeeds: infeeds}
+  end
 
   @doc """
   Adds a function hook if it has a callback defined for it.
@@ -67,7 +164,7 @@ defmodule EXLA.Defn.Outfeed do
 
   def configure_stream_hook(%Outfeed{} = outfeed, pid, ref) when is_pid(pid) do
     {{flag, shapes}, outfeed} = pop_in(outfeed.compiled_hooks[:stream])
-    {put_in(outfeed.compiled_hooks[flag], {:stream, shapes, pid, ref}), shapes}
+    {shapes, put_in(outfeed.compiled_hooks[flag], {:stream, shapes, pid, ref})}
   end
 
   @doc """
@@ -81,8 +178,8 @@ defmodule EXLA.Defn.Outfeed do
   def close(%Outfeed{} = outfeed, _builder),
     do: outfeed
 
-  defp outfeed_flat_tuple(%Outfeed{token: token} = outfeed, builder, tuple) do
-    flag = next_hook(outfeed)
+  defp outfeed_flat_tuple(%Outfeed{token: token, compiled_hooks: ch} = outfeed, builder, tuple) do
+    flag = next_hook(ch)
     token = EXLA.Op.outfeed(EXLA.Op.constant_r0(builder, flag, {:u, 16}), token)
     %EXLA.Shape{dims: {size}, dtype: {:tuple, shapes}} = EXLA.Op.get_shape(tuple)
 
@@ -95,7 +192,7 @@ defmodule EXLA.Defn.Outfeed do
   end
 
   # The index 0 is served for closing streams
-  defp next_hook(%{compiled_hooks: compiled_hooks}), do: map_size(compiled_hooks) + 1
+  defp next_hook(compiled_hooks), do: map_size(compiled_hooks) + 1
 
   ## Process API
 
@@ -105,25 +202,30 @@ defmodule EXLA.Defn.Outfeed do
   deliver/execute the outputs. The computation must emit
   a 0 flag on exit.
   """
-  def start_child(%EXLA.Executable{} = executable, %Outfeed{} = outfeed, group_leader) do
+  def start_child(
+        %EXLA.Executable{} = executable,
+        %Outfeed{} = outfeed,
+        group_leader,
+        infeeds \\ %{}
+      ) do
     %{client: client, device_id: device_id} = executable
     %{compiled_hooks: compiled_hooks} = outfeed
 
     Task.Supervisor.start_child(EXLA.Defn.TaskSupervisor, fn ->
-      init(client, device_id, compiled_hooks, group_leader)
+      init(client, device_id, compiled_hooks, infeeds, group_leader)
     end)
   end
 
-  defp init(client, device_id, hooks, group_leader) do
+  defp init(client, device_id, hooks, infeeds, group_leader) do
     Process.flag(:trap_exit, true)
     # Copy the group leader so we report to the proper device
     Process.group_leader(self(), group_leader)
     ref = make_ref()
     shape = EXLA.Shape.make_shape({:u, 16}, {})
-    loop(client, device_id, ref, shape, hooks)
+    loop(client, device_id, ref, shape, hooks, infeeds)
   end
 
-  defp loop(client, device_id, ref, shape, hooks) do
+  defp loop(client, device_id, ref, shape, hooks, infeeds) do
     :ok = EXLA.Client.from_outfeed(client, device_id, [shape], self(), ref)
 
     receive do
@@ -132,9 +234,19 @@ defmodule EXLA.Defn.Outfeed do
 
       {^ref, <<flag::native-unsigned-16>>} ->
         case Map.fetch!(hooks, flag) do
+          {:infeed, index, data_shape} ->
+            data =
+              case Map.fetch!(infeeds, index) do
+                %EXLA.DeviceBuffer{} = buffer -> EXLA.DeviceBuffer.read(buffer)
+                %EXLA.BinaryBuffer{data: data} -> data
+              end
+
+            EXLA.Client.to_infeed(client, device_id, [{data, data_shape}])
+            loop(client, device_id, ref, shape, hooks, infeeds)
+
           {:stream, shapes, recv_pid, recv_ref} ->
             :ok = EXLA.Client.from_outfeed(client, device_id, shapes, recv_pid, recv_ref)
-            loop(client, device_id, ref, shape, hooks)
+            loop(client, device_id, ref, shape, hooks, infeeds)
 
           {:function, shapes, fun, template} ->
             length = length(shapes)
@@ -144,7 +256,7 @@ defmodule EXLA.Defn.Outfeed do
             :ok = EXLA.Client.from_outfeed(client, device_id, shapes, pid, ref)
 
             receive do
-              ^ref -> loop(client, device_id, ref, shape, hooks)
+              ^ref -> loop(client, device_id, ref, shape, hooks, infeeds)
             end
         end
     end

@@ -6,7 +6,7 @@ defmodule Nx.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx"
-  @version "0.4.1"
+  @version "0.4.2"
 
   def project do
     [
@@ -38,7 +38,7 @@ defmodule Nx.MixProject do
 
   defp deps do
     [
-      {:complex, "~> 0.4.2", github: "elixir-nx/complex", branch: "main"},
+      {:complex, "~> 0.4.3"},
       {:telemetry, "~> 0.4.0 or ~> 1.0"},
       {:ex_doc, "~> 0.29.0", only: :docs}
     ]

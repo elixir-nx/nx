@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.4.2 (2023-01-13)
+
+### Enhancements
+
+  * [Nx] Allow tensors to be given on `Nx.tensor/2`
+  * [Nx] Add `Nx.with_default_backend/2`
+  * [Nx] Add `:axes` option to `Nx.flatten/2`
+  * [Nx] Add `:axes` option to `Nx.weighted_mean/2`
+  * [Nx.Defn] Warn if `Nx.tensor/2` first-argument is not constant inside defn
+  * [Nx.LinAlg] Add `Nx.LinAlg.pinv/1`
+  * [Nx.LinAlg] Optimize and handle more cases in `Nx.LinAlg.svd/1`
+
+### Bug fixes
+
+  * [Nx] Respect fortran order in loading from numpy
+  * [Nx.Defn] Render containers in compile error type+shape mismatch
+  * [Nx.Defn] Restore pdict state after compilation
+
 ## v0.4.1 (2022-12-07)
 
 ### Enhancements
