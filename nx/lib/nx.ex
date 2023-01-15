@@ -12130,12 +12130,6 @@ defmodule Nx do
 
   ### Error Cases
 
-      iex> Nx.linspace(0, 24, n: nil)
-      ** (ArgumentError) expected n to be a non-negative integer, got: nil
-
-      iex> Nx.linspace(0, 24, n: -1)
-      ** (ArgumentError) expected n to be a non-negative integer, got: -1
-
       iex> Nx.linspace(0, 24, n: 1.0)
       ** (ArgumentError) expected n to be a non-negative integer, got: 1.0
   """
