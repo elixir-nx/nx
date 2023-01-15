@@ -12084,6 +12084,70 @@ defmodule Nx do
     apply(impl!(tensor), kind, [out, tensor, opts])
   end
 
+  @doc """
+  Creates a tensor of shape `{n}` with linearly spaced samples between `start` and `stop`
+
+  ## Options
+
+    * `:n` - The number of samples in the tensor.
+    * `:axis_name` - Optional name for the output axis.
+    * `:type` - Optional type for the output. Defaults to `{:f, 32}`
+    * `:endpoint` - Boolean that indicates whether to include `stop`
+                    as the last point in the output. Defaults to `true`
+
+  ## Examples
+
+      iex> Nx.linspace(5, 8, n: 5)
+      #Nx.Tensor<
+        f32[5]
+        [5.0, 5.75, 6.5, 7.25, 8.0]
+      >
+
+      iex> Nx.linspace(0, 10, n: 5, endpoint: false)
+      #Nx.Tensor<
+        f32[5]
+        [0.0, 2.0, 4.0, 6.0, 8.0]
+      >
+
+  For integer types, the results might not be what's expected.
+  When `endpoint: true` (the default), the step is given by
+  `step = (stop - start) / (n - 1)`, which means that instead
+  of a step of `3` in the example below, we get a step close to
+  `3.42`.
+
+      iex> Nx.linspace(0, 24, n: 8, type: {:u, 8}, endpoint: true)
+      #Nx.Tensor<
+        u8[8]
+        [0, 3, 6, 10, 13, 17, 20, 24]
+      >
+
+      iex> Nx.linspace(0, 24, n: 8, type: {:s, 64}, endpoint: false)
+      #Nx.Tensor<
+        s64[8]
+        [0, 3, 6, 9, 12, 15, 18, 21]
+      >
+  """
+  def linspace(start, stop, opts \\ []) do
+    opts = keyword!(opts, [:n, :axis_name, type: {:f, 32}, endpoint: true])
+
+    n = opts[:n]
+
+    divisor =
+      if opts[:endpoint] do
+        n - 1
+      else
+        n
+      end
+
+    step = (stop - start) / divisor
+    iota = iota({n}, names: [opts[:axis_name]], type: opts[:type])
+
+    iota
+    |> multiply(step)
+    |> add(start)
+    |> as_type(opts[:type])
+  end
+
   ## Sigils
 
   @doc """
