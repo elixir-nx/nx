@@ -12113,7 +12113,8 @@ defmodule Nx do
   When `endpoint: true` (the default), the step is given by
   `step = (stop - start) / (n - 1)`, which means that instead
   of a step of `3` in the example below, we get a step close to
-  `3.42`.
+  `3.42`. The results are calculated first and only cast in the
+  end, so that the `:endpoint` condition is respected.
 
       iex> Nx.linspace(0, 24, n: 8, type: {:u, 8}, endpoint: true)
       #Nx.Tensor<
@@ -12126,11 +12127,26 @@ defmodule Nx do
         s64[8]
         [0, 3, 6, 9, 12, 15, 18, 21]
       >
+
+  ### Error Cases
+
+      iex> Nx.linspace(0, 24, n: nil)
+      ** (ArgumentError) expected n to be a non-negative integer, got: nil
+
+      iex> Nx.linspace(0, 24, n: -1)
+      ** (ArgumentError) expected n to be a non-negative integer, got: -1
+
+      iex> Nx.linspace(0, 24, n: 1.0)
+      ** (ArgumentError) expected n to be a non-negative integer, got: 1.0
   """
   def linspace(start, stop, opts \\ []) do
     opts = keyword!(opts, [:n, :axis_name, type: {:f, 32}, endpoint: true])
 
     n = opts[:n]
+
+    unless is_integer(n) and n > 0 do
+      raise ArgumentError, "expected n to be a non-negative integer, got: #{inspect(n)}"
+    end
 
     divisor =
       if opts[:endpoint] do
