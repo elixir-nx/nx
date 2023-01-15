@@ -12085,7 +12085,7 @@ defmodule Nx do
   end
 
   @doc """
-  Creates a tensor of shape `{n}` with linearly spaced samples between `start` and `stop`
+  Creates a tensor of shape `{n}` with linearly spaced samples between `start` and `stop`.
 
   ## Options
 
@@ -12093,7 +12093,7 @@ defmodule Nx do
     * `:axis_name` - Optional name for the output axis.
     * `:type` - Optional type for the output. Defaults to `{:f, 32}`
     * `:endpoint` - Boolean that indicates whether to include `stop`
-                    as the last point in the output. Defaults to `true`
+      as the last point in the output. Defaults to `true`
 
   ## Examples
 
