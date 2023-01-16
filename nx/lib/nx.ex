@@ -12090,7 +12090,7 @@ defmodule Nx do
   ## Options
 
     * `:n` - The number of samples in the tensor.
-    * `:axis_name` - Optional name for the output axis.
+    * `:name` - Optional name for the output axis.
     * `:type` - Optional type for the output. Defaults to `{:f, 32}`
     * `:endpoint` - Boolean that indicates whether to include `stop`
       as the last point in the output. Defaults to `true`
@@ -12103,9 +12103,9 @@ defmodule Nx do
         [5.0, 5.75, 6.5, 7.25, 8.0]
       >
 
-      iex> Nx.linspace(0, 10, n: 5, endpoint: false)
+      iex> Nx.linspace(0, 10, n: 5, endpoint: false, name: :x)
       #Nx.Tensor<
-        f32[5]
+        f32[x: 5]
         [0.0, 2.0, 4.0, 6.0, 8.0]
       >
 
@@ -12134,7 +12134,7 @@ defmodule Nx do
       ** (ArgumentError) expected n to be a non-negative integer, got: 1.0
   """
   def linspace(start, stop, opts \\ []) do
-    opts = keyword!(opts, [:n, :axis_name, type: {:f, 32}, endpoint: true])
+    opts = keyword!(opts, [:n, :name, type: {:f, 32}, endpoint: true])
 
     n = opts[:n]
 
@@ -12150,7 +12150,7 @@ defmodule Nx do
       end
 
     step = (stop - start) / divisor
-    iota = iota({n}, names: [opts[:axis_name]], type: opts[:type])
+    iota = iota({n}, names: [opts[:name]], type: opts[:type])
 
     iota
     |> multiply(step)
