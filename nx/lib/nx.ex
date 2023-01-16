@@ -8892,6 +8892,8 @@ defmodule Nx do
   possible. Instead, use functions `sum/2`, `reduce_max/2`,
   `all/1`, and so forth.
 
+  Inside `defn`, consider using `Nx.Defn.Kernel.while/4` instead.
+
   ## Examples
 
       iex> Nx.reduce(Nx.tensor(42), 0, fn x, y -> Nx.add(x, y) end)
@@ -9146,6 +9148,8 @@ defmodule Nx do
   Therefore, you should avoid using `map/2` whenever possible
   and use other functions in the `Nx` module to achieve the
   desired result.
+
+  Inside `defn`, consider using `Nx.Defn.Kernel.while/4` instead.
 
   ### Examples
 
