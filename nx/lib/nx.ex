@@ -12135,6 +12135,8 @@ defmodule Nx do
   """
   def linspace(start, stop, opts \\ []) do
     opts = keyword!(opts, [:n, :name, type: {:f, 32}, endpoint: true])
+    start = to_tensor(start)
+    stop = to_tensor(stop)
 
     n = opts[:n]
 
@@ -12149,7 +12151,7 @@ defmodule Nx do
         n
       end
 
-    step = (stop - start) / divisor
+    step = Nx.subtract(stop, start) |> Nx.divide(divisor)
     iota = iota({n}, names: [opts[:name]], type: opts[:type])
 
     iota
