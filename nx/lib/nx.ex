@@ -12156,6 +12156,7 @@ defmodule Nx do
       iex> Nx.linspace(Nx.tensor([[0, 1]]), Nx.tensor([1, 2, 3]), n: 2)
       ** (ArgumentError) expected start and stop to have the same shape. Got shapes {1, 2} and {3}
   """
+  @doc type: :creation
   def linspace(start, stop, opts \\ []) do
     opts = keyword!(opts, [:n, :name, type: {:f, 32}, endpoint: true])
     start = to_tensor(start)
