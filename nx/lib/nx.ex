@@ -946,7 +946,7 @@ defmodule Nx do
   Shortcut for `random_uniform(shape, 0.0, 1.0, opts)`.
   """
   # TODO: Deprecate this in Nx v0.5
-  @doc type: :random, deprecated: "Use Nx.Random.uniform/2 instead"
+  @doc type: :creation, deprecated: "Use Nx.Random.uniform/2 instead"
   def random_uniform(tensor_or_shape, opts \\ []) do
     random_uniform(tensor_or_shape, 0.0, 1.0, opts)
   end
@@ -1073,7 +1073,7 @@ defmodule Nx do
 
   """
   # TODO: Deprecate this in Nx v0.5
-  @doc type: :random, deprecated: "Use Nx.Random.uniform/2 instead"
+  @doc type: :creation, deprecated: "Use Nx.Random.uniform/2 instead"
   def random_uniform(tensor_or_shape, min, max, opts \\ []) do
     opts = keyword!(opts, [:type, :names, :backend])
     %T{type: min_type, shape: min_shape} = min = to_tensor(min)
@@ -1104,7 +1104,7 @@ defmodule Nx do
   Shortcut for `random_normal(shape, 0.0, 1.0, opts)`.
   """
   # TODO: Deprecate this in Nx v0.5
-  @doc type: :random, deprecated: "Use Nx.Random instead"
+  @doc type: :creation, deprecated: "Use Nx.Random instead"
   def random_normal(tensor_or_shape, opts \\ []) do
     random_normal(tensor_or_shape, 0.0, 1.0, opts)
   end
@@ -1191,7 +1191,7 @@ defmodule Nx do
 
   """
   # TODO: Deprecate this in Nx v0.5
-  @doc type: :random, deprecated: "Use Nx.Random instead"
+  @doc type: :creation, deprecated: "Use Nx.Random instead"
   def random_normal(tensor_or_shape, mu, sigma, opts \\ []) do
     opts = keyword!(opts, [:type, :names, :backend])
     %T{type: mu_type, shape: mu_shape} = mu = to_tensor(mu)
@@ -1261,7 +1261,7 @@ defmodule Nx do
         ]
       >
   """
-  @doc type: :random
+  @doc type: :creation
   def shuffle(tensor, opts \\ []) do
     opts = keyword!(opts, [:axis])
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)

@@ -9,6 +9,30 @@ defmodule NxTest do
     fun.(b, a)
   end
 
+  @doctypes [
+    :aggregation,
+    :backend,
+    :conversion,
+    :creation,
+    :cumulative,
+    :element,
+    :indexed,
+    :ndim,
+    :shape,
+    :type,
+    :window
+  ]
+
+  test "defines doc metadata" do
+    {:docs_v1, _, :elixir, "text/markdown", _docs, _metadata, entries} = Code.fetch_docs(Nx)
+
+    for {{:function, name, arity}, _ann, _signature, docs, metadata} <- entries,
+        is_map(docs) and map_size(docs) > 0,
+        metadata[:type] not in @doctypes do
+      flunk("invalid @doc type: #{inspect(metadata[:type])} for #{name}/#{arity}")
+    end
+  end
+
   describe "binary broadcast" do
     test "{2, 1} + {1, 2}" do
       commute(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]), fn a, b ->
