@@ -38,13 +38,13 @@ defmodule Torchx.MixProject do
       aliases: aliases(),
       make_env: fn ->
         priv_path = Path.join(Mix.Project.app_path(), "priv")
-        libtorch_link_path = @libtorch_env_dir || relative_to("#{@libtorch_dir}/lib", priv_path)
+        libtorch_link_path = @libtorch_env_dir || relative_to(@libtorch_dir, priv_path)
 
         %{
           "LIBTORCH_DIR" => @libtorch_dir,
           "LIBTORCH_BASE" => @libtorch_base,
           "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}",
-          "LIBTORCH_LINK" => libtorch_link_path
+          "LIBTORCH_LINK" => "#{libtorch_link_path}/lib"
         }
       end
     ]
