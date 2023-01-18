@@ -38,13 +38,8 @@ else
 	POST_INSTALL = $(NOOP)
 endif
 
-ifeq (, $(shell which realpath))
-	XLA_EXTENSION_LIB_LINK_PATH = $(abspath $(XLA_EXTENSION_LIB))
-	EXLA_CACHE_SO_LINK_PATH = $(abspath $(EXLA_CACHE_SO))
-else
-	XLA_EXTENSION_LIB_LINK_PATH = $(shell realpath --relative-to=$(PRIV_DIR) $(XLA_EXTENSION_LIB))
-	EXLA_CACHE_SO_LINK_PATH = $(shell realpath --relative-to=$(PRIV_DIR) $(EXLA_CACHE_SO))
-endif
+XLA_EXTENSION_LIB_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(XLA_EXTENSION_LIB)
+EXLA_CACHE_SO_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(EXLA_CACHE_SO)
 
 $(EXLA_SO): $(EXLA_CACHE_SO)
 	@ mkdir -p $(PRIV_DIR)

@@ -26,9 +26,20 @@ defmodule EXLA.MixProject do
         "compile.extract_xla": &extract_xla/1,
         "compile.cached_make": &cached_make/1
       ],
-      make_env: %{
-        "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}"
-      }
+      make_env: fn ->
+        cwd_relative_to_priv =
+          Mix.Project.app_path()
+          |> Path.join("priv")
+          |> Path.relative_to_cwd()
+          |> Path.split()
+          |> Enum.map(fn _ -> ".." end)
+          |> Path.join()
+
+        %{
+          "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}",
+          "CWD_RELATIVE_TO_PRIV_PATH" => cwd_relative_to_priv
+        }
+      end
     ]
   end
 
