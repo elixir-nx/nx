@@ -26,9 +26,15 @@ defmodule EXLA.MixProject do
         "compile.extract_xla": &extract_xla/1,
         "compile.cached_make": &cached_make/1
       ],
-      make_env: %{
-        "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}"
-      }
+      make_env: fn ->
+        priv_path = Path.join(Mix.Project.app_path(), "priv")
+        cwd_relative_to_priv = relative_to(File.cwd!(), priv_path)
+
+        %{
+          "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}",
+          "CWD_RELATIVE_TO_PRIV_PATH" => cwd_relative_to_priv
+        }
+      end
     ]
   end
 
@@ -167,4 +173,16 @@ defmodule EXLA.MixProject do
       :filename.basedir(:user_cache, "xla")
     end
   end
+
+  # Returns `path` relative to the `from` directory.
+  defp relative_to(path, from) do
+    path_parts = path |> Path.expand() |> Path.split()
+    from_parts = from |> Path.expand() |> Path.split()
+    {path_parts, from_parts} = drop_common_prefix(path_parts, from_parts)
+    root_relative = for _ <- from_parts, do: ".."
+    Path.join(root_relative ++ path_parts)
+  end
+
+  defp drop_common_prefix([h | left], [h | right]), do: drop_common_prefix(left, right)
+  defp drop_common_prefix(left, right), do: {left, right}
 end
