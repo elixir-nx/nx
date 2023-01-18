@@ -16,6 +16,10 @@ PRIV_DIR = $(MIX_APP_PATH)/priv
 EXLA_SO = $(PRIV_DIR)/libexla.so
 EXLA_LIB_DIR = $(PRIV_DIR)/lib
 
+# Link paths
+XLA_EXTENSION_LIB_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(XLA_EXTENSION_LIB)
+EXLA_CACHE_SO_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(EXLA_CACHE_SO)
+
 # Build flags
 CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -O3 -Wall -Wno-sign-compare \
 	 -Wno-unused-parameter -Wno-missing-field-initializers -Wno-comment \
@@ -37,9 +41,6 @@ else
 	LDFLAGS += -Wl,-rpath,'$$ORIGIN/lib'
 	POST_INSTALL = $(NOOP)
 endif
-
-XLA_EXTENSION_LIB_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(XLA_EXTENSION_LIB)
-EXLA_CACHE_SO_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(EXLA_CACHE_SO)
 
 $(EXLA_SO): $(EXLA_CACHE_SO)
 	@ mkdir -p $(PRIV_DIR)

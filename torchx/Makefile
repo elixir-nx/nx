@@ -28,7 +28,7 @@ $(TORCHX_SO): c_src/torchx.cpp c_src/nx_nif_utils.hpp
 	@ if [ "${MIX_BUILD_EMBEDDED}" = "true" ]; then \
 		cp -a $(abspath $(LIBTORCH_DIR)/lib) $(PRIV_DIR)/$(LIBTORCH_BASE) ; \
 	else \
-		ln -sf $(abspath $(LIBTORCH_DIR)/lib) $(PRIV_DIR)/$(LIBTORCH_BASE) ; \
+		ln -sf $(LIBTORCH_LINK) $(PRIV_DIR)/$(LIBTORCH_BASE) ; \
 	fi
 	@ cd $(CMAKE_BUILD_DIR) && \
 		cmake -DCMAKE_PREFIX_PATH=$(LIBTORCH_DIR) -DC_SRC=$(C_SRC) \

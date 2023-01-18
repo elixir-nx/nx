@@ -10,7 +10,8 @@ defmodule Torchx.MixProject do
   @libtorch_target System.get_env("LIBTORCH_TARGET", "cpu")
 
   @libtorch_base "libtorch"
-  @libtorch_dir System.get_env("LIBTORCH_DIR") ||
+  @libtorch_env_dir System.get_env("LIBTORCH_DIR")
+  @libtorch_dir @libtorch_env_dir ||
                   Path.join(__DIR__, "cache/libtorch-#{@libtorch_version}-#{@libtorch_target}")
   @libtorch_compilers [:torchx, :elixir_make]
 
@@ -35,11 +36,17 @@ defmodule Torchx.MixProject do
       # Compilers
       compilers: @libtorch_compilers ++ Mix.compilers(),
       aliases: aliases(),
-      make_env: %{
-        "LIBTORCH_DIR" => @libtorch_dir,
-        "LIBTORCH_BASE" => @libtorch_base,
-        "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}"
-      }
+      make_env: fn ->
+        priv_path = Path.join(Mix.Project.app_path(), "priv")
+        libtorch_link_path = @libtorch_env_dir || relative_to("#{@libtorch_dir}/lib", priv_path)
+
+        %{
+          "LIBTORCH_DIR" => @libtorch_dir,
+          "LIBTORCH_BASE" => @libtorch_base,
+          "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}",
+          "LIBTORCH_LINK" => libtorch_link_path
+        }
+      end
     ]
   end
 
@@ -219,4 +226,16 @@ defmodule Torchx.MixProject do
   end
 
   defp executable_exists?(name), do: not is_nil(System.find_executable(name))
+
+  # Returns `path` relative to the `from` directory.
+  defp relative_to(path, from) do
+    path_parts = path |> Path.expand() |> Path.split()
+    from_parts = from |> Path.expand() |> Path.split()
+    {path_parts, from_parts} = drop_common_prefix(path_parts, from_parts)
+    root_relative = for _ <- from_parts, do: ".."
+    Path.join(root_relative ++ path_parts)
+  end
+
+  defp drop_common_prefix([h | left], [h | right]), do: drop_common_prefix(left, right)
+  defp drop_common_prefix(left, right), do: {left, right}
 end
