@@ -86,22 +86,43 @@ defmodule EXLA.BackendTest do
     end
   end
 
-  test "Nx.backend_copy/1" do
-    t = Nx.tensor([1, 2, 3, 4])
+  describe "Nx.backend_copy/1" do
+    test "same client" do
+      t = Nx.tensor([1, 2, 3, 4])
 
-    et = Nx.backend_transfer(t, EXLA.Backend)
-    assert %EXLA.Backend{buffer: %EXLA.DeviceBuffer{} = old_buffer} = et.data
+      et = Nx.backend_transfer(t, EXLA.Backend)
+      assert %EXLA.Backend{buffer: %EXLA.DeviceBuffer{} = old_buffer} = et.data
 
-    # Copy to the same client/device_id still makes a copy
-    et = Nx.backend_copy(t, EXLA.Backend)
-    assert %EXLA.Backend{buffer: %EXLA.DeviceBuffer{} = new_buffer} = et.data
-    assert old_buffer != new_buffer
+      # Copy to the same client/device_id still makes a copy
+      et = Nx.backend_copy(t, EXLA.Backend)
+      assert %EXLA.Backend{buffer: %EXLA.DeviceBuffer{} = new_buffer} = et.data
+      assert old_buffer != new_buffer
 
-    nt = Nx.backend_copy(et)
-    assert Nx.to_binary(nt) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
+      nt = Nx.backend_copy(et)
+      assert Nx.to_binary(nt) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
 
-    nt = Nx.backend_copy(et)
-    assert Nx.to_binary(nt) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
+      nt = Nx.backend_copy(et)
+      assert Nx.to_binary(nt) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
+    end
+
+    test "different clients" do
+      t = Nx.tensor([1, 2, 3, 4])
+
+      et = Nx.backend_transfer(t, EXLA.Backend)
+      assert %EXLA.Backend{buffer: %EXLA.DeviceBuffer{} = old_buffer} = et.data
+
+      et = Nx.backend_copy(t, {EXLA.Backend, client: :other_host})
+      assert %EXLA.Backend{buffer: %EXLA.DeviceBuffer{} = new_buffer} = et.data
+      assert old_buffer != new_buffer
+      assert new_buffer.client_name == :other_host
+      assert new_buffer.device_id == 0
+
+      nt = Nx.backend_copy(et)
+      assert Nx.to_binary(nt) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
+
+      nt = Nx.backend_copy(et)
+      assert Nx.to_binary(nt) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
+    end
   end
 
   test "Nx.LinAlg.svg/2" do

@@ -52,7 +52,18 @@ defmodule EXLA.Backend do
     backend_copy(tensor, Nx.BinaryBackend, backend_options)
   end
 
-  # TODO: Support direct transfers between EXLA without going through Elixir
+  def backend_copy(%T{data: %B{buffer: buffer}} = tensor, EXLA.Backend, backend_options) do
+    {client, device_id} = client_and_device_id(backend_options)
+
+    if same_client_device?(buffer, client, device_id) do
+      # We cannot copy to the same client/device using copy_to_device
+      EXLA.Backend.from_binary(tensor, EXLA.DeviceBuffer.read(buffer), backend_options)
+    else
+      buffer = EXLA.DeviceBuffer.copy_to_device(buffer, client, device_id)
+      put_in(tensor.data, %B{buffer: buffer})
+    end
+  end
+
   def backend_copy(%T{data: %B{buffer: buffer}} = tensor, backend, backend_options) do
     backend.from_binary(tensor, EXLA.DeviceBuffer.read(buffer), backend_options)
   end
@@ -151,6 +162,10 @@ defmodule EXLA.Backend do
 
   defp same_client_device?(buffer, opts) do
     {client, device_id} = client_and_device_id(opts)
+    same_client_device?(buffer, client, device_id)
+  end
+
+  defp same_client_device?(buffer, client, device_id) do
     buffer.client_name == client.name and buffer.device_id == device_id
   end
 
