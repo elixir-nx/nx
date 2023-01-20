@@ -12,7 +12,7 @@ In order to use `EXLA`, you will need Elixir installed. Then create an Elixir pr
 $ mix new my_app
 ```
 
-Then you can add `EXLA` as dependency in your `mix.exs`. At the moment you will have to use a Git dependency while we work on our first release:
+Then you can add `EXLA` as dependency in your `mix.exs`:
 
 ```elixir
 def deps do
