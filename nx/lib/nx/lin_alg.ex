@@ -1762,7 +1762,8 @@ defmodule Nx.LinAlg do
 
   @doc """
   Return matrix rank of input M × N matrix using Singular Value Decomposition method.
-  Calculate the number of singular values greater than `eps * max(singular values) * max(M, N)` as a rank.
+
+  Approximate the number of linearly independent rows by calculating the number of singular values greater than `eps * max(singular values) * max(M, N)`.
   This also appears in Numerical recipes in the discussion of SVD solutions for linear least squares [1].
   [1] W. H. Press, S. A. Teukolsky, W. T. Vetterling and B. P. Flannery, “Numerical Recipes (3rd edition)”, Cambridge University Press, 2007, page 795.
 
@@ -1796,6 +1797,7 @@ defmodule Nx.LinAlg do
   """
   @doc from_backend: false
   def matrix_rank(a, opts \\ []) do
+    # TODO: support batching when SVD supports it too
     opts = keyword!(opts, eps: 1.0e-10)
     shape = Nx.shape(a)
     :ok = Nx.Shape.matrix_rank(shape)
@@ -1815,7 +1817,7 @@ defmodule Nx.LinAlg do
     # Set tolerance values
     tol = opts[:eps] * max_dim * s_max
 
-    # Calucate matrix rank
+    # Calculate matrix rank
     s
     |> Nx.greater(tol)
     |> Nx.sum()
