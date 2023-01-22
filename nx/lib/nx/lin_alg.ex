@@ -1806,7 +1806,9 @@ defmodule Nx.LinAlg do
 
     # Calculate max singular value
     {_u, s, _v} = svd(a)
-    s_max = s
+
+    s_max =
+      s
       |> Nx.reduce_max()
       |> Nx.to_number()
 
