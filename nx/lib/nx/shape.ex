@@ -2093,4 +2093,15 @@ defmodule Nx.Shape do
           "cannot merge name #{inspect(l_name)} on axis #{l_axis} " <>
             "with name #{inspect(r_name)} on axis #{r_axis}"
   end
+
+  def matrix_rank(shape) when tuple_size(shape) > 1 do
+    :ok
+  end
+
+  def matrix_rank(shape) do
+    raise(
+      ArgumentError,
+      "tensor must have at least rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
+    )
+  end
 end
