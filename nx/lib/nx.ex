@@ -3038,6 +3038,8 @@ defmodule Nx do
   the tensor is clipped on either end according to the
   padding width. Interior padding widths cannot be negative.
 
+  See also: `reflect/2`
+
   ## Examples
 
       iex> Nx.pad(Nx.tensor(1), 0, [])
@@ -12197,13 +12199,15 @@ defmodule Nx do
   end
 
   @doc """
-  Pads a tensor along the given axes through periodic reflections.
+  Pads a tensor of rank 1 or greater along the given axes through periodic reflections.
 
   ## Options
 
     * `:padding_config` - A list of tuples in the format `{pre, post}`,
       which specify the length (0 or greater) of the reflection before and
       after the tensor along a each axis.
+
+  See also: `pad/3`
 
   ## Examples
 
@@ -12235,51 +12239,61 @@ defmodule Nx do
       raise ArgumentError, "missing mandatory option :padding_config"
     end
 
+    rank = Nx.rank(tensor)
+
+    unless rank > 0 do
+      raise ArgumentError, "expected tensor to have rank greater than 0"
+    end
+
     axes = axes(tensor)
 
-    if length(axes) != length(padding_config) do
+    if rank != length(padding_config) do
       raise ArgumentError, "expected to have one padding_config entry each tensor axis"
     end
 
-    padding_config
-    |> Enum.zip(axes)
-    |> Enum.reduce(tensor, fn {{left_padding, right_padding}, axis}, tensor ->
-      n = Nx.axis_size(tensor, axis)
+    Enum.zip_reduce(
+      padding_config,
+      axes,
+      tensor,
+      fn {left_padding, right_padding}, axis, tensor ->
+        n = Nx.axis_size(tensor, axis)
 
-      left_padding =
-        if left_padding > 0 do
-          idx_period = left_reflect_index_period(n)
-          repetitions = div(left_padding, n) + 1
+        left_padding =
+          if(left_padding > 0) do
+            idx_period = left_reflect_index_period(n)
+            repetitions = div(left_padding, n) + 1
 
-          idx =
-            idx_period
-            |> Nx.tile([repetitions])
-            |> Nx.take(Nx.iota({left_padding}))
-            |> Nx.reverse()
+            idx =
+              Nx.tile(idx_period, [repetitions])
+              |> Nx.take(Nx.iota({left_padding}))
+              |> Nx.reverse()
 
-          Nx.take(tensor, idx, axis: axis)
+            Nx.take(tensor, idx, axis: axis)
+          end
+
+        right_padding =
+          if(right_padding > 0) do
+            idx_period = right_reflect_index_period(n)
+            repetitions = div(right_padding, n) + 1
+            idx = idx_period |> Nx.tile([repetitions]) |> Nx.take(Nx.iota({right_padding}))
+            Nx.take(tensor, idx, axis: axis)
+          end
+
+        case({left_padding, right_padding}) do
+          {nil, nil} ->
+            tensor
+
+          {nil, right} ->
+            Nx.concatenate([tensor, right], axis: axis)
+
+          {left, nil} ->
+            Nx.concatenate([left, tensor], axis: axis)
+
+          {left, right} ->
+            Nx.concatenate([left, tensor, right], axis: axis)
         end
-
-      right_padding =
-        if right_padding > 0 do
-          idx_period = right_reflect_index_period(n)
-          repetitions = div(right_padding, n) + 1
-
-          idx =
-            idx_period
-            |> Nx.tile([repetitions])
-            |> Nx.take(Nx.iota({right_padding}))
-
-          Nx.take(tensor, idx, axis: axis)
-        end
-
-      case {left_padding, right_padding} do
-        {nil, nil} -> tensor
-        {nil, right} -> Nx.concatenate([tensor, right], axis: axis)
-        {left, nil} -> Nx.concatenate([left, tensor], axis: axis)
-        {left, right} -> Nx.concatenate([left, tensor, right], axis: axis)
       end
-    end)
+    )
   end
 
   defp left_reflect_index_period(n) do
