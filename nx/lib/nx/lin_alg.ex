@@ -1805,14 +1805,20 @@ defmodule Nx.LinAlg do
     # TODO: support batching when SVD supports it too
     opts = keyword!(opts, eps: 1.0e-10)
     shape = Nx.shape(a)
-    :ok = Nx.Shape.matrix_rank(shape)
+    size = Nx.rank(shape)
+    if size <= 1 do
+      raise(
+        ArgumentError,
+        "tensor must have at least rank 2, got rank #{inspect(size)} with shape #{inspect(shape)}"
+      )
+    end
 
     # Calculate max dimension
     {row_dim, col_dim} = shape
     max_dim = if row_dim > col_dim, do: row_dim, else: col_dim
 
     # Calculate max singular value
-    {_u, s, _v} = svd(a)
+    {_u, s, _v} = Nx.LinAlg.svd(a)
 
     s_max = Nx.reduce_max(s)
 
