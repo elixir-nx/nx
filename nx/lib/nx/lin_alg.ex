@@ -1801,7 +1801,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) tensor must have at least rank 2, got rank 1 with shape {3}
   """
   @doc from_backend: false
-  def matrix_rank(a, opts \\ []) do
+  defn matrix_rank(a, opts \\ []) do
     # TODO: support batching when SVD supports it too
     opts = keyword!(opts, eps: 1.0e-10)
     shape = Nx.shape(a)
@@ -1814,13 +1814,10 @@ defmodule Nx.LinAlg do
     # Calculate max singular value
     {_u, s, _v} = svd(a)
 
-    s_max =
-      s
-      |> Nx.reduce_max()
-      |> Nx.to_number()
+    s_max = Nx.reduce_max(s)
 
     # Set tolerance values
-    tol = opts[:eps] * max_dim * s_max
+    tol = Nx.multiply(opts[:eps] * max_dim, s_max)
 
     # Calculate matrix rank
     s
