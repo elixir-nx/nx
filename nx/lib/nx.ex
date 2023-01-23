@@ -12282,14 +12282,14 @@ defmodule Nx do
     end)
   end
 
-  def left_reflect_index_period(n) do
+  defp left_reflect_index_period(n) do
     # Generates the indices for pre-reflecting on the axis
     left = Nx.iota({n - 1}) |> Nx.add(1)
     right = Nx.subtract(n - 2, Nx.iota({n - 1}))
     Nx.concatenate([left, right])
   end
 
-  def right_reflect_index_period(n) do
+  defp right_reflect_index_period(n) do
     # Generates the indices for post-reflecting on the axis
     left = Nx.subtract(n - 2, Nx.iota({n - 1}))
     right = Nx.iota({n - 1}) |> Nx.add(1)
