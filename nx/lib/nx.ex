@@ -12202,8 +12202,8 @@ defmodule Nx do
   ## Options
 
     * `:padding_config` - A list of tuples in the format `{pre, post}`,
-    which specify the length (0 or greater) of the reflection before and
-    after the tensor along a each axis.
+      which specify the length (0 or greater) of the reflection before and
+      after the tensor along a each axis.
 
   ## Examples
 
