@@ -1806,6 +1806,7 @@ defmodule Nx.LinAlg do
     opts = keyword!(opts, eps: 1.0e-10)
     shape = Nx.shape(a)
     size = Nx.rank(shape)
+
     if size <= 1 do
       raise(
         ArgumentError,
