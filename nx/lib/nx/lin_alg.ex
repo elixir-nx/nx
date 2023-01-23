@@ -1807,10 +1807,10 @@ defmodule Nx.LinAlg do
     shape = Nx.shape(a)
     size = Nx.rank(shape)
 
-    if size <= 1 do
+    if size != 2 do
       raise(
         ArgumentError,
-        "tensor must have at least rank 2, got rank #{inspect(size)} with shape #{inspect(shape)}"
+        "tensor must have rank 2, got rank #{inspect(size)} with shape #{inspect(shape)}"
       )
     end
 
@@ -1824,11 +1824,9 @@ defmodule Nx.LinAlg do
     s_max = Nx.reduce_max(s)
 
     # Set tolerance values
-    tol = Nx.multiply(opts[:eps] * max_dim, s_max)
+    tol = opts[:eps] * max_dim * s_max
 
     # Calculate matrix rank
-    s
-    |> Nx.greater(tol)
-    |> Nx.sum()
+    Nx.sum(s > tol)
   end
 end
