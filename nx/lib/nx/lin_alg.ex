@@ -1798,7 +1798,7 @@ defmodule Nx.LinAlg do
   ## Error cases
 
       iex> Nx.LinAlg.matrix_rank(Nx.tensor([1, 2, 3]))
-      ** (ArgumentError) tensor must have at least rank 2, got rank 1 with shape {3}
+      ** (ArgumentError) tensor must have rank 2, got rank 1 with shape {3}
   """
   @doc from_backend: false
   defn matrix_rank(a, opts \\ []) do
