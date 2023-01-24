@@ -1825,22 +1825,32 @@ defmodule Nx.Shape do
         "tensor must have at least rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
       )
 
-  def svd(shape) when tuple_size(shape) > 1 do
+  def svd(shape, opts \\ [])
+
+  def svd(shape, opts) when tuple_size(shape) > 1 do
     rank = tuple_size(shape)
     {m, n} = {elem(shape, rank - 2), elem(shape, rank - 1)}
     {unchanged_shape, _} = Tuple.to_list(shape) |> Enum.split(-2)
 
-    [
-      [unchanged_shape, [m, m]],
-      [unchanged_shape, [min(m, n)]],
-      [unchanged_shape, [n, n]]
-    ]
+    if opts[:full_matrices?] do
+      [
+        [unchanged_shape, [m, m]],
+        [unchanged_shape, [min(m, n)]],
+        [unchanged_shape, [n, n]]
+      ]
+    else
+      [
+        [unchanged_shape, [m, min(m, n)]],
+        [unchanged_shape, [min(m, n)]],
+        [unchanged_shape, [min(m, n), n]]
+      ]
+    end
     |> Enum.map(&List.flatten/1)
     |> Enum.map(&List.to_tuple/1)
     |> List.to_tuple()
   end
 
-  def svd(shape),
+  def svd(shape, _opts),
     do:
       raise(
         ArgumentError,

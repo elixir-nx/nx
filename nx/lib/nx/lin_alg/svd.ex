@@ -26,7 +26,7 @@ defmodule Nx.LinAlg.SVD do
 
     result =
       if Nx.all(input_tensor == 0) do
-        svd_all_zeros(input_tensor)
+        svd_all_zeros(input_tensor, opts)
       else
         svd_non_zero(input_tensor, opts)
       end
@@ -40,7 +40,7 @@ defmodule Nx.LinAlg.SVD do
     opts[:max_iter] || raise ArgumentError, "missing option :max_iter"
   end
 
-  defnp svd_all_zeros(a) do
+  defnp svd_all_zeros(a, opts) do
     {m, n} = Nx.shape(a)
 
     k =
@@ -49,27 +49,17 @@ defmodule Nx.LinAlg.SVD do
         _ -> m
       end
 
+    min_shape = Kernel.min(m, n)
+    {u_cols, v_rows} = if opts[:full_matrices?], do: {m, n}, else: {min_shape, min_shape}
+
     s = Nx.broadcast(Nx.tensor(0, type: Nx.type(a)), {k})
-    u = Nx.eye({m, m}, type: Nx.type(a))
-    v = Nx.eye({n, n}, type: Nx.type(a))
+    u = Nx.eye({m, u_cols}, type: Nx.type(a))
+    v = Nx.eye({v_rows, n}, type: Nx.type(a))
 
     {u, s, v}
   end
 
-  defn svd_non_zero(input_tensor, opts \\ []) do
-    {is_flipped, tensor} =
-      case Nx.shape(input_tensor) do
-        {m, n} when m < n ->
-          {true, Nx.LinAlg.adjoint(input_tensor)}
-
-        _ ->
-          {false, input_tensor}
-      end
-
-    # We always return full matrices for retrocompatibility.
-    # Original Jax code has extensions if we want to add that
-    # as an option (i.e. mode: :complete | :reduced)
-
+  defn svd_full(tensor, opts \\ []) do
     {reduce_to_square, q, u_null, a} =
       case Nx.shape(tensor) do
         {m, n} when m > n ->
@@ -93,6 +83,50 @@ defmodule Nx.LinAlg.SVD do
 
         false ->
           u
+      end
+
+    {u, s, v}
+  end
+
+  defn svd_non_full(tensor, opts \\ []) do
+    {m, n} = Nx.shape(tensor)
+
+    {reduced_to_square, q, a} =
+      if m > 1.15 * n do
+        {q, a} = Nx.LinAlg.qr(tensor, mode: :reduced)
+        {true, q, a}
+      else
+        {false, tensor, tensor}
+      end
+
+    {u, s, v} = svd_tall_and_square(a, opts)
+
+    u =
+      case reduced_to_square do
+        true ->
+          Nx.dot(q, u)
+
+        _ ->
+          u
+      end
+
+    {u, s, v}
+  end
+
+  defn svd_non_zero(input_tensor, opts \\ []) do
+    {is_flipped, a} =
+      case Nx.shape(input_tensor) do
+        {m, n} when m < n ->
+          {true, Nx.LinAlg.adjoint(input_tensor)}
+
+        _ ->
+          {false, input_tensor}
+      end
+
+    {u, s, v} =
+      case opts[:full_matrices?] do
+        true -> svd_full(a, opts)
+        false -> svd_non_full(a, opts)
       end
 
     case is_flipped do

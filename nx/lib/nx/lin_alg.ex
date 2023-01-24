@@ -1271,7 +1271,7 @@ defmodule Nx.LinAlg do
     Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.svd", 2)
 
     output_type = Nx.Type.to_floating(type)
-    {u_shape, s_shape, v_shape} = Nx.Shape.svd(shape)
+    {u_shape, s_shape, v_shape} = Nx.Shape.svd(shape, opts)
     rank = tuple_size(shape)
 
     output =
@@ -1279,16 +1279,7 @@ defmodule Nx.LinAlg do
        %{tensor | names: List.duplicate(nil, rank - 1), type: output_type, shape: s_shape},
        %{tensor | names: List.duplicate(nil, rank), type: output_type, shape: v_shape}}
 
-    {u, s, vt} = Nx.Shared.optional(:svd, [tensor, opts], output, &Nx.LinAlg.SVD.svd/2)
-
-    if opts[:full_matrices?] do
-      {u, s, vt}
-    else
-      min_shape = Kernel.min(Nx.axis_size(u, -1), Nx.axis_size(vt, -1))
-      u = Nx.slice_along_axis(u, 0, min_shape, axis: -1)
-      vt = Nx.slice_along_axis(vt, 0, min_shape, axis: -2)
-      {u, s, vt}
-    end
+    Nx.Shared.optional(:svd, [tensor, opts], output, &Nx.LinAlg.SVD.svd/2)
   end
 
   @doc """
