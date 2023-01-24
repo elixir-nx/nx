@@ -3,6 +3,14 @@ defmodule Nx.Defn.Evaluator do
   The default implementation of a `Nx.Defn.Compiler`
   that evaluates the expression tree against the
   tensor backend.
+
+  ## Options
+
+  The following options are specific to this compiler:
+
+    * `:garbage_collect` - when true, garbage collects
+      after evaluating each node
+
   """
 
   @behaviour Nx.Defn.Compiler
@@ -18,7 +26,7 @@ defmodule Nx.Defn.Evaluator do
     count = Nx.Defn.Composite.count(input) + Nx.Defn.Composite.count(acc)
     rest_params = Enum.drop(args, count)
     hooks = Keyword.get(opts, :hooks, %{})
-    gc? = Keyword.get(opts, :garbage_collect, true)
+    gc? = Keyword.get(opts, :garbage_collect, false)
     {expr, cache} = precompile(fun, vars, hooks)
 
     [
@@ -41,7 +49,7 @@ defmodule Nx.Defn.Evaluator do
   @impl true
   def __compile__(_key, vars, fun, opts) do
     hooks = Keyword.get(opts, :hooks, %{})
-    gc? = Keyword.get(opts, :garbage_collect, true)
+    gc? = Keyword.get(opts, :garbage_collect, false)
     {expr, cache} = precompile(fun, vars, hooks)
 
     fn [params] ->
