@@ -76,13 +76,11 @@ defmodule Nx.LinAlg.SVD do
     {u, s, v} = svd_tall_and_square(a, opts)
 
     u =
-      case reduce_to_square do
-        true ->
-          u = Nx.dot(q, u)
-          Nx.concatenate([u, u_null], axis: -1)
-
-        false ->
-          u
+      if reduce_to_square do
+        u = Nx.dot(q, u)
+        Nx.concatenate([u, u_null], axis: -1)
+      else
+        u
       end
 
     {u, s, v}
@@ -104,12 +102,10 @@ defmodule Nx.LinAlg.SVD do
     {u, s, v} = svd_tall_and_square(a, opts)
 
     u =
-      case reduced_to_square do
-        true ->
-          Nx.dot(q, u)
-
-        _ ->
-          u
+      if reduced_to_square do
+        Nx.dot(q, u)
+      else
+        u
       end
 
     {u, s, v}
@@ -126,14 +122,16 @@ defmodule Nx.LinAlg.SVD do
       end
 
     {u, s, v} =
-      case opts[:full_matrices?] do
-        true -> svd_full(a, opts)
-        false -> svd_non_full(a, opts)
+      if opts[:full_matrices?] do
+        svd_full(a, opts)
+      else
+        svd_non_full(a, opts)
       end
 
-    case is_flipped do
-      true -> {v, s, Nx.LinAlg.adjoint(u)}
-      false -> {u, s, Nx.LinAlg.adjoint(v)}
+    if is_flipped do
+      {v, s, Nx.LinAlg.adjoint(u)}
+    else
+      {u, s, Nx.LinAlg.adjoint(v)}
     end
   end
 
