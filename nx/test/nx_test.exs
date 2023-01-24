@@ -2477,4 +2477,27 @@ defmodule NxTest do
       assert inspect(left) == inspect(right)
     end
   end
+
+  describe "reflect/2" do
+    test "reflects over axes of size 1" do
+      assert Nx.tensor([1, 1, 1, 1]) == Nx.reflect(Nx.tensor([1]), padding_config: [{2, 1}])
+
+      assert Nx.tensor([[[1, 1, 1, 1]]]) ==
+               Nx.reflect(Nx.tensor([[[1]]]), padding_config: [{0, 0}, {0, 0}, {2, 1}])
+    end
+
+    test "semantic error on invalid padding config" do
+      assert_raise ArgumentError,
+                   "expected padding config for axis 0 to be of the format {left, right}, with left and right as non-negative integers, got: {0}",
+                   fn ->
+                     Nx.reflect(Nx.tensor([0]), padding_config: [{0}])
+                   end
+
+      assert_raise ArgumentError,
+                   "expected padding config for axis 2 to be of the format {left, right}, with left and right as non-negative integers, got: {-1, 0}",
+                   fn ->
+                     Nx.reflect(Nx.tensor([[[0]]]), padding_config: [{0, 0}, {0, 0}, {-1, 0}])
+                   end
+    end
+  end
 end
