@@ -2477,4 +2477,13 @@ defmodule NxTest do
       assert inspect(left) == inspect(right)
     end
   end
+
+  describe "reflect/2" do
+    test "reflects over axes of size 1" do
+      assert Nx.tensor([1, 1, 1, 1]) == Nx.reflect(Nx.tensor([1]), padding_config: [{2, 1}])
+
+      assert Nx.tensor([[[1, 1, 1, 1]]]) ==
+               Nx.reflect(Nx.tensor([[[1]]]), padding_config: [{0, 0}, {0, 0}, {2, 1}])
+    end
+  end
 end
