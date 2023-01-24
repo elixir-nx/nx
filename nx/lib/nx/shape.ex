@@ -1831,18 +1831,19 @@ defmodule Nx.Shape do
     rank = tuple_size(shape)
     {m, n} = {elem(shape, rank - 2), elem(shape, rank - 1)}
     {unchanged_shape, _} = Tuple.to_list(shape) |> Enum.split(-2)
+    k = min(m, n)
 
     if opts[:full_matrices?] do
       [
         [unchanged_shape, [m, m]],
-        [unchanged_shape, [min(m, n)]],
+        [unchanged_shape, [k]],
         [unchanged_shape, [n, n]]
       ]
     else
       [
-        [unchanged_shape, [m, min(m, n)]],
-        [unchanged_shape, [min(m, n)]],
-        [unchanged_shape, [min(m, n), n]]
+        [unchanged_shape, [m, k]],
+        [unchanged_shape, [k]],
+        [unchanged_shape, [k, n]]
       ]
     end
     |> Enum.map(&List.flatten/1)
