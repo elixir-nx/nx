@@ -1179,7 +1179,7 @@ defmodule Nx.LinAlg do
       Number of maximum iterations before stopping the decomposition
 
     * `:full_matrices?` - `boolean`. Defaults to `true`
-      If True, u and vt are of shape (M, M), (N, N). Otherwise,
+      If `true`, `u` and `vt` are of shape (M, M), (N, N). Otherwise,
       the shapes are (M, K) and (K, N), where K = min(M, N).
 
   Note not all options apply to all backends, as backends may have
