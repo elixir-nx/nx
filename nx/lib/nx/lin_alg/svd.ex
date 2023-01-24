@@ -92,6 +92,8 @@ defmodule Nx.LinAlg.SVD do
     {m, n} = Nx.shape(tensor)
 
     {reduced_to_square, q, a} =
+      # The constant `1.15` comes from Yuji Nakatsukasa's implementation
+      # https://www.mathworks.com/matlabcentral/fileexchange/36830-symmetric-eigenvalue-decomposition-and-the-svd?s_tid=FX_rc3_behav
       if m > 1.15 * n do
         {q, a} = Nx.LinAlg.qr(tensor, mode: :reduced)
         {true, q, a}
