@@ -12255,43 +12255,49 @@ defmodule Nx do
       padding_config,
       axes,
       tensor,
-      fn {left_padding, right_padding}, axis, tensor ->
-        n = Nx.axis_size(tensor, axis)
+      fn
+        {left_padding, right_padding}, axis, tensor
+        when left_padding >= 0 and right_padding >= 0 ->
+          n = Nx.axis_size(tensor, axis)
 
-        left_padding =
-          if(left_padding > 0) do
-            idx_period = left_reflect_index_period(n)
-            repetitions = div(left_padding, n) + 1
+          left_padding =
+            if(left_padding > 0) do
+              idx_period = left_reflect_index_period(n)
+              repetitions = div(left_padding, n) + 1
 
-            idx =
-              Nx.tile(idx_period, [repetitions])
-              |> Nx.take(Nx.iota({left_padding}))
-              |> Nx.reverse()
+              idx =
+                Nx.tile(idx_period, [repetitions])
+                |> Nx.take(Nx.iota({left_padding}))
+                |> Nx.reverse()
 
-            Nx.take(tensor, idx, axis: axis)
+              Nx.take(tensor, idx, axis: axis)
+            end
+
+          right_padding =
+            if(right_padding > 0) do
+              idx_period = right_reflect_index_period(n)
+              repetitions = div(right_padding, n) + 1
+              idx = idx_period |> Nx.tile([repetitions]) |> Nx.take(Nx.iota({right_padding}))
+              Nx.take(tensor, idx, axis: axis)
+            end
+
+          case({left_padding, right_padding}) do
+            {nil, nil} ->
+              tensor
+
+            {nil, right} ->
+              Nx.concatenate([tensor, right], axis: axis)
+
+            {left, nil} ->
+              Nx.concatenate([left, tensor], axis: axis)
+
+            {left, right} ->
+              Nx.concatenate([left, tensor, right], axis: axis)
           end
 
-        right_padding =
-          if(right_padding > 0) do
-            idx_period = right_reflect_index_period(n)
-            repetitions = div(right_padding, n) + 1
-            idx = idx_period |> Nx.tile([repetitions]) |> Nx.take(Nx.iota({right_padding}))
-            Nx.take(tensor, idx, axis: axis)
-          end
-
-        case({left_padding, right_padding}) do
-          {nil, nil} ->
-            tensor
-
-          {nil, right} ->
-            Nx.concatenate([tensor, right], axis: axis)
-
-          {left, nil} ->
-            Nx.concatenate([left, tensor], axis: axis)
-
-          {left, right} ->
-            Nx.concatenate([left, tensor, right], axis: axis)
-        end
+        padding, axis, _ ->
+          raise ArgumentError,
+                "expected padding config for axis #{axis} to be of the format {left, right}, with left and right as non-negative integers, got: #{inspect(padding)}"
       end
     )
   end
