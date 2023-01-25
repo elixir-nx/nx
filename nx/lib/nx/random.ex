@@ -526,6 +526,80 @@ defmodule Nx.Random do
     end)
   end
 
+  @doc """
+  Randomly shuffles a tensor along an axis
+
+  ## Options
+
+    * `:axis` - the axis along which to shuffle. Defaults to `0`
+    * `:independent` - a boolean that indicates wether the permutations
+      are independent along the given axis. Defaults to `false`
+
+  ## Examples
+
+      iex> key = Nx.Random.key(42)
+      iex> {shuffled, _new_key} = Nx.Random.permutation(key, Nx.iota({3, 4}, axis: 0))
+      iex> shuffled
+      #Nx.Tensor<
+        s64[3][4]
+        [
+          [2, 2, 2, 2],
+          [0, 0, 0, 0],
+          [1, 1, 1, 1]
+        ]
+      >
+
+      iex> key = Nx.Random.key(10)
+      iex> {shuffled, _new_key} = Nx.Random.permutation(key, Nx.iota({3, 4}, axis: 1), independent: true, axis: 1)
+      iex> shuffled
+      #Nx.Tensor<
+        s64[3][4]
+        [
+          [2, 1, 3, 0],
+          [3, 0, 1, 2],
+          [2, 3, 0, 1]
+        ]
+      >
+  """
+  defn permutation(key, tensor, opts \\ []) do
+    opts = keyword!(opts, axis: 0, independent: false)
+    axis = opts[:axis]
+
+    if opts[:independent] do
+      shuffle(key, tensor, axis: axis)
+    else
+      {idx, key} = shuffle(key, Nx.iota({Nx.axis_size(tensor, axis)}), axis: axis)
+      {Nx.take(tensor, idx, axis: axis), key}
+    end
+  end
+
+  defnp shuffle(key, tensor, opts \\ []) do
+    axis = opts[:axis]
+
+    # reference: https://github.com/google/jax/blob/838bc454895ed2086563301936fb0d6d852fd198/jax/_src/random.py#L437
+    exponent = 3
+    uint32max = Nx.Constants.max_finite(:u32)
+
+    num_rounds =
+      Nx.ceil(exponent * Nx.log(Nx.size(tensor)) / Nx.log(uint32max))
+      |> Nx.as_type(:u32)
+
+    {_, out, key} =
+      while {i = 0, tensor, key}, i < num_rounds do
+        keys = split(key)
+        sort_keys = random_bits(keys[1], shape: tensor.shape)
+        tensor = sort_key_val(tensor, sort_keys, axis: axis)
+        {i + 1, tensor, keys[0]}
+      end
+
+    {out, key}
+  end
+
+  defnp sort_key_val(tensor, sort_keys, opts \\ []) do
+    idx = Nx.argsort(sort_keys, axis: opts[:axis])
+    Nx.take_along_axis(tensor, idx, axis: opts[:axis])
+  end
+
   deftransformp next_after_minus_1({_, bits}) do
     # Get the floating point representation of -1 and
     # convert it to a big integer so the precision comes last (after exponent)
