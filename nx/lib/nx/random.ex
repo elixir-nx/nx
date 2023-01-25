@@ -539,7 +539,7 @@ defmodule Nx.Random do
   ## Examples
 
       iex> key = Nx.Random.key(42)
-      iex> {shuffled, _new_key} = Nx.Random.permutation(key, Nx.iota({3, 4}, axis: 0))
+      iex> {shuffled, _new_key} = Nx.Random.shuffle(key, Nx.iota({3, 4}, axis: 0))
       iex> shuffled
       #Nx.Tensor<
         s64[3][4]
@@ -551,7 +551,7 @@ defmodule Nx.Random do
       >
 
       iex> key = Nx.Random.key(10)
-      iex> {shuffled, _new_key} = Nx.Random.permutation(key, Nx.iota({3, 4}, axis: 1), independent: true, axis: 1)
+      iex> {shuffled, _new_key} = Nx.Random.shuffle(key, Nx.iota({3, 4}, axis: 1), independent: true, axis: 1)
       iex> shuffled
       #Nx.Tensor<
         s64[3][4]
@@ -562,21 +562,20 @@ defmodule Nx.Random do
         ]
       >
   """
-  defn permutation(key, tensor, opts \\ []) do
+  defn shuffle(key, tensor, opts \\ []) do
     opts = keyword!(opts, axis: 0, independent: false)
     axis = opts[:axis]
 
     if opts[:independent] do
-      shuffle(key, tensor, axis: axis)
+      shuffle_independent(key, tensor, axis: axis)
     else
-      {idx, key} = shuffle(key, Nx.iota({Nx.axis_size(tensor, axis)}), axis: axis)
+      {idx, key} = shuffle_independent(key, Nx.iota({Nx.axis_size(tensor, axis)}), axis: axis)
       {Nx.take(tensor, idx, axis: axis), key}
     end
   end
 
-  defnp shuffle(key, tensor, opts \\ []) do
+  defnp shuffle_independent(key, tensor, opts \\ []) do
     axis = opts[:axis]
-
     # reference: https://github.com/google/jax/blob/838bc454895ed2086563301936fb0d6d852fd198/jax/_src/random.py#L437
     exponent = 3
     uint32max = Nx.Constants.max_finite(:u32)

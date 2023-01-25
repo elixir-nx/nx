@@ -1261,7 +1261,7 @@ defmodule Nx do
         ]
       >
   """
-  @doc type: :creation
+  @doc type: :creation, deprecated: "Use Nx.Random.shuffle/2 instead"
   def shuffle(tensor, opts \\ []) do
     opts = keyword!(opts, [:axis])
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
