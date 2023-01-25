@@ -1180,6 +1180,10 @@ defmodule Nx.LinAlg do
     * `:max_iter` - `integer`. Defaults to `100`
       Number of maximum iterations before stopping the decomposition
 
+    * `:full_matrices?` - `boolean`. Defaults to `true`
+      If `true`, `u` and `vt` are of shape (M, M), (N, N). Otherwise,
+      the shapes are (M, K) and (K, N), where K = min(M, N).
+
   Note not all options apply to all backends, as backends may have
   specific optimizations that render these mechanisms unnecessary.
 
@@ -1236,15 +1240,40 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> {u, s, vt} = Nx.LinAlg.svd(Nx.tensor([[2, 0, 0], [0, 3, 0], [0, 0, -1], [0, 0, 0]]), full_matrices?: false)
+      iex> u
+      #Nx.Tensor<
+        f32[4][3]
+        [
+          [0.0, 0.9999999403953552, 0.0],
+          [1.0, 0.0, 0.0],
+          [0.0, 0.0, -1.0],
+          [0.0, 0.0, 0.0]
+        ]
+      >
+      iex> s
+      #Nx.Tensor<
+        f32[3]
+        [3.0, 1.9999998807907104, 1.0]
+      >
+      iex> vt
+      #Nx.Tensor<
+        f32[3][3]
+        [
+          [0.0, 1.0, 0.0],
+          [1.0, 0.0, 0.0],
+          [0.0, 0.0, 1.0]
+        ]
+      >
   """
   def svd(tensor, opts \\ []) do
-    opts = keyword!(opts, max_iter: 100)
+    opts = keyword!(opts, max_iter: 100, full_matrices?: true)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
     Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.svd", 2)
 
     output_type = Nx.Type.to_floating(type)
-    {u_shape, s_shape, v_shape} = Nx.Shape.svd(shape)
+    {u_shape, s_shape, v_shape} = Nx.Shape.svd(shape, opts)
     rank = tuple_size(shape)
 
     output =
