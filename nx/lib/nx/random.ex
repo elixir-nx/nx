@@ -532,6 +532,7 @@ defmodule Nx.Random do
   ## Options
 
     * `:axis` - the axis along which to shuffle. Defaults to `0`
+
     * `:independent` - a boolean that indicates wether the permutations
       are independent along the given axis. Defaults to `false`
 
