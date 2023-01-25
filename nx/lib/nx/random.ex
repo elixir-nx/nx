@@ -527,7 +527,7 @@ defmodule Nx.Random do
   end
 
   @doc """
-  Randomly shuffles a tensor along an axis
+  Randomly shuffles tensor elements along an axis.
 
   ## Options
 
