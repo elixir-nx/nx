@@ -576,6 +576,7 @@ defmodule Nx.Random do
 
   defnp shuffle_independent(key, tensor, opts \\ []) do
     axis = opts[:axis]
+
     # reference: https://github.com/google/jax/blob/838bc454895ed2086563301936fb0d6d852fd198/jax/_src/random.py#L437
     exponent = 3
     uint32max = Nx.Constants.max_finite(:u32)
