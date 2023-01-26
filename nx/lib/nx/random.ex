@@ -46,7 +46,7 @@ defmodule Nx.Random do
      constraints between random function calls.
   """
 
-  import Nx.Defn, only: [deftransform: 2, deftransformp: 2, defn: 2, defnp: 2]
+  import Nx.Defn, only: [deftransformp: 2, defn: 2, defnp: 2]
 
   @nbits 32
 
@@ -661,7 +661,7 @@ defmodule Nx.Random do
         [2, 0, 4, 5, 1, 3]
       >
   """
-  deftransform choice(key, tensor, opts) do
+  defn choice(key, tensor, opts) do
     {tensor_shape, n_inputs, n_draws, axis, replace} = validate_choice_opts(tensor, opts)
     tensor = Nx.reshape(tensor, tensor_shape)
 
@@ -735,7 +735,7 @@ defmodule Nx.Random do
         [3, 1, 2, 5, 4, 0]
       >
   """
-  deftransform choice(key, tensor, p, opts) do
+  defn choice(key, tensor, p, opts) do
     {tensor_shape, n_inputs, n_draws, axis, replace} = validate_choice_opts(tensor, opts)
     tensor = Nx.reshape(tensor, tensor_shape)
 
