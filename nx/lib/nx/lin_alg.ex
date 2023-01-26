@@ -1794,7 +1794,7 @@ defmodule Nx.LinAlg do
 
   This also appears in Numerical recipes in the discussion of SVD solutions for
   linear least squares [1].
-  
+
   [1] W. H. Press, S. A. Teukolsky, W. T. Vetterling and B. P. Flannery,
   “Numerical Recipes (3rd edition)”, Cambridge University Press, 2007, page 795.
 
@@ -1809,11 +1809,13 @@ defmodule Nx.LinAlg do
         u64
         2
       >
+
       iex> Nx.LinAlg.matrix_rank(Nx.tensor([[1, 1, 1, 1], [1, 1, 1, 1], [1, 2, 3, 4]]))
       #Nx.Tensor<
         u64
         2
       >
+
       iex> Nx.LinAlg.matrix_rank(Nx.tensor([[1, 1, 1], [2, 2, 2], [8, 9, 10], [-2, 1, 5]]))
       #Nx.Tensor<
         u64
