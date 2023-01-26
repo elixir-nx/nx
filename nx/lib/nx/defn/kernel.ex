@@ -243,6 +243,7 @@ defmodule Nx.Defn.Kernel do
     Nx.Defn.Expr.metadata(expr, %{stop_grad: true, inspect: :stop_grad})
   end
 
+  @doc false
   @deprecated "custom_grad/2 is deprecated, use custom_grad/3 instead"
   def custom_grad(expr, fun) when is_function(fun, 2) do
     Nx.Defn.Expr.metadata(expr, %{custom_grad: fun, inspect: :custom_grad})
@@ -1621,8 +1622,7 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc false
-  # TODO: Deprecate this in Nx v0.5
-  # @deprecated "Use deftransform/2 or deftransformp/2 from Nx.Defn instead"
+  @deprecated "Use deftransform/2 or deftransformp/2 from Nx.Defn instead"
   def transform(arg, fun) when is_function(fun, 1) do
     fun.(arg)
   end

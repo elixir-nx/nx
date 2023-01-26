@@ -942,138 +942,14 @@ defmodule Nx do
     |> then(fn {template, :ok} -> template end)
   end
 
-  @doc """
-  Shortcut for `random_uniform(shape, 0.0, 1.0, opts)`.
-  """
-  # TODO: Deprecate this in Nx v0.5
-  @doc type: :creation, deprecated: "Use Nx.Random.uniform/2 instead"
+  @doc false
+  @deprecated "Use Nx.Random.uniform/2 instead"
   def random_uniform(tensor_or_shape, opts \\ []) do
     random_uniform(tensor_or_shape, 0.0, 1.0, opts)
   end
 
-  @doc """
-  Returns a uniformly-distributed random tensor with the given shape.
-
-  The distribution is bounded on the semi-open interval `[min, max)`.
-  If `min` and `max` are integers, then the tensor has type `{:s, 64}`.
-  Otherwise, a `{:f, 64}` tensor is returned. You can also pass any
-  valid type via the `:type` option.
-
-  If a tensor or a number are given, the shape and default type are
-  taken from them.
-
-  ## Examples
-
-  ### Generating Floats
-
-      iex> t = Nx.random_uniform({10})
-      iex> for <<x::float-32-native <- Nx.to_binary(t)>> do
-      ...>   true = x >= 0.0 and x < 1.0
-      ...> end
-      iex> Nx.shape(t)
-      {10}
-      iex> Nx.type(t)
-      {:f, 32}
-
-      iex> t = Nx.random_uniform({5, 5}, type: :bf16)
-      iex> byte_size(Nx.to_binary(t))
-      50
-      iex> Nx.shape(t)
-      {5, 5}
-      iex> Nx.type(t)
-      {:bf, 16}
-
-      iex> t = Nx.random_uniform({5, 5}, -1.0, 1.0, type: :f64)
-      iex> for <<x::float-64-native <- Nx.to_binary(t)>> do
-      ...>   true = x >= -1.0 and x < 1.0
-      ...> end
-      iex> Nx.shape(t)
-      {5, 5}
-      iex> Nx.type(t)
-      {:f, 64}
-
-  ### Generating Integers
-
-      iex> t = Nx.random_uniform({10}, 5, 10, type: :u8)
-      iex> for <<x::8-unsigned-native <- Nx.to_binary(t)>> do
-      ...>   true = x >= 5 and x < 10
-      ...> end
-      iex> Nx.shape(t)
-      {10}
-      iex> Nx.type(t)
-      {:u, 8}
-
-      iex> t = Nx.random_uniform({5, 5}, -5, 5, type: :s64)
-      iex> for <<x::64-signed-native <- Nx.to_binary(t)>> do
-      ...>   true = x >= -5 and x < 5
-      ...> end
-      iex> Nx.shape(t)
-      {5, 5}
-      iex> Nx.type(t)
-      {:s, 64}
-
-  ### Tensors as shapes
-
-  If given a tensor as a shape, it takes the shape and names from the tensor:
-
-      iex> t = Nx.tensor([[1, 2], [3, 4]], names: [:batch, :data])
-      iex> t = Nx.random_uniform(t)
-      iex> Nx.shape(t)
-      {2, 2}
-      iex> Nx.type(t)
-      {:f, 32}
-      iex> Nx.names(t)
-      [:batch, :data]
-
-      iex> t = Nx.tensor([[1, 2], [3, 4]])
-      iex> t = Nx.random_uniform(t, type: :f32)
-      iex> Nx.shape(t)
-      {2, 2}
-      iex> Nx.type(t)
-      {:f, 32}
-      iex> Nx.names(t)
-      [nil, nil]
-
-  The same applies to numbers:
-
-      iex> t = Nx.random_uniform(10)
-      iex> Nx.shape(t)
-      {}
-      iex> Nx.type(t)
-      {:f, 32}
-
-      iex> t = Nx.random_uniform(10.0)
-      iex> Nx.shape(t)
-      {}
-      iex> Nx.type(t)
-      {:f, 32}
-      iex> Nx.names(t)
-      []
-
-  If you pass `:names` as an option, the resulting tensor will take on those names:
-
-      iex> t = Nx.tensor([[1, 2], [3, 4]], names: [:batch, :data])
-      iex> t = Nx.random_uniform(t, names: [:batch, nil])
-      iex> Nx.shape(t)
-      {2, 2}
-      iex> Nx.type(t)
-      {:f, 32}
-      iex> Nx.names(t)
-      [:batch, nil]
-
-  ## Options
-
-    * `:type` - the type of the tensor
-
-    * `:names` - the names of the tensor dimensions
-
-    * `:backend` - the backend to allocate the tensor on. It is either
-      an atom or a tuple in the shape `{backend, options}`. This option
-      is ignored inside `defn`
-
-  """
-  # TODO: Deprecate this in Nx v0.5
-  @doc type: :creation, deprecated: "Use Nx.Random.uniform/2 instead"
+  @doc false
+  @deprecated "Use Nx.Random.uniform/2 instead"
   def random_uniform(tensor_or_shape, min, max, opts \\ []) do
     opts = keyword!(opts, [:type, :names, :backend])
     %T{type: min_type, shape: min_shape} = min = to_tensor(min)
@@ -1100,98 +976,14 @@ defmodule Nx do
     backend.random_uniform(%T{shape: shape, type: type, names: names}, min, max, backend_options)
   end
 
-  @doc """
-  Shortcut for `random_normal(shape, 0.0, 1.0, opts)`.
-  """
-  # TODO: Deprecate this in Nx v0.5
-  @doc type: :creation, deprecated: "Use Nx.Random instead"
+  @doc false
+  @deprecated "Use Nx.Random instead"
   def random_normal(tensor_or_shape, opts \\ []) do
     random_normal(tensor_or_shape, 0.0, 1.0, opts)
   end
 
-  @doc """
-  Returns a normally-distributed random tensor with the given shape.
-
-  The distribution has mean of `mu` and standard deviation of
-  `sigma`. Return type is one of `{:bf, 16}`, `{:f, 32}` or `{:f, 64}`.
-
-  If a tensor or a number are given, the shape is taken from the tensor.
-
-  ## Examples
-
-      iex> t = Nx.random_normal({10})
-      iex> Nx.shape(t)
-      {10}
-      iex> Nx.type(t)
-      {:f, 32}
-
-      iex> t = Nx.random_normal({5, 5}, 2.0, 1.0, type: :bf16)
-      iex> Nx.shape(t)
-      {5, 5}
-      iex> Nx.type(t)
-      {:bf, 16}
-
-      iex> t = Nx.random_normal({3, 3, 3}, -1.0, 1.0, type: :f32)
-      iex> Nx.shape(t)
-      {3, 3, 3}
-      iex> Nx.type(t)
-      {:f, 32}
-
-  If given a tensor as a shape, it takes the shape, names, and default type
-  from the tensor:
-
-      iex> t = Nx.tensor([[1.0, 2.0], [3.0, 4.0]], names: [:batch, :data])
-      iex> t = Nx.random_normal(t)
-      iex> Nx.shape(t)
-      {2, 2}
-      iex> Nx.type(t)
-      {:f, 32}
-      iex> Nx.names(t)
-      [:batch, :data]
-
-      iex> t = Nx.tensor([[1.0, 2.0], [3.0, 4.0]])
-      iex> t = Nx.random_normal(t, type: :f32)
-      iex> Nx.shape(t)
-      {2, 2}
-      iex> Nx.type(t)
-      {:f, 32}
-      iex> Nx.names(t)
-      [nil, nil]
-
-  The same applies to numbers:
-
-      iex> t = Nx.random_normal(10.0)
-      iex> Nx.shape(t)
-      {}
-      iex> Nx.type(t)
-      {:f, 32}
-      iex> Nx.names(t)
-      []
-
-  If you pass the `:names` option, the resulting tensor will take on those names:
-
-      iex> t = Nx.tensor([[1, 2], [3, 4]], names: [:batch, :data])
-      iex> t = Nx.random_normal(t, names: [:batch, nil])
-      iex> Nx.shape(t)
-      {2, 2}
-      iex> Nx.type(t)
-      {:f, 32}
-      iex> Nx.names(t)
-      [:batch, nil]
-
-  ## Options
-
-    * `:type` - the type of the tensor
-
-    * `:names` - the names of the tensor dimensions
-
-    * `:backend` - the backend to allocate the tensor on. It is either
-      an atom or a tuple in the shape `{backend, options}`. This option
-      is ignored inside `defn`
-
-  """
-  # TODO: Deprecate this in Nx v0.5
-  @doc type: :creation, deprecated: "Use Nx.Random instead"
+  @doc false
+  @deprecated "Use Nx.Random instead"
   def random_normal(tensor_or_shape, mu, sigma, opts \\ []) do
     opts = keyword!(opts, [:type, :names, :backend])
     %T{type: mu_type, shape: mu_shape} = mu = to_tensor(mu)
@@ -1221,47 +1013,8 @@ defmodule Nx do
     backend.random_normal(%T{shape: shape, type: type, names: names}, mu, sigma, backend_options)
   end
 
-  @doc """
-  Shuffles tensor elements.
-
-  By default, shuffles elements within the whole tensor. When `:axis`
-  is given, shuffles the tensor along the specific axis instead.
-
-  ## Options
-
-    * `:axis` - the axis to shuffle along
-
-  ## Examples
-
-  Shuffling all elements:
-
-      t = Nx.tensor([[1, 2], [3, 4], [5, 6]])
-      Nx.shuffle(t)
-      #=>
-      #Nx.Tensor<
-        s64[3][2]
-        [
-          [5, 1],
-          [2, 3],
-          [6, 4]
-        ]
-      >
-
-  Shuffling rows in a two-dimensional tensor:
-
-      t = Nx.tensor([[1, 2], [3, 4], [5, 6]])
-      Nx.shuffle(t, axis: 0)
-      #=>
-      #Nx.Tensor<
-        s64[3][2]
-        [
-          [5, 6],
-          [1, 2],
-          [3, 4]
-        ]
-      >
-  """
-  @doc type: :creation, deprecated: "Use Nx.Random.shuffle/2 instead"
+  @doc false
+  @deprecated "Use Nx.Random.shuffle/2 instead"
   def shuffle(tensor, opts \\ []) do
     opts = keyword!(opts, [:axis])
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
@@ -2043,8 +1796,8 @@ defmodule Nx do
     end
   end
 
+  @doc false
   @deprecated "Use to_batched/3 instead"
-  @doc type: :conversion
   def to_batched_list(tensor, batch_size, opts \\ []) do
     tensor |> to_batched(batch_size, opts) |> Enum.to_list()
   end
