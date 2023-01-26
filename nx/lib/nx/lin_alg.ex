@@ -1800,7 +1800,7 @@ defmodule Nx.LinAlg do
   “Numerical Recipes (3rd edition)”, Cambridge University Press, 2007, page 795.
 
   ## Options
-  
+
     * `:eps` - Rounding error threshold used to assume values as 0. Defaults to `1.0e-9`
 
   ## Examples
