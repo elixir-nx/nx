@@ -1441,7 +1441,7 @@ defmodule Nx.Defn.Kernel do
           hook_token(token, another_value)
         end
 
-      attach_token(result)
+      attach_token(token, result)
 
   Instead, you must write:
 
