@@ -1,8 +1,6 @@
 defmodule Nx.LinAlg do
   @moduledoc """
   Nx conveniences for linear algebra.
-
-  This module can be used in `defn`.
   """
 
   import Nx.Shared
@@ -1052,17 +1050,14 @@ defmodule Nx.LinAlg do
         adjoint(tensor) / norm(tensor) ** 2
 
       _ ->
-        {u, s, vt} = Nx.LinAlg.svd(tensor)
+        {u, s, vt} = Nx.LinAlg.svd(tensor, full_matrices?: false)
         v = adjoint(vt)
         ut = adjoint(u)
 
         s_idx = Nx.abs(s) < opts[:eps]
         adjusted_s = Nx.select(s_idx, 1, s)
-        s_shape = {Nx.axis_size(v, -1), Nx.axis_size(ut, -2)}
 
-        s_inv_matrix =
-          Nx.broadcast(0, s_shape)
-          |> Nx.put_diagonal(Nx.select(s_idx, 0, 1 / adjusted_s))
+        s_inv_matrix = Nx.make_diagonal(Nx.select(s_idx, 0, 1 / adjusted_s))
 
         v |> Nx.dot(s_inv_matrix) |> Nx.dot(ut)
     end
@@ -1787,75 +1782,5 @@ defmodule Nx.LinAlg do
     t
     |> Nx.take_diagonal(offset: offset)
     |> Nx.product(axes: [rank - 2])
-  end
-
-  @doc """
-  Return matrix rank of input M × N matrix using Singular Value Decomposition method.
-
-  Approximate the number of linearly independent rows by calculating the number
-  of singular values greater than `eps * max(singular values) * max(M, N)`.
-
-  This also appears in Numerical recipes in the discussion of SVD solutions for
-  linear least squares [1].
-
-  [1] W. H. Press, S. A. Teukolsky, W. T. Vetterling and B. P. Flannery,
-  “Numerical Recipes (3rd edition)”, Cambridge University Press, 2007, page 795.
-
-  ## Options
-    * `:eps` - Rounding error threshold used to assume values as 0. Defaults to `1.0e-10`
-
-  ## Examples
-
-      iex> Nx.LinAlg.matrix_rank(Nx.tensor([[1, 2], [3, 4]]))
-      #Nx.Tensor<
-        u64
-        2
-      >
-
-      iex> Nx.LinAlg.matrix_rank(Nx.tensor([[1, 1, 1, 1], [1, 1, 1, 1], [1, 2, 3, 4]]))
-      #Nx.Tensor<
-        u64
-        2
-      >
-
-      iex> Nx.LinAlg.matrix_rank(Nx.tensor([[1, 1, 1], [2, 2, 2], [8, 9, 10], [-2, 1, 5]]))
-      #Nx.Tensor<
-        u64
-        3
-      >
-
-  ## Error cases
-
-      iex> Nx.LinAlg.matrix_rank(Nx.tensor([1, 2, 3]))
-      ** (ArgumentError) tensor must have rank 2, got rank 1 with shape {3}
-  """
-  @doc from_backend: false
-  defn matrix_rank(a, opts \\ []) do
-    # TODO: support batching when SVD supports it too
-    opts = keyword!(opts, eps: 1.0e-10)
-    shape = Nx.shape(a)
-    size = Nx.rank(shape)
-
-    if size != 2 do
-      raise(
-        ArgumentError,
-        "tensor must have rank 2, got rank #{inspect(size)} with shape #{inspect(shape)}"
-      )
-    end
-
-    # Calculate max dimension
-    {row_dim, col_dim} = shape
-    max_dim = if row_dim > col_dim, do: row_dim, else: col_dim
-
-    # Calculate max singular value
-    {_u, s, _v} = Nx.LinAlg.svd(a)
-
-    s_max = Nx.reduce_max(s)
-
-    # Set tolerance values
-    tol = opts[:eps] * max_dim * s_max
-
-    # Calculate matrix rank
-    Nx.sum(s > tol)
   end
 end
