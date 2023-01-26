@@ -311,8 +311,6 @@ defmodule TorchxTest do
       s_diag = Nx.eye({4, 10}) |> Nx.put_diagonal(s)
       a = u |> Nx.dot(s_diag) |> Nx.dot(vt)
       assert_all_close(t, a)
-
-
       assert {%{shape: {4, 4}} = u, %{shape: {4}} = s, %{shape: {10, 10}} = vt} = Nx.LinAlg.svd(t)
 
       s_diag = Nx.eye({4, 10}) |> Nx.put_diagonal(s)
