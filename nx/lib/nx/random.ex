@@ -661,8 +661,20 @@ defmodule Nx.Random do
         [2, 0, 4, 5, 1, 3]
       >
   """
-  deftransform choice(key, tensor), do: choice_uniform(key, tensor, [])
-  deftransform choice(key, tensor, opts) when is_list(opts), do: choice_uniform(key, tensor, opts)
+  deftransform choice(key, tensor, opts) do
+    {tensor_shape, n_inputs, n_draws, axis, replace} = validate_choice_opts(tensor, opts)
+    tensor = Nx.reshape(tensor, tensor_shape)
+
+    if replace do
+      {idx, key} = randint(key, 0, n_inputs, shape: {n_draws})
+      result = Nx.take(tensor, idx, axis: axis)
+      {result, key}
+    else
+      {shuffled, key} = shuffle(key, tensor, axis: axis)
+      result = Nx.slice_along_axis(shuffled, 0, n_draws, axis: axis)
+      {result, key}
+    end
+  end
 
   @doc """
   Generates random samples from a tensor with specified probabilities.
@@ -723,8 +735,39 @@ defmodule Nx.Random do
         [3, 1, 2, 5, 4, 0]
       >
   """
-  deftransform choice(key, tensor, p), do: choice_probabilities(key, tensor, p)
-  deftransform choice(key, tensor, p, opts), do: choice_probabilities(key, tensor, p, opts)
+  deftransform choice(key, tensor, p, opts) do
+    {tensor_shape, n_inputs, n_draws, axis, replace} = validate_choice_opts(tensor, opts)
+    tensor = Nx.reshape(tensor, tensor_shape)
+
+    case {Nx.size(p), Nx.axis_size(tensor, axis)} do
+      {n, n} ->
+        :ok
+
+      _ ->
+        raise ArgumentError, "input and probabilities tensors must have the same shape"
+    end
+
+    if replace do
+      p_cumulative = Nx.cumulative_sum(p)
+      {uniform, key} = uniform(key, shape: {n_draws}, type: Nx.type(p_cumulative))
+      r = p_cumulative[-1] * (1 - uniform)
+
+      # naïve implementation of jax.numpy.searchsorted
+      p_cumulative = Nx.new_axis(p_cumulative, 0)
+      r = Nx.new_axis(r, 1)
+      idx = Nx.argmin(p_cumulative <= r, tie_break: :low, axis: 1)
+
+      result = Nx.take(tensor, idx, axis: axis)
+      {result, key}
+    else
+      {g, k} = gumbel(key, shape: {n_inputs}, type: Nx.type(p))
+      g = -g - Nx.log(p)
+      idx = g |> Nx.argsort() |> Nx.slice_along_axis(0, n_draws, axis: 0)
+
+      result = Nx.take(tensor, idx, axis: axis)
+      {result, k}
+    end
+  end
 
   deftransformp validate_choice_opts(tensor, opts) do
     opts = Keyword.validate!(opts, [:samples, :axis, replace: true])
@@ -761,55 +804,6 @@ defmodule Nx.Random do
     end
 
     {tensor_shape, n_inputs, n_draws, axis, replace}
-  end
-
-  defnp choice_uniform(key, tensor, opts) do
-    {tensor_shape, n_inputs, n_draws, axis, replace} = validate_choice_opts(tensor, opts)
-    tensor = Nx.reshape(tensor, tensor_shape)
-
-    if replace do
-      {idx, key} = randint(key, 0, n_inputs, shape: {n_draws})
-      result = Nx.take(tensor, idx, axis: axis)
-      {result, key}
-    else
-      {shuffled, key} = shuffle(key, tensor, axis: axis)
-      result = Nx.slice_along_axis(shuffled, 0, n_draws, axis: axis)
-      {result, key}
-    end
-  end
-
-  defnp choice_probabilities(key, tensor, p, opts \\ []) do
-    {tensor_shape, n_inputs, n_draws, axis, replace} = validate_choice_opts(tensor, opts)
-    tensor = Nx.reshape(tensor, tensor_shape)
-
-    case {Nx.size(p), Nx.axis_size(tensor, axis)} do
-      {n, n} ->
-        :ok
-
-      _ ->
-        raise ArgumentError, "input and probabilities tensors must have the same shape"
-    end
-
-    if replace do
-      p_cumulative = Nx.cumulative_sum(p)
-      {uniform, key} = uniform(key, shape: {n_draws}, type: Nx.type(p_cumulative))
-      r = p_cumulative[-1] * (1 - uniform)
-
-      # naïve implementation of jax.numpy.searchsorted
-      p_cumulative = Nx.new_axis(p_cumulative, 0)
-      r = Nx.new_axis(r, 1)
-      idx = Nx.argmin(p_cumulative <= r, tie_break: :low, axis: 1)
-
-      result = Nx.take(tensor, idx, axis: axis)
-      {result, key}
-    else
-      {g, k} = gumbel(key, shape: {n_inputs}, type: Nx.type(p))
-      g = -g - Nx.log(p)
-      idx = g |> Nx.argsort() |> Nx.slice_along_axis(0, n_draws, axis: 0)
-
-      result = Nx.take(tensor, idx, axis: axis)
-      {result, k}
-    end
   end
 
   @doc """
