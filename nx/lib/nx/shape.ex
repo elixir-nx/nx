@@ -1044,7 +1044,7 @@ defmodule Nx.Shape do
       ** (ArgumentError) given axis (3) invalid for shape with rank 3
 
       iex> Nx.Shape.normalize_axis({4, 2, 5}, :z, [:batch, :x, :y])
-      ** (ArgumentError) key :z not found in tensor with names [:batch, :x, :y]
+      ** (ArgumentError) name :z not found in tensor with names [:batch, :x, :y]
 
       iex> Nx.Shape.normalize_axis({4, 2, 5}, nil, [:batch, nil, nil])
       ** (ArgumentError) axis name cannot be nil
@@ -1065,7 +1065,7 @@ defmodule Nx.Shape do
     if axis in names do
       Enum.with_index(names)[axis]
     else
-      raise ArgumentError, "key #{inspect(axis)} not found in tensor with names #{inspect(names)}"
+      raise ArgumentError, "name #{inspect(axis)} not found in tensor with names #{inspect(names)}"
     end
   end
 

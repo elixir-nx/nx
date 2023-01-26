@@ -3432,7 +3432,7 @@ defmodule Nx do
       ** (ArgumentError) given axis (3) invalid for shape with rank 3
 
       iex> Nx.axis_index(Nx.iota({100, 10, 20}, names: [:batch, :x, :y]), :z)
-      ** (ArgumentError) key :z not found in tensor with names [:batch, :x, :y]
+      ** (ArgumentError) name :z not found in tensor with names [:batch, :x, :y]
 
   """
   @doc type: :shape
@@ -6650,19 +6650,21 @@ defmodule Nx do
 
   ## Examples
 
+  By default the sum always returns a scalar:
+
       iex> Nx.sum(Nx.tensor(42))
       #Nx.Tensor<
         s64
         42
       >
 
-      iex> Nx.sum(Nx.tensor([1, 2, 3], names: [:x]))
+      iex> Nx.sum(Nx.tensor([1, 2, 3]))
       #Nx.Tensor<
         s64
         6
       >
 
-      iex> Nx.sum(Nx.tensor([[1.0, 2.0], [3.0, 4.0]], names: [:x, :y]))
+      iex> Nx.sum(Nx.tensor([[1.0, 2.0], [3.0, 4.0]]))
       #Nx.Tensor<
         f32
         10.0
@@ -6671,13 +6673,13 @@ defmodule Nx do
   Giving a tensor with low precision casts it to a higher
   precision to make sure the sum does not overflow:
 
-      iex> Nx.sum(Nx.tensor([[101, 102], [103, 104]], type: :s8, names: [:x, :y]))
+      iex> Nx.sum(Nx.tensor([[101, 102], [103, 104]], type: :s8))
       #Nx.Tensor<
         s64
         410
       >
 
-      iex> Nx.sum(Nx.tensor([[101, 102], [103, 104]], type: :s16, names: [:x, :y]))
+      iex> Nx.sum(Nx.tensor([[101, 102], [103, 104]], type: :s16))
       #Nx.Tensor<
         s64
         410
@@ -6685,7 +6687,7 @@ defmodule Nx do
 
   ### Aggregating over an axis
 
-      iex> Nx.sum(Nx.tensor([1, 2, 3], names: [:x]), axes: [0])
+      iex> Nx.sum(Nx.tensor([1, 2, 3]), axes: [0])
       #Nx.Tensor<
         s64
         6
@@ -6693,80 +6695,53 @@ defmodule Nx do
 
   Same tensor over different axes combinations:
 
-      iex> t = Nx.tensor(
-      ...>   [
-      ...>     [
-      ...>       [1, 2, 3],
-      ...>       [4, 5, 6]
-      ...>     ],
-      ...>     [
-      ...>       [7, 8, 9],
-      ...>       [10, 11, 12]
-      ...>     ]
-      ...>   ],
-      ...>   names: [:x, :y, :z]
-      ...> )
+      iex> t = Nx.iota({2, 2, 3}, names: [:x, :y, :z])
       iex> Nx.sum(t, axes: [:x])
       #Nx.Tensor<
         s64[y: 2][z: 3]
         [
-          [8, 10, 12],
-          [14, 16, 18]
+          [6, 8, 10],
+          [12, 14, 16]
         ]
       >
       iex> Nx.sum(t, axes: [:y])
       #Nx.Tensor<
         s64[x: 2][z: 3]
         [
-          [5, 7, 9],
-          [17, 19, 21]
+          [3, 5, 7],
+          [15, 17, 19]
         ]
       >
       iex> Nx.sum(t, axes: [:z])
       #Nx.Tensor<
         s64[x: 2][y: 2]
         [
-          [6, 15],
-          [24, 33]
+          [3, 12],
+          [21, 30]
         ]
       >
       iex> Nx.sum(t, axes: [:x, :z])
       #Nx.Tensor<
         s64[y: 2]
-        [30, 48]
-      >
-      iex> Nx.sum(t, axes: [:z])
-      #Nx.Tensor<
-        s64[x: 2][y: 2]
-        [
-          [6, 15],
-          [24, 33]
-        ]
+        [24, 42]
       >
       iex> Nx.sum(t, axes: [-3])
       #Nx.Tensor<
         s64[y: 2][z: 3]
         [
-          [8, 10, 12],
-          [14, 16, 18]
+          [6, 8, 10],
+          [12, 14, 16]
         ]
       >
 
   ### Keeping axes
 
-      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
-      iex> Nx.sum(t, axes: [:z], keep_axes: true)
+      iex> t = Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
+      iex> Nx.sum(t, axes: [:x], keep_axes: true)
       #Nx.Tensor<
-        s64[x: 2][y: 2][z: 1]
+        s64[x: 1][y: 2]
         [
-          [
-            [6],
-            [15]
-          ],
-          [
-            [24],
-            [33]
-          ]
+          [4, 6]
         ]
       >
 
@@ -6813,7 +6788,7 @@ defmodule Nx do
 
   ### Aggregating over an axis
 
-      iex> Nx.mean(Nx.tensor([1, 2, 3], names: [:x]), axes: [0])
+      iex> Nx.mean(Nx.tensor([1, 2, 3]), axes: [0])
       #Nx.Tensor<
         f32
         2.0
@@ -6825,47 +6800,47 @@ defmodule Nx do
         2.0
       >
 
-      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      iex> t = Nx.tensor(Nx.iota({2, 2, 3}), names: [:x, :y, :z])
       iex> Nx.mean(t, axes: [:x])
       #Nx.Tensor<
         f32[y: 2][z: 3]
         [
-          [4.0, 5.0, 6.0],
-          [7.0, 8.0, 9.0]
+          [3.0, 4.0, 5.0],
+          [6.0, 7.0, 8.0]
         ]
       >
 
-      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      iex> t = Nx.tensor(Nx.iota({2, 2, 3}), names: [:x, :y, :z])
       iex> Nx.mean(t, axes: [:x, :z])
       #Nx.Tensor<
         f32[y: 2]
-        [5.0, 8.0]
+        [4.0, 7.0]
       >
 
-      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      iex> t = Nx.tensor(Nx.iota({2, 2, 3}), names: [:x, :y, :z])
       iex> Nx.mean(t, axes: [-1])
       #Nx.Tensor<
         f32[x: 2][y: 2]
         [
-          [2.0, 5.0],
-          [8.0, 11.0]
+          [1.0, 4.0],
+          [7.0, 10.0]
         ]
       >
 
   ### Keeping axes
 
-      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      iex> t = Nx.tensor(Nx.iota({2, 2, 3}), names: [:x, :y, :z])
       iex> Nx.mean(t, axes: [-1], keep_axes: true)
       #Nx.Tensor<
         f32[x: 2][y: 2][z: 1]
         [
           [
-            [2.0],
-            [5.0]
+            [1.0],
+            [4.0]
           ],
           [
-            [8.0],
-            [11.0]
+            [7.0],
+            [10.0]
           ]
         ]
       >
@@ -6932,28 +6907,6 @@ defmodule Nx do
         2.444444417953491
       >
 
-      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
-      iex> weights = Nx.tensor([[[0, 1, 2], [1, 1, 0]], [[-1, 1, -1], [1, 1, -1]]])
-      iex> Nx.weighted_mean(t, weights, axes: [:x])
-      #Nx.Tensor<
-        f32[y: 2][z: 3]
-        [
-          [7.0, 5.0, -3.0],
-          [7.0, 8.0, 12.0]
-        ]
-      >
-
-      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
-      iex> weights = Nx.tensor([[[0, 1, 2], [1, 1, 0]], [[-1, 1, -1], [1, 1, -1]]])
-      iex> Nx.weighted_mean(t, weights, axes: [-1])
-      #Nx.Tensor<
-        f32[x: 2][y: 2]
-        [
-          [2.6666667461395264, 4.5],
-          [8.0, 9.0]
-        ]
-      >
-
       iex> t = Nx.iota({3, 4})
       iex> weights = Nx.tensor([1, 2, 3, 4])
       iex> Nx.weighted_mean(t, weights, axes: [1])
@@ -6973,23 +6926,21 @@ defmodule Nx do
         ]
       >
 
-
-
   ### Keeping axes
 
-      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      iex> t = Nx.tensor(Nx.iota({2, 2, 3}), names: [:x, :y, :z])
       iex> weights = Nx.tensor([[[0, 1, 2], [1, 1, 0]], [[-1, 1, -1], [1, 1, -1]]])
       iex> Nx.weighted_mean(t, weights, axes: [-1], keep_axes: true)
       #Nx.Tensor<
         f32[x: 2][y: 2][z: 1]
         [
           [
-            [2.6666667461395264],
-            [4.5]
+            [1.6666666269302368],
+            [3.5]
           ],
           [
-            [8.0],
-            [9.0]
+            [7.0],
+            [8.0]
           ]
         ]
       >
@@ -7026,7 +6977,7 @@ defmodule Nx do
         weights = reshape(weights, dims_to_reshape)
         dims_to_swap = for i <- 0..(tuple_size(dims_to_reshape) - 1), do: i
         checked_axes = if is_list(axes), do: Enum.at(axes, 0), else: axes
-        dims_to_swap = swap(dims_to_swap, checked_axes, -1)
+        dims_to_swap = swap_last(dims_to_swap, checked_axes)
 
         transpose(weights, axes: dims_to_swap)
       else
@@ -7041,17 +6992,19 @@ defmodule Nx do
     |> divide(weights_sum)
   end
 
-  defp swap(a, i1, i2) do
-    e1 = Enum.fetch!(a, i1)
-    e2 = Enum.fetch!(a, i2)
+  defp swap_last(a, i) do
+    e1 = Enum.fetch!(a, i)
+    e2 = Enum.fetch!(a, -1)
 
     a
-    |> List.replace_at(i1, e2)
-    |> List.replace_at(i2, e1)
+    |> List.replace_at(i, e2)
+    |> List.replace_at(-1, e1)
   end
 
   @doc """
   Returns the median for the tensor.
+
+  The median is the value in the middle of a data set.
 
   If the `:axis` option is given, it aggregates over
   that dimension, effectively removing it. `axis: 0`
@@ -7098,13 +7051,13 @@ defmodule Nx do
         [2, 5]
       >
 
-      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      iex> t = Nx.tensor(Nx.iota({2, 2, 3}), names: [:x, :y, :z])
       iex> Nx.median(t, axis: :x)
       #Nx.Tensor<
         f32[y: 2][z: 3]
         [
-          [4.0, 5.0, 6.0],
-          [7.0, 8.0, 9.0]
+          [3.0, 4.0, 5.0],
+          [6.0, 7.0, 8.0]
         ]
       >
 
@@ -7184,7 +7137,9 @@ defmodule Nx do
   end
 
   @doc """
-  Returns the mode of a tensor (the value that appears most often).
+  Returns the mode of a tensor.
+
+  The mode is the value that appears most often.
 
   If the `:axis` option is given, it aggregates over
   that dimension, effectively removing it. `axis: 0`
@@ -7237,13 +7192,11 @@ defmodule Nx do
         [2, 1]
       >
 
-      iex> Nx.mode(Nx.tensor([[[[1]]]]), axis: 1)
+      iex> Nx.mode(Nx.tensor([[[1]]]), axis: 1)
       #Nx.Tensor<
-        s64[1][1][1]
+        s64[1][1]
         [
-          [
-            [1]
-          ]
+          [1]
         ]
       >
 
@@ -7274,17 +7227,6 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.mode(Nx.tensor([[[[1]]]]), axis: 1, keep_axis: true)
-      #Nx.Tensor<
-        s64[1][1][1][1]
-        [
-          [
-            [
-              [1]
-            ]
-          ]
-        ]
-      >
   """
   @doc type: :aggregation, from_backend: false
   def mode(tensor, opts \\ []) do
@@ -7386,19 +7328,21 @@ defmodule Nx do
 
   ## Examples
 
+  By default the product always returns a scalar:
+
       iex> Nx.product(Nx.tensor(42))
       #Nx.Tensor<
         s64
         42
       >
 
-      iex> Nx.product(Nx.tensor([1, 2, 3], names: [:x]))
+      iex> Nx.product(Nx.tensor([1, 2, 3]))
       #Nx.Tensor<
         s64
         6
       >
 
-      iex> Nx.product(Nx.tensor([[1.0, 2.0], [3.0, 4.0]], names: [:x, :y]))
+      iex> Nx.product(Nx.tensor([[1.0, 2.0], [3.0, 4.0]]))
       #Nx.Tensor<
         f32
         24.0
@@ -7421,7 +7365,7 @@ defmodule Nx do
 
   ### Aggregating over an axis
 
-      iex> Nx.product(Nx.tensor([1, 2, 3], names: [:x]), axes: [0])
+      iex> Nx.product(Nx.tensor([1, 2, 3]), axes: [0])
       #Nx.Tensor<
         s64
         6
@@ -7429,71 +7373,59 @@ defmodule Nx do
 
   Same tensor over different axes combinations:
 
-      iex> t = Nx.tensor(
-      ...>   [
-      ...>     [
-      ...>       [1, 2, 3],
-      ...>       [4, 5, 6]
-      ...>     ],
-      ...>     [
-      ...>       [7, 8, 9],
-      ...>       [10, 11, 12]
-      ...>     ]
-      ...>   ],
-      ...>   names: [:x, :y, :z]
-      ...> )
+      iex> t = Nx.iota({2, 2, 3}, names: [:x, :y, :z])
       iex> Nx.product(t, axes: [:x])
       #Nx.Tensor<
         s64[y: 2][z: 3]
         [
-          [7, 16, 27],
-          [40, 55, 72]
+          [0, 7, 16],
+          [27, 40, 55]
         ]
       >
       iex> Nx.product(t, axes: [:y])
       #Nx.Tensor<
         s64[x: 2][z: 3]
         [
-          [4, 10, 18],
-          [70, 88, 108]
+          [0, 4, 10],
+          [54, 70, 88]
         ]
       >
       iex> Nx.product(t, axes: [:x, :z])
       #Nx.Tensor<
         s64[y: 2]
-        [3024, 158400]
+        [0, 59400]
       >
       iex> Nx.product(t, axes: [:z])
       #Nx.Tensor<
         s64[x: 2][y: 2]
         [
-          [6, 120],
-          [504, 1320]
+          [0, 60],
+          [336, 990]
         ]
       >
       iex> Nx.product(t, axes: [-3])
       #Nx.Tensor<
         s64[y: 2][z: 3]
         [
-          [7, 16, 27],
-          [40, 55, 72]
+          [0, 7, 16],
+          [27, 40, 55]
         ]
       >
 
   ### Keeping axes
 
-      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      iex> t = Nx.iota({2, 2, 3}, names: [:x, :y, :z])
       iex> Nx.product(t, axes: [:z], keep_axes: true)
       #Nx.Tensor<
         s64[x: 2][y: 2][z: 1]
         [
           [
-            [6],
-            [120]
+            [0],
+            [60]
           ],
           [
-            [504],
-            [1320]
+            [336],
+            [990]
           ]
         ]
       >
@@ -7738,10 +7670,10 @@ defmodule Nx do
 
   ### Aggregating over an axis
 
-      iex> t = Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]], names: [:x, :y, :z])
-      iex> Nx.argmax(t, axis: :x)
+      iex> t = Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]])
+      iex> Nx.argmax(t, axis: 0)
       #Nx.Tensor<
-        s64[y: 2][z: 3]
+        s64[2][3]
         [
           [1, 0, 0],
           [1, 1, 0]
@@ -7850,10 +7782,10 @@ defmodule Nx do
 
   ### Aggregating over an axis
 
-      iex> t = Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]], names: [:x, :y, :z])
-      iex> Nx.argmin(t, axis: :x)
+      iex> t = Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]])
+      iex> Nx.argmin(t, axis: 0)
       #Nx.Tensor<
-        s64[y: 2][z: 3]
+        s64[2][3]
         [
           [0, 0, 0],
           [0, 0, 0]
@@ -11888,37 +11820,37 @@ defmodule Nx do
         1.29099440574646
       >
 
-      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]), axes: [0])
+      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [10, 20]]), axes: [0])
       #Nx.Tensor<
         f32[2]
-        [1.0, 1.0]
+        [4.5, 9.0]
       >
 
-      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]), axes: [1])
+      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [10, 20]]), axes: [1])
       #Nx.Tensor<
         f32[2]
-        [0.5, 0.5]
+        [0.5, 5.0]
       >
 
-      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]), axes: [0], ddof: 1)
+      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [10, 20]]), axes: [0], ddof: 1)
       #Nx.Tensor<
         f32[2]
-        [1.4142135381698608, 1.4142135381698608]
+        [6.363961219787598, 12.727922439575195]
       >
 
-      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]), axes: [1], ddof: 1)
+      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [10, 20]]), axes: [1], ddof: 1)
       #Nx.Tensor<
         f32[2]
-        [0.7071067690849304, 0.7071067690849304]
+        [0.7071067690849304, 7.071067810058594]
       >
 
   ### Keeping axes
 
-      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]), keep_axes: true)
+      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [10, 20]]), keep_axes: true)
       #Nx.Tensor<
         f32[1][1]
         [
-          [1.1180340051651]
+          [7.628073215484619]
         ]
       >
   """
