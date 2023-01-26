@@ -815,8 +815,35 @@ defmodule Nx.Random do
       random samples. Defaults to `{}`
 
     * `:type` - the floating-point output type. Defaults to `{:f, 32}`
+
+  ## Examples
+
+      iex> {result, _key} = Nx.Random.gumbel(Nx.Random.key(1))
+      iex> result
+      #Nx.Tensor<
+        f32
+        -0.7294610142707825
+      >
+
+      iex> {result, _key} = Nx.Random.gumbel(Nx.Random.key(1), shape: {2, 3})
+      iex> result
+      #Nx.Tensor<
+        f32[2][3]
+        [
+          [0.6247938275337219, -0.21740718185901642, 0.7678327560424805],
+          [0.7778404355049133, 4.0895304679870605, 0.3029090166091919]
+        ]
+      >
   """
   defn gumbel(key, opts \\ []) do
+    keys = split(key)
+    {gumbel_split(keys[1], opts), keys[0]}
+  end
+
+  @doc """
+  Same as `gumbel/2`, but assumes the key has been split beforehand.
+  """
+  defn gumbel_split(key, opts \\ []) do
     opts = keyword!(opts, shape: {}, type: {:f, 32})
     type = opts[:type]
     shape = opts[:shape]
@@ -825,12 +852,10 @@ defmodule Nx.Random do
       raise ArgumentError, "output type must be floating-point, got: #{inspect(type)}"
     end
 
-    {u, k} =
-      uniform(key, Nx.Constants.smallest_positive_normal(type), 1, shape: shape, type: type)
+    u =
+      uniform_split(key, Nx.Constants.smallest_positive_normal(type), 1, shape: shape, type: type)
 
-    result = -Nx.log(-Nx.log(u))
-
-    {result, k}
+    -Nx.log(-Nx.log(u))
   end
 
   deftransformp next_after_minus_1({_, bits}) do
