@@ -292,6 +292,19 @@ defmodule Nx.Constants do
     Nx.tensor(Complex.new(0, 1), opts)
   end
 
+  @doc """
+  Returns the smallest normal floating point number.
+
+  The smallest normal floating point number is the smallest positive value with
+  1 as the leading bit for the mantissa.
+
+  Accepts the same options as `Nx.tensor/2`
+  """
+  def smallest_normal(type, opts \\ []) do
+    type = Nx.Type.normalize!(type)
+    from_binary(Nx.Type.smallest_normal(type), type, opts)
+  end
+
   defp from_binary(binary, type, opts) do
     opts = keyword!(opts, [:backend])
     {backend, backend_options} = backend_from_options!(opts) || Nx.default_backend()
