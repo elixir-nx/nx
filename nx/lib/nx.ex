@@ -1022,11 +1022,11 @@ defmodule Nx do
     if axis = opts[:axis] do
       axis = Nx.Shape.normalize_axis(shape, axis, names)
       size = Nx.axis_size(tensor, axis)
-      permutation = Nx.random_uniform({size}) |> Nx.argsort()
+      permutation = random_uniform({size}) |> Nx.argsort()
       Nx.take(tensor, permutation, axis: axis)
     else
       flattened = Nx.flatten(tensor)
-      permutation = flattened |> Nx.random_uniform() |> Nx.argsort()
+      permutation = flattened |> random_uniform() |> Nx.argsort()
       flattened |> Nx.take(permutation) |> Nx.reshape(tensor)
     end
   end

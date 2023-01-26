@@ -115,13 +115,5 @@ defmodule Nx.TensorTest do
     test "on iota" do
       assert_raise RuntimeError, "not supported", fn -> Nx.iota({2, 2}) end
     end
-
-    test "on random_normal" do
-      assert_raise RuntimeError, "not supported", fn -> Nx.random_normal({2, 2}) end
-    end
-
-    test "on random_uniform" do
-      assert_raise RuntimeError, "not supported", fn -> Nx.random_uniform({2, 2}) end
-    end
   end
 end

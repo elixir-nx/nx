@@ -356,8 +356,6 @@ defmodule Nx.DefnTest do
   describe "creation ops" do
     defn iota(t), do: Nx.iota(Nx.shape(t))
     defn eye, do: Nx.eye(2)
-    defn random_uniform(t), do: Nx.random_uniform(t, 0.0, 2.0)
-    defn random_normal(t), do: Nx.random_normal(t, 0.0, 1.0)
 
     test "iota" do
       assert %T{shape: {3}, data: %Expr{op: :iota, args: [nil]}} = iota(Nx.tensor([1, 2, 3]))
@@ -365,18 +363,6 @@ defmodule Nx.DefnTest do
 
     test "eye" do
       assert %T{shape: {2, 2}, data: %Expr{op: :eye, args: []}} = eye()
-    end
-
-    test "random uniform" do
-      assert %T{
-               shape: {3},
-               data: %Expr{op: :random_uniform, args: [%T{shape: {}}, %T{shape: {}}]}
-             } = random_uniform(Nx.tensor([1, 2, 3]))
-    end
-
-    test "random normal" do
-      assert %T{shape: {3}, data: %Expr{op: :random_normal, args: [%T{shape: {}}, %T{shape: {}}]}} =
-               random_normal(Nx.tensor([1, 2, 3]))
     end
 
     test "raise an error given a shape tuple with tensor values" do
@@ -2227,12 +2213,12 @@ defmodule Nx.DefnTest do
       assert remote_calls_sum_axis_opts(Nx.tensor([[1, 2], [3, 4]])) == Nx.tensor(10)
     end
 
-    defn random_opts(opts \\ []), do: Nx.random_uniform({}, 0, 1, opts)
+    defn iota_opts(opts \\ []), do: Nx.iota({1}, opts)
 
     @tag compiler: Evaluator
     test "exclusively" do
-      assert random_opts([]).type == {:s, 64}
-      assert random_opts(type: {:f, 64}).type == {:f, 64}
+      assert iota_opts([]).type == {:s, 64}
+      assert iota_opts(type: {:f, 64}).type == {:f, 64}
     end
 
     defn sum_axis_expr(a, opts \\ []), do: Nx.sum(a, opts)
