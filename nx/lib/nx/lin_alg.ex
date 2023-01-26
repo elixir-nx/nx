@@ -1801,7 +1801,7 @@ defmodule Nx.LinAlg do
 
   ## Options
 
-    * `:eps` - Rounding error threshold used to assume values as 0. Defaults to `1.0e-9`
+    * `:eps` - Rounding error threshold used to assume values as 0. Defaults to `1.0e-7`
 
   ## Examples
 
@@ -1831,7 +1831,7 @@ defmodule Nx.LinAlg do
   @doc from_backend: false
   defn matrix_rank(a, opts \\ []) do
     # TODO: support batching when SVD supports it too
-    opts = keyword!(opts, eps: 1.0e-9)
+    opts = keyword!(opts, eps: 1.0e-7)
     shape = Nx.shape(a)
     size = Nx.rank(shape)
 
