@@ -601,6 +601,72 @@ defmodule Nx.Random do
     Nx.take_along_axis(tensor, idx, axis: opts[:axis])
   end
 
+  defn choice(key, tensor), do: choice(key, tensor, [])
+  defn choice(key, tensor, p) when not is_list(opts), do: choice(key, tensor, p, [])
+
+  defn choice(key, tensor, opts) when is_list(opts) do
+    # use -1 as a placeholder for probabilities=none
+    choice(key, tensor, -1, opts)
+  end
+
+  defn choice(key, tensor, p, opts) do
+    opts = keyword!(opts, [:shape, replace: true, axis: 0])
+
+    axis = opts[:axis]
+
+    unless axis do
+      raise ArgumentError, "missing required option :axis"
+    end
+
+    axis = Nx.Shape.normalize_axis(tensor.shape, axis, tensor.names)
+
+    if Nx.rank(tensor) < 1 do
+      raise ArgumentError, "tensor must have rank 1 or greater"
+    end
+
+    shape = opts[:shape]
+    n_draws = Nx.size(shape)
+
+    if n_draws == 0 do
+      raise "expected output shape to have size greater than"
+    end
+
+    n_inputs = Nx.axis_size(tensor, axis)
+
+    if not opts[:replace] and n_draws > Nx.size(tensor) do
+      raise ArgumentError, "cannot take more samples than the input size when replace: false"
+    end
+
+    cond do
+      p == -1 and opts[:replace] ->
+        {idx, key} = randint(key, 0, n_inputs, shape: shape)
+        result = Nx.take(tensor, idx, axis: axis)
+        {result, key}
+
+      p == -1 ->
+        {shuffled, key} = shuffle(key, tensor, axis: axis)
+        result = Nx.slice_along_axis(shuffled, 0, n_draws, axis: axis)
+        {result, key}
+
+      opts[:replace] ->
+        # p specified, with replacement
+        p_cumulative = Nx.cumulative_sum(p)
+        {uniform, key} = uniform(key, shape, type: Nx.type(p_cumulative))
+        r = p_cumulative[-1] * (1 - uniform)
+
+        # naïve implementation of jax.numpy.searchsorted
+        p_cumulative = Nx.new_axis(p_cumulative, 0)
+        r = Nx.new_axis(r, 1)
+        idx = Nx.argmin(p_cumulative <= r, tie_break: :low, axis: 1)
+
+        {Nx.take(tensor, idx, axis: axis), key}
+
+      true ->
+        nil
+        # p specified, without replacement
+    end
+  end
+
   deftransformp next_after_minus_1({_, bits}) do
     # Get the floating point representation of -1 and
     # convert it to a big integer so the precision comes last (after exponent)
