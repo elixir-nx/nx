@@ -992,7 +992,7 @@ defmodule Nx.LinAlg do
       #Nx.Tensor<
         f32[2][2]
         [
-          [3.9924840927124023, -1.0052788257598877],
+          [3.9924843311309814, -1.0052789449691772],
           [-3.005120038986206, 1.0071183443069458]
         ]
       >
@@ -1059,9 +1059,10 @@ defmodule Nx.LinAlg do
         s_idx = Nx.abs(s) < opts[:eps]
         adjusted_s = Nx.select(s_idx, 1, s)
 
-        s_inv_matrix = Nx.make_diagonal(Nx.select(s_idx, 0, 1 / adjusted_s))
+        s_inv_matrix = Nx.select(s_idx, 0, 1 / adjusted_s)
 
-        v |> Nx.dot(s_inv_matrix) |> Nx.dot(ut)
+        sut = Nx.new_axis(s_inv_matrix, -1) * ut
+        Nx.dot(v, sut)
     end
   end
 
