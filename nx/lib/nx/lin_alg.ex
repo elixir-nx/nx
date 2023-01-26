@@ -992,7 +992,7 @@ defmodule Nx.LinAlg do
       #Nx.Tensor<
         f32[2][2]
         [
-          [3.9924840927124023, -1.0052788257598877],
+          [3.9924843311309814, -1.0052789449691772],
           [-3.005120038986206, 1.0071183443069458]
         ]
       >
@@ -1052,19 +1052,17 @@ defmodule Nx.LinAlg do
         adjoint(tensor) / norm(tensor) ** 2
 
       _ ->
-        {u, s, vt} = Nx.LinAlg.svd(tensor)
+        {u, s, vt} = Nx.LinAlg.svd(tensor, full_matrices?: false)
         v = adjoint(vt)
         ut = adjoint(u)
 
         s_idx = Nx.abs(s) < opts[:eps]
         adjusted_s = Nx.select(s_idx, 1, s)
-        s_shape = {Nx.axis_size(v, -1), Nx.axis_size(ut, -2)}
 
-        s_inv_matrix =
-          Nx.broadcast(0, s_shape)
-          |> Nx.put_diagonal(Nx.select(s_idx, 0, 1 / adjusted_s))
+        s_inv_matrix = Nx.select(s_idx, 0, 1 / adjusted_s)
 
-        v |> Nx.dot(s_inv_matrix) |> Nx.dot(ut)
+        sut = Nx.new_axis(s_inv_matrix, -1) * ut
+        Nx.dot(v, sut)
     end
   end
 
@@ -1802,6 +1800,7 @@ defmodule Nx.LinAlg do
   “Numerical Recipes (3rd edition)”, Cambridge University Press, 2007, page 795.
 
   ## Options
+  
     * `:eps` - Rounding error threshold used to assume values as 0. Defaults to `1.0e-9`
 
   ## Examples
