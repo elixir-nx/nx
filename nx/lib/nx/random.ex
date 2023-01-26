@@ -836,10 +836,6 @@ defmodule Nx.Random do
     {result, k}
   end
 
-  #   _check_shape("gumbel", shape)
-  #   return -jnp.log(-jnp.log(
-  #       uniform(key, shape, dtype, minval=jnp.finfo(dtype).tiny, maxval=1.)))
-
   deftransformp next_after_minus_1({_, bits}) do
     # Get the floating point representation of -1 and
     # convert it to a big integer so the precision comes last (after exponent)
