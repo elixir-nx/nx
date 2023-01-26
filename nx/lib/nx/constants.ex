@@ -293,16 +293,36 @@ defmodule Nx.Constants do
   end
 
   @doc """
-  Returns the smallest normal floating point number.
-
-  The smallest normal floating point number is the smallest positive value with
-  1 as the leading bit for the mantissa.
-
-  Accepts the same options as `Nx.tensor/2`
+  Returns a scalar tensor with the maximum finite value for the given type.
+  ## Options
+    * `:backend` - a backend to allocate the tensor on.
+  ## Examples
+      iex> Nx.Constants.smallest_positive_normal({:f, 64})
+      #Nx.Tensor<
+        f64
+        2.2250738585072014e-308
+      >
+      iex> Nx.Constants.smallest_positive_normal({:f, 32})
+      #Nx.Tensor<
+        f32
+        1.1754943508222875e-38
+      >
+      iex> Nx.Constants.smallest_positive_normal({:f, 16})
+      #Nx.Tensor<
+        f16
+        6.103515625e-5
+      >
+      iex> Nx.Constants.smallest_positive_normal(:bf16)
+      #Nx.Tensor<
+        bf16
+        1.1754943508222875e-38
+      >
+      iex> Nx.Constants.smallest_positive_normal({:s, 32})
+      ** (ArgumentError) only floating types are supported, got: {:s, 32}
   """
-  def smallest_normal(type, opts \\ []) do
+  def smallest_positive_normal(type, opts \\ []) do
     type = Nx.Type.normalize!(type)
-    from_binary(Nx.Type.smallest_normal(type), type, opts)
+    from_binary(Nx.Type.smallest_positive_normal_binary(type), type, opts)
   end
 
   defp from_binary(binary, type, opts) do

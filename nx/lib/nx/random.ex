@@ -825,7 +825,7 @@ defmodule Nx.Random do
       raise ArgumentError, "output type must be floating-point, got: #{inspect(type)}"
     end
 
-    {u, k} = uniform(key, Nx.Constants.smallest_normal(type), 1, shape: shape, type: type)
+    {u, k} = uniform(key, Nx.Constants.smallest_positive_normal(type), 1, shape: shape, type: type)
     result = -Nx.log(-Nx.log(u))
 
     {result, k}

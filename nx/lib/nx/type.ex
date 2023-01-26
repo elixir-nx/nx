@@ -591,28 +591,16 @@ defmodule Nx.Type do
   def to_string({type, size}), do: Atom.to_string(type) <> Integer.to_string(size)
 
   @doc """
-  Returns the native binary representation the for smallest normal floating point number.
-
-  The smallest normal floating point number is the smallest positive value with
-  1 as the leading bit for the mantissa.
+  Returns the smallest positive number as a binary for the given type
   """
-  def smallest_normal({:bf, 16}) do
-    f32 = smallest_normal({:f, 32})
+  def smallest_positive_normal_binary(type)
+  def smallest_positive_normal_binary({:bf, 16}), do: <<0x0080::16-native>>
+  def smallest_positive_normal_binary({:f, 16}), do: <<0x0400::16-native>>
+  def smallest_positive_normal_binary({:f, 32}), do: <<0x0080_0000::32-native>>
+  def smallest_positive_normal_binary({:f, 64}), do: <<0x0010_0000_0000_0000::64-native>>
 
-    if System.endianness() == :little do
-      <<_::16, x::16-bitstring>> = f32
-      x
-    else
-      <<x::16-bitstring, _::16>> = f32
-      x
-    end
-  end
-
-  def smallest_normal({:f, 16}), do: <<0x0400::16-native>>
-  def smallest_normal({:f, 32}), do: <<0x800000::32-native>>
-  def smallest_normal({:f, 64}), do: <<0x10000000000000::64-native>>
-  def smallest_normal({:c, 64}), do: smallest_normal({:f, 32}) <> <<0::32>>
-  def smallest_normal({:c, 128}), do: smallest_normal({:f, 64}) <> <<0::64>>
+  def smallest_positive_normal_binary(type),
+    do: raise(ArgumentError, "only floating types are supported, got: #{inspect(type)}")
 
   defp unsigned_size(x) when x <= 1, do: 1
   defp unsigned_size(x) when x <= 255, do: 8
