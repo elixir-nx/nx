@@ -624,22 +624,23 @@ defmodule Nx.Random do
       iex> {result, _key} = Nx.Random.choice(k, t, samples: 4, axis: 0) # with replacement
       iex> result
       #Nx.Tensor<
+        s64[4][3]
         [
-          [9, 10, 11],
           [6, 7, 8],
-          [0, 1, 2],
-          [6, 7, 8]
+          [3, 4, 5],
+          [6, 7, 8],
+          [3, 4, 5]
         ]
       >
-      iex> {result, _key} = Nx.Random.choice(k, t, samples: 4, axis: 0replace: false) # without replacement
+      iex> {result, _key} = Nx.Random.choice(k, t, samples: 4, axis: 0, replace: false) # without replacement
       iex> result
       #Nx.Tensor<
         s64[4][3]
         [
           [3, 4, 5],
-          [0, 1, 2],
           [9, 10, 11],
-          [6, 7, 8]
+          [6, 7, 8],
+          [0, 1, 2]
         ]
       >
 
@@ -718,7 +719,7 @@ defmodule Nx.Random do
       iex> {result, _key} = Nx.Random.choice(k, t, p, samples: 6, replace: false) # without replacement
       iex> result
       #Nx.Tensor<
-        s64[10]
+        s64[6]
         [3, 1, 2, 5, 4, 0]
       >
   """
