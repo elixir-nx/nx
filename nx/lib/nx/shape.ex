@@ -1065,7 +1065,8 @@ defmodule Nx.Shape do
     if axis in names do
       Enum.with_index(names)[axis]
     else
-      raise ArgumentError, "name #{inspect(axis)} not found in tensor with names #{inspect(names)}"
+      raise ArgumentError,
+            "name #{inspect(axis)} not found in tensor with names #{inspect(names)}"
     end
   end
 
