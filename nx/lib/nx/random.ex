@@ -688,7 +688,7 @@ defmodule Nx.Random do
           [10, 10, 10, 10, 9]
         ]
       >
-      iex> {result, _key} = Nx.Random.choice(k, t, p, samples: 3, axis: 1) # without replacement
+      iex> {result, _key} = Nx.Random.choice(k, t, p, samples: 3, axis: 1, replace: false) # without replacement
       iex> result
       #Nx.Tensor<
         s64[4][3]
