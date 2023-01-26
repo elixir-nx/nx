@@ -296,6 +296,7 @@ defmodule Nx.Constants do
   Returns a scalar tensor with the maximum finite value for the given type.
 
   ## Options
+
     * `:backend` - a backend to allocate the tensor on.
 
   ## Examples
