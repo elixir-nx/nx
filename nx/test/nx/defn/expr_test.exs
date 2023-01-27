@@ -105,13 +105,13 @@ defmodule Nx.Defn.ExprTest do
                Nx.divide(param, Expr.tensor(1))
     end
 
-    test "power" do
+    test "pow" do
       param = Expr.parameter(nil, {:s, 64}, {2, 2}, 2)
 
-      assert ^param = Nx.power(param, Expr.tensor(1))
+      assert ^param = Nx.pow(param, Expr.tensor(1))
 
       assert %T{data: %Expr{op: :as_type, args: [^param]}, type: {:f, 32}} =
-               Nx.power(param, Expr.tensor(1.0))
+               Nx.pow(param, Expr.tensor(1.0))
     end
 
     test "commute" do

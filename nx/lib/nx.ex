@@ -3833,7 +3833,7 @@ defmodule Nx do
 
   ### Power of scalars
 
-      iex> Nx.power(2, 4)
+      iex> Nx.pow(2, 4)
       #Nx.Tensor<
         s64
         16
@@ -3841,13 +3841,13 @@ defmodule Nx do
 
   ### Power of tensors and scalars
 
-      iex> Nx.power(Nx.tensor([1, 2, 3], names: [:data]), 2)
+      iex> Nx.pow(Nx.tensor([1, 2, 3], names: [:data]), 2)
       #Nx.Tensor<
         s64[data: 3]
         [1, 4, 9]
       >
 
-      iex> Nx.power(2, Nx.tensor([1.0, 2.0, 3.0], names: [:data]))
+      iex> Nx.pow(2, Nx.tensor([1.0, 2.0, 3.0], names: [:data]))
       #Nx.Tensor<
         f32[data: 3]
         [2.0, 4.0, 8.0]
@@ -3855,7 +3855,7 @@ defmodule Nx do
 
   ### Power of tensors
 
-      iex> Nx.power(Nx.tensor([[2], [3]], names: [:x, nil]), Nx.tensor([[4, 5]], names: [nil, :y]))
+      iex> Nx.pow(Nx.tensor([[2], [3]], names: [:x, nil]), Nx.tensor([[4, 5]], names: [nil, :y]))
       #Nx.Tensor<
         s64[x: 2][y: 2]
         [
@@ -3866,7 +3866,11 @@ defmodule Nx do
 
   """
   @doc type: :element
-  def power(left, right), do: element_wise_bin_op(left, right, :power, & &1)
+  def pow(left, right), do: element_wise_bin_op(left, right, :pow, & &1)
+
+  @deprecated "Use pow/2 instead"
+  @doc type: :element
+  def power(left, right), do: pow(left, right)
 
   @doc """
   Element-wise remainder of two tensors.
@@ -11547,7 +11551,7 @@ defmodule Nx do
 
     tensor
     |> subtract(mean)
-    |> power(2)
+    |> pow(2)
     |> sum(opts)
     |> divide(total - ddof)
   end

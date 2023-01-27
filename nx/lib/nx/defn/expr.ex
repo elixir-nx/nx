@@ -645,13 +645,13 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def power(out, t1, t2) do
+  def pow(out, t1, t2) do
     {[t1, t2], context} = to_exprs([t1, t2])
     c2 = maybe_constant(t2)
 
     cond do
       c2 == 1 -> ensure_compatible(t1, out)
-      true -> binary_expr(out, context, :power, t1, t2)
+      true -> binary_expr(out, context, :pow, t1, t2)
     end
   end
 

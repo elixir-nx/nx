@@ -195,8 +195,8 @@ defmodule Nx.NonFiniteTest do
       assert Nx.multiply(@arg, @arg2) == Nx.tensor(Complex.new(:neg_infinity, :infinity))
     end
 
-    test "power" do
-      assert_all_close(Nx.power(@arg, @arg2), @nan_nan, equal_nan: true)
+    test "pow" do
+      assert_all_close(Nx.pow(@arg, @arg2), @nan_nan, equal_nan: true)
     end
 
     test "divide" do

@@ -180,8 +180,8 @@ defmodule Nx.ComplexTest do
       assert_all_close(Nx.multiply(@arg, @arg2), Complex.new(-25, 8))
     end
 
-    test "power" do
-      assert_all_close(Nx.power(@arg, @arg2), Complex.new(5.90369e-5, 5.26792e-5))
+    test "pow" do
+      assert_all_close(Nx.pow(@arg, @arg2), Complex.new(5.90369e-5, 5.26792e-5))
     end
 
     test "divide" do

@@ -159,7 +159,7 @@ defmodule Nx.LinAlg do
   | -1           | `min(sum(abs(x), axes: [0]))`  | as below                          |
   | 2            | 2-norm                         | as below                          |
   | -2           | smallest singular value        | as below                          |
-  | other        | -                              | power(sum(power(abs(x), p)), 1/p) |
+  | other        | -                              | pow(sum(pow(abs(x), p)), 1/p) |
 
   ## Examples
 
@@ -376,9 +376,9 @@ defmodule Nx.LinAlg do
 
     abs_t
     |> Nx.divide(numerical_stability_coefficient)
-    |> Nx.power(ord)
+    |> Nx.pow(ord)
     |> Nx.sum(opts)
-    |> Nx.power(inv_ord)
+    |> Nx.pow(inv_ord)
     |> Nx.multiply(numerical_stability_coefficient)
   end
 
