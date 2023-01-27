@@ -11321,13 +11321,16 @@ defmodule Nx do
   originally created or intended to be loaded from NumPy into
   Elixir.
 
+  This function will raise if the archive or any of its contents
+  are invalid.
+
   Note: This function cannot be used in `defn`.
 
   ## Examples
 
       "array.npy"
       |> File.read!()
-      |> Nx.from_numpy()
+      |> Nx.load_numpy!()
       #=>
       #Nx.Tensor<
         s64[3]
@@ -11336,24 +11339,24 @@ defmodule Nx do
 
   """
   @doc type: :conversion
-  @spec from_numpy(data :: binary) :: Nx.Tensor.t()
-  def from_numpy(data)
+  @spec load_numpy!(data :: binary) :: Nx.Tensor.t()
+  def load_numpy!(data)
 
-  def from_numpy(<<"\x93NUMPY"::binary, major::size(8), minor::size(8), rest::binary>>) do
-    from_numpy(rest, major, minor)
+  def load_numpy!(<<"\x93NUMPY"::binary, major::size(8), minor::size(8), rest::binary>>) do
+    load_numpy!(rest, major, minor)
   end
 
-  def from_numpy(_) do
+  def load_numpy!(_) do
     raise ArgumentError,
           "unable to parse NumPy file, it may be corrupted" <>
             " or invalid"
   end
 
-  defp from_numpy(<<header_size::size(16)-little-unsigned, rest::binary>>, 1, 0) do
+  defp load_numpy!(<<header_size::size(16)-little-unsigned, rest::binary>>, 1, 0) do
     do_numpy_to_tensor(rest, header_size)
   end
 
-  defp from_numpy(<<header_size::size(32)-little-unsigned, rest::binary>>, _, _) do
+  defp load_numpy!(<<header_size::size(32)-little-unsigned, rest::binary>>, _, _) do
     do_numpy_to_tensor(rest, header_size)
   end
 
@@ -11400,26 +11403,18 @@ defmodule Nx do
 
         # We can't just infer native endianness matches our native endianness
         endianness ->
-          raise ArgumentError, "Numpy tensor has unsupported endianness: #{endianness}"
+          raise ArgumentError, "unsupported numpy endianness: #{endianness}"
       end
 
     type =
       case type do
-        "u" ->
-          :u
-
-        "i" ->
-          :s
-
-        "f" ->
-          :f
-
-        _ ->
-          raise "unsupported type"
+        "u" -> :u
+        "i" -> :s
+        "f" -> :f
+        _ -> raise "unsupported numpy type: #{type}"
       end
 
     size = size |> String.to_integer() |> Kernel.*(8)
-
     {byte_order, {type, size}}
   end
 
@@ -11459,8 +11454,17 @@ defmodule Nx do
   @doc """
   Loads a `.npz` archive into a list of tensors.
 
-  An `.npz` file is a zipped, possibly compressed archive containing
-  multiple `.npy` files.
+  An `.npz` file is a zipped, possibly compressed
+  archive containing multiple `.npy` files.
+
+  It returns a list of two elements tuples, where
+  the tensor name is first and the serialized tensor
+  is second. The list is returned in the same order
+  as in the archive. Use `Map.new/1` afterwards if
+  you want to access the list elements by name.
+
+  It will raise if the archive or any of its contents
+  are invalid.
 
   Note: This function cannot be used in `defn`.
 
@@ -11468,7 +11472,7 @@ defmodule Nx do
 
       "archive.npz"
       |> File.read!()
-      |> Nx.from_numpy_archive()
+      |> Nx.load_numpy_archive!()
       #=>
       [
         {"foo",
@@ -11484,12 +11488,11 @@ defmodule Nx do
       ]
   """
   @doc type: :conversion
-  @spec from_numpy_archive(data :: binary) :: [{name :: binary, Nx.Tensor.t()}]
-  def from_numpy_archive(archive) do
+  @spec load_numpy_archive!(data :: binary) :: [{name :: binary, Nx.Tensor.t()}]
+  def load_numpy_archive!(archive) do
     case :zip.unzip(archive, [:memory]) do
       {:ok, files} ->
-        files
-        |> Enum.map(fn {name, data} ->
+        Enum.map(files, fn {name, data} ->
           name = to_string(name)
 
           name =
@@ -11499,7 +11502,7 @@ defmodule Nx do
               name
             end
 
-          {name, from_numpy(data)}
+          {name, load_numpy!(data)}
         end)
 
       _ ->
