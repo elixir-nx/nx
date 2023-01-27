@@ -2050,7 +2050,10 @@ defmodule Nx.DefnTest do
     test "uses the default backend on iota" do
       Nx.default_backend(ProcessBackend)
       assert_raise RuntimeError, "not supported", fn -> Nx.Defn.jit(&jit_iota/0).() end
-      assert_raise RuntimeError, "not supported", fn -> Nx.Defn.jit(fn -> Nx.iota({3, 3}) end).() end
+
+      assert_raise RuntimeError, "not supported", fn ->
+        Nx.Defn.jit(fn -> Nx.iota({3, 3}) end).()
+      end
     end
 
     defn nested_jit(opts \\ []), do: nested_jit_transform(opts)
