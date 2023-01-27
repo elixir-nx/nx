@@ -7,6 +7,8 @@ defmodule Nx.OptionalTest do
     defstruct [:state]
     alias Nx.BinaryBackend
 
+    def init(opts), do: opts
+
     def from_binary(tensor, data, _opts) do
       %{tensor | data: %__MODULE__{state: data}}
     end
@@ -50,6 +52,8 @@ defmodule Nx.OptionalTest do
   defmodule NonCustomImplTestBackend do
     defstruct [:state]
     alias Nx.BinaryBackend
+
+    def init(opts), do: opts
 
     def from_binary(tensor, data, _opts) do
       %{tensor | data: %__MODULE__{state: data}}

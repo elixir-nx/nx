@@ -2048,9 +2048,9 @@ defmodule Nx.DefnTest do
     @tag :capture_log
     @tag compiler: Evaluator
     test "uses the default backend on iota" do
-      Nx.default_backend(UnknownBackend)
-      assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(&jit_iota/0).() end
-      assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(fn -> Nx.iota({3, 3}) end).() end
+      Nx.default_backend(ProcessBackend)
+      assert_raise RuntimeError, "not supported", fn -> Nx.Defn.jit(&jit_iota/0).() end
+      assert_raise RuntimeError, "not supported", fn -> Nx.Defn.jit(fn -> Nx.iota({3, 3}) end).() end
     end
 
     defn nested_jit(opts \\ []), do: nested_jit_transform(opts)

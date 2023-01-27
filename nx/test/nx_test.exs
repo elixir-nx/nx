@@ -1013,6 +1013,16 @@ defmodule NxTest do
         Nx.tensor([len3, len2])
       end)
     end
+
+    test "raises with tensor and different backends" do
+      assert_raise ArgumentError,
+                   "Nx.tensor/2 wants to allocate on backend ProcessBackend but it was given a tensor allocated on Nx.BinaryBackend",
+                   fn ->
+                     Nx.tensor(Nx.tensor([1, 2, 3], backend: Nx.BinaryBackend),
+                       backend: ProcessBackend
+                     )
+                   end
+    end
   end
 
   describe "from_binary/3" do

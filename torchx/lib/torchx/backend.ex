@@ -236,10 +236,6 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def backend_copy(tensor, Nx.Tensor, opts) do
-    backend_copy(tensor, Nx.BinaryBackend, opts)
-  end
-
   def backend_copy(tensor, Torchx.Backend, opts) do
     Torchx.to_device(from_nx(tensor), device_option(opts)) |> to_nx(tensor)
   end

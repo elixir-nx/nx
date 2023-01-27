@@ -122,10 +122,10 @@ defmodule Nx.Defn.StreamTest do
   test "uses the default backend on iota" do
     Process.flag(:trap_exit, true)
     args = [Nx.tensor(1), Nx.tensor(2)]
-    Nx.default_backend(UnknownBackend)
+    Nx.default_backend(ProcessBackend)
     assert %_{} = stream = Nx.Defn.stream(&stream_iota/2, args)
     assert Nx.Stream.send(stream, hd(args))
-    assert_receive {:EXIT, _, {:undef, _}}, 500
+    assert_receive {:EXIT, _, {%RuntimeError{message: "not supported"}, _}}, 500
   end
 
   defn container_stream(%Container{a: a} = elem, %Container{b: b} = acc) do

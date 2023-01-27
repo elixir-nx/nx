@@ -48,10 +48,6 @@ defmodule EXLA.Backend do
   end
 
   @impl true
-  def backend_copy(tensor, Nx.Tensor, backend_options) do
-    backend_copy(tensor, Nx.BinaryBackend, backend_options)
-  end
-
   def backend_copy(%T{data: %B{buffer: buffer}} = tensor, EXLA.Backend, backend_options) do
     {client, device_id} = client_and_device_id(backend_options)
 

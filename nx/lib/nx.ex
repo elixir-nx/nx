@@ -660,10 +660,8 @@ defmodule Nx do
       ** (ArgumentError) Nx.tensor/2 expects a tensor with type :f32 but it was given a tensor of type {:s, 64}
 
   The `:backend` option will check only against the backend name
-  and not specific backend configuration such as device and client:
-
-      iex> Nx.tensor(Nx.tensor([1, 2, 3], backend: Nx.BinaryBackend), backend: EXLA.Backend)
-      ** (ArgumentError) Nx.tensor/2 wants to allocate on backend EXLA.Backend but it was given a tensor allocated on Nx.BinaryBackend
+  and not specific backend configuration such as device and client.
+  In case the backend differs, it will also raise.
 
   The names in the given tensor are always discarded but Nx will raise
   in case the tensor already has names that conflict with the assigned ones:
@@ -3311,10 +3309,8 @@ defmodule Nx do
 
   ## Examples
 
-      iex> Nx.default_backend({EXLA.Backend, device: :cuda})
-      {Nx.BinaryBackend, []}
-      iex> Nx.default_backend()
-      {EXLA.Backend, device: :cuda}
+      Nx.default_backend({EXLA.Backend, device: :cuda})
+      #=> {Nx.BinaryBackend, []}
 
   """
   @doc type: :backend
@@ -3420,7 +3416,7 @@ defmodule Nx do
     >
   """
   @doc type: :backend
-  def backend_copy(tensor_or_container, backend \\ Nx.Tensor) do
+  def backend_copy(tensor_or_container, backend \\ Nx.BinaryBackend) do
     {backend, opts} = backend!(backend)
 
     Nx.Defn.Composite.traverse(tensor_or_container, fn tensor ->
@@ -3472,7 +3468,7 @@ defmodule Nx do
 
   """
   @doc type: :backend
-  def backend_transfer(tensor_or_container, backend \\ Nx.Tensor) do
+  def backend_transfer(tensor_or_container, backend \\ Nx.BinaryBackend) do
     {backend, opts} = backend!(backend)
 
     Nx.Defn.Composite.traverse(tensor_or_container, fn tensor ->
@@ -12269,13 +12265,8 @@ defmodule Nx do
     backend!({backend, []})
   end
 
-  # TODO: Remove function exported check on Nx v0.5
   defp backend!({backend, options}) when is_atom(backend) and is_list(options) do
-    if Code.ensure_loaded?(backend) and function_exported?(backend, :init, 1) do
-      {backend, backend.init(options)}
-    else
-      {backend, options}
-    end
+    {backend, backend.init(options)}
   end
 
   defp backend!(other) do

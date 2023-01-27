@@ -17,7 +17,6 @@ defmodule EXLA.Defn.Outfeed do
   @doc """
   Computes used inputs by depth and used hooks.
   """
-  # TODO: Support lazy transfer from metadata (but disabled for inputs)
   def used_inputs_and_hooks(expr, force_inputs, lazy_transfers) do
     if lazy_transfers not in [:always, :never, :opt_in] do
       raise ArgumentError,
