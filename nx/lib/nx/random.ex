@@ -601,6 +601,263 @@ defmodule Nx.Random do
     Nx.take_along_axis(tensor, idx, axis: opts[:axis])
   end
 
+  @choice_options """
+  ## Options
+
+    * `:samples` - The number of samples to take
+
+    * `:axis` - The axis along which to take samples.
+      If `nil`, the tensor is flattened beforehand.
+
+    * `:replace` - a boolean that specifies if samples will
+      be taken with or without replacement. Defaults to `true`.
+  """
+  @doc """
+  Generates random samples from a tensor.
+
+  #{@choice_options}
+
+  ## Examples
+
+      iex> k = Nx.Random.key(1)
+      iex> t = Nx.iota({4, 3})
+      iex> {result, _key} = Nx.Random.choice(k, t, samples: 4, axis: 0) # with replacement
+      iex> result
+      #Nx.Tensor<
+        s64[4][3]
+        [
+          [6, 7, 8],
+          [3, 4, 5],
+          [6, 7, 8],
+          [3, 4, 5]
+        ]
+      >
+      iex> {result, _key} = Nx.Random.choice(k, t, samples: 4, axis: 0, replace: false) # without replacement
+      iex> result
+      #Nx.Tensor<
+        s64[4][3]
+        [
+          [3, 4, 5],
+          [9, 10, 11],
+          [6, 7, 8],
+          [0, 1, 2]
+        ]
+      >
+
+  If no axis is specified, the tensor is flattened:
+
+      iex> k = Nx.Random.key(2)
+      iex> t = Nx.iota({3, 2})
+      iex> {result, _key} = Nx.Random.choice(k, t, samples: 6) # with replacement
+      iex> result
+      #Nx.Tensor<
+        s64[6]
+        [5, 0, 0, 4, 0, 3]
+      >
+      iex> {result, _key} = Nx.Random.choice(k, t, samples: 6, replace: false) # without replacement
+      iex> result
+      #Nx.Tensor<
+        s64[6]
+        [2, 0, 4, 5, 1, 3]
+      >
+  """
+  defn choice(key, tensor, opts) do
+    {tensor_shape, n_inputs, n_draws, axis, replace} = validate_choice_opts(tensor, opts)
+    tensor = Nx.reshape(tensor, tensor_shape)
+
+    if replace do
+      {idx, key} = randint(key, 0, n_inputs, shape: {n_draws})
+      result = Nx.take(tensor, idx, axis: axis)
+      {result, key}
+    else
+      {shuffled, key} = shuffle(key, tensor, axis: axis)
+      result = Nx.slice_along_axis(shuffled, 0, n_draws, axis: axis)
+      {result, key}
+    end
+  end
+
+  @doc """
+  Generates random samples from a tensor with specified probabilities.
+
+  The probabilities tensor must have the same size as the axis along
+  which the samples are being taken. If no axis is given, the size
+  must be equal to the input tensor's size.
+
+  #{@choice_options}
+
+  ## Examples
+
+      iex> k = Nx.Random.key(1)
+      iex> t = Nx.iota({4, 3})
+      iex> p = Nx.tensor([0.1, 0.7, 0.2])
+      iex> {result, _key} = Nx.Random.choice(k, t, p, samples: 5, axis: 1) # with replacement
+      iex> result
+      #Nx.Tensor<
+        s64[4][5]
+        [
+          [1, 1, 1, 1, 0],
+          [4, 4, 4, 4, 3],
+          [7, 7, 7, 7, 6],
+          [10, 10, 10, 10, 9]
+        ]
+      >
+      iex> {result, _key} = Nx.Random.choice(k, t, p, samples: 3, axis: 1, replace: false) # without replacement
+      iex> result
+      #Nx.Tensor<
+        s64[4][3]
+        [
+          [1, 2, 0],
+          [4, 5, 3],
+          [7, 8, 6],
+          [10, 11, 9]
+        ]
+      >
+
+  If no axis is specified, the tensor is flattened.
+  Notice that in the first case we get a higher occurence
+  of the entries with bigger probabilities, while in the
+  second case, without replacements, we get those samples
+  first.
+
+      iex> k = Nx.Random.key(2)
+      iex> t = Nx.iota({2, 3})
+      iex> p = Nx.tensor([0.01, 0.1, 0.19, 0.6, 0.05, 0.05])
+      iex> {result, _key} = Nx.Random.choice(k, t, p, samples: 10) # with replacement
+      iex> result
+      #Nx.Tensor<
+        s64[10]
+        [2, 1, 3, 3, 3, 1, 3, 3, 1, 2]
+      >
+      iex> {result, _key} = Nx.Random.choice(k, t, p, samples: 6, replace: false) # without replacement
+      iex> result
+      #Nx.Tensor<
+        s64[6]
+        [3, 1, 2, 5, 4, 0]
+      >
+  """
+  defn choice(key, tensor, p, opts) do
+    {tensor_shape, n_inputs, n_draws, axis, replace} = validate_choice_opts(tensor, opts)
+    tensor = Nx.reshape(tensor, tensor_shape)
+
+    case {Nx.size(p), Nx.axis_size(tensor, axis)} do
+      {n, n} ->
+        :ok
+
+      _ ->
+        raise ArgumentError, "input and probabilities tensors must have the same shape"
+    end
+
+    if replace do
+      p_cumulative = Nx.cumulative_sum(p)
+      {uniform, key} = uniform(key, shape: {n_draws}, type: Nx.type(p_cumulative))
+      r = p_cumulative[-1] * (1 - uniform)
+
+      # naïve implementation of jax.numpy.searchsorted
+      p_cumulative = Nx.new_axis(p_cumulative, 0)
+      r = Nx.new_axis(r, 1)
+      idx = Nx.argmin(p_cumulative <= r, tie_break: :low, axis: 1)
+
+      result = Nx.take(tensor, idx, axis: axis)
+      {result, key}
+    else
+      {g, k} = gumbel(key, shape: {n_inputs}, type: Nx.type(p))
+      g = -g - Nx.log(p)
+      idx = g |> Nx.argsort() |> Nx.slice_along_axis(0, n_draws, axis: 0)
+
+      result = Nx.take(tensor, idx, axis: axis)
+      {result, k}
+    end
+  end
+
+  deftransformp validate_choice_opts(tensor, opts) do
+    opts = Keyword.validate!(opts, [:samples, :axis, replace: true])
+
+    {axis, tensor_shape} =
+      case opts[:axis] do
+        nil ->
+          {0, {Tuple.product(tensor.shape)}}
+
+        axis ->
+          {Nx.Shape.normalize_axis(tensor.shape, axis, tensor.names), tensor.shape}
+      end
+
+    if Nx.rank(tensor) < 1 do
+      raise ArgumentError, "tensor must have rank 1 or greater"
+    end
+
+    n_draws = opts[:samples]
+
+    if n_draws < 1 do
+      raise "must take at least one sample, got samples=#{n_draws}"
+    end
+
+    n_inputs =
+      case opts[:axis] do
+        nil -> Nx.size(tensor)
+        _ -> Nx.axis_size(tensor, axis)
+      end
+
+    replace = opts[:replace]
+
+    if not replace and n_draws > n_inputs do
+      raise ArgumentError, "cannot take more samples than the input size when replace: false"
+    end
+
+    {tensor_shape, n_inputs, n_draws, axis, replace}
+  end
+
+  @doc """
+  Sample Gumbel random values with given shape and float dtype.
+
+  ## Options
+
+    * `:shape` - the shape of the output tensor containing the
+      random samples. Defaults to `{}`
+
+    * `:type` - the floating-point output type. Defaults to `{:f, 32}`
+
+  ## Examples
+
+      iex> {result, _key} = Nx.Random.gumbel(Nx.Random.key(1))
+      iex> result
+      #Nx.Tensor<
+        f32
+        -0.7294610142707825
+      >
+
+      iex> {result, _key} = Nx.Random.gumbel(Nx.Random.key(1), shape: {2, 3})
+      iex> result
+      #Nx.Tensor<
+        f32[2][3]
+        [
+          [0.6247938275337219, -0.21740718185901642, 0.7678327560424805],
+          [0.7778404355049133, 4.0895304679870605, 0.3029090166091919]
+        ]
+      >
+  """
+  defn gumbel(key, opts \\ []) do
+    keys = split(key)
+    {gumbel_split(keys[1], opts), keys[0]}
+  end
+
+  @doc """
+  Same as `gumbel/2`, but assumes the key has been split beforehand.
+  """
+  defn gumbel_split(key, opts \\ []) do
+    opts = keyword!(opts, shape: {}, type: {:f, 32})
+    type = opts[:type]
+    shape = opts[:shape]
+
+    if not Nx.Type.float?(type) do
+      raise ArgumentError, "output type must be floating-point, got: #{inspect(type)}"
+    end
+
+    u =
+      uniform_split(key, Nx.Constants.smallest_positive_normal(type), 1, shape: shape, type: type)
+
+    -Nx.log(-Nx.log(u))
+  end
+
   deftransformp next_after_minus_1({_, bits}) do
     # Get the floating point representation of -1 and
     # convert it to a big integer so the precision comes last (after exponent)
