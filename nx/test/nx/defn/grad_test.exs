@@ -51,7 +51,7 @@ defmodule Nx.Defn.GradTest do
 
   describe "value and grad" do
     defn vg(a, b) do
-      value_and_grad({a, b}, fn {a, b} -> Nx.tanh(a) + Nx.power(b, 2) end)
+      value_and_grad({a, b}, fn {a, b} -> Nx.tanh(a) + Nx.pow(b, 2) end)
     end
 
     test "computes value and grad" do
@@ -62,7 +62,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "tokens" do
-    defn grad_token(t), do: value_and_grad(t, fn t -> hook(Nx.power(t, 2), :grad) end)
+    defn grad_token(t), do: value_and_grad(t, fn t -> hook(Nx.pow(t, 2), :grad) end)
 
     test "computes grad with token" do
       parent = self()
@@ -74,7 +74,7 @@ defmodule Nx.Defn.GradTest do
       assert tensor == Nx.tensor(9)
     end
 
-    defn token_grad(t), do: hook(grad(t, &Nx.power(&1, 2)), :grad)
+    defn token_grad(t), do: hook(grad(t, &Nx.pow(&1, 2)), :grad)
 
     test "computes token with grad" do
       parent = self()
@@ -142,7 +142,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "addition rule" do
-    defn addition_rule(t), do: Nx.tanh(Nx.tanh(Nx.add(Nx.power(t, 2), Nx.power(t, 3))))
+    defn addition_rule(t), do: Nx.tanh(Nx.tanh(Nx.add(Nx.pow(t, 2), Nx.pow(t, 3))))
     defn grad_addition_rule(t), do: grad(t, &addition_rule/1)
 
     test "computes gradient of compound rules" do
@@ -159,7 +159,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "product rule" do
-    defn product_rule(t), do: Nx.tanh(Nx.tanh(Nx.multiply(Nx.power(t, 2), Nx.power(t, 3))))
+    defn product_rule(t), do: Nx.tanh(Nx.tanh(Nx.multiply(Nx.pow(t, 2), Nx.pow(t, 3))))
     defn grad_product_rule(t), do: grad(t, &product_rule/1)
 
     test "computes gradient for scalars" do
@@ -174,7 +174,7 @@ defmodule Nx.Defn.GradTest do
       end
     end
 
-    defn sum_product_rule(t), do: Nx.sum(Nx.multiply(Nx.power(t, 2), Nx.power(t, 3)))
+    defn sum_product_rule(t), do: Nx.sum(Nx.multiply(Nx.pow(t, 2), Nx.pow(t, 3)))
     defn grad_sum_product_rule(t), do: grad(t, &sum_product_rule/1)
 
     test "computes gradient for tensors" do
@@ -270,7 +270,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "power rule" do
-    defn power_rule(t), do: Nx.power(t, 3)
+    defn power_rule(t), do: Nx.pow(t, 3)
     defn grad_power_rule(t), do: grad(t, &power_rule/1)
 
     test "computes gradient" do
@@ -287,7 +287,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "exponential rule" do
-    defn exp_rule(t), do: Nx.add(Nx.power(Nx.tanh(t), 2), Nx.power(Nx.tanh(t), 3))
+    defn exp_rule(t), do: Nx.add(Nx.pow(Nx.tanh(t), 2), Nx.pow(Nx.tanh(t), 3))
     defn grad_exp_rule(t), do: grad(t, &exp_rule/1)
 
     test "computes gradient" do
@@ -365,7 +365,7 @@ defmodule Nx.Defn.GradTest do
                Nx.tensor([[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]])
     end
 
-    defn grad_dot_both_rule(x), do: grad(x, &Nx.sum(Nx.dot(Nx.power(&1, 2), Nx.power(&1, 3))))
+    defn grad_dot_both_rule(x), do: grad(x, &Nx.sum(Nx.dot(Nx.pow(&1, 2), Nx.pow(&1, 3))))
 
     test "computes gradient for tensors on both sides" do
       assert grad_dot_both_rule(Nx.iota({3, 3, 3})) ==
@@ -1451,7 +1451,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "tuples" do
-    defnp tuple_pattern({a, b}), do: Nx.power(a, 2) + b
+    defnp tuple_pattern({a, b}), do: Nx.pow(a, 2) + b
     defn grad_tuple_pattern(t), do: grad(t, &tuple_pattern({&1, 2.0}))
 
     test "as patterns" do
@@ -1459,15 +1459,15 @@ defmodule Nx.Defn.GradTest do
     end
 
     defn grad_tuple_input(a, b) do
-      grad({a, b}, fn {a, b} -> Nx.power(a, 2) * Nx.power(b, 3) end)
+      grad({a, b}, fn {a, b} -> Nx.pow(a, 2) * Nx.pow(b, 3) end)
     end
 
     defn grad_tuple_input(a, b, c) do
-      grad({a, b, c}, fn {a, b, c} -> Nx.power(a, 2) * Nx.power(b, 3) * Nx.power(c, 4) end)
+      grad({a, b, c}, fn {a, b, c} -> Nx.pow(a, 2) * Nx.pow(b, 3) * Nx.pow(c, 4) end)
     end
 
     defn grad_tuple_unused(a, b) do
-      grad({a, b}, fn {a, _b} -> Nx.power(a, a) end)
+      grad({a, b}, fn {a, _b} -> Nx.pow(a, a) end)
     end
 
     test "as multiple inputs" do
@@ -1557,7 +1557,7 @@ defmodule Nx.Defn.GradTest do
       for _ <- @iters, type <- @types do
         t = random_uniform(-0.999, 0.999, type: type)
 
-        expected = t |> Nx.power(2) |> Nx.negate() |> Nx.add(1) |> Nx.rsqrt() |> Nx.negate()
+        expected = t |> Nx.pow(2) |> Nx.negate() |> Nx.add(1) |> Nx.rsqrt() |> Nx.negate()
 
         assert_all_close(grad_acos(t), expected)
       end
@@ -1715,21 +1715,21 @@ defmodule Nx.Defn.GradTest do
     defn concatenate_grad_power(t) do
       grad(
         t,
-        &Nx.sum(Nx.concatenate([Nx.power(&1, 2), Nx.power(&1, 3)], axis: 0))
+        &Nx.sum(Nx.concatenate([Nx.pow(&1, 2), Nx.pow(&1, 3)], axis: 0))
       )
     end
 
     defn concatenate_grad_composed(t) do
       grad(
         t,
-        &Nx.sum(Nx.concatenate([Nx.log(Nx.power(&1, 2)), Nx.log(Nx.power(&1, 3))], axis: 3))
+        &Nx.sum(Nx.concatenate([Nx.log(Nx.pow(&1, 2)), Nx.log(Nx.pow(&1, 3))], axis: 3))
       )
     end
 
     defn concatenate_grad_log1p(t) do
       grad(
         t,
-        &Nx.sum(Nx.log1p(Nx.concatenate([Nx.power(&1, 2), Nx.power(&1, 3)], axis: 3)))
+        &Nx.sum(Nx.log1p(Nx.concatenate([Nx.pow(&1, 2), Nx.pow(&1, 3)], axis: 3)))
       )
     end
 
@@ -1825,7 +1825,7 @@ defmodule Nx.Defn.GradTest do
 
     defn qr_megapower_grad(t) do
       grad(t, fn tensor ->
-        {q, r} = Nx.LinAlg.qr(Nx.power(tensor, 2))
+        {q, r} = Nx.LinAlg.qr(Nx.pow(tensor, 2))
 
         q
         |> Nx.cos()
@@ -1882,7 +1882,7 @@ defmodule Nx.Defn.GradTest do
 
     defn lu_megapower_grad(t) do
       grad(t, fn tensor ->
-        {p, l, u} = Nx.LinAlg.lu(Nx.power(tensor, 2))
+        {p, l, u} = Nx.LinAlg.lu(Nx.pow(tensor, 2))
 
         l
         |> Nx.cos()
@@ -2343,7 +2343,7 @@ defmodule Nx.Defn.GradTest do
   describe "abs" do
     defn abs_scalar(t), do: Nx.abs(t)
     defn grad_abs_scalar(t), do: grad(t, &Nx.abs(&1))
-    defn grad_abs_squared(t), do: grad(t, &(&1 |> Nx.abs() |> Nx.power(2)))
+    defn grad_abs_squared(t), do: grad(t, &(&1 |> Nx.abs() |> Nx.pow(2)))
     defn grad_abs(t), do: grad(t, &Nx.sum(Nx.abs(&1)))
     defn grad_cos_abs_sin(t), do: grad(t, &Nx.sum(Nx.cos(Nx.abs(Nx.sin(&1)))))
 
@@ -2387,7 +2387,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "max" do
-    defn grad_max(t), do: grad(t, &Nx.sum(Nx.max(Nx.power(&1, 2), Nx.power(&1, 3))))
+    defn grad_max(t), do: grad(t, &Nx.sum(Nx.max(Nx.pow(&1, 2), Nx.pow(&1, 3))))
 
     test "computes gradient with tensors" do
       assert grad_max(Nx.tensor([[1.0], [2.0], [3.0]])) == Nx.tensor([[2.5], [12.0], [27.0]])
@@ -2398,7 +2398,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "min" do
-    defn grad_min(t), do: grad(t, &Nx.sum(Nx.min(Nx.power(&1, 2), Nx.power(&1, 3))))
+    defn grad_min(t), do: grad(t, &Nx.sum(Nx.min(Nx.pow(&1, 2), Nx.pow(&1, 3))))
 
     test "computes gradient with tensors" do
       assert grad_min(Nx.tensor([[1.0], [2.0], [3.0]])) == Nx.tensor([[2.5], [4.0], [6.0]])
@@ -2524,23 +2524,23 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "if" do
-    defn grad_if(t), do: grad(t, fn t -> if(t + 1, do: Nx.power(t, 2), else: Nx.power(t, 3)) end)
+    defn grad_if(t), do: grad(t, fn t -> if(t + 1, do: Nx.pow(t, 2), else: Nx.pow(t, 3)) end)
 
     defn grad_sum_if(t) do
-      grad(t, fn t -> Nx.sum(if(Nx.all(t), do: Nx.power(t, 2), else: Nx.power(t, 3))) end)
+      grad(t, fn t -> Nx.sum(if(Nx.all(t), do: Nx.pow(t, 2), else: Nx.pow(t, 3))) end)
     end
 
     defn grad_if_sum(t) do
-      grad(t, fn t -> if(Nx.all(t), do: Nx.sum(Nx.power(t, 2)), else: Nx.sum(Nx.power(t, 3))) end)
+      grad(t, fn t -> if(Nx.all(t), do: Nx.sum(Nx.pow(t, 2)), else: Nx.sum(Nx.pow(t, 3))) end)
     end
 
     defn grad_if_tuple(t) do
       grad(t, fn t ->
         {{a, b}, c} =
           if t > 0 do
-            {{Nx.power(t, 2), Nx.power(t, 3)}, Nx.power(t, 4)}
+            {{Nx.pow(t, 2), Nx.pow(t, 3)}, Nx.pow(t, 4)}
           else
-            {{Nx.power(t, 4), Nx.power(t, 3)}, Nx.power(t, 2)}
+            {{Nx.pow(t, 4), Nx.pow(t, 3)}, Nx.pow(t, 2)}
           end
 
         d = if t > 0, do: 123, else: 456
@@ -2625,18 +2625,18 @@ defmodule Nx.Defn.GradTest do
     defn grad_while_3x_sin(t) do
       value_and_grad(t, fn t ->
         {_, t} =
-          while {i = 0, t = Nx.power(t, 3)}, i < 3 do
+          while {i = 0, t = Nx.pow(t, 3)}, i < 3 do
             {i + 1, Nx.sin(t)}
           end
 
-        Nx.sum(Nx.power(t, 2))
+        Nx.sum(Nx.pow(t, 2))
       end)
     end
 
     defn grad_3x_sin(t) do
       value_and_grad(
         t,
-        &(&1 |> Nx.power(3) |> Nx.sin() |> Nx.sin() |> Nx.sin() |> Nx.power(2) |> Nx.sum())
+        &(&1 |> Nx.pow(3) |> Nx.sin() |> Nx.sin() |> Nx.sin() |> Nx.pow(2) |> Nx.sum())
       )
     end
 
@@ -3012,7 +3012,7 @@ defmodule Nx.Defn.GradTest do
         t,
         fn t ->
           t
-          |> Nx.power(2)
+          |> Nx.pow(2)
           |> Nx.sort(direction: :desc)
           |> Nx.sum()
         end
@@ -3025,7 +3025,7 @@ defmodule Nx.Defn.GradTest do
         fn t ->
           t
           |> Nx.sort(direction: :desc)
-          |> Nx.power(2)
+          |> Nx.pow(2)
           |> Nx.sum()
         end
       )
@@ -3038,7 +3038,7 @@ defmodule Nx.Defn.GradTest do
           t
           |> Nx.cos()
           |> Nx.sort(opts)
-          |> Nx.power(2)
+          |> Nx.pow(2)
           |> Nx.log()
           |> Nx.sum()
         end
@@ -3085,7 +3085,7 @@ defmodule Nx.Defn.GradTest do
         t,
         fn t ->
           t
-          |> Nx.power(2)
+          |> Nx.pow(2)
           |> Nx.take_along_axis(i, axis: 1)
           |> Nx.sum()
         end
@@ -3099,7 +3099,7 @@ defmodule Nx.Defn.GradTest do
           t
           |> Nx.cos()
           |> Nx.take_along_axis(i, axis: 1)
-          |> Nx.power(2)
+          |> Nx.pow(2)
           |> Nx.log()
           |> Nx.sum()
         end
@@ -3201,7 +3201,7 @@ defmodule Nx.Defn.GradTest do
         t,
         fn t ->
           t
-          |> Nx.power(2)
+          |> Nx.pow(2)
           |> Nx.take(i, axis: 1)
           |> Nx.sum()
         end
@@ -3215,7 +3215,7 @@ defmodule Nx.Defn.GradTest do
           t
           |> Nx.cos()
           |> Nx.take(i, axis: 1)
-          |> Nx.power(2)
+          |> Nx.pow(2)
           |> Nx.log()
           |> Nx.sum()
         end
@@ -3341,7 +3341,7 @@ defmodule Nx.Defn.GradTest do
         t,
         fn t ->
           t
-          |> Nx.power(2)
+          |> Nx.pow(2)
           |> Nx.gather(i)
           |> Nx.sum()
         end
@@ -3355,7 +3355,7 @@ defmodule Nx.Defn.GradTest do
           t
           |> Nx.cos()
           |> Nx.gather(i)
-          |> Nx.power(2)
+          |> Nx.pow(2)
           |> Nx.log()
           |> Nx.sum()
         end

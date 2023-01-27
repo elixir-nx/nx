@@ -642,7 +642,7 @@ defmodule Nx.Defn do
   To differentiate on multiple vars, pass a tuple as first argument:
 
       defn tanh_power_grad(a, b) do
-        grad({a, b}, fn {a, b} -> Nx.tanh(a) + Nx.power(b, 2) end)
+        grad({a, b}, fn {a, b} -> Nx.tanh(a) + Nx.pow(b, 2) end)
       end
 
   `var_or_vars` can be any `Nx.Container` with one or multiple
@@ -698,7 +698,7 @@ defmodule Nx.Defn do
   To differentiate on multiple vars, pass a tuple as first argument:
 
       defn tanh_power_grad(a, b) do
-        value_and_grad({a, b}, fn {a, b} -> Nx.tanh(a) + Nx.power(b, 2) end)
+        value_and_grad({a, b}, fn {a, b} -> Nx.tanh(a) + Nx.pow(b, 2) end)
       end
 
   `var_or_vars` can be any `Nx.Container` with one or multiple
@@ -773,14 +773,14 @@ defmodule Nx.Defn do
   Take the following defn expression:
 
       defn tanh_power(a, b) do
-        Nx.tanh(a) + Nx.power(b, 2)
+        Nx.tanh(a) + Nx.pow(b, 2)
       end
 
   Let's see a trivial example, which is to use `IO.inspect/1` to
   print a tensor expression at definition time:
 
       defn tanh_power(a, b) do
-        Nx.tanh(a) + Nx.power(b, 2) |> my_inspect()
+        Nx.tanh(a) + Nx.pow(b, 2) |> my_inspect()
       end
 
       deftransformp my_inspect(expr), do: IO.inspect(expr)
@@ -788,7 +788,7 @@ defmodule Nx.Defn do
   Or:
 
       defn tanh_power(a, b) do
-        res = Nx.tanh(a) + Nx.power(b, 2)
+        res = Nx.tanh(a) + Nx.pow(b, 2)
         my_inspect(res)
         res
       end
@@ -800,7 +800,7 @@ defmodule Nx.Defn do
         parameter a
         parameter c
         b = tanh [ a ] ()
-        d = power [ c, 2 ] ()
+        d = pow [ c, 2 ] ()
         e = add [ b, d ] ()
       >
 

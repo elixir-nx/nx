@@ -162,7 +162,7 @@ defmodule EXLA.Defn.APITest do
     defn stream_composite(i, {a, {b, c}}) do
       a = a + i
       b = b * i
-      c = Nx.power(c, i)
+      c = Nx.pow(c, i)
       {{{a, b}, c}, {a, {b, c}}}
     end
 
@@ -356,7 +356,7 @@ defmodule EXLA.Defn.APITest do
       cond do
         a == -1 -> hook(b * 2, :cond)
         a == 1 -> hook(b / 2, :cond)
-        true -> hook(Nx.power(b, 2), :cond)
+        true -> hook(Nx.pow(b, 2), :cond)
       end
     end
 

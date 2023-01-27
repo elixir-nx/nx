@@ -677,7 +677,7 @@ BINARY_OP(divide)
 BINARY_OP(remainder)
 BINARY_OP(multiply)
 BINARY_OP(matmul)
-BINARY_OP2(power, pow)
+BINARY_OP2(pow, pow)
 BINARY_OP(atan2)
 BINARY_OP(min)
 BINARY_OP(max)
@@ -1238,7 +1238,7 @@ static ErlNifFunc nif_functions[] = {
     DF(fmod, 2),
     DF(quotient, 2),
     DF(multiply, 2),
-    DF(power, 2),
+    DF(pow, 2),
     DF(atan2, 2),
     DF(min, 2),
     DF(max, 2),

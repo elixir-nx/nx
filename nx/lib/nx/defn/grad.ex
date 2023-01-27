@@ -336,7 +336,7 @@ defmodule Nx.Defn.Grad do
     end
   end
 
-  @reduced_grads [:add, :multiply, :power]
+  @reduced_grads [:add, :multiply, :pow]
   @verify_grad Application.compile_env(:nx, :verify_grad, false)
 
   defp update_grads(op, args, ans, g, _to_grad_ids, grads) do
@@ -864,18 +864,18 @@ defmodule Nx.Defn.Grad do
     ]
   end
 
-  defp grad(:power, [x, y], ans, g) do
+  defp grad(:pow, [x, y], ans, g) do
     case y do
       %T{data: %Expr{op: :constant, args: [y]}} ->
         exponent = if y == 0.0, do: 1.0, else: y - 1.0
-        gx = Nx.multiply(y, Nx.power(x, exponent))
+        gx = Nx.multiply(y, Nx.pow(x, exponent))
         [unbroadcast(x, Nx.multiply(g, gx), ans)]
 
       %{} ->
         exponent = Nx.select(Nx.equal(y, 0.0), 1.0, Nx.subtract(y, 1.0))
         base = Nx.select(Nx.equal(x, 0.0), 1.0, x)
 
-        gx = Nx.multiply(y, Nx.power(x, exponent))
+        gx = Nx.multiply(y, Nx.pow(x, exponent))
         gy = Nx.multiply(Nx.log(base), ans)
         [unbroadcast(x, Nx.multiply(g, gx), ans), unbroadcast(y, Nx.multiply(g, gy), ans)]
     end
@@ -1001,7 +1001,7 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:rsqrt, [x], _ans, g) do
-    [{x, Nx.multiply(Nx.multiply(g, -0.5), Nx.power(x, -1.5))}]
+    [{x, Nx.multiply(Nx.multiply(g, -0.5), Nx.pow(x, -1.5))}]
   end
 
   defp grad(:sin, [x], _ans, g) do

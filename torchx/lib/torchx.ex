@@ -274,7 +274,7 @@ defmodule Torchx do
   deftensor add(tensorA, tensorB)
   deftensor subtract(tensorA, tensorB)
   deftensor multiply(tensorA, tensorB)
-  deftensor power(tensorA, tensorB)
+  deftensor pow(tensorA, tensorB)
   deftensor remainder(tensorA, tensorB)
   deftensor fmod(tensorA, tensorB)
   deftensor divide(tensorA, tensorB)

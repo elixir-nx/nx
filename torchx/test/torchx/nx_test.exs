@@ -9,8 +9,8 @@ defmodule Torchx.NxTest do
   @types [{:s, 8}, {:u, 8}, {:s, 16}, {:s, 32}, {:s, 64}, {:bf, 16}, {:f, 32}, {:f, 64}]
   @bf16_and_ints [{:s, 8}, {:u, 8}, {:s, 16}, {:s, 32}, {:s, 64}, {:bf, 16}]
   @ints [{:s, 8}, {:u, 8}, {:s, 16}, {:s, 32}, {:s, 64}]
-  @ops [:add, :subtract, :divide, :remainder, :multiply, :power, :atan2, :min, :max]
-  @ops_unimplemented_for_bfloat [:remainder, :atan2, :power]
+  @ops [:add, :subtract, :divide, :remainder, :multiply, :pow, :atan2, :min, :max]
+  @ops_unimplemented_for_bfloat [:remainder, :atan2, :pow]
   @ops_with_bfloat_specific_result [:divide]
   @bitwise_ops [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift]
   @logical_ops [

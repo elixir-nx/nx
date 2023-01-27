@@ -137,7 +137,7 @@ defmodule EXLA.Op do
 
   ## Element-wise binary ops
 
-  arith = [:add, :subtract, :multiply, :divide, :max, :min, :remainder, :atan2, :power]
+  arith = [:add, :subtract, :multiply, :divide, :max, :min, :remainder, :atan2, :pow]
   bitwise = [:bitwise_and, :bitwise_or, :bitwise_xor]
   shift = [:left_shift, :right_shift_arithmetic, :right_shift_logical]
   comparison = [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]

@@ -162,7 +162,7 @@ defmodule Nx.Defn.Kernel do
         parameter a s64
         parameter c s64
         b = tanh [ a ] f64
-        d = power [ c, 2 ] s64
+        d = pow [ c, 2 ] s64
         e = add [ b, d ] f64
       >
 
@@ -393,17 +393,17 @@ defmodule Nx.Defn.Kernel do
   @doc """
   Element-wise power operator.
 
-  It delegates to `Nx.power/2` (supports broadcasting).
+  It delegates to `Nx.pow/2` (supports broadcasting).
 
   ## Examples
 
-      defn power(a, b) do
+      defn pow(a, b) do
         a ** b
       end
 
   """
   def left ** right when Kernel.and(is_number(left), is_number(right)), do: Kernel.**(left, right)
-  def left ** right, do: Nx.power(left, right)
+  def left ** right, do: Nx.pow(left, right)
 
   @doc """
   Element-wise division operator.

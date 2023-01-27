@@ -339,9 +339,9 @@ defmodule Nx.Random do
     span = max_val - min_val
 
     multiplier =
-      Nx.power(2, Nx.quotient(nbits, 2))
+      Nx.pow(2, Nx.quotient(nbits, 2))
       |> Nx.remainder(span)
-      |> Nx.power(2)
+      |> Nx.pow(2)
       |> Nx.remainder(span)
 
     offset =

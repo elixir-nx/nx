@@ -818,7 +818,7 @@ defmodule EXLA.Defn do
     apply(EXLA.Op, op, [to_type(left, type), to_type(right, type), dims])
   end
 
-  @bin_op [:add, :subtract, :multiply, :min, :max, :remainder, :power, :divide, :atan2] ++
+  @bin_op [:add, :subtract, :multiply, :min, :max, :remainder, :pow, :divide, :atan2] ++
             [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift]
 
   defp to_operator(op, [left, right], %{type: type}, _state) when op in @bin_op do
