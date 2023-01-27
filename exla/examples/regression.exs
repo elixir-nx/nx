@@ -17,7 +17,7 @@ defmodule LinReg do
   # MSE Loss
   defn loss({m, b}, inp, tar) do
     preds = predict({m, b}, inp)
-    Nx.mean(Nx.power(tar - preds, 2))
+    Nx.mean(Nx.pow(tar - preds, 2))
   end
 
   defn update({m, b} = params, inp, tar, step) do
