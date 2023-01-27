@@ -1153,12 +1153,12 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def svd({u_holder, s_holder, vt_holder}, tensor, _opts) do
+  def svd({u_holder, s_holder, vt_holder}, tensor, opts) do
     {u, s, vt} =
       tensor
       |> from_nx()
       |> Torchx.to_type(to_torch_type(u_holder.type))
-      |> Torchx.svd()
+      |> Torchx.svd(opts[:full_matrices?] == true)
 
     {to_nx(u, u_holder), to_nx(s, s_holder), to_nx(vt, vt_holder)}
   end

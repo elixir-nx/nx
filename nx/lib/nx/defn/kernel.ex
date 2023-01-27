@@ -1,6 +1,8 @@
 defmodule Nx.Defn.Kernel do
   @moduledoc """
   All imported functionality available inside `defn` blocks.
+
+  This module can be used in `defn`.
   """
 
   import Nx.Shared, only: [defnguard: 2]
@@ -33,7 +35,6 @@ defmodule Nx.Defn.Kernel do
       defn some_fun(t) do
         MH.fft(t)
       end
-
   """
   defmacro alias(module, opts \\ []), do: special_form!([module, opts])
 
@@ -242,12 +243,18 @@ defmodule Nx.Defn.Kernel do
     Nx.Defn.Expr.metadata(expr, %{stop_grad: true, inspect: :stop_grad})
   end
 
+  @doc false
+  @deprecated "custom_grad/2 is deprecated, use custom_grad/3 instead"
+  def custom_grad(expr, fun) when is_function(fun, 2) do
+    Nx.Defn.Expr.metadata(expr, %{custom_grad: fun, inspect: :custom_grad})
+  end
+
   @doc """
   Defines a custom gradient for the given expression.
 
-  It expects a `fun` to compute the gradient. The function
-  will be called with the expression itself and the current
-  gradient. It must return a list of arguments and their
+  It also expects a list of inputs of the gradient and a `fun`
+  to compute the gradient. The function will be called with the
+  current gradient. It must return a list of arguments and their
   updated gradient to continue applying `grad` on.
 
   ## Examples
@@ -256,14 +263,14 @@ defmodule Nx.Defn.Kernel do
   implemented by hand:
 
       def cos(t) do
-        custom_grad(Nx.cos(t), fn _ans, g ->
+        custom_grad(Nx.cos(t), [t], fn g ->
           [{t, -g * Nx.sin(t)}]
         end)
       end
 
   """
-  def custom_grad(expr, fun) when is_function(fun, 2) do
-    Nx.Defn.Expr.metadata(expr, %{custom_grad: fun, inspect: :custom_grad})
+  def custom_grad(expr, inputs, fun) when Kernel.and(is_list(inputs), is_function(fun, 1)) do
+    Nx.Defn.Expr.metadata(expr, %{custom_grad: {inputs, fun}, inspect: :custom_grad})
   end
 
   @doc """
@@ -384,7 +391,7 @@ defmodule Nx.Defn.Kernel do
   def left * right, do: Nx.multiply(left, right)
 
   @doc """
-  Element-wise multiplication operator.
+  Element-wise power operator.
 
   It delegates to `Nx.power/2` (supports broadcasting).
 
@@ -1435,7 +1442,7 @@ defmodule Nx.Defn.Kernel do
           hook_token(token, another_value)
         end
 
-      attach_token(result)
+      attach_token(token, result)
 
   Instead, you must write:
 
@@ -1615,8 +1622,7 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc false
-  # TODO: Deprecate this in Nx v0.5
-  # @deprecated "Use deftransform/2 or deftransformp/2 from Nx.Defn instead"
+  @deprecated "Use deftransform/2 or deftransformp/2 from Nx.Defn instead"
   def transform(arg, fun) when is_function(fun, 1) do
     fun.(arg)
   end

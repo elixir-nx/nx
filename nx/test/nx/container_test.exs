@@ -169,5 +169,58 @@ defmodule Nx.ContainerTest do
       assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 64}} = right
     end
+
+    defn container_while_raise_type_mismatching(x) do
+      container = %Container{a: 1, b: 2}
+
+      while {i = 0, container, x = Nx.as_type(x, :u8)}, i < 10 do
+        {i + 1, container, Nx.as_type(x, :s16)}
+      end
+    end
+
+    defn container_cond_raise_type_mismatching(x) do
+      container = %Container{a: 1, b: 2}
+
+      cond do
+        x == 1 ->
+          container
+
+        true ->
+          1
+      end
+    end
+
+    test "renders correctly when while raises" do
+      expected_error =
+        [
+          "the do-block in while must return tensors with the same shape, type, and names as the initial arguments.",
+          "\n\nBody matches template:\n\n{#Nx.Tensor<\n   s64\n >, ",
+          "%Container{a: #Nx.Tensor<\n     s64\n   >, b: #Nx.Tensor<\n     s64\n   >, c: %{}, d: %{}}, #Nx.Tensor<\n   s16\n >}",
+          "\n\nand initial argument has template:\n\n{#Nx.Tensor<\n   s64\n >, ",
+          "%Container{a: #Nx.Tensor<\n     s64\n   >, b: #Nx.Tensor<\n     s64\n   >, c: %{}, d: %{}}, #Nx.Tensor<\n   u8\n >}\n$"
+        ]
+        |> IO.iodata_to_binary()
+        |> Regex.compile!()
+
+      assert_raise CompileError, expected_error, fn ->
+        container_while_raise_type_mismatching(1)
+      end
+    end
+
+    test "renders correctly when cond raises" do
+      expected_error =
+        [
+          "cond/if expects all branches to return compatible tensor types.",
+          "\n\nGot mismatching templates:\n\n%Container{a: #Nx.Tensor<\n    s64\n  >, b: #Nx.Tensor<\n    s64\n  >, c: %{}, d: %{}}",
+          "\n\nand\n\n#Nx.Tensor<\n  s64\n>\n",
+          "$"
+        ]
+        |> IO.iodata_to_binary()
+        |> Regex.compile!()
+
+      assert_raise CompileError, expected_error, fn ->
+        container_cond_raise_type_mismatching(1)
+      end
+    end
   end
 end

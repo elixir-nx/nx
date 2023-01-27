@@ -656,6 +656,7 @@ defmodule Torchx.NxTest do
                Nx.tensor([0.0, 1.0, 2.0], type: {:bf, 16}, backend: Nx.BinaryBackend)
     end
 
+    @tag :skip_apple_arm64
     test "non-finite to integer conversions" do
       non_finite =
         Nx.stack([Nx.Constants.infinity(), Nx.Constants.nan(), Nx.Constants.neg_infinity()])

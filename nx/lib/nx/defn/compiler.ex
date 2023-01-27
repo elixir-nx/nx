@@ -83,7 +83,7 @@ defmodule Nx.Defn.Compiler do
                  vars: [Nx.Container.t()]
 
   # Modules allowed in defn
-  @allowed_modules [Nx, Nx.Constants, Nx.Defn, Nx.Defn.Kernel, Nx.LinAlg, Nx.Type]
+  @allowed_modules [Nx.Constants, Nx.Defn, Nx.Defn.Kernel, Nx.LinAlg, Nx.Type]
 
   # These operations do not have valid meaning for Nx.Defn.Expr
   @forbidden_ops [:backend_copy, :backend_deallocate, :backend_transfer] ++
@@ -134,8 +134,7 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp runtime_fun(args, fun, compiler) do
-    tuple = Nx.default_backend()
-    Nx.default_backend(Nx.Defn.Expr)
+    previous_backend = Process.put(Nx.Shared.backend_pdict_key(), {Nx.Defn.Expr, []})
     previous = Process.put(Nx.Defn.Compiler, compiler)
 
     try do
@@ -143,7 +142,11 @@ defmodule Nx.Defn.Compiler do
       |> apply(args)
       |> Nx.Defn.Composite.traverse(&Nx.Defn.Expr.tensor/1)
     after
-      Nx.default_backend(tuple)
+      if previous_backend do
+        Process.put(Nx.Shared.backend_pdict_key(), previous_backend)
+      else
+        Process.delete(Nx.Shared.backend_pdict_key())
+      end
 
       if previous do
         Process.put(Nx.Defn.Compiler, compiler)
@@ -250,7 +253,7 @@ defmodule Nx.Defn.Compiler do
 
   defp compile_each_defn({{name, arity} = def, def_meta}, state) do
     %{defaults: defaults} = def_meta
-    {{kind, _meta, args, ast}, state} = get_and_normalize_definition(def, state)
+    {{kind, _meta, args, ast}, state} = get_and_normalize_defn(def, state)
 
     defn_name = defn_name(name)
 
@@ -293,23 +296,32 @@ defmodule Nx.Defn.Compiler do
     {kind, meta, [Macro.update_meta(signature, &Keyword.delete(&1, :context)), block]}
   end
 
-  defp compile_each_transform({{name, max_arity}, _def_meta}, state) do
+  defp compile_each_transform({{name, defn_arity}, def_meta}, state) do
     defn_name = defn_name(name)
 
-    # {...} <- [Module...] is a trick so we can skip nil definitions for a given arity
-    ast =
-      for defn_arity <- 0..max_arity,
-          {:v1, kind, meta, _clauses} <- [Module.get_definition(state.module, {name, defn_arity})] do
-        defn_args = Macro.generate_arguments(defn_arity, __MODULE__)
+    %{defaults: defaults} = def_meta
+
+    case Module.get_definition(state.module, {name, defn_arity}) do
+      {:v1, kind, meta, _clauses} ->
+        all_args = Macro.generate_arguments(defn_arity, __MODULE__)
+
+        defn_args =
+          Enum.with_index(all_args, fn arg, i ->
+            case defaults do
+              %{^i => {meta, default}} -> {:\\, meta, [arg, default]}
+              %{} -> arg
+            end
+          end)
 
         quote line: meta[:line] do
           Kernel.unquote(kind)(unquote(defn_name)(unquote_splicing(defn_args)),
-            do: unquote(name)(unquote_splicing(defn_args))
+            do: unquote(name)(unquote_splicing(all_args))
           )
         end
-      end
 
-    {:__block__, [], ast}
+      _ ->
+        nil
+    end
   end
 
   @doc false
@@ -323,7 +335,7 @@ defmodule Nx.Defn.Compiler do
     res
   end
 
-  defp get_and_normalize_definition(def, state) do
+  defp get_and_normalize_defn({name, arity} = def, state) do
     {:v1, kind, meta, clauses} = Module.get_definition(state.module, def)
     state = %{state | function: def, line: meta[:line] || state.line, rewrite_underscore?: true}
 
@@ -331,7 +343,7 @@ defmodule Nx.Defn.Compiler do
 
     case clauses do
       [] ->
-        compile_error!(meta, state, "cannot have #{type_str} without clauses")
+        compile_error!(meta, state, "cannot have #{type_str} #{name}/#{arity} without clauses")
 
       [{meta, args, [], ast}] ->
         {args, state} = normalize_args(args, meta, state)
@@ -339,7 +351,11 @@ defmodule Nx.Defn.Compiler do
         {{kind, meta, args, ast}, state}
 
       [_, _ | _] ->
-        compile_error!(meta, state, "cannot compile #{type_str} with multiple clauses")
+        compile_error!(
+          meta,
+          state,
+          "cannot compile #{type_str} #{name}/#{arity} with multiple clauses"
+        )
     end
   end
 
@@ -569,12 +585,31 @@ defmodule Nx.Defn.Compiler do
     {{dot, meta, [arg]}, state}
   end
 
-  defp normalize({{:., dot_meta, [mod, name]}, meta, args}, state) when mod in @allowed_modules do
+  defp normalize({{:., dot_meta, [Nx, name]}, meta, args}, state) do
     if name in @forbidden_ops do
-      mfa = Exception.format_mfa(mod, name, length(args))
+      mfa = Exception.format_mfa(Nx, name, length(args))
       compile_error!(meta, state, "#{mfa} is not allowed inside defn")
     end
 
+    if name == :tensor and args != [] and not Macro.quoted_literal?(hd(args)) do
+      warn(meta, state, """
+      Nx.tensor/2 inside defn expects the first argument to be a literal (such as a list)
+
+      You must avoid code such as:
+
+          Nx.tensor(opts[:key])
+
+      As that will JIT compile a different function for each different key.
+      Those values must be literals or be converted to tensors by explicitly \
+      calling Nx.tensor/2 outside of a defn
+      """)
+    end
+
+    {args, state} = normalize_list(args, state)
+    {{{:., dot_meta, [Nx, name]}, meta, args}, state}
+  end
+
+  defp normalize({{:., dot_meta, [mod, name]}, meta, args}, state) when mod in @allowed_modules do
     {args, state} = normalize_list(args, state)
     {{{:., dot_meta, [mod, name]}, meta, args}, state}
   end
@@ -775,6 +810,13 @@ defmodule Nx.Defn.Compiler do
   defp compile_error!(meta, state, description) do
     line = meta[:line] || state.line
     raise CompileError, line: line, file: state.file, description: description
+  end
+
+  defp warn(meta, state, message) do
+    line = meta[:line] || state.line
+    {name, arity} = state.function
+    entry = {state.module, name, arity, [file: String.to_charlist(state.file), line: line]}
+    IO.warn(message, [entry])
   end
 
   defp defn_name(name), do: :"__defn:#{name}__"

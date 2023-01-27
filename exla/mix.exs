@@ -2,7 +2,7 @@ defmodule EXLA.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx"
-  @version "0.4.1"
+  @version "0.4.2"
 
   def project do
     [
@@ -21,13 +21,20 @@ defmodule EXLA.MixProject do
         docs: :docs,
         "hex.publish": :docs
       ],
-      compilers: [:exla, :elixir_make] ++ Mix.compilers(),
+      compilers: [:extract_xla, :cached_make] ++ Mix.compilers(),
       aliases: [
-        "compile.exla": &compile/1
+        "compile.extract_xla": &extract_xla/1,
+        "compile.cached_make": &cached_make/1
       ],
-      make_env: %{
-        "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}"
-      }
+      make_env: fn ->
+        priv_path = Path.join(Mix.Project.app_path(), "priv")
+        cwd_relative_to_priv = relative_to(File.cwd!(), priv_path)
+
+        %{
+          "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}",
+          "CWD_RELATIVE_TO_PRIV_PATH" => cwd_relative_to_priv
+        }
+      end
     ]
   end
 
@@ -52,7 +59,7 @@ defmodule EXLA.MixProject do
 
   defp deps do
     [
-      {:nx, "~> 0.4.1"},
+      {:nx, "~> 0.4.2"},
       # {:nx, path: "../nx"},
       {:telemetry, "~> 0.4.0 or ~> 1.0"},
       {:xla, "~> 0.4.0", runtime: false},
@@ -101,7 +108,7 @@ defmodule EXLA.MixProject do
   # We keep track of the current XLA archive path in xla_snapshot.txt.
   # Whenever the path changes, we extract it again and Makefile picks
   # up this change
-  defp compile(_) do
+  defp extract_xla(_) do
     xla_archive_path = XLA.archive_path!()
 
     cache_dir = Path.join(__DIR__, "cache")
@@ -114,17 +121,68 @@ defmodule EXLA.MixProject do
 
       _ ->
         File.rm_rf!(xla_extension_path)
-
         Mix.shell().info("Unpacking #{xla_archive_path} into #{cache_dir}")
 
         case :erl_tar.extract(xla_archive_path, [:compressed, cwd: cache_dir]) do
-          :ok -> :ok
+          :ok -> File.write!(xla_snapshot_path, xla_archive_path)
           {:error, term} -> Mix.raise("failed to extract xla archive, reason: #{inspect(term)}")
         end
-
-        File.write!(xla_snapshot_path, xla_archive_path)
     end
 
     {:ok, []}
   end
+
+  defp cached_make(_) do
+    contents =
+      for path <- Path.wildcard("c_src/**/*"),
+          {:ok, contents} <- [File.read(path)],
+          do: contents
+
+    md5 =
+      [XLA.archive_path!() | contents]
+      |> :erlang.md5()
+      |> Base.encode32(padding: false, case: :lower)
+
+    cache_key =
+      "elixir-#{System.version()}-erts-#{:erlang.system_info(:version)}-xla-#{Application.spec(:xla, :vsn)}-exla-#{@version}-#{md5}"
+
+    cached_so = Path.join([xla_cache_dir(), "exla", cache_key, "libexla.so"])
+    cached? = File.exists?(cached_so)
+
+    if cached? do
+      Mix.shell().info("Using libexla.so from #{cached_so}")
+      File.cp!(cached_so, "cache/libexla.so")
+    end
+
+    result = Mix.Tasks.Compile.ElixirMake.run([])
+
+    if not cached? and match?({:ok, _}, result) do
+      Mix.shell().info("Caching libexla.so at #{cached_so}")
+      File.mkdir_p!(Path.dirname(cached_so))
+      File.cp!("cache/libexla.so", cached_so)
+    end
+
+    result
+  end
+
+  defp xla_cache_dir() do
+    # The directory where we store all the archives
+    if dir = System.get_env("XLA_CACHE_DIR") do
+      Path.expand(dir)
+    else
+      :filename.basedir(:user_cache, "xla")
+    end
+  end
+
+  # Returns `path` relative to the `from` directory.
+  defp relative_to(path, from) do
+    path_parts = path |> Path.expand() |> Path.split()
+    from_parts = from |> Path.expand() |> Path.split()
+    {path_parts, from_parts} = drop_common_prefix(path_parts, from_parts)
+    root_relative = for _ <- from_parts, do: ".."
+    Path.join(root_relative ++ path_parts)
+  end
+
+  defp drop_common_prefix([h | left], [h | right]), do: drop_common_prefix(left, right)
+  defp drop_common_prefix(left, right), do: {left, right}
 end

@@ -38,6 +38,8 @@ defmodule Nx.Defn do
 
   Please consult `Nx.Defn.Kernel` for a complete reference.
 
+  This module can be used in `defn`.
+
   ## Operators
 
   `defn` attempts to keep as close to the Elixir semantics as
@@ -72,28 +74,16 @@ defmodule Nx.Defn do
 
   The above will return an anonymous function that optimizes,
   compiles, and run `softmax` on the fly on the CPU (or the GPU)
-  if available.
-
-  You can also change the default compiler for all numerical
-  definitions (`defn`) by setting the default options. This can
-  be done in your `config/*.exs` files as follows:
-
-      config :nx, :default_defn_options, compiler: EXLA
-
-  Now calling `MyModule.softmax(my_tensor)` will use `EXLA` even
-  without wrapping it in `jit/2`.
-
-  However, note that compilation may be quite time consuming on
-  the first invocation, that's why it is often preferred to use
-  the `compiler: EXLA` option when calling the functions in this
-  module instead. EXLA, in particular, also exports a `EXLA.jit/2`
+  if available. EXLA, in particular, also exports a `EXLA.jit/2`
   function for convenience.
 
   `defn` functions are compiled when they are invoked, based on
-  the type and shapes of the tensors given as arguments. The
-  compilation is then cached based on the tensors shapes and types.
-  Calling the same function with a tensor of different values but
-  same shape and type means no recompilation is performed.
+  the type and shapes of the tensors given as arguments.
+  Therefore compilation may be quite time consuming on the first
+  invocation. The compilation is then cached based on the tensors
+  shapes and types. Calling the same function with a tensor of
+  different values but same shape and type means no recompilation
+  is performed.
 
   For those interested in writing custom compilers, see `Nx.Defn.Compiler`.
 
@@ -128,31 +118,12 @@ defmodule Nx.Defn do
 
       deftransformp custom_elixir_code(value), do: IO.inspect(value)
 
-  For example, the two code snippets invoke `IO.inspect/1`, which is
-  not a `defn` function, with the value of `res`. This is useful
-  as it allows developers to transform `defn` code to optimize,
-  add new properties, and so on.
+  The only difference between using `deftransform` and `deftransformp`
+  is wether you want to expose and share the code with other modules,
+  just like `def` and `defp`.
 
-  The only difference between using `deftransform` and `deftransformp` is
-  wether you want to expose and share the code with other modules, just
-  like `def` and `defp`.
-
-  Transforms can also be used to manipulate Elixir data structures,
-  such as options. `defn` expects all inputs to be tensors, with the
-  exception of a default argument (declared with `\\`) which will be
-  treated as options.
-
-  For example, imagine you want to support options where the :axis
-  key is required. While you can't invoke `Keyword` directly, you
-  can do it via a transform:
-
-      defn sum_axis(t, opts \\ []) do
-        opts = keyword!(opts, [:axis])
-        axis = get_axis(opts)
-        Nx.sum(t, axes: [axis])
-      end
-
-      deftransformp get_axis(opts), do: Keyword.fetch!(opts, :axis)
+  Transforms are useful to manipulate tensor expressions or
+  Elixir data structures without the constraints of `defn`.
 
   ## Inputs and outputs types
 
@@ -247,12 +218,16 @@ defmodule Nx.Defn do
   separate process, such as `Task`, the default options must be
   set on the new process too.
 
-  This function is mostly used for scripting and testing. In your
-  applications, you typically set the default options in your
-  config files:
+  The function returns the values that were previously set as default
+  options.
 
-        config :nx, :#{@app_key}, [compiler: EXLA, client: :cuda]
+  This function must be used only for scripting and testing.
 
+  ## Examples
+
+      iex> Nx.Defn.default_options(compiler: EXLA, client: :cuda)
+      iex> Nx.Defn.default_options()
+      [compiler: EXLA, client: :cuda]
   """
   def default_options(options) when is_list(options) do
     Process.put(@compiler_key, options) || Application.fetch_env!(:nx, @app_key)
@@ -265,13 +240,14 @@ defmodule Nx.Defn do
   `defn`. It also applies to calls to the `jit/3` and `stream/3`
   functions in this module.
 
-  You must avoid calling this function at runtime. It is mostly
-  useful during scripts or code notebooks to set a default.
-  If you need to configure a global default options in your
-  applications, you can do so in your `config/*.exs` files:
+  You must avoid calling this function at runtime and mostly for
+  testing purposes. You may also set in your test environment using
+  configuration:
 
       config :nx, :#{@app_key}, [compiler: EXLA, client: :cuda]
 
+  The function returns the values that were previously set as global
+  default options.
   """
   def global_default_options(options) when is_list(options) do
     current = Application.fetch_env!(:nx, @app_key)
@@ -333,28 +309,13 @@ defmodule Nx.Defn do
         raise "cannot invoke compiled function when there is a JIT compilation happening"
       end
 
-      {templates, flatten} = compile_flatten(args, templates, 1, [])
-
-      if templates != [] do
-        raise ArgumentError, """
-        cannot invoke compiled function because the given arguments do not match compiled arguments
-
-        Compiled with:
-
-        #{inspect(template_args)}
-
-        Got:
-
-        #{inspect(args)}
-        """
-      end
-
+      flatten = compile_flatten(args, templates, template_args, 1, [])
       [res] = compiled_fun.([flatten])
       res
     end)
   end
 
-  defp compile_flatten([arg | args], templates, pos, acc) do
+  defp compile_flatten([arg | args], templates, template_args, pos, acc) do
     {_, {templates, acc}} =
       Nx.LazyContainer.traverse(arg, {templates, acc}, fn
         arg_template, fun, {[template | templates], acc} ->
@@ -370,19 +331,50 @@ defmodule Nx.Defn do
 
             #{inspect(arg_template)}
 
-            Within argument:
+            Expected argument:
+
+            #{inspect(Enum.fetch!(template_args, pos - 1))}
+
+            Actual argument:
 
             #{inspect(arg)}
             """
           end
 
           {:ok, {templates, [fun | acc]}}
+
+        _arg_template, _fun, {[], acc} ->
+          raise ArgumentError, """
+          cannot invoke compiled function because the given arguments do not match compiled arguments
+
+          Compiled with:
+
+          #{inspect(template_args)}
+
+          Got:
+
+          #{inspect(Enum.reverse(acc, [arg | args]))}
+          """
       end)
 
-    compile_flatten(args, templates, pos + 1, acc)
+    compile_flatten(args, templates, template_args, pos + 1, acc)
   end
 
-  defp compile_flatten([], templates, _pos, acc), do: {templates, Enum.reverse(acc)}
+  defp compile_flatten([], [], _template_args, _pos, acc), do: Enum.reverse(acc)
+
+  defp compile_flatten([], _templates, template_args, _pos, acc) do
+    raise ArgumentError, """
+    cannot invoke compiled function because the given arguments do not match compiled arguments
+
+    Compiled with:
+
+    #{inspect(template_args)}
+
+    Got:
+
+    #{inspect(Enum.reverse(acc))}
+    """
+  end
 
   @doc """
   Wraps an anonymous function with just-in-time compilation.
@@ -561,6 +553,25 @@ defmodule Nx.Defn do
 
     * `:hooks` - a map of hooks to execute. See `Nx.Defn.Kernel.hook/3`
 
+  ## Beware: deadlocks
+
+  Some backends (such as XLA) place locks around devices. For example,
+  if you start streaming on the GPU, you cannot perform any other
+  operation on the GPU until streaming is over.
+
+  This means if we modify the loop above to the following:
+
+      for i <- 1..5 do
+        Nx.Stream.send(stream, Nx.tensor(i) |> Nx.multiply(2))
+        IO.inspect {:chunk, Nx.Stream.recv(stream)}
+      end
+
+  The loop may deadlock at the time it performs the multiplication.
+  In practice, this means you should perform the streaming on the GPU
+  and the remaining operations on the CPU. If you only have a single
+  device (i.e. only a CPU), then it may not be possible to perform the
+  above and you will have to restructure your code to manipulate the
+  input before streaming starts.
   """
   def stream(fun, args, opts \\ [])
       when is_function(fun) and is_list(args) and is_list(opts) do

@@ -52,7 +52,18 @@ defmodule EXLA.Backend do
     backend_copy(tensor, Nx.BinaryBackend, backend_options)
   end
 
-  # TODO: Support direct transfers between EXLA without going through Elixir
+  def backend_copy(%T{data: %B{buffer: buffer}} = tensor, EXLA.Backend, backend_options) do
+    {client, device_id} = client_and_device_id(backend_options)
+
+    if same_client_device?(buffer, client, device_id) do
+      # We cannot copy to the same client/device using copy_to_device
+      EXLA.Backend.from_binary(tensor, EXLA.DeviceBuffer.read(buffer), backend_options)
+    else
+      buffer = EXLA.DeviceBuffer.copy_to_device(buffer, client, device_id)
+      put_in(tensor.data, %B{buffer: buffer})
+    end
+  end
+
   def backend_copy(%T{data: %B{buffer: buffer}} = tensor, backend, backend_options) do
     backend.from_binary(tensor, EXLA.DeviceBuffer.read(buffer), backend_options)
   end
@@ -101,7 +112,7 @@ defmodule EXLA.Backend do
           ])
         end
 
-        jit(expr_fun, [tensor])
+        jit([], expr_fun, [tensor])
 
       i ->
         expr_fun = fn tensor, start_idx ->
@@ -109,7 +120,7 @@ defmodule EXLA.Backend do
         end
 
         start_idx = i * batch_size
-        jit(expr_fun, [tensor, start_idx])
+        jit([], expr_fun, [tensor, start_idx])
     end)
   end
 
@@ -151,6 +162,10 @@ defmodule EXLA.Backend do
 
   defp same_client_device?(buffer, opts) do
     {client, device_id} = client_and_device_id(opts)
+    same_client_device?(buffer, client, device_id)
+  end
+
+  defp same_client_device?(buffer, client, device_id) do
     buffer.client_name == client.name and buffer.device_id == device_id
   end
 
@@ -164,7 +179,7 @@ defmodule EXLA.Backend do
       Nx.Defn.Expr.concatenate(out, Tuple.to_list(tensors), axis)
     end
 
-    jit(expr_fun, tensors, [List.to_tuple(tensors)])
+    jit([], expr_fun, tensors, [List.to_tuple(tensors)])
   end
 
   @impl true
@@ -176,13 +191,13 @@ defmodule EXLA.Backend do
         Nx.Defn.Expr.slice(out, tensor, start_indices, lengths, strides)
       end
 
-      jit(expr_fun, [tensor])
+      jit([], expr_fun, [tensor])
     else
       expr_fun = fn tensor, start_indices ->
         Nx.Defn.Expr.slice(out, tensor, Tuple.to_list(start_indices), lengths, strides)
       end
 
-      jit(expr_fun, [tensor | start_indices], [tensor, List.to_tuple(start_indices)])
+      jit([], expr_fun, [tensor | start_indices], [tensor, List.to_tuple(start_indices)])
     end
   end
 
@@ -195,13 +210,18 @@ defmodule EXLA.Backend do
         Nx.Defn.Expr.put_slice(out, tensor, start_indices, slice)
       end
 
-      jit(expr_fun, [tensor, slice])
+      jit([], expr_fun, [tensor, slice])
     else
       expr_fun = fn tensor, start_indices, slice ->
         Nx.Defn.Expr.put_slice(out, tensor, Tuple.to_list(start_indices), slice)
       end
 
-      jit(expr_fun, [tensor, slice | start_indices], [tensor, List.to_tuple(start_indices), slice])
+      jit(
+        [],
+        expr_fun,
+        [tensor, slice | start_indices],
+        [tensor, List.to_tuple(start_indices), slice]
+      )
     end
   end
 
@@ -214,7 +234,7 @@ defmodule EXLA.Backend do
       Nx.Defn.Expr.optional(name, Tuple.to_list(tensors) ++ rest, fun)
     end
 
-    jit(wrapper_fun, tensors, [List.to_tuple(tensors)])
+    jit([], wrapper_fun, tensors, [List.to_tuple(tensors)])
   end
 
   binary_ops =
@@ -279,7 +299,6 @@ defmodule EXLA.Backend do
       {:qr, [:tensor, :opts], [:tensor]},
       {:triangular_solve, [:a, :b, :opts], [:a, :b]},
       {:eigh, [:tensor, :opts], [:tensor]},
-      {:svd, [:tensor, :opts], [:tensor]},
       {:fft, [:tensor, :opts], [:tensor]},
       {:ifft, [:tensor, :opts], [:tensor]}
     ] ++
@@ -290,6 +309,8 @@ defmodule EXLA.Backend do
     args = Enum.map(args, &Macro.var(&1, __MODULE__))
     tensor_args = Enum.map(tensor_args, &Macro.var(&1, __MODULE__))
 
+    backend_options = Enum.find(args, [], &match?({:backend_options, _, _}, &1))
+
     @impl true
     def unquote(name)(out, unquote_splicing(args)) do
       out = Nx.to_template(out)
@@ -298,27 +319,28 @@ defmodule EXLA.Backend do
         Nx.Defn.Expr.unquote(name)(out, unquote_splicing(args))
       end
 
-      jit(expr_fun, [unquote_splicing(tensor_args)])
+      jit(unquote(backend_options), expr_fun, [unquote_splicing(tensor_args)])
     end
   end
 
-  defp jit(fun, args), do: jit(fun, args, args)
+  defp jit(backend_options, fun, args), do: jit(backend_options, fun, args, args)
 
-  # TODO: Should we automatically transfer between devices?
-  defp jit(fun, tensors, args) do
+  defp jit(backend_options, fun, tensors, args) do
     client =
       for %T{data: %B{buffer: %EXLA.DeviceBuffer{client_name: client_name}}} <- tensors,
           reduce: nil do
         acc when acc != nil and acc != client_name ->
-          raise ArgumentError, """
-          cannot perform Nx operation using EXLA tensors from different clients. Got:
-
-          #{inspect(tensors)}
-          """
+          if EXLA.Client.fetch!(client_name).platform == :host do
+            acc
+          else
+            client_name
+          end
 
         _ ->
           client_name
       end
+
+    client = backend_options[:client] || client
 
     EXLA.jit_apply(fun, args, on_conflict: :force, client: client || EXLA.Client.default_name())
   end

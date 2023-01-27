@@ -54,7 +54,7 @@ jobs:
 
   win:
     name: Windows
-    runs-on: windows-latest
+    runs-on: windows-2019
     strategy:
       fail-fast: false
       matrix:
@@ -74,6 +74,10 @@ jobs:
         working-directory: .
       - uses: actions/checkout@v2
       - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          toolset: 14.2
+          vsversion: 2019
+          arch: x64
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{ matrix.otp }}

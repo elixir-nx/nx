@@ -92,8 +92,18 @@ defmodule Nx.Defn.Expr do
   inspection.
   """
   def metadata(expr, metadata) when is_map(metadata) do
-    expr = to_expr(expr)
-    expr(expr, expr.data.context, :metadata, [expr, metadata])
+    case to_container_expr(expr) do
+      %{data: %{context: context}} = res ->
+        expr(res, context, :metadata, [expr, metadata])
+
+      t when is_tuple(t) ->
+        context = elem(t, 0).data.context
+
+        tuple(
+          expr(tuple_out(tuple_size(t)), context, :metadata, [expr, metadata]),
+          Tuple.to_list(t)
+        )
+    end
   end
 
   @doc """
@@ -217,8 +227,16 @@ defmodule Nx.Defn.Expr do
   def optional(name, args, fun) do
     {args, opts} = Enum.split_while(args, &(not is_list(&1)))
     params = Enum.with_index(args, &parameter/2)
-    %{data: %{context: context}} = res = apply(fun, params ++ opts)
-    expr(res, context, :optional, [expr(res, context, name, args), res])
+
+    case apply(fun, params ++ opts) do
+      %{data: %{context: context}} = res ->
+        expr(res, context, :optional, [expr(res, context, name, args), res])
+
+      t when is_tuple(t) ->
+        context = elem(t, 0).data.context
+        out = expr(tuple_out(tuple_size(t)), context, name, args)
+        tuple(expr(out, context, :optional, [out, t]), Tuple.to_list(t))
+    end
   end
 
   ## Nx.Defn AST callbacks
@@ -285,9 +303,17 @@ defmodule Nx.Defn.Expr do
               raise CompileError,
                 line: meta[:line],
                 file: file,
-                description:
-                  "cond/if expects all branches to return compatible tensor types. " <>
-                    "Got: #{maybe_type_shape_string(first)} and #{maybe_type_shape_string(expr)}"
+                description: """
+                cond/if expects all branches to return compatible tensor types.
+
+                Got mismatching templates:
+
+                #{inspect_as_template(first)}
+
+                and
+
+                #{inspect_as_template(expr)}
+                """
             end
 
             [{pred, expr} | acc]
@@ -325,14 +351,7 @@ defmodule Nx.Defn.Expr do
         condition = to_pred(condition, line, file, :while)
         body = to_container_expr(body)
 
-        if not Nx.compatible?(initial, body) do
-          raise CompileError,
-            line: line,
-            file: file,
-            description:
-              "the do-block in while must return tensors with the same shape, type, and names as the initial arguments. " <>
-                "Got body #{maybe_type_shape_string(body)} and initial #{maybe_type_shape_string(initial)}"
-        end
+        compatible_while!(file, line, initial, body)
 
         while(initial, context, arg, condition, body)
 
@@ -464,9 +483,17 @@ defmodule Nx.Defn.Expr do
       raise CompileError,
         line: line,
         file: file,
-        description:
-          "the do-block in while must return tensors with the same shape, type, and names as the initial arguments. " <>
-            "Got body #{maybe_type_shape_string(body)} and initial #{maybe_type_shape_string(initial)}"
+        description: """
+        the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
+
+        Body matches template:
+
+        #{inspect_as_template(body)}
+
+        and initial argument has template:
+
+        #{inspect_as_template(initial)}
+        """
     end
   end
 
@@ -946,8 +973,8 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def qr({q, r}, tensor, opts) do
-    tensor = to_expr(tensor)
+  def qr({q, r}, t, opts) do
+    tensor = to_expr(t)
     context = tensor.data.context
     out = %T{names: [], shape: {}, type: {:tuple, 2}}
     tuple(expr(out, context, :qr, [{q, r}, tensor, opts]), [q, r])
@@ -959,14 +986,6 @@ defmodule Nx.Defn.Expr do
     context = tensor.data.context
     out = %T{names: [], shape: {}, type: {:tuple, 2}}
     tuple(expr(out, context, :eigh, [{evals, evecs}, tensor, opts]), [evals, evecs])
-  end
-
-  @impl true
-  def svd({u, s, vt}, tensor, opts) do
-    tensor = to_expr(tensor)
-    context = tensor.data.context
-    out = %T{names: [], shape: {}, type: {:tuple, 3}}
-    tuple(expr(out, context, :svd, [{u, s, vt}, tensor, opts]), [u, s, vt])
   end
 
   @impl true
@@ -1172,32 +1191,16 @@ defmodule Nx.Defn.Expr do
     context || acc
   end
 
-  defp maybe_type_shape_string(%{type: type, shape: shape, names: names}) do
-    Nx.Type.to_string(type) <> Nx.Shape.to_string(shape, names)
+  defp inspect_as_template(data) do
+    if is_number(data) or is_tuple(data) or
+         (is_map(data) and Nx.Container.impl_for(data) != Nx.Container.Any) do
+      data
+      |> Nx.to_template()
+      |> Kernel.inspect(custom_options: [skip_template_backend_header: true])
+    else
+      inspect(data)
+    end
   end
-
-  defp maybe_type_shape_string(tuple) when is_tuple(tuple) do
-    list = Tuple.to_list(tuple)
-    IO.iodata_to_binary(["{", Enum.map_intersperse(list, ", ", &maybe_type_shape_string/1), "}"])
-  end
-
-  defp maybe_type_shape_string(map) when is_map(map) do
-    pairs =
-      Enum.map_intersperse(map, ", ", fn {k, v} ->
-        [inspect(k), " => ", maybe_type_shape_string(v)]
-      end)
-
-    IO.iodata_to_binary(["%{", pairs, "}"])
-  end
-
-  defp maybe_type_shape_string(number) when is_number(number) do
-    shape = {}
-    names = []
-    type = Nx.Type.infer(number)
-    Nx.Type.to_string(type) <> Nx.Shape.to_string(shape, names)
-  end
-
-  defp maybe_type_shape_string(other), do: inspect(other)
 
   ## Constant helpers and related optimizations
 
@@ -1299,6 +1302,11 @@ defmodule Nx.Defn.Expr do
   import Inspect.Algebra
 
   @impl true
+  # Special case for constants since we show them inline in regular printing
+  def inspect(%T{data: %Expr{op: :constant, args: [constant]}}, opts) do
+    concat([line(), color("Nx.Defn.Expr", :map, opts), line(), to_string(constant)])
+  end
+
   def inspect(tensor, opts) do
     {t, acc} = inspect_expr(tensor, {[], [], %{}, %{}})
     {_, {exprs, params, _var_map, _cache}} = Tree.apply_args(t, acc, &inspect_expr/2)

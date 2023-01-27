@@ -150,8 +150,23 @@ defmodule Nx.BinaryBackend do
   @impl true
   def from_binary(t, binary, _backend_options), do: from_binary(t, binary)
 
-  defp from_binary(t, binary) when is_binary(binary), do: %{t | data: %B{state: binary}}
-  defp from_binary(t, other), do: %{t | data: %B{state: IO.iodata_to_binary(other)}}
+  if Application.compile_env(:nx, :verify_binary_size) do
+    defp from_binary(%{type: {_, bitsize}, shape: shape} = t, binary) when is_binary(binary) do
+      actual = byte_size(binary)
+      expected = Tuple.product(shape) * div(bitsize, 8)
+
+      unless actual == expected do
+        raise ArgumentError,
+              "unexpected size for tensor data, expected #{expected} bytes got: #{actual} bytes"
+      end
+
+      %{t | data: %B{state: binary}}
+    end
+  else
+    defp from_binary(t, binary) when is_binary(binary), do: %{t | data: %B{state: binary}}
+  end
+
+  defp from_binary(t, other), do: from_binary(t, IO.iodata_to_binary(other))
 
   @impl true
   def to_binary(%{type: {_backend_options, size}} = t, limit) do
@@ -337,7 +352,7 @@ defmodule Nx.BinaryBackend do
   # as we transpose and build the rest.
   @impl true
   def pad(out, t, pad_value, padding_config) do
-    pad_value = to_binary(as_type(out, pad_value))
+    pad_value = %{pad_value | type: out.type} |> as_type(pad_value) |> to_binary()
 
     case t.shape do
       {} ->
@@ -615,9 +630,14 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def select(out, %{shape: {}} = pred, on_true, on_false) do
-    if scalar_to_number(pred) == 0,
-      do: from_binary(out, broadcast_data(on_false, out.shape)),
-      else: from_binary(out, broadcast_data(on_true, out.shape))
+    result =
+      if scalar_to_number(pred) == 0 do
+        on_false |> broadcast_data(out.shape) |> binary_to_binary(on_false.type, out.type, & &1)
+      else
+        on_true |> broadcast_data(out.shape) |> binary_to_binary(on_true.type, out.type, & &1)
+      end
+
+    from_binary(out, result)
   end
 
   def select(%{shape: shape, type: type} = out, pred, on_true, on_false) do
@@ -1307,43 +1327,6 @@ defmodule Nx.BinaryBackend do
       end)
 
     {from_binary(eigenvals_holder, eigenvals), from_binary(eigenvecs_holder, eigenvecs)}
-  end
-
-  @impl true
-  def svd(
-        {u_holder, %{type: output_type} = s_holder, v_holder},
-        %{type: input_type, shape: input_shape} = tensor,
-        opts
-      ) do
-    bin = to_binary(tensor)
-    rank = tuple_size(input_shape)
-    m = elem(input_shape, rank - 2)
-    n = elem(input_shape, rank - 1)
-
-    vt_rows = elem(v_holder.shape, rank - 2)
-    vt_cols = elem(v_holder.shape, rank - 1)
-
-    if m < n do
-      error_msg =
-        if rank == 2 do
-          "SVD not implemented for wide matrices (tensors with shape {m, n} where m < n)"
-        else
-          "SVD not implemented for batches of wide matrices (tensors with shape {..., m, n} where m < n)"
-        end
-
-      raise ArgumentError, error_msg
-    end
-
-    {u, s, v} =
-      bin_batch_reduce(bin, m * n, input_type, {<<>>, <<>>, <<>>}, fn matrix,
-                                                                      {u_acc, s_acc, v_acc} ->
-        {u, s, v} =
-          B.Matrix.svd(matrix, input_type, {m, n}, output_type, {vt_rows, vt_cols}, opts)
-
-        {u_acc <> u, s_acc <> s, v_acc <> v}
-      end)
-
-    {from_binary(u_holder, u), from_binary(s_holder, s), from_binary(v_holder, v)}
   end
 
   @impl true
@@ -2430,7 +2413,7 @@ defmodule Nx.BinaryBackend do
 
   ## Conversion helpers
 
-  defp scalar_to_number(n) when is_number(n), do: n
+  defp scalar_to_number(n) when is_number(n) or n in [:nan, :neg_infinity, :infinity], do: n
   defp scalar_to_number(%Complex{} = n), do: n
   defp scalar_to_number(t), do: binary_to_number(to_binary(t), t.type)
 

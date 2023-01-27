@@ -328,26 +328,5 @@ defmodule Torchx.NxLinAlgTest do
         Nx.tensor(48)
       )
     end
-
-    test "eigh" do
-      a =
-        Nx.tensor([
-          [0, 1, 2],
-          [1, 0, 2],
-          [2, 2, 3]
-        ])
-
-      {values, vectors} = Nx.LinAlg.eigh(a)
-      assert_all_close(values, Nx.tensor([-1.0, -1.0, 5.0]))
-
-      assert_all_close(
-        vectors,
-        Nx.tensor([
-          [-0.796406, -0.44617220, -0.408248],
-          [0.596439, -0.6910815, -0.408248],
-          [0.099983, 0.568626, -0.816496]
-        ])
-      )
-    end
   end
 end

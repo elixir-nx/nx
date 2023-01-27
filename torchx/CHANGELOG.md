@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.2 (2023-01-13)
+
+### Enhancements
+
+  * Cache LibTorch downloads across repositories
+
 ## v0.4.1 (2022-12-07)
 
 ### Enhancements

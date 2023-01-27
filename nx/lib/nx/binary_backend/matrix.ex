@@ -262,7 +262,7 @@ defmodule Nx.BinaryBackend.Matrix do
 
         # Conj(a + bi) = a - bi
 
-        if abs(re_ij - re_ji) > eps do
+        if abs(re_ij - re_ji) > eps and not (re_ij == :nan and re_ji == :nan) do
           raise_not_hermitian()
         end
 
@@ -271,6 +271,9 @@ defmodule Nx.BinaryBackend.Matrix do
             :ok
 
           {:neg_infinity, :infinity} ->
+            :ok
+
+          {:nan, :nan} ->
             :ok
 
           {x, y} ->
@@ -409,7 +412,12 @@ defmodule Nx.BinaryBackend.Matrix do
     |> Enum.all?(fn {a_row, b_row} ->
       a_row
       |> Enum.zip(b_row)
-      |> Enum.all?(fn {a_elem, b_elem} -> Complex.abs(a_elem - b_elem) <= eps end)
+      |> Enum.all?(fn
+        {a_elem, b_elem} ->
+          abs_diff = Complex.abs(a_elem - b_elem)
+
+          abs_diff == :nan or abs_diff <= eps
+      end)
     end)
   end
 
@@ -504,119 +512,6 @@ defmodule Nx.BinaryBackend.Matrix do
     end)
   end
 
-  def svd(
-        input_data,
-        input_type,
-        input_shape,
-        output_type,
-        {vt_rows, vt_cols},
-        opts
-      ) do
-    # This implementation is a mixture of concepts described in [1] and the
-    # algorithmic descriptions found in [2], [3] and [4]
-    #
-    # [1] - Parallel One-Sided Block Jacobi SVD Algorithm: I. Analysis and Design,
-    #       by Gabriel Oksa and Marian Vajtersic
-    #       Source: https://www.cosy.sbg.ac.at/research/tr/2007-02_Oksa_Vajtersic.pdf
-    # [2] - https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/client/lib/svd.cc#L784
-    # [3] - https://github.com/tensorflow/tensorflow/blob/dcdc6b2f9015829cde2c02b111c04b2852687efc/tensorflow/compiler/xla/client/lib/svd.cc#L386
-    # [4] - http://drsfenner.org/blog/2016/03/householder-bidiagonalization/
-    # [5] - http://www.mymathlib.com/c_source/matrices/linearsystems/singular_value_decomposition.c
-    a = binary_to_matrix(input_data, input_type, input_shape)
-
-    eps = opts[:eps]
-    max_iter = opts[:max_iter] || 1000
-    {u, d, vt} = householder_bidiagonalization(a, input_shape, eps)
-
-    {fro_norm, off_diag_norm} = get_frobenius_norm(d)
-
-    {u, s_matrix, vt, _, _} =
-      Enum.reduce_while(1..max_iter, {u, d, vt, off_diag_norm, fro_norm}, fn
-        _, {u, d, vt, off_diag_norm, fro_norm} ->
-          eps = 1.0e-9 * fro_norm
-
-          if off_diag_norm > eps do
-            # Execute a round of jacobi rotations on u, d and vt
-            {u, d, vt} = svd_jacobi_rotation_round(u, d, vt, input_shape, eps)
-
-            # calculate a posteriori norms for d, so the next iteration of Enum.reduce_while can decide to halt
-            {fro_norm, off_diag_norm} = get_frobenius_norm(d)
-
-            {:cont, {u, d, vt, off_diag_norm, fro_norm}}
-          else
-            {:halt, {u, d, vt, nil, nil}}
-          end
-      end)
-
-    # Make s a vector
-    s =
-      s_matrix
-      |> Enum.with_index()
-      |> Enum.map(fn {row, idx} -> Enum.at(row, idx) end)
-      |> Enum.reject(&is_nil/1)
-
-    {s, [vt_row | _] = vt} = apply_singular_value_corrections(s, vt)
-
-    if length(vt) != vt_rows or length(vt_row) != vt_cols do
-      raise "vt matrix completion for wide-matrices not implemented for Nx.BinaryBackend"
-    end
-
-    {u |> approximate_zeros(eps) |> matrix_to_binary(output_type),
-     s |> approximate_zeros(eps) |> matrix_to_binary(output_type),
-     vt |> approximate_zeros(eps) |> matrix_to_binary(output_type)}
-  end
-
-  defp svd_jacobi_rotation_round(u, d, v, {_, n}, eps) do
-    for p <- 0..(n - 2), q <- (p + 1)..(n - 1), reduce: {u, d, v} do
-      {u, d, v} ->
-        # We need the values for d_bin at indices [p,p], [p,q], [q,p], [q,q], [[p,q], 0..n-1] for this first iteration
-        d_rows_pq = get_matrix_rows(d, [p, q])
-
-        [d_pp, d_pq, d_qp, d_qq] = get_matrix_elements(d, [[p, p], [p, q], [q, p], [q, q]])
-
-        {rot_l, rot_r} = jacobi_rotators(d_pp, d_pq, d_qp, d_qq, eps)
-
-        updated_d_rows_pq = rot_l |> transpose_matrix() |> dot_matrix(d_rows_pq)
-
-        d = replace_rows(d, [p, q], updated_d_rows_pq)
-        d_cols = get_matrix_columns(d, [p, q])
-
-        updated_d_cols = dot_matrix(d_cols, rot_r)
-        d = replace_cols(d, [p, q], updated_d_cols)
-
-        rotated_u_cols = u |> get_matrix_columns([p, q]) |> dot_matrix(rot_l)
-        u = replace_cols(u, [p, q], rotated_u_cols)
-
-        rotated_v_cols = v |> get_matrix_columns([p, q]) |> dot_matrix(rot_r)
-        v = replace_cols(v, [p, q], rotated_v_cols)
-
-        {u, d, v}
-    end
-  end
-
-  defp apply_singular_value_corrections(s, v) do
-    # Due to convention, the singular values must be positive.
-    # This function fixes any negative singular values.
-    # It's important to note that since s left-multiplies v_transposed in
-    # the SVD result. Since it also represents a diagonal matrix,
-    # changing a sign in s implies a sign change in the
-    # corresponding row of v_transposed.
-
-    # This function also sorts singular values from highest to lowest,
-    # as this can be convenient.
-
-    s
-    |> Enum.zip_with(transpose_matrix(v), fn
-      singular_value, row when singular_value < 0 ->
-        {-singular_value, Enum.map(row, &(&1 * -1))}
-
-      singular_value, row ->
-        {singular_value, row}
-    end)
-    |> Enum.sort_by(fn {s, _} -> s end, &>=/2)
-    |> Enum.unzip()
-  end
-
   ## Householder helpers
 
   defp householder_reflector(a, target_k, eps)
@@ -696,9 +591,9 @@ defmodule Nx.BinaryBackend.Matrix do
     else
       v_0 =
         if a_0 <= 0 do
-          a_0 - :math.sqrt(norm_a_squared)
+          a_0 - Complex.sqrt(norm_a_squared)
         else
-          -norm_a_sq_1on / (a_0 + :math.sqrt(norm_a_squared))
+          -norm_a_sq_1on / (a_0 + Complex.sqrt(norm_a_squared))
         end
 
       v_0_sq = v_0 * v_0
@@ -712,7 +607,7 @@ defmodule Nx.BinaryBackend.Matrix do
     # complex case
     norm_a_sq_1on = Enum.reduce(tail, 0, &(Complex.abs_squared(&1) + &2))
     norm_a_sq = norm_a_sq_1on + Complex.abs_squared(a_0)
-    norm_a = :math.sqrt(norm_a_sq)
+    norm_a = Complex.sqrt(norm_a_sq)
 
     phase_a_0 = Complex.phase(a_0)
     alfa = Complex.exp(Complex.new(0, phase_a_0)) * norm_a
@@ -721,132 +616,10 @@ defmodule Nx.BinaryBackend.Matrix do
     u_0 = a_0 + alfa
     u = [u_0 | tail]
     norm_u_sq = norm_a_sq_1on + Complex.abs_squared(u_0)
-    norm_u = :math.sqrt(norm_u_sq)
+    norm_u = Complex.sqrt(norm_u_sq)
 
     v = Enum.map(u, &(&1 / norm_u))
     {v, 2, true}
-  end
-
-  defp householder_bidiagonalization(a, {m, 1}, eps) do
-    a = List.flatten(a)
-    u = householder_reflector(a, m, eps)
-    s = Enum.reduce(a, 0, fn x, acc -> x * Complex.conjugate(x) + acc end)
-    s = [[Complex.sqrt(s)]]
-    vt = [[1]]
-
-    {u, s, vt}
-  end
-
-  defp householder_bidiagonalization(tensor, {m, n}, eps) do
-    # For each column in `tensor`, apply
-    # the current column's householder reflector from the left to `tensor`.
-    # if the current column is not the penultimate, also apply
-    # the corresponding row's householder reflector from the right
-
-    for col <- 0..(n - 1), reduce: {nil, tensor, nil} do
-      {ll, a, rr} ->
-        # a[[col..m-1, col]] -> take `m - col` rows from the `col`-th column
-        row_length = if m < col, do: 0, else: m - col
-        a_col = a |> slice_matrix([col, col], [row_length, 1])
-
-        l = householder_reflector(a_col, m, eps)
-
-        ll =
-          if is_nil(ll) do
-            l
-          else
-            dot_matrix(ll, l)
-          end
-
-        a = dot_matrix(l, a)
-
-        {a, rr} =
-          if col <= n - 2 do
-            # r = householder_reflector(a[[col, col+1:]], n)
-
-            r =
-              a
-              |> slice_matrix([col, col + 1], [1, n - col])
-              |> householder_reflector(n, eps)
-
-            rr =
-              if is_nil(rr) do
-                r
-              else
-                dot_matrix(r, rr)
-              end
-
-            a = dot_matrix(a, r)
-            {a, rr}
-          else
-            {a, rr}
-          end
-
-        {ll, a, rr}
-    end
-  end
-
-  defp get_frobenius_norm(tensor) do
-    # returns a tuple with {frobenius_norm, off_diagonal_norm}
-    {fro_norm_sq, off_diag_norm_sq, _row_idx} =
-      Enum.reduce(tensor, {0, 0, 0}, fn row, {fro_norm_sq, off_diag_norm_sq, row_idx} ->
-        {fro_norm_sq, off_diag_norm_sq, _} =
-          Enum.reduce(row, {fro_norm_sq, off_diag_norm_sq, 0}, fn x,
-                                                                  {fro_norm_sq, off_diag_norm_sq,
-                                                                   col_idx} ->
-            if col_idx == row_idx do
-              {fro_norm_sq + x * x, off_diag_norm_sq, col_idx + 1}
-            else
-              {fro_norm_sq + x * x, off_diag_norm_sq + x * x, col_idx + 1}
-            end
-          end)
-
-        {fro_norm_sq, off_diag_norm_sq, row_idx + 1}
-      end)
-
-    {:math.sqrt(fro_norm_sq), :math.sqrt(off_diag_norm_sq)}
-  end
-
-  defp jacobi_rotators(pp, pq, qp, qq, eps) do
-    t = pp + qq
-    d = qp - pq
-
-    {s, c} =
-      if abs(d) < eps do
-        {0, 1}
-      else
-        u = t / d
-        den = :math.sqrt(1 + u * u)
-        {-1 / den, u / den}
-      end
-
-    [[m00, m01], [_, m11]] = dot_matrix([[c, s], [-s, c]], [[pp, pq], [qp, qq]])
-    {c_r, s_r} = make_jacobi(m00, m11, m01, eps)
-    c_l = c_r * c - s_r * s
-    s_l = c_r * s + s_r * c
-
-    rot_l = [[c_l, s_l], [-s_l, c_l]]
-    rot_r = [[c_r, s_r], [-s_r, c_r]]
-
-    {rot_l, rot_r}
-  end
-
-  defp make_jacobi(pp, qq, pq, eps) do
-    if abs(pq) <= eps do
-      {1, 0}
-    else
-      tau = (qq - pp) / (2 * pq)
-
-      t =
-        if tau >= 0 do
-          1 / (tau + :math.sqrt(1 + tau * tau))
-        else
-          -1 / (-tau + :math.sqrt(1 + tau * tau))
-        end
-
-      c = 1 / :math.sqrt(1 + t * t)
-      {c, t * c}
-    end
   end
 
   ## Matrix (2-D array) manipulation
@@ -957,21 +730,6 @@ defmodule Nx.BinaryBackend.Matrix do
         item -> item
       end
     end)
-  end
-
-  defp replace_rows(m, rows, values) do
-    rows
-    |> Enum.zip(values)
-    |> Enum.reduce(m, fn {idx, row}, m -> List.replace_at(m, idx, row) end)
-  end
-
-  defp replace_cols(m, [], _), do: m
-
-  defp replace_cols(m, cols, values) do
-    m
-    |> transpose_matrix()
-    |> replace_rows(cols, transpose_matrix(values))
-    |> transpose_matrix()
   end
 
   defp replace_matrix_element(m, row, col, value) do

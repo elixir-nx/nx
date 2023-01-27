@@ -360,8 +360,7 @@ defmodule Nx.Shared do
       rsqrt:
         {"reverse square root", quote(do: Complex.divide(1, Complex.sqrt(var!(x)))),
          "$$rsqrt(z) = \\frac{1}{\\sqrt{z}}$$"},
-      cbrt:
-        {"cube root", quote(do: Complex.power(var!(x), 1 / 3)), "$$cbrt(z) = z^{\\frac{1}{3}}$$"},
+      cbrt: {"cube root", quote(do: Complex.cbrt(var!(x))), "$$cbrt(z) = z^{\\frac{1}{3}}$$"},
       erf:
         {"error function", quote(do: Complex.erf(var!(x))),
          "$$erf(z) = \\frac{2}{\\sqrt{\\pi}} \\int_{0}^{z} e^{-t^2}dt$$"},
@@ -506,6 +505,13 @@ defmodule Nx.Shared do
     end
   end
 
+  defp ensure_optional_compatible!(left, right) when tuple_size(left) == tuple_size(right) do
+    [Tuple.to_list(left), Tuple.to_list(right)]
+    |> Enum.zip_with(fn [l, r] -> ensure_optional_compatible!(l, r) end)
+
+    left
+  end
+
   defp ensure_optional_compatible!(
          %{shape: shape, type: type, names: names} = left,
          %{shape: shape, type: type, names: names}
@@ -538,4 +544,9 @@ defmodule Nx.Shared do
     do: raise_complex_not_implemented_yet(function, arity)
 
   def raise_complex_not_implemented_yet(_, _, _), do: nil
+
+  @doc """
+  The process dictionary key to store default backend under.
+  """
+  def backend_pdict_key, do: {Nx, :default_backend}
 end

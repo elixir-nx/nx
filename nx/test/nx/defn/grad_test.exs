@@ -8,6 +8,10 @@ defmodule Nx.Defn.GradTest do
   @iters 1..25
   @types [{:f, 64}, {:c, 128}]
 
+  defp random_uniform(min, max, opts) do
+    Nx.random_uniform({}, min, max, opts)
+  end
+
   describe "simple" do
     defn grad_itself(t), do: grad(t, fn t -> t end)
     defn grad_tensor(t), do: grad(t, fn _t -> Nx.tensor(1.0) end)
@@ -100,7 +104,7 @@ defmodule Nx.Defn.GradTest do
 
       custom_cos =
         grad(t, fn t ->
-          custom_grad(Nx.cos(t), fn _ans, g ->
+          custom_grad(Nx.cos(t), [t], fn g ->
             [{t, g * -Nx.sin(t)}]
           end)
         end)
@@ -148,7 +152,7 @@ defmodule Nx.Defn.GradTest do
         check_grads!(
           &addition_rule/1,
           &grad_addition_rule/1,
-          Nx.random_uniform({}, -5.0, 5.0, type: type)
+          random_uniform(-5.0, 5.0, type: type)
         )
       end
     end
@@ -165,7 +169,7 @@ defmodule Nx.Defn.GradTest do
         check_grads!(
           &product_rule/1,
           &grad_product_rule/1,
-          Nx.random_uniform({}, -0.5, 0.5, type: type)
+          random_uniform(-0.5, 0.5, type: type)
         )
       end
     end
@@ -190,7 +194,7 @@ defmodule Nx.Defn.GradTest do
         check_grads!(
           &division_rule/1,
           &grad_division_rule/1,
-          Nx.random_uniform({}, 0.0, 10.0, type: type)
+          random_uniform(0.0, 10.0, type: type)
         )
       end
     end
@@ -203,7 +207,7 @@ defmodule Nx.Defn.GradTest do
         check_grads!(
           &division_num_rule/1,
           &grad_division_num_rule/1,
-          Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
+          random_uniform(0.0, 10.0, type: {:f, 64})
         )
       end
     end
@@ -216,7 +220,7 @@ defmodule Nx.Defn.GradTest do
         check_grads!(
           &division_den_rule/1,
           &grad_division_den_rule/1,
-          Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
+          random_uniform(0.0, 10.0, type: {:f, 64})
         )
       end
     end
@@ -233,7 +237,7 @@ defmodule Nx.Defn.GradTest do
         check_grads!(
           &remainder_rule/1,
           &grad_remainder_rule/1,
-          Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
+          random_uniform(0.0, 10.0, type: {:f, 64})
         )
       end
     end
@@ -246,7 +250,7 @@ defmodule Nx.Defn.GradTest do
         check_grads!(
           &remainder_num_rule/1,
           &grad_remainder_num_rule/1,
-          Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
+          random_uniform(0.0, 10.0, type: {:f, 64})
         )
       end
     end
@@ -259,7 +263,7 @@ defmodule Nx.Defn.GradTest do
         check_grads!(
           &remainder_den_rule/1,
           &grad_remainder_den_rule/1,
-          Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
+          random_uniform(0.0, 10.0, type: {:f, 64})
         )
       end
     end
@@ -276,7 +280,7 @@ defmodule Nx.Defn.GradTest do
         check_grads!(
           &power_rule/1,
           &grad_power_rule/1,
-          Nx.random_uniform({}, 0.0, 10.0, type: type)
+          random_uniform(0.0, 10.0, type: type)
         )
       end
     end
@@ -293,7 +297,7 @@ defmodule Nx.Defn.GradTest do
         check_grads!(
           &exp_rule/1,
           &grad_exp_rule/1,
-          Nx.random_uniform({}, 0.0, 10.0, type: type)
+          random_uniform(0.0, 10.0, type: type)
         )
       end
     end
@@ -310,7 +314,7 @@ defmodule Nx.Defn.GradTest do
         check_grads!(
           &atan2_rule/1,
           &grad_atan2_rule/1,
-          Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
+          random_uniform(0.0, 10.0, type: {:f, 64})
         )
       end
     end
@@ -1426,7 +1430,7 @@ defmodule Nx.Defn.GradTest do
       assert grad_tanh_exp(Nx.tensor(1.0)) == Nx.tensor(0.046936701983213425)
 
       for _ <- @iters do
-        t = Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
+        t = random_uniform(0.0, 10.0, type: {:f, 64})
         check_grads!(&Nx.tanh(Nx.exp(&1)), &grad_tanh_exp/1, t)
       end
     end
@@ -1440,7 +1444,7 @@ defmodule Nx.Defn.GradTest do
       assert grad_grad_tanh(Nx.tensor(1.0)) == Nx.tensor(-0.6397000084492246)
 
       for _ <- @iters do
-        t = Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
+        t = random_uniform(0.0, 10.0, type: {:f, 64})
         check_grads!(&grad_tanh_base/1, &grad_grad_tanh/1, t)
       end
     end
@@ -1495,7 +1499,7 @@ defmodule Nx.Defn.GradTest do
 
       test "computes gradient" do
         for _ <- @iters, type <- @types do
-          t = Nx.random_uniform({}, 0.1, 10.0, type: type)
+          t = random_uniform(0.1, 10.0, type: type)
           check_grads!(&Nx.unquote(fun)(&1), &(__MODULE__.unquote(grad_fun) / 1), t)
         end
       end
@@ -1509,7 +1513,7 @@ defmodule Nx.Defn.GradTest do
 
       test "computes gradient" do
         for _ <- @iters do
-          t = Nx.random_uniform({}, 0.1, 10.0, type: {:c, 128})
+          t = random_uniform(0.1, 10.0, type: {:c, 128})
           check_grads!(&Nx.unquote(fun)(&1), &(__MODULE__.unquote(grad_fun) / 1), t)
         end
       end
@@ -1523,8 +1527,8 @@ defmodule Nx.Defn.GradTest do
       for _ <- @iters, type <- @types do
         # check_grads!/4 fails for values close to the asymptotes
         # of tan's gradient, so we select t to avoid them.
-        multiplier = Nx.random_uniform({}, 0, 10, type: {:u, 32})
-        offset = Nx.random_uniform({}, -1.5, 1.5, type: type)
+        multiplier = random_uniform(0, 10, type: {:u, 32})
+        offset = random_uniform(-1.5, 1.5, type: type)
         t = 3.14159 |> Nx.multiply(multiplier) |> Nx.add(offset)
         check_grads!(&Nx.tan/1, &grad_tan/1, t)
       end
@@ -1538,7 +1542,7 @@ defmodule Nx.Defn.GradTest do
 
     test "computes gradient of inverse trig functions" do
       for _ <- @iters, type <- @types do
-        t = Nx.random_uniform({}, -0.999, 0.999, type: type)
+        t = random_uniform(-0.999, 0.999, type: type)
         check_grads!(&Nx.asin/1, &grad_asin/1, t, atol: 1.0e-5, rtol: 1.0e-2)
         check_grads!(&Nx.atan/1, &grad_atan/1, t, atol: 0.1, rtol: 1.0e-2)
         check_grads!(&Nx.atan/1, &grad_atan/1, Nx.multiply(1000.0, t), atol: 1.0e-2)
@@ -1551,7 +1555,7 @@ defmodule Nx.Defn.GradTest do
       # the formula is in accordance to references.
 
       for _ <- @iters, type <- @types do
-        t = Nx.random_uniform({}, -0.999, 0.999, type: type)
+        t = random_uniform(-0.999, 0.999, type: type)
 
         expected = t |> Nx.power(2) |> Nx.negate() |> Nx.add(1) |> Nx.rsqrt() |> Nx.negate()
 
@@ -1566,16 +1570,10 @@ defmodule Nx.Defn.GradTest do
 
     test "computes gradient" do
       for _ <- @iters, type <- @types do
-        t = Nx.random_uniform({}, -10, 10, type: type)
+        t = random_uniform(-10, 10, type: type)
         check_grads!(&Nx.sinh/1, &grad_sinh/1, t)
         check_grads!(&Nx.cosh/1, &grad_cosh/1, t)
       end
-    end
-
-    test "computes multidimensional gradient" do
-      t = Nx.random_uniform({Enum.count(@iters)}, -10, 10, type: {:f, 64})
-      check_grads!(&Nx.sinh/1, &grad_sinh/1, t)
-      check_grads!(&Nx.cosh/1, &grad_cosh/1, t)
     end
   end
 
@@ -1586,17 +1584,17 @@ defmodule Nx.Defn.GradTest do
 
     test "computes gradient of inverse hyperbolic functions" do
       for _ <- @iters, type <- @types do
-        t = Nx.random_uniform({}, -100.0, 100.0, type: type)
+        t = random_uniform(-100.0, 100.0, type: type)
         check_grads!(&Nx.asinh/1, &grad_asinh/1, t, atol: 1.0e-5, rtol: 1.0e-2)
       end
 
       for _ <- @iters, type <- @types do
-        t = Nx.random_uniform({}, 1.01, 100.0, type: type)
+        t = random_uniform(1.01, 100.0, type: type)
         check_grads!(&Nx.acosh/1, &grad_acosh/1, t, atol: 1.0e-5, rtol: 1.0e-2)
       end
 
       for _ <- @iters, type <- @types do
-        t = Nx.random_uniform({}, -0.999, 0.999, type: type)
+        t = random_uniform(-0.999, 0.999, type: type)
         check_grads!(&Nx.atanh/1, &grad_atanh/1, t, atol: 1.0e-5, rtol: 1.0e-2)
       end
     end
@@ -1607,7 +1605,7 @@ defmodule Nx.Defn.GradTest do
 
     test "computes the gradient" do
       for _ <- @iters do
-        t = Nx.random_uniform({}, -100.0, 100.0, type: {:f, 64})
+        t = random_uniform(-100.0, 100.0, type: {:f, 64})
         check_grads!(&Nx.erf/1, &grad_erf/1, t, atol: 1.0e-5, rtol: 1.0e-2)
       end
     end
@@ -1618,7 +1616,7 @@ defmodule Nx.Defn.GradTest do
 
     test "computes the gradient" do
       for _ <- @iters do
-        t = Nx.random_uniform({}, -100.0, 100.0, type: {:f, 64})
+        t = random_uniform(-100.0, 100.0, type: {:f, 64})
         check_grads!(&Nx.erfc/1, &grad_erfc/1, t, atol: 1.0e-4)
       end
     end
@@ -1629,21 +1627,21 @@ defmodule Nx.Defn.GradTest do
 
     test "computes gradient close to 0.0" do
       for _ <- @iters do
-        t = Nx.random_uniform({}, 0.0, 0.9, type: {:f, 64})
+        t = random_uniform(0.0, 0.9, type: {:f, 64})
         check_grads!(&Nx.erf_inv/1, &grad_erf_inv/1, t, atol: 1.0e-5, rtol: 1.0e-2)
       end
     end
 
     test "computes gradient between 0.9 and 0.95" do
       for _ <- @iters do
-        t = Nx.random_uniform({}, 0.9, 0.95, type: {:f, 64})
+        t = random_uniform(0.9, 0.95, type: {:f, 64})
         check_grads!(&Nx.erf_inv/1, &grad_erf_inv/1, t, atol: 1.0e-5, rtol: 1.0e-2)
       end
     end
 
     test "computes gradient between 0.95 and 0.98" do
       for _ <- @iters do
-        t = Nx.random_uniform({}, 0.95, 0.98, type: {:f, 64})
+        t = random_uniform(0.95, 0.98, type: {:f, 64})
         check_grads!(&Nx.erf_inv/1, &grad_erf_inv/1, t, atol: 1.0e-5, rtol: 1.0e-2)
       end
     end
@@ -1958,8 +1956,8 @@ defmodule Nx.Defn.GradTest do
       assert_all_close(
         svd_grad(Nx.tensor([[3, 0], [1, 2]])),
         Nx.tensor([
-          [1.8970632553100586, -1.130002737045288],
-          [-0.7087637782096863, 0.05829668045043945]
+          [0.07228553295135498, 0.7500489950180054],
+          [1.113668441772461, 1.8945982456207275]
         ])
       )
     end
@@ -1967,7 +1965,10 @@ defmodule Nx.Defn.GradTest do
     test "computes the composed grad for tensor" do
       assert_all_close(
         svd_composed_grad(Nx.tensor([[3, 0], [1, 2]])),
-        Nx.tensor([[23.213549, 3.1363947], [9.804395, 8.365231]])
+        Nx.tensor([
+          [22.44730567932129, 4.334394931793213],
+          [10.295409202575684, 9.27196216583252]
+        ])
       )
     end
 
@@ -1975,9 +1976,9 @@ defmodule Nx.Defn.GradTest do
       assert_all_close(
         svd_composed_grad(Nx.tensor([[3, 0], [1, 2], [1, 1]])),
         Nx.tensor([
-          [25.680400848388672, 6.340582847595215],
-          [12.773930549621582, 11.075220108032227],
-          [10.668397903442383, 6.5805983543396]
+          [25.990453720092773, 6.061026096343994],
+          [12.646490097045898, 10.775838851928711],
+          [10.656349182128906, 6.384178638458252]
         ])
       )
     end
@@ -2351,7 +2352,7 @@ defmodule Nx.Defn.GradTest do
         check_grads!(
           &abs_scalar/1,
           &grad_abs_scalar/1,
-          Nx.random_uniform({}, 0.0, 1000.0, type: {:f, 64})
+          random_uniform(0.0, 1000.0, type: {:f, 64})
         )
       end
     end

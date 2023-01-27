@@ -30,7 +30,7 @@ xla::Status ExlaBuffer::Deallocate() {
   }
   else {
     buffer_->Delete();
-    return xla::Status::OK();
+    return tsl::OkStatus();
   }
 }
 

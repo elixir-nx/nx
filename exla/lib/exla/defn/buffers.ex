@@ -4,16 +4,49 @@ defmodule EXLA.Defn.Buffers do
   @doc """
   Filter inputs based on index.
   """
-  def filter_by_indexes(args, inputs), do: filter_by_indexes(args, 0, inputs)
+  def filter_by_indexes(args, inputs, callback \\ fn x, _ -> x end)
 
-  defp filter_by_indexes([var | vars], i, [i | inputs]),
-    do: [var | filter_by_indexes(vars, i + 1, inputs)]
+  def filter_by_indexes(args, inputs, callback) when is_list(inputs),
+    do: filter_by_indexes_list(args, 0, inputs, callback)
 
-  defp filter_by_indexes([_var | vars], i, inputs),
-    do: filter_by_indexes(vars, i + 1, inputs)
+  def filter_by_indexes(args, inputs, callback) when is_map(inputs),
+    do: filter_by_indexes_map(args, 0, inputs, callback)
 
-  defp filter_by_indexes([], _i, []),
+  defp filter_by_indexes_list([var | vars], i, [i | inputs], callback),
+    do: [callback.(var, i) | filter_by_indexes_list(vars, i + 1, inputs, callback)]
+
+  defp filter_by_indexes_list([_var | vars], i, inputs, callback),
+    do: filter_by_indexes_list(vars, i + 1, inputs, callback)
+
+  defp filter_by_indexes_list([], _i, [], _callback),
     do: []
+
+  defp filter_by_indexes_map([var | vars], i, inputs, callback) when is_map_key(inputs, i),
+    do: [callback.(var, i) | filter_by_indexes_map(vars, i + 1, inputs, callback)]
+
+  defp filter_by_indexes_map([_var | vars], i, inputs, callback),
+    do: filter_by_indexes_map(vars, i + 1, inputs, callback)
+
+  defp filter_by_indexes_map([], _i, _, _callback),
+    do: []
+
+  @doc """
+  Splits the given args by value and returns them as is.
+
+  Entries with a map entry are discarded.
+  """
+  def split_by_value(args, %{} = map, callback) do
+    {_i, left, right} =
+      Enum.reduce(args, {0, [], []}, fn arg, {i, left, right} ->
+        case map do
+          %{^i => nil} -> {i + 1, [callback.(arg, i, nil) | left], right}
+          %{^i => value} -> {i + 1, left, [callback.(arg, i, value) | right]}
+          %{} -> {i + 1, left, right}
+        end
+      end)
+
+    {left, right}
+  end
 
   @doc """
   binary + EXLA.DeviceBuffer + EXLA.BinaryBuffer -> Nx.
@@ -67,21 +100,36 @@ defmodule EXLA.Defn.Buffers do
   @doc """
   Nx -> EXLA.DeviceBuffer + EXLA.BinaryBuffer.
   """
-  def from_nx!(funs) do
-    for fun <- funs do
-      %Nx.Tensor{data: data} = tensor = fun.()
+  def from_nx!(fun, executable, transfer? \\ true) do
+    %Nx.Tensor{data: data} = tensor = fun.()
 
-      case data do
-        %EXLA.Backend{buffer: buffer} ->
-          buffer
+    case data do
+      %EXLA.Backend{buffer: %EXLA.DeviceBuffer{} = buffer}
+      when transfer? and buffer.client_name != executable.client.name ->
+        buffer_client = EXLA.Client.fetch!(buffer.client_name)
 
-        %Nx.Defn.Expr{} ->
-          raise ArgumentError,
-                "cannot pass a tensor expression as argument to defn, got: #{inspect(tensor)}"
+        if buffer_client.platform == :host do
+          EXLA.DeviceBuffer.copy_to_device(buffer, executable.client, executable.device_id)
+        else
+          raise ArgumentError, """
+          EXLA computation (defn) is allocated on client #{executable.client.name} (#{executable.client.platform})
+          but one of the input tensors are allocated on #{buffer_client.name} (#{buffer_client.platform}).
 
-        _ ->
-          EXLA.BinaryBuffer.from_binary(Nx.to_binary(tensor), to_exla_shape(tensor))
-      end
+          EXLA only automatically transfers allocated on host to other client.
+          You need to either transfer your tensors to the same client as the executable
+          or compile the defn with a client that matches your input tensors
+          """
+        end
+
+      %EXLA.Backend{buffer: buffer} ->
+        buffer
+
+      %Nx.Defn.Expr{} ->
+        raise ArgumentError,
+              "cannot pass a tensor expression as argument to defn, got: #{inspect(tensor)}"
+
+      _ ->
+        EXLA.BinaryBuffer.from_binary(Nx.to_binary(tensor), to_exla_shape(tensor))
     end
   end
 

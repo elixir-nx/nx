@@ -14,8 +14,6 @@ defmodule EXLA do
 
   ## Configuration
 
-  ### As a backend (recommended)
-
   EXLA ships with a backend to store tensors and run computations on.
   Generally speaking, the backend is enabled globally in your `config/config.exs`
   (or `config/ENV.exs`) with the following:
@@ -49,21 +47,9 @@ defmodule EXLA do
   `ELIXIR_ERL_OPTIONS="+sssdio 128"` is also required on more complex operations
   to increase CUDA's compiler stack size.
 
-  ### As a compiler (optional)
-
-  You can also use EXLA to compile your numerical definitions. One option is to
-  do so globally in your configuration:
-
-      import Config
-      config :nx, :default_defn_options, [compiler: EXLA]
-
-  But compilation can be time consuming when first executing large numerical
-  definitions. Therefore explicit compilation is often preferred by passing
-  the `:compiler` option to `Nx.Defn.jit/2` or by using the convenient `EXLA.jit/2`
-  shortcut:
-
-      Nx.Defn.jit(&some_function/3, compiler: EXLA).(arg1, arg2, arg3)
-      EXLA.jit(&some_function/3).(arg1, arg2, arg3)
+  Note that setting the `EXLA.Backend` does not enable the EXLA compiler.
+  You must still pass the `compiler: EXLA` option to `Nx.Defn` functions
+  or call the functions in this module.
 
   ### Options
 
@@ -230,15 +216,21 @@ defmodule EXLA do
 
   It accepts the same option as `Nx.Defn.jit/2` plus:
 
-    * `:debug` - print compile and debugging information, defaults to `false`.
-
     * `:cache` - cache the results of compilation, defaults to `true`.
 
     * `:client` - an atom representing the client to use. The default
       client is chosen on this order: `:cuda`, `:rocm`, `:tpu`, and `:host`.
 
+    * `:debug` - print compile and debugging information, defaults to `false`.
+
     * `:device_id` - the default device id to run the computation on.
       Defaults to the `:default_device_id` on the client
+
+    * `:lazy_transfers` - when `:always`, it lazily transfers data to the device
+      instead of upfront. This is useful to reduce memory allocation on GPU/TPU
+      devices at the cost of increased latency. **It is recommended to only enable
+      this if the input tensors are allocated on host and the computation is
+      running on GPU/TPU with a limited amount of memory**
 
   """
   def jit(function, options \\ []) do

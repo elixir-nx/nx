@@ -3,18 +3,32 @@ defmodule EXLA.Defn.APITest do
 
   import Nx.Defn
   import ExUnit.CaptureLog
-  import ExUnit.CaptureIO
 
-  describe "options" do
-    defn add_two(a, b), do: a + b
+  defn add_two(a, b), do: a + b
 
-    test "raises on invalid device_id" do
-      # the message is different between backends
-      assert_raise RuntimeError, ~r/1024/, fn ->
-        EXLA.jit(&add_two/2, device_id: 1024).(2, 3)
-      end
+  describe "multi-client" do
+    test "converts from host to separate client" do
+      a = Nx.tensor(1, backend: {EXLA.Backend, client: :host})
+      b = Nx.tensor(2, backend: {EXLA.Backend, client: :host})
+
+      assert_equal(
+        EXLA.jit(&add_two/2, client: :other_host).(a, b),
+        Nx.tensor(3)
+      )
     end
 
+    test "converts from host to separate client through lazy transfers" do
+      a = Nx.tensor(1, backend: {EXLA.Backend, client: :host})
+      b = Nx.tensor(2, backend: {EXLA.Backend, client: :host})
+
+      assert_equal(
+        EXLA.jit(&add_two/2, client: :other_host, lazy_transfers: :always).(a, b),
+        Nx.tensor(3)
+      )
+    end
+  end
+
+  describe "options" do
     test "logs when debugging" do
       logs =
         capture_log(fn ->
@@ -272,38 +286,19 @@ defmodule EXLA.Defn.APITest do
   describe "hooks" do
     require Logger
 
-    defn print_add(a, b) do
-      print_value(a + b)
-    end
-
-    test "prints value" do
-      assert capture_io(fn ->
-               assert_equal(print_add(Nx.tensor(1), Nx.tensor(2)), Nx.tensor(3))
-             end) =~ """
-             #Nx.Tensor<
-               s64
-               3
-             >\
-             """
-    end
-
     defp send_to_self(tag) do
       parent = self()
       fn value -> send(parent, {tag, value}) end
     end
 
     defn hook_default(a, b) do
-      hook(a + b, :default, &Logger.error("add: #{inspect(&1)}"))
+      hook(a + b, :default, send_to_self(:default))
     end
 
     test "executes hook with default" do
-      assert ExUnit.CaptureLog.capture_log(fn -> hook_default(2, 3) end) =~
-               """
-               add: #Nx.Tensor<
-                 s64
-                 5
-               >
-               """
+      assert hook_default(2, 3)
+      assert_receive {:default, tensor}
+      assert_equal(tensor, Nx.tensor(5))
     end
 
     test "executes hook with callback" do

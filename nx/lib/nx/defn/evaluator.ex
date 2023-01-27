@@ -3,6 +3,14 @@ defmodule Nx.Defn.Evaluator do
   The default implementation of a `Nx.Defn.Compiler`
   that evaluates the expression tree against the
   tensor backend.
+
+  ## Options
+
+  The following options are specific to this compiler:
+
+    * `:garbage_collect` - when true, garbage collects
+      after evaluating each node
+
   """
 
   @behaviour Nx.Defn.Compiler
@@ -18,7 +26,7 @@ defmodule Nx.Defn.Evaluator do
     count = Nx.Defn.Composite.count(input) + Nx.Defn.Composite.count(acc)
     rest_params = Enum.drop(args, count)
     hooks = Keyword.get(opts, :hooks, %{})
-    gc? = Keyword.get(opts, :garbage_collect, true)
+    gc? = Keyword.get(opts, :garbage_collect, false)
     {expr, cache} = precompile(fun, vars, hooks)
 
     [
@@ -41,7 +49,7 @@ defmodule Nx.Defn.Evaluator do
   @impl true
   def __compile__(_key, vars, fun, opts) do
     hooks = Keyword.get(opts, :hooks, %{})
-    gc? = Keyword.get(opts, :garbage_collect, true)
+    gc? = Keyword.get(opts, :garbage_collect, false)
     {expr, cache} = precompile(fun, vars, hooks)
 
     fn [params] ->
@@ -74,7 +82,7 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp compute_cache(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, _meta]}}, state, cache) do
-    compute_cache(expr, state, cache)
+    composite_compute_cache(expr, state, cache)
   end
 
   defp compute_cache(%Nx.Tensor{data: %Expr{id: id, op: op}} = tensor, state, cache) do
@@ -214,7 +222,7 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, _meta]}}, state, caches) do
-    eval(expr, state, caches)
+    composite_eval(expr, state, caches)
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}} = ans, state, [cache | caches]) do
@@ -367,7 +375,7 @@ defmodule Nx.Defn.Evaluator do
     else
       params = Enum.map(args, &fn -> &1 end)
       {{expr, optional_cache}, caches} = pop_cache!(caches, [:optional | id])
-      {res, _} = eval(expr, %{state | params: params}, [optional_cache])
+      {res, _} = composite_eval(expr, %{state | params: params}, [optional_cache])
       {res, caches}
     end
   end

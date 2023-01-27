@@ -35,6 +35,14 @@ defmodule Nx.DefnTest do
     test "from binary" do
       assert %T{data: %Expr{op: :tensor}} = binary_constant()
     end
+
+    test "Nx.tensor/2 warns if not constant" do
+      assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
+               defmodule NotConstant do
+                 defn not_constant(opts), do: Nx.tensor(opts[:rate])
+               end
+             end) =~ "Nx.tensor/2 inside defn expects the first argument to be a literal"
+    end
   end
 
   describe "tuple" do
@@ -348,8 +356,6 @@ defmodule Nx.DefnTest do
   describe "creation ops" do
     defn iota(t), do: Nx.iota(Nx.shape(t))
     defn eye, do: Nx.eye(2)
-    defn random_uniform(t), do: Nx.random_uniform(t, 0.0, 2.0)
-    defn random_normal(t), do: Nx.random_normal(t, 0.0, 1.0)
 
     test "iota" do
       assert %T{shape: {3}, data: %Expr{op: :iota, args: [nil]}} = iota(Nx.tensor([1, 2, 3]))
@@ -357,18 +363,6 @@ defmodule Nx.DefnTest do
 
     test "eye" do
       assert %T{shape: {2, 2}, data: %Expr{op: :eye, args: []}} = eye()
-    end
-
-    test "random uniform" do
-      assert %T{
-               shape: {3},
-               data: %Expr{op: :random_uniform, args: [%T{shape: {}}, %T{shape: {}}]}
-             } = random_uniform(Nx.tensor([1, 2, 3]))
-    end
-
-    test "random normal" do
-      assert %T{shape: {3}, data: %Expr{op: :random_normal, args: [%T{shape: {}}, %T{shape: {}}]}} =
-               random_normal(Nx.tensor([1, 2, 3]))
     end
 
     test "raise an error given a shape tuple with tensor values" do
@@ -1244,7 +1238,7 @@ defmodule Nx.DefnTest do
 
     test "raises on non-tensor return" do
       assert_raise CompileError,
-                   ~r"cond/if expects all branches to return compatible tensor types. Got: :foo and :bar",
+                   ~r"cond/if expects all branches to return compatible tensor types.\n\nGot mismatching templates:\n\n:foo\n\nand\n\n:bar\n",
                    fn -> non_tensor_cond(1) end
     end
   end
@@ -1420,8 +1414,17 @@ defmodule Nx.DefnTest do
     test "factorial" do
       assert %T{} = factorial(5)
 
+      expected_error =
+        [
+          "the do-block in while must return tensors with the same shape, type, and names as the initial arguments.",
+          "\n\nBody matches template:\n\n{#Nx.Tensor<\n   f32\n >, #Nx.Tensor<\n   f32\n >}",
+          "\n\nand initial argument has template:\n\n{#Nx.Tensor<\n   s64\n >, #Nx.Tensor<\n   f32\n >}\n"
+        ]
+        |> IO.iodata_to_binary()
+        |> Regex.compile!()
+
       assert_raise CompileError,
-                   ~r/the do-block in while must return tensors with the same shape, type, and names as the initial arguments. Got body \{f32, f32\} and initial \{s64, f32\}/,
+                   expected_error,
                    fn -> factorial(10.0) end
     end
 
@@ -1832,8 +1835,17 @@ defmodule Nx.DefnTest do
     end
 
     test "raises on mixed return" do
+      expected_error =
+        [
+          "the do-block in while must return tensors with the same shape, type, and names as the initial arguments.",
+          "\n\nBody matches template:\n\n%{a: #Nx.Tensor<\n    s64\n  >, b: #Nx.Tensor<\n    s64\n  >}",
+          "\n\nand initial argument has template:\n\n{#Nx.Tensor<\n   s64\n >, #Nx.Tensor<\n   s64\n >}\n"
+        ]
+        |> IO.iodata_to_binary()
+        |> Regex.compile!()
+
       assert_raise CompileError,
-                   ~r/the do-block in while must return tensors with the same shape, type, and names as the initial arguments. Got body %\{:a => s64, :b => s64\} and initial \{s64, s64\}/,
+                   expected_error,
                    fn -> while_mixed_return(Nx.tensor(0), Nx.tensor(1)) end
     end
 
@@ -2089,6 +2101,10 @@ defmodule Nx.DefnTest do
       assert_raise ArgumentError,
                    ~r"cannot invoke compiled function because the given arguments do not match compiled arguments",
                    fn -> fun.(3, 4) end
+
+      assert_raise ArgumentError,
+                   ~r"cannot invoke compiled function because the given arguments do not match compiled arguments",
+                   fn -> fun.({3, 4, 5}, {6, 7, 8}) end
     end
 
     defn nested_compile(opts \\ []), do: nested_compile_transform(opts)
@@ -2197,12 +2213,12 @@ defmodule Nx.DefnTest do
       assert remote_calls_sum_axis_opts(Nx.tensor([[1, 2], [3, 4]])) == Nx.tensor(10)
     end
 
-    defn random_opts(opts \\ []), do: Nx.random_uniform({}, 0, 1, opts)
+    defn iota_opts(opts \\ []), do: Nx.iota({1}, opts)
 
     @tag compiler: Evaluator
     test "exclusively" do
-      assert random_opts([]).type == {:s, 64}
-      assert random_opts(type: {:f, 64}).type == {:f, 64}
+      assert iota_opts([]).type == {:s, 64}
+      assert iota_opts(type: {:f, 64}).type == {:f, 64}
     end
 
     defn sum_axis_expr(a, opts \\ []), do: Nx.sum(a, opts)
@@ -2308,7 +2324,7 @@ defmodule Nx.DefnTest do
     defn multi_clause_first(x), do: multi_clause_transform(x, &(&1 + &1))
     defn multi_clause_second(opts \\ []), do: multi_clause_transform(opts[:x], opts[:y])
 
-    deftransform(multi_clause_bodiless_tf(x \\ 1, y))
+    deftransform multi_clause_bodiless_tf(x \\ 1, y)
     deftransform multi_clause_bodiless_tf(1, y), do: y
     deftransform multi_clause_bodiless_tf(x, _y), do: x
 
@@ -2317,7 +2333,7 @@ defmodule Nx.DefnTest do
     defn multi_clause_transform_bodiless2(opts \\ []),
       do: multi_clause_bodiless_tf(opts[:a], opts[:b])
 
-    deftransformp(multi_clause_bodiless_tf_private(x \\ 1, y))
+    deftransformp multi_clause_bodiless_tf_private(x \\ 1, y)
     deftransformp multi_clause_bodiless_tf_private(1, y), do: y
     deftransformp multi_clause_bodiless_tf_private(x, _y), do: x
 
@@ -2325,6 +2341,31 @@ defmodule Nx.DefnTest do
 
     defn multi_clause_transform_bodiless4(opts \\ []),
       do: multi_clause_bodiless_tf_private(opts[:a], opts[:b])
+
+    # Multi-clause deftransform with guards
+    deftransform multi_clause_multi_arity_transform(x, y \\ 10, z \\ 20)
+
+    deftransform multi_clause_multi_arity_transform(x, y, opts) when is_list(opts),
+      do: {x, y, opts[:value]}
+
+    deftransform multi_clause_multi_arity_transform(x, y, w), do: {x, y, w}
+
+    deftransform multi_clause_multi_arity_transform(x, y, w, opts), do: {x, y, w, opts[:value]}
+
+    defmodule RemoteTransform do
+      import Nx.Defn
+
+      deftransform remote_with_defaults(x, y \\ 0), do: Nx.add(x, y)
+    end
+
+    defn call_remote_transform_1(x), do: RemoteTransform.remote_with_defaults(x)
+    defn call_remote_transform_2(x), do: RemoteTransform.remote_with_defaults(x, x + 1)
+
+    @tag compiler: Evaluator
+    test "can call remote deftransform with defaults from within defn" do
+      assert Nx.tensor(1) == call_remote_transform_1(1)
+      assert Nx.tensor(3) == call_remote_transform_2(1)
+    end
 
     test "can call deftransform and deftransformp functions from within defn" do
       result = deftransform_test(Nx.tensor(1), Nx.tensor(2), b: 3, c: 4)
@@ -2416,6 +2457,15 @@ defmodule Nx.DefnTest do
                    not rb
                  ])
       end
+    end
+
+    @tag compiler: Evaluator
+    test "deftransform supports multi-clause + multi-arity at the same time" do
+      assert multi_clause_multi_arity_transform(1) == {1, 10, 20}
+      assert multi_clause_multi_arity_transform(1, 2) == {1, 2, 20}
+      assert multi_clause_multi_arity_transform(1, 2, 3) == {1, 2, 3}
+      assert multi_clause_multi_arity_transform(1, 2, value: 4) == {1, 2, 4}
+      assert multi_clause_multi_arity_transform(1, 2, 3, value: 4) == {1, 2, 3, 4}
     end
   end
 end

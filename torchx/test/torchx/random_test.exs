@@ -128,6 +128,7 @@ defmodule Torchx.Nx.RandomTest do
       )
     end
 
+    @tag :skip_apple_arm64
     test "normal" do
       key = Nx.Random.key(44)
 

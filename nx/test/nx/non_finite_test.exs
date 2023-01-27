@@ -95,7 +95,7 @@ defmodule Nx.NonFiniteTest do
     end
 
     test "cbrt" do
-      assert_all_close(Nx.cbrt(@arg), @nan_nan, equal_nan: true)
+      assert_all_close(Nx.cbrt(@arg), Complex.new(:infinity, 0))
     end
 
     test "conjugate" do
@@ -112,20 +112,6 @@ defmodule Nx.NonFiniteTest do
           Nx.unquote(fun)(@arg)
         end
       end
-    end
-
-    test "random_uniform" do
-      assert %Nx.Tensor{shape: {3, 3}, type: {:c, 64}} =
-               t = Nx.random_uniform({3, 3}, type: {:c, 64})
-
-      assert Enum.all?(Nx.to_flat_list(t), &is_struct(&1, Complex))
-    end
-
-    test "random_normal" do
-      assert %Nx.Tensor{shape: {3, 3}, type: {:c, 64}} =
-               t = Nx.random_normal({3, 3}, type: {:c, 64})
-
-      assert Enum.all?(Nx.to_flat_list(t), &is_struct(&1, Complex))
     end
   end
 

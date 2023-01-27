@@ -161,7 +161,8 @@ defmodule Nx.Backend do
     cumulative_product: 3,
     cumulative_min: 3,
     cumulative_max: 3,
-    all_close: 4
+    all_close: 4,
+    svd: 3
   ]
 
   ## Inspect implementation

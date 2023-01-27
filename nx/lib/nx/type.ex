@@ -20,6 +20,8 @@ defmodule Nx.Type do
   which is `{:tuple, size}`, that represents a tuple. Said types
   do not appear on user code, only on compiler implementations,
   and therefore are not handled by the functions in this module.
+
+  This module can be used in `defn`.
   """
 
   @type t ::
@@ -587,6 +589,18 @@ defmodule Nx.Type do
       "f64"
   """
   def to_string({type, size}), do: Atom.to_string(type) <> Integer.to_string(size)
+
+  @doc """
+  Returns the smallest positive number as a binary for the given type
+  """
+  def smallest_positive_normal_binary(type)
+  def smallest_positive_normal_binary({:bf, 16}), do: <<0x0080::16-native>>
+  def smallest_positive_normal_binary({:f, 16}), do: <<0x0400::16-native>>
+  def smallest_positive_normal_binary({:f, 32}), do: <<0x0080_0000::32-native>>
+  def smallest_positive_normal_binary({:f, 64}), do: <<0x0010_0000_0000_0000::64-native>>
+
+  def smallest_positive_normal_binary(type),
+    do: raise(ArgumentError, "only floating types are supported, got: #{inspect(type)}")
 
   defp unsigned_size(x) when x <= 1, do: 1
   defp unsigned_size(x) when x <= 255, do: 8

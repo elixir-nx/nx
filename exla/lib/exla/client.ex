@@ -31,9 +31,15 @@ defmodule EXLA.Client do
           Enum.find(preferred_clients, fn client ->
             config =
               all_clients[client] ||
-                raise "unknown client #{inspect(client)} given as :preferred_clients"
+                raise "unknown client #{inspect(client)} given as :preferred_clients. " <>
+                        "If you plan to use :cuda or :rocm, make sure the XLA_TARGET environment variable " <>
+                        "is appropriately set. Currently it is set to #{inspect(System.get_env("XLA_TARGET"))}"
 
-            Map.has_key?(supported_platforms, config[:platform] || :host)
+            platform = config[:platform] || :host
+
+            # If you install XLA with CUDA/ROCm but there are no devices,
+            # we don't want to pick them by default.
+            match?(%{^platform => devices} when devices >= 0, supported_platforms)
           end)
 
         unless client do
@@ -111,14 +117,6 @@ defmodule EXLA.Client do
   def from_outfeed(%EXLA.Client{ref: client}, device_id, shapes, pid, ref) when is_list(shapes) do
     shape_refs = Enum.map(shapes, fn %EXLA.Shape{ref: shape_ref} -> shape_ref end)
     EXLA.NIF.transfer_from_outfeed(client, device_id, shape_refs, pid, ref) |> unwrap!()
-  end
-
-  @doc """
-  Copies buffer to device with given device ID.
-  """
-  def copy_buffer_to_device(%EXLA.Client{ref: client}, %EXLA.DeviceBuffer{ref: buffer}, device_id)
-      when is_integer(device_id) do
-    EXLA.NIF.copy_buffer_to_device(client, buffer, device_id) |> unwrap!()
   end
 
   ## Callbacks
