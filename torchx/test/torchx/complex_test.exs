@@ -155,7 +155,7 @@ defmodule Torchx.ComplexTest do
     end
 
     test "power" do
-      assert_all_close(Nx.power(@arg, @arg2), Complex.new(5.90369e-5, 5.26792e-5))
+      assert_all_close(Nx.pow(@arg, @arg2), Complex.new(5.90369e-5, 5.26792e-5))
     end
 
     test "divide" do
