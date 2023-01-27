@@ -3869,7 +3869,7 @@ defmodule Nx do
   def pow(left, right), do: element_wise_bin_op(left, right, :pow, & &1)
 
   @deprecated "Use pow/2 instead"
-  @doc type: :element
+  @doc false
   def power(left, right), do: pow(left, right)
 
   @doc """
