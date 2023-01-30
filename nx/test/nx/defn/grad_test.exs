@@ -105,7 +105,7 @@ defmodule Nx.Defn.GradTest do
       custom_cos =
         grad(t, fn t ->
           custom_grad(Nx.cos(t), [t], fn g ->
-            [{t, g * -Nx.sin(t)}]
+            [g * -Nx.sin(t)]
           end)
         end)
 

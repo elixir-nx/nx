@@ -323,8 +323,6 @@ defmodule Nx.LinAlg.SVD do
 
     dvt_component = Nx.dot(u, first_dvt_component + second_dvt_component)
 
-    da = du_component + ds_component + dvt_component
-
-    [{input, da}]
+    [du_component + ds_component + dvt_component]
   end
 end

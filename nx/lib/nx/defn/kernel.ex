@@ -264,7 +264,7 @@ defmodule Nx.Defn.Kernel do
 
       def cos(t) do
         custom_grad(Nx.cos(t), [t], fn g ->
-          [{t, -g * Nx.sin(t)}]
+          [-g * Nx.sin(t)]
         end)
       end
 

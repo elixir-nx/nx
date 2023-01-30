@@ -361,18 +361,26 @@ defmodule Nx.Defn.Grad do
     [{arg, g}]
   end
 
-  defp grad(:metadata, [_expr, %{custom_grad: {_, fun}}], _ans, g) do
+  defp grad(:metadata, [_expr, %{custom_grad: {inputs, fun}}], _ans, g) do
     # We don't expose the internal list representation to users
     g = if is_list(g), do: List.to_tuple(g), else: g
-    args = fun.(g)
 
-    unless is_list(args) and Enum.all?(args, &match?({_, _}, &1)) do
-      raise "custom_grad/3 must return a list of tuples, " <>
-              "where the first element is the expression to continue computing grad " <>
-              "and the second element is the updated g"
+    args =
+      case fun.(g) do
+        [{_, _} | _] = args ->
+          # TODO: Remove this clause on Nx v0.6
+          IO.warn("custom_grad/3 must return a list of tensors that map directly to the inputs")
+          Enum.map(args, &elem(&1, 1))
+
+        args ->
+          args
+      end
+
+    unless is_list(args) and Enum.all?(args, &match?(%Nx.Tensor{}, &1)) do
+      raise "custom_grad/3 must return a list of tensors that map directly to the inputs"
     end
 
-    args
+    Enum.zip(inputs, args)
   end
 
   # TODO: Remove this clause when custom_grad/2 from Nx.Defn.Kernel is removed

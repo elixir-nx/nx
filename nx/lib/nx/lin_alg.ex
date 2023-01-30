@@ -748,7 +748,7 @@ defmodule Nx.LinAlg do
     custom_grad(ans, [tensor], fn g ->
       # As defined in https://juliadiff.org/ChainRulesCore.jl/stable/maths/arrays.html#Matrix-inversion-2
       ans_h = adjoint(ans)
-      [{tensor, ans_h |> Nx.negate() |> Nx.dot(g) |> Nx.dot(ans_h)}]
+      [ans_h |> Nx.negate() |> Nx.dot(g) |> Nx.dot(ans_h)]
     end)
   end
 
