@@ -851,6 +851,8 @@ defmodule Nx.Defn do
         use Nx.Defn.Kernel
         unquote(block)
       end
+
+      Process.delete(Nx.Defn)
     end
   end
 
@@ -947,6 +949,7 @@ defmodule Nx.Defn do
           }
         end)
       else
+        Process.put(Nx.Defn, true)
         Map.put(exports, {name, arity}, current_export)
       end
 

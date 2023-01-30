@@ -108,6 +108,15 @@ defmodule Nx.Defn.Compiler do
     Process.get(Nx.Defn.Compiler)
   end
 
+  @doc """
+  Returns if we are inside `defn` at _compilation time_.
+
+  This would be invoked inside a macro that has specific `defn` logic.
+  """
+  def defn?() do
+    Process.get(Nx.Defn, false)
+  end
+
   ## JIT/Stream
 
   @doc false

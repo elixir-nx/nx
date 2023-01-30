@@ -978,8 +978,9 @@ defmodule Nx.Defn.Kernel do
   defmacro if(pred, do_else)
 
   defmacro if(pred, do: on_true) do
+    __defn__!(:if, 2)
+
     quote do
-      Nx.Defn.Kernel.__defn__!(:if, 2)
       pred = unquote(pred)
 
       cond do
@@ -990,8 +991,9 @@ defmodule Nx.Defn.Kernel do
   end
 
   defmacro if(pred, do: on_true, else: on_false) do
+    __defn__!(:if, 2)
+
     quote do
-      Nx.Defn.Kernel.__defn__!(:if, 2)
       pred = unquote(pred)
 
       cond do
@@ -1127,6 +1129,8 @@ defmodule Nx.Defn.Kernel do
   end
 
   defp while(initial, pattern, vars, values, generator, condition, block, opts) do
+    __defn__!(:while, 4)
+
     initial =
       Macro.prewalk(initial, fn
         {name, meta, ctx} when Kernel.and(is_atom(name), is_atom(ctx)) ->
@@ -1137,7 +1141,6 @@ defmodule Nx.Defn.Kernel do
       end)
 
     quote do
-      Nx.Defn.Kernel.__defn__!(:while, 2)
       {unquote_splicing(vars)} = {unquote_splicing(values)}
 
       Nx.Defn.Kernel.__while__(
@@ -1702,8 +1705,8 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc false
-  def __defn__!(fun, arity) do
-    Nx.Defn.Compiler.current() ||
+  defp __defn__!(fun, arity) do
+    Nx.Defn.Compiler.defn?() ||
       Kernel.raise(
         "cannot invoke Nx.Defn.Kernel.#{fun}/#{arity} because you are not inside a defn"
       )

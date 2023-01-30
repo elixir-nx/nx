@@ -209,4 +209,19 @@ defmodule Nx.Defn.KernelTest do
       assert "hook_" <> _ = Atom.to_string(name)
     end
   end
+
+  describe "macros" do
+    test "raise outside of defn" do
+      assert_raise RuntimeError,
+                   "cannot invoke Nx.Defn.Kernel.if/2 because you are not inside a defn",
+                   fn ->
+                     Code.eval_quoted(
+                       quote do
+                         require Nx.Defn.Kernel
+                         Nx.Defn.Kernel.if(1, do: 0)
+                       end
+                     )
+                   end
+    end
+  end
 end
