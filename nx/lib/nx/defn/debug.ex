@@ -4,6 +4,9 @@ defmodule Nx.Defn.Debug do
   @behaviour Nx.Defn.Compiler
 
   @impl true
+  def __partitions_options__(_), do: raise("not implemented")
+
+  @impl true
   def __stream__(_, _, _, _, _, _, _), do: raise("not implemented")
 
   @impl true

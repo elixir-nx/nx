@@ -33,10 +33,8 @@ defmodule Nx.ServingTest do
 
     @impl true
     def handle_batch(batch, partition, pid) do
-      send(pid, {:batch, partition})
-
       fun = fn ->
-        send(pid, {:execute, self()})
+        send(pid, {:execute, partition, self()})
 
         receive do
           :crash -> raise "oops"
@@ -305,7 +303,7 @@ defmodule Nx.ServingTest do
           Nx.Serving.batched_run(config.test, batch)
         end)
 
-      assert_receive {:execute, executor}
+      assert_receive {:execute, 0, executor}
       send(executor, :crash)
 
       assert_receive {:DOWN, ^ref, _, _,
@@ -328,10 +326,10 @@ defmodule Nx.ServingTest do
           assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([6, 8, 10])
         end)
 
-      assert_receive {:execute, executor}
+      assert_receive {:execute, 0, executor}
       send(executor, :continue)
 
-      assert_receive {:execute, executor}
+      assert_receive {:execute, 0, executor}
       send(executor, :crash)
 
       # One task should succeed and the other terminate
@@ -340,7 +338,7 @@ defmodule Nx.ServingTest do
                      when ref in [ref1, ref2]
 
       assert_receive {:DOWN, ref, _, _, :normal} when ref in [ref1, ref2]
-      refute_received {:execute, _executor}
+      refute_received {:execute, _partition, _executor}
     end
 
     @tag :capture_log
@@ -359,7 +357,7 @@ defmodule Nx.ServingTest do
           assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([6, 8])
         end)
 
-      assert_receive {:execute, executor}
+      assert_receive {:execute, 0, executor}
       send(serving_pid, {:system, {self(), make_ref()}, {:terminate, :shutdown}})
       send(executor, :continue)
 
@@ -370,7 +368,7 @@ defmodule Nx.ServingTest do
       assert_receive {:DOWN, ref, _, _, {:shutdown, {Nx.Serving, :batched_run, [_, _]}}}
                      when ref in [ref1, ref2]
 
-      refute_received {:execute, _executor}
+      refute_received {:execute, _partition, _executor}
     end
 
     test "2=>2=>1+timeout", config do
@@ -382,15 +380,11 @@ defmodule Nx.ServingTest do
           assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([2, 4])
         end)
 
-      assert_receive {:batch, 0}
-
       task2 =
         Task.async(fn ->
           batch = Nx.Batch.concatenate([Nx.tensor([3, 4])])
           assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([6, 8])
         end)
-
-      assert_receive {:batch, 0}
 
       task3 =
         Task.async(fn ->
@@ -398,16 +392,15 @@ defmodule Nx.ServingTest do
           assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([10])
         end)
 
-      assert_receive {:execute, executor1}
+      assert_receive {:execute, 0, executor1}
       send(executor1, :continue)
       Task.await(task1)
 
-      assert_receive {:execute, executor2}
+      assert_receive {:execute, 0, executor2}
       send(executor2, :continue)
       Task.await(task2)
 
-      assert_receive {:batch, 0}
-      assert_receive {:execute, executor3}
+      assert_receive {:execute, 0, executor3}
       send(executor3, :continue)
       Task.await(task3)
     end
@@ -471,6 +464,34 @@ defmodule Nx.ServingTest do
                        Nx.Batch.concatenate([Nx.tensor([1, 2, 3])])
                      )
                    end
+    end
+  end
+
+  describe "partitioning" do
+    test "spawns tasks concurrently", config do
+      serving = Nx.Serving.new(ExecuteSync, self(), max_concurrency: 2)
+      opts = [name: config.test, serving: serving, partitions: true, batch_size: 2, shutdown: 1000]
+      start_supervised!({Nx.Serving, opts})
+
+      task1 =
+        Task.async(fn ->
+          batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
+          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([2, 4])
+        end)
+
+      task2 =
+        Task.async(fn ->
+          batch = Nx.Batch.concatenate([Nx.tensor([3, 4])])
+          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([6, 8])
+        end)
+
+      assert_receive {:execute, 0, executor1}
+      assert_receive {:execute, 1, executor2}
+      send(executor1, :continue)
+      send(executor2, :continue)
+
+      assert Task.await(task1)
+      assert Task.await(task2)
     end
   end
 end

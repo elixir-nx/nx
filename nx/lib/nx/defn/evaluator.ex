@@ -11,6 +11,9 @@ defmodule Nx.Defn.Evaluator do
     * `:garbage_collect` - when true, garbage collects
       after evaluating each node
 
+    * `:max_concurrency` - the number of partitions to
+      start when running a `Nx.Serving` with this compiler
+
   """
 
   @behaviour Nx.Defn.Compiler
@@ -20,6 +23,11 @@ defmodule Nx.Defn.Evaluator do
   @random_ops [:random_uniform, :random_normal]
   @list_ops [:concatenate]
   @indices_ops [:slice, :put_slice]
+
+  @impl true
+  def __partitions_options__(opts) do
+    List.duplicate(opts, Keyword.get(opts, :max_concurrency, 1))
+  end
 
   @impl true
   def __stream__(_key, input, acc, vars, fun, [args], opts) do

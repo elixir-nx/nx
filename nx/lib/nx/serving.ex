@@ -292,7 +292,7 @@ defmodule Nx.Serving do
   separate process.
   """
   @callback handle_batch(Nx.Batch.t(), partition :: non_neg_integer(), state) ::
-              {:execute, (-> {Nx.Container.t(), metadata()}), state}
+              {:execute, (() -> {Nx.Container.t(), metadata()}), state}
             when state: term()
 
   @doc """
@@ -502,8 +502,7 @@ defmodule Nx.Serving do
       preprocessing: preprocessing,
       postprocessing: postprocessing,
       limit: limit
-    } =
-      :persistent_term.get(persistent_key(name), nil)
+    } = :persistent_term.get(persistent_key(name), nil)
 
     {batch, info} = handle_preprocessing(preprocessing, input)
 
@@ -600,8 +599,9 @@ defmodule Nx.Serving do
       limit: batch_size,
       timeout: batch_timeout,
       timer: :none,
-      queue: @empty_queue,
-      task: :none,
+      in_queue: @empty_queue,
+      out_queue: Enum.reduce(0..(length(partitions) - 1), :queue.new(), &:queue.in/2),
+      tasks: [],
       task_supervisor: task_supervisor
     }
 
@@ -609,7 +609,8 @@ defmodule Nx.Serving do
   end
 
   defp serving_partitions(%Nx.Serving{defn_options: defn_options}) do
-    [defn_options]
+    compiler = Keyword.get(defn_options, :compiler, Nx.Defn.Evaluator)
+    compiler.__partitions_options__(defn_options)
   end
 
   @impl true
@@ -660,16 +661,26 @@ defmodule Nx.Serving do
     {:noreply, server_timeout(state)}
   end
 
-  def handle_info({ref, reply}, %{task: {task, ref_sizes}, module: module} = state)
-      when task.ref == ref do
-    server_reply_ok(module, ref, reply, ref_sizes)
-    {:noreply, server_task_done(state)}
+  def handle_info({ref, reply}, %{tasks: tasks, module: module} = state) do
+    case Enum.split_with(tasks, &(elem(&1, 0).ref == ref)) do
+      {[{_task, partition, ref_sizes}], tasks} ->
+        server_reply_ok(module, ref, reply, ref_sizes)
+        {:noreply, server_task_done(state, tasks, partition)}
+
+      _ ->
+        {:noreply, state}
+    end
   end
 
-  def handle_info({:DOWN, ref, type, _process, reason}, %{task: {task, ref_sizes}} = state)
-      when task.ref == ref do
-    server_reply_down(type, reason, ref_sizes)
-    {:noreply, server_task_done(state)}
+  def handle_info({:DOWN, ref, type, _process, reason}, %{tasks: tasks} = state) do
+    case Enum.split_with(tasks, &(elem(&1, 0).ref == ref)) do
+      {[{_task, partition, ref_sizes}], tasks} ->
+        server_reply_down(type, reason, ref_sizes)
+        {:noreply, server_task_done(state, tasks, partition)}
+
+      _ ->
+        {:noreply, state}
+    end
   end
 
   def handle_info(msg, state) do
@@ -678,15 +689,15 @@ defmodule Nx.Serving do
   end
 
   @impl true
-  def terminate(_reason, state) do
-    with %{module: module, task: {%Task{ref: ref}, ref_sizes}} <- state do
+  def terminate(_reason, %{module: module, tasks: tasks}) do
+    for task <- tasks, {%Task{ref: ref}, _partition, ref_sizes} = task do
       receive do
         {^ref, reply} -> server_reply_ok(module, ref, reply, ref_sizes)
         {:DOWN, ^ref, type, _, reason} -> server_reply_down(type, reason, ref_sizes)
       end
     end
 
-    state
+    :ok
   end
 
   defp server_reply_ok(module, ref, reply, ref_sizes) do
@@ -715,11 +726,15 @@ defmodule Nx.Serving do
   defp server_execute(%{stack: @empty_stack} = state), do: state
 
   defp server_execute(state) do
-    %{module: module, module_state: module_state, stack: {stack, count}, timer: timer} = state
+    %{stack: {stack, count}, timer: timer} = state
 
-    if is_reference(timer) and Process.cancel_timer(timer) == false do
+    if is_reference(timer) do
+      Process.cancel_timer(timer)
+
       receive do
         @timeout_message -> :ok
+      after
+        0 -> :ok
       end
     end
 
@@ -729,52 +744,58 @@ defmodule Nx.Serving do
         {[{ref, ending - size, size} | ref_sizes], [batch | batches], ending - size}
       end)
 
-    batch = Nx.Batch.merge(batches)
-    {:execute, function, module_state} = handle_batch(module, batch, 0, module_state)
+    state = %{state | timer: :none, stack: @empty_stack}
+    server_task_or_enqueue(state, Nx.Batch.merge(batches), ref_sizes)
+  end
 
-    wrapped_function = fn ->
-      :telemetry.span([:nx, :serving, :execute], %{module: module}, fn ->
-        {output, metadata} = function.()
+  defp server_task_or_enqueue(%{out_queue: out_queue} = state, batch, ref_sizes) do
+    case :queue.out(out_queue) do
+      {:empty, _out_queue} ->
+        %{state | in_queue: :queue.in({batch, ref_sizes}, state.in_queue)}
 
-        {{output, metadata}, %{metadata: metadata, module: module}}
-      end)
+      {{:value, partition}, out_queue} ->
+        %{module: module, module_state: module_state} = state
+        {:execute, function, module_state} = handle_batch(module, batch, partition, module_state)
+
+        wrapped_function = fn ->
+          :telemetry.span([:nx, :serving, :execute], %{module: module}, fn ->
+            {output, metadata} = function.()
+            {{output, metadata}, %{metadata: metadata, module: module}}
+          end)
+        end
+
+        task = Task.Supervisor.async_nolink(state.task_supervisor, wrapped_function)
+        tasks = [{task, partition, ref_sizes} | state.tasks]
+        %{state | module_state: module_state, tasks: tasks, out_queue: out_queue}
     end
-
-    state = %{state | timer: :none, stack: @empty_stack, module_state: module_state}
-    server_task_or_enqueue(state, wrapped_function, ref_sizes)
   end
 
-  defp server_task_or_enqueue(%{task: :none} = state, function, ref_sizes) do
-    task = Task.Supervisor.async_nolink(state.task_supervisor, function)
-    %{state | task: {task, ref_sizes}}
-  end
+  defp server_task_done(%{in_queue: in_queue, out_queue: out_queue} = state, tasks, partition) do
+    out_queue = :queue.in(partition, out_queue)
 
-  defp server_task_or_enqueue(%{task: {_, _}, queue: queue} = state, function, ref_sizes) do
-    %{state | queue: :queue.in({function, ref_sizes}, queue)}
-  end
-
-  defp server_task_done(%{queue: queue} = state) do
-    case :queue.out(queue) do
+    case :queue.out(in_queue) do
       # The timer expired while the task was processing, so execute the current batch.
-      {:empty, _queue} when state.timer == :done ->
-        server_execute(%{state | task: :none})
+      {:empty, _in_queue} when state.timer == :done ->
+        server_execute(%{state | tasks: tasks, out_queue: out_queue})
 
       # Nothing to do.
-      {:empty, _queue} ->
-        %{state | task: :none}
+      {:empty, _in_queue} ->
+        %{state | tasks: tasks, out_queue: out_queue}
 
       # Execute the next one in queue.
-      {{:value, {function, ref_sizes}}, queue} ->
-        server_task_or_enqueue(%{state | task: :none, queue: queue}, function, ref_sizes)
+      {{:value, {batch, ref_sizes}}, in_queue} ->
+        state = %{state | tasks: tasks, out_queue: out_queue, in_queue: in_queue}
+        server_task_or_enqueue(state, batch, ref_sizes)
     end
   end
 
-  # It timed out and there is no task and the queue is empty, execute it now.
-  defp server_timeout(%{task: :none, queue: @empty_queue} = state),
-    do: server_execute(%{state | timer: :done})
+  # It timed out, the in queue is empty and out queue is not empty, execute it now.
+  defp server_timeout(%{out_queue: out_queue, in_queue: @empty_queue} = state)
+       when out_queue != @empty_queue,
+       do: server_execute(%{state | timer: :done})
 
   # Otherwise continue batching until the queue is empty or it is full.
-  defp server_timeout(%{task: {_, _}} = state),
+  defp server_timeout(state),
     do: %{state | timer: :done}
 
   ## Shared helpers

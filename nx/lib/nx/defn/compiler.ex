@@ -82,6 +82,13 @@ defmodule Nx.Defn.Compiler do
                  acc: Nx.Container.t(),
                  vars: [Nx.Container.t()]
 
+  @doc """
+  Receives a keyword list of compiler options and
+  returns a list of compiler options, each to run
+  on a separate partition/device.
+  """
+  @callback __partitions_options__(keyword) :: [keyword]
+
   # Modules allowed in defn
   @allowed_modules [Nx.Constants, Nx.Defn, Nx.Defn.Kernel, Nx.LinAlg, Nx.Type]
 
