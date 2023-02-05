@@ -102,9 +102,12 @@ defmodule Nx.Serving do
 
   ## Stateful/process workflow
 
-  `Nx.Serving` allows us to define a process that will batch requests up to
-  a certain size or time. To do so, we need to start a `Nx.Serving` process
-  with a serving inside a supervision tree:
+  `Nx.Serving` allows us to define an Elixir process to handle requests.
+  This process provides several features, such as batching up to a given
+  size or time, and partitioning.
+
+  To do so, we need to start a `Nx.Serving` process with a serving inside
+  a supervision tree:
 
       children = [
         {Nx.Serving,
@@ -146,15 +149,43 @@ defmodule Nx.Serving do
   function, it will be executed after getting the response from the
   server.
 
-  ## Module-based serving
+  ### Partitioning
+
+  You can start several partitions under th same serving by passing
+  `partitions: true` when starting the serving. The number of partitions
+  will be determined according  your compiler and for which host it is
+  compiling.
+
+  For example, when creating the serving, you may pass the following
+  `defn_options`:
+
+      Nx.Serving.new(computation, compiler: EXLA, client: :cuda)
+
+  Now when booting up the serving:
+
+      children = [
+        {Nx.Serving,
+         serving: serving,
+         name: MyServing,
+         batch_size: 10,
+         batch_timeout: 100,
+         partitions: true}
+      ]
+
+  If you have two GPUs, the serving will now gather batches and send
+  them to the GPUs as they become available to process requests.
+
+  ## Advanced notes
+
+  ### Module-based serving
 
   In the examples so far, we have been using the default version of
   `Nx.Serving`, which executes the given function for each batch.
 
   However, we can also use `new/2` to start a module-based version of
-  `Nx.Serving`, which acts similar to an Elixir `GenServer` and gives
-  us more control over both inline and process workflows. A simple
-  module implementation of a `Nx.Serving` could look like this:
+  `Nx.Serving` which gives us more control over both inline and process
+  workflows. A simple module implementation of a `Nx.Serving` could look
+  like this:
 
       defmodule MyServing do
         @behaviour Nx.Serving
@@ -165,21 +196,21 @@ defmodule Nx.Serving do
         end
 
         @impl true
-        def init(_inline_or_process, :unused_arg) do
-          {:ok, Nx.Defn.jit(&print_and_multiply/1)}
+        def init(_inline_or_process, :unused_arg, [defn_options]) do
+          {:ok, Nx.Defn.jit(&print_and_multiply/1, defn_options)}
         end
 
         @impl true
-        def handle_batch(batch, function) do
+        def handle_batch(batch, 0, function) do
           {:execute, fn -> {function.(batch), :server_info} end, function}
         end
       end
 
-  It has two functions. The first, `c:init/2`, receives the type of serving
+  It has two functions. The first, `c:init/3`, receives the type of serving
   (`:inline` or `:process`) and the serving argument. In this step,
   we capture `print_and_multiply/1`as a jitted function.
 
-  The second function is called `handle_batch/2`. This function
+  The second function is called `handle_batch/3`. This function
   receives a `Nx.Batch` and returns a function to execute.
   The function itself must return a two element-tuple: the batched
   results and some server information. The server information can
@@ -208,6 +239,11 @@ defmodule Nx.Serving do
   supervision and even customize `client_preprocessing/1` and
   `client_postprocessing/1` callbacks to this serving, as seen in the
   previous sections.
+
+  Note in our implementation above assumes it won't run partitioned.
+  In partitioned mode, `c:init/3` may receive multiple `defn_options`
+  as the third argument and `handle_batch/3` may receive another partition
+  besides 0.
   """
 
   @doc false
@@ -240,23 +276,23 @@ defmodule Nx.Serving do
 
   The first argument reveals if the serving is executed inline,
   such as by calling `run/2`, by started with the process.
-  The second argument is the serving argument given to `new/2`,
-  and the third argument are the compiler options to be used to
-  compile the computation.
+  The second argument is the serving argument given to `new/2`.
+  The third argument option is a list of compiler options to be
+  used to compile each partition the serving will run.
 
   It must return `{:ok, state}`, where the `state` can be any term.
   """
-  @callback init(type :: :inline | :process, arg :: term(), defn_options :: Keyword.t()) ::
+  @callback init(type :: :inline | :process, arg :: term(), [defn_options :: keyword]) ::
               {:ok, state :: term()}
 
   @doc """
-  Receives a batch and returns a function to execute the batch.
+  Receives a batch, a partition, and returns a function to execute the batch.
 
   In case of serving processes, the function is executed is an
   separate process.
   """
-  @callback handle_batch(Nx.Batch.t(), state) ::
-              {:execute, (() -> {Nx.Container.t(), metadata()}), state}
+  @callback handle_batch(Nx.Batch.t(), partition :: non_neg_integer(), state) ::
+              {:execute, (-> {Nx.Container.t(), metadata()}), state}
             when state: term()
 
   @doc """
@@ -350,9 +386,9 @@ defmodule Nx.Serving do
       defn_options: defn_options
     } = serving
 
-    {:ok, state} = handle_init(module, :inline, arg, defn_options)
+    {:ok, state} = handle_init(module, :inline, arg, [defn_options])
     {%{size: size} = batch, info} = handle_preprocessing(preprocessing, input)
-    {:execute, function, _} = handle_batch(module, batch, state)
+    {:execute, function, _} = handle_batch(module, batch, 0, state)
 
     {output, metadata} =
       :telemetry.span([:nx, :serving, :execute], %{module: module}, fn ->
@@ -402,19 +438,19 @@ defmodule Nx.Serving do
       before executing the batch. A value is first read from the `Nx.Serving`
       struct and then it falls back to this option (which defaults to `100`ms)
 
+    * `:partitions` - when `true`, starts several partitions under this serving.
+      The number of partitions will be determined according to your compiler
+      and for which host it is compiling. See the module docs for more information
+
     * `:shutdown` - the maximum time for the serving to shutdown. This will
       block until the existing computation finishes (defaults to `30_000`ms)
-
-    * `:max_restarts` and `:max_seconds` - the maximum number of restarts
-      within max seconds for each serving (see `Supervisor.start_link/3`)
 
     * `:hibernate_after` and `:spawn_opt` - configure the underlying serving
       workers (see `GenServer.start_link/3`)
   """
   def start_link(opts) do
-    {name, opts} = Keyword.pop!(opts, :name)
-    {serving, opts} = Keyword.pop!(opts, :serving)
-    %Nx.Serving{module: module, arg: arg, process_options: process_options} = serving
+    name = Keyword.fetch!(opts, :name)
+    {%Nx.Serving{process_options: process_options} = serving, opts} = Keyword.pop!(opts, :serving)
 
     opts =
       Keyword.merge(process_options, opts, fn
@@ -428,52 +464,25 @@ defmodule Nx.Serving do
           v2
       end)
 
-    {supervisor_opts, opts} = Keyword.split(opts, [:max_restarts, :max_seconds])
-    shutdown = Keyword.get(opts, :shutdown, 30_000)
-    batch_size = Keyword.get(opts, :batch_size, 1)
-    batch_timeout = Keyword.get(opts, :batch_timeout, 100)
+    {shutdown, opts} = Keyword.pop(opts, :shutdown, 30_000)
+    {batch_size, opts} = Keyword.pop(opts, :batch_size, 1)
+    {batch_timeout, opts} = Keyword.pop(opts, :batch_timeout, 100)
 
-    base_name = Atom.to_string(name)
-    task_supervisor = Module.concat(base_name, "Supervisor")
+    supervisor = Module.concat(name, "Supervisor")
+    task_supervisor = Module.concat(name, "TaskSupervisor")
 
-    serving_partitions =
-      serving
-      |> serving_partitions()
-      |> Enum.with_index(fn defn_options, index ->
-        {:"#{base_name}_#{index + 1}", defn_options}
-      end)
+    arg = {name, serving, batch_size, batch_timeout, task_supervisor}
 
-    key = persistent_key(name)
+    children = [
+      {Task.Supervisor, name: task_supervisor},
+      %{
+        id: __MODULE__,
+        start: {GenServer, :start_link, [__MODULE__, arg, opts]},
+        shutdown: shutdown
+      }
+    ]
 
-    payload = %{
-      names: Keyword.keys(serving_partitions),
-      limit: batch_size,
-      preprocessing: serving.client_preprocessing,
-      postprocessing: serving.client_postprocessing
-    }
-
-    children =
-      for {name, defn_options} <- serving_partitions do
-        arg = {task_supervisor, module, arg, defn_options, batch_size, batch_timeout}
-
-        %{
-          id: __MODULE__,
-          start: {GenServer, :start_link, [__MODULE__, arg, [name: name] ++ opts]},
-          shutdown: shutdown
-        }
-      end
-
-    children = [{Task.Supervisor, name: task_supervisor} | children]
-
-    Supervisor.start_link(
-      Nx.Serving.Supervisor,
-      {key, payload, children, [strategy: :one_for_one] ++ supervisor_opts},
-      name: name
-    )
-  end
-
-  defp serving_partitions(%Nx.Serving{defn_options: defn_options}) do
-    [defn_options]
+    Supervisor.start_link(children, strategy: :one_for_all, max_restarts: 0, name: supervisor)
   end
 
   @doc """
@@ -487,14 +496,14 @@ defmodule Nx.Serving do
   `:batch_size` in the server.
   """
   def batched_run(name, input) when is_atom(name) do
+    pid = GenServer.whereis(name) || exit({:noproc, {__MODULE__, :batched_run, [name, input]}})
+
     %{
-      names: [partition_name],
       preprocessing: preprocessing,
       postprocessing: postprocessing,
       limit: limit
     } =
-      :persistent_term.get(persistent_key(name), nil) ||
-        exit({:noproc, {__MODULE__, :batched_run, [name, input]}})
+      :persistent_term.get(persistent_key(name), nil)
 
     {batch, info} = handle_preprocessing(preprocessing, input)
 
@@ -504,8 +513,8 @@ defmodule Nx.Serving do
     end
 
     # Use Process.monitor/2 on Elixir v1.15+
-    ref = :erlang.monitor(:process, partition_name, alias: :demonitor)
-    Process.send(partition_name, {__MODULE__, :batched_run, ref, batch}, [:noconnect])
+    ref = :erlang.monitor(:process, pid, alias: :demonitor)
+    Process.send(pid, {__MODULE__, :batched_run, ref, batch}, [:noconnect])
 
     {tensor, metadata} = receive_batched(batch.size, ref, [], nil, name, input)
     handle_postprocessing(postprocessing, tensor, metadata, info)
@@ -568,14 +577,24 @@ defmodule Nx.Serving do
   @timeout_message {__MODULE__, :timeout}
 
   @impl true
-  def init({task_supervisor, module, arg, defn_options, batch_size, batch_timeout}) do
+  def init({name, serving, batch_size, batch_timeout, task_supervisor}) do
     Process.flag(:trap_exit, true)
-    {:ok, module_state} = handle_init(module, :process, arg, defn_options)
+    partitions = serving_partitions(serving)
+    {:ok, module_state} = handle_init(serving.module, :process, serving.arg, partitions)
+
+    :persistent_term.put(
+      persistent_key(name),
+      %{
+        limit: batch_size,
+        preprocessing: serving.client_preprocessing,
+        postprocessing: serving.client_postprocessing
+      }
+    )
 
     # We keep batches in a stack. Once the stack is full
     # or it times out, we either execute or enqueue it.
     state = %{
-      module: module,
+      module: serving.module,
       module_state: module_state,
       stack: @empty_stack,
       limit: batch_size,
@@ -587,6 +606,10 @@ defmodule Nx.Serving do
     }
 
     {:ok, state}
+  end
+
+  defp serving_partitions(%Nx.Serving{defn_options: defn_options}) do
+    [defn_options]
   end
 
   @impl true
@@ -707,7 +730,7 @@ defmodule Nx.Serving do
       end)
 
     batch = Nx.Batch.merge(batches)
-    {:execute, function, module_state} = handle_batch(module, batch, module_state)
+    {:execute, function, module_state} = handle_batch(module, batch, 0, module_state)
 
     wrapped_function = fn ->
       :telemetry.span([:nx, :serving, :execute], %{module: module}, fn ->
@@ -760,8 +783,8 @@ defmodule Nx.Serving do
     {__MODULE__, name}
   end
 
-  defp handle_init(module, type, arg, opts) do
-    case module.init(type, arg, opts) do
+  defp handle_init(module, type, arg, [_ | _] = partitions) do
+    case module.init(type, arg, partitions) do
       {:ok, _} = pair ->
         pair
 
@@ -770,13 +793,13 @@ defmodule Nx.Serving do
     end
   end
 
-  defp handle_batch(module, batch, state) do
-    case module.handle_batch(batch, state) do
+  defp handle_batch(module, batch, partition, state) do
+    case module.handle_batch(batch, partition, state) do
       {:execute, function, _} = pair when is_function(function, 0) ->
         pair
 
       other ->
-        raise "#{inspect(module)}.handle_batch/2 must return {:execute, function, state}, " <>
+        raise "#{inspect(module)}.handle_batch/3 must return {:execute, function, state}, " <>
                 "where function is a function that receives no arguments and returns a tuple. " <>
                 "Got: #{inspect(other)}"
     end
@@ -788,7 +811,7 @@ defmodule Nx.Serving do
         {output, metadata}
 
       other ->
-        raise "the function returned by #{inspect(module)}.handle_batch/2 must return {output, metadata}. " <>
+        raise "the function returned by #{inspect(module)}.handle_batch/3 must return {output, metadata}. " <>
                 "Got: #{inspect(other)}"
     end
   end
@@ -833,5 +856,33 @@ defmodule Nx.Serving do
 
       {output, %{meta | output: output}}
     end)
+  end
+end
+
+defmodule Nx.Serving.Default do
+  @moduledoc false
+  @behaviour Nx.Serving
+
+  @impl true
+  def init(_type, fun, partitions) do
+    batch_funs =
+      for defn_options <- partitions do
+        case fun.(defn_options) do
+          batch_fun when is_function(batch_fun, 1) ->
+            batch_fun
+
+          other ->
+            raise "anonymous function given to Nx.Serving.new/2 should return an AOT or " <>
+                    "JIT compiled function that expects one argument. Got: #{inspect(other)}"
+        end
+      end
+
+    {:ok, batch_funs}
+  end
+
+  @impl true
+  def handle_batch(batch, partition, batch_funs) do
+    batch_fun = Enum.fetch!(batch_funs, partition)
+    {:execute, fn -> {batch_fun.(batch), :server_info} end, batch_funs}
   end
 end

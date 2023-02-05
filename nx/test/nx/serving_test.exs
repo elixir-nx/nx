@@ -5,14 +5,14 @@ defmodule Nx.ServingTest do
     @behaviour Nx.Serving
 
     @impl true
-    def init(type, pid, options) do
-      send(pid, {:init, type, options})
+    def init(type, pid, partitions) do
+      send(pid, {:init, type, partitions})
       {:ok, pid}
     end
 
     @impl true
-    def handle_batch(batch, pid) do
-      send(pid, {:batch, batch})
+    def handle_batch(batch, partition, pid) do
+      send(pid, {:batch, partition, batch})
 
       fun = fn ->
         send(pid, :execute)
@@ -27,13 +27,13 @@ defmodule Nx.ServingTest do
     @behaviour Nx.Serving
 
     @impl true
-    def init(_type, pid, _options) do
+    def init(_type, pid, _partitions) do
       {:ok, pid}
     end
 
     @impl true
-    def handle_batch(batch, pid) do
-      send(pid, :batch)
+    def handle_batch(batch, partition, pid) do
+      send(pid, {:batch, partition})
 
       fun = fn ->
         send(pid, {:execute, self()})
@@ -82,8 +82,8 @@ defmodule Nx.ServingTest do
       batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
 
       assert Nx.Serving.run(serving, batch) == Nx.tensor([[2, 4, 6]])
-      assert_received {:init, :inline, [garbage_collect: 1]}
-      assert_received {:batch, batch}
+      assert_received {:init, :inline, [[garbage_collect: 1]]}
+      assert_received {:batch, 0, batch}
       assert_received :execute
       assert batch.size == 1
       assert batch.pad == 0
@@ -106,9 +106,9 @@ defmodule Nx.ServingTest do
       post = Nx.tensor([[2, 4], [6, 8]])
       assert Nx.Serving.run(serving, pre) == {post, :metadata, :preprocessing!}
 
-      assert_received {:init, :inline, []}
+      assert_received {:init, :inline, [[]]}
       assert_received {:pre, ^pre}
-      assert_received {:batch, batch}
+      assert_received {:batch, 0, batch}
       assert_received :execute
       assert_received {:post, ^post, :metadata, :preprocessing!}
       assert batch.size == 2
@@ -163,8 +163,8 @@ defmodule Nx.ServingTest do
 
       batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
       assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([[2, 4, 6]])
-      assert_received {:init, :process, [garbage_collect: true]}
-      assert_received {:batch, batch}
+      assert_received {:init, :process, [[garbage_collect: true]]}
+      assert_received {:batch, 0, batch}
       assert_received :execute
       assert batch.size == 1
       assert batch.pad == 0
@@ -189,8 +189,8 @@ defmodule Nx.ServingTest do
       Task.await(t1, :infinity)
       Task.await(t2, :infinity)
 
-      assert_received {:init, :process, []}
-      assert_received {:batch, batch}
+      assert_received {:init, :process, [[]]}
+      assert_received {:batch, 0, batch}
       assert_received :execute
       assert batch.size == 4
       assert batch.pad == 0
@@ -228,8 +228,8 @@ defmodule Nx.ServingTest do
       Task.await(t1, :infinity)
       Task.await(t2, :infinity)
 
-      assert_received {:init, :process, []}
-      assert_received {:batch, batch}
+      assert_received {:init, :process, [[]]}
+      assert_received {:batch, 0, batch}
       assert_received :execute
       assert batch.size == 4
       assert batch.pad == 0
@@ -382,7 +382,7 @@ defmodule Nx.ServingTest do
           assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([2, 4])
         end)
 
-      assert_receive :batch
+      assert_receive {:batch, 0}
 
       task2 =
         Task.async(fn ->
@@ -390,7 +390,7 @@ defmodule Nx.ServingTest do
           assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([6, 8])
         end)
 
-      assert_receive :batch
+      assert_receive {:batch, 0}
 
       task3 =
         Task.async(fn ->
@@ -406,7 +406,7 @@ defmodule Nx.ServingTest do
       send(executor2, :continue)
       Task.await(task2)
 
-      assert_receive :batch
+      assert_receive {:batch, 0}
       assert_receive {:execute, executor3}
       send(executor3, :continue)
       Task.await(task3)
