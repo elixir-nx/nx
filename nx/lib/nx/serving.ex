@@ -218,7 +218,7 @@ defmodule Nx.Serving do
     :client_preprocessing,
     :client_postprocessing,
     process_options: [],
-    compiler_options: []
+    defn_options: []
   ]
 
   @type metadata() :: term()
@@ -246,7 +246,7 @@ defmodule Nx.Serving do
 
   It must return `{:ok, state}`, where the `state` can be any term.
   """
-  @callback init(type :: :inline | :process, arg :: term(), compiler_options :: Keyword.t()) ::
+  @callback init(type :: :inline | :process, arg :: term(), defn_options :: Keyword.t()) ::
               {:ok, state :: term()}
 
   @doc """
@@ -269,21 +269,22 @@ defmodule Nx.Serving do
   The function will be called with the arguments returned by the
   `client_preprocessing` callback.
   """
-  def new(function, compiler_options \\ [])
+  def new(function, defn_options \\ [])
 
-  def new(function, compiler_options)
-      when is_function(function, 1) and is_list(compiler_options) do
-    new(Nx.Serving.Default, function, compiler_options)
+  def new(function, defn_options)
+      when is_function(function, 1) and is_list(defn_options) do
+    new(Nx.Serving.Default, function, defn_options)
   end
 
-  def new(function, compiler_options)
-      when is_function(function, 0) and is_list(compiler_options) do
+  def new(function, process_options)
+      when is_function(function, 0) and is_list(process_options) do
     IO.warn(
       "passing a zero-arity function to Nx.Serving.new is deprecated, " <>
         "please pass a single arity function that will receive the compiler options"
     )
 
-    new(Nx.Serving.Default, fn _ -> function.() end, compiler_options)
+    new(Nx.Serving.Default, fn _ -> function.() end, [])
+    |> process_options(process_options)
   end
 
   def new(module, arg) when is_atom(module) do
@@ -296,13 +297,13 @@ defmodule Nx.Serving do
   It expects a module and an argument that is given to its `init`
   callback.
 
-  A third optional argument called `compiler_options` are additional
+  A third optional argument called `defn_options` are additional
   compiler options which will be given to the module. Those options
   will be merged into `Nx.Defn.default_options/0`.
   """
-  def new(module, arg, compiler_options) when is_atom(module) and is_list(compiler_options) do
-    compiler_options = Keyword.merge(Nx.Defn.default_options(), compiler_options)
-    %Nx.Serving{module: module, arg: arg, compiler_options: compiler_options}
+  def new(module, arg, defn_options) when is_atom(module) and is_list(defn_options) do
+    defn_options = Keyword.merge(Nx.Defn.default_options(), defn_options)
+    %Nx.Serving{module: module, arg: arg, defn_options: defn_options}
   end
 
   @doc """
@@ -346,10 +347,10 @@ defmodule Nx.Serving do
       arg: arg,
       client_preprocessing: preprocessing,
       client_postprocessing: postprocessing,
-      compiler_options: compiler_options
+      defn_options: defn_options
     } = serving
 
-    {:ok, state} = handle_init(module, :inline, arg, compiler_options)
+    {:ok, state} = handle_init(module, :inline, arg, defn_options)
     {%{size: size} = batch, info} = handle_preprocessing(preprocessing, input)
     {:execute, function, _} = handle_batch(module, batch, state)
 
@@ -528,7 +529,7 @@ defmodule Nx.Serving do
     [parent | _] = Process.get(:"$ancestors")
 
     {:ok, module_state} =
-      handle_init(serving.module, :process, serving.arg, serving.compiler_options)
+      handle_init(serving.module, :process, serving.arg, serving.defn_options)
 
     :persistent_term.put(
       persistent_key(name),
@@ -796,8 +797,8 @@ defmodule Nx.Serving.Default do
   @behaviour Nx.Serving
 
   @impl true
-  def init(_type, fun, compiler_options) do
-    case fun.(compiler_options) do
+  def init(_type, fun, defn_options) do
+    case fun.(defn_options) do
       batch_fun when is_function(batch_fun, 1) ->
         {:ok, batch_fun}
 
