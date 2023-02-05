@@ -5,8 +5,8 @@ defmodule Nx.ServingTest do
     @behaviour Nx.Serving
 
     @impl true
-    def init(type, pid) do
-      send(pid, {:init, type})
+    def init(type, pid, options) do
+      send(pid, {:init, type, options})
       {:ok, pid}
     end
 
@@ -27,7 +27,7 @@ defmodule Nx.ServingTest do
     @behaviour Nx.Serving
 
     @impl true
-    def init(_type, pid) do
+    def init(_type, pid, _options) do
       {:ok, pid}
     end
 
@@ -50,15 +50,15 @@ defmodule Nx.ServingTest do
 
   describe "run/2" do
     test "with function" do
-      serving = Nx.Serving.new(fn -> Nx.Defn.jit(&Nx.multiply(&1, 2)) end)
+      serving = Nx.Serving.new(fn opts -> Nx.Defn.jit(&Nx.multiply(&1, 2), opts) end)
       batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
       assert Nx.Serving.run(serving, batch) == Nx.tensor([[2, 4, 6]])
     end
 
     test "with container" do
       serving =
-        Nx.Serving.new(fn ->
-          Nx.Defn.jit(fn {a, b} -> {Nx.multiply(a, 2), Nx.divide(b, 2)} end)
+        Nx.Serving.new(fn opts ->
+          Nx.Defn.jit(fn {a, b} -> {Nx.multiply(a, 2), Nx.divide(b, 2)} end, opts)
         end)
 
       batch = Nx.Batch.concatenate([{Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])}])
@@ -67,9 +67,9 @@ defmodule Nx.ServingTest do
 
     test "with padding" do
       serving =
-        Nx.Serving.new(fn ->
+        Nx.Serving.new(fn opts ->
           fn batch ->
-            Nx.Defn.jit_apply(&Nx.multiply(&1, 2), [Nx.Batch.pad(batch, 4)])
+            Nx.Defn.jit_apply(&Nx.multiply(&1, 2), [Nx.Batch.pad(batch, 4)], opts)
           end
         end)
 
@@ -78,11 +78,11 @@ defmodule Nx.ServingTest do
     end
 
     test "with module callbacks" do
-      serving = Nx.Serving.new(Simple, self())
+      serving = Nx.Serving.new(Simple, self(), garbage_collect: 1)
       batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
 
       assert Nx.Serving.run(serving, batch) == Nx.tensor([[2, 4, 6]])
-      assert_received {:init, :inline}
+      assert_received {:init, :inline, [garbage_collect: 1]}
       assert_received {:batch, batch}
       assert_received :execute
       assert batch.size == 1
@@ -106,7 +106,7 @@ defmodule Nx.ServingTest do
       post = Nx.tensor([[2, 4], [6, 8]])
       assert Nx.Serving.run(serving, pre) == {post, :metadata, :preprocessing!}
 
-      assert_received {:init, :inline}
+      assert_received {:init, :inline, []}
       assert_received {:pre, ^pre}
       assert_received {:batch, batch}
       assert_received :execute
@@ -129,7 +129,7 @@ defmodule Nx.ServingTest do
 
       batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
 
-      fn -> Nx.Defn.jit(&Nx.multiply(&1, 2)) end
+      fn opts -> Nx.Defn.jit(&Nx.multiply(&1, 2), opts) end
       |> Nx.Serving.new()
       |> Nx.Serving.client_preprocessing(fn _entry -> {batch, :pre} end)
       |> Nx.Serving.client_postprocessing(fn res, meta, info -> {res, meta, info} end)
@@ -159,11 +159,11 @@ defmodule Nx.ServingTest do
     end
 
     test "1=1", config do
-      simple_supervised!(config)
+      simple_supervised!(config, serving: Nx.Serving.new(Simple, self(), garbage_collect: true))
 
       batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
       assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([[2, 4, 6]])
-      assert_received {:init, :process}
+      assert_received {:init, :process, [garbage_collect: true]}
       assert_received {:batch, batch}
       assert_received :execute
       assert batch.size == 1
@@ -189,7 +189,7 @@ defmodule Nx.ServingTest do
       Task.await(t1, :infinity)
       Task.await(t2, :infinity)
 
-      assert_received {:init, :process}
+      assert_received {:init, :process, []}
       assert_received {:batch, batch}
       assert_received :execute
       assert batch.size == 4
@@ -198,7 +198,8 @@ defmodule Nx.ServingTest do
 
     test "2+2=4 with pre and post", config do
       serving =
-        Nx.Serving.new(Simple, self(), batch_size: 4)
+        Nx.Serving.new(Simple, self())
+        |> Nx.Serving.process_options(batch_size: 4)
         |> Nx.Serving.client_preprocessing(fn entry ->
           {Nx.Batch.stack(entry), :preprocessing!}
         end)
@@ -227,7 +228,7 @@ defmodule Nx.ServingTest do
       Task.await(t1, :infinity)
       Task.await(t2, :infinity)
 
-      assert_received {:init, :process}
+      assert_received {:init, :process, []}
       assert_received {:batch, batch}
       assert_received :execute
       assert batch.size == 4
@@ -236,10 +237,10 @@ defmodule Nx.ServingTest do
 
     test "3+4+5=6+6 (container)", config do
       serving =
-        Nx.Serving.new(
-          fn -> Nx.Defn.jit(fn {a, b} -> {Nx.multiply(a, 2), Nx.divide(b, 2)} end) end,
-          batch_size: 6
-        )
+        Nx.Serving.new(fn opts ->
+          Nx.Defn.jit(fn {a, b} -> {Nx.multiply(a, 2), Nx.divide(b, 2)} end, opts)
+        end)
+        |> Nx.Serving.process_options(batch_size: 6)
 
       simple_supervised!(config, batch_timeout: 100, serving: serving)
 
@@ -381,9 +382,9 @@ defmodule Nx.ServingTest do
 
     test "with padding", config do
       serving =
-        Nx.Serving.new(fn ->
+        Nx.Serving.new(fn opts ->
           fn batch ->
-            Nx.Defn.jit_apply(&Nx.multiply(&1, 2), [Nx.Batch.pad(batch, 4)])
+            Nx.Defn.jit_apply(&Nx.multiply(&1, 2), [Nx.Batch.pad(batch, 4)], opts)
           end
         end)
 
@@ -415,7 +416,10 @@ defmodule Nx.ServingTest do
       assert_raise ArgumentError,
                    ~r":batch_size has been set when starting an Nx.Serving process \(15\) but a conflicting value was already set on the Nx.Serving struct \(30\)",
                    fn ->
-                     serving = Nx.Serving.new(Simple, self(), batch_size: 30)
+                     serving =
+                       Nx.Serving.new(Simple, self())
+                       |> Nx.Serving.process_options(batch_size: 30)
+
                      Nx.Serving.start_link(name: :unused, serving: serving, batch_size: 15)
                    end
     end

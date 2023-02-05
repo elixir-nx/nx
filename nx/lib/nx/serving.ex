@@ -28,7 +28,7 @@ defmodule Nx.Serving do
   We can use `new/1` to create a serving that will return a JIT
   or AOT compiled function to execute on batches of tensors:
 
-      iex> serving = Nx.Serving.new(fn -> Nx.Defn.jit(&print_and_multiply/1) end)
+      iex> serving = Nx.Serving.new(fn opts -> Nx.Defn.jit(&print_and_multiply/1, opts) end)
       iex> batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
       iex> Nx.Serving.run(serving, batch)
       {:debug, #Nx.Tensor<
@@ -44,6 +44,11 @@ defmodule Nx.Serving do
         ]
       >
 
+  We started the serving by passing a function that receives
+  compiler options and returns a JIT or AOT compiled function.
+  We called `Nx.Defn.jit/2` passing the options received as
+  argument, which will customize the JIT/AOT compilation.
+
   You should see two values printed. The former is the result of
   `Nx.Defn.Kernel.print_value/1`, which shows the tensor that was
   actually part of the computation and how it was batched.
@@ -54,7 +59,7 @@ defmodule Nx.Serving do
   using `client_postprocessing` hooks. Let's give it another try:
 
       iex> serving = (
-      ...>   Nx.Serving.new(fn -> Nx.Defn.jit(&print_and_multiply/1) end)
+      ...>   Nx.Serving.new(fn opts -> Nx.Defn.jit(&print_and_multiply/1, opts) end)
       ...>   |> Nx.Serving.client_preprocessing(fn input -> {Nx.Batch.stack(input), :client_info} end)
       ...>   |> Nx.Serving.client_postprocessing(&{&1, &2, &3})
       ...> )
@@ -207,7 +212,14 @@ defmodule Nx.Serving do
 
   @doc false
   @enforce_keys [:module, :arg]
-  defstruct [:module, :arg, :client_preprocessing, :client_postprocessing, process_options: []]
+  defstruct [
+    :module,
+    :arg,
+    :client_preprocessing,
+    :client_postprocessing,
+    process_options: [],
+    defn_options: []
+  ]
 
   @type metadata() :: term()
   @type client_info() :: term()
@@ -228,11 +240,14 @@ defmodule Nx.Serving do
 
   The first argument reveals if the serving is executed inline,
   such as by calling `run/2`, by started with the process.
-  The second argument is the serving argument given to `new/2`.
+  The second argument is the serving argument given to `new/2`,
+  and the third argument are the compiler options to be used to
+  compile the computation.
 
   It must return `{:ok, state}`, where the `state` can be any term.
   """
-  @callback init(type :: :inline | :process, arg :: term()) :: {:ok, state :: term()}
+  @callback init(type :: :inline | :process, arg :: term(), defn_options :: Keyword.t()) ::
+              {:ok, state :: term()}
 
   @doc """
   Receives a batch and returns a function to execute the batch.
@@ -247,18 +262,29 @@ defmodule Nx.Serving do
   @doc """
   Creates a new function serving.
 
-  It expects a function that returns a JIT (via `Nx.Defn.jit/2`) or
-  AOT compiled (via `Nx.Defn.compile/3`) one-arity function as argument.
+  It expects a function that receives the compiler options and
+  returns a JIT (via `Nx.Defn.jit/2`) or AOT compiled (via
+  `Nx.Defn.compile/3`) one-arity function as argument.
+
   The function will be called with the arguments returned by the
   `client_preprocessing` callback.
-
-  A second optional argument called `process_options`, can be given
-  to customize the options when starting the serving under a process.
   """
-  def new(function, process_options \\ [])
+  def new(function, defn_options \\ [])
 
-  def new(function, process_options) when is_function(function, 0) and is_list(process_options) do
-    new(Nx.Serving.Default, function, process_options)
+  def new(function, defn_options)
+      when is_function(function, 1) and is_list(defn_options) do
+    new(Nx.Serving.Default, function, defn_options)
+  end
+
+  def new(function, process_options)
+      when is_function(function, 0) and is_list(process_options) do
+    IO.warn(
+      "passing a zero-arity function to Nx.Serving.new is deprecated, " <>
+        "please pass a single arity function that will receive the compiler options"
+    )
+
+    new(Nx.Serving.Default, fn _ -> function.() end, [])
+    |> process_options(process_options)
   end
 
   def new(module, arg) when is_atom(module) do
@@ -268,13 +294,16 @@ defmodule Nx.Serving do
   @doc """
   Creates a new module-based serving.
 
-  It expects a module and an argument that is given to its `init` callback.
+  It expects a module and an argument that is given to its `init`
+  callback.
 
-  A third optional argument called `process_options`, can be given to
-  customize the options when starting the serving  under a process.
+  A third optional argument called `defn_options` are additional
+  compiler options which will be given to the module. Those options
+  will be merged into `Nx.Defn.default_options/0`.
   """
-  def new(module, arg, process_options) when is_atom(module) and is_list(process_options) do
-    %Nx.Serving{module: module, arg: arg, process_options: process_options}
+  def new(module, arg, defn_options) when is_atom(module) and is_list(defn_options) do
+    defn_options = Keyword.merge(Nx.Defn.default_options(), defn_options)
+    %Nx.Serving{module: module, arg: arg, defn_options: defn_options}
   end
 
   @doc """
@@ -300,6 +329,16 @@ defmodule Nx.Serving do
   end
 
   @doc """
+  Sets the process options of this serving.
+
+  These are the same options as supported on `start_link/1`,
+  except `:name` and `:serving` itself.
+  """
+  def process_options(%Nx.Serving{} = serving, process_options) when is_list(process_options) do
+    %{serving | process_options: process_options}
+  end
+
+  @doc """
   Runs `serving` with the given `input` inline with the current process.
   """
   def run(%Nx.Serving{} = serving, input) do
@@ -307,10 +346,11 @@ defmodule Nx.Serving do
       module: module,
       arg: arg,
       client_preprocessing: preprocessing,
-      client_postprocessing: postprocessing
+      client_postprocessing: postprocessing,
+      defn_options: defn_options
     } = serving
 
-    {:ok, state} = handle_init(module, :inline, arg)
+    {:ok, state} = handle_init(module, :inline, arg, defn_options)
     {%{size: size} = batch, info} = handle_preprocessing(preprocessing, input)
     {:execute, function, _} = handle_batch(module, batch, state)
 
@@ -487,7 +527,7 @@ defmodule Nx.Serving do
   @impl true
   def init({name, serving, batch_size, batch_timeout}) do
     [parent | _] = Process.get(:"$ancestors")
-    {:ok, module_state} = handle_init(serving.module, :process, serving.arg)
+    {:ok, module_state} = handle_init(serving.module, :process, serving.arg, serving.defn_options)
 
     :persistent_term.put(
       persistent_key(name),
@@ -674,13 +714,13 @@ defmodule Nx.Serving do
     {__MODULE__, name}
   end
 
-  defp handle_init(module, type, arg) do
-    case module.init(type, arg) do
+  defp handle_init(module, type, arg, opts) do
+    case module.init(type, arg, opts) do
       {:ok, _} = pair ->
         pair
 
       other ->
-        raise "#{inspect(module)}.init/2 must return {:ok, state}. Got: #{inspect(other)}"
+        raise "#{inspect(module)}.init/3 must return {:ok, state}. Got: #{inspect(other)}"
     end
   end
 
@@ -755,8 +795,8 @@ defmodule Nx.Serving.Default do
   @behaviour Nx.Serving
 
   @impl true
-  def init(_type, fun) do
-    case fun.() do
+  def init(_type, fun, defn_options) do
+    case fun.(defn_options) do
       batch_fun when is_function(batch_fun, 1) ->
         {:ok, batch_fun}
 
