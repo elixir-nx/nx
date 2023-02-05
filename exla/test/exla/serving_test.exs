@@ -1,0 +1,95 @@
+defmodule EXLA.ServingTest do
+  use EXLA.Case, async: true
+
+  defmodule ExecuteSync do
+    @behaviour Nx.Serving
+
+    @impl true
+    def init(_type, pid, _partitions) do
+      {:ok, pid}
+    end
+
+    @impl true
+    def handle_batch(batch, partition, pid) do
+      fun = fn ->
+        send(pid, {:execute, partition, self()})
+
+        receive do
+          :crash -> raise "oops"
+          :continue -> {Nx.Defn.jit_apply(&Nx.multiply(&1, 2), [batch]), :metadata}
+        end
+      end
+
+      {:execute, fun, pid}
+    end
+  end
+
+  defp execute_sync_supervised!(config, opts) do
+    serving = Nx.Serving.new(ExecuteSync, self())
+    opts = [name: config.test, serving: serving, shutdown: 1000] ++ opts
+    start_supervised!({Nx.Serving, opts})
+  end
+
+  describe "batched_run" do
+    test "2+2=4", config do
+      execute_sync_supervised!(config, batch_size: 2)
+
+      task1 =
+        Task.async(fn ->
+          batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
+          tensor = Nx.Serving.batched_run(config.test, batch)
+          assert is_struct(tensor.data, EXLA.Backend)
+          assert_equal tensor, Nx.tensor([2, 4])
+        end)
+
+      task2 =
+        Task.async(fn ->
+          batch = Nx.Batch.concatenate([Nx.tensor([3, 4])])
+          tensor = Nx.Serving.batched_run(config.test, batch)
+          assert is_struct(tensor.data, EXLA.Backend)
+          assert_equal tensor, Nx.tensor([6, 8])
+        end)
+
+      assert_receive {:execute, 0, executor}
+      send(executor, :continue)
+
+      assert_receive {:execute, 0, executor}
+      send(executor, :continue)
+
+      assert Task.await(task1)
+      assert Task.await(task2)
+    end
+  end
+
+  describe "partitioning" do
+    @describetag :multi_device
+
+    test "spawns tasks concurrently", config do
+      execute_sync_supervised!(config, batch_size: 2, partitions: true)
+
+      task1 =
+        Task.async(fn ->
+          batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
+          tensor = Nx.Serving.batched_run(config.test, batch)
+          assert is_struct(tensor.data, EXLA.Backend)
+          assert_equal tensor, Nx.tensor([2, 4])
+        end)
+
+      task2 =
+        Task.async(fn ->
+          batch = Nx.Batch.concatenate([Nx.tensor([3, 4])])
+          tensor = Nx.Serving.batched_run(config.test, batch)
+          assert is_struct(tensor.data, EXLA.Backend)
+          assert_equal tensor, Nx.tensor([6, 8])
+        end)
+
+      assert_receive {:execute, 0, executor1}
+      assert_receive {:execute, 1, executor2}
+      send(executor1, :continue)
+      send(executor2, :continue)
+
+      assert Task.await(task1)
+      assert Task.await(task2)
+    end
+  end
+end

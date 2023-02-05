@@ -290,7 +290,8 @@ defmodule Nx.ServingTest do
 
     defp execute_sync_supervised!(config, opts \\ []) do
       serving = Nx.Serving.new(ExecuteSync, self())
-      start_supervised!({Nx.Serving, [name: config.test, serving: serving] ++ opts})
+      opts = [name: config.test, serving: serving, shutdown: 1000] ++ opts
+      start_supervised!({Nx.Serving, opts})
     end
 
     @tag :capture_log

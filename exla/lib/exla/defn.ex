@@ -7,6 +7,13 @@ defmodule EXLA.Defn do
   alias Nx.Tensor, as: T
 
   @doc false
+  def __partitions_options__(options) do
+    client_name = Keyword.get_lazy(options, :client, &EXLA.Client.default_name/0)
+    device_count = EXLA.Client.fetch!(client_name).device_count
+    Enum.map(1..device_count//1, &Keyword.put(options, :device, &1))
+  end
+
+  @doc false
   def __stream__(key, input, acc, vars, fun, [args], options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
 

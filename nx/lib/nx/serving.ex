@@ -465,13 +465,13 @@ defmodule Nx.Serving do
       end)
 
     {shutdown, opts} = Keyword.pop(opts, :shutdown, 30_000)
+    {partitions, opts} = Keyword.pop(opts, :partitions, false)
     {batch_size, opts} = Keyword.pop(opts, :batch_size, 1)
     {batch_timeout, opts} = Keyword.pop(opts, :batch_timeout, 100)
 
     supervisor = Module.concat(name, "Supervisor")
     task_supervisor = Module.concat(name, "TaskSupervisor")
-
-    arg = {name, serving, batch_size, batch_timeout, task_supervisor}
+    arg = {name, serving, partitions, batch_size, batch_timeout, task_supervisor}
 
     children = [
       {Task.Supervisor, name: task_supervisor},
@@ -576,9 +576,9 @@ defmodule Nx.Serving do
   @timeout_message {__MODULE__, :timeout}
 
   @impl true
-  def init({name, serving, batch_size, batch_timeout, task_supervisor}) do
+  def init({name, serving, partitions, batch_size, batch_timeout, task_supervisor}) do
     Process.flag(:trap_exit, true)
-    partitions = serving_partitions(serving)
+    partitions = serving_partitions(serving, partitions)
     {:ok, module_state} = handle_init(serving.module, :process, serving.arg, partitions)
 
     :persistent_term.put(
@@ -608,9 +608,13 @@ defmodule Nx.Serving do
     {:ok, state}
   end
 
-  defp serving_partitions(%Nx.Serving{defn_options: defn_options}) do
+  defp serving_partitions(%Nx.Serving{defn_options: defn_options}, true) do
     compiler = Keyword.get(defn_options, :compiler, Nx.Defn.Evaluator)
     compiler.__partitions_options__(defn_options)
+  end
+
+  defp serving_partitions(%Nx.Serving{defn_options: defn_options}, false) do
+    [defn_options]
   end
 
   @impl true

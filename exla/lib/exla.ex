@@ -433,4 +433,7 @@ defmodule EXLA do
 
   @impl true
   defdelegate __stream__(key, input, acc, vars, fun, args, opts), to: EXLA.Defn
+
+  @impl true
+  defdelegate __partitions_options__(opts), to: EXLA.Defn
 end
