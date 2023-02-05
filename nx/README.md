@@ -10,9 +10,9 @@ Nx is a multi-dimensional tensors library for Elixir with multi-staged compilati
 
   * Automatic differentiation, also known as autograd. The `grad` function provides reverse-mode differentiation, useful for simulations, training probabilistic models, etc;
 
-  * Tensors backends, which enables the main `Nx` API to be used to manipulate binary tensors, GPU-backed tensors, sparse matrices, and more;
-
   * Numerical definitions, known as `defn`, is a subset of Elixir that is compilable to multiple targets, including GPUs. See [EXLA](https://github.com/elixir-nx/nx/tree/main/exla) for just-in-time (JIT) compilation for CPUs/GPUs/TPUs and [Torchx](https://github.com/elixir-nx/nx/tree/main/torchx) for CPUs/GPUs support;
+
+  * Built-in serving: easily embed your code into `Nx.Serving`, which encapsulate complex numerical pipelines. Servings can also be spawned as Elixir process to handle requests and provide features such as batching, up to a given size or time, and multi-device partitioning (for example, if you have two GPUs, it will send the batches to the one available);
 
   * Support for data streaming and hooks, allowing developers to send and receive data from CPUs/GPUs/TPUs while computations are running;
 
