@@ -471,7 +471,15 @@ defmodule Nx.ServingTest do
   describe "partitioning" do
     test "spawns tasks concurrently", config do
       serving = Nx.Serving.new(ExecuteSync, self(), max_concurrency: 2)
-      opts = [name: config.test, serving: serving, partitions: true, batch_size: 2, shutdown: 1000]
+
+      opts = [
+        name: config.test,
+        serving: serving,
+        partitions: true,
+        batch_size: 2,
+        shutdown: 1000
+      ]
+
       start_supervised!({Nx.Serving, opts})
 
       task1 =

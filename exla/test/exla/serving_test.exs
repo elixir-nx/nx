@@ -39,7 +39,7 @@ defmodule EXLA.ServingTest do
           batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
           tensor = Nx.Serving.batched_run(config.test, batch)
           assert is_struct(tensor.data, EXLA.Backend)
-          assert_equal tensor, Nx.tensor([2, 4])
+          assert_equal(tensor, Nx.tensor([2, 4]))
         end)
 
       task2 =
@@ -47,7 +47,7 @@ defmodule EXLA.ServingTest do
           batch = Nx.Batch.concatenate([Nx.tensor([3, 4])])
           tensor = Nx.Serving.batched_run(config.test, batch)
           assert is_struct(tensor.data, EXLA.Backend)
-          assert_equal tensor, Nx.tensor([6, 8])
+          assert_equal(tensor, Nx.tensor([6, 8]))
         end)
 
       assert_receive {:execute, 0, executor}
@@ -72,7 +72,7 @@ defmodule EXLA.ServingTest do
           batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
           tensor = Nx.Serving.batched_run(config.test, batch)
           assert is_struct(tensor.data, EXLA.Backend)
-          assert_equal tensor, Nx.tensor([2, 4])
+          assert_equal(tensor, Nx.tensor([2, 4]))
         end)
 
       task2 =
@@ -80,7 +80,7 @@ defmodule EXLA.ServingTest do
           batch = Nx.Batch.concatenate([Nx.tensor([3, 4])])
           tensor = Nx.Serving.batched_run(config.test, batch)
           assert is_struct(tensor.data, EXLA.Backend)
-          assert_equal tensor, Nx.tensor([6, 8])
+          assert_equal(tensor, Nx.tensor([6, 8]))
         end)
 
       assert_receive {:execute, 0, executor1}
