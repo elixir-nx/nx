@@ -10,7 +10,7 @@ defmodule EXLA.Defn do
   def __partitions_options__(options) do
     client_name = Keyword.get_lazy(options, :client, &EXLA.Client.default_name/0)
     device_count = EXLA.Client.fetch!(client_name).device_count
-    Enum.map(1..device_count//1, &Keyword.put(options, :device, &1))
+    Enum.map(1..device_count//1, &Keyword.put(options, :device_id, &1 - 1))
   end
 
   @doc false

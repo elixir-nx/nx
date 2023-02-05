@@ -5,22 +5,25 @@ defmodule EXLA.ServingTest do
     @behaviour Nx.Serving
 
     @impl true
-    def init(_type, pid, _partitions) do
-      {:ok, pid}
+    def init(_type, pid, partitions) do
+      funs = Enum.map(partitions, fn opts -> Nx.Defn.jit(&Nx.multiply(&1, 2), opts) end)
+      {:ok, {funs, pid}}
     end
 
     @impl true
-    def handle_batch(batch, partition, pid) do
+    def handle_batch(batch, partition, {funs, pid}) do
+      jit = Enum.fetch!(funs, partition)
+
       fun = fn ->
         send(pid, {:execute, partition, self()})
 
         receive do
           :crash -> raise "oops"
-          :continue -> {Nx.Defn.jit_apply(&Nx.multiply(&1, 2), [batch]), :metadata}
+          :continue -> {jit.(batch), :metadata}
         end
       end
 
-      {:execute, fun, pid}
+      {:execute, fun, {funs, pid}}
     end
   end
 
@@ -40,6 +43,7 @@ defmodule EXLA.ServingTest do
           tensor = Nx.Serving.batched_run(config.test, batch)
           assert is_struct(tensor.data, EXLA.Backend)
           assert_equal(tensor, Nx.tensor([2, 4]))
+          tensor.data.buffer.device_id
         end)
 
       task2 =
@@ -48,6 +52,7 @@ defmodule EXLA.ServingTest do
           tensor = Nx.Serving.batched_run(config.test, batch)
           assert is_struct(tensor.data, EXLA.Backend)
           assert_equal(tensor, Nx.tensor([6, 8]))
+          tensor.data.buffer.device_id
         end)
 
       assert_receive {:execute, 0, executor}
@@ -56,8 +61,7 @@ defmodule EXLA.ServingTest do
       assert_receive {:execute, 0, executor}
       send(executor, :continue)
 
-      assert Task.await(task1)
-      assert Task.await(task2)
+      assert Task.await(task1) == Task.await(task2)
     end
   end
 
@@ -73,6 +77,7 @@ defmodule EXLA.ServingTest do
           tensor = Nx.Serving.batched_run(config.test, batch)
           assert is_struct(tensor.data, EXLA.Backend)
           assert_equal(tensor, Nx.tensor([2, 4]))
+          tensor.data.buffer.device_id
         end)
 
       task2 =
@@ -81,6 +86,7 @@ defmodule EXLA.ServingTest do
           tensor = Nx.Serving.batched_run(config.test, batch)
           assert is_struct(tensor.data, EXLA.Backend)
           assert_equal(tensor, Nx.tensor([6, 8]))
+          tensor.data.buffer.device_id
         end)
 
       assert_receive {:execute, 0, executor1}
@@ -88,8 +94,7 @@ defmodule EXLA.ServingTest do
       send(executor1, :continue)
       send(executor2, :continue)
 
-      assert Task.await(task1)
-      assert Task.await(task2)
+      assert Task.await(task1) != Task.await(task2)
     end
   end
 end
