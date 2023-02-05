@@ -296,7 +296,7 @@ defmodule Nx.ServingTest do
     end
 
     @tag :capture_log
-    test "1=crash", config do
+    test "1=>crash", config do
       execute_sync_supervised!(config)
 
       {_pid, ref} =
@@ -313,7 +313,7 @@ defmodule Nx.ServingTest do
     end
 
     @tag :capture_log
-    test "2+3=crash", config do
+    test "2+3=>crash", config do
       execute_sync_supervised!(config, batch_timeout: 100, batch_size: 4)
 
       {_pid, ref1} =
@@ -334,9 +334,43 @@ defmodule Nx.ServingTest do
       assert_receive {:execute, executor}
       send(executor, :crash)
 
+      # One task should succeed and the other terminate
       assert_receive {:DOWN, ref, _, _,
                       {{%RuntimeError{}, _}, {Nx.Serving, :batched_run, [_, _]}}}
                      when ref in [ref1, ref2]
+
+      assert_receive {:DOWN, ref, _, _, :normal} when ref in [ref1, ref2]
+      refute_received {:execute, _executor}
+    end
+
+    @tag :capture_log
+    test "2=>shutdown=>2", config do
+      serving_pid = execute_sync_supervised!(config, batch_timeout: 100, batch_size: 2)
+
+      {_pid, ref1} =
+        spawn_monitor(fn ->
+          batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
+          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([2, 4])
+        end)
+
+      {_pid, ref2} =
+        spawn_monitor(fn ->
+          batch = Nx.Batch.concatenate([Nx.tensor([3, 4])])
+          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([6, 8])
+        end)
+
+      assert_receive {:execute, executor}
+      send(serving_pid, {:system, {self(), make_ref()}, {:terminate, :shutdown}})
+      send(executor, :continue)
+
+      # One task should succeed and the other terminate
+      assert_receive {:DOWN, ref, _, _, :normal}
+                     when ref in [ref1, ref2]
+
+      assert_receive {:DOWN, ref, _, _, {:shutdown, {Nx.Serving, :batched_run, [_, _]}}}
+                     when ref in [ref1, ref2]
+
+      refute_received {:execute, _executor}
     end
 
     test "2=>2=>1+timeout", config do
@@ -363,8 +397,6 @@ defmodule Nx.ServingTest do
           batch = Nx.Batch.concatenate([Nx.tensor([5])])
           assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([10])
         end)
-
-      Process.sleep(100)
 
       assert_receive {:execute, executor1}
       send(executor1, :continue)

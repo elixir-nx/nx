@@ -402,36 +402,78 @@ defmodule Nx.Serving do
       before executing the batch. A value is first read from the `Nx.Serving`
       struct and then it falls back to this option (which defaults to `100`ms)
 
+    * `:shutdown` - the maximum time for the serving to shutdown. This will
+      block until the existing computation finishes (defaults to `30_000`ms)
+
+    * `:max_restarts` and `:max_seconds` - the maximum number of restarts
+      within max seconds for each serving (see `Supervisor.start_link/3`)
+
+    * `:hibernate_after` and `:spawn_opt` - configure the underlying serving
+      workers (see `GenServer.start_link/3`)
   """
   def start_link(opts) do
-    name = Keyword.fetch!(opts, :name)
-    {%Nx.Serving{process_options: serving_opts} = serving, opts} = Keyword.pop!(opts, :serving)
-    {batch_size, opts} = process_option(:batch_size, serving_opts, opts, 1)
-    {batch_timeout, opts} = process_option(:batch_timeout, serving_opts, opts, 100)
-    arg = {name, serving, batch_size, batch_timeout}
+    {name, opts} = Keyword.pop!(opts, :name)
+    {serving, opts} = Keyword.pop!(opts, :serving)
+    %Nx.Serving{module: module, arg: arg, process_options: process_options} = serving
 
-    children = [
-      %{
-        id: __MODULE__,
-        start: {GenServer, :start_link, [__MODULE__, arg, opts]}
-      }
-    ]
+    opts =
+      Keyword.merge(process_options, opts, fn
+        k, v1, v2 when k == :batch_size and v1 != v2 ->
+          raise ArgumentError,
+                "#{inspect(k)} has been set when starting an Nx.Serving process (#{inspect(v2)}) " <>
+                  "but a conflicting value was already set on the Nx.Serving struct (#{inspect(v1)}). " <>
+                  "Please remove the option given to the Nx.Serving process"
 
-    Supervisor.start_link(children, strategy: :one_for_all, max_restarts: 0)
+        _k, _v1, v2 ->
+          v2
+      end)
+
+    {supervisor_opts, opts} = Keyword.split(opts, [:max_restarts, :max_seconds])
+    shutdown = Keyword.get(opts, :shutdown, 30_000)
+    batch_size = Keyword.get(opts, :batch_size, 1)
+    batch_timeout = Keyword.get(opts, :batch_timeout, 100)
+
+    base_name = Atom.to_string(name)
+    task_supervisor = Module.concat(base_name, "Supervisor")
+
+    serving_partitions =
+      serving
+      |> serving_partitions()
+      |> Enum.with_index(fn defn_options, index ->
+        {:"#{base_name}_#{index + 1}", defn_options}
+      end)
+
+    key = persistent_key(name)
+
+    payload = %{
+      names: Keyword.keys(serving_partitions),
+      limit: batch_size,
+      preprocessing: serving.client_preprocessing,
+      postprocessing: serving.client_postprocessing
+    }
+
+    children =
+      for {name, defn_options} <- serving_partitions do
+        arg = {task_supervisor, module, arg, defn_options, batch_size, batch_timeout}
+
+        %{
+          id: __MODULE__,
+          start: {GenServer, :start_link, [__MODULE__, arg, [name: name] ++ opts]},
+          shutdown: shutdown
+        }
+      end
+
+    children = [{Task.Supervisor, name: task_supervisor} | children]
+
+    Supervisor.start_link(
+      Nx.Serving.Supervisor,
+      {key, payload, children, [strategy: :one_for_one] ++ supervisor_opts},
+      name: name
+    )
   end
 
-  defp process_option(key, serving_opts, opts, default) do
-    serving_value = serving_opts[key]
-    {value, opts} = Keyword.pop(opts, key)
-
-    if serving_value && value && serving_value != value do
-      raise ArgumentError,
-            "#{inspect(key)} has been set when starting an Nx.Serving process (#{inspect(value)}) " <>
-              "but a conflicting value was already set on the Nx.Serving struct (#{inspect(serving_value)}). " <>
-              "Please remove the option given to the Nx.Serving process"
-    end
-
-    {serving_value || value || default, opts}
+  defp serving_partitions(%Nx.Serving{defn_options: defn_options}) do
+    [defn_options]
   end
 
   @doc """
@@ -445,13 +487,14 @@ defmodule Nx.Serving do
   `:batch_size` in the server.
   """
   def batched_run(name, input) when is_atom(name) do
-    pid = GenServer.whereis(name) || exit({:noproc, {__MODULE__, :batched_run, [name, input]}})
-
     %{
+      names: [partition_name],
       preprocessing: preprocessing,
       postprocessing: postprocessing,
       limit: limit
-    } = :persistent_term.get(persistent_key(name))
+    } =
+      :persistent_term.get(persistent_key(name), nil) ||
+        exit({:noproc, {__MODULE__, :batched_run, [name, input]}})
 
     {batch, info} = handle_preprocessing(preprocessing, input)
 
@@ -461,8 +504,8 @@ defmodule Nx.Serving do
     end
 
     # Use Process.monitor/2 on Elixir v1.15+
-    ref = :erlang.monitor(:process, pid, alias: :demonitor)
-    Process.send(pid, {__MODULE__, :batched_run, ref, batch}, [:noconnect])
+    ref = :erlang.monitor(:process, partition_name, alias: :demonitor)
+    Process.send(partition_name, {__MODULE__, :batched_run, ref, batch}, [:noconnect])
 
     {tensor, metadata} = receive_batched(batch.size, ref, [], nil, name, input)
     handle_postprocessing(postprocessing, tensor, metadata, info)
@@ -525,24 +568,14 @@ defmodule Nx.Serving do
   @timeout_message {__MODULE__, :timeout}
 
   @impl true
-  def init({name, serving, batch_size, batch_timeout}) do
-    [parent | _] = Process.get(:"$ancestors")
-    {:ok, module_state} = handle_init(serving.module, :process, serving.arg, serving.defn_options)
-
-    :persistent_term.put(
-      persistent_key(name),
-      %{
-        limit: batch_size,
-        preprocessing: serving.client_preprocessing,
-        postprocessing: serving.client_postprocessing
-      }
-    )
+  def init({task_supervisor, module, arg, defn_options, batch_size, batch_timeout}) do
+    Process.flag(:trap_exit, true)
+    {:ok, module_state} = handle_init(module, :process, arg, defn_options)
 
     # We keep batches in a stack. Once the stack is full
     # or it times out, we either execute or enqueue it.
     state = %{
-      name: name,
-      module: serving.module,
+      module: module,
       module_state: module_state,
       stack: @empty_stack,
       limit: batch_size,
@@ -550,16 +583,10 @@ defmodule Nx.Serving do
       timer: :none,
       queue: @empty_queue,
       task: :none,
-      task_supervisor: nil
+      task_supervisor: task_supervisor
     }
 
-    {:ok, state, {:continue, {:task_supervisor, parent}}}
-  end
-
-  @impl true
-  def handle_continue({:task_supervisor, parent}, state) do
-    {:ok, task_supervisor} = Supervisor.start_child(parent, Task.Supervisor)
-    {:noreply, %{state | task_supervisor: task_supervisor}}
+    {:ok, state}
   end
 
   @impl true
@@ -610,29 +637,48 @@ defmodule Nx.Serving do
     {:noreply, server_timeout(state)}
   end
 
-  def handle_info({ref, reply}, %{task: {task, ref_sizes}} = state) when task.ref == ref do
-    Process.demonitor(ref, [:flush])
-    {output, metadata} = handle_executed(state.module, reply)
-
-    for {ref, start, size} <- ref_sizes do
-      send(ref, {ref, {start, size, output, metadata}})
-    end
-
+  def handle_info({ref, reply}, %{task: {task, ref_sizes}, module: module} = state)
+      when task.ref == ref do
+    server_reply_ok(module, ref, reply, ref_sizes)
     {:noreply, server_task_done(state)}
   end
 
   def handle_info({:DOWN, ref, type, _process, reason}, %{task: {task, ref_sizes}} = state)
       when task.ref == ref do
-    for {ref, _start, _size} <- ref_sizes do
-      send(ref, {:DOWN, ref, type, self(), reason})
-    end
-
+    server_reply_down(type, reason, ref_sizes)
     {:noreply, server_task_done(state)}
   end
 
   def handle_info(msg, state) do
     Logger.warning("Unknown message in Nx.Serving: #{inspect(msg)}")
     {:noreply, state}
+  end
+
+  @impl true
+  def terminate(_reason, state) do
+    with %{module: module, task: {%Task{ref: ref}, ref_sizes}} <- state do
+      receive do
+        {^ref, reply} -> server_reply_ok(module, ref, reply, ref_sizes)
+        {:DOWN, ^ref, type, _, reason} -> server_reply_down(type, reason, ref_sizes)
+      end
+    end
+
+    state
+  end
+
+  defp server_reply_ok(module, ref, reply, ref_sizes) do
+    Process.demonitor(ref, [:flush])
+    {output, metadata} = handle_executed(module, reply)
+
+    for {ref, start, size} <- ref_sizes do
+      send(ref, {ref, {start, size, output, metadata}})
+    end
+  end
+
+  defp server_reply_down(type, reason, ref_sizes) do
+    for {ref, _start, _size} <- ref_sizes do
+      send(ref, {:DOWN, ref, type, self(), reason})
+    end
   end
 
   defp server_stack(%{stack: {stack, count}, limit: limit} = state, ref, batch)
@@ -787,27 +833,5 @@ defmodule Nx.Serving do
 
       {output, %{meta | output: output}}
     end)
-  end
-end
-
-defmodule Nx.Serving.Default do
-  @moduledoc false
-  @behaviour Nx.Serving
-
-  @impl true
-  def init(_type, fun, defn_options) do
-    case fun.(defn_options) do
-      batch_fun when is_function(batch_fun, 1) ->
-        {:ok, batch_fun}
-
-      other ->
-        raise "anonymous function given to Nx.Serving.new/2 should return an AOT or " <>
-                "JIT compiled function that expects one argument. Got: #{inspect(other)}"
-    end
-  end
-
-  @impl true
-  def handle_batch(batch, batch_fun) do
-    {:execute, fn -> {batch_fun.(batch), :server_info} end, batch_fun}
   end
 end
