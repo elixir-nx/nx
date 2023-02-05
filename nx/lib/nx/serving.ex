@@ -527,9 +527,7 @@ defmodule Nx.Serving do
   @impl true
   def init({name, serving, batch_size, batch_timeout}) do
     [parent | _] = Process.get(:"$ancestors")
-
-    {:ok, module_state} =
-      handle_init(serving.module, :process, serving.arg, serving.defn_options)
+    {:ok, module_state} = handle_init(serving.module, :process, serving.arg, serving.defn_options)
 
     :persistent_term.put(
       persistent_key(name),
