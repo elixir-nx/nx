@@ -330,7 +330,7 @@ defmodule Nx.Serving do
   separate process.
   """
   @callback handle_batch(Nx.Batch.t(), partition :: non_neg_integer(), state) ::
-              {:execute, (-> {Nx.Container.t(), metadata()}), state}
+              {:execute, (() -> {Nx.Container.t(), metadata()}), state}
             when state: term()
 
   @doc """
@@ -597,7 +597,9 @@ defmodule Nx.Serving do
   end
 
   def batched_run({:local, name}, input, _distributed_preprocessing) when is_atom(name) do
-    pid = Process.whereis(name) || exit({:noproc, {__MODULE__, :local_batched_run, [name, input]}})
+    pid =
+      Process.whereis(name) || exit({:noproc, {__MODULE__, :local_batched_run, [name, input]}})
+
     local_batched_run!(pid, name, input)
   end
 
@@ -716,7 +718,9 @@ defmodule Nx.Serving do
             distributed_batched_run_with_retries!(name, input, retries - 1)
 
           {:DOWN, _, _, _, reason} ->
-            exit({reason, {__MODULE__, :distributed_batched_run, [name, input, [retries: retries]]}})
+            exit(
+              {reason, {__MODULE__, :distributed_batched_run, [name, input, [retries: retries]]}}
+            )
         end
     end
   end
