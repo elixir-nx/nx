@@ -308,7 +308,7 @@ defmodule Nx.ServingTest do
       send(executor, :crash)
 
       assert_receive {:DOWN, ^ref, _, _,
-                      {{%RuntimeError{}, _}, {Nx.Serving, :batched_run, [_, _]}}}
+                      {{%RuntimeError{}, _}, {Nx.Serving, :local_batched_run, [_, _]}}}
     end
 
     @tag :capture_log
@@ -335,7 +335,7 @@ defmodule Nx.ServingTest do
 
       # One task should succeed and the other terminate
       assert_receive {:DOWN, ref, _, _,
-                      {{%RuntimeError{}, _}, {Nx.Serving, :batched_run, [_, _]}}}
+                      {{%RuntimeError{}, _}, {Nx.Serving, :local_batched_run, [_, _]}}}
                      when ref in [ref1, ref2]
 
       assert_receive {:DOWN, ref, _, _, :normal} when ref in [ref1, ref2]
@@ -366,7 +366,7 @@ defmodule Nx.ServingTest do
       assert_receive {:DOWN, ref, _, _, :normal}
                      when ref in [ref1, ref2]
 
-      assert_receive {:DOWN, ref, _, _, {:shutdown, {Nx.Serving, :batched_run, [_, _]}}}
+      assert_receive {:DOWN, ref, _, _, {:shutdown, {Nx.Serving, :local_batched_run, [_, _]}}}
                      when ref in [ref1, ref2]
 
       refute_received {:execute, _partition, _executor}
