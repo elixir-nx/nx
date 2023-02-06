@@ -543,10 +543,10 @@ defmodule Nx.Serving do
   end
 
   @doc """
-  Runs the given `input` on the serving given by `name`.
+  Runs the given `input` on the serving process given by `name`.
 
   `name` is either an atom representing a local or distributed
-  serving. First it will attempt to dispatch locally, then it
+  serving process. First it will attempt to dispatch locally, then it
   falls back to the distributed serving. You may specify
   `{:local, name}` to force a local lookup or `{:distributed, name}`
   to force a distributed one.
@@ -554,8 +554,10 @@ defmodule Nx.Serving do
   The `client_preprocessing` callback will be invoked on the `input`
   which is then sent to the server. The server will batch requests
   and send a response either when the batch is full or on timeout.
-  Then `client_postprocesing` is invoked on the response. See the
-  module documentation for more information.
+  Then `client_postprocessing` is invoked on the response. See the
+  module documentation for more information. In the distributed case,
+  the callbacks are invoked in the distributed node, but still outside of
+  the serving process.
 
   Note that you cannot batch an `input` larger than the configured
   `:batch_size` in the server.
@@ -714,7 +716,6 @@ defmodule Nx.Serving do
             result
 
           {:DOWN, _, _, _, :noproc} ->
-            # TODO: Return no proc for stacked and queued batches on terminate
             distributed_batched_run_with_retries!(name, input, retries - 1)
 
           {:DOWN, _, _, _, reason} ->
