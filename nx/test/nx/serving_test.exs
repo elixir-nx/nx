@@ -374,7 +374,8 @@ defmodule Nx.ServingTest do
 
     @tag :capture_log
     test "2=>shutdown=>1 (stacked)", config do
-      serving_pid = execute_sync_supervised!(config, batch_timeout: 100, batch_size: 2, batch_timeout: 30_000)
+      serving_pid =
+        execute_sync_supervised!(config, batch_timeout: 100, batch_size: 2, batch_timeout: 30_000)
 
       {_pid, ref1} =
         spawn_monitor(fn ->
@@ -531,6 +532,104 @@ defmodule Nx.ServingTest do
 
       assert Task.await(task1)
       assert Task.await(task2)
+    end
+  end
+
+  describe "distributed" do
+    test "spawns distributed tasks locally", config do
+      parent = self()
+
+      preprocessing = fn input ->
+        send(parent, {:pre, input})
+        input
+      end
+
+      postprocessing = fn output ->
+        send(parent, {:post, output})
+        output
+      end
+
+      serving =
+        Nx.Serving.new(ExecuteSync, self())
+        |> Nx.Serving.distributed_postprocessing(postprocessing)
+
+      opts = [
+        name: config.test,
+        serving: serving,
+        batch_size: 2,
+        shutdown: 1000
+      ]
+
+      start_supervised!({Nx.Serving, opts})
+
+      task1 =
+        Task.async(fn ->
+          batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
+
+          assert Nx.Serving.batched_run({:distributed, config.test}, batch, preprocessing) ==
+                   Nx.tensor([2, 4])
+        end)
+
+      task2 =
+        Task.async(fn ->
+          batch = Nx.Batch.concatenate([Nx.tensor([3, 4])])
+
+          assert Nx.Serving.batched_run({:distributed, config.test}, batch, preprocessing) ==
+                   Nx.tensor([6, 8])
+        end)
+
+      assert_receive {:pre, %Nx.Batch{size: 2}}
+      assert_receive {:execute, 0, executor}
+      send(executor, :continue)
+      assert_receive {:post, %Nx.Tensor{}}
+
+      assert_receive {:pre, %Nx.Batch{size: 2}}
+      assert_receive {:execute, 0, executor}
+      send(executor, :continue)
+      assert_receive {:post, %Nx.Tensor{}}
+
+      assert Task.await(task1)
+      assert Task.await(task2)
+    end
+
+    @tag :distributed
+    test "spawns distributed tasks over the network", config do
+      parent = self()
+
+      preprocessing = fn input ->
+        send(parent, {:pre, node(), input})
+        input
+      end
+
+      opts = [
+        name: config.test,
+        batch_size: 2,
+        shutdown: 1000
+      ]
+
+      Node.spawn_link(:"secondary@127.0.0.1", DistributedServings, :multiply, [parent, opts])
+      assert_receive :spawned
+
+      batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
+
+      # local call
+      assert {:noproc, _} =
+               catch_exit(Nx.Serving.batched_run({:local, config.test}, batch, preprocessing))
+
+      # distributed call
+      assert Nx.Serving.batched_run({:distributed, config.test}, batch, preprocessing) ==
+               Nx.tensor([2, 4])
+
+      assert_receive {:pre, node, %Nx.Batch{size: 2}} when node == node()
+      assert_receive {:post, node, tensor} when node != node()
+      assert tensor == Nx.tensor([2, 4])
+
+      # lookup call
+      batch = Nx.Batch.concatenate([Nx.tensor([3])])
+      assert Nx.Serving.batched_run(config.test, batch, preprocessing) == Nx.tensor([6])
+      assert_receive {:pre, node, %Nx.Batch{size: 1}} when node == node()
+      assert_receive {:post, node, tensor} when node != node()
+      assert tensor == Nx.tensor([6])
     end
   end
 end
