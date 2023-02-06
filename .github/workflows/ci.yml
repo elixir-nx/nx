@@ -13,7 +13,7 @@ jobs:
       matrix:
         working_directory: ["nx", "exla", "torchx"]
         elixir: ["1.14.2"]
-        otp: ["24.0"]
+        otp: ["25.2"]
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}
@@ -62,7 +62,7 @@ jobs:
       matrix:
         working_directory: ["nx", "torchx"]
         elixir: ["1.14.2"]
-        otp: ["24.0"]
+        otp: ["25.2"]
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}
