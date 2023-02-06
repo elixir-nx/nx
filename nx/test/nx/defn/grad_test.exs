@@ -9,7 +9,14 @@ defmodule Nx.Defn.GradTest do
   @types [{:f, 64}, {:c, 128}]
 
   defp random_uniform(min, max, opts) do
-    Nx.random_uniform({}, min, max, opts)
+    rand =
+      if Nx.Type.float?(opts[:type] || {:f, 32}) do
+        :rand.uniform() * (max - min) + min
+      else
+        round(:rand.uniform() * (max - min) + min)
+      end
+
+    Nx.tensor(rand, opts)
   end
 
   describe "simple" do

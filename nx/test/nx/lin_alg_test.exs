@@ -385,15 +385,19 @@ defmodule Nx.LinAlgTest do
     end
 
     test "property" do
-      for _ <- 1..10, type <- [{:f, 32}, {:c, 64}] do
-        square = Nx.random_uniform({2, 4, 4}, type: type)
-        tall = Nx.random_uniform({2, 4, 3}, type: type)
+      key = Nx.Random.key(System.unique_integer())
 
-        assert {q, r} = Nx.LinAlg.qr(square)
-        assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), square, atol: 1.0e-6)
+      for _ <- 1..10, type <- [{:f, 32}, {:c, 64}], reduce: key do
+        key ->
+          {square, key} = Nx.Random.uniform(key, shape: {2, 4, 4}, type: type)
+          {tall, key} = Nx.Random.uniform(key, shape: {2, 4, 3}, type: type)
 
-        assert {q, r} = Nx.LinAlg.qr(tall)
-        assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), tall, atol: 1.0e-6)
+          assert {q, r} = Nx.LinAlg.qr(square)
+          assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), square, atol: 1.0e-6)
+
+          assert {q, r} = Nx.LinAlg.qr(tall)
+          assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), tall, atol: 1.0e-6)
+          key
       end
     end
   end
@@ -467,43 +471,49 @@ defmodule Nx.LinAlgTest do
       # from random matrices based on the relation A = Q.Λ.Q^*
       # where Λ is the diagonal matrix of eigenvalues and Q is unitary matrix.
 
-      for type <- [f: 32, c: 64] do
-        # Unitary matrix from a random matrix
-        {q, _} = Nx.random_uniform({3, 3, 3}, type: type) |> Nx.LinAlg.qr()
+      key = Nx.Random.key(System.unique_integer())
 
-        # Different eigenvalues from random values
-        evals_test =
-          [{100, 30}, {4, 6}, {0.7, 0.9}]
-          |> Enum.map(fn {low, up} ->
-            if :rand.uniform() - 0.5 > 0 do
-              {low, up}
-            else
-              {-up, -low}
-            end
-          end)
-          |> Enum.map(fn {low, up} ->
-            Nx.random_uniform({1}, low, up, type: {:f, 64})
-          end)
-          |> Nx.concatenate()
+      for type <- [f: 32, c: 64], reduce: key do
+        key ->
+          # Unitary matrix from a random matrix
+          {base, key} = Nx.Random.uniform(key, shape: {3, 3, 3}, type: type)
+          {q, _} = Nx.LinAlg.qr(base)
 
-        # Hermitian matrix with different eigenvalues
-        # using A = A^* = Q^*.Λ.Q.
-        a =
-          q
-          |> Nx.LinAlg.adjoint()
-          |> Nx.multiply(evals_test)
-          |> Nx.dot([2], [0], q, [1], [0])
-          |> round(2)
+          # Different eigenvalues from random values
+          evals_test =
+            [{100, 30}, {4, 6}, {0.7, 0.9}]
+            |> Enum.map(fn {low, up} ->
+              if :rand.uniform() - 0.5 > 0 do
+                {low, up}
+              else
+                {-up, -low}
+              end
+            end)
+            |> Enum.map(fn {low, up} ->
+              rand = :rand.uniform() * (up - low) + low
+              Nx.tensor([rand], type: :f64)
+            end)
+            |> Nx.concatenate()
 
-        # Eigenvalues and eigenvectors
-        assert {evals, evecs} = Nx.LinAlg.eigh(a, max_iter: 10_000)
-        assert_all_close(evals_test, evals, atol: 1.0e-1)
+          # Hermitian matrix with different eigenvalues
+          # using A = A^* = Q^*.Λ.Q.
+          a =
+            q
+            |> Nx.LinAlg.adjoint()
+            |> Nx.multiply(evals_test)
+            |> Nx.dot([2], [0], q, [1], [0])
+            |> round(2)
 
-        # Eigenvalue equation
-        evecs_evals = Nx.multiply(evecs, evals)
-        a_evecs = Nx.dot(a, [2], [0], evecs, [1], [0])
+          # Eigenvalues and eigenvectors
+          assert {evals, evecs} = Nx.LinAlg.eigh(a, max_iter: 10_000)
+          assert_all_close(evals_test, evals, atol: 1.0e-1)
 
-        assert_all_close(evecs_evals, a_evecs, atol: 1.0e-1)
+          # Eigenvalue equation
+          evecs_evals = Nx.multiply(evecs, evals)
+          a_evecs = Nx.dot(a, [2], [0], evecs, [1], [0])
+
+          assert_all_close(evecs_evals, a_evecs, atol: 1.0e-1)
+          key
       end
     end
 
@@ -511,36 +521,41 @@ defmodule Nx.LinAlgTest do
       # Generate real Hermitian matrices with close eigenvalues
       # from random matrices based on the relation A = Q.Λ.Q^*
 
-      for _ <- 1..3 do
-        # Unitary matrix from a random matrix
-        {q, _} = Nx.random_uniform({3, 3, 3}) |> Nx.LinAlg.qr()
+      key = Nx.Random.key(System.unique_integer())
 
-        # ensure that eval1 is far apart from the other two eigenvals
-        eval1 = :rand.uniform() * 10 + 10
-        # eval2 is in the range 1 < eval2 < 1.01
-        eval2 = :rand.uniform() * 0.01 + 1
-        # eval3 also in the same range as eval2
-        eval3 = :rand.uniform() * 0.01 + 1
+      for _ <- 1..3, reduce: key do
+        key ->
+          # Unitary matrix from a random matrix
+          {base_q, key} = Nx.Random.uniform(key, 0, 1, shape: {3, 3, 3})
+          {q, _} = Nx.LinAlg.qr(base_q)
 
-        evals_test = Nx.tensor([eval1, eval2, eval3])
+          # ensure that eval1 is far apart from the other two eigenvals
+          eval1 = :rand.uniform() * 10 + 10
+          # eval2 is in the range 1 < eval2 < 1.01
+          eval2 = :rand.uniform() * 0.01 + 1
+          # eval3 also in the same range as eval2
+          eval3 = :rand.uniform() * 0.01 + 1
 
-        # Hermitian matrix with different eigenvalues
-        # using A = A^* = Q^*ΛQ.
-        a =
-          q
-          |> Nx.LinAlg.adjoint()
-          |> Nx.multiply(evals_test)
-          |> Nx.dot([2], [0], q, [1], [0])
-          |> round(3)
+          evals_test = Nx.tensor([eval1, eval2, eval3])
 
-        # Eigenvalues and eigenvectors
-        assert {evals, evecs} = Nx.LinAlg.eigh(a)
-        assert_all_close(evals_test, evals, atol: 0.1)
+          # Hermitian matrix with different eigenvalues
+          # using A = A^* = Q^*ΛQ.
+          a =
+            q
+            |> Nx.LinAlg.adjoint()
+            |> Nx.multiply(evals_test)
+            |> Nx.dot([2], [0], q, [1], [0])
+            |> round(3)
 
-        # Eigenvalue equation
-        evecs_evals = Nx.multiply(evecs, evals)
-        a_evecs = Nx.dot(a, [2], [0], evecs, [1], [0])
-        assert_all_close(evecs_evals, a_evecs, atol: 0.1)
+          # Eigenvalues and eigenvectors
+          assert {evals, evecs} = Nx.LinAlg.eigh(a)
+          assert_all_close(evals_test, evals, atol: 0.1)
+
+          # Eigenvalue equation
+          evecs_evals = Nx.multiply(evecs, evals)
+          a_evecs = Nx.dot(a, [2], [0], evecs, [1], [0])
+          assert_all_close(evecs_evals, a_evecs, atol: 0.1)
+          key
       end
     end
   end
@@ -669,71 +684,84 @@ defmodule Nx.LinAlgTest do
 
   describe "lu" do
     test "property" do
-      for _ <- 1..10, type <- [{:f, 32}, {:c, 64}] do
-        # Generate random L and U matrices so we can construct
-        # a factorizable A matrix:
-        shape = {3, 4, 4}
-        lower_selector = Nx.iota(shape, axis: 1) |> Nx.greater_equal(Nx.iota(shape, axis: 2))
-        upper_selector = Nx.LinAlg.adjoint(lower_selector)
+      key = Nx.Random.key(System.unique_integer())
 
-        l_prime =
-          shape
-          |> Nx.random_uniform(type: type)
-          |> Nx.multiply(lower_selector)
+      for _ <- 1..10, type <- [{:f, 32}, {:c, 64}], reduce: key do
+        key ->
+          # Generate random L and U matrices so we can construct
+          # a factorizable A matrix:
+          shape = {3, 4, 4}
+          lower_selector = Nx.iota(shape, axis: 1) |> Nx.greater_equal(Nx.iota(shape, axis: 2))
+          upper_selector = Nx.LinAlg.adjoint(lower_selector)
 
-        u_prime = shape |> Nx.random_uniform(type: type) |> Nx.multiply(upper_selector)
+          {l_prime, key} = Nx.Random.uniform(key, 0, 1, shape: shape, type: type)
+          l_prime = Nx.multiply(l_prime, lower_selector)
 
-        a = Nx.dot(l_prime, [2], [0], u_prime, [1], [0])
+          {u_prime, key} = Nx.Random.uniform(key, 0, 1, shape: shape, type: type)
+          u_prime = Nx.multiply(u_prime, upper_selector)
 
-        assert {p, l, u} = Nx.LinAlg.lu(a)
-        assert_all_close(p |> Nx.dot([2], [0], l, [1], [0]) |> Nx.dot([2], [0], u, [1], [0]), a)
+          a = Nx.dot(l_prime, [2], [0], u_prime, [1], [0])
+
+          assert {p, l, u} = Nx.LinAlg.lu(a)
+          assert_all_close(p |> Nx.dot([2], [0], l, [1], [0]) |> Nx.dot([2], [0], u, [1], [0]), a)
+          key
       end
     end
   end
 
   describe "cholesky" do
     test "property" do
-      for _ <- 1..10, type <- @types do
-        # Generate random L matrix so we can construct
-        # a factorizable A matrix:
-        shape = {3, 4, 4}
-        lower_selector = Nx.iota(shape, axis: 1) |> Nx.greater_equal(Nx.iota(shape, axis: 2))
+      key = Nx.Random.key(System.unique_integer())
 
-        l_prime =
-          shape
-          |> Nx.random_uniform(type: type)
-          |> Nx.multiply(lower_selector)
+      for _ <- 1..10, type <- @types, reduce: key do
+        key ->
+          # Generate random L matrix so we can construct
+          # a factorizable A matrix:
+          shape = {3, 4, 4}
+          lower_selector = Nx.iota(shape, axis: 1) |> Nx.greater_equal(Nx.iota(shape, axis: 2))
 
-        a = Nx.dot(l_prime, [2], [0], Nx.LinAlg.adjoint(l_prime), [1], [0])
+          {l_prime, key} = Nx.Random.uniform(key, 0, 1, shape: shape, type: type)
 
-        assert l = Nx.LinAlg.cholesky(a)
-        assert_all_close(Nx.dot(l, [2], [0], Nx.LinAlg.adjoint(l), [1], [0]), a, atol: 1.0e-2)
+          l_prime = Nx.multiply(l_prime, lower_selector)
+
+          a = Nx.dot(l_prime, [2], [0], Nx.LinAlg.adjoint(l_prime), [1], [0])
+
+          assert l = Nx.LinAlg.cholesky(a)
+          assert_all_close(Nx.dot(l, [2], [0], Nx.LinAlg.adjoint(l), [1], [0]), a, atol: 1.0e-2)
+          key
       end
     end
   end
 
   describe "pinv" do
     test "does not raise for 0 singular values" do
-      for {m, n} <- [{3, 4}, {3, 3}, {4, 3}] do
-        # generate u and vt as random orthonormal matrices
-        {u, _} = Nx.random_uniform({m, m}) |> Nx.LinAlg.qr()
-        {vt, _} = Nx.random_uniform({n, n}) |> Nx.LinAlg.qr()
+      key = Nx.Random.key(System.unique_integer())
 
-        # because min(m, n) is always 3, we can use fixed values here
-        # the important thing is that there's at least one zero in the
-        # diagonal, to ensure that we're guarding against 0 division
-        zeros = Nx.broadcast(0, {m, n})
-        s = Nx.put_diagonal(zeros, Nx.tensor([1, 4, 0]))
-        s_inv = Nx.put_diagonal(Nx.transpose(zeros), Nx.tensor([1, 0.25, 0]))
+      for {m, n} <- [{3, 4}, {3, 3}, {4, 3}], reduce: key do
+        key ->
+          # generate u and vt as random orthonormal matrices
+          {base_u, key} = Nx.Random.uniform(key, 0, 1, shape: {m, m})
+          {u, _} = Nx.LinAlg.qr(base_u)
+          {base_vt, key} = Nx.Random.uniform(key, 0, 1, shape: {n, n})
+          {vt, _} = Nx.LinAlg.qr(base_vt)
 
-        # construct t with the given singular values
-        t = u |> Nx.dot(s) |> Nx.dot(vt)
-        pinv = Nx.LinAlg.pinv(t)
+          # because min(m, n) is always 3, we can use fixed values here
+          # the important thing is that there's at least one zero in the
+          # diagonal, to ensure that we're guarding against 0 division
+          zeros = Nx.broadcast(0, {m, n})
+          s = Nx.put_diagonal(zeros, Nx.tensor([1, 4, 0]))
+          s_inv = Nx.put_diagonal(Nx.transpose(zeros), Nx.tensor([1, 0.25, 0]))
 
-        # ensure that the returned pinv is close to what we expect
-        assert_all_close(pinv, Nx.transpose(vt) |> Nx.dot(s_inv) |> Nx.dot(Nx.transpose(u)),
-          atol: 1.0e-2
-        )
+          # construct t with the given singular values
+          t = u |> Nx.dot(s) |> Nx.dot(vt)
+          pinv = Nx.LinAlg.pinv(t)
+
+          # ensure that the returned pinv is close to what we expect
+          assert_all_close(pinv, Nx.transpose(vt) |> Nx.dot(s_inv) |> Nx.dot(Nx.transpose(u)),
+            atol: 1.0e-2
+          )
+
+          key
       end
     end
   end

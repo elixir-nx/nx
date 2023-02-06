@@ -770,7 +770,7 @@ defmodule Nx.BinaryBackend do
   defp element_min(_, a, b) when is_number(a) and is_number(b), do: min(a, b)
 
   defp element_pow({type, _}, a, b) when type in [:s, :u], do: Integer.pow(a, b)
-  defp element_pow(_, a, b), do: Complex.power(a, b)
+  defp element_pow(_, a, b), do: Complex.pow(a, b)
 
   defp element_bitwise_and(_, a, b), do: :erlang.band(a, b)
   defp element_bitwise_or(_, a, b), do: :erlang.bor(a, b)

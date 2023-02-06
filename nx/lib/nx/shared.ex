@@ -315,14 +315,14 @@ defmodule Nx.Shared do
            |> Complex.subtract(1)
          end, "$$expm1(z) = e^z - 1$$"},
       log:
-        {"natural log", quote(do: Complex.ln(var!(x))),
+        {"natural log", quote(do: Complex.log(var!(x))),
          ~S"""
          $$log(z) = ln(z),\quad \text{if z} \in \Reals$$
 
          $$log(z) = ln(r) + i\theta,\quad\text{if }z = re^{i\theta} \in \Complex$$
          """},
       log1p:
-        {"natural log plus one", quote(do: Complex.ln(Complex.add(var!(x), 1))),
+        {"natural log plus one", quote(do: Complex.log(Complex.add(var!(x), 1))),
          "$$log1p(z) = log(z + 1)$$"},
       sigmoid:
         {"sigmoid",
