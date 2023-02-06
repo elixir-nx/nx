@@ -1,7 +1,7 @@
 ExUnit.start(assert_receive_timeout: 1000)
 
 cond do
-  :distribution in Keyword.get(ExUnit.configuration(), :exclude, []) ->
+  :distributed in Keyword.get(ExUnit.configuration(), :exclude, []) ->
     :ok
 
   Code.ensure_loaded?(:peer) and match?({:ok, _}, Node.start(:"primary@127.0.0.1", :longnames)) ->
@@ -10,5 +10,5 @@ cond do
     {:ok, _} = :erpc.call(node, :application, :ensure_all_started, [:nx])
 
   true ->
-    ExUnit.configure(exclude: [:distribution])
+    ExUnit.configure(exclude: [:distributed])
 end
