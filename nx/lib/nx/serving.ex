@@ -849,10 +849,10 @@ defmodule Nx.Serving do
     end
   end
 
-  def handle_info({:DOWN, ref, type, _process, reason}, %{tasks: tasks} = state) do
+  def handle_info({:DOWN, ref, :process, _process, reason}, %{tasks: tasks} = state) do
     case Enum.split_with(tasks, &(elem(&1, 0).ref == ref)) do
       {[{_task, partition, ref_sizes}], tasks} ->
-        server_reply_down(type, reason, ref_sizes)
+        server_reply_down(reason, ref_sizes)
         {:noreply, server_task_done(state, tasks, partition)}
 
       _ ->
@@ -866,11 +866,22 @@ defmodule Nx.Serving do
   end
 
   @impl true
-  def terminate(_reason, %{module: module, tasks: tasks}) do
-    for task <- tasks, {%Task{ref: ref}, _partition, ref_sizes} = task do
+  def terminate(_reason, %{module: module, tasks: tasks, in_queue: in_queue, stack: {stack, _}}) do
+    # Emulate the process is gone for entries in the queue
+    for {_batch, ref_sizes} <- :queue.to_list(in_queue) do
+      server_reply_down(:noproc, ref_sizes)
+    end
+
+    # As well as for entries in the stack
+    for {ref, _batch} <- stack do
+      send(ref, {:DOWN, ref, :process, self(), :noproc})
+    end
+
+    # And wait until all current tasks are processed
+    for {%Task{ref: ref}, _partition, ref_sizes} <- tasks do
       receive do
         {^ref, reply} -> server_reply_ok(module, ref, reply, ref_sizes)
-        {:DOWN, ^ref, type, _, reason} -> server_reply_down(type, reason, ref_sizes)
+        {:DOWN, ^ref, :process, _, reason} -> server_reply_down(reason, ref_sizes)
       end
     end
 
@@ -886,9 +897,9 @@ defmodule Nx.Serving do
     end
   end
 
-  defp server_reply_down(type, reason, ref_sizes) do
+  defp server_reply_down(reason, ref_sizes) do
     for {ref, _start, _size} <- ref_sizes do
-      send(ref, {:DOWN, ref, type, self(), reason})
+      send(ref, {:DOWN, ref, :process, self(), reason})
     end
   end
 

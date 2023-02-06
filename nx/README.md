@@ -56,6 +56,8 @@ Here are some introductory resources with more information on Nx as a whole:
 
   * [An article by Philip Brown showing an end-to-end example of running a Machine Learning model with Elixir in production](https://fly.io/phoenix-files/recognize-digits-using-ml-in-elixir/) (text)
 
+  * [The announcement of Bumblebee, which provides pre-trained machine learning models such BERT, StableDiffusion, and others](https://news.livebook.dev/announcing-bumblebee-gpt2-stable-diffusion-and-more-in-elixir-3Op73O) (text+video)
+
 ## Installation
 
 In order to use `Nx`, you will need Elixir installed. Then create an Elixir project via the `mix` build tool:

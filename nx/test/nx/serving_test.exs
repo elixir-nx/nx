@@ -343,7 +343,7 @@ defmodule Nx.ServingTest do
     end
 
     @tag :capture_log
-    test "2=>shutdown=>2", config do
+    test "2=>shutdown=>2 (queued)", config do
       serving_pid = execute_sync_supervised!(config, batch_timeout: 100, batch_size: 2)
 
       {_pid, ref1} =
@@ -366,7 +366,37 @@ defmodule Nx.ServingTest do
       assert_receive {:DOWN, ref, _, _, :normal}
                      when ref in [ref1, ref2]
 
-      assert_receive {:DOWN, ref, _, _, {:shutdown, {Nx.Serving, :local_batched_run, [_, _]}}}
+      assert_receive {:DOWN, ref, _, _, {:noproc, {Nx.Serving, :local_batched_run, [_, _]}}}
+                     when ref in [ref1, ref2]
+
+      refute_received {:execute, _partition, _executor}
+    end
+
+    @tag :capture_log
+    test "2=>shutdown=>1 (stacked)", config do
+      serving_pid = execute_sync_supervised!(config, batch_timeout: 100, batch_size: 2, batch_timeout: 30_000)
+
+      {_pid, ref1} =
+        spawn_monitor(fn ->
+          batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
+          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([2, 4])
+        end)
+
+      {_pid, ref2} =
+        spawn_monitor(fn ->
+          batch = Nx.Batch.concatenate([Nx.tensor([3])])
+          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([6])
+        end)
+
+      assert_receive {:execute, 0, executor}
+      send(serving_pid, {:system, {self(), make_ref()}, {:terminate, :shutdown}})
+      send(executor, :continue)
+
+      # One task should succeed and the other terminate
+      assert_receive {:DOWN, ref, _, _, :normal}
+                     when ref in [ref1, ref2]
+
+      assert_receive {:DOWN, ref, _, _, {:noproc, {Nx.Serving, :local_batched_run, [_, _]}}}
                      when ref in [ref1, ref2]
 
       refute_received {:execute, _partition, _executor}
