@@ -12,7 +12,7 @@ Nx is a multi-dimensional tensors library for Elixir with multi-staged compilati
 
   * Numerical definitions, known as `defn`, is a subset of Elixir that is compilable to multiple targets, including GPUs. See [EXLA](https://github.com/elixir-nx/nx/tree/main/exla) for just-in-time (JIT) compilation for CPUs/GPUs/TPUs and [Torchx](https://github.com/elixir-nx/nx/tree/main/torchx) for CPUs/GPUs support;
 
-  * Built-in serving: easily embed your code into `Nx.Serving`, which encapsulate complex numerical pipelines. Servings can also be spawned as Elixir process to handle requests and provide features such as batching, up to a given size or time, and multi-device partitioning (for example, if you have two GPUs, it will send the batches to the one available);
+  * Built-in distributed² serving: encapsulate complex numerical pipelines into `Nx.Serving`. Servings provide batching, up to a given size or time, distribution over multiple CPU cores and GPU devices, as well as distribution over a cluster of machines;
 
   * Support for data streaming and hooks, allowing developers to send and receive data from CPUs/GPUs/TPUs while computations are running;
 
@@ -20,7 +20,7 @@ Nx is a multi-dimensional tensors library for Elixir with multi-staged compilati
 
 You can find planned enhancements and features in the issues tracker. If you need one particular feature to move forward, don't hesitate to let us know and give us feedback.
 
-For Python developers, `Nx` currently takes its main inspirations from [`Numpy`](https://numpy.org/) and [`JAX`](https://github.com/google/jax) but packaged into a single unified library.
+For Python developers, `Nx` packages features from [`Numpy`](https://numpy.org/), [`JAX`](https://github.com/google/jax), [HuggingFace Pipelines](https://huggingface.co/docs/transformers/main_classes/pipelines), and TorchServing/TensorServing, but packaged into a single unified library and developer experience.
 
 ## Community
 
@@ -55,6 +55,8 @@ Here are some introductory resources with more information on Nx as a whole:
   * [A screencast by José Valim announcing Livebook, where he also showcases Nx and Axon (a neural network library built on top of Nx)](https://www.youtube.com/watch?v=RKvqc-UEe34) (video)
 
   * [An article by Philip Brown showing an end-to-end example of running a Machine Learning model with Elixir in production](https://fly.io/phoenix-files/recognize-digits-using-ml-in-elixir/) (text)
+
+  * [The announcement of Bumblebee, which provides pre-trained machine learning models such BERT, StableDiffusion, and others](https://news.livebook.dev/announcing-bumblebee-gpt2-stable-diffusion-and-more-in-elixir-3Op73O) (text+video)
 
 ## Installation
 

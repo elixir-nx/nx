@@ -104,7 +104,7 @@ defmodule Nx.Serving do
 
   `Nx.Serving` allows us to define an Elixir process to handle requests.
   This process provides several features, such as batching up to a given
-  size or time, and partitioning.
+  size or time, partitioning, and distribution over a group of nodes.
 
   To do so, we need to start a `Nx.Serving` process with a serving inside
   a supervision tree:
@@ -172,8 +172,40 @@ defmodule Nx.Serving do
          partitions: true}
       ]
 
-  If you have two GPUs, the serving will now gather batches and send
+  If you have two GPUs, `batched_run/3` will now gather batches and send
   them to the GPUs as they become available to process requests.
+
+  ### Distribution
+
+  All `Nx.Serving`s are distributed by default. If the current machine
+  does not have an instance of `Nx.Serving` running, `batched_run/3` will
+  automatically look for one in the cluster. The nodes do not need to run
+  the same code and applications. It is only required that they run the
+  same `Nx` version.
+
+  The load balancing between servings is done randomly, however, the number
+  of partitions are considered if the `partitioned: true` option is also given.
+  For example, if you have a node with 2 GPUs and another with 4, the latter
+  will receive the double of requests compared to the former.
+
+  `batched_run/3` receives an optional `distributed_preprocessing` callback as
+  third argument for preprocessing the input for distributed requests. When
+  using libraries like EXLA or Torchx, the tensor is often allocated in memory
+  inside a third-party library so it is necessary to either transfer or copy
+  the tensor to the binary backend before sending it to another node.
+  This can be done by passing either `Nx.backend_transfer/1` or `Nx.backend_copy/1`
+  as third argument:
+
+      Nx.Serving.batched_run(MyDistributedServing, input, &Nx.backend_copy/1)
+
+  Use `backend_transfer/1` if you know the input will no longer be used.
+
+  Similarly, the serving has a `distributed_postprocessing` callback which can do
+  equivalent before sending the reply to the caller.
+
+  The servings are dispatched using Erlang Distribution. You can use
+  `Node.connect/1` to manually connect nodes. In a production setup, this is
+  often done with the help of libraries like [`libcluster`](https://github.com/bitwalker/libcluster).
 
   ## Advanced notes
 
@@ -253,6 +285,7 @@ defmodule Nx.Serving do
     :arg,
     :client_preprocessing,
     :client_postprocessing,
+    distributed_postprocessing: &Function.identity/1,
     process_options: [],
     defn_options: []
   ]
@@ -261,12 +294,17 @@ defmodule Nx.Serving do
   @type client_info() :: term()
   @type client_preprocessing() :: (term() -> {Nx.Batch.t(), client_info()})
   @type client_postprocessing() :: (Nx.Container.t(), metadata(), client_info() -> term())
+  @type distributed_preprocessing() :: (term() -> term())
+  @type distributed_postprocessing() :: (term() -> term())
 
   @type t :: %__MODULE__{
           module: atom(),
           arg: term(),
           client_preprocessing: client_preprocessing(),
-          client_postprocessing: client_postprocessing()
+          client_postprocessing: client_postprocessing(),
+          distributed_postprocessing: distributed_postprocessing(),
+          process_options: keyword(),
+          defn_options: keyword()
         }
 
   @axis 0
@@ -365,6 +403,16 @@ defmodule Nx.Serving do
   end
 
   @doc """
+  Sets the distributed postprocessing function.
+
+  The default implementation is `Function.identity/1`.
+  """
+  def distributed_postprocessing(%Nx.Serving{} = serving, function)
+      when is_function(function, 1) do
+    %{serving | distributed_postprocessing: function}
+  end
+
+  @doc """
   Sets the process options of this serving.
 
   These are the same options as supported on `start_link/1`,
@@ -372,6 +420,15 @@ defmodule Nx.Serving do
   """
   def process_options(%Nx.Serving{} = serving, process_options) when is_list(process_options) do
     %{serving | process_options: process_options}
+  end
+
+  @doc """
+  Sets the defn options of this serving.
+
+  These are the options supported by `Nx.Defn.default_options/1`.
+  """
+  def defn_options(%Nx.Serving{} = serving, defn_options) when is_list(defn_options) do
+    %{serving | defn_options: defn_options}
   end
 
   @doc """
@@ -486,23 +543,85 @@ defmodule Nx.Serving do
   end
 
   @doc """
-  Runs the given `input` on the process given by `name`.
+  Runs the given `input` on the serving process given by `name`.
 
-  The process `name` will batch requests and send a response
-  either when the batch is full or on timeout. See the module
-  documentation for more information.
+  `name` is either an atom representing a local or distributed
+  serving process. First it will attempt to dispatch locally, then it
+  falls back to the distributed serving. You may specify
+  `{:local, name}` to force a local lookup or `{:distributed, name}`
+  to force a distributed one.
+
+  The `client_preprocessing` callback will be invoked on the `input`
+  which is then sent to the server. The server will batch requests
+  and send a response either when the batch is full or on timeout.
+  Then `client_postprocessing` is invoked on the response. See the
+  module documentation for more information. In the distributed case,
+  the callbacks are invoked in the distributed node, but still outside of
+  the serving process.
 
   Note that you cannot batch an `input` larger than the configured
   `:batch_size` in the server.
-  """
-  def batched_run(name, input) when is_atom(name) do
-    pid = GenServer.whereis(name) || exit({:noproc, {__MODULE__, :batched_run, [name, input]}})
 
+  ## Distributed mode
+
+  To run in distributed mode, the nodes do not need to run the same
+  code and applications. It is only required that they run the
+  same `Nx` version.
+
+  If the current node is running a serving given by `name` locally
+  and `{:distributed, name}` is used, the request will use the same
+  distribution mechanisms instead of being handled locally, which
+  is useful for testing locally without a need to spawn nodes.
+
+  This function receives an optional `distributed_preprocessing` callback as
+  third argument for preprocessing the input for distributed requests. When
+  using libraries like EXLA or Torchx, the tensor is often allocated in memory
+  inside a third-party library so it is necessary to either transfer or copy
+  the tensor to the binary backend before sending it to another node.
+  This can be done by passing either `Nx.backend_transfer/1` or `Nx.backend_copy/1`
+  as third argument:
+
+      Nx.Serving.batched_run(MyDistributedServing, input, &Nx.backend_copy/1)
+
+  Use `backend_transfer/1` if you know the input will no longer be used.
+
+  Similarly, the serving has a `distributed_postprocessing` callback which can do
+  equivalent before sending the reply to the caller.
+  """
+  def batched_run(name, input, distributed_preprocessing \\ &Function.identity/1)
+
+  def batched_run(name, input, distributed_preprocessing) when is_atom(name) do
+    if pid = Process.whereis(name) do
+      local_batched_run!(pid, name, input)
+    else
+      distributed_batched_run!(name, input, distributed_preprocessing)
+    end
+  end
+
+  def batched_run({:local, name}, input, _distributed_preprocessing) when is_atom(name) do
+    pid =
+      Process.whereis(name) || exit({:noproc, {__MODULE__, :local_batched_run, [name, input]}})
+
+    local_batched_run!(pid, name, input)
+  end
+
+  def batched_run({:distributed, name}, input, distributed_preprocessing) when is_atom(name) do
+    distributed_batched_run!(name, input, distributed_preprocessing)
+  end
+
+  defp local_batched_run!(pid, name, input) do
+    case local_batched_run(pid, name, input) do
+      {:ok, result} -> result
+      {:DOWN, reason} -> exit({reason, {__MODULE__, :local_batched_run, [name, input]}})
+    end
+  end
+
+  defp local_batched_run(pid, name, input) do
     %{
       preprocessing: preprocessing,
       postprocessing: postprocessing,
       limit: limit
-    } = :persistent_term.get(persistent_key(name), nil)
+    } = :persistent_term.get(persistent_key(name))
 
     {batch, info} = handle_preprocessing(preprocessing, input)
 
@@ -515,8 +634,13 @@ defmodule Nx.Serving do
     ref = :erlang.monitor(:process, pid, alias: :demonitor)
     Process.send(pid, {__MODULE__, :batched_run, ref, batch}, [:noconnect])
 
-    {tensor, metadata} = receive_batched(batch.size, ref, [], nil, name, input)
-    handle_postprocessing(postprocessing, tensor, metadata, info)
+    case receive_batched(batch.size, ref, [], nil, name, input) do
+      {:ok, tensor, metadata} ->
+        {:ok, handle_postprocessing(postprocessing, tensor, metadata, info)}
+
+      {:DOWN, reason} ->
+        {:DOWN, reason}
+    end
   end
 
   defp receive_batched(0, ref, acc, {template, metadata}, _name, _input) do
@@ -532,7 +656,7 @@ defmodule Nx.Serving do
         {tensor, tensors}
       end)
 
-    {output, metadata}
+    {:ok, output, metadata}
   end
 
   defp receive_batched(total_size, ref, acc, _template_metadata, name, input) do
@@ -546,7 +670,7 @@ defmodule Nx.Serving do
           output =
             Nx.Defn.Composite.traverse(output, &Nx.slice_along_axis(&1, start, size, axis: @axis))
 
-          {output, metadata}
+          {:ok, output, metadata}
         else
           funs =
             output
@@ -562,7 +686,57 @@ defmodule Nx.Serving do
       {:DOWN, ^ref, _, _, reason} ->
         # We fake monitor messages, so still demonitor and flush.
         Process.demonitor(ref, [:flush])
-        exit({reason, {__MODULE__, :batched_run, [name, input]}})
+        {:DOWN, reason}
+    end
+  end
+
+  defp distributed_batched_run!(name, input, distributed_callback) do
+    distributed_batched_run_with_retries!(name, distributed_callback.(input), 3)
+  end
+
+  defp distributed_batched_run_with_retries!(name, input, 0) do
+    exit({:noproc, {__MODULE__, :distributed_batched_run, [name, input, [retries: 0]]}})
+  end
+
+  defp distributed_batched_run_with_retries!(name, input, retries) do
+    case :pg.get_members(Nx.PG, __MODULE__) do
+      [] ->
+        exit({:noproc, {__MODULE__, :distributed_batched_run, [name, input, [retries: retries]]}})
+
+      entries ->
+        pid = Enum.fetch!(entries, :rand.uniform(length(entries)) - 1)
+        ref = make_ref()
+        args = [ref, name, input]
+
+        {_, monitor_ref} =
+          Node.spawn_monitor(node(pid), __MODULE__, :__distributed_batched_run__, args)
+
+        receive do
+          {:DOWN, ^monitor_ref, _, _, {^ref, result}} ->
+            result
+
+          {:DOWN, _, _, _, :noproc} ->
+            distributed_batched_run_with_retries!(name, input, retries - 1)
+
+          {:DOWN, _, _, _, reason} ->
+            exit(
+              {reason, {__MODULE__, :distributed_batched_run, [name, input, [retries: retries]]}}
+            )
+        end
+    end
+  end
+
+  @doc false
+  def __distributed_batched_run__(ref, name, input) do
+    pid = Process.whereis(name) || exit(:noproc)
+
+    case local_batched_run(pid, name, input) do
+      {:ok, result} ->
+        result = :persistent_term.get(persistent_key(name)).distributed_postprocessing.(result)
+        exit({ref, result})
+
+      {:DOWN, reason} ->
+        exit(reason)
     end
   end
 
@@ -579,6 +753,7 @@ defmodule Nx.Serving do
   def init({name, serving, partitions, batch_size, batch_timeout, task_supervisor}) do
     Process.flag(:trap_exit, true)
     partitions = serving_partitions(serving, partitions)
+    partitions_count = length(partitions)
     {:ok, module_state} = handle_init(serving.module, :process, serving.arg, partitions)
 
     :persistent_term.put(
@@ -586,9 +761,12 @@ defmodule Nx.Serving do
       %{
         limit: batch_size,
         preprocessing: serving.client_preprocessing,
-        postprocessing: serving.client_postprocessing
+        postprocessing: serving.client_postprocessing,
+        distributed_postprocessing: serving.distributed_postprocessing
       }
     )
+
+    :pg.join(Nx.PG, __MODULE__, List.duplicate(self(), partitions_count))
 
     # We keep batches in a stack. Once the stack is full
     # or it times out, we either execute or enqueue it.
@@ -600,7 +778,7 @@ defmodule Nx.Serving do
       timeout: batch_timeout,
       timer: :none,
       in_queue: @empty_queue,
-      out_queue: Enum.reduce(0..(length(partitions) - 1), :queue.new(), &:queue.in/2),
+      out_queue: Enum.reduce(0..(partitions_count - 1), :queue.new(), &:queue.in/2),
       tasks: [],
       task_supervisor: task_supervisor
     }
@@ -676,10 +854,10 @@ defmodule Nx.Serving do
     end
   end
 
-  def handle_info({:DOWN, ref, type, _process, reason}, %{tasks: tasks} = state) do
+  def handle_info({:DOWN, ref, :process, _process, reason}, %{tasks: tasks} = state) do
     case Enum.split_with(tasks, &(elem(&1, 0).ref == ref)) do
       {[{_task, partition, ref_sizes}], tasks} ->
-        server_reply_down(type, reason, ref_sizes)
+        server_reply_down(reason, ref_sizes)
         {:noreply, server_task_done(state, tasks, partition)}
 
       _ ->
@@ -693,11 +871,22 @@ defmodule Nx.Serving do
   end
 
   @impl true
-  def terminate(_reason, %{module: module, tasks: tasks}) do
-    for task <- tasks, {%Task{ref: ref}, _partition, ref_sizes} = task do
+  def terminate(_reason, %{module: module, tasks: tasks, in_queue: in_queue, stack: {stack, _}}) do
+    # Emulate the process is gone for entries in the queue
+    for {_batch, ref_sizes} <- :queue.to_list(in_queue) do
+      server_reply_down(:noproc, ref_sizes)
+    end
+
+    # As well as for entries in the stack
+    for {ref, _batch} <- stack do
+      send(ref, {:DOWN, ref, :process, self(), :noproc})
+    end
+
+    # And wait until all current tasks are processed
+    for {%Task{ref: ref}, _partition, ref_sizes} <- tasks do
       receive do
         {^ref, reply} -> server_reply_ok(module, ref, reply, ref_sizes)
-        {:DOWN, ^ref, type, _, reason} -> server_reply_down(type, reason, ref_sizes)
+        {:DOWN, ^ref, :process, _, reason} -> server_reply_down(reason, ref_sizes)
       end
     end
 
@@ -713,9 +902,9 @@ defmodule Nx.Serving do
     end
   end
 
-  defp server_reply_down(type, reason, ref_sizes) do
+  defp server_reply_down(reason, ref_sizes) do
     for {ref, _start, _size} <- ref_sizes do
-      send(ref, {:DOWN, ref, type, self(), reason})
+      send(ref, {:DOWN, ref, :process, self(), reason})
     end
   end
 

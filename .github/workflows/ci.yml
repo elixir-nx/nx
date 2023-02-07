@@ -13,7 +13,7 @@ jobs:
       matrix:
         working_directory: ["nx", "exla", "torchx"]
         elixir: ["1.14.2"]
-        otp: ["24.0"]
+        otp: ["25.2"]
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}
@@ -49,6 +49,8 @@ jobs:
         run: mix compile --warnings-as-errors
       - name: Check formatting
         run: mix format --check-formatted
+      - name: Run epmd for distributed tests
+        run: epmd -daemon
       - name: Run tests
         run: mix test
 
@@ -60,7 +62,7 @@ jobs:
       matrix:
         working_directory: ["nx", "torchx"]
         elixir: ["1.14.2"]
-        otp: ["24.0"]
+        otp: ["25.2"]
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}
