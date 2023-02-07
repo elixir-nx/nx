@@ -704,7 +704,7 @@ defmodule Nx.Serving do
         exit({:noproc, {__MODULE__, :distributed_batched_run, [name, input, [retries: retries]]}})
 
       entries ->
-        pid = Enum.fetch!(entries, :rand.uniform(length(entries)) - 1)
+        pid = Enum.random(entries)
         ref = make_ref()
         args = [ref, name, input]
 
