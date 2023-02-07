@@ -4,7 +4,7 @@ defmodule Nx.Application do
 
   def start(_type, _args) do
     children = [
-      %{id: Nx.PG, start: {:pg, :start_link, [Nx.PG]}}
+      %{id: Nx.Serving.PG, start: {:pg, :start_link, [Nx.Serving.PG]}}
     ]
 
     Supervisor.start_link(children, strategy: :one_for_all)

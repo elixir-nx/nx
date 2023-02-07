@@ -699,7 +699,7 @@ defmodule Nx.Serving do
   end
 
   defp distributed_batched_run_with_retries!(name, input, retries) do
-    case :pg.get_members(Nx.PG, __MODULE__) do
+    case :pg.get_members(Nx.Serving.PG, __MODULE__) do
       [] ->
         exit({:noproc, {__MODULE__, :distributed_batched_run, [name, input, [retries: retries]]}})
 
@@ -766,7 +766,7 @@ defmodule Nx.Serving do
       }
     )
 
-    :pg.join(Nx.PG, __MODULE__, List.duplicate(self(), partitions_count))
+    :pg.join(Nx.Serving.PG, __MODULE__, List.duplicate(self(), partitions_count))
 
     # We keep batches in a stack. Once the stack is full
     # or it times out, we either execute or enqueue it.
