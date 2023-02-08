@@ -750,67 +750,6 @@ r[y][t] = \rm{agg}\big( t0[y]0[t], t0[y]1[t], t1[y]0[t], t1[y]1[t]\big)
 
 <!-- livebook:{"break_markdown":true} -->
 
-$$
-\begin{bmatrix} x=0
-  \begin{bmatrix} y=0
-
-```
-\begin{bmatrix}
-   \boxed{1}, 2, 3 & \\
-   \boxed{1}, -2, 3 &
-\end{bmatrix}
-\\ 
-y=1
-\begin{bmatrix} 
-  & 4, -3, 2 & \\
-  & -4, 3, 2 &
-\end{bmatrix}
-\\ 
-y=2
-\begin{bmatrix}
-  & 5, -1, 3 &\\
-  & -5, 1, 3 &
-\end{bmatrix}
-```
-
-\end{bmatrix}
-  \\
-  x=1
-  \begin{bmatrix} y=0
-
-```
-\begin{bmatrix}
-   \boxed{4}, 6, 1 & \\
-   \boxed{4},-6, 1 &
-\end{bmatrix}
-\\ 
-y=1
-\begin{bmatrix}
-  & 1, 2, 3 & \\
-  & 1, -2, 3 &
-\end{bmatrix}
-\\ 
-y=2
-\begin{bmatrix}
-  & 4, -3, 2 & \\
-  & -4, 3, 2 &
-\end{bmatrix}
-```
-
-\end{bmatrix}
-\end{bmatrix}
-
-\to
-
-\begin{bmatrix}
- \rm{agg}(1,1,4,4),\rm{agg}(2,-2,6,-6),\rm{agg}(3,3,1,1) &\\
-  \rm{agg}(4,-4,1,1), \rm{agg}(-3,3,2,-2), \rm{agg}(2,2,3,3) & \\
-  \rm{agg}(5,-5,4,-4) , \rm{agg}(-1,1,-3,3,  \rm{agg}(3,3,2,2)
-\end{bmatrix}
-$$
-
-<!-- livebook:{"break_markdown":true} -->
-
 From this, it is easy to undertand what the aggregate returns:
 
 ```elixir
