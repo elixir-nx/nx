@@ -22,7 +22,12 @@ A tensor _in computer science_ can be viewed as a list of multi-indexed numbers.
 ```elixir
 {
   Nx.tensor([1, 2, 3]),
-  ~V[1 2 3]
+  ~V[1 2 3],
+  Nx.tensor([[1, 2], [3, 4]]),
+  ~M[
+    1 2
+    3 4
+  ]
 }
 ```
 
