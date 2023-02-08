@@ -761,7 +761,7 @@ r[y][t] = \rm{agg}\big( t0[y]0[t], t0[y]1[t], t1[y]0[t], t1[y]1[t]\big)
 From this, it is easier to understand what the following aggregation calls return:
 
 ```elixir
-Nx.reduce_min(t, axes: [0, 2])
+Nx.reduce_min(t, axes: [0, -1])
 ```
 
 ```elixir
