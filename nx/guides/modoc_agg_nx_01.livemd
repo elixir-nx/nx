@@ -36,7 +36,7 @@ As an application, we use a tensor of rank 1 (a list) and compare the calculus d
 l = ~V[0 1 2]
 
 mean = (0 + 1 + 2) / 3
-variance = ((0 - mean) ** 2 + (1 - mean) ** 2 + (2 - mean) ** 2) / 3
+variance = ((0 - mean) ** 2 + (1 - mean) ** 2 + (2 - mean) ** 2) / 3 # == ((-1)**2 + (0)**2 + (1)**2 / 3 == 2/3 or 0.66...
 
 nx_variance = Nx.variance(l)
 
