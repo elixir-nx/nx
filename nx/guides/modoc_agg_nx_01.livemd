@@ -769,5 +769,5 @@ Nx.reduce_max(t, axes: [:x, :t])
 ```
 
 ```elixir
-Nx.mean(t, axes: [0, 2])
+Nx.mean(t, axes: [:x, :y])
 ```
