@@ -765,7 +765,7 @@ Nx.reduce_min(t, axes: [0, 2])
 ```
 
 ```elixir
-Nx.reduce_max(t, axes: [0, 2])
+Nx.reduce_max(t, axes: [:x, :t])
 ```
 
 ```elixir
