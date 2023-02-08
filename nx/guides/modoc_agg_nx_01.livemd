@@ -26,7 +26,7 @@ A tensor _in computer science_ can be viewed as a list of multi-indexed numbers.
 }
 ```
 
-You can aggregation functions on any tensor. This means you apply a function to the elements of your tensor. The function can be applied to the elements as a whole, or by "axis".
+You can apply aggregation functions on any tensor. The function can be applied to tensor as a whole or to a subsection of the tensor taken in an axis-wise fashion. For instance, you could get the maximum number in a matrix (2D tensor) with `Nx.reduce_max(matrix)`, returning a scalar (0D tensor); or the maximum number for each row with `Nx.reduce_max(matrix, axes: [1])`, returning a vector (1D tensor).
 
 Let's take a first example with the `Nx.all_close` full-tensor aggregate.  For each element of your tensor, you make a comparison against a given tensor and evaluate how "close" globally these tensors are.
 
