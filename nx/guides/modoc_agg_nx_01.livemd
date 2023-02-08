@@ -30,7 +30,7 @@ You can apply aggregation functions on any tensor. The function can be applied t
 
 Let's take a first example with the `Nx.all_close` full-tensor aggregate.  For each element of your tensor, you make a comparison against a given tensor and evaluate how "close" globally these tensors are.
 
-As an application, we use a tensor of rank 1 (a list) and compare the calculus done by hand with the aggregate `Nx.variance` (which is a tensor of rank 0).
+As an application, we use a tensor of rank 1 (a vector) and compare the calculations done by hand with the aggregate function `Nx.variance` (which returns a tensor of rank 0 if not aggregated axis-wise).
 
 ```elixir
 l = ~V[0 1 2]
