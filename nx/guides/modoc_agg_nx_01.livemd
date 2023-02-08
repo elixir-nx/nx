@@ -47,7 +47,7 @@ nx_variance = Nx.variance(l)
 
 %{
   hand_variance: variance,
-  nx_variance: Nx.to_number(nx_variance),
+  nx_variance: nx_variance,
   variance_result_rank: Nx.rank(nx_variance),
   _nx_close_agg: Nx.all_close(Nx.tensor(variance, type: :f16), nx_variance)
 }
