@@ -56,7 +56,10 @@ nx_variance = Nx.variance(l)
 Let's take an example of the aggregate `Nx.weighted_mean` that supports full-tensor and per axis operations. Let's take an example with a tensor of rank 2; these are vectors, covectors and 2D matrices. Let's check how the weighted mean aggregate of a matrix is computed with a 2D tensor of shape`{2,2}` (aka as "square matrix").
 
 ```elixir
-m = ~V[1 2 3 4] |> Nx.reshape({2, 2})
+m = ~M[
+  1 2
+  3 4
+]
 ```
 
 We run the full -tensor aggregate, do the same calculations by hand and finally compare them:
