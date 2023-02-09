@@ -194,11 +194,13 @@ $$
 \begin{bmatrix}
 x=0 &
 \begin{bmatrix}
-y=0 & \begin{bmatrix} 
+y=0 & 
+\begin{bmatrix} 
 z=0 & a_{0,0,0,0} & a_{0,0,0,1} & a_{0,0,0,2} \\
 z=1 & a_{0,0,1,0} & a_{0,0,1,1} & a_{0,0,1,2}
 \end{bmatrix}\\
-y=1 & \begin{bmatrix}
+y=1 & 
+\begin{bmatrix}
 z=0 & a_{0,1,0,0} & a_{0,1,0,1} & a_{0,1,0,2} \\
 z=1 & a_{0,1,1,0} & a_{0,1,1,1} & a_{0,1,1,2} \\
 \end{bmatrix}\\
@@ -207,16 +209,20 @@ z=0 & a_{0,2,0,0} & a_{0,2,0,1} & a_{0,2,0,2} \\
 z=1 & a_{0,2,1,0} & a_{0,2,1,1} & a_{0,2,1,2} \\
 \end{bmatrix}
 \end{bmatrix} \\
-x=1 & \begin{bmatrix}
-y=0 & \begin{bmatrix}
+x=1 & 
+\begin{bmatrix}
+y=0 & 
+\begin{bmatrix}
 z=0 & a_{1,0,0,0} & a_{1,0,0,1} & a_{1,0,0,2}  \\
 z=1 & a_{1,0,1,0} & a_{1,0,1,1} & a_{1,0,1,2} \\
 \end{bmatrix}\\
-y=1 & \begin{bmatrix}
+y=1 & 
+\begin{bmatrix}
 z=0 & a_{1,1,0,0} & a_{1,1,0,1} & a_{1,1,0,2}  \\
 z=1 & a_{1,1,1,0} & a_{1,1,1,1} & a_{1,1,1,2} \\
 \end{bmatrix}\\
-y=2 & \begin{bmatrix}
+y=2 & 
+\begin{bmatrix}
 z=0 & a_{1,2,0,0} & a_{1,2,0,1} & a_{1,2,0,2}  \\
 z=1 & a_{1,2,1,0} & a_{1,2,1,1} & a_{1,2,1,2} \\
 \end{bmatrix}
@@ -243,7 +249,7 @@ z=1 & a_{1,2,1,0} & a_{1,2,1,1} & a_{1,2,1,2} \\
 & 4, 6, 1 & \\
 & 4, -6, 1 &
 \end{bmatrix}\\
-begin{bmatrix}
+\begin{bmatrix}
 & 1, 2, 3 & \\
 & 1, -2, 3 &
 \end{bmatrix}\\
