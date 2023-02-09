@@ -351,7 +351,7 @@ $$
 \begin{bmatrix}
 & \boxed{\rm{agg}(1,4)}, \rm{agg}(2,6), \rm{agg}(3, 1)& \\
 & \rm{agg}(1,4), \rm{agg}(-2,-6), \rm{agg}(3,1) &
-end{bmatrix} \\
+\end{bmatrix} \\
 \begin{bmatrix}
 & \rm{agg}(4,1), \rm{agg}(-3,2), \rm{agg}(2,3) & \\
 & \rm{agg}(-4,1), \rm{agg}(3,-2), \rm{agg}(2,3) &
@@ -538,7 +538,7 @@ x=1 &
 \begin{bmatrix}
 & 0, 0, 0 & \\
 & 0, 0, 0 & \\
-& 0, 1, 0
+& 0, 1, 0 &
 \end{bmatrix}
 \end{bmatrix}
 $$
@@ -573,7 +573,7 @@ y=0 &
 & 1, -2, 3, &
 \end{bmatrix}\\ 
 y=1 &
-begin{bmatrix}
+\begin{bmatrix}
 & 4, -3, 2 & \\
 & -4, 3, 2 &
 \end{bmatrix}\\
