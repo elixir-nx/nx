@@ -477,42 +477,37 @@ In the example below, we used the `argmax` function.
 
 $$
 \begin{bmatrix}
-x=0
+  x=0 &
   \begin{bmatrix}
-    y=0
+    y=0 &
     \begin{bmatrix}
       \boxed{1}, 2, 3, & \\
       \boxed{1}, -2, 3, &
-    \end{bmatrix}
-    \\
-    y=1
+    \end{bmatrix} \\
+    y=1 &
     \begin{bmatrix}
       & 4, -3, 2 & \\
       & -4, 3, 2 &
-    \end{bmatrix}
-    \\
-    y=2
+    \end{bmatrix}\\
+    y=2 &
     \begin{bmatrix}
       & 5, -1, 3 &\\
       & -5, 1, 3 &
     \end{bmatrix}
-  \end{bmatrix}
-  \\
-  x=1
+  \end{bmatrix}\\
+  x=1 &
   \begin{bmatrix}
-    y=0
+    y=0 &
     \begin{bmatrix}
       & 4, \boxed{6}, 1  \\
       & 4,\boxed{-6}, 1
-    \end{bmatrix}
-    \\
-    y=1
+    \end{bmatrix}\\
+    y=1 &
     \begin{bmatrix}
       & 1, 2, 3 & \\
       & 1, -2, 3 &
-    \end{bmatrix}
-    \\
-    y=2
+    \end{bmatrix}\\
+    y=2 &
     \begin{bmatrix}
       & 4, -3, 2 & \\
       & -4, 3, 2 &
@@ -521,14 +516,13 @@ x=0
 \end{bmatrix}
 \to
 \begin{bmatrix}
-x=0
+  x=0 &
   \begin{bmatrix}
     & \boxed{\rm{agg}(1,1)}, \rm{agg}(2,-2), \rm{agg}(3,3)& \\
     & \rm{agg}(4,-4), \rm{agg}(-3,3), \rm{agg}(2,2) & \\
     & \rm{agg}(5,-5), \rm{agg}(-1,1), \rm{agg}(3,3)
-  \end{bmatrix}
-  \\
-  x=1
+  \end{bmatrix}\\
+  x=1 &
   \begin{bmatrix}
     & \rm{agg}(4,4), \boxed{\rm{agg}(6,-6)}, \rm{agg}(1,1) & \\
     & \rm{agg}(1,1), \rm{agg}(2,-2), \rm{agg}(3,3) & \\
@@ -572,42 +566,37 @@ Below is the result for the function `argmin`.
 
 $$
 \begin{bmatrix} 
-x=0
+  x=0 &
   \begin{bmatrix} 
-  y=0
+    y=0 &
     \begin{bmatrix}
       & \boxed{1, 2, 3}, & \\
       & 1, -2, 3, &
-    \end{bmatrix}
-    \\ 
-    y=1
+    \end{bmatrix}\\ 
+    y=1 &
     \begin{bmatrix}
       & 4, -3, 2 & \\
       & -4, 3, 2 &
-    \end{bmatrix}
-    \\
-    y=2
+    \end{bmatrix}\\
+    y=2 &
     \begin{bmatrix}
       & 5, -1, 3 &\\
       & -5, 1, 3 &
     \end{bmatrix}
-  \end{bmatrix}
-  \\
-  x=1
+  \end{bmatrix}\\
+  x=1 &
   \begin{bmatrix}
-  y=0
+    y=0 &
     \begin{bmatrix}
       & 4, 6, 1 & \\
       & 4,-6, 1 &
-    \end{bmatrix}
-    \\
-    y=1
+    \end{bmatrix}\\
+    y=1 &
     \begin{bmatrix}
       & 1, 2, 3 & \\
       & \boxed{1, -2, 3} &
-    \end{bmatrix}
-    \\
-    y=2
+    \end{bmatrix}\\
+    y=2 &
     \begin{bmatrix}
       & 4, -3, 2 & \\
       & -4, 3, 2 &
@@ -620,8 +609,7 @@ x=0
     & \boxed{0}, 1 & \\
     & 1, 0 & \\
     & 1, 0
-  \end{bmatrix}
-  \\
+  \end{bmatrix}\\
   \begin{bmatrix}
     & 2, 1 & \\
     & 0, \boxed{1} & \\
