@@ -1,112 +1,175 @@
-# Livebook companion for Nx
+# Livebook companion for Nx aggregations
 
 ```elixir
 Mix.install([
-  {:nx, "~> 0.4.2"},
-  {:kino, "~> 0.8"}
+  {:nx, "~> 0.4.2"}
 ])
-
-# import IEx.Helpers
 ```
 
-## Aggregations operations on tensors
-
-
+## Quick review on tensors with Nx
 
 ```elixir
 import Nx, only: :sigils
 ```
 
-A tensor _in computer science_ can be viewed as a list of multi-indexed numbers. You simply wrap your list with `Nx.tensor`. Equivalently, you can use the compact `~V` sigil:
+A tensor can be viewed as a list of indexed numbers.
+
+#### A note on how to build tensors
+
+We will use the function `Nx.tensor/2` to [construct tensors](https://hexdocs.pm/nx/Nx.html#module-creating-tensors). A few examples:
+
+* you can pass a number to a tensor and you get a 0D tensor. For example, `Nx.tensor(1)` is a 0D tensor.
 
 ```elixir
+Nx.tensor(1)
+```
+
+* you can build a 1D tensor or "vector" by passing a list of numbers. Equivalently, you can use the sigil `~V`. Both parenthesis "(" and brackets "[" are accepted.
+
+```elixir
+v = Nx.tensor([1, 2, 3])
+v1 = ~V(1 2 3)
+v2 = ~V[1 2 3]
+
 {
-  Nx.tensor([1, 2, 3]),
-  ~V[1 2 3],
-  Nx.tensor([[1, 2], [3, 4]]),
-  ~M[
-    1 2
-    3 4
-  ]
+  v == v1,
+  v == v2,
+  v
 }
 ```
 
-You can apply aggregation functions on any tensor. The function can be applied to tensor as a whole or to a subsection of the tensor taken in an axis-wise fashion. For instance, you could get the maximum number in a matrix (2D tensor) with `Nx.reduce_max(matrix)`, returning a scalar (0D tensor); or the maximum number for each row with `Nx.reduce_max(matrix, axes: [1])`, returning a vector (1D tensor).
-
-Let's take a first example with the `Nx.all_close` full-tensor aggregate.  For each element of your tensor, you make a comparison against a given tensor and evaluate how "close" globally these tensors are.
-
-As an application, we use a tensor of rank 1 (a vector) and compare the calculations done by hand with the aggregate function `Nx.variance` (which returns a tensor of rank 0 if not aggregated axis-wise).
+* you can build a matrix or 2D tensor with the sigil `~M`. For example a matrix with [shape](<(https://hexdocs.pm/nx/Nx.html#shape/1)>) (2,3).
 
 ```elixir
-l = ~V[0 1 2]
+m = ~M( 1 2 3
+  4 5 6)
+```
 
-mean = (0 + 1 + 2) / 3 # == 1
-variance = ((0 - mean) ** 2 + (1 - mean) ** 2 + (2 - mean) ** 2) / 3 # == ((-1)**2 + (0)**2 + (1)**2 / 3 == 2/3 or 0.66...
+Equivalently, you can write the structure by using nested lists. You can also start with a "flat vector" and _reshape_ it. For example:
 
-nx_variance = Nx.variance(l)
+```elixir
+m1 = Nx.tensor([[1, 2, 3], [4, 5, 6]])
 
-%{
-  hand_variance: variance,
-  nx_variance: nx_variance,
-  variance_result_rank: Nx.rank(nx_variance),
-  _nx_close_agg: Nx.all_close(Nx.tensor(variance, type: :f16), nx_variance)
+m2 = ~V(1 2 3 4 5 6) |> Nx.reshape({2, 3})
+
+{
+  m == m1,
+  m == m2,
+  m
 }
 ```
 
-Let's take an example of the aggregate `Nx.weighted_mean` that supports full-tensor and per axis operations. Let's take an example with a tensor of rank 2; these are vectors, covectors and 2D matrices. Let's check how the weighted mean aggregate of a matrix is computed with a 2D tensor of shape`{2,2}` (aka as "square matrix").
+* for higher dimensions, you can pass an arbitrarily nested list of numbers, or equivalently, you can reshape a "flat vector" into the dimensions that match your nested list. For example:
 
 ```elixir
-m = ~M[
-  1 2
-  3 4
-]
+t1 = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
+
+t2 = ~V(1 2 3 4 5 6 7 8 9 10 11 12) |> Nx.reshape({2, 2, 3})
+
+{
+  Nx.shape(t1),
+  t1 == t2,
+  t1
+}
 ```
 
-We run the full -tensor aggregate, do the same calculations by hand and finally compare them:
+#### A note on how to access to values of a tensor
+
+If `t` is the tensor, you can [access](https://hexdocs.pm/nx/Nx.html#module-access-syntax-slicing) to its elements by appending the indexes at the end within brackets "[i]" and you get a tensor response. Recall that the indexes start from $0$. For example, with the matrix `t` below, then `t[0][1] = Nx.Tensor(2)}`. You can iterate on the indexes, and access from the end with negative indexes where the index -1 represents the last one.
 
 ```elixir
-full_weights = ~V[4 5 4 5] |> Nx.reshape({2, 2})
-nx_w_avg = Nx.weighted_mean(m, full_weights)
+t = ~M(1 2 3
+  4 5 6)
+
+first_row = t[0]
+first_column = for i <- 0..1, do: t[i][0]
+corners = {t[0][0], t[0][2], t[1][2], t[1][0]}
+reverse_index = t[1][2] == t[-1][-1]
+
+{
+  corners,
+  first_row,
+  first_column,
+  reverse_index
+}
+```
+
+## Aggregations operations on tensors
+
+You can apply [aggregation functions](https://hexdocs.pm/nx/Nx.html#functions-aggregates) on any tensor. The function can be applied to the tensor as a whole or to a subsection of the tensor taken in an axis-wise fashion.
+
+As a first example, let's take a 2D tensor (aka matrix) of shape (2,3). Notice that we can _name_ the axes. The elements of the tensor `t` are the `t[i][j]` when $i$ is the row, and $j$ the column.
+
+```elixir
+m = Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y])
+```
+
+You can get the maximum number in a tensor with [Nx.reduce_max(matrix)](https://hexdocs.pm/nx/Nx.html#reduce_max/2), returning a scalar (0D tensor). With a reduction, we loose a dimension per axis reduced, and since we did globally, we loose all the dimensions. It should return `Nx.Tensor(6)` here.
+
+We can get the maximum number for each _row_ with `Nx.reduce_max(matrix, axes: [:y])`, returning a vector (1D tensor) of length 2. Why `:y`? Because for each row, we reduce along the `:y` axis.
+
+We can get the maximum number for each _column_ with `Nx.reduce_max(matrix, axes: [:x])`, returning a vector (1D tensor) of length 3. For each column, we reduce along the axis `:x`.
+
+```elixir
+max = Nx.reduce_max(m)
+max_x = Nx.reduce_max(m, axes: [:x])
+max_y = Nx.reduce_max(m, axes: [:y])
+{max, max_x, max_y, m}
+```
+
+Let's consider another example with the aggregate [Nx.weighted_mean](https://hexdocs.pm/nx/Nx.html#weighted_mean/3). It supports full-tensor and per axis operations. Let's check how the weighted mean aggregate of a matrix is computed with a 2D tensor of shape (2,2) (aka as "square matrix").
+
+```elixir
+m = ~M(1 2
+  3 4)
+```
+
+We compute the full -tensor aggregate. The calculations are developped below. We calculate an "array product" (aka [Hadamard product](<https://en.wikipedia.org/wiki/Hadamard_product_(matrices)#:~:text=In%20mathematics%2C%20the%20Hadamard%20product,elements%20i%2C%20j%20of%20the>), a terms by terms product) of our tensor with the tensor of weights, then sum all the elements and divide by the sum of the weights.
+
+```elixir
+w = ~M[4 5
+  4 5]
+
+nx_w_avg = Nx.weighted_mean(m, w)
 
 man_w_avg = (1 * 4 + 2 * 5 + 3 * 4 + 4 * 5) / (4 + 5 + 4 + 5)
+# 46/18
 
 %{
   nx_weighted_avg: Nx.to_number(nx_w_avg),
-  manual_weighted_avg: man_w_avg,
-  _nx_close: Nx.all_close(nx_w_avg, Nx.tensor(man_w_avg))
+  manual_weighted_avg: man_w_avg
 }
 ```
 
-The weighted mean can be run per axis. Let's take an example of the same squared matrix along the **first** axis (`axes: [0]`) with the same weights per axis: you calculate "by column", so aggregate all elements with the second remaining index 1 constant, or equivalently "reduce" along the selected axis (the first index):
+The weighted mean can be run per axis. Let's compute it along the **first** axis (`axes: [0]`) with the same weights per axis: you calculate "by column", so you aggregate/reduce along the first axis:
 
 ```elixir
-axes_weights = ~V[4 5]
-w_avg_x = Nx.weighted_mean(m, axes_weights, axes: [0])
+w = ~M(4 5
+  4 5)
 
-man_w_avg_x = [(1 * 4 + 3 * 5) / (4 + 5), (2 * 4 + 4 * 5) / (4 + 5)]
+w_avg_x = Nx.weighted_mean(m, w, axes: [0])
+
+man_w_avg_x = [(1 * 4 + 3 * 4) / (4 + 4), (2 * 5 + 4 * 5) / (5 + 5)]
 
 {
   w_avg_x,
-  man_w_avg_x,
-  Nx.all_close(w_avg_x, Nx.tensor(man_w_avg_x))
+  man_w_avg_x
 }
 ```
 
-We calculate weighted mean of a square matrix along the **second** axis with a set of different weights per axis: you calculate per row, so you aggregate all elements the the same remaining. index fiexd (the first index), equivalently reduce along the second axis.
+We calculate weighted mean of a square matrix along the **second** axis (`axes: [1]`): you calculate per row, so you aggregate/reduce along the second axis.
 
 ```elixir
-x0_weights = ~V[4 5]
-x1_weights = ~V[5 4]
-weights = Nx.concatenate([x0_weights, x1_weights]) |> Nx.reshape({2, 2})
+w = ~M(4 5
+  5 4)
 
-nx_w_avg_y = Nx.weighted_mean(m, weights, axes: [1])
+nx_w_avg_y = Nx.weighted_mean(m, w, axes: [1])
 
 man_w_avg_y = [(1 * 4 + 2 * 5) / (4 + 5), (3 * 5 + 4 * 4) / (4 + 5)]
 
 {
   nx_w_avg_y,
-  man_w_avg_y,
-  Nx.all_close(nx_w_avg_y, Nx.tensor(man_w_avg_y))
+  man_w_avg_y
 }
 ```
 
@@ -114,7 +177,7 @@ man_w_avg_y = [(1 * 4 + 2 * 5) / (4 + 5), (3 * 5 + 4 * 4) / (4 + 5)]
 
 The example below will be used through the documentation.
 
-Take a list of numbers of length $n=36$, and turn it into a tensor with the shape `{2,3,2,3}`; this is a computational tensor of rank 4. We will _name_ the axes, with `names: [:x, :y, :z, :t]`.
+Take a list of numbers of length $n=36$, and turn it into a tensor with the shape `{2,3,2,3}`; this is a tensor of rank 4. We will _name_ the axes, with `names: [:x, :y, :z, :t]`.
 
 ```elixir
 t =
@@ -124,105 +187,73 @@ t =
 
 We can view this list as a succession of slices into rows given by the shape of the tensor. With the shape `{2,3,2,4}`, you obtain slices of length $2$,then $3$, then $2$ and the last index of length $4$ is conventionally represented as a row. The picture below will help to understand the aggregations.
 
+<!-- livebook:{"break_markdown":true} -->
+
+
 $$
-\begin{bmatrix} x=0
-  \begin{bmatrix} y=0
-
 \begin{bmatrix}
-  a_{0,0,0,0} & a_{0,0,0,1} & a_{0,0,0,2} \\
-  a_{0,0,1,0} & a_{0,0,1,1} & a_{0,0,1,2} \\
+  \begin{bmatrix}
+    \begin{bmatrix}
+      a_{0,0,0,0} & a_{0,0,0,1} & a_{0,0,0,2} \\
+      a_{0,0,1,0} & a_{0,0,1,1} & a_{0,0,1,2} \\
+    \end{bmatrix} \\
+    \begin{bmatrix}
+      a_{0,1,0,0} & a_{0,1,0,1} & a_{0,1,0,2} \\
+      a_{0,1,1,0} & a_{0,1,1,1} & a_{0,1,1,2} \\
+    \end{bmatrix}\\
+    \begin{bmatrix}
+      a_{0,2,0,0} & a_{0,2,0,1} & a_{0,2,0,2} \\
+      a_{0,2,1,0} & a_{0,2,1,1} & a_{0,2,1,2} \\
+    \end{bmatrix}\\
+  \end{bmatrix}\\
+  \begin{bmatrix}
+    \begin{bmatrix}
+      a_{1,0,0,0} & a_{1,0,0,1} & a_{1,0,0,2}  \\
+      a_{1,0,1,0} & a_{1,0,1,1} & a_{1,0,1,2} \\
+    \end{bmatrix}\\
+    \begin{bmatrix}
+      a_{1,1,0,0} & a_{1,1,0,1} & a_{1,1,0,2}  \\
+      a_{1,1,1,0} & a_{1,1,1,1} & a_{1,1,1,2} \\
+    \end{bmatrix}\\
+    \begin{bmatrix}
+    a_{1,2,0,0} & a_{1,2,0,1} & a_{1,2,0,2}  \\
+      a_{1,2,1,0} & a_{1,2,1,1} & a_{1,2,1,2} \\
+    \end{bmatrix}
+  \end{bmatrix}
 \end{bmatrix}
-\\ 
-y=1
-\begin{bmatrix} 
-  a_{0,1,0,0} & a_{0,1,0,1} & a_{0,1,0,2} \\
-  a_{0,1,1,0} & a_{0,1,1,1} & a_{0,1,1,2} \\
-\end{bmatrix}
-\\ 
-y=2
+\equiv
 \begin{bmatrix}
-  a_{0,2,0,0} & a_{0,2,0,1} & a_{0,2,0,2} \\
-  a_{0,2,1,0} & a_{0,2,1,1} & a_{0,2,1,2} \\
-\end{bmatrix}
-
-\end{bmatrix}
-  \\
-
-x=1
-
-\begin{bmatrix} y=0
-
-\begin{bmatrix}
-  a_{1,0,0,0} & a_{1,0,0,1} & a_{1,0,0,2}  \\
-  a_{1,0,1,0} & a_{1,0,1,1} & a_{1,0,1,2}  \\
-\end{bmatrix}
-\\ 
-y=1
-\begin{bmatrix}
-  a_{1,1,0,0} & a_{1,1,0,1} & a_{1,1,0,2}  \\
-  a_{1,1,1,0} & a_{1,1,1,1} & a_{1,1,1,2}  \\
-\end{bmatrix}
-\\ 
-y=2
-\begin{bmatrix}
-  a_{1,2,0,0} & a_{1,2,0,1} & a_{1,2,0,2}  \\
-  a_{1,2,1,0} & a_{1,2,1,1} & a_{1,2,1,2}  \\    
-\end{bmatrix}
-
-\end{bmatrix}
-\end{bmatrix}
-
-
-
-\begin{bmatrix} x=0
-  \begin{bmatrix} y=0
-
-```
-\begin{bmatrix}
-  & 1, 2, 3, & \\
-  & 1, -2, 3, &
-\end{bmatrix}
-\\ 
-y=1
-\begin{bmatrix} 
-  & 4, -3, 2 & \\
-  & -4, 3, 2 &
-\end{bmatrix}
-\\ 
-y=2
-\begin{bmatrix}
-  & 5, -1, 3 &\\
-  & -5, 1, 3 &
-\end{bmatrix}
-```
-
-\end{bmatrix}
-  \\
-  x=1
-  \begin{bmatrix} y=0
-
-```
-\begin{bmatrix}
-  & 4, 6, 1 & \\
-  & 4, -6, 1 &
-\end{bmatrix}
-\\ 
-y=1
-\begin{bmatrix}
-  & 1, 2, 3 & \\
-  & 1, -2, 3 &
-\end{bmatrix}
-\\ 
-y=2
-\begin{bmatrix}
-  & 4, -3, 2 & \\
-  & -4, 3, 2 &
-\end{bmatrix}
-```
-
-\end{bmatrix}
+  \begin{bmatrix}
+    \begin{bmatrix}
+      & 1, 2, 3, & \\
+      & 1, -2, 3, &
+    \end{bmatrix} \\
+    \begin{bmatrix}
+      & 4, -3, 2 & \\
+      & -4, 3, 2 &
+    \end{bmatrix}\\
+    \begin{bmatrix}
+      & 5, -1, 3 &\\
+      & -5, 1, 3 &
+    \end{bmatrix}
+  \end{bmatrix} \\
+  \begin{bmatrix}
+    \begin{bmatrix}
+      & 4, 6, 1 & \\
+      & 4, -6, 1 &
+    \end{bmatrix}\\
+    \begin{bmatrix}
+      & 1, 2, 3 & \\
+      & 1, -2, 3 &
+    \end{bmatrix}\\
+    \begin{bmatrix}
+      & 4, -3, 2 & \\
+      & -4, 3, 2 &
+    \end{bmatrix}
+  \end{bmatrix}
 \end{bmatrix}
 $$
+
 
 <!-- livebook:{"break_markdown":true} -->
 
@@ -264,7 +295,7 @@ When you aggregate along an axis, you are going to reshape the tensor and to agg
 
 ###### Aggregate along the first axis `axis: :x` (equivalently `axis: 0`).
 
-The shape of our original tensor  `t`  is `[x: 2, y: 3, z: 2, t: 3]`. When we aggregate along the axis `:x`, it collapses and the shape of the resultant tensor `r` is `[y: 3,z: 2,t: 3]`. The rule is that every axis before the selected one will remain in the structure of the tensor as well as every axis after the selected one.
+The shape of our original tensor `t` is `[x: 2, y: 3, z: 2, t: 3]`. When we aggregate along the axis `:x`, it collapses and the shape of the resultant tensor `r` is `[y: 3,z: 2,t: 3]`. The rule is that every axis before the selected one will remain in the structure of the tensor as well as every axis after the selected one.
 
 How? You collect from each slice of `x` the elements that have the _same_ remaining indexes "on the right" $y,z,t$. In the case of our tensor, you have 2 `x`-slices so you build a sublist of 2 elements, and then apply the aggregating function on it. This gives you the value of the resulting tensor $r$ at the location $r[y][z][t]$:
 
@@ -272,105 +303,75 @@ $$
 \rm{agg}\big(t[0][y][z][t], t[1][y][z][t]\big) = r[y][z][t]
 $$
 
-The aggregating function used below is `argmin`: the index of the smallest element of the  sublist. In case of several occurences, the `:tie_break` attribute takes the lowest index.
+The aggregating function used below is [argmin](https://hexdocs.pm/nx/Nx.html#argmin/2): it returns the index of the smallest element of the sublist. In case of several occurences, the `:tie_break` attribute takes the lowest index by default.
+
+<!-- livebook:{"break_markdown":true} -->
+
 
 $$
-\begin{bmatrix} x=0
-  \begin{bmatrix} y=0
-
-```
 \begin{bmatrix}
-  & \boxed{1}, 2, 3, & \\
-  & 1, -2, 3, &
+  \begin{bmatrix}
+    \begin{bmatrix}
+      & \boxed{1}, 2, 3, & \\
+      & 1, -2, 3, &
+    \end{bmatrix} \\
+    \begin{bmatrix}
+      & 4, -3, 2 & \\
+      & -4, 3, 2 &
+    \end{bmatrix} \\
+    \begin{bmatrix}
+      & 5, -1, 3 &\\
+      & -5, 1, 3 &
+    \end{bmatrix}
+  \end{bmatrix} \\
+  \begin{bmatrix}
+    \begin{bmatrix}
+      & \boxed{4}, 6, 1 & \\
+      & 4, -6, 1 &
+    \end{bmatrix} \\
+    \begin{bmatrix}
+      & 1, 2, 3 & \\
+      & 1, -2, 3 &
+    \end{bmatrix} \\
+    \begin{bmatrix}
+      & 4, -3, 2 & \\
+      & -4, 3, 2 &
+    \end{bmatrix}
+  \end{bmatrix}
 \end{bmatrix}
-\\ 
-y=1
-\begin{bmatrix} 
-  & 4, -3, 2 & \\
-  & -4, 3, 2 &
-\end{bmatrix}
-\\ 
-y=2
-\begin{bmatrix}
-  & 5, -1, 3 &\\
-  & -5, 1, 3 &
-\end{bmatrix}
-```
-
-\end{bmatrix}
-  \\
-  x=1
-  \begin{bmatrix} y=0
-
-```
-\begin{bmatrix}
-  & \boxed{4}, 6, 1 & \\
-  & 4, -6, 1 &
-\end{bmatrix}
-\\ 
-y=1
-\begin{bmatrix}
-  & 1, 2, 3 & \\
-  & 1, -2, 3 &
-\end{bmatrix}
-\\ 
-y=2
-\begin{bmatrix}
-  & 4, -3, 2 & \\
-  & -4, 3, 2 &
-\end{bmatrix}
-```
-
-\end{bmatrix}
-\end{bmatrix}
-
 \to
-  \begin{bmatrix} y=0
-
-```
 \begin{bmatrix}
-  & \boxed{\rm{agg}(1,4)}, \rm{agg}(2,6), \rm{agg}(3, 1)& \\
-  & \rm{agg}(1,4), \rm{agg}(-2,-6), \rm{agg}(3,1) &
+  \begin{bmatrix}
+    & \boxed{\rm{agg}(1,4)}, \rm{agg}(2,6), \rm{agg}(3, 1)& \\
+    & \rm{agg}(1,4), \rm{agg}(-2,-6), \rm{agg}(3,1) &
+    \end{bmatrix} \\
+      \begin{bmatrix}
+    & \rm{agg}(4,1), \rm{agg}(-3,2), \rm{agg}(2,3) & \\
+    & \rm{agg}(-4,1), \rm{agg}(3,-2), \rm{agg}(2,3) &
+    \end{bmatrix} \\
+      \begin{bmatrix}
+    & \rm{agg}(5,4), \rm{agg}(-1,-3), \rm{agg}(3,2) &\\
+    & \rm{agg}(-5,-4), \rm{agg}(1,3), \rm{agg}(3,2) &
+  \end{bmatrix}\\
 \end{bmatrix}
-\\ 
-y=1
-\begin{bmatrix} 
-  & \rm{agg}(4,1), \rm{agg}(-3,2), \rm{agg}(2,3) & \\
-  & \rm{agg}(-4,1), \rm{agg}(3,-2), \rm{agg}(2,3) &
-\end{bmatrix}
-\\ 
-y=2
-\begin{bmatrix}
-  & \rm{agg}(5,4), \rm{agg}(-1,-3), \rm{agg}(3,2) &\\
-  & \rm{agg}(-5,-4), \rm{agg}(1,3), \rm{agg}(3,2) &
-\end{bmatrix}
-```
-
-\end{bmatrix}
-
 \xrightarrow[]{\rm{argmin}}
-
 \begin{bmatrix}
-
-```
-\begin{bmatrix}
-  & 0,0, 1 & \\
-  & 0, 1,1 &
-\end{bmatrix}
-\\ 
-\begin{bmatrix} 
-  & 1, 0,0 & \\
-  & 0,1,0 &
-\end{bmatrix}
-\\ 
-\begin{bmatrix}
-  & 1, 1,1 &\\
-  & 0, 0,1 &
-\end{bmatrix}
-```
-
+  \begin{bmatrix}
+    & 0,0, 1 & \\
+    & 0, 1,1 &
+  \end{bmatrix} \\
+  \begin{bmatrix}
+    & 1, 0,0 & \\
+    & 0,1,0 &
+  \end{bmatrix} \\
+  \begin{bmatrix}
+    & 1, 1,1 &\\
+    & 0, 0,1 &
+  \end{bmatrix}
 \end{bmatrix}
 $$
+
+
 
 ```elixir
 Nx.argmin(t, axis: :x)
@@ -382,7 +383,7 @@ The axis `y` will collapse and the shape of the resultant tensor `r` is `[x: 2, 
 
 How? The axis $x$ is before the selected one $y$ so it will remain. We therefor apply the procedure as above for _each_ sub $x$-slice.
 
-More precisely, fix the $x$-slice,  and let's consider the $x=1$ one. You collect in each sub `y`-slice the elements with the same remaining indexes "on the right", $z,t$ (and $x$ of course). You apply the aggregation and the result will be the value at location $r[1][z][t]$ of the resultant tensor $r$. So the elements of the slice $x=1$ of the resultant tensor $r$ will be:
+More precisely, fix the $x$-slice, and let's consider the $x=1$ one. You collect in each sub `y`-slice the elements with the same remaining indexes "on the right", $z,t$ (and $x$ of course). You apply the aggregation and the result will be the value at location $r[1][z][t]$ of the resultant tensor $r$. So the elements of the slice $x=1$ of the resultant tensor $r$ will be:
 
 $$
 r[x_{=1}][z][t] = \rm{agg}\big([t[x_{=1}][0][z][t], t[x_{=1}][1][z][t], t[x_{=1}][2][z][t]\big)
@@ -392,92 +393,63 @@ You repeat this operation for each $x$-slice.
 
 In the example below, we used again the `argmin` function.
 
+<!-- livebook:{"break_markdown":true} -->
+
 $$
-\begin{bmatrix} x=0
-  \begin{bmatrix} y=0
-
-```
 \begin{bmatrix}
-  & \boxed{1}, 2, 3, & \\
-  & 1, -2, 3, &
+  \begin{bmatrix}
+    \begin{bmatrix}
+      & \boxed{1}, 2, 3, & \\
+      & 1, -2, 3, &
+    \end{bmatrix}\\
+    \begin{bmatrix}
+      & \boxed{4}, -3, 2 & \\
+      & -4, 3, 2 &
+    \end{bmatrix}\\
+    \begin{bmatrix}
+      & \boxed{5}, -1, 3 &\\
+      & -5, 1, 3 &
+    \end{bmatrix}
+  \end{bmatrix}\\
+  \begin{bmatrix}
+    \begin{bmatrix}
+      & 4, 6, 1 & \\
+      & 4, \boxed{-6}, 1 &
+    \end{bmatrix}\\
+    \begin{bmatrix}
+      & 1, 2, 3 & \\
+      & 1, \boxed{-2}, 3 &
+    \end{bmatrix}\\
+    \begin{bmatrix}
+      & 4, -3, 2 & \\
+      & -4, \boxed{3}, 2 &
+    \end{bmatrix}
+  \end{bmatrix}
 \end{bmatrix}
-\\ 
-y=1
-\begin{bmatrix} 
-  & \boxed{4}, -3, 2 & \\
-  & -4, 3, 2 &
-\end{bmatrix}
-\\ 
-y=2
-\begin{bmatrix}
-  & \boxed{5}, -1, 3 &\\
-  & -5, 1, 3 &
-\end{bmatrix}
-```
-
-\end{bmatrix}
-  \\
-  x=1
-  \begin{bmatrix} y=0
-
-```
-\begin{bmatrix}
-  & 4, 6, 1 & \\
-  & 4, \boxed{-6}, 1 &
-\end{bmatrix}
-\\ 
-y=1
-\begin{bmatrix}
-  & 1, 2, 3 & \\
-  & 1, \boxed{-2}, 3 &
-\end{bmatrix}
-\\ 
-y=2
-\begin{bmatrix}
-  & 4, -3, 2 & \\
-  & -4, \boxed{3}, 2 &
-\end{bmatrix}
-```
-
-\end{bmatrix}
-\end{bmatrix}
-
 \to
-  \begin{bmatrix} x=0
-
-```
 \begin{bmatrix}
-  &\boxed{\rm{agg}(1,4,5)}, \rm{agg}(2,-3,-1), \rm{agg}(3, 2,3)& \\
-  & \rm{agg}(1,-4,-5), \rm{agg}(-2,3,1), \rm{agg}(3,2,3) &
+  \begin{bmatrix}
+    &\boxed{\rm{agg}(1,4,5)}, \rm{agg}(2,-3,-1), \rm{agg}(3, 2,3)& \\
+    & \rm{agg}(1,-4,-5), \rm{agg}(-2,3,1), \rm{agg}(3,2,3) &
+  \end{bmatrix}\\
+  \begin{bmatrix}
+    & \rm{agg}(4,1,4), \rm{agg}(6,2,-3), \rm{agg}(1,3,2) & \\
+    & \rm{agg}(4,1,-4), \boxed{\rm{agg}(-6,-2,3)}, \rm{agg}(1,3,2) &
+  \end{bmatrix}
 \end{bmatrix}
-\\ 
-x=1
-\begin{bmatrix} 
-  & \rm{agg}(4,1,4), \rm{agg}(6,2,-3), \rm{agg}(1,3,2) & \\
-  & \rm{agg}(4,1,-4), \boxed{\rm{agg}(-6,-2,3)}, \rm{agg}(1,3,2) &
-\end{bmatrix}
-```
-
-\end{bmatrix}
-
 \xrightarrow[]{\rm{argmin}}
-
 \begin{bmatrix}
-
-```
-\begin{bmatrix}
-  & 0, 2, 1 & \\
-  & 2, 0,1 &
-\end{bmatrix}
-\\ 
-\begin{bmatrix} 
-  & 1, 2,0 & \\
-  & 2,0,0 &
-\end{bmatrix}
-```
-
+  \begin{bmatrix}
+    & 0, 2, 1 & \\
+    & 2, 0,1 &
+  \end{bmatrix}\\
+  \begin{bmatrix}
+    & 1, 2,0 & \\
+    & 2,0,0 &
+  \end{bmatrix}
 \end{bmatrix}
 $$
+
 
 ```elixir
 Nx.argmin(t, axis: 1)
@@ -493,96 +465,84 @@ $$
 
 In the example below, we used the `argmax` function.
 
+<!-- livebook:{"break_markdown":true} -->
+
 $$
-\begin{bmatrix} x=0
-  \begin{bmatrix} y=0
-
-```
 \begin{bmatrix}
-  \boxed{1}, 2, 3, & \\
-  \boxed{1}, -2, 3, &
-\end{bmatrix}
-\\ 
-y=1
-\begin{bmatrix} 
-  & 4, -3, 2 & \\
-  & -4, 3, 2 &
-\end{bmatrix}
-\\ 
-y=2
-\begin{bmatrix}
-  & 5, -1, 3 &\\
-  & -5, 1, 3 &
-\end{bmatrix}
-```
-
-\end{bmatrix}
+x=0
+  \begin{bmatrix}
+    y=0
+    \begin{bmatrix}
+      \boxed{1}, 2, 3, & \\
+      \boxed{1}, -2, 3, &
+    \end{bmatrix}
+    \\
+    y=1
+    \begin{bmatrix}
+      & 4, -3, 2 & \\
+      & -4, 3, 2 &
+    \end{bmatrix}
+    \\
+    y=2
+    \begin{bmatrix}
+      & 5, -1, 3 &\\
+      & -5, 1, 3 &
+    \end{bmatrix}
+  \end{bmatrix}
   \\
   x=1
-  \begin{bmatrix} y=0
-
-```
-\begin{bmatrix}
-   & 4, \boxed{6}, 1  \\
-   & 4,\boxed{-6}, 1 
+  \begin{bmatrix}
+    y=0
+    \begin{bmatrix}
+      & 4, \boxed{6}, 1  \\
+      & 4,\boxed{-6}, 1
+    \end{bmatrix}
+    \\
+    y=1
+    \begin{bmatrix}
+      & 1, 2, 3 & \\
+      & 1, -2, 3 &
+    \end{bmatrix}
+    \\
+    y=2
+    \begin{bmatrix}
+      & 4, -3, 2 & \\
+      & -4, 3, 2 &
+    \end{bmatrix}
+  \end{bmatrix}
 \end{bmatrix}
-\\ 
-y=1
-\begin{bmatrix}
-  & 1, 2, 3 & \\
-  & 1, -2, 3 &
-\end{bmatrix}
-\\ 
-y=2
-\begin{bmatrix}
-  & 4, -3, 2 & \\
-  & -4, 3, 2 &
-\end{bmatrix}
-```
-
-\end{bmatrix}
-\end{bmatrix}
-
 \to
-  \begin{bmatrix} x=0
-
-```
 \begin{bmatrix}
-  & \boxed{\rm{agg}(1,1)}, \rm{agg}(2,-2), \rm{agg}(3,3)& \\
-  & \rm{agg}(4,-4), \rm{agg}(-3,3), \rm{agg}(2,2) & \\
-  & \rm{agg}(5,-5), \rm{agg}(-1,1), \rm{agg}(3,3)
+x=0
+  \begin{bmatrix}
+    & \boxed{\rm{agg}(1,1)}, \rm{agg}(2,-2), \rm{agg}(3,3)& \\
+    & \rm{agg}(4,-4), \rm{agg}(-3,3), \rm{agg}(2,2) & \\
+    & \rm{agg}(5,-5), \rm{agg}(-1,1), \rm{agg}(3,3)
+  \end{bmatrix}
+  \\
+  x=1
+  \begin{bmatrix}
+    & \rm{agg}(4,4), \boxed{\rm{agg}(6,-6)}, \rm{agg}(1,1) & \\
+    & \rm{agg}(1,1), \rm{agg}(2,-2), \rm{agg}(3,3) & \\
+    & \rm{agg}(4,-4), \rm{agg}(-3,3), \rm{agg}(2,2) &
+  \end{bmatrix}
 \end{bmatrix}
-\\ 
-x=1
-\begin{bmatrix} 
-  & \rm{agg}(4,4), \boxed{\rm{agg}(6,-6)}, \rm{agg}(1,1) & \\
-  & \rm{agg}(1,1), \rm{agg}(2,-2), \rm{agg}(3,3) & \\
-  & \rm{agg}(4,-4), \rm{agg}(-3,3), \rm{agg}(2,2) &
-\end{bmatrix}
-```
-
-\end{bmatrix}
-
 \xrightarrow[]{\rm{argmax}}
-
 \begin{bmatrix}
-
-```
-\begin{bmatrix}
-  & 0, 0, 0 & \\
-  & 0, 1, 0 & \\
-  & 0, 1, 0
-\end{bmatrix}
-\\ 
-\begin{bmatrix} 
-  & 0, 0, 0 & \\
-  & 0, 0, 0 & \\
-  & 0, 1, 0
-\end{bmatrix}
-```
-
+  \begin{bmatrix}
+    & 0, 0, 0 & \\
+    & 0, 1, 0 & \\
+    & 0, 1, 0
+  \end{bmatrix}\\
+  \begin{bmatrix}
+    & 0, 0, 0 & \\
+    & 0, 0, 0 & \\
+    & 0, 1, 0
+  \end{bmatrix}
 \end{bmatrix}
 $$
+
+<!-- livebook:{"break_markdown":true} -->
 
 ```elixir
 Nx.argmax(t, axis: :z)
@@ -593,83 +553,77 @@ Nx.argmax(t, axis: :z)
 This will reshape the tensor to `[x: 2, y: 3, z: 2]`. Since this is the last index, having in mind the matrix picture above, you aggregate along each row:
 
 $$
-r[x][y][z] = \rm{agg}\big(t[x][y][z]0,  t[x][y][z]1, t[x][y][z]2\big)
+r[x][y][z] = \rm{agg}\big(t[x][y][z][0],  t[x][y][z][1], t[x][y][z][2]\big)
 $$
 
 and repeat this for each $x$-slice, each sub $y$-slice, each sub-sub $z$-slice.
 
 Below is the result for the function `argmin`.
 
+<!-- livebook:{"break_markdown":true} -->
+
 $$
-\begin{bmatrix} x=0
-  \begin{bmatrix} y=0
-
-```
-\begin{bmatrix}
-  & \boxed{1, 2, 3}, & \\
-  & 1, -2, 3, &
-\end{bmatrix}
-\\ 
-y=1
 \begin{bmatrix} 
-  & 4, -3, 2 & \\
-  & -4, 3, 2 &
-\end{bmatrix}
-\\ 
-y=2
-\begin{bmatrix}
-  & 5, -1, 3 &\\
-  & -5, 1, 3 &
-\end{bmatrix}
-```
-
-\end{bmatrix}
+x=0
+  \begin{bmatrix} 
+  y=0
+    \begin{bmatrix}
+      & \boxed{1, 2, 3}, & \\
+      & 1, -2, 3, &
+    \end{bmatrix}
+    \\ 
+    y=1
+    \begin{bmatrix}
+      & 4, -3, 2 & \\
+      & -4, 3, 2 &
+    \end{bmatrix}
+    \\
+    y=2
+    \begin{bmatrix}
+      & 5, -1, 3 &\\
+      & -5, 1, 3 &
+    \end{bmatrix}
+  \end{bmatrix}
   \\
   x=1
-  \begin{bmatrix} y=0
-
-```
-\begin{bmatrix}
-  & 4, 6, 1 & \\
-  & 4,-6, 1 &
+  \begin{bmatrix}
+  y=0
+    \begin{bmatrix}
+      & 4, 6, 1 & \\
+      & 4,-6, 1 &
+    \end{bmatrix}
+    \\
+    y=1
+    \begin{bmatrix}
+      & 1, 2, 3 & \\
+      & \boxed{1, -2, 3} &
+    \end{bmatrix}
+    \\
+    y=2
+    \begin{bmatrix}
+      & 4, -3, 2 & \\
+      & -4, 3, 2 &
+    \end{bmatrix}
+  \end{bmatrix}
 \end{bmatrix}
-\\ 
-y=1
-\begin{bmatrix}
-  & 1, 2, 3 & \\
-  & \boxed{1, -2, 3} &
-\end{bmatrix}
-\\ 
-y=2
-\begin{bmatrix}
-  & 4, -3, 2 & \\
-  & -4, 3, 2 &
-\end{bmatrix}
-```
-
-\end{bmatrix}
-\end{bmatrix}
-
 \xrightarrow[]{\rm{argmin}}
-
 \begin{bmatrix}
-
-```
-\begin{bmatrix}
-  & \boxed{0}, 1 & \\
-  & 1, 0 & \\
-  & 1, 0
-\end{bmatrix}
-\\ 
-\begin{bmatrix} 
-  & 2, 1 & \\
-  & 0, \boxed{1} & \\
-  & 1, 0
-\end{bmatrix}
-```
-
+  \begin{bmatrix}
+    & \boxed{0}, 1 & \\
+    & 1, 0 & \\
+    & 1, 0
+  \end{bmatrix}
+  \\
+  \begin{bmatrix}
+    & 2, 1 & \\
+    & 0, \boxed{1} & \\
+    & 1, 0
+  \end{bmatrix}
 \end{bmatrix}
 $$
+
+<!-- livebook:{"break_markdown":true} -->
+
 
 ```elixir
 Nx.argmin(t, axis: 3)
@@ -697,53 +651,36 @@ Nx.argmin(t, axis: 1, keep_axis: true) ==
   Nx.argmin(t, axis: 1) |> Nx.reshape({2, 1, 2, 3}, names: [:x, :y, :z, :t])
 ```
 
+<!-- livebook:{"break_markdown":true} -->
+
 $$
 \begin{bmatrix}
   \begin{bmatrix}
-
-```
-& 0, 2, 1 & \\
-& 2, 0,1 &
-```
-
-\end{bmatrix}
-  \\ 
-  \begin{bmatrix}
-
-```
-& 1, 2,0 & \\
-& 2,0,0 &
-```
-
-\end{bmatrix}
-\end{bmatrix}
-
-\to
-
-\begin{bmatrix}
-  \begin{bmatrix}
-
-```
-  \begin{bmatrix}
     & 0, 2, 1 & \\
     & 2, 0,1 &
-  \end{bmatrix}
-```
-
-\end{bmatrix}
-  \\ 
-  \begin{bmatrix}
-
-```
+  \end{bmatrix}\\
   \begin{bmatrix}
     & 1, 2,0 & \\
     & 2,0,0 &
   \end{bmatrix}
-```
-
 \end{bmatrix}
+\to
+\begin{bmatrix}
+  \begin{bmatrix}
+    \begin{bmatrix}
+      & 0, 2, 1 & \\
+      & 2, 0,1 &
+    \end{bmatrix}
+  \end{bmatrix} \\
+  \begin{bmatrix}
+    \begin{bmatrix}
+      & 1, 2,0 & \\
+      & 2,0,0 &
+    \end{bmatrix}
+  \end{bmatrix}
 \end{bmatrix}
 $$
+
 
 <!-- livebook:{"break_markdown":true} -->
 
@@ -754,11 +691,54 @@ $$
 Suppose you want to aggregate along the axis `x` and `z`. Then you should get a tensor of shape `[y: 3, t: 3]`. Given an index `x` and `z`, you aggregate all the numbers with the same indexes $(y,t)$.
 
 $$
-r[y][t] = \rm{agg}\big( t0[y]0[t], t0[y]1[t], t1[y]0[t], t1[y]1[t]\big)
+r[y][t] = \rm{agg}\big( t[0][y][0][t], t[0][y][1][t], t[1][y][0][t], t[1][y][1][t]\big)
+$$
 
 <!-- livebook:{"break_markdown":true} -->
 
-From this, it is easier to understand what the following aggregation calls return:
+$$
+\begin{bmatrix}
+  \begin{bmatrix}
+    \begin{bmatrix}
+      \boxed{1}, 2, 3 & \\
+      \boxed{1}, -2, 3 &
+    \end{bmatrix}\\
+    \begin{bmatrix}
+      & 4, -3, 2 & \\
+      & -4, 3, 2 &
+    \end{bmatrix}\\
+    \begin{bmatrix}
+      & 5, -1, 3 &\\
+      & -5, 1, 3 &
+    \end{bmatrix}
+  \end{bmatrix}\\
+  \begin{bmatrix}
+    \begin{bmatrix}
+      \boxed{4}, 6, 1 & \\
+      \boxed{4},-6, 1 &
+    \end{bmatrix}\\
+    \begin{bmatrix}
+      & 1, 2, 3 & \\
+      & 1, -2, 3 &
+    \end{bmatrix}\\
+    \begin{bmatrix}
+      & 4, -3, 2 & \\
+      & -4, 3, 2 &
+    \end{bmatrix}
+  \end{bmatrix}
+\end{bmatrix}
+\to
+\begin{bmatrix}
+  \rm{agg}(1,1,4,4),\rm{agg}(2,-2,6,-6),\rm{agg}(3,3,1,1) &\\
+  \rm{agg}(4,-4,1,1), \rm{agg}(-3,3,2,-2), \rm{agg}(2,2,3,3) & \\
+  \rm{agg}(5,-5,4,-4) , \rm{agg}(-1,1,-3,3,  \rm{agg}(3,3,2,2)
+\end{bmatrix}
+$$
+
+
+<!-- livebook:{"break_markdown":true} -->
+
+From this, it is easier to undertand what the aggregate returns:
 
 ```elixir
 Nx.reduce_min(t, axes: [0, -1])
