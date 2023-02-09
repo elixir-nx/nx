@@ -531,14 +531,14 @@ x=1 &
 \xrightarrow[]{\rm{argmax}}
 \begin{bmatrix}
 \begin{bmatrix}
-& 0, 0, 0 & \\
-& 0, 1, 0 & \\
- 0, 1, 0
+0, 0, 0  \\
+0, 1, 0 \\
+0, 1, 0
 \end{bmatrix}\\
 \begin{bmatrix}
-& 0, 0, 0 & \\
-& 0, 0, 0 & \\
-& 0, 1, 0 &
+0, 0, 0  \\
+0, 0, 0 \\
+0, 1, 0
 \end{bmatrix}
 \end{bmatrix}
 $$
