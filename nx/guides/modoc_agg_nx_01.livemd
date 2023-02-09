@@ -194,7 +194,8 @@ $$
 \begin{bmatrix}
 x=0 &
 \begin{bmatrix}
-y=0 & \begin{bmatrix} z=0 & a_{0,0,0,0} & a_{0,0,0,1} & a_{0,0,0,2} \\
+y=0 & \begin{bmatrix} 
+z=0 & a_{0,0,0,0} & a_{0,0,0,1} & a_{0,0,0,2} \\
 z=1 & a_{0,0,1,0} & a_{0,0,1,1} & a_{0,0,1,2}
 \end{bmatrix}\\
 y=1 & \begin{bmatrix}
