@@ -624,7 +624,7 @@ $$
 Nx.argmin(t, axis: 3)
 ```
 
-#### Option `:tie_break`
+#### Option [:tie_break](https://hexdocs.pm/nx/Nx.html#argmax/2-tie-breaks)
 
 You have the `:tie_break` option to decide how to operate with you have several occurences of the result. It defaults to `tie_break: :low`.
 
@@ -637,7 +637,7 @@ t4 = ~V[2 0 0 0 1]
 }
 ```
 
-#### Option `:keep_axis`
+#### Option [:keep_axis](https://hexdocs.pm/nx/Nx.html#argmax/2-keep-axis)
 
 Its default value is `false` but when this option set to `keep_axis: true`, you reshape the resulting tensor with a new shape where the dimension of the working axis to $1$. For example, `Nx.argmax(t, axis: :y, keep_axix: true)` will have a shape a `[x: 2,y: 1,z: 2, t: 3]`. This mean that:
 
