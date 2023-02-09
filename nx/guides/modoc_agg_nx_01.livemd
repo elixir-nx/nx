@@ -317,64 +317,64 @@ The aggregating function used below is [argmin](https://hexdocs.pm/nx/Nx.html#ar
 
 $$
 \begin{bmatrix}
-  \begin{bmatrix}
-    \begin{bmatrix}
-      & \boxed{1}, 2, 3, & \\
-      & 1, -2, 3, &
-    \end{bmatrix} \\
-    \begin{bmatrix}
-      & 4, -3, 2 & \\
-      & -4, 3, 2 &
-    \end{bmatrix} \\
-    \begin{bmatrix}
-      & 5, -1, 3 &\\
-      & -5, 1, 3 &
-    \end{bmatrix}
-  \end{bmatrix} \\
-  \begin{bmatrix}
-    \begin{bmatrix}
-      & \boxed{4}, 6, 1 & \\
-      & 4, -6, 1 &
-    \end{bmatrix} \\
-    \begin{bmatrix}
-      & 1, 2, 3 & \\
-      & 1, -2, 3 &
-    \end{bmatrix} \\
-    \begin{bmatrix}
-      & 4, -3, 2 & \\
-      & -4, 3, 2 &
-    \end{bmatrix}
-  \end{bmatrix}
+\begin{bmatrix}
+\begin{bmatrix}
+& \boxed{1}, 2, 3, & \\
+& 1, -2, 3, &
+\end{bmatrix} \\
+\begin{bmatrix}
+& 4, -3, 2 & \\
+& -4, 3, 2 &
+\end{bmatrix} \\
+\begin{bmatrix}
+& 5, -1, 3 &\\
+& -5, 1, 3 &
+\end{bmatrix}
+\end{bmatrix} \\
+\begin{bmatrix}
+\begin{bmatrix}
+& \boxed{4}, 6, 1 & \\
+& 4, -6, 1 &
+\end{bmatrix} \\
+\begin{bmatrix}
+& 1, 2, 3 & \\
+& 1, -2, 3 &
+\end{bmatrix} \\
+\begin{bmatrix}
+& 4, -3, 2 & \\
+& -4, 3, 2 &
+\end{bmatrix}
+\end{bmatrix}
 \end{bmatrix}
 \to
 \begin{bmatrix}
-  \begin{bmatrix}
-    & \boxed{\rm{agg}(1,4)}, \rm{agg}(2,6), \rm{agg}(3, 1)& \\
-    & \rm{agg}(1,4), \rm{agg}(-2,-6), \rm{agg}(3,1) &
-    \end{bmatrix} \\
-      \begin{bmatrix}
-    & \rm{agg}(4,1), \rm{agg}(-3,2), \rm{agg}(2,3) & \\
-    & \rm{agg}(-4,1), \rm{agg}(3,-2), \rm{agg}(2,3) &
-    \end{bmatrix} \\
-      \begin{bmatrix}
-    & \rm{agg}(5,4), \rm{agg}(-1,-3), \rm{agg}(3,2) &\\
-    & \rm{agg}(-5,-4), \rm{agg}(1,3), \rm{agg}(3,2) &
-  \end{bmatrix}\\
+\begin{bmatrix}
+& \boxed{\rm{agg}(1,4)}, \rm{agg}(2,6), \rm{agg}(3, 1)& \\
+& \rm{agg}(1,4), \rm{agg}(-2,-6), \rm{agg}(3,1) &
+end{bmatrix} \\
+\begin{bmatrix}
+& \rm{agg}(4,1), \rm{agg}(-3,2), \rm{agg}(2,3) & \\
+& \rm{agg}(-4,1), \rm{agg}(3,-2), \rm{agg}(2,3) &
+\end{bmatrix} \\
+\begin{bmatrix}
+& \rm{agg}(5,4), \rm{agg}(-1,-3), \rm{agg}(3,2) &\\
+& \rm{agg}(-5,-4), \rm{agg}(1,3), \rm{agg}(3,2) &
+\end{bmatrix}\\
 \end{bmatrix}
 \xrightarrow[]{\rm{argmin}}
 \begin{bmatrix}
-  \begin{bmatrix}
-    & 0,0, 1 & \\
-    & 0, 1,1 &
-  \end{bmatrix} \\
-  \begin{bmatrix}
-    & 1, 0,0 & \\
-    & 0,1,0 &
-  \end{bmatrix} \\
-  \begin{bmatrix}
-    & 1, 1,1 &\\
-    & 0, 0,1 &
-  \end{bmatrix}
+\begin{bmatrix}
+& 0,0, 1 & \\
+& 0, 1,1 &
+\end{bmatrix} \\
+\begin{bmatrix}
+& 1, 0,0 & \\
+& 0,1,0 &
+\end{bmatrix} \\
+\begin{bmatrix}
+& 1, 1,1 &\\
+& 0, 0,1 &
+\end{bmatrix}
 \end{bmatrix}
 $$
 
@@ -404,56 +404,56 @@ In the example below, we used again the `argmin` function.
 
 $$
 \begin{bmatrix}
-  \begin{bmatrix}
-    \begin{bmatrix}
-      & \boxed{1}, 2, 3, & \\
-      & 1, -2, 3, &
-    \end{bmatrix}\\
-    \begin{bmatrix}
-      & \boxed{4}, -3, 2 & \\
-      & -4, 3, 2 &
-    \end{bmatrix}\\
-    \begin{bmatrix}
-      & \boxed{5}, -1, 3 &\\
-      & -5, 1, 3 &
-    \end{bmatrix}
-  \end{bmatrix}\\
-  \begin{bmatrix}
-    \begin{bmatrix}
-      & 4, 6, 1 & \\
-      & 4, \boxed{-6}, 1 &
-    \end{bmatrix}\\
-    \begin{bmatrix}
-      & 1, 2, 3 & \\
-      & 1, \boxed{-2}, 3 &
-    \end{bmatrix}\\
-    \begin{bmatrix}
-      & 4, -3, 2 & \\
-      & -4, \boxed{3}, 2 &
-    \end{bmatrix}
-  \end{bmatrix}
+\begin{bmatrix}
+\begin{bmatrix}
+& \boxed{1}, 2, 3, & \\
+& 1, -2, 3, &
+\end{bmatrix}\\
+\begin{bmatrix}
+& \boxed{4}, -3, 2 & \\
+& -4, 3, 2 &
+\end{bmatrix}\\
+\begin{bmatrix}
+& \boxed{5}, -1, 3 &\\
+& -5, 1, 3 &
+\end{bmatrix}
+\end{bmatrix}\\
+\begin{bmatrix}
+\begin{bmatrix}
+& 4, 6, 1 & \\
+& 4, \boxed{-6}, 1 &
+\end{bmatrix}\\
+\begin{bmatrix}
+& 1, 2, 3 & \\
+& 1, \boxed{-2}, 3 &
+\end{bmatrix}\\
+\begin{bmatrix}
+& 4, -3, 2 & \\
+& -4, \boxed{3}, 2 &
+\end{bmatrix}
+\end{bmatrix}
 \end{bmatrix}
 \to
 \begin{bmatrix}
-  \begin{bmatrix}
-    &\boxed{\rm{agg}(1,4,5)}, \rm{agg}(2,-3,-1), \rm{agg}(3, 2,3)& \\
-    & \rm{agg}(1,-4,-5), \rm{agg}(-2,3,1), \rm{agg}(3,2,3) &
-  \end{bmatrix}\\
-  \begin{bmatrix}
-    & \rm{agg}(4,1,4), \rm{agg}(6,2,-3), \rm{agg}(1,3,2) & \\
-    & \rm{agg}(4,1,-4), \boxed{\rm{agg}(-6,-2,3)}, \rm{agg}(1,3,2) &
-  \end{bmatrix}
+\begin{bmatrix}
+&\boxed{\rm{agg}(1,4,5)}, \rm{agg}(2,-3,-1), \rm{agg}(3, 2,3)& \\
+& \rm{agg}(1,-4,-5), \rm{agg}(-2,3,1), \rm{agg}(3,2,3) &
+\end{bmatrix}\\
+\begin{bmatrix}
+& \rm{agg}(4,1,4), \rm{agg}(6,2,-3), \rm{agg}(1,3,2) & \\
+& \rm{agg}(4,1,-4), \boxed{\rm{agg}(-6,-2,3)}, \rm{agg}(1,3,2) &
+\end{bmatrix}
 \end{bmatrix}
 \xrightarrow[]{\rm{argmin}}
 \begin{bmatrix}
-  \begin{bmatrix}
-    & 0, 2, 1 & \\
-    & 2, 0,1 &
-  \end{bmatrix}\\
-  \begin{bmatrix}
-    & 1, 2,0 & \\
-    & 2,0,0 &
-  \end{bmatrix}
+\begin{bmatrix}
+& 0, 2, 1 & \\
+& 2, 0,1 &
+\end{bmatrix}\\
+\begin{bmatrix}
+& 1, 2,0 & \\
+& 2,0,0 &
+\end{bmatrix}
 \end{bmatrix}
 $$
 
@@ -476,70 +476,70 @@ In the example below, we used the `argmax` function.
 
 $$
 \begin{bmatrix}
-  x=0 &
-  \begin{bmatrix}
-    y=0 &
-    \begin{bmatrix}
-      \boxed{1}, 2, 3, & \\
-      \boxed{1}, -2, 3, &
-    \end{bmatrix} \\
-    y=1 &
-    \begin{bmatrix}
-      & 4, -3, 2 & \\
-      & -4, 3, 2 &
-    \end{bmatrix}\\
-    y=2 &
-    \begin{bmatrix}
-      & 5, -1, 3 &\\
-      & -5, 1, 3 &
-    \end{bmatrix}
-  \end{bmatrix}\\
-  x=1 &
-  \begin{bmatrix}
-    y=0 &
-    \begin{bmatrix}
-      & 4, \boxed{6}, 1  \\
-      & 4,\boxed{-6}, 1
-    \end{bmatrix}\\
-    y=1 &
-    \begin{bmatrix}
-      & 1, 2, 3 & \\
-      & 1, -2, 3 &
-    \end{bmatrix}\\
-    y=2 &
-    \begin{bmatrix}
-      & 4, -3, 2 & \\
-      & -4, 3, 2 &
-    \end{bmatrix}
-  \end{bmatrix}
+x=0 &
+\begin{bmatrix}
+y=0 &
+\begin{bmatrix}
+\boxed{1}, 2, 3, & \\
+\boxed{1}, -2, 3, &
+\end{bmatrix} \\
+y=1 &
+\begin{bmatrix}
+& 4, -3, 2 & \\
+& -4, 3, 2 &
+\end{bmatrix}\\
+y=2 &
+\begin{bmatrix}
+& 5, -1, 3 &\\
+& -5, 1, 3 &
+\end{bmatrix}
+\end{bmatrix}\\
+x=1 &
+\begin{bmatrix}
+y=0 &
+\begin{bmatrix}
+& 4, \boxed{6}, 1  \\
+& 4,\boxed{-6}, 1
+\end{bmatrix}\\
+y=1 &
+\begin{bmatrix}
+& 1, 2, 3 & \\
+& 1, -2, 3 &
+\end{bmatrix}\\
+y=2 &
+\begin{bmatrix}
+& 4, -3, 2 & \\
+& -4, 3, 2 &
+\end{bmatrix}
+\end{bmatrix}
 \end{bmatrix}
 \to
 \begin{bmatrix}
-  x=0 &
-  \begin{bmatrix}
-    & \boxed{\rm{agg}(1,1)}, \rm{agg}(2,-2), \rm{agg}(3,3)& \\
-    & \rm{agg}(4,-4), \rm{agg}(-3,3), \rm{agg}(2,2) & \\
-    & \rm{agg}(5,-5), \rm{agg}(-1,1), \rm{agg}(3,3)
-  \end{bmatrix}\\
-  x=1 &
-  \begin{bmatrix}
-    & \rm{agg}(4,4), \boxed{\rm{agg}(6,-6)}, \rm{agg}(1,1) & \\
-    & \rm{agg}(1,1), \rm{agg}(2,-2), \rm{agg}(3,3) & \\
-    & \rm{agg}(4,-4), \rm{agg}(-3,3), \rm{agg}(2,2) &
-  \end{bmatrix}
+x=0 &
+\begin{bmatrix}
+& \boxed{\rm{agg}(1,1)}, \rm{agg}(2,-2), \rm{agg}(3,3)& \\
+& \rm{agg}(4,-4), \rm{agg}(-3,3), \rm{agg}(2,2) & \\
+& \rm{agg}(5,-5), \rm{agg}(-1,1), \rm{agg}(3,3)
+\end{bmatrix}\\
+x=1 &
+\begin{bmatrix}
+& \rm{agg}(4,4), \boxed{\rm{agg}(6,-6)}, \rm{agg}(1,1) & \\
+& \rm{agg}(1,1), \rm{agg}(2,-2), \rm{agg}(3,3) & \\
+& \rm{agg}(4,-4), \rm{agg}(-3,3), \rm{agg}(2,2) &
+\end{bmatrix}
 \end{bmatrix}
 \xrightarrow[]{\rm{argmax}}
 \begin{bmatrix}
-  \begin{bmatrix}
-    & 0, 0, 0 & \\
-    & 0, 1, 0 & \\
-    & 0, 1, 0
-  \end{bmatrix}\\
-  \begin{bmatrix}
-    & 0, 0, 0 & \\
-    & 0, 0, 0 & \\
-    & 0, 1, 0
-  \end{bmatrix}
+\begin{bmatrix}
+& 0, 0, 0 & \\
+& 0, 1, 0 & \\
+ 0, 1, 0
+\end{bmatrix}\\
+\begin{bmatrix}
+& 0, 0, 0 & \\
+& 0, 0, 0 & \\
+& 0, 1, 0
+\end{bmatrix}
 \end{bmatrix}
 $$
 
@@ -565,55 +565,55 @@ Below is the result for the function `argmin`.
 
 $$
 \begin{bmatrix} 
-  x=0 &
-  \begin{bmatrix} 
-    y=0 &
-    \begin{bmatrix}
-      & \boxed{1, 2, 3}, & \\
-      & 1, -2, 3, &
-    \end{bmatrix}\\ 
-    y=1 &
-    \begin{bmatrix}
-      & 4, -3, 2 & \\
-      & -4, 3, 2 &
-    \end{bmatrix}\\
-    y=2 &
-    \begin{bmatrix}
-      & 5, -1, 3 &\\
-      & -5, 1, 3 &
-    \end{bmatrix}
-  \end{bmatrix}\\
-  x=1 &
-  \begin{bmatrix}
-    y=0 &
-    \begin{bmatrix}
-      & 4, 6, 1 & \\
-      & 4,-6, 1 &
-    \end{bmatrix}\\
-    y=1 &
-    \begin{bmatrix}
-      & 1, 2, 3 & \\
-      & \boxed{1, -2, 3} &
-    \end{bmatrix}\\
-    y=2 &
-    \begin{bmatrix}
-      & 4, -3, 2 & \\
-      & -4, 3, 2 &
-    \end{bmatrix}
-  \end{bmatrix}
+x=0 &
+\begin{bmatrix} 
+y=0 &
+\begin{bmatrix}
+& \boxed{1, 2, 3}, & \\
+& 1, -2, 3, &
+\end{bmatrix}\\ 
+y=1 &
+begin{bmatrix}
+& 4, -3, 2 & \\
+& -4, 3, 2 &
+\end{bmatrix}\\
+y=2 &
+\begin{bmatrix}
+& 5, -1, 3 &\\
+& -5, 1, 3 &
+\end{bmatrix}
+\end{bmatrix}\\
+x=1 &
+\begin{bmatrix}
+y=0 &
+\begin{bmatrix}
+& 4, 6, 1 & \\
+& 4,-6, 1 &
+\end{bmatrix}\\
+y=1 &
+\begin{bmatrix}
+& 1, 2, 3 & \\
+& \boxed{1, -2, 3} &
+\end{bmatrix}\\
+y=2 &
+\begin{bmatrix}
+& 4, -3, 2 & \\
+& -4, 3, 2 &
+\end{bmatrix}
+\end{bmatrix}
 \end{bmatrix}
 \xrightarrow[]{\rm{argmin}}
 \begin{bmatrix}
-  \begin{bmatrix}
-    & \boxed{0}, 1 & \\
-    & 1, 0 & \\
-    & 1, 0
-  \end{bmatrix}\\
-  \begin{bmatrix}
-    & 2, 1 & \\
-    & 0, \boxed{1} & \\
-    & 1, 0
-  \end{bmatrix}
+\begin{bmatrix}
+& \boxed{0}, 1 & \\
+& 1, 0 & \\
+& 1, 0
+\end{bmatrix}\\
+\begin{bmatrix}
+& 2, 1 & \\
+& 0, \boxed{1} & \\
+& 1, 0
+\end{bmatrix}
 \end{bmatrix}
 $$
 
@@ -650,29 +650,29 @@ Nx.argmin(t, axis: 1, keep_axis: true) ==
 
 $$
 \begin{bmatrix}
-  \begin{bmatrix}
-    & 0, 2, 1 & \\
-    & 2, 0,1 &
-  \end{bmatrix}\\
-  \begin{bmatrix}
-    & 1, 2,0 & \\
-    & 2,0,0 &
-  \end{bmatrix}
+\begin{bmatrix}
+& 0, 2, 1 & \\
+& 2, 0,1 &
+\end{bmatrix}\\
+\begin{bmatrix}
+& 1, 2,0 & \\
+& 2,0,0 &
+\end{bmatrix}
 \end{bmatrix}
 \to
 \begin{bmatrix}
-  \begin{bmatrix}
-    \begin{bmatrix}
-      & 0, 2, 1 & \\
-      & 2, 0,1 &
-    \end{bmatrix}
-  \end{bmatrix} \\
-  \begin{bmatrix}
-    \begin{bmatrix}
-      & 1, 2,0 & \\
-      & 2,0,0 &
-    \end{bmatrix}
-  \end{bmatrix}
+\begin{bmatrix}
+\begin{bmatrix}
+& 0, 2, 1 & \\
+& 2, 0,1 &
+\end{bmatrix}
+\end{bmatrix} \\
+begin{bmatrix}
+\begin{bmatrix}
+& 1, 2,0 & \\
+& 2,0,0 &
+\end{bmatrix}
+\end{bmatrix}
 \end{bmatrix}
 $$
 
@@ -693,40 +693,40 @@ $$
 
 $$
 \begin{bmatrix}
-  \begin{bmatrix}
-    \begin{bmatrix}
-      \boxed{1}, 2, 3 & \\
-      \boxed{1}, -2, 3 &
-    \end{bmatrix}\\
-    \begin{bmatrix}
-      & 4, -3, 2 & \\
-      & -4, 3, 2 &
-    \end{bmatrix}\\
-    \begin{bmatrix}
-      & 5, -1, 3 &\\
-      & -5, 1, 3 &
-    \end{bmatrix}
-  \end{bmatrix}\\
-  \begin{bmatrix}
-    \begin{bmatrix}
-      \boxed{4}, 6, 1 & \\
-      \boxed{4},-6, 1 &
-    \end{bmatrix}\\
-    \begin{bmatrix}
-      & 1, 2, 3 & \\
-      & 1, -2, 3 &
-    \end{bmatrix}\\
-    \begin{bmatrix}
-      & 4, -3, 2 & \\
-      & -4, 3, 2 &
-    \end{bmatrix}
-  \end{bmatrix}
+\begin{bmatrix}
+\begin{bmatrix}
+\boxed{1}, 2, 3 & \\
+\boxed{1}, -2, 3 &
+\end{bmatrix}\\
+\begin{bmatrix}
+& 4, -3, 2 & \\
+& -4, 3, 2 &
+\end{bmatrix}\\
+\begin{bmatrix}
+& 5, -1, 3 &\\
+& -5, 1, 3 &
+\end{bmatrix}
+\end{bmatrix}\\
+\begin{bmatrix}
+\begin{bmatrix}
+\boxed{4}, 6, 1 & \\
+\boxed{4},-6, 1 &
+\end{bmatrix}\\
+\begin{bmatrix}
+& 1, 2, 3 & \\
+& 1, -2, 3 &
+\end{bmatrix}\\
+\begin{bmatrix}
+& 4, -3, 2 & \\
+& -4, 3, 2 &
+\end{bmatrix}
+\end{bmatrix}
 \end{bmatrix}
 \to
 \begin{bmatrix}
-  \rm{agg}(1,1,4,4),\rm{agg}(2,-2,6,-6),\rm{agg}(3,3,1,1) &\\
-  \rm{agg}(4,-4,1,1), \rm{agg}(-3,3,2,-2), \rm{agg}(2,2,3,3) & \\
-  \rm{agg}(5,-5,4,-4) , \rm{agg}(-1,1,-3,3,  \rm{agg}(3,3,2,2)
+\rm{agg}(1,1,4,4),\rm{agg}(2,-2,6,-6),\rm{agg}(3,3,1,1) &\\
+\rm{agg}(4,-4,1,1), \rm{agg}(-3,3,2,-2), \rm{agg}(2,2,3,3) & \\
+\rm{agg}(5,-5,4,-4) , \rm{agg}(-1,1,-3,3,  \rm{agg}(3,3,2,2)
 \end{bmatrix}
 $$
 
