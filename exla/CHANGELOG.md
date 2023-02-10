@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.5.0 (2023-02-10)
+
+ * Optimize backend_transfer/backend_copy within EXLA backends
+ * Use relative symlinks on compilation whenever possible
+
 ## v0.4.2 (2023-01-13)
 
 ### Enhancements

@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.5.0 (2023-02-10)
+
+### Enhancements
+
+  * [Nx] Support serialization of containers
+  * [Nx] Rename `Nx.power` to `Nx.pow`
+  * [Nx] Add `Nx.reflect` and `Nx.linspace`
+  * [Nx.Defn] Raise at compile time for invalid defn if/cond usage
+  * [Nx.LinAlg] Support `full_matrices?` in SVD
+  * [Nx.LinAlg] Add `Nx.LinAlg.matrix_rank`
+  * [Nx.Random] Add `Nx.Random.choice` and `Nx.Random.shuffle`
+  * [Nx.Serving] Add distributed² serving by distributing over devices (GPUs/CPUs) as well as nodes
+  * [Nx.Serving] Add telemetry to `Nx.Serving` callbacks
+
+### Backwards incompatible changes
+
+  * [Nx] `from_numpy` and `from_numpy_archive` have been replaced by `load_numpy!` and `load_numpy_archive!`
+  * [Nx.Defn.Evaluator] Do not force GC on evaluator
+
 ## v0.4.2 (2023-01-13)
 
 ### Enhancements

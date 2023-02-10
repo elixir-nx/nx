@@ -2,7 +2,7 @@ defmodule Torchx.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx"
-  @version "0.4.2"
+  @version "0.5.0"
 
   @valid_targets ["cpu", "cu102", "cu113", "cu116"]
 
@@ -61,8 +61,8 @@ defmodule Torchx.MixProject do
 
   defp deps do
     [
-      # {:nx, "~> 0.4.1"},
-      {:nx, path: "../nx"},
+      {:nx, "~> 0.5.0"},
+      # {:nx, path: "../nx"},
       {:dll_loader_helper, "~> 0.1.0"},
       {:elixir_make, "~> 0.6"},
       {:ex_doc, "~> 0.29.0", only: :docs}
