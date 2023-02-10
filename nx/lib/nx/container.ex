@@ -154,7 +154,7 @@ end
 defimpl Nx.Container, for: [Integer, Float, Complex, Nx.Tensor] do
   def traverse(tensor, acc, fun), do: {tensor, fun.(tensor, acc)}
   def reduce(tensor, acc, fun), do: fun.(tensor, acc)
-  def serialize(_), do: raise "cannot be serialized directly"
+  def serialize(_), do: raise("cannot be serialized directly")
 end
 
 defimpl Nx.Container, for: Any do

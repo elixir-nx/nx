@@ -11297,7 +11297,6 @@ defmodule Nx do
     end
   end
 
-
   @doc """
   Loads a `.npy` file into a tensor.
 
