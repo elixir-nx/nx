@@ -841,15 +841,10 @@ defmodule Nx do
   defp tensor_or_number_to_binary(true, type), do: tensor_or_number_to_binary(1, type)
   defp tensor_or_number_to_binary(false, type), do: tensor_or_number_to_binary(0, type)
 
-  defp tensor_or_number_to_binary(%Complex{re: re, im: im}, {:c, size}) do
-    number_to_binary(re, {:f, div(size, 2)}) <> number_to_binary(im, {:f, div(size, 2)})
-  end
-
-  defp tensor_or_number_to_binary(number, type) when is_number(number) do
-    number_to_binary(number, type)
-  end
-
-  defp tensor_or_number_to_binary(number, type) when number in @non_finite do
+  defp tensor_or_number_to_binary(number, type)
+       when is_number(number)
+       when is_struct(number, Complex)
+       when number in @non_finite do
     number_to_binary(number, type)
   end
 
@@ -11165,7 +11160,7 @@ defmodule Nx do
   @doc """
   Serializes the given tensor or container of tensors to iodata.
 
-  You may pass a tensor, tuple, or map to serialize.
+  You may pass any tensor or `Nx.Container` to serialization.
 
   `opts` controls the serialization options. For example, you can choose
   to compress the given tensor or container of tensors by passing a
@@ -11214,7 +11209,7 @@ defmodule Nx do
 
   defp to_term(tensor_or_container) do
     case tensor_or_container do
-      number when is_number(number) ->
+      number when is_number(number) when is_struct(number, Complex) ->
         type = Nx.Type.infer(number)
         {:tensor, {}, type, [], number_to_binary(number, type)}
 
@@ -11225,27 +11220,10 @@ defmodule Nx do
         binary = to_binary(tensor)
         {:tensor, shape, type, names, binary}
 
-      %_{} = value ->
-        bad_serialize!(value)
-
-      container when is_tuple(container) or is_map(container) ->
-        {serialized, :ok} =
-          Nx.Container.traverse(container, :ok, fn container_elem, :ok ->
-            {to_term(container_elem), :ok}
-          end)
-
-        {:container, serialized}
-
-      value ->
-        bad_serialize!(value)
+      other ->
+        {module, pairs, meta} = Nx.Container.serialize(other)
+        {module, Enum.map(pairs, fn {k, v} -> {k, to_term(v)} end), meta}
     end
-  end
-
-  defp bad_serialize!(value) do
-    raise ArgumentError,
-          "unable to serialize #{inspect(value)}. Only tensors, tuples and " <>
-            "maps are supported. If you are attempting to serialize a custom " <>
-            "container, you will need to serialize fields in the container manually"
   end
 
   @doc """
@@ -11288,7 +11266,13 @@ defmodule Nx do
     |> from_term()
   end
 
-  defp from_term({1, endianness, term}) do
+  defp from_term({1, endianness, term}), do: from_term_v1(term, endianness)
+
+  defp from_term(_) do
+    raise ArgumentError, "unable to deserialize binary term to tensor"
+  end
+
+  defp from_term_v1(term, endianness) do
     case term do
       {:tensor, shape, {_, size} = type, names, binary} ->
         binary
@@ -11299,19 +11283,20 @@ defmodule Nx do
       {:container, container} ->
         {deserialized, :ok} =
           Nx.Container.traverse(container, :ok, fn container_elem, :ok ->
-            {from_term({1, endianness, container_elem}), :ok}
+            {from_term_v1(container_elem, endianness), :ok}
           end)
 
         deserialized
+
+      {module, pairs, metadata} ->
+        pairs = Enum.map(pairs, fn {k, v} -> {k, from_term_v1(v, endianness)} end)
+        module.deserialize(pairs, metadata)
 
       _ ->
         raise ArgumentError, "unable to deserialize binary term to tensor"
     end
   end
 
-  defp from_term(_) do
-    raise ArgumentError, "unable to deserialize binary term to tensor"
-  end
 
   @doc """
   Loads a `.npy` file into a tensor.

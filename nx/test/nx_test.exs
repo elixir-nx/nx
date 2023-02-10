@@ -2113,13 +2113,18 @@ defmodule NxTest do
   end
 
   describe "serialize/deserialize" do
-    test "cannot serialize containers" do
-      assert_raise ArgumentError, ~r"unable to serialize", fn ->
-        Nx.serialize(%Container{})
-      end
+    test "containers" do
+      container = %Container{
+        a: {Nx.tensor(1), Nx.tensor(2)},
+        b: %{key: Nx.tensor(3)},
+        c: :discarded,
+        d: :kept
+      }
+
+      assert Nx.deserialize(Nx.serialize(container)) == %{container | c: %{}}
     end
 
-    test "serializes numbers" do
+    test "numbers" do
       assert Nx.deserialize(Nx.serialize(123)) == Nx.tensor(123)
       assert Nx.deserialize(Nx.serialize(1.2)) == Nx.tensor(1.2)
     end

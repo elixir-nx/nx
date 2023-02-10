@@ -38,6 +38,18 @@ defprotocol Nx.Container do
   > `Nx.Defn` will have to compile and cache it twice).
   > You must only keep fields that you are certain to be used
   > inside `defn` during compilation time.
+
+  ## Serialization
+
+  If you `@derive {Nx.Container, ...}`, it will automatically
+  define a serialization function with the container and keep
+  fields you declare. If you expect a struct to be serialized,
+  then you must be careful to evolve its schema over time in
+  a compatible way. In particular, removing fields will lead to
+  crashes. If you change the type of a field value, previously
+  serialized structs may still hold the old type. And if you add
+  new fields, previously serialized structs won't have such fields
+  and therefore be deserialized with its default value.
   """
 
   @doc """
@@ -69,6 +81,22 @@ defprotocol Nx.Container do
   """
   @spec reduce(t(), acc, (t(), acc -> acc)) :: acc when acc: term()
   def reduce(data, acc, fun)
+
+  @doc """
+  Defines how this container must be serialized to disk.
+
+  It receives the container and it must return a three element tuple
+  of `{module, list_of_container_tuples, metadata}` where:
+
+    * the `module` to deserialize the container
+    * a list of tuples in the shape `{key, container}` with containers to be further serialized
+    * additional metadata for serialization/deserialization
+
+  On deserialization, `module.deserialize(list_of_container_tuples, metadata)`
+  will be invoked.
+  """
+  @spec serialize(t()) :: {module(), [{term(), t()}], term()}
+  def serialize(struct)
 end
 
 defimpl Nx.Container, for: Tuple do
@@ -83,6 +111,15 @@ defimpl Nx.Container, for: Tuple do
     tuple
     |> Tuple.to_list()
     |> Enum.reduce(acc, fun)
+  end
+
+  def serialize(tuple) do
+    pairs = for v <- Tuple.to_list(tuple), do: {[], v}
+    {__MODULE__, pairs, :ok}
+  end
+
+  def deserialize(pairs, :ok) do
+    pairs |> Enum.map(&elem(&1, 1)) |> List.to_tuple()
   end
 end
 
@@ -104,11 +141,20 @@ defimpl Nx.Container, for: Map do
     |> Enum.sort()
     |> Enum.reduce(acc, fn {_, v}, acc -> fun.(v, acc) end)
   end
+
+  def serialize(map) do
+    {__MODULE__, Map.to_list(map), :ok}
+  end
+
+  def deserialize(pairs, :ok) do
+    Map.new(pairs)
+  end
 end
 
 defimpl Nx.Container, for: [Integer, Float, Complex, Nx.Tensor] do
   def traverse(tensor, acc, fun), do: {tensor, fun.(tensor, acc)}
   def reduce(tensor, acc, fun), do: fun.(tensor, acc)
+  def serialize(_), do: raise "cannot be serialized directly"
 end
 
 defimpl Nx.Container, for: Any do
@@ -156,6 +202,14 @@ defimpl Nx.Container, for: Any do
           unquote_splicing(reduces)
           acc
         end
+
+        def serialize(%{unquote_splicing(full_pattern)} = struct) do
+          {__MODULE__, [unquote_splicing(container_pattern)], [unquote_splicing(keep_pattern)]}
+        end
+
+        def deserialize(containers, keep) do
+          struct!(unquote(module), containers ++ keep)
+        end
       end
     end
   end
@@ -175,6 +229,10 @@ defimpl Nx.Container, for: Any do
   end
 
   def reduce(data, _acc, _fun) do
+    raise Protocol.UndefinedError, protocol: @protocol, value: data
+  end
+
+  def serialize(data) do
     raise Protocol.UndefinedError, protocol: @protocol, value: data
   end
 end
