@@ -142,23 +142,10 @@ defmodule Nx.Shared do
           elem_size = div(unquote(size), 2)
           <<x::float-native-size(elem_size), 0::float-native-size(elem_size)>>
 
-        %Complex{re: re, im: im} when is_number(re) and is_number(im) ->
-          elem_size = div(unquote(size), 2)
-          <<re::float-native-size(elem_size), im::float-native-size(elem_size)>>
+        %Complex{re: re, im: im} ->
+          Nx.Shared.write_complex(re, im, div(unquote(size), 2))
 
-        %Complex{re: re, im: im} when is_number(re) and not is_number(im) ->
-          elem_size = div(unquote(size), 2)
-          <<re::float-native-size(elem_size)>> <> write_non_finite(im, elem_size)
-
-        %Complex{re: re, im: im} when not is_number(re) and is_number(im) ->
-          elem_size = div(unquote(size), 2)
-          write_non_finite(re, elem_size) <> <<im::float-native-size(elem_size)>>
-
-        %Complex{re: re, im: im} when not is_number(re) and not is_number(im) ->
-          elem_size = div(unquote(size), 2)
-          write_non_finite(re, elem_size) <> write_non_finite(im, elem_size)
-
-        x when x in [:infinity, :neg_infinity, :nan] ->
+        x ->
           elem_size = div(unquote(size), 2)
           Nx.Shared.write_non_finite(x, elem_size) <> <<0::float-native-size(elem_size)>>
       end :: binary
@@ -236,6 +223,25 @@ defmodule Nx.Shared do
       :neg_infinity -> unquote(Nx.Type.neg_infinity_binary({:bf, 16}))
       :nan -> unquote(Nx.Type.nan_binary({:bf, 16}))
     end
+  end
+
+  @doc """
+  Complex write callback.
+  """
+  def write_complex(re, im, size) when is_number(re) and is_number(im) do
+    <<re::float-native-size(size), im::float-native-size(size)>>
+  end
+
+  def write_complex(re, im, size) when is_number(re) and not is_number(im) do
+    <<re::float-native-size(size)>> <> write_non_finite(im, size)
+  end
+
+  def write_complex(re, im, size) when not is_number(re) and is_number(im) do
+    write_non_finite(re, size) <> <<im::float-native-size(size)>>
+  end
+
+  def write_complex(re, im, size) when not is_number(re) and not is_number(im) do
+    write_non_finite(re, size) <> write_non_finite(im, size)
   end
 
   @doc """
