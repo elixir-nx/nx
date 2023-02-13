@@ -355,7 +355,7 @@ defmodule Nx.Constants do
 
       iex> Nx.Constants.pi({:f, 32})
       #Nx.Tensor<
-        f64
+        f32
         3.1415927410125732
       >
 
