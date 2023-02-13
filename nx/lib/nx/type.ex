@@ -614,4 +614,40 @@ defmodule Nx.Type do
   defp signed_size(x) when x <= 32767, do: 16
   defp signed_size(x) when x <= 2_147_483_647, do: 32
   defp signed_size(_), do: 64
+
+  @doc ~S"""
+  Returns $\pi$ as a binary for the given type
+  """
+  def pi_binary(type)
+  def pi_binary({:bf, 16}), do: <<73, 64>>
+  def pi_binary({:f, 16}), do: <<72, 66>>
+  def pi_binary({:f, 32}), do: <<219, 15, 73, 64>>
+  def pi_binary({:f, 64}), do: <<24, 45, 68, 84, 251, 33, 9, 64>>
+
+  def pi_binary(type),
+    do: raise(ArgumentError, "only floating types are supported, got: #{inspect(type)}")
+
+  @doc """
+  Returns $e$ as a binary for the given type
+  """
+  def e_binary(type)
+  def e_binary({:bf, 16}), do: <<45, 64>>
+  def e_binary({:f, 16}), do: <<112, 65>>
+  def e_binary({:f, 32}), do: <<84, 248, 45, 64>>
+  def e_binary({:f, 64}), do: <<105, 87, 20, 139, 10, 191, 5, 64>>
+
+  def e_binary(type),
+    do: raise(ArgumentError, "only floating types are supported, got: #{inspect(type)}")
+
+  @doc ~S"""
+  Returns Euler–Mascheroni constant ($\gamma$) as a binary for the given type
+  """
+  def euler_gamma_binary(type)
+  def euler_gamma_binary({:bf, 16}), do: <<19, 63>>
+  def euler_gamma_binary({:f, 16}), do: <<158, 56>>
+  def euler_gamma_binary({:f, 32}), do: <<104, 196, 19, 63>>
+  def euler_gamma_binary({:f, 64}), do: <<25, 182, 111, 252, 140, 120, 226, 63>>
+
+  def euler_gamma_binary(type),
+    do: raise(ArgumentError, "only floating types are supported, got: #{inspect(type)}")
 end

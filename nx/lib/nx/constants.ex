@@ -306,7 +306,7 @@ defmodule Nx.Constants do
         f64
         2.2250738585072014e-308
       >
-      
+
       iex> Nx.Constants.smallest_positive_normal({:f, 32})
       #Nx.Tensor<
         f32
@@ -331,6 +331,144 @@ defmodule Nx.Constants do
   def smallest_positive_normal(type, opts \\ []) do
     type = Nx.Type.normalize!(type)
     from_binary(Nx.Type.smallest_positive_normal_binary(type), type, opts)
+  end
+
+  @doc ~S"""
+  Returns $\pi$ in f32.
+  """
+  def pi, do: pi({:f, 32}, [])
+
+  @doc ~S"""
+  Returns a scalar tensor with the value of $\pi$ for the given type.
+
+  ## Options
+
+    * `:backend` - a backend to allocate the tensor on.
+
+  ## Examples
+
+      iex> Nx.Constants.pi({:f, 64})
+      #Nx.Tensor<
+        f64
+        3.141592653589793
+      >
+
+      iex> Nx.Constants.pi({:f, 32})
+      #Nx.Tensor<
+        f64
+        3.1415927410125732
+      >
+
+      iex> Nx.Constants.pi({:f, 16})
+      #Nx.Tensor<
+        f16
+        3.140625
+      >
+
+      iex> Nx.Constants.pi({:bf, 16})
+      #Nx.Tensor<
+        bf16
+        3.140625
+      >
+
+      iex> Nx.Constants.pi({:s, 32})
+      ** (ArgumentError) only floating types are supported, got: {:s, 32}
+  """
+  def pi(type, opts \\ []) do
+    type = Nx.Type.normalize!(type)
+    from_binary(Nx.Type.pi_binary(type), type, opts)
+  end
+
+  @doc """
+  Returns $e$ in f32.
+  """
+  def e, do: e({:f, 32}, [])
+
+  @doc """
+  Returns a scalar tensor with the value of $e$ for the given type.
+
+  ## Options
+
+    * `:backend` - a backend to allocate the tensor on.
+
+  ## Examples
+
+      iex> Nx.Constants.e({:f, 64})
+      #Nx.Tensor<
+        f64
+        2.718281828459045
+      >
+
+      iex> Nx.Constants.e({:f, 32})
+      #Nx.Tensor<
+        f32
+        2.7182817459106445
+      >
+
+      iex> Nx.Constants.e({:f, 16})
+      #Nx.Tensor<
+        f16
+        2.71875
+      >
+
+      iex> Nx.Constants.e({:bf, 16})
+      #Nx.Tensor<
+        bf16
+        2.703125
+      >
+
+      iex> Nx.Constants.e({:s, 32})
+      ** (ArgumentError) only floating types are supported, got: {:s, 32}
+  """
+  def e(type, opts \\ []) do
+    type = Nx.Type.normalize!(type)
+    from_binary(Nx.Type.e_binary(type), type, opts)
+  end
+
+  @doc ~S"""
+  Returns $\gamma$ (Euler-Mascheroni constant) in f32.
+  """
+  def euler_gamma, do: euler_gamma({:f, 32}, [])
+
+  @doc ~S"""
+  Returns a scalar tensor with the value of $\gamma$ (Euler-Mascheroni constant) for the given type.
+
+  ## Options
+
+    * `:backend` - a backend to allocate the tensor on.
+
+  ## Examples
+
+      iex> Nx.Constants.euler_gamma({:f, 64})
+      #Nx.Tensor<
+        f64
+        0.5772156649015329
+      >
+
+      iex> Nx.Constants.euler_gamma({:f, 32})
+      #Nx.Tensor<
+        f32
+        0.5772156715393066
+      >
+
+      iex> Nx.Constants.euler_gamma({:f, 16})
+      #Nx.Tensor<
+        f16
+        0.5771484375
+      >
+
+      iex> Nx.Constants.euler_gamma({:bf, 16})
+      #Nx.Tensor<
+        bf16
+        0.57421875
+      >
+
+      iex> Nx.Constants.euler_gamma({:s, 32})
+      ** (ArgumentError) only floating types are supported, got: {:s, 32}
+  """
+  def euler_gamma(type, opts \\ []) do
+    type = Nx.Type.normalize!(type)
+    from_binary(Nx.Type.euler_gamma_binary(type), type, opts)
   end
 
   defp from_binary(binary, type, opts) do
