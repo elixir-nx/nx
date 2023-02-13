@@ -1789,6 +1789,18 @@ defmodule Nx do
     end
   end
 
+  def to_list(tensor) do
+    list = to_flat_list(tensor)
+
+    tensor
+    |> shape()
+    |> Tuple.to_list()
+    |> Enum.drop(1)
+    |> Enum.reverse()
+    |> Enum.reduce(list, &Stream.chunk_every(&2, &1))
+    |> Enum.to_list()
+  end
+
   @doc false
   @deprecated "Use to_batched/3 instead"
   def to_batched_list(tensor, batch_size, opts \\ []) do
