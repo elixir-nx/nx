@@ -24,7 +24,7 @@ We will use the function `Nx.tensor/2` to [construct tensors](https://hexdocs.pm
 Nx.tensor(1)
 ```
 
-* you can build a 1D tensor or "vector" by passing a list of numbers. Equivalently, you can use the sigil `~V`. Both parenthesis "(" and brackets "[" are accepted.
+* you can build a 1D tensor or vector by passing a list of numbers. Equivalently, you can use the sigil `~V`. Both parenthesis "(" and brackets "[" are accepted.
 
 ```elixir
 v = Nx.tensor([1, 2, 3])
