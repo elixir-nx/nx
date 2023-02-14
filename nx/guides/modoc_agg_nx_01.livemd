@@ -117,7 +117,7 @@ max_y = Nx.reduce_max(m, axes: [:y])
 {max, max_x, max_y, m}
 ```
 
-Let's consider another example with the aggregate [Nx.weighted_mean](https://hexdocs.pm/nx/Nx.html#weighted_mean/3). It supports full-tensor and per axis operations. Let's check how the weighted mean aggregate of a matrix is computed with a 2D tensor of shape (2,2) (aka as "square matrix").
+Let's consider another example with the aggregate [Nx.weighted_mean](https://hexdocs.pm/nx/Nx.html#weighted_mean/3). It supports full-tensor and per axis operations. Let's check how the weighted mean aggregate of a matrix is computed with a 2D tensor of shape `{2,2}`.
 
 ```elixir
 m = ~M(1 2
