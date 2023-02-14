@@ -6,95 +6,11 @@ Mix.install([
 ])
 ```
 
-## Quick review on tensors with Nx
+## Aggregation operations on tensors
 
 ```elixir
 import Nx, only: :sigils
 ```
-
-A tensor can be viewed as a list of indexed numbers.
-
-#### A note on how to build tensors
-
-We will use the function `Nx.tensor/2` to [construct tensors](https://hexdocs.pm/nx/Nx.html#module-creating-tensors). A few examples:
-
-* you can pass a number to a tensor and you get a 0D tensor. For example, `Nx.tensor(1)` is a 0D tensor.
-
-```elixir
-Nx.tensor(1)
-```
-
-* you can build a 1D tensor or vector by passing a list of numbers. Equivalently, you can use the sigil `~V`. Both parenthesis "(" and brackets "[" are accepted.
-
-```elixir
-v = Nx.tensor([1, 2, 3])
-v1 = ~V(1 2 3)
-v2 = ~V[1 2 3]
-
-{
-  v == v1,
-  v == v2,
-  v
-}
-```
-
-* you can build a matrix or 2D tensor with the sigil `~M`. For example a matrix with [shape](<(https://hexdocs.pm/nx/Nx.html#shape/1)>) (2,3).
-
-```elixir
-m = ~M( 1 2 3
-  4 5 6)
-```
-
-Equivalently, you can write the structure by using nested lists. You can also start with a "flat vector" and _reshape_ it. For example:
-
-```elixir
-m1 = Nx.tensor([[1, 2, 3], [4, 5, 6]])
-
-m2 = ~V(1 2 3 4 5 6) |> Nx.reshape({2, 3})
-
-{
-  m == m1,
-  m == m2,
-  m
-}
-```
-
-* for higher dimensions, you can pass an arbitrarily nested list of numbers, or equivalently, you can reshape a "flat vector" into the dimensions that match your nested list. For example:
-
-```elixir
-t1 = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
-
-t2 = ~V(1 2 3 4 5 6 7 8 9 10 11 12) |> Nx.reshape({2, 2, 3})
-
-{
-  Nx.shape(t1),
-  t1 == t2,
-  t1
-}
-```
-
-#### A note on how to access to values of a tensor
-
-If `t` is the tensor, you can [access](https://hexdocs.pm/nx/Nx.html#module-access-syntax-slicing) to its elements by appending the indexes at the end within brackets "[i]" and you get a tensor response. Recall that the indexes start from $0$. For example, with the matrix `t` below, then `t[0][1] = Nx.Tensor(2)}`. You can iterate on the indexes, and access from the end with negative indexes where the index -1 represents the last one.
-
-```elixir
-t = ~M(1 2 3
-  4 5 6)
-
-first_row = t[0]
-first_column = for i <- 0..1, do: t[i][0]
-corners = {t[0][0], t[0][2], t[1][2], t[1][0]}
-reverse_index = t[1][2] == t[-1][-1]
-
-{
-  corners,
-  first_row,
-  first_column,
-  reverse_index
-}
-```
-
-## Aggregation operations on tensors
 
 You can apply [aggregation functions](https://hexdocs.pm/nx/Nx.html#functions-aggregates) on any tensor. The functions can be applied to the tensor as a whole or to a subsection of the tensor taken in an axis-wise fashion.
 
@@ -117,23 +33,23 @@ max_y = Nx.reduce_max(m, axes: [:y])
 {max, max_x, max_y, m}
 ```
 
-Let's consider another example with the aggregate [Nx.weighted_mean](https://hexdocs.pm/nx/Nx.html#weighted_mean/3). It supports full-tensor and per axis operations. Let's check how the weighted mean aggregate of a matrix is computed with a 2D tensor of shape `{2,2}`.
+Let's consider another example with the aggregate [Nx.weighted_mean](https://hexdocs.pm/nx/Nx.html#weighted_mean/3). It supports full-tensor and per axis operations. We check how the weighted mean aggregate of a matrix is computed with the example below of a 2D tensor of shape `{2,2}` labeled `m`:
 
 ```elixir
 m = ~M(1 2
   3 4)
 ```
 
-We compute the full-tensor aggregate. The calculations are developed below. We calculate an "array product" (aka [Hadamard product](<https://en.wikipedia.org/wiki/Hadamard_product_(matrices)#:~:text=In%20mathematics%2C%20the%20Hadamard%20product,elements%20i%2C%20j%20of%20the>), an element-wise product) of our tensor with the tensor of weights, then sum all the elements and divide by the sum of the weights.
+We compute firstly the full-tensor aggregate. The calculations are developed below. We calculate an "array product" (aka [Hadamard product](<https://en.wikipedia.org/wiki/Hadamard_product_(matrices)#:~:text=In%20mathematics%2C%20the%20Hadamard%20product,elements%20i%2C%20j%20of%20the>), an element-wise product) of our tensor with the tensor of weights, then sum all the elements and divide by the sum of the weights.
 
 ```elixir
-w = ~M[4 5
-  4 5]
+w = ~M[10 20
+  30 40]
 
 nx_w_avg = Nx.weighted_mean(m, w)
 
-man_w_avg = (1 * 4 + 2 * 5 + 3 * 4 + 4 * 5) / (4 + 5 + 4 + 5)
-# 46/18
+man_w_avg = (1 * 10 + 2 * 20 + 3 * 30 + 4 * 40) / (10 + 20 + 30 + 40)
+# 300/100
 
 %{
   nx_weighted_avg: Nx.to_number(nx_w_avg),
@@ -141,32 +57,32 @@ man_w_avg = (1 * 4 + 2 * 5 + 3 * 4 + 4 * 5) / (4 + 5 + 4 + 5)
 }
 ```
 
-The weighted mean can be run per axis. Let's compute it along the **first** axis (`axes: [0]`) with the same weights per axis: you calculate "by column", so you aggregate/reduce along the first axis:
+The weighted mean can be computed _per axis_. Let's compute it along the _first_ axis (`axes: [0]`): you calculate "by column", so you aggregate/reduce along the first axis:
 
 ```elixir
-w = ~M(4 5
-  4 5)
+w = ~M(10 20
+  30 40)
 
 w_avg_x = Nx.weighted_mean(m, w, axes: [0])
 
-man_w_avg_x = [(1 * 4 + 3 * 4) / (4 + 4), (2 * 5 + 4 * 5) / (5 + 5)]
-
+man_w_avg_x = [(1 * 10 + 3 * 30) / (10 + 30), (2 * 20 + 4 * 40) / (20 + 40)]
+# [100/40, 200/60]
 {
   w_avg_x,
   man_w_avg_x
 }
 ```
 
-We calculate weighted mean of a square matrix along the **second** axis (`axes: [1]`): you calculate per row, so you aggregate/reduce along the second axis.
+We calculate weighted mean of a square matrix along the _second_ axis (`axes: [1]`): you calculate per row, so you aggregate/reduce along the second axis.
 
 ```elixir
-w = ~M(4 5
-  5 4)
+w = ~M(10 20
+  30 40)
 
 nx_w_avg_y = Nx.weighted_mean(m, w, axes: [1])
 
-man_w_avg_y = [(1 * 4 + 2 * 5) / (4 + 5), (3 * 5 + 4 * 4) / (4 + 5)]
-
+man_w_avg_y = [(1 * 10 + 2 * 20) / (10 + 20), (3 * 30 + 4 * 40) / (30 + 40)]
+# [ 50/30, 250/70]
 {
   nx_w_avg_y,
   man_w_avg_y
@@ -188,7 +104,6 @@ t =
 We can view this list as a succession of slices into rows given by the shape of the tensor. With the shape `{2,3,2,4}`, you obtain slices of length $2$,then $3$, then $2$ and the last index of length $4$ is conventionally represented as a row. The picture below will help to understand the aggregations.
 
 <!-- livebook:{"break_markdown":true} -->
-
 
 $$
 \begin{bmatrix}
@@ -261,7 +176,6 @@ z=1 & a_{1,2,1,0} & a_{1,2,1,1} & a_{1,2,1,2} \\
 \end{bmatrix}
 $$
 
-
 <!-- livebook:{"break_markdown":true} -->
 
 Firstly, let's check some characteristics of this tensor: they use full tensor aggregation functions.
@@ -313,7 +227,6 @@ $$
 The aggregating function used below is [argmin](https://hexdocs.pm/nx/Nx.html#argmin/2): it returns the index of the smallest element of the sublist. In case of several occurences, the `:tie_break` attribute takes the lowest index by default.
 
 <!-- livebook:{"break_markdown":true} -->
-
 
 $$
 \begin{bmatrix}
@@ -377,8 +290,6 @@ $$
 \end{bmatrix}
 \end{bmatrix}
 $$
-
-
 
 ```elixir
 Nx.argmin(t, axis: :x)
@@ -456,7 +367,6 @@ $$
 \end{bmatrix}
 \end{bmatrix}
 $$
-
 
 ```elixir
 Nx.argmin(t, axis: 1)
@@ -545,6 +455,8 @@ $$
 
 <!-- livebook:{"break_markdown":true} -->
 
+
+
 ```elixir
 Nx.argmax(t, axis: :z)
 ```
@@ -620,6 +532,7 @@ $$
 <!-- livebook:{"break_markdown":true} -->
 
 
+
 ```elixir
 Nx.argmin(t, axis: 3)
 ```
@@ -639,43 +552,52 @@ t4 = ~V[2 0 0 0 1]
 
 #### Option [:keep_axis](https://hexdocs.pm/nx/Nx.html#argmax/2-keep-axis)
 
-Its default value is `false` but when this option set to `keep_axis: true`, you reshape the resulting tensor with a new shape where the dimension of the working axis to $1$. For example, `Nx.argmax(t, axis: :y, keep_axix: true)` will have a shape a `[x: 2,y: 1,z: 2, t: 3]`. This mean that:
+Its default value is `false`. When this option set to `keep_axis: true`, you reduce but keep the dimension of the working axis to $1$. For example, with `t` of shape `{2,3,2,3}`, when you reduce along the third axis, `:z`, we saw that the shape is `{2,3,3}` but when you keep the axis, the shape is `{2,3,1,3}`:
 
 ```elixir
-Nx.argmin(t, axis: 1, keep_axis: true) ==
-  Nx.argmin(t, axis: 1) |> Nx.reshape({2, 1, 2, 3}, names: [:x, :y, :z, :t])
+Nx.argmin(t, axis: 2, keep_axis: true) ==
+  Nx.argmin(t, axis: 2) |> Nx.reshape({2, 3, 1, 3}, names: [:x, :y, :z, :t])
 ```
-
-<!-- livebook:{"break_markdown":true} -->
 
 $$
 \begin{bmatrix}
 \begin{bmatrix}
-& 0, 2, 1 & \\
-& 2, 0,1 &
+0, 0, 0  \\
+0, 1, 0 \\
+0, 1, 0
 \end{bmatrix}\\
 \begin{bmatrix}
-& 1, 2,0 & \\
-& 2,0,0 &
+0, 0, 0  \\
+0, 0, 0 \\
+0, 1, 0
 \end{bmatrix}
 \end{bmatrix}
 \to
 \begin{bmatrix}
 \begin{bmatrix}
 \begin{bmatrix}
-& 0, 2, 1 & \\
-& 2, 0,1 &
+0, 0, 0
+\end{bmatrix}\\
+\begin{bmatrix}
+0, 1, 0
+\end{bmatrix}\\
+\begin{bmatrix}
+0, 1, 0
 \end{bmatrix}
-\end{bmatrix} \\
+\end{bmatrix}\\
 \begin{bmatrix}
 \begin{bmatrix}
-& 1, 2,0 & \\
-& 2,0,0 &
+0, 0, 0
+\end{bmatrix}\\
+\begin{bmatrix}
+0, 0, 0
+\end{bmatrix}\\
+\begin{bmatrix}
+0, 1, 0
 \end{bmatrix}
 \end{bmatrix}
 \end{bmatrix}
 $$
-
 
 <!-- livebook:{"break_markdown":true} -->
 
@@ -729,7 +651,6 @@ $$
 \rm{agg}(5,-5,4,-4) , \rm{agg}(-1,1,-3,3,  \rm{agg}(3,3,2,2)
 \end{bmatrix}
 $$
-
 
 <!-- livebook:{"break_markdown":true} -->
 
