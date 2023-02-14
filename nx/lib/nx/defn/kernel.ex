@@ -105,6 +105,11 @@ defmodule Nx.Defn.Kernel do
         true -> b - c
       end
 
+  When a `defn` is invoked, all `cond` clauses are traversed
+  and expanded in order to build their expressions. This means that,
+  **if you attempt to raise in any clause, then it will always raise**.
+  You can only `raise` in limited situations inside `defn`, see
+  `raise/2` for more information.
   """
   defmacro cond(opts), do: special_form!([opts])
 
@@ -974,6 +979,12 @@ defmodule Nx.Defn.Kernel do
   In case else is not given, it is assumed to be 0 with the
   same as the do clause. If you want to nest multiple conditionals,
   see `cond/1` instead.
+
+  When a `defn` is invoked, both `do`/`else` clauses are traversed
+  and expanded in order to build their expressions. This means that,
+  **if you attempt to raise in any clause, then it will always raise**.
+  You can only `raise` in limited situations inside `defn`, see
+  `raise/2` for more information.
   """
   defmacro if(pred, do_else)
 
@@ -1581,7 +1592,7 @@ defmodule Nx.Defn.Kernel do
 
   In this case, both `a` and `b` are tensors and we are comparing their values.
   However, their values are unknown, which means we need to convert the whole
-  `if` to a numerical expression and run it on the device. However, once we
+  `if` to a numerical expression and run it on the device. Therefore, once we
   convert the `else` branch, it will execute `raise/2`, making it so the code
   above always raises!
 
