@@ -1,14 +1,13 @@
 # Rotating Image
 
-## Setup
-
 ```elixir
 Mix.install(
   [
-    {:req, "~> 0.2.0"},
-    {:kino, "~> 0.5.1"},
-    {:exla, "~> 0.2"},
-    {:stb_image, "~> 0.5"}
+    {:nx, github: "elixir-nx/nx", override: true, sparse: "nx"},
+    {:req, "~> 0.3.5"},
+    {:kino, "~> 0.8.1"},
+    {:exla, "~> 0.5"},
+    {:stb_image, "~> 0.6"}
   ],
   config: [
     nx: [default_backend: EXLA.Backend]
@@ -38,11 +37,10 @@ defmodule Preprocess do
     end
   end
 
-  # there is no pi const in Nx yet.
-  @pi 3.14159
-
   defp calculate_new_side_length(side1, side2, angle, radians?) do
-    angle = if radians?, do: angle, else: angle |> Nx.divide(180) |> Nx.multiply(@pi)
+    angle =
+      if radians?, do: angle, else: angle |> Nx.divide(180) |> Nx.multiply(Nx.Constants.pi())
+
     sine = Nx.sin(angle)
     cosine = Nx.cos(angle)
 
@@ -68,7 +66,7 @@ end
 ```elixir
 defmodule Rotate do
   import Nx.Defn
-  @num_channels 3
+  @num_channels 4
   # using three shears to avoid aliasing
   # https://datagenetics.com/blog/august32013/index.html
   defnp calculate_new_positions(
@@ -80,47 +78,23 @@ defmodule Rotate do
           angle
         ) do
     k = Nx.iota({y_image * x_image})
-    i = Nx.as_type(Nx.divide(k, x_image), {:u, 32})
-    j = rem(k, x_image)
+    i = Nx.as_type(k / x_image, {:u, 32})
+    j = Nx.remainder(k, x_image)
 
-    y =
-      orig_ctr_height
-      |> Nx.add(1)
-      |> Nx.add(i)
-      |> then(&Nx.subtract(y_image, &1))
+    y = y_image - (orig_ctr_height + i + 1)
 
-    x =
-      orig_ctr_width
-      |> Nx.add(1)
-      |> Nx.add(j)
-      |> then(&Nx.subtract(x_image, &1))
+    x = x_image - (orig_ctr_width + j + 1)
 
-    tangent =
-      angle
-      |> Nx.divide(2)
-      |> Nx.tan()
+    tangent = Nx.tan(angle / 2)
 
-    new_x =
-      y
-      |> Nx.multiply(tangent)
-      |> then(&Nx.subtract(x, &1))
-      |> Nx.round()
+    new_x = Nx.round(x - y * tangent)
 
-    new_y =
-      angle
-      |> Nx.sin()
-      |> Nx.multiply(new_x)
-      |> Nx.add(y)
-      |> Nx.round()
+    new_y = Nx.round(Nx.sin(angle) * new_x + y)
 
-    new_x =
-      new_y
-      |> Nx.multiply(tangent)
-      |> then(&Nx.subtract(new_x, &1))
-      |> Nx.round()
+    new_x = Nx.round(new_x - new_y * tangent)
 
-    new_y = Nx.subtract(new_ctr_height, new_y)
-    new_x = Nx.subtract(new_ctr_width, new_x)
+    new_y = new_ctr_height - new_y
+    new_x = new_ctr_width - new_x
 
     new_y = Nx.as_type(Nx.round(new_y), {:u, 32})
     new_x = Nx.as_type(Nx.round(new_x), {:u, 32})
@@ -129,11 +103,7 @@ defmodule Rotate do
   end
 
   defnp calculate_ctr(coordinate) do
-    coordinate
-    |> Nx.add(1)
-    |> Nx.divide(2)
-    |> Nx.subtract(1)
-    |> Nx.round()
+    Nx.round((coordinate + 1) / 2 - 1)
   end
 
   defnp preprocess_position(pos, n) do
@@ -147,14 +117,11 @@ defmodule Rotate do
     |> Nx.reshape({n * @num_channels, 3})
   end
 
-  # there is no pi const in Nx yet.
-  @pi 3.14159
-
   # new_image is a tensor with dims of rotated image filled with zeros
 
-  defn rotate_image_by_angle(image, angle, new_image, radians? \\ true) do
+  defn rotate_image_by_angle(image, angle, new_image, radians?) do
     # if radians? is set to false than assuming that angle is given in degrees
-    angle = if radians?, do: angle, else: angle |> Nx.divide(180) |> Nx.multiply(@pi)
+    angle = if radians?, do: angle, else: angle / 180 * Nx.Constants.pi()
 
     {height, width, _} = image.shape
     {new_height, new_width, _} = new_image.shape
@@ -188,20 +155,20 @@ end
 ## Example of usage
 
 ```elixir
-num_channels = 3
+num_channels = 4
 
 dir = File.cwd!()
 
 default_input =
-  "https://www.researchgate.net/publication/259521525/figure/fig8/AS:268024322195479@1440913386352/Original-standard-test-image-of-Peppers.png"
+  "https://upload.wikimedia.org/wikipedia/commons/7/7f/Earth_fluent_design_reflective_surface_icon.png"
 
 input = Kino.Input.text("Image to rotate", default: default_input)
 Kino.render(input)
 path_to_file = Kino.Input.read(input)
 
 # set options
-radians? = false
-angle = 70
+radians? = 0
+angle = 90
 
 # rotate image by 70 degrees to the right
 image = Preprocess.image_to_tensor(path_to_file)
@@ -209,7 +176,7 @@ image = Preprocess.image_to_tensor(path_to_file)
 {new_height, new_width} = Preprocess.get_new_height_and_width(height, width, angle, radians?)
 new_image = Nx.broadcast(Nx.tensor([0], type: {:u, 8}), {new_height, new_width, num_channels})
 rotate_image = EXLA.jit(&Rotate.rotate_image_by_angle/4)
-rotate_image.(image, angle, new_image, radians?)
+rotated_image = rotate_image.(image, angle, new_image, radians?)
 
 # convert the tensor back to stb_image and render it as png
 img = StbImage.from_nx(rotated_image)
