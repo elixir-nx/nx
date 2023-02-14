@@ -1796,6 +1796,8 @@ defmodule Nx do
   will be represented by the atoms `:neg_infinity`, `:infinity`, and
   `:nan` respectively.
 
+  It raises if a scalar tensor is given, use `to_number/1` instead.
+
   Note: This function cannot be used in `defn`.
 
   ## Examples
@@ -1805,12 +1807,22 @@ defmodule Nx do
         [0, 1, 2],
         [3, 4, 5]
       ]
+
+      iex> Nx.tensor(123) |> Nx.to_list()
+      ** (ArgumentError) cannot convert a scalar tensor to a list, got: #Nx.Tensor<
+        s64
+        123
+      >
   """
   @doc type: :conversion
   def to_list(tensor) do
     %{type: type, shape: shape} = tensor = to_tensor(tensor)
-    binary = to_binary(tensor, [])
 
+    if shape == {} do
+      raise ArgumentError, "cannot convert a scalar tensor to a list, got: #{inspect(tensor)}"
+    end
+
+    binary = to_binary(tensor, [])
     dims = Tuple.to_list(shape)
     {list, ""} = chunk(dims, binary, type)
     list

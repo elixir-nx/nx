@@ -93,7 +93,7 @@ defmodule Nx.Defn.Compiler do
   @allowed_modules [Nx.Constants, Nx.Defn, Nx.Defn.Kernel, Nx.LinAlg, Nx.Type]
 
   # These operations do not have valid meaning for Nx.Defn.Expr
-  @forbidden_ops [:backend_copy, :backend_deallocate, :backend_transfer] ++
+  @forbidden_ops [:backend_copy, :backend_deallocate, :backend_transfer, :to_list] ++
                    [:to_binary, :to_number, :to_flat_list, :to_heatmap, :to_batched] ++
                    [:load_numpy, :load_numpy_archive!, :compatible?, :default_backend] ++
                    [:serialize, :deserialize]
