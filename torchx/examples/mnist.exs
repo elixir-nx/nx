@@ -2,16 +2,19 @@ defmodule MNIST do
   import Nx.Defn
 
   defn init_random_params do
-    w1 = Nx.random_normal({784, 128}, 0.0, 0.1, names: [:input, :layer])
-    b1 = Nx.random_normal({128}, 0.0, 0.1, names: [:layer])
-    w2 = Nx.random_normal({128, 10}, 0.0, 0.1, names: [:layer, :output])
-    b2 = Nx.random_normal({10}, 0.0, 0.1, names: [:output])
+    key = Nx.Random.key(42)
+    {w1, new_key} = Nx.Random.normal(key, 0.0, 0.1, shape: {784, 128}, names: [:input, :layer])
+    {b1, new_key} = Nx.Random.normal(new_key, 0.0, 0.1, shape: {128}, names: [:layer])
+
+    {w2, new_key} =
+      Nx.Random.normal(new_key, 0.0, 0.1, shape: {128, 10}, names: [:layer, :output])
+
+    {b2, _new_key} = Nx.Random.normal(new_key, 0.0, 0.1, shape: {10}, names: [:output])
     {w1, b1, w2, b2}
   end
 
   defn softmax(logits) do
-    exp = Nx.exp(logits)
-    Nx.divide(exp, Nx.sum(exp, axes: [:output], keep_axes: true))
+    Nx.exp(logits) / Nx.sum(Nx.exp(logits), axes: [:output], keep_axes: true)
   end
 
   defn predict({w1, b1, w2, b2}, batch) do
@@ -30,7 +33,6 @@ defmodule MNIST do
         Nx.argmax(batch_labels, axis: :output),
         Nx.argmax(predict({w1, b1, w2, b2}, batch_images), axis: :output)
       )
-      |> Nx.as_type({:s, 8})
     )
   end
 
@@ -71,7 +73,7 @@ defmodule MNIST do
         :inets.start()
         :ssl.start()
 
-        {:ok, {_status, _response, data}} = :httpc.request(:get, {base_url ++ zip, []}, [], [])
+        {:ok, {_status, _response, data}} = :httpc.request(base_url ++ zip)
         File.mkdir_p!("tmp")
         File.write!(path, data)
 
@@ -101,7 +103,6 @@ defmodule MNIST do
       |> Nx.from_binary({:u, 8})
       |> Nx.reshape({n_labels, 1}, names: [:batch, :output])
       |> Nx.equal(Nx.tensor(Enum.to_list(0..9)))
-      |> Nx.as_type({:s, 8})
       |> Nx.to_batched(30)
 
     IO.puts("#{n_labels} labels\n")
@@ -147,7 +148,7 @@ defmodule MNIST do
   end
 end
 
-Nx.default_backend(Torchx.Backend)
+Nx.global_default_backend(Torchx.Backend)
 
 {train_images, train_labels} =
   MNIST.download(~c"train-images-idx3-ubyte.gz", ~c"train-labels-idx1-ubyte.gz")
@@ -159,7 +160,11 @@ IO.puts("Training MNIST for 10 epochs...\n\n")
 final_params = MNIST.train(train_images, train_labels, params, epochs: 10)
 
 IO.puts("The result of the first batch")
-IO.inspect(MNIST.predict(final_params, hd(train_images)) |> Nx.argmax(axis: :output))
+
+IO.inspect(
+  MNIST.predict(final_params, hd(Enum.to_list(train_images)))
+  |> Nx.argmax(axis: :output)
+)
 
 IO.puts("Labels for the first batch")
-IO.inspect(hd(train_labels) |> Nx.argmax(axis: :output))
+IO.inspect(hd(Enum.to_list(train_labels)) |> Nx.argmax(axis: :output))

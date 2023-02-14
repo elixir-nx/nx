@@ -2,10 +2,14 @@ defmodule MNIST do
   import Nx.Defn
 
   defn init_random_params do
-    w1 = Nx.random_normal({784, 128}, 0.0, 0.1, names: [:input, :layer])
-    b1 = Nx.random_normal({128}, 0.0, 0.1, names: [:layer])
-    w2 = Nx.random_normal({128, 10}, 0.0, 0.1, names: [:layer, :output])
-    b2 = Nx.random_normal({10}, 0.0, 0.1, names: [:output])
+    key = Nx.Random.key(42)
+    {w1, new_key} = Nx.Random.normal(key, 0.0, 0.1, shape: {784, 128}, names: [:input, :layer])
+    {b1, new_key} = Nx.Random.normal(new_key, 0.0, 0.1, shape: {128}, names: [:layer])
+
+    {w2, new_key} =
+      Nx.Random.normal(new_key, 0.0, 0.1, shape: {128, 10}, names: [:layer, :output])
+
+    {b2, _new_key} = Nx.Random.normal(new_key, 0.0, 0.1, shape: {10}, names: [:output])
     {w1, b1, w2, b2}
   end
 
@@ -153,7 +157,7 @@ IO.puts("Initializing parameters...\n")
 params = MNIST.init_random_params()
 
 IO.puts("Wrap the training function in JIT")
-fun = EXLA.jit(&update_with_averages/6)
+fun = EXLA.jit(&MNIST.update_with_averages/6)
 
 IO.puts("Training MNIST for 10 epochs...\n\n")
 final_params = MNIST.train(fun, train_images, train_labels, params, epochs: 10)
@@ -163,4 +167,4 @@ final_params = Nx.backend_transfer(final_params)
 IO.inspect(final_params)
 
 IO.puts("The result of the first batch against the trained network")
-IO.inspect(EXLA.jit(&MNIST.predict/2).(final_params, hd(train_images)))
+IO.inspect(EXLA.jit(&MNIST.predict/2).(final_params, hd(Enum.to_list(train_images))))
