@@ -1,9 +1,3 @@
-Mix.install([
-  {:nx, "~> 0.5", override: true},
-  {:exla, "~> 0.5"},
-  {:scholar, github: "elixir-nx/scholar", override: true}
-])
-
 defmodule LinReg do
   import Nx.Defn
 
@@ -22,7 +16,7 @@ defmodule LinReg do
   # MSE Loss
   defn loss({m, b}, inp, tar) do
     preds = predict({m, b}, inp)
-    Scholar.Metrics.mean_square_error(tar, preds)
+    Nx.mean(Nx.pow(tar - preds, 2))
   end
 
   defn update({m, b} = params, inp, tar, step) do

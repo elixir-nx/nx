@@ -1,8 +1,3 @@
-Mix.install([
-  {:nx, "~> 0.5"},
-  {:torchx, "~> 0.5"}
-])
-
 defmodule MNIST do
   import Nx.Defn
 
