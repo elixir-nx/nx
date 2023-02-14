@@ -94,7 +94,7 @@ reverse_index = t[1][2] == t[-1][-1]
 }
 ```
 
-## Aggregations operations on tensors
+## Aggregation operations on tensors
 
 You can apply [aggregation functions](https://hexdocs.pm/nx/Nx.html#functions-aggregates) on any tensor. The function can be applied to the tensor as a whole or to a subsection of the tensor taken in an axis-wise fashion.
 
