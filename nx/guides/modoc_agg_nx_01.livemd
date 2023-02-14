@@ -20,7 +20,7 @@ As a first example, let's take a 2D tensor of shape `{2, 3}`. Notice that we can
 m = Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y])
 ```
 
-You can get the maximum number in a tensor with [Nx.reduce_max(m)](https://hexdocs.pm/nx/Nx.html#reduce_max/2), returning a scalar (0D tensor). With a reduction, we lose a dimension per axis reduced, and since we applied the reduction globally, we lose all the dimensions. It should return `Nx.Tensor(6)` here.
+You can get the maximum number in a tensor with [Nx.reduce_max(m)](https://hexdocs.pm/nx/Nx.html#reduce_max/2), returning a 0D tensor. With a reduction, we lose a dimension per axis reduced, and since we applied the reduction globally, we lose all the dimensions. It should return `Nx.Tensor(6)` here.
 
 We can get the maximum number for each _row_ with `Nx.reduce_max(matrix, axes: [:y])`, returning a 1D tensor of size 2. Why `:y`? Because for each row, we reduce along the `:y` axis.
 
