@@ -1789,6 +1789,53 @@ defmodule Nx do
     end
   end
 
+  @doc """
+  Converts the tensor into a list reflecting its structure.
+
+  Negative infinity (-Inf), infinity (Inf), and "not a number" (NaN)
+  will be represented by the atoms `:neg_infinity`, `:infinity`, and
+  `:nan` respectively.
+
+  Note: This function cannot be used in `defn`.
+
+  ## Examples
+
+      iex> Nx.iota({2, 3}) |> Nx.to_list()
+      [
+        [0, 1, 2],
+        [3, 4, 5]
+      ]
+  """
+  @doc type: :conversion
+  def to_list(tensor) do
+    %{type: type, shape: shape} = tensor = to_tensor(tensor)
+    binary = to_binary(tensor, [])
+
+    dims = Tuple.to_list(shape)
+    {list, ""} = chunk(dims, binary, type)
+    list
+  end
+
+  defp chunk([], data, type) do
+    match_types [type] do
+      <<match!(head, 0), tail::binary>> = data
+      {read!(head, 0), tail}
+    end
+  end
+
+  defp chunk([dim | dims], data, type) do
+    chunk_each(dim, data, [], dims, type)
+  end
+
+  defp chunk_each(0, data, acc, _dims, _type) do
+    {Enum.reverse(acc), data}
+  end
+
+  defp chunk_each(dim, data, acc, dims, type) do
+    {entry, rest} = chunk(dims, data, type)
+    chunk_each(dim - 1, rest, [entry | acc], dims, type)
+  end
+
   @doc false
   @deprecated "Use to_batched/3 instead"
   def to_batched_list(tensor, batch_size, opts \\ []) do
