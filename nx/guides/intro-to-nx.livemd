@@ -2,7 +2,7 @@
 
 ```elixir
 Mix.install([
-  {:nx, github: "elixir-nx/nx", override: true, sparse: "nx"}
+  {:nx, "~> 0.2"}
 ])
 ```
 
@@ -264,7 +264,7 @@ suggest that they would work on primitive values, called scalars.
 Indeed, a tensor can be a scalar:
 
 ```elixir
-pi = Nx.Constants.pi()
+pi = Nx.tensor(3.1415, type: :f32)
 ```
 
 Take the cosine:
@@ -607,7 +607,7 @@ Here's the Elixir equivalent of those functions:
 ```elixir
 defmodule Funs do
   defn poly(x) do
-    3 * Nx.pow(x, 2) + 2 * x + 1
+    3 * Nx.power(x, 2) + 2 * x + 1
   end
 
   defn poly_slope_at(x) do
