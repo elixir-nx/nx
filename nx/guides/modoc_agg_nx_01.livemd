@@ -124,7 +124,7 @@ m = ~M(1 2
   3 4)
 ```
 
-We compute the full -tensor aggregate. The calculations are developped below. We calculate an "array product" (aka [Hadamard product](<https://en.wikipedia.org/wiki/Hadamard_product_(matrices)#:~:text=In%20mathematics%2C%20the%20Hadamard%20product,elements%20i%2C%20j%20of%20the>), a terms by terms product) of our tensor with the tensor of weights, then sum all the elements and divide by the sum of the weights.
+We compute the full-tensor aggregate. The calculations are developed below. We calculate an "array product" (aka [Hadamard product](<https://en.wikipedia.org/wiki/Hadamard_product_(matrices)#:~:text=In%20mathematics%2C%20the%20Hadamard%20product,elements%20i%2C%20j%20of%20the>), an element-wise product) of our tensor with the tensor of weights, then sum all the elements and divide by the sum of the weights.
 
 ```elixir
 w = ~M[4 5
