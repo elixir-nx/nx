@@ -30,10 +30,10 @@ We can get the maximum number for each _column_ with `Nx.reduce_max(matrix, axes
 max = Nx.reduce_max(m)
 max_x = Nx.reduce_max(m, axes: [:x])
 max_y = Nx.reduce_max(m, axes: [:y])
-{max, max_x, max_y, m}
+%{max: max, max_x: max_x, max_y: max_y}
 ```
 
-Let's consider another example with the aggregate [Nx.weighted_mean](https://hexdocs.pm/nx/Nx.html#weighted_mean/3). It supports full-tensor and per axis operations. We check how the weighted mean aggregate of a matrix is computed with the example below of a 2D tensor of shape `{2,2}` labeled `m`:
+Let's consider another example with the aggregate [Nx.weighted_mean](https://hexdocs.pm/nx/Nx.html#weighted_mean/3). It supports full-tensor and per axis operations. We display how to compute the _weighted mean aggregate_ of a matrix with the example below of a 2D tensor of shape `{2,2}` labeled `m`:
 
 ```elixir
 m = ~M(1 2
