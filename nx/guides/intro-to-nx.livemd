@@ -2,7 +2,7 @@
 
 ```elixir
 Mix.install([
-  {:nx, "~> 0.2"}
+  {:nx, "~> 0.5"}
 ])
 ```
 
@@ -607,7 +607,7 @@ Here's the Elixir equivalent of those functions:
 ```elixir
 defmodule Funs do
   defn poly(x) do
-    3 * Nx.power(x, 2) + 2 * x + 1
+    3 * Nx.pow(x, 2) + 2 * x + 1
   end
 
   defn poly_slope_at(x) do
@@ -625,7 +625,7 @@ see it at work here:
 Funs.poly_slope_at(2)
 ```
 
-Nice. If you plug the number 2 into the function $$ 6x + 2 $$
+Nice. If you plug the number 2 into the function $6x + 2$
 you get 14! Said another way, if you look at the graph at
 exactly 2, the rate of increase is 14 units of `poly(x)`
 for every unit of `x`, precisely at `x`.
