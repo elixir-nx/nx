@@ -98,7 +98,7 @@ reverse_index = t[1][2] == t[-1][-1]
 
 You can apply [aggregation functions](https://hexdocs.pm/nx/Nx.html#functions-aggregates) on any tensor. The functions can be applied to the tensor as a whole or to a subsection of the tensor taken in an axis-wise fashion.
 
-As a first example, let's take a 2D tensor (aka matrix) of shape (2,3). Notice that we can _name_ the axes. The elements of the tensor `t` are the `t[i][j]` when $i$ is the row, and $j$ the column.
+As a first example, let's take a 2D tensor of shape `{2, 3}`. Notice that we can _name_ the axes. The elements of the tensor `t` are the `t[i][j]` when $i$ is the row, and $j$ the column.
 
 ```elixir
 m = Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y])
