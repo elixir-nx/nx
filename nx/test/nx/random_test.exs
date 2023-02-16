@@ -49,6 +49,21 @@ defmodule Nx.RandomTest do
     end
   end
 
+  describe "shuffle" do
+    test "shuffle tensor for axis other that 0" do
+      key = Nx.Random.key(42)
+      nums = Nx.iota({3, 4}, axis: 1)
+      {result, _} = Nx.Random.shuffle(key, nums, axis: 1)
+
+      assert result ==
+               Nx.tensor([
+                 [2, 0, 1, 3],
+                 [2, 0, 1, 3],
+                 [2, 0, 1, 3]
+               ])
+    end
+  end
+
   describe "distributions" do
     defp distribution_case(name, args: args, expected: expected) do
       seed = :erlang.adler32("#{name}threefry2x32")

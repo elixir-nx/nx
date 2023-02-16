@@ -569,7 +569,7 @@ defmodule Nx.Random do
     if opts[:independent] do
       shuffle_independent(key, tensor, axis: axis)
     else
-      {idx, key} = shuffle_independent(key, Nx.iota({Nx.axis_size(tensor, axis)}), axis: axis)
+      {idx, key} = shuffle_independent(key, Nx.iota({Nx.axis_size(tensor, axis)}), axis: 0)
       {Nx.take(tensor, idx, axis: axis), key}
     end
   end
