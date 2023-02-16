@@ -314,6 +314,29 @@ defmodule Nx.Defn.Kernel do
   def __unary_minus__(tensor), do: Nx.negate(tensor)
 
   @doc """
+  Creates the full-slice range `0..-1//1`.
+
+  This function returns a range with the following properties:
+
+    * When enumerated, it is empty
+
+    * When used as a `slice`, it returns the sliced element as is
+
+  ## Examples
+
+      iex> t = Nx.tensor([1, 2, 3])
+      iex> t[..]
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+
+  """
+  def (..) do
+    Range.new(0, Kernel.-(1), 1)
+  end
+
+  @doc """
   Builds a range.
 
   Ranges are inclusive and both sides must be integers.

@@ -24,9 +24,7 @@ defmodule EXLA.Defn.Outfeed do
     end
 
     lazy? = lazy_transfers == :always
-
-    # TODO: Use Map.from_keys on Elixir v1.14+
-    inputs = Map.new(force_inputs, &{&1, nil})
+    inputs = Map.from_keys(force_inputs, nil)
 
     {_, used_inputs, used_hooks} =
       Composite.reduce(expr, {%{}, inputs, %{}}, &used_inputs_and_hooks(&1, &2, 0, lazy?))
@@ -111,11 +109,9 @@ defmodule EXLA.Defn.Outfeed do
     %{compiled_hooks: compiled_hooks, token: token} = outfeed
 
     # Reversed because higher depth comes first
-    # TODO: Use List.keysort/3 with :desc on Elixir v1.14
     {infeeds, {compiled_hooks, token}} =
       entries
-      |> List.keysort(1)
-      |> Enum.reverse()
+      |> List.keysort(1, :desc)
       |> Enum.map_reduce({compiled_hooks, token}, fn {pos, _, shape}, {compiled_hooks, token} ->
         next_flag = next_hook(compiled_hooks)
         compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed, pos, shape})
