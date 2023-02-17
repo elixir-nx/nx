@@ -604,6 +604,16 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def top_k({out_values, out_indices}, tensor, opts) do
+    {values, indices} =
+      tensor
+      |> from_nx()
+      |> Torchx.top_k(Keyword.fetch!(opts, :k))
+
+    {to_nx(values, out_values), to_nx(indices, out_indices)}
+  end
+
+  @impl true
   def reverse(out, tensor, axes) do
     tensor
     |> from_nx()

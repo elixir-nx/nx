@@ -11068,6 +11068,82 @@ defmodule Nx do
   end
 
   @doc """
+  Returns a tuple of `{values, indices}` for the top `k`
+  values in last dimension of the tensor.
+
+  `:k` is an option and must be at least 1, and less than
+  or equal to the size of the last dimension of the tensor.
+  It defaults to `1`.
+
+  ## Examples
+
+      iex> a = Nx.tensor([1, 2, 3, 4, 5])
+      iex> {values, indices} = Nx.top_k(a, k: 2)
+      iex> values
+      #Nx.Tensor<
+        s64[2]
+        [5, 4]
+      >
+      iex> indices
+      #Nx.Tensor<
+        s64[2]
+        [4, 3]
+      >
+
+  `:k` defaults to 1:
+
+      iex> a = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+      iex> {values, indices} = Nx.top_k(a)
+      iex> values
+      #Nx.Tensor<
+        f32[2][1]
+        [
+          [3.0],
+          [6.0]
+        ]
+      >
+      iex> indices
+      #Nx.Tensor<
+        s64[2][1]
+        [
+          [2],
+          [2]
+        ]
+      >
+
+  ### Error cases
+
+      iex> a = Nx.tensor([1, 2, 3, 4, 5])
+      iex> Nx.top_k(a, k: 6)
+      ** (ArgumentError) top_k input last axis size must be greater than or equal to k, got size=5 and k=6
+
+      iex> a = Nx.tensor(1)
+      iex> Nx.top_k(a, k: 1)
+      ** (ArgumentError) top_k input must have at least rank 1
+
+  """
+  @doc type: :ndim
+  def top_k(tensor, opts \\ []) do
+    opts = Keyword.validate!(opts, k: 1)
+    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
+    {output_shape, output_names} = Nx.Shape.top_k(shape, names, opts[:k])
+
+    out_values = %{tensor | shape: output_shape, names: output_names}
+    out_indices = %{tensor | shape: output_shape, names: output_names, type: {:s, 64}}
+
+    Nx.Shared.optional(:top_k, [tensor, opts], {out_values, out_indices}, fn tensor, opts ->
+      k = Keyword.fetch!(opts, :k)
+      rank = rank(tensor)
+
+      indices = argsort(tensor, axis: rank - 1, direction: :desc)
+      values = Nx.take_along_axis(tensor, indices, axis: rank - 1)
+
+      {slice_along_axis(values, 0, k, axis: rank - 1),
+       slice_along_axis(indices, 0, k, axis: rank - 1)}
+    end)
+  end
+
+  @doc """
   Sorts the tensor along the given axis according
   to the given direction and returns the corresponding indices
   of the original tensor in the new sorted positions.
@@ -11829,11 +11905,8 @@ defmodule Nx do
 
   defp call_fft(tensor, opts, kind) do
     tensor = to_tensor(tensor)
-
     shape = Nx.Shape.fft(tensor.shape)
-
     n = elem(shape, tuple_size(shape) - 1)
-
     opts = Keyword.validate!(opts, length: n, eps: 1.0e-10)
 
     length =

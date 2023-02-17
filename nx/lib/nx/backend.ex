@@ -150,6 +150,7 @@ defmodule Nx.Backend do
   @callback cumulative_max(out :: tensor, t :: tensor, keyword) :: tensor
 
   @callback all_close(out :: tensor, tensor, tensor, keyword) :: tensor
+  @callback top_k(out :: tensor, tensor, keyword) :: tensor
 
   @optional_callbacks [
     optional: 3,
@@ -162,7 +163,8 @@ defmodule Nx.Backend do
     cumulative_min: 3,
     cumulative_max: 3,
     all_close: 4,
-    svd: 3
+    svd: 3,
+    top_k: 3
   ]
 
   ## Inspect implementation

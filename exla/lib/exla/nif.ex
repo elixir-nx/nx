@@ -201,6 +201,8 @@ defmodule EXLA.NIF do
   def sort(_operand, _comparator, _dimension),
     do: :erlang.nif_error(:undef)
 
+  def top_k(_operand, _k), do: :erlang.nif_error(:undef)
+
   def variadic_sort(_operands, _comparator, _dimension),
     do: :erlang.nif_error(:undef)
 
