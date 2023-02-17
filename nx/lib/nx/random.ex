@@ -46,7 +46,7 @@ defmodule Nx.Random do
      constraints between random function calls.
   """
 
-  import Nx.Defn, only: [deftransformp: 2, defn: 2, defnp: 2]
+  import Nx.Defn, only: [deftransform: 2, deftransformp: 2, defn: 2, defnp: 2]
 
   @nbits 32
 
@@ -574,7 +574,7 @@ defmodule Nx.Random do
     end
   end
 
-  defnp shuffle_independent(key, tensor, opts \\ []) do
+  defnp shuffle_independent(key, tensor, opts) do
     axis = opts[:axis]
 
     # reference: https://github.com/google/jax/blob/838bc454895ed2086563301936fb0d6d852fd198/jax/_src/random.py#L437
@@ -621,7 +621,7 @@ defmodule Nx.Random do
 
       iex> k = Nx.Random.key(1)
       iex> t = Nx.iota({4, 3})
-      iex> {result, _key} = Nx.Random.choice(k, t, samples: 4, axis: 0) # with replacement
+      iex> {result, _key} = Nx.Random.choice(k, t, samples: 4, axis: 0)
       iex> result
       #Nx.Tensor<
         s64[4][3]
@@ -632,7 +632,7 @@ defmodule Nx.Random do
           [3, 4, 5]
         ]
       >
-      iex> {result, _key} = Nx.Random.choice(k, t, samples: 4, axis: 0, replace: false) # without replacement
+      iex> {result, _key} = Nx.Random.choice(k, t, samples: 4, axis: 0, replace: false)
       iex> result
       #Nx.Tensor<
         s64[4][3]
@@ -648,20 +648,28 @@ defmodule Nx.Random do
 
       iex> k = Nx.Random.key(2)
       iex> t = Nx.iota({3, 2})
-      iex> {result, _key} = Nx.Random.choice(k, t, samples: 6) # with replacement
+      iex> {result, _key} = Nx.Random.choice(k, t)
       iex> result
       #Nx.Tensor<
-        s64[6]
-        [5, 0, 0, 4, 0, 3]
+        s64[1]
+        [3]
       >
-      iex> {result, _key} = Nx.Random.choice(k, t, samples: 6, replace: false) # without replacement
+      iex> {result, _key} = Nx.Random.choice(k, t, samples: 6, replace: false)
       iex> result
       #Nx.Tensor<
         s64[6]
         [2, 0, 4, 5, 1, 3]
       >
   """
-  defn choice(key, tensor, opts) do
+  deftransform choice(key, tensor, opts \\ []) do
+    if is_list(opts) do
+      choice_no_probabilities(key, tensor, opts)
+    else
+      choice(key, tensor, opts, [])
+    end
+  end
+
+  defnp choice_no_probabilities(key, tensor, opts) do
     {tensor_shape, n_inputs, n_draws, axis, replace} = validate_choice_opts(tensor, opts)
     tensor = Nx.reshape(tensor, tensor_shape)
 
@@ -690,18 +698,18 @@ defmodule Nx.Random do
       iex> k = Nx.Random.key(1)
       iex> t = Nx.iota({4, 3})
       iex> p = Nx.tensor([0.1, 0.7, 0.2])
-      iex> {result, _key} = Nx.Random.choice(k, t, p, samples: 5, axis: 1) # with replacement
+      iex> {result, _key} = Nx.Random.choice(k, t, p, samples: 3, axis: 1)
       iex> result
       #Nx.Tensor<
-        s64[4][5]
+        s64[4][3]
         [
-          [1, 1, 1, 1, 0],
-          [4, 4, 4, 4, 3],
-          [7, 7, 7, 7, 6],
-          [10, 10, 10, 10, 9]
+          [1, 0, 1],
+          [4, 3, 4],
+          [7, 6, 7],
+          [10, 9, 10]
         ]
       >
-      iex> {result, _key} = Nx.Random.choice(k, t, p, samples: 3, axis: 1, replace: false) # without replacement
+      iex> {result, _key} = Nx.Random.choice(k, t, p, samples: 3, axis: 1, replace: false)
       iex> result
       #Nx.Tensor<
         s64[4][3]
@@ -722,13 +730,19 @@ defmodule Nx.Random do
       iex> k = Nx.Random.key(2)
       iex> t = Nx.iota({2, 3})
       iex> p = Nx.tensor([0.01, 0.1, 0.19, 0.6, 0.05, 0.05])
-      iex> {result, _key} = Nx.Random.choice(k, t, p, samples: 10) # with replacement
+      iex> {result, _key} = Nx.Random.choice(k, t, p)
       iex> result
       #Nx.Tensor<
-        s64[10]
-        [2, 1, 3, 3, 3, 1, 3, 3, 1, 2]
+        s64[1]
+        [3]
       >
-      iex> {result, _key} = Nx.Random.choice(k, t, p, samples: 6, replace: false) # without replacement
+      iex> {result, _key} = Nx.Random.choice(k, t, p, samples: 6)
+      iex> result
+      #Nx.Tensor<
+        s64[6]
+        [3, 3, 3, 0, 3, 3]
+      >
+      iex> {result, _key} = Nx.Random.choice(k, t, p, samples: 6, replace: false)
       iex> result
       #Nx.Tensor<
         s64[6]
@@ -743,8 +757,9 @@ defmodule Nx.Random do
       {n, n} ->
         :ok
 
-      _ ->
-        raise ArgumentError, "input and probabilities tensors must have the same shape"
+      {p_size, a_size} ->
+        raise ArgumentError,
+              "probability tensor of size #{p_size} is expected to have size #{a_size}"
     end
 
     if replace do
@@ -770,7 +785,7 @@ defmodule Nx.Random do
   end
 
   deftransformp validate_choice_opts(tensor, opts) do
-    opts = Keyword.validate!(opts, [:samples, :axis, replace: true])
+    opts = Keyword.validate!(opts, [:axis, samples: 1, replace: true])
 
     {axis, tensor_shape} =
       case opts[:axis] do
