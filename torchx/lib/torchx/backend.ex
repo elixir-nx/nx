@@ -609,7 +609,7 @@ defmodule Torchx.Backend do
       tensor
       |> from_nx()
       |> Torchx.top_k(Keyword.fetch!(opts, :k))
-    
+
     {to_nx(values, out_values), to_nx(indices, out_indices)}
   end
 
