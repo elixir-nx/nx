@@ -11135,8 +11135,8 @@ defmodule Nx do
       k = Keyword.fetch!(opts, :k)
       rank = rank(tensor)
 
-      values = sort(tensor, axis: rank - 1, direction: :desc)
       indices = argsort(tensor, axis: rank - 1, direction: :desc)
+      values = Nx.take_along_axis(tensor, indices, axis: rank - 1)
 
       {slice_along_axis(values, 0, k, axis: rank - 1),
        slice_along_axis(indices, 0, k, axis: rank - 1)}
