@@ -11126,6 +11126,7 @@ defmodule Nx do
 
     out_values = %{tensor | shape: output_shape, names: output_names}
     out_indices = %{tensor | shape: output_shape, names: output_names, type: {:s, 64}}
+
     Nx.Shared.optional(:top_k, [tensor, k], {out_values, out_indices}, fn tensor, k ->
       rank = rank(tensor)
 
