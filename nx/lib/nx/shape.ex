@@ -1510,7 +1510,7 @@ defmodule Nx.Shape do
 
     if tuple_size(shape) != tuple_size(indices_shape) do
       raise ArgumentError,
-            "shapes must have the same number of dimensions. Expected #{take_along_axis_shape_template(shape, axis)}, got: #{inspect(indices_shape)}"
+            "shapes must have the same number of dimensions. Expected #{shape_template_on_axis(shape, axis)}, got: #{inspect(indices_shape)}"
     end
 
     shape_list = Tuple.to_list(shape)
@@ -1525,14 +1525,14 @@ defmodule Nx.Shape do
       {input_length, output_length}, _axis ->
         unless input_length == output_length do
           raise ArgumentError,
-                "non-indexing dimensions must match. Expected #{take_along_axis_shape_template(shape, axis)}, got: #{inspect(indices_shape)}"
+                "non-indexing dimensions must match. Expected #{shape_template_on_axis(shape, axis)}, got: #{inspect(indices_shape)}"
         end
     end)
 
     indices_shape
   end
 
-  defp take_along_axis_shape_template(shape, axis) do
+  defp shape_template_on_axis(shape, axis) do
     shape_list = Tuple.to_list(shape)
 
     shape_template =
@@ -1608,7 +1608,9 @@ defmodule Nx.Shape do
     {concat_dims(shapes, axis), names}
   end
 
-  defp concat_dims([s1 | shapes], axis) do
+  defp concat_dims([s1 | shapes] = all_shapes, axis) do
+    assert_non_concat_dims_equal(all_shapes, axis)
+
     s1 = Tuple.to_list(s1)
 
     shapes
@@ -1634,6 +1636,25 @@ defmodule Nx.Shape do
                   " while concatenating on axis #{axis}"
       end
     end)
+  end
+
+  defp assert_non_concat_dims_equal([], _axis), do: :ok
+
+  defp assert_non_concat_dims_equal([s1 | shapes], axis) do
+    s1_size = tuple_size(s1)
+    template = Tuple.delete_at(s1, axis)
+
+    Enum.each(
+      shapes,
+      fn
+        shape ->
+          unless is_tuple(shape) and tuple_size(shape) == s1_size and
+                   Tuple.delete_at(shape, axis) == template do
+            raise ArgumentError,
+                  "expected all shapes to match #{shape_template_on_axis(s1, axis)}, got unmatching shape: #{inspect(shape)}"
+          end
+      end
+    )
   end
 
   @doc """
