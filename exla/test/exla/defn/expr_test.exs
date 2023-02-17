@@ -3900,6 +3900,21 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
+  describe "top_k" do
+    defn top_1(t), do: Nx.top_k(t, k: 1)
+
+    test "returns top 1 values and indices" do
+      a = Nx.iota({5})
+      assert_equal(top_1(a), {Nx.tensor([4]), Nx.tensor([4])})
+
+      a = Nx.iota({5, 5}, axis: 1)
+      assert_equal(top_1(a), {Nx.broadcast(4, {5, 1}), Nx.broadcast(4, {5, 1})})
+
+      a = Nx.iota({5, 5, 5}, axis: 2)
+      assert_equal(top_1(a), {Nx.broadcast(4, {5, 5, 1}), Nx.broadcast(4, {5, 5, 1})})
+    end
+  end
+
   describe "argsort" do
     defn argsort0(t), do: Nx.argsort(t, axis: 0)
     defn argsort1(t), do: Nx.argsort(t, axis: 1)

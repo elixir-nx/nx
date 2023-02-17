@@ -753,6 +753,11 @@ defmodule Nx.Random do
     {tensor_shape, n_inputs, n_draws, axis, replace} = validate_choice_opts(tensor, opts)
     tensor = Nx.reshape(tensor, tensor_shape)
 
+    case Nx.rank(p) do
+      1 -> :ok
+      r -> raise ArgumentError, "propability tensor must have rank 1, got: #{r}"
+    end
+
     case {Nx.size(p), Nx.axis_size(tensor, axis)} do
       {n, n} ->
         :ok

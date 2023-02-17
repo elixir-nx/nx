@@ -2088,6 +2088,50 @@ defmodule Nx.Shape do
   def fft(shape) when is_tuple(shape), do: shape
 
   @doc """
+  Output shape after a top_k operation.
+
+  ## Examples
+
+      iex> Nx.Shape.top_k({3, 3, 3}, [:a, :b, :c], 2)
+      {{3, 3, 2}, [:a, :b, :c]}
+
+      iex> Nx.Shape.top_k({2, 3, 1}, [:a, :b, :c], 1)
+      {{2, 3, 1}, [:a, :b, :c]}
+
+  ### Error cases
+      
+      iex> Nx.Shape.top_k({}, [], 1)
+      ** (ArgumentError) top_k input must have at least rank 1
+
+      iex> Nx.Shape.top_k({2, 3, 1}, [:a, :b, :c], 2)
+      ** (ArgumentError) top_k input last axis size must be greater than or equal to k, got size=1 and k=2
+
+      iex> Nx.Shape.top_k({2, 3, 1}, [:a, :b, :c], -1)
+      ** (ArgumentError) top_k k must be an integer greater than or equal to 1, got k=-1
+  """
+  def top_k(shape, names, k) when is_integer(k) and k >= 1 do
+    case shape do
+      {} ->
+        raise ArgumentError, "top_k input must have at least rank 1"
+
+      tuple ->
+        rank = tuple_size(tuple)
+        last_axis = elem(tuple, rank - 1)
+
+        if last_axis < k do
+          raise ArgumentError,
+                "top_k input last axis size must be greater than or" <>
+                  " equal to k, got size=#{last_axis} and k=#{k}"
+        end
+
+        {put_elem(tuple, rank - 1, k), names}
+    end
+  end
+
+  def top_k(_shape, _names, k),
+    do: raise(ArgumentError, "top_k k must be an integer greater than or equal to 1, got k=#{k}")
+
+  @doc """
   Merges names, raising on mismatch.
 
   It assumes their length match.

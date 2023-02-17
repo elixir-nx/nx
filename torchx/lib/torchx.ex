@@ -366,6 +366,7 @@ defmodule Torchx do
   deftensor triangular_solve(tensor_a, tensor_b, transpose, upper)
   deftensor determinant(tensor)
   deftensor sort(tensor, axis, descending)
+  deftensor top_k(tensor, k)
   deftensor clip(tensor, tensor_min, tensor_max)
   deftensor solve(tensor_a, tensor_b)
 
