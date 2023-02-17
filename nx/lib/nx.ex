@@ -11126,7 +11126,15 @@ defmodule Nx do
 
     out_values = %{tensor | shape: output_shape, names: output_names}
     out_indices = %{tensor | shape: output_shape, names: output_names, type: {:s, 64}}
-    impl!(tensor).top_k({out_values, out_indices}, tensor, k)
+    Nx.Shared.optional(:top_k, [tensor, k], {out_values, out_indices}, fn tensor, k ->
+      rank = rank(tensor)
+
+      values = sort(tensor, axis: rank - 1, direction: :desc)
+      indices = argsort(tensor, axis: rank - 1, direction: :desc)
+
+      {slice_along_axis(values, 0, k, axis: rank - 1),
+       slice_along_axis(indices, 0, k, axis: rank - 1)}
+    end)
   end
 
   @doc """
