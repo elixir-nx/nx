@@ -1239,6 +1239,10 @@ defmodule EXLA.Defn do
     EXLA.Op.sort(tensor, comp, dimension)
   end
 
+  defp to_operator(:top_k, [tensor, k], _ans, _state) do
+    EXLA.Op.top_k(tensor, k)
+  end
+
   defp to_operator(:argsort, [tensor, opts], ans, state) do
     dimension = opts[:axis]
 

@@ -787,6 +787,11 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def top_k(%Op{builder: builder, ref: operand}, k) do
+    ref = EXLA.NIF.top_k(operand, k) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
   def variadic_sort(
         %Builder{ref: builder},
         operands,

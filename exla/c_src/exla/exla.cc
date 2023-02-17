@@ -13,6 +13,7 @@
 #include "tensorflow/compiler/xla/client/lib/qr.h"
 #include "tensorflow/compiler/xla/client/lib/self_adjoint_eig.h"
 #include "tensorflow/compiler/xla/client/lib/svd.h"
+#include "tensorflow/compiler/xla/client/lib/sorting.h"
 #include "tensorflow/compiler/xla/primitive_util.h"
 
 // All of these are created with calls to `new` and subsequently
@@ -1747,6 +1748,26 @@ ERL_NIF_TERM sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
+ERL_NIF_TERM top_k(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 2) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  exla::int64 k;
+
+  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get(env, argv[1], &k)) {
+    return exla::nif::error(env, "Unable to get k.");
+  }
+
+  xla::XlaOp op = xla::TopK(*operand, k);
+
+  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
+}
+
 ERL_NIF_TERM variadic_sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");
@@ -2450,6 +2471,7 @@ static ErlNifFunc exla_funcs[] = {
   {"reverse", 2, reverse},
   {"concatenate", 3, concatenate},
   {"sort", 3, sort},
+  {"top_k", 2, top_k},
   {"variadic_sort", 3, variadic_sort},
   // LinAlg
   {"cholesky", 1, cholesky},

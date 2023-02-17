@@ -11068,6 +11068,68 @@ defmodule Nx do
   end
 
   @doc """
+  Returns a tuple of `{values, indices}` for the top `k`
+  values in last dimension of the tensor.
+
+  `k` must be at least 1, and less than or equal to the size
+  of the last dimension of the tensor. 
+
+  ## Examples
+
+      iex> a = Nx.tensor([1, 2, 3, 4, 5])
+      iex> {values, indices} = Nx.top_k(a, 2)
+      iex> values
+      #Nx.Tensor<
+        s64[2]
+        [5, 4]
+      >
+      iex> indices
+      #Nx.Tensor<
+        s64[2]
+        [4, 3]
+      >
+
+      iex> a = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+      iex> {values, indices} = Nx.top_k(a, 1)
+      iex> values
+      #Nx.Tensor<
+        f32[2][1]
+        [
+          [3.0],
+          [6.0]
+        ]
+      >
+      iex> indices
+      #Nx.Tensor<
+        s64[2][1]
+        [
+          [2],
+          [2]
+        ]
+      >
+
+  ### Error cases
+
+      iex> a = Nx.tensor([1, 2, 3, 4, 5])
+      iex> Nx.top_k(a, 6)
+      ** (ArgumentError) top_k input last axis size must be greater than or equal to k, got size=5 and k=6
+
+      iex> a = Nx.tensor(1)
+      iex> Nx.top_k(a, 1)
+      ** (ArgumentError) top_k input must have at least rank 1
+
+  """
+  @doc type: :ndim
+  def top_k(tensor, k) do
+    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
+    {output_shape, output_names} = Nx.Shape.top_k(shape, names, k)
+
+    out_values = %{tensor | shape: output_shape, names: output_names}
+    out_indices = %{tensor | shape: output_shape, names: output_names, type: {:s, 64}}
+    impl!(tensor).top_k({out_values, out_indices}, tensor, k)
+  end
+
+  @doc """
   Sorts the tensor along the given axis according
   to the given direction and returns the corresponding indices
   of the original tensor in the new sorted positions.

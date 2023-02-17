@@ -995,6 +995,13 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
+  def top_k({values, indices}, tensor, k) do
+    %{data: %{context: context}} = tensor = to_expr(tensor)
+    out = %T{names: [], shape: {}, type: {:tuple, 2}}
+    tuple(expr(out, context, :top_k, [tensor, k]), [values, indices])
+  end
+
+  @impl true
   def argsort(out, tensor, opts) do
     %{data: %{context: context}} = tensor = to_expr(tensor)
     expr(out, context, :argsort, [tensor, opts])

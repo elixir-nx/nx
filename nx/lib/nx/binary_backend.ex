@@ -2250,6 +2250,17 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
+  def top_k(_out, tensor, k) do
+    rank = Nx.rank(tensor)
+
+    values = Nx.sort(tensor, axis: rank - 1, direction: :desc)
+    indices = Nx.argsort(tensor, axis: rank - 1, direction: :desc)
+
+    {Nx.slice_along_axis(values, 0, k, axis: rank - 1),
+     Nx.slice_along_axis(indices, 0, k, axis: rank - 1)}
+  end
+
+  @impl true
   def fft(out, tensor, opts), do: calculate_fft(out, tensor, opts, :fft)
 
   @impl true

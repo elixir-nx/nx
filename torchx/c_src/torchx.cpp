@@ -493,6 +493,14 @@ NIF(argsort)
   TENSOR(torch::argsort(*input, axis, is_descending));
 }
 
+NIF(top_k)
+{
+  TENSOR_PARAM(0, input);
+  PARAM(1, int64_t, k);
+
+  TENSOR_TUPLE(at::topk(*input, k));
+}
+
 NIF(flip)
 {
   TENSOR_PARAM(0, input);
@@ -1227,6 +1235,7 @@ static ErlNifFunc nif_functions[] = {
     DF(indexed_add, 4),
     DF(indexed_put, 4),
     DF(argsort, 3),
+    DF(top_k, 2),
     DF(flip, 2),
     DF(unfold, 4),
     DF(put, 3),
