@@ -10742,21 +10742,25 @@ defmodule Nx do
         ]
       >
 
-  ### Error Cases
+  ### Error cases
 
   Shapes must have the same rank and match on the non-concatenating axis.
 
+  For example, the tensors below work if we concatenate on axis 1, but not on axis 0:
+
       iex> t1 = Nx.iota({1, 2, 3})
       iex> t2 = Nx.iota({1, 1, 3})
-      iex> result = Nx.concatenate([t1, t2], axis: 1) # This works because they match on the 0 and 2 axes
+      iex> result = Nx.concatenate([t1, t2], axis: 1)
       iex> Nx.shape(result)
       {1, 3, 3}
-      iex> Nx.concatenate([t1, t2], axis: 0) # This doesn't work because they differ on the 1 axis
+      iex> Nx.concatenate([t1, t2], axis: 0)
       ** (ArgumentError) expected all shapes to match {*, 2, 3}, got unmatching shape: {1, 1, 3}
+
+  If the ranks are different, it doesn't work, regardless of the axis choice:
 
       iex> t1 = Nx.iota({1, 2, 3})
       iex> t2 = Nx.iota({1, 1})
-      iex> Nx.concatenate([t1, t2]) # This fails because t2 doesn't have the same rank as t1
+      iex> Nx.concatenate([t1, t2])
       ** (ArgumentError) expected all shapes to match {*, 2, 3}, got unmatching shape: {1, 1}
   """
   @doc type: :ndim

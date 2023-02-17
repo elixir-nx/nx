@@ -1644,17 +1644,11 @@ defmodule Nx.Shape do
     s1_size = tuple_size(s1)
     template = Tuple.delete_at(s1, axis)
 
-    Enum.each(
-      shapes,
-      fn
-        shape ->
-          unless is_tuple(shape) and tuple_size(shape) == s1_size and
-                   Tuple.delete_at(shape, axis) == template do
-            raise ArgumentError,
-                  "expected all shapes to match #{shape_template_on_axis(s1, axis)}, got unmatching shape: #{inspect(shape)}"
-          end
-      end
-    )
+    for shape <- shapes,
+        tuple_size(shape) != s1_size or Tuple.delete_at(shape, axis) != template do
+      raise ArgumentError,
+            "expected all shapes to match #{shape_template_on_axis(s1, axis)}, got unmatching shape: #{inspect(shape)}"
+    end
   end
 
   @doc """
