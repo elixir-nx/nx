@@ -2176,7 +2176,7 @@ defmodule Nx do
         [0, 0, 0]
       >
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.bitcast(Nx.tensor([0, 1, 2], names: [:data], type: :s16), :f32)
       ** (ArgumentError) input type width must match new type width, got input type {:s, 16} and output type {:f, 32}
@@ -2508,7 +2508,7 @@ defmodule Nx do
         ]
       >
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.tile(Nx.tensor([1,2]), 1.0)
       ** (ArgumentError) repetitions must be a list of integers, got: 1.0
@@ -2662,7 +2662,7 @@ defmodule Nx do
         [1, 2]
       >
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.squeeze(Nx.tensor([[1, 2, 3], [4, 5, 6]]), axes: [1])
       ** (ArgumentError) cannot squeeze dimensions whose sizes are not 1, got 3 for dimension 1
@@ -3143,7 +3143,7 @@ defmodule Nx do
 
   If a shape as a tuple is given, it returns the shape itself.
 
-  ### Examples
+  ## Examples
 
       iex> Nx.shape(Nx.tensor(1))
       {}
@@ -3176,7 +3176,7 @@ defmodule Nx do
   If a tuple is given as a shape, it computes the rank
   of the given tuple.
 
-  ### Examples
+  ## Examples
 
       iex> Nx.rank(Nx.tensor(1))
       0
@@ -3201,7 +3201,7 @@ defmodule Nx do
   It accepts either an atom as the name or an integer as the axis.
   It raises if the axis/name does not exist.
 
-  ### Examples
+  ## Examples
 
       iex> Nx.axis_size(Nx.iota({100, 10, 20}), 0)
       100
@@ -3220,7 +3220,7 @@ defmodule Nx do
   @doc """
   Returns the index of the given axis in the tensor.
 
-  ### Examples
+  ## Examples
 
       iex> Nx.axis_index(Nx.iota({100, 10, 20}), 0)
       0
@@ -3231,7 +3231,7 @@ defmodule Nx do
       iex> Nx.axis_index(Nx.iota({100, 10, 20}, names: [:batch, :x, :y]), :x)
       1
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.axis_index(Nx.iota({100, 10, 20}), 3)
       ** (ArgumentError) given axis (3) invalid for shape with rank 3
@@ -3251,7 +3251,7 @@ defmodule Nx do
 
   If a tuple is given, it returns the number of elements in a tensor with that shape.
 
-  ### Examples
+  ## Examples
 
       iex> Nx.size(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
       6
@@ -3271,7 +3271,7 @@ defmodule Nx do
   Returns the byte size of the data in the tensor
   computed from its shape and type.
 
-  ### Examples
+  ## Examples
 
       iex> Nx.byte_size(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
       48
@@ -3294,7 +3294,7 @@ defmodule Nx do
 
   If a shape is given, it returns the axes for the given shape.
 
-  ### Examples
+  ## Examples
 
       iex> Nx.axes(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
       [0, 1]
@@ -3312,7 +3312,7 @@ defmodule Nx do
   @doc """
   Returns all of the names in a tensor.
 
-  ### Examples
+  ## Examples
 
       iex> Nx.names(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:batch, :data]))
       [:batch, :data]
@@ -3458,7 +3458,7 @@ defmodule Nx do
   this function.
   * This function cannot be used in `defn`.
 
-  ### Examples
+  ## Examples
 
     iex> Nx.backend_copy(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
     #Nx.Tensor<
@@ -4439,7 +4439,7 @@ defmodule Nx do
         [0, 0, 0, 1]
       >
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.bitwise_and(Nx.tensor([0, 0, 1, 1]), 1.0)
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 32}
@@ -4492,7 +4492,7 @@ defmodule Nx do
         [0, 1, 1, 1]
       >
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.bitwise_or(Nx.tensor([0, 0, 1, 1]), 1.0)
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 32}
@@ -4542,7 +4542,7 @@ defmodule Nx do
         [0, 1, 1, 0]
       >
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.bitwise_xor(Nx.tensor([0, 0, 1, 1]), 1.0)
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 32}
@@ -4595,7 +4595,7 @@ defmodule Nx do
         [2, 4, -8, -16]
       >
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.left_shift(Nx.tensor([0, 0, 1, 1]), 1.0)
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 32}
@@ -4653,7 +4653,7 @@ defmodule Nx do
         [8, 8, -8, -8]
       >
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.right_shift(Nx.tensor([0, 0, 1, 1]), 1.0)
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 32}
@@ -5469,7 +5469,7 @@ defmodule Nx do
 
   See also: `indexed_add/3`, `gather/2`, `take/3`, `take_along_axis/3`
 
-  ### Examples
+  ## Examples
 
       iex> t = Nx.iota({1, 2, 3})
       #Nx.Tensor<
@@ -5515,7 +5515,7 @@ defmodule Nx do
         [3]
       >
 
-  ### Error cases
+  ## Error cases
       iex> Nx.indexed_add(Nx.tensor([[1], [2]]), Nx.tensor([[[1, 2, 3]]]), Nx.tensor([0]))
       ** (ArgumentError) indices must be a rank 2 tensor, got: 3
 
@@ -5544,7 +5544,7 @@ defmodule Nx do
 
   See also: `indexed_add/3`, `put_slice/3`.
 
-  ### Examples
+  ## Examples
 
       iex> Nx.indexed_put(Nx.tensor([0, 0, 0]), Nx.tensor([[1], [2]]), Nx.tensor([2, 4]))
       #Nx.Tensor<
@@ -5602,7 +5602,7 @@ defmodule Nx do
         [3]
       >
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([[[1, 2, 3]]]), Nx.tensor([0]))
       ** (ArgumentError) indices must be a rank 2 tensor, got: 3
@@ -6009,7 +6009,7 @@ defmodule Nx do
 
   Does not accept complex tensors as inputs.
 
-  ### Examples
+  ## Examples
 
       iex> Nx.complex(Nx.tensor(1), Nx.tensor(2))
       #Nx.Tensor<
@@ -6062,7 +6062,7 @@ defmodule Nx do
         [255, 254, 1, 0]
       >
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.bitwise_not(Nx.tensor([0.0, 1.0]))
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 32}
@@ -6103,7 +6103,7 @@ defmodule Nx do
         [0, 1, 6, 7, 8, 2, 1]
       >
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.population_count(Nx.tensor([0.0, 1.0]))
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 32}
@@ -6168,7 +6168,7 @@ defmodule Nx do
         [8, 7, 6, 5, 4, 3, 2, 1, 0]
       >
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.count_leading_zeros(Nx.tensor([0.0, 1.0]))
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 32}
@@ -8777,7 +8777,7 @@ defmodule Nx do
 
   The initial value must be a number or a scalar shaped tensor.
 
-  ### Examples
+  ## Examples
 
       iex> init_value = Nx.Constants.min_finite(:s64)
       iex> t = Nx.tensor([[1, 2, 3, 4], [4, 5, 6, 7], [7, 8, 9, 10], [11, 12, 13, 14]])
@@ -8892,7 +8892,7 @@ defmodule Nx do
 
   Inside `defn`, consider using `Nx.Defn.Kernel.while/4` instead.
 
-  ### Examples
+  ## Examples
 
       iex> Nx.map(Nx.tensor([[1, 2, 3], [4, 5, 6]]), fn x -> Nx.add(x, 1) end)
       #Nx.Tensor<
@@ -9104,7 +9104,7 @@ defmodule Nx do
         ]
       >
 
-  ### Error Cases
+  ## Error cases
 
       iex> Nx.dot(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2]))
       ** (ArgumentError) dot/zip expects shapes to be compatible, dimension 0 of left-side (3) does not equal dimension 0 of right-side (2)
@@ -9291,7 +9291,7 @@ defmodule Nx do
         ]
       >
 
-  ### Error cases
+  ## Error cases
 
       iex> u = Nx.tensor([[[1, 1]], [[2, 2]]])
       iex> v = Nx.tensor([[[3], [3]], [[4], [4]]])
@@ -9548,7 +9548,7 @@ defmodule Nx do
   dimensions. Dimensions must be unique, but they do not
   have to be successive.
 
-  ### Examples
+  ## Examples
 
       iex> Nx.reverse(Nx.tensor([1, 2, 3]))
       #Nx.Tensor<
@@ -9893,7 +9893,7 @@ defmodule Nx do
   You can pass a tensor to `min` or `max` as long
   as the tensor has a scalar shape.
 
-  ### Examples
+  ## Examples
 
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y])
       iex> Nx.clip(t, 2, 4)
@@ -10446,7 +10446,7 @@ defmodule Nx do
         ]
       >
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.take(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([1, 0, 1], type: :f32))
       ** (ArgumentError) indices must be an integer tensor, got {:f, 32}
@@ -10564,7 +10564,7 @@ defmodule Nx do
         ]
       >
 
-  ### Error cases
+  ## Error cases
 
       iex> tensor = Nx.iota({3, 3})
       iex> idx = Nx.tensor([[2.0], [1.0], [2.0]], type: :f32)
@@ -10621,7 +10621,7 @@ defmodule Nx do
         [1, 12, 112]
       >
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.gather(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[0, 0]], type: :f32))
       ** (ArgumentError) indices must be an integer tensor, got {:f, 32}
@@ -10656,7 +10656,7 @@ defmodule Nx do
   be cast to the higher type before concatenating.
   If tensors are named, the names must match.
 
-  ### Examples
+  ## Examples
 
   Giving a single tensor is a no-op:
 
@@ -10731,7 +10731,7 @@ defmodule Nx do
         [1, 2, 3, 4, 5, 6]
       >
 
-  ### Error cases
+  ## Error cases
 
   Shapes must have the same rank and match on the non-concatenating axis.
 
@@ -10838,7 +10838,7 @@ defmodule Nx do
     * `:axis` - optional index of the axis along which the tensors are stacked. Defaults to 0.
     * `:name` - optional name for the added dimension. Defaults to an unnamed axis.
 
-  ### Examples
+  ## Examples
 
   Stacking always creates a new dimension:
 
@@ -10931,7 +10931,7 @@ defmodule Nx do
       should be applied
     * `:direction` - Can be `:asc` or `:desc`. Defaults to `:asc`
 
-  ### Examples
+  ## Examples
 
       iex> Nx.sort(Nx.tensor([16, 23, 42, 4, 8, 15]))
       #Nx.Tensor<
@@ -11144,7 +11144,7 @@ defmodule Nx do
         ]
       >
 
-  ### Error cases
+  ## Error cases
 
       iex> a = Nx.tensor([1, 2, 3, 4, 5])
       iex> Nx.top_k(a, k: 6)
@@ -12025,7 +12025,7 @@ defmodule Nx do
       ]
     >
 
-  ### Error Cases
+  ## Error cases
 
       iex> Nx.linspace(0, 24, n: 1.0)
       ** (ArgumentError) expected n to be a non-negative integer, got: 1.0

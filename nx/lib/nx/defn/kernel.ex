@@ -154,7 +154,7 @@ defmodule Nx.Defn.Kernel do
 
   It returns the given expressions.
 
-  ### Examples
+  ## Examples
 
       defn tanh_grad(t) do
         grad(t, &Nx.tanh/1) |> print_expr()
@@ -1273,7 +1273,7 @@ defmodule Nx.Defn.Kernel do
   This is most commonly used in pipelines, allowing you
   to pipe a value to a function outside of its first argument.
 
-  ### Examples
+  ## Examples
 
       a
       |> Nx.add(b)

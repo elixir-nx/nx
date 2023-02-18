@@ -633,7 +633,7 @@ defmodule Nx.Defn do
   If a non-scalar tensor is given, it is assumed the additional
   dimensions are batch dimensions.
 
-  ### Examples
+  ## Examples
 
       defn tanh_grad(t) do
         grad(t, &Nx.tanh/&1)
@@ -689,7 +689,7 @@ defmodule Nx.Defn do
 
   It returns a tuple with the value and the gradient.
 
-  ### Examples
+  ## Examples
 
       defn tanh_grad(t) do
         value_and_grad(t, &Nx.tanh/&1)

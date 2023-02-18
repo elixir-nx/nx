@@ -269,7 +269,7 @@ defmodule Nx.Constants do
 
   Accepts the same options as `Nx.tensor/2`
 
-  ### Examples
+  ## Examples
 
       iex> Nx.Constants.i()
       #Nx.Tensor<
@@ -283,7 +283,7 @@ defmodule Nx.Constants do
         0.0+1.0i
       >
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.Constants.i(type: {:f, 32})
       ** (ArgumentError) invalid type for complex number. Expected {:c, 64} or {:c, 128}, got: {:f, 32}

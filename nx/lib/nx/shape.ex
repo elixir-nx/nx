@@ -151,7 +151,7 @@ defmodule Nx.Shape do
       iex> Nx.Shape.reshape({2, 2, 2}, {:auto, 4})
       {2, 4}
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.Shape.reshape({2, 2, 2}, {2, 3})
       ** (ArgumentError) cannot reshape, current shape {2, 2, 2} is not compatible with new shape {2, 3}
@@ -219,7 +219,7 @@ defmodule Nx.Shape do
       iex> Nx.Shape.broadcast!({2}, {2, 3}, [0])
       :ok
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.Shape.broadcast!({4, 2, 2}, {1, 1}, [0, 1, 2])
       ** (ArgumentError) cannot broadcast tensor of dimensions {4, 2, 2} to {1, 1} with axes [0, 1, 2]
@@ -290,7 +290,7 @@ defmodule Nx.Shape do
       iex> Nx.Shape.binary_broadcast({3, 1}, [:x, :y], {15, 3, 5}, [:batch, :x, nil])
       {{15, 3, 5}, [:batch, :x, :y]}
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.Shape.binary_broadcast({4, 2, 5}, [nil, nil, nil], {3, 2, 5}, [:batch, :x, :y])
       ** (ArgumentError) cannot broadcast tensor of dimensions {4, 2, 5} to {3, 2, 5}
@@ -427,7 +427,7 @@ defmodule Nx.Shape do
     iex> Nx.Shape.transpose({4, 8, 2, 1}, [1, 0, 3, 2], [:batch, :channels, :height, :width])
     {{8, 4, 1, 2}, [:channels, :batch, :width, :height]}
 
-  ### Error cases
+  ## Error cases
 
     iex> Nx.Shape.transpose({4, 8, 2, 1}, [0, 1, 2], [:batch, nil, nil, nil])
     ** (ArgumentError) expected length of permutation (3) to match rank of shape (4)
@@ -518,7 +518,7 @@ defmodule Nx.Shape do
       iex> Nx.Shape.to_padding_config({12, 12}, {2, 2}, :same)
       [{0, 1}, {0, 1}]
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.Shape.to_padding_config({2, 3, 2}, {2, 3, 2}, :foo)
       ** (ArgumentError) invalid padding mode specified, padding must be one of :valid, :same, or a padding configuration, got: :foo
@@ -571,7 +571,7 @@ defmodule Nx.Shape do
       iex> Nx.Shape.flatten({1, 2, 3}, [nil, nil, nil], [])
       {{1, 2, 3}, [nil, nil, nil]}
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.Shape.flatten({1, 2, 3}, [:batch, nil, nil], [0, 2])
       ** (ArgumentError) flatten axes must be consecutive
@@ -830,7 +830,7 @@ defmodule Nx.Shape do
     iex> Nx.Shape.pool({3, 2, 3}, {2, 1, 1}, [1, 2, 1], :same, [1, 1, 1])
     {{3, 1, 3}, [{0, 1}, {0, 0}, {0, 0}]}
 
-  ### Error cases
+  ## Error cases
 
     iex> Nx.Shape.pool({1, 2, 3}, {2, 1, 1}, [1, 1, 1], :valid, [1, 1, 1])
     ** (ArgumentError) window dimensions would result in empty tensor which is not currently supported in Nx, please open an issue if you'd like this behavior to change
@@ -936,7 +936,7 @@ defmodule Nx.Shape do
       iex> Nx.Shape.squeeze({1, 2}, [0], [:batch, :x])
       {{2}, [:x]}
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.Shape.squeeze({2, 2, 1}, [1], [:batch, :x, :y])
       ** (ArgumentError) cannot squeeze dimensions whose sizes are not 1, got 2 for dimension 1
@@ -980,7 +980,7 @@ defmodule Nx.Shape do
       iex> Nx.Shape.pad({2, 3}, [{0, 0, 1}, {0, 0, 1}])
       {3, 5}
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.Shape.pad({2, 2, 3}, [{0, 1, 0}, {1, 2, 0}])
       ** (ArgumentError) invalid padding configuration, rank of padding configuration and shape must match
@@ -1035,7 +1035,7 @@ defmodule Nx.Shape do
       iex> Nx.Shape.normalize_axis({4, 2, 1, 4}, :z, [:batch, :x, :y, :z])
       3
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.Shape.normalize_axis({4, 2, 5}, -4, [:batch, :x, :y])
       ** (ArgumentError) given axis (-4) invalid for shape with rank 3
@@ -1088,7 +1088,7 @@ defmodule Nx.Shape do
       iex> Nx.Shape.normalize_axes({2, 3, 4}, [:batch, 1], [:batch, :x])
       [0, 1]
 
-  ### Error Cases
+  ## Error cases
 
       iex> Nx.Shape.normalize_axes({2, 3, 4}, [1, 1], [nil, nil, nil])
       ** (ArgumentError) axes [1, 1] must be unique integers between 0 and 2
@@ -1173,7 +1173,7 @@ defmodule Nx.Shape do
       iex> Nx.Shape.slice({2, 15, 30}, [1, 4, 25], [1, 1, 10], [1, 1, 1])
       {[1, 4, 20], {1, 1, 10}}
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.Shape.slice({2, 15, 30}, [1, 4, 10], [3, 1, 1], [1, 1, 1])
       ** (ArgumentError) length at axis 0 must be less than axis size of 2, got: 3
@@ -1293,7 +1293,7 @@ defmodule Nx.Shape do
       iex> Nx.Shape.take({2, 3, 4}, [:x, :y, :z], {10, 20}, [:a, :b], 1)
       {{2, 10, 20, 4}, [:x, :a, :b, :z]}
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.Shape.take({2, 3}, [nil, :data], {10}, [:reordered], 1)
       ** (ArgumentError) cannot merge name :data on axis 1 with name :reordered on axis 0
@@ -1495,7 +1495,7 @@ defmodule Nx.Shape do
       iex> Nx.Shape.take_along_axis({2, 3, 4}, {10, 3, 4}, 0)
       {10, 3, 4}
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.Shape.take_along_axis({2, 3, 4}, {3, 10, 4}, 1)
       ** (ArgumentError) non-indexing dimensions must match. Expected {2, *, 4}, got: {3, 10, 4}
@@ -1566,7 +1566,7 @@ defmodule Nx.Shape do
       iex> Nx.Shape.gather({2, 2, 2}, {3})
       {{}, []}
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.Shape.gather({2, 3}, {})
       ** (ArgumentError) expected indices rank to be at least 1, got: 0
@@ -2098,7 +2098,7 @@ defmodule Nx.Shape do
       iex> Nx.Shape.top_k({2, 3, 1}, [:a, :b, :c], 1)
       {{2, 3, 1}, [:a, :b, :c]}
 
-  ### Error cases
+  ## Error cases
       
       iex> Nx.Shape.top_k({}, [], 1)
       ** (ArgumentError) top_k input must have at least rank 1

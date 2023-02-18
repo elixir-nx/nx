@@ -69,7 +69,7 @@ defmodule Nx.LinAlg do
   default backend if those conditions are not met. Other
   backends may emit undefined behaviour.
 
-  ### Examples
+  ## Examples
       iex> Nx.LinAlg.cholesky(Nx.tensor([[20.0, 17.6], [17.6, 16.0]]))
       #Nx.Tensor<
         f32[2][2]
@@ -120,7 +120,7 @@ defmodule Nx.LinAlg do
         ]
       >
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.LinAlg.cholesky(Nx.tensor([[1.0, 2.0], [3.0, 4.0]]))
       ** (ArgumentError) matrix must be hermitian, a matrix is hermitian iff X = adjoint(X)
@@ -269,7 +269,7 @@ defmodule Nx.LinAlg do
         0.0
       >
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.LinAlg.norm(Nx.tensor([3, 4]), ord: :frobenius)
       ** (ArgumentError) expected a 2-D tensor for ord: :frobenius, got a 1-D tensor
@@ -508,7 +508,7 @@ defmodule Nx.LinAlg do
         ]
       >
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]))
       ** (ArgumentError) triangular_solve/3 expected a square matrix or a batch of square matrices, got tensor with shape: {2, 4}
@@ -612,7 +612,7 @@ defmodule Nx.LinAlg do
         [1.0, 1.0, -1.0]
       >
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.LinAlg.solve(Nx.tensor([[1, 0], [0, 1]]), Nx.tensor([4, 2, 4, 2]))
       ** (ArgumentError) `b` tensor has incompatible dimensions, expected {2, 2} or {2}, got: {4}
@@ -729,7 +729,7 @@ defmodule Nx.LinAlg do
         ]
       >
 
-  ### Error cases
+  ## Error cases
 
       iex> Nx.LinAlg.invert(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]))
       ** (ArgumentError) invert/1 expects a square matrix or a batch of square matrices, got tensor with shape: {2, 4}
@@ -1580,7 +1580,7 @@ defmodule Nx.LinAlg do
   @doc """
   Calculates the determinant of batched square matrices.
 
-  ### Examples
+  ## Examples
 
   For 2x2 and 3x3, the results are given by the closed formulas:
 
