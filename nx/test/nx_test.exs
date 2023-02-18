@@ -1689,7 +1689,7 @@ defmodule NxTest do
     end
 
     test "raises for an empty list of tensors" do
-      assert_raise(ArgumentError, "empty list passed to concatenate", fn ->
+      assert_raise(ArgumentError, "no tensors were given to concatenate", fn ->
         Nx.concatenate([])
       end)
     end

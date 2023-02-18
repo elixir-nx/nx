@@ -897,7 +897,7 @@ defmodule Nx do
   operations and the data is not yet available.
 
   For convenience, this function accepts tensors and any container
-  (such as maps and tuples as defined by the `Nx.Container` protocol)
+  (such as maps and tuples as defined by the `Nx.LazyContainer` protocol)
   and recursively converts all tensors to templates.
 
   ## Examples
@@ -10643,18 +10643,22 @@ defmodule Nx do
   @doc """
   Concatenates tensors along the given axis.
 
-  If no axis is provided, defaults to 0.
+  Tensors can be a tuple or any `Nx.Container` or `Nx.LazyContainer`.
+  This means you can easily concatenate all columns in a datafrane
+  and other data structures. For convenience, this function also allows
+  a list of tensors to be given, which may be common outside of `defn`.
 
-  All tensors must have the same rank and all of their
-  dimension sizes but the concatenated dimension must match.
-
-  If tensors are named, the names must be able to be merged.
+  If no axis is provided, defaults to 0. All tensors must have the same
+  rank and all of their axis except the concatenated one must match.
 
   If tensors with mixed types are given, the types will
   be merged to a higher type and all of the tensors will
   be cast to the higher type before concatenating.
+  If tensors are named, the names must match.
 
   ### Examples
+
+  Giving a single tensor is a no-op:
 
       iex> Nx.concatenate([Nx.tensor([1, 2, 3])])
       #Nx.Tensor<
@@ -10662,11 +10666,15 @@ defmodule Nx do
         [1, 2, 3]
       >
 
+  Multiple tensors are concatented:
+
       iex> Nx.concatenate([Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])])
       #Nx.Tensor<
         s64[6]
         [1, 2, 3, 4, 5, 6]
       >
+
+  Types are merged and names must match:
 
       iex> t1 = Nx.iota({2, 2, 2}, names: [:x, :y, :z], type: :f32)
       iex> t2 = Nx.iota({1, 2, 2}, names: [:x, :y, :z], type: :u8)
@@ -10694,6 +10702,8 @@ defmodule Nx do
         ]
       >
 
+  And you can pick a different axis:
+
       iex> t1 = Nx.iota({1, 3, 2}, names: [:x, :y, :z])
       iex> t2 = Nx.iota({1, 1, 2}, names: [:x, :y, :z])
       iex> t3 = Nx.iota({1, 2, 2}, names: [:x, :y, :z])
@@ -10712,34 +10722,13 @@ defmodule Nx do
         ]
       >
 
-      iex> t1 = Nx.iota({2, 1, 4}, names: [:x, :y, :z])
-      iex> t2 = Nx.iota({2, 1, 1}, names: [:x, :y, :z])
-      iex> t3 = Nx.iota({2, 1, 3}, names: [:x, :y, :z])
-      iex> Nx.concatenate([t1, t2, t3], axis: :z)
-      #Nx.Tensor<
-        s64[x: 2][y: 1][z: 8]
-        [
-          [
-            [0, 1, 2, 3, 0, 0, 1, 2]
-          ],
-          [
-            [4, 5, 6, 7, 1, 3, 4, 5]
-          ]
-        ]
-      >
+  You can also pass any container (or lazy container) as first argument
+  and they are recursively traversed:
 
-      iex> t1 = Nx.iota({2, 1, 4}, names: [:x, :y, :z])
-      iex> Nx.concatenate([t1], axis: :z)
+      iex> Nx.concatenate({Nx.tensor([1, 2]), {Nx.tensor([3, 4]), Nx.tensor([5, 6])}})
       #Nx.Tensor<
-        s64[x: 2][y: 1][z: 4]
-        [
-          [
-            [0, 1, 2, 3]
-          ],
-          [
-            [4, 5, 6, 7]
-          ]
-        ]
+        s64[6]
+        [1, 2, 3, 4, 5, 6]
       >
 
   ### Error cases
@@ -10764,13 +10753,13 @@ defmodule Nx do
       ** (ArgumentError) expected all shapes to match {*, 2, 3}, got unmatching shape: {1, 1}
   """
   @doc type: :ndim
-  def concatenate(tensors, opts \\ []) when is_list(tensors) do
+  def concatenate(tensors, opts \\ []) do
     opts = keyword!(opts, axis: 0)
     axis = opts[:axis]
 
-    case tensors do
+    case flatten_list_or_container(tensors) do
       [] ->
-        raise ArgumentError, "empty list passed to concatenate"
+        raise ArgumentError, "no tensors were given to concatenate"
 
       [t] ->
         t
@@ -10780,35 +10769,69 @@ defmodule Nx do
           tensors
           |> Enum.map(fn t ->
             %T{type: type, shape: shape, names: names} = t = to_tensor(t)
-
             {t, type, shape, names}
           end)
           |> unzip4()
 
         axis = Nx.Shape.normalize_axis(s1, axis, n1)
         {output_shape, output_names} = Nx.Shape.concatenate(shapes, names, axis)
-
-        output_type =
-          rest
-          |> Enum.reduce(type1, fn t1, t2 -> Nx.Type.merge(t1, t2) end)
+        output_type = Enum.reduce(rest, type1, fn t1, t2 -> Nx.Type.merge(t1, t2) end)
 
         out = %{t1 | type: output_type, shape: output_shape, names: output_names}
         list_impl!(tensors).concatenate(out, tensors, axis)
     end
   end
 
+  defp flatten_list_or_container(list) when is_list(list) do
+    list
+    |> Enum.reduce([], &flatten_container/2)
+    |> Enum.reverse()
+  end
+
+  defp flatten_list_or_container(container) do
+    container
+    |> flatten_container([])
+    |> Enum.reverse()
+  end
+
+  defp flatten_container(container, acc) do
+    if match?(%{}, container) and not match?(%_{}, container) do
+      IO.warn(
+        "a map has been given to stack/concatenate. Maps do not have a predefined order " <>
+          "and therefore there is no guarantee over of the stack/concatenated tensors"
+      )
+    end
+
+    container
+    |> Nx.LazyContainer.traverse(acc, fn template, fun, acc -> {template, [fun.() | acc]} end)
+    |> elem(1)
+  end
+
   defp unzip4(enumerable) do
     {list1, list2, list3, list4} =
-      Enum.reduce(enumerable, {[], [], [], []}, fn {el1, el2, el3, el4},
-                                                   {list1, list2, list3, list4} ->
-        {[el1 | list1], [el2 | list2], [el3 | list3], [el4 | list4]}
+      Enum.reduce(enumerable, {[], [], [], []}, fn
+        {el1, el2, el3, el4}, {list1, list2, list3, list4} ->
+          {[el1 | list1], [el2 | list2], [el3 | list3], [el4 | list4]}
       end)
 
     {Enum.reverse(list1), Enum.reverse(list2), Enum.reverse(list3), Enum.reverse(list4)}
   end
 
   @doc """
-  Joins a list of tensors with the same shape along a new axis.
+  Stacks a list of tensors with the same shape along a new axis.
+
+  Tensors can be a tuple or any `Nx.Container` or `Nx.LazyContainer`.
+  This means you can easily concatenate all columns in a datafrane
+  and other data structures. For convenience, this function also allows
+  a list of tensors to be given, which may be common outside of `defn`.
+
+  If no axis is provided, defaults to 0. All tensors must have the same
+  shape.
+
+  If tensors with mixed types are given, the types will
+  be merged to a higher type and all of the tensors will
+  be cast to the higher type before concatenating.
+  If tensors are named, the names must match.
 
   ### Options
 
@@ -10816,6 +10839,8 @@ defmodule Nx do
     * `:name` - optional name for the added dimension. Defaults to an unnamed axis.
 
   ### Examples
+
+  Stacking always creates a new dimension:
 
       iex> Nx.stack([1, 2, 3])
       #Nx.Tensor<
@@ -10831,6 +10856,8 @@ defmodule Nx do
           [4, 5, 6]
         ]
       >
+
+  The axis option can be given:
 
       iex> t1 = Nx.iota({2, 1, 4})
       iex> t2 = Nx.iota({2, 1, 4})
@@ -10858,51 +10885,36 @@ defmodule Nx do
         ]
       >
 
-      iex> t1 = Nx.iota({2, 1, 4})
-      iex> t2 = Nx.iota({2, 1, 4})
-      iex> t3 = Nx.iota({2, 1, 4})
-      iex> Nx.stack([t1, t2, t3], axis: 1)
-      #Nx.Tensor<
-        s64[2][3][1][4]
-        [
-          [
-            [
-              [0, 1, 2, 3]
-            ],
-            [
-              [0, 1, 2, 3]
-            ],
-            [
-              [0, 1, 2, 3]
-            ]
-          ],
-          [
-            [
-              [4, 5, 6, 7]
-            ],
-            [
-              [4, 5, 6, 7]
-            ],
-            [
-              [4, 5, 6, 7]
-            ]
-          ]
-        ]
-      >
+  And a name can be given for the new dimension:
 
       iex> Nx.stack([Nx.tensor(1), Nx.tensor(2)], name: :x)
       #Nx.Tensor<
         s64[x: 2]
         [1, 2]
       >
+
+  You can also pass any container (or lazy container) as first argument
+  and they are recursively traversed:
+
+      iex> Nx.stack({Nx.tensor([1, 2]), {Nx.tensor([3, 4]), Nx.tensor([5, 6])}})
+      #Nx.Tensor<
+        s64[3][2]
+        [
+          [1, 2],
+          [3, 4],
+          [5, 6]
+        ]
+      >
+
   """
   @doc type: :ndim, from_backend: false
-  def stack(tensors, opts \\ []) when is_list(tensors) do
+  def stack(tensors, opts \\ []) do
     opts = keyword!(opts, axis: 0, name: nil)
     axis = opts[:axis]
     name = opts[:name]
 
     tensors
+    |> flatten_list_or_container()
     |> Enum.map(&Nx.new_axis(&1, axis, name))
     |> Nx.concatenate(axis: axis)
   end

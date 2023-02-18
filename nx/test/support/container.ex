@@ -28,8 +28,15 @@ defmodule LazyOnly do
   defimpl Nx.LazyContainer do
     def traverse(%LazyOnly{a: a, b: b, c: c}, acc, fun) do
       {a, acc} = fun.(Nx.to_template(a), fn -> Nx.tensor(a) end, acc)
-      {b, acc} = fun.(Nx.to_template(b), fn -> raise "don't call b" end, acc)
-      {c, acc} = fun.(Nx.to_template(c), fn -> Nx.tensor(c) end, acc)
+
+      {b, acc} =
+        if b do
+          fun.(Nx.to_template(b), fn -> raise "don't call b" end, acc)
+        else
+          {b, acc}
+        end
+
+      {c, acc} = Nx.LazyContainer.traverse(c, acc, fun)
       {%LazyWrapped{a: a, b: b, c: c}, acc}
     end
   end

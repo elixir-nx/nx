@@ -17,6 +17,36 @@ defmodule Nx.LazyLazyOnlyTest do
              }
   end
 
+  test "concatenate" do
+    assert Nx.concatenate(%LazyOnly{a: Nx.tensor([1]), c: {Nx.tensor([2]), Nx.tensor([3])}}) ==
+             Nx.tensor([1, 2, 3])
+
+    assert Nx.concatenate([
+             %LazyOnly{a: Nx.tensor([1]), c: {Nx.tensor([2]), Nx.tensor([3])}},
+             Nx.tensor([4])
+           ]) ==
+             Nx.tensor([1, 2, 3, 4])
+
+    assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
+             Nx.concatenate(%{a: Nx.tensor([1]), b: Nx.tensor([2])})
+           end) =~ "a map has been given to stack/concatenate"
+  end
+
+    test "stack" do
+    assert Nx.stack(%LazyOnly{a: Nx.tensor(1), c: {Nx.tensor(2), Nx.tensor(3)}}) ==
+             Nx.tensor([1, 2, 3])
+
+    assert Nx.stack([
+             %LazyOnly{a: Nx.tensor(1), c: {Nx.tensor(2), Nx.tensor(3)}},
+             Nx.tensor(4)
+           ]) ==
+             Nx.tensor([1, 2, 3, 4])
+
+    assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
+             Nx.stack(%{a: Nx.tensor(1), b: Nx.tensor(2)})
+           end) =~ "a map has been given to stack/concatenate"
+  end
+
   test "compatible?" do
     assert Nx.compatible?(%LazyOnly{a: 1, b: 2, c: 3}, %LazyOnly{a: 4, b: 5, c: 6})
     refute Nx.compatible?(%LazyOnly{a: 1, b: 2, c: 3}, %LazyOnly{a: 4, b: 5, c: 6.0})
