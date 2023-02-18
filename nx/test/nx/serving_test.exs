@@ -426,14 +426,15 @@ defmodule Nx.ServingTest do
 
       assert_receive {:execute, 0, executor1}
       send(executor1, :continue)
-      Task.await(task1)
 
       assert_receive {:execute, 0, executor2}
       send(executor2, :continue)
-      Task.await(task2)
 
       assert_receive {:execute, 0, executor3}
       send(executor3, :continue)
+
+      Task.await(task1)
+      Task.await(task2)
       Task.await(task3)
     end
 
