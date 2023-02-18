@@ -1,8 +1,12 @@
 # Changelog
 
+## v0.5.1 (2023-02-18)
+
+  * Support `top_k`
+
 ## v0.5.0 (2023-02-10)
 
- * Use relative symlinks on compilation whenever possible
+  * Use relative symlinks on compilation whenever possible
 
 ## v0.4.2 (2023-01-13)
 

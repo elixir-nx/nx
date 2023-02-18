@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.5.1 (2023-02-18)
+
+Require Elixir v1.14.
+
+### Enhancements
+
+  * [Nx] Support any container or lazy container in `stack`/`concatenate`
+  * [Nx] Add `Nx.top_k/2`
+  * [Nx] Add `Nx.to_list/1`
+  * [Nx] Improve shape validation in `Nx.concatenate/2`
+  * [Nx.Constants] Add `pi`, `e`, and `euler_gamma`
+  * [Nx.Random] Raise if a non-unary rank tensor is given as probabilities to `Nx.Random.choice/4`
+  * [Nx.Random] Make `samples` optional in `Nx.Random.choice/3`
+
 ## v0.5.0 (2023-02-10)
 
 ### Enhancements
