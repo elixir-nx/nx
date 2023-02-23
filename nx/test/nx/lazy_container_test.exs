@@ -32,7 +32,7 @@ defmodule Nx.LazyLazyOnlyTest do
            end) =~ "a map has been given to stack/concatenate"
   end
 
-    test "stack" do
+  test "stack" do
     assert Nx.stack(%LazyOnly{a: Nx.tensor(1), c: {Nx.tensor(2), Nx.tensor(3)}}) ==
              Nx.tensor([1, 2, 3])
 
