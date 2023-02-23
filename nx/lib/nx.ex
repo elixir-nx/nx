@@ -6675,16 +6675,16 @@ defmodule Nx do
   @doc """
   Returns the weighted mean for the tensor and the weights.
 
-  If the `:axis` option is given, it aggregates over
-  that dimension, effectively removing it. `axis: 0`
+  If the `:axes` option is given, it aggregates over
+  those dimensions, effectively removing them. `axes: [0]`
   implies aggregating over the highest order dimension
-  and so forth. If the axis is negative, then the axis will
-  be counted from the back. For example, `axis: -1` will
+  and so forth. If the axes are negative, then the axes will
+  be counted from the back. For example, `axes: [-1]` will
   always aggregate over the last dimension.
 
-  You may optionally set `:keep_axis` to true, which will
+  You may optionally set `:keep_axes` to true, which will
   retain the rank of the input tensor by setting the averaged
-  axis to size 1.
+  axes to size 1.
 
   ## Examples
 
