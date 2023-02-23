@@ -6676,7 +6676,7 @@ defmodule Nx do
   Returns the weighted mean for the tensor and the weights.
 
   If the `:axes` option is given, it aggregates over
-  these dimensions, effectively removing them. `axes: [0]`
+  those dimensions, effectively removing them. `axes: [0]`
   implies aggregating over the highest order dimension
   and so forth. If the axes are negative, then the axes will
   be counted from the back. For example, `axes: [-1]` will
