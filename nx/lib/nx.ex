@@ -3602,6 +3602,17 @@ defmodule Nx do
     end)
   end
 
+  defp element_wise_bin_op(left, right, op, fun) do
+    type = binary_type(left, right) |> fun.()
+
+    %T{shape: left_shape, names: left_names} = left = to_tensor(left)
+    %T{shape: right_shape, names: right_names} = right = to_tensor(right)
+
+    {shape, names} = Nx.Shape.binary_broadcast(left_shape, left_names, right_shape, right_names)
+
+    apply(impl!(left, right), op, [%{left | type: type, shape: shape, names: names}, left, right])
+  end
+
   defp unvectorize(left, right) do
     left_names = Keyword.keys(left.vectorized_axes) |> MapSet.new()
     right_names = Keyword.keys(right.vectorized_axes) |> MapSet.new()
@@ -3612,29 +3623,40 @@ defmodule Nx do
 
     # left: 1s for in right but not in left ++ in left but not in right ++ in both ++ shape left
     # right: 1s for in left but not in right ++ in both ++ in right but not in left ++ shape right
+    # target_left: right_only ++ left_only ++ in_both ++ shape_left
+    # target_right: right_only ++ left_only ++ in_both ++ shape_right
 
-    both = Keyword.values(Keyword.take(left.vectorized_axes, Enum.to_list(in_both)))
-
-    left_shape =
-      Keyword.values(Keyword.take(left.vectorized_axes, Enum.to_list(left_only))) ++ both
-
-    left_offset = length(left_shape)
-    left_broadcast_axes = Enum.with_index(right_only, fn _, idx -> idx + left_offset end)
+    both = take_keyword_values(left.vectorized_axes, in_both)
 
     left_shape =
-      left_shape ++ List.duplicate(1, MapSet.size(right_only)) ++ Tuple.to_list(left.shape)
+      take_keyword_values(left.vectorized_axes, left_only) ++
+        both ++ List.duplicate(1, MapSet.size(right_only)) ++ Tuple.to_list(left.shape)
 
     left_shape = List.to_tuple(left_shape)
+
+    left_target_shape =
+      take_keyword_values(left.vectorized_axes, left_only) ++
+        both ++
+        take_keyword_values(right.vectorized_axes, right_only) ++
+        Tuple.to_list(left.shape)
+
+    left_target_shape = List.to_tuple(left_target_shape)
 
     right_shape =
       List.duplicate(1, MapSet.size(left_only)) ++
         both ++
-        Keyword.values(Keyword.take(right.vectorized_axes, Enum.to_list(right_only))) ++
+        take_keyword_values(right.vectorized_axes, right_only) ++
         Tuple.to_list(right.shape)
 
-    right_broadcast_axes = Enum.with_index(left_only, fn _, idx -> idx end)
-
     right_shape = List.to_tuple(right_shape)
+
+    right_target_shape =
+      take_keyword_values(left.vectorized_axes, left_only) ++
+        both ++
+        take_keyword_values(right.vectorized_axes, right_only) ++
+        Tuple.to_list(right.shape)
+
+    right_target_shape = List.to_tuple(right_target_shape)
 
     left = %{
       left
@@ -3650,32 +3672,17 @@ defmodule Nx do
         shape: right_shape
     }
 
-    left_out =
-      if left_broadcast_axes != [] do
-        broadcast(left, right.shape)
-      else
-        left
-      end
+    left_out = broadcast(left, left_target_shape)
 
-    right_out =
-      if right_broadcast_axes != [] do
-        broadcast(right, left.shape)
-      else
-        right
-      end
+    right_out = broadcast(right, right_target_shape)
 
     {left_out, right_out}
   end
 
-  defp element_wise_bin_op(left, right, op, fun) do
-    type = binary_type(left, right) |> fun.()
-
-    %T{shape: left_shape, names: left_names} = left = to_tensor(left)
-    %T{shape: right_shape, names: right_names} = right = to_tensor(right)
-
-    {shape, names} = Nx.Shape.binary_broadcast(left_shape, left_names, right_shape, right_names)
-
-    apply(impl!(left, right), op, [%{left | type: type, shape: shape, names: names}, left, right])
+  defp take_keyword_values(keyword, enum) when not is_list(enum) do
+    keyword
+    |> Keyword.take(Enum.to_list(enum))
+    |> Keyword.values()
   end
 
   defp non_complex_element_wise_pred_op(left, right, op) do
