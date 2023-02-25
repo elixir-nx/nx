@@ -119,6 +119,11 @@ defmodule Nx.Serving do
 
       Supervisor.start_child(children, strategy: :one_for_one)
 
+  > Note: in your actual application, you want to make sure
+  > `Nx.Serving` comes early in your supervision tree, for example
+  > before your web application endpoint or your data processing
+  > pipelines, as those processes may end-up hitting Nx.Serving.
+
   Now you can send batched runs to said process:
 
       iex> batch = Nx.Batch.stack([Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])])
@@ -621,7 +626,13 @@ defmodule Nx.Serving do
       preprocessing: preprocessing,
       postprocessing: postprocessing,
       limit: limit
-    } = :persistent_term.get(persistent_key(name))
+    } =
+      :persistent_term.get(persistent_key(name), nil) ||
+        raise(
+          ArgumentError,
+          "could not find Nx.Serving with name #{inspect(name)}. " <>
+            "Make sure your Nx.Serving is running and/or started as part of your supervision tree"
+        )
 
     {batch, info} = handle_preprocessing(preprocessing, input)
 
