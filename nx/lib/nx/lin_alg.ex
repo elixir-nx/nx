@@ -916,6 +916,10 @@ defmodule Nx.LinAlg do
 
       iex> Nx.LinAlg.qr(Nx.tensor([1, 2, 3, 4, 5]))
       ** (ArgumentError) tensor must have at least rank 2, got rank 1 with shape {5}
+
+      iex> t = Nx.tensor([[-3, 2, 1], [0, 1, 1], [0, 0, -1]])
+      iex> Nx.LinAlg.qr(t, mode: :error_test)
+      ** (ArgumentError) invalid :mode received. Expected one of [:reduced, :complete], received: :error_test
   """
   def qr(tensor, opts \\ []) do
     opts = keyword!(opts, mode: :reduced, eps: 1.0e-10)
@@ -926,7 +930,7 @@ defmodule Nx.LinAlg do
 
     unless mode in valid_modes do
       raise ArgumentError,
-            "invalid :mode received. Expected one of #{valid_modes}, received: #{mode}"
+            "invalid :mode received. Expected one of #{inspect(valid_modes)}, received: #{inspect(mode)}"
     end
 
     output_type = Nx.Type.to_floating(type)
