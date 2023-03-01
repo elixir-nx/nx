@@ -1833,7 +1833,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) tensor must have rank 2, got rank 1 with shape {3}
 
       iex> Nx.LinAlg.matrix_rank(Nx.tensor([[1, Complex.new(0, 2)], [3, Complex.new(0, -4)]]))
-      ** (ArgumentError) Nx.LinAlg.matrix_rank is not yet implemented for complex inputs
+      ** (ArgumentError) Nx.LinAlg.matrix_rank/2 is not yet implemented for complex inputs
   """
   @doc from_backend: false
   defn matrix_rank(a, opts \\ []) do
@@ -1844,7 +1844,7 @@ defmodule Nx.LinAlg do
 
     case type do
       {:c, _} ->
-        raise ArgumentError, "Nx.LinAlg.matrix_rank is not yet implemented for complex inputs"
+        raise ArgumentError, "Nx.LinAlg.matrix_rank/2 is not yet implemented for complex inputs"
 
       _ ->
         nil
