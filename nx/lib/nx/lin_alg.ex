@@ -1831,13 +1831,24 @@ defmodule Nx.LinAlg do
 
       iex> Nx.LinAlg.matrix_rank(Nx.tensor([1, 2, 3]))
       ** (ArgumentError) tensor must have rank 2, got rank 1 with shape {3}
+
+      iex> Nx.LinAlg.matrix_rank(Nx.tensor([[1, Complex.new(0, 2)], [3, Complex.new(0, -4)]]))
+      ** (ArgumentError) Nx.LinAlg.matrix_rank/2 is not yet implemented for complex inputs
   """
   @doc from_backend: false
   defn matrix_rank(a, opts \\ []) do
     # TODO: support batching when SVD supports it too
     opts = keyword!(opts, eps: 1.0e-7)
-    shape = Nx.shape(a)
+    %T{type: type, shape: shape} = Nx.to_tensor(a)
     size = Nx.rank(shape)
+
+    case type do
+      {:c, _} ->
+        raise ArgumentError, "Nx.LinAlg.matrix_rank/2 is not yet implemented for complex inputs"
+
+      _ ->
+        nil
+    end
 
     if size != 2 do
       raise(
