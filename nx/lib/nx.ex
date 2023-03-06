@@ -3585,6 +3585,18 @@ defmodule Nx do
     }
   end
 
+  defp unvectorize(%T{shape: shape, names: names, vectorized_axes: vectorized_axes} = tensor) do
+    {vectorized_names, vectorized_sizes} = Enum.unzip(vectorized_axes)
+
+    output_shape_l = vectorized_sizes ++ Tuple.to_list(shape)
+    output_shape = List.to_tuple(output_shape_l)
+
+    output_names = List.duplicate(nil, length(vectorized_sizes)) ++ names
+
+    output = %{tensor | shape: output_shape, names: output_names, vectorized_axes: []}
+    {output, vectorized_names}
+  end
+
   defp unvectorize(
          %T{shape: left_shape, names: left_shape_names} = left,
          %T{shape: right_shape, names: right_shape_names} = right
@@ -3678,6 +3690,26 @@ defmodule Nx do
     |> Keyword.values()
   end
 
+  defp apply_vectorized([tensor], fun) do
+    if tensor.vectorized_axes != [] do
+      {tensor, vectorized_names} = unvectorize(tensor)
+      result = fun.(tensor)
+      Enum.reduce(vectorized_names, result, &vectorize(&2, &1))
+    else
+      fun.(tensor)
+    end
+  end
+
+  defp apply_vectorized([left, right], fun) do
+    if left.vectorized_axes != [] or right.vectorized_axes != [] do
+      {left, right, vectorized_names} = unvectorize(left, right)
+      result = fun.(left, right)
+      Enum.reduce(vectorized_names, result, &vectorize(&2, &1))
+    else
+      fun.(left, right)
+    end
+  end
+
   ## Element-wise binary ops
 
   defp non_complex_element_wise_bin_op(left, right, op, fun) do
@@ -3692,15 +3724,7 @@ defmodule Nx do
     left = to_tensor(left)
     right = to_tensor(right)
 
-    if left.vectorized_axes != [] or right.vectorized_axes != [] do
-      {left, right, vectorized_names} = unvectorize(left, right)
-
-      result = unvectorized_element_wise_bin_op(type, left, right, op)
-
-      Enum.reduce(vectorized_names, result, &vectorize(&2, &1))
-    else
-      unvectorized_element_wise_bin_op(type, left, right, op)
-    end
+    apply_vectorized([left, right], &unvectorized_element_wise_bin_op(type, &1, &2, op))
   end
 
   defp unvectorized_element_wise_bin_op(type, %T{} = left, %T{} = right, op) do
@@ -3721,16 +3745,7 @@ defmodule Nx do
   defp element_wise_pred_op(left, right, op) do
     left = to_tensor(left)
     right = to_tensor(right)
-
-    if left.vectorized_axes != [] or right.vectorized_axes != [] do
-      {left, right, vectorized_names} = unvectorize(left, right)
-
-      result = unvectorized_element_wise_pred_op(left, right, op)
-
-      Enum.reduce(vectorized_names, result, &vectorize(&2, &1))
-    else
-      unvectorized_element_wise_pred_op(left, right, op)
-    end
+    apply_vectorized([left, right], &unvectorized_element_wise_pred_op(&1, &2, op))
   end
 
   defp unvectorized_element_wise_pred_op(
@@ -5846,7 +5861,9 @@ defmodule Nx do
 
       unquote(complex_check_block)
 
-      impl!(tensor).unquote(name)(%{tensor | type: type}, tensor)
+      apply_vectorized([tensor], fn tensor ->
+        impl!(tensor).unquote(name)(%{tensor | type: type}, tensor)
+      end)
     end
   end
 

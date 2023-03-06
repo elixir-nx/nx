@@ -9,6 +9,14 @@ defmodule Nx.VectorizeTest do
 
   @vectorized Nx.vectorize(@base, :rows)
 
+  @base_math Nx.tensor([
+               [[0.1, 0.2, 0.3]],
+               [[0.4, 0.5, 0.6]],
+               [[0.7, 0.8, 0.9]]
+             ])
+
+  @vectorized_math Nx.vectorize(@base_math, :rows)
+
   describe "vectorize" do
     test "adds new vectorization axes to the end of the list" do
       v = Nx.vectorize(@vectorized, :cols)
@@ -19,6 +27,29 @@ defmodule Nx.VectorizeTest do
     # TO-DO: re-write value inspect to support vectorization
     @tag :skip
     test "inspect works as expected"
+  end
+
+  describe "unary math ops" do
+    for {name, _} <- Nx.Shared.unary_math_funs(), name != :acosh do
+      test "Nx.#{name}/1 works on vectorized tensor" do
+        result =
+          @base_math
+          |> Nx.unquote(name)()
+          |> Nx.vectorize(:rows)
+
+        assert result == Nx.unquote(name)(@vectorized_math)
+      end
+    end
+
+    test "Nx.acosh/1 works on vectorized tensor" do
+      result =
+        @base_math
+        |> Nx.add(1)
+        |> Nx.acosh()
+        |> Nx.vectorize(:rows)
+
+      assert result == Nx.acosh(Nx.add(@vectorized_math, 1))
+    end
   end
 
   describe "binary operations" do
