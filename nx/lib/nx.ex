@@ -3571,11 +3571,110 @@ defmodule Nx do
     raise ArgumentError, "cannot vectorize tensor of rank 0"
   end
 
-  def vectorize(%Nx.Tensor{shape: shape, vectorized_axes: vec_axes} = tensor, name) do
+  def vectorize(%Nx.Tensor{names: names, shape: shape, vectorized_axes: vec_axes} = tensor, name) do
     size = elem(shape, 0)
     new_shape = Tuple.delete_at(shape, 0)
+    names = Enum.drop(names, 1)
 
-    %Nx.Tensor{tensor | shape: new_shape, vectorized_axes: vec_axes ++ [{name, size}]}
+    %Nx.Tensor{
+      tensor
+      | shape: new_shape,
+        names: names,
+        vectorized_axes: vec_axes ++ [{name, size}]
+    }
+  end
+
+  defp unvectorize(
+         %T{shape: left_shape, names: left_shape_names} = left,
+         %T{shape: right_shape, names: right_shape_names} = right
+       ) do
+    left_names = Keyword.keys(left.vectorized_axes) |> MapSet.new()
+    right_names = Keyword.keys(right.vectorized_axes) |> MapSet.new()
+
+    left_only = MapSet.difference(left_names, right_names)
+    right_only = MapSet.difference(right_names, left_names)
+    in_both = MapSet.intersection(left_names, right_names)
+
+    # check that common names share the same value
+    for name <- in_both do
+      l = left.vectorized_axes[name]
+      r = right.vectorized_axes[name]
+
+      if l != r do
+        raise ArgumentError,
+              "expected vectorized axis #{inspect(name)} to have the same size in both tensors, got #{inspect(l)} and #{inspect(r)}"
+      end
+    end
+
+    # left: 1s for in right but not in left ++ in left but not in right ++ in both ++ shape left
+    # right: 1s for in left but not in right ++ in both ++ in right but not in left ++ shape right
+    # target_left: right_only ++ left_only ++ in_both ++ shape_left
+    # target_right: right_only ++ left_only ++ in_both ++ shape_right
+
+    both = take_keyword_values(left.vectorized_axes, in_both)
+
+    # Because we are explicitly broadcasting, we need to also broadcast the base shapes (i.e. each "vector entry"'s shapes)
+
+    {common_shape, base_names} =
+      Nx.Shape.binary_broadcast(left_shape, left_shape_names, right_shape, right_shape_names)
+
+    target_rank = tuple_size(common_shape)
+
+    left_base_shape_l =
+      List.duplicate(1, target_rank - tuple_size(left_shape)) ++ Tuple.to_list(left_shape)
+
+    right_base_shape_l =
+      List.duplicate(1, target_rank - tuple_size(right_shape)) ++ Tuple.to_list(right_shape)
+
+    left_shape =
+      take_keyword_values(left.vectorized_axes, left_only) ++
+        both ++ List.duplicate(1, MapSet.size(right_only)) ++ left_base_shape_l
+
+    left_shape = List.to_tuple(left_shape)
+
+    left_target_shape =
+      take_keyword_values(left.vectorized_axes, left_only) ++
+        both ++
+        take_keyword_values(right.vectorized_axes, right_only) ++
+        left_base_shape_l
+
+    left_target_shape = List.to_tuple(left_target_shape)
+
+    right_shape =
+      List.duplicate(1, MapSet.size(left_only)) ++
+        both ++
+        take_keyword_values(right.vectorized_axes, right_only) ++
+        right_base_shape_l
+
+    right_shape = List.to_tuple(right_shape)
+
+    right_target_shape =
+      take_keyword_values(left.vectorized_axes, left_only) ++
+        both ++
+        take_keyword_values(right.vectorized_axes, right_only) ++
+        right_base_shape_l
+
+    right_target_shape = List.to_tuple(right_target_shape)
+
+    names = List.duplicate(nil, MapSet.size(MapSet.union(left_names, right_names))) ++ base_names
+
+    left = reshape(%{left | vectorized_axes: [], names: names, shape: left_shape}, left_shape)
+    right = reshape(%{right | vectorized_axes: [], names: names, shape: right_shape}, right_shape)
+
+    left_out = broadcast(left, left_target_shape)
+
+    right_out = broadcast(right, right_target_shape)
+
+    out_vectorized_names =
+      Enum.to_list(left_only) ++ Enum.to_list(in_both) ++ Enum.to_list(right_only)
+
+    {left_out, right_out, out_vectorized_names}
+  end
+
+  defp take_keyword_values(keyword, enum) when not is_list(enum) do
+    keyword
+    |> Keyword.take(Enum.to_list(enum))
+    |> Keyword.values()
   end
 
   ## Element-wise binary ops
@@ -3586,23 +3685,22 @@ defmodule Nx do
     element_wise_bin_op(left, right, op, fun)
   end
 
-  defp element_wise_bin_op(
-         %T{vectorized_axes: left_vec} = left,
-         %T{vectorized_axes: right_vec} = right,
-         op,
-         fun
-       )
-       when left_vec != [] or right_vec != [] do
-    {left, right} = unvectorize(left, right)
+  defp element_wise_bin_op(left, right, op, fun) do
+    left = to_tensor(left)
+    right = to_tensor(right)
 
-    result = element_wise_bin_op(left, right, op, fun)
+    if left.vectorized_axes != [] or right.vectorized_axes != [] do
+      {left, right, vectorized_names} = unvectorize(left, right)
 
-    Enum.reduce(left_vec ++ right_vec, result, fn {name, _}, result ->
-      vectorize(result, name)
-    end)
+      result = unvectorized_element_wise_bin_op(left, right, op, fun)
+
+      Enum.reduce(vectorized_names, result, &vectorize(&2, &1))
+    else
+      unvectorized_element_wise_bin_op(left, right, op, fun)
+    end
   end
 
-  defp element_wise_bin_op(left, right, op, fun) do
+  defp unvectorized_element_wise_bin_op(%T{} = left, %T{} = right, op, fun) do
     type = binary_type(left, right) |> fun.()
 
     %T{shape: left_shape, names: left_names} = left = to_tensor(left)
@@ -3613,82 +3711,23 @@ defmodule Nx do
     apply(impl!(left, right), op, [%{left | type: type, shape: shape, names: names}, left, right])
   end
 
-  defp unvectorize(left, right) do
-    left_names = Keyword.keys(left.vectorized_axes) |> MapSet.new()
-    right_names = Keyword.keys(right.vectorized_axes) |> MapSet.new()
-
-    left_only = MapSet.difference(left_names, right_names)
-    right_only = MapSet.difference(right_names, left_names)
-    in_both = MapSet.intersection(left_names, right_names)
-
-    # left: 1s for in right but not in left ++ in left but not in right ++ in both ++ shape left
-    # right: 1s for in left but not in right ++ in both ++ in right but not in left ++ shape right
-    # target_left: right_only ++ left_only ++ in_both ++ shape_left
-    # target_right: right_only ++ left_only ++ in_both ++ shape_right
-
-    both = take_keyword_values(left.vectorized_axes, in_both)
-
-    left_shape =
-      take_keyword_values(left.vectorized_axes, left_only) ++
-        both ++ List.duplicate(1, MapSet.size(right_only)) ++ Tuple.to_list(left.shape)
-
-    left_shape = List.to_tuple(left_shape)
-
-    left_target_shape =
-      take_keyword_values(left.vectorized_axes, left_only) ++
-        both ++
-        take_keyword_values(right.vectorized_axes, right_only) ++
-        Tuple.to_list(left.shape)
-
-    left_target_shape = List.to_tuple(left_target_shape)
-
-    right_shape =
-      List.duplicate(1, MapSet.size(left_only)) ++
-        both ++
-        take_keyword_values(right.vectorized_axes, right_only) ++
-        Tuple.to_list(right.shape)
-
-    right_shape = List.to_tuple(right_shape)
-
-    right_target_shape =
-      take_keyword_values(left.vectorized_axes, left_only) ++
-        both ++
-        take_keyword_values(right.vectorized_axes, right_only) ++
-        Tuple.to_list(right.shape)
-
-    right_target_shape = List.to_tuple(right_target_shape)
-
-    left = %{
-      left
-      | vectorized_axes: [],
-        names: List.duplicate(nil, tuple_size(left_shape)),
-        shape: left_shape
-    }
-
-    right = %{
-      right
-      | vectorized_axes: [],
-        names: List.duplicate(nil, tuple_size(right_shape)),
-        shape: right_shape
-    }
-
-    left_out = broadcast(left, left_target_shape)
-
-    right_out = broadcast(right, right_target_shape)
-
-    {left_out, right_out}
-  end
-
-  defp take_keyword_values(keyword, enum) when not is_list(enum) do
-    keyword
-    |> Keyword.take(Enum.to_list(enum))
-    |> Keyword.values()
-  end
-
   defp non_complex_element_wise_pred_op(left, right, op) do
     Nx.Shared.raise_complex_not_supported(type(left), op, 2)
     Nx.Shared.raise_complex_not_supported(type(right), op, 2)
     element_wise_pred_op(left, right, op)
+  end
+
+  defp element_wise_pred_op(
+         %T{vectorized_axes: left_vec} = left,
+         %T{vectorized_axes: right_vec} = right,
+         op
+       )
+       when left_vec != [] or right_vec != [] do
+    {left, right, vectorized_names} = unvectorize(left, right)
+
+    result = element_wise_pred_op(left, right, op)
+
+    Enum.reduce(vectorized_names, result, &vectorize(&2, &1))
   end
 
   defp element_wise_pred_op(left, right, op) do

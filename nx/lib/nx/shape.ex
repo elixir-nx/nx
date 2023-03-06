@@ -2099,7 +2099,7 @@ defmodule Nx.Shape do
       {{2, 3, 1}, [:a, :b, :c]}
 
   ## Error cases
-      
+
       iex> Nx.Shape.top_k({}, [], 1)
       ** (ArgumentError) top_k input must have at least rank 1
 
