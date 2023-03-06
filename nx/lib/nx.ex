@@ -3561,6 +3561,7 @@ defmodule Nx do
   |> vectorize(:first) # => {3, 4} vec [first: 2]
   |> vectorize(:second) # => {4} vec [first: 2, second: 3]
   """
+  @doc type: :shape
   def vectorize(tensor, name)
 
   def vectorize(_tensor, name) when not is_atom(name) do
@@ -3686,23 +3687,23 @@ defmodule Nx do
   end
 
   defp element_wise_bin_op(left, right, op, fun) do
+    type = binary_type(left, right) |> fun.()
+
     left = to_tensor(left)
     right = to_tensor(right)
 
     if left.vectorized_axes != [] or right.vectorized_axes != [] do
       {left, right, vectorized_names} = unvectorize(left, right)
 
-      result = unvectorized_element_wise_bin_op(left, right, op, fun)
+      result = unvectorized_element_wise_bin_op(type, left, right, op)
 
       Enum.reduce(vectorized_names, result, &vectorize(&2, &1))
     else
-      unvectorized_element_wise_bin_op(left, right, op, fun)
+      unvectorized_element_wise_bin_op(type, left, right, op)
     end
   end
 
-  defp unvectorized_element_wise_bin_op(%T{} = left, %T{} = right, op, fun) do
-    type = binary_type(left, right) |> fun.()
-
+  defp unvectorized_element_wise_bin_op(type, %T{} = left, %T{} = right, op) do
     %T{shape: left_shape, names: left_names} = left = to_tensor(left)
     %T{shape: right_shape, names: right_names} = right = to_tensor(right)
 
