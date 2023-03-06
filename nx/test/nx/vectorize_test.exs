@@ -131,4 +131,122 @@ defmodule Nx.VectorizeTest do
       assert result == Nx.add(@vectorized, v2)
     end
   end
+
+  describe "predicate operations" do
+    test "left Nx.equal by scalar" do
+      result = Nx.equal(2, @vectorized)
+      assert result.shape == {1, 3}
+
+      assert result ==
+               Nx.vectorize(
+                 Nx.tensor([[[0, 0, 1]], [[0, 0, 0]], [[0, 0, 0]]], type: :u8),
+                 :rows
+               )
+    end
+
+    test "right Nx.equal by scalar" do
+      result = Nx.equal(@vectorized, 2)
+      assert result.shape == {1, 3}
+
+      assert result ==
+               Nx.vectorize(
+                 Nx.tensor([[[0, 0, 1]], [[0, 0, 0]], [[0, 0, 0]]], type: :u8),
+                 :rows
+               )
+    end
+
+    test "left Nx.equal by rank-1" do
+      result = Nx.equal(Nx.tensor([2]), @vectorized)
+      assert result.shape == {1, 3}
+
+      assert result ==
+               Nx.vectorize(
+                 Nx.tensor([[[0, 0, 1]], [[0, 0, 0]], [[0, 0, 0]]], type: :u8),
+                 :rows
+               )
+    end
+
+    test "right Nx.equal by rank-1" do
+      result = Nx.equal(@vectorized, Nx.tensor([2]))
+      assert result.shape == {1, 3}
+
+      assert result ==
+               Nx.vectorize(
+                 Nx.tensor([[[0, 0, 1]], [[0, 0, 0]], [[0, 0, 0]]], type: :u8),
+                 :rows
+               )
+    end
+
+    test "left Nx.equal by rank-2" do
+      result = Nx.equal(Nx.tensor([[1], [2]]), @vectorized)
+      assert result.shape == {2, 3}
+
+      assert result ==
+               Nx.vectorize(
+                 Nx.tensor(
+                   [
+                     [[0, 1, 0], [0, 0, 1]],
+                     [[0, 0, 0], [0, 0, 0]],
+                     [[0, 0, 0], [0, 0, 0]]
+                   ],
+                   type: :u8
+                 ),
+                 :rows
+               )
+    end
+
+    test "right Nx.equal by rank-2" do
+      result = Nx.equal(@vectorized, Nx.tensor([[1], [2]]))
+      assert result.shape == {2, 3}
+
+      assert result ==
+               Nx.vectorize(
+                 Nx.tensor(
+                   [
+                     [[0, 1, 0], [0, 0, 1]],
+                     [[0, 0, 0], [0, 0, 0]],
+                     [[0, 0, 0], [0, 0, 0]]
+                   ],
+                   type: :u8
+                 ),
+                 :rows
+               )
+    end
+
+    test "Nx.equal by vectorized with same axes" do
+      assert Nx.vectorize(Nx.broadcast(Nx.tensor(1, type: :u8), @base), :rows) ==
+               Nx.equal(@vectorized, @vectorized)
+    end
+
+    test "Nx.equal by vectorized with different axes" do
+      v2 = Nx.vectorize(@base, :cols)
+
+      result =
+        Nx.stack([
+          Nx.equal(@base, Nx.tensor([[0, 1, 2]])),
+          Nx.equal(@base, Nx.tensor([[3, 4, 5]])),
+          Nx.equal(@base, Nx.tensor([[6, 7, 8]]))
+        ])
+        |> Nx.vectorize(:rows)
+        |> Nx.vectorize(:cols)
+
+      assert result == Nx.equal(@vectorized, v2)
+    end
+
+    test "Nx.equal by vectorized with common axes" do
+      base_2 = Nx.iota({1, 2, 3, 1, 3})
+      v2 = base_2 |> Nx.vectorize(:x) |> Nx.vectorize(:y) |> Nx.vectorize(:rows)
+
+      base = Nx.concatenate([@base, @base], axis: 1) |> Nx.reshape({1, 2, 3, 1, 3})
+
+      result =
+        Nx.equal(base, base_2)
+        |> Nx.reshape({3, 1, 2, 1, 3})
+        |> Nx.vectorize(:rows)
+        |> Nx.vectorize(:x)
+        |> Nx.vectorize(:y)
+
+      assert result == Nx.equal(@vectorized, v2)
+    end
+  end
 end
