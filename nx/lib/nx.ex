@@ -3717,23 +3717,26 @@ defmodule Nx do
     element_wise_pred_op(left, right, op)
   end
 
-  defp element_wise_pred_op(
-         %T{vectorized_axes: left_vec} = left,
-         %T{vectorized_axes: right_vec} = right,
-         op
-       )
-       when left_vec != [] or right_vec != [] do
-    {left, right, vectorized_names} = unvectorize(left, right)
+  defp element_wise_pred_op(left, right, op) do
+    left = to_tensor(left)
+    right = to_tensor(right)
 
-    result = element_wise_pred_op(left, right, op)
+    if left.vectorized_axes != [] or right.vectorized_axes != [] do
+      {left, right, vectorized_names} = unvectorize(left, right)
 
-    Enum.reduce(vectorized_names, result, &vectorize(&2, &1))
+      result = unvectorized_element_wise_pred_op(left, right, op)
+
+      Enum.reduce(vectorized_names, result, &vectorize(&2, &1))
+    else
+      unvectorized_element_wise_pred_op(left, right, op)
+    end
   end
 
-  defp element_wise_pred_op(left, right, op) do
-    %T{shape: left_shape, names: left_names} = left = to_tensor(left)
-    %T{shape: right_shape, names: right_names} = right = to_tensor(right)
-
+  defp unvectorized_element_wise_pred_op(
+         %T{shape: left_shape, names: left_names} = left,
+         %T{shape: right_shape, names: right_names} = right,
+         op
+       ) do
     {shape, names} = Nx.Shape.binary_broadcast(left_shape, left_names, right_shape, right_names)
 
     out = %{left | type: {:u, 8}, shape: shape, names: names}
