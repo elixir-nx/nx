@@ -3664,10 +3664,11 @@ defmodule Nx do
     tensor = to_tensor(tensor)
 
     if tensor.vectorized_axes != [] do
-      {tensor, vectorized_names} = unvectorize(tensor)
-      result = fun.(tensor)
-      # TODO: Apply vectorization at once and check that the sizes match
-      Enum.reduce(vectorized_names, result, &vectorize(&2, elem(&1, 0)))
+      {tensor, vectorized_axes} = unvectorize(tensor)
+
+      tensor
+      |> fun.()
+      |> revectorize_and_validate_sizes(vectorized_axes)
     else
       fun.(tensor)
     end
@@ -3678,13 +3679,40 @@ defmodule Nx do
     right = to_tensor(right)
 
     if left.vectorized_axes != [] or right.vectorized_axes != [] do
-      {left, right, vectorized_names} = unvectorize(left, right)
-      result = fun.(left, right)
-      # TODO: Apply vectorization at once and check that the sizes match
-      Enum.reduce(vectorized_names, result, &vectorize(&2, elem(&1, 0)))
+      {left, right, vectorized_axes} = unvectorize(left, right)
+
+      left
+      |> fun.(right)
+      |> revectorize_and_validate_sizes(vectorized_axes)
     else
       fun.(left, right)
     end
+  end
+
+  defp revectorize_and_validate_sizes(
+         %T{vectorized_axes: [], shape: shape, names: names} = tensor,
+         names_and_sizes_kw
+       ) do
+    shape_l = Tuple.to_list(shape)
+    n = length(names_and_sizes_kw)
+
+    {vectorized_axes, base_axes} = Enum.split(shape_l, n)
+
+    out_shape = List.to_tuple(base_axes)
+
+    vectorized_axes =
+      Enum.zip_with([vectorized_axes, names_and_sizes_kw], fn
+        [axis_size, {name, axis_size}] ->
+          {name, axis_size}
+
+        [axis_size, {name, expected_size}] ->
+          raise ArgumentError,
+                "expected revectorized axis #{inspect(name)} to have size #{inspect(expected_size)}, got: #{inspect(axis_size)}"
+      end)
+
+    out_names = Enum.drop(names, n)
+
+    %T{tensor | names: out_names, vectorized_axes: vectorized_axes, shape: out_shape}
   end
 
   ## Element-wise binary ops
