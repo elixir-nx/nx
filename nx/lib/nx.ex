@@ -3660,6 +3660,16 @@ defmodule Nx do
           end
       end)
 
+    # We need the "original" shapes so that we can properly reshape the tensors in the backends.
+    # This is needed because backends also keep track of the tensor shape, so it doesn't suffice to just
+    # pass the new shape with 1s interspersed and batch axes reordered accordingly.
+
+    left_original_shape_l = Keyword.values(left.vectorized_axes) ++ Tuple.to_list(left_shape)
+    left_original_shape = List.to_tuple(left_original_shape_l)
+
+    right_original_shape_l = Keyword.values(right.vectorized_axes) ++ Tuple.to_list(right_shape)
+    right_original_shape = List.to_tuple(right_original_shape_l)
+
     left_pairs = Enum.reverse(left_pairs)
     both_pairs = Enum.reverse(both_pairs)
 
@@ -3694,10 +3704,14 @@ defmodule Nx do
 
     names = List.duplicate(nil, all_size) ++ base_names
 
-    left_out = reshape(%{left | vectorized_axes: [], names: names, shape: left_shape}, left_shape)
+    left_out =
+      reshape(%{left | vectorized_axes: [], names: names, shape: left_original_shape}, left_shape)
 
     right_out =
-      reshape(%{right | vectorized_axes: [], names: names, shape: right_shape}, right_shape)
+      reshape(
+        %{right | vectorized_axes: [], names: names, shape: right_original_shape},
+        right_shape
+      )
 
     out_vectorized_names = left_pairs ++ both_pairs ++ right_pairs
     {left_out, right_out, out_vectorized_names}
