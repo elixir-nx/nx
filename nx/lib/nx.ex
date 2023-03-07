@@ -3643,27 +3643,26 @@ defmodule Nx do
 
     left_shape = left_values ++ both_values ++ List.duplicate(1, right_size) ++ left_base_shape_l
     left_shape = List.to_tuple(left_shape)
-    left_target_shape = left_values ++ both_values ++ right_values ++ left_base_shape_l
-    left_target_shape = List.to_tuple(left_target_shape)
 
-    right_shape = List.duplicate(1, left_size) ++ both_values ++ right_values ++ right_base_shape_l
+    right_shape =
+      List.duplicate(1, left_size) ++ both_values ++ right_values ++ right_base_shape_l
+
     right_shape = List.to_tuple(right_shape)
-    right_target_shape = left_values ++ both_values ++ right_values ++ right_base_shape_l
-    right_target_shape = List.to_tuple(right_target_shape)
 
     names = List.duplicate(nil, all_size) ++ base_names
 
-    left = reshape(%{left | vectorized_axes: [], names: names, shape: left_shape}, left_shape)
-    right = reshape(%{right | vectorized_axes: [], names: names, shape: right_shape}, right_shape)
+    left_out = reshape(%{left | vectorized_axes: [], names: names, shape: left_shape}, left_shape)
 
-    left_out = broadcast(left, left_target_shape)
-    right_out = broadcast(right, right_target_shape)
+    right_out =
+      reshape(%{right | vectorized_axes: [], names: names, shape: right_shape}, right_shape)
 
     out_vectorized_names = left_pairs ++ both_pairs ++ right_pairs
     {left_out, right_out, out_vectorized_names}
   end
 
   defp apply_vectorized([tensor], fun) do
+    tensor = to_tensor(tensor)
+
     if tensor.vectorized_axes != [] do
       {tensor, vectorized_names} = unvectorize(tensor)
       result = fun.(tensor)
@@ -3675,6 +3674,9 @@ defmodule Nx do
   end
 
   defp apply_vectorized([left, right], fun) do
+    left = to_tensor(left)
+    right = to_tensor(right)
+
     if left.vectorized_axes != [] or right.vectorized_axes != [] do
       {left, right, vectorized_names} = unvectorize(left, right)
       result = fun.(left, right)
@@ -3695,16 +3697,12 @@ defmodule Nx do
 
   defp element_wise_bin_op(left, right, op, fun) do
     type = binary_type(left, right) |> fun.()
-
-    left = to_tensor(left)
-    right = to_tensor(right)
-
     apply_vectorized([left, right], &unvectorized_element_wise_bin_op(type, &1, &2, op))
   end
 
   defp unvectorized_element_wise_bin_op(type, %T{} = left, %T{} = right, op) do
-    %T{shape: left_shape, names: left_names} = left = to_tensor(left)
-    %T{shape: right_shape, names: right_names} = right = to_tensor(right)
+    %T{shape: left_shape, names: left_names} = left
+    %T{shape: right_shape, names: right_names} = right
 
     {shape, names} = Nx.Shape.binary_broadcast(left_shape, left_names, right_shape, right_names)
 
@@ -3718,8 +3716,6 @@ defmodule Nx do
   end
 
   defp element_wise_pred_op(left, right, op) do
-    left = to_tensor(left)
-    right = to_tensor(right)
     apply_vectorized([left, right], &unvectorized_element_wise_pred_op(&1, &2, op))
   end
 
@@ -5831,12 +5827,9 @@ defmodule Nx do
     """
     @doc type: :element
     def unquote(name)(tensor) do
-      tensor = to_tensor(tensor)
-      type = Nx.Type.to_floating(tensor.type)
-
-      unquote(complex_check_block)
-
       apply_vectorized([tensor], fn tensor ->
+        type = Nx.Type.to_floating(tensor.type)
+        unquote(complex_check_block)
         impl!(tensor).unquote(name)(%{tensor | type: type}, tensor)
       end)
     end
