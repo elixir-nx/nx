@@ -3575,7 +3575,7 @@ defmodule Nx do
   def vectorize(%Nx.Tensor{names: names, shape: shape, vectorized_axes: vec_axes} = tensor, name) do
     size = elem(shape, 0)
     new_shape = Tuple.delete_at(shape, 0)
-    names = Enum.drop(names, 1)
+    names = tl(names)
 
     %Nx.Tensor{
       tensor
@@ -3586,7 +3586,7 @@ defmodule Nx do
   end
 
   defp unvectorize(%T{shape: shape, names: names, vectorized_axes: vectorized_axes} = tensor) do
-    {vectorized_names, vectorized_sizes} = Enum.unzip(vectorized_axes)
+    vectorized_sizes = Keyword.values(vectorized_axes)
 
     output_shape_l = vectorized_sizes ++ Tuple.to_list(shape)
     output_shape = List.to_tuple(output_shape_l)
@@ -3594,37 +3594,39 @@ defmodule Nx do
     output_names = List.duplicate(nil, length(vectorized_sizes)) ++ names
 
     output = %{tensor | shape: output_shape, names: output_names, vectorized_axes: []}
-    {output, vectorized_names}
+    {output, vectorized_axes}
   end
 
   defp unvectorize(
          %T{shape: left_shape, names: left_shape_names} = left,
          %T{shape: right_shape, names: right_shape_names} = right
        ) do
-    left_names = Keyword.keys(left.vectorized_axes) |> MapSet.new()
-    right_names = Keyword.keys(right.vectorized_axes) |> MapSet.new()
+    {left_pairs, both_pairs, right_pairs} =
+      Enum.reduce(left.vectorized_axes, {[], [], right.vectorized_axes}, fn
+        {name, size}, {lefties, both, righties} ->
+          case List.keytake(righties, name, 0) do
+            {{^name, ^size}, righties} ->
+              {lefties, [{name, size} | both], righties}
 
-    left_only = MapSet.difference(left_names, right_names)
-    right_only = MapSet.difference(right_names, left_names)
-    in_both = MapSet.intersection(left_names, right_names)
+            {{^name, other_size}, _righties} ->
+              raise ArgumentError,
+                    "expected vectorized axis #{inspect(name)} to have the same size in both tensors, got #{inspect(size)} and #{inspect(other_size)}"
 
-    # check that common names share the same value
-    for name <- in_both do
-      l = left.vectorized_axes[name]
-      r = right.vectorized_axes[name]
+            nil ->
+              {[{name, size} | lefties], both, righties}
+          end
+      end)
 
-      if l != r do
-        raise ArgumentError,
-              "expected vectorized axis #{inspect(name)} to have the same size in both tensors, got #{inspect(l)} and #{inspect(r)}"
-      end
-    end
+    left_pairs = Enum.reverse(left_pairs)
+    both_pairs = Enum.reverse(both_pairs)
 
-    # left: 1s for in right but not in left ++ in left but not in right ++ in both ++ shape left
-    # right: 1s for in left but not in right ++ in both ++ in right but not in left ++ shape right
-    # target_left: right_only ++ left_only ++ in_both ++ shape_left
-    # target_right: right_only ++ left_only ++ in_both ++ shape_right
+    left_values = Keyword.values(left_pairs)
+    right_values = Keyword.values(right_pairs)
+    both_values = Keyword.values(both_pairs)
 
-    both = take_keyword_values(left.vectorized_axes, in_both)
+    left_size = length(left_pairs)
+    right_size = length(right_pairs)
+    all_size = left_size + right_size + length(both_pairs)
 
     # Because we are explicitly broadcasting, we need to also broadcast the base shapes (i.e. each "vector entry"'s shapes)
 
@@ -3639,62 +3641,34 @@ defmodule Nx do
     right_base_shape_l =
       List.duplicate(1, target_rank - tuple_size(right_shape)) ++ Tuple.to_list(right_shape)
 
-    left_shape =
-      take_keyword_values(left.vectorized_axes, left_only) ++
-        both ++ List.duplicate(1, MapSet.size(right_only)) ++ left_base_shape_l
-
+    left_shape = left_values ++ both_values ++ List.duplicate(1, right_size) ++ left_base_shape_l
     left_shape = List.to_tuple(left_shape)
-
-    left_target_shape =
-      take_keyword_values(left.vectorized_axes, left_only) ++
-        both ++
-        take_keyword_values(right.vectorized_axes, right_only) ++
-        left_base_shape_l
-
+    left_target_shape = left_values ++ both_values ++ right_values ++ left_base_shape_l
     left_target_shape = List.to_tuple(left_target_shape)
 
-    right_shape =
-      List.duplicate(1, MapSet.size(left_only)) ++
-        both ++
-        take_keyword_values(right.vectorized_axes, right_only) ++
-        right_base_shape_l
-
+    right_shape = List.duplicate(1, left_size) ++ both_values ++ right_values ++ right_base_shape_l
     right_shape = List.to_tuple(right_shape)
-
-    right_target_shape =
-      take_keyword_values(left.vectorized_axes, left_only) ++
-        both ++
-        take_keyword_values(right.vectorized_axes, right_only) ++
-        right_base_shape_l
-
+    right_target_shape = left_values ++ both_values ++ right_values ++ right_base_shape_l
     right_target_shape = List.to_tuple(right_target_shape)
 
-    names = List.duplicate(nil, MapSet.size(MapSet.union(left_names, right_names))) ++ base_names
+    names = List.duplicate(nil, all_size) ++ base_names
 
     left = reshape(%{left | vectorized_axes: [], names: names, shape: left_shape}, left_shape)
     right = reshape(%{right | vectorized_axes: [], names: names, shape: right_shape}, right_shape)
 
     left_out = broadcast(left, left_target_shape)
-
     right_out = broadcast(right, right_target_shape)
 
-    out_vectorized_names =
-      Enum.to_list(left_only) ++ Enum.to_list(in_both) ++ Enum.to_list(right_only)
-
+    out_vectorized_names = left_pairs ++ both_pairs ++ right_pairs
     {left_out, right_out, out_vectorized_names}
-  end
-
-  defp take_keyword_values(keyword, enum) when not is_list(enum) do
-    keyword
-    |> Keyword.take(Enum.to_list(enum))
-    |> Keyword.values()
   end
 
   defp apply_vectorized([tensor], fun) do
     if tensor.vectorized_axes != [] do
       {tensor, vectorized_names} = unvectorize(tensor)
       result = fun.(tensor)
-      Enum.reduce(vectorized_names, result, &vectorize(&2, &1))
+      # TODO: Apply vectorization at once and check that the sizes match
+      Enum.reduce(vectorized_names, result, &vectorize(&2, elem(&1, 0)))
     else
       fun.(tensor)
     end
@@ -3704,7 +3678,8 @@ defmodule Nx do
     if left.vectorized_axes != [] or right.vectorized_axes != [] do
       {left, right, vectorized_names} = unvectorize(left, right)
       result = fun.(left, right)
-      Enum.reduce(vectorized_names, result, &vectorize(&2, &1))
+      # TODO: Apply vectorization at once and check that the sizes match
+      Enum.reduce(vectorized_names, result, &vectorize(&2, elem(&1, 0)))
     else
       fun.(left, right)
     end
