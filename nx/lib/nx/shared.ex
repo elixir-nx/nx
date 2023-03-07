@@ -551,6 +551,22 @@ defmodule Nx.Shared do
 
   def raise_complex_not_implemented_yet(_, _, _), do: nil
 
+  @doc false
+  def raise_vectorized_not_implemented_yet(t, %Macro.Env{
+        module: module,
+        function: {function, arity}
+      }) do
+    raise_vectorized_not_implemented_yet(t, module, function, arity)
+  end
+
+  @doc false
+  def raise_vectorized_not_implemented_yet(%T{vectorized_axes: [_ | _]}, module, function, arity) do
+    raise ArgumentError,
+          "#{module}.#{function}/#{arity} is not yet implemented for vectorized inputs"
+  end
+
+  def raise_vectorized_not_implemented_yet(_, _, _, _), do: nil
+
   @doc """
   The process dictionary key to store default backend under.
   """
