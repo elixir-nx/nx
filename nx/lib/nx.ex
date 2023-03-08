@@ -948,8 +948,8 @@ defmodule Nx do
     %T{type: min_type, shape: min_shape} = min = to_tensor(min)
     %T{type: max_type, shape: max_shape} = max = to_tensor(max)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(min, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(max, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(min, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(max, __ENV__.function)
 
     shape = shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
@@ -985,8 +985,8 @@ defmodule Nx do
     %T{type: mu_type, shape: mu_shape} = mu = to_tensor(mu)
     %T{type: sigma_type, shape: sigma_shape} = sigma = to_tensor(sigma)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(mu, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(sigma, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(mu, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(sigma, __ENV__.function)
 
     shape = shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
@@ -1017,7 +1017,7 @@ defmodule Nx do
   def shuffle(tensor, opts \\ []) do
     opts = keyword!(opts, [:axis])
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     if axis = opts[:axis] do
       axis = Nx.Shape.normalize_axis(shape, axis, names)
@@ -1151,7 +1151,7 @@ defmodule Nx do
       IO.warn("passing a tensor as shape to iota/2 is deprecated. Please call Nx.shape/2 before")
     end
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor_or_shape, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor_or_shape, __ENV__.function)
 
     shape = shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
@@ -1256,7 +1256,7 @@ defmodule Nx do
 
   def eye(tensor, opts) do
     IO.warn("passing a tensor as shape to eye/2 is deprecated. Please call Nx.shape/2 before")
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     eye(Nx.shape(tensor), opts)
   end
 
@@ -1336,7 +1336,7 @@ defmodule Nx do
   @doc type: :creation
   def take_diagonal(tensor, opts \\ []) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     opts = keyword!(opts, offset: 0)
 
@@ -1448,7 +1448,7 @@ defmodule Nx do
   @doc type: :creation
   def make_diagonal(tensor, opts \\ []) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     opts = keyword!(opts, offset: 0)
 
@@ -1600,7 +1600,7 @@ defmodule Nx do
   @doc type: :creation
   def put_diagonal(tensor, diagonal, opts \\ []) do
     %{shape: shape} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     offset = opts |> keyword!(offset: 0) |> Keyword.fetch!(:offset)
 
     Nx.Shape.put_diagonal(shape, diagonal.shape, offset)
@@ -1726,7 +1726,7 @@ defmodule Nx do
   def to_binary(tensor, opts \\ []) do
     opts = keyword!(opts, [:limit])
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     limit = if limit = opts[:limit], do: Kernel.min(size(tensor), limit), else: size(tensor)
     impl!(tensor).to_binary(tensor, limit)
   end
@@ -1794,7 +1794,7 @@ defmodule Nx do
   def to_flat_list(tensor, opts \\ []) do
     opts = keyword!(opts, [:limit])
     %{type: {_, size} = type} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     for <<part::size(size)-bitstring <- to_binary(tensor, Keyword.take(opts, [:limit]))>> do
       match_types [type] do
@@ -1832,7 +1832,7 @@ defmodule Nx do
   @doc type: :conversion
   def to_list(tensor) do
     %{type: type, shape: shape} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     if shape == {} do
       raise ArgumentError, "cannot convert a scalar tensor to a list, got: #{inspect(tensor)}"
@@ -1867,7 +1867,7 @@ defmodule Nx do
   @doc false
   @deprecated "Use to_batched/3 instead"
   def to_batched_list(tensor, batch_size, opts \\ []) do
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     tensor |> to_batched(batch_size, opts) |> Enum.to_list()
   end
 
@@ -1968,7 +1968,7 @@ defmodule Nx do
     opts = keyword!(opts, leftover: :repeat)
 
     %{shape: shape} = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     if shape == {} do
       raise ArgumentError, "cannot batch scalar tensor #{inspect(tensor)}"
@@ -2009,7 +2009,7 @@ defmodule Nx do
 
   def to_number(tensor) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     if tensor.shape != {} do
       raise ArgumentError, "cannot convert tensor of shape #{inspect(tensor.shape)} to number"
@@ -2053,7 +2053,7 @@ defmodule Nx do
   @doc type: :conversion
   def to_heatmap(tensor, opts \\ []) when is_list(opts) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     if tensor.shape == {} do
       raise ArgumentError, "cannot show heatmap for scalar tensors, got: #{inspect(tensor)}"
@@ -2158,7 +2158,7 @@ defmodule Nx do
   @doc type: :type
   def as_type(tensor, type) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     new_type = Nx.Type.normalize!(type)
 
     cond do
@@ -2211,7 +2211,7 @@ defmodule Nx do
   @doc type: :type
   def bitcast(tensor, type) do
     %T{type: {_, bits} = input_type} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     {_, new_bits} = new_type = Nx.Type.normalize!(type)
 
     Nx.Shared.raise_complex_not_supported(input_type, :bitcast, 2)
@@ -2302,7 +2302,7 @@ defmodule Nx do
   @doc type: :shape
   def reshape(tensor, new_shape, opts \\ []) do
     %T{shape: old_shape} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     new_names = opts[:names] || names!(new_shape)
     new_shape = if is_tuple(new_shape), do: new_shape, else: shape(new_shape)
     new_shape = Nx.Shape.reshape(old_shape, new_shape)
@@ -2334,7 +2334,7 @@ defmodule Nx do
   @doc type: :shape
   def rename(tensor, names) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     %{tensor | names: Nx.Shape.named_axes!(names, tensor.shape)}
   end
 
@@ -2432,7 +2432,7 @@ defmodule Nx do
   @doc type: :shape
   def flatten(tensor, opts \\ []) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     opts = Keyword.validate!(opts, [:axes])
     {shape, names} = Nx.Shape.flatten(tensor.shape, tensor.names, opts[:axes])
     reshape(tensor, shape, names: names)
@@ -2548,7 +2548,7 @@ defmodule Nx do
   @doc type: :shape, from_backend: false
   def tile(tensor, repetitions) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     unless tile_valid_repetitions?(repetitions) do
       raise ArgumentError,
@@ -2638,7 +2638,7 @@ defmodule Nx do
   @doc type: :shape, from_backend: false
   def new_axis(tensor, axis, name \\ nil) when is_integer(axis) do
     %{shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     rank = tuple_size(shape)
     norm = if axis < 0, do: axis + rank + 1, else: axis
 
@@ -2703,7 +2703,7 @@ defmodule Nx do
   def squeeze(tensor, opts \\ []) do
     opts = keyword!(opts, [:axes])
     %T{shape: old_shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     axes = opts[:axes] || Nx.Shape.squeeze_axes(old_shape)
     axes = Nx.Shape.normalize_axes(old_shape, axes, names)
     {new_shape, new_names} = Nx.Shape.squeeze(old_shape, axes, names)
@@ -2837,7 +2837,7 @@ defmodule Nx do
     opts = keyword!(opts, [:axes, :names])
 
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     broadcast_names = opts[:names] || names!(shape)
     broadcast_shape = shape(shape)
     opts_axes = opts[:axes]
@@ -3053,10 +3053,10 @@ defmodule Nx do
   def pad(tensor, pad_value, padding_config) when is_list(padding_config) do
     output_type = binary_type(tensor, pad_value)
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     pad_value = to_tensor(pad_value)
-    Nx.Shared.raise_vectorized_not_implemented_yet(pad_value, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(pad_value, __ENV__.function)
 
     if pad_value.shape != {} do
       raise ArgumentError, "padding value must be a scalar"
@@ -3149,8 +3149,8 @@ defmodule Nx do
   def compatible?(left, right)
 
   def compatible?(%T{} = left, %T{} = right) do
-    Nx.Shared.raise_vectorized_not_implemented_yet(left, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(right, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(left, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(right, __ENV__.function)
 
     %{type: type, shape: shape, names: left_names} = left
 
@@ -3322,7 +3322,7 @@ defmodule Nx do
   @doc type: :shape
   def byte_size(tensor) do
     %{type: {_, bit_size}, shape: shape} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     size(shape) * div(bit_size, 8)
   end
 
@@ -3512,7 +3512,7 @@ defmodule Nx do
 
     Nx.Defn.Composite.traverse(tensor_or_container, fn tensor ->
       tensor = to_tensor(tensor)
-      Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+      Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
       impl!(tensor).backend_copy(tensor, backend, opts)
     end)
   end
@@ -3565,7 +3565,7 @@ defmodule Nx do
 
     Nx.Defn.Composite.traverse(tensor_or_container, fn tensor ->
       tensor = to_tensor(tensor)
-      Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+      Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
       impl!(tensor).backend_transfer(tensor, backend, opts)
     end)
   end
@@ -3586,7 +3586,7 @@ defmodule Nx do
   def backend_deallocate(tensor_or_container) do
     Nx.Defn.Composite.reduce(tensor_or_container, :ok, fn
       %Nx.Tensor{} = tensor, :ok ->
-        Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+        Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
         impl!(tensor).backend_deallocate(tensor)
 
       _, :ok ->
@@ -5111,7 +5111,7 @@ defmodule Nx do
   @doc type: :element
   def logical_not(tensor) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     output = Nx.template(tensor.shape, {:u, 8}, names: tensor.names)
 
     Nx.Shared.optional(:logical_not, [tensor], output, fn tensor ->
@@ -5475,9 +5475,9 @@ defmodule Nx do
     %T{shape: true_shape, names: true_names} = on_true = to_tensor(on_true)
     %T{shape: false_shape, names: false_names} = on_false = to_tensor(on_false)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(pred, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(on_true, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(on_false, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(pred, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(on_true, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(on_false, __ENV__.function)
 
     output_type = binary_type(on_true, on_false)
 
@@ -5569,9 +5569,9 @@ defmodule Nx do
     %T{shape: source_shape, type: source_type} = source = to_tensor(source)
     %T{type: value_type} = init_value = to_tensor(init_value)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(source, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(init_value, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(source, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(init_value, __ENV__.function)
 
     padding = opts[:padding]
     strides = opts[:strides]
@@ -5664,9 +5664,9 @@ defmodule Nx do
     %T{shape: source_shape, type: source_type} = source = to_tensor(source)
     %T{type: value_type} = init_value = to_tensor(init_value)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(source, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(init_value, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(source, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(init_value, __ENV__.function)
 
     padding = opts[:padding]
     strides = opts[:strides]
@@ -5868,9 +5868,9 @@ defmodule Nx do
     indices = to_tensor(indices)
     updates = to_tensor(updates)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(target, __MODULE__, op, 3)
-    Nx.Shared.raise_vectorized_not_implemented_yet(indices, __MODULE__, op, 3)
-    Nx.Shared.raise_vectorized_not_implemented_yet(updates, __MODULE__, op, 3)
+    Nx.Shared.raise_vectorized_not_implemented_yet(target, {op, 3})
+    Nx.Shared.raise_vectorized_not_implemented_yet(indices, {op, 3})
+    Nx.Shared.raise_vectorized_not_implemented_yet(updates, {op, 3})
 
     type = binary_type(target, updates)
 
@@ -5966,7 +5966,7 @@ defmodule Nx do
   @doc type: :element
   def is_nan(tensor) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     impl!(tensor).is_nan(%{tensor | type: {:u, 8}}, tensor)
   end
@@ -6000,7 +6000,7 @@ defmodule Nx do
   @doc type: :element
   def is_infinity(tensor) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     impl!(tensor).is_infinity(%{tensor | type: {:u, 8}}, tensor)
   end
@@ -6043,7 +6043,7 @@ defmodule Nx do
   @doc type: :element
   def negate(tensor) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     impl!(tensor).negate(tensor, tensor)
   end
 
@@ -6067,7 +6067,7 @@ defmodule Nx do
   @doc type: :element
   def sign(tensor) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     impl!(tensor).sign(tensor, tensor)
   end
 
@@ -6086,7 +6086,7 @@ defmodule Nx do
   @doc type: :element
   def abs(tensor) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     case tensor.type do
       {:u, _} -> tensor
@@ -6123,7 +6123,7 @@ defmodule Nx do
   @doc type: :element
   def conjugate(tensor) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     impl!(tensor).conjugate(%{tensor | type: Nx.Type.to_complex(tensor.type)}, tensor)
   end
@@ -6156,7 +6156,7 @@ defmodule Nx do
   @doc type: :element
   def phase(tensor) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     output = %{tensor | type: Nx.Type.to_real(tensor.type)}
 
     Nx.Shared.optional(:phase, [tensor], output, fn tensor ->
@@ -6199,7 +6199,7 @@ defmodule Nx do
   @doc type: :element
   def real(tensor) do
     %{type: type} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     cond do
       match?({:c, _}, type) ->
@@ -6247,7 +6247,7 @@ defmodule Nx do
   @doc type: :element
   def imag(tensor) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     case tensor do
       %{type: {:c, size}} = tensor ->
@@ -6326,7 +6326,7 @@ defmodule Nx do
   @doc type: :element
   def bitwise_not(tensor) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     assert_bitwise_type!(tensor.type)
     impl!(tensor).bitwise_not(tensor, tensor)
   end
@@ -6368,7 +6368,7 @@ defmodule Nx do
   @doc type: :element
   def population_count(tensor) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     assert_bitwise_type!(tensor.type)
     impl!(tensor).population_count(tensor, tensor)
   end
@@ -6434,7 +6434,7 @@ defmodule Nx do
   @doc type: :element
   def count_leading_zeros(tensor) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     assert_bitwise_type!(tensor.type)
     impl!(tensor).count_leading_zeros(tensor, tensor)
   end
@@ -6467,7 +6467,7 @@ defmodule Nx do
     @doc type: :element
     def unquote(name)(tensor) do
       tensor = to_tensor(tensor)
-      Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+      Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
       case tensor do
         %T{type: {type, _}} = tensor when type in [:s, :u] -> tensor
@@ -6671,8 +6671,8 @@ defmodule Nx do
 
     a = to_tensor(a)
     b = to_tensor(b)
-    Nx.Shared.raise_vectorized_not_implemented_yet(a, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(b, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(a, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(b, __ENV__.function)
 
     Nx.Shared.optional(
       :all_close,
@@ -6920,7 +6920,7 @@ defmodule Nx do
   @doc type: :aggregation, from_backend: false
   def mean(tensor, opts \\ []) do
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     mean_den =
       if axes = opts[:axes] do
@@ -7023,8 +7023,8 @@ defmodule Nx do
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
     %T{shape: weights_shape} = weights = to_tensor(weights)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(weights, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(weights, __ENV__.function)
 
     axes =
       if opts[:axes] do
@@ -7168,7 +7168,7 @@ defmodule Nx do
   def median(tensor, opts \\ []) do
     opts = keyword!(opts, axis: nil, keep_axis: false)
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     axis =
       if axis_opt = opts[:axis] do
@@ -7308,7 +7308,7 @@ defmodule Nx do
   def mode(tensor, opts \\ []) do
     opts = keyword!(opts, axis: nil, keep_axis: false)
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     axis =
       if opts[:axis] != nil,
@@ -7682,7 +7682,7 @@ defmodule Nx do
     opts = keyword!(opts, [:axes, keep_axes: false])
     keep_axes = opts[:keep_axes]
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __MODULE__, op, 2)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, {op, 2})
 
     {shape, names, axes} =
       cond do
@@ -7937,7 +7937,7 @@ defmodule Nx do
   defp argmin_or_max(tensor, op, opts) do
     opts = keyword!(opts, [:axis, tie_break: :low, keep_axis: false])
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __MODULE__, op, 2)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, {op, 2})
 
     tie_break =
       case opts[:tie_break] do
@@ -7973,7 +7973,7 @@ defmodule Nx do
     opts = keyword!(opts, [:window_dilations, padding: :valid, strides: 1])
     Nx.Shape.validate!(window_dimensions, :window_dimensions)
     %{shape: shape} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     strides = opts[:strides]
     padding = opts[:padding]
@@ -8709,7 +8709,7 @@ defmodule Nx do
     opts = keyword!(opts, axis: 0, reverse: false)
     reverse = opts[:reverse]
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names)
 
     Nx.Shared.optional(op, [tensor, [axis: axis, reverse: reverse]], tensor, fn tensor, opts ->
@@ -9009,8 +9009,8 @@ defmodule Nx do
     %{shape: shape, names: names} = tensor = to_tensor(tensor)
     acc = to_tensor(acc)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(acc, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(acc, __ENV__.function)
 
     {shape, names, axes} =
       if axes = opts[:axes] do
@@ -9114,8 +9114,8 @@ defmodule Nx do
     %T{shape: shape} = tensor = to_tensor(tensor)
     acc = to_tensor(acc)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(acc, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(acc, __ENV__.function)
 
     padding = opts[:padding]
     strides = opts[:strides] || List.duplicate(1, rank(tensor.shape))
@@ -9204,7 +9204,7 @@ defmodule Nx do
   @doc type: :element
   def map(tensor, opts \\ [], fun) do
     %T{type: type} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     opts = keyword!(opts, type: type)
     output_type = Nx.Type.normalize!(opts[:type])
     out = %{tensor | type: output_type}
@@ -9397,8 +9397,8 @@ defmodule Nx do
     %T{shape: s1} = t1 = to_tensor(t1)
     %T{shape: s2} = t2 = to_tensor(t2)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(t1, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(t2, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(t1, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(t2, __ENV__.function)
 
     case {tuple_size(s1), tuple_size(s2)} do
       {0, _} -> multiply(t1, t2)
@@ -9614,8 +9614,8 @@ defmodule Nx do
     %{shape: s1, names: names1} = t1 = to_tensor(t1)
     %{shape: s2, names: names2} = t2 = to_tensor(t2)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(t1, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(t2, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(t1, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(t2, __ENV__.function)
 
     output_type = binary_type(t1, t2)
 
@@ -9675,8 +9675,8 @@ defmodule Nx do
     %{names: n1} = t1 = to_tensor(t1)
     %{names: n2} = t2 = to_tensor(t2)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(t1, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(t2, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(t1, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(t2, __ENV__.function)
 
     names =
       case {n1, n2} do
@@ -9820,7 +9820,7 @@ defmodule Nx do
   def transpose(tensor, opts \\ []) do
     opts = keyword!(opts, [:axes])
     %{shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     axes = opts[:axes] || Nx.Shape.transpose_axes(shape)
     axes = Nx.Shape.normalize_axes(shape, axes, names)
 
@@ -9901,7 +9901,7 @@ defmodule Nx do
   def reverse(tensor, opts \\ []) do
     opts = keyword!(opts, [:axes])
     %{shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     axes = opts[:axes] || axes(shape)
 
     case Nx.Shape.normalize_axes(shape, axes, names) do
@@ -10107,8 +10107,8 @@ defmodule Nx do
     %{shape: input_shape, names: input_names} = tensor = to_tensor(tensor)
     %{shape: kernel_shape, names: kernel_names} = kernel = to_tensor(kernel)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(kernel, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(kernel, __ENV__.function)
 
     Nx.Shape.validate_conv!(input_shape, kernel_shape)
 
@@ -10249,9 +10249,9 @@ defmodule Nx do
     %T{type: min_type, shape: min_shape} = min = to_tensor(min)
     %T{type: max_type, shape: max_shape} = max = to_tensor(max)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(min, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(max, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(min, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(max, __ENV__.function)
 
     if min_shape != {} do
       raise ArgumentError, "min value must be a scalar shape, got: #{inspect(min_shape)}"
@@ -10425,7 +10425,7 @@ defmodule Nx do
     opts = keyword!(opts, strides: 1)
     %T{shape: shape} = tensor = to_tensor(tensor)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     strides = opts[:strides]
 
@@ -10518,7 +10518,7 @@ defmodule Nx do
     axis = Keyword.fetch!(opts, :axis)
     strides = Keyword.fetch!(opts, :strides)
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     axis = Nx.Shape.normalize_axis(shape, axis, names)
 
     if start_index == 0 and strides == 1 and elem(shape, axis) == len do
@@ -10606,8 +10606,8 @@ defmodule Nx do
     %T{shape: shape, names: names, type: type} = tensor = to_tensor(tensor)
     %T{shape: slice_shape, names: slice_names, type: slice_type} = slice = to_tensor(slice)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(slice, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(slice, __ENV__.function)
 
     output_type = binary_type(type, slice_type)
 
@@ -10765,8 +10765,8 @@ defmodule Nx do
     tensor = to_tensor(tensor)
     indices = to_tensor(indices)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(indices, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(indices, __ENV__.function)
 
     unless Nx.Type.integer?(indices.type) do
       raise ArgumentError, "indices must be an integer tensor, got #{inspect(indices.type)}"
@@ -10888,8 +10888,8 @@ defmodule Nx do
     tensor = to_tensor(tensor)
     indices = to_tensor(indices)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(indices, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(indices, __ENV__.function)
 
     unless Nx.Type.integer?(indices.type) do
       raise ArgumentError, "indices must be an integer tensor, got #{inspect(indices.type)}"
@@ -10946,8 +10946,8 @@ defmodule Nx do
     tensor = to_tensor(tensor)
     indices = to_tensor(indices)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(indices, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(indices, __ENV__.function)
 
     unless Nx.Type.integer?(indices.type) do
       raise ArgumentError, "indices must be an integer tensor, got #{inspect(indices.type)}"
@@ -11087,7 +11087,7 @@ defmodule Nx do
           tensors
           |> Enum.map(fn t ->
             %T{type: type, shape: shape, names: names} = t = to_tensor(t)
-            Nx.Shared.raise_vectorized_not_implemented_yet(t, __ENV__)
+            Nx.Shared.raise_vectorized_not_implemented_yet(t, __ENV__.function)
             {t, type, shape, names}
           end)
           |> unzip4()
@@ -11409,7 +11409,7 @@ defmodule Nx do
 
     %T{shape: shape, names: names, type: type} = tensor = to_tensor(tensor)
     Nx.Shared.raise_complex_not_supported(type, :sort, 2)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
 
     impl!(tensor).sort(
@@ -11479,7 +11479,7 @@ defmodule Nx do
   def top_k(tensor, opts \\ []) do
     opts = Keyword.validate!(opts, k: 1)
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     {output_shape, output_names} = Nx.Shape.top_k(shape, names, opts[:k])
 
     out_values = %{tensor | shape: output_shape, names: output_names}
@@ -11632,7 +11632,7 @@ defmodule Nx do
       end
 
     %T{type: type, shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
 
     Nx.Shared.raise_complex_not_supported(type, :argsort, 2)
@@ -11704,7 +11704,7 @@ defmodule Nx do
         {:tensor, {}, type, [], number_to_binary(number, type)}
 
       %T{} = tensor ->
-        Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+        Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
         shape = shape(tensor)
         type = type(tensor)
         names = names(tensor)
@@ -12048,7 +12048,7 @@ defmodule Nx do
   @spec variance(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
   def variance(tensor, opts \\ []) do
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     opts = keyword!(opts, [:axes, ddof: 0, keep_axes: false])
     axes = opts[:axes]
     {ddof, opts} = Keyword.pop!(opts, :ddof)
@@ -12262,7 +12262,7 @@ defmodule Nx do
 
   defp call_fft(tensor, opts, kind) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __MODULE__, kind, 2)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, {kind, 2})
 
     shape = Nx.Shape.fft(tensor.shape)
     n = elem(shape, tuple_size(shape) - 1)
@@ -12365,8 +12365,8 @@ defmodule Nx do
     start = to_tensor(start)
     stop = to_tensor(stop)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(start, __ENV__)
-    Nx.Shared.raise_vectorized_not_implemented_yet(stop, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(start, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(stop, __ENV__.function)
 
     n = opts[:n]
 
@@ -12436,7 +12436,7 @@ defmodule Nx do
   def reflect(tensor, opts \\ []) do
     opts = keyword!(opts, [:padding_config])
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     padding_config = opts[:padding_config]
 
@@ -12770,7 +12770,7 @@ defmodule Nx do
     else
       Enum.with_index(start_indices, fn index, i ->
         %T{shape: idx_shape, type: idx_type} = t = to_tensor(index)
-        Nx.Shared.raise_vectorized_not_implemented_yet(t, __ENV__)
+        Nx.Shared.raise_vectorized_not_implemented_yet(t, __ENV__.function)
 
         unless idx_shape == {} do
           raise ArgumentError,
