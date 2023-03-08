@@ -368,12 +368,12 @@ defmodule EXLA.Defn do
 
     {debug?, options} = Keyword.pop(options, :debug, false)
 
-    {args_key, reverse_args_triplet} =
+    {args_key, reverse_args_identifiers} =
       Enum.map_reduce(vars, [], fn var, acc ->
         Nx.Defn.Composite.traverse(var, acc, fn
-          %T{type: type, shape: shape, names: names}, acc ->
-            triplet = {type, shape, names}
-            {triplet, [triplet | acc]}
+          %T{type: type, shape: shape, names: names, vectorized_axes: vectorized_axes, }, acc ->
+            identifier = {type, shape, names, vectorized_axes}
+            {identifier, [identifier | acc]}
         end)
       end)
 
@@ -404,11 +404,11 @@ defmodule EXLA.Defn do
       :timer.tc(fn ->
         comp_cache_fun.(comp_key, fn ->
           {reverse_inputs_and_shapes, reverse_infeeds} =
-            reverse_args_triplet
+            reverse_args_identifiers
             |> Enum.reverse()
             |> EXLA.Defn.Buffers.split_by_value(used_inputs, fn
-              {type, shape, _names}, i, nil -> {i, EXLA.Shape.make_shape(type, shape)}
-              {type, shape, _names}, i, depth -> {i, depth, EXLA.Shape.make_shape(type, shape)}
+              {type, shape, _names, _vectorized_axes}, i, nil -> {i, EXLA.Shape.make_shape(type, shape)}
+              {type, shape, _names, _vectorized_axes}, i, depth -> {i, depth, EXLA.Shape.make_shape(type, shape)}
             end)
 
           inputs_and_shapes = Enum.reverse(reverse_inputs_and_shapes)
@@ -1466,7 +1466,7 @@ defmodule EXLA.Defn do
   defp computation_key(op, args) do
     keys =
       Enum.map(args, fn
-        %Nx.Tensor{shape: shape, names: names, type: type} -> {type, shape, names}
+        %Nx.Tensor{shape: shape, names: names, type: type, vectorized_axes: vectorized_axes} -> {type, shape, names, vectorized_axes}
         opts -> opts
       end)
 
