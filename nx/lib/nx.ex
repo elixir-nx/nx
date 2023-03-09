@@ -1726,6 +1726,8 @@ defmodule Nx do
 
   If your goal is to create tensors from lists, see `tensor/2`.
   If you want to create a tensor from binary, see `from_binary/3`.
+  If you want to convert non-tensor data structures or `Nx.Container`s
+  into tensors, see `stack/2` or `concatenate/2` instead.
   """
   @doc type: :conversion
   def to_tensor(%T{} = t),
