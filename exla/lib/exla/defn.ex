@@ -371,8 +371,9 @@ defmodule EXLA.Defn do
     {args_key, reverse_args_identifiers} =
       Enum.map_reduce(vars, [], fn var, acc ->
         Nx.Defn.Composite.traverse(var, acc, fn
-          %T{type: type, shape: shape, names: names, vectorized_axes: vectorized_axes, }, acc ->
-            identifier = {type, shape, names, vectorized_axes}
+          %T{} = t, acc ->
+            %T{type: type, shape: shape, names: names} = Nx.devectorize(t)
+            identifier = {type, shape, names}
             {identifier, [identifier | acc]}
         end)
       end)
@@ -407,8 +408,8 @@ defmodule EXLA.Defn do
             reverse_args_identifiers
             |> Enum.reverse()
             |> EXLA.Defn.Buffers.split_by_value(used_inputs, fn
-              {type, shape, _names, _vectorized_axes}, i, nil -> {i, EXLA.Shape.make_shape(type, shape)}
-              {type, shape, _names, _vectorized_axes}, i, depth -> {i, depth, EXLA.Shape.make_shape(type, shape)}
+              {type, shape, _names}, i, nil -> {i, EXLA.Shape.make_shape(type, shape)}
+              {type, shape, _names}, i, depth -> {i, depth, EXLA.Shape.make_shape(type, shape)}
             end)
 
           inputs_and_shapes = Enum.reverse(reverse_inputs_and_shapes)
@@ -612,6 +613,8 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(:tensor, [tensor], _ans, state) do
+    tensor = Nx.devectorize(tensor)
+
     case tensor.shape do
       {} ->
         to_constant(state.builder, Nx.to_number(tensor), tensor.type)
@@ -642,7 +645,7 @@ defmodule EXLA.Defn do
     EXLA.Op.rng_normal(mu, sigma, shape)
   end
 
-  defp to_operator(:iota, [axis], %{type: type, shape: shape}, state) do
+  defp to_operator(:iota, [axis], %{type: type, shape: shape} = t, state) do
     shape = EXLA.Shape.make_shape(type, shape)
     EXLA.Lib.iota(state.builder, shape, axis)
   end
@@ -1466,14 +1469,18 @@ defmodule EXLA.Defn do
   defp computation_key(op, args) do
     keys =
       Enum.map(args, fn
-        %Nx.Tensor{shape: shape, names: names, type: type, vectorized_axes: vectorized_axes} -> {type, shape, names, vectorized_axes}
-        opts -> opts
+        %Nx.Tensor{shape: shape, names: names, type: type, vectorized_axes: vectorized_axes} ->
+          {type, shape, names, vectorized_axes}
+
+        opts ->
+          opts
       end)
 
     {op, keys}
   end
 
-  defp computation_arg_shape(%{type: type, shape: shape}) do
+  defp computation_arg_shape(%T{} = tensor) do
+    %{type: type, shape: shape} = Nx.devectorize(tensor)
     EXLA.Shape.make_shape(type, shape)
   end
 

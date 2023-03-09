@@ -183,8 +183,7 @@ defmodule Nx.Tensor do
       shape = Nx.Shape.to_algebra(shape, names, open, close)
 
       # TO-DO: this is not the right way, but helps validate results
-      full_shape = List.to_tuple(vectorized_sizes ++ Tuple.to_list(tensor.shape))
-      data = tensor.data.__struct__.inspect(%{tensor | shape: full_shape}, opts)
+      data = tensor.data.__struct__.inspect(Nx.devectorize(tensor), opts)
 
       inner =
         if data == empty() do

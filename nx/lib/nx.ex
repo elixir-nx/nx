@@ -1726,7 +1726,15 @@ defmodule Nx do
   def to_binary(tensor, opts \\ []) do
     opts = keyword!(opts, [:limit])
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+
+    # TODO: add proper implementation
+    tensor =
+      if tensor.vectorized_axes != [] do
+        devectorize(tensor)
+      else
+        tensor
+      end
+
     limit = if limit = opts[:limit], do: Kernel.min(size(tensor), limit), else: size(tensor)
     impl!(tensor).to_binary(tensor, limit)
   end
@@ -3512,8 +3520,12 @@ defmodule Nx do
 
     Nx.Defn.Composite.traverse(tensor_or_container, fn tensor ->
       tensor = to_tensor(tensor)
-      Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-      impl!(tensor).backend_copy(tensor, backend, opts)
+
+      {tensor, axes} = devectorize_with_axes(tensor)
+
+      result = impl!(tensor).backend_copy(tensor, backend, opts)
+
+      revectorize_and_validate_sizes(result, axes)
     end)
   end
 
@@ -3565,8 +3577,9 @@ defmodule Nx do
 
     Nx.Defn.Composite.traverse(tensor_or_container, fn tensor ->
       tensor = to_tensor(tensor)
-      Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-      impl!(tensor).backend_transfer(tensor, backend, opts)
+      {tensor, axes} = devectorize_with_axes(tensor)
+      result = impl!(tensor).backend_transfer(tensor, backend, opts)
+      revectorize_and_validate_sizes(result, axes)
     end)
   end
 
@@ -3586,7 +3599,6 @@ defmodule Nx do
   def backend_deallocate(tensor_or_container) do
     Nx.Defn.Composite.reduce(tensor_or_container, :ok, fn
       %Nx.Tensor{} = tensor, :ok ->
-        Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
         impl!(tensor).backend_deallocate(tensor)
 
       _, :ok ->
@@ -3628,19 +3640,42 @@ defmodule Nx do
     }
   end
 
-  defp unvectorize(%T{shape: shape, names: names, vectorized_axes: vectorized_axes} = tensor) do
-    vectorized_sizes = Keyword.values(vectorized_axes)
+  @doc """
+  Transforms a vectorized tensor back into a regular tensor.
+
+  ## Examples
+
+      iex> t = Nx.iota({1, 2, 3}) |> Nx.vectorize(:x) |> Nx.vectorize(:y)
+      iex> Nx.devectorize(t)
+      #Nx.Tensor<
+        s64[x: 1][y: 2][3]
+        [
+          [
+            [0, 1, 2],
+            [3, 4, 5]
+          ]
+        ]
+      >
+  """
+  def devectorize(%T{shape: shape, names: names, vectorized_axes: vectorized_axes} = tensor)
+      when vectorized_axes != [] do
+    {vectorized_names, vectorized_sizes} = Enum.unzip(vectorized_axes)
 
     output_shape_l = vectorized_sizes ++ Tuple.to_list(shape)
     output_shape = List.to_tuple(output_shape_l)
 
-    output_names = List.duplicate(nil, length(vectorized_sizes)) ++ names
+    output_names = vectorized_names ++ names
 
-    output = %{tensor | shape: output_shape, names: output_names, vectorized_axes: []}
-    {output, vectorized_axes}
+    %{tensor | shape: output_shape, names: output_names, vectorized_axes: []}
   end
 
-  defp unvectorize(
+  def devectorize(tensor), do: tensor
+
+  defp devectorize_with_axes(tensor) do
+    {devectorize(tensor), tensor.vectorized_axes}
+  end
+
+  defp devectorize_with_axes(
          %T{shape: left_shape, names: left_shape_names} = left,
          %T{shape: right_shape, names: right_shape_names} = right
        ) do
@@ -3721,7 +3756,7 @@ defmodule Nx do
     tensor = to_tensor(tensor)
 
     if tensor.vectorized_axes != [] do
-      {tensor, vectorized_axes} = unvectorize(tensor)
+      {tensor, vectorized_axes} = devectorize_with_axes(tensor)
 
       tensor
       |> fun.()
@@ -3736,7 +3771,7 @@ defmodule Nx do
     right = to_tensor(right)
 
     if left.vectorized_axes != [] or right.vectorized_axes != [] do
-      {left, right, vectorized_axes} = unvectorize(left, right)
+      {left, right, vectorized_axes} = devectorize_with_axes(left, right)
 
       left
       |> fun.(right)
@@ -3782,10 +3817,10 @@ defmodule Nx do
 
   defp element_wise_bin_op(left, right, op, fun) do
     type = binary_type(left, right) |> fun.()
-    apply_vectorized([left, right], &unvectorized_element_wise_bin_op(type, &1, &2, op))
+    apply_vectorized([left, right], &devectorized_element_wise_bin_op(type, &1, &2, op))
   end
 
-  defp unvectorized_element_wise_bin_op(type, %T{} = left, %T{} = right, op) do
+  defp devectorized_element_wise_bin_op(type, %T{} = left, %T{} = right, op) do
     %T{shape: left_shape, names: left_names} = left
     %T{shape: right_shape, names: right_names} = right
 
@@ -3801,10 +3836,10 @@ defmodule Nx do
   end
 
   defp element_wise_pred_op(left, right, op) do
-    apply_vectorized([left, right], &unvectorized_element_wise_pred_op(&1, &2, op))
+    apply_vectorized([left, right], &devectorized_element_wise_pred_op(&1, &2, op))
   end
 
-  defp unvectorized_element_wise_pred_op(
+  defp devectorized_element_wise_pred_op(
          %T{shape: left_shape, names: left_names} = left,
          %T{shape: right_shape, names: right_names} = right,
          op
