@@ -2166,7 +2166,6 @@ defmodule Nx do
   @doc type: :type
   def as_type(tensor, type) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     new_type = Nx.Type.normalize!(type)
 
     cond do
