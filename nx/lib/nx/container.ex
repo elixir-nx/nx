@@ -1,36 +1,40 @@
 defprotocol Nx.Container do
   @moduledoc """
-  A protocol that teaches Nx how to traverse data structures
-  non-recursively.
+  A protocol that teaches `defn` how to traverse data structures.
 
-  `Nx` and `defn` expect the arguments to be numbers, tensors,
-  or one of the following composite data types:
+  When you invoke a `defn`, its arguments must implement
+  a `Nx.LazyContainer` and return a data structure that
+  implements `Nx.Container`. Inside `defn`, you can work
+  with any container data structure, such as:
 
-    1. tuples of numbers/tensors
-    2. maps of any key with numbers/tensors as values
-    3. any struct that implements `Nx.Container`
+    1. numbers/tensors
+    2. tuples
+    3. maps of any key
+    4. any struct that implements `Nx.Container`
 
-  If you need to pass additional values, you can implement
-  or derive this protocol. For example:
+  The easiest way to implement `Nx.Container` is by deriving
+  it. For example:
 
       @derive {Nx.Container,
                containers: [:field_name, :other_field]}
       defstruct [:field_name, :other_fields, ...]
 
   The `:containers` option is required and it must specify a
-  list of fields that contains tensors. Inside `defn`, the
-  container fields will be automatically converted to tensor
-  expressions. All other fields will be reset to their default
-  value, unless you explicitly declare them to be kept:
+  list of fields that contains tensors (or other containers).
+  Inside `defn`, the container fields will be automatically
+  converted to tensor expressions. All other fields will be
+  reset to their default value, unless you explicitly declare
+  them to be kept:
 
       @derive {Nx.Container,
                containers: [:field_name, :other_field],
                keep: [:another_field]}
       defstruct [:field_name, :other_fields, ...]
 
-  Note the functions in this module are not recursive.
-  If you want to deeply traverse and reduce containers,
-  use the functions in `Nx.Defn.Composite` instead.
+  Note `Nx.LazyContainer` is automatically implemented for all
+  data structures that implement `Nx.Container`. This also means
+  that you can convert any `Nx.Container` to a tensor by using
+  `Nx.stack/2` and `Nx.concatenate/2`.
 
   > **Careful!**: If you keep a field, its value will be part
   > of the `Nx.Defn` compiler cache key (i.e. therefore if you

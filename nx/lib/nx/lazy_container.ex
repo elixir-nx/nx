@@ -1,24 +1,20 @@
 defprotocol Nx.LazyContainer do
   @moduledoc """
-  Converts a data structure to a container lazily and recursively.
+  Converts a data structure to a container lazily.
 
-  Sometimes building tensors for a container is an expensive
-  operation, so we want to allow that to happen lazily.
+  When you invoke a `defn`, its arguments must implement
+  the `Nx.LazyContainer` protocol and return a data structure
+  that implements `Nx.Container`. In other words, this
+  protocol teaches Nx to work with additional data types
+  beyond numbers and tensors.
 
   This module provides a single traverse implementation
   that emits the tensor template and a function that computes
   the tensor as two distinct values. Then a tensor is only
   allocated if necessary.
 
-  This protocol is used throughout `Nx.Defn` API. This means
-  compilation, jitting, and streaming will only realize lazy
-  tensors when necessary.
-
-  If a data structure does not implement this protocol,
-  a default implementation converts eager to lazy using
-  `Nx.Container`. When a value is given to `defn`, it is
-  first converted to tensors and containers via `Nx.LazyContainer`.
-  Inside `defn`, there are no lazy containers, only containers.
+  You can convert any `Nx.LazyContainer` to a tensor by using
+  `Nx.stack/2` and `Nx.concatenate/2`.
   """
 
   @fallback_to_any true
