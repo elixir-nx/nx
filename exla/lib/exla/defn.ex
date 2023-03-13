@@ -1485,6 +1485,10 @@ defmodule EXLA.Defn do
     EXLA.Shape.make_shape(type, shape)
   end
 
+  defp computation_arg_shape(%{type: type, shape: shape}) do
+    EXLA.Shape.make_shape(type, shape)
+  end
+
   defp computation_arg_shape(tuple) when is_tuple(tuple) do
     tuple
     |> Tuple.to_list()
