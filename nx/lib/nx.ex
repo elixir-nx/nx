@@ -3608,12 +3608,102 @@ defmodule Nx do
   @doc """
   Transforms the leading dimension in a tensor into a vectorized axis.
 
-  Nested vectorizations will "remove" the leading axis from the shape
-  and append it to the vectorized axes
+  Each vectorization removes an axis from the shape and appends it to
+  vectorized axes list.
 
-  {2, 3, 4}
-  |> vectorize(:first) # => {3, 4} vec [first: 2]
-  |> vectorize(:second) # => {4} vec [first: 2, second: 3]
+  ## Examples
+
+      iex> t = Nx.iota({2, 3, 1, 1})
+      iex> vectorized = Nx.vectorize(t, :first)
+      #Nx.Tensor<
+        vectorized[first: 2]
+        s64[3][1][1]
+        [
+          [
+            [
+              [0]
+            ],
+            [
+              [1]
+            ],
+            [
+              [2]
+            ]
+          ],
+          [
+            [
+              [3]
+            ],
+            [
+              [4]
+            ],
+            [
+              [5]
+            ]
+          ]
+        ]
+      >
+      iex> Nx.vectorize(vectorized, :second)
+      #Nx.Tensor<
+        vectorized[first: 2][second: 3]
+        s64[1][1]
+        [
+          [
+            [
+              [0]
+            ],
+            [
+              [1]
+            ],
+            [
+              [2]
+            ]
+          ],
+          [
+            [
+              [3]
+            ],
+            [
+              [4]
+            ],
+            [
+              [5]
+            ]
+          ]
+        ]
+      >
+
+  A vectorized tensor can be thought of as a nested list of tensors
+  that have the shape equal to the tensor's base shape. Operations
+  are then applied in a nested manner accordingly.
+
+  In the following example, notice that you don't need to have the
+  second argument shaped in a way that can be broadcasted
+  (i.e. shape {1, 2} can be broadcasted to {4, 2}, while {2} can't),
+  because vectorization handles that automatically.
+
+      iex> vectorized = {4, 2} |> Nx.iota() |> Nx.vectorize(:x)
+      #Nx.Tensor<
+        vectorized[x: 4]
+        s64[2]
+        [
+          [0, 1],
+          [2, 3],
+          [4, 5],
+          [6, 7]
+        ]
+      >
+      iex> Nx.add(vectorized, Nx.tensor([1, -2]))
+      #Nx.Tensor<
+        vectorized[x: 4]
+        s64[2]
+        [
+          [1, -1],
+          [3, 1],
+          [5, 3],
+          [7, 5]
+        ]
+      >
   """
   @doc type: :shape
   def vectorize(tensor, name)

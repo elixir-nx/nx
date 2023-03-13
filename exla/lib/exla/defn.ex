@@ -646,7 +646,7 @@ defmodule EXLA.Defn do
     EXLA.Op.rng_normal(mu, sigma, shape)
   end
 
-  defp to_operator(:iota, [axis], %{type: type, shape: shape} = t, state) do
+  defp to_operator(:iota, [axis], %{type: type, shape: shape}, state) do
     shape = EXLA.Shape.make_shape(type, shape)
     EXLA.Lib.iota(state.builder, shape, axis)
   end
