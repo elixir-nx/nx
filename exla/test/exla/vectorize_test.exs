@@ -5,6 +5,7 @@ defmodule Nx.VectorizeTest do
 
   setup do
     backend = Nx.default_backend(EXLA.Backend)
+
     on_exit(fn ->
       Nx.default_backend(backend)
     end)
@@ -57,7 +58,10 @@ defmodule Nx.VectorizeTest do
         EXLA.jit_apply(&unquote(defn_name)(&1), [x])
       end
 
-      test "Nx.#{name}/1 works on vectorized tensor", %{base_math: base_math, vectorized_math: vectorized_math} do
+      test "Nx.#{name}/1 works on vectorized tensor", %{
+        base_math: base_math,
+        vectorized_math: vectorized_math
+      } do
         result =
           base_math
           |> Nx.unquote(name)()
@@ -67,14 +71,11 @@ defmodule Nx.VectorizeTest do
       end
     end
 
-    test "Nx.acosh/1 works on vectorized tensor", %{base_math: base_math, vectorized_math: vectorized_math} do
-      # convert to f64 because there's some funky rounding errors for f32
-      # They are probably due to differences between adding a 3D tensor and a scalar
-      # versus adding a 3D tensor to another 3D tensor (which is what the scalar becomes)
-      # for the vectorized version -- albeit with shape {1, 1, 1})
-      base_math = Nx.as_type(base_math, :f64)
-      vectorized_math = Nx.as_type(vectorized_math, :f64)
-      fun = EXLA.jit(& &1  |> Nx.add(1) |> Nx.acosh())
+    test "Nx.acosh/1 works on vectorized tensor", %{
+      base_math: base_math,
+      vectorized_math: vectorized_math
+    } do
+      fun = EXLA.jit(&(&1 |> Nx.add(2) |> Nx.acosh()))
 
       expected = fun.(base_math) |> Nx.vectorize(:rows)
       result = fun.(vectorized_math)
@@ -174,7 +175,7 @@ defmodule Nx.VectorizeTest do
       assert_equal(
         Nx.vectorize(Nx.add(base, base), :rows),
         add(vectorized, vectorized)
-        )
+      )
     end
 
     test "addition by vectorized with different axes", %{vectorized: vectorized, base: base} do

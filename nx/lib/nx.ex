@@ -3656,6 +3656,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :shape
   def devectorize(%T{shape: shape, names: names, vectorized_axes: vectorized_axes} = tensor)
       when vectorized_axes != [] do
     {vectorized_names, vectorized_sizes} = Enum.unzip(vectorized_axes)

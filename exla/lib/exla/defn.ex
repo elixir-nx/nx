@@ -371,10 +371,11 @@ defmodule EXLA.Defn do
     {args_key, reverse_args_identifiers} =
       Enum.map_reduce(vars, [], fn var, acc ->
         Nx.Defn.Composite.traverse(var, acc, fn
-          %T{} = t, acc ->
+          %T{vectorized_axes: vectorized_axes} = t, acc ->
             %T{type: type, shape: shape, names: names} = Nx.devectorize(t)
             identifier = {type, shape, names}
-            {identifier, [identifier | acc]}
+            cache_key = {type, shape, names, vectorized_axes}
+            {cache_key, [identifier | acc]}
         end)
       end)
 
