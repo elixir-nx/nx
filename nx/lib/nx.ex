@@ -3735,6 +3735,16 @@ defmodule Nx do
   ## Examples
 
       iex> t = Nx.iota({1, 2, 3}) |> Nx.vectorize(:x) |> Nx.vectorize(:y)
+      #Nx.Tensor<
+        vectorized[x: 1][y: 2]
+        s64[3]
+        [
+          [
+            [0, 1, 2],
+            [3, 4, 5]
+          ]
+        ]
+      >
       iex> Nx.devectorize(t)
       #Nx.Tensor<
         s64[x: 1][y: 2][3]
