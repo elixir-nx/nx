@@ -73,6 +73,7 @@ defmodule Nx.Random do
 
     Nx.stack([k1, k2])
     |> Nx.as_type(:u32)
+    |> stop_grad()
   end
 
   @doc """
@@ -105,7 +106,7 @@ defmodule Nx.Random do
   defn split(key, opts \\ []) do
     assert_key!(key)
     opts = keyword!(opts, parts: 2)
-    threefry2x32(key, {opts[:parts], 2})
+    threefry2x32(key, {opts[:parts], 2}) |> stop_grad()
   end
 
   @doc """
@@ -158,6 +159,7 @@ defmodule Nx.Random do
     [x1, x2]
     |> Nx.stack(axis: -1)
     |> Nx.reshape(fold_shape(Nx.shape(data)))
+    |> stop_grad()
   end
 
   deftransformp fold_shape(shape) do
@@ -261,6 +263,7 @@ defmodule Nx.Random do
         threefry2x32(key, shape)
         |> Nx.as_type({:u, bit_width})
     end
+    |> stop_grad()
   end
 
   deftransformp mantissa_shift(nbits, type) do
@@ -354,6 +357,7 @@ defmodule Nx.Random do
     (min_val + offset)
     |> Nx.as_type(type)
     |> Nx.reshape(shape, take_names(opts))
+    |> stop_grad()
   end
 
   deftransformp randint_random_bits_shape(shape), do: Tuple.insert_at(shape, 0, 2)
@@ -438,6 +442,7 @@ defmodule Nx.Random do
       |> Nx.max(min_value)
       |> Nx.reshape(shape, take_names(opts))
     end)
+    |> stop_grad()
   end
 
   @doc """
@@ -524,6 +529,7 @@ defmodule Nx.Random do
       normal = Nx.sqrt(Nx.tensor(2, type: type)) * Nx.erf_inv(u)
       Nx.as_type(standard_deviation, type) * normal + Nx.as_type(mean, type)
     end)
+    |> stop_grad()
   end
 
   @doc """
@@ -875,7 +881,7 @@ defmodule Nx.Random do
     u =
       uniform_split(key, Nx.Constants.smallest_positive_normal(type), 1, shape: shape, type: type)
 
-    -Nx.log(-Nx.log(u))
+    stop_grad(-Nx.log(-Nx.log(u)))
   end
 
   deftransformp next_after_minus_1({_, bits}) do
