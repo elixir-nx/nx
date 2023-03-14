@@ -127,6 +127,7 @@ defmodule Nx.LinAlg do
   """
   def cholesky(tensor) do
     %T{type: type, shape: shape, names: names} = tensor = Nx.to_tensor(tensor)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     output_type = Nx.Type.to_floating(type)
 
@@ -282,6 +283,7 @@ defmodule Nx.LinAlg do
 
   deftransformp norm_transform(t, opts) do
     rank = Nx.rank(t)
+    Nx.Shared.raise_vectorized_not_implemented_yet(t, __ENV__.function)
 
     unless rank == 1 or rank == 2 do
       raise ArgumentError, "expected 1-D or 2-D tensor, got tensor with shape #{inspect(t.shape)}"
@@ -533,6 +535,8 @@ defmodule Nx.LinAlg do
     output_type = binary_type(a, b) |> Nx.Type.to_floating()
     %T{shape: a_shape} = a = Nx.to_tensor(a)
     %T{shape: b_shape} = b = Nx.to_tensor(b)
+    Nx.Shared.raise_vectorized_not_implemented_yet(a, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(b, __ENV__.function)
 
     case opts[:transform_a] do
       t when t in [:none, :transpose] ->
@@ -626,6 +630,8 @@ defmodule Nx.LinAlg do
   def solve(a, b) do
     %T{shape: a_shape, type: a_type} = a = Nx.to_tensor(a)
     %T{shape: b_shape, type: b_type} = b = Nx.to_tensor(b)
+    Nx.Shared.raise_vectorized_not_implemented_yet(a, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(b, __ENV__.function)
 
     output_shape = Nx.Shape.solve(a_shape, b_shape)
     output_type = a_type |> Nx.Type.merge(b_type) |> Nx.Type.to_floating()
@@ -924,6 +930,7 @@ defmodule Nx.LinAlg do
   def qr(tensor, opts \\ []) do
     opts = keyword!(opts, mode: :reduced, eps: 1.0e-10)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     mode = opts[:mode]
     valid_modes = [:reduced, :complete]
@@ -1154,6 +1161,7 @@ defmodule Nx.LinAlg do
   def eigh(tensor, opts \\ []) do
     opts = keyword!(opts, max_iter: 1_000, eps: 1.0e-4)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     output_type = Nx.Type.to_floating(type)
 
@@ -1271,6 +1279,7 @@ defmodule Nx.LinAlg do
   def svd(tensor, opts \\ []) do
     opts = keyword!(opts, max_iter: 100, full_matrices?: true)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.svd", 2)
 
@@ -1445,6 +1454,7 @@ defmodule Nx.LinAlg do
   def lu(tensor, opts \\ []) do
     opts = keyword!(opts, eps: 1.0e-10)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     output_type = Nx.Type.to_floating(type)
     {p_shape, l_shape, u_shape} = Nx.Shape.lu(shape)
@@ -1685,6 +1695,7 @@ defmodule Nx.LinAlg do
   # optional needs to work on the actual backend.
   def determinant(tensor) do
     tensor = Nx.to_tensor(tensor)
+    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     shape = Nx.shape(tensor)
     {batch_shape, matrix_shape} = shape |> Tuple.to_list() |> Enum.split(-2)
     output = Nx.template(List.to_tuple(batch_shape), Nx.Type.to_floating(tensor.type))

@@ -53,8 +53,9 @@ defmodule EXLA.Defn.Buffers do
   """
   def to_nx!(buffers, outputs) do
     {res, []} =
-      Nx.Defn.Composite.traverse(outputs, buffers, fn %Nx.Tensor{} = hole, [buffer | acc] ->
-        {%{hole | data: buffer_to_data(hole, buffer)}, acc}
+      Nx.Defn.Composite.traverse(outputs, buffers, fn
+        %Nx.Tensor{} = hole, [buffer | acc] ->
+          {%{hole | data: buffer_to_data(hole, buffer)}, acc}
       end)
 
     res
@@ -79,7 +80,9 @@ defmodule EXLA.Defn.Buffers do
     %Nx.BinaryBackend{state: data}
   end
 
-  defp validate_shape!(%{type: type, shape: shape}, exla_shape) do
+  defp validate_shape!(%Nx.Tensor{} = t, exla_shape) do
+    %{type: type, shape: shape} = Nx.devectorize(t)
+
     nx_type = to_nx_type(exla_shape.dtype)
     nx_shape = exla_shape.dims
 
@@ -101,7 +104,7 @@ defmodule EXLA.Defn.Buffers do
   Nx -> EXLA.DeviceBuffer + EXLA.BinaryBuffer.
   """
   def from_nx!(fun, executable, transfer? \\ true) do
-    %Nx.Tensor{data: data} = tensor = fun.()
+    %Nx.Tensor{data: data} = tensor = Nx.devectorize(fun.())
 
     case data do
       %EXLA.Backend{buffer: %EXLA.DeviceBuffer{} = buffer}

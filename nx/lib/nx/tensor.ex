@@ -13,6 +13,7 @@ defmodule Nx.Tensor do
     * `:shape` - the tensor shape
     * `:type` - the tensor type
     * `:names` - the tensor names
+    * `:vectorized_axes` - a tuple that encodes names and sizes for vectorization
 
   In general it is discouraged to access those fields directly. Use
   the functions in the `Nx` module instead. Backends have to access those
@@ -30,7 +31,7 @@ defmodule Nx.Tensor do
   @type t(data) :: %Nx.Tensor{data: data, type: type, shape: shape, names: [name]}
 
   @enforce_keys [:type, :shape, :names]
-  defstruct [:data, :type, :shape, :names]
+  defstruct [:data, :type, :shape, :names, vectorized_axes: []]
 
   ## Access
 
@@ -157,18 +158,38 @@ defmodule Nx.Tensor do
   defimpl Inspect do
     import Inspect.Algebra
 
-    def inspect(%{shape: shape, names: names, type: type} = tensor, opts) do
+    def inspect(
+          %{shape: shape, names: names, type: type, vectorized_axes: vectorized_axes} = tensor,
+          opts
+        ) do
       open = color("[", :list, opts)
       close = color("]", :list, opts)
       type = color(Nx.Type.to_string(type), :atom, opts)
+
+      {vectorized_names, vectorized_sizes} = Enum.unzip(vectorized_axes)
+      vectorized_shape_tuple = List.to_tuple(vectorized_sizes)
+
+      vectorized_shape =
+        if vectorized_axes == [] do
+          empty()
+        else
+          concat([
+            "vectorized",
+            Nx.Shape.to_algebra(vectorized_shape_tuple, vectorized_names, open, close),
+            line()
+          ])
+        end
+
       shape = Nx.Shape.to_algebra(shape, names, open, close)
-      data = tensor.data.__struct__.inspect(tensor, opts)
+
+      # TO-DO: this is not the right way, but helps validate results
+      data = tensor.data.__struct__.inspect(Nx.devectorize(tensor), opts)
 
       inner =
         if data == empty() do
-          concat([line(), type, shape, data])
+          concat([line(), vectorized_shape, type, shape, data])
         else
-          concat([line(), type, shape, line(), data])
+          concat([line(), vectorized_shape, type, shape, line(), data])
         end
 
       force_unfit(
