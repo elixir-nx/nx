@@ -3613,95 +3613,82 @@ defmodule Nx do
 
   ## Examples
 
-      iex> t = Nx.iota({2, 3, 1, 1})
+  In this first example, we turn a `{2, 3}`-shaped tensor into a tensor
+  with 1 vectorized axes and rank 1 shape, `{3}`, and then into a tensor with
+  2 vectorized axes and rank 0 shape.
+
+      iex> t = Nx.iota({2, 3})
       iex> vectorized = Nx.vectorize(t, :first)
       #Nx.Tensor<
         vectorized[first: 2]
-        s64[3][1][1]
+        s64[3]
         [
-          [
-            [
-              [0]
-            ],
-            [
-              [1]
-            ],
-            [
-              [2]
-            ]
-          ],
-          [
-            [
-              [3]
-            ],
-            [
-              [4]
-            ],
-            [
-              [5]
-            ]
-          ]
+          [0, 1, 2],
+          [3, 4, 5]
         ]
       >
       iex> Nx.vectorize(vectorized, :second)
       #Nx.Tensor<
         vectorized[first: 2][second: 3]
-        s64[1][1]
+        s64
         [
-          [
-            [
-              [0]
-            ],
-            [
-              [1]
-            ],
-            [
-              [2]
-            ]
-          ],
-          [
-            [
-              [3]
-            ],
-            [
-              [4]
-            ],
-            [
-              [5]
-            ]
-          ]
+          [0, 1, 2],
+          [3, 4, 5]
         ]
       >
 
-  A vectorized tensor can be thought of as a nested list of tensors
-  that have the shape equal to the tensor's base shape. Operations
-  are then applied in a nested manner accordingly.
+  A vectorized tensor can be thought of as a tensor that signals
+  to Nx that any operation applied on it must instead be applied
+  to each individual entry for the vectorized axis.
+  Nested vectorizations just apply this idea recursively, ultimately
+  applying the operation to each non-vectorized entry.
 
   In the following example, notice that you don't need to have the
-  second argument shaped in a way that can be broadcasted
-  (i.e. shape {1, 2} can be broadcasted to {4, 2}, while {2} can't),
-  because vectorization handles that automatically.
+  second argument shaped in a way that can be broadcasted, because
+  vectorization handles that automatically.
 
-      iex> vectorized = {4, 2} |> Nx.iota() |> Nx.vectorize(:x)
+  In the example below, shape `{4}` isn't broadcast-compatible with `{2}`:
+
+      iex> Nx.add(Nx.tensor([4, 3, 2, 1]), Nx.tensor([0, 1]))
+      ** (ArgumentError) cannot broadcast tensor of dimensions {4} to {2}
+
+  If we want to add the two tensors, normally we would need to reshape
+  to signal which axis are broadcasted together:
+
+      iex> left = Nx.tensor([4, 3, 2, 1]) |> Nx.reshape({4, 1})
+      iex> right = Nx.tensor([0, 1]) |> Nx.reshape({1, 2})
+      iex> Nx.add(left, right)
       #Nx.Tensor<
-        vectorized[x: 4]
-        s64[2]
+        s64[4][2]
         [
-          [0, 1],
-          [2, 3],
           [4, 5],
-          [6, 7]
+          [3, 4],
+          [2, 3],
+          [1, 2]
         ]
       >
-      iex> Nx.add(vectorized, Nx.tensor([1, -2]))
+
+  However, it `vectorize/1` simplifies this process. We can instead
+  signal that each entry on the `left` tensor will be treated as an
+  individual tensor, effectively forcing the same broadcast to happen.
+  In fact, you can think of the following code as a series of
+  additions between tensors of shapes `{}` and `{2}` respectively.
+
+      iex> vectorized = Nx.vectorize(Nx.tensor([4, 3, 2, 1]), :x)
+      #Nx.Tensor<
+        vectorized[x: 4]
+        s64
+        [4, 3, 2, 1]
+      >
+      iex> Nx.add(vectorized, Nx.tensor([0, 1]))
       #Nx.Tensor<
         vectorized[x: 4]
         s64[2]
         [
-          [1, -1],
-          [3, 1],
-          [5, 3],
-          [7, 5]
+          [4, 5],
+          [3, 4],
+          [2, 3],
+          [1, 2]
         ]
       >
   """
