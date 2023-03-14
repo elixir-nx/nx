@@ -3327,9 +3327,7 @@ defmodule Nx do
   Returns the number of elements in the tensor.
 
   If a tuple is given, it returns the number of elements in a tensor with that shape.
-  Vectorized tensors will return the base shape's size.
-
-  See also: `flat_size/1`
+  Vectorized tensors will not include vectorized axes sizes. See `flat_size/1`.
 
   ## Examples
 
