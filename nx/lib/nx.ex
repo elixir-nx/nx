@@ -3344,8 +3344,7 @@ defmodule Nx do
   def size(tensor), do: size(shape(tensor))
 
   @doc """
-  Returns the number of elements in the tensor.
-  Vectorized tensors will behave as if they aren't vectorized.
+  Returns the number of elements in the tensor (including vectorized axes).
 
   See also: `size/1`
 
