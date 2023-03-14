@@ -1721,11 +1721,16 @@ defmodule Nx do
       iex> Nx.to_binary(Nx.tensor([1.0, 2.0, 3.0]), limit: 2)
       <<1.0::float-32-native, 2.0::float-32-native>>
 
+  ### Vectorized tensors
+
+  `to_binary/2` discards the vectorized axes before calculating the data to be returned:
+
+      iex> Nx.to_binary(Nx.vectorize(Nx.tensor([[1, 2], [3, 4]]), :x))
+      <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
+
       iex> Nx.to_binary(Nx.vectorize(Nx.tensor([1, 2, 3]), :x), limit: 2)
       <<1::64-native, 2::64-native>>
 
-      iex> Nx.to_binary(Nx.vectorize(Nx.tensor([[1, 2, 3], [4, 5, 6]]), :x))
-      <<1::64-native, 2::64-native, 3::64-native, 4::64-native, 5::64-native, 6::64-native>>
   """
   @doc type: :conversion
   def to_binary(tensor, opts \\ []) do
@@ -1802,16 +1807,24 @@ defmodule Nx do
       iex> Nx.to_flat_list(t)
       [:neg_infinity, :nan, :infinity]
 
+  ### Vectorized tensors
+
+  `to_flat_list/2` discards the vectorized axes before calculating the data to be returned.
+  Like `to_binary/1`, `:limit` refers to the flattened devectorized data.
+
+      iex> t = Nx.vectorize(Nx.tensor([[1], [2], [3], [4]]), :x)
+      iex> Nx.to_flat_list(t)
+      [1, 2, 3, 4]
+      iex> Nx.to_flat_list(t, limit: 2)
+      [1, 2]
   """
   @doc type: :conversion
   def to_flat_list(tensor, opts \\ []) do
     opts = keyword!(opts, [:limit])
-    %{type: {_, size} = type} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    %{type: type} = tensor = to_tensor(tensor)
 
-    for <<part::size(size)-bitstring <- to_binary(tensor, Keyword.take(opts, [:limit]))>> do
-      match_types [type] do
-        <<match!(var, 0)>> = part
+    match_types [type] do
+      for <<match!(var, 0) <- to_binary(tensor, opts)>> do
         read!(var, 0)
       end
     end
@@ -1841,11 +1854,20 @@ defmodule Nx do
         s64
         123
       >
+
+  ### Vectorized tensors
+
+  `to_list/1` discards the vectorized axes before calculating the data to be returned.
+  The special case below shows that a vectorized tensor with inner scalar shape will
+  still be converted to a list accordingly:
+
+      iex> %{shape: {}} = t = Nx.vectorize(Nx.tensor([1, 2, 3]), :x)
+      iex> Nx.to_list(t) # recall that normally, shape == {} would raise!
+      [1, 2, 3]
   """
   @doc type: :conversion
   def to_list(tensor) do
-    %{type: type, shape: shape} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    %{type: type, shape: shape} = tensor = tensor |> to_tensor() |> devectorize()
 
     if shape == {} do
       raise ArgumentError, "cannot convert a scalar tensor to a list, got: #{inspect(tensor)}"
