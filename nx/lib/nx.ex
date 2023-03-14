@@ -2024,7 +2024,7 @@ defmodule Nx do
   will be represented by the atoms `:neg_infinity`, `:infinity`, and
   `:nan` respectively.
 
-  If the tensor has a dimension, it raises.
+  If the tensor has a dimension or is vectorized, it raises.
 
   Note: This function cannot be used in `defn`.
 
@@ -2036,6 +2036,9 @@ defmodule Nx do
       iex> Nx.to_number(Nx.tensor([1.0, 2.0, 3.0]))
       ** (ArgumentError) cannot convert tensor of shape {3} to number
 
+      iex> Nx.to_number(Nx.vectorize(Nx.tensor([1]), :x))
+      ** (ArgumentError) cannot convert vectorized tensor with axes [x: 1] and shape {} to number
+
   """
   @doc type: :conversion
   def to_number(tensor)
@@ -2044,7 +2047,11 @@ defmodule Nx do
 
   def to_number(tensor) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+
+    if tensor.vectorized_axes != [] do
+      raise ArgumentError,
+            "cannot convert vectorized tensor with axes #{inspect(tensor.vectorized_axes)} and shape #{inspect(tensor.shape)} to number"
+    end
 
     if tensor.shape != {} do
       raise ArgumentError, "cannot convert tensor of shape #{inspect(tensor.shape)} to number"
