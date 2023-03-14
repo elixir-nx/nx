@@ -1721,21 +1721,24 @@ defmodule Nx do
       iex> Nx.to_binary(Nx.tensor([1.0, 2.0, 3.0]), limit: 2)
       <<1.0::float-32-native, 2.0::float-32-native>>
 
+      iex> Nx.to_binary(Nx.vectorize(Nx.tensor([1, 2, 3]), :x), limit: 2)
+      <<1::64-native, 2::64-native>>
+
+      iex> Nx.to_binary(Nx.vectorize(Nx.tensor([[1, 2, 3], [4, 5, 6]]), :x))
+      <<1::64-native, 2::64-native, 3::64-native, 4::64-native, 5::64-native, 6::64-native>>
   """
   @doc type: :conversion
   def to_binary(tensor, opts \\ []) do
     opts = keyword!(opts, [:limit])
     tensor = to_tensor(tensor)
 
-    # TODO: add proper implementation
-    tensor =
-      if tensor.vectorized_axes != [] do
-        devectorize(tensor)
+    limit =
+      if limit = opts[:limit] do
+        Kernel.min(flat_size(tensor), limit)
       else
-        tensor
+        flat_size(tensor)
       end
 
-    limit = if limit = opts[:limit], do: Kernel.min(size(tensor), limit), else: size(tensor)
     impl!(tensor).to_binary(tensor, limit)
   end
 
@@ -3295,6 +3298,9 @@ defmodule Nx do
   Returns the number of elements in the tensor.
 
   If a tuple is given, it returns the number of elements in a tensor with that shape.
+  Vectorized tensors will return the base shape's size.
+
+  See also: `flat_size/1`
 
   ## Examples
 
@@ -3307,10 +3313,42 @@ defmodule Nx do
       iex> Nx.size({1, 2, 3, 2})
       12
 
+      iex> Nx.size(Nx.vectorize(Nx.iota({4, 3, 2}), :x))
+      6
+
   """
   @doc type: :shape
   def size(shape) when is_tuple(shape), do: Tuple.product(shape)
   def size(tensor), do: size(shape(tensor))
+
+  @doc """
+  Returns the number of elements in the tensor.
+  Vectorized tensors will behave as if they aren't vectorized.
+
+  See also: `size/1`
+
+  ## Examples
+
+      iex> Nx.flat_size(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
+      6
+
+      iex> Nx.flat_size(10)
+      1
+
+      iex> t = Nx.iota({4, 3, 2})
+      iex> v1 = Nx.vectorize(t, :x)
+      iex> Nx.flat_size(v1)
+      24
+      iex> Nx.flat_size(Nx.vectorize(v1, :y))
+      24
+  """
+  @doc type: :shape
+  def flat_size(%T{vectorized_axes: axes} = tensor) when axes != [] do
+    base_size = size(tensor)
+    Enum.reduce(axes, base_size, fn {_, size}, acc -> acc * size end)
+  end
+
+  def flat_size(tensor), do: size(tensor)
 
   @doc """
   Returns the byte size of the data in the tensor
