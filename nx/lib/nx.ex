@@ -3847,11 +3847,21 @@ defmodule Nx do
     if tensor.vectorized_axes != [] do
       {tensor, vectorized_axes} = devectorize_with_axes(tensor)
 
-      tensor
-      |> fun.()
-      |> revectorize_and_validate_sizes(vectorized_axes)
+      if is_function(fun, 2) do
+        tensor
+        |> fun.(length(vectorized_axes))
+        |> revectorize_and_validate_sizes(vectorized_axes)
+      else
+        tensor
+        |> fun.()
+        |> revectorize_and_validate_sizes(vectorized_axes)
+      end
     else
-      fun.(tensor)
+      if is_function(fun, 1) do
+        fun.(tensor)
+      else
+        fun.(tensor, 0)
+      end
     end
   end
 
@@ -3899,18 +3909,6 @@ defmodule Nx do
 
     %T{tensor | names: out_names, vectorized_axes: vectorized_axes, shape: out_shape}
   end
-
-  defp vectorized_offset_axis_option(opts, %{vectorized_axes: axes}) when axes != [] do
-    axis =
-      case opts[:axis] do
-        nil -> nil
-        axis -> axis + length(axes)
-      end
-
-    Keyword.put(opts, :axis, axis)
-  end
-
-  defp vectorized_offset_axis_option(opts, _), do: opts
 
   ## Element-wise binary ops
 
@@ -11516,11 +11514,9 @@ defmodule Nx do
   """
   @doc type: :ndim
   def sort(tensor, opts \\ []) do
-    opts =
-      keyword!(opts, axis: 0, direction: :asc)
-      |> vectorized_offset_axis_option(tensor)
+    opts = keyword!(opts, axis: 0, direction: :asc)
 
-    apply_vectorized([tensor], fn tensor ->
+    apply_vectorized([tensor], fn tensor, offset ->
       direction =
         case opts[:direction] do
           :asc ->
@@ -11536,7 +11532,7 @@ defmodule Nx do
 
       %T{shape: shape, names: names, type: type} = tensor
       Nx.Shared.raise_complex_not_supported(type, :sort, 2)
-      axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
+      axis = Nx.Shape.normalize_axis(shape, opts[:axis], names, offset)
 
       impl!(tensor).sort(
         tensor,
@@ -11744,12 +11740,9 @@ defmodule Nx do
   """
   @doc type: :ndim
   def argsort(tensor, opts \\ []) do
-    opts =
-      opts
-      |> keyword!(axis: 0, direction: :asc)
-      |> vectorized_offset_axis_option(tensor)
+    opts = keyword!(opts, axis: 0, direction: :asc)
 
-    apply_vectorized([tensor], fn tensor ->
+    apply_vectorized([tensor], fn tensor, offset ->
       direction =
         case opts[:direction] do
           :asc ->
@@ -11764,7 +11757,7 @@ defmodule Nx do
         end
 
       %T{type: type, shape: shape, names: names} = tensor
-      axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
+      axis = Nx.Shape.normalize_axis(shape, opts[:axis], names, offset)
 
       Nx.Shared.raise_complex_not_supported(type, :argsort, 2)
 
@@ -12566,14 +12559,16 @@ defmodule Nx do
   """
   @doc type: :shape
   def reflect(tensor, opts \\ []) do
-    opts = opts |> keyword!([:padding_config]) |> reflect_vectorized_padding_config(tensor)
+    opts = keyword!(opts, [:padding_config])
 
-    apply_vectorized([tensor], fn tensor ->
+    apply_vectorized([tensor], fn tensor, offset ->
       padding_config = opts[:padding_config]
 
       unless padding_config do
         raise ArgumentError, "missing mandatory option :padding_config"
       end
+
+      padding_config = List.duplicate({0, 0}, offset) ++ padding_config
 
       rank = Nx.rank(tensor)
 
@@ -12638,21 +12633,6 @@ defmodule Nx do
       )
     end)
   end
-
-  defp reflect_vectorized_padding_config(opts, %{vectorized_axes: axes}) when axes != [] do
-    padding_config =
-      case opts[:padding_config] do
-        nil ->
-          nil
-
-        conf ->
-          List.duplicate({0, 0}, length(axes)) ++ conf
-      end
-
-    Keyword.put(opts, :padding_config, padding_config)
-  end
-
-  defp reflect_vectorized_padding_config(opts, _), do: opts
 
   defp left_reflect_index_period(1), do: Nx.tensor([0])
 
