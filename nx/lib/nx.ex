@@ -1721,21 +1721,29 @@ defmodule Nx do
       iex> Nx.to_binary(Nx.tensor([1.0, 2.0, 3.0]), limit: 2)
       <<1.0::float-32-native, 2.0::float-32-native>>
 
+  ### Vectorized tensors
+
+  `to_binary/2` discards the vectorized axes before calculating the data to be returned:
+
+      iex> Nx.to_binary(Nx.vectorize(Nx.tensor([[1, 2], [3, 4]]), :x))
+      <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
+
+      iex> Nx.to_binary(Nx.vectorize(Nx.tensor([1, 2, 3]), :x), limit: 2)
+      <<1::64-native, 2::64-native>>
+
   """
   @doc type: :conversion
   def to_binary(tensor, opts \\ []) do
     opts = keyword!(opts, [:limit])
     tensor = to_tensor(tensor)
 
-    # TODO: add proper implementation
-    tensor =
-      if tensor.vectorized_axes != [] do
-        devectorize(tensor)
+    limit =
+      if limit = opts[:limit] do
+        Kernel.min(flat_size(tensor), limit)
       else
-        tensor
+        flat_size(tensor)
       end
 
-    limit = if limit = opts[:limit], do: Kernel.min(size(tensor), limit), else: size(tensor)
     impl!(tensor).to_binary(tensor, limit)
   end
 
@@ -1799,16 +1807,24 @@ defmodule Nx do
       iex> Nx.to_flat_list(t)
       [:neg_infinity, :nan, :infinity]
 
+  ### Vectorized tensors
+
+  `to_flat_list/2` discards the vectorized axes before calculating the data to be returned.
+  Like `to_binary/1`, `:limit` refers to the flattened devectorized data.
+
+      iex> t = Nx.vectorize(Nx.tensor([[1], [2], [3], [4]]), :x)
+      iex> Nx.to_flat_list(t)
+      [1, 2, 3, 4]
+      iex> Nx.to_flat_list(t, limit: 2)
+      [1, 2]
   """
   @doc type: :conversion
   def to_flat_list(tensor, opts \\ []) do
     opts = keyword!(opts, [:limit])
-    %{type: {_, size} = type} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    %{type: type} = tensor = to_tensor(tensor)
 
-    for <<part::size(size)-bitstring <- to_binary(tensor, Keyword.take(opts, [:limit]))>> do
-      match_types [type] do
-        <<match!(var, 0)>> = part
+    match_types [type] do
+      for <<match!(var, 0) <- to_binary(tensor, opts)>> do
         read!(var, 0)
       end
     end
@@ -1838,11 +1854,20 @@ defmodule Nx do
         s64
         123
       >
+
+  ### Vectorized tensors
+
+  `to_list/1` discards the vectorized axes before calculating the data to be returned.
+  The special case below shows that a vectorized tensor with inner scalar shape will
+  still be converted to a list accordingly:
+
+      iex> %{shape: {}} = t = Nx.vectorize(Nx.tensor([1, 2, 3]), :x)
+      iex> Nx.to_list(t) # recall that normally, shape == {} would raise!
+      [1, 2, 3]
   """
   @doc type: :conversion
   def to_list(tensor) do
-    %{type: type, shape: shape} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    %{type: type, shape: shape} = tensor = tensor |> to_tensor() |> devectorize()
 
     if shape == {} do
       raise ArgumentError, "cannot convert a scalar tensor to a list, got: #{inspect(tensor)}"
@@ -1999,7 +2024,7 @@ defmodule Nx do
   will be represented by the atoms `:neg_infinity`, `:infinity`, and
   `:nan` respectively.
 
-  If the tensor has a dimension, it raises.
+  If the tensor has a dimension or is vectorized, it raises.
 
   Note: This function cannot be used in `defn`.
 
@@ -2011,6 +2036,9 @@ defmodule Nx do
       iex> Nx.to_number(Nx.tensor([1.0, 2.0, 3.0]))
       ** (ArgumentError) cannot convert tensor of shape {3} to number
 
+      iex> Nx.to_number(Nx.vectorize(Nx.tensor([1]), :x))
+      ** (ArgumentError) cannot convert vectorized tensor with axes [x: 1] and shape {} to number
+
   """
   @doc type: :conversion
   def to_number(tensor)
@@ -2019,7 +2047,11 @@ defmodule Nx do
 
   def to_number(tensor) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+
+    if tensor.vectorized_axes != [] do
+      raise ArgumentError,
+            "cannot convert vectorized tensor with axes #{inspect(tensor.vectorized_axes)} and shape #{inspect(tensor.shape)} to number"
+    end
 
     if tensor.shape != {} do
       raise ArgumentError, "cannot convert tensor of shape #{inspect(tensor.shape)} to number"
@@ -3295,6 +3327,7 @@ defmodule Nx do
   Returns the number of elements in the tensor.
 
   If a tuple is given, it returns the number of elements in a tensor with that shape.
+  Vectorized tensors will not include vectorized axes sizes. See `flat_size/1`.
 
   ## Examples
 
@@ -3307,10 +3340,41 @@ defmodule Nx do
       iex> Nx.size({1, 2, 3, 2})
       12
 
+      iex> Nx.size(Nx.vectorize(Nx.iota({4, 3, 2}), :x))
+      6
+
   """
   @doc type: :shape
   def size(shape) when is_tuple(shape), do: Tuple.product(shape)
   def size(tensor), do: size(shape(tensor))
+
+  @doc """
+  Returns the number of elements in the tensor (including vectorized axes).
+
+  See also: `size/1`
+
+  ## Examples
+
+      iex> Nx.flat_size(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
+      6
+
+      iex> Nx.flat_size(10)
+      1
+
+      iex> t = Nx.iota({4, 3, 2})
+      iex> v1 = Nx.vectorize(t, :x)
+      iex> Nx.flat_size(v1)
+      24
+      iex> Nx.flat_size(Nx.vectorize(v1, :y))
+      24
+  """
+  @doc type: :shape
+  def flat_size(%T{vectorized_axes: axes} = tensor) when axes != [] do
+    base_size = size(tensor)
+    Enum.reduce(axes, base_size, fn {_, size}, acc -> acc * size end)
+  end
+
+  def flat_size(tensor), do: size(tensor)
 
   @doc """
   Returns the byte size of the data in the tensor
