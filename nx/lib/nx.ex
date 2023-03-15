@@ -3391,12 +3391,16 @@ defmodule Nx do
       iex> Nx.byte_size(1)
       8
 
+  Vectorized tensors account for all elements
+
+      iex> Nx.byte_size(Nx.tensor([[1, 2], [3, 4]]) |> Nx.vectorize(:x))
+      32
+
   """
   @doc type: :shape
   def byte_size(tensor) do
-    %{type: {_, bit_size}, shape: shape} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    size(shape) * div(bit_size, 8)
+    %{type: {_, bit_size}} = tensor = to_tensor(tensor)
+    flat_size(tensor) * div(bit_size, 8)
   end
 
   @doc """
