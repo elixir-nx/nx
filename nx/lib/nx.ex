@@ -3857,10 +3857,10 @@ defmodule Nx do
         |> revectorize_and_validate_sizes(vectorized_axes)
       end
     else
-      if is_function(fun, 1) do
-        fun.(tensor)
-      else
+      if is_function(fun, 2) do
         fun.(tensor, 0)
+      else
+        fun.(tensor)
       end
     end
   end
