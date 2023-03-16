@@ -9997,6 +9997,47 @@ defmodule Nx do
         ]
       >
 
+  ### Vectorized tensors
+
+  For vectorized tensors, transpose will manipulate the inner shape only,
+  keeping the order of vectorized axes the same.
+
+      iex> v = Nx.vectorize(Nx.iota({1, 2, 3}), :x)
+      #Nx.Tensor<
+        vectorized[x: 1]
+        s64[2][3]
+        [
+          [
+            [0, 1, 2],
+            [3, 4, 5]
+          ]
+        ]
+      >
+      iex> Nx.transpose(v)
+      #Nx.Tensor<
+        vectorized[x: 1]
+        s64[3][2]
+        [
+          [
+            [0, 3],
+            [1, 4],
+            [2, 5]
+          ]
+        ]
+      >
+      iex> Nx.transpose(v, axes: [1, 0])
+      #Nx.Tensor<
+        vectorized[x: 1]
+        s64[3][2]
+        [
+          [
+            [0, 3],
+            [1, 4],
+            [2, 5]
+          ]
+        ]
+      >
+
   ### Errors
 
       iex> Nx.transpose(Nx.iota({2, 2}, names: [:batch, :x]), axes: [:batch])
@@ -10008,18 +10049,30 @@ defmodule Nx do
   """
   @doc type: :shape
   def transpose(tensor, opts \\ []) do
-    opts = keyword!(opts, [:axes])
-    %{shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    axes = opts[:axes] || Nx.Shape.transpose_axes(shape)
-    axes = Nx.Shape.normalize_axes(shape, axes, names)
+    base_shape = shape(tensor)
 
-    if axes == Nx.axes(shape) do
-      tensor
-    else
-      {shape, names} = Nx.Shape.transpose(shape, axes, names)
-      impl!(tensor).transpose(%{tensor | shape: shape, names: names}, tensor, axes)
-    end
+    apply_vectorized([tensor], fn tensor, offset ->
+      opts = keyword!(opts, [:axes])
+      %{shape: shape, names: names} = tensor
+
+      offset_axes = count_up(offset, 0)
+
+      axes =
+        case opts[:axes] do
+          nil ->
+            offset_axes ++ Nx.Shape.transpose_axes(base_shape, offset)
+
+          axes ->
+            offset_axes ++ Nx.Shape.normalize_axes(shape, axes, names, offset)
+        end
+
+      if axes == Nx.axes(shape) do
+        tensor
+      else
+        {shape, names} = Nx.Shape.transpose(shape, axes, names)
+        impl!(tensor).transpose(%{tensor | shape: shape, names: names}, tensor, axes)
+      end
+    end)
   end
 
   @doc """
@@ -10086,18 +10139,64 @@ defmodule Nx do
           ]
         ]
       >
+
+  ### Vectorized tensors
+
+  For vectorized tensors, the `:axes` refer to the non-vectorized part.
+  Vectorized axes will always remain unchanged.
+
+      iex> v = Nx.vectorize(Nx.iota({1, 2, 3}), :x)
+      #Nx.Tensor<
+        vectorized[x: 1]
+        s64[2][3]
+        [
+          [
+            [0, 1, 2],
+            [3, 4, 5]
+          ]
+        ]
+      >
+      iex> Nx.reverse(v)
+      #Nx.Tensor<
+        vectorized[x: 1]
+        s64[2][3]
+        [
+          [
+            [5, 4, 3],
+            [2, 1, 0]
+          ]
+        ]
+      >
+      iex> Nx.reverse(v, axes: [1])
+      #Nx.Tensor<
+        vectorized[x: 1]
+        s64[2][3]
+        [
+          [
+            [2, 1, 0],
+            [5, 4, 3]
+          ]
+        ]
+      >
+
   """
   @doc type: :ndim
   def reverse(tensor, opts \\ []) do
-    opts = keyword!(opts, [:axes])
-    %{shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    axes = opts[:axes] || axes(shape)
+    base_shape = shape(tensor)
 
-    case Nx.Shape.normalize_axes(shape, axes, names) do
-      [] -> tensor
-      axes -> impl!(tensor).reverse(tensor, tensor, Enum.sort(axes))
-    end
+    apply_vectorized([tensor], fn tensor, offset ->
+      opts = keyword!(opts, [:axes])
+      %{shape: shape, names: names} = tensor
+      axes = opts[:axes] || axes(base_shape)
+
+      case Nx.Shape.normalize_axes(shape, axes, names, offset) do
+        [] ->
+          tensor
+
+        axes ->
+          impl!(tensor).reverse(tensor, tensor, Enum.sort(axes))
+      end
+    end)
   end
 
   ## Conv
