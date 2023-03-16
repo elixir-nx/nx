@@ -1098,12 +1098,12 @@ defmodule Nx.Shape do
       iex> Nx.Shape.normalize_axes({2, 3, 4}, [1, 1], [nil, nil, nil])
       ** (ArgumentError) axes [1, 1] must be unique integers between 0 and 2
   """
-  def normalize_axes(shape, axes, names) when is_list(axes) do
-    normalized = Enum.map(axes, &normalize_axis(shape, &1, names))
+  def normalize_axes(shape, axes, names, offset \\ 0) when is_list(axes) do
+    normalized = Enum.map(axes, &normalize_axis(shape, &1, names, offset))
 
     if length(Enum.uniq(normalized)) != length(axes) do
       raise ArgumentError,
-            "axes #{inspect(axes)} must be unique integers between 0 and #{tuple_size(shape) - 1}"
+            "axes #{inspect(axes)} must be unique integers between 0 and #{tuple_size(shape) - 1 - offset}"
     end
 
     normalized
@@ -1120,9 +1120,9 @@ defmodule Nx.Shape do
       [2, 1, 0]
 
   """
-  def transpose_axes(shape) do
+  def transpose_axes(shape, offset \\ 0) do
     rank = tuple_size(shape)
-    count_down(rank, rank - 1)
+    count_down(rank, rank + offset - 1)
   end
 
   @doc """
