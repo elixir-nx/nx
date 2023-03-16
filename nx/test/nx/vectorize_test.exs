@@ -1,6 +1,8 @@
 defmodule Nx.VectorizeTest do
   use ExUnit.Case, async: true
 
+  import Nx, only: :sigils
+
   @base Nx.tensor([
           [[0, 1, 2]],
           [[3, 4, 5]],
@@ -9,13 +11,13 @@ defmodule Nx.VectorizeTest do
 
   @vectorized Nx.vectorize(@base, :rows)
 
-  @base_math Nx.tensor([
-               [[0.1, 0.2, 0.3]],
-               [[0.4, 0.5, 0.6]],
-               [[0.7, 0.8, 0.9]]
-             ])
+  @base_unary Nx.tensor([
+                [[0.1, 0.2, 0.3]],
+                [[0.4, 0.5, 0.6]],
+                [[0.7, 0.8, 0.9]]
+              ])
 
-  @vectorized_math Nx.vectorize(@base_math, :rows)
+  @vectorized_unary Nx.vectorize(@base_unary, :rows)
 
   describe "vectorize" do
     test "adds new vectorization axes to the end of the list" do
@@ -33,22 +35,22 @@ defmodule Nx.VectorizeTest do
     for {name, _} <- Nx.Shared.unary_math_funs(), name != :acosh do
       test "Nx.#{name}/1 works on vectorized tensor" do
         result =
-          @base_math
+          @base_unary
           |> Nx.unquote(name)()
           |> Nx.vectorize(:rows)
 
-        assert result == Nx.unquote(name)(@vectorized_math)
+        assert result == Nx.unquote(name)(@vectorized_unary)
       end
     end
 
     test "Nx.acosh/1 works on vectorized tensor" do
       result =
-        @base_math
+        @base_unary
         |> Nx.add(1)
         |> Nx.acosh()
         |> Nx.vectorize(:rows)
 
-      assert result == Nx.acosh(Nx.add(@vectorized_math, 1))
+      assert result == Nx.acosh(Nx.add(@vectorized_unary, 1))
     end
   end
 
@@ -278,6 +280,145 @@ defmodule Nx.VectorizeTest do
         |> Nx.vectorize(:y)
 
       assert result == Nx.equal(@vectorized, v2)
+    end
+  end
+
+  describe "unary operations" do
+    for op <- [
+          :logical_not,
+          :is_nan,
+          :is_infinity,
+          :negate
+        ] do
+      test "#{op}" do
+        result =
+          @base_unary
+          |> Nx.unquote(op)()
+          |> Nx.vectorize(:rows)
+
+        assert result == Nx.unquote(op)(@vectorized_unary)
+      end
+    end
+
+    test "sign" do
+      input = Nx.tensor([-10, 0, 10]) |> Nx.vectorize(:rows)
+      result = Nx.vectorize(Nx.tensor([-1, 0, 1]), :rows)
+      assert result == Nx.sign(input)
+    end
+
+    test "abs" do
+      input = Nx.tensor([-10, 0, 10]) |> Nx.vectorize(:rows)
+      result = Nx.vectorize(Nx.tensor([10, 0, 10]), :rows)
+      assert result == Nx.abs(input)
+    end
+
+    test "conjugate" do
+      input = ~V[-1i 1i 10-i] |> Nx.vectorize(:rows)
+      result = Nx.vectorize(~V[1i -1i 10+i], :rows)
+      assert result == Nx.conjugate(input)
+    end
+
+    test "phase" do
+      input = ~V[1i 0 10] |> Nx.vectorize(:rows)
+      result = Nx.vectorize(Nx.tensor([:math.pi() / 2, 0, 0]), :rows)
+      assert result == Nx.phase(input)
+    end
+
+    test "real" do
+      input = ~V[-1i 0 10] |> Nx.vectorize(:rows)
+      result = Nx.vectorize(~V[0 0 10]f32, :rows)
+      assert result == Nx.real(input)
+    end
+
+    test "imag" do
+      input = ~V[-1i 0 10] |> Nx.vectorize(:rows)
+      result = Nx.vectorize(~V[-1 0 0]f32, :rows)
+      assert result == Nx.imag(input)
+    end
+
+    test "bitwise_not" do
+      input = ~V[15 240 0]u8 |> Nx.vectorize(:rows)
+      result = Nx.vectorize(~V[240 15 255]u8, :rows)
+      assert result == Nx.bitwise_not(input)
+    end
+
+    test "population_count" do
+      input = ~V[15 240 3]u8 |> Nx.vectorize(:rows)
+      result = Nx.vectorize(~V[4 4 2]u8, :rows)
+      assert result == Nx.population_count(input)
+    end
+
+    test "count_leading_zeros" do
+      input = ~V[15 240 3]u8 |> Nx.vectorize(:rows)
+      result = Nx.vectorize(~V[4 0 6]u8, :rows)
+      assert result == Nx.count_leading_zeros(input)
+    end
+
+    test "sort" do
+      input = ~M[
+        1 2 3
+        3 2 1
+      ] |> Nx.vectorize(:rows)
+
+      result = ~M[
+        1 2 3
+        1 2 3
+      ] |> Nx.vectorize(:rows)
+
+      assert result == Nx.sort(input, axis: 0)
+    end
+
+    test "argsort" do
+      input = ~M[
+        1 2 3
+        3 2 1
+      ] |> Nx.vectorize(:rows)
+
+      result = ~M[
+        0 1 2
+        2 1 0
+      ] |> Nx.vectorize(:rows)
+
+      assert result == Nx.argsort(input, axis: 0)
+    end
+
+    test "top_k" do
+      input =
+        Nx.tensor([
+          [[1, 2, 3]],
+          [[5, 4, 3]]
+        ])
+        |> Nx.vectorize(:rows)
+
+      result_values =
+        Nx.tensor([
+          [[3, 2]],
+          [[5, 4]]
+        ])
+        |> Nx.vectorize(:rows)
+
+      result_idx =
+        Nx.tensor([
+          [[2, 1]],
+          [[0, 1]]
+        ])
+        |> Nx.vectorize(:rows)
+
+      assert {result_values, result_idx} == Nx.top_k(input, k: 2)
+    end
+
+    test "reflect" do
+      input = ~M[
+        0 1 2
+        5 4 3
+      ] |> Nx.vectorize(:rows)
+
+      result = ~M[
+        1 2 1 0 1 2 1
+        4 3 4 5 4 3 4
+      ] |> Nx.vectorize(:rows)
+
+      assert result == Nx.reflect(input, padding_config: [{3, 1}])
     end
   end
 end

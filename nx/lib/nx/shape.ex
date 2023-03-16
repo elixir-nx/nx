@@ -1035,6 +1035,9 @@ defmodule Nx.Shape do
       iex> Nx.Shape.normalize_axis({4, 2, 1, 4}, :z, [:batch, :x, :y, :z])
       3
 
+      iex> Nx.Shape.normalize_axis({4, 2, 1, 4}, 2, [nil, nil, nil, nil], 1)
+      3
+
   ## Error cases
 
       iex> Nx.Shape.normalize_axis({4, 2, 5}, -4, [:batch, :x, :y])
@@ -1050,18 +1053,20 @@ defmodule Nx.Shape do
       ** (ArgumentError) axis name cannot be nil
 
   """
-  def normalize_axis(shape, axis, names)
+  def normalize_axis(shape, axis, names, vectorized_offset \\ 0)
 
-  def normalize_axis(shape, axis, _names) when axis < 0 and abs(axis) <= tuple_size(shape),
-    do: tuple_size(shape) + axis
+  def normalize_axis(shape, axis, _names, _vectorized_offset)
+      when axis < 0 and abs(axis) <= tuple_size(shape),
+      do: tuple_size(shape) + axis
 
-  def normalize_axis(shape, axis, _names) when axis >= 0 and axis < tuple_size(shape),
-    do: axis
+  def normalize_axis(shape, axis, _names, vectorized_offset)
+      when axis >= 0 and axis < tuple_size(shape),
+      do: axis + vectorized_offset
 
-  def normalize_axis(_shape, nil, _names),
+  def normalize_axis(_shape, nil, _names, _vectorized_offset),
     do: raise(ArgumentError, "axis name cannot be nil")
 
-  def normalize_axis(_shape, axis, names) when is_atom(axis) do
+  def normalize_axis(_shape, axis, names, _vectorized_offset) when is_atom(axis) do
     if axis in names do
       Enum.with_index(names)[axis]
     else
@@ -1070,7 +1075,7 @@ defmodule Nx.Shape do
     end
   end
 
-  def normalize_axis(shape, axis, _names) do
+  def normalize_axis(shape, axis, _names, _vectorized_offset) do
     raise ArgumentError,
           "given axis (#{inspect(axis)}) invalid for shape with rank #{tuple_size(shape)}"
   end
