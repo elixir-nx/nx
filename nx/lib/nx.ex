@@ -1496,7 +1496,7 @@ defmodule Nx do
 
       diag_len = len + Kernel.abs(offset)
 
-      batch_shape = shape |> Tuple.delete_at(tuple_size(shape) - 1) |>  Tuple.to_list()
+      batch_shape = shape |> Tuple.delete_at(tuple_size(shape) - 1) |> Tuple.to_list()
       diag_shape = List.to_tuple(batch_shape ++ [diag_len, diag_len])
 
       0
