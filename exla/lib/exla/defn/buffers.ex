@@ -107,6 +107,11 @@ defmodule EXLA.Defn.Buffers do
     %Nx.Tensor{data: data} = tensor = Nx.devectorize(fun.())
 
     case data do
+      %EXLA.Backend{buffer: %EXLA.DeviceBuffer{ref: ref} = buffer}
+      when node(ref) != node() ->
+        binary = :erpc.call(node(ref), EXLA.DeviceBuffer, :read, [buffer])
+        EXLA.BinaryBuffer.from_binary(binary, to_exla_shape(tensor))
+
       %EXLA.Backend{buffer: %EXLA.DeviceBuffer{} = buffer}
       when transfer? and buffer.client_name != executable.client.name ->
         buffer_client = EXLA.Client.fetch!(buffer.client_name)
