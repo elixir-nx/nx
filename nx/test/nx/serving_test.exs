@@ -632,5 +632,33 @@ defmodule Nx.ServingTest do
       assert_receive {:post, node, tensor} when node != node()
       assert tensor == Nx.tensor([6])
     end
+
+    @tag :distributed
+    test "spawns distributed tasks over the network with hidden nodes", config do
+      parent = self()
+
+      preprocessing = fn input ->
+        send(parent, {:pre, node(), input})
+        input
+      end
+
+      opts = [
+        name: config.test,
+        batch_size: 2,
+        shutdown: 1000
+      ]
+
+      Node.spawn_link(:"tertiary@127.0.0.1", DistributedServings, :multiply, [parent, opts])
+      assert_receive :spawned
+
+      batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
+
+      assert Nx.Serving.batched_run({:distributed, config.test}, batch, preprocessing) ==
+               Nx.tensor([2, 4])
+
+      assert_receive {:pre, node, %Nx.Batch{size: 2}} when node == node()
+      assert_receive {:post, node, tensor} when node != node()
+      assert tensor == Nx.tensor([2, 4])
+    end
   end
 end
