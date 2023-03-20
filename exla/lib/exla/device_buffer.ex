@@ -40,8 +40,7 @@ defmodule EXLA.DeviceBuffer do
   reads the whole buffer.
   """
   def read(%DeviceBuffer{ref: ref}, size \\ -1) do
-    binary = EXLA.NIF.read_device_mem(ref, size) |> unwrap!()
-    binary
+    EXLA.NIF.read_device_mem(ref, size) |> unwrap!()
   end
 
   @doc """
