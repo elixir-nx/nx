@@ -12655,6 +12655,21 @@ defmodule Nx do
         ]
       >
 
+  ## Vectorized tensors
+
+  Vectorized tensors work the same as N-dimensional tensors
+
+      iex> tensor = Nx.tensor([[1, 1, 0, 0, 2, 3], [1, 0, 0, 0, 2, 3]]) |> Nx.vectorize(:x)
+      iex> Nx.fft(tensor, length: 4)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        c64[4]
+        [
+          [2.0+0.0i, 1.0-1.0i, 0.0+0.0i, 1.0+1.0i],
+          [1.0+0.0i, 1.0+0.0i, 1.0+0.0i, 1.0+0.0i]
+        ]
+      >
+
   ## Error Cases
 
       iex> Nx.fft(Nx.tensor([1, 1]), length: :invalid)
@@ -12717,6 +12732,21 @@ defmodule Nx do
         ]
       >
 
+  ## Vectorized tensors
+
+  Vectorized tensors work the same as N-dimensional tensors
+
+      iex> tensor = Nx.tensor([[1, 1, 0, 0, 2, 3], [1, 0, 0, 0, 2, 3]]) |> Nx.vectorize(:x)
+      iex> Nx.ifft(tensor, length: 4)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        c64[4]
+        [
+          [0.5+0.0i, 0.25+0.25i, 0.0+0.0i, 0.25-0.25i],
+          [0.25+0.0i, 0.25+0.0i, 0.25+0.0i, 0.25+0.0i]
+        ]
+      >
+
   ## Error Cases
 
       iex> Nx.ifft(Nx.tensor([1, 1]), length: :invalid)
@@ -12726,34 +12756,33 @@ defmodule Nx do
   def ifft(tensor, opts \\ []), do: call_fft(tensor, opts, :ifft)
 
   defp call_fft(tensor, opts, kind) do
-    tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, {kind, 2})
+    apply_vectorized(tensor, fn tensor ->
+      shape = Nx.Shape.fft(tensor.shape)
+      n = elem(shape, tuple_size(shape) - 1)
+      opts = Keyword.validate!(opts, length: n, eps: 1.0e-10)
 
-    shape = Nx.Shape.fft(tensor.shape)
-    n = elem(shape, tuple_size(shape) - 1)
-    opts = Keyword.validate!(opts, length: n, eps: 1.0e-10)
+      length =
+        case opts[:length] do
+          :power_of_two ->
+            2 ** Kernel.ceil(:math.log2(n))
 
-    length =
-      case opts[:length] do
-        :power_of_two ->
-          2 ** Kernel.ceil(:math.log2(n))
+          n when is_integer(n) and n > 0 ->
+            n
 
-        n when is_integer(n) and n > 0 ->
-          n
+          length ->
+            raise "expected an integer or :power_of_two as length, got: #{inspect(length)}"
+        end
 
-        length ->
-          raise "expected an integer or :power_of_two as length, got: #{inspect(length)}"
-      end
+      opts = Keyword.put(opts, :length, length)
 
-    opts = Keyword.put(opts, :length, length)
+      output_shape =
+        shape
+        |> Tuple.insert_at(tuple_size(shape) - 1, length)
+        |> Tuple.delete_at(tuple_size(shape))
 
-    output_shape =
-      shape
-      |> Tuple.insert_at(tuple_size(shape) - 1, length)
-      |> Tuple.delete_at(tuple_size(shape))
-
-    out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_complex(tensor.type)})
-    apply(impl!(tensor), kind, [out, tensor, opts])
+      out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_complex(tensor.type)})
+      apply(impl!(tensor), kind, [out, tensor, opts])
+    end)
   end
 
   @doc """
