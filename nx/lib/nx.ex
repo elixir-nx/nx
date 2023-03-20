@@ -1409,6 +1409,13 @@ defmodule Nx do
   to the size of the tensor. If an offset is given, the absolute value
   of the offset is added to the matrix dimensions sizes.
 
+  ## Options
+
+    * `:offset` - offset used for making the diagonal.
+      Use offset > 0 for diagonals above the main diagonal,
+      and offset < 0 for diagonals below the main diagonal.
+      Defaults to 0.
+
   ## Examples
 
     Given a 1D tensor:
@@ -1478,12 +1485,43 @@ defmodule Nx do
         ]
       >
 
-  ## Options
+  ### Vectorized tensors
 
-    * `:offset` - offset used for making the diagonal.
-      Use offset > 0 for diagonals above the main diagonal,
-      and offset < 0 for diagonals below the main diagonal.
-      Defaults to 0.
+      iex> t = Nx.vectorize(Nx.tensor([[1, 2], [3, 4]]), :x)
+      iex> Nx.make_diagonal(t, offset: 1)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[3][3]
+        [
+          [
+            [0, 1, 0],
+            [0, 0, 2],
+            [0, 0, 0]
+          ],
+          [
+            [0, 3, 0],
+            [0, 0, 4],
+            [0, 0, 0]
+          ]
+        ]
+      >
+      iex> Nx.make_diagonal(t, offset: -1)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[3][3]
+        [
+          [
+            [0, 0, 0],
+            [1, 0, 0],
+            [0, 2, 0]
+          ],
+          [
+            [0, 0, 0],
+            [3, 0, 0],
+            [0, 4, 0]
+          ]
+        ]
+      >
 
   ## Error cases
 
@@ -1492,20 +1530,24 @@ defmodule Nx do
   """
   @doc type: :creation
   def make_diagonal(tensor, opts \\ []) do
-    tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    base_shape = shape(tensor)
 
-    opts = keyword!(opts, offset: 0)
+    apply_vectorized(tensor, fn tensor ->
+      %{shape: shape} = tensor = to_tensor(tensor)
+      opts = keyword!(opts, offset: 0)
 
-    {len} = Nx.Shape.make_diagonal(tensor.shape)
-    offset = opts[:offset]
+      {len} = Nx.Shape.make_diagonal(base_shape)
+      offset = opts[:offset]
 
-    diag_len = len + Kernel.abs(offset)
-    diag_shape = {diag_len, diag_len}
+      diag_len = len + Kernel.abs(offset)
 
-    0
-    |> Nx.broadcast(diag_shape)
-    |> Nx.indexed_put(diag_indices(diag_shape, offset), tensor)
+      batch_shape = shape |> Tuple.delete_at(tuple_size(shape) - 1) |> Tuple.to_list()
+      diag_shape = List.to_tuple(batch_shape ++ [diag_len, diag_len])
+
+      0
+      |> broadcast(diag_shape)
+      |> indexed_put(diag_indices(diag_shape, offset), Nx.flatten(tensor))
+    end)
   end
 
   @doc """
