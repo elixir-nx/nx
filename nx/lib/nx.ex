@@ -1040,6 +1040,22 @@ defmodule Nx do
 
   If a tensor or a number are given, the shape and names are taken from the tensor.
 
+  ## Options
+
+    * `:type` - the type of the tensor
+
+    * `:axis` - an axis to repeat the iota over
+
+    * `:names` - the names of the tensor dimensions
+
+    * `:backend` - the backend to allocate the tensor on. It is either
+      an atom or a tuple in the shape `{backend, options}`. This option
+      is ignored inside `defn`
+
+    * `:vectorized_axes` - a keyword list of `axis_name: axis_size`.
+      If given, the resulting tensor will be vectorized accordingly.
+      Vectorization is not supported via tensor inputs.
+
   ## Examples
 
       iex> Nx.iota({})
@@ -1130,39 +1146,68 @@ defmodule Nx do
         ]
       >
 
-  ## Options
-
-    * `:type` - the type of the tensor
-
-    * `:axis` - an axis to repeat the iota over
-
-    * `:names` - the names of the tensor dimensions
-
-    * `:backend` - the backend to allocate the tensor on. It is either
-      an atom or a tuple in the shape `{backend, options}`. This option
-      is ignored inside `defn`
-
+      iex> Nx.iota({2, 3}, axis: 0, vectorized_axes: [x: 1, y: 2])
+      #Nx.Tensor<
+        vectorized[x: 1][y: 2]
+        s64[2][3]
+        [
+          [
+            [
+              [0, 0, 0],
+              [1, 1, 1]
+            ],
+            [
+              [0, 0, 0],
+              [1, 1, 1]
+            ]
+          ]
+        ]
+      >
   """
   @doc type: :creation
   def iota(tensor_or_shape, opts \\ []) do
-    opts = keyword!(opts, [:axis, :names, :backend, type: {:s, 64}])
+    opts = keyword!(opts, [:axis, :names, :backend, :vectorized_axes, type: {:s, 64}])
+    vectorized_axes = opts[:vectorized_axes]
 
     if not is_tuple(tensor_or_shape) do
       IO.warn("passing a tensor as shape to iota/2 is deprecated. Please call Nx.shape/2 before")
-    end
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor_or_shape, __ENV__.function)
+      vectorized_axes =
+        case tensor_or_shape do
+          %T{vectorized_axes: tensor_axes} -> vectorized_axes || tensor_axes
+          _ -> vectorized_axes
+        end
+
+      if vectorized_axes do
+        raise ArgumentError, "vectorization is only supported for shape inputs"
+      end
+    end
 
     shape = shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type])
     {backend, backend_options} = backend_from_options!(opts) || default_backend()
 
-    if axis = opts[:axis] do
-      axis = Nx.Shape.normalize_axis(shape, axis, names)
-      backend.iota(%T{type: type, shape: shape, names: names}, axis, backend_options)
+    output =
+      if axis = opts[:axis] do
+        axis = Nx.Shape.normalize_axis(shape, axis, names)
+        backend.iota(%T{type: type, shape: shape, names: names}, axis, backend_options)
+      else
+        backend.iota(%T{type: type, shape: shape, names: names}, nil, backend_options)
+      end
+
+    if not is_nil(vectorized_axes) and vectorized_axes != [] do
+      base_shape =
+        List.to_tuple(List.duplicate(1, length(vectorized_axes)) ++ Tuple.to_list(shape))
+
+      output_shape = List.to_tuple(Keyword.values(vectorized_axes) ++ Tuple.to_list(shape))
+
+      output
+      |> reshape(base_shape)
+      |> broadcast(output_shape)
+      |> revectorize_and_validate_sizes(vectorized_axes)
     else
-      backend.iota(%T{type: type, shape: shape, names: names}, nil, backend_options)
+      output
     end
   end
 
