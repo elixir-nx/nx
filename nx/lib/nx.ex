@@ -1532,7 +1532,7 @@ defmodule Nx do
   def make_diagonal(tensor, opts \\ []) do
     base_shape = shape(tensor)
 
-    apply_vectorized([tensor], fn tensor ->
+    apply_vectorized(tensor, fn tensor ->
       %{shape: shape} = tensor = to_tensor(tensor)
       opts = keyword!(opts, offset: 0)
 
