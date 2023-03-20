@@ -4035,22 +4035,6 @@ defmodule Nx do
     end
   end
 
-  defp apply_vectorized([first, second, third], fun) do
-    first = to_tensor(first)
-    second = to_tensor(second)
-    third = to_tensor(third)
-
-    if first.vectorized_axes != [] or second.vectorized_axes != [] or third.vectorized_axes != [] do
-      {first, second, third, vectorized_axes} = devectorize_with_axes(first, second, third)
-
-      first
-      |> fun.(second, third)
-      |> revectorize_and_validate_sizes(vectorized_axes)
-    else
-      fun.(first, second, third)
-    end
-  end
-
   defp revectorize_and_validate_sizes({t1, t2}, kw) do
     {revectorize_and_validate_sizes(t1, kw), revectorize_and_validate_sizes(t2, kw)}
   end
@@ -5771,39 +5755,41 @@ defmodule Nx do
   """
   @doc type: :element
   def select(pred, on_true, on_false) do
-    apply_vectorized([pred, on_true, on_false], fn pred, on_true, on_false ->
-      output_type = binary_type(on_true, on_false)
+    %T{shape: pred_shape, names: pred_names} = pred = to_tensor(pred)
+    %T{shape: true_shape, names: true_names} = on_true = to_tensor(on_true)
+    %T{shape: false_shape, names: false_names} = on_false = to_tensor(on_false)
 
-      %T{shape: pred_shape, names: pred_names} = pred
-      %T{shape: true_shape, names: true_names} = on_true
-      %T{shape: false_shape, names: false_names} = on_false
+    Nx.Shared.raise_vectorized_not_implemented_yet(pred, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(on_true, __ENV__.function)
+    Nx.Shared.raise_vectorized_not_implemented_yet(on_false, __ENV__.function)
 
-      {output_shape, output_names} =
-        case pred_shape do
-          {} ->
-            Nx.Shape.binary_broadcast(true_shape, true_names, false_shape, false_names)
+    output_type = binary_type(on_true, on_false)
 
-          _ ->
-            {shape(pred), pred_names}
-        end
+    {output_shape, output_names} =
+      case pred_shape do
+        {} ->
+          Nx.Shape.binary_broadcast(true_shape, true_names, false_shape, false_names)
 
-      _ =
-        Nx.Shape.broadcast!(
-          true_shape,
-          output_shape,
-          Nx.Shape.broadcast_axes(true_shape, output_shape)
-        )
+        _ ->
+          {pred_shape, pred_names}
+      end
 
-      _ =
-        Nx.Shape.broadcast!(
-          false_shape,
-          output_shape,
-          Nx.Shape.broadcast_axes(false_shape, output_shape)
-        )
+    _ =
+      Nx.Shape.broadcast!(
+        true_shape,
+        output_shape,
+        Nx.Shape.broadcast_axes(true_shape, output_shape)
+      )
 
-      out = %{pred | shape: output_shape, type: output_type, names: output_names}
-      impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
-    end)
+    _ =
+      Nx.Shape.broadcast!(
+        false_shape,
+        output_shape,
+        Nx.Shape.broadcast_axes(false_shape, output_shape)
+      )
+
+    out = %{pred | shape: output_shape, type: output_type, names: output_names}
+    impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
   end
 
   @doc """
