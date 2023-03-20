@@ -2157,6 +2157,11 @@ defmodule NxTest do
       assert Nx.deserialize(Nx.serialize(123)) == Nx.tensor(123)
       assert Nx.deserialize(Nx.serialize(1.2)) == Nx.tensor(1.2)
     end
+
+    test "vectorized" do
+      tensor = Nx.tensor([[1], [2], [3]]) |> Nx.vectorize(:x)
+      assert Nx.deserialize(Nx.serialize(tensor)) == tensor
+    end
   end
 
   describe "load_numpy/1" do
