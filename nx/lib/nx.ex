@@ -12756,7 +12756,7 @@ defmodule Nx do
   def ifft(tensor, opts \\ []), do: call_fft(tensor, opts, :ifft)
 
   defp call_fft(tensor, opts, kind) do
-    apply_vectorized([tensor], fn tensor ->
+    apply_vectorized(tensor, fn tensor ->
       shape = Nx.Shape.fft(tensor.shape)
       n = elem(shape, tuple_size(shape) - 1)
       opts = Keyword.validate!(opts, length: n, eps: 1.0e-10)
