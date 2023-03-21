@@ -6,7 +6,7 @@ on:
   pull_request:
 jobs:
   main:
-    name: Linux
+    name: Linux (${{ matrix.working_directory }}, ${{ matrix.elixir }}, ${{ matrix.otp }}, ${{ matrix.torch_version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -14,8 +14,9 @@ jobs:
         working_directory: ["nx", "exla", "torchx"]
         elixir: ["1.14.2"]
         otp: ["25.2"]
-        torch_version: ["2.0.0"]
         include:
+          - working_directory: "torchx"
+            torch_version: "2.0.0"
           - working_directory: "torchx"
             torch_version: "1.12.1"
     defaults:
@@ -59,7 +60,7 @@ jobs:
         run: mix test
 
   win:
-    name: Windows
+    name: Windows (${{ matrix.working_directory }}, ${{ matrix.elixir }}, ${{ matrix.otp }}, ${{ matrix.torch_version }})
     runs-on: windows-2019
     strategy:
       fail-fast: false
