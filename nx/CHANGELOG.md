@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.5.2 (2023-03-21)
+
+### Enhancements
+
+  * [Nx.Random] Add `stop_grad` to `Nx.Random` creation functions
+  * [Nx.Serving] Reduce references sent through serving
+
+### Bug fixes
+
+  * [Nx] Fix `Nx.mode` with `:axis` option
+
 ## v0.5.1 (2023-02-18)
 
 Require Elixir v1.14.

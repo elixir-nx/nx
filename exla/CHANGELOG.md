@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.5.2 (2023-03-21)
+
+  * Automatically transfer tensors between nodes
+
 ## v0.5.1 (2023-02-18)
 
   * Support `top_k`
