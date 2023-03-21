@@ -12994,7 +12994,7 @@ defmodule Nx do
 
       true ->
         nil
-        # we need to reorder the vectorized axes to the expected order
+        # we need to reorder the vectorized axes to the expected order according to the signature `linspace(start, stop, ...)`
 
         idx_by_name = Enum.with_index(vectorized_axes, fn {name, _}, idx -> {name, idx} end)
 
