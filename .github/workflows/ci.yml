@@ -22,7 +22,7 @@ jobs:
       MIX_ENV: test
       XLA_FLAGS: --xla_force_host_platform_device_count=2
       LIBTORCH_VERSION: ${{ matrix.torch_version }}
-      LIBTORCH_DIR: ${{ github.workspace }}/torchx/cache/libtorch
+      LIBTORCH_DIR: ${{ github.workspace }}/torchx/cache/libtorch-${{ matrix.torch_version }}
     steps:
       - uses: actions/checkout@v2
       - uses: erlef/setup-beam@v1
@@ -73,7 +73,7 @@ jobs:
       MIX_ENV: test
       XLA_FLAGS: --xla_force_host_platform_device_count=2
       LIBTORCH_VERSION: ${{ matrix.torch_version }}
-      LIBTORCH_DIR: ${{ github.workspace }}\torchx\cache\libtorch
+      LIBTORCH_DIR: ${{ github.workspace }}\torchx\cache\libtorch-${{ matrix.torch_version }}
     steps:
       - name: Configure Git
         run: git config --global core.autocrlf input
