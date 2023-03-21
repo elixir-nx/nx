@@ -2762,23 +2762,41 @@ defmodule Nx do
         ]
       >
 
+  ## Vectorized tensors
+
+      iex> t = Nx.tensor([1]) |> Nx.vectorize(:x)
+      #Nx.Tensor<
+        vectorized[x: 1]
+        s64
+        [1]
+      >
+      iex> Nx.new_axis(t, -1, :new)
+      #Nx.Tensor<
+        vectorized[x: 1]
+        s64[new: 1]
+        [
+          [1]
+        ]
+      >
+
   """
   @doc type: :shape, from_backend: false
   def new_axis(tensor, axis, name \\ nil) when is_integer(axis) do
-    %{shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    rank = tuple_size(shape)
-    norm = if axis < 0, do: axis + rank + 1, else: axis
+    apply_vectorized(tensor, fn tensor, offset ->
+      %{shape: shape, names: names} = tensor = to_tensor(tensor)
+      rank = tuple_size(shape)
+      norm = if axis < 0, do: axis + rank + 1, else: axis + offset
 
-    if norm not in 0..tuple_size(shape) do
-      raise ArgumentError,
-            "new axis position for shape #{inspect(shape)} must be " <>
-              "a number between #{-rank - 1} and #{rank}, got: #{axis}"
-    end
+      if norm not in offset..tuple_size(shape) do
+        raise ArgumentError,
+              "new axis position for shape #{inspect(shape)} must be " <>
+                "a number between #{-rank - 1 + offset} and #{rank - offset}, got: #{axis}"
+      end
 
-    new_shape = Tuple.insert_at(shape, norm, 1)
-    new_names = List.insert_at(names, norm, name)
-    impl!(tensor).reshape(%{tensor | shape: new_shape, names: new_names}, tensor)
+      new_shape = Tuple.insert_at(shape, norm, 1)
+      new_names = List.insert_at(names, norm, name)
+      impl!(tensor).reshape(%{tensor | shape: new_shape, names: new_names}, tensor)
+    end)
   end
 
   @doc """
@@ -4035,9 +4053,13 @@ defmodule Nx do
     end
   end
 
+  defp revectorize_and_validate_sizes({t1, t2}, []), do: {t1, t2}
+
   defp revectorize_and_validate_sizes({t1, t2}, kw) do
     {revectorize_and_validate_sizes(t1, kw), revectorize_and_validate_sizes(t2, kw)}
   end
+
+  defp revectorize_and_validate_sizes(tensor, []), do: tensor
 
   defp revectorize_and_validate_sizes(
          %T{vectorized_axes: [], shape: shape, names: names} = tensor,
@@ -12871,6 +12893,48 @@ defmodule Nx do
       ]
     >
 
+  ## Vectorized tensors
+
+      iex> Nx.linspace(0, Nx.vectorize(Nx.tensor([10, 20]), :x), n: 5)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32[5]
+        [
+          [0.0, 2.5, 5.0, 7.5, 10.0],
+          [0.0, 5.0, 10.0, 15.0, 20.0]
+        ]
+      >
+
+      iex> start = Nx.vectorize(Nx.tensor([0, 1]), :x)
+      iex> stop = Nx.vectorize(Nx.tensor([10, 20]), :y)
+      iex> Nx.linspace(start, stop, n: 5)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 2]
+        f32[5]
+        [
+          [
+            [0.0, 2.5, 5.0, 7.5, 10.0],
+            [0.0, 5.0, 10.0, 15.0, 20.0]
+          ],
+          [
+            [1.0, 3.25, 5.5, 7.75, 10.0],
+            [1.0, 5.75, 10.5, 15.25, 20.0]
+          ]
+        ]
+      >
+
+      iex> start = Nx.vectorize(Nx.tensor([0, 1]), :x)
+      iex> stop = Nx.vectorize(Nx.tensor([10, 10]), :x)
+      iex> Nx.linspace(start, stop, n: 5)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32[5]
+        [
+          [0.0, 2.5, 5.0, 7.5, 10.0],
+          [1.0, 3.25, 5.5, 7.75, 10.0]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.linspace(0, 24, n: 1.0)
@@ -12882,11 +12946,8 @@ defmodule Nx do
   @doc type: :creation
   def linspace(start, stop, opts \\ []) do
     opts = keyword!(opts, [:n, :name, type: {:f, 32}, endpoint: true])
-    start = to_tensor(start)
-    stop = to_tensor(stop)
-
-    Nx.Shared.raise_vectorized_not_implemented_yet(start, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(stop, __ENV__.function)
+    %{shape: start_shape} = start = to_tensor(start)
+    %{shape: stop_shape} = stop = to_tensor(stop)
 
     n = opts[:n]
 
@@ -12895,7 +12956,7 @@ defmodule Nx do
     end
 
     {iota_shape, start, stop} =
-      case {shape(start), shape(stop)} do
+      case {start_shape, stop_shape} do
         {shape, shape} ->
           iota_shape = Tuple.insert_at(shape, tuple_size(shape), n)
           {iota_shape, new_axis(start, -1, opts[:name]), new_axis(stop, -1, opts[:name])}
@@ -12905,6 +12966,8 @@ defmodule Nx do
                 "expected start and stop to have the same shape. Got shapes #{inspect(start_shape)} and #{inspect(stop_shape)}"
       end
 
+    {_start, _stop, vectorized_axes} = devectorize_with_axes(start, stop)
+
     divisor =
       if opts[:endpoint] do
         n - 1
@@ -12912,14 +12975,51 @@ defmodule Nx do
         n
       end
 
+    iota = iota(iota_shape, axis: -1, type: opts[:type], vectorized_axes: vectorized_axes)
+
     step = Nx.subtract(stop, start) |> Nx.divide(divisor)
 
-    iota = iota(iota_shape, axis: -1, type: opts[:type])
+    out =
+      iota
+      |> multiply(step)
+      |> add(start)
+      |> as_type(opts[:type])
 
-    iota
-    |> multiply(step)
-    |> add(start)
-    |> as_type(opts[:type])
+    cond do
+      out.vectorized_axes == [] ->
+        out
+
+      out.vectorized_axes == vectorized_axes ->
+        out
+
+      true ->
+        nil
+        # we need to reorder the vectorized axes to the expected order
+
+        idx_by_name = Enum.with_index(vectorized_axes, fn {name, _}, idx -> {name, idx} end)
+
+        {[], indices_rev} =
+          Enum.reduce(out.vectorized_axes, {idx_by_name, []}, fn {name, _},
+                                                                 {idx_by_name, indices} ->
+            {{_name, idx}, idx_by_name} = List.keytake(idx_by_name, name, 0)
+
+            unless idx do
+              raise "invalid vectorized axes"
+            end
+
+            {idx_by_name, [idx | indices]}
+          end)
+
+        devec = devectorize(out)
+
+        inner_axes = count_up(tuple_size(out.shape), tuple_size(devec.shape) - 1)
+
+        transpose_axes = Enum.reverse(indices_rev) ++ inner_axes
+
+        devec
+        |> transpose(axes: transpose_axes)
+        |> revectorize_and_validate_sizes(vectorized_axes)
+    end
   end
 
   @doc """
