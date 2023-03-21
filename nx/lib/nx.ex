@@ -5819,7 +5819,7 @@ defmodule Nx do
       iex> pred = Nx.vectorize(pred, :z)
       iex> Nx.select(pred, on_true, on_false)
       #Nx.Tensor<
-        vectorized[x: 2][y: 3][z: 4]
+        vectorized[x: 2][z: 3][y: 4]
         s64
         [
           [
