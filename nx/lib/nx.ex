@@ -1214,6 +1214,20 @@ defmodule Nx do
   @doc """
   Creates the identity matrix of size `n`.
 
+  ## Options
+
+    * `:type` - the type of the tensor
+
+    * `:names` - the names of the tensor dimensions
+
+    * `:backend` - the backend to allocate the tensor on. It is either
+      an atom or a tuple in the shape `{backend, options}`. This option
+      is ignored inside `defn`
+
+    * `:vectorized_axes` - a keyword list of `axis_name: axis_size`.
+      If given, the resulting tensor will be vectorized accordingly.
+      Vectorization is not supported via tensor inputs.
+
   ## Examples
 
       iex> Nx.eye(2)
@@ -1267,16 +1281,38 @@ defmodule Nx do
         ]
       >
 
-  ## Options
+  ## Vectorized tensors
 
-    * `:type` - the type of the tensor
+  If given vectorized axes, are added as leading dimensions to the tensor,
+  effectively broadcasting the base shape along them.
 
-    * `:names` - the names of the tensor dimensions
+      iex> Nx.eye({3}, vectorized_axes: [x: 1, y: 2])
+      #Nx.Tensor<
+        vectorized[x: 1][y: 2]
+        s64[3]
+        [
+          [
+            [1, 0, 0],
+            [1, 0, 0]
+          ]
+        ]
+      >
 
-    * `:backend` - the backend to allocate the tensor on. It is either
-      an atom or a tuple in the shape `{backend, options}`. This option
-      is ignored inside `defn`
-
+      iex> Nx.eye({2, 3}, vectorized_axes: [x: 2])
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[2][3]
+        [
+          [
+            [1, 0, 0],
+            [0, 1, 0]
+          ],
+          [
+            [1, 0, 0],
+            [0, 1, 0]
+          ]
+        ]
+      >
   """
   @doc type: :creation
   def eye(n_or_tensor_or_shape, opts \\ [])
@@ -1285,13 +1321,47 @@ defmodule Nx do
     eye({n, n}, opts)
   end
 
-  def eye(shape, opts) when is_tuple(shape) and tuple_size(shape) >= 2 do
-    opts = keyword!(opts, [:names, :backend, type: {:s, 64}])
+  def eye(shape, opts) when is_tuple(shape) and tuple_size(shape) >= 1 do
+    opts = keyword!(opts, [:names, :backend, :vectorized_axes, type: {:s, 64}])
     names = Nx.Shape.named_axes!(opts[:names], shape)
     type = Nx.Type.normalize!(opts[:type] || {:s, 64})
+    vectorized_axes = opts[:vectorized_axes] || []
 
     {backend, backend_options} = backend_from_options!(opts) || default_backend()
-    backend.eye(%T{type: type, shape: shape, names: names}, backend_options)
+
+    if vectorized_axes != [] do
+      {vec_names, vec_sizes} = Enum.unzip(vectorized_axes)
+
+      out_shape = List.to_tuple(vec_sizes ++ Tuple.to_list(shape))
+      names = vec_names ++ names
+
+      out =
+        case shape do
+          {n} ->
+            intermediate_shape = Tuple.duplicate(1, tuple_size(out_shape) - 1) |> Tuple.append(n)
+
+            backend.eye(
+              %T{type: type, shape: intermediate_shape, names: names},
+              backend_options
+            )
+            |> broadcast(out_shape, names: names)
+
+          _ ->
+            backend.eye(
+              %T{type: type, shape: out_shape, names: names},
+              backend_options
+            )
+        end
+
+      revectorize_and_validate_sizes(out, vectorized_axes)
+    else
+      if tuple_size(shape) < 2 do
+        raise ArgumentError,
+              "eye/2 expects a shape with at least 2 dimensions or an integer, got: #{inspect(shape)}"
+      end
+
+      backend.eye(%T{type: type, shape: shape, names: names}, backend_options)
+    end
   end
 
   def eye(shape, _opts) when is_tuple(shape) do
