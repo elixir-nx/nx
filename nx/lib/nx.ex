@@ -5796,7 +5796,7 @@ defmodule Nx do
 
       iex> pred = Nx.tensor([[1, 0, 1], [2, 0, 0]]) |> Nx.vectorize(:x)
       iex> on_true = 42
-      iex> on_false = Nx.tensor([1, 2, 3, 4]) |> Nx.vectorize(:z)
+      iex> on_false = Nx.tensor([1, 2, 3, 4]) |> Nx.vectorize(:y)
       iex> Nx.select(pred, on_true, on_false)
       #Nx.Tensor<
         vectorized[x: 2][y: 4]
