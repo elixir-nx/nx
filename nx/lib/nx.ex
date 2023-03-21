@@ -7008,6 +7008,11 @@ defmodule Nx do
           [1]
         ]
       >
+      iex> Nx.mode(Nx.tensor([[1], [2], [1], [3]]), axis: 1)
+      #Nx.Tensor<
+        s64[4]
+        [1, 2, 1, 3]
+      >
 
   ### Keeping axis
 
@@ -7057,7 +7062,7 @@ defmodule Nx do
       tensor_size == 1 and axis == nil ->
         if opts[:keep_axis], do: tensor, else: squeeze(tensor)
 
-      tensor_size == 1 and axis != nil ->
+      axis != nil and (tensor_size == 1 or Nx.axis_size(tensor, axis) == 1) ->
         if opts[:keep_axis], do: tensor, else: squeeze(tensor, axes: [axis])
 
       axis == nil ->
