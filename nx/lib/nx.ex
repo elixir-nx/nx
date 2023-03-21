@@ -1228,7 +1228,6 @@ defmodule Nx do
       If given, the resulting tensor will be vectorized accordingly.
       Vectorization is not supported via tensor inputs.
 
-
   ## Examples
 
       iex> Nx.eye(2)
