@@ -8194,6 +8194,31 @@ defmodule Nx do
           ]
         ]
       >
+
+  ### Vectorized tensors
+
+      iex> v = Nx.tensor([[1, 2, 3], [6, 5, 4]]) |> Nx.vectorize(:x)
+      iex> Nx.argmax(v)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64
+        [2, 0]
+      >
+      iex> Nx.argmax(v, axis: 0)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64
+        [2, 0]
+      >
+      iex> Nx.argmax(v, keep_axis: true)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[1]
+        [
+          [2],
+          [0]
+        ]
+      >
   """
   @doc type: :aggregation
   def argmax(tensor, opts \\ []) do
@@ -8306,6 +8331,32 @@ defmodule Nx do
           ]
         ]
       >
+
+  ### Vectorized tensors
+
+      iex> v = Nx.tensor([[1, 2, 3], [6, 5, 4]]) |> Nx.vectorize(:x)
+      iex> Nx.argmin(v)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64
+        [0, 2]
+      >
+      iex> Nx.argmin(v, axis: 0)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64
+        [0, 2]
+      >
+      iex> Nx.argmin(v, keep_axis: true)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[1]
+        [
+          [0],
+          [2]
+        ]
+      >
+
   """
   @doc type: :aggregation
   def argmin(tensor, opts \\ []) do
@@ -8313,38 +8364,62 @@ defmodule Nx do
   end
 
   defp argmin_or_max(tensor, op, opts) do
-    opts = keyword!(opts, [:axis, tie_break: :low, keep_axis: false])
+    apply_vectorized(tensor, fn tensor, offset ->
+      opts = keyword!(opts, [:axis, tie_break: :low, keep_axis: false])
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, {op, 2})
+      tie_break =
+        case opts[:tie_break] do
+          :high ->
+            :high
 
-    tie_break =
-      case opts[:tie_break] do
-        :high ->
-          :high
+          :low ->
+            :low
 
-        :low ->
-          :low
+          other ->
+            raise ArgumentError,
+                  "unknown value for :tie_break, expected :high or :low, got: #{inspect(other)}"
+        end
 
-        other ->
-          raise ArgumentError,
-                "unknown value for :tie_break, expected :high or :low, got: #{inspect(other)}"
-      end
+      %{shape: shape, names: names, type: type} = tensor
+      Nx.Shared.raise_complex_not_supported(type, op, 2)
 
-    %{shape: shape, names: names, type: type} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_complex_not_supported(type, op, 2)
+      {tensor, shape, names, axis} =
+        cond do
+          axis = opts[:axis] ->
+            axis = Nx.Shape.normalize_axis(shape, axis, names, offset)
+            {new_shape, new_names} = Nx.Shape.contract(shape, [axis], names, opts[:keep_axis])
+            {tensor, new_shape, new_names, axis}
 
-    {shape, names, axis} =
-      if axis = opts[:axis] do
-        axis = Nx.Shape.normalize_axis(shape, axis, names)
-        {new_shape, new_names} = Nx.Shape.contract(shape, [axis], names, opts[:keep_axis])
-        {new_shape, new_names, axis}
-      else
-        {{}, [], nil}
-      end
+          offset == 0 ->
+            # unvectorized case, so we can reduce all
+            {tensor, {}, [], nil}
 
-    out = %{tensor | type: {:s, 64}, shape: shape, names: names}
-    opts = [tie_break: tie_break, axis: axis, keep_axis: opts[:keep_axis]]
-    apply(impl!(tensor), op, [out, tensor, opts])
+          true ->
+            {new_shape, new_names} =
+              Nx.Shape.contract(
+                shape,
+                count_up(tuple_size(shape), offset),
+                names,
+                opts[:keep_axis]
+              )
+
+            flattened_shape =
+              if opts[:keep_axis] do
+                new_shape
+                |> Tuple.delete_at(tuple_size(new_shape) - 1)
+                |> Tuple.append(:auto)
+              else
+                Tuple.append(new_shape, :auto)
+              end
+
+            reshaped_tensor = reshape(tensor, flattened_shape)
+            {reshaped_tensor, new_shape, new_names, offset}
+        end
+
+      out = %{tensor | type: {:s, 64}, shape: shape, names: names}
+      opts = [tie_break: tie_break, axis: axis, keep_axis: opts[:keep_axis]]
+      apply(impl!(tensor), op, [out, tensor, opts])
+    end)
   end
 
   defp aggregate_window_op(tensor, window_dimensions, opts, op) when is_list(opts) do
