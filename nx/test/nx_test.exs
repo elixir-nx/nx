@@ -2424,4 +2424,17 @@ defmodule NxTest do
                    end
     end
   end
+
+  describe "mode" do
+    test "axis" do
+      assert Nx.tensor([[1, 2, 3]]) |> Nx.mode(axis: 0) == Nx.tensor([1, 2, 3])
+      assert Nx.tensor([[1, 2, 3]]) |> Nx.mode(axis: 0, keep_axis: true) == Nx.tensor([[1, 2, 3]])
+      assert Nx.mode(Nx.tensor([[1], [2], [1], [3]]), axis: 1) == Nx.tensor([1, 2, 1, 3])
+    end
+
+    test "keep_axis" do
+      assert Nx.mode(Nx.tensor(1), keep_axis: true) == Nx.tensor([1])
+      assert Nx.mode(Nx.tensor([[[1]]]), keep_axis: true) == Nx.tensor([[[1]]])
+    end
+  end
 end
