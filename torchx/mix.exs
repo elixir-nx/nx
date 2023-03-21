@@ -218,6 +218,8 @@ defmodule Torchx.MixProject do
         :wget -> {"wget", ["-O", dest, url]}
       end
 
+    IO.puts("Downloading Libtorch from #{url}")
+
     case System.cmd(command, args) do
       {_, 0} -> :ok
       _ -> :error

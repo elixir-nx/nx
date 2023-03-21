@@ -48,7 +48,7 @@ jobs:
         id: libtorch-cache
         with:
           path: ${{ env.LIBTORCH_DIR }}
-          key: linux-v2-libtorch-${{ matrix.torch_version }}-cpu
+          key: linux-v1-libtorch-${{ matrix.torch_version }}-cpu
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
@@ -112,7 +112,7 @@ jobs:
         id: libtorch-cache-win
         with:
           path: ${{ env.LIBTORCH_DIR }}
-          key: win-v2-libtorch-${{ matrix.torch_version }}-cpu
+          key: win-v1-libtorch-${{ matrix.torch_version }}-cpu
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
