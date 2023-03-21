@@ -18,6 +18,8 @@ jobs:
         include:
           - working_directory: "torchx"
             torch_version: "1.12.1"
+            elixir: "1.14.2"
+            otp: "25.2"
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}
@@ -71,6 +73,8 @@ jobs:
         include:
           - working_directory: "torchx"
             torch_version: "1.12.1"
+            elixir: "1.14.2"
+            otp: "25.2"
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}
