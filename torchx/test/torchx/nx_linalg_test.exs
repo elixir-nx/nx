@@ -331,7 +331,7 @@ defmodule Torchx.NxLinAlgTest do
   end
 
   defp random_uniform(shape, opts \\ [type: :f32]) do
-    values = Enum.map(1..Tuple.product(shape), fn _ -> :rand.uniform end)
+    values = Enum.map(1..Tuple.product(shape), fn _ -> :rand.uniform() end)
 
     values
     |> Nx.tensor(opts)

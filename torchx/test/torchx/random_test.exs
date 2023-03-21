@@ -173,13 +173,15 @@ defmodule Torchx.Nx.RandomTest do
     end
 
     test "gumbel" do
-
       {result, _key} = Nx.Random.gumbel(Nx.Random.key(1), shape: {2, 3})
 
-      assert_equal(result, Nx.tensor([
-           [0.6247938871383667, -0.21740718185901642, 0.7678327560424805],
-           [0.7778404355049133, 4.0895304679870605, 0.3029090166091919]
-         ]))
+      assert_equal(
+        result,
+        Nx.tensor([
+          [0.6247938871383667, -0.21740718185901642, 0.7678327560424805],
+          [0.7778404355049133, 4.0895304679870605, 0.3029090166091919]
+        ])
+      )
     end
   end
 
