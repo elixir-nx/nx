@@ -4,9 +4,9 @@ defmodule Torchx.MixProject do
   @source_url "https://github.com/elixir-nx/nx"
   @version "0.5.1"
 
-  @valid_targets ["cpu", "cu102", "cu113", "cu116"]
+  @valid_targets ["cpu", "cu117", "cu118"]
 
-  @libtorch_version System.get_env("LIBTORCH_VERSION", "1.12.1")
+  @libtorch_version System.get_env("LIBTORCH_VERSION", "2.0.0")
   @libtorch_target System.get_env("LIBTORCH_TARGET", "cpu")
 
   @libtorch_base "libtorch"
@@ -61,8 +61,8 @@ defmodule Torchx.MixProject do
 
   defp deps do
     [
-      {:nx, "~> 0.5.1"},
-      # {:nx, path: "../nx"},
+      # {:nx, "~> 0.5.1"},
+      {:nx, path: "../nx"},
       {:dll_loader_helper, "~> 0.1.0"},
       {:elixir_make, "~> 0.6"},
       {:ex_doc, "~> 0.29.0", only: :docs}
