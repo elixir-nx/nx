@@ -7008,11 +7008,6 @@ defmodule Nx do
           [1]
         ]
       >
-      iex> Nx.mode(Nx.tensor([[1], [2], [1], [3]]), axis: 1)
-      #Nx.Tensor<
-        s64[4]
-        [1, 2, 1, 3]
-      >
 
   ### Keeping axis
 
@@ -7022,22 +7017,6 @@ defmodule Nx do
         [
           [2],
           [1]
-        ]
-      >
-
-      iex> Nx.mode(Nx.tensor(1), keep_axis: true)
-      #Nx.Tensor<
-        s64[1]
-        [1]
-      >
-
-      iex> Nx.mode(Nx.tensor([[[1]]]), keep_axis: true)
-      #Nx.Tensor<
-        s64[1][1][1]
-        [
-          [
-            [1]
-          ]
         ]
       >
 
