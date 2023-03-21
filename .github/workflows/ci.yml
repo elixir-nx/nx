@@ -14,6 +14,11 @@ jobs:
         working_directory: ["nx", "exla", "torchx"]
         elixir: ["1.14.2"]
         otp: ["25.2"]
+        include:
+          - working_directory: "torchx"
+            torch_version: "1.12.1"
+          - working_directory: "torchx"
+            torch_version: "2.0.0"
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}
@@ -41,7 +46,7 @@ jobs:
         id: libtorch-cache
         with:
           path: ${{ env.LIBTORCH_DIR }}
-          key: linux-v1-libtorch-2.0.0-cpu
+          key: linux-v1-libtorch-${{ matrix.torch_version }}-cpu
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
@@ -63,6 +68,11 @@ jobs:
         working_directory: ["nx", "torchx"]
         elixir: ["1.14.2"]
         otp: ["25.2"]
+        include:
+          - working_directory: "torchx"
+            torch_version: "1.12.1"
+          - working_directory: "torchx"
+            torch_version: "2.0.0"
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}
@@ -98,7 +108,7 @@ jobs:
         id: libtorch-cache-win
         with:
           path: ${{ env.LIBTORCH_DIR }}
-          key: win-v1-libtorch-2.0.0-cpu
+          key: win-v1-libtorch-${{ matrix.torch_version }}-cpu
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get

@@ -25,6 +25,10 @@ target_include_directories(torchx PUBLIC ${ERTS_INCLUDE_DIR})
 
 SET_TARGET_PROPERTIES(torchx PROPERTIES PREFIX "")
 
+if (Torch_VERSION_MAJOR EQUAL 1)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSING_TORCH_V1")
+endif()
+
 if(UNIX)
 set_target_properties(torchx PROPERTIES
     INSTALL_RPATH_USE_LINK_PATH TRUE

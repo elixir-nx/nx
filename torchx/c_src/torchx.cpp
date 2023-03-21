@@ -1,5 +1,11 @@
 #include <torch/torch.h>
-#include <ATen/LegacyBatchedTensorImpl.h>
+
+#if defined(USING_TORCH_V1)
+  #include <ATen/BatchedTensorImpl.h>
+#else
+  #include <ATen/LegacyBatchedTensorImpl.h>
+#endif
+
 #include <iostream>
 #include <atomic>
 
@@ -806,10 +812,9 @@ NIF(triangular_solve)
   PARAM(2, bool, transpose);
   PARAM(3, bool, upper);
 
-
-
   auto ts_a = *a;
-  if (transpose) {
+  if (transpose)
+  {
     auto num_dims = a->dim();
     ts_a = torch::transpose(*a, num_dims - 2, num_dims - 1);
     upper = !upper;
