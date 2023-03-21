@@ -7646,7 +7646,7 @@ defmodule Nx do
       tensor_size == 1 and axis == nil ->
         if opts[:keep_axis], do: tensor, else: squeeze(tensor)
 
-      (tensor_size == 1 and axis != nil) or Nx.axis_size(tensor, axis) == 1 ->
+      axis != nil and (tensor_size == 1 or Nx.axis_size(tensor, axis) == 1) ->
         if opts[:keep_axis], do: tensor, else: squeeze(tensor, axes: [axis])
 
       axis == nil ->
