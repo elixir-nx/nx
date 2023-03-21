@@ -98,7 +98,7 @@ jobs:
         id: libtorch-cache-win
         with:
           path: ${{ env.LIBTORCH_DIR }}
-          key: win-v1-libtorch-cpu
+          key: win-v1-libtorch-2.0.0-cpu
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
