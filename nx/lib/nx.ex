@@ -4054,8 +4054,12 @@ defmodule Nx do
       # We devectorize both revectorized tensors (which now have the same vectorized axes)
       # in reference to the third one, so `out_vectorized_axes` contains all vectorized axes and the shapes
       # all have the
-      {a, c_devec, out_vectorized_axes} = devectorize_with_axes(a, c)
-      {b, ^c_devec, ^out_vectorized_axes} = devectorize_with_axes(b, c)
+
+      {a, %{shape: c_devec_shape, names: c_devec_names} = c_devec, out_vectorized_axes} =
+        devectorize_with_axes(a, c)
+
+      {b, %{shape: ^c_devec_shape, names: ^c_devec_names}, ^out_vectorized_axes} =
+        devectorize_with_axes(b, c)
 
       target_shape =
         a.shape
