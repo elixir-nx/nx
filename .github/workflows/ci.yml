@@ -6,7 +6,7 @@ on:
   pull_request:
 jobs:
   main:
-    name: Linux (${{ matrix.working_directory == "torchx" && "torchx(${matrix.torch_version})" || matrix.working_directory  }}, ${{ matrix.elixir }}, ${{ matrix.otp }})
+    name: Linux (${{ matrix.working_directory == 'torchx' && 'torchx(${matrix.torch_version})' || matrix.working_directory  }}, ${{ matrix.elixir }}, ${{ matrix.otp }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
