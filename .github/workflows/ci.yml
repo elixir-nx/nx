@@ -14,18 +14,14 @@ jobs:
         working_directory: ["nx", "exla", "torchx"]
         elixir: ["1.14.2"]
         otp: ["25.2"]
-        torch_version: ["2.0.0"]
-        include:
-          - working_directory: "torchx"
-            torch_version: "1.12.1"
-            elixir: "1.14.2"
-            otp: "25.2"
+        torch_version: ["1.12.1", "2.0.0"]
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}
     env:
       MIX_ENV: test
       XLA_FLAGS: --xla_force_host_platform_device_count=2
+      LIBTORCH_VERSION: ${{ matrix.torch_version }}
       LIBTORCH_DIR: ${{ github.workspace }}/torchx/cache/libtorch
     steps:
       - uses: actions/checkout@v2
@@ -47,7 +43,7 @@ jobs:
         id: libtorch-cache
         with:
           path: ${{ env.LIBTORCH_DIR }}
-          key: linux-v1-libtorch-${{ matrix.torch_version }}-cpu
+          key: linux-v2-libtorch-${{ matrix.torch_version }}-cpu
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
@@ -69,18 +65,14 @@ jobs:
         working_directory: ["nx", "torchx"]
         elixir: ["1.14.2"]
         otp: ["25.2"]
-        torch_version: ["2.0.0"]
-        include:
-          - working_directory: "torchx"
-            torch_version: "1.12.1"
-            elixir: "1.14.2"
-            otp: "25.2"
+        torch_version: ["1.12.1", "2.0.0"]
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}
     env:
       MIX_ENV: test
       XLA_FLAGS: --xla_force_host_platform_device_count=2
+      LIBTORCH_VERSION: ${{ matrix.torch_version }}
       LIBTORCH_DIR: ${{ github.workspace }}\torchx\cache\libtorch
     steps:
       - name: Configure Git
@@ -110,7 +102,7 @@ jobs:
         id: libtorch-cache-win
         with:
           path: ${{ env.LIBTORCH_DIR }}
-          key: win-v1-libtorch-${{ matrix.torch_version }}-cpu
+          key: win-v2-libtorch-${{ matrix.torch_version }}-cpu
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
