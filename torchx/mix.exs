@@ -73,7 +73,7 @@ defmodule Torchx.MixProject do
       {:dll_loader_helper, "~> 0.1.0"},
       {:elixir_make, "~> 0.6"},
       {:ex_doc, "~> 0.29.0", only: :docs}
-    ]f
+    ]
   end
 
   defp docs do
