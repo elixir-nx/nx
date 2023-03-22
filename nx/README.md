@@ -172,15 +172,33 @@ See the [`bench`](https://github.com/elixir-nx/nx/tree/main/exla/bench) and [`ex
 
 Many of Elixir's features are supported inside `defn`, such as the pipe operator, aliases, conditionals, pattern-matching, and more. It also brings exclusive features to numerical definitions, such as `while` loops, automatic differentiation via the `grad` function, hooks to inspect data running on the GPU, and more.
 
+## Working with processes
+
+Elixir runs on the Erlang Virtual Machine, which runs your code inside lightweight thread of executions called "processes". Sending tensors between processes is done by sharing, no copying is required. The tensors are then [refcounted](https://en.wikipedia.org/wiki/Reference_counting) and garbage collected once all processes no longer hold a reference to them.
+
+Nx also allows developers to run different Erlang VM processes, each against a different GPU device. For using, with EXLA, one could do:
+
+```elixir
+Nx.default_backend({EXLA.Backend, client: :cuda, device_id: 1})
+```
+
+or:
+
+```elixir
+will_jit = EXLA.jit(&MyModule.softmax/1, client: :cuda, device_id: 1)
+```
+
+And, from that moment on, all operations will happen within a particular GPU instance. You can then use Elixir's message-passing abilities to coordinate the necessary work across processes.
+
 ## Why Elixir?
 
-The goal of the Nx project is to bring the power of numerical computing to those who are already leveraging the Erlang VM for building scalable and fault-tolerant systems.
+The goal of the Nx project is to marry the power of numerical computing with the Erlang VM capabilities for building concurrent, scalable, and fault-tolerant systems.
 
 Elixir is a functional programming language that runs on the Erlang VM. And, at this point, you might ask: is functional programming a good fit for numerical computing? One of the main concerns is that immutability can lead to high memory usage when working with large blobs of memory. And that's true!
 
 However, it turns out that the most efficient way of executing numerical computations is by first building a graph of all computations, then compiling that graph to run on your CPUs/GPUs just-in-time. At this point, your numerical computing code becomes a function:
 
-    input -> [numerical computing] -> output 
+    input -> [compiled numerical computing graph] -> output
 
 The `input` is an Elixir data-structure. Inside the function, the algorithm is highly optimized and free to mutate the data in any way it seems fit. Then we get an output that once again must obey Elixir semantics.
 
@@ -196,7 +214,7 @@ To build those graphs, immutability becomes an indispensable tool both in terms 
 
 At the end of the day, Elixir provides the functional foundation and a powerful macro system that allows us to compile a subset of Elixir to the CPU/GPU.
 
-With time, we hope to see efforts that marry the benefits of the Erlang VM with numerical computing. Such as distributed computations, thanks to the Erlang VM's built-in ability of running in clusters, and federated learning, leverating the Erlang VM capabilities of handling data in and out of hundreds of thousands of devices concurrently.
+With the addition of `Nx.Serving`, we started to marry the benefits of the Erlang VM with numerical computing. With `Nx.Serving`, you can batch numerical computing requests, as well as load balance requests over a cluster of machines. This makes it easy to embed and scale Nx code within your existing Elixir systems, both horizontally and vertically, and without a need for third-party services.
 
 We also expect numerical computing to complement the Elixir ecosystem in different ways, such as:
 
@@ -205,6 +223,10 @@ We also expect numerical computing to complement the Elixir ecosystem in differe
   * deploying models, signal processing, and data modelling inside embedded systems [via Nerves](https://www.nerves-project.org/)
 
   * incorporating data analysis and classification algorithms inside concurrent data pipelines powered [by Broadway](https://www.elixir-broadway.org/)
+
+  * adding audio and video processing and AI capabilities to media systems [through Membrane](https://membrane.stream/)
+
+We are also excited to explore how Nx and Elixir can be used under distinct domains, such as federated learning, and leverage the Erlang VM ability to handle data in and out of hundreds of thousands of devices concurrently.
 
 ## License
 

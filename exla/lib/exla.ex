@@ -107,6 +107,16 @@ defmodule EXLA do
     * `:memory_fraction` - how much memory of a GPU device to
       allocate. Defaults to `0.9`.
 
+  ### Memory preallocation
+
+  XLA preallocates memory in GPU devices. This means that, if you are to
+  run multiple notebooks or multiple instances of your application, the
+  second, third, and so on instances won't be able to allocate memory.
+
+  You can disable this behaviour by setting `preallocate: false` on the
+  client configuration, as specified above. You may also use
+  `:memory_fraction` to control how much is preallocated.
+
   ### GPU Runtime Issues
 
   GPU Executions run in dirty IO threads, which have a considerable smaller
