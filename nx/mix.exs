@@ -61,6 +61,7 @@ defmodule Nx.MixProject do
       before_closing_body_tag: &before_closing_body_tag/1,
       extras: [
         "guides/intro-to-nx.livemd",
+        "guides/tensor-aggregation-101.livemd",
         "CHANGELOG.md"
       ],
       skip_undefined_reference_warnings_on: ["CHANGELOG.md"],
