@@ -1281,7 +1281,7 @@ defmodule Nx do
         ]
       >
 
-  ## Vectors
+  ## Vectorized tensors
 
   If given, vectorized axes, are added as leading dimensions to the tensor,
   effectively broadcasting the base shape along them.
@@ -1555,7 +1555,7 @@ defmodule Nx do
         ]
       >
 
-  ### Vectors
+  ### Vectorized tensors
 
       iex> t = Nx.vectorize(Nx.tensor([[1, 2], [3, 4]]), :x)
       iex> Nx.make_diagonal(t, offset: 1)
@@ -1878,7 +1878,7 @@ defmodule Nx do
       iex> Nx.to_binary(Nx.tensor([1.0, 2.0, 3.0]), limit: 2)
       <<1.0::float-32-native, 2.0::float-32-native>>
 
-  ### Vectors
+  ### Vectorized tensors
 
   `to_binary/2` disregards the vectorized axes before calculating the data to be returned:
 
@@ -1964,7 +1964,7 @@ defmodule Nx do
       iex> Nx.to_flat_list(t)
       [:neg_infinity, :nan, :infinity]
 
-  ### Vectors
+  ### Vectorized tensors
 
   `to_flat_list/2` disregards the vectorized axes before calculating the data to be returned.
   Like `to_binary/1`, `:limit` refers to the flattened devectorized data.
@@ -2012,7 +2012,7 @@ defmodule Nx do
         123
       >
 
-  ### Vectors
+  ### Vectorized tensors
 
   `to_list/1` disregards the vectorized axes before calculating the data to be returned.
   The special case below shows that a vectorized tensor with inner scalar shape will
@@ -3497,7 +3497,7 @@ defmodule Nx do
   Returns the number of elements in the tensor.
 
   If a tuple is given, it returns the number of elements in a tensor with that shape.
-  Vectors will not include vectorized axes sizes. See `flat_size/1`.
+  Vectorized tensors will not include vectorized axes sizes. See `flat_size/1`.
 
   ## Examples
 
@@ -3561,7 +3561,7 @@ defmodule Nx do
       iex> Nx.byte_size(1)
       8
 
-  Vectors account for all elements
+  Vectorized tensors account for all elements
 
       iex> Nx.byte_size(Nx.tensor([[1, 2], [3, 4]]) |> Nx.vectorize(:x))
       32
@@ -3846,19 +3846,18 @@ defmodule Nx do
   end
 
   @doc """
-  Transforms a tensor into a vector.
-
-  Vectors are tensors in which some of the axes are treated
-  as vectorized, which is explained in more detail below.
+  Transforms a tensor into a vectorized tensor.
 
   Each vectorization removes the leading axis from the shape and appends it to
   `:vectorized_axes` list for the tensor.
 
+  In the examples below, we discuss in more detail how a vectorized tensor works.
+
   ## Examples
 
-  In this first example, we turn a `{2, 3}`-shaped tensor into a vector
-  with 1 vectorized axes and rank 1 shape, `{3}`, and then into a vector with
-  2 vectorized axes and rank 0 shape.
+  In this first example, we turn a `{2, 3}`-shaped tensor into a vectorized tensor
+  with 1 vectorized axes and rank 1 shape, `{3}`, and then into a vectorized tensor
+  with 2 vectorized axes and rank 0 shape.
 
       iex> t = Nx.iota({2, 3})
       iex> vectorized = Nx.vectorize(t, :first)
@@ -4060,13 +4059,12 @@ defmodule Nx do
           Enum.map(right_pairs, fn {k, _} -> {k, 1} end)
       end)
 
-    {devec, _} = devectorize_with_axes(first)
-
     target_shape =
       List.to_tuple(Keyword.values(first_vectorized_axes) ++ Tuple.to_list(first.shape))
 
     left =
-      devec
+      first
+      |> devectorize()
       |> reshape(target_shape)
       |> revectorize_and_validate_sizes(first_vectorized_axes, true)
 
@@ -7029,7 +7027,7 @@ defmodule Nx do
         ]
       >
 
-  ### Vectors
+  ### Vectorized tensors
 
       iex> t = Nx.vectorize(Nx.tensor([[0, 1], [1, 1]]), :x)
       iex> Nx.all(t, axes: [0], keep_axes: true)
@@ -7094,7 +7092,7 @@ defmodule Nx do
         ]
       >
 
-  ### Vectors
+  ### Vectorized tensors
 
       iex> t = Nx.vectorize(Nx.tensor([[0, 1], [0, 0]]), :x)
       iex> Nx.any(t, axes: [0], keep_axes: true)
@@ -7346,7 +7344,7 @@ defmodule Nx do
         ]
       >
 
-  ### Vectors
+  ### Vectorized tensors
 
       iex> t = Nx.vectorize(Nx.tensor([[1, 2], [3, 4]]), :x)
       iex> Nx.sum(t, axes: [0], keep_axes: true)
@@ -8034,7 +8032,7 @@ defmodule Nx do
         ]
       >
 
-  ### Vectors
+  ### Vectorized tensors
 
       iex> t = Nx.vectorize(Nx.tensor([[1, 2], [3, 4]]), :x)
       iex> Nx.product(t, axes: [0], keep_axes: true)
@@ -8131,7 +8129,7 @@ defmodule Nx do
         ]
       >
 
-  ### Vectors
+  ### Vectorized tensors
 
       iex> t = Nx.vectorize(Nx.tensor([[1, 2], [3, 4]]), :x)
       iex> Nx.reduce_max(t, axes: [0], keep_axes: true)
@@ -8223,7 +8221,7 @@ defmodule Nx do
         ]
       >
 
-  ### Vectors
+  ### Vectorized tensors
 
       iex> t = Nx.vectorize(Nx.tensor([[1, 2], [3, 4]]), :x)
       iex> Nx.reduce_min(t, axes: [0], keep_axes: true)
@@ -8406,7 +8404,7 @@ defmodule Nx do
         ]
       >
 
-  ### Vectors
+  ### Vectorized tensors
 
       iex> v = Nx.tensor([[1, 2, 3], [6, 5, 4]]) |> Nx.vectorize(:x)
       iex> Nx.argmax(v)
@@ -8543,7 +8541,7 @@ defmodule Nx do
         ]
       >
 
-  ### Vectors
+  ### Vectorized tensors
 
       iex> v = Nx.tensor([[1, 2, 3], [6, 5, 4]]) |> Nx.vectorize(:x)
       iex> Nx.argmin(v)
@@ -10471,9 +10469,9 @@ defmodule Nx do
         ]
       >
 
-  ### Vectors
+  ### Vectorized tensors
 
-  For vectors, transpose will manipulate the inner shape only,
+  For vectorized tensors, transpose will manipulate the inner shape only,
   keeping the order of vectorized axes the same.
 
       iex> v = Nx.vectorize(Nx.iota({1, 2, 3}), :x)
@@ -10614,9 +10612,9 @@ defmodule Nx do
         ]
       >
 
-  ### Vectors
+  ### Vectorized tensors
 
-  For vectors, the `:axes` refer to the non-vectorized part.
+  For vectorized tensors, the `:axes` refer to the non-vectorized part.
   Vectorized axes will always remain unchanged.
 
       iex> v = Nx.vectorize(Nx.iota({1, 2, 3}), :x)
@@ -12983,9 +12981,9 @@ defmodule Nx do
         ]
       >
 
-  ## Vectors
+  ## Vectorized tensors
 
-  Vectors work the same as N-dimensional tensors
+  Vectorized tensors work the same as N-dimensional tensors
 
       iex> tensor = Nx.tensor([[1, 1, 0, 0, 2, 3], [1, 0, 0, 0, 2, 3]]) |> Nx.vectorize(:x)
       iex> Nx.fft(tensor, length: 4)
@@ -13060,9 +13058,9 @@ defmodule Nx do
         ]
       >
 
-  ## Vectors
+  ## Vectorized tensors
 
-  Vectors work the same as N-dimensional tensors
+  Vectorized tensors work the same as N-dimensional tensors
 
       iex> tensor = Nx.tensor([[1, 1, 0, 0, 2, 3], [1, 0, 0, 0, 2, 3]]) |> Nx.vectorize(:x)
       iex> Nx.ifft(tensor, length: 4)
