@@ -4042,14 +4042,17 @@ defmodule Nx do
 
   def reshape_vectors([tensor]), do: [tensor]
 
-  def reshape_vectors([first | tensors]) do
+  def reshape_vectors(input) when is_list(input) do
     # For all tensors to be compatible, each pair also needs to be compatible
     # This means that we can do a first pass accumulating axes into
     # the first tensor, and then a second pass getting them all into their final shapes.
 
-    %T{vectorized_axes: initial_vectorized_axes} = to_tensor(first)
+    [first | tensors] = Enum.map(input, &to_tensor/1)
 
-    first_vectorized_axes =
+    %T{vectorized_axes: initial_vectorized_axes} = first
+
+    # calculate the expected order for vectorized axes
+    canonical_vectorized_axes =
       Enum.reduce(tensors, initial_vectorized_axes, fn right, axes ->
         {left_pairs, both_pairs, right_pairs} =
           calculate_common_vectorized_axes(axes, right.vectorized_axes)
@@ -4059,42 +4062,29 @@ defmodule Nx do
           Enum.map(right_pairs, fn {k, _} -> {k, 1} end)
       end)
 
-    target_shape =
-      List.to_tuple(Keyword.values(first_vectorized_axes) ++ Tuple.to_list(first.shape))
+    Enum.map([first | tensors], fn %T{shape: shape, vectorized_axes: current_axes} = t ->
+      {vectorized_axes, []} =
+        Enum.map_reduce(canonical_vectorized_axes, current_axes, fn
+          kv, [] ->
+            {kv, []}
 
-    left =
-      first
+          {name, _size}, current_axes ->
+            case List.keytake(current_axes, name, 0) do
+              {{^name, other_size}, current_axes} ->
+                {{name, other_size}, current_axes}
+
+              _ ->
+                {{name, 1}, current_axes}
+            end
+        end)
+
+      target_shape = List.to_tuple(Keyword.values(vectorized_axes) ++ Tuple.to_list(shape))
+
+      t
       |> devectorize()
       |> reshape(target_shape)
-      |> revectorize_and_validate_sizes(first_vectorized_axes, true)
-
-    tail =
-      Enum.map(tensors, fn right ->
-        {_, right, vectorized_axes} = devectorize_with_axes(left, right)
-
-        same_order =
-          Enum.reduce_while(left.vectorized_axes, vectorized_axes, fn
-            {left_name, _}, [{right_name, _} | axes] ->
-              cond do
-                left_name != right_name ->
-                  {:halt, false}
-
-                axes == [] ->
-                  {:cont, true}
-
-                true ->
-                  {:cont, axes}
-              end
-          end)
-
-        if same_order do
-          revectorize_and_validate_sizes(right, vectorized_axes, true)
-        else
-          reorder_vectorized_axes(right, vectorized_axes, left.vectorized_axes)
-        end
-      end)
-
-    [left | tail]
+      |> revectorize_and_validate_sizes(canonical_vectorized_axes, true)
+    end)
   end
 
   defp calculate_common_vectorized_axes(left_vectorized_axes, right_vectorized_axes) do
@@ -4263,31 +4253,6 @@ defmodule Nx do
     out_names = Enum.drop(names, n)
 
     %T{tensor | names: out_names, vectorized_axes: vectorized_axes, shape: out_shape}
-  end
-
-  defp reorder_vectorized_axes(tensor, axes, target_axes) do
-    idx_by_name = Enum.with_index(axes, fn {name, _}, idx -> {name, idx} end)
-
-    {[], m, indices_rev} =
-      Enum.reduce(target_axes, {idx_by_name, 0, []}, fn {name, _}, {idx_by_name, m, indices} ->
-        {{_name, idx}, idx_by_name} = List.keytake(idx_by_name, name, 0)
-
-        unless idx do
-          raise "invalid vectorized axes"
-        end
-
-        {idx_by_name, m + 1, [idx | indices]}
-      end)
-
-    n = tuple_size(tensor.shape)
-
-    inner_axes = count_up(n - m, n - 1)
-
-    transpose_axes = Enum.reverse(indices_rev) ++ inner_axes
-
-    tensor
-    |> transpose(axes: transpose_axes)
-    |> revectorize_and_validate_sizes(target_axes, true)
   end
 
   ## Element-wise binary ops
