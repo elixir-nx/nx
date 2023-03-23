@@ -699,7 +699,7 @@ defmodule Nx do
   def tensor(arg, opts \\ [])
 
   def tensor(%Nx.Tensor{} = tensor, opts) do
-    opts = keyword!(opts, [:type, :names, :backend, :vectorized_axes])
+    opts = keyword!(opts, [:type, :names, :backend])
 
     tensor =
       if backend = opts[:backend] do
