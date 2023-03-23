@@ -4042,23 +4042,21 @@ defmodule Nx do
       [x: 1, y: 2]
 
   The resulting tensors will all present the combined vectors in the
-  same order. In the example below, those are `:x`, `:y` and `:z`.
-  Note that the sizes will always be either `1` or the original size
-  of the vector for that tensor.
+  same order in which each unique vector appears in the input.
+  The example below shows how this behaves for a pair of tensors.
 
       iex> x = Nx.tensor([1, 2, 3]) |> Nx.vectorize(:x)
       iex> y = Nx.tensor([4]) |> Nx.vectorize(:y)
-      iex> xy = Nx.tensor([[[5]], [[6]]]) |> Nx.vectorize(:y) |> Nx.vectorize(:x)
-      iex> z = Nx.tensor([8]) |> Nx.vectorize(:z)
-      iex> [x, y, xy, z] = Nx.reshape_vectors([x, y, xy, z])
+      iex> [x, y] = Nx.reshape_vectors([x, y])
       iex> x.vectorized_axes
-      [x: 3, y: 1, z: 1]
+      [x: 3, y: 1]
       iex> y.vectorized_axes
-      [x: 1, y: 1, z: 1]
-      iex> xy.vectorized_axes
-      [x: 1, y: 2, z: 1]
-      iex> z.vectorized_axes
-      [x: 1, y: 1, z: 1]
+      [x: 1, y: 1]
+      iex> [y, x] = Nx.reshape_vectors([y, x])
+      iex> x.vectorized_axes
+      [y: 1, x: 3]
+      iex> y.vectorized_axes
+      [y: 1, x: 1]
   """
   @doc type: :shape
   def reshape_vectors(tensors)
