@@ -699,7 +699,7 @@ defmodule Nx do
   def tensor(arg, opts \\ [])
 
   def tensor(%Nx.Tensor{} = tensor, opts) do
-    opts = keyword!(opts, [:type, :names, :backend])
+    opts = keyword!(opts, [:type, :names, :backend, :vectorized_axes])
 
     tensor =
       if backend = opts[:backend] do
@@ -1281,9 +1281,9 @@ defmodule Nx do
         ]
       >
 
-  ## Vectorized tensors
+  ## Vectors
 
-  If given vectorized axes, are added as leading dimensions to the tensor,
+  If given, vectorized axes, are added as leading dimensions to the tensor,
   effectively broadcasting the base shape along them.
 
       iex> Nx.eye({3}, vectorized_axes: [x: 1, y: 2])
@@ -1555,7 +1555,7 @@ defmodule Nx do
         ]
       >
 
-  ### Vectorized tensors
+  ### Vectors
 
       iex> t = Nx.vectorize(Nx.tensor([[1, 2], [3, 4]]), :x)
       iex> Nx.make_diagonal(t, offset: 1)
@@ -1878,9 +1878,9 @@ defmodule Nx do
       iex> Nx.to_binary(Nx.tensor([1.0, 2.0, 3.0]), limit: 2)
       <<1.0::float-32-native, 2.0::float-32-native>>
 
-  ### Vectorized tensors
+  ### Vectors
 
-  `to_binary/2` discards the vectorized axes before calculating the data to be returned:
+  `to_binary/2` disregards the vectorized axes before calculating the data to be returned:
 
       iex> Nx.to_binary(Nx.vectorize(Nx.tensor([[1, 2], [3, 4]]), :x))
       <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
@@ -1964,9 +1964,9 @@ defmodule Nx do
       iex> Nx.to_flat_list(t)
       [:neg_infinity, :nan, :infinity]
 
-  ### Vectorized tensors
+  ### Vectors
 
-  `to_flat_list/2` discards the vectorized axes before calculating the data to be returned.
+  `to_flat_list/2` disregards the vectorized axes before calculating the data to be returned.
   Like `to_binary/1`, `:limit` refers to the flattened devectorized data.
 
       iex> t = Nx.vectorize(Nx.tensor([[1], [2], [3], [4]]), :x)
@@ -2012,9 +2012,9 @@ defmodule Nx do
         123
       >
 
-  ### Vectorized tensors
+  ### Vectors
 
-  `to_list/1` discards the vectorized axes before calculating the data to be returned.
+  `to_list/1` disregards the vectorized axes before calculating the data to be returned.
   The special case below shows that a vectorized tensor with inner scalar shape will
   still be converted to a list accordingly:
 
@@ -2499,18 +2499,31 @@ defmodule Nx do
   """
   @doc type: :shape
   def reshape(tensor, new_shape, opts \\ []) do
-    %T{shape: old_shape} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    %T{shape: old_shape, vectorized_axes: vectorized_axes} = tensor = to_tensor(tensor)
     new_names = opts[:names] || names!(new_shape)
     new_shape = if is_tuple(new_shape), do: new_shape, else: shape(new_shape)
     new_shape = Nx.Shape.reshape(old_shape, new_shape)
 
     names = Nx.Shape.named_axes!(new_names, new_shape)
 
-    if old_shape == new_shape do
-      %{tensor | names: names}
-    else
-      impl!(tensor).reshape(%{tensor | shape: new_shape, names: names}, tensor)
+    cond do
+      old_shape == new_shape ->
+        %{tensor | names: names}
+
+      vectorized_axes == [] ->
+        impl!(tensor).reshape(%{tensor | shape: new_shape, names: names}, tensor)
+
+      true ->
+        apply_vectorized(tensor, fn tensor, offset ->
+          new_shape =
+            tensor.shape
+            |> Tuple.to_list()
+            |> Enum.take(offset)
+            |> Enum.concat(Tuple.to_list(new_shape))
+            |> List.to_tuple()
+
+          impl!(tensor).reshape(%{tensor | shape: new_shape, names: names}, tensor)
+        end)
     end
   end
 
@@ -3484,7 +3497,7 @@ defmodule Nx do
   Returns the number of elements in the tensor.
 
   If a tuple is given, it returns the number of elements in a tensor with that shape.
-  Vectorized tensors will not include vectorized axes sizes. See `flat_size/1`.
+  Vectors will not include vectorized axes sizes. See `flat_size/1`.
 
   ## Examples
 
@@ -3548,7 +3561,7 @@ defmodule Nx do
       iex> Nx.byte_size(1)
       8
 
-  Vectorized tensors account for all elements
+  Vectors account for all elements
 
       iex> Nx.byte_size(Nx.tensor([[1, 2], [3, 4]]) |> Nx.vectorize(:x))
       32
@@ -3833,15 +3846,18 @@ defmodule Nx do
   end
 
   @doc """
-  Transforms the leading dimension in a tensor into a vectorized axis.
+  Transforms a tensor into a vector.
 
-  Each vectorization removes an axis from the shape and appends it to
-  vectorized axes list.
+  Vectors are tensors in which some of the axes are treated
+  as vectorized, which is explained in more detail below.
+
+  Each vectorization removes the leading axis from the shape and appends it to
+  `:vectorized_axes` list for the tensor.
 
   ## Examples
 
-  In this first example, we turn a `{2, 3}`-shaped tensor into a tensor
-  with 1 vectorized axes and rank 1 shape, `{3}`, and then into a tensor with
+  In this first example, we turn a `{2, 3}`-shaped tensor into a vector
+  with 1 vectorized axes and rank 1 shape, `{3}`, and then into a vector with
   2 vectorized axes and rank 0 shape.
 
       iex> t = Nx.iota({2, 3})
@@ -3985,6 +4001,96 @@ defmodule Nx do
 
   def devectorize(tensor), do: tensor
 
+  @doc """
+  Reshapes input tensors so that they are all vectorized with the same vectors.
+
+  For vectors with the same name to be compatible, they need to either
+  have the same size or one must be of size 1.
+
+  ## Examples
+
+  Two vectors of the same name are compatible if they have the same sizes or if either has size 1.
+
+      iex> x = Nx.tensor([1, 2, 3]) |> Nx.vectorize(:x)
+      iex> xy = Nx.tensor([[[5]], [[6]]]) |> Nx.vectorize(:y) |> Nx.vectorize(:x)
+      iex> [x, xy] = Nx.reshape_vectors([x, xy])
+      iex> x.vectorized_axes
+      [x: 3, y: 1]
+      iex> xy.vectorized_axes
+      [x: 1, y: 2]
+
+  The resulting tensors will all present the combined vectors in the
+  same order. In the example below, those are `:x`, `:y` and `:z`.
+  Note that the sizes will always be either `1` or the original size
+  of the vector for that tensor.
+
+      iex> x = Nx.tensor([1, 2, 3]) |> Nx.vectorize(:x)
+      iex> y = Nx.tensor([4]) |> Nx.vectorize(:y)
+      iex> xy = Nx.tensor([[[5]], [[6]]]) |> Nx.vectorize(:y) |> Nx.vectorize(:x)
+      iex> z = Nx.tensor([8]) |> Nx.vectorize(:z)
+      iex> [x, y, xy, z] = Nx.reshape_vectors([x, y, xy, z])
+      iex> x.vectorized_axes
+      [x: 3, y: 1, z: 1]
+      iex> y.vectorized_axes
+      [x: 1, y: 1, z: 1]
+      iex> xy.vectorized_axes
+      [x: 1, y: 2, z: 1]
+      iex> z.vectorized_axes
+      [x: 1, y: 1, z: 1]
+  """
+  @doc type: :shape
+  def reshape_vectors(tensors)
+
+  def reshape_vectors([tensor]), do: [tensor]
+
+  def reshape_vectors([first | tensors]) do
+    # For all tensors to be compatible, each pair also needs to be compatible
+    # This means that we can do a first pass accumulating axes into
+    # the first tensor, and then a second pass getting them all into their final shapes.
+    left =
+      Enum.reduce(tensors, first, fn right, left ->
+        {left, _, vectorized_axes} = devectorize_with_axes(left, to_tensor(right))
+        revectorize_and_validate_sizes(left, vectorized_axes, true)
+      end)
+
+    left = reshape(left, shape(first))
+
+    tail =
+      Enum.map(tensors, fn %{shape: inner_shape} = right ->
+        {_, right, vectorized_axes} = devectorize_with_axes(left, right)
+
+        # this check might be optimizable with Enum.reduce+List.keytake
+
+        same_order =
+          Enum.reduce_while(left.vectorized_axes, vectorized_axes, fn
+            {left_name, _}, [{right_name, _} | axes] ->
+              cond do
+                left_name != right_name ->
+                  {:halt, false}
+
+                axes == [] ->
+                  {:cont, true}
+
+                true ->
+                  {:cont, axes}
+              end
+          end)
+
+        vectorized =
+          if same_order do
+            revectorize_and_validate_sizes(right, vectorized_axes, true)
+          else
+            reorder_vectorized_axes(right, vectorized_axes, left.vectorized_axes)
+          end
+
+        # we also want to ensure the inner shape is the same
+
+        reshape(vectorized, inner_shape)
+      end)
+
+    [left | tail]
+  end
+
   defp devectorize_with_axes(tensor) do
     {devectorize(tensor), tensor.vectorized_axes}
   end
@@ -3997,12 +4103,13 @@ defmodule Nx do
       Enum.reduce(left.vectorized_axes, {[], [], right.vectorized_axes}, fn
         {name, size}, {lefties, both, righties} ->
           case List.keytake(righties, name, 0) do
-            {{^name, ^size}, righties} ->
-              {lefties, [{name, size} | both], righties}
+            {{^name, other_size}, righties}
+            when other_size == size or other_size == 1 or size == 1 ->
+              {lefties, [{name, {size, other_size}} | both], righties}
 
             {{^name, other_size}, _righties} ->
               raise ArgumentError,
-                    "expected vectorized axis #{inspect(name)} to have the same size in both tensors, got #{inspect(size)} and #{inspect(other_size)}"
+                    "expected vectorized axis #{inspect(name)} to have the same size in both tensors or to one of them to have size 1, got #{inspect(size)} and #{inspect(other_size)}"
 
             nil ->
               {[{name, size} | lefties], both, righties}
@@ -4024,7 +4131,8 @@ defmodule Nx do
 
     left_values = Keyword.values(left_pairs)
     right_values = Keyword.values(right_pairs)
-    both_values = Keyword.values(both_pairs)
+    both_values_left = Enum.map(both_pairs, fn {_k, {l, _}} -> l end)
+    both_values_right = Enum.map(both_pairs, fn {_k, {_, r}} -> r end)
 
     left_size = length(left_pairs)
     right_size = length(right_pairs)
@@ -4043,11 +4151,13 @@ defmodule Nx do
     right_base_shape_l =
       List.duplicate(1, target_rank - tuple_size(right_shape)) ++ Tuple.to_list(right_shape)
 
-    left_shape = left_values ++ both_values ++ List.duplicate(1, right_size) ++ left_base_shape_l
+    left_shape =
+      left_values ++ both_values_left ++ List.duplicate(1, right_size) ++ left_base_shape_l
+
     left_shape = List.to_tuple(left_shape)
 
     right_shape =
-      List.duplicate(1, left_size) ++ both_values ++ right_values ++ right_base_shape_l
+      List.duplicate(1, left_size) ++ both_values_right ++ right_values ++ right_base_shape_l
 
     right_shape = List.to_tuple(right_shape)
 
@@ -4062,7 +4172,10 @@ defmodule Nx do
         right_shape
       )
 
-    out_vectorized_names = left_pairs ++ both_pairs ++ right_pairs
+    out_vectorized_names =
+      left_pairs ++
+        Enum.map(both_pairs, fn {k, {l, r}} -> {k, Kernel.max(l, r)} end) ++ right_pairs
+
     {left_out, right_out, out_vectorized_names}
   end
 
@@ -4111,7 +4224,8 @@ defmodule Nx do
 
   defp revectorize_and_validate_sizes(
          %T{vectorized_axes: [], shape: shape, names: names} = tensor,
-         names_and_sizes_kw
+         names_and_sizes_kw,
+         accept_one_sized_axis \\ false
        ) do
     shape_l = Tuple.to_list(shape)
     n = length(names_and_sizes_kw)
@@ -4122,6 +4236,12 @@ defmodule Nx do
 
     vectorized_axes =
       Enum.zip_with([vectorized_axes, names_and_sizes_kw], fn
+        [1, {name, _}] when accept_one_sized_axis ->
+          {name, 1}
+
+        [axis_size, {name, 1}] when accept_one_sized_axis ->
+          {name, axis_size}
+
         [axis_size, {name, axis_size}] ->
           {name, axis_size}
 
@@ -4133,6 +4253,31 @@ defmodule Nx do
     out_names = Enum.drop(names, n)
 
     %T{tensor | names: out_names, vectorized_axes: vectorized_axes, shape: out_shape}
+  end
+
+  defp reorder_vectorized_axes(tensor, axes, target_axes) do
+    idx_by_name = Enum.with_index(axes, fn {name, _}, idx -> {name, idx} end)
+
+    {[], m, indices_rev} =
+      Enum.reduce(target_axes, {idx_by_name, 0, []}, fn {name, _}, {idx_by_name, m, indices} ->
+        {{_name, idx}, idx_by_name} = List.keytake(idx_by_name, name, 0)
+
+        unless idx do
+          raise "invalid vectorized axes"
+        end
+
+        {idx_by_name, m + 1, [idx | indices]}
+      end)
+
+    n = tuple_size(tensor.shape)
+
+    inner_axes = count_up(n - m, n - 1)
+
+    transpose_axes = Enum.reverse(indices_rev) ++ inner_axes
+
+    tensor
+    |> transpose(axes: transpose_axes)
+    |> revectorize_and_validate_sizes(target_axes, true)
   end
 
   ## Element-wise binary ops
@@ -6872,7 +7017,7 @@ defmodule Nx do
         ]
       >
 
-  ### Vectorized tensors
+  ### Vectors
 
       iex> t = Nx.vectorize(Nx.tensor([[0, 1], [1, 1]]), :x)
       iex> Nx.all(t, axes: [0], keep_axes: true)
@@ -6937,7 +7082,7 @@ defmodule Nx do
         ]
       >
 
-  ### Vectorized tensors
+  ### Vectors
 
       iex> t = Nx.vectorize(Nx.tensor([[0, 1], [0, 0]]), :x)
       iex> Nx.any(t, axes: [0], keep_axes: true)
@@ -7189,7 +7334,7 @@ defmodule Nx do
         ]
       >
 
-  ### Vectorized tensors
+  ### Vectors
 
       iex> t = Nx.vectorize(Nx.tensor([[1, 2], [3, 4]]), :x)
       iex> Nx.sum(t, axes: [0], keep_axes: true)
@@ -7877,7 +8022,7 @@ defmodule Nx do
         ]
       >
 
-  ### Vectorized tensors
+  ### Vectors
 
       iex> t = Nx.vectorize(Nx.tensor([[1, 2], [3, 4]]), :x)
       iex> Nx.product(t, axes: [0], keep_axes: true)
@@ -7974,7 +8119,7 @@ defmodule Nx do
         ]
       >
 
-  ### Vectorized tensors
+  ### Vectors
 
       iex> t = Nx.vectorize(Nx.tensor([[1, 2], [3, 4]]), :x)
       iex> Nx.reduce_max(t, axes: [0], keep_axes: true)
@@ -8066,7 +8211,7 @@ defmodule Nx do
         ]
       >
 
-  ### Vectorized tensors
+  ### Vectors
 
       iex> t = Nx.vectorize(Nx.tensor([[1, 2], [3, 4]]), :x)
       iex> Nx.reduce_min(t, axes: [0], keep_axes: true)
@@ -8249,7 +8394,7 @@ defmodule Nx do
         ]
       >
 
-  ### Vectorized tensors
+  ### Vectors
 
       iex> v = Nx.tensor([[1, 2, 3], [6, 5, 4]]) |> Nx.vectorize(:x)
       iex> Nx.argmax(v)
@@ -8386,7 +8531,7 @@ defmodule Nx do
         ]
       >
 
-  ### Vectorized tensors
+  ### Vectors
 
       iex> v = Nx.tensor([[1, 2, 3], [6, 5, 4]]) |> Nx.vectorize(:x)
       iex> Nx.argmin(v)
@@ -10314,9 +10459,9 @@ defmodule Nx do
         ]
       >
 
-  ### Vectorized tensors
+  ### Vectors
 
-  For vectorized tensors, transpose will manipulate the inner shape only,
+  For vectors, transpose will manipulate the inner shape only,
   keeping the order of vectorized axes the same.
 
       iex> v = Nx.vectorize(Nx.iota({1, 2, 3}), :x)
@@ -10457,9 +10602,9 @@ defmodule Nx do
         ]
       >
 
-  ### Vectorized tensors
+  ### Vectors
 
-  For vectorized tensors, the `:axes` refer to the non-vectorized part.
+  For vectors, the `:axes` refer to the non-vectorized part.
   Vectorized axes will always remain unchanged.
 
       iex> v = Nx.vectorize(Nx.iota({1, 2, 3}), :x)
@@ -12826,9 +12971,9 @@ defmodule Nx do
         ]
       >
 
-  ## Vectorized tensors
+  ## Vectors
 
-  Vectorized tensors work the same as N-dimensional tensors
+  Vectors work the same as N-dimensional tensors
 
       iex> tensor = Nx.tensor([[1, 1, 0, 0, 2, 3], [1, 0, 0, 0, 2, 3]]) |> Nx.vectorize(:x)
       iex> Nx.fft(tensor, length: 4)
@@ -12903,9 +13048,9 @@ defmodule Nx do
         ]
       >
 
-  ## Vectorized tensors
+  ## Vectors
 
-  Vectorized tensors work the same as N-dimensional tensors
+  Vectors work the same as N-dimensional tensors
 
       iex> tensor = Nx.tensor([[1, 1, 0, 0, 2, 3], [1, 0, 0, 0, 2, 3]]) |> Nx.vectorize(:x)
       iex> Nx.ifft(tensor, length: 4)
