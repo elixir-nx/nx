@@ -2770,7 +2770,7 @@ defmodule Nx do
 
   ## Vectorized tensors
 
-  Like `reshape/2`, `tile/2` works on the shape, leaving vectors untouched
+  Like `reshape/2`, `tile/2` works on the shape, leaving vectors untouched.
 
       iex> t = Nx.vectorize(Nx.tensor([[1, 2, 3], [4, 5, 6]]), :x)
       iex> Nx.tile(t, [1, 3, 1])
