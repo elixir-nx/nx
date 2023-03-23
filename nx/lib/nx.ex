@@ -2980,6 +2980,47 @@ defmodule Nx do
         [1, 2]
       >
 
+  ## Vectorized tensors
+
+  `squeeze/2` operates on the tensor's shape, leaving vectorized axes untouched.
+
+      iex> t = Nx.tensor([[[[[1], [2], [3]]]]]) |> Nx.vectorize(:x)
+      #Nx.Tensor<
+        vectorized[x: 1]
+        s64[1][1][3][1]
+        [
+          [
+            [
+              [
+                [1],
+                [2],
+                [3]
+              ]
+            ]
+          ]
+        ]
+      >
+      iex> Nx.squeeze(t)
+      #Nx.Tensor<
+        vectorized[x: 1]
+        s64[3]
+        [
+          [1, 2, 3]
+        ]
+      >
+      iex> Nx.squeeze(t, axes: [0, 1])
+      #Nx.Tensor<
+        vectorized[x: 1]
+        s64[3][1]
+        [
+          [
+            [1],
+            [2],
+            [3]
+          ]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.squeeze(Nx.tensor([[1, 2, 3], [4, 5, 6]]), axes: [1])
