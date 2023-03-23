@@ -163,10 +163,7 @@ defmodule Torchx.MixProject do
                 "https://download.pytorch.org/libtorch/#{@libtorch_target}/libtorch-macos-#{@libtorch_version}.zip"
 
               _ ->
-                # "https://github.com/mlverse/libtorch-mac-m1/releases/download/LibTorch/libtorch-v#{@libtorch_version}.zip"
-                # For now, no 2.0.0 releases are available at this source.
-                # Meanwhile, 2.0.0 can be linked against by pointing LIBTORCH_DIR to a python-installed torch version
-                "https://github.com/mlverse/libtorch-mac-m1/releases/download/LibTorch/libtorch-v1.12.1.zip"
+                "https://github.com/mlverse/libtorch-mac-m1/releases/download/LibTorch/libtorch-v#{@libtorch_version}.zip"
             end
 
           {:win32, :nt} ->
