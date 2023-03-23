@@ -4065,15 +4065,15 @@ defmodule Nx do
 
       iex> x = Nx.tensor([1, 2, 3]) |> Nx.vectorize(:x)
       iex> y = Nx.tensor([4]) |> Nx.vectorize(:y)
-      iex> [x, y] = Nx.reshape_vectors([x, y])
-      iex> x.vectorized_axes
+      iex> [xv, yv] = Nx.reshape_vectors([x, y])
+      iex> xv.vectorized_axes
       [x: 3, y: 1]
-      iex> y.vectorized_axes
+      iex> yv.vectorized_axes
       [x: 1, y: 1]
-      iex> [y, x] = Nx.reshape_vectors([y, x])
-      iex> x.vectorized_axes
+      iex> [yv, xv] = Nx.reshape_vectors([y, x])
+      iex> xv.vectorized_axes
       [y: 1, x: 3]
-      iex> y.vectorized_axes
+      iex> yv.vectorized_axes
       [y: 1, x: 1]
   """
   @doc type: :shape
@@ -4092,14 +4092,7 @@ defmodule Nx do
 
     # calculate the expected order for vectorized axes
     canonical_vectorized_axes =
-      Enum.reduce(tensors, initial_vectorized_axes, fn right, axes ->
-        {left_pairs, both_pairs, right_pairs} =
-          calculate_common_vectorized_axes(axes, right.vectorized_axes)
-
-        left_pairs ++
-          Enum.map(both_pairs, fn {name, {l, _}} -> {name, l} end) ++
-          Enum.map(right_pairs, fn {k, _} -> {k, 1} end)
-      end)
+      Enum.reduce(tensors, initial_vectorized_axes, &combine_vectorized_axes/2)
 
     Enum.map([first | tensors], fn %T{shape: shape, vectorized_axes: current_axes} = t ->
       {vectorized_axes, []} =
@@ -4126,22 +4119,26 @@ defmodule Nx do
     end)
   end
 
-  defp calculate_common_vectorized_axes(left_vectorized_axes, right_vectorized_axes) do
-    Enum.reduce(left_vectorized_axes, {[], [], right_vectorized_axes}, fn
-      {name, size}, {lefties, both, righties} ->
-        case List.keytake(righties, name, 0) do
-          {{^name, other_size}, righties}
-          when other_size == size or other_size == 1 or size == 1 ->
-            {lefties, [{name, {size, other_size}} | both], righties}
+  defp combine_vectorized_axes(%T{vectorized_axes: right_vectorized_axes}, left_vectorized_axes) do
+    {left_pairs, both_pairs, right_pairs} =
+      Enum.reduce(left_vectorized_axes, {[], [], right_vectorized_axes}, fn
+        {name, size}, {lefties, both, righties} ->
+          case List.keytake(righties, name, 0) do
+            {{^name, other_size}, righties}
+            when other_size == size or other_size == 1 or size == 1 ->
+              {lefties, [{name, size} | both], righties}
 
-          {{^name, other_size}, _righties} ->
-            raise ArgumentError,
-                  "expected vectorized axis #{inspect(name)} to have the same size in both tensors or to one of them to have size 1, got #{inspect(size)} and #{inspect(other_size)}"
+            {{^name, other_size}, _righties} ->
+              raise ArgumentError,
+                    "expected vectorized axis #{inspect(name)} to have the same size in both tensors or to one of them to have size 1, got #{inspect(size)} and #{inspect(other_size)}"
 
-          nil ->
-            {[{name, size} | lefties], both, righties}
-        end
-    end)
+            nil ->
+              {[{name, size} | lefties], both, righties}
+          end
+      end)
+
+    Enum.reverse(left_pairs) ++
+      Enum.reverse(both_pairs) ++ Enum.map(right_pairs, fn {k, _} -> {k, 1} end)
   end
 
   defp devectorize_with_axes(tensor) do
@@ -13193,8 +13190,8 @@ defmodule Nx do
   @doc type: :creation
   def linspace(start, stop, opts \\ []) do
     opts = keyword!(opts, [:n, :name, type: {:f, 32}, endpoint: true])
-    %{shape: start_shape} = start = to_tensor(start)
-    %{shape: stop_shape} = stop = to_tensor(stop)
+
+    [%{vectorized_axes: vectorized_axes} = start, stop] = reshape_vectors([start, stop])
 
     n = opts[:n]
 
@@ -13203,7 +13200,7 @@ defmodule Nx do
     end
 
     {iota_shape, start, stop} =
-      case {start_shape, stop_shape} do
+      case {start.shape, stop.shape} do
         {shape, shape} ->
           iota_shape = Tuple.insert_at(shape, tuple_size(shape), n)
           {iota_shape, new_axis(start, -1, opts[:name]), new_axis(stop, -1, opts[:name])}
@@ -13213,7 +13210,7 @@ defmodule Nx do
                 "expected start and stop to have the same shape. Got shapes #{inspect(start_shape)} and #{inspect(stop_shape)}"
       end
 
-    {_start, _stop, vectorized_axes} = devectorize_with_axes(start, stop)
+    iota = iota(iota_shape, axis: -1, type: opts[:type], vectorized_axes: vectorized_axes)
 
     divisor =
       if opts[:endpoint] do
@@ -13222,52 +13219,12 @@ defmodule Nx do
         n
       end
 
-    iota = iota(iota_shape, axis: -1, type: opts[:type], vectorized_axes: vectorized_axes)
-
     step = Nx.subtract(stop, start) |> Nx.divide(divisor)
 
-    out =
-      iota
-      |> multiply(step)
-      |> add(start)
-      |> as_type(opts[:type])
-
-    cond do
-      out.vectorized_axes == [] ->
-        out
-
-      out.vectorized_axes == vectorized_axes ->
-        out
-
-      true ->
-        nil
-
-        # we need to reorder the vectorized axes to the expected order according to the signature `linspace(start, stop, ...)`
-
-        idx_by_name = Enum.with_index(vectorized_axes, fn {name, _}, idx -> {name, idx} end)
-
-        {[], indices_rev} =
-          Enum.reduce(out.vectorized_axes, {idx_by_name, []}, fn {name, _},
-                                                                 {idx_by_name, indices} ->
-            {{_name, idx}, idx_by_name} = List.keytake(idx_by_name, name, 0)
-
-            unless idx do
-              raise "invalid vectorized axes"
-            end
-
-            {idx_by_name, [idx | indices]}
-          end)
-
-        devec = devectorize(out)
-
-        inner_axes = count_up(tuple_size(out.shape), tuple_size(devec.shape) - 1)
-
-        transpose_axes = Enum.reverse(indices_rev) ++ inner_axes
-
-        devec
-        |> transpose(axes: transpose_axes)
-        |> revectorize_and_validate_sizes(vectorized_axes)
-    end
+    iota
+    |> multiply(step)
+    |> add(start)
+    |> as_type(opts[:type])
   end
 
   @doc """
