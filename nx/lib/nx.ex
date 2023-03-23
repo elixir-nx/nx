@@ -4047,16 +4047,31 @@ defmodule Nx do
     # For all tensors to be compatible, each pair also needs to be compatible
     # This means that we can do a first pass accumulating axes into
     # the first tensor, and then a second pass getting them all into their final shapes.
-    left =
-      Enum.reduce(tensors, first, fn right, left ->
-        {left, _, vectorized_axes} = devectorize_with_axes(left, to_tensor(right))
-        revectorize_and_validate_sizes(left, vectorized_axes, true)
+
+    %T{vectorized_axes: initial_vectorized_axes} = to_tensor(first)
+
+    first_vectorized_axes =
+      Enum.reduce(tensors, initial_vectorized_axes, fn right, axes ->
+        {left_pairs, both_pairs, right_pairs} =
+          calculate_common_vectorized_axes(axes, right.vectorized_axes)
+
+        left_pairs ++
+          Enum.map(both_pairs, fn {name, {l, _}} -> {name, l} end) ++
+          Enum.map(right_pairs, fn {k, _} -> {k, 1} end)
       end)
 
-    left = reshape(left, shape(first))
+    {devec, _} = devectorize_with_axes(first)
+
+    target_shape =
+      List.to_tuple(Keyword.values(first_vectorized_axes) ++ Tuple.to_list(first.shape))
+
+    left =
+      devec
+      |> reshape(target_shape)
+      |> revectorize_and_validate_sizes(first_vectorized_axes, true)
 
     tail =
-      Enum.map(tensors, fn %{shape: inner_shape} = right ->
+      Enum.map(tensors, fn right ->
         {_, right, vectorized_axes} = devectorize_with_axes(left, right)
 
         same_order =
@@ -4074,19 +4089,32 @@ defmodule Nx do
               end
           end)
 
-        vectorized =
-          if same_order do
-            revectorize_and_validate_sizes(right, vectorized_axes, true)
-          else
-            reorder_vectorized_axes(right, vectorized_axes, left.vectorized_axes)
-          end
-
-        # we also want to ensure the inner shape is the same
-
-        reshape(vectorized, inner_shape)
+        if same_order do
+          revectorize_and_validate_sizes(right, vectorized_axes, true)
+        else
+          reorder_vectorized_axes(right, vectorized_axes, left.vectorized_axes)
+        end
       end)
 
     [left | tail]
+  end
+
+  defp calculate_common_vectorized_axes(left_vectorized_axes, right_vectorized_axes) do
+    Enum.reduce(left_vectorized_axes, {[], [], right_vectorized_axes}, fn
+      {name, size}, {lefties, both, righties} ->
+        case List.keytake(righties, name, 0) do
+          {{^name, other_size}, righties}
+          when other_size == size or other_size == 1 or size == 1 ->
+            {lefties, [{name, {size, other_size}} | both], righties}
+
+          {{^name, other_size}, _righties} ->
+            raise ArgumentError,
+                  "expected vectorized axis #{inspect(name)} to have the same size in both tensors or to one of them to have size 1, got #{inspect(size)} and #{inspect(other_size)}"
+
+          nil ->
+            {[{name, size} | lefties], both, righties}
+        end
+    end)
   end
 
   defp devectorize_with_axes(tensor) do
@@ -4098,21 +4126,7 @@ defmodule Nx do
          %T{shape: right_shape, names: right_shape_names} = right
        ) do
     {left_pairs, both_pairs, right_pairs} =
-      Enum.reduce(left.vectorized_axes, {[], [], right.vectorized_axes}, fn
-        {name, size}, {lefties, both, righties} ->
-          case List.keytake(righties, name, 0) do
-            {{^name, other_size}, righties}
-            when other_size == size or other_size == 1 or size == 1 ->
-              {lefties, [{name, {size, other_size}} | both], righties}
-
-            {{^name, other_size}, _righties} ->
-              raise ArgumentError,
-                    "expected vectorized axis #{inspect(name)} to have the same size in both tensors or to one of them to have size 1, got #{inspect(size)} and #{inspect(other_size)}"
-
-            nil ->
-              {[{name, size} | lefties], both, righties}
-          end
-      end)
+      calculate_common_vectorized_axes(left.vectorized_axes, right.vectorized_axes)
 
     # We need the "original" shapes so that we can properly reshape the tensors in the backends.
     # This is needed because backends also keep track of the tensor shape, so it doesn't suffice to just
