@@ -4059,8 +4059,6 @@ defmodule Nx do
       Enum.map(tensors, fn %{shape: inner_shape} = right ->
         {_, right, vectorized_axes} = devectorize_with_axes(left, right)
 
-        # this check might be optimizable with Enum.reduce+List.keytake
-
         same_order =
           Enum.reduce_while(left.vectorized_axes, vectorized_axes, fn
             {left_name, _}, [{right_name, _} | axes] ->
