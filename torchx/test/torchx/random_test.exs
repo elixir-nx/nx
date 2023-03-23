@@ -1,7 +1,7 @@
 defmodule Torchx.Nx.RandomTest do
   use Torchx.Case, async: true
 
-  doctest Nx.Random, except: [normal: 2, normal: 4]
+  doctest Nx.Random, except: [normal: 2, normal: 4, gumbel: 2]
 
   describe "key/1" do
     test "transforms given integer into PRNG key" do
@@ -169,6 +169,19 @@ defmodule Torchx.Nx.RandomTest do
       assert_all_close(
         Nx.Random.normal_split(key, 0.0, 100.0, type: :c64),
         Nx.complex(-0.74267750, 6.5133848)
+      )
+    end
+
+    test "gumbel" do
+      {result, _key} = Nx.Random.gumbel(Nx.Random.key(1), shape: {2, 3})
+
+      assert_all_close(
+        result,
+        Nx.tensor([
+          [0.6247938275337219, -0.21740718185901642, 0.7678327560424805],
+          [0.7778404355049133, 4.0895304679870605, 0.3029090166091919]
+        ]),
+        atol: 1.0e-7
       )
     end
   end

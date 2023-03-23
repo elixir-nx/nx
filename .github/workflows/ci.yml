@@ -6,7 +6,7 @@ on:
   pull_request:
 jobs:
   main:
-    name: Linux
+    name: Linux (${{ matrix.working_directory == 'torchx' && format('torchx({0})', matrix.torch_version) || matrix.working_directory }}, ${{ matrix.elixir }}, ${{ matrix.otp }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -14,13 +14,20 @@ jobs:
         working_directory: ["nx", "exla", "torchx"]
         elixir: ["1.14.2"]
         otp: ["25.2"]
+        torch_version: ["2.0.0"]
+        include:
+          - working_directory: torchx
+            torch_version: "1.12.1"
+            elixir: "1.14.2"
+            otp: "25.2"
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}
     env:
       MIX_ENV: test
       XLA_FLAGS: --xla_force_host_platform_device_count=2
-      LIBTORCH_DIR: ${{ github.workspace }}/torchx/cache/libtorch
+      LIBTORCH_VERSION: ${{ matrix.torch_version }}
+      LIBTORCH_DIR: ${{ github.workspace }}/torchx/cache/libtorch-${{ matrix.torch_version }}
     steps:
       - uses: actions/checkout@v2
       - uses: erlef/setup-beam@v1
@@ -41,7 +48,7 @@ jobs:
         id: libtorch-cache
         with:
           path: ${{ env.LIBTORCH_DIR }}
-          key: linux-v1-libtorch-cpu
+          key: linux-v1-libtorch-${{ matrix.torch_version }}-cpu
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
@@ -55,7 +62,7 @@ jobs:
         run: mix test
 
   win:
-    name: Windows
+    name: Windows (${{ matrix.working_directory == 'torchx' && format('torchx({0})', matrix.torch_version) || matrix.working_directory }}, ${{ matrix.elixir }}, ${{ matrix.otp }})
     runs-on: windows-2019
     strategy:
       fail-fast: false
@@ -63,13 +70,20 @@ jobs:
         working_directory: ["nx", "torchx"]
         elixir: ["1.14.2"]
         otp: ["25.2"]
+        torch_version: ["2.0.0"]
+        include:
+          - working_directory: torchx
+            torch_version: "1.12.1"
+            elixir: "1.14.2"
+            otp: "25.2"
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}
     env:
       MIX_ENV: test
       XLA_FLAGS: --xla_force_host_platform_device_count=2
-      LIBTORCH_DIR: ${{ github.workspace }}\torchx\cache\libtorch
+      LIBTORCH_VERSION: ${{ matrix.torch_version }}
+      LIBTORCH_DIR: ${{ github.workspace }}\torchx\cache\libtorch-${{ matrix.torch_version }}
     steps:
       - name: Configure Git
         run: git config --global core.autocrlf input
@@ -98,7 +112,7 @@ jobs:
         id: libtorch-cache-win
         with:
           path: ${{ env.LIBTORCH_DIR }}
-          key: win-v1-libtorch-cpu
+          key: win-v1-libtorch-${{ matrix.torch_version }}-cpu
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get

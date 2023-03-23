@@ -4,10 +4,17 @@ defmodule Torchx.MixProject do
   @source_url "https://github.com/elixir-nx/nx"
   @version "0.5.1"
 
-  @valid_targets ["cpu", "cu102", "cu113", "cu116"]
+  @valid_targets ["cpu", "cu102", "cu113", "cu116", "cu117", "cu118"]
 
-  @libtorch_version System.get_env("LIBTORCH_VERSION", "1.12.1")
   @libtorch_target System.get_env("LIBTORCH_TARGET", "cpu")
+
+  if @libtorch_target in ["cu102", "cu113", "cu116"] do
+    @default_libtorch_version "1.12.1"
+  else
+    @default_libtorch_version "2.0.0"
+  end
+
+  @libtorch_version System.get_env("LIBTORCH_VERSION", @default_libtorch_version)
 
   @libtorch_base "libtorch"
   @libtorch_env_dir System.get_env("LIBTORCH_DIR")
@@ -61,8 +68,8 @@ defmodule Torchx.MixProject do
 
   defp deps do
     [
-      {:nx, "~> 0.5.1"},
-      # {:nx, path: "../nx"},
+      # {:nx, "~> 0.5.1"},
+      {:nx, path: "../nx"},
       {:dll_loader_helper, "~> 0.1.0"},
       {:elixir_make, "~> 0.6"},
       {:ex_doc, "~> 0.29.0", only: :docs}
@@ -156,7 +163,10 @@ defmodule Torchx.MixProject do
                 "https://download.pytorch.org/libtorch/#{@libtorch_target}/libtorch-macos-#{@libtorch_version}.zip"
 
               _ ->
-                "https://github.com/mlverse/libtorch-mac-m1/releases/download/LibTorch/libtorch-v#{@libtorch_version}.zip"
+                # "https://github.com/mlverse/libtorch-mac-m1/releases/download/LibTorch/libtorch-v#{@libtorch_version}.zip"
+                # For now, no 2.0.0 releases are available at this source.
+                # Meanwhile, 2.0.0 can be linked against by pointing LIBTORCH_DIR to a python-installed torch version
+                "https://github.com/mlverse/libtorch-mac-m1/releases/download/LibTorch/libtorch-v1.12.1.zip"
             end
 
           {:win32, :nt} ->
@@ -210,6 +220,8 @@ defmodule Torchx.MixProject do
         :curl -> {"curl", ["--fail", "-L", url, "-o", dest]}
         :wget -> {"wget", ["-O", dest, url]}
       end
+
+    IO.puts("Downloading Libtorch from #{url}")
 
     case System.cmd(command, args) do
       {_, 0} -> :ok

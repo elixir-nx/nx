@@ -186,8 +186,8 @@ defmodule Torchx.NxLinAlgTest do
   describe "qr" do
     test "property" do
       for _ <- 1..10, type <- [{:f, 32}, {:c, 64}] do
-        square = Nx.random_uniform({4, 4}, type: type)
-        tall = Nx.random_uniform({4, 3}, type: type)
+        square = random_uniform({4, 4}, type: type)
+        tall = random_uniform({4, 3}, type: type)
 
         assert {q, r} = Nx.LinAlg.qr(square)
         assert_all_close(Nx.dot(q, r), square, rtol: 1.0e-2)
@@ -207,7 +207,7 @@ defmodule Torchx.NxLinAlgTest do
   describe "lu" do
     test "property" do
       for _ <- 1..20, type <- [{:f, 32}, {:c, 64}] do
-        a = Nx.random_uniform({3, 3}, type: type)
+        a = random_uniform({3, 3}, type: type)
         {p, l, u} = Nx.LinAlg.lu(a)
 
         a_reconstructed = p |> Nx.dot(l) |> Nx.dot(u)
@@ -220,7 +220,7 @@ defmodule Torchx.NxLinAlgTest do
   describe "eigh" do
     test "property" do
       for _ <- 1..20 do
-        a = {3, 3} |> Nx.random_uniform() |> then(&Nx.add(&1, Nx.transpose(&1)))
+        a = random_uniform({3, 3}) |> then(&Nx.add(&1, Nx.transpose(&1)))
 
         {eigenval, eigenvec} = Nx.LinAlg.eigh(a)
 
@@ -328,5 +328,13 @@ defmodule Torchx.NxLinAlgTest do
         Nx.tensor(48)
       )
     end
+  end
+
+  defp random_uniform(shape, opts \\ [type: :f32]) do
+    values = Enum.map(1..Tuple.product(shape), fn _ -> :rand.uniform() end)
+
+    values
+    |> Nx.tensor(opts)
+    |> Nx.reshape(shape)
   end
 end
