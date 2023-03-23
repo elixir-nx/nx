@@ -12485,7 +12485,7 @@ defmodule Nx do
   end
 
   defp parse_header(header) do
-    header = header |> String.trim("{") |> String.trim("}") |> String.trim(", ")
+    header = header |> String.trim("{") |> String.trim() |> String.trim("}") |> String.trim(", ")
 
     case header do
       "'descr': " <> <<dtype::size(5)-binary>> <> ", 'fortran_order': False, 'shape': " <> shape ->
