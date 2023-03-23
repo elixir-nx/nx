@@ -227,9 +227,9 @@ defmodule Nx.Shape do
       iex> Nx.Shape.broadcast!({2, 2}, {2, 2, 2}, [1, 0])
       ** (ArgumentError) broadcast axes must be ordered, got 0 after 1
   """
-  def broadcast!(old_shape, new_shape, axes)
+  def broadcast!(old_shape, new_shape, axes, offset \\ 0)
 
-  def broadcast!(old_shape, new_shape, axes)
+  def broadcast!(old_shape, new_shape, axes, offset)
       when is_tuple(old_shape) and is_tuple(new_shape) and is_list(axes) do
     old_rank = tuple_size(old_shape)
     new_rank = tuple_size(new_shape)
@@ -240,6 +240,16 @@ defmodule Nx.Shape do
     end
 
     if old_rank > new_rank or not valid_broadcast?(axes, 0, -1, old_shape, new_shape) do
+      drop_axes = fn t -> t |> Tuple.to_list() |> Enum.drop(offset) |> List.to_tuple() end
+
+      {old_shape, new_shape, axes} =
+        if offset > 0 do
+          {drop_axes.(old_shape), drop_axes.(new_shape),
+           axes |> Enum.drop(offset) |> Enum.map(&(&1 - offset))}
+        else
+          {old_shape, new_shape, axes}
+        end
+
       raise ArgumentError,
             "cannot broadcast tensor of dimensions #{inspect(old_shape)} " <>
               "to #{inspect(new_shape)} with axes #{inspect(axes)}"
@@ -1163,8 +1173,14 @@ defmodule Nx.Shape do
       iex> Nx.Shape.squeeze_axes({1, 2, 1, 3, 2, 1})
       [0, 2, 5]
   """
-  def squeeze_axes(shape) do
-    for {1, i} <- Enum.with_index(Tuple.to_list(shape)), do: i
+  def squeeze_axes(shape, offset \\ 0) do
+    axes =
+      shape
+      |> Tuple.to_list()
+      |> Enum.drop(offset)
+      |> Enum.with_index()
+
+    for {1, i} <- axes, do: i
   end
 
   @doc """
