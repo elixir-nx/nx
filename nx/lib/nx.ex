@@ -12485,31 +12485,24 @@ defmodule Nx do
   end
 
   defp parse_header(header) do
-    header = header |> String.trim("{") |> String.trim("}") |> String.trim(", ")
-
     case header do
-      "'descr': " <> <<dtype::size(5)-binary>> <> ", 'fortran_order': False, 'shape': " <> shape ->
+      "{'descr': " <> <<dtype::size(5)-binary>> <> ", 'fortran_order': False, 'shape': " <> shape ->
         {byte_order, type} = parse_type(dtype)
         {byte_order, type, parse_shape(shape), false}
 
-      "'descr': " <> <<dtype::size(5)-binary>> <> ", 'fortran_order': True, 'shape': " <> shape ->
+      "{'descr': " <> <<dtype::size(5)-binary>> <> ", 'fortran_order': True, 'shape': " <> shape ->
         {byte_order, type} = parse_type(dtype)
         {byte_order, type, parse_shape(shape), true}
     end
   end
 
-  defp parse_type(dtype) do
-    [byte_order, type, size] =
-      dtype
-      |> String.trim("'")
-      |> String.split("", trim: true)
-
+  defp parse_type(<<?', byte_order, type, size, ?'>>) do
     byte_order =
       case byte_order do
-        ">" ->
+        ?> ->
           :big
 
-        "<" ->
+        ?< ->
           :little
 
         # We can't just infer native endianness matches our native endianness
@@ -12519,21 +12512,20 @@ defmodule Nx do
 
     type =
       case type do
-        "u" -> :u
-        "i" -> :s
-        "f" -> :f
+        ?u -> :u
+        ?i -> :s
+        ?f -> :f
         _ -> raise "unsupported numpy type: #{type}"
       end
 
-    size = size |> String.to_integer() |> Kernel.*(8)
+    size = (size - ?0) * 8
     {byte_order, {type, size}}
   end
 
-  defp parse_shape(shape) do
+  defp parse_shape("(" <> shape) do
     shape
-    |> String.trim()
-    |> String.trim("), }")
-    |> String.trim("(")
+    |> String.split(")", parts: 2)
+    |> hd()
     |> String.split(",", trim: true)
     |> Enum.map(&(String.trim(&1) |> String.to_integer()))
     |> List.to_tuple()
