@@ -2870,18 +2870,32 @@ defmodule Nx do
 
   ## Vectorized tensors
 
+  Similarly to `reshape/2`, vectorized tensors will have their
+  vectors unchanged. The examples below show that the new axes
+  only affect the tensor shape.
+
       iex> t = Nx.tensor([1]) |> Nx.vectorize(:x)
       #Nx.Tensor<
         vectorized[x: 1]
         s64
         [1]
       >
-      iex> Nx.new_axis(t, -1, :new)
+      iex> t = Nx.new_axis(t, -1, :new)
       #Nx.Tensor<
         vectorized[x: 1]
         s64[new: 1]
         [
           [1]
+        ]
+      >
+      iex> Nx.new_axis(t, 0)
+      #Nx.Tensor<
+        vectorized[x: 1]
+        s64[1][new: 1]
+        [
+          [
+            [1]
+          ]
         ]
       >
 
