@@ -2868,23 +2868,55 @@ defmodule Nx do
         ]
       >
 
+  ## Vectorized tensors
+
+  Similarly to `reshape/2`, vectorized tensors will have their
+  vectors unchanged. The examples below show that the new axes
+  only affect the tensor shape.
+
+      iex> t = Nx.tensor([1]) |> Nx.vectorize(:x)
+      #Nx.Tensor<
+        vectorized[x: 1]
+        s64
+        [1]
+      >
+      iex> t = Nx.new_axis(t, -1, :new)
+      #Nx.Tensor<
+        vectorized[x: 1]
+        s64[new: 1]
+        [
+          [1]
+        ]
+      >
+      iex> Nx.new_axis(t, 0)
+      #Nx.Tensor<
+        vectorized[x: 1]
+        s64[1][new: 1]
+        [
+          [
+            [1]
+          ]
+        ]
+      >
+
   """
   @doc type: :shape, from_backend: false
   def new_axis(tensor, axis, name \\ nil) when is_integer(axis) do
-    %{shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    rank = tuple_size(shape)
-    norm = if axis < 0, do: axis + rank + 1, else: axis
+    apply_vectorized(tensor, fn tensor, offset ->
+      %{shape: shape, names: names} = tensor = to_tensor(tensor)
+      rank = tuple_size(shape)
+      norm = if axis < 0, do: axis + rank + 1, else: axis + offset
 
-    if norm not in 0..tuple_size(shape) do
-      raise ArgumentError,
-            "new axis position for shape #{inspect(shape)} must be " <>
-              "a number between #{-rank - 1} and #{rank}, got: #{axis}"
-    end
+      if norm not in offset..tuple_size(shape) do
+        raise ArgumentError,
+              "new axis position for shape #{inspect(shape)} must be " <>
+                "a number between #{-rank - 1 + offset} and #{rank - offset}, got: #{axis}"
+      end
 
-    new_shape = Tuple.insert_at(shape, norm, 1)
-    new_names = List.insert_at(names, norm, name)
-    impl!(tensor).reshape(%{tensor | shape: new_shape, names: new_names}, tensor)
+      new_shape = Tuple.insert_at(shape, norm, 1)
+      new_names = List.insert_at(names, norm, name)
+      impl!(tensor).reshape(%{tensor | shape: new_shape, names: new_names}, tensor)
+    end)
   end
 
   @doc """
@@ -4047,15 +4079,15 @@ defmodule Nx do
 
       iex> x = Nx.tensor([1, 2, 3]) |> Nx.vectorize(:x)
       iex> y = Nx.tensor([4]) |> Nx.vectorize(:y)
-      iex> [x, y] = Nx.reshape_vectors([x, y])
-      iex> x.vectorized_axes
+      iex> [xv, yv] = Nx.reshape_vectors([x, y])
+      iex> xv.vectorized_axes
       [x: 3, y: 1]
-      iex> y.vectorized_axes
+      iex> yv.vectorized_axes
       [x: 1, y: 1]
-      iex> [y, x] = Nx.reshape_vectors([y, x])
-      iex> x.vectorized_axes
+      iex> [yv, xv] = Nx.reshape_vectors([y, x])
+      iex> xv.vectorized_axes
       [y: 1, x: 3]
-      iex> y.vectorized_axes
+      iex> yv.vectorized_axes
       [y: 1, x: 1]
   """
   @doc type: :shape
@@ -4074,14 +4106,7 @@ defmodule Nx do
 
     # calculate the expected order for vectorized axes
     canonical_vectorized_axes =
-      Enum.reduce(tensors, initial_vectorized_axes, fn right, axes ->
-        {left_pairs, both_pairs, right_pairs} =
-          calculate_common_vectorized_axes(axes, right.vectorized_axes)
-
-        left_pairs ++
-          Enum.map(both_pairs, fn {name, {l, _}} -> {name, l} end) ++
-          Enum.map(right_pairs, fn {k, _} -> {k, 1} end)
-      end)
+      Enum.reduce(tensors, initial_vectorized_axes, &combine_vectorized_axes/2)
 
     Enum.map([first | tensors], fn %T{shape: shape, vectorized_axes: current_axes} = t ->
       {vectorized_axes, []} =
@@ -4108,22 +4133,26 @@ defmodule Nx do
     end)
   end
 
-  defp calculate_common_vectorized_axes(left_vectorized_axes, right_vectorized_axes) do
-    Enum.reduce(left_vectorized_axes, {[], [], right_vectorized_axes}, fn
-      {name, size}, {lefties, both, righties} ->
-        case List.keytake(righties, name, 0) do
-          {{^name, other_size}, righties}
-          when other_size == size or other_size == 1 or size == 1 ->
-            {lefties, [{name, {size, other_size}} | both], righties}
+  defp combine_vectorized_axes(%T{vectorized_axes: right_vectorized_axes}, left_vectorized_axes) do
+    {left_pairs, both_pairs, right_pairs} =
+      Enum.reduce(left_vectorized_axes, {[], [], right_vectorized_axes}, fn
+        {name, size}, {lefties, both, righties} ->
+          case List.keytake(righties, name, 0) do
+            {{^name, other_size}, righties}
+            when other_size == size or other_size == 1 or size == 1 ->
+              {lefties, [{name, size} | both], righties}
 
-          {{^name, other_size}, _righties} ->
-            raise ArgumentError,
-                  "expected vectorized axis #{inspect(name)} to have the same size in both tensors or to one of them to have size 1, got #{inspect(size)} and #{inspect(other_size)}"
+            {{^name, other_size}, _righties} ->
+              raise ArgumentError,
+                    "expected vectorized axis #{inspect(name)} to have the same size in both tensors or to one of them to have size 1, got #{inspect(size)} and #{inspect(other_size)}"
 
-          nil ->
-            {[{name, size} | lefties], both, righties}
-        end
-    end)
+            nil ->
+              {[{name, size} | lefties], both, righties}
+          end
+      end)
+
+    Enum.reverse(left_pairs) ++
+      Enum.reverse(both_pairs) ++ Enum.map(right_pairs, fn {k, _} -> {k, 1} end)
   end
 
   defp devectorize_with_axes(tensor) do
@@ -4208,9 +4237,13 @@ defmodule Nx do
     end
   end
 
+  defp revectorize_and_validate_sizes({t1, t2}, []), do: {t1, t2}
+
   defp revectorize_and_validate_sizes({t1, t2}, kw) do
     {revectorize_and_validate_sizes(t1, kw), revectorize_and_validate_sizes(t2, kw)}
   end
+
+  defp revectorize_and_validate_sizes(tensor, []), do: tensor
 
   defp revectorize_and_validate_sizes(
          %T{vectorized_axes: [], shape: shape, names: names} = tensor,
@@ -13118,6 +13151,48 @@ defmodule Nx do
       ]
     >
 
+  ## Vectorized tensors
+
+      iex> Nx.linspace(0, Nx.vectorize(Nx.tensor([10, 20]), :x), n: 5)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32[5]
+        [
+          [0.0, 2.5, 5.0, 7.5, 10.0],
+          [0.0, 5.0, 10.0, 15.0, 20.0]
+        ]
+      >
+
+      iex> start = Nx.vectorize(Nx.tensor([0, 1]), :x)
+      iex> stop = Nx.vectorize(Nx.tensor([10, 20]), :y)
+      iex> Nx.linspace(start, stop, n: 5)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 2]
+        f32[5]
+        [
+          [
+            [0.0, 2.5, 5.0, 7.5, 10.0],
+            [0.0, 5.0, 10.0, 15.0, 20.0]
+          ],
+          [
+            [1.0, 3.25, 5.5, 7.75, 10.0],
+            [1.0, 5.75, 10.5, 15.25, 20.0]
+          ]
+        ]
+      >
+
+      iex> start = Nx.vectorize(Nx.tensor([0, 1]), :x)
+      iex> stop = Nx.vectorize(Nx.tensor([10, 10]), :x)
+      iex> Nx.linspace(start, stop, n: 5)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32[5]
+        [
+          [0.0, 2.5, 5.0, 7.5, 10.0],
+          [1.0, 3.25, 5.5, 7.75, 10.0]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.linspace(0, 24, n: 1.0)
@@ -13129,11 +13204,8 @@ defmodule Nx do
   @doc type: :creation
   def linspace(start, stop, opts \\ []) do
     opts = keyword!(opts, [:n, :name, type: {:f, 32}, endpoint: true])
-    start = to_tensor(start)
-    stop = to_tensor(stop)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(start, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(stop, __ENV__.function)
+    [%{vectorized_axes: vectorized_axes} = start, stop] = reshape_vectors([start, stop])
 
     n = opts[:n]
 
@@ -13142,7 +13214,7 @@ defmodule Nx do
     end
 
     {iota_shape, start, stop} =
-      case {shape(start), shape(stop)} do
+      case {start.shape, stop.shape} do
         {shape, shape} ->
           iota_shape = Tuple.insert_at(shape, tuple_size(shape), n)
           {iota_shape, new_axis(start, -1, opts[:name]), new_axis(stop, -1, opts[:name])}
@@ -13152,6 +13224,8 @@ defmodule Nx do
                 "expected start and stop to have the same shape. Got shapes #{inspect(start_shape)} and #{inspect(stop_shape)}"
       end
 
+    iota = iota(iota_shape, axis: -1, type: opts[:type], vectorized_axes: vectorized_axes)
+
     divisor =
       if opts[:endpoint] do
         n - 1
@@ -13160,8 +13234,6 @@ defmodule Nx do
       end
 
     step = Nx.subtract(stop, start) |> Nx.divide(divisor)
-
-    iota = iota(iota_shape, axis: -1, type: opts[:type])
 
     iota
     |> multiply(step)
