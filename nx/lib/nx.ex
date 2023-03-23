@@ -2496,6 +2496,26 @@ defmodule Nx do
           [5, 6]
         ]
       >
+
+  ## Vectorized tensors
+
+  Vectorized tensors have their inner shapes changed, keeping vectors unchanged.
+
+      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]]]) |> Nx.vectorize(:x)
+      iex> t.shape
+      {2, 3}
+      iex> Nx.reshape(t, {3, 2})
+      #Nx.Tensor<
+        vectorized[x: 1]
+        s64[3][2]
+        [
+          [
+            [1, 2],
+            [3, 4],
+            [5, 6]
+          ]
+        ]
+      >
   """
   @doc type: :shape
   def reshape(tensor, new_shape, opts \\ []) do
@@ -2522,7 +2542,10 @@ defmodule Nx do
             |> Enum.concat(Tuple.to_list(new_shape))
             |> List.to_tuple()
 
-          impl!(tensor).reshape(%{tensor | shape: new_shape, names: names}, tensor)
+          impl!(tensor).reshape(
+            %{tensor | shape: new_shape, names: List.duplicate(nil, offset) ++ names},
+            tensor
+          )
         end)
     end
   end
@@ -4065,8 +4088,8 @@ defmodule Nx do
     Enum.map([first | tensors], fn %T{shape: shape, vectorized_axes: current_axes} = t ->
       {vectorized_axes, []} =
         Enum.map_reduce(canonical_vectorized_axes, current_axes, fn
-          kv, [] ->
-            {kv, []}
+          {k, _}, [] ->
+            {{k, 1}, []}
 
           {name, _size}, current_axes ->
             case List.keytake(current_axes, name, 0) do
@@ -4109,76 +4132,6 @@ defmodule Nx do
     {devectorize(tensor), tensor.vectorized_axes}
   end
 
-  defp devectorize_with_axes(
-         %T{shape: left_shape, names: left_shape_names} = left,
-         %T{shape: right_shape, names: right_shape_names} = right
-       ) do
-    {left_pairs, both_pairs, right_pairs} =
-      calculate_common_vectorized_axes(left.vectorized_axes, right.vectorized_axes)
-
-    # We need the "original" shapes so that we can properly reshape the tensors in the backends.
-    # This is needed because backends also keep track of the tensor shape, so it doesn't suffice to just
-    # pass the new shape with 1s interspersed and batch axes reordered accordingly.
-
-    left_original_shape_l = Keyword.values(left.vectorized_axes) ++ Tuple.to_list(left_shape)
-    left_original_shape = List.to_tuple(left_original_shape_l)
-
-    right_original_shape_l = Keyword.values(right.vectorized_axes) ++ Tuple.to_list(right_shape)
-    right_original_shape = List.to_tuple(right_original_shape_l)
-
-    left_pairs = Enum.reverse(left_pairs)
-    both_pairs = Enum.reverse(both_pairs)
-
-    left_values = Keyword.values(left_pairs)
-    right_values = Keyword.values(right_pairs)
-    both_values_left = Enum.map(both_pairs, fn {_k, {l, _}} -> l end)
-    both_values_right = Enum.map(both_pairs, fn {_k, {_, r}} -> r end)
-
-    left_size = length(left_pairs)
-    right_size = length(right_pairs)
-    all_size = left_size + right_size + length(both_pairs)
-
-    # Because we are explicitly broadcasting, we need to also broadcast the base shapes (i.e. each "vector entry"'s shapes)
-
-    {common_shape, base_names} =
-      Nx.Shape.binary_broadcast(left_shape, left_shape_names, right_shape, right_shape_names)
-
-    target_rank = tuple_size(common_shape)
-
-    left_base_shape_l =
-      List.duplicate(1, target_rank - tuple_size(left_shape)) ++ Tuple.to_list(left_shape)
-
-    right_base_shape_l =
-      List.duplicate(1, target_rank - tuple_size(right_shape)) ++ Tuple.to_list(right_shape)
-
-    left_shape =
-      left_values ++ both_values_left ++ List.duplicate(1, right_size) ++ left_base_shape_l
-
-    left_shape = List.to_tuple(left_shape)
-
-    right_shape =
-      List.duplicate(1, left_size) ++ both_values_right ++ right_values ++ right_base_shape_l
-
-    right_shape = List.to_tuple(right_shape)
-
-    names = List.duplicate(nil, all_size) ++ base_names
-
-    left_out =
-      reshape(%{left | vectorized_axes: [], names: names, shape: left_original_shape}, left_shape)
-
-    right_out =
-      reshape(
-        %{right | vectorized_axes: [], names: names, shape: right_original_shape},
-        right_shape
-      )
-
-    out_vectorized_names =
-      left_pairs ++
-        Enum.map(both_pairs, fn {k, {l, r}} -> {k, Kernel.max(l, r)} end) ++ right_pairs
-
-    {left_out, right_out, out_vectorized_names}
-  end
-
   defp apply_vectorized(tensor, fun) when is_tensor(tensor) do
     tensor = to_tensor(tensor)
 
@@ -4208,10 +4161,49 @@ defmodule Nx do
     right = to_tensor(right)
 
     if left.vectorized_axes != [] or right.vectorized_axes != [] do
-      {left, right, vectorized_axes} = devectorize_with_axes(left, right)
+      [left, right] = reshape_vectors([left, right])
 
-      left
-      |> fun.(right)
+      vectorized_axes =
+        Enum.zip_with([left.vectorized_axes, right.vectorized_axes], fn
+          [{k, 1}, {k, v}] ->
+            {k, v}
+
+          [{k, v}, {k, 1}] ->
+            {k, v}
+
+          [{k, v}, {k, v}] ->
+            {k, v}
+        end)
+
+      {left, right} =
+        case {left.shape, right.shape} do
+          {{}, {}} ->
+            {left, right}
+
+          {{}, _} ->
+            {reshape(left, {1}), right}
+
+          {_, {}} ->
+            {left, reshape(right, {1})}
+
+          _ ->
+            {left, right}
+        end
+
+      devec_left =
+        devectorize(%{
+          left
+          | vectorized_axes: Enum.map(left.vectorized_axes, fn {_, v} -> {nil, v} end)
+        })
+
+      devec_right =
+        devectorize(%{
+          right
+          | vectorized_axes: Enum.map(right.vectorized_axes, fn {_, v} -> {nil, v} end)
+        })
+
+      devec_left
+      |> fun.(devec_right)
       |> revectorize_and_validate_sizes(vectorized_axes)
     else
       fun.(left, right)
