@@ -2400,6 +2400,27 @@ defmodule Nx do
         [0, 0, 0]
       >
 
+      iex> t = Nx.vectorize(Nx.tensor([[0, -1], [1, -2], [2, -3]], type: :s8), :x)
+      #Nx.Tensor<
+        vectorized[x: 3]
+        s8[2]
+        [
+          [0, -1],
+          [1, -2],
+          [2, -3]
+        ]
+      >
+      iex> Nx.bitcast(t, :u8)
+      #Nx.Tensor<
+        vectorized[x: 3]
+        u8[2]
+        [
+          [0, 255],
+          [1, 254],
+          [2, 253]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.bitcast(Nx.tensor([0, 1, 2], names: [:data], type: :s16), :f32)
@@ -2413,21 +2434,22 @@ defmodule Nx do
   """
   @doc type: :type
   def bitcast(tensor, type) do
-    %T{type: {_, bits} = input_type} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    {_, new_bits} = new_type = Nx.Type.normalize!(type)
+    apply_vectorized(tensor, fn tensor ->
+      %T{type: {_, bits} = input_type} = tensor
+      {_, new_bits} = new_type = Nx.Type.normalize!(type)
 
-    Nx.Shared.raise_complex_not_supported(input_type, :bitcast, 2)
-    Nx.Shared.raise_complex_not_supported(new_type, :bitcast, 2)
+      Nx.Shared.raise_complex_not_supported(input_type, :bitcast, 2)
+      Nx.Shared.raise_complex_not_supported(new_type, :bitcast, 2)
 
-    unless new_bits == bits do
-      raise ArgumentError,
-            "input type width must match new type width," <>
-              " got input type #{inspect(input_type)} and" <>
-              " output type #{inspect(new_type)}"
-    end
+      unless new_bits == bits do
+        raise ArgumentError,
+              "input type width must match new type width," <>
+                " got input type #{inspect(input_type)} and" <>
+                " output type #{inspect(new_type)}"
+      end
 
-    impl!(tensor).bitcast(%{tensor | type: new_type}, tensor)
+      impl!(tensor).bitcast(%{tensor | type: new_type}, tensor)
+    end)
   end
 
   @doc """
