@@ -3589,14 +3589,14 @@ defmodule Nx do
   ## Vectorized tensors
 
   Same compatibility criteria applies to vectorized tensors, but there's
-  the additional requirement that if a vectorized axis name appears in both
-  tensors, it must appear with the same size, or one of them must be 1.
+  the additional requirement that vectorized axes must be the same in both
+  tensors.
 
-      iex> Nx.compatible?(Nx.tensor([1]) |> Nx.vectorize(:x), Nx.tensor([1, 2]) |> Nx.vectorize(:y))
-      true
-      iex> Nx.compatible?(Nx.tensor([1]) |> Nx.vectorize(:x), Nx.tensor([1, 2]) |> Nx.vectorize(:x))
+      iex> Nx.compatible?(Nx.tensor([1, 2]) |> Nx.vectorize(:x), Nx.tensor([3, 4]) |> Nx.vectorize(:x))
       true
       iex> Nx.compatible?(Nx.tensor([1, 2, 3]) |> Nx.vectorize(:x), Nx.tensor([1, 2]) |> Nx.vectorize(:x))
+      false
+      iex> Nx.compatible?(Nx.tensor([1]) |> Nx.vectorize(:x), Nx.tensor([1, 2]) |> Nx.vectorize(:y))
       false
 
   """
@@ -3606,30 +3606,8 @@ defmodule Nx do
   def compatible?(
         %T{type: type, shape: shape, names: l_names, vectorized_axes: l_axes},
         %T{type: type, shape: shape, names: r_names, vectorized_axes: r_axes}
-      )
-      when l_axes != [] or r_axes != [] do
-    # for vectorized tensors, we need to check that vectorized axes
-    # with the same name have the same size or one of them is 1
-
-    {compatible_vectors, _} =
-      Enum.reduce_while(l_axes, {true, r_axes}, fn {name, size}, {_, r_axes} ->
-        {compatible_axis, remaining_r_axes} =
-          case List.keytake(r_axes, name, 0) do
-            {{^name, r_size}, r_axes} ->
-              {size == 1 or r_size == 1 or r_size == size, r_axes}
-
-            _ ->
-              {true, r_axes}
-          end
-
-        if not compatible_axis do
-          {:halt, {false, []}}
-        else
-          {:cont, {true, remaining_r_axes}}
-        end
-      end)
-
-    compatible_vectors and compatible_names?(l_names, r_names)
+      ) do
+      l_axes == r_axes and compatible_names?(l_names, r_names)
   end
 
   def compatible?(%T{} = left, %T{} = right) do
