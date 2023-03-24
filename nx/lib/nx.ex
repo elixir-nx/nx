@@ -4309,6 +4309,130 @@ defmodule Nx do
     end)
   end
 
+  @doc """
+  Broadcasts vectorized axes, ensuring they end up with the same final size.
+
+  The inner shape is unchanged for each tensor.
+  The order of the vectorized axes is determined by order of appearance in the input list.
+
+  ## Examples
+
+      iex> x = Nx.tensor([1, 2]) |> Nx.vectorize(:x)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64
+        [1, 2]
+      >
+      iex> xy = Nx.tensor([[[5]], [[6]]]) |> Nx.vectorize(:y) |> Nx.vectorize(:x)
+      #Nx.Tensor<
+        vectorized[y: 2][x: 1]
+        s64[1]
+        [
+          [
+            [5]
+          ],
+          [
+            [6]
+          ]
+        ]
+      >
+      iex> [broadcast_x, broadcast_xy] = Nx.broadcast_vectors([x, xy])
+      iex> broadcast_x
+      #Nx.Tensor<
+        vectorized[x: 2][y: 2]
+        s64
+        [
+          [1, 1],
+          [2, 2]
+        ]
+      >
+      iex> broadcast_xy
+      #Nx.Tensor<
+        vectorized[x: 2][y: 2]
+        s64[1]
+        [
+          [
+            [5],
+            [6]
+          ],
+          [
+            [5],
+            [6]
+          ]
+        ]
+      >
+      iex> [broadcast_xy, broadcast_x] = Nx.broadcast_vectors([xy, x])
+      iex> broadcast_x
+      #Nx.Tensor<
+        vectorized[y: 2][x: 2]
+        s64
+        [
+          [1, 2],
+          [1, 2]
+        ]
+      >
+      iex> broadcast_xy
+      #Nx.Tensor<
+        vectorized[y: 2][x: 2]
+        s64[1]
+        [
+          [
+            [5],
+            [5]
+          ],
+          [
+            [6],
+            [6]
+          ]
+        ]
+      >
+  """
+  @doc type: :shape
+  def broadcast_vectors([t]), do: t
+
+  def broadcast_vectors(tensors) when is_list(tensors) do
+    tensors = reshape_vectors(tensors)
+
+    target_vectorized_axes =
+      tensors
+      |> Enum.map(& &1.vectorized_axes)
+      |> Enum.zip_with(&Enum.max_by(&1, fn {_, v} -> v end))
+
+    target_vector_shape =
+      target_vectorized_axes
+      |> Enum.map(fn {_, v} -> v end)
+      |> List.to_tuple()
+
+    offset = tuple_size(target_vector_shape)
+
+    devec =
+      Enum.map(
+        tensors,
+        &devectorize(%{
+          &1
+          | vectorized_axes: Enum.map(&1.vectorized_axes, fn {_, v} -> {nil, v} end)
+        })
+      )
+
+    devec
+    |> Enum.map(fn t ->
+      target_shape =
+        t.shape
+        |> Tuple.to_list()
+        |> Enum.with_index(fn size, idx ->
+          if idx < offset do
+            elem(target_vector_shape, idx)
+          else
+            size
+          end
+        end)
+        |> List.to_tuple()
+
+      broadcast(t, target_shape, names: t.names)
+    end)
+    |> Enum.map(&revectorize_and_validate_sizes(&1, target_vectorized_axes))
+  end
+
   defp combine_vectorized_axes(%T{vectorized_axes: right_vectorized_axes}, left_vectorized_axes) do
     {left_pairs, both_pairs, right_pairs} =
       Enum.reduce(left_vectorized_axes, {[], [], right_vectorized_axes}, fn
