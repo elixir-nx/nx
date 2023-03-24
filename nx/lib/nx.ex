@@ -10047,15 +10047,31 @@ defmodule Nx do
         ]
       >
 
+  ## Vectorized tensors
+
+  `map/3` behaves the same as with non-vectorized tensors, applying
+  `fun` in an element-wise fashion.
+
+      iex> Nx.map(Nx.tensor([[1, 2, 3], [4, 5, 6]]) |> Nx.vectorize(:x), [type: :f64], &Nx.add(&1, 1))
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f64[3]
+        [
+          [2.0, 3.0, 4.0],
+          [5.0, 6.0, 7.0]
+        ]
+      >
   """
   @doc type: :element
   def map(tensor, opts \\ [], fun) do
-    %T{type: type} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    opts = keyword!(opts, type: type)
-    output_type = Nx.Type.normalize!(opts[:type])
-    out = %{tensor | type: output_type}
-    impl!(tensor).map(out, tensor, opts, fun)
+    apply_vectorized(tensor, fn tensor ->
+      %T{type: type} = tensor
+
+      opts = keyword!(opts, type: type)
+      output_type = Nx.Type.normalize!(opts[:type])
+      out = %{tensor | type: output_type}
+      impl!(tensor).map(out, tensor, opts, fun)
+    end)
   end
 
   ## Matrix ops
