@@ -11167,30 +11167,50 @@ defmodule Nx do
           [4.0, 4.0, 4.0]
         ]
       >
+
+  ## Vectorized tensors
+
+  Only the main input tensor is allowed to be vectorized. `min` and `max` threshold tensors
+  must be unvectorized scalar tensors.
+
+      iex> t = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], type: :f32, names: [nil, :y]) |> Nx.vectorize(:x)
+      iex> Nx.clip(t, 1, 4)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32[y: 3]
+        [
+          [1.0, 2.0, 3.0],
+          [4.0, 4.0, 4.0]
+        ]
+      >
   """
   @doc type: :element
   def clip(tensor, min, max) do
-    %T{type: type} = tensor = to_tensor(tensor)
-    %T{type: min_type, shape: min_shape} = min = to_tensor(min)
-    %T{type: max_type, shape: max_shape} = max = to_tensor(max)
+    apply_vectorized(tensor, fn tensor ->
+      %T{type: type} = tensor
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(min, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(max, __ENV__.function)
+      %T{type: min_type, shape: min_shape, vectorized_axes: min_vectorized_axes} =
+        min = to_tensor(min)
 
-    if min_shape != {} do
-      raise ArgumentError, "min value must be a scalar shape, got: #{inspect(min_shape)}"
-    end
+      %T{type: max_type, shape: max_shape, vectorized_axes: max_vectorized_axes} =
+        max = to_tensor(max)
 
-    if max_shape != {} do
-      raise ArgumentError, "max value must be a scalar shape, got: #{inspect(max_shape)}"
-    end
+      if not (min_shape == {} and min_vectorized_axes == []) do
+        raise ArgumentError,
+              "min value must be a non-vectorized scalar shape, got shape #{inspect(min_shape)} and vectorized axes #{inspect(min_vectorized_axes)}"
+      end
 
-    output_type = Nx.Type.merge(type, Nx.Type.merge(min_type, max_type))
+      if not (max_shape == {} and max_vectorized_axes == []) do
+        raise ArgumentError,
+              "max value must be a non-vectorized scalar shape, got shape #{inspect(max_shape)} and vectorized axes #{inspect(max_vectorized_axes)}"
+      end
 
-    Nx.Shared.raise_complex_not_supported(output_type, :clip, 2)
+      output_type = Nx.Type.merge(type, Nx.Type.merge(min_type, max_type))
 
-    impl!(tensor).clip(%{tensor | type: output_type}, tensor, min, max)
+      Nx.Shared.raise_complex_not_supported(output_type, :clip, 2)
+
+      impl!(tensor).clip(%{tensor | type: output_type}, tensor, min, max)
+    end)
   end
 
   @doc """

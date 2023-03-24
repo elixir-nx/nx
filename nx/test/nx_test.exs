@@ -1645,7 +1645,7 @@ defmodule NxTest do
       min = Nx.iota({2})
       max = 3
 
-      assert_raise(ArgumentError, "min value must be a scalar shape, got: {2}", fn ->
+      assert_raise(ArgumentError, "min value must be a non-vectorized scalar shape, got shape {2} and vectorized axes []", fn ->
         Nx.clip(t, min, max)
       end)
     end
@@ -1655,7 +1655,7 @@ defmodule NxTest do
       min = Nx.iota({})
       max = Nx.iota({3})
 
-      assert_raise(ArgumentError, "max value must be a scalar shape, got: {3}", fn ->
+      assert_raise(ArgumentError, "max value must be a non-vectorized scalar shape, got shape {3} and vectorized axes []", fn ->
         Nx.clip(t, min, max)
       end)
     end
