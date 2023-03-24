@@ -2258,13 +2258,12 @@ defmodule Nx do
   @doc type: :conversion
   def to_heatmap(tensor, opts \\ []) when is_list(opts) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     if tensor.shape == {} do
       raise ArgumentError, "cannot show heatmap for scalar tensors, got: #{inspect(tensor)}"
     end
 
-    %Nx.Heatmap{tensor: to_tensor(tensor), opts: opts}
+    %Nx.Heatmap{tensor: tensor, opts: opts}
   end
 
   ## Reflection operations (do not invoke the backend)
@@ -2401,6 +2400,27 @@ defmodule Nx do
         [0, 0, 0]
       >
 
+      iex> t = Nx.vectorize(Nx.tensor([[0, -1], [1, -2], [2, -3]], type: :s8), :x)
+      #Nx.Tensor<
+        vectorized[x: 3]
+        s8[2]
+        [
+          [0, -1],
+          [1, -2],
+          [2, -3]
+        ]
+      >
+      iex> Nx.bitcast(t, :u8)
+      #Nx.Tensor<
+        vectorized[x: 3]
+        u8[2]
+        [
+          [0, 255],
+          [1, 254],
+          [2, 253]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.bitcast(Nx.tensor([0, 1, 2], names: [:data], type: :s16), :f32)
@@ -2414,21 +2434,22 @@ defmodule Nx do
   """
   @doc type: :type
   def bitcast(tensor, type) do
-    %T{type: {_, bits} = input_type} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    {_, new_bits} = new_type = Nx.Type.normalize!(type)
+    apply_vectorized(tensor, fn tensor ->
+      %T{type: {_, bits} = input_type} = tensor
+      {_, new_bits} = new_type = Nx.Type.normalize!(type)
 
-    Nx.Shared.raise_complex_not_supported(input_type, :bitcast, 2)
-    Nx.Shared.raise_complex_not_supported(new_type, :bitcast, 2)
+      Nx.Shared.raise_complex_not_supported(input_type, :bitcast, 2)
+      Nx.Shared.raise_complex_not_supported(new_type, :bitcast, 2)
 
-    unless new_bits == bits do
-      raise ArgumentError,
-            "input type width must match new type width," <>
-              " got input type #{inspect(input_type)} and" <>
-              " output type #{inspect(new_type)}"
-    end
+      unless new_bits == bits do
+        raise ArgumentError,
+              "input type width must match new type width," <>
+                " got input type #{inspect(input_type)} and" <>
+                " output type #{inspect(new_type)}"
+      end
 
-    impl!(tensor).bitcast(%{tensor | type: new_type}, tensor)
+      impl!(tensor).bitcast(%{tensor | type: new_type}, tensor)
+    end)
   end
 
   @doc """
@@ -2570,11 +2591,35 @@ defmodule Nx do
         ]
       >
 
+  ## Vectorized tensors
+
+  Only the inner axis names are renamed. New names must not overlap with
+  vectorized names.
+
+      iex> t = Nx.tensor([[1], [2], [3]], names: [nil, :y]) |> Nx.vectorize(:x)
+      iex> Nx.rename(t, [:a])
+      #Nx.Tensor<
+        vectorized[x: 3]
+        s64[a: 1]
+        [
+          [1],
+          [2],
+          [3]
+        ]
+      >
+      iex> Nx.rename(t, [:x])
+      ** (ArgumentError) name :x is already a name for a vectorized axis
   """
   @doc type: :shape
   def rename(tensor, names) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+
+    Enum.each(tensor.vectorized_axes, fn {name, _} ->
+      if name in names do
+        raise ArgumentError, "name #{inspect(name)} is already a name for a vectorized axis"
+      end
+    end)
+
     %{tensor | names: Nx.Shape.named_axes!(names, tensor.shape)}
   end
 
@@ -2668,11 +2713,28 @@ defmodule Nx do
       >
       iex> Nx.flatten(t, axes: [0, 2])
       ** (ArgumentError) flatten axes must be consecutive
+
+  ## Vectorized tensors
+
+  Only the inner shape is flattened, leaving vectorized axes untouched.
+
+      iex> t = Nx.iota({1, 3, 2, 2}) |> Nx.vectorize(:x) |> Nx.vectorize(:y)
+      iex> Nx.flatten(t)
+      #Nx.Tensor<
+        vectorized[x: 1][y: 3]
+        s64[4]
+        [
+          [
+            [0, 1, 2, 3],
+            [4, 5, 6, 7],
+            [8, 9, 10, 11]
+          ]
+        ]
+      >
   """
   @doc type: :shape
   def flatten(tensor, opts \\ []) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     opts = Keyword.validate!(opts, [:axes])
     {shape, names} = Nx.Shape.flatten(tensor.shape, tensor.names, opts[:axes])
     reshape(tensor, shape, names: names)
@@ -3490,24 +3552,40 @@ defmodule Nx do
         ]
       >
 
+  ## Vectorized tensors
+
+  Like with the non-vectorized case, `pad_value` must be a non-vectorized scalar tensor.
+  Vectorized axes remain unchanged.
+
+      iex> t = Nx.tensor([[1], [2], [3]], names: [nil, :data]) |> Nx.vectorize(:x)
+      iex> Nx.pad(t, 0, [{1, 1, 0}])
+      #Nx.Tensor<
+        vectorized[x: 3]
+        s64[data: 3]
+        [
+          [0, 1, 0],
+          [0, 2, 0],
+          [0, 3, 0]
+        ]
+      >
+
   """
   @doc type: :shape
   def pad(tensor, pad_value, padding_config) when is_list(padding_config) do
-    output_type = binary_type(tensor, pad_value)
-    tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    apply_vectorized(tensor, fn tensor, offset ->
+      output_type = binary_type(tensor, pad_value)
+      pad_value = to_tensor(pad_value)
 
-    pad_value = to_tensor(pad_value)
-    Nx.Shared.raise_vectorized_not_implemented_yet(pad_value, __ENV__.function)
+      if not (pad_value.shape == {} and pad_value.vectorized_axes == []) do
+        raise ArgumentError, "padding value must be a scalar and non-vectorized"
+      end
 
-    if pad_value.shape != {} do
-      raise ArgumentError, "padding value must be a scalar"
-    end
+      padding_config = List.duplicate({0, 0, 0}, offset) ++ padding_config
+      shape = Nx.Shape.pad(tensor.shape, padding_config)
 
-    shape = Nx.Shape.pad(tensor.shape, padding_config)
-
-    out = %{tensor | type: output_type, shape: shape}
-    impl!(tensor).pad(out, tensor, pad_value, padding_config)
+      out = %{tensor | type: output_type, shape: shape}
+      impl!(tensor).pad(out, tensor, pad_value, padding_config)
+    end)
   end
 
   ## Reflection
@@ -3586,14 +3664,31 @@ defmodule Nx do
       iex> Nx.compatible?(%{foo: Nx.iota({3, 2})}, %{bar: Nx.iota({3, 2})})
       false
 
+  ## Vectorized tensors
+
+  Same compatibility criteria applies to vectorized tensors, but there's
+  the additional requirement that vectorized axes must be the same in both
+  tensors.
+
+      iex> Nx.compatible?(Nx.tensor([1, 2]) |> Nx.vectorize(:x), Nx.tensor([3, 4]) |> Nx.vectorize(:x))
+      true
+      iex> Nx.compatible?(Nx.tensor([1, 2, 3]) |> Nx.vectorize(:x), Nx.tensor([1, 2]) |> Nx.vectorize(:x))
+      false
+      iex> Nx.compatible?(Nx.tensor([1]) |> Nx.vectorize(:x), Nx.tensor([1, 2]) |> Nx.vectorize(:y))
+      false
+
   """
   @doc type: :shape
   def compatible?(left, right)
 
-  def compatible?(%T{} = left, %T{} = right) do
-    Nx.Shared.raise_vectorized_not_implemented_yet(left, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(right, __ENV__.function)
+  def compatible?(
+        %T{type: type, shape: shape, names: l_names, vectorized_axes: l_axes},
+        %T{type: type, shape: shape, names: r_names, vectorized_axes: r_axes}
+      ) do
+    l_axes == r_axes and compatible_names?(l_names, r_names)
+  end
 
+  def compatible?(%T{} = left, %T{} = right) do
     %{type: type, shape: shape, names: left_names} = left
 
     case right do
@@ -4180,6 +4275,11 @@ defmodule Nx do
     size = elem(shape, 0)
     new_shape = Tuple.delete_at(shape, 0)
     names = tl(names)
+
+    for ^name <- names do
+      raise ArgumentError,
+            "cannot use name #{inspect(name)} for vectorized axes because there's already an axis with the same name"
+    end
 
     %Nx.Tensor{
       tensor
@@ -10028,15 +10128,31 @@ defmodule Nx do
         ]
       >
 
+  ## Vectorized tensors
+
+  `map/3` behaves the same as with non-vectorized tensors, applying
+  `fun` in an element-wise fashion.
+
+      iex> Nx.map(Nx.tensor([[1, 2, 3], [4, 5, 6]]) |> Nx.vectorize(:x), [type: :f64], &Nx.add(&1, 1))
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f64[3]
+        [
+          [2.0, 3.0, 4.0],
+          [5.0, 6.0, 7.0]
+        ]
+      >
   """
   @doc type: :element
   def map(tensor, opts \\ [], fun) do
-    %T{type: type} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    opts = keyword!(opts, type: type)
-    output_type = Nx.Type.normalize!(opts[:type])
-    out = %{tensor | type: output_type}
-    impl!(tensor).map(out, tensor, opts, fun)
+    apply_vectorized(tensor, fn tensor ->
+      %T{type: type} = tensor
+
+      opts = keyword!(opts, type: type)
+      output_type = Nx.Type.normalize!(opts[:type])
+      out = %{tensor | type: output_type}
+      impl!(tensor).map(out, tensor, opts, fun)
+    end)
   end
 
   ## Matrix ops
