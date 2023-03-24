@@ -3586,14 +3586,53 @@ defmodule Nx do
       iex> Nx.compatible?(%{foo: Nx.iota({3, 2})}, %{bar: Nx.iota({3, 2})})
       false
 
+  ## Vectorized tensors
+
+  Same compatibility criteria applies to vectorized tensors, but there's
+  the additional requirement that if a vectorized axis name appears in both
+  tensors, it must appear with the same size, or one of them must be 1.
+
+      iex> Nx.compatible?(Nx.tensor([1]) |> Nx.vectorize(:x), Nx.tensor([1, 2]) |> Nx.vectorize(:y))
+      true
+      iex> Nx.compatible?(Nx.tensor([1]) |> Nx.vectorize(:x), Nx.tensor([1, 2]) |> Nx.vectorize(:x))
+      true
+      iex> Nx.compatible?(Nx.tensor([1, 2, 3]) |> Nx.vectorize(:x), Nx.tensor([1, 2]) |> Nx.vectorize(:x))
+      false
+
   """
   @doc type: :shape
   def compatible?(left, right)
 
-  def compatible?(%T{} = left, %T{} = right) do
-    Nx.Shared.raise_vectorized_not_implemented_yet(left, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(right, __ENV__.function)
+  def compatible?(
+        %T{type: type, shape: shape, names: l_names, vectorized_axes: l_axes},
+        %T{type: type, shape: shape, names: r_names, vectorized_axes: r_axes}
+      )
+      when l_axes != [] or r_axes != [] do
+    # for vectorized tensors, we need to check that vectorized axes
+    # with the same name have the same size or one of them is 1
 
+    {compatible_vectors, _} =
+      Enum.reduce_while(l_axes, {true, r_axes}, fn {name, size}, {_, r_axes} ->
+        {compatible_axis, remaining_r_axes} =
+          case List.keytake(r_axes, name, 0) do
+            {{^name, r_size}, r_axes} ->
+              {size == 1 or r_size == 1 or r_size == size, r_axes}
+
+            _ ->
+              {true, r_axes}
+          end
+
+        if not compatible_axis do
+          {:halt, {false, []}}
+        else
+          {:cont, {true, remaining_r_axes}}
+        end
+      end)
+
+    compatible_vectors and compatible_names?(l_names, r_names)
+  end
+
+  def compatible?(%T{} = left, %T{} = right) do
     %{type: type, shape: shape, names: left_names} = left
 
     case right do
