@@ -3184,7 +3184,7 @@ defmodule Nx do
         ]
       >
 
-  For tensor inputs, the broadcast will only take the shape in consideration.
+  For tensors as shapes, the broadcast will only take the shape in consideration.
 
       iex> a = Nx.tensor([[1, 2, 3], [4, 5, 6]]) |> Nx.vectorize(:x)
       #Nx.Tensor<
