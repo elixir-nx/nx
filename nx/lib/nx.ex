@@ -2668,11 +2668,28 @@ defmodule Nx do
       >
       iex> Nx.flatten(t, axes: [0, 2])
       ** (ArgumentError) flatten axes must be consecutive
+
+  ## Vectorized tensors
+
+  Only the inner shape is flattened, leaving vectorized axes untouched.
+
+      iex> t = Nx.iota({1, 3, 2, 2}) |> Nx.vectorize(:x) |> Nx.vectorize(:y)
+      iex> Nx.flatten(t)
+      #Nx.Tensor<
+        vectorized[x: 1][y: 3]
+        s64[4]
+        [
+          [
+            [0, 1, 2, 3],
+            [4, 5, 6, 7],
+            [8, 9, 10, 11]
+          ]
+        ]
+      >
   """
   @doc type: :shape
   def flatten(tensor, opts \\ []) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     opts = Keyword.validate!(opts, [:axes])
     {shape, names} = Nx.Shape.flatten(tensor.shape, tensor.names, opts[:axes])
     reshape(tensor, shape, names: names)
