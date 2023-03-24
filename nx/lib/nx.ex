@@ -4372,43 +4372,12 @@ defmodule Nx do
   def reshape_vectors([tensor]), do: [tensor]
 
   def reshape_vectors(input) when is_list(input) do
-    # For all tensors to be compatible, each pair also needs to be compatible
-    # This means that we can do a first pass accumulating axes into
-    # the first tensor, and then a second pass getting them all into their final shapes.
+    {devectorized_tensors, canonical_vectorized_axes, _n} = do_reshape_vectors(input)
 
-    [first | tensors] = Enum.map(input, &to_tensor/1)
-
-    %T{vectorized_axes: initial_vectorized_axes} = first
-
-    # calculate the expected order for vectorized axes
-    canonical_vectorized_axes =
-      Enum.reduce(tensors, initial_vectorized_axes, &combine_vectorized_axes/2)
-
-    Enum.map([first | tensors], fn %T{names: names, shape: shape, vectorized_axes: current_axes} =
-                                     t ->
-      {vectorized_axes, []} =
-        Enum.map_reduce(canonical_vectorized_axes, current_axes, fn
-          {k, _}, [] ->
-            {{k, 1}, []}
-
-          {name, _size}, current_axes ->
-            case List.keytake(current_axes, name, 0) do
-              {{^name, other_size}, current_axes} ->
-                {{name, other_size}, current_axes}
-
-              _ ->
-                {{name, 1}, current_axes}
-            end
-        end)
-
-      target_shape = List.to_tuple(Keyword.values(vectorized_axes) ++ Tuple.to_list(shape))
-
-      t
-      |> devectorize()
-      |> reshape(target_shape)
-      |> revectorize_and_validate_sizes(canonical_vectorized_axes, true)
-      |> then(&rename(&1, names))
-    end)
+    Enum.map(
+      devectorized_tensors,
+      &revectorize_and_validate_sizes(&1, canonical_vectorized_axes, true)
+    )
   end
 
   @doc """
@@ -4493,49 +4462,78 @@ defmodule Nx do
   def broadcast_vectors([t]), do: t
 
   def broadcast_vectors(tensors) when is_list(tensors) do
-    tensors = reshape_vectors(tensors)
+    {devectorized_tensors, canonical_vectorized_axes, offset} = do_reshape_vectors(tensors)
+
+    target_vector_shape_l =
+      devectorized_tensors
+      |> Enum.map(&(&1.shape |> Tuple.to_list() |> Enum.take(offset)))
+      |> Enum.zip_with(&Enum.max/1)
 
     target_vectorized_axes =
-      tensors
-      |> Enum.map(& &1.vectorized_axes)
-      |> Enum.zip_with(&Enum.max_by(&1, fn {_, v} -> v end))
+      Enum.zip_with([canonical_vectorized_axes, target_vector_shape_l], fn [{k, _}, v] ->
+        {k, v}
+      end)
 
-    target_vector_shape =
-      target_vectorized_axes
-      |> Enum.map(fn {_, v} -> v end)
-      |> List.to_tuple()
-
-    offset = tuple_size(target_vector_shape)
-
-    devec =
-      Enum.map(
-        tensors,
-        &devectorize(%{
-          &1
-          | vectorized_axes: Enum.map(&1.vectorized_axes, fn {_, v} -> {nil, v} end)
-        })
-      )
-
-    devec
+    devectorized_tensors
     |> Enum.map(fn t ->
-      target_shape =
-        t.shape
-        |> Tuple.to_list()
-        |> Enum.with_index(fn size, idx ->
-          if idx < offset do
-            elem(target_vector_shape, idx)
-          else
-            size
-          end
-        end)
-        |> List.to_tuple()
+      tensor_base_shape_l = t.shape |> Tuple.to_list() |> Enum.drop(offset)
+
+      target_shape = List.to_tuple(target_vector_shape_l ++ tensor_base_shape_l)
 
       broadcast(t, target_shape, names: t.names)
     end)
     |> Enum.map(&revectorize_and_validate_sizes(&1, target_vectorized_axes))
   end
 
-  defp combine_vectorized_axes(%T{vectorized_axes: right_vectorized_axes}, left_vectorized_axes) do
+  defp do_reshape_vectors(input) do
+    # For all tensors to be compatible, each pair also needs to be compatible
+    # This means that we can do a first pass accumulating axes into
+    # the first tensor, and then a second pass getting them all into their final shapes.
+
+    [first | tensors] = Enum.map(input, &to_tensor/1)
+
+    %T{vectorized_axes: initial_vectorized_axes} = first
+
+    # calculate the expected order for vectorized axes
+    canonical_vectorized_axes =
+      Enum.reduce(tensors, initial_vectorized_axes, &do_reshape_vectors_combine_vectorized_axes/2)
+
+    n = length(canonical_vectorized_axes)
+
+    devectorized_tensors =
+      Enum.map([first | tensors], fn %T{names: names, shape: shape, vectorized_axes: current_axes} =
+                                       t ->
+        {vectorized_axes, []} =
+          Enum.map_reduce(canonical_vectorized_axes, current_axes, fn
+            {k, _}, [] ->
+              {{k, 1}, []}
+
+            {name, _size}, current_axes ->
+              case List.keytake(current_axes, name, 0) do
+                {{^name, other_size}, current_axes} ->
+                  {{name, other_size}, current_axes}
+
+                _ ->
+                  {{name, 1}, current_axes}
+              end
+          end)
+
+        target_shape = List.to_tuple(Keyword.values(vectorized_axes) ++ Tuple.to_list(shape))
+
+        target_names = List.duplicate(nil, n) ++ names
+
+        t
+        |> devectorize()
+        |> reshape(target_shape, names: target_names)
+      end)
+
+    {devectorized_tensors, canonical_vectorized_axes, n}
+  end
+
+  defp do_reshape_vectors_combine_vectorized_axes(
+         %T{vectorized_axes: right_vectorized_axes},
+         left_vectorized_axes
+       ) do
     {left_pairs, both_pairs, right_pairs} =
       Enum.reduce(left_vectorized_axes, {[], [], right_vectorized_axes}, fn
         {name, size}, {lefties, both, righties} ->
