@@ -3528,24 +3528,40 @@ defmodule Nx do
         ]
       >
 
+  ## Vectorized tensors
+
+  Like with the non-vectorized case, `pad_value` must be a non-vectorized scalar tensor.
+  Vectorized axes remain unchanged.
+
+      iex> t = Nx.tensor([[1], [2], [3]], names: [nil, :data]) |> Nx.vectorize(:x)
+      iex> Nx.pad(t, 0, [{1, 1, 0}])
+      #Nx.Tensor<
+        vectorized[x: 3]
+        s64[data: 3]
+        [
+          [0, 1, 0],
+          [0, 2, 0],
+          [0, 3, 0]
+        ]
+      >
+
   """
   @doc type: :shape
   def pad(tensor, pad_value, padding_config) when is_list(padding_config) do
-    output_type = binary_type(tensor, pad_value)
-    tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    apply_vectorized(tensor, fn tensor, offset ->
+      output_type = binary_type(tensor, pad_value)
+      pad_value = to_tensor(pad_value)
 
-    pad_value = to_tensor(pad_value)
-    Nx.Shared.raise_vectorized_not_implemented_yet(pad_value, __ENV__.function)
+      if not (pad_value.shape == {} and pad_value.vectorized_axes == []) do
+        raise ArgumentError, "padding value must be a scalar and non-vectorized"
+      end
 
-    if pad_value.shape != {} do
-      raise ArgumentError, "padding value must be a scalar"
-    end
+      padding_config = List.duplicate({0, 0, 0}, offset) ++ padding_config
+      shape = Nx.Shape.pad(tensor.shape, padding_config)
 
-    shape = Nx.Shape.pad(tensor.shape, padding_config)
-
-    out = %{tensor | type: output_type, shape: shape}
-    impl!(tensor).pad(out, tensor, pad_value, padding_config)
+      out = %{tensor | type: output_type, shape: shape}
+      impl!(tensor).pad(out, tensor, pad_value, padding_config)
+    end)
   end
 
   ## Reflection
