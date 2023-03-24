@@ -3640,14 +3640,31 @@ defmodule Nx do
       iex> Nx.compatible?(%{foo: Nx.iota({3, 2})}, %{bar: Nx.iota({3, 2})})
       false
 
+  ## Vectorized tensors
+
+  Same compatibility criteria applies to vectorized tensors, but there's
+  the additional requirement that vectorized axes must be the same in both
+  tensors.
+
+      iex> Nx.compatible?(Nx.tensor([1, 2]) |> Nx.vectorize(:x), Nx.tensor([3, 4]) |> Nx.vectorize(:x))
+      true
+      iex> Nx.compatible?(Nx.tensor([1, 2, 3]) |> Nx.vectorize(:x), Nx.tensor([1, 2]) |> Nx.vectorize(:x))
+      false
+      iex> Nx.compatible?(Nx.tensor([1]) |> Nx.vectorize(:x), Nx.tensor([1, 2]) |> Nx.vectorize(:y))
+      false
+
   """
   @doc type: :shape
   def compatible?(left, right)
 
-  def compatible?(%T{} = left, %T{} = right) do
-    Nx.Shared.raise_vectorized_not_implemented_yet(left, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(right, __ENV__.function)
+  def compatible?(
+        %T{type: type, shape: shape, names: l_names, vectorized_axes: l_axes},
+        %T{type: type, shape: shape, names: r_names, vectorized_axes: r_axes}
+      ) do
+    l_axes == r_axes and compatible_names?(l_names, r_names)
+  end
 
+  def compatible?(%T{} = left, %T{} = right) do
     %{type: type, shape: shape, names: left_names} = left
 
     case right do
