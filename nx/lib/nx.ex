@@ -3607,7 +3607,7 @@ defmodule Nx do
         %T{type: type, shape: shape, names: l_names, vectorized_axes: l_axes},
         %T{type: type, shape: shape, names: r_names, vectorized_axes: r_axes}
       ) do
-      l_axes == r_axes and compatible_names?(l_names, r_names)
+    l_axes == r_axes and compatible_names?(l_names, r_names)
   end
 
   def compatible?(%T{} = left, %T{} = right) do
