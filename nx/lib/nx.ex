@@ -2570,11 +2570,35 @@ defmodule Nx do
         ]
       >
 
+  ## Vectorized tensors
+
+  Only the inner axis names are renamed. New names must not overlap with
+  vectorized names.
+
+      iex> t = Nx.tensor([[1], [2], [3]], names: [nil, :y]) |> Nx.vectorize(:x)
+      iex> Nx.rename(t, [:a])
+      #Nx.Tensor<
+        vectorized[x: 3]
+        s64[a: 1]
+        [
+          [1],
+          [2],
+          [3]
+        ]
+      >
+      iex> Nx.rename(t, [:x])
+      ** (ArgumentError) name :x is already a name for a vectorized axis
   """
   @doc type: :shape
   def rename(tensor, names) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+
+    Enum.each(tensor.vectorized_axes, fn {name, _} ->
+      if name in names do
+        raise ArgumentError, "name #{inspect(name)} is already a name for a vectorized axis"
+      end
+    end)
+
     %{tensor | names: Nx.Shape.named_axes!(names, tensor.shape)}
   end
 
@@ -4180,6 +4204,13 @@ defmodule Nx do
     size = elem(shape, 0)
     new_shape = Tuple.delete_at(shape, 0)
     names = tl(names)
+
+    for axis_name <- names do
+      if axis_name == name do
+        raise ArgumentError,
+              "cannot use name #{inspect(name)} for vectorized axes because there's already an axis with the same name."
+      end
+    end
 
     %Nx.Tensor{
       tensor
