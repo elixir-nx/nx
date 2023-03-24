@@ -3165,7 +3165,7 @@ defmodule Nx do
 
   ## Vectorized tensors
 
-  Vectors remain unchanged, and normal broadcast rules apply otherwise.
+  Vectorized axes remain unchanged, and normal broadcast rules apply otherwise.
 
       iex> a = Nx.tensor([[[1, 2, 3]], [[4, 5, 6]]]) |> Nx.vectorize(:x)
       iex> Nx.broadcast(a, {2, 3})
