@@ -4307,7 +4307,7 @@ defmodule Nx do
       |> devectorize()
       |> reshape(target_shape)
       |> revectorize_and_validate_sizes(canonical_vectorized_axes, true)
-      |> then(&reshape(&1, &1.shape, names: names))
+      |> then(&rename(&1, names))
     end)
   end
 
