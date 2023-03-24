@@ -3507,7 +3507,6 @@ defmodule Nx do
         ]
       >
 
-
   """
   @doc type: :shape
   def pad(tensor, pad_value, padding_config) when is_list(padding_config) do
