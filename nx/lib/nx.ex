@@ -10538,9 +10538,8 @@ defmodule Nx do
   """
   @doc type: :ndim
   def outer(t1, t2) do
-    [t1, t2] = reshape_vectors([t1, t2])
-    %T{names: n1} = t1
-    %T{names: n2} = t2
+    %T{names: n1} = to_tensor(t1)
+    %T{names: n2} = to_tensor(t2)
 
     names =
       case {n1, n2} do
