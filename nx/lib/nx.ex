@@ -4311,6 +4311,8 @@ defmodule Nx do
           Nx.Tensor.t()
   def vectorize(tensor, name_or_axes)
 
+  def vectorize(%Nx.Tensor{shape: {}} = tensor, []), do: tensor
+
   def vectorize(%Nx.Tensor{shape: {}}, _name) do
     raise ArgumentError, "cannot vectorize tensor of rank 0"
   end

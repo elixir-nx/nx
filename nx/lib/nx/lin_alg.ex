@@ -647,6 +647,24 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> a = Nx.tensor([[[1, 1], [0, 1]], [[2, 0], [0, 2]]]) |> Nx.vectorize(x: 2)
+      iex> b = Nx.tensor([[[2, 1], [5, -1]]]) |> Nx.vectorize(x: 1, y: 2)
+      iex> Nx.LinAlg.solve(a, b)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 2]
+        f32[2]
+        [
+          [
+            [1.0, 1.0],
+            [6.0, -1.0]
+          ],
+          [
+            [1.0, 0.5],
+            [2.5, -0.5]
+          ]
+        ]
+      >
+
   If the axes are named, their names are not preserved in the output:
 
       iex> a = Nx.tensor([[1, 0, 1], [1, 1, 0], [1, 1, 1]], names: [:x, :y])
@@ -668,28 +686,34 @@ defmodule Nx.LinAlg do
   # optional needs to work on the actual backend.
   @doc from_backend: false
   def solve(a, b) do
-    %T{shape: a_shape, type: a_type} = a = Nx.to_tensor(a)
-    %T{shape: b_shape, type: b_type} = b = Nx.to_tensor(b)
-    Nx.Shared.raise_vectorized_not_implemented_yet(a, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(b, __ENV__.function)
+    [%T{vectorized_axes: vectorized_axes} = a, b] = Nx.broadcast_vectors([a, b])
+
+    a = Nx.devectorize(a)
+    b = Nx.devectorize(b)
+
+    %T{shape: a_shape, type: a_type} = a
+    %T{shape: b_shape, type: b_type} = b
 
     output_shape = Nx.Shape.solve(a_shape, b_shape)
     output_type = a_type |> Nx.Type.merge(b_type) |> Nx.Type.to_floating()
     output = Nx.template(output_shape, output_type)
 
-    Nx.Shared.optional(:solve, [a, b], output, fn a, b ->
-      # Since we have triangular solve, which accepts upper
-      # triangular matrices with the `lower: false` option,
-      # we can solve a system as follows:
+    result =
+      Nx.Shared.optional(:solve, [a, b], output, fn a, b ->
+        # Since we have triangular solve, which accepts upper
+        # triangular matrices with the `lower: false` option,
+        # we can solve a system as follows:
 
-      # A.X = B -> QR.X = B -> R.X = adjoint(Q).B
+        # A.X = B -> QR.X = B -> R.X = adjoint(Q).B
 
-      {q, r} = Nx.LinAlg.qr(a)
-      q_rank = Nx.rank(q)
-      batches = Enum.to_list(0..(q_rank - 3)//1)
-      qb = Nx.dot(adjoint(q), [q_rank - 1], batches, b, [q_rank - 2], batches)
-      triangular_solve(r, qb, lower: false)
-    end)
+        {q, r} = Nx.LinAlg.qr(a)
+        q_rank = Nx.rank(q)
+        batches = Enum.to_list(0..(q_rank - 3)//1)
+        qb = Nx.dot(adjoint(q), [q_rank - 1], batches, b, [q_rank - 2], batches)
+        triangular_solve(r, qb, lower: false)
+      end)
+
+    Nx.vectorize(result, vectorized_axes)
   end
 
   @doc """
@@ -1819,6 +1843,14 @@ defmodule Nx.LinAlg do
         [630.0, 630.0]
       >
 
+      iex> t = Nx.tensor([[[1, 0], [0, 2]], [[3, 0], [0, 4]]]) |> Nx.vectorize(x: 2)
+      iex> Nx.LinAlg.determinant(t)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32
+        [2.0, 12.0]
+      >
+
   If the axes are named, their names are not preserved in the output:
 
       iex> two_by_two = Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
@@ -1855,32 +1887,32 @@ defmodule Nx.LinAlg do
   # IMPORTANT: This function cannot be a defn because
   # optional needs to work on the actual backend.
   def determinant(tensor) do
-    tensor = Nx.to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    shape = Nx.shape(tensor)
-    {batch_shape, matrix_shape} = shape |> Tuple.to_list() |> Enum.split(-2)
-    output = Nx.template(List.to_tuple(batch_shape), Nx.Type.to_floating(tensor.type))
+    apply_vectorized(tensor, fn tensor ->
+      shape = Nx.shape(tensor)
+      {batch_shape, matrix_shape} = shape |> Tuple.to_list() |> Enum.split(-2)
+      output = Nx.template(List.to_tuple(batch_shape), Nx.Type.to_floating(tensor.type))
 
-    case matrix_shape do
-      [n, n] ->
-        :ok
-
-      shape ->
-        raise ArgumentError,
-              "determinant/1 expects a square tensor, got tensor with shape: #{inspect(shape)}"
-    end
-
-    Nx.Shared.optional(:determinant, [tensor], output, fn tensor ->
       case matrix_shape do
-        [2, 2] ->
-          determinant_2by2(tensor)
-
-        [3, 3] ->
-          determinant_3by3(tensor)
-
         [n, n] ->
-          determinant_NbyN(tensor, batch_shape_n: List.to_tuple(batch_shape ++ [n]))
+          :ok
+
+        shape ->
+          raise ArgumentError,
+                "determinant/1 expects a square tensor, got tensor with shape: #{inspect(shape)}"
       end
+
+      Nx.Shared.optional(:determinant, [tensor], output, fn tensor ->
+        case matrix_shape do
+          [2, 2] ->
+            determinant_2by2(tensor)
+
+          [3, 3] ->
+            determinant_3by3(tensor)
+
+          [n, n] ->
+            determinant_NbyN(tensor, batch_shape_n: List.to_tuple(batch_shape ++ [n]))
+        end
+      end)
     end)
   end
 
