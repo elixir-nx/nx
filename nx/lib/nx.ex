@@ -2774,6 +2774,33 @@ defmodule Nx do
         ]
       >
 
+  ## Vectorized tensors
+
+  Like `reshape/2`, `tile/2` works on the shape, leaving vectors untouched.
+
+      iex> t = Nx.vectorize(Nx.tensor([[1, 2, 3], [4, 5, 6]]), :x)
+      iex> Nx.tile(t, [1, 3, 1])
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[1][3][3]
+        [
+          [
+            [
+              [1, 2, 3],
+              [1, 2, 3],
+              [1, 2, 3]
+            ]
+          ],
+          [
+            [
+              [4, 5, 6],
+              [4, 5, 6],
+              [4, 5, 6]
+            ]
+          ]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.tile(Nx.tensor([1,2]), 1.0)
@@ -2787,9 +2814,6 @@ defmodule Nx do
   """
   @doc type: :shape, from_backend: false
   def tile(tensor, repetitions) do
-    tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-
     unless tile_valid_repetitions?(repetitions) do
       raise ArgumentError,
             "repetitions must be a list of integers, got: #{inspect(repetitions)}"
@@ -2962,6 +2986,47 @@ defmodule Nx do
         [1, 2]
       >
 
+  ## Vectorized tensors
+
+  `squeeze/2` operates on the tensor's shape, leaving vectorized axes untouched.
+
+      iex> t = Nx.tensor([[[[[1], [2], [3]]]]]) |> Nx.vectorize(:x)
+      #Nx.Tensor<
+        vectorized[x: 1]
+        s64[1][1][3][1]
+        [
+          [
+            [
+              [
+                [1],
+                [2],
+                [3]
+              ]
+            ]
+          ]
+        ]
+      >
+      iex> Nx.squeeze(t)
+      #Nx.Tensor<
+        vectorized[x: 1]
+        s64[3]
+        [
+          [1, 2, 3]
+        ]
+      >
+      iex> Nx.squeeze(t, axes: [0, 1])
+      #Nx.Tensor<
+        vectorized[x: 1]
+        s64[3][1]
+        [
+          [
+            [1],
+            [2],
+            [3]
+          ]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.squeeze(Nx.tensor([[1, 2, 3], [4, 5, 6]]), axes: [1])
@@ -2973,18 +3038,19 @@ defmodule Nx do
   """
   @doc type: :shape
   def squeeze(tensor, opts \\ []) do
-    opts = keyword!(opts, [:axes])
-    %T{shape: old_shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    axes = opts[:axes] || Nx.Shape.squeeze_axes(old_shape)
-    axes = Nx.Shape.normalize_axes(old_shape, axes, names)
-    {new_shape, new_names} = Nx.Shape.squeeze(old_shape, axes, names)
+    apply_vectorized(tensor, fn tensor, offset ->
+      opts = keyword!(opts, [:axes])
+      %T{shape: old_shape, names: names} = tensor
+      axes = opts[:axes] || Nx.Shape.squeeze_axes(old_shape, offset)
+      axes = Nx.Shape.normalize_axes(old_shape, axes, names, offset)
+      {new_shape, new_names} = Nx.Shape.squeeze(old_shape, axes, names)
 
-    if old_shape == new_shape do
-      tensor
-    else
-      impl!(tensor).squeeze(%{tensor | shape: new_shape, names: new_names}, tensor, axes)
-    end
+      if old_shape == new_shape do
+        tensor
+      else
+        impl!(tensor).squeeze(%{tensor | shape: new_shape, names: new_names}, tensor, axes)
+      end
+    end)
   end
 
   @doc """
@@ -3103,33 +3169,137 @@ defmodule Nx do
         ]
       >
 
+  ## Vectorized tensors
+
+  Vectorized axes remain unchanged, and normal broadcast rules apply otherwise.
+
+      iex> a = Nx.tensor([[[1, 2, 3]], [[4, 5, 6]]]) |> Nx.vectorize(:x)
+      iex> Nx.broadcast(a, {2, 3})
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[2][3]
+        [
+          [
+            [1, 2, 3],
+            [1, 2, 3]
+          ],
+          [
+            [4, 5, 6],
+            [4, 5, 6]
+          ]
+        ]
+      >
+
+  For tensors as shapes, the broadcast will only take the shape in consideration.
+
+      iex> a = Nx.tensor([[1, 2, 3], [4, 5, 6]]) |> Nx.vectorize(:x)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[3]
+        [
+          [1, 2, 3],
+          [4, 5, 6]
+        ]
+      >
+      iex> b = Nx.tensor([[[1, 2, 3], [4, 5, 6]]], names: [nil, nil, :y]) |> Nx.vectorize(:a)
+      #Nx.Tensor<
+        vectorized[a: 1]
+        s64[2][y: 3]
+        [
+          [
+            [1, 2, 3],
+            [4, 5, 6]
+          ]
+        ]
+      >
+      iex> Nx.broadcast(a, b, axes: [1], names: [:i, :j])
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[i: 2][j: 3]
+        [
+          [
+            [1, 2, 3],
+            [1, 2, 3]
+          ],
+          [
+            [4, 5, 6],
+            [4, 5, 6]
+          ]
+        ]
+      >
   """
   @doc type: :shape
   def broadcast(tensor, shape, opts \\ []) do
     opts = keyword!(opts, [:axes, :names])
 
-    tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    broadcast_names = opts[:names] || names!(shape)
-    broadcast_shape = shape(shape)
-    opts_axes = opts[:axes]
+    apply_vectorized(tensor, fn tensor, offset ->
+      broadcast_names = opts[:names] || names!(shape)
 
-    axes =
-      if opts_axes do
-        Nx.Shape.normalize_axes(broadcast_shape, opts_axes, tensor.names)
+      broadcast_names =
+        if offset > 0 and is_list(broadcast_names) do
+          List.duplicate(nil, offset + 1) ++ broadcast_names
+        else
+          broadcast_names
+        end
+
+      broadcast_shape_l = shape |> shape() |> Tuple.to_list()
+
+      offset_axes =
+        if offset > 0 do
+          Enum.map(0..(offset - 1)//1, &elem(tensor.shape, &1)) ++ [1]
+        else
+          []
+        end
+
+      tensor =
+        if offset > 0 do
+          new_axis(tensor, offset)
+        else
+          tensor
+        end
+
+      broadcast_shape = List.to_tuple(offset_axes ++ broadcast_shape_l)
+
+      opts_axes = opts[:axes]
+
+      actual_offset = if offset > 0, do: offset + 1, else: 0
+
+      axes =
+        if opts_axes do
+          axes =
+            Nx.Shape.normalize_axes(
+              broadcast_shape,
+              opts_axes,
+              tensor.names,
+              actual_offset
+            )
+
+          if offset > 0 do
+            Enum.to_list(0..(actual_offset - 1)//1) ++ axes
+          else
+            axes
+          end
+        else
+          Nx.Shape.broadcast_axes(tensor.shape, broadcast_shape)
+        end
+
+      broadcast_names = Nx.Shape.named_axes!(broadcast_names, broadcast_shape)
+      out = %{tensor | names: broadcast_names, shape: broadcast_shape}
+
+      out =
+        if tensor.shape == broadcast_shape and is_nil(opts_axes) do
+          out
+        else
+          _ = Nx.Shape.broadcast!(tensor.shape, broadcast_shape, axes, actual_offset)
+          impl!(tensor).broadcast(out, tensor, broadcast_shape, axes)
+        end
+
+      if offset > 0 do
+        squeeze(out, axes: [offset])
       else
-        Nx.Shape.broadcast_axes(tensor.shape, broadcast_shape)
+        out
       end
-
-    broadcast_names = Nx.Shape.named_axes!(broadcast_names, broadcast_shape)
-    out = %{tensor | names: broadcast_names, shape: broadcast_shape}
-
-    if tensor.shape == broadcast_shape and is_nil(opts_axes) do
-      out
-    else
-      _ = Nx.Shape.broadcast!(tensor.shape, broadcast_shape, axes)
-      impl!(tensor).broadcast(out, tensor, broadcast_shape, axes)
-    end
+    end)
   end
 
   @doc """
