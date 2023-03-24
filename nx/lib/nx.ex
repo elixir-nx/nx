@@ -4384,7 +4384,8 @@ defmodule Nx do
     canonical_vectorized_axes =
       Enum.reduce(tensors, initial_vectorized_axes, &combine_vectorized_axes/2)
 
-    Enum.map([first | tensors], fn %T{shape: shape, vectorized_axes: current_axes} = t ->
+    Enum.map([first | tensors], fn %T{names: names, shape: shape, vectorized_axes: current_axes} =
+                                     t ->
       {vectorized_axes, []} =
         Enum.map_reduce(canonical_vectorized_axes, current_axes, fn
           {k, _}, [] ->
@@ -4406,6 +4407,7 @@ defmodule Nx do
       |> devectorize()
       |> reshape(target_shape)
       |> revectorize_and_validate_sizes(canonical_vectorized_axes, true)
+      |> then(&rename(&1, names))
     end)
   end
 
@@ -10611,14 +10613,49 @@ defmodule Nx do
         ]
       >
 
+  ## Vectorized tensors
+
+  Because `outer/2` is built on top of other
+
+      iex> x = Nx.tensor([[1, 2, 3], [0, -1, -2]], names: [nil, :a]) |> Nx.vectorize(:x)
+      iex> y = Nx.tensor([[10, 20], [-10, -20]], names: [nil, :b]) |> Nx.vectorize(:y)
+      iex> Nx.outer(x, y)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 2]
+        s64[a: 3][b: 2]
+        [
+          [
+            [
+              [10, 20],
+              [20, 40],
+              [30, 60]
+            ],
+            [
+              [-10, -20],
+              [-20, -40],
+              [-30, -60]
+            ]
+          ],
+          [
+            [
+              [0, 0],
+              [-10, -20],
+              [-20, -40]
+            ],
+            [
+              [0, 0],
+              [10, 20],
+              [20, 40]
+            ]
+          ]
+        ]
+      >
+
   """
   @doc type: :ndim
   def outer(t1, t2) do
-    %{names: n1} = t1 = to_tensor(t1)
-    %{names: n2} = t2 = to_tensor(t2)
-
-    Nx.Shared.raise_vectorized_not_implemented_yet(t1, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(t2, __ENV__.function)
+    %T{names: n1} = t1 = to_tensor(t1)
+    %T{names: n2} = t2 = to_tensor(t2)
 
     names =
       case {n1, n2} do
