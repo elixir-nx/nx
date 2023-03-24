@@ -758,6 +758,12 @@ defmodule Nx do
     Nx.Type.infer(number)
   end
 
+  defp infer_type(%Nx.Tensor{} = value) do
+    raise ArgumentError,
+          "invalid value given to Nx.tensor/1. If you want to create a tensor from other tensors, " <>
+            "consider using Nx.concatenate/2 or Nx.stack/2 instead. Got: #{inspect(value)}"
+  end
+
   defp infer_type(value) do
     raise ArgumentError, "invalid value given to Nx.tensor/1, got: #{inspect(value)}"
   end
