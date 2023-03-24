@@ -1112,7 +1112,7 @@ defmodule NxTest do
 
   describe "pad/3" do
     test "raises for non-scalar pad value" do
-      assert_raise(ArgumentError, "padding value must be a scalar", fn ->
+      assert_raise(ArgumentError, "padding value must be a scalar and non-vectorized", fn ->
         Nx.pad(Nx.tensor(1), Nx.tensor([0]), [])
       end)
     end
