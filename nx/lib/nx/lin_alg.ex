@@ -915,6 +915,43 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> t = Nx.tensor([[[-3, 2, 1], [0, 1, 1], [0, 0, -1]],[[3, 2, 1], [0, 1, 1], [0, 0, 1]]]) |> Nx.vectorize(x: 2)
+      iex> {qs, rs} = Nx.LinAlg.qr(t)
+      iex> qs
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32[3][3]
+        [
+          [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0]
+          ],
+          [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0]
+          ]
+        ]
+      >
+      iex> rs
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32[3][3]
+        [
+          [
+            [-3.0, 2.0, 1.0],
+            [0.0, 1.0, 1.0],
+            [0.0, 0.0, -1.0]
+          ],
+          [
+            [3.0, 2.0, 1.0],
+            [0.0, 1.0, 1.0],
+            [0.0, 0.0, 1.0]
+          ]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.LinAlg.qr(Nx.tensor([[[1, 1, 1, 1], [-1, 4, 4, -1], [4, -2, 2, 0]]]))
@@ -928,37 +965,38 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) invalid :mode received. Expected one of [:reduced, :complete], received: :error_test
   """
   def qr(tensor, opts \\ []) do
-    opts = keyword!(opts, mode: :reduced, eps: 1.0e-10)
-    %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    apply_vectorized(tensor, fn tensor ->
+      opts = keyword!(opts, mode: :reduced, eps: 1.0e-10)
+      %T{type: type, shape: shape} = tensor
 
-    mode = opts[:mode]
-    valid_modes = [:reduced, :complete]
+      mode = opts[:mode]
+      valid_modes = [:reduced, :complete]
 
-    unless mode in valid_modes do
-      raise ArgumentError,
-            "invalid :mode received. Expected one of #{inspect(valid_modes)}, received: #{inspect(mode)}"
-    end
+      unless mode in valid_modes do
+        raise ArgumentError,
+              "invalid :mode received. Expected one of #{inspect(valid_modes)}, received: #{inspect(mode)}"
+      end
 
-    output_type = Nx.Type.to_floating(type)
-    {q_shape, r_shape} = Nx.Shape.qr(shape, opts)
+      output_type = Nx.Type.to_floating(type)
+      {q_shape, r_shape} = Nx.Shape.qr(shape, opts)
 
-    impl!(tensor).qr(
-      {%{
-         tensor
-         | type: output_type,
-           shape: q_shape,
-           names: List.duplicate(nil, tuple_size(q_shape))
-       },
-       %{
-         tensor
-         | type: output_type,
-           shape: r_shape,
-           names: List.duplicate(nil, tuple_size(r_shape))
-       }},
-      tensor,
-      opts
-    )
+      impl!(tensor).qr(
+        {%{
+           tensor
+           | type: output_type,
+             shape: q_shape,
+             names: List.duplicate(nil, tuple_size(q_shape))
+         },
+         %{
+           tensor
+           | type: output_type,
+             shape: r_shape,
+             names: List.duplicate(nil, tuple_size(r_shape))
+         }},
+        tensor,
+        opts
+      )
+    end)
   end
 
   @doc """
@@ -1150,6 +1188,33 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> t = Nx.tensor([[[2, 5],[5, 6]], [[1, 0], [0, 4]]]) |> Nx.vectorize(x: 2)
+      iex> {eigenvals, eigenvecs} = Nx.LinAlg.eigh(t)
+      iex> Nx.round(eigenvals)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32[2]
+        [
+          [9.0, -1.0],
+          [1.0, 4.0]
+        ]
+      >
+      iex> eigenvecs
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32[2][2]
+        [
+          [
+            [0.5612090229988098, -0.8276740908622742],
+            [0.8276740908622742, 0.5612090229988098]
+          ],
+          [
+            [1.0, 0.0],
+            [0.0, 1.0]
+          ]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
@@ -1159,24 +1224,25 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) matrix must be hermitian, a matrix is hermitian iff X = adjoint(X)
   """
   def eigh(tensor, opts \\ []) do
-    opts = keyword!(opts, max_iter: 1_000, eps: 1.0e-4)
-    %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    apply_vectorized(tensor, fn tensor ->
+      opts = keyword!(opts, max_iter: 1_000, eps: 1.0e-4)
+      %T{type: type, shape: shape} = tensor
 
-    output_type = Nx.Type.to_floating(type)
+      output_type = Nx.Type.to_floating(type)
 
-    {eigenvals_shape, eigenvecs_shape} = Nx.Shape.eigh(shape)
-    rank = tuple_size(shape)
+      {eigenvals_shape, eigenvecs_shape} = Nx.Shape.eigh(shape)
+      rank = tuple_size(shape)
 
-    eigenvecs_name = List.duplicate(nil, rank)
-    eigenvals_name = tl(eigenvecs_name)
+      eigenvecs_name = List.duplicate(nil, rank)
+      eigenvals_name = tl(eigenvecs_name)
 
-    impl!(tensor).eigh(
-      {%{tensor | names: eigenvals_name, type: output_type, shape: eigenvals_shape},
-       %{tensor | names: eigenvecs_name, type: output_type, shape: eigenvecs_shape}},
-      tensor,
-      opts
-    )
+      impl!(tensor).eigh(
+        {%{tensor | names: eigenvals_name, type: output_type, shape: eigenvals_shape},
+         %{tensor | names: eigenvecs_name, type: output_type, shape: eigenvecs_shape}},
+        tensor,
+        opts
+      )
+    end)
   end
 
   @doc """
@@ -1882,5 +1948,16 @@ defmodule Nx.LinAlg do
 
     # Calculate matrix rank
     Nx.sum(s > tol)
+  end
+
+  defp apply_vectorized(tensor, fun) when is_function(fun, 1) do
+    # same as Nx's apply_vectorized defp, but written in a "public-api" way!
+    %T{vectorized_axes: vectorized_axes} = tensor = Nx.to_tensor(tensor)
+
+    tensor
+    |> Nx.devectorize()
+    |> then(fun)
+    |> Nx.Container.traverse(nil, fn t, nil -> {Nx.vectorize(t, vectorized_axes), nil} end)
+    |> then(fn {res, nil} -> res end)
   end
 end
