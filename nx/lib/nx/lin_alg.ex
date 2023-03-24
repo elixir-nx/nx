@@ -528,6 +528,24 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> a = Nx.tensor([[[1, 1], [0, 1]], [[2, 0], [0, 2]]]) |> Nx.vectorize(x: 2)
+      iex> b = Nx.tensor([[[2, 1], [5, -1]]]) |> Nx.vectorize(x: 1, y: 2)
+      iex> Nx.LinAlg.triangular_solve(a, b, lower: false)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 2]
+        f32[2]
+        [
+          [
+            [1.0, 1.0],
+            [6.0, -1.0]
+          ],
+          [
+            [1.0, 0.5],
+            [2.5, -0.5]
+          ]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]))
@@ -550,11 +568,6 @@ defmodule Nx.LinAlg do
   """
   def triangular_solve(a, b, opts \\ []) do
     opts = keyword!(opts, lower: true, left_side: true, transform_a: :none)
-    output_type = binary_type(a, b) |> Nx.Type.to_floating()
-    %T{shape: a_shape} = a = Nx.to_tensor(a)
-    %T{shape: b_shape} = b = Nx.to_tensor(b)
-    Nx.Shared.raise_vectorized_not_implemented_yet(a, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(b, __ENV__.function)
 
     case opts[:transform_a] do
       t when t in [:none, :transpose] ->
@@ -569,9 +582,18 @@ defmodule Nx.LinAlg do
                 "got: #{inspect(t)}"
     end
 
-    :ok = Nx.Shape.triangular_solve(a_shape, b_shape, opts[:left_side])
+    [%T{vectorized_axes: vectorized_axes, shape: a_shape} = a, %T{shape: b_shape} = b] =
+      Nx.broadcast_vectors([a, b])
 
-    impl!(a, b).triangular_solve(%{b | type: output_type}, a, b, opts)
+    :ok = Nx.Shape.triangular_solve(a_shape, b_shape, opts[:left_side])
+    output_type = binary_type(a, b) |> Nx.Type.to_floating()
+
+    a = Nx.devectorize(a)
+    b = Nx.devectorize(b)
+
+    result = impl!(a, b).triangular_solve(%{b | type: output_type}, a, b, opts)
+
+    Nx.vectorize(result, vectorized_axes)
   end
 
   @doc """
