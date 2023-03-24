@@ -2258,13 +2258,12 @@ defmodule Nx do
   @doc type: :conversion
   def to_heatmap(tensor, opts \\ []) when is_list(opts) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     if tensor.shape == {} do
       raise ArgumentError, "cannot show heatmap for scalar tensors, got: #{inspect(tensor)}"
     end
 
-    %Nx.Heatmap{tensor: to_tensor(tensor), opts: opts}
+    %Nx.Heatmap{tensor: tensor, opts: opts}
   end
 
   ## Reflection operations (do not invoke the backend)

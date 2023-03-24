@@ -58,6 +58,23 @@ defmodule Nx.HeatmapTest do
              """
     end
 
+    test "vectorized 1 + rank 2" do
+      assert @tensor3 |> Nx.vectorize(:x) |> Nx.to_heatmap(ansi_enabled: false) |> inspect() ==
+               """
+               #Nx.Heatmap<
+                 vectorized[x: 2]
+                 s64[2][3]
+                 [
+                   024
+                   579,
+               \s\s\s\s
+                   024
+                   579
+                 ]
+               >\
+               """
+    end
+
     test "non-finite" do
       assert @non_finite |> Nx.to_heatmap(ansi_enabled: false) |> inspect() == """
              #Nx.Heatmap<
