@@ -4205,11 +4205,9 @@ defmodule Nx do
     new_shape = Tuple.delete_at(shape, 0)
     names = tl(names)
 
-    for axis_name <- names do
-      if axis_name == name do
-        raise ArgumentError,
-              "cannot use name #{inspect(name)} for vectorized axes because there's already an axis with the same name."
-      end
+    for ^name <- names do
+      raise ArgumentError,
+            "cannot use name #{inspect(name)} for vectorized axes because there's already an axis with the same name"
     end
 
     %Nx.Tensor{
