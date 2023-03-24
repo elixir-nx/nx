@@ -38,18 +38,33 @@ defmodule Nx.Heatmap do
     @mono256 @min_mono256..@max_mono256
 
     def inspect(%{tensor: tensor, opts: heatmap_opts}, opts) do
-      %{shape: shape, names: names, type: type} = tensor
+      %{shape: shape, names: names, type: type, vectorized_axes: vectorized_axes} = tensor
 
       open = color("[", :list, opts)
       sep = color(",", :list, opts)
       close = color("]", :list, opts)
 
-      data = data(tensor, heatmap_opts, opts, {open, sep, close})
+      data = data(Nx.devectorize(tensor), heatmap_opts, opts, {open, sep, close})
       type = color(Nx.Type.to_string(type), :atom, opts)
+
+      {vectorized_names, vectorized_sizes} = Enum.unzip(vectorized_axes)
+      vectorized_shape_tuple = List.to_tuple(vectorized_sizes)
+
+      vectorized_shape =
+        if vectorized_axes == [] do
+          empty()
+        else
+          concat([
+            "vectorized",
+            Nx.Shape.to_algebra(vectorized_shape_tuple, vectorized_names, open, close),
+            line()
+          ])
+        end
+
       shape = Nx.Shape.to_algebra(shape, names, open, close)
 
       color("#Nx.Heatmap<", :map, opts)
-      |> concat(nest(concat([line(), type, shape, line(), data]), 2))
+      |> concat(nest(concat([line(), vectorized_shape, type, shape, line(), data]), 2))
       |> concat(color("\n>", :map, opts))
     end
 
