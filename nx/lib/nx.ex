@@ -10721,7 +10721,7 @@ defmodule Nx do
 
       iex> u = Nx.tensor([[[1, 1]], [[2, 2]]]) |> Nx.vectorize(:x)
       iex> v = Nx.tensor([[[3], [3]], [[4], [4]]]) |> Nx.vectorize(:x)
-      iex> result = Nx.dot(u, [1], [], v, [0], []) # note that axes refer to the inner shapes
+      iex> Nx.dot(u, [1], [], v, [0], []) # note that axes refer to the inner shapes
       #Nx.Tensor<
         vectorized[x: 2]
         s64[1][1]
