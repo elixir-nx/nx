@@ -4570,17 +4570,9 @@ defmodule Nx do
   def broadcast_vectors([t]), do: t
 
   def broadcast_vectors(tensors) when is_list(tensors) do
-    {devectorized_tensors, canonical_vectorized_axes, offset} = do_reshape_vectors(tensors)
+    {devectorized_tensors, target_vectorized_axes, offset} = do_reshape_vectors(tensors)
 
-    target_vector_shape_l =
-      devectorized_tensors
-      |> Enum.map(&(&1.shape |> Tuple.to_list() |> Enum.take(offset)))
-      |> Enum.zip_with(&Enum.max/1)
-
-    target_vectorized_axes =
-      Enum.zip_with([canonical_vectorized_axes, target_vector_shape_l], fn [{k, _}, v] ->
-        {k, v}
-      end)
+    target_vector_shape_l = Keyword.values(target_vectorized_axes)
 
     devectorized_tensors
     |> Enum.map(fn t ->
