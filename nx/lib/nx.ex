@@ -4180,7 +4180,7 @@ defmodule Nx do
   The vectorization specification can be a list of atoms or `{atom, pos_integer}`
   pairs. If a single atom is given, it behaves as a single-element list.
   The atom names the vectorized axes. If a pair is given, we also verify
-  that the given size matches the size of the to-be-vectorized axis. 
+  that the given size matches the size of the to-be-vectorized axis.
 
   In the examples below, we discuss in more detail how a vectorized tensor works.
 
@@ -13463,12 +13463,20 @@ defmodule Nx do
           [0.25]
         ]
       >
+
+  ### Vectorized tensors
+
+      iex> Nx.variance(Nx.tensor([[1, 2], [0, 4]]) |> Nx.vectorize(:x))
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32
+        [0.25, 4.0]
+      >
   """
   @doc type: :aggregation
   @spec variance(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
   def variance(tensor, opts \\ []) do
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     opts = keyword!(opts, [:axes, ddof: 0, keep_axes: false])
     axes = opts[:axes]
     {ddof, opts} = Keyword.pop!(opts, :ddof)
@@ -13542,6 +13550,15 @@ defmodule Nx do
         [
           [7.628073215484619]
         ]
+      >
+
+  ### Vectorized tensors
+
+      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [0, 4]]) |> Nx.vectorize(:x))
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32
+        [0.5, 2.0]
       >
   """
   @doc type: :aggregation
