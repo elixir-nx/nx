@@ -12605,25 +12605,22 @@ defmodule Nx do
 
       [_ | _] = tensors ->
         [%T{vectorized_axes: vectorized_axes} | _] = tensors = broadcast_vectors(tensors)
-
         offset = length(vectorized_axes)
+        tensors = if vectorized_axes != [], do: Enum.map(tensors, &devectorize/1), else: tensors
 
-        [t1 | _] =
-          tensors = if vectorized_axes != [], do: Enum.map(tensors, &devectorize/1), else: tensors
-
-        {tensors, [type1 | rest], [s1 | _] = shapes, [n1 | _] = names} =
-          tensors
-          |> Enum.map(fn t ->
-            %T{type: type, shape: shape, names: names} = t
-            {t, type, shape, names}
+        {types, [s1 | _] = shapes, [n1 | _] = names} =
+          Enum.reduce(tensors, {[], [], []}, fn
+            %T{type: t, shape: s, names: n}, {types, shapes, names} ->
+              {[t | types], [s | shapes], [n | names]}
           end)
-          |> unzip4()
 
         axis = Nx.Shape.normalize_axis(s1, axis, n1, offset)
-        {output_shape, output_names} = Nx.Shape.concatenate(shapes, names, axis)
-        output_type = Enum.reduce(rest, type1, fn t1, t2 -> Nx.Type.merge(t1, t2) end)
+        output_type = Enum.reduce(types, fn t1, t2 -> Nx.Type.merge(t1, t2) end)
 
-        out = %{t1 | type: output_type, shape: output_shape, names: output_names}
+        {output_shape, output_names} =
+          Nx.Shape.concatenate(Enum.reverse(shapes), Enum.reverse(names), axis)
+
+        out = %{hd(tensors) | type: output_type, shape: output_shape, names: output_names}
         result = list_impl!(tensors).concatenate(out, tensors, axis)
         vectorize(result, vectorized_axes)
     end
@@ -12652,16 +12649,6 @@ defmodule Nx do
     container
     |> Nx.LazyContainer.traverse(acc, fn template, fun, acc -> {template, [fun.() | acc]} end)
     |> elem(1)
-  end
-
-  defp unzip4(enumerable) do
-    {list1, list2, list3, list4} =
-      Enum.reduce(enumerable, {[], [], [], []}, fn
-        {el1, el2, el3, el4}, {list1, list2, list3, list4} ->
-          {[el1 | list1], [el2 | list2], [el3 | list3], [el4 | list4]}
-      end)
-
-    {Enum.reverse(list1), Enum.reverse(list2), Enum.reverse(list3), Enum.reverse(list4)}
   end
 
   @doc """
