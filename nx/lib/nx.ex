@@ -13433,12 +13433,20 @@ defmodule Nx do
           [0.25]
         ]
       >
+
+  ### Vectorized tensors
+
+      iex> Nx.variance(Nx.tensor([[1, 2], [0, 4]]) |> Nx.vectorize(:x))
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32
+        [0.25, 4.0]
+      >
   """
   @doc type: :aggregation
   @spec variance(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
   def variance(tensor, opts \\ []) do
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     opts = keyword!(opts, [:axes, ddof: 0, keep_axes: false])
     axes = opts[:axes]
     {ddof, opts} = Keyword.pop!(opts, :ddof)
@@ -13512,6 +13520,15 @@ defmodule Nx do
         [
           [7.628073215484619]
         ]
+      >
+
+  ### Vectorized tensors
+
+      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [0, 4]]) |> Nx.vectorize(:x))
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32
+        [0.5, 2.0]
       >
   """
   @doc type: :aggregation
