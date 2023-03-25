@@ -6673,18 +6673,69 @@ defmodule Nx do
           [3, 0, 0, 0, 1]
         ]
       >
+
+  ## Vectorized tensors
+
+  The source and target tensors can be vectorized, and will be broadcasted
+  through `broadcast_vectors/1` for the result calculation. `init_value`
+  must not be vectorized.
+
+      iex> t = Nx.tensor([
+      ...>   [
+      ...>     [7, 2, 5, 1],
+      ...>     [3, 8, 9, 3]
+      ...>   ],
+      ...>   [
+      ...>     [1, 5, 7, 5],
+      ...>     [0, 6, 2, 8]
+      ...>   ]
+      ...> ]) |> Nx.vectorize(:x)
+      iex> opts = [strides: [1, 2], padding: :valid]
+      iex> source = Nx.tensor([[[2, 6]], [[3, 1]]]) |> Nx.vectorize(:y)
+      iex> Nx.window_scatter_min(t, source, 0, {2, 2}, opts)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 2]
+        s64[2][4]
+        [
+          [
+            [
+              [0, 2, 0, 6],
+              [0, 0, 0, 0]
+            ],
+            [
+              [0, 3, 0, 1],
+              [0, 0, 0, 0]
+            ]
+          ],
+          [
+            [
+              [0, 0, 0, 0],
+              [2, 0, 6, 0]
+            ],
+            [
+              [0, 0, 0, 0],
+              [3, 0, 1, 0]
+            ]
+          ]
+        ]
+      >
   """
   @doc type: :window
   def window_scatter_min(tensor, source, init_value, window_dimensions, opts \\ []) do
     opts = keyword!(opts, padding: :valid, strides: 1)
 
-    %T{shape: input_shape} = tensor = to_tensor(tensor)
-    %T{shape: source_shape, type: source_type} = source = to_tensor(source)
-    %T{type: value_type} = init_value = to_tensor(init_value)
+    [tensor, source] = broadcast_vectors([tensor, source])
+    %T{shape: input_shape, vectorized_axes: vectorized_axes} = tensor
+    %T{shape: source_shape, type: source_type} = source
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(source, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(init_value, __ENV__.function)
+    %T{type: value_type, vectorized_axes: value_vectorized_axes} =
+      init_value = to_tensor(init_value)
+
+    if value_vectorized_axes != [] do
+      raise ArgumentError, "the init_value tensor cannot be vectorized"
+    end
+
+    offset = length(vectorized_axes)
 
     padding = opts[:padding]
     strides = opts[:strides]
@@ -6706,15 +6757,31 @@ defmodule Nx do
     output_type = Nx.Type.merge(source_type, value_type)
     Nx.Shared.raise_complex_not_supported(output_type, :window_scatter_min, 5)
 
-    impl!(tensor, source).window_scatter_min(
-      %{tensor | type: output_type},
-      tensor,
-      source,
-      init_value,
-      window_dimensions,
-      padding: padding_config,
-      strides: strides
-    )
+    padding_config = List.duplicate({0, 0}, offset) ++ padding_config
+    strides = List.duplicate(1, offset) ++ strides
+
+    window_dimensions =
+      if offset != 0 do
+        List.to_tuple(List.duplicate(1, offset) ++ Tuple.to_list(window_dimensions))
+      else
+        window_dimensions
+      end
+
+    tensor = devectorize(tensor)
+    source = devectorize(source)
+
+    result =
+      impl!(tensor, source).window_scatter_min(
+        %{tensor | type: output_type},
+        tensor,
+        source,
+        init_value,
+        window_dimensions,
+        padding: padding_config,
+        strides: strides
+      )
+
+    vectorize(result, vectorized_axes)
   end
 
   @doc """
