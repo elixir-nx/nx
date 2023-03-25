@@ -4570,17 +4570,9 @@ defmodule Nx do
   def broadcast_vectors([t]), do: t
 
   def broadcast_vectors(tensors) when is_list(tensors) do
-    {devectorized_tensors, canonical_vectorized_axes, offset} = do_reshape_vectors(tensors)
+    {devectorized_tensors, target_vectorized_axes, offset} = do_reshape_vectors(tensors)
 
-    target_vector_shape_l =
-      devectorized_tensors
-      |> Enum.map(&(&1.shape |> Tuple.to_list() |> Enum.take(offset)))
-      |> Enum.zip_with(&Enum.max/1)
-
-    target_vectorized_axes =
-      Enum.zip_with([canonical_vectorized_axes, target_vector_shape_l], fn [{k, _}, v] ->
-        {k, v}
-      end)
+    target_vector_shape_l = Keyword.values(target_vectorized_axes)
 
     devectorized_tensors
     |> Enum.map(fn t ->
@@ -4600,18 +4592,14 @@ defmodule Nx do
     # This means that we can do a first pass accumulating axes into
     # the first tensor, and then a second pass getting them all into their final shapes.
 
-    [first | tensors] = Enum.map(input, &to_tensor/1)
-
-    %T{vectorized_axes: initial_vectorized_axes} = first
+    tensors = Enum.map(input, &to_tensor/1)
 
     # calculate the expected order for vectorized axes
-    canonical_vectorized_axes =
-      Enum.reduce(tensors, initial_vectorized_axes, &do_reshape_vectors_combine_vectorized_axes/2)
+    canonical_vectorized_axes = calculate_canonical_vectorized_axes(tensors)
 
     n = length(canonical_vectorized_axes)
 
-    devectorized_tensors =
-      do_reshape_vectors_devectorize([first | tensors], canonical_vectorized_axes, n)
+    devectorized_tensors = do_reshape_vectors_devectorize(tensors, canonical_vectorized_axes, n)
 
     {devectorized_tensors, canonical_vectorized_axes, n}
   end
@@ -4649,29 +4637,35 @@ defmodule Nx do
     end)
   end
 
-  defp do_reshape_vectors_combine_vectorized_axes(
-         %T{vectorized_axes: right_vectorized_axes},
-         left_vectorized_axes
-       ) do
-    {left_pairs, both_pairs, right_pairs} =
-      Enum.reduce(left_vectorized_axes, {[], [], right_vectorized_axes}, fn
-        {name, size}, {lefties, both, righties} ->
-          case List.keytake(righties, name, 0) do
-            {{^name, other_size}, righties}
-            when other_size == size or other_size == 1 or size == 1 ->
-              {lefties, [{name, size} | both], righties}
+  defp calculate_canonical_vectorized_axes(tensors) do
+    canonical_axes_reversed =
+      for %T{vectorized_axes: tensor_axes} <- tensors,
+          {axis_name, axis_size} <- tensor_axes,
+          reduce: [] do
+        canonical_axes ->
+          case List.keyfind(canonical_axes, axis_name, 0) do
+            {^axis_name, other_size}
+            when other_size == axis_size
+            when other_size == 1
+            when axis_size == 1 ->
+              List.keyreplace(
+                canonical_axes,
+                axis_name,
+                0,
+                {axis_name, Kernel.max(axis_size, other_size)}
+              )
 
-            {{^name, other_size}, _righties} ->
+            {^axis_name, other_size} ->
               raise ArgumentError,
-                    "expected vectorized axis #{inspect(name)} to have the same size in both tensors or to one of them to have size 1, got #{inspect(size)} and #{inspect(other_size)}"
+                    "expected vectorized axis #{inspect(axis_name)} to have the same size in both tensors or to one of them to have size 1, got #{inspect(axis_size)} and #{inspect(other_size)}"
 
             nil ->
-              {[{name, size} | lefties], both, righties}
+              # accumulate in reverse order first, reverse in the end
+              [{axis_name, axis_size} | canonical_axes]
           end
-      end)
+      end
 
-    Enum.reverse(left_pairs) ++
-      Enum.reverse(both_pairs) ++ Enum.map(right_pairs, fn {k, _} -> {k, 1} end)
+    Enum.reverse(canonical_axes_reversed)
   end
 
   defp devectorize_with_axes(tensor) do
@@ -12551,6 +12545,31 @@ defmodule Nx do
         [1, 2, 3, 4, 5, 6]
       >
 
+  ## Vectorized tensors
+
+  If vectorized tensors are given, they are all broadcasted throughout the
+  vectorized axes before concatenation. Normal concatenation rules still apply
+  to the inner shapes.
+
+      iex> x = Nx.tensor([[1, 2]]) |> Nx.vectorize(:x)
+      iex> y = Nx.tensor([[3, 4], [5, 6]]) |> Nx.vectorize(:y)
+      iex> z = Nx.tensor([[10], [11]]) |> Nx.vectorize(:x)
+      iex> Nx.concatenate({x, y, z})
+      #Nx.Tensor<
+        vectorized[x: 2][y: 2]
+        s64[5]
+        [
+          [
+            [1, 2, 3, 4, 10],
+            [1, 2, 5, 6, 10]
+          ],
+          [
+            [1, 2, 3, 4, 11],
+            [1, 2, 5, 6, 11]
+          ]
+        ]
+      >
+
   ## Error cases
 
   Shapes must have the same rank and match on the non-concatenating axis.
@@ -12584,22 +12603,29 @@ defmodule Nx do
       [t] ->
         t
 
-      [t1 | _] = tensors ->
+      [_ | _] = tensors ->
+        [%T{vectorized_axes: vectorized_axes} | _] = tensors = broadcast_vectors(tensors)
+
+        offset = length(vectorized_axes)
+
+        [t1 | _] =
+          tensors = if vectorized_axes != [], do: Enum.map(tensors, &devectorize/1), else: tensors
+
         {tensors, [type1 | rest], [s1 | _] = shapes, [n1 | _] = names} =
           tensors
           |> Enum.map(fn t ->
-            %T{type: type, shape: shape, names: names} = t = to_tensor(t)
-            Nx.Shared.raise_vectorized_not_implemented_yet(t, __ENV__.function)
+            %T{type: type, shape: shape, names: names} = t
             {t, type, shape, names}
           end)
           |> unzip4()
 
-        axis = Nx.Shape.normalize_axis(s1, axis, n1)
+        axis = Nx.Shape.normalize_axis(s1, axis, n1, offset)
         {output_shape, output_names} = Nx.Shape.concatenate(shapes, names, axis)
         output_type = Enum.reduce(rest, type1, fn t1, t2 -> Nx.Type.merge(t1, t2) end)
 
         out = %{t1 | type: output_type, shape: output_shape, names: output_names}
-        list_impl!(tensors).concatenate(out, tensors, axis)
+        result = list_impl!(tensors).concatenate(out, tensors, axis)
+        vectorize(result, vectorized_axes)
     end
   end
 
