@@ -4177,8 +4177,10 @@ defmodule Nx do
   Each vectorization removes the leading axes from the shape and appends them to
   the `:vectorized_axes` list for the tensor.
 
-  The vectorization specification can be a list of `t:atom()` or `{t:atom(), t:pos_integer()}`,
-  or a single atom, which will behave the same as a single-element list.
+  The vectorization specification can be a list of atoms or `{atom, pos_integer}`
+  pairs. If a single atom is given, it behaves as a single-element list.
+  The atom names the vectorized axes. If a pair is given, we also verify
+  that the given size matches the size of the to-be-vectorized axis. 
 
   In the examples below, we discuss in more detail how a vectorized tensor works.
 
@@ -4208,10 +4210,9 @@ defmodule Nx do
         ]
       >
 
-  This can also be written in similar ways with list inputs.
-
-  The first way below doesn't validate sizes.
-  The second way, ensures that the second axis has size `3`.
+  You can also vectorize multiple axes at once by passing a list,
+  as seen in the examples below. The first example doesn't validate
+  sizes. The second ensures the second axis has size `3`.
 
       iex> t = Nx.iota({2, 3})
       iex> v1 = Nx.vectorize(t, [:first, :second])
