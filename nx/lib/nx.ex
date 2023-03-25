@@ -7734,14 +7734,51 @@ defmodule Nx do
 
   ### Vectorized tensors
 
-      iex> t = Nx.vectorize(Nx.tensor([[1, 2], [3, 4]]), :x)
-      iex> Nx.sum(t, axes: [0], keep_axes: true)
+      iex> t = Nx.tensor([[[[1, 2]], [[3, 4]]], [[[5, 6]], [[7, 8]]]]) |> Nx.vectorize(:x) |> Nx.vectorize(:y)
       #Nx.Tensor<
-        vectorized[x: 2]
-        s64[1]
+        vectorized[x: 2][y: 2]
+        s64[1][2]
         [
-          [3],
-          [7]
+          [
+            [
+              [1, 2]
+            ],
+            [
+              [3, 4]
+            ]
+          ],
+          [
+            [
+              [5, 6]
+            ],
+            [
+              [7, 8]
+            ]
+          ]
+        ]
+      >
+      iex> Nx.sum(t)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 2]
+        s64
+        [
+          [3, 7],
+          [11, 15]
+        ]
+      >
+      iex> Nx.sum(t, axes: [0])
+      #Nx.Tensor<
+        vectorized[x: 2][y: 2]
+        s64[2]
+        [
+          [
+            [1, 2],
+            [3, 4]
+          ],
+          [
+            [5, 6],
+            [7, 8]
+          ]
         ]
       >
 
@@ -7845,11 +7882,38 @@ defmodule Nx do
         ]
       >
 
+  ## Vectorized tensors
+
+      iex> t = Nx.iota({2, 5}, vectorized_axes: [x: 2])
+      iex> Nx.mean(t)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32
+        [4.5, 4.5]
+      >
+      iex> Nx.mean(t, axes: [0])
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32[5]
+        [
+          [2.5, 3.5, 4.5, 5.5, 6.5],
+          [2.5, 3.5, 4.5, 5.5, 6.5]
+        ]
+      >
+      iex> Nx.mean(t, axes: [1])
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32[2]
+        [
+          [2.0, 7.0],
+          [2.0, 7.0]
+        ]
+      >
+
   """
   @doc type: :aggregation, from_backend: false
   def mean(tensor, opts \\ []) do
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     mean_den =
       if axes = opts[:axes] do
@@ -7945,15 +8009,43 @@ defmodule Nx do
           ]
         ]
       >
+
+  ### Vectorized tensors
+
+      iex> t = Nx.tensor([[1, 2, 3], [1, 1, 1]]) |> Nx.vectorize(:x)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[3]
+        [
+          [1, 2, 3],
+          [1, 1, 1]
+        ]
+      >
+      iex> w = Nx.tensor([[1, 1, 1], [0, 0, 1]]) |> Nx.vectorize(:y)
+      #Nx.Tensor<
+        vectorized[y: 2]
+        s64[3]
+        [
+          [1, 1, 1],
+          [0, 0, 1]
+        ]
+      >
+      iex> Nx.weighted_mean(t, w)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 2]
+        f32
+        [
+          [2.0, 3.0],
+          [1.0, 1.0]
+        ]
+      >
+
   """
   @doc type: :aggregation, from_backend: false
   def weighted_mean(tensor, weights, opts \\ []) do
     opts = keyword!(opts, [:axes, keep_axes: false])
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
     %T{shape: weights_shape} = weights = to_tensor(weights)
-
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(weights, __ENV__.function)
 
     axes =
       if opts[:axes] do
@@ -8636,9 +8728,11 @@ defmodule Nx do
       opts = keyword!(opts, [:axes, keep_axes: false])
       keep_axes = opts[:keep_axes]
 
+      axes = opts[:axes]
+
       {shape, names, axes} =
         cond do
-          axes = opts[:axes] ->
+          not is_nil(axes) ->
             axes = Nx.Shape.normalize_axes(shape, axes, names, offset)
             {new_shape, new_names} = Nx.Shape.contract(shape, axes, names, keep_axes)
             {new_shape, new_names, axes}
@@ -8656,7 +8750,7 @@ defmodule Nx do
               end)
               |> List.to_tuple()
 
-            {output_shape, names, count_up(tuple_size(shape), offset)}
+            {output_shape, names, count_up(tuple_size(shape) - offset, offset)}
 
           true ->
             output_shape =
@@ -8667,7 +8761,7 @@ defmodule Nx do
 
             axes =
               if offset != 0 do
-                count_up(tuple_size(shape), offset)
+                count_up(tuple_size(shape) - offset, offset)
               end
 
             {output_shape, List.duplicate(nil, offset), axes}
@@ -8995,7 +9089,7 @@ defmodule Nx do
             {new_shape, new_names} =
               Nx.Shape.contract(
                 shape,
-                count_up(tuple_size(shape), offset),
+                count_up(tuple_size(shape) - offset, offset),
                 names,
                 opts[:keep_axis]
               )
