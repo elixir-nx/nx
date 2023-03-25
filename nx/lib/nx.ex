@@ -3937,8 +3937,8 @@ defmodule Nx do
   def names(%T{names: names}), do: names
   def names(a) when is_number(a), do: []
 
-  def count_up(0, _n), do: []
-  def count_up(i, n), do: [n | count_up(i - 1, n + 1)]
+  defp count_up(0, _n), do: []
+  defp count_up(i, n), do: [n | count_up(i - 1, n + 1)]
 
   ## Backend API
 
