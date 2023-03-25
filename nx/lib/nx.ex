@@ -4174,8 +4174,13 @@ defmodule Nx do
   @doc """
   Transforms a tensor into a vectorized tensor.
 
-  Each vectorization removes the leading axis from the shape and appends it to
-  `:vectorized_axes` list for the tensor.
+  Each vectorization removes the leading axes from the shape and appends them to
+  the `:vectorized_axes` list for the tensor.
+
+  The vectorization specification can be a list of atoms or `{atom, pos_integer}`
+  pairs. If a single atom is given, it behaves as a single-element list.
+  The atom names the vectorized axes. If a pair is given, we also verify
+  that the given size matches the size of the to-be-vectorized axis. 
 
   In the examples below, we discuss in more detail how a vectorized tensor works.
 
@@ -4204,6 +4209,24 @@ defmodule Nx do
           [3, 4, 5]
         ]
       >
+
+  You can also vectorize multiple axes at once by passing a list,
+  as seen in the examples below. The first example doesn't validate
+  sizes. The second ensures the second axis has size `3`.
+
+      iex> t = Nx.iota({2, 3})
+      iex> v1 = Nx.vectorize(t, [:first, :second])
+      #Nx.Tensor<
+        vectorized[first: 2][second: 3]
+        s64
+        [
+          [0, 1, 2],
+          [3, 4, 5]
+        ]
+      >
+      iex> v2 = Nx.vectorize(t, [:first, second: 3])
+      iex> v1 == v2
+      true
 
   A vectorized tensor can be thought of as a tensor that signals
   to Nx that any operation applied on it must instead be applied
@@ -4259,33 +4282,94 @@ defmodule Nx do
           [1, 2]
         ]
       >
+
+  ## Error cases
+
+      iex> Nx.vectorize(Nx.tensor(1), :x)
+      ** (ArgumentError) cannot vectorize tensor of rank 0
+
+      iex> Nx.vectorize(Nx.tensor([1]), [:x, :y])
+      ** (ArgumentError) number of vectorized axes must not be greater than the shape size
+
+      iex> Nx.vectorize(Nx.tensor([1]), [x: 2])
+      ** (ArgumentError) expected vectorized axis :x to have size 2, got 1
+
+      iex> Nx.vectorize(Nx.tensor([[1]]), [:x, "y"])
+      ** (ArgumentError) expected vectorized axis specification to be an atom or a tuple of {atom, pos_integer}, got: "y"
+
+      iex> Nx.vectorize(Nx.tensor([[1]], names: [:x, :y]), [:y])
+      ** (ArgumentError) cannot use name :y for new vectorized axes because there's already an axis with the same name
+
+      iex> t = Nx.vectorize(Nx.tensor([[1]]), :x)
+      iex> Nx.vectorize(t, :x)
+      ** (ArgumentError) cannot use name :x for new vectorized axes because there's already a vectorized axis with the same name
   """
   @doc type: :shape
-  def vectorize(tensor, name)
+  @spec vectorize(
+          tensor :: Nx.Tensor.t(),
+          name_or_axes :: atom() | [atom() | {atom(), pos_integer()}]
+        ) ::
+          Nx.Tensor.t()
+  def vectorize(tensor, name_or_axes)
 
-  def vectorize(_tensor, name) when not is_atom(name) do
-    raise ArgumentError, "name for new vectorized axis must be an atom, got: #{inspect(name)}"
-  end
+  def vectorize(%Nx.Tensor{shape: {}} = tensor, []), do: tensor
 
   def vectorize(%Nx.Tensor{shape: {}}, _name) do
     raise ArgumentError, "cannot vectorize tensor of rank 0"
   end
 
-  def vectorize(%Nx.Tensor{names: names, shape: shape, vectorized_axes: vec_axes} = tensor, name) do
-    size = elem(shape, 0)
-    new_shape = Tuple.delete_at(shape, 0)
-    names = tl(names)
+  def vectorize(%Nx.Tensor{} = t, name) when is_atom(name), do: vectorize(t, [name])
 
-    for ^name <- names do
-      raise ArgumentError,
-            "cannot use name #{inspect(name)} for vectorized axes because there's already an axis with the same name"
+  def vectorize(
+        %Nx.Tensor{names: names, shape: shape, vectorized_axes: vec_axes} = tensor,
+        vector_spec
+      ) do
+    n = length(vector_spec)
+
+    if n > tuple_size(shape) do
+      raise ArgumentError, "number of vectorized axes must not be greater than the shape size"
     end
+
+    shape_l = Tuple.to_list(shape)
+
+    {to_vectorize_shape_l, new_shape_l} = Enum.split(shape_l, n)
+
+    new_vectorized_axes =
+      Enum.zip_with([vector_spec, to_vectorize_shape_l], fn
+        [name, size] when is_atom(name) ->
+          {name, size}
+
+        [{name, size}, size] when is_atom(name) ->
+          {name, size}
+
+        [{name, other_size}, size] when is_atom(name) and is_integer(other_size) ->
+          raise ArgumentError,
+                "expected vectorized axis #{inspect(name)} to have size #{other_size}, got #{size}"
+
+        [spec, _] ->
+          raise ArgumentError,
+                "expected vectorized axis specification to be an atom or a tuple of {atom, pos_integer}, got: #{inspect(spec)}"
+      end)
+
+    names = Enum.drop(names, n)
+
+    for name <- names, {new_axis_name, _} <- new_vectorized_axes, name == new_axis_name do
+      raise ArgumentError,
+            "cannot use name #{inspect(name)} for new vectorized axes because there's already an axis with the same name"
+    end
+
+    for {name, _} <- vec_axes, {new_axis_name, _} <- new_vectorized_axes, name == new_axis_name do
+      raise ArgumentError,
+            "cannot use name #{inspect(name)} for new vectorized axes because there's already a vectorized axis with the same name"
+    end
+
+    vectorized_axes = vec_axes ++ new_vectorized_axes
 
     %Nx.Tensor{
       tensor
-      | shape: new_shape,
+      | shape: List.to_tuple(new_shape_l),
         names: names,
-        vectorized_axes: vec_axes ++ [{name, size}]
+        vectorized_axes: vectorized_axes
     }
   end
 

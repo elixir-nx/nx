@@ -120,21 +120,39 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> t = Nx.tensor([[[2.0, 3.0], [3.0, 5.0]], [[1.0, 0.0], [0.0, 1.0]]]) |> Nx.vectorize(x: 2)
+      iex> Nx.LinAlg.cholesky(t)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32[2][2]
+        [
+          [
+            [1.4142135381698608, 0.0],
+            [2.1213202476501465, 0.7071067690849304]
+          ],
+          [
+            [1.0, 0.0],
+            [0.0, 1.0]
+          ]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.LinAlg.cholesky(Nx.tensor([[1.0, 2.0], [3.0, 4.0]]))
       ** (ArgumentError) matrix must be hermitian, a matrix is hermitian iff X = adjoint(X)
   """
   def cholesky(tensor) do
-    %T{type: type, shape: shape, names: names} = tensor = Nx.to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    apply_vectorized(tensor, fn tensor ->
+      %T{type: type, shape: shape, names: names} = tensor
 
-    output_type = Nx.Type.to_floating(type)
+      output_type = Nx.Type.to_floating(type)
 
-    {output_shape, output_names} = Nx.Shape.cholesky(shape, names)
+      {output_shape, output_names} = Nx.Shape.cholesky(shape, names)
 
-    out = %{tensor | type: output_type, shape: output_shape, names: output_names}
-    impl!(tensor).cholesky(out, tensor)
+      out = %{tensor | type: output_type, shape: output_shape, names: output_names}
+      impl!(tensor).cholesky(out, tensor)
+    end)
   end
 
   @doc """
@@ -510,6 +528,24 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> a = Nx.tensor([[[1, 1], [0, 1]], [[2, 0], [0, 2]]]) |> Nx.vectorize(x: 2)
+      iex> b = Nx.tensor([[[2, 1], [5, -1]]]) |> Nx.vectorize(x: 1, y: 2)
+      iex> Nx.LinAlg.triangular_solve(a, b, lower: false)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 2]
+        f32[2]
+        [
+          [
+            [1.0, 1.0],
+            [6.0, -1.0]
+          ],
+          [
+            [1.0, 0.5],
+            [2.5, -0.5]
+          ]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]))
@@ -532,11 +568,6 @@ defmodule Nx.LinAlg do
   """
   def triangular_solve(a, b, opts \\ []) do
     opts = keyword!(opts, lower: true, left_side: true, transform_a: :none)
-    output_type = binary_type(a, b) |> Nx.Type.to_floating()
-    %T{shape: a_shape} = a = Nx.to_tensor(a)
-    %T{shape: b_shape} = b = Nx.to_tensor(b)
-    Nx.Shared.raise_vectorized_not_implemented_yet(a, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(b, __ENV__.function)
 
     case opts[:transform_a] do
       t when t in [:none, :transpose] ->
@@ -551,9 +582,18 @@ defmodule Nx.LinAlg do
                 "got: #{inspect(t)}"
     end
 
-    :ok = Nx.Shape.triangular_solve(a_shape, b_shape, opts[:left_side])
+    [%T{vectorized_axes: vectorized_axes, shape: a_shape} = a, %T{shape: b_shape} = b] =
+      Nx.broadcast_vectors([a, b])
 
-    impl!(a, b).triangular_solve(%{b | type: output_type}, a, b, opts)
+    :ok = Nx.Shape.triangular_solve(a_shape, b_shape, opts[:left_side])
+    output_type = binary_type(a, b) |> Nx.Type.to_floating()
+
+    a = Nx.devectorize(a)
+    b = Nx.devectorize(b)
+
+    result = impl!(a, b).triangular_solve(%{b | type: output_type}, a, b, opts)
+
+    Nx.vectorize(result, vectorized_axes)
   end
 
   @doc """
@@ -607,6 +647,24 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> a = Nx.tensor([[[1, 1], [0, 1]], [[2, 0], [0, 2]]]) |> Nx.vectorize(x: 2)
+      iex> b = Nx.tensor([[[2, 1], [5, -1]]]) |> Nx.vectorize(x: 1, y: 2)
+      iex> Nx.LinAlg.solve(a, b)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 2]
+        f32[2]
+        [
+          [
+            [1.0, 1.0],
+            [6.0, -1.0]
+          ],
+          [
+            [1.0, 0.5],
+            [2.5, -0.5]
+          ]
+        ]
+      >
+
   If the axes are named, their names are not preserved in the output:
 
       iex> a = Nx.tensor([[1, 0, 1], [1, 1, 0], [1, 1, 1]], names: [:x, :y])
@@ -628,28 +686,34 @@ defmodule Nx.LinAlg do
   # optional needs to work on the actual backend.
   @doc from_backend: false
   def solve(a, b) do
-    %T{shape: a_shape, type: a_type} = a = Nx.to_tensor(a)
-    %T{shape: b_shape, type: b_type} = b = Nx.to_tensor(b)
-    Nx.Shared.raise_vectorized_not_implemented_yet(a, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(b, __ENV__.function)
+    [%T{vectorized_axes: vectorized_axes} = a, b] = Nx.broadcast_vectors([a, b])
+
+    a = Nx.devectorize(a)
+    b = Nx.devectorize(b)
+
+    %T{shape: a_shape, type: a_type} = a
+    %T{shape: b_shape, type: b_type} = b
 
     output_shape = Nx.Shape.solve(a_shape, b_shape)
     output_type = a_type |> Nx.Type.merge(b_type) |> Nx.Type.to_floating()
     output = Nx.template(output_shape, output_type)
 
-    Nx.Shared.optional(:solve, [a, b], output, fn a, b ->
-      # Since we have triangular solve, which accepts upper
-      # triangular matrices with the `lower: false` option,
-      # we can solve a system as follows:
+    result =
+      Nx.Shared.optional(:solve, [a, b], output, fn a, b ->
+        # Since we have triangular solve, which accepts upper
+        # triangular matrices with the `lower: false` option,
+        # we can solve a system as follows:
 
-      # A.X = B -> QR.X = B -> R.X = adjoint(Q).B
+        # A.X = B -> QR.X = B -> R.X = adjoint(Q).B
 
-      {q, r} = Nx.LinAlg.qr(a)
-      q_rank = Nx.rank(q)
-      batches = Enum.to_list(0..(q_rank - 3)//1)
-      qb = Nx.dot(adjoint(q), [q_rank - 1], batches, b, [q_rank - 2], batches)
-      triangular_solve(r, qb, lower: false)
-    end)
+        {q, r} = Nx.LinAlg.qr(a)
+        q_rank = Nx.rank(q)
+        batches = Enum.to_list(0..(q_rank - 3)//1)
+        qb = Nx.dot(adjoint(q), [q_rank - 1], batches, b, [q_rank - 2], batches)
+        triangular_solve(r, qb, lower: false)
+      end)
+
+    Nx.vectorize(result, vectorized_axes)
   end
 
   @doc """
@@ -915,6 +979,43 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> t = Nx.tensor([[[-3, 2, 1], [0, 1, 1], [0, 0, -1]],[[3, 2, 1], [0, 1, 1], [0, 0, 1]]]) |> Nx.vectorize(x: 2)
+      iex> {qs, rs} = Nx.LinAlg.qr(t)
+      iex> qs
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32[3][3]
+        [
+          [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0]
+          ],
+          [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0]
+          ]
+        ]
+      >
+      iex> rs
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32[3][3]
+        [
+          [
+            [-3.0, 2.0, 1.0],
+            [0.0, 1.0, 1.0],
+            [0.0, 0.0, -1.0]
+          ],
+          [
+            [3.0, 2.0, 1.0],
+            [0.0, 1.0, 1.0],
+            [0.0, 0.0, 1.0]
+          ]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.LinAlg.qr(Nx.tensor([[[1, 1, 1, 1], [-1, 4, 4, -1], [4, -2, 2, 0]]]))
@@ -928,37 +1029,38 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) invalid :mode received. Expected one of [:reduced, :complete], received: :error_test
   """
   def qr(tensor, opts \\ []) do
-    opts = keyword!(opts, mode: :reduced, eps: 1.0e-10)
-    %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    apply_vectorized(tensor, fn tensor ->
+      opts = keyword!(opts, mode: :reduced, eps: 1.0e-10)
+      %T{type: type, shape: shape} = tensor
 
-    mode = opts[:mode]
-    valid_modes = [:reduced, :complete]
+      mode = opts[:mode]
+      valid_modes = [:reduced, :complete]
 
-    unless mode in valid_modes do
-      raise ArgumentError,
-            "invalid :mode received. Expected one of #{inspect(valid_modes)}, received: #{inspect(mode)}"
-    end
+      unless mode in valid_modes do
+        raise ArgumentError,
+              "invalid :mode received. Expected one of #{inspect(valid_modes)}, received: #{inspect(mode)}"
+      end
 
-    output_type = Nx.Type.to_floating(type)
-    {q_shape, r_shape} = Nx.Shape.qr(shape, opts)
+      output_type = Nx.Type.to_floating(type)
+      {q_shape, r_shape} = Nx.Shape.qr(shape, opts)
 
-    impl!(tensor).qr(
-      {%{
-         tensor
-         | type: output_type,
-           shape: q_shape,
-           names: List.duplicate(nil, tuple_size(q_shape))
-       },
-       %{
-         tensor
-         | type: output_type,
-           shape: r_shape,
-           names: List.duplicate(nil, tuple_size(r_shape))
-       }},
-      tensor,
-      opts
-    )
+      impl!(tensor).qr(
+        {%{
+           tensor
+           | type: output_type,
+             shape: q_shape,
+             names: List.duplicate(nil, tuple_size(q_shape))
+         },
+         %{
+           tensor
+           | type: output_type,
+             shape: r_shape,
+             names: List.duplicate(nil, tuple_size(r_shape))
+         }},
+        tensor,
+        opts
+      )
+    end)
   end
 
   @doc """
@@ -1150,6 +1252,33 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> t = Nx.tensor([[[2, 5],[5, 6]], [[1, 0], [0, 4]]]) |> Nx.vectorize(x: 2)
+      iex> {eigenvals, eigenvecs} = Nx.LinAlg.eigh(t)
+      iex> Nx.round(eigenvals)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32[2]
+        [
+          [9.0, -1.0],
+          [1.0, 4.0]
+        ]
+      >
+      iex> eigenvecs
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32[2][2]
+        [
+          [
+            [0.5612090229988098, -0.8276740908622742],
+            [0.8276740908622742, 0.5612090229988098]
+          ],
+          [
+            [1.0, 0.0],
+            [0.0, 1.0]
+          ]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
@@ -1159,24 +1288,25 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) matrix must be hermitian, a matrix is hermitian iff X = adjoint(X)
   """
   def eigh(tensor, opts \\ []) do
-    opts = keyword!(opts, max_iter: 1_000, eps: 1.0e-4)
-    %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    apply_vectorized(tensor, fn tensor ->
+      opts = keyword!(opts, max_iter: 1_000, eps: 1.0e-4)
+      %T{type: type, shape: shape} = tensor
 
-    output_type = Nx.Type.to_floating(type)
+      output_type = Nx.Type.to_floating(type)
 
-    {eigenvals_shape, eigenvecs_shape} = Nx.Shape.eigh(shape)
-    rank = tuple_size(shape)
+      {eigenvals_shape, eigenvecs_shape} = Nx.Shape.eigh(shape)
+      rank = tuple_size(shape)
 
-    eigenvecs_name = List.duplicate(nil, rank)
-    eigenvals_name = tl(eigenvecs_name)
+      eigenvecs_name = List.duplicate(nil, rank)
+      eigenvals_name = tl(eigenvecs_name)
 
-    impl!(tensor).eigh(
-      {%{tensor | names: eigenvals_name, type: output_type, shape: eigenvals_shape},
-       %{tensor | names: eigenvecs_name, type: output_type, shape: eigenvecs_shape}},
-      tensor,
-      opts
-    )
+      impl!(tensor).eigh(
+        {%{tensor | names: eigenvals_name, type: output_type, shape: eigenvals_shape},
+         %{tensor | names: eigenvecs_name, type: output_type, shape: eigenvecs_shape}},
+        tensor,
+        opts
+      )
+    end)
   end
 
   @doc """
@@ -1446,27 +1576,82 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> t = Nx.tensor([[[9, 8, 7], [6, 5, 4], [3, 2, 1]], [[-1, 0, -1], [1, 0, 1], [1, 1, 1]]]) |> Nx.vectorize(x: 2)
+      iex> {p, l, u} = Nx.LinAlg.lu(t)
+      iex> p
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[3][3]
+        [
+          [
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1]
+          ],
+          [
+            [1, 0, 0],
+            [0, 0, 1],
+            [0, 1, 0]
+          ]
+        ]
+      >
+      iex> l
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32[3][3]
+        [
+          [
+            [1.0, 0.0, 0.0],
+            [0.6666666865348816, 1.0, 0.0],
+            [0.3333333432674408, 2.0, 1.0]
+          ],
+          [
+            [1.0, 0.0, 0.0],
+            [-1.0, 1.0, 0.0],
+            [-1.0, 0.0, 1.0]
+          ]
+        ]
+      >
+      iex> u
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32[3][3]
+        [
+          [
+            [9.0, 8.0, 7.0],
+            [0.0, -0.3333333432674408, -0.6666666865348816],
+            [0.0, 0.0, 0.0]
+          ],
+          [
+            [-1.0, 0.0, -1.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0]
+          ]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.LinAlg.lu(Nx.tensor([[1, 1, 1, 1], [-1, 4, 4, -1], [4, -2, 2, 0]]))
       ** (ArgumentError) tensor must be a square matrix or a batch of square matrices, got shape: {3, 4}
   """
   def lu(tensor, opts \\ []) do
-    opts = keyword!(opts, eps: 1.0e-10)
-    %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    apply_vectorized(tensor, fn tensor ->
+      opts = keyword!(opts, eps: 1.0e-10)
+      %T{type: type, shape: shape} = tensor
 
-    output_type = Nx.Type.to_floating(type)
-    {p_shape, l_shape, u_shape} = Nx.Shape.lu(shape)
-    names = List.duplicate(nil, tuple_size(shape))
+      output_type = Nx.Type.to_floating(type)
+      {p_shape, l_shape, u_shape} = Nx.Shape.lu(shape)
+      names = List.duplicate(nil, tuple_size(shape))
 
-    impl!(tensor).lu(
-      {%{tensor | type: type, shape: p_shape, names: names},
-       %{tensor | type: output_type, shape: l_shape, names: names},
-       %{tensor | type: output_type, shape: u_shape, names: names}},
-      tensor,
-      opts
-    )
+      impl!(tensor).lu(
+        {%{tensor | type: type, shape: p_shape, names: names},
+         %{tensor | type: output_type, shape: l_shape, names: names},
+         %{tensor | type: output_type, shape: u_shape, names: names}},
+        tensor,
+        opts
+      )
+    end)
   end
 
   @doc """
@@ -1658,6 +1843,14 @@ defmodule Nx.LinAlg do
         [630.0, 630.0]
       >
 
+      iex> t = Nx.tensor([[[1, 0], [0, 2]], [[3, 0], [0, 4]]]) |> Nx.vectorize(x: 2)
+      iex> Nx.LinAlg.determinant(t)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32
+        [2.0, 12.0]
+      >
+
   If the axes are named, their names are not preserved in the output:
 
       iex> two_by_two = Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
@@ -1694,32 +1887,32 @@ defmodule Nx.LinAlg do
   # IMPORTANT: This function cannot be a defn because
   # optional needs to work on the actual backend.
   def determinant(tensor) do
-    tensor = Nx.to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    shape = Nx.shape(tensor)
-    {batch_shape, matrix_shape} = shape |> Tuple.to_list() |> Enum.split(-2)
-    output = Nx.template(List.to_tuple(batch_shape), Nx.Type.to_floating(tensor.type))
+    apply_vectorized(tensor, fn tensor ->
+      shape = Nx.shape(tensor)
+      {batch_shape, matrix_shape} = shape |> Tuple.to_list() |> Enum.split(-2)
+      output = Nx.template(List.to_tuple(batch_shape), Nx.Type.to_floating(tensor.type))
 
-    case matrix_shape do
-      [n, n] ->
-        :ok
-
-      shape ->
-        raise ArgumentError,
-              "determinant/1 expects a square tensor, got tensor with shape: #{inspect(shape)}"
-    end
-
-    Nx.Shared.optional(:determinant, [tensor], output, fn tensor ->
       case matrix_shape do
-        [2, 2] ->
-          determinant_2by2(tensor)
-
-        [3, 3] ->
-          determinant_3by3(tensor)
-
         [n, n] ->
-          determinant_NbyN(tensor, batch_shape_n: List.to_tuple(batch_shape ++ [n]))
+          :ok
+
+        shape ->
+          raise ArgumentError,
+                "determinant/1 expects a square tensor, got tensor with shape: #{inspect(shape)}"
       end
+
+      Nx.Shared.optional(:determinant, [tensor], output, fn tensor ->
+        case matrix_shape do
+          [2, 2] ->
+            determinant_2by2(tensor)
+
+          [3, 3] ->
+            determinant_3by3(tensor)
+
+          [n, n] ->
+            determinant_NbyN(tensor, batch_shape_n: List.to_tuple(batch_shape ++ [n]))
+        end
+      end)
     end)
   end
 
@@ -1882,5 +2075,28 @@ defmodule Nx.LinAlg do
 
     # Calculate matrix rank
     Nx.sum(s > tol)
+  end
+
+  defp apply_vectorized(tensor, fun) when is_function(fun, 1) do
+    # same as Nx's apply_vectorized defp, but written in a "public-api" way!
+    %T{vectorized_axes: vectorized_axes} = tensor = Nx.to_tensor(tensor)
+
+    tensor
+    |> Nx.devectorize()
+    |> then(fun)
+    |> case do
+      %T{} = t ->
+        Nx.vectorize(t, vectorized_axes)
+
+      {a, b} ->
+        {Nx.vectorize(a, vectorized_axes), Nx.vectorize(b, vectorized_axes)}
+
+      {a, b, c} ->
+        {
+          Nx.vectorize(a, vectorized_axes),
+          Nx.vectorize(b, vectorized_axes),
+          Nx.vectorize(c, vectorized_axes)
+        }
+    end
   end
 end
