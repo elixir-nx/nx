@@ -12047,6 +12047,28 @@ defmodule Nx do
         ]
       >
 
+  ## Vectorized tensors
+
+  Slices are taken over each vectorized entry.
+  The `start_index` cannot be vectorized.
+
+      iex> t = Nx.iota({2, 5}, vectorized_axes: [x: 2])
+      iex> Nx.slice_along_axis(t, 0, 3, axis: 1, strides: 2)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[2][2]
+        [
+          [
+            [0, 2],
+            [5, 7]
+          ],
+          [
+            [0, 2],
+            [5, 7]
+          ]
+        ]
+      >
+
   """
   @doc type: :indexed, from_backend: false
   def slice_along_axis(tensor, start_index, len, opts \\ []) when is_integer(len) do
@@ -12054,7 +12076,6 @@ defmodule Nx do
     axis = Keyword.fetch!(opts, :axis)
     strides = Keyword.fetch!(opts, :strides)
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     axis = Nx.Shape.normalize_axis(shape, axis, names)
 
     if start_index == 0 and strides == 1 and elem(shape, axis) == len do
