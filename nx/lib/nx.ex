@@ -12160,7 +12160,6 @@ defmodule Nx do
         ]
       >
 
-
   """
   @doc type: :indexed
   def put_slice(tensor, start_indices, slice) when is_list(start_indices) do
