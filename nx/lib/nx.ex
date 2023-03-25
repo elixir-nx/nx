@@ -6475,6 +6475,7 @@ defmodule Nx do
       )
 
     out = devectorize(%{pred | shape: output_shape, type: output_type, names: output_names})
+
     pred = devectorize(pred)
     on_true = devectorize(on_true)
     on_false = devectorize(on_false)
@@ -6484,32 +6485,25 @@ defmodule Nx do
     revectorize_and_validate_sizes(result, vectorized_axes, true)
   end
 
-  defp reshape_tensor_for_broadcasting(%{vectorized_axes: [], shape: {}} = tensor, _), do: tensor
-  defp reshape_tensor_for_broadcasting(%{shape: shape} = tensor, shape), do: tensor
+  defp reshape_tensor_for_broadcasting(tensor, target_shape) when tensor.shape == target_shape do
+    tensor
+  end
+
+  defp reshape_tensor_for_broadcasting(%T{vectorized_axes: [], shape: {}} = t, _), do: t
 
   defp reshape_tensor_for_broadcasting(tensor, target_shape) do
     input_shape = tensor.shape
+    input_rank = tuple_size(input_shape)
+    target_rank = tuple_size(target_shape)
 
-    # Find the dimensions that need to be inserted (singleton dimensions)
-    insert_dims =
-      for idx <- 0..(tuple_size(target_shape) - 1),
-          tuple_size(input_shape) < idx + 1 or elem(input_shape, idx) == 1,
-          do: idx
+    # Pad the input shape with 1s on the left side to match the target_rank
+    input_shape_padded = List.duplicate(1, target_rank - input_rank) ++ Tuple.to_list(input_shape)
 
-    # Insert singleton dimensions where needed
-    new_shape =
-      Enum.reduce(insert_dims, input_shape, fn dim, acc ->
-        if tuple_size(acc) < dim + 1 do
-          Tuple.append(acc, 1)
-        else
-          acc
-          |> Tuple.delete_at(dim)
-          |> Tuple.insert_at(dim, 1)
-        end
-      end)
+    # Convert the new shape list to a tuple
+    new_shape = List.to_tuple(input_shape_padded)
 
     # Reshape the tensor with the new shape
-    Nx.reshape(tensor, new_shape)
+    reshape(tensor, new_shape)
   end
 
   @doc """
