@@ -1763,7 +1763,6 @@ defmodule Nx do
   @doc type: :creation
   def put_diagonal(tensor, diagonal, opts \\ []) do
     %{shape: shape} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     offset = opts |> keyword!(offset: 0) |> Keyword.fetch!(:offset)
 
     Nx.Shape.put_diagonal(shape, diagonal.shape, offset)
@@ -6836,6 +6835,31 @@ defmodule Nx do
         [3]
       >
 
+  ## Vectorized tensors
+
+  All of the inputs can be vectorized. The function will broadcast along the vectorized axes
+  before calculating the results.
+
+      iex> x = Nx.tensor([[0, 10], [10, 20]]) |> Nx.vectorize(:x)
+      iex> idx = Nx.tensor([[[0], [0]], [[0], [1]], [[1], [1]]]) |> Nx.vectorize(:y)
+      iex> Nx.indexed_add(x, idx, Nx.tensor([1, 1]))
+      #Nx.Tensor<
+        vectorized[x: 2][y: 3]
+        s64[2]
+        [
+          [
+            [2, 10],
+            [1, 11],
+            [0, 12]
+          ],
+          [
+            [12, 20],
+            [11, 21],
+            [10, 22]
+          ]
+        ]
+      >
+
   ## Error cases
       iex> Nx.indexed_add(Nx.tensor([[1], [2]]), Nx.tensor([[[1, 2, 3]]]), Nx.tensor([0]))
       ** (ArgumentError) indices must be a rank 2 tensor, got: 3
@@ -6923,6 +6947,31 @@ defmodule Nx do
         [3]
       >
 
+  ## Vectorized tensors
+
+  All of the inputs can be vectorized. The function will broadcast along the vectorized axes
+  before calculating the results.
+
+      iex> x = Nx.tensor([[0, 10], [10, 20]]) |> Nx.vectorize(:x)
+      iex> idx = Nx.tensor([[[0], [0]], [[0], [1]], [[1], [1]]]) |> Nx.vectorize(:y)
+      iex> Nx.indexed_put(x, idx, Nx.tensor([1, 1]))
+      #Nx.Tensor<
+        vectorized[x: 2][y: 3]
+        s64[2]
+        [
+          [
+            [1, 10],
+            [1, 1],
+            [0, 1]
+          ],
+          [
+            [1, 20],
+            [1, 1],
+            [10, 1]
+          ]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([[[1, 2, 3]]]), Nx.tensor([0]))
@@ -6943,21 +6992,43 @@ defmodule Nx do
   end
 
   defp indexed_op(target, indices, updates, op) do
-    target = to_tensor(target)
-    indices = to_tensor(indices)
-    updates = to_tensor(updates)
-
-    Nx.Shared.raise_vectorized_not_implemented_yet(target, {op, 3})
-    Nx.Shared.raise_vectorized_not_implemented_yet(indices, {op, 3})
-    Nx.Shared.raise_vectorized_not_implemented_yet(updates, {op, 3})
+    [%T{vectorized_axes: vectorized_axes} = target, indices, updates] =
+      broadcast_vectors([target, indices, updates])
 
     type = binary_type(target, updates)
 
     Nx.Shape.indexed(target, indices, updates)
 
+    target = devectorize(target)
+    indices = devectorize(indices)
+    updates = devectorize(updates)
+
+    {indices, updates} =
+      if vectorized_axes != [] do
+        offset = length(vectorized_axes)
+
+        to_concat =
+          Enum.reduce((offset - 1)..0//-1, [indices], fn axis, idx ->
+            [Nx.iota(indices.shape, axis: axis) | idx]
+          end)
+
+        n = elem(indices.shape, tuple_size(indices.shape) - 1)
+
+        indices =
+          to_concat
+          |> concatenate(axis: -1)
+          |> reshape({:auto, offset + n})
+
+        {indices, flatten(updates)}
+      else
+        {indices, updates}
+      end
+
     out = %{target | type: type}
 
-    apply(impl!(target, indices, updates), op, [out, target, indices, updates])
+    result = apply(impl!(target, indices, updates), op, [out, target, indices, updates])
+
+    vectorize(result, vectorized_axes)
   end
 
   ## Unary ops
