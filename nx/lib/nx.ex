@@ -6365,27 +6365,100 @@ defmodule Nx do
         f32[3]
         [2.0, 1.0, 2.0]
       >
+
+  ## Vectorized tensors
+
+  Vectorized and non-vectorized tensors can be mixed-and-matched on all three inputs.
+
+      iex> pred = Nx.tensor([[0, 1, 0], [1, 1, 0]]) |> Nx.vectorize(:x)
+      iex> on_true = 1
+      iex> on_false = Nx.tensor([2, 3]) |> Nx.vectorize(:y)
+      iex> Nx.select(pred, on_true, on_false)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 2]
+        s64[3]
+        [
+          [
+            [2, 1, 2],
+            [3, 1, 3]
+          ],
+          [
+            [1, 1, 2],
+            [1, 1, 3]
+          ]
+        ]
+      >
+
+    In the next example, notice that even though the `pred` input
+    is scalar, because we're dealing with vectorize inputs, some
+    broadcasting still occurs.
+
+      iex> pred = 1
+      iex> on_true = Nx.tensor([1, 2, 3]) |> Nx.vectorize(:x)
+      iex> on_false = Nx.tensor([4, 5]) |> Nx.vectorize(:y)
+      iex> Nx.select(pred, on_true, on_false)
+      #Nx.Tensor<
+        vectorized[x: 3][y: 2]
+        s64
+        [
+          [1, 1],
+          [2, 2],
+          [3, 3]
+        ]
+      >
+
+  Finally, broadcasting will also occur if more than one input share
+  the same vectorized axes, but one of them presents size 1
+
+      iex> pred = Nx.tensor([1, 0, 0]) |> Nx.vectorize(:x)
+      iex> on_true = Nx.tensor([[2]]) |> Nx.vectorize(:x) |> Nx.vectorize(:y)
+      iex> on_false = Nx.tensor([3, 4]) |> Nx.vectorize(:y)
+      iex> Nx.select(pred, on_true, on_false)
+      #Nx.Tensor<
+        vectorized[x: 3][y: 2]
+        s64
+        [
+          [2, 2],
+          [3, 4],
+          [3, 4]
+        ]
+      >
   """
   @doc type: :element
   def select(pred, on_true, on_false) do
-    %T{shape: pred_shape, names: pred_names} = pred = to_tensor(pred)
-    %T{shape: true_shape, names: true_names} = on_true = to_tensor(on_true)
-    %T{shape: false_shape, names: false_names} = on_false = to_tensor(on_false)
+    [pred, on_true, on_false] = broadcast_vectors([pred, on_true, on_false])
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(pred, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(on_true, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(on_false, __ENV__.function)
+    %T{vectorized_axes: vectorized_axes, shape: pred_shape, names: pred_names} = pred
+    %T{shape: true_shape, names: true_names} = on_true
+    %T{shape: false_shape, names: false_names} = on_false
 
     output_type = binary_type(on_true, on_false)
 
     {output_shape, output_names} =
-      case pred_shape do
-        {} ->
+      case {vectorized_axes, pred_shape} do
+        {[], {}} ->
           Nx.Shape.binary_broadcast(true_shape, true_names, false_shape, false_names)
 
         _ ->
-          {pred_shape, pred_names}
+          # we want to keep only pred_names as part of the output
+          # for the non-scalar case
+          true_names = List.duplicate(nil, tuple_size(true_shape))
+          false_names = List.duplicate(nil, tuple_size(false_shape))
+
+          {binary_shape, binary_names} =
+            Nx.Shape.binary_broadcast(true_shape, true_names, false_shape, false_names)
+
+          Nx.Shape.binary_broadcast(
+            pred_shape,
+            pred_names,
+            binary_shape,
+            binary_names
+          )
       end
+
+    on_true = reshape_tensor_for_broadcasting(on_true, output_shape)
+    on_false = reshape_tensor_for_broadcasting(on_false, output_shape)
+    pred = reshape_tensor_for_broadcasting(pred, output_shape)
 
     _ =
       Nx.Shape.broadcast!(
@@ -6401,8 +6474,42 @@ defmodule Nx do
         Nx.Shape.broadcast_axes(false_shape, output_shape)
       )
 
-    out = %{pred | shape: output_shape, type: output_type, names: output_names}
-    impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
+    out = devectorize(%{pred | shape: output_shape, type: output_type, names: output_names})
+    pred = devectorize(pred)
+    on_true = devectorize(on_true)
+    on_false = devectorize(on_false)
+
+    result = impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
+
+    revectorize_and_validate_sizes(result, vectorized_axes, true)
+  end
+
+  defp reshape_tensor_for_broadcasting(%{vectorized_axes: [], shape: {}} = tensor, _), do: tensor
+  defp reshape_tensor_for_broadcasting(%{shape: shape} = tensor, shape), do: tensor
+
+  defp reshape_tensor_for_broadcasting(tensor, target_shape) do
+    input_shape = tensor.shape
+
+    # Find the dimensions that need to be inserted (singleton dimensions)
+    insert_dims =
+      for idx <- 0..(tuple_size(target_shape) - 1),
+          tuple_size(input_shape) < idx + 1 or elem(input_shape, idx) == 1,
+          do: idx
+
+    # Insert singleton dimensions where needed
+    new_shape =
+      Enum.reduce(insert_dims, input_shape, fn dim, acc ->
+        if tuple_size(acc) < dim + 1 do
+          Tuple.append(acc, 1)
+        else
+          acc
+          |> Tuple.delete_at(dim)
+          |> Tuple.insert_at(dim, 1)
+        end
+      end)
+
+    # Reshape the tensor with the new shape
+    Nx.reshape(tensor, new_shape)
   end
 
   @doc """
