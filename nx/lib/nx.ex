@@ -2159,14 +2159,16 @@ defmodule Nx do
 
   ## Vectorized tensors
 
-  Vectorized tensors will have their vectorized axes collapsed into
-  a single dimension which will then be batched accordingly.
+  Similarly to `to_list/1` and `to_binary/1`, `to_batched/2` will
+  ignore vectorization to perform calculations. Because the output
+  still contains tensors, however, they will still be vectorized.
 
       iex> t = Nx.iota({2, 2, 2}) |> Nx.vectorize(x: 2)
       iex> [first, second] = Nx.to_batched(t, 1) |> Enum.to_list()
       iex> first
       #Nx.Tensor<
-        s64[1][2][2]
+        vectorized[x: 1]
+        s64[2][2]
         [
           [
             [0, 1],
@@ -2176,7 +2178,8 @@ defmodule Nx do
       >
       iex> second
       #Nx.Tensor<
-        s64[1][2][2]
+        vectorized[x: 1]
+        s64[2][2]
         [
           [
             [4, 5],
@@ -2186,31 +2189,38 @@ defmodule Nx do
       >
 
       iex> t = Nx.iota({2, 2, 2}) |> Nx.vectorize(x: 2, y: 2)
-      iex> [first, second] = Nx.to_batched(t, 2) |> Enum.to_list()
+      iex> [first, second] = Nx.to_batched(t, 1) |> Enum.to_list()
       iex> first
       #Nx.Tensor<
-        s64[2][2]
+        vectorized[x: 1][y: 2]
+        s64[2]
         [
-          [0, 1],
-          [2, 3]
+          [
+            [0, 1],
+            [2, 3]
+          ]
         ]
       >
       iex> second
       #Nx.Tensor<
-        s64[2][2]
+        vectorized[x: 1][y: 2]
+        s64[2]
         [
-          [4, 5],
-          [6, 7]
+          [
+            [4, 5],
+            [6, 7]
+          ]
         ]
       >
 
-  Same rules about uneven batches still apply on the resulting axis:
+  Same rules about uneven batches still apply:
 
       iex> t = Nx.iota({5, 2}, names: [:x, :y]) |> Nx.vectorize(:x)
       iex> [first, second, third] = Nx.to_batched(t, 2) |> Enum.to_list()
       iex> first
       #Nx.Tensor<
-        s64[2][y: 2]
+        vectorized[x: 2]
+        s64[y: 2]
         [
           [0, 1],
           [2, 3]
@@ -2218,7 +2228,8 @@ defmodule Nx do
       >
       iex> second
       #Nx.Tensor<
-        s64[2][y: 2]
+        vectorized[x: 2]
+        s64[y: 2]
         [
           [4, 5],
           [6, 7]
@@ -2226,7 +2237,8 @@ defmodule Nx do
       >
       iex> third
       #Nx.Tensor<
-        s64[2][y: 2]
+        vectorized[x: 2]
+        s64[y: 2]
         [
           [8, 9],
           [0, 1]
@@ -2240,12 +2252,14 @@ defmodule Nx do
       iex> [first, second] = t |> Nx.to_batched(2) |> Enum.to_list()
       iex> first
       #Nx.Tensor<
-        s64[2]
+        vectorized[x: 2]
+        s64
         [1, 2]
       >
       iex> second
       #Nx.Tensor<
-        s64[2]
+        vectorized[x: 2]
+        s64
         [3, 1]
       >
   """
@@ -2254,23 +2268,13 @@ defmodule Nx do
       when is_integer(batch_size) and batch_size >= 1 do
     opts = keyword!(opts, leftover: :repeat)
 
-    %T{vectorized_axes: vectorized_axes} = to_tensor(tensor)
+    %T{vectorized_axes: vectorized_axes} = tensor = to_tensor(tensor)
 
     if vectorized_axes == [] and tensor.shape == {} do
       raise ArgumentError, "cannot batch non-vectorized scalar tensor #{inspect(tensor)}"
     end
 
-    tensor =
-      if vectorized_axes != [] do
-        vectorized_size = vectorized_axes |> Keyword.values() |> Enum.product()
-        target_shape = Tuple.insert_at(tensor.shape, 0, vectorized_size)
-
-        tensor
-        |> devectorize()
-        |> reshape(target_shape, names: [nil | tensor.names])
-      else
-        devectorize(tensor, keep_names: false)
-      end
+    tensor = devectorize(tensor, keep_names: false)
 
     if elem(tensor.shape, 0) < batch_size do
       raise ArgumentError, "cannot batch beyond original tensor"
@@ -2278,7 +2282,15 @@ defmodule Nx do
 
     new_shape = put_elem(tensor.shape, 0, batch_size)
 
-    impl!(tensor).to_batched(%{tensor | shape: new_shape}, tensor, opts)
+    result = impl!(tensor).to_batched(%{tensor | shape: new_shape}, tensor, opts)
+
+    case vectorized_axes do
+      [] ->
+        result
+
+      [{name, _} | remaining_axes] ->
+        Stream.map(result, &vectorize(&1, [{name, batch_size} | remaining_axes]))
+    end
   end
 
   @doc """
