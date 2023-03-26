@@ -6520,7 +6520,7 @@ defmodule Nx do
 
     result = impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
 
-    revectorize_and_validate_sizes(result, vectorized_axes, true)
+    vectorize(result, Keyword.keys(vectorized_axes))
   end
 
   defp reshape_tensor_for_broadcasting(tensor, target_shape) when tensor.shape == target_shape do
