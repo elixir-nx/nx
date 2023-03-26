@@ -4682,19 +4682,27 @@ defmodule Nx do
   end
 
   defp apply_vectorized([left, right], fun) do
-    [left, right] = reshape_vectors([left, right])
+    [%{vectorized_axes: vectorized_axes} = left, right] = reshape_vectors([left, right])
 
-    if left.vectorized_axes != [] or right.vectorized_axes != [] do
+    if vectorized_axes != [] do
       {left, right} =
         case {left.shape, right.shape} do
           {{}, {}} ->
             {left, right}
 
-          {{}, _} ->
-            {reshape(left, {1}), right}
+          {{}, other_shape} ->
+            {reshape(left, Tuple.duplicate(1, tuple_size(other_shape))), right}
 
-          {_, {}} ->
-            {left, reshape(right, {1})}
+          {other_shape, {}} ->
+            {left, reshape(right, Tuple.duplicate(1, tuple_size(other_shape)))}
+
+          {{n}, other_shape} ->
+            target_shape = Tuple.duplicate(1, tuple_size(other_shape)) |> put_elem(0, n)
+            {reshape(left, target_shape), right}
+
+          {other_shape, {n}} ->
+            target_shape = Tuple.duplicate(1, tuple_size(other_shape)) |> put_elem(0, n)
+            {left, reshape(right, target_shape)}
 
           _ ->
             {left, right}
@@ -12973,41 +12981,47 @@ defmodule Nx do
   and then the operation takes place normally, with `:axis` and `indices`
   having their values in reference to the input shape.
 
-      iex> t = Nx.tensor([[[1, 2]], [[11, 12]]]) |> Nx.vectorize(:x)
-      iex> idx = Nx.tensor([0, 1]) |> Nx.vectorize(:y)
-      iex> Nx.take(t, idx,  axis: 1)
+      iex> t = Nx.tensor([[1, 2], [11, 12]])
+      iex> idx = Nx.tensor([0, 1, 0]) |> Nx.vectorize(:x)
+      iex> Nx.take(t, idx)
       #Nx.Tensor<
-        vectorized[x: 2][y: 2]
-        s64[1][2][2]
+        vectorized[x: 3]
+        s64[2]
+        [
+          [1, 2],
+          [11, 12]
+          [1, 2]
+        ]
+      >
+
+      iex> t = Nx.tensor([[[1, 2]], [[11, 12]]]) |> Nx.vectorize(:x)
+      iex> idx = Nx.tensor([0, 1])
+      iex> Nx.take(t, idx, axis: 1)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[1]
         [
           [
-            [
-              [
-                [1, 2],
-                [1, 2]
-              ]
-            ],
-            [
-              [
-                [1, 2],
-                [1, 2]
-              ]
-            ]
+            [1, 2]
           ],
           [
-            [
-              [
-                [11, 12],
-                [11, 12]
-              ]
-            ],
-            [
-              [
-                [11, 12],
-                [11, 12]
-              ]
-            ]
+            [11, 12]
           ]
+        ]
+      >
+
+  In case both inputs are vectorized, they will be broadcasted
+  together before calculations are performed:
+
+      iex> t = Nx.tensor([[1, 2], [11, 12]]) |> Nx.vectorize(:x)
+      iex> idx = Nx.tensor([0, 1, 0]) |> Nx.vectorize(:y)
+      iex> Nx.take(t, idx)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 3]
+        s64
+        [
+          [1, 2, 1],
+          [11, 12, 11]
         ]
       >
 
@@ -13018,8 +13032,10 @@ defmodule Nx do
   """
   @doc type: :indexed
   def take(tensor, indices, opts \\ []) when is_list(opts) do
-    [%T{vectorized_axes: vectorized_axes} = tensor, indices] =
-      broadcast_vectors([tensor, indices])
+    [tensor, indices] = reshape_vectors([tensor, indices])
+
+    vectorized_axes =
+      Enum.zip_with(tensor.vectorized_axes, indices.vectorized_axes, &Kernel.max/2)
 
     unless Nx.Type.integer?(indices.type) do
       raise ArgumentError, "indices must be an integer tensor, got #{inspect(indices.type)}"
@@ -13028,16 +13044,27 @@ defmodule Nx do
     offset = length(vectorized_axes)
 
     opts = keyword!(opts, axis: 0)
-    axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names, offset)
+    axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names)
+
+    {shape, names} =
+      if offset != 0 do
+        {shape, names} =
+          Nx.Shape.take(tensor.shape, tensor.names, indices.shape, indices.names, axis)
+
+        shape = List.to_tuple(Keyword.values(vectorized_axes) ++ Tuple.to_list(shape))
+        {shape, names}
+      else
+        Nx.Shape.take(tensor.shape, tensor.names, indices.shape, indices.names, axis)
+      end
 
     tensor = devectorize(tensor, keep_names: false)
     indices = devectorize(indices, keep_names: false)
+    axis = axis + offset
 
-    {shape, names} = Nx.Shape.take(tensor.shape, tensor.names, indices.shape, indices.names, axis)
-
+    IO.inspect({vectorized_axes, tensor, indices, shape, names, axis})
     result = impl!(tensor).take(%{tensor | shape: shape, names: names}, tensor, indices, axis)
 
-    vectorize(result, vectorized_axes)
+    vectorize(result, Keyword.keys(vectorized_axes))
   end
 
   @doc """

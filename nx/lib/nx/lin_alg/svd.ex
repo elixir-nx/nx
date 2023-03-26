@@ -24,6 +24,8 @@ defmodule Nx.LinAlg.SVD do
   defn svd(input_tensor, opts \\ []) do
     validate_opts(opts)
 
+    input_tensor = collapse_batch_axes_and_vectorize(input_tensor)
+
     result =
       if Nx.all(input_tensor == 0) do
         svd_all_zeros(input_tensor, opts)
@@ -31,9 +33,40 @@ defmodule Nx.LinAlg.SVD do
         svd_non_zero(input_tensor, opts)
       end
 
-    custom_grad(result, [input_tensor], fn g ->
-      grad(result, input_tensor, g)
-    end)
+    {u, s, vt} =
+      custom_grad(result, [input_tensor], fn g ->
+        svd_grad(result, input_tensor, g)
+      end)
+
+    {
+      Nx.devectorize(u, keep_names: false),
+      Nx.devectorize(s, keep_names: false),
+      Nx.devectorize(vt, keep_names: false)
+    }
+  end
+
+  deftransformp collapse_batch_axes_and_vectorize(
+                  %Nx.Tensor{vectorized_axes: [], shape: {_, _}} = tensor
+                ),
+                do: tensor
+
+  deftransformp collapse_batch_axes_and_vectorize(%Nx.Tensor{shape: shape} = tensor) do
+    if tensor.vectorized_axes != [] do
+      raise ArgumentError, "expected input to be non-vectorized, got: #{inspect(tensor)}"
+    end
+
+    rank = tuple_size(shape)
+    m = elem(shape, rank - 2)
+    n = elem(shape, rank - 1)
+
+    vector_size =
+      shape |> Tuple.delete_at(rank - 2) |> Tuple.delete_at(rank - 2) |> Tuple.product()
+
+    target_shape = {vector_size, m, n}
+
+    tensor
+    |> Nx.reshape(target_shape)
+    |> Nx.vectorize(vector: vector_size)
   end
 
   deftransformp validate_opts(opts \\ []) do
@@ -142,14 +175,28 @@ defmodule Nx.LinAlg.SVD do
     h = (h + Nx.LinAlg.adjoint(h)) / 2
     {s, v} = Nx.LinAlg.eigh(h, max_iter: opts[:max_iter])
 
+    print_expr(s, label: "s")
+    print_expr(v, label: "v")
+
     sign = Nx.select(s < 0, -1, 1)
+
+    print_expr(sign, label: "sign")
+
     v = sign * v
     s = sign * s
 
+    print_expr(v, label: "sign * v")
+
     # sort s and v according to
     sort_idx = Nx.argsort(s, direction: :desc)
-    s_out = Nx.take(s, sort_idx)
+
+    print_expr(sort_idx, label: "sort_idx")
+
+    s_out = Nx.take(s, sort_idx) |> print_expr(label: "s_out")
     v_out = Nx.take(v, sort_idx, axis: 1)
+    print_expr(u, label: "u")
+    print_expr(v_out, label: "v_out")
+
     u_out = Nx.dot(u, v_out)
 
     u_out = Nx.select(s[0] < n * @eps * s_out[0], correct_rank_deficiency(u_out), u_out)
@@ -160,6 +207,7 @@ defmodule Nx.LinAlg.SVD do
     # reference implementation taken from Jax
     alpha = Nx.sqrt(Nx.LinAlg.norm(x, ord: 1)) * Nx.sqrt(Nx.LinAlg.norm(x, ord: :inf))
     l = @eps
+
     u = x / alpha
     tol_l = 5 * @eps
     tol_norm = Nx.cbrt(tol_l)
@@ -195,6 +243,7 @@ defmodule Nx.LinAlg.SVD do
 
         iterating_l = Nx.abs(1.0 - l) > tol_l
         iterating_u = Nx.LinAlg.norm(u - u_prev) > tol_norm
+        iterating_u = iterating_u |> Nx.devectorize() |> Nx.all()
         is_unconverged = iterating_l or iterating_u
         is_not_max_iteration = iter_idx < max_iter
         {u, l, iter_idx + 1, is_unconverged, is_not_max_iteration, max_iter}
@@ -268,7 +317,7 @@ defmodule Nx.LinAlg.SVD do
     u_out * sign_r
   end
 
-  defnp grad({u, s_input, vt}, input, {du, ds, dvt}) do
+  defnp svd_grad({u, s_input, vt}, input, {du, ds, dvt}) do
     {k} = Nx.shape(s_input)
     {m, n} = Nx.shape(input)
 

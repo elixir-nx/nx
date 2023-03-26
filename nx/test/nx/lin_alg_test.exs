@@ -641,7 +641,6 @@ defmodule Nx.LinAlgTest do
              |> round(3) == round(v, 3)
     end
 
-    @tag :skip
     test "works with batched matrices" do
       t =
         Nx.tensor([
