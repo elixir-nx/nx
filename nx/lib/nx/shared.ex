@@ -558,6 +558,13 @@ defmodule Nx.Shared do
 
   def raise_vectorized_not_implemented_yet(_, _), do: nil
 
+  @doc false
+  def raise_vectorization_not_supported(%T{vectorized_axes: [_ | _]}, {function, arity}) do
+    raise ArgumentError, "#{function}/#{arity} is does not support vectorized inputs"
+  end
+
+  def raise_vectorization_not_supported(_, _), do: nil
+
   @doc """
   The process dictionary key to store default backend under.
   """

@@ -954,8 +954,8 @@ defmodule Nx do
     %T{type: min_type, shape: min_shape} = min = to_tensor(min)
     %T{type: max_type, shape: max_shape} = max = to_tensor(max)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(min, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(max, __ENV__.function)
+    Nx.Shared.raise_vectorization_not_supported(min, __ENV__.function)
+    Nx.Shared.raise_vectorization_not_supported(max, __ENV__.function)
 
     shape = shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
@@ -991,8 +991,8 @@ defmodule Nx do
     %T{type: mu_type, shape: mu_shape} = mu = to_tensor(mu)
     %T{type: sigma_type, shape: sigma_shape} = sigma = to_tensor(sigma)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(mu, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(sigma, __ENV__.function)
+    Nx.Shared.raise_vectorization_not_supported(mu, __ENV__.function)
+    Nx.Shared.raise_vectorization_not_supported(sigma, __ENV__.function)
 
     shape = shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
@@ -1023,7 +1023,6 @@ defmodule Nx do
   def shuffle(tensor, opts \\ []) do
     opts = keyword!(opts, [:axis])
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     if axis = opts[:axis] do
       axis = Nx.Shape.normalize_axis(shape, axis, names)
@@ -1377,7 +1376,7 @@ defmodule Nx do
 
   def eye(tensor, opts) do
     IO.warn("passing a tensor as shape to eye/2 is deprecated. Please call Nx.shape/2 before")
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    Nx.Shared.raise_vectorization_not_supported(tensor, __ENV__.function)
     eye(Nx.shape(tensor), opts)
   end
 
@@ -1457,7 +1456,6 @@ defmodule Nx do
   @doc type: :creation
   def take_diagonal(tensor, opts \\ []) do
     tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     opts = keyword!(opts, offset: 0)
 
@@ -2064,7 +2062,7 @@ defmodule Nx do
   @doc false
   @deprecated "Use to_batched/3 instead"
   def to_batched_list(tensor, batch_size, opts \\ []) do
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    Nx.Shared.raise_vectorization_not_supported(tensor, __ENV__.function)
     tensor |> to_batched(batch_size, opts) |> Enum.to_list()
   end
 
@@ -8442,7 +8440,6 @@ defmodule Nx do
   def median(tensor, opts \\ []) do
     opts = keyword!(opts, axis: nil, keep_axis: false)
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     axis =
       if axis_opt = opts[:axis] do
@@ -12687,6 +12684,7 @@ defmodule Nx do
         [4, 2, 3]
       >
 
+
       iex> t = Nx.tensor([[1, 2], [3, 4]])
       iex> Nx.gather(t, Nx.tensor([[[1, 1], [0, 0]], [[1, 0], [0, 1]]]))
       #Nx.Tensor<
@@ -12704,6 +12702,44 @@ defmodule Nx do
         [1, 12, 112]
       >
 
+  ## Vectorized tensors
+
+  `tensor` and `indices` have their vectorized axes broadcast together,
+  and then the operation takes place normally, with `:axis` and `indices`
+  having their values in reference to the input shape.
+
+      iex> t = Nx.tensor([[[1, 2], [11, 12]], [[101, 102], [111, 112]]]) |> Nx.vectorize(:x)
+      iex> idx = Nx.tensor([[[0, 0], [0, 1]], [[1, 0], [1, 1]]]) |> Nx.vectorize(:x)
+      iex> Nx.gather(t, idx)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[2]
+        [
+          [1, 2],
+          [111, 112]
+        ]
+      >
+
+  And with vectorized broadcasting:
+
+      iex> t = Nx.tensor([[[1, 2], [11, 12]], [[101, 102], [111, 112]]]) |> Nx.vectorize(:x)
+      iex> idx = Nx.tensor([[[0, 0], [0, 1]], [[1, 0], [1, 1]]]) |> Nx.vectorize(:y)
+      iex> Nx.gather(t, idx)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 2]
+        s64[2]
+        [
+          [
+            [1, 2],
+            [11, 12]
+          ],
+          [
+            [101, 102],
+            [111, 112]
+          ]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.gather(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[0, 0]], type: :f32))
@@ -12711,19 +12747,33 @@ defmodule Nx do
   """
   @doc type: :indexed
   def gather(tensor, indices) do
-    tensor = to_tensor(tensor)
-    indices = to_tensor(indices)
-
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(indices, __ENV__.function)
+    [%T{vectorized_axes: vectorized_axes} = tensor, indices] =
+      broadcast_vectors([tensor, indices])
 
     unless Nx.Type.integer?(indices.type) do
       raise ArgumentError, "indices must be an integer tensor, got #{inspect(indices.type)}"
     end
 
+    offset = length(vectorized_axes)
+
+    tensor = devectorize(tensor, keep_names: false)
+    indices = devectorize(indices, keep_names: false)
+
+    iota_shape =
+      indices.shape |> Tuple.delete_at(tuple_size(indices.shape) - 1) |> Tuple.append(1)
+
+    offset_axes = (offset - 1)..0//-1
+
+    indices =
+      offset_axes
+      |> Enum.reduce([indices], &[Nx.iota(iota_shape, axis: &1) | &2])
+      |> concatenate(axis: -1)
+
     {shape, names} = Nx.Shape.gather(tensor.shape, indices.shape)
 
-    impl!(tensor).gather(%{tensor | shape: shape, names: names}, tensor, indices)
+    result = impl!(tensor).gather(%{tensor | shape: shape, names: names}, tensor, indices)
+
+    vectorize(result, vectorized_axes)
   end
 
   @doc """
