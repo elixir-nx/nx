@@ -8569,6 +8569,18 @@ defmodule Nx do
           ]
         ]
       >
+
+  ### Vectorized tensors
+
+  For vectorized inputs, `:axis` refers to the
+  non-vectorized shape:
+
+      iex> Nx.median(Nx.tensor([[1, 2, 3], [4, 5, 6]]) |> Nx.vectorize(:x), axis: 0)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64
+        [2, 5]
+      >
   """
   @doc type: :aggregation, from_backend: false
   def median(tensor, opts \\ []) do
