@@ -12684,7 +12684,6 @@ defmodule Nx do
         [4, 2, 3]
       >
 
-
       iex> t = Nx.tensor([[1, 2], [3, 4]])
       iex> Nx.gather(t, Nx.tensor([[[1, 1], [0, 0]], [[1, 0], [0, 1]]]))
       #Nx.Tensor<
