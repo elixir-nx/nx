@@ -10537,6 +10537,7 @@ defmodule Nx do
   ## Vectorized tensors
 
   The contracting axes refer to the tensors' shapes
+  and do not apply to the vectorized axes:
 
       iex> t1 = Nx.tensor([[[1, 1], [2, 2]], [[1, 1], [1, 1]]]) |> Nx.vectorize(:x)
       iex> t2 = Nx.tensor([[1, 2], [3, 4]])
