@@ -11220,6 +11220,37 @@ defmodule Nx do
         ]
       >
 
+  ## Vectorized tensors
+
+  Vectorized axes are treated as batched axes, much like
+  `dot/6` behaves with non-vectorized tensors.
+
+      iex> t1 = Nx.tensor([[1, 2], [3, 4]]) |> Nx.vectorize(:x)
+      iex> t2 = Nx.tensor([[10, 20], [30, 40]]) |> Nx.vectorize(:x)
+      iex> Nx.dot(t1, t2)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64
+        [50, 250]
+      >
+
+      iex> t1 = Nx.tensor([1, 2]) |> Nx.vectorize(:x)
+      iex> t2 = Nx.tensor([[10, 20]]) |> Nx.vectorize(:y)
+      iex> Nx.dot(t1, t2)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 1]
+        s64[2]
+        [
+          [
+            [10, 20]
+          ],
+          [
+            [20, 40]
+          ]
+        ]
+      >
+
+
   ## Error cases
 
       iex> Nx.dot(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2]))
@@ -11229,9 +11260,6 @@ defmodule Nx do
   def dot(t1, t2) do
     %T{shape: s1} = t1 = to_tensor(t1)
     %T{shape: s2} = t2 = to_tensor(t2)
-
-    Nx.Shared.raise_vectorized_not_implemented_yet(t1, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(t2, __ENV__.function)
 
     case {tuple_size(s1), tuple_size(s2)} do
       {0, _} -> multiply(t1, t2)
@@ -11269,6 +11297,44 @@ defmodule Nx do
       #Nx.Tensor<
         f32
         50.0
+      >
+
+  ## Vectorized tensors
+
+  The contracting axes refer to the tensors' shapes
+  and do not apply to the vectorized axes:
+
+      iex> t1 = Nx.tensor([[[1, 1], [2, 2]], [[1, 1], [1, 1]]]) |> Nx.vectorize(:x)
+      iex> t2 = Nx.tensor([[1, 2], [3, 4]])
+      iex> Nx.dot(t1, [0], t2, [0])
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[2][2]
+        [
+          [
+            [7, 10],
+            [7, 10]
+          ],
+          [
+            [4, 6],
+            [4, 6]
+          ]
+        ]
+      >
+      iex> Nx.dot(t1, [1], t2, [0])
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[2][2]
+        [
+          [
+            [4, 6],
+            [8, 12]
+          ],
+          [
+            [4, 6],
+            [4, 6]
+          ]
+        ]
       >
 
   """
@@ -11410,6 +11476,41 @@ defmodule Nx do
         ]
       >
 
+  ## Vectorized tensors
+
+  If you already have vectorized axes, they will be automatically
+  added to the batched axes of `dot/6`. Input axes must refer to
+  the tensor shape, and offsets due to vectorized axes are
+  handled internally.
+
+  Rewriting the previous example with vectorization:
+
+      iex> u = Nx.tensor([[[1, 1]], [[2, 2]]]) |> Nx.vectorize(:x)
+      iex> v = Nx.tensor([[[3], [3]], [[4], [4]]]) |> Nx.vectorize(:x)
+      iex> Nx.dot(u, [1], [], v, [0], []) # note that axes refer to the inner shapes
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[1][1]
+        [
+          [
+            [6]
+          ],
+          [
+            [16]
+          ]
+        ]
+      >
+
+    Because the batch axes are now empty, we can use `dot/4` to be more concise.
+
+      Nx.dot(u, [1], v, [0])
+
+    However, we can go even further. Since we are contracting the last axis of
+    `u` with the first axis of `v`, we can rely on `dot/2` to achieve the same
+    result.
+
+        Nx.dot(u, v)
+
   ## Error cases
 
       iex> u = Nx.tensor([[[1, 1]], [[2, 2]]])
@@ -11444,13 +11545,14 @@ defmodule Nx do
   """
   @doc type: :ndim
   def dot(t1, contract_axes1, batch_axes1, t2, contract_axes2, batch_axes2) do
-    %{shape: s1, names: names1} = t1 = to_tensor(t1)
-    %{shape: s2, names: names2} = t2 = to_tensor(t2)
+    [t1, t2] = broadcast_vectors([t1, t2])
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(t1, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(t2, __ENV__.function)
+    %{vectorized_axes: vectorized_axes, shape: s1, names: names1} = t1
+    %{shape: s2, names: names2} = t2
 
     output_type = binary_type(t1, t2)
+
+    offset = length(vectorized_axes)
 
     # Axes normalization
     c1 = Nx.Shape.normalize_axes(s1, contract_axes1, names1)
@@ -11461,7 +11563,24 @@ defmodule Nx do
     {output_shape, output_names} = Nx.Shape.dot(s1, c1, names1, b1, s2, c2, names2, b2)
 
     out = %{t1 | type: output_type, names: output_names, shape: output_shape}
-    impl!(t1, t2).dot(out, t1, c1, b1, t2, c2, b2)
+
+    if offset != 0 do
+      offset_axes = count_up(offset, 0)
+
+      t1 = devectorize(t1)
+      t2 = devectorize(t2)
+      out = devectorize(out)
+
+      c1 = Enum.map(c1, &(&1 + offset))
+      c2 = Enum.map(c2, &(&1 + offset))
+      b1 = offset_axes ++ Enum.map(b1, &(&1 + offset))
+      b2 = offset_axes ++ Enum.map(b2, &(&1 + offset))
+
+      res = impl!(t1, t2).dot(out, t1, c1, b1, t2, c2, b2)
+      vectorize(res, vectorized_axes)
+    else
+      impl!(t1, t2).dot(out, t1, c1, b1, t2, c2, b2)
+    end
   end
 
   @doc """
