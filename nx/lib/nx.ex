@@ -11978,6 +11978,26 @@ defmodule Nx do
         ]
       >
 
+  ## Vectorized tensors
+
+  The tensor to be sliced can be vectorized, but indices must be non-vectorized.
+
+      iex> Nx.slice(Nx.iota({3, 3}, vectorized_axes: [x: 2]), [0, Nx.tensor(1)], [2, 2])
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[2][2]
+        [
+          [
+            [1, 2],
+            [4, 5]
+          ],
+          [
+            [1, 2],
+            [4, 5]
+          ]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.slice(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [Nx.tensor([1, 2]), Nx.tensor(1)], [1, 1])
@@ -11990,9 +12010,7 @@ defmodule Nx do
   def slice(tensor, start_indices, lengths, opts \\ [])
       when is_list(start_indices) and is_list(lengths) and is_list(opts) do
     opts = keyword!(opts, strides: 1)
-    %T{shape: shape} = tensor = to_tensor(tensor)
-
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    %T{vectorized_axes: vectorized_axes, shape: shape} = tensor = to_tensor(tensor)
 
     strides = opts[:strides]
 
@@ -12004,8 +12022,30 @@ defmodule Nx do
         else: strides
 
     {start_indices, output_shape} = Nx.Shape.slice(shape, start_indices, lengths, strides)
-    out = %{tensor | shape: output_shape}
-    impl!(tensor).slice(out, tensor, start_indices, lengths, strides)
+
+    offset = length(vectorized_axes)
+
+    start_indices = List.duplicate(0, offset) ++ start_indices
+
+    offset_shape = Keyword.values(vectorized_axes)
+    lengths = offset_shape ++ lengths
+
+    tensor = devectorize(tensor)
+
+    output_shape_devec =
+      if offset != 0 do
+        List.to_tuple(offset_shape ++ Tuple.to_list(output_shape))
+      else
+        output_shape
+      end
+
+    out = %{tensor | shape: output_shape_devec}
+
+    strides = List.duplicate(1, offset) ++ strides
+
+    result = impl!(tensor).slice(out, tensor, start_indices, lengths, strides)
+
+    vectorize(result, vectorized_axes)
   end
 
   @doc """
@@ -12078,6 +12118,28 @@ defmodule Nx do
         ]
       >
 
+  ## Vectorized tensors
+
+  Slices are taken over each vectorized entry.
+  The `start_index` cannot be vectorized.
+
+      iex> t = Nx.iota({2, 5}, vectorized_axes: [x: 2])
+      iex> Nx.slice_along_axis(t, 0, 3, axis: 1, strides: 2)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[2][2]
+        [
+          [
+            [0, 2],
+            [5, 7]
+          ],
+          [
+            [0, 2],
+            [5, 7]
+          ]
+        ]
+      >
+
   """
   @doc type: :indexed, from_backend: false
   def slice_along_axis(tensor, start_index, len, opts \\ []) when is_integer(len) do
@@ -12085,7 +12147,6 @@ defmodule Nx do
     axis = Keyword.fetch!(opts, :axis)
     strides = Keyword.fetch!(opts, :strides)
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
     axis = Nx.Shape.normalize_axis(shape, axis, names)
 
     if start_index == 0 and strides == 1 and elem(shape, axis) == len do
@@ -12167,27 +12228,72 @@ defmodule Nx do
           [4, 9, 10]
         ]
       >
+
+  ## Vectorized tensors
+
+  The both tensor to be sliced and the slices can be vectorized,
+  but indices must be non-vectorized.
+
+      iex> t = Nx.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]) |> Nx.vectorize(:x)
+      iex> slice = Nx.tensor([[10, 20], [30, 40]]) |> Nx.vectorize(:y)
+      iex> Nx.put_slice(t, [2], slice)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 2]
+        s64[4]
+        [
+          [
+            [1, 2, 10, 20],
+            [1, 2, 30, 40]
+          ],
+          [
+            [5, 6, 10, 20],
+            [5, 6, 30, 40]
+          ]
+        ]
+      >
+
   """
   @doc type: :indexed
   def put_slice(tensor, start_indices, slice) when is_list(start_indices) do
-    %T{shape: shape, names: names, type: type} = tensor = to_tensor(tensor)
-    %T{shape: slice_shape, names: slice_names, type: slice_type} = slice = to_tensor(slice)
+    [tensor, slice] = broadcast_vectors([tensor, slice])
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(slice, __ENV__.function)
+    %T{vectorized_axes: vectorized_axes, shape: shape, names: names, type: type} = tensor
+    %T{shape: slice_shape, names: slice_names, type: slice_type} = slice
 
     output_type = binary_type(type, slice_type)
 
     start_indices = to_indices(start_indices)
 
-    {shape, names} = Nx.Shape.put_slice(shape, names, slice_shape, slice_names, start_indices)
+    {output_shape, output_names} =
+      Nx.Shape.put_slice(shape, names, slice_shape, slice_names, start_indices)
 
-    impl!(tensor).put_slice(
-      %{tensor | shape: shape, names: names, type: output_type},
-      tensor,
-      start_indices,
-      slice
-    )
+    offset = length(vectorized_axes)
+
+    start_indices = List.duplicate(0, offset) ++ start_indices
+
+    offset_shape = Keyword.values(vectorized_axes)
+
+    tensor = devectorize(tensor)
+    slice = devectorize(slice)
+
+    output_shape_devec =
+      if offset != 0 do
+        List.to_tuple(offset_shape ++ Tuple.to_list(output_shape))
+      else
+        output_shape
+      end
+
+    output_names = List.duplicate(nil, offset) ++ output_names
+
+    result =
+      impl!(tensor).put_slice(
+        %{tensor | shape: output_shape_devec, names: output_names, type: output_type},
+        tensor,
+        start_indices,
+        slice
+      )
+
+    vectorize(result, vectorized_axes)
   end
 
   @doc """
@@ -14465,7 +14571,10 @@ defmodule Nx do
     else
       Enum.with_index(start_indices, fn index, i ->
         %T{shape: idx_shape, type: idx_type} = t = to_tensor(index)
-        Nx.Shared.raise_vectorized_not_implemented_yet(t, __ENV__.function)
+
+        if t.vectorized_axes != [] do
+          raise ArgumentError, "index for axis #{i} must be non-vectorized"
+        end
 
         unless idx_shape == {} do
           raise ArgumentError,
