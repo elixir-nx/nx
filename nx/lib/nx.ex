@@ -10450,6 +10450,22 @@ defmodule Nx do
         ]
       >
 
+  ## Vectorized tensors
+
+  Only `tensor` can be vectorized. Normal behavior of `reduce/4`
+  is applied to each corresponding entry. `:axes` refers to the
+  non-vectorized shape.
+
+      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[10, 20, 30], [40, 50, 60]]]) |> Nx.vectorize(:x)
+      iex> Nx.reduce(t, 10, [axes: [1]], &Nx.add/2)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[2]
+        [
+          [16, 25],
+          [70, 160]
+        ]
+      >
   """
   @doc type: :aggregation
   def reduce(tensor, acc, opts \\ [], fun) when is_function(fun, 2) do
@@ -10457,32 +10473,52 @@ defmodule Nx do
     type = Nx.Type.normalize!(opts[:type] || binary_type(tensor, acc))
     keep_axes = opts[:keep_axes]
 
-    %{shape: shape, names: names} = tensor = to_tensor(tensor)
+    %T{vectorized_axes: vectorized_axes} = to_tensor(tensor)
     acc = to_tensor(acc)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(acc, __ENV__.function)
+    if not (acc.shape == {} and acc.vectorized_axes == []) do
+      raise ArgumentError, "the accumulator must be a non-vectorized scalar, got: #{inspect(acc)}"
+    end
+
+    %T{shape: shape, names: names} = tensor = devectorize(tensor, keep_names: false)
+    offset = length(vectorized_axes)
+    axes = opts[:axes]
 
     {shape, names, axes} =
-      if axes = opts[:axes] do
-        axes = Nx.Shape.normalize_axes(shape, axes, names)
-        {new_shape, new_names} = Nx.Shape.contract(shape, axes, names, keep_axes)
-        {new_shape, new_names, axes}
-      else
-        if keep_axes do
-          shape = Tuple.duplicate(1, Nx.rank(shape))
-          {shape, names, nil}
-        else
+      cond do
+        not is_nil(axes) ->
+          axes = Nx.Shape.normalize_axes(shape, axes, names, offset)
+          {new_shape, new_names} = Nx.Shape.contract(shape, axes, names, keep_axes)
+          {new_shape, new_names, axes}
+
+        keep_axes ->
+          shape =
+            List.to_tuple(
+              Keyword.values(vectorized_axes) ++ List.duplicate(1, tuple_size(shape) - offset)
+            )
+
+          axes = count_up(tuple_size(shape) - offset, offset)
+          {shape, names, axes}
+
+        offset != 0 ->
+          axes = count_up(tuple_size(shape) - offset, offset)
+          shape = vectorized_axes |> Keyword.values() |> List.to_tuple()
+          names = List.duplicate(nil, offset)
+          {shape, names, axes}
+
+        true ->
           {{}, [], nil}
-        end
       end
 
-    if axes == [] do
-      tensor
-    else
-      out = %{tensor | type: type, shape: shape, names: names}
-      impl!(tensor).reduce(out, tensor, acc, [axes: axes, keep_axes: keep_axes], fun)
-    end
+    output =
+      if offset == 0 and axes == [] do
+        tensor
+      else
+        out = %{tensor | type: type, shape: shape, names: names}
+        impl!(tensor).reduce(out, tensor, acc, [axes: axes, keep_axes: keep_axes], fun)
+      end
+
+    vectorize(output, vectorized_axes)
   end
 
   @doc """
