@@ -12755,18 +12755,25 @@ defmodule Nx do
 
     offset = length(vectorized_axes)
 
-    tensor = devectorize(tensor, keep_names: false)
-    indices = devectorize(indices, keep_names: false)
+    {tensor, indices} =
+      if offset != 0 do
+        tensor = devectorize(tensor, keep_names: false)
+        indices = devectorize(indices, keep_names: false)
 
-    iota_shape =
-      indices.shape |> Tuple.delete_at(tuple_size(indices.shape) - 1) |> Tuple.append(1)
+        iota_shape =
+          indices.shape |> Tuple.delete_at(tuple_size(indices.shape) - 1) |> Tuple.append(1)
 
-    offset_axes = (offset - 1)..0//-1
+        offset_axes = (offset - 1)..0//-1
 
-    indices =
-      offset_axes
-      |> Enum.reduce([indices], &[Nx.iota(iota_shape, axis: &1) | &2])
-      |> concatenate(axis: -1)
+        indices =
+          offset_axes
+          |> Enum.reduce([indices], &[Nx.iota(iota_shape, axis: &1) | &2])
+          |> concatenate(axis: -1)
+
+        {tensor, indices}
+      else
+        {tensor, indices}
+      end
 
     {shape, names} = Nx.Shape.gather(tensor.shape, indices.shape)
 
