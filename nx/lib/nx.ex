@@ -9917,6 +9917,22 @@ defmodule Nx do
           [21, 15, 8]
         ]
       >
+
+  ## Vectorized axes
+
+  Works the same as if the accumulation was to happen over a list of tensors.
+  `:axis` refers to the non-vectorized shape.
+
+      iex> Nx.cumulative_sum(Nx.tensor([[2, 3, 1], [1, 3, 2], [2, 1, 3]]) |> Nx.vectorize(:x), axis: 0)
+      #Nx.Tensor<
+        vectorized[x: 3]
+        s64[3]
+        [
+          [2, 5, 6],
+          [1, 4, 6],
+          [2, 3, 6]
+        ]
+      >
   """
   @doc type: :cumulative
   def cumulative_sum(tensor, opts \\ []),
@@ -9975,6 +9991,22 @@ defmodule Nx do
           [0, 2, 2],
           [60, 20, 5],
           [336, 56, 8]
+        ]
+      >
+
+  ## Vectorized axes
+
+  Works the same as if the accumulation was to happen over a list of tensors.
+  `:axis` refers to the non-vectorized shape.
+
+      iex> Nx.cumulative_product(Nx.tensor([[2, 3, 0], [1, 3, 2], [2, 1, 3]]) |> Nx.vectorize(:x), axis: 0)
+      #Nx.Tensor<
+        vectorized[x: 3]
+        s64[3]
+        [
+          [2, 6, 0],
+          [1, 3, 6],
+          [2, 2, 6]
         ]
       >
   """
@@ -10037,6 +10069,22 @@ defmodule Nx do
           [1, 1, 3]
         ]
       >
+
+  ## Vectorized axes
+
+  Works the same as if the accumulation was to happen over a list of tensors.
+  `:axis` refers to the non-vectorized shape.
+
+      iex> Nx.cumulative_min(Nx.tensor([[2, 3, 1], [1, 3, 2], [2, 1, 3]]) |> Nx.vectorize(:x), axis: 0)
+      #Nx.Tensor<
+        vectorized[x: 3]
+        s64[3]
+        [
+          [2, 2, 1],
+          [1, 1, 1],
+          [2, 1, 1]
+        ]
+      >
   """
   @doc type: :cumulative
   def cumulative_min(tensor, opts \\ []),
@@ -10097,20 +10145,36 @@ defmodule Nx do
           [3, 3, 3]
         ]
       >
+
+  ## Vectorized axes
+
+  Works the same as if the accumulation was to happen over a list of tensors.
+  `:axis` refers to the non-vectorized shape.
+
+      iex> Nx.cumulative_max(Nx.tensor([[2, 3, 1], [1, 3, 2], [2, 1, 3]]) |> Nx.vectorize(:x), axis: 0)
+      #Nx.Tensor<
+        vectorized[x: 3]
+        s64[3]
+        [
+          [2, 3, 3],
+          [1, 3, 3],
+          [2, 2, 3]
+        ]
+      >
   """
   @doc type: :cumulative
   def cumulative_max(tensor, opts \\ []),
     do: cumulative_op(tensor, opts, :cumulative_max, &Nx.max/2)
 
   defp cumulative_op(tensor, opts, op, reduce_fun) do
-    opts = keyword!(opts, axis: 0, reverse: false)
-    reverse = opts[:reverse]
-    tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names)
+    apply_vectorized(tensor, fn tensor, offset ->
+      opts = keyword!(opts, axis: 0, reverse: false)
+      reverse = opts[:reverse]
+      axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names, offset)
 
-    Nx.Shared.optional(op, [tensor, [axis: axis, reverse: reverse]], tensor, fn tensor, opts ->
-      associative_scan(tensor, reduce_fun, opts)
+      Nx.Shared.optional(op, [tensor, [axis: axis, reverse: reverse]], tensor, fn tensor, opts ->
+        associative_scan(tensor, reduce_fun, opts)
+      end)
     end)
   end
 
