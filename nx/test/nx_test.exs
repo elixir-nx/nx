@@ -2445,4 +2445,32 @@ defmodule NxTest do
       assert Nx.mode(Nx.tensor([[[1]]]), keep_axis: true) == Nx.tensor([[[1]]])
     end
   end
+
+  describe "reshape_vectors" do
+    test "returns correct axes' order" do
+      x = Nx.iota({1}, vectorized_axes: [x: 1])
+      xy = Nx.iota({1}, vectorized_axes: [x: 1, y: 2])
+      x2 = Nx.iota({1}, vectorized_axes: [x: 2])
+
+      assert [
+               %Nx.Tensor{x | vectorized_axes: [x: 1, y: 1]},
+               %Nx.Tensor{xy | vectorized_axes: [x: 1, y: 2]},
+               %Nx.Tensor{x2 | vectorized_axes: [x: 2, y: 1]}
+             ] == Nx.reshape_vectors([x, xy, x2])
+    end
+  end
+
+  describe "broadcast_vectors" do
+    test "returns correct axes' order" do
+      x = Nx.iota({1}, vectorized_axes: [x: 1])
+      xy = Nx.iota({1, 2}, vectorized_axes: [x: 1, y: 2])
+      x2 = Nx.iota({1, 2, 3}, vectorized_axes: [x: 2])
+
+      assert [
+               Nx.iota({1}, vectorized_axes: [x: 2, y: 2]),
+               Nx.iota({1, 2}, vectorized_axes: [x: 2, y: 2]),
+               Nx.iota({1, 2, 3}, vectorized_axes: [x: 2, y: 2])
+             ] == Nx.broadcast_vectors([x, xy, x2])
+    end
+  end
 end
