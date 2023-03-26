@@ -12436,7 +12436,7 @@ defmodule Nx do
 
       iex> t = Nx.tensor([[[1, 2]], [[11, 12]]]) |> Nx.vectorize(:x)
       iex> idx = Nx.tensor([0, 1]) |> Nx.vectorize(:y)
-      iex(30)> Nx.take(t, idx,  axis: 1)
+      iex> Nx.take(t, idx,  axis: 1)
       #Nx.Tensor<
         vectorized[x: 2][y: 2]
         s64[1][2][2]
@@ -12471,8 +12471,6 @@ defmodule Nx do
           ]
         ]
       >
-
-
 
   ## Error cases
 
@@ -12599,6 +12597,48 @@ defmodule Nx do
         ]
       >
 
+  ## Vectorized tensors
+
+  `tensor` and `indices` have their vectorized axes broadcast together,
+  and then the operation takes place normally, with `:axis` and `indices`
+  having their values in reference to the input shape.
+
+      iex> t = Nx.tensor([[[1, 2, 3]], [[4, 5, 6]]]) |> Nx.vectorize(:x)
+      iex> idx = Nx.tensor([[[0, 0, 2, 1]], [[2, 1, 0, 0]]]) |> Nx.vectorize(:x)
+      iex> Nx.take_along_axis(t, idx, axis: 1)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[1][4]
+        [
+          [
+            [1, 1, 3, 2]
+          ],
+          [
+            [6, 5, 4, 4]
+          ]
+        ]
+      >
+
+  In the example below, we have broadcasting throughout the vectorized axes
+
+      iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6]]) |> Nx.vectorize(:x)
+      iex> idx = Nx.tensor([[0, 0, 2, 1], [2, 1, 0, 0]]) |> Nx.vectorize(:y)
+      iex> Nx.take_along_axis(t, idx, axis: 0)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 2]
+        s64[4]
+        [
+          [
+            [1, 1, 3, 2],
+            [3, 2, 1, 1]
+          ],
+          [
+            [4, 4, 6, 5],
+            [6, 5, 4, 4]
+          ]
+        ]
+      >
+
   ## Error cases
 
       iex> tensor = Nx.iota({3, 3})
@@ -12608,22 +12648,27 @@ defmodule Nx do
   """
   @doc type: :indexed
   def take_along_axis(tensor, indices, opts \\ []) when is_list(opts) do
-    tensor = to_tensor(tensor)
-    indices = to_tensor(indices)
-
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(indices, __ENV__.function)
+    [%T{vectorized_axes: vectorized_axes} = tensor, indices] =
+      broadcast_vectors([tensor, indices])
 
     unless Nx.Type.integer?(indices.type) do
       raise ArgumentError, "indices must be an integer tensor, got #{inspect(indices.type)}"
     end
 
     opts = keyword!(opts, axis: 0)
-    axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names)
+
+    tensor = devectorize(tensor, keep_names: false)
+    indices = devectorize(indices, keep_names: false)
+
+    offset = length(vectorized_axes)
+
+    axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names, offset)
 
     shape = Nx.Shape.take_along_axis(tensor.shape, indices.shape, axis)
 
-    impl!(tensor).take_along_axis(%{tensor | shape: shape}, tensor, indices, axis)
+    result = impl!(tensor).take_along_axis(%{tensor | shape: shape}, tensor, indices, axis)
+
+    vectorize(result, vectorized_axes)
   end
 
   @doc """
