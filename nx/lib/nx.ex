@@ -7099,9 +7099,11 @@ defmodule Nx do
       if vectorized_axes != [] do
         offset = length(vectorized_axes)
 
+        iota_shape = put_elem(indices.shape, tuple_size(indices.shape) - 1, 1)
+
         to_concat =
           Enum.reduce((offset - 1)..0//-1, [indices], fn axis, idx ->
-            [Nx.iota(indices.shape, axis: axis) | idx]
+            [Nx.iota(iota_shape, axis: axis) | idx]
           end)
 
         n = elem(indices.shape, tuple_size(indices.shape) - 1)
@@ -8690,12 +8692,34 @@ defmodule Nx do
         ]
       >
 
+  ### Vectorized tensors
+
+  For vectorized tensors, `:axis` refers to the non-vectorized shape:
+
+      iex> t = Nx.tensor([[[1, 2, 2, 3, 5], [1, 1, 76, 8, 1]], [[1, 2, 2, 2, 5], [5, 2, 2, 2, 1]]]) |> Nx.vectorize(:x)
+      iex> Nx.mode(t, axis: 0)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[5]
+        [
+          [1, 1, 2, 3, 1],
+          [1, 2, 2, 2, 1]
+        ]
+      >
+      iex> Nx.mode(t, axis: 1)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[2]
+        [
+          [2, 1],
+          [2, 2]
+        ]
+      >
   """
   @doc type: :aggregation, from_backend: false
   def mode(tensor, opts \\ []) do
     opts = keyword!(opts, axis: nil, keep_axis: false)
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     axis =
       if opts[:axis] != nil,
