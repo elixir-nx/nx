@@ -4478,13 +4478,15 @@ defmodule Nx do
 
   def reshape_vectors([tensor]), do: [to_tensor(tensor)]
 
-  def reshape_vectors(input) when is_list(input) do
-    {devectorized_tensors, canonical_vectorized_axes, _n} = do_reshape_vectors(input)
+  def reshape_vectors(tensors) when is_list(tensors) do
+    {devectorized_tensors, canonical_vectorized_axes, offset} = do_reshape_vectors(tensors)
 
-    Enum.map(
-      devectorized_tensors,
-      &vectorize(&1, Keyword.keys(canonical_vectorized_axes))
-    )
+    if offset != 0 do
+      keys = Keyword.keys(canonical_vectorized_axes)
+      Enum.map(devectorized_tensors, &vectorize(&1, keys))
+    else
+      devectorized_tensors
+    end
   end
 
   @doc """
@@ -4566,73 +4568,64 @@ defmodule Nx do
       >
   """
   @doc type: :shape
-  def broadcast_vectors([t]), do: t
+  def broadcast_vectors([t]), do: [to_tensor(t)]
 
   def broadcast_vectors(tensors) when is_list(tensors) do
     {devectorized_tensors, target_vectorized_axes, offset} = do_reshape_vectors(tensors)
 
-    target_vector_shape_l = Keyword.values(target_vectorized_axes)
+    if offset != 0 do
+      target_vector_shape_l = Keyword.values(target_vectorized_axes)
 
-    devectorized_tensors
-    |> Enum.map(fn t ->
-      tensor_base_shape_l = t.shape |> Tuple.to_list() |> Enum.drop(offset)
+      for t <- devectorized_tensors do
+        tensor_base_shape_l = t.shape |> Tuple.to_list() |> Enum.drop(offset)
+        target_shape = List.to_tuple(target_vector_shape_l ++ tensor_base_shape_l)
 
-      target_shape = List.to_tuple(target_vector_shape_l ++ tensor_base_shape_l)
-
-      broadcast(t, target_shape, names: t.names)
-    end)
-    |> Enum.map(&vectorize(&1, target_vectorized_axes))
+        t
+        |> broadcast(target_shape, names: t.names)
+        |> vectorize(target_vectorized_axes)
+      end
+    else
+      devectorized_tensors
+    end
   end
 
-  defp do_reshape_vectors([input]), do: [to_tensor(input)]
-
-  defp do_reshape_vectors(input) do
+  defp do_reshape_vectors(tensors) do
     # For all tensors to be compatible, each pair also needs to be compatible
     # This means that we can do a first pass accumulating axes into
     # the first tensor, and then a second pass getting them all into their final shapes.
-
-    tensors = Enum.map(input, &to_tensor/1)
-
-    # calculate the expected order for vectorized axes
-    canonical_vectorized_axes = calculate_canonical_vectorized_axes(tensors)
-
-    n = length(canonical_vectorized_axes)
-
-    devectorized_tensors = do_reshape_vectors_devectorize(tensors, canonical_vectorized_axes, n)
-
-    {devectorized_tensors, canonical_vectorized_axes, n}
+    tensors = Enum.map(tensors, &to_tensor/1)
+    canonical = calculate_canonical_vectorized_axes(tensors)
+    n = length(canonical)
+    devectorized_tensors = do_reshape_vectors_devectorize(tensors, canonical, n)
+    {devectorized_tensors, canonical, n}
   end
 
   defp do_reshape_vectors_devectorize(tensors, [], _n), do: tensors
 
   defp do_reshape_vectors_devectorize(tensors, canonical_vectorized_axes, n) do
-    Enum.map(tensors, fn %T{
-                           names: names,
-                           shape: shape,
-                           vectorized_axes: current_axes
-                         } = t ->
-      {vectorized_axes, []} =
-        Enum.map_reduce(canonical_vectorized_axes, current_axes, fn
-          {k, _}, [] ->
-            {{k, 1}, []}
+    Enum.map(tensors, fn
+      %T{names: names, shape: shape, vectorized_axes: current_axes} = t ->
+        {vectorized_axes, []} =
+          Enum.map_reduce(canonical_vectorized_axes, current_axes, fn
+            {k, _}, [] ->
+              {{k, 1}, []}
 
-          {name, _size}, current_axes ->
-            case List.keytake(current_axes, name, 0) do
-              {{^name, other_size}, current_axes} ->
-                {{name, other_size}, current_axes}
+            {name, _size}, current_axes ->
+              case List.keytake(current_axes, name, 0) do
+                {{^name, other_size}, current_axes} ->
+                  {{name, other_size}, current_axes}
 
-              _ ->
-                {{name, 1}, current_axes}
-            end
-        end)
+                _ ->
+                  {{name, 1}, current_axes}
+              end
+          end)
 
-      target_shape = List.to_tuple(Keyword.values(vectorized_axes) ++ Tuple.to_list(shape))
+        target_shape = List.to_tuple(Keyword.values(vectorized_axes) ++ Tuple.to_list(shape))
+        target_names = List.duplicate(nil, n) ++ names
 
-      target_names = List.duplicate(nil, n) ++ names
-
-      t
-      |> devectorize()
-      |> reshape(target_shape, names: target_names)
+        t
+        |> devectorize()
+        |> reshape(target_shape, names: target_names)
     end)
   end
 
