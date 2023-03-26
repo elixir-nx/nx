@@ -12989,7 +12989,7 @@ defmodule Nx do
         s64[2]
         [
           [1, 2],
-          [11, 12]
+          [11, 12],
           [1, 2]
         ]
       >
@@ -12999,7 +12999,7 @@ defmodule Nx do
       iex> Nx.take(t, idx, axis: 1)
       #Nx.Tensor<
         vectorized[x: 2]
-        s64[1]
+        s64[1][2]
         [
           [
             [1, 2]
@@ -13052,6 +13052,7 @@ defmodule Nx do
           Nx.Shape.take(tensor.shape, tensor.names, indices.shape, indices.names, axis)
 
         shape = List.to_tuple(Keyword.values(vectorized_axes) ++ Tuple.to_list(shape))
+        names = List.duplicate(nil, offset) ++ names
         {shape, names}
       else
         Nx.Shape.take(tensor.shape, tensor.names, indices.shape, indices.names, axis)
@@ -13061,7 +13062,6 @@ defmodule Nx do
     indices = devectorize(indices, keep_names: false)
     axis = axis + offset
 
-    IO.inspect({vectorized_axes, tensor, indices, shape, names, axis})
     result = impl!(tensor).take(%{tensor | shape: shape, names: names}, tensor, indices, axis)
 
     vectorize(result, Keyword.keys(vectorized_axes))
