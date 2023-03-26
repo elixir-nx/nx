@@ -12428,6 +12428,52 @@ defmodule Nx do
         ]
       >
 
+  ## Vectorized tensors
+
+  `tensor` and `indices` have their vectorized axes broadcast together,
+  and then the operation takes place normally, with `:axis` and `indices`
+  having their values in reference to the input shape.
+
+      iex> t = Nx.tensor([[[1, 2]], [[11, 12]]]) |> Nx.vectorize(:x)
+      iex> idx = Nx.tensor([0, 1]) |> Nx.vectorize(:y)
+      iex(30)> Nx.take(t, idx,  axis: 1)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 2]
+        s64[1][2][2]
+        [
+          [
+            [
+              [
+                [1, 2],
+                [1, 2]
+              ]
+            ],
+            [
+              [
+                [1, 2],
+                [1, 2]
+              ]
+            ]
+          ],
+          [
+            [
+              [
+                [11, 12],
+                [11, 12]
+              ]
+            ],
+            [
+              [
+                [11, 12],
+                [11, 12]
+              ]
+            ]
+          ]
+        ]
+      >
+
+
+
   ## Error cases
 
       iex> Nx.take(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([1, 0, 1], type: :f32))
@@ -12435,22 +12481,26 @@ defmodule Nx do
   """
   @doc type: :indexed
   def take(tensor, indices, opts \\ []) when is_list(opts) do
-    tensor = to_tensor(tensor)
-    indices = to_tensor(indices)
-
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(indices, __ENV__.function)
+    [%T{vectorized_axes: vectorized_axes} = tensor, indices] =
+      broadcast_vectors([tensor, indices])
 
     unless Nx.Type.integer?(indices.type) do
       raise ArgumentError, "indices must be an integer tensor, got #{inspect(indices.type)}"
     end
 
+    offset = length(vectorized_axes)
+
     opts = keyword!(opts, axis: 0)
-    axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names)
+    axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names, offset)
+
+    tensor = devectorize(tensor, keep_names: false)
+    indices = devectorize(indices, keep_names: false)
 
     {shape, names} = Nx.Shape.take(tensor.shape, tensor.names, indices.shape, indices.names, axis)
 
-    impl!(tensor).take(%{tensor | shape: shape, names: names}, tensor, indices, axis)
+    result = impl!(tensor).take(%{tensor | shape: shape, names: names}, tensor, indices, axis)
+
+    vectorize(result, vectorized_axes)
   end
 
   @doc """
