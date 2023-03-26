@@ -10789,8 +10789,6 @@ defmodule Nx do
 
     offset = length(vectorized_axes)
 
-    offset_axes = count_up(offset, 0)
-
     # Axes normalization
     c1 = Nx.Shape.normalize_axes(s1, contract_axes1, names1)
     c2 = Nx.Shape.normalize_axes(s2, contract_axes2, names2)
@@ -10801,18 +10799,23 @@ defmodule Nx do
 
     out = %{t1 | type: output_type, names: output_names, shape: output_shape}
 
-    t1 = devectorize(t1)
-    t2 = devectorize(t2)
-    out = devectorize(out)
+    if offset != 0 do
+      offset_axes = count_up(offset, 0)
 
-    c1 = Enum.map(c1, &(&1 + offset))
-    c2 = Enum.map(c2, &(&1 + offset))
-    b1 = offset_axes ++ Enum.map(b1, &(&1 + offset))
-    b2 = offset_axes ++ Enum.map(b2, &(&1 + offset))
+      t1 = devectorize(t1)
+      t2 = devectorize(t2)
+      out = devectorize(out)
 
-    res = impl!(t1, t2).dot(out, t1, c1, b1, t2, c2, b2)
+      c1 = Enum.map(c1, &(&1 + offset))
+      c2 = Enum.map(c2, &(&1 + offset))
+      b1 = offset_axes ++ Enum.map(b1, &(&1 + offset))
+      b2 = offset_axes ++ Enum.map(b2, &(&1 + offset))
 
-    revectorize_and_validate_sizes(res, vectorized_axes, true)
+      res = impl!(t1, t2).dot(out, t1, c1, b1, t2, c2, b2)
+      revectorize_and_validate_sizes(res, vectorized_axes, true)
+    else
+      impl!(t1, t2).dot(out, t1, c1, b1, t2, c2, b2)
+    end
   end
 
   @doc """
