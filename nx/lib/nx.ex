@@ -6390,7 +6390,7 @@ defmodule Nx do
       >
 
     In the next example, notice that even though the `pred` input
-    is scalar, because we're dealing with vectorize inputs, some
+    is scalar, because we're dealing with vectorized inputs, some
     broadcasting still occurs.
 
       iex> pred = 1
