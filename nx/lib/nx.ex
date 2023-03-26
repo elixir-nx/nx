@@ -2156,24 +2156,128 @@ defmodule Nx do
           [6, 7]
         ]
       >
+
+  ## Vectorized tensors
+
+  Vectorized tensors will have their vectorized axes collapsed into
+  a single dimension which will then be batched accordingly.
+
+      iex> t = Nx.iota({2, 2, 2}) |> Nx.vectorize(x: 2)
+      iex> [first, second] = Nx.to_batched(t, 1) |> Enum.to_list()
+      iex> first
+      #Nx.Tensor<
+        s64[1][2][2]
+        [
+          [
+            [0, 1],
+            [2, 3]
+          ]
+        ]
+      >
+      iex> second
+      #Nx.Tensor<
+        s64[1][2][2]
+        [
+          [
+            [4, 5],
+            [6, 7]
+          ]
+        ]
+      >
+
+      iex> t = Nx.iota({2, 2, 2}) |> Nx.vectorize(x: 2, y: 2)
+      iex> [first, second] = Nx.to_batched(t, 2) |> Enum.to_list()
+      iex> first
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [0, 1],
+          [2, 3]
+        ]
+      >
+      iex> second
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [4, 5],
+          [6, 7]
+        ]
+      >
+
+  Same rules about uneven batches still apply on the resulting axis:
+
+      iex> t = Nx.iota({5, 2}, names: [:x, :y]) |> Nx.vectorize(:x)
+      iex> [first, second, third] = Nx.to_batched(t, 2) |> Enum.to_list()
+      iex> first
+      #Nx.Tensor<
+        s64[2][y: 2]
+        [
+          [0, 1],
+          [2, 3]
+        ]
+      >
+      iex> second
+      #Nx.Tensor<
+        s64[2][y: 2]
+        [
+          [4, 5],
+          [6, 7]
+        ]
+      >
+      iex> third
+      #Nx.Tensor<
+        s64[2][y: 2]
+        [
+          [8, 9],
+          [0, 1]
+        ]
+      >
+
+  Because we're dealing with vectorized tensors, a vectorized
+  scalar tensor can also be batched.
+
+      iex> t = Nx.tensor([1, 2, 3]) |> Nx.vectorize(:x)
+      iex> [first, second] = t |> Nx.to_batched(2) |> Enum.to_list()
+      iex> first
+      #Nx.Tensor<
+        s64[2]
+        [1, 2]
+      >
+      iex> second
+      #Nx.Tensor<
+        s64[2]
+        [3, 1]
+      >
   """
   @doc type: :conversion
   def to_batched(tensor, batch_size, opts \\ [])
       when is_integer(batch_size) and batch_size >= 1 do
     opts = keyword!(opts, leftover: :repeat)
 
-    %{shape: shape} = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    %T{vectorized_axes: vectorized_axes} = to_tensor(tensor)
 
-    if shape == {} do
-      raise ArgumentError, "cannot batch scalar tensor #{inspect(tensor)}"
+    if vectorized_axes == [] and tensor.shape == {} do
+      raise ArgumentError, "cannot batch non-vectorized scalar tensor #{inspect(tensor)}"
     end
 
-    if elem(shape, 0) < batch_size do
+    tensor =
+      if vectorized_axes != [] do
+        vectorized_size = vectorized_axes |> Keyword.values() |> Enum.product()
+        target_shape = Tuple.insert_at(tensor.shape, 0, vectorized_size)
+
+        tensor
+        |> devectorize()
+        |> reshape(target_shape, names: [nil | tensor.names])
+      else
+        devectorize(tensor, keep_names: false)
+      end
+
+    if elem(tensor.shape, 0) < batch_size do
       raise ArgumentError, "cannot batch beyond original tensor"
     end
 
-    new_shape = put_elem(shape, 0, batch_size)
+    new_shape = put_elem(tensor.shape, 0, batch_size)
+
     impl!(tensor).to_batched(%{tensor | shape: new_shape}, tensor, opts)
   end
 
