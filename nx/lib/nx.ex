@@ -9357,31 +9357,49 @@ defmodule Nx do
   end
 
   defp aggregate_window_op(tensor, window_dimensions, opts, op) when is_list(opts) do
-    opts = keyword!(opts, [:window_dilations, padding: :valid, strides: 1])
-    Nx.Shape.validate!(window_dimensions, :window_dimensions)
-    %{shape: shape} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    apply_vectorized(tensor, fn tensor, offset ->
+      opts = keyword!(opts, [:window_dilations, padding: :valid, strides: 1])
+      Nx.Shape.validate!(window_dimensions, :window_dimensions)
+      %{shape: shape} = tensor
 
-    strides = opts[:strides]
-    padding = opts[:padding]
-    dilations = opts[:window_dilations] || List.duplicate(1, rank(shape))
+      strides = opts[:strides]
+      padding = opts[:padding]
 
-    strides =
-      if is_integer(strides),
-        do: List.duplicate(strides, rank(shape)),
-        else: strides
+      offset_ones = List.duplicate(1, offset)
 
-    dilations =
-      if is_integer(dilations),
-        do: List.duplicate(dilations, rank(shape)),
-        else: dilations
+      dilations =
+        case opts[:window_dilations] do
+          nil ->
+            List.duplicate(1, rank(shape))
 
-    {output_shape, padding_config} =
-      Nx.Shape.pool(shape, window_dimensions, strides, padding, dilations)
+          dilations when is_integer(dilations) ->
+            offset_ones ++ List.duplicate(dilations, rank(shape) - offset)
 
-    out = %{tensor | shape: output_shape}
-    opts = [padding: padding_config, strides: strides, window_dilations: dilations]
-    apply(impl!(tensor), op, [out, tensor, window_dimensions, opts])
+          dilations ->
+            offset_ones ++ dilations
+        end
+
+      strides =
+        cond do
+          strides == 1 ->
+            List.duplicate(1, rank(shape))
+
+          is_integer(strides) ->
+            offset_ones ++ List.duplicate(strides, rank(shape) - offset)
+
+          true ->
+            offset_ones ++ strides
+        end
+
+      window_dimensions = List.to_tuple(offset_ones ++ Tuple.to_list(window_dimensions))
+
+      {output_shape, padding_config} =
+        Nx.Shape.pool(shape, window_dimensions, strides, padding, dilations)
+
+      out = %{tensor | shape: output_shape}
+      opts = [padding: padding_config, strides: strides, window_dilations: dilations]
+      apply(impl!(tensor), op, [out, tensor, window_dimensions, opts])
+    end)
   end
 
   @doc """
@@ -9499,6 +9517,49 @@ defmodule Nx do
           ]
         ]
       >
+
+  ## Vectorized tensors
+
+  For vectorized tensors, the windows will slide throughout all vectorized axes,
+  and all options refer to the inner shape only.
+
+      iex> t = Nx.iota({2, 1, 2, 5}) |> Nx.vectorize(:x) |> Nx.vectorize(:y)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 1]
+        s64[2][5]
+        [
+          [
+            [
+              [0, 1, 2, 3, 4],
+              [5, 6, 7, 8, 9]
+            ]
+          ],
+          [
+            [
+              [10, 11, 12, 13, 14],
+              [15, 16, 17, 18, 19]
+            ]
+          ]
+        ]
+      >
+      iex> Nx.window_sum(t, {2, 2}, strides: [1, 2], window_dilations: [1, 2])
+      #Nx.Tensor<
+        vectorized[x: 2][y: 1]
+        s64[1][2]
+        [
+          [
+            [
+              [14, 22]
+            ]
+          ],
+          [
+            [
+              [54, 62]
+            ]
+          ]
+        ]
+      >
+
   """
   @doc type: :window
   def window_sum(tensor, window_dimensions, opts \\ []),
@@ -9594,6 +9655,48 @@ defmodule Nx do
           ]
         ]
       >
+
+  ## Vectorized tensors
+
+  For vectorized tensors, the windows will slide throughout all vectorized axes,
+  and all options refer to the inner shape only.
+
+      iex> t = Nx.iota({2, 1, 2, 5}) |> Nx.vectorize(:x) |> Nx.vectorize(:y)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 1]
+        s64[2][5]
+        [
+          [
+            [
+              [0, 1, 2, 3, 4],
+              [5, 6, 7, 8, 9]
+            ]
+          ],
+          [
+            [
+              [10, 11, 12, 13, 14],
+              [15, 16, 17, 18, 19]
+            ]
+          ]
+        ]
+      >
+      iex> Nx.window_mean(t, {2, 2}, strides: [1, 2], window_dilations: [1, 2])
+      #Nx.Tensor<
+        vectorized[x: 2][y: 1]
+        f32[1][2]
+        [
+          [
+            [
+              [3.5, 5.5]
+            ]
+          ],
+          [
+            [
+              [13.5, 15.5]
+            ]
+          ]
+        ]
+      >
   """
   @doc type: :window
   def window_mean(tensor, window_dimensions, opts \\ []) do
@@ -9673,6 +9776,48 @@ defmodule Nx do
           [
             [4, 3],
             [4, 7]
+          ]
+        ]
+      >
+
+  ## Vectorized tensors
+
+  For vectorized tensors, the windows will slide throughout all vectorized axes,
+  and all options refer to the inner shape only.
+
+      iex> t = Nx.iota({2, 1, 2, 5}) |> Nx.vectorize(:x) |> Nx.vectorize(:y)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 1]
+        s64[2][5]
+        [
+          [
+            [
+              [0, 1, 2, 3, 4],
+              [5, 6, 7, 8, 9]
+            ]
+          ],
+          [
+            [
+              [10, 11, 12, 13, 14],
+              [15, 16, 17, 18, 19]
+            ]
+          ]
+        ]
+      >
+      iex> Nx.window_max(t, {2, 2}, strides: [1, 2], window_dilations: [1, 2])
+      #Nx.Tensor<
+        vectorized[x: 2][y: 1]
+        s64[1][2]
+        [
+          [
+            [
+              [7, 9]
+            ]
+          ],
+          [
+            [
+              [17, 19]
+            ]
           ]
         ]
       >
@@ -9760,6 +9905,48 @@ defmodule Nx do
           ]
         ]
       >
+
+  ## Vectorized tensors
+
+  For vectorized tensors, the windows will slide throughout all vectorized axes,
+  and all options refer to the inner shape only.
+
+      iex> t = Nx.iota({2, 1, 2, 5}) |> Nx.vectorize(:x) |> Nx.vectorize(:y)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 1]
+        s64[2][5]
+        [
+          [
+            [
+              [0, 1, 2, 3, 4],
+              [5, 6, 7, 8, 9]
+            ]
+          ],
+          [
+            [
+              [10, 11, 12, 13, 14],
+              [15, 16, 17, 18, 19]
+            ]
+          ]
+        ]
+      >
+      iex> Nx.window_min(t, {2, 2}, strides: [1, 2], window_dilations: [1, 2])
+      #Nx.Tensor<
+        vectorized[x: 2][y: 1]
+        s64[1][2]
+        [
+          [
+            [
+              [0, 2]
+            ]
+          ],
+          [
+            [
+              [10, 12]
+            ]
+          ]
+        ]
+      >
   """
   @doc type: :window
   def window_min(tensor, window_dimensions, opts \\ []) do
@@ -9844,6 +10031,48 @@ defmodule Nx do
           [
             [4, 6],
             [4, 14]
+          ]
+        ]
+      >
+
+  ## Vectorized tensors
+
+  For vectorized tensors, the windows will slide throughout all vectorized axes,
+  and all options refer to the inner shape only.
+
+      iex> t = Nx.iota({2, 1, 2, 5}) |> Nx.vectorize(:x) |> Nx.vectorize(:y)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 1]
+        s64[2][5]
+        [
+          [
+            [
+              [0, 1, 2, 3, 4],
+              [5, 6, 7, 8, 9]
+            ]
+          ],
+          [
+            [
+              [10, 11, 12, 13, 14],
+              [15, 16, 17, 18, 19]
+            ]
+          ]
+        ]
+      >
+      iex> Nx.window_product(t, {2, 2}, strides: [1, 2], window_dilations: [1, 2])
+      #Nx.Tensor<
+        vectorized[x: 2][y: 1]
+        s64[1][2]
+        [
+          [
+            [
+              [0, 504]
+            ]
+          ],
+          [
+            [
+              [30600, 54264]
+            ]
           ]
         ]
       >
