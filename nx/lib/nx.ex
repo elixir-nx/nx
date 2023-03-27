@@ -7207,10 +7207,11 @@ defmodule Nx do
     {indices, updates} =
       if vectorized_axes != [] do
         offset = length(vectorized_axes)
+        iota_shape = put_elem(indices.shape, tuple_size(indices.shape) - 1, 1)
 
         to_concat =
           Enum.reduce((offset - 1)..0//-1, [indices], fn axis, idx ->
-            [Nx.iota(indices.shape, axis: axis) | idx]
+            [Nx.iota(iota_shape, axis: axis) | idx]
           end)
 
         n = elem(indices.shape, tuple_size(indices.shape) - 1)
