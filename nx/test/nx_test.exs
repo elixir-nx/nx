@@ -847,6 +847,54 @@ defmodule NxTest do
                  Nx.tensor([Complex.new(2), 1])
                )
     end
+
+    test "vectorized target and non-vectorized index" do
+      t = Nx.tensor([[0, 1, 2], [3, 4, 5]]) |> Nx.vectorize(x: 2)
+      index = Nx.tensor([[0], [1], [1], [0]])
+      updates = Nx.tensor([1, 2, 3, 4])
+
+      assert Nx.indexed_add(t, index, updates) ==
+               Nx.tensor([
+                 [5, 6, 2],
+                 [8, 9, 5]
+               ])
+               |> Nx.vectorize(x: 2)
+    end
+
+    test "non-vectorized target and vectorized index+updates" do
+      t = Nx.tensor([0, 1, 2])
+
+      assert %{shape: {2, 1}} =
+               index =
+               Nx.tensor([
+                 [0, 0],
+                 [0, 1],
+                 [1, 0],
+                 [1, 1]
+               ])
+               |> Nx.reshape({2, 2, 2, 1})
+               |> Nx.vectorize(x: 2, y: 2)
+
+      updates =
+        Nx.tensor([
+          [1, 2],
+          [3, 4]
+        ])
+        |> Nx.vectorize(x: 2)
+
+      assert Nx.indexed_add(t, index, updates) ==
+               Nx.tensor([
+                 [
+                   [3, 1, 2],
+                   [1, 3, 2]
+                 ],
+                 [
+                   [4, 4, 2],
+                   [0, 8, 2]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2, y: 2)
+    end
   end
 
   describe "indexed_put" do
