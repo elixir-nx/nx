@@ -1480,11 +1480,6 @@ defmodule EXLA.Defn do
     {op, keys}
   end
 
-  defp computation_arg_shape(%T{} = tensor) do
-    %{type: type, shape: shape} = Nx.devectorize(tensor)
-    EXLA.Shape.make_shape(type, shape)
-  end
-
   defp computation_arg_shape(%{type: type, shape: shape}) do
     EXLA.Shape.make_shape(type, shape)
   end
