@@ -1141,8 +1141,7 @@ defmodule EXLA.Defn do
     collapsed_slice_dims = [axis]
     start_index_map = [axis]
 
-    tensor
-    |> EXLA.Op.gather(
+    EXLA.Op.gather(tensor,
       indices,
       index_vector_dim,
       slice_sizes,
@@ -1150,7 +1149,6 @@ defmodule EXLA.Defn do
       collapsed_slice_dims,
       start_index_map
     )
-    |> EXLA.Op.reshape(ans.shape)
   end
 
   defp to_operator(:take_along_axis, [tensor, indices, axis], _ans, state) do
