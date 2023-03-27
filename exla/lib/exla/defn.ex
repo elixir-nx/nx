@@ -421,8 +421,10 @@ defmodule EXLA.Defn do
             |> Outfeed.with_token(EXLA.Op.create_token(builder))
             |> Outfeed.add_infeeds(builder, reverse_infeeds)
 
+          expr = Nx.Defn.Composite.traverse(expr || fun.(vars), &Nx.devectorize/1)
+
           {computation, extra, outfeed} =
-            to_computation.(builder, expr || fun.(vars), inputs_and_shapes, outfeed)
+            to_computation.(builder, expr, inputs_and_shapes, outfeed)
 
           {xla_time, executable} =
             :timer.tc(fn ->
@@ -480,7 +482,7 @@ defmodule EXLA.Defn do
         {res, cache}
 
       %{} ->
-        {res, cache} = cached_recur_operator(op, expr, state, cache)
+        {res, cache} = cached_recur_operator(op, Nx.devectorize(expr), state, cache)
         {res, Map.put(cache, id, res)}
     end
   end
@@ -1478,11 +1480,6 @@ defmodule EXLA.Defn do
       end)
 
     {op, keys}
-  end
-
-  defp computation_arg_shape(%T{} = tensor) do
-    %{type: type, shape: shape} = Nx.devectorize(tensor)
-    EXLA.Shape.make_shape(type, shape)
   end
 
   defp computation_arg_shape(%{type: type, shape: shape}) do

@@ -2102,6 +2102,20 @@ defmodule Nx.DefnTest do
     end
 
     @tag compiler: Evaluator
+    test "compiles with vectorized inputs" do
+      fun = Nx.Defn.compile(&Nx.add/2, [Nx.template({2, 2}, :s64) |> Nx.vectorize(:x), 0])
+
+      assert fun.(Nx.iota({2, 2}) |> Nx.vectorize(:x), 1) ==
+               Nx.tensor([[1, 2], [3, 4]]) |> Nx.vectorize(:x)
+
+      fun = fn left, right -> Nx.subtract(right, Nx.add(left, left)) end
+      fun = Nx.Defn.compile(fun, [Nx.template({2, 2}, :s64) |> Nx.vectorize(:x), 0])
+
+      assert fun.(Nx.iota({2, 2}) |> Nx.vectorize(:x), 1) ==
+               Nx.tensor([[1, -1], [-3, -5]]) |> Nx.vectorize(:x)
+    end
+
+    @tag compiler: Evaluator
     test "raises on incompatible shape" do
       fun = Nx.Defn.compile(&defn_compile/2, [{4, 5}, 3])
 

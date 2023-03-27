@@ -35,7 +35,7 @@ defmodule Nx.Defn.Evaluator do
     rest_params = Enum.drop(args, count)
     hooks = Keyword.get(opts, :hooks, %{})
     gc? = Keyword.get(opts, :garbage_collect, false)
-    {expr, cache} = precompile(fun, vars, hooks)
+    {expr, output, cache} = precompile(fun, vars, hooks)
 
     [
       Nx.Defn.Stream.start_link(input, acc, fn input_params, acc ->
@@ -44,7 +44,7 @@ defmodule Nx.Defn.Evaluator do
 
         expr
         |> composite_eval(%{params: params, gc: gc?}, [cache])
-        |> elem(0)
+        |> apply_output(output)
       end)
     ]
   end
@@ -58,22 +58,33 @@ defmodule Nx.Defn.Evaluator do
   def __compile__(_key, vars, fun, opts) do
     hooks = Keyword.get(opts, :hooks, %{})
     gc? = Keyword.get(opts, :garbage_collect, false)
-    {expr, cache} = precompile(fun, vars, hooks)
+    {expr, output, cache} = precompile(fun, vars, hooks)
 
     fn [params] ->
       [
         expr
         |> composite_eval(%{params: params, gc: gc?}, [cache])
-        |> elem(0)
+        |> apply_output(output)
       ]
     end
+  end
+
+  defp apply_output({result, _cache}, output) do
+    {result, []} =
+      Composite.traverse(result, output, fn
+        result, [%Nx.Tensor{vectorized_axes: vectorized_axes} | acc] ->
+          {Nx.vectorize(result, vectorized_axes), acc}
+      end)
+
+    result
   end
 
   defp precompile(fun, vars, hooks) do
     expr = fun.(vars)
     state = %{hooks: hooks, parent_ids: nil, current_ids: nil}
     cache = init_compute_cache(expr, state)
-    {expr, cache}
+    {expr, output} = Nx.Defn.Composite.traverse(expr, [], &{Nx.devectorize(&1), [&1 | &2]})
+    {expr, Enum.reverse(output), cache}
   end
 
   defp init_compute_cache(expr, state) do

@@ -1056,7 +1056,7 @@ defmodule NxTest do
     test "raises for scalars" do
       t = Nx.tensor(1)
 
-      assert_raise(ArgumentError, ~r/cannot batch scalar tensor/, fn ->
+      assert_raise(ArgumentError, ~r/cannot batch non-vectorized scalar tensor/, fn ->
         Nx.to_batched(t, 1)
       end)
     end
