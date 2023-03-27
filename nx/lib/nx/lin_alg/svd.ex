@@ -24,7 +24,7 @@ defmodule Nx.LinAlg.SVD do
   defn svd(input_tensor, opts \\ []) do
     validate_opts(opts)
 
-    input_tensor = collapse_batch_axes_and_vectorize(input_tensor)
+    {input_tensor, collapsed_axes} = collapse_batch_axes_and_vectorize(input_tensor)
 
     {uz, sz, vtz} = svd_all_zeros(input_tensor, opts)
     {u, s, vt} = svd_non_zero(input_tensor, opts)
@@ -42,9 +42,9 @@ defmodule Nx.LinAlg.SVD do
         svd_grad(result, input_tensor, g)
       end)
 
-    u = Nx.devectorize(u, keep_names: false)
-    s = Nx.devectorize(s, keep_names: false)
-    vt = Nx.devectorize(vt, keep_names: false)
+    u = expand_batch_axes(u, collapsed_axes)
+    s = expand_batch_axes(s, collapsed_axes)
+    vt = expand_batch_axes(vt, collapsed_axes)
 
     {u, s, vt}
   end
@@ -52,7 +52,7 @@ defmodule Nx.LinAlg.SVD do
   deftransformp collapse_batch_axes_and_vectorize(
                   %Nx.Tensor{vectorized_axes: [], shape: {_, _}} = tensor
                 ),
-                do: tensor
+                do: {tensor, {}}
 
   deftransformp collapse_batch_axes_and_vectorize(%Nx.Tensor{shape: shape} = tensor) do
     if tensor.vectorized_axes != [] do
@@ -63,18 +63,38 @@ defmodule Nx.LinAlg.SVD do
     m = elem(shape, rank - 2)
     n = elem(shape, rank - 1)
 
-    vector_size =
-      shape |> Tuple.delete_at(rank - 2) |> Tuple.delete_at(rank - 2) |> Tuple.product()
+    collapsed_axes = shape |> Tuple.delete_at(rank - 2) |> Tuple.delete_at(rank - 2)
+    vector_size = Tuple.product(collapsed_axes)
 
     target_shape = {vector_size, m, n}
 
-    tensor
-    |> Nx.reshape(target_shape)
-    |> Nx.vectorize(vector: vector_size)
+    vectorized =
+      tensor
+      |> Nx.reshape(target_shape)
+      |> Nx.vectorize(vector: vector_size)
+
+    {vectorized, collapsed_axes}
   end
 
   deftransformp validate_opts(opts \\ []) do
     opts[:max_iter] || raise ArgumentError, "missing option :max_iter"
+  end
+
+  deftransformp expand_batch_axes(tensor, {}), do: tensor
+
+  deftransformp expand_batch_axes(
+                  %Nx.Tensor{vectorized_axes: [vector: _size], shape: shape} = tensor,
+                  collapsed_axes
+                ) do
+    target_shape =
+      case shape do
+        {k} -> Tuple.append(collapsed_axes, k)
+        {m, n} -> collapsed_axes |> Tuple.append(m) |> Tuple.append(n)
+      end
+
+    tensor
+    |> Nx.devectorize()
+    |> Nx.reshape(target_shape)
   end
 
   defnp svd_all_zeros(a, opts) do
