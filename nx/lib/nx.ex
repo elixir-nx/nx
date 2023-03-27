@@ -4351,8 +4351,6 @@ defmodule Nx do
     names = Enum.drop(names, n)
 
     for name <- names, {new_axis_name, _} <- new_vectorized_axes, name == new_axis_name do
-      IO.inspect({tensor, vector_spec})
-
       raise ArgumentError,
             "cannot use name #{inspect(name)} for new vectorized axes because there's already an axis with the same name"
     end
@@ -13027,6 +13025,18 @@ defmodule Nx do
         ]
       >
 
+      iex> t = Nx.tensor([[1, 2], [11, 12]]) |> Nx.vectorize(:x)
+      iex> idx = Nx.tensor([[0, 1, 0], [0, 1, 0]]) |> Nx.vectorize(:x)
+      iex> Nx.take(t, idx)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[3]
+        [
+          [1, 2, 1],
+          [11, 12, 11]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.take(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([1, 0, 1], type: :f32))
@@ -13034,6 +13044,7 @@ defmodule Nx do
   """
   @doc type: :indexed
   def take(tensor, indices, opts \\ []) when is_list(opts) do
+    %T{vectorized_axes: tensor_vectorized_axes} = to_tensor(tensor)
     [tensor, indices] = reshape_vectors([tensor, indices])
 
     unless Nx.Type.integer?(indices.type) do
@@ -13053,13 +13064,25 @@ defmodule Nx do
         {shape, names} =
           Nx.Shape.take(tensor.shape, tensor.names, indices.shape, indices.names, axis)
 
-        {indices_slice_lengths_rev, indices_squeeze_axes_rev, _} =
-          Enum.zip_reduce(indices.vectorized_axes, vectorized_axes, {[], [], 0}, fn
-            {name, s1}, {name, s2}, {slice_acc, squeeze_acc, axis} when s2 >= s1 ->
-              {[1 | slice_acc], [axis | squeeze_acc], axis + 1}
+        # because take/3 will insert the index shape into the tensor axis which we are
+        # taking from, we need to ensure that we squeeze out all common vectorized
+        # axes, as well as the 1-sized vectorized axes from indices
+        {[], indices_slice_lengths_rev, indices_squeeze_axes_rev, _} =
+          Enum.reduce(indices.vectorized_axes, {tensor_vectorized_axes, [], [], 0}, fn
+            {_name, s1}, {[], slice_acc, squeeze_acc, axis} ->
+              {[], [s1 | slice_acc], squeeze_acc, axis + 1}
 
-            {name, s1}, {name, 1}, {slice_acc, squeeze_acc, axis} ->
-              {[s1 | slice_acc], squeeze_acc, axis + 1}
+            {name, s1}, {other_axes, slice_acc, squeeze_acc, axis} ->
+              {slice, squeeze_acc, other_axes} =
+                case List.keytake(other_axes, name, 0) do
+                  {{^name, s2}, other_axes} when s2 >= s1 ->
+                    {1, [axis | squeeze_acc], other_axes}
+
+                  _ ->
+                    {s1, squeeze_acc, other_axes}
+                end
+
+              {other_axes, [slice | slice_acc], squeeze_acc, axis + 1}
           end)
 
         devec_indices = devectorize(indices)

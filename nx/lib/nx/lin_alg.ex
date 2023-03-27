@@ -1407,12 +1407,11 @@ defmodule Nx.LinAlg do
   """
   def svd(tensor, opts \\ []) do
     opts = keyword!(opts, max_iter: 100, full_matrices?: true)
-    %T{type: type, shape: shape, vectorized_axes: vectorized_axes} = tensor = Nx.to_tensor(tensor)
+    %T{vectorized_axes: vectorized_axes} = tensor = Nx.to_tensor(tensor)
+
+    %T{type: type, shape: shape} = tensor = Nx.devectorize(tensor)
 
     Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.svd", 2)
-
-    tensor = Nx.devectorize(tensor)
-
     output_type = Nx.Type.to_floating(type)
     {u_shape, s_shape, v_shape} = Nx.Shape.svd(shape, opts)
     rank = tuple_size(shape)
@@ -1425,6 +1424,13 @@ defmodule Nx.LinAlg do
     {u, s, vt} =
       Nx.Shared.optional(:svd, [tensor, opts], output, fn tensor, opts ->
         {u, s, vt} = Nx.LinAlg.SVD.svd(tensor, opts)
+
+        # THIS IS A BUG, DO NOT MERGE AS IS
+        {
+          Nx.devectorize(u, keep_names: false),
+          Nx.devectorize(s, keep_names: false),
+          Nx.devectorize(vt, keep_names: false)
+        }
       end)
 
     {

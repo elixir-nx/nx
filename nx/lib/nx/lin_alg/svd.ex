@@ -26,21 +26,22 @@ defmodule Nx.LinAlg.SVD do
 
     input_tensor = collapse_batch_axes_and_vectorize(input_tensor)
 
-    # {uz, sz, vtz} = svd_all_zeros(input_tensor, opts)
+    {uz, sz, vtz} = svd_all_zeros(input_tensor, opts)
     {u, s, vt} = svd_non_zero(input_tensor, opts)
 
-    # all_zeros = Nx.all(input_tensor == 0)
+    all_zeros = Nx.all(input_tensor == 0)
 
-    # u = Nx.select(all_zeros, uz, u)
-    # s = Nx.select(all_zeros, sz, s)
-    # vt = Nx.select(all_zeros, vtz, vt)
+    u = Nx.select(all_zeros, uz, u)
+    s = Nx.select(all_zeros, sz, s)
+    vt = Nx.select(all_zeros, vtz, vt)
 
-    # result = {u, s, vt}
+    result = {u, s, vt}
 
-    # {u, s, vt} =
-    #   custom_grad(result, [input_tensor], fn g ->
-    #     svd_grad(result, input_tensor, g)
-    #   end)
+    {u, s, vt} =
+      custom_grad(result, [input_tensor], fn g ->
+        svd_grad(result, input_tensor, g)
+      end)
+
     u = Nx.devectorize(u, keep_names: false)
     s = Nx.devectorize(s, keep_names: false)
     vt = Nx.devectorize(vt, keep_names: false)

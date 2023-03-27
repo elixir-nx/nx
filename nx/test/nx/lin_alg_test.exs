@@ -656,13 +656,12 @@ defmodule Nx.LinAlgTest do
           Nx.broadcast(0, {3, 3}) |> Nx.put_diagonal(s[1])
         ])
 
-      IO.inspect({u, s, v})
+      reconstructed_t =
+        u
+        |> Nx.dot([2], [0], s_matrix, [1], [0])
+        |> Nx.dot([2], [0], v, [1], [0])
 
-      assert round(t, 2) ==
-               u
-               |> Nx.dot([2], [0], s_matrix, [1], [0])
-               |> Nx.dot([2], [0], v, [1], [0])
-               |> round(2)
+      assert_all_close(t, reconstructed_t, atol: 1.0e-2, rtol: 1.0e-2)
     end
 
     test "works with vectors" do
