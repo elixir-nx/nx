@@ -83,7 +83,8 @@ defmodule Nx.Defn.Evaluator do
     expr = fun.(vars)
     state = %{hooks: hooks, parent_ids: nil, current_ids: nil}
     cache = init_compute_cache(expr, state)
-    {expr, Nx.Defn.Composite.flatten_list([expr]), cache}
+    {expr, output} = Nx.Defn.Composite.traverse(expr, [], &{Nx.devectorize(&1), [&1 | &2]})
+    {expr, Enum.reverse(output), cache}
   end
 
   defp init_compute_cache(expr, state) do
@@ -236,7 +237,7 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval(%Nx.Tensor{data: %Expr{op: :constant, args: [constant]}} = ans, _state, caches) do
     {backend, backend_options} = Nx.default_backend()
-    {backend.constant(Nx.devectorize(ans), constant, backend_options), caches}
+    {backend.constant(ans, constant, backend_options), caches}
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, _meta]}}, state, caches) do
@@ -246,7 +247,7 @@ defmodule Nx.Defn.Evaluator do
   defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}} = ans, state, [cache | caches]) do
     case cache do
       %{^id => count} when is_integer(count) ->
-        {res, [cache | caches]} = eval_apply(op, Nx.devectorize(ans), state, [cache | caches])
+        {res, [cache | caches]} = eval_apply(op, ans, state, [cache | caches])
         state.gc && :erlang.garbage_collect(self())
         {res, [decrement_cache(cache, id, count, res) | caches]}
 
@@ -275,7 +276,7 @@ defmodule Nx.Defn.Evaluator do
         {res, Enum.reverse(acc, [cache | caches])}
 
       %{^id => count} when is_integer(count) ->
-        {res, [cache | caches]} = eval_apply(op, Nx.devectorize(ans), state, [cache | caches])
+        {res, [cache | caches]} = eval_apply(op, ans, state, [cache | caches])
         state.gc && :erlang.garbage_collect(self())
         {res, Enum.reverse(acc, [Map.put(cache, id, {count, res}) | caches])}
 

@@ -421,8 +421,10 @@ defmodule EXLA.Defn do
             |> Outfeed.with_token(EXLA.Op.create_token(builder))
             |> Outfeed.add_infeeds(builder, reverse_infeeds)
 
+          expr = Nx.Defn.Composite.traverse(expr || fun.(vars), &Nx.devectorize/1)
+
           {computation, extra, outfeed} =
-            to_computation.(builder, expr || fun.(vars), inputs_and_shapes, outfeed)
+            to_computation.(builder, expr, inputs_and_shapes, outfeed)
 
           {xla_time, executable} =
             :timer.tc(fn ->

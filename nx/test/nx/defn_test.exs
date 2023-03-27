@@ -2107,6 +2107,12 @@ defmodule Nx.DefnTest do
 
       assert fun.(Nx.iota({2, 2}) |> Nx.vectorize(:x), 1) ==
                Nx.tensor([[1, 2], [3, 4]]) |> Nx.vectorize(:x)
+
+      fun = fn left, right -> Nx.subtract(right, Nx.add(left, left)) end
+      fun = Nx.Defn.compile(fun, [Nx.template({2, 2}, :s64) |> Nx.vectorize(:x), 0])
+
+      assert fun.(Nx.iota({2, 2}) |> Nx.vectorize(:x), 1) ==
+               Nx.tensor([[1, -1], [-3, -5]]) |> Nx.vectorize(:x)
     end
 
     @tag compiler: Evaluator
