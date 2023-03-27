@@ -428,9 +428,7 @@ defmodule Nx.Defn.Evaluator do
           {Nx.Shared.list_impl!(args), [ans | args]}
       end
 
-    result = apply(mod, op, args)
-
-    {result, caches}
+    {apply(mod, op, args), caches}
   end
 
   defp pop_cache!([cache | caches], key) do
