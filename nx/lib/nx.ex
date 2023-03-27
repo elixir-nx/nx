@@ -4798,26 +4798,36 @@ defmodule Nx do
   end
 
   defp apply_vectorized([left, right], fun) do
-    [left, right] = reshape_vectors([left, right])
+    [%{vectorized_axes: vectorized_axes} = left, right] = reshape_vectors([left, right])
 
-    if left.vectorized_axes != [] or right.vectorized_axes != [] do
+    if vectorized_axes != [] do
       {left, right} =
         case {left.shape, right.shape} do
           {{}, {}} ->
             {left, right}
 
-          {{}, _} ->
-            {reshape(left, {1}), right}
+          {{}, other_shape} ->
+            {reshape(left, Tuple.duplicate(1, tuple_size(other_shape))), right}
 
-          {_, {}} ->
-            {left, reshape(right, {1})}
+          {other_shape, {}} ->
+            {left, reshape(right, Tuple.duplicate(1, tuple_size(other_shape)))}
+
+          {{n}, other_shape} ->
+            rank = tuple_size(other_shape)
+            target_shape = Tuple.duplicate(1, rank) |> put_elem(rank - 1, n)
+            {reshape(left, target_shape), right}
+
+          {other_shape, {n}} ->
+            rank = tuple_size(other_shape)
+            target_shape = Tuple.duplicate(1, rank) |> put_elem(rank - 1, n)
+            {left, reshape(right, target_shape)}
 
           _ ->
             {left, right}
         end
 
-      devec_left = devectorize(left, keep_names: false)
-      devec_right = devectorize(right, keep_names: false)
+      devec_left = devectorize(left)
+      devec_right = devectorize(right)
 
       vectorized_axes =
         Enum.zip_with(left.vectorized_axes, right.vectorized_axes, fn {name, s1}, {name, s2} ->
