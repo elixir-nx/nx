@@ -1130,7 +1130,7 @@ defmodule EXLA.Defn do
     EXLA.Op.dynamic_update_slice(tensor, slice, start_indices)
   end
 
-  defp to_operator(:take, [tensor, indices, axis], ans, _state) do
+  defp to_operator(:take, [tensor, indices, axis], _ans, _state) do
     tensor_rank = tensor |> op_shape() |> tuple_size()
     indices_rank = indices |> op_shape() |> tuple_size()
     result_rank = tensor_rank - 1 + indices_rank
@@ -1141,7 +1141,8 @@ defmodule EXLA.Defn do
     collapsed_slice_dims = [axis]
     start_index_map = [axis]
 
-    EXLA.Op.gather(tensor,
+    EXLA.Op.gather(
+          tensor,
       indices,
       index_vector_dim,
       slice_sizes,
