@@ -1421,17 +1421,7 @@ defmodule Nx.LinAlg do
        %{tensor | names: List.duplicate(nil, rank - 1), type: output_type, shape: s_shape},
        %{tensor | names: List.duplicate(nil, rank), type: output_type, shape: v_shape}}
 
-    {u, s, vt} =
-      Nx.Shared.optional(:svd, [tensor, opts], output, fn tensor, opts ->
-        {u, s, vt} = Nx.LinAlg.SVD.svd(tensor, opts)
-
-        # THIS IS A BUG, DO NOT MERGE AS IS
-        {
-          Nx.devectorize(u, keep_names: false),
-          Nx.devectorize(s, keep_names: false),
-          Nx.devectorize(vt, keep_names: false)
-        }
-      end)
+    {u, s, vt} = Nx.Shared.optional(:svd, [tensor, opts], output, &Nx.LinAlg.SVD.svd/2)
 
     {
       Nx.vectorize(u, vectorized_axes),
