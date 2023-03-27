@@ -2473,4 +2473,114 @@ defmodule NxTest do
              ] == Nx.broadcast_vectors([x, xy, x2])
     end
   end
+
+  describe "vectorization" do
+    test "broadcasts work for vectorized scalars vs non-vectorized operand" do
+      v = Nx.tensor([0, 1]) |> Nx.vectorize(x: 2)
+      t = Nx.iota({2, 3})
+
+      result =
+        Nx.tensor([
+          [
+            [0, 1, 2],
+            [3, 4, 5]
+          ],
+          [
+            [1, 2, 3],
+            [4, 5, 6]
+          ]
+        ])
+        |> Nx.vectorize(x: 2)
+
+      assert Nx.add(t, v) == result
+      assert Nx.add(v, t) == result
+    end
+
+    test "broadcasts work for vectorized 1D tensors vs non-vectorized operand" do
+      v = Nx.tensor([[0, 1, 2], [10, 20, 30]]) |> Nx.vectorize(x: 2)
+      t = Nx.iota({2, 3})
+
+      result =
+        Nx.tensor([
+          [
+            [0, 2, 4],
+            [3, 5, 7]
+          ],
+          [
+            [10, 21, 32],
+            [13, 24, 35]
+          ]
+        ])
+        |> Nx.vectorize(x: 2)
+
+      assert Nx.add(t, v) == result
+      assert Nx.add(v, t) == result
+    end
+
+    test "broadcasts work for vectorized scalars vs vectorized operand" do
+      v = Nx.tensor([0, 1]) |> Nx.vectorize(x: 2)
+      t = Nx.iota({2, 3}, vectorized_axes: [x: 1, y: 2])
+
+      result =
+        Nx.tensor([
+          [
+            [
+              [0, 1, 2],
+              [3, 4, 5]
+            ],
+            [
+              [0, 1, 2],
+              [3, 4, 5]
+            ]
+          ],
+          [
+            [
+              [1, 2, 3],
+              [4, 5, 6]
+            ],
+            [
+              [1, 2, 3],
+              [4, 5, 6]
+            ]
+          ]
+        ])
+        |> Nx.vectorize(x: 2, y: 2)
+
+      assert Nx.add(t, v) == result
+      assert Nx.add(v, t) == result
+    end
+
+    test "broadcasts work for vectorized 1D tensors vs vectorized operand" do
+      v = Nx.tensor([[0, 1, 2], [10, 20, 30]]) |> Nx.vectorize(x: 2)
+      t = Nx.iota({2, 3}, vectorized_axes: [x: 1, y: 2])
+
+      result =
+        Nx.tensor([
+          [
+            [
+              [0, 2, 4],
+              [3, 5, 7]
+            ],
+            [
+              [0, 2, 4],
+              [3, 5, 7]
+            ]
+          ],
+          [
+            [
+              [10, 21, 32],
+              [13, 24, 35]
+            ],
+            [
+              [10, 21, 32],
+              [13, 24, 35]
+            ]
+          ]
+        ])
+        |> Nx.vectorize(x: 2, y: 2)
+
+      assert Nx.add(t, v) == result
+      assert Nx.add(v, t) == result
+    end
+  end
 end
