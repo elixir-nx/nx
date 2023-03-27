@@ -4813,11 +4813,13 @@ defmodule Nx do
             {left, reshape(right, Tuple.duplicate(1, tuple_size(other_shape)))}
 
           {{n}, other_shape} ->
-            target_shape = Tuple.duplicate(1, tuple_size(other_shape)) |> put_elem(0, n)
+            rank = tuple_size(other_shape)
+            target_shape = Tuple.duplicate(1, rank) |> put_elem(rank - 1, n)
             {reshape(left, target_shape), right}
 
           {other_shape, {n}} ->
-            target_shape = Tuple.duplicate(1, tuple_size(other_shape)) |> put_elem(0, n)
+            rank = tuple_size(other_shape)
+            target_shape = Tuple.duplicate(1, rank) |> put_elem(rank - 1, n)
             {left, reshape(right, target_shape)}
 
           _ ->
@@ -7215,12 +7217,11 @@ defmodule Nx do
     {indices, updates} =
       if vectorized_axes != [] do
         offset = length(vectorized_axes)
-
         iota_shape = put_elem(indices.shape, tuple_size(indices.shape) - 1, 1)
 
         to_concat =
           Enum.reduce((offset - 1)..0//-1, [indices], fn axis, idx ->
-            [iota(iota_shape, axis: axis) | idx]
+            [Nx.iota(iota_shape, axis: axis) | idx]
           end)
 
         n = elem(indices.shape, tuple_size(indices.shape) - 1)

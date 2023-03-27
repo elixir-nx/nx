@@ -847,6 +847,54 @@ defmodule NxTest do
                  Nx.tensor([Complex.new(2), 1])
                )
     end
+
+    test "vectorized target and non-vectorized index" do
+      t = Nx.tensor([[0, 1, 2], [3, 4, 5]]) |> Nx.vectorize(x: 2)
+      index = Nx.tensor([[0], [1], [1], [0]])
+      updates = Nx.tensor([1, 2, 3, 4])
+
+      assert Nx.indexed_add(t, index, updates) ==
+               Nx.tensor([
+                 [5, 6, 2],
+                 [8, 9, 5]
+               ])
+               |> Nx.vectorize(x: 2)
+    end
+
+    test "non-vectorized target and vectorized index+updates" do
+      t = Nx.tensor([0, 1, 2])
+
+      assert %{shape: {2, 1}} =
+               index =
+               Nx.tensor([
+                 [0, 0],
+                 [0, 1],
+                 [1, 0],
+                 [1, 1]
+               ])
+               |> Nx.reshape({2, 2, 2, 1})
+               |> Nx.vectorize(x: 2, y: 2)
+
+      updates =
+        Nx.tensor([
+          [1, 2],
+          [3, 4]
+        ])
+        |> Nx.vectorize(x: 2)
+
+      assert Nx.indexed_add(t, index, updates) ==
+               Nx.tensor([
+                 [
+                   [3, 1, 2],
+                   [1, 3, 2]
+                 ],
+                 [
+                   [4, 4, 2],
+                   [0, 8, 2]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2, y: 2)
+    end
   end
 
   describe "indexed_put" do
@@ -2471,6 +2519,142 @@ defmodule NxTest do
                Nx.iota({1, 2}, vectorized_axes: [x: 2, y: 2]),
                Nx.iota({1, 2, 3}, vectorized_axes: [x: 2, y: 2])
              ] == Nx.broadcast_vectors([x, xy, x2])
+    end
+  end
+
+  describe "vectorization" do
+    test "broadcasts work for vectorized scalars vs non-vectorized operand" do
+      v = Nx.tensor([0, 1]) |> Nx.vectorize(x: 2)
+      t = Nx.iota({2, 3})
+
+      result =
+        Nx.tensor([
+          [
+            [0, 1, 2],
+            [3, 4, 5]
+          ],
+          [
+            [1, 2, 3],
+            [4, 5, 6]
+          ]
+        ])
+        |> Nx.vectorize(x: 2)
+
+      assert Nx.add(t, v) == result
+      assert Nx.add(v, t) == result
+    end
+
+    test "broadcasts work for vectorized 1D tensors vs non-vectorized operand" do
+      v = Nx.tensor([[0, 1, 2], [10, 20, 30]]) |> Nx.vectorize(x: 2)
+      t = Nx.iota({2, 3})
+
+      result =
+        Nx.tensor([
+          [
+            [0, 2, 4],
+            [3, 5, 7]
+          ],
+          [
+            [10, 21, 32],
+            [13, 24, 35]
+          ]
+        ])
+        |> Nx.vectorize(x: 2)
+
+      assert Nx.add(t, v) == result
+      assert Nx.add(v, t) == result
+    end
+
+    test "broadcasts work for vectorized scalars vs vectorized operand" do
+      v = Nx.tensor([0, 1]) |> Nx.vectorize(x: 2)
+      t = Nx.iota({2, 3}, vectorized_axes: [x: 1, y: 2])
+
+      result =
+        Nx.tensor([
+          [
+            [
+              [0, 1, 2],
+              [3, 4, 5]
+            ],
+            [
+              [0, 1, 2],
+              [3, 4, 5]
+            ]
+          ],
+          [
+            [
+              [1, 2, 3],
+              [4, 5, 6]
+            ],
+            [
+              [1, 2, 3],
+              [4, 5, 6]
+            ]
+          ]
+        ])
+        |> Nx.vectorize(x: 2, y: 2)
+
+      assert Nx.add(t, v) == result
+      assert Nx.add(v, t) == result
+    end
+
+    test "broadcasts work for vectorized 1D tensors vs vectorized operand" do
+      v = Nx.tensor([[0, 1, 2], [10, 20, 30]]) |> Nx.vectorize(x: 2)
+      t = Nx.iota({2, 3}, vectorized_axes: [x: 1, y: 2])
+
+      result =
+        Nx.tensor([
+          [
+            [
+              [0, 2, 4],
+              [3, 5, 7]
+            ],
+            [
+              [0, 2, 4],
+              [3, 5, 7]
+            ]
+          ],
+          [
+            [
+              [10, 21, 32],
+              [13, 24, 35]
+            ],
+            [
+              [10, 21, 32],
+              [13, 24, 35]
+            ]
+          ]
+        ])
+        |> Nx.vectorize(x: 2, y: 2)
+
+      assert Nx.add(t, v) == result
+      assert Nx.add(v, t) == result
+    end
+  end
+
+  describe "select" do
+    test "works with vectorized scalar pred" do
+      pred = Nx.tensor([0, 1]) |> Nx.vectorize(x: 2)
+      on_true = Nx.tensor([[0, 1, 2]])
+      on_false = Nx.tensor([[3, 4, 5]])
+
+      assert Nx.select(pred, on_true, on_false) ==
+               Nx.tensor([[[3, 4, 5]], [[0, 1, 2]]]) |> Nx.vectorize(x: 2)
+
+      pred = Nx.tensor([0, 1]) |> Nx.vectorize(x: 2)
+      on_true = Nx.tensor([[0, 1, 2]]) |> Nx.vectorize(x: 1)
+      on_false = Nx.tensor([[3, 4, 5]]) |> Nx.vectorize(x: 1)
+
+      assert Nx.select(pred, on_true, on_false) ==
+               Nx.tensor([[3, 4, 5], [0, 1, 2]]) |> Nx.vectorize(x: 2)
+    end
+
+    test "works with scalar pred and vectorized inputs" do
+      assert Nx.select(
+               1,
+               Nx.iota({2}, vectorized_axes: [x: 2]),
+               Nx.tensor([[3, 4]]) |> Nx.vectorize(x: 1)
+             ) == Nx.tensor([[0, 1], [0, 1]]) |> Nx.vectorize(x: 2)
     end
   end
 end
