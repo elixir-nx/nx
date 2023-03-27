@@ -2629,6 +2629,8 @@ defmodule NxTest do
 
       assert Nx.add(t, v) == result
       assert Nx.add(v, t) == result
+    end
+  end
 
   describe "select" do
     test "works with vectorized scalar pred" do
