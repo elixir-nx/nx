@@ -26,23 +26,26 @@ defmodule Nx.LinAlg.SVD do
 
     input_tensor = collapse_batch_axes_and_vectorize(input_tensor)
 
-    result =
-      if Nx.all(input_tensor == 0) do
-        svd_all_zeros(input_tensor, opts)
-      else
-        svd_non_zero(input_tensor, opts)
-      end
+    # {uz, sz, vtz} = svd_all_zeros(input_tensor, opts)
+    {u, s, vt} = svd_non_zero(input_tensor, opts)
 
-    {u, s, vt} =
-      custom_grad(result, [input_tensor], fn g ->
-        svd_grad(result, input_tensor, g)
-      end)
+    # all_zeros = Nx.all(input_tensor == 0)
 
-    {
-      Nx.devectorize(u, keep_names: false),
-      Nx.devectorize(s, keep_names: false),
-      Nx.devectorize(vt, keep_names: false)
-    }
+    # u = Nx.select(all_zeros, uz, u)
+    # s = Nx.select(all_zeros, sz, s)
+    # vt = Nx.select(all_zeros, vtz, vt)
+
+    # result = {u, s, vt}
+
+    # {u, s, vt} =
+    #   custom_grad(result, [input_tensor], fn g ->
+    #     svd_grad(result, input_tensor, g)
+    #   end)
+    u = Nx.devectorize(u, keep_names: false)
+    s = Nx.devectorize(s, keep_names: false)
+    vt = Nx.devectorize(vt, keep_names: false)
+
+    {u, s, vt}
   end
 
   deftransformp collapse_batch_axes_and_vectorize(
@@ -86,8 +89,11 @@ defmodule Nx.LinAlg.SVD do
     {u_cols, v_rows} = if opts[:full_matrices?], do: {m, n}, else: {min_shape, min_shape}
 
     s = Nx.broadcast(Nx.tensor(0, type: Nx.type(a)), {k})
-    u = Nx.eye({m, u_cols}, type: Nx.type(a))
-    v = Nx.eye({v_rows, n}, type: Nx.type(a))
+
+    [s, _] = Nx.broadcast_vectors([s, a])
+
+    u = Nx.eye({m, u_cols}, vectorized_axes: a.vectorized_axes, type: Nx.type(a))
+    v = Nx.eye({v_rows, n}, vectorized_axes: a.vectorized_axes, type: Nx.type(a))
 
     {u, s, v}
   end
@@ -175,27 +181,16 @@ defmodule Nx.LinAlg.SVD do
     h = (h + Nx.LinAlg.adjoint(h)) / 2
     {s, v} = Nx.LinAlg.eigh(h, max_iter: opts[:max_iter])
 
-    print_expr(s, label: "s")
-    print_expr(v, label: "v")
-
     sign = Nx.select(s < 0, -1, 1)
-
-    print_expr(sign, label: "sign")
 
     v = sign * v
     s = sign * s
 
-    print_expr(v, label: "sign * v")
-
     # sort s and v according to
     sort_idx = Nx.argsort(s, direction: :desc)
 
-    print_expr(sort_idx, label: "sort_idx")
-
-    s_out = Nx.take(s, sort_idx) |> print_expr(label: "s_out")
+    s_out = Nx.take(s, sort_idx)
     v_out = Nx.take(v, sort_idx, axis: 1)
-    print_expr(u, label: "u")
-    print_expr(v_out, label: "v_out")
 
     u_out = Nx.dot(u, v_out)
 
@@ -243,7 +238,7 @@ defmodule Nx.LinAlg.SVD do
 
         iterating_l = Nx.abs(1.0 - l) > tol_l
         iterating_u = Nx.LinAlg.norm(u - u_prev) > tol_norm
-        iterating_u = iterating_u |> Nx.devectorize() |> Nx.all()
+        iterating_u = iterating_u |> Nx.devectorize(keep_names: false) |> Nx.all()
         is_unconverged = iterating_l or iterating_u
         is_not_max_iteration = iter_idx < max_iter
         {u, l, iter_idx + 1, is_unconverged, is_not_max_iteration, max_iter}

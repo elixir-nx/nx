@@ -415,7 +415,25 @@ defmodule Nx.Defn.Evaluator do
           {Nx.Shared.list_impl!(args), [ans | args]}
       end
 
-    {apply(mod, op, args), caches}
+    args =
+      Enum.map(args, fn
+        %Nx.Tensor{vectorized_axes: axes} = t when axes != [] ->
+          Nx.devectorize(t, keep_names: false)
+
+        arg ->
+          arg
+      end)
+
+    result =
+      case apply(mod, op, args) do
+        %Nx.Tensor{} = t ->
+          Nx.vectorize(t, ans.vectorized_axes)
+
+        t ->
+          t
+      end
+
+    {result, caches}
   end
 
   defp pop_cache!([cache | caches], key) do

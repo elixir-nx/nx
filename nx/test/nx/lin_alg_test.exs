@@ -656,6 +656,8 @@ defmodule Nx.LinAlgTest do
           Nx.broadcast(0, {3, 3}) |> Nx.put_diagonal(s[1])
         ])
 
+      IO.inspect({u, s, v})
+
       assert round(t, 2) ==
                u
                |> Nx.dot([2], [0], s_matrix, [1], [0])

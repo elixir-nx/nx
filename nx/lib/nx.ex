@@ -4351,6 +4351,8 @@ defmodule Nx do
     names = Enum.drop(names, n)
 
     for name <- names, {new_axis_name, _} <- new_vectorized_axes, name == new_axis_name do
+      IO.inspect({tensor, vector_spec})
+
       raise ArgumentError,
             "cannot use name #{inspect(name)} for new vectorized axes because there's already an axis with the same name"
     end
@@ -4708,8 +4710,8 @@ defmodule Nx do
             {left, right}
         end
 
-      devec_left = devectorize(left, keep_names: false)
-      devec_right = devectorize(right, keep_names: false)
+      devec_left = devectorize(left)
+      devec_right = devectorize(right)
 
       vectorized_axes =
         Enum.zip_with(left.vectorized_axes, right.vectorized_axes, fn {name, s1}, {name, s2} ->
@@ -6504,7 +6506,7 @@ defmodule Nx do
 
     on_true = reshape_tensor_for_broadcasting(on_true, output_shape)
     on_false = reshape_tensor_for_broadcasting(on_false, output_shape)
-    pred = reshape_tensor_for_broadcasting(pred, output_shape)
+    pred = reshape_tensor_for_broadcasting(pred, output_shape) |> broadcast(output_shape)
 
     _ =
       Nx.Shape.broadcast!(
@@ -10818,7 +10820,7 @@ defmodule Nx do
       raise ArgumentError, "the accumulator must be a non-vectorized scalar, got: #{inspect(acc)}"
     end
 
-    %T{shape: shape, names: names} = tensor = devectorize(tensor, keep_names: false)
+    %T{shape: shape, names: names} = tensor = devectorize(tensor)
     offset = length(vectorized_axes)
     axes = opts[:axes]
 
@@ -13034,32 +13036,52 @@ defmodule Nx do
   def take(tensor, indices, opts \\ []) when is_list(opts) do
     [tensor, indices] = reshape_vectors([tensor, indices])
 
-    vectorized_axes =
-      Enum.zip_with(tensor.vectorized_axes, indices.vectorized_axes, &Kernel.max/2)
-
     unless Nx.Type.integer?(indices.type) do
       raise ArgumentError, "indices must be an integer tensor, got #{inspect(indices.type)}"
     end
+
+    vectorized_axes =
+      Enum.zip_with(tensor.vectorized_axes, indices.vectorized_axes, &Kernel.max/2)
 
     offset = length(vectorized_axes)
 
     opts = keyword!(opts, axis: 0)
     axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names)
 
-    {shape, names} =
+    {shape, names, indices} =
       if offset != 0 do
         {shape, names} =
           Nx.Shape.take(tensor.shape, tensor.names, indices.shape, indices.names, axis)
 
+        {indices_slice_lengths_rev, indices_squeeze_axes_rev, _} =
+          Enum.zip_reduce(indices.vectorized_axes, vectorized_axes, {[], [], 0}, fn
+            {name, s1}, {name, s2}, {slice_acc, squeeze_acc, axis} when s2 >= s1 ->
+              {[1 | slice_acc], [axis | squeeze_acc], axis + 1}
+
+            {name, s1}, {name, 1}, {slice_acc, squeeze_acc, axis} ->
+              {[s1 | slice_acc], squeeze_acc, axis + 1}
+          end)
+
+        devec_indices = devectorize(indices)
+        starts = List.duplicate(0, rank(devec_indices))
+        lengths = Enum.reverse(indices_slice_lengths_rev) ++ Tuple.to_list(indices.shape)
+
+        indices =
+          devec_indices
+          |> slice(starts, lengths)
+          |> squeeze(axes: Enum.reverse(indices_squeeze_axes_rev))
+
         shape = List.to_tuple(Keyword.values(vectorized_axes) ++ Tuple.to_list(shape))
         names = List.duplicate(nil, offset) ++ names
-        {shape, names}
+        {shape, names, indices}
       else
-        Nx.Shape.take(tensor.shape, tensor.names, indices.shape, indices.names, axis)
+        {shape, names} =
+          Nx.Shape.take(tensor.shape, tensor.names, indices.shape, indices.names, axis)
+
+        {shape, names, indices}
       end
 
-    tensor = devectorize(tensor, keep_names: false)
-    indices = devectorize(indices, keep_names: false)
+    tensor = devectorize(tensor)
     axis = axis + offset
 
     result = impl!(tensor).take(%{tensor | shape: shape, names: names}, tensor, indices, axis)
@@ -13223,8 +13245,8 @@ defmodule Nx do
 
     opts = keyword!(opts, axis: 0)
 
-    tensor = devectorize(tensor, keep_names: false)
-    indices = devectorize(indices, keep_names: false)
+    tensor = devectorize(tensor)
+    indices = devectorize(indices)
 
     offset = length(vectorized_axes)
 
@@ -13326,8 +13348,8 @@ defmodule Nx do
 
     {tensor, indices} =
       if offset != 0 do
-        tensor = devectorize(tensor, keep_names: false)
-        indices = devectorize(indices, keep_names: false)
+        tensor = devectorize(tensor)
+        indices = devectorize(indices)
 
         iota_shape =
           indices.shape |> Tuple.delete_at(tuple_size(indices.shape) - 1) |> Tuple.append(1)
