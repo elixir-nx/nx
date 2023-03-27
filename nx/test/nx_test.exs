@@ -2473,4 +2473,30 @@ defmodule NxTest do
              ] == Nx.broadcast_vectors([x, xy, x2])
     end
   end
+
+  describe "select" do
+    test "works with vectorized scalar pred" do
+      pred = Nx.tensor([0, 1]) |> Nx.vectorize(x: 2)
+      on_true = Nx.tensor([[0, 1, 2]])
+      on_false = Nx.tensor([[3, 4, 5]])
+
+      assert Nx.select(pred, on_true, on_false) ==
+               Nx.tensor([[[3, 4, 5]], [[0, 1, 2]]]) |> Nx.vectorize(x: 2)
+
+      pred = Nx.tensor([0, 1]) |> Nx.vectorize(x: 2)
+      on_true = Nx.tensor([[0, 1, 2]]) |> Nx.vectorize(x: 1)
+      on_false = Nx.tensor([[3, 4, 5]]) |> Nx.vectorize(x: 1)
+
+      assert Nx.select(pred, on_true, on_false) ==
+               Nx.tensor([[3, 4, 5], [0, 1, 2]]) |> Nx.vectorize(x: 2)
+    end
+
+    test "works with scalar pred and vectorized inputs" do
+      assert Nx.select(
+               1,
+               Nx.iota({2}, vectorized_axes: [x: 2]),
+               Nx.tensor([[3, 4]]) |> Nx.vectorize(x: 1)
+             ) == Nx.tensor([[0, 1], [0, 1]]) |> Nx.vectorize(x: 2)
+    end
+  end
 end
