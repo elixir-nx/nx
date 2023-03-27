@@ -10929,7 +10929,7 @@ defmodule Nx do
       raise ArgumentError, "the accumulator must be a non-vectorized scalar, got: #{inspect(acc)}"
     end
 
-    %T{shape: shape, names: names} = tensor = devectorize(tensor)
+    %T{shape: shape, names: names} = tensor = devectorize(tensor, keep_names: false)
     offset = length(vectorized_axes)
     axes = opts[:axes]
 
