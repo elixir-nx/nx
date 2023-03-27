@@ -6590,29 +6590,9 @@ defmodule Nx do
 
     {output_shape, output_names} =
       case {vectorized_axes, pred_shape} do
-        {[], {}} ->
-          Nx.Shape.binary_broadcast(true_shape, true_names, false_shape, false_names)
-
-        _ ->
-          # we want to keep only pred_names as part of the output
-          # for the non-scalar case
-          true_names = List.duplicate(nil, tuple_size(true_shape))
-          false_names = List.duplicate(nil, tuple_size(false_shape))
-
-          {binary_shape, binary_names} =
-            Nx.Shape.binary_broadcast(true_shape, true_names, false_shape, false_names)
-
-          Nx.Shape.binary_broadcast(
-            pred_shape,
-            pred_names,
-            binary_shape,
-            binary_names
-          )
+        {[], {}} -> Nx.Shape.binary_broadcast(true_shape, true_names, false_shape, false_names)
+        {_, _} -> {pred_shape, pred_names}
       end
-
-    on_true = reshape_tensor_for_broadcasting(on_true, output_shape)
-    on_false = reshape_tensor_for_broadcasting(on_false, output_shape)
-    pred = reshape_tensor_for_broadcasting(pred, output_shape)
 
     _ =
       Nx.Shape.broadcast!(
@@ -6628,22 +6608,26 @@ defmodule Nx do
         Nx.Shape.broadcast_axes(false_shape, output_shape)
       )
 
-    out = devectorize(%{pred | shape: output_shape, type: output_type, names: output_names})
+    out = %{pred | shape: output_shape, type: output_type, names: output_names}
 
-    pred = devectorize(pred)
-    on_true = devectorize(on_true)
-    on_false = devectorize(on_false)
+    if vectorized_axes != [] do
+      on_true = reshape_tensor_for_broadcasting(on_true, output_shape)
+      on_false = reshape_tensor_for_broadcasting(on_false, output_shape)
+      pred = reshape_tensor_for_broadcasting(pred, output_shape)
 
-    result = impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
+      out = devectorize(out)
+      pred = devectorize(pred)
+      on_true = devectorize(on_true)
+      on_false = devectorize(on_false)
 
-    vectorize(result, Keyword.keys(vectorized_axes))
+      result = impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
+      vectorize(result, Keyword.keys(vectorized_axes))
+    else
+      impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
+    end
   end
 
-  defp reshape_tensor_for_broadcasting(tensor, target_shape) when tensor.shape == target_shape do
-    tensor
-  end
-
-  defp reshape_tensor_for_broadcasting(%T{vectorized_axes: [], shape: {}} = t, _), do: t
+  defp reshape_tensor_for_broadcasting(%{shape: shape} = t, shape), do: t
 
   defp reshape_tensor_for_broadcasting(tensor, target_shape) do
     input_shape = tensor.shape
