@@ -13388,8 +13388,8 @@ defmodule Nx do
 
     opts = keyword!(opts, axis: 0)
 
-    tensor = devectorize(tensor)
-    indices = devectorize(indices)
+    tensor = devectorize(tensor, keep_names: false)
+    indices = devectorize(indices, keep_names: false)
 
     offset = length(vectorized_axes)
 
@@ -13491,8 +13491,8 @@ defmodule Nx do
 
     {tensor, indices} =
       if offset != 0 do
-        tensor = devectorize(tensor)
-        indices = devectorize(indices)
+        tensor = devectorize(tensor, keep_names: false)
+        indices = devectorize(indices, keep_names: false)
 
         iota_shape =
           indices.shape |> Tuple.delete_at(tuple_size(indices.shape) - 1) |> Tuple.append(1)
