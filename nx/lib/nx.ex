@@ -13151,17 +13151,26 @@ defmodule Nx do
   """
   @doc type: :indexed
   def take(tensor, indices, opts \\ []) when is_list(opts) do
-    %T{vectorized_axes: tensor_vectorized_axes} = to_tensor(tensor)
-    [tensor, indices] = reshape_vectors([tensor, indices])
+    tensor = to_tensor(tensor)
+    indices = to_tensor(indices)
+
+    canonical_vectorized_axes = calculate_canonical_vectorized_axes([tensor, indices])
+    target_vectorized_axes = Keyword.keys(canonical_vectorized_axes)
+
+    offset = length(canonical_vectorized_axes)
+
+    indices =
+      [indices]
+      |> do_reshape_vectors_devectorize(
+        canonical_vectorized_axes,
+        offset
+      )
+      |> hd()
+      |> vectorize(target_vectorized_axes)
 
     unless Nx.Type.integer?(indices.type) do
       raise ArgumentError, "indices must be an integer tensor, got #{inspect(indices.type)}"
     end
-
-    vectorized_axes =
-      Enum.zip_with(tensor.vectorized_axes, indices.vectorized_axes, &Kernel.max/2)
-
-    offset = length(vectorized_axes)
 
     opts = keyword!(opts, axis: 0)
     axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names)
@@ -13175,7 +13184,7 @@ defmodule Nx do
         # taking from, we need to ensure that we squeeze out all common vectorized
         # axes, as well as the 1-sized vectorized axes from indices
         {[], indices_slice_lengths_rev, indices_squeeze_axes_rev, _} =
-          Enum.reduce(indices.vectorized_axes, {tensor_vectorized_axes, [], [], 0}, fn
+          Enum.reduce(indices.vectorized_axes, {tensor.vectorized_axes, [], [], 0}, fn
             {_name, s1}, {[], slice_acc, squeeze_acc, axis} ->
               {[], [s1 | slice_acc], squeeze_acc, axis + 1}
 
@@ -13192,7 +13201,7 @@ defmodule Nx do
               {other_axes, [slice | slice_acc], squeeze_acc, axis + 1}
           end)
 
-        devec_indices = devectorize(indices)
+        devec_indices = devectorize(indices, keep_names: false)
         starts = List.duplicate(0, rank(devec_indices))
         lengths = Enum.reverse(indices_slice_lengths_rev) ++ Tuple.to_list(indices.shape)
 
@@ -13201,7 +13210,7 @@ defmodule Nx do
           |> slice(starts, lengths)
           |> squeeze(axes: Enum.reverse(indices_squeeze_axes_rev))
 
-        shape = List.to_tuple(Keyword.values(vectorized_axes) ++ Tuple.to_list(shape))
+        shape = List.to_tuple(Keyword.values(canonical_vectorized_axes) ++ Tuple.to_list(shape))
         names = List.duplicate(nil, offset) ++ names
         {shape, names, indices}
       else
@@ -13211,12 +13220,13 @@ defmodule Nx do
         {shape, names, indices}
       end
 
+    tensor_offset = length(tensor.vectorized_axes)
     tensor = devectorize(tensor, keep_names: false)
-    axis = axis + offset
+    axis = axis + tensor_offset
 
     result = impl!(tensor).take(%{tensor | shape: shape, names: names}, tensor, indices, axis)
 
-    vectorize(result, Keyword.keys(vectorized_axes))
+    vectorize(result, canonical_vectorized_axes)
   end
 
   @doc """
