@@ -402,6 +402,8 @@ defmodule Nx.Defn.Evaluator do
   defp eval_apply(op, ans, state, caches) do
     {args, caches} = Tree.apply_args(ans, caches, &eval(&1, state, &2))
 
+    ans = Nx.devectorize(ans, keep_names: false)
+
     {mod, args} =
       cond do
         op in @creation_ops ->
@@ -426,23 +428,7 @@ defmodule Nx.Defn.Evaluator do
           {Nx.Shared.list_impl!(args), [ans | args]}
       end
 
-    args =
-      Enum.map(args, fn
-        %Nx.Tensor{vectorized_axes: axes} = t when axes != [] ->
-          Nx.devectorize(t, keep_names: false)
-
-        arg ->
-          arg
-      end)
-
-    result =
-      case apply(mod, op, args) do
-        %Nx.Tensor{} = t ->
-          Nx.vectorize(t, ans.vectorized_axes)
-
-        t ->
-          t
-      end
+    result = apply(mod, op, args)
 
     {result, caches}
   end
