@@ -13089,41 +13089,58 @@ defmodule Nx do
   and then the operation takes place normally, with `:axis` and `indices`
   having their values in reference to the input shape.
 
-      iex> t = Nx.tensor([[[1, 2]], [[11, 12]]]) |> Nx.vectorize(:x)
-      iex> idx = Nx.tensor([0, 1]) |> Nx.vectorize(:y)
-      iex> Nx.take(t, idx,  axis: 1)
+      iex> t = Nx.tensor([[1, 2], [11, 12]])
+      iex> idx = Nx.tensor([0, 1, 0]) |> Nx.vectorize(:x)
+      iex> Nx.take(t, idx)
       #Nx.Tensor<
-        vectorized[x: 2][y: 2]
-        s64[1][2][2]
+        vectorized[x: 3]
+        s64[2]
+        [
+          [1, 2],
+          [11, 12],
+          [1, 2]
+        ]
+      >
+      iex> t = Nx.tensor([[[1, 2]], [[11, 12]]]) |> Nx.vectorize(:x)
+      iex> idx = Nx.tensor([0, 1])
+      iex> Nx.take(t, idx, axis: 1)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[1][2]
         [
           [
-            [
-              [
-                [1, 2],
-                [1, 2]
-              ]
-            ],
-            [
-              [
-                [1, 2],
-                [1, 2]
-              ]
-            ]
+            [1, 2]
           ],
           [
-            [
-              [
-                [11, 12],
-                [11, 12]
-              ]
-            ],
-            [
-              [
-                [11, 12],
-                [11, 12]
-              ]
-            ]
+            [11, 12]
           ]
+        ]
+      >
+
+  In case both inputs are vectorized, they will be broadcasted
+  together before calculations are performed:
+
+      iex> t = Nx.tensor([[1, 2], [11, 12]]) |> Nx.vectorize(:x)
+      iex> idx = Nx.tensor([0, 1, 0]) |> Nx.vectorize(:y)
+      iex> Nx.take(t, idx)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 3]
+        s64
+        [
+          [1, 2, 1],
+          [11, 12, 11]
+        ]
+      >
+
+      iex> t = Nx.tensor([[1, 2], [11, 12]]) |> Nx.vectorize(:x)
+      iex> idx = Nx.tensor([[0, 1, 0], [0, 1, 0]]) |> Nx.vectorize(:x)
+      iex> Nx.take(t, idx)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[3]
+        [
+          [1, 2, 1],
+          [11, 12, 11]
         ]
       >
 
@@ -13134,26 +13151,72 @@ defmodule Nx do
   """
   @doc type: :indexed
   def take(tensor, indices, opts \\ []) when is_list(opts) do
-    [%T{vectorized_axes: vectorized_axes} = tensor, indices] =
-      broadcast_vectors([tensor, indices])
+    %T{vectorized_axes: tensor_vectorized_axes} = to_tensor(tensor)
+    [tensor, indices] = reshape_vectors([tensor, indices])
 
     unless Nx.Type.integer?(indices.type) do
       raise ArgumentError, "indices must be an integer tensor, got #{inspect(indices.type)}"
     end
 
+    vectorized_axes =
+      Enum.zip_with(tensor.vectorized_axes, indices.vectorized_axes, &Kernel.max/2)
+
     offset = length(vectorized_axes)
 
     opts = keyword!(opts, axis: 0)
-    axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names, offset)
+    axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names)
+
+    {shape, names, indices} =
+      if offset != 0 do
+        {shape, names} =
+          Nx.Shape.take(tensor.shape, tensor.names, indices.shape, indices.names, axis)
+
+        # because take/3 will insert the index shape into the tensor axis which we are
+        # taking from, we need to ensure that we squeeze out all common vectorized
+        # axes, as well as the 1-sized vectorized axes from indices
+        {[], indices_slice_lengths_rev, indices_squeeze_axes_rev, _} =
+          Enum.reduce(indices.vectorized_axes, {tensor_vectorized_axes, [], [], 0}, fn
+            {_name, s1}, {[], slice_acc, squeeze_acc, axis} ->
+              {[], [s1 | slice_acc], squeeze_acc, axis + 1}
+
+            {name, s1}, {other_axes, slice_acc, squeeze_acc, axis} ->
+              {slice, squeeze_acc, other_axes} =
+                case List.keytake(other_axes, name, 0) do
+                  {{^name, s2}, other_axes} when s2 >= s1 ->
+                    {1, [axis | squeeze_acc], other_axes}
+
+                  _ ->
+                    {s1, squeeze_acc, other_axes}
+                end
+
+              {other_axes, [slice | slice_acc], squeeze_acc, axis + 1}
+          end)
+
+        devec_indices = devectorize(indices)
+        starts = List.duplicate(0, rank(devec_indices))
+        lengths = Enum.reverse(indices_slice_lengths_rev) ++ Tuple.to_list(indices.shape)
+
+        indices =
+          devec_indices
+          |> slice(starts, lengths)
+          |> squeeze(axes: Enum.reverse(indices_squeeze_axes_rev))
+
+        shape = List.to_tuple(Keyword.values(vectorized_axes) ++ Tuple.to_list(shape))
+        names = List.duplicate(nil, offset) ++ names
+        {shape, names, indices}
+      else
+        {shape, names} =
+          Nx.Shape.take(tensor.shape, tensor.names, indices.shape, indices.names, axis)
+
+        {shape, names, indices}
+      end
 
     tensor = devectorize(tensor, keep_names: false)
-    indices = devectorize(indices, keep_names: false)
-
-    {shape, names} = Nx.Shape.take(tensor.shape, tensor.names, indices.shape, indices.names, axis)
+    axis = axis + offset
 
     result = impl!(tensor).take(%{tensor | shape: shape, names: names}, tensor, indices, axis)
 
-    vectorize(result, vectorized_axes)
+    vectorize(result, Keyword.keys(vectorized_axes))
   end
 
   @doc """
