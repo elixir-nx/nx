@@ -6597,9 +6597,10 @@ defmodule Nx do
     output_type = binary_type(on_true, on_false)
 
     {output_shape, output_names} =
-      case {vectorized_axes, pred_shape} do
-        {[], {}} -> Nx.Shape.binary_broadcast(true_shape, true_names, false_shape, false_names)
-        {_, _} -> {pred_shape, pred_names}
+      if pred_shape == {} do
+        Nx.Shape.binary_broadcast(true_shape, true_names, false_shape, false_names)
+      else
+        {pred_shape, pred_names}
       end
 
     _ =
@@ -6621,7 +6622,15 @@ defmodule Nx do
     if vectorized_axes != [] do
       on_true = reshape_tensor_for_broadcasting(on_true, output_shape)
       on_false = reshape_tensor_for_broadcasting(on_false, output_shape)
-      pred = reshape_tensor_for_broadcasting(pred, output_shape)
+
+      pred =
+        if pred.shape != output_shape do
+          pred
+          |> reshape_tensor_for_broadcasting(output_shape)
+          |> broadcast(output_shape)
+        else
+          reshape_tensor_for_broadcasting(pred, output_shape)
+        end
 
       out = devectorize(out)
       pred = devectorize(pred)
