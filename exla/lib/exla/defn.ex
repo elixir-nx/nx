@@ -1142,7 +1142,7 @@ defmodule EXLA.Defn do
     start_index_map = [axis]
 
     EXLA.Op.gather(
-          tensor,
+      tensor,
       indices,
       index_vector_dim,
       slice_sizes,
