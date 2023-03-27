@@ -480,7 +480,7 @@ defmodule EXLA.Defn do
         {res, cache}
 
       %{} ->
-        {res, cache} = cached_recur_operator(op, expr, state, cache)
+        {res, cache} = cached_recur_operator(op, Nx.devectorize(expr), state, cache)
         {res, Map.put(cache, id, res)}
     end
   end
