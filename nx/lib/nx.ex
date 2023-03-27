@@ -6598,29 +6598,9 @@ defmodule Nx do
 
     {output_shape, output_names} =
       case {vectorized_axes, pred_shape} do
-        {[], {}} ->
-          Nx.Shape.binary_broadcast(true_shape, true_names, false_shape, false_names)
-
-        _ ->
-          # we want to keep only pred_names as part of the output
-          # for the non-scalar case
-          true_names = List.duplicate(nil, tuple_size(true_shape))
-          false_names = List.duplicate(nil, tuple_size(false_shape))
-
-          {binary_shape, binary_names} =
-            Nx.Shape.binary_broadcast(true_shape, true_names, false_shape, false_names)
-
-          Nx.Shape.binary_broadcast(
-            pred_shape,
-            pred_names,
-            binary_shape,
-            binary_names
-          )
+        {[], {}} -> Nx.Shape.binary_broadcast(true_shape, true_names, false_shape, false_names)
+        {_, _} -> {pred_shape, pred_names}
       end
-
-    on_true = reshape_tensor_for_broadcasting(on_true, output_shape)
-    on_false = reshape_tensor_for_broadcasting(on_false, output_shape)
-    pred = reshape_tensor_for_broadcasting(pred, output_shape) |> broadcast(output_shape)
 
     _ =
       Nx.Shape.broadcast!(
@@ -6636,22 +6616,26 @@ defmodule Nx do
         Nx.Shape.broadcast_axes(false_shape, output_shape)
       )
 
-    out = devectorize(%{pred | shape: output_shape, type: output_type, names: output_names})
+    out = %{pred | shape: output_shape, type: output_type, names: output_names}
 
-    pred = devectorize(pred)
-    on_true = devectorize(on_true)
-    on_false = devectorize(on_false)
+    if vectorized_axes != [] do
+      on_true = reshape_tensor_for_broadcasting(on_true, output_shape)
+      on_false = reshape_tensor_for_broadcasting(on_false, output_shape)
+      pred = reshape_tensor_for_broadcasting(pred, output_shape)
 
-    result = impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
+      out = devectorize(out)
+      pred = devectorize(pred)
+      on_true = devectorize(on_true)
+      on_false = devectorize(on_false)
 
-    vectorize(result, Keyword.keys(vectorized_axes))
+      result = impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
+      vectorize(result, Keyword.keys(vectorized_axes))
+    else
+      impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
+    end
   end
 
-  defp reshape_tensor_for_broadcasting(tensor, target_shape) when tensor.shape == target_shape do
-    tensor
-  end
-
-  defp reshape_tensor_for_broadcasting(%T{vectorized_axes: [], shape: {}} = t, _), do: t
+  defp reshape_tensor_for_broadcasting(%{shape: shape} = t, shape), do: t
 
   defp reshape_tensor_for_broadcasting(tensor, target_shape) do
     input_shape = tensor.shape
@@ -13109,7 +13093,6 @@ defmodule Nx do
           [1, 2]
         ]
       >
-
       iex> t = Nx.tensor([[[1, 2]], [[11, 12]]]) |> Nx.vectorize(:x)
       iex> idx = Nx.tensor([0, 1])
       iex> Nx.take(t, idx, axis: 1)
@@ -13160,17 +13143,26 @@ defmodule Nx do
   """
   @doc type: :indexed
   def take(tensor, indices, opts \\ []) when is_list(opts) do
-    %T{vectorized_axes: tensor_vectorized_axes} = to_tensor(tensor)
-    [tensor, indices] = reshape_vectors([tensor, indices])
+    tensor = to_tensor(tensor)
+    indices = to_tensor(indices)
+
+    canonical_vectorized_axes = calculate_canonical_vectorized_axes([tensor, indices])
+    target_vectorized_axes = Keyword.keys(canonical_vectorized_axes)
+
+    offset = length(canonical_vectorized_axes)
+
+    indices =
+      [indices]
+      |> do_reshape_vectors_devectorize(
+        canonical_vectorized_axes,
+        offset
+      )
+      |> hd()
+      |> vectorize(target_vectorized_axes)
 
     unless Nx.Type.integer?(indices.type) do
       raise ArgumentError, "indices must be an integer tensor, got #{inspect(indices.type)}"
     end
-
-    vectorized_axes =
-      Enum.zip_with(tensor.vectorized_axes, indices.vectorized_axes, &Kernel.max/2)
-
-    offset = length(vectorized_axes)
 
     opts = keyword!(opts, axis: 0)
     axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names)
@@ -13184,7 +13176,7 @@ defmodule Nx do
         # taking from, we need to ensure that we squeeze out all common vectorized
         # axes, as well as the 1-sized vectorized axes from indices
         {[], indices_slice_lengths_rev, indices_squeeze_axes_rev, _} =
-          Enum.reduce(indices.vectorized_axes, {tensor_vectorized_axes, [], [], 0}, fn
+          Enum.reduce(indices.vectorized_axes, {tensor.vectorized_axes, [], [], 0}, fn
             {_name, s1}, {[], slice_acc, squeeze_acc, axis} ->
               {[], [s1 | slice_acc], squeeze_acc, axis + 1}
 
@@ -13201,7 +13193,7 @@ defmodule Nx do
               {other_axes, [slice | slice_acc], squeeze_acc, axis + 1}
           end)
 
-        devec_indices = devectorize(indices)
+        devec_indices = devectorize(indices, keep_names: false)
         starts = List.duplicate(0, rank(devec_indices))
         lengths = Enum.reverse(indices_slice_lengths_rev) ++ Tuple.to_list(indices.shape)
 
@@ -13210,7 +13202,7 @@ defmodule Nx do
           |> slice(starts, lengths)
           |> squeeze(axes: Enum.reverse(indices_squeeze_axes_rev))
 
-        shape = List.to_tuple(Keyword.values(vectorized_axes) ++ Tuple.to_list(shape))
+        shape = List.to_tuple(Keyword.values(canonical_vectorized_axes) ++ Tuple.to_list(shape))
         names = List.duplicate(nil, offset) ++ names
         {shape, names, indices}
       else
@@ -13220,12 +13212,13 @@ defmodule Nx do
         {shape, names, indices}
       end
 
-    tensor = devectorize(tensor)
-    axis = axis + offset
+    tensor_offset = length(tensor.vectorized_axes)
+    tensor = devectorize(tensor, keep_names: false)
+    axis = axis + tensor_offset
 
     result = impl!(tensor).take(%{tensor | shape: shape, names: names}, tensor, indices, axis)
 
-    vectorize(result, Keyword.keys(vectorized_axes))
+    vectorize(result, canonical_vectorized_axes)
   end
 
   @doc """
