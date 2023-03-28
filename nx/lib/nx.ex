@@ -4400,8 +4400,8 @@ defmodule Nx do
 
   Containers are also supported:
 
-      iex> input = {Nx.tensor([1]), %{a: Nx.tensor([2]), b: {Nx.tensor([3]), Nx.tensor([[4, 5]])}}}
-      iex> {t1, %{a: t2, b: {t3, t4}}} = Nx.vectorize(input, x: 1)
+      iex> input = {Nx.tensor([1]), %{a: Nx.tensor([2])}}
+      iex> {t1, %{a: t2}} = Nx.vectorize(input, x: 1)
       iex> t1
       #Nx.Tensor<
         vectorized[x: 1]
@@ -4413,20 +4413,6 @@ defmodule Nx do
         vectorized[x: 1]
         s64
         [2]
-      >
-      iex> t3
-      #Nx.Tensor<
-        vectorized[x: 1]
-        s64
-        [3]
-      >
-      iex> t4
-      #Nx.Tensor<
-        vectorized[x: 1]
-        s64[2]
-        [
-          [4, 5]
-        ]
       >
 
   ## Error cases
@@ -4526,12 +4512,6 @@ defmodule Nx do
   def vectorize(container, vectorized_axes) do
     {result, nil} =
       Nx.Container.traverse(container, nil, fn
-        item, [] when is_tensor(item) ->
-          to_tensor(item)
-
-        item, _ when item.shape == {} when is_number(item) when is_struct(item, Complex) ->
-          raise ArgumentError, "cannot vectorize tensor of rank 0"
-
         item, _ ->
           {vectorize(item, vectorized_axes), nil}
       end)
@@ -4586,35 +4566,9 @@ defmodule Nx do
 
   Containers are also supported:
 
-      iex> input = {1, Nx.iota({2}, vectorized_axes: [x: 1, y: 1]), Nx.iota({1, 2}, vectorized_axes: [z: 2]), %{a: Nx.iota({3}, vectorized_axes: [x: 1])}}
-      iex> {t1, t2, t3, %{a: t4}} = Nx.devectorize(input)
+      iex> input = {1, %{a: Nx.iota({3}, vectorized_axes: [x: 1])}}
+      iex> {1, %{a: t1}} = Nx.devectorize(input)
       iex> t1
-      #Nx.Tensor<
-        s64
-        1
-      >
-      iex> t2
-      #Nx.Tensor<
-        s64[x: 1][y: 1][2]
-        [
-          [
-            [0, 1]
-          ]
-        ]
-      >
-      iex> t3
-      #Nx.Tensor<
-        s64[z: 2][1][2]
-        [
-          [
-            [0, 1]
-          ],
-          [
-            [0, 1]
-          ]
-        ]
-      >
-      iex> t4
       #Nx.Tensor<
         s64[x: 1][3]
         [
@@ -4653,10 +4607,6 @@ defmodule Nx do
   def devectorize(container, opts) do
     {result, nil} =
       Nx.Container.traverse(container, nil, fn
-        item, _ when is_number(item) or is_struct(item, Complex) ->
-          result = to_tensor(item)
-          {result, nil}
-
         item, _ ->
           {devectorize(item, opts), nil}
       end)
