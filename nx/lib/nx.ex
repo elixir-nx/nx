@@ -8602,7 +8602,7 @@ defmodule Nx do
       #Nx.Tensor<
         f32
         8.5
-       >
+      >
 
   ### Aggregating over an axis
 
