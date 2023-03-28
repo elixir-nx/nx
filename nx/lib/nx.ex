@@ -8692,7 +8692,7 @@ defmodule Nx do
 
       :otherwise ->
         t[[half_idx - 1]]
-        |> add(tensor[[half_idx]])
+        |> add(t[[half_idx]])
         |> divide(2)
     end
   end
