@@ -156,7 +156,7 @@ defmodule Nx.Serving do
 
   ### Partitioning
 
-  You can start several partitions under th same serving by passing
+  You can start several partitions under the same serving by passing
   `partitions: true` when starting the serving. The number of partitions
   will be determined according  your compiler and for which host it is
   compiling.
