@@ -19,7 +19,7 @@ defmodule Nx.Serving do
         import Nx.Defn
 
         defnp print_and_multiply(x) do
-          print_value(x, label: "debug")
+          x = print_value(x, label: "debug")
           x * 2
         end
       end
@@ -31,12 +31,12 @@ defmodule Nx.Serving do
       iex> serving = Nx.Serving.new(fn opts -> Nx.Defn.jit(&MyDefn.print_and_multiply/1, opts) end)
       iex> batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
       iex> Nx.Serving.run(serving, batch)
-      {:debug, #Nx.Tensor<
+      debug: #Nx.Tensor<
         s64[1][3]
         [
           [1, 2, 3]
         ]
-      >}
+      >
       #Nx.Tensor<
         s64[1][3]
         [
@@ -64,13 +64,13 @@ defmodule Nx.Serving do
       ...>   |> Nx.Serving.client_postprocessing(&{&1, &2, &3})
       ...> )
       iex> Nx.Serving.run(serving, [Nx.tensor([1, 2]), Nx.tensor([3, 4])])
-      {:debug, #Nx.Tensor<
+      debug: #Nx.Tensor<
         s64[2][2]
         [
           [1, 2],
           [3, 4]
         ]
-      >}
+      >
       {#Nx.Tensor<
          s64[2][2]
          [
@@ -128,13 +128,13 @@ defmodule Nx.Serving do
 
       iex> batch = Nx.Batch.stack([Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])])
       iex> Nx.Serving.batched_run(MyServing, batch)
-      {:debug, #Nx.Tensor<
+      debug: #Nx.Tensor<
         s64[2][3]
         [
           [1, 2, 3],
           [4, 5, 6]
         ]
-      >}
+      >
       #Nx.Tensor<
         s64[2][3]
         [
@@ -156,7 +156,7 @@ defmodule Nx.Serving do
 
   ### Partitioning
 
-  You can start several partitions under th same serving by passing
+  You can start several partitions under the same serving by passing
   `partitions: true` when starting the serving. The number of partitions
   will be determined according  your compiler and for which host it is
   compiling.
