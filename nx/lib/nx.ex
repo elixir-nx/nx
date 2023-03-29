@@ -8597,6 +8597,12 @@ defmodule Nx do
         f32
         1.5
       >
+      
+      iex> Nx.median(Nx.iota({2, 3, 3}))
+      #Nx.Tensor<
+        f32
+        8.5
+      >
 
   ### Aggregating over an axis
 
@@ -8692,7 +8698,7 @@ defmodule Nx do
 
       :otherwise ->
         t[[half_idx - 1]]
-        |> add(tensor[[half_idx]])
+        |> add(t[[half_idx]])
         |> divide(2)
     end
   end
