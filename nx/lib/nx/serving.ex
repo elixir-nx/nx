@@ -111,7 +111,7 @@ defmodule Nx.Serving do
 
       children = [
         {Nx.Serving,
-         serving: Nx.Serving.new(Nx.Serving.new(fn opts ->  Nx.Defn.jit(&MyDefn.print_and_multiply/1, opts) end)),
+         serving: Nx.Serving.new(fn opts ->  Nx.Defn.jit(&MyDefn.print_and_multiply/1, opts) end),
          name: MyServing,
          batch_size: 10,
          batch_timeout: 100}
