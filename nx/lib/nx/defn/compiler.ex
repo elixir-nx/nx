@@ -290,7 +290,7 @@ defmodule Nx.Defn.Compiler do
           if Process.get(Nx.Defn.Compiler) do
             unquote(defn_name)(unquote_splicing(all_args))
           else
-            Nx.Defn.Compiler.__runtime__(
+            Nx.Defn.jit_apply(
               &(unquote(Macro.var(defn_name, __MODULE__)) / unquote(arity)),
               unquote(all_args)
             )
@@ -338,17 +338,6 @@ defmodule Nx.Defn.Compiler do
       _ ->
         nil
     end
-  end
-
-  @doc false
-  def __runtime__(fun, args) do
-    {compiler, compiler_opts} =
-      Keyword.pop(Nx.Defn.default_options(), :compiler, Nx.Defn.Evaluator)
-
-    {fun, params, _templates, flatten} = to_lazy_params(fun, args)
-    runtime_fun = &runtime_fun(&1, fun, compiler)
-    [res] = compiler.__jit__(fun, params, runtime_fun, [flatten], compiler_opts)
-    res
   end
 
   defp get_and_normalize_defn({name, arity} = def, state) do
