@@ -1299,7 +1299,8 @@ defmodule Nx.Defn.Kernel do
       1
 
   """
-  def elem(tuple, index), do: :erlang.element(Kernel.+(index, 1), tuple)
+  def elem(tuple, index) when Kernel.and(is_tuple(tuple), is_integer(index)),
+    do: :erlang.element(Kernel.+(index, 1), tuple)
 
   @doc """
   Reads a module attribute at compilation time.
