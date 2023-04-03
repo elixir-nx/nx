@@ -1747,15 +1747,14 @@ defmodule Nx.LinAlg do
     # Taken from slogdet at https://github.com/google/jax/blob/a3a6afcd5b8bf3d60aba94054bb0001c0fcc50d7/jax/_src/numpy/linalg.py#L134
     {p, l, u} = Nx.LinAlg.lu(t)
 
-    diag = Nx.multiply(Nx.take_diagonal(l), Nx.take_diagonal(u))
-    is_zero = Nx.any(diag != 0, axes: [-1])
+    diag = Nx.take_diagonal(l) * Nx.take_diagonal(u)
+    is_zero = Nx.any(diag == 0, axes: [-1])
 
     {batch_axes, transition_bcast_axes_1, transition_bcast_axes_2} = determinant_axes(rank)
 
     transitions =
-      p
-      |> Nx.real()
-      |> Nx.dot(
+      Nx.dot(
+        Nx.real(p),
         [rank - 1],
         batch_axes,
         Nx.iota(batch_shape_n, axis: -1),
@@ -1763,17 +1762,17 @@ defmodule Nx.LinAlg do
         batch_axes
       )
 
-    upper_tri_mask = Nx.iota(shape, axis: -2) |> Nx.less(Nx.iota(shape, axis: -1))
+    upper_tri_mask = Nx.iota(shape, axis: -2) < Nx.iota(shape, axis: -1)
 
-    parity =
-      transitions
-      |> Nx.broadcast(shape, axes: transition_bcast_axes_1)
-      |> Nx.greater(Nx.broadcast(transitions, shape, axes: transition_bcast_axes_2))
-      |> Nx.multiply(upper_tri_mask)
-      |> Nx.sum(axes: [-2, -1])
+    transitions_gt =
+      Nx.broadcast(transitions, shape, axes: transition_bcast_axes_1) >
+        Nx.broadcast(transitions, shape, axes: transition_bcast_axes_2)
+
+    parity = Nx.sum(transitions_gt * upper_tri_mask, axes: [-2, -1])
 
     sign = -2 * Nx.remainder(parity, 2) + 1
-    is_zero * sign * Nx.product(diag, axes: [-1])
+
+    Nx.select(is_zero, 0, sign * Nx.product(diag, axes: [-1]))
   end
 
   deftransformp determinant_axes(rank) do
