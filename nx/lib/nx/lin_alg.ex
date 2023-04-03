@@ -1017,10 +1017,7 @@ defmodule Nx.LinAlg do
       >
 
   ## Error cases
-
-      iex> Nx.LinAlg.qr(Nx.tensor([[[1, 1, 1, 1], [-1, 4, 4, -1], [4, -2, 2, 0]]]))
-      ** (ArgumentError) tensor must have at least as many rows as columns in the last two axes, got 3 rows and 4 columns
-
+  
       iex> Nx.LinAlg.qr(Nx.tensor([1, 2, 3, 4, 5]))
       ** (ArgumentError) tensor must have at least rank 2, got rank 1 with shape {5}
 

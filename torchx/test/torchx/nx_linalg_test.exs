@@ -188,12 +188,16 @@ defmodule Torchx.NxLinAlgTest do
       for _ <- 1..10, type <- [{:f, 32}, {:c, 64}] do
         square = random_uniform({4, 4}, type: type)
         tall = random_uniform({4, 3}, type: type)
+        wide = random_uniform({3, 4}, type: type)
 
         assert {q, r} = Nx.LinAlg.qr(square)
         assert_all_close(Nx.dot(q, r), square, rtol: 1.0e-2)
 
         assert {q, r} = Nx.LinAlg.qr(tall)
         assert_all_close(Nx.dot(q, r), tall, rtol: 1.0e-2)
+
+        assert {q, r} = Nx.LinAlg.qr(wide)
+        assert_all_close(Nx.dot(q, r), wide, rtol: 1.0e-2)
       end
     end
 
