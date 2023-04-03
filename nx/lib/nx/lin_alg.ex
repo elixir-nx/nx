@@ -1017,7 +1017,7 @@ defmodule Nx.LinAlg do
       >
 
   ## Error cases
-  
+
       iex> Nx.LinAlg.qr(Nx.tensor([1, 2, 3, 4, 5]))
       ** (ArgumentError) tensor must have at least rank 2, got rank 1 with shape {5}
 
