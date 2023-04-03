@@ -4567,8 +4567,13 @@ defmodule Nx do
   Containers are also supported:
 
       iex> input = {1, %{a: Nx.iota({3}, vectorized_axes: [x: 1])}}
-      iex> {1, %{a: t1}} = Nx.devectorize(input)
+      iex> {t1, %{a: t2}} = Nx.devectorize(input)
       iex> t1
+      #Nx.Tensor<
+        s64
+        1
+      >
+      iex> t2
       #Nx.Tensor<
         s64[x: 1][3]
         [
@@ -4598,17 +4603,17 @@ defmodule Nx do
     %{tensor | shape: output_shape, names: output_names, vectorized_axes: []}
   end
 
-  def devectorize(tensor, _)
-      when tensor.vectorized_axes == []
-      when is_struct(tensor, Complex)
-      when is_number(tensor),
-      do: tensor
+  def devectorize(%T{vectorized_axes: []} = tensor, _), do: tensor
+
+  def devectorize(number, _)
+      when is_struct(number, Complex)
+      when is_number(number),
+      do: to_tensor(number)
 
   def devectorize(container, opts) do
     {result, nil} =
       Nx.Container.traverse(container, nil, fn
-        item, _ ->
-          {devectorize(item, opts), nil}
+        item, _ -> {devectorize(item, opts), nil}
       end)
 
     result

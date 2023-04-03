@@ -2537,7 +2537,7 @@ defmodule NxTest do
                      Nx.tensor([[4, 5]]) |> Nx.vectorize(x: 1)}
                 }}
 
-      assert Nx.devectorize({1, vectorized}, keep_names: false) == {1, container}
+      assert Nx.devectorize({1, vectorized}, keep_names: false) == {Nx.tensor(1), container}
     end
 
     test "broadcasts work for vectorized scalars vs non-vectorized operand" do
