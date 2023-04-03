@@ -1952,7 +1952,7 @@ defmodule Nx.LinAlg do
     {p, l, u} = Nx.LinAlg.lu(t)
 
     diag = Nx.multiply(Nx.take_diagonal(l), Nx.take_diagonal(u))
-    is_zero = Nx.any(diag != 0, axes: [-1])
+    is_zero = Nx.any(diag == 0, axes: [-1])
 
     {batch_axes, transition_bcast_axes_1, transition_bcast_axes_2} = determinant_axes(rank)
 
@@ -1977,6 +1977,10 @@ defmodule Nx.LinAlg do
       |> Nx.sum(axes: [-2, -1])
 
     sign = -2 * Nx.remainder(parity, 2) + 1
+
+    is_zero = print_value(is_zero, label: "is_zero")
+    sign = print_value(sign, label: "sign")
+    diag = print_value(diag, label: "diag")
 
     Nx.select(is_zero, 0, sign * Nx.product(diag, axes: [-1]))
   end
