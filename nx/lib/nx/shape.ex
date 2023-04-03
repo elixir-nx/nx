@@ -1876,24 +1876,19 @@ defmodule Nx.Shape do
     {put_rows_and_columns.(m1, n1), put_rows_and_columns.(m2, n2)}
   end
 
-  def qr({m, n}, opts) when m >= n do
+  def qr({m, n}, opts) do
     mode = opts[:mode]
+
+    k = min(m, n)
 
     case mode do
       :reduced ->
-        {{m, n}, {n, n}}
+        {{m, k}, {k, n}}
 
       _ ->
         {{m, m}, {m, n}}
     end
   end
-
-  def qr({m, n}, _opts),
-    do:
-      raise(
-        ArgumentError,
-        "tensor must have at least as many rows as columns in the last two axes, got #{m} rows and #{n} columns"
-      )
 
   def qr(shape, _opts),
     do:

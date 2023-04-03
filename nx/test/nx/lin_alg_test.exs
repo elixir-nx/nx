@@ -263,7 +263,7 @@ defmodule Nx.LinAlgTest do
       assert_all_close(Nx.dot(q, r), t, atol: 1.0e-10)
     end
 
-    test "factors rectangular matrix" do
+    test "factors tall matrix" do
       t = Nx.tensor([[1.0, -1.0, 4.0], [1.0, 4.0, -2.0], [1.0, 4.0, 2.0], [1.0, -1.0, 0.0]])
 
       # Reduced mode
@@ -314,6 +314,43 @@ defmodule Nx.LinAlgTest do
       assert_all_close(r, expected_r, atol: 1.0e-10)
 
       assert_all_close(Nx.dot(q, r), t, atol: 1.0e-10)
+    end
+
+    test "factors wide matrix" do
+      t =
+        Nx.tensor([
+          [1.0, 1.0, 1.0, 1.0],
+          [-1.0, 4.0, 4.0, -1.0],
+          [4.0, -2.0, 2.0, 0.0]
+        ])
+
+      # Reduced mode
+      {q, r} = Nx.LinAlg.qr(t, mode: :reduced)
+
+      expected_q =
+        Nx.tensor([
+          [0.23570226, 0.42637839, -0.87329601],
+          [-0.23570226, 0.89686489, 0.37426972],
+          [0.94280904, 0.11762162, 0.31189143]
+        ])
+
+      assert_all_close(q, expected_q, atol: 1.0e-10)
+
+      expected_r =
+        Nx.tensor([
+          [4.24264069, -2.59272486, 1.1785113, 0.47140452],
+          [0.0, 3.77859468, 4.24908118, -0.4704865],
+          [0.0, 0.0, 1.24756572, -1.24756572]
+        ])
+
+      assert_all_close(r, expected_r, atol: 1.0e-10)
+      assert_all_close(Nx.dot(q, r), t, atol: 1.0e-7)
+
+      # Complete mode
+      {q, r} = Nx.LinAlg.qr(t, mode: :complete)
+
+      assert_all_close(q, expected_q, atol: 1.0e-10)
+      assert_all_close(r, expected_r, atol: 1.0e-10)
     end
 
     test "works with complex matrix" do
@@ -391,12 +428,17 @@ defmodule Nx.LinAlgTest do
         key ->
           {square, key} = Nx.Random.uniform(key, shape: {2, 4, 4}, type: type)
           {tall, key} = Nx.Random.uniform(key, shape: {2, 4, 3}, type: type)
+          {wide, key} = Nx.Random.uniform(key, shape: {2, 3, 4}, type: type)
 
           assert {q, r} = Nx.LinAlg.qr(square)
           assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), square, atol: 1.0e-6)
 
           assert {q, r} = Nx.LinAlg.qr(tall)
           assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), tall, atol: 1.0e-6)
+
+          assert {q, r} = Nx.LinAlg.qr(wide)
+          assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), wide, atol: 1.0e-6)
+
           key
       end
     end
