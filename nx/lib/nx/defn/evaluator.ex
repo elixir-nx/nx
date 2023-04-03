@@ -83,7 +83,10 @@ defmodule Nx.Defn.Evaluator do
     expr = fun.(vars)
     state = %{hooks: hooks, parent_ids: nil, current_ids: nil}
     cache = init_compute_cache(expr, state)
-    {expr, output} = Nx.Defn.Composite.traverse(expr, [], &{Nx.devectorize(&1), [&1 | &2]})
+
+    {expr, output} =
+      Nx.Defn.Composite.traverse(expr, [], &{Nx.devectorize(&1, keep_names: false), [&1 | &2]})
+
     {expr, Enum.reverse(output), cache}
   end
 
@@ -241,7 +244,9 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, _meta]}}, state, caches) do
-    composite_eval(expr, state, caches)
+    expr
+    |> Nx.devectorize(keep_names: false)
+    |> composite_eval(state, caches)
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}} = ans, state, [cache | caches]) do
@@ -350,6 +355,8 @@ defmodule Nx.Defn.Evaluator do
       |> Enum.zip(clauses_cache)
       |> cond_clause(last, last_cache, state, caches)
 
+    chosen = Nx.devectorize(chosen, keep_names: false)
+
     {res, [_ | caches]} = composite_eval(chosen, state, chosen_cache)
     caches = Enum.reduce(parent_ids, caches, &decrement_parents(&2, &1))
     {res, caches}
@@ -357,6 +364,11 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval_apply(:while, %{data: %Expr{args: args, id: id}}, state, caches) do
     [initial, _arg, condition, block] = args
+
+    initial = Nx.devectorize(initial, keep_names: false)
+    block = Nx.devectorize(block, keep_names: false)
+    condition = Nx.devectorize(condition, keep_names: false)
+
     {initial, caches} = composite_eval(initial, state, caches)
     {while_cache, caches} = pop_cache!(caches, [:while | id])
     {while(initial, condition, block, state, [while_cache]), caches}
@@ -399,14 +411,12 @@ defmodule Nx.Defn.Evaluator do
     end
   end
 
-  defp eval_apply(_op, %{vectorized_axes: [_ | _]} = ans, _state, _caches) do
-    raise "unexpected vectorized axes in evaluator: #{inspect(ans)}"
+  defp eval_apply(op, %{vectorized_axes: [_ | _]} = ans, _state, _caches) do
+    raise "unexpected vectorized axes in evaluator for operation #{inspect(op)}: #{inspect(ans)}"
   end
 
   defp eval_apply(op, ans, state, caches) do
     {args, caches} = Tree.apply_args(ans, caches, &eval(&1, state, &2))
-
-    ans = Nx.devectorize(ans, keep_names: false)
 
     {mod, args} =
       cond do

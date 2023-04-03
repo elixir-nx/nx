@@ -1421,13 +1421,9 @@ defmodule Nx.LinAlg do
        %{tensor | names: List.duplicate(nil, rank - 1), type: output_type, shape: s_shape},
        %{tensor | names: List.duplicate(nil, rank), type: output_type, shape: v_shape}}
 
-    {u, s, vt} = Nx.Shared.optional(:svd, [tensor, opts], output, &Nx.LinAlg.SVD.svd/2)
-
-    {
-      Nx.vectorize(u, vectorized_axes),
-      Nx.vectorize(s, vectorized_axes),
-      Nx.vectorize(vt, vectorized_axes)
-    }
+    :svd
+    |> Nx.Shared.optional([tensor, opts], output, &Nx.LinAlg.SVD.svd/2)
+    |> Nx.vectorize(vectorized_axes)
   end
 
   @doc """

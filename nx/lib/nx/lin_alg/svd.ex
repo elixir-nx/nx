@@ -31,22 +31,19 @@ defmodule Nx.LinAlg.SVD do
 
     all_zeros = Nx.all(input_tensor == 0)
 
-    u = Nx.select(all_zeros, uz, u)
-    s = Nx.select(all_zeros, sz, s)
-    vt = Nx.select(all_zeros, vtz, vt)
+    # TO-DO: rewrite this with if-else/cond when we support vectorization
+    # for cond
+    result = {
+      Nx.select(all_zeros, uz, u),
+      Nx.select(all_zeros, sz, s),
+      Nx.select(all_zeros, vtz, vt)
+    }
 
-    result = {u, s, vt}
-
-    {u, s, vt} =
-      custom_grad(result, [input_tensor], fn g ->
-        svd_grad(result, input_tensor, g)
-      end)
-
-    u = expand_batch_axes(u, collapsed_axes)
-    s = expand_batch_axes(s, collapsed_axes)
-    vt = expand_batch_axes(vt, collapsed_axes)
-
-    {u, s, vt}
+    result
+    |> custom_grad([input_tensor], fn g ->
+      svd_grad(result, input_tensor, g)
+    end)
+    |> expand_batch_axes(collapsed_axes)
   end
 
   deftransformp collapse_batch_axes_and_vectorize(
@@ -78,6 +75,14 @@ defmodule Nx.LinAlg.SVD do
 
   deftransformp validate_opts(opts \\ []) do
     opts[:max_iter] || raise ArgumentError, "missing option :max_iter"
+  end
+
+  deftransformp expand_batch_axes({u, s, vt}, collapsed_axes) do
+    {
+      expand_batch_axes(u, collapsed_axes),
+      expand_batch_axes(s, collapsed_axes),
+      expand_batch_axes(vt, collapsed_axes)
+    }
   end
 
   deftransformp expand_batch_axes(tensor, {}), do: tensor

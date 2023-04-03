@@ -620,4 +620,26 @@ defmodule Nx.Defn.EvaluatorTest do
       assert cond_nested_condition_cache(%{iteration: 12}) == %{iteration: Nx.tensor(13)}
     end
   end
+
+  describe "vectorization" do
+    defn vectorize_within_defn(t, a) do
+      t =
+        t
+        |> Nx.vectorize(a: 1, b: 2)
+        |> Nx.add(1)
+
+      a = Nx.vectorize(a, a: 1)
+
+      Nx.select(a, t, a)
+    end
+
+    test "vectorize works inside defn" do
+      t = Nx.tensor([[1, 2]])
+
+      assert vectorize_within_defn(t, Nx.tensor([1])) == Nx.vectorize(Nx.add(t, 1), a: 1, b: 2)
+
+      assert vectorize_within_defn(t, Nx.tensor([0])) ==
+               Nx.vectorize(Nx.tensor([[0, 0]]), a: 1, b: 2)
+    end
+  end
 end
