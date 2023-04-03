@@ -1235,11 +1235,12 @@ defmodule Nx.Defn.Grad do
     dtensor = Nx.broadcast(0, tensor)
 
     dinit_value =
-      Nx.indexed_put(
-        g,
+      g
+      |> Nx.indexed_put(
         indices_to_flatten,
         Nx.broadcast(0, {Nx.axis_size(indices_to_flatten, 0)})
       )
+      |> Nx.sum()
 
     [{tensor, dtensor}, {source, dsource}, {init_value, dinit_value}]
   end
