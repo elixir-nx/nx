@@ -152,6 +152,52 @@ defmodule Nx.LinAlgTest do
 
       assert_all_close(Nx.LinAlg.determinant(four_by_four), Nx.tensor([-108.0, -490]))
     end
+
+    test "returns 0 for LD rows" do
+      for type <- [bf: 16, f: 16, f: 32, f: 64] do
+        assert_all_close(
+          Nx.LinAlg.determinant(Nx.tensor([[1.0, 0.0], [3.0, 0.0]], type: type)),
+          Nx.tensor(0)
+        )
+
+        assert_all_close(
+          Nx.LinAlg.determinant(
+            Nx.tensor([[1.0, 2.0, 3.0], [-1.0, -2.0, -3.0], [4.0, 5.0, 6.0]], type: type)
+          ),
+          Nx.tensor(0)
+        )
+
+        assert_all_close(
+          Nx.LinAlg.determinant(
+            Nx.tensor(
+              [
+                [1.0, 2.0, 3.0, 0],
+                [-1.0, -2.0, -3.0, 0],
+                [4.0, 5.0, 6.0, 0],
+                [4.0, 5.0, 6.0, 0]
+              ],
+              type: type
+            )
+          ),
+          Nx.tensor(0)
+        )
+
+        assert_all_close(
+          Nx.LinAlg.determinant(
+            Nx.tensor(
+              [
+                [1.0, 2.0, 3.0, 4.0],
+                [1.0, 2.0, 3.0, 4.0],
+                [1.0, 2.0, 3.0, 4.0],
+                [1.0, 2.0, 3.0, 4.0]
+              ],
+              type: type
+            )
+          ),
+          Nx.tensor(0)
+        )
+      end
+    end
   end
 
   describe "norm/2" do
