@@ -620,4 +620,52 @@ defmodule Nx.Defn.EvaluatorTest do
       assert cond_nested_condition_cache(%{iteration: 12}) == %{iteration: Nx.tensor(13)}
     end
   end
+
+  describe "vectorization" do
+    defn vectorized_while(t) do
+      while({t, i = 0}, i < 2) do
+        {t + 1, i + 1}
+      end
+    end
+
+    defn vectorized_cond(cond_1, on_1, cond_2, on_2, on_3) do
+      cond do
+        cond_1 -> on_1
+        cond_2 -> on_2
+        true -> on_3
+      end
+    end
+
+    defn vectorized_metadata(t) do
+      x = Nx.devectorize(t)
+      x = Nx.vectorize(x, t.vectorized_axes)
+
+      stop_grad(x)
+    end
+
+    test "while" do
+      t = Nx.iota({2, 3}, vectorized_axes: [a: 1])
+
+      assert {result, i} = vectorized_while(t)
+
+      assert result == Nx.add(t, 2)
+      assert i == Nx.tensor(2)
+    end
+
+    test "cond" do
+      a = Nx.tensor(1)
+      b = Nx.tensor(2)
+      c = Nx.vectorize(Nx.tensor([[1]]), x: 1, y: 1)
+
+      # This shows that non-vectorized branches still return unvectorized.
+      assert a == vectorized_cond(1, a, 0, b, c)
+      assert b == vectorized_cond(0, a, 1, b, c)
+      assert c == vectorized_cond(0, a, 0, b, c)
+    end
+
+    test "metadata with expr" do
+      a = Nx.iota({1}, vectorized_axes: [x: 2])
+      assert a == vectorized_metadata(a)
+    end
+  end
 end
