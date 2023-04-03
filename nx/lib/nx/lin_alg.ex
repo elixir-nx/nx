@@ -1978,10 +1978,6 @@ defmodule Nx.LinAlg do
 
     sign = -2 * Nx.remainder(parity, 2) + 1
 
-    is_zero = print_value(is_zero, label: "is_zero")
-    sign = print_value(sign, label: "sign")
-    diag = print_value(diag, label: "diag")
-
     Nx.select(is_zero, 0, sign * Nx.product(diag, axes: [-1]))
   end
 
