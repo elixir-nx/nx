@@ -263,7 +263,6 @@ defmodule Nx.BinaryBackend.Matrix do
         # Conj(a + bi) = a - bi
 
         if abs(re_ij - re_ji) > eps and not (re_ij == :nan and re_ji == :nan) do
-          IO.inspect(matrix)
           raise_not_hermitian()
         end
 
