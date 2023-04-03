@@ -463,7 +463,17 @@ defmodule Nx.BinaryBackend.Matrix do
                 [a_ij] = get_matrix_elements(a_prime, [[i, j]])
                 [u_jj] = get_matrix_elements(u, [[j, j]])
 
-                value = (a_ij - sum) / u_jj
+                value =
+                  cond do
+                    u_jj != 0 ->
+                      (a_ij - sum) / u_jj
+
+                    a_ij >= sum ->
+                      :infinity
+
+                    true ->
+                      :neg_infinity
+                  end
 
                 if abs(value) < eps do
                   replace_matrix_element(l, i, j, 0)

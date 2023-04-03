@@ -1977,7 +1977,8 @@ defmodule Nx.LinAlg do
       |> Nx.sum(axes: [-2, -1])
 
     sign = -2 * Nx.remainder(parity, 2) + 1
-    is_zero * sign * Nx.product(diag, axes: [-1])
+
+    Nx.select(is_zero, 0, sign * Nx.product(diag, axes: [-1]))
   end
 
   deftransformp determinant_axes(rank) do
