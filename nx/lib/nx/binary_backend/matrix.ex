@@ -272,7 +272,7 @@ defmodule Nx.BinaryBackend.Matrix do
     zeros = binary_to_matrix(<<0::size(zeros_size)>>, type, shape)
 
     # check if matrix is hermitian
-    eps = 1.0e-10
+    eps = 1.0e-6
 
     for i <- 0..(n - 1) do
       row = matrix |> get_matrix_rows([i]) |> List.flatten()
@@ -324,12 +324,21 @@ defmodule Nx.BinaryBackend.Matrix do
             |> Enum.reduce(0, &+/2)
 
           l_ij =
-            if i == j do
-              Complex.sqrt(a_ij - sum)
-            else
-              [l_jj] = get_matrix_elements(l, [[j, j]])
+            cond do
+              i == j and (a_ij >= sum or is_struct(a_ij, Complex) or is_struct(sum, Complex)) ->
+                Complex.sqrt(a_ij - sum)
 
-              (a_ij - sum) / l_jj
+              i == j ->
+                :nan
+
+              true ->
+                [l_jj] = get_matrix_elements(l, [[j, j]])
+
+                if l_jj == 0 do
+                  :nan
+                else
+                  (a_ij - sum) / l_jj
+                end
             end
 
           replace_matrix_element(l, i, j, l_ij)
