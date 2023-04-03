@@ -19,7 +19,7 @@ defmodule Nx.Serving do
         import Nx.Defn
 
         defnp print_and_multiply(x) do
-          print_value({:debug, x})
+          x = print_value(x, label: "debug")
           x * 2
         end
       end
@@ -28,15 +28,15 @@ defmodule Nx.Serving do
   We can use `new/1` to create a serving that will return a JIT
   or AOT compiled function to execute on batches of tensors:
 
-      iex> serving = Nx.Serving.new(fn opts -> Nx.Defn.jit(&print_and_multiply/1, opts) end)
+      iex> serving = Nx.Serving.new(fn opts -> Nx.Defn.jit(&MyDefn.print_and_multiply/1, opts) end)
       iex> batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
       iex> Nx.Serving.run(serving, batch)
-      {:debug, #Nx.Tensor<
+      debug: #Nx.Tensor<
         s64[1][3]
         [
           [1, 2, 3]
         ]
-      >}
+      >
       #Nx.Tensor<
         s64[1][3]
         [
@@ -59,18 +59,18 @@ defmodule Nx.Serving do
   using `client_postprocessing` hooks. Let's give it another try:
 
       iex> serving = (
-      ...>   Nx.Serving.new(fn opts -> Nx.Defn.jit(&print_and_multiply/1, opts) end)
+      ...>   Nx.Serving.new(fn opts -> Nx.Defn.jit(&MyDefn.print_and_multiply/1, opts) end)
       ...>   |> Nx.Serving.client_preprocessing(fn input -> {Nx.Batch.stack(input), :client_info} end)
       ...>   |> Nx.Serving.client_postprocessing(&{&1, &2, &3})
       ...> )
       iex> Nx.Serving.run(serving, [Nx.tensor([1, 2]), Nx.tensor([3, 4])])
-      {:debug, #Nx.Tensor<
+      debug: #Nx.Tensor<
         s64[2][2]
         [
           [1, 2],
           [3, 4]
         ]
-      >}
+      >
       {#Nx.Tensor<
          s64[2][2]
          [
@@ -111,7 +111,7 @@ defmodule Nx.Serving do
 
       children = [
         {Nx.Serving,
-         serving: Nx.Serving.new(Nx.Defn.jit(&print_and_multiply/1)),
+         serving: Nx.Serving.new(fn opts ->  Nx.Defn.jit(&MyDefn.print_and_multiply/1, opts) end),
          name: MyServing,
          batch_size: 10,
          batch_timeout: 100}
@@ -128,13 +128,13 @@ defmodule Nx.Serving do
 
       iex> batch = Nx.Batch.stack([Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])])
       iex> Nx.Serving.batched_run(MyServing, batch)
-      {:debug, #Nx.Tensor<
+      debug: #Nx.Tensor<
         s64[2][3]
         [
           [1, 2, 3],
           [4, 5, 6]
         ]
-      >}
+      >
       #Nx.Tensor<
         s64[2][3]
         [
@@ -156,7 +156,7 @@ defmodule Nx.Serving do
 
   ### Partitioning
 
-  You can start several partitions under th same serving by passing
+  You can start several partitions under the same serving by passing
   `partitions: true` when starting the serving. The number of partitions
   will be determined according  your compiler and for which host it is
   compiling.

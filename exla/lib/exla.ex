@@ -23,14 +23,11 @@ defmodule EXLA do
 
   In a script/notebook, you would do:
 
-      Mix.install(
-        [
-          {:exla, "~> 0.2"}
-        ],
-        config: [
-          nx: [default_backend: EXLA.Backend]
-        ]
-      )
+      Mix.install([
+        {:exla, "~> 0.2"}
+      ])
+
+      Nx.global_default_backend(EXLA.Backend)
 
   From now on, all created tensors will be allocated directly on the given
   `EXLA.Backend`. You can use functions such as `Nx.backend_transfer/2` to

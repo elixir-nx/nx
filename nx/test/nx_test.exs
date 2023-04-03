@@ -2523,6 +2523,23 @@ defmodule NxTest do
   end
 
   describe "vectorization" do
+    test "vectorizes and devectorizes containers" do
+      container = {Nx.tensor([1]), %{a: Nx.tensor([2]), b: {Nx.tensor([3]), Nx.tensor([[4, 5]])}}}
+
+      vectorized = Nx.vectorize(container, x: 1)
+
+      assert vectorized ==
+               {Nx.tensor([1]) |> Nx.vectorize(x: 1),
+                %{
+                  a: Nx.tensor([2]) |> Nx.vectorize(x: 1),
+                  b:
+                    {Nx.tensor([3]) |> Nx.vectorize(x: 1),
+                     Nx.tensor([[4, 5]]) |> Nx.vectorize(x: 1)}
+                }}
+
+      assert Nx.devectorize({1, vectorized}, keep_names: false) == {1, container}
+    end
+
     test "broadcasts work for vectorized scalars vs non-vectorized operand" do
       v = Nx.tensor([0, 1]) |> Nx.vectorize(x: 2)
       t = Nx.iota({2, 3})
