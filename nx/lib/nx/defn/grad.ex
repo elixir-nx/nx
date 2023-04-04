@@ -1206,8 +1206,8 @@ defmodule Nx.Defn.Grad do
 
     nx_function =
       case op do
-        :window_scatter_max -> &Nx.argmax(&1, axis: -1)
-        :window_scatter_min -> &Nx.argmin(&1, axis: -1)
+        :window_scatter_max -> &Nx.argmax(&1, tie_break: :high, axis: -1)
+        :window_scatter_min -> &Nx.argmin(&1, tie_break: :high, axis: -1)
       end
 
     windows =
@@ -1234,13 +1234,8 @@ defmodule Nx.Defn.Grad do
     dsource = Nx.gather(g, indices)
     dtensor = Nx.broadcast(0, tensor)
 
-    dinit_value =
-      g
-      |> Nx.indexed_put(
-        indices_to_flatten,
-        Nx.broadcast(0, {Nx.axis_size(indices_to_flatten, 0)})
-      )
-      |> Nx.sum()
+    # because we scatter by adding, we should take all entries into account here
+    dinit_value = Nx.sum(g)
 
     [{tensor, dtensor}, {source, dsource}, {init_value, dinit_value}]
   end
@@ -1594,7 +1589,7 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad_scatter_window__gather_windows(tensor, window_dimensions, strides, padding) do
-    tensor = Nx.pad(tensor, 0, padding)
+    tensor = Nx.pad(tensor, 0, Enum.map(padding, &Tuple.append(&1, 0)))
 
     shape_l = Tuple.to_list(tensor.shape)
     window_dims_l = Tuple.to_list(window_dimensions)

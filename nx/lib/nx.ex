@@ -8659,7 +8659,7 @@ defmodule Nx do
         f32
         1.5
       >
-      
+
       iex> Nx.median(Nx.iota({2, 3, 3}))
       #Nx.Tensor<
         f32
