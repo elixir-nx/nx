@@ -132,6 +132,7 @@ defmodule Nx.Defn.Expr do
   @doc """
   Creates a `cond` tensor expression.
   """
+
   def cond([], last) do
     Nx.devectorize(last, keep_names: false)
   end
@@ -140,10 +141,22 @@ defmodule Nx.Defn.Expr do
     {preds, exprs} = Enum.unzip(clauses)
     {preds, context} = to_exprs(preds)
 
-    [last = out | exprs] =
+    [out | _] = broadcasted = Nx.broadcast_vectors([last | exprs])
+
+    [last | exprs] =
+      Enum.zip_with(broadcasted, [last | exprs], fn
+        _expr, original
+        when is_number(original)
+        when original in [:infinity, :neg_infinity, :nan]
+        when is_struct(original, Complex) ->
+          original
+
+        expr, _original ->
+          Nx.devectorize(expr, keep_names: false)
+      end)
+
+    [last | exprs] =
       [last | exprs]
-      |> Nx.broadcast_vectors()
-      |> Enum.map(&Nx.devectorize(&1, keep_names: false))
       |> Enum.map(&Composite.flatten_list([&1]))
       |> Enum.zip_with(&broadcast_clause/1)
       |> case do

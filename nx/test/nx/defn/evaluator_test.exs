@@ -653,13 +653,13 @@ defmodule Nx.Defn.EvaluatorTest do
     end
 
     test "cond" do
-      a = Nx.tensor(1)
+      a = Nx.tensor(3)
       b = Nx.tensor(2)
       c = Nx.vectorize(Nx.tensor([[1]]), x: 1, y: 1)
 
       # This shows that non-vectorized branches still return unvectorized.
-      assert a == vectorized_cond(1, a, 0, b, c)
-      assert b == vectorized_cond(0, a, 1, b, c)
+      assert Nx.add(c, 2) == vectorized_cond(1, a, 0, b, c)
+      assert Nx.add(c, 1) == vectorized_cond(0, a, 1, b, c)
       assert c == vectorized_cond(0, a, 0, b, c)
     end
 
