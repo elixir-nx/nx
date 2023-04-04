@@ -158,9 +158,18 @@ defmodule Nx.Defn.Expr do
           []
       end
 
+    type_out =
+      case Composite.flatten_list([out]) do
+        [type_out | _] ->
+          type_out
+
+        out ->
+          out
+      end
+
     [last | exprs] =
       broadcasted_and_flattened
-      |> Enum.zip_with(&broadcast_clause(out, &1))
+      |> Enum.zip_with(&broadcast_clause(type_out, &1))
       |> case do
         # Handle the case where branches don't return anything
         [] -> Enum.map(broadcasted_and_flattened, fn _ -> {} end)
@@ -180,7 +189,7 @@ defmodule Nx.Defn.Expr do
     |> Nx.vectorize(names)
   end
 
-  defp broadcast_clause(_type, [type = last | exprs]) do
+  defp broadcast_clause(type, [last | exprs]) do
     %{shape: shape, names: names} = last = to_expr(last)
 
     {exprs, {type, shape, names}} =
