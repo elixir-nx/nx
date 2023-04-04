@@ -92,7 +92,10 @@ defmodule Nx.Defn.Expr do
   inspection.
   """
   def metadata(expr, metadata) when is_map(metadata) do
-    case to_container_expr(expr) do
+    expr
+    |> to_container_expr()
+    |> Nx.devectorize()
+    |> case do
       %{data: %{context: context}} = res ->
         expr(res, context, :metadata, [expr, metadata])
 
@@ -130,15 +133,17 @@ defmodule Nx.Defn.Expr do
   Creates a `cond` tensor expression.
   """
   def cond([], last) do
-    last
+    Nx.devectorize(last, keep_names: false)
   end
 
-  def cond(clauses, last = out) do
+  def cond(clauses, last) do
     {preds, exprs} = Enum.unzip(clauses)
     {preds, context} = to_exprs(preds)
 
-    [last | exprs] =
+    [last = out | exprs] =
       [last | exprs]
+      |> Nx.broadcast_vectors()
+      |> Enum.map(&Nx.devectorize(&1, keep_names: false))
       |> Enum.map(&Composite.flatten_list([&1]))
       |> Enum.zip_with(&broadcast_clause/1)
       |> case do

@@ -44,7 +44,7 @@ defmodule Nx.Defn.Evaluator do
 
         expr
         |> composite_eval(%{params: params, gc: gc?}, [cache])
-        |> apply_output_to_result_tuple(output)
+        |> apply_output(output)
       end)
     ]
   end
@@ -64,14 +64,12 @@ defmodule Nx.Defn.Evaluator do
       [
         expr
         |> composite_eval(%{params: params, gc: gc?}, [cache])
-        |> apply_output_to_result_tuple(output)
+        |> apply_output(output)
       ]
     end
   end
 
-  defp apply_output_to_result_tuple({result, _cache}, output), do: apply_output(result, output)
-
-  defp apply_output(result, output) do
+  defp apply_output({result, _cache}, output) do
     {result, []} =
       Composite.traverse(result, output, fn
         result, [%Nx.Tensor{vectorized_axes: vectorized_axes} | acc] ->
@@ -246,12 +244,7 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, _meta]}}, state, caches) do
-    expr
-    |> Nx.devectorize(keep_names: false)
-    |> composite_eval(state, caches)
-    |> then(fn {result, cache} ->
-      {Nx.devectorize(result), cache}
-    end)
+    composite_eval(expr, state, caches)
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}} = ans, state, [cache | caches]) do
@@ -360,15 +353,10 @@ defmodule Nx.Defn.Evaluator do
       |> Enum.zip(clauses_cache)
       |> cond_clause(last, last_cache, state, caches)
 
-    {chosen, output} =
-      Nx.Defn.Composite.traverse(chosen, [], &{Nx.devectorize(&1, keep_names: false), [&1 | &2]})
-
-    output = Enum.reverse(output)
-
     {res, [_ | caches]} = composite_eval(chosen, state, chosen_cache)
     caches = Enum.reduce(parent_ids, caches, &decrement_parents(&2, &1))
 
-    {apply_output(res, output), caches}
+    {res, caches}
   end
 
   defp eval_apply(:while, %{data: %Expr{args: args, id: id}}, state, caches) do
