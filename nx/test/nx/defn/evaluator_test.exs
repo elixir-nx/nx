@@ -622,9 +622,9 @@ defmodule Nx.Defn.EvaluatorTest do
   end
 
   describe "vectorization" do
-    defn vectorized_while(t) do
-      while({t, i = 0}, i < 2) do
-        {t + 1, i + 1}
+    defn vectorized_while(a, b) do
+      while({a, b, i = 0}, i < 2) do
+        {a + b, b, i + 1}
       end
     end
 
@@ -646,10 +646,47 @@ defmodule Nx.Defn.EvaluatorTest do
     test "while" do
       t = Nx.iota({2, 3}, vectorized_axes: [a: 1])
 
-      assert {result, i} = vectorized_while(t)
+      assert {result, one, i} = vectorized_while(t, 1)
 
       assert result == Nx.add(t, 2)
+      assert one == Nx.tensor(1)
       assert i == Nx.tensor(2)
+    end
+
+    test "while raises on incompatible body/initial" do
+      t = Nx.iota({2, 3}, vectorized_axes: [a: 1], type: :s64)
+
+      message = """
+      test/nx/defn/evaluator_test.exs:626: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
+
+      Body matches template:
+
+      {#Nx.Tensor<
+         vectorized[a: 2]
+         s64[2][3]
+       >, #Nx.Tensor<
+         vectorized[a: 2]
+         s64[2][3]
+       >, #Nx.Tensor<
+         s64
+       >}
+
+      and initial argument has template:
+
+      {#Nx.Tensor<
+         vectorized[a: 1]
+         s64[2][3]
+       >, #Nx.Tensor<
+         vectorized[a: 2]
+         s64[2][3]
+       >, #Nx.Tensor<
+         s64
+       >}
+      """
+
+      assert_raise CompileError, message, fn ->
+        vectorized_while(t, Nx.iota({2, 3}, vectorized_axes: [a: 2], type: :s64))
+      end
     end
 
     test "cond" do
@@ -657,10 +694,9 @@ defmodule Nx.Defn.EvaluatorTest do
       b = Nx.tensor(2)
       c = Nx.vectorize(Nx.tensor([[1]]), x: 1, y: 1)
 
-      # This shows that non-vectorized branches still return unvectorized.
+      assert {c, c} == vectorized_cond(0, {c, c}, 0, {c, c}, {c, c})
       assert Nx.add(c, 2) == vectorized_cond(1, a, 0, b, c)
       assert Nx.add(c, 1) == vectorized_cond(0, a, 1, b, c)
-      assert c == vectorized_cond(0, a, 0, b, c)
     end
 
     test "metadata with expr" do

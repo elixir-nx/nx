@@ -134,42 +134,53 @@ defmodule Nx.Defn.Expr do
   """
 
   def cond([], last) do
-    Nx.devectorize(last, keep_names: false)
+    last
   end
 
-  def cond(clauses, last) do
+  def cond(clauses, out = last) do
+    IO.inspect({clauses, out})
+
     {preds, exprs} = Enum.unzip(clauses)
     {preds, context} = to_exprs(preds)
 
-    [out | _] = broadcasted = Nx.broadcast_vectors([last | exprs])
-
-    [last | exprs] =
-      Enum.zip_with(broadcasted, [last | exprs], fn
-        _expr, original
-        when is_number(original)
-        when original in [:infinity, :neg_infinity, :nan]
-        when is_struct(original, Complex) ->
-          original
-
-        expr, _original ->
-          Nx.devectorize(expr, keep_names: false)
-      end)
-
-    [last | exprs] =
+    [h | _] =
+      broadcasted_and_flattened =
       [last | exprs]
+      |> Nx.reshape_vectors()
       |> Enum.map(&Composite.flatten_list([&1]))
-      |> Enum.zip_with(&broadcast_clause/1)
+
+    vectorized_axes =
+      case h do
+        [%{vectorized_axes: vectorized_axes} | _] ->
+          vectorized_axes
+
+        _ ->
+          []
+      end
+
+    [last | exprs] =
+      broadcasted_and_flattened
+      |> Enum.zip_with(&broadcast_clause(out, &1))
       |> case do
         # Handle the case where branches don't return anything
-        [] -> Enum.map([last | exprs], fn _ -> {} end)
+        [] -> Enum.map(broadcasted_and_flattened, fn _ -> {} end)
         clauses -> unzip_clauses(clauses)
       end
 
+    names = Keyword.keys(vectorized_axes)
+
     clauses = Enum.zip(preds, exprs)
-    flatten_to_composite(out, context, exprs, &expr(&1, context, :cond, [clauses, last]))
+
+    out
+    |> flatten_to_composite(
+      context,
+      exprs,
+      &expr(&1, context, :cond, [clauses, last])
+    )
+    |> Nx.vectorize(names)
   end
 
-  defp broadcast_clause([type = last | exprs]) do
+  defp broadcast_clause(_type, [type = last | exprs]) do
     %{shape: shape, names: names} = last = to_expr(last)
 
     {exprs, {type, shape, names}} =
@@ -184,6 +195,7 @@ defmodule Nx.Defn.Expr do
       expr
       |> Nx.as_type(type)
       |> Nx.broadcast(shape, names: names)
+      |> Nx.devectorize(keep_names: false)
     end
   end
 
