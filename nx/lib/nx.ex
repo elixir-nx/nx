@@ -4843,9 +4843,13 @@ defmodule Nx do
     # This means that we can do a first pass accumulating axes into
     # the first tensor, and then a second pass getting them all into their final shapes.
     tensors_or_containers =
-      Enum.map(tensors_or_containers, fn t ->
-        {t, nil} = Nx.Defn.Composite.traverse(t, nil, fn t, nil -> {to_tensor(t), nil} end)
-        t
+      Enum.map(tensors_or_containers, fn
+        t when is_tensor(t) when t in [:infinity, :neg_infinity, :nan] ->
+          to_tensor(t)
+
+        t ->
+          {t, nil} = Nx.Defn.Composite.traverse(t, nil, fn t, nil -> {to_tensor(t), nil} end)
+          t
       end)
 
     canonical = calculate_canonical_vectorized_axes(tensors_or_containers)

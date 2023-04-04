@@ -362,10 +362,6 @@ defmodule Nx.Defn.Evaluator do
   defp eval_apply(:while, %{data: %Expr{args: args, id: id}}, state, caches) do
     [initial, _arg, condition, block] = args
 
-    initial = Nx.devectorize(initial, keep_names: false)
-    block = Nx.devectorize(block, keep_names: false)
-    condition = Nx.devectorize(condition, keep_names: false)
-
     {initial, caches} = composite_eval(initial, state, caches)
     {while_cache, caches} = pop_cache!(caches, [:while | id])
     {while(initial, condition, block, state, [while_cache]), caches}

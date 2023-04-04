@@ -198,7 +198,14 @@ defmodule Nx.Defn.Expr do
   """
   def while(initial, context, arg, condition, body) do
     [flatten_initial, flatten_arg, flatten_body] = clauses = flatten_clauses([initial, arg, body])
-    args = [flatten_initial, flatten_arg, condition, flatten_body]
+
+    args = [
+      Nx.devectorize(flatten_initial, keep_names: false),
+      flatten_arg,
+      Nx.devectorize(condition, keep_names: false),
+      Nx.devectorize(flatten_body, keep_names: false)
+    ]
+
     flatten_to_composite(initial, context, clauses, &expr(&1, context, :while, args))
   end
 
