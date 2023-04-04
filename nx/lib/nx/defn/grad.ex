@@ -492,9 +492,7 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:indexed_add, [target, indices, updates], _ans, g) do
-    zeros = Nx.broadcast(Expr.tensor(0.0), updates)
-
-    target_g = Nx.indexed_add(g, indices, zeros)
+    target_g = g
     updates_g = g |> Nx.gather(indices) |> Nx.reshape(updates.shape)
     indices_g = Nx.broadcast(Expr.tensor(0.0), indices)
 
@@ -1199,6 +1197,47 @@ defmodule Nx.Defn.Grad do
     [{a_input, da}, {b, db}]
   end
 
+  defp grad(op, [tensor, source, init_value, window_dimensions, opts], _ans, g)
+       when op in [:window_scatter_max, :window_scatter_min] do
+    padding_config = opts[:padding]
+    strides = opts[:strides]
+
+    nx_function =
+      case op do
+        :window_scatter_max -> &Nx.argmax(&1, tie_break: :high, axis: -1)
+        :window_scatter_min -> &Nx.argmin(&1, tie_break: :high, axis: -1)
+      end
+
+    windows =
+      grad_scatter_window__gather_windows(tensor, window_dimensions, strides, padding_config)
+
+    arg_idx = nx_function.(windows)
+
+    indices_to_flatten =
+      tensor
+      |> Nx.axes()
+      |> Enum.map(fn axis ->
+        tensor
+        |> Nx.shape()
+        |> Nx.iota(axis: axis)
+        |> grad_scatter_window__gather_windows(window_dimensions, strides, padding_config)
+        |> Nx.take_along_axis(Nx.new_axis(arg_idx, -1), axis: -1)
+      end)
+      |> Nx.concatenate(axis: -1)
+
+    num_axes = tuple_size(window_dimensions)
+
+    indices = Nx.reshape(indices_to_flatten, Tuple.append(source.shape, num_axes))
+
+    dsource = Nx.gather(g, indices)
+    dtensor = Nx.broadcast(0, tensor)
+
+    # because we scatter by adding, we should take all entries into account here
+    dinit_value = Nx.sum(g)
+
+    [{tensor, dtensor}, {source, dsource}, {init_value, dinit_value}]
+  end
+
   defp grad(:quotient, _, _, _) do
     raise ArgumentError, """
     cannot compute gradient for Nx.quotient/2.
@@ -1545,5 +1584,47 @@ defmodule Nx.Defn.Grad do
       end
 
     [{t, formatted_grad}]
+  end
+
+  defp grad_scatter_window__gather_windows(tensor, window_dimensions, strides, padding) do
+    tensor = Nx.pad(tensor, 0, Enum.map(padding, &Tuple.append(&1, 0)))
+
+    shape_l = Tuple.to_list(tensor.shape)
+    window_dims_l = Tuple.to_list(window_dimensions)
+
+    # generate all possible start indices given the shape and stride
+    starts =
+      [strides, shape_l]
+      |> Enum.zip_with(fn [stride, size] ->
+        0..(size - 1)//stride
+      end)
+      |> grad_scatter_window__generate_window_start_indices()
+
+    # filter start indices given the shape and window length
+    starts =
+      Enum.filter(starts, fn starts ->
+        [starts, window_dims_l, shape_l]
+        |> Enum.zip_with(fn [start, length, size] ->
+          start + length - 1 < size
+        end)
+        |> Enum.all?()
+      end)
+
+    # get a tensor of {num_windows, elements_per_window}
+    starts
+    |> Enum.map(fn starts ->
+      tensor
+      |> Nx.slice(starts, window_dims_l)
+      |> Nx.flatten()
+    end)
+    |> Nx.stack()
+  end
+
+  defp grad_scatter_window__generate_window_start_indices([[] | _]), do: []
+  defp grad_scatter_window__generate_window_start_indices([]), do: [[]]
+
+  defp grad_scatter_window__generate_window_start_indices([head | tail]) do
+    tail_product = grad_scatter_window__generate_window_start_indices(tail)
+    for h <- head, t <- tail_product, do: [h | t]
   end
 end

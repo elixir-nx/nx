@@ -4015,4 +4015,132 @@ defmodule Nx.Defn.GradTest do
       end
     end
   end
+
+  describe "window_scatter_min/max" do
+    defn grad_window_scatter_max(t, source, init) do
+      grad({t, source, init}, fn {t, source, init} ->
+        Nx.window_scatter_max(t, source, init, {2, 3}, strides: [2, 3], padding: :valid)
+      end)
+    end
+
+    defn grad_window_scatter_min(t, source, init) do
+      grad({t, source, init}, fn {t, source, init} ->
+        Nx.window_scatter_min(t, source, init, {2, 3}, strides: [2, 3], padding: :valid)
+      end)
+    end
+
+    defn grad_composed_window_scatter_min(t, source, init) do
+      grad({t, source, init}, fn {t, source, init} ->
+        t
+        |> Nx.pow(2)
+        |> Nx.window_scatter_min(source, init, {2, 3}, strides: [2, 3], padding: :valid)
+        |> Nx.exp()
+        |> Nx.add(Nx.multiply(init, 2))
+      end)
+    end
+
+    defn grad_composed_window_scatter_max(t, source, init) do
+      grad({t, source, init}, fn {t, source, init} ->
+        t
+        |> Nx.pow(2)
+        |> Nx.window_scatter_max(source, init, {2, 3}, strides: [2, 3], padding: :valid)
+        |> Nx.exp()
+        |> Nx.add(Nx.multiply(init, 2))
+      end)
+    end
+
+    test "window_scatter_max" do
+      t =
+        Nx.tensor([
+          [7, 2, 5, 3, 10, 2],
+          [3, 8, 9, 3, 4, 2],
+          [1, 5, 7, 5, 6, 1],
+          [0, 6, 2, 7, 2, 8]
+        ])
+
+      source = Nx.tensor([[2, 6], [3, 1]])
+      init_value = 0
+
+      assert {input_grad, source_grad, init_value_grad} =
+               grad_window_scatter_max(t, source, init_value)
+
+      assert input_grad == Nx.broadcast(0, t)
+      assert source_grad == Nx.broadcast(1.0, source)
+      assert init_value_grad == Nx.tensor(24.0)
+    end
+
+    test "window_scatter_min" do
+      t =
+        Nx.tensor([
+          [7, 2, 5, 3, 10, 2],
+          [3, 8, 9, 3, 4, 2],
+          [1, 5, 7, 5, 6, 1],
+          [0, 6, 2, 7, 2, 8]
+        ])
+
+      source = Nx.tensor([[2, 6], [3, 1]])
+      init_value = 0
+
+      assert {input_grad, source_grad, init_value_grad} =
+               grad_window_scatter_min(t, source, init_value)
+
+      assert input_grad == Nx.broadcast(0, t)
+      assert source_grad == Nx.broadcast(1.0, source)
+      assert init_value_grad == Nx.tensor(24.0)
+    end
+
+    test "grad_composed_window_scatter_max" do
+      t =
+        Nx.tensor([
+          [7, 2, 5, 3, 10, 2],
+          [3, 8, 9, 3, 4, 2],
+          [1, 5, 7, 5, 6, 1],
+          [0, 6, 2, 7, 2, 8]
+        ])
+
+      source = Nx.tensor([[2, 6], [3, 1]])
+      init_value = 0
+
+      expected_source_grad =
+        Nx.Defn.grad(source, fn s ->
+          Nx.exp(s)
+        end)
+
+      assert {input_grad, source_grad, init_value_grad} =
+               grad_composed_window_scatter_max(t, source, init_value)
+
+      assert input_grad == Nx.broadcast(0.0, t)
+      assert source_grad == expected_source_grad
+
+      # the acummulated grad is 2 * 24 + 20 1s for the scattered values + the source grad for the positions where source was added
+      assert init_value_grad == Nx.tensor(2 * 24 + 20) |> Nx.add(Nx.sum(expected_source_grad))
+    end
+
+    test "grad_composed_window_scatter_min" do
+      t =
+        Nx.tensor([
+          [7, 2, 5, 3, 10, 2],
+          [3, 8, 9, 3, 4, 2],
+          [1, 5, 7, 5, 6, 1],
+          [0, 6, 2, 7, 2, 8]
+        ])
+
+      source = Nx.tensor([[2, 6], [3, 1]])
+      init_value = 0
+
+      expected_source_grad =
+        Nx.Defn.grad(source, fn s ->
+          Nx.exp(s)
+        end)
+
+      assert {input_grad, source_grad, init_value_grad} =
+               grad_composed_window_scatter_min(t, source, init_value)
+
+      assert input_grad == Nx.broadcast(0.0, t)
+      assert source_grad == expected_source_grad
+
+      # the acummulated grad is 2 * 24 + 20 1s for the scattered values + the source grad for the positions where source was added
+      assert init_value_grad == Nx.tensor(2 * 24 + 20) |> Nx.add(Nx.sum(expected_source_grad))
+    end
+  end
 end
