@@ -138,8 +138,6 @@ defmodule Nx.Defn.Expr do
   end
 
   def cond(clauses, out = last) do
-    IO.inspect({clauses, out})
-
     {preds, exprs} = Enum.unzip(clauses)
     {preds, context} = to_exprs(preds)
 

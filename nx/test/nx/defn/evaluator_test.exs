@@ -693,10 +693,15 @@ defmodule Nx.Defn.EvaluatorTest do
       a = Nx.tensor(3)
       b = Nx.tensor(2)
       c = Nx.vectorize(Nx.tensor([[1]]), x: 1, y: 1)
+      d = Nx.vectorize(Nx.tensor([[1, 2]]), x: 1, y: 2)
 
       assert {c, c} == vectorized_cond(0, {c, c}, 0, {c, c}, {c, c})
       assert Nx.add(c, 2) == vectorized_cond(1, a, 0, b, c)
       assert Nx.add(c, 1) == vectorized_cond(0, a, 1, b, c)
+
+      # vectorization edge cases
+      assert c == vectorized_cond(0, a, 1, c, d)
+      assert d == vectorized_cond(0, a, 0, c, d)
     end
 
     test "metadata with expr" do
