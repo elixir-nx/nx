@@ -2156,7 +2156,30 @@ defmodule Nx.DefnTest do
                end,
                [x, y],
                compiler: Evaluator
-             ) == 1
+             ) == {
+               Nx.tensor([
+                 [
+                   [0],
+                   [0]
+                 ],
+                 [
+                   [1],
+                   [1]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2, y: 2),
+               Nx.tensor([
+                 [
+                   [0],
+                   [1]
+                 ],
+                 [
+                   [0],
+                   [1]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2, y: 2)
+             }
     end
 
     @tag compiler: Evaluator
