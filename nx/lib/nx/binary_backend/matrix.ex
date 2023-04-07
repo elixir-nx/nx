@@ -177,9 +177,22 @@ defmodule Nx.BinaryBackend.Matrix do
 
   defp do_ts([], [], _idx, acc), do: acc
 
-  def qr(input_data, input_type, input_shape, output_type, m, k, n, opts) do
+  def qr(input_data, {_, s} = input_type, input_shape, output_type, m_in, k_in, n_in, opts) do
     mode = opts[:mode]
     eps = opts[:eps]
+
+    {input_data, m, n, k, wide_mode} =
+      if m_in < n_in do
+        # "Matrix Computations" by Golub and Van Loan: Section 5.4.1
+        # describes the problem of computing QR factorization for wide matrices,
+        # and suggests adding rows of zeros as a solution.
+
+        ext_size = s * (n_in - m_in) * n_in
+        extended = input_data <> <<0::size(ext_size)>>
+        {extended, n_in, n_in, n_in, true}
+      else
+        {input_data, m_in, n_in, k_in, false}
+      end
 
     {q_matrix, r_matrix} =
       input_data
@@ -187,15 +200,27 @@ defmodule Nx.BinaryBackend.Matrix do
       |> qr_decomposition(m, n, eps)
 
     {q_matrix, r_matrix} =
-      if mode == :reduced and m - k > 0 do
-        # Remove unnecessary columns (rows) from the matrix Q (R)
-        q_matrix = get_matrix_columns(q_matrix, 0..(k - 1))
+      cond do
+        wide_mode ->
+          # output {m, m} and {m, n} from q {n, n} and r {n, n}
+          q_matrix =
+            q_matrix
+            |> get_matrix_columns(0..(m_in - 1))
+            |> Enum.take(m_in)
 
-        r_matrix = Enum.drop(r_matrix, k - m)
+          r_matrix = Enum.take(r_matrix, m_in)
+          {q_matrix, r_matrix}
 
-        {q_matrix, r_matrix}
-      else
-        {q_matrix, r_matrix}
+        mode == :reduced and m > n ->
+          # output {m, m} and {n, n} from q {m, n} and r {n, n}
+          q_matrix = get_matrix_columns(q_matrix, 0..(k - 1))
+
+          r_matrix = Enum.drop(r_matrix, k - m)
+
+          {q_matrix, r_matrix}
+
+        true ->
+          {q_matrix, r_matrix}
       end
 
     {matrix_to_binary(q_matrix, output_type), matrix_to_binary(r_matrix, output_type)}
@@ -247,7 +272,7 @@ defmodule Nx.BinaryBackend.Matrix do
     zeros = binary_to_matrix(<<0::size(zeros_size)>>, type, shape)
 
     # check if matrix is hermitian
-    eps = 1.0e-10
+    eps = 1.0e-6
 
     for i <- 0..(n - 1) do
       row = matrix |> get_matrix_rows([i]) |> List.flatten()
@@ -299,12 +324,21 @@ defmodule Nx.BinaryBackend.Matrix do
             |> Enum.reduce(0, &+/2)
 
           l_ij =
-            if i == j do
-              Complex.sqrt(a_ij - sum)
-            else
-              [l_jj] = get_matrix_elements(l, [[j, j]])
+            cond do
+              i == j and (a_ij >= sum or is_struct(a_ij, Complex) or is_struct(sum, Complex)) ->
+                Complex.sqrt(a_ij - sum)
 
-              (a_ij - sum) / l_jj
+              i == j ->
+                :nan
+
+              true ->
+                [l_jj] = get_matrix_elements(l, [[j, j]])
+
+                if l_jj == 0 do
+                  :nan
+                else
+                  (a_ij - sum) / l_jj
+                end
             end
 
           replace_matrix_element(l, i, j, l_ij)
@@ -463,7 +497,17 @@ defmodule Nx.BinaryBackend.Matrix do
                 [a_ij] = get_matrix_elements(a_prime, [[i, j]])
                 [u_jj] = get_matrix_elements(u, [[j, j]])
 
-                value = (a_ij - sum) / u_jj
+                value =
+                  cond do
+                    u_jj != 0 ->
+                      (a_ij - sum) / u_jj
+
+                    a_ij >= sum ->
+                      :infinity
+
+                    true ->
+                      :neg_infinity
+                  end
 
                 if abs(value) < eps do
                   replace_matrix_element(l, i, j, 0)

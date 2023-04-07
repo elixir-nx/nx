@@ -4567,8 +4567,13 @@ defmodule Nx do
   Containers are also supported:
 
       iex> input = {1, %{a: Nx.iota({3}, vectorized_axes: [x: 1])}}
-      iex> {1, %{a: t1}} = Nx.devectorize(input)
+      iex> {t1, %{a: t2}} = Nx.devectorize(input)
       iex> t1
+      #Nx.Tensor<
+        s64
+        1
+      >
+      iex> t2
       #Nx.Tensor<
         s64[x: 1][3]
         [
@@ -4598,17 +4603,17 @@ defmodule Nx do
     %{tensor | shape: output_shape, names: output_names, vectorized_axes: []}
   end
 
-  def devectorize(tensor, _)
-      when tensor.vectorized_axes == []
-      when is_struct(tensor, Complex)
-      when is_number(tensor),
-      do: tensor
+  def devectorize(%T{vectorized_axes: []} = tensor, _), do: tensor
+
+  def devectorize(number, _)
+      when is_struct(number, Complex)
+      when is_number(number),
+      do: to_tensor(number)
 
   def devectorize(container, opts) do
     {result, nil} =
       Nx.Container.traverse(container, nil, fn
-        item, _ ->
-          {devectorize(item, opts), nil}
+        item, _ -> {devectorize(item, opts), nil}
       end)
 
     result
@@ -8049,6 +8054,14 @@ defmodule Nx do
         ]
       >
 
+      iex> t = Nx.vectorize(Nx.tensor([1, 0]), :x)
+      iex> Nx.all(t)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        u8
+        [1, 0]
+      >
+
   """
   @doc type: :aggregation
   def all(tensor, opts \\ []) do
@@ -8127,119 +8140,149 @@ defmodule Nx do
   You may set the absolute tolerance, `:atol` and relative tolerance
   `:rtol`. Given tolerances, this functions returns 1 if
 
-      absolute(a - b) <= (atol + rtol * absolute(b))
+     absolute(a - b) <= (atol + rtol * absolute(b))
 
   is true for all elements of a and b.
 
   ## Options
 
-    * `:rtol` - relative tolerance between numbers, as described above. Defaults to 1.0e-5
-    * `:atol` - absolute tolerance between numbers, as described above. Defaults to 1.0e-8
-    * `:equal_nan` - if `false`, NaN will always compare as false.
-      Otherwise `NaN` will only equal `NaN`. Defaults to `false`
+   * `:rtol` - relative tolerance between numbers, as described above. Defaults to 1.0e-5
+   * `:atol` - absolute tolerance between numbers, as described above. Defaults to 1.0e-8
+   * `:equal_nan` - if `false`, NaN will always compare as false.
+     Otherwise `NaN` will only equal `NaN`. Defaults to `false`
 
   ## Examples
 
-      iex> Nx.all_close(Nx.tensor([1.0e10, 1.0e-7]), Nx.tensor([1.00001e10, 1.0e-8]))
-      #Nx.Tensor<
-        u8
-        0
-      >
+     iex> Nx.all_close(Nx.tensor([1.0e10, 1.0e-7]), Nx.tensor([1.00001e10, 1.0e-8]))
+     #Nx.Tensor<
+       u8
+       0
+     >
 
-      iex> Nx.all_close(Nx.tensor([1.0e-8, 1.0e-8]), Nx.tensor([1.0e-8, 1.0e-9]))
-      #Nx.Tensor<
-        u8
-        1
-      >
+     iex> Nx.all_close(Nx.tensor([1.0e-8, 1.0e-8]), Nx.tensor([1.0e-8, 1.0e-9]))
+     #Nx.Tensor<
+       u8
+       1
+     >
 
   Although `NaN` by definition isn't equal to itself, so this implementation
   also considers all `NaN`s different from each other by default:
 
-      iex> Nx.all_close(Nx.tensor(:nan), Nx.tensor(:nan))
-      #Nx.Tensor<
-        u8
-        0
-      >
+     iex> Nx.all_close(Nx.tensor(:nan), Nx.tensor(:nan))
+     #Nx.Tensor<
+       u8
+       0
+     >
 
-      iex> Nx.all_close(Nx.tensor(:nan), Nx.tensor(0))
-      #Nx.Tensor<
-        u8
-        0
-      >
+     iex> Nx.all_close(Nx.tensor(:nan), Nx.tensor(0))
+     #Nx.Tensor<
+       u8
+       0
+     >
 
   We can change this behavior with the `:equal_nan` option:
 
-      iex> t = Nx.tensor([:nan, 1])
-      iex> Nx.all_close(t, t, equal_nan: true) # nan == nan -> true
-      #Nx.Tensor<
-        u8
-        1
-      >
-      iex> Nx.all_close(t, t, equal_nan: false) # nan == nan -> false, default behavior
-      #Nx.Tensor<
-        u8
-        0
-      >
+     iex> t = Nx.tensor([:nan, 1])
+     iex> Nx.all_close(t, t, equal_nan: true) # nan == nan -> true
+     #Nx.Tensor<
+       u8
+       1
+     >
+     iex> Nx.all_close(t, t, equal_nan: false) # nan == nan -> false, default behavior
+     #Nx.Tensor<
+       u8
+       0
+     >
 
   Infinities behave as expected, being "close" to themselves but not
   to other numbers:
 
-      iex> Nx.all_close(Nx.tensor(:infinity), Nx.tensor(:infinity))
+     iex> Nx.all_close(Nx.tensor(:infinity), Nx.tensor(:infinity))
+     #Nx.Tensor<
+       u8
+       1
+     >
+
+     iex> Nx.all_close(Nx.tensor(:infinity), Nx.tensor(:neg_infinity))
+     #Nx.Tensor<
+       u8
+       0
+     >
+
+     iex> Nx.all_close(Nx.tensor(1.0e30), Nx.tensor(:infinity))
+     #Nx.Tensor<
+       u8
+       0
+     >
+
+  ## Vectorized tensors
+
+  Vectorized inputs have their vectorized axes broadcast together
+  before calculations are performed.
+
+      iex> x = Nx.tensor([0, 1]) |> Nx.vectorize(:x)
+      iex> Nx.all_close(x, x)
       #Nx.Tensor<
+        vectorized[x: 2]
         u8
-        1
+        [1, 1]
       >
 
-      iex> Nx.all_close(Nx.tensor(:infinity), Nx.tensor(:neg_infinity))
+      iex> x = Nx.tensor([0, 1, 2]) |> Nx.vectorize(:x)
+      iex> y = Nx.tensor([0, 1]) |> Nx.vectorize(:y)
+      iex> Nx.all_close(x, y)
       #Nx.Tensor<
+        vectorized[x: 3][y: 2]
         u8
-        0
-      >
-
-      iex> Nx.all_close(Nx.tensor(1.0e30), Nx.tensor(:infinity))
-      #Nx.Tensor<
-        u8
-        0
+        [
+          [1, 0],
+          [0, 1],
+          [0, 0]
+        ]
       >
   """
   @doc type: :aggregation
   def all_close(a, b, opts \\ []) do
     opts = keyword!(opts, equal_nan: false, rtol: 1.0e-5, atol: 1.0e-8)
 
-    a = to_tensor(a)
-    b = to_tensor(b)
-    Nx.Shared.raise_vectorized_not_implemented_yet(a, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(b, __ENV__.function)
+    [%T{vectorized_axes: vectorized_axes} = a, b] = broadcast_vectors([a, b])
 
-    Nx.Shared.optional(
-      :all_close,
-      [a, b, opts],
-      %{a | names: [], shape: {}, type: {:u, 8}},
-      fn a, b, opts ->
-        atol = opts[:atol]
-        rtol = opts[:rtol]
-        finite_entries = less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b))))
+    if vectorized_axes != [] do
+      vectorized_all_close(a, b, opts)
+    else
+      Nx.Shared.optional(
+        :all_close,
+        [a, b, opts],
+        %{a | names: [], shape: {}, type: {:u, 8}},
+        &vectorized_all_close/3
+      )
+    end
+  end
 
-        if Nx.Type.integer?(a.type) and Nx.Type.integer?(b.type) do
-          all(finite_entries)
-        else
-          # inf - inf is a nan, however, they are equal,
-          # so we explicitly check for equal entries.
-          inf_a = is_infinity(a)
-          inf_b = is_infinity(b)
-          inf_entries = select(logical_or(inf_a, inf_b), equal(a, b), finite_entries)
+  defp vectorized_all_close(a, b, opts) do
+    atol = opts[:atol]
+    rtol = opts[:rtol]
 
-          if opts[:equal_nan] do
-            nan_a = is_nan(a)
-            nan_b = is_nan(b)
-            nan_entries = logical_and(nan_a, nan_b)
-            all(select(nan_entries, 1, inf_entries))
-          else
-            all(inf_entries)
-          end
-        end
+    finite_entries = less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b))))
+
+    if Nx.Type.integer?(a.type) and Nx.Type.integer?(b.type) do
+      all(finite_entries)
+    else
+      # inf - inf is a nan, however, they are equal,
+      # so we explicitly check for equal entries.
+      inf_a = is_infinity(a)
+      inf_b = is_infinity(b)
+      inf_entries = select(logical_or(inf_a, inf_b), equal(a, b), finite_entries)
+
+      if opts[:equal_nan] do
+        nan_a = is_nan(a)
+        nan_b = is_nan(b)
+        nan_entries = logical_and(nan_a, nan_b)
+        all(select(nan_entries, 1, inf_entries))
+      else
+        all(inf_entries)
       end
-    )
+    end
   end
 
   @doc """
@@ -8811,6 +8854,18 @@ defmodule Nx do
           ]
         ]
       >
+
+  ### Vectorized tensors
+
+  For vectorized inputs, `:axis` refers to the
+  non-vectorized shape:
+
+      iex> Nx.median(Nx.tensor([[1, 2, 3], [4, 5, 6]]) |> Nx.vectorize(:x), axis: 0)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64
+        [2, 5]
+      >
   """
   @doc type: :aggregation, from_backend: false
   def median(tensor, opts \\ []) do
@@ -8934,12 +8989,34 @@ defmodule Nx do
         ]
       >
 
+  ### Vectorized tensors
+
+  For vectorized tensors, `:axis` refers to the non-vectorized shape:
+
+      iex> t = Nx.tensor([[[1, 2, 2, 3, 5], [1, 1, 76, 8, 1]], [[1, 2, 2, 2, 5], [5, 2, 2, 2, 1]]]) |> Nx.vectorize(:x)
+      iex> Nx.mode(t, axis: 0)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[5]
+        [
+          [1, 1, 2, 3, 1],
+          [1, 2, 2, 2, 1]
+        ]
+      >
+      iex> Nx.mode(t, axis: 1)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[2]
+        [
+          [2, 1],
+          [2, 2]
+        ]
+      >
   """
   @doc type: :aggregation, from_backend: false
   def mode(tensor, opts \\ []) do
     opts = keyword!(opts, axis: nil, keep_axis: false)
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
 
     axis =
       if opts[:axis] != nil,
@@ -9393,8 +9470,8 @@ defmodule Nx do
             {output_shape, List.duplicate(nil, offset), axes}
         end
 
-      if offset == 0 and axes == [] do
-        tensor
+      if axes == [] do
+        Nx.as_type(tensor, type)
       else
         apply(impl!(tensor), op, [
           %{tensor | type: type, shape: shape, names: names},

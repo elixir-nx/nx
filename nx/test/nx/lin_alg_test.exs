@@ -152,6 +152,52 @@ defmodule Nx.LinAlgTest do
 
       assert_all_close(Nx.LinAlg.determinant(four_by_four), Nx.tensor([-108.0, -490]))
     end
+
+    test "returns 0 for LD rows" do
+      for type <- [bf: 16, f: 16, f: 32, f: 64] do
+        assert_all_close(
+          Nx.LinAlg.determinant(Nx.tensor([[1.0, 0.0], [3.0, 0.0]], type: type)),
+          Nx.tensor(0)
+        )
+
+        assert_all_close(
+          Nx.LinAlg.determinant(
+            Nx.tensor([[1.0, 2.0, 3.0], [-1.0, -2.0, -3.0], [4.0, 5.0, 6.0]], type: type)
+          ),
+          Nx.tensor(0)
+        )
+
+        assert_all_close(
+          Nx.LinAlg.determinant(
+            Nx.tensor(
+              [
+                [1.0, 2.0, 3.0, 0],
+                [-1.0, -2.0, -3.0, 0],
+                [4.0, 5.0, 6.0, 0],
+                [4.0, 5.0, 6.0, 0]
+              ],
+              type: type
+            )
+          ),
+          Nx.tensor(0)
+        )
+
+        assert_all_close(
+          Nx.LinAlg.determinant(
+            Nx.tensor(
+              [
+                [1.0, 2.0, 3.0, 4.0],
+                [1.0, 2.0, 3.0, 4.0],
+                [1.0, 2.0, 3.0, 4.0],
+                [1.0, 2.0, 3.0, 4.0]
+              ],
+              type: type
+            )
+          ),
+          Nx.tensor(0)
+        )
+      end
+    end
   end
 
   describe "norm/2" do
@@ -263,7 +309,7 @@ defmodule Nx.LinAlgTest do
       assert_all_close(Nx.dot(q, r), t, atol: 1.0e-10)
     end
 
-    test "factors rectangular matrix" do
+    test "factors tall matrix" do
       t = Nx.tensor([[1.0, -1.0, 4.0], [1.0, 4.0, -2.0], [1.0, 4.0, 2.0], [1.0, -1.0, 0.0]])
 
       # Reduced mode
@@ -314,6 +360,43 @@ defmodule Nx.LinAlgTest do
       assert_all_close(r, expected_r, atol: 1.0e-10)
 
       assert_all_close(Nx.dot(q, r), t, atol: 1.0e-10)
+    end
+
+    test "factors wide matrix" do
+      t =
+        Nx.tensor([
+          [1.0, 1.0, 1.0, 1.0],
+          [-1.0, 4.0, 4.0, -1.0],
+          [4.0, -2.0, 2.0, 0.0]
+        ])
+
+      # Reduced mode
+      {q, r} = Nx.LinAlg.qr(t, mode: :reduced)
+
+      expected_q =
+        Nx.tensor([
+          [0.23570226, 0.42637839, -0.87329601],
+          [-0.23570226, 0.89686489, 0.37426972],
+          [0.94280904, 0.11762162, 0.31189143]
+        ])
+
+      assert_all_close(q, expected_q, atol: 1.0e-10)
+
+      expected_r =
+        Nx.tensor([
+          [4.24264069, -2.59272486, 1.1785113, 0.47140452],
+          [0.0, 3.77859468, 4.24908118, -0.4704865],
+          [0.0, 0.0, 1.24756572, -1.24756572]
+        ])
+
+      assert_all_close(r, expected_r, atol: 1.0e-10)
+      assert_all_close(Nx.dot(q, r), t, atol: 1.0e-7)
+
+      # Complete mode
+      {q, r} = Nx.LinAlg.qr(t, mode: :complete)
+
+      assert_all_close(q, expected_q, atol: 1.0e-10)
+      assert_all_close(r, expected_r, atol: 1.0e-10)
     end
 
     test "works with complex matrix" do
@@ -391,12 +474,17 @@ defmodule Nx.LinAlgTest do
         key ->
           {square, key} = Nx.Random.uniform(key, shape: {2, 4, 4}, type: type)
           {tall, key} = Nx.Random.uniform(key, shape: {2, 4, 3}, type: type)
+          {wide, key} = Nx.Random.uniform(key, shape: {2, 3, 4}, type: type)
 
           assert {q, r} = Nx.LinAlg.qr(square)
           assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), square, atol: 1.0e-6)
 
           assert {q, r} = Nx.LinAlg.qr(tall)
           assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), tall, atol: 1.0e-6)
+
+          assert {q, r} = Nx.LinAlg.qr(wide)
+          assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), wide, atol: 1.0e-6)
+
           key
       end
     end
@@ -718,13 +806,15 @@ defmodule Nx.LinAlgTest do
           # Generate random L matrix so we can construct
           # a factorizable A matrix:
           shape = {3, 4, 4}
-          lower_selector = Nx.iota(shape, axis: 1) |> Nx.greater_equal(Nx.iota(shape, axis: 2))
 
-          {l_prime, key} = Nx.Random.uniform(key, 0, 1, shape: shape, type: type)
+          {a_prime, key} = Nx.Random.normal(key, 0, 1, shape: shape, type: type)
 
-          l_prime = Nx.multiply(l_prime, lower_selector)
+          a_prime = Nx.add(a_prime, Nx.eye(shape))
+          b = Nx.dot(Nx.LinAlg.adjoint(a_prime), [-1], [0], a_prime, [-2], [0])
 
-          a = Nx.dot(l_prime, [2], [0], Nx.LinAlg.adjoint(l_prime), [1], [0])
+          d = Nx.eye(shape) |> Nx.multiply(0.1)
+
+          a = Nx.add(b, d)
 
           assert l = Nx.LinAlg.cholesky(a)
           assert_all_close(Nx.dot(l, [2], [0], Nx.LinAlg.adjoint(l), [1], [0]), a, atol: 1.0e-2)
