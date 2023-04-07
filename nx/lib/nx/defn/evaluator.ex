@@ -305,7 +305,7 @@ defmodule Nx.Defn.Evaluator do
               "cannot pass a tensor expression as argument to defn, got: #{inspect(tensor)}"
 
       %Nx.Tensor{} = tensor ->
-        {tensor, caches}
+        {Nx.devectorize(tensor), caches}
     end
   end
 

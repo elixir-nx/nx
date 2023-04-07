@@ -2115,6 +2115,73 @@ defmodule Nx.DefnTest do
                Nx.tensor([[1, -1], [-3, -5]]) |> Nx.vectorize(:x)
     end
 
+    # @tag compiler: Evaluator
+    test "supports broadcast_vectors inside defn" do
+      x = Nx.iota({2, 1, 1}) |> Nx.vectorize(x: 2, y: 1)
+      y = Nx.iota({1, 2, 1}) |> Nx.vectorize(x: 1, y: 2)
+
+      result =
+        Nx.Defn.jit_apply(
+          fn x, y ->
+            [x, y] = Nx.broadcast_vectors([x, y])
+            {x, y}
+          end,
+          [x, y]
+        )
+
+      assert inspect(result) |> String.replace(~r/\s/, "") ==
+               """
+               {#Nx.Tensor<
+               vectorized[x: 2][y: 2]
+               s64[1]
+
+               Nx.Defn.Expr
+               parameter a:0                           s64[2][1][1]
+               b = broadcast a, {2, 2, 1}, [0, 1, 2]   s64[2][2][1]
+               >, #Nx.Tensor<
+               vectorized[x: 2][y: 2]
+               s64[1]
+
+               Nx.Defn.Expr
+               parameter a:1                           s64[1][2][1]
+               b = broadcast a, {2, 2, 1}, [0, 1, 2]   s64[2][2][1]
+               >}
+               """
+               |> String.replace(~r/\s/, "")
+
+      assert Nx.Defn.jit_apply(
+               fn x, y ->
+                 [x, y] = Nx.broadcast_vectors([x, y])
+                 {x, y}
+               end,
+               [x, y],
+               compiler: Evaluator
+             ) == {
+               Nx.tensor([
+                 [
+                   [0],
+                   [0]
+                 ],
+                 [
+                   [1],
+                   [1]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2, y: 2),
+               Nx.tensor([
+                 [
+                   [0],
+                   [1]
+                 ],
+                 [
+                   [0],
+                   [1]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2, y: 2)
+             }
+    end
+
     @tag compiler: Evaluator
     test "raises on incompatible shape" do
       fun = Nx.Defn.compile(&defn_compile/2, [{4, 5}, 3])
