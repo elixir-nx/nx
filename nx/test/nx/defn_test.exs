@@ -1395,7 +1395,7 @@ defmodule Nx.DefnTest do
 
       assert %{shape: {2}, vectorized_axes: [x: 2, y: 1]} = b_vec_a
       assert %{shape: {1}, vectorized_axes: [z: 1, w: 2]} = b_vec_c
-      
+
       assert cond_container(1, on_true, on_false) == {a, b_vec_c}
       assert cond_container(0, on_true, on_false) == {b_vec_a, c}
     end
