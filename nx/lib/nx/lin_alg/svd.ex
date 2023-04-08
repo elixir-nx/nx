@@ -44,6 +44,7 @@ defmodule Nx.LinAlg.SVD do
       svd_grad(result, input_tensor, g)
     end)
     |> expand_batch_axes(collapsed_axes)
+    |> print_expr()
   end
 
   deftransformp collapse_batch_axes_and_vectorize(
@@ -98,7 +99,7 @@ defmodule Nx.LinAlg.SVD do
       end
 
     tensor
-    |> Nx.devectorize()
+    |> Nx.devectorize(keep_names: false)
     |> Nx.reshape(target_shape)
   end
 
@@ -116,7 +117,7 @@ defmodule Nx.LinAlg.SVD do
 
     s = Nx.broadcast(Nx.tensor(0, type: Nx.type(a)), {k})
 
-    [s, _] = Nx.broadcast_vectors([s, a])
+    [s, _] = Nx.broadcast_vectors([s, a], align_ranks: false)
 
     u = Nx.eye({m, u_cols}, vectorized_axes: a.vectorized_axes, type: Nx.type(a))
     v = Nx.eye({v_rows, n}, vectorized_axes: a.vectorized_axes, type: Nx.type(a))
