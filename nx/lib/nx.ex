@@ -4661,36 +4661,6 @@ defmodule Nx do
       [y: 1, x: 3]
       iex> yv.vectorized_axes
       [y: 1, x: 1]
-
-  Containers are also supported:
-
-      iex> x = Nx.iota({2}, vectorized_axes: [x: 2])
-      iex> y = Nx.iota({3}, vectorized_axes: [y: 2])
-      iex> [broadcast_x, {broadcast_y}] = Nx.reshape_vectors([x, {y}])
-      iex> broadcast_x
-      #Nx.Tensor<
-        vectorized[x: 2][y: 1]
-        s64[2]
-        [
-          [
-            [0, 1]
-          ],
-          [
-            [0, 1]
-          ]
-        ]
-      >
-      iex> broadcast_y
-      #Nx.Tensor<
-        vectorized[x: 1][y: 2]
-        s64[3]
-        [
-          [
-            [0, 1, 2],
-            [0, 1, 2]
-          ]
-        ]
-      >
   """
   @doc type: :shape
   def reshape_vectors(tensors_or_containers, opts \\ [])
@@ -4802,40 +4772,6 @@ defmodule Nx do
           ]
         ]
       >
-
-      iex> x = Nx.iota({2}, vectorized_axes: [x: 2])
-      iex> y = Nx.iota({3}, vectorized_axes: [y: 2])
-      iex> [broadcast_x, {broadcast_y}] = Nx.broadcast_vectors([x, {y}])
-      iex> broadcast_x
-      #Nx.Tensor<
-        vectorized[x: 2][y: 2]
-        s64[2]
-        [
-          [
-            [0, 1],
-            [0, 1]
-          ],
-          [
-            [0, 1],
-            [0, 1]
-          ]
-        ]
-      >
-      iex> broadcast_y
-      #Nx.Tensor<
-        vectorized[x: 2][y: 2]
-        s64[3]
-        [
-          [
-            [0, 1, 2],
-            [0, 1, 2]
-          ],
-          [
-            [0, 1, 2],
-            [0, 1, 2]
-          ]
-        ]
-      >
   """
   @doc type: :shape
   def broadcast_vectors(tensors_or_containers, opts \\ [])
@@ -4845,148 +4781,84 @@ defmodule Nx do
   def broadcast_vectors(tensors, opts) when is_list(tensors) do
     opts = keyword!(opts, align_ranks: true)
 
-    {devectorized_tensors_or_containers, target_vectorized_axes, offset} =
+    {devectorized_tensors, target_vectorized_axes, offset} =
       do_reshape_vectors(tensors, opts[:align_ranks])
 
     if offset != 0 do
       target_vector_shape_l = Keyword.values(target_vectorized_axes)
 
-      for devec_tensor_or_container <- devectorized_tensors_or_containers do
-        {revec, nil} =
-          Nx.Defn.Composite.traverse(devec_tensor_or_container, nil, fn t, nil ->
-            tensor_base_shape_l = t.shape |> Tuple.to_list() |> Enum.drop(offset)
-            target_shape = List.to_tuple(target_vector_shape_l ++ tensor_base_shape_l)
+      for t <- devectorized_tensors do
+        tensor_base_shape_l = t.shape |> Tuple.to_list() |> Enum.drop(offset)
+        target_shape = List.to_tuple(target_vector_shape_l ++ tensor_base_shape_l)
 
-            revec =
-              t
-              |> broadcast(target_shape, names: t.names)
-              |> vectorize(target_vectorized_axes)
-
-            {revec, nil}
-          end)
-
-        revec
+        t
+        |> broadcast(target_shape, names: t.names)
+        |> vectorize(target_vectorized_axes)
       end
     else
-      devectorized_tensors_or_containers
+      devectorized_tensors
     end
   end
 
-  defp do_reshape_vectors(tensors_or_containers, align_ranks) do
+  defp do_reshape_vectors(tensors, align_ranks) do
     # For all tensors to be compatible, each pair also needs to be compatible
     # This means that we can do a first pass accumulating axes into
     # the first tensor, and then a second pass getting them all into their final shapes.
-    tensors_or_containers =
-      Enum.map(tensors_or_containers, fn
-        t when is_tensor(t) when t in [:infinity, :neg_infinity, :nan] ->
-          to_tensor(t)
-
-        t ->
-          {t, nil} = Nx.Defn.Composite.traverse(t, nil, fn t, nil -> {to_tensor(t), nil} end)
-          t
-      end)
-
-    canonical = calculate_canonical_vectorized_axes(tensors_or_containers)
+    tensors = Enum.map(tensors, &to_tensor/1)
+    canonical = calculate_canonical_vectorized_axes(tensors)
     n = length(canonical)
 
-    devectorized_tensors =
-      do_reshape_vectors_devectorize(tensors_or_containers, canonical, n, align_ranks)
+    devectorized_tensors = do_reshape_vectors_devectorize(tensors, canonical, n, align_ranks)
 
     {devectorized_tensors, canonical, n}
   end
 
   defp do_reshape_vectors_devectorize(tensors, [], _n, _align_ranks), do: tensors
 
-  defp do_reshape_vectors_devectorize(
-         tensors_or_containers,
-         canonical_vectorized_axes,
-         n,
-         align_ranks
-       ) do
+  defp do_reshape_vectors_devectorize(tensors, canonical_vectorized_axes, n, align_ranks) do
     rank =
-      Enum.reduce(tensors_or_containers, 0, fn
-        %T{} = t, acc ->
-          Kernel.max(rank(t), acc)
-
-        c, acc ->
-          {_, res} =
-            Nx.Defn.Composite.traverse(c, acc, fn t, max_rank ->
-              {t, Kernel.max(rank(t), max_rank)}
-            end)
-
-          res
-      end)
-
-    Enum.map(
-      tensors_or_containers,
-      fn
-        %T{} = t ->
-          do_reshape_vectors_devectorize_single(
-            t,
-            n,
-            rank,
-            canonical_vectorized_axes,
-            align_ranks
-          )
-
-        container ->
-          Nx.Defn.Composite.traverse(container, fn t ->
-            do_reshape_vectors_devectorize_single(
-              t,
-              n,
-              rank,
-              canonical_vectorized_axes,
-              align_ranks
-            )
-          end)
-      end
-    )
-  end
-
-  defp do_reshape_vectors_devectorize_single(
-         %T{names: names, shape: shape, vectorized_axes: current_axes} = t,
-         n,
-         max_rank,
-         canonical_vectorized_axes,
-         align_ranks
-       ) do
-    {vectorized_axes, []} =
-      Enum.map_reduce(canonical_vectorized_axes, current_axes, fn
-        {k, _}, [] ->
-          {{k, 1}, []}
-
-        {name, _size}, current_axes ->
-          case List.keytake(current_axes, name, 0) do
-            {{^name, other_size}, current_axes} ->
-              {{name, other_size}, current_axes}
-
-            _ ->
-              {{name, 1}, current_axes}
-          end
-      end)
-
-    size = if align_ranks, do: max_rank - tuple_size(shape), else: 0
-
-    target_shape =
-      List.to_tuple(
-        Keyword.values(vectorized_axes) ++
-          List.duplicate(1, size) ++ Tuple.to_list(shape)
+      Enum.reduce(
+        tl(tensors),
+        tuple_size(hd(tensors).shape),
+        &Kernel.max(tuple_size(&1.shape), &2)
       )
 
-    target_names = List.duplicate(nil, n + size) ++ names
+    Enum.map(tensors, fn
+      %T{names: names, shape: shape, vectorized_axes: current_axes} = t ->
+        {vectorized_axes, []} =
+          Enum.map_reduce(canonical_vectorized_axes, current_axes, fn
+            {k, _}, [] ->
+              {{k, 1}, []}
 
-    devec =
-      t
-      |> devectorize()
-      |> reshape(target_shape, names: target_names)
+            {name, _size}, current_axes ->
+              case List.keytake(current_axes, name, 0) do
+                {{^name, other_size}, current_axes} ->
+                  {{name, other_size}, current_axes}
 
-    devec
+                _ ->
+                  {{name, 1}, current_axes}
+              end
+          end)
+
+        size = if align_ranks, do: rank - tuple_size(shape), else: 0
+
+        target_shape =
+          List.to_tuple(
+            Keyword.values(vectorized_axes) ++
+              List.duplicate(1, size) ++ Tuple.to_list(shape)
+          )
+
+        target_names = List.duplicate(nil, n + size) ++ names
+
+        t
+        |> devectorize()
+        |> reshape(target_shape, names: target_names)
+    end)
   end
 
-  defp calculate_canonical_vectorized_axes(tensors_or_containers) do
+  defp calculate_canonical_vectorized_axes(tensors) do
     canonical_axes_reversed =
-      for %T{vectorized_axes: tensor_axes} <-
-            Nx.Defn.Composite.flatten_list(tensors_or_containers),
+      for %T{vectorized_axes: tensor_axes} <- tensors,
           {axis_name, axis_size} <- tensor_axes,
           reduce: [] do
         canonical_axes ->
