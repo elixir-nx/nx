@@ -167,30 +167,17 @@ defmodule Nx.Defn.Expr do
   end
 
   defp broadcast_clause([type = last | expr_types = exprs]) do
-    %{shape: shape, names: names} = last = to_expr(last)
+    [%{vectorized_axes: vectorized_axes} = last | exprs] = Nx.reshape_vectors([last | exprs])
 
-    [%{vectorized_axes: vectorized_axes} = last | exprs] =
-      case Nx.broadcast_vectors([last | exprs]) do
-        [%{vectorized_axes: []} | _] ->
-          # so that we avoid polluting the expr graph
-          [last | exprs]
-
-        result ->
-          result
-      end
-
-    [last | exprs] = Enum.map([last | exprs], &Nx.devectorize/1)
+    [%{shape: shape, names: names} = last | exprs] = Enum.map([last | exprs], &Nx.devectorize/1)
 
     {exprs, {type, shape, names}} =
       Enum.map_reduce(Enum.zip(exprs, expr_types), {type, shape, names}, fn {expr, expr_type},
                                                                             {type, shape, names} ->
         type = binary_type(type, expr_type)
-        expr = to_expr(expr)
         {shape, names} = Nx.Shape.binary_broadcast(shape, names, expr.shape, expr.names)
         {expr, {type, shape, names}}
       end)
-
-    # shape_l = Tuple.to_list(shape)
 
     result =
       for expr <- [last | exprs] do
@@ -199,7 +186,7 @@ defmodule Nx.Defn.Expr do
         |> Nx.broadcast(shape, names: names)
       end
 
-    {result, vectorized_axes}
+    {result, Keyword.keys(vectorized_axes)}
   end
 
   defp unzip_clauses([exprs | _] = clauses),

@@ -2521,7 +2521,7 @@ defmodule NxTest do
              ] == Nx.broadcast_vectors([x, xy, x2])
     end
 
-    test "returns correct axes' order and shape for make_broadcastable: false" do
+    test "returns correct axes' order and shape for align_ranks: false" do
       x = Nx.iota({1}, vectorized_axes: [x: 1])
       xy = Nx.iota({1, 2}, vectorized_axes: [x: 1, y: 2])
       x2 = Nx.iota({1, 2, 3}, vectorized_axes: [x: 2])
@@ -2530,7 +2530,7 @@ defmodule NxTest do
                Nx.iota({1}, vectorized_axes: [x: 2, y: 2]),
                Nx.iota({1, 2}, vectorized_axes: [x: 2, y: 2]),
                Nx.iota({1, 2, 3}, vectorized_axes: [x: 2, y: 2])
-             ] == Nx.broadcast_vectors([x, xy, x2], make_broadcastable: false)
+             ] == Nx.broadcast_vectors([x, xy, x2], align_ranks: false)
     end
   end
 

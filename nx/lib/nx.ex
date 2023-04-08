@@ -4627,10 +4627,11 @@ defmodule Nx do
 
   ## Options
 
-    * `:make_broadcastable` - boolean that indicates whether the inner
-      shapes should also be modified. If `true`, 1-sized leading dimensions
-      are added. This is useful because upon devectorization, the tensors are still
-      broadcastable between themselves.
+    * `:align_ranks` - boolean that indicates whether the inner
+      shapes should be aligned to the maximum rank of the inputs.
+      That is, 1-sized leading dimensions are added so
+      that all tensors have the same rank in the output.
+      This only applies in case one of the inputs is vectorized.
 
   ## Examples
 
@@ -4667,10 +4668,10 @@ defmodule Nx do
   def reshape_vectors([tensor], _opts), do: [to_tensor(tensor)]
 
   def reshape_vectors(tensors, opts) when is_list(tensors) do
-    opts = keyword!(opts, make_broadcastable: true)
+    opts = keyword!(opts, align_ranks: true)
 
     {devectorized_tensors, canonical_vectorized_axes, offset} =
-      do_reshape_vectors(tensors, opts[:make_broadcastable])
+      do_reshape_vectors(tensors, opts[:align_ranks])
 
     if offset != 0 do
       keys = Keyword.keys(canonical_vectorized_axes)
@@ -4688,10 +4689,11 @@ defmodule Nx do
 
   ## Options
 
-    * `:make_broadcastable` - boolean that indicates whether the inner
-      shapes should also be modified. If `true`, 1-sized leading dimensions
-      are added. This is useful because upon devectorization, the tensors are still
-      broadcastable between themselves.
+    * `:align_ranks` - boolean that indicates whether the inner
+      shapes should be aligned to the maximum rank of the inputs.
+      That is, 1-sized leading dimensions are added so
+      that all tensors have the same rank in the output.
+      This only applies in case one of the inputs is vectorized.
 
   ## Examples
 
@@ -4745,7 +4747,7 @@ defmodule Nx do
           ]
         ]
       >
-      iex> [broadcast_xy, broadcast_x] = Nx.broadcast_vectors([xy, x], make_broadcastable: false)
+      iex> [broadcast_xy, broadcast_x] = Nx.broadcast_vectors([xy, x], align_ranks: false)
       iex> broadcast_x
       #Nx.Tensor<
         vectorized[y: 2][x: 2]
@@ -4778,10 +4780,10 @@ defmodule Nx do
 
   def broadcast_vectors(tensors, opts) when is_list(tensors) do
     # mode: broadcastable | vectorized_only
-    opts = keyword!(opts, make_broadcastable: true)
+    opts = keyword!(opts, align_ranks: true)
 
     {devectorized_tensors, target_vectorized_axes, offset} =
-      do_reshape_vectors(tensors, opts[:make_broadcastable])
+      do_reshape_vectors(tensors, opts[:align_ranks])
 
     if offset != 0 do
       target_vector_shape_l = Keyword.values(target_vectorized_axes)
@@ -4799,7 +4801,7 @@ defmodule Nx do
     end
   end
 
-  defp do_reshape_vectors(tensors, make_broadcastable) do
+  defp do_reshape_vectors(tensors, align_ranks) do
     # For all tensors to be compatible, each pair also needs to be compatible
     # This means that we can do a first pass accumulating axes into
     # the first tensor, and then a second pass getting them all into their final shapes.
@@ -4807,15 +4809,14 @@ defmodule Nx do
     canonical = calculate_canonical_vectorized_axes(tensors)
     n = length(canonical)
 
-    devectorized_tensors =
-      do_reshape_vectors_devectorize(tensors, canonical, n, make_broadcastable)
+    devectorized_tensors = do_reshape_vectors_devectorize(tensors, canonical, n, align_ranks)
 
     {devectorized_tensors, canonical, n}
   end
 
-  defp do_reshape_vectors_devectorize(tensors, [], _n, _make_broadcastable), do: tensors
+  defp do_reshape_vectors_devectorize(tensors, [], _n, _align_ranks), do: tensors
 
-  defp do_reshape_vectors_devectorize(tensors, canonical_vectorized_axes, n, make_broadcastable) do
+  defp do_reshape_vectors_devectorize(tensors, canonical_vectorized_axes, n, align_ranks) do
     rank =
       Enum.reduce(
         tensors,
@@ -4840,7 +4841,7 @@ defmodule Nx do
               end
           end)
 
-        size = if make_broadcastable, do: rank - tuple_size(shape), else: 0
+        size = if align_ranks, do: rank - tuple_size(shape), else: 0
 
         target_shape =
           List.to_tuple(
@@ -7264,7 +7265,7 @@ defmodule Nx do
 
   defp indexed_op(target, indices, updates, op) do
     [%T{vectorized_axes: vectorized_axes} = target, indices, updates] =
-      broadcast_vectors([target, indices, updates], make_broadcastable: false)
+      broadcast_vectors([target, indices, updates], align_ranks: false)
 
     type = binary_type(target, updates)
 
