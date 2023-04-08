@@ -83,9 +83,7 @@ defmodule Nx.Defn.Evaluator do
     expr = fun.(vars)
     state = %{hooks: hooks, parent_ids: nil, current_ids: nil}
     cache = init_compute_cache(expr, state)
-
     {expr, output} = Nx.Defn.Composite.traverse(expr, [], &{Nx.devectorize(&1), [&1 | &2]})
-
     {expr, Enum.reverse(output), cache}
   end
 
@@ -359,7 +357,6 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval_apply(:while, %{data: %Expr{args: args, id: id}}, state, caches) do
     [initial, _arg, condition, block] = args
-
     {initial, caches} = composite_eval(initial, state, caches)
     {while_cache, caches} = pop_cache!(caches, [:while | id])
     {while(initial, condition, block, state, [while_cache]), caches}
