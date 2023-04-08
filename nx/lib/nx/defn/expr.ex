@@ -219,22 +219,12 @@ defmodule Nx.Defn.Expr do
   def while(initial, context, arg, condition, body) do
     [flatten_initial, flatten_arg, flatten_body] = clauses = flatten_clauses([initial, arg, body])
 
-    Composite.traverse(condition, fn
-      %T{vectorized_axes: [_ | _]} ->
-        raise ArgumentError,
-              "condition for while cannot be vectorized, got: #{inspect(condition)}"
+    if condition.vectorized_axes != [] do
+      raise ArgumentError,
+            "condition for while cannot be vectorized, got: #{inspect(condition)}"
+    end
 
-      _ ->
-        :ok
-    end)
-
-    args = [
-      flatten_initial,
-      flatten_arg,
-      condition,
-      flatten_body
-    ]
-
+    args = [flatten_initial, flatten_arg, condition, flatten_body]
     flatten_to_composite(initial, context, clauses, &expr(&1, context, :while, args))
   end
 
@@ -263,17 +253,16 @@ defmodule Nx.Defn.Expr do
       |> Enum.reverse()
 
     {out, {[], ^size, []}} =
-      Composite.traverse(out, {Tuple.to_list(head), 0, vectorized_axes}, fn _,
-                                                                            {[head | tail], i,
-                                                                             [axes | axes_tail]} ->
-        head =
-          if axes do
-            Nx.vectorize(head, axes)
-          else
-            head
-          end
+      Composite.traverse(out, {Tuple.to_list(head), 0, vectorized_axes}, fn
+        _, {[head | tail], i, [axes | axes_tail]} ->
+          head =
+            if axes do
+              Nx.vectorize(head, axes)
+            else
+              head
+            end
 
-        {expr(head, context, :elem, [expr, i]), {tail, i + 1, axes_tail}}
+          {expr(head, context, :elem, [expr, i]), {tail, i + 1, axes_tail}}
       end)
 
     out
