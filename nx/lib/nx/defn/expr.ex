@@ -137,36 +137,56 @@ defmodule Nx.Defn.Expr do
     {preds, exprs} = Enum.unzip(clauses)
     {preds, context} = to_exprs(preds)
 
-    [last | exprs] =
+    {broadcasted_clauses, vectorized_axes} =
       [last | exprs]
       |> Enum.map(&Composite.flatten_list([&1]))
       |> Enum.zip_with(&broadcast_clause/1)
-      |> case do
+      |> Enum.unzip()
+
+    [last | exprs] =
+      case broadcasted_clauses do
         # Handle the case where branches don't return anything
         [] -> Enum.map([last | exprs], fn _ -> {} end)
         clauses -> unzip_clauses(clauses)
       end
 
     clauses = Enum.zip(preds, exprs)
-    flatten_to_composite(out, context, exprs, &expr(&1, context, :cond, [clauses, last]))
+
+    out = flatten_to_composite(out, context, exprs, &expr(&1, context, :cond, [clauses, last]))
+
+    if vectorized_axes == [] do
+      out
+    else
+      {result, []} =
+        Composite.traverse(out, vectorized_axes, fn expr, [axes | tail] ->
+          {Nx.vectorize(expr, axes), tail}
+        end)
+
+      result
+    end
   end
 
-  defp broadcast_clause([type = last | exprs]) do
-    %{shape: shape, names: names} = last = to_expr(last)
+  defp broadcast_clause([type = last | expr_types = exprs]) do
+    [%{vectorized_axes: vectorized_axes} = last | exprs] = Nx.reshape_vectors([last | exprs])
+
+    [%{shape: shape, names: names} = last | exprs] = Enum.map([last | exprs], &Nx.devectorize/1)
 
     {exprs, {type, shape, names}} =
-      Enum.map_reduce(exprs, {type, shape, names}, fn expr, {type, shape, names} ->
-        type = binary_type(type, expr)
-        expr = to_expr(expr)
+      Enum.map_reduce(Enum.zip(exprs, expr_types), {type, shape, names}, fn {expr, expr_type},
+                                                                            {type, shape, names} ->
+        type = binary_type(type, expr_type)
         {shape, names} = Nx.Shape.binary_broadcast(shape, names, expr.shape, expr.names)
         {expr, {type, shape, names}}
       end)
 
-    for expr <- [last | exprs] do
-      expr
-      |> Nx.as_type(type)
-      |> Nx.broadcast(shape, names: names)
-    end
+    result =
+      for expr <- [last | exprs] do
+        expr
+        |> Nx.as_type(type)
+        |> Nx.broadcast(shape, names: names)
+      end
+
+    {result, Keyword.keys(vectorized_axes)}
   end
 
   defp unzip_clauses([exprs | _] = clauses),
