@@ -620,4 +620,118 @@ defmodule Nx.Defn.EvaluatorTest do
       assert cond_nested_condition_cache(%{iteration: 12}) == %{iteration: Nx.tensor(13)}
     end
   end
+
+  describe "vectorization" do
+    defn vectorized_while(a, b, i \\ 0) do
+      while({a, b, i}, i < 2) do
+        {a + b, b, i + 1}
+      end
+    end
+
+    defn vectorized_cond(cond_1, on_1, cond_2, on_2, on_3) do
+      cond do
+        cond_1 -> on_1
+        cond_2 -> on_2
+        true -> on_3
+      end
+    end
+
+    defn vectorized_metadata(t) do
+      x = Nx.devectorize(t)
+      x = Nx.vectorize(x, t.vectorized_axes)
+
+      stop_grad(x)
+    end
+
+    test "while" do
+      t = Nx.iota({2, 3}, vectorized_axes: [a: 1])
+
+      assert {result, one, i} = vectorized_while(t, 1)
+
+      assert result == Nx.add(t, 2)
+      assert one == Nx.tensor(1)
+      assert i == Nx.tensor(2)
+    end
+
+    test "while raises on incompatible body/initial" do
+      t = Nx.iota({2, 3}, vectorized_axes: [a: 1], type: :s64)
+
+      message = """
+      test/nx/defn/evaluator_test.exs:626: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
+
+      Body matches template:
+
+      {#Nx.Tensor<
+         vectorized[a: 2]
+         s64[2][3]
+       >, #Nx.Tensor<
+         vectorized[a: 2]
+         s64[2][3]
+       >, #Nx.Tensor<
+         s64
+       >}
+
+      and initial argument has template:
+
+      {#Nx.Tensor<
+         vectorized[a: 1]
+         s64[2][3]
+       >, #Nx.Tensor<
+         vectorized[a: 2]
+         s64[2][3]
+       >, #Nx.Tensor<
+         s64
+       >}
+      """
+
+      assert_raise CompileError, message, fn ->
+        vectorized_while(t, Nx.iota({2, 3}, vectorized_axes: [a: 2], type: :s64))
+      end
+    end
+
+    test "while raises on vectorized condition" do
+      t = Nx.iota({2, 3}, vectorized_axes: [a: 1])
+
+      error =
+        """
+        test/nx/defn/evaluator_test.exs:626: condition must be a scalar tensor, got: #Nx.Tensor<
+          vectorized[x: 1]
+          u8[1]
+        \s\s
+          Nx.Defn.Expr
+          parameter a:2   s64[1][1]
+          b = reshape 2   s64[1][1]
+          c = less a, b   u8[1][1]
+        >, consider using Nx.all/1 or Nx.any/1 to obtain a scalar predicate from tensor
+        """
+        |> String.trim()
+
+      assert_raise CompileError, error, fn ->
+        vectorized_while(t, t, Nx.iota({1}, vectorized_axes: [x: 1]))
+      end
+    end
+
+    test "cond" do
+      a = Nx.tensor(3)
+      b = Nx.tensor(2)
+      c = Nx.vectorize(Nx.tensor([[1]]), x: 1, y: 1)
+      d = Nx.vectorize(Nx.tensor([[1, 2]]), x: 1, y: 2)
+
+      assert {c, c} == vectorized_cond(0, {c, c}, 0, {c, c}, {c, c})
+      assert Nx.add(c, 2) == vectorized_cond(1, a, 0, b, c)
+      assert Nx.add(c, 1) == vectorized_cond(0, a, 1, b, c)
+
+      # vectorization edge cases
+
+      [c_vec_d, _] = Nx.broadcast_vectors([c, d])
+
+      assert c_vec_d == vectorized_cond(0, a, 1, c, d)
+      assert d == vectorized_cond(0, a, 0, c, d)
+    end
+
+    test "metadata with expr" do
+      a = Nx.iota({1}, vectorized_axes: [x: 2])
+      assert a == vectorized_metadata(a)
+    end
+  end
 end
