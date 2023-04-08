@@ -1160,14 +1160,14 @@ defmodule Nx.DefnTest do
                )
     end
 
-    defn cond_lit(a) do
+    defn cond_list(a) do
       if Nx.any(a), do: 1, else: -1
     end
 
     @tag compiler: Evaluator
     test "supports literals" do
-      assert cond_lit(Nx.tensor(0)) == Nx.tensor(-1)
-      assert cond_lit(Nx.tensor(1)) == Nx.tensor(1)
+      assert cond_list(Nx.tensor(0)) == Nx.tensor(-1)
+      assert cond_list(Nx.tensor(1)) == Nx.tensor(1)
     end
 
     defn cond_empty_map(a) do
@@ -1247,6 +1247,157 @@ defmodule Nx.DefnTest do
       assert_raise CompileError,
                    ~r"cond/if expects all branches to return compatible tensor types.\n\nGot mismatching templates:\n\n:foo\n\nand\n\n:bar\n",
                    fn -> non_tensor_cond(1) end
+    end
+
+    test "supports vectorized plain branches" do
+      a = Nx.iota({2}, vectorized_axes: [x: 2, y: 1])
+      b = 2
+      c = Nx.tensor([[1, 2]]) |> Nx.vectorize(x: 1, y: 2)
+
+      assert inspect(cond4(-1, a, b, c)) ==
+               String.trim("""
+               #Nx.Tensor<
+                 vectorized[x: 2][y: 2]
+                 s64[2]
+               \s\s
+                 Nx.Defn.Expr
+                 parameter a:0                           s64
+                 parameter c:1                           s64[2][1][2]
+                 parameter i:2                           s64
+                 parameter o:3                           s64[1][2]
+                 b = greater a, 0                        u8
+                 d = reshape 1                           s64[1][1]
+                 e = reshape d                           s64[1][1][1]
+                 f = add c, e                            s64[2][1][2]
+                 g = broadcast f, {2, 2, 2}, [0, 1, 2]   s64[2][2][2]
+                 h = less a, 0                           u8
+                 j = subtract i, 1                       s64
+                 k = reshape j                           s64[1][1]
+                 l = broadcast k, {2, 2}, [0, 1]         s64[2][2]
+                 m = reshape l                           s64[2][2][1]
+                 n = broadcast m, {2, 2, 2}, [0, 1, 2]   s64[2][2][2]
+                 p = reshape 2                           s64[1][1]
+                 q = multiply o, p                       s64[1][2]
+                 r = broadcast q, {2, 2}, [0, 1]         s64[2][2]
+                 s = reshape r                           s64[2][2][1]
+                 t = broadcast s, {2, 2, 2}, [0, 1, 2]   s64[2][2][2]
+                 u = cond b -> g, h -> n, true -> t      s64[2][2][2]
+               >
+               """)
+
+      Nx.Defn.default_options(compiler: Nx.Defn.Evaluator)
+
+      assert cond4(-1, a, b, c) ==
+               Nx.tensor([
+                 [
+                   [1, 1],
+                   [1, 1]
+                 ],
+                 [
+                   [1, 1],
+                   [1, 1]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2, y: 2)
+
+      assert cond4(0, a, b, c) ==
+               Nx.tensor([
+                 [
+                   [2, 2],
+                   [4, 4]
+                 ],
+                 [
+                   [2, 2],
+                   [4, 4]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2, y: 2)
+
+      assert cond4(1, a, b, c) ==
+               Nx.tensor([
+                 [
+                   [1, 2],
+                   [1, 2]
+                 ],
+                 [
+                   [1, 2],
+                   [1, 2]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2, y: 2)
+    end
+
+    defn cond_container(pred, x, y) do
+      cond do
+        pred ->
+          x
+
+        true ->
+          y
+      end
+    end
+
+    test "supports vectorized container branches" do
+      a = Nx.iota({2}, vectorized_axes: [x: 2, y: 1])
+      b = 2
+      c = Nx.tensor([[[1], [2]]]) |> Nx.vectorize(z: 1, w: 2)
+
+      on_true = {a, b}
+      on_false = {b, c}
+
+      assert inspect(cond_container(0, on_true, on_false)) ==
+               String.trim("""
+               {#Nx.Tensor<
+                  vectorized[x: 2][y: 1]
+                  s64[2]
+                \s\s
+                  Nx.Defn.Expr
+                  parameter a:0                           s64
+                  parameter b:1                           s64[2][1][2]
+                  parameter c:2                           s64
+                  parameter g:3                           s64
+                  parameter l:4                           s64[1][2][1]
+                  d = reshape c                           s64[1][1]
+                  e = broadcast d, {1, 2}, [0, 1]         s64[1][2]
+                  f = reshape e                           s64[1][2][1]
+                  h = reshape g                           s64[1][1]
+                  i = broadcast h, {2, 1}, [0, 1]         s64[2][1]
+                  j = reshape i                           s64[2][1][1]
+                  k = broadcast j, {2, 1, 2}, [0, 1, 2]   s64[2][1][2]
+                  m = cond a -> {b, f}, true -> {k, l}    tuple2
+                  n = elem m, 0                           s64[2][1][2]
+                >, #Nx.Tensor<
+                  vectorized[z: 1][w: 2]
+                  s64[1]
+                \s\s
+                  Nx.Defn.Expr
+                  parameter a:0                           s64
+                  parameter b:1                           s64[2][1][2]
+                  parameter c:2                           s64
+                  parameter g:3                           s64
+                  parameter l:4                           s64[1][2][1]
+                  d = reshape c                           s64[1][1]
+                  e = broadcast d, {1, 2}, [0, 1]         s64[1][2]
+                  f = reshape e                           s64[1][2][1]
+                  h = reshape g                           s64[1][1]
+                  i = broadcast h, {2, 1}, [0, 1]         s64[2][1]
+                  j = reshape i                           s64[2][1][1]
+                  k = broadcast j, {2, 1, 2}, [0, 1, 2]   s64[2][1][2]
+                  m = cond a -> {b, f}, true -> {k, l}    tuple2
+                  n = elem m, 1                           s64[1][2][1]
+                >}
+               """)
+
+      Nx.Defn.default_options(compiler: Nx.Defn.Evaluator)
+
+      [b_vec_a, _] = Nx.broadcast_vectors([Nx.broadcast(b, a), a])
+      [b_vec_c, _] = Nx.broadcast_vectors([Nx.broadcast(b, c), c])
+
+      assert %{shape: {2}, vectorized_axes: [x: 2, y: 1]} = b_vec_a
+      assert %{shape: {1}, vectorized_axes: [z: 1, w: 2]} = b_vec_c
+      
+      assert cond_container(1, on_true, on_false) == {a, b_vec_c}
+      assert cond_container(0, on_true, on_false) == {b_vec_a, c}
     end
   end
 
