@@ -1263,25 +1263,21 @@ defmodule Nx.DefnTest do
                  Nx.Defn.Expr
                  parameter a:0                           s64
                  parameter c:1                           s64[2][1][2]
-                 parameter i:2                           s64
-                 parameter o:3                           s64[1][2]
+                 parameter h:2                           s64
+                 parameter l:3                           s64[1][2]
                  b = greater a, 0                        u8
-                 d = reshape 1                           s64[1][1]
-                 e = reshape d                           s64[1][1][1]
-                 f = add c, e                            s64[2][1][2]
-                 g = broadcast f, {2, 2, 2}, [0, 1, 2]   s64[2][2][2]
-                 h = less a, 0                           u8
-                 j = subtract i, 1                       s64
-                 k = reshape j                           s64[1][1]
-                 l = broadcast k, {2, 2}, [0, 1]         s64[2][2]
-                 m = reshape l                           s64[2][2][1]
-                 n = broadcast m, {2, 2, 2}, [0, 1, 2]   s64[2][2][2]
-                 p = reshape 2                           s64[1][1]
-                 q = multiply o, p                       s64[1][2]
-                 r = broadcast q, {2, 2}, [0, 1]         s64[2][2]
-                 s = reshape r                           s64[2][2][1]
-                 t = broadcast s, {2, 2, 2}, [0, 1, 2]   s64[2][2][2]
-                 u = cond b -> g, h -> n, true -> t      s64[2][2][2]
+                 d = reshape 1                           s64[1][1][1]
+                 e = add c, d                            s64[2][1][2]
+                 f = broadcast e, {2, 2, 2}, [0, 1, 2]   s64[2][2][2]
+                 g = less a, 0                           u8
+                 i = subtract h, 1                       s64
+                 j = reshape i                           s64[1][1][1]
+                 k = broadcast j, {2, 2, 2}, [0, 1, 2]   s64[2][2][2]
+                 m = reshape 2                           s64[1][1]
+                 n = multiply l, m                       s64[1][2]
+                 o = reshape n                           s64[1][2][1]
+                 p = broadcast o, {2, 2, 2}, [0, 1, 2]   s64[2][2][2]
+                 q = cond b -> f, g -> k, true -> p      s64[2][2][2]
                >
                """)
 
@@ -1347,7 +1343,7 @@ defmodule Nx.DefnTest do
 
       assert inspect(cond_container(0, on_true, on_false)) ==
                String.trim("""
-               {#Nx.Tensor<
+                {#Nx.Tensor<
                   vectorized[x: 2][y: 1]
                   s64[2]
                 \s\s
@@ -1355,17 +1351,14 @@ defmodule Nx.DefnTest do
                   parameter a:0                           s64
                   parameter b:1                           s64[2][1][2]
                   parameter c:2                           s64
-                  parameter g:3                           s64
-                  parameter l:4                           s64[1][2][1]
-                  d = reshape c                           s64[1][1]
-                  e = broadcast d, {1, 2}, [0, 1]         s64[1][2]
-                  f = reshape e                           s64[1][2][1]
-                  h = reshape g                           s64[1][1]
-                  i = broadcast h, {2, 1}, [0, 1]         s64[2][1]
-                  j = reshape i                           s64[2][1][1]
-                  k = broadcast j, {2, 1, 2}, [0, 1, 2]   s64[2][1][2]
-                  m = cond a -> {b, f}, true -> {k, l}    tuple2
-                  n = elem m, 0                           s64[2][1][2]
+                  parameter f:3                           s64
+                  parameter i:4                           s64[1][2][1]
+                  d = reshape c                           s64[1][1][1]
+                  e = broadcast d, {1, 2, 1}, [0, 1, 2]   s64[1][2][1]
+                  g = reshape f                           s64[1][1][1]
+                  h = broadcast g, {2, 1, 2}, [0, 1, 2]   s64[2][1][2]
+                  j = cond a -> {b, e}, true -> {h, i}    tuple2
+                  k = elem j, 0                           s64[2][1][2]
                 >, #Nx.Tensor<
                   vectorized[z: 1][w: 2]
                   s64[1]
@@ -1374,17 +1367,14 @@ defmodule Nx.DefnTest do
                   parameter a:0                           s64
                   parameter b:1                           s64[2][1][2]
                   parameter c:2                           s64
-                  parameter g:3                           s64
-                  parameter l:4                           s64[1][2][1]
-                  d = reshape c                           s64[1][1]
-                  e = broadcast d, {1, 2}, [0, 1]         s64[1][2]
-                  f = reshape e                           s64[1][2][1]
-                  h = reshape g                           s64[1][1]
-                  i = broadcast h, {2, 1}, [0, 1]         s64[2][1]
-                  j = reshape i                           s64[2][1][1]
-                  k = broadcast j, {2, 1, 2}, [0, 1, 2]   s64[2][1][2]
-                  m = cond a -> {b, f}, true -> {k, l}    tuple2
-                  n = elem m, 1                           s64[1][2][1]
+                  parameter f:3                           s64
+                  parameter i:4                           s64[1][2][1]
+                  d = reshape c                           s64[1][1][1]
+                  e = broadcast d, {1, 2, 1}, [0, 1, 2]   s64[1][2][1]
+                  g = reshape f                           s64[1][1][1]
+                  h = broadcast g, {2, 1, 2}, [0, 1, 2]   s64[2][1][2]
+                  j = cond a -> {b, e}, true -> {h, i}    tuple2
+                  k = elem j, 1                           s64[1][2][1]
                 >}
                """)
 

@@ -166,16 +166,8 @@ defmodule Nx.Defn.Expr do
     end
   end
 
-  defp broadcast_clause([type = last | exprs]) do
+  defp broadcast_clause([type = last | expr_types = exprs]) do
     %{shape: shape, names: names} = last = to_expr(last)
-
-    {exprs, {type, shape, names}} =
-      Enum.map_reduce(exprs, {type, shape, names}, fn expr, {type, shape, names} ->
-        type = binary_type(type, expr)
-        expr = to_expr(expr)
-        {shape, names} = Nx.Shape.binary_broadcast(shape, names, expr.shape, expr.names)
-        {expr, {type, shape, names}}
-      end)
 
     [%{vectorized_axes: vectorized_axes} = last | exprs] =
       case Nx.broadcast_vectors([last | exprs]) do
@@ -187,44 +179,24 @@ defmodule Nx.Defn.Expr do
           result
       end
 
-    shape_l = Tuple.to_list(shape)
+    [last | exprs] = Enum.map([last | exprs], &Nx.devectorize/1)
+
+    {exprs, {type, shape, names}} =
+      Enum.map_reduce(Enum.zip(exprs, expr_types), {type, shape, names}, fn {expr, expr_type},
+                                                                            {type, shape, names} ->
+        type = binary_type(type, expr_type)
+        expr = to_expr(expr)
+        {shape, names} = Nx.Shape.binary_broadcast(shape, names, expr.shape, expr.names)
+        {expr, {type, shape, names}}
+      end)
+
+    # shape_l = Tuple.to_list(shape)
 
     result =
       for expr <- [last | exprs] do
-        expr =
-          case {expr, shape} do
-            _ when vectorized_axes == [] ->
-              expr
-
-            {%{shape: {}}, {}} ->
-              expr
-
-            {%{shape: {}}, target_shape} ->
-              Nx.reshape(expr, Tuple.duplicate(1, tuple_size(target_shape)))
-
-            {%{shape: {n}}, target_shape} ->
-              rank = tuple_size(target_shape)
-              intermediate_shape = Tuple.duplicate(1, rank) |> put_elem(rank - 1, n)
-              Nx.reshape(expr, intermediate_shape)
-
-            _ ->
-              expr
-          end
-
-        {target_shape, target_names} =
-          if vectorized_axes == [] do
-            {shape, names}
-          else
-            {vec_names, vec_values} = Enum.unzip(vectorized_axes)
-            shape = List.to_tuple(vec_values ++ shape_l)
-
-            {shape, vec_names ++ names}
-          end
-
         expr
-        |> Nx.devectorize()
         |> Nx.as_type(type)
-        |> Nx.broadcast(target_shape, names: target_names)
+        |> Nx.broadcast(shape, names: names)
       end
 
     {result, vectorized_axes}
