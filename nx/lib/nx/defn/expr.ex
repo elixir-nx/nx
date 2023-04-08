@@ -94,13 +94,13 @@ defmodule Nx.Defn.Expr do
   def metadata(expr, metadata) when is_map(metadata) do
     case to_container_expr(expr) do
       %{data: %{context: context}} = res ->
-        expr(res, context, :metadata, [expr, metadata])
+        expr(res, context, :metadata, [Nx.devectorize(expr), metadata])
 
       t when is_tuple(t) ->
         context = elem(t, 0).data.context
 
         tuple(
-          expr(tuple_out(tuple_size(t)), context, :metadata, [expr, metadata]),
+          expr(tuple_out(tuple_size(t)), context, :metadata, [Nx.devectorize(expr), metadata]),
           Tuple.to_list(t)
         )
     end
@@ -137,36 +137,61 @@ defmodule Nx.Defn.Expr do
     {preds, exprs} = Enum.unzip(clauses)
     {preds, context} = to_exprs(preds)
 
-    [last | exprs] =
+    {broadcasted_clauses, vectorized_axes} =
       [last | exprs]
       |> Enum.map(&Composite.flatten_list([&1]))
       |> Enum.zip_with(&broadcast_clause/1)
-      |> case do
+      |> Enum.unzip()
+
+    [last | exprs] =
+      case broadcasted_clauses do
         # Handle the case where branches don't return anything
         [] -> Enum.map([last | exprs], fn _ -> {} end)
         clauses -> unzip_clauses(clauses)
       end
 
     clauses = Enum.zip(preds, exprs)
+
+    out =
+      if vectorized_axes == [] do
+        out
+      else
+        {result, []} =
+          Composite.traverse(out, vectorized_axes, fn
+            %T{} = expr, [axes | tail] ->
+              {%{expr | vectorized_axes: axes}, tail}
+
+            expr, [[] | tail] ->
+              {expr, tail}
+          end)
+
+        result
+      end
+
     flatten_to_composite(out, context, exprs, &expr(&1, context, :cond, [clauses, last]))
   end
 
-  defp broadcast_clause([type = last | exprs]) do
-    %{shape: shape, names: names} = last = to_expr(last)
+  defp broadcast_clause([type = last | expr_types = exprs]) do
+    [%{vectorized_axes: vectorized_axes} = last | exprs] = Nx.reshape_vectors([last | exprs])
+
+    [%{shape: shape, names: names} = last | exprs] = Enum.map([last | exprs], &Nx.devectorize/1)
 
     {exprs, {type, shape, names}} =
-      Enum.map_reduce(exprs, {type, shape, names}, fn expr, {type, shape, names} ->
-        type = binary_type(type, expr)
-        expr = to_expr(expr)
+      Enum.map_reduce(Enum.zip(exprs, expr_types), {type, shape, names}, fn {expr, expr_type},
+                                                                            {type, shape, names} ->
+        type = binary_type(type, expr_type)
         {shape, names} = Nx.Shape.binary_broadcast(shape, names, expr.shape, expr.names)
         {expr, {type, shape, names}}
       end)
 
-    for expr <- [last | exprs] do
-      expr
-      |> Nx.as_type(type)
-      |> Nx.broadcast(shape, names: names)
-    end
+    result =
+      for expr <- [last | exprs] do
+        expr
+        |> Nx.as_type(type)
+        |> Nx.broadcast(shape, names: names)
+      end
+
+    {result, vectorized_axes}
   end
 
   defp unzip_clauses([exprs | _] = clauses),
@@ -193,6 +218,12 @@ defmodule Nx.Defn.Expr do
   """
   def while(initial, context, arg, condition, body) do
     [flatten_initial, flatten_arg, flatten_body] = clauses = flatten_clauses([initial, arg, body])
+
+    if condition.vectorized_axes != [] do
+      raise ArgumentError,
+            "condition for while cannot be vectorized, got: #{inspect(condition)}"
+    end
+
     args = [flatten_initial, flatten_arg, condition, flatten_body]
     flatten_to_composite(initial, context, clauses, &expr(&1, context, :while, args))
   end
@@ -200,8 +231,8 @@ defmodule Nx.Defn.Expr do
   defp flatten_clauses(clauses) do
     Enum.map(clauses, fn expr ->
       case Composite.flatten_list([expr]) do
-        [single] -> single
-        list -> List.to_tuple(list)
+        [single] -> Nx.devectorize(single)
+        list -> list |> Enum.map(&Nx.devectorize/1) |> List.to_tuple()
       end
     end)
   end
@@ -210,16 +241,58 @@ defmodule Nx.Defn.Expr do
     size = tuple_size(head)
     expr = fun.(tuple_out(size))
 
-    {out, {[], ^size}} =
-      Composite.traverse(out, {Tuple.to_list(head), 0}, fn _, {[head | tail], i} ->
-        {expr(head, context, :elem, [expr, i]), {tail, i + 1}}
+    vectorized_axes =
+      out
+      |> Composite.reduce([], fn
+        %T{vectorized_axes: [_ | _] = axes}, acc ->
+          [Keyword.keys(axes) | acc]
+
+        _t, acc ->
+          [nil | acc]
+      end)
+      |> Enum.reverse()
+
+    {out, {[], ^size, []}} =
+      Composite.traverse(out, {Tuple.to_list(head), 0, vectorized_axes}, fn
+        _, {[head | tail], i, [axes | axes_tail]} ->
+          head =
+            if axes do
+              Nx.vectorize(head, axes)
+            else
+              head
+            end
+
+          {expr(head, context, :elem, [expr, i]), {tail, i + 1, axes_tail}}
       end)
 
     out
   end
 
   defp flatten_to_composite(out, _context, [head | _], fun) do
-    {out, []} = Composite.traverse(out, [fun.(head)], fn _, [head | tail] -> {head, tail} end)
+    vectorized_axes =
+      out
+      |> Composite.reduce([], fn
+        %T{vectorized_axes: [_ | _] = axes}, acc ->
+          [Keyword.keys(axes) | acc]
+
+        _, acc ->
+          [nil | acc]
+      end)
+      |> Enum.reverse()
+
+    {out, {[], []}} =
+      Composite.traverse(out, {[fun.(head)], vectorized_axes}, fn
+        _, {[head | tail], [axes | axes_tail]} ->
+          head =
+            if axes do
+              Nx.vectorize(head, axes)
+            else
+              head
+            end
+
+          {head, {tail, axes_tail}}
+      end)
+
     out
   end
 

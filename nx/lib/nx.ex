@@ -4625,6 +4625,14 @@ defmodule Nx do
   For vectors with the same name to be compatible, they need to either
   have the same size or one must be of size 1.
 
+  ## Options
+
+    * `:align_ranks` - boolean that indicates whether the inner
+      shapes should be aligned to the maximum rank of the inputs.
+      That is, 1-sized leading dimensions are added so
+      that all tensors have the same rank in the output.
+      This only applies in case one of the inputs is vectorized.
+
   ## Examples
 
   Two vectors of the same name are compatible if they have the same sizes or if either has size 1.
@@ -4655,12 +4663,15 @@ defmodule Nx do
       [y: 1, x: 1]
   """
   @doc type: :shape
-  def reshape_vectors(tensors)
+  def reshape_vectors(tensors_or_containers, opts \\ [])
 
-  def reshape_vectors([tensor]), do: [to_tensor(tensor)]
+  def reshape_vectors([tensor], _opts), do: [to_tensor(tensor)]
 
-  def reshape_vectors(tensors) when is_list(tensors) do
-    {devectorized_tensors, canonical_vectorized_axes, offset} = do_reshape_vectors(tensors)
+  def reshape_vectors(tensors, opts) when is_list(tensors) do
+    opts = keyword!(opts, align_ranks: true)
+
+    {devectorized_tensors, canonical_vectorized_axes, offset} =
+      do_reshape_vectors(tensors, opts[:align_ranks])
 
     if offset != 0 do
       keys = Keyword.keys(canonical_vectorized_axes)
@@ -4675,6 +4686,14 @@ defmodule Nx do
 
   The inner shape is unchanged for each tensor.
   The order of the vectorized axes is determined by order of appearance in the input list.
+
+  ## Options
+
+    * `:align_ranks` - boolean that indicates whether the inner
+      shapes should be aligned to the maximum rank of the inputs.
+      That is, 1-sized leading dimensions are added so
+      that all tensors have the same rank in the output.
+      This only applies in case one of the inputs is vectorized.
 
   ## Examples
 
@@ -4701,10 +4720,16 @@ defmodule Nx do
       iex> broadcast_x
       #Nx.Tensor<
         vectorized[x: 2][y: 2]
-        s64
+        s64[1]
         [
-          [1, 1],
-          [2, 2]
+          [
+            [1],
+            [1]
+          ],
+          [
+            [2],
+            [2]
+          ]
         ]
       >
       iex> broadcast_xy
@@ -4722,7 +4747,7 @@ defmodule Nx do
           ]
         ]
       >
-      iex> [broadcast_xy, broadcast_x] = Nx.broadcast_vectors([xy, x])
+      iex> [broadcast_xy, broadcast_x] = Nx.broadcast_vectors([xy, x], align_ranks: false)
       iex> broadcast_x
       #Nx.Tensor<
         vectorized[y: 2][x: 2]
@@ -4749,10 +4774,15 @@ defmodule Nx do
       >
   """
   @doc type: :shape
-  def broadcast_vectors([t]), do: [to_tensor(t)]
+  def broadcast_vectors(tensors_or_containers, opts \\ [])
 
-  def broadcast_vectors(tensors) when is_list(tensors) do
-    {devectorized_tensors, target_vectorized_axes, offset} = do_reshape_vectors(tensors)
+  def broadcast_vectors([t], _opts), do: [to_tensor(t)]
+
+  def broadcast_vectors(tensors, opts) when is_list(tensors) do
+    opts = keyword!(opts, align_ranks: true)
+
+    {devectorized_tensors, target_vectorized_axes, offset} =
+      do_reshape_vectors(tensors, opts[:align_ranks])
 
     if offset != 0 do
       target_vector_shape_l = Keyword.values(target_vectorized_axes)
@@ -4770,20 +4800,29 @@ defmodule Nx do
     end
   end
 
-  defp do_reshape_vectors(tensors) do
+  defp do_reshape_vectors(tensors, align_ranks) do
     # For all tensors to be compatible, each pair also needs to be compatible
     # This means that we can do a first pass accumulating axes into
     # the first tensor, and then a second pass getting them all into their final shapes.
     tensors = Enum.map(tensors, &to_tensor/1)
     canonical = calculate_canonical_vectorized_axes(tensors)
     n = length(canonical)
-    devectorized_tensors = do_reshape_vectors_devectorize(tensors, canonical, n)
+
+    devectorized_tensors = do_reshape_vectors_devectorize(tensors, canonical, n, align_ranks)
+
     {devectorized_tensors, canonical, n}
   end
 
-  defp do_reshape_vectors_devectorize(tensors, [], _n), do: tensors
+  defp do_reshape_vectors_devectorize(tensors, [], _n, _align_ranks), do: tensors
 
-  defp do_reshape_vectors_devectorize(tensors, canonical_vectorized_axes, n) do
+  defp do_reshape_vectors_devectorize(tensors, canonical_vectorized_axes, n, align_ranks) do
+    rank =
+      Enum.reduce(
+        tl(tensors),
+        tuple_size(hd(tensors).shape),
+        &Kernel.max(tuple_size(&1.shape), &2)
+      )
+
     Enum.map(tensors, fn
       %T{names: names, shape: shape, vectorized_axes: current_axes} = t ->
         {vectorized_axes, []} =
@@ -4801,8 +4840,15 @@ defmodule Nx do
               end
           end)
 
-        target_shape = List.to_tuple(Keyword.values(vectorized_axes) ++ Tuple.to_list(shape))
-        target_names = List.duplicate(nil, n) ++ names
+        size = if align_ranks, do: rank - tuple_size(shape), else: 0
+
+        target_shape =
+          List.to_tuple(
+            Keyword.values(vectorized_axes) ++
+              List.duplicate(1, size) ++ Tuple.to_list(shape)
+          )
+
+        target_names = List.duplicate(nil, n + size) ++ names
 
         t
         |> devectorize()
@@ -4865,47 +4911,17 @@ defmodule Nx do
   end
 
   defp apply_vectorized([left, right], fun) do
-    [%{vectorized_axes: vectorized_axes} = left, right] = reshape_vectors([left, right])
+    left = to_tensor(left)
+    right = to_tensor(right)
 
-    if vectorized_axes != [] do
-      {left, right} =
-        case {left.shape, right.shape} do
-          {{}, {}} ->
-            {left, right}
+    case do_reshape_vectors([left, right], true) do
+      {_, [], 0} ->
+        fun.(left, right)
 
-          {{}, other_shape} ->
-            {reshape(left, Tuple.duplicate(1, tuple_size(other_shape))), right}
-
-          {other_shape, {}} ->
-            {left, reshape(right, Tuple.duplicate(1, tuple_size(other_shape)))}
-
-          {{n}, other_shape} ->
-            rank = tuple_size(other_shape)
-            target_shape = Tuple.duplicate(1, rank) |> put_elem(rank - 1, n)
-            {reshape(left, target_shape), right}
-
-          {other_shape, {n}} ->
-            rank = tuple_size(other_shape)
-            target_shape = Tuple.duplicate(1, rank) |> put_elem(rank - 1, n)
-            {left, reshape(right, target_shape)}
-
-          _ ->
-            {left, right}
-        end
-
-      devec_left = devectorize(left)
-      devec_right = devectorize(right)
-
-      vectorized_axes =
-        Enum.zip_with(left.vectorized_axes, right.vectorized_axes, fn {name, s1}, {name, s2} ->
-          {name, Kernel.max(s1, s2)}
-        end)
-
-      devec_left
-      |> fun.(devec_right)
-      |> vectorize(vectorized_axes)
-    else
-      fun.(left, right)
+      {[devec_left, devec_right], canonical_vectorized_axes, _offset} ->
+        devec_left
+        |> fun.(devec_right)
+        |> vectorize(canonical_vectorized_axes)
     end
   end
 
@@ -6657,77 +6673,54 @@ defmodule Nx do
   """
   @doc type: :element
   def select(pred, on_true, on_false) do
+    %T{shape: pred_shape} = pred = to_tensor(pred)
+
     [pred, on_true, on_false] = broadcast_vectors([pred, on_true, on_false])
 
-    %T{vectorized_axes: vectorized_axes, shape: pred_shape, names: pred_names} = pred
-    %T{shape: true_shape, names: true_names} = on_true
-    %T{shape: false_shape, names: false_names} = on_false
+    %T{vectorized_axes: vectorized_axes} = pred
+
+    pred = devectorize(pred)
+    on_true = devectorize(on_true)
+    on_false = devectorize(on_false)
 
     output_type = binary_type(on_true, on_false)
 
     {output_shape, output_names} =
       if pred_shape == {} do
-        Nx.Shape.binary_broadcast(true_shape, true_names, false_shape, false_names)
+        Nx.Shape.binary_broadcast(on_true.shape, on_true.names, on_false.shape, on_false.names)
       else
-        {pred_shape, pred_names}
+        {pred.shape, pred.names}
       end
 
     _ =
       Nx.Shape.broadcast!(
-        true_shape,
+        on_true.shape,
         output_shape,
-        Nx.Shape.broadcast_axes(true_shape, output_shape)
+        Nx.Shape.broadcast_axes(on_true.shape, output_shape)
       )
 
     _ =
       Nx.Shape.broadcast!(
-        false_shape,
+        on_false.shape,
         output_shape,
-        Nx.Shape.broadcast_axes(false_shape, output_shape)
+        Nx.Shape.broadcast_axes(on_false.shape, output_shape)
       )
 
     out = %{pred | shape: output_shape, type: output_type, names: output_names}
 
     if vectorized_axes != [] do
-      on_true = reshape_tensor_for_broadcasting(on_true, output_shape)
-      on_false = reshape_tensor_for_broadcasting(on_false, output_shape)
-
       pred =
         if pred.shape != output_shape do
-          pred
-          |> reshape_tensor_for_broadcasting(output_shape)
-          |> broadcast(output_shape)
+          broadcast(pred, output_shape)
         else
-          reshape_tensor_for_broadcasting(pred, output_shape)
+          pred
         end
 
-      out = devectorize(out)
-      pred = devectorize(pred)
-      on_true = devectorize(on_true)
-      on_false = devectorize(on_false)
-
       result = impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
-      vectorize(result, Keyword.keys(vectorized_axes))
+      vectorize(result, vectorized_axes)
     else
       impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
     end
-  end
-
-  defp reshape_tensor_for_broadcasting(%{shape: shape} = t, shape), do: t
-
-  defp reshape_tensor_for_broadcasting(tensor, target_shape) do
-    input_shape = tensor.shape
-    input_rank = tuple_size(input_shape)
-    target_rank = tuple_size(target_shape)
-
-    # Pad the input shape with 1s on the left side to match the target_rank
-    input_shape_padded = List.duplicate(1, target_rank - input_rank) ++ Tuple.to_list(input_shape)
-
-    # Convert the new shape list to a tuple
-    new_shape = List.to_tuple(input_shape_padded)
-
-    # Reshape the tensor with the new shape
-    reshape(tensor, new_shape)
   end
 
   @doc """
@@ -7271,7 +7264,7 @@ defmodule Nx do
 
   defp indexed_op(target, indices, updates, op) do
     [%T{vectorized_axes: vectorized_axes} = target, indices, updates] =
-      broadcast_vectors([target, indices, updates])
+      broadcast_vectors([target, indices, updates], align_ranks: false)
 
     type = binary_type(target, updates)
 
@@ -13312,7 +13305,8 @@ defmodule Nx do
       [indices]
       |> do_reshape_vectors_devectorize(
         canonical_vectorized_axes,
-        offset
+        offset,
+        false
       )
       |> hd()
       |> vectorize(target_vectorized_axes)
