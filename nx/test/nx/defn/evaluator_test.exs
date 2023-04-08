@@ -622,8 +622,8 @@ defmodule Nx.Defn.EvaluatorTest do
   end
 
   describe "vectorization" do
-    defn vectorized_while(a, b) do
-      while({a, b, i = 0}, i < 2) do
+    defn vectorized_while(a, b, i \\ 0) do
+      while({a, b, i}, i < 2) do
         {a + b, b, i + 1}
       end
     end
@@ -686,6 +686,28 @@ defmodule Nx.Defn.EvaluatorTest do
 
       assert_raise CompileError, message, fn ->
         vectorized_while(t, Nx.iota({2, 3}, vectorized_axes: [a: 2], type: :s64))
+      end
+    end
+
+    test "while raises on vectorized condition" do
+      t = Nx.iota({2, 3}, vectorized_axes: [a: 1])
+
+      error =
+        """
+        test/nx/defn/evaluator_test.exs:626: condition must be a scalar tensor, got: #Nx.Tensor<
+          vectorized[x: 1]
+          u8[1]
+        \s\s
+          Nx.Defn.Expr
+          parameter a:2   s64[1][1]
+          b = reshape 2   s64[1][1]
+          c = less a, b   u8[1][1]
+        >, consider using Nx.all/1 or Nx.any/1 to obtain a scalar predicate from tensor
+        """
+        |> String.trim()
+
+      assert_raise CompileError, error, fn ->
+        vectorized_while(t, t, Nx.iota({1}, vectorized_axes: [x: 1]))
       end
     end
 

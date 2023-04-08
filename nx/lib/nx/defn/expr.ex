@@ -219,6 +219,15 @@ defmodule Nx.Defn.Expr do
   def while(initial, context, arg, condition, body) do
     [flatten_initial, flatten_arg, flatten_body] = clauses = flatten_clauses([initial, arg, body])
 
+    Composite.traverse(condition, fn
+      %T{vectorized_axes: [_ | _]} ->
+        raise ArgumentError,
+              "condition for while cannot be vectorized, got: #{inspect(condition)}"
+
+      _ ->
+        :ok
+    end)
+
     args = [
       flatten_initial,
       flatten_arg,
