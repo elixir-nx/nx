@@ -253,14 +253,13 @@ defmodule Nx.Defn.Expr do
 
     vectorized_axes =
       out
-      |> Composite.traverse([], fn
-        %T{vectorized_axes: [_ | _] = axes} = t, acc ->
-          {t, [Keyword.keys(axes) | acc]}
+      |> Composite.reduce([], fn
+        %T{vectorized_axes: [_ | _] = axes}, acc ->
+          [Keyword.keys(axes) | acc]
 
-        t, acc ->
-          {t, [nil | acc]}
+        _t, acc ->
+          [nil | acc]
       end)
-      |> elem(1)
       |> Enum.reverse()
 
     {out, {[], ^size, []}} =
