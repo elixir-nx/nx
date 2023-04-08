@@ -583,7 +583,7 @@ defmodule Nx.LinAlg do
     end
 
     [%T{vectorized_axes: vectorized_axes, shape: a_shape} = a, %T{shape: b_shape} = b] =
-      Nx.broadcast_vectors([a, b])
+      Nx.broadcast_vectors([a, b], align_ranks: false)
 
     :ok = Nx.Shape.triangular_solve(a_shape, b_shape, opts[:left_side])
     output_type = binary_type(a, b) |> Nx.Type.to_floating()
@@ -686,7 +686,8 @@ defmodule Nx.LinAlg do
   # optional needs to work on the actual backend.
   @doc from_backend: false
   def solve(a, b) do
-    [%T{vectorized_axes: vectorized_axes} = a, b] = Nx.broadcast_vectors([a, b])
+    [%T{vectorized_axes: vectorized_axes} = a, b] =
+      Nx.broadcast_vectors([a, b], align_ranks: false)
 
     a = Nx.devectorize(a)
     b = Nx.devectorize(b)

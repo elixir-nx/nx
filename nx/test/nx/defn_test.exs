@@ -1160,14 +1160,14 @@ defmodule Nx.DefnTest do
                )
     end
 
-    defn cond_lit(a) do
+    defn cond_list(a) do
       if Nx.any(a), do: 1, else: -1
     end
 
     @tag compiler: Evaluator
     test "supports literals" do
-      assert cond_lit(Nx.tensor(0)) == Nx.tensor(-1)
-      assert cond_lit(Nx.tensor(1)) == Nx.tensor(1)
+      assert cond_list(Nx.tensor(0)) == Nx.tensor(-1)
+      assert cond_list(Nx.tensor(1)) == Nx.tensor(1)
     end
 
     defn cond_empty_map(a) do
@@ -1247,6 +1247,147 @@ defmodule Nx.DefnTest do
       assert_raise CompileError,
                    ~r"cond/if expects all branches to return compatible tensor types.\n\nGot mismatching templates:\n\n:foo\n\nand\n\n:bar\n",
                    fn -> non_tensor_cond(1) end
+    end
+
+    test "supports vectorized plain branches" do
+      a = Nx.iota({2}, vectorized_axes: [x: 2, y: 1])
+      b = 2
+      c = Nx.tensor([[1, 2]]) |> Nx.vectorize(x: 1, y: 2)
+
+      assert inspect(cond4(-1, a, b, c)) ==
+               String.trim("""
+               #Nx.Tensor<
+                 vectorized[x: 2][y: 2]
+                 s64[2]
+               \s\s
+                 Nx.Defn.Expr
+                 parameter a:0                           s64
+                 parameter c:1                           s64[2][1][2]
+                 parameter h:2                           s64
+                 parameter l:3                           s64[1][2]
+                 b = greater a, 0                        u8
+                 d = reshape 1                           s64[1][1][1]
+                 e = add c, d                            s64[2][1][2]
+                 f = broadcast e, {2, 2, 2}, [0, 1, 2]   s64[2][2][2]
+                 g = less a, 0                           u8
+                 i = subtract h, 1                       s64
+                 j = reshape i                           s64[1][1][1]
+                 k = broadcast j, {2, 2, 2}, [0, 1, 2]   s64[2][2][2]
+                 m = reshape 2                           s64[1][1]
+                 n = multiply l, m                       s64[1][2]
+                 o = reshape n                           s64[1][2][1]
+                 p = broadcast o, {2, 2, 2}, [0, 1, 2]   s64[2][2][2]
+                 q = cond b -> f, g -> k, true -> p      s64[2][2][2]
+               >
+               """)
+
+      Nx.Defn.default_options(compiler: Nx.Defn.Evaluator)
+
+      assert cond4(-1, a, b, c) ==
+               Nx.tensor([
+                 [
+                   [1, 1],
+                   [1, 1]
+                 ],
+                 [
+                   [1, 1],
+                   [1, 1]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2, y: 2)
+
+      assert cond4(0, a, b, c) ==
+               Nx.tensor([
+                 [
+                   [2, 2],
+                   [4, 4]
+                 ],
+                 [
+                   [2, 2],
+                   [4, 4]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2, y: 2)
+
+      assert cond4(1, a, b, c) ==
+               Nx.tensor([
+                 [
+                   [1, 2],
+                   [1, 2]
+                 ],
+                 [
+                   [1, 2],
+                   [1, 2]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2, y: 2)
+    end
+
+    defn cond_container(pred, x, y) do
+      cond do
+        pred ->
+          x
+
+        true ->
+          y
+      end
+    end
+
+    test "supports vectorized container branches" do
+      a = Nx.iota({2}, vectorized_axes: [x: 2, y: 1])
+      b = 2
+      c = Nx.tensor([[[1], [2]]]) |> Nx.vectorize(z: 1, w: 2)
+
+      on_true = {a, b}
+      on_false = {b, c}
+
+      assert inspect(cond_container(0, on_true, on_false)) ==
+               String.trim("""
+                {#Nx.Tensor<
+                  vectorized[x: 2][y: 1]
+                  s64[2]
+                \s\s
+                  Nx.Defn.Expr
+                  parameter a:0                           s64
+                  parameter b:1                           s64[2][1][2]
+                  parameter c:2                           s64
+                  parameter f:3                           s64
+                  parameter i:4                           s64[1][2][1]
+                  d = reshape c                           s64[1][1][1]
+                  e = broadcast d, {1, 2, 1}, [0, 1, 2]   s64[1][2][1]
+                  g = reshape f                           s64[1][1][1]
+                  h = broadcast g, {2, 1, 2}, [0, 1, 2]   s64[2][1][2]
+                  j = cond a -> {b, e}, true -> {h, i}    tuple2
+                  k = elem j, 0                           s64[2][1][2]
+                >, #Nx.Tensor<
+                  vectorized[z: 1][w: 2]
+                  s64[1]
+                \s\s
+                  Nx.Defn.Expr
+                  parameter a:0                           s64
+                  parameter b:1                           s64[2][1][2]
+                  parameter c:2                           s64
+                  parameter f:3                           s64
+                  parameter i:4                           s64[1][2][1]
+                  d = reshape c                           s64[1][1][1]
+                  e = broadcast d, {1, 2, 1}, [0, 1, 2]   s64[1][2][1]
+                  g = reshape f                           s64[1][1][1]
+                  h = broadcast g, {2, 1, 2}, [0, 1, 2]   s64[2][1][2]
+                  j = cond a -> {b, e}, true -> {h, i}    tuple2
+                  k = elem j, 1                           s64[1][2][1]
+                >}
+               """)
+
+      Nx.Defn.default_options(compiler: Nx.Defn.Evaluator)
+
+      [b_vec_a, _] = Nx.broadcast_vectors([Nx.broadcast(b, a), a])
+      [b_vec_c, _] = Nx.broadcast_vectors([Nx.broadcast(b, c), c])
+
+      assert %{shape: {2}, vectorized_axes: [x: 2, y: 1]} = b_vec_a
+      assert %{shape: {1}, vectorized_axes: [z: 1, w: 2]} = b_vec_c
+
+      assert cond_container(1, on_true, on_false) == {a, b_vec_c}
+      assert cond_container(0, on_true, on_false) == {b_vec_a, c}
     end
   end
 
@@ -2561,6 +2702,121 @@ defmodule Nx.DefnTest do
       assert multi_clause_multi_arity_transform(1, 2, 3) == {1, 2, 3}
       assert multi_clause_multi_arity_transform(1, 2, value: 4) == {1, 2, 4}
       assert multi_clause_multi_arity_transform(1, 2, 3, value: 4) == {1, 2, 3, 4}
+    end
+  end
+
+  describe "metadata" do
+    defn vectorized_metadata(x, y) do
+      stop_grad(x) + y
+    end
+
+    defn vectorized_metadata_tuple(x, y) do
+      {x, y} = stop_grad({x, y})
+      x + y
+    end
+
+    test "supports vectorization" do
+      x = Nx.iota({2}, vectorized_axes: [x: 1, y: 2])
+      y = Nx.iota({2}, vectorized_axes: [x: 2, y: 1])
+      z = Nx.tensor([1])
+
+      # 2 vectorized inputs
+      assert inspect(vectorized_metadata(x, y)) ==
+               String.trim("""
+               #Nx.Tensor<
+                 vectorized[x: 2][y: 2]
+                 s64[2]
+               \s\s
+                 Nx.Defn.Expr
+                 parameter a:0                s64[1][2][2]
+                 parameter c:1                s64[2][1][2]
+                 b = metadata a, :stop_grad   s64[1][2][2]
+                 d = add b, c                 s64[2][2][2]
+               >
+               """)
+
+      assert inspect(vectorized_metadata_tuple(x, y)) ==
+               String.trim("""
+               #Nx.Tensor<
+                 vectorized[x: 2][y: 2]
+                 s64[2]
+               \s\s
+                 Nx.Defn.Expr
+                 parameter a:0                     s64[1][2][2]
+                 parameter b:1                     s64[2][1][2]
+                 c = metadata {a, b}, :stop_grad   tuple2
+                 d = elem c, 0                     s64[1][2][2]
+                 e = elem c, 1                     s64[2][1][2]
+                 f = add d, e                      s64[2][2][2]
+               >
+               """)
+
+      # vectorized + non vectorized
+      assert inspect(vectorized_metadata(x, z)) ==
+               String.trim("""
+               #Nx.Tensor<
+                 vectorized[x: 1][y: 2]
+                 s64[2]
+               \s\s
+                 Nx.Defn.Expr
+                 parameter a:0                s64[1][2][2]
+                 parameter c:1                s64[1]
+                 b = metadata a, :stop_grad   s64[1][2][2]
+                 d = reshape c                s64[1][1][1]
+                 e = add b, d                 s64[1][2][2]
+               >
+               """)
+
+      assert inspect(vectorized_metadata_tuple(x, z)) ==
+               String.trim("""
+               #Nx.Tensor<
+                 vectorized[x: 1][y: 2]
+                 s64[2]
+               \s\s
+                 Nx.Defn.Expr
+                 parameter a:0                     s64[1][2][2]
+                 parameter b:1                     s64[1]
+                 c = metadata {a, b}, :stop_grad   tuple2
+                 d = elem c, 0                     s64[1][2][2]
+                 e = elem c, 1                     s64[1]
+                 f = reshape e                     s64[1][1][1]
+                 g = add d, f                      s64[1][2][2]
+               >
+               """)
+
+      Nx.Defn.default_options(compiler: Nx.Defn.Evaluator)
+
+      # 2 vectorized inputs
+
+      vectorized_result =
+        Nx.tensor([
+          [
+            [0, 2],
+            [0, 2]
+          ],
+          [
+            [0, 2],
+            [0, 2]
+          ]
+        ])
+        |> Nx.vectorize(x: 2, y: 2)
+
+      assert vectorized_metadata(x, y) == vectorized_result
+      assert vectorized_metadata_tuple(x, y) == vectorized_result
+
+      # vectorized + non vectorized
+
+      vec_nonvec_result =
+        Nx.tensor([
+          [
+            [1, 2],
+            [1, 2]
+          ]
+        ])
+        |> Nx.vectorize(x: 1, y: 2)
+
+      assert vectorized_metadata(x, z) == vec_nonvec_result
+      assert vectorized_metadata_tuple(x, z) == vec_nonvec_result
     end
   end
 end

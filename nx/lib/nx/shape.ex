@@ -2074,7 +2074,7 @@ defmodule Nx.Shape do
 
         raise(
           ArgumentError,
-          "`b` tensor has incompatible dimensions, expected #{expected_2d} or #{expected_1d}, got: " <>
+          "`b` tensor has incompatible dimensions, expected #{inspect(expected_2d)} or #{inspect(expected_1d)}, got: " <>
             inspect(b_shape)
         )
     end

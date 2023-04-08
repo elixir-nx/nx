@@ -700,7 +700,10 @@ defmodule Nx.Defn.EvaluatorTest do
       assert Nx.add(c, 1) == vectorized_cond(0, a, 1, b, c)
 
       # vectorization edge cases
-      assert c == vectorized_cond(0, a, 1, c, d)
+
+      [c_vec_d, _] = Nx.broadcast_vectors([c, d])
+
+      assert c_vec_d == vectorized_cond(0, a, 1, c, d)
       assert d == vectorized_cond(0, a, 0, c, d)
     end
 
