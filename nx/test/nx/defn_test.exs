@@ -2563,4 +2563,119 @@ defmodule Nx.DefnTest do
       assert multi_clause_multi_arity_transform(1, 2, 3, value: 4) == {1, 2, 3, 4}
     end
   end
+
+  describe "metadata" do
+    defn vectorized_metadata(x, y) do
+      stop_grad(x) + y
+    end
+
+    defn vectorized_metadata_tuple(x, y) do
+      {x, y} = stop_grad({x, y})
+      x + y
+    end
+
+    test "supports vectorization" do
+      x = Nx.iota({2}, vectorized_axes: [x: 1, y: 2])
+      y = Nx.iota({2}, vectorized_axes: [x: 2, y: 1])
+      z = Nx.tensor([1])
+
+      # 2 vectorized inputs
+      assert inspect(vectorized_metadata(x, y)) ==
+               String.trim("""
+               #Nx.Tensor<
+                 vectorized[x: 2][y: 2]
+                 s64[2]
+               \s\s
+                 Nx.Defn.Expr
+                 parameter a:0                s64[1][2][2]
+                 parameter c:1                s64[2][1][2]
+                 b = metadata a, :stop_grad   s64[1][2][2]
+                 d = add b, c                 s64[2][2][2]
+               >
+               """)
+
+      assert inspect(vectorized_metadata_tuple(x, y)) ==
+               String.trim("""
+               #Nx.Tensor<
+                 vectorized[x: 2][y: 2]
+                 s64[2]
+               \s\s
+                 Nx.Defn.Expr
+                 parameter a:0                     s64[1][2][2]
+                 parameter b:1                     s64[2][1][2]
+                 c = metadata {a, b}, :stop_grad   tuple2
+                 d = elem c, 0                     s64[1][2][2]
+                 e = elem c, 1                     s64[2][1][2]
+                 f = add d, e                      s64[2][2][2]
+               >
+               """)
+
+      # vectorized + non vectorized
+      assert inspect(vectorized_metadata(x, z)) ==
+               String.trim("""
+               #Nx.Tensor<
+                 vectorized[x: 1][y: 2]
+                 s64[2]
+               \s\s
+                 Nx.Defn.Expr
+                 parameter a:0                s64[1][2][2]
+                 parameter c:1                s64[1]
+                 b = metadata a, :stop_grad   s64[1][2][2]
+                 d = reshape c                s64[1][1][1]
+                 e = add b, d                 s64[1][2][2]
+               >
+               """)
+
+      assert inspect(vectorized_metadata_tuple(x, z)) ==
+               String.trim("""
+               #Nx.Tensor<
+                 vectorized[x: 1][y: 2]
+                 s64[2]
+               \s\s
+                 Nx.Defn.Expr
+                 parameter a:0                     s64[1][2][2]
+                 parameter b:1                     s64[1]
+                 c = metadata {a, b}, :stop_grad   tuple2
+                 d = elem c, 0                     s64[1][2][2]
+                 e = elem c, 1                     s64[1]
+                 f = reshape e                     s64[1][1][1]
+                 g = add d, f                      s64[1][2][2]
+               >
+               """)
+
+      Nx.Defn.default_options(compiler: Nx.Defn.Evaluator)
+
+      # 2 vectorized inputs
+
+      vectorized_result =
+        Nx.tensor([
+          [
+            [0, 2],
+            [0, 2]
+          ],
+          [
+            [0, 2],
+            [0, 2]
+          ]
+        ])
+        |> Nx.vectorize(x: 2, y: 2)
+
+      assert vectorized_metadata(x, y) == vectorized_result
+      assert vectorized_metadata_tuple(x, y) == vectorized_result
+
+      # vectorized + non vectorized
+
+      vec_nonvec_result =
+        Nx.tensor([
+          [
+            [1, 2],
+            [1, 2]
+          ]
+        ])
+        |> Nx.vectorize(x: 1, y: 2)
+
+      assert vectorized_metadata(x, z) == vec_nonvec_result
+      assert vectorized_metadata_tuple(x, z) == vec_nonvec_result
+    end
+  end
 end
