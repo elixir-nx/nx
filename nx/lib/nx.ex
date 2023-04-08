@@ -4819,7 +4819,7 @@ defmodule Nx do
   defp do_reshape_vectors_devectorize(tensors, canonical_vectorized_axes, n, align_ranks) do
     rank =
       Enum.reduce(
-        tensors,
+        tl(tensors),
         tuple_size(hd(tensors).shape),
         &Kernel.max(tuple_size(&1.shape), &2)
       )
