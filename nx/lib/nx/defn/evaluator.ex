@@ -84,8 +84,7 @@ defmodule Nx.Defn.Evaluator do
     state = %{hooks: hooks, parent_ids: nil, current_ids: nil}
     cache = init_compute_cache(expr, state)
 
-    {expr, output} =
-      Nx.Defn.Composite.traverse(expr, [], &{Nx.devectorize(&1, keep_names: false), [&1 | &2]})
+    {expr, output} = Nx.Defn.Composite.traverse(expr, [], &{Nx.devectorize(&1), [&1 | &2]})
 
     {expr, Enum.reverse(output), cache}
   end
@@ -355,7 +354,6 @@ defmodule Nx.Defn.Evaluator do
 
     {res, [_ | caches]} = composite_eval(chosen, state, chosen_cache)
     caches = Enum.reduce(parent_ids, caches, &decrement_parents(&2, &1))
-
     {res, caches}
   end
 
