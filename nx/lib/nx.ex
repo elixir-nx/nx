@@ -4779,7 +4779,6 @@ defmodule Nx do
   def broadcast_vectors([t], _opts), do: [to_tensor(t)]
 
   def broadcast_vectors(tensors, opts) when is_list(tensors) do
-    # mode: broadcastable | vectorized_only
     opts = keyword!(opts, align_ranks: true)
 
     {devectorized_tensors, target_vectorized_axes, offset} =
