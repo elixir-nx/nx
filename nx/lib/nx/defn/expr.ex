@@ -94,13 +94,13 @@ defmodule Nx.Defn.Expr do
   def metadata(expr, metadata) when is_map(metadata) do
     case to_container_expr(expr) do
       %{data: %{context: context}} = res ->
-        expr(res, context, :metadata, [expr, metadata])
+        expr(res, context, :metadata, [Nx.devectorize(expr), metadata])
 
       t when is_tuple(t) ->
         context = elem(t, 0).data.context
 
         tuple(
-          expr(tuple_out(tuple_size(t)), context, :metadata, [expr, metadata]),
+          expr(tuple_out(tuple_size(t)), context, :metadata, [Nx.devectorize(expr), metadata]),
           Tuple.to_list(t)
         )
     end
