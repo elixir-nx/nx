@@ -282,17 +282,16 @@ defmodule Nx.Defn.Expr do
       |> Enum.reverse()
 
     {out, {[], []}} =
-      Composite.traverse(out, {[fun.(head)], vectorized_axes}, fn _,
-                                                                  {[head | tail],
-                                                                   [axes | axes_tail]} ->
-        head =
-          if axes do
-            Nx.vectorize(head, axes)
-          else
-            head
-          end
+      Composite.traverse(out, {[fun.(head)], vectorized_axes}, fn
+        _, {[head | tail], [axes | axes_tail]} ->
+          head =
+            if axes do
+              Nx.vectorize(head, axes)
+            else
+              head
+            end
 
-        {head, {tail, axes_tail}}
+          {head, {tail, axes_tail}}
       end)
 
     out
