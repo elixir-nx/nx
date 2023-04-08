@@ -92,9 +92,7 @@ defmodule Nx.Defn.Expr do
   inspection.
   """
   def metadata(expr, metadata) when is_map(metadata) do
-    expr
-    |> to_container_expr()
-    |> case do
+    case to_container_expr(expr) do
       %{data: %{context: context}} = res ->
         expr(res, context, :metadata, [Nx.devectorize(expr), metadata])
 
