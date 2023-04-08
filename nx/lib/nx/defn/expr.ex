@@ -129,12 +129,11 @@ defmodule Nx.Defn.Expr do
   @doc """
   Creates a `cond` tensor expression.
   """
-
   def cond([], last) do
     last
   end
 
-  def cond(clauses, out = last) do
+  def cond(clauses, last = out) do
     {preds, exprs} = Enum.unzip(clauses)
     {preds, context} = to_exprs(preds)
 
