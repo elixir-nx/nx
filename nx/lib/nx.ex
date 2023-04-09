@@ -2659,7 +2659,9 @@ defmodule Nx do
   """
   @doc type: :shape
   def reshape(tensor, new_shape, opts \\ []) do
-    %T{shape: old_shape, vectorized_axes: vectorized_axes} = tensor = to_tensor(tensor)
+    %T{shape: old_shape, vectorized_axes: vectorized_axes, names: old_names} =
+      tensor = to_tensor(tensor)
+
     new_names = opts[:names] || names!(new_shape)
     new_shape = if is_tuple(new_shape), do: new_shape, else: shape(new_shape)
     new_shape = Nx.Shape.reshape(old_shape, new_shape)
@@ -2667,8 +2669,11 @@ defmodule Nx do
     names = Nx.Shape.named_axes!(new_names, new_shape)
 
     cond do
-      old_shape == new_shape ->
-        %{tensor | names: names}
+      old_shape == new_shape and names == old_names ->
+        # we can't assume that a given backend does not register names for tensor
+        # shapes, so we can only return a no-op if both the shape and the names
+        # are unchanged
+        tensor
 
       vectorized_axes == [] ->
         impl!(tensor).reshape(%{tensor | shape: new_shape, names: names}, tensor)

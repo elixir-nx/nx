@@ -1263,21 +1263,24 @@ defmodule Nx.DefnTest do
                  Nx.Defn.Expr
                  parameter a:0                           s64
                  parameter c:1                           s64[2][1][2]
-                 parameter h:2                           s64
-                 parameter l:3                           s64[1][2]
+                 parameter j:2                           s64
+                 parameter n:3                           s64[1][2]
                  b = greater a, 0                        u8
-                 d = reshape 1                           s64[1][1][1]
-                 e = add c, d                            s64[2][1][2]
-                 f = broadcast e, {2, 2, 2}, [0, 1, 2]   s64[2][2][2]
-                 g = less a, 0                           u8
-                 i = subtract h, 1                       s64
-                 j = reshape i                           s64[1][1][1]
-                 k = broadcast j, {2, 2, 2}, [0, 1, 2]   s64[2][2][2]
-                 m = reshape 2                           s64[1][1]
-                 n = multiply l, m                       s64[1][2]
-                 o = reshape n                           s64[1][2][1]
-                 p = broadcast o, {2, 2, 2}, [0, 1, 2]   s64[2][2][2]
-                 q = cond b -> f, g -> k, true -> p      s64[2][2][2]
+                 d = reshape c                           s64[2][1][2]
+                 e = reshape 1                           s64[1][1][1]
+                 f = add d, e                            s64[2][1][2]
+                 g = reshape f                           s64[2][1][2]
+                 h = broadcast g, {2, 2, 2}, [0, 1, 2]   s64[2][2][2]
+                 i = less a, 0                           u8
+                 k = subtract j, 1                       s64
+                 l = reshape k                           s64[1][1][1]
+                 m = broadcast l, {2, 2, 2}, [0, 1, 2]   s64[2][2][2]
+                 o = reshape n                           s64[1][2]
+                 p = reshape 2                           s64[1][1]
+                 q = multiply o, p                       s64[1][2]
+                 r = reshape q                           s64[1][2][1]
+                 s = broadcast r, {2, 2, 2}, [0, 1, 2]   s64[2][2][2]
+                 t = cond b -> h, i -> m, true -> s      s64[2][2][2]
                >
                """)
 
@@ -1343,22 +1346,24 @@ defmodule Nx.DefnTest do
 
       assert inspect(cond_container(0, on_true, on_false)) ==
                String.trim("""
-                {#Nx.Tensor<
+               {#Nx.Tensor<
                   vectorized[x: 2][y: 1]
                   s64[2]
                 \s\s
                   Nx.Defn.Expr
                   parameter a:0                           s64
                   parameter b:1                           s64[2][1][2]
-                  parameter c:2                           s64
-                  parameter f:3                           s64
-                  parameter i:4                           s64[1][2][1]
-                  d = reshape c                           s64[1][1][1]
-                  e = broadcast d, {1, 2, 1}, [0, 1, 2]   s64[1][2][1]
-                  g = reshape f                           s64[1][1][1]
-                  h = broadcast g, {2, 1, 2}, [0, 1, 2]   s64[2][1][2]
-                  j = cond a -> {b, e}, true -> {h, i}    tuple2
-                  k = elem j, 0                           s64[2][1][2]
+                  parameter d:2                           s64
+                  parameter g:3                           s64
+                  parameter j:4                           s64[1][2][1]
+                  c = reshape b                           s64[2][1][2]
+                  e = reshape d                           s64[1][1][1]
+                  f = broadcast e, {1, 2, 1}, [0, 1, 2]   s64[1][2][1]
+                  h = reshape g                           s64[1][1][1]
+                  i = broadcast h, {2, 1, 2}, [0, 1, 2]   s64[2][1][2]
+                  k = reshape j                           s64[1][2][1]
+                  l = cond a -> {c, f}, true -> {i, k}    tuple2
+                  m = elem l, 0                           s64[2][1][2]
                 >, #Nx.Tensor<
                   vectorized[z: 1][w: 2]
                   s64[1]
@@ -1366,15 +1371,17 @@ defmodule Nx.DefnTest do
                   Nx.Defn.Expr
                   parameter a:0                           s64
                   parameter b:1                           s64[2][1][2]
-                  parameter c:2                           s64
-                  parameter f:3                           s64
-                  parameter i:4                           s64[1][2][1]
-                  d = reshape c                           s64[1][1][1]
-                  e = broadcast d, {1, 2, 1}, [0, 1, 2]   s64[1][2][1]
-                  g = reshape f                           s64[1][1][1]
-                  h = broadcast g, {2, 1, 2}, [0, 1, 2]   s64[2][1][2]
-                  j = cond a -> {b, e}, true -> {h, i}    tuple2
-                  k = elem j, 1                           s64[1][2][1]
+                  parameter d:2                           s64
+                  parameter g:3                           s64
+                  parameter j:4                           s64[1][2][1]
+                  c = reshape b                           s64[2][1][2]
+                  e = reshape d                           s64[1][1][1]
+                  f = broadcast e, {1, 2, 1}, [0, 1, 2]   s64[1][2][1]
+                  h = reshape g                           s64[1][1][1]
+                  i = broadcast h, {2, 1, 2}, [0, 1, 2]   s64[2][1][2]
+                  k = reshape j                           s64[1][2][1]
+                  l = cond a -> {c, f}, true -> {i, k}    tuple2
+                  m = elem l, 1                           s64[1][2][1]
                 >}
                """)
 
@@ -2278,14 +2285,16 @@ defmodule Nx.DefnTest do
 
                Nx.Defn.Expr
                parameter a:0                           s64[2][1][1]
-               b = broadcast a, {2, 2, 1}, [0, 1, 2]   s64[2][2][1]
+               b = reshape a                           s64[2][1][1]
+               c = broadcast b, {2, 2, 1}, [0, 1, 2]   s64[2][2][1]
                >, #Nx.Tensor<
                vectorized[x: 2][y: 2]
                s64[1]
 
                Nx.Defn.Expr
                parameter a:1                           s64[1][2][1]
-               b = broadcast a, {2, 2, 1}, [0, 1, 2]   s64[2][2][1]
+               b = reshape a                           s64[1][2][1]
+               c = broadcast b, {2, 2, 1}, [0, 1, 2]   s64[2][2][1]
                >}
                """
                |> String.replace(~r/\s/, "")
@@ -2729,9 +2738,11 @@ defmodule Nx.DefnTest do
                \s\s
                  Nx.Defn.Expr
                  parameter a:0                s64[1][2][2]
-                 parameter c:1                s64[2][1][2]
+                 parameter d:1                s64[2][1][2]
                  b = metadata a, :stop_grad   s64[1][2][2]
-                 d = add b, c                 s64[2][2][2]
+                 c = reshape b                s64[1][2][2]
+                 e = reshape d                s64[2][1][2]
+                 f = add c, e                 s64[2][2][2]
                >
                """)
 
@@ -2746,8 +2757,10 @@ defmodule Nx.DefnTest do
                  parameter b:1                     s64[2][1][2]
                  c = metadata {a, b}, :stop_grad   tuple2
                  d = elem c, 0                     s64[1][2][2]
-                 e = elem c, 1                     s64[2][1][2]
-                 f = add d, e                      s64[2][2][2]
+                 e = reshape d                     s64[1][2][2]
+                 f = elem c, 1                     s64[2][1][2]
+                 g = reshape f                     s64[2][1][2]
+                 h = add e, g                      s64[2][2][2]
                >
                """)
 
@@ -2760,10 +2773,11 @@ defmodule Nx.DefnTest do
                \s\s
                  Nx.Defn.Expr
                  parameter a:0                s64[1][2][2]
-                 parameter c:1                s64[1]
+                 parameter d:1                s64[1]
                  b = metadata a, :stop_grad   s64[1][2][2]
-                 d = reshape c                s64[1][1][1]
-                 e = add b, d                 s64[1][2][2]
+                 c = reshape b                s64[1][2][2]
+                 e = reshape d                s64[1][1][1]
+                 f = add c, e                 s64[1][2][2]
                >
                """)
 
@@ -2778,9 +2792,10 @@ defmodule Nx.DefnTest do
                  parameter b:1                     s64[1]
                  c = metadata {a, b}, :stop_grad   tuple2
                  d = elem c, 0                     s64[1][2][2]
-                 e = elem c, 1                     s64[1]
-                 f = reshape e                     s64[1][1][1]
-                 g = add d, f                      s64[1][2][2]
+                 e = reshape d                     s64[1][2][2]
+                 f = elem c, 1                     s64[1]
+                 g = reshape f                     s64[1][1][1]
+                 h = add e, g                      s64[1][2][2]
                >
                """)
 
