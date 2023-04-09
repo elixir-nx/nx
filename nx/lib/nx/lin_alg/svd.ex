@@ -77,35 +77,34 @@ defmodule Nx.LinAlg.SVD do
     opts[:max_iter] || raise ArgumentError, "missing option :max_iter"
   end
 
-  defnp expand_batch_axes({u, s, vt}, collapsed_axes) do
+  deftransformp expand_batch_axes({u, s, vt}, collapsed_axes) do
     {
-      do_expand_batch_axes(u, collapsed_axes),
-      do_expand_batch_axes(s, collapsed_axes),
-      do_expand_batch_axes(vt, collapsed_axes)
+      expand_batch_axes(u, collapsed_axes),
+      expand_batch_axes(s, collapsed_axes),
+      expand_batch_axes(vt, collapsed_axes)
     }
   end
 
-  defnp do_expand_batch_axes(tensor, axes) do
+  deftransformp expand_batch_axes(tensor, axes) do
     %Nx.Tensor{shape: shape} = tensor
-    {target_shape, target_names} = expand_shape(shape, axes)
 
-    tensor
-    |> Nx.devectorize()
-    |> Nx.reshape(target_shape, names: target_names)
-  end
-
-  deftransformp expand_shape(shape, {}), do: {shape, List.duplicate(nil, tuple_size(shape))}
-
-  deftransformp expand_shape(shape, collapsed_axes) do
     target_shape =
       case shape do
-        {k} -> Tuple.append(collapsed_axes, k)
-        {m, n} -> collapsed_axes |> Tuple.append(m) |> Tuple.append(n)
+        _ when axes == {} ->
+          shape
+
+        {k} ->
+          Tuple.append(axes, k)
+
+        {m, n} ->
+          axes |> Tuple.append(m) |> Tuple.append(n)
       end
 
     target_names = List.duplicate(nil, tuple_size(target_shape))
 
-    {target_shape, target_names}
+    tensor
+    |> Nx.devectorize()
+    |> Nx.reshape(target_shape, names: target_names)
   end
 
   defnp svd_all_zeros(a, opts) do

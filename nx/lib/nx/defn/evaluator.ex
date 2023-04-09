@@ -395,7 +395,6 @@ defmodule Nx.Defn.Evaluator do
       params = Enum.map(args, &fn -> &1 end)
       {{expr, optional_cache}, caches} = pop_cache!(caches, [:optional | id])
       {res, _} = composite_eval(expr, %{state | params: params}, [optional_cache])
-
       {res, caches}
     end
   end
