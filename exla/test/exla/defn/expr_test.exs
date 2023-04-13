@@ -1477,8 +1477,8 @@ defmodule EXLA.Defn.ExprTest do
 
     test "while inside if" do
       assert %{a: a, b: b} = while_inside_if(1, %{a: 1, b: 2.0})
-      assert_all_close a, 1
-      assert_all_close b, 2.0
+      assert_all_close(a, 1)
+      assert_all_close(b, 2.0)
     end
   end
 
