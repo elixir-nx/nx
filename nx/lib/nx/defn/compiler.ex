@@ -695,14 +695,14 @@ defmodule Nx.Defn.Compiler do
     end
   end
 
-  defp normalize_arg({:%, meta, [aliases, {:%{}, meta, args}]}, _meta, state) do
+  defp normalize_arg({:%, meta1, [aliases, {:%{}, meta2, args}]}, _meta, state) do
     {args, state} =
       Enum.map_reduce(args, state, fn {k, v}, acc ->
-        {v, acc} = normalize_arg(v, meta, acc)
+        {v, acc} = normalize_arg(v, meta1, acc)
         {{k, v}, acc}
       end)
 
-    {{:%, meta, [aliases, {:%{}, meta, args}]}, state}
+    {{:%, meta1, [aliases, {:%{}, meta2, args}]}, state}
   end
 
   defp normalize_arg({:%{}, meta, args}, _meta, state) do
