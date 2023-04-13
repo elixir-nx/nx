@@ -773,7 +773,7 @@ defmodule Nx.LinAlgTest do
       x = Nx.tensor([[0, 0], [0, 0]], type: :f16)
       assert Nx.LinAlg.svd(x) == {Nx.eye(2, type: :f16), ~V"0.0 0.0"f16, Nx.eye(2, type: :f16)}
 
-      x = Nx.tensor([[1,2,3,4], [1,2,3,4], [1,2,3,4], [1,2,3,4]], type: :f16)
+      x = Nx.tensor([[1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4]], type: :f16)
       assert {u, s, vt} = Nx.LinAlg.svd(x)
       assert u.type == {:f, 16}
       assert s.type == {:f, 16}
@@ -784,7 +784,7 @@ defmodule Nx.LinAlgTest do
       x = Nx.tensor([[0, 0], [0, 0]], type: :f64)
       assert Nx.LinAlg.svd(x) == {Nx.eye(2, type: :f64), ~V"0.0 0.0"f64, Nx.eye(2, type: :f64)}
 
-      x = Nx.tensor([[1,2,3,4], [1,2,3,4], [1,2,3,4], [1,2,3,4]], type: :f64)
+      x = Nx.tensor([[1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4]], type: :f64)
       assert {u, s, vt} = Nx.LinAlg.svd(x)
       assert u.type == {:f, 64}
       assert s.type == {:f, 64}
