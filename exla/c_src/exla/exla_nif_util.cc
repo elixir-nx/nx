@@ -470,19 +470,17 @@ namespace nif {
 
       xla::PrimitiveType type = shape.element_type();
       absl::Span<const int64> dims = shape.dimensions();
-      int64 rank = shape.rank();
-
       std::string name = xla::primitive_util::LowercasePrimitiveTypeName(type);
 
       std::vector<ERL_NIF_TERM> dim_arr;
-      dim_arr.reserve(rank);
-      for (int i = 0; i < rank; i++) {
+      dim_arr.reserve(dims.size());
+      for (int i = 0; i < dims.size(); i++) {
         int copy;
         copy = dims.at(i);
         dim_arr.push_back(make(env, copy));
       }
 
-      ERL_NIF_TERM dims_term = enif_make_tuple_from_array(env, &dim_arr[0], rank);
+      ERL_NIF_TERM dims_term = enif_make_tuple_from_array(env, &dim_arr[0], dims.size());
       ERL_NIF_TERM type_term = make(env, name);
 
       return enif_make_tuple(env, 2, dims_term, type_term);
