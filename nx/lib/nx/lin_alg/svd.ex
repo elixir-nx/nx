@@ -165,6 +165,8 @@ defmodule Nx.LinAlg.SVD do
     tol_norm = Nx.cbrt(tol_l)
 
     one_u8 = Nx.tensor(1, type: :u8)
+    original_type = Nx.type(u)
+    u = Nx.as_type(u, min_precision_type(original_type))
 
     {u, _l, _num_iters, _is_unconverged, _is_not_max_iteration, _max_iter} =
       while {u, l, iter_idx = 1, is_unconverged = one_u8, is_not_max_iteration = one_u8,
@@ -200,11 +202,16 @@ defmodule Nx.LinAlg.SVD do
         {u, l, iter_idx + 1, is_unconverged, is_not_max_iteration, max_iter}
       end
 
+    u = Nx.as_type(u, original_type)
     u = 1.5 * u - 0.5 * Nx.dot(u, Nx.dot(Nx.LinAlg.adjoint(u), u))
     h = u |> Nx.LinAlg.adjoint() |> Nx.dot(x)
     h = (h + Nx.LinAlg.adjoint(h)) / 2
     {u, h}
   end
+
+  # f16 is not enough precision to compute SVD
+  deftransformp min_precision_type({:f, 64}), do: {:f, 64}
+  deftransformp min_precision_type(_), do: {:f, 32}
 
   defn qdwh_use_qr(u, x, a, b, c) do
     {m, _n} = Nx.shape(x)
