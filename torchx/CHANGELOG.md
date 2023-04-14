@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.5.3 (2023-04-14)
+
+  * No changes
+
 ## v0.5.2 (2023-03-21)
 
   * No changes

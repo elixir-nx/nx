@@ -2,7 +2,7 @@ defmodule Torchx.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx"
-  @version "0.5.2"
+  @version "0.5.3"
 
   @valid_targets ["cpu", "cu102", "cu113", "cu116"]
 
