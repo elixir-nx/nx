@@ -8,7 +8,7 @@ defmodule Nx.Serving do
 
   More specifically, servings are a mechanism to apply a computation on a
   `Nx.Batch`, with hooks for preprocessing input from and postprocessing
-  output for the client. Thus we can think of an instance of `Nx.Serving.t()`
+  output for the client. Thus we can think of an instance of `t:Nx.Serving.t/0`
   (a serving) as something that encapsulates batches of Nx computations.
 
   ## Inline/serverless workflow
@@ -228,7 +228,7 @@ defmodule Nx.Serving do
         @behaviour Nx.Serving
 
         defnp print_and_multiply(x) do
-          print_value({:debug, x})
+          x = print_value({:debug, x})
           x * 2
         end
 
@@ -247,7 +247,7 @@ defmodule Nx.Serving do
   (`:inline` or `:process`) and the serving argument. In this step,
   we capture `print_and_multiply/1`as a jitted function.
 
-  The second function is called `handle_batch/3`. This function
+  The second function is called `c:handle_batch/3`. This function
   receives a `Nx.Batch` and returns a function to execute.
   The function itself must return a two element-tuple: the batched
   results and some server information. The server information can
@@ -279,7 +279,7 @@ defmodule Nx.Serving do
 
   Note in our implementation above assumes it won't run partitioned.
   In partitioned mode, `c:init/3` may receive multiple `defn_options`
-  as the third argument and `handle_batch/3` may receive another partition
+  as the third argument and `c:handle_batch/3` may receive another partition
   besides 0.
   """
 
