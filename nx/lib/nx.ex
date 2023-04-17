@@ -13323,6 +13323,7 @@ defmodule Nx do
       Nx.Shape.take(
         tensor.shape,
         tensor.names,
+        # forcing this for testing the case where both are vectorized with [x: 3]
         put_elem(indices.shape, 0, 1),
         indices.names,
         axis
@@ -13349,6 +13350,7 @@ defmodule Nx do
             List.duplicate(1, Nx.rank(indices))
 
           _, 0 ->
+            # forcing this for testing the case where both are vectorized with [x: 3]
             1
 
           x, _ ->
