@@ -13293,83 +13293,126 @@ defmodule Nx do
   """
   @doc type: :indexed
   def take(tensor, indices, opts \\ []) when is_list(opts) do
-    tensor = to_tensor(tensor)
-    indices = to_tensor(indices)
-
-    canonical_vectorized_axes = calculate_canonical_vectorized_axes([tensor, indices])
-    target_vectorized_axes = Keyword.keys(canonical_vectorized_axes)
-
-    offset = length(canonical_vectorized_axes)
-
-    indices =
-      [indices]
-      |> do_reshape_vectors_devectorize(
-        canonical_vectorized_axes,
-        offset,
-        false
-      )
-      |> hd()
-      |> vectorize(target_vectorized_axes)
-
     unless Nx.Type.integer?(indices.type) do
       raise ArgumentError, "indices must be an integer tensor, got #{inspect(indices.type)}"
     end
 
     opts = keyword!(opts, axis: 0)
-    axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names)
 
-    {shape, names, indices} =
-      if offset != 0 do
-        {shape, names} =
-          Nx.Shape.take(tensor.shape, tensor.names, indices.shape, indices.names, axis)
+    [tensor, indices] = reshape_vectors([tensor, indices], align_ranks: false)
 
-        # because take/3 will insert the index shape into the tensor axis which we are
-        # taking from, we need to ensure that we squeeze out all common vectorized
-        # axes, as well as the 1-sized vectorized axes from indices
-        {[], indices_slice_lengths_rev, indices_squeeze_axes_rev, _} =
-          Enum.reduce(indices.vectorized_axes, {tensor.vectorized_axes, [], [], 0}, fn
-            {_name, s1}, {[], slice_acc, squeeze_acc, axis} ->
-              {[], [s1 | slice_acc], squeeze_acc, axis + 1}
+    vectorized_axes =
+      Enum.zip_with(tensor.vectorized_axes, indices.vectorized_axes, fn {k, s1}, {k, s2} ->
+        {k, Kernel.max(s1, s2)}
+      end)
 
-            {name, s1}, {other_axes, slice_acc, squeeze_acc, axis} ->
-              {slice, squeeze_acc, other_axes} =
-                case List.keytake(other_axes, name, 0) do
-                  {{^name, s2}, other_axes} when s2 >= s1 ->
-                    {1, [axis | squeeze_acc], other_axes}
+    axis =
+      Nx.Shape.normalize_axis(
+        tensor.shape,
+        opts[:axis],
+        tensor.names,
+        length(vectorized_axes)
+      )
 
-                  _ ->
-                    {s1, squeeze_acc, other_axes}
-                end
+    IO.inspect({indices.shape})
 
-              {other_axes, [slice | slice_acc], squeeze_acc, axis + 1}
-          end)
-
-        devec_indices = devectorize(indices, keep_names: false)
-        starts = List.duplicate(0, rank(devec_indices))
-        lengths = Enum.reverse(indices_slice_lengths_rev) ++ Tuple.to_list(indices.shape)
-
-        indices =
-          devec_indices
-          |> slice(starts, lengths)
-          |> squeeze(axes: Enum.reverse(indices_squeeze_axes_rev))
-
-        shape = List.to_tuple(Keyword.values(canonical_vectorized_axes) ++ Tuple.to_list(shape))
-        names = List.duplicate(nil, offset) ++ names
-        {shape, names, indices}
-      else
-        {shape, names} =
-          Nx.Shape.take(tensor.shape, tensor.names, indices.shape, indices.names, axis)
-
-        {shape, names, indices}
-      end
-
-    tensor_offset = length(tensor.vectorized_axes)
     tensor = devectorize(tensor, keep_names: false)
-    axis = axis + tensor_offset
+    indices = devectorize(indices, keep_names: false)
 
-    result = impl!(tensor).take(%{tensor | shape: shape, names: names}, tensor, indices, axis)
+    {inner_shape, inner_names} =
+      Nx.Shape.take(
+        tensor.shape,
+        tensor.names,
+        put_elem(indices.shape, 0, 1),
+        indices.names,
+        axis
+      )
 
-    vectorize(result, canonical_vectorized_axes)
+    if vectorized_axes != [] do
+      # axis = axis + length(vectorized_axes)
+
+      axes_range = Nx.axes(tensor)
+
+      indices_shape =
+        axes_range
+        |> Enum.flat_map(fn
+          ^axis -> Tuple.to_list(indices.shape)
+          _ -> [1]
+        end)
+        |> List.to_tuple()
+
+      idx_tiling =
+        tensor.shape
+        |> Tuple.to_list()
+        |> Enum.with_index(fn
+          _x, ^axis ->
+            List.duplicate(1, Nx.rank(indices))
+
+          _, 0 ->
+            1
+
+          x, _ ->
+            x
+        end)
+        |> List.flatten()
+
+      indices_for_axis =
+        indices
+        |> Nx.reshape(indices_shape)
+        |> Nx.tile(idx_tiling |> IO.inspect())
+
+      IO.inspect(indices_for_axis)
+
+      axis_offset = Nx.rank(indices) - 1
+
+      indices =
+        axes_range
+        |> Enum.map(fn
+          ^axis ->
+            Nx.reshape(indices_for_axis, {:auto, 1})
+
+          0 ->
+            indices_for_axis
+            |> Nx.shape()
+            |> Nx.iota(axis: 1)
+            |> Nx.reshape({:auto, 1})
+
+          current when current < axis ->
+            indices_for_axis
+            |> Nx.shape()
+            |> Nx.iota(axis: current)
+            |> Nx.reshape({:auto, 1})
+
+          current when current > axis ->
+            indices_for_axis
+            |> Nx.shape()
+            |> Nx.iota(axis: current + axis_offset)
+            |> Nx.reshape({:auto, 1})
+        end)
+        |> Nx.concatenate(axis: 1)
+        |> IO.inspect()
+        |> Nx.reshape(Tuple.append(inner_shape, rank(tensor)))
+        |> dbg()
+
+      IO.inspect({tensor, indices})
+
+      IO.inspect({inner_shape, inner_names})
+      # out_shape = List.to_tuple(Keyword.values(vectorized_axes) ++ Tuple.to_list(inner_shape))
+      # out_names = List.duplicate(nil, length(vectorized_axes)) ++ inner_names
+      # out_shape = inner_shape
+      # out_names = inner_names
+
+      tensor
+      |> gather(indices)
+      |> vectorize(vectorized_axes)
+    else
+      impl!(tensor).take(
+        %{tensor | shape: inner_shape, names: inner_names},
+        tensor,
+        indices,
+        axis
+      )
+    end
   end
 
   @doc """
