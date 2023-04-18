@@ -342,6 +342,133 @@ defmodule NxTest do
                  type: {:f, 32}
                )
     end
+
+    test "vectorization" do
+      t =
+        Nx.tensor([
+          [
+            [
+              [0, 1, 2]
+            ]
+          ],
+          [
+            [
+              [3, 4, 5]
+            ]
+          ]
+        ])
+        |> Nx.vectorize(x: 2)
+
+      k =
+        Nx.tensor([
+          [
+            [
+              [2]
+            ]
+          ],
+          [
+            [
+              [10]
+            ]
+          ]
+        ])
+
+      # same vectorized axis case
+      assert Nx.conv(t, Nx.vectorize(k, x: 2)) ==
+               Nx.tensor([
+                 [
+                   [
+                     [0.0, 2.0, 4.0]
+                   ]
+                 ],
+                 [
+                   [
+                     [30.0, 40.0, 50.0]
+                   ]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2)
+
+      # cross-product case
+      assert Nx.conv(t, Nx.vectorize(Nx.reshape(k, {1, 2, 1, 1, 1}), z: 1, y: 2)) ==
+               Nx.tensor([
+                 [
+                   [
+                     [
+                       [
+                         [0.0, 2.0, 4.0]
+                       ]
+                     ],
+                     [
+                       [
+                         [0.0, 10.0, 20.0]
+                       ]
+                     ]
+                   ]
+                 ],
+                 [
+                   [
+                     [
+                       [
+                         [6.0, 8.0, 10.0]
+                       ]
+                     ],
+                     [
+                       [
+                         [30.0, 40.0, 50.0]
+                       ]
+                     ]
+                   ]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2, z: 1, y: 2)
+
+      # vectorized tensor and devec kernel
+      assert Nx.conv(t, k[0]) ==
+               Nx.tensor([
+                 [
+                   [
+                     [0.0, 2.0, 4.0]
+                   ]
+                 ],
+                 [
+                   [
+                     [6.0, 8.0, 10.0]
+                   ]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2)
+
+      # devec tensor and vectorized kernel
+      assert Nx.conv(Nx.devectorize(t)[0], Nx.vectorize(k, x: 2)) ==
+               Nx.tensor([
+                 [
+                   [
+                     [0.0, 2.0, 4.0]
+                   ]
+                 ],
+                 [
+                   [
+                     [0.0, 10.0, 20.0]
+                   ]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2)
+    end
+
+    test "vectorization - batch_group_size" do
+      # get and assert the expected base shape for the output
+      assert %{shape: {1, 3, 1, 1}} =
+               Nx.conv(Nx.iota({3, 10, 1, 1}), Nx.iota({3, 10, 1, 1}), batch_group_size: 3)
+
+      # using 2, 5 and 7 as vectorized sizes so that they have no common factor between each other
+      # and between them and the batch_group_size: 3
+      t = Nx.iota({3, 10, 1, 1}, vectorized_axes: [x: 2, y: 1, z: 7])
+      k = Nx.iota({3, 10, 1, 1}, vectorized_axes: [x: 1, y: 5, z: 7])
+
+      assert %{vectorized_axes: [x: 2, y: 5, z: 7], shape: {1, 3, 1, 1}} =
+               Nx.conv(t, k, batch_group_size: 3)
+    end
   end
 
   describe "pad" do
