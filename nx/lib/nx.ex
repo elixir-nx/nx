@@ -13321,8 +13321,6 @@ defmodule Nx do
     if tensor.vectorized_axes != [] or indices.vectorized_axes != [] do
       axes_range = axes(tensor)
 
-      indices = if rank(indices) == 0, do: new_axis(indices, 0), else: indices
-
       indices_shape =
         axes_range
         |> Enum.map(fn
@@ -13341,7 +13339,6 @@ defmodule Nx do
           x, _ ->
             x
         end)
-        |> List.flatten()
 
       indices_for_axis =
         indices
