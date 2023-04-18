@@ -13325,9 +13325,9 @@ defmodule Nx do
 
       indices_shape =
         axes_range
-        |> Enum.flat_map(fn
-          ^axis -> Tuple.to_list(indices.shape)
-          _ -> [1]
+        |> Enum.map(fn
+          ^axis -> Tuple.product(indices.shape)
+          _ -> 1
         end)
         |> List.to_tuple()
 
@@ -13336,7 +13336,7 @@ defmodule Nx do
         |> Tuple.to_list()
         |> Enum.with_index(fn
           _x, ^axis ->
-            List.duplicate(1, rank(indices))
+            1
 
           x, _ ->
             x
@@ -13348,24 +13348,16 @@ defmodule Nx do
         |> reshape(indices_shape)
         |> tile(idx_tiling)
 
-      axis_offset = rank(indices) - 1
-
       indices =
         axes_range
         |> Enum.map(fn
           ^axis ->
             reshape(indices_for_axis, {:auto, 1})
 
-          current when current < axis ->
+          current ->
             indices_for_axis
             |> shape()
             |> iota(axis: current, vectorized_axes: indices.vectorized_axes)
-            |> reshape({:auto, 1})
-
-          current when current > axis ->
-            indices_for_axis
-            |> shape()
-            |> iota(axis: current + axis_offset, vectorized_axes: indices.vectorized_axes)
             |> reshape({:auto, 1})
         end)
         |> concatenate(axis: 1)
