@@ -11181,16 +11181,38 @@ defmodule Nx do
           ]
         ]
       >
+
+  ## Vectorized tensors
+
+  The accumulator must not be vectorized. Aside from that, `window_reduce` will apply the reduction
+  over each non-vectorized entry, as follows:
+
+      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[0, -1, -2], [-3, -4, -5]]]) |> Nx.vectorize(x: 2)
+      iex> opts = [padding: [{0, 0}, {0, 1}], strides: [1, 1]]
+      iex> Nx.window_reduce(t, 0, {2, 2}, opts, fn x, acc -> Nx.add(x, acc) end)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[1][3]
+        [
+          [
+            [12, 16, 9]
+          ],
+          [
+            [-8, -12, -7]
+          ]
+        ]
+      >
   """
   @doc type: :window
   def window_reduce(tensor, acc, window_dimensions, opts \\ [], fun)
       when is_tuple(window_dimensions) do
     opts = keyword!(opts, [:window_dilations, :strides, padding: :valid])
-    %T{shape: shape} = tensor = to_tensor(tensor)
+    tensor = to_tensor(tensor)
     acc = to_tensor(acc)
 
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(acc, __ENV__.function)
+    if acc.vectorized_axes != [] do
+      raise ArgumentError, "accumulator for window_reduce/4 cannot be vectorized"
+    end
 
     padding = opts[:padding]
     strides = opts[:strides] || List.duplicate(1, rank(tensor.shape))
@@ -11206,12 +11228,20 @@ defmodule Nx do
         do: List.duplicate(strides, rank(tensor.shape)),
         else: strides
 
-    {output_shape, padding_config} =
-      Nx.Shape.pool(shape, window_dimensions, strides, padding, dilations)
+    apply_vectorized(tensor, fn tensor, offset ->
+      ones = List.duplicate(1, offset)
+      strides = ones ++ strides
+      window_dimensions = List.to_tuple(ones ++ Tuple.to_list(window_dimensions))
+      dilations = ones ++ dilations
+      padding = if is_list(padding), do: List.duplicate({0, 0}, offset) ++ padding, else: padding
 
-    out = %{tensor | shape: output_shape}
-    opts = [padding: padding_config, strides: strides, window_dilations: dilations]
-    impl!(tensor).window_reduce(out, tensor, acc, window_dimensions, opts, fun)
+      {output_shape, padding_config} =
+        Nx.Shape.pool(tensor.shape, window_dimensions, strides, padding, dilations)
+
+      out = %{tensor | shape: output_shape}
+      opts = [padding: padding_config, strides: strides, window_dilations: dilations]
+      impl!(tensor).window_reduce(out, tensor, acc, window_dimensions, opts, fun)
+    end)
   end
 
   @doc """
