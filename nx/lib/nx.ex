@@ -12457,14 +12457,18 @@ defmodule Nx do
     %{shape: t_shape} = tensor = devectorize(tensor)
 
     {batch_axes, other_axes} = t_shape |> Tuple.to_list() |> Enum.split(offset + 1)
-    tensor = reshape(tensor, List.to_tuple([Enum.product(batch_axes) | other_axes]))
+    {_, names} = Enum.split(tensor.names, offset)
+
+    tensor = reshape(tensor, List.to_tuple([Enum.product(batch_axes) | other_axes]), names: names)
 
     %{shape: k_shape} = kernel = devectorize(kernel)
+    {_, names} = Enum.split(kernel.names, offset)
     {batch_axes, other_axes} = k_shape |> Tuple.to_list() |> Enum.split(offset + 1)
-    kernel = reshape(kernel, List.to_tuple([Enum.product(batch_axes) | other_axes]))
 
-    %{shape: input_shape, names: input_names} = tensor = to_tensor(tensor)
-    %{shape: kernel_shape, names: kernel_names} = kernel = to_tensor(kernel)
+    kernel = reshape(kernel, List.to_tuple([Enum.product(batch_axes) | other_axes]), names: names)
+
+    %{shape: input_shape, names: input_names} = tensor
+    %{shape: kernel_shape, names: kernel_names} = kernel
 
     input_permutation = opts[:input_permutation] || axes(input_shape)
     input_permutation = Nx.Shape.normalize_axes(input_shape, input_permutation, input_names)
