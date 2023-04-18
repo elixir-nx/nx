@@ -1486,12 +1486,28 @@ defmodule Nx.BinaryBackend do
   defp non_finite_min(_, :neg_infinity), do: :neg_infinity
   defp non_finite_min(x, y) when is_number(x) and is_number(y), do: Kernel.min(x, y)
 
+  defp non_finite_lt(:nan, _), do: false
+  defp non_finite_lt(_, :nan), do: false
+  defp non_finite_lt(:infinity, _), do: false
+  defp non_finite_lt(_, :infinity), do: true
+  defp non_finite_lt(_, :neg_infinity), do: false
+  defp non_finite_lt(:neg_infinity, _), do: true
+  defp non_finite_lt(x, y) when is_number(x) and is_number(y), do: x < y
+
+  defp non_finite_gt(:nan, _), do: false
+  defp non_finite_gt(_, :nan), do: false
+  defp non_finite_gt(_, :infinity), do: false
+  defp non_finite_gt(:infinity, _), do: true
+  defp non_finite_gt(:neg_infinity, _), do: false
+  defp non_finite_gt(_, :neg_infinity), do: true
+  defp non_finite_gt(x, y) when is_number(x) and is_number(y), do: x > y
+
   @impl true
   def argmin(out, tensor, opts) do
     comparator =
       case opts[:tie_break] do
-        :high -> &<=/2
-        :low -> &</2
+        :high -> &(non_finite_lt(&1, &2) or &1 == &2)
+        :low -> &non_finite_lt/2
       end
 
     argmin_or_max(out, tensor, comparator, opts[:axis])
@@ -1501,8 +1517,8 @@ defmodule Nx.BinaryBackend do
   def argmax(out, tensor, opts) do
     comparator =
       case opts[:tie_break] do
-        :high -> &>=/2
-        :low -> &>/2
+        :high -> &(non_finite_gt(&1, &2) or &1 == &2)
+        :low -> &non_finite_gt/2
       end
 
     argmin_or_max(out, tensor, comparator, opts[:axis])

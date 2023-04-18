@@ -1298,6 +1298,26 @@ defmodule NxTest do
   end
 
   describe "argmin/2" do
+    test "works with non finites" do
+      t =
+        Nx.tensor([
+          [:neg_infinity, :infinity, 1],
+          [:neg_infinity, :nan, 1],
+          [:neg_infinity, :neg_infinity, 1],
+          [:neg_infinity, 0, 1],
+          [:infinity, :infinity, 1],
+          [:infinity, :nan, 1],
+          [:infinity, :neg_infinity, 1],
+          [:infinity, 0, 1],
+          [:nan, :infinity, 1],
+          [:nan, :nan, 1],
+          [:nan, :neg_infinity, 1],
+          [:nan, 0, 1]
+        ])
+
+      assert Nx.argmin(t, axis: 1) == Nx.tensor([0, 0, 0, 0, 2, 2, 1, 1, 0, 0, 0, 0])
+    end
+
     test "raises for invalid :tie_break option" do
       assert_raise(
         ArgumentError,
@@ -1306,6 +1326,28 @@ defmodule NxTest do
           Nx.argmin(Nx.tensor(1), tie_break: :blep)
         end
       )
+    end
+  end
+
+  describe "argmax" do
+    test "works with non finites" do
+      t =
+        Nx.tensor([
+          [:neg_infinity, :infinity, 1],
+          [:neg_infinity, :nan, 1],
+          [:neg_infinity, :neg_infinity, 1],
+          [:neg_infinity, 0, 1],
+          [:infinity, :infinity, 1],
+          [:infinity, :nan, 1],
+          [:infinity, :neg_infinity, 1],
+          [:infinity, 0, 1],
+          [:nan, :infinity, 1],
+          [:nan, :nan, 1],
+          [:nan, :neg_infinity, 1],
+          [:nan, 0, 1]
+        ])
+
+      assert Nx.argmax(t, axis: 1) == Nx.tensor([1, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0])
     end
   end
 
