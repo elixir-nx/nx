@@ -468,13 +468,6 @@ defmodule Torchx.Backend do
       |> Nx.concatenate(axis: 1)
 
     gather(out, t, indices)
-    |> tap(fn x ->
-      actual_shape = x |> Torchx.from_nx() |> Torchx.shape()
-
-      if actual_shape != x.shape do
-        raise "error"
-      end
-    end)
   end
 
   @impl true
