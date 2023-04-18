@@ -342,6 +342,115 @@ defmodule NxTest do
                  type: {:f, 32}
                )
     end
+
+    test "vectorization" do
+      t =
+        Nx.tensor([
+          [
+            [
+              [0, 1, 2]
+            ]
+          ],
+          [
+            [
+              [3, 4, 5]
+            ]
+          ]
+        ])
+        |> Nx.vectorize(x: 2)
+
+      devec_k =
+        Nx.tensor([
+          [
+            [
+              [2]
+            ]
+          ],
+          [
+            [
+              [10]
+            ]
+          ]
+        ])
+
+      # same vectorized axis case
+      assert Nx.conv(t, Nx.vectorize(k, x: 2)) ==
+               Nx.tensor([
+                 [
+                   [
+                     [0.0, 2.0, 4.0]
+                   ]
+                 ],
+                 [
+                   [
+                     [30.0, 40.0, 50.0]
+                   ]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2)
+
+      # cross-product case
+      assert Nx.conv(t, Nx.vectorize(k, z: 1, y: 2)) ==
+               Nx.tensor([
+                 [
+                   [
+                     [
+                       [0.0, 2.0, 4.0]
+                     ]
+                   ],
+                   [
+                     [
+                       [0.0, 10.0, 20.0]
+                     ]
+                   ]
+                 ],
+                 [
+                   [
+                     [
+                       [6.0, 8.0, 10.0]
+                     ]
+                   ],
+                   [
+                     [
+                       [30.0, 40.0, 50.0]
+                     ]
+                   ]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2, z: 1, y: 2)
+
+      # vectorized tensor and devec kernel
+      assert Nx.conv(t, k[0]) ==
+               Nx.tensor([
+                 [
+                   [
+                     [0.0, 2.0, 4.0]
+                   ]
+                 ],
+                 [
+                   [
+                     [6.0, 8.0, 10.0]
+                   ]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2)
+
+      # devec tensor and vectorized kernel
+      assert Nx.conv(Nx.devectorize(t)[0], k) ==
+               Nx.tensor([
+                 [
+                   [
+                     [0.0, 2.0, 4.0]
+                   ]
+                 ],
+                 [
+                   [
+                     [0.0, 10.0, 20.0]
+                   ]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2)
+    end
   end
 
   describe "pad" do

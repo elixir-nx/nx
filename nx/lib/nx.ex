@@ -12448,11 +12448,21 @@ defmodule Nx do
     feature_group_count = opts[:feature_group_size]
     batch_group_count = opts[:batch_group_size]
 
+    [tensor, kernel] = broadcast_vectors([tensor, kernel], align_ranks: false)
+
+    vectorized_axes = tensor.vectorized_axes
+    offset = length(vectorized_axes)
+
+    %{shape: t_shape} = tensor = devectorize(tensor)
+    {batch_axes, other_axes} = t_shape |> Tuple.to_list() |> Enum.split(offset + 1)
+    tensor = reshape(tensor, List.to_tuple([Enum.product(batch_axes) | other_axes]))
+
+    %{shape: k_shape} = kernel = devectorize(kernel)
+    {batch_axes, other_axes} = k_shape |> Tuple.to_list() |> Enum.split(offset + 1)
+    kernel = reshape(kernel, List.to_tuple([Enum.product(batch_axes) | other_axes]))
+
     %{shape: input_shape, names: input_names} = tensor = to_tensor(tensor)
     %{shape: kernel_shape, names: kernel_names} = kernel = to_tensor(kernel)
-
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
-    Nx.Shared.raise_vectorized_not_implemented_yet(kernel, __ENV__.function)
 
     Nx.Shape.validate_conv!(input_shape, kernel_shape)
 
@@ -12493,6 +12503,12 @@ defmodule Nx do
         do: kernel_dilation,
         else: for(_ <- 1..(Nx.rank(kernel_shape) - 2), do: kernel_dilation)
 
+    IO.inspect({tensor, kernel})
+
+    batch_count_offset = elem(input_shape, 0)
+
+    batch_group_size = batch_group_count * batch_count_offset
+
     {shape, names, padding_config} =
       Nx.Shape.conv(
         input_shape,
@@ -12502,7 +12518,7 @@ defmodule Nx do
         strides,
         padding,
         feature_group_count,
-        batch_group_count,
+        batch_group_size,
         input_dilation,
         kernel_dilation,
         input_permutation,
@@ -12512,20 +12528,40 @@ defmodule Nx do
 
     out = %{tensor | type: type, shape: shape, names: names}
 
-    impl!(tensor).conv(
-      out,
-      tensor,
-      kernel,
-      strides: strides,
-      padding: padding_config,
-      input_dilation: input_dilation,
-      kernel_dilation: kernel_dilation,
-      feature_group_size: feature_group_count,
-      batch_group_size: batch_group_count,
-      input_permutation: input_permutation,
-      kernel_permutation: kernel_permutation,
-      output_permutation: output_permutation
-    )
+    result =
+      impl!(tensor).conv(
+        out,
+        tensor,
+        kernel,
+        strides: strides,
+        padding: padding_config,
+        input_dilation: input_dilation,
+        kernel_dilation: kernel_dilation,
+        feature_group_size: feature_group_count,
+        batch_group_size: batch_group_size,
+        input_permutation: input_permutation,
+        kernel_permutation: kernel_permutation,
+        output_permutation: output_permutation
+      )
+
+    if vectorized_axes != [] do
+      [output_axis, batch | features] = Tuple.to_list(shape)
+
+      vectorized_size = Enum.reduce(vectorized_axes, 1, fn {_, s}, acc -> s * acc end)
+
+      unwrapped_shape =
+        List.to_tuple(
+          Keyword.values(vectorized_axes) ++ [output_axis, div(batch, vectorized_size) | features]
+        )
+
+      unwrapped_names = List.duplicate(nil, offset) ++ names
+
+      result
+      |> reshape(unwrapped_shape, names: unwrapped_names)
+      |> vectorize(vectorized_axes)
+    else
+      result
+    end
   end
 
   @doc """
