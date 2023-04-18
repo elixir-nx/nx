@@ -359,7 +359,7 @@ defmodule NxTest do
         ])
         |> Nx.vectorize(x: 2)
 
-      devec_k =
+      k =
         Nx.tensor([
           [
             [
@@ -390,29 +390,33 @@ defmodule NxTest do
                |> Nx.vectorize(x: 2)
 
       # cross-product case
-      assert Nx.conv(t, Nx.vectorize(k, z: 1, y: 2)) ==
+      assert Nx.conv(t, Nx.vectorize(Nx.reshape(k, {1, 2, 1, 1, 1}), z: 1, y: 2)) ==
                Nx.tensor([
                  [
                    [
                      [
-                       [0.0, 2.0, 4.0]
-                     ]
-                   ],
-                   [
+                       [
+                         [0.0, 2.0, 4.0]
+                       ]
+                     ],
                      [
-                       [0.0, 10.0, 20.0]
+                       [
+                         [0.0, 10.0, 20.0]
+                       ]
                      ]
                    ]
                  ],
                  [
                    [
                      [
-                       [6.0, 8.0, 10.0]
-                     ]
-                   ],
-                   [
+                       [
+                         [6.0, 8.0, 10.0]
+                       ]
+                     ],
                      [
-                       [30.0, 40.0, 50.0]
+                       [
+                         [30.0, 40.0, 50.0]
+                       ]
                      ]
                    ]
                  ]
@@ -436,7 +440,7 @@ defmodule NxTest do
                |> Nx.vectorize(x: 2)
 
       # devec tensor and vectorized kernel
-      assert Nx.conv(Nx.devectorize(t)[0], k) ==
+      assert Nx.conv(Nx.devectorize(t)[0], Nx.vectorize(k, x: 2)) ==
                Nx.tensor([
                  [
                    [

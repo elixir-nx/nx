@@ -12449,11 +12449,13 @@ defmodule Nx do
     batch_group_count = opts[:batch_group_size]
 
     [tensor, kernel] = broadcast_vectors([tensor, kernel], align_ranks: false)
+    Nx.Shape.validate_conv!(tensor.shape, kernel.shape)
 
     vectorized_axes = tensor.vectorized_axes
     offset = length(vectorized_axes)
 
     %{shape: t_shape} = tensor = devectorize(tensor)
+
     {batch_axes, other_axes} = t_shape |> Tuple.to_list() |> Enum.split(offset + 1)
     tensor = reshape(tensor, List.to_tuple([Enum.product(batch_axes) | other_axes]))
 
@@ -12463,8 +12465,6 @@ defmodule Nx do
 
     %{shape: input_shape, names: input_names} = tensor = to_tensor(tensor)
     %{shape: kernel_shape, names: kernel_names} = kernel = to_tensor(kernel)
-
-    Nx.Shape.validate_conv!(input_shape, kernel_shape)
 
     input_permutation = opts[:input_permutation] || axes(input_shape)
     input_permutation = Nx.Shape.normalize_axes(input_shape, input_permutation, input_names)
@@ -12503,11 +12503,9 @@ defmodule Nx do
         do: kernel_dilation,
         else: for(_ <- 1..(Nx.rank(kernel_shape) - 2), do: kernel_dilation)
 
-    IO.inspect({tensor, kernel})
+    vectorized_size = Enum.reduce(vectorized_axes, 1, fn {_, s}, acc -> s * acc end)
 
-    batch_count_offset = elem(input_shape, 0)
-
-    batch_group_size = batch_group_count * batch_count_offset
+    batch_group_size = batch_group_count * vectorized_size
 
     {shape, names, padding_config} =
       Nx.Shape.conv(
@@ -12546,8 +12544,6 @@ defmodule Nx do
 
     if vectorized_axes != [] do
       [output_axis, batch | features] = Tuple.to_list(shape)
-
-      vectorized_size = Enum.reduce(vectorized_axes, 1, fn {_, s}, acc -> s * acc end)
 
       unwrapped_shape =
         List.to_tuple(
