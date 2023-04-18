@@ -12454,21 +12454,11 @@ defmodule Nx do
     vectorized_axes = tensor.vectorized_axes
     offset = length(vectorized_axes)
 
-    %{shape: t_shape} = tensor = devectorize(tensor)
+    %{shape: input_shape, names: input_names} =
+      tensor = conv_collapse_into_batch_axes(tensor, offset)
 
-    {batch_axes, other_axes} = t_shape |> Tuple.to_list() |> Enum.split(offset + 1)
-    {_, names} = Enum.split(tensor.names, offset)
-
-    tensor = reshape(tensor, List.to_tuple([Enum.product(batch_axes) | other_axes]), names: names)
-
-    %{shape: k_shape} = kernel = devectorize(kernel)
-    {_, names} = Enum.split(kernel.names, offset)
-    {batch_axes, other_axes} = k_shape |> Tuple.to_list() |> Enum.split(offset + 1)
-
-    kernel = reshape(kernel, List.to_tuple([Enum.product(batch_axes) | other_axes]), names: names)
-
-    %{shape: input_shape, names: input_names} = tensor
-    %{shape: kernel_shape, names: kernel_names} = kernel
+    %{shape: kernel_shape, names: kernel_names} =
+      kernel = conv_collapse_into_batch_axes(kernel, offset)
 
     input_permutation = opts[:input_permutation] || axes(input_shape)
     input_permutation = Nx.Shape.normalize_axes(input_shape, input_permutation, input_names)
@@ -12562,6 +12552,18 @@ defmodule Nx do
     else
       result
     end
+  end
+
+  defp conv_collapse_into_batch_axes(t, 0), do: t
+
+  defp conv_collapse_into_batch_axes(t, offset) do
+    t = devectorize(t)
+
+    {batch_axes, other_axes} = t.shape |> Tuple.to_list() |> Enum.split(offset + 1)
+
+    {_, names} = Enum.split(t.names, offset)
+
+    reshape(t, List.to_tuple([Enum.product(batch_axes) | other_axes]), names: names)
   end
 
   @doc """
