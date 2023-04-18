@@ -455,6 +455,20 @@ defmodule NxTest do
                ])
                |> Nx.vectorize(x: 2)
     end
+
+    test "vectorization - batch_group_size" do
+      # get and assert the expected base shape for the output
+      assert %{shape: {1, 3, 1, 1}} =
+               Nx.conv(Nx.iota({3, 10, 1, 1}), Nx.iota({3, 10, 1, 1}), batch_group_size: 3)
+
+      # using 2, 5 and 7 as vectorized sizes so that they have no common factor between each other
+      # and between them and the batch_group_size: 3
+      t = Nx.iota({3, 10, 1, 1}, vectorized_axes: [x: 2, y: 1, z: 7])
+      k = Nx.iota({3, 10, 1, 1}, vectorized_axes: [x: 1, y: 5, z: 7])
+
+      assert %{vectorized_axes: [x: 2, y: 5, z: 7], shape: {1, 3, 1, 1}} =
+               Nx.conv(t, k, batch_group_size: 3)
+    end
   end
 
   describe "pad" do
