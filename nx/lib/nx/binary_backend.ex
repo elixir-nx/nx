@@ -1451,24 +1451,40 @@ defmodule Nx.BinaryBackend do
     data =
       bin_reduce(tensor, out.type, :first, opts, fn bin, acc ->
         val = binary_to_number(bin, type)
-        res = if acc == :first, do: val, else: Kernel.max(acc, val)
+        res = if acc == :first, do: val, else: non_finite_max(acc, val)
         {res, res}
       end)
 
     from_binary(out, data)
   end
+
+  defp non_finite_max(:nan, _), do: :nan
+  defp non_finite_max(_, :nan), do: :nan
+  defp non_finite_max(:infinity, _), do: :infinity
+  defp non_finite_max(_, :infinity), do: :infinity
+  defp non_finite_max(:neg_infinity, x), do: x
+  defp non_finite_max(x, :neg_infinity), do: x
+  defp non_finite_max(x, y) when is_number(x) and is_number(y), do: Kernel.max(x, y)
 
   @impl true
   def reduce_min(out, %{type: type} = tensor, opts) do
     data =
       bin_reduce(tensor, out.type, :first, opts, fn bin, acc ->
         val = binary_to_number(bin, type)
-        res = if acc == :first, do: val, else: Kernel.min(acc, val)
+        res = if acc == :first, do: val, else: non_finite_min(acc, val)
         {res, res}
       end)
 
     from_binary(out, data)
   end
+
+  defp non_finite_min(:nan, _), do: :nan
+  defp non_finite_min(_, :nan), do: :nan
+  defp non_finite_min(:infinity, x), do: x
+  defp non_finite_min(x, :infinity), do: x
+  defp non_finite_min(:neg_infinity, _), do: :neg_infinity
+  defp non_finite_min(_, :neg_infinity), do: :neg_infinity
+  defp non_finite_min(x, y) when is_number(x) and is_number(y), do: Kernel.min(x, y)
 
   @impl true
   def argmin(out, tensor, opts) do

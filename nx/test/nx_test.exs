@@ -1197,6 +1197,40 @@ defmodule NxTest do
   end
 
   describe "reduce_min/2" do
+    test "works with non finites" do
+      t =
+        Nx.tensor([
+          [:neg_infinity, :infinity, 1],
+          [:neg_infinity, :nan, 1],
+          [:neg_infinity, :neg_infinity, 1],
+          [:neg_infinity, 0, 1],
+          [:infinity, :infinity, 1],
+          [:infinity, :nan, 1],
+          [:infinity, :neg_infinity, 1],
+          [:infinity, 0, 1],
+          [:nan, :infinity, 1],
+          [:nan, :nan, 1],
+          [:nan, :neg_infinity, 1],
+          [:nan, 0, 1]
+        ])
+
+      assert Nx.reduce_min(t, axes: [1]) ==
+               Nx.tensor([
+                 :neg_infinity,
+                 :nan,
+                 :neg_infinity,
+                 :neg_infinity,
+                 1,
+                 :nan,
+                 :neg_infinity,
+                 0,
+                 :nan,
+                 :nan,
+                 :nan,
+                 :nan
+               ])
+    end
+
     test "removes all axes (scalar) when no axes are specified" do
       t = Nx.tensor([[1, 2, 3], [3, 1, 2]])
       out1 = Nx.reduce_min(t)
@@ -1224,6 +1258,42 @@ defmodule NxTest do
       out1 = Nx.reduce_min(t, keep_axes: true)
       assert out1 == Nx.tensor([[1]])
       assert out1.shape == {1, 1}
+    end
+  end
+
+  describe "reduce_max/2" do
+    test "works with non finites" do
+      t =
+        Nx.tensor([
+          [:neg_infinity, :infinity, 1],
+          [:neg_infinity, :nan, 1],
+          [:neg_infinity, :neg_infinity, 1],
+          [:neg_infinity, 0, 1],
+          [:infinity, :infinity, 1],
+          [:infinity, :nan, 1],
+          [:infinity, :neg_infinity, 1],
+          [:infinity, 0, 1],
+          [:nan, :infinity, 1],
+          [:nan, :nan, 1],
+          [:nan, :neg_infinity, 1],
+          [:nan, 0, 1]
+        ])
+
+      assert Nx.reduce_max(t, axes: [1]) ==
+               Nx.tensor([
+                 :infinity,
+                 :nan,
+                 1,
+                 1,
+                 :infinity,
+                 :nan,
+                 :infinity,
+                 :infinity,
+                 :nan,
+                 :nan,
+                 :nan,
+                 :nan
+               ])
     end
   end
 
