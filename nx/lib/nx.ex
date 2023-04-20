@@ -4806,6 +4806,12 @@ defmodule Nx do
   Accepts the `target_axes` keyword list where the total size must match the current total
   size of the vectorized axes. One of the items can have the `:auto` value.
 
+  ### Options
+
+    * `:target_rank` - the non-vectorized rank for the output. Can be used to transfer some of the vectorized axes
+    to the non-vectorized shape. If not given, the target rank will be at most the input tensor rank, and can be
+    reduced depending on how many `target_axes` are given.
+
   ### Examples
 
       iex> t = Nx.iota({1}, vectorized_axes: [x: 2, y: 3, z: 4])
@@ -4820,14 +4826,68 @@ defmodule Nx do
 
       iex> t1  = Nx.iota({1}, vectorized_axes: [x: 2, y: 3])
       iex> t2 = Nx.iota({1}, vectorized_axes: [x: 2, y: 1])
-      iex> {r1, r2} = Nx.revectorize({t1, t2}, [a: :auto])
+      iex> {r1, r2} = Nx.revectorize({t1, t2}, a: :auto)
       iex> r1.vectorized_axes
       [a: 6]
       iex> r2.vectorized_axes
       [a: 2]
+
+  This function is useful for when you need to introduce a temporary custom axis to ease calculations.
+  The example below shows how to manipulate your vectorized tensor for that objective.
+
+      iex> t = Nx.iota({2}, vectorized_axes: [x: 2, y: 2])
+      #Nx.Tensor<
+        vectorized[x: 2][y: 2]
+        s64[2]
+        [
+          [
+            [0, 1],
+            [0, 1]
+          ],
+          [
+            [0, 1],
+            [0, 1]
+          ]
+        ]
+      >
+      iex> revec = Nx.revectorize(t, temp: :auto)
+      #Nx.Tensor<
+        vectorized[temp: 4]
+        s64[2]
+        [
+          [0, 1],
+          [0, 1],
+          [0, 1],
+          [0, 1]
+        ]
+      >
+      iex> result = Nx.add(revec |> Nx.vectorize(x: 2), Nx.tensor([1, -1]) |> Nx.vectorize(x: 2))
+      iex> Nx.revectorize(result, t.vectorized_axes, target_rank: Nx.rank(t))
+      #Nx.Tensor<
+        vectorized[x: 2][y: 2]
+        s64[2]
+        [
+          [
+            [1, 0],
+            [1, 0]
+          ],
+          [
+            [1, 0],
+            [1, 0]
+          ]
+        ]
+      >
+
+  Note how we could reuse the `:x` name because through `revectorize/3` we ensured
+  that it was no longer a vectorized axis name. This is especially important if we
+  are receiving unknown tensors, as this enables us to force specific names for
+  internal calculations, and then we can restore the original ones for the output.
   """
   @doc type: :vectorization
-  def revectorize(%T{} = tensor, target_axes) do
+  def revectorize(tensor, target_axes, opts \\ [])
+
+  def revectorize(%T{} = tensor, target_axes, opts) do
+    opts = keyword!(opts, [:target_rank])
     auto_axes = Enum.count(target_axes, fn {_k, v} -> v == :auto end)
 
     if auto_axes > 1 do
@@ -4836,8 +4896,24 @@ defmodule Nx do
     end
 
     axes_names = Keyword.keys(target_axes)
-    target_shape = List.to_tuple(Keyword.values(target_axes) ++ Tuple.to_list(tensor.shape))
-    target_names = axes_names ++ tensor.names
+
+    {names, devectorized_shape_l} =
+      if target_rank = opts[:target_rank] do
+        devectorized_shape_l =
+          Keyword.values(tensor.vectorized_axes) ++ Tuple.to_list(tensor.shape)
+
+        shape_l = Enum.take(devectorized_shape_l, -target_rank)
+        names = Keyword.keys(tensor.vectorized_axes) ++ tensor.names
+        names = Enum.take(names, -target_rank)
+
+        {names, shape_l}
+      else
+        {tensor.names, Tuple.to_list(tensor.shape)}
+      end
+
+    target_shape = List.to_tuple(Keyword.values(target_axes) ++ devectorized_shape_l)
+
+    target_names = axes_names ++ names
 
     tensor
     |> devectorize(keep_names: false)
@@ -4845,8 +4921,8 @@ defmodule Nx do
     |> vectorize(axes_names)
   end
 
-  def revectorize(container, target_axes),
-    do: Nx.Defn.Composite.traverse(container, &revectorize(&1, target_axes))
+  def revectorize(container, target_axes, opts),
+    do: Nx.Defn.Composite.traverse(container, &revectorize(&1, target_axes, opts))
 
   defp do_reshape_vectors(tensors, align_ranks) do
     # For all tensors to be compatible, each pair also needs to be compatible
