@@ -4662,7 +4662,7 @@ defmodule Nx do
       iex> yv.vectorized_axes
       [y: 1, x: 1]
   """
-  @doc type: :shape
+  @doc type: :vectorization
   def reshape_vectors(tensors_or_containers, opts \\ [])
 
   def reshape_vectors([tensor], _opts), do: [to_tensor(tensor)]
@@ -4773,7 +4773,7 @@ defmodule Nx do
         ]
       >
   """
-  @doc type: :shape
+  @doc type: :vectorization
   def broadcast_vectors(tensors_or_containers, opts \\ [])
 
   def broadcast_vectors([t], _opts), do: [to_tensor(t)]
@@ -4799,6 +4799,54 @@ defmodule Nx do
       devectorized_tensors
     end
   end
+
+  @doc """
+  Changes the disposition of the vectorized axes of a tensor or `Nx.Container`.
+
+  Accepts the `target_axes` keyword list where the total size must match the current total
+  size of the vectorized axes. One of the items can have the `:auto` value.
+
+  ### Examples
+
+      iex> t = Nx.iota({1}, vectorized_axes: [x: 2, y: 3, z: 4])
+      iex> t2 = Nx.revectorize(t, x: 12, y: :auto)
+      iex> t2.vectorized_axes
+      [x: 12, y: 2]
+      iex> t3 = Nx.revectorize(t, a: :auto)
+      iex> t3.vectorized_axes
+      [a: 24]
+
+  Also works on containers. Note that the revectorization happens on a per-entry basis.
+
+      iex> t1  = Nx.iota({1}, vectorized_axes: [x: 2, y: 3])
+      iex> t2 = Nx.iota({1}, vectorized_axes: [x: 2, y: 1])
+      iex> {r1, r2} = Nx.revectorize({t1, t2}, [a: :auto])
+      iex> r1.vectorized_axes
+      [a: 6]
+      iex> r2.vectorized_axes
+      [a: 2]
+  """
+  @doc type: :vectorization
+  def revectorize(%T{} = tensor, target_axes) do
+    auto_axes = Enum.count(target_axes, fn {_k, v} -> v == :auto end)
+
+    if auto_axes > 1 do
+      raise ArgumentError,
+            "at most one vectorized axis size can be calculated automatically, got: #{auto_axes}"
+    end
+
+    axes_names = Keyword.keys(target_axes)
+    target_shape = List.to_tuple(Keyword.values(target_axes) ++ Tuple.to_list(tensor.shape))
+    target_names = axes_names ++ tensor.names
+
+    tensor
+    |> devectorize(keep_names: false)
+    |> reshape(target_shape, target_names)
+    |> vectorize(axes_names)
+  end
+
+  def revectorize(container, target_axes),
+    do: Nx.Defn.Composite.traverse(container, &revectorize(&1, target_axes))
 
   defp do_reshape_vectors(tensors, align_ranks) do
     # For all tensors to be compatible, each pair also needs to be compatible
