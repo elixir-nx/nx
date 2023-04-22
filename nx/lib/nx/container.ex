@@ -12,6 +12,11 @@ defprotocol Nx.Container do
     3. maps of any key
     4. any struct that implements `Nx.Container`
 
+  In other words, LazyContainer is how you convert data
+  structures that are not meant to work inside `defn` into
+  a `Nx.Container`. And a `Nx.Container` is a data structure
+  that can be manipulated inside `defn` itself.
+
   The easiest way to implement `Nx.Container` is by deriving
   it. For example:
 
@@ -31,10 +36,8 @@ defprotocol Nx.Container do
                keep: [:another_field]}
       defstruct [:field_name, :other_fields, ...]
 
-  Note `Nx.LazyContainer` is automatically implemented for all
-  data structures that implement `Nx.Container`. This also means
-  that you can convert any `Nx.Container` to a tensor by using
-  `Nx.stack/2` and `Nx.concatenate/2`.
+  Note `Nx.LazyContainer` is automatically provided for all
+  data structures that implement `Nx.Container`.
 
   > **Careful!**: If you keep a field, its value will be part
   > of the `Nx.Defn` compiler cache key (i.e. therefore if you

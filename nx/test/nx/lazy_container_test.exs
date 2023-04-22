@@ -1,6 +1,14 @@
 defmodule Nx.LazyLazyOnlyTest do
   use ExUnit.Case, async: true
 
+  test "to_tensor" do
+    assert Nx.to_tensor(%MagicNumber{value: 13}) == Nx.tensor(13)
+
+    assert_raise ArgumentError,
+                 ~r"it represents a collection of tensors, use Nx.stack/2 or Nx.concatenate/2 instead",
+                 fn -> Nx.to_tensor(%{value: 13}) end
+  end
+
   test "to_template" do
     assert Nx.to_template(%LazyOnly{a: 1, b: 2, c: 3}) ==
              %LazyWrapped{

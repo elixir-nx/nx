@@ -1563,12 +1563,6 @@ defmodule NxTest do
       assert Nx.shape(out) == {1, 3}
       assert out == Nx.tensor([[3, 6, 9]])
     end
-
-    test "raises readable error on invalid inputs" do
-      assert_raise ArgumentError, "expected a %Nx.Tensor{} or a number, got: nil", fn ->
-        Nx.dot(Nx.tensor([1, 2, 3]), nil)
-      end
-    end
   end
 
   describe "dot/4" do

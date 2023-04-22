@@ -13,8 +13,8 @@ defprotocol Nx.LazyContainer do
   the tensor as two distinct values. Then a tensor is only
   allocated if necessary.
 
-  You can convert any `Nx.LazyContainer` to a tensor by using
-  `Nx.stack/2` and `Nx.concatenate/2`.
+  `Nx.LazyContainer` is automatically provided for data
+  structures that implement `Nx.Container`.
   """
 
   @fallback_to_any true

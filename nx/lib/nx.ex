@@ -1908,16 +1908,17 @@ defmodule Nx do
   end
 
   @doc """
-  Converts the given number (or tensor) to a tensor.
+  Converts a data structure into a tensor.
 
   This function only converts types which are automatically
   cast to tensors throughout Nx API: numbers, complex numbers,
-  and tensors themselves.
+  tensors themselves, and implementations of `Nx.LazyContainer`
+  (and `Nx.Container`).
 
   If your goal is to create tensors from lists, see `tensor/2`.
   If you want to create a tensor from binary, see `from_binary/3`.
-  If you want to convert non-tensor data structures or `Nx.Container`s
-  into tensors, see `stack/2` or `concatenate/2` instead.
+  If you want to convert a data structure with several tensors at
+  once into a single one, see `stack/2` or `concatenate/2` instead.
   """
   @doc type: :conversion
   def to_tensor(%T{} = t),
@@ -1937,8 +1938,16 @@ defmodule Nx do
     backend.constant(out, number, options)
   end
 
-  def to_tensor(t) do
-    raise ArgumentError, "expected a %Nx.Tensor{} or a number, got: #{inspect(t)}"
+  def to_tensor(container) do
+    case Nx.LazyContainer.traverse(container, nil, fn _, fun, _ -> {fun.(), nil} end) do
+      {%T{} = tensor, _} ->
+        tensor
+
+      {_, _} ->
+        raise ArgumentError,
+              "cannot convert #{inspect(container)} to tensor because it represents " <>
+              "a collection of tensors, use Nx.stack/2 or Nx.concatenate/2 instead"
+    end
   end
 
   @doc """
@@ -3733,11 +3742,6 @@ defmodule Nx do
 
   The data in the tensor is ignored.
 
-  For convenience, this function accepts tensors and any container
-  (such as maps and tuples as defined by the `Nx.Container` protocol)
-  and recursively compares them, observing their container data
-  structures are also the same.
-
   Note: This function cannot be used in `defn`.
 
   ## Examples
@@ -4170,11 +4174,6 @@ defmodule Nx do
   you may want to use `backend_transfer/2`, unless you explicitly
   want to copy the data.
 
-  For convenience, this function accepts tensors and any container
-  (such as maps and tuples as defined by the `Nx.Container` protocol)
-  and recursively copies all tensors in them. This behaviour exists
-  as it is common to transfer data before and after `defn` functions.
-
   Note:
 
   * `Nx.default_backend/1` does not affect the behaviour of
@@ -4226,16 +4225,9 @@ defmodule Nx do
   implies the data is copied from the GPU to the Erlang VM
   and then deallocated from the device.
 
-  For convenience, this function accepts tensors and any container
-  (such as maps and tuples as defined by the `Nx.Container` protocol)
-  and transfers all tensors in them. This behaviour exists as it is
-  common to transfer data from tuples and maps before and after `defn`
-  functions.
-
   Note:
 
-  * `Nx.default_backend/1` does not affect the behaviour of
-  this function.
+  * `Nx.default_backend/1` does not affect the behaviour of this function.
   * This function cannot be used in `defn`.
 
   ## Examples
@@ -4265,11 +4257,6 @@ defmodule Nx do
   Deallocates data in a device.
 
   It returns either `:ok` or `:already_deallocated`.
-
-  For convenience, this function accepts tensors and any container
-  (such as maps and tuples as defined by the `Nx.Container` protocol)
-  and deallocates all devices in them. This behaviour exists as it is
-  common to deallocate data after `defn` functions.
 
   Note: This function cannot be used in `defn`.
   """
@@ -4511,9 +4498,8 @@ defmodule Nx do
 
   def vectorize(container, vectorized_axes) do
     {result, nil} =
-      Nx.Container.traverse(container, nil, fn
-        item, _ ->
-          {vectorize(item, vectorized_axes), nil}
+      Nx.LazyContainer.traverse(container, nil, fn _template, fun, _ ->
+        {vectorize(fun.(), vectorized_axes), nil}
       end)
 
     result
@@ -4612,8 +4598,8 @@ defmodule Nx do
 
   def devectorize(container, opts) do
     {result, nil} =
-      Nx.Container.traverse(container, nil, fn
-        item, _ -> {devectorize(item, opts), nil}
+      Nx.LazyContainer.traverse(container, nil, fn _template, fun, _ ->
+        {devectorize(fun.(), opts), nil}
       end)
 
     result
@@ -14442,6 +14428,10 @@ defmodule Nx do
   Serializes the given tensor or container of tensors to iodata.
 
   You may pass any tensor or `Nx.Container` to serialization.
+  Opposite to other functions in this module, `Nx.LazyContainer`
+  cannot be serialized and they must be explicitly converted
+  to tensors before (that's because lazy containers do not preserve
+  their shape).
 
   `opts` controls the serialization options. For example, you can choose
   to compress the given tensor or container of tensors by passing a
