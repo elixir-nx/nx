@@ -1946,7 +1946,7 @@ defmodule Nx do
       {_, _} ->
         raise ArgumentError,
               "cannot convert #{inspect(container)} to tensor because it represents " <>
-              "a collection of tensors, use Nx.stack/2 or Nx.concatenate/2 instead"
+                "a collection of tensors, use Nx.stack/2 or Nx.concatenate/2 instead"
     end
   end
 
