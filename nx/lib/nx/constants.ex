@@ -359,7 +359,7 @@ defmodule Nx.Constants do
       iex> Nx.Constants.epsilon({:f, 16})
       #Nx.Tensor<
         f16
-        0.0009765625
+        9.765625e-4
       >
 
       iex> Nx.Constants.epsilon(:bf16)
