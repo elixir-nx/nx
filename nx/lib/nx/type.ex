@@ -606,7 +606,7 @@ defmodule Nx.Type do
   Returns the machine epsilon for the given type
   """
   def epsilon_binary(type)
-  def epsilon_binary({:bf, 16}), do: <<0, 52>>
+  def epsilon_binary({:bf, 16}), do: <<0, 60>>
   def epsilon_binary({:f, 16}), do: <<0, 20>>
   def epsilon_binary({:f, 32}), do: <<0, 0, 0, 52>>
   def epsilon_binary({:f, 64}), do: <<0, 0, 0, 0, 0, 0, 176, 60>>
