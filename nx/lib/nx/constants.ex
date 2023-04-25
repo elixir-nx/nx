@@ -333,6 +333,49 @@ defmodule Nx.Constants do
     from_binary(Nx.Type.smallest_positive_normal_binary(type), type, opts)
   end
 
+  @doc """
+  Returns a scalar with the machine epsilon for the given type.
+
+  The values are compatible with a IEEE 754 floating point standard.
+
+  ## Options
+
+    * `:backend` - a backend to allocate the tensor on.
+
+  ## Examples
+
+      iex> Nx.Constants.epsilon({:f, 64})
+      #Nx.Tensor<
+        f64
+        2.220446049250313e-16
+      >
+
+      iex> Nx.Constants.epsilon({:f, 32})
+      #Nx.Tensor<
+        f32
+        1.1920928955078125e-7
+      >
+
+      iex> Nx.Constants.epsilon({:f, 16})
+      #Nx.Tensor<
+        f16
+        9.765625e-4
+      >
+
+      iex> Nx.Constants.epsilon(:bf16)
+      #Nx.Tensor<
+        bf16
+        0.0078125
+      >
+
+      iex> Nx.Constants.epsilon({:s, 32})
+      ** (ArgumentError) only floating types are supported, got: {:s, 32}
+  """
+  def epsilon(type, opts \\ []) do
+    type = Nx.Type.normalize!(type)
+    from_binary(Nx.Type.epsilon_binary(type), type, opts)
+  end
+
   @doc ~S"""
   Returns $\pi$ in f32.
   """
