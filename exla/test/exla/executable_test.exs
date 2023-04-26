@@ -120,8 +120,17 @@ defmodule EXLA.ExecutableTest do
                end)
 
       assert <<1::32-native>> == DeviceBuffer.read(a)
+      assert a.device_id == 1
       assert <<2::32-native>> == DeviceBuffer.read(b)
+      assert b.device_id == 1
       assert <<3::32-native>> == DeviceBuffer.read(c)
+      assert c.device_id == 1
+
+      assert_raise RuntimeError, ~r"Expected buffer to be placed on device 0", fn ->
+        run_one([a, b], [device_id: 0], fn b, x, y ->
+          Op.tuple(b, [Op.add(x, y)])
+        end)
+      end
     end
   end
 end

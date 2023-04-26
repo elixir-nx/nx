@@ -120,13 +120,26 @@ defmodule EXLA.Defn.Buffers do
         if buffer_client.platform == :host do
           EXLA.DeviceBuffer.copy_to_device(buffer, executable.client, executable.device_id)
         else
-          raise ArgumentError, """
-          EXLA computation (defn) is allocated on client #{executable.client.name} ##{executable.device_id} (#{executable.client.platform})
-          but one of the input tensors are allocated on #{buffer_client.name} ##{buffer_client.device_id} (#{buffer_client.platform}).
+          default = EXLA.Client.fetch!(EXLA.Client.default_name())
 
-          EXLA only automatically transfers allocated on host to other clients. \
-          Either allocate your tensors on :host or ensure your inputs are allocated \
-          on the same device that you compiled your \"defn\" with
+          raise ArgumentError, """
+          EXLA computation (defn) is allocated on client #{executable.client.name} \
+          ##{executable.device_id} (#{executable.client.platform}) \
+          but one of the input tensors are allocated on #{buffer_client.name} \
+          ##{buffer.device_id} (#{buffer_client.platform}).
+
+          EXLA only transfers tensors allocated on host to other clients. \
+          You can force `:host` as your default backend with:
+
+              # via config
+              config :nx, default_backend: {EXLA.Backend, client: :host}
+
+              # via API
+              Nx.global_default_backend({EXLA.Backend, client: :host})
+
+          Otherwise ensure your tensors are allocated on the same client-device \
+          pair as your numerical definitions (defn). The default client-device is \
+          #{default.name} ##{default.default_device_id} (#{default.platform})
           """
         end
 
