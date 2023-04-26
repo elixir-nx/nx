@@ -290,6 +290,7 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
+  defmacro +tensor when is_number(tensor), do: tensor
   defnguard(+tensor, :__unary_plus__)
 
   @doc false
@@ -307,6 +308,7 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
+  defmacro -tensor when is_number(tensor), do: Kernel.-(tensor)
   defnguard(-tensor, :__unary_minus__)
 
   @doc false

@@ -35,8 +35,16 @@ defmodule Nx.DefnTest do
     test "from binary" do
       assert %T{data: %Expr{op: :tensor}} = binary_constant()
     end
+  end
 
-    test "Nx.tensor/2 warns if not constant" do
+  describe "Nx.tensor" do
+    test "does not warn on negative values" do
+      defmodule NegConstant do
+        defn this_wont_warn, do: Nx.tensor(1) + Nx.tensor(-1)
+      end
+    end
+
+    test "warns if not constant" do
       assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
                defmodule NotConstant do
                  defn(not_constant(opts), do: Nx.tensor(opts[:rate]))
