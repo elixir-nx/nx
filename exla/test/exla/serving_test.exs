@@ -68,33 +68,35 @@ defmodule EXLA.ServingTest do
   describe "partitioning" do
     @describetag :multi_device
 
-    test "spawns tasks concurrently", config do
-      execute_sync_supervised!(config, batch_size: 2, partitions: true)
+    for backend <- [Nx.BinaryBackend, EXLA.Backend] do
+      test "spawns tasks concurrently with #{inspect(backend)}", config do
+        execute_sync_supervised!(config, batch_size: 2, partitions: true)
 
-      task1 =
-        Task.async(fn ->
-          batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
-          tensor = Nx.Serving.batched_run(config.test, batch)
-          assert is_struct(tensor.data, EXLA.Backend)
-          assert_equal(tensor, Nx.tensor([2, 4]))
-          tensor.data.buffer.device_id
-        end)
+        task1 =
+          Task.async(fn ->
+            batch = Nx.Batch.concatenate([Nx.tensor([1, 2], backend: unquote(backend))])
+            tensor = Nx.Serving.batched_run(config.test, batch)
+            assert is_struct(tensor.data, EXLA.Backend)
+            assert_equal(tensor, Nx.tensor([2, 4]))
+            tensor.data.buffer.device_id
+          end)
 
-      task2 =
-        Task.async(fn ->
-          batch = Nx.Batch.concatenate([Nx.tensor([3, 4])])
-          tensor = Nx.Serving.batched_run(config.test, batch)
-          assert is_struct(tensor.data, EXLA.Backend)
-          assert_equal(tensor, Nx.tensor([6, 8]))
-          tensor.data.buffer.device_id
-        end)
+        task2 =
+          Task.async(fn ->
+            batch = Nx.Batch.concatenate([Nx.tensor([3, 4], backend: unquote(backend))])
+            tensor = Nx.Serving.batched_run(config.test, batch)
+            assert is_struct(tensor.data, EXLA.Backend)
+            assert_equal(tensor, Nx.tensor([6, 8]))
+            tensor.data.buffer.device_id
+          end)
 
-      assert_receive {:execute, 0, executor1}
-      assert_receive {:execute, 1, executor2}
-      send(executor1, :continue)
-      send(executor2, :continue)
+        assert_receive {:execute, 0, executor1}, 5000
+        assert_receive {:execute, 1, executor2}, 5000
+        send(executor1, :continue)
+        send(executor2, :continue)
 
-      assert Task.await(task1) != Task.await(task2)
+        assert Task.await(task1) != Task.await(task2)
+      end
     end
   end
 end

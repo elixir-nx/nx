@@ -113,19 +113,20 @@ defmodule EXLA.Defn.Buffers do
         EXLA.BinaryBuffer.from_binary(binary, to_exla_shape(tensor))
 
       %EXLA.Backend{buffer: %EXLA.DeviceBuffer{} = buffer}
-      when transfer? and buffer.client_name != executable.client.name ->
+      when transfer? and buffer.client_name != executable.client.name
+      when transfer? and buffer.device_id != executable.device_id ->
         buffer_client = EXLA.Client.fetch!(buffer.client_name)
 
         if buffer_client.platform == :host do
           EXLA.DeviceBuffer.copy_to_device(buffer, executable.client, executable.device_id)
         else
           raise ArgumentError, """
-          EXLA computation (defn) is allocated on client #{executable.client.name} (#{executable.client.platform})
-          but one of the input tensors are allocated on #{buffer_client.name} (#{buffer_client.platform}).
+          EXLA computation (defn) is allocated on client #{executable.client.name} ##{executable.device_id} (#{executable.client.platform})
+          but one of the input tensors are allocated on #{buffer_client.name} ##{buffer_client.device_id} (#{buffer_client.platform}).
 
-          EXLA only automatically transfers allocated on host to other client.
-          You need to either transfer your tensors to the same client as the executable
-          or compile the defn with a client that matches your input tensors
+          EXLA only automatically transfers allocated on host to other clients. \
+          Either allocate your tensors on :host or ensure your inputs are allocated \
+          on the same device that you compiled your \"defn\" with
           """
         end
 
