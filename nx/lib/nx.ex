@@ -15457,7 +15457,7 @@ defmodule Nx do
   end
 
   @doc """
-  Calculates the element-wise logarithm of a tensor with given base `p`.
+  Calculates the element-wise logarithm of a tensor with given `base`.
 
   ## Examples
 
