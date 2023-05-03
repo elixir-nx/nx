@@ -15475,7 +15475,7 @@ defmodule Nx do
   """
   @doc type: :element
   def log_p(tensor, base) do
-    if base < 0 or base == 1 do
+    if base <= 0 or base == 1 do
       raise ArgumentError,
             "expected base to be greater than 0 and different then 1, got: #{inspect(base)}"
     end
