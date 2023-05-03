@@ -15461,20 +15461,20 @@ defmodule Nx do
 
   ## Examples
 
-      iex> Nx.log_p(2, 2)
+      iex> Nx.log(2, 2)
       #Nx.Tensor<
         f32
         1.0
       >
 
-      iex> Nx.log_p(Nx.tensor([3, 9, 27, 81]), 3)
+      iex> Nx.log(Nx.tensor([3, 9, 27, 81]), 3)
       #Nx.Tensor<
         f32[4]
         [1.0, 2.0, 3.0, 4.0]
       >
   """
   @doc type: :element
-  def log_p(tensor, base) do
+  def log(tensor, base) do
     if base <= 0 or base == 1 do
       raise ArgumentError,
             "expected base to be greater than 0 and different then 1, got: #{inspect(base)}"
