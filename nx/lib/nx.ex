@@ -15412,6 +15412,77 @@ defmodule Nx do
     Nx.concatenate([left, right])
   end
 
+  @doc """
+  Calculates the element-wise logarithm of a tensor with base 2.
+
+  ## Examples
+
+      iex> Nx.log2(2)
+      #Nx.Tensor<
+        f32
+        1.0
+      >
+
+      iex> Nx.log2(Nx.tensor([1, 2, 4, 8]))
+      #Nx.Tensor<
+        f32[4]
+        [0.0, 1.0, 2.0, 3.0]
+      >
+  """
+  @doc type: :element
+  def log2(tensor) do
+    divide(log(tensor), log(2))
+  end
+
+  @doc """
+  Calculates the element-wise logarithm of a tensor with base 10.
+
+  ## Examples
+
+      iex> Nx.log10(10)
+      #Nx.Tensor<
+        f32
+        1.0
+      >
+
+      iex> Nx.log10(Nx.tensor([1, 10, 100, 1000]))
+      #Nx.Tensor<
+        f32[4]
+        [0.0, 1.0, 2.0, 3.0]
+      >
+  """
+  @doc type: :element
+  def log10(tensor) do
+    divide(log(tensor), log(10))
+  end
+
+  @doc """
+  Calculates the element-wise logarithm of a tensor with given base `p`.
+
+  ## Examples
+
+      iex> Nx.log_p(2, 2)
+      #Nx.Tensor<
+        f32
+        1.0
+      >
+
+      iex> Nx.log_p(Nx.tensor([3, 9, 27, 81]), 3)
+      #Nx.Tensor<
+        f32[4]
+        [1.0, 2.0, 3.0, 4.0]
+      >
+  """
+  @doc type: :element
+  def log_p(tensor, base) do
+    if base < 0 or base == 1 do
+      raise ArgumentError,
+            "expected base to be greater than 0 and different then 1, got: #{inspect(base)}"
+    end
+
+    divide(log(tensor), log(base))
+  end
+
   ## Sigils
 
   @doc """
