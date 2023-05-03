@@ -15477,7 +15477,7 @@ defmodule Nx do
   def log(tensor, base) do
     if base <= 0 or base == 1 do
       raise ArgumentError,
-            "expected base to be greater than 0 and different then 1, got: #{inspect(base)}"
+            "expected base to be greater than 0 and different than 1, got: #{inspect(base)}"
     end
 
     divide(log(tensor), log(base))
