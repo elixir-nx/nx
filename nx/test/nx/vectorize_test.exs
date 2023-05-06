@@ -423,40 +423,21 @@ defmodule Nx.VectorizeTest do
     end
   end
 
-     [2, 3, 4]
-  0         0
-  1         1
-  2         2
-  3         3
-  4      1  0
-  5      1  1
-  6      1  2
-  7      1  3
-  8      2  0
-  9      2  1
- 10      2  2
- 11      2  3
- 12   1  0  0
- 13   1  0  1
-
   describe "while/3" do
     defn double_n_times(x) do
-      {_i, v} =
-        while {j = 0, y[vec], parent_i[vec][...], parent_v[vec][...]}, l < size_vectorized_axes do
-          i = rem(l, ...)
-          j = rem(l, ...)
-
-
-          {y, i, v} =
-            while {y = 0, i = x[i][1], v = x[i][j]}, i > 0 do
+      {_j, rest} =
+        while {j = 0, {i, v}}, j < size_vectorized_axes do
+          {child_i, child_v} =
+            while {i = x[j][1], v = x[j][0]}, i > 0 do
               {i - 1, v * 2}
             end
 
-          parent_i[j] = i
-          parent_v[j] = v
-          {j + 1, parent_i, parent_v}
+          i[j] = child_i
+          v[j] = child_v
+          {j + 1, i, v}
         end
 
+      {i, v} = revectorize(rest)
       v
     end
 
