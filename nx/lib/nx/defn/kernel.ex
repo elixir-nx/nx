@@ -1184,7 +1184,12 @@ defmodule Nx.Defn.Kernel do
         __ENV__.line,
         unquote(initial),
         unquote(generator),
-        fn unquote(pattern) -> {unquote(condition), unquote(block)} end,
+        fn which, unquote(pattern) ->
+          case which do
+            :condition -> unquote(condition)
+            :body -> unquote(block)
+          end
+        end,
         unquote(opts)
       )
     end

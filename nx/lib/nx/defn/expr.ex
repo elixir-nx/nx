@@ -420,13 +420,8 @@ defmodule Nx.Defn.Expr do
         end
 
         {arg, context} = to_param_expr(initial, :while)
-        {condition, body} = condition_body.(arg)
-        condition = to_pred(condition, line, file, :while)
-        body = to_container_expr(body)
-
-        compatible_while!(file, line, initial, body)
-
-        while(initial, context, arg, condition, body)
+        condition = condition_body.(:condition, arg) |> to_pred(line, file, :while)
+        while_vectorized(file, line, initial, context, arg, condition, condition_body)
 
       {:while, %T{} = generator} ->
         range =
@@ -439,15 +434,15 @@ defmodule Nx.Defn.Expr do
               0..(Nx.axis_size(generator, 0) - 1)//1
           end
 
-        condition_body = fn {{index, generator_expr}, acc} ->
-          condition_body.({generator_expr[index], acc})
+        condition_body = fn which, {{index, generator_expr}, acc} ->
+          condition_body.(which, {generator_expr[index], acc})
         end
 
         while_range(range, file, line, initial, generator, condition_body, opts)
 
       {:while, _.._//_ = range} ->
-        condition_body = fn {{index, {}}, acc} ->
-          condition_body.({index, acc})
+        condition_body = fn which, {{index, {}}, acc} ->
+          condition_body.(which, {index, acc})
         end
 
         while_range(range, file, line, initial, {}, condition_body, opts)
@@ -457,6 +452,26 @@ defmodule Nx.Defn.Expr do
           line: line,
           file: file,
           description: "generators in while expect a range or a tensor, got: #{inspect(other)}"
+    end
+  end
+
+  defp while_vectorized(file, line, initial, context, arg, condition, condition_body) do
+    case condition.vectorized_axes do
+      [] ->
+        body = condition_body.(:body, arg) |> to_container_expr()
+        compatible_while!(file, line, initial, body)
+        while(initial, context, arg, condition, body)
+
+      va ->
+        # 1. pop the first vectorized axis
+        # 2. create a parameter "i" for the while
+        # 3. recompute initial replacing the vectorized axis by var[..][i][..]
+        # 4.
+        {arg, context} = to_param_expr(initial, :while)
+        condition = condition_body.(:condition, arg) |> to_pred(line, file, :while)
+        while = while_vectorized(file, line, initial, context, arg, condition, condition_body)
+        # 5. for each tensor in while, create initial that is tensor[i][..]
+
     end
   end
 
@@ -500,8 +515,7 @@ defmodule Nx.Defn.Expr do
           body =
             Enum.reduce(internal_unroll, arg, fn index, acc ->
               next = Nx.add(index_param, step * index)
-              {true, body} = condition_body.({{next, generator_param}, acc})
-              body = to_container_expr(body)
+              body = condition_body.(:body, {{next, generator_param}, acc}) |> to_container_expr()
               index == 0 and compatible_while!(file, line, initial, body)
               body
             end)
@@ -517,8 +531,7 @@ defmodule Nx.Defn.Expr do
       end
 
     Enum.reduce(external, result, fn index, acc ->
-      {true, body} = condition_body.({{index, generator}, acc})
-      body = to_container_expr(body)
+      body = condition_body.(:body, {{index, generator}, acc}) |> to_container_expr()
       index == external.first and compatible_while!(file, line, initial, body)
       body
     end)

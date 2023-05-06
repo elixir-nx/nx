@@ -2,6 +2,7 @@ defmodule Nx.VectorizeTest do
   use ExUnit.Case, async: true
 
   import Nx, only: :sigils
+  import Nx.Defn
 
   @base Nx.tensor([
           [[0, 1, 2]],
@@ -419,6 +420,56 @@ defmodule Nx.VectorizeTest do
       ] |> Nx.vectorize(:rows)
 
       assert result == Nx.reflect(input, padding_config: [{3, 1}])
+    end
+  end
+
+     [2, 3, 4]
+  0         0
+  1         1
+  2         2
+  3         3
+  4      1  0
+  5      1  1
+  6      1  2
+  7      1  3
+  8      2  0
+  9      2  1
+ 10      2  2
+ 11      2  3
+ 12   1  0  0
+ 13   1  0  1
+
+  describe "while/3" do
+    defn double_n_times(x) do
+      {_i, v} =
+        while {j = 0, y[vec], parent_i[vec][...], parent_v[vec][...]}, l < size_vectorized_axes do
+          i = rem(l, ...)
+          j = rem(l, ...)
+
+
+          {y, i, v} =
+            while {y = 0, i = x[i][1], v = x[i][j]}, i > 0 do
+              {i - 1, v * 2}
+            end
+
+          parent_i[j] = i
+          parent_v[j] = v
+          {j + 1, parent_i, parent_v}
+        end
+
+      v
+    end
+
+    test "simple" do
+      assert double_n_times(Nx.tensor([1, 5])) == Nx.tensor(32)
+
+      tensor = ~M[
+        1 5
+        2 6
+        3 3
+      ] |> Nx.vectorize(:x)
+
+      assert double_n_times(tensor) == ~V[32 128 24]
     end
   end
 end
