@@ -76,6 +76,7 @@ defmodule Nx.MixProject do
         "Functions: Indexed": &(&1[:type] == :indexed),
         "Functions: N-dim": &(&1[:type] == :ndim),
         "Functions: Shape": &(&1[:type] == :shape),
+        "Functions: Vectorization": &(&1[:type] == :vectorization),
         "Functions: Type": &(&1[:type] == :type),
         "Functions: Window": &(&1[:type] == :window)
       ],

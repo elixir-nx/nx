@@ -4648,7 +4648,7 @@ defmodule Nx do
       iex> yv.vectorized_axes
       [y: 1, x: 1]
   """
-  @doc type: :shape
+  @doc type: :vectorization
   def reshape_vectors(tensors_or_containers, opts \\ [])
 
   def reshape_vectors([tensor], _opts), do: [to_tensor(tensor)]
@@ -4759,7 +4759,7 @@ defmodule Nx do
         ]
       >
   """
-  @doc type: :shape
+  @doc type: :vectorization
   def broadcast_vectors(tensors_or_containers, opts \\ [])
 
   def broadcast_vectors([t], _opts), do: [to_tensor(t)]
@@ -4785,6 +4785,145 @@ defmodule Nx do
       devectorized_tensors
     end
   end
+
+  @doc """
+  Changes the disposition of the vectorized axes of a tensor or `Nx.Container`.
+
+  This function is basically a short-hand for:
+
+      tensor
+      |> Nx.devectorize(keep_names: false)
+      |> Nx.reshape(vectorized_sizes ++ target_shape, names: target_names)
+      |> Nx.vectorize(vectorized_names)
+
+  Accepts the `target_axes` keyword list where the total size must match the current total
+  size of the vectorized axes.
+
+  Between `target_axes` and the `:target_shape` option, there can be at most one `:auto` entry.
+
+  ### Options
+
+    * `:target_shape` - the (non-vectorized) output shape.
+    * `:target_names` - the names for the output shape.
+
+  ### Examples
+
+      iex> t = Nx.iota({1}, vectorized_axes: [x: 2, y: 3, z: 4])
+      iex> t2 = Nx.revectorize(t, x: 12, y: :auto)
+      iex> t2.vectorized_axes
+      [x: 12, y: 2]
+      iex> t3 = Nx.revectorize(t, a: :auto)
+      iex> t3.vectorized_axes
+      [a: 24]
+
+  Also works on containers. Note that the revectorization happens on a per-entry basis.
+
+      iex> t1  = Nx.iota({1}, vectorized_axes: [x: 2, y: 3])
+      iex> t2 = Nx.iota({1}, vectorized_axes: [x: 2, y: 1])
+      iex> {r1, r2} = Nx.revectorize({t1, t2}, a: :auto)
+      iex> r1.vectorized_axes
+      [a: 6]
+      iex> r2.vectorized_axes
+      [a: 2]
+
+  This function is useful for when you need to introduce a temporary custom axis to ease calculations.
+  The example below shows how to manipulate your vectorized tensor for that objective.
+
+      iex> t = Nx.iota({2, 2, 2}) |> Nx.vectorize(x: 2, y: 2)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 2]
+        s64[2]
+        [
+          [
+            [0, 1],
+            [2, 3]
+          ],
+          [
+            [4, 5],
+            [6, 7]
+          ]
+        ]
+      >
+      iex> Nx.revectorize(t, temp: :auto, x: 2) # Note that if we don't pass `:target_shape`, `:auto` will only act upon the vectorized axes
+      #Nx.Tensor<
+        vectorized[temp: 2][x: 2]
+        s64[2]
+        [
+          [
+            [0, 1],
+            [2, 3]
+          ],
+          [
+            [4, 5],
+            [6, 7]
+          ]
+        ]
+      >
+      iex> revec = Nx.revectorize(t, [temp: :auto, x: 2], target_shape: {})
+      #Nx.Tensor<
+        vectorized[temp: 4][x: 2]
+        s64
+        [
+          [0, 1],
+          [2, 3],
+          [4, 5],
+          [6, 7]
+        ]
+      >
+      iex> Nx.revectorize(revec, [new_vec: 2], target_shape: {1, 4}, target_names: [:x, :last])
+      #Nx.Tensor<
+        vectorized[new_vec: 2]
+        s64[x: 1][last: 4]
+        [
+          [
+            [0, 1, 2, 3]
+          ],
+          [
+            [4, 5, 6, 7]
+          ]
+        ]
+      >
+
+  Note how in the last example the `:x` name could be reused in various positions
+  (both vectorized and non-vectorized), because `revectorize/2` ensures that the
+  names are rewritten at each call.
+  """
+  @doc type: :vectorization
+  def revectorize(tensor, target_axes, opts \\ [])
+
+  def revectorize(%T{} = tensor, target_axes, opts) do
+    opts = keyword!(opts, [:target_shape, :target_names])
+
+    {axes_names, axes_sizes} = Enum.unzip(target_axes)
+
+    {target_shape, target_names} =
+      if target_shape = opts[:target_shape] do
+        target_names = opts[:target_names] || List.duplicate(nil, tuple_size(target_shape))
+
+        {target_shape, target_names}
+      else
+        {tensor.shape, tensor.names}
+      end
+
+    inner_names = axes_names ++ target_names
+
+    inner_shape_l = axes_sizes ++ Tuple.to_list(target_shape)
+
+    if Enum.count(inner_shape_l, &(&1 == :auto)) > 1 do
+      raise ArgumentError,
+            "cannot have more than one `:auto` occurrence between target_axes and the :target_shape option"
+    end
+
+    inner_shape = List.to_tuple(inner_shape_l)
+
+    tensor
+    |> devectorize(keep_names: false)
+    |> reshape(inner_shape, names: inner_names)
+    |> vectorize(axes_names)
+  end
+
+  def revectorize(container, target_axes, opts),
+    do: Nx.Defn.Composite.traverse(container, &revectorize(&1, target_axes, opts))
 
   defp do_reshape_vectors(tensors, align_ranks) do
     # For all tensors to be compatible, each pair also needs to be compatible
@@ -15410,6 +15549,77 @@ defmodule Nx do
     left = Nx.subtract(n - 2, Nx.iota({n - 1}))
     right = Nx.iota({n - 1}) |> Nx.add(1)
     Nx.concatenate([left, right])
+  end
+
+  @doc """
+  Calculates the element-wise logarithm of a tensor with base 2.
+
+  ## Examples
+
+      iex> Nx.log2(2)
+      #Nx.Tensor<
+        f32
+        1.0
+      >
+
+      iex> Nx.log2(Nx.tensor([1, 2, 4, 8]))
+      #Nx.Tensor<
+        f32[4]
+        [0.0, 1.0, 2.0, 3.0]
+      >
+  """
+  @doc type: :element
+  def log2(tensor) do
+    divide(log(tensor), log(2))
+  end
+
+  @doc """
+  Calculates the element-wise logarithm of a tensor with base 10.
+
+  ## Examples
+
+      iex> Nx.log10(10)
+      #Nx.Tensor<
+        f32
+        1.0
+      >
+
+      iex> Nx.log10(Nx.tensor([1, 10, 100, 1000]))
+      #Nx.Tensor<
+        f32[4]
+        [0.0, 1.0, 2.0, 3.0]
+      >
+  """
+  @doc type: :element
+  def log10(tensor) do
+    divide(log(tensor), log(10))
+  end
+
+  @doc """
+  Calculates the element-wise logarithm of a tensor with given `base`.
+
+  ## Examples
+
+      iex> Nx.log(2, 2)
+      #Nx.Tensor<
+        f32
+        1.0
+      >
+
+      iex> Nx.log(Nx.tensor([3, 9, 27, 81]), 3)
+      #Nx.Tensor<
+        f32[4]
+        [1.0, 2.0, 3.0, 4.0]
+      >
+  """
+  @doc type: :element
+  def log(tensor, base) do
+    if is_number(base) and (base <= 0 or base == 1) do
+      raise ArgumentError,
+            "expected base to be greater than 0 and different than 1, got: #{inspect(base)}"
+    end
+
+    divide(log(tensor), log(base))
   end
 
   ## Sigils
