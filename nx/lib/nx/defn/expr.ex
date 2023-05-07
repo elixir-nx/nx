@@ -463,10 +463,12 @@ defmodule Nx.Defn.Expr do
         while(initial, context, arg, condition, body)
 
       va ->
-        # 1. pop the first vectorized axis
-        # 2. create a parameter "i" for the while
-        # 3. recompute initial replacing the vectorized axis by var[..][i][..]
-        # 4.
+        # 1. broadcast_vectors each `initial` arg with `pred`
+        # 2. Flatten the common vectorized axes
+        # 3. add a parameter "i" for iterating on an outer while
+        # 4. take the i-th position and pass to the inner while
+        # 5. put_slice the results onto the accumulators
+        # 6. return the tuple without the "i" parameter
         {arg, context} = to_param_expr(initial, :while)
         condition = condition_body.(:condition, arg) |> to_pred(line, file, :while)
         while = while_vectorized(file, line, initial, context, arg, condition, condition_body)
