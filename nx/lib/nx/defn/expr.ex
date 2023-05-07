@@ -462,18 +462,39 @@ defmodule Nx.Defn.Expr do
         compatible_while!(file, line, initial, body)
         while(initial, context, arg, condition, body)
 
-      va ->
+      [{first_axis, _} | _] = vectorized_axes ->
         # 1. broadcast_vectors each `initial` arg with `pred`
         # 2. Flatten the common vectorized axes
         # 3. add a parameter "i" for iterating on an outer while
         # 4. take the i-th position and pass to the inner while
         # 5. put_slice the results onto the accumulators
         # 6. return the tuple without the "i" parameter
-        {arg, context} = to_param_expr(initial, :while)
-        condition = condition_body.(:condition, arg) |> to_pred(line, file, :while)
-        while = while_vectorized(file, line, initial, context, arg, condition, condition_body)
-        # 5. for each tensor in while, create initial that is tensor[i][..]
 
+        num_vectorized_axes = length(vectorized_axes)
+
+        initial =
+          Composite.traverse(initial, fn leaf ->
+            # broadcast and pull common axes to the front
+            [_, leaf] = Nx.broadcast_vectors([condition, leaf])
+
+            %{vectorized_axes: leaf_axes} = leaf
+
+            # remove common axes so that we can flatten them into a fixed axis.
+            # We use the `first_axis` to ensure that there's no name collision
+            # in an easy way.
+            vectorized_axes = [{first_axis, :auto} | Enum.drop(leaf_axes, num_vectorized_axes)]
+
+            Nx.revectorize(leaf, vectorized_axes)
+          end)
+
+        {arg, context} = to_param_expr(initial, :while)
+
+        dbg({arg, initial})
+        raise "unimplemented"
+
+        # condition = condition_body.(:condition, arg) |> to_pred(line, file, :while)
+        # while = while_vectorized(file, line, initial, context, arg, condition, condition_body)
+        # 5. for each tensor in while, create initial that is tensor[i][..]
     end
   end
 

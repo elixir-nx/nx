@@ -424,33 +424,39 @@ defmodule Nx.VectorizeTest do
   end
 
   describe "while/3" do
-    defn double_n_times(x) do
-      {_j, rest} =
-        while {j = 0, {i, v}}, j < size_vectorized_axes do
-          {child_i, child_v} =
-            while {i = x[j][1], v = x[j][0]}, i > 0 do
-              {i - 1, v * 2}
-            end
+    # defn double_n_times(x) do
+    #   {_j, rest} =
+    #     while {j = 0, {i, v}}, j < size_vectorized_axes do
+    #       {child_i, child_v} =
+    #         while {i = x[j][1], v = x[j][0]}, i > 0 do
+    #           {i - 1, v * 2}
+    #         end
 
-          i[j] = child_i
-          v[j] = child_v
-          {j + 1, i, v}
+    #       i[j] = child_i
+    #       v[j] = child_v
+    #       {j + 1, i, v}
+    #     end
+
+    #   {i, v} = revectorize(rest)
+    #   v
+    # end
+
+    defn double_n_times(x, n) do
+      {_i, v} =
+        while {i = n, v = x}, i > 0 do
+          {i - 1, v * 2}
         end
 
-      {i, v} = revectorize(rest)
       v
     end
 
     test "simple" do
-      assert double_n_times(Nx.tensor([1, 5])) == Nx.tensor(32)
+      assert double_n_times(Nx.tensor(3), Nx.tensor(5)) == Nx.tensor(96)
 
-      tensor = ~M[
-        1 5
-        2 6
-        3 3
-      ] |> Nx.vectorize(:x)
+      x = Nx.vectorize(~V[1 2 3], :init)
+      n = Nx.vectorize(~V[5 6 3], :pred)
 
-      assert double_n_times(tensor) == ~V[32 128 24]
+      assert double_n_times(x, n) == Nx.vectorize(~V[32 128 24], :x)
     end
   end
 end
