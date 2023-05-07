@@ -20,7 +20,8 @@ defmodule NxTest do
     :ndim,
     :shape,
     :type,
-    :window
+    :window,
+    :vectorization
   ]
 
   test "defines doc metadata" do
