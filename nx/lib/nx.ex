@@ -4803,14 +4803,22 @@ defmodule Nx do
   @doc """
   Changes the disposition of the vectorized axes of a tensor or `Nx.Container`.
 
+  This function is basically a short-hand for:
+
+      tensor
+      |> Nx.devectorize(keep_names: false)
+      |> Nx.reshape(vectorized_sizes ++ target_shape, names: target_names)
+      |> Nx.vectorize(vectorized_names)
+
   Accepts the `target_axes` keyword list where the total size must match the current total
-  size of the vectorized axes. One of the items can have the `:auto` value.
+  size of the vectorized axes.
+
+  Between `target_axes` and the `:target_shape` option, there can be at most one `:auto` entry.
 
   ### Options
 
-    * `:target_rank` - the non-vectorized rank for the output. Can be used to transfer some of the vectorized axes
-    to the non-vectorized shape. If not given, the target rank will be at most the input tensor rank, and can be
-    reduced depending on how many `target_axes` are given.
+    * `:target_shape` - the (non-vectorized) output shape.
+    * `:target_names` - the names for the output shape.
 
   ### Examples
 
@@ -4835,89 +4843,96 @@ defmodule Nx do
   This function is useful for when you need to introduce a temporary custom axis to ease calculations.
   The example below shows how to manipulate your vectorized tensor for that objective.
 
-      iex> t = Nx.iota({2}, vectorized_axes: [x: 2, y: 2])
+      iex> t = Nx.iota({2, 2, 2}) |> Nx.vectorize(x: 2, y: 2)
       #Nx.Tensor<
         vectorized[x: 2][y: 2]
         s64[2]
         [
           [
             [0, 1],
-            [0, 1]
+            [2, 3]
           ],
           [
-            [0, 1],
-            [0, 1]
+            [4, 5],
+            [6, 7]
           ]
         ]
       >
-      iex> revec = Nx.revectorize(t, temp: :auto)
+      iex> Nx.revectorize(t, temp: :auto, x: 2) # Note that if we don't pass `:target_shape`, `:auto` will only act upon the vectorized axes
       #Nx.Tensor<
-        vectorized[temp: 4]
-        s64[2]
-        [
-          [0, 1],
-          [0, 1],
-          [0, 1],
-          [0, 1]
-        ]
-      >
-      iex> result = Nx.add(revec |> Nx.vectorize(x: 2), Nx.tensor([1, -1]) |> Nx.vectorize(x: 2))
-      iex> Nx.revectorize(result, t.vectorized_axes, target_rank: Nx.rank(t))
-      #Nx.Tensor<
-        vectorized[x: 2][y: 2]
+        vectorized[temp: 2][x: 2]
         s64[2]
         [
           [
-            [1, 0],
-            [1, 0]
+            [0, 1],
+            [2, 3]
           ],
           [
-            [1, 0],
-            [1, 0]
+            [4, 5],
+            [6, 7]
+          ]
+        ]
+      >
+      iex> revec = Nx.revectorize(t, [temp: :auto, x: 2], target_shape: {})
+      #Nx.Tensor<
+        vectorized[temp: 4][x: 2]
+        s64
+        [
+          [0, 1],
+          [2, 3],
+          [4, 5],
+          [6, 7]
+        ]
+      >
+      iex> Nx.revectorize(revec, [new_vec: 2], target_shape: {1, 4}, target_names: [:x, :last])
+      #Nx.Tensor<
+        vectorized[new_vec: 2]
+        s64[x: 1][last: 4]
+        [
+          [
+            [0, 1, 2, 3]
+          ],
+          [
+            [4, 5, 6, 7]
           ]
         ]
       >
 
-  Note how we could reuse the `:x` name because through `revectorize/3` we ensured
-  that it was no longer a vectorized axis name. This is especially important if we
-  are receiving unknown tensors, as this enables us to force specific names for
-  internal calculations, and then we can restore the original ones for the output.
+  Note how in the last example the `:x` name could be reused in various positions
+  (both vectorized and non-vectorized), because `revectorize/2` ensures that the
+  names are rewritten at each call.
   """
   @doc type: :vectorization
   def revectorize(tensor, target_axes, opts \\ [])
 
   def revectorize(%T{} = tensor, target_axes, opts) do
-    opts = keyword!(opts, [:target_rank])
-    auto_axes = Enum.count(target_axes, fn {_k, v} -> v == :auto end)
+    opts = keyword!(opts, [:target_shape, :target_names])
 
-    if auto_axes > 1 do
-      raise ArgumentError,
-            "at most one vectorized axis size can be calculated automatically, got: #{auto_axes}"
-    end
+    {axes_names, axes_sizes} = Enum.unzip(target_axes)
 
-    axes_names = Keyword.keys(target_axes)
+    {target_shape, target_names} =
+      if target_shape = opts[:target_shape] do
+        target_names = opts[:target_names] || List.duplicate(nil, tuple_size(target_shape))
 
-    {names, devectorized_shape_l} =
-      if target_rank = opts[:target_rank] do
-        devectorized_shape_l =
-          Keyword.values(tensor.vectorized_axes) ++ Tuple.to_list(tensor.shape)
-
-        shape_l = Enum.take(devectorized_shape_l, -target_rank)
-        names = Keyword.keys(tensor.vectorized_axes) ++ tensor.names
-        names = Enum.take(names, -target_rank)
-
-        {names, shape_l}
+        {target_shape, target_names}
       else
-        {tensor.names, Tuple.to_list(tensor.shape)}
+        {tensor.shape, tensor.names}
       end
 
-    target_shape = List.to_tuple(Keyword.values(target_axes) ++ devectorized_shape_l)
+    inner_names = axes_names ++ target_names
 
-    target_names = axes_names ++ names
+    inner_shape_l = axes_sizes ++ Tuple.to_list(target_shape)
+
+    if Enum.count(inner_shape_l, &(&1 == :auto)) > 1 do
+      raise ArgumentError,
+            "cannot have more than one `:auto` occurrence between target_axes and the :target_shape option"
+    end
+
+    inner_shape = List.to_tuple(inner_shape_l)
 
     tensor
     |> devectorize(keep_names: false)
-    |> reshape(target_shape, target_names)
+    |> reshape(inner_shape, names: inner_names)
     |> vectorize(axes_names)
   end
 
