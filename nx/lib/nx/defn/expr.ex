@@ -206,7 +206,7 @@ defmodule Nx.Defn.Expr do
 
       zero = Nx.broadcast(0, Nx.devectorize(last).shape) |> Nx.vectorize(last.vectorized_axes)
 
-      # We first reverse the clauses so that ou
+      # We first reverse the clauses so that we can keep our accumulator on the right side of the select
       clauses
       |> Enum.reverse()
       |> Enum.reduce(last, fn {pred, clause}, acc ->
