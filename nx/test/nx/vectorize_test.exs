@@ -424,23 +424,6 @@ defmodule Nx.VectorizeTest do
   end
 
   describe "while/3" do
-    # defn double_n_times(x) do
-    #   {_j, rest} =
-    #     while {j = 0, {i, v}}, j < size_vectorized_axes do
-    #       {child_i, child_v} =
-    #         while {i = x[j][1], v = x[j][0]}, i > 0 do
-    #           {i - 1, v * 2}
-    #         end
-
-    #       i[j] = child_i
-    #       v[j] = child_v
-    #       {j + 1, i, v}
-    #     end
-
-    #   {i, v} = revectorize(rest)
-    #   v
-    # end
-
     defn double_n_times(x, n) do
       {_i, v} =
         while {i = n, v = x}, i > 0 do
@@ -509,6 +492,24 @@ defmodule Nx.VectorizeTest do
                ),
                Nx.vectorize(~V[27 162], pred: 2)
              }
+    end
+
+    test "simple with multiple pred axes" do
+      x = Nx.vectorize(~V[1 2 3], :x)
+      n = Nx.vectorize(~M[
+        0 1 2
+        5 6 3
+      ], y: 2, x: 3)
+
+      assert double_n_times(x, n) ==
+               Nx.vectorize(
+                 ~M[
+                  1 4 12
+                  32 128 24
+                ],
+                 y: 2,
+                 x: 3
+               )
     end
   end
 end
