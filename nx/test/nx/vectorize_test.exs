@@ -450,13 +450,65 @@ defmodule Nx.VectorizeTest do
       v
     end
 
+    defn double_x_triple_y_n_times(x, y, n) do
+      {_i, v, z} =
+        while {i = n, v = x, z = y}, i > 0 do
+          {i - 1, v * 2, z * 3}
+        end
+
+      {v, z}
+    end
+
     test "simple" do
       assert double_n_times(Nx.tensor(3), Nx.tensor(5)) == Nx.tensor(96)
 
-      x = Nx.vectorize(~V[1 2 3], :init)
-      n = Nx.vectorize(~V[5 6 3], :pred)
+      x = Nx.vectorize(~V[1 2 3], :x)
+      n = Nx.vectorize(~V[5 6 3], :x)
 
       assert double_n_times(x, n) == Nx.vectorize(~V[32 128 24], :x)
+    end
+
+    test "different axes" do
+      x = Nx.vectorize(~V[1 2 3], :init)
+      n = Nx.vectorize(~V[4 5], :pred)
+
+      assert double_n_times(x, n) ==
+               Nx.vectorize(
+                 ~M[
+                  16 32 48
+                  32 64 96
+                 ],
+                 pred: 2,
+                 init: 3
+               )
+    end
+
+    test "mix of common and different axes" do
+      x =
+        Nx.vectorize(
+          ~M[
+          1 2
+          3 4
+          5 6
+        ],
+          other: 3,
+          pred: 2
+        )
+
+      y = Nx.vectorize(~V[1 2], :pred)
+      n = Nx.vectorize(~V[3 4], :pred)
+
+      assert double_x_triple_y_n_times(x, y, n) == {
+               Nx.vectorize(
+                 ~M[
+                   8 16 24
+                   64 80 96
+                 ],
+                 pred: 2,
+                 other: 3
+               ),
+               Nx.vectorize(~V[27 162], pred: 2)
+             }
     end
   end
 end

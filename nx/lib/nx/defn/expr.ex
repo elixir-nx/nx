@@ -472,8 +472,8 @@ defmodule Nx.Defn.Expr do
 
         num_vectorized_axes = length(vectorized_axes)
 
-        initial =
-          Composite.traverse(initial, fn leaf ->
+        {initial, max_vec_size} =
+          Composite.traverse(initial, nil, fn leaf, _ ->
             # broadcast and pull common axes to the front
             [_, leaf] = Nx.broadcast_vectors([condition, leaf])
 
@@ -484,17 +484,60 @@ defmodule Nx.Defn.Expr do
             # in an easy way.
             vectorized_axes = [{first_axis, :auto} | Enum.drop(leaf_axes, num_vectorized_axes)]
 
-            Nx.revectorize(leaf, vectorized_axes)
+            %{vectorized_axes: [{_, s} | _]} = leaf = Nx.revectorize(leaf, vectorized_axes)
+            {leaf, s}
           end)
 
-        {arg, context} = to_param_expr(initial, :while)
+        # add the vectorized axis index to to the while initial args
+        outer_initial = {tensor(0), initial}
+        {{index_param, outer_arg}, outer_context} = to_param_expr(outer_initial, :while)
 
-        dbg({arg, initial})
-        raise "unimplemented"
+        outer_condition = Nx.less(index_param, tensor(max_vec_size))
 
-        # condition = condition_body.(:condition, arg) |> to_pred(line, file, :while)
-        # while = while_vectorized(file, line, initial, context, arg, condition, condition_body)
-        # 5. for each tensor in while, create initial that is tensor[i][..]
+        inner_initial =
+          Composite.traverse(outer_arg, fn %{vectorized_axes: [_ | ax]} = leaf ->
+            leaf
+            |> Nx.devectorize()
+            |> Nx.take(index_param)
+            |> Nx.vectorize(ax)
+          end)
+
+        {inner_arg, inner_context} = to_param_expr(inner_initial, :while)
+
+        inner_condition = condition_body.(:condition, inner_arg) |> to_pred(line, file, :while)
+        inner_body = condition_body.(:body, inner_arg) |> to_container_expr()
+
+        inner_while = while(inner_initial, inner_context, inner_arg, inner_condition, inner_body)
+
+        {outer_body, _} =
+          Composite.traverse(
+            inner_while,
+            Composite.flatten_list([outer_arg]),
+            fn node, [target | targets] ->
+              target = Nx.devectorize(target)
+              starts = [index_param | List.duplicate(0, tuple_size(target.shape) - 1)]
+
+              updated_target =
+                target
+                |> Nx.put_slice(starts, Nx.devectorize(node) |> Nx.new_axis(0))
+                |> Nx.vectorize(target.vectorized_axes)
+
+              {updated_target, targets}
+            end
+          )
+
+        outer_body = {Nx.add(index_param, 1), outer_body}
+
+        {_aux_index, result} =
+          while(
+            outer_initial,
+            outer_context,
+            {index_param, outer_arg},
+            outer_condition,
+            outer_body
+          )
+
+        result
     end
   end
 
