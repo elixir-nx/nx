@@ -530,6 +530,7 @@ defmodule Nx.VectorizeTest do
     end
 
     test "simple if" do
+      # this tests the case where we have a single vectorized predicate
       pred = Nx.vectorize(~V[0 1 0], :pred)
 
       io =
@@ -549,6 +550,7 @@ defmodule Nx.VectorizeTest do
     end
 
     test "simple cond" do
+      # this tests the case where we have a two vectorized predicates
       pred1 = Nx.vectorize(~V[1 0 0], :pred)
       pred2 = Nx.vectorize(~V[0 0 0], :pred)
 
@@ -599,5 +601,73 @@ defmodule Nx.VectorizeTest do
                inspect({Nx.tensor(7), Nx.tensor(8), Nx.tensor([9, 10, 11], names: [:x])}),
                "\n"
              ])
+  end
+
+  defn cond4(p1, c1, p2, c2, p3, c3, c4) do
+    cond do
+      p1 -> c1
+      p2 -> c2
+      p3 -> c3
+      true -> c4
+    end
+  end
+
+  test "1 vectorized pred in the beginning" do
+    assert cond4(Nx.vectorize(~V[0 1], :pred), 10, 0, 20, 0, 30, 40) ==
+             Nx.vectorize(~V[40 10], :pred)
+
+    assert cond4(Nx.vectorize(~V[0 0], :pred), 10, 1, 20, 0, 30, 40) ==
+             Nx.vectorize(~V[20 20], :pred)
+
+    assert cond4(Nx.vectorize(~V[0 0], :pred), 10, 0, 20, 1, 30, 40) ==
+             Nx.vectorize(~V[30 30], :pred)
+
+    assert cond4(Nx.vectorize(~V[0 0], :pred), 10, 0, 20, 0, 30, 40) ==
+             Nx.vectorize(~V[40 40], :pred)
+  end
+
+  test "1 vectorized pred in the second but not last position" do
+    assert cond4(0, 10, Nx.vectorize(~V[0 1], :pred), 20, 0, 30, 40) ==
+             Nx.vectorize(~V[40 20], :pred)
+
+    assert cond4(1, 10, Nx.vectorize(~V[0 1], :pred), 20, 0, 30, 40) ==
+             Nx.vectorize(~V[10 10], :pred)
+
+    assert cond4(0, 10, Nx.vectorize(~V[0 0], :pred), 20, 1, 30, 40) ==
+             Nx.vectorize(~V[30 30], :pred)
+
+    assert cond4(0, 10, Nx.vectorize(~V[0 0], :pred), 20, 0, 30, 40) ==
+             Nx.vectorize(~V[40 40], :pred)
+  end
+
+  test "1 vectorized pred in the last position" do
+    assert cond4(0, 10, 0, 20, Nx.vectorize(~V[0 1], :pred), 30, 40) ==
+             Nx.vectorize(~V[40 30], :pred)
+
+    assert cond4(1, 10, 0, 20, Nx.vectorize(~V[0 1], :pred), 30, 40) ==
+             Nx.vectorize(~V[10 10], :pred)
+
+    assert cond4(0, 10, 1, 20, Nx.vectorize(~V[0 1], :pred), 30, 40) ==
+             Nx.vectorize(~V[20 20], :pred)
+
+    assert cond4(0, 10, 0, 20, Nx.vectorize(~V[0 0], :pred), 30, 40) ==
+             Nx.vectorize(~V[40 40], :pred)
+  end
+
+  test "2 vectorized preds with different axes" do
+    assert cond4(
+             Nx.vectorize(~V[0 1 0], :pred1),
+             10,
+             Nx.vectorize(~V[1 0], :pred2),
+             20,
+             0,
+             30,
+             40
+           ) ==
+             Nx.vectorize(~M[
+              20 40
+              10 10
+              20 40
+            ], pred1: 3, pred2: 2)
   end
 end
