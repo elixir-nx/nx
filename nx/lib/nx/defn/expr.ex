@@ -173,32 +173,53 @@ defmodule Nx.Defn.Expr do
   end
 
   defp vectorized_cond(%Nx.Tensor{data: %Nx.Defn.Expr{op: :cond, args: [clauses, last]}} = expr) do
-    [%{vectorized_axes: [{first_axis, _} | _]} = p1 | _] =
-      preds = clauses |> Enum.map(&elem(&1, 0)) |> Nx.broadcast_vectors()
+    [p1 | _] = preds = clauses |> Enum.map(&elem(&1, 0)) |> Nx.reshape_vectors()
 
-    num_vectorized_axes = length(p1.vectorized_axes)
+    if p1.vectorized_axes == [] do
+      expr
+    else
+      num_vectorized_axes = length(p1.vectorized_axes)
+      %{vectorized_axes: [{first_axis, _} | _]} = p1
 
-    clauses =
-      Enum.zip_with(preds, clauses, fn pred, clause ->
-        [_pred, clause] = Nx.broadcast_vectors([pred, clause])
+      clauses =
+        Enum.zip_with(preds, clauses, fn pred, {_pred, clause} ->
+          [_pred, clause] = Nx.reshape_vectors([pred, clause])
 
-        clause_axes = [
-          {first_axis, :auto} | Enum.drop(clause.vectorized_axes, num_vectorized_axes)
-        ]
+          clause_axes = [
+            {first_axis, :auto} | Enum.drop(clause.vectorized_axes, num_vectorized_axes)
+          ]
 
-        {Nx.revectorize(pred, [{first_axis, :auto}]), Nx.revectorize(clause, clause_axes)}
+          {Nx.revectorize(pred, [{first_axis, :auto}]), Nx.revectorize(clause, clause_axes)}
+        end)
+
+      [_, last] = Nx.reshape_vectors([p1, last])
+
+      last =
+        Nx.revectorize(last, [
+          {first_axis, :auto} | Enum.drop(last.vectorized_axes, num_vectorized_axes)
+        ])
+
+      # For each clause:
+      # 1. check if the pred is true at least once
+      # 2. replace with if any(pred_i), do: clause_i, else: "0 like last"
+      # 3. reduce with sequential selects
+
+      zero = Nx.broadcast(0, Nx.devectorize(last).shape) |> Nx.vectorize(last.vectorized_axes)
+
+      clauses
+      |> Enum.reverse()
+      |> Enum.map(fn {pred, clause} ->
+        clause_is_executed_at_least_once = pred |> Nx.devectorize() |> Nx.any()
+        # by wrapping the clause in the following cond, we ensure it is only executed if
+        # it is indeed needed at least once
+        result = cond([{clause_is_executed_at_least_once, clause}], zero)
+
+        {pred, result}
       end)
-
-    [_, last] = Nx.broadcast_vectors([p1, last])
-
-    last =
-      Nx.revectorize([{first_axis, :auto} | Enum.drop(last.vectorized_axes, num_vectorized_axes)])
-
-    # From here on, each clause (including last) is led by a single vectorized axis upon which we can iterate through a while loop
-
-    # 1. iterate over that outer axis
-    # 2. apply cond over each iteration for the preds and their corresponding entries
-    # 3. put_slice the result over the accumulator expression
+      |> Enum.reduce(last, fn {pred, clause}, acc ->
+        Nx.select(pred, clause, acc)
+      end)
+    end
   end
 
   defp broadcast_clause([type = last | expr_types = exprs]) do

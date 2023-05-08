@@ -423,25 +423,7 @@ defmodule Nx.VectorizeTest do
     end
   end
 
-<<<<<<< Updated upstream
   describe "while/3" do
-    # defn double_n_times(x) do
-    #   {_j, rest} =
-    #     while {j = 0, {i, v}}, j < size_vectorized_axes do
-    #       {child_i, child_v} =
-    #         while {i = x[j][1], v = x[j][0]}, i > 0 do
-    #           {i - 1, v * 2}
-    #         end
-
-    #       i[j] = child_i
-    #       v[j] = child_v
-    #       {j + 1, i, v}
-    #     end
-
-    #   {i, v} = revectorize(rest)
-    #   v
-    # end
-
     defn double_n_times(x, n) do
       {_i, v} =
         while {i = n, v = x}, i > 0 do
@@ -510,22 +492,46 @@ defmodule Nx.VectorizeTest do
                ),
                Nx.vectorize(~V[27 162], pred: 2)
              }
-=======
+    end
+  end
+
   describe "cond" do
-    defn vectorized_cond(pred1, clause1, pred2, clause2, clause3) do
+    defn vectorized_if(pred, then, other) do
       cond do
-        pred1 -> clause1
-        pred2 -> clause2
-        true -> clause3
+        pred -> then
+        true -> other
       end
     end
 
-    test "simple" do
-      pred1 = Nx.vectorize(~V[0 1 0], :pred)
-      pred2 = Nx.vectorize(~V[1 0 0], :pred)
+    defn vectorized_cond(pred1, clause1, pred2, clause2, clause3) do
+      cond do
+        pred1 -> print_value(clause1, label: "clause_1")
+        pred2 -> print_value(clause2, label: "clause_2")
+        true -> print_value(clause3, label: "clause_3")
+      end
+    end
 
-      assert vectorized_cond(pred1, 1, pred2, 2, 3) == Nx.vectorize(~V[2 1 3], :pred)
->>>>>>> Stashed changes
+    test "simple if" do
+      pred = Nx.vectorize(~V[0 1 0], :pred)
+
+      assert vectorized_if(pred, 1, 2) == Nx.vectorize(~V[2 1 2], :pred)
+    end
+
+    test "simple cond" do
+      pred1 = Nx.vectorize(~V[1 0 0], :pred)
+      pred2 = Nx.vectorize(~V[0 0 0], :pred)
+
+      io =
+        ExUnit.CaptureIO.capture_io(fn ->
+          assert vectorized_cond(pred1, 1, pred2, 2, 3) == Nx.vectorize(~V[1 3 3], :pred)
+        end)
+
+      # This assertion ensures that the clause for pred2 is never executed
+      assert io ==
+               IO.iodata_to_binary([
+                 "clause_1: #{inspect(Nx.tensor(1))}\n",
+                 "clause_3: #{inspect(Nx.tensor(3))}\n"
+               ])
     end
   end
 end
