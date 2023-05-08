@@ -4929,6 +4929,7 @@ defmodule Nx do
     # For all tensors to be compatible, each pair also needs to be compatible
     # This means that we can do a first pass accumulating axes into
     # the first tensor, and then a second pass getting them all into their final shapes.
+
     tensors = Enum.map(tensors, &to_tensor/1)
     canonical = calculate_canonical_vectorized_axes(tensors)
     n = length(canonical)

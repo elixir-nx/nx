@@ -129,13 +129,63 @@ defmodule Nx.Defn.Expr do
   @doc """
   Creates a `cond` tensor expression.
   """
-  def cond([], last) do
+  def cond([], last), do: last
+
+  def cond(clauses, last) do
+    {preds, exprs} = Enum.unzip(clauses)
+    {preds, context} = to_exprs(preds)
+
+    if Enum.all?(preds, &(&1.vectorized_axes == [])) do
+      non_vectorized_cond(clauses, last, context)
+    else
+      clauses = Enum.zip(preds, exprs)
+
+      # note: for all clauses `non_vectorized_pre` can be empty, but either `cond`
+      # or `non_vectorized_cond` will take care of this
+      case Enum.split_while(clauses, fn {pred, _expr} -> pred.vectorized_axes == [] end) do
+        {non_vectorized_pre, [{pred, expr}]} ->
+          # In this case, the vectorized pred is the last non-default one, so
+          # we can use `last` as the default value for our select because it is the "else" branch
+          clause_is_executed_at_least_once = pred |> Nx.devectorize() |> Nx.any()
+
+          then_clause =
+            non_vectorized_cond([{clause_is_executed_at_least_once, expr}], last, context)
+
+          {clause, []} =
+            Composite.traverse(then_clause, Composite.flatten_list([last]), fn node, [h | tl] ->
+              {Nx.select(pred, node, h), tl}
+            end)
+
+          non_vectorized_cond(non_vectorized_pre, clause, context)
+
+        {non_vectorized_pre, [{pred, expr} | other]} ->
+          # In this case, we have remaining possibly vectorized clauses in `other`
+          clause_is_executed_at_least_once = pred |> Nx.devectorize() |> Nx.any()
+
+          # here we build the `other` clauses into a remaining cond that also contains `last`.
+          # It will also be the default value for when the expr is not executed
+          else_clause = cond(other, last)
+
+          then_clause =
+            non_vectorized_cond([{clause_is_executed_at_least_once, expr}], else_clause, context)
+
+          {clause, []} =
+            Composite.traverse(then_clause, Composite.flatten_list([else_clause]), fn node,
+                                                                                      [h | tl] ->
+              {Nx.select(pred, node, h), tl}
+            end)
+
+          non_vectorized_cond(non_vectorized_pre, clause, context)
+      end
+    end
+  end
+
+  defp non_vectorized_cond([], last, _context) do
     last
   end
 
-  def cond(clauses, last = out) do
+  defp non_vectorized_cond(clauses, last = out, context) do
     {preds, exprs} = Enum.unzip(clauses)
-    {preds, context} = to_exprs(preds)
 
     {broadcasted_clauses, vectorized_axes} =
       [last | exprs]
@@ -168,56 +218,12 @@ defmodule Nx.Defn.Expr do
         result
       end
 
-    flatten_to_composite(out, context, exprs, &expr(&1, context, :cond, [clauses, last]))
-    |> Composite.traverse(&vectorized_cond/1)
-  end
-
-  defp vectorized_cond(%Nx.Tensor{data: %Nx.Defn.Expr{op: :cond, args: [clauses, last]}} = expr) do
-    [p1 | _] = preds = clauses |> Enum.map(&elem(&1, 0)) |> Nx.reshape_vectors()
-
-    if p1.vectorized_axes == [] do
-      expr
-    else
-      num_vectorized_axes = length(p1.vectorized_axes)
-      %{vectorized_axes: [{first_axis, _} | _]} = p1
-
-      clauses =
-        Enum.zip_with(preds, clauses, fn pred, {_pred, clause} ->
-          [_pred, clause] = Nx.reshape_vectors([pred, clause])
-
-          clause_axes = [
-            {first_axis, :auto} | Enum.drop(clause.vectorized_axes, num_vectorized_axes)
-          ]
-
-          {Nx.revectorize(pred, [{first_axis, :auto}]), Nx.revectorize(clause, clause_axes)}
-        end)
-
-      [_, last] = Nx.reshape_vectors([p1, last])
-
-      last =
-        Nx.revectorize(last, [
-          {first_axis, :auto} | Enum.drop(last.vectorized_axes, num_vectorized_axes)
-        ])
-
-      # For each clause:
-      # 1. check if the pred is true at least once
-      # 2. replace with if any(pred_i), do: clause_i, else: "0 like last"
-      # 3. reduce with sequential selects
-
-      zero = Nx.broadcast(0, Nx.devectorize(last).shape) |> Nx.vectorize(last.vectorized_axes)
-
-      # We first reverse the clauses so that we can keep our accumulator on the right side of the select
-      clauses
-      |> Enum.reverse()
-      |> Enum.reduce(last, fn {pred, clause}, acc ->
-        clause_is_executed_at_least_once = pred |> Nx.devectorize() |> Nx.any()
-        # by wrapping the clause in the following cond, we ensure it is only executed if
-        # it is indeed needed at least once
-        result = cond([{clause_is_executed_at_least_once, clause}], zero)
-
-        Nx.select(pred, result, acc)
-      end)
-    end
+    flatten_to_composite(
+      out,
+      context,
+      exprs,
+      &expr(&1, context, :cond, [clauses, last])
+    )
   end
 
   defp broadcast_clause([type = last | expr_types = exprs]) do

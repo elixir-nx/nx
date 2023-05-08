@@ -498,8 +498,8 @@ defmodule Nx.VectorizeTest do
   describe "cond" do
     defn vectorized_if(pred, then, other) do
       cond do
-        pred -> then
-        true -> other
+        pred -> print_value(then, label: "if")
+        true -> print_value(other, label: "else")
       end
     end
 
@@ -533,5 +533,43 @@ defmodule Nx.VectorizeTest do
                  "clause_3: #{inspect(Nx.tensor(3))}\n"
                ])
     end
+  end
+
+  test "if with container result" do
+    pred1 = Nx.vectorize(~V[2 0 0], :pred)
+
+    first = {1, 2, Nx.vectorize(~V[3 3 3], :x)}
+    second = {7, 8, Nx.vectorize(~V[9 10 11], :x)}
+
+    io =
+      ExUnit.CaptureIO.capture_io(fn ->
+        result =
+          vectorized_if(
+            pred1,
+            {1, 2, 3},
+            second
+          )
+
+        assert result == {
+                 Nx.vectorize(~V[1 7 7], :pred),
+                 Nx.vectorize(~V[2 8 8], :pred),
+                 Nx.vectorize(~M[
+                  3 3 3
+                  9 10 11
+                  9 10 11
+                ], pred: 3, x: 3)
+               }
+      end)
+
+    # This assertion ensures that the clause for pred2 is never executed
+    assert String.replace(io, ",\n", ",") ==
+             IO.iodata_to_binary([
+               "if: ",
+               inspect({Nx.tensor(1), Nx.tensor(2), Nx.tensor(3)}),
+               "\n",
+               "else: ",
+               inspect({Nx.tensor(7), Nx.tensor(8), Nx.tensor([9, 10, 11], names: [:x])}),
+               "\n"
+             ])
   end
 end
