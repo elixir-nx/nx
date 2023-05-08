@@ -206,18 +206,16 @@ defmodule Nx.Defn.Expr do
 
       zero = Nx.broadcast(0, Nx.devectorize(last).shape) |> Nx.vectorize(last.vectorized_axes)
 
+      # We first reverse the clauses so that ou
       clauses
       |> Enum.reverse()
-      |> Enum.map(fn {pred, clause} ->
+      |> Enum.reduce(last, fn {pred, clause}, acc ->
         clause_is_executed_at_least_once = pred |> Nx.devectorize() |> Nx.any()
         # by wrapping the clause in the following cond, we ensure it is only executed if
         # it is indeed needed at least once
         result = cond([{clause_is_executed_at_least_once, clause}], zero)
 
-        {pred, result}
-      end)
-      |> Enum.reduce(last, fn {pred, clause}, acc ->
-        Nx.select(pred, clause, acc)
+        Nx.select(pred, result, acc)
       end)
     end
   end
