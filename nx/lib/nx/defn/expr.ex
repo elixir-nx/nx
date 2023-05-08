@@ -169,6 +169,36 @@ defmodule Nx.Defn.Expr do
       end
 
     flatten_to_composite(out, context, exprs, &expr(&1, context, :cond, [clauses, last]))
+    |> Composite.traverse(&vectorized_cond/1)
+  end
+
+  defp vectorized_cond(%Nx.Tensor{data: %Nx.Defn.Expr{op: :cond, args: [clauses, last]}} = expr) do
+    [%{vectorized_axes: [{first_axis, _} | _]} = p1 | _] =
+      preds = clauses |> Enum.map(&elem(&1, 0)) |> Nx.broadcast_vectors()
+
+    num_vectorized_axes = length(p1.vectorized_axes)
+
+    clauses =
+      Enum.zip_with(preds, clauses, fn pred, clause ->
+        [_pred, clause] = Nx.broadcast_vectors([pred, clause])
+
+        clause_axes = [
+          {first_axis, :auto} | Enum.drop(clause.vectorized_axes, num_vectorized_axes)
+        ]
+
+        {Nx.revectorize(pred, [{first_axis, :auto}]), Nx.revectorize(clause, clause_axes)}
+      end)
+
+    [_, last] = Nx.broadcast_vectors([p1, last])
+
+    last =
+      Nx.revectorize([{first_axis, :auto} | Enum.drop(last.vectorized_axes, num_vectorized_axes)])
+
+    # From here on, each clause (including last) is led by a single vectorized axis upon which we can iterate through a while loop
+
+    # 1. iterate over that outer axis
+    # 2. apply cond over each iteration for the preds and their corresponding entries
+    # 3. put_slice the result over the accumulator expression
   end
 
   defp broadcast_clause([type = last | expr_types = exprs]) do

@@ -423,6 +423,7 @@ defmodule Nx.VectorizeTest do
     end
   end
 
+<<<<<<< Updated upstream
   describe "while/3" do
     # defn double_n_times(x) do
     #   {_j, rest} =
@@ -509,6 +510,22 @@ defmodule Nx.VectorizeTest do
                ),
                Nx.vectorize(~V[27 162], pred: 2)
              }
+=======
+  describe "cond" do
+    defn vectorized_cond(pred1, clause1, pred2, clause2, clause3) do
+      cond do
+        pred1 -> clause1
+        pred2 -> clause2
+        true -> clause3
+      end
+    end
+
+    test "simple" do
+      pred1 = Nx.vectorize(~V[0 1 0], :pred)
+      pred2 = Nx.vectorize(~V[1 0 0], :pred)
+
+      assert vectorized_cond(pred1, 1, pred2, 2, 3) == Nx.vectorize(~V[2 1 3], :pred)
+>>>>>>> Stashed changes
     end
   end
 end
