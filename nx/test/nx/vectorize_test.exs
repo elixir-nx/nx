@@ -514,7 +514,20 @@ defmodule Nx.VectorizeTest do
     test "simple if" do
       pred = Nx.vectorize(~V[0 1 0], :pred)
 
-      assert vectorized_if(pred, 1, 2) == Nx.vectorize(~V[2 1 2], :pred)
+      io =
+        ExUnit.CaptureIO.capture_io(fn ->
+          assert vectorized_if(pred, 1, 2) == Nx.vectorize(~V[2 1 2], :pred)
+        end)
+
+      assert io ==
+               IO.iodata_to_binary([
+                 "if: ",
+                 inspect(Nx.tensor(1)),
+                 "\n",
+                 "else: ",
+                 inspect(Nx.tensor(2)),
+                 "\n"
+               ])
     end
 
     test "simple cond" do
@@ -538,16 +551,13 @@ defmodule Nx.VectorizeTest do
   test "if with container result" do
     pred1 = Nx.vectorize(~V[2 0 0], :pred)
 
-    first = {1, 2, Nx.vectorize(~V[3 3 3], :x)}
-    second = {7, 8, Nx.vectorize(~V[9 10 11], :x)}
-
     io =
       ExUnit.CaptureIO.capture_io(fn ->
         result =
           vectorized_if(
             pred1,
             {1, 2, 3},
-            second
+            {7, 8, Nx.vectorize(~V[9 10 11], :x)}
           )
 
         assert result == {
