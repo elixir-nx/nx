@@ -670,4 +670,37 @@ defmodule Nx.VectorizeTest do
               20 40
             ], pred1: 3, pred2: 2)
   end
+
+  test "2 vectorized preds with different axes + clauses that match either" do
+    [p1, p2] =
+      Nx.broadcast_vectors([Nx.vectorize(~V[0 1 0], :pred1), Nx.vectorize(~V[1 0], :pred2)])
+
+    cond4(
+      p1,
+      Nx.vectorize(~V[10 100], :pred2),
+      p2,
+      Nx.vectorize(~V[20 200 2000], :pred1),
+      0,
+      30,
+      40
+    )
+    |> IO.inspect()
+
+    # the results here differ, which maybe indicates that we do indeed need to broadcast vectorized_axes between vectorized predicates
+
+    assert cond4(
+             Nx.vectorize(~V[0 1 0], :pred1),
+             Nx.vectorize(~V[10 100], :pred2),
+             Nx.vectorize(~V[1 0], :pred2),
+             Nx.vectorize(~V[20 200 2000], :pred1),
+             0,
+             30,
+             40
+           ) ==
+             Nx.vectorize(~M[
+              20 40
+              10 100
+              2000 40
+            ], pred1: 3, pred2: 2)
+  end
 end
