@@ -493,6 +493,24 @@ defmodule Nx.VectorizeTest do
                Nx.vectorize(~V[27 162], pred: 2)
              }
     end
+
+    test "simple with multiple pred axes" do
+      x = Nx.vectorize(~V[1 2 3], :x)
+      n = Nx.vectorize(~M[
+        0 1 2
+        5 6 3
+      ], y: 2, x: 3)
+
+      assert double_n_times(x, n) ==
+               Nx.vectorize(
+                 ~M[
+                  1 4 12
+                  32 128 24
+                ],
+                 y: 2,
+                 x: 3
+               )
+    end
   end
 
   describe "cond" do

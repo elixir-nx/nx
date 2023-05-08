@@ -592,7 +592,10 @@ defmodule Nx.Defn.Expr do
             outer_body
           )
 
-        result
+        Composite.traverse(result, fn leaf ->
+          %{vectorized_axes: [{^first_axis, _} | other_axes]} = leaf
+          Nx.revectorize(leaf, vectorized_axes ++ other_axes)
+        end)
     end
   end
 
