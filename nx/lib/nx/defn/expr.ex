@@ -138,7 +138,16 @@ defmodule Nx.Defn.Expr do
     if Enum.all?(preds, &(&1.vectorized_axes == [])) do
       non_vectorized_cond(clauses, last, context)
     else
-      clauses = Enum.zip(preds, exprs)
+      # We reshape_vectors to ensure that all predicate vectorized axes are encountered
+      # in the same order throughout the clauses. the zip_with below ensures that only
+      # the vectorized predicates are pushed through with this new order
+      reshaped_preds = Nx.reshape_vectors(preds)
+
+      clauses =
+        Enum.zip_with([preds, reshaped_preds, exprs], fn
+          [%{vectorized_axes: []} = pred, _reshaped, expr] -> {pred, expr}
+          [_, reshaped, expr] -> {reshaped, expr}
+        end)
 
       # note: for all clauses `non_vectorized_pre` can be empty, but either `cond`
       # or `non_vectorized_cond` will take care of this
