@@ -420,13 +420,8 @@ defmodule Nx.Defn.Expr do
         end
 
         {arg, context} = to_param_expr(initial, :while)
-        {condition, body} = condition_body.(arg)
-        condition = to_pred(condition, line, file, :while)
-        body = to_container_expr(body)
-
-        compatible_while!(file, line, initial, body)
-
-        while(initial, context, arg, condition, body)
+        condition = condition_body.(:condition, arg) |> to_pred(line, file, :while)
+        while_vectorized(file, line, initial, context, arg, condition, condition_body)
 
       {:while, %T{} = generator} ->
         range =
@@ -439,15 +434,15 @@ defmodule Nx.Defn.Expr do
               0..(Nx.axis_size(generator, 0) - 1)//1
           end
 
-        condition_body = fn {{index, generator_expr}, acc} ->
-          condition_body.({generator_expr[index], acc})
+        condition_body = fn which, {{index, generator_expr}, acc} ->
+          condition_body.(which, {generator_expr[index], acc})
         end
 
         while_range(range, file, line, initial, generator, condition_body, opts)
 
       {:while, _.._//_ = range} ->
-        condition_body = fn {{index, {}}, acc} ->
-          condition_body.({index, acc})
+        condition_body = fn which, {{index, {}}, acc} ->
+          condition_body.(which, {index, acc})
         end
 
         while_range(range, file, line, initial, {}, condition_body, opts)
@@ -457,6 +452,95 @@ defmodule Nx.Defn.Expr do
           line: line,
           file: file,
           description: "generators in while expect a range or a tensor, got: #{inspect(other)}"
+    end
+  end
+
+  defp while_vectorized(file, line, initial, context, arg, condition, condition_body) do
+    case condition.vectorized_axes do
+      [] ->
+        body = condition_body.(:body, arg) |> to_container_expr()
+        compatible_while!(file, line, initial, body)
+        while(initial, context, arg, condition, body)
+
+      [{first_axis, _} | _] = vectorized_axes ->
+        # 1. broadcast_vectors each `initial` arg with `pred`
+        # 2. Flatten the common vectorized axes
+        # 3. add a parameter "i" for iterating on an outer while
+        # 4. take the i-th position and pass to the inner while
+        # 5. put_slice the results onto the accumulators
+        # 6. return the tuple without the "i" parameter
+
+        num_vectorized_axes = length(vectorized_axes)
+
+        {initial, max_vec_size} =
+          Composite.traverse(initial, nil, fn leaf, _ ->
+            # broadcast and pull common axes to the front
+            [_, leaf] = Nx.broadcast_vectors([condition, leaf])
+
+            %{vectorized_axes: leaf_axes} = leaf
+
+            # remove common axes so that we can flatten them into a fixed axis.
+            # We use the `first_axis` to ensure that there's no name collision
+            # in an easy way.
+            vectorized_axes = [{first_axis, :auto} | Enum.drop(leaf_axes, num_vectorized_axes)]
+
+            %{vectorized_axes: [{_, s} | _]} = leaf = Nx.revectorize(leaf, vectorized_axes)
+            {leaf, s}
+          end)
+
+        # add the vectorized axis index to to the while initial args
+        outer_initial = {tensor(0), initial}
+        {{index_param, outer_arg}, outer_context} = to_param_expr(outer_initial, :while)
+
+        outer_condition = Nx.less(index_param, tensor(max_vec_size))
+
+        inner_initial =
+          Composite.traverse(outer_arg, fn %{vectorized_axes: [_ | ax]} = leaf ->
+            leaf
+            |> Nx.devectorize()
+            |> Nx.take(index_param)
+            |> Nx.vectorize(ax)
+          end)
+
+        {inner_arg, inner_context} = to_param_expr(inner_initial, :while)
+
+        inner_condition = condition_body.(:condition, inner_arg) |> to_pred(line, file, :while)
+        inner_body = condition_body.(:body, inner_arg) |> to_container_expr()
+
+        inner_while = while(inner_initial, inner_context, inner_arg, inner_condition, inner_body)
+
+        {outer_body, _} =
+          Composite.traverse(
+            inner_while,
+            Composite.flatten_list([outer_arg]),
+            fn node, [target | targets] ->
+              target = Nx.devectorize(target)
+              starts = [index_param | List.duplicate(0, tuple_size(target.shape) - 1)]
+
+              updated_target =
+                target
+                |> Nx.put_slice(starts, Nx.devectorize(node) |> Nx.new_axis(0))
+                |> Nx.vectorize(target.vectorized_axes)
+
+              {updated_target, targets}
+            end
+          )
+
+        outer_body = {Nx.add(index_param, 1), outer_body}
+
+        {_aux_index, result} =
+          while(
+            outer_initial,
+            outer_context,
+            {index_param, outer_arg},
+            outer_condition,
+            outer_body
+          )
+
+        Composite.traverse(result, fn leaf ->
+          %{vectorized_axes: [{^first_axis, _} | other_axes]} = leaf
+          Nx.revectorize(leaf, vectorized_axes ++ other_axes)
+        end)
     end
   end
 
@@ -500,8 +584,7 @@ defmodule Nx.Defn.Expr do
           body =
             Enum.reduce(internal_unroll, arg, fn index, acc ->
               next = Nx.add(index_param, step * index)
-              {true, body} = condition_body.({{next, generator_param}, acc})
-              body = to_container_expr(body)
+              body = condition_body.(:body, {{next, generator_param}, acc}) |> to_container_expr()
               index == 0 and compatible_while!(file, line, initial, body)
               body
             end)
@@ -517,8 +600,7 @@ defmodule Nx.Defn.Expr do
       end
 
     Enum.reduce(external, result, fn index, acc ->
-      {true, body} = condition_body.({{index, generator}, acc})
-      body = to_container_expr(body)
+      body = condition_body.(:body, {{index, generator}, acc}) |> to_container_expr()
       index == external.first and compatible_while!(file, line, initial, body)
       body
     end)
