@@ -915,16 +915,29 @@ defmodule Nx.Shape do
         %Nx.Tensor{shape: indices_shape},
         %Nx.Tensor{shape: updates_shape}
       ) do
-    case {indices_shape, updates_shape} do
-      _ when tuple_size(indices_shape) != 2 ->
-        raise(ArgumentError, "indices must be a rank 2 tensor, got: #{tuple_size(indices_shape)}")
+    r = tuple_size(target_shape)
 
-      _ when tuple_size(updates_shape) != 1 ->
+    case {indices_shape, updates_shape} do
+      {{n}, _} when n != r ->
+        raise ArgumentError,
+              "expected indices to have shape {#{r}}, got: #{inspect({n})}"
+
+      {{^r}, updates_shape} when updates_shape != {} ->
+        raise ArgumentError,
+              "updates must be a scalar tensor when indices has rank 1, got: #{inspect(updates_shape)}"
+
+      _ when tuple_size(indices_shape) > 2 ->
+        raise(
+          ArgumentError,
+          "indices must be a rank 1 or 2 tensor, got: #{tuple_size(indices_shape)}"
+        )
+
+      _ when tuple_size(indices_shape) > 1 and tuple_size(updates_shape) != 1 ->
         raise(ArgumentError, "updates must be a rank 1 tensor, got: #{tuple_size(updates_shape)}")
 
-      {{_, n}, _} when n != tuple_size(target_shape) ->
+      {{_, n}, _} when n != r ->
         raise ArgumentError,
-              "expected indices to have shape {*, #{tuple_size(target_shape)}}, got: #{inspect(indices_shape)}"
+              "expected indices to have shape {*, #{r}}, got: #{inspect(indices_shape)}"
 
       {{n, _}, {m}} when n != m ->
         raise ArgumentError,
