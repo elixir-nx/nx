@@ -155,33 +155,52 @@ defmodule Nx.Defn.Expr do
         {non_vectorized_pre, [{pred, expr}]} ->
           # In this case, the vectorized pred is the last non-default one, so
           # we can use `last` as the default value for our select because it is the "else" branch
-          clause_is_executed_at_least_once = pred |> Nx.devectorize() |> Nx.any()
+          devec_pred = Nx.devectorize(pred)
+          then_selector = Nx.any(devec_pred)
+          else_selector = Nx.any(Nx.logical_not(devec_pred))
 
-          then_clause =
-            non_vectorized_cond([{clause_is_executed_at_least_once, expr}], last, context)
+          zero =
+            Composite.traverse(last, fn leaf ->
+              Nx.broadcast(0, Nx.devectorize(leaf).shape) |> Nx.vectorize(leaf.vectorized_axes)
+            end)
+
+          then_clause = non_vectorized_cond([{then_selector, expr}], zero, context)
+
+          else_clause =
+            Composite.flatten_list([non_vectorized_cond([{else_selector, last}], zero, context)])
 
           {clause, []} =
-            Composite.traverse(then_clause, Composite.flatten_list([last]), fn node, [h | tl] ->
-              {Nx.select(pred, node, h), tl}
+            Composite.traverse(then_clause, else_clause, fn
+              l, [r | tl] ->
+                {Nx.select(pred, l, r), tl}
             end)
 
           non_vectorized_cond(non_vectorized_pre, clause, context)
 
         {non_vectorized_pre, [{pred, expr} | other]} ->
           # In this case, we have remaining possibly vectorized clauses in `other`
-          clause_is_executed_at_least_once = pred |> Nx.devectorize() |> Nx.any()
+          devec_pred = Nx.devectorize(pred)
+          then_selector = Nx.any(devec_pred)
+          else_selector = Nx.any(Nx.logical_not(devec_pred))
+
+          zero =
+            Composite.traverse(last, fn leaf ->
+              Nx.broadcast(0, Nx.devectorize(leaf).shape) |> Nx.vectorize(leaf.vectorized_axes)
+            end)
 
           # here we build the `other` clauses into a remaining cond that also contains `last`.
           # It will also be the default value for when the expr is not executed
-          else_clause = cond(other, last)
+          then_clause = non_vectorized_cond([{then_selector, expr}], zero, context)
 
-          then_clause =
-            non_vectorized_cond([{clause_is_executed_at_least_once, expr}], else_clause, context)
+          else_clause =
+            Composite.flatten_list([
+              non_vectorized_cond([{else_selector, cond(other, last)}], zero, context)
+            ])
 
           {clause, []} =
-            Composite.traverse(then_clause, Composite.flatten_list([else_clause]), fn node,
-                                                                                      [h | tl] ->
-              {Nx.select(pred, node, h), tl}
+            Composite.traverse(then_clause, else_clause, fn
+              l, [r | tl] ->
+                {Nx.select(pred, l, r), tl}
             end)
 
           non_vectorized_cond(non_vectorized_pre, clause, context)

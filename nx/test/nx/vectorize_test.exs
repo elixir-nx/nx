@@ -605,11 +605,31 @@ defmodule Nx.VectorizeTest do
 
   defn cond4(p1, c1, p2, c2, p3, c3, c4) do
     cond do
-      p1 -> c1
-      p2 -> c2
-      p3 -> c3
-      true -> c4
+      p1 -> print_value(c1, label: "c1")
+      p2 -> print_value(c2, label: "c2")
+      p3 -> print_value(c3, label: "c3")
+      true -> print_value(c4, label: "c4")
     end
+  end
+
+  test "only executes selected branches" do
+    t = Nx.vectorize(~V[1], :pred)
+    val = Nx.tensor(10)
+    ret = Nx.vectorize(~V[10], :pred)
+
+    assert ExUnit.CaptureIO.capture_io(fn -> assert ret == cond4(t, 10, 0, 10, 0, 10, 10) end) ==
+             "c1: #{inspect(val)}\n"
+
+    assert ExUnit.CaptureIO.capture_io(fn -> assert ret == cond4(0, 10, t, 10, 0, 10, 10) end) ==
+             "c2: #{inspect(val)}\n"
+
+    assert ExUnit.CaptureIO.capture_io(fn -> assert ret == cond4(0, 10, 0, 10, t, 10, 10) end) ==
+             "c3: #{inspect(val)}\n"
+
+    assert ExUnit.CaptureIO.capture_io(fn ->
+             assert ret == cond4(Nx.multiply(t, 0), 10, 0, 10, 0, 10, 10)
+           end) ==
+             "c4: #{inspect(val)}\n"
   end
 
   test "1 vectorized pred in the beginning" do
