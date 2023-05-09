@@ -129,13 +129,68 @@ defmodule Nx.Defn.Expr do
   @doc """
   Creates a `cond` tensor expression.
   """
-  def cond([], last) do
+  def cond([], last), do: last
+
+  def cond(clauses, last) do
+    {preds, exprs} = Enum.unzip(clauses)
+    {preds, context} = to_exprs(preds)
+
+    if Enum.all?(preds, &(&1.vectorized_axes == [])) do
+      non_vectorized_cond(clauses, last, context)
+    else
+      # We reshape_vectors to ensure that all predicate vectorized axes are encountered
+      # in the same order throughout the clauses. the zip_with below ensures that only
+      # the vectorized predicates are pushed through with this new order
+      reshaped_preds = Nx.reshape_vectors(preds)
+
+      clauses =
+        Enum.zip_with([preds, reshaped_preds, exprs], fn
+          [%{vectorized_axes: []} = pred, _reshaped, expr] -> {pred, expr}
+          [_, reshaped, expr] -> {reshaped, expr}
+        end)
+
+      # note: because we already checked above if any pred is vectorized, the right
+      # side of the tuple will always have at least one element in the list
+      {non_vectorized_pre, [{pred, expr} | other]} =
+        Enum.split_while(clauses, fn {pred, _expr} -> pred.vectorized_axes == [] end)
+
+      # `other` can also be an empty list. `cond([], last)` deals with this above
+      devec_pred = Nx.devectorize(pred)
+      then_selector = Nx.any(devec_pred)
+
+      # note: any(not(x)) == not(all(x)); we can skip the outer not if we swap the branches
+      else_selector = Nx.all(devec_pred)
+
+      zero =
+        Composite.traverse(last, fn leaf ->
+          Nx.broadcast(0, Nx.devectorize(leaf).shape) |> Nx.vectorize(leaf.vectorized_axes)
+        end)
+
+      # here we build the `other` clauses into a remaining cond that also contains `last`.
+      # It will also be the default value for when the expr is not executed
+      then_clause = non_vectorized_cond([{then_selector, expr}], zero, context)
+
+      else_clause =
+        Composite.flatten_list([
+          non_vectorized_cond([{else_selector, zero}], cond(other, last), context)
+        ])
+
+      {clause, []} =
+        Composite.traverse(then_clause, else_clause, fn
+          l, [r | tl] ->
+            {Nx.select(pred, l, r), tl}
+        end)
+
+      non_vectorized_cond(non_vectorized_pre, clause, context)
+    end
+  end
+
+  defp non_vectorized_cond([], last, _context) do
     last
   end
 
-  def cond(clauses, last = out) do
+  defp non_vectorized_cond(clauses, last = out, context) do
     {preds, exprs} = Enum.unzip(clauses)
-    {preds, context} = to_exprs(preds)
 
     {broadcasted_clauses, vectorized_axes} =
       [last | exprs]
@@ -168,7 +223,12 @@ defmodule Nx.Defn.Expr do
         result
       end
 
-    flatten_to_composite(out, context, exprs, &expr(&1, context, :cond, [clauses, last]))
+    flatten_to_composite(
+      out,
+      context,
+      exprs,
+      &expr(&1, context, :cond, [clauses, last])
+    )
   end
 
   defp broadcast_clause([type = last | expr_types = exprs]) do
