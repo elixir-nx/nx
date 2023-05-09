@@ -7233,7 +7233,7 @@ defmodule Nx do
 
   As a shorthand notation, rank-1 indices can be used for updating a single entry:
 
-      iex> Nx.indexed_add(Nx.tensor([[1], [2]]), Nx.tensor([1, 0]), Nx.tensor(8))
+      iex> Nx.indexed_add(Nx.tensor([[1], [2]]), Nx.tensor([1, 0]), 8)
       #Nx.Tensor<
         s64[2][1]
         [
@@ -7356,7 +7356,7 @@ defmodule Nx do
 
   As a shorthand notation, rank-1 indices can be used for updating a single entry:
 
-      iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([1, 0]), Nx.tensor(10))
+      iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([1, 0]), 10)
       #Nx.Tensor<
         s64[2][1]
         [
@@ -7410,6 +7410,7 @@ defmodule Nx do
   end
 
   defp indexed_op(target, %Nx.Tensor{shape: {_}} = index, update, op) when is_tensor(update) do
+    update = to_tensor(update)
     Nx.Shape.indexed(target, index, update)
     indexed_op(target, Nx.new_axis(index, 0), Nx.new_axis(update, 0), op)
   end
