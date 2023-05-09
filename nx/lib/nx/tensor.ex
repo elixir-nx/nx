@@ -93,11 +93,12 @@ defmodule Nx.Tensor do
     start = List.duplicate(0, offset) ++ start
     offset_shape = Keyword.values(vectorized_axes)
     lengths = offset_shape ++ lengths
+    strides = List.duplicate(1, rank + offset)
 
     tensor = Nx.devectorize(tensor)
 
     %{tensor | shape: List.to_tuple(lengths)}
-    |> impl.slice(tensor, start, lengths, List.duplicate(1, rank))
+    |> impl.slice(tensor, start, lengths, strides)
     |> Nx.vectorize(vectorized_axes)
     |> Nx.squeeze(axes: squeeze)
   end

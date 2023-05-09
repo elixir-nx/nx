@@ -566,146 +566,187 @@ defmodule Nx.VectorizeTest do
                  "clause_3: #{inspect(Nx.tensor(3))}\n"
                ])
     end
-  end
 
-  test "if with container result" do
-    pred1 = Nx.vectorize(~V[2 0 0], :pred)
+    test "if with container result" do
+      pred1 = Nx.vectorize(~V[2 0 0], :pred)
 
-    io =
-      ExUnit.CaptureIO.capture_io(fn ->
-        result =
-          vectorized_if(
-            pred1,
-            {1, 2, 3},
-            {7, 8, Nx.vectorize(~V[9 10 11], :x)}
-          )
+      io =
+        ExUnit.CaptureIO.capture_io(fn ->
+          result =
+            vectorized_if(
+              pred1,
+              {1, 2, 3},
+              {7, 8, Nx.vectorize(~V[9 10 11], :x)}
+            )
 
-        assert result == {
-                 Nx.vectorize(~V[1 7 7], :pred),
-                 Nx.vectorize(~V[2 8 8], :pred),
-                 Nx.vectorize(~M[
+          assert result == {
+                   Nx.vectorize(~V[1 7 7], :pred),
+                   Nx.vectorize(~V[2 8 8], :pred),
+                   Nx.vectorize(~M[
                   3 3 3
                   9 10 11
                   9 10 11
                 ], pred: 3, x: 3)
-               }
-      end)
+                 }
+        end)
 
-    # This assertion ensures that the clause for pred2 is never executed
-    assert String.replace(io, ",\n", ",") ==
-             IO.iodata_to_binary([
-               "if: ",
-               inspect({Nx.tensor(1), Nx.tensor(2), Nx.tensor(3)}),
-               "\n",
-               "else: ",
-               inspect({Nx.tensor(7), Nx.tensor(8), Nx.tensor([9, 10, 11], names: [:x])}),
-               "\n"
-             ])
-  end
-
-  defn cond4(p1, c1, p2, c2, p3, c3, c4) do
-    cond do
-      p1 -> send_value(c1, clause: "c1")
-      p2 -> send_value(c2, clause: "c2")
-      p3 -> send_value(c3, clause: "c3")
-      true -> send_value(c4, clause: "c4")
-    end
-  end
-
-  deftransformp send_value(val, opts \\ []) do
-    Nx.Defn.Kernel.hook(val, &send(self(), {&1, opts}))
-  end
-
-  test "only executes selected branches" do
-    t = Nx.vectorize(~V[1], :pred)
-    f = Nx.vectorize(~V[0], :pred)
-
-    assert = fn res, val, clause ->
-      t = Nx.tensor(val)
-      assert Nx.vectorize(Nx.new_axis(t, 0), :pred) == res
-      assert_received {^t, clause: ^clause}
-      refute_received _
+      # This assertion ensures that the clause for pred2 is never executed
+      assert String.replace(io, ",\n", ",") ==
+               IO.iodata_to_binary([
+                 "if: ",
+                 inspect({Nx.tensor(1), Nx.tensor(2), Nx.tensor(3)}),
+                 "\n",
+                 "else: ",
+                 inspect({Nx.tensor(7), Nx.tensor(8), Nx.tensor([9, 10, 11], names: [:x])}),
+                 "\n"
+               ])
     end
 
-    assert.(cond4(t, 10, 0, 20, 0, 30, 40), 10, "c1")
-    assert.(cond4(0, 10, t, 20, 0, 30, 40), 20, "c2")
-    assert.(cond4(0, 10, 0, 20, t, 30, 40), 30, "c3")
-    assert.(cond4(f, 10, 0, 20, 0, 30, 40), 40, "c4")
-  end
+    defn cond4(p1, c1, p2, c2, p3, c3, c4) do
+      cond do
+        p1 -> send_value(c1, clause: "c1")
+        p2 -> send_value(c2, clause: "c2")
+        p3 -> send_value(c3, clause: "c3")
+        true -> send_value(c4, clause: "c4")
+      end
+    end
 
-  test "1 vectorized pred in the beginning" do
-    assert cond4(Nx.vectorize(~V[0 1], :pred), 10, 0, 20, 0, 30, 40) ==
-             Nx.vectorize(~V[40 10], :pred)
+    deftransformp send_value(val, opts \\ []) do
+      Nx.Defn.Kernel.hook(val, &send(self(), {&1, opts}))
+    end
 
-    assert cond4(Nx.vectorize(~V[0 0], :pred), 10, 1, 20, 0, 30, 40) ==
-             Nx.vectorize(~V[20 20], :pred)
+    test "only executes selected branches" do
+      t = Nx.vectorize(~V[1], :pred)
+      f = Nx.vectorize(~V[0], :pred)
 
-    assert cond4(Nx.vectorize(~V[0 0], :pred), 10, 0, 20, 1, 30, 40) ==
-             Nx.vectorize(~V[30 30], :pred)
+      assert = fn res, val, clause ->
+        t = Nx.tensor(val)
+        assert Nx.vectorize(Nx.new_axis(t, 0), :pred) == res
+        assert_received {^t, clause: ^clause}
+        refute_received _
+      end
 
-    assert cond4(Nx.vectorize(~V[0 0], :pred), 10, 0, 20, 0, 30, 40) ==
-             Nx.vectorize(~V[40 40], :pred)
-  end
+      assert.(cond4(t, 10, 0, 20, 0, 30, 40), 10, "c1")
+      assert.(cond4(0, 10, t, 20, 0, 30, 40), 20, "c2")
+      assert.(cond4(0, 10, 0, 20, t, 30, 40), 30, "c3")
+      assert.(cond4(f, 10, 0, 20, 0, 30, 40), 40, "c4")
+    end
 
-  test "1 vectorized pred in the second but not last position" do
-    assert cond4(0, 10, Nx.vectorize(~V[0 1], :pred), 20, 0, 30, 40) ==
-             Nx.vectorize(~V[40 20], :pred)
+    test "1 vectorized pred in the beginning" do
+      assert cond4(Nx.vectorize(~V[0 1], :pred), 10, 0, 20, 0, 30, 40) ==
+               Nx.vectorize(~V[40 10], :pred)
 
-    assert cond4(1, 10, Nx.vectorize(~V[0 1], :pred), 20, 0, 30, 40) ==
-             Nx.vectorize(~V[10 10], :pred)
+      assert cond4(Nx.vectorize(~V[0 0], :pred), 10, 1, 20, 0, 30, 40) ==
+               Nx.vectorize(~V[20 20], :pred)
 
-    assert cond4(0, 10, Nx.vectorize(~V[0 0], :pred), 20, 1, 30, 40) ==
-             Nx.vectorize(~V[30 30], :pred)
+      assert cond4(Nx.vectorize(~V[0 0], :pred), 10, 0, 20, 1, 30, 40) ==
+               Nx.vectorize(~V[30 30], :pred)
 
-    assert cond4(0, 10, Nx.vectorize(~V[0 0], :pred), 20, 0, 30, 40) ==
-             Nx.vectorize(~V[40 40], :pred)
-  end
+      assert cond4(Nx.vectorize(~V[0 0], :pred), 10, 0, 20, 0, 30, 40) ==
+               Nx.vectorize(~V[40 40], :pred)
+    end
 
-  test "1 vectorized pred in the last position" do
-    assert cond4(0, 10, 0, 20, Nx.vectorize(~V[0 1], :pred), 30, 40) ==
-             Nx.vectorize(~V[40 30], :pred)
+    test "1 vectorized pred in the second but not last position" do
+      assert cond4(0, 10, Nx.vectorize(~V[0 1], :pred), 20, 0, 30, 40) ==
+               Nx.vectorize(~V[40 20], :pred)
 
-    assert cond4(1, 10, 0, 20, Nx.vectorize(~V[0 1], :pred), 30, 40) ==
-             Nx.vectorize(~V[10 10], :pred)
+      assert cond4(1, 10, Nx.vectorize(~V[0 1], :pred), 20, 0, 30, 40) ==
+               Nx.vectorize(~V[10 10], :pred)
 
-    assert cond4(0, 10, 1, 20, Nx.vectorize(~V[0 1], :pred), 30, 40) ==
-             Nx.vectorize(~V[20 20], :pred)
+      assert cond4(0, 10, Nx.vectorize(~V[0 0], :pred), 20, 1, 30, 40) ==
+               Nx.vectorize(~V[30 30], :pred)
 
-    assert cond4(0, 10, 0, 20, Nx.vectorize(~V[0 0], :pred), 30, 40) ==
-             Nx.vectorize(~V[40 40], :pred)
-  end
+      assert cond4(0, 10, Nx.vectorize(~V[0 0], :pred), 20, 0, 30, 40) ==
+               Nx.vectorize(~V[40 40], :pred)
+    end
 
-  test "2 vectorized preds with different axes" do
-    assert cond4(
-             Nx.vectorize(~V[0 1 0], :pred1),
-             10,
-             Nx.vectorize(~V[1 0], :pred2),
-             20,
-             0,
-             30,
-             40
-           ) ==
-             Nx.vectorize(~M[
+    test "1 vectorized pred in the last position" do
+      assert cond4(0, 10, 0, 20, Nx.vectorize(~V[0 1], :pred), 30, 40) ==
+               Nx.vectorize(~V[40 30], :pred)
+
+      assert cond4(1, 10, 0, 20, Nx.vectorize(~V[0 1], :pred), 30, 40) ==
+               Nx.vectorize(~V[10 10], :pred)
+
+      assert cond4(0, 10, 1, 20, Nx.vectorize(~V[0 1], :pred), 30, 40) ==
+               Nx.vectorize(~V[20 20], :pred)
+
+      assert cond4(0, 10, 0, 20, Nx.vectorize(~V[0 0], :pred), 30, 40) ==
+               Nx.vectorize(~V[40 40], :pred)
+    end
+
+    test "2 vectorized preds with different axes" do
+      assert cond4(
+               Nx.vectorize(~V[0 1 0], :pred1),
+               10,
+               Nx.vectorize(~V[1 0], :pred2),
+               20,
+               0,
+               30,
+               40
+             ) ==
+               Nx.vectorize(~M[
               20 40
               10 10
               20 40
             ], pred1: 3, pred2: 2)
-  end
+    end
 
-  test "2 vectorized preds with different axes + clauses that match either" do
-    assert cond4(
-             Nx.vectorize(~V[0 1 0], :pred1),
-             Nx.vectorize(~V[10 100], :pred2),
-             Nx.vectorize(~V[1 0], :pred2),
-             Nx.vectorize(~V[20 200 2000], :pred1),
-             0,
-             30,
-             40
-           ) ==
-             Nx.vectorize(~M[
+    test "2 vectorized preds with different axes + clauses that match either" do
+      assert cond4(
+               Nx.vectorize(~V[0 1 0], :pred1),
+               Nx.vectorize(~V[10 100], :pred2),
+               Nx.vectorize(~V[1 0], :pred2),
+               Nx.vectorize(~V[20 200 2000], :pred1),
+               0,
+               30,
+               40
+             ) ==
+               Nx.vectorize(~M[
               20 40
               10 100
               2000 40
             ], pred1: 3, pred2: 2)
+    end
+  end
+
+  describe "access" do
+    test "get vectorized tensor, unvectorized indices" do
+      t = Nx.iota({3}, vectorized_axes: [x: 2])
+
+      assert t[0] == Nx.vectorize(Nx.tensor([0, 0]), x: 2)
+      assert t[1] == Nx.vectorize(Nx.tensor([1, 1]), x: 2)
+      assert t[2] == Nx.vectorize(Nx.tensor([2, 2]), x: 2)
+
+      t = Nx.iota({3, 4}, vectorized_axes: [x: 2])
+
+      assert t[[0, 1..2]] == Nx.vectorize(Nx.tensor([[1, 2], [1, 2]]), x: 2)
+      assert t[[1, 1..1]] == Nx.vectorize(Nx.tensor([[5], [5]]), x: 2)
+      assert t[[2, 2..3]] == Nx.vectorize(Nx.tensor([[10, 11], [10, 11]]), x: 2)
+    end
+
+    @tag :skip
+    test "get unvectorized tensor, vectorized indices" do
+      t = Nx.iota({6})
+      i = Nx.tensor([0, 2, 4]) |> Nx.vectorize(:i)
+
+      assert t[i] == Nx.vectorize(Nx.tensor([0, 2, 4]), i: 3)
+
+      t = Nx.iota({6, 2})
+
+      i = Nx.tensor([0, 2, 4]) |> Nx.vectorize(:i)
+
+      assert t[[i, 0..1]] ==
+               Nx.vectorize(
+                 Nx.tensor([
+                   [0, 1],
+                   [4, 5],
+                   [8, 9]
+                 ]),
+                 i: 3
+               )
+    end
+
+    @tag :skip
+    test "get vectorized tensor, vectorized indices"
   end
 end
