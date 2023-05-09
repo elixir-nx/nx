@@ -7232,6 +7232,17 @@ defmodule Nx do
         [3]
       >
 
+  As a shorthand notation, rank-1 indices can be used for updating a single entry:
+
+      iex> Nx.indexed_add(Nx.tensor([[1], [2]]), Nx.tensor([1, 0]), 8)
+      #Nx.Tensor<
+        s64[2][1]
+        [
+          [1],
+          [10]
+        ]
+      >
+
   ## Vectorized tensors
 
   All of the inputs can be vectorized. The function will broadcast along the vectorized axes
@@ -7259,7 +7270,7 @@ defmodule Nx do
 
   ## Error cases
       iex> Nx.indexed_add(Nx.tensor([[1], [2]]), Nx.tensor([[[1, 2, 3]]]), Nx.tensor([0]))
-      ** (ArgumentError) indices must be a rank 2 tensor, got: 3
+      ** (ArgumentError) indices must be a rank 1 or 2 tensor, got: 3
 
       iex> Nx.indexed_add(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2]]), Nx.tensor([[0]]))
       ** (ArgumentError) updates must be a rank 1 tensor, got: 2
@@ -7344,6 +7355,17 @@ defmodule Nx do
         [3]
       >
 
+  As a shorthand notation, rank-1 indices can be used for updating a single entry:
+
+      iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([1, 0]), 10)
+      #Nx.Tensor<
+        s64[2][1]
+        [
+          [1],
+          [10]
+        ]
+      >
+
   ## Vectorized tensors
 
   All of the inputs can be vectorized. The function will broadcast along the vectorized axes
@@ -7372,7 +7394,7 @@ defmodule Nx do
   ## Error cases
 
       iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([[[1, 2, 3]]]), Nx.tensor([0]))
-      ** (ArgumentError) indices must be a rank 2 tensor, got: 3
+      ** (ArgumentError) indices must be a rank 1 or 2 tensor, got: 3
 
       iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2]]), Nx.tensor([[0]]))
       ** (ArgumentError) updates must be a rank 1 tensor, got: 2
@@ -7386,6 +7408,12 @@ defmodule Nx do
   @doc type: :indexed
   def indexed_put(target, indices, updates) do
     indexed_op(target, indices, updates, :indexed_put)
+  end
+
+  defp indexed_op(target, %Nx.Tensor{shape: {_}} = index, update, op) when is_tensor(update) do
+    update = to_tensor(update)
+    Nx.Shape.indexed(target, index, update)
+    indexed_op(target, Nx.new_axis(index, 0), Nx.new_axis(update, 0), op)
   end
 
   defp indexed_op(target, indices, updates, op) do
