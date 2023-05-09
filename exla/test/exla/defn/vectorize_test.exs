@@ -195,7 +195,10 @@ defmodule EXLA.Defn.VectorizeTest do
       pred1 = Nx.vectorize(~V[1 0 0], :pred)
       pred2 = Nx.vectorize(~V[0 0 0], :pred)
 
-      assert_equal(vectorized_cond(pred1, 1, pred2, 2, 3, pid: self()), Nx.vectorize(~V[1 3 3], :pred))
+      assert_equal(
+        vectorized_cond(pred1, 1, pred2, 2, 3, pid: self()),
+        Nx.vectorize(~V[1 3 3], :pred)
+      )
 
       assert_received {t, clause: "clause_1"}
       assert_equal(t, Nx.tensor(1))
@@ -207,24 +210,23 @@ defmodule EXLA.Defn.VectorizeTest do
     test "if with container result" do
       pred1 = Nx.vectorize(~V[2 0 0], :pred)
 
-          result =
-            vectorized_if(
-              pred1,
-              {1, 2, 3},
-              {7, 8, Nx.vectorize(~V[9 10 11], :x)},
-              pid: self()
-            )
+      result =
+        vectorized_if(
+          pred1,
+          {1, 2, 3},
+          {7, 8, Nx.vectorize(~V[9 10 11], :x)},
+          pid: self()
+        )
 
-          assert_equal(result, {
-                   Nx.vectorize(~V[1 7 7], :pred),
-                   Nx.vectorize(~V[2 8 8], :pred),
-                   Nx.vectorize(~M[
+      assert_equal(result, {
+        Nx.vectorize(~V[1 7 7], :pred),
+        Nx.vectorize(~V[2 8 8], :pred),
+        Nx.vectorize(~M[
                   3 3 3
                   9 10 11
                   9 10 11
                 ], pred: 3, x: 3)
-                 })
-
+      })
 
       assert_received {t, clause: "if"}
       assert_equal(t, {Nx.tensor(1), Nx.tensor(2), Nx.tensor(3)})
