@@ -149,62 +149,39 @@ defmodule Nx.Defn.Expr do
           [_, reshaped, expr] -> {reshaped, expr}
         end)
 
-      # note: for all clauses `non_vectorized_pre` can be empty, but either `cond`
-      # or `non_vectorized_cond` will take care of this
-      case Enum.split_while(clauses, fn {pred, _expr} -> pred.vectorized_axes == [] end) do
-        {non_vectorized_pre, [{pred, expr}]} ->
-          # In this case, the vectorized pred is the last non-default one, so
-          # we can use `last` as the default value for our select because it is the "else" branch
-          devec_pred = Nx.devectorize(pred)
-          then_selector = Nx.any(devec_pred)
-          else_selector = Nx.any(Nx.logical_not(devec_pred))
+      # note: because we already checked above if any pred is vectorized, the right
+      # side of the tuple will always have at least one element in the list
+      {non_vectorized_pre, [{pred, expr} | other]} =
+        Enum.split_while(clauses, fn {pred, _expr} -> pred.vectorized_axes == [] end)
 
-          zero =
-            Composite.traverse(last, fn leaf ->
-              Nx.broadcast(0, Nx.devectorize(leaf).shape) |> Nx.vectorize(leaf.vectorized_axes)
-            end)
+      # `other` can also be an empty list. `cond([], last)` deals with this above
+      devec_pred = Nx.devectorize(pred)
+      then_selector = Nx.any(devec_pred)
 
-          then_clause = non_vectorized_cond([{then_selector, expr}], zero, context)
+      # note: any(not(x)) == not(all(x)); we can skip the outer not if we swap the branches
+      else_selector = Nx.all(devec_pred)
 
-          else_clause =
-            Composite.flatten_list([non_vectorized_cond([{else_selector, last}], zero, context)])
+      zero =
+        Composite.traverse(last, fn leaf ->
+          Nx.broadcast(0, Nx.devectorize(leaf).shape) |> Nx.vectorize(leaf.vectorized_axes)
+        end)
 
-          {clause, []} =
-            Composite.traverse(then_clause, else_clause, fn
-              l, [r | tl] ->
-                {Nx.select(pred, l, r), tl}
-            end)
+      # here we build the `other` clauses into a remaining cond that also contains `last`.
+      # It will also be the default value for when the expr is not executed
+      then_clause = non_vectorized_cond([{then_selector, expr}], zero, context)
 
-          non_vectorized_cond(non_vectorized_pre, clause, context)
+      else_clause =
+        Composite.flatten_list([
+          non_vectorized_cond([{else_selector, zero}], cond(other, last), context)
+        ])
 
-        {non_vectorized_pre, [{pred, expr} | other]} ->
-          # In this case, we have remaining possibly vectorized clauses in `other`
-          devec_pred = Nx.devectorize(pred)
-          then_selector = Nx.any(devec_pred)
-          else_selector = Nx.any(Nx.logical_not(devec_pred))
+      {clause, []} =
+        Composite.traverse(then_clause, else_clause, fn
+          l, [r | tl] ->
+            {Nx.select(pred, l, r), tl}
+        end)
 
-          zero =
-            Composite.traverse(last, fn leaf ->
-              Nx.broadcast(0, Nx.devectorize(leaf).shape) |> Nx.vectorize(leaf.vectorized_axes)
-            end)
-
-          # here we build the `other` clauses into a remaining cond that also contains `last`.
-          # It will also be the default value for when the expr is not executed
-          then_clause = non_vectorized_cond([{then_selector, expr}], zero, context)
-
-          else_clause =
-            Composite.flatten_list([
-              non_vectorized_cond([{else_selector, cond(other, last)}], zero, context)
-            ])
-
-          {clause, []} =
-            Composite.traverse(then_clause, else_clause, fn
-              l, [r | tl] ->
-                {Nx.select(pred, l, r), tl}
-            end)
-
-          non_vectorized_cond(non_vectorized_pre, clause, context)
-      end
+      non_vectorized_cond(non_vectorized_pre, clause, context)
     end
   end
 

@@ -605,11 +605,15 @@ defmodule Nx.VectorizeTest do
 
   defn cond4(p1, c1, p2, c2, p3, c3, c4) do
     cond do
-      p1 -> print_value(c1, label: "c1")
-      p2 -> print_value(c2, label: "c2")
-      p3 -> print_value(c3, label: "c3")
-      true -> print_value(c4, label: "c4")
+      p1 -> send_value(c1, clause: "c1")
+      p2 -> send_value(c2, clause: "c2")
+      p3 -> send_value(c3, clause: "c3")
+      true -> send_value(c4, clause: "c4")
     end
+  end
+
+  deftransformp send_value(val, opts \\ []) do
+    Nx.Defn.Kernel.hook(val, &send(self(), {&1, opts}))
   end
 
   test "only executes selected branches" do
@@ -617,19 +621,22 @@ defmodule Nx.VectorizeTest do
     val = Nx.tensor(10)
     ret = Nx.vectorize(~V[10], :pred)
 
-    assert ExUnit.CaptureIO.capture_io(fn -> assert ret == cond4(t, 10, 0, 10, 0, 10, 10) end) ==
-             "c1: #{inspect(val)}\n"
+    assertion = fn clause ->
+      assert_received {^val, clause: ^clause}
+      refute_received _
+    end
 
-    assert ExUnit.CaptureIO.capture_io(fn -> assert ret == cond4(0, 10, t, 10, 0, 10, 10) end) ==
-             "c2: #{inspect(val)}\n"
+    assert ret == cond4(t, 10, 0, 10, 0, 10, 10)
+    assertion.("c1")
 
-    assert ExUnit.CaptureIO.capture_io(fn -> assert ret == cond4(0, 10, 0, 10, t, 10, 10) end) ==
-             "c3: #{inspect(val)}\n"
+    assert ret == cond4(0, 10, t, 10, 0, 10, 10)
+    assertion.("c2")
 
-    assert ExUnit.CaptureIO.capture_io(fn ->
-             assert ret == cond4(Nx.multiply(t, 0), 10, 0, 10, 0, 10, 10)
-           end) ==
-             "c4: #{inspect(val)}\n"
+    assert ret == cond4(0, 10, 0, 10, t, 10, 10)
+    assertion.("c3")
+
+    assert ret == cond4(Nx.multiply(t, 0), 10, 0, 10, 0, 10, 10)
+    assertion.("c4")
   end
 
   test "1 vectorized pred in the beginning" do
