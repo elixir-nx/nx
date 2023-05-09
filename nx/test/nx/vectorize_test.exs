@@ -618,25 +618,19 @@ defmodule Nx.VectorizeTest do
 
   test "only executes selected branches" do
     t = Nx.vectorize(~V[1], :pred)
-    val = Nx.tensor(10)
-    ret = Nx.vectorize(~V[10], :pred)
+    f = Nx.vectorize(~V[0], :pred)
 
-    assertion = fn clause ->
-      assert_received {^val, clause: ^clause}
+    assert = fn res, val, clause ->
+      t = Nx.tensor(val)
+      assert Nx.vectorize(Nx.new_axis(t, 0), :pred) == res
+      assert_received {^t, clause: ^clause}
       refute_received _
     end
 
-    assert ret == cond4(t, 10, 0, 10, 0, 10, 10)
-    assertion.("c1")
-
-    assert ret == cond4(0, 10, t, 10, 0, 10, 10)
-    assertion.("c2")
-
-    assert ret == cond4(0, 10, 0, 10, t, 10, 10)
-    assertion.("c3")
-
-    assert ret == cond4(Nx.multiply(t, 0), 10, 0, 10, 0, 10, 10)
-    assertion.("c4")
+    assert.(cond4(t, 10, 0, 20, 0, 30, 40), 10, "c1")
+    assert.(cond4(0, 10, t, 20, 0, 30, 40), 20, "c2")
+    assert.(cond4(0, 10, 0, 20, t, 30, 40), 30, "c3")
+    assert.(cond4(f, 10, 0, 20, 0, 30, 40), 40, "c4")
   end
 
   test "1 vectorized pred in the beginning" do
