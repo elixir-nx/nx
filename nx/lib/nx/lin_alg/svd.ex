@@ -24,87 +24,52 @@ defmodule Nx.LinAlg.SVD do
   defn svd(input_tensor, opts \\ []) do
     validate_opts(opts)
 
-    {input_tensor, collapsed_axes} = collapse_batch_axes_and_vectorize(input_tensor)
+    {revectorize, target_shape, u_shape, s_shape, vt_shape} = calculate_shapes(input_tensor)
 
-    {uz, sz, vtz} = svd_all_zeros(input_tensor, opts)
-    {u, s, vt} = svd_non_zero(input_tensor, opts)
+    tensor =
+      if revectorize do
+        Nx.revectorize(input_tensor, [vector: :auto], target_shape: target_shape)
+      else
+        input_tensor
+      end
 
-    all_zeros = Nx.all(input_tensor == 0)
+    result =
+      if Nx.all(tensor == 0) do
+        svd_all_zeros(tensor, opts)
+      else
+        svd_non_zero(tensor, opts)
+      end
 
-    # TO-DO: rewrite this with if-else/cond when we support vectorization
-    # for cond
-    result = {
-      Nx.select(all_zeros, uz, u),
-      Nx.select(all_zeros, sz, s),
-      Nx.select(all_zeros, vtz, vt)
+    {u, s, vt} =
+      custom_grad(result, [input_tensor], fn g ->
+        svd_grad(result, input_tensor, g)
+      end)
+
+    {
+      Nx.revectorize(u, input_tensor.vectorized_axes, target_shape: u_shape),
+      Nx.revectorize(s, input_tensor.vectorized_axes, target_shape: s_shape),
+      Nx.revectorize(vt, input_tensor.vectorized_axes, target_shape: vt_shape)
     }
-
-    result
-    |> custom_grad([input_tensor], fn g ->
-      svd_grad(result, input_tensor, g)
-    end)
-    |> expand_batch_axes(collapsed_axes)
-  end
-
-  deftransformp collapse_batch_axes_and_vectorize(
-                  %Nx.Tensor{vectorized_axes: [], shape: {_, _}} = tensor
-                ),
-                do: {tensor, {}}
-
-  deftransformp collapse_batch_axes_and_vectorize(%Nx.Tensor{shape: shape} = tensor) do
-    if tensor.vectorized_axes != [] do
-      raise ArgumentError, "expected input to be non-vectorized, got: #{inspect(tensor)}"
-    end
-
-    rank = tuple_size(shape)
-    m = elem(shape, rank - 2)
-    n = elem(shape, rank - 1)
-
-    collapsed_axes = shape |> Tuple.delete_at(rank - 2) |> Tuple.delete_at(rank - 2)
-    vector_size = Tuple.product(collapsed_axes)
-
-    target_shape = {vector_size, m, n}
-
-    vectorized =
-      tensor
-      |> Nx.reshape(target_shape)
-      |> Nx.vectorize(vector: vector_size)
-
-    {vectorized, collapsed_axes}
   end
 
   deftransformp validate_opts(opts \\ []) do
     opts[:max_iter] || raise ArgumentError, "missing option :max_iter"
   end
 
-  deftransformp expand_batch_axes({u, s, vt}, collapsed_axes) do
-    {
-      expand_batch_axes(u, collapsed_axes),
-      expand_batch_axes(s, collapsed_axes),
-      expand_batch_axes(vt, collapsed_axes)
-    }
-  end
+  deftransformp calculate_shapes(t) do
+    shape = Nx.shape(t)
+    rank = tuple_size(shape)
+    m = elem(shape, rank - 2)
+    n = elem(shape, rank - 1)
 
-  deftransformp expand_batch_axes(tensor, axes) do
-    %Nx.Tensor{shape: shape} = tensor
+    collapsed_axes = shape |> Tuple.delete_at(rank - 2) |> Tuple.delete_at(rank - 2)
 
-    target_shape =
-      case shape do
-        _ when axes == {} ->
-          shape
+    u_shape = collapsed_axes |> Tuple.append(m) |> Tuple.append(:auto)
+    s_shape = Tuple.append(collapsed_axes, :auto)
+    vt_shape = Tuple.append(s_shape, n)
 
-        {k} ->
-          Tuple.append(axes, k)
-
-        {m, n} ->
-          axes |> Tuple.append(m) |> Tuple.append(n)
-      end
-
-    target_names = List.duplicate(nil, tuple_size(target_shape))
-
-    tensor
-    |> Nx.devectorize()
-    |> Nx.reshape(target_shape, names: target_names)
+    revectorize = collapsed_axes != {} or t.vectorized_axes != []
+    {revectorize, {m, n}, u_shape, s_shape, vt_shape}
   end
 
   defnp svd_all_zeros(a, opts) do
@@ -238,7 +203,7 @@ defmodule Nx.LinAlg.SVD do
     tol_l = 5 * @eps
     tol_norm = Nx.cbrt(tol_l)
 
-    one_u8 = Nx.tensor(1, type: :u8)
+    one_u8 = Nx.iota({}, type: :u8, vectorized_axes: u.vectorized_axes) + 1
     original_type = Nx.type(u)
     u = Nx.as_type(u, min_precision_type(original_type))
 
@@ -271,7 +236,6 @@ defmodule Nx.LinAlg.SVD do
 
         iterating_l = Nx.abs(1.0 - l) > tol_l
         iterating_u = Nx.LinAlg.norm(u - u_prev) > tol_norm
-        iterating_u = iterating_u |> Nx.devectorize(keep_names: false) |> Nx.all()
         is_unconverged = iterating_l or iterating_u
         is_not_max_iteration = iter_idx < max_iter
         {u, l, iter_idx + 1, is_unconverged, is_not_max_iteration, max_iter}
@@ -285,8 +249,8 @@ defmodule Nx.LinAlg.SVD do
   end
 
   # f16 is not enough precision to compute SVD
-  deftransformp min_precision_type({:f, 64}), do: {:f, 64}
-  deftransformp min_precision_type(_), do: {:f, 32}
+  deftransformp(min_precision_type({:f, 64}), do: {:f, 64})
+  deftransformp(min_precision_type(_), do: {:f, 32})
 
   defn qdwh_use_qr(u, x, a, b, c) do
     {m, _n} = Nx.shape(x)
