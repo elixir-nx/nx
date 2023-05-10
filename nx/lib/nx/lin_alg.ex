@@ -301,7 +301,6 @@ defmodule Nx.LinAlg do
 
   deftransformp norm_transform(t, opts) do
     rank = Nx.rank(t)
-    Nx.Shared.raise_vectorized_not_implemented_yet(t, __ENV__.function)
 
     unless rank == 1 or rank == 2 do
       raise ArgumentError, "expected 1-D or 2-D tensor, got tensor with shape #{inspect(t.shape)}"
@@ -1406,11 +1405,11 @@ defmodule Nx.LinAlg do
   """
   def svd(tensor, opts \\ []) do
     opts = keyword!(opts, max_iter: 100, full_matrices?: true)
-    %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
-    Nx.Shared.raise_vectorized_not_implemented_yet(tensor, __ENV__.function)
+    %T{vectorized_axes: vectorized_axes} = tensor = Nx.to_tensor(tensor)
+
+    %T{type: type, shape: shape} = tensor = Nx.devectorize(tensor)
 
     Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.svd", 2)
-
     output_type = Nx.Type.to_floating(type)
     {u_shape, s_shape, v_shape} = Nx.Shape.svd(shape, opts)
     rank = tuple_size(shape)
@@ -1420,7 +1419,9 @@ defmodule Nx.LinAlg do
        %{tensor | names: List.duplicate(nil, rank - 1), type: output_type, shape: s_shape},
        %{tensor | names: List.duplicate(nil, rank), type: output_type, shape: v_shape}}
 
-    Nx.Shared.optional(:svd, [tensor, opts], output, &Nx.LinAlg.SVD.svd/2)
+    :svd
+    |> Nx.Shared.optional([tensor, opts], output, &Nx.LinAlg.SVD.svd/2)
+    |> Nx.vectorize(vectorized_axes)
   end
 
   @doc """

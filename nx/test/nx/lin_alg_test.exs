@@ -729,7 +729,6 @@ defmodule Nx.LinAlgTest do
              |> round(3) == round(v, 3)
     end
 
-    @tag :skip
     test "works with batched matrices" do
       t =
         Nx.tensor([
@@ -745,11 +744,38 @@ defmodule Nx.LinAlgTest do
           Nx.broadcast(0, {3, 3}) |> Nx.put_diagonal(s[1])
         ])
 
-      assert round(t, 2) ==
-               u
-               |> Nx.dot([2], [0], s_matrix, [1], [0])
-               |> Nx.dot([2], [0], v, [1], [0])
-               |> round(2)
+      reconstructed_t =
+        u
+        |> Nx.dot([2], [0], s_matrix, [1], [0])
+        |> Nx.dot([2], [0], v, [1], [0])
+
+      assert_all_close(t, reconstructed_t, atol: 1.0e-2, rtol: 1.0e-2)
+    end
+
+    test "works with vectorized tensors matrices" do
+      t =
+        Nx.tensor([
+          [[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]]],
+          [[[1.0, 2.0, 3.0], [0.0, 4.0, 0.0], [0.0, 0.0, 9.0]]]
+        ])
+        |> Nx.vectorize(x: 2, y: 1)
+
+      assert {u, s, v} = Nx.LinAlg.svd(t)
+
+      s_matrix = Nx.put_diagonal(Nx.broadcast(0, {3, 3}), s)
+
+      reconstructed_t =
+        u
+        |> Nx.dot(s_matrix)
+        |> Nx.dot(v)
+
+      assert reconstructed_t.vectorized_axes == [x: 2, y: 1]
+      assert reconstructed_t.shape == {3, 3}
+
+      assert_all_close(Nx.devectorize(t), Nx.devectorize(reconstructed_t),
+        atol: 1.0e-2,
+        rtol: 1.0e-2
+      )
     end
 
     test "works with vectors" do

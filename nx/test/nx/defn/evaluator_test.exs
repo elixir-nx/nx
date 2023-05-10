@@ -622,6 +622,26 @@ defmodule Nx.Defn.EvaluatorTest do
   end
 
   describe "vectorization" do
+    defn vectorize_within_defn(t, a) do
+      t =
+        t
+        |> Nx.vectorize(a: 1, b: 2)
+        |> Nx.add(1)
+
+      a = Nx.vectorize(a, a: 1)
+
+      Nx.select(a, t, a)
+    end
+
+    test "vectorize works inside defn" do
+      t = Nx.tensor([[1, 2]])
+
+      assert vectorize_within_defn(t, Nx.tensor([1])) == Nx.vectorize(Nx.add(t, 1), a: 1, b: 2)
+
+      assert vectorize_within_defn(t, Nx.tensor([0])) ==
+               Nx.vectorize(Nx.tensor([[0, 0]]), a: 1, b: 2)
+    end
+
     defn vectorized_while(a, b, i \\ 0) do
       while({a, b, i}, i < 2) do
         {a + b, b, i + 1}
@@ -657,7 +677,7 @@ defmodule Nx.Defn.EvaluatorTest do
       t = Nx.iota({2, 3}, vectorized_axes: [a: 1], type: :s64)
 
       message = """
-      test/nx/defn/evaluator_test.exs:626: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
+      test/nx/defn/evaluator_test.exs:646: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
 
       Body matches template:
 
@@ -694,7 +714,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
       error =
         """
-        test/nx/defn/evaluator_test.exs:626: condition must be a scalar tensor, got: #Nx.Tensor<
+        test/nx/defn/evaluator_test.exs:646: condition must be a scalar tensor, got: #Nx.Tensor<
           vectorized[x: 1]
           u8[1]
         \s\s

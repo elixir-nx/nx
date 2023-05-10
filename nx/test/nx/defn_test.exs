@@ -1344,7 +1344,7 @@ defmodule Nx.DefnTest do
 
       assert inspect(cond_container(0, on_true, on_false)) ==
                String.trim("""
-                {#Nx.Tensor<
+               {#Nx.Tensor<
                   vectorized[x: 2][y: 1]
                   s64[2]
                 \s\s

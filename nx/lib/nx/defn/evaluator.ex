@@ -72,8 +72,8 @@ defmodule Nx.Defn.Evaluator do
   defp apply_output({result, _cache}, output) do
     {result, []} =
       Composite.traverse(result, output, fn
-        result, [%Nx.Tensor{vectorized_axes: vectorized_axes} | acc] ->
-          {Nx.vectorize(result, vectorized_axes), acc}
+        result, [out | acc] ->
+          {%{out | data: result.data}, acc}
       end)
 
     result

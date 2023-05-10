@@ -2486,12 +2486,12 @@ defmodule Nx do
     tensor = to_tensor(tensor)
     new_type = Nx.Type.normalize!(type)
 
-    cond do
-      tensor.type == new_type ->
-        tensor
-
-      true ->
+    if tensor.type == new_type do
+      tensor
+    else
+      apply_vectorized(tensor, fn tensor ->
         impl!(tensor).as_type(%{tensor | type: new_type}, tensor)
+      end)
     end
   end
 
