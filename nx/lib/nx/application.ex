@@ -8,7 +8,7 @@ defmodule Nx.Application do
       {Nx.HiddenServing, Nx.Serving.PG}
     ]
 
-    Supervisor.start_link(children, strategy: :one_for_all)
+    Supervisor.start_link(children, strategy: :one_for_all, name: Nx.Supervisor)
   end
 end
 

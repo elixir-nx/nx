@@ -20,7 +20,8 @@ defmodule NxTest do
     :ndim,
     :shape,
     :type,
-    :window
+    :window,
+    :vectorization
   ]
 
   test "defines doc metadata" do
@@ -341,6 +342,133 @@ defmodule NxTest do
                  ],
                  type: {:f, 32}
                )
+    end
+
+    test "vectorization" do
+      t =
+        Nx.tensor([
+          [
+            [
+              [0, 1, 2]
+            ]
+          ],
+          [
+            [
+              [3, 4, 5]
+            ]
+          ]
+        ])
+        |> Nx.vectorize(x: 2)
+
+      k =
+        Nx.tensor([
+          [
+            [
+              [2]
+            ]
+          ],
+          [
+            [
+              [10]
+            ]
+          ]
+        ])
+
+      # same vectorized axis case
+      assert Nx.conv(t, Nx.vectorize(k, x: 2)) ==
+               Nx.tensor([
+                 [
+                   [
+                     [0.0, 2.0, 4.0]
+                   ]
+                 ],
+                 [
+                   [
+                     [30.0, 40.0, 50.0]
+                   ]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2)
+
+      # cross-product case
+      assert Nx.conv(t, Nx.vectorize(Nx.reshape(k, {1, 2, 1, 1, 1}), z: 1, y: 2)) ==
+               Nx.tensor([
+                 [
+                   [
+                     [
+                       [
+                         [0.0, 2.0, 4.0]
+                       ]
+                     ],
+                     [
+                       [
+                         [0.0, 10.0, 20.0]
+                       ]
+                     ]
+                   ]
+                 ],
+                 [
+                   [
+                     [
+                       [
+                         [6.0, 8.0, 10.0]
+                       ]
+                     ],
+                     [
+                       [
+                         [30.0, 40.0, 50.0]
+                       ]
+                     ]
+                   ]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2, z: 1, y: 2)
+
+      # vectorized tensor and devec kernel
+      assert Nx.conv(t, k[0]) ==
+               Nx.tensor([
+                 [
+                   [
+                     [0.0, 2.0, 4.0]
+                   ]
+                 ],
+                 [
+                   [
+                     [6.0, 8.0, 10.0]
+                   ]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2)
+
+      # devec tensor and vectorized kernel
+      assert Nx.conv(Nx.devectorize(t)[0], Nx.vectorize(k, x: 2)) ==
+               Nx.tensor([
+                 [
+                   [
+                     [0.0, 2.0, 4.0]
+                   ]
+                 ],
+                 [
+                   [
+                     [0.0, 10.0, 20.0]
+                   ]
+                 ]
+               ])
+               |> Nx.vectorize(x: 2)
+    end
+
+    test "vectorization - batch_group_size" do
+      # get and assert the expected base shape for the output
+      assert %{shape: {1, 3, 1, 1}} =
+               Nx.conv(Nx.iota({3, 10, 1, 1}), Nx.iota({3, 10, 1, 1}), batch_group_size: 3)
+
+      # using 2, 5 and 7 as vectorized sizes so that they have no common factor between each other
+      # and between them and the batch_group_size: 3
+      t = Nx.iota({3, 10, 1, 1}, vectorized_axes: [x: 2, y: 1, z: 7])
+      k = Nx.iota({3, 10, 1, 1}, vectorized_axes: [x: 1, y: 5, z: 7])
+
+      assert %{vectorized_axes: [x: 2, y: 5, z: 7], shape: {1, 3, 1, 1}} =
+               Nx.conv(t, k, batch_group_size: 3)
     end
   end
 
@@ -1197,6 +1325,40 @@ defmodule NxTest do
   end
 
   describe "reduce_min/2" do
+    test "works with non finites" do
+      t =
+        Nx.tensor([
+          [:neg_infinity, :infinity, 1],
+          [:neg_infinity, :nan, 1],
+          [:neg_infinity, :neg_infinity, 1],
+          [:neg_infinity, 0, 1],
+          [:infinity, :infinity, 1],
+          [:infinity, :nan, 1],
+          [:infinity, :neg_infinity, 1],
+          [:infinity, 0, 1],
+          [:nan, :infinity, 1],
+          [:nan, :nan, 1],
+          [:nan, :neg_infinity, 1],
+          [:nan, 0, 1]
+        ])
+
+      assert Nx.reduce_min(t, axes: [1]) ==
+               Nx.tensor([
+                 :neg_infinity,
+                 :nan,
+                 :neg_infinity,
+                 :neg_infinity,
+                 1,
+                 :nan,
+                 :neg_infinity,
+                 0,
+                 :nan,
+                 :nan,
+                 :nan,
+                 :nan
+               ])
+    end
+
     test "removes all axes (scalar) when no axes are specified" do
       t = Nx.tensor([[1, 2, 3], [3, 1, 2]])
       out1 = Nx.reduce_min(t)
@@ -1227,7 +1389,63 @@ defmodule NxTest do
     end
   end
 
+  describe "reduce_max/2" do
+    test "works with non finites" do
+      t =
+        Nx.tensor([
+          [:neg_infinity, :infinity, 1],
+          [:neg_infinity, :nan, 1],
+          [:neg_infinity, :neg_infinity, 1],
+          [:neg_infinity, 0, 1],
+          [:infinity, :infinity, 1],
+          [:infinity, :nan, 1],
+          [:infinity, :neg_infinity, 1],
+          [:infinity, 0, 1],
+          [:nan, :infinity, 1],
+          [:nan, :nan, 1],
+          [:nan, :neg_infinity, 1],
+          [:nan, 0, 1]
+        ])
+
+      assert Nx.reduce_max(t, axes: [1]) ==
+               Nx.tensor([
+                 :infinity,
+                 :nan,
+                 1,
+                 1,
+                 :infinity,
+                 :nan,
+                 :infinity,
+                 :infinity,
+                 :nan,
+                 :nan,
+                 :nan,
+                 :nan
+               ])
+    end
+  end
+
   describe "argmin/2" do
+    test "works with non finites" do
+      t =
+        Nx.tensor([
+          [:neg_infinity, :infinity, 1],
+          [:neg_infinity, :nan, 1],
+          [:neg_infinity, :neg_infinity, 1],
+          [:neg_infinity, 0, 1],
+          [:infinity, :infinity, 1],
+          [:infinity, :nan, 1],
+          [:infinity, :neg_infinity, 1],
+          [:infinity, 0, 1],
+          [:nan, :infinity, 1],
+          [:nan, :nan, 1],
+          [:nan, :neg_infinity, 1],
+          [:nan, 0, 1]
+        ])
+
+      assert Nx.argmin(t, axis: 1) == Nx.tensor([0, 0, 0, 0, 2, 2, 1, 1, 0, 0, 0, 0])
+    end
+
     test "raises for invalid :tie_break option" do
       assert_raise(
         ArgumentError,
@@ -1236,6 +1454,28 @@ defmodule NxTest do
           Nx.argmin(Nx.tensor(1), tie_break: :blep)
         end
       )
+    end
+  end
+
+  describe "argmax" do
+    test "works with non finites" do
+      t =
+        Nx.tensor([
+          [:neg_infinity, :infinity, 1],
+          [:neg_infinity, :nan, 1],
+          [:neg_infinity, :neg_infinity, 1],
+          [:neg_infinity, 0, 1],
+          [:infinity, :infinity, 1],
+          [:infinity, :nan, 1],
+          [:infinity, :neg_infinity, 1],
+          [:infinity, 0, 1],
+          [:nan, :infinity, 1],
+          [:nan, :nan, 1],
+          [:nan, :neg_infinity, 1],
+          [:nan, 0, 1]
+        ])
+
+      assert Nx.argmax(t, axis: 1) == Nx.tensor([1, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0])
     end
   end
 
@@ -1323,12 +1563,6 @@ defmodule NxTest do
       out = Nx.dot(t, 3)
       assert Nx.shape(out) == {1, 3}
       assert out == Nx.tensor([[3, 6, 9]])
-    end
-
-    test "raises readable error on invalid inputs" do
-      assert_raise ArgumentError, "expected a %Nx.Tensor{} or a number, got: nil", fn ->
-        Nx.dot(Nx.tensor([1, 2, 3]), nil)
-      end
     end
   end
 

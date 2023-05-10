@@ -424,13 +424,13 @@ defmodule Torchx.Backend do
 
   @impl true
   def take(out, t, i, axis) do
-    axes_range = 0..(Nx.rank(t) - 1)//1
+    axes = Nx.axes(t)
 
     indices_shape =
-      axes_range
-      |> Enum.flat_map(fn
-        ^axis -> Tuple.to_list(i.shape)
-        _ -> [1]
+      axes
+      |> Enum.map(fn
+        ^axis -> Tuple.product(i.shape)
+        _ -> 1
       end)
       |> List.to_tuple()
 
@@ -439,12 +439,11 @@ defmodule Torchx.Backend do
       |> Tuple.to_list()
       |> Enum.with_index(fn
         _x, ^axis ->
-          List.duplicate(1, Nx.rank(i))
+          1
 
         x, _ ->
           x
       end)
-      |> List.flatten()
 
     indices_for_axis =
       i
@@ -453,24 +452,17 @@ defmodule Torchx.Backend do
 
     num_elements = Tuple.product(indices_for_axis.shape)
 
-    axis_offset = Nx.rank(i) - 1
-
     indices =
-      axes_range
+      axes
       |> Enum.map(fn
         ^axis ->
           Nx.reshape(indices_for_axis, {num_elements, 1})
 
-        current when current < axis ->
+        current ->
+          # current when current < axis ->
           indices_for_axis
           |> Nx.shape()
           |> Nx.iota(axis: current, backend: __MODULE__)
-          |> Nx.reshape({num_elements, 1})
-
-        current when current > axis ->
-          indices_for_axis
-          |> Nx.shape()
-          |> Nx.iota(axis: current + axis_offset, backend: __MODULE__)
           |> Nx.reshape({num_elements, 1})
       end)
       |> Nx.concatenate(axis: 1)

@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.5.3 (2023-04-14)
+
+### Bug fixes
+
+  * [Nx.Defn] Fix compilation error when Elixir compiler has column tracking enabled
+  * [Nx.LinAlg] Fix cases where determinant could return NaN
+  * [Nx.LinAlg] Fix SVD when working with f16 and bf16
+
 ## v0.5.2 (2023-03-21)
 
 ### Enhancements

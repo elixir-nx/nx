@@ -602,6 +602,18 @@ defmodule Nx.Type do
   def smallest_positive_normal_binary(type),
     do: raise(ArgumentError, "only floating types are supported, got: #{inspect(type)}")
 
+  @doc """
+  Returns the machine epsilon for the given type
+  """
+  def epsilon_binary(type)
+  def epsilon_binary({:bf, 16}), do: <<0, 60>>
+  def epsilon_binary({:f, 16}), do: <<0, 20>>
+  def epsilon_binary({:f, 32}), do: <<0, 0, 0, 52>>
+  def epsilon_binary({:f, 64}), do: <<0, 0, 0, 0, 0, 0, 176, 60>>
+
+  def epsilon_binary(type),
+    do: raise(ArgumentError, "only floating types are supported, got: #{inspect(type)}")
+
   defp unsigned_size(x) when x <= 1, do: 1
   defp unsigned_size(x) when x <= 255, do: 8
   defp unsigned_size(x) when x <= 65535, do: 16

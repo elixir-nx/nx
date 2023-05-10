@@ -1461,6 +1461,25 @@ defmodule EXLA.Defn.ExprTest do
         Nx.tensor([2, 1, 0, 1, 2])
       )
     end
+
+    defn while_inside_if(pred, x) do
+      if pred do
+        {x, _} =
+          while {x, i = 0}, i < 10 do
+            {x, i + 1}
+          end
+
+        x
+      else
+        x
+      end
+    end
+
+    test "while inside if" do
+      assert %{a: a, b: b} = while_inside_if(1, %{a: 1, b: 2.0})
+      assert_all_close(a, 1)
+      assert_all_close(b, 2.0)
+    end
   end
 
   describe "reduce" do

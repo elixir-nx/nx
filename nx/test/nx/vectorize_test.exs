@@ -2,6 +2,7 @@ defmodule Nx.VectorizeTest do
   use ExUnit.Case, async: true
 
   import Nx, only: :sigils
+  import Nx.Defn
 
   @base Nx.tensor([
           [[0, 1, 2]],
@@ -420,5 +421,332 @@ defmodule Nx.VectorizeTest do
 
       assert result == Nx.reflect(input, padding_config: [{3, 1}])
     end
+  end
+
+  describe "while/3" do
+    defn double_n_times(x, n) do
+      {_i, v} =
+        while {i = n, v = x}, i > 0 do
+          {i - 1, v * 2}
+        end
+
+      v
+    end
+
+    defn double_x_triple_y_n_times(x, y, n) do
+      {_i, v, z} =
+        while {i = n, v = x, z = y}, i > 0 do
+          {i - 1, v * 2, z * 3}
+        end
+
+      {v, z}
+    end
+
+    test "simple" do
+      assert double_n_times(Nx.tensor(3), Nx.tensor(5)) == Nx.tensor(96)
+
+      x = Nx.vectorize(~V[1 2 3], :x)
+      n = Nx.vectorize(~V[5 6 3], :x)
+
+      assert double_n_times(x, n) == Nx.vectorize(~V[32 128 24], :x)
+    end
+
+    test "different axes" do
+      x = Nx.vectorize(~V[1 2 3], :init)
+      n = Nx.vectorize(~V[4 5], :pred)
+
+      assert double_n_times(x, n) ==
+               Nx.vectorize(
+                 ~M[
+                  16 32 48
+                  32 64 96
+                 ],
+                 pred: 2,
+                 init: 3
+               )
+    end
+
+    test "mix of common and different axes" do
+      x =
+        Nx.vectorize(
+          ~M[
+          1 2
+          3 4
+          5 6
+        ],
+          other: 3,
+          pred: 2
+        )
+
+      y = Nx.vectorize(~V[1 2], :pred)
+      n = Nx.vectorize(~V[3 4], :pred)
+
+      assert double_x_triple_y_n_times(x, y, n) == {
+               Nx.vectorize(
+                 ~M[
+                   8 16 24
+                   64 80 96
+                 ],
+                 pred: 2,
+                 other: 3
+               ),
+               Nx.vectorize(~V[27 162], pred: 2)
+             }
+    end
+
+    test "simple with multiple pred axes" do
+      x = Nx.vectorize(~V[1 2 3], :x)
+      n = Nx.vectorize(~M[
+        0 1 2
+        5 6 3
+      ], y: 2, x: 3)
+
+      assert double_n_times(x, n) ==
+               Nx.vectorize(
+                 ~M[
+                  1 4 12
+                  32 128 24
+                ],
+                 y: 2,
+                 x: 3
+               )
+    end
+  end
+
+  describe "cond" do
+    defn vectorized_if(pred, then, other) do
+      cond do
+        pred -> print_value(then, label: "if")
+        true -> print_value(other, label: "else")
+      end
+    end
+
+    defn vectorized_cond(pred1, clause1, pred2, clause2, clause3) do
+      cond do
+        pred1 -> print_value(clause1, label: "clause_1")
+        pred2 -> print_value(clause2, label: "clause_2")
+        true -> print_value(clause3, label: "clause_3")
+      end
+    end
+
+    test "simple if" do
+      # this tests the case where we have a single vectorized predicate
+      pred = Nx.vectorize(~V[0 1 0], :pred)
+
+      io =
+        ExUnit.CaptureIO.capture_io(fn ->
+          assert vectorized_if(pred, 1, 2) == Nx.vectorize(~V[2 1 2], :pred)
+        end)
+
+      assert io ==
+               IO.iodata_to_binary([
+                 "if: ",
+                 inspect(Nx.tensor(1)),
+                 "\n",
+                 "else: ",
+                 inspect(Nx.tensor(2)),
+                 "\n"
+               ])
+    end
+
+    test "simple cond" do
+      # this tests the case where we have a two vectorized predicates
+      pred1 = Nx.vectorize(~V[1 0 0], :pred)
+      pred2 = Nx.vectorize(~V[0 0 0], :pred)
+
+      io =
+        ExUnit.CaptureIO.capture_io(fn ->
+          assert vectorized_cond(pred1, 1, pred2, 2, 3) == Nx.vectorize(~V[1 3 3], :pred)
+        end)
+
+      # This assertion ensures that the clause for pred2 is never executed
+      assert io ==
+               IO.iodata_to_binary([
+                 "clause_1: #{inspect(Nx.tensor(1))}\n",
+                 "clause_3: #{inspect(Nx.tensor(3))}\n"
+               ])
+    end
+
+    test "if with container result" do
+      pred1 = Nx.vectorize(~V[2 0 0], :pred)
+
+      io =
+        ExUnit.CaptureIO.capture_io(fn ->
+          result =
+            vectorized_if(
+              pred1,
+              {1, 2, 3},
+              {7, 8, Nx.vectorize(~V[9 10 11], :x)}
+            )
+
+          assert result == {
+                   Nx.vectorize(~V[1 7 7], :pred),
+                   Nx.vectorize(~V[2 8 8], :pred),
+                   Nx.vectorize(~M[
+                  3 3 3
+                  9 10 11
+                  9 10 11
+                ], pred: 3, x: 3)
+                 }
+        end)
+
+      # This assertion ensures that the clause for pred2 is never executed
+      assert String.replace(io, ",\n", ",") ==
+               IO.iodata_to_binary([
+                 "if: ",
+                 inspect({Nx.tensor(1), Nx.tensor(2), Nx.tensor(3)}),
+                 "\n",
+                 "else: ",
+                 inspect({Nx.tensor(7), Nx.tensor(8), Nx.tensor([9, 10, 11], names: [:x])}),
+                 "\n"
+               ])
+    end
+
+    defn cond4(p1, c1, p2, c2, p3, c3, c4) do
+      cond do
+        p1 -> send_value(c1, clause: "c1")
+        p2 -> send_value(c2, clause: "c2")
+        p3 -> send_value(c3, clause: "c3")
+        true -> send_value(c4, clause: "c4")
+      end
+    end
+
+    deftransformp send_value(val, opts \\ []) do
+      Nx.Defn.Kernel.hook(val, &send(self(), {&1, opts}))
+    end
+
+    test "only executes selected branches" do
+      t = Nx.vectorize(~V[1], :pred)
+      f = Nx.vectorize(~V[0], :pred)
+
+      assert = fn res, val, clause ->
+        t = Nx.tensor(val)
+        assert Nx.vectorize(Nx.new_axis(t, 0), :pred) == res
+        assert_received {^t, clause: ^clause}
+        refute_received _
+      end
+
+      assert.(cond4(t, 10, 0, 20, 0, 30, 40), 10, "c1")
+      assert.(cond4(0, 10, t, 20, 0, 30, 40), 20, "c2")
+      assert.(cond4(0, 10, 0, 20, t, 30, 40), 30, "c3")
+      assert.(cond4(f, 10, 0, 20, 0, 30, 40), 40, "c4")
+    end
+
+    test "1 vectorized pred in the beginning" do
+      assert cond4(Nx.vectorize(~V[0 1], :pred), 10, 0, 20, 0, 30, 40) ==
+               Nx.vectorize(~V[40 10], :pred)
+
+      assert cond4(Nx.vectorize(~V[0 0], :pred), 10, 1, 20, 0, 30, 40) ==
+               Nx.vectorize(~V[20 20], :pred)
+
+      assert cond4(Nx.vectorize(~V[0 0], :pred), 10, 0, 20, 1, 30, 40) ==
+               Nx.vectorize(~V[30 30], :pred)
+
+      assert cond4(Nx.vectorize(~V[0 0], :pred), 10, 0, 20, 0, 30, 40) ==
+               Nx.vectorize(~V[40 40], :pred)
+    end
+
+    test "1 vectorized pred in the second but not last position" do
+      assert cond4(0, 10, Nx.vectorize(~V[0 1], :pred), 20, 0, 30, 40) ==
+               Nx.vectorize(~V[40 20], :pred)
+
+      assert cond4(1, 10, Nx.vectorize(~V[0 1], :pred), 20, 0, 30, 40) ==
+               Nx.vectorize(~V[10 10], :pred)
+
+      assert cond4(0, 10, Nx.vectorize(~V[0 0], :pred), 20, 1, 30, 40) ==
+               Nx.vectorize(~V[30 30], :pred)
+
+      assert cond4(0, 10, Nx.vectorize(~V[0 0], :pred), 20, 0, 30, 40) ==
+               Nx.vectorize(~V[40 40], :pred)
+    end
+
+    test "1 vectorized pred in the last position" do
+      assert cond4(0, 10, 0, 20, Nx.vectorize(~V[0 1], :pred), 30, 40) ==
+               Nx.vectorize(~V[40 30], :pred)
+
+      assert cond4(1, 10, 0, 20, Nx.vectorize(~V[0 1], :pred), 30, 40) ==
+               Nx.vectorize(~V[10 10], :pred)
+
+      assert cond4(0, 10, 1, 20, Nx.vectorize(~V[0 1], :pred), 30, 40) ==
+               Nx.vectorize(~V[20 20], :pred)
+
+      assert cond4(0, 10, 0, 20, Nx.vectorize(~V[0 0], :pred), 30, 40) ==
+               Nx.vectorize(~V[40 40], :pred)
+    end
+
+    test "2 vectorized preds with different axes" do
+      assert cond4(
+               Nx.vectorize(~V[0 1 0], :pred1),
+               10,
+               Nx.vectorize(~V[1 0], :pred2),
+               20,
+               0,
+               30,
+               40
+             ) ==
+               Nx.vectorize(~M[
+              20 40
+              10 10
+              20 40
+            ], pred1: 3, pred2: 2)
+    end
+
+    test "2 vectorized preds with different axes + clauses that match either" do
+      assert cond4(
+               Nx.vectorize(~V[0 1 0], :pred1),
+               Nx.vectorize(~V[10 100], :pred2),
+               Nx.vectorize(~V[1 0], :pred2),
+               Nx.vectorize(~V[20 200 2000], :pred1),
+               0,
+               30,
+               40
+             ) ==
+               Nx.vectorize(~M[
+              20 40
+              10 100
+              2000 40
+            ], pred1: 3, pred2: 2)
+    end
+  end
+
+  describe "access" do
+    test "get vectorized tensor, unvectorized indices" do
+      t = Nx.iota({3}, vectorized_axes: [x: 2])
+
+      assert t[0] == Nx.vectorize(Nx.tensor([0, 0]), x: 2)
+      assert t[1] == Nx.vectorize(Nx.tensor([1, 1]), x: 2)
+      assert t[2] == Nx.vectorize(Nx.tensor([2, 2]), x: 2)
+
+      t = Nx.iota({3, 4}, vectorized_axes: [x: 2])
+
+      assert t[[0, 1..2]] == Nx.vectorize(Nx.tensor([[1, 2], [1, 2]]), x: 2)
+      assert t[[1, 1..1]] == Nx.vectorize(Nx.tensor([[5], [5]]), x: 2)
+      assert t[[2, 2..3]] == Nx.vectorize(Nx.tensor([[10, 11], [10, 11]]), x: 2)
+    end
+
+    @tag :skip
+    test "get unvectorized tensor, vectorized indices" do
+      t = Nx.iota({6})
+      i = Nx.tensor([0, 2, 4]) |> Nx.vectorize(:i)
+
+      assert t[i] == Nx.vectorize(Nx.tensor([0, 2, 4]), i: 3)
+
+      t = Nx.iota({6, 2})
+
+      i = Nx.tensor([0, 2, 4]) |> Nx.vectorize(:i)
+
+      assert t[[i, 0..1]] ==
+               Nx.vectorize(
+                 Nx.tensor([
+                   [0, 1],
+                   [4, 5],
+                   [8, 9]
+                 ]),
+                 i: 3
+               )
+    end
+
+    @tag :skip
+    test "get vectorized tensor, vectorized indices"
   end
 end

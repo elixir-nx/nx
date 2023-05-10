@@ -113,19 +113,33 @@ defmodule EXLA.Defn.Buffers do
         EXLA.BinaryBuffer.from_binary(binary, to_exla_shape(tensor))
 
       %EXLA.Backend{buffer: %EXLA.DeviceBuffer{} = buffer}
-      when transfer? and buffer.client_name != executable.client.name ->
+      when transfer? and buffer.client_name != executable.client.name
+      when transfer? and buffer.device_id != executable.device_id ->
         buffer_client = EXLA.Client.fetch!(buffer.client_name)
 
         if buffer_client.platform == :host do
           EXLA.DeviceBuffer.copy_to_device(buffer, executable.client, executable.device_id)
         else
-          raise ArgumentError, """
-          EXLA computation (defn) is allocated on client #{executable.client.name} (#{executable.client.platform})
-          but one of the input tensors are allocated on #{buffer_client.name} (#{buffer_client.platform}).
+          default = EXLA.Client.fetch!(EXLA.Client.default_name())
 
-          EXLA only automatically transfers allocated on host to other client.
-          You need to either transfer your tensors to the same client as the executable
-          or compile the defn with a client that matches your input tensors
+          raise ArgumentError, """
+          EXLA computation (defn) is allocated on client #{executable.client.name} \
+          ##{executable.device_id} (#{executable.client.platform}) \
+          but one of the input tensors are allocated on #{buffer_client.name} \
+          ##{buffer.device_id} (#{buffer_client.platform}).
+
+          EXLA only transfers tensors allocated on host to other clients. \
+          You can force `:host` as your default backend with:
+
+              # via config
+              config :nx, default_backend: {EXLA.Backend, client: :host}
+
+              # via API
+              Nx.global_default_backend({EXLA.Backend, client: :host})
+
+          Otherwise ensure your tensors are allocated on the same client-device \
+          pair as your numerical definitions (defn). The default client-device is \
+          #{default.name} ##{default.default_device_id} (#{default.platform})
           """
         end
 

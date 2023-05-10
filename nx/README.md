@@ -22,6 +22,8 @@ You can find planned enhancements and features in the issues tracker. If you nee
 
 For Python developers, `Nx` packages features from [`Numpy`](https://numpy.org/), [`JAX`](https://github.com/google/jax), [HuggingFace Pipelines](https://huggingface.co/docs/transformers/main_classes/pipelines), and TorchServing/TensorServing, but packaged into a single unified library and developer experience.
 
+See [the Nx organization on GitHub](https://github.com/elixir-nx) to learn about other Numerical Elixir projects.
+
 ## Community
 
 Developers interested in Numerical Elixir can join the community and interact in the following places:
@@ -41,22 +43,6 @@ In order to support Nx, you might:
   * Become a supporting member or a sponsor of the Erlang Ecosystem Foundation. The Nx project is part of the [Machine Learning WG](https://erlef.org/wg/machine-learning).
 
   * Nx's mascot is the Numbat, a marsupial native to southern Australia. Unfortunately the Numbat are endangered and it is estimated to be fewer than 1000 left. If you enjoy this project, consider donating to Numbat conservation efforts, such as [Project Numbat](https://www.numbat.org.au/) and [Australian Wildlife Conservancy](https://www.australianwildlife.org). The Project Numbat website also contains Numbat related swag.
-
-## Resources
-
-Here are some introductory resources with more information on Nx as a whole:
-
-  * [A post by José Valim on Nx v0.1 release, discussing its goals, showing benchmarks, and general direction](https://dashbit.co/blog/elixir-and-machine-learning-nx-v0.1) (text)
-
-  * [Sean Moriarity's blog](https://seanmoriarity.com/) containing tips on how to use Nx (text)
-
-  * [A talk by José Valim at Lambda Days 2021 where he builds a neural network from scratch with Nx](https://www.youtube.com/watch?v=fPKMmJpAGWc) (video)
-
-  * [A screencast by José Valim announcing Livebook, where he also showcases Nx and Axon (a neural network library built on top of Nx)](https://www.youtube.com/watch?v=RKvqc-UEe34) (video)
-
-  * [An article by Philip Brown showing an end-to-end example of running a Machine Learning model with Elixir in production](https://fly.io/phoenix-files/recognize-digits-using-ml-in-elixir/) (text)
-
-  * [The announcement of Bumblebee, which provides pre-trained machine learning models such BERT, StableDiffusion, and others](https://news.livebook.dev/announcing-bumblebee-gpt2-stable-diffusion-and-more-in-elixir-3Op73O) (text+video)
 
 ## Installation
 
@@ -189,44 +175,6 @@ will_jit = EXLA.jit(&MyModule.softmax/1, client: :cuda, device_id: 1)
 ```
 
 And, from that moment on, all operations will happen within a particular GPU instance. You can then use Elixir's message-passing abilities to coordinate the necessary work across processes.
-
-## Why Elixir?
-
-The goal of the Nx project is to marry the power of numerical computing with the Erlang VM capabilities for building concurrent, scalable, and fault-tolerant systems.
-
-Elixir is a functional programming language that runs on the Erlang VM. And, at this point, you might ask: is functional programming a good fit for numerical computing? One of the main concerns is that immutability can lead to high memory usage when working with large blobs of memory. And that's true!
-
-However, it turns out that the most efficient way of executing numerical computations is by first building a graph of all computations, then compiling that graph to run on your CPUs/GPUs just-in-time. At this point, your numerical computing code becomes a function:
-
-    input -> [compiled numerical computing graph] -> output
-
-The `input` is an Elixir data-structure. Inside the function, the algorithm is highly optimized and free to mutate the data in any way it seems fit. Then we get an output that once again must obey Elixir semantics.
-
-To build those graphs, immutability becomes an indispensable tool both in terms of implementation and reasoning. As an example, the JAX library for Python, which has been one of the inspirations for Nx, also promotes functional and immutable principles:
-
-> JAX is intended to be used with a functional style of programming
->
-> — JAX Docs
-
-> Unlike NumPy arrays, JAX arrays are always immutable
->
-> — JAX Docs
-
-At the end of the day, Elixir provides the functional foundation and a powerful macro system that allows us to compile a subset of Elixir to the CPU/GPU.
-
-With the addition of `Nx.Serving`, we started to marry the benefits of the Erlang VM with numerical computing. With `Nx.Serving`, you can batch numerical computing requests, as well as load balance requests over a cluster of machines. This makes it easy to embed and scale Nx code within your existing Elixir systems, both horizontally and vertically, and without a need for third-party services.
-
-We also expect numerical computing to complement the Elixir ecosystem in different ways, such as:
-
-  * running Machine Learning models in real-time within your [Phoenix web application](https://phoenixframework.org/)
-
-  * deploying models, signal processing, and data modelling inside embedded systems [via Nerves](https://www.nerves-project.org/)
-
-  * incorporating data analysis and classification algorithms inside concurrent data pipelines powered [by Broadway](https://www.elixir-broadway.org/)
-
-  * adding audio and video processing and AI capabilities to media systems [through Membrane](https://membrane.stream/)
-
-We are also excited to explore how Nx and Elixir can be used under distinct domains, such as federated learning, and leverage the Erlang VM ability to handle data in and out of hundreds of thousands of devices concurrently.
 
 ## License
 

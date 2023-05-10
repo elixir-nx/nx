@@ -41,3 +41,13 @@ defmodule LazyOnly do
     end
   end
 end
+
+defmodule MagicNumber do
+  defstruct value: 0
+
+  defimpl Nx.LazyContainer do
+    def traverse(%{value: value}, acc, fun) do
+      fun.(Nx.to_template(value), fn -> Nx.tensor(value) end, acc)
+    end
+  end
+end

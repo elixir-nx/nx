@@ -20,7 +20,7 @@ defmodule EXLA.ExecutableTest do
   end
 
   describe "run" do
-    test "succeeds with no inputs and default options" do
+    test "with no inputs and default options" do
       assert [a = %DeviceBuffer{}] =
                run_one([], fn b ->
                  Op.tuple(b, [Op.constant_r0(b, 1, {:s, 32})])
@@ -29,7 +29,7 @@ defmodule EXLA.ExecutableTest do
       assert <<1::32-native>> == DeviceBuffer.read(a)
     end
 
-    test "succeeds with 2 inputs and default options" do
+    test "with 2 inputs and default options" do
       t1 = BinaryBuffer.from_binary(<<1::32-native>>, Shape.make_shape({:s, 32}, {}))
       t2 = BinaryBuffer.from_binary(<<1::32-native>>, Shape.make_shape({:s, 32}, {}))
 
@@ -39,7 +39,7 @@ defmodule EXLA.ExecutableTest do
       assert <<2::32-native>> == DeviceBuffer.read(a)
     end
 
-    test "succeeds when data is preloaded" do
+    test "when data is preloaded" do
       t1 =
         DeviceBuffer.place_on_device(
           <<1::32-native>>,
@@ -70,7 +70,7 @@ defmodule EXLA.ExecutableTest do
       assert DeviceBuffer.read(t2) == <<1::32-native>>
     end
 
-    test "succeeds with data from a previous run" do
+    test "with data from a previous run" do
       t1 = BinaryBuffer.from_binary(<<1::32-native>>, Shape.make_shape({:s, 32}, {}))
       t2 = BinaryBuffer.from_binary(<<1::32-native>>, Shape.make_shape({:s, 32}, {}))
 
@@ -81,7 +81,7 @@ defmodule EXLA.ExecutableTest do
       assert <<4::32-native>> == DeviceBuffer.read(a)
     end
 
-    test "succeeds with mixed data" do
+    test "with mixed data" do
       t1 =
         DeviceBuffer.place_on_device(
           <<1::32-native>>,
@@ -98,7 +98,7 @@ defmodule EXLA.ExecutableTest do
       assert <<3::32-native>> == DeviceBuffer.read(a)
     end
 
-    test "succeeds with tuple return" do
+    test "with tuple return" do
       t1 = BinaryBuffer.from_binary(<<1::32-native>>, Shape.make_shape({:s, 32}, {}))
       t2 = BinaryBuffer.from_binary(<<2::32-native>>, Shape.make_shape({:s, 32}, {}))
 
@@ -107,6 +107,30 @@ defmodule EXLA.ExecutableTest do
 
       assert <<1::32-native>> == DeviceBuffer.read(a)
       assert <<2::32-native>> == DeviceBuffer.read(b)
+    end
+
+    @tag :multi_device
+    test "runs on a specific device" do
+      t1 = BinaryBuffer.from_binary(<<1::32-native>>, Shape.make_shape({:s, 32}, {}))
+      t2 = BinaryBuffer.from_binary(<<2::32-native>>, Shape.make_shape({:s, 32}, {}))
+
+      assert [a = %DeviceBuffer{}, b = %DeviceBuffer{}, c = %DeviceBuffer{}] =
+               run_one([t1, t2], [device_id: 1], fn b, x, y ->
+                 Op.tuple(b, [x, y, Op.add(x, y)])
+               end)
+
+      assert <<1::32-native>> == DeviceBuffer.read(a)
+      assert a.device_id == 1
+      assert <<2::32-native>> == DeviceBuffer.read(b)
+      assert b.device_id == 1
+      assert <<3::32-native>> == DeviceBuffer.read(c)
+      assert c.device_id == 1
+
+      assert_raise RuntimeError, ~r"Expected buffer to be placed on device 0", fn ->
+        run_one([a, b], [device_id: 0], fn b, x, y ->
+          Op.tuple(b, [Op.add(x, y)])
+        end)
+      end
     end
   end
 end

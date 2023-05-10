@@ -35,8 +35,16 @@ defmodule Nx.DefnTest do
     test "from binary" do
       assert %T{data: %Expr{op: :tensor}} = binary_constant()
     end
+  end
 
-    test "Nx.tensor/2 warns if not constant" do
+  describe "Nx.tensor" do
+    test "does not warn on negative values" do
+      defmodule NegConstant do
+        defn this_wont_warn, do: Nx.tensor(1) + Nx.tensor(-1)
+      end
+    end
+
+    test "warns if not constant" do
       assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
                defmodule NotConstant do
                  defn(not_constant(opts), do: Nx.tensor(opts[:rate]))
@@ -239,7 +247,7 @@ defmodule Nx.DefnTest do
   end
 
   describe "unary ops" do
-    defn(exp(t), do: Nx.exp(t))
+    defn exp(t), do: Nx.exp(t)
 
     defn unary_plus_minus_guards(opts \\ []) do
       case opts[:value] do
@@ -281,9 +289,9 @@ defmodule Nx.DefnTest do
   end
 
   describe "binary ops" do
-    defn(add(t1, t2), do: Nx.add(t1, t2))
-    defn(add_two_int(t), do: Nx.add(t, 2))
-    defn(add_two_float(t), do: Nx.add(t, 2))
+    defn add(t1, t2), do: Nx.add(t1, t2)
+    defn add_two_int(t), do: Nx.add(t, 2)
+    defn add_two_float(t), do: Nx.add(t, 2)
 
     test "to expr" do
       assert %T{shape: {3}, type: {:s, 64}, data: %Expr{op: :add, args: [_, _]}} =
@@ -309,10 +317,10 @@ defmodule Nx.DefnTest do
   end
 
   describe "aggregate axes ops" do
-    defn(sum_all(t), do: Nx.sum(t))
-    defn(sum_pos(t), do: Nx.sum(t, axes: [0, 1]))
-    defn(sum_neg(t), do: Nx.sum(t, axes: [-1, -2]))
-    defn(sum_keep(t), do: Nx.sum(t, axes: [0, 1], keep_axes: true))
+    defn sum_all(t), do: Nx.sum(t)
+    defn sum_pos(t), do: Nx.sum(t, axes: [0, 1])
+    defn sum_neg(t), do: Nx.sum(t, axes: [-1, -2])
+    defn sum_keep(t), do: Nx.sum(t, axes: [0, 1], keep_axes: true)
 
     test "to expr" do
       assert %T{
@@ -354,8 +362,8 @@ defmodule Nx.DefnTest do
   end
 
   describe "creation ops" do
-    defn(iota(t), do: Nx.iota(Nx.shape(t)))
-    defn(eye, do: Nx.eye(2))
+    defn iota(t), do: Nx.iota(Nx.shape(t))
+    defn eye, do: Nx.eye(2)
 
     test "iota" do
       assert %T{shape: {3}, data: %Expr{op: :iota, args: [nil]}} = iota(Nx.tensor([1, 2, 3]))
@@ -373,11 +381,11 @@ defmodule Nx.DefnTest do
   end
 
   describe "tensor ops" do
-    defn(dot2(t1, t2), do: Nx.dot(t1, t2))
-    defn(dot6(t1, t2), do: Nx.dot(t1, [-2], [], t2, [-1], []))
-    defn(transpose_1(t), do: Nx.transpose(t))
-    defn(transpose_2(t), do: Nx.transpose(t, axes: [-1, -2]))
-    defn(reshape(t), do: Nx.reshape(t, {2, 3}))
+    defn dot2(t1, t2), do: Nx.dot(t1, t2)
+    defn dot6(t1, t2), do: Nx.dot(t1, [-2], [], t2, [-1], [])
+    defn transpose_1(t), do: Nx.transpose(t)
+    defn transpose_2(t), do: Nx.transpose(t, axes: [-1, -2])
+    defn reshape(t), do: Nx.reshape(t, {2, 3})
 
     test "dot product" do
       assert %T{data: %Expr{op: :dot, args: [_, [0], _, _, [0], _]}, shape: {2}} =
@@ -408,8 +416,8 @@ defmodule Nx.DefnTest do
   end
 
   describe "broadcast" do
-    defn(broadcast(t), do: Nx.broadcast(t, {3, 3, 3}))
-    defn(broadcast_axes(t), do: Nx.broadcast(t, {3, 2}, axes: [-2]))
+    defn broadcast(t), do: Nx.broadcast(t, {3, 3, 3})
+    defn broadcast_axes(t), do: Nx.broadcast(t, {3, 2}, axes: [-2])
 
     test "with and without axes" do
       assert %T{data: %Expr{op: :broadcast, args: [_, _, [2]]}, shape: {3, 3, 3}} =
@@ -419,32 +427,26 @@ defmodule Nx.DefnTest do
                broadcast_axes(Nx.tensor([1, 2, 3]))
     end
 
-    defn(broadcast_collapse1(t), do: t |> Nx.broadcast({5, 3}) |> Nx.broadcast({7, 5, 3}))
+    defn broadcast_collapse1(t), do: t |> Nx.broadcast({5, 3}) |> Nx.broadcast({7, 5, 3})
 
-    defn(broadcast_collapse2(t),
+    defn broadcast_collapse2(t),
       do: t |> Nx.broadcast({3, 5}, axes: [0]) |> Nx.broadcast({3, 5, 7}, axes: [0, 1])
-    )
 
-    defn(broadcast_collapse3(t),
+    defn broadcast_collapse3(t),
       do: t |> Nx.broadcast({3, 5}, axes: [0]) |> Nx.broadcast({3, 7, 5}, axes: [0, 2])
-    )
 
-    defn(broadcast_collapse4(t),
+    defn broadcast_collapse4(t),
       do: t |> Nx.broadcast({3, 5}, axes: [0]) |> Nx.broadcast({7, 3, 5}, axes: [1, 2])
-    )
 
-    defn(broadcast_collapse5(t),
+    defn broadcast_collapse5(t),
       do: t |> Nx.broadcast({5, 3}) |> Nx.broadcast({7, 5, 3, 9}, axes: [1, 2])
-    )
 
-    defn(broadcast_collapse6(t),
+    defn broadcast_collapse6(t),
       do: t |> Nx.broadcast({5, 3, 7}, axes: [1]) |> Nx.broadcast({9, 5, 3, 7}, axes: [1, 2, 3])
-    )
 
-    defn(broadcast_collapse7(t),
+    defn broadcast_collapse7(t),
       do:
         t |> Nx.broadcast({3, 5, 7}, axes: [0, 2]) |> Nx.broadcast({3, 9, 5, 7}, axes: [0, 2, 3])
-    )
 
     test "collapses" do
       assert %T{data: %Expr{op: :broadcast, args: [_, {7, 5, 3}, [1]]}, shape: {7, 5, 3}} =
@@ -471,16 +473,16 @@ defmodule Nx.DefnTest do
   end
 
   describe "squeeze" do
-    defn(squeeze(t), do: Nx.squeeze(t))
+    defn squeeze(t), do: Nx.squeeze(t)
 
     test "sized one dimensions" do
       assert %T{data: %Expr{op: :squeeze, args: [_, [0, 2, 4]]}, shape: {3, 2}} =
                squeeze(Nx.iota({1, 3, 1, 2, 1}))
     end
 
-    defn(squeeze_collapse1(t), do: t |> Nx.squeeze(axes: [0, 2]) |> Nx.squeeze(axes: [0, 2]))
-    defn(squeeze_collapse2(t), do: t |> Nx.squeeze(axes: [3, 1]) |> Nx.squeeze(axes: [2]))
-    defn(squeeze_collapse3(t), do: t |> Nx.squeeze(axes: [2]) |> Nx.squeeze(axes: [3, 1]))
+    defn squeeze_collapse1(t), do: t |> Nx.squeeze(axes: [0, 2]) |> Nx.squeeze(axes: [0, 2])
+    defn squeeze_collapse2(t), do: t |> Nx.squeeze(axes: [3, 1]) |> Nx.squeeze(axes: [2])
+    defn squeeze_collapse3(t), do: t |> Nx.squeeze(axes: [2]) |> Nx.squeeze(axes: [3, 1])
 
     test "with explicit dimensions are collapsed" do
       assert %T{data: %Expr{op: :squeeze, args: [_, [0, 1, 2, 4]]}, shape: {1}, names: [:d]} =
@@ -495,7 +497,7 @@ defmodule Nx.DefnTest do
   end
 
   describe "conditional ops" do
-    defn(select(t1, t2, t3), do: Nx.select(t1, t2, t3))
+    defn select(t1, t2, t3), do: Nx.select(t1, t2, t3)
 
     test "select with tensor predicate" do
       assert %{data: %Expr{op: :select, args: [_, _, _]}, shape: {2, 2}} =
@@ -512,17 +514,16 @@ defmodule Nx.DefnTest do
   end
 
   describe "reduce ops" do
-    defn(reduce(t1, acc), do: Nx.reduce(t1, acc, fn x, y -> x + y end))
+    defn reduce(t1, acc), do: Nx.reduce(t1, acc, fn x, y -> x + y end)
 
-    defn(reduce_static(t1, acc), do: Nx.reduce(t1, acc, fn _, _ -> 0 end))
+    defn reduce_static(t1, acc), do: Nx.reduce(t1, acc, fn _, _ -> 0 end)
 
-    defn(reduce_invalid(t1, amplifier), do: Nx.reduce(t1, 0, fn x, y -> x * amplifier + y end))
+    defn reduce_invalid(t1, amplifier), do: Nx.reduce(t1, 0, fn x, y -> x * amplifier + y end)
 
-    defn(reduce_non_scalar(t1), do: Nx.reduce(t1, 0, fn x, y -> Nx.broadcast(x * y, {1, 1}) end))
+    defn reduce_non_scalar(t1), do: Nx.reduce(t1, 0, fn x, y -> Nx.broadcast(x * y, {1, 1}) end)
 
-    defn(reduce_with_opts(t1, acc),
+    defn reduce_with_opts(t1, acc),
       do: Nx.reduce(t1, acc, [type: {:f, 64}, axes: [-1]], fn x, y -> x + y end)
-    )
 
     test "reduces with function" do
       assert %{
@@ -574,31 +575,31 @@ defmodule Nx.DefnTest do
   end
 
   describe "operators" do
-    defn(add_two(a, b), do: a + b)
+    defn add_two(a, b), do: a + b
 
     test "+" do
       assert %T{data: %Expr{op: :add, args: [_, _]}} = add_two(1, 2)
     end
 
-    defn(subtract_two(a, b), do: a - b)
+    defn subtract_two(a, b), do: a - b
 
     test "-" do
       assert %T{data: %Expr{op: :subtract, args: [_, _]}} = subtract_two(1, 2)
     end
 
-    defn(multiply_two(a, b), do: a * b)
+    defn multiply_two(a, b), do: a * b
 
     test "*" do
       assert %T{data: %Expr{op: :multiply, args: [_, _]}} = multiply_two(1, 2)
     end
 
-    defn(divide_two(a, b), do: a / b)
+    defn divide_two(a, b), do: a / b
 
     test "/" do
       assert %T{data: %Expr{op: :divide, args: [_, _]}} = divide_two(1, 2)
     end
 
-    defn(land_two(a, b), do: a and b)
+    defn land_two(a, b), do: a and b
 
     defn land_true(a) do
       true and a
@@ -608,7 +609,7 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :logical_and, args: [_, _]}} = land_two(1, 2)
     end
 
-    defn(lor_two(a, b), do: a or b)
+    defn lor_two(a, b), do: a or b
 
     defn lor_true(opts \\ []) do
       true or opts[:value]
@@ -618,8 +619,8 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :logical_or, args: [_, _]}} = lor_two(1, 2)
     end
 
-    defn(lnot(a), do: not a)
-    defn(lnot_boolean(opts \\ []), do: not constant_boolean_transform(opts))
+    defn lnot(a), do: not a
+    defn lnot_boolean(opts \\ []), do: not constant_boolean_transform(opts)
 
     deftransformp constant_boolean_transform(opts) do
       if opts[:value] == true do
@@ -629,81 +630,81 @@ defmodule Nx.DefnTest do
       end
     end
 
-    defn(band_two(a, b), do: a &&& b)
+    defn band_two(a, b), do: a &&& b
 
     test "&&&" do
       assert %T{data: %Expr{op: :bitwise_and, args: [_, _]}} = band_two(1, 2)
     end
 
-    defn(bor_two(a, b), do: a ||| b)
+    defn bor_two(a, b), do: a ||| b
 
     test "|||" do
       assert %T{data: %Expr{op: :bitwise_or, args: [_, _]}} = bor_two(1, 2)
     end
 
-    defn(bsl_two(a, b), do: a <<< b)
+    defn bsl_two(a, b), do: a <<< b
 
     test "<<<" do
       assert %T{data: %Expr{op: :left_shift, args: [_, _]}} = bsl_two(1, 2)
     end
 
-    defn(bsr_two(a, b), do: a >>> b)
+    defn bsr_two(a, b), do: a >>> b
 
     test ">>>" do
       assert %T{data: %Expr{op: :right_shift, args: [_, _]}} = bsr_two(1, 2)
     end
 
-    defn(add_two_with_pipe(a, b), do: a |> Nx.add(b))
+    defn add_two_with_pipe(a, b), do: a |> Nx.add(b)
 
     test "|>" do
       assert %T{data: %Expr{op: :add, args: [_, _]}} = add_two_with_pipe(1, 2)
     end
 
-    defn(unary_plus(a), do: +a)
-    defn(unary_minus(a), do: -a)
+    defn unary_plus(a), do: +a
+    defn unary_minus(a), do: -a
 
     test "unary plus and minus" do
       assert %T{data: %Expr{op: :parameter, args: [_]}} = unary_plus(1)
       assert %T{data: %Expr{op: :negate, args: [_]}} = unary_minus(1)
     end
 
-    defn(unary_bnot(a), do: ~~~a)
+    defn unary_bnot(a), do: ~~~a
 
     test "~~~" do
       assert %T{data: %Expr{op: :bitwise_not, args: [_]}} = unary_bnot(1)
     end
 
-    defn(equality(a, b), do: a == b)
+    defn equality(a, b), do: a == b
 
     test "==" do
       assert %T{data: %Expr{op: :equal, args: [_, _]}} = equality(1, 2)
     end
 
-    defn(inequality(a, b), do: a != b)
+    defn inequality(a, b), do: a != b
 
     test "!=" do
       assert %T{data: %Expr{op: :not_equal, args: [_, _]}} = inequality(1, 2)
     end
 
-    defn(less_than(a, b), do: a < b)
+    defn less_than(a, b), do: a < b
 
     test "<" do
       assert %T{data: %Expr{op: :less, args: [_, _]}} = less_than(1, 2)
     end
 
-    defn(greater_than(a, b), do: a > b)
+    defn greater_than(a, b), do: a > b
 
     test ">" do
       assert %T{data: %Expr{op: :greater, args: [_, _]}} = greater_than(1, 2)
     end
 
-    defn(less_than_or_equal(a, b), do: a <= b)
+    defn less_than_or_equal(a, b), do: a <= b
 
     test "<=" do
       assert %T{data: %Expr{op: :less_equal, args: [_, _]}} = less_than_or_equal(1, 2)
     end
 
-    defn(greater_than_or_equal(a, b), do: a >= b)
+    defn greater_than_or_equal(a, b), do: a >= b
 
     test ">=" do
       assert %T{data: %Expr{op: :greater_equal, args: [_, _]}} = greater_than_or_equal(1, 2)

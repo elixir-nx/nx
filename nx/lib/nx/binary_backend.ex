@@ -1451,31 +1451,63 @@ defmodule Nx.BinaryBackend do
     data =
       bin_reduce(tensor, out.type, :first, opts, fn bin, acc ->
         val = binary_to_number(bin, type)
-        res = if acc == :first, do: val, else: Kernel.max(acc, val)
+        res = if acc == :first, do: val, else: non_finite_max(acc, val)
         {res, res}
       end)
 
     from_binary(out, data)
   end
+
+  defp non_finite_max(:nan, _), do: :nan
+  defp non_finite_max(_, :nan), do: :nan
+  defp non_finite_max(:infinity, _), do: :infinity
+  defp non_finite_max(_, :infinity), do: :infinity
+  defp non_finite_max(:neg_infinity, x), do: x
+  defp non_finite_max(x, :neg_infinity), do: x
+  defp non_finite_max(x, y) when is_number(x) and is_number(y), do: Kernel.max(x, y)
 
   @impl true
   def reduce_min(out, %{type: type} = tensor, opts) do
     data =
       bin_reduce(tensor, out.type, :first, opts, fn bin, acc ->
         val = binary_to_number(bin, type)
-        res = if acc == :first, do: val, else: Kernel.min(acc, val)
+        res = if acc == :first, do: val, else: non_finite_min(acc, val)
         {res, res}
       end)
 
     from_binary(out, data)
   end
 
+  defp non_finite_min(:nan, _), do: :nan
+  defp non_finite_min(_, :nan), do: :nan
+  defp non_finite_min(:infinity, x), do: x
+  defp non_finite_min(x, :infinity), do: x
+  defp non_finite_min(:neg_infinity, _), do: :neg_infinity
+  defp non_finite_min(_, :neg_infinity), do: :neg_infinity
+  defp non_finite_min(x, y) when is_number(x) and is_number(y), do: Kernel.min(x, y)
+
+  defp non_finite_lt(:nan, _), do: false
+  defp non_finite_lt(_, :nan), do: false
+  defp non_finite_lt(:infinity, _), do: false
+  defp non_finite_lt(_, :infinity), do: true
+  defp non_finite_lt(_, :neg_infinity), do: false
+  defp non_finite_lt(:neg_infinity, _), do: true
+  defp non_finite_lt(x, y) when is_number(x) and is_number(y), do: x < y
+
+  defp non_finite_gt(:nan, _), do: false
+  defp non_finite_gt(_, :nan), do: false
+  defp non_finite_gt(_, :infinity), do: false
+  defp non_finite_gt(:infinity, _), do: true
+  defp non_finite_gt(:neg_infinity, _), do: false
+  defp non_finite_gt(_, :neg_infinity), do: true
+  defp non_finite_gt(x, y) when is_number(x) and is_number(y), do: x > y
+
   @impl true
   def argmin(out, tensor, opts) do
     comparator =
       case opts[:tie_break] do
-        :high -> &<=/2
-        :low -> &</2
+        :high -> &(non_finite_lt(&1, &2) or &1 == &2)
+        :low -> &non_finite_lt/2
       end
 
     argmin_or_max(out, tensor, comparator, opts[:axis])
@@ -1485,8 +1517,8 @@ defmodule Nx.BinaryBackend do
   def argmax(out, tensor, opts) do
     comparator =
       case opts[:tie_break] do
-        :high -> &>=/2
-        :low -> &>/2
+        :high -> &(non_finite_gt(&1, &2) or &1 == &2)
+        :low -> &non_finite_gt/2
       end
 
     argmin_or_max(out, tensor, comparator, opts[:axis])
@@ -1500,7 +1532,7 @@ defmodule Nx.BinaryBackend do
         bin, {i, cur_extreme_x, cur_extreme_i} ->
           x = binary_to_number(bin, type)
 
-          if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
+          if cur_extreme_x == :first or comparator.(x, cur_extreme_x) do
             {i, {i + 1, x, i}}
           else
             {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}

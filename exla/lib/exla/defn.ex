@@ -1531,18 +1531,30 @@ defmodule EXLA.Defn do
   # If each element of the tuple is just a reference to the parent expression,
   # discard the tuple elements and return the parent expression.
   defp full_tuple(list) do
-    with [%T{data: %Expr{op: :elem, args: args}} | rest] <- list,
-         [%T{data: %Expr{id: id}} = expr, 0] <- args,
-         true <- rest |> Enum.with_index(1) |> Enum.all?(&full_tuple?(&1, id)) do
+    with [%T{data: %Expr{op: :elem, args: [%T{data: %Expr{id: id} = expr}, 0]}} | _] <- list,
+         true <- full_tuple?(list, 0, id) do
       expr
     else
       _ -> nil
     end
   end
 
-  defp full_tuple?({arg, index}, id) do
-    match?(%T{data: %Expr{op: :elem, args: [%T{data: %Expr{id: ^id}}, ^index]}}, arg)
+  defp full_tuple?([arg | args], index, id) do
+    case arg do
+      %T{data: %Expr{op: :elem, args: [%T{data: %Expr{id: ^id}, shape: shape}, ^index]}} ->
+        if shape == {:tuple, index} do
+          true
+        else
+          full_tuple?(args, index + 1, id)
+        end
+
+      _ ->
+        false
+    end
   end
+
+  # We got until the end without traversing the whole tuple
+  defp full_tuple?([], _index, _id), do: false
 
   ## Aggregation
 

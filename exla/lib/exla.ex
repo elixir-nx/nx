@@ -133,31 +133,34 @@ defmodule EXLA do
   That's because when the Erlang VM runs as root, it has to manage
   all child programs.
 
-  At the same time, Google XLA's shells out to child program during
-  compilation and it must retain control over how child programs
-  terminate.
+  At the same time, Google XLA's shells out to child programs and
+  must retain control over how child programs terminate.
 
   To address this, simply make sure you wrap the Erlang VM in
   another process, such as the shell one. In other words, if you
   are using releases, instead of this:
 
-      RUN path/to/release start
+      CMD path/to/release start
 
   do this:
 
-      RUN sh -c "path/to/release start"
+      CMD sh -c "path/to/release start"
 
   If you are using Mix inside your Docker containers, instead of this:
 
-      RUN mix run
+      CMD mix run
 
   do this:
 
-      RUN sh -c "mix run"
+      CMD sh -c "mix run"
 
-  Alternatively, you can pass the `--init` flag to `docker run`, so
-  it runs an `init` inside the container that forwards signals and
-  reaps processes.
+  Alternatively, you can pass the `--init` flag to `docker run`,
+  so it runs an `init` inside the container that forwards signals
+  and reaps processes.
+
+  The `--init` flag uses the [`tini`](https://github.com/krallin/tini)
+  project, so for cases where the flag may not available (e.g.
+  kubernetes) you may want to install it.
 
   ## Telemetry events
 

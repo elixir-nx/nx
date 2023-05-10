@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.5.3 (2023-04-14)
+
+  * Fix compilation issue on certain macOS caused by O3
+  * Fix optimization which would cause EXLA to return a complete tuple instead of a subset
+
 ## v0.5.2 (2023-03-21)
 
   * Automatically transfer tensors between nodes
