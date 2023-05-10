@@ -33,23 +33,28 @@ defmodule Nx.LinAlg.SVD do
         input_tensor
       end
 
-    result =
+    {u, s, vt} =
       if Nx.all(tensor == 0) do
         svd_all_zeros(tensor, opts)
       else
         svd_non_zero(tensor, opts)
       end
 
-    {u, s, vt} =
-      custom_grad(result, [input_tensor], fn g ->
-        svd_grad(result, input_tensor, g)
-      end)
+    # we can force [] as the vectorized axes because we are guaranteed that the input is devectorized
+    result =
+      if revectorize do
+        {
+          Nx.revectorize(u, [], target_shape: u_shape),
+          Nx.revectorize(s, [], target_shape: s_shape),
+          Nx.revectorize(vt, [], target_shape: vt_shape)
+        }
+      else
+        {u, s, vt}
+      end
 
-    {
-      Nx.revectorize(u, input_tensor.vectorized_axes, target_shape: u_shape),
-      Nx.revectorize(s, input_tensor.vectorized_axes, target_shape: s_shape),
-      Nx.revectorize(vt, input_tensor.vectorized_axes, target_shape: vt_shape)
-    }
+    custom_grad(result, [input_tensor], fn g ->
+      svd_grad(result, input_tensor, g)
+    end)
   end
 
   deftransformp validate_opts(opts \\ []) do
@@ -68,7 +73,7 @@ defmodule Nx.LinAlg.SVD do
     s_shape = Tuple.append(collapsed_axes, :auto)
     vt_shape = Tuple.append(s_shape, n)
 
-    revectorize = collapsed_axes != {} or t.vectorized_axes != []
+    revectorize = collapsed_axes != {}
     {revectorize, {m, n}, u_shape, s_shape, vt_shape}
   end
 
