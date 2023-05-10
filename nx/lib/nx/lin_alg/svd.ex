@@ -24,14 +24,9 @@ defmodule Nx.LinAlg.SVD do
   defn svd(input_tensor, opts \\ []) do
     validate_opts(opts)
 
-    {revectorize, target_shape, u_shape, s_shape, vt_shape} = calculate_shapes(input_tensor)
+    {target_shape, u_shape, s_shape, vt_shape} = calculate_shapes(input_tensor)
 
-    tensor =
-      if revectorize do
-        Nx.revectorize(input_tensor, [vector: :auto], target_shape: target_shape)
-      else
-        input_tensor
-      end
+    tensor = Nx.revectorize(input_tensor, [vector: :auto], target_shape: target_shape)
 
     {u, s, vt} =
       if Nx.all(tensor == 0) do
@@ -41,16 +36,11 @@ defmodule Nx.LinAlg.SVD do
       end
 
     # we can force [] as the vectorized axes because we are guaranteed that the input is devectorized
-    result =
-      if revectorize do
-        {
-          Nx.revectorize(u, [], target_shape: u_shape),
-          Nx.revectorize(s, [], target_shape: s_shape),
-          Nx.revectorize(vt, [], target_shape: vt_shape)
-        }
-      else
-        {u, s, vt}
-      end
+    result = {
+      Nx.revectorize(u, [], target_shape: u_shape),
+      Nx.revectorize(s, [], target_shape: s_shape),
+      Nx.revectorize(vt, [], target_shape: vt_shape)
+    }
 
     custom_grad(result, [input_tensor], fn g ->
       svd_grad(result, input_tensor, g)
@@ -73,8 +63,7 @@ defmodule Nx.LinAlg.SVD do
     s_shape = Tuple.append(collapsed_axes, :auto)
     vt_shape = Tuple.append(s_shape, n)
 
-    revectorize = collapsed_axes != {}
-    {revectorize, {m, n}, u_shape, s_shape, vt_shape}
+    {{m, n}, u_shape, s_shape, vt_shape}
   end
 
   defnp svd_all_zeros(a, opts) do
@@ -254,8 +243,8 @@ defmodule Nx.LinAlg.SVD do
   end
 
   # f16 is not enough precision to compute SVD
-  deftransformp min_precision_type({:f, 64}), do: {:f, 64}
-  deftransformp min_precision_type(_), do: {:f, 32}
+  deftransformp(min_precision_type({:f, 64}), do: {:f, 64})
+  deftransformp(min_precision_type(_), do: {:f, 32})
 
   defn qdwh_use_qr(u, x, a, b, c) do
     {m, _n} = Nx.shape(x)
