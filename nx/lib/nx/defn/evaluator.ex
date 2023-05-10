@@ -399,8 +399,8 @@ defmodule Nx.Defn.Evaluator do
     end
   end
 
-  defp eval_apply(_op, %{vectorized_axes: [_ | _]} = ans, _state, _caches) do
-    raise "unexpected vectorized axes in evaluator: #{inspect(ans)}"
+  defp eval_apply(op, %{vectorized_axes: [_ | _]} = ans, _state, _caches) do
+    raise "unexpected vectorized axes in evaluator for operation #{inspect(op)}: #{inspect(ans)}"
   end
 
   defp eval_apply(op, ans, state, caches) do
