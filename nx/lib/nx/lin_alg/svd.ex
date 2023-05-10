@@ -254,8 +254,8 @@ defmodule Nx.LinAlg.SVD do
   end
 
   # f16 is not enough precision to compute SVD
-  deftransformp(min_precision_type({:f, 64}), do: {:f, 64})
-  deftransformp(min_precision_type(_), do: {:f, 32})
+  deftransformp min_precision_type({:f, 64}), do: {:f, 64}
+  deftransformp min_precision_type(_), do: {:f, 32}
 
   defn qdwh_use_qr(u, x, a, b, c) do
     {m, _n} = Nx.shape(x)
