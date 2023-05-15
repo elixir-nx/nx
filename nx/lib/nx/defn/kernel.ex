@@ -1140,6 +1140,11 @@ defmodule Nx.Defn.Kernel do
   time, however it enables additional compile-time optimizations (such as
   fusion), improving the runtime efficiency.
 
+  In case the tensor for generator is vectorized, `:unroll` will only
+  affect the non-vectorized part. For instance, if a tensor has shape `{4}`
+  and vectorized axes `[x: 2][y: 3]`, `unroll: true` will only unroll
+  the `4` inner iterations.
+
   ### Range generators
 
   A range can also be given as a generator. The range may be increasing or
