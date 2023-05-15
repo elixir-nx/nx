@@ -744,7 +744,6 @@ defmodule Nx.VectorizeTest do
       assert t[[2, 2..3]] == Nx.vectorize(Nx.tensor([[10, 11], [10, 11]]), x: 2)
     end
 
-    @tag :skip
     test "get unvectorized tensor, vectorized indices" do
       t = Nx.iota({6})
       i = Nx.tensor([0, 2, 4]) |> Nx.vectorize(:i)
@@ -766,7 +765,23 @@ defmodule Nx.VectorizeTest do
                )
     end
 
-    @tag :skip
-    test "get vectorized tensor, vectorized indices"
+    test "get vectorized tensor, vectorized indices" do
+      t = Nx.iota({3, 6}) |> Nx.vectorize(i: 3)
+      i = Nx.tensor([0, 2, 4]) |> Nx.vectorize(i: 3)
+
+      assert t[i] == Nx.vectorize(Nx.tensor([0, 8, 16]), i: 3)
+
+      t = Nx.iota({2, 6, 2}) |> Nx.vectorize(j: 2)
+
+      assert t[[i, 0..1]] ==
+               Nx.vectorize(
+                 Nx.tensor([
+                   [[0, 1], [4, 5], [8, 9]],
+                   [[12, 13], [16, 17], [20, 21]]
+                 ]),
+                 j: 2,
+                 i: 3
+               )
+    end
   end
 end
