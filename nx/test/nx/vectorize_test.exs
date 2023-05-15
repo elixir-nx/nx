@@ -512,11 +512,10 @@ defmodule Nx.VectorizeTest do
                  y: 2,
                  x: 3
                )
-
-              end
+    end
 
     test "vectorized generator" do
-      x_devec = Nx.iota({2, 3})
+      x_devec = Nx.iota({2, 4}, vectorized_axes: [y: 3])
       x = Nx.vectorize(x_devec, x: 2)
       y = Nx.tensor([10, 20, 30])
 
