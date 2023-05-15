@@ -120,7 +120,5 @@ jobs:
         run: mix compile --warnings-as-errors
       - name: Check formatting
         run: mix format --check-formatted
-      - name: Start epmd
-        run: epmd.exe -daemon
       - name: Run tests
         run: mix test
