@@ -12999,13 +12999,34 @@ defmodule Nx do
 
   ## Vectorized tensors
 
-  The tensor to be sliced can be vectorized, but indices must be non-vectorized.
+  Both the tensor to be sliced and the indices can be vectorized.
 
       iex> Nx.slice(Nx.iota({3, 3}, vectorized_axes: [x: 2]), [0, Nx.tensor(1)], [2, 2])
       #Nx.Tensor<
         vectorized[x: 2]
         s64[2][2]
         [
+          [
+            [1, 2],
+            [4, 5]
+          ],
+          [
+            [1, 2],
+            [4, 5]
+          ]
+        ]
+      >
+
+      iex> idx = Nx.tensor([0, 1, 10]) |> Nx.vectorize(:i)
+      iex> Nx.slice(Nx.iota({3, 3}), [0, idx], [2, 2])
+      #Nx.Tensor<
+        vectorized[i: 3]
+        s64[2][2]
+        [
+          [
+            [0, 1],
+            [3, 4]
+          ],
           [
             [1, 2],
             [4, 5]
@@ -13031,40 +13052,84 @@ defmodule Nx do
     opts = keyword!(opts, strides: 1)
     %T{vectorized_axes: vectorized_axes, shape: shape} = tensor = to_tensor(tensor)
 
-    strides = opts[:strides]
+    if Enum.any?(start_indices, &(is_struct(&1, T) and &1.vectorized_axes != [])) do
+      # if any of the indices is vectorized, we instead treat this slice as a gather
+      [%{vectorized_axes: [{first_axis, _} | _] = vectorized_axes} | _] =
+        start_indices = Nx.broadcast_vectors(start_indices, align_ranks: false)
 
-    start_indices = to_indices(start_indices)
+      n = tuple_size(shape)
 
-    strides =
-      if is_integer(strides),
-        do: List.duplicate(strides, rank(shape)),
-        else: strides
+      idx =
+        Enum.zip_with([start_indices, lengths, 0..(n - 1)], fn [s, l, i] ->
+          s = to_tensor(s)
 
-    {start_indices, output_shape} = Nx.Shape.slice(shape, start_indices, lengths, strides)
+          if s.shape != {} do
+            raise "start index must be a scalar, got shape: #{inspect(s.shape)}"
+          end
 
-    offset = length(vectorized_axes)
+          # The indexed vec_axes are added so that we can easily get the cartesian
+          # product of the constructed-along-axis indices.
+          # Because we want to ensure that the name is different than the other,
+          # we build the new axis name based on the first_axis's name.
+          vec_axis = :"#{first_axis}_#{i}"
 
-    start_indices = List.duplicate(0, offset) ++ start_indices
+          max_idx = add(s, l)
 
-    offset_shape = Keyword.values(vectorized_axes)
-    lengths = offset_shape ++ lengths
+          max_valid = axis_size(tensor, i) - 1
 
-    tensor = devectorize(tensor)
+          offset =
+            select(greater(max_idx, max_valid), subtract(max_idx, max_valid) |> subtract(1), 0)
 
-    output_shape_devec =
-      if offset != 0 do
-        List.to_tuple(offset_shape ++ Tuple.to_list(output_shape))
-      else
-        output_shape
-      end
+          offset = Nx.max(offset, 0)
 
-    out = %{tensor | shape: output_shape_devec}
+          {l}
+          |> iota(vectorized_axes: vectorized_axes)
+          |> revectorize([{first_axis, :auto}, {vec_axis, l}], target_shape: {})
+          |> add(s)
+          |> subtract(offset)
+        end)
+        |> Nx.stack()
+        |> Nx.revectorize(vectorized_axes,
+          target_shape: Tuple.append(List.to_tuple(lengths), :auto)
+        )
 
-    strides = List.duplicate(1, offset) ++ strides
+      Nx.gather(tensor, idx)
+    else
+      strides = opts[:strides]
 
-    result = impl!(tensor).slice(out, tensor, start_indices, lengths, strides)
+      start_indices = to_indices(start_indices)
 
-    vectorize(result, vectorized_axes)
+      strides =
+        if is_integer(strides),
+          do: List.duplicate(strides, rank(shape)),
+          else: strides
+
+      {start_indices, output_shape} = Nx.Shape.slice(shape, start_indices, lengths, strides)
+
+      offset = length(vectorized_axes)
+
+      start_indices = List.duplicate(0, offset) ++ start_indices
+
+      offset_shape = Keyword.values(vectorized_axes)
+      lengths = offset_shape ++ lengths
+
+      tensor = devectorize(tensor)
+
+      output_shape_devec =
+        if offset != 0 do
+          List.to_tuple(offset_shape ++ Tuple.to_list(output_shape))
+        else
+          output_shape
+        end
+
+      out = %{tensor | shape: output_shape_devec}
+
+      strides = List.duplicate(1, offset) ++ strides
+
+      result = impl!(tensor).slice(out, tensor, start_indices, lengths, strides)
+
+      vectorize(result, vectorized_axes)
+    end
   end
 
   @doc """
@@ -13520,9 +13585,6 @@ defmodule Nx do
     end
 
     opts = keyword!(opts, axis: 0)
-
-    tensor = to_tensor(tensor)
-    indices = to_tensor(indices)
 
     axis =
       Nx.Shape.normalize_axis(

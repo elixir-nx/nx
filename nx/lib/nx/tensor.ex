@@ -83,23 +83,14 @@ defmodule Nx.Tensor do
   defp with_names([], _names, acc),
     do: acc
 
-  defp fetch_axes(%Nx.Tensor{vectorized_axes: vectorized_axes, shape: shape} = tensor, axes) do
+  defp fetch_axes(%Nx.Tensor{shape: shape} = tensor, axes) do
     rank = Nx.rank(shape)
-    impl = Nx.Shared.impl!(tensor)
     {start, lengths, squeeze} = fetch_axes(rank - 1, axes, shape, [], [], [])
 
-    offset = length(vectorized_axes)
+    strides = List.duplicate(1, rank)
 
-    start = List.duplicate(0, offset) ++ start
-    offset_shape = Keyword.values(vectorized_axes)
-    lengths = offset_shape ++ lengths
-    strides = List.duplicate(1, rank + offset)
-
-    tensor = Nx.devectorize(tensor)
-
-    %{tensor | shape: List.to_tuple(lengths)}
-    |> impl.slice(tensor, start, lengths, strides)
-    |> Nx.vectorize(vectorized_axes)
+    tensor
+    |> Nx.slice(start, lengths, strides: strides)
     |> Nx.squeeze(axes: squeeze)
   end
 
