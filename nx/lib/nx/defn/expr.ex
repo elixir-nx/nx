@@ -604,6 +604,94 @@ defmodule Nx.Defn.Expr do
     end
   end
 
+  defp while_range(
+         range,
+         file,
+         line,
+         initial,
+         %T{vectorized_axes: [{first_axis, _} | _] = vectorized_axes} = generator,
+         condition_body,
+         opts
+       ) do
+    num_vectorized_axes = length(vectorized_axes)
+
+    {initial, max_vec_size} =
+      Composite.traverse(initial, nil, fn leaf, _ ->
+        # broadcast and pull common axes to the front
+        [_, leaf] = Nx.broadcast_vectors([generator, leaf])
+
+        %{vectorized_axes: leaf_axes} = leaf
+
+        # remove common axes so that we can flatten them into a fixed axis.
+        # We use the `first_axis` to ensure that there's no name collision
+        # in an easy way.
+        vectorized_axes = [{first_axis, :auto} | Enum.drop(leaf_axes, num_vectorized_axes)]
+
+        %{vectorized_axes: [{_, s} | _]} = leaf = Nx.revectorize(leaf, vectorized_axes)
+        {leaf, s}
+      end)
+
+    flat_generator = generator |> Nx.revectorize([{first_axis, :auto}]) |> Nx.devectorize()
+    outer_initial = {{tensor(0), flat_generator}, initial}
+
+    {{{index_param, inner_gen_param}, outer_arg}, outer_context} =
+      to_param_expr(outer_initial, :while)
+
+    outer_condition = Nx.less(index_param, tensor(max_vec_size))
+
+    inner_initial =
+      Composite.traverse(outer_arg, fn %{vectorized_axes: [_ | ax]} = leaf ->
+        leaf
+        |> Nx.devectorize()
+        |> Nx.take(index_param)
+        |> Nx.vectorize(ax)
+      end)
+
+    inner_while =
+      while_range(
+        range,
+        file,
+        line,
+        inner_initial,
+        Nx.take(inner_gen_param, index_param),
+        condition_body,
+        opts
+      )
+
+    {outer_body, _} =
+      Composite.traverse(
+        inner_while,
+        Composite.flatten_list([outer_arg]),
+        fn node, [target | targets] ->
+          target = Nx.devectorize(target)
+          starts = [index_param | List.duplicate(0, tuple_size(target.shape) - 1)]
+
+          updated_target =
+            target
+            |> Nx.put_slice(starts, Nx.devectorize(node) |> Nx.new_axis(0))
+            |> Nx.vectorize(target.vectorized_axes)
+
+          {updated_target, targets}
+        end
+      )
+
+    outer_body = {{Nx.add(index_param, 1), inner_gen_param}, outer_body}
+
+    {_aux_index, result} =
+      while(
+        outer_initial,
+        outer_context,
+        {index_param, outer_arg},
+        outer_condition,
+        outer_body
+      )
+
+    Composite.traverse(result, fn leaf ->
+      %{vectorized_axes: [{^first_axis, _} | other_axes]} = leaf
+      Nx.revectorize(leaf, vectorized_axes ++ other_axes)
+    end)
+  end
+
   defp while_range(range, file, line, initial, generator, condition_body, opts) do
     opts = Keyword.validate!(opts, unroll: false)
     size = Range.size(range)

@@ -26,10 +26,6 @@ defmodule Nx.VectorizeTest do
       assert v.vectorized_axes == [rows: 3, cols: 1]
       assert v.shape == {3}
     end
-
-    # TO-DO: re-write value inspect to support vectorization
-    @tag :skip
-    test "inspect works as expected"
   end
 
   describe "unary math ops" do
@@ -442,6 +438,12 @@ defmodule Nx.VectorizeTest do
       {v, z}
     end
 
+    defn y_plus_each_x(x, y) do
+      while y, t <- x do
+        y + t
+      end
+    end
+
     test "simple" do
       assert double_n_times(Nx.tensor(3), Nx.tensor(5)) == Nx.tensor(96)
 
@@ -510,6 +512,20 @@ defmodule Nx.VectorizeTest do
                  y: 2,
                  x: 3
                )
+
+              end
+
+    test "vectorized generator" do
+      x_devec = Nx.iota({2, 3})
+      x = Nx.vectorize(x_devec, x: 2)
+      y = Nx.tensor([10, 20, 30])
+
+      res1 = y_plus_each_x(x_devec[0], y)
+      res2 = y_plus_each_x(x_devec[1], y)
+
+      result = y_plus_each_x(x, y)
+
+      assert result == [res1, res2] |> Nx.stack(axis: 0) |> Nx.vectorize(x: 2)
     end
   end
 
