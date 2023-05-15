@@ -515,16 +515,21 @@ defmodule Nx.VectorizeTest do
     end
 
     test "vectorized generator" do
-      x_devec = Nx.iota({2, 4}, vectorized_axes: [y: 3])
-      x = Nx.vectorize(x_devec, x: 2)
-      y = Nx.tensor([10, 20, 30])
+      x_devec = Nx.iota({3, 4})
+      x = Nx.vectorize(x_devec, x: 3)
+      y = Nx.tensor([[10, 20, 30, 40], [-10, -20, -30, -40]]) |> Nx.vectorize(y: 2)
 
       res1 = y_plus_each_x(x_devec[0], y)
       res2 = y_plus_each_x(x_devec[1], y)
+      res3 = y_plus_each_x(x_devec[2], y)
 
       result = y_plus_each_x(x, y)
 
-      assert result == [res1, res2] |> Nx.stack(axis: 0) |> Nx.vectorize(x: 2)
+      assert result ==
+               {res1, res2, res3}
+               |> Nx.devectorize()
+               |> Nx.stack(axis: 0)
+               |> Nx.vectorize(x: 3, y: 2)
     end
   end
 
