@@ -423,13 +423,13 @@ defmodule Nx do
   @doc """
   Checks whether the value is a valid numerical value.
 
-  Returns true if the value is a `number`, a `Complex` number or an `Nx.Tensor`.
+  Returns true if the value is a `number`, a non-finite atom (like :infinity), a `Complex` number or an `Nx.Tensor`.
 
   See also: `t:t/0`
   """
   @doc type: :guards
   defguard is_tensor(t)
-           when is_number(t) or is_struct(t, T) or is_struct(t, Complex)
+           when is_number(t) or is_struct(t, T) or is_struct(t, Complex) or t in @non_finite
 
   ## Creation API
 
