@@ -13587,6 +13587,9 @@ defmodule Nx do
 
     opts = keyword!(opts, axis: 0)
 
+    tensor = to_tensor(tensor)
+    indices = to_tensor(indices)
+
     axis =
       Nx.Shape.normalize_axis(
         tensor.shape,

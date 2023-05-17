@@ -2140,6 +2140,14 @@ defmodule NxTest do
     end
   end
 
+  describe "take" do
+    test "accepts scalar and number as index" do
+      assert Nx.take(Nx.iota({4}), 2) == Nx.tensor(2)
+      assert Nx.take(Nx.iota({4}), Nx.tensor(2)) == Nx.tensor(2)
+      assert Nx.take(Nx.iota({4}), Nx.tensor([0, 2])) == Nx.tensor([0, 2])
+    end
+  end
+
   describe "take_diagonal/2" do
     test "extracts valid diagonal given no offset" do
       diag =
