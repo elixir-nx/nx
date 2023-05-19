@@ -2700,6 +2700,14 @@ defmodule NxTest do
     end
   end
 
+  describe "linspace/3" do
+    test "works for :f64 (bug fix: https://github.com/elixir-nx/nx/issues/1222)" do
+      linear = Nx.linspace(0.0, 0.5, n: 6, type: :f64)
+      expected_linear = Nx.tensor([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], type: :f64)
+      assert_all_close(linear, expected_linear, atol: 1.0e-15, rtol: 1.0e-15)
+    end
+  end
+
   describe "reflect/2" do
     test "reflects over axes of size 1" do
       assert Nx.tensor([1, 1, 1, 1]) == Nx.reflect(Nx.tensor([1]), padding_config: [{2, 1}])

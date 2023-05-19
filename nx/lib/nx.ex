@@ -15486,7 +15486,8 @@ defmodule Nx do
     opts = keyword!(opts, [:n, :name, type: {:f, 32}, endpoint: true])
 
     [%{vectorized_axes: vectorized_axes} = start, stop] = reshape_vectors([start, stop])
-
+    start = Nx.as_type(start, opts[:type])
+    stop = Nx.as_type(stop, opts[:type])
     n = opts[:n]
 
     unless is_integer(n) and n > 0 do
