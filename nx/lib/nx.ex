@@ -916,17 +916,17 @@ defmodule Nx do
     @doc """
     Short-hand function for creating tensor of type `#{type}`.
 
-    iex> Nx.#{type}(1)
-    #Nx.Tensor<
-      #{type}
-      #{result}
-    >
+        iex> Nx.#{type}(1)
+        #Nx.Tensor<
+          #{type}
+          #{result}
+        >
 
-    iex> Nx.#{type}([1, 1, 1])
-    #Nx.Tensor<
-      #{type}[3]
-      [#{result}, #{result}, #{result}]
-    >
+        iex> Nx.#{type}([1, 1, 1])
+        #Nx.Tensor<
+          #{type}[3]
+          [#{result}, #{result}, #{result}]
+        >
     """
     @doc type: :creation
     def unquote(type)(tensor), do: Nx.tensor(tensor, type: unquote(type))
