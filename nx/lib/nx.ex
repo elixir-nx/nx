@@ -914,7 +914,7 @@ defmodule Nx do
         c128: "1.0+0.0i"
       ] do
     @doc """
-    Short-hand function for creating tensor of type #{type}.
+    Short-hand function for creating tensor of type `#{type}`.
 
     iex> Nx.#{type}(1)
     #Nx.Tensor<
