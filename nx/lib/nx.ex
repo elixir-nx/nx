@@ -897,6 +897,41 @@ defmodule Nx do
     %T{shape: shape, type: type, names: names, data: %Nx.TemplateBackend{}}
   end
 
+  for {type, result} <- [
+        u8: "1",
+        u16: "1",
+        u32: "1",
+        u64: "1",
+        s8: "1",
+        s16: "1",
+        s32: "1",
+        s64: "1",
+        bf16: "1.0",
+        f16: "1.0",
+        f32: "1.0",
+        f64: "1.0",
+        c64: "1.0+0.0i",
+        c128: "1.0+0.0i"
+      ] do
+    @doc """
+    Short-hand function for creating tensor of type #{type}.
+
+    iex> Nx.#{type}(1)
+    #Nx.Tensor<
+      #{type}
+      #{result}
+    >
+
+    iex> Nx.#{type}([1, 1, 1])
+    #Nx.Tensor<
+      #{type}[3]
+      [#{result}, #{result}, #{result}]
+    >
+    """
+    @doc type: :creation
+    def unquote(type)(tensor), do: Nx.tensor(tensor, type: unquote(type))
+  end
+
   @doc """
   Converts a tensor (or tuples and maps of tensors) to tensor templates.
 
