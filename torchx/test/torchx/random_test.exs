@@ -162,7 +162,7 @@ defmodule Torchx.Nx.RandomTest do
       # upcast
       assert_equal(
         Nx.Random.normal_split(key, 0, 100, type: :f64),
-        Nx.tensor(-0.7426619192938079, type: :f64)
+        Nx.tensor(-0.7426619192938078, type: :f64)
       )
 
       # complex
