@@ -1,7 +1,7 @@
 defmodule Nx.Defn.Tree do
   @moduledoc """
   Helper functions to traverse defn expressions,
-  either as single nodes or recursively.
+  either as single nodes or in-depth.
   """
 
   alias Nx.Defn.{Composite, Expr}

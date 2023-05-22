@@ -2516,9 +2516,24 @@ defmodule Nx do
         [Inf, NaN]
       >
 
+  If the input is a numerical constant instead of a tensor, this is an
+  alias to `Nx.tensor(number, type: type)`. In the example below,
+  notice how precision is only lost if we pass a type which can't
+  represent the numerical input:
+
+      iex> Nx.as_type(1.0e-128, :f32)
+      #Nx.Tensor<
+        f32
+        0.0
+      >
+      iex> Nx.as_type(1.0e-128, :f64)
+      #Nx.Tensor<
+        f64
+        1.0e-128
+      >
   """
   @doc type: :type
-  def as_type(tensor, type) do
+  def as_type(%T{} = tensor, type) do
     tensor = to_tensor(tensor)
     new_type = Nx.Type.normalize!(type)
 
@@ -2530,6 +2545,8 @@ defmodule Nx do
       end)
     end
   end
+
+  def as_type(number, type) when is_tensor(number), do: tensor(number, type: type)
 
   @doc """
   Changes the type of a tensor, using a bitcast.
@@ -15521,7 +15538,8 @@ defmodule Nx do
     opts = keyword!(opts, [:n, :name, type: {:f, 32}, endpoint: true])
 
     [%{vectorized_axes: vectorized_axes} = start, stop] = reshape_vectors([start, stop])
-
+    start = Nx.as_type(start, opts[:type])
+    stop = Nx.as_type(stop, opts[:type])
     n = opts[:n]
 
     unless is_integer(n) and n > 0 do

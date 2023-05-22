@@ -152,7 +152,7 @@ defmodule Nx.RandomTest do
 
       # upcast
       assert Nx.Random.normal_split(key, 0, 100, type: :f64) ==
-               Nx.tensor(-0.74266187285454, type: :f64)
+               Nx.tensor(-0.7426618728545261, type: :f64)
     end
   end
 

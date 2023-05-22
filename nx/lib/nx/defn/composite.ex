@@ -1,13 +1,13 @@
 defmodule Nx.Defn.Composite do
   @moduledoc """
-  Functions to deal with composite data types according to `Nx.Container`.
+  Functions to deal with composite data types.
+
+  Composite data-types are traversed according to `Nx.Container`.
+  If a regular tensor is given, it is individually traversed. 
+  Numerical values, such as integers, floats, and complex numbers
+  are not normalized before hand. Use `Nx.to_tensor/1` to do so.
 
   The functions in this module can be used both inside and outside `defn`.
-  Note the functions in this module traverses tensors, but it does not
-  automatically convert values to tensors. For example, the tuple `{1, 2, 3}`
-  once traversed will emit the numbers `1`, `2`, and `3`. If desired,
-  you can invoke `Nx.to_tensor/1` to normalize them.
-
   Note that, when a value is given to `defn`, it is first converted to
   tensors and containers via `Nx.LazyContainer`. Inside `defn`, there are
   no lazy containers, only containers.
@@ -19,6 +19,9 @@ defmodule Nx.Defn.Composite do
 
   @doc """
   Traverses two composite types to see if they are compatible.
+
+  Non-tensor values are first compared using `Nx.LazyContainer`
+  and then, if not available, as `Nx.Container`.
 
   For non-composite types, the given `fun` will be called to
   compare numbers/tensors pairwise.
