@@ -2481,7 +2481,8 @@ defmodule Nx do
         [Inf, NaN]
       >
 
-  If the input is a numerical constant instead of a tensor, this is an alias to `Nx.tensor(number, type: type)`
+  If the input is a numerical constant instead of a tensor, this is an alias to `Nx.tensor(number, type: type)`.
+  In the example below, notice how precision is only lost if we pass a type which can't represent the numerical input.
 
       iex> Nx.as_type(1.0e-128, :f32)
       #Nx.Tensor<
