@@ -897,39 +897,14 @@ defmodule Nx do
     %T{shape: shape, type: type, names: names, data: %Nx.TemplateBackend{}}
   end
 
-  for {type, result} <- [
-        u8: "1",
-        u16: "1",
-        u32: "1",
-        u64: "1",
-        s8: "1",
-        s16: "1",
-        s32: "1",
-        s64: "1",
-        bf16: "1.0",
-        f16: "1.0",
-        f32: "1.0",
-        f64: "1.0",
-        c64: "1.0+0.0i",
-        c128: "1.0+0.0i"
-      ] do
+  for t <- [:u8, :u16, :u32, :u64, :s8, :s16, :s32, :s64, :bf16, :f16, :f32, :f64, :c64, :c128] do
     @doc """
-    Short-hand function for creating tensor of type `#{type}`.
+    Short-hand function for creating tensor of type `#{t}`.
 
-        iex> Nx.#{type}(1)
-        #Nx.Tensor<
-          #{type}
-          #{result}
-        >
-
-        iex> Nx.#{type}([1, 1, 1])
-        #Nx.Tensor<
-          #{type}[3]
-          [#{result}, #{result}, #{result}]
-        >
+    This is just an alias for `Nx.tensor(tensor, type: #{t})`.
     """
     @doc type: :creation
-    def unquote(type)(tensor), do: Nx.tensor(tensor, type: unquote(type))
+    def unquote(t)(tensor), do: Nx.tensor(tensor, type: unquote(t))
   end
 
   @doc """
