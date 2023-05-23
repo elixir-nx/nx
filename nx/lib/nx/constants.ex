@@ -288,8 +288,12 @@ defmodule Nx.Constants do
       iex> Nx.Constants.i(type: {:f, 32})
       ** (ArgumentError) invalid type for complex number. Expected {:c, 64} or {:c, 128}, got: {:f, 32}
   """
-  def i(opts \\ []) do
-    Nx.tensor(Complex.new(0, 1), opts)
+  def i(type \\ :c64, opts \\ []) do
+    if Keyword.has_key?(opts, :type) do
+      raise "type must not be passed as an option"
+    end
+
+    Nx.tensor(Complex.new(0, 1), Keyword.put(opts, :type, type))
   end
 
   @doc """
