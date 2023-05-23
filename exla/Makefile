@@ -14,10 +14,10 @@ EXLA_CACHE_SO = cache/libexla.so
 EXLA_DIR = c_src/exla
 PRIV_DIR = $(MIX_APP_PATH)/priv
 EXLA_SO = $(PRIV_DIR)/libexla.so
-EXLA_LIB_DIR = $(PRIV_DIR)/lib
+EXLA_LIB_DIR = $(PRIV_DIR)/xla_extension/lib
 
 # Link paths
-XLA_EXTENSION_LIB_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(XLA_EXTENSION_LIB)
+XLA_EXTENSION_LIB_LINK_PATH = ../$(CWD_RELATIVE_TO_PRIV_PATH)/$(XLA_EXTENSION_LIB)
 EXLA_CACHE_SO_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(EXLA_CACHE_SO)
 
 # Build flags
@@ -38,12 +38,13 @@ else
 	# in ./lib regardless of the absolute location. This way priv can be safely
 	# packed into an Elixir release. Also, we use $$ to escape Makefile variable
 	# and single quotes to escape shell variable
-	LDFLAGS += -Wl,-rpath,'$$ORIGIN/lib'
+	LDFLAGS += -Wl,-rpath,'$$ORIGIN/xla_extension/lib'
 	POST_INSTALL = $(NOOP)
 endif
 
 $(EXLA_SO): $(EXLA_CACHE_SO)
 	@ mkdir -p $(PRIV_DIR)
+	@ mkdir -p $(PRIV_DIR)/xla_extension
 	@ if [ "${MIX_BUILD_EMBEDDED}" = "true" ]; then \
 		cp -a $(abspath $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR) ; \
 		cp -a $(abspath $(EXLA_CACHE_SO)) $(EXLA_SO) ; \
