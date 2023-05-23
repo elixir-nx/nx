@@ -7876,7 +7876,7 @@ defmodule Nx do
     t = type(real) |> Nx.Type.merge(type(imag)) |> Nx.Type.to_complex()
 
     imag
-    |> multiply(Nx.Constants.i(type: t))
+    |> multiply(Nx.Constants.i(t))
     |> add(real)
   end
 

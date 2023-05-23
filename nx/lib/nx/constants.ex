@@ -277,7 +277,7 @@ defmodule Nx.Constants do
         0.0+1.0i
       >
 
-      iex> Nx.Constants.i(type: {:c, 128})
+      iex> Nx.Constants.i(:c128)
       #Nx.Tensor<
         c128
         0.0+1.0i
@@ -285,7 +285,7 @@ defmodule Nx.Constants do
 
   ## Error cases
 
-      iex> Nx.Constants.i(type: {:f, 32})
+      iex> Nx.Constants.i({:f, 32})
       ** (ArgumentError) invalid type for complex number. Expected {:c, 64} or {:c, 128}, got: {:f, 32}
   """
   def i(type \\ :c64, opts \\ []) do
