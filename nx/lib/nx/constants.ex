@@ -265,6 +265,11 @@ defmodule Nx.Constants do
   end
 
   @doc """
+  Returns the imaginary constant in c64
+  """
+  def i, do: i(:c64)
+
+  @doc """
   Returns the imaginary constant.
 
   Accepts the same options as `Nx.tensor/2`
@@ -277,7 +282,7 @@ defmodule Nx.Constants do
         0.0+1.0i
       >
 
-      iex> Nx.Constants.i(type: {:c, 128})
+      iex> Nx.Constants.i(:c128)
       #Nx.Tensor<
         c128
         0.0+1.0i
@@ -285,11 +290,15 @@ defmodule Nx.Constants do
 
   ## Error cases
 
-      iex> Nx.Constants.i(type: {:f, 32})
+      iex> Nx.Constants.i({:f, 32})
       ** (ArgumentError) invalid type for complex number. Expected {:c, 64} or {:c, 128}, got: {:f, 32}
   """
-  def i(opts \\ []) do
-    Nx.tensor(Complex.new(0, 1), opts)
+  def i(type, opts \\ []) do
+    if Keyword.has_key?(opts, :type) do
+      raise "type must not be passed as an option"
+    end
+
+    Nx.tensor(Complex.new(0, 1), Keyword.put(opts, :type, type))
   end
 
   @doc """
