@@ -15394,11 +15394,7 @@ defmodule Nx do
         |> Tuple.delete_at(tuple_size(shape))
 
       out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_complex(tensor.type)})
-
-      # function = if kind == :fft, do: &Nx.FFT.bluesteins_fft/2, else: &Nx.FFT.bluesteins_ifft/2
-
       apply(impl!(tensor), kind, [out, tensor, opts])
-      # Nx.Shared.optional(kind, [tensor, opts], out, function)
     end)
   end
 
