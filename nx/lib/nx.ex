@@ -1072,6 +1072,12 @@ defmodule Nx do
       If given, the resulting tensor will be vectorized accordingly.
       Vectorization is not supported via tensor inputs.
 
+    * `:strides` - a list with the same length as the target iota rank.
+      If given, the output will contain every `s` position in each axis,
+      where `s` is the stride along that axis. Intuitively, this is
+      equivalent to taking the indices defined by `0..(axis_size-1)//stride`
+      for each axis.
+
   ## Examples
 
       iex> Nx.iota({})
@@ -1179,10 +1185,51 @@ defmodule Nx do
           ]
         ]
       >
+
+  An iota can also be strided:
+
+      iex> Nx.iota({2, 3, 5}, strides: [1, 2, 2])
+      #Nx.Tensor<
+        s64[2][2][3]
+        [
+          [
+            [0, 2, 4],
+            [10, 12, 14]
+          ],
+          [
+            [15, 17, 19],
+            [25, 27, 29]
+          ]
+        ]
+      >
+
+      iex> Nx.iota({2, 3, 5}, strides: [1, 3, 3])
+      #Nx.Tensor<
+        s64[2][2][3]
+        [
+          [0, 3],
+          [5, 8]
+        ]
+      >
+
+      iex> Nx.iota({2, 3, 5}, strides: [1, 2, 2], axis: 2)
+      #Nx.Tensor<
+        s64[2][2][3]
+        [
+          [
+            [0, 2, 4],
+            [0, 2, 4]
+          ],
+          [
+            [0, 2, 4],
+            [0, 2, 4]
+          ]
+        ]
+      >
   """
   @doc type: :creation
   def iota(tensor_or_shape, opts \\ []) do
-    opts = keyword!(opts, [:axis, :names, :backend, :vectorized_axes, type: {:s, 64}])
+    opts = keyword!(opts, [:axis, :names, :backend, :vectorized_axes, :strides, type: {:s, 64}])
     vectorized_axes = opts[:vectorized_axes]
 
     if not is_tuple(tensor_or_shape) do
@@ -1204,6 +1251,18 @@ defmodule Nx do
     type = Nx.Type.normalize!(opts[:type])
     {backend, backend_options} = backend_from_options!(opts) || default_backend()
 
+    strides = opts[:strides]
+
+    if not is_nil(strides) do
+      len_strides = length(strides)
+      rank = tuple_size(shape)
+
+      if len_strides != rank do
+        raise ArgumentError,
+              "strides must have the same length as the iota rank. Expected #{rank}, got: #{len_strides}"
+      end
+    end
+
     output =
       if axis = opts[:axis] do
         axis = Nx.Shape.normalize_axis(shape, axis, names)
@@ -1212,18 +1271,25 @@ defmodule Nx do
         backend.iota(%T{type: type, shape: shape, names: names}, nil, backend_options)
       end
 
-    if not is_nil(vectorized_axes) and vectorized_axes != [] do
-      base_shape =
-        List.to_tuple(List.duplicate(1, length(vectorized_axes)) ++ Tuple.to_list(shape))
+    result =
+      if not is_nil(vectorized_axes) and vectorized_axes != [] do
+        base_shape =
+          List.to_tuple(List.duplicate(1, length(vectorized_axes)) ++ Tuple.to_list(shape))
 
-      output_shape = List.to_tuple(Keyword.values(vectorized_axes) ++ Tuple.to_list(shape))
+        output_shape = List.to_tuple(Keyword.values(vectorized_axes) ++ Tuple.to_list(shape))
 
-      output
-      |> reshape(base_shape)
-      |> broadcast(output_shape)
-      |> vectorize(vectorized_axes)
+        output
+        |> reshape(base_shape)
+        |> broadcast(output_shape)
+        |> vectorize(vectorized_axes)
+      else
+        output
+      end
+
+    if strides do
+      window_min(result, Tuple.duplicate(1, length(strides)), strides: strides)
     else
-      output
+      result
     end
   end
 
