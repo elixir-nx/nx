@@ -890,7 +890,7 @@ defmodule NxTest do
       tensor = Nx.tensor([[1, 2, 3]], names: [:x, :y])
 
       assert_raise ArgumentError,
-                   ~r"slicing a tensor requires a non-empty range with a step of 1, got: 2..1//-1",
+                   ~r"slicing a tensor requires a non-empty range with a positive step, got: 2..1//-1",
                    fn -> tensor[[y: 2..1]] end
     end
   end
