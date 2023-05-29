@@ -2382,7 +2382,9 @@ defmodule Nx.BinaryBackend do
 
     w =
       Enum.map(0..(n - 1), fn k ->
-        Complex.exp(Complex.new(0, -2 * :math.pi() * k ** 2 / (2 * n)))
+        0
+        |> Complex.new(-:math.pi() * k ** 2 / n)
+        |> Complex.exp()
       end)
 
     a_pad = List.duplicate(0, m - n)
