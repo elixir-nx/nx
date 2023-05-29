@@ -2317,10 +2317,7 @@ defmodule Nx.BinaryBackend do
             fft_list(row, n)
 
           :ifft ->
-            row
-            |> Enum.map(&Complex.conjugate/1)
-            |> fft_list(n)
-            |> Enum.map(&(Complex.conjugate(&1) / n))
+            ifft_list(row, n)
         end
       end
 
@@ -2337,38 +2334,94 @@ defmodule Nx.BinaryBackend do
     from_binary(out, output_data)
   end
 
-  defp fft_list(data, bigN) when bigN < 2, do: data
+  defp ifft_list(row, n) do
+    row
+    |> Enum.map(&Complex.conjugate/1)
+    |> fft_list(n)
+    |> Enum.map(&(Complex.conjugate(&1) / n))
+  end
 
-  defp fft_list(data, bigN) when rem(bigN, 2) != 0 do
-    # Naive DFT case for when bigN is odd > 2
-    for k <- 0..(bigN - 1) do
-      minus_two_pi_k_over_bigN = -2 * :math.pi() * k / bigN
+  defp fft_list(data, n) do
+    is_power_of_two = n == 1 or Bitwise.band(n, n - 1) == 0
 
-      data
-      |> Enum.with_index(fn x, n ->
-        x * Complex.exp(Complex.new(0, minus_two_pi_k_over_bigN * n))
-      end)
-      |> Enum.reduce(&+/2)
+    if is_power_of_two or n < 1024 do
+      # fft_list_base is Cooley-Tukey Radix-2 FFT with DFT fallback
+      fft_list_base(data, n)
+    else
+      fft_bluestein(data, n)
     end
   end
 
-  defp fft_list([_ | tail] = data, bigN) do
-    # Here bigN is guaranteed to be even, so the recursion will
-    # work on at least one level
-    bigN_over_2 = div(bigN, 2)
+  defp fft_list_base(data, n) when n < 2, do: data
 
-    even = fft_list(Enum.take_every(data, 2), bigN_over_2)
-    odd = fft_list(Enum.take_every(tail, 2), bigN_over_2)
+  defp fft_list_base(data, n) when rem(n, 2) != 0 do
+    minus_two_pi_over_n = -2 * :math.pi() / n
+
+    for k <- 0..(n - 1) do
+      if k == 0 do
+        # we can avoid calculations because exp(0 * ...) := 1
+        data
+        |> Enum.reduce(&+/2)
+        |> case do
+          %Complex{} = c -> c
+          x -> Complex.new(x)
+        end
+      else
+        twiddle_phase = minus_two_pi_over_n * k
+
+        data
+        |> Enum.with_index(fn x, i ->
+          x * Complex.from_polar(1, twiddle_phase * i)
+        end)
+        |> Enum.reduce(&+/2)
+      end
+    end
+  end
+
+  defp fft_list_base([_ | tail] = data, n) do
+    # in this case n is guaranteed to be even
+    n_over_2 = div(n, 2)
+
+    even = fft_list_base(Enum.take_every(data, 2), n_over_2)
+    odd = fft_list_base(Enum.take_every(tail, 2), n_over_2)
 
     t =
       Enum.with_index(odd, fn item, k ->
-        Complex.exp(Complex.new(0, -2 * :math.pi() * k / bigN)) * item
+        Complex.exp(Complex.new(0, -2 * :math.pi() * k / n)) * item
       end)
 
-    left = Enum.zip_with([even, t], fn [x, y] -> x + y end)
-    right = Enum.zip_with([even, t], fn [x, y] -> x - y end)
+    left = Enum.zip_with(even, t, &+/2)
+    right = Enum.zip_with(even, t, &-/2)
 
     left ++ right
+  end
+
+  # fft_bluestein:
+  # This is an extension of the FFT for when
+  # n isn't a power of 2
+  defp fft_bluestein(x, n) do
+    m = 2 * n - 1
+    m = 2 ** ceil(:math.log2(m))
+
+    w =
+      Enum.map(0..(n - 1), fn k ->
+        0
+        |> Complex.new(-:math.pi() * k ** 2 / n)
+        |> Complex.exp()
+      end)
+
+    a_pad = List.duplicate(0, m - n)
+    a = Enum.zip_with(w, x, &*/2) ++ a_pad
+
+    b_pad = List.duplicate(0, m - 2 * n + 1)
+    [_ | b_tl] = b = Enum.map(w, &Complex.conjugate/1)
+    b = b ++ b_pad ++ Enum.reverse(b_tl)
+
+    c_fft = Enum.zip_with(fft_list_base(a, m), fft_list_base(b, m), &*/2)
+
+    c_fft
+    |> ifft_list(m)
+    |> Enum.zip_with(w, &*/2)
   end
 
   ## Binary reducers
