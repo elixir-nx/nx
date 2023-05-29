@@ -83,4 +83,39 @@ defmodule Nx.TensorTest do
       assert_raise RuntimeError, "not supported", fn -> Nx.iota({2, 2}) end
     end
   end
+
+  describe "access" do
+    test "works with stepped ranges" do
+      assert Nx.iota({2, 3, 5})[[.., 0..-1//3, 0..-1//2]] ==
+               Nx.tensor([
+                 [
+                   [0, 2, 4]
+                 ],
+                 [
+                   [15, 17, 19]
+                 ]
+               ])
+
+      assert Nx.iota({2, 3, 5})[[.., 0..-1//2, 0..-1//2]] ==
+               Nx.tensor([
+                 [
+                   [0, 2, 4],
+                   [10, 12, 14]
+                 ],
+                 [
+                   [15, 17, 19],
+                   [25, 27, 29]
+                 ]
+               ])
+    end
+
+    test "works with negative steps" do
+      iota = Nx.iota({2, 5})
+
+      for step <- -5..-1 do
+        assert iota[[0, 4..0//step]] == Nx.tensor(Enum.to_list(4..0//step))
+        assert iota[[1, 4..0//step]] == Nx.tensor(Enum.to_list(9..5//step))
+      end
+    end
+  end
 end

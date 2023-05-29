@@ -66,7 +66,7 @@ defmodule Nx.Tensor do
     tensor[slice] expects slice to be one of:
 
       * an integer or a scalar tensor representing a zero-based index
-      * a first..last range representing inclusive start-stop indexes
+      * a first..last//step range representing inclusive start-stop indexes with an optional step
       * a list of integers and ranges
       * a keyword list of integers and ranges
 
@@ -85,35 +85,75 @@ defmodule Nx.Tensor do
 
   defp fetch_axes(%Nx.Tensor{shape: shape} = tensor, axes) do
     rank = Nx.rank(shape)
-    {start, lengths, squeeze} = fetch_axes(rank - 1, axes, shape, [], [], [])
 
-    strides = List.duplicate(1, rank)
+    {start, lengths, squeeze, strides, reverse} =
+      fetch_axes(rank - 1, axes, shape, [], [], [], [], [])
 
     tensor
     |> Nx.slice(start, lengths, strides: strides)
+    |> Nx.reverse(axes: reverse)
     |> Nx.squeeze(axes: squeeze)
   end
 
-  defp fetch_axes(axis, axes, shape, start, lengths, squeeze) when axis >= 0 do
+  defp fetch_axes(axis, axes, shape, start, lengths, squeeze, strides, reverse) when axis >= 0 do
     case List.keytake(axes, axis, 0) do
       {{^axis, %Nx.Tensor{} = index}, axes} ->
-        fetch_axes(axis - 1, axes, shape, [index | start], [1 | lengths], [axis | squeeze])
+        fetch_axes(
+          axis - 1,
+          axes,
+          shape,
+          [index | start],
+          [1 | lengths],
+          [axis | squeeze],
+          [1 | strides],
+          reverse
+        )
 
       {{^axis, index}, axes} when is_integer(index) ->
         index = normalize_index(index, axis, shape)
-        fetch_axes(axis - 1, axes, shape, [index | start], [1 | lengths], [axis | squeeze])
 
-      {{^axis, first..last//step = range}, axes} ->
+        fetch_axes(
+          axis - 1,
+          axes,
+          shape,
+          [index | start],
+          [1 | lengths],
+          [axis | squeeze],
+          [1 | strides],
+          reverse
+        )
+
+      {{^axis, first..last_in//step}, axes} ->
         first = normalize_index(first, axis, shape)
-        last = normalize_index(last, axis, shape)
+        last = normalize_index(last_in, axis, shape)
 
-        if last < first or step != 1 do
+        range =
+          if last_in < 0 and first < last and step < 0 do
+            last..first//step
+          else
+            first..last//step
+          end
+
+        range_size = Range.size(range)
+
+        if range_size == 0 do
           raise ArgumentError,
-                "slicing a tensor requires a non-empty range with a step of 1, got: #{inspect(range)}"
+                "slicing a tensor requires a non-empty range, got: #{inspect(range)}"
         end
 
-        len = last - first + 1
-        fetch_axes(axis - 1, axes, shape, [first | start], [len | lengths], squeeze)
+        {start, lengths, strides, reverse} =
+          if step < 0 do
+            first = range.first + step * (range_size - 1)
+            last = range.first
+            len = last - first + 1
+
+            {[first | start], [len | lengths], [abs(step) | strides], [axis | reverse]}
+          else
+            len = last - first + 1
+            {[first | start], [len | lengths], [step | strides], reverse}
+          end
+
+        fetch_axes(axis - 1, axes, shape, start, lengths, squeeze, strides, reverse)
 
       {{^axis, value}, _} ->
         raise ArgumentError,
@@ -121,17 +161,26 @@ defmodule Nx.Tensor do
                 inspect(value)
 
       nil ->
-        fetch_axes(axis - 1, axes, shape, [0 | start], [elem(shape, axis) | lengths], squeeze)
+        fetch_axes(
+          axis - 1,
+          axes,
+          shape,
+          [0 | start],
+          [elem(shape, axis) | lengths],
+          squeeze,
+          [1 | strides],
+          reverse
+        )
     end
   end
 
-  defp fetch_axes(_axis, [{axis, _} | _], shape, _start, _lengths, _squeeze) do
+  defp fetch_axes(_axis, [{axis, _} | _], shape, _start, _lengths, _squeeze, _strides, _reverse) do
     raise ArgumentError,
           "unknown or duplicate axis #{axis} found when slicing shape #{inspect(shape)}"
   end
 
-  defp fetch_axes(_axis, [], _shape, start, lengths, squeeze) do
-    {start, lengths, squeeze}
+  defp fetch_axes(_axis, [], _shape, start, lengths, squeeze, strides, reverse) do
+    {start, lengths, squeeze, strides, reverse}
   end
 
   defp normalize_index(index, axis, shape) do
