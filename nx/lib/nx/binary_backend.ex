@@ -2344,24 +2344,46 @@ defmodule Nx.BinaryBackend do
   defp fft_list(data, n) do
     is_power_of_two = n == 1 or Bitwise.band(n, n - 1) == 0
 
-    if is_power_of_two do
-      fft_list2(data, n)
+    if is_power_of_two or n < 1024 do
+      # fft_list_base is Cooley-Tukey Radix-2 FFT with DFT fallback
+      fft_list_base(data, n)
     else
       fft_bluestein(data, n)
     end
   end
 
-  # fft_list2:
-  # n is guaranteed to be a power of 2, so
-  # the recursion will work all the way down
+  defp fft_list_base(data, n) when n < 2, do: data
 
-  defp fft_list2(data, n) when n < 2, do: data
+  defp fft_list_base(data, n) when rem(n, 2) != 0 do
+    minus_two_pi_over_n = -2 * :math.pi() / n
 
-  defp fft_list2([_ | tail] = data, n) do
+    for k <- 0..(n - 1) do
+      if k == 0 do
+        # we can avoid calculations because exp(0 * ...) := 1
+        data
+        |> Enum.reduce(&+/2)
+        |> case do
+          %Complex{} = c -> c
+          x -> Complex.new(x)
+        end
+      else
+        twiddle_phase = minus_two_pi_over_n * k
+
+        data
+        |> Enum.with_index(fn x, i ->
+          x * Complex.from_polar(1, twiddle_phase * i)
+        end)
+        |> Enum.reduce(&+/2)
+      end
+    end
+  end
+
+  defp fft_list_base([_ | tail] = data, n) do
+    # in this case n is guaranteed to be even
     n_over_2 = div(n, 2)
 
-    even = fft_list2(Enum.take_every(data, 2), n_over_2)
-    odd = fft_list2(Enum.take_every(tail, 2), n_over_2)
+    even = fft_list_base(Enum.take_every(data, 2), n_over_2)
+    odd = fft_list_base(Enum.take_every(tail, 2), n_over_2)
 
     t =
       Enum.with_index(odd, fn item, k ->
@@ -2395,7 +2417,7 @@ defmodule Nx.BinaryBackend do
     [_ | b_tl] = b = Enum.map(w, &Complex.conjugate/1)
     b = b ++ b_pad ++ Enum.reverse(b_tl)
 
-    c_fft = Enum.zip_with(fft_list2(a, m), fft_list2(b, m), &*/2)
+    c_fft = Enum.zip_with(fft_list_base(a, m), fft_list_base(b, m), &*/2)
 
     c_fft
     |> ifft_list(m)

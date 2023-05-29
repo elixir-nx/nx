@@ -2936,4 +2936,27 @@ defmodule NxTest do
              ) == Nx.tensor([[0, 1], [0, 1]]) |> Nx.vectorize(x: 2)
     end
   end
+
+  describe "fft/ifft" do
+    test "Bluestein clause" do
+      # we need a tensor which isn't a power of 2 and is > than 1024 to actually
+      # validate the bluestein implementation. No doctests check for it.
+      x = Nx.tile(~V[1 1 1 0 0 0], [400])
+      x_fft = Nx.fft(x)
+
+      # From numpy we expect the following indices to be the only non-zero values in the tensor
+      non_zero_idx = Nx.tensor([0, 400, 1200, 2000])
+      assert Nx.take(x_fft, non_zero_idx) == ~V[1200 400-692.820323i 400 400+692.820323i]
+
+      zeros_check = Nx.indexed_put(x_fft, Nx.new_axis(non_zero_idx, 1), ~V[0 0 0 0])
+      zeros = Nx.broadcast(0, x_fft)
+      assert_all_close(Nx.real(zeros_check), zeros, atol: 1.0e-9)
+      assert_all_close(Nx.imag(zeros_check), zeros, atol: 1.0e-9)
+
+      # Because we implement ifft in terms of fft, we'll use the same tensor as validation
+      x_ifft = Nx.ifft(x_fft)
+      assert_all_close(x, Nx.real(x_ifft), atol: 1.0e-8)
+      assert_all_close(zeros, Nx.imag(x_ifft), atol: 1.0e-8)
+    end
+  end
 end
