@@ -2352,8 +2352,9 @@ defmodule Nx.BinaryBackend do
   end
 
   # fft_list2:
-  # Here n is guaranteed to be even, so the recursion will
-  # work all the way down
+  # n is guaranteed to be a power of 2, so
+  # the recursion will work all the way down
+
   defp fft_list2(data, n) when n < 2, do: data
 
   defp fft_list2([_ | tail] = data, n) do
