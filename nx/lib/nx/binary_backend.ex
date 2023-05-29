@@ -2382,27 +2382,20 @@ defmodule Nx.BinaryBackend do
 
     w =
       Enum.map(0..(n - 1), fn k ->
-        Complex.exp(Complex.new(0, -2 * :math.pi() * rem(k ** 2, 2 * n) / n))
+        Complex.exp(Complex.new(0, -2 * :math.pi() * k ** 2 / (2 * n)))
       end)
 
-    zeros = List.duplicate(0, m - n)
-    a = Enum.zip_with(w, x, &*/2) ++ zeros
-    [_ | c] = w_conj = Enum.map(w, &Complex.conjugate/1)
-    c = zeros ++ [0 | Enum.reverse(c)]
-    b = w_conj ++ zeros
+    a_pad = List.duplicate(0, m - n)
+    a = Enum.zip_with(w, x, &*/2) ++ a_pad
 
-    a_fft = fft_list2(a, m)
-    b_fft = fft_list2(b, m)
-    c_fft = fft_list2(c, m)
+    b_pad = List.duplicate(0, m - 2 * n + 1)
+    [_ | b_tl] = b = Enum.map(w, &Complex.conjugate/1)
+    b = b ++ b_pad ++ Enum.reverse(b_tl)
 
-    y_fft =
-      Enum.zip_with([a_fft, b_fft, c_fft], fn [ai, bi, ci] ->
-        ai * (bi + ci)
-      end)
+    c_fft = Enum.zip_with(fft_list2(a, m), fft_list2(b, m), &*/2)
 
-    y = ifft_list(y_fft, m)
-
-    y
+    c_fft
+    |> ifft_list(m)
     |> Enum.take(n)
     |> Enum.zip_with(w, &*/2)
   end
