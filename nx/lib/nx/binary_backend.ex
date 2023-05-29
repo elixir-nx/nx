@@ -2398,7 +2398,6 @@ defmodule Nx.BinaryBackend do
 
     c_fft
     |> ifft_list(m)
-    |> Enum.take(n)
     |> Enum.zip_with(w, &*/2)
   end
 
