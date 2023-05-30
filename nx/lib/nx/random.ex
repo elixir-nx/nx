@@ -55,7 +55,7 @@ defmodule Nx.Random do
   > we can think of keeping track of the `Nx.Random` key as a way to
   > isolate multiple GPU users, much like the PRNG on different
   > BEAM nodes is isolated. Each key gets updated in its own
-  > isolated sequence of calls, an thus we don't get different
+  > isolated sequence of calls, and thus we don't get different
   > results for each process using the same PRNG as we would
   > in the normal situation.
   >
