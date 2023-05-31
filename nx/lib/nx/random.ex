@@ -44,8 +44,6 @@ defmodule Nx.Random do
      (generating array values) and multi-replica, multi-core
      computation. In particular it should not use sequencing
      constraints between random function calls.
-
-  <a name="key-to-keys"></a>
   > #### The key to understanding Nx.Random keys {: .info}
   >
   > Most Elixir users might be used to not having to keep
