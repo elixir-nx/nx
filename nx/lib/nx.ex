@@ -3266,21 +3266,41 @@ defmodule Nx do
   end
 
   @doc ~S"""
-  Split tensor into train and test subsets.
+  Split a tensor into train and test subsets.
+
+  `split` must be a float number between `0.0` and `1.0`.
+
+  ## Options
+
+    * `:axis` - The axis along which to take the values from. Defaults to `0`.
 
   ## Examples
 
-    Split into 80% for training and 20% for testing.
+    Split a tensor into two separate tensors.
 
-    iex> train = Nx.tensor([[3, 6, 5],[26, 75, 3]])
-    iex> test = Nx.tensor([[23, 4, 1]])
-    iex> {^train, ^test} = Nx.split(Nx.tensor([[3, 6, 5], [26, 75, 3], [23, 4, 1]]), split: 0.8)
+    iex> {train, test} = Nx.split(Nx.tensor([[3, 6, 5], [26, 75, 3], [23, 4, 1]]), 0.8, axis: 0)
+    iex> train
+    #Nx.Tensor<
+      s64[2][3]
+      [
+        [3, 6, 5],
+        [26, 75, 3]
+      ]
+    >
+    iex> test
+    #Nx.Tensor<
+      s64[1][3]
+      [
+        [23, 4, 1]
+      ]
+    >
   """
-  @doc type: :shape
-  def split(tensor, opts \\ [])
+  @doc type: :indexed
+  def split(tensor, split, opts \\ [])
 
-  def split(%T{shape: shape} = tensor, opts) do
-    split = Keyword.fetch!(opts, :split)
+  def split(%T{shape: shape} = tensor, split, opts) do
+    opts = keyword!(opts, axis: 0)
+    axis = Keyword.fetch!(opts, :axis)
 
     if is_float(split) and split > 0.0 and split < 1.0 do
       rows = elem(shape, 0)
@@ -3289,8 +3309,8 @@ defmodule Nx do
       remaining_size = rows - split_size
 
       {
-        slice_along_axis(tensor, 0, split_size, axis: 0),
-        slice_along_axis(tensor, split_size, remaining_size, axis: 0)
+        slice_along_axis(tensor, 0, split_size, axis: axis),
+        slice_along_axis(tensor, split_size, remaining_size, axis: axis)
       }
     else
       raise ":split must be a float number between 0.0 and 1.0"
