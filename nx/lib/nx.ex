@@ -3266,7 +3266,7 @@ defmodule Nx do
   end
 
   @doc ~S"""
-  Split tensor or list into train and test subsets.
+  Split tensor into train and test subsets.
 
   ## Examples
 
