@@ -3026,31 +3026,33 @@ defmodule NxTest do
   describe "split/2" do
     test "Split list into 50% for training and 50% for testing" do
       tensor = Nx.iota({10, 2}, names: [:x, :y])
+      {train, test} = Nx.split(tensor, split: 0.5)
 
-      {train, test} =
-        tensor
-        |> Nx.to_list()
-        |> Nx.split(split: 0.5)
+      assert Nx.tensor(
+               [
+                 [0, 1],
+                 [2, 3],
+                 [4, 5],
+                 [6, 7],
+                 [8, 9]
+               ],
+               names: [:x, :y]
+             ) == train
 
-      assert [
-               [0, 1],
-               [2, 3],
-               [4, 5],
-               [6, 7],
-               [8, 9]
-             ] == train
-
-      assert [
-               [10, 11],
-               [12, 13],
-               [14, 15],
-               [16, 17],
-               [18, 19]
-             ] == test
+      assert Nx.tensor(
+               [
+                 [10, 11],
+                 [12, 13],
+                 [14, 15],
+                 [16, 17],
+                 [18, 19]
+               ],
+               names: [:x, :y]
+             ) == test
     end
 
     test "Split into 70% for training and 30% for testing" do
-      tensor = Nx.iota({100, 6}, names: [:x, :y])
+      tensor = Nx.iota({100, 6})
       {train, test} = Nx.split(tensor, split: 0.7)
 
       assert length(Nx.to_list(train)) == 70
@@ -3058,7 +3060,7 @@ defmodule NxTest do
     end
 
     test "Split into 75% for training and 25% for testing" do
-      tensor = Nx.iota({100, 10}, names: [:x, :y])
+      tensor = Nx.iota({100, 10})
       {train, test} = Nx.split(tensor, split: 0.75)
 
       assert length(Nx.to_list(train)) == 75
@@ -3066,7 +3068,7 @@ defmodule NxTest do
     end
 
     test "Split into 61% for training and 39% for testing" do
-      tensor = Nx.iota({100, 10}, names: [:x, :y])
+      tensor = Nx.iota({100, 10})
       {train, test} = Nx.split(tensor, split: 0.61)
 
       assert length(Nx.to_list(train)) == 61
@@ -3074,7 +3076,7 @@ defmodule NxTest do
     end
 
     test "Split into 60% for training and 40% for testing with unbalanced data" do
-      tensor = Nx.iota({73, 4}, names: [:x, :y])
+      tensor = Nx.iota({73, 4})
       {train, test} = Nx.split(tensor, split: 0.61)
 
       assert length(Nx.to_list(train)) == 44
