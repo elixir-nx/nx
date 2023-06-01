@@ -3265,6 +3265,61 @@ defmodule Nx do
     end)
   end
 
+  @doc ~S"""
+  Split tensor or list into train and test subsets.
+
+  ## Examples
+
+    Split into 80% for training and 20% for testing.
+
+    iex> {_train, _test} = Nx.split(Nx.tensor([[3, 6, 5], [26, 75, 3], [23, 4, 1]]), split: 0.8)
+    {#Nx.Tensor<
+      s64[2][3]
+      [
+        [3, 6, 5],
+        [26, 75, 3]
+      ]
+      >, #Nx.Tensor<
+        s64[1][3]
+        [
+          [23, 4, 1]
+        ]
+      >
+    }
+
+    iex> {_train, _test} = Nx.split([[3, 6, 5], [26, 75, 3], [23, 4, 1]], split: 0.8)
+    {[[3, 6, 5], [26, 75, 3]], [[23, 4, 1]]}
+  """
+  @doc type: :shape
+  def split(tensor, opts \\ [])
+
+  def split(tensor, opts) when is_tensor(tensor) do
+    {train, test} =
+      tensor
+      |> to_list()
+      |> split_op(opts)
+
+    {Nx.tensor(train), Nx.tensor(test)}
+  end
+
+  def split(data, opts) when is_list(data) do
+    split_op(data, opts)
+  end
+
+  defp split_op([_ | _] = features, opts) do
+    split = Keyword.fetch!(opts, :split)
+
+    if is_float(split) and split > 0.0 and split <= 1.0 do
+      num_samples = Enum.count(features)
+
+      split_size = Kernel.floor(split * num_samples)
+
+      Enum.split(features, split_size)
+    else
+      raise ":split must be a float number between 0.0 and 1.0"
+    end
+  end
+
   @doc """
   Broadcasts `tensor` to the given `broadcast_shape`.
 
