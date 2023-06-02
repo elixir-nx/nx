@@ -3024,63 +3024,85 @@ defmodule NxTest do
   end
 
   describe "split/2" do
-    test "Split list into 50% for training and 50% for testing" do
+    test "split is less than zero" do
       tensor = Nx.iota({10, 2}, names: [:x, :y])
-      {train, test} = Nx.split(tensor, 0.5)
 
-      assert Nx.tensor(
-               [
-                 [0, 1],
-                 [2, 3],
-                 [4, 5],
-                 [6, 7],
-                 [8, 9]
-               ],
-               names: [:x, :y]
-             ) == train
-
-      assert Nx.tensor(
-               [
-                 [10, 11],
-                 [12, 13],
-                 [14, 15],
-                 [16, 17],
-                 [18, 19]
-               ],
-               names: [:x, :y]
-             ) == test
+      assert_raise RuntimeError,
+                   "split must be an integer greater than zero and less than the length of the tensor.",
+                   fn ->
+                     Nx.split(tensor, -1)
+                   end
     end
 
-    test "Split into 70% for training and 30% for testing" do
-      tensor = Nx.iota({100, 6})
-      {train, test} = Nx.split(tensor, 0.7)
+    test "split is greater than tensor length" do
+      tensor = Nx.iota({10, 2}, names: [:x, :y])
 
-      assert length(Nx.to_list(train)) == 70
-      assert length(Nx.to_list(test)) == 30
+      assert_raise ArgumentError,
+                   "length at axis 1 must be less than axis size of 2, got: 3",
+                   fn ->
+                     Nx.split(tensor, 3, axis: 1)
+                   end
     end
 
-    test "Split into 75% for training and 25% for testing" do
+    test "axis is out of tensor bounds" do
+      tensor = Nx.iota({10, 2}, names: [:x, :y])
+
+      assert_raise RuntimeError,
+                   ":axis is out of tensor bounds.",
+                   fn ->
+                     Nx.split(tensor, 2, axis: 2)
+                   end
+    end
+
+    test "named axis is out of tensor bounds" do
+      tensor = Nx.iota({10, 2}, names: [:x, :y])
+
+      assert_raise RuntimeError,
+                   ":axis is out of tensor bounds.",
+                   fn ->
+                     Nx.split(tensor, 2, axis: :z)
+                   end
+    end
+
+    test "split into 70% for training and 30% for testing along a named :axis" do
+      tensor = Nx.iota({100, 6}, names: [:rows, :columns])
+      {train, test} = Nx.split(tensor, 70, axis: :rows)
+
+      assert {70, 6} == Nx.shape(train)
+      assert {30, 6} == Nx.shape(test)
+    end
+
+    test "split into 90% for training and 10% for testing along a named :axis" do
+      tensor = Nx.iota({2, 100}, names: [:rows, :columns])
+      {train, test} = Nx.split(tensor, 90, axis: :columns)
+
+      assert {2, 90} == Nx.shape(train)
+      assert {2, 10} == Nx.shape(test)
+    end
+
+    test "split into 50% for training and 50% for testing along the :axis 1" do
       tensor = Nx.iota({100, 10})
-      {train, test} = Nx.split(tensor, 0.75)
+      {train, test} = Nx.split(tensor, 5, axis: 1)
 
-      assert length(Nx.to_list(train)) == 75
-      assert length(Nx.to_list(test)) == 25
+      assert {100, 5} == Nx.shape(train)
+      assert {100, 5} == Nx.shape(test)
     end
 
-    test "Split into 61% for training and 39% for testing" do
+    test "split into 61% for training and 39% for testing" do
       tensor = Nx.iota({100, 10})
-      {train, test} = Nx.split(tensor, 0.61)
+      {train, test} = Nx.split(tensor, 61)
 
-      assert length(Nx.to_list(train)) == 61
-      assert length(Nx.to_list(test)) == 39
+      assert {61, 10} == Nx.shape(train)
+      assert {39, 10} == Nx.shape(test)
     end
 
-    test "Split into 60% for training and 40% for testing with unbalanced data" do
-      tensor = Nx.iota({73, 4})
-      {train, test} = Nx.split(tensor, 0.61)
+    test "split into 60% for training and 40% for testing with unbalanced data" do
+      tensor = Nx.iota({99, 4})
 
-      assert length(Nx.to_list(train)) == 44
-      assert length(Nx.to_list(test)) == 29
+      {train, test} = Nx.split(tensor, 60)
+
+      assert {60, 4} == Nx.shape(train)
+      assert {39, 4} == Nx.shape(test)
     end
   end
 end
