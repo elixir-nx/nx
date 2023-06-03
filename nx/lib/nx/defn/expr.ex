@@ -141,7 +141,7 @@ defmodule Nx.Defn.Expr do
       # We reshape_vectors to ensure that all predicate vectorized axes are encountered
       # in the same order throughout the clauses. the zip_with below ensures that only
       # the vectorized predicates are pushed through with this new order
-      reshaped_preds = Nx.reshape_vectors(preds)
+      reshaped_preds = Nx.reshape_vectors(preds, align_ranks: true)
 
       clauses =
         Enum.zip_with([preds, reshaped_preds, exprs], fn
@@ -232,7 +232,8 @@ defmodule Nx.Defn.Expr do
   end
 
   defp broadcast_clause([type = last | expr_types = exprs]) do
-    [%{vectorized_axes: vectorized_axes} = last | exprs] = Nx.reshape_vectors([last | exprs])
+    [%{vectorized_axes: vectorized_axes} = last | exprs] =
+      Nx.reshape_vectors([last | exprs], align_ranks: true)
 
     [%{shape: shape, names: names} = last | exprs] = Enum.map([last | exprs], &Nx.devectorize/1)
 
@@ -663,7 +664,7 @@ defmodule Nx.Defn.Expr do
 
     Composite.traverse(initial, nil, fn leaf, _ ->
       # broadcast and pull common axes to the front
-      [_, leaf] = Nx.broadcast_vectors([target, leaf])
+      [_, leaf] = Nx.broadcast_vectors([target, leaf], align_ranks: true)
 
       %{vectorized_axes: leaf_axes} = leaf
 
