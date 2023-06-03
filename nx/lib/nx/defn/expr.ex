@@ -439,13 +439,9 @@ defmodule Nx.Defn.Expr do
                 description: """
                 cond/if expects all branches to return compatible tensor types.
 
-                Got mismatching templates:
+                Comparison:
 
-                #{inspect_as_template(first)}
-
-                and
-
-                #{inspect_as_template(expr)}
+                #{Nx.Defn.CompilationDiff.build_and_inspect(first, expr)}
                 """
             end
 
@@ -764,13 +760,9 @@ defmodule Nx.Defn.Expr do
         description: """
         the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
 
-        Body matches template:
+        Comparison:
 
-        #{inspect_as_template(body)}
-
-        and initial argument has template:
-
-        #{inspect_as_template(initial)}
+        #{Nx.Defn.CompilationDiff.build_and_inspect(body, initial)}
         """
     end
   end
@@ -1467,17 +1459,6 @@ defmodule Nx.Defn.Expr do
     end
 
     context || acc
-  end
-
-  defp inspect_as_template(data) do
-    if is_number(data) or is_tuple(data) or
-         (is_map(data) and Nx.Container.impl_for(data) != Nx.Container.Any) do
-      data
-      |> Nx.to_template()
-      |> Kernel.inspect(custom_options: [skip_template_backend_header: true])
-    else
-      inspect(data)
-    end
   end
 
   ## Constant helpers and related optimizations

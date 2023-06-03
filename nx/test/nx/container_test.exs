@@ -141,7 +141,7 @@ defmodule Nx.ContainerTest do
       var.a + var.b
     end
 
-    deftransformp assert_fields!(%C{c: %{}, d: :keep}), do: 1
+    deftransformp(assert_fields!(%C{c: %{}, d: :keep}), do: 1)
 
     test "keeps fields" do
       inp = %Container{a: 1, b: 2, c: :reset, d: :keep}
@@ -158,7 +158,7 @@ defmodule Nx.ContainerTest do
       var.a + var.b
     end
 
-    deftransformp dot_assert_fields_transform(%C{c: %{}, d: %{}}), do: 1
+    deftransformp(dot_assert_fields_transform(%C{c: %{}, d: %{}}), do: 1)
 
     test "keeps empty maps" do
       inp = %Container{a: 1, b: 2, c: :reset, d: %{}}
@@ -194,10 +194,8 @@ defmodule Nx.ContainerTest do
       expected_error =
         [
           "the do-block in while must return tensors with the same shape, type, and names as the initial arguments.",
-          "\n\nBody matches template:\n\n{#Nx.Tensor<\n   s64\n >, ",
-          "%Container{a: #Nx.Tensor<\n     s64\n   >, b: #Nx.Tensor<\n     s64\n   >, c: %{}, d: %{}}, #Nx.Tensor<\n   s16\n >}",
-          "\n\nand initial argument has template:\n\n{#Nx.Tensor<\n   s64\n >, ",
-          "%Container{a: #Nx.Tensor<\n     s64\n   >, b: #Nx.Tensor<\n     s64\n   >, c: %{}, d: %{}}, #Nx.Tensor<\n   u8\n >}\n$"
+          "\n\nComparison:\n\n{#Nx.Tensor<\n  s64\n>, %Container{a: #Nx.Tensor<\n  s64\n>, b: #Nx.Tensor<\n  s64\n>, c: %{}, d: %{}}, \n",
+          "   \e\\[100m\e\\[32m#Nx.Tensor<\n  s16\n>\n   \e\\[31m#Nx.Tensor<\n  u8\n>\n   \e\\[0m}\n$"
         ]
         |> IO.iodata_to_binary()
         |> Regex.compile!()
@@ -211,8 +209,7 @@ defmodule Nx.ContainerTest do
       expected_error =
         [
           "cond/if expects all branches to return compatible tensor types.",
-          "\n\nGot mismatching templates:\n\n%Container{a: #Nx.Tensor<\n    s64\n  >, b: #Nx.Tensor<\n    s64\n  >, c: %{}, d: %{}}",
-          "\n\nand\n\n#Nx.Tensor<\n  s64\n>\n",
+          "\n\nComparison:\n\n\n\e\\[100m\e\\[32m%Container{a: #Nx.Tensor<\n    s64\n  >, b: #Nx.Tensor<\n    s64\n  >, c: %{}, d: %{}}\n\e\\[31m#Nx.Tensor<\n  s64\n>\n\e\\[0m\n",
           "$"
         ]
         |> IO.iodata_to_binary()

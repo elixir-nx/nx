@@ -331,13 +331,9 @@ defmodule Nx.Defn do
 
             #{inspect(arg_template)}
 
-            Expected argument:
+            Comparison:
 
-            #{inspect(Enum.fetch!(template_args, pos - 1))}
-
-            Actual argument:
-
-            #{inspect(arg)}
+            #{Nx.Defn.CompilationDiff.build_and_inspect(Enum.fetch!(template_args, pos - 1), arg)}
             """
           end
 
