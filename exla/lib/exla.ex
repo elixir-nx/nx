@@ -58,6 +58,19 @@ defmodule EXLA do
     * `:device_id` - the default device id to run the computation
         on. Defaults to the `:default_device_id` on the client
 
+    * `:precision` - control the tradeoff between speed and accuracy for
+      array computations on accelerator backends (i.e. TPU and GPU).
+      It must be one of:
+
+      * `:default` - Fastest mode, but least accurate. Performs computations
+        in bfloat16
+
+      * `:high` - Slower but more accurate. Performs float32 computations in
+        3 bfloat16 passes, or using tensorfloat32 where available
+
+      * `:highest` - Slowest but most accurate. Performs computations in float32
+        or float64 as applicable
+
   ## Clients
 
   The `EXLA` library uses a client for compiling and executing code.
