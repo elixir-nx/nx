@@ -203,7 +203,7 @@ defmodule EXLA.Defn do
             end)
 
           state = %{
-            precision: Keyword.get(options, :precision, :highest),
+            precision: Keyword.get(options, :precision, :default),
             builder: body_b,
             params: Map.new(input_params ++ acc_params ++ constant_params),
             scope_ids: Tree.scope_ids(expr)
@@ -299,7 +299,7 @@ defmodule EXLA.Defn do
       end)
 
     state = %{
-      precision: Keyword.get(options, :precision, :highest),
+      precision: Keyword.get(options, :precision, :default),
       builder: builder,
       params: Map.new(params ++ outfeed.infeeds),
       scope_ids: Tree.scope_ids(expr)
