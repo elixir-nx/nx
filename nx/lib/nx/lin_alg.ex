@@ -858,7 +858,7 @@ defmodule Nx.LinAlg do
     det = Nx.LinAlg.determinant(tensor)
 
     type = Nx.Type.to_real(Nx.type(tensor))
-    eps = Nx.Constants.epsilon(type) * 1.0e-10
+    eps = Nx.Constants.smallest_positive_normal(type) * 1.0e5
 
     inverse =
       if Nx.abs(det) <= eps do
