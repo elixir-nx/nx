@@ -4,8 +4,8 @@ defmodule Nx.Defn.EvaluatorTest do
   alias Nx.Tensor, as: T
   import Nx.Defn
 
-  defn(add_two_int(t), do: Nx.add(t, 2))
-  defn(add_two_float(t), do: Nx.add(t, 2))
+  defn add_two_int(t), do: Nx.add(t, 2)
+  defn add_two_float(t), do: Nx.add(t, 2)
 
   test "constant" do
     assert %T{shape: {3}, type: {:u, 8}} = add_two_int(Nx.tensor([1, 2, 3], type: {:u, 8}))
@@ -13,13 +13,13 @@ defmodule Nx.Defn.EvaluatorTest do
     assert %T{shape: {3}, type: {:bf, 16}} = add_two_float(Nx.tensor([1, 2, 3], type: {:bf, 16}))
   end
 
-  defn(iota(), do: Nx.iota({2, 2}))
+  defn iota(), do: Nx.iota({2, 2})
 
   test "iota" do
     assert %T{shape: {2, 2}, type: {:s, 64}} = iota()
   end
 
-  defn(concatenate(a, b), do: Nx.concatenate([a, b]))
+  defn concatenate(a, b), do: Nx.concatenate([a, b])
 
   test "concatenate" do
     assert concatenate(Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])) ==
@@ -31,7 +31,7 @@ defmodule Nx.Defn.EvaluatorTest do
     end
   end
 
-  defn(slice(a, b), do: Nx.slice(a, [b], [1]))
+  defn slice(a, b), do: Nx.slice(a, [b], [1])
 
   test "slice" do
     assert slice(Nx.tensor([1, 2, 3]), Nx.tensor(0)) == Nx.tensor([1])
@@ -42,22 +42,21 @@ defmodule Nx.Defn.EvaluatorTest do
     end
   end
 
-  defn(reshape(t), do: Nx.reshape(t, {3, 2}))
+  defn reshape(t), do: Nx.reshape(t, {3, 2})
 
   test "reshape" do
     assert %T{shape: {3, 2}, type: {:s, 64}} = reshape(Nx.iota({2, 3}))
   end
 
-  defn(reduce_window(t1, acc),
+  defn reduce_window(t1, acc),
     do: Nx.window_reduce(t1, acc, {2}, [padding: :valid], fn x, acc -> x + acc end)
-  )
 
   test "window reduce" do
     assert reduce_window(Nx.tensor([1, 2, 3]), 0) == Nx.tensor([3, 5])
   end
 
   describe "decompositions" do
-    defn(lu(t), do: Nx.LinAlg.lu(t))
+    defn lu(t), do: Nx.LinAlg.lu(t)
 
     test "lu" do
       assert {p, l, u} = lu(Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]))
@@ -66,7 +65,7 @@ defmodule Nx.Defn.EvaluatorTest do
       assert u == Nx.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]])
     end
 
-    defn(qr(t), do: Nx.LinAlg.qr(t))
+    defn qr(t), do: Nx.LinAlg.qr(t)
 
     test "qr" do
       assert {q, r} = qr(Nx.iota({3, 2}))
@@ -85,7 +84,7 @@ defmodule Nx.Defn.EvaluatorTest do
                ])
     end
 
-    defn(svd(t), do: Nx.LinAlg.svd(t))
+    defn svd(t), do: Nx.LinAlg.svd(t)
 
     test "svd" do
       assert {u, s, vt} = svd(Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]))
@@ -96,7 +95,7 @@ defmodule Nx.Defn.EvaluatorTest do
   end
 
   describe "if" do
-    defn(if3(a, b, c), do: if(a, do: b, else: c))
+    defn if3(a, b, c), do: if(a, do: b, else: c)
 
     test "simple" do
       assert if3(Nx.tensor(0), Nx.tensor(1, type: {:s, 16}), Nx.tensor(2, type: {:f, 32})) ==
@@ -115,7 +114,7 @@ defmodule Nx.Defn.EvaluatorTest do
                Nx.tensor([[1, 2], [1, 2]])
     end
 
-    defn(if_tuple(a, b, c), do: if(a, do: {{a, b}, c}, else: {{c, b}, a}))
+    defn if_tuple(a, b, c), do: if(a, do: {{a, b}, c}, else: {{c, b}, a})
 
     test "with tuples" do
       assert if_tuple(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)) ==
@@ -154,7 +153,7 @@ defmodule Nx.Defn.EvaluatorTest do
                {Nx.tensor(1), Nx.tensor(10)}
     end
 
-    defn(if_map(a, b, c), do: if(a, do: {%{a: a, b: b, c: 1}, c}, else: {%{a: c, b: b, c: 2}, a}))
+    defn if_map(a, b, c), do: if(a, do: {%{a: a, b: b, c: 1}, c}, else: {%{a: c, b: b, c: 2}, a})
 
     test "with map" do
       assert if_map(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)) ==
@@ -241,7 +240,7 @@ defmodule Nx.Defn.EvaluatorTest do
   end
 
   describe "argsort/2" do
-    defn(argsort(x), do: Nx.argsort(x))
+    defn argsort(x), do: Nx.argsort(x)
 
     test "simple" do
       t = Nx.tensor([3, 1, 2])
@@ -250,7 +249,7 @@ defmodule Nx.Defn.EvaluatorTest do
   end
 
   describe "sort/2" do
-    defn(sort(x), do: Nx.sort(x))
+    defn sort(x), do: Nx.sort(x)
 
     test "simple" do
       t = Nx.tensor([3, 1, 2])
@@ -259,13 +258,13 @@ defmodule Nx.Defn.EvaluatorTest do
   end
 
   describe "anonymous functions" do
-    defn(calls_binary_fun(fun, a, b), do: fun.(a, b))
+    defn calls_binary_fun(fun, a, b), do: fun.(a, b)
 
     test "calls external anonymous function directly" do
       assert calls_binary_fun(&Nx.add/2, 1, 2.0) == Nx.tensor(3.0)
     end
 
-    defn(calls_reduce_fun(fun, t), do: Nx.reduce(t, 0, fun))
+    defn calls_reduce_fun(fun, t), do: Nx.reduce(t, 0, fun)
 
     test "calls external anonymous function via reduce" do
       assert calls_reduce_fun(&Nx.add/2, Nx.tensor([1, 2, 3])) == Nx.tensor(6)
@@ -283,7 +282,7 @@ defmodule Nx.Defn.EvaluatorTest do
   end
 
   describe "access" do
-    defn(slice1(t), do: t[1][0])
+    defn slice1(t), do: t[1][0]
 
     test "supports correct access" do
       assert slice1(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])) == Nx.tensor(4)
@@ -310,7 +309,7 @@ defmodule Nx.Defn.EvaluatorTest do
     end
   end
 
-  defn(labelled_inspect(a, b), do: print_value(a + b, label: "add"))
+  defn labelled_inspect(a, b), do: print_value(a + b, label: "add")
 
   test "print_value/2" do
     assert ExUnit.CaptureIO.capture_io(fn -> labelled_inspect(1, 2) end) ==
@@ -325,7 +324,7 @@ defmodule Nx.Defn.EvaluatorTest do
   describe "hooks" do
     defp send_to_self(value), do: send(self(), value)
 
-    defn(basic_hook(a, b), do: hook(a + b, :example, &send_to_self({:default, &1})))
+    defn basic_hook(a, b), do: hook(a + b, :example, &send_to_self({:default, &1}))
 
     test "basic hook with overriddes" do
       assert basic_hook(1, 2) == Nx.tensor(3)
@@ -343,7 +342,7 @@ defmodule Nx.Defn.EvaluatorTest do
       assert tensor == Nx.tensor(3)
     end
 
-    defn(container_hook(a, b), do: hook({a, b}, :example, &send_to_self({:default, &1})))
+    defn container_hook(a, b), do: hook({a, b}, :example, &send_to_self({:default, &1}))
 
     test "container hook with overriddes" do
       assert container_hook(1, 2) == {Nx.tensor(1), Nx.tensor(2)}
@@ -678,7 +677,7 @@ defmodule Nx.Defn.EvaluatorTest do
       t = Nx.iota({2, 3}, vectorized_axes: [a: 1], type: :s64)
 
       message = """
-      test/nx/defn/evaluator_test.exs:647: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
+      test/nx/defn/evaluator_test.exs:646: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
 
       Comparison:
 
@@ -712,7 +711,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
       error =
         """
-        test/nx/defn/evaluator_test.exs:647: condition must be a scalar tensor, got: #Nx.Tensor<
+        test/nx/defn/evaluator_test.exs:646: condition must be a scalar tensor, got: #Nx.Tensor<
           vectorized[x: 1]
           u8[1]
         \s\s

@@ -441,7 +441,7 @@ defmodule Nx.Defn.Expr do
 
                 Comparison:
 
-                #{Nx.Defn.CompilationDiff.build_and_inspect(first, expr)}
+                #{Nx.Defn.TemplateDiff.build_and_inspect(first, expr, fn _, _ -> true end)}
                 """
             end
 
@@ -762,7 +762,7 @@ defmodule Nx.Defn.Expr do
 
         Comparison:
 
-        #{Nx.Defn.CompilationDiff.build_and_inspect(body, initial)}
+        #{Nx.Defn.TemplateDiff.build_and_inspect(body, initial)}
         """
     end
   end

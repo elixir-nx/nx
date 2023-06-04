@@ -333,7 +333,7 @@ defmodule Nx.Defn do
 
             Comparison:
 
-            #{Nx.Defn.CompilationDiff.build_and_inspect(Enum.fetch!(template_args, pos - 1), arg)}
+            #{Nx.Defn.TemplateDiff.build_and_inspect(Enum.fetch!(template_args, pos - 1), arg)}
             """
           end
 

@@ -1,14 +1,17 @@
-defmodule Nx.Defn.CompilationDiff do
+defmodule Nx.Defn.TemplateDiff do
+  @moduledoc false
   defstruct [:left, :right, :compatible, :nesting]
 
-  defp is_valid_container?(t) do
-    impl = Nx.Container.impl_for(t)
+  defp is_valid_container?(impl) do
     not is_nil(impl) and impl != Nx.Container.Any
   end
 
-  def build(left, right) do
-    l = is_valid_container?(left)
-    r = is_valid_container?(right)
+  def build(left, right, compatibility_fn \\ &Nx.compatible?/2) do
+    left_impl = Nx.Container.impl_for(left)
+    right_impl = Nx.Container.impl_for(right)
+
+    l = is_valid_container?(left_impl)
+    r = is_valid_container?(right_impl)
 
     cond do
       not l and not r ->
@@ -17,7 +20,7 @@ defmodule Nx.Defn.CompilationDiff do
       not l or not r ->
         %__MODULE__{left: left, right: right, compatible: false}
 
-      Nx.Container.impl_for(left) != Nx.Container.impl_for(right) ->
+      left_impl != right_impl ->
         %__MODULE__{left: left, right: right, compatible: false}
 
       l and r ->
@@ -31,7 +34,7 @@ defmodule Nx.Defn.CompilationDiff do
                 %__MODULE__{
                   left: left,
                   right: right,
-                  compatible: Nx.compatible?(left, right)
+                  compatible: compatibility_fn.(left, right)
                 },
                 acc
               }
@@ -45,24 +48,24 @@ defmodule Nx.Defn.CompilationDiff do
     end
   end
 
-  def build_and_inspect(left, right) do
+  def build_and_inspect(left, right, compatibility_fn \\ &Nx.compatible?/2) do
     left
-    |> build(right)
+    |> build(right, compatibility_fn)
     |> inspect()
   end
 
   defimpl Inspect do
     import Inspect.Algebra
 
-    def inspect(%Nx.Defn.CompilationDiff{left: left, right: nil}, _opts) do
+    def inspect(%Nx.Defn.TemplateDiff{left: left, right: nil}, _opts) do
       inspect_as_template(left)
     end
 
-    def inspect(%Nx.Defn.CompilationDiff{left: left, compatible: true}, _opts) do
+    def inspect(%Nx.Defn.TemplateDiff{left: left, compatible: true}, _opts) do
       inspect_as_template(left)
     end
 
-    def inspect(%Nx.Defn.CompilationDiff{left: left, right: right}, _opts) do
+    def inspect(%Nx.Defn.TemplateDiff{left: left, right: right}, _opts) do
       concat([
         IO.ANSI.light_black_background(),
         IO.ANSI.green(),
