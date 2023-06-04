@@ -843,23 +843,29 @@ defmodule Nx.LinAlg do
     # norm_t ** -1 = (t / det) ** -1 = t ** -1 * det
     # t ** -1 = norm_t ** -1 / det
 
-    tensor = Nx.revectorize(tensor, [collapsed_batch: :auto], target_shape: {m, n})
+    tensor =
+      case input_shape do
+        {_, _} ->
+          # this avoids the need for creating a new
+          # vectorized axis to collapse batched axes,
+          # because we have no batch axes
+          tensor
 
-    [identity, nan, _] =
-      Nx.broadcast_vectors([
-        Nx.eye({n, n}),
-        Nx.broadcast(Nx.tensor(:nan), {n, n}),
-        tensor
-      ])
+        _ ->
+          Nx.revectorize(tensor, [collapsed_batch: :auto], target_shape: {m, n})
+      end
 
     det = Nx.LinAlg.determinant(tensor)
 
+    type = Nx.Type.to_real(Nx.type(tensor))
+    eps = Nx.Constants.epsilon(type) * 1.0e-10
+
     inverse =
-      if det == 0 do
-        nan
+      if Nx.abs(det) <= eps do
+        Nx.tensor(:nan)
       else
         normalized_tensor = tensor / det
-        Nx.LinAlg.solve(normalized_tensor, identity) / det
+        Nx.LinAlg.solve(normalized_tensor, Nx.eye({n, n})) / det
       end
 
     Nx.revectorize(inverse, vectorized_axes, target_shape: input_shape)
