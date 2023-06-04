@@ -48,6 +48,17 @@ defmodule Torchx.Backend do
 
   ## Creation
 
+  def constant(
+        %T{shape: shape, names: names, type: type},
+        scalar,
+        backend_options
+      )
+      when scalar in [:infinity, :neg_infinity, :nan] do
+    t = apply(Nx.Constants, scalar, [type, [backend: {TB, backend_options}]])
+
+    Nx.broadcast(t, shape, names: names)
+  end
+
   @impl true
   def constant(%T{shape: {}, type: type} = out, scalar, backend_options) do
     scalar

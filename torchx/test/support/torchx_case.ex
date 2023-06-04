@@ -30,9 +30,12 @@ defmodule Torchx.Case do
   end
 
   def assert_equal(left, right) do
+    both_nan = Nx.is_nan(left) |> Nx.logical_and(Nx.is_nan(right))
+
     equals =
       left
       |> Nx.equal(right)
+      |> Nx.logical_or(both_nan)
       |> Nx.all()
       |> Nx.to_number()
 

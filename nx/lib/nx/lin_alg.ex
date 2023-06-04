@@ -164,6 +164,8 @@ defmodule Nx.LinAlg do
 
     * `:axes` - defines the axes upon which the norm will be calculated.
       Applies only on 2-norm for 2-D tensors. Default: `nil`.
+    * `:keep_axes` - whether the calculation axes should be kept with
+      length 1. Defaults to `false`
     * `:ord` - defines which norm will be calculated according to the table below. Default: `nil`.
 
   | ord          | 2-D                            | 1-D                               |
@@ -295,7 +297,7 @@ defmodule Nx.LinAlg do
   """
   @doc from_backend: false
   defn norm(tensor, opts \\ []) do
-    opts = keyword!(opts, [:ord, :axes])
+    opts = keyword!(opts, [:ord, :axes, :keep_axes])
     norm_transform(tensor, opts)
   end
 
@@ -306,7 +308,7 @@ defmodule Nx.LinAlg do
       raise ArgumentError, "expected 1-D or 2-D tensor, got tensor with shape #{inspect(t.shape)}"
     end
 
-    axes_opts = Keyword.take(opts, [:axes])
+    axes_opts = Keyword.take(opts, [:axes, :keep_axes])
 
     case opts[:ord] do
       nil when rank == 1 -> norm_integer(t, 2, axes_opts)
@@ -330,10 +332,14 @@ defmodule Nx.LinAlg do
     Nx.sum(s)
   end
 
-  defp norm_inf(%{shape: shape, type: type} = t, ord, _opts) when ord in [:inf, :neg_inf] do
+  defp norm_inf(%{shape: shape, type: type} = t, ord, opts) when ord in [:inf, :neg_inf] do
     output_type = Nx.Type.to_real(type)
     aggregate_axes = if tuple_size(shape) == 2, do: &Nx.sum(&1, axes: [1]), else: & &1
-    reduce = if ord == :inf, do: &Nx.reduce_max/1, else: &Nx.reduce_min/1
+
+    reduce =
+      if ord == :inf,
+        do: &Nx.reduce_max(&1, opts),
+        else: &Nx.reduce_min(&1, opts)
 
     t
     |> Nx.abs()
@@ -342,18 +348,18 @@ defmodule Nx.LinAlg do
     |> Nx.as_type(output_type)
   end
 
-  defp norm_integer(%{shape: {_}, type: type} = t, 0, _opts) do
+  defp norm_integer(%{shape: {_}, type: type} = t, 0, opts) do
     output_type = Nx.Type.to_real(type)
 
     t
     |> Nx.not_equal(0)
-    |> Nx.sum()
+    |> Nx.sum(opts)
     |> Nx.as_type(output_type)
   end
 
-  defp norm_integer(%{shape: {_, _}, type: type} = t, ord, _opts) when ord in [1, -1] do
+  defp norm_integer(%{shape: {_, _}, type: type} = t, ord, opts) when ord in [1, -1] do
     output_type = Nx.Type.to_real(type)
-    function = if ord == 1, do: &Nx.reduce_max/1, else: &Nx.reduce_min/1
+    function = if ord == 1, do: &Nx.reduce_max(&1, opts), else: &Nx.reduce_min(&1, opts)
 
     t
     |> Nx.abs()
@@ -366,9 +372,9 @@ defmodule Nx.LinAlg do
     raise ArgumentError, "invalid :ord for 2-D tensor, got: #{inspect(ord)}"
   end
 
-  defp norm_integer(%{shape: {_, _}} = t, -2, _opts) do
+  defp norm_integer(%{shape: {_, _}} = t, -2, opts) do
     {_u, s, _v} = Nx.LinAlg.svd(t)
-    Nx.reduce_min(s)
+    Nx.reduce_min(s, opts)
   end
 
   defp norm_integer(%{type: type} = t, ord, opts) when is_integer(ord) do
@@ -383,7 +389,7 @@ defmodule Nx.LinAlg do
     # The idea is that by dividing the tensor by it, large values of
     # tensor entries and large values of p are reduced, which in turn
     # avoids numerical overflow.
-    numerical_stability_coefficient = Nx.reduce_max(abs_t)
+    numerical_stability_coefficient = Nx.reduce_max(abs_t, opts)
 
     # This code prevents from division by zero.
     numerical_stability_coefficient =
@@ -719,7 +725,7 @@ defmodule Nx.LinAlg do
   @doc """
   Inverts a batch of square matrices.
 
-  For non-square matrices, use `svd/2` for pseudo-inverse calculations.
+  For non-square matrices, use `pinv/2` for pseudo-inverse calculations.
 
   ## Examples
 
@@ -799,13 +805,23 @@ defmodule Nx.LinAlg do
         ]
       >
 
+  If a singular matrix is passed, the result will silently fail.
+
+      iex> Nx.LinAlg.invert(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]))
+      #Nx.Tensor<
+        f32[4][4]
+        [
+          [NaN, NaN, NaN, NaN],
+          [NaN, NaN, NaN, NaN],
+          [NaN, NaN, NaN, NaN],
+          [NaN, NaN, NaN, NaN]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.LinAlg.invert(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]))
       ** (ArgumentError) invert/1 expects a square matrix or a batch of square matrices, got tensor with shape: {2, 4}
-
-      iex> Nx.LinAlg.invert(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]))
-      ** (ArgumentError) can't solve for singular matrix
 
   """
   @doc from_backend: false
@@ -823,9 +839,60 @@ defmodule Nx.LinAlg do
   end
 
   defnp invert_tensor(tensor) do
-    n = elem(Nx.shape(tensor), Nx.rank(tensor) - 1)
-    identity = Nx.broadcast(Nx.eye(n), Nx.shape(tensor))
-    Nx.LinAlg.solve(tensor, identity)
+    m = Nx.axis_size(tensor, -2)
+    n = Nx.axis_size(tensor, -1)
+    vectorized_axes = tensor.vectorized_axes
+    input_shape = Nx.shape(tensor)
+
+    # proof of equivalence:
+    # norm_t = t / det
+    # norm_t ** -1 = (t / det) ** -1 = t ** -1 * det
+    # t ** -1 = norm_t ** -1 / det
+
+    tensor =
+      case input_shape do
+        {_, _} ->
+          # this avoids the need for creating a new
+          # vectorized axis to collapse batched axes,
+          # because we have no batch axes
+          tensor
+
+        _ ->
+          Nx.revectorize(tensor, [collapsed_batch: :auto], target_shape: {m, n})
+      end
+
+    det = Nx.LinAlg.determinant(tensor)
+
+    type = Nx.Type.to_real(Nx.type(tensor))
+    eps = Nx.Constants.smallest_positive_normal(type) * 1.0e3
+
+    inverse =
+      if Nx.abs(det) <= eps do
+        Nx.tensor(:nan)
+      else
+        # matrix is possibly invertible but ill-conditioned
+        # we normalize it by the determinant
+
+        scaling_matrix = Nx.reduce_max(Nx.abs(tensor), axes: [1], keep_axes: true)
+        # don't rescale for 0-norm rows
+        scaling_matrix = 1 / Nx.select(scaling_matrix == 0, 1, scaling_matrix)
+
+        # We can think of the implementation as a system of equations.
+        # Since we're scaling the left side by scaling_matrix[i] for each row i,
+        # we need to also scale the right side.
+        # This is achieved by scaling each row of an identity matrix, which is,
+        # in fact, the same as putting the scaling values in the diagonal of the
+        # right-side matrix.
+
+        normalized_tensor = scaling_matrix * tensor
+
+        Nx.LinAlg.solve(
+          normalized_tensor,
+          Nx.make_diagonal(Nx.squeeze(scaling_matrix, axes: [1]))
+        )
+      end
+
+    Nx.revectorize(inverse, vectorized_axes, target_shape: input_shape)
   end
 
   deftransformp invert_shape(tensor) do
@@ -1724,8 +1791,8 @@ defmodule Nx.LinAlg do
             [2.75, -0.75]
           ],
           [
-            [-110.375, 76.875],
-            [92.25, -64.25]
+            [-110.37469482421875, 76.8747787475586],
+            [92.249755859375, -64.24981689453125]
           ]
         ]
       >
