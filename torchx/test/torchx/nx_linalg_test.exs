@@ -176,10 +176,11 @@ defmodule Torchx.NxLinAlgTest do
       assert_all_close(Nx.dot(a_inv, a), Nx.eye(Nx.shape(a)))
     end
 
-    test "fails for singular matrix" do
-      assert_raise ArgumentError, "can't solve for singular matrix", fn ->
-        Nx.LinAlg.invert(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]))
-      end
+    test "fails silently for singular matrix" do
+      assert_equal(
+        Nx.LinAlg.invert(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]])),
+        Nx.broadcast(:nan, {4, 4})
+      )
     end
   end
 
