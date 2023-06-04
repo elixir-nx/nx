@@ -80,7 +80,7 @@ defmodule Nx.LinAlg.SVD do
 
     s = Nx.broadcast(Nx.tensor(0, type: Nx.type(a)), {k})
 
-    [s, _] = Nx.broadcast_vectors([s, a], align_ranks: false)
+    [s, _] = Nx.broadcast_vectors([s, a])
 
     u = Nx.eye({m, u_cols}, vectorized_axes: a.vectorized_axes, type: Nx.type(a))
     v = Nx.eye({v_rows, n}, vectorized_axes: a.vectorized_axes, type: Nx.type(a))

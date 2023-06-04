@@ -4675,6 +4675,49 @@ defmodule Nx do
       [y: 1, x: 3]
       iex> yv.vectorized_axes
       [y: 1, x: 1]
+
+  The `:align_ranks` option controls whether the resulting tensors should end up
+  with the same rank, which helps with broadcasting in some cases.
+
+      iex> x = 1
+      iex> y = Nx.tensor([[[1], [1]], [[2], [2]], [[3], [3]]]) |> Nx.vectorize(:y)
+      iex> [xv, yv] = Nx.reshape_vectors([x, y])
+      iex> xv
+      #Nx.Tensor<
+        vectorized[y: 1]
+        s64
+        [1]
+      >
+      iex> yv
+      #Nx.Tensor<
+        vectorized[y: 3]
+        s64[2][1]
+        [
+          [
+            [1],
+            [1]
+          ],
+          [
+            [2],
+            [2]
+          ],
+          [
+            [3],
+            [3]
+          ]
+        ]
+      >
+      iex> [xv, _yv] = Nx.reshape_vectors([x, y], align_ranks: true)
+      iex> xv
+      #Nx.Tensor<
+        vectorized[y: 1]
+        s64[1][1]
+        [
+          [
+            [1]
+          ]
+        ]
+      >
   """
   @doc type: :vectorization
   def reshape_vectors(tensors_or_containers, opts \\ [])
@@ -4682,7 +4725,7 @@ defmodule Nx do
   def reshape_vectors([tensor], _opts), do: [to_tensor(tensor)]
 
   def reshape_vectors(tensors, opts) when is_list(tensors) do
-    opts = keyword!(opts, align_ranks: true)
+    opts = keyword!(opts, align_ranks: false)
 
     {devectorized_tensors, canonical_vectorized_axes, offset} =
       do_reshape_vectors(tensors, opts[:align_ranks])
@@ -4730,7 +4773,7 @@ defmodule Nx do
           ]
         ]
       >
-      iex> [broadcast_x, broadcast_xy] = Nx.broadcast_vectors([x, xy])
+      iex> [broadcast_x, broadcast_xy] = Nx.broadcast_vectors([x, xy], align_ranks: true)
       iex> broadcast_x
       #Nx.Tensor<
         vectorized[x: 2][y: 2]
@@ -4761,7 +4804,7 @@ defmodule Nx do
           ]
         ]
       >
-      iex> [broadcast_xy, broadcast_x] = Nx.broadcast_vectors([xy, x], align_ranks: false)
+      iex> [broadcast_xy, broadcast_x] = Nx.broadcast_vectors([xy, x])
       iex> broadcast_x
       #Nx.Tensor<
         vectorized[y: 2][x: 2]
@@ -4793,7 +4836,7 @@ defmodule Nx do
   def broadcast_vectors([t], _opts), do: [to_tensor(t)]
 
   def broadcast_vectors(tensors, opts) when is_list(tensors) do
-    opts = keyword!(opts, align_ranks: true)
+    opts = keyword!(opts, align_ranks: false)
 
     {devectorized_tensors, target_vectorized_axes, offset} =
       do_reshape_vectors(tensors, opts[:align_ranks])
@@ -6829,7 +6872,7 @@ defmodule Nx do
   def select(pred, on_true, on_false) do
     %T{shape: pred_shape} = pred = to_tensor(pred)
 
-    [pred, on_true, on_false] = broadcast_vectors([pred, on_true, on_false])
+    [pred, on_true, on_false] = broadcast_vectors([pred, on_true, on_false], align_ranks: true)
 
     %T{vectorized_axes: vectorized_axes} = pred
 
@@ -6980,7 +7023,7 @@ defmodule Nx do
     opts = keyword!(opts, padding: :valid, strides: 1)
     Nx.Shape.validate!(window_dimensions, :window_dimensions)
 
-    [tensor, source] = broadcast_vectors([tensor, source])
+    [tensor, source] = broadcast_vectors([tensor, source], align_ranks: true)
     %T{shape: input_shape, vectorized_axes: vectorized_axes} = tensor
     %T{shape: source_shape, type: source_type} = source
 
@@ -7446,7 +7489,7 @@ defmodule Nx do
 
   defp indexed_op(target, indices, updates, op) do
     [%T{vectorized_axes: vectorized_axes} = target, indices, updates] =
-      broadcast_vectors([target, indices, updates], align_ranks: false)
+      broadcast_vectors([target, indices, updates])
 
     type = binary_type(target, updates)
 
@@ -8326,7 +8369,7 @@ defmodule Nx do
   def all_close(a, b, opts \\ []) do
     opts = keyword!(opts, equal_nan: false, rtol: 1.0e-5, atol: 1.0e-8)
 
-    [%T{vectorized_axes: vectorized_axes} = a, b] = broadcast_vectors([a, b])
+    [%T{vectorized_axes: vectorized_axes} = a, b] = broadcast_vectors([a, b], align_ranks: true)
 
     if vectorized_axes != [] do
       vectorized_all_close(a, b, opts)
@@ -12015,7 +12058,7 @@ defmodule Nx do
   """
   @doc type: :ndim
   def dot(t1, contract_axes1, batch_axes1, t2, contract_axes2, batch_axes2) do
-    [t1, t2] = broadcast_vectors([t1, t2])
+    [t1, t2] = broadcast_vectors([t1, t2], align_ranks: true)
 
     %{vectorized_axes: vectorized_axes, shape: s1, names: names1} = t1
     %{shape: s2, names: names2} = t2
@@ -12660,7 +12703,7 @@ defmodule Nx do
     feature_group_count = opts[:feature_group_size]
     batch_group_count = opts[:batch_group_size]
 
-    [tensor, kernel] = broadcast_vectors([tensor, kernel], align_ranks: false)
+    [tensor, kernel] = broadcast_vectors([tensor, kernel])
     Nx.Shape.validate_conv!(tensor.shape, kernel.shape)
 
     vectorized_axes = tensor.vectorized_axes
@@ -13083,7 +13126,7 @@ defmodule Nx do
     if Enum.any?(start_indices, &(is_struct(&1, T) and &1.vectorized_axes != [])) do
       # if any of the indices is vectorized, we instead treat this slice as a gather
       [%{vectorized_axes: [{first_axis, _} | _] = vectorized_axes} | _] =
-        start_indices = Nx.broadcast_vectors(start_indices, align_ranks: false)
+        start_indices = Nx.broadcast_vectors(start_indices)
 
       n = tuple_size(shape)
 
@@ -13367,7 +13410,7 @@ defmodule Nx do
   """
   @doc type: :indexed
   def put_slice(tensor, start_indices, slice) when is_list(start_indices) do
-    [tensor, slice] = broadcast_vectors([tensor, slice])
+    [tensor, slice] = broadcast_vectors([tensor, slice], align_ranks: true)
 
     %T{vectorized_axes: vectorized_axes, shape: shape, names: names, type: type} = tensor
     %T{shape: slice_shape, names: slice_names, type: slice_type} = slice
@@ -13838,7 +13881,7 @@ defmodule Nx do
   @doc type: :indexed
   def take_along_axis(tensor, indices, opts \\ []) when is_list(opts) do
     [%T{vectorized_axes: vectorized_axes} = tensor, indices] =
-      broadcast_vectors([tensor, indices])
+      broadcast_vectors([tensor, indices], align_ranks: true)
 
     unless Nx.Type.integer?(indices.type) do
       raise ArgumentError, "indices must be an integer tensor, got #{inspect(indices.type)}"
@@ -14124,7 +14167,9 @@ defmodule Nx do
         t
 
       [_ | _] = tensors ->
-        [%T{vectorized_axes: vectorized_axes} | _] = tensors = broadcast_vectors(tensors)
+        [%T{vectorized_axes: vectorized_axes} | _] =
+          tensors = broadcast_vectors(tensors, align_ranks: true)
+
         offset = length(vectorized_axes)
         tensors = if vectorized_axes != [], do: Enum.map(tensors, &devectorize/1), else: tensors
 
@@ -15506,7 +15551,9 @@ defmodule Nx do
   def linspace(start, stop, opts \\ []) do
     opts = keyword!(opts, [:n, :name, type: {:f, 32}, endpoint: true])
 
-    [%{vectorized_axes: vectorized_axes} = start, stop] = reshape_vectors([start, stop])
+    [%{vectorized_axes: vectorized_axes} = start, stop] =
+      reshape_vectors([start, stop], align_ranks: true)
+
     start = Nx.as_type(start, opts[:type])
     stop = Nx.as_type(stop, opts[:type])
     n = opts[:n]

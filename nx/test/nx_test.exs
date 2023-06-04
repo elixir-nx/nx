@@ -2764,23 +2764,26 @@ defmodule NxTest do
       xy = Nx.iota({1, 2}, vectorized_axes: [x: 1, y: 2])
       x2 = Nx.iota({1, 2, 3}, vectorized_axes: [x: 2])
 
-      assert [
-               Nx.iota({1, 1, 1}, vectorized_axes: [x: 2, y: 2]),
-               Nx.iota({1, 1, 2}, vectorized_axes: [x: 2, y: 2]),
-               Nx.iota({1, 2, 3}, vectorized_axes: [x: 2, y: 2])
-             ] == Nx.broadcast_vectors([x, xy, x2])
+      result = [
+        Nx.iota({1}, vectorized_axes: [x: 2, y: 2]),
+        Nx.iota({1, 2}, vectorized_axes: [x: 2, y: 2]),
+        Nx.iota({1, 2, 3}, vectorized_axes: [x: 2, y: 2])
+      ]
+
+      assert result == Nx.broadcast_vectors([x, xy, x2])
+      assert result == Nx.broadcast_vectors([x, xy, x2], align_ranks: false)
     end
 
-    test "returns correct axes' order and shape for align_ranks: false" do
+    test "returns correct axes' order and shape for align_ranks: true" do
       x = Nx.iota({1}, vectorized_axes: [x: 1])
       xy = Nx.iota({1, 2}, vectorized_axes: [x: 1, y: 2])
       x2 = Nx.iota({1, 2, 3}, vectorized_axes: [x: 2])
 
       assert [
-               Nx.iota({1}, vectorized_axes: [x: 2, y: 2]),
-               Nx.iota({1, 2}, vectorized_axes: [x: 2, y: 2]),
+               Nx.iota({1, 1, 1}, vectorized_axes: [x: 2, y: 2]),
+               Nx.iota({1, 1, 2}, vectorized_axes: [x: 2, y: 2]),
                Nx.iota({1, 2, 3}, vectorized_axes: [x: 2, y: 2])
-             ] == Nx.broadcast_vectors([x, xy, x2], align_ranks: false)
+             ] == Nx.broadcast_vectors([x, xy, x2], align_ranks: true)
     end
   end
 
