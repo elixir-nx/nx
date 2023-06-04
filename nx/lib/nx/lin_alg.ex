@@ -295,7 +295,7 @@ defmodule Nx.LinAlg do
   """
   @doc from_backend: false
   defn norm(tensor, opts \\ []) do
-    opts = keyword!(opts, [:ord, :axes])
+    opts = keyword!(opts, [:ord, :axes, :keep_axes])
     norm_transform(tensor, opts)
   end
 
@@ -306,7 +306,7 @@ defmodule Nx.LinAlg do
       raise ArgumentError, "expected 1-D or 2-D tensor, got tensor with shape #{inspect(t.shape)}"
     end
 
-    axes_opts = Keyword.take(opts, [:axes])
+    axes_opts = Keyword.take(opts, [:axes, :keep_axes])
 
     case opts[:ord] do
       nil when rank == 1 -> norm_integer(t, 2, axes_opts)
@@ -330,10 +330,14 @@ defmodule Nx.LinAlg do
     Nx.sum(s)
   end
 
-  defp norm_inf(%{shape: shape, type: type} = t, ord, _opts) when ord in [:inf, :neg_inf] do
+  defp norm_inf(%{shape: shape, type: type} = t, ord, opts) when ord in [:inf, :neg_inf] do
     output_type = Nx.Type.to_real(type)
     aggregate_axes = if tuple_size(shape) == 2, do: &Nx.sum(&1, axes: [1]), else: & &1
-    reduce = if ord == :inf, do: &Nx.reduce_max/1, else: &Nx.reduce_min/1
+
+    reduce =
+      if ord == :inf,
+        do: &Nx.reduce_max(&1, opts),
+        else: &Nx.reduce_min(&1, opts)
 
     t
     |> Nx.abs()
@@ -342,18 +346,18 @@ defmodule Nx.LinAlg do
     |> Nx.as_type(output_type)
   end
 
-  defp norm_integer(%{shape: {_}, type: type} = t, 0, _opts) do
+  defp norm_integer(%{shape: {_}, type: type} = t, 0, opts) do
     output_type = Nx.Type.to_real(type)
 
     t
     |> Nx.not_equal(0)
-    |> Nx.sum()
+    |> Nx.sum(opts)
     |> Nx.as_type(output_type)
   end
 
-  defp norm_integer(%{shape: {_, _}, type: type} = t, ord, _opts) when ord in [1, -1] do
+  defp norm_integer(%{shape: {_, _}, type: type} = t, ord, opts) when ord in [1, -1] do
     output_type = Nx.Type.to_real(type)
-    function = if ord == 1, do: &Nx.reduce_max/1, else: &Nx.reduce_min/1
+    function = if ord == 1, do: &Nx.reduce_max(&1, opts), else: &Nx.reduce_min(&1, opts)
 
     t
     |> Nx.abs()
@@ -366,9 +370,9 @@ defmodule Nx.LinAlg do
     raise ArgumentError, "invalid :ord for 2-D tensor, got: #{inspect(ord)}"
   end
 
-  defp norm_integer(%{shape: {_, _}} = t, -2, _opts) do
+  defp norm_integer(%{shape: {_, _}} = t, -2, opts) do
     {_u, s, _v} = Nx.LinAlg.svd(t)
-    Nx.reduce_min(s)
+    Nx.reduce_min(s, opts)
   end
 
   defp norm_integer(%{type: type} = t, ord, opts) when is_integer(ord) do
@@ -383,7 +387,7 @@ defmodule Nx.LinAlg do
     # The idea is that by dividing the tensor by it, large values of
     # tensor entries and large values of p are reduced, which in turn
     # avoids numerical overflow.
-    numerical_stability_coefficient = Nx.reduce_max(abs_t)
+    numerical_stability_coefficient = Nx.reduce_max(abs_t, opts)
 
     # This code prevents from division by zero.
     numerical_stability_coefficient =
@@ -858,14 +862,34 @@ defmodule Nx.LinAlg do
     det = Nx.LinAlg.determinant(tensor)
 
     type = Nx.Type.to_real(Nx.type(tensor))
-    eps = Nx.Constants.smallest_positive_normal(type) * 1.0e5
+    eps = Nx.Constants.smallest_positive_normal(type) * 1.0e3
 
     inverse =
       if Nx.abs(det) <= eps do
         Nx.tensor(:nan)
       else
-        normalized_tensor = tensor / det
-        Nx.LinAlg.solve(normalized_tensor, Nx.eye({n, n})) / det
+        # matrix is possibly invertible but ill-conditioned
+        # we normalize it by the determinant
+
+        scaling_matrix = Nx.LinAlg.norm(tensor, axes: [1], keep_axes: true)
+        # don't rescale for 0-norm rows
+        scaling_matrix = 1 / Nx.select(scaling_matrix == 0, 1, scaling_matrix)
+
+        # T.inv(T) = I
+        # C.T.inv(T).S = I
+        # inv(T).S = inv(C.T).C
+        # inv(T) = inv(C.T).[C.inv(S)]
+        # C.inv(S) = I -> S = C
+
+        # As an implementation detail, we realize the scaling with multiply and divide,
+        # so we don't actually invert C explicitly
+
+        normalized_tensor = scaling_matrix * tensor
+
+        Nx.LinAlg.solve(
+          normalized_tensor,
+          Nx.make_diagonal(Nx.squeeze(scaling_matrix, axes: [1]))
+        )
       end
 
     Nx.revectorize(inverse, vectorized_axes, target_shape: input_shape)
@@ -1738,8 +1762,8 @@ defmodule Nx.LinAlg do
       #Nx.Tensor<
         f32[2][2]
         [
-          [-2.0, 1.0],
-          [1.5, -0.5]
+          [-1.999999761581421, 0.9999999403953552],
+          [1.4999998807907104, -0.4999999701976776]
         ]
       >
 
@@ -1767,8 +1791,8 @@ defmodule Nx.LinAlg do
             [2.75, -0.75]
           ],
           [
-            [-110.375, 76.875],
-            [92.25, -64.25]
+            [-110.37472534179688, 76.87480926513672],
+            [92.2497787475586, -64.24984741210938]
           ]
         ]
       >

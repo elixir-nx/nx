@@ -49,7 +49,7 @@ defmodule Torchx.Backend do
   ## Creation
 
   def constant(
-        %T{shape: shape, names: names, type: type} = out,
+        %T{shape: shape, names: names, type: type},
         scalar,
         backend_options
       )
