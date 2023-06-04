@@ -164,6 +164,8 @@ defmodule Nx.LinAlg do
 
     * `:axes` - defines the axes upon which the norm will be calculated.
       Applies only on 2-norm for 2-D tensors. Default: `nil`.
+    * `:keep_axes` - whether the calculation axes should be kept with
+      length 1. Defaults to `false`
     * `:ord` - defines which norm will be calculated according to the table below. Default: `nil`.
 
   | ord          | 2-D                            | 1-D                               |
