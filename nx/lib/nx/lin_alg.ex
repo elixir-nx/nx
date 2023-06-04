@@ -719,7 +719,7 @@ defmodule Nx.LinAlg do
   @doc """
   Inverts a batch of square matrices.
 
-  For non-square matrices, use `svd/2` for pseudo-inverse calculations.
+  For non-square matrices, use `pinv/2` for pseudo-inverse calculations.
 
   ## Examples
 
@@ -799,13 +799,23 @@ defmodule Nx.LinAlg do
         ]
       >
 
+  If a singular matrix is passed, the result will silently fail.
+
+      iex> Nx.LinAlg.invert(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]))
+      #Nx.Tensor<
+        f32[4][4]
+        [
+          [NaN, NaN, NaN, NaN],
+          [NaN, NaN, NaN, NaN],
+          [NaN, NaN, NaN, NaN],
+          [NaN, NaN, NaN, NaN]
+        ]
+      >
+
   ## Error cases
 
       iex> Nx.LinAlg.invert(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]))
       ** (ArgumentError) invert/1 expects a square matrix or a batch of square matrices, got tensor with shape: {2, 4}
-
-      iex> Nx.LinAlg.invert(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]))
-      ** (ArgumentError) can't solve for singular matrix
 
   """
   @doc from_backend: false
@@ -823,9 +833,36 @@ defmodule Nx.LinAlg do
   end
 
   defnp invert_tensor(tensor) do
-    n = elem(Nx.shape(tensor), Nx.rank(tensor) - 1)
-    identity = Nx.broadcast(Nx.eye(n), Nx.shape(tensor))
-    Nx.LinAlg.solve(tensor, identity)
+    m = Nx.axis_size(tensor, -2)
+    n = Nx.axis_size(tensor, -1)
+    vectorized_axes = tensor.vectorized_axes
+    input_shape = Nx.shape(tensor)
+
+    # proof of equivalence:
+    # norm_t = t / det
+    # norm_t ** -1 = (t / det) ** -1 = t ** -1 * det
+    # t ** -1 = norm_t ** -1 / det
+
+    tensor = Nx.revectorize(tensor, [collapsed_batch: :auto], target_shape: {m, n})
+
+    [identity, nan, _] =
+      Nx.broadcast_vectors([
+        Nx.eye({n, n}),
+        Nx.broadcast(Nx.tensor(:nan), {n, n}),
+        tensor
+      ])
+
+    det = Nx.LinAlg.determinant(tensor)
+
+    inverse =
+      if det == 0 do
+        nan
+      else
+        normalized_tensor = tensor / det
+        Nx.LinAlg.solve(normalized_tensor, identity) / det
+      end
+
+    Nx.revectorize(inverse, vectorized_axes, target_shape: input_shape)
   end
 
   deftransformp invert_shape(tensor) do

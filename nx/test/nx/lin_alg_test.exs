@@ -109,6 +109,23 @@ defmodule Nx.LinAlgTest do
       assert_all_close(Nx.dot(a, result), Nx.eye(Nx.shape(a)))
       assert_all_close(Nx.dot(result, a), Nx.eye(Nx.shape(a)))
     end
+
+    test "regression for numerical stability" do
+      q =
+        Nx.tensor(
+          [
+            [1, 0.5, 0.5, 0.5],
+            [0.5, 1, 0.5, 0.5],
+            [0.5, 0.5, 1, 0.5],
+            [0.5, 0.5, 0.5, 1]
+          ],
+          type: :f64
+        )
+        |> Nx.multiply(1.0e-10)
+
+      invq = Nx.LinAlg.invert(q)
+      assert_all_close(Nx.dot(invq, q), Nx.eye(q.shape), atol: 1.0e-15)
+    end
   end
 
   describe "determinant/1" do
