@@ -12,13 +12,13 @@ defmodule Nx.Defn.CompilationDiff do
 
     cond do
       not l and not r ->
-        %__MODULE__{left: left, right: right, compatible: left == right, nesting: 0}
+        %__MODULE__{left: left, right: right, compatible: left == right}
 
       not l or not r ->
-        %__MODULE__{left: left, right: right, compatible: false, nesting: 0}
+        %__MODULE__{left: left, right: right, compatible: false}
 
       Nx.Container.impl_for(left) != Nx.Container.impl_for(right) ->
-        %__MODULE__{left: left, right: right, compatible: false, nesting: 0}
+        %__MODULE__{left: left, right: right, compatible: false}
 
       l and r ->
         {diff, acc} =
@@ -31,15 +31,14 @@ defmodule Nx.Defn.CompilationDiff do
                 %__MODULE__{
                   left: left,
                   right: right,
-                  compatible: Nx.compatible?(left, right),
-                  nesting: 2
+                  compatible: Nx.compatible?(left, right)
                 },
                 acc
               }
           end)
 
         if acc == :incompatible_sizes do
-          %__MODULE__{left: left, right: right, compatible: false, nesting: 0}
+          %__MODULE__{left: left, right: right, compatible: false}
         else
           diff
         end
@@ -63,21 +62,24 @@ defmodule Nx.Defn.CompilationDiff do
       inspect_as_template(left)
     end
 
-    def inspect(%Nx.Defn.CompilationDiff{left: left, right: right, nesting: nesting}, _opts) do
-      nest(
-        concat([
-          line(),
-          IO.ANSI.light_black_background(),
-          IO.ANSI.green(),
-          inspect_as_template(left),
-          line(),
-          IO.ANSI.red(),
-          inspect_as_template(right),
-          line(),
-          IO.ANSI.reset()
-        ]),
-        nesting
-      )
+    def inspect(%Nx.Defn.CompilationDiff{left: left, right: right}, _opts) do
+      concat([
+        IO.ANSI.light_black_background(),
+        IO.ANSI.green(),
+        line(),
+        "<<<<<<<<<<",
+        line(),
+        inspect_as_template(left),
+        line(),
+        "==========",
+        line(),
+        IO.ANSI.red(),
+        inspect_as_template(right),
+        line(),
+        ">>>>>>>>>>",
+        line(),
+        IO.ANSI.reset()
+      ])
     end
 
     defp inspect_as_template(data) do

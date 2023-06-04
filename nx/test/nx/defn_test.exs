@@ -1253,7 +1253,7 @@ defmodule Nx.DefnTest do
 
     test "raises on non-tensor return" do
       assert_raise CompileError,
-                   ~r"cond/if expects all branches to return compatible tensor types.\n\nComparison:\n\n\n\e\[100m\e\[32m:foo\n\e\[31m:bar\n\e\[0m\n",
+                   ~r"cond/if expects all branches to return compatible tensor types.\n\nComparison:\n\n\e\[100m\e\[32m\n<<<<<<<<<<\n:foo\n==========\n\e\[31m:bar\n>>>>>>>>>>\n\e\[0m\n",
                    fn -> non_tensor_cond(1) end
     end
 
@@ -1573,8 +1573,7 @@ defmodule Nx.DefnTest do
       expected_error =
         [
           "the do-block in while must return tensors with the same shape, type, and names as the initial arguments.",
-          "\n\nComparison:\n\n",
-          "{\n   \e\\[100m\e\\[32m#Nx.Tensor<\n  f32\n>\n   \e\\[31m#Nx.Tensor<\n  s64\n>\n   \e\\[0m, #Nx.Tensor<\n  f32\n>}\n$"
+          "\n\nComparison:\n\n{\e\\[100m\e\\[32m\n <<<<<<<<<<\n #Nx.Tensor<\n  f32\n>\n ==========\n \e\\[31m#Nx.Tensor<\n  s64\n>\n >>>>>>>>>>\n \e\\[0m, #Nx.Tensor<\n  f32\n>}\n$"
         ]
         |> IO.iodata_to_binary()
         |> Regex.compile!()
@@ -1994,8 +1993,8 @@ defmodule Nx.DefnTest do
       expected_error =
         [
           "the do-block in while must return tensors with the same shape, type, and names as the initial arguments.",
-          "\n\nComparison:\n\n\n\e\\[100m\e\\[32m%{a: #Nx.Tensor<\n    s64\n  >, b: #Nx.Tensor<\n    s64\n  >}\n\e\\[31m{#Nx.Tensor<\n",
-          "   s64\n >, #Nx.Tensor<\n   s64\n >}\n\e\\[0m\n"
+          "\n\nComparison:\n\n\e\\[100m\e\\[32m\n<<<<<<<<<<\n%{a: #Nx.Tensor<\n    s64\n  >, b: #Nx.Tensor<\n    s64\n  ",
+          ">}\n==========\n\e\\[31m{#Nx.Tensor<\n   s64\n >, #Nx.Tensor<\n   s64\n >}\n>>>>>>>>>>\n\e\\[0m\n"
         ]
         |> IO.iodata_to_binary()
         |> Regex.compile!()
