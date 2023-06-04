@@ -871,18 +871,16 @@ defmodule Nx.LinAlg do
         # matrix is possibly invertible but ill-conditioned
         # we normalize it by the determinant
 
-        scaling_matrix = Nx.LinAlg.norm(tensor, axes: [1], keep_axes: true)
+        scaling_matrix = Nx.reduce_max(Nx.abs(tensor), axes: [1], keep_axes: true)
         # don't rescale for 0-norm rows
         scaling_matrix = 1 / Nx.select(scaling_matrix == 0, 1, scaling_matrix)
 
-        # T.inv(T) = I
-        # C.T.inv(T).S = I
-        # inv(T).S = inv(C.T).C
-        # inv(T) = inv(C.T).[C.inv(S)]
-        # C.inv(S) = I -> S = C
-
-        # As an implementation detail, we realize the scaling with multiply and divide,
-        # so we don't actually invert C explicitly
+        # We can think of the implementation as a system of equations.
+        # Since we're scaling the left side by scaling_matrix[i] for each row i,
+        # we need to also scale the right side.
+        # This is achieved by scaling each row of an identity matrix, which is,
+        # in fact, the same as putting the scaling values in the diagonal of the
+        # right-side matrix.
 
         normalized_tensor = scaling_matrix * tensor
 
@@ -1762,8 +1760,8 @@ defmodule Nx.LinAlg do
       #Nx.Tensor<
         f32[2][2]
         [
-          [-1.999999761581421, 0.9999999403953552],
-          [1.4999998807907104, -0.4999999701976776]
+          [-2.0, 1.0],
+          [1.5, -0.5]
         ]
       >
 
@@ -1791,8 +1789,8 @@ defmodule Nx.LinAlg do
             [2.75, -0.75]
           ],
           [
-            [-110.37472534179688, 76.87480926513672],
-            [92.2497787475586, -64.24984741210938]
+            [-110.37469482421875, 76.8747787475586],
+            [92.249755859375, -64.24981689453125]
           ]
         ]
       >
