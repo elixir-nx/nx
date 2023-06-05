@@ -12057,10 +12057,11 @@ defmodule Nx do
       ** (ArgumentError) dot batch axes for right tensor ([0]) cannot be in contract axes ([0])
   """
   @doc type: :ndim
-  def dot(t1, contract_axes1, batch_axes1, t2, contract_axes2, batch_axes2) do
-    [t1, t2] = broadcast_vectors([t1, t2], align_ranks: true)
+  def dot(t1_in, contract_axes1, batch_axes1, t2_in, contract_axes2, batch_axes2) do
+    [t1, t2] = broadcast_vectors([t1_in, t2_in])
 
-    %{vectorized_axes: vectorized_axes, shape: s1, names: names1} = t1
+    %{vectorized_axes: vectorized_axes} = t1
+    %{shape: s1, names: names1} = t1
     %{shape: s2, names: names2} = t2
 
     output_type = binary_type(t1, t2)

@@ -1650,6 +1650,45 @@ defmodule NxTest do
       t = Nx.tensor([[[1, 2, 3], [4, 5, 6]]])
       assert Nx.dot(t, [2], [0], t, [2], [0]) == Nx.tensor([[[14, 32], [32, 77]]])
     end
+
+    test "vectorization regression" do
+      l = Nx.tensor([[[[0, 1, 2], [0, -1, -2]]]]) |> Nx.tile([5, 1, 1, 1]) |> Nx.vectorize(x: 5)
+
+      assert l.shape == {1, 2, 3}
+
+      r =
+        Nx.tensor([
+          [1, 1, 1, 1],
+          [2, 2, 2, 2],
+          [3, 3, 3, 3]
+        ])
+
+      assert Nx.dot(l, r) ==
+               Nx.tensor([
+                 [
+                   [8, 8, 8, 8],
+                   [-8, -8, -8, -8]
+                 ],
+                 [
+                   [8, 8, 8, 8],
+                   [-8, -8, -8, -8]
+                 ],
+                 [
+                   [8, 8, 8, 8],
+                   [-8, -8, -8, -8]
+                 ],
+                 [
+                   [8, 8, 8, 8],
+                   [-8, -8, -8, -8]
+                 ],
+                 [
+                   [8, 8, 8, 8],
+                   [-8, -8, -8, -8]
+                 ]
+               ])
+               |> Nx.vectorize(x: 5)
+               |> Nx.reshape({1, 2, 4})
+    end
   end
 
   describe "reverse/2" do
