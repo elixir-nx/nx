@@ -679,24 +679,19 @@ defmodule Nx.Defn.EvaluatorTest do
       message = """
       test/nx/defn/evaluator_test.exs:646: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
 
-      Body matches template:
-
-      {#Nx.Tensor<
+      {\e[32m
+       <<<<< Body (do-block) <<<<<
+       #Nx.Tensor<
          vectorized[a: 2]
          s64[2][3]
-       >, #Nx.Tensor<
-         vectorized[a: 2]
-         s64[2][3]
-       >, #Nx.Tensor<
-         s64
-       >}
-
-      and initial argument has template:
-
-      {#Nx.Tensor<
+       >
+       ==========
+       \e[31m#Nx.Tensor<
          vectorized[a: 1]
          s64[2][3]
-       >, #Nx.Tensor<
+       >
+       >>>>>     Initial     >>>>>
+       \e[0m, #Nx.Tensor<
          vectorized[a: 2]
          s64[2][3]
        >, #Nx.Tensor<

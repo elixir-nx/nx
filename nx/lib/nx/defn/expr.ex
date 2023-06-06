@@ -429,8 +429,9 @@ defmodule Nx.Defn.Expr do
       [{_, first_pred, first} | rest] ->
         first = first.()
 
-        [{last_pred, last} | reverse] =
-          Enum.reduce(rest, [{first_pred, first}], fn {meta, pred, expr}, acc ->
+        {[{last_pred, last} | reverse], _} =
+          Enum.reduce(rest, {[{first_pred, first}], 1}, fn {meta, pred, expr},
+                                                           {acc, branch_idx} ->
             expr = expr.()
 
             if not Nx.Defn.Composite.compatible?(first, expr, fn _, _ -> true end) do
@@ -440,17 +441,11 @@ defmodule Nx.Defn.Expr do
                 description: """
                 cond/if expects all branches to return compatible tensor types.
 
-                Got mismatching templates:
-
-                #{inspect_as_template(first)}
-
-                and
-
-                #{inspect_as_template(expr)}
+                #{Nx.Defn.TemplateDiff.build_and_inspect(first, expr, "First Branch (expected)", "Branch #{branch_idx}", fn _, _ -> true end)}
                 """
             end
 
-            [{pred, expr} | acc]
+            {[{pred, expr} | acc], branch_idx + 1}
           end)
 
         case last_pred do
@@ -765,13 +760,7 @@ defmodule Nx.Defn.Expr do
         description: """
         the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
 
-        Body matches template:
-
-        #{inspect_as_template(body)}
-
-        and initial argument has template:
-
-        #{inspect_as_template(initial)}
+        #{Nx.Defn.TemplateDiff.build_and_inspect(body, initial, "Body (do-block)", "Initial")}
         """
     end
   end
@@ -1468,17 +1457,6 @@ defmodule Nx.Defn.Expr do
     end
 
     context || acc
-  end
-
-  defp inspect_as_template(data) do
-    if is_number(data) or is_tuple(data) or
-         (is_map(data) and Nx.Container.impl_for(data) != Nx.Container.Any) do
-      data
-      |> Nx.to_template()
-      |> Kernel.inspect(custom_options: [skip_template_backend_header: true])
-    else
-      inspect(data)
-    end
   end
 
   ## Constant helpers and related optimizations

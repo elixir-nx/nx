@@ -323,21 +323,7 @@ defmodule Nx.Defn do
             raise ArgumentError, """
             argument at position #{pos} is not compatible with compiled function template.
 
-            Expected template:
-
-            #{inspect(template)}
-
-            Argument template:
-
-            #{inspect(arg_template)}
-
-            Expected argument:
-
-            #{inspect(Enum.fetch!(template_args, pos - 1))}
-
-            Actual argument:
-
-            #{inspect(arg)}
+            #{Nx.Defn.TemplateDiff.build_and_inspect(Enum.fetch!(template_args, pos - 1), arg, "Expected", "Argument")}
             """
           end
 
