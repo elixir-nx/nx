@@ -141,7 +141,7 @@ defmodule Nx.ContainerTest do
       var.a + var.b
     end
 
-    deftransformp assert_fields!(%C{c: %{}, d: :keep}), do: 1
+    deftransformp(assert_fields!(%C{c: %{}, d: :keep}), do: 1)
 
     test "keeps fields" do
       inp = %Container{a: 1, b: 2, c: :reset, d: :keep}
@@ -158,7 +158,7 @@ defmodule Nx.ContainerTest do
       var.a + var.b
     end
 
-    deftransformp dot_assert_fields_transform(%C{c: %{}, d: %{}}), do: 1
+    deftransformp(dot_assert_fields_transform(%C{c: %{}, d: %{}}), do: 1)
 
     test "keeps empty maps" do
       inp = %Container{a: 1, b: 2, c: :reset, d: %{}}
@@ -195,7 +195,7 @@ defmodule Nx.ContainerTest do
         [
           "the do-block in while must return tensors with the same shape, type, and names as the initial arguments.",
           "\n\n{#Nx.Tensor<\n   s64\n >, %Container{a: #Nx.Tensor<\n     s64\n   >, b: #Nx.Tensor<\n     s64\n   >,",
-          " c: %{}, d: %{}}, \e\\[100m\e\\[32m\n <<<<< Body \\(do-block\\) <<<<<\n #Nx.Tensor<\n   s16\n >\n ==========\n \e\\[31m#Nx.Tensor<\n   u8\n >\n >>>>>     Initial     >>>>>\n \e\\[0m}\n$"
+          " c: %{}, d: %{}}, \e\\[32m\n <<<<< Body \\(do-block\\) <<<<<\n #Nx.Tensor<\n   s16\n >\n ==========\n \e\\[31m#Nx.Tensor<\n   u8\n >\n >>>>>     Initial     >>>>>\n \e\\[0m}\n$"
         ]
         |> IO.iodata_to_binary()
         |> Regex.compile!()
@@ -209,7 +209,7 @@ defmodule Nx.ContainerTest do
       expected_error =
         [
           "cond/if expects all branches to return compatible tensor types.",
-          "\n\n\e\\[100m\e\\[32m\n<<<<< First Branch \\(expected\\) <<<<<\n%Container",
+          "\n\n\e\\[32m\n<<<<< First Branch \\(expected\\) <<<<<\n%Container",
           "{a: #Nx.Tensor<\n    s64\n  >, b: #Nx.Tensor<\n    s64\n  >, c: %{}, d: %{}}",
           "\n==========\n\e\\[31m#Nx.Tensor<\n  s64\n>\n>>>>>        Branch 1         >>>>>\n\e\\[0m\n$"
         ]

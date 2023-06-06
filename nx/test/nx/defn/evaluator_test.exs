@@ -679,7 +679,7 @@ defmodule Nx.Defn.EvaluatorTest do
       message = """
       test/nx/defn/evaluator_test.exs:646: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
 
-      {\e[100m\e[32m
+      {\e[32m
        <<<<< Body (do-block) <<<<<
        #Nx.Tensor<
          vectorized[a: 2]

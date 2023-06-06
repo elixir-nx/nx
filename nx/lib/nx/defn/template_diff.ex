@@ -109,7 +109,6 @@ defmodule Nx.Defn.TemplateDiff do
       {left_title, right_title} = centralize_titles(left_title, right_title)
 
       concat([
-        IO.ANSI.light_black_background(),
         IO.ANSI.green(),
         line(),
         "<<<<< #{left_title} <<<<<",
