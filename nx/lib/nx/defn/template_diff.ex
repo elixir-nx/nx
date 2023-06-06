@@ -152,7 +152,7 @@ defmodule Nx.Defn.TemplateDiff do
         |> Nx.to_template()
         |> to_doc(Inspect.Opts.new(custom_options: [skip_template_backend_header: true]))
       else
-        inspect(data)
+        to_doc(data)
       end
     end
   end
