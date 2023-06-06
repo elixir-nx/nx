@@ -1246,7 +1246,7 @@ defmodule Nx.DefnTest do
 
     test "raises on non-tensor return" do
       assert_raise CompileError,
-                   ~r"cond/if expects all branches to return compatible tensor types.\n\nComparison:\n\n\e\[100m\e\[32m\n<<<<<<<<<<\n:foo\n==========\n\e\[31m:bar\n>>>>>>>>>>\n\e\[0m\n",
+                   ~r"cond/if expects all branches to return compatible tensor types.\n\n\e\[100m\e\[32m\n<<<<< First Branch \(expected\) <<<<<\n:foo\n==========\n\e\[31m:bar\n>>>>>        Branch 1         >>>>>\n\e\[0m\n",
                    fn -> non_tensor_cond(1) end
     end
 
@@ -1565,9 +1565,10 @@ defmodule Nx.DefnTest do
 
       expected_error =
         [
-          "the do-block in while must return tensors with the same shape, type, and names as the initial arguments.",
-          "\n\nComparison:\n\n{\e\\[100m\e\\[32m\n <<<<<<<<<<\n #Nx.Tensor<\n  f32\n>\n ==========\n \e\\[31m#Nx.Tensor<\n",
-          "  s64\n>\n >>>>>>>>>>\n \e\\[0m, #Nx.Tensor<\n  f32\n>}\n$"
+          "the do-block in while must return tensors with the same shape, type, and names ",
+          "as the initial arguments.\n\n\\{\e\\[100m\e\\[32m\n <<<<< Body \\(do-block\\) <<<<<\n ",
+          "#Nx.Tensor<\n   f32\n >\n ==========\n \e\\[31m#Nx.Tensor<\n   s64\n >\n >>>>>",
+          "     Initial     >>>>>\n \e\\[0m, #Nx.Tensor<\n   f32\n >\\}\n$"
         ]
         |> IO.iodata_to_binary()
         |> Regex.compile!()
@@ -1987,8 +1988,8 @@ defmodule Nx.DefnTest do
       expected_error =
         [
           "the do-block in while must return tensors with the same shape, type, and names as the initial arguments.",
-          "\n\nComparison:\n\n\e\\[100m\e\\[32m\n<<<<<<<<<<\n%{a: #Nx.Tensor<\n    s64\n  >, b: #Nx.Tensor<\n    s64\n  >}",
-          "\n==========\n\e\\[31m{#Nx.Tensor<\n   s64\n >, #Nx.Tensor<\n   s64\n >}\n>>>>>>>>>>\n\e\\[0m\n$"
+          "\n\n\e\\[100m\e\\[32m\n<<<<< Body \\(do-block\\) <<<<<\n%\\{a: #Nx.Tensor<\n    s64\n  >, b: #Nx.Tensor<\n    s64\n  >\\}",
+          "\n==========\n\e\\[31m\\{#Nx.Tensor<\n   s64\n >, #Nx.Tensor<\n   s64\n >\\}\n>>>>>     Initial     >>>>>\n\e\\[0m\n$"
         ]
         |> IO.iodata_to_binary()
         |> Regex.compile!()

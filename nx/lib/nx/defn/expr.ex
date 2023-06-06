@@ -428,8 +428,9 @@ defmodule Nx.Defn.Expr do
       [{_, first_pred, first} | rest] ->
         first = first.()
 
-        [{last_pred, last} | reverse] =
-          Enum.reduce(rest, [{first_pred, first}], fn {meta, pred, expr}, acc ->
+        {[{last_pred, last} | reverse], _} =
+          Enum.reduce(rest, {[{first_pred, first}], 1}, fn {meta, pred, expr},
+                                                           {acc, branch_idx} ->
             expr = expr.()
 
             if not Nx.Defn.Composite.compatible?(first, expr, fn _, _ -> true end) do
@@ -439,13 +440,11 @@ defmodule Nx.Defn.Expr do
                 description: """
                 cond/if expects all branches to return compatible tensor types.
 
-                Comparison:
-
-                #{Nx.Defn.TemplateDiff.build_and_inspect(first, expr, fn _, _ -> true end)}
+                #{Nx.Defn.TemplateDiff.build_and_inspect(first, expr, "First Branch (expected)", "Branch #{branch_idx}", fn _, _ -> true end)}
                 """
             end
 
-            [{pred, expr} | acc]
+            {[{pred, expr} | acc], branch_idx + 1}
           end)
 
         case last_pred do
@@ -760,9 +759,7 @@ defmodule Nx.Defn.Expr do
         description: """
         the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
 
-        Comparison:
-
-        #{Nx.Defn.TemplateDiff.build_and_inspect(body, initial)}
+        #{Nx.Defn.TemplateDiff.build_and_inspect(body, initial, "Body (do-block)", "Initial")}
         """
     end
   end

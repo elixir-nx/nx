@@ -194,8 +194,8 @@ defmodule Nx.ContainerTest do
       expected_error =
         [
           "the do-block in while must return tensors with the same shape, type, and names as the initial arguments.",
-          "\n\nComparison:\n\n{#Nx.Tensor<\n  s64\n>, %Container{a: #Nx.Tensor<\n  s64\n>, b: #Nx.Tensor<\n  s64\n>,",
-          " c: %{}, d: %{}}, \e\\[100m\e\\[32m\n <<<<<<<<<<\n #Nx.Tensor<\n  s16\n>\n ==========\n \e\\[31m#Nx.Tensor<\n  u8\n>\n >>>>>>>>>>\n \e\\[0m}\n$"
+          "\n\n{#Nx.Tensor<\n   s64\n >, %Container{a: #Nx.Tensor<\n     s64\n   >, b: #Nx.Tensor<\n     s64\n   >,",
+          " c: %{}, d: %{}}, \e\\[100m\e\\[32m\n <<<<< Body \\(do-block\\) <<<<<\n #Nx.Tensor<\n   s16\n >\n ==========\n \e\\[31m#Nx.Tensor<\n   u8\n >\n >>>>>     Initial     >>>>>\n \e\\[0m}\n$"
         ]
         |> IO.iodata_to_binary()
         |> Regex.compile!()
@@ -209,9 +209,9 @@ defmodule Nx.ContainerTest do
       expected_error =
         [
           "cond/if expects all branches to return compatible tensor types.",
-          "\n\nComparison:\n\n\e\\[100m\e\\[32m\n<<<<<<<<<<\n%Container{a: ",
-          "#Nx.Tensor<\n    s64\n  >, b: #Nx.Tensor<\n    s64\n  >, c: %{}, d: %{}}\n==========\n\e\\[31m#Nx.Tensor<\n  s64\n>\n>>>>>>>>>>\n\e\\[0m\n",
-          "$"
+          "\n\n\e\\[100m\e\\[32m\n<<<<< First Branch \\(expected\\) <<<<<\n%Container",
+          "{a: #Nx.Tensor<\n    s64\n  >, b: #Nx.Tensor<\n    s64\n  >, c: %{}, d: %{}}",
+          "\n==========\n\e\\[31m#Nx.Tensor<\n  s64\n>\n>>>>>        Branch 1         >>>>>\n\e\\[0m\n$"
         ]
         |> IO.iodata_to_binary()
         |> Regex.compile!()
