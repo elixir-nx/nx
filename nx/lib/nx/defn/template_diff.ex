@@ -89,12 +89,12 @@ defmodule Nx.Defn.TemplateDiff do
   defimpl Inspect do
     import Inspect.Algebra
 
-    def inspect(%Nx.Defn.TemplateDiff{left: left, right: nil}, _opts) do
-      inspect_as_template(left)
+    def inspect(%Nx.Defn.TemplateDiff{left: left, right: nil}, opts) do
+      inspect_as_template(left, opts)
     end
 
-    def inspect(%Nx.Defn.TemplateDiff{left: left, compatible: true}, _opts) do
-      inspect_as_template(left)
+    def inspect(%Nx.Defn.TemplateDiff{left: left, compatible: true}, opts) do
+      inspect_as_template(left, opts)
     end
 
     def inspect(
@@ -104,7 +104,7 @@ defmodule Nx.Defn.TemplateDiff do
             right: right,
             right_title: right_title
           },
-          _opts
+          opts
         ) do
       {left_title, right_title} = centralize_titles(left_title, right_title)
 
@@ -113,12 +113,12 @@ defmodule Nx.Defn.TemplateDiff do
         line(),
         "<<<<< #{left_title} <<<<<",
         line(),
-        inspect_as_template(left),
+        inspect_as_template(left, opts),
         line(),
         "==========",
         line(),
         IO.ANSI.red(),
-        inspect_as_template(right),
+        inspect_as_template(right, opts),
         line(),
         ">>>>> #{right_title} >>>>>",
         line(),
@@ -144,14 +144,16 @@ defmodule Nx.Defn.TemplateDiff do
       |> String.pad_trailing(n)
     end
 
-    defp inspect_as_template(data) do
+    defp inspect_as_template(data, opts) do
       if is_number(data) or is_tuple(data) or
            (is_map(data) and Nx.Container.impl_for(data) != Nx.Container.Any) do
         data
         |> Nx.to_template()
-        |> to_doc(Inspect.Opts.new(custom_options: [skip_template_backend_header: true]))
+        |> to_doc(
+          update_in(opts.custom_options, &Keyword.put(&1, :skip_template_backend_header, true))
+        )
       else
-        to_doc(data, Inspect.Opts.new([]))
+        to_doc(data, opts)
       end
     end
   end
