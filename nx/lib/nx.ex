@@ -7491,6 +7491,12 @@ defmodule Nx do
     [%T{vectorized_axes: vectorized_axes} = target, indices, updates] =
       broadcast_vectors([target, indices, updates])
 
+    idx_type = type(indices)
+
+    unless Nx.Type.integer?(idx_type) do
+      raise ArgumentError, "indices must be an integer tensor, got type: #{inspect(idx_type)}"
+    end
+
     type = binary_type(target, updates)
 
     Nx.Shape.indexed(target, indices, updates)
