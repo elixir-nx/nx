@@ -2461,9 +2461,11 @@ defmodule NxTest do
       for type <- [f: 16, bf: 16, f: 32, f: 64, c: 64, c: 128] do
         indices = Nx.tensor([[0, 0], [0, 1], [1, 0], [1, 1]], type: type)
 
-        assert_raise ArgumentError, "indices must be an integer tensor, got type: #{inspect(type)}", fn ->
-          Nx.indexed_add(Nx.broadcast(0, {2, 2}), indices, Nx.tensor([1, 2, 3, 4]))
-        end
+        assert_raise ArgumentError,
+                     "indices must be an integer tensor, got type: #{inspect(type)}",
+                     fn ->
+                       Nx.indexed_add(Nx.broadcast(0, {2, 2}), indices, Nx.tensor([1, 2, 3, 4]))
+                     end
       end
     end
   end
