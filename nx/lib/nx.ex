@@ -14593,6 +14593,9 @@ defmodule Nx do
 
   If no axis is given, defaults to `0`.
 
+  See `take_along_axis/3` for examples on how to apply the
+  resulting indices from this function.
+
   ## Options
 
     * `:axis` - The name or number of the corresponding axis on which the sort
