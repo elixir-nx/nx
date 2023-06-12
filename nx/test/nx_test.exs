@@ -2447,6 +2447,25 @@ defmodule NxTest do
                  Nx.reshape(t, {num_elements})
                )
     end
+
+    test "works with all integer types in indices" do
+      for kind <- [:u, :s], width <- [8, 16, 32, 64] do
+        indices = Nx.tensor([[0, 0], [0, 1], [1, 0], [1, 1]], type: {kind, width})
+
+        assert Nx.add(Nx.iota({2, 2}), 1) ==
+                 Nx.indexed_add(Nx.broadcast(0, {2, 2}), indices, Nx.tensor([1, 2, 3, 4]))
+      end
+    end
+
+    test "fails for all non-integer types in indices" do
+      for type <- [f: 16, bf: 16, f: 32, f: 64, c: 64, c: 128] do
+        indices = Nx.tensor([[0, 0], [0, 1], [1, 0], [1, 1]], type: type)
+
+        assert_raise ArgumentError, "indices must be an integer tensor, got type: #{inspect(type)}", fn ->
+          Nx.indexed_add(Nx.broadcast(0, {2, 2}), indices, Nx.tensor([1, 2, 3, 4]))
+        end
+      end
+    end
   end
 
   describe "serialize/deserialize" do
