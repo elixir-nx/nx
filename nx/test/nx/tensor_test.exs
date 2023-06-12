@@ -109,12 +109,23 @@ defmodule Nx.TensorTest do
                ])
     end
 
-    test "works with negative steps" do
+    test "raises for negative steps" do
       iota = Nx.iota({2, 5})
 
-      for step <- -5..-1 do
-        assert iota[[0, 4..0//step]] == Nx.tensor(Enum.to_list(4..0//step))
-        assert iota[[1, 4..0//step]] == Nx.tensor(Enum.to_list(9..5//step))
+      range = 4..0//-2
+      base_message = "range step must be positive, got range: 4..0//-2"
+
+      assert_raise ArgumentError, base_message, fn ->
+        iota[[0, range]]
+      end
+
+      range = 1..-1
+
+      message =
+        "range step must be positive, got range: 1..-1//-1. Did you mean to pass the range 1..-1//1 instead?"
+
+      assert_raise ArgumentError, message, fn ->
+        iota[[1, range]]
       end
     end
   end
