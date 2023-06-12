@@ -295,4 +295,8 @@ defmodule EXLA.NIF do
 
   def start_log_sink(_sink_pid),
     do: :erlang.nif_error(:undef)
+
+  def get_c_api_client(_device_type), do: :erlang.nif_error(:undef)
+
+  def load_pjrt_plugin(_device_type, _library_path), do: :erlang.nif_error(:undef)
 end

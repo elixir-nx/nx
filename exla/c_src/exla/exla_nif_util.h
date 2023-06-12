@@ -9,9 +9,9 @@
 #include <map>
 
 #include "erl_nif.h"
-#include "tensorflow/compiler/xla/xla_data.pb.h"
-#include "tensorflow/compiler/xla/types.h"
-#include "tensorflow/compiler/xla/shape.h"
+#include "xla/xla_data.pb.h"
+#include "xla/types.h"
+#include "xla/shape.h"
 
 #if !defined(__GNUC__) && (defined(__WIN32__) || defined(_WIN32) || defined(_WIN32_))
   typedef unsigned __int64 nif_uint64_t;
@@ -346,7 +346,7 @@ ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape);
 #define EXLA_EFFECT_OR_RETURN_NIF_IMPL(status, rexpr, env)                   \
   auto status = (rexpr);                                                     \
   if (!status.ok()) {                                                        \
-    return exla::nif::error(env, status.error_message().c_str());            \
+    return exla::nif::error(env, status.message().data());            \
   }
 
 // Macro to be used to consume Status from within a NIF.
@@ -372,7 +372,7 @@ ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape);
 #define EXLA_ASSIGN_OR_RETURN_NIF_IMPL(statusor, lhs, rexpr, env)            \
   auto statusor = (rexpr);                                                   \
   if (!statusor.ok()) {                                                      \
-    return exla::nif::error(env, statusor.status().error_message().c_str()); \
+    return exla::nif::error(env, statusor.status().message().data()); \
   }                                                                          \
   lhs = std::move(statusor.value());
 

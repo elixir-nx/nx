@@ -6,10 +6,10 @@
 #include <utility>
 
 #include "exla_nif_util.h"
-#include "tensorflow/core/platform/types.h"
-#include "tensorflow/core/platform/status.h"
-#include "tensorflow/compiler/xla/pjrt/gpu/gpu_helpers.h"
-#include "tensorflow/compiler/xla/pjrt/pjrt_client.h"
+#include "tsl/platform/types.h"
+#include "tsl/platform/status.h"
+#include "xla/pjrt/gpu/gpu_helpers.h"
+#include "xla/pjrt/pjrt_client.h"
 
 // The implementations in this module are designed after implementations
 // in the XLA runtime, PjRt. Deviations are made where it makes sense
@@ -95,6 +95,8 @@ xla::StatusOr<ExlaClient*> GetGpuClient(double memory_fraction,
                                         xla::GpuAllocatorConfig::Kind kind);
 
 xla::StatusOr<ExlaClient*> GetTpuClient();
+
+xla::StatusOr<ExlaClient*> GetCApiClient(std::string device_type);
 } // namespace exla
 
 #endif

@@ -1,10 +1,11 @@
 #include "exla_client.h"
 #include "exla_nif_util.h"
-#include "tensorflow/compiler/xla/layout_util.h"
-#include "tensorflow/compiler/xla/pjrt/gpu/gpu_helpers.h"
-#include "tensorflow/compiler/xla/pjrt/tfrt_cpu_pjrt_client.h"
-#include "tensorflow/compiler/xla/pjrt/gpu/se_gpu_pjrt_client.h"
-#include "tensorflow/compiler/xla/pjrt/tpu_client.h"
+#include "xla/layout_util.h"
+#include "xla/pjrt/gpu/gpu_helpers.h"
+#include "xla/pjrt/tfrt_cpu_pjrt_client.h"
+#include "xla/pjrt/gpu/se_gpu_pjrt_client.h"
+#include "xla/pjrt/pjrt_c_api_client.h"
+#include "xla/pjrt/tpu_client.h"
 
 namespace exla {
 
@@ -455,6 +456,13 @@ xla::StatusOr<ExlaClient*> GetGpuClient(double memory_fraction,
 xla::StatusOr<ExlaClient*> GetTpuClient() {
   EXLA_ASSIGN_OR_RETURN(std::shared_ptr<xla::PjRtClient> client,
     xla::GetTpuClient(32));
+
+  return new ExlaClient(std::move(client));
+}
+
+xla::StatusOr<ExlaClient*> GetCApiClient(std::string device_type) {
+  EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtClient> client,
+    xla::GetCApiClient(device_type));
 
   return new ExlaClient(std::move(client));
 }
