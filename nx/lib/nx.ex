@@ -10987,6 +10987,67 @@ defmodule Nx do
     end)
   end
 
+  @doc """
+  Calculate the n-th discrete difference along the given axis.
+
+  The first difference is given by `out[i] = a[i+1] - a[i]` along the given axis,
+  higher differences are calculated by using `diff` recursively.
+
+  ## Options
+
+    * `:n` - the number of times to perform the difference. Defaults to `1`
+    * `:axis` - the axis to perform the difference along. Defaults to `-1`
+
+  ## Examples
+
+      iex> Nx.diff(Nx.tensor([1, 2, 4, 7, 0]))
+      #Nx.Tensor<
+        s64[4]
+        [1, 2, 3, -7]
+      >
+
+      iex> Nx.diff(Nx.tensor([1, 2, 4, 7, 0]), n: 2)
+      #Nx.Tensor<
+        s64[3]
+        [1, 1, -10]
+      >
+
+      iex> Nx.diff(Nx.tensor([[1, 3, 6, 10], [0, 5, 6, 8]]))
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [2, 3, 4],
+          [5, 1, 2]
+        ]
+
+      iex> Nx.diff(Nx.tensor([[1, 3, 6, 10], [0, 5, 6, 8]]), axis: 0)
+      #Nx.Tensor<
+        s64[1][4]
+        [
+          [-1, 2, 0, -2]
+        ]
+  """
+  @doc type: :cumulative
+  def diff(tensor, opts \\ []) do
+    opts = keyword!(opts, n: 1, axis: -1)
+    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
+    n = opts[:n]
+    axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
+
+    if rank(tensor) == 0 do
+      raise ArgumentError, "Cannot compute diff of a scalar"
+    end
+
+    axis_size = Nx.axis_size(tensor, axis)
+
+    Enum.reduce(0..(n - 1), tensor, fn x, acc ->
+      subtract(
+        take(acc, add(1, iota({axis_size - x - 1})), axis: axis),
+        take(acc, iota({axis_size - x - 1}), axis: axis)
+      )
+    end)
+  end
+
   # Scans the given tensor using an associative binary operator.
   #
   # The scanning function must be associative and perform an element-wise
