@@ -11019,6 +11019,7 @@ defmodule Nx do
           [2, 3, 4],
           [5, 1, 2]
         ]
+      >
 
       iex> Nx.diff(Nx.tensor([[1, 3, 6, 10], [0, 5, 6, 8]]), axis: 0)
       #Nx.Tensor<
@@ -11026,6 +11027,7 @@ defmodule Nx do
         [
           [-1, 2, 0, -2]
         ]
+      >
   """
   @doc type: :cumulative
   def diff(tensor, opts \\ []) do
