@@ -653,6 +653,9 @@ defmodule Nx.ServingTest do
 
       batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
 
+      # Make sure stray messages do not crash processing
+      send(self(), {:DOWN, make_ref(), :process, self(), :normal})
+
       assert Nx.Serving.batched_run({:distributed, config.test}, batch, preprocessing) ==
                Nx.tensor([2, 4])
 

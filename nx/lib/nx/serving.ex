@@ -726,10 +726,10 @@ defmodule Nx.Serving do
           {:DOWN, ^monitor_ref, _, _, {^ref, result}} ->
             result
 
-          {:DOWN, _, _, _, :noproc} ->
+          {:DOWN, ^monitor_ref, _, _, :noproc} ->
             distributed_batched_run_with_retries!(name, input, retries - 1)
 
-          {:DOWN, _, _, _, reason} ->
+          {:DOWN, ^monitor_ref, _, _, reason} ->
             exit(
               {reason, {__MODULE__, :distributed_batched_run, [name, input, [retries: retries]]}}
             )
