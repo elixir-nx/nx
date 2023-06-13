@@ -3034,6 +3034,16 @@ defmodule NxTest do
                    end
     end
 
+    test "split is a float out of bounds" do
+      tensor = Nx.iota({10, 2}, names: [:x, :y])
+
+      assert_raise RuntimeError,
+                   "split must be a float number between 0.0 and 1.0.",
+                   fn ->
+                     Nx.split(tensor, 1.0)
+                   end
+    end
+
     test "split is greater than tensor length" do
       tensor = Nx.iota({10, 2}, names: [:x, :y])
 
@@ -3062,6 +3072,14 @@ defmodule NxTest do
                    fn ->
                      Nx.split(tensor, 2, axis: :z)
                    end
+    end
+
+    test "split into 50% for training and 50% for testing with floats on columns" do
+      tensor = Nx.iota({4, 4}, names: [:rows, :columns])
+      {train, test} = Nx.split(tensor, 0.5, axis: :columns)
+
+      assert {4, 2} == Nx.shape(train)
+      assert {4, 2} == Nx.shape(test)
     end
 
     test "split into 70% for training and 30% for testing along a named :axis" do
