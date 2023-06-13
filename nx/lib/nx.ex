@@ -11040,14 +11040,22 @@ defmodule Nx do
       raise ArgumentError, "Cannot compute diff of a scalar"
     end
 
+    if n < 0 do
+      raise ArgumentError, "order must be non-negative but got: #{inspect(n)}"
+    end
+
     axis_size = Nx.axis_size(tensor, axis)
 
-    Enum.reduce(0..(n - 1), tensor, fn x, acc ->
-      subtract(
-        take(acc, add(1, iota({axis_size - x - 1})), axis: axis),
-        take(acc, iota({axis_size - x - 1}), axis: axis)
-      )
-    end)
+    if n == 0 do
+      tensor
+    else
+      Enum.reduce(0..(n - 1), tensor, fn x, acc ->
+        subtract(
+          take(acc, add(1, iota({axis_size - x - 1})), axis: axis),
+          take(acc, iota({axis_size - x - 1}), axis: axis)
+        )
+      end)
+    end
   end
 
   # Scans the given tensor using an associative binary operator.
