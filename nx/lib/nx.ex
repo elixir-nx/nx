@@ -11028,6 +11028,15 @@ defmodule Nx do
           [-1, 2, 0, -2]
         ]
       >
+
+      iex> Nx.diff(Nx.tensor([1, 2, 4, 7, 0]), n: 0)
+      #Nx.Tensor<
+        s64[5]
+        [1, 2, 4, 7, 0]
+      >
+
+      iex> Nx.diff(Nx.tensor([1, 2, 4, 7, 0]), n: -1)
+      ** (ArgumentError) order must be non-negative but got: -1
   """
   @doc type: :cumulative
   def diff(tensor, opts \\ []) do
