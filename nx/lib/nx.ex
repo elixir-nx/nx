@@ -11205,16 +11205,12 @@ defmodule Nx do
 
     axis_size = Nx.axis_size(tensor, axis)
 
-    if n == 0 do
-      tensor
-    else
-      Enum.reduce(0..(n - 1), tensor, fn x, acc ->
-        subtract(
-          slice_along_axis(acc, 1, axis_size - x - 1, axis: axis),
-          slice_along_axis(acc, 0, axis_size - x - 1, axis: axis)
-        )
-      end)
-    end
+    Enum.reduce(0..(n - 1)//1, tensor, fn x, acc ->
+      subtract(
+        slice_along_axis(acc, 1, axis_size - x - 1, axis: axis),
+        slice_along_axis(acc, 0, axis_size - x - 1, axis: axis)
+      )
+    end)
   end
 
   # Scans the given tensor using an associative binary operator.
