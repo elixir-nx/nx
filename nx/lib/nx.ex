@@ -3268,11 +3268,15 @@ defmodule Nx do
   @doc ~S"""
   Split a tensor into train and test subsets.
 
-  `split` split must be either an integer greater than zero and less than the length of the tensor or a float number between `0.0` and `1.0`.
+  `split` must be defined so that there are no empty result tensors.
+  This means that `split` must be:
+
+    * an integer such that `0 < split` and `split < axis_size`
+    * a float such that `0.0 < split` and `ceil(axis_size * split) < axis_size`
 
   ## Options
 
-    * `:axis` - The axis along which to take the values from. Defaults to `0`.
+    * `:axis` - The axis along which to split the tensor. Defaults to `0`.
 
   ## Examples
 
