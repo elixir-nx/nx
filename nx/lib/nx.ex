@@ -3280,79 +3280,81 @@ defmodule Nx do
 
   ## Examples
 
-    All examples will operate on the same tensor so that it's easier to compare different configurations.
+  All examples will operate on the same tensor so that it's easier to compare different configurations.
 
-    iex> t = Nx.tensor([[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11]])
-    iex> {left, right} = Nx.split(t, 2, axis: 0)
-    iex> left
-    #Nx.Tensor<
-      s64[2][4]
-      [
-        [0, 1, 2, 3],
-        [4, 5, 6, 7]
-      ]
-    >
-    iex> right
-    #Nx.Tensor<
-      s64[1][4]
-      [
-        [8, 9, 10, 11]
-      ]
-    >
-    iex> {left, right} = Nx.split(t, 2, axis: 1)
-    iex> left
-    #Nx.Tensor<
-      s64[3][2]
-      [
-        [0, 1],
-        [4, 5],
-        [8, 9]
-      ]
-    >
-    iex> right
-    #Nx.Tensor<
-      s64[3][2]
-      [
-        [2, 3],
-        [6, 7],
-        [10, 11]
-      ]
-    >
-    iex> {left, right} = Nx.split(t, 0.5, axis: 0)
-    iex> left
-    #Nx.Tensor<
-      s64[2][4]
-      [
-        [0, 1, 2, 3],
-        [4, 5, 6, 7]
-      ]
-    >
-    iex> right
-    #Nx.Tensor<
-      s64[1][4]
-      [
-        [8, 9, 10, 11]
-      ]
-    >
-    iex> {left, right} = Nx.split(t, 0.75, axis: 1)
-    iex> left
-    #Nx.Tensor<
-      s64[3][3]
-      [
-        [0, 1, 2],
-        [4, 5, 6],
-        [8, 9, 10]
-      ]
-    >
-    iex> right
-    #Nx.Tensor<
-      s64[3][1]
-      [
-        [3],
-        [7],
-        [11]
-      ]
-    >
+      iex> t = Nx.tensor([[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11]])
+      iex> {left, right} = Nx.split(t, 2, axis: 0)
+      iex> left
+      #Nx.Tensor<
+        s64[2][4]
+        [
+          [0, 1, 2, 3],
+          [4, 5, 6, 7]
+        ]
+      >
+      iex> right
+      #Nx.Tensor<
+        s64[1][4]
+        [
+          [8, 9, 10, 11]
+        ]
+      >
+      iex> {left, right} = Nx.split(t, 2, axis: 1)
+      iex> left
+      #Nx.Tensor<
+        s64[3][2]
+        [
+          [0, 1],
+          [4, 5],
+          [8, 9]
+        ]
+      >
+      iex> right
+      #Nx.Tensor<
+        s64[3][2]
+        [
+          [2, 3],
+          [6, 7],
+          [10, 11]
+        ]
+      >
+
+      iex> t = Nx.tensor([[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11]])
+      iex> {left, right} = Nx.split(t, 0.5, axis: 0)
+      iex> left
+      #Nx.Tensor<
+        s64[2][4]
+        [
+          [0, 1, 2, 3],
+          [4, 5, 6, 7]
+        ]
+      >
+      iex> right
+      #Nx.Tensor<
+        s64[1][4]
+        [
+          [8, 9, 10, 11]
+        ]
+      >
+      iex> {left, right} = Nx.split(t, 0.75, axis: 1)
+      iex> left
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [0, 1, 2],
+          [4, 5, 6],
+          [8, 9, 10]
+        ]
+      >
+      iex> right
+      #Nx.Tensor<
+        s64[3][1]
+        [
+          [3],
+          [7],
+          [11]
+        ]
+      >
   """
   @doc type: :indexed
   def split(tensor, split, opts \\ [])
