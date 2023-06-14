@@ -3374,16 +3374,13 @@ defmodule Nx do
   @doc type: :indexed
   def split(tensor, split, opts \\ [])
 
-  def split(tensor, split, opts) when is_number(split) do
+  def split(tensor, split, opts) do
     tensor = to_tensor(tensor)
     opts = keyword!(opts, axis: 0)
     axis = Keyword.fetch!(opts, :axis)
 
     axis = Nx.Shape.normalize_axis(tensor.shape, axis, tensor.names)
     axis_size = axis_size(tensor, axis)
-
-    # negative index `-n` is the the same as `axis_size - n`
-    split = if is_integer(split) and split < 0, do: axis_size + split, else: split
 
     # only used in case the split is a float
     float_split_index = Kernel.ceil(split * axis_size)
@@ -3392,6 +3389,9 @@ defmodule Nx do
       cond do
         is_integer(split) and split > 0 and split < axis_size ->
           {split, axis_size - split}
+
+        is_integer(split) and split < 0 and split > -axis_size ->
+          {axis_size + split, Kernel.abs(split)}
 
         is_integer(split) ->
           raise ArgumentError,
