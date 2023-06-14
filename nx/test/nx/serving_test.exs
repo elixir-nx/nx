@@ -53,12 +53,8 @@ defmodule Nx.ServingTest do
       assert Nx.Serving.run(serving, batch) == Nx.tensor([[2, 4, 6]])
     end
 
-    test "with container" do
-      serving =
-        Nx.Serving.new(fn opts ->
-          Nx.Defn.jit(fn {a, b} -> {Nx.multiply(a, 2), Nx.divide(b, 2)} end, opts)
-        end)
-
+    test "with container (and jit)" do
+      serving = Nx.Serving.jit(fn {a, b} -> {Nx.multiply(a, 2), Nx.divide(b, 2)} end)
       batch = Nx.Batch.concatenate([{Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])}])
       assert Nx.Serving.run(serving, batch) == {Nx.tensor([2, 4, 6]), Nx.tensor([2, 2.5, 3])}
     end

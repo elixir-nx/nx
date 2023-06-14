@@ -56,10 +56,12 @@ defmodule Nx.Serving do
 
   When defining a `Nx.Serving`, we can also customize how the data is
   batched by using the `client_preprocessing` as well as the result by
-  using `client_postprocessing` hooks. Let's give it another try:
+  using `client_postprocessing` hooks. Let's give it another try,
+  this time using `jit/2` to create the serving, which automatically
+  wraps the given function in `Nx.Defn.jit/2` for us:
 
       iex> serving = (
-      ...>   Nx.Serving.new(fn opts -> Nx.Defn.jit(&MyDefn.print_and_multiply/1, opts) end)
+      ...>   Nx.Serving.jit(&MyDefn.print_and_multiply/1)
       ...>   |> Nx.Serving.client_preprocessing(fn input -> {Nx.Batch.stack(input), :client_info} end)
       ...>   |> Nx.Serving.client_postprocessing(&{&1, &2, &3})
       ...> )
@@ -111,7 +113,7 @@ defmodule Nx.Serving do
 
       children = [
         {Nx.Serving,
-         serving: Nx.Serving.new(fn opts ->  Nx.Defn.jit(&MyDefn.print_and_multiply/1, opts) end),
+         serving: Nx.Serving.jit(&MyDefn.print_and_multiply/1),
          name: MyServing,
          batch_size: 10,
          batch_timeout: 100}
@@ -368,6 +370,18 @@ defmodule Nx.Serving do
 
   def new(module, arg) when is_atom(module) do
     new(module, arg, [])
+  end
+
+  @doc """
+  Creates a new serving by jitting the given `fun` with `defn_options`.
+
+  This is equivalent to:
+
+      new(fn opts -> Nx.Defn.jit(fun, opts) end, defn_options)
+
+  """
+  def jit(fun, defn_options \\ []) do
+    new(fn opts -> Nx.Defn.jit(fun, opts) end, defn_options)
   end
 
   @doc """
