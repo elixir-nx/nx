@@ -3027,8 +3027,8 @@ defmodule NxTest do
     test "split is less than zero" do
       tensor = Nx.iota({10, 2}, names: [:x, :y])
 
-      assert_raise RuntimeError,
-                   "split must be an integer greater than zero and less than the length of the tensor.",
+      assert_raise ArgumentError,
+                   "split must be an integer greater than zero and less than the length of the given axis",
                    fn ->
                      Nx.split(tensor, -1)
                    end
@@ -3037,8 +3037,8 @@ defmodule NxTest do
     test "split is a float out of bounds" do
       tensor = Nx.iota({10, 2}, names: [:x, :y])
 
-      assert_raise RuntimeError,
-                   "split must be a float number between 0.0 and 1.0.",
+      assert_raise ArgumentError,
+                   "split must be a float such that 0 < split and ceil(split * axis_size) < 1",
                    fn ->
                      Nx.split(tensor, 1.0)
                    end
@@ -3048,7 +3048,7 @@ defmodule NxTest do
       tensor = Nx.iota({10, 2}, names: [:x, :y])
 
       assert_raise ArgumentError,
-                   "length at axis 1 must be less than axis size of 2, got: 3",
+                   "split must be an integer greater than zero and less than the length of the given axis",
                    fn ->
                      Nx.split(tensor, 3, axis: 1)
                    end
@@ -3057,18 +3057,18 @@ defmodule NxTest do
     test "axis is out of tensor bounds" do
       tensor = Nx.iota({10, 2}, names: [:x, :y])
 
-      assert_raise RuntimeError,
-                   ":axis is out of tensor bounds.",
+      assert_raise ArgumentError,
+                   "given axis (2) invalid for shape with rank 2",
                    fn ->
                      Nx.split(tensor, 2, axis: 2)
                    end
     end
 
-    test "named axis is out of tensor bounds" do
+    test "named axis is invalid" do
       tensor = Nx.iota({10, 2}, names: [:x, :y])
 
-      assert_raise RuntimeError,
-                   ":axis is out of tensor bounds.",
+      assert_raise ArgumentError,
+                   "name :z not found in tensor with names [:x, :y]",
                    fn ->
                      Nx.split(tensor, 2, axis: :z)
                    end

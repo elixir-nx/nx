@@ -3276,111 +3276,119 @@ defmodule Nx do
 
   ## Examples
 
-    Split a tensor into two separate tensors.
+    All examples will operate on the same tensor so that it's easier to compare different configurations.
 
-    iex> {train, test} = Nx.split(Nx.tensor([[3, 6, 5], [26, 75, 3], [23, 4, 1]]), 2, axis: 0)
-    iex> train
+    iex> t = Nx.tensor([[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11]])
+    iex> {left, right} = Nx.split(t, 2, axis: 0)
+    iex> left
     #Nx.Tensor<
-      s64[2][3]
+      s64[2][4]
       [
-        [3, 6, 5],
-        [26, 75, 3]
+        [0, 1, 2, 3],
+        [4, 5, 6, 7]
       ]
     >
-    iex> test
+    iex> right
     #Nx.Tensor<
-      s64[1][3]
+      s64[1][4]
       [
-        [23, 4, 1]
+        [8, 9, 10, 11]
       ]
     >
-
-    iex> {train, test} = Nx.split(Nx.tensor([[3, 6, 5], [26, 75, 3], [23, 4, 1]]), 2, axis: 1)
-    iex> train
+    iex> {left, right} = Nx.split(t, 2, axis: 1)
+    iex> left
     #Nx.Tensor<
       s64[3][2]
       [
-        [3, 6],
-        [26, 75],
-        [23, 4]
+        [0, 1],
+        [4, 5],
+        [8, 9]
       ]
     >
-    iex> test
+    iex> right
+    #Nx.Tensor<
+      s64[3][2]
+      [
+        [2, 3],
+        [6, 7],
+        [10, 11]
+      ]
+    >
+    iex> {left, right} = Nx.split(t, 0.5, axis: 0)
+    iex> left
+    #Nx.Tensor<
+      s64[2][4]
+      [
+        [0, 1, 2, 3],
+        [4, 5, 6, 7]
+      ]
+    >
+    iex> right
+    #Nx.Tensor<
+      s64[1][4]
+      [
+        [8, 9, 10, 11]
+      ]
+    >
+    iex> {left, right} = Nx.split(t, 0.75, axis: 1)
+    iex> left
+    #Nx.Tensor<
+      s64[3][3]
+      [
+        [0, 1, 2],
+        [4, 5, 6],
+        [8, 9, 10]
+      ]
+    >
+    iex> right
     #Nx.Tensor<
       s64[3][1]
       [
-        [5],
         [3],
-        [1]
-      ]
-    >
-
-    iex> {train, test} = Nx.split(Nx.tensor([[3, 6, 5, 9], [26, 75, 3, 20], [23, 4, 1, 56], [40, 6, 78, 94]]), 0.5, axis: 0)
-    iex> train
-    #Nx.Tensor<
-      s64[2][4]
-      [
-        [3, 6, 5, 9],
-        [26, 75, 3, 20]
-      ]
-    >
-    iex> test
-    #Nx.Tensor<
-      s64[2][4]
-      [
-        [23, 4, 1, 56],
-        [40, 6, 78, 94]
+        [7],
+        [11]
       ]
     >
   """
   @doc type: :indexed
   def split(tensor, split, opts \\ [])
 
-  def split(%T{shape: shape} = tensor, split, opts) when is_integer(split) do
+  def split(tensor, split, opts) do
+    tensor = to_tensor(tensor)
     opts = keyword!(opts, axis: 0)
     axis = Keyword.fetch!(opts, :axis)
 
-    if split > 0 do
-      axis = find_axis(tensor, axis)
-      values = elem(shape, axis)
-      size = values - split
+    axis = Nx.Shape.normalize_axis(tensor.shape, axis, tensor.names)
+    axis_size = axis_size(tensor, axis)
 
-      {
-        slice_along_axis(tensor, 0, split, axis: axis),
-        slice_along_axis(tensor, split, size, axis: axis)
-      }
-    else
-      raise "split must be an integer greater than zero and less than the length of the tensor."
-    end
-  end
+    # only used in case the split is a float
+    float_split_index = Kernel.ceil(split * axis_size)
 
-  def split(%T{shape: shape} = tensor, split, opts) when is_float(split) do
-    opts = keyword!(opts, axis: 0)
-    axis = Keyword.fetch!(opts, :axis)
+    {split_index, remainder_length} =
+      cond do
+        is_integer(split) and split > 0 and split < axis_size ->
+          {split, axis_size - split}
 
-    if split > 0.0 and split < 1.0 do
-      axis = find_axis(tensor, axis)
+        is_integer(split) ->
+          raise ArgumentError,
+                "split must be an integer greater than zero and less than the length of the given axis"
 
-      values = elem(shape, axis)
+        is_float(split) and float_split_index > 0 and float_split_index < axis_size ->
+          {float_split_index, axis_size - float_split_index}
 
-      split_size = Kernel.ceil(split * values)
+        is_float(split) ->
+          raise ArgumentError,
+                "split must be a float such that 0 < split and ceil(split * axis_size) < 1"
 
-      split_size =
-        cond do
-          split_size < 1 -> 1
-          split_size >= values -> 1
-          true -> split_size
-        end
+        true ->
+          raise ArgumentError,
+                "invalid split received, expected a float or an integer, got: #{inspect(split)}"
+      end
 
-      remaining_size = values - split_size
-
-      {
-        slice_along_axis(tensor, 0, split_size, axis: axis),
-        slice_along_axis(tensor, split_size, remaining_size, axis: axis)
-      }
-    else
-      raise "split must be a float number between 0.0 and 1.0."
-    end
+    {
+      slice_along_axis(tensor, 0, split_index, axis: axis),
+      slice_along_axis(tensor, split_index, remainder_length, axis: axis)
+    }
   end
 
   @doc """
@@ -16177,23 +16185,6 @@ defmodule Nx do
 
         t
       end)
-    end
-  end
-
-  defp find_axis(tensor, axis) do
-    axis_values = axes(tensor)
-    axis_names = names(tensor)
-
-    cond do
-      is_integer(axis) and axis in axis_values ->
-        axis
-
-      is_atom(axis) and axis in axis_names ->
-        dimensions = Enum.zip(axis_names, axis_values)
-        dimensions[axis]
-
-      true ->
-        raise ":axis is out of tensor bounds."
     end
   end
 end
