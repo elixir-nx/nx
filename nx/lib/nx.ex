@@ -10990,7 +10990,7 @@ defmodule Nx do
   @doc """
   Calculate the n-th discrete difference along the given axis.
 
-  The first difference is given by `out[i] = a[i+1] - a[i]` along the given axis,
+  The first difference is given by $out_i = a_{i+1} - a_i$ along the given axis,
   higher differences are calculated by using `diff` recursively.
 
   ## Options
