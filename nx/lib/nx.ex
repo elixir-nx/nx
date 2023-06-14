@@ -3355,6 +3355,21 @@ defmodule Nx do
           [11]
         ]
       >
+
+  Negative indices are also accepted, in the same fashion as `Enum.split/2`.
+
+      iex> t = Nx.tensor([1, 2, 3, 4])
+      iex> {left, right} = Nx.split(t, -1)
+      iex> left
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+      iex> right
+      #Nx.Tensor<
+        s64[1]
+        [4]
+      >
   """
   @doc type: :indexed
   def split(tensor, split, opts \\ [])
@@ -3374,6 +3389,9 @@ defmodule Nx do
       cond do
         is_integer(split) and split > 0 and split < axis_size ->
           {split, axis_size - split}
+
+        is_integer(split) and split < 0 and split > -axis_size ->
+          {axis_size + split, Kernel.abs(split)}
 
         is_integer(split) ->
           raise ArgumentError,
