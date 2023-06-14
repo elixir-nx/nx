@@ -3355,17 +3355,35 @@ defmodule Nx do
           [11]
         ]
       >
+
+  Negative indices are also accepted, in the same fashion as `Enum.split/2`.
+
+      iex> t = Nx.tensor([1, 2, 3, 4])
+      iex> {left, right} = Nx.split(t, -1)
+      iex> left
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+      iex> right
+      #Nx.Tensor<
+        s64[1]
+        [4]
+      >
   """
   @doc type: :indexed
   def split(tensor, split, opts \\ [])
 
-  def split(tensor, split, opts) do
+  def split(tensor, split, opts) when is_number(split) do
     tensor = to_tensor(tensor)
     opts = keyword!(opts, axis: 0)
     axis = Keyword.fetch!(opts, :axis)
 
     axis = Nx.Shape.normalize_axis(tensor.shape, axis, tensor.names)
     axis_size = axis_size(tensor, axis)
+
+    # negative index `-n` is the the same as `axis_size - n`
+    split = if is_integer(split) and split < 0, do: axis_size + split, else: split
 
     # only used in case the split is a float
     float_split_index = Kernel.ceil(split * axis_size)

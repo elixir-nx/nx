@@ -3025,13 +3025,9 @@ defmodule NxTest do
 
   describe "split/2" do
     test "split is less than zero" do
-      tensor = Nx.iota({10, 2}, names: [:x, :y])
+      tensor = Nx.iota({10, 3}, names: [:x, :y])
 
-      assert_raise ArgumentError,
-                   "split must be an integer greater than zero and less than the length of the given axis",
-                   fn ->
-                     Nx.split(tensor, -1)
-                   end
+      assert Nx.split(tensor, -1, axis: 1) == {tensor[[.., 0..1]], tensor[[.., 2..2]]}
     end
 
     test "split is a float out of bounds" do
