@@ -3265,6 +3265,138 @@ defmodule Nx do
     end)
   end
 
+  @doc ~S"""
+  Split a tensor into train and test subsets.
+
+  `split` must be defined so that there are no empty result tensors.
+  This means that `split` must be:
+
+    * an integer such that `0 < split` and `split < axis_size`
+    * a float such that `0.0 < split` and `ceil(axis_size * split) < axis_size`
+
+  ## Options
+
+    * `:axis` - The axis along which to split the tensor. Defaults to `0`.
+
+  ## Examples
+
+  All examples will operate on the same tensor so that it's easier to compare different configurations.
+
+      iex> t = Nx.tensor([[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11]])
+      iex> {left, right} = Nx.split(t, 2, axis: 0)
+      iex> left
+      #Nx.Tensor<
+        s64[2][4]
+        [
+          [0, 1, 2, 3],
+          [4, 5, 6, 7]
+        ]
+      >
+      iex> right
+      #Nx.Tensor<
+        s64[1][4]
+        [
+          [8, 9, 10, 11]
+        ]
+      >
+      iex> {left, right} = Nx.split(t, 2, axis: 1)
+      iex> left
+      #Nx.Tensor<
+        s64[3][2]
+        [
+          [0, 1],
+          [4, 5],
+          [8, 9]
+        ]
+      >
+      iex> right
+      #Nx.Tensor<
+        s64[3][2]
+        [
+          [2, 3],
+          [6, 7],
+          [10, 11]
+        ]
+      >
+
+      iex> t = Nx.tensor([[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11]])
+      iex> {left, right} = Nx.split(t, 0.5, axis: 0)
+      iex> left
+      #Nx.Tensor<
+        s64[2][4]
+        [
+          [0, 1, 2, 3],
+          [4, 5, 6, 7]
+        ]
+      >
+      iex> right
+      #Nx.Tensor<
+        s64[1][4]
+        [
+          [8, 9, 10, 11]
+        ]
+      >
+      iex> {left, right} = Nx.split(t, 0.75, axis: 1)
+      iex> left
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [0, 1, 2],
+          [4, 5, 6],
+          [8, 9, 10]
+        ]
+      >
+      iex> right
+      #Nx.Tensor<
+        s64[3][1]
+        [
+          [3],
+          [7],
+          [11]
+        ]
+      >
+  """
+  @doc type: :indexed
+  def split(tensor, split, opts \\ [])
+
+  def split(tensor, split, opts) do
+    tensor = to_tensor(tensor)
+    opts = keyword!(opts, axis: 0)
+    axis = Keyword.fetch!(opts, :axis)
+
+    axis = Nx.Shape.normalize_axis(tensor.shape, axis, tensor.names)
+    axis_size = axis_size(tensor, axis)
+
+    # only used in case the split is a float
+    float_split_index = Kernel.ceil(split * axis_size)
+
+    {split_index, remainder_length} =
+      cond do
+        is_integer(split) and split > 0 and split < axis_size ->
+          {split, axis_size - split}
+
+        is_integer(split) ->
+          raise ArgumentError,
+                "split must be an integer greater than zero and less than the length of the given axis"
+
+        is_float(split) and float_split_index > 0 and float_split_index < axis_size ->
+          {float_split_index, axis_size - float_split_index}
+
+        is_float(split) ->
+          raise ArgumentError,
+                "split must be a float such that 0 < split and ceil(split * axis_size) < 1"
+
+        true ->
+          raise ArgumentError,
+                "invalid split received, expected a float or an integer, got: #{inspect(split)}"
+      end
+
+    {
+      slice_along_axis(tensor, 0, split_index, axis: axis),
+      slice_along_axis(tensor, split_index, remainder_length, axis: axis)
+    }
+  end
+
   @doc """
   Broadcasts `tensor` to the given `broadcast_shape`.
 
