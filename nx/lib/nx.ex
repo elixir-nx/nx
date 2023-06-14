@@ -10995,7 +10995,7 @@ defmodule Nx do
 
   ## Options
 
-    * `:n` - the number of times to perform the difference. Defaults to `1`
+    * `:order` - the number of times to perform the difference. Defaults to `1`
     * `:axis` - the axis to perform the difference along. Defaults to `-1`
 
   ## Examples
@@ -11006,7 +11006,7 @@ defmodule Nx do
         [1, 2, 3, -7]
       >
 
-      iex> Nx.diff(Nx.tensor([1, 2, 4, 7, 0]), n: 2)
+      iex> Nx.diff(Nx.tensor([1, 2, 4, 7, 0]), order: 2)
       #Nx.Tensor<
         s64[3]
         [1, 1, -10]
@@ -11029,20 +11029,20 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.diff(Nx.tensor([1, 2, 4, 7, 0]), n: 0)
+      iex> Nx.diff(Nx.tensor([1, 2, 4, 7, 0]), order: 0)
       #Nx.Tensor<
         s64[5]
         [1, 2, 4, 7, 0]
       >
 
-      iex> Nx.diff(Nx.tensor([1, 2, 4, 7, 0]), n: -1)
+      iex> Nx.diff(Nx.tensor([1, 2, 4, 7, 0]), order: -1)
       ** (ArgumentError) order must be non-negative but got: -1
   """
-  @doc type: :cumulative
+  @doc type: :ndim
   def diff(tensor, opts \\ []) do
-    opts = keyword!(opts, n: 1, axis: -1)
+    opts = keyword!(opts, order: 1, axis: -1)
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
-    n = opts[:n]
+    n = opts[:order]
     axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
 
     if rank(tensor) == 0 do
