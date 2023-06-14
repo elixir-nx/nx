@@ -9378,6 +9378,112 @@ defmodule Nx do
   end
 
   @doc """
+  Integrate `y` along the given axis using the composite trapezoidal rule.
+  The integration happens in sequence along elements of `x`.
+
+  ## Parameters
+
+      * `axis` - Axis along which to integrate. Defaults to `-1`.
+
+  ## Examples
+
+      iex> Nx.trapz(Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]))
+      #Nx.Tensor<
+        f32
+        4.0
+      >
+
+      iex> Nx.trapz(Nx.tensor([[0, 1, 2], [3, 4, 5]]), Nx.tensor([[1, 2, 3], [1, 2, 3]]))
+      #Nx.Tensor<
+        f32[2]
+        [2.0, 8.0]
+      >
+
+      iex> Nx.trapz(Nx.tensor([[0, 1, 2], [3, 4, 5]]), Nx.tensor([[1, 1, 1], [2, 2, 2]]), axis: 0)
+      #Nx.Tensor<
+        f32[3]
+        [1.5, 2.5, 3.5]
+      >
+  """
+  @doc type: :aggregation, from_backend: false
+  def trapz(y, x, opts \\ []) do
+    opts = keyword!(opts, axis: -1)
+    %T{shape: y_shape, names: y_names} = y = to_tensor(y)
+    %T{shape: x_shape} = x = to_tensor(x)
+
+    axis = Nx.Shape.normalize_axis(y_shape, opts[:axis], y_names)
+
+    d =
+      if rank(x) == 0 do
+        x_diff = diff(x)
+
+        shape =
+          List.duplicate(1, rank(y))
+          |> List.replace_at(axis, elem(x_shape, 0))
+          |> List.to_tuple()
+
+        reshape(x_diff, shape)
+      else
+        diff(x, axis: axis)
+      end
+
+    y_axis_size = elem(y_shape, axis)
+    scaler = divide(d, 2.0)
+
+    slice_along_axis(y, 0, y_axis_size - 1, axis: axis)
+    |> add(slice_along_axis(y, 1, y_axis_size - 1, axis: axis))
+    |> multiply(scaler)
+    |> sum(axes: [axis])
+  end
+
+  @doc """
+  Integrate `y` along the given axis using the composite trapezoidal rule.
+
+  This is a simplified version of `trapz/3` that assumes `x` is
+  a uniform tensor along `axis` with step size equal to `dx`.
+
+  ## Parameters
+
+      * `axis` - Axis along which to integrate. Defaults to `-1`.
+      * `dx` - Step size along `axis`. Defaults to `1`.
+
+  ## Examples
+
+      iex> Nx.trapz_uniform(Nx.tensor([1, 2, 3]))
+      #Nx.Tensor<
+        f32
+        4.0
+      >
+
+      iex> Nx.trapz_uniform(Nx.tensor([1, 2, 3]), dx: 2)
+      #Nx.Tensor<
+        f32
+        8.0
+      >
+
+      iex> Nx.trapz_uniform(Nx.tensor([[0, 1, 2], [3, 4, 5]]), dx: 2, axis: 0)
+      #Nx.Tensor<
+        f32[3]
+        [3.0, 5.0, 7.0]
+      >
+  """
+  @doc type: :aggregation, from_backend: false
+  def trapz_uniform(y, opts \\ []) do
+    opts = keyword!(opts, axis: -1, dx: 1.0)
+    %T{shape: y_shape, names: y_names} = y = to_tensor(y)
+
+    axis = Nx.Shape.normalize_axis(y_shape, opts[:axis], y_names)
+
+    y_axis_size = elem(y_shape, axis)
+    scaler = divide(opts[:dx], 2.0)
+
+    slice_along_axis(y, 0, y_axis_size - 1, axis: axis)
+    |> add(slice_along_axis(y, 1, y_axis_size - 1, axis: axis))
+    |> multiply(scaler)
+    |> sum(axes: [axis])
+  end
+
+  @doc """
   Returns the product for the tensor.
 
   If the `:axes` option is given, it aggregates over
