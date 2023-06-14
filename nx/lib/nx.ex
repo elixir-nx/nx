@@ -11046,7 +11046,7 @@ defmodule Nx do
     axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
 
     if rank(tensor) == 0 do
-      raise ArgumentError, "Cannot compute diff of a scalar"
+      raise ArgumentError, "cannot compute diff of a scalar"
     end
 
     if n < 0 do
