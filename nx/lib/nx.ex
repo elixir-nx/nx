@@ -11060,8 +11060,8 @@ defmodule Nx do
     else
       Enum.reduce(0..(n - 1), tensor, fn x, acc ->
         subtract(
-          take(acc, add(1, iota({axis_size - x - 1})), axis: axis),
-          take(acc, iota({axis_size - x - 1}), axis: axis)
+          slice_along_axis(acc, 1, axis_size - x - 1, axis: axis),
+          slice_along_axis(acc, 0, axis_size - x - 1, axis: axis)
         )
       end)
     end
