@@ -57,7 +57,7 @@ defmodule Nx.Serving do
   When defining a `Nx.Serving`, we can also customize how the data is
   batched by using the `client_preprocessing` as well as the result by
   using `client_postprocessing` hooks. Let's give it another try,
-  this time we will use `jit/2` to create the serving, which automatically
+  this time using `jit/2` to create the serving, which automatically
   wraps the given function in `Nx.Defn.jit/2` for us:
 
       iex> serving = (
