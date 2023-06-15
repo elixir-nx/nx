@@ -9476,10 +9476,10 @@ defmodule Nx do
 
     y_axis_size = elem(y_shape, axis)
     scaler = divide(opts[:dx], 2.0)
+    y = multiply(y, scaler)
 
     slice_along_axis(y, 0, y_axis_size - 1, axis: axis)
     |> add(slice_along_axis(y, 1, y_axis_size - 1, axis: axis))
-    |> multiply(scaler)
     |> sum(axes: [axis])
   end
 
