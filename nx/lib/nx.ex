@@ -9413,6 +9413,25 @@ defmodule Nx do
 
     axis = Nx.Shape.normalize_axis(y_shape, opts[:axis], y_names)
 
+    if rank(x) == 1 and Nx.size(x) != elem(y_shape, axis) do
+      raise ArgumentError, "x and y must have the same size along the given axis"
+    end
+
+    if rank(x) != 1 and elem(x_shape, axis) != elem(y_shape, axis) do
+      raise ArgumentError, "x and y must have the same size along the given axis"
+    end
+
+    if rank(x) != 1 and rank(x) != rank(y) do
+      raise ArgumentError, "x must be rank 1 or x and y must have the same rank"
+    end
+
+    if rank(x) != 1 and
+         not (valid_broadcast?(Enum.to_list(0..(rank(x) - 1)), x_shape, y_shape) and
+                elem(x_shape, axis) == elem(y_shape, axis)) do
+      raise ArgumentError,
+            "x and y must be broadcast compatible with dimension #{inspect(axis)} of same size"
+    end
+
     d =
       if rank(x) == 1 do
         x_diff = diff(x)
@@ -9435,6 +9454,16 @@ defmodule Nx do
     |> multiply(scaler)
     |> sum(axes: [axis])
   end
+
+  defp valid_broadcast?([head | tail], old_shape, new_shape) do
+    old_dim = elem(old_shape, head)
+    new_dim = elem(new_shape, head)
+
+    (old_dim == 1 or old_dim == new_dim) and
+      valid_broadcast?(tail, old_shape, new_shape)
+  end
+
+  defp valid_broadcast?([], _old_shape, _new_shape), do: true
 
   @doc """
   Integrate `y` along the given axis using the composite trapezoidal rule.
