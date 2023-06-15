@@ -9419,7 +9419,7 @@ defmodule Nx do
 
         shape =
           List.duplicate(1, rank(y))
-          |> List.replace_at(axis, elem(x_shape, 0))
+          |> List.replace_at(axis, elem(x_shape, 0) - 1)
           |> List.to_tuple()
 
         reshape(x_diff, shape)
