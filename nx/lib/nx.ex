@@ -9414,7 +9414,7 @@ defmodule Nx do
     axis = Nx.Shape.normalize_axis(y_shape, opts[:axis], y_names)
 
     d =
-      if rank(x) == 0 do
+      if rank(x) == 1 do
         x_diff = diff(x)
 
         shape =
