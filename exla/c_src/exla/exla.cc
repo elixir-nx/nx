@@ -1,4 +1,5 @@
 #include <map>
+#include <string> 
 
 #include "exla_nif_util.h"
 #include "exla_client.h"
@@ -16,6 +17,16 @@
 #include "xla/client/lib/sorting.h"
 #include "xla/primitive_util.h"
 #include "xla/pjrt/pjrt_api.h"
+#include "xla/translate/hlo_to_mhlo/hlo_to_mlir_hlo.h"
+#include "mlir/IR/MLIRContext.h" 
+#include "xla/mlir_hlo/mhlo/IR/hlo_ops.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"  // from @llvm-project
+#include "llvm/Support/raw_ostream.h"
+
+struct ModuleResource {
+  mlir::MLIRContext context;
+  mlir::OwningOpRef<mlir::ModuleOp> module;
+};
 
 // All of these are created with calls to `new` and subsequently
 // passed to the VM as pointers-to-pointers so we balance it out
@@ -63,6 +74,9 @@ static int open_resources(ErlNifEnv* env) {
     return -1;
   }
   if (!exla::nif::open_resource<xla::XlaComputation>(env, mod, "Computation")) {
+    return -1;
+  }
+  if (!exla::nif::open_resource<struct ModuleResource>(env, mod, "ModuleOp")) {
     return -1;
   }
   if (!exla::nif::open_resource<exla::ExlaExecutable*>(env, mod, "Executable", free_exla_executable)) {
@@ -2275,7 +2289,7 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   exla::ExlaClient** client;
-  xla::XlaComputation* computation;
+  struct ModuleResource * computation;
   std::vector<xla::Shape*> argument_layouts;
   xla::ExecutableBuildOptions build_options;
   int num_replicas;
@@ -2286,7 +2300,7 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
     return exla::nif::error(env, "Unable to get client.");
   }
-  if (!exla::nif::get<xla::XlaComputation>(env, argv[1], computation)) {
+  if (!exla::nif::get<struct ModuleResource>(env, argv[1], computation)) {
     return exla::nif::error(env, "Unable to get computation.");
   }
   if (!exla::nif::get_list<xla::Shape>(env, argv[2], argument_layouts)) {
@@ -2316,7 +2330,7 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaExecutable* executable,
-    (*client)->Compile(*computation, argument_layouts, build_options, compile_portable_executable), env);
+    (*client)->Compile(*(computation->module), argument_layouts, build_options, compile_portable_executable), env);
 
   return exla::nif::ok(env, exla::nif::make<exla::ExlaExecutable*>(env, executable));
 }
@@ -2348,6 +2362,39 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
      (*executable)->Run(env, arguments, device_id), env);
 
   return term;
+}
+
+// MLIR Conversion
+
+ERL_NIF_TERM convert_xla_computation_to_mlir_module(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  xla::XlaComputation* computation;
+
+  if (!exla::nif::get<xla::XlaComputation>(env, argv[0], computation)) {
+    return exla::nif::error(env, "Unable to get computation.");
+  }
+  struct ModuleResource * res =
+    (struct ModuleResource *) enif_alloc_resource(exla::nif::resource_object<struct ModuleResource>::type, sizeof(ModuleResource));
+
+  new (&res->context) mlir::MLIRContext();
+  new (&res->module) mlir::OwningOpRef<mlir::ModuleOp>(mlir::ModuleOp::create(mlir::UnknownLoc::get(&res->context)));
+
+  (res->context).loadDialect<mlir::func::FuncDialect>();
+  (res->context).loadDialect<mlir::mhlo::MhloDialect>();
+
+  xla::Status status = ConvertHloToMlirHlo(*(res->module), &(computation->proto()), true);
+
+  ERL_NIF_TERM term = enif_make_resource(env, res);
+  enif_release_resource(res);
+
+  if (!status.ok()) {
+    return exla::nif::error(env, status.message().data());
+  } else {
+    return exla::nif::ok(env, term);
+  }
 }
 
 // Logging Functions
@@ -2528,7 +2575,9 @@ static ErlNifFunc exla_funcs[] = {
   // Special
   {"optimization_barrier", 1, optimization_barrier},
   // Log Sink
-  {"start_log_sink", 1, start_log_sink}
+  {"start_log_sink", 1, start_log_sink},
+  // MLIR
+  {"convert_xla_computation_to_mlir_module", 1, convert_xla_computation_to_mlir_module}
 };
 
 ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, NULL, NULL);

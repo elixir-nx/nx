@@ -299,4 +299,6 @@ defmodule EXLA.NIF do
   def get_c_api_client(_device_type), do: :erlang.nif_error(:undef)
 
   def load_pjrt_plugin(_device_type, _library_path), do: :erlang.nif_error(:undef)
+
+  def convert_xla_computation_to_mlir_module(_computation), do: :erlang.nif_error(:undef)
 end

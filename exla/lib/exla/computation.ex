@@ -37,6 +37,10 @@ defmodule EXLA.Computation do
     num_replicas = Keyword.get(options, :num_replicas, 1)
     num_partitions = Keyword.get(options, :num_partitions, 1)
 
+    # Convert to MLIR module from XLA computation for compilation
+    {:ok, mlir_ref} = EXLA.NIF.convert_xla_computation_to_mlir_module(computation.ref)
+    computation = %{computation | ref: mlir_ref}
+
     # JAX comments say SPMD can lead to subtle bugs so they only enable
     # when strictly necessary, which is when num_partitions is greater than 1.
     use_spmd = if Keyword.get(options, :use_spmd, true) or num_partitions >= 1, do: 1, else: 0

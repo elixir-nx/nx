@@ -66,7 +66,7 @@ class ExlaClient {
   xla::PjRtClient* client() { return client_.get(); }
 
   // Compiles the given computation with the given compile options
-  xla::StatusOr<ExlaExecutable*> Compile(const xla::XlaComputation&,
+  xla::StatusOr<ExlaExecutable*> Compile(const mlir::ModuleOp& module,
                                          std::vector<xla::Shape*> argument_layouts,
                                          xla::ExecutableBuildOptions& options,
                                          bool compile_portable_executable);

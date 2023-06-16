@@ -6,6 +6,7 @@
 #include "xla/pjrt/gpu/se_gpu_pjrt_client.h"
 #include "xla/pjrt/pjrt_c_api_client.h"
 #include "xla/pjrt/tpu_client.h"
+#include "xla/pjrt/pjrt_compiler.h"
 
 namespace exla {
 
@@ -332,7 +333,7 @@ xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromBinary(ErlNifEnv* env,
   return exla_buffer;
 }
 
-xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& computation,
+xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const mlir::ModuleOp& module,
                                                    std::vector<xla::Shape*> argument_layouts,
                                                    xla::ExecutableBuildOptions& options,
                                                    bool compile_portable_executable) {
@@ -351,7 +352,7 @@ xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& co
   compile_opts.compile_portable_executable = compile_portable_executable;
 
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtLoadedExecutable> executable,
-    client_->Compile(computation, std::move(compile_opts)));
+    client_->Compile(module, std::move(compile_opts)));
   EXLA_ASSIGN_OR_RETURN(absl::optional<std::string> fingerprint,
     client_->ExecutableFingerprint(*executable));
 
