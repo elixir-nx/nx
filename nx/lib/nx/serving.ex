@@ -191,7 +191,7 @@ defmodule Nx.Serving do
   same `Nx` version.
 
   The load balancing between servings is done randomly, however, the number
-  of partitions are considered if the `partitioned: true` option is also given.
+  of partitions are considered if the `partitions: true` option is also given.
   For example, if you have a node with 2 GPUs and another with 4, the latter
   will receive the double of requests compared to the former.
 
