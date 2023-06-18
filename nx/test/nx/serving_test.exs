@@ -371,7 +371,7 @@ defmodule Nx.ServingTest do
     @tag :capture_log
     test "2=>shutdown=>1 (stacked)", config do
       serving_pid =
-        execute_sync_supervised!(config, batch_timeout: 100, batch_size: 2, batch_timeout: 30_000)
+        execute_sync_supervised!(config, batch_timeout: 100, batch_size: 2)
 
       {_pid, ref1} =
         spawn_monitor(fn ->
