@@ -259,7 +259,8 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
 
   // the device assignment is a 2d array which maps coordinates (replica, partition)
   // to a device; or in this case just maps a replica to a device
-  EXLA_ASSIGN_OR_RETURN(xla::DeviceAssignment device_assignment,
+  xla::DeviceAssignment device_assignment;
+  EXLA_ASSIGN_OR_RETURN(device_assignment,
     client_->client()->GetDefaultDeviceAssignment(num_replicas, 1));
 
   if (device_id >= 0 && num_replicas > 1) {
@@ -333,7 +334,7 @@ xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromBinary(ErlNifEnv* env,
   return exla_buffer;
 }
 
-xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const mlir::ModuleOp& module,
+xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& computation,
                                                    std::vector<xla::Shape*> argument_layouts,
                                                    xla::ExecutableBuildOptions& options,
                                                    bool compile_portable_executable) {
@@ -352,7 +353,33 @@ xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const mlir::ModuleOp& module,
   compile_opts.compile_portable_executable = compile_portable_executable;
 
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtLoadedExecutable> executable,
-    client_->Compile(module, std::move(compile_opts)));
+    client_->Compile(computation, std::move(compile_opts)));
+  EXLA_ASSIGN_OR_RETURN(absl::optional<std::string> fingerprint,
+    client_->ExecutableFingerprint(*executable));
+
+  return new ExlaExecutable(std::move(executable), std::move(fingerprint), this);
+}
+
+xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const mlir::OwningOpRef<mlir::ModuleOp>& module,
+                                                   std::vector<xla::Shape*> argument_layouts,
+                                                   xla::ExecutableBuildOptions& options,
+                                                   bool compile_portable_executable) {
+  std::vector<xla::Shape> layouts;
+  layouts.reserve(argument_layouts.size());
+  for (auto shape : argument_layouts) {
+    xla::Shape cpy_shape = xla::ShapeUtil::MakeShape(shape->element_type(), shape->dimensions());
+    xla::LayoutUtil::ClearLayout(&cpy_shape);
+    layouts.push_back(cpy_shape);
+  }
+
+  xla::CompileOptions compile_opts;
+  compile_opts.argument_layouts = layouts;
+  compile_opts.parameter_is_tupled_arguments = false;
+  compile_opts.executable_build_options = options;
+  compile_opts.compile_portable_executable = compile_portable_executable;
+
+  EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtLoadedExecutable> executable,
+    client_->Compile(*module, std::move(compile_opts)));
   EXLA_ASSIGN_OR_RETURN(absl::optional<std::string> fingerprint,
     client_->ExecutableFingerprint(*executable));
 

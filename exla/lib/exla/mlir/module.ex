@@ -1,15 +1,47 @@
-defmodule EXLA.Computation do
+defmodule EXLA.MLIR.Module do
   @moduledoc """
-  Wrapper around XLA's computation.
+  Representation of an MLIR module.
   """
 
-  @enforce_keys [:ref, :output_shape]
-  defstruct [:ref, :output_shape]
+  defstruct [:ref]
 
-  alias EXLA.{Client, Computation, Executable}
+  alias __MODULE__, as: Module
+  alias EXLA.MLIR.Function
+  alias EXLA.MLIR.Type
+  alias EXLA.{Client, Executable}
 
   @doc """
-  Compiles a computation into an executable.
+  Creates a new MLIR module.
+  """
+  def new() do
+    ref = EXLA.NIF.new_mlir_module() |> unwrap!()
+    %Module{ref: ref}
+  end
+
+  @doc """
+  Creates a new MLIR function with the given name belonging
+  to the given MLIR module.
+  """
+  def create_function(%Module{ref: module_ref} = module, name, arg_types, %Type{
+        dims: ret_dims,
+        type: ret_type
+      })
+      when is_binary(name) do
+    nif_arg_types =
+      Enum.map(arg_types, fn %Type{dims: dims, type: type} ->
+        {dims, type}
+      end)
+
+    nif_ret_type = {ret_dims, ret_type}
+
+    ref =
+      EXLA.NIF.create_mlir_function(module_ref, name, nif_arg_types, nif_ret_type) |> unwrap!()
+
+    %Function{module: module, ref: ref, name: name}
+  end
+
+  @doc """
+  Compiles a module into an executable.
 
   ## Options
 
@@ -33,7 +65,13 @@ defmodule EXLA.Computation do
     * `:num_partitions` - the number of partitions this computation will run on.
 
   """
-  def compile(computation = %Computation{}, client = %Client{}, argument_shapes, options \\ []) do
+  def compile(
+        module = %Module{},
+        client = %Client{},
+        argument_shapes,
+        return_shape,
+        options \\ []
+      ) do
     num_replicas = Keyword.get(options, :num_replicas, 1)
     num_partitions = Keyword.get(options, :num_partitions, 1)
 
@@ -46,12 +84,10 @@ defmodule EXLA.Computation do
         do: -1,
         else: Keyword.get(options, :device_id, client.default_device_id)
 
-    output_shape = assert_output_shape!(computation)
-
     ref =
-      EXLA.NIF.compile(
+      EXLA.NIF.mlir_compile(
         client.ref,
-        computation.ref,
+        module.ref,
         Enum.map(argument_shapes, & &1.ref),
         num_replicas,
         num_partitions,
@@ -63,28 +99,11 @@ defmodule EXLA.Computation do
     %Executable{
       client: client,
       ref: ref,
-      output_shape: output_shape,
+      output_shape: return_shape,
       num_replicas: num_replicas,
       num_partitions: num_partitions,
       device_id: device_id
     }
-  end
-
-  defp assert_output_shape!(%{output_shape: output_shape}) do
-    if root_tuple_only?(output_shape) do
-      output_shape
-    else
-      raise ArgumentError,
-            "can only compile computations with a tuple at the root (and only at the root), " <>
-              "got: #{inspect(output_shape)}"
-    end
-  end
-
-  defp root_tuple_only?(shape) do
-    case shape do
-      %{dtype: {:tuple, inner}} -> Enum.all?(inner, &(not match?({:tuple, _}, &1.dtype)))
-      %{} -> false
-    end
   end
 
   defp unwrap!(:ok), do: :ok
