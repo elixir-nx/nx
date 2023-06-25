@@ -23,6 +23,8 @@ class MLIRFunction {
 
   mlir::Value AddOp(mlir::Value lhs, mlir::Value rhs);
   mlir::Value SubtractOp(mlir::Value lhs, mlir::Value rhs);
+  mlir::Value TupleOp(std::vector<mlir::Value> vals);
+  mlir::Value GetTupleElementOp(mlir::Value tuple, tsl::int64 index);
 
   // TODO: Somehow protect this resource so we cannot
   // specify more operations after return?

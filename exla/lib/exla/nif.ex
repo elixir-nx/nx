@@ -15,6 +15,8 @@ defmodule EXLA.NIF do
 
   def mlir_add(_function, _lhs, _rhs), do: :erlang.nif_error(:undef)
   def mlir_subtract(_function, _lhs, _rhs), do: :erlang.nif_error(:undef)
+  def mlir_tuple(_function, _vals), do: :erlang.nif_error(:undef)
+  def mlir_get_tuple_element(_function, _tuple, _index), do: :erlang.nif_error(:undef)
 
   def mlir_build(_function, _root), do: :erlang.nif_error(:undef)
 

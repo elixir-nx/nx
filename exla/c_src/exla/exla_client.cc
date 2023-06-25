@@ -260,8 +260,12 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
   // the device assignment is a 2d array which maps coordinates (replica, partition)
   // to a device; or in this case just maps a replica to a device
   xla::DeviceAssignment device_assignment;
-  EXLA_ASSIGN_OR_RETURN(device_assignment,
-    client_->client()->GetDefaultDeviceAssignment(num_replicas, 1));
+  if (client_->client()->platform_name() == "METAL") {
+    device_assignment = xla::DeviceAssignment(1, 1);
+  } else{
+    EXLA_ASSIGN_OR_RETURN(device_assignment,
+      client_->client()->GetDefaultDeviceAssignment(num_replicas, 1));
+  }
 
   if (device_id >= 0 && num_replicas > 1) {
     // if the device id is greater than or equal to 1, that means we've specified
@@ -283,26 +287,28 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
 
   std::vector<std::vector<std::unique_ptr<xla::PjRtBuffer>>> per_replica_results;
 
-  if (device_id >= 0) {
-    // if we specified a device id, then we need to execute the executable as a portable
-    // executable, meaning we need to find the device corresponding to the specific device
-    // id and execute on that device, we've already guaranteed this executable only has 1
-    // replica
-    EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->client()->LookupDevice(device_id));
-    // because this is a portable executable, it only has 1 replica and so we only need
-    // to get the arguments at the first position of the input buffers
-    std::vector<xla::PjRtBuffer *> portable_args = input_buffers.at(0);
-    EXLA_ASSIGN_OR_RETURN(auto portable_result,
-      executable_->ExecutePortable(portable_args, device, options));
-    // the logic for handling unpacking of results is shared between portable code path
-    // and the replicated code-path, so we take ownership of the result buffers to unpack
-    per_replica_results.push_back(std::move(portable_result));
-  } else {
-    // no device ID is present, so it may be a replicated executable which means we need
-    // to use the replica execution path
-    // TODO: This now exposes a `returned_futures` API, does this make sense for us?
-    EXLA_ASSIGN_OR_RETURN(per_replica_results, executable_->Execute(input_buffers, options));
-  }
+  EXLA_ASSIGN_OR_RETURN(per_replica_results, executable_->Execute(input_buffers, options));
+
+  // if (device_id >= 0) {
+  //   // if we specified a device id, then we need to execute the executable as a portable
+  //   // executable, meaning we need to find the device corresponding to the specific device
+  //   // id and execute on that device, we've already guaranteed this executable only has 1
+  //   // replica
+  //   EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->client()->LookupDevice(device_id));
+  //   // because this is a portable executable, it only has 1 replica and so we only need
+  //   // to get the arguments at the first position of the input buffers
+  //   std::vector<xla::PjRtBuffer *> portable_args = input_buffers.at(0);
+  //   EXLA_ASSIGN_OR_RETURN(auto portable_result,
+  //     executable_->ExecutePortable(portable_args, device, options));
+  //   // the logic for handling unpacking of results is shared between portable code path
+  //   // and the replicated code-path, so we take ownership of the result buffers to unpack
+  //   per_replica_results.push_back(std::move(portable_result));
+  // } else {
+  //   // no device ID is present, so it may be a replicated executable which means we need
+  //   // to use the replica execution path
+  //   // TODO: This now exposes a `returned_futures` API, does this make sense for us?
+  //   EXLA_ASSIGN_OR_RETURN(per_replica_results, executable_->Execute(input_buffers, options));
+  // }
 
   // sanity check
   if (per_replica_results.size() != num_replicas) {

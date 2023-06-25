@@ -248,6 +248,50 @@ ERL_NIF_TERM mlir_subtract(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
 
+ERL_NIF_TERM mlir_tuple(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 2) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction ** function;
+  std::vector<mlir::Value> vals;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get_list<mlir::Value>(env, argv[1], vals)) {
+    return exla::nif::error(env, "Unable to get values.");
+  }
+
+  mlir::Value res = (*function)->TupleOp(vals);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
+ERL_NIF_TERM mlir_get_tuple_element(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction ** function;
+  mlir::Value * tuple;
+  exla::int64 index;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], tuple)) {
+    return exla::nif::error(env, "Unable to get tuple.");
+  }
+  if (!exla::nif::get(env, argv[2], &index)) {
+    return exla::nif::error(env, "Unable to get index.");
+  }
+
+  mlir::Value res = (*function)->GetTupleElementOp(*tuple, index);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
 ERL_NIF_TERM mlir_build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
@@ -876,6 +920,8 @@ static ErlNifFunc exla_funcs[] = {
   {"get_mlir_function_arguments", 1, get_mlir_function_arguments},
   {"mlir_add", 3, mlir_add},
   {"mlir_subtract", 3, mlir_subtract},
+  {"mlir_tuple", 2, mlir_tuple},
+  {"mlir_get_tuple_element", 3, mlir_get_tuple_element},
   {"mlir_build", 2, mlir_build},
   {"dump_mlir_module", 1, dump_mlir_module},
   // XlaBuilder

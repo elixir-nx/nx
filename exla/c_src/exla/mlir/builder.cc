@@ -31,6 +31,18 @@ mlir::Value MLIRFunction::AddOp(mlir::Value lhs, mlir::Value rhs) {
   return op;
 }
 
+mlir::Value MLIRFunction::TupleOp(std::vector<mlir::Value> vals) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  auto op = module_->builder()->create<mlir::mhlo::TupleOp>(module_->builder()->getUnknownLoc(), vals);
+  return op;
+}
+
+mlir::Value MLIRFunction::GetTupleElementOp(mlir::Value tuple, tsl::int64 index) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  auto op = module_->builder()->create<mlir::mhlo::GetTupleElementOp>(module_->builder()->getUnknownLoc(), tuple, index);
+  return op;
+}
+
 void MLIRFunction::Build(mlir::Value root) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   auto op = module_->builder()->create<mlir::func::ReturnOp>(module_->builder()->getUnknownLoc(), root);

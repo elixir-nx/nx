@@ -1,4 +1,4 @@
-client = EXLA.Client.fetch!(:host)
+client = EXLA.Client.fetch!(:metal)
 
 arg_xla_shape = EXLA.Shape.make_shape({:f, 32}, {4, 3, 1})
 mlir_arg_types = Enum.map([arg_xla_shape, arg_xla_shape], &EXLA.MLIR.Type.new/1)
@@ -9,6 +9,8 @@ function = EXLA.MLIR.Module.create_function(module, "main", mlir_arg_types, mlir
 [arg1, arg2] = EXLA.MLIR.Function.get_arguments(function)
 result = EXLA.MLIR.Value.add(arg1, arg2)
 result = EXLA.MLIR.Value.subtract(arg1, result)
+result = EXLA.MLIR.Value.tuple([result])
+result = EXLA.MLIR.Value.get_tuple_element(result, 0)
 :ok = EXLA.NIF.mlir_build(function.ref, result.ref)
 EXLA.NIF.dump_mlir_module(module.ref)
 
