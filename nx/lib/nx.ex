@@ -1459,7 +1459,7 @@ defmodule Nx do
   @doc type: :creation
   def triu(tensor, opts \\ []) do
     opts = keyword!(opts, k: 0)
-    mask = tri(axis_size(tensor, -2), axis_size(tensor, -1), k: opts[:k]-1)
+    mask = tri(axis_size(tensor, -2), axis_size(tensor, -1), k: opts[:k] - 1)
     select(equal(mask, Nx.tensor(1, type: type(mask))), Nx.tensor(0, type: type(tensor)), tensor)
   end
 
