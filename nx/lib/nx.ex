@@ -1392,6 +1392,117 @@ defmodule Nx do
   end
 
   @doc """
+  Lower triangle of an array.
+
+  ## Options
+
+    * `k` - The diagonal above which to zero elements. Default: 0.
+
+  ## Examples
+
+      iex> Nx.tril(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]))
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [1, 0, 0],
+          [4, 5, 0],
+          [7, 8, 9]
+        ]
+      >
+
+      iex> Nx.tril(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]), k: 1)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [1, 2, 0],
+          [4, 5, 6],
+          [7, 8, 9]
+        ]
+      >
+  """
+  @doc type: :creation
+  def tril(tensor, opts \\ []) do
+    opts = keyword!(opts, k: 0)
+    mask = tri(axis_size(tensor, -2), axis_size(tensor, -1), k: opts[:k])
+    select(equal(mask, Nx.tensor(1, type: type(mask))), tensor, Nx.tensor(0, type: type(tensor)))
+  end
+
+  @doc """
+  Upper triangle of an array.
+
+  ## Options
+
+    * `k` - The diagonal below which to zero elements. Default: 0.
+
+  ## Examples
+
+      iex> Nx.triu(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]))
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [1, 2, 3],
+          [0, 5, 6],
+          [0, 0, 9]
+        ]
+      >
+
+      iex> Nx.triu(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]), k: 1)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [0, 2, 3],
+          [0, 0, 6],
+          [0, 0, 0]
+        ]
+      >
+  """
+  @doc type: :creation
+  def triu(tensor, opts \\ []) do
+    opts = keyword!(opts, k: 0)
+    mask = tri(axis_size(tensor, -2), axis_size(tensor, -1), k: opts[:k]-1)
+    select(equal(mask, Nx.tensor(1, type: type(mask))), Nx.tensor(0, type: type(tensor)), tensor)
+  end
+
+  @doc """
+  An array with ones at and below the given diagonal and zeros elsewhere.
+
+  ## Options
+
+    * `k` - The diagonal above which to zero elements. Default: 0.
+
+  ## Examples
+
+      iex> tensor = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+      iex> {num_rows, num_cols} = Nx.shape(tensor)
+      iex> Nx.tri(num_rows, num_cols)
+      #Nx.Tensor<
+        u8[3][3]
+        [
+          [1, 0, 0],
+          [1, 1, 0],
+          [1, 1, 1]
+        ]
+      >
+
+      iex> tensor = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+      iex> {num_rows, num_cols} = Nx.shape(tensor)
+      iex> Nx.tri(num_rows, num_cols, k: 1)
+      #Nx.Tensor<
+        u8[3][3]
+        [
+          [1, 1, 0],
+          [1, 1, 1],
+          [1, 1, 1]
+        ]
+      >
+  """
+  @doc type: :creation
+  def tri(n, m, opts \\ []) do
+    opts = keyword!(opts, k: 0)
+    greater_equal(new_axis(iota({n}), 1), new_axis(subtract(iota({m}), opts[:k]), 0))
+  end
+
+  @doc """
   Extracts the diagonal of batched matrices.
 
   Converse of `make_diagonal/2`.
