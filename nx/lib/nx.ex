@@ -1424,7 +1424,7 @@ defmodule Nx do
   def tril(tensor, opts \\ []) do
     opts = keyword!(opts, k: 0)
     mask = tri(axis_size(tensor, -2), axis_size(tensor, -1), k: opts[:k])
-    select(equal(mask, Nx.tensor(1, type: type(mask))), tensor, Nx.tensor(0, type: type(tensor)))
+    select(mask, tensor, 0)
   end
 
   @doc """
@@ -1460,7 +1460,7 @@ defmodule Nx do
   def triu(tensor, opts \\ []) do
     opts = keyword!(opts, k: 0)
     mask = tri(axis_size(tensor, -2), axis_size(tensor, -1), k: opts[:k] - 1)
-    select(equal(mask, Nx.tensor(1, type: type(mask))), Nx.tensor(0, type: type(tensor)), tensor)
+    select(mask, 0, tensor)
   end
 
   @doc """
@@ -1499,7 +1499,7 @@ defmodule Nx do
   @doc type: :creation
   def tri(n, m, opts \\ []) do
     opts = keyword!(opts, k: 0)
-    greater_equal(new_axis(iota({n}), 1), new_axis(subtract(iota({m}), opts[:k]), 0))
+    greater_equal(iota({n, 1}), subtract(iota({1, m}), opts[:k]))
   end
 
   @doc """
