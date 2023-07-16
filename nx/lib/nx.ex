@@ -1436,6 +1436,7 @@ defmodule Nx do
           ]
         ]
       >
+
       iex> Nx.tril(Nx.iota({6}))
       ** (ArgumentError) tril/2 expects a tensor with at least 2 dimensions, got: #Nx.Tensor<
         s64[6]
