@@ -657,9 +657,9 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:cholesky, [input], l, g) do
-    num = g |> tril() |> Nx.dot([0], l, [0]) |> Nx.transpose()
+    num = g |> Nx.tril() |> Nx.dot([0], l, [0]) |> Nx.transpose()
     den = l |> Nx.shape() |> Nx.eye() |> Nx.add(1)
-    phi_tril = num |> Nx.divide(den) |> tril()
+    phi_tril = num |> Nx.divide(den) |> Nx.tril()
 
     bm = Nx.LinAlg.triangular_solve(l, phi_tril, transform_a: :transpose)
 
@@ -687,7 +687,7 @@ defmodule Nx.Defn.Grad do
     m = Nx.dot(r, Nx.LinAlg.adjoint(dr)) |> Nx.subtract(Nx.dot(Nx.LinAlg.adjoint(dq), q))
 
     # copyltu
-    m_ltu = tril(m) |> Nx.add(m |> tril_strict() |> Nx.LinAlg.adjoint())
+    m_ltu = Nx.tril(m) |> Nx.add(m |> tril_strict() |> Nx.LinAlg.adjoint())
 
     da = dq |> Nx.add(Nx.dot(q, m_ltu)) |> Nx.dot(Nx.LinAlg.adjoint(r_inv))
 
@@ -711,7 +711,7 @@ defmodule Nx.Defn.Grad do
     lt_inv = Nx.LinAlg.invert(l_h)
     ut_inv = Nx.LinAlg.invert(u_h)
 
-    df = lh_dl |> tril_strict() |> Nx.add(triu(du_uh))
+    df = lh_dl |> tril_strict() |> Nx.add(Nx.triu(du_uh))
     da = p_t |> Nx.dot(lt_inv) |> Nx.dot(df) |> Nx.dot(ut_inv)
 
     [{input, da}]
@@ -1183,9 +1183,9 @@ defmodule Nx.Defn.Grad do
 
     da =
       if opts[:lower] do
-        tril(da)
+        Nx.tril(da)
       else
-        triu(da)
+        Nx.triu(da)
       end
 
     db =
@@ -1536,27 +1536,11 @@ defmodule Nx.Defn.Grad do
 
   defp argsort(list), do: list |> Enum.with_index() |> Enum.sort() |> Enum.map(&elem(&1, 1))
 
-  defp tril(t) do
-    t
-    |> Nx.shape()
-    |> Nx.iota(axis: 0)
-    |> Nx.greater_equal(Nx.iota(Nx.shape(t), axis: 1))
-    |> Nx.select(t, Nx.tensor(0, type: t.type))
-  end
-
   defp tril_strict(t) do
     t
     |> Nx.shape()
     |> Nx.iota(axis: 0)
     |> Nx.greater(Nx.iota(Nx.shape(t), axis: 1))
-    |> Nx.select(t, Nx.tensor(0, type: t.type))
-  end
-
-  defp triu(t) do
-    t
-    |> Nx.shape()
-    |> Nx.iota(axis: 0)
-    |> Nx.less_equal(Nx.iota(Nx.shape(t), axis: 1))
     |> Nx.select(t, Nx.tensor(0, type: t.type))
   end
 
