@@ -1392,7 +1392,7 @@ defmodule Nx do
   end
 
   @doc """
-  Lower triangle of an array.
+  Lower triangle of a matrix.
 
   ## Options
 
