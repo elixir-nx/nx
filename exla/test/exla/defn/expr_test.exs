@@ -725,6 +725,19 @@ defmodule EXLA.Defn.ExprTest do
         Nx.tensor([0, 0, 1, 0, 0], type: {:u, 8})
       )
     end
+
+    defn logical_and_all_finite(a, b, c) do
+      Nx.logical_and(
+        Nx.logical_and(is_finite(a), is_finite(b)),
+        is_finite(c)
+      )
+    end
+
+    defnp is_finite(x), do: Nx.all(Nx.logical_not(Nx.is_infinity(x)))
+
+    test "logical and/not with all predicate" do
+      assert_equal(logical_and_all_finite(1, 0, 2.0), Nx.u8(1))
+    end
   end
 
   describe "select" do

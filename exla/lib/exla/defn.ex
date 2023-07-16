@@ -555,9 +555,9 @@ defmodule EXLA.Defn do
   defp cached_recur_operator(:optional, %T{data: %Expr{args: args}}, state, cache) do
     [call, expr] = args
     %{data: %{args: args, op: op}} = call
-    key = computation_key(op, args)
 
     {call_args, cache} = Enum.map_reduce(args, cache, &recur_operator(&1, state, &2))
+    key = computation_key(op, call_args)
 
     {call_body, cache} =
       case cache do
@@ -1469,11 +1469,13 @@ defmodule EXLA.Defn do
     {EXLA.Builder.build(res), merge_outfeed(cache, comp_cache)}
   end
 
+  # The cache is built on top of call args because we need to handle pred/u8.
   defp computation_key(op, args) do
     keys =
       Enum.map(args, fn
-        %Nx.Tensor{shape: shape, names: names, type: type, vectorized_axes: vectorized_axes} ->
-          {type, shape, names, vectorized_axes}
+        %EXLA.Op{} = op ->
+          %{dims: dims, dtype: dtype} = EXLA.Op.get_shape(op)
+          {dims, dtype}
 
         opts ->
           opts
