@@ -1392,6 +1392,183 @@ defmodule Nx do
   end
 
   @doc """
+  Lower triangle of a matrix.
+
+  ## Options
+
+    * `k` - The diagonal above which to zero elements. Default: 0.
+
+  ## Examples
+
+      iex> Nx.tril(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]))
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [1, 0, 0],
+          [4, 5, 0],
+          [7, 8, 9]
+        ]
+      >
+
+      iex> Nx.tril(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]), k: 1)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [1, 2, 0],
+          [4, 5, 6],
+          [7, 8, 9]
+        ]
+      >
+
+      iex> Nx.tril(Nx.iota({2, 3, 4}))
+      #Nx.Tensor<
+        s64[2][3][4]
+        [
+          [
+            [0, 0, 0, 0],
+            [4, 5, 0, 0],
+            [8, 9, 10, 0]
+          ],
+          [
+            [12, 0, 0, 0],
+            [16, 17, 0, 0],
+            [20, 21, 22, 0]
+          ]
+        ]
+      >
+
+      iex> Nx.tril(Nx.iota({6}))
+      ** (ArgumentError) tril/2 expects a tensor with at least 2 dimensions, got: #Nx.Tensor<
+        s64[6]
+        [0, 1, 2, 3, 4, 5]
+      >
+  """
+  @doc type: :creation
+  def tril(tensor, opts \\ []) do
+    opts = keyword!(opts, k: 0)
+
+    if rank(tensor) < 2 do
+      raise ArgumentError,
+            "tril/2 expects a tensor with at least 2 dimensions, got: #{inspect(tensor)}"
+    end
+
+    mask = tri(axis_size(tensor, -2), axis_size(tensor, -1), k: opts[:k])
+    mask = extend_mask(tensor, mask)
+    select(mask, tensor, 0)
+  end
+
+  @doc """
+  Upper triangle of an array.
+
+  ## Options
+
+    * `k` - The diagonal below which to zero elements. Default: 0.
+
+  ## Examples
+
+      iex> Nx.triu(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]))
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [1, 2, 3],
+          [0, 5, 6],
+          [0, 0, 9]
+        ]
+      >
+
+      iex> Nx.triu(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]), k: 1)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [0, 2, 3],
+          [0, 0, 6],
+          [0, 0, 0]
+        ]
+      >
+
+      iex> Nx.triu(Nx.iota({2, 3, 4}))
+      #Nx.Tensor<
+        s64[2][3][4]
+        [
+          [
+            [0, 1, 2, 3],
+            [0, 5, 6, 7],
+            [0, 0, 10, 11]
+          ],
+          [
+            [12, 13, 14, 15],
+            [0, 17, 18, 19],
+            [0, 0, 22, 23]
+          ]
+        ]
+      >
+
+      iex> Nx.triu(Nx.iota({6}))
+      ** (ArgumentError) triu/2 expects a tensor with at least 2 dimensions, got: #Nx.Tensor<
+        s64[6]
+        [0, 1, 2, 3, 4, 5]
+      >
+  """
+  @doc type: :creation
+  def triu(tensor, opts \\ []) do
+    opts = keyword!(opts, k: 0)
+
+    if rank(tensor) < 2 do
+      raise ArgumentError,
+            "triu/2 expects a tensor with at least 2 dimensions, got: #{inspect(tensor)}"
+    end
+
+    mask = tri(axis_size(tensor, -2), axis_size(tensor, -1), k: opts[:k] - 1)
+    mask = extend_mask(tensor, mask)
+    select(mask, 0, tensor)
+  end
+
+  @doc """
+  An array with ones at and below the given diagonal and zeros elsewhere.
+
+  ## Options
+
+    * `k` - The diagonal above which to zero elements. Default: 0.
+
+  ## Examples
+
+      iex> tensor = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+      iex> {num_rows, num_cols} = Nx.shape(tensor)
+      iex> Nx.tri(num_rows, num_cols)
+      #Nx.Tensor<
+        u8[3][3]
+        [
+          [1, 0, 0],
+          [1, 1, 0],
+          [1, 1, 1]
+        ]
+      >
+
+      iex> tensor = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+      iex> {num_rows, num_cols} = Nx.shape(tensor)
+      iex> Nx.tri(num_rows, num_cols, k: 1)
+      #Nx.Tensor<
+        u8[3][3]
+        [
+          [1, 1, 0],
+          [1, 1, 1],
+          [1, 1, 1]
+        ]
+      >
+  """
+  @doc type: :creation
+  def tri(n, m, opts \\ []) do
+    opts = keyword!(opts, k: 0)
+    greater_equal(iota({n, 1}), subtract(iota({1, m}), opts[:k]))
+  end
+
+  defp extend_mask(tensor, mask) do
+    to_duplicate = rank(tensor) - 2
+    shape = List.to_tuple(List.duplicate(1, to_duplicate) ++ Tuple.to_list(shape(mask)))
+    reshape(mask, shape) |> broadcast(tensor)
+  end
+
+  @doc """
   Extracts the diagonal of batched matrices.
 
   Converse of `make_diagonal/2`.
