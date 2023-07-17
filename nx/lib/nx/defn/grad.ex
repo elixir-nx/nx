@@ -687,7 +687,7 @@ defmodule Nx.Defn.Grad do
     m = Nx.dot(r, Nx.LinAlg.adjoint(dr)) |> Nx.subtract(Nx.dot(Nx.LinAlg.adjoint(dq), q))
 
     # copyltu
-    m_ltu = Nx.tril(m) |> Nx.add(m |> tril_strict() |> Nx.LinAlg.adjoint())
+    m_ltu = Nx.tril(m) |> Nx.add(m |> Nx.tril(k: -1) |> Nx.LinAlg.adjoint())
 
     da = dq |> Nx.add(Nx.dot(q, m_ltu)) |> Nx.dot(Nx.LinAlg.adjoint(r_inv))
 
@@ -711,7 +711,7 @@ defmodule Nx.Defn.Grad do
     lt_inv = Nx.LinAlg.invert(l_h)
     ut_inv = Nx.LinAlg.invert(u_h)
 
-    df = lh_dl |> tril_strict() |> Nx.add(Nx.triu(du_uh))
+    df = lh_dl |> Nx.tril(k: -1) |> Nx.add(Nx.triu(du_uh))
     da = p_t |> Nx.dot(lt_inv) |> Nx.dot(df) |> Nx.dot(ut_inv)
 
     [{input, da}]
@@ -1535,14 +1535,6 @@ defmodule Nx.Defn.Grad do
   defp up_to(_, _), do: []
 
   defp argsort(list), do: list |> Enum.with_index() |> Enum.sort() |> Enum.map(&elem(&1, 1))
-
-  defp tril_strict(t) do
-    t
-    |> Nx.shape()
-    |> Nx.iota(axis: 0)
-    |> Nx.greater(Nx.iota(Nx.shape(t), axis: 1))
-    |> Nx.select(t, Nx.tensor(0, type: t.type))
-  end
 
   defp conjugate_if_complex(%{type: {:c, _}} = t), do: Nx.conjugate(t)
   defp conjugate_if_complex(t), do: t
