@@ -358,7 +358,7 @@ defmodule Nx.Random do
     higher_bits = random_bits[0]
     lower_bits = random_bits[1]
 
-    span = max_val - min_val
+    span = Nx.as_type(max_val - min_val, {:u, nbits})
 
     multiplier =
       Nx.pow(2, Nx.quotient(nbits, 2))
