@@ -16560,20 +16560,27 @@ defmodule Nx do
   """
   @doc type: :aggregation
   def logsumexp(tensor, opts \\ []) do
+    type = type(tensor)
     opts = keyword!(opts, [:axes, :exp_scaling_factor, :keep_axes])
     axes = opts[:axes]
     keep_axes = opts[:keep_axes]
     max = reduce_max(tensor, axes: axes, keep_axes: true)
-    exponentials = tensor |> subtract(max) |> exp
-    max = if keep_axes, do: max, else: squeeze(max)
+    mask = is_infinity(max)
+    max = select(mask, Nx.tensor(0, type: type), max)
+    exponentials = tensor |> subtract(max) |> exp()
 
-    if exp_scaling_factor = opts[:exp_scaling_factor] do
-      multiply(exp_scaling_factor, exponentials)
-    else
-      exponentials
-    end
+    exponentials =
+      if exp_scaling_factor = opts[:exp_scaling_factor] do
+        multiply(exp_scaling_factor, exponentials)
+      else
+        exponentials
+      end
+
+    max = if keep_axes, do: max, else: squeeze(max, axes: axes)
+
+    exponentials
     |> sum(axes: axes, keep_axes: keep_axes)
-    |> log
+    |> log()
     |> add(max)
   end
 end
