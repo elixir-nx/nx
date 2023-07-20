@@ -16566,10 +16566,11 @@ defmodule Nx do
     max = reduce_max(tensor, axes: axes, keep_axes: true)
     exponentials = tensor |> subtract(max) |> exp
     max = if keep_axes, do: max, else: squeeze(max)
+
     if exp_scaling_factor = opts[:exp_scaling_factor] do
-        multiply(exp_scaling_factor, exponentials)
+      multiply(exp_scaling_factor, exponentials)
     else
-        exponentials
+      exponentials
     end
     |> sum(axes: axes, keep_axes: keep_axes)
     |> log
