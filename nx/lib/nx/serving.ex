@@ -63,7 +63,7 @@ defmodule Nx.Serving do
       iex> serving = (
       ...>   Nx.Serving.jit(&MyDefn.print_and_multiply/1)
       ...>   |> Nx.Serving.client_preprocessing(fn input -> {Nx.Batch.stack(input), :client_info} end)
-      ...>   |> Nx.Serving.client_postprocessing(&{&1, &2, &3})
+      ...>   |> Nx.Serving.client_postprocessing(&{&1, &2})
       ...> )
       iex> Nx.Serving.run(serving, [Nx.tensor([1, 2]), Nx.tensor([3, 4])])
       debug: #Nx.Tensor<
@@ -73,14 +73,14 @@ defmodule Nx.Serving do
           [3, 4]
         ]
       >
-      {#Nx.Tensor<
-         s64[2][2]
-         [
-           [2, 4],
-           [6, 8]
-         ]
-       >,
-       :server_info,
+      {{#Nx.Tensor<
+          s64[2][2]
+          [
+            [2, 4],
+            [6, 8]
+          ]
+        >,
+        :server_info},
        :client_info}
 
   You can see the results are a bit different now. First of all, notice that
@@ -292,6 +292,7 @@ defmodule Nx.Serving do
     :arg,
     :client_preprocessing,
     :client_postprocessing,
+    :streaming,
     distributed_postprocessing: &Function.identity/1,
     process_options: [],
     defn_options: []
@@ -300,7 +301,7 @@ defmodule Nx.Serving do
   @type metadata() :: term()
   @type client_info() :: term()
   @type client_preprocessing() :: (term() -> {Nx.Batch.t(), client_info()})
-  @type client_postprocessing() :: (Nx.Container.t(), metadata(), client_info() -> term())
+  @type client_postprocessing() :: ({Nx.Container.t(), metadata()}, client_info() -> term())
   @type distributed_preprocessing() :: (term() -> term())
   @type distributed_postprocessing() :: (term() -> term())
 
@@ -311,7 +312,8 @@ defmodule Nx.Serving do
           client_postprocessing: client_postprocessing(),
           distributed_postprocessing: distributed_postprocessing(),
           process_options: keyword(),
-          defn_options: keyword()
+          defn_options: keyword(),
+          streaming: nil | %{hooks: [atom()]}
         }
 
   @axis 0
@@ -346,7 +348,7 @@ defmodule Nx.Serving do
   separate process.
   """
   @callback handle_batch(Nx.Batch.t(), partition :: non_neg_integer(), state) ::
-              {:execute, (() -> {Nx.Container.t(), metadata()}), state}
+              {:execute, (-> {Nx.Container.t(), metadata()}), state}
             when state: term()
 
   @doc """
@@ -422,12 +424,32 @@ defmodule Nx.Serving do
   @doc """
   Sets the client postprocessing function.
 
-  The default implementation returns the first element given
-  to the function.
+  The client postprocessing receives a tuple with the
+  `{output, metadata}` or a stream as first argument.
+  The second argument is always the additional information
+  returned by the client preprocessing.
+
+  The default implementation returns either the output or
+  the stream.
   """
   def client_postprocessing(%Nx.Serving{} = serving, function)
-      when is_function(function, 3) or is_nil(function) do
+      when is_function(function, 2) or is_nil(function) do
     %{serving | client_postprocessing: function}
+  end
+
+  def client_postprocessing(%Nx.Serving{} = serving, function)
+      when is_function(function, 3) do
+    IO.warn(
+      "Passing a 3-arity function to client_postprocessing is deprecated, " <>
+        "instead a two-arity function that receives the output and metadata must be given"
+    )
+
+    %{
+      serving
+      | client_postprocessing: fn {output, metadata}, info ->
+          function.(output, metadata, info)
+        end
+    }
   end
 
   @doc """
@@ -438,6 +460,27 @@ defmodule Nx.Serving do
   def distributed_postprocessing(%Nx.Serving{} = serving, function)
       when is_function(function, 1) do
     %{serving | distributed_postprocessing: function}
+  end
+
+  @doc """
+  Marks this serving as a streaming serving.
+
+  This means the client postprocessing callback will receive
+  a stream which will emit events for each hook in the shape
+  of:
+
+      {hook_name, term()}
+
+  Once the stream is done, it will emit `{:done, output, metadata}`.
+  """
+  def streaming(%Nx.Serving{} = serving, opts \\ []) do
+    hooks = Keyword.get(opts, :hooks, [])
+
+    if serving.streaming do
+      raise ArgumentError, "serving is already marked as streaming"
+    end
+
+    %{serving | streaming: %{hooks: hooks}}
   end
 
   @doc """
@@ -475,15 +518,17 @@ defmodule Nx.Serving do
     {%{size: size} = batch, info} = handle_preprocessing(preprocessing, input)
     {:execute, function, _} = handle_batch(module, batch, 0, state)
 
-    {output, metadata} =
+    execution_result =
       :telemetry.span([:nx, :serving, :execute], %{module: module}, fn ->
         {output, metadata} = handle_executed(module, function.())
 
-        {{output, metadata}, %{metadata: metadata, module: module}}
+        output =
+          Nx.Defn.Composite.traverse(output, &Nx.slice_along_axis(&1, 0, size, axis: @axis))
+
+        {{output, metadata}, %{module: module, metadata: metadata}}
       end)
 
-    output = Nx.Defn.Composite.traverse(output, &Nx.slice_along_axis(&1, 0, size, axis: @axis))
-    handle_postprocessing(postprocessing, output, metadata, info)
+    handle_postprocessing(postprocessing, execution_result, info)
   end
 
   ## Process API
@@ -672,7 +717,7 @@ defmodule Nx.Serving do
 
     case receive_batched(batch.size, ref, [], nil, name, input) do
       {:ok, tensor, metadata} ->
-        {:ok, handle_postprocessing(postprocessing, tensor, metadata, info)}
+        {:ok, handle_postprocessing(postprocessing, {tensor, metadata}, info)}
 
       {:DOWN, reason} ->
         {:DOWN, reason}
@@ -1092,15 +1137,14 @@ defmodule Nx.Serving do
   defp no_empty_batch!(%{size: 0}), do: raise(ArgumentError, "cannot run with empty Nx.Batch")
   defp no_empty_batch!(%{size: _} = batch), do: batch
 
-  defp handle_postprocessing(nil, output, _metadata, _info), do: output
+  defp handle_postprocessing(nil, {output, _metadata}, _info), do: output
+  defp handle_postprocessing(nil, %_{} = stream, _info), do: stream
 
-  defp handle_postprocessing(postprocessing, output, metadata, info) do
-    meta = %{info: info, metadata: metadata, output: output}
+  defp handle_postprocessing(postprocessing, result, info) do
+    meta = %{info: info}
 
     :telemetry.span([:nx, :serving, :postprocessing], meta, fn ->
-      output = postprocessing.(output, metadata, info)
-
-      {output, %{meta | output: output}}
+      {postprocessing.(result, info), meta}
     end)
   end
 end

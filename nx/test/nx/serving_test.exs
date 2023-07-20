@@ -91,7 +91,7 @@ defmodule Nx.ServingTest do
           send(self(), {:pre, entry})
           {Nx.Batch.stack(entry), :preprocessing!}
         end)
-        |> Nx.Serving.client_postprocessing(fn result, metadata, info ->
+        |> Nx.Serving.client_postprocessing(fn {result, metadata}, info ->
           send(self(), {:post, result, metadata, info})
           {result, metadata, info}
         end)
@@ -126,7 +126,7 @@ defmodule Nx.ServingTest do
       fn opts -> Nx.Defn.jit(&Nx.multiply(&1, 2), opts) end
       |> Nx.Serving.new()
       |> Nx.Serving.client_preprocessing(fn _entry -> {batch, :pre} end)
-      |> Nx.Serving.client_postprocessing(fn res, meta, info -> {res, meta, info} end)
+      |> Nx.Serving.client_postprocessing(fn {res, meta}, info -> {res, meta, info} end)
       |> Nx.Serving.run(batch)
 
       assert_receive {[:nx, :serving, :execute, :stop], ^ref, _measure, meta}
@@ -136,7 +136,7 @@ defmodule Nx.ServingTest do
       assert %{info: :pre, input: %Nx.Batch{}} = meta
 
       assert_receive {[:nx, :serving, :postprocessing, :stop], ^ref, _measure, meta}
-      assert %{info: _, metadata: _, output: _} = meta
+      assert %{info: :pre} = meta
     end
   end
 
@@ -197,7 +197,7 @@ defmodule Nx.ServingTest do
         |> Nx.Serving.client_preprocessing(fn entry ->
           {Nx.Batch.stack(entry), :preprocessing!}
         end)
-        |> Nx.Serving.client_postprocessing(fn result, metadata, info ->
+        |> Nx.Serving.client_postprocessing(fn {result, metadata}, info ->
           {result, metadata, info}
         end)
 
