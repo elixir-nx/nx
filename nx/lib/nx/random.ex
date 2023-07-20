@@ -298,7 +298,7 @@ defmodule Nx.Random do
   end
 
   @doc """
-  Sample uniform random integer values in `[min_value, max_value)`.
+  Sample uniform random integer values in the semi-open open interval `[min_value, max_value)`.
 
   ## Options
 
@@ -389,7 +389,7 @@ defmodule Nx.Random do
   end
 
   @doc """
-  Sample uniform float values in `[min_val, max_val)`.
+  Sample uniform float values in the semi-open interval `[min_val, max_val)`.
 
   ## Options
 
