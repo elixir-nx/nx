@@ -511,24 +511,124 @@ defmodule Nx.Serving do
       arg: arg,
       client_preprocessing: preprocessing,
       client_postprocessing: postprocessing,
-      defn_options: defn_options
+      defn_options: defn_options,
+      streaming: streaming
     } = serving
 
+    {ref, defn_options} = run_streaming_hooks(streaming, defn_options)
     {:ok, state} = handle_init(module, :inline, arg, [defn_options])
     {%{size: size} = batch, info} = handle_preprocessing(preprocessing, input)
     {:execute, function, _} = handle_batch(module, batch, 0, state)
 
     execution_result =
-      :telemetry.span([:nx, :serving, :execute], %{module: module}, fn ->
-        {output, metadata} = handle_executed(module, function.())
+      if ref do
+        parent = self()
 
-        output =
-          Nx.Defn.Composite.traverse(output, &Nx.slice_along_axis(&1, 0, size, axis: @axis))
+        spawn_link(fn ->
+          {output, metadata} = run_execute(module, function, size)
+          send(parent, {ref, {0, size, output, metadata}})
+          :ok
+        end)
 
-        {{output, metadata}, %{module: module, metadata: metadata}}
-      end)
+        run_stream(ref, size)
+      else
+        run_execute(module, function, size)
+      end
 
     handle_postprocessing(postprocessing, execution_result, info)
+  end
+
+  defp run_streaming_hooks(nil, defn_options), do: {nil, defn_options}
+
+  defp run_streaming_hooks(%{hooks: hooks}, defn_options) do
+    parent = self()
+    ref = make_ref()
+
+    defn_options =
+      update_in(defn_options[:hooks], fn acc ->
+        Enum.reduce(hooks, acc || %{}, fn hook, acc ->
+          Map.put(acc, hook, &run_streaming_hook(parent, ref, hook, &1))
+        end)
+      end)
+
+    {ref, defn_options}
+  end
+
+  defp run_streaming_hook(pid, ref, hook, result) do
+    send(pid, {ref, {hook, 0, result}})
+  end
+
+  defp run_execute(module, function, size) do
+    :telemetry.span([:nx, :serving, :execute], %{module: module}, fn ->
+      {output, metadata} = handle_executed(module, function.())
+      output = remove_maybe_padded(output, 0, size)
+      {{output, metadata}, %{module: module, metadata: metadata}}
+    end)
+  end
+
+  defp run_stream(ref, size) do
+    Stream.unfold({0, [], nil}, fn
+      {index, acc, template} ->
+        case receive_batched(ref, size, index, acc, template) do
+          {:done, _tensor, _metadata} = result -> {result, :done}
+          {:hook, name, value, index_acc_template} -> {{name, value}, index_acc_template}
+          {:DOWN, reason} -> exit(reason)
+        end
+
+      :done ->
+        nil
+    end)
+  end
+
+  defp remove_maybe_padded(output, start, size) do
+    Nx.Defn.Composite.traverse(output, &Nx.slice_along_axis(&1, start, size, axis: @axis))
+  end
+
+  defp receive_batched(ref, size, size, acc, {template, metadata}) do
+    Process.demonitor(ref, [:flush])
+
+    tensors =
+      acc
+      |> Enum.reverse()
+      |> Enum.zip_with(&Nx.concatenate(&1, axis: @axis))
+
+    {output, []} =
+      Nx.Defn.Composite.traverse(template, tensors, fn _template, [tensor | tensors] ->
+        {tensor, tensors}
+      end)
+
+    {:done, output, metadata}
+  end
+
+  defp receive_batched(ref, size, index, acc, template_metadata) do
+    receive do
+      {^ref, {hook, start, output}} ->
+        output = remove_maybe_padded(output, start, size)
+        {:hook, hook, output, {index, acc, template_metadata}}
+
+      {^ref, {output_start, output_size, output, metadata}} ->
+        # If we have a single response, slice and return immediately.
+        # Otherwise we collect their contents and build the concatenated result later.
+        if acc == [] and output_size == size - index do
+          Process.demonitor(ref, [:flush])
+          {:done, remove_maybe_padded(output, output_start, output_size), metadata}
+        else
+          funs =
+            output
+            |> Nx.Defn.Composite.reduce(
+              [],
+              &[Nx.slice_along_axis(&1, output_start, output_size, axis: @axis) | &2]
+            )
+            |> Enum.reverse()
+
+          receive_batched(ref, size, index + output_size, [funs | acc], {output, metadata})
+        end
+
+      {:DOWN, ^ref, _, _, reason} ->
+        # We fake monitor messages, so still demonitor and flush.
+        Process.demonitor(ref, [:flush])
+        {:DOWN, reason}
+    end
   end
 
   ## Process API
@@ -715,58 +815,11 @@ defmodule Nx.Serving do
     ref = :erlang.monitor(:process, pid, alias: :demonitor)
     Process.send(pid, {__MODULE__, :batched_run, ref, batch}, [:noconnect])
 
-    case receive_batched(batch.size, ref, [], nil, name, input) do
-      {:ok, tensor, metadata} ->
+    case receive_batched(ref, batch.size, 0, [], nil) do
+      {:done, tensor, metadata} ->
         {:ok, handle_postprocessing(postprocessing, {tensor, metadata}, info)}
 
       {:DOWN, reason} ->
-        {:DOWN, reason}
-    end
-  end
-
-  defp receive_batched(0, ref, acc, {template, metadata}, _name, _input) do
-    Process.demonitor(ref, [:flush])
-
-    tensors =
-      acc
-      |> Enum.reverse()
-      |> Enum.zip_with(&Nx.concatenate(&1, axis: @axis))
-
-    {output, []} =
-      Nx.Defn.Composite.traverse(template, tensors, fn _template, [tensor | tensors] ->
-        {tensor, tensors}
-      end)
-
-    {:ok, output, metadata}
-  end
-
-  defp receive_batched(total_size, ref, acc, _template_metadata, name, input) do
-    receive do
-      {^ref, {start, size, output, metadata}} ->
-        # If we have a single response, slice and return immediately.
-        # Otherwise we collect their contents and build the concatenated result later.
-        if acc == [] and size == total_size do
-          Process.demonitor(ref, [:flush])
-
-          output =
-            Nx.Defn.Composite.traverse(output, &Nx.slice_along_axis(&1, start, size, axis: @axis))
-
-          {:ok, output, metadata}
-        else
-          funs =
-            output
-            |> Nx.Defn.Composite.reduce(
-              [],
-              &[Nx.slice_along_axis(&1, start, size, axis: @axis) | &2]
-            )
-            |> Enum.reverse()
-
-          receive_batched(total_size - size, ref, [funs | acc], {output, metadata}, name, input)
-        end
-
-      {:DOWN, ^ref, _, _, reason} ->
-        # We fake monitor messages, so still demonitor and flush.
-        Process.demonitor(ref, [:flush])
         {:DOWN, reason}
     end
   end
@@ -1138,7 +1191,7 @@ defmodule Nx.Serving do
   defp no_empty_batch!(%{size: _} = batch), do: batch
 
   defp handle_postprocessing(nil, {output, _metadata}, _info), do: output
-  defp handle_postprocessing(nil, %_{} = stream, _info), do: stream
+  defp handle_postprocessing(nil, stream, _info), do: stream
 
   defp handle_postprocessing(postprocessing, result, info) do
     meta = %{info: info}

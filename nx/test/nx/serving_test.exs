@@ -1,6 +1,8 @@
 defmodule Nx.ServingTest do
   use ExUnit.Case, async: true
 
+  import Nx.Defn
+
   defmodule Simple do
     @behaviour Nx.Serving
 
@@ -44,6 +46,16 @@ defmodule Nx.ServingTest do
 
       {:execute, fun, pid}
     end
+  end
+
+  defn add_five_round_about(batch) do
+    batch
+    |> Nx.multiply(2)
+    |> hook(:double)
+    |> Nx.add(10)
+    |> hook(:plus_ten)
+    |> Nx.divide(2)
+    |> hook(:to_be_ignored)
   end
 
   describe "run/2" do
@@ -137,6 +149,90 @@ defmodule Nx.ServingTest do
 
       assert_receive {[:nx, :serving, :postprocessing, :stop], ^ref, _measure, meta}
       assert %{info: :pre} = meta
+    end
+  end
+
+  describe "run + streaming" do
+    test "with function" do
+      serving =
+        Nx.Serving.new(fn opts -> Nx.Defn.jit(&Nx.multiply(&1, 2), opts) end)
+        |> Nx.Serving.streaming()
+
+      batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
+
+      assert Nx.Serving.run(serving, batch) |> Enum.to_list() ==
+               [{:done, Nx.tensor([[2, 4, 6]]), :server_info}]
+    end
+
+    test "with padding" do
+      serving =
+        Nx.Serving.new(fn opts ->
+          fn batch ->
+            Nx.Defn.jit_apply(&Nx.multiply(&1, 2), [Nx.Batch.pad(batch, 4)], opts)
+          end
+        end)
+        |> Nx.Serving.streaming()
+
+      batch = Nx.Batch.stack([Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])])
+
+      assert Nx.Serving.run(serving, batch) |> Enum.to_list() ==
+               [{:done, Nx.tensor([[2, 4, 6], [8, 10, 12]]), :server_info}]
+    end
+
+    test "with module callbacks" do
+      serving = Nx.Serving.new(Simple, self(), garbage_collect: 1) |> Nx.Serving.streaming()
+      batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
+
+      assert Nx.Serving.run(serving, batch) |> Enum.to_list() ==
+               [{:done, Nx.tensor([[2, 4, 6]]), :metadata}]
+
+      assert_received {:init, :inline, [[hooks: %{}, garbage_collect: 1]]}
+      assert_received {:batch, 0, batch}
+      assert_received :execute
+      assert batch.size == 1
+      assert batch.pad == 0
+      assert Nx.Defn.jit_apply(&Function.identity/1, [batch]) == Nx.tensor([[1, 2, 3]])
+    end
+
+    test "with client pre/post" do
+      serving =
+        Nx.Serving.new(Simple, self())
+        |> Nx.Serving.client_preprocessing(fn entry ->
+          send(self(), {:pre, entry})
+          {Nx.Batch.stack(entry), :preprocessing!}
+        end)
+        |> Nx.Serving.client_postprocessing(fn stream, info ->
+          send(self(), {:post, stream, info})
+          {stream, info}
+        end)
+        |> Nx.Serving.streaming()
+
+      pre = [Nx.tensor([1, 2]), Nx.tensor([3, 4])]
+      {stream, :preprocessing!} = Nx.Serving.run(serving, pre)
+      assert Enum.to_list(stream) == [{:done, Nx.tensor([[2, 4], [6, 8]]), :metadata}]
+
+      assert_received {:init, :inline, [[hooks: %{}]]}
+      assert_received {:pre, ^pre}
+      assert_received {:batch, 0, batch}
+      assert_received :execute
+      assert_received {:post, ^stream, :preprocessing!}
+      assert batch.size == 2
+      assert batch.pad == 0
+      assert Nx.Defn.jit_apply(&Function.identity/1, [batch]) == Nx.tensor([[1, 2], [3, 4]])
+    end
+
+    test "with hooks" do
+      serving =
+        Nx.Serving.jit(&add_five_round_about/1)
+        |> Nx.Serving.streaming(hooks: [:double, :plus_ten])
+
+      batch = Nx.Batch.stack([Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])])
+
+      assert Nx.Serving.run(serving, batch) |> Enum.to_list() == [
+               {:double, Nx.tensor([[2, 4, 6], [8, 10, 12]])},
+               {:plus_ten, Nx.tensor([[12, 14, 16], [18, 20, 22]])},
+               {:done, Nx.tensor([[6.0, 7.0, 8.0], [9.0, 10.0, 11.0]]), :server_info}
+             ]
     end
   end
 
