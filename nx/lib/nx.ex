@@ -16565,8 +16565,8 @@ defmodule Nx do
     axes = opts[:axes]
     keep_axes = opts[:keep_axes]
     max = reduce_max(tensor, axes: axes, keep_axes: true)
-    mask = is_infinity(max)
-    max = select(mask, Nx.tensor(0, type: type), max)
+    infinity_mask = is_infinity(max)
+    max = select(infinity_mask, Nx.tensor(0, type: type), max)
     exponentials = tensor |> subtract(max) |> exp()
 
     exponentials =

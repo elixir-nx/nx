@@ -3129,4 +3129,85 @@ defmodule NxTest do
       assert {39, 4} == Nx.shape(test)
     end
   end
+
+  describe "logsumexp" do
+    test "removes the right axes" do
+      tensor = Nx.tensor([[[11.0], [12.0], [13.0]]])
+
+      assert Nx.logsumexp(tensor, axes: [0]) ==
+               Nx.tensor([
+                 [11.0],
+                 [12.0],
+                 [13.0]
+               ])
+
+      assert Nx.logsumexp(tensor, axes: [2]) ==
+               Nx.tensor([
+                 [11.0, 12.0, 13.0]
+               ])
+    end
+
+    test "works with infinities" do
+      tensor =
+        Nx.tensor([
+          [Inf, Inf, Inf],
+          [Inf, Inf, -Inf],
+          [Inf, Inf, 0.0],
+          [Inf, -Inf, Inf],
+          [Inf, -Inf, -Inf],
+          [Inf, -Inf, 0.0],
+          [Inf, 0.0, Inf],
+          [Inf, 0.0, -Inf],
+          [Inf, 0.0, 0.0],
+          [-Inf, Inf, Inf],
+          [-Inf, Inf, -Inf],
+          [-Inf, Inf, 0.0],
+          [-Inf, -Inf, Inf],
+          [-Inf, -Inf, -Inf],
+          [-Inf, -Inf, 0.0],
+          [-Inf, 0.0, Inf],
+          [-Inf, 0.0, -Inf],
+          [-Inf, 0.0, 0.0],
+          [0.0, Inf, Inf],
+          [0.0, Inf, -Inf],
+          [0.0, Inf, 0.0],
+          [0.0, -Inf, Inf],
+          [0.0, -Inf, -Inf],
+          [0.0, -Inf, 0.0],
+          [0.0, 0.0, Inf],
+          [0.0, 0.0, -Inf]
+        ])
+
+      assert Nx.logexpsum(tensor, axes: [1]) ==
+               Nx.tensor([
+                 Inf,
+                 Inf,
+                 Inf,
+                 Inf,
+                 Inf,
+                 Inf,
+                 Inf,
+                 Inf,
+                 Inf,
+                 Inf,
+                 Inf,
+                 Inf,
+                 Inf,
+                 -Inf,
+                 0.0,
+                 Inf,
+                 0.0,
+                 0.6931471824645996,
+                 Inf,
+                 Inf,
+                 Inf,
+                 Inf,
+                 0.0,
+                 0.6931471824645996,
+                 Inf,
+                 0.6931471824645996,
+                 1.0986123085021973
+               ])
+    end
+  end
 end
