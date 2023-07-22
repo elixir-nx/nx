@@ -723,7 +723,7 @@ defmodule Nx.Serving do
   This function receives an optional `distributed_preprocessing` callback as
   third argument for preprocessing the input for distributed requests. When
   using libraries like EXLA or Torchx, the tensor is often allocated in memory
-  inside a third-party library so it is necessary to either transfer or copy
+  inside a third-party library so it may be necessary to either transfer or copy
   the tensor to the binary backend before sending it to another node.
   This can be done by passing either `Nx.backend_transfer/1` or `Nx.backend_copy/1`
   as third argument:
@@ -818,12 +818,26 @@ defmodule Nx.Serving do
       entries ->
         pid = Enum.random(entries)
         ref = make_ref()
-        args = [ref, name, input]
+        args = [self(), ref, name, input]
 
         {_, monitor_ref} =
           Node.spawn_monitor(node(pid), __MODULE__, :__distributed_batched_run__, args)
 
         receive do
+          {^ref, :stream} ->
+            Stream.unfold(:ok, fn :ok ->
+              receive do
+                {^ref, event} ->
+                  {event, :ok}
+
+                {:DOWN, ^monitor_ref, _, _, {^ref, :stream}} ->
+                  nil
+
+                {:DOWN, ^monitor_ref, _, _, reason} ->
+                  exit({reason, {Nx.Serving, :streaming, []}})
+              end
+            end)
+
           {:DOWN, ^monitor_ref, _, _, {^ref, result}} ->
             result
 
@@ -838,13 +852,21 @@ defmodule Nx.Serving do
   end
 
   @doc false
-  def __distributed_batched_run__(ref, name, input) do
+  def __distributed_batched_run__(client_pid, ref, name, input) do
     pid = Process.whereis(name) || exit(:noproc)
 
     case local_batched_run(pid, name, input) do
       {:ok, result} ->
-        result = :persistent_term.get(persistent_key(name)).distributed_postprocessing.(result)
-        exit({ref, result})
+        %{streaming?: streaming?, distributed_postprocessing: dist_post} =
+          :persistent_term.get(persistent_key(name))
+
+        if streaming? do
+          send(client_pid, {ref, :stream})
+          Enum.each(dist_post.(result), &send(client_pid, {ref, &1}))
+          exit({ref, :stream})
+        else
+          exit({ref, dist_post.(result)})
+        end
 
       {:DOWN, reason} ->
         exit(reason)

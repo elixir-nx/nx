@@ -753,6 +753,11 @@ defmodule Nx.ServingTest do
   end
 
   describe "distributed" do
+    setup do
+      :pg.monitor_scope(Nx.Serving.PG)
+      :ok
+    end
+
     test "spawns distributed tasks locally", config do
       parent = self()
 
@@ -825,7 +830,7 @@ defmodule Nx.ServingTest do
       ]
 
       Node.spawn_link(:"secondary@127.0.0.1", DistributedServings, :multiply, [parent, opts])
-      assert_receive :spawned
+      assert_receive {_, :join, Nx.Serving, _}
 
       batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
 
@@ -850,6 +855,53 @@ defmodule Nx.ServingTest do
     end
 
     @tag :distributed
+    test "spawns distributed tasks over the network with streaming", config do
+      parent = self()
+
+      preprocessing = fn input ->
+        send(parent, {:pre, node(), input})
+        input
+      end
+
+      opts = [
+        name: config.test,
+        batch_size: 2,
+        shutdown: 1000
+      ]
+
+      args = [parent, opts]
+      Node.spawn_link(:"secondary@127.0.0.1", DistributedServings, :add_five_round_about, args)
+      assert_receive {_, :join, Nx.Serving, _}
+
+      batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
+
+      # local call
+      assert {:noproc, _} =
+               catch_exit(Nx.Serving.batched_run({:local, config.test}, batch, preprocessing))
+
+      # distributed call
+      assert Nx.Serving.batched_run({:distributed, config.test}, batch, preprocessing)
+             |> Enum.to_list() == [
+               {{:double, Nx.tensor([2, 4])}, :"secondary@127.0.0.1"},
+               {{:plus_ten, Nx.tensor([12, 14])}, :"secondary@127.0.0.1"},
+               {{:done, Nx.tensor([6.0, 7.0]), :server_info}, :"secondary@127.0.0.1"}
+             ]
+
+      assert_receive {:pre, node, %Nx.Batch{size: 2}} when node == node()
+
+      # lookup call
+      batch = Nx.Batch.concatenate([Nx.tensor([3])])
+
+      assert Nx.Serving.batched_run(config.test, batch, preprocessing) |> Enum.to_list() == [
+               {{:double, Nx.tensor([6])}, :"secondary@127.0.0.1"},
+               {{:plus_ten, Nx.tensor([16])}, :"secondary@127.0.0.1"},
+               {{:done, Nx.tensor([8.0]), :server_info}, :"secondary@127.0.0.1"}
+             ]
+
+      assert_receive {:pre, node, %Nx.Batch{size: 1}} when node == node()
+    end
+
+    @tag :distributed
     test "spawns distributed tasks over the network with hidden nodes", config do
       parent = self()
 
@@ -865,7 +917,7 @@ defmodule Nx.ServingTest do
       ]
 
       Node.spawn_link(:"tertiary@127.0.0.1", DistributedServings, :multiply, [parent, opts])
-      assert_receive :spawned
+      assert_receive {_, :join, Nx.Serving, _}
 
       batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
 
