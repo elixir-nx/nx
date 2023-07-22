@@ -19,6 +19,8 @@ jobs:
           - elixir: "1.15.4"
             lint: true
           - working_directory: torchx
+            elixir: "1.14.5"
+            otp: "25.3"
             torch_version: "1.12.1"
     defaults:
       run:
