@@ -465,13 +465,46 @@ defmodule Nx.Serving do
   @doc """
   Marks this serving as a streaming serving.
 
-  This means the client postprocessing callback will receive
-  a stream which will emit events for each hook in the shape
-  of:
+  Once `run/2` or `batched_run/2` are invoked, it will then
+  return a stream. The stream is must be consumed in the same
+  process that calls `run/2` or `batched_run/2`.
+
+  ## Options
+
+    * `:hooks` - a list of hook names that will become streaming events
+
+  ## Implementation details
+
+  ### Client postprocessing
+
+  Once streaming is enabled, the client postprocessing callback
+  will receive a stream which will emit events for each hook
+  in the shape of:
 
       {hook_name, term()}
 
   Once the stream is done, it will emit `{:done, output, metadata}`.
+  The client postprocessing is often expected to call
+  `Stream.transform/3` to process those events into something usable
+  by callers.
+
+  ### Batch breaking
+
+  Another consequence of streaming is that a serving server can
+  no longer break a batch. For example, imagine you have a
+  `batch_size` of 3 and you push three batches of two elements
+  (AA, BB, and CC). Without streaming, the batches will be consumed as:
+
+      AAB -> BCC
+
+  With streaming, we can't break the batch `BB`, as above, so we will
+  consistently pad with zeroes:
+
+      AA0 -> BB0 -> CC0
+
+  In practice, this should not be a major problem, as you should
+  generally avoid having a batch size that is not a multiple of the
+  most common batches.
   """
   def streaming(%Nx.Serving{} = serving, opts \\ []) do
     hooks = Keyword.get(opts, :hooks, [])
@@ -530,7 +563,7 @@ defmodule Nx.Serving do
           :ok
         end)
 
-        run_stream(ref, size)
+        receive_stream(ref, size)
       else
         run_execute(module, function, size)
       end
@@ -566,69 +599,8 @@ defmodule Nx.Serving do
     end)
   end
 
-  defp run_stream(ref, size) do
-    Stream.unfold({0, [], nil}, fn
-      {index, acc, template} ->
-        case receive_batched(ref, size, index, acc, template) do
-          {:done, _tensor, _metadata} = result -> {result, :done}
-          {:hook, name, value, index_acc_template} -> {{name, value}, index_acc_template}
-          {:DOWN, reason} -> exit(reason)
-        end
-
-      :done ->
-        nil
-    end)
-  end
-
   defp remove_maybe_padded(output, start, size) do
     Nx.Defn.Composite.traverse(output, &Nx.slice_along_axis(&1, start, size, axis: @axis))
-  end
-
-  defp receive_batched(ref, size, size, acc, {template, metadata}) do
-    Process.demonitor(ref, [:flush])
-
-    tensors =
-      acc
-      |> Enum.reverse()
-      |> Enum.zip_with(&Nx.concatenate(&1, axis: @axis))
-
-    {output, []} =
-      Nx.Defn.Composite.traverse(template, tensors, fn _template, [tensor | tensors] ->
-        {tensor, tensors}
-      end)
-
-    {:done, output, metadata}
-  end
-
-  defp receive_batched(ref, size, index, acc, template_metadata) do
-    receive do
-      {^ref, {hook, start, output}} ->
-        output = remove_maybe_padded(output, start, size)
-        {:hook, hook, output, {index, acc, template_metadata}}
-
-      {^ref, {output_start, output_size, output, metadata}} ->
-        # If we have a single response, slice and return immediately.
-        # Otherwise we collect their contents and build the concatenated result later.
-        if acc == [] and output_size == size - index do
-          Process.demonitor(ref, [:flush])
-          {:done, remove_maybe_padded(output, output_start, output_size), metadata}
-        else
-          funs =
-            output
-            |> Nx.Defn.Composite.reduce(
-              [],
-              &[Nx.slice_along_axis(&1, output_start, output_size, axis: @axis) | &2]
-            )
-            |> Enum.reverse()
-
-          receive_batched(ref, size, index + output_size, [funs | acc], {output, metadata})
-        end
-
-      {:DOWN, ^ref, _, _, reason} ->
-        # We fake monitor messages, so still demonitor and flush.
-        Process.demonitor(ref, [:flush])
-        {:DOWN, reason}
-    end
   end
 
   ## Process API
@@ -795,7 +767,8 @@ defmodule Nx.Serving do
     %{
       preprocessing: preprocessing,
       postprocessing: postprocessing,
-      limit: limit
+      limit: limit,
+      streaming?: streaming?
     } =
       :persistent_term.get(persistent_key(name), nil) ||
         raise(
@@ -815,12 +788,17 @@ defmodule Nx.Serving do
     ref = :erlang.monitor(:process, pid, alias: :demonitor)
     Process.send(pid, {__MODULE__, :batched_run, ref, batch}, [:noconnect])
 
-    case receive_batched(ref, batch.size, 0, [], nil) do
-      {:done, tensor, metadata} ->
-        {:ok, handle_postprocessing(postprocessing, {tensor, metadata}, info)}
+    if streaming? do
+      stream = receive_stream(ref, batch.size)
+      {:ok, handle_postprocessing(postprocessing, stream, info)}
+    else
+      case receive_batched(ref, batch.size, 0, [], nil) do
+        {:done, tensor, metadata} ->
+          {:ok, handle_postprocessing(postprocessing, {tensor, metadata}, info)}
 
-      {:DOWN, reason} ->
-        {:DOWN, reason}
+        {:DOWN, reason} ->
+          {:DOWN, reason}
+      end
     end
   end
 
@@ -853,9 +831,8 @@ defmodule Nx.Serving do
             distributed_batched_run_with_retries!(name, input, retries - 1)
 
           {:DOWN, ^monitor_ref, _, _, reason} ->
-            exit(
-              {reason, {__MODULE__, :distributed_batched_run, [name, input, [retries: retries]]}}
-            )
+            exit_args = [name, input, [retries: retries]]
+            exit({reason, {__MODULE__, :distributed_batched_run, exit_args}})
         end
     end
   end
@@ -874,6 +851,69 @@ defmodule Nx.Serving do
     end
   end
 
+  ## Client message receiving
+
+  defp receive_stream(ref, size) do
+    Stream.unfold({0, [], nil}, fn
+      {index, acc, template} ->
+        case receive_batched(ref, size, index, acc, template) do
+          {:done, _tensor, _metadata} = result -> {result, :done}
+          {:hook, name, value, index_acc_template} -> {{name, value}, index_acc_template}
+          {:DOWN, reason} -> exit({reason, {Nx.Serving, :streaming, []}})
+        end
+
+      :done ->
+        nil
+    end)
+  end
+
+  defp receive_batched(ref, size, size, acc, {template, metadata}) do
+    Process.demonitor(ref, [:flush])
+
+    tensors =
+      acc
+      |> Enum.reverse()
+      |> Enum.zip_with(&Nx.concatenate(&1, axis: @axis))
+
+    {output, []} =
+      Nx.Defn.Composite.traverse(template, tensors, fn _template, [tensor | tensors] ->
+        {tensor, tensors}
+      end)
+
+    {:done, output, metadata}
+  end
+
+  defp receive_batched(ref, size, index, acc, template_metadata) do
+    receive do
+      {^ref, {hook, start, output}} ->
+        output = remove_maybe_padded(output, start, size)
+        {:hook, hook, output, {index, acc, template_metadata}}
+
+      {^ref, {output_start, output_size, output, metadata}} ->
+        # If we have a single response, slice and return immediately.
+        # Otherwise we collect their contents and build the concatenated result later.
+        if acc == [] and output_size == size - index do
+          Process.demonitor(ref, [:flush])
+          {:done, remove_maybe_padded(output, output_start, output_size), metadata}
+        else
+          funs =
+            output
+            |> Nx.Defn.Composite.reduce(
+              [],
+              &[Nx.slice_along_axis(&1, output_start, output_size, axis: @axis) | &2]
+            )
+            |> Enum.reverse()
+
+          receive_batched(ref, size, index + output_size, [funs | acc], {output, metadata})
+        end
+
+      {:DOWN, ^ref, _, _, reason} ->
+        # We fake monitor messages, so still demonitor and flush.
+        Process.demonitor(ref, [:flush])
+        {:DOWN, reason}
+    end
+  end
+
   ## Process callbacks
 
   require Logger
@@ -884,9 +924,10 @@ defmodule Nx.Serving do
   @timeout_message {__MODULE__, :timeout}
 
   @impl true
-  def init({name, serving, partitions, batch_size, batch_timeout, task_supervisor}) do
+  def init({name, serving, partitions?, batch_size, batch_timeout, task_supervisor}) do
     Process.flag(:trap_exit, true)
-    partitions = serving_partitions(serving, partitions)
+    partitions = serving_partitions(serving, partitions?)
+    {partitions, streaming_table} = serving_streaming(serving, partitions)
     partitions_count = length(partitions)
     {:ok, module_state} = handle_init(serving.module, :process, serving.arg, partitions)
 
@@ -896,7 +937,8 @@ defmodule Nx.Serving do
         limit: batch_size,
         preprocessing: serving.client_preprocessing,
         postprocessing: serving.client_postprocessing,
-        distributed_postprocessing: serving.distributed_postprocessing
+        distributed_postprocessing: serving.distributed_postprocessing,
+        streaming?: serving.streaming != nil
       }
     )
 
@@ -914,7 +956,8 @@ defmodule Nx.Serving do
       in_queue: @empty_queue,
       out_queue: Enum.reduce(0..(partitions_count - 1), :queue.new(), &:queue.in/2),
       tasks: [],
-      task_supervisor: task_supervisor
+      task_supervisor: task_supervisor,
+      streaming_table: streaming_table
     }
 
     {:ok, state}
@@ -927,6 +970,31 @@ defmodule Nx.Serving do
 
   defp serving_partitions(%Nx.Serving{defn_options: defn_options}, false) do
     [defn_options]
+  end
+
+  defp serving_streaming(%Nx.Serving{streaming: nil}, partitions) do
+    {partitions, nil}
+  end
+
+  defp serving_streaming(%Nx.Serving{streaming: %{hooks: hooks}}, partitions) do
+    ets = :ets.new(__MODULE__, [:public, :set, read_concurrency: true])
+
+    partitions =
+      Enum.with_index(partitions, fn defn_options, index ->
+        update_in(defn_options[:hooks], fn acc ->
+          Enum.reduce(hooks, acc || %{}, fn hook, acc ->
+            Map.put(acc, hook, &server_streaming_hook(ets, index, hook, &1))
+          end)
+        end)
+      end)
+
+    {partitions, ets}
+  end
+
+  defp server_streaming_hook(ets, index, hook, result) do
+    for {ref, start, _size} <- :ets.lookup_element(ets, index, 2) do
+      send(ref, {ref, {hook, start, result}})
+    end
   end
 
   @impl true
@@ -953,7 +1021,14 @@ defmodule Nx.Serving do
         batch.size + count < limit ->
           server_stack(state, ref, batch)
 
-        # We go over the limit.
+        # We go over the limit, but if streaming, we can't split.
+        batch.size + count > limit and state.streaming_table != nil ->
+          state
+          |> server_execute()
+          |> server_timer()
+          |> server_stack(ref, batch)
+
+        # We go over the limit, split it across runs.
         batch.size + count > limit ->
           {current, next} = Nx.Batch.split(batch, limit - count)
 
@@ -1072,11 +1147,15 @@ defmodule Nx.Serving do
         %{state | in_queue: :queue.in({batch, ref_sizes}, state.in_queue)}
 
       {{:value, partition}, out_queue} ->
-        %{module: module, module_state: module_state} = state
+        %{module: module, module_state: module_state, streaming_table: streaming_table} = state
         {:execute, function, module_state} = handle_batch(module, batch, partition, module_state)
 
         wrapped_function = fn ->
           :telemetry.span([:nx, :serving, :execute], %{module: module}, fn ->
+            if streaming_table do
+              :ets.insert(streaming_table, {partition, ref_sizes})
+            end
+
             {output, metadata} = function.()
 
             for {ref, start, size} <- ref_sizes do
