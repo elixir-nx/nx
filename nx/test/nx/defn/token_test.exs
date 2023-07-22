@@ -1,7 +1,7 @@
 defmodule Nx.Defn.TokenTest do
   use ExUnit.Case, async: true
 
-  test "Inspect" do
+  test "inspect" do
     token = Nx.Defn.Token.new()
     assert inspect(token) == "#Nx.Defn.Token<[]>"
 
