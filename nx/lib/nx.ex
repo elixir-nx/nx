@@ -16480,7 +16480,7 @@ defmodule Nx do
   axes to size 1.
 
   Exponentials can be scaled before summation by multiplying
-  them with `:exp_scaling_factor`. It must be of the same shape
+  them with `:exp_scaling_factor` option. It must be of the same shape
   as the input tensor or broadcastable to it.
 
   ## Examples
