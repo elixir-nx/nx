@@ -16479,6 +16479,10 @@ defmodule Nx do
   retain the rank of the input tensor by setting the reduced
   axes to size 1.
 
+  Exponentials can be scaled before summation by multiplying
+  them with `:exp_scaling_factor`. It must be of the same shape
+  as the input tensor or broadcastable to it.
+
   ## Examples
 
       iex> Nx.logsumexp(Nx.tensor([1, 2, 3, 4, 5, 6]))
