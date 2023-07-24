@@ -318,8 +318,10 @@ defmodule Nx.Serving do
       >
 
   When using a process-based serving, you must specify the supported
-  `:batch_keys` when the process is started. Those will be verified
-  when the batch is created in the client-preprocessing callback.
+  `:batch_keys` when the process is started. The batch keys will be
+  available inside the `defn_options` passed as the third argument of
+  the `c:init/3` callback. The batck keys will also be verified
+  when the batch is returned from the client-preprocessing callback.
   """
 
   @doc false
