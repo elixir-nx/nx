@@ -283,6 +283,45 @@ defmodule Nx.Serving do
   In partitioned mode, `c:init/3` may receive multiple `defn_options`
   as the third argument and `c:handle_batch/3` may receive another partition
   besides 0.
+
+  ### Batch keys
+
+  Sometimes it may be necessary to execute different functions under the
+  same serving. For example, sequence transformers must pad the sequence
+  to a given length. However, if you are batching, the length must be
+  padded upfront. If the length is too small, you have to either discard
+  data or support only small inputs. If the length is too large, then you
+  decrease performance with the extra padding.
+
+  Batch keys provide a mechanism to accumulate different batches, based on
+  their key, which execute independently. As an example, we will do a
+  serving which performs different operations based on the batch key,
+  but it could also be used to perform the same operation for different
+  templates:
+
+      iex> args = [Nx.template({10}, :s64)]
+      iex> serving = Nx.Serving.new(fn
+      ...>   :double, opts -> Nx.Defn.compile(&Nx.multiply(&1, 2), args, opts)
+      ...>   :half, opts -> Nx.Defn.compile(&Nx.divide(&1, 2), args, opts)
+      ...> end)
+      iex> double_batch = Nx.Batch.concatenate([Nx.iota({10})]) |> Nx.Batch.key(:double)
+      iex> Nx.Serving.run(serving, double_batch)
+      #Nx.Tensor<
+        s64[10]
+        [0, 2, 4, 6, 8, 10, 12, 14, 16, 18]
+      >
+      iex> half_batch = Nx.Batch.concatenate([Nx.iota({10})]) |> Nx.Batch.key(:half)
+      iex> Nx.Serving.run(serving, half_batch)
+      #Nx.Tensor<
+        f32[10]
+        [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5]
+      >
+
+  When using a process-based serving, you must specify the supported
+  `:batch_keys` when the process is started. The batch keys will be
+  available inside the `defn_options` passed as the third argument of
+  the `c:init/3` callback. The batch keys will also be verified
+  when the batch is returned from the client-preprocessing callback.
   """
 
   @doc false
@@ -321,6 +360,7 @@ defmodule Nx.Serving do
   @process_keys [
     :batch_size,
     :batch_timeout,
+    :batch_keys,
     :partitions,
     :shutdown,
     :hibernate_after,
@@ -354,9 +394,19 @@ defmodule Nx.Serving do
   @doc """
   Creates a new function serving.
 
-  It expects a function that receives the compiler options and
-  returns a JIT (via `Nx.Defn.jit/2`) or AOT compiled (via
-  `Nx.Defn.compile/3`) one-arity function as argument.
+  It expects a single- or double-arity function. If a single-arity
+  function is given, it receives the compiler options and must
+  return a JIT (via `Nx.Defn.jit/2`) or AOT compiled (via
+  `Nx.Defn.compile/3`) one-arity function.
+
+  If a double-arity function is given, it receives the batch
+  key as first argument and the compiler options as second argument.
+  It must return a JIT (via `Nx.Defn.jit/2`) or AOT compiled
+  (via `Nx.Defn.compile/3`) one-arity function, but in practice
+  it will be a `Nx.Defn.compile/3`, since the purpose of the
+  batch key is often to precompile different versions of the
+  same function upfront. The batch keys can be given on
+  `start_link/1`.
 
   The function will be called with the arguments returned by the
   `client_preprocessing` callback.
@@ -364,7 +414,7 @@ defmodule Nx.Serving do
   def new(function, defn_options \\ [])
 
   def new(function, defn_options)
-      when is_function(function, 1) and is_list(defn_options) do
+      when (is_function(function, 1) or is_function(function, 2)) and is_list(defn_options) do
     new(Nx.Serving.Default, function, defn_options)
   end
 
@@ -549,8 +599,8 @@ defmodule Nx.Serving do
     } = serving
 
     {ref, defn_options} = run_streaming_hooks(streaming, defn_options)
-    {:ok, state} = handle_init(module, :inline, arg, [defn_options])
-    {%{size: size} = batch, info} = handle_preprocessing(preprocessing, input)
+    {%{size: size, key: key} = batch, info} = handle_preprocessing(preprocessing, input)
+    {:ok, state} = handle_init(module, :inline, arg, [[batch_keys: [key]] ++ defn_options])
     {:execute, function, _} = handle_batch(module, batch, 0, state)
 
     execution_result =
@@ -632,6 +682,10 @@ defmodule Nx.Serving do
 
     * `:serving` - a `Nx.Serving` struct with the serving configuration
 
+    * `:batch_keys` - all available batch keys. Batch keys allows Nx.Serving
+      to accumulate different batches with different properties. Defaults to
+      `[:default]`
+
     * `:batch_size` - the maximum batch size. A value is first read
       from the `Nx.Serving` struct and then it falls back to this option
       (which defaults to `1`)
@@ -669,13 +723,14 @@ defmodule Nx.Serving do
 
     shutdown = Keyword.get(opts, :shutdown, 30_000)
     partitions = Keyword.get(opts, :partitions, false)
+    batch_keys = Keyword.get(opts, :batch_keys, [:default])
     batch_size = Keyword.get(opts, :batch_size, 1)
     batch_timeout = Keyword.get(opts, :batch_timeout, 100)
     process_options = Keyword.take(opts, [:name, :hibernate_after, :spawn_opt])
 
     supervisor = Module.concat(name, "Supervisor")
     task_supervisor = Module.concat(name, "TaskSupervisor")
-    arg = {name, serving, partitions, batch_size, batch_timeout, task_supervisor}
+    arg = {name, serving, partitions, batch_keys, batch_size, batch_timeout, task_supervisor}
 
     children = [
       {Task.Supervisor, name: task_supervisor},
@@ -768,7 +823,8 @@ defmodule Nx.Serving do
       preprocessing: preprocessing,
       postprocessing: postprocessing,
       limit: limit,
-      streaming?: streaming?
+      streaming?: streaming?,
+      batch_keys: batch_keys
     } =
       :persistent_term.get(persistent_key(name), nil) ||
         raise(
@@ -782,6 +838,11 @@ defmodule Nx.Serving do
     if batch.size > limit do
       raise ArgumentError,
             "batch size (#{batch.size}) cannot exceed Nx.Serving server batch size of #{limit}"
+    end
+
+    unless is_map_key(batch_keys, batch.key) do
+      raise ArgumentError,
+            "unknown batch key: #{inspect(batch.key)} (expected one of #{inspect(Map.keys(batch_keys))})"
     end
 
     # Use Process.monitor/2 on Elixir v1.15+
@@ -941,17 +1002,18 @@ defmodule Nx.Serving do
   require Logger
   @behaviour GenServer
 
-  @empty_stack {[], 0}
+  @empty_stack {[], 0, :none}
   @empty_queue :queue.new()
   @timeout_message {__MODULE__, :timeout}
 
   @impl true
-  def init({name, serving, partitions?, batch_size, batch_timeout, task_supervisor}) do
+  def init({name, serving, partitions?, batch_keys, batch_size, batch_timeout, task_supervisor}) do
     Process.flag(:trap_exit, true)
-    partitions = serving_partitions(serving, partitions?)
-    {partitions, streaming_table} = serving_streaming(serving, partitions)
-    partitions_count = length(partitions)
-    {:ok, module_state} = handle_init(serving.module, :process, serving.arg, partitions)
+    partitions_opts = serving_partitions(serving, partitions?)
+    partitions_count = length(partitions_opts)
+    {partitions_opts, streaming_table} = serving_streaming(serving, partitions_opts)
+    partitions_opts = Enum.map(partitions_opts, &Keyword.put(&1, :batch_keys, batch_keys))
+    {:ok, module_state} = handle_init(serving.module, :process, serving.arg, partitions_opts)
 
     :persistent_term.put(
       persistent_key(name),
@@ -960,24 +1022,28 @@ defmodule Nx.Serving do
         preprocessing: serving.client_preprocessing,
         postprocessing: serving.client_postprocessing,
         distributed_postprocessing: serving.distributed_postprocessing,
-        streaming?: serving.streaming != nil
+        streaming?: serving.streaming != nil,
+        batch_keys: Map.from_keys(batch_keys, [])
       }
     )
 
     :pg.join(Nx.Serving.PG, __MODULE__, List.duplicate(self(), partitions_count))
+
+    for batch_key <- batch_keys do
+      stack_init(batch_key)
+    end
 
     # We keep batches in a stack. Once the stack is full
     # or it times out, we either execute or enqueue it.
     state = %{
       module: serving.module,
       module_state: module_state,
-      stack: @empty_stack,
       limit: batch_size,
       timeout: batch_timeout,
-      timer: :none,
       in_queue: @empty_queue,
       out_queue: Enum.reduce(0..(partitions_count - 1), :queue.new(), &:queue.in/2),
       tasks: [],
+      pending_batches: Map.from_keys(batch_keys, @empty_queue),
       task_supervisor: task_supervisor,
       streaming_table: streaming_table
     }
@@ -1020,8 +1086,9 @@ defmodule Nx.Serving do
   end
 
   @impl true
-  def handle_info({__MODULE__, :batched_run, ref, %Nx.Batch{} = batch}, state) do
-    %{limit: limit, stack: {_, count}} = state
+  def handle_info({__MODULE__, :batched_run, ref, %Nx.Batch{key: key} = batch}, state) do
+    %{limit: limit} = state
+    count = stack_count(key)
 
     state =
       cond do
@@ -1029,49 +1096,55 @@ defmodule Nx.Serving do
         # Execute what we have (if any) and execute a new one.
         batch.size == limit ->
           state
-          |> server_execute()
-          |> server_stack(ref, batch)
-          |> server_execute()
+          |> server_execute(key)
+          |> server_stack(key, ref, batch, :skip_timer)
+          |> server_execute(key)
 
         # First entry in batch.
         count == 0 ->
-          state
-          |> server_timer()
-          |> server_stack(ref, batch)
+          server_stack(state, key, ref, batch, :start_timer)
 
         # We don't exceed the limit.
         batch.size + count < limit ->
-          server_stack(state, ref, batch)
+          server_stack(state, key, ref, batch, :skip_timer)
 
         # We go over the limit, but if streaming, we can't split.
         batch.size + count > limit and state.streaming_table != nil ->
           state
-          |> server_execute()
-          |> server_timer()
-          |> server_stack(ref, batch)
+          |> server_execute(key)
+          |> server_stack(key, ref, batch, :start_timer)
 
         # We go over the limit, split it across runs.
         batch.size + count > limit ->
           {current, next} = Nx.Batch.split(batch, limit - count)
 
           state
-          |> server_stack(ref, current)
-          |> server_execute()
-          |> server_timer()
-          |> server_stack(ref, next)
+          |> server_stack(key, ref, current, :skip_timer)
+          |> server_execute(key)
+          |> server_stack(key, ref, next, :start_timer)
 
         # Exact match.
         true ->
           state
-          |> server_stack(ref, batch)
-          |> server_execute()
+          |> server_stack(key, ref, batch, :skip_timer)
+          |> server_execute(key)
       end
 
     {:noreply, state}
   end
 
-  def handle_info(@timeout_message, state) do
-    {:noreply, server_timeout(state)}
+  def handle_info({@timeout_message, key}, %{out_queue: out_queue} = state) do
+    # We have processing power, so execute it immediately.
+    # Otherwise we will queue it but keep on increasing the batch.
+    if out_queue != @empty_queue do
+      {:noreply, server_execute(state, key)}
+    else
+      stack_update(key, fn {[_ | _] = stack, count, _timer} ->
+        {stack, count, :done}
+      end)
+
+      {:noreply, update_in(state.in_queue, &:queue.in(key, &1))}
+    end
   end
 
   def handle_info({ref, :done}, %{tasks: tasks} = state) do
@@ -1102,15 +1175,17 @@ defmodule Nx.Serving do
   end
 
   @impl true
-  def terminate(_reason, %{tasks: tasks, in_queue: in_queue, stack: {stack, _}}) do
-    # Emulate the process is gone for entries in the queue
-    for {_batch, ref_sizes} <- :queue.to_list(in_queue) do
-      server_reply_down(:noproc, ref_sizes)
-    end
+  def terminate(_reason, %{tasks: tasks, pending_batches: pending_batches}) do
+    for {batch_key, queue} <- pending_batches do
+      # Emulate the process is gone for entries in the queue
+      for {_batch, ref_sizes} <- :queue.to_list(queue) do
+        server_reply_down(:noproc, ref_sizes)
+      end
 
-    # As well as for entries in the stack
-    for {ref, _batch} <- stack do
-      send(ref, {:DOWN, ref, :process, self(), :noproc})
+      # As well as for entries in the stack
+      for {ref, _batch} <- stack_entries(batch_key) do
+        send(ref, {:DOWN, ref, :process, self(), :noproc})
+      end
     end
 
     # And wait until all current tasks are processed
@@ -1130,24 +1205,131 @@ defmodule Nx.Serving do
     end
   end
 
-  defp server_stack(%{stack: {stack, count}, limit: limit} = state, ref, batch)
-       when batch.size + count <= limit do
-    %{state | stack: {[{ref, batch} | stack], count + batch.size}}
+  defp server_stack(%{limit: limit} = state, key, ref, batch, timer_mode) do
+    stack_update(key, fn {stack, count, timer} when batch.size + count <= limit ->
+      timer =
+        case timer_mode do
+          :start_timer when timer == :none ->
+            Process.send_after(self(), {@timeout_message, key}, state.timeout)
+
+          :skip_timer ->
+            timer
+        end
+
+      {[{ref, batch} | stack], count + batch.size, timer}
+    end)
+
+    state
   end
 
-  defp server_timer(%{timeout: timeout, timer: :none} = state),
-    do: %{state | timer: Process.send_after(self(), @timeout_message, timeout)}
+  defp server_execute(state, key) do
+    if stack_count(key) == 0 do
+      state
+    else
+      {batch_refs, timer} = stack_to_batch_refs(key)
+      state = update_in(state.pending_batches[key], &:queue.in(batch_refs, &1))
 
-  defp server_execute(%{stack: @empty_stack} = state), do: state
+      state =
+        if timer == :done do
+          state
+        else
+          update_in(state.in_queue, &:queue.in(key, &1))
+        end
 
-  defp server_execute(state) do
-    %{stack: {stack, count}, timer: timer} = state
+      server_maybe_task(state)
+    end
+  end
+
+  defp server_maybe_task(state) do
+    %{out_queue: out_queue, in_queue: in_queue, pending_batches: pending_batches} = state
+
+    with {{:value, partition}, out_queue} <- :queue.out(out_queue),
+         {{:value, key}, in_queue} <- :queue.out(in_queue) do
+      {{batch, ref_sizes}, pending_batches} =
+        case :queue.out(pending_batches[key]) do
+          {:empty, _pending_batches} ->
+            # If there is no entry pending, then we have a timed-out in-construction batch.
+            {batch_refs, :done} = stack_to_batch_refs(key)
+            {batch_refs, pending_batches}
+
+          {{:value, batch_refs}, queue} ->
+            {batch_refs, Map.put(pending_batches, key, queue)}
+        end
+
+      %{module: module, module_state: module_state, streaming_table: streaming_table} = state
+      {:execute, function, module_state} = handle_batch(module, batch, partition, module_state)
+
+      wrapped_function = fn ->
+        :telemetry.span([:nx, :serving, :execute], %{module: module}, fn ->
+          if streaming_table do
+            :ets.insert(streaming_table, {partition, ref_sizes})
+          end
+
+          {output, metadata} = function.()
+
+          for {ref, start, size} <- ref_sizes do
+            send(ref, {ref, {start, size, output, metadata}})
+          end
+
+          {:done, %{metadata: metadata, module: module}}
+        end)
+      end
+
+      task = Task.Supervisor.async_nolink(state.task_supervisor, wrapped_function)
+      tasks = [{task, partition, ref_sizes} | state.tasks]
+
+      %{
+        state
+        | module_state: module_state,
+          tasks: tasks,
+          out_queue: out_queue,
+          in_queue: in_queue,
+          pending_batches: pending_batches
+      }
+    else
+      _ -> state
+    end
+  end
+
+  defp server_task_done(%{out_queue: out_queue} = state, tasks, partition) do
+    out_queue = :queue.in(partition, out_queue)
+    server_maybe_task(%{state | tasks: tasks, out_queue: out_queue})
+  end
+
+  ## Stack management
+  #
+  # The stack is stored in the process dictionary for performance
+  # since the common case does not use any batch key.
+
+  defp stack_init(key) do
+    Process.put({__MODULE__, key}, @empty_stack)
+    :ok
+  end
+
+  defp stack_count(key) do
+    {_stack, count, _timer} = Process.get({__MODULE__, key})
+    count
+  end
+
+  defp stack_entries(key) do
+    {stack, _count, _timer} = Process.get({__MODULE__, key})
+    stack
+  end
+
+  defp stack_update(key, fun) do
+    Process.put({__MODULE__, key}, fun.(Process.get({__MODULE__, key})))
+    :ok
+  end
+
+  defp stack_to_batch_refs(key) do
+    {[_ | _] = stack, count, timer} = Process.get({__MODULE__, key})
+    :ok = stack_init(key)
 
     if is_reference(timer) do
       Process.cancel_timer(timer)
 
       receive do
-        @timeout_message -> :ok
+        {@timeout_message, ^key} -> :ok
       after
         0 -> :ok
       end
@@ -1159,68 +1341,8 @@ defmodule Nx.Serving do
         {[{ref, ending - size, size} | ref_sizes], [batch | batches], ending - size}
       end)
 
-    state = %{state | timer: :none, stack: @empty_stack}
-    server_task_or_enqueue(state, Nx.Batch.merge(batches), ref_sizes)
+    {{Nx.Batch.merge(batches), ref_sizes}, timer}
   end
-
-  defp server_task_or_enqueue(%{out_queue: out_queue} = state, batch, ref_sizes) do
-    case :queue.out(out_queue) do
-      {:empty, _out_queue} ->
-        %{state | in_queue: :queue.in({batch, ref_sizes}, state.in_queue)}
-
-      {{:value, partition}, out_queue} ->
-        %{module: module, module_state: module_state, streaming_table: streaming_table} = state
-        {:execute, function, module_state} = handle_batch(module, batch, partition, module_state)
-
-        wrapped_function = fn ->
-          :telemetry.span([:nx, :serving, :execute], %{module: module}, fn ->
-            if streaming_table do
-              :ets.insert(streaming_table, {partition, ref_sizes})
-            end
-
-            {output, metadata} = function.()
-
-            for {ref, start, size} <- ref_sizes do
-              send(ref, {ref, {start, size, output, metadata}})
-            end
-
-            {:done, %{metadata: metadata, module: module}}
-          end)
-        end
-
-        task = Task.Supervisor.async_nolink(state.task_supervisor, wrapped_function)
-        tasks = [{task, partition, ref_sizes} | state.tasks]
-        %{state | module_state: module_state, tasks: tasks, out_queue: out_queue}
-    end
-  end
-
-  defp server_task_done(%{in_queue: in_queue, out_queue: out_queue} = state, tasks, partition) do
-    out_queue = :queue.in(partition, out_queue)
-
-    case :queue.out(in_queue) do
-      # The timer expired while the task was processing, so execute the current batch.
-      {:empty, _in_queue} when state.timer == :done ->
-        server_execute(%{state | tasks: tasks, out_queue: out_queue})
-
-      # Nothing to do.
-      {:empty, _in_queue} ->
-        %{state | tasks: tasks, out_queue: out_queue}
-
-      # Execute the next one in queue.
-      {{:value, {batch, ref_sizes}}, in_queue} ->
-        state = %{state | tasks: tasks, out_queue: out_queue, in_queue: in_queue}
-        server_task_or_enqueue(state, batch, ref_sizes)
-    end
-  end
-
-  # It timed out, the in queue is empty and out queue is not empty, execute it now.
-  defp server_timeout(%{out_queue: out_queue, in_queue: @empty_queue} = state)
-       when out_queue != @empty_queue,
-       do: server_execute(%{state | timer: :done})
-
-  # Otherwise continue batching until the queue is empty or it is full.
-  defp server_timeout(state),
-    do: %{state | timer: :done}
 
   ## Shared helpers
 
@@ -1310,23 +1432,41 @@ defmodule Nx.Serving.Default do
   @impl true
   def init(_type, fun, partitions) do
     batch_funs =
-      for defn_options <- partitions do
-        case fun.(defn_options) do
-          batch_fun when is_function(batch_fun, 1) ->
-            batch_fun
+      Enum.with_index(partitions, fn defn_options, index ->
+        value =
+          cond do
+            is_function(fun, 1) ->
+              validate_batch_fun!(fun.(defn_options))
 
-          other ->
-            raise "anonymous function given to Nx.Serving.new/2 should return an AOT or " <>
-                    "JIT compiled function that expects one argument. Got: #{inspect(other)}"
-        end
-      end
+            is_function(fun, 2) ->
+              {batch_keys, defn_options} = Keyword.pop!(defn_options, :batch_keys)
 
-    {:ok, batch_funs}
+              for batch_key <- batch_keys,
+                  into: %{},
+                  do: {batch_key, validate_batch_fun!(fun.(batch_key, defn_options))}
+          end
+
+        {index, value}
+      end)
+
+    {:ok, Map.new(batch_funs)}
+  end
+
+  defp validate_batch_fun!(batch_fun) when is_function(batch_fun, 1), do: batch_fun
+
+  defp validate_batch_fun!(other) do
+    raise "anonymous function given to Nx.Serving.new/2 should return an AOT or " <>
+            "JIT compiled function that expects one argument. Got: #{inspect(other)}"
   end
 
   @impl true
   def handle_batch(batch, partition, batch_funs) do
-    batch_fun = Enum.fetch!(batch_funs, partition)
+    batch_fun =
+      case batch_funs do
+        %{^partition => batch_keys} when is_map(batch_keys) -> Map.fetch!(batch_keys, batch.key)
+        %{^partition => fun} -> fun
+      end
+
     {:execute, fn -> {batch_fun.(batch), :server_info} end, batch_funs}
   end
 end

@@ -65,6 +65,22 @@ defmodule Nx.ServingTest do
       assert Nx.Serving.run(serving, batch) == Nx.tensor([[2, 4, 6]])
     end
 
+    test "with function and batch key" do
+      serving =
+        Nx.Serving.new(fn batch_key, opts ->
+          send(self(), {:batch_key, batch_key})
+          Nx.Defn.jit(&Nx.multiply(&1, 2), opts)
+        end)
+
+      batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])]) |> Nx.Batch.key(:foo)
+      assert Nx.Serving.run(serving, batch) == Nx.tensor([[2, 4, 6]])
+      assert_receive {:batch_key, :foo}
+
+      batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])]) |> Nx.Batch.key(:bar)
+      assert Nx.Serving.run(serving, batch) == Nx.tensor([[2, 4, 6]])
+      assert_receive {:batch_key, :bar}
+    end
+
     test "with container (and jit)" do
       serving = Nx.Serving.jit(fn {a, b} -> {Nx.multiply(a, 2), Nx.divide(b, 2)} end)
       batch = Nx.Batch.concatenate([{Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])}])
@@ -88,7 +104,7 @@ defmodule Nx.ServingTest do
       batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
 
       assert Nx.Serving.run(serving, batch) == Nx.tensor([[2, 4, 6]])
-      assert_received {:init, :inline, [[garbage_collect: 1]]}
+      assert_received {:init, :inline, [[batch_keys: [:default], garbage_collect: 1]]}
       assert_received {:batch, 0, batch}
       assert_received :execute
       assert batch.size == 1
@@ -112,7 +128,7 @@ defmodule Nx.ServingTest do
       post = Nx.tensor([[2, 4], [6, 8]])
       assert Nx.Serving.run(serving, pre) == {post, :metadata, :preprocessing!}
 
-      assert_received {:init, :inline, [[]]}
+      assert_received {:init, :inline, [[batch_keys: [:default]]]}
       assert_received {:pre, ^pre}
       assert_received {:batch, 0, batch}
       assert_received :execute
@@ -186,7 +202,7 @@ defmodule Nx.ServingTest do
       assert Nx.Serving.run(serving, batch) |> Enum.to_list() ==
                [{:done, Nx.tensor([[2, 4, 6]]), :metadata}]
 
-      assert_received {:init, :inline, [[hooks: %{}, garbage_collect: 1]]}
+      assert_received {:init, :inline, [[batch_keys: [:default], hooks: %{}, garbage_collect: 1]]}
       assert_received {:batch, 0, batch}
       assert_received :execute
       assert batch.size == 1
@@ -211,7 +227,7 @@ defmodule Nx.ServingTest do
       {stream, :preprocessing!} = Nx.Serving.run(serving, pre)
       assert Enum.to_list(stream) == [{:done, Nx.tensor([[2, 4], [6, 8]]), :metadata}]
 
-      assert_received {:init, :inline, [[hooks: %{}]]}
+      assert_received {:init, :inline, [[batch_keys: [:default], hooks: %{}]]}
       assert_received {:pre, ^pre}
       assert_received {:batch, 0, batch}
       assert_received :execute
@@ -253,7 +269,7 @@ defmodule Nx.ServingTest do
 
       batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
       assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([[2, 4, 6]])
-      assert_received {:init, :process, [[garbage_collect: true]]}
+      assert_received {:init, :process, [[batch_keys: [:default], garbage_collect: true]]}
       assert_received {:batch, 0, batch}
       assert_received :execute
       assert batch.size == 1
@@ -279,7 +295,7 @@ defmodule Nx.ServingTest do
       Task.await(t1, :infinity)
       Task.await(t2, :infinity)
 
-      assert_received {:init, :process, [[]]}
+      assert_received {:init, :process, [[batch_keys: [:default]]]}
       assert_received {:batch, 0, batch}
       assert_received :execute
       assert batch.size == 4
@@ -318,7 +334,7 @@ defmodule Nx.ServingTest do
       Task.await(t1, :infinity)
       Task.await(t2, :infinity)
 
-      assert_received {:init, :process, [[]]}
+      assert_received {:init, :process, [[batch_keys: [:default]]]}
       assert_received {:batch, 0, batch}
       assert_received :execute
       assert batch.size == 4
@@ -516,6 +532,51 @@ defmodule Nx.ServingTest do
       Task.await(task3)
     end
 
+    test "batch keys", config do
+      serving =
+        Nx.Serving.new(fn
+          :double, opts -> Nx.Defn.compile(&Nx.multiply(&1, 2), [Nx.template({3}, :s64)], opts)
+          :half, opts -> Nx.Defn.compile(&Nx.divide(&1, 2), [Nx.template({3}, :s64)], opts)
+        end)
+
+      simple_supervised!(config,
+        serving: serving,
+        batch_timeout: 10_000,
+        batch_size: 3,
+        batch_keys: [:double, :half]
+      )
+
+      assert_raise ArgumentError,
+                   "unknown batch key: :default (expected one of [:double, :half])",
+                   fn ->
+                     Nx.Serving.batched_run(config.test, Nx.Batch.concatenate([Nx.iota({3})]))
+                   end
+
+      t1 =
+        Task.async(fn ->
+          batch = Nx.Batch.concatenate([Nx.iota({2})]) |> Nx.Batch.key(:double)
+          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([0, 2])
+        end)
+
+      t2 =
+        Task.async(fn ->
+          batch = Nx.Batch.concatenate([Nx.iota({3})]) |> Nx.Batch.key(:half)
+          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([0.0, 0.5, 1.0])
+        end)
+
+      Task.await(t2, :infinity)
+      refute Task.yield(t1, 0)
+
+      t3 =
+        Task.async(fn ->
+          batch = Nx.Batch.concatenate([Nx.iota({1})]) |> Nx.Batch.key(:double)
+          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([0])
+        end)
+
+      Task.await(t1, :infinity)
+      Task.await(t3, :infinity)
+    end
+
     test "with padding", config do
       serving =
         Nx.Serving.new(fn opts ->
@@ -625,7 +686,7 @@ defmodule Nx.ServingTest do
       Task.await(t1, :infinity)
       Task.await(t2, :infinity)
 
-      assert_received {:init, :process, [[hooks: %{}]]}
+      assert_received {:init, :process, [[batch_keys: [:default], hooks: %{}]]}
       assert_received {:batch, 0, batch}
       assert_received :execute
       assert batch.size == 4

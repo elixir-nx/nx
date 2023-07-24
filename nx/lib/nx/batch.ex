@@ -13,7 +13,7 @@ defmodule Nx.Batch do
   The `:size` field is public.
   """
   @derive {Inspect, only: [:size, :pad]}
-  defstruct stack: [], size: 0, template: nil, pad: 0
+  defstruct stack: [], size: 0, template: nil, pad: 0, key: :default
 
   @type t :: %Nx.Batch{
           stack: list(),
@@ -26,6 +26,13 @@ defmodule Nx.Batch do
   Returns a new empty batch.
   """
   def new, do: %Nx.Batch{}
+
+  @doc """
+  Sets the batch key for the given batch.
+  """
+  def key(%Nx.Batch{} = batch, key) do
+    %{batch | key: key}
+  end
 
   @doc """
   Merges two batches.
@@ -61,12 +68,17 @@ defmodule Nx.Batch do
   def merge([]), do: new()
 
   def merge([%Nx.Batch{} = head | tail]) do
-    %{template: template, stack: stack, pad: pad, size: size} = head
+    %{template: template, stack: stack, pad: pad, size: size, key: head_key} = head
 
     {template, stack, pad, size} =
       Enum.reduce(tail, {template, stack, pad, size}, fn batch, acc ->
-        %Nx.Batch{template: template, stack: stack, pad: pad, size: size} = batch
+        %Nx.Batch{template: template, stack: stack, pad: pad, size: size, key: tail_key} = batch
         {acc_template, acc_stack, acc_pad, acc_size} = acc
+
+        if head_key != tail_key do
+          raise ArgumentError,
+                "cannot merge batches with different batch keys: #{inspect(head_key)} and #{inspect(tail_key)}"
+        end
 
         if template != nil and acc_template != nil and not Nx.compatible?(template, acc_template) do
           raise ArgumentError, """
@@ -83,7 +95,7 @@ defmodule Nx.Batch do
         {acc_template || template, stack ++ acc_stack, pad + acc_pad, size + acc_size}
       end)
 
-    %Nx.Batch{template: template, stack: stack, pad: pad, size: size}
+    %Nx.Batch{template: template, stack: stack, pad: pad, size: size, key: head_key}
   end
 
   @doc """
