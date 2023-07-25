@@ -166,75 +166,96 @@ defmodule EXLA.BackendTest do
       t = Nx.tensor(11)
       assert double(fn -> t end) |> Nx.to_number() == 121
     end
+
+    test "raises on invalid client" do
+      assert_raise ArgumentError,
+                   ~r"could not find EXLA client named :unknown",
+                   fn ->
+                     Nx.backend_transfer(Nx.tensor([1, 2]), {EXLA.Backend, client: :unknown})
+                   end
+    end
   end
 
-  test "raises on invalid client" do
-    assert_raise ArgumentError,
-                 ~r"could not find EXLA client named :unknown",
-                 fn ->
-                   Nx.backend_transfer(Nx.tensor([1, 2]), {EXLA.Backend, client: :unknown})
-                 end
-  end
+  describe "Nx.logexpsum/1" do
+    test "rank-1 tensor" do
+      assert_equal(Nx.logsumexp(Nx.tensor([1, 2, 3, 4, 5, 6])), Nx.tensor(6.456193447113037))
+    end
 
-  test "Nx.logexpsum/1" do
-    assert_equal(Nx.logsumexp(Nx.tensor([1, 2, 3, 4, 5, 6])), Nx.tensor(6.456193447113037))
+    test "scalar :exp_scaling_factor" do
+      assert_equal(
+        Nx.logsumexp(Nx.tensor([1, 2, 3, 4, 5, 6]), exp_scaling_factor: 0.5),
+        Nx.tensor(5.7630462646484375)
+      )
+    end
 
-    assert_equal(
-      Nx.logsumexp(Nx.tensor([1, 2, 3, 4, 5, 6]), exp_scaling_factor: 0.5),
-      Nx.tensor(5.7630462646484375)
-    )
+    test "tensor :exp_scaling_factor" do
+      assert_equal(
+        Nx.logsumexp(Nx.tensor([1, 2, 3, 4, 5, 6]),
+          exp_scaling_factor: Nx.tensor([-1, -1, -1, 1, 1, 1])
+        ),
+        Nx.tensor(6.356536865234375)
+      )
+    end
 
-    assert_equal(
-      Nx.logsumexp(Nx.tensor([1, 2, 3, 4, 5, 6]),
-        exp_scaling_factor: Nx.tensor([-1, -1, -1, 1, 1, 1])
-      ),
-      Nx.tensor(6.356536865234375)
-    )
+    test "rank-2 tensor" do
+      assert_equal(
+        Nx.logsumexp(Nx.tensor([[1, 2], [3, 4], [5, 6]])),
+        Nx.tensor(6.456193447113037)
+      )
+    end
 
-    assert_equal(Nx.logsumexp(Nx.tensor([[1, 2], [3, 4], [5, 6]])), Nx.tensor(6.456193447113037))
+    test "axes: [:x]" do
+      assert_equal(
+        Nx.logsumexp(Nx.tensor([[1, 2], [3, 4], [5, 6]], names: [:x, :y]), axes: [:x]),
+        Nx.tensor([5.1429314613342285, 6.1429314613342285], names: [:y])
+      )
+    end
 
-    assert_equal(
-      Nx.logsumexp(Nx.tensor([[1, 2], [3, 4], [5, 6]], names: [:x, :y]), axes: [:x]),
-      Nx.tensor([5.1429314613342285, 6.1429314613342285], names: [:y])
-    )
+    test "axes: [:y]" do
+      assert_equal(
+        Nx.logsumexp(Nx.tensor([[1, 2], [3, 4], [5, 6]], names: [:x, :y]), axes: [:y]),
+        Nx.tensor([2.3132615089416504, 4.31326150894165, 6.31326150894165], names: [:x])
+      )
+    end
 
-    assert_equal(
-      Nx.logsumexp(Nx.tensor([[1, 2], [3, 4], [5, 6]], names: [:x, :y]), axes: [:y]),
-      Nx.tensor([2.3132615089416504, 4.31326150894165, 6.31326150894165], names: [:x])
-    )
+    test "axes: [:x, :y, :z]" do
+      assert_equal(
+        Nx.logsumexp(Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], names: [:x, :y, :z]),
+          axes: [:x, :z]
+        ),
+        Nx.tensor([6.331411361694336, 8.331411361694336], names: [:y])
+      )
+    end
 
-    assert_equal(
-      Nx.logsumexp(Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], names: [:x, :y, :z]),
-        axes: [:x, :z]
-      ),
-      Nx.tensor([6.331411361694336, 8.331411361694336], names: [:y])
-    )
-
-    assert_equal(
-      Nx.logsumexp(Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], names: [:x, :y, :z]),
-        axes: [:x, :z],
-        keep_axes: true
-      ),
-      Nx.tensor(
-        [
+    test "keep_axes: true" do
+      assert_equal(
+        Nx.logsumexp(Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], names: [:x, :y, :z]),
+          axes: [:x, :z],
+          keep_axes: true
+        ),
+        Nx.tensor(
           [
-            [6.331411361694336],
-            [8.331411361694336]
-          ]
-        ],
-        names: [:x, :y, :z]
+            [
+              [6.331411361694336],
+              [8.331411361694336]
+            ]
+          ],
+          names: [:x, :y, :z]
+        )
       )
-    )
+    end
 
-    assert_equal(
-      Nx.logsumexp(Nx.vectorize(Nx.tensor([[1, 2], [3, 4], [5, 6]]), :x),
-        axes: [0],
-        keep_axes: true
-      ),
-      Nx.vectorize(
-        Nx.tensor([[2.3132615089416504], [4.31326150894165], [6.31326150894165]]),
-        :x
+    test "vectorized tensor" do
+      assert_equal(
+        Nx.logsumexp(Nx.vectorize(Nx.tensor([[1, 2], [3, 4], [5, 6]]), :x),
+          axes: [0],
+          keep_axes: true
+        ),
+        Nx.vectorize(
+          Nx.tensor([[2.3132615089416504], [4.31326150894165], [6.31326150894165]]),
+          :x
+        )
       )
-    )
+    end
   end
 end
