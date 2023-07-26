@@ -21,7 +21,8 @@ defmodule EXLA.BackendTest do
     ceil: 1,
     sigmoid: 1,
     fft: 2,
-    ifft: 2
+    ifft: 2,
+    logsumexp: 2
   ]
 
   @temporarily_broken_doctests [
@@ -125,7 +126,7 @@ defmodule EXLA.BackendTest do
     end
   end
 
-  test "Nx.LinAlg.svg/2" do
+  test "Nx.LinAlg.svd/2" do
     t = Nx.iota({4, 4})
     assert {u, s, vt} = Nx.LinAlg.svd(t, max_iter: 10_000)
 
@@ -165,13 +166,13 @@ defmodule EXLA.BackendTest do
       t = Nx.tensor(11)
       assert double(fn -> t end) |> Nx.to_number() == 121
     end
-  end
 
-  test "raises on invalid client" do
-    assert_raise ArgumentError,
-                 ~r"could not find EXLA client named :unknown",
-                 fn ->
-                   Nx.backend_transfer(Nx.tensor([1, 2]), {EXLA.Backend, client: :unknown})
-                 end
+    test "raises on invalid client" do
+      assert_raise ArgumentError,
+                   ~r"could not find EXLA client named :unknown",
+                   fn ->
+                     Nx.backend_transfer(Nx.tensor([1, 2]), {EXLA.Backend, client: :unknown})
+                   end
+    end
   end
 end

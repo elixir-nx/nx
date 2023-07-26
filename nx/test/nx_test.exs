@@ -3129,4 +3129,84 @@ defmodule NxTest do
       assert {39, 4} == Nx.shape(test)
     end
   end
+
+  describe "logsumexp" do
+    test "removes the right axes" do
+      tensor = Nx.tensor([[[11.0], [12.0], [13.0]]])
+
+      assert Nx.logsumexp(tensor, axes: [0]) ==
+               Nx.tensor([
+                 [11.0],
+                 [12.0],
+                 [13.0]
+               ])
+
+      assert Nx.logsumexp(tensor, axes: [2]) ==
+               Nx.tensor([
+                 [11.0, 12.0, 13.0]
+               ])
+    end
+
+    test "works with infinities" do
+      tensor =
+        Nx.tensor([
+          [:infinity, :infinity, :infinity],
+          [:infinity, :infinity, :neg_infinity],
+          [:infinity, :infinity, 0.0],
+          [:infinity, :neg_infinity, :infinity],
+          [:infinity, :neg_infinity, :neg_infinity],
+          [:infinity, :neg_infinity, 0.0],
+          [:infinity, 0.0, :infinity],
+          [:infinity, 0.0, :neg_infinity],
+          [:infinity, 0.0, 0.0],
+          [:neg_infinity, :infinity, :infinity],
+          [:neg_infinity, :infinity, :neg_infinity],
+          [:neg_infinity, :infinity, 0.0],
+          [:neg_infinity, :neg_infinity, :infinity],
+          [:neg_infinity, :neg_infinity, :neg_infinity],
+          [:neg_infinity, :neg_infinity, 0.0],
+          [:neg_infinity, 0.0, :infinity],
+          [:neg_infinity, 0.0, :neg_infinity],
+          [:neg_infinity, 0.0, 0.0],
+          [0.0, :infinity, :infinity],
+          [0.0, :infinity, :neg_infinity],
+          [0.0, :infinity, 0.0],
+          [0.0, :neg_infinity, :infinity],
+          [0.0, :neg_infinity, :neg_infinity],
+          [0.0, :neg_infinity, 0.0],
+          [0.0, 0.0, :infinity],
+          [0.0, 0.0, :neg_infinity]
+        ])
+
+      assert Nx.logsumexp(tensor, axes: [1]) ==
+               Nx.tensor([
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :neg_infinity,
+                 0.0,
+                 :infinity,
+                 0.0,
+                 0.6931471824645996,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 0.0,
+                 0.6931471824645996,
+                 :infinity,
+                 0.6931471824645996
+               ])
+    end
+  end
 end

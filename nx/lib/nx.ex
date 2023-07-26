@@ -16464,4 +16464,127 @@ defmodule Nx do
       end)
     end
   end
+
+  @doc """
+  Returns the logarithm of the sum of the exponentials of tensor elements.
+
+  If the `:axes` option is given, it aggregates over
+  the given dimensions, effectively removing them.
+  `axes: [0]` implies aggregating over the highest order
+  dimension and so forth. If the axis is negative, then
+  counts the axis from the back. For example, `axes: [-1]`
+  will always aggregate all rows.
+
+  You may optionally set `:keep_axes` to true, which will
+  retain the rank of the input tensor by setting the reduced
+  axes to size 1.
+
+  Exponentials can be scaled before summation by multiplying
+  them with `:exp_scaling_factor` option. It must be of the same shape
+  as the input tensor or broadcastable to it.
+
+  ## Examples
+
+      iex> Nx.logsumexp(Nx.tensor([1, 2, 3, 4, 5, 6]))
+      #Nx.Tensor<
+        f32
+        6.456193447113037
+      >
+
+      iex> Nx.logsumexp(Nx.tensor([1, 2, 3, 4, 5, 6]), exp_scaling_factor: 0.5)
+      #Nx.Tensor<
+        f32
+        5.7630462646484375
+      >
+
+      iex> t = Nx.tensor([1, 2, 3, 4, 5, 6])
+      iex> a = Nx.tensor([-1, -1, -1, 1, 1, 1])
+      iex> Nx.logsumexp(t, exp_scaling_factor: a)
+      #Nx.Tensor<
+        f32
+        6.356536865234375
+      >
+
+      iex> Nx.logsumexp(Nx.tensor([[1, 2], [3, 4], [5, 6]]))
+      #Nx.Tensor<
+        f32
+        6.456193447113037
+      >
+
+  ### Aggregating over an axis
+
+      iex> t = Nx.tensor([[1, 2], [3, 4], [5, 6]], names: [:x, :y])
+      iex> Nx.logsumexp(t, axes: [:x])
+      #Nx.Tensor<
+        f32[y: 2]
+        [5.1429314613342285, 6.1429314613342285]
+      >
+
+      iex> t = Nx.tensor([[1, 2], [3, 4], [5, 6]], names: [:x, :y])
+      iex> Nx.logsumexp(t, axes: [:y])
+      #Nx.Tensor<
+        f32[x: 3]
+        [2.3132617473602295, 4.31326150894165, 6.31326150894165]
+      >
+
+      iex> t = Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], names: [:x, :y, :z])
+      iex> Nx.logsumexp(t, axes: [:x, :z])
+      #Nx.Tensor<
+        f32[y: 2]
+        [6.331411361694336, 8.331411361694336]
+      >
+
+  ### Keeping axes
+
+      iex> t = Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], names: [:x, :y, :z])
+      iex> Nx.logsumexp(t, axes: [:x, :z], keep_axes: true)
+      #Nx.Tensor<
+        f32[x: 1][y: 2][z: 1]
+        [
+          [
+            [6.331411361694336],
+            [8.331411361694336]
+          ]
+        ]
+      >
+
+  ### Vectorized tensors
+
+      iex> t = Nx.vectorize(Nx.tensor([[1, 2], [3, 4], [5, 6]]), :x)
+      iex> Nx.logsumexp(t, axes: [0], keep_axes: true)
+      #Nx.Tensor<
+        vectorized[x: 3]
+        f32[1]
+        [
+          [2.3132617473602295],
+          [4.31326150894165],
+          [6.31326150894165]
+        ]
+      >
+  """
+  @doc type: :aggregation
+  def logsumexp(tensor, opts \\ []) do
+    type = type(tensor)
+    opts = keyword!(opts, [:axes, :exp_scaling_factor, :keep_axes])
+    axes = opts[:axes]
+    keep_axes = opts[:keep_axes]
+    max = reduce_max(tensor, axes: axes, keep_axes: true)
+    infinity_mask = is_infinity(max)
+    max = select(infinity_mask, Nx.tensor(0, type: type), max)
+    exponentials = tensor |> subtract(max) |> exp()
+
+    exponentials =
+      if exp_scaling_factor = opts[:exp_scaling_factor] do
+        multiply(exp_scaling_factor, exponentials)
+      else
+        exponentials
+      end
+
+    max = if keep_axes, do: max, else: squeeze(max, axes: axes)
+
+    exponentials
+    |> sum(axes: axes, keep_axes: keep_axes)
+    |> log()
+    |> add(max)
+  end
 end
