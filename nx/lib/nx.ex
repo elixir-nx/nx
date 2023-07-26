@@ -416,7 +416,7 @@ defmodule Nx do
   @type axes :: Nx.Tensor.axes()
   @type template :: Nx.Tensor.t(%Nx.TemplateBackend{})
 
-  @file_prefix ?n + ?x
+  @file_prefix <<?n, ?x>>
   @file_version 1
 
   @non_finite [:neg_infinity, :infinity, :nan]
