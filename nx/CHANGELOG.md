@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.6.0-dev
+
+### Deprecations
+
+  * [Nx.Serving] The post-processing function must now be a two-arity function that receives the `{output, metadata}` as a pair or the stream
+
+### Breaking changes
+
+  * [Nx.Serving] The `nx.serving.postprocessing` telemetry event no longer receives the serving output or serving metadata as event metadata
+
 ## v0.5.3 (2023-04-14)
 
 ### Bug fixes

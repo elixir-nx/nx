@@ -31,7 +31,7 @@ defmodule Nx.Defn do
 
         defn softmax(t) do
           t
-          |> Nx.exp(t)
+          |> Nx.exp()
           |> then(& &1 / Nx.sum(&1))
         end
       end
