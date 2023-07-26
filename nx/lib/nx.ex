@@ -416,7 +416,8 @@ defmodule Nx do
   @type axes :: Nx.Tensor.axes()
   @type template :: Nx.Tensor.t(%Nx.TemplateBackend{})
 
-  @file_version 2
+  @file_prefix ?n + ?x
+  @file_version 1
 
   @non_finite [:neg_infinity, :infinity, :nan]
 
@@ -15192,29 +15193,49 @@ defmodule Nx do
   """
   @doc type: :conversion
   def serialize(tensor_or_container, opts \\ []) do
-    data_term = to_term(tensor_or_container)
-    term = {@file_version, System.endianness(), data_term}
-    :erlang.term_to_iovec(term, opts)
+    {term, {binaries, _offsets}} = to_term(tensor_or_container, {[], 0})
+    data = :erlang.term_to_iovec(term, opts)
+    endianness = endianness_to_byte(System.endianness())
+
+    [<<@file_prefix, @file_version, endianness, IO.iodata_length(data)::64>> | data] ++
+      Enum.reverse(binaries)
   end
 
-  defp to_term(tensor_or_container) do
+  defp to_term(tensor_or_container, {binaries, offset}) do
     case tensor_or_container do
       number when is_number(number) when is_struct(number, Complex) ->
         type = Nx.Type.infer(number)
-        {:tensor, {}, type, [], [], number_to_binary(number, type)}
+        binary = number_to_binary(number, type)
+        size = Kernel.byte_size(binary)
+        acc = {[binary | binaries], offset + size}
+        {{:t, {}, type, [], [], offset, size}, acc}
 
       %T{vectorized_axes: vectorized_axes} = tensor ->
         %{shape: shape, names: names} = devectorize(tensor)
-
         type = type(tensor)
         binary = to_binary(tensor)
-        {:tensor, shape, type, names, vectorized_axes, binary}
+        size = Kernel.byte_size(binary)
+        acc = {[binary | binaries], offset + size}
+        {{:t, shape, type, names, vectorized_axes, offset, size}, acc}
 
       other ->
         {module, pairs, meta} = Nx.Container.serialize(other)
-        {module, Enum.map(pairs, fn {k, v} -> {k, to_term(v)} end), meta}
+
+        {pairs, acc} =
+          Enum.map_reduce(pairs, {binaries, offset}, fn {k, v}, acc ->
+            {v, acc} = to_term(v, acc)
+            {{k, v}, acc}
+          end)
+
+        {{module, pairs, meta}, acc}
     end
   end
+
+  defp endianness_to_byte(:little), do: 0
+  defp endianness_to_byte(:big), do: 1
+
+  defp byte_to_endianness(0), do: :little
+  defp byte_to_endianness(1), do: :big
 
   @doc """
   Deserializes a serialized representation of a tensor or a container
@@ -15253,44 +15274,48 @@ defmodule Nx do
   def deserialize(data, opts \\ []) do
     data
     |> IO.iodata_to_binary()
-    |> :erlang.binary_to_term(opts)
-    |> from_term()
+    |> deserialize_binary(opts)
   end
 
-  defp from_term({2, endianness, term}), do: from_term_v2(term, endianness)
-  defp from_term({1, endianness, term}), do: from_term_v1(term, endianness)
-
-  defp from_term(_) do
-    raise ArgumentError, "unable to deserialize binary term to tensor"
+  defp deserialize_binary(
+         <<@file_prefix, @file_version, endianness, size::64, data::binary-size(size),
+           buffers::binary>>,
+         opts
+       ) do
+    term = :erlang.binary_to_term(data, opts)
+    from_buffers(term, byte_to_endianness(endianness), buffers)
   end
 
-  defp from_term_v2(term, endianness) do
+  defp deserialize_binary(<<@file_prefix, version, _::binary>>, _opts) do
+    raise ArgumentError, "cannot deserialize Nx format v#{version}"
+  end
+
+  # TODO: Remove me in future releases (format for Nx v0.5 and earlier).
+  defp deserialize_binary(binary, opts) do
+    {1, endianness, term} = :erlang.binary_to_term(binary, opts)
+    from_term(term, endianness)
+  end
+
+  defp from_buffers(term, endianness, buffers) do
     case term do
-      {:tensor, flat_shape, {_, size} = type, names, vectorized_axes, binary} ->
-        binary
-        |> new_byte_order(size, endianness)
+      {:t, flat_shape, {_, type_size} = type, names, vectorized_axes, offset, size} ->
+        buffers
+        |> binary_part(offset, size)
+        |> new_byte_order(type_size, endianness)
         |> from_binary(type)
         |> reshape(flat_shape, names: names)
         |> vectorize(vectorized_axes)
 
-      {:container, container} ->
-        {deserialized, :ok} =
-          Nx.Container.traverse(container, :ok, fn container_elem, :ok ->
-            {from_term_v2(container_elem, endianness), :ok}
-          end)
-
-        deserialized
-
       {module, pairs, metadata} ->
-        pairs = Enum.map(pairs, fn {k, v} -> {k, from_term_v2(v, endianness)} end)
+        pairs = Enum.map(pairs, fn {k, v} -> {k, from_buffers(v, endianness, buffers)} end)
         module.deserialize(pairs, metadata)
 
       _ ->
-        raise ArgumentError, "unable to deserialize binary term to tensor"
+        raise ArgumentError, "unable to deserialize term to tensor: #{inspect(term)}"
     end
   end
 
-  defp from_term_v1(term, endianness) do
+  defp from_term(term, endianness) do
     case term do
       {:tensor, shape, {_, size} = type, names, binary} ->
         binary
@@ -15301,13 +15326,13 @@ defmodule Nx do
       {:container, container} ->
         {deserialized, :ok} =
           Nx.Container.traverse(container, :ok, fn container_elem, :ok ->
-            {from_term_v1(container_elem, endianness), :ok}
+            {from_term(container_elem, endianness), :ok}
           end)
 
         deserialized
 
       {module, pairs, metadata} ->
-        pairs = Enum.map(pairs, fn {k, v} -> {k, from_term_v1(v, endianness)} end)
+        pairs = Enum.map(pairs, fn {k, v} -> {k, from_term(v, endianness)} end)
         module.deserialize(pairs, metadata)
 
       _ ->
