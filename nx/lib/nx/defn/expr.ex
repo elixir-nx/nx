@@ -1586,6 +1586,10 @@ defmodule Nx.Defn.Expr do
     recur_inspect(tensor, state)
   end
 
+  defp recur_inspect(%T{data: %Expr{op: :optional, args: [expr, _default]}}, state) do
+    recur_inspect(expr, state)
+  end
+
   defp recur_inspect(%T{data: %Expr{id: id, op: op, args: args}} = tensor, state) do
     case state.cache do
       %{^id => var_name} ->
@@ -1606,17 +1610,22 @@ defmodule Nx.Defn.Expr do
     {[?{, Enum.intersperse(args, ", "), ?}], state}
   end
 
-  defp recur_inspect(term, %{opts: opts} = state) do
-    if Keyword.keyword?(term) and term != [] do
+  defp recur_inspect(list, %{opts: opts} = state) when is_list(list) do
+    if list != [] and Keyword.keyword?(list) do
       inspect =
-        Enum.map_intersperse(term, ", ", fn {key, value} ->
+        Enum.map_intersperse(list, ", ", fn {key, value} ->
           [Macro.inspect_atom(:key, key), " ", doc_inspect(value, opts)]
         end)
 
       {inspect, state}
     else
-      {doc_inspect(term, opts), state}
+      {args, state} = Enum.map_reduce(list, state, &recur_inspect/2)
+      {[?[, Enum.intersperse(args, ", "), ?]], state}
     end
+  end
+
+  defp recur_inspect(term, state) do
+    {doc_inspect(term, state.opts), state}
   end
 
   defp cached_recur_inspect(:parameter, [pos], type_shape, state) do
