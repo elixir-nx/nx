@@ -1581,6 +1581,11 @@ defmodule Nx.Defn.Expr do
     {[?&, Exception.format_mfa(m, f, a)], state}
   end
 
+  defp recur_inspect(%T{data: %Expr{op: :metadata, args: [tensor, metadata]}}, state)
+       when not is_map_key(metadata, :inspect) do
+    recur_inspect(tensor, state)
+  end
+
   defp recur_inspect(%T{data: %Expr{id: id, op: op, args: args}} = tensor, state) do
     case state.cache do
       %{^id => var_name} ->
@@ -1590,6 +1595,15 @@ defmodule Nx.Defn.Expr do
         {var_name, state} = cached_recur_inspect(op, args, to_type_shape(tensor), state)
         {var_name, put_in(state.cache[id], var_name)}
     end
+  end
+
+  defp recur_inspect(tuple, state) when is_tuple(tuple) do
+    {args, state} =
+      tuple
+      |> Tuple.to_list()
+      |> Enum.map_reduce(state, &recur_inspect/2)
+
+    {[?{, Enum.intersperse(args, ", "), ?}], state}
   end
 
   defp recur_inspect(term, %{opts: opts} = state) do
@@ -1611,11 +1625,48 @@ defmodule Nx.Defn.Expr do
     {var_name, store_line(state, :parameters, parameter, type_shape)}
   end
 
+  defp cached_recur_inspect(:tensor, [_], type_shape, state) do
+    var_name = var_name(state)
+    parameter = "tensor #{var_name}"
+    {var_name, store_line(state, :parameters, parameter, type_shape)}
+  end
+
   defp cached_recur_inspect(op, args, type_shape, state) do
-    {args, state} = Enum.map_reduce(args, state, &recur_inspect/2)
+    {args, state} = traverse_args(op, args, state)
     var_name = var_name(state)
     expr = IO.iodata_to_binary(["#{var_name} = #{op} " | Enum.intersperse(args, ", ")])
     {var_name, store_line(state, :exprs, expr, type_shape)}
+  end
+
+  defp traverse_args(:token, [%Nx.Defn.Token{hooks: hooks}], state) do
+    Enum.map_reduce(hooks, state, fn %{name: name, expr: expr}, state ->
+      {expr, state} = recur_inspect(expr, state)
+      {[Macro.inspect_atom(:key, name), " ", expr], state}
+    end)
+  end
+
+  defp traverse_args(:cond, [clauses, other], state) do
+    Enum.map_reduce(clauses ++ [{true, other}], state, fn {condition, body}, state ->
+      {condition, state} = recur_inspect(condition, state)
+      {body, state} = recur_inspect(body, state)
+      {[condition, " -> ", body], state}
+    end)
+  end
+
+  defp traverse_args(:while, [initial, _arg, _condition, _body], state),
+    do: traverse_args([initial], state)
+
+  defp traverse_args(:metadata, [tensor, %{inspect: inspect}], state),
+    do: traverse_args([tensor, inspect], state)
+
+  defp traverse_args(_op, [tuple | args], state) when is_tuple(tuple),
+    do: traverse_args(args, state)
+
+  defp traverse_args(_op, args, state),
+    do: traverse_args(args, state)
+
+  defp traverse_args(args, state) do
+    Enum.map_reduce(args, state, &recur_inspect/2)
   end
 
   defp doc_inspect(term, opts) do
@@ -1653,138 +1704,4 @@ defmodule Nx.Defn.Expr do
 
     IO.iodata_to_binary([Nx.Type.to_string(type) | brackets])
   end
-
-  # # Constants and funs are shown as is
-  # defp inspect_expr(%T{data: %Expr{op: :constant}} = t, acc), do: {t, acc}
-  # defp inspect_expr(%T{data: %Expr{op: :fun}} = t, acc), do: {t, acc}
-
-  # defp inspect_expr(%T{data: %Expr{op: :metadata, args: [expr, metadata]}}, acc)
-  #      when not is_map_key(metadata, :inspect),
-  #      do: inspect_expr(expr, acc)
-
-  # defp inspect_expr(%T{data: %Expr{op: :optional, args: [expr, _default]}}, acc) do
-  #   inspect_expr(expr, acc)
-  # end
-
-  # defp inspect_expr(%T{data: %Expr{id: id}} = t, {exprs, params, var_map, cache} = acc) do
-  #   case cache do
-  #     %{^id => _} -> {t, acc}
-  #     %{} -> cached_inspect_expr(t, {exprs, params, var_map, Map.put(cache, id, true)})
-  #   end
-  # end
-
-  # defp cached_inspect_expr(%T{data: %Expr{op: :parameter, id: id, args: [i]}} = t, acc) do
-  #   {exprs, params, var_map, cache} = acc
-  #   {var, var_map} = var_for_id(var_map, id)
-  #   param = "parameter " <> var <> ":" <> Integer.to_string(i)
-  #   {t, {exprs, [{param, t} | params], var_map, cache}}
-  # end
-
-  # defp cached_inspect_expr(%T{data: %Expr{op: :tensor, id: id}} = t, acc) do
-  #   {exprs, params, var_map, cache} = acc
-  #   {var, var_map} = var_for_id(var_map, id)
-  #   param = "tensor " <> var
-  #   {t, {exprs, [{param, t} | params], var_map, cache}}
-  # end
-
-  # defp cached_inspect_expr(%T{} = t, acc) do
-  #   %{data: %Expr{id: id, op: op}} = t
-  #   {args, {exprs, params, var_map, cache}} = traverse_args(op, t, acc)
-  #   {var, var_map} = var_for_id(var_map, id)
-  #   args_str = inspect_args(op, args, var_map)
-  #   expr_str = var <> " = " <> Atom.to_string(op) <> " " <> args_str
-  #   {t, {[{expr_str, t} | exprs], params, var_map, cache}}
-  # end
-
-  # defp traverse_args(:while, %T{data: %{args: [initial, _, _, _]}}, acc) do
-  #   {initial, acc} = Composite.traverse(initial, acc, &inspect_expr/2)
-  #   {[initial], acc}
-  # end
-
-  # defp traverse_args(:token, %T{data: %{args: [token]}}, acc) do
-  #   {hooks, acc} =
-  #     Enum.map_reduce(token.hooks, acc, fn %{name: name, expr: expr}, acc ->
-  #       {expr, acc} = Composite.traverse(expr, acc, &inspect_expr/2)
-  #       {{name, expr}, acc}
-  #     end)
-
-  #   {hooks, acc}
-  # end
-
-  # defp traverse_args(_op, t, acc) do
-  #   Tree.apply_args(t, acc, &inspect_expr/2)
-  # end
-
-  # defp inspect_args(:token, hooks, var_map) do
-  #   IO.iodata_to_binary(
-  #     Enum.map_intersperse(hooks, ", ", fn {key, val} ->
-  #       "#{key}: " <> inspect_arg(val, var_map)
-  #     end)
-  #   )
-  # end
-
-  # defp inspect_args(:while, [initial], var_map) do
-  #   IO.iodata_to_binary(inspect_arg(initial, var_map))
-  # end
-
-  # defp inspect_args(:cond, [clauses, last], var_map) do
-  #   clauses =
-  #     Enum.map(clauses, fn {pred, expr} ->
-  #       [inspect_arg(pred, var_map), " -> ", inspect_arg(expr, var_map), ", "]
-  #     end)
-
-  #   IO.iodata_to_binary([clauses, "true -> ", inspect_arg(last, var_map)])
-  # end
-
-  # defp inspect_args(:metadata, [expr, %{inspect: inspect}], var_map) do
-  #   IO.iodata_to_binary([inspect_arg(expr, var_map), ", ", inspect(inspect)])
-  # end
-
-  # defp inspect_args(_op, [tuple | args], var_map) when is_tuple(tuple),
-  #   do: inspect_args(args, var_map)
-
-  # defp inspect_args(_op, args, var_map),
-  #   do: inspect_args(args, var_map)
-
-  # defp inspect_args(args, var_map),
-  #   do: Enum.map_join(args, ", ", &inspect_arg(&1, var_map))
-
-  # defp inspect_arg(arg, var_map) do
-  #   case arg do
-  #     %T{data: %Expr{op: :fun, args: [_, _, {m, f, a}]}} ->
-  #       [?&, Exception.format_mfa(m, f, a)]
-
-  #     %T{data: %Expr{op: :constant, args: [number]}} ->
-  #       to_string(number)
-
-  #     %T{data: %Expr{id: id}} ->
-  #       Map.fetch!(var_map, id)
-
-  #     _ ->
-  #       cond do
-  #         Keyword.keyword?(arg) and arg != [] ->
-  #           Enum.map_join(arg, ", ", fn {k, v} -> "#{k}: #{inspect(v)}" end)
-
-  #         is_list(arg) ->
-  #           [?[, inspect_args(arg, var_map), ?]]
-
-  #         is_tuple(arg) ->
-  #           [?{, inspect_args(Tuple.to_list(arg), var_map), ?}]
-
-  #         true ->
-  #           inspect(arg)
-  #       end
-  #   end
-  # end
-
-  # defp var_for_id(var_map, id) do
-  #   case var_map do
-  #     %{^id => var} ->
-  #       {var, var_map}
-
-  #     %{} ->
-  #       var = IO.iodata_to_binary(counter_to_name(map_size(var_map)))
-  #       {var, Map.put(var_map, id, var)}
-  #   end
-  # end
 end
