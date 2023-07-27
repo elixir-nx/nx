@@ -1565,29 +1565,8 @@ defmodule Nx.Defn.Expr do
   end
 
   def inspect(tensor, opts) do
-    {_,
-     %{
-       exprs: exprs,
-       parameters: parameters,
-       length: length,
-       opts: %{limit: limit}
-     }} =
-      recur_inspect(tensor, %{
-        cache: %{},
-        exprs: [],
-        parameters: [],
-        opts: opts,
-        length: 0
-      })
-
-    {exprs, parameters} =
-      if limit < 0 do
-        [h | t] = exprs
-        exprs = [h | Enum.take(t, opts.limit - 1)] ++ [{"...", ""}]
-        {exprs, []}
-      else
-        {exprs, parameters}
-      end
+    {_, %{exprs: exprs, parameters: parameters, length: length}} =
+      recur_inspect(tensor, %{cache: %{}, exprs: [], parameters: [], opts: opts, length: 0})
 
     concat(line(), color("Nx.Defn.Expr", :map, opts))
     |> append_lines(parameters, length + 3)
@@ -1612,18 +1591,25 @@ defmodule Nx.Defn.Expr do
   end
 
   defp recur_inspect(%T{data: %Expr{id: id, op: op, args: args}} = tensor, state) do
-    case state.cache do
+    %{opts: %{limit: limit}, cache: cache} = state
+
+    case cache do
       %{^id => var_name} ->
         {var_name, state}
 
+      cache when map_size(cache) == limit ->
+        state = store_line(state, :parameters, "...", "")
+        var_name = var_name(state)
+        {var_name, put_in(state.cache[id], var_name)}
+
+      cache when map_size(cache) > limit ->
+        var_name = var_name(state)
+        {var_name, put_in(state.cache[id], var_name)}
+
       %{} ->
-        if state.opts.limit <= 0 do
-          var_name = var_name(state)
-          {var_name, put_in(state.cache[id], var_name)}
-        else
-          {var_name, state} = cached_recur_inspect(op, args, to_type_shape(tensor), state)
-          {var_name, put_in(state.cache[id], var_name)}
-        end
+        state = put_in(state.cache[id], :booked)
+        {var_name, state} = cached_recur_inspect(op, args, to_type_shape(tensor), state)
+        {var_name, put_in(state.cache[id], var_name)}
     end
   end
 
@@ -1701,10 +1687,7 @@ defmodule Nx.Defn.Expr do
     do: traverse_args(args, state)
 
   defp traverse_args(args, state) do
-    {args, state} = Enum.map_reduce(args, state, &recur_inspect/2)
-
-    {args,
-     update_in(state.opts.limit, fn limit -> if(is_integer(limit), do: limit - 1, else: limit) end)}
+    Enum.map_reduce(args, state, &recur_inspect/2)
   end
 
   defp doc_inspect(term, opts) do
