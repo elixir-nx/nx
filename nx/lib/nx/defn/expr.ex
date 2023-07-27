@@ -1569,7 +1569,8 @@ defmodule Nx.Defn.Expr do
      %{
        exprs: exprs,
        parameters: parameters,
-       length: length
+       length: length,
+       opts: %{limit: limit}
      }} =
       recur_inspect(tensor, %{
         cache: %{},
@@ -1579,30 +1580,13 @@ defmodule Nx.Defn.Expr do
         length: 0
       })
 
-    exprs =
-      cond do
-        opts.limit == 0 ->
-          [{"...", ""}]
-
-        length(exprs) > opts.limit ->
-          [h | t] = exprs
-          [h | Enum.take(t, opts.limit - 1)] ++ [{"...", ""}]
-
-        true ->
-          exprs
-      end
-
-    parameters =
-      cond do
-        opts.limit == 0 ->
-          [{"...", ""}]
-
-        (len = length(parameters)) > opts.limit ->
-          [h | t] = parameters
-          [h, {"...", ""} | Enum.drop(t, len - opts.limit)]
-
-        true ->
-          parameters
+    {exprs, parameters} =
+      if limit < 0 do
+        [h | t] = exprs
+        exprs = [h | Enum.take(t, opts.limit - 1)] ++ [{"...", ""}]
+        {exprs, []}
+      else
+        {exprs, parameters}
       end
 
     concat(line(), color("Nx.Defn.Expr", :map, opts))
@@ -1633,8 +1617,13 @@ defmodule Nx.Defn.Expr do
         {var_name, state}
 
       %{} ->
-        {var_name, state} = cached_recur_inspect(op, args, to_type_shape(tensor), state)
-        {var_name, put_in(state.cache[id], var_name)}
+        if state.opts.limit <= 0 do
+          var_name = var_name(state)
+          {var_name, put_in(state.cache[id], var_name)}
+        else
+          {var_name, state} = cached_recur_inspect(op, args, to_type_shape(tensor), state)
+          {var_name, put_in(state.cache[id], var_name)}
+        end
     end
   end
 
@@ -1712,7 +1701,10 @@ defmodule Nx.Defn.Expr do
     do: traverse_args(args, state)
 
   defp traverse_args(args, state) do
-    Enum.map_reduce(args, state, &recur_inspect/2)
+    {args, state} = Enum.map_reduce(args, state, &recur_inspect/2)
+
+    {args,
+     update_in(state.opts.limit, fn limit -> if(is_integer(limit), do: limit - 1, else: limit) end)}
   end
 
   defp doc_inspect(term, opts) do
