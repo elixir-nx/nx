@@ -1565,8 +1565,37 @@ defmodule Nx.Defn.Expr do
   end
 
   def inspect(tensor, opts) do
-    {_, %{exprs: exprs, parameters: parameters, length: length}} =
-      recur_inspect(tensor, %{cache: %{}, exprs: [], parameters: [], opts: opts, length: 0})
+    {_,
+     %{
+       exprs: exprs,
+       parameters: parameters,
+       length: length
+     }} =
+      recur_inspect(tensor, %{
+        cache: %{},
+        exprs: [],
+        parameters: [],
+        opts: opts,
+        length: 0
+      })
+
+    exprs =
+      cond do
+        opts.limit == 0 ->
+          [{"...", ""}]
+
+        (len = length(exprs)) > opts.limit ->
+          [h | t] = exprs
+
+          [
+            h,
+            {"...", ""}
+            | Enum.drop(t, max(len - opts.limit, 0))
+          ]
+
+        true ->
+          exprs
+      end
 
     concat(line(), color("Nx.Defn.Expr", :map, opts))
     |> append_lines(parameters, length + 3)
