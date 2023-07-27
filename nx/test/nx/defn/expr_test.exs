@@ -405,37 +405,27 @@ defmodule Nx.Defn.ExprTest do
 
       result = add_sub_mult_no_tokens(t, t, t, t)
 
-      # greater than the number of exprs
-      assert inspect(result, limit: 8) == """
-             #Nx.Tensor<
-               f32
-             \s\s
-               Nx.Defn.Expr
-               parameter a:0       f32
-               parameter b:1       f32
-               parameter d:2       f32
-               parameter f:3       f32
-               c = add a, b        f32
-               e = subtract c, d   f32
-               g = multiply e, f   f32
-             >\
-             """
+      full_expr = """
+      #Nx.Tensor<
+        f32
+      \s\s
+        Nx.Defn.Expr
+        parameter a:0       f32
+        parameter b:1       f32
+        parameter d:2       f32
+        parameter f:3       f32
+        c = add a, b        f32
+        e = subtract c, d   f32
+        g = multiply e, f   f32
+      >\
+      """
 
+      # infinity
+      assert inspect(result, limit: :infinity) == full_expr
+      # greater than the number of exprs
+      assert inspect(result, limit: 8) == full_expr
       # equal to the number of exprs
-      assert inspect(result, limit: 7) == """
-             #Nx.Tensor<
-               f32
-             \s\s
-               Nx.Defn.Expr
-               parameter a:0       f32
-               parameter b:1       f32
-               parameter d:2       f32
-               parameter f:3       f32
-               c = add a, b        f32
-               e = subtract c, d   f32
-               g = multiply e, f   f32
-             >\
-             """
+      assert inspect(result, limit: 7) == full_expr
 
       # one less than the number of exprs
       assert inspect(result, limit: 6) == """
