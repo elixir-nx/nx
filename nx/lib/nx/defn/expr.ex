@@ -1584,17 +1584,25 @@ defmodule Nx.Defn.Expr do
         opts.limit == 0 ->
           [{"...", ""}]
 
-        (len = length(exprs)) > opts.limit ->
+        length(exprs) > opts.limit ->
           [h | t] = exprs
-
-          [
-            h,
-            {"...", ""}
-            | Enum.drop(t, max(len - opts.limit, 0))
-          ]
+          [h | Enum.take(t, opts.limit - 1)] ++ [{"...", ""}]
 
         true ->
           exprs
+      end
+
+    parameters =
+      cond do
+        opts.limit == 0 ->
+          [{"...", ""}]
+
+        (len = length(parameters)) > opts.limit ->
+          [h | t] = parameters
+          [h, {"...", ""} | Enum.drop(t, len - opts.limit)]
+
+        true ->
+          parameters
       end
 
     concat(line(), color("Nx.Defn.Expr", :map, opts))
