@@ -453,6 +453,18 @@ defmodule Nx.Defn.ExprTest do
              >\
              """
 
+      assert inspect(result, limit: 3) == """
+             #Nx.Tensor<
+               f32
+             \s\s
+               Nx.Defn.Expr
+               ...                \s
+               c = add a, b        f32
+               e = subtract c, d   f32
+               g = multiply e, f   f32
+             >\
+             """
+
       assert inspect(result, limit: 1) == """
              #Nx.Tensor<
                f32
