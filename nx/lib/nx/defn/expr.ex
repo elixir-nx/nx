@@ -1566,7 +1566,14 @@ defmodule Nx.Defn.Expr do
 
   def inspect(tensor, opts) do
     {_, %{exprs: exprs, parameters: parameters, length: length}} =
-      recur_inspect(tensor, %{cache: %{}, exprs: [], parameters: [], opts: opts, length: 0})
+      recur_inspect(tensor, %{
+        cache: %{},
+        exprs: [],
+        parameters: [],
+        opts: opts,
+        length: 0,
+        limit: opts.limit
+      })
 
     concat(line(), color("Nx.Defn.Expr", :map, opts))
     |> append_lines(parameters, length + 3)
@@ -1591,12 +1598,25 @@ defmodule Nx.Defn.Expr do
   end
 
   defp recur_inspect(%T{data: %Expr{id: id, op: op, args: args}} = tensor, state) do
-    case state.cache do
+    %{limit: limit, cache: cache} = state
+
+    case cache do
       %{^id => var_name} ->
         {var_name, state}
 
+      %{} when limit == 0 ->
+        state = state |> decrement_limit(limit) |> store_line(:parameters, "...", "")
+        var_name = var_name(state)
+        {var_name, put_in(state.cache[id], var_name)}
+
+      %{} when limit < 0 ->
+        var_name = var_name(state)
+        {var_name, put_in(state.cache[id], var_name)}
+
       %{} ->
-        {var_name, state} = cached_recur_inspect(op, args, to_type_shape(tensor), state)
+        {var_name, state} =
+          cached_recur_inspect(op, args, to_type_shape(tensor), decrement_limit(state, limit))
+
         {var_name, put_in(state.cache[id], var_name)}
     end
   end
@@ -1677,6 +1697,9 @@ defmodule Nx.Defn.Expr do
   defp traverse_args(args, state) do
     Enum.map_reduce(args, state, &recur_inspect/2)
   end
+
+  defp decrement_limit(state, :infinity), do: state
+  defp decrement_limit(state, limit), do: %{state | limit: limit - 1}
 
   defp doc_inspect(term, opts) do
     term
