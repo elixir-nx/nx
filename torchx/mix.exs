@@ -4,22 +4,6 @@ defmodule Torchx.MixProject do
   @source_url "https://github.com/elixir-nx/nx"
   @version "0.5.1"
 
-  @valid_targets ["cpu", "cu102", "cu113", "cu116", "cu117", "cu118"]
-
-  @libtorch_target System.get_env("LIBTORCH_TARGET", "cpu")
-
-  if @libtorch_target in ["cu102", "cu113", "cu116"] do
-    @default_libtorch_version "1.12.1"
-  else
-    @default_libtorch_version "2.0.0"
-  end
-
-  @libtorch_version System.get_env("LIBTORCH_VERSION", @default_libtorch_version)
-
-  @libtorch_base "libtorch"
-  @libtorch_env_dir System.get_env("LIBTORCH_DIR")
-  @libtorch_dir @libtorch_env_dir ||
-                  Path.join(__DIR__, "cache/libtorch-#{@libtorch_version}-#{@libtorch_target}")
   @libtorch_compilers [:torchx, :elixir_make]
 
   def project do
@@ -44,12 +28,16 @@ defmodule Torchx.MixProject do
       compilers: @libtorch_compilers ++ Mix.compilers(),
       aliases: aliases(),
       make_env: fn ->
+        libtorch_config = libtorch_config()
+
         priv_path = Path.join(Mix.Project.app_path(), "priv")
-        libtorch_link_path = @libtorch_env_dir || relative_to(@libtorch_dir, priv_path)
+
+        libtorch_link_path =
+          libtorch_config.env_dir || relative_to(libtorch_config.dir, priv_path)
 
         %{
-          "LIBTORCH_DIR" => @libtorch_dir,
-          "LIBTORCH_BASE" => @libtorch_base,
+          "LIBTORCH_DIR" => libtorch_config.dir,
+          "LIBTORCH_BASE" => libtorch_config.base,
           "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}",
           "LIBTORCH_LINK" => "#{libtorch_link_path}/lib"
         }
@@ -111,8 +99,24 @@ defmodule Torchx.MixProject do
     ]
   end
 
+  defp libtorch_config() do
+    target = System.get_env("LIBTORCH_TARGET", "cpu")
+    default_version = if(target in ["cu102", "cu113", "cu116"], do: "1.12.1", else: "2.0.0")
+    version = System.get_env("LIBTORCH_VERSION", default_version)
+    env_dir = System.get_env("LIBTORCH_DIR")
+
+    %{
+      valid_targets: ["cpu", "cu102", "cu113", "cu116", "cu117", "cu118"],
+      target: target,
+      version: version,
+      base: "libtorch",
+      env_dir: env_dir,
+      dir: env_dir || Path.join(__DIR__, "cache/libtorch-#{version}-#{target}")
+    }
+  end
+
   defp download_and_unzip(args) do
-    libtorch_dir = @libtorch_dir
+    libtorch_config = libtorch_config()
 
     cache_dir =
       if dir = System.get_env("LIBTORCH_CACHE") do
@@ -122,53 +126,55 @@ defmodule Torchx.MixProject do
       end
 
     if "--force" in args do
-      File.rm_rf(libtorch_dir)
+      File.rm_rf(libtorch_config.dir)
       File.rm_rf(cache_dir)
     end
 
-    if File.dir?(libtorch_dir) do
+    if File.dir?(libtorch_config.dir) do
       {:ok, []}
     else
-      download_and_unzip(cache_dir, libtorch_dir)
+      download_and_unzip(cache_dir, libtorch_config)
     end
   end
 
-  defp download_and_unzip(cache_dir, libtorch_dir) do
+  defp download_and_unzip(cache_dir, libtorch_config) do
     File.mkdir_p!(cache_dir)
-    libtorch_zip = Path.join(cache_dir, "libtorch-#{@libtorch_version}-#{@libtorch_target}.zip")
+
+    libtorch_zip =
+      Path.join(cache_dir, "libtorch-#{libtorch_config.version}-#{libtorch_config.target}.zip")
 
     unless File.exists?(libtorch_zip) do
       # Download libtorch
 
       # This is so we don't forget to update the URLs below when we want to update libtorch
-      if @libtorch_target != "cpu" and {:unix, :darwin} == :os.type() do
+      if libtorch_config.target != "cpu" and {:unix, :darwin} == :os.type() do
         Mix.raise("No CUDA support on OSX")
       end
 
       # Check if target is valid
-      unless Enum.member?(@valid_targets, @libtorch_target) do
-        Mix.raise("Invalid target, please use one of #{inspect(@valid_targets)}")
+      unless Enum.member?(libtorch_config.valid_targets, libtorch_config.target) do
+        Mix.raise("Invalid target, please use one of #{inspect(libtorch_config.valid_targets)}")
       end
 
       url =
         case :os.type() do
           {:unix, :linux} ->
-            "https://download.pytorch.org/libtorch/#{@libtorch_target}/libtorch-cxx11-abi-shared-with-deps-#{@libtorch_version}%2B#{@libtorch_target}.zip"
+            "https://download.pytorch.org/libtorch/#{libtorch_config.target}/libtorch-cxx11-abi-shared-with-deps-#{libtorch_config.version}%2B#{libtorch_config.target}.zip"
 
           {:unix, :darwin} ->
             # MacOS
             # pytorch only provides official pre-built binaries for x86_64
             case List.to_string(:erlang.system_info(:system_architecture)) do
               "x86_64" <> _ ->
-                "https://download.pytorch.org/libtorch/#{@libtorch_target}/libtorch-macos-#{@libtorch_version}.zip"
+                "https://download.pytorch.org/libtorch/#{libtorch_config.target}/libtorch-macos-#{libtorch_config.version}.zip"
 
               _ ->
-                "https://github.com/mlverse/libtorch-mac-m1/releases/download/LibTorch/libtorch-v#{@libtorch_version}.zip"
+                "https://github.com/mlverse/libtorch-mac-m1/releases/download/LibTorch/libtorch-v#{libtorch_config.version}.zip"
             end
 
           {:win32, :nt} ->
             # Windows
-            "https://download.pytorch.org/libtorch/#{@libtorch_target}/libtorch-win-shared-with-deps-#{@libtorch_version}%2B#{@libtorch_target}.zip"
+            "https://download.pytorch.org/libtorch/#{libtorch_config.target}/libtorch-win-shared-with-deps-#{libtorch_config.version}%2B#{libtorch_config.target}.zip"
 
           os ->
             Mix.raise("OS #{inspect(os)} is not supported")
@@ -178,7 +184,7 @@ defmodule Torchx.MixProject do
     end
 
     # Unpack libtorch and move to the target cache dir
-    parent_libtorch_dir = Path.dirname(libtorch_dir)
+    parent_libtorch_dir = Path.dirname(libtorch_config.dir)
     File.mkdir_p!(parent_libtorch_dir)
 
     # Extract to the parent directory (it will be inside the libtorch directory)
@@ -188,7 +194,7 @@ defmodule Torchx.MixProject do
       |> :zip.unzip(cwd: String.to_charlist(parent_libtorch_dir))
 
     # And then rename
-    File.rename!(Path.join(parent_libtorch_dir, "libtorch"), libtorch_dir)
+    File.rename!(Path.join(parent_libtorch_dir, "libtorch"), libtorch_config.dir)
 
     :ok
   end
