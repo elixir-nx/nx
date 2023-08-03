@@ -613,7 +613,7 @@ defmodule Nx.Serving do
           :ok
         end)
 
-        receive_stream(ref, size)
+        receive_stream("run/2", ref, size)
       else
         run_execute(module, function, size)
       end
@@ -850,7 +850,7 @@ defmodule Nx.Serving do
     Process.send(pid, {__MODULE__, :batched_run, ref, batch}, [:noconnect])
 
     if streaming? do
-      stream = receive_stream(ref, batch.size)
+      stream = receive_stream("batched_run/2", ref, batch.size)
       {:ok, handle_postprocessing(postprocessing, stream, info)}
     else
       case receive_batched(ref, batch.size, 0, [], nil) do
@@ -886,18 +886,30 @@ defmodule Nx.Serving do
 
         receive do
           {^ref, :stream} ->
-            Stream.unfold(:ok, fn :ok ->
-              receive do
-                {^ref, event} ->
-                  {event, :ok}
+            owner = self()
 
-                {:DOWN, ^monitor_ref, _, _, {^ref, :stream}} ->
-                  nil
+            Stream.resource(
+              fn ->
+                if self() != owner do
+                  raise "the stream returned from Nx.Serving.batched_run/2 must be consumed in the same process"
+                end
 
-                {:DOWN, ^monitor_ref, _, _, reason} ->
-                  exit({reason, {Nx.Serving, :streaming, []}})
-              end
-            end)
+                :ok
+              end,
+              fn :ok ->
+                receive do
+                  {^ref, event} ->
+                    {[event], :ok}
+
+                  {:DOWN, ^monitor_ref, _, _, {^ref, :stream}} ->
+                    {:halt, :ok}
+
+                  {:DOWN, ^monitor_ref, _, _, reason} ->
+                    exit({reason, {Nx.Serving, :streaming, []}})
+                end
+              end,
+              fn _ -> :ok end
+            )
 
           {:DOWN, ^monitor_ref, _, _, {^ref, result}} ->
             result
@@ -936,18 +948,30 @@ defmodule Nx.Serving do
 
   ## Client message receiving
 
-  defp receive_stream(ref, size) do
-    Stream.unfold({0, [], nil}, fn
-      {index, acc, template} ->
-        case receive_batched(ref, size, index, acc, template) do
-          {:done, _tensor, _metadata} = result -> {result, :done}
-          {:hook, name, value, index_acc_template} -> {{name, value}, index_acc_template}
-          {:DOWN, reason} -> exit({reason, {Nx.Serving, :streaming, []}})
+  defp receive_stream(fun, ref, size) do
+    owner = self()
+
+    Stream.resource(
+      fn ->
+        if self() != owner do
+          raise "the stream returned from Nx.Serving.#{fun} must be consumed in the same process"
         end
 
-      :done ->
-        nil
-    end)
+        {0, [], nil}
+      end,
+      fn
+        {index, acc, template} ->
+          case receive_batched(ref, size, index, acc, template) do
+            {:done, _tensor, _metadata} = result -> {[result], :done}
+            {:hook, name, value, index_acc_template} -> {[{name, value}], index_acc_template}
+            {:DOWN, reason} -> exit({reason, {Nx.Serving, :streaming, []}})
+          end
+
+        :done ->
+          {:halt, :done}
+      end,
+      fn _ -> :ok end
+    )
   end
 
   defp receive_batched(ref, size, size, acc, {template, metadata}) do
