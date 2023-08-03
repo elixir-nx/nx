@@ -250,6 +250,24 @@ defmodule Nx.ServingTest do
                {:done, Nx.tensor([[6.0, 7.0, 8.0], [9.0, 10.0, 11.0]]), :server_info}
              ]
     end
+
+    @tag :capture_log
+    test "raises when consumed in a different process" do
+      serving =
+        Nx.Serving.new(fn opts -> Nx.Defn.jit(&Nx.multiply(&1, 2), opts) end)
+        |> Nx.Serving.streaming()
+
+      batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
+
+      stream = Nx.Serving.run(serving, batch)
+
+      {_pid, ref} = spawn_monitor(fn -> Enum.to_list(stream) end)
+
+      assert_receive {:DOWN, ^ref, _, _, {%RuntimeError{message: message}, _}}
+
+      assert message ==
+               "the stream returned from Nx.Serving.run/2 must be consumed in the same process"
+    end
   end
 
   defp simple_supervised!(config, opts \\ []) do
@@ -775,6 +793,26 @@ defmodule Nx.ServingTest do
       Task.await(t1, :infinity)
       Task.await(t2, :infinity)
     end
+
+    @tag :capture_log
+    test "raises when consumed in a different process", config do
+      serving =
+        Nx.Serving.new(fn opts -> Nx.Defn.jit(&Nx.multiply(&1, 2), opts) end)
+        |> Nx.Serving.streaming()
+
+      simple_supervised!(config, serving: serving)
+
+      batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
+
+      stream = Nx.Serving.batched_run(config.test, batch)
+
+      {_pid, ref} = spawn_monitor(fn -> Enum.to_list(stream) end)
+
+      assert_receive {:DOWN, ^ref, _, _, {%RuntimeError{message: message}, _}}
+
+      assert message ==
+               "the stream returned from Nx.Serving.batched_run/2 must be consumed in the same process"
+    end
   end
 
   describe "partitioning" do
@@ -916,6 +954,7 @@ defmodule Nx.ServingTest do
     end
 
     @tag :distributed
+    @tag :capture_log
     test "spawns distributed tasks over the network with streaming", config do
       parent = self()
 
@@ -960,6 +999,16 @@ defmodule Nx.ServingTest do
              ]
 
       assert_receive {:pre, node, %Nx.Batch{size: 1}} when node == node()
+
+      # raises when consumed in a different process
+      stream = Nx.Serving.batched_run(config.test, batch, preprocessing)
+
+      {_pid, ref} = spawn_monitor(fn -> Enum.to_list(stream) end)
+
+      assert_receive {:DOWN, ^ref, _, _, {%RuntimeError{message: message}, _}}
+
+      assert message ==
+               "the stream returned from Nx.Serving.batched_run/2 must be consumed in the same process"
     end
 
     @tag :distributed
