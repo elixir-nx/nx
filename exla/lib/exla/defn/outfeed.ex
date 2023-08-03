@@ -90,12 +90,17 @@ defmodule EXLA.Defn.Outfeed do
     used_hooks =
       Enum.sort(for {k, v} <- default_hooks, v != nil or Map.has_key?(user_hooks, k), do: k)
 
+    # We don't store the user hooks yet, because we don't want them to be cached
     %Outfeed{
-      user_hooks: user_hooks,
       default_hooks: default_hooks,
       used_hooks: used_hooks
     }
   end
+
+  @doc """
+  Sets the user hooks to outfeed.
+  """
+  def with_user_hooks(%Outfeed{} = outfeed, user_hooks), do: %{outfeed | user_hooks: user_hooks}
 
   @doc """
   Sets the token to outfeed.
@@ -134,8 +139,7 @@ defmodule EXLA.Defn.Outfeed do
     cond do
       name in outfeed.used_hooks ->
         {outfeed, flag, shapes} = outfeed_flat_tuple(outfeed, builder, tuple)
-        fun = outfeed.user_hooks[name] || Map.fetch!(outfeed.default_hooks, name)
-        put_in(outfeed.compiled_hooks[flag], {:function, shapes, fun, Nx.to_template(expr)})
+        put_in(outfeed.compiled_hooks[flag], {:function, shapes, name, Nx.to_template(expr)})
 
       outfeed.token ->
         outfeed
@@ -204,23 +208,27 @@ defmodule EXLA.Defn.Outfeed do
         infeeds \\ %{}
       ) do
     %{client: client, device_id: device_id} = executable
-    %{compiled_hooks: compiled_hooks} = outfeed
+
+    %{compiled_hooks: compiled_hooks, default_hooks: default_hooks, user_hooks: user_hooks} =
+      outfeed
+
+    hooks = Map.merge(default_hooks, user_hooks)
 
     Task.Supervisor.start_child(EXLA.Defn.TaskSupervisor, fn ->
-      init(client, device_id, compiled_hooks, infeeds, group_leader)
+      init(client, device_id, hooks, compiled_hooks, infeeds, group_leader)
     end)
   end
 
-  defp init(client, device_id, hooks, infeeds, group_leader) do
+  defp init(client, device_id, hooks, compiled_hooks, infeeds, group_leader) do
     Process.flag(:trap_exit, true)
     # Copy the group leader so we report to the proper device
     Process.group_leader(self(), group_leader)
     ref = make_ref()
     shape = EXLA.Shape.make_shape({:u, 16}, {})
-    loop(client, device_id, ref, shape, hooks, infeeds)
+    loop(client, device_id, ref, shape, hooks, compiled_hooks, infeeds)
   end
 
-  defp loop(client, device_id, ref, shape, hooks, infeeds) do
+  defp loop(client, device_id, ref, shape, hooks, compiled_hooks, infeeds) do
     :ok = EXLA.Client.from_outfeed(client, device_id, [shape], self(), ref)
 
     receive do
@@ -228,7 +236,7 @@ defmodule EXLA.Defn.Outfeed do
         :ok
 
       {^ref, <<flag::native-unsigned-16>>} ->
-        case Map.fetch!(hooks, flag) do
+        case Map.fetch!(compiled_hooks, flag) do
           {:infeed, index, data_shape} ->
             data =
               case Map.fetch!(infeeds, index) do
@@ -237,13 +245,14 @@ defmodule EXLA.Defn.Outfeed do
               end
 
             EXLA.Client.to_infeed(client, device_id, [{data, data_shape}])
-            loop(client, device_id, ref, shape, hooks, infeeds)
+            loop(client, device_id, ref, shape, hooks, compiled_hooks, infeeds)
 
           {:stream, shapes, recv_pid, recv_ref} ->
             :ok = EXLA.Client.from_outfeed(client, device_id, shapes, recv_pid, recv_ref)
-            loop(client, device_id, ref, shape, hooks, infeeds)
+            loop(client, device_id, ref, shape, hooks, compiled_hooks, infeeds)
 
-          {:function, shapes, fun, template} ->
+          {:function, shapes, name, template} ->
+            fun = Map.fetch!(hooks, name)
             length = length(shapes)
             parent = self()
             ref = make_ref()
@@ -251,7 +260,7 @@ defmodule EXLA.Defn.Outfeed do
             :ok = EXLA.Client.from_outfeed(client, device_id, shapes, pid, ref)
 
             receive do
-              ^ref -> loop(client, device_id, ref, shape, hooks, infeeds)
+              ^ref -> loop(client, device_id, ref, shape, hooks, compiled_hooks, infeeds)
             end
         end
     end

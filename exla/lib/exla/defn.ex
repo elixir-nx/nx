@@ -459,6 +459,7 @@ defmodule EXLA.Defn do
       :telemetry.execute([:exla, :compilation], measurements, %{key: key})
     end
 
+    outfeed = Outfeed.with_user_hooks(outfeed, hooks)
     {executable, used_inputs, outputs, outfeed, extra, debug?}
   end
 
