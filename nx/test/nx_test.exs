@@ -2533,7 +2533,8 @@ defmodule NxTest do
       assert Nx.load_numpy!(File.read!("test/fixtures/numpy/2d_float32.npy")) ==
                Nx.tensor([[1, 2], [3, 4], [5, 6]], type: {:f, 32})
 
-      assert Nx.load_numpy!(File.read!("test/fixtures/numpy/1d_uint8.npy")) == Nx.tensor([1, 2, 3], type: {:u, 8})
+      assert Nx.load_numpy!(File.read!("test/fixtures/numpy/1d_uint8.npy")) ==
+               Nx.tensor([1, 2, 3], type: {:u, 8})
     end
   end
 

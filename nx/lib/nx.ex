@@ -15421,7 +15421,7 @@ defmodule Nx do
         _ -> raise "unsupported numpy type: #{type}"
       end
 
-     {System.endianness(), {type, 8}}
+    {System.endianness(), {type, 8}}
   end
 
   defp parse_type(<<?', byte_order, type, size, ?'>>) do
