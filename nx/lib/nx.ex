@@ -14432,7 +14432,7 @@ defmodule Nx do
   Concatenates tensors along the given axis.
 
   Tensors can be a tuple or any `Nx.Container` or `Nx.LazyContainer`.
-  This means you can easily concatenate all columns in a datafrane
+  This means you can easily concatenate all columns in a dataframe
   and other data structures. For convenience, this function also allows
   a list of tensors to be given, which may be common outside of `defn`.
 
@@ -14631,7 +14631,7 @@ defmodule Nx do
   Stacks a list of tensors with the same shape along a new axis.
 
   Tensors can be a tuple or any `Nx.Container` or `Nx.LazyContainer`.
-  This means you can easily concatenate all columns in a datafrane
+  This means you can easily concatenate all columns in a dataframe
   and other data structures. For convenience, this function also allows
   a list of tensors to be given, which may be common outside of `defn`.
 
