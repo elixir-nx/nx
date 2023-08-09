@@ -15412,6 +15412,18 @@ defmodule Nx do
     end
   end
 
+  defp parse_type(<<?', ?|, type, ?1, ?'>>) do
+    type =
+      case type do
+        ?u -> :u
+        ?i -> :s
+        ?f -> :f
+        _ -> raise "unsupported numpy type: #{type}"
+      end
+
+    {System.endianness(), {type, 8}}
+  end
+
   defp parse_type(<<?', byte_order, type, size, ?'>>) do
     byte_order =
       case byte_order do
