@@ -4,7 +4,7 @@
 #include <string>
 
 #include "exla_nif_util.h"
-#include "tensorflow/core/platform/logging.h"
+#include "tsl/platform/logging.h"
 #include "absl/base/log_severity.h"
 
 namespace exla {
@@ -12,7 +12,7 @@ namespace exla {
 // Redirects calls to logging to the Elixir Logger. `sink_pid`
 // is the PID for a GenServer in Elixir which receives messages
 // with logging information on every call to `LOG(severity)`.
-class ExlaLogSink : public tensorflow::TFLogSink {
+class ExlaLogSink : public tsl::TFLogSink {
  public:
   explicit ExlaLogSink(ErlNifPid sink_pid) : sink_pid_(sink_pid) {
     // Logger Env
@@ -45,7 +45,7 @@ class ExlaLogSink : public tensorflow::TFLogSink {
     return enif_make_tuple4(env_, status, msg, file, line_term);
   }
 
-  void Send(const tensorflow::TFLogEntry& entry) {
+  void Send(const tsl::TFLogEntry& entry) {
     ERL_NIF_TERM msg;
     std::string msg_str = entry.ToString();
     std::string fname = entry.FName();

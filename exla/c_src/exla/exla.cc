@@ -3,18 +3,18 @@
 #include "exla_nif_util.h"
 #include "exla_client.h"
 #include "exla_log_sink.h"
-#include "tensorflow/compiler/xla/service/platform_util.h"
-#include "tensorflow/compiler/xla/shape_util.h"
-#include "tensorflow/compiler/xla/client/xla_builder.h"
-#include "tensorflow/compiler/xla/client/xla_computation.h"
-#include "tensorflow/compiler/xla/client/client.h"
-#include "tensorflow/compiler/xla/client/lib/math.h"
-#include "tensorflow/compiler/xla/client/lib/lu_decomposition.h"
-#include "tensorflow/compiler/xla/client/lib/qr.h"
-#include "tensorflow/compiler/xla/client/lib/self_adjoint_eig.h"
-#include "tensorflow/compiler/xla/client/lib/svd.h"
-#include "tensorflow/compiler/xla/client/lib/sorting.h"
-#include "tensorflow/compiler/xla/primitive_util.h"
+#include "xla/service/platform_util.h"
+#include "xla/shape_util.h"
+#include "xla/client/xla_builder.h"
+#include "xla/client/xla_computation.h"
+#include "xla/client/client.h"
+#include "xla/client/lib/math.h"
+#include "xla/client/lib/lu_decomposition.h"
+#include "xla/client/lib/qr.h"
+#include "xla/client/lib/self_adjoint_eig.h"
+#include "xla/client/lib/svd.h"
+#include "xla/client/lib/sorting.h"
+#include "xla/primitive_util.h"
 
 // All of these are created with calls to `new` and subsequently
 // passed to the VM as pointers-to-pointers so we balance it out
@@ -2064,7 +2064,7 @@ ERL_NIF_TERM transfer_to_infeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM arg
     xla::Status transfer_status = (*client)->TransferToInfeed(env, terms[0], *shape, device_id);
 
     if(!transfer_status.ok()) {
-      return exla::nif::error(env, transfer_status.error_message().c_str());
+      return exla::nif::error(env, transfer_status.message().data());
     }
 
     data = tail;
@@ -2107,7 +2107,7 @@ ERL_NIF_TERM transfer_from_outfeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
 
     if (!statusor.ok()) {
       enif_clear_env(penv);
-      return exla::nif::error(env, statusor.status().error_message().c_str());
+      return exla::nif::error(env, statusor.status().message().data());
     }
 
     ERL_NIF_TERM msg = std::move(statusor.value());
@@ -2326,11 +2326,11 @@ ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   exla::ExlaLogSink* sink = new exla::ExlaLogSink(logger_pid);
 
   // NO_DEFAULT_LOGGER doesn't behave right
-  for (auto *log_sink : tensorflow::TFGetLogSinks()) {
-    tensorflow::TFRemoveLogSink(log_sink);
+  for (auto *log_sink : tsl::TFGetLogSinks()) {
+    tsl::TFRemoveLogSink(log_sink);
   }
 
-  tensorflow::TFAddLogSink(sink);
+  tsl::TFAddLogSink(sink);
 
   return exla::nif::ok(env);
 }
