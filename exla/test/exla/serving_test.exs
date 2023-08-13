@@ -55,10 +55,10 @@ defmodule EXLA.ServingTest do
           tensor.data.buffer.device_id
         end)
 
-      assert_receive {:execute, 0, executor}
+      assert_receive {:execute, 0, executor}, 5000
       send(executor, :continue)
 
-      assert_receive {:execute, 0, executor}
+      assert_receive {:execute, 0, executor}, 5000
       send(executor, :continue)
 
       assert Task.await(task1) == Task.await(task2)
