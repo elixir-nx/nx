@@ -12,5 +12,5 @@
   "nx": {:hex, :nx, "0.5.1", "118134b8c97c2a8f86c87aa8434994c1cbbe139a306b89cca04e08dd46228067", [:mix], [{:complex, "~> 0.5", [hex: :complex, repo: "hexpm", optional: false]}, {:telemetry, "~> 0.4.0 or ~> 1.0", [hex: :telemetry, repo: "hexpm", optional: false]}], "hexpm", "ceb8fbbe19b3c4252a7188d8b0e059fac9da0f4a4f3bb770fc665fdd0b29f0c5"},
   "statistex": {:hex, :statistex, "1.0.0", "f3dc93f3c0c6c92e5f291704cf62b99b553253d7969e9a5fa713e5481cd858a5", [:mix], [], "hexpm", "ff9d8bee7035028ab4742ff52fc80a2aa35cece833cf5319009b52f1b5a86c27"},
   "telemetry": {:hex, :telemetry, "1.2.1", "68fdfe8d8f05a8428483a97d7aab2f268aaff24b49e0f599faa091f1d4e7f61c", [:rebar3], [], "hexpm", "dad9ce9d8effc621708f99eac538ef1cbe05d6a874dd741de2e689c47feafed5"},
-  "xla": {:git, "https://github.com/elixir-nx/xla.git", "a864469e7a5ecec4569cd260b50347c1a274deaf", []},
+  "xla": {:git, "https://github.com/elixir-nx/xla.git", "c43861c47ea971e530af2fa108cdcc63363c3f11", []},
 }
