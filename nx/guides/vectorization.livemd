@@ -253,7 +253,7 @@ In the example above, we can see that both tensors end up containing vectorized 
 
 Finally, the `align_ranks: true` option is passed so that the inner shape (the non-vectorized part!) of both tensors ends up in a broadcastable shape with the same rank across all tensors. The example uses only 2 tensors, but the list can have arbitrary size.
 
-`Nx.broadcast_tensors/2` works similarly, except it also broadcasts the dimensions instead of simply reshaping:
+`Nx.broadcast_vectors/2` works similarly, except it also broadcasts the dimensions instead of simply reshaping:
 
 ```elixir
 x = Nx.iota({2, 1}, vectorized_axes: [x: 2, y: 1])
