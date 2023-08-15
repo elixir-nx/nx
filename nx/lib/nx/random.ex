@@ -556,6 +556,8 @@ defmodule Nx.Random do
 
   ## Options
 
+    * `:type` - a float type for the returned tensor
+
     * `:shape` - shape of the returned tensor
 
     * `:names` - the names of the returned tensor
@@ -579,22 +581,22 @@ defmodule Nx.Random do
       >
 
       iex> key = Nx.Random.key(12)
-      iex> {multivariate_normal, _new_key} = Nx.Random.multivariate_normal(key, Nx.tensor([0]), Nx.tensor([[1]]), shape: {3, 2})
+      iex> {multivariate_normal, _new_key} = Nx.Random.multivariate_normal(key, Nx.tensor([0]), Nx.tensor([[1]]), shape: {3, 2}, type: :f16)
       iex> multivariate_normal
       #Nx.Tensor<
-        f32[3][2][1]
+        f16[3][2][1]
         [
           [
-            [0.7878797650337219],
-            [0.7445305585861206]
+            [0.326904296875],
+            [0.2176513671875]
           ],
           [
-            [-0.9385733008384705],
-            [1.37663996219635]
+            [0.316650390625],
+            [0.1109619140625]
           ],
           [
-            [0.35099124908447266],
-            [-1.1289547681808472]
+            [0.53955078125],
+            [-0.8857421875]
           ]
         ]
       >
@@ -630,8 +632,10 @@ defmodule Nx.Random do
   """
   defn multivariate_normal_split(key, mean, covariance, opts \\ []) do
     assert_key!(key)
-    opts = keyword!(opts, [:names, :shape, method: :cholesky])
-    shape = validate_multivariate_normal_args(mean, covariance, opts)
+    opts = keyword!(opts, [:names, :type, :shape, method: :cholesky])
+    {type, shape} = validate_multivariate_normal_args(mean, covariance, opts)
+    mean = Nx.as_type(mean, type)
+    covariance = Nx.as_type(covariance, type)
 
     a =
       case opts[:method] do
@@ -648,7 +652,7 @@ defmodule Nx.Random do
       end
 
     z =
-      normal_split(key, 0.0, 1.0, shape: shape, type: Nx.type(a))
+      normal_split(key, 0.0, 1.0, shape: shape, type: type)
       |> Nx.reshape({:auto, Nx.size(mean)})
 
     # x = mean + z * a^T
@@ -663,6 +667,14 @@ defmodule Nx.Random do
             """
             method must be either :svd, :eigh, or :cholesky
             """
+    end
+
+    type = infer_float_type(mean, covariance, opts)
+    case type do
+      {:f, _} -> nil
+      {:bf, _} -> nil
+      {:c, _} -> Nx.Shared.raise_complex_not_supported(:multivariate_normal_split, 4)
+      _ -> raise ArgumentError, "expected float or complex type, got type #{inspect(type)}"
     end
 
     if Nx.rank(mean) != 1 do
@@ -695,7 +707,7 @@ defmodule Nx.Random do
             """
     end
 
-    case opts[:shape] do
+    shape = case opts[:shape] do
       nil ->
         {dim}
 
@@ -708,6 +720,8 @@ defmodule Nx.Random do
               shape must be a tuple of integers
               """
     end
+
+    {type, shape}
   end
 
   @doc """

@@ -161,19 +161,43 @@ defmodule Nx.RandomTest do
       # zero mean and identity covariance
       assert Nx.Random.multivariate_normal_split(
                key,
-               Nx.tensor([0], type: :f32),
+               Nx.tensor([0.0], type: :f32),
                Nx.eye(1, type: :f32)
              ) == Nx.tensor([-0.5135871767997742], type: :f32)
 
       assert Nx.Random.multivariate_normal_split(
                key,
-               Nx.tensor([0, 0], type: :f32),
+               Nx.tensor([0.0, 0.0], type: :f32),
                Nx.eye(2, type: :f32)
              ) == Nx.tensor([0.37033146619796753, -0.9389335513114929], type: :f32)
 
       # int to float cast
       assert Nx.Random.multivariate_normal_split(key, Nx.tensor([0, 0]), Nx.eye(2)) ==
                Nx.tensor([0.37033146619796753, -0.9389335513114929], type: :f32)
+
+      # f32 to bf16 downcast
+      assert Nx.Random.multivariate_normal_split(
+               key,
+               Nx.tensor([0.0, 0.0], type: :f32),
+               Nx.eye(2, type: :f32),
+               type: :bf16
+             ) == Nx.tensor([0.0146484375, 0.1318359375], type: :bf16)
+
+      # f32 to f16 downcast
+      assert Nx.Random.multivariate_normal_split(
+               key,
+               Nx.tensor([0.0, 0.0], type: :f32),
+               Nx.eye(2, type: :f32),
+               type: :f16
+             ) == Nx.tensor([0.037322998046875, 0.1455078125], type: :f16)
+
+      # upcast
+      assert Nx.Random.multivariate_normal_split(
+               key,
+               Nx.tensor([0.0, 0.0], type: :f32),
+               Nx.eye(2, type: :f32),
+               type: :f64
+             ) == Nx.tensor([-1.3117988877107423, -0.708217598850204], type: :f64)
     end
   end
 
