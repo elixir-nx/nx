@@ -1,6 +1,26 @@
 # Changelog
 
-## v0.6.0-dev
+## v0.6.0 (2023-08-15)
+
+### Enhancements
+
+  * [Nx] Add constant creation helpers such as `u8`, `f32`, etc
+  * [Nx] Implement Bluestein's algorithm for `fft` and `ifft` in the binary backend
+  * [Nx] Support range with steps when accessing tensors
+  * [Nx] Support vectorization via `Nx.vectorize/2`, `Nx.devectorize/2`, `Nx.revectorize/2`, `Nx.reshape_vectors/2`, and `Nx.broadcast_vectors/2`
+  * [Nx] Add `Nx.logsumexp/2`
+  * [Nx] Add `Nx.split/3`
+  * [Nx] Add `Nx.tri/2`, `Nx.triu/2`, `Nx.tril/2`
+  * [Nx] Introduce a new serialization format that is more suitable to memory mapping
+  * [Nx.Defn] Consider Inspect.Opts limit when pretty printing Nx.Defn expressions
+  * [Nx.Serving] Support multiple batch keys in Nx.Serving
+  * [Nx.Serving] Support streaming in Nx.Serving
+
+### Bug fixes
+
+  * [Nx] Fix `from_numpy` with 1-byte width arrays
+  * [Nx] Fix cases where pretty printing large Nx.Defn expressions would take a long time
+  * [Nx] Fix `reduce_min`/`reduce_max` for non-finite values
 
 ### Deprecations
 

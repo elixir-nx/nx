@@ -881,7 +881,7 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :add, args: [_, _]}} = add_two_from_external_macro(1, 2)
     end
 
-    defmacrop add_internal(a, b) do
+    defmacro add_internal(a, b) do
       use Nx.Defn.Kernel
 
       quote do
@@ -894,7 +894,7 @@ defmodule Nx.DefnTest do
     end
 
     test "internal" do
-      assert %T{data: %Expr{op: :add, args: [_, _]}} = add_two_from_external_macro(1, 2)
+      assert %T{data: %Expr{op: :add, args: [_, _]}} = add_two_from_internal_macro(1, 2)
     end
 
     defn add_two_from_alias(a, b) do
