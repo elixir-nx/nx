@@ -1169,6 +1169,13 @@ defmodule Nx.Defn.Kernel do
     while(pattern, pattern, vars, values, :none, condition, block, opts)
   end
 
+  defmacro while(_var, _cond, _opts, other) do
+    Kernel.raise(
+      ArgumentError,
+      "expected last argument of \"while\" to be a do-block, got: #{Macro.to_string(other)}"
+    )
+  end
+
   defp while(initial, pattern, vars, values, generator, condition, block, opts) do
     __defn__!(:while, 4)
 
@@ -1198,13 +1205,6 @@ defmodule Nx.Defn.Kernel do
         unquote(opts)
       )
     end
-  end
-
-  defmacro while(_var, _cond, _opts, other) do
-    Kernel.raise(
-      ArgumentError,
-      "expected last argument of \"while\" to be a do-block, got: #{Macro.to_string(other)}"
-    )
   end
 
   @doc false

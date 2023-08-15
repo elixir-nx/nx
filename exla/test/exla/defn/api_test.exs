@@ -309,6 +309,15 @@ defmodule EXLA.Defn.APITest do
 
       assert_receive {:tag, tensor}
       assert_equal(tensor, Nx.tensor(5))
+
+      # Executing again with another tag works
+      assert_equal(
+        EXLA.jit(&hook_default/2, hooks: %{default: send_to_self(:another_tag)}).(2, 3),
+        Nx.tensor(5)
+      )
+
+      assert_receive {:another_tag, tensor}
+      assert_equal(tensor, Nx.tensor(5))
     end
 
     defn hook_optional(a, b) do

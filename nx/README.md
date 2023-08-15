@@ -10,9 +10,11 @@ Nx is a multi-dimensional tensors library for Elixir with multi-staged compilati
 
   * Automatic differentiation, also known as autograd. The `grad` function provides reverse-mode differentiation, useful for simulations, training probabilistic models, etc;
 
+  * Auto-vectorization and auto-batching, which allow developers to elegantly transform numerical code that only work on specific dimensions, into code that efficiently runs on higher dimensions in parallel
+
   * Numerical definitions, known as `defn`, is a subset of Elixir that is compilable to multiple targets, including GPUs. See [EXLA](https://github.com/elixir-nx/nx/tree/main/exla) for just-in-time (JIT) compilation for CPUs/GPUs/TPUs and [Torchx](https://github.com/elixir-nx/nx/tree/main/torchx) for CPUs/GPUs support;
 
-  * Built-in distributed² serving: encapsulate complex numerical pipelines into `Nx.Serving`. Servings provide batching, up to a given size or time, distribution over multiple CPU cores and GPU devices, as well as distribution over a cluster of machines;
+  * Built-in distributed² serving: encapsulate complex numerical pipelines into `Nx.Serving`. Servings provide batching, streaming, and partitioning out of the box. You can distribute servings over multiple CPU cores and GPU devices, as well as over a cluster of machines;
 
   * Support for data streaming and hooks, allowing developers to send and receive data from CPUs/GPUs/TPUs while computations are running;
 

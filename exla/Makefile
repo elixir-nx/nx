@@ -23,15 +23,15 @@ EXLA_CACHE_SO_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(EXLA_CACHE_SO)
 # Build flags
 CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -O3 -Wall -Wno-sign-compare \
 	 -Wno-unused-parameter -Wno-missing-field-initializers -Wno-comment \
-	 -shared -std=c++17 -w -DLLVM_ON_UNIX=1
+	 -shared -std=c++17 -w -DLLVM_VERSION_STRING=
 
 LDFLAGS = -L$(XLA_EXTENSION_LIB) -lxla_extension
 
 ifeq ($(shell uname -s), Darwin)
 	LDFLAGS += -flat_namespace -undefined suppress
 	POST_INSTALL = install_name_tool \
-		-change bazel-out/darwin_arm64-opt/bin/tensorflow/compiler/xla/extension/libxla_extension.so @loader_path/xla_extension/lib/libxla_extension.so \
-		-change bazel-out/darwin-opt/bin/tensorflow/compiler/xla/extension/libxla_extension.so @loader_path/xla_extension/lib/libxla_extension.so \
+		-change bazel-out/darwin_arm64-opt/bin/xla/extension/libxla_extension.so @loader_path/xla_extension/lib/libxla_extension.so \
+		-change bazel-out/darwin-opt/bin/xla/extension/libxla_extension.so @loader_path/xla_extension/lib/libxla_extension.so \
 		$(EXLA_CACHE_SO)
 else
 	# Use a relative RPATH, so at runtime libexla.so looks for libxla_extension.so
