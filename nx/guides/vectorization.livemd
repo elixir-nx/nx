@@ -6,11 +6,11 @@ Mix.install([{:nx, github: "elixir-nx/nx", sparse: "nx"}])
 
 ## What is vectorization?
 
-Vectorization in Nx is the concept of imposing "for-each" semantics into leading tensor axes. This enables writing tensor operations in a simpler way, as we'll see in this guide.
+Vectorization in Nx is the concept of imposing "for-each" semantics into leading tensor axes. This enables writing tensor operations in a simpler way, avoiding `while` loops, which also leading to more efficient code, as we'll see in this guide.
 
 <!-- livebook:{"break_markdown":true} -->
 
-There are a few functions related to vectorization. First we'll look into `Nx.vectorize/2`, `Nx.devectorize/2` and `Nx.revectorize/3`.
+There are a few functions related to vectorization. First we'll look into `Nx.vectorize/2`, `Nx.devectorize/2`, and `Nx.revectorize/3`.
 
 For these examples, we'll utilize the `normalize` function defined below, which only works with 1D tensors. The function subtracts the minimum value and divides the tensor by the resulting maximum.
 
@@ -25,13 +25,19 @@ defmodule Example do
     end
 
     min = Nx.reduce_min(t)
-
     zero_min = Nx.subtract(t, min)
-
     Nx.divide(zero_min, Nx.reduce_max(zero_min))
   end
 end
 ```
+
+We can invoke it as:
+
+```elixir
+Example.normalize(Nx.tensor([1, 2, 3]))
+```
+
+However, if we attempt to call it for any tensor with more than one dimension, it won't work. Let's first define a 2D tensor:
 
 ```elixir
 t =
@@ -42,22 +48,25 @@ t =
   ])
 ```
 
+Now if we attempt to invoke it:
+
 ```elixir
-# This will raise
 Example.normalize(t)
 ```
+
+To address this, we can vectorize the tensor:
 
 ```elixir
 vec = Nx.vectorize(t, :rows)
 ```
 
-As we can see above, the newly vectorized `vec` is the same tensor as `t`, but the first axis is now a `vectorized` axis called `rows`, with size `3`. This means that for all intents and purposes, we can think of this tensor as a 1D tensor, on which our `normalize` function will now work as if we passed those 3 rows separately (thus the "for-each" semantics mentioned above).
+As we can see above, the newly vectorized `vec` is the same tensor as `t`, but the first axis is now a `vectorized` axis called `rows`, with size `3`. This means that for all intents and purposes, we can think of this tensor as a 1D tensor, on which our `normalize` function will now work as if we passed those 3 rows separately (thus the "for-each" semantics mentioned above). Let's give it a try:
 
 ```elixir
 normalized_vec = Example.normalize(vec)
 ```
 
-Now, we can't treat this tensor as a matrix (2D tensor), because the result is still vectorized. For this, we can use the `devectorize` function as follows.
+While the tensor is vectorized, we can't treat it as a matrix (2D tensor):
 
 ```elixir
 right =
@@ -72,6 +81,8 @@ right =
 Nx.add(normalized_vec, right)
 ```
 
+You can devectorize the tensor to get its original shape:
+
 ```elixir
 # If we want to keep the vectorized axes' names
 Nx.devectorize(normalized_vec)
@@ -82,15 +93,18 @@ Nx.devectorize(normalized_vec)
 devec = Nx.devectorize(normalized_vec, keep_names: false)
 ```
 
+Once devectorized, we can effectively add the two matrices together:
+
 ```elixir
-# this now returns just a single matrix because we're 
-# operating on 2 non-vectorized tensors
 Nx.add(devec, right)
 ```
+
+## Revectorization
 
 Now that we have the basics down, let's discuss `Nx.revectorize` with multi dimensional tensors. This is especially useful in cases where we have multiple vectorization axes which we want to collapse and then re-expand.
 
 ```elixir
+# This version of vectorize also asserts on the size of the dimensions being vectorized
 t = Nx.iota({2, 1, 3, 2, 2}) |> Nx.vectorize(x: 2, y: 1, z: 3)
 ```
 
@@ -99,11 +113,12 @@ Let's imagine we want to operate on the vectorized iota `t` above, adding a spec
 ```elixir
 collapsed_t = Nx.revectorize(t, [vectors: :auto], target_shape: t.shape)
 
-# get the vectorized_size from the new collapsed axis
 [vectors: vectorized_size] = collapsed_t.vectorized_axes
 
 constants =
-  Nx.iota({vectorized_size}) |> Nx.multiply(100) |> Nx.vectorize(vectors: vectorized_size)
+  Nx.iota({vectorized_size})
+  |> Nx.multiply(100)
+  |> Nx.vectorize(vectors: vectorized_size)
 
 {constants, collapsed_t}
 ```
@@ -155,7 +170,6 @@ defmodule WhileExample do
   defn vectorized_sum_and_multiply(x, y) do
     # for the sake of equivalence, we'll keep the limitation
     # of accepting only rank-2 tensors for x
-
     {n, m} =
       case Nx.shape(x) do
         {n, m} ->
@@ -183,6 +197,8 @@ defmodule WhileExample do
 end
 ```
 
+Let's give those definitions a try:
+
 ```elixir
 x =
   Nx.tensor([
@@ -205,11 +221,13 @@ y_vec = Nx.concatenate([y, Nx.multiply(y, 2)]) |> Nx.reshape({2, 3}) |> Nx.vecto
 }
 ```
 
-The eagle-eyed reader will have noticed that we inadvertently threw away the vectorized axes that we received from `y`. This is becaused during our usage of `revectorize` we disregarded the possibility that the axes could be different in each input tensor.
+The advantage of vectorization is that the underlying compilers and hardware may do a much better job of optimizing tensor operations than `while` loops, which often run linearly.
+
+The eagle-eyed reader will have noticed that we inadvertently threw away the vectorized axes that we received from `y`. This is because our usage of `revectorize` disregards the possibility that the axes could be different in each input tensor. Luckily, we can tackle this problem too.
 
 ## Reshape and Broadcast Vectors
 
-The bug introduced in the previous section can be solved through `Nx.reshape_vectors/1` and `Nx.broadcast_vectors/1`. Both functions receive lists of tensors and will operate on their vectorized axes to ensure that the shapes are compatibilized in one way or the other.
+The bug introduced in the previous section can be solved through `Nx.reshape_vectors/1` and `Nx.broadcast_vectors/1`. Both functions receive lists of tensors and will operate on their vectorized axes to ensure that the shapes are compatible in one way or the other.
 
 Nx functions will natively do this for us, as we see below:
 
@@ -225,17 +243,17 @@ Nx.multiply(vec_i, vec_j)
 Ok, now that we know that broadcasting will work on vectorized axes to add elements in our resulting tensor, we can look into the aforementioned functions.
 
 ```elixir
-x = Nx.iota({2, 1}, vectorized_axes: [x: 2, y: 1])
-y = Nx.iota({}, vectorized_axes: [z: 2, x: 1])
+a = Nx.iota({2, 1}, vectorized_axes: [x: 2, y: 1])
+b = Nx.iota({}, vectorized_axes: [z: 2, x: 1])
 
-Nx.reshape_vectors([x, y], align_ranks: true)
+Nx.reshape_vectors([a, b], align_ranks: true)
 ```
 
-In the example above, we can see that both tensors end up containing vectorized axes `:x`, `:y` and `:z`. Furthermore, we can also see that the `y` tensor was rearranged so that the `:x` axis comes first. All tensors end up with the same ordering of axes, but the axes aren't resized in any way.
+In the example above, we can see that both tensors end up containing vectorized axes `:x`, `:y`, and `:z`. Furthermore, we can also see that the `b` tensor was rearranged so that the `:x` axis comes first. All tensors end up with the same ordering of axes, but the axes aren't resized in any way.
 
-Finally, the `align_ranks: true` option is passed so that the inner shape (the non-vectorized part!) of both tensors ends up in a broadcastable shape with the same rank across all tensors.
+Finally, the `align_ranks: true` option is passed so that the inner shape (the non-vectorized part!) of both tensors ends up in a broadcastable shape with the same rank across all tensors. The example uses only 2 tensors, but the list can have arbitrary size.
 
-The example uses only 2 tensors, but the list can have arbitrary size.
+`Nx.broadcast_tensors/2` works similarly, except it also broadcasts the dimensions instead of simply reshaping:
 
 ```elixir
 x = Nx.iota({2, 1}, vectorized_axes: [x: 2, y: 1])
@@ -244,7 +262,7 @@ y = Nx.iota({}, vectorized_axes: [z: 2, x: 1])
 Nx.broadcast_vectors([x, y])
 ```
 
-Now, with `broadcast_vectors`, most of the behavior is the same. The key difference is that all vectorized axes will end up with the same size in all resulting tensors, effectively behaving the same as `Nx.broadcast` does for non-vectorized shapes. Specifically, we can see that the `x` tensor gets the new `z: 2` axis and `y` gets both `x: 2, y: 1`, where the `:x` axis was already present, but has now been resized.
+The key difference is that all vectorized axes will end up with the same size in all resulting tensors, effectively behaving the same as `Nx.broadcast` does for non-vectorized shapes. Specifically, we can see that the `x` tensor gets the new `z: 2` axis and `y` gets both `x: 2, y: 1`, where the `:x` axis was already present, but has now been resized.
 
 With this knowledge we can rewrite our function without the bug, as follows:
 
@@ -284,6 +302,8 @@ defmodule BroadcastVectorsExample do
   end
 end
 ```
+
+Let's give it once again another try:
 
 ```elixir
 x =
