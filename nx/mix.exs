@@ -62,6 +62,7 @@ defmodule Nx.MixProject do
       extras: [
         "guides/intro-to-nx.livemd",
         "guides/tensor-aggregation-101.livemd",
+        "guides/vectorization.livemd",
         "CHANGELOG.md"
       ],
       skip_undefined_reference_warnings_on: ["CHANGELOG.md"],
