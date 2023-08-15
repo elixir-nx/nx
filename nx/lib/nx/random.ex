@@ -670,6 +670,7 @@ defmodule Nx.Random do
     end
 
     type = infer_float_type(mean, covariance, opts)
+
     case type do
       {:f, _} -> nil
       {:bf, _} -> nil
@@ -707,19 +708,20 @@ defmodule Nx.Random do
             """
     end
 
-    shape = case opts[:shape] do
-      nil ->
-        {dim}
+    shape =
+      case opts[:shape] do
+        nil ->
+          {dim}
 
-      dims when is_tuple(dims) ->
-        Tuple.append(dims, dim)
+        dims when is_tuple(dims) ->
+          Tuple.append(dims, dim)
 
-      _ ->
-        raise ArgumentError,
-              """
-              shape must be a tuple of integers
-              """
-    end
+        _ ->
+          raise ArgumentError,
+                """
+                shape must be a tuple of integers
+                """
+      end
 
     {type, shape}
   end
