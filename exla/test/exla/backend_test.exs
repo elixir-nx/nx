@@ -42,8 +42,6 @@ defmodule EXLA.BackendTest do
   case EXLAHelpers.client() do
     %EXLA.Client{platform: :cuda} ->
       @precision_error_doctests [
-
-
                                   standard_deviation: 2,
                                   rsqrt: 1,
                                   acos: 1,
