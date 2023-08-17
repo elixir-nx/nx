@@ -10,4 +10,5 @@ path = "src/lib.rs"
 crate-type = ["cdylib"]
 
 [dependencies]
+candle-core = "0.1.0"
 rustler = "0.29.1"
