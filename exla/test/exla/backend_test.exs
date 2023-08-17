@@ -39,6 +39,23 @@ defmodule EXLA.BackendTest do
     default_backend: 1
   ]
 
+  case EXLAHelpers.client() do
+    %EXLA.Client{platform: :cuda} ->
+      @precision_error_doctests [
+                                  standard_deviation: 2,
+                                  rsqrt: 1,
+                                  acos: 1,
+                                  variance: 2,
+                                  atan2: 2,
+                                  weighted_mean: 3,
+                                  cbrt: 1
+                                ] ++ @precision_error_doctests
+      @inherently_unsupported_doctests [conv: 3] ++ @inherently_unsupported_doctests
+
+    _ ->
+      nil
+  end
+
   doctest Nx,
     except:
       [:moduledoc] ++
