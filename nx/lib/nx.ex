@@ -7704,10 +7704,10 @@ defmodule Nx do
         [0, 2, 4]
       >
 
-      iex> Nx.indexed_put(Nx.tensor([0, 0, 0]), Nx.tensor([[1], [2], [1]]), Nx.tensor([3, 4, 2]))
+      iex> Nx.indexed_put(Nx.tensor([0, 0, 0]), Nx.tensor([[1], [2]]), Nx.tensor([3, 4]))
       #Nx.Tensor<
         s64[3]
-        [0, 2, 4]
+        [0, 3, 4]
       >
 
       iex> t = Nx.iota({1, 2, 3})

@@ -1816,7 +1816,6 @@ defmodule EXLA.Defn.ExprTest do
 
       indices =
         Nx.tensor([
-          [0, 0, 0],
           [0, 0, 1],
           [0, 0, 0],
           [0, 1, 1],
@@ -1827,7 +1826,6 @@ defmodule EXLA.Defn.ExprTest do
 
       updates =
         Nx.tensor([
-          1,
           1,
           -1,
           2,
