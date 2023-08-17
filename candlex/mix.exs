@@ -21,6 +21,7 @@ defmodule Candlex.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:nx, path: "../nx"},
       {:rustler, "~> 0.29.1"}
     ]
   end
