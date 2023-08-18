@@ -126,6 +126,13 @@ defmodule EXLA.BackendTest do
     end
   end
 
+  test "Nx.pad/3 with multiple backends" do
+    t = Nx.tensor([1, 1], backend: Nx.BinaryBackend)
+    pad_value = Nx.tensor(0, backend: EXLA.Backend)
+    result = Nx.pad(t, pad_value, [{1, 1, 0}])
+    assert_equal(result, Nx.tensor([0, 1, 1, 0]))
+  end
+
   test "Nx.LinAlg.svd/2" do
     t = Nx.iota({4, 4})
     assert {u, s, vt} = Nx.LinAlg.svd(t, max_iter: 10_000)
