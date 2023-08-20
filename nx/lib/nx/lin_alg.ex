@@ -1738,6 +1738,15 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4]]), 1)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 2],
+          [3, 4]
+        ]
+      >
+
       iex> Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4]]), 6)
       #Nx.Tensor<
         s64[2][2]
@@ -1811,6 +1820,14 @@ defmodule Nx.LinAlg do
     :ok = Nx.Shape.matrix_power(shape)
 
     Nx.eye(shape)
+  end
+
+  # Define below function to avoid unnecessary processing when `power` is 1.
+  def matrix_power(tensor, 1) do
+    shape = Nx.shape(tensor)
+    :ok = Nx.Shape.matrix_power(shape)
+
+    tensor
   end
 
   def matrix_power(tensor, power) when is_integer(power) do
