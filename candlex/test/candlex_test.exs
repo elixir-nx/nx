@@ -4,7 +4,9 @@ defmodule CandlexTest do
 
   describe "creation" do
     test "tensor" do
-      Nx.tensor(100_002, type: :u32, backend: Candlex.Backend)
+      tensor = Nx.tensor(100_002, type: :u32, backend: Candlex.Backend)
+
+      tensor
       |> IO.inspect()
       |> Nx.to_binary()
       |> IO.inspect()
@@ -24,12 +26,12 @@ defmodule CandlexTest do
       |> Nx.to_binary()
       |> IO.inspect()
 
-
       Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], type: :u32, backend: Candlex.Backend)
       |> IO.inspect()
       |> Nx.to_binary()
       |> IO.inspect()
-      # assert Nx.backend_transfer(tensor) == Nx.tensor(1, type: :u32, backend: Nx.BinaryBackend)
+
+      assert Nx.backend_copy(tensor) == Nx.tensor(100_002, type: :u32, backend: Nx.BinaryBackend)
     end
   end
 end

@@ -40,6 +40,11 @@ defmodule Candlex.Backend do
   end
 
   # @impl true
+  def backend_copy(%T{} = tensor, backend, backend_options) do
+    backend.from_binary(tensor, to_binary(tensor), backend_options)
+  end
+
+  # @impl true
   def inspect(%T{} = tensor, inspect_opts) do
     limit = if inspect_opts.limit == :infinity, do: :infinity, else: inspect_opts.limit + 1
 
@@ -49,7 +54,7 @@ defmodule Candlex.Backend do
     |> maybe_add_signature(tensor)
   end
 
-  def to_binary(tensor, _limit) do
+  def to_binary(tensor, _limit \\ nil) do
     # TODO: don't ignore limit
 
     from_nx(tensor)
