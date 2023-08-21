@@ -24,7 +24,7 @@ impl ExTensor {
     }
 }
 
-// Implement Deref so we can call `Tensor` functions directly from a `ExTensor` struct.
+// Implement Deref so we can call `Tensor` functions directly from an `ExTensor` struct.
 impl Deref for ExTensor {
     type Target = Tensor;
 
