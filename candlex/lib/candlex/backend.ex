@@ -21,12 +21,10 @@ defmodule Candlex.Backend do
   end
 
   @impl true
-  def constant(%T{shape: {}, type: _type} = tensor, scalar, _backend_options) do
-    # TODO: Don't ignore backend options
-
-    scalar
-    |> Native.scalar_tensor()
-    |> to_nx(tensor)
+  def constant(%T{} = tensor, scalar, backend_options) do
+    tensor
+    |> Nx.BinaryBackend.constant(scalar, [])
+    |> Nx.BinaryBackend.backend_transfer(__MODULE__, backend_options)
   end
 
   @impl true

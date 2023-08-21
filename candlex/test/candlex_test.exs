@@ -4,50 +4,29 @@ defmodule CandlexTest do
 
   describe "creation" do
     test "tensor" do
-      tensor = Nx.tensor(100_002, type: :u32, backend: Candlex.Backend)
-
-      tensor
-      |> IO.inspect()
-      |> Nx.to_binary()
-      |> IO.inspect()
-
-      Nx.tensor([1, 2], type: :u32, backend: Candlex.Backend)
-      |> IO.inspect()
-      |> Nx.to_binary()
-      |> IO.inspect()
-
-      Nx.tensor([[1, 2], [3, 4]], type: :u32, backend: Candlex.Backend)
-      |> IO.inspect()
-      |> Nx.to_binary()
-      |> IO.inspect()
-
-      Nx.tensor([[1, 2, 3, 4], [5, 6, 7, 8]], type: :u32, backend: Candlex.Backend)
-      |> IO.inspect()
-      |> Nx.to_binary()
-      |> IO.inspect()
-
-      Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], type: :u32, backend: Candlex.Backend)
-      |> IO.inspect()
-      |> Nx.to_binary()
-      |> IO.inspect()
-
-      assert Nx.backend_copy(tensor) == Nx.tensor(100_002, type: :u32, backend: Nx.BinaryBackend)
-      assert Nx.backend_transfer(tensor) == Nx.tensor(100_002, type: :u32, backend: Nx.BinaryBackend)
-
-      Nx.tensor([0, 255], type: :u8, backend: Candlex.Backend)
-      |> IO.inspect()
-      |> Nx.to_binary()
-      |> IO.inspect()
-
-      Nx.tensor([-0.5, 0.88], type: :f32, backend: Candlex.Backend)
-      |> IO.inspect()
-      |> Nx.to_binary()
-      |> IO.inspect()
-
-      Nx.tensor([-0.5, 0.88], type: :f64, backend: Candlex.Backend)
-      |> IO.inspect()
-      |> Nx.to_binary()
-      |> IO.inspect()
+      check(255, :u8)
+      check(100_002, :u32)
+      check(1.11, :f32)
+      check(-0.002, :f64)
+      check([1, 2], :u32)
+      check([[1, 2], [3, 4]], :u32)
+      check([[1, 2, 3, 4], [5, 6, 7, 8]], :u32)
+      check([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], :u32)
+      check([0, 255], :u8)
+      check([-0.5, 0.88], :f32)
+      check([-0.5, 0.88], :f64)
     end
+  end
+
+  defp check(value, type) do
+    tensor = Nx.tensor(value, type: type, backend: Candlex.Backend)
+
+    tensor
+    |> IO.inspect()
+    |> Nx.to_binary()
+    |> IO.inspect()
+
+    assert Nx.backend_copy(tensor) == Nx.tensor(value, type: type, backend: Nx.BinaryBackend)
+    assert Nx.backend_transfer(tensor) == Nx.tensor(value, type: type, backend: Nx.BinaryBackend)
   end
 end
