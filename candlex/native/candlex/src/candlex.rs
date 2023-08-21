@@ -39,6 +39,13 @@ pub fn scalar_tensor(scalar: u32) -> ExTensor {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+pub fn from_binary(binary: Binary, shape: Term) -> ExTensor {
+    let (_prefx, slice, _suffix) = unsafe { binary.as_slice().align_to::<u32>() };
+
+    ExTensor::new(Tensor::from_slice(slice, tuple_to_vec(shape), &Device::Cpu).unwrap())
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 pub fn to_binary(env: Env, ex_tensor: ExTensor) -> Binary {
     let bytes: Vec<u8> =
         ex_tensor
@@ -54,13 +61,6 @@ pub fn to_binary(env: Env, ex_tensor: ExTensor) -> Binary {
     binary.as_mut_slice().copy_from_slice(bytes.as_slice());
 
     binary.into()
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-pub fn from_binary(binary: Binary, shape: Term) -> ExTensor {
-    let (_prefx, slice, _suffix) = unsafe { binary.as_slice().align_to::<u32>() };
-
-    ExTensor::new(Tensor::from_slice(slice, tuple_to_vec(shape), &Device::Cpu).unwrap())
 }
 
 pub fn load(env: Env, _info: Term) -> bool {
