@@ -79,8 +79,6 @@ defmodule Candlex.Backend do
     ])
   end
 
-  # defp to_candle_type({:u, 32}), do: :u32
-
   # defp device_option(_backend_options) do
   #   # TODO: Support CUDA
   #   :cpu
