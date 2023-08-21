@@ -34,6 +34,11 @@ defmodule CandlexTest do
       assert Nx.backend_copy(tensor) == Nx.tensor(100_002, type: :u32, backend: Nx.BinaryBackend)
       assert Nx.backend_transfer(tensor) == Nx.tensor(100_002, type: :u32, backend: Nx.BinaryBackend)
 
+      Nx.tensor([-0.5, 0.88], type: :f32, backend: Candlex.Backend)
+      |> IO.inspect()
+      |> Nx.to_binary()
+      |> IO.inspect()
+
       Nx.tensor([-0.5, 0.88], type: :f64, backend: Candlex.Backend)
       |> IO.inspect()
       |> Nx.to_binary()
