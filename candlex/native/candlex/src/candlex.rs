@@ -35,12 +35,15 @@ impl Deref for ExTensor {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-pub fn from_binary(binary: Binary, dtype: &str, shape: Term) -> ExTensor {
-    let dtype = DType::from_str(dtype).unwrap();
-
+pub fn from_binary(binary: Binary, dtype_str: &str, shape: Term) -> ExTensor {
     ExTensor::new(
-        Tensor::from_raw_buffer(binary.as_slice(), dtype, &tuple_to_vec(shape), &Device::Cpu)
-            .unwrap(),
+        Tensor::from_raw_buffer(
+            binary.as_slice(),
+            DType::from_str(dtype_str).unwrap(),
+            &tuple_to_vec(shape),
+            &Device::Cpu,
+        )
+        .unwrap(),
     )
 }
 
