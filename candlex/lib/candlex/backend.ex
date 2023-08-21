@@ -45,6 +45,18 @@ defmodule Candlex.Backend do
   end
 
   # @impl true
+  def backend_transfer(tensor, backend, backend_options) do
+    backend_copy(tensor, backend, backend_options)
+  after
+    backend_deallocate(tensor)
+  end
+
+  # @impl true
+  def backend_deallocate(%T{} = _tensor) do
+    true
+  end
+
+  # @impl true
   def inspect(%T{} = tensor, inspect_opts) do
     limit = if inspect_opts.limit == :infinity, do: :infinity, else: inspect_opts.limit + 1
 
