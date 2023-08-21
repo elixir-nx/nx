@@ -5,14 +5,13 @@ defmodule Candlex.Backend do
 
   defstruct [:resource]
 
-  # TODO: enable behaviour
-  # @behaviour Nx.Backend
+  @behaviour Nx.Backend
 
   alias Nx.Tensor, as: T
   alias Candlex.Backend, as: CB
   alias Candlex.Native
 
-  # @impl true
+  @impl true
   def init(opts) do
     if opts != [] do
       raise ArgumentError, "Candlex.Backend accepts no options"
@@ -21,7 +20,7 @@ defmodule Candlex.Backend do
     opts
   end
 
-  # @impl true
+  @impl true
   def constant(%T{shape: {}, type: _type} = tensor, scalar, _backend_options) do
     # TODO: Don't ignore backend options
 
@@ -30,7 +29,7 @@ defmodule Candlex.Backend do
     |> to_nx(tensor)
   end
 
-  # @impl true
+  @impl true
   def from_binary(%T{shape: shape, type: {:u, 32}} = tensor, binary, _backend_options) do
     # TODO: Don't ignore backend options
 
@@ -39,24 +38,24 @@ defmodule Candlex.Backend do
     |> to_nx(tensor)
   end
 
-  # @impl true
+  @impl true
   def backend_copy(%T{} = tensor, backend, backend_options) do
     backend.from_binary(tensor, to_binary(tensor), backend_options)
   end
 
-  # @impl true
+  @impl true
   def backend_transfer(tensor, backend, backend_options) do
     backend_copy(tensor, backend, backend_options)
   after
     backend_deallocate(tensor)
   end
 
-  # @impl true
+  @impl true
   def backend_deallocate(%T{} = _tensor) do
     true
   end
 
-  # @impl true
+  @impl true
   def inspect(%T{} = tensor, inspect_opts) do
     limit = if inspect_opts.limit == :infinity, do: :infinity, else: inspect_opts.limit + 1
 
@@ -66,6 +65,7 @@ defmodule Candlex.Backend do
     |> maybe_add_signature(tensor)
   end
 
+  @impl true
   def to_binary(tensor, _limit \\ nil) do
     # TODO: don't ignore limit
 
