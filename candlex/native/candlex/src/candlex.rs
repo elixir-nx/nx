@@ -1,4 +1,4 @@
-use candle_core::{Tensor, Device};
+use candle_core::{Device, Tensor};
 use rustler::{Binary, Env, NewBinary, NifStruct, ResourceArc, Term};
 use std::ops::Deref;
 
@@ -47,8 +47,7 @@ pub fn from_binary(binary: Binary, shape: Term) -> ExTensor {
 
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn to_binary(env: Env, ex_tensor: ExTensor) -> Binary {
-    let bytes: Vec<u8> =
-        ex_tensor
+    let bytes: Vec<u8> = ex_tensor
         .flatten_all()
         .unwrap()
         .to_vec1::<u32>()
