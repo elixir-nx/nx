@@ -31,11 +31,11 @@ defmodule Candlex.Backend do
   end
 
   # @impl true
-  def from_binary(%T{shape: {2}, type: {:u, 32}} = tensor, binary, _backend_options) do
+  def from_binary(%T{shape: shape, type: {:u, 32}} = tensor, binary, _backend_options) do
     # TODO: Don't ignore backend options
 
     binary
-    |> Native.from_binary()
+    |> Native.from_binary(shape)
     |> to_nx(tensor)
   end
 

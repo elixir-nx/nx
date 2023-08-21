@@ -52,7 +52,7 @@ pub fn to_binary(env: Env, ex_tensor: ExTensor) -> Binary {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-pub fn from_binary(binary: Binary) -> ExTensor {
+pub fn from_binary(binary: Binary, shape: Term) -> ExTensor {
     let slice = binary.as_slice();
 
     // let slice: &[u32; 2] = unsafe {
@@ -60,9 +60,9 @@ pub fn from_binary(binary: Binary) -> ExTensor {
     // };
     let (_prefx, slice, _suffix) = unsafe { slice.align_to::<u32>() };
 
-    println!("{:?}", &slice);
+    // println!("{:?}", &slice);
     // let slice = u32::from_ne_bytes(slice);
-    ExTensor::new(Tensor::from_slice(slice, 2, &Device::Cpu).unwrap())
+    ExTensor::new(Tensor::from_slice(slice, tuple_to_vec(shape), &Device::Cpu).unwrap())
 
     // let mut vec = vec![0u32; 2];
     // reader.read_u32_into::<LittleEndian>(&mut vec)?;
@@ -72,4 +72,12 @@ pub fn from_binary(binary: Binary) -> ExTensor {
 pub fn load(env: Env, _info: Term) -> bool {
     rustler::resource!(TensorRef, env);
     true
+}
+
+fn tuple_to_vec(term: Term) -> Vec<usize> {
+    rustler::types::tuple::get_tuple(term)
+        .unwrap()
+        .iter()
+        .map(|elem| elem.decode().unwrap())
+        .collect()
 }
