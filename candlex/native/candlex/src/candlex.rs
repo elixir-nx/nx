@@ -53,20 +53,9 @@ pub fn to_binary(env: Env, ex_tensor: ExTensor) -> Binary {
 
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn from_binary(binary: Binary, shape: Term) -> ExTensor {
-    let slice = binary.as_slice();
+    let (_prefx, slice, _suffix) = unsafe { binary.as_slice().align_to::<u32>() };
 
-    // let slice: &[u32; 2] = unsafe {
-        // std::mem::transmute::<&[u8], &[u32; 2]>(binary.as_slice())
-    // };
-    let (_prefx, slice, _suffix) = unsafe { slice.align_to::<u32>() };
-
-    // println!("{:?}", &slice);
-    // let slice = u32::from_ne_bytes(slice);
     ExTensor::new(Tensor::from_slice(slice, tuple_to_vec(shape), &Device::Cpu).unwrap())
-
-    // let mut vec = vec![0u32; 2];
-    // reader.read_u32_into::<LittleEndian>(&mut vec)?;
-    // ExTensor::new(Tensor::from_vec(vec, 2, &Device::Cpu).unwrap())
 }
 
 pub fn load(env: Env, _info: Term) -> bool {
