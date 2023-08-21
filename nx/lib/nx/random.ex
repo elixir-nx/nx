@@ -553,14 +553,19 @@ defmodule Nx.Random do
 
   @doc """
   Returns a sample from a multivariate normal distribution with given `mean` and `covariance` (matrix).
+  The function assumes that the covariance is a positive semi-definite matrix.
+  Otherwise, the result will not be normally distributed.
 
   ## Options
 
     * `:type` - a float type for the returned tensor
 
-    * `:shape` - shape of the returned tensor
+    * `:shape` - batch shape of the returned tensor, i.e. the prefix of the result shape exluding the last axis
 
     * `:names` - the names of the returned tensor
+
+    * `:method` - a decomposition methond used for the covariance. Must be one of :svd, :eigh, and :cholesky.
+      Default :cholesky. For singular covariance matrices, use :svd or :eigh.
 
   ## Examples
 
@@ -645,7 +650,7 @@ defmodule Nx.Random do
 
         :eigh ->
           {s, u} = Nx.LinAlg.eigh(covariance)
-          u * Nx.sqrt(Nx.abs(s))
+          u * Nx.sqrt(s)
 
         :cholesky ->
           Nx.LinAlg.cholesky(covariance)
@@ -665,7 +670,7 @@ defmodule Nx.Random do
     if opts[:method] not in [:svd, :eigh, :cholesky] do
       raise ArgumentError,
             """
-            method must be either :svd, :eigh, or :cholesky
+            method must be one of :svd, :eigh, and :cholesky
             """
     end
 

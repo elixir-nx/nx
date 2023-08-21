@@ -315,17 +315,27 @@ defmodule Nx.RandomTest do
     test "multivariate_normal properties" do
       key = Nx.Random.key(:rand.uniform(10_000))
 
+      mean = Nx.tensor([10, 10])
+      covariance = Nx.tensor([[25, 25], [25, 25]])
+
       multivariate_normal =
         Nx.Random.multivariate_normal_split(
           key,
-          Nx.tensor([10, 10]),
-          Nx.tensor([[25, 0], [0, 25]]),
+          mean,
+          covariance,
           shape: {1_000}
         )
 
-      assert_all_close(Nx.mean(multivariate_normal, axes: [0]), Nx.tensor([10, 10]), rtol: 0.1)
+      assert_all_close(Nx.mean(multivariate_normal, axes: [0]), mean, rtol: 0.1)
 
-      assert_all_close(Nx.standard_deviation(multivariate_normal, axes: [0]), Nx.tensor([5, 5]),
+      multivariate_normal_centered = Nx.subtract(multivariate_normal, mean)
+
+      assert_all_close(
+        Nx.divide(
+          Nx.dot(multivariate_normal_centered, [0], multivariate_normal_centered, [0]),
+          1000
+        ),
+        covariance,
         rtol: 0.1
       )
     end
