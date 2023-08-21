@@ -54,6 +54,12 @@ pub fn to_binary(env: Env, ex_tensor: ExTensor) -> Binary {
     let tensor = ex_tensor.flatten_all().unwrap();
 
     let bytes: Vec<u8> = match tensor.dtype() {
+        DType::U8 => tensor
+            .to_vec1::<u8>()
+            .unwrap()
+            .iter()
+            .flat_map(|val| val.to_ne_bytes())
+            .collect(),
         DType::U32 => tensor
             .to_vec1::<u32>()
             .unwrap()

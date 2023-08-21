@@ -97,6 +97,7 @@ defmodule Candlex.Backend do
     %{t | data: backend_tensor}
   end
 
+  defp to_candle_dtype({:u, 8}), do: "u8"
   defp to_candle_dtype({:u, 32}), do: "u32"
   defp to_candle_dtype({:f, 32}), do: "f32"
   defp to_candle_dtype({:f, 64}), do: "f64"
