@@ -47,7 +47,7 @@ pub fn to_binary(env: Env, ex_tensor: ExTensor) -> Binary {
         .to_vec1::<u32>()
         .unwrap()
         .iter()
-        .flat_map(|val| val.to_ne_bytes().to_vec())
+        .flat_map(|val| val.to_ne_bytes())
         .collect();
 
     let mut binary = NewBinary::new(env, bytes.len());
