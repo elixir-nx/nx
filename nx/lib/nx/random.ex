@@ -552,6 +552,186 @@ defmodule Nx.Random do
   end
 
   @doc """
+  Returns a sample from a multivariate normal distribution with given `mean` and `covariance` (matrix).
+  The function assumes that the covariance is a positive semi-definite matrix.
+  Otherwise, the result will not be normally distributed.
+
+  ## Options
+
+    * `:type` - a float type for the returned tensor
+
+    * `:shape` - batch shape of the returned tensor, i.e. the prefix of the result shape excluding the last axis
+
+    * `:names` - the names of the returned tensor
+
+    * `:method` - a decomposition method used for the covariance. Must be one of :svd, :eigh, and :cholesky.
+      Defaults to :cholesky. For singular covariance matrices, use :svd or :eigh.
+
+  ## Examples
+
+      iex> key = Nx.Random.key(12)
+      iex> {multivariate_normal, _new_key} = Nx.Random.multivariate_normal(key, Nx.tensor([0]), Nx.tensor([[1]]))
+      iex> multivariate_normal
+      #Nx.Tensor<
+        f32[1]
+        [0.735927939414978]
+      >
+
+      iex> key = Nx.Random.key(12)
+      iex> {multivariate_normal, _new_key} = Nx.Random.multivariate_normal(key, Nx.tensor([0, 0]), Nx.tensor([[1, 0], [0, 1]]))
+      iex> multivariate_normal
+      #Nx.Tensor<
+        f32[2]
+        [-1.3425945043563843, -0.40812060236930847]
+      >
+
+      iex> key = Nx.Random.key(12)
+      iex> {multivariate_normal, _new_key} = Nx.Random.multivariate_normal(key, Nx.tensor([0]), Nx.tensor([[1]]), shape: {3, 2}, type: :f16)
+      iex> multivariate_normal
+      #Nx.Tensor<
+        f16[3][2][1]
+        [
+          [
+            [0.326904296875],
+            [0.2176513671875]
+          ],
+          [
+            [0.316650390625],
+            [0.1109619140625]
+          ],
+          [
+            [0.53955078125],
+            [-0.8857421875]
+          ]
+        ]
+      >
+
+      iex> key = Nx.Random.key(12)
+      iex> {multivariate_normal, _new_key} = Nx.Random.multivariate_normal(key, Nx.tensor([0, 0]), Nx.tensor([[1, 0], [0, 1]]), shape: {3, 2})
+      iex> multivariate_normal
+      #Nx.Tensor<
+        f32[3][2][2]
+        [
+          [
+            [0.9891449809074402, 1.0795185565948486],
+            [-0.9467806220054626, 1.47813880443573]
+          ],
+          [
+            [2.2095863819122314, -1.529456377029419],
+            [-0.7933920621871948, 1.121195673942566]
+          ],
+          [
+            [0.10976295918226242, -0.9959557056427002],
+            [0.4754556119441986, 1.1413804292678833]
+          ]
+        ]
+      >
+  """
+  defn multivariate_normal(key, mean, covariance, opts \\ []) do
+    keys = split(key)
+    {multivariate_normal_split(keys[1], mean, covariance, opts), keys[0]}
+  end
+
+  @doc """
+  Same as `multivariate_normal/4` but assumes the key has already been split.
+  """
+  defn multivariate_normal_split(key, mean, covariance, opts \\ []) do
+    assert_key!(key)
+    opts = keyword!(opts, [:names, :type, :shape, method: :cholesky])
+    {type, shape} = validate_multivariate_normal_args(mean, covariance, opts)
+    mean = Nx.as_type(mean, type)
+    covariance = Nx.as_type(covariance, type)
+
+    a =
+      case opts[:method] do
+        :svd ->
+          {u, s, _} = Nx.LinAlg.svd(covariance)
+          u * Nx.sqrt(s)
+
+        :eigh ->
+          {s, u} = Nx.LinAlg.eigh(covariance)
+          u * Nx.sqrt(s)
+
+        :cholesky ->
+          Nx.LinAlg.cholesky(covariance)
+      end
+
+    z =
+      normal_split(key, 0.0, 1.0, shape: shape, type: type)
+      |> Nx.reshape({:auto, Nx.size(mean)})
+
+    # x = mean + z * a^T
+    (mean + Nx.dot(z, [1], a, [1]))
+    |> Nx.reshape(shape, names: opts[:names])
+    |> stop_grad()
+  end
+
+  deftransformp validate_multivariate_normal_args(mean, covariance, opts) do
+    if opts[:method] not in [:svd, :eigh, :cholesky] do
+      raise ArgumentError,
+            """
+            method must be one of :svd, :eigh, and :cholesky
+            """
+    end
+
+    type = infer_float_type(mean, covariance, opts)
+
+    case type do
+      {:f, _} -> nil
+      {:bf, _} -> nil
+      {:c, _} -> Nx.Shared.raise_complex_not_supported(:multivariate_normal_split, 4)
+      _ -> raise ArgumentError, "expected float or complex type, got type #{inspect(type)}"
+    end
+
+    if Nx.rank(mean) != 1 do
+      raise ArgumentError,
+            """
+            expected mean to have rank 1, got tensor with rank #{Nx.rank(mean)}
+            """
+    end
+
+    dim = Nx.size(mean)
+
+    if Nx.rank(covariance) != 2 do
+      raise ArgumentError,
+            """
+            expected covariance to have rank 2, got tensor with rank #{Nx.rank(covariance)}
+            """
+    end
+
+    if Nx.axis_size(covariance, 0) != Nx.axis_size(covariance, 1) do
+      raise ArgumentError,
+            """
+            expected covariance to be a square matrix, got tensor with shape #{Nx.shape(covariance)}
+            """
+    end
+
+    if Nx.axis_size(covariance, 0) != dim do
+      raise ArgumentError,
+            """
+            expected mean and covariance to have the same dimensions, got #{dim} and #{Nx.axis_size(covariance, 0)}
+            """
+    end
+
+    shape =
+      case opts[:shape] do
+        nil ->
+          {dim}
+
+        dims when is_tuple(dims) ->
+          Tuple.append(dims, dim)
+
+        _ ->
+          raise ArgumentError,
+                """
+                shape must be a tuple of integers
+                """
+      end
+
+    {type, shape}
+  end
+
+  @doc """
   Randomly shuffles tensor elements along an axis.
 
   ## Options
@@ -780,7 +960,7 @@ defmodule Nx.Random do
 
     case Nx.rank(p) do
       1 -> :ok
-      r -> raise ArgumentError, "propability tensor must have rank 1, got: #{r}"
+      r -> raise ArgumentError, "probability tensor must have rank 1, got: #{r}"
     end
 
     case {Nx.size(p), Nx.axis_size(tensor, axis)} do
