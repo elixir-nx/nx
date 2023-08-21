@@ -560,12 +560,12 @@ defmodule Nx.Random do
 
     * `:type` - a float type for the returned tensor
 
-    * `:shape` - batch shape of the returned tensor, i.e. the prefix of the result shape exluding the last axis
+    * `:shape` - batch shape of the returned tensor, i.e. the prefix of the result shape excluding the last axis
 
     * `:names` - the names of the returned tensor
 
-    * `:method` - a decomposition methond used for the covariance. Must be one of :svd, :eigh, and :cholesky.
-      Default :cholesky. For singular covariance matrices, use :svd or :eigh.
+    * `:method` - a decomposition method used for the covariance. Must be one of :svd, :eigh, and :cholesky.
+      Defaults to :cholesky. For singular covariance matrices, use :svd or :eigh.
 
   ## Examples
 
