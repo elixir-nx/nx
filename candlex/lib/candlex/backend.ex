@@ -30,11 +30,11 @@ defmodule Candlex.Backend do
   end
 
   @impl true
-  def from_binary(%T{shape: shape, type: {:u, 32}} = tensor, binary, _backend_options) do
+  def from_binary(%T{shape: shape, type: type} = tensor, binary, _backend_options) do
     # TODO: Don't ignore backend options
 
     binary
-    |> Native.from_binary(shape)
+    |> Native.from_binary(to_candle_dtype(type), shape)
     |> to_nx(tensor)
   end
 
@@ -96,4 +96,8 @@ defmodule Candlex.Backend do
   defp to_nx(%{resource: ref} = backend_tensor, %T{} = t) when is_reference(ref) do
     %{t | data: backend_tensor}
   end
+
+  defp to_candle_dtype({:u, 32}), do: "u32"
+  defp to_candle_dtype({:f, 32}), do: "f32"
+  defp to_candle_dtype({:f, 64}), do: "f64"
 end

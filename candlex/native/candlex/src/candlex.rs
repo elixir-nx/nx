@@ -1,6 +1,7 @@
-use candle_core::{Device, Tensor};
+use candle_core::{Device, DType, Tensor};
 use rustler::{Binary, Env, NewBinary, NifStruct, ResourceArc, Term};
 use std::ops::Deref;
+use std::str::FromStr;
 
 pub struct TensorRef(pub Tensor);
 
@@ -39,22 +40,24 @@ pub fn scalar_tensor(scalar: u32) -> ExTensor {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-pub fn from_binary(binary: Binary, shape: Term) -> ExTensor {
-    let (_prefx, slice, _suffix) = unsafe { binary.as_slice().align_to::<u32>() };
+pub fn from_binary(binary: Binary, dtype: &str, shape: Term) -> ExTensor {
+    let dtype = DType::from_str(dtype).unwrap();
+    // let (_prefx, slice, _suffix) = unsafe { binary.as_slice().align_to::<u32>() };
 
-    ExTensor::new(Tensor::from_slice(slice, tuple_to_vec(shape), &Device::Cpu).unwrap())
+    ExTensor::new(Tensor::from_raw_buffer(binary.as_slice(), dtype, &tuple_to_vec(shape), &Device::Cpu).unwrap())
+    // ExTensor::new(Tensor::from_slice(slice, tuple_to_vec(shape), &Device::Cpu).unwrap())
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn to_binary(env: Env, ex_tensor: ExTensor) -> Binary {
-    let bytes: Vec<u8> = ex_tensor
-        .flatten_all()
-        .unwrap()
-        .to_vec1::<u32>()
-        .unwrap()
-        .iter()
-        .flat_map(|val| val.to_ne_bytes())
-        .collect();
+    let tensor = ex_tensor.flatten_all().unwrap();
+
+    let bytes: Vec<u8> = match tensor.dtype() {
+        DType::U32 => tensor.to_vec1::<u32>().unwrap().iter().flat_map(|val| val.to_ne_bytes()).collect(),
+        DType::F64 => tensor.to_vec1::<f64>().unwrap().iter().flat_map(|val| val.to_ne_bytes()).collect(),
+        // TODO: Support all dtypes
+        _ => tensor.to_vec1::<u8>().unwrap().iter().flat_map(|val| val.to_ne_bytes()).collect()
+    };
 
     let mut binary = NewBinary::new(env, bytes.len());
     binary.as_mut_slice().copy_from_slice(bytes.as_slice());
