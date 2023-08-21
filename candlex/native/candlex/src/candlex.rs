@@ -40,10 +40,15 @@ pub fn scalar_tensor(scalar: u32) -> ExTensor {
 
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn to_binary(env: Env, ex_tensor: ExTensor) -> Binary {
-    let tensor = ex_tensor.flatten_all().unwrap();
-    let vec = tensor.to_vec1::<u32>().unwrap();
-
-    let bytes: Vec<u8> = vec.iter().flat_map(|val| val.to_ne_bytes().to_vec()).collect();
+    let bytes: Vec<u8> =
+        ex_tensor
+        .flatten_all()
+        .unwrap()
+        .to_vec1::<u32>()
+        .unwrap()
+        .iter()
+        .flat_map(|val| val.to_ne_bytes().to_vec())
+        .collect();
 
     let mut binary = NewBinary::new(env, bytes.len());
     binary.as_mut_slice().copy_from_slice(bytes.as_slice());
