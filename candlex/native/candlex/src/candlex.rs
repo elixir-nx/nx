@@ -1,40 +1,9 @@
 use crate::error::CandlexError;
+use crate::tensor::{ExTensor, TensorRef};
 use candle_core::{DType, Device, Tensor};
-use rustler::{Binary, Env, NewBinary, NifStruct, ResourceArc, Term};
-use std::ops::Deref;
+use rustler::{Binary, Env, NewBinary, Term};
 use std::result::Result;
 use std::str::FromStr;
-
-pub struct TensorRef(pub Tensor);
-
-#[derive(NifStruct)]
-#[module = "Candlex.Backend"]
-pub struct ExTensor {
-    pub resource: ResourceArc<TensorRef>,
-}
-
-impl TensorRef {
-    pub fn new(tensor: Tensor) -> Self {
-        Self(tensor)
-    }
-}
-
-impl ExTensor {
-    pub fn new(tensor: Tensor) -> Self {
-        Self {
-            resource: ResourceArc::new(TensorRef::new(tensor)),
-        }
-    }
-}
-
-// Implement Deref so we can call `Tensor` functions directly from an `ExTensor` struct.
-impl Deref for ExTensor {
-    type Target = Tensor;
-
-    fn deref(&self) -> &Self::Target {
-        &self.resource.0
-    }
-}
 
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn from_binary(binary: Binary, dtype_str: &str, shape: Term) -> Result<ExTensor, CandlexError> {
