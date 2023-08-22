@@ -1,4 +1,5 @@
 mod candlex;
+mod error;
 
 rustler::init! {
     "Elixir.Candlex.Native",

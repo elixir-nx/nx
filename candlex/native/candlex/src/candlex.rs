@@ -1,6 +1,8 @@
+use crate::error::CandlexError;
 use candle_core::{DType, Device, Tensor};
 use rustler::{Binary, Env, NewBinary, NifStruct, ResourceArc, Term};
 use std::ops::Deref;
+use std::result::Result;
 use std::str::FromStr;
 
 pub struct TensorRef(pub Tensor);
@@ -35,15 +37,17 @@ impl Deref for ExTensor {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-pub fn from_binary(binary: Binary, dtype_str: &str, shape: Term) -> ExTensor {
-    ExTensor::new(
-        Tensor::from_raw_buffer(
-            binary.as_slice(),
-            DType::from_str(dtype_str).unwrap(),
-            &tuple_to_vec(shape),
-            &Device::Cpu,
+pub fn from_binary(binary: Binary, dtype_str: &str, shape: Term) -> Result<ExTensor, CandlexError> {
+    Ok(
+        ExTensor::new(
+            Tensor::from_raw_buffer(
+                binary.as_slice(),
+                // TODO: Handle DTypeParseError
+                DType::from_str(dtype_str).unwrap(),
+                &tuple_to_vec(shape),
+                &Device::Cpu,
+            )?
         )
-        .unwrap(),
     )
 }
 
