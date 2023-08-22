@@ -4,16 +4,16 @@ use std::ops::Deref;
 
 pub struct TensorRef(pub Tensor);
 
-#[derive(NifStruct)]
-#[module = "Candlex.Backend"]
-pub struct ExTensor {
-    resource: ResourceArc<TensorRef>,
-}
-
 impl TensorRef {
     pub fn new(tensor: Tensor) -> Self {
         Self(tensor)
     }
+}
+
+#[derive(NifStruct)]
+#[module = "Candlex.Backend"]
+pub struct ExTensor {
+    resource: ResourceArc<TensorRef>,
 }
 
 impl ExTensor {
