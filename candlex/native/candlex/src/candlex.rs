@@ -98,7 +98,7 @@ fn tensor_bytes(tensor: Tensor) -> Result<Vec<u8>, CandlexError> {
                 .iter()
                 .flat_map(|val| val.to_ne_bytes())
                 .collect(),
-                // TODO: Support all dtypes
+                // TODO: Support f16 and bf16
             _ => tensor
                 .to_vec1::<u8>()?
                 .iter()
