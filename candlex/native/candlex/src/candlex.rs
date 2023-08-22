@@ -44,7 +44,8 @@ pub fn from_binary(binary: Binary, dtype_str: &str, shape: Term) -> Result<ExTen
                 binary.as_slice(),
                 // TODO: Handle DTypeParseError
                 DType::from_str(dtype_str).unwrap(),
-                &tuple_to_vec(shape),
+                // TODO: Handle rustler::Error
+                &tuple_to_vec(shape).unwrap(),
                 &Device::Cpu,
             )?
         )
@@ -65,12 +66,13 @@ pub fn load(env: Env, _info: Term) -> bool {
     true
 }
 
-fn tuple_to_vec(term: Term) -> Vec<usize> {
-    rustler::types::tuple::get_tuple(term)
-        .unwrap()
+fn tuple_to_vec(term: Term) -> Result<Vec<usize>, rustler::Error> {
+    Ok(
+        rustler::types::tuple::get_tuple(term)?
         .iter()
-        .map(|elem| elem.decode().unwrap())
-        .collect()
+        .map(|elem| elem.decode())
+        .collect::<Result<_, _>>()?
+    )
 }
 
 fn tensor_bytes(tensor: Tensor) -> Result<Vec<u8>, CandlexError> {
