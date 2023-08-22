@@ -1,9 +1,34 @@
 use crate::error::CandlexError;
-use crate::tensor::{ExTensor, TensorRef};
 use candle_core::{DType, Device, Tensor};
-use rustler::{Binary, Env, NewBinary, Term};
+use rustler::{Binary, Env, NewBinary, NifStruct, ResourceArc, Term};
+use std::ops::Deref;
 use std::result::Result;
 use std::str::FromStr;
+
+pub(crate) struct TensorRef(Tensor);
+
+#[derive(NifStruct)]
+#[module = "Candlex.Backend"]
+pub struct ExTensor {
+    resource: ResourceArc<TensorRef>,
+}
+
+impl ExTensor {
+    pub fn new(tensor: Tensor) -> Self {
+        Self {
+            resource: ResourceArc::new(TensorRef(tensor)),
+        }
+    }
+}
+
+// Implement Deref so we can call `Tensor` functions directly from an `ExTensor` struct.
+impl Deref for ExTensor {
+    type Target = Tensor;
+
+    fn deref(&self) -> &Self::Target {
+        &self.resource.0
+    }
+}
 
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn from_binary(binary: Binary, dtype_str: &str, shape: Term) -> Result<ExTensor, CandlexError> {
@@ -21,6 +46,7 @@ pub fn from_binary(binary: Binary, dtype_str: &str, shape: Term) -> Result<ExTen
     )
 }
 
+
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn to_binary(env: Env, ex_tensor: ExTensor) -> Result<Binary, CandlexError> {
     let bytes = tensor_bytes(ex_tensor.flatten_all()?)?;
@@ -28,11 +54,6 @@ pub fn to_binary(env: Env, ex_tensor: ExTensor) -> Result<Binary, CandlexError> 
     binary.as_mut_slice().copy_from_slice(bytes.as_slice());
 
     Ok(binary.into())
-}
-
-pub fn load(env: Env, _info: Term) -> bool {
-    rustler::resource!(TensorRef, env);
-    true
 }
 
 fn tuple_to_vec(term: Term) -> Result<Vec<usize>, rustler::Error> {

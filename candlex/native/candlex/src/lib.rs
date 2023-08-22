@@ -1,12 +1,19 @@
 mod error;
-mod tensor;
-mod candlex;
+mod tensors;
+
+use rustler::{Env, Term};
+use tensors::TensorRef;
+
+fn load(env: Env, _info: Term) -> bool {
+    rustler::resource!(TensorRef, env);
+    true
+}
 
 rustler::init! {
     "Elixir.Candlex.Native",
     [
-        candlex::from_binary,
-        candlex::to_binary
+        tensors::from_binary,
+        tensors::to_binary
     ],
-    load = candlex::load
+    load = load
 }
