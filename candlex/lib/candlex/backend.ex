@@ -70,6 +70,7 @@ defmodule Candlex.Backend do
 
     from_nx(tensor)
     |> Native.to_binary()
+    |> unwrap!()
   end
 
   defp maybe_add_signature(result, %T{data: %CB{resource: ref}}) when is_reference(ref) do
