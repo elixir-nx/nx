@@ -7,7 +7,7 @@ pub struct TensorRef(pub Tensor);
 #[derive(NifStruct)]
 #[module = "Candlex.Backend"]
 pub struct ExTensor {
-    pub resource: ResourceArc<TensorRef>,
+    resource: ResourceArc<TensorRef>,
 }
 
 impl TensorRef {
