@@ -2,7 +2,7 @@ use candle_core::Tensor;
 use rustler::{NifStruct, ResourceArc};
 use std::ops::Deref;
 
-pub struct TensorRef(pub Tensor);
+pub struct TensorRef(Tensor);
 
 impl TensorRef {
     pub fn new(tensor: Tensor) -> Self {
