@@ -10,6 +10,6 @@ path = "src/lib.rs"
 crate-type = ["cdylib"]
 
 [dependencies]
-candle-core = "0.1.0"
+candle-core = { git = "https://github.com/huggingface/candle" }
 rustler = "0.29.1"
 thiserror = "1.0.47"

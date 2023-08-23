@@ -37,9 +37,8 @@ checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 
 [[package]]
 name = "candle-core"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a14e585d4632a3c278c03d69db4e3595801cceeb72f329da099bb687025b05c"
+version = "0.1.3"
+source = "git+https://github.com/huggingface/candle#aba1e90797e430f28eec13b14b76dd5355876f9c"
 dependencies = [
  "byteorder",
  "candle-gemm",

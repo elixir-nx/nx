@@ -95,11 +95,12 @@ defmodule Candlex.Backend do
     %{t | data: backend_tensor}
   end
 
+  defp to_candle_dtype({:s, 64}), do: "i64"
   defp to_candle_dtype({:u, 8}), do: "u8"
   defp to_candle_dtype({:u, 32}), do: "u32"
   defp to_candle_dtype({:f, 32}), do: "f32"
   defp to_candle_dtype({:f, 64}), do: "f64"
 
   defp unwrap!({:ok, result}), do: result
-  defp unwrap!({:error, error}), do: raise("Candlex: " <> List.to_string(error))
+  defp unwrap!({:error, error}), do: raise("Candlex: #{error}")
 end

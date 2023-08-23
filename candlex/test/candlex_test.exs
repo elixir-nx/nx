@@ -6,6 +6,7 @@ defmodule CandlexTest do
     test "tensor" do
       check(255, :u8)
       check(100_002, :u32)
+      check(-101, :s64)
       check(1.11, :f32)
       check(-0.002, :f64)
       check([1, 2], :u32)

@@ -46,7 +46,6 @@ pub fn from_binary(binary: Binary, dtype_str: &str, shape: Term) -> Result<ExTen
     )
 }
 
-
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn to_binary(env: Env, ex_tensor: ExTensor) -> Result<Binary, CandlexError> {
     let bytes = tensor_bytes(ex_tensor.flatten_all()?)?;
@@ -68,6 +67,11 @@ fn tuple_to_vec(term: Term) -> Result<Vec<usize>, rustler::Error> {
 fn tensor_bytes(tensor: Tensor) -> Result<Vec<u8>, CandlexError> {
     Ok(
         match tensor.dtype() {
+            DType::I64 => tensor
+                .to_vec1::<i64>()?
+                .iter()
+                .flat_map(|val| val.to_ne_bytes())
+                .collect(),
             DType::U8 => tensor
                 .to_vec1::<u8>()?
                 .iter()
