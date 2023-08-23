@@ -26,6 +26,20 @@ defmodule CandlexTest do
       |> Nx.add(t([10, 20, 30]))
       |> assert_equal(t([11, 22, 33]))
     end
+
+    test "multiply" do
+      t([1, 2])
+      |> Nx.multiply(t([3, 4]))
+      |> assert_equal(t([3, 8]))
+
+      t([[1], [2]])
+      |> Nx.multiply(t([3, 4]))
+      |> assert_equal(t([[3, 4], [6, 8]]))
+
+      t([1, 2])
+      |> Nx.multiply(t([[3], [4]]))
+      |> assert_equal(t([[3, 6], [4, 8]]))
+    end
   end
 
   defp t(values, backend \\ Candlex.Backend) do

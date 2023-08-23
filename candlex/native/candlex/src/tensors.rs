@@ -62,7 +62,12 @@ pub fn add(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-pub fn eq(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
+pub fn multiply(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(left.broadcast_mul(&right)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn equal(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
     Ok(ExTensor::new(left.eq(&right)?))
 }
 

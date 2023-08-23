@@ -81,20 +81,14 @@ defmodule Candlex.Backend do
 
   # Binary ops
 
-  @impl true
-  def add(%T{} = out, %T{} = left, %T{} = right) do
-    from_nx(left)
-    |> Native.add(from_nx(right))
-    |> unwrap!()
-    |> to_nx(out)
-  end
-
-  @impl true
-  def equal(%T{} = out, %T{} = left, %T{} = right) do
-    from_nx(left)
-    |> Native.eq(from_nx(right))
-    |> unwrap!()
-    |> to_nx(out)
+  for op <- [:add, :equal, :multiply] do
+    @impl true
+    def unquote(op)(%T{} = out, %T{} = left, %T{} = right) do
+      from_nx(left)
+      |> Native.unquote(op)(from_nx(right))
+      |> unwrap!()
+      |> to_nx(out)
+    end
   end
 
   # Unary ops
