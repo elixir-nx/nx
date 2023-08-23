@@ -1,5 +1,6 @@
 use crate::error::CandlexError;
 use candle_core::{DType, Device, Tensor};
+use half::{bf16, f16};
 use rustler::{Binary, Env, NewBinary, NifStruct, ResourceArc, Term};
 use std::ops::Deref;
 use std::result::Result;
@@ -82,6 +83,11 @@ fn tensor_bytes(tensor: Tensor) -> Result<Vec<u8>, CandlexError> {
                 .iter()
                 .flat_map(|val| val.to_ne_bytes())
                 .collect(),
+            DType::F16 => tensor
+                .to_vec1::<f16>()?
+                .iter()
+                .flat_map(|val| val.to_ne_bytes())
+                .collect(),
             DType::F32 => tensor
                 .to_vec1::<f32>()?
                 .iter()
@@ -92,9 +98,8 @@ fn tensor_bytes(tensor: Tensor) -> Result<Vec<u8>, CandlexError> {
                 .iter()
                 .flat_map(|val| val.to_ne_bytes())
                 .collect(),
-                // TODO: Support f16 and bf16
-            _ => tensor
-                .to_vec1::<u8>()?
+            DType::BF16 => tensor
+                .to_vec1::<bf16>()?
                 .iter()
                 .flat_map(|val| val.to_ne_bytes())
                 .collect(),

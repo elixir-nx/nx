@@ -7,7 +7,8 @@ defmodule CandlexTest do
       check(255, :u8)
       check(100_002, :u32)
       check(-101, :s64)
-      check(1.11, :f32)
+      check(1.16, :f16)
+      check(1.32, :f32)
       check([1, 2, 3], :f32)
       check(-0.002, :f64)
       check([1, 2], :u32)
@@ -17,6 +18,7 @@ defmodule CandlexTest do
       check([0, 255], :u8)
       check([-0.5, 0.88], :f32)
       check([-0.5, 0.88], :f64)
+      check(2.16, :bf16)
     end
   end
 
