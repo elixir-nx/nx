@@ -13,7 +13,10 @@ rustler::init! {
     "Elixir.Candlex.Native",
     [
         tensors::from_binary,
-        tensors::to_binary
+        tensors::to_binary,
+        tensors::add,
+        tensors::eq,
+        tensors::all
     ],
     load = load
 }

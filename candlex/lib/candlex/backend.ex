@@ -20,6 +20,8 @@ defmodule Candlex.Backend do
     opts
   end
 
+  # Creation
+
   @impl true
   def constant(%T{} = tensor, scalar, backend_options) do
     tensor
@@ -36,6 +38,8 @@ defmodule Candlex.Backend do
     |> unwrap!()
     |> to_nx(tensor)
   end
+
+  # Backend
 
   @impl true
   def backend_copy(%T{} = tensor, backend, backend_options) do
@@ -54,15 +58,7 @@ defmodule Candlex.Backend do
     true
   end
 
-  @impl true
-  def inspect(%T{} = tensor, inspect_opts) do
-    limit = if inspect_opts.limit == :infinity, do: :infinity, else: inspect_opts.limit + 1
-
-    tensor
-    |> to_binary(min(limit, Nx.size(tensor)))
-    |> then(&Nx.Backend.inspect(tensor, &1, inspect_opts))
-    |> maybe_add_signature(tensor)
-  end
+  # Conversion
 
   @impl true
   def to_binary(tensor, _limit \\ nil) do
@@ -71,6 +67,48 @@ defmodule Candlex.Backend do
     from_nx(tensor)
     |> Native.to_binary()
     |> unwrap!()
+  end
+
+  # Aggregates
+
+  @impl true
+  def all(%T{} = out, %T{} = tensor, _opts) do
+    from_nx(tensor)
+    |> Native.all()
+    |> unwrap!()
+    |> to_nx(out)
+  end
+
+  # Binary ops
+
+  @impl true
+  def add(%T{} = out, %T{} = left, %T{} = right) do
+    from_nx(left)
+    |> Native.add(from_nx(right))
+    |> unwrap!()
+    |> to_nx(out)
+  end
+
+  @impl true
+  def equal(%T{} = out, %T{} = left, %T{} = right) do
+    from_nx(left)
+    |> Native.eq(from_nx(right))
+    |> unwrap!()
+    |> to_nx(out)
+  end
+
+  # Unary ops
+
+  # Inspect
+
+  @impl true
+  def inspect(%T{} = tensor, inspect_opts) do
+    limit = if inspect_opts.limit == :infinity, do: :infinity, else: inspect_opts.limit + 1
+
+    tensor
+    |> to_binary(min(limit, Nx.size(tensor)))
+    |> then(&Nx.Backend.inspect(tensor, &1, inspect_opts))
+    |> maybe_add_signature(tensor)
   end
 
   defp maybe_add_signature(result, %T{data: %CB{resource: ref}}) when is_reference(ref) do
@@ -111,7 +149,11 @@ defmodule Candlex.Backend do
   defp to_candle_dtype({:c, 128}), do: unsupported_dtype()
 
   defp unsupported_dtype do
-    raise("Unsupported dtype")
+    raise("Unsupported candle dtype")
+  end
+
+  defp unsupported_op do
+    raise("Unsupported candle op")
   end
 
   defp unwrap!({:ok, result}), do: result

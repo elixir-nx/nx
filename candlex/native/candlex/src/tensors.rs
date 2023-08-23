@@ -56,6 +56,33 @@ pub fn to_binary(env: Env, ex_tensor: ExTensor) -> Result<Binary, CandlexError> 
     Ok(binary.into())
 }
 
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn add(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(left.add(&right)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn eq(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(left.eq(&right)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn all(ex_tensor: ExTensor) -> Result<ExTensor, CandlexError> {
+    let device = &Device::Cpu;
+    let t = ex_tensor.flatten_all()?;
+    let dims = t.shape().dims();
+    let on_true = Tensor::ones(dims, DType::U8, device)?;
+    let on_false = Tensor::zeros(dims, DType::U8, device)?;
+
+    let bool_scalar =
+        match t.where_cond(&on_true, &on_false)?.min(0)?.to_scalar::<u8>()? {
+            0 => 0u8,
+            _ => 1u8
+        };
+
+    Ok(ExTensor::new(Tensor::new(bool_scalar, device)?))
+}
+
 fn tuple_to_vec(term: Term) -> Result<Vec<usize>, rustler::Error> {
     Ok(
         rustler::types::tuple::get_tuple(term)?
