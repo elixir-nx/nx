@@ -4,21 +4,28 @@ defmodule CandlexTest do
 
   describe "creation" do
     test "tensor" do
-      check(255, :u8)
-      check(100_002, :u32)
-      check(-101, :s64)
-      check(1.16, :f16)
-      check(1.32, :f32)
-      check([1, 2, 3], :f32)
-      check(-0.002, :f64)
-      check([1, 2], :u32)
-      check([[1, 2], [3, 4]], :u32)
-      check([[1, 2, 3, 4], [5, 6, 7, 8]], :u32)
-      check([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], :u32)
-      check([0, 255], :u8)
-      check([-0.5, 0.88], :f32)
-      check([-0.5, 0.88], :f64)
-      check(2.16, :bf16)
+      check(255, type: :u8)
+      check(100_002, type: :u32)
+      check(-101, type: :s64)
+      check(1.16, type: :f16)
+      check(1.32, type: :f32)
+      check([1, 2, 3], type: :f32)
+      check(-0.002, type: :f64)
+      check([1, 2], type: :u32)
+      check([[1, 2], [3, 4]], type: :u32)
+      check([[1, 2, 3, 4], [5, 6, 7, 8]], type: :u32)
+      check([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], type: :u32)
+      check([0, 255], type: :u8)
+      check([-0.5, 0.88], type: :f32)
+      check([-0.5, 0.88], type: :f64)
+      check(2.16, type: :bf16)
+    end
+
+    test "named dimensions" do
+      check([[1, 2, 3], [4, 5, 6]], names: [:x, :y])
+
+      t([[1, 2, 3], [4, 5, 6]], names: [:x, :y])
+      |> assert_equal(t([[1, 2, 3], [4, 5, 6]]))
     end
 
     test "addition" do
@@ -67,19 +74,27 @@ defmodule CandlexTest do
     end
   end
 
-  defp t(values, backend \\ Candlex.Backend) do
-    Nx.tensor(values, backend: backend)
+  defp t(values, opts \\ []) do
+    opts =
+      [backend: Candlex.Backend]
+      |> Keyword.merge(opts)
+
+    Nx.tensor(values, opts)
   end
 
-  defp check(value, type) do
-    tensor = Nx.tensor(value, type: type, backend: Candlex.Backend)
+  defp check(value, opts \\ []) do
+    tensor = t(value, opts)
 
     tensor
     |> IO.inspect()
     |> Nx.to_binary()
     |> IO.inspect()
 
-    assert Nx.backend_copy(tensor) == Nx.tensor(value, type: type, backend: Nx.BinaryBackend)
-    assert Nx.backend_transfer(tensor) == Nx.tensor(value, type: type, backend: Nx.BinaryBackend)
+    opts =
+      [backend: Nx.BinaryBackend]
+      |> Keyword.merge(opts)
+
+    assert Nx.backend_copy(tensor) == t(value, opts)
+    assert Nx.backend_transfer(tensor) == t(value, opts)
   end
 end
