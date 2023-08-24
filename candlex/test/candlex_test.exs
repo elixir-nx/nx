@@ -27,6 +27,24 @@ defmodule CandlexTest do
       |> assert_equal(t([11, 22, 33]))
     end
 
+    test "iota" do
+      Nx.iota({})
+      |> assert_equal(t(0))
+
+      Nx.iota({}, type: :f32)
+      |> assert_equal(t(0.0))
+
+      Nx.iota({5})
+      |> assert_equal(t([0, 1, 2, 3, 4]))
+
+      # TODO: Support iota with float
+      # Nx.iota({5}, type: :f32)
+      # |> assert_equal(t([0.0, 1.0, 2.0, 3.0, 4.0]))
+
+      Nx.iota({2, 3})
+      |> assert_equal(t([[0, 1, 2], [3, 4, 5]]))
+    end
+
     test "multiply" do
       t([1, 2])
       |> Nx.multiply(t([3, 4]))
@@ -50,7 +68,7 @@ defmodule CandlexTest do
   end
 
   defp t(values, backend \\ Candlex.Backend) do
-    Nx.tensor(values, type: :u32, backend: backend)
+    Nx.tensor(values, backend: backend)
   end
 
   defp check(value, type) do

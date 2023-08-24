@@ -39,6 +39,18 @@ defmodule Candlex.Backend do
     |> to_nx(tensor)
   end
 
+  @impl true
+  def iota(%T{shape: {}} = out, nil, backend_options) do
+    constant(out, 0, backend_options)
+  end
+
+  def iota(%T{shape: shape} = out, nil, _backend_options) do
+    # TODO: Support different types
+    Native.arange(0, Nx.size(shape), shape)
+    |> unwrap!()
+    |> to_nx(out)
+  end
+
   # Backend
 
   @impl true

@@ -82,6 +82,11 @@ pub fn squeeze(t: ExTensor, dim: usize) -> Result<ExTensor, CandlexError> {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+pub fn arange(start: i64, end: i64, shape: Term) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(Tensor::arange(start, end, &Device::Cpu)?.reshape(tuple_to_vec(shape).unwrap())?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 pub fn all(ex_tensor: ExTensor) -> Result<ExTensor, CandlexError> {
     let device = &Device::Cpu;
     let t = ex_tensor.flatten_all()?;

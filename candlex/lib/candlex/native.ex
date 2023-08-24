@@ -9,6 +9,7 @@ defmodule Candlex.Native do
   def all(_tensor), do: error()
   def narrow(_tensor, _dim, _start, _length), do: error()
   def squeeze(_tensor, _dim), do: error()
+  def arange(_start, _end, _shape), do: error()
 
   for op <- [:add, :equal, :multiply] do
     def unquote(op)(_left, _right), do: error()
