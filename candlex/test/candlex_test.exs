@@ -40,6 +40,13 @@ defmodule CandlexTest do
       |> Nx.multiply(t([[3], [4]]))
       |> assert_equal(t([[3, 6], [4, 8]]))
     end
+
+    test "access" do
+      tensor = t([[1, 2], [3, 4]])
+
+      assert_equal(tensor[0], t([1, 2]))
+      assert_equal(tensor[1], t([3, 4]))
+    end
   end
 
   defp t(values, backend \\ Candlex.Backend) do

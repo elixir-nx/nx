@@ -17,7 +17,9 @@ rustler::init! {
         tensors::add,
         tensors::multiply,
         tensors::equal,
-        tensors::all
+        tensors::all,
+        tensors::narrow,
+        tensors::squeeze
     ],
     load = load
 }

@@ -93,6 +93,38 @@ defmodule Candlex.Backend do
 
   # Unary ops
 
+  # Indexed
+
+  @impl true
+  def slice(
+        %T{shape: _output_shape} = out,
+        %T{shape: input_shape} = t,
+        starts,
+        lengths,
+        _strides
+      ) do
+    t
+    |> from_nx()
+    |> narrow(starts, lengths, 0, input_shape)
+    # TODO: Support strides
+    # |> stride(output_shape, lengths, strides)
+    |> to_nx(out)
+  end
+
+  # Shape
+
+  @impl true
+  def squeeze(%T{} = out, %T{} = t, axes) do
+    # sort the axes desc so we don't have to decrease the axis numbers after each squeeze
+    for axis <- Enum.sort(axes, :desc), reduce: from_nx(t) do
+      ref ->
+      ref
+      |> Native.squeeze(axis)
+      |> unwrap!()
+    end
+    |> to_nx(out)
+  end
+
   # Inspect
 
   @impl true
@@ -117,6 +149,23 @@ defmodule Candlex.Backend do
   #   # TODO: Support CUDA
   #   :cpu
   # end
+
+  defp narrow(t, [start | starts], [length | lengths], axis, shape) do
+    dim = elem(shape, axis)
+    start = min(start, dim - length)
+
+    if start == 0 and length == dim do
+      # Nothing to narrow at this step
+      t
+    else
+      t
+      |> Native.narrow(axis, start, length)
+      |> unwrap!()
+    end
+    |> narrow(starts, lengths, axis + 1, shape)
+  end
+
+  defp narrow(t, [], [], _axis, _shape), do: t
 
   ## Conversions
 

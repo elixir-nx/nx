@@ -72,6 +72,16 @@ pub fn equal(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> 
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+pub fn narrow(t: ExTensor, dim: usize, start: usize, length: usize) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(t.narrow(dim, start, length)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn squeeze(t: ExTensor, dim: usize) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(t.squeeze(dim)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 pub fn all(ex_tensor: ExTensor) -> Result<ExTensor, CandlexError> {
     let device = &Device::Cpu;
     let t = ex_tensor.flatten_all()?;
