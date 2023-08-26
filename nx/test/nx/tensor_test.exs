@@ -1,6 +1,8 @@
 defmodule Nx.TensorTest do
   use ExUnit.Case, async: true
 
+  import Nx, only: :sigils
+
   describe "backend_transfer" do
     test "transfers existing tensor" do
       Nx.tensor([1, 2, 3]) |> Nx.backend_transfer({ProcessBackend, key: :example})
@@ -127,6 +129,58 @@ defmodule Nx.TensorTest do
       assert_raise ArgumentError, message, fn ->
         iota[[1, range]]
       end
+    end
+  end
+
+  describe "inspect" do
+    test "prints with configured precision" do
+      assert inspect(~V[1], custom_options: [nx_precision: 5]) ==
+               """
+               #Nx.Tensor<
+                 s64[1]
+                 [1]
+               >\
+               """
+
+      assert inspect(~V[1.0], custom_options: [nx_precision: 5]) ==
+               """
+               #Nx.Tensor<
+                 f32[1]
+                 [1.00000e00]
+               >\
+               """
+
+      assert inspect(~V[1.000042e-3], custom_options: [nx_precision: 5]) ==
+               """
+               #Nx.Tensor<
+                 f32[1]
+                 [1.00004e-03]
+               >\
+               """
+
+      assert inspect(~V[1.133742e10], custom_options: [nx_precision: 7]) ==
+               """
+               #Nx.Tensor<
+                 f32[1]
+                 [1.1337420e10]
+               >\
+               """
+
+      assert inspect(~V[Inf -Inf NaN], custom_options: [nx_precision: 7]) ==
+               """
+               #Nx.Tensor<
+                 f32[3]
+                 [Inf, -Inf, NaN]
+               >\
+               """
+
+      assert inspect(~V[Inf-Infi 1.0i -0.0001i 0 1000], custom_options: [nx_precision: 3]) ==
+               """
+               #Nx.Tensor<
+                 c64[5]
+                 [Inf-Infi, 0.000e00+1.000e00i, 0.000e00-1.000e-04i, 0.000e00+0.000e00i, 1.000e03+0.000e00i]
+               >\
+               """
     end
   end
 end

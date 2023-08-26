@@ -178,31 +178,46 @@ defmodule Nx.Backend do
   Note the `binary` may have fewer elements than the
   tensor size but, in such cases, it must strictly have
   more elements than `inspect_opts.limit`
+
+  ## Options
+
+  The following must be passed through `Inspect` `:custom_options`
+
+    * `:nx_precision` - Configures the floating-point number printing precision.
+      If set, will print floating-point numbers in scientific notation using the
+      specified number of significant digits. Otherwise, default Elixir printing
+      rules are applied.
   """
   def inspect(%{shape: shape, type: type}, binary, inspect_opts) do
     open = IA.color("[", :list, inspect_opts)
     sep = IA.color(",", :list, inspect_opts)
     close = IA.color("]", :list, inspect_opts)
 
+    # TO-DO: This is a paliative accessibility-related solution
+    precision = inspect_opts.custom_options[:nx_precision]
+
     dims = Tuple.to_list(shape)
-    {data, _rest, _limit} = chunk(dims, binary, type, inspect_opts.limit, {open, sep, close})
+
+    {data, _rest, _limit} =
+      chunk(dims, binary, type, inspect_opts.limit, precision, {open, sep, close})
+
     data
   end
 
-  defp chunk([], data, type, limit, _docs) do
+  defp chunk([], data, type, limit, precision, _docs) do
     {doc, tail} =
       Nx.Shared.match_types [type] do
         <<match!(head, 0), tail::binary>> = data
-        {inspect_value(read!(head, 0)), tail}
+        {inspect_value(read!(head, 0), precision), tail}
       end
 
     if limit == :infinity, do: {doc, tail, limit}, else: {doc, tail, limit - 1}
   end
 
-  defp chunk([dim | dims], data, type, limit, {open, sep, close} = docs) do
+  defp chunk([dim | dims], data, type, limit, precision, {open, sep, close} = docs) do
     {acc, rest, limit} =
       chunk_each(dim, data, [], limit, fn chunk, limit ->
-        chunk(dims, chunk, type, limit, docs)
+        chunk(dims, chunk, type, limit, precision, docs)
       end)
 
     {open, sep, close, nest} =
@@ -234,10 +249,68 @@ defmodule Nx.Backend do
     chunk_each(dim - 1, rest, [doc | acc], limit, fun)
   end
 
-  defp inspect_value(%Complex{} = val), do: Complex.to_string(val)
-  defp inspect_value(integer) when is_integer(integer), do: Integer.to_string(integer)
-  defp inspect_value(float) when is_float(float), do: Float.to_string(float)
-  defp inspect_value(:neg_infinity), do: "-Inf"
-  defp inspect_value(:infinity), do: "Inf"
-  defp inspect_value(:nan), do: "NaN"
+  defp inspect_value(float, precision) when is_float(float) and is_integer(precision) do
+    float_to_string(float, precision)
+  end
+
+  defp inspect_value(float, nil) when is_float(float), do: Float.to_string(float)
+
+  defp inspect_value(%Complex{} = val, precision), do: complex_to_string(val, precision)
+
+  defp inspect_value(integer, _) when is_integer(integer), do: Integer.to_string(integer)
+  defp inspect_value(:neg_infinity, _), do: "-Inf"
+  defp inspect_value(:infinity, _), do: "Inf"
+  defp inspect_value(:nan, _), do: "NaN"
+
+  defp float_to_string(float, precision) do
+    str = :erlang.float_to_binary(float, scientific: precision)
+
+    # remove + sign from exponent for better readability
+    # it's safe to use plain string replacement because
+    # we'll always have 2 + precision digits before e+ occurs
+    String.replace(str, "e+", "e")
+  end
+
+  def complex_to_string(%Complex{re: re, im: im}, precision) do
+    re_str = complex_to_string_real(re, precision)
+    im_str = complex_to_string_component(im, precision)
+
+    "#{re_str}#{im_str}i"
+  end
+
+  defp complex_to_string_real(n, precision) do
+    case complex_to_string_component(n, precision) do
+      "-" <> _ = s -> s
+      "+" <> s -> s
+    end
+  end
+
+  defp complex_to_string_component(:infinity, _), do: "+Inf"
+  defp complex_to_string_component(:neg_infinity, _), do: "-Inf"
+  defp complex_to_string_component(:nan, _), do: "+NaN"
+
+  defp complex_to_string_component(n, nil) when n == 0, do: "+0.0"
+
+  defp complex_to_string_component(n, nil) do
+    abs_s = Kernel.to_string(abs(n))
+
+    if n >= 0 do
+      "+#{abs_s}"
+    else
+      "-#{abs_s}"
+    end
+  end
+
+  defp complex_to_string_component(n, precision) do
+    # convert number to float
+    n = if is_float(n), do: n, else: n * 1.0
+
+    str = float_to_string(n, precision)
+
+    if n < 0 do
+      str
+    else
+      "+#{str}"
+    end
+  end
 end
