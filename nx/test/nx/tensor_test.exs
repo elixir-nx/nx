@@ -154,7 +154,7 @@ defmodule Nx.TensorTest do
                """
                #Nx.Tensor<
                  f32[1]
-                 [0.00100]
+                 [0.001]
                >\
                """
 

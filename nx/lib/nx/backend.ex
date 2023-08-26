@@ -270,9 +270,20 @@ defmodule Nx.Backend do
       end
 
     # We'll now prune decimal_part to ensure we have at most `precision`
-    # digits there:
+    # digits there.
 
-    decimal_part = binary_part(decimal_part, 0, min(byte_size(decimal_part), precision))
+    decimal_part =
+      decimal_part
+      |> binary_part(0, min(byte_size(decimal_part), precision))
+
+    #  We also prune trailing zeros. Only for more than 1 digit because that single
+    # digit always needs to stay put.
+    decimal_part =
+      if byte_size(decimal_part) > 1 do
+        String.trim_trailing(decimal_part, "0")
+      else
+        decimal_part
+      end
 
     integer_part <> "." <> decimal_part <> exponent_part
   end
