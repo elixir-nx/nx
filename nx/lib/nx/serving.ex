@@ -1175,7 +1175,7 @@ defmodule Nx.Serving do
     case Enum.split_with(tasks, &(elem(&1, 0).ref == ref)) do
       {[{_task, partition, _ref_sizes}], tasks} ->
         Process.demonitor(ref, [:flush])
-        {:noreply, server_task_done(state, tasks, partition)}
+        noreply_task_done_and_continue(state, tasks, partition)
 
       _ ->
         {:noreply, state}
@@ -1186,7 +1186,7 @@ defmodule Nx.Serving do
     case Enum.split_with(tasks, &(elem(&1, 0).ref == ref)) do
       {[{_task, partition, ref_sizes}], tasks} ->
         server_reply_down(reason, ref_sizes)
-        {:noreply, server_task_done(state, tasks, partition)}
+        noreply_task_done_and_continue(state, tasks, partition)
 
       _ ->
         {:noreply, state}
@@ -1196,6 +1196,11 @@ defmodule Nx.Serving do
   def handle_info(msg, state) do
     Logger.warning("Unknown message in Nx.Serving: #{inspect(msg)}")
     {:noreply, state}
+  end
+
+  @impl true
+  def handle_continue(:maybe_task, state) do
+    {:noreply, server_maybe_task(state)}
   end
 
   @impl true
@@ -1221,6 +1226,14 @@ defmodule Nx.Serving do
     end
 
     :ok
+  end
+
+  # We don't spawn the task here because, if it crashes,
+  # we want a checked-in version of the state that knows
+  # the current task has finished.
+  defp noreply_task_done_and_continue(%{out_queue: out_queue} = state, tasks, partition) do
+    out_queue = :queue.in(partition, out_queue)
+    {:noreply, %{state | tasks: tasks, out_queue: out_queue}, {:continue, :maybe_task}}
   end
 
   defp server_reply_down(reason, ref_sizes) do
@@ -1313,11 +1326,6 @@ defmodule Nx.Serving do
     else
       _ -> state
     end
-  end
-
-  defp server_task_done(%{out_queue: out_queue} = state, tasks, partition) do
-    out_queue = :queue.in(partition, out_queue)
-    server_maybe_task(%{state | tasks: tasks, out_queue: out_queue})
   end
 
   ## Stack management
