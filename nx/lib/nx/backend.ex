@@ -263,12 +263,18 @@ defmodule Nx.Backend do
   defp inspect_value(:nan, _), do: "NaN"
 
   defp float_to_string(float, precision) do
-    str = :erlang.float_to_binary(float, scientific: precision)
+    [integer_part, decimal_part, exponent_part] =
+      case String.split(Float.to_string(float), [".", "e"], parts: 3) do
+        [i, d] -> [i, d, ""]
+        [i, d, e] -> [i, d, "e" <> e]
+      end
 
-    # remove + sign from exponent for better readability
-    # it's safe to use plain string replacement because
-    # we'll always have 2 + precision digits before e+ occurs
-    String.replace(str, "e+", "e")
+    # We'll now prune decimal_part to ensure we have at most `precision`
+    # digits there:
+
+    decimal_part = binary_part(decimal_part, 0, min(byte_size(decimal_part), precision))
+
+    integer_part <> "." <> decimal_part <> exponent_part
   end
 
   def complex_to_string(%Complex{re: re, im: im}, precision) do

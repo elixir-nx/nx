@@ -146,7 +146,7 @@ defmodule Nx.TensorTest do
                """
                #Nx.Tensor<
                  f32[1]
-                 [1.00000e00]
+                 [1.0]
                >\
                """
 
@@ -154,15 +154,15 @@ defmodule Nx.TensorTest do
                """
                #Nx.Tensor<
                  f32[1]
-                 [1.00004e-03]
+                 [0.00100]
                >\
                """
 
-      assert inspect(~V[1.133742e10], custom_options: [nx_precision: 7]) ==
+      assert inspect(~V[42.1337e10], custom_options: [nx_precision: 5]) ==
                """
                #Nx.Tensor<
                  f32[1]
-                 [1.1337420e10]
+                 [421337006080.0]
                >\
                """
 
@@ -174,11 +174,27 @@ defmodule Nx.TensorTest do
                >\
                """
 
-      assert inspect(~V[Inf-Infi 1.0i -0.0001i 0 1000], custom_options: [nx_precision: 3]) ==
+      assert inspect(~V[Inf-Infi 1.0i 0 1000], custom_options: [nx_precision: 3]) ==
                """
                #Nx.Tensor<
-                 c64[5]
-                 [Inf-Infi, 0.000e00+1.000e00i, 0.000e00-1.000e-04i, 0.000e00+0.000e00i, 1.000e03+0.000e00i]
+                 c64[4]
+                 [Inf-Infi, 0.0+1.0i, 0.0+0.0i, 1.0e3+0.0i]
+               >\
+               """
+
+      assert inspect(~V[-0.0001], custom_options: [nx_precision: 3]) ==
+               """
+               #Nx.Tensor<
+                 f32[1]
+                 [-9.999e-5]
+               >\
+               """
+
+      assert inspect(~V[-0.0001], custom_options: [nx_precision: 8]) ==
+               """
+               #Nx.Tensor<
+                 f32[1]
+                 [-9.99999974e-5]
                >\
                """
     end
