@@ -62,6 +62,16 @@ pub fn add(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+pub fn max(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(left.broadcast_maximum(&right)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn min(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(left.broadcast_minimum(&right)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 pub fn multiply(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
     Ok(ExTensor::new(left.broadcast_mul(&right)?))
 }
@@ -119,6 +129,11 @@ pub fn broadcast_to(t: ExTensor, shape: Term) -> Result<ExTensor, CandlexError> 
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+pub fn reshape(t: ExTensor, shape: Term) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(t.reshape(tuple_to_vec(shape).unwrap())?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 pub fn where_cond(t: ExTensor, on_true: ExTensor, on_false: ExTensor) -> Result<ExTensor, CandlexError> {
     Ok(ExTensor::new(t.where_cond(&on_true, &on_false)?))
 }
@@ -126,6 +141,12 @@ pub fn where_cond(t: ExTensor, on_true: ExTensor, on_false: ExTensor) -> Result<
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn to_type(t: ExTensor, dtype_str: &str) -> Result<ExTensor, CandlexError> {
     Ok(ExTensor::new(t.to_dtype(DType::from_str(dtype_str).unwrap())?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn concatenate(ex_tensors: Vec<ExTensor>, dim: usize) -> Result<ExTensor, CandlexError> {
+    let tensors = ex_tensors.iter().map(|t| t.deref()).collect::<Vec<&Tensor>>();
+    Ok(ExTensor::new(Tensor::cat(&tensors[..], dim)?))
 }
 
 fn tuple_to_vec(term: Term) -> Result<Vec<usize>, rustler::Error> {

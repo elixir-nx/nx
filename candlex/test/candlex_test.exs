@@ -69,6 +69,30 @@ defmodule CandlexTest do
       |> assert_equal(t([[0, 1, 2], [3, 4, 5]]))
     end
 
+    test "max" do
+      Nx.max(1, 2)
+      |> assert_equal(t(2))
+
+      Nx.max(1, t([1.0, 2.0, 3.0], names: [:data]))
+      |> assert_equal(t([1.0, 2.0, 3.0]))
+
+      t([[1], [2]], type: :f32, names: [:x, nil])
+      |> Nx.max(t([[10, 20]], type: :f32, names: [nil, :y]))
+      |> assert_equal(t([[10.0, 20.0], [10.0, 20.0]]))
+    end
+
+    test "min" do
+      Nx.min(1, 2)
+      |> assert_equal(t(1))
+
+      Nx.min(1, t([1.0, 2.0, 3.0], names: [:data]))
+      |> assert_equal(t([1.0, 1.0, 1.0]))
+
+      t([[1], [2]], type: :f32, names: [:x, nil])
+      |> Nx.min(t([[10, 20]], type: :f32, names: [nil, :y]))
+      |> assert_equal(t([[1.0, 1.0], [2.0, 2.0]]))
+    end
+
     test "multiply" do
       t([1, 2])
       |> Nx.multiply(t([3, 4]))

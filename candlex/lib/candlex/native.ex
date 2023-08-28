@@ -12,9 +12,11 @@ defmodule Candlex.Native do
   def squeeze(_tensor, _dim), do: error()
   def arange(_start, _end, _shape), do: error()
   def broadcast_to(_tensor, _shape), do: error()
+  def reshape(_tensor, _shape), do: error()
   def to_type(_tensor, _dtype), do: error()
+  def concatenate(_tensors, _axis), do: error()
 
-  for op <- [:add, :equal, :greater_equal, :multiply, :subtract] do
+  for op <- [:add, :equal, :greater_equal, :max, :min, :multiply, :subtract] do
     def unquote(op)(_left, _right), do: error()
   end
 

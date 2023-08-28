@@ -118,9 +118,10 @@ defmodule Candlex.Backend do
 
   # Binary ops
 
-  for op <- [:add, :equal, :greater_equal, :multiply, :subtract] do
+  for op <- [:add, :equal, :greater_equal, :max, :min, :multiply, :subtract] do
     @impl true
     def unquote(op)(%T{} = out, %T{} = left, %T{} = right) do
+      {left, right} = maybe_upcast(left, right)
       {left, right} = maybe_broadcast_bin_args(out.shape, left, right)
 
       left
@@ -150,7 +151,26 @@ defmodule Candlex.Backend do
     |> to_nx(out)
   end
 
+  # N-dim
+
+  @impl true
+  def concatenate(%T{} = out, tensors, axis) do
+    tensors
+    |> Enum.map(&from_nx/1)
+    |> Native.concatenate(axis)
+    |> unwrap!()
+    |> to_nx(out)
+  end
+
   # Shape
+
+  @impl true
+  def reshape(%T{shape: shape} = out, %T{} = t) do
+    from_nx(t)
+    |> Native.reshape(shape)
+    |> unwrap!()
+    |> to_nx(out)
+  end
 
   @impl true
   def as_type(%T{type: type} = out, %T{} = t) do
@@ -213,6 +233,15 @@ defmodule Candlex.Backend do
   end
 
   defp narrow(t, [], [], _axis, _shape), do: t
+
+  defp maybe_upcast(%T{type: t} = left, %T{type: t} = right) do
+    {left, right}
+  end
+  defp maybe_upcast(left, right) do
+    type = Nx.Type.merge(left.type, right.type)
+
+    {Nx.as_type(left, type), Nx.as_type(right, type)}
+  end
 
   defp maybe_broadcast_bin_args(_out_shape, %{shape: {}} = l, r), do: {from_nx(l), from_nx(r)}
   defp maybe_broadcast_bin_args(_out_shape, l, %{shape: {}} = r), do: {from_nx(l), from_nx(r)}
