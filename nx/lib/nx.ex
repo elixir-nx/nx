@@ -15704,6 +15704,73 @@ defmodule Nx do
   end
 
   @doc """
+  Finds the covariance matrix of the input tensor columns.
+
+  Covariance of two random variables X and Y is calculated as mean((X - mean(X)) * (Y - mean(Y))).
+  Covariance matrix element at position (i, j) is equal to
+  the covariance of the i-th and j-th columns of the input tensor.
+  If the `:ddof` (delta degrees of freedom) option is given, the divisor `n - ddof` is used for the sum of the products.
+  Means of the columns can be provided with the `:mean` option. Otherwise, they are estimated using `Nx.mean`.
+
+  ## Examples
+
+    iex> Nx.covariance(Nx.tensor([[1, 2], [3, 4], [5, 6]]))
+    #Nx.Tensor<
+      f32[2][2]
+      [
+        [2.6666667461395264, 2.6666667461395264],
+        [2.6666667461395264, 2.6666667461395264]
+      ]
+    >
+
+    iex> Nx.covariance(Nx.tensor([[1, 2], [3, 4], [5, 6]]), ddof: 1)
+    #Nx.Tensor<
+      f32[2][2]
+      [
+        [4.0, 4.0],
+        [4.0, 4.0]
+      ]
+    >
+
+    iex> Nx.covariance(Nx.tensor([[1, 2], [3, 4], [5, 6]]), mean: Nx.tensor([4, 3]))
+    #Nx.Tensor<
+      f32[2][2]
+      [
+        [3.6666667461395264, 1.6666666269302368],
+        [1.6666666269302368, 3.6666667461395264]
+      ]
+    >
+  """
+  @doc type: :aggregation
+  @spec covariance(tensor :: Nx.Tensor.t, opts :: Keyword.t()) :: Nx.Tensor.t()
+  def covariance(tensor, opts \\ []) do
+    tensor = to_tensor(tensor)
+    opts = keyword!(opts, [ddof: 0, mean: nil])
+    if rank(tensor) != 2 do
+      raise ArgumentError, "expected tensor of rank 2, got #{rank(tensor)}"
+    end
+    {total, dim} = shape(tensor)
+    ddof = opts[:ddof]
+    if not is_integer(ddof) or ddof < 0 do
+      raise ArgumentError, "expected ddof to be a non-negative integer, got #{ddof}"
+    end
+    mean =
+      if opts[:mean] do
+        opts_mean = opts[:mean]
+        cond do
+          not is_tensor(opts_mean) -> raise ArgumentError, "mean must be a tensor"
+          rank(opts_mean) != 1 -> raise ArgumentError, "expected mean to have rank 1, got #{rank(opts_mean)}"
+          size(opts_mean) != dim -> raise ArgumentError, "expected input tensor and mean to have same dimensions, got #{dim} and #{size(opts_mean)}"
+          true -> opts_mean
+        end
+      else
+        mean(tensor, axes: [0])
+      end
+    tensor = subtract(tensor, mean)
+    Nx.dot(Nx.LinAlg.adjoint(tensor), tensor) |> divide(total - ddof)
+  end
+
+  @doc """
   Calculates the DFT of the given tensor.
 
   ## Options

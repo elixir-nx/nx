@@ -2680,6 +2680,38 @@ defmodule NxTest do
     end
   end
 
+  describe "covariance/1" do
+    test "calculates the covariance of a tensor" do
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+
+      assert Nx.covariance(t) ==
+               Nx.tensor([
+                 [1.5555554628372192, 2.444444417953491],
+                 [2.444444417953491, 4.222222328186035]
+               ])
+    end
+
+    test "uses optional ddof" do
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+
+      assert Nx.covariance(t, ddof: 1) ==
+               Nx.tensor([
+                 [2.3333332538604736, 3.6666667461395264],
+                 [3.6666667461395264, 6.333333492279053]
+               ])
+    end
+
+    test "uses optional mean" do
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+
+      assert Nx.covariance(t, mean: Nx.tensor([3, 2])) ==
+               Nx.tensor([
+                 [2.0, 2.0],
+                 [2.0, 4.666666507720947]
+               ])
+    end
+  end
+
   describe "weighted_mean/3" do
     test "shape of input differs from shape of weights" do
       t = Nx.iota({4, 6})
