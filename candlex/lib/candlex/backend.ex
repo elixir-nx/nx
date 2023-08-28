@@ -165,6 +165,16 @@ defmodule Candlex.Backend do
   # Shape
 
   @impl true
+  def broadcast(out, %T{} = t, shape, axes) do
+    t
+    |> maybe_reshape(shape, axes)
+    |> from_nx()
+    |> Native.broadcast_to(shape)
+    |> unwrap!()
+    |> to_nx(out)
+  end
+
+  @impl true
   def reshape(%T{shape: shape} = out, %T{} = t) do
     from_nx(t)
     |> Native.reshape(shape)
@@ -233,6 +243,33 @@ defmodule Candlex.Backend do
   end
 
   defp narrow(t, [], [], _axis, _shape), do: t
+
+  defp maybe_reshape(%T{shape: {}} = t, target_shape, _axes) do
+    shape =
+      1
+      |> List.duplicate(tuple_size(target_shape))
+      |> List.to_tuple()
+
+    t
+    |> Nx.reshape(shape)
+  end
+
+  defp maybe_reshape(%T{shape: shape} = t, target_shape, axes) do
+    base_broadcast_shape = 1 |> List.duplicate(tuple_size(target_shape)) |> List.to_tuple()
+
+    new_shape =
+      shape
+      |> Tuple.to_list()
+      |> Enum.zip(axes)
+      |> Enum.reduce(base_broadcast_shape, fn {dim_size, target_axis}, shape_acc ->
+        shape_acc
+        |> Tuple.delete_at(target_axis)
+        |> Tuple.insert_at(target_axis, dim_size)
+      end)
+
+    t
+    |> Nx.reshape(new_shape)
+  end
 
   defp maybe_upcast(%T{type: t} = left, %T{type: t} = right) do
     {left, right}

@@ -107,6 +107,15 @@ defmodule CandlexTest do
       |> assert_equal(t([[3, 6], [4, 8]]))
     end
 
+    test "broadcast" do
+      Nx.broadcast(1, {1, 2, 3})
+      |> assert_equal(t([[[1, 1, 1], [1, 1, 1]]]))
+
+      t([1, 2, 3])
+      |> Nx.broadcast({3, 2}, axes: [0])
+      |> assert_equal(t([[1, 1], [2, 2], [3, 3]]))
+    end
+
     test "access" do
       tensor = t([[1, 2], [3, 4]])
 
