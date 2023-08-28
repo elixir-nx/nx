@@ -7,11 +7,14 @@ defmodule Candlex.Native do
   def from_binary(_binary, _dtype, _shape), do: error()
   def to_binary(_tensor), do: error()
   def all(_tensor), do: error()
+  def where_cond(_tensor, _on_true, _on_false), do: error()
   def narrow(_tensor, _dim, _start, _length), do: error()
   def squeeze(_tensor, _dim), do: error()
   def arange(_start, _end, _shape), do: error()
+  def broadcast_to(_tensor, _shape), do: error()
+  def to_type(_tensor, _dtype), do: error()
 
-  for op <- [:add, :equal, :multiply] do
+  for op <- [:add, :equal, :greater_equal, :multiply, :subtract] do
     def unquote(op)(_left, _right), do: error()
   end
 

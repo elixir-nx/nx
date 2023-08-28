@@ -28,6 +28,23 @@ defmodule CandlexTest do
       |> assert_equal(t([[1, 2, 3], [4, 5, 6]]))
     end
 
+    test "tensor tensor" do
+      t(t([1, 2, 3]))
+      |> assert_equal(t([1, 2, 3]))
+    end
+
+    test "tril" do
+      t([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+      |> Nx.tril()
+      |> assert_equal(t([[1, 0, 0], [4, 5, 0], [7, 8, 9]]))
+    end
+
+    test "triu" do
+      t([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+      |> Nx.triu()
+      |> assert_equal(t([[1, 2, 3], [0, 5, 6], [0, 0, 9]]))
+    end
+
     test "addition" do
       t([1, 2, 3])
       |> Nx.add(t([10, 20, 30]))

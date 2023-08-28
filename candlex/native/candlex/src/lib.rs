@@ -17,10 +17,15 @@ rustler::init! {
         tensors::add,
         tensors::multiply,
         tensors::equal,
+        tensors::greater_equal,
+        tensors::subtract,
         tensors::all,
+        tensors::where_cond,
         tensors::narrow,
         tensors::squeeze,
-        tensors::arange
+        tensors::arange,
+        tensors::to_type,
+        tensors::broadcast_to
     ],
     load = load
 }

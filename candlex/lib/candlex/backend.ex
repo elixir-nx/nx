@@ -91,13 +91,40 @@ defmodule Candlex.Backend do
     |> to_nx(out)
   end
 
+  # Element-wise
+
+  @impl true
+  def select(%T{shape: shape} = out, pred, on_true, on_false) do
+    on_true =
+      on_true
+      |> Nx.as_type(Nx.type(out))
+      |> from_nx()
+      |> Native.broadcast_to(shape)
+      |> unwrap!()
+
+    on_false =
+      on_false
+      |> Nx.as_type(Nx.type(out))
+      |> from_nx()
+      |> Native.broadcast_to(shape)
+      |> unwrap!()
+
+    pred
+    |> from_nx()
+    |> Native.where_cond(on_true, on_false)
+    |> unwrap!()
+    |> to_nx(out)
+  end
+
   # Binary ops
 
-  for op <- [:add, :equal, :multiply] do
+  for op <- [:add, :equal, :greater_equal, :multiply, :subtract] do
     @impl true
     def unquote(op)(%T{} = out, %T{} = left, %T{} = right) do
-      from_nx(left)
-      |> Native.unquote(op)(from_nx(right))
+      {left, right} = maybe_broadcast_bin_args(out.shape, left, right)
+
+      left
+      |> Native.unquote(op)(right)
       |> unwrap!()
       |> to_nx(out)
     end
@@ -124,6 +151,14 @@ defmodule Candlex.Backend do
   end
 
   # Shape
+
+  @impl true
+  def as_type(%T{type: type} = out, %T{} = t) do
+    from_nx(t)
+    |> Native.to_type(to_candle_dtype(type))
+    |> unwrap!()
+    |> to_nx(out)
+  end
 
   @impl true
   def squeeze(%T{} = out, %T{} = t, axes) do
@@ -178,6 +213,25 @@ defmodule Candlex.Backend do
   end
 
   defp narrow(t, [], [], _axis, _shape), do: t
+
+  defp maybe_broadcast_bin_args(_out_shape, %{shape: {}} = l, r), do: {from_nx(l), from_nx(r)}
+  defp maybe_broadcast_bin_args(_out_shape, l, %{shape: {}} = r), do: {from_nx(l), from_nx(r)}
+
+  defp maybe_broadcast_bin_args(out_shape, l, r) do
+    {
+      case l.shape do
+        ^out_shape ->
+          from_nx(l)
+
+        _ ->
+          l |> from_nx() |> Native.broadcast_to(out_shape) |> unwrap!()
+      end,
+      case r.shape do
+        ^out_shape -> from_nx(r)
+        _ -> r |> from_nx() |> Native.broadcast_to(out_shape) |> unwrap!()
+      end
+    }
+  end
 
   ## Conversions
 

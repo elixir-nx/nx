@@ -72,6 +72,16 @@ pub fn equal(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> 
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+pub fn greater_equal(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(left.ge(&right)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn subtract(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(left.broadcast_sub(&right)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 pub fn narrow(t: ExTensor, dim: usize, start: usize, length: usize) -> Result<ExTensor, CandlexError> {
     Ok(ExTensor::new(t.narrow(dim, start, length)?))
 }
@@ -101,6 +111,21 @@ pub fn all(ex_tensor: ExTensor) -> Result<ExTensor, CandlexError> {
         };
 
     Ok(ExTensor::new(Tensor::new(bool_scalar, device)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn broadcast_to(t: ExTensor, shape: Term) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(t.broadcast_as(tuple_to_vec(shape).unwrap())?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn where_cond(t: ExTensor, on_true: ExTensor, on_false: ExTensor) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(t.where_cond(&on_true, &on_false)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn to_type(t: ExTensor, dtype_str: &str) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(t.to_dtype(DType::from_str(dtype_str).unwrap())?))
 }
 
 fn tuple_to_vec(term: Term) -> Result<Vec<usize>, rustler::Error> {
