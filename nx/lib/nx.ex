@@ -15742,30 +15742,44 @@ defmodule Nx do
     >
   """
   @doc type: :aggregation
-  @spec covariance(tensor :: Nx.Tensor.t, opts :: Keyword.t()) :: Nx.Tensor.t()
+  @spec covariance(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
   def covariance(tensor, opts \\ []) do
     tensor = to_tensor(tensor)
-    opts = keyword!(opts, [ddof: 0, mean: nil])
+    opts = keyword!(opts, ddof: 0, mean: nil)
+
     if rank(tensor) != 2 do
       raise ArgumentError, "expected tensor of rank 2, got #{rank(tensor)}"
     end
+
     {total, dim} = shape(tensor)
     ddof = opts[:ddof]
+
     if not is_integer(ddof) or ddof < 0 do
       raise ArgumentError, "expected ddof to be a non-negative integer, got #{ddof}"
     end
+
     mean =
       if opts[:mean] do
         opts_mean = opts[:mean]
+
         cond do
-          not is_tensor(opts_mean) -> raise ArgumentError, "mean must be a tensor"
-          rank(opts_mean) != 1 -> raise ArgumentError, "expected mean to have rank 1, got #{rank(opts_mean)}"
-          size(opts_mean) != dim -> raise ArgumentError, "expected input tensor and mean to have same dimensions, got #{dim} and #{size(opts_mean)}"
-          true -> opts_mean
+          not is_tensor(opts_mean) ->
+            raise ArgumentError, "mean must be a tensor"
+
+          rank(opts_mean) != 1 ->
+            raise ArgumentError, "expected mean to have rank 1, got #{rank(opts_mean)}"
+
+          size(opts_mean) != dim ->
+            raise ArgumentError,
+                  "expected input tensor and mean to have same dimensions, got #{dim} and #{size(opts_mean)}"
+
+          true ->
+            opts_mean
         end
       else
         mean(tensor, axes: [0])
       end
+
     tensor = subtract(tensor, mean)
     Nx.dot(Nx.LinAlg.adjoint(tensor), tensor) |> divide(total - ddof)
   end
