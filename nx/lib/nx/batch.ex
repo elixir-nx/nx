@@ -12,20 +12,22 @@ defmodule Nx.Batch do
 
   The `:size` field is public.
   """
+  @enforce_keys [:key]
   @derive {Inspect, only: [:size, :pad]}
-  defstruct stack: [], size: 0, template: nil, pad: 0, key: :default
+  defstruct [:key, stack: [], size: 0, template: nil, pad: 0]
 
   @type t :: %Nx.Batch{
           stack: list(),
           size: non_neg_integer(),
           template: Nx.Container.t() | Nx.Tensor.t() | nil,
-          pad: non_neg_integer()
+          pad: non_neg_integer(),
+          key: term()
         }
 
   @doc """
   Returns a new empty batch.
   """
-  def new, do: %Nx.Batch{}
+  def new, do: %Nx.Batch{key: :default}
 
   @doc """
   Sets the batch key for the given batch.
@@ -121,17 +123,17 @@ defmodule Nx.Batch do
       >
   """
   def split(%Nx.Batch{} = batch, n) when is_integer(n) and n > 0 do
-    %{template: template, stack: stack, pad: pad, size: size} = batch
+    %{template: template, stack: stack, pad: pad, size: size, key: key} = batch
 
     if n < size do
       {left, right} = drop_split(stack, size - n, [])
 
       {%{batch | stack: left, size: n, pad: 0},
-       %Nx.Batch{template: template, pad: pad, size: size - n, stack: right}}
+       %Nx.Batch{template: template, pad: pad, size: size - n, stack: right, key: key}}
     else
       right_pad = max(size + pad - n, 0)
       left_pad = pad - right_pad
-      {%{batch | pad: left_pad}, %Nx.Batch{template: template, pad: right_pad}}
+      {%{batch | pad: left_pad}, %Nx.Batch{template: template, pad: right_pad, key: key}}
     end
   end
 
