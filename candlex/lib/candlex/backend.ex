@@ -92,7 +92,7 @@ defmodule Candlex.Backend do
 
   # Element-wise
 
-  for op <- [:bitwise_and, :bitwise_or, :bitwise_xor] do
+  for op <- [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift] do
     @impl true
     def unquote(op)(out, l, r) do
       # TODO: Implement in candle

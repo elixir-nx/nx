@@ -238,6 +238,19 @@ defmodule CandlexTest do
       |> Nx.less_equal(t([1, 2, 3]))
       |> assert_equal(t([[1, 1, 1], [0, 0, 0]]))
     end
+
+    test "left_shift" do
+      Nx.left_shift(1, 0)
+      |> assert_equal(t(1))
+
+      t([1, 2, 3])
+      |> Nx.left_shift(2)
+      |> assert_equal(t([4, 8, 12]))
+
+      t([1, 1, -1, -1])
+      |> Nx.left_shift(t([1, 2, 3, 4]))
+      |> assert_equal(t([2, 4, -8, -16]))
+    end
   end
 
   defp t(values, opts \\ []) do
