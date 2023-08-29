@@ -130,7 +130,7 @@ defmodule Candlex.Backend do
 
   # Binary ops
 
-  for op <- [:add, :equal, :greater_equal, :max, :min, :multiply, :subtract] do
+  for op <- [:add, :equal, :greater_equal, :less, :max, :min, :multiply, :subtract] do
     @impl true
     def unquote(op)(%T{} = out, %T{} = left, %T{} = right) do
       {left, right} = maybe_upcast(left, right)
@@ -315,9 +315,6 @@ defmodule Candlex.Backend do
       Nx.as_type(tensor, type)
     end)
   end
-
-  defp maybe_broadcast_bin_args(_out_shape, %{shape: {}} = l, r), do: {from_nx(l), from_nx(r)}
-  defp maybe_broadcast_bin_args(_out_shape, l, %{shape: {}} = r), do: {from_nx(l), from_nx(r)}
 
   defp maybe_broadcast_bin_args(out_shape, l, r) do
     {

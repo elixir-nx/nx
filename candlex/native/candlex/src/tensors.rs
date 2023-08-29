@@ -83,6 +83,11 @@ pub fn greater_equal(left: ExTensor, right: ExTensor) -> Result<ExTensor, Candle
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+pub fn less(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(left.lt(&right)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 pub fn subtract(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
     Ok(ExTensor::new(left.broadcast_sub(&right)?))
 }

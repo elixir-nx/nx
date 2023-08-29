@@ -214,6 +214,18 @@ defmodule CandlexTest do
       |> Nx.bitwise_xor(t([0, 1, 0, 1]))
       |> assert_equal(t([0, 1, 1, 0]))
     end
+
+    test "less" do
+      Nx.less(1, 2)
+      |> assert_equal(t(1))
+
+      Nx.less(1, t([1, 2, 3]))
+      |> assert_equal(t([0, 1, 1]))
+
+      t([[1.0, 2.0, 3.0], [4.0, 2.0, 1.0]])
+      |> Nx.less(t([1, 2, 3]))
+      |> assert_equal(t([[0, 0, 0], [0, 0, 1]]))
+    end
   end
 
   defp t(values, opts \\ []) do
