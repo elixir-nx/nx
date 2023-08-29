@@ -302,7 +302,12 @@ defmodule Candlex.Backend do
   ## Conversions
 
   @doc false
-  defp from_nx(%T{data: data}), do: data
+  defp from_nx(%T{data: %CB{} = data}), do: data
+  defp from_nx(%T{} = tensor) do
+    tensor
+    |> Nx.backend_transfer(CB)
+    |> from_nx()
+  end
 
   defp to_nx(%{resource: ref} = backend_tensor, %T{} = t) when is_reference(ref) do
     %{t | data: backend_tensor}
