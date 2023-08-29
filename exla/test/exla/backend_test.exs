@@ -1,6 +1,8 @@
 defmodule EXLA.BackendTest do
   use EXLA.Case, async: true
 
+  import Nx, only: [sigil_V: 2]
+
   setup do
     Nx.default_backend(EXLA.Backend)
     :ok
@@ -22,7 +24,8 @@ defmodule EXLA.BackendTest do
     sigmoid: 1,
     fft: 2,
     ifft: 2,
-    logsumexp: 2
+    logsumexp: 2,
+    conjugate: 1
   ]
 
   @temporarily_broken_doctests [
@@ -198,5 +201,9 @@ defmodule EXLA.BackendTest do
                      Nx.backend_transfer(Nx.tensor([1, 2]), {EXLA.Backend, client: :unknown})
                    end
     end
+  end
+
+  test "conjugate" do
+    assert inspect(Nx.conjugate(~V[1 2-0i 3+0i 0-i 0-2i])) =~ "1.0-0.0i, 2.0+0.0i, 3.0-0.0i, 0.0+1.0i, 0.0+2.0i"
   end
 end
