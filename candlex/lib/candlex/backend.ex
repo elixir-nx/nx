@@ -154,8 +154,8 @@ defmodule Candlex.Backend do
 
   @impl true
   def concatenate(%T{} = out, tensors, axis) do
-    # TODO: Support concatenating tensors of different type
     tensors
+    |> maybe_upcast()
     |> Enum.map(&from_nx/1)
     |> Native.concatenate(axis)
     |> unwrap!()
@@ -278,6 +278,21 @@ defmodule Candlex.Backend do
     type = Nx.Type.merge(left.type, right.type)
 
     {Nx.as_type(left, type), Nx.as_type(right, type)}
+  end
+  defp maybe_upcast([first | _] = tensors) do
+    type =
+      tensors
+      |> Enum.reduce(
+        first.type,
+        fn tensor, type ->
+          Nx.Type.merge(type, tensor.type)
+        end
+      )
+
+    tensors
+    |> Enum.map(fn tensor ->
+      Nx.as_type(tensor, type)
+    end)
   end
 
   defp maybe_broadcast_bin_args(_out_shape, %{shape: {}} = l, r), do: {from_nx(l), from_nx(r)}
