@@ -122,6 +122,43 @@ defmodule CandlexTest do
       assert_equal(tensor[0], t([1, 2]))
       assert_equal(tensor[1], t([3, 4]))
     end
+
+    test "concatenate" do
+      [t([1, 2, 3])]
+      |> Nx.concatenate()
+      |> assert_equal(t([1, 2, 3]))
+
+      [t([1, 2, 3]), t([4, 5, 6])]
+      |> Nx.concatenate()
+      |> assert_equal(t([1, 2, 3, 4, 5, 6]))
+
+      t1 = Nx.iota({2, 2, 2}, names: [:x, :y, :z], type: :u8)
+      t2 = Nx.iota({1, 2, 2}, names: [:x, :y, :z], type: :u8)
+      t3 = Nx.iota({1, 2, 2}, names: [:x, :y, :z], type: :s64)
+
+      [t1, t2, t3]
+      |> Nx.concatenate(axis: :x)
+      |> assert_equal(t(
+        [
+          [
+            [0, 1],
+            [2, 3]
+          ],
+          [
+            [4, 5],
+            [6, 7]
+          ],
+          [
+            [0, 1],
+            [2, 3]
+          ],
+          [
+            [0, 1],
+            [2, 3]
+          ]
+        ]
+      ))
+    end
   end
 
   defp t(values, opts \\ []) do
