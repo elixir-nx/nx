@@ -33,18 +33,14 @@ impl Deref for ExTensor {
 
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn from_binary(binary: Binary, dtype_str: &str, shape: Term) -> Result<ExTensor, CandlexError> {
-    Ok(
-        ExTensor::new(
-            Tensor::from_raw_buffer(
-                binary.as_slice(),
-                // TODO: Handle DTypeParseError
-                DType::from_str(dtype_str).unwrap(),
-                // TODO: Handle rustler::Error
-                &tuple_to_vec(shape).unwrap(),
-                &Device::Cpu,
-            )?
-        )
-    )
+    Ok(ExTensor::new(Tensor::from_raw_buffer(
+        binary.as_slice(),
+        // TODO: Handle DTypeParseError
+        DType::from_str(dtype_str).unwrap(),
+        // TODO: Handle rustler::Error
+        &tuple_to_vec(shape).unwrap(),
+        &Device::Cpu,
+    )?))
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
@@ -92,7 +88,12 @@ pub fn subtract(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexErro
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-pub fn narrow(t: ExTensor, dim: usize, start: usize, length: usize) -> Result<ExTensor, CandlexError> {
+pub fn narrow(
+    t: ExTensor,
+    dim: usize,
+    start: usize,
+    length: usize,
+) -> Result<ExTensor, CandlexError> {
     Ok(ExTensor::new(t.narrow(dim, start, length)?))
 }
 
@@ -103,7 +104,9 @@ pub fn squeeze(t: ExTensor, dim: usize) -> Result<ExTensor, CandlexError> {
 
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn arange(start: i64, end: i64, shape: Term) -> Result<ExTensor, CandlexError> {
-    Ok(ExTensor::new(Tensor::arange(start, end, &Device::Cpu)?.reshape(tuple_to_vec(shape).unwrap())?))
+    Ok(ExTensor::new(
+        Tensor::arange(start, end, &Device::Cpu)?.reshape(tuple_to_vec(shape).unwrap())?,
+    ))
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
@@ -114,11 +117,14 @@ pub fn all(ex_tensor: ExTensor) -> Result<ExTensor, CandlexError> {
     let on_true = Tensor::ones(dims, DType::U8, device)?;
     let on_false = Tensor::zeros(dims, DType::U8, device)?;
 
-    let bool_scalar =
-        match t.where_cond(&on_true, &on_false)?.min(0)?.to_scalar::<u8>()? {
-            0 => 0u8,
-            _ => 1u8
-        };
+    let bool_scalar = match t
+        .where_cond(&on_true, &on_false)?
+        .min(0)?
+        .to_scalar::<u8>()?
+    {
+        0 => 0u8,
+        _ => 1u8,
+    };
 
     Ok(ExTensor::new(Tensor::new(bool_scalar, device)?))
 }
@@ -134,68 +140,73 @@ pub fn reshape(t: ExTensor, shape: Term) -> Result<ExTensor, CandlexError> {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-pub fn where_cond(t: ExTensor, on_true: ExTensor, on_false: ExTensor) -> Result<ExTensor, CandlexError> {
+pub fn where_cond(
+    t: ExTensor,
+    on_true: ExTensor,
+    on_false: ExTensor,
+) -> Result<ExTensor, CandlexError> {
     Ok(ExTensor::new(t.where_cond(&on_true, &on_false)?))
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn to_type(t: ExTensor, dtype_str: &str) -> Result<ExTensor, CandlexError> {
-    Ok(ExTensor::new(t.to_dtype(DType::from_str(dtype_str).unwrap())?))
+    Ok(ExTensor::new(
+        t.to_dtype(DType::from_str(dtype_str).unwrap())?,
+    ))
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn concatenate(ex_tensors: Vec<ExTensor>, dim: usize) -> Result<ExTensor, CandlexError> {
-    let tensors = ex_tensors.iter().map(|t| t.deref()).collect::<Vec<&Tensor>>();
+    let tensors = ex_tensors
+        .iter()
+        .map(|t| t.deref())
+        .collect::<Vec<&Tensor>>();
     Ok(ExTensor::new(Tensor::cat(&tensors[..], dim)?))
 }
 
 fn tuple_to_vec(term: Term) -> Result<Vec<usize>, rustler::Error> {
-    Ok(
-        rustler::types::tuple::get_tuple(term)?
+    Ok(rustler::types::tuple::get_tuple(term)?
         .iter()
         .map(|elem| elem.decode())
-        .collect::<Result<_, _>>()?
-    )
+        .collect::<Result<_, _>>()?)
 }
 
 fn tensor_bytes(tensor: Tensor) -> Result<Vec<u8>, CandlexError> {
-    Ok(
-        match tensor.dtype() {
-            DType::I64 => tensor
-                .to_vec1::<i64>()?
-                .iter()
-                .flat_map(|val| val.to_ne_bytes())
-                .collect(),
-            DType::U8 => tensor
-                .to_vec1::<u8>()?
-                .iter()
-                .flat_map(|val| val.to_ne_bytes())
-                .collect(),
-            DType::U32 => tensor
-                .to_vec1::<u32>()?
-                .iter()
-                .flat_map(|val| val.to_ne_bytes())
-                .collect(),
-            DType::F16 => tensor
-                .to_vec1::<f16>()?
-                .iter()
-                .flat_map(|val| val.to_ne_bytes())
-                .collect(),
-            DType::F32 => tensor
-                .to_vec1::<f32>()?
-                .iter()
-                .flat_map(|val| val.to_ne_bytes())
-                .collect(),
-            DType::F64 => tensor
-                .to_vec1::<f64>()?
-                .iter()
-                .flat_map(|val| val.to_ne_bytes())
-                .collect(),
-            DType::BF16 => tensor
-                .to_vec1::<bf16>()?
-                .iter()
-                .flat_map(|val| val.to_ne_bytes())
-                .collect(),
-        }
-    )
+    Ok(match tensor.dtype() {
+        DType::I64 => tensor
+            .to_vec1::<i64>()?
+            .iter()
+            .flat_map(|val| val.to_ne_bytes())
+            .collect(),
+        DType::U8 => tensor
+            .to_vec1::<u8>()?
+            .iter()
+            .flat_map(|val| val.to_ne_bytes())
+            .collect(),
+        DType::U32 => tensor
+            .to_vec1::<u32>()?
+            .iter()
+            .flat_map(|val| val.to_ne_bytes())
+            .collect(),
+        DType::F16 => tensor
+            .to_vec1::<f16>()?
+            .iter()
+            .flat_map(|val| val.to_ne_bytes())
+            .collect(),
+        DType::F32 => tensor
+            .to_vec1::<f32>()?
+            .iter()
+            .flat_map(|val| val.to_ne_bytes())
+            .collect(),
+        DType::F64 => tensor
+            .to_vec1::<f64>()?
+            .iter()
+            .flat_map(|val| val.to_ne_bytes())
+            .collect(),
+        DType::BF16 => tensor
+            .to_vec1::<bf16>()?
+            .iter()
+            .flat_map(|val| val.to_ne_bytes())
+            .collect(),
+    })
 }

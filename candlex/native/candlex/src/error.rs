@@ -9,7 +9,7 @@ rustler::atoms! {
 #[derive(Error, Debug)]
 pub enum CandlexError {
     #[error("Candle Error: {0}")]
-    Candle(#[from] candle_core::Error)
+    Candle(#[from] candle_core::Error),
 }
 
 impl Encoder for CandlexError {
