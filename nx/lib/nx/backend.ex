@@ -249,18 +249,15 @@ defmodule Nx.Backend do
     chunk_each(dim - 1, rest, [doc | acc], limit, fun)
   end
 
-  defp inspect_value(float, precision) when is_float(float) and is_integer(precision) do
-    float_to_string(float, precision)
-  end
-
-  defp inspect_value(float, nil) when is_float(float), do: Float.to_string(float)
-
-  defp inspect_value(%Complex{} = val, precision), do: complex_to_string(val, precision)
-
   defp inspect_value(integer, _) when is_integer(integer), do: Integer.to_string(integer)
   defp inspect_value(:neg_infinity, _), do: "-Inf"
   defp inspect_value(:infinity, _), do: "Inf"
   defp inspect_value(:nan, _), do: "NaN"
+  defp inspect_value(%Complex{} = val, precision), do: complex_to_string(val, precision)
+
+  defp inspect_value(float, precision), do: float_to_string(float, precision)
+
+  defp float_to_string(float, _) when float == 0, do: "0.0"
 
   defp float_to_string(float, precision) do
     [integer_part, decimal_part, exponent_part] =
@@ -289,45 +286,15 @@ defmodule Nx.Backend do
   end
 
   def complex_to_string(%Complex{re: re, im: im}, precision) do
-    re_str = complex_to_string_real(re, precision)
-    im_str = complex_to_string_component(im, precision)
+    re_str = inspect_value(re, precision)
+    im_str = inspect_value(im, precision)
 
-    "#{re_str}#{im_str}i"
-  end
+    im_str =
+      case im_str do
+        "-" <> _ -> im_str
+        s -> "+" <> s
+      end
 
-  defp complex_to_string_real(n, precision) do
-    case complex_to_string_component(n, precision) do
-      "-" <> _ = s -> s
-      "+" <> s -> s
-    end
-  end
-
-  defp complex_to_string_component(:infinity, _), do: "+Inf"
-  defp complex_to_string_component(:neg_infinity, _), do: "-Inf"
-  defp complex_to_string_component(:nan, _), do: "+NaN"
-
-  defp complex_to_string_component(n, nil) when n == 0, do: "+0.0"
-
-  defp complex_to_string_component(n, nil) do
-    abs_s = Kernel.to_string(abs(n))
-
-    if n >= 0 do
-      "+#{abs_s}"
-    else
-      "-#{abs_s}"
-    end
-  end
-
-  defp complex_to_string_component(n, precision) do
-    # convert number to float
-    n = if is_float(n), do: n, else: n * 1.0
-
-    str = float_to_string(n, precision)
-
-    if n < 0 do
-      str
-    else
-      "+#{str}"
-    end
+    re_str <> im_str <> "i"
   end
 end
