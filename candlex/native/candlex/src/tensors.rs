@@ -54,7 +54,7 @@ pub fn to_binary(env: Env, ex_tensor: ExTensor) -> Result<Binary, CandlexError> 
 
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn add(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
-    Ok(ExTensor::new(left.add(&right)?))
+    Ok(ExTensor::new(left.broadcast_add(&right)?))
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
