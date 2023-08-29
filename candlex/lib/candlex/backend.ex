@@ -145,12 +145,14 @@ defmodule Candlex.Backend do
 
   # Unary ops
 
-  @impl true
-  def bitwise_not(%T{} = out, tensor) do
-    # TODO: Implement in candle
-    out
-    |> Nx.BinaryBackend.bitwise_not(backend_transfer(tensor, Nx.BinaryBackend, []))
-    |> backend_transfer(__MODULE__, [])
+  for op <- [:bitwise_not, :erf_inv] do
+    @impl true
+    def unquote(op)(out, t) do
+      # TODO: Implement in candle
+      out
+      |> Nx.BinaryBackend.unquote(op)(backend_transfer(t, Nx.BinaryBackend, []))
+      |> backend_transfer(__MODULE__, [])
+    end
   end
 
   # Indexed

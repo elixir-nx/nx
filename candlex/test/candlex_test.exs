@@ -270,6 +270,15 @@ defmodule CandlexTest do
       |> Nx.bitcast(:f64)
       |> assert_equal(t([0.0, 0.0, 0.0]))
     end
+
+    test "erf_inv" do
+      Nx.erf_inv(0.10000000149011612)
+      |> assert_equal(t(0.08885598927736282))
+
+      t([0.10000000149011612, 0.5, 0.8999999761581421])
+      |> Nx.erf_inv()
+      |> assert_equal(t([0.08885598927736282, 0.4769362807273865, 1.163087010383606]))
+    end
   end
 
   defp t(values, opts \\ []) do
