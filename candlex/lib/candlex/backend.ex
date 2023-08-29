@@ -130,7 +130,7 @@ defmodule Candlex.Backend do
 
   # Binary ops
 
-  for op <- [:add, :equal, :greater_equal, :less, :max, :min, :multiply, :subtract] do
+  for op <- [:add, :equal, :greater_equal, :less, :less_equal, :max, :min, :multiply, :subtract] do
     @impl true
     def unquote(op)(%T{} = out, %T{} = left, %T{} = right) do
       {left, right} = maybe_upcast(left, right)

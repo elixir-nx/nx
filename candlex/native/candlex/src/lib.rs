@@ -21,6 +21,7 @@ rustler::init! {
         tensors::equal,
         tensors::greater_equal,
         tensors::less,
+        tensors::less_equal,
         tensors::subtract,
         tensors::all,
         tensors::where_cond,

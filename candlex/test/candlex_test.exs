@@ -226,6 +226,18 @@ defmodule CandlexTest do
       |> Nx.less(t([1, 2, 3]))
       |> assert_equal(t([[0, 0, 0], [0, 0, 1]]))
     end
+
+    test "less_equal" do
+      Nx.less_equal(1, 2)
+      |> assert_equal(t(1))
+
+      Nx.less_equal(1, t([1, 2, 3]))
+      |> assert_equal(t([1, 1, 1]))
+
+      t([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+      |> Nx.less_equal(t([1, 2, 3]))
+      |> assert_equal(t([[1, 1, 1], [0, 0, 0]]))
+    end
   end
 
   defp t(values, opts \\ []) do
