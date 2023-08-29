@@ -10,7 +10,7 @@ defmodule Candlex.Native do
   def where_cond(_tensor, _on_true, _on_false), do: error()
   def narrow(_tensor, _dim, _start, _length), do: error()
   def squeeze(_tensor, _dim), do: error()
-  def arange(_start, _end, _shape), do: error()
+  def arange(_start, _end, _dtype, _shape), do: error()
   def broadcast_to(_tensor, _shape), do: error()
   def reshape(_tensor, _shape), do: error()
   def to_type(_tensor, _dtype), do: error()

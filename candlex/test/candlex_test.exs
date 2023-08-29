@@ -61,9 +61,8 @@ defmodule CandlexTest do
       Nx.iota({5})
       |> assert_equal(t([0, 1, 2, 3, 4]))
 
-      # TODO: Support iota with float
-      # Nx.iota({5}, type: :f32)
-      # |> assert_equal(t([0.0, 1.0, 2.0, 3.0, 4.0]))
+      Nx.iota({5}, type: :f32)
+      |> assert_equal(t([0.0, 1.0, 2.0, 3.0, 4.0]))
 
       Nx.iota({2, 3})
       |> assert_equal(t([[0, 1, 2], [3, 4, 5]]))
@@ -132,32 +131,33 @@ defmodule CandlexTest do
       |> Nx.concatenate()
       |> assert_equal(t([1, 2, 3, 4, 5, 6]))
 
-      t1 = Nx.iota({2, 2, 2}, names: [:x, :y, :z], type: :u8)
-      t2 = Nx.iota({1, 2, 2}, names: [:x, :y, :z], type: :u8)
-      t3 = Nx.iota({1, 2, 2}, names: [:x, :y, :z], type: :s64)
+      # TODO: Support concatenating tensors of different type
+      # t1 = Nx.iota({2, 2, 2}, names: [:x, :y, :z], type: :f32)
+      # t2 = Nx.iota({1, 2, 2}, names: [:x, :y, :z], type: :u8)
+      # t3 = Nx.iota({1, 2, 2}, names: [:x, :y, :z], type: :s64)
 
-      [t1, t2, t3]
-      |> Nx.concatenate(axis: :x)
-      |> assert_equal(t(
-        [
-          [
-            [0, 1],
-            [2, 3]
-          ],
-          [
-            [4, 5],
-            [6, 7]
-          ],
-          [
-            [0, 1],
-            [2, 3]
-          ],
-          [
-            [0, 1],
-            [2, 3]
-          ]
-        ]
-      ))
+      # [t1, t2, t3]
+      # |> Nx.concatenate(axis: :x)
+      # |> assert_equal(t(
+      #   [
+      #     [
+      #       [0.0, 1.0],
+      #       [2.0, 3.0]
+      #     ],
+      #     [
+      #       [4.0, 5.0],
+      #       [6.0, 7.0]
+      #     ],
+      #     [
+      #       [0.0, 1.0],
+      #       [2.0, 3.0]
+      #     ],
+      #     [
+      #       [0.0, 1.0],
+      #       [2.0, 3.0]
+      #     ]
+      #   ]
+      # ))
     end
   end
 

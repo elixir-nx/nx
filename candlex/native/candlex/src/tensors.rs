@@ -103,9 +103,16 @@ pub fn squeeze(t: ExTensor, dim: usize) -> Result<ExTensor, CandlexError> {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-pub fn arange(start: i64, end: i64, shape: Term) -> Result<ExTensor, CandlexError> {
+pub fn arange(
+    start: i64,
+    end: i64,
+    dtype_str: &str,
+    shape: Term,
+) -> Result<ExTensor, CandlexError> {
     Ok(ExTensor::new(
-        Tensor::arange(start, end, &Device::Cpu)?.reshape(tuple_to_vec(shape).unwrap())?,
+        Tensor::arange(start, end, &Device::Cpu)?
+            .to_dtype(DType::from_str(dtype_str).unwrap())?
+            .reshape(tuple_to_vec(shape).unwrap())?,
     ))
 }
 

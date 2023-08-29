@@ -44,9 +44,8 @@ defmodule Candlex.Backend do
     constant(out, 0, backend_options)
   end
 
-  def iota(%T{shape: shape} = out, nil, _backend_options) do
-    # TODO: Support different types
-    Native.arange(0, Nx.size(shape), shape)
+  def iota(%T{shape: shape, type: type} = out, nil, _backend_options) do
+    Native.arange(0, Nx.size(shape), to_candle_dtype(type), shape)
     |> unwrap!()
     |> to_nx(out)
   end
@@ -155,6 +154,7 @@ defmodule Candlex.Backend do
 
   @impl true
   def concatenate(%T{} = out, tensors, axis) do
+    # TODO: Support concatenating tensors of different type
     tensors
     |> Enum.map(&from_nx/1)
     |> Native.concatenate(axis)
