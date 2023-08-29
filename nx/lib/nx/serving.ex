@@ -1003,6 +1003,8 @@ defmodule Nx.Serving do
   defp receive_execute(ref, size, index, acc, _template_metadata) do
     case receive_each(ref, size, index) do
       {:batch, {output_start, output_size, output, metadata}} ->
+        # If we have a single response, slice and return immediately.
+        # Otherwise we collect their contents and build the concatenated result later.
         if acc == [] and output_size == size - index do
           {:ok, remove_maybe_padded(output, output_start, output_size), metadata}
         else
