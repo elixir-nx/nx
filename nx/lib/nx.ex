@@ -15732,7 +15732,7 @@ defmodule Nx do
       ]
     >
 
-    iex> Nx.covariance(Nx.tensor([[1, 2], [3, 4], [5, 6]]), mean: Nx.tensor([4, 3]))
+    iex> Nx.covariance(Nx.tensor([[1, 2], [3, 4], [5, 6]]), Nx.tensor([4, 3]))
     #Nx.Tensor<
       f32[2][2]
       [
@@ -15743,45 +15743,38 @@ defmodule Nx do
   """
   @doc type: :aggregation
   @spec covariance(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
-  def covariance(tensor, opts \\ []) do
-    tensor = to_tensor(tensor)
-    opts = keyword!(opts, ddof: 0, mean: nil)
+  def covariance(tensor, opts \\ [])
 
-    if rank(tensor) != 2 do
-      raise ArgumentError, "expected tensor of rank 2, got #{rank(tensor)}"
+  def covariance(tensor, opts) when is_list(opts),
+    do: covariance(tensor, Nx.mean(tensor, axes: [-2]), opts)
+
+  def covariance(tensor, mean), do: covariance(tensor, mean, [])
+
+  def covariance(tensor, mean, opts) do
+    tensor = to_tensor(tensor)
+    mean = to_tensor(mean)
+    opts = keyword!(opts, ddof: 0)
+    tensor_rank = Nx.rank(tensor)
+
+    if tensor_rank < 2 do
+      raise ArgumentError, "expected input tensor of rank at least 2, got #{tensor_rank}"
     end
 
-    {total, dim} = shape(tensor)
+    if Nx.rank(mean) == 0 do
+      raise ArgumentError, "expected mean of rank at least 1, got 0"
+    end
+
     ddof = opts[:ddof]
 
     if not is_integer(ddof) or ddof < 0 do
       raise ArgumentError, "expected ddof to be a non-negative integer, got #{ddof}"
     end
 
-    mean =
-      if opts[:mean] do
-        opts_mean = opts[:mean]
-
-        cond do
-          not is_tensor(opts_mean) ->
-            raise ArgumentError, "mean must be a tensor"
-
-          rank(opts_mean) != 1 ->
-            raise ArgumentError, "expected mean to have rank 1, got #{rank(opts_mean)}"
-
-          size(opts_mean) != dim ->
-            raise ArgumentError,
-                  "expected input tensor and mean to have same dimensions, got #{dim} and #{size(opts_mean)}"
-
-          true ->
-            opts_mean
-        end
-      else
-        mean(tensor, axes: [0])
-      end
-
-    tensor = subtract(tensor, mean)
-    Nx.dot(Nx.LinAlg.adjoint(tensor), tensor) |> divide(total - ddof)
+    tensor = subtract(tensor, new_axis(mean, -2))
+    conj = if Nx.Type.complex?(Nx.type(tensor)), do: Nx.conjugate(tensor), else: tensor
+    batch_axes = 0..(Nx.rank(tensor) - 3)//1 |> Enum.to_list()
+    total = Nx.axis_size(tensor, -2)
+    Nx.dot(conj, [-2], batch_axes, tensor, [-2], batch_axes) |> divide(total - ddof)
   end
 
   @doc """

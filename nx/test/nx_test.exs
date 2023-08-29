@@ -2691,6 +2691,17 @@ defmodule NxTest do
                ])
     end
 
+    test "with mean" do
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+      mean = Nx.tensor([3, 2])
+
+      assert Nx.covariance(t, mean) ==
+               Nx.tensor([
+                 [2.0, 2.0],
+                 [2.0, 4.666666507720947]
+               ])
+    end
+
     test "uses optional ddof" do
       t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
 
@@ -2698,16 +2709,6 @@ defmodule NxTest do
                Nx.tensor([
                  [2.3333332538604736, 3.6666667461395264],
                  [3.6666667461395264, 6.333333492279053]
-               ])
-    end
-
-    test "uses optional mean" do
-      t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
-
-      assert Nx.covariance(t, mean: Nx.tensor([3, 2])) ==
-               Nx.tensor([
-                 [2.0, 2.0],
-                 [2.0, 4.666666507720947]
                ])
     end
   end

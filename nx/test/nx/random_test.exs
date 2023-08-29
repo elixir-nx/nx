@@ -329,7 +329,7 @@ defmodule Nx.RandomTest do
       assert_all_close(Nx.mean(multivariate_normal, axes: [0]), mean, rtol: 0.1)
 
       assert_all_close(
-        Nx.covariance(multivariate_normal, mean: mean),
+        Nx.covariance(multivariate_normal, mean),
         covariance,
         rtol: 0.1
       )
