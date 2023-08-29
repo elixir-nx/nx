@@ -15774,7 +15774,7 @@ defmodule Nx do
       raise ArgumentError, "expected ddof to be a non-negative integer, got #{ddof}"
     end
 
-    tensor = subtract(tensor, new_axis(mean, -2))
+    tensor = tensor |> subtract(new_axis(mean, -2)) |> rename(nil)
     conj = if Nx.Type.complex?(Nx.type(tensor)), do: Nx.conjugate(tensor), else: tensor
     batch_axes = 0..(Nx.rank(tensor) - 3)//1 |> Enum.to_list()
     total = Nx.axis_size(tensor, -2)
