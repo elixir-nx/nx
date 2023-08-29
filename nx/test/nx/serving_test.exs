@@ -711,6 +711,58 @@ defmodule Nx.ServingTest do
       assert batch.pad == 0
     end
 
+    test "3+3=4+2(+pad) with pre and post", config do
+      serving =
+        Nx.Serving.new(Simple, self())
+        |> Nx.Serving.process_options(batch_size: 4)
+        |> Nx.Serving.client_preprocessing(fn entry ->
+          {Nx.Batch.stack(entry), :preprocessing!}
+        end)
+        |> Nx.Serving.client_postprocessing(fn stream, info ->
+          {stream, info}
+        end)
+        |> Nx.Serving.streaming()
+
+      simple_supervised!(config, serving: serving, batch_timeout: 100)
+
+      t1 =
+        Task.async(fn ->
+          batch = [Nx.tensor([11, 12]), Nx.tensor([13, 14]), Nx.tensor([15, 16])]
+
+          {stream, :preprocessing!} = Nx.Serving.batched_run(config.test, batch)
+          Enum.to_list(stream)
+        end)
+
+      t2 =
+        Task.async(fn ->
+          batch = [Nx.tensor([21, 22]), Nx.tensor([23, 24]), Nx.tensor([25, 26])]
+          {stream, :preprocessing!} = Nx.Serving.batched_run(config.test, batch)
+          Enum.to_list(stream)
+        end)
+
+      r1 = Task.await(t1, :infinity)
+      r2 = Task.await(t2, :infinity)
+
+      # Two possible schedules
+      case {r1, r2} do
+        {[batch1], [batch2, batch3]} ->
+          assert batch1 == {:batch, Nx.tensor([[22, 24], [26, 28], [30, 32]]), :metadata}
+          assert batch2 == {:batch, Nx.tensor([[42, 44]]), :metadata}
+          assert batch3 == {:batch, Nx.tensor([[46, 48], [50, 52]]), :metadata}
+
+        {[batch2, batch3], [batch1]} ->
+          assert batch1 == {:batch, Nx.tensor([[42, 44], [46, 48], [50, 52]]), :metadata}
+          assert batch2 == {:batch, Nx.tensor([[22, 24]]), :metadata}
+          assert batch3 == {:batch, Nx.tensor([[26, 28], [30, 32]]), :metadata}
+      end
+
+      assert_received {:init, :process, [[batch_keys: [:default]]]}
+      assert_received {:batch, 0, batch}
+      assert_received :execute
+      assert batch.size == 4
+      assert batch.pad == 0
+    end
+
     @tag :capture_log
     test "1=>crash", config do
       serving = Nx.Serving.new(ExecuteSync, self()) |> Nx.Serving.streaming()
