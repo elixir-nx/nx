@@ -15745,11 +15745,15 @@ defmodule Nx do
   @spec covariance(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
   def covariance(tensor, opts \\ [])
 
+  @spec covariance(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
   def covariance(tensor, opts) when is_list(opts),
     do: covariance(tensor, Nx.mean(tensor, axes: [-2]), opts)
 
+  @spec covariance(tensor :: Nx.Tensor.t(), mean :: Nx.Tensor.t()) :: Nx.Tensor.t()
   def covariance(tensor, mean), do: covariance(tensor, mean, [])
 
+  @spec covariance(tensor :: Nx.Tensor.t(), mean :: Nx.Tensor.t(), opts :: Keyword.t()) ::
+          Nx.Tensor.t()
   def covariance(tensor, mean, opts) do
     tensor = to_tensor(tensor)
     mean = to_tensor(mean)
