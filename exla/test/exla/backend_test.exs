@@ -204,6 +204,7 @@ defmodule EXLA.BackendTest do
   end
 
   test "conjugate" do
-    assert inspect(Nx.conjugate(~V[1 2-0i 3+0i 0-i 0-2i])) =~ "1.0-0.0i, 2.0+0.0i, 3.0-0.0i, 0.0+1.0i, 0.0+2.0i"
+    assert inspect(Nx.conjugate(~V[1 2-0i 3+0i 0-i 0-2i])) =~
+             "1.0-0.0i, 2.0+0.0i, 3.0-0.0i, 0.0+1.0i, 0.0+2.0i"
   end
 end
