@@ -92,6 +92,19 @@ defmodule Candlex.Backend do
 
   # Element-wise
 
+  for op <- [:bitwise_and, :bitwise_or, :bitwise_xor] do
+    @impl true
+    def unquote(op)(out, l, r) do
+      # TODO: Implement in candle
+      out
+      |> Nx.BinaryBackend.unquote(op)(
+        backend_transfer(l, Nx.BinaryBackend, []),
+        backend_transfer(r, Nx.BinaryBackend, [])
+      )
+      |> backend_transfer(__MODULE__, [])
+    end
+  end
+
   @impl true
   def select(%T{shape: shape} = out, pred, on_true, on_false) do
     on_true =
@@ -131,6 +144,14 @@ defmodule Candlex.Backend do
   end
 
   # Unary ops
+
+  @impl true
+  def bitwise_not(%T{} = out, tensor) do
+    # TODO: Implement in candle
+    out
+    |> Nx.BinaryBackend.bitwise_not(backend_transfer(tensor, Nx.BinaryBackend, []))
+    |> backend_transfer(__MODULE__, [])
+  end
 
   # Indexed
 
