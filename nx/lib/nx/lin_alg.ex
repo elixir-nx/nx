@@ -32,7 +32,7 @@ defmodule Nx.LinAlg do
       #Nx.Tensor<
         c64[2][2]
         [
-          [1.0+0.0i, 3.0+0.0i],
+          [1.0-0.0i, 3.0-0.0i],
           [0.0-2.0i, 0.0+4.0i]
         ]
       >
@@ -1945,7 +1945,7 @@ defmodule Nx.LinAlg do
       iex> Nx.LinAlg.determinant(t)
       #Nx.Tensor<
         c64
-        0.0-6.0i
+        -0.0-6.0i
       >
 
   """
