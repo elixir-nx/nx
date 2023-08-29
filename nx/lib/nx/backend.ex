@@ -257,8 +257,6 @@ defmodule Nx.Backend do
 
   defp inspect_value(float, precision), do: float_to_string(float, precision)
 
-  defp float_to_string(float, _) when float == 0, do: "0.0"
-
   defp float_to_string(float, precision) do
     [integer_part, decimal_part, exponent_part] =
       case String.split(Float.to_string(float), [".", "e"], parts: 3) do
