@@ -204,14 +204,6 @@ defmodule Candlex.Backend do
   end
 
   @impl true
-  def as_type(%T{type: type} = out, %T{} = t) do
-    from_nx(t)
-    |> Native.to_type(to_candle_dtype(type))
-    |> unwrap!()
-    |> to_nx(out)
-  end
-
-  @impl true
   def squeeze(%T{} = out, %T{} = t, axes) do
     # sort the axes desc so we don't have to decrease the axis numbers after each squeeze
     for axis <- Enum.sort(axes, :desc), reduce: from_nx(t) do
@@ -221,6 +213,22 @@ defmodule Candlex.Backend do
       |> unwrap!()
     end
     |> to_nx(out)
+  end
+
+  # Type
+
+  @impl true
+  def as_type(%T{type: type} = out, %T{} = t) do
+    from_nx(t)
+    |> Native.to_type(to_candle_dtype(type))
+    |> unwrap!()
+    |> to_nx(out)
+  end
+
+  @impl true
+  def bitcast(out, tensor) do
+    out
+    |> from_binary(to_binary(tensor), [])
   end
 
   # Inspect

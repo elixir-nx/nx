@@ -264,6 +264,12 @@ defmodule CandlexTest do
       |> Nx.right_shift(t([1, 2, 3, 4]))
       |> assert_equal(t([8, 8, -8, -8]))
     end
+
+    test "bitcast" do
+      t([0, 0, 0], type: :s64)
+      |> Nx.bitcast(:f64)
+      |> assert_equal(t([0.0, 0.0, 0.0]))
+    end
   end
 
   defp t(values, opts \\ []) do
