@@ -616,7 +616,7 @@ defmodule Nx.Serving do
           :ok
         end)
 
-        receive_streaming("run/2", ref, size)
+        receive_stream("run/2", ref, size)
       else
         run_execute(module, function, size)
       end
@@ -863,7 +863,7 @@ defmodule Nx.Serving do
         end
 
       _ ->
-        stream = receive_streaming("batched_run/2", ref, batch.size)
+        stream = receive_stream("batched_run/2", ref, batch.size)
         {:ok, handle_postprocessing(postprocessing, stream, info)}
     end
   end
@@ -953,7 +953,7 @@ defmodule Nx.Serving do
 
   ## Client message receiving
 
-  defp receive_streaming(fun, ref, size) do
+  defp receive_stream(fun, ref, size) do
     owner = self()
 
     Stream.resource(
