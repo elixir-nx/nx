@@ -1988,6 +1988,11 @@ defmodule NxTest do
         end
       )
     end
+
+    test "works with infinities" do
+      t = Nx.tensor([1.0, 2.0, 3.0])
+      assert t == Nx.clip(t, Nx.Constants.neg_infinity(), Nx.Constants.infinity())
+    end
   end
 
   describe "concatenate/2" do
