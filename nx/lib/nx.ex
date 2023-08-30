@@ -15704,13 +15704,13 @@ defmodule Nx do
   end
 
   @doc """
-  Computes the covariance matrix of the input tensor with shape {..., n, d}.
+  Computes the covariance matrix of the input tensor with shape `{..., n, d}`.
 
   Covariance of two random variables X and Y is calculated as mean( (X - mean(X)) * (Y - mean(Y)) ).
   For every tensor of shape {n, d} in the batch, covariance matrix element at position (i, j)
   is equal to the covariance of the i-th and j-th columns of the tensor.
-  Column mean can be provided as the second argument. It must be a tensor of shape {..., d}
-  where the batch shape ... is broadcastable with that of input tensor.
+  Column mean can be provided as the second argument. It must be a tensor of shape `{..., d}`
+  where the batch shape `...` is broadcastable with that of the input tensor.
   If not provided, colum mean is estimated using `Nx.mean`.
   If the `:ddof` (delta degrees of freedom) option is given, the divisor `n - ddof` is used for the sum of the products.
 
@@ -15725,7 +15725,7 @@ defmodule Nx do
       ]
     >
 
-    iex> Nx.covariance([[[1, 2], [3, 4], [5, 6]], [[7, 8], [9, 10], [11, 12]]])
+    iex> Nx.covariance(Nx.tensor([[[1, 2], [3, 4], [5, 6]], [[7, 8], [9, 10], [11, 12]]]))
     #Nx.Tensor<
       f32[2][2][2]
       [
