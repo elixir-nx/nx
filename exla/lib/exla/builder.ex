@@ -71,7 +71,6 @@ defmodule EXLA.Builder do
 
     %EXLA.MLIR.Function{ref: function_ref, module: %EXLA.MLIR.Module{ref: module_ref}} = function
     :ok = EXLA.NIF.mlir_build(function_ref, root_ref)
-    # EXLA.NIF.dump_mlir_module(module_ref)
     function
   end
 end
