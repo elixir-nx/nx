@@ -340,6 +340,35 @@ defmodule CandlexTest do
       # ))
     end
 
+    test "dot" do
+      Nx.dot(5, 5)
+      |> assert_equal(t(25))
+
+      Nx.dot(-2.0, 5.0)
+      |> assert_equal(t(-10.0))
+
+      Nx.dot(2, 2.0)
+      |> assert_equal(t(4.0))
+
+      # TODO:
+      # t([1, 2, 3])
+      # |> Nx.dot(t([4, 5, 6]))
+      # |> assert_equal(t(32))
+
+      # t([1.0, 2.0, 3.0])
+      # |> Nx.dot(t([1, 2, 3]))
+      # |> assert_equal(t(14.0))
+
+      # t([[1, 2, 3], [4, 5, 6]])
+      # |> Nx.dot(t([[7, 8], [9, 10], [11, 12]]))
+      # |> assert_equal(t(
+      #   [
+      #     [58, 64],
+      #     [139, 154]
+      #   ]
+      # ))
+    end
+
     test "negate" do
       # TODO: candle doesn't support unary functions for integers yet
       # Nx.negate(1)

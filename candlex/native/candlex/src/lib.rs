@@ -32,7 +32,8 @@ rustler::init! {
         tensors::to_type,
         tensors::broadcast_to,
         tensors::reshape,
-        tensors::concatenate
+        tensors::concatenate,
+        tensors::matmul
     ],
     load = load
 }

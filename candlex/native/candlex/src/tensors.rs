@@ -165,6 +165,7 @@ binary_nif!(equal, eq);
 binary_nif!(greater_equal, ge);
 binary_nif!(less, lt);
 binary_nif!(less_equal, le);
+binary_nif!(matmul, broadcast_matmul);
 
 fn tuple_to_vec(term: Term) -> Result<Vec<usize>, rustler::Error> {
     Ok(rustler::types::tuple::get_tuple(term)?

@@ -20,7 +20,7 @@ defmodule Candlex.Native do
     def unquote(op)(_tensor), do: error()
   end
 
-  for op <- [:add, :equal, :greater_equal, :less, :less_equal, :max, :min, :multiply, :subtract] do
+  for op <- [:add, :equal, :greater_equal, :less, :less_equal, :matmul, :max, :min, :multiply, :subtract] do
     def unquote(op)(_left, _right), do: error()
   end
 
