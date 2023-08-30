@@ -15707,7 +15707,7 @@ defmodule Nx do
   Computes the covariance matrix of the input tensor with shape `{..., n, d}`.
 
   The covariance of two random variables X and Y is calculated as $Cov(X, Y) = \\frac{1}{N}\\sum_{i=0}^{N-1}{(X_i - \\overline{X}) * (Y_i - \\overline{Y})}$.
-  For every tensor of shape {n, d} in the batch, covariance matrix element at position (i, j)
+  For every tensor of shape {n, d} in the batch, the covariance matrix element at position (i, j)
   is equal to the covariance of the i-th and j-th columns of the tensor.
   Column mean can be provided as the second argument. It must be a tensor of shape `{..., d}`
   where the batch shape `...` is broadcastable with that of the input tensor.
