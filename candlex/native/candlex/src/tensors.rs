@@ -53,51 +53,6 @@ pub fn to_binary(env: Env, ex_tensor: ExTensor) -> Result<Binary, CandlexError> 
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-pub fn add(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
-    Ok(ExTensor::new(left.broadcast_add(&right)?))
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-pub fn max(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
-    Ok(ExTensor::new(left.broadcast_maximum(&right)?))
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-pub fn min(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
-    Ok(ExTensor::new(left.broadcast_minimum(&right)?))
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-pub fn multiply(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
-    Ok(ExTensor::new(left.broadcast_mul(&right)?))
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-pub fn equal(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
-    Ok(ExTensor::new(left.eq(&right)?))
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-pub fn greater_equal(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
-    Ok(ExTensor::new(left.ge(&right)?))
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-pub fn less(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
-    Ok(ExTensor::new(left.lt(&right)?))
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-pub fn less_equal(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
-    Ok(ExTensor::new(left.le(&right)?))
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-pub fn subtract(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
-    Ok(ExTensor::new(left.broadcast_sub(&right)?))
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
 pub fn narrow(
     t: ExTensor,
     dim: usize,
@@ -180,6 +135,25 @@ pub fn concatenate(ex_tensors: Vec<ExTensor>, dim: usize) -> Result<ExTensor, Ca
         .collect::<Vec<&Tensor>>();
     Ok(ExTensor::new(Tensor::cat(&tensors[..], dim)?))
 }
+
+macro_rules! binary_nif {
+    ($nif_name:ident, $native_fn_name:ident) => {
+        #[rustler::nif(schedule = "DirtyCpu")]
+        pub fn $nif_name(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
+            Ok(ExTensor::new(left.$native_fn_name(&right)?))
+        }
+    }
+}
+
+binary_nif!(add, broadcast_add);
+binary_nif!(subtract, broadcast_sub);
+binary_nif!(multiply, broadcast_mul);
+binary_nif!(max, broadcast_maximum);
+binary_nif!(min, broadcast_minimum);
+binary_nif!(equal, eq);
+binary_nif!(greater_equal, ge);
+binary_nif!(less, lt);
+binary_nif!(less_equal, le);
 
 fn tuple_to_vec(term: Term) -> Result<Vec<usize>, rustler::Error> {
     Ok(rustler::types::tuple::get_tuple(term)?
