@@ -1,4 +1,4 @@
-client = EXLA.Client.fetch!(:metal)
+client = EXLA.Client.fetch!(:host)
 
 arg_xla_shape = EXLA.Shape.make_shape({:f, 32}, {4, 3, 1})
 mlir_arg_types = Enum.map([arg_xla_shape, arg_xla_shape], &EXLA.MLIR.Type.new/1)
@@ -30,4 +30,4 @@ result
 |> EXLA.DeviceBuffer.read()
 |> Nx.from_binary(:f32)
 |> Nx.reshape({4, 3, 1})
-|> IO.inspect
+|> IO.inspect(label: "all negative ones")

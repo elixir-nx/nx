@@ -287,28 +287,28 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
 
   std::vector<std::vector<std::unique_ptr<xla::PjRtBuffer>>> per_replica_results;
 
-  EXLA_ASSIGN_OR_RETURN(per_replica_results, executable_->Execute(input_buffers, options));
+  if (device_id >= 0) {
+    // if we specified a device id, then we need to execute the executable as a portable
+    // executable, meaning we need to find the device corresponding to the specific device
+    // id and execute on that device, we've already guaranteed this executable only has 1
+    // replica
+    EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->client()->LookupDevice(device_id));
+    // because this is a portable executable, it only has 1 replica and so we only need
+    // to get the arguments at the first position of the input buffers
+    std::vector<xla::PjRtBuffer *> portable_args = input_buffers.at(0);
+    EXLA_ASSIGN_OR_RETURN(auto portable_result,
+      executable_->ExecutePortable(portable_args, device, options));
+    // the logic for handling unpacking of results is shared between portable code path
+    // and the replicated code-path, so we take ownership of the result buffers to unpack
+    per_replica_results.push_back(std::move(portable_result));
+  } else {
+    // no device ID is present, so it may be a replicated executable which means we need
+    // to use the replica execution path
+    // TODO: This now exposes a `returned_futures` API, does this make sense for us?
+    EXLA_ASSIGN_OR_RETURN(per_replica_results, executable_->Execute(input_buffers, options));
+  }
 
-  // if (device_id >= 0) {
-  //   // if we specified a device id, then we need to execute the executable as a portable
-  //   // executable, meaning we need to find the device corresponding to the specific device
-  //   // id and execute on that device, we've already guaranteed this executable only has 1
-  //   // replica
-  //   EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->client()->LookupDevice(device_id));
-  //   // because this is a portable executable, it only has 1 replica and so we only need
-  //   // to get the arguments at the first position of the input buffers
-  //   std::vector<xla::PjRtBuffer *> portable_args = input_buffers.at(0);
-  //   EXLA_ASSIGN_OR_RETURN(auto portable_result,
-  //     executable_->ExecutePortable(portable_args, device, options));
-  //   // the logic for handling unpacking of results is shared between portable code path
-  //   // and the replicated code-path, so we take ownership of the result buffers to unpack
-  //   per_replica_results.push_back(std::move(portable_result));
-  // } else {
-  //   // no device ID is present, so it may be a replicated executable which means we need
-  //   // to use the replica execution path
-  //   // TODO: This now exposes a `returned_futures` API, does this make sense for us?
-  //   EXLA_ASSIGN_OR_RETURN(per_replica_results, executable_->Execute(input_buffers, options));
-  // }
+  // EXLA_ASSIGN_OR_RETURN(per_replica_results, executable_->Execute(input_buffers, options));
 
   // sanity check
   if (per_replica_results.size() != num_replicas) {
@@ -482,7 +482,7 @@ xla::StatusOr<ExlaClient*> GetGpuClient(double memory_fraction,
   };
 
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtClient> client,
-    xla::GetStreamExecutorGpuClient(false, allocator_config, nullptr, 0));
+    xla::GetStreamExecutorGpuClient(false, allocator_config, 0, 0));
 
   return new ExlaClient(std::move(client));
 }
