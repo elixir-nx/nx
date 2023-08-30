@@ -845,7 +845,8 @@ defmodule EXLA.Defn do
   @bin_op [:add, :subtract, :multiply, :min, :max, :remainder, :pow, :divide, :atan2] ++
             [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift]
 
-  defp to_operator(op, [%EXLA.MLIR.Value{} = left, %EXLA.MLIR.Value{} = right], out, state) when op in @bin_op do
+  defp to_operator(op, [%EXLA.MLIR.Value{} = left, %EXLA.MLIR.Value{} = right], out, state)
+       when op in @bin_op do
     apply(EXLA.MLIR.Value, op, [left, right])
   end
 

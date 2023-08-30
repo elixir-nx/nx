@@ -22,10 +22,16 @@ defmodule EXLA.MLIR.Module do
   Creates a new MLIR function with the given name belonging
   to the given MLIR module.
   """
-  def create_function(%Module{ref: module_ref} = module, name, arg_types, %Type{
-        dims: ret_dims,
-        type: ret_type
-      } = return_type, xla_ret_shape)
+  def create_function(
+        %Module{ref: module_ref} = module,
+        name,
+        arg_types,
+        %Type{
+          dims: ret_dims,
+          type: ret_type
+        } = return_type,
+        xla_ret_shape
+      )
       when is_binary(name) do
     nif_arg_types =
       Enum.map(arg_types, fn %Type{dims: dims, type: type} ->
