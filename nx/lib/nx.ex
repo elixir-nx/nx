@@ -15711,7 +15711,7 @@ defmodule Nx do
   is equal to the covariance between the i-th and j-th columns of the tensor.
   Column mean can be provided as the second argument. It must be a tensor of shape `{..., d}`
   where the batch shape `...` is broadcastable with that of the input tensor.
-  If not provided, colum mean is estimated using `Nx.mean`.
+  If not provided, colum mean is estimated using `Nx.mean/2`.
   If the `:ddof` (delta degrees of freedom) option is given, the divisor `n - ddof` is used for the sum of the products.
 
   ## Examples
