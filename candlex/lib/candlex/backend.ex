@@ -50,6 +50,14 @@ defmodule Candlex.Backend do
     |> to_nx(out)
   end
 
+  @impl true
+  def eye(%T{shape: shape, type: type} = out, backend_options) do
+    iota = Nx.iota(shape, backend_options)
+
+    Nx.equal(Nx.tril(iota), Nx.triu(iota))
+    |> Nx.as_type(type)
+  end
+
   # Backend
 
   @impl true
