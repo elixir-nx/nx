@@ -16,6 +16,10 @@ defmodule Candlex.Native do
   def to_type(_tensor, _dtype), do: error()
   def concatenate(_tensors, _axis), do: error()
 
+  for op <- [:negate] do
+    def unquote(op)(_tensor), do: error()
+  end
+
   for op <- [:add, :equal, :greater_equal, :less, :less_equal, :max, :min, :multiply, :subtract] do
     def unquote(op)(_left, _right), do: error()
   end

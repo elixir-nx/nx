@@ -136,6 +136,15 @@ pub fn concatenate(ex_tensors: Vec<ExTensor>, dim: usize) -> Result<ExTensor, Ca
     Ok(ExTensor::new(Tensor::cat(&tensors[..], dim)?))
 }
 
+macro_rules! unary_nif {
+    ($nif_name:ident, $native_fn_name:ident) => {
+        #[rustler::nif(schedule = "DirtyCpu")]
+        pub fn $nif_name(ex_tensor: ExTensor) -> Result<ExTensor, CandlexError> {
+            Ok(ExTensor::new(ex_tensor.$native_fn_name()?))
+        }
+    }
+}
+
 macro_rules! binary_nif {
     ($nif_name:ident, $native_fn_name:ident) => {
         #[rustler::nif(schedule = "DirtyCpu")]
@@ -144,6 +153,8 @@ macro_rules! binary_nif {
         }
     }
 }
+
+unary_nif!(negate, neg);
 
 binary_nif!(add, broadcast_add);
 binary_nif!(subtract, broadcast_sub);

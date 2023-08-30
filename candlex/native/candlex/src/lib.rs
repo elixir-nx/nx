@@ -24,6 +24,7 @@ rustler::init! {
         tensors::less_equal,
         tensors::subtract,
         tensors::all,
+        tensors::negate,
         tensors::where_cond,
         tensors::narrow,
         tensors::squeeze,

@@ -339,6 +339,19 @@ defmodule CandlexTest do
       #   ]
       # ))
     end
+
+    test "negate" do
+      # TODO: candle doesn't support unary functions for integers yet
+      # Nx.negate(1)
+      # |> assert_equal(t(-1))
+
+      Nx.negate(1.0)
+      |> assert_equal(t(-1.0))
+
+      t([1.0, 2.0, -3.0], type: :f32)
+      |> Nx.negate()
+      |> assert_equal(t([-1.0, -2.0, 3.0]))
+    end
   end
 
   defp t(values, opts \\ []) do

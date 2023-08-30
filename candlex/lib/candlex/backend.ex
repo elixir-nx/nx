@@ -153,6 +153,19 @@ defmodule Candlex.Backend do
 
   # Unary ops
 
+  unary_ops = [:negate]
+
+  for op <- unary_ops do
+    @impl true
+    def unquote(op)(%T{} = out, %T{} = tensor) do
+      tensor
+      |> from_nx()
+      |> Native.unquote(op)()
+      |> unwrap!()
+      |> to_nx(out)
+    end
+  end
+
   for op <- [:bitwise_not, :erf_inv] do
     @impl true
     def unquote(op)(out, t) do
