@@ -33,7 +33,9 @@ defmodule EXLA.Computation do
     * `:num_partitions` - the number of partitions this computation will run on.
 
   """
-  def compile(computation = %Computation{}, client = %Client{}, argument_shapes, options \\ []) do
+  def compile(computation, client, argument_shapes, options \\ [])
+
+  def compile(computation = %Computation{}, client = %Client{}, argument_shapes, options) do
     num_replicas = Keyword.get(options, :num_replicas, 1)
     num_partitions = Keyword.get(options, :num_partitions, 1)
 
@@ -68,6 +70,15 @@ defmodule EXLA.Computation do
       num_partitions: num_partitions,
       device_id: device_id
     }
+  end
+
+  def compile(%EXLA.MLIR.Function{module: module, xla_return_shape: ret_shape}, client, arg_shapes, _opts) do
+    EXLA.MLIR.Module.compile(
+      module,
+      client,
+      arg_shapes,
+      EXLA.Shape.make_tuple_shape([ret_shape])
+    )
   end
 
   defp assert_output_shape!(%{output_shape: output_shape}) do

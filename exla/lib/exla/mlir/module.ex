@@ -25,7 +25,7 @@ defmodule EXLA.MLIR.Module do
   def create_function(%Module{ref: module_ref} = module, name, arg_types, %Type{
         dims: ret_dims,
         type: ret_type
-      })
+      } = return_type, xla_ret_shape)
       when is_binary(name) do
     nif_arg_types =
       Enum.map(arg_types, fn %Type{dims: dims, type: type} ->
@@ -37,7 +37,7 @@ defmodule EXLA.MLIR.Module do
     ref =
       EXLA.NIF.create_mlir_function(module_ref, name, nif_arg_types, nif_ret_type) |> unwrap!()
 
-    %Function{module: module, ref: ref, name: name}
+    %Function{module: module, ref: ref, name: name, xla_return_shape: xla_ret_shape}
   end
 
   @doc """
