@@ -658,15 +658,6 @@ defmodule Nx.ServingTest do
       assert_raise ArgumentError, "cannot run with empty Nx.Batch", fn ->
         Nx.Serving.batched_run(config.test, Nx.Batch.new())
       end
-
-      assert_raise ArgumentError,
-                   "batch size (3) cannot exceed Nx.Serving server batch size of 2",
-                   fn ->
-                     Nx.Serving.batched_run(
-                       config.test,
-                       Nx.Batch.concatenate([Nx.tensor([1, 2, 3])])
-                     )
-                   end
     end
   end
 
@@ -709,6 +700,71 @@ defmodule Nx.ServingTest do
       assert_received :execute
       assert batch.size == 4
       assert batch.pad == 0
+    end
+
+    test "5=3+3 (oversized)", config do
+      serving =
+        Nx.Serving.new(Simple, self())
+        |> Nx.Serving.process_options(batch_size: 3)
+        |> Nx.Serving.streaming()
+
+      simple_supervised!(config, serving: serving, batch_timeout: 100)
+
+      batch =
+        Nx.Batch.stack([
+          Nx.tensor([1, 2]),
+          Nx.tensor([3, 4]),
+          Nx.tensor([5, 6]),
+          Nx.tensor([7, 8]),
+          Nx.tensor([9, 10]),
+          Nx.tensor([11, 12])
+        ])
+
+      assert Nx.Serving.batched_run(config.test, batch) |> Enum.to_list() == [
+               {:batch, Nx.tensor([[2, 4], [6, 8], [10, 12]]), :metadata},
+               {:batch, Nx.tensor([[14, 16], [18, 20], [22, 24]]), :metadata}
+             ]
+
+      assert_received {:init, :process, [[batch_keys: [:default]]]}
+      assert_received {:batch, 0, batch1}
+      assert_received {:batch, 0, batch2}
+      assert_received :execute
+      assert batch1.size == 3
+      assert batch1.pad == 0
+      assert batch2.size == 3
+      assert batch2.pad == 0
+    end
+
+    test "5=3+2(+pad) (oversized)", config do
+      serving =
+        Nx.Serving.new(Simple, self())
+        |> Nx.Serving.process_options(batch_size: 3)
+        |> Nx.Serving.streaming()
+
+      simple_supervised!(config, serving: serving, batch_timeout: 100)
+
+      batch =
+        Nx.Batch.stack([
+          Nx.tensor([1, 2]),
+          Nx.tensor([3, 4]),
+          Nx.tensor([5, 6]),
+          Nx.tensor([7, 8]),
+          Nx.tensor([9, 10])
+        ])
+
+      assert Nx.Serving.batched_run(config.test, batch) |> Enum.to_list() == [
+               {:batch, Nx.tensor([[2, 4], [6, 8], [10, 12]]), :metadata},
+               {:batch, Nx.tensor([[14, 16], [18, 20]]), :metadata}
+             ]
+
+      assert_received {:init, :process, [[batch_keys: [:default]]]}
+      assert_received {:batch, 0, batch1}
+      assert_received {:batch, 0, batch2}
+      assert_received :execute
+      assert batch1.size == 3
+      assert batch1.pad == 0
+      assert batch2.size == 2
+      assert batch2.pad == 0
     end
 
     test "3+3=4+2(+pad) with pre and post", config do
@@ -757,10 +813,13 @@ defmodule Nx.ServingTest do
       end
 
       assert_received {:init, :process, [[batch_keys: [:default]]]}
-      assert_received {:batch, 0, batch}
+      assert_received {:batch, 0, batch1}
+      assert_received {:batch, 0, batch2}
       assert_received :execute
-      assert batch.size == 4
-      assert batch.pad == 0
+      assert batch1.size == 4
+      assert batch1.pad == 0
+      assert batch2.size == 2
+      assert batch2.pad == 0
     end
 
     @tag :capture_log
@@ -844,6 +903,23 @@ defmodule Nx.ServingTest do
 
       Task.await(t1, :infinity)
       Task.await(t2, :infinity)
+    end
+
+    test "errors on batch size", config do
+      serving =
+        Nx.Serving.jit(&add_five_round_about/1)
+        |> Nx.Serving.streaming(hooks: [:double, :plus_ten])
+
+      simple_supervised!(config, serving: serving, batch_size: 2)
+
+      assert_raise ArgumentError,
+                   "batch size (3) cannot exceed Nx.Serving server batch size of 2 when streaming hooks",
+                   fn ->
+                     Nx.Serving.batched_run(
+                       config.test,
+                       Nx.Batch.concatenate([Nx.tensor([1, 2, 3])])
+                     )
+                   end
     end
 
     @tag :capture_log

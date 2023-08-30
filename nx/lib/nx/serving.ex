@@ -536,17 +536,22 @@ defmodule Nx.Serving do
 
       {hook_name, term()}
 
-  Once the stream is done, it will emit `{:batch, output, metadata}`.
-  The client postprocessing is often expected to call
-  `Stream.transform/3` to process those events into something usable
-  by callers.
+  The stream will also receive events in the shape of
+  `{:batch, output, metadata}` as batches are processed by the
+  serving. The client postprocessing is often expected to call
+  `Stream.transform/3` to process those events into something
+  usable by callers.
 
-  ### Batch breaking
+  If the `:hooks` option is given, only a single `:batch` event
+  is emitted, at the end, as detailed next.
 
-  Another consequence of streaming is that a serving server can
-  no longer break a batch. For example, imagine you have a
-  `batch_size` of 3 and you push three batches of two elements
-  (AA, BB, and CC). Without streaming, the batches will be consumed as:
+  ### Batch limits
+
+  If you are streaming hooks, the serving server can no longer break
+  batch and you are unable to push a payload bigger than `:batch_size`.
+  For example, imagine you have a `batch_size` of 3 and you push three
+  batches of two elements (AA, BB, and CC). Without hooks, the batches
+  will be consumed as:
 
       AAB -> BCC
 
@@ -838,9 +843,9 @@ defmodule Nx.Serving do
 
     {batch, info} = handle_preprocessing(preprocessing, input)
 
-    if batch.size > limit do
+    if mode == :hooks and batch.size > limit do
       raise ArgumentError,
-            "batch size (#{batch.size}) cannot exceed Nx.Serving server batch size of #{limit}"
+            "batch size (#{batch.size}) cannot exceed Nx.Serving server batch size of #{limit} when streaming hooks"
     end
 
     unless is_map_key(batch_keys, batch.key) do
@@ -1150,34 +1155,15 @@ defmodule Nx.Serving do
           |> server_stack(key, ref, batch, :skip_timer)
           |> server_execute(key)
 
-        # First entry in batch.
-        count == 0 ->
-          server_stack(state, key, ref, batch, :start_timer)
-
-        # We don't exceed the limit.
-        batch.size + count < limit ->
-          server_stack(state, key, ref, batch, :skip_timer)
-
         # We go over the limit, but if using hooks, we can't split.
         batch.size + count > limit and state.hooks_table != nil ->
           state
           |> server_execute(key)
-          |> server_stack(key, ref, batch, :start_timer)
+          |> server_stack(key, ref, batch, :set_timer)
 
-        # We go over the limit, split it across runs.
-        batch.size + count > limit ->
-          {current, next} = Nx.Batch.split(batch, limit - count)
-
-          state
-          |> server_stack(key, ref, current, :skip_timer)
-          |> server_execute(key)
-          |> server_stack(key, ref, next, :start_timer)
-
-        # Exact match.
+        # Split as necessary.
         true ->
-          state
-          |> server_stack(key, ref, batch, :skip_timer)
-          |> server_execute(key)
+          server_stack_and_execute_loop(state, batch, count, key, ref)
       end
 
     {:noreply, state}
@@ -1268,15 +1254,36 @@ defmodule Nx.Serving do
     end
   end
 
+  defp server_stack_and_execute_loop(state, batch, count, key, ref) do
+    %{limit: limit} = state
+    %{size: size} = batch
+
+    cond do
+      size + count < limit ->
+        server_stack(state, key, ref, batch, :set_timer)
+
+      size + count > limit ->
+        {current, batch} = Nx.Batch.split(batch, limit - count)
+
+        state
+        |> server_stack(key, ref, current, :skip_timer)
+        |> server_execute(key)
+        |> server_stack_and_execute_loop(batch, 0, key, ref)
+
+      true ->
+        state
+        |> server_stack(key, ref, batch, :skip_timer)
+        |> server_execute(key)
+    end
+  end
+
   defp server_stack(%{limit: limit} = state, key, ref, batch, timer_mode) do
     stack_update(key, fn {stack, count, timer} when batch.size + count <= limit ->
       timer =
-        case timer_mode do
-          :start_timer when timer == :none ->
-            Process.send_after(self(), {@timeout_message, key}, state.timeout)
-
-          :skip_timer ->
-            timer
+        if timer == :none and timer_mode == :set_timer do
+          Process.send_after(self(), {@timeout_message, key}, state.timeout)
+        else
+          timer
         end
 
       {[{ref, batch} | stack], count + batch.size, timer}
