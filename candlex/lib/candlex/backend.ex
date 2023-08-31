@@ -11,6 +11,9 @@ defmodule Candlex.Backend do
   alias Candlex.Backend, as: CB
   alias Candlex.Native
 
+  @device_cuda :cuda
+  @device_cpu :cpu
+
   @impl true
   def init(opts) do
     if opts != [] do
@@ -30,11 +33,9 @@ defmodule Candlex.Backend do
   end
 
   @impl true
-  def from_binary(%T{shape: shape, type: type} = tensor, binary, _backend_options) do
-    # TODO: Don't ignore backend options
-
+  def from_binary(%T{shape: shape, type: type} = tensor, binary, backend_options) do
     binary
-    |> Native.from_binary(to_candle_dtype(type), shape)
+    |> Native.from_binary(to_candle_dtype(type), shape, device_option(backend_options))
     |> unwrap!()
     |> to_nx(tensor)
   end
@@ -44,8 +45,8 @@ defmodule Candlex.Backend do
     constant(out, 0, backend_options)
   end
 
-  def iota(%T{shape: shape, type: type} = out, nil, _backend_options) do
-    Native.arange(0, Nx.size(shape), to_candle_dtype(type), shape)
+  def iota(%T{shape: shape, type: type} = out, nil, backend_options) do
+    Native.arange(0, Nx.size(shape), to_candle_dtype(type), shape, device_option(backend_options))
     |> unwrap!()
     |> to_nx(out)
   end
@@ -298,11 +299,6 @@ defmodule Candlex.Backend do
     ])
   end
 
-  # defp device_option(_backend_options) do
-  #   # TODO: Support CUDA
-  #   :cpu
-  # end
-
   defp narrow(t, [start | starts], [length | lengths], axis, shape) do
     dim = elem(shape, axis)
     start = min(start, dim - length)
@@ -418,6 +414,28 @@ defmodule Candlex.Backend do
   defp to_candle_dtype({:bf, 16}), do: "bf16"
   defp to_candle_dtype({:c, 64}), do: unsupported_dtype()
   defp to_candle_dtype({:c, 128}), do: unsupported_dtype()
+
+  defp device_option(nil) do
+    default_device()
+  end
+
+  defp device_option(backend_options) do
+    backend_options[:device] || default_device()
+  end
+
+  defp default_device do
+    # TODO: Support CUDA
+    # if cuda_available?() do
+    #   @device_cuda
+    # else
+    #   @device_cpu
+    # end
+    @device_cpu
+  end
+
+  defp cuda_available? do
+    Native.is_cuda_available()
+  end
 
   defp unsupported_dtype do
     raise("Unsupported candle dtype")

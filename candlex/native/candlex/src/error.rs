@@ -10,6 +10,8 @@ rustler::atoms! {
 pub enum CandlexError {
     #[error("Candle Error: {0}")]
     Candle(#[from] candle_core::Error),
+    #[error("Generic Error: {0}")]
+    Other(String),
 }
 
 impl Encoder for CandlexError {

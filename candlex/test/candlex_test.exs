@@ -21,6 +21,11 @@ defmodule CandlexTest do
       check(2.16, type: :bf16)
     end
 
+    # test "gpu" do
+    #   t([1, 2, 3], backend: {Candlex.Backend, device: :cuda})
+    #   |> assert_equal(t([1, 2, 3]))
+    # end
+
     test "named dimensions" do
       check([[1, 2, 3], [4, 5, 6]], names: [:x, :y])
 

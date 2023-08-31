@@ -4,13 +4,13 @@ defmodule Candlex.Native do
   use Rustler, otp_app: :candlex, crate: "candlex"
 
   # Rustler will override all the below stub functions with real NIFs
-  def from_binary(_binary, _dtype, _shape), do: error()
+  def from_binary(_binary, _dtype, _shape, _device), do: error()
   def to_binary(_tensor), do: error()
   def all(_tensor), do: error()
   def where_cond(_tensor, _on_true, _on_false), do: error()
   def narrow(_tensor, _dim, _start, _length), do: error()
   def squeeze(_tensor, _dim), do: error()
-  def arange(_start, _end, _dtype, _shape), do: error()
+  def arange(_start, _end, _dtype, _shape, _device), do: error()
   def broadcast_to(_tensor, _shape), do: error()
   def reshape(_tensor, _shape), do: error()
   def to_type(_tensor, _dtype), do: error()
@@ -34,6 +34,8 @@ defmodule Candlex.Native do
       ] do
     def unquote(op)(_left, _right), do: error()
   end
+
+  def is_cuda_available(), do: error()
 
   defp error(), do: :erlang.nif_error(:nif_not_loaded)
 end

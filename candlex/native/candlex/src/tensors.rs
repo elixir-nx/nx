@@ -1,7 +1,8 @@
+use crate::atoms;
 use crate::error::CandlexError;
 use candle_core::{DType, Device, Tensor};
 use half::{bf16, f16};
-use rustler::{Binary, Env, NewBinary, NifStruct, ResourceArc, Term};
+use rustler::{Atom, Binary, Env, NewBinary, NifStruct, ResourceArc, Term};
 use std::ops::Deref;
 use std::result::Result;
 use std::str::FromStr;
@@ -32,14 +33,14 @@ impl Deref for ExTensor {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-pub fn from_binary(binary: Binary, dtype_str: &str, shape: Term) -> Result<ExTensor, CandlexError> {
+pub fn from_binary(binary: Binary, dtype_str: &str, shape: Term, device: Atom) -> Result<ExTensor, CandlexError> {
     Ok(ExTensor::new(Tensor::from_raw_buffer(
         binary.as_slice(),
         // TODO: Handle DTypeParseError
         DType::from_str(dtype_str).unwrap(),
         // TODO: Handle rustler::Error
         &tuple_to_vec(shape).unwrap(),
-        &Device::Cpu,
+        &device_from_atom(device)?
     )?))
 }
 
@@ -73,9 +74,10 @@ pub fn arange(
     end: i64,
     dtype_str: &str,
     shape: Term,
+    device: Atom
 ) -> Result<ExTensor, CandlexError> {
     Ok(ExTensor::new(
-        Tensor::arange(start, end, &Device::Cpu)?
+        Tensor::arange(start, end, &device_from_atom(device)?)?
             .to_dtype(DType::from_str(dtype_str).unwrap())?
             .reshape(tuple_to_vec(shape).unwrap())?,
     ))
@@ -83,7 +85,7 @@ pub fn arange(
 
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn all(ex_tensor: ExTensor) -> Result<ExTensor, CandlexError> {
-    let device = &Device::Cpu;
+    let device = ex_tensor.device();
     let t = ex_tensor.flatten_all()?;
     let dims = t.shape().dims();
     let on_true = Tensor::ones(dims, DType::U8, device)?;
@@ -172,6 +174,16 @@ fn tuple_to_vec(term: Term) -> Result<Vec<usize>, rustler::Error> {
         .iter()
         .map(|elem| elem.decode())
         .collect::<Result<_, _>>()?)
+}
+
+fn device_from_atom(atom: Atom) -> Result<Device, CandlexError> {
+    if atom == atoms::cpu() {
+        Ok(Device::Cpu)
+    // } else if atom == atoms::cuda() {
+    //     Ok(Device::new_cuda(0)?)
+    } else {
+        Err(CandlexError::Other(format!("unsupported device {:?}", atom)))
+    }
 }
 
 fn tensor_bytes(tensor: Tensor) -> Result<Vec<u8>, CandlexError> {

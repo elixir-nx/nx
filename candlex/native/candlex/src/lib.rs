@@ -1,3 +1,11 @@
+mod atoms {
+    rustler::atoms! {
+        cpu,
+        cuda
+    }
+}
+
+mod devices;
 mod error;
 mod tensors;
 
@@ -33,7 +41,8 @@ rustler::init! {
         tensors::broadcast_to,
         tensors::reshape,
         tensors::concatenate,
-        tensors::matmul
+        tensors::matmul,
+        devices::is_cuda_available
     ],
     load = load
 }
