@@ -170,16 +170,6 @@ defmodule EXLA.Client do
         :tpu ->
           EXLA.NIF.get_tpu_client()
 
-        :metal ->
-          # TODO: Is this really where/how we want to do this?
-          :ok =
-            EXLA.NIF.load_pjrt_plugin(
-              "METAL",
-              "/opt/homebrew/lib/python3.10/site-packages/jax_plugins/metal_plugin/pjrt_plugin_metal_14.dylib"
-            )
-
-          EXLA.NIF.get_c_api_client("METAL")
-
         _ ->
           raise ArgumentError, "unknown EXLA platform: #{inspect(platform)}"
       end

@@ -10,7 +10,7 @@ defmodule EXLAHelpers do
   It expects a list of shapes which will be given as parameters.
   """
   def compile(shapes, opts \\ [], fun) do
-    builder = EXLA.Builder.new("test")
+    builder = EXLA.Builder.new("test", nil, nil, :xla)
 
     {params, _} =
       Enum.map_reduce(shapes, 0, fn shape, pos ->

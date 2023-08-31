@@ -21,9 +21,12 @@ XLA_EXTENSION_LIB_LINK_PATH = ../$(CWD_RELATIVE_TO_PRIV_PATH)/$(XLA_EXTENSION_LI
 EXLA_CACHE_SO_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(EXLA_CACHE_SO)
 
 # Build flags
+# c++17 is needed, otherwise xla headers
+# break on some conflicting llvm/std definitions
+# Note: this is on :xla 0.5.0 -- things can change with later versions
 CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -O3 -Wall -Wno-sign-compare \
 	 -Wno-unused-parameter -Wno-missing-field-initializers -Wno-comment \
-	 -shared -std=c++20 -w -DLLVM_VERSION_STRING=
+	 -shared -std=c++17 -w -DLLVM_VERSION_STRING=
 
 LDFLAGS = -L$(XLA_EXTENSION_LIB) -lxla_extension
 

@@ -33,7 +33,8 @@ defmodule EXLA.MLIR.Value do
     %Value{ref: ref, function: func}
   end
 
-  def get_tuple_element(%Value{function: %Function{} = func, ref: ref}, index) when is_integer(index) do
+  def get_tuple_element(%Value{function: %Function{} = func, ref: ref}, index)
+      when is_integer(index) do
     ref = EXLA.NIF.mlir_get_tuple_element(func.ref, ref, index) |> unwrap!()
     %Value{ref: ref, function: func}
   end

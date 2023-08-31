@@ -145,7 +145,6 @@ defmodule EXLA.Lib do
 
   defp min_binary({:pred, 8}), do: <<0>>
   defp min_binary(type), do: Nx.Type.min_binary(type)
-
   defp max_binary({:pred, 8}), do: <<1>>
   defp max_binary(type), do: Nx.Type.max_binary(type)
 
