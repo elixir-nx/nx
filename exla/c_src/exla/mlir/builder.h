@@ -33,8 +33,6 @@ class MLIRFunction {
   mlir::Value Atan2Op(mlir::Value lhs, mlir::Value rhs);
   mlir::Value ShiftLeftOp(mlir::Value lhs, mlir::Value rhs);
 
-  // TODO: Somehow protect this resource so we cannot
-  // specify more operations after return?
   void Build(mlir::Value root);
 
   llvm::MutableArrayRef<mlir::BlockArgument> get_arguments() { return func_->getBody().front().getArguments(); }
