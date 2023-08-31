@@ -83,7 +83,7 @@ defmodule EXLA.Computation do
       client,
       arg_shapes,
       # TO-DO (mlir): do not hardcode this single-item tuple output type
-      EXLA.Shape.make_tuple_shape([ret_shape])
+      EXLA.Shape.make_tuple_shape([return_shape])
     )
   end
 
