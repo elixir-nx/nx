@@ -15704,6 +15704,20 @@ defmodule Nx do
   end
 
   @doc """
+  A shortcut to `covariance/3` with either `opts` or `mean` as second argument.
+  """
+  @doc type: :aggregation
+  @spec covariance(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
+  def covariance(tensor, opts \\ [])
+
+  @spec covariance(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
+  def covariance(tensor, opts) when is_list(opts),
+    do: covariance(tensor, Nx.mean(tensor, axes: [-2]), opts)
+
+  @spec covariance(tensor :: Nx.Tensor.t(), mean :: Nx.Tensor.t()) :: Nx.Tensor.t()
+  def covariance(tensor, mean), do: covariance(tensor, mean, [])
+
+  @doc """
   Computes the covariance matrix of the input tensor.
 
   The covariance of two random variables X and Y is calculated as $Cov(X, Y) = \\frac{1}{N}\\sum_{i=0}^{N-1}{(X_i - \\overline{X}) * (Y_i - \\overline{Y})}$.
@@ -15763,16 +15777,6 @@ defmodule Nx do
     >
   """
   @doc type: :aggregation
-  @spec covariance(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
-  def covariance(tensor, opts \\ [])
-
-  @spec covariance(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
-  def covariance(tensor, opts) when is_list(opts),
-    do: covariance(tensor, Nx.mean(tensor, axes: [-2]), opts)
-
-  @spec covariance(tensor :: Nx.Tensor.t(), mean :: Nx.Tensor.t()) :: Nx.Tensor.t()
-  def covariance(tensor, mean), do: covariance(tensor, mean, [])
-
   @spec covariance(tensor :: Nx.Tensor.t(), mean :: Nx.Tensor.t(), opts :: Keyword.t()) ::
           Nx.Tensor.t()
   def covariance(tensor, mean, opts) do
