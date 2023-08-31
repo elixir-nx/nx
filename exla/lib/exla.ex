@@ -79,7 +79,7 @@ defmodule EXLA do
 
   Those clients are singleton resources on Google's XLA library,
   therefore they are treated as a singleton resource on this library
-  too. EXLA ships with the client configuration for each supported
+  too. EXLA ships with runtime client configuration for each supported
   platform:
 
       config :exla, :clients,
@@ -87,6 +87,16 @@ defmodule EXLA do
         rocm: [platform: :rocm],
         tpu: [platform: :tpu],
         host: [platform: :host]
+
+  In a script/notebook, you can set those after `Mix.install/2`,
+  but before any tensor operation is performed:
+
+      Application.put_env(:exla, :clients,
+        cuda: [platform: :cuda],
+        rocm: [platform: :rocm],
+        tpu: [platform: :tpu],
+        host: [platform: :host]
+      )
 
   You can provide your own list of clients, replacing the list above
   or configuring each client as listed below. You can also specify

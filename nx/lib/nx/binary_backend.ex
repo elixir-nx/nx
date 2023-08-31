@@ -1885,7 +1885,23 @@ defmodule Nx.BinaryBackend do
     in_data = to_binary(tensor)
     min = binary_to_number(to_binary(min), min.type)
     max = binary_to_number(to_binary(max), max.type)
-    out_data = binary_to_binary(in_data, tensor.type, out.type, &min(max(&1, min), max))
+
+    comparison_fn = fn x ->
+      clipped_min =
+        if element_greater(nil, x, min) == 1 do
+          x
+        else
+          min
+        end
+
+      if element_less(nil, clipped_min, max) == 1 do
+        clipped_min
+      else
+        max
+      end
+    end
+
+    out_data = binary_to_binary(in_data, tensor.type, out.type, comparison_fn)
     from_binary(out, out_data)
   end
 

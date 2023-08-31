@@ -12,20 +12,29 @@ defmodule Nx.Batch do
 
   The `:size` field is public.
   """
+  @enforce_keys [:key]
   @derive {Inspect, only: [:size, :pad]}
-  defstruct stack: [], size: 0, template: nil, pad: 0
+  defstruct [:key, stack: [], size: 0, template: nil, pad: 0]
 
   @type t :: %Nx.Batch{
           stack: list(),
           size: non_neg_integer(),
           template: Nx.Container.t() | Nx.Tensor.t() | nil,
-          pad: non_neg_integer()
+          pad: non_neg_integer(),
+          key: term()
         }
 
   @doc """
   Returns a new empty batch.
   """
-  def new, do: %Nx.Batch{}
+  def new, do: %Nx.Batch{key: :default}
+
+  @doc """
+  Sets the batch key for the given batch.
+  """
+  def key(%Nx.Batch{} = batch, key) do
+    %{batch | key: key}
+  end
 
   @doc """
   Merges two batches.
@@ -61,12 +70,17 @@ defmodule Nx.Batch do
   def merge([]), do: new()
 
   def merge([%Nx.Batch{} = head | tail]) do
-    %{template: template, stack: stack, pad: pad, size: size} = head
+    %{template: template, stack: stack, pad: pad, size: size, key: head_key} = head
 
     {template, stack, pad, size} =
       Enum.reduce(tail, {template, stack, pad, size}, fn batch, acc ->
-        %Nx.Batch{template: template, stack: stack, pad: pad, size: size} = batch
+        %Nx.Batch{template: template, stack: stack, pad: pad, size: size, key: tail_key} = batch
         {acc_template, acc_stack, acc_pad, acc_size} = acc
+
+        if head_key != tail_key do
+          raise ArgumentError,
+                "cannot merge batches with different batch keys: #{inspect(head_key)} and #{inspect(tail_key)}"
+        end
 
         if template != nil and acc_template != nil and not Nx.compatible?(template, acc_template) do
           raise ArgumentError, """
@@ -83,7 +97,7 @@ defmodule Nx.Batch do
         {acc_template || template, stack ++ acc_stack, pad + acc_pad, size + acc_size}
       end)
 
-    %Nx.Batch{template: template, stack: stack, pad: pad, size: size}
+    %Nx.Batch{template: template, stack: stack, pad: pad, size: size, key: head_key}
   end
 
   @doc """
@@ -109,17 +123,17 @@ defmodule Nx.Batch do
       >
   """
   def split(%Nx.Batch{} = batch, n) when is_integer(n) and n > 0 do
-    %{template: template, stack: stack, pad: pad, size: size} = batch
+    %{template: template, stack: stack, pad: pad, size: size, key: key} = batch
 
     if n < size do
       {left, right} = drop_split(stack, size - n, [])
 
       {%{batch | stack: left, size: n, pad: 0},
-       %Nx.Batch{template: template, pad: pad, size: size - n, stack: right}}
+       %Nx.Batch{template: template, pad: pad, size: size - n, stack: right, key: key}}
     else
       right_pad = max(size + pad - n, 0)
       left_pad = pad - right_pad
-      {%{batch | pad: left_pad}, %Nx.Batch{template: template, pad: right_pad}}
+      {%{batch | pad: left_pad}, %Nx.Batch{template: template, pad: right_pad, key: key}}
     end
   end
 

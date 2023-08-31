@@ -212,7 +212,7 @@ Nx.shape(tensor)
 We can also create a new tensor with a new shape using  `Nx.reshape/2`:
 
 ```elixir
-Nx.reshape(tensor, {1, 4}, names: [:batches, :values])
+Nx.reshape(tensor, {1, 9}, names: [:batches, :values])
 ```
 
 This operation reuses all of the tensor data and simply

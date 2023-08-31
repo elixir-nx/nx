@@ -416,7 +416,8 @@ defmodule Nx do
   @type axes :: Nx.Tensor.axes()
   @type template :: Nx.Tensor.t(%Nx.TemplateBackend{})
 
-  @file_version 2
+  @file_prefix <<?n, ?x>>
+  @file_version 1
 
   @non_finite [:neg_infinity, :infinity, :nan]
 
@@ -1389,6 +1390,183 @@ defmodule Nx do
     IO.warn("passing a tensor as shape to eye/2 is deprecated. Please call Nx.shape/2 before")
     Nx.Shared.raise_vectorization_not_supported(tensor, __ENV__.function)
     eye(Nx.shape(tensor), opts)
+  end
+
+  @doc """
+  Lower triangle of a matrix.
+
+  ## Options
+
+    * `k` - The diagonal above which to zero elements. Default: 0.
+
+  ## Examples
+
+      iex> Nx.tril(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]))
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [1, 0, 0],
+          [4, 5, 0],
+          [7, 8, 9]
+        ]
+      >
+
+      iex> Nx.tril(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]), k: 1)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [1, 2, 0],
+          [4, 5, 6],
+          [7, 8, 9]
+        ]
+      >
+
+      iex> Nx.tril(Nx.iota({2, 3, 4}))
+      #Nx.Tensor<
+        s64[2][3][4]
+        [
+          [
+            [0, 0, 0, 0],
+            [4, 5, 0, 0],
+            [8, 9, 10, 0]
+          ],
+          [
+            [12, 0, 0, 0],
+            [16, 17, 0, 0],
+            [20, 21, 22, 0]
+          ]
+        ]
+      >
+
+      iex> Nx.tril(Nx.iota({6}))
+      ** (ArgumentError) tril/2 expects a tensor with at least 2 dimensions, got: #Nx.Tensor<
+        s64[6]
+        [0, 1, 2, 3, 4, 5]
+      >
+  """
+  @doc type: :creation
+  def tril(tensor, opts \\ []) do
+    opts = keyword!(opts, k: 0)
+
+    if rank(tensor) < 2 do
+      raise ArgumentError,
+            "tril/2 expects a tensor with at least 2 dimensions, got: #{inspect(tensor)}"
+    end
+
+    mask = tri(axis_size(tensor, -2), axis_size(tensor, -1), k: opts[:k])
+    mask = extend_mask(tensor, mask)
+    select(mask, tensor, 0)
+  end
+
+  @doc """
+  Upper triangle of an array.
+
+  ## Options
+
+    * `k` - The diagonal below which to zero elements. Default: 0.
+
+  ## Examples
+
+      iex> Nx.triu(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]))
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [1, 2, 3],
+          [0, 5, 6],
+          [0, 0, 9]
+        ]
+      >
+
+      iex> Nx.triu(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]), k: 1)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [0, 2, 3],
+          [0, 0, 6],
+          [0, 0, 0]
+        ]
+      >
+
+      iex> Nx.triu(Nx.iota({2, 3, 4}))
+      #Nx.Tensor<
+        s64[2][3][4]
+        [
+          [
+            [0, 1, 2, 3],
+            [0, 5, 6, 7],
+            [0, 0, 10, 11]
+          ],
+          [
+            [12, 13, 14, 15],
+            [0, 17, 18, 19],
+            [0, 0, 22, 23]
+          ]
+        ]
+      >
+
+      iex> Nx.triu(Nx.iota({6}))
+      ** (ArgumentError) triu/2 expects a tensor with at least 2 dimensions, got: #Nx.Tensor<
+        s64[6]
+        [0, 1, 2, 3, 4, 5]
+      >
+  """
+  @doc type: :creation
+  def triu(tensor, opts \\ []) do
+    opts = keyword!(opts, k: 0)
+
+    if rank(tensor) < 2 do
+      raise ArgumentError,
+            "triu/2 expects a tensor with at least 2 dimensions, got: #{inspect(tensor)}"
+    end
+
+    mask = tri(axis_size(tensor, -2), axis_size(tensor, -1), k: opts[:k] - 1)
+    mask = extend_mask(tensor, mask)
+    select(mask, 0, tensor)
+  end
+
+  @doc """
+  An array with ones at and below the given diagonal and zeros elsewhere.
+
+  ## Options
+
+    * `k` - The diagonal above which to zero elements. Default: 0.
+
+  ## Examples
+
+      iex> tensor = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+      iex> {num_rows, num_cols} = Nx.shape(tensor)
+      iex> Nx.tri(num_rows, num_cols)
+      #Nx.Tensor<
+        u8[3][3]
+        [
+          [1, 0, 0],
+          [1, 1, 0],
+          [1, 1, 1]
+        ]
+      >
+
+      iex> tensor = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+      iex> {num_rows, num_cols} = Nx.shape(tensor)
+      iex> Nx.tri(num_rows, num_cols, k: 1)
+      #Nx.Tensor<
+        u8[3][3]
+        [
+          [1, 1, 0],
+          [1, 1, 1],
+          [1, 1, 1]
+        ]
+      >
+  """
+  @doc type: :creation
+  def tri(n, m, opts \\ []) do
+    opts = keyword!(opts, k: 0)
+    greater_equal(iota({n, 1}), subtract(iota({1, m}), opts[:k]))
+  end
+
+  defp extend_mask(tensor, mask) do
+    to_duplicate = rank(tensor) - 2
+    shape = List.to_tuple(List.duplicate(1, to_duplicate) ++ Tuple.to_list(shape(mask)))
+    reshape(mask, shape) |> broadcast(tensor)
   end
 
   @doc """
@@ -3265,6 +3443,156 @@ defmodule Nx do
     end)
   end
 
+  @doc ~S"""
+  Split a tensor into train and test subsets.
+
+  `split` must be defined so that there are no empty result tensors.
+  This means that `split` must be:
+
+    * an integer such that `0 < split` and `split < axis_size`
+    * a float such that `0.0 < split` and `ceil(axis_size * split) < axis_size`
+
+  ## Options
+
+    * `:axis` - The axis along which to split the tensor. Defaults to `0`.
+
+  ## Examples
+
+  All examples will operate on the same tensor so that it's easier to compare different configurations.
+
+      iex> t = Nx.tensor([[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11]])
+      iex> {left, right} = Nx.split(t, 2, axis: 0)
+      iex> left
+      #Nx.Tensor<
+        s64[2][4]
+        [
+          [0, 1, 2, 3],
+          [4, 5, 6, 7]
+        ]
+      >
+      iex> right
+      #Nx.Tensor<
+        s64[1][4]
+        [
+          [8, 9, 10, 11]
+        ]
+      >
+      iex> {left, right} = Nx.split(t, 2, axis: 1)
+      iex> left
+      #Nx.Tensor<
+        s64[3][2]
+        [
+          [0, 1],
+          [4, 5],
+          [8, 9]
+        ]
+      >
+      iex> right
+      #Nx.Tensor<
+        s64[3][2]
+        [
+          [2, 3],
+          [6, 7],
+          [10, 11]
+        ]
+      >
+
+      iex> t = Nx.tensor([[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11]])
+      iex> {left, right} = Nx.split(t, 0.5, axis: 0)
+      iex> left
+      #Nx.Tensor<
+        s64[2][4]
+        [
+          [0, 1, 2, 3],
+          [4, 5, 6, 7]
+        ]
+      >
+      iex> right
+      #Nx.Tensor<
+        s64[1][4]
+        [
+          [8, 9, 10, 11]
+        ]
+      >
+      iex> {left, right} = Nx.split(t, 0.75, axis: 1)
+      iex> left
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [0, 1, 2],
+          [4, 5, 6],
+          [8, 9, 10]
+        ]
+      >
+      iex> right
+      #Nx.Tensor<
+        s64[3][1]
+        [
+          [3],
+          [7],
+          [11]
+        ]
+      >
+
+  Negative indices are also accepted, in the same fashion as `Enum.split/2`.
+
+      iex> t = Nx.tensor([1, 2, 3, 4])
+      iex> {left, right} = Nx.split(t, -1)
+      iex> left
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+      iex> right
+      #Nx.Tensor<
+        s64[1]
+        [4]
+      >
+  """
+  @doc type: :indexed
+  def split(tensor, split, opts \\ [])
+
+  def split(tensor, split, opts) do
+    tensor = to_tensor(tensor)
+    opts = keyword!(opts, axis: 0)
+    axis = Keyword.fetch!(opts, :axis)
+
+    axis = Nx.Shape.normalize_axis(tensor.shape, axis, tensor.names)
+    axis_size = axis_size(tensor, axis)
+
+    # only used in case the split is a float
+    float_split_index = Kernel.ceil(split * axis_size)
+
+    {split_index, remainder_length} =
+      cond do
+        is_integer(split) and split > 0 and split < axis_size ->
+          {split, axis_size - split}
+
+        is_integer(split) and split < 0 and split > -axis_size ->
+          {axis_size + split, Kernel.abs(split)}
+
+        is_integer(split) ->
+          raise ArgumentError,
+                "split must be an integer greater than zero and less than the length of the given axis"
+
+        is_float(split) and float_split_index > 0 and float_split_index < axis_size ->
+          {float_split_index, axis_size - float_split_index}
+
+        is_float(split) ->
+          raise ArgumentError,
+                "split must be a float such that 0 < split and ceil(split * axis_size) < 1"
+
+        true ->
+          raise ArgumentError,
+                "invalid split received, expected a float or an integer, got: #{inspect(split)}"
+      end
+
+    {
+      slice_along_axis(tensor, 0, split_index, axis: axis),
+      slice_along_axis(tensor, split_index, remainder_length, axis: axis)
+    }
+  end
+
   @doc """
   Broadcasts `tensor` to the given `broadcast_shape`.
 
@@ -3734,7 +4062,7 @@ defmodule Nx do
       shape = Nx.Shape.pad(tensor.shape, padding_config)
 
       out = %{tensor | type: output_type, shape: shape}
-      impl!(tensor).pad(out, tensor, pad_value, padding_config)
+      impl!(tensor, pad_value).pad(out, tensor, pad_value, padding_config)
     end)
   end
 
@@ -7376,10 +7704,10 @@ defmodule Nx do
         [0, 2, 4]
       >
 
-      iex> Nx.indexed_put(Nx.tensor([0, 0, 0]), Nx.tensor([[1], [2], [1]]), Nx.tensor([3, 4, 2]))
+      iex> Nx.indexed_put(Nx.tensor([0, 0, 0]), Nx.tensor([[1], [2]]), Nx.tensor([3, 4]))
       #Nx.Tensor<
         s64[3]
-        [0, 2, 4]
+        [0, 3, 4]
       >
 
       iex> t = Nx.iota({1, 2, 3})
@@ -7490,6 +7818,12 @@ defmodule Nx do
   defp indexed_op(target, indices, updates, op) do
     [%T{vectorized_axes: vectorized_axes} = target, indices, updates] =
       broadcast_vectors([target, indices, updates])
+
+    idx_type = type(indices)
+
+    unless Nx.Type.integer?(idx_type) do
+      raise ArgumentError, "indices must be an integer tensor, got type: #{inspect(idx_type)}"
+    end
 
     type = binary_type(target, updates)
 
@@ -10981,6 +11315,82 @@ defmodule Nx do
     end)
   end
 
+  @doc """
+  Calculate the n-th discrete difference along the given axis.
+
+  The first difference is given by $out_i = a_{i+1} - a_i$ along the given axis,
+  higher differences are calculated by using `diff` recursively.
+
+  ## Options
+
+    * `:order` - the number of times to perform the difference. Defaults to `1`
+    * `:axis` - the axis to perform the difference along. Defaults to `-1`
+
+  ## Examples
+
+      iex> Nx.diff(Nx.tensor([1, 2, 4, 7, 0]))
+      #Nx.Tensor<
+        s64[4]
+        [1, 2, 3, -7]
+      >
+
+      iex> Nx.diff(Nx.tensor([1, 2, 4, 7, 0]), order: 2)
+      #Nx.Tensor<
+        s64[3]
+        [1, 1, -10]
+      >
+
+      iex> Nx.diff(Nx.tensor([[1, 3, 6, 10], [0, 5, 6, 8]]))
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [2, 3, 4],
+          [5, 1, 2]
+        ]
+      >
+
+      iex> Nx.diff(Nx.tensor([[1, 3, 6, 10], [0, 5, 6, 8]]), axis: 0)
+      #Nx.Tensor<
+        s64[1][4]
+        [
+          [-1, 2, 0, -2]
+        ]
+      >
+
+      iex> Nx.diff(Nx.tensor([1, 2, 4, 7, 0]), order: 0)
+      #Nx.Tensor<
+        s64[5]
+        [1, 2, 4, 7, 0]
+      >
+
+      iex> Nx.diff(Nx.tensor([1, 2, 4, 7, 0]), order: -1)
+      ** (ArgumentError) order must be non-negative but got: -1
+  """
+  @doc type: :ndim
+  def diff(tensor, opts \\ []) do
+    opts = keyword!(opts, order: 1, axis: -1)
+    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
+    n = opts[:order]
+    axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
+
+    if rank(tensor) == 0 do
+      raise ArgumentError, "cannot compute diff of a scalar"
+    end
+
+    if n < 0 do
+      raise ArgumentError, "order must be non-negative but got: #{inspect(n)}"
+    end
+
+    axis_size = Nx.axis_size(tensor, axis)
+
+    Enum.reduce(0..(n - 1)//1, tensor, fn x, acc ->
+      subtract(
+        slice_along_axis(acc, 1, axis_size - x - 1, axis: axis),
+        slice_along_axis(acc, 0, axis_size - x - 1, axis: axis)
+      )
+    end)
+  end
+
   # Scans the given tensor using an associative binary operator.
   #
   # The scanning function must be associative and perform an element-wise
@@ -14022,7 +14432,7 @@ defmodule Nx do
   Concatenates tensors along the given axis.
 
   Tensors can be a tuple or any `Nx.Container` or `Nx.LazyContainer`.
-  This means you can easily concatenate all columns in a datafrane
+  This means you can easily concatenate all columns in a dataframe
   and other data structures. For convenience, this function also allows
   a list of tensors to be given, which may be common outside of `defn`.
 
@@ -14221,7 +14631,7 @@ defmodule Nx do
   Stacks a list of tensors with the same shape along a new axis.
 
   Tensors can be a tuple or any `Nx.Container` or `Nx.LazyContainer`.
-  This means you can easily concatenate all columns in a datafrane
+  This means you can easily concatenate all columns in a dataframe
   and other data structures. For convenience, this function also allows
   a list of tensors to be given, which may be common outside of `defn`.
 
@@ -14587,6 +14997,9 @@ defmodule Nx do
 
   If no axis is given, defaults to `0`.
 
+  See `take_along_axis/3` for examples on how to apply the
+  resulting indices from this function.
+
   ## Options
 
     * `:axis` - The name or number of the corresponding axis on which the sort
@@ -14780,29 +15193,49 @@ defmodule Nx do
   """
   @doc type: :conversion
   def serialize(tensor_or_container, opts \\ []) do
-    data_term = to_term(tensor_or_container)
-    term = {@file_version, System.endianness(), data_term}
-    :erlang.term_to_iovec(term, opts)
+    {term, {binaries, _offsets}} = to_term(tensor_or_container, {[], 0})
+    data = :erlang.term_to_iovec(term, opts)
+    endianness = endianness_to_byte(System.endianness())
+
+    [<<@file_prefix, @file_version, endianness, IO.iodata_length(data)::64>> | data] ++
+      Enum.reverse(binaries)
   end
 
-  defp to_term(tensor_or_container) do
+  defp to_term(tensor_or_container, {binaries, offset}) do
     case tensor_or_container do
       number when is_number(number) when is_struct(number, Complex) ->
         type = Nx.Type.infer(number)
-        {:tensor, {}, type, [], [], number_to_binary(number, type)}
+        binary = number_to_binary(number, type)
+        size = Kernel.byte_size(binary)
+        acc = {[binary | binaries], offset + size}
+        {{:t, {}, type, [], [], offset, size}, acc}
 
       %T{vectorized_axes: vectorized_axes} = tensor ->
         %{shape: shape, names: names} = devectorize(tensor)
-
         type = type(tensor)
         binary = to_binary(tensor)
-        {:tensor, shape, type, names, vectorized_axes, binary}
+        size = Kernel.byte_size(binary)
+        acc = {[binary | binaries], offset + size}
+        {{:t, shape, type, names, vectorized_axes, offset, size}, acc}
 
       other ->
         {module, pairs, meta} = Nx.Container.serialize(other)
-        {module, Enum.map(pairs, fn {k, v} -> {k, to_term(v)} end), meta}
+
+        {pairs, acc} =
+          Enum.map_reduce(pairs, {binaries, offset}, fn {k, v}, acc ->
+            {v, acc} = to_term(v, acc)
+            {{k, v}, acc}
+          end)
+
+        {{module, pairs, meta}, acc}
     end
   end
+
+  defp endianness_to_byte(:little), do: 0
+  defp endianness_to_byte(:big), do: 1
+
+  defp byte_to_endianness(0), do: :little
+  defp byte_to_endianness(1), do: :big
 
   @doc """
   Deserializes a serialized representation of a tensor or a container
@@ -14841,44 +15274,48 @@ defmodule Nx do
   def deserialize(data, opts \\ []) do
     data
     |> IO.iodata_to_binary()
-    |> :erlang.binary_to_term(opts)
-    |> from_term()
+    |> deserialize_binary(opts)
   end
 
-  defp from_term({2, endianness, term}), do: from_term_v2(term, endianness)
-  defp from_term({1, endianness, term}), do: from_term_v1(term, endianness)
-
-  defp from_term(_) do
-    raise ArgumentError, "unable to deserialize binary term to tensor"
+  defp deserialize_binary(
+         <<@file_prefix, @file_version, endianness, size::64, data::binary-size(size),
+           buffers::binary>>,
+         opts
+       ) do
+    term = :erlang.binary_to_term(data, opts)
+    from_buffers(term, byte_to_endianness(endianness), buffers)
   end
 
-  defp from_term_v2(term, endianness) do
+  defp deserialize_binary(<<@file_prefix, version, _::binary>>, _opts) do
+    raise ArgumentError, "cannot deserialize Nx format v#{version}"
+  end
+
+  # TODO: Remove me in future releases (format for Nx v0.5 and earlier).
+  defp deserialize_binary(binary, opts) do
+    {1, endianness, term} = :erlang.binary_to_term(binary, opts)
+    from_term(term, endianness)
+  end
+
+  defp from_buffers(term, endianness, buffers) do
     case term do
-      {:tensor, flat_shape, {_, size} = type, names, vectorized_axes, binary} ->
-        binary
-        |> new_byte_order(size, endianness)
+      {:t, flat_shape, {_, type_size} = type, names, vectorized_axes, offset, size} ->
+        buffers
+        |> binary_part(offset, size)
+        |> new_byte_order(type_size, endianness)
         |> from_binary(type)
         |> reshape(flat_shape, names: names)
         |> vectorize(vectorized_axes)
 
-      {:container, container} ->
-        {deserialized, :ok} =
-          Nx.Container.traverse(container, :ok, fn container_elem, :ok ->
-            {from_term_v2(container_elem, endianness), :ok}
-          end)
-
-        deserialized
-
       {module, pairs, metadata} ->
-        pairs = Enum.map(pairs, fn {k, v} -> {k, from_term_v2(v, endianness)} end)
+        pairs = Enum.map(pairs, fn {k, v} -> {k, from_buffers(v, endianness, buffers)} end)
         module.deserialize(pairs, metadata)
 
       _ ->
-        raise ArgumentError, "unable to deserialize binary term to tensor"
+        raise ArgumentError, "unable to deserialize term to tensor: #{inspect(term)}"
     end
   end
 
-  defp from_term_v1(term, endianness) do
+  defp from_term(term, endianness) do
     case term do
       {:tensor, shape, {_, size} = type, names, binary} ->
         binary
@@ -14889,13 +15326,13 @@ defmodule Nx do
       {:container, container} ->
         {deserialized, :ok} =
           Nx.Container.traverse(container, :ok, fn container_elem, :ok ->
-            {from_term_v1(container_elem, endianness), :ok}
+            {from_term(container_elem, endianness), :ok}
           end)
 
         deserialized
 
       {module, pairs, metadata} ->
-        pairs = Enum.map(pairs, fn {k, v} -> {k, from_term_v1(v, endianness)} end)
+        pairs = Enum.map(pairs, fn {k, v} -> {k, from_term(v, endianness)} end)
         module.deserialize(pairs, metadata)
 
       _ ->
@@ -14973,6 +15410,18 @@ defmodule Nx do
         {byte_order, type} = parse_type(dtype)
         {byte_order, type, parse_shape(shape), true}
     end
+  end
+
+  defp parse_type(<<?', ?|, type, ?1, ?'>>) do
+    type =
+      case type do
+        ?u -> :u
+        ?i -> :s
+        ?f -> :f
+        _ -> raise "unsupported numpy type: #{type}"
+      end
+
+    {System.endianness(), {type, 8}}
   end
 
   defp parse_type(<<?', byte_order, type, size, ?'>>) do
@@ -16051,5 +16500,128 @@ defmodule Nx do
         t
       end)
     end
+  end
+
+  @doc """
+  Returns the logarithm of the sum of the exponentials of tensor elements.
+
+  If the `:axes` option is given, it aggregates over
+  the given dimensions, effectively removing them.
+  `axes: [0]` implies aggregating over the highest order
+  dimension and so forth. If the axis is negative, then
+  counts the axis from the back. For example, `axes: [-1]`
+  will always aggregate all rows.
+
+  You may optionally set `:keep_axes` to true, which will
+  retain the rank of the input tensor by setting the reduced
+  axes to size 1.
+
+  Exponentials can be scaled before summation by multiplying
+  them with `:exp_scaling_factor` option. It must be of the same shape
+  as the input tensor or broadcastable to it.
+
+  ## Examples
+
+      iex> Nx.logsumexp(Nx.tensor([1, 2, 3, 4, 5, 6]))
+      #Nx.Tensor<
+        f32
+        6.456193447113037
+      >
+
+      iex> Nx.logsumexp(Nx.tensor([1, 2, 3, 4, 5, 6]), exp_scaling_factor: 0.5)
+      #Nx.Tensor<
+        f32
+        5.7630462646484375
+      >
+
+      iex> t = Nx.tensor([1, 2, 3, 4, 5, 6])
+      iex> a = Nx.tensor([-1, -1, -1, 1, 1, 1])
+      iex> Nx.logsumexp(t, exp_scaling_factor: a)
+      #Nx.Tensor<
+        f32
+        6.356536865234375
+      >
+
+      iex> Nx.logsumexp(Nx.tensor([[1, 2], [3, 4], [5, 6]]))
+      #Nx.Tensor<
+        f32
+        6.456193447113037
+      >
+
+  ### Aggregating over an axis
+
+      iex> t = Nx.tensor([[1, 2], [3, 4], [5, 6]], names: [:x, :y])
+      iex> Nx.logsumexp(t, axes: [:x])
+      #Nx.Tensor<
+        f32[y: 2]
+        [5.1429314613342285, 6.1429314613342285]
+      >
+
+      iex> t = Nx.tensor([[1, 2], [3, 4], [5, 6]], names: [:x, :y])
+      iex> Nx.logsumexp(t, axes: [:y])
+      #Nx.Tensor<
+        f32[x: 3]
+        [2.3132617473602295, 4.31326150894165, 6.31326150894165]
+      >
+
+      iex> t = Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], names: [:x, :y, :z])
+      iex> Nx.logsumexp(t, axes: [:x, :z])
+      #Nx.Tensor<
+        f32[y: 2]
+        [6.331411361694336, 8.331411361694336]
+      >
+
+  ### Keeping axes
+
+      iex> t = Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], names: [:x, :y, :z])
+      iex> Nx.logsumexp(t, axes: [:x, :z], keep_axes: true)
+      #Nx.Tensor<
+        f32[x: 1][y: 2][z: 1]
+        [
+          [
+            [6.331411361694336],
+            [8.331411361694336]
+          ]
+        ]
+      >
+
+  ### Vectorized tensors
+
+      iex> t = Nx.vectorize(Nx.tensor([[1, 2], [3, 4], [5, 6]]), :x)
+      iex> Nx.logsumexp(t, axes: [0], keep_axes: true)
+      #Nx.Tensor<
+        vectorized[x: 3]
+        f32[1]
+        [
+          [2.3132617473602295],
+          [4.31326150894165],
+          [6.31326150894165]
+        ]
+      >
+  """
+  @doc type: :aggregation
+  def logsumexp(tensor, opts \\ []) do
+    type = type(tensor)
+    opts = keyword!(opts, [:axes, :exp_scaling_factor, :keep_axes])
+    axes = opts[:axes]
+    keep_axes = opts[:keep_axes]
+    max = reduce_max(tensor, axes: axes, keep_axes: true)
+    infinity_mask = is_infinity(max)
+    max = select(infinity_mask, Nx.tensor(0, type: type), max)
+    exponentials = tensor |> subtract(max) |> exp()
+
+    exponentials =
+      if exp_scaling_factor = opts[:exp_scaling_factor] do
+        multiply(exp_scaling_factor, exponentials)
+      else
+        exponentials
+      end
+
+    max = if keep_axes, do: max, else: squeeze(max, axes: axes)
+
+    exponentials
+    |> sum(axes: axes, keep_axes: keep_axes)
+    |> log()
+    |> add(max)
   end
 end

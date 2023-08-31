@@ -12,10 +12,6 @@ defmodule EXLA.Defn.Lock do
 
   It will wait until the key becomes available.
   """
-  # TODO: Once we support multiple devices, what happens if we are trying
-  # to run on a device and the Nx.LazyContainer operations happen in another
-  # one? Perhaps we should track pid => device and force all operations on
-  # a certain device?
   def lock(key) do
     GenServer.call(@name, {:lock, key}, @timeout)
   end

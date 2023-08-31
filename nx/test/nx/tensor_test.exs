@@ -1,6 +1,8 @@
 defmodule Nx.TensorTest do
   use ExUnit.Case, async: true
 
+  import Nx, only: :sigils
+
   describe "backend_transfer" do
     test "transfers existing tensor" do
       Nx.tensor([1, 2, 3]) |> Nx.backend_transfer({ProcessBackend, key: :example})
@@ -109,13 +111,92 @@ defmodule Nx.TensorTest do
                ])
     end
 
-    test "works with negative steps" do
+    test "raises for negative steps" do
       iota = Nx.iota({2, 5})
 
-      for step <- -5..-1 do
-        assert iota[[0, 4..0//step]] == Nx.tensor(Enum.to_list(4..0//step))
-        assert iota[[1, 4..0//step]] == Nx.tensor(Enum.to_list(9..5//step))
+      range = 4..0//-2
+      base_message = "range step must be positive, got range: 4..0//-2"
+
+      assert_raise ArgumentError, base_message, fn ->
+        iota[[0, range]]
       end
+
+      range = 1..-1
+
+      message =
+        "range step must be positive, got range: 1..-1//-1. Did you mean to pass the range 1..-1//1 instead?"
+
+      assert_raise ArgumentError, message, fn ->
+        iota[[1, range]]
+      end
+    end
+  end
+
+  describe "inspect" do
+    test "prints with configured precision" do
+      assert inspect(~V[1], custom_options: [nx_precision: 5]) ==
+               """
+               #Nx.Tensor<
+                 s64[1]
+                 [1]
+               >\
+               """
+
+      assert inspect(~V[1.0], custom_options: [nx_precision: 5]) ==
+               """
+               #Nx.Tensor<
+                 f32[1]
+                 [1.0]
+               >\
+               """
+
+      assert inspect(~V[1.000042e-3], custom_options: [nx_precision: 5]) ==
+               """
+               #Nx.Tensor<
+                 f32[1]
+                 [0.001]
+               >\
+               """
+
+      assert inspect(~V[42.1337e10], custom_options: [nx_precision: 5]) ==
+               """
+               #Nx.Tensor<
+                 f32[1]
+                 [421337006080.0]
+               >\
+               """
+
+      assert inspect(~V[Inf -Inf NaN], custom_options: [nx_precision: 7]) ==
+               """
+               #Nx.Tensor<
+                 f32[3]
+                 [Inf, -Inf, NaN]
+               >\
+               """
+
+      assert inspect(~V[Inf-Infi 1.0i 0 1000], custom_options: [nx_precision: 3]) ==
+               """
+               #Nx.Tensor<
+                 c64[4]
+                 [Inf-Infi, 0.0+1.0i, 0.0+0.0i, 1.0e3+0.0i]
+               >\
+               """
+
+      assert inspect(~V[-0.0001], custom_options: [nx_precision: 3]) ==
+               """
+               #Nx.Tensor<
+                 f32[1]
+                 [-9.999e-5]
+               >\
+               """
+
+      assert inspect(~V[-0.0001], custom_options: [nx_precision: 8]) ==
+               """
+               #Nx.Tensor<
+                 f32[1]
+                 [-9.99999974e-5]
+               >\
+               """
     end
   end
 end

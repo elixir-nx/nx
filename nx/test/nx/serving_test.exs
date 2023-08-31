@@ -1,6 +1,8 @@
 defmodule Nx.ServingTest do
   use ExUnit.Case, async: true
 
+  import Nx.Defn
+
   defmodule Simple do
     @behaviour Nx.Serving
 
@@ -46,6 +48,16 @@ defmodule Nx.ServingTest do
     end
   end
 
+  defn add_five_round_about(batch) do
+    batch
+    |> Nx.multiply(2)
+    |> hook(:double)
+    |> Nx.add(10)
+    |> hook(:plus_ten)
+    |> Nx.divide(2)
+    |> hook(:to_be_ignored)
+  end
+
   describe "run/2" do
     test "with function" do
       serving = Nx.Serving.new(fn opts -> Nx.Defn.jit(&Nx.multiply(&1, 2), opts) end)
@@ -53,12 +65,24 @@ defmodule Nx.ServingTest do
       assert Nx.Serving.run(serving, batch) == Nx.tensor([[2, 4, 6]])
     end
 
-    test "with container" do
+    test "with function and batch key" do
       serving =
-        Nx.Serving.new(fn opts ->
-          Nx.Defn.jit(fn {a, b} -> {Nx.multiply(a, 2), Nx.divide(b, 2)} end, opts)
+        Nx.Serving.new(fn batch_key, opts ->
+          send(self(), {:batch_key, batch_key})
+          Nx.Defn.jit(&Nx.multiply(&1, 2), opts)
         end)
 
+      batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])]) |> Nx.Batch.key(:foo)
+      assert Nx.Serving.run(serving, batch) == Nx.tensor([[2, 4, 6]])
+      assert_receive {:batch_key, :foo}
+
+      batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])]) |> Nx.Batch.key(:bar)
+      assert Nx.Serving.run(serving, batch) == Nx.tensor([[2, 4, 6]])
+      assert_receive {:batch_key, :bar}
+    end
+
+    test "with container (and jit)" do
+      serving = Nx.Serving.jit(fn {a, b} -> {Nx.multiply(a, 2), Nx.divide(b, 2)} end)
       batch = Nx.Batch.concatenate([{Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])}])
       assert Nx.Serving.run(serving, batch) == {Nx.tensor([2, 4, 6]), Nx.tensor([2, 2.5, 3])}
     end
@@ -80,7 +104,7 @@ defmodule Nx.ServingTest do
       batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
 
       assert Nx.Serving.run(serving, batch) == Nx.tensor([[2, 4, 6]])
-      assert_received {:init, :inline, [[garbage_collect: 1]]}
+      assert_received {:init, :inline, [[batch_keys: [:default], garbage_collect: 1]]}
       assert_received {:batch, 0, batch}
       assert_received :execute
       assert batch.size == 1
@@ -95,7 +119,7 @@ defmodule Nx.ServingTest do
           send(self(), {:pre, entry})
           {Nx.Batch.stack(entry), :preprocessing!}
         end)
-        |> Nx.Serving.client_postprocessing(fn result, metadata, info ->
+        |> Nx.Serving.client_postprocessing(fn {result, metadata}, info ->
           send(self(), {:post, result, metadata, info})
           {result, metadata, info}
         end)
@@ -104,7 +128,7 @@ defmodule Nx.ServingTest do
       post = Nx.tensor([[2, 4], [6, 8]])
       assert Nx.Serving.run(serving, pre) == {post, :metadata, :preprocessing!}
 
-      assert_received {:init, :inline, [[]]}
+      assert_received {:init, :inline, [[batch_keys: [:default]]]}
       assert_received {:pre, ^pre}
       assert_received {:batch, 0, batch}
       assert_received :execute
@@ -130,7 +154,7 @@ defmodule Nx.ServingTest do
       fn opts -> Nx.Defn.jit(&Nx.multiply(&1, 2), opts) end
       |> Nx.Serving.new()
       |> Nx.Serving.client_preprocessing(fn _entry -> {batch, :pre} end)
-      |> Nx.Serving.client_postprocessing(fn res, meta, info -> {res, meta, info} end)
+      |> Nx.Serving.client_postprocessing(fn {res, meta}, info -> {res, meta, info} end)
       |> Nx.Serving.run(batch)
 
       assert_receive {[:nx, :serving, :execute, :stop], ^ref, _measure, meta}
@@ -140,16 +164,118 @@ defmodule Nx.ServingTest do
       assert %{info: :pre, input: %Nx.Batch{}} = meta
 
       assert_receive {[:nx, :serving, :postprocessing, :stop], ^ref, _measure, meta}
-      assert %{info: _, metadata: _, output: _} = meta
+      assert %{info: :pre} = meta
     end
   end
 
-  describe "batched_run" do
-    defp simple_supervised!(config, opts \\ []) do
-      opts = Keyword.put_new(opts, :serving, Nx.Serving.new(Simple, self()))
-      start_supervised!({Nx.Serving, [name: config.test] ++ opts})
+  describe "run + streaming" do
+    test "with function" do
+      serving =
+        Nx.Serving.new(fn opts -> Nx.Defn.jit(&Nx.multiply(&1, 2), opts) end)
+        |> Nx.Serving.streaming()
+
+      batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
+
+      assert Nx.Serving.run(serving, batch) |> Enum.to_list() ==
+               [{:batch, Nx.tensor([[2, 4, 6]]), :server_info}]
     end
 
+    test "with padding" do
+      serving =
+        Nx.Serving.new(fn opts ->
+          fn batch ->
+            Nx.Defn.jit_apply(&Nx.multiply(&1, 2), [Nx.Batch.pad(batch, 4)], opts)
+          end
+        end)
+        |> Nx.Serving.streaming()
+
+      batch = Nx.Batch.stack([Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])])
+
+      assert Nx.Serving.run(serving, batch) |> Enum.to_list() ==
+               [{:batch, Nx.tensor([[2, 4, 6], [8, 10, 12]]), :server_info}]
+    end
+
+    test "with module callbacks" do
+      serving = Nx.Serving.new(Simple, self(), garbage_collect: 1) |> Nx.Serving.streaming()
+      batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
+
+      assert Nx.Serving.run(serving, batch) |> Enum.to_list() ==
+               [{:batch, Nx.tensor([[2, 4, 6]]), :metadata}]
+
+      assert_received {:init, :inline, [[batch_keys: [:default], hooks: %{}, garbage_collect: 1]]}
+      assert_received {:batch, 0, batch}
+      assert_received :execute
+      assert batch.size == 1
+      assert batch.pad == 0
+      assert Nx.Defn.jit_apply(&Function.identity/1, [batch]) == Nx.tensor([[1, 2, 3]])
+    end
+
+    test "with client pre/post" do
+      serving =
+        Nx.Serving.new(Simple, self())
+        |> Nx.Serving.client_preprocessing(fn entry ->
+          send(self(), {:pre, entry})
+          {Nx.Batch.stack(entry), :preprocessing!}
+        end)
+        |> Nx.Serving.client_postprocessing(fn stream, info ->
+          send(self(), {:post, stream, info})
+          {stream, info}
+        end)
+        |> Nx.Serving.streaming()
+
+      pre = [Nx.tensor([1, 2]), Nx.tensor([3, 4])]
+      {stream, :preprocessing!} = Nx.Serving.run(serving, pre)
+      assert Enum.to_list(stream) == [{:batch, Nx.tensor([[2, 4], [6, 8]]), :metadata}]
+
+      assert_received {:init, :inline, [[batch_keys: [:default], hooks: %{}]]}
+      assert_received {:pre, ^pre}
+      assert_received {:batch, 0, batch}
+      assert_received :execute
+      assert_received {:post, ^stream, :preprocessing!}
+      assert batch.size == 2
+      assert batch.pad == 0
+      assert Nx.Defn.jit_apply(&Function.identity/1, [batch]) == Nx.tensor([[1, 2], [3, 4]])
+    end
+
+    test "with hooks" do
+      serving =
+        Nx.Serving.jit(&add_five_round_about/1)
+        |> Nx.Serving.streaming(hooks: [:double, :plus_ten])
+
+      batch = Nx.Batch.stack([Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])])
+
+      assert Nx.Serving.run(serving, batch) |> Enum.to_list() == [
+               {:double, Nx.tensor([[2, 4, 6], [8, 10, 12]])},
+               {:plus_ten, Nx.tensor([[12, 14, 16], [18, 20, 22]])},
+               {:batch, Nx.tensor([[6.0, 7.0, 8.0], [9.0, 10.0, 11.0]]), :server_info}
+             ]
+    end
+
+    @tag :capture_log
+    test "raises when consumed in a different process" do
+      serving =
+        Nx.Serving.new(fn opts -> Nx.Defn.jit(&Nx.multiply(&1, 2), opts) end)
+        |> Nx.Serving.streaming()
+
+      batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
+
+      stream = Nx.Serving.run(serving, batch)
+
+      {_pid, ref} = spawn_monitor(fn -> Enum.to_list(stream) end)
+
+      assert_receive {:DOWN, ^ref, _, _, {%RuntimeError{message: message}, _}}
+
+      assert message ==
+               "the stream returned from Nx.Serving.run/2 must be consumed in the same process"
+    end
+  end
+
+  defp simple_supervised!(config, opts \\ []) do
+    opts = Keyword.put_new(opts, :serving, Nx.Serving.new(Simple, self()))
+    start_supervised!({Nx.Serving, [name: config.test] ++ opts})
+  end
+
+  describe "batched_run" do
     test "supervision tree", config do
       pid = simple_supervised!(config)
       :sys.get_status(config.test)
@@ -161,7 +287,7 @@ defmodule Nx.ServingTest do
 
       batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
       assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([[2, 4, 6]])
-      assert_received {:init, :process, [[garbage_collect: true]]}
+      assert_received {:init, :process, [[batch_keys: [:default], garbage_collect: true]]}
       assert_received {:batch, 0, batch}
       assert_received :execute
       assert batch.size == 1
@@ -187,11 +313,83 @@ defmodule Nx.ServingTest do
       Task.await(t1, :infinity)
       Task.await(t2, :infinity)
 
-      assert_received {:init, :process, [[]]}
+      assert_received {:init, :process, [[batch_keys: [:default]]]}
       assert_received {:batch, 0, batch}
       assert_received :execute
       assert batch.size == 4
       assert batch.pad == 0
+    end
+
+    test "5=3+3 (oversized)", config do
+      serving =
+        Nx.Serving.new(Simple, self())
+        |> Nx.Serving.process_options(batch_size: 3)
+
+      simple_supervised!(config, serving: serving, batch_timeout: 100)
+
+      batch =
+        Nx.Batch.stack([
+          Nx.tensor([1, 2]),
+          Nx.tensor([3, 4]),
+          Nx.tensor([5, 6]),
+          Nx.tensor([7, 8]),
+          Nx.tensor([9, 10]),
+          Nx.tensor([11, 12])
+        ])
+
+      assert Nx.Serving.batched_run(config.test, batch) ==
+               Nx.tensor([
+                 [2, 4],
+                 [6, 8],
+                 [10, 12],
+                 [14, 16],
+                 [18, 20],
+                 [22, 24]
+               ])
+
+      assert_received {:init, :process, [[batch_keys: [:default]]]}
+      assert_received {:batch, 0, batch1}
+      assert_received {:batch, 0, batch2}
+      assert_received :execute
+      assert batch1.size == 3
+      assert batch1.pad == 0
+      assert batch2.size == 3
+      assert batch2.pad == 0
+    end
+
+    test "5=3+2(+pad) (oversized)", config do
+      serving =
+        Nx.Serving.new(Simple, self())
+        |> Nx.Serving.process_options(batch_size: 3)
+
+      simple_supervised!(config, serving: serving, batch_timeout: 100)
+
+      batch =
+        Nx.Batch.stack([
+          Nx.tensor([1, 2]),
+          Nx.tensor([3, 4]),
+          Nx.tensor([5, 6]),
+          Nx.tensor([7, 8]),
+          Nx.tensor([9, 10])
+        ])
+
+      assert Nx.Serving.batched_run(config.test, batch) ==
+               Nx.tensor([
+                 [2, 4],
+                 [6, 8],
+                 [10, 12],
+                 [14, 16],
+                 [18, 20]
+               ])
+
+      assert_received {:init, :process, [[batch_keys: [:default]]]}
+      assert_received {:batch, 0, batch1}
+      assert_received {:batch, 0, batch2}
+      assert_received :execute
+      assert batch1.size == 3
+      assert batch1.pad == 0
+      assert batch2.size == 2
+      assert batch2.pad == 0
     end
 
     test "2+2=4 with pre and post", config do
@@ -201,7 +399,7 @@ defmodule Nx.ServingTest do
         |> Nx.Serving.client_preprocessing(fn entry ->
           {Nx.Batch.stack(entry), :preprocessing!}
         end)
-        |> Nx.Serving.client_postprocessing(fn result, metadata, info ->
+        |> Nx.Serving.client_postprocessing(fn {result, metadata}, info ->
           {result, metadata, info}
         end)
 
@@ -226,7 +424,7 @@ defmodule Nx.ServingTest do
       Task.await(t1, :infinity)
       Task.await(t2, :infinity)
 
-      assert_received {:init, :process, [[]]}
+      assert_received {:init, :process, [[batch_keys: [:default]]]}
       assert_received {:batch, 0, batch}
       assert_received :execute
       assert batch.size == 4
@@ -273,19 +471,6 @@ defmodule Nx.ServingTest do
       Task.await(t1, :infinity)
       Task.await(t2, :infinity)
       Task.await(t3, :infinity)
-    end
-
-    test "instrumenting with telemetry", config do
-      ref = :telemetry_test.attach_event_handlers(self(), [[:nx, :serving, :execute, :stop]])
-
-      simple_supervised!(config)
-
-      batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
-
-      Nx.Serving.batched_run(config.test, batch)
-
-      assert_receive {[:nx, :serving, :execute, :stop], ^ref, _measure, meta}
-      assert %{metadata: :metadata, module: Nx.ServingTest.Simple} = meta
     end
 
     defp execute_sync_supervised!(config, opts \\ []) do
@@ -374,8 +559,7 @@ defmodule Nx.ServingTest do
 
     @tag :capture_log
     test "2=>shutdown=>1 (stacked)", config do
-      serving_pid =
-        execute_sync_supervised!(config, batch_timeout: 100, batch_size: 2, batch_timeout: 30_000)
+      serving_pid = execute_sync_supervised!(config, batch_timeout: 100, batch_size: 2)
 
       {_pid, ref1} =
         spawn_monitor(fn ->
@@ -438,6 +622,51 @@ defmodule Nx.ServingTest do
       Task.await(task3)
     end
 
+    test "batch keys", config do
+      serving =
+        Nx.Serving.new(fn
+          :double, opts -> Nx.Defn.compile(&Nx.multiply(&1, 2), [Nx.template({3}, :s64)], opts)
+          :half, opts -> Nx.Defn.compile(&Nx.divide(&1, 2), [Nx.template({3}, :s64)], opts)
+        end)
+
+      simple_supervised!(config,
+        serving: serving,
+        batch_timeout: 10_000,
+        batch_size: 3,
+        batch_keys: [:double, :half]
+      )
+
+      assert_raise ArgumentError,
+                   "unknown batch key: :default (expected one of [:double, :half])",
+                   fn ->
+                     Nx.Serving.batched_run(config.test, Nx.Batch.concatenate([Nx.iota({3})]))
+                   end
+
+      t1 =
+        Task.async(fn ->
+          batch = Nx.Batch.concatenate([Nx.iota({2})]) |> Nx.Batch.key(:double)
+          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([0, 2])
+        end)
+
+      t2 =
+        Task.async(fn ->
+          batch = Nx.Batch.concatenate([Nx.iota({3})]) |> Nx.Batch.key(:half)
+          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([0.0, 0.5, 1.0])
+        end)
+
+      Task.await(t2, :infinity)
+      refute Task.yield(t1, 0)
+
+      t3 =
+        Task.async(fn ->
+          batch = Nx.Batch.concatenate([Nx.iota({1})]) |> Nx.Batch.key(:double)
+          assert Nx.Serving.batched_run(config.test, batch) == Nx.tensor([0])
+        end)
+
+      Task.await(t1, :infinity)
+      Task.await(t3, :infinity)
+    end
+
     test "with padding", config do
       serving =
         Nx.Serving.new(fn opts ->
@@ -470,6 +699,19 @@ defmodule Nx.ServingTest do
                Nx.tensor([[22, 24], [26, 28], [30, 32], [34, 36]])
     end
 
+    test "instrumenting with telemetry", config do
+      ref = :telemetry_test.attach_event_handlers(self(), [[:nx, :serving, :execute, :stop]])
+
+      simple_supervised!(config)
+
+      batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
+
+      Nx.Serving.batched_run(config.test, batch)
+
+      assert_receive {[:nx, :serving, :execute, :stop], ^ref, _measure, meta}
+      assert %{metadata: :metadata, module: Nx.ServingTest.Simple} = meta
+    end
+
     test "conflict on batch size" do
       assert_raise ArgumentError,
                    ~r":batch_size has been set when starting an Nx.Serving process \(15\) but a conflicting value was already set on the Nx.Serving struct \(30\)",
@@ -488,15 +730,288 @@ defmodule Nx.ServingTest do
       assert_raise ArgumentError, "cannot run with empty Nx.Batch", fn ->
         Nx.Serving.batched_run(config.test, Nx.Batch.new())
       end
+    end
+  end
+
+  describe "batched_run + streaming" do
+    test "2+2=4 with pre and post", config do
+      serving =
+        Nx.Serving.new(Simple, self())
+        |> Nx.Serving.process_options(batch_size: 4)
+        |> Nx.Serving.client_preprocessing(fn entry ->
+          {Nx.Batch.stack(entry), :preprocessing!}
+        end)
+        |> Nx.Serving.client_postprocessing(fn stream, info ->
+          {stream, info}
+        end)
+        |> Nx.Serving.streaming()
+
+      simple_supervised!(config, serving: serving, batch_timeout: 10_000)
+
+      t1 =
+        Task.async(fn ->
+          batch = [Nx.tensor([11, 12]), Nx.tensor([13, 14])]
+
+          {stream, :preprocessing!} = Nx.Serving.batched_run(config.test, batch)
+          assert Enum.to_list(stream) == [{:batch, Nx.tensor([[22, 24], [26, 28]]), :metadata}]
+        end)
+
+      t2 =
+        Task.async(fn ->
+          batch = [Nx.tensor([21, 22]), Nx.tensor([23, 24])]
+
+          {stream, :preprocessing!} = Nx.Serving.batched_run(config.test, batch)
+          assert Enum.to_list(stream) == [{:batch, Nx.tensor([[42, 44], [46, 48]]), :metadata}]
+        end)
+
+      Task.await(t1, :infinity)
+      Task.await(t2, :infinity)
+
+      assert_received {:init, :process, [[batch_keys: [:default]]]}
+      assert_received {:batch, 0, batch}
+      assert_received :execute
+      assert batch.size == 4
+      assert batch.pad == 0
+    end
+
+    test "5=3+3 (oversized)", config do
+      serving =
+        Nx.Serving.new(Simple, self())
+        |> Nx.Serving.process_options(batch_size: 3)
+        |> Nx.Serving.streaming()
+
+      simple_supervised!(config, serving: serving, batch_timeout: 100)
+
+      batch =
+        Nx.Batch.stack([
+          Nx.tensor([1, 2]),
+          Nx.tensor([3, 4]),
+          Nx.tensor([5, 6]),
+          Nx.tensor([7, 8]),
+          Nx.tensor([9, 10]),
+          Nx.tensor([11, 12])
+        ])
+
+      assert Nx.Serving.batched_run(config.test, batch) |> Enum.to_list() == [
+               {:batch, Nx.tensor([[2, 4], [6, 8], [10, 12]]), :metadata},
+               {:batch, Nx.tensor([[14, 16], [18, 20], [22, 24]]), :metadata}
+             ]
+
+      assert_received {:init, :process, [[batch_keys: [:default]]]}
+      assert_received {:batch, 0, batch1}
+      assert_received {:batch, 0, batch2}
+      assert_received :execute
+      assert batch1.size == 3
+      assert batch1.pad == 0
+      assert batch2.size == 3
+      assert batch2.pad == 0
+    end
+
+    test "5=3+2(+pad) (oversized)", config do
+      serving =
+        Nx.Serving.new(Simple, self())
+        |> Nx.Serving.process_options(batch_size: 3)
+        |> Nx.Serving.streaming()
+
+      simple_supervised!(config, serving: serving, batch_timeout: 100)
+
+      batch =
+        Nx.Batch.stack([
+          Nx.tensor([1, 2]),
+          Nx.tensor([3, 4]),
+          Nx.tensor([5, 6]),
+          Nx.tensor([7, 8]),
+          Nx.tensor([9, 10])
+        ])
+
+      assert Nx.Serving.batched_run(config.test, batch) |> Enum.to_list() == [
+               {:batch, Nx.tensor([[2, 4], [6, 8], [10, 12]]), :metadata},
+               {:batch, Nx.tensor([[14, 16], [18, 20]]), :metadata}
+             ]
+
+      assert_received {:init, :process, [[batch_keys: [:default]]]}
+      assert_received {:batch, 0, batch1}
+      assert_received {:batch, 0, batch2}
+      assert_received :execute
+      assert batch1.size == 3
+      assert batch1.pad == 0
+      assert batch2.size == 2
+      assert batch2.pad == 0
+    end
+
+    test "3+3=4+2(+pad) with pre and post", config do
+      serving =
+        Nx.Serving.new(Simple, self())
+        |> Nx.Serving.process_options(batch_size: 4)
+        |> Nx.Serving.client_preprocessing(fn entry ->
+          {Nx.Batch.stack(entry), :preprocessing!}
+        end)
+        |> Nx.Serving.client_postprocessing(fn stream, info ->
+          {stream, info}
+        end)
+        |> Nx.Serving.streaming()
+
+      simple_supervised!(config, serving: serving, batch_timeout: 100)
+
+      t1 =
+        Task.async(fn ->
+          batch = [Nx.tensor([11, 12]), Nx.tensor([13, 14]), Nx.tensor([15, 16])]
+
+          {stream, :preprocessing!} = Nx.Serving.batched_run(config.test, batch)
+          Enum.to_list(stream)
+        end)
+
+      t2 =
+        Task.async(fn ->
+          batch = [Nx.tensor([21, 22]), Nx.tensor([23, 24]), Nx.tensor([25, 26])]
+          {stream, :preprocessing!} = Nx.Serving.batched_run(config.test, batch)
+          Enum.to_list(stream)
+        end)
+
+      r1 = Task.await(t1, :infinity)
+      r2 = Task.await(t2, :infinity)
+
+      # Two possible schedules
+      case {r1, r2} do
+        {[batch1], [batch2, batch3]} ->
+          assert batch1 == {:batch, Nx.tensor([[22, 24], [26, 28], [30, 32]]), :metadata}
+          assert batch2 == {:batch, Nx.tensor([[42, 44]]), :metadata}
+          assert batch3 == {:batch, Nx.tensor([[46, 48], [50, 52]]), :metadata}
+
+        {[batch2, batch3], [batch1]} ->
+          assert batch1 == {:batch, Nx.tensor([[42, 44], [46, 48], [50, 52]]), :metadata}
+          assert batch2 == {:batch, Nx.tensor([[22, 24]]), :metadata}
+          assert batch3 == {:batch, Nx.tensor([[26, 28], [30, 32]]), :metadata}
+      end
+
+      assert_received {:init, :process, [[batch_keys: [:default]]]}
+      assert_received {:batch, 0, batch1}
+      assert_received {:batch, 0, batch2}
+      assert_received :execute
+      assert batch1.size == 4
+      assert batch1.pad == 0
+      assert batch2.size == 2
+      assert batch2.pad == 0
+    end
+
+    @tag :capture_log
+    test "1=>crash", config do
+      serving = Nx.Serving.new(ExecuteSync, self()) |> Nx.Serving.streaming()
+      simple_supervised!(config, serving: serving, shutdown: 1000)
+
+      {_pid, ref} =
+        spawn_monitor(fn ->
+          batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
+          Enum.to_list(Nx.Serving.batched_run(config.test, batch))
+        end)
+
+      assert_receive {:execute, 0, executor}
+      send(executor, :crash)
+
+      assert_receive {:DOWN, ^ref, _, _, {{%RuntimeError{}, _}, {Nx.Serving, :streaming, []}}}
+    end
+
+    test "2+2=2(+pad)+2(+pad) and hooks", config do
+      serving =
+        Nx.Serving.jit(&add_five_round_about/1)
+        |> Nx.Serving.streaming(hooks: [:double, :plus_ten])
+
+      simple_supervised!(config, serving: serving, batch_timeout: 100, batch_size: 3)
+
+      t1 =
+        Task.async(fn ->
+          batch = Nx.Batch.stack([Nx.tensor([11, 12]), Nx.tensor([13, 14])])
+
+          assert Nx.Serving.batched_run(config.test, batch) |> Enum.to_list() == [
+                   {:double, Nx.tensor([[22, 24], [26, 28]])},
+                   {:plus_ten, Nx.tensor([[32, 34], [36, 38]])},
+                   {:batch, Nx.tensor([[16.0, 17.0], [18.0, 19.0]]), :server_info}
+                 ]
+        end)
+
+      t2 =
+        Task.async(fn ->
+          batch = Nx.Batch.stack([Nx.tensor([21, 22]), Nx.tensor([23, 24])])
+
+          assert Nx.Serving.batched_run(config.test, batch) |> Enum.to_list() == [
+                   {:double, Nx.tensor([[42, 44], [46, 48]])},
+                   {:plus_ten, Nx.tensor([[52, 54], [56, 58]])},
+                   {:batch, Nx.tensor([[26.0, 27.0], [28.0, 29.0]]), :server_info}
+                 ]
+        end)
+
+      Task.await(t1, :infinity)
+      Task.await(t2, :infinity)
+    end
+
+    test "2+2=4(+pad) and hooks", config do
+      serving =
+        Nx.Serving.jit(&add_five_round_about/1)
+        |> Nx.Serving.streaming(hooks: [:double, :plus_ten])
+
+      simple_supervised!(config, serving: serving, batch_timeout: 100, batch_size: 5)
+
+      t1 =
+        Task.async(fn ->
+          batch = Nx.Batch.stack([Nx.tensor([11, 12]), Nx.tensor([13, 14])])
+
+          assert Nx.Serving.batched_run(config.test, batch) |> Enum.to_list() == [
+                   {:double, Nx.tensor([[22, 24], [26, 28]])},
+                   {:plus_ten, Nx.tensor([[32, 34], [36, 38]])},
+                   {:batch, Nx.tensor([[16.0, 17.0], [18.0, 19.0]]), :server_info}
+                 ]
+        end)
+
+      t2 =
+        Task.async(fn ->
+          batch = Nx.Batch.stack([Nx.tensor([21, 22]), Nx.tensor([23, 24])])
+
+          assert Nx.Serving.batched_run(config.test, batch) |> Enum.to_list() == [
+                   {:double, Nx.tensor([[42, 44], [46, 48]])},
+                   {:plus_ten, Nx.tensor([[52, 54], [56, 58]])},
+                   {:batch, Nx.tensor([[26.0, 27.0], [28.0, 29.0]]), :server_info}
+                 ]
+        end)
+
+      Task.await(t1, :infinity)
+      Task.await(t2, :infinity)
+    end
+
+    test "errors on batch size", config do
+      serving =
+        Nx.Serving.jit(&add_five_round_about/1)
+        |> Nx.Serving.streaming(hooks: [:double, :plus_ten])
+
+      simple_supervised!(config, serving: serving, batch_size: 2)
 
       assert_raise ArgumentError,
-                   "batch size (3) cannot exceed Nx.Serving server batch size of 2",
+                   "batch size (3) cannot exceed Nx.Serving server batch size of 2 when streaming hooks",
                    fn ->
                      Nx.Serving.batched_run(
                        config.test,
                        Nx.Batch.concatenate([Nx.tensor([1, 2, 3])])
                      )
                    end
+    end
+
+    @tag :capture_log
+    test "raises when consumed in a different process", config do
+      serving =
+        Nx.Serving.new(fn opts -> Nx.Defn.jit(&Nx.multiply(&1, 2), opts) end)
+        |> Nx.Serving.streaming()
+
+      simple_supervised!(config, serving: serving)
+
+      batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
+
+      stream = Nx.Serving.batched_run(config.test, batch)
+
+      {_pid, ref} = spawn_monitor(fn -> Enum.to_list(stream) end)
+
+      assert_receive {:DOWN, ^ref, _, _, {%RuntimeError{message: message}, _}}
+
+      assert message ==
+               "the stream returned from Nx.Serving.batched_run/2 must be consumed in the same process"
     end
   end
 
@@ -537,6 +1052,11 @@ defmodule Nx.ServingTest do
   end
 
   describe "distributed" do
+    setup do
+      :pg.monitor_scope(Nx.Serving.PG)
+      :ok
+    end
+
     test "spawns distributed tasks locally", config do
       parent = self()
 
@@ -609,7 +1129,7 @@ defmodule Nx.ServingTest do
       ]
 
       Node.spawn_link(:"secondary@127.0.0.1", DistributedServings, :multiply, [parent, opts])
-      assert_receive :spawned
+      assert_receive {_, :join, Nx.Serving, _}
 
       batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
 
@@ -634,6 +1154,64 @@ defmodule Nx.ServingTest do
     end
 
     @tag :distributed
+    @tag :capture_log
+    test "spawns distributed tasks over the network with streaming", config do
+      parent = self()
+
+      preprocessing = fn input ->
+        send(parent, {:pre, node(), input})
+        input
+      end
+
+      opts = [
+        name: config.test,
+        batch_size: 2,
+        shutdown: 1000
+      ]
+
+      args = [parent, opts]
+      Node.spawn_link(:"secondary@127.0.0.1", DistributedServings, :add_five_round_about, args)
+      assert_receive {_, :join, Nx.Serving, _}
+
+      batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
+
+      # local call
+      assert {:noproc, _} =
+               catch_exit(Nx.Serving.batched_run({:local, config.test}, batch, preprocessing))
+
+      # distributed call
+      assert Nx.Serving.batched_run({:distributed, config.test}, batch, preprocessing)
+             |> Enum.to_list() == [
+               {{:double, Nx.tensor([2, 4])}, :"secondary@127.0.0.1"},
+               {{:plus_ten, Nx.tensor([12, 14])}, :"secondary@127.0.0.1"},
+               {{:batch, Nx.tensor([6.0, 7.0]), :server_info}, :"secondary@127.0.0.1"}
+             ]
+
+      assert_receive {:pre, node, %Nx.Batch{size: 2}} when node == node()
+
+      # lookup call
+      batch = Nx.Batch.concatenate([Nx.tensor([3])])
+
+      assert Nx.Serving.batched_run(config.test, batch, preprocessing) |> Enum.to_list() == [
+               {{:double, Nx.tensor([6])}, :"secondary@127.0.0.1"},
+               {{:plus_ten, Nx.tensor([16])}, :"secondary@127.0.0.1"},
+               {{:batch, Nx.tensor([8.0]), :server_info}, :"secondary@127.0.0.1"}
+             ]
+
+      assert_receive {:pre, node, %Nx.Batch{size: 1}} when node == node()
+
+      # raises when consumed in a different process
+      stream = Nx.Serving.batched_run(config.test, batch, preprocessing)
+
+      {_pid, ref} = spawn_monitor(fn -> Enum.to_list(stream) end)
+
+      assert_receive {:DOWN, ^ref, _, _, {%RuntimeError{message: message}, _}}
+
+      assert message ==
+               "the stream returned from Nx.Serving.batched_run/2 must be consumed in the same process"
+    end
+
+    @tag :distributed
     test "spawns distributed tasks over the network with hidden nodes", config do
       parent = self()
 
@@ -649,9 +1227,12 @@ defmodule Nx.ServingTest do
       ]
 
       Node.spawn_link(:"tertiary@127.0.0.1", DistributedServings, :multiply, [parent, opts])
-      assert_receive :spawned
+      assert_receive {_, :join, Nx.Serving, _}
 
       batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
+
+      # Make sure stray messages do not crash processing
+      send(self(), {:DOWN, make_ref(), :process, self(), :normal})
 
       assert Nx.Serving.batched_run({:distributed, config.test}, batch, preprocessing) ==
                Nx.tensor([2, 4])

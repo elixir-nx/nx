@@ -41,30 +41,37 @@ defmodule Nx.BatchTest do
         [Nx.tensor([1, 2]), Nx.tensor([3, 4, 5])]
         |> Nx.Batch.concatenate()
         |> Nx.Batch.pad(3)
+        |> Nx.Batch.key(:another)
 
       {left, right} = Nx.Batch.split(batch, 5)
       assert left.template == right.template
       assert left.size == 5
       assert left.pad == 0
+      assert left.key == :another
       assert realize(left) == Nx.tensor([1, 2, 3, 4, 5])
       assert right.size == 0
       assert right.pad == 3
+      assert right.key == :another
 
       {left, right} = Nx.Batch.split(batch, 6)
       assert left.template == right.template
       assert left.size == 5
       assert left.pad == 1
+      assert left.key == :another
       assert realize(left) == Nx.tensor([1, 2, 3, 4, 5, 0])
       assert right.size == 0
       assert right.pad == 2
+      assert right.key == :another
 
       {left, right} = Nx.Batch.split(batch, 10)
       assert left.template == right.template
       assert left.size == 5
       assert left.pad == 3
+      assert left.key == :another
       assert realize(left) == Nx.tensor([1, 2, 3, 4, 5, 0, 0, 0])
       assert right.size == 0
       assert right.pad == 0
+      assert right.key == :another
     end
 
     test "when n < size" do

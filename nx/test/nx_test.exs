@@ -1988,6 +1988,11 @@ defmodule NxTest do
         end
       )
     end
+
+    test "works with infinities" do
+      t = Nx.tensor([1.0, 2.0, 3.0])
+      assert t == Nx.clip(t, Nx.Constants.neg_infinity(), Nx.Constants.infinity())
+    end
   end
 
   describe "concatenate/2" do
@@ -2447,6 +2452,27 @@ defmodule NxTest do
                  Nx.reshape(t, {num_elements})
                )
     end
+
+    test "works with all integer types in indices" do
+      for kind <- [:u, :s], width <- [8, 16, 32, 64] do
+        indices = Nx.tensor([[0, 0], [0, 1], [1, 0], [1, 1]], type: {kind, width})
+
+        assert Nx.add(Nx.iota({2, 2}), 1) ==
+                 Nx.indexed_add(Nx.broadcast(0, {2, 2}), indices, Nx.tensor([1, 2, 3, 4]))
+      end
+    end
+
+    test "fails for all non-integer types in indices" do
+      for type <- [f: 16, bf: 16, f: 32, f: 64, c: 64, c: 128] do
+        indices = Nx.tensor([[0, 0], [0, 1], [1, 0], [1, 1]], type: type)
+
+        assert_raise ArgumentError,
+                     "indices must be an integer tensor, got type: #{inspect(type)}",
+                     fn ->
+                       Nx.indexed_add(Nx.broadcast(0, {2, 2}), indices, Nx.tensor([1, 2, 3, 4]))
+                     end
+      end
+    end
   end
 
   describe "serialize/deserialize" do
@@ -2511,6 +2537,9 @@ defmodule NxTest do
 
       assert Nx.load_numpy!(File.read!("test/fixtures/numpy/2d_float32.npy")) ==
                Nx.tensor([[1, 2], [3, 4], [5, 6]], type: {:f, 32})
+
+      assert Nx.load_numpy!(File.read!("test/fixtures/numpy/1d_uint8.npy")) ==
+               Nx.tensor([1, 2, 3], type: {:u, 8})
     end
   end
 
@@ -2999,6 +3028,193 @@ defmodule NxTest do
       x_ifft = Nx.ifft(x_fft)
       assert_all_close(x, Nx.real(x_ifft), atol: 1.0e-8)
       assert_all_close(zeros, Nx.imag(x_ifft), atol: 1.0e-8)
+    end
+  end
+
+  describe "split/2" do
+    test "split is less than zero" do
+      tensor = Nx.iota({10, 3}, names: [:x, :y])
+
+      assert Nx.split(tensor, -1, axis: 1) == {tensor[[.., 0..1]], tensor[[.., 2..2]]}
+    end
+
+    test "split with negative float" do
+      tensor = Nx.iota({10, 2}, names: [:x, :y])
+
+      assert_raise ArgumentError,
+                   "split must be a float such that 0 < split and ceil(split * axis_size) < 1",
+                   fn ->
+                     Nx.split(tensor, -0.5)
+                   end
+    end
+
+    test "split is a float out of bounds" do
+      tensor = Nx.iota({10, 2}, names: [:x, :y])
+
+      assert_raise ArgumentError,
+                   "split must be a float such that 0 < split and ceil(split * axis_size) < 1",
+                   fn ->
+                     Nx.split(tensor, 1.0)
+                   end
+    end
+
+    test "split is greater than tensor length" do
+      tensor = Nx.iota({10, 2}, names: [:x, :y])
+
+      assert_raise ArgumentError,
+                   "split must be an integer greater than zero and less than the length of the given axis",
+                   fn ->
+                     Nx.split(tensor, 3, axis: 1)
+                   end
+    end
+
+    test "axis is out of tensor bounds" do
+      tensor = Nx.iota({10, 2}, names: [:x, :y])
+
+      assert_raise ArgumentError,
+                   "given axis (2) invalid for shape with rank 2",
+                   fn ->
+                     Nx.split(tensor, 2, axis: 2)
+                   end
+    end
+
+    test "named axis is invalid" do
+      tensor = Nx.iota({10, 2}, names: [:x, :y])
+
+      assert_raise ArgumentError,
+                   "name :z not found in tensor with names [:x, :y]",
+                   fn ->
+                     Nx.split(tensor, 2, axis: :z)
+                   end
+    end
+
+    test "split into 50% for training and 50% for testing with floats on columns" do
+      tensor = Nx.iota({4, 4}, names: [:rows, :columns])
+      {train, test} = Nx.split(tensor, 0.5, axis: :columns)
+
+      assert {4, 2} == Nx.shape(train)
+      assert {4, 2} == Nx.shape(test)
+    end
+
+    test "split into 70% for training and 30% for testing along a named :axis" do
+      tensor = Nx.iota({100, 6}, names: [:rows, :columns])
+      {train, test} = Nx.split(tensor, 70, axis: :rows)
+
+      assert {70, 6} == Nx.shape(train)
+      assert {30, 6} == Nx.shape(test)
+    end
+
+    test "split into 90% for training and 10% for testing along a named :axis" do
+      tensor = Nx.iota({2, 100}, names: [:rows, :columns])
+      {train, test} = Nx.split(tensor, 90, axis: :columns)
+
+      assert {2, 90} == Nx.shape(train)
+      assert {2, 10} == Nx.shape(test)
+    end
+
+    test "split into 50% for training and 50% for testing along the :axis 1" do
+      tensor = Nx.iota({100, 10})
+      {train, test} = Nx.split(tensor, 5, axis: 1)
+
+      assert {100, 5} == Nx.shape(train)
+      assert {100, 5} == Nx.shape(test)
+    end
+
+    test "split into 61% for training and 39% for testing" do
+      tensor = Nx.iota({100, 10})
+      {train, test} = Nx.split(tensor, 61)
+
+      assert {61, 10} == Nx.shape(train)
+      assert {39, 10} == Nx.shape(test)
+    end
+
+    test "split into 60% for training and 40% for testing with unbalanced data" do
+      tensor = Nx.iota({99, 4})
+
+      {train, test} = Nx.split(tensor, 60)
+
+      assert {60, 4} == Nx.shape(train)
+      assert {39, 4} == Nx.shape(test)
+    end
+  end
+
+  describe "logsumexp" do
+    test "removes the right axes" do
+      tensor = Nx.tensor([[[11.0], [12.0], [13.0]]])
+
+      assert Nx.logsumexp(tensor, axes: [0]) ==
+               Nx.tensor([
+                 [11.0],
+                 [12.0],
+                 [13.0]
+               ])
+
+      assert Nx.logsumexp(tensor, axes: [2]) ==
+               Nx.tensor([
+                 [11.0, 12.0, 13.0]
+               ])
+    end
+
+    test "works with infinities" do
+      tensor =
+        Nx.tensor([
+          [:infinity, :infinity, :infinity],
+          [:infinity, :infinity, :neg_infinity],
+          [:infinity, :infinity, 0.0],
+          [:infinity, :neg_infinity, :infinity],
+          [:infinity, :neg_infinity, :neg_infinity],
+          [:infinity, :neg_infinity, 0.0],
+          [:infinity, 0.0, :infinity],
+          [:infinity, 0.0, :neg_infinity],
+          [:infinity, 0.0, 0.0],
+          [:neg_infinity, :infinity, :infinity],
+          [:neg_infinity, :infinity, :neg_infinity],
+          [:neg_infinity, :infinity, 0.0],
+          [:neg_infinity, :neg_infinity, :infinity],
+          [:neg_infinity, :neg_infinity, :neg_infinity],
+          [:neg_infinity, :neg_infinity, 0.0],
+          [:neg_infinity, 0.0, :infinity],
+          [:neg_infinity, 0.0, :neg_infinity],
+          [:neg_infinity, 0.0, 0.0],
+          [0.0, :infinity, :infinity],
+          [0.0, :infinity, :neg_infinity],
+          [0.0, :infinity, 0.0],
+          [0.0, :neg_infinity, :infinity],
+          [0.0, :neg_infinity, :neg_infinity],
+          [0.0, :neg_infinity, 0.0],
+          [0.0, 0.0, :infinity],
+          [0.0, 0.0, :neg_infinity]
+        ])
+
+      assert Nx.logsumexp(tensor, axes: [1]) ==
+               Nx.tensor([
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :neg_infinity,
+                 0.0,
+                 :infinity,
+                 0.0,
+                 0.6931471824645996,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 :infinity,
+                 0.0,
+                 0.6931471824645996,
+                 :infinity,
+                 0.6931471824645996
+               ])
     end
   end
 end
