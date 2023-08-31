@@ -1,7 +1,7 @@
 use rustler::{Encoder, Env, Term};
 use thiserror::Error;
 
-// Defines the atoms for each value of ExplorerError.
+// Defines the atoms for each value of CandlexError.
 rustler::atoms! {
     candle,
 }
