@@ -429,6 +429,15 @@ defmodule CandlexTest do
       |> Nx.log()
       |> assert_equal(t([0.0, 0.6931471824645996, 1.0986123085021973]))
     end
+
+    test "tanh" do
+      Nx.tanh(1.0)
+      |> assert_equal(t(0.7615941762924194))
+
+      t([1.0, 2, 3])
+      |> Nx.tanh()
+      |> assert_equal(t([0.7615941762924194, 0.9640275835990906, 0.9950547814369202]))
+    end
   end
 
   defp t(values, opts \\ []) do
