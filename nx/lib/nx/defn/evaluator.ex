@@ -20,7 +20,6 @@ defmodule Nx.Defn.Evaluator do
   alias Nx.Defn.{Composite, Expr, Tree}
 
   @creation_ops [:eye, :iota, :from_binary]
-  @random_ops [:random_uniform, :random_normal]
   @list_ops [:concatenate]
   @indices_ops [:slice, :put_slice]
 
@@ -411,10 +410,6 @@ defmodule Nx.Defn.Evaluator do
         op in @creation_ops ->
           {backend, backend_options} = Nx.default_backend()
           {backend, [ans | args] ++ [backend_options]}
-
-        op in @random_ops ->
-          {_backend, backend_options} = Nx.default_backend()
-          {Nx.Shared.list_impl!(args), [ans | args] ++ [backend_options]}
 
         op in @list_ops ->
           {Nx.Shared.list_impl!(hd(args)), [ans | args]}

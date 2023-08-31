@@ -45,8 +45,7 @@ defmodule Nx do
   ## Creating tensors
 
   The main APIs for creating tensors are `tensor/2`, `from_binary/2`,
-  `iota/2`, `eye/2`, `random_uniform/2`, `random_normal/2`, and
-  `broadcast/3`.
+  `iota/2`, `eye/2`, and `broadcast/3`.
 
   The tensor types can be one of:
 
@@ -951,101 +950,6 @@ defmodule Nx do
     tensor_or_container
     |> Nx.LazyContainer.traverse(:ok, fn template, _fun, :ok -> {template, :ok} end)
     |> then(fn {template, :ok} -> template end)
-  end
-
-  @doc false
-  @deprecated "Use Nx.Random.uniform/2 instead"
-  def random_uniform(tensor_or_shape, opts \\ []) do
-    random_uniform(tensor_or_shape, 0.0, 1.0, opts)
-  end
-
-  @doc false
-  @deprecated "Use Nx.Random.uniform/2 instead"
-  def random_uniform(tensor_or_shape, min, max, opts \\ []) do
-    opts = keyword!(opts, [:type, :names, :backend])
-    %T{type: min_type, shape: min_shape} = min = to_tensor(min)
-    %T{type: max_type, shape: max_shape} = max = to_tensor(max)
-
-    Nx.Shared.raise_vectorization_not_supported(min, __ENV__.function)
-    Nx.Shared.raise_vectorization_not_supported(max, __ENV__.function)
-
-    shape = shape(tensor_or_shape)
-    names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
-    range_type = Nx.Type.merge(min_type, max_type)
-    type = Nx.Type.normalize!(opts[:type] || range_type)
-
-    unless min_shape == {} and max_shape == {} do
-      raise ArgumentError,
-            "random_uniform/3 expects min and max to be scalars, got:" <>
-              " min shape: #{inspect(min_shape)} and max shape: #{inspect(max_shape)}"
-    end
-
-    unless Nx.Type.float?(type) or (Nx.Type.integer?(type) and Nx.Type.integer?(range_type)) do
-      raise ArgumentError,
-            "random_uniform/3 expects compatible types, got: #{inspect(type)}" <>
-              " with range #{inspect(range_type)}"
-    end
-
-    {backend, backend_options} = backend_from_options!(opts) || default_backend()
-    backend.random_uniform(%T{shape: shape, type: type, names: names}, min, max, backend_options)
-  end
-
-  @doc false
-  @deprecated "Use Nx.Random instead"
-  def random_normal(tensor_or_shape, opts \\ []) do
-    random_normal(tensor_or_shape, 0.0, 1.0, opts)
-  end
-
-  @doc false
-  @deprecated "Use Nx.Random instead"
-  def random_normal(tensor_or_shape, mu, sigma, opts \\ []) do
-    opts = keyword!(opts, [:type, :names, :backend])
-    %T{type: mu_type, shape: mu_shape} = mu = to_tensor(mu)
-    %T{type: sigma_type, shape: sigma_shape} = sigma = to_tensor(sigma)
-
-    Nx.Shared.raise_vectorization_not_supported(mu, __ENV__.function)
-    Nx.Shared.raise_vectorization_not_supported(sigma, __ENV__.function)
-
-    shape = shape(tensor_or_shape)
-    names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
-    type = Nx.Type.normalize!(opts[:type] || {:f, 32})
-
-    unless mu_shape == {} and sigma_shape == {} do
-      raise ArgumentError,
-            "random_normal/3 expects mu and sigma to be scalars" <>
-              " got: mu shape: #{inspect(mu_shape)} and sigma shape: #{inspect(sigma_shape)}"
-    end
-
-    unless Nx.Type.float?(mu_type) and Nx.Type.float?(sigma_type) do
-      raise ArgumentError,
-            "random_normal/3 expects mu and sigma to be float types," <>
-              " got: mu type: #{inspect(mu_type)} and sigma type: #{inspect(sigma_type)}"
-    end
-
-    unless Nx.Type.float?(type) do
-      raise ArgumentError, "random_normal/3 expects float type, got: #{inspect(type)}"
-    end
-
-    {backend, backend_options} = backend_from_options!(opts) || default_backend()
-    backend.random_normal(%T{shape: shape, type: type, names: names}, mu, sigma, backend_options)
-  end
-
-  @doc false
-  @deprecated "Use Nx.Random.shuffle/2 instead"
-  def shuffle(tensor, opts \\ []) do
-    opts = keyword!(opts, [:axis])
-    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
-
-    if axis = opts[:axis] do
-      axis = Nx.Shape.normalize_axis(shape, axis, names)
-      size = Nx.axis_size(tensor, axis)
-      permutation = random_uniform({size}) |> Nx.argsort()
-      Nx.take(tensor, permutation, axis: axis)
-    else
-      flattened = Nx.flatten(tensor)
-      permutation = flattened |> random_uniform() |> Nx.argsort()
-      flattened |> Nx.take(permutation) |> Nx.reshape(tensor)
-    end
   end
 
   @doc """

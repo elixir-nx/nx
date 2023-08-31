@@ -115,8 +115,10 @@ defmodule EXLA.Defn.APITest do
     deftransformp(merge_transform(params, init_map), do: Map.merge(params, init_map))
 
     defn init() do
-      %{"x" => Nx.random_uniform({}), "y" => Nx.random_uniform({})}
+      %{"x" => rand(), "y" => rand()}
     end
+
+    deftransformp rand, do: :rand.uniform()
 
     test "considers map keys in cache keys" do
       assert_equal(merge(%{"x" => 10})["x"], Nx.tensor(10))

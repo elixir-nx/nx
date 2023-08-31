@@ -125,20 +125,6 @@ defmodule Torchx.ComplexTest do
         end
       end
     end
-
-    test "random_uniform" do
-      assert %Nx.Tensor{shape: {3, 3}, type: {:c, 64}} =
-               t = Nx.random_uniform({3, 3}, type: {:c, 64})
-
-      assert Enum.all?(Nx.to_flat_list(t), &is_struct(&1, Complex))
-    end
-
-    test "random_normal" do
-      assert %Nx.Tensor{shape: {3, 3}, type: {:c, 64}} =
-               t = Nx.random_normal({3, 3}, type: {:c, 64})
-
-      assert Enum.all?(Nx.to_flat_list(t), &is_struct(&1, Complex))
-    end
   end
 
   describe "binary operations" do

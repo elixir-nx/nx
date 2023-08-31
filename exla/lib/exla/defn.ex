@@ -630,26 +630,6 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp to_operator(:random_uniform, [min, max], %{type: type, shape: shape}, _state) do
-    if match?({int, size} when int in [:s, :u] and size < 32, type) do
-      raise ArgumentError,
-            "Nx.random_uniform/4 for EXLA requires signed and unsigned tensors to be " <>
-              "at least of size 32, got: #{elem(type, 1)}"
-    end
-
-    min = to_type(min, type)
-    max = to_type(max, type)
-    shape = EXLA.Shape.make_shape(type, shape)
-    EXLA.Op.rng_uniform(min, max, shape)
-  end
-
-  defp to_operator(:random_normal, [mu, sigma], %{type: type, shape: shape}, _state) do
-    mu = to_type(mu, type)
-    sigma = to_type(sigma, type)
-    shape = EXLA.Shape.make_shape(type, shape)
-    EXLA.Op.rng_normal(mu, sigma, shape)
-  end
-
   defp to_operator(:iota, [axis], %{type: type, shape: shape}, state) do
     shape = EXLA.Shape.make_shape(type, shape)
     EXLA.Lib.iota(state.builder, shape, axis)

@@ -798,18 +798,6 @@ defmodule Nx.Defn.Expr do
     expr(out, nil, :iota, [axis])
   end
 
-  @impl true
-  def random_uniform(out, min, max, _backend_options) do
-    {[min, max], context} = to_exprs([min, max])
-    expr(out, context, :random_uniform, [min, max])
-  end
-
-  @impl true
-  def random_normal(out, mu, sigma, _backend_options) do
-    {[mu, sigma], context} = to_exprs([mu, sigma])
-    expr(out, context, :random_normal, [mu, sigma])
-  end
-
   unary_ops =
     [:exp, :expm1, :log, :log1p, :sigmoid, :cos, :sin, :tan, :cosh, :sinh, :tanh] ++
       [:acosh, :asinh, :atanh, :sqrt, :rsqrt, :cbrt, :negate, :sign, :abs, :bitwise_not] ++

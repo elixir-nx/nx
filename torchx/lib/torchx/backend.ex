@@ -130,53 +130,6 @@ defmodule Torchx.Backend do
     Torchx.broadcast_to(aten, shape) |> to_nx(out)
   end
 
-  @impl true
-  def random_uniform(%T{type: {s, _} = type, shape: shape} = out, min, max, backend_options)
-      when s in [:u, :s] do
-    min = to_number(min)
-    max = to_number(max)
-
-    Torchx.randint(min, max, shape, to_torch_type(type), device_option(backend_options))
-    |> to_nx(out)
-  end
-
-  def random_uniform(%T{type: {:c, s}, shape: shape} = out, min, max, backend_options) do
-    rand_type = {:f, div(s, 2)}
-
-    real = random_uniform_float(min, max, shape, rand_type, backend_options)
-    imag = random_uniform_float(min, max, shape, rand_type, backend_options)
-
-    imag
-    |> Torchx.multiply(
-      Torchx.scalar_tensor(Complex.new(0, 1), :complex, device_option(backend_options))
-    )
-    |> Torchx.add(real)
-    |> to_nx(out)
-  end
-
-  def random_uniform(%T{type: {f, _} = type, shape: shape} = out, min, max, backend_options)
-      when f in [:f, :bf] do
-    min
-    |> random_uniform_float(max, shape, type, backend_options)
-    |> to_nx(out)
-  end
-
-  defp random_uniform_float(min, max, shape, type, backend_options) do
-    min = to_number(min)
-    max = to_number(max)
-
-    Torchx.rand(min, max, shape, to_torch_type(type), device_option(backend_options))
-  end
-
-  @impl true
-  def random_normal(%T{type: type, shape: shape} = out, mu, sigma, backend_options) do
-    mu = to_number(mu)
-    sigma = to_number(sigma)
-
-    Torchx.normal(mu, sigma, shape, to_torch_type(type), device_option(backend_options))
-    |> to_nx(out)
-  end
-
   ## Transfer
 
   @impl true
