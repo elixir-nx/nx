@@ -145,6 +145,9 @@ macro_rules! unary_nif {
             Ok(ExTensor::new(ex_tensor.$native_fn_name()?))
         }
     };
+    ($nif_name:ident) => {
+        unary_nif!($nif_name, $nif_name);
+    };
 }
 
 macro_rules! binary_nif {
@@ -157,6 +160,7 @@ macro_rules! binary_nif {
 }
 
 unary_nif!(negate, neg);
+unary_nif!(sin);
 
 binary_nif!(add, broadcast_add);
 binary_nif!(subtract, broadcast_sub);

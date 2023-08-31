@@ -393,6 +393,15 @@ defmodule CandlexTest do
       |> Nx.negate()
       |> assert_equal(t([-1.0, -2.0, 3.0]))
     end
+
+    test "sin" do
+      Nx.sin(1.0)
+      |> assert_equal(t(0.8414709568023682))
+
+      t([1.0, 2.0, 3.0])
+      |> Nx.sin()
+      |> assert_equal(t([0.8414709568023682, 0.9092974066734314, 0.14112000167369843]))
+    end
   end
 
   defp t(values, opts \\ []) do
