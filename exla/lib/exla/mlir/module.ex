@@ -5,17 +5,18 @@ defmodule EXLA.MLIR.Module do
 
   defstruct [:ref]
 
-  alias __MODULE__, as: Module
   alias EXLA.MLIR.Function
-  alias EXLA.MLIR.Type
-  alias EXLA.{Client, Executable}
+
+  alias EXLA.Client
+  alias EXLA.Executable
+  alias EXLA.Shape
 
   @doc """
   Creates a new MLIR module.
   """
   def new() do
     ref = EXLA.NIF.new_mlir_module() |> unwrap!()
-    %Module{ref: ref}
+    %__MODULE__{ref: ref}
   end
 
   @doc """
@@ -23,27 +24,19 @@ defmodule EXLA.MLIR.Module do
   to the given MLIR module.
   """
   def create_function(
-        %Module{ref: module_ref} = module,
+        %__MODULE__{ref: module_ref} = module,
         name,
-        arg_types,
-        %Type{
-          dims: ret_dims,
-          type: ret_type
-        } = return_type,
-        xla_ret_shape
+        arg_shapes,
+        %Shape{ref: return_shape_ref} = return_shape
       )
       when is_binary(name) do
-    nif_arg_types =
-      Enum.map(arg_types, fn %Type{dims: dims, type: type} ->
-        {dims, type}
-      end)
-
-    nif_ret_type = {ret_dims, ret_type}
+    arg_shape_refs =
+      Enum.map(arg_shapes, fn %Shape{ref: ref} -> ref end)
 
     ref =
-      EXLA.NIF.create_mlir_function(module_ref, name, nif_arg_types, nif_ret_type) |> unwrap!()
+      EXLA.NIF.create_mlir_function(module_ref, name, arg_shape_refs, return_shape_ref) |> unwrap!()
 
-    %Function{module: module, ref: ref, name: name, xla_return_shape: xla_ret_shape}
+    %Function{module: module, ref: ref, name: name, return_shape: return_shape}
   end
 
   @doc """
@@ -72,7 +65,7 @@ defmodule EXLA.MLIR.Module do
 
   """
   def compile(
-        module = %Module{},
+        module = %__MODULE__{},
         client = %Client{},
         argument_shapes,
         return_shape,
