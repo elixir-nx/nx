@@ -1,6 +1,10 @@
 defmodule EXLA.MLIR.ExecutableTest do
   use EXLA.Case, async: true
 
+  setup do
+    Nx.Defn.default_options(compiler: EXLA, compiler_mode: :mlir)
+  end
+
   test "mvp" do
     # TO-DO (mlir): this will probably be reorganized in the end
     # This test is being added as an MVP for MLIR compilation
@@ -9,15 +13,14 @@ defmodule EXLA.MLIR.ExecutableTest do
     t2 = Nx.broadcast(1.0, {2, 3, 1})
 
     result =
-      EXLA.jit_apply(
+      Nx.Defn.jit_apply(
         fn t1, t2 ->
           t1
           |> Nx.add(t2)
           |> then(&{Nx.add(t2, &1), Nx.subtract(t2, &1)})
           |> then(&elem(&1, 0))
         end,
-        [t1, t2],
-        compiler_mode: :mlir
+        [t1, t2]
       )
 
     # expected = {Nx.add(t2, t2), t1}
@@ -38,7 +41,7 @@ defmodule EXLA.MLIR.ExecutableTest do
         t2 = Nx.broadcast(Nx.tensor(2, type: :f32), {2, 3, 1})
 
         result_nx = Nx.Defn.jit_apply(function, [t1, t2], compiler: Nx.Defn.Evaluator)
-        result_mlir = Nx.Defn.jit_apply(function, [t1, t2], compiler: EXLA, compiler_mode: :mlir)
+        result_mlir = Nx.Defn.jit_apply(function, [t1, t2])
 
         assert_equal(result_nx, result_mlir)
       end
