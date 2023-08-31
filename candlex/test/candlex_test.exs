@@ -407,9 +407,9 @@ defmodule CandlexTest do
     tensor = t(value, opts)
 
     tensor
-    |> IO.inspect()
+    # |> IO.inspect()
     |> Nx.to_binary()
-    |> IO.inspect()
+    # |> IO.inspect()
 
     opts =
       [backend: Nx.BinaryBackend]
