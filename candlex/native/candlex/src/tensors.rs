@@ -165,6 +165,7 @@ unary_nif!(cos);
 unary_nif!(exp);
 unary_nif!(sin);
 unary_nif!(log);
+unary_nif!(sqrt);
 unary_nif!(tanh);
 
 binary_nif!(add, broadcast_add);

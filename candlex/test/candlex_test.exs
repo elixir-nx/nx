@@ -444,6 +444,15 @@ defmodule CandlexTest do
       |> Nx.abs()
       |> assert_equal(t([2, 1, 0, 1, 2]))
     end
+
+    test "sqrt" do
+      Nx.sqrt(1.0)
+      |> assert_equal(t(1.0))
+
+      t([1.0, 2, 3])
+      |> Nx.sqrt()
+      |> assert_equal(t([1.0, 1.4142135381698608, 1.7320507764816284]))
+    end
   end
 
   defp t(values, opts \\ []) do
