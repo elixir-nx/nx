@@ -15704,6 +15704,109 @@ defmodule Nx do
   end
 
   @doc """
+  A shortcut to `covariance/3` with either `opts` or `mean` as second argument.
+  """
+  @doc type: :aggregation
+  @spec covariance(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
+  def covariance(tensor, opts \\ [])
+
+  @spec covariance(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
+  def covariance(tensor, opts) when is_list(opts),
+    do: covariance(tensor, Nx.mean(tensor, axes: [-2]), opts)
+
+  @spec covariance(tensor :: Nx.Tensor.t(), mean :: Nx.Tensor.t()) :: Nx.Tensor.t()
+  def covariance(tensor, mean), do: covariance(tensor, mean, [])
+
+  @doc """
+  Computes the covariance matrix of the input tensor.
+
+  The covariance of two random variables X and Y is calculated as $Cov(X, Y) = \\frac{1}{N}\\sum_{i=0}^{N-1}{(X_i - \\overline{X}) * (Y_i - \\overline{Y})}$.
+
+  The tensor must be at least of rank 2, with shape `{n, d}`. Any additional
+  dimension will be treated as batch dimensions.
+
+  The column mean can be provided as the second argument and it must be
+  a tensor of shape `{..., d}`, where the batch shape is broadcastable with
+  that of the input tensor. If not provided, the mean is estimated using `Nx.mean/2`.
+
+  If the `:ddof` (delta degrees of freedom) option is given, the divisor `n - ddof`
+  is used for the sum of the products.
+
+  ## Examples
+
+    iex> Nx.covariance(Nx.tensor([[1, 2], [3, 4], [5, 6]]))
+    #Nx.Tensor<
+      f32[2][2]
+      [
+        [2.6666667461395264, 2.6666667461395264],
+        [2.6666667461395264, 2.6666667461395264]
+      ]
+    >
+
+    iex> Nx.covariance(Nx.tensor([[[1, 2], [3, 4], [5, 6]], [[7, 8], [9, 10], [11, 12]]]))
+    #Nx.Tensor<
+      f32[2][2][2]
+      [
+        [
+          [2.6666667461395264, 2.6666667461395264],
+          [2.6666667461395264, 2.6666667461395264]
+        ],
+        [
+          [2.6666667461395264, 2.6666667461395264],
+          [2.6666667461395264, 2.6666667461395264]
+        ]
+      ]
+    >
+
+    iex> Nx.covariance(Nx.tensor([[1, 2], [3, 4], [5, 6]]), ddof: 1)
+    #Nx.Tensor<
+      f32[2][2]
+      [
+        [4.0, 4.0],
+        [4.0, 4.0]
+      ]
+    >
+
+    iex> Nx.covariance(Nx.tensor([[1, 2], [3, 4], [5, 6]]), Nx.tensor([4, 3]))
+    #Nx.Tensor<
+      f32[2][2]
+      [
+        [3.6666667461395264, 1.6666666269302368],
+        [1.6666666269302368, 3.6666667461395264]
+      ]
+    >
+  """
+  @doc type: :aggregation
+  @spec covariance(tensor :: Nx.Tensor.t(), mean :: Nx.Tensor.t(), opts :: Keyword.t()) ::
+          Nx.Tensor.t()
+  def covariance(tensor, mean, opts) do
+    tensor = to_tensor(tensor)
+    mean = to_tensor(mean)
+    opts = keyword!(opts, ddof: 0)
+    tensor_rank = Nx.rank(tensor)
+
+    if tensor_rank < 2 do
+      raise ArgumentError, "expected input tensor of rank at least 2, got #{tensor_rank}"
+    end
+
+    if Nx.rank(mean) == 0 do
+      raise ArgumentError, "expected mean of rank at least 1, got 0"
+    end
+
+    ddof = opts[:ddof]
+
+    if not is_integer(ddof) or ddof < 0 do
+      raise ArgumentError, "expected ddof to be a non-negative integer, got #{ddof}"
+    end
+
+    tensor = tensor |> subtract(new_axis(mean, -2)) |> rename(nil)
+    conj = if Nx.Type.complex?(Nx.type(tensor)), do: Nx.conjugate(tensor), else: tensor
+    batch_axes = 0..(Nx.rank(tensor) - 3)//1 |> Enum.to_list()
+    total = Nx.axis_size(tensor, -2)
+    Nx.dot(conj, [-2], batch_axes, tensor, [-2], batch_axes) |> divide(total - ddof)
+  end
+
+  @doc """
   Calculates the DFT of the given tensor.
 
   ## Options
