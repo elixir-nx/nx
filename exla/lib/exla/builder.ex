@@ -47,11 +47,11 @@ defmodule EXLA.Builder do
 
   def build(%EXLA.MLIR.Value{} = val) do
     %EXLA.MLIR.Value{function: function, ref: root_ref} =
+      # TO-DO: do not hardcode fetching just the first item as the output
       EXLA.MLIR.Value.get_tuple_element(val, 0)
 
     %EXLA.MLIR.Function{ref: function_ref} = function
     :ok = EXLA.NIF.mlir_build(function_ref, root_ref)
-
     function
   end
 end
