@@ -204,32 +204,6 @@ defmodule EXLA do
 
   @behaviour Nx.Defn.Compiler
 
-  @doc false
-  @deprecated "Configure the Nx backend directly"
-  def set_as_nx_default(clients, opts \\ []) do
-    supported_platforms = EXLA.Client.get_supported_platforms()
-    all_clients = Application.fetch_env!(:exla, :clients)
-
-    chosen =
-      Enum.find(clients, fn client ->
-        client_config = all_clients[client]
-        client_platform = client_config[:platform] || :host
-        client_config && Map.has_key?(supported_platforms, client_platform)
-      end)
-
-    if chosen do
-      opts = Keyword.put(opts, :client, chosen)
-      Nx.global_default_backend({EXLA.Backend, opts})
-      chosen
-    end
-  end
-
-  @doc false
-  @deprecated "Configure the Nx backend directly"
-  def set_preferred_defn_options(clients, opts \\ []) do
-    set_as_nx_default(clients, opts)
-  end
-
   @doc """
   A shortcut for `Nx.Defn.jit/2` with the EXLA compiler.
 

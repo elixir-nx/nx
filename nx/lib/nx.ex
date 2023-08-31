@@ -2161,13 +2161,6 @@ defmodule Nx do
     chunk_each(dim - 1, rest, [entry | acc], dims, type)
   end
 
-  @doc false
-  @deprecated "Use to_batched/3 instead"
-  def to_batched_list(tensor, batch_size, opts \\ []) do
-    Nx.Shared.raise_vectorization_not_supported(tensor, __ENV__.function)
-    tensor |> to_batched(batch_size, opts) |> Enum.to_list()
-  end
-
   @doc """
   Converts the underlying tensor to a stream of tensor batches.
 
@@ -5728,10 +5721,6 @@ defmodule Nx do
   """
   @doc type: :element
   def pow(left, right), do: element_wise_bin_op(left, right, :pow, & &1)
-
-  @deprecated "Use pow/2 instead"
-  @doc false
-  def power(left, right), do: pow(left, right)
 
   @doc """
   Element-wise remainder of two tensors.
@@ -13628,18 +13617,6 @@ defmodule Nx do
       strides = List.duplicate(1, rank) |> List.replace_at(axis, strides)
       slice(tensor, start_indices, lengths, strides: strides)
     end
-  end
-
-  @doc false
-  @deprecated "Use slice_along_axis/4 instead"
-  def slice_axis(tensor, start_index, len, axis, opts \\ []) when is_integer(len) do
-    slice_along_axis(tensor, start_index, len, [axis: axis] ++ opts)
-  end
-
-  @doc false
-  @deprecated "Use sigmoid/1 instead"
-  def logistic(tensor) do
-    sigmoid(tensor)
   end
 
   @doc """
