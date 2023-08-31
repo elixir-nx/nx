@@ -13,8 +13,14 @@ defmodule EXLA.NIF do
 
   def get_mlir_function_arguments(_function), do: :erlang.nif_error(:undef)
 
-  def mlir_add(_function, _lhs, _rhs), do: :erlang.nif_error(:undef)
-  def mlir_subtract(_function, _lhs, _rhs), do: :erlang.nif_error(:undef)
+  @bin_ops [:add, :subtract, :multiply, :divide, :pow, :min] ++
+             [:max, :remainder, :atan2]
+
+  for op <- @bin_ops do
+    mlir_op = :"mlir_#{op}"
+    def unquote(mlir_op)(_function, _lhs, _rhs), do: :erlang.nif_error(:undef)
+  end
+
   def mlir_tuple(_function, _vals), do: :erlang.nif_error(:undef)
   def mlir_get_tuple_element(_function, _tuple, _index), do: :erlang.nif_error(:undef)
 
