@@ -328,13 +328,8 @@ defmodule Nx.RandomTest do
 
       assert_all_close(Nx.mean(multivariate_normal, axes: [0]), mean, rtol: 0.1)
 
-      multivariate_normal_centered = Nx.subtract(multivariate_normal, mean)
-
       assert_all_close(
-        Nx.divide(
-          Nx.dot(multivariate_normal_centered, [0], multivariate_normal_centered, [0]),
-          1000
-        ),
+        Nx.covariance(multivariate_normal, mean),
         covariance,
         rtol: 0.1
       )
