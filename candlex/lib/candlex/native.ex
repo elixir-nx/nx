@@ -1,7 +1,7 @@
 defmodule Candlex.Native do
   @moduledoc false
 
-  use Rustler, otp_app: :candlex, crate: "candlex"
+  use Rustler, otp_app: :candlex, features: Application.compile_env(:candlex, :crate_features, [])
 
   # Rustler will override all the below stub functions with real NIFs
   def from_binary(_binary, _dtype, _shape, _device), do: error()
@@ -83,6 +83,7 @@ defmodule Candlex.Native do
   end
 
   def is_cuda_available(), do: error()
+  def to_device(_tensor, _device), do: error()
 
   defp error(), do: :erlang.nif_error(:nif_not_loaded)
 end

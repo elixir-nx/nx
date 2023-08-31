@@ -61,6 +61,11 @@ pub fn from_binary(
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+pub fn to_device(ex_tensor: ExTensor, device: Atom) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(ex_tensor.to_device(&device_from_atom(device)?)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 pub fn to_binary(env: Env, ex_tensor: ExTensor) -> Result<Binary, CandlexError> {
     let bytes = tensor_bytes(ex_tensor.flatten_all()?)?;
     let mut binary = NewBinary::new(env, bytes.len());
@@ -390,8 +395,8 @@ fn vec_to_tuple(env: Env, vec: Vec<usize>) -> Result<Term, rustler::Error> {
 fn device_from_atom(atom: Atom) -> Result<Device, CandlexError> {
     if atom == atoms::cpu() {
         Ok(Device::Cpu)
-    // } else if atom == atoms::cuda() {
-    //     Ok(Device::new_cuda(0)?)
+    } else if atom == atoms::cuda() {
+        Ok(Device::new_cuda(0)?)
     } else {
         Err(CandlexError::Other(format!(
             "unsupported device {:?}",

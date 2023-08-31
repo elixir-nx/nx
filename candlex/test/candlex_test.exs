@@ -22,11 +22,6 @@ defmodule CandlexTest do
       check(2.16, type: :bf16)
     end
 
-    # test "gpu" do
-    #   t([1, 2, 3], backend: {Candlex.Backend, device: :cuda})
-    #   |> assert_equal(t([1, 2, 3]))
-    # end
-
     test "named dimensions" do
       check([[1, 2, 3], [4, 5, 6]], names: [:x, :y])
 
@@ -560,11 +555,11 @@ defmodule CandlexTest do
 
     test "sin" do
       Nx.sin(1.0)
-      |> assert_equal(t(0.8414709568023682))
+      |> assert_close(t(0.8414709568023682))
 
       t([1.0, 2.0, 3.0])
       |> Nx.sin()
-      |> assert_equal(t([0.8414709568023682, 0.9092974066734314, 0.14112000167369843]))
+      |> assert_close(t([0.8414709568023682, 0.9092974066734314, 0.14112000167369843]))
     end
 
     test "exp" do
@@ -578,11 +573,11 @@ defmodule CandlexTest do
 
     test "cos" do
       Nx.cos(1.0)
-      |> assert_equal(t(0.5403022766113281))
+      |> assert_close(t(0.5403022766113281))
 
       t([1.0, 2, 3])
       |> Nx.cos()
-      |> assert_equal(t([0.5403022766113281, -0.416146844625473, -0.9899924993515015]))
+      |> assert_close(t([0.5403022766113281, -0.416146844625473, -0.9899924993515015]))
     end
 
     test "log" do

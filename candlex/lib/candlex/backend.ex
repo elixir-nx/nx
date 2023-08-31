@@ -16,11 +16,7 @@ defmodule Candlex.Backend do
 
   @impl true
   def init(opts) do
-    if opts != [] do
-      raise ArgumentError, "Candlex.Backend accepts no options"
-    end
-
-    opts
+    Keyword.validate!(opts, [:device])
   end
 
   # Creation
@@ -79,6 +75,14 @@ defmodule Candlex.Backend do
   # Backend
 
   @impl true
+  def backend_copy(%T{} = tensor, Candlex.Backend, backend_options) do
+    tensor
+    |> from_nx()
+    |> Native.to_device(device_option(backend_options))
+    |> unwrap!()
+    |> to_nx(tensor)
+  end
+
   def backend_copy(%T{} = tensor, backend, backend_options) do
     backend.from_binary(tensor, to_binary(tensor), backend_options)
   end
@@ -721,13 +725,11 @@ defmodule Candlex.Backend do
   end
 
   defp default_device do
-    # TODO: Support CUDA
-    # if cuda_available?() do
-    #   @device_cuda
-    # else
-    #   @device_cpu
-    # end
-    @device_cpu
+    if cuda_available?() do
+      @device_cuda
+    else
+      @device_cpu
+    end
   end
 
   defp cuda_available? do
