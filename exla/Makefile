@@ -27,7 +27,6 @@ EXLA_CACHE_SO_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(EXLA_CACHE_SO)
 CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -O3 -Wall -Wno-sign-compare \
 	 -Wno-unused-parameter -Wno-missing-field-initializers -Wno-comment \
 	 -shared -std=c++17 -w -DLLVM_VERSION_STRING=
-	 -shared -std=c++17 -w -DLLVM_VERSION_STRING=
 
 LDFLAGS = -L$(XLA_EXTENSION_LIB) -lxla_extension
 
