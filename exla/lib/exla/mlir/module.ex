@@ -34,7 +34,8 @@ defmodule EXLA.MLIR.Module do
       Enum.map(arg_shapes, fn %Shape{ref: ref} -> ref end)
 
     ref =
-      EXLA.NIF.create_mlir_function(module_ref, name, arg_shape_refs, return_shape_ref) |> unwrap!()
+      EXLA.NIF.create_mlir_function(module_ref, name, arg_shape_refs, return_shape_ref)
+      |> unwrap!()
 
     %Function{module: module, ref: ref, name: name, return_shape: return_shape}
   end
