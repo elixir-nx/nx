@@ -12,7 +12,7 @@
 #include "xla/pjrt/pjrt_client.h"
 
 #include "mlir/IR/OwningOpRef.h"
-#include "mlir/IR/BuiltInOps.h"
+#include "mlir/IR/BuiltinOps.h"
 
 
 // The implementations in this module are designed after implementations
