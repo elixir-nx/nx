@@ -1,0 +1,1 @@
+[subdirectories: ["nx", "exla", "torchx"]]
