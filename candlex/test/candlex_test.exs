@@ -438,6 +438,12 @@ defmodule CandlexTest do
       |> Nx.tanh()
       |> assert_equal(t([0.7615941762924194, 0.9640275835990906, 0.9950547814369202]))
     end
+
+    test "abs" do
+      t([-2.0, -1, 0, 1, 2])
+      |> Nx.abs()
+      |> assert_equal(t([2, 1, 0, 1, 2]))
+    end
   end
 
   defp t(values, opts \\ []) do

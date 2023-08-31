@@ -42,6 +42,7 @@ rustler::init! {
         tensors::reshape,
         tensors::concatenate,
         tensors::matmul,
+        tensors::abs,
         tensors::cos,
         tensors::sin,
         tensors::exp,

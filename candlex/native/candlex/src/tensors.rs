@@ -160,6 +160,7 @@ macro_rules! binary_nif {
 }
 
 unary_nif!(negate, neg);
+unary_nif!(abs);
 unary_nif!(cos);
 unary_nif!(exp);
 unary_nif!(sin);
