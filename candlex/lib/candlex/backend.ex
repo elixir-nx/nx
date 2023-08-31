@@ -114,18 +114,20 @@ defmodule Candlex.Backend do
   end
 
   @impl true
-  def select(%T{shape: shape} = out, pred, on_true, on_false) do
+  def select(%T{shape: shape, type: type} = out, pred, on_true, on_false) do
     on_true =
       on_true
-      |> Nx.as_type(Nx.type(out))
       |> from_nx()
+      |> Native.to_type(to_candle_dtype(type))
+      |> unwrap!()
       |> Native.broadcast_to(shape)
       |> unwrap!()
 
     on_false =
       on_false
-      |> Nx.as_type(Nx.type(out))
       |> from_nx()
+      |> Native.to_type(to_candle_dtype(type))
+      |> unwrap!()
       |> Native.broadcast_to(shape)
       |> unwrap!()
 
