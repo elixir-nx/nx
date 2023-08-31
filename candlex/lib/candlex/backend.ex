@@ -103,13 +103,7 @@ defmodule Candlex.Backend do
   for op <- [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] do
     @impl true
     def unquote(op)(out, l, r) do
-      # TODO: Implement in candle
-      out
-      |> Nx.BinaryBackend.unquote(op)(
-        backend_transfer(l, Nx.BinaryBackend, []),
-        backend_transfer(r, Nx.BinaryBackend, [])
-      )
-      |> backend_transfer(__MODULE__, [])
+      unsupported_op(unquote(op))
     end
   end
 
@@ -183,10 +177,7 @@ defmodule Candlex.Backend do
   for op <- [:bitwise_not, :erf_inv] do
     @impl true
     def unquote(op)(out, t) do
-      # TODO: Implement in candle
-      out
-      |> Nx.BinaryBackend.unquote(op)(backend_transfer(t, Nx.BinaryBackend, []))
-      |> backend_transfer(__MODULE__, [])
+      unsupported_op(unquote(op))
     end
   end
 
@@ -428,8 +419,8 @@ defmodule Candlex.Backend do
     raise("Unsupported candle dtype")
   end
 
-  defp unsupported_op do
-    raise("Unsupported candle op")
+  defp unsupported_op(op_name) do
+    raise("Unsupported candlex operation '#{op_name}'")
   end
 
   defp unwrap!({:ok, result}), do: result
