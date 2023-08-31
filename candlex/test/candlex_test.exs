@@ -402,6 +402,15 @@ defmodule CandlexTest do
       |> Nx.sin()
       |> assert_equal(t([0.8414709568023682, 0.9092974066734314, 0.14112000167369843]))
     end
+
+    test "exp" do
+      Nx.exp(1.0)
+      |> assert_equal(t(2.7182817459106445))
+
+      t([1.0, 2, 3])
+      |> Nx.exp()
+      |> assert_equal(t([2.7182817459106445, 7.389056205749512, 20.08553695678711]))
+    end
   end
 
   defp t(values, opts \\ []) do

@@ -161,6 +161,7 @@ macro_rules! binary_nif {
 
 unary_nif!(negate, neg);
 unary_nif!(sin);
+unary_nif!(exp);
 
 binary_nif!(add, broadcast_add);
 binary_nif!(subtract, broadcast_sub);
