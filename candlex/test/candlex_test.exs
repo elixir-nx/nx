@@ -144,8 +144,8 @@ defmodule CandlexTest do
 
       [t1, t2, t3]
       |> Nx.concatenate(axis: :x)
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [
             [0.0, 1.0],
             [2.0, 3.0]
@@ -162,8 +162,8 @@ defmodule CandlexTest do
             [0.0, 1.0],
             [2.0, 3.0]
           ]
-        ]
-      ))
+        ])
+      )
     end
 
     # test "bitwise_and" do
@@ -292,20 +292,20 @@ defmodule CandlexTest do
       |> assert_equal(t([[1, 0], [0, 1]]))
 
       Nx.eye(3, type: :f32)
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [1.0, 0.0, 0.0],
           [0.0, 1.0, 0.0],
           [0.0, 0.0, 1.0]
-        ]
-      ))
+        ])
+      )
 
       Nx.eye({1, 2})
       |> assert_equal(t([[1, 0]]))
 
       Nx.eye({2, 4, 3})
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [
             [1, 0, 0],
             [0, 1, 0],
@@ -318,8 +318,8 @@ defmodule CandlexTest do
             [0, 0, 1],
             [0, 0, 0]
           ]
-        ]
-      ))
+        ])
+      )
 
       # assert_equal doesn't yet work with vectorized axes
       # Nx.eye({3}, vectorized_axes: [x: 1, y: 2])

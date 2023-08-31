@@ -220,7 +220,8 @@ defmodule Candlex.Backend do
         %T{shape: right_shape, type: _right_type} = right,
         _right_axes,
         [] = _right_batched_axes
-      ) when tuple_size(left_shape) == 2 and tuple_size(right_shape) == 2 do
+      )
+      when tuple_size(left_shape) == 2 and tuple_size(right_shape) == 2 do
     Native.matmul(
       from_nx(left),
       from_nx(right)
@@ -254,9 +255,9 @@ defmodule Candlex.Backend do
     # sort the axes desc so we don't have to decrease the axis numbers after each squeeze
     for axis <- Enum.sort(axes, :desc), reduce: from_nx(t) do
       ref ->
-      ref
-      |> Native.squeeze(axis)
-      |> unwrap!()
+        ref
+        |> Native.squeeze(axis)
+        |> unwrap!()
     end
     |> to_nx(out)
   end
@@ -349,11 +350,13 @@ defmodule Candlex.Backend do
   defp maybe_upcast(%T{type: t} = left, %T{type: t} = right) do
     {left, right}
   end
+
   defp maybe_upcast(left, right) do
     type = Nx.Type.merge(left.type, right.type)
 
     {Nx.as_type(left, type), Nx.as_type(right, type)}
   end
+
   defp maybe_upcast([first | _] = tensors) do
     type =
       tensors
@@ -390,6 +393,7 @@ defmodule Candlex.Backend do
 
   @doc false
   defp from_nx(%T{data: %CB{} = data}), do: data
+
   defp from_nx(%T{} = tensor) do
     tensor
     |> Nx.backend_transfer(CB)
