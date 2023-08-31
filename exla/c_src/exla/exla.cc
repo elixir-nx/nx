@@ -272,6 +272,198 @@ ERL_NIF_TERM mlir_get_tuple_element(ErlNifEnv* env, int argc, const ERL_NIF_TERM
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
 
+ERL_NIF_TERM mlir_multiply(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* lhs;
+  mlir::Value* rhs;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], lhs)) {
+    return exla::nif::error(env, "Unable to get lhs.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[2], rhs)) {
+    return exla::nif::error(env, "Unable to get rhs.");
+  }
+
+  mlir::Value res = (*function)->MulOp(*lhs, *rhs);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
+ERL_NIF_TERM mlir_min(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* lhs;
+  mlir::Value* rhs;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], lhs)) {
+    return exla::nif::error(env, "Unable to get lhs.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[2], rhs)) {
+    return exla::nif::error(env, "Unable to get rhs.");
+  }
+
+  mlir::Value res = (*function)->MinOp(*lhs, *rhs);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
+ERL_NIF_TERM mlir_max(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* lhs;
+  mlir::Value* rhs;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], lhs)) {
+    return exla::nif::error(env, "Unable to get lhs.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[2], rhs)) {
+    return exla::nif::error(env, "Unable to get rhs.");
+  }
+
+  mlir::Value res = (*function)->MaxOp(*lhs, *rhs);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
+ERL_NIF_TERM mlir_remainder(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* lhs;
+  mlir::Value* rhs;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], lhs)) {
+    return exla::nif::error(env, "Unable to get lhs.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[2], rhs)) {
+    return exla::nif::error(env, "Unable to get rhs.");
+  }
+
+  mlir::Value res = (*function)->RemOp(*lhs, *rhs);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
+ERL_NIF_TERM mlir_pow(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* lhs;
+  mlir::Value* rhs;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], lhs)) {
+    return exla::nif::error(env, "Unable to get lhs.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[2], rhs)) {
+    return exla::nif::error(env, "Unable to get rhs.");
+  }
+
+  mlir::Value res = (*function)->PowOp(*lhs, *rhs);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
+ERL_NIF_TERM mlir_divide(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* lhs;
+  mlir::Value* rhs;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], lhs)) {
+    return exla::nif::error(env, "Unable to get lhs.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[2], rhs)) {
+    return exla::nif::error(env, "Unable to get rhs.");
+  }
+
+  mlir::Value res = (*function)->DivOp(*lhs, *rhs);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
+ERL_NIF_TERM mlir_atan2(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* lhs;
+  mlir::Value* rhs;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], lhs)) {
+    return exla::nif::error(env, "Unable to get lhs.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[2], rhs)) {
+    return exla::nif::error(env, "Unable to get rhs.");
+  }
+
+  mlir::Value res = (*function)->Atan2Op(*lhs, *rhs);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
+ERL_NIF_TERM mlir_shift_left(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* lhs;
+  mlir::Value* rhs;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], lhs)) {
+    return exla::nif::error(env, "Unable to get lhs.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[2], rhs)) {
+    return exla::nif::error(env, "Unable to get rhs.");
+  }
+
+  mlir::Value res = (*function)->ShiftLeftOp(*lhs, *rhs);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
 ERL_NIF_TERM mlir_build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
@@ -892,170 +1084,177 @@ ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 }
 
 static ErlNifFunc exla_funcs[] = {
-  // MLIR Builder
-  {"new_mlir_module", 0, new_mlir_module},
-  {"create_mlir_function", 4, create_mlir_function},
-  {"get_mlir_function_arguments", 1, get_mlir_function_arguments},
-  {"mlir_add", 3, mlir_add},
-  {"mlir_subtract", 3, mlir_subtract},
-  {"mlir_tuple", 2, mlir_tuple},
-  {"mlir_get_tuple_element", 3, mlir_get_tuple_element},
-  {"mlir_build", 2, mlir_build},
-  {"dump_mlir_module", 1, dump_mlir_module},
-  // XlaBuilder
-  {"new_builder", 1, new_builder},
-  {"create_sub_builder", 2, create_sub_builder},
-  {"build", 2, build},
-  {"parameter", 4, parameter},
-  // ExlaClient
-  {"get_host_client", 0, get_host_client},
-  {"get_gpu_client", 2, get_gpu_client},
-  {"get_tpu_client", 0, get_tpu_client},
-  {"get_c_api_client", 1, get_c_api_client},
-  {"load_pjrt_plugin", 2, load_pjrt_plugin},
-  {"get_device_count", 1, get_device_count},
-  {"get_supported_platforms", 0, get_supported_platforms},
-  {"compile", 7, compile, ERL_NIF_DIRTY_JOB_CPU_BOUND},
-  {"mlir_compile", 7, mlir_compile, ERL_NIF_DIRTY_JOB_CPU_BOUND},
-  // ExlaBuffer
-  {"binary_to_device_mem", 4, binary_to_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"read_device_mem", 2, read_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"deallocate_device_mem", 1, deallocate_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"transfer_to_infeed", 3, transfer_to_infeed, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"transfer_from_outfeed", 5, transfer_from_outfeed, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"copy_buffer_to_device", 3, copy_buffer_to_device, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  // ExlaExecutable
-  {"run_io", 4, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"run_cpu", 4, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
-  // Shape
-  {"make_shape", 2, make_shape},
-  {"make_token_shape", 0, make_token_shape},
-  {"make_tuple_shape", 1, make_tuple_shape},
-  {"get_shape_info", 1, get_shape_info},
-  // Element-wise Binary
-  {"add", 3, add},
-  {"subtract", 3, sub},
-  {"multiply", 3, mul},
-  {"divide", 3, div},
-  {"remainder", 3, rem},
-  {"min", 3, min},
-  {"max", 3, max},
-  {"bitwise_and", 3, bitwise_and},
-  {"bitwise_or", 3, bitwise_or},
-  {"bitwise_xor", 3, bitwise_xor},
-  {"left_shift", 3, shift_left},
-  {"right_shift_logical", 3, shift_right_logical},
-  {"right_shift_arithmetic", 3, shift_right_arithmetic},
-  {"pow", 3, pow},
-  {"complex", 3, complex},
-  {"atan2", 3, atan2},
-  // Element-wise Binary comparison
-  {"equal", 3, equal},
-  {"not_equal", 3, not_equal},
-  {"greater", 3, greater},
-  {"greater_equal", 3, greater_equal},
-  {"less", 3, less},
-  {"less_equal", 3, less_equal},
-  // Element-wise Unary
-  {"abs", 1, abs},
-  {"exp", 1, exp},
-  {"expm1", 1, expm1},
-  {"floor", 1, floor},
-  {"ceil", 1, ceil},
-  {"round", 1, round},
-  {"log", 1, log},
-  {"log1p", 1, log1p},
-  {"sigmoid", 1, sigmoid},
-  {"sign", 1, sign},
-  {"cos", 1, cos},
-  {"sin", 1, sin},
-  {"acos", 1, acos},
-  {"asin", 1, asin},
-  {"atan", 1, atan},
-  {"cosh", 1, cosh},
-  {"fft", 2, fft},
-  {"ifft", 2, ifft},
-  {"sinh", 1, sinh},
-  {"tanh", 1, tanh},
-  {"acosh", 1, acosh},
-  {"asinh", 1, asinh},
-  {"atanh", 1, atanh},
-  {"real", 1, real},
-  {"imag", 1, imag},
-  {"sqrt", 1, sqrt},
-  {"rsqrt", 1, rsqrt},
-  {"cbrt", 1, cbrt},
-  {"is_nan", 1, is_nan},
-  {"is_infinity", 1, is_infinity},
-  {"erf", 1, erf},
-  {"erfc", 1, erfc},
-  {"erf_inv", 1, erf_inv},
-  {"is_finite", 1, is_finite},
-  {"negate", 1, neg},
-  {"conj", 1, conj},
-  {"bitwise_not", 1, bitwise_not},
-  {"count_leading_zeros", 1, clz},
-  {"population_count", 1, population_count},
-  // Constant Creation
-  {"constant_r0", 3, constant_r0},
-  {"constant_from_binary", 3, constant_from_binary},
-  // Tuples
-  {"tuple", 2, tuple},
-  {"get_tuple_element", 2, get_tuple_element},
-  // Control Flow
-  {"conditional", 5, conditional_if},
-  {"conditional", 3, conditional_multi},
-  {"select", 3, select},
-  {"while", 3, while_loop},
-  {"call", 3, call},
-  // Slicing
-  {"slice", 4, slice},
-  {"dynamic_slice", 3, dynamic_slice},
-  {"dynamic_update_slice", 3, dynamic_update_slice},
-  {"gather", 7, gather},
-  // Tensor Creation
-  {"rng_normal", 3, rng_normal},
-  {"rng_uniform", 3, rng_uniform},
-  {"iota", 3, iota},
-  // Functional Ops
-  {"reduce", 4, reduce},
-  {"variadic_reduce", 5, variadic_reduce},
-  {"window_reduce", 7, window_reduce},
-  {"select_and_scatter", 8, select_and_scatter},
-  {"scatter", 8, scatter},
-  {"map", 4, map},
-  // Shape/Type Manipulation
-  {"broadcast_in_dim", 3, broadcast_in_dim},
-  {"reshape", 2, reshape},
-  {"get_shape", 2, get_shape_op},
-  {"convert_element_type", 2, convert_element_type},
-  {"bitcast_convert_type", 2, bitcast_convert_type},
-  {"transpose", 2, transpose},
-  // Other
-  {"dot", 3, dot},
-  {"dot_general", 4, dot_general},
-  {"conv_general_dilated", 10, conv_general_dilated},
-  {"pad", 3, pad},
-  {"clamp", 3, clamp},
-  {"reverse", 2, reverse},
-  {"concatenate", 3, concatenate},
-  {"sort", 3, sort},
-  {"top_k", 2, top_k},
-  {"variadic_sort", 3, variadic_sort},
-  // LinAlg
-  {"cholesky", 1, cholesky},
-  {"eigh", 4, eigh},
-  {"lu", 1, lu},
-  {"qr", 2, qr},
-  {"triangular_solve", 6, triangular_solve},
-  // Infeed/Outfeed
-  {"infeed", 2, infeed},
-  {"outfeed", 3, outfeed},
-  {"create_token", 1, create_token},
-  // Special
-  {"optimization_barrier", 1, optimization_barrier},
-  // Log Sink
-  {"start_log_sink", 1, start_log_sink}
-};
+    // MLIR Builder
+    {"new_mlir_module", 0, new_mlir_module},
+    {"create_mlir_function", 4, create_mlir_function},
+    {"get_mlir_function_arguments", 1, get_mlir_function_arguments},
+    {"mlir_add", 3, mlir_add},
+    {"mlir_subtract", 3, mlir_subtract},
+    {"mlir_tuple", 2, mlir_tuple},
+    {"mlir_get_tuple_element", 3, mlir_get_tuple_element},
+    {"mlir_multiply", 3, mlir_multiply},
+    {"mlir_min", 3, mlir_min},
+    {"mlir_max", 3, mlir_max},
+    {"mlir_remainder", 3, mlir_remainder},
+    {"mlir_pow", 3, mlir_pow},
+    {"mlir_divide", 3, mlir_divide},
+    {"mlir_atan2", 3, mlir_atan2},
+    {"mlir_shift_left", 3, mlir_shift_left},
+    {"mlir_build", 2, mlir_build},
+    {"dump_mlir_module", 1, dump_mlir_module},
+    // XlaBuilder
+    {"new_builder", 1, new_builder},
+    {"create_sub_builder", 2, create_sub_builder},
+    {"build", 2, build},
+    {"parameter", 4, parameter},
+    // ExlaClient
+    {"get_host_client", 0, get_host_client},
+    {"get_gpu_client", 2, get_gpu_client},
+    {"get_tpu_client", 0, get_tpu_client},
+    {"get_c_api_client", 1, get_c_api_client},
+    {"load_pjrt_plugin", 2, load_pjrt_plugin},
+    {"get_device_count", 1, get_device_count},
+    {"get_supported_platforms", 0, get_supported_platforms},
+    {"compile", 7, compile, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+    {"mlir_compile", 7, mlir_compile, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+    // ExlaBuffer
+    {"binary_to_device_mem", 4, binary_to_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"read_device_mem", 2, read_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"deallocate_device_mem", 1, deallocate_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"transfer_to_infeed", 3, transfer_to_infeed, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"transfer_from_outfeed", 5, transfer_from_outfeed, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"copy_buffer_to_device", 3, copy_buffer_to_device, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    // ExlaExecutable
+    {"run_io", 4, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"run_cpu", 4, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+    // Shape
+    {"make_shape", 2, make_shape},
+    {"make_token_shape", 0, make_token_shape},
+    {"make_tuple_shape", 1, make_tuple_shape},
+    {"get_shape_info", 1, get_shape_info},
+    // Element-wise Binary
+    {"add", 3, add},
+    {"subtract", 3, sub},
+    {"multiply", 3, mul},
+    {"divide", 3, div},
+    {"remainder", 3, rem},
+    {"min", 3, min},
+    {"max", 3, max},
+    {"bitwise_and", 3, bitwise_and},
+    {"bitwise_or", 3, bitwise_or},
+    {"bitwise_xor", 3, bitwise_xor},
+    {"left_shift", 3, shift_left},
+    {"right_shift_logical", 3, shift_right_logical},
+    {"right_shift_arithmetic", 3, shift_right_arithmetic},
+    {"pow", 3, pow},
+    {"complex", 3, complex},
+    {"atan2", 3, atan2},
+    // Element-wise Binary comparison
+    {"equal", 3, equal},
+    {"not_equal", 3, not_equal},
+    {"greater", 3, greater},
+    {"greater_equal", 3, greater_equal},
+    {"less", 3, less},
+    {"less_equal", 3, less_equal},
+    // Element-wise Unary
+    {"abs", 1, abs},
+    {"exp", 1, exp},
+    {"expm1", 1, expm1},
+    {"floor", 1, floor},
+    {"ceil", 1, ceil},
+    {"round", 1, round},
+    {"log", 1, log},
+    {"log1p", 1, log1p},
+    {"sigmoid", 1, sigmoid},
+    {"sign", 1, sign},
+    {"cos", 1, cos},
+    {"sin", 1, sin},
+    {"acos", 1, acos},
+    {"asin", 1, asin},
+    {"atan", 1, atan},
+    {"cosh", 1, cosh},
+    {"fft", 2, fft},
+    {"ifft", 2, ifft},
+    {"sinh", 1, sinh},
+    {"tanh", 1, tanh},
+    {"acosh", 1, acosh},
+    {"asinh", 1, asinh},
+    {"atanh", 1, atanh},
+    {"real", 1, real},
+    {"imag", 1, imag},
+    {"sqrt", 1, sqrt},
+    {"rsqrt", 1, rsqrt},
+    {"cbrt", 1, cbrt},
+    {"is_nan", 1, is_nan},
+    {"is_infinity", 1, is_infinity},
+    {"erf", 1, erf},
+    {"erfc", 1, erfc},
+    {"erf_inv", 1, erf_inv},
+    {"is_finite", 1, is_finite},
+    {"negate", 1, neg},
+    {"conj", 1, conj},
+    {"bitwise_not", 1, bitwise_not},
+    {"count_leading_zeros", 1, clz},
+    {"population_count", 1, population_count},
+    // Constant Creation
+    {"constant_r0", 3, constant_r0},
+    {"constant_from_binary", 3, constant_from_binary},
+    // Tuples
+    {"tuple", 2, tuple},
+    {"get_tuple_element", 2, get_tuple_element},
+    // Control Flow
+    {"conditional", 5, conditional_if},
+    {"conditional", 3, conditional_multi},
+    {"select", 3, select},
+    {"while", 3, while_loop},
+    {"call", 3, call},
+    // Slicing
+    {"slice", 4, slice},
+    {"dynamic_slice", 3, dynamic_slice},
+    {"dynamic_update_slice", 3, dynamic_update_slice},
+    {"gather", 7, gather},
+    // Tensor Creation
+    {"rng_normal", 3, rng_normal},
+    {"rng_uniform", 3, rng_uniform},
+    {"iota", 3, iota},
+    // Functional Ops
+    {"reduce", 4, reduce},
+    {"variadic_reduce", 5, variadic_reduce},
+    {"window_reduce", 7, window_reduce},
+    {"select_and_scatter", 8, select_and_scatter},
+    {"scatter", 8, scatter},
+    {"map", 4, map},
+    // Shape/Type Manipulation
+    {"broadcast_in_dim", 3, broadcast_in_dim},
+    {"reshape", 2, reshape},
+    {"get_shape", 2, get_shape_op},
+    {"convert_element_type", 2, convert_element_type},
+    {"bitcast_convert_type", 2, bitcast_convert_type},
+    {"transpose", 2, transpose},
+    // Other
+    {"dot", 3, dot},
+    {"dot_general", 4, dot_general},
+    {"conv_general_dilated", 10, conv_general_dilated},
+    {"pad", 3, pad},
+    {"clamp", 3, clamp},
+    {"reverse", 2, reverse},
+    {"concatenate", 3, concatenate},
+    {"sort", 3, sort},
+    {"top_k", 2, top_k},
+    {"variadic_sort", 3, variadic_sort},
+    // LinAlg
+    {"cholesky", 1, cholesky},
+    {"eigh", 4, eigh},
+    {"lu", 1, lu},
+    {"qr", 2, qr},
+    {"triangular_solve", 6, triangular_solve},
+    // Infeed/Outfeed
+    {"infeed", 2, infeed},
+    {"outfeed", 3, outfeed},
+    {"create_token", 1, create_token},
+    // Special
+    {"optimization_barrier", 1, optimization_barrier},
+    // Log Sink
+    {"start_log_sink", 1, start_log_sink}};
 
 ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, NULL, NULL);

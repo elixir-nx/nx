@@ -11,20 +11,19 @@ defmodule EXLA.MLIR.Value do
   alias __MODULE__, as: Value
   alias EXLA.MLIR.Function
 
-  def add(
-        %Value{ref: lhs, function: %Function{} = func},
-        %Value{ref: rhs, function: %Function{} = func}
-      ) do
-    ref = EXLA.NIF.mlir_add(func.ref, lhs, rhs) |> unwrap!()
-    %Value{ref: ref, function: func}
-  end
+  @bin_ops [:add, :subtract, :multiply, :divide, :pow, :min] ++
+             [:max, :remainder, :atan2, :shift_left]
 
-  def subtract(
-        %Value{ref: lhs, function: %Function{} = func},
-        %Value{ref: rhs, function: %Function{} = func}
-      ) do
-    ref = EXLA.NIF.mlir_subtract(func.ref, lhs, rhs) |> unwrap!()
-    %Value{ref: ref, function: func}
+  for op <- @bin_ops do
+    mlir_op = :"mlir_#{op}"
+
+    def unquote(op)(
+          %Value{ref: lhs, function: %Function{} = func},
+          %Value{ref: rhs, function: %Function{} = func}
+        ) do
+      ref = EXLA.NIF.unquote(mlir_op)(func.ref, lhs, rhs) |> unwrap!()
+      %Value{ref: ref, function: func}
+    end
   end
 
   def tuple([%Value{function: %Function{} = func} | _rest] = vals) do

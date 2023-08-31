@@ -30,6 +30,54 @@ mlir::Value MLIRFunction::AddOp(mlir::Value lhs, mlir::Value rhs) {
   return op;
 }
 
+mlir::Value MLIRFunction::MulOp(mlir::Value lhs, mlir::Value rhs) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  auto op = module_->builder()->create<mlir::mhlo::MulOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  return op;
+}
+
+mlir::Value MLIRFunction::MinOp(mlir::Value lhs, mlir::Value rhs) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  auto op = module_->builder()->create<mlir::mhlo::MinOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  return op;
+}
+
+mlir::Value MLIRFunction::MaxOp(mlir::Value lhs, mlir::Value rhs) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  auto op = module_->builder()->create<mlir::mhlo::MaxOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  return op;
+}
+
+mlir::Value MLIRFunction::RemOp(mlir::Value lhs, mlir::Value rhs) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  auto op = module_->builder()->create<mlir::mhlo::RemOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  return op;
+}
+
+mlir::Value MLIRFunction::PowOp(mlir::Value lhs, mlir::Value rhs) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  auto op = module_->builder()->create<mlir::mhlo::PowOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  return op;
+}
+
+mlir::Value MLIRFunction::DivOp(mlir::Value lhs, mlir::Value rhs) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  auto op = module_->builder()->create<mlir::mhlo::DivOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  return op;
+}
+
+mlir::Value MLIRFunction::Atan2Op(mlir::Value lhs, mlir::Value rhs) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  auto op = module_->builder()->create<mlir::mhlo::Atan2Op>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  return op;
+}
+
+mlir::Value MLIRFunction::ShiftLeftOp(mlir::Value lhs, mlir::Value rhs) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  auto op = module_->builder()->create<mlir::mhlo::ShiftLeftOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  return op;
+}
+
 mlir::Value MLIRFunction::TupleOp(std::vector<mlir::Value> vals) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   auto op = module_->builder()->create<mlir::mhlo::TupleOp>(module_->builder()->getUnknownLoc(), vals);
