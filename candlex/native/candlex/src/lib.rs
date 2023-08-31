@@ -45,6 +45,7 @@ rustler::init! {
         tensors::cos,
         tensors::sin,
         tensors::exp,
+        tensors::log,
         devices::is_cuda_available
     ],
     load = load

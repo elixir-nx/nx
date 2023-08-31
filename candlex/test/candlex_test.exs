@@ -420,6 +420,15 @@ defmodule CandlexTest do
       |> Nx.cos()
       |> assert_equal(t([0.5403022766113281, -0.416146844625473, -0.9899924993515015]))
     end
+
+    test "log" do
+      Nx.log(1.0)
+      |> assert_equal(t(0.0))
+
+      t([1.0, 2, 3])
+      |> Nx.log()
+      |> assert_equal(t([0.0, 0.6931471824645996, 1.0986123085021973]))
+    end
   end
 
   defp t(values, opts \\ []) do

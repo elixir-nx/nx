@@ -163,6 +163,7 @@ unary_nif!(negate, neg);
 unary_nif!(cos);
 unary_nif!(exp);
 unary_nif!(sin);
+unary_nif!(log);
 
 binary_nif!(add, broadcast_add);
 binary_nif!(subtract, broadcast_sub);
