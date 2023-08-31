@@ -49,6 +49,13 @@ defmodule CandlexTest do
       t([1, 2, 3])
       |> Nx.add(t([10, 20, 30]))
       |> assert_equal(t([11, 22, 33]))
+
+      Nx.add(1, 2.2)
+      |> assert_equal(t(3.2))
+
+      t([1, 2, 3])
+      |> Nx.add(1.0)
+      |> assert_equal(t([2.0, 3.0, 4.0]))
     end
 
     test "iota" do
