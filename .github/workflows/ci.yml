@@ -12,14 +12,16 @@ jobs:
       fail-fast: false
       matrix:
         working_directory: ["nx", "exla", "torchx"]
-        elixir: ["1.14.2"]
-        otp: ["25.2"]
+        elixir: ["1.14.5", "1.15.4"]
+        otp: ["25.3"]
         torch_version: ["2.0.0"]
         include:
+          - elixir: "1.15.4"
+            lint: true
           - working_directory: torchx
+            elixir: "1.14.5"
+            otp: "25.3"
             torch_version: "1.12.1"
-            elixir: "1.14.2"
-            otp: "25.2"
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}
@@ -55,6 +57,7 @@ jobs:
       - name: Compile and check warnings
         run: mix compile --warnings-as-errors
       - name: Check formatting
+        if: ${{ matrix.lint }}
         run: mix format --check-formatted
       - name: Run epmd for distributed tests
         run: epmd -daemon
@@ -68,14 +71,9 @@ jobs:
       fail-fast: false
       matrix:
         working_directory: ["nx", "torchx"]
-        elixir: ["1.14.2"]
+        elixir: ["1.14.5"]
         otp: ["25.2"]
         torch_version: ["2.0.0"]
-        include:
-          - working_directory: torchx
-            torch_version: "1.12.1"
-            elixir: "1.14.2"
-            otp: "25.2"
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}
@@ -118,7 +116,5 @@ jobs:
         run: mix deps.get
       - name: Compile and check warnings
         run: mix compile --warnings-as-errors
-      - name: Check formatting
-        run: mix format --check-formatted
       - name: Run tests
         run: mix test
