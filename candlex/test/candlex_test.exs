@@ -411,6 +411,15 @@ defmodule CandlexTest do
       |> Nx.exp()
       |> assert_equal(t([2.7182817459106445, 7.389056205749512, 20.08553695678711]))
     end
+
+    test "cos" do
+      Nx.cos(1.0)
+      |> assert_equal(t(0.5403022766113281))
+
+      t([1.0, 2, 3])
+      |> Nx.cos()
+      |> assert_equal(t([0.5403022766113281, -0.416146844625473, -0.9899924993515015]))
+    end
   end
 
   defp t(values, opts \\ []) do

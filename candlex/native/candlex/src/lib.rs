@@ -42,6 +42,7 @@ rustler::init! {
         tensors::reshape,
         tensors::concatenate,
         tensors::matmul,
+        tensors::cos,
         tensors::sin,
         tensors::exp,
         devices::is_cuda_available

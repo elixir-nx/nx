@@ -162,7 +162,7 @@ defmodule Candlex.Backend do
 
   # Unary ops
 
-  unary_ops = [:exp, :negate, :sin]
+  unary_ops = [:cos, :exp, :negate, :sin]
 
   for op <- unary_ops do
     @impl true
