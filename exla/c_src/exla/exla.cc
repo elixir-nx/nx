@@ -440,30 +440,6 @@ ERL_NIF_TERM mlir_atan2(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
 
-ERL_NIF_TERM mlir_shift_left(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 3) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  exla::MLIRFunction** function;
-  mlir::Value* lhs;
-  mlir::Value* rhs;
-
-  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
-    return exla::nif::error(env, "Unable to get function.");
-  }
-  if (!exla::nif::get<mlir::Value>(env, argv[1], lhs)) {
-    return exla::nif::error(env, "Unable to get lhs.");
-  }
-  if (!exla::nif::get<mlir::Value>(env, argv[2], rhs)) {
-    return exla::nif::error(env, "Unable to get rhs.");
-  }
-
-  mlir::Value res = (*function)->ShiftLeftOp(*lhs, *rhs);
-
-  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
-}
-
 ERL_NIF_TERM mlir_build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
@@ -1099,7 +1075,6 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_pow", 3, mlir_pow},
     {"mlir_divide", 3, mlir_divide},
     {"mlir_atan2", 3, mlir_atan2},
-    {"mlir_shift_left", 3, mlir_shift_left},
     {"mlir_build", 2, mlir_build},
     {"dump_mlir_module", 1, dump_mlir_module},
     // XlaBuilder

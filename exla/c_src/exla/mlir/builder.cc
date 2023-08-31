@@ -72,12 +72,6 @@ mlir::Value MLIRFunction::Atan2Op(mlir::Value lhs, mlir::Value rhs) {
   return op;
 }
 
-mlir::Value MLIRFunction::ShiftLeftOp(mlir::Value lhs, mlir::Value rhs) {
-  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  auto op = module_->builder()->create<mlir::mhlo::ShiftLeftOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
-  return op;
-}
-
 mlir::Value MLIRFunction::TupleOp(std::vector<mlir::Value> vals) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   auto op = module_->builder()->create<mlir::mhlo::TupleOp>(module_->builder()->getUnknownLoc(), vals);
