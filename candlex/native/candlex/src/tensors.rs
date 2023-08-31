@@ -142,7 +142,7 @@ macro_rules! unary_nif {
         pub fn $nif_name(ex_tensor: ExTensor) -> Result<ExTensor, CandlexError> {
             Ok(ExTensor::new(ex_tensor.$native_fn_name()?))
         }
-    }
+    };
 }
 
 macro_rules! binary_nif {
@@ -151,7 +151,7 @@ macro_rules! binary_nif {
         pub fn $nif_name(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
             Ok(ExTensor::new(left.$native_fn_name(&right)?))
         }
-    }
+    };
 }
 
 unary_nif!(negate, neg);
