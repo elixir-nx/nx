@@ -11,6 +11,10 @@
 #include "xla/pjrt/gpu/gpu_helpers.h"
 #include "xla/pjrt/pjrt_client.h"
 
+#include "mlir/IR/OwningOpRef.h"
+#include "mlir/IR/BuiltinOps.h"
+
+
 // The implementations in this module are designed after implementations
 // in the XLA runtime, PjRt. Deviations are made where it makes sense
 // to work better with the VM.
@@ -66,10 +70,15 @@ class ExlaClient {
   xla::PjRtClient* client() { return client_.get(); }
 
   // Compiles the given computation with the given compile options
-  xla::StatusOr<ExlaExecutable*> Compile(const xla::XlaComputation&,
+  xla::StatusOr<ExlaExecutable*> Compile(const xla::XlaComputation& computation,
                                          std::vector<xla::Shape*> argument_layouts,
                                          xla::ExecutableBuildOptions& options,
                                          bool compile_portable_executable);
+
+    xla::StatusOr<ExlaExecutable*> Compile(const mlir::OwningOpRef<mlir::ModuleOp>& computation,
+                                           std::vector<xla::Shape*> argument_layouts,
+                                           xla::ExecutableBuildOptions& options,
+                                           bool compile_portable_executable);
 
   xla::StatusOr<ExlaBuffer*> BufferFromBinary(ErlNifEnv* env,
                                               ERL_NIF_TERM binary_term,
@@ -95,6 +104,8 @@ xla::StatusOr<ExlaClient*> GetGpuClient(double memory_fraction,
                                         xla::GpuAllocatorConfig::Kind kind);
 
 xla::StatusOr<ExlaClient*> GetTpuClient();
+
+xla::StatusOr<ExlaClient*> GetCApiClient(std::string device_type);
 } // namespace exla
 
 #endif

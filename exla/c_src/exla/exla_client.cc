@@ -4,7 +4,9 @@
 #include "xla/pjrt/gpu/gpu_helpers.h"
 #include "xla/pjrt/tfrt_cpu_pjrt_client.h"
 #include "xla/pjrt/gpu/se_gpu_pjrt_client.h"
+#include "xla/pjrt/pjrt_c_api_client.h"
 #include "xla/pjrt/tpu_client.h"
+#include "xla/pjrt/pjrt_compiler.h"
 
 namespace exla {
 
@@ -257,8 +259,13 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
 
   // the device assignment is a 2d array which maps coordinates (replica, partition)
   // to a device; or in this case just maps a replica to a device
-  EXLA_ASSIGN_OR_RETURN(xla::DeviceAssignment device_assignment,
-    client_->client()->GetDefaultDeviceAssignment(num_replicas, 1));
+  xla::DeviceAssignment device_assignment;
+  if (client_->client()->platform_name() == "METAL") {
+    device_assignment = xla::DeviceAssignment(1, 1);
+  } else{
+    EXLA_ASSIGN_OR_RETURN(device_assignment,
+      client_->client()->GetDefaultDeviceAssignment(num_replicas, 1));
+  }
 
   if (device_id >= 0 && num_replicas > 1) {
     // if the device id is greater than or equal to 1, that means we've specified
@@ -300,6 +307,8 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
     // TODO: This now exposes a `returned_futures` API, does this make sense for us?
     EXLA_ASSIGN_OR_RETURN(per_replica_results, executable_->Execute(input_buffers, options));
   }
+
+  // EXLA_ASSIGN_OR_RETURN(per_replica_results, executable_->Execute(input_buffers, options));
 
   // sanity check
   if (per_replica_results.size() != num_replicas) {
@@ -351,6 +360,32 @@ xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& co
 
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtLoadedExecutable> executable,
     client_->Compile(computation, std::move(compile_opts)));
+  EXLA_ASSIGN_OR_RETURN(absl::optional<std::string> fingerprint,
+    client_->ExecutableFingerprint(*executable));
+
+  return new ExlaExecutable(std::move(executable), std::move(fingerprint), this);
+}
+
+xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const mlir::OwningOpRef<mlir::ModuleOp>& module,
+                                                   std::vector<xla::Shape*> argument_layouts,
+                                                   xla::ExecutableBuildOptions& options,
+                                                   bool compile_portable_executable) {
+  std::vector<xla::Shape> layouts;
+  layouts.reserve(argument_layouts.size());
+  for (auto shape : argument_layouts) {
+    xla::Shape cpy_shape = xla::ShapeUtil::MakeShape(shape->element_type(), shape->dimensions());
+    xla::LayoutUtil::ClearLayout(&cpy_shape);
+    layouts.push_back(cpy_shape);
+  }
+
+  xla::CompileOptions compile_opts;
+  compile_opts.argument_layouts = layouts;
+  compile_opts.parameter_is_tupled_arguments = false;
+  compile_opts.executable_build_options = options;
+  compile_opts.compile_portable_executable = compile_portable_executable;
+
+  EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtLoadedExecutable> executable,
+    client_->Compile(*module, std::move(compile_opts)));
   EXLA_ASSIGN_OR_RETURN(absl::optional<std::string> fingerprint,
     client_->ExecutableFingerprint(*executable));
 
@@ -447,7 +482,7 @@ xla::StatusOr<ExlaClient*> GetGpuClient(double memory_fraction,
   };
 
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtClient> client,
-    xla::GetStreamExecutorGpuClient(false, allocator_config, 0));
+    xla::GetStreamExecutorGpuClient(false, allocator_config, 0, 0));
 
   return new ExlaClient(std::move(client));
 }
@@ -455,6 +490,13 @@ xla::StatusOr<ExlaClient*> GetGpuClient(double memory_fraction,
 xla::StatusOr<ExlaClient*> GetTpuClient() {
   EXLA_ASSIGN_OR_RETURN(std::shared_ptr<xla::PjRtClient> client,
     xla::GetTpuClient(32));
+
+  return new ExlaClient(std::move(client));
+}
+
+xla::StatusOr<ExlaClient*> GetCApiClient(std::string device_type) {
+  EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtClient> client,
+    xla::GetCApiClient(device_type));
 
   return new ExlaClient(std::move(client));
 }

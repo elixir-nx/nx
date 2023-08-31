@@ -21,6 +21,9 @@ XLA_EXTENSION_LIB_LINK_PATH = ../$(CWD_RELATIVE_TO_PRIV_PATH)/$(XLA_EXTENSION_LI
 EXLA_CACHE_SO_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(EXLA_CACHE_SO)
 
 # Build flags
+# c++17 is needed, otherwise xla headers
+# break on some conflicting llvm/std definitions
+# Note: this is on :xla 0.5.0 -- things can change with later versions
 CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -O3 -Wall -Wno-sign-compare \
 	 -Wno-unused-parameter -Wno-missing-field-initializers -Wno-comment \
 	 -shared -std=c++17 -w -DLLVM_VERSION_STRING=
@@ -30,8 +33,8 @@ LDFLAGS = -L$(XLA_EXTENSION_LIB) -lxla_extension
 ifeq ($(shell uname -s), Darwin)
 	LDFLAGS += -flat_namespace -undefined suppress
 	POST_INSTALL = install_name_tool \
-		-change bazel-out/darwin_arm64-opt/bin/xla/extension/libxla_extension.so @loader_path/xla_extension/lib/libxla_extension.so \
-		-change bazel-out/darwin-opt/bin/xla/extension/libxla_extension.so @loader_path/xla_extension/lib/libxla_extension.so \
+			-change bazel-out/darwin_arm64-opt/bin/xla/extension/libxla_extension.so @loader_path/xla_extension/lib/libxla_extension.so \
+			-change bazel-out/darwin-opt/bin/xla/extension/libxla_extension.so @loader_path/xla_extension/lib/libxla_extension.so \
 		$(EXLA_CACHE_SO)
 else
 	# Use a relative RPATH, so at runtime libexla.so looks for libxla_extension.so
@@ -53,8 +56,8 @@ $(EXLA_SO): $(EXLA_CACHE_SO)
 		ln -sf $(EXLA_CACHE_SO_LINK_PATH) $(EXLA_SO) ; \
 	fi
 
-$(EXLA_CACHE_SO): $(XLA_EXTENSION_DIR) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h
-	$(CXX) $(CFLAGS) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/exla_client.cc -o $(EXLA_CACHE_SO) $(LDFLAGS)
+$(EXLA_CACHE_SO): $(XLA_EXTENSION_DIR) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_ops.cc $(EXLA_DIR)/exla_ops.h $(EXLA_DIR)/mlir/builder.cc $(EXLA_DIR)/mlir/builder.h $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h
+	$(CXX) $(CFLAGS) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/mlir/builder.cc $(EXLA_DIR)/exla_ops.cc $(EXLA_DIR)/exla_client.cc -o $(EXLA_CACHE_SO) $(LDFLAGS)
 	$(POST_INSTALL)
 
 clean:

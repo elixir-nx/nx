@@ -4,13 +4,13 @@ defmodule EXLA.OpTest do
   alias EXLA.{Builder, Shape, Op}
 
   test "parameter/4 successfully creates op" do
-    builder = Builder.new("test")
+    builder = Builder.new("test", nil, nil, :xla)
     shape = Shape.make_shape({:s, 32}, {1, 1})
     assert %Op{} = Op.parameter(builder, 0, shape, "x")
   end
 
   test "constant_r0/3 successfully creates constant op" do
-    builder = Builder.new("test")
+    builder = Builder.new("test", nil, nil, :xla)
     assert a = %Op{} = Op.constant_r0(builder, 1.0, {:f, 64})
     assert b = %Op{} = Op.constant_r0(builder, 1.0, {:f, 32})
     assert c = %Op{} = Op.constant_r0(builder, -10000, {:s, 32})
@@ -35,7 +35,7 @@ defmodule EXLA.OpTest do
   end
 
   test "constant_from_binary/3" do
-    builder = Builder.new("test")
+    builder = Builder.new("test", nil, nil, :xla)
 
     shape = Shape.make_shape({:s, 64}, {0})
     assert a = %Op{} = Op.constant_from_binary(builder, <<>>, shape)
@@ -70,7 +70,7 @@ defmodule EXLA.OpTest do
   end
 
   test "tuple/2" do
-    builder = Builder.new("test")
+    builder = Builder.new("test", nil, nil, :xla)
 
     shape_a = Shape.make_shape({:s, 64}, {0})
     a = Op.constant_from_binary(builder, <<>>, shape_a)
@@ -177,7 +177,7 @@ defmodule EXLA.OpTest do
   end
 
   test "get_tuple_element/2" do
-    builder = Builder.new("test")
+    builder = Builder.new("test", nil, nil, :xla)
 
     shape_a = Shape.make_shape({:s, 64}, {0})
     a = Op.constant_from_binary(builder, <<>>, shape_a)
@@ -210,7 +210,7 @@ defmodule EXLA.OpTest do
   end
 
   test "add/3 successfully creates add op without broadcast dimensions" do
-    builder = Builder.new("test")
+    builder = Builder.new("test", nil, nil, :xla)
     shape = Shape.make_shape({:s, 32}, {1, 1})
     a = Op.parameter(builder, 0, shape, "a")
     b = Op.parameter(builder, 1, shape, "b")
@@ -218,7 +218,7 @@ defmodule EXLA.OpTest do
   end
 
   test "dot/3 successfully creates dot op" do
-    builder = Builder.new("test")
+    builder = Builder.new("test", nil, nil, :xla)
     shape = Shape.make_shape({:s, 32}, {1, 1})
     a = Op.parameter(builder, 0, shape, "a")
     b = Op.parameter(builder, 1, shape, "b")
@@ -226,14 +226,14 @@ defmodule EXLA.OpTest do
   end
 
   test "exp/1 successfully creates exp op" do
-    builder = Builder.new("test")
+    builder = Builder.new("test", nil, nil, :xla)
     shape = Shape.make_shape({:s, 32}, {1, 1})
     a = Op.parameter(builder, 0, shape, "a")
     assert %Op{} = Op.exp(a)
   end
 
   test "reduce/4 successfully creates reduce op" do
-    builder = Builder.new("test")
+    builder = Builder.new("test", nil, nil, :xla)
     sub_builder = Builder.new(builder, "sub_test")
 
     shape = Shape.make_shape({:f, 64}, {1_000})
@@ -251,14 +251,14 @@ defmodule EXLA.OpTest do
   end
 
   test "get_shape/1 returns shape of op" do
-    builder = Builder.new("test")
+    builder = Builder.new("test", nil, nil, :xla)
     shape = Shape.make_shape({:f, 64}, {5, 5, 5, 5, 5})
     x = Op.parameter(builder, 0, shape, "x")
     assert %Shape{dims: {5, 5, 5, 5, 5}, dtype: {:f, 64}} = Op.get_shape(x)
   end
 
   test "convert_element_type/1 changes type of operand" do
-    builder = Builder.new("test")
+    builder = Builder.new("test", nil, nil, :xla)
 
     shape = Shape.make_shape({:f, 64}, {1, 1})
 
@@ -284,7 +284,7 @@ defmodule EXLA.OpTest do
   end
 
   test "rng_normal/3" do
-    builder = Builder.new("test")
+    builder = Builder.new("test", nil, nil, :xla)
 
     shape_a = Shape.make_shape({:f, 64}, {3, 3, 3})
     mu_a = Op.constant_r0(builder, 0, {:f, 64})
@@ -301,7 +301,7 @@ defmodule EXLA.OpTest do
   end
 
   test "rng_uniform/3" do
-    builder = Builder.new("test")
+    builder = Builder.new("test", nil, nil, :xla)
 
     shape_a = Shape.make_shape({:f, 64}, {3, 3, 3})
     low_a = Op.constant_r0(builder, 0, {:f, 64})

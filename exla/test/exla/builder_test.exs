@@ -4,14 +4,14 @@ defmodule EXLA.BuilderTest do
   alias EXLA.{Builder, Computation, Op}
 
   test "new/1 succeeds in creating a new builder" do
-    assert b = %Builder{} = Builder.new("builder")
+    assert b = %Builder{} = Builder.new("builder", nil, nil, :xla)
     assert b.name == "builder"
     assert is_reference(b.ref)
     assert is_nil(b.parent)
   end
 
   test "new/2 succeeds in creating a new subbuilder" do
-    parent = Builder.new("builder")
+    parent = Builder.new("builder", nil, nil, :xla)
     assert b = Builder.new(parent, "subbuilder")
     assert b.name == "subbuilder"
     assert is_reference(b.ref)
@@ -19,7 +19,7 @@ defmodule EXLA.BuilderTest do
   end
 
   test "build/1 returns a computation" do
-    builder = Builder.new("test")
+    builder = Builder.new("test", nil, nil, :xla)
     op = Op.constant_r0(builder, 1, {:s, 32})
     assert %Computation{} = Builder.build(op)
   end

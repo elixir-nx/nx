@@ -7,6 +7,32 @@ defmodule EXLA.NIF do
     :erlang.load_nif(path, 0)
   end
 
+  def new_mlir_module, do: :erlang.nif_error(:undef)
+
+  def create_mlir_function(_module, _name, _arg_types, _ret_type), do: :erlang.nif_error(:undef)
+
+  def get_mlir_function_arguments(_function), do: :erlang.nif_error(:undef)
+
+  def mlir_add(_function, _lhs, _rhs), do: :erlang.nif_error(:undef)
+  def mlir_subtract(_function, _lhs, _rhs), do: :erlang.nif_error(:undef)
+  def mlir_tuple(_function, _vals), do: :erlang.nif_error(:undef)
+  def mlir_get_tuple_element(_function, _tuple, _index), do: :erlang.nif_error(:undef)
+
+  def mlir_build(_function, _root), do: :erlang.nif_error(:undef)
+
+  def mlir_compile(
+        _client,
+        _computation,
+        _argument_layouts,
+        _num_replicas,
+        _num_partitions,
+        _use_spmd,
+        _device_id
+      ),
+      do: :erlang.nif_error(:undef)
+
+  def dump_mlir_module(_builder), do: :erlang.nif_error(:undef)
+
   def new_builder(_name),
     do: :erlang.nif_error(:undef)
 
@@ -295,4 +321,8 @@ defmodule EXLA.NIF do
 
   def start_log_sink(_sink_pid),
     do: :erlang.nif_error(:undef)
+
+  def get_c_api_client(_device_type), do: :erlang.nif_error(:undef)
+
+  def load_pjrt_plugin(_device_type, _library_path), do: :erlang.nif_error(:undef)
 end
