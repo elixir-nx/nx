@@ -185,6 +185,7 @@ version = "0.1.0"
 dependencies = [
  "candle-core",
  "half",
+ "num-traits",
  "rustler",
  "thiserror",
 ]

@@ -7,6 +7,7 @@ mod atoms {
 
 mod devices;
 mod error;
+mod ops;
 mod tensors;
 
 use rustler::{Env, Term};
@@ -45,6 +46,7 @@ rustler::init! {
         tensors::concatenate,
         tensors::matmul,
         tensors::abs,
+        tensors::acos,
         tensors::cos,
         tensors::sin,
         tensors::exp,

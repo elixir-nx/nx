@@ -1,4 +1,5 @@
 use crate::atoms;
+use crate::ops::{Acos};
 use crate::error::CandlexError;
 use candle_core::{DType, Device, Tensor};
 use half::{bf16, f16};
@@ -183,6 +184,15 @@ macro_rules! binary_nif {
     };
 }
 
+macro_rules! custom_unary_nif {
+    ($nif_name:ident, $custom_op_name:ident) => {
+        #[rustler::nif(schedule = "DirtyCpu")]
+        pub fn $nif_name(ex_tensor: ExTensor) -> Result<ExTensor, CandlexError> {
+            Ok(ExTensor::new(ex_tensor.apply_op1_no_bwd(&$custom_op_name)?))
+        }
+    };
+}
+
 unary_nif!(negate, neg);
 unary_nif!(abs);
 unary_nif!(cos);
@@ -191,6 +201,8 @@ unary_nif!(sin);
 unary_nif!(log);
 unary_nif!(sqrt);
 unary_nif!(tanh);
+
+custom_unary_nif!(acos, Acos);
 
 binary_nif!(add, broadcast_add);
 binary_nif!(subtract, broadcast_sub);

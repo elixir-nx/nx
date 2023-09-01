@@ -539,6 +539,15 @@ defmodule CandlexTest do
         ]
       ))
     end
+
+    test "acos" do
+      Nx.acos(0.10000000149011612)
+      |> assert_equal(t(1.4706288576126099))
+
+      t([0.10000000149011612, 0.5, 0.8999999761581421])
+      |> Nx.acos()
+      |> assert_equal(t([1.4706288576126099, 1.0471975803375244, 0.4510268568992615]))
+    end
   end
 
   defp t(values, opts \\ []) do
