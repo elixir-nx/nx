@@ -27,6 +27,7 @@ defmodule Candlex.Native do
         :exp,
         :floor,
         :log,
+        :log1p,
         :negate,
         :round,
         :sin,

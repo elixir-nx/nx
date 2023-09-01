@@ -614,6 +614,15 @@ defmodule CandlexTest do
       |> Nx.cbrt()
       |> assert_equal(t([1.0, 1.2599210739135742, 1.4422495365142822]))
     end
+
+    test "log1p" do
+      Nx.log1p(1.0)
+      |> assert_equal(t(0.6931471824645996))
+
+      t([1.0, 2, 3])
+      |> Nx.log1p()
+      |> assert_equal(t([0.6931471824645996, 1.0986123085021973, 1.3862943649291992]))
+    end
   end
 
   defp t(values, opts \\ []) do
