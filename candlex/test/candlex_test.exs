@@ -458,7 +458,7 @@ defmodule CandlexTest do
       Nx.argmax(4)
       |> assert_equal(t(0))
 
-      # TODO: Support total argmax
+      # TODO: Support argmax without specific axis
       # t([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]])
       # |> Nx.argmax()
       # |> assert_equal(t(10))
@@ -495,6 +495,47 @@ defmodule CandlexTest do
           [
             [0, 1, 0]
           ]
+        ]
+      ))
+    end
+
+    test "argmin" do
+      Nx.argmin(4)
+      |> assert_equal(t(0))
+
+      # TODO: Support argmin without specific axis
+      # t([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]])
+      # |> Nx.argmin()
+      # |> assert_equal(t(4))
+
+      # t([2.0, 4.0])
+      # |> Nx.argmin()
+      # |> assert_equal(t(0))
+
+      t([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]])
+      |> Nx.argmin(axis: 0)
+      |> assert_equal(t(
+        [
+          [0, 0, 0],
+          [0, 0, 0]
+        ]
+      ))
+
+      t([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]], names: [:x, :y, :z])
+      |> Nx.argmin(axis: 1)
+      |> assert_equal(t(
+        [
+          [1, 1, 0],
+          [1, 0, 0]
+        ]
+      ))
+
+      t([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]], names: [:x, :y, :z])
+      |> Nx.argmin(axis: :z)
+      |> assert_equal(t(
+        [
+          [1, 1],
+          [1, 2]
         ]
       ))
     end

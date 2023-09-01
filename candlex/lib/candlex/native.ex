@@ -7,7 +7,6 @@ defmodule Candlex.Native do
   def from_binary(_binary, _dtype, _shape, _device), do: error()
   def to_binary(_tensor), do: error()
   def all(_tensor), do: error()
-  def argmax(_tensor, _dim, _keep_dim), do: error()
   def where_cond(_tensor, _on_true, _on_false), do: error()
   def narrow(_tensor, _dim, _start, _length), do: error()
   def squeeze(_tensor, _dim), do: error()
@@ -34,6 +33,10 @@ defmodule Candlex.Native do
         :subtract
       ] do
     def unquote(op)(_left, _right), do: error()
+  end
+
+  for op <- [:argmax, :argmin] do
+    def unquote(op)(_tensor, _dim, _keep_dim), do: error()
   end
 
   def is_cuda_available(), do: error()
