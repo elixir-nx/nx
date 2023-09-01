@@ -1,5 +1,5 @@
 use crate::atoms;
-use crate::ops::{Acos};
+use crate::ops::{Acos, Asin};
 use crate::error::CandlexError;
 use candle_core::{DType, Device, Tensor};
 use half::{bf16, f16};
@@ -203,6 +203,7 @@ unary_nif!(sqrt);
 unary_nif!(tanh);
 
 custom_unary_nif!(acos, Acos);
+custom_unary_nif!(asin, Asin);
 
 binary_nif!(add, broadcast_add);
 binary_nif!(subtract, broadcast_sub);
