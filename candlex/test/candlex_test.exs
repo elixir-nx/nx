@@ -557,6 +557,15 @@ defmodule CandlexTest do
       |> Nx.asin()
       |> assert_equal(t([0.1001674234867096, 0.5235987901687622, 1.1197694540023804]))
     end
+
+    test "tan" do
+      Nx.tan(1.0)
+      |> assert_equal(t(1.5574077367782593))
+
+      t([1.0, 2, 3])
+      |> Nx.tan()
+      |> assert_equal(t([1.5574077367782593, -2.185039758682251, -0.14254654943943024]))
+    end
   end
 
   defp t(values, opts \\ []) do

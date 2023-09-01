@@ -53,6 +53,7 @@ rustler::init! {
         tensors::exp,
         tensors::log,
         tensors::sqrt,
+        tensors::tan,
         tensors::tanh,
         devices::is_cuda_available
     ],

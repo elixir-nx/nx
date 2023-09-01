@@ -39,3 +39,4 @@ macro_rules! custom_unary_op {
 
 custom_unary_op!(Acos, "acos", acos);
 custom_unary_op!(Asin, "asin", asin);
+custom_unary_op!(Tan, "tan", tan);
