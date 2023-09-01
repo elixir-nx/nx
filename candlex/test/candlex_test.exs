@@ -575,6 +575,26 @@ defmodule CandlexTest do
       |> Nx.atan()
       |> assert_equal(t([0.09966865181922913, 0.46364760398864746, 0.7328150868415833]))
     end
+
+    test "ceil" do
+      t([-1, 0, 1])
+      |> Nx.ceil()
+      |> assert_equal(t([-1, 0, 1]))
+
+      t([-1.5, -0.5, 0.5, 1.5])
+      |> Nx.ceil()
+      |> assert_equal(t([-1.0, 0.0, 1.0, 2.0]))
+    end
+
+    test "floor" do
+      t([-1, 0, 1])
+      |> Nx.floor()
+      |> assert_equal(t([-1, 0, 1]))
+
+      t([-1.5, -0.5, 0.5, 1.5])
+      |> Nx.floor()
+      |> assert_equal(t([-2.0, -1.0, 0.0, 1.0]))
+    end
   end
 
   defp t(values, opts \\ []) do

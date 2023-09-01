@@ -1,6 +1,6 @@
 use crate::atoms;
 use crate::error::CandlexError;
-use crate::ops::{Acos, Asin, Atan, Tan};
+use crate::ops::{Acos, Asin, Atan, Ceil, Floor, Tan};
 use candle_core::{DType, Device, Tensor};
 use half::{bf16, f16};
 use rustler::{Atom, Binary, Env, NewBinary, NifStruct, ResourceArc, Term};
@@ -208,6 +208,8 @@ unary_nif!(tanh);
 custom_unary_nif!(acos, Acos);
 custom_unary_nif!(asin, Asin);
 custom_unary_nif!(atan, Atan);
+custom_unary_nif!(ceil, Ceil);
+custom_unary_nif!(floor, Floor);
 custom_unary_nif!(tan, Tan);
 
 binary_nif!(add, broadcast_add);

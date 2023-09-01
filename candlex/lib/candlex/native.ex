@@ -16,7 +16,22 @@ defmodule Candlex.Native do
   def to_type(_tensor, _dtype), do: error()
   def concatenate(_tensors, _axis), do: error()
 
-  for op <- [:abs, :acos, :asin, :atan, :cos, :exp, :log, :negate, :sin, :sqrt, :tan, :tanh] do
+  for op <- [
+        :abs,
+        :acos,
+        :asin,
+        :atan,
+        :ceil,
+        :cos,
+        :exp,
+        :floor,
+        :log,
+        :negate,
+        :sin,
+        :sqrt,
+        :tan,
+        :tanh
+      ] do
     def unquote(op)(_tensor), do: error()
   end
 

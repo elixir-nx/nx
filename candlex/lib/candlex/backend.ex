@@ -184,9 +184,22 @@ defmodule Candlex.Backend do
 
   # Unary ops
 
-  unary_ops = [:abs, :acos, :asin, :atan, :cos, :exp, :log, :negate, :sin, :sqrt, :tan, :tanh]
-
-  for op <- unary_ops do
+  for op <- [
+        :abs,
+        :acos,
+        :asin,
+        :atan,
+        :ceil,
+        :cos,
+        :exp,
+        :floor,
+        :log,
+        :negate,
+        :sin,
+        :sqrt,
+        :tan,
+        :tanh
+      ] do
     @impl true
     def unquote(op)(%T{} = out, %T{} = tensor) do
       tensor
