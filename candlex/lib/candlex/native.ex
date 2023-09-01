@@ -7,6 +7,7 @@ defmodule Candlex.Native do
   def from_binary(_binary, _dtype, _shape, _device), do: error()
   def to_binary(_tensor), do: error()
   def all(_tensor), do: error()
+  def argmax(_tensor, _dim, _keep_dim), do: error()
   def where_cond(_tensor, _on_true, _on_false), do: error()
   def narrow(_tensor, _dim, _start, _length), do: error()
   def squeeze(_tensor, _dim), do: error()

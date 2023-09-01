@@ -104,6 +104,18 @@ pub fn all(ex_tensor: ExTensor) -> Result<ExTensor, CandlexError> {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+pub fn argmax(ex_tensor: ExTensor, dim: usize, keep_dim: bool) -> Result<ExTensor, CandlexError> {
+    let t =
+        if keep_dim {
+            ex_tensor.argmax_keepdim(dim)?
+        } else {
+            ex_tensor.argmax(dim)?
+        };
+
+    Ok(ExTensor::new(t))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 pub fn broadcast_to(t: ExTensor, shape: Term) -> Result<ExTensor, CandlexError> {
     Ok(ExTensor::new(t.broadcast_as(tuple_to_vec(shape).unwrap())?))
 }

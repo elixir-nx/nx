@@ -99,6 +99,25 @@ defmodule Candlex.Backend do
     |> to_nx(out)
   end
 
+  @impl true
+  def argmax(%T{} = out, %T{shape: {}} = tensor, _opts) do
+    out
+    |> constant(0, [])
+  end
+
+  def argmax(%T{type: type} = out, %T{} = tensor, opts) do
+    axis = opts[:axis] || -1
+    keep_axis = opts[:keep_axis] || false
+
+    from_nx(tensor)
+    |> Native.argmax(axis, keep_axis)
+    |> unwrap!()
+    # # candle argmax changes to u32
+    |> Native.to_type(to_candle_dtype(type))
+    |> unwrap!()
+    |> to_nx(out)
+  end
+
   # Element-wise
 
   for op <- [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] do

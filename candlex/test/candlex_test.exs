@@ -453,6 +453,51 @@ defmodule CandlexTest do
       |> Nx.sqrt()
       |> assert_equal(t([1.0, 1.4142135381698608, 1.7320507764816284]))
     end
+
+    test "argmax" do
+      Nx.argmax(4)
+      |> assert_equal(t(0))
+
+      # TODO: Support total argmax
+      # t([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]])
+      # |> Nx.argmax()
+      # |> assert_equal(t(10))
+
+      # t([2.0, 4.0])
+      # |> Nx.argmax()
+      # |> assert_equal(t(1))
+
+      t([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]])
+      |> Nx.argmax(axis: 0)
+      |> assert_equal(t(
+        [
+          [1, 0, 0],
+          [1, 1, 0]
+        ]
+      ))
+
+      t([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]], names: [:x, :y, :z])
+      |> Nx.argmax(axis: :z)
+      |> assert_equal(t(
+        [
+          [0, 2],
+          [0, 1]
+        ]
+      ))
+
+      t([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]], names: [:x, :y, :z])
+      |> Nx.argmax(axis: :y, keep_axis: true)
+      |> assert_equal(t(
+        [
+          [
+            [0, 0, 0]
+          ],
+          [
+            [0, 1, 0]
+          ]
+        ]
+      ))
+    end
   end
 
   defp t(values, opts \\ []) do
