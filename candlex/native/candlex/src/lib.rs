@@ -48,6 +48,7 @@ rustler::init! {
         tensors::abs,
         tensors::acos,
         tensors::asin,
+        tensors::atan,
         tensors::cos,
         tensors::sin,
         tensors::exp,
