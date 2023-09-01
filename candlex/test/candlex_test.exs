@@ -595,6 +595,15 @@ defmodule CandlexTest do
       |> Nx.floor()
       |> assert_equal(t([-2.0, -1.0, 0.0, 1.0]))
     end
+
+    test "cbrt" do
+      Nx.cbrt(1.0)
+      |> assert_equal(t(1.0))
+
+      t([1.0, 2, 3])
+      |> Nx.cbrt()
+      |> assert_equal(t([1.0, 1.2599210739135742, 1.4422495365142822]))
+    end
   end
 
   defp t(values, opts \\ []) do

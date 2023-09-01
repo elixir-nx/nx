@@ -189,6 +189,7 @@ defmodule Candlex.Backend do
         :acos,
         :asin,
         :atan,
+        :cbrt,
         :ceil,
         :cos,
         :exp,

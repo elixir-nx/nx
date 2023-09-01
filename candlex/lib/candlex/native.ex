@@ -21,6 +21,7 @@ defmodule Candlex.Native do
         :acos,
         :asin,
         :atan,
+        :cbrt,
         :ceil,
         :cos,
         :exp,
