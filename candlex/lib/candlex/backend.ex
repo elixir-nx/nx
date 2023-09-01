@@ -99,13 +99,13 @@ defmodule Candlex.Backend do
     |> to_nx(out)
   end
 
-
   for op <- [:argmax, :argmin] do
     @impl true
     def unquote(op)(%T{} = out, %T{shape: {}} = _tensor, _opts) do
       out
       |> constant(0, [])
     end
+
     def unquote(op)(%T{type: type} = out, %T{} = tensor, opts) do
       axis = opts[:axis] || -1
       keep_axis = opts[:keep_axis] || false
