@@ -1,6 +1,6 @@
 use crate::atoms;
-use crate::ops::{Acos, Asin};
 use crate::error::CandlexError;
+use crate::ops::{Acos, Asin};
 use candle_core::{DType, Device, Tensor};
 use half::{bf16, f16};
 use rustler::{Atom, Binary, Env, NewBinary, NifStruct, ResourceArc, Term};
@@ -34,14 +34,19 @@ impl Deref for ExTensor {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-pub fn from_binary(binary: Binary, dtype_str: &str, shape: Term, device: Atom) -> Result<ExTensor, CandlexError> {
+pub fn from_binary(
+    binary: Binary,
+    dtype_str: &str,
+    shape: Term,
+    device: Atom,
+) -> Result<ExTensor, CandlexError> {
     Ok(ExTensor::new(Tensor::from_raw_buffer(
         binary.as_slice(),
         // TODO: Handle DTypeParseError
         DType::from_str(dtype_str).unwrap(),
         // TODO: Handle rustler::Error
         &tuple_to_vec(shape).unwrap(),
-        &device_from_atom(device)?
+        &device_from_atom(device)?,
     )?))
 }
 
@@ -75,7 +80,7 @@ pub fn arange(
     end: i64,
     dtype_str: &str,
     shape: Term,
-    device: Atom
+    device: Atom,
 ) -> Result<ExTensor, CandlexError> {
     Ok(ExTensor::new(
         Tensor::arange(start, end, &device_from_atom(device)?)?
@@ -106,24 +111,22 @@ pub fn all(ex_tensor: ExTensor) -> Result<ExTensor, CandlexError> {
 
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn argmax(ex_tensor: ExTensor, dim: usize, keep_dim: bool) -> Result<ExTensor, CandlexError> {
-    let t =
-        if keep_dim {
-            ex_tensor.argmax_keepdim(dim)?
-        } else {
-            ex_tensor.argmax(dim)?
-        };
+    let t = if keep_dim {
+        ex_tensor.argmax_keepdim(dim)?
+    } else {
+        ex_tensor.argmax(dim)?
+    };
 
     Ok(ExTensor::new(t))
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn argmin(ex_tensor: ExTensor, dim: usize, keep_dim: bool) -> Result<ExTensor, CandlexError> {
-    let t =
-        if keep_dim {
-            ex_tensor.argmin_keepdim(dim)?
-        } else {
-            ex_tensor.argmin(dim)?
-        };
+    let t = if keep_dim {
+        ex_tensor.argmin_keepdim(dim)?
+    } else {
+        ex_tensor.argmin(dim)?
+    };
 
     Ok(ExTensor::new(t))
 }
@@ -229,7 +232,10 @@ fn device_from_atom(atom: Atom) -> Result<Device, CandlexError> {
     // } else if atom == atoms::cuda() {
     //     Ok(Device::new_cuda(0)?)
     } else {
-        Err(CandlexError::Other(format!("unsupported device {:?}", atom)))
+        Err(CandlexError::Other(format!(
+            "unsupported device {:?}",
+            atom
+        )))
     }
 }
 

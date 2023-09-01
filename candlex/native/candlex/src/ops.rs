@@ -17,7 +17,11 @@ macro_rules! custom_unary_op {
 
             /// The forward pass, as run on a cpu device. Note that the storage can use arbitrary strides,
             /// offsets etc so the associated layout should be used to access it.
-            fn cpu_fwd(&self, storage: &CpuStorage, layout: &Layout) -> Result<(CpuStorage, Shape), candle_core::Error> {
+            fn cpu_fwd(
+                &self,
+                storage: &CpuStorage,
+                layout: &Layout,
+            ) -> Result<(CpuStorage, Shape), candle_core::Error> {
                 use candle_core::backend::BackendStorage;
 
                 let storage = candle_core::map_dtype!(
@@ -30,7 +34,7 @@ macro_rules! custom_unary_op {
                 Ok((storage, layout.shape().clone()))
             }
         }
-    }
+    };
 }
 
 custom_unary_op!(Acos, "acos", acos);
