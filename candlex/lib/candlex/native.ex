@@ -28,6 +28,7 @@ defmodule Candlex.Native do
         :floor,
         :log,
         :negate,
+        :round,
         :sin,
         :sqrt,
         :tan,

@@ -196,6 +196,7 @@ defmodule Candlex.Backend do
         :floor,
         :log,
         :negate,
+        :round,
         :sin,
         :sqrt,
         :tan,

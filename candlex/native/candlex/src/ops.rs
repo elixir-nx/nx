@@ -43,4 +43,5 @@ custom_unary_op!(Atan, "atan", atan);
 custom_unary_op!(Cbrt, "cbrt", cbrt);
 custom_unary_op!(Ceil, "ceil", ceil);
 custom_unary_op!(Floor, "floor", floor);
+custom_unary_op!(Round, "round", round);
 custom_unary_op!(Tan, "tan", tan);

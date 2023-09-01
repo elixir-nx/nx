@@ -55,6 +55,7 @@ rustler::init! {
         tensors::sin,
         tensors::exp,
         tensors::floor,
+        tensors::round,
         tensors::log,
         tensors::sqrt,
         tensors::tan,

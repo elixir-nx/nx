@@ -596,6 +596,16 @@ defmodule CandlexTest do
       |> assert_equal(t([-2.0, -1.0, 0.0, 1.0]))
     end
 
+    test "round" do
+      t([-1, 0, 1])
+      |> Nx.round()
+      |> assert_equal(t([-1, 0, 1]))
+
+      t([-1.5, -0.5, 0.5, 1.5])
+      |> Nx.round()
+      |> assert_equal(t([-2.0, -1.0, 1.0, 2.0]))
+    end
+
     test "cbrt" do
       Nx.cbrt(1.0)
       |> assert_equal(t(1.0))
