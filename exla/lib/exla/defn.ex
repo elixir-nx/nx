@@ -803,9 +803,19 @@ defmodule EXLA.Defn do
 
   ## to_operator element-wise
 
+  # defp to_operator(:negate, [%EXLA.MLIR.Value{} = op], _ans, _state), do: EXLA.MLIR.Value.negate(op)
   defp to_operator(:negate, [op], _ans, _state), do: EXLA.Op.negate(op)
 
+  defp to_operator(:abs, [%EXLA.MLIR.Value{} = op], _ans, _state), do: EXLA.MLIR.Value.abs(op)
   defp to_operator(:abs, [op], _ans, _state), do: EXLA.Op.abs(op)
+
+  defp to_operator(:sign, [%EXLA.MLIR.Value{} = op], %{type: type}, _state) do
+    case type do
+      # {:u, _} -> Value.min(op, Value.constant_r0(state.builder, 1, type))
+      {:u, _} -> raise "sign not implemented yet for unsigned inputs"
+      _ -> Value.sign(op)
+    end
+  end
 
   defp to_operator(:sign, [op], %{type: type}, state) do
     case type do
@@ -882,6 +892,10 @@ defmodule EXLA.Defn do
               [:bitwise_not, :count_leading_zeros, :population_count, :cosh, :sinh, :acos] ++
               [:asin, :atan, :floor, :ceil, :round, :acosh, :asinh, :atanh, :erf] ++
               [:erfc, :erf_inv, :conjugate]
+
+  defp to_operator(op, [%EXLA.MLIR.Value{} = arg], %{type: type}, _state) when op in @unary_op do
+    apply(EXLA.MLIR.Value, op, [to_type(arg, type)])
+  end
 
   defp to_operator(op, [arg], %{type: type}, _state) when op in @unary_op do
     apply(EXLA.Op, op, [to_type(arg, type)])
@@ -1795,6 +1809,10 @@ defmodule EXLA.Defn do
   defp subbuilder(%EXLA.Builder{name: name} = builder, desc) do
     suffix = System.unique_integer([:positive])
     EXLA.Builder.new(builder, name <> "-" <> desc <> "-" <> Integer.to_string(suffix))
+  end
+
+  defp subbuilder(%EXLA.MLIR.Function{} = function, _description) do
+    function
   end
 
   # Helpers

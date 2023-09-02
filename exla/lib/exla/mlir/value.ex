@@ -27,6 +27,21 @@ defmodule EXLA.MLIR.Value do
     end
   end
 
+  @unary_ops [:abs, :exp, :expm1, :floor, :ceil, :round] ++
+               [:log, :log1p, :sigmoid, :sign, :cos] ++
+               [:sin, :acos, :asin, :atan, :cosh, :sinh] ++
+               [:tanh, :acosh, :asinh, :atanh] ++
+               [:sqrt, :cbrt]
+
+  for op <- @unary_ops do
+    mlir_op = :"mlir_#{op}"
+
+    def unquote(op)(%Value{ref: operand, function: %Function{} = func}) do
+      ref = EXLA.NIF.unquote(mlir_op)(func.ref, operand) |> unwrap!()
+      %Value{ref: ref, function: func}
+    end
+  end
+
   def tuple([%Value{function: %Function{} = func} | _rest] = vals) do
     refs = Enum.map(vals, fn %Value{ref: ref, function: ^func} -> ref end)
     ref = EXLA.NIF.mlir_tuple(func.ref, refs) |> unwrap!()

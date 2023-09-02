@@ -39,6 +39,29 @@ class MLIRFunction {
   mlir::Value GreaterEqualOp(mlir::Value lhs, mlir::Value rhs);
   mlir::Value ShiftLeftOp(mlir::Value lhs, mlir::Value rhs);
   mlir::Value ConvertOp(mlir::Value operand, mlir::Type type);
+  mlir::Value AbsOp(mlir::Value operand);
+  mlir::Value ExpOp(mlir::Value operand);
+  mlir::Value Expm1Op(mlir::Value operand);
+  mlir::Value FloorOp(mlir::Value operand);
+  mlir::Value CeilOp(mlir::Value operand);
+  mlir::Value RoundOp(mlir::Value operand);
+  mlir::Value LogOp(mlir::Value operand);
+  mlir::Value Log1pOp(mlir::Value operand);
+  mlir::Value SignOp(mlir::Value operand);
+  mlir::Value CosOp(mlir::Value operand);
+  mlir::Value SinOp(mlir::Value operand);
+  mlir::Value AcosOp(mlir::Value operand);
+  mlir::Value AsinOp(mlir::Value operand);
+  mlir::Value AtanOp(mlir::Value operand);
+  mlir::Value CoshOp(mlir::Value operand);
+  mlir::Value SinhOp(mlir::Value operand);
+  mlir::Value TanhOp(mlir::Value operand);
+  mlir::Value AcoshOp(mlir::Value operand);
+  mlir::Value AsinhOp(mlir::Value operand);
+  mlir::Value AtanhOp(mlir::Value operand);
+  mlir::Value SqrtOp(mlir::Value operand);
+  mlir::Value CbrtOp(mlir::Value operand);
+
   int get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *type);
 
   void Build(mlir::Value root);

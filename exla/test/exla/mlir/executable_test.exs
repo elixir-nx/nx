@@ -87,4 +87,84 @@ defmodule EXLA.MLIR.ExecutableTest do
       end
     end
   end
+
+  describe "unary ops" do
+    @unary_ops [:abs, :exp, :expm1, :floor, :ceil, :round] ++
+                 [:log, :log1p, :sign, :cosh, :sinh] ++
+                 [:sqrt, :cbrt, :sin, :cos, :atan] ++
+                 [:tanh]
+
+    for op <- @unary_ops do
+      test "#{op}" do
+        function = fn t -> Nx.unquote(op)(t) end
+
+        t =
+          Nx.Defn.jit_apply(&Nx.add/2, [Nx.iota({2, 3, 1}, type: :f32), 1],
+            compiler: Nx.Defn.Evaluator
+          )
+
+        result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
+        result_mlir = Nx.Defn.jit_apply(function, [t])
+
+        assert result_nx.shape == result_mlir.shape
+        assert result_nx.type == result_mlir.type
+        # TO-DO (mlir): remove backend transfer
+        assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
+      end
+    end
+
+    test "acosh" do
+      function = fn t -> Nx.acosh(t) end
+
+      t =
+        Nx.Defn.jit_apply(
+          &Nx.divide(&3, Nx.add(&1, &2)),
+          [Nx.iota({2, 3, 1}, type: :f32), 1, 100],
+          compiler: Nx.Defn.Evaluator
+        )
+
+      result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
+      result_mlir = Nx.Defn.jit_apply(function, [t])
+
+      assert result_nx.shape == result_mlir.shape
+      assert result_nx.type == result_mlir.type
+      # TO-DO (mlir): remove backend transfer
+      assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
+    end
+
+    for op <- [:acos, :atanh, :asin, :asinh] do
+      test "#{op}" do
+        function = fn t -> Nx.unquote(op)(t) end
+
+        t =
+          Nx.Defn.jit_apply(
+            &Nx.divide(Nx.add(&1, &2), &3),
+            [Nx.iota({2, 3, 1}, type: :f32), 1, 100],
+            compiler: Nx.Defn.Evaluator
+          )
+
+        result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
+        result_mlir = Nx.Defn.jit_apply(function, [t])
+
+        assert result_nx.shape == result_mlir.shape
+        assert result_nx.type == result_mlir.type
+        # TO-DO (mlir): remove backend transfer
+        assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
+      end
+    end
+
+    # TO-DO (mlir): this case depends on constant_r0 being available
+    # test "sign with unsigned input" do
+    #   function = fn t -> Nx.sign(t) end
+
+    #   t = Nx.tensor([0, 1, 2], type: :u8)
+
+    #   result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
+    #   result_mlir = Nx.Defn.jit_apply(function, [t])
+
+    #   assert result_nx.shape == result_mlir.shape
+    #   assert result_nx.type == result_mlir.type
+    #   assert_equal(result_nx, result_mlir)
+    # end
+  end
 end

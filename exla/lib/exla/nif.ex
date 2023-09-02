@@ -22,6 +22,17 @@ defmodule EXLA.NIF do
     def unquote(mlir_op)(_function, _lhs, _rhs), do: :erlang.nif_error(:undef)
   end
 
+  @unary_ops [:abs, :exp, :expm1, :floor, :ceil, :round] ++
+               [:log, :log1p, :sigmoid, :sign, :cos] ++
+               [:sin, :acos, :asin, :atan, :cosh, :sinh] ++
+               [:tanh, :acosh, :asinh, :atanh] ++
+               [:sqrt, :cbrt]
+
+  for op <- @unary_ops do
+    mlir_op = :"mlir_#{op}"
+    def unquote(mlir_op)(_function, _operand), do: :erlang.nif_error(:undef)
+  end
+
   def mlir_tuple(_function, _vals), do: :erlang.nif_error(:undef)
   def mlir_get_tuple_element(_function, _tuple, _index), do: :erlang.nif_error(:undef)
 
