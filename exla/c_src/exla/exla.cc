@@ -295,6 +295,30 @@ ERL_NIF_TERM mlir_atan2(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_BIN_OP(Atan2Op);
 }
 
+ERL_NIF_TERM mlir_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(EqualOp);
+}
+
+ERL_NIF_TERM mlir_not_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(NotEqualOp);
+}
+
+ERL_NIF_TERM mlir_less(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(LessOp);
+}
+
+ERL_NIF_TERM mlir_less_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(LessEqualOp);
+}
+
+ERL_NIF_TERM mlir_greater(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(GreaterOp);
+}
+
+ERL_NIF_TERM mlir_greater_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(GreaterEqualOp);
+}
+
 ERL_NIF_TERM mlir_build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
@@ -976,6 +1000,12 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_pow", 3, mlir_pow},
     {"mlir_divide", 3, mlir_divide},
     {"mlir_atan2", 3, mlir_atan2},
+    {"mlir_equal", 3, mlir_equal},
+    {"mlir_not_equal", 3, mlir_not_equal},
+    {"mlir_less", 3, mlir_less},
+    {"mlir_less_equal", 3, mlir_less_equal},
+    {"mlir_greater", 3, mlir_greater},
+    {"mlir_greater_equal", 3, mlir_greater_equal},
     {"mlir_build", 2, mlir_build},
     {"dump_mlir_module", 1, dump_mlir_module},
     {"mlir_get_shape", 1, mlir_get_shape},

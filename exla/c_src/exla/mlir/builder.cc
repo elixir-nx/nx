@@ -138,6 +138,42 @@ mlir::Value MLIRFunction::Atan2Op(mlir::Value lhs, mlir::Value rhs) {
   return op;
 }
 
+mlir::Value compare_and_return_bool(mlir::OpBuilder* builder, mlir::Value lhs, mlir::Value rhs, mlir::mhlo::ComparisonDirection direction) {
+  auto op = builder->create<mlir::mhlo::CompareOp>(builder->getUnknownLoc(), lhs, rhs, direction);
+  mlir::Type mlir_bool = builder->getIntegerType(8, false);
+  return builder->create<mlir::mhlo::ConvertOp>(builder->getUnknownLoc(), op, mlir_bool);
+}
+
+mlir::Value MLIRFunction::EqualOp(mlir::Value lhs, mlir::Value rhs) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return compare_and_return_bool(module_->builder(), lhs, rhs, mlir::mhlo::ComparisonDirection::EQ);
+}
+
+mlir::Value MLIRFunction::NotEqualOp(mlir::Value lhs, mlir::Value rhs) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return compare_and_return_bool(module_->builder(), lhs, rhs, mlir::mhlo::ComparisonDirection::NE);
+}
+
+mlir::Value MLIRFunction::LessOp(mlir::Value lhs, mlir::Value rhs) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return compare_and_return_bool(module_->builder(), lhs, rhs, mlir::mhlo::ComparisonDirection::LT);
+}
+
+mlir::Value MLIRFunction::LessEqualOp(mlir::Value lhs, mlir::Value rhs) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return compare_and_return_bool(module_->builder(), lhs, rhs, mlir::mhlo::ComparisonDirection::LE);
+}
+
+mlir::Value MLIRFunction::GreaterOp(mlir::Value lhs, mlir::Value rhs) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return compare_and_return_bool(module_->builder(), lhs, rhs, mlir::mhlo::ComparisonDirection::GT);
+}
+
+mlir::Value MLIRFunction::GreaterEqualOp(mlir::Value lhs, mlir::Value rhs) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return compare_and_return_bool(module_->builder(), lhs, rhs, mlir::mhlo::ComparisonDirection::GE);
+}
+
 mlir::Value MLIRFunction::TupleOp(std::vector<mlir::Value> vals) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   auto op = module_->builder()->create<mlir::mhlo::TupleOp>(module_->builder()->getUnknownLoc(), vals);

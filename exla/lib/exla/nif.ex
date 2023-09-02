@@ -14,7 +14,8 @@ defmodule EXLA.NIF do
   def get_mlir_function_arguments(_function), do: :erlang.nif_error(:undef)
 
   @bin_ops [:add, :subtract, :multiply, :divide, :pow, :min] ++
-             [:max, :remainder, :atan2]
+             [:max, :remainder, :atan2, :equal, :not_equal] ++
+             [:less, :less_equal, :greater, :greater_equal]
 
   for op <- @bin_ops do
     mlir_op = :"mlir_#{op}"

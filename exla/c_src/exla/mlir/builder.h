@@ -31,6 +31,12 @@ class MLIRFunction {
   mlir::Value PowOp(mlir::Value lhs, mlir::Value rhs);
   mlir::Value DivOp(mlir::Value lhs, mlir::Value rhs);
   mlir::Value Atan2Op(mlir::Value lhs, mlir::Value rhs);
+  mlir::Value EqualOp(mlir::Value lhs, mlir::Value rhs);
+  mlir::Value NotEqualOp(mlir::Value lhs, mlir::Value rhs);
+  mlir::Value LessOp(mlir::Value lhs, mlir::Value rhs);
+  mlir::Value LessEqualOp(mlir::Value lhs, mlir::Value rhs);
+  mlir::Value GreaterOp(mlir::Value lhs, mlir::Value rhs);
+  mlir::Value GreaterEqualOp(mlir::Value lhs, mlir::Value rhs);
   mlir::Value ShiftLeftOp(mlir::Value lhs, mlir::Value rhs);
   mlir::Value ConvertOp(mlir::Value operand, mlir::Type type);
   int get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *type);

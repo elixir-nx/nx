@@ -69,7 +69,8 @@ defmodule EXLA.MLIR.ExecutableTest do
 
   describe "binary ops" do
     @bin_ops [:add, :subtract, :multiply, :pow, :min] ++
-               [:max, :remainder, :atan2]
+               [:max, :remainder, :atan2, :equal, :not_equal] ++
+               [:less, :less_equal, :greater, :greater_equal]
     # TO-DO (mlir): test for type casting
 
     for op <- @bin_ops do
