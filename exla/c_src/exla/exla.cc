@@ -132,12 +132,17 @@ ERL_NIF_TERM create_mlir_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     return exla::nif::error(env, "Unable to get args.");
   }
 
+  absl::Span<const int64_t> span;
+
   for (xla::Shape* shape : arg_shapes) {
     int type = shape->element_type();
     if (type == -1) {
       return exla::nif::error(env, "Invalid argument type received.");
     }
-    arg_types.emplace_back(exla::get_xla_shape_dims(shape), type);
+    span = shape->dimensions();
+    std::vector<exla::int64> dims(span.begin(), span.end());
+
+    arg_types.emplace_back(dims, type);
   }
 
   xla::Shape* ret_shape;
@@ -150,7 +155,10 @@ ERL_NIF_TERM create_mlir_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     return exla::nif::error(env, "Invalid output type received.");
   }
 
-  ret_type = std::make_pair(exla::get_xla_shape_dims(ret_shape), type);
+  span = ret_shape->dimensions();
+  std::vector<exla::int64> ret_dims(span.begin(), span.end());
+
+  ret_type = std::make_pair(ret_dims, type);
 
   exla::MLIRFunction* func = (*module)->CreateFunction(func_name, arg_types, ret_type);
 

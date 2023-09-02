@@ -263,10 +263,4 @@ MLIRFunction* MLIRModule::CreateFunction(
   return new MLIRFunction(this, std::move(funcOp));
 }
 
-std::vector<exla::int64> get_xla_shape_dims(xla::Shape* shape) {
-  absl::Span<const int64_t> span = shape->dimensions();
-  std::vector<exla::int64> dims(span.begin(), span.end());
-  return dims;
-}
-
 }  // namespace exla

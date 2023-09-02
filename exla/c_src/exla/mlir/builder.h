@@ -66,7 +66,6 @@ class MLIRModule {
 };
 
 mlir::Type TypeIntToMLIRType(mlir::OpBuilder *builder, int type_int);
-std::vector<exla::int64> get_xla_shape_dims(xla::Shape *);
 
 xla::PrimitiveType MLIRTypeToPrimitiveType(mlir::Type);
 }  // namespace exla
