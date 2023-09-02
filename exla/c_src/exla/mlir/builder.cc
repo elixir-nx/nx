@@ -4,6 +4,7 @@
 
 #include "../exla_nif_util.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
@@ -172,6 +173,136 @@ mlir::Value MLIRFunction::GreaterOp(mlir::Value lhs, mlir::Value rhs) {
 mlir::Value MLIRFunction::GreaterEqualOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   return compare_and_return_bool(module_->builder(), lhs, rhs, mlir::mhlo::ComparisonDirection::GE);
+}
+
+mlir::Value MLIRFunction::AbsOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::AbsOp>(module_->builder()->getUnknownLoc(), operand);
+}
+
+mlir::Value MLIRFunction::ExpOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::ExpOp>(module_->builder()->getUnknownLoc(), operand);
+}
+
+mlir::Value MLIRFunction::Expm1Op(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::Expm1Op>(module_->builder()->getUnknownLoc(), operand);
+}
+
+mlir::Value MLIRFunction::FloorOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::FloorOp>(module_->builder()->getUnknownLoc(), operand);
+}
+
+mlir::Value MLIRFunction::CeilOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::CeilOp>(module_->builder()->getUnknownLoc(), operand);
+}
+
+mlir::Value MLIRFunction::RoundOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::RoundOp>(module_->builder()->getUnknownLoc(), operand);
+}
+
+mlir::Value MLIRFunction::LogOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::LogOp>(module_->builder()->getUnknownLoc(), operand);
+}
+
+mlir::Value MLIRFunction::Log1pOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::Log1pOp>(module_->builder()->getUnknownLoc(), operand);
+}
+
+// mlir::Value MLIRFunction::SigmoidOp(mlir::Value operand) {
+//   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+//   return module_->builder()->create<mlir::mhlo::SigmoidOp>(module_->builder()->getUnknownLoc(), operand);
+// }
+
+mlir::Value MLIRFunction::SignOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::SignOp>(module_->builder()->getUnknownLoc(), operand);
+}
+
+mlir::Value MLIRFunction::ClzOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::ClzOp>(module_->builder()->getUnknownLoc(), operand);
+}
+
+// mlir::Value MLIRFunction::CosOp(mlir::Value operand) {
+//   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+//   return module_->builder()->create<mlir::math::CosOp>(module_->builder()->getUnknownLoc(), operand);
+// }
+
+// mlir::Value MLIRFunction::SinOp(mlir::Value operand) {
+//   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+//   return module_->builder()->create<mlir::math::SinOp>(module_->builder()->getUnknownLoc(), operand);
+// }
+
+// mlir::Value MLIRFunction::AcosOp(mlir::Value operand) {
+//   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+//   return module_->builder()->create<mlir::math::AcosOp>(module_->builder()->getUnknownLoc(), operand);
+// }
+
+// mlir::Value MLIRFunction::AsinOp(mlir::Value operand) {
+//   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+//   return module_->builder()->create<mlir::math::AsinOp>(module_->builder()->getUnknownLoc(), operand);
+// }
+
+// mlir::Value MLIRFunction::AtanOp(mlir::Value operand) {
+//   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+//   return module_->builder()->create<mlir::math::AtanOp>(module_->builder()->getUnknownLoc(), operand);
+// }
+
+// mlir::Value MLIRFunction::CoshOp(mlir::Value operand) {
+//   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+//   return module_->builder()->create<mlir::math::CoshOp>(module_->builder()->getUnknownLoc(), operand);
+// }
+
+// mlir::Value MLIRFunction::SinhOp(mlir::Value operand) {
+//   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+//   return module_->builder()->create<mlir::math::SinhOp>(module_->builder()->getUnknownLoc(), operand);
+// }
+
+// mlir::Value MLIRFunction::TanhOp(mlir::Value operand) {
+//   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+//   return module_->builder()->create<mlir::math::TanhOp>(module_->builder()->getUnknownLoc(), operand);
+// }
+
+// mlir::Value MLIRFunction::AcoshOp(mlir::Value operand) {
+//   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+//   return module_->builder()->create<mlir::math::AcoshOp>(module_->builder()->getUnknownLoc(), operand);
+// }
+
+// mlir::Value MLIRFunction::AsinhOp(mlir::Value operand) {
+//   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+//   return module_->builder()->create<mlir::math::AsinhOp>(module_->builder()->getUnknownLoc(), operand);
+// }
+
+// mlir::Value MLIRFunction::AtanhOp(mlir::Value operand) {
+//   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+//   return module_->builder()->create<mlir::math::AtanhOp>(module_->builder()->getUnknownLoc(), operand);
+// }
+
+mlir::Value MLIRFunction::RealOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::RealOp>(module_->builder()->getUnknownLoc(), operand);
+}
+
+mlir::Value MLIRFunction::ImagOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::ImagOp>(module_->builder()->getUnknownLoc(), operand);
+}
+
+mlir::Value MLIRFunction::SqrtOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::SqrtOp>(module_->builder()->getUnknownLoc(), operand);
+}
+
+mlir::Value MLIRFunction::CbrtOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::CbrtOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::TupleOp(std::vector<mlir::Value> vals) {

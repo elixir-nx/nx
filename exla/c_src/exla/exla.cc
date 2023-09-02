@@ -259,6 +259,28 @@ ERL_NIF_TERM mlir_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[],
 
 #define MLIR_BIN_OP(OP) mlir_binary_op(env, argc, argv, [](exla::MLIRFunction* f, mlir::Value* lhs, mlir::Value* rhs) -> mlir::Value { return f->OP(*lhs, *rhs); })
 
+ERL_NIF_TERM mlir_unary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], std::function<mlir::Value(exla::MLIRFunction*, mlir::Value*)> op) {
+  if (argc != 2) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* operand;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+
+  mlir::Value res = op(*function, operand);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
+#define MLIR_UNARY_OP(OP) mlir_unary_op(env, argc, argv, [](exla::MLIRFunction* f, mlir::Value* operand) -> mlir::Value { return f->OP(*operand); })
+
 ERL_NIF_TERM mlir_add(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_BIN_OP(AddOp);
 }
@@ -317,6 +339,85 @@ ERL_NIF_TERM mlir_greater(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
 ERL_NIF_TERM mlir_greater_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_BIN_OP(GreaterEqualOp);
+}
+
+ERL_NIF_TERM mlir_abs(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(AbsOp);
+}
+ERL_NIF_TERM mlir_exp(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(ExpOp);
+}
+ERL_NIF_TERM mlir_expm1(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(Expm1Op);
+}
+ERL_NIF_TERM mlir_floor(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(FloorOp);
+}
+ERL_NIF_TERM mlir_ceil(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(CeilOp);
+}
+ERL_NIF_TERM mlir_round(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(RoundOp);
+}
+ERL_NIF_TERM mlir_log(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(LogOp);
+}
+ERL_NIF_TERM mlir_log1p(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(Log1pOp);
+}
+// ERL_NIF_TERM mlir_sigmoid(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+//   return MLIR_UNARY_OP(SigmoidOp);
+// }
+ERL_NIF_TERM mlir_sign(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(SignOp);
+}
+ERL_NIF_TERM mlir_clz(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(ClzOp);
+}
+// ERL_NIF_TERM mlir_cos(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+//   return MLIR_UNARY_OP(CosOp);
+// }
+// ERL_NIF_TERM mlir_sin(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+//   return MLIR_UNARY_OP(SinOp);
+// }
+// ERL_NIF_TERM mlir_acos(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+//   return MLIR_UNARY_OP(AcosOp);
+// }
+// ERL_NIF_TERM mlir_asin(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+//   return MLIR_UNARY_OP(AsinOp);
+// }
+// ERL_NIF_TERM mlir_atan(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+//   return MLIR_UNARY_OP(AtanOp);
+// }
+// ERL_NIF_TERM mlir_cosh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+//   return MLIR_UNARY_OP(CoshOp);
+// }
+// ERL_NIF_TERM mlir_sinh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+//   return MLIR_UNARY_OP(SinhOp);
+// }
+// ERL_NIF_TERM mlir_tanh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+//   return MLIR_UNARY_OP(TanhOp);
+// }
+// ERL_NIF_TERM mlir_acosh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+//   return MLIR_UNARY_OP(AcoshOp);
+// }
+// ERL_NIF_TERM mlir_asinh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+//   return MLIR_UNARY_OP(AsinhOp);
+// }
+// ERL_NIF_TERM mlir_atanh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+//   return MLIR_UNARY_OP(AtanhOp);
+// }
+ERL_NIF_TERM mlir_real(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(RealOp);
+}
+ERL_NIF_TERM mlir_imag(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(ImagOp);
+}
+ERL_NIF_TERM mlir_sqrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(SqrtOp);
+}
+ERL_NIF_TERM mlir_cbrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(CbrtOp);
 }
 
 ERL_NIF_TERM mlir_build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -1010,6 +1111,32 @@ static ErlNifFunc exla_funcs[] = {
     {"dump_mlir_module", 1, dump_mlir_module},
     {"mlir_get_shape", 1, mlir_get_shape},
     {"mlir_convert", 3, mlir_convert},
+    {"mlir_abs", 2, mlir_abs},
+    {"mlir_exp", 2, mlir_exp},
+    {"mlir_expm1", 2, mlir_expm1},
+    {"mlir_floor", 2, mlir_floor},
+    {"mlir_ceil", 2, mlir_ceil},
+    {"mlir_round", 2, mlir_round},
+    {"mlir_log", 2, mlir_log},
+    {"mlir_log1p", 2, mlir_log1p},
+    // {"mlir_sigmoid", 2, mlir_sigmoid},
+    {"mlir_sign", 2, mlir_sign},
+    {"mlir_clz", 2, mlir_clz},
+    // {"mlir_cos", 2, mlir_cos},
+    // {"mlir_sin", 2, mlir_sin},
+    // {"mlir_acos", 2, mlir_acos},
+    // {"mlir_asin", 2, mlir_asin},
+    // {"mlir_atan", 2, mlir_atan},
+    // {"mlir_cosh", 2, mlir_cosh},
+    // {"mlir_sinh", 2, mlir_sinh},
+    // {"mlir_tanh", 2, mlir_tanh},
+    // {"mlir_acosh", 2, mlir_acosh},
+    // {"mlir_asinh", 2, mlir_asinh},
+    // {"mlir_atanh", 2, mlir_atanh},
+    {"mlir_real", 2, mlir_real},
+    {"mlir_imag", 2, mlir_imag},
+    {"mlir_sqrt", 2, mlir_sqrt},
+    {"mlir_cbrt", 2, mlir_cbrt},
     // XlaBuilder
     {"new_builder", 1, new_builder},
     {"create_sub_builder", 2, create_sub_builder},
