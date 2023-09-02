@@ -114,7 +114,7 @@ MLIRModule::MLIRModule() {
   builder_->setInsertionPointToStart(module_->getBody());
 }
 
-mlir::Type exla::TypeIntToMLIRType(mlir::OpBuilder* builder, int type_int) {
+mlir::Type TypeIntToMLIRType(mlir::OpBuilder* builder, int type_int) {
   switch (type_int) {
     case 2:
       return builder->getIntegerType(8);
