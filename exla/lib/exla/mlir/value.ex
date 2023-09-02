@@ -44,7 +44,9 @@ defmodule EXLA.MLIR.Value do
   end
 
   def convert(%Value{ref: in_ref, function: %Function{} = func} = value, dtype) do
-    out_ref = EXLA.NIF.mlir_convert(func.ref, in_ref, EXLA.Shape.dtype_to_charlist(dtype)) |> unwrap!()
+    out_ref =
+      EXLA.NIF.mlir_convert(func.ref, in_ref, EXLA.Shape.dtype_to_charlist(dtype)) |> unwrap!()
+
     %Value{value | ref: out_ref}
   end
 
