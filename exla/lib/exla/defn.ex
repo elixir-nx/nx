@@ -845,7 +845,8 @@ defmodule EXLA.Defn do
 
   @bin_comp_op [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
 
-  defp to_operator(op, [%EXLA.MLIR.Value{} = left, %EXLA.MLIR.Value{} = right], _ans, _state) when op in @bin_comp_op do
+  defp to_operator(op, [%EXLA.MLIR.Value{} = left, %EXLA.MLIR.Value{} = right], _ans, _state)
+       when op in @bin_comp_op do
     # The answer type is always {:u, 8} but we need cast the inputs
     # to the same type which is not necessarily the answer type.
     # left_shape = EXLA.Op.get_shape(left)
