@@ -61,6 +61,7 @@ class MLIRFunction {
   mlir::Value AtanhOp(mlir::Value operand);
   mlir::Value SqrtOp(mlir::Value operand);
   mlir::Value CbrtOp(mlir::Value operand);
+  mlir::Value IotaOp(xla::Shape shape, int64_t dimension);
 
   int get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *type);
 

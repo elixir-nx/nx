@@ -17,6 +17,40 @@
 
 namespace exla {
 
+mlir::Type TypeIntToMLIRType(mlir::OpBuilder* builder, int type_int) {
+  switch (type_int) {
+    case 2:
+      return builder->getIntegerType(8);
+    case 3:
+      return builder->getIntegerType(16);
+    case 4:
+      return builder->getIntegerType(32);
+    case 5:
+      return builder->getIntegerType(64);
+    case 6:
+      return builder->getIntegerType(8, false);
+    case 7:
+      return builder->getIntegerType(16, false);
+    case 8:
+      return builder->getIntegerType(32, false);
+    case 9:
+      return builder->getIntegerType(64, false);
+    case 10:
+      return builder->getF16Type();
+    case 11:
+      return builder->getF32Type();
+    case 12:
+      return builder->getF64Type();
+    case 16:
+      return builder->getBF16Type();
+  }
+}
+
+mlir::TensorType GetMLIRType(mlir::OpBuilder* builder, std::vector<tsl::int64> dims, int type_int) {
+  auto type = TypeIntToMLIRType(builder, type_int);
+  return mlir::RankedTensorType::get(dims, type);
+}
+
 int MLIRFunction::get_mlir_type(ErlNifEnv* env, ERL_NIF_TERM term, mlir::Type* type) {
   auto builder = module_->builder();
   std::string type_str;
@@ -306,6 +340,17 @@ mlir::Value MLIRFunction::GetTupleElementOp(mlir::Value tuple, tsl::int64 index)
   return op;
 }
 
+mlir::Value MLIRFunction::IotaOp(xla::Shape shape, int64_t dimension) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+
+  absl::Span<const int64_t> dimensions_span = shape.dimensions();
+  std::vector<int64_t> dimensions(dimensions_span.begin(), dimensions_span.end());
+
+  mlir::TensorType type = GetMLIRType(module_->builder(), dimensions, shape.element_type());
+
+  return module_->builder()->create<mlir::mhlo::IotaOp>(module_->builder()->getUnknownLoc(), type, dimension);
+}
+
 void MLIRFunction::Build(mlir::Value root) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   auto op = module_->builder()->create<mlir::func::ReturnOp>(module_->builder()->getUnknownLoc(), root);
@@ -323,35 +368,6 @@ MLIRModule::MLIRModule() {
   module_ = mlir::OwningOpRef<mlir::ModuleOp>(mlir::ModuleOp::create(mlir::UnknownLoc::get(context_.get())));
   builder_ = std::make_unique<mlir::OpBuilder>(context_.get());
   builder_->setInsertionPointToStart(module_->getBody());
-}
-
-mlir::Type TypeIntToMLIRType(mlir::OpBuilder* builder, int type_int) {
-  switch (type_int) {
-    case 2:
-      return builder->getIntegerType(8);
-    case 3:
-      return builder->getIntegerType(16);
-    case 4:
-      return builder->getIntegerType(32);
-    case 5:
-      return builder->getIntegerType(64);
-    case 6:
-      return builder->getIntegerType(8, false);
-    case 7:
-      return builder->getIntegerType(16, false);
-    case 8:
-      return builder->getIntegerType(32, false);
-    case 9:
-      return builder->getIntegerType(64, false);
-    case 10:
-      return builder->getF16Type();
-    case 11:
-      return builder->getF32Type();
-    case 12:
-      return builder->getF64Type();
-    case 16:
-      return builder->getBF16Type();
-  }
 }
 
 xla::PrimitiveType MLIRTypeToPrimitiveType(mlir::Type type) {
@@ -390,11 +406,6 @@ xla::PrimitiveType MLIRTypeToPrimitiveType(mlir::Type type) {
   }
   // type.isF64()
   return xla::primitive_util::NativeToPrimitiveType<double>();
-}
-
-mlir::TensorType GetMLIRType(mlir::OpBuilder* builder, std::vector<tsl::int64> dims, int type_int) {
-  auto type = TypeIntToMLIRType(builder, type_int);
-  return mlir::RankedTensorType::get(dims, type);
 }
 
 MLIRFunction* MLIRModule::CreateFunction(

@@ -67,7 +67,7 @@ defmodule EXLA.MLIR.Value do
   end
 
   def iota(%Function{} = func, shape, dim) do
-    ref = EXLA.NIF.mlir_iota(func.ref, shape, dim) |> unwrap!()
+    ref = EXLA.NIF.mlir_iota(func.ref, shape.ref, dim) |> unwrap!()
     %Value{ref: ref, function: func}
   end
 
@@ -77,7 +77,7 @@ defmodule EXLA.MLIR.Value do
   end
 
   def constant_from_binary(%Function{} = func, data, shape) do
-    ref = EXLA.NIF.mlir_constant_from_binary(func.ref, data, shape) |> unwrap!()
+    ref = EXLA.NIF.mlir_constant_from_binary(func.ref, data, shape.ref) |> unwrap!()
     %Value{ref: ref, function: func}
   end
 

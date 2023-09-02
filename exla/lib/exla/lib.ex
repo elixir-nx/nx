@@ -28,9 +28,8 @@ defmodule EXLA.Lib do
     Op.iota(builder, shape, axis)
   end
 
-  def iota(%EXLA.MLIR.Function{} = function, shape, nil) do
+  def iota(%EXLA.MLIR.Function{} = _function, _shape, nil) do
     # total_elems = Nx.size(shape.dims)
-
     raise "not implemented yet (depends on reshape)"
   end
 
