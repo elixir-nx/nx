@@ -365,12 +365,8 @@ ERL_NIF_TERM mlir_log(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 ERL_NIF_TERM mlir_log1p(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_UNARY_OP(Log1pOp);
 }
-
 ERL_NIF_TERM mlir_sign(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_UNARY_OP(SignOp);
-}
-ERL_NIF_TERM mlir_clz(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  return MLIR_UNARY_OP(ClzOp);
 }
 ERL_NIF_TERM mlir_cos(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_UNARY_OP(CosOp);
@@ -404,12 +400,6 @@ ERL_NIF_TERM mlir_asinh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 ERL_NIF_TERM mlir_atanh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_UNARY_OP(AtanhOp);
-}
-ERL_NIF_TERM mlir_real(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  return MLIR_UNARY_OP(RealOp);
-}
-ERL_NIF_TERM mlir_imag(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  return MLIR_UNARY_OP(ImagOp);
 }
 ERL_NIF_TERM mlir_sqrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_UNARY_OP(SqrtOp);
@@ -1118,7 +1108,6 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_log", 2, mlir_log},
     {"mlir_log1p", 2, mlir_log1p},
     {"mlir_sign", 2, mlir_sign},
-    {"mlir_clz", 2, mlir_clz},
     {"mlir_cos", 2, mlir_cos},
     {"mlir_sin", 2, mlir_sin},
     {"mlir_acos", 2, mlir_acos},
@@ -1130,8 +1119,6 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_acosh", 2, mlir_acosh},
     {"mlir_asinh", 2, mlir_asinh},
     {"mlir_atanh", 2, mlir_atanh},
-    {"mlir_real", 2, mlir_real},
-    {"mlir_imag", 2, mlir_imag},
     {"mlir_sqrt", 2, mlir_sqrt},
     {"mlir_cbrt", 2, mlir_cbrt},
     // XlaBuilder

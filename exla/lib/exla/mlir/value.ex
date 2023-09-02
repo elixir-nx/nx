@@ -28,10 +28,10 @@ defmodule EXLA.MLIR.Value do
   end
 
   @unary_ops [:abs, :exp, :expm1, :floor, :ceil, :round] ++
-               [:log, :log1p, :sigmoid, :sign, :clz, :cos] ++
+               [:log, :log1p, :sigmoid, :sign, :cos] ++
                [:sin, :acos, :asin, :atan, :cosh, :sinh] ++
-               [:tanh, :acosh, :asinh, :atanh, :real] ++
-               [:imag, :sqrt, :cbrt]
+               [:tanh, :acosh, :asinh, :atanh] ++
+               [:sqrt, :cbrt]
 
   for op <- @unary_ops do
     mlir_op = :"mlir_#{op}"

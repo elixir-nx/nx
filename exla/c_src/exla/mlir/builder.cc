@@ -289,16 +289,6 @@ mlir::Value MLIRFunction::AtanhOp(mlir::Value operand) {
   return module_->builder()->create<mlir::chlo::AtanhOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
-mlir::Value MLIRFunction::RealOp(mlir::Value operand) {
-  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::RealOp>(module_->builder()->getUnknownLoc(), operand);
-}
-
-mlir::Value MLIRFunction::ImagOp(mlir::Value operand) {
-  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::ImagOp>(module_->builder()->getUnknownLoc(), operand);
-}
-
 mlir::Value MLIRFunction::SqrtOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   return module_->builder()->create<mlir::mhlo::SqrtOp>(module_->builder()->getUnknownLoc(), operand);

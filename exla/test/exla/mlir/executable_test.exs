@@ -89,8 +89,6 @@ defmodule EXLA.MLIR.ExecutableTest do
   end
 
   describe "unary ops" do
-    #  [:sigmoid, :cos] ++
-    #  [:sin, :acos, :asin, :atan, :cosh, :sinh] ++
     @unary_ops [:abs, :exp, :expm1, :floor, :ceil, :round] ++
                  [:log, :log1p, :sign, :cosh, :sinh] ++
                  [:sqrt, :cbrt, :sin, :cos, :atan] ++
@@ -116,28 +114,32 @@ defmodule EXLA.MLIR.ExecutableTest do
     end
 
     test "acosh" do
-        function = fn t -> Nx.acosh(t) end
+      function = fn t -> Nx.acosh(t) end
 
-        t =
-          Nx.Defn.jit_apply(&Nx.divide(&3, Nx.add(&1, &2)), [Nx.iota({2, 3, 1}, type: :f32), 1, 100],
-            compiler: Nx.Defn.Evaluator
-          )
+      t =
+        Nx.Defn.jit_apply(
+          &Nx.divide(&3, Nx.add(&1, &2)),
+          [Nx.iota({2, 3, 1}, type: :f32), 1, 100],
+          compiler: Nx.Defn.Evaluator
+        )
 
-        result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
-        result_mlir = Nx.Defn.jit_apply(function, [t])
+      result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
+      result_mlir = Nx.Defn.jit_apply(function, [t])
 
-        assert result_nx.shape == result_mlir.shape
-        assert result_nx.type == result_mlir.type
-        # TO-DO (mlir): remove backend transfer
-        assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
-      end
+      assert result_nx.shape == result_mlir.shape
+      assert result_nx.type == result_mlir.type
+      # TO-DO (mlir): remove backend transfer
+      assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
+    end
 
     for op <- [:acos, :atanh, :asin, :asinh] do
       test "#{op}" do
         function = fn t -> Nx.unquote(op)(t) end
 
         t =
-          Nx.Defn.jit_apply(&Nx.divide(Nx.add(&1, &2), &3), [Nx.iota({2, 3, 1}, type: :f32), 1, 100],
+          Nx.Defn.jit_apply(
+            &Nx.divide(Nx.add(&1, &2), &3),
+            [Nx.iota({2, 3, 1}, type: :f32), 1, 100],
             compiler: Nx.Defn.Evaluator
           )
 
