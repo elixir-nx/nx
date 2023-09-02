@@ -215,11 +215,6 @@ mlir::Value MLIRFunction::Log1pOp(mlir::Value operand) {
   return module_->builder()->create<mlir::mhlo::Log1pOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
-// mlir::Value MLIRFunction::SigmoidOp(mlir::Value operand) {
-//   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-//   return module_->builder()->create<mlir::mhlo::SigmoidOp>(module_->builder()->getUnknownLoc(), operand);
-// }
-
 mlir::Value MLIRFunction::SignOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   return module_->builder()->create<mlir::mhlo::SignOp>(module_->builder()->getUnknownLoc(), operand);
@@ -230,15 +225,15 @@ mlir::Value MLIRFunction::ClzOp(mlir::Value operand) {
   return module_->builder()->create<mlir::mhlo::ClzOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
-// mlir::Value MLIRFunction::CosOp(mlir::Value operand) {
-//   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-//   return module_->builder()->create<mlir::math::CosOp>(module_->builder()->getUnknownLoc(), operand);
-// }
+mlir::Value MLIRFunction::CosOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::CosineOp>(module_->builder()->getUnknownLoc(), operand);
+}
 
-// mlir::Value MLIRFunction::SinOp(mlir::Value operand) {
-//   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-//   return module_->builder()->create<mlir::math::SinOp>(module_->builder()->getUnknownLoc(), operand);
-// }
+mlir::Value MLIRFunction::SinOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::SineOp>(module_->builder()->getUnknownLoc(), operand);
+}
 
 // mlir::Value MLIRFunction::AcosOp(mlir::Value operand) {
 //   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());

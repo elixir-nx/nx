@@ -47,11 +47,10 @@ class MLIRFunction {
   mlir::Value RoundOp(mlir::Value operand);
   mlir::Value LogOp(mlir::Value operand);
   mlir::Value Log1pOp(mlir::Value operand);
-  // mlir::Value SigmoidOp(mlir::Value operand);
   mlir::Value SignOp(mlir::Value operand);
   mlir::Value ClzOp(mlir::Value operand);
-  // mlir::Value CosOp(mlir::Value operand);
-  // mlir::Value SinOp(mlir::Value operand);
+  mlir::Value CosOp(mlir::Value operand);
+  mlir::Value SinOp(mlir::Value operand);
   // mlir::Value AcosOp(mlir::Value operand);
   // mlir::Value AsinOp(mlir::Value operand);
   // mlir::Value AtanOp(mlir::Value operand);

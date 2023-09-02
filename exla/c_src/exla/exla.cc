@@ -365,21 +365,19 @@ ERL_NIF_TERM mlir_log(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 ERL_NIF_TERM mlir_log1p(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_UNARY_OP(Log1pOp);
 }
-// ERL_NIF_TERM mlir_sigmoid(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-//   return MLIR_UNARY_OP(SigmoidOp);
-// }
+
 ERL_NIF_TERM mlir_sign(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_UNARY_OP(SignOp);
 }
 ERL_NIF_TERM mlir_clz(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_UNARY_OP(ClzOp);
 }
-// ERL_NIF_TERM mlir_cos(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-//   return MLIR_UNARY_OP(CosOp);
-// }
-// ERL_NIF_TERM mlir_sin(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-//   return MLIR_UNARY_OP(SinOp);
-// }
+ERL_NIF_TERM mlir_cos(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(CosOp);
+}
+ERL_NIF_TERM mlir_sin(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(SinOp);
+}
 // ERL_NIF_TERM mlir_acos(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 //   return MLIR_UNARY_OP(AcosOp);
 // }
@@ -1119,11 +1117,10 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_round", 2, mlir_round},
     {"mlir_log", 2, mlir_log},
     {"mlir_log1p", 2, mlir_log1p},
-    // {"mlir_sigmoid", 2, mlir_sigmoid},
     {"mlir_sign", 2, mlir_sign},
     {"mlir_clz", 2, mlir_clz},
-    // {"mlir_cos", 2, mlir_cos},
-    // {"mlir_sin", 2, mlir_sin},
+    {"mlir_cos", 2, mlir_cos},
+    {"mlir_sin", 2, mlir_sin},
     // {"mlir_acos", 2, mlir_acos},
     // {"mlir_asin", 2, mlir_asin},
     // {"mlir_atan", 2, mlir_atan},

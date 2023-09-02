@@ -89,12 +89,12 @@ defmodule EXLA.MLIR.ExecutableTest do
   end
 
   describe "unary ops" do
-    #  [:log, :log1p, :sigmoid, :sign, :cos] ++
+    #  [:sigmoid, :cos] ++
     #  [:sin, :acos, :asin, :atan, :cosh, :sinh] ++
     #  [:tanh, :acosh, :asinh, :atanh, :real] ++
     @unary_ops [:abs, :exp, :expm1, :floor, :ceil, :round] ++
                  [:log, :log1p, :sign] ++
-                 [:sqrt, :cbrt]
+                 [:sqrt, :cbrt, :sin, :cos]
 
     for op <- @unary_ops do
       test "#{op}" do
