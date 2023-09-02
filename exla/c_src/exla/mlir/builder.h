@@ -32,6 +32,8 @@ class MLIRFunction {
   mlir::Value DivOp(mlir::Value lhs, mlir::Value rhs);
   mlir::Value Atan2Op(mlir::Value lhs, mlir::Value rhs);
   mlir::Value ShiftLeftOp(mlir::Value lhs, mlir::Value rhs);
+  mlir::Value ConvertOp(mlir::Value operand, mlir::Type type);
+  int get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *type);
 
   void Build(mlir::Value root);
 
@@ -63,9 +65,9 @@ class MLIRModule {
   std::vector<mlir::Type> input_types_;
 };
 
-int get_mlir_type_for_xla_shape(xla::Shape *);
-std::vector<exla::int64> get_xla_shape_dims(xla::Shape *);
+mlir::Type TypeIntToMLIRType(mlir::OpBuilder *builder, int type_int);
 
+xla::PrimitiveType MLIRTypeToPrimitiveType(mlir::Type);
 }  // namespace exla
 
 #endif

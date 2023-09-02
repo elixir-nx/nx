@@ -28,6 +28,45 @@ defmodule EXLA.MLIR.ExecutableTest do
     assert_equal(result, expected)
   end
 
+  describe "convert" do
+    @types [s: 8, s: 16, s: 32, s: 64, u: 8, u: 16, u: 32, u: 64, f: 16, f: 32, f: 64, bf: 16]
+
+    for origin_type <- @types, dest_type <- @types do
+      test "converts #{inspect(origin_type)} to #{inspect(dest_type)}" do
+        t = Nx.tensor([[1], [2]], type: unquote(origin_type))
+        expected = Nx.as_type(t, unquote(dest_type))
+
+        result = Nx.Defn.jit_apply(&Nx.as_type(&1, unquote(dest_type)), [t])
+        assert result.type == expected.type
+        assert_equal(result, expected)
+      end
+    end
+
+    for {k, _} = type <- @types, k in [:u, :s] do
+      test "#{inspect(type)} max_finite to u64" do
+        t = Nx.Constants.max_finite(unquote(type))
+
+        expected = Nx.as_type(t, :u64)
+        result = Nx.Defn.jit_apply(&Nx.as_type(&1, :u64), [t])
+
+        assert result.type == expected.type
+        assert_equal(result, expected)
+      end
+    end
+
+    for {k, _} = type <- @types, k in [:u, :s] do
+      test "#{inspect(type)} min_finite to f64" do
+        t = Nx.Constants.min_finite(unquote(type))
+
+        expected = Nx.as_type(t, :f64)
+        result = Nx.Defn.jit_apply(&Nx.as_type(&1, :f64), [t])
+
+        assert result.type == expected.type
+        assert_equal(result, expected)
+      end
+    end
+  end
+
   describe "binary ops" do
     @bin_ops [:add, :subtract, :multiply, :pow, :min] ++
                [:max, :remainder, :atan2]

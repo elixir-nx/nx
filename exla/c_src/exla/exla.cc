@@ -132,12 +132,17 @@ ERL_NIF_TERM create_mlir_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     return exla::nif::error(env, "Unable to get args.");
   }
 
+  absl::Span<const int64_t> span;
+
   for (xla::Shape* shape : arg_shapes) {
-    int type = exla::get_mlir_type_for_xla_shape(shape);
+    int type = shape->element_type();
     if (type == -1) {
       return exla::nif::error(env, "Invalid argument type received.");
     }
-    arg_types.emplace_back(exla::get_xla_shape_dims(shape), type);
+    span = shape->dimensions();
+    std::vector<exla::int64> dims(span.begin(), span.end());
+
+    arg_types.emplace_back(dims, type);
   }
 
   xla::Shape* ret_shape;
@@ -145,12 +150,15 @@ ERL_NIF_TERM create_mlir_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     return exla::nif::error(env, "Unable to get return.");
   }
 
-  int type = exla::get_mlir_type_for_xla_shape(ret_shape);
+  int type = ret_shape->element_type();
   if (type == -1) {
     return exla::nif::error(env, "Invalid output type received.");
   }
 
-  ret_type = std::make_pair(exla::get_xla_shape_dims(ret_shape), type);
+  span = ret_shape->dimensions();
+  std::vector<exla::int64> ret_dims(span.begin(), span.end());
+
+  ret_type = std::make_pair(ret_dims, type);
 
   exla::MLIRFunction* func = (*module)->CreateFunction(func_name, arg_types, ret_type);
 
@@ -458,6 +466,52 @@ ERL_NIF_TERM mlir_build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   (*function)->Build(*root);
 
   return exla::nif::ok(env);
+}
+
+ERL_NIF_TERM mlir_convert(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* t;
+  mlir::Type type;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], t)) {
+    return exla::nif::error(env, "Unable to get tensor.");
+  }
+  if ((*function)->get_mlir_type(env, argv[2], &type)) {
+    return exla::nif::error(env, "Unable to get type string.");
+  }
+
+  mlir::Value result = (*function)->ConvertOp(*t, type);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
+}
+
+ERL_NIF_TERM mlir_get_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  mlir::Value* t;
+
+  if (!exla::nif::get<mlir::Value>(env, argv[0], t)) {
+    return exla::nif::error(env, "Unable to get tensor.");
+  }
+
+  auto mlir_shape = mlir::ValueShapeRange({}).getShape(*t);
+
+  mlir::Type type = mlir_shape.getElementType();
+  xla::PrimitiveType element_type = exla::MLIRTypeToPrimitiveType(type);
+  mlir::ShapedTypeComponents shape_dims(mlir_shape);
+
+  xla::Shape shape = xla::ShapeUtil::MakeShape(element_type, shape_dims.getDims());
+
+  return exla::nif::ok(env, exla::nif::make<xla::Shape>(env, shape));
 }
 
 ERL_NIF_TERM dump_mlir_module(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -1077,6 +1131,8 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_atan2", 3, mlir_atan2},
     {"mlir_build", 2, mlir_build},
     {"dump_mlir_module", 1, dump_mlir_module},
+    {"mlir_get_shape", 1, mlir_get_shape},
+    {"mlir_convert", 3, mlir_convert},
     // XlaBuilder
     {"new_builder", 1, new_builder},
     {"create_sub_builder", 2, create_sub_builder},
