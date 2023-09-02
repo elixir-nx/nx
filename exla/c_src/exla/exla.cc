@@ -1,3 +1,4 @@
+#include <functional>
 #include <map>
 #include <string>
 
@@ -188,54 +189,6 @@ ERL_NIF_TERM get_mlir_function_arguments(ErlNifEnv* env, int argc, const ERL_NIF
   return exla::nif::ok(env, enif_make_list_from_array(env, terms.data(), terms.size()));
 }
 
-ERL_NIF_TERM mlir_add(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 3) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  exla::MLIRFunction** function;
-  mlir::Value* lhs;
-  mlir::Value* rhs;
-
-  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
-    return exla::nif::error(env, "Unable to get function.");
-  }
-  if (!exla::nif::get<mlir::Value>(env, argv[1], lhs)) {
-    return exla::nif::error(env, "Unable to get lhs.");
-  }
-  if (!exla::nif::get<mlir::Value>(env, argv[2], rhs)) {
-    return exla::nif::error(env, "Unable to get rhs.");
-  }
-
-  mlir::Value res = (*function)->AddOp(*lhs, *rhs);
-
-  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
-}
-
-ERL_NIF_TERM mlir_subtract(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 3) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  exla::MLIRFunction** function;
-  mlir::Value* lhs;
-  mlir::Value* rhs;
-
-  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
-    return exla::nif::error(env, "Unable to get function.");
-  }
-  if (!exla::nif::get<mlir::Value>(env, argv[1], lhs)) {
-    return exla::nif::error(env, "Unable to get lhs.");
-  }
-  if (!exla::nif::get<mlir::Value>(env, argv[2], rhs)) {
-    return exla::nif::error(env, "Unable to get rhs.");
-  }
-
-  mlir::Value res = (*function)->SubtractOp(*lhs, *rhs);
-
-  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
-}
-
 ERL_NIF_TERM mlir_tuple(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
@@ -280,7 +233,7 @@ ERL_NIF_TERM mlir_get_tuple_element(ErlNifEnv* env, int argc, const ERL_NIF_TERM
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
 
-ERL_NIF_TERM mlir_multiply(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM mlir_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], std::function<mlir::Value(exla::MLIRFunction*, mlir::Value*, mlir::Value*)> op) {
   if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");
   }
@@ -299,153 +252,71 @@ ERL_NIF_TERM mlir_multiply(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
     return exla::nif::error(env, "Unable to get rhs.");
   }
 
-  mlir::Value res = (*function)->MulOp(*lhs, *rhs);
+  mlir::Value res = op(*function, lhs, rhs);
 
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
+#define MLIR_BIN_OP(OP) mlir_binary_op(env, argc, argv, [](exla::MLIRFunction* f, mlir::Value* lhs, mlir::Value* rhs) -> mlir::Value { return f->OP(*lhs, *rhs); })
+
+ERL_NIF_TERM mlir_add(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(AddOp);
+}
+
+ERL_NIF_TERM mlir_subtract(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(SubtractOp);
+}
+
+ERL_NIF_TERM mlir_multiply(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(MulOp);
 }
 
 ERL_NIF_TERM mlir_min(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 3) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  exla::MLIRFunction** function;
-  mlir::Value* lhs;
-  mlir::Value* rhs;
-
-  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
-    return exla::nif::error(env, "Unable to get function.");
-  }
-  if (!exla::nif::get<mlir::Value>(env, argv[1], lhs)) {
-    return exla::nif::error(env, "Unable to get lhs.");
-  }
-  if (!exla::nif::get<mlir::Value>(env, argv[2], rhs)) {
-    return exla::nif::error(env, "Unable to get rhs.");
-  }
-
-  mlir::Value res = (*function)->MinOp(*lhs, *rhs);
-
-  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+  return MLIR_BIN_OP(MinOp);
 }
 
 ERL_NIF_TERM mlir_max(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 3) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  exla::MLIRFunction** function;
-  mlir::Value* lhs;
-  mlir::Value* rhs;
-
-  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
-    return exla::nif::error(env, "Unable to get function.");
-  }
-  if (!exla::nif::get<mlir::Value>(env, argv[1], lhs)) {
-    return exla::nif::error(env, "Unable to get lhs.");
-  }
-  if (!exla::nif::get<mlir::Value>(env, argv[2], rhs)) {
-    return exla::nif::error(env, "Unable to get rhs.");
-  }
-
-  mlir::Value res = (*function)->MaxOp(*lhs, *rhs);
-
-  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+  return MLIR_BIN_OP(MaxOp);
 }
 
 ERL_NIF_TERM mlir_remainder(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 3) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  exla::MLIRFunction** function;
-  mlir::Value* lhs;
-  mlir::Value* rhs;
-
-  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
-    return exla::nif::error(env, "Unable to get function.");
-  }
-  if (!exla::nif::get<mlir::Value>(env, argv[1], lhs)) {
-    return exla::nif::error(env, "Unable to get lhs.");
-  }
-  if (!exla::nif::get<mlir::Value>(env, argv[2], rhs)) {
-    return exla::nif::error(env, "Unable to get rhs.");
-  }
-
-  mlir::Value res = (*function)->RemOp(*lhs, *rhs);
-
-  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+  return MLIR_BIN_OP(RemOp);
 }
 
 ERL_NIF_TERM mlir_pow(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 3) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  exla::MLIRFunction** function;
-  mlir::Value* lhs;
-  mlir::Value* rhs;
-
-  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
-    return exla::nif::error(env, "Unable to get function.");
-  }
-  if (!exla::nif::get<mlir::Value>(env, argv[1], lhs)) {
-    return exla::nif::error(env, "Unable to get lhs.");
-  }
-  if (!exla::nif::get<mlir::Value>(env, argv[2], rhs)) {
-    return exla::nif::error(env, "Unable to get rhs.");
-  }
-
-  mlir::Value res = (*function)->PowOp(*lhs, *rhs);
-
-  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+  return MLIR_BIN_OP(PowOp);
 }
 
 ERL_NIF_TERM mlir_divide(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 3) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  exla::MLIRFunction** function;
-  mlir::Value* lhs;
-  mlir::Value* rhs;
-
-  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
-    return exla::nif::error(env, "Unable to get function.");
-  }
-  if (!exla::nif::get<mlir::Value>(env, argv[1], lhs)) {
-    return exla::nif::error(env, "Unable to get lhs.");
-  }
-  if (!exla::nif::get<mlir::Value>(env, argv[2], rhs)) {
-    return exla::nif::error(env, "Unable to get rhs.");
-  }
-
-  mlir::Value res = (*function)->DivOp(*lhs, *rhs);
-
-  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+  return MLIR_BIN_OP(DivOp);
 }
 
 ERL_NIF_TERM mlir_atan2(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 3) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
+  return MLIR_BIN_OP(Atan2Op);
+}
 
-  exla::MLIRFunction** function;
-  mlir::Value* lhs;
-  mlir::Value* rhs;
+ERL_NIF_TERM mlir_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(EqualOp);
+}
 
-  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
-    return exla::nif::error(env, "Unable to get function.");
-  }
-  if (!exla::nif::get<mlir::Value>(env, argv[1], lhs)) {
-    return exla::nif::error(env, "Unable to get lhs.");
-  }
-  if (!exla::nif::get<mlir::Value>(env, argv[2], rhs)) {
-    return exla::nif::error(env, "Unable to get rhs.");
-  }
+ERL_NIF_TERM mlir_not_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(NotEqualOp);
+}
 
-  mlir::Value res = (*function)->Atan2Op(*lhs, *rhs);
+ERL_NIF_TERM mlir_less(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(LessOp);
+}
 
-  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+ERL_NIF_TERM mlir_less_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(LessEqualOp);
+}
+
+ERL_NIF_TERM mlir_greater(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(GreaterOp);
+}
+
+ERL_NIF_TERM mlir_greater_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(GreaterEqualOp);
 }
 
 ERL_NIF_TERM mlir_build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -1129,6 +1000,12 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_pow", 3, mlir_pow},
     {"mlir_divide", 3, mlir_divide},
     {"mlir_atan2", 3, mlir_atan2},
+    {"mlir_equal", 3, mlir_equal},
+    {"mlir_not_equal", 3, mlir_not_equal},
+    {"mlir_less", 3, mlir_less},
+    {"mlir_less_equal", 3, mlir_less_equal},
+    {"mlir_greater", 3, mlir_greater},
+    {"mlir_greater_equal", 3, mlir_greater_equal},
     {"mlir_build", 2, mlir_build},
     {"dump_mlir_module", 1, dump_mlir_module},
     {"mlir_get_shape", 1, mlir_get_shape},

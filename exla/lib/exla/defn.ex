@@ -845,6 +845,19 @@ defmodule EXLA.Defn do
 
   @bin_comp_op [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
 
+  defp to_operator(op, [%EXLA.MLIR.Value{} = left, %EXLA.MLIR.Value{} = right], _ans, _state)
+       when op in @bin_comp_op do
+    # The answer type is always {:u, 8} but we need cast the inputs
+    # to the same type which is not necessarily the answer type.
+    # left_shape = EXLA.Op.get_shape(left)
+    # right_shape = EXLA.Op.get_shape(right)
+    # type = merge_type(left_shape.dtype, right_shape.dtype)
+    # dims = broadcast_axes(left_shape.dims, right_shape.dims)
+    # apply(EXLA.Op, op, [to_type(left, type), to_type(right, type), dims])
+    # TO-DO (mlir): apply type casting
+    apply(EXLA.MLIR.Value, op, [left, right])
+  end
+
   defp to_operator(op, [left, right], _ans, _state) when op in @bin_comp_op do
     # The answer type is always {:u, 8} but we need cast the inputs
     # to the same type which is not necessarily the answer type.

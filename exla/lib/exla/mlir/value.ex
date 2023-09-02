@@ -12,7 +12,8 @@ defmodule EXLA.MLIR.Value do
   alias EXLA.MLIR.Function
 
   @bin_ops [:add, :subtract, :multiply, :divide, :pow, :min] ++
-             [:max, :remainder, :atan2]
+             [:max, :remainder, :atan2, :equal, :less, :less_equal] ++
+             [:greater, :greater_equal, :not_equal]
 
   for op <- @bin_ops do
     mlir_op = :"mlir_#{op}"
