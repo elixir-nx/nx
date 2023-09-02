@@ -221,11 +221,6 @@ mlir::Value MLIRFunction::SignOp(mlir::Value operand) {
   return module_->builder()->create<mlir::mhlo::SignOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
-mlir::Value MLIRFunction::ClzOp(mlir::Value operand) {
-  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::ClzOp>(module_->builder()->getUnknownLoc(), operand);
-}
-
 mlir::Value MLIRFunction::CosOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   return module_->builder()->create<mlir::mhlo::CosineOp>(module_->builder()->getUnknownLoc(), operand);
