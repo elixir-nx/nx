@@ -257,6 +257,68 @@ ERL_NIF_TERM mlir_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[],
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
 
+#define MLIR_BIN_OP(OP) mlir_binary_op(env, argc, argv, [](exla::MLIRFunction* f, mlir::Value* lhs, mlir::Value* rhs) -> mlir::Value { return f->OP(*lhs, *rhs); })
+
+ERL_NIF_TERM mlir_add(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(AddOp);
+}
+
+ERL_NIF_TERM mlir_subtract(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(SubtractOp);
+}
+
+ERL_NIF_TERM mlir_multiply(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(MulOp);
+}
+
+ERL_NIF_TERM mlir_min(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(MinOp);
+}
+
+ERL_NIF_TERM mlir_max(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(MaxOp);
+}
+
+ERL_NIF_TERM mlir_remainder(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(RemOp);
+}
+
+ERL_NIF_TERM mlir_pow(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(PowOp);
+}
+
+ERL_NIF_TERM mlir_divide(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(DivOp);
+}
+
+ERL_NIF_TERM mlir_atan2(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(Atan2Op);
+}
+
+ERL_NIF_TERM mlir_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(EqualOp);
+}
+
+ERL_NIF_TERM mlir_not_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(NotEqualOp);
+}
+
+ERL_NIF_TERM mlir_less(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(LessOp);
+}
+
+ERL_NIF_TERM mlir_less_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(LessEqualOp);
+}
+
+ERL_NIF_TERM mlir_greater(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(GreaterOp);
+}
+
+ERL_NIF_TERM mlir_greater_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(GreaterEqualOp);
+}
+
 ERL_NIF_TERM mlir_build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
