@@ -167,4 +167,17 @@ defmodule EXLA.MLIR.ExecutableTest do
     #   assert_equal(result_nx, result_mlir)
     # end
   end
+
+  describe "constants" do
+    test "iota" do
+      for axis <- [0, 1, 2] do
+        function = fn -> Nx.iota({2, 3, 4}, axis: axis) end
+
+        expected_result = Nx.Defn.jit_apply(function, [], compiler: Nx.Defn.Evaluator)
+        mlir_result = Nx.Defn.jit_apply(function, [])
+
+        assert_equal(expected_result, mlir_result)
+      end
+    end
+  end
 end

@@ -410,6 +410,16 @@ ERL_NIF_TERM mlir_cbrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_UNARY_OP(CbrtOp);
 }
 
+ERL_NIF_TERM mlir_iota(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return exla::nif::error(env, "not implemented yet");
+}
+ERL_NIF_TERM mlir_constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return exla::nif::error(env, "not implemented yet");
+}
+ERL_NIF_TERM mlir_constant_from_binary(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return exla::nif::error(env, "not implemented yet");
+}
+
 ERL_NIF_TERM mlir_build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
@@ -1123,6 +1133,9 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_atanh", 2, mlir_atanh},
     {"mlir_sqrt", 2, mlir_sqrt},
     {"mlir_cbrt", 2, mlir_cbrt},
+    {"mlir_iota", 3, mlir_iota},
+    {"mlir_constant_r0", 3, mlir_constant_r0},
+    {"mlir_constant_from_binary", 3, mlir_constant_from_binary},
     // XlaBuilder
     {"new_builder", 1, new_builder},
     {"create_sub_builder", 2, create_sub_builder},
