@@ -15,6 +15,63 @@
 
 namespace exla {
 
+int MLIRFunction::get_mlir_type(ErlNifEnv* env, ERL_NIF_TERM term, mlir::Type* type) {
+  auto builder = module_->builder();
+  std::string type_str;
+  if (!exla::nif::get(env, term, type_str)) return 1;
+
+  if (type_str == "u8") {
+    *type = builder->getIntegerType(8, false);
+    return 0;
+  }
+  if (type_str == "u16") {
+    *type = builder->getIntegerType(16, false);
+    return 0;
+  }
+  if (type_str == "u32") {
+    *type = builder->getIntegerType(32, false);
+    return 0;
+  }
+  if (type_str == "u64") {
+    *type = builder->getIntegerType(64, false);
+    return 0;
+  }
+  if (type_str == "s8") {
+    *type = builder->getIntegerType(8);
+    return 0;
+  }
+  if (type_str == "s16") {
+    *type = builder->getIntegerType(16);
+    return 0;
+  }
+  if (type_str == "s32") {
+    *type = builder->getIntegerType(32);
+    return 0;
+  }
+  if (type_str == "s64") {
+    *type = builder->getIntegerType(64);
+    return 0;
+  }
+  if (type_str == "f16") {
+    *type = builder->getF16Type();
+    return 0;
+  }
+  if (type_str == "f32") {
+    *type = builder->getF32Type();
+    return 0;
+  }
+  if (type_str == "f64") {
+    *type = builder->getF64Type();
+    return 0;
+  }
+  if (type_str == "bf16") {
+    *type = builder->getBF16Type();
+    return 0;
+  }
+
+  return 1;
+}
+
 MLIRFunction::MLIRFunction(MLIRModule* module, std::unique_ptr<mlir::func::FuncOp> func)
     : func_(std::move(func)),
       module_(module) {}
@@ -25,11 +82,9 @@ mlir::Value MLIRFunction::SubtractOp(mlir::Value lhs, mlir::Value rhs) {
   return op;
 }
 
-mlir::Value MLIRFunction::ConvertOp(mlir::Value operand, xla::PrimitiveType xla_type) {
+mlir::Value MLIRFunction::ConvertOp(mlir::Value operand, mlir::Type type) {
   mlir::OpBuilder* builder = module_->builder();
   builder->setInsertionPointToEnd(&func_->getBody().back());
-
-  mlir::Type type = exla::TypeIntToMLIRType(builder, xla_type);
 
   auto op = builder->create<mlir::mhlo::ConvertOp>(builder->getUnknownLoc(), operand, type);
   return op;

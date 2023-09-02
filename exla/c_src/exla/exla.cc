@@ -467,7 +467,7 @@ ERL_NIF_TERM mlir_convert(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   exla::MLIRFunction** function;
   mlir::Value* t;
-  xla::PrimitiveType type;
+  mlir::Type type;
 
   if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
     return exla::nif::error(env, "Unable to get function.");
@@ -475,7 +475,7 @@ ERL_NIF_TERM mlir_convert(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get<mlir::Value>(env, argv[1], t)) {
     return exla::nif::error(env, "Unable to get tensor.");
   }
-  if (!exla::nif::get_primitive_type(env, argv[2], &type)) {
+  if ((*function)->get_mlir_type(env, argv[2], &type)) {
     return exla::nif::error(env, "Unable to get type string.");
   }
 
