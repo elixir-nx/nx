@@ -6,6 +6,8 @@ defmodule EXLA.Defn do
   alias Nx.Defn.{Composite, Expr, Tree}
   alias Nx.Tensor, as: T
 
+  alias EXLA.MLIR.Value
+
   @doc false
   def __partitions_options__(options) do
     client_name = Keyword.get_lazy(options, :client, &EXLA.Client.default_name/0)
@@ -826,10 +828,9 @@ defmodule EXLA.Defn do
   @bin_op [:add, :subtract, :multiply, :min, :max, :remainder, :pow, :divide, :atan2] ++
             [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift]
 
-  defp to_operator(op, [%EXLA.MLIR.Value{} = left, %EXLA.MLIR.Value{} = right], _out, _state)
+  defp to_operator(op, [%Value{} = left, %Value{} = right], out, _state)
        when op in @bin_op do
-    # TO-DO (mlir): use output type from out
-    apply(EXLA.MLIR.Value, op, [left, right])
+    apply(Value, op, [to_type(left, out.type), to_type(right, out.type)])
   end
 
   defp to_operator(op, [left, right], %{type: type}, _state) when op in @bin_op do
@@ -1740,11 +1741,21 @@ defmodule EXLA.Defn do
 
   ## Op Helpers
 
-  defp op_type(op), do: EXLA.Op.get_shape(op).dtype
-  defp op_shape(op), do: EXLA.Op.get_shape(op).dims
+  defp op_type(%EXLA.Op{} = op), do: EXLA.Op.get_shape(op).dtype
+  defp op_type(%Value{} = op), do: Value.get_shape(op)
 
-  defp to_type(op, type) do
+  defp op_shape(%EXLA.Op{} = op), do: EXLA.Op.get_shape(op).dims
+
+  defp to_type(%EXLA.Op{} = op, type) do
     if op_type(op) == type, do: op, else: EXLA.Op.convert_element_type(op, type)
+  end
+
+  defp to_type(%Value{} = op, type) do
+    if op_type(op) == type do
+      op
+    else
+      Value.convert(op, type)
+    end
   end
 
   # Inside cond/while, we need to convert pred to u8.

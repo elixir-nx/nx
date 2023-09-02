@@ -10,6 +10,7 @@
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/OwningOpRef.h"
 #include "xla/mlir_hlo/mhlo/IR/hlo_ops.h"
+#include "xla/primitive_util.h"
 #include "xla/types.h"
 
 namespace exla {
@@ -21,6 +22,16 @@ MLIRFunction::MLIRFunction(MLIRModule* module, std::unique_ptr<mlir::func::FuncO
 mlir::Value MLIRFunction::SubtractOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   auto op = module_->builder()->create<mlir::mhlo::SubtractOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  return op;
+}
+
+mlir::Value MLIRFunction::ConvertOp(mlir::Value operand, xla::PrimitiveType xla_type) {
+  mlir::OpBuilder* builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+
+  mlir::Type type = exla::TypeIntToMLIRType(builder, xla_type);
+
+  auto op = builder->create<mlir::mhlo::ConvertOp>(builder->getUnknownLoc(), operand, type);
   return op;
 }
 
@@ -103,11 +114,71 @@ MLIRModule::MLIRModule() {
   builder_->setInsertionPointToStart(module_->getBody());
 }
 
-mlir::Type TypeIntToMLIRType(mlir::OpBuilder* builder, int type_int) {
+mlir::Type exla::TypeIntToMLIRType(mlir::OpBuilder* builder, int type_int) {
   switch (type_int) {
+    case 2:
+      return builder->getIntegerType(8);
+    case 3:
+      return builder->getIntegerType(16);
+    case 4:
+      return builder->getIntegerType(32);
+    case 5:
+      return builder->getIntegerType(64);
+    case 6:
+      return builder->getIntegerType(8, false);
+    case 7:
+      return builder->getIntegerType(16, false);
+    case 8:
+      return builder->getIntegerType(32, false);
     case 9:
+      return builder->getIntegerType(64, false);
+    case 10:
+      return builder->getF16Type();
+    case 11:
       return builder->getF32Type();
+    case 12:
+      return builder->getF64Type();
+    case 16:
+      return builder->getBF16Type();
   }
+}
+
+xla::PrimitiveType MLIRTypeToPrimitiveType(mlir::Type type) {
+  if (type.isUnsignedInteger(8)) {
+    return xla::primitive_util::NativeToPrimitiveType<uint8_t>();
+  }
+  if (type.isUnsignedInteger(16)) {
+    return xla::primitive_util::NativeToPrimitiveType<uint16_t>();
+  }
+  if (type.isUnsignedInteger(32)) {
+    return xla::primitive_util::NativeToPrimitiveType<uint32_t>();
+  }
+  if (type.isUnsignedInteger(64)) {
+    return xla::primitive_util::NativeToPrimitiveType<uint64_t>();
+  }
+  if (type.isSignlessInteger(8)) {
+    return xla::primitive_util::NativeToPrimitiveType<int8_t>();
+  }
+  if (type.isSignlessInteger(16)) {
+    return xla::primitive_util::NativeToPrimitiveType<int16_t>();
+  }
+  if (type.isSignlessInteger(32)) {
+    return xla::primitive_util::NativeToPrimitiveType<int32_t>();
+  }
+  if (type.isSignlessInteger(64)) {
+    return xla::primitive_util::NativeToPrimitiveType<int64_t>();
+  }
+  if (type.isBF16()) {
+    return xla::primitive_util::NativeToPrimitiveType<xla::bfloat16>();
+  }
+  if (type.isF16()) {
+    return xla::primitive_util::NativeToPrimitiveType<xla::half>();
+  }
+  if (type.isF32()) {
+    return xla::primitive_util::NativeToPrimitiveType<float>();
+  }
+  // type.isF64()
+  return xla::primitive_util::NativeToPrimitiveType<double>();
 }
 
 mlir::TensorType GetMLIRType(mlir::OpBuilder* builder, std::vector<tsl::int64> dims, int type_int) {
@@ -135,37 +206,6 @@ MLIRFunction* MLIRModule::CreateFunction(
   funcOp->addEntryBlock();
   builder_->setInsertionPointToStart(&funcOp->getBody().front());
   return new MLIRFunction(this, std::move(funcOp));
-}
-
-int get_mlir_type_for_xla_shape(xla::Shape* shape) {
-  switch (shape->element_type()) {
-    case xla::PrimitiveType::S8:
-      return 0;
-    case xla::PrimitiveType::S16:
-      return 1;
-    case xla::PrimitiveType::S32:
-      return 2;
-    case xla::PrimitiveType::S64:
-      return 3;
-    case xla::PrimitiveType::U8:
-      return 4;
-    case xla::PrimitiveType::U16:
-      return 5;
-    case xla::PrimitiveType::U32:
-      return 6;
-    case xla::PrimitiveType::U64:
-      return 7;
-    case xla::PrimitiveType::F16:
-      return 8;
-    case xla::PrimitiveType::F32:
-      return 9;
-    case xla::PrimitiveType::F64:
-      return 10;
-    case xla::PrimitiveType::BF16:
-      return 11;
-    default:
-      return -1;
-  }
 }
 
 std::vector<exla::int64> get_xla_shape_dims(xla::Shape* shape) {

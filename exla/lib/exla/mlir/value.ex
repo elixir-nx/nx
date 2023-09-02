@@ -38,6 +38,16 @@ defmodule EXLA.MLIR.Value do
     %Value{ref: ref, function: func}
   end
 
+  def get_shape(%Value{ref: ref}) do
+    shape_ref = EXLA.NIF.mlir_get_shape(ref) |> unwrap!()
+    EXLA.Shape.get_shape_info(shape_ref)
+  end
+
+  def convert(%Value{ref: in_ref, function: %Function{} = func} = value, dtype) do
+    out_ref = EXLA.NIF.mlir_convert(func.ref, in_ref, EXLA.Shape.dtype_to_charlist(dtype)) |> unwrap!()
+    %Value{value | ref: out_ref}
+  end
+
   defp unwrap!({:ok, value}), do: value
   defp unwrap!(other), do: raise("#{inspect(other)}")
 end
