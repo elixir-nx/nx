@@ -368,6 +368,54 @@ mlir::Value MLIRFunction::CbrtOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   return module_->builder()->create<mlir::mhlo::CbrtOp>(module_->builder()->getUnknownLoc(), operand);
 }
+mlir::Value MLIRFunction::NegateOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::NegOp>(module_->builder()->getUnknownLoc(), operand);
+}
+mlir::Value MLIRFunction::ErfOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
+  return module_->builder()->create<mlir::chlo::ErfOp>(module_->builder()->getUnknownLoc(), operand);
+}
+mlir::Value MLIRFunction::ErfInvOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
+  return module_->builder()->create<mlir::chlo::ErfInvOp>(module_->builder()->getUnknownLoc(), operand);
+}
+mlir::Value MLIRFunction::ErfcOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
+  return module_->builder()->create<mlir::chlo::ErfcOp>(module_->builder()->getUnknownLoc(), operand);
+}
+
+mlir::Value MLIRFunction::IsInfOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
+  mlir::Value op = module_->builder()->create<mlir::chlo::IsInfOp>(module_->builder()->getUnknownLoc(), operand);
+  mlir::Type mlir_bool = module_->builder()->getIntegerType(8, false);
+  return module_->builder()->create<mlir::mhlo::ConvertOp>(module_->builder()->getUnknownLoc(), op, mlir_bool);
+}
+
+mlir::Value MLIRFunction::IsNanOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
+  mlir::Type mlir_bool = module_->builder()->getI1Type();
+
+  mlir::Value is_finite_op = module_->builder()->create<mlir::mhlo::IsFiniteOp>(module_->builder()->getUnknownLoc(), operand);
+  is_finite_op = module_->builder()->create<mlir::mhlo::ConvertOp>(module_->builder()->getUnknownLoc(), is_finite_op, mlir_bool);
+
+  mlir::Value is_inf_op = this->IsInfOp(operand);
+  is_inf_op = module_->builder()->create<mlir::mhlo::ConvertOp>(module_->builder()->getUnknownLoc(), is_inf_op, mlir_bool);
+
+  mlir::Value is_nan_op = this->BitwiseAndOp(this->BitwiseNotOp(is_inf_op), this->BitwiseNotOp(is_finite_op));
+  mlir_bool = module_->builder()->getIntegerType(8, false);
+
+  return module_->builder()->create<mlir::mhlo::ConvertOp>(module_->builder()->getUnknownLoc(), is_nan_op, mlir_bool);
+}
+mlir::Value MLIRFunction::RsqrtOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::RsqrtOp>(module_->builder()->getUnknownLoc(), operand);
+}
 
 mlir::Value MLIRFunction::TupleOp(std::vector<mlir::Value> vals) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());

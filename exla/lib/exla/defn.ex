@@ -628,7 +628,7 @@ defmodule EXLA.Defn do
 
       shape when is_struct(state.builder, EXLA.MLIR.Function) ->
         shape = EXLA.Shape.make_shape(tensor.type, shape)
-        EXLA.MLIR.Value.constant_from_binary(state.builder, Nx.to_binary(tensor), shape)
+        Value.constant_from_binary(state.builder, Nx.to_binary(tensor), shape)
 
       shape ->
         shape = EXLA.Shape.make_shape(tensor.type, shape)
@@ -807,13 +807,13 @@ defmodule EXLA.Defn do
 
   ## to_operator element-wise
 
-  # defp to_operator(:negate, [%EXLA.MLIR.Value{} = op], _ans, _state), do: EXLA.MLIR.Value.negate(op)
+  defp to_operator(:negate, [%Value{} = op], _ans, _state), do: Value.negate(op)
   defp to_operator(:negate, [op], _ans, _state), do: EXLA.Op.negate(op)
 
-  defp to_operator(:abs, [%EXLA.MLIR.Value{} = op], _ans, _state), do: EXLA.MLIR.Value.abs(op)
+  defp to_operator(:abs, [%Value{} = op], _ans, _state), do: Value.abs(op)
   defp to_operator(:abs, [op], _ans, _state), do: EXLA.Op.abs(op)
 
-  defp to_operator(:sign, [%EXLA.MLIR.Value{} = op], %{type: type}, _state) do
+  defp to_operator(:sign, [%Value{} = op], %{type: type}, _state) do
     case type do
       # {:u, _} -> Value.min(op, Value.constant_r0(state.builder, 1, type))
       {:u, _} -> raise "sign not implemented yet for unsigned inputs"
@@ -830,7 +830,7 @@ defmodule EXLA.Defn do
 
   defp to_operator(
          :right_shift,
-         [%EXLA.MLIR.Value{} = left, %EXLA.MLIR.Value{} = right],
+         [%Value{} = left, %Value{} = right],
          %{type: type},
          _state
        ) do
@@ -841,7 +841,7 @@ defmodule EXLA.Defn do
         do: :right_shift_logical,
         else: :right_shift_arithmetic
 
-    apply(EXLA.MLIR.Value, op, [to_type(left, type), to_type(right, type)])
+    apply(Value, op, [to_type(left, type), to_type(right, type)])
   end
 
   defp to_operator(:right_shift, [left, right], %{type: type}, _state) do
@@ -875,7 +875,7 @@ defmodule EXLA.Defn do
 
   @bin_comp_op [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
 
-  defp to_operator(op, [%EXLA.MLIR.Value{} = left, %EXLA.MLIR.Value{} = right], _ans, _state)
+  defp to_operator(op, [%Value{} = left, %Value{} = right], _ans, _state)
        when op in @bin_comp_op do
     # The answer type is always {:u, 8} but we need cast the inputs
     # to the same type which is not necessarily the answer type.
@@ -885,7 +885,7 @@ defmodule EXLA.Defn do
     # dims = broadcast_axes(left_shape.dims, right_shape.dims)
     # apply(EXLA.Op, op, [to_type(left, type), to_type(right, type), dims])
     # TO-DO (mlir): apply type casting
-    apply(EXLA.MLIR.Value, op, [left, right])
+    apply(Value, op, [left, right])
   end
 
   defp to_operator(op, [left, right], _ans, _state) when op in @bin_comp_op do
@@ -913,8 +913,8 @@ defmodule EXLA.Defn do
               [:asin, :atan, :floor, :ceil, :round, :acosh, :asinh, :atanh, :erf] ++
               [:erfc, :erf_inv, :conjugate]
 
-  defp to_operator(op, [%EXLA.MLIR.Value{} = arg], %{type: type}, _state) when op in @unary_op do
-    apply(EXLA.MLIR.Value, op, [to_type(arg, type)])
+  defp to_operator(op, [%Value{} = arg], %{type: type}, _state) when op in @unary_op do
+    apply(Value, op, [to_type(arg, type)])
   end
 
   defp to_operator(op, [arg], %{type: type}, _state) when op in @unary_op do
@@ -924,8 +924,14 @@ defmodule EXLA.Defn do
   defp to_operator(:fft, args, out, state), do: fft(&EXLA.Op.fft/2, args, out, state)
   defp to_operator(:ifft, args, out, state), do: fft(&EXLA.Op.ifft/2, args, out, state)
 
+  defp to_operator(:is_nan, [%Value{} = arg], _out, _state),
+    do: Value.is_nan(arg)
+
   defp to_operator(:is_nan, [arg], out, state),
     do: EXLA.Op.is_nan(arg, op_type(arg), out.shape, Nx.axes(out), state)
+
+  defp to_operator(:is_infinity, [%Value{} = arg], _out, _state),
+    do: Value.is_infinity(arg)
 
   defp to_operator(:is_infinity, [arg], out, state),
     do: EXLA.Op.is_infinity(arg, op_type(arg), out.shape, Nx.axes(out), state)
@@ -1828,7 +1834,7 @@ defmodule EXLA.Defn do
   end
 
   defp to_constant(%EXLA.MLIR.Function{} = function, constant, type) do
-    EXLA.MLIR.Value.constant_r0(function, constant, type)
+    Value.constant_r0(function, constant, type)
   end
 
   defp subbuilder(%EXLA.Builder{name: name} = builder, desc) do

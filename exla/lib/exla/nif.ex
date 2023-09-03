@@ -27,8 +27,9 @@ defmodule EXLA.NIF do
   @unary_ops [:abs, :exp, :expm1, :floor, :ceil, :round] ++
                [:log, :log1p, :sigmoid, :sign, :cos] ++
                [:sin, :acos, :asin, :atan, :cosh, :sinh] ++
-               [:tanh, :acosh, :asinh, :atanh] ++
-               [:sqrt, :cbrt, :bitwise_not]
+               [:tanh, :acosh, :asinh, :atanh, :sqrt, :cbrt] ++
+               [:bitwise_not, :erf, :erfc, :erf_inv] ++
+               [:is_infinity, :is_nan, :rsqrt, :negate]
 
   for op <- @unary_ops do
     mlir_op = :"mlir_#{op}"
@@ -95,7 +96,7 @@ defmodule EXLA.NIF do
 
   unary_ops =
     [:exp, :expm1, :log, :log1p, :sigmoid, :cos, :sin, :tanh, :real, :imag, :erf_inv] ++
-      [:is_finite, :conj, :acos, :asin, :atan, :cosh, :sinh, :erf, :erfc] ++
+      [:conj, :acos, :asin, :atan, :cosh, :sinh, :erf, :erfc] ++
       [:acosh, :asinh, :atanh, :sqrt, :rsqrt, :cbrt, :is_nan, :is_infinity, :negate, :sign, :abs] ++
       [:bitwise_not, :population_count, :count_leading_zeros, :floor, :ceil, :round]
 
