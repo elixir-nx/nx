@@ -86,13 +86,41 @@ defmodule EXLA.MLIR.ExecutableTest do
         assert_equal(result_nx, result_mlir)
       end
     end
+
+    for op <- [:bitwise_and, :bitwise_or, :bitwise_xor] do
+      test "#{op}" do
+        function = fn t1, t2 -> Nx.unquote(op)(t1, t2) end
+
+        t1 = Nx.iota({2, 3, 1}, type: :s64)
+        t2 = Nx.broadcast(Nx.tensor(2, type: :s64), {2, 3, 1})
+
+        result_nx = Nx.Defn.jit_apply(function, [t1, t2], compiler: Nx.Defn.Evaluator)
+        result_mlir = Nx.Defn.jit_apply(function, [t1, t2])
+
+        assert_equal(result_nx, result_mlir)
+      end
+    end
+
+    for op <- [:left_shift, :right_shift], type <- [u: 8, s: 8] do
+      test "#{op} #{inspect(type)}" do
+        function = fn t1, t2 -> Nx.unquote(op)(t1, t2) end
+
+        t1 = Nx.iota({2, 3, 1}, type: unquote(type))
+        t2 = Nx.broadcast(Nx.tensor(2, type: unquote(type)), {2, 3, 1})
+
+        result_nx = Nx.Defn.jit_apply(function, [t1, t2], compiler: Nx.Defn.Evaluator)
+        result_mlir = Nx.Defn.jit_apply(function, [t1, t2])
+
+        assert_equal(result_nx, result_mlir)
+      end
+    end
   end
 
   describe "unary ops" do
     @unary_ops [:abs, :exp, :expm1, :floor, :ceil, :round] ++
                  [:log, :log1p, :sign, :cosh, :sinh] ++
                  [:sqrt, :cbrt, :sin, :cos, :atan] ++
-                 [:tanh]
+                 [:tanh, :sigmoid]
 
     for op <- @unary_ops do
       test "#{op}" do
@@ -111,6 +139,17 @@ defmodule EXLA.MLIR.ExecutableTest do
         # TO-DO (mlir): remove backend transfer
         assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
       end
+    end
+
+    test "bitwise_not" do
+      function = fn t -> Nx.bitwise_not(t) end
+
+      t = Nx.iota({2, 3, 1}, type: :s64)
+
+      result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
+      result_mlir = Nx.Defn.jit_apply(function, [t])
+
+      assert_equal(result_nx, result_mlir)
     end
 
     test "acosh" do

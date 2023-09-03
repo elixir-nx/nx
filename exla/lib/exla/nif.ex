@@ -15,7 +15,9 @@ defmodule EXLA.NIF do
 
   @bin_ops [:add, :subtract, :multiply, :divide, :pow, :min] ++
              [:max, :remainder, :atan2, :equal, :not_equal] ++
-             [:less, :less_equal, :greater, :greater_equal]
+             [:less, :less_equal, :greater, :greater_equal] ++
+             [:bitwise_and, :bitwise_or, :bitwise_xor] ++
+             [:left_shift, :right_shift_arithmetic, :right_shift_logical]
 
   for op <- @bin_ops do
     mlir_op = :"mlir_#{op}"
@@ -26,7 +28,7 @@ defmodule EXLA.NIF do
                [:log, :log1p, :sigmoid, :sign, :cos] ++
                [:sin, :acos, :asin, :atan, :cosh, :sinh] ++
                [:tanh, :acosh, :asinh, :atanh] ++
-               [:sqrt, :cbrt]
+               [:sqrt, :cbrt, :bitwise_not]
 
   for op <- @unary_ops do
     mlir_op = :"mlir_#{op}"

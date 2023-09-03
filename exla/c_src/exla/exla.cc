@@ -319,7 +319,29 @@ ERL_NIF_TERM mlir_greater_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM arg
   return MLIR_BIN_OP(GreaterEqualOp);
 }
 
-#define MLIR_BIN_OP(OP) mlir_binary_op(env, argc, argv, [](exla::MLIRFunction* f, mlir::Value* lhs, mlir::Value* rhs) -> mlir::Value { return f->OP(*lhs, *rhs); })
+ERL_NIF_TERM mlir_bitwise_and(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(BitwiseAndOp);
+}
+
+ERL_NIF_TERM mlir_bitwise_or(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(BitwiseOrOp);
+}
+
+ERL_NIF_TERM mlir_bitwise_xor(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(BitwiseXorOp);
+}
+
+ERL_NIF_TERM mlir_shift_left(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(ShiftLeftOp);
+}
+
+ERL_NIF_TERM mlir_shift_right_logical(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(ShiftRightLogicalOp);
+}
+
+ERL_NIF_TERM mlir_shift_right_arithmetic(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(ShiftRightArithmeticOp);
+}
 
 ERL_NIF_TERM mlir_unary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], std::function<mlir::Value(exla::MLIRFunction*, mlir::Value*)> op) {
   if (argc != 2) {
@@ -363,6 +385,9 @@ ERL_NIF_TERM mlir_round(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 ERL_NIF_TERM mlir_log(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_UNARY_OP(LogOp);
+}
+ERL_NIF_TERM mlir_sigmoid(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(LogisticOp);
 }
 ERL_NIF_TERM mlir_log1p(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_UNARY_OP(Log1pOp);
@@ -408,6 +433,10 @@ ERL_NIF_TERM mlir_sqrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 ERL_NIF_TERM mlir_cbrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_UNARY_OP(CbrtOp);
+}
+
+ERL_NIF_TERM mlir_bitwise_not(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(BitwiseNotOp);
 }
 
 ERL_NIF_TERM mlir_iota(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -1170,6 +1199,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_ceil", 2, mlir_ceil},
     {"mlir_round", 2, mlir_round},
     {"mlir_log", 2, mlir_log},
+    {"mlir_sigmoid", 2, mlir_sigmoid},
     {"mlir_log1p", 2, mlir_log1p},
     {"mlir_sign", 2, mlir_sign},
     {"mlir_cos", 2, mlir_cos},
@@ -1188,6 +1218,13 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_iota", 3, mlir_iota},
     {"mlir_constant_r0", 3, mlir_constant_r0},
     {"mlir_constant_from_binary", 4, mlir_constant_from_binary},
+    {"mlir_bitwise_and", 3, mlir_bitwise_and},
+    {"mlir_bitwise_or", 3, mlir_bitwise_or},
+    {"mlir_bitwise_xor", 3, mlir_bitwise_xor},
+    {"mlir_bitwise_not", 2, mlir_bitwise_not},
+    {"mlir_left_shift", 3, mlir_shift_left},
+    {"mlir_right_shift_logical", 3, mlir_shift_right_logical},
+    {"mlir_right_shift_arithmetic", 3, mlir_shift_right_arithmetic},
     // XlaBuilder
     {"new_builder", 1, new_builder},
     {"create_sub_builder", 2, create_sub_builder},

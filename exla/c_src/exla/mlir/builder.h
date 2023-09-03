@@ -37,7 +37,13 @@ class MLIRFunction {
   mlir::Value LessEqualOp(mlir::Value lhs, mlir::Value rhs);
   mlir::Value GreaterOp(mlir::Value lhs, mlir::Value rhs);
   mlir::Value GreaterEqualOp(mlir::Value lhs, mlir::Value rhs);
+  mlir::Value BitwiseAndOp(mlir::Value lhs, mlir::Value rhs);
+  mlir::Value BitwiseOrOp(mlir::Value lhs, mlir::Value rhs);
+  mlir::Value BitwiseXorOp(mlir::Value lhs, mlir::Value rhs);
+  mlir::Value BitwiseNotOp(mlir::Value operand);
   mlir::Value ShiftLeftOp(mlir::Value lhs, mlir::Value rhs);
+  mlir::Value ShiftRightLogicalOp(mlir::Value lhs, mlir::Value rhs);
+  mlir::Value ShiftRightArithmeticOp(mlir::Value lhs, mlir::Value rhs);
   mlir::Value ConvertOp(mlir::Value operand, mlir::Type type);
   mlir::Value AbsOp(mlir::Value operand);
   mlir::Value ExpOp(mlir::Value operand);
@@ -46,6 +52,7 @@ class MLIRFunction {
   mlir::Value CeilOp(mlir::Value operand);
   mlir::Value RoundOp(mlir::Value operand);
   mlir::Value LogOp(mlir::Value operand);
+  mlir::Value LogisticOp(mlir::Value operand);
   mlir::Value Log1pOp(mlir::Value operand);
   mlir::Value SignOp(mlir::Value operand);
   mlir::Value CosOp(mlir::Value operand);

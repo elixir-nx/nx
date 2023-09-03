@@ -4,6 +4,7 @@
 
 #include "../exla_nif_util.h"
 #include "_virtual_includes/chlo_ops/stablehlo/dialect/ChloOps.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/IR/Builders.h"
@@ -210,6 +211,41 @@ mlir::Value MLIRFunction::GreaterEqualOp(mlir::Value lhs, mlir::Value rhs) {
   return compare_and_return_bool(module_->builder(), lhs, rhs, mlir::mhlo::ComparisonDirection::GE);
 }
 
+mlir::Value MLIRFunction::ShiftLeftOp(mlir::Value lhs, mlir::Value rhs) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::ShiftLeftOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+}
+
+mlir::Value MLIRFunction::ShiftRightLogicalOp(mlir::Value lhs, mlir::Value rhs) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::ShiftRightLogicalOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+}
+
+mlir::Value MLIRFunction::ShiftRightArithmeticOp(mlir::Value lhs, mlir::Value rhs) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::ShiftRightArithmeticOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+}
+
+mlir::Value MLIRFunction::BitwiseAndOp(mlir::Value lhs, mlir::Value rhs) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::AndOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+}
+
+mlir::Value MLIRFunction::BitwiseOrOp(mlir::Value lhs, mlir::Value rhs) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::OrOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+}
+
+mlir::Value MLIRFunction::BitwiseNotOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::NotOp>(module_->builder()->getUnknownLoc(), operand);
+}
+
+mlir::Value MLIRFunction::BitwiseXorOp(mlir::Value lhs, mlir::Value rhs) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::XorOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+}
+
 mlir::Value MLIRFunction::AbsOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   return module_->builder()->create<mlir::mhlo::AbsOp>(module_->builder()->getUnknownLoc(), operand);
@@ -243,6 +279,11 @@ mlir::Value MLIRFunction::RoundOp(mlir::Value operand) {
 mlir::Value MLIRFunction::LogOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   return module_->builder()->create<mlir::mhlo::LogOp>(module_->builder()->getUnknownLoc(), operand);
+}
+
+mlir::Value MLIRFunction::LogisticOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::LogisticOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::Log1pOp(mlir::Value operand) {
