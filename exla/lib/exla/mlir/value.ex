@@ -32,8 +32,9 @@ defmodule EXLA.MLIR.Value do
   @unary_ops [:abs, :exp, :expm1, :floor, :ceil, :round] ++
                [:log, :log1p, :sigmoid, :sign, :cos] ++
                [:sin, :acos, :asin, :atan, :cosh, :sinh] ++
-               [:tanh, :acosh, :asinh, :atanh] ++
-               [:sqrt, :cbrt, :bitwise_not]
+               [:tanh, :acosh, :asinh, :atanh, :sqrt, :cbrt] ++
+               [:bitwise_not, :erf, :erfc, :erf_inv] ++
+               [:is_infinity, :is_nan, :rsqrt]
 
   for op <- @unary_ops do
     mlir_op = :"mlir_#{op}"

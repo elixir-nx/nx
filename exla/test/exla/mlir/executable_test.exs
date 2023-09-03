@@ -120,7 +120,7 @@ defmodule EXLA.MLIR.ExecutableTest do
     @unary_ops [:abs, :exp, :expm1, :floor, :ceil, :round] ++
                  [:log, :log1p, :sign, :cosh, :sinh] ++
                  [:sqrt, :cbrt, :sin, :cos, :atan] ++
-                 [:tanh, :sigmoid]
+                 [:tanh, :sigmoid, :erf, :erfc, :rsqrt]
 
     for op <- @unary_ops do
       test "#{op}" do
@@ -139,6 +139,48 @@ defmodule EXLA.MLIR.ExecutableTest do
         # TO-DO (mlir): remove backend transfer
         assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
       end
+    end
+
+    test "is_infinity" do
+      function = fn t -> Nx.is_infinity(t) end
+
+      t = Nx.tensor([:nan, 0, :infinity, :neg_infinity, :nan, 10])
+
+      result_nx = Nx.u8([0, 0, 1, 1, 0, 0])
+      result_mlir = Nx.Defn.jit_apply(function, [t])
+
+      assert result_nx.shape == result_mlir.shape
+      assert result_nx.type == result_mlir.type
+      # TO-DO (mlir): remove backend transfer
+      assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
+    end
+
+    test "is_nan" do
+      function = fn t -> Nx.is_nan(t) end
+
+      t = Nx.tensor([:nan, 0, :infinity, :neg_infinity, :nan, 10])
+
+      result_nx = Nx.u8([1, 0, 0, 0, 1, 0])
+      result_mlir = Nx.Defn.jit_apply(function, [t])
+
+      assert result_nx.shape == result_mlir.shape
+      assert result_nx.type == result_mlir.type
+      # TO-DO (mlir): remove backend transfer
+      assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
+    end
+
+    test "erf_inf" do
+      function = fn t -> Nx.erf_inv(t) end
+
+      t = Nx.erf(Nx.tensor([1, 1, 2, 3, 5, 8]))
+
+      result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
+      result_mlir = Nx.Defn.jit_apply(function, [t])
+
+      assert result_nx.shape == result_mlir.shape
+      assert result_nx.type == result_mlir.type
+      # TO-DO (mlir): remove backend transfer
+      assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
     end
 
     test "bitwise_not" do

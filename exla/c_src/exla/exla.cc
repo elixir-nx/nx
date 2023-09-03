@@ -439,7 +439,29 @@ ERL_NIF_TERM mlir_bitwise_not(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
   return MLIR_UNARY_OP(BitwiseNotOp);
 }
 
-ERL_NIF_TERM mlir_iota(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM mlir_erf(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(ErfOp);
+}
+
+ERL_NIF_TERM mlir_erfc(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(ErfcOp);
+}
+
+ERL_NIF_TERM mlir_erf_inv(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(ErfInvOp);
+}
+
+ERL_NIF_TERM mlir_is_infinity(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(IsInfOp);
+}
+ERL_NIF_TERM mlir_is_nan(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(IsNanOp);
+}
+ERL_NIF_TERM mlir_rsqrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(RsqrtOp);
+}
+ERL_NIF_TERM
+mlir_iota(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");
   }
@@ -1225,6 +1247,12 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_left_shift", 3, mlir_shift_left},
     {"mlir_right_shift_logical", 3, mlir_shift_right_logical},
     {"mlir_right_shift_arithmetic", 3, mlir_shift_right_arithmetic},
+    {"mlir_erf", 2, mlir_erf},
+    {"mlir_erfc", 2, mlir_erfc},
+    {"mlir_erf_inv", 2, mlir_erf_inv},
+    {"mlir_is_infinity", 2, mlir_is_infinity},
+    {"mlir_is_nan", 2, mlir_is_nan},
+    {"mlir_rsqrt", 2, mlir_rsqrt},
     // XlaBuilder
     {"new_builder", 1, new_builder},
     {"create_sub_builder", 2, create_sub_builder},
@@ -1313,7 +1341,6 @@ static ErlNifFunc exla_funcs[] = {
     {"erf", 1, erf},
     {"erfc", 1, erfc},
     {"erf_inv", 1, erf_inv},
-    {"is_finite", 1, is_finite},
     {"negate", 1, neg},
     {"conj", 1, conj},
     {"bitwise_not", 1, bitwise_not},
