@@ -439,6 +439,10 @@ ERL_NIF_TERM mlir_bitwise_not(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
   return MLIR_UNARY_OP(BitwiseNotOp);
 }
 
+ERL_NIF_TERM mlir_negate(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(NegateOp);
+}
+
 ERL_NIF_TERM mlir_erf(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_UNARY_OP(ErfOp);
 }
@@ -1247,6 +1251,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_left_shift", 3, mlir_shift_left},
     {"mlir_right_shift_logical", 3, mlir_shift_right_logical},
     {"mlir_right_shift_arithmetic", 3, mlir_shift_right_arithmetic},
+    {"mlir_negate", 2, mlir_negate},
     {"mlir_erf", 2, mlir_erf},
     {"mlir_erfc", 2, mlir_erfc},
     {"mlir_erf_inv", 2, mlir_erf_inv},

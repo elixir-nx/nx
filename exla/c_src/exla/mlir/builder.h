@@ -68,6 +68,7 @@ class MLIRFunction {
   mlir::Value AtanhOp(mlir::Value operand);
   mlir::Value SqrtOp(mlir::Value operand);
   mlir::Value CbrtOp(mlir::Value operand);
+  mlir::Value NegateOp(mlir::Value operand);
   mlir::Value ErfOp(mlir::Value operand);
   mlir::Value ErfInvOp(mlir::Value operand);
   mlir::Value ErfcOp(mlir::Value operand);

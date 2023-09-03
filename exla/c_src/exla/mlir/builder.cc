@@ -368,6 +368,10 @@ mlir::Value MLIRFunction::CbrtOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   return module_->builder()->create<mlir::mhlo::CbrtOp>(module_->builder()->getUnknownLoc(), operand);
 }
+mlir::Value MLIRFunction::NegateOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::NegOp>(module_->builder()->getUnknownLoc(), operand);
+}
 mlir::Value MLIRFunction::ErfOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();

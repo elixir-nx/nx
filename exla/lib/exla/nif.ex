@@ -29,7 +29,7 @@ defmodule EXLA.NIF do
                [:sin, :acos, :asin, :atan, :cosh, :sinh] ++
                [:tanh, :acosh, :asinh, :atanh, :sqrt, :cbrt] ++
                [:bitwise_not, :erf, :erfc, :erf_inv] ++
-               [:is_infinity, :is_nan, :rsqrt]
+               [:is_infinity, :is_nan, :rsqrt, :negate]
 
   for op <- @unary_ops do
     mlir_op = :"mlir_#{op}"
