@@ -153,7 +153,7 @@ defmodule EXLA.MLIR.ExecutableTest do
       end
     end
 
-    # TO-DO (mlir): this case depends on constant_r0 being available
+    # TO-DO (mlir): this case depends on broadcasting being available
     # test "sign with unsigned input" do
     #   function = fn t -> Nx.sign(t) end
 
