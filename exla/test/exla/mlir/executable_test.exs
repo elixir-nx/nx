@@ -120,7 +120,7 @@ defmodule EXLA.MLIR.ExecutableTest do
     @unary_ops [:abs, :exp, :expm1, :floor, :ceil, :round] ++
                  [:log, :log1p, :sign, :cosh, :sinh] ++
                  [:sqrt, :cbrt, :sin, :cos, :atan] ++
-                 [:tanh, :bitwise_not]
+                 [:tanh, :sigmoid]
 
     for op <- @unary_ops do
       test "#{op}" do
@@ -139,6 +139,17 @@ defmodule EXLA.MLIR.ExecutableTest do
         # TO-DO (mlir): remove backend transfer
         assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
       end
+    end
+
+    test "bitwise_not" do
+      function = fn t -> Nx.bitwise_not(t) end
+
+      t = Nx.iota({2, 3, 1}, type: :s64)
+
+      result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
+      result_mlir = Nx.Defn.jit_apply(function, [t])
+
+      assert_equal(result_nx, result_mlir)
     end
 
     test "acosh" do

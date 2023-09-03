@@ -386,6 +386,9 @@ ERL_NIF_TERM mlir_round(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 ERL_NIF_TERM mlir_log(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_UNARY_OP(LogOp);
 }
+ERL_NIF_TERM mlir_sigmoid(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(LogisticOp);
+}
 ERL_NIF_TERM mlir_log1p(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_UNARY_OP(Log1pOp);
 }
@@ -1196,6 +1199,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_ceil", 2, mlir_ceil},
     {"mlir_round", 2, mlir_round},
     {"mlir_log", 2, mlir_log},
+    {"mlir_sigmoid", 2, mlir_sigmoid},
     {"mlir_log1p", 2, mlir_log1p},
     {"mlir_sign", 2, mlir_sign},
     {"mlir_cos", 2, mlir_cos},

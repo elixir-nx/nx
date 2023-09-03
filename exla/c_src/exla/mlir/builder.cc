@@ -281,6 +281,11 @@ mlir::Value MLIRFunction::LogOp(mlir::Value operand) {
   return module_->builder()->create<mlir::mhlo::LogOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
+mlir::Value MLIRFunction::LogisticOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::LogisticOp>(module_->builder()->getUnknownLoc(), operand);
+}
+
 mlir::Value MLIRFunction::Log1pOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   return module_->builder()->create<mlir::mhlo::Log1pOp>(module_->builder()->getUnknownLoc(), operand);

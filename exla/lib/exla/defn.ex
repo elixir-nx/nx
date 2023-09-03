@@ -828,7 +828,12 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp to_operator(:right_shift, [%EXLA.MLIR.Value{} = left, %EXLA.MLIR.Value{} = right], %{type: type}, _state) do
+  defp to_operator(
+         :right_shift,
+         [%EXLA.MLIR.Value{} = left, %EXLA.MLIR.Value{} = right],
+         %{type: type},
+         _state
+       ) do
     # dims = broadcast_axes(op_shape(left), op_shape(right))
 
     op =
