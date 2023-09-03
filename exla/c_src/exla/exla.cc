@@ -451,7 +451,25 @@ ERL_NIF_TERM mlir_constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
   return (*function)->ConstantOp(type, env, argv[1]);
 }
 ERL_NIF_TERM mlir_constant_from_binary(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  return exla::nif::error(env, "not implemented yet");
+  if (argc != 4) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Type type;
+  std::vector<exla::int64> dims;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if ((*function)->get_mlir_type(env, argv[2], &type)) {
+    return exla::nif::error(env, "Unable to get type string.");
+  }
+  if (!exla::nif::get_tuple(env, argv[3], dims)) {
+    return exla::nif::error(env, "Unable to get dims.");
+  }
+
+  return (*function)->ConstantOp(type, env, argv[1], dims);
 }
 
 ERL_NIF_TERM mlir_build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -1169,7 +1187,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_cbrt", 2, mlir_cbrt},
     {"mlir_iota", 3, mlir_iota},
     {"mlir_constant_r0", 3, mlir_constant_r0},
-    {"mlir_constant_from_binary", 3, mlir_constant_from_binary},
+    {"mlir_constant_from_binary", 4, mlir_constant_from_binary},
     // XlaBuilder
     {"new_builder", 1, new_builder},
     {"create_sub_builder", 2, create_sub_builder},

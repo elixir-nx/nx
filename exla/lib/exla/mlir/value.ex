@@ -77,7 +77,7 @@ defmodule EXLA.MLIR.Value do
   end
 
   def constant_from_binary(%Function{} = func, data, shape) do
-    ref = EXLA.NIF.mlir_constant_from_binary(func.ref, data, shape.ref) |> unwrap!()
+    ref = EXLA.NIF.mlir_constant_from_binary(func.ref, data, EXLA.Shape.dtype_to_charlist(shape.dtype), shape.dims) |> unwrap!()
     %Value{ref: ref, function: func}
   end
 

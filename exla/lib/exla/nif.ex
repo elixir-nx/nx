@@ -57,7 +57,7 @@ defmodule EXLA.NIF do
 
   def mlir_iota(_function, _shape, _dim), do: :erlang.nif_error(:undef)
   def mlir_constant_r0(_function, _value, _type), do: :erlang.nif_error(:undef)
-  def mlir_constant_from_binary(_function, _data, _shape), do: :erlang.nif_error(:undef)
+  def mlir_constant_from_binary(_function, _data, _type, _dims), do: :erlang.nif_error(:undef)
 
   def new_builder(_name),
     do: :erlang.nif_error(:undef)

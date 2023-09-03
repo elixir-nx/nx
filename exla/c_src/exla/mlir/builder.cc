@@ -352,67 +352,84 @@ mlir::Value MLIRFunction::IotaOp(xla::Shape shape, int64_t dimension) {
 }
 
 template <typename T>
-ERL_NIF_TERM ConstantOpImpl(mlir::OpBuilder *builder, mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM term) {
-  T value;
-  if (!exla::nif::get(env, term, &value)) {
-    return exla::nif::error(env, "Unable to cast scalar to type.");
+ERL_NIF_TERM ConstantOpImpl(mlir::OpBuilder *builder, mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM term, std::vector<int64_t> dims) {
+  mlir::RankedTensorType ty = mlir::RankedTensorType::get(dims, type);
+  mlir::DenseElementsAttr attr;
+
+  if (dims.size() == 0) {
+    // this is the scalar case
+    T value;
+    if (!exla::nif::get(env, term, &value)) {
+      return exla::nif::error(env, "Unable to cast scalar to type.");
+    }
+    attr = mlir::DenseElementsAttr::get(ty, value);
+  } else {
+    // non-scalar case. we'll assume our data
+    // is in the form of a raw buffer
+    ErlNifBinary binary;
+    if (!exla::nif::get_binary(env, term, &binary)) {
+      return exla::nif::error(env, "Unable to get binary data.");
+    }
+    char *data = const_cast<char *>(reinterpret_cast<char *>(binary.data));
+    llvm::ArrayRef<char> values(data, binary.size);
+
+    attr = mlir::DenseElementsAttr::getFromRawBuffer(ty, values);
   }
+
   // We set a fixed scalar shape because we're using single values here.
-  mlir::RankedTensorType ty = mlir::RankedTensorType::get({}, type);
-  mlir::DenseElementsAttr attr = mlir::DenseElementsAttr::get(ty, value);
   mlir::Value op = builder->create<mlir::mhlo::ConstantOp>(builder->getUnknownLoc(), attr);
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, op));
 }
 
-ERL_NIF_TERM MLIRFunction::ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM term) {
+ERL_NIF_TERM MLIRFunction::ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM term, std::vector<int64_t> dims) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
 
   if (type.isUnsignedInteger(8)) {
-    return ConstantOpImpl<exla::uint8>(module_->builder(), type, env, term);
+    return ConstantOpImpl<exla::uint8>(module_->builder(), type, env, term, dims);
   }
 
   if (type.isUnsignedInteger(16)) {
-    return ConstantOpImpl<exla::uint16>(module_->builder(), type, env, term);
+    return ConstantOpImpl<exla::uint16>(module_->builder(), type, env, term, dims);
   }
 
   if (type.isUnsignedInteger(32)) {
-    return ConstantOpImpl<exla::uint32>(module_->builder(), type, env, term);
+    return ConstantOpImpl<exla::uint32>(module_->builder(), type, env, term, dims);
   }
 
   if (type.isUnsignedInteger(64)) {
-    return ConstantOpImpl<exla::uint64>(module_->builder(), type, env, term);
+    return ConstantOpImpl<exla::uint64>(module_->builder(), type, env, term, dims);
   }
 
   if (type.isSignlessInteger(8)) {
-    return ConstantOpImpl<exla::int8>(module_->builder(), type, env, term);
+    return ConstantOpImpl<exla::int8>(module_->builder(), type, env, term, dims);
   }
 
   if (type.isSignlessInteger(16)) {
-    return ConstantOpImpl<exla::int16>(module_->builder(), type, env, term);
+    return ConstantOpImpl<exla::int16>(module_->builder(), type, env, term, dims);
   }
 
   if (type.isSignlessInteger(32)) {
-    return ConstantOpImpl<exla::int32>(module_->builder(), type, env, term);
+    return ConstantOpImpl<exla::int32>(module_->builder(), type, env, term, dims);
   }
 
   if (type.isSignlessInteger(64)) {
-    return ConstantOpImpl<exla::int64>(module_->builder(), type, env, term);
+    return ConstantOpImpl<exla::int64>(module_->builder(), type, env, term, dims);
   }
 
   if (type.isBF16()) {
-    return ConstantOpImpl<exla::bfloat16>(module_->builder(), type, env, term);
+    return ConstantOpImpl<exla::bfloat16>(module_->builder(), type, env, term, dims);
   }
 
   if (type.isF16()) {
-    return ConstantOpImpl<exla::float16>(module_->builder(), type, env, term);
+    return ConstantOpImpl<exla::float16>(module_->builder(), type, env, term, dims);
   }
 
   if (type.isF32()) {
-    return ConstantOpImpl<exla::float32>(module_->builder(), type, env, term);
+    return ConstantOpImpl<exla::float32>(module_->builder(), type, env, term, dims);
   }
 
   if (type.isF64()) {
-    return ConstantOpImpl<exla::float64>(module_->builder(), type, env, term);
+    return ConstantOpImpl<exla::float64>(module_->builder(), type, env, term, dims);
   }
   return exla::nif::error(env, "invalid type received");
 }
