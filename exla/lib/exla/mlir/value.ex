@@ -13,7 +13,8 @@ defmodule EXLA.MLIR.Value do
 
   @bin_ops [:add, :subtract, :multiply, :divide, :pow, :min] ++
              [:max, :remainder, :atan2, :equal, :less, :less_equal] ++
-             [:greater, :greater_equal, :not_equal]
+             [:greater, :greater_equal, :not_equal, :bitwise_and] ++
+             [:bitwise_or, :bitwise_xor]
 
   for op <- @bin_ops do
     mlir_op = :"mlir_#{op}"
@@ -31,7 +32,7 @@ defmodule EXLA.MLIR.Value do
                [:log, :log1p, :sigmoid, :sign, :cos] ++
                [:sin, :acos, :asin, :atan, :cosh, :sinh] ++
                [:tanh, :acosh, :asinh, :atanh] ++
-               [:sqrt, :cbrt]
+               [:sqrt, :cbrt, :bitwise_not]
 
   for op <- @unary_ops do
     mlir_op = :"mlir_#{op}"

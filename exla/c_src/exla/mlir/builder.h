@@ -37,6 +37,10 @@ class MLIRFunction {
   mlir::Value LessEqualOp(mlir::Value lhs, mlir::Value rhs);
   mlir::Value GreaterOp(mlir::Value lhs, mlir::Value rhs);
   mlir::Value GreaterEqualOp(mlir::Value lhs, mlir::Value rhs);
+  mlir::Value BitwiseAndOp(mlir::Value lhs, mlir::Value rhs);
+  mlir::Value BitwiseOrOp(mlir::Value lhs, mlir::Value rhs);
+  mlir::Value BitwiseXorOp(mlir::Value lhs, mlir::Value rhs);
+  mlir::Value BitwiseNotOp(mlir::Value operand);
   mlir::Value ShiftLeftOp(mlir::Value lhs, mlir::Value rhs);
   mlir::Value ConvertOp(mlir::Value operand, mlir::Type type);
   mlir::Value AbsOp(mlir::Value operand);
