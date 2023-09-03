@@ -434,7 +434,21 @@ ERL_NIF_TERM mlir_iota(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 
 ERL_NIF_TERM mlir_constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  return exla::nif::error(env, "not implemented yet");
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Type type;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if ((*function)->get_mlir_type(env, argv[2], &type)) {
+    return exla::nif::error(env, "Unable to get type string.");
+  }
+
+  return (*function)->ConstantOp(type, env, argv[1]);
 }
 ERL_NIF_TERM mlir_constant_from_binary(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::error(env, "not implemented yet");

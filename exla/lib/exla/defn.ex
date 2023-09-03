@@ -1802,8 +1802,12 @@ defmodule EXLA.Defn do
   defp to_nx_type({:pred, 8}), do: {:u, 8}
   defp to_nx_type(type), do: type
 
-  defp to_constant(builder, constant, type) do
+  defp to_constant(%EXLA.Builder{} = builder, constant, type) do
     EXLA.Op.constant_r0(builder, constant, type)
+  end
+
+  defp to_constant(%EXLA.MLIR.Function{} = function, constant, type) do
+    EXLA.MLIR.Value.constant_r0(function, constant, type)
   end
 
   defp subbuilder(%EXLA.Builder{name: name} = builder, desc) do

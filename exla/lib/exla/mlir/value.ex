@@ -72,7 +72,7 @@ defmodule EXLA.MLIR.Value do
   end
 
   def constant_r0(%Function{} = func, value, type) do
-    ref = EXLA.NIF.mlir_constant_r0(func.ref, value, type) |> unwrap!()
+    ref = EXLA.NIF.mlir_constant_r0(func.ref, value, EXLA.Shape.dtype_to_charlist(type)) |> unwrap!()
     %Value{ref: ref, function: func}
   end
 

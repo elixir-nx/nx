@@ -179,5 +179,16 @@ defmodule EXLA.MLIR.ExecutableTest do
         assert_equal(expected_result, mlir_result)
       end
     end
+
+    test "constant_r0" do
+      for type <- @types do
+        function = fn -> Nx.tensor(10, type: type) end
+
+        expected_result = Nx.Defn.jit_apply(function, [], compiler: Nx.Defn.Evaluator)
+        mlir_result = Nx.Defn.jit_apply(function, [])
+
+        assert_equal(expected_result, mlir_result)
+      end
+    end
   end
 end
