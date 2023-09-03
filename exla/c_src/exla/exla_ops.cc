@@ -743,16 +743,8 @@ ERL_NIF_TERM equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_binary_op(env, argc, argv, xla::Eq);
 }
 
-ERL_NIF_TERM eq_total_order(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  return xla_binary_op(env, argc, argv, xla::EqTotalOrder);
-}
-
 ERL_NIF_TERM not_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_binary_op(env, argc, argv, xla::Ne);
-}
-
-ERL_NIF_TERM ne_total_order(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  return xla_binary_op(env, argc, argv, xla::NeTotalOrder);
 }
 
 ERL_NIF_TERM greater_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
