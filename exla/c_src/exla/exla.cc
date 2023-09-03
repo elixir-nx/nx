@@ -410,6 +410,68 @@ ERL_NIF_TERM mlir_cbrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_UNARY_OP(CbrtOp);
 }
 
+ERL_NIF_TERM mlir_iota(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  xla::Shape* shape;
+  exla::int64 dimension;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<xla::Shape>(env, argv[1], shape)) {
+    return exla::nif::error(env, "Unable to get shape.");
+  }
+  if (!exla::nif::get(env, argv[2], &dimension)) {
+    return exla::nif::error(env, "Unable to get dimension");
+  }
+
+  mlir::Value res = (*function)->IotaOp(*shape, dimension);
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
+ERL_NIF_TERM mlir_constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Type type;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if ((*function)->get_mlir_type(env, argv[2], &type)) {
+    return exla::nif::error(env, "Unable to get type string.");
+  }
+
+  return (*function)->ConstantOp(type, env, argv[1]);
+}
+ERL_NIF_TERM mlir_constant_from_binary(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 4) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Type type;
+  std::vector<exla::int64> dims;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if ((*function)->get_mlir_type(env, argv[2], &type)) {
+    return exla::nif::error(env, "Unable to get type string.");
+  }
+  if (!exla::nif::get_tuple(env, argv[3], dims)) {
+    return exla::nif::error(env, "Unable to get dims.");
+  }
+
+  return (*function)->ConstantOp(type, env, argv[1], dims);
+}
+
 ERL_NIF_TERM mlir_build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
@@ -1123,6 +1185,9 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_atanh", 2, mlir_atanh},
     {"mlir_sqrt", 2, mlir_sqrt},
     {"mlir_cbrt", 2, mlir_cbrt},
+    {"mlir_iota", 3, mlir_iota},
+    {"mlir_constant_r0", 3, mlir_constant_r0},
+    {"mlir_constant_from_binary", 4, mlir_constant_from_binary},
     // XlaBuilder
     {"new_builder", 1, new_builder},
     {"create_sub_builder", 2, create_sub_builder},

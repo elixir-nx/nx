@@ -91,6 +91,7 @@ int get(ErlNifEnv* env, ERL_NIF_TERM term, uint16* var);
 int get(ErlNifEnv* env, ERL_NIF_TERM term, uint32* var);
 int get(ErlNifEnv* env, ERL_NIF_TERM term, uint64* var);
 int get(ErlNifEnv* env, ERL_NIF_TERM term, bfloat16* var);
+int get(ErlNifEnv* env, ERL_NIF_TERM term, float16* var);
 int get(ErlNifEnv* env, ERL_NIF_TERM term, float32* var);
 int get(ErlNifEnv* env, ERL_NIF_TERM term, float64* var);
 int get(ErlNifEnv* env, ERL_NIF_TERM term, complex64* var);

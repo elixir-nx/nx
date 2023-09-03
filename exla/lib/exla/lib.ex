@@ -15,7 +15,7 @@ defmodule EXLA.Lib do
   @doc """
   Builds iota along axis.
   """
-  def iota(builder, shape, nil) do
+  def iota(%Builder{} = builder, shape, nil) do
     total_elems = Nx.size(shape.dims)
 
     Op.reshape(
@@ -24,8 +24,17 @@ defmodule EXLA.Lib do
     )
   end
 
-  def iota(builder, shape, axis) do
+  def iota(%Builder{} = builder, shape, axis) do
     Op.iota(builder, shape, axis)
+  end
+
+  def iota(%EXLA.MLIR.Function{} = _function, _shape, nil) do
+    # total_elems = Nx.size(shape.dims)
+    raise "not implemented yet (depends on reshape)"
+  end
+
+  def iota(%EXLA.MLIR.Function{} = function, shape, axis) do
+    EXLA.MLIR.Value.iota(function, shape, axis)
   end
 
   @doc """

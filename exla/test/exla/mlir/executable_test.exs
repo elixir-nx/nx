@@ -153,7 +153,7 @@ defmodule EXLA.MLIR.ExecutableTest do
       end
     end
 
-    # TO-DO (mlir): this case depends on constant_r0 being available
+    # TO-DO (mlir): this case depends on broadcasting being available
     # test "sign with unsigned input" do
     #   function = fn t -> Nx.sign(t) end
 
@@ -166,5 +166,40 @@ defmodule EXLA.MLIR.ExecutableTest do
     #   assert result_nx.type == result_mlir.type
     #   assert_equal(result_nx, result_mlir)
     # end
+  end
+
+  describe "constants" do
+    test "iota" do
+      for axis <- [0, 1, 2] do
+        function = fn -> Nx.iota({2, 3, 4}, axis: axis) end
+
+        expected_result = Nx.Defn.jit_apply(function, [], compiler: Nx.Defn.Evaluator)
+        mlir_result = Nx.Defn.jit_apply(function, [])
+
+        assert_equal(expected_result, mlir_result)
+      end
+    end
+
+    test "constant_r0" do
+      for type <- @types do
+        function = fn -> Nx.tensor(10, type: type) end
+
+        expected_result = Nx.Defn.jit_apply(function, [], compiler: Nx.Defn.Evaluator)
+        mlir_result = Nx.Defn.jit_apply(function, [])
+
+        assert_equal(expected_result, mlir_result)
+      end
+    end
+
+    test "constant_from_binary" do
+      for type <- @types do
+        function = fn -> Nx.tensor([[10], [20], [30]], type: type) end
+
+        expected_result = Nx.Defn.jit_apply(function, [], compiler: Nx.Defn.Evaluator)
+        mlir_result = Nx.Defn.jit_apply(function, [])
+
+        assert_equal(expected_result, mlir_result)
+      end
+    end
   end
 end

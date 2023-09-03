@@ -17,7 +17,41 @@
 
 namespace exla {
 
-int MLIRFunction::get_mlir_type(ErlNifEnv* env, ERL_NIF_TERM term, mlir::Type* type) {
+mlir::Type TypeIntToMLIRType(mlir::OpBuilder *builder, int type_int) {
+  switch (type_int) {
+    case 2:
+      return builder->getIntegerType(8);
+    case 3:
+      return builder->getIntegerType(16);
+    case 4:
+      return builder->getIntegerType(32);
+    case 5:
+      return builder->getIntegerType(64);
+    case 6:
+      return builder->getIntegerType(8, false);
+    case 7:
+      return builder->getIntegerType(16, false);
+    case 8:
+      return builder->getIntegerType(32, false);
+    case 9:
+      return builder->getIntegerType(64, false);
+    case 10:
+      return builder->getF16Type();
+    case 11:
+      return builder->getF32Type();
+    case 12:
+      return builder->getF64Type();
+    case 16:
+      return builder->getBF16Type();
+  }
+}
+
+mlir::TensorType GetMLIRType(mlir::OpBuilder *builder, std::vector<tsl::int64> dims, int type_int) {
+  auto type = TypeIntToMLIRType(builder, type_int);
+  return mlir::RankedTensorType::get(dims, type);
+}
+
+int MLIRFunction::get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *type) {
   auto builder = module_->builder();
   std::string type_str;
   if (!exla::nif::get(env, term, type_str)) return 1;
@@ -74,7 +108,7 @@ int MLIRFunction::get_mlir_type(ErlNifEnv* env, ERL_NIF_TERM term, mlir::Type* t
   return 1;
 }
 
-MLIRFunction::MLIRFunction(MLIRModule* module, std::unique_ptr<mlir::func::FuncOp> func)
+MLIRFunction::MLIRFunction(MLIRModule *module, std::unique_ptr<mlir::func::FuncOp> func)
     : func_(std::move(func)),
       module_(module) {}
 
@@ -85,7 +119,7 @@ mlir::Value MLIRFunction::SubtractOp(mlir::Value lhs, mlir::Value rhs) {
 }
 
 mlir::Value MLIRFunction::ConvertOp(mlir::Value operand, mlir::Type type) {
-  mlir::OpBuilder* builder = module_->builder();
+  mlir::OpBuilder *builder = module_->builder();
   builder->setInsertionPointToEnd(&func_->getBody().back());
 
   auto op = builder->create<mlir::mhlo::ConvertOp>(builder->getUnknownLoc(), operand, type);
@@ -140,7 +174,7 @@ mlir::Value MLIRFunction::Atan2Op(mlir::Value lhs, mlir::Value rhs) {
   return op;
 }
 
-mlir::Value compare_and_return_bool(mlir::OpBuilder* builder, mlir::Value lhs, mlir::Value rhs, mlir::mhlo::ComparisonDirection direction) {
+mlir::Value compare_and_return_bool(mlir::OpBuilder *builder, mlir::Value lhs, mlir::Value rhs, mlir::mhlo::ComparisonDirection direction) {
   auto op = builder->create<mlir::mhlo::CompareOp>(builder->getUnknownLoc(), lhs, rhs, direction);
   mlir::Type mlir_bool = builder->getIntegerType(8, false);
   return builder->create<mlir::mhlo::ConvertOp>(builder->getUnknownLoc(), op, mlir_bool);
@@ -306,6 +340,100 @@ mlir::Value MLIRFunction::GetTupleElementOp(mlir::Value tuple, tsl::int64 index)
   return op;
 }
 
+mlir::Value MLIRFunction::IotaOp(xla::Shape shape, int64_t dimension) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+
+  absl::Span<const int64_t> dimensions_span = shape.dimensions();
+  std::vector<int64_t> dimensions(dimensions_span.begin(), dimensions_span.end());
+
+  mlir::TensorType type = GetMLIRType(module_->builder(), dimensions, shape.element_type());
+
+  return module_->builder()->create<mlir::mhlo::IotaOp>(module_->builder()->getUnknownLoc(), type, dimension);
+}
+
+template <typename T>
+ERL_NIF_TERM ConstantOpImpl(mlir::OpBuilder *builder, mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM term, std::vector<int64_t> dims) {
+  mlir::RankedTensorType ty = mlir::RankedTensorType::get(dims, type);
+  mlir::DenseElementsAttr attr;
+
+  if (dims.size() == 0) {
+    // this is the scalar case
+    T value;
+    if (!exla::nif::get(env, term, &value)) {
+      return exla::nif::error(env, "Unable to cast scalar to type.");
+    }
+    attr = mlir::DenseElementsAttr::get(ty, value);
+  } else {
+    // non-scalar case. we'll assume our data
+    // is in the form of a raw buffer
+    ErlNifBinary binary;
+    if (!exla::nif::get_binary(env, term, &binary)) {
+      return exla::nif::error(env, "Unable to get binary data.");
+    }
+    char *data = const_cast<char *>(reinterpret_cast<char *>(binary.data));
+    llvm::ArrayRef<char> values(data, binary.size);
+
+    attr = mlir::DenseElementsAttr::getFromRawBuffer(ty, values);
+  }
+
+  // We set a fixed scalar shape because we're using single values here.
+  mlir::Value op = builder->create<mlir::mhlo::ConstantOp>(builder->getUnknownLoc(), attr);
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, op));
+}
+
+ERL_NIF_TERM MLIRFunction::ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM term, std::vector<int64_t> dims) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+
+  if (type.isUnsignedInteger(8)) {
+    return ConstantOpImpl<exla::uint8>(module_->builder(), type, env, term, dims);
+  }
+
+  if (type.isUnsignedInteger(16)) {
+    return ConstantOpImpl<exla::uint16>(module_->builder(), type, env, term, dims);
+  }
+
+  if (type.isUnsignedInteger(32)) {
+    return ConstantOpImpl<exla::uint32>(module_->builder(), type, env, term, dims);
+  }
+
+  if (type.isUnsignedInteger(64)) {
+    return ConstantOpImpl<exla::uint64>(module_->builder(), type, env, term, dims);
+  }
+
+  if (type.isSignlessInteger(8)) {
+    return ConstantOpImpl<exla::int8>(module_->builder(), type, env, term, dims);
+  }
+
+  if (type.isSignlessInteger(16)) {
+    return ConstantOpImpl<exla::int16>(module_->builder(), type, env, term, dims);
+  }
+
+  if (type.isSignlessInteger(32)) {
+    return ConstantOpImpl<exla::int32>(module_->builder(), type, env, term, dims);
+  }
+
+  if (type.isSignlessInteger(64)) {
+    return ConstantOpImpl<exla::int64>(module_->builder(), type, env, term, dims);
+  }
+
+  if (type.isBF16()) {
+    return ConstantOpImpl<exla::bfloat16>(module_->builder(), type, env, term, dims);
+  }
+
+  if (type.isF16()) {
+    return ConstantOpImpl<exla::float16>(module_->builder(), type, env, term, dims);
+  }
+
+  if (type.isF32()) {
+    return ConstantOpImpl<exla::float32>(module_->builder(), type, env, term, dims);
+  }
+
+  if (type.isF64()) {
+    return ConstantOpImpl<exla::float64>(module_->builder(), type, env, term, dims);
+  }
+  return exla::nif::error(env, "invalid type received");
+}
+
 void MLIRFunction::Build(mlir::Value root) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   auto op = module_->builder()->create<mlir::func::ReturnOp>(module_->builder()->getUnknownLoc(), root);
@@ -323,35 +451,6 @@ MLIRModule::MLIRModule() {
   module_ = mlir::OwningOpRef<mlir::ModuleOp>(mlir::ModuleOp::create(mlir::UnknownLoc::get(context_.get())));
   builder_ = std::make_unique<mlir::OpBuilder>(context_.get());
   builder_->setInsertionPointToStart(module_->getBody());
-}
-
-mlir::Type TypeIntToMLIRType(mlir::OpBuilder* builder, int type_int) {
-  switch (type_int) {
-    case 2:
-      return builder->getIntegerType(8);
-    case 3:
-      return builder->getIntegerType(16);
-    case 4:
-      return builder->getIntegerType(32);
-    case 5:
-      return builder->getIntegerType(64);
-    case 6:
-      return builder->getIntegerType(8, false);
-    case 7:
-      return builder->getIntegerType(16, false);
-    case 8:
-      return builder->getIntegerType(32, false);
-    case 9:
-      return builder->getIntegerType(64, false);
-    case 10:
-      return builder->getF16Type();
-    case 11:
-      return builder->getF32Type();
-    case 12:
-      return builder->getF64Type();
-    case 16:
-      return builder->getBF16Type();
-  }
 }
 
 xla::PrimitiveType MLIRTypeToPrimitiveType(mlir::Type type) {
@@ -392,12 +491,7 @@ xla::PrimitiveType MLIRTypeToPrimitiveType(mlir::Type type) {
   return xla::primitive_util::NativeToPrimitiveType<double>();
 }
 
-mlir::TensorType GetMLIRType(mlir::OpBuilder* builder, std::vector<tsl::int64> dims, int type_int) {
-  auto type = TypeIntToMLIRType(builder, type_int);
-  return mlir::RankedTensorType::get(dims, type);
-}
-
-MLIRFunction* MLIRModule::CreateFunction(
+MLIRFunction *MLIRModule::CreateFunction(
     std::string name,
     std::vector<std::pair<std::vector<tsl::int64>, int>> arg_types,
     std::pair<std::vector<tsl::int64>, int> ret_type) {
