@@ -87,13 +87,26 @@ defmodule EXLA.MLIR.ExecutableTest do
       end
     end
 
-
     for op <- [:bitwise_and, :bitwise_or, :bitwise_xor] do
-       test "#{op}" do
+      test "#{op}" do
         function = fn t1, t2 -> Nx.unquote(op)(t1, t2) end
 
         t1 = Nx.iota({2, 3, 1}, type: :s64)
         t2 = Nx.broadcast(Nx.tensor(2, type: :s64), {2, 3, 1})
+
+        result_nx = Nx.Defn.jit_apply(function, [t1, t2], compiler: Nx.Defn.Evaluator)
+        result_mlir = Nx.Defn.jit_apply(function, [t1, t2])
+
+        assert_equal(result_nx, result_mlir)
+      end
+    end
+
+    for op <- [:left_shift, :right_shift], type <- [u: 8, s: 8] do
+      test "#{op} #{inspect(type)}" do
+        function = fn t1, t2 -> Nx.unquote(op)(t1, t2) end
+
+        t1 = Nx.iota({2, 3, 1}, type: unquote(type))
+        t2 = Nx.broadcast(Nx.tensor(2, type: unquote(type)), {2, 3, 1})
 
         result_nx = Nx.Defn.jit_apply(function, [t1, t2], compiler: Nx.Defn.Evaluator)
         result_mlir = Nx.Defn.jit_apply(function, [t1, t2])

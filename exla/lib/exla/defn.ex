@@ -828,6 +828,17 @@ defmodule EXLA.Defn do
     end
   end
 
+  defp to_operator(:right_shift, [%EXLA.MLIR.Value{} = left, %EXLA.MLIR.Value{} = right], %{type: type}, _state) do
+    # dims = broadcast_axes(op_shape(left), op_shape(right))
+
+    op =
+      if match?({:u, _}, type),
+        do: :right_shift_logical,
+        else: :right_shift_arithmetic
+
+    apply(EXLA.MLIR.Value, op, [to_type(left, type), to_type(right, type)])
+  end
+
   defp to_operator(:right_shift, [left, right], %{type: type}, _state) do
     dims = broadcast_axes(op_shape(left), op_shape(right))
 
@@ -1773,9 +1784,10 @@ defmodule EXLA.Defn do
   ## Op Helpers
 
   defp op_type(%EXLA.Op{} = op), do: EXLA.Op.get_shape(op).dtype
-  defp op_type(%Value{} = op), do: Value.get_shape(op)
+  defp op_type(%Value{} = op), do: Value.get_shape(op).dtype
 
   defp op_shape(%EXLA.Op{} = op), do: EXLA.Op.get_shape(op).dims
+  defp op_shape(%Value{} = op), do: Value.get_shape(op).dims
 
   defp to_type(%EXLA.Op{} = op, type) do
     if op_type(op) == type, do: op, else: EXLA.Op.convert_element_type(op, type)

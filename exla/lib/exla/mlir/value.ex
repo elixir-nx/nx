@@ -14,7 +14,8 @@ defmodule EXLA.MLIR.Value do
   @bin_ops [:add, :subtract, :multiply, :divide, :pow, :min] ++
              [:max, :remainder, :atan2, :equal, :less, :less_equal] ++
              [:greater, :greater_equal, :not_equal, :bitwise_and] ++
-             [:bitwise_or, :bitwise_xor]
+             [:bitwise_or, :bitwise_xor] ++
+             [:left_shift, :right_shift_arithmetic, :right_shift_logical]
 
   for op <- @bin_ops do
     mlir_op = :"mlir_#{op}"

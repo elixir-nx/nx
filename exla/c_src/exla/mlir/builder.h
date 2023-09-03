@@ -42,6 +42,8 @@ class MLIRFunction {
   mlir::Value BitwiseXorOp(mlir::Value lhs, mlir::Value rhs);
   mlir::Value BitwiseNotOp(mlir::Value operand);
   mlir::Value ShiftLeftOp(mlir::Value lhs, mlir::Value rhs);
+  mlir::Value ShiftRightLogicalOp(mlir::Value lhs, mlir::Value rhs);
+  mlir::Value ShiftRightArithmeticOp(mlir::Value lhs, mlir::Value rhs);
   mlir::Value ConvertOp(mlir::Value operand, mlir::Type type);
   mlir::Value AbsOp(mlir::Value operand);
   mlir::Value ExpOp(mlir::Value operand);

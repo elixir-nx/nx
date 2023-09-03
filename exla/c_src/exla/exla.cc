@@ -331,6 +331,18 @@ ERL_NIF_TERM mlir_bitwise_xor(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
   return MLIR_BIN_OP(BitwiseXorOp);
 }
 
+ERL_NIF_TERM mlir_shift_left(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(ShiftLeftOp);
+}
+
+ERL_NIF_TERM mlir_shift_right_logical(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(ShiftRightLogicalOp);
+}
+
+ERL_NIF_TERM mlir_shift_right_arithmetic(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_BIN_OP(ShiftRightArithmeticOp);
+}
+
 ERL_NIF_TERM mlir_unary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], std::function<mlir::Value(exla::MLIRFunction*, mlir::Value*)> op) {
   if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
@@ -1206,6 +1218,9 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_bitwise_or", 3, mlir_bitwise_or},
     {"mlir_bitwise_xor", 3, mlir_bitwise_xor},
     {"mlir_bitwise_not", 2, mlir_bitwise_not},
+    {"mlir_left_shift", 3, mlir_shift_left},
+    {"mlir_right_shift_logical", 3, mlir_shift_right_logical},
+    {"mlir_right_shift_arithmetic", 3, mlir_shift_right_arithmetic},
     // XlaBuilder
     {"new_builder", 1, new_builder},
     {"create_sub_builder", 2, create_sub_builder},
