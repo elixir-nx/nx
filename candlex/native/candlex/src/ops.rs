@@ -65,6 +65,11 @@ macro_rules! custom_binary_op {
                 // );
 
                 match (s1, s2) {
+                    (CpuStorage::U32(lhs), CpuStorage::U32(rhs)) => {
+                        let data = candle_core::cpu_backend::binary_map(l1, l2, lhs, rhs, $closure);
+
+                        Ok((CpuStorage::U32(data), l1.shape().clone()))
+                    }
                     (CpuStorage::I64(lhs), CpuStorage::I64(rhs)) => {
                         let data = candle_core::cpu_backend::binary_map(l1, l2, lhs, rhs, $closure);
 
