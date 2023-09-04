@@ -45,12 +45,14 @@ defmodule Candlex.Native do
         :bitwise_xor,
         :equal,
         :greater_equal,
+        :left_shift,
         :less,
         :less_equal,
         :matmul,
         :max,
         :min,
         :multiply,
+        :right_shift,
         :subtract
       ] do
     def unquote(op)(_left, _right), do: error()

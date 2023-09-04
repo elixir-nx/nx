@@ -1,6 +1,6 @@
 use crate::atoms;
 use crate::error::CandlexError;
-use crate::ops::{Acos, Asin, Atan, BitAnd, BitOr, BitXor, Cbrt, Ceil, Floor, Log1p, Round, Tan};
+use crate::ops::{Acos, Asin, Atan, BitAnd, BitOr, BitXor, Cbrt, Ceil, Floor, Shl, Shr, Log1p, Round, Tan};
 use candle_core::{DType, Device, Tensor};
 use half::{bf16, f16};
 use rustler::{Atom, Binary, Env, NewBinary, NifStruct, ResourceArc, Term};
@@ -238,6 +238,8 @@ binary_nif!(matmul, broadcast_matmul);
 custom_binary_nif!(bitwise_and, BitAnd);
 custom_binary_nif!(bitwise_or, BitOr);
 custom_binary_nif!(bitwise_xor, BitXor);
+custom_binary_nif!(left_shift, Shl);
+custom_binary_nif!(right_shift, Shr);
 
 fn tuple_to_vec(term: Term) -> Result<Vec<usize>, rustler::Error> {
     Ok(rustler::types::tuple::get_tuple(term)?

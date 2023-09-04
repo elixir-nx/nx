@@ -97,3 +97,5 @@ custom_unary_op!(Tan, "tan", tan);
 custom_binary_op!(BitAnd, "bit_and", |v1, v2| v1 & v2);
 custom_binary_op!(BitOr, "bit_or", |v1, v2| v1 | v2);
 custom_binary_op!(BitXor, "bit_xor", |v1, v2| v1 ^ v2);
+custom_binary_op!(Shl, "shl", |v1, v2| v1 << v2);
+custom_binary_op!(Shr, "shr", |v1, v2| v1 >> v2);

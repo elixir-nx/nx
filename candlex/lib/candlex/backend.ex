@@ -123,13 +123,6 @@ defmodule Candlex.Backend do
 
   # Element-wise
 
-  for op <- [:left_shift, :right_shift] do
-    @impl true
-    def unquote(op)(out, l, r) do
-      unsupported_op(unquote(op))
-    end
-  end
-
   @impl true
   def select(%T{shape: shape, type: type} = out, pred, on_true, on_false) do
     on_true =
@@ -169,7 +162,7 @@ defmodule Candlex.Backend do
     end
   end
 
-  for op <- [:bitwise_and, :bitwise_or, :bitwise_xor, :equal, :greater_equal, :less, :less_equal] do
+  for op <- [:bitwise_and, :bitwise_or, :bitwise_xor, :equal, :greater_equal, :left_shift, :less, :less_equal, :right_shift] do
     @impl true
     def unquote(op)(%T{} = out, %T{} = left, %T{} = right) do
       {left, right} = maybe_upcast(left, right)
