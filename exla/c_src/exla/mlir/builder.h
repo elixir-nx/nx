@@ -76,6 +76,7 @@ class MLIRFunction {
   mlir::Value IsInfOp(mlir::Value operand);
   mlir::Value IsNanOp(mlir::Value operand);
   mlir::Value RsqrtOp(mlir::Value operand);
+  mlir::Value ClzOp(mlir::Value operand);
   mlir::Value IotaOp(xla::Shape shape, int64_t dimension);
   ERL_NIF_TERM ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM value_ptr, std::vector<int64_t> dims = {});
   int get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *type);
