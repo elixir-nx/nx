@@ -40,6 +40,9 @@ defmodule Candlex.Native do
 
   for op <- [
         :add,
+        :bitwise_and,
+        :bitwise_or,
+        :bitwise_xor,
         :equal,
         :greater_equal,
         :less,

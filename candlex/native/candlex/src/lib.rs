@@ -61,6 +61,9 @@ rustler::init! {
         tensors::sqrt,
         tensors::tan,
         tensors::tanh,
+        tensors::bitwise_and,
+        tensors::bitwise_or,
+        tensors::bitwise_xor,
         devices::is_cuda_available
     ],
     load = load

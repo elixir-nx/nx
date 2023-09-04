@@ -1,6 +1,6 @@
 use crate::atoms;
 use crate::error::CandlexError;
-use crate::ops::{Acos, Asin, Atan, Cbrt, Ceil, Floor, Log1p, Round, Tan};
+use crate::ops::{Acos, Asin, Atan, BitAnd, BitOr, BitXor, Cbrt, Ceil, Floor, Log1p, Round, Tan};
 use candle_core::{DType, Device, Tensor};
 use half::{bf16, f16};
 use rustler::{Atom, Binary, Env, NewBinary, NifStruct, ResourceArc, Term};
@@ -196,6 +196,15 @@ macro_rules! custom_unary_nif {
     };
 }
 
+macro_rules! custom_binary_nif {
+    ($nif_name:ident, $custom_op_name:ident) => {
+        #[rustler::nif(schedule = "DirtyCpu")]
+        pub fn $nif_name(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
+            Ok(ExTensor::new(left.apply_op2_no_bwd(right.deref(), &$custom_op_name)?))
+        }
+    };
+}
+
 unary_nif!(negate, neg);
 unary_nif!(abs);
 unary_nif!(cos);
@@ -225,6 +234,10 @@ binary_nif!(greater_equal, ge);
 binary_nif!(less, lt);
 binary_nif!(less_equal, le);
 binary_nif!(matmul, broadcast_matmul);
+
+custom_binary_nif!(bitwise_and, BitAnd);
+custom_binary_nif!(bitwise_or, BitOr);
+custom_binary_nif!(bitwise_xor, BitXor);
 
 fn tuple_to_vec(term: Term) -> Result<Vec<usize>, rustler::Error> {
     Ok(rustler::types::tuple::get_tuple(term)?

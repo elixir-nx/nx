@@ -623,6 +623,57 @@ defmodule CandlexTest do
       |> Nx.log1p()
       |> assert_equal(t([0.6931471824645996, 1.0986123085021973, 1.3862943649291992]))
     end
+
+    test "bitwise_and" do
+      Nx.bitwise_and(1, 0)
+      |> assert_equal(t(0))
+
+      t([0, 1, 2])
+      |> Nx.bitwise_and(1)
+      |> assert_equal(t([0, 1, 0]))
+
+      t([0, -1, -2])
+      |> Nx.bitwise_and(-1)
+      |> assert_equal(t([0, -1, -2]))
+
+      t([0, 0, 1, 1])
+      |> Nx.bitwise_and(t([0, 1, 0, 1]))
+      |> assert_equal(t([0, 0, 0, 1]))
+    end
+
+    test "bitwise_or" do
+      Nx.bitwise_or(1, 0)
+      |> assert_equal(t(1))
+
+      t([0, 1, 2])
+      |> Nx.bitwise_or(1)
+      |> assert_equal(t([1, 1, 3]))
+
+      t([0, -1, -2])
+      |> Nx.bitwise_or(-1)
+      |> assert_equal(t([-1, -1, -1]))
+
+      t([0, 0, 1, 1])
+      |> Nx.bitwise_or(t([0, 1, 0, 1]))
+      |> assert_equal(t([0, 1, 1, 1]))
+    end
+
+    test "bitwise_xor" do
+      Nx.bitwise_xor(1, 0)
+      |> assert_equal(t(1))
+
+      t([1, 2, 3])
+      |> Nx.bitwise_xor(2)
+      |> assert_equal(t([3, 0, 1]))
+
+      t([-1, -2, -3])
+      |> Nx.bitwise_xor(2)
+      |> assert_equal(t([-3, -4, -1]))
+
+      t([0, 0, 1, 1])
+      |> Nx.bitwise_xor(t([0, 1, 0, 1]))
+      |> assert_equal(t([0, 1, 1, 0]))
+    end
   end
 
   defp t(values, opts \\ []) do
