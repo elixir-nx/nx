@@ -21,6 +21,7 @@ defmodule Candlex.Native do
         :acos,
         :asin,
         :atan,
+        :bitwise_not,
         :cbrt,
         :ceil,
         :cos,

@@ -61,6 +61,7 @@ rustler::init! {
         tensors::sqrt,
         tensors::tan,
         tensors::tanh,
+        tensors::bitwise_not,
         tensors::bitwise_and,
         tensors::bitwise_or,
         tensors::bitwise_xor,

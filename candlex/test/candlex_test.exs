@@ -619,6 +619,19 @@ defmodule CandlexTest do
       |> assert_equal(t([0, 1, 1, 0]))
     end
 
+    test "bitwise_not" do
+      Nx.bitwise_not(1)
+      |> assert_equal(t(-2))
+
+      t([-1, 0, 1])
+      |> Nx.bitwise_not()
+      |> assert_equal(t([0, -1, -2]))
+
+      t([0, 1, 254, 255], type: :u8)
+      |> Nx.bitwise_not()
+      |> assert_equal(t([255, 254, 1, 0]))
+    end
+
     test "left_shift" do
       Nx.left_shift(1, 0)
       |> assert_equal(t(1))

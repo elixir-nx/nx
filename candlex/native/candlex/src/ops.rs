@@ -37,6 +37,57 @@ macro_rules! custom_unary_op {
     };
 }
 
+macro_rules! custom_unary_op_closure {
+    ($struct_name:ident, $name:expr, $closure:expr) => {
+        pub(crate) struct $struct_name;
+
+        impl CustomOp1 for $struct_name {
+            // Box<dyn> does not support const yet, so use a function to get the name.
+            fn name(&self) -> &'static str {
+                $name
+            }
+
+            /// The forward pass, as run on a cpu device. Note that the storage can use arbitrary strides,
+            /// offsets etc so the associated layout should be used to access it.
+            fn cpu_fwd(
+                &self,
+                storage: &CpuStorage,
+                layout: &Layout,
+            ) -> Result<(CpuStorage, Shape), candle_core::Error> {
+                use candle_core::backend::BackendStorage;
+
+                // TODO: Find a way to make map_dtype! play well with inferred closure
+                //       params types?
+                //
+                // let storage = candle_core::map_dtype!(
+                //     $name,
+                //     storage,
+                //     |vec| candle_core::cpu_backend::unary_map(vec, layout, $closure),
+                //     (U8, U32, I64)
+                // );
+
+                // Ok((storage, layout.shape().clone()))
+
+                match storage {
+                    CpuStorage::U8(vec) => {
+                        let data = candle_core::cpu_backend::unary_map(vec, layout, $closure);
+                        Ok((CpuStorage::U8(data), layout.shape().clone()))
+                    }
+                    CpuStorage::U32(vec) => {
+                        let data = candle_core::cpu_backend::unary_map(vec, layout, $closure);
+                        Ok((CpuStorage::U32(data), layout.shape().clone()))
+                    }
+                    CpuStorage::I64(vec) => {
+                        let data = candle_core::cpu_backend::unary_map(vec, layout, $closure);
+                        Ok((CpuStorage::I64(data), layout.shape().clone()))
+                    }
+                    s => Err(Error::UnsupportedDTypeForOp(s.dtype(), $name).bt())?
+                }
+            }
+        }
+    };
+}
+
 macro_rules! custom_binary_op {
     ($struct_name:ident, $name:literal, $closure:expr) => {
         pub(crate) struct $struct_name;
@@ -98,6 +149,7 @@ custom_unary_op!(Floor, "floor", floor);
 custom_unary_op!(Log1p, "ln_1p", ln_1p);
 custom_unary_op!(Round, "round", round);
 custom_unary_op!(Tan, "tan", tan);
+custom_unary_op_closure!(BitNot, "bit_not", |v| !v);
 
 custom_binary_op!(BitAnd, "bit_and", |v1, v2| v1 & v2);
 custom_binary_op!(BitOr, "bit_or", |v1, v2| v1 | v2);

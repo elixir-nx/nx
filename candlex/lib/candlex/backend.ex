@@ -182,6 +182,7 @@ defmodule Candlex.Backend do
         :acos,
         :asin,
         :atan,
+        :bitwise_not,
         :cbrt,
         :ceil,
         :cos,
@@ -206,7 +207,7 @@ defmodule Candlex.Backend do
     end
   end
 
-  for op <- [:bitwise_not, :erf_inv] do
+  for op <- [:erf_inv] do
     @impl true
     def unquote(op)(out, t) do
       unsupported_op(unquote(op))
