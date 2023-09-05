@@ -297,12 +297,25 @@ defmodule EXLA.MLIR.ExecutableTest do
         assert_equal(result_nx, result_mlir)
       end
     end
-    
+
     describe "slice" do
       test "works"
     end
     describe "reverse" do
-      test "works"
+      test "works" do
+        t = Nx.iota({2, 3, 4})
+        axes = [[], 0, 1, 2]
+        for ax1 <- axes, ax2 <- axes, ax3 <- axes do
+          axes = Enum.uniq(List.flatten([ax1, ax2, ax3]))
+          function = fn t -> Nx.reverse(t, axes: axes) end
+          result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
+          result_mlir = Nx.Defn.jit_apply(function, [t])
+
+          assert result_nx.shape == result_mlir.shape
+          assert result_nx.type == result_mlir.type
+          assert_equal(result_nx, result_mlir)
+        end
+      end
     end
     describe "pad" do
       test "works"

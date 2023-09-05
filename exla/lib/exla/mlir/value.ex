@@ -50,6 +50,11 @@ defmodule EXLA.MLIR.Value do
     %Value{op | ref: ref}
   end
 
+  def reverse(%Value{function: %Function{} = func} = op, dims) do
+    ref = EXLA.NIF.mlir_reverse(func.ref, op.ref, dims) |> unwrap!()
+    %Value{op | ref: ref}
+  end
+
   def tuple([%Value{function: %Function{} = func} | _rest] = vals) do
     refs = Enum.map(vals, fn %Value{ref: ref, function: ^func} -> ref end)
     ref = EXLA.NIF.mlir_tuple(func.ref, refs) |> unwrap!()

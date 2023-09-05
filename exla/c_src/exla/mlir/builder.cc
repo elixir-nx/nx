@@ -417,11 +417,20 @@ mlir::Value MLIRFunction::RsqrtOp(mlir::Value operand) {
   return module_->builder()->create<mlir::mhlo::RsqrtOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
-mlir::Value MLIRFunction::ReshapeOp(mlir::Value operand, std::vector<int64_t> target_shape){
+mlir::Value MLIRFunction::ReshapeOp(mlir::Value operand, std::vector<int64_t> target_shape) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   mlir::RankedTensorType t_in = cast<mlir::RankedTensorType>(operand.getType());
   mlir::RankedTensorType type = mlir::RankedTensorType::get(target_shape, t_in.getElementType());
   return module_->builder()->create<mlir::mhlo::ReshapeOp>(module_->builder()->getUnknownLoc(), type, operand);
+}
+
+mlir::Value MLIRFunction::ReverseOp(mlir::Value operand, std::vector<int64_t> dims) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  int64_t num_dims[] = {static_cast<int64_t>(dims.size())};
+  auto type = mlir::RankedTensorType::get(llvm::ArrayRef(num_dims, 1), module_->builder()->getIntegerType(64));
+  auto dense_attr = mlir::DenseElementsAttr::get<int64_t>(type, llvm::ArrayRef<int64_t>(dims.data(), dims.size()));
+  auto dims_attr = llvm::cast<mlir::DenseIntElementsAttr>(dense_attr);
+  return module_->builder()->create<mlir::mhlo::ReverseOp>(module_->builder()->getUnknownLoc(), operand, dims_attr);
 }
 
 mlir::Value MLIRFunction::TupleOp(std::vector<mlir::Value> vals) {

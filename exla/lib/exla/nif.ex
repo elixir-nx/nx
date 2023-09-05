@@ -37,6 +37,7 @@ defmodule EXLA.NIF do
   end
 
   def mlir_reshape(_function, _operand, _shape), do: :erlang.nif_error(:undef)
+  def mlir_reverse(_function, _operand, _shape), do: :erlang.nif_error(:undef)
   def mlir_tuple(_function, _vals), do: :erlang.nif_error(:undef)
   def mlir_get_tuple_element(_function, _tuple, _index), do: :erlang.nif_error(:undef)
 

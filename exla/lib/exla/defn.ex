@@ -1259,9 +1259,14 @@ defmodule EXLA.Defn do
     )
   end
 
+  defp to_operator(:reverse, [%Value{} = tensor, axes], _ans, _state) do
+    Value.reverse(tensor, axes)
+  end
+
   defp to_operator(:reverse, [tensor, axes], _ans, _state) do
     EXLA.Op.reverse(tensor, axes)
   end
+
 
   defp to_operator(:concatenate, [tensors, axis], ans, _state) do
     tensors =
