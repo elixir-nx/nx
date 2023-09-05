@@ -55,7 +55,6 @@ defmodule EXLA.MLIR.Value do
     %Value{op | ref: ref}
   end
 
-
   def slice(%Value{function: %Function{} = func} = op, starts, limits, strides) do
     ref = EXLA.NIF.mlir_slice(func.ref, op.ref, starts, limits, strides) |> unwrap!()
     %Value{op | ref: ref}

@@ -33,7 +33,7 @@ defmodule EXLA.Lib do
   def iota(%EXLA.MLIR.Function{} = function, shape, nil) do
     total_elems = Nx.size(shape.dims)
 
-   Value.reshape(
+    Value.reshape(
       Value.iota(function, EXLA.Shape.make_shape(shape.dtype, {total_elems}), 0),
       shape.dims
     )
