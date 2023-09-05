@@ -76,6 +76,7 @@ class MLIRFunction {
   mlir::Value IsInfOp(mlir::Value operand);
   mlir::Value IsNanOp(mlir::Value operand);
   mlir::Value RsqrtOp(mlir::Value operand);
+  mlir::Value ClzOp(mlir::Value operand);
   mlir::Value IotaOp(xla::Shape shape, int64_t dimension);
   mlir::Value ReshapeOp(mlir::Value operand, std::vector<int64_t> target_shape);
   mlir::Value ReverseOp(mlir::Value operand, std::vector<int64_t> dims);

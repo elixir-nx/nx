@@ -464,7 +464,10 @@ mlir::Value MLIRFunction::DynamicSliceOp(mlir::Value operand, std::vector<mlir::
           len_attr);
 }
 
-// static void build(::mlir::OpBuilder &odsBuilder, ::mlir::OperationState &odsState, ::mlir::Value operand, ::mlir::DenseIntElementsAttr start_indices, ::mlir::DenseIntElementsAttr limit_indices, ::mlir::DenseIntElementsAttr strides);
+mlir::Value MLIRFunction::ClzOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::ClzOp>(module_->builder()->getUnknownLoc(), operand);
+}
 
 mlir::Value MLIRFunction::TupleOp(std::vector<mlir::Value> vals) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());

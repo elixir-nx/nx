@@ -464,8 +464,11 @@ ERL_NIF_TERM mlir_is_nan(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 ERL_NIF_TERM mlir_rsqrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_UNARY_OP(RsqrtOp);
 }
-ERL_NIF_TERM
-mlir_iota(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM mlir_clz(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(ClzOp);
+}
+
+ERL_NIF_TERM mlir_iota(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");
   }
@@ -1361,6 +1364,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_is_infinity", 2, mlir_is_infinity},
     {"mlir_is_nan", 2, mlir_is_nan},
     {"mlir_rsqrt", 2, mlir_rsqrt},
+    {"mlir_count_leading_zeros", 2, mlir_clz},
     // XlaBuilder
     {"new_builder", 1, new_builder},
     {"create_sub_builder", 2, create_sub_builder},

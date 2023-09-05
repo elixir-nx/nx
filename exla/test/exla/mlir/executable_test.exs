@@ -184,15 +184,17 @@ defmodule EXLA.MLIR.ExecutableTest do
       assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
     end
 
-    test "bitwise_not" do
-      function = fn t -> Nx.bitwise_not(t) end
+    for op <- [:count_leading_zeros, :bitwise_not] do
+      test "#{op}" do
+        function = fn t -> Nx.unquote(op)(t) end
 
-      t = Nx.iota({2, 3, 1}, type: :s64)
+        t = Nx.iota({2, 3, 1}, type: :s64)
 
-      result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
-      result_mlir = Nx.Defn.jit_apply(function, [t])
+        result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
+        result_mlir = Nx.Defn.jit_apply(function, [t])
 
-      assert_equal(result_nx, result_mlir)
+        assert_equal(result_nx, result_mlir)
+      end
     end
 
     test "acosh" do
