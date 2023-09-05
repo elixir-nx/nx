@@ -428,7 +428,13 @@ defmodule Candlex.Backend do
     |> from_nx()
   end
 
-  defp to_nx(%{resource: ref} = backend_tensor, %T{} = t) when is_reference(ref) do
+  defp to_nx(%CB{resource: ref} = backend_tensor, %T{type: nx_type} = t) when is_reference(ref) do
+    {:ok, candle_dtype} = Native.dtype(backend_tensor)
+
+    if nx_type != from_candle_dtype(candle_dtype) do
+      raise "tensor type mismatch, Nx (#{inspect(nx_type)}) and Candle (#{inspect(candle_dtype)})"
+    end
+
     %{t | data: backend_tensor}
   end
 
@@ -446,6 +452,14 @@ defmodule Candlex.Backend do
   defp to_candle_dtype({:bf, 16}), do: "bf16"
   defp to_candle_dtype({:c, 64}), do: unsupported_dtype()
   defp to_candle_dtype({:c, 128}), do: unsupported_dtype()
+
+  defp from_candle_dtype("i64"), do: {:s, 64}
+  defp from_candle_dtype("u8"), do: {:u, 8}
+  defp from_candle_dtype("u32"), do: {:u, 32}
+  defp from_candle_dtype("f16"), do: {:f, 16}
+  defp from_candle_dtype("bf16"), do: {:bf, 16}
+  defp from_candle_dtype("f32"), do: {:f, 32}
+  defp from_candle_dtype("f64"), do: {:f, 64}
 
   defp device_option(nil) do
     default_device()

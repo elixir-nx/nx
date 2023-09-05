@@ -158,6 +158,11 @@ pub fn to_type(t: ExTensor, dtype_str: &str) -> Result<ExTensor, CandlexError> {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+pub fn dtype(t: ExTensor) -> Result<&'static str, CandlexError> {
+    Ok(t.dtype().as_str())
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 pub fn concatenate(ex_tensors: Vec<ExTensor>, dim: usize) -> Result<ExTensor, CandlexError> {
     let tensors = ex_tensors
         .iter()

@@ -14,6 +14,7 @@ defmodule Candlex.Native do
   def broadcast_to(_tensor, _shape), do: error()
   def reshape(_tensor, _shape), do: error()
   def to_type(_tensor, _dtype), do: error()
+  def dtype(_tensor), do: error()
   def concatenate(_tensors, _axis), do: error()
 
   for op <- [
