@@ -417,6 +417,16 @@ mlir::Value MLIRFunction::RsqrtOp(mlir::Value operand) {
   return module_->builder()->create<mlir::mhlo::RsqrtOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
+mlir::Value MLIRFunction::ReshapeOp(mlir::Value operand, std::vector<int64_t> target_shape){
+  std::cout << "1" << std::endl;
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  std::cout << "2" << std::endl;
+  mlir::RankedTensorType t_in = cast<mlir::RankedTensorType>(operand.getType());
+  mlir::RankedTensorType type = mlir::RankedTensorType::get(target_shape, t_in.getElementType());
+  std::cout << "3" << std::endl;
+  return module_->builder()->create<mlir::mhlo::ReshapeOp>(module_->builder()->getUnknownLoc(), type, operand);
+}
+
 mlir::Value MLIRFunction::TupleOp(std::vector<mlir::Value> vals) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   auto op = module_->builder()->create<mlir::mhlo::TupleOp>(module_->builder()->getUnknownLoc(), vals);

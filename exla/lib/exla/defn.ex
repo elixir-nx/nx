@@ -653,6 +653,10 @@ defmodule EXLA.Defn do
 
   ## to_operator shape
 
+  defp to_operator(:reshape, [%Value{} = op], %{shape: shape}, _state) do
+    Value.reshape(op, shape)
+  end
+
   defp to_operator(:reshape, [op], %{shape: shape}, _state) do
     EXLA.Op.reshape(op, shape)
   end

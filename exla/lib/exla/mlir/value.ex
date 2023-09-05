@@ -45,6 +45,11 @@ defmodule EXLA.MLIR.Value do
     end
   end
 
+  def reshape(%Value{function: %Function{} = func} = op, shape_tuple) do
+    ref = EXLA.NIF.mlir_reshape(func.ref, op.ref, shape_tuple) |> unwrap!()
+    %Value{op | ref: ref}
+  end
+
   def tuple([%Value{function: %Function{} = func} | _rest] = vals) do
     refs = Enum.map(vals, fn %Value{ref: ref, function: ^func} -> ref end)
     ref = EXLA.NIF.mlir_tuple(func.ref, refs) |> unwrap!()
