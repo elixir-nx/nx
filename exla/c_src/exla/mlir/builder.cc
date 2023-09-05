@@ -109,6 +109,13 @@ int MLIRFunction::get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *t
   return 1;
 }
 
+mlir::DenseIntElementsAttr Int64ToDenseIntElementsAttr(mlir::OpBuilder *builder, std::vector<int64_t> vec) {
+  int64_t num_entries[] = {static_cast<int64_t>(vec.size())};
+  auto type = mlir::RankedTensorType::get(llvm::ArrayRef(num_entries, 1), builder->getIntegerType(64));
+  auto dense_attr = mlir::DenseElementsAttr::get<int64_t>(type, llvm::ArrayRef<int64_t>(vec.data(), vec.size()));
+  return llvm::cast<mlir::DenseIntElementsAttr>(dense_attr);
+}
+
 MLIRFunction::MLIRFunction(MLIRModule *module, std::unique_ptr<mlir::func::FuncOp> func)
     : func_(std::move(func)),
       module_(module) {}
@@ -426,12 +433,25 @@ mlir::Value MLIRFunction::ReshapeOp(mlir::Value operand, std::vector<int64_t> ta
 
 mlir::Value MLIRFunction::ReverseOp(mlir::Value operand, std::vector<int64_t> dims) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  int64_t num_dims[] = {static_cast<int64_t>(dims.size())};
-  auto type = mlir::RankedTensorType::get(llvm::ArrayRef(num_dims, 1), module_->builder()->getIntegerType(64));
-  auto dense_attr = mlir::DenseElementsAttr::get<int64_t>(type, llvm::ArrayRef<int64_t>(dims.data(), dims.size()));
-  auto dims_attr = llvm::cast<mlir::DenseIntElementsAttr>(dense_attr);
+  auto dims_attr = Int64ToDenseIntElementsAttr(module_->builder(), dims);
   return module_->builder()->create<mlir::mhlo::ReverseOp>(module_->builder()->getUnknownLoc(), operand, dims_attr);
 }
+
+mlir::Value MLIRFunction::SliceOp(mlir::Value operand, std::vector<int64_t> starts, std::vector<int64_t> limits, std::vector<int64_t> strides) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  auto idx_attr = Int64ToDenseIntElementsAttr(module_->builder(), starts);
+  auto lim_attr = Int64ToDenseIntElementsAttr(module_->builder(), limits);
+  auto strides_attr = Int64ToDenseIntElementsAttr(module_->builder(), strides);
+
+  return module_->builder()->create<mlir::mhlo::SliceOp>(
+      module_->builder()->getUnknownLoc(),
+      operand,
+      idx_attr,
+      lim_attr,
+      strides_attr);
+}
+
+// static void build(::mlir::OpBuilder &odsBuilder, ::mlir::OperationState &odsState, ::mlir::Value operand, ::mlir::DenseIntElementsAttr start_indices, ::mlir::DenseIntElementsAttr limit_indices, ::mlir::DenseIntElementsAttr strides);
 
 mlir::Value MLIRFunction::TupleOp(std::vector<mlir::Value> vals) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());

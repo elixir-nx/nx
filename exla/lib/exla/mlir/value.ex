@@ -55,6 +55,14 @@ defmodule EXLA.MLIR.Value do
     %Value{op | ref: ref}
   end
 
+
+  def slice(%Value{function: %Function{} = func} = op, starts, limits, strides) do
+    ref = EXLA.NIF.mlir_slice(func.ref, op.ref, starts, limits, strides) |> unwrap!()
+    %Value{op | ref: ref}
+  end
+
+
+
   def tuple([%Value{function: %Function{} = func} | _rest] = vals) do
     refs = Enum.map(vals, fn %Value{ref: ref, function: ^func} -> ref end)
     ref = EXLA.NIF.mlir_tuple(func.ref, refs) |> unwrap!()

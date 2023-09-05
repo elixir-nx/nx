@@ -531,6 +531,35 @@ ERL_NIF_TERM mlir_reverse(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   mlir::Value res = (*function)->ReverseOp(*operand, dims);
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
+ERL_NIF_TERM mlir_slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 5) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  std::vector<int64_t> starts, limits, strides;
+  mlir::Value* operand;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get_list(env, argv[2], starts)) {
+    return exla::nif::error(env, "Unable to get starts.");
+  }
+  if (!exla::nif::get_list(env, argv[3], limits)) {
+    return exla::nif::error(env, "Unable to get lwngths.");
+  }
+  if (!exla::nif::get_list(env, argv[4], strides)) {
+    return exla::nif::error(env, "Unable to get strides.");
+  }
+
+  mlir::Value res = (*function)->SliceOp(*operand, starts, limits, strides);
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
 ERL_NIF_TERM mlir_constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");
@@ -1287,6 +1316,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_iota", 3, mlir_iota},
     {"mlir_reshape", 3, mlir_reshape},
     {"mlir_reverse", 3, mlir_reverse},
+    {"mlir_slice", 5, mlir_slice},
     {"mlir_constant_r0", 3, mlir_constant_r0},
     {"mlir_constant_from_binary", 4, mlir_constant_from_binary},
     {"mlir_bitwise_and", 3, mlir_bitwise_and},

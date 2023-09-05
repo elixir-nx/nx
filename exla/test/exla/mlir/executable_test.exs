@@ -299,7 +299,25 @@ defmodule EXLA.MLIR.ExecutableTest do
     end
 
     describe "slice" do
-      test "works"
+      test "works" do
+        t = Nx.iota({2, 3, 4})
+
+        function = fn t -> Nx.slice(t, [0, 0, 0], [2, 3, 1]) end
+        result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
+        result_mlir = Nx.Defn.jit_apply(function, [t])
+
+        assert result_nx.shape == result_mlir.shape
+        assert result_nx.type == result_mlir.type
+        assert_equal(result_nx, result_mlir)
+
+        function = fn t -> Nx.slice(t, [0, 0, 1], [2, 3, 4]) end
+        result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
+        result_mlir = Nx.Defn.jit_apply(function, [t])
+
+        assert result_nx.shape == result_mlir.shape
+        assert result_nx.type == result_mlir.type
+        assert_equal(result_nx, result_mlir)
+      end
     end
     describe "reverse" do
       test "works" do
