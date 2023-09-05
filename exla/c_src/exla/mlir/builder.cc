@@ -424,6 +424,12 @@ mlir::Value MLIRFunction::RsqrtOp(mlir::Value operand) {
   return module_->builder()->create<mlir::mhlo::RsqrtOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
+mlir::Value MLIRFunction::TransposeOp(mlir::Value operand, std::vector<int64_t> axes) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  auto axes_attr = Int64ToDenseIntElementsAttr(module_->builder(), axes);
+  return module_->builder()->create<mlir::mhlo::TransposeOp>(module_->builder()->getUnknownLoc(), operand, axes_attr);
+}
+
 mlir::Value MLIRFunction::ReshapeOp(mlir::Value operand, std::vector<int64_t> target_shape) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   mlir::RankedTensorType t_in = llvm::cast<mlir::RankedTensorType>(operand.getType());

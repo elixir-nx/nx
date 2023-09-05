@@ -669,6 +669,10 @@ defmodule EXLA.Defn do
     EXLA.Op.broadcast_in_dim(op, ans.shape, List.to_tuple(axes))
   end
 
+  defp to_operator(:transpose, [%Value{} = op, axes], _ans, _state) do
+    Value.transpose(op, axes)
+  end
+
   defp to_operator(:transpose, [op, axes], _ans, _state) do
     EXLA.Op.transpose(op, List.to_tuple(axes))
   end
