@@ -339,4 +339,23 @@ defmodule EXLA.MLIR.ExecutableTest do
       end
     end
   end
+
+  describe "tranpose" do
+    test "works" do
+      t = Nx.iota({2, 3, 4})
+      axes = [0, 1, 2]
+
+      for ax1 <- axes, ax2 <- axes, ax3 <- axes, ax1 != ax2 and ax1 != ax3 and ax2 != ax3 do
+        axes = [ax1, ax2, ax3]
+        function = fn t -> Nx.transpose(t, axes: axes) end
+        result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
+        result_mlir = Nx.Defn.jit_apply(function, [t])
+
+        assert result_nx.shape == result_mlir.shape
+        assert result_nx.type == result_mlir.type
+        assert_equal(result_nx, result_mlir)
+      end
+      |> then(fn x -> assert length(x) == 6 end)
+    end
+  end
 end

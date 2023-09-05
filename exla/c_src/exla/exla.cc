@@ -512,6 +512,7 @@ ERL_NIF_TERM mlir_reshape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   mlir::Value res = (*function)->ReshapeOp(*operand, shape);
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
+
 ERL_NIF_TERM mlir_reverse(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");
@@ -534,6 +535,30 @@ ERL_NIF_TERM mlir_reverse(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   mlir::Value res = (*function)->ReverseOp(*operand, dims);
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
+
+ERL_NIF_TERM mlir_transpose(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  std::vector<int64_t> axes;
+  mlir::Value* operand;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get_list(env, argv[2], axes)) {
+    return exla::nif::error(env, "Unable to get axes.");
+  }
+
+  mlir::Value res = (*function)->TransposeOp(*operand, axes);
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
 ERL_NIF_TERM mlir_slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 5) {
     return exla::nif::error(env, "Bad argument count.");
@@ -1346,6 +1371,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_iota", 3, mlir_iota},
     {"mlir_reshape", 3, mlir_reshape},
     {"mlir_reverse", 3, mlir_reverse},
+    {"mlir_transpose", 3, mlir_transpose},
     {"mlir_slice", 5, mlir_slice},
     {"mlir_dynamic_slice", 4, mlir_dynamic_slice},
     {"mlir_constant_r0", 3, mlir_constant_r0},
