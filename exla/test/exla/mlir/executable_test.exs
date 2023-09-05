@@ -254,7 +254,7 @@ defmodule EXLA.MLIR.ExecutableTest do
 
   describe "constants" do
     test "iota" do
-      for axis <- [0, 1, 2] do
+      for axis <- [0, 1, 2, nil] do
         function = fn -> Nx.iota({2, 3, 4}, axis: axis) end
 
         expected_result = Nx.Defn.jit_apply(function, [], compiler: Nx.Defn.Evaluator)
@@ -283,6 +283,59 @@ defmodule EXLA.MLIR.ExecutableTest do
         mlir_result = Nx.Defn.jit_apply(function, [])
 
         assert_equal(expected_result, mlir_result)
+      end
+    end
+  end
+
+  describe "reshape" do
+    test "works" do
+      t = Nx.iota({24})
+      function = fn t -> Nx.reshape(t, {2, 3, 4}) end
+      result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
+      result_mlir = Nx.Defn.jit_apply(function, [t])
+
+      assert result_nx.shape == result_mlir.shape
+      assert result_nx.type == result_mlir.type
+      assert_equal(result_nx, result_mlir)
+    end
+  end
+
+  describe "slice" do
+    test "works" do
+      t = Nx.iota({2, 3, 4})
+
+      function = fn t -> Nx.slice(t, [0, 0, 0], [2, 3, 1]) end
+      result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
+      result_mlir = Nx.Defn.jit_apply(function, [t])
+
+      assert result_nx.shape == result_mlir.shape
+      assert result_nx.type == result_mlir.type
+      assert_equal(result_nx, result_mlir)
+
+      function = fn t -> Nx.slice(t, [0, Nx.tensor(0), Nx.tensor(1)], [2, 3, 4]) end
+      result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
+      result_mlir = Nx.Defn.jit_apply(function, [t])
+
+      assert result_nx.shape == result_mlir.shape
+      assert result_nx.type == result_mlir.type
+      assert_equal(result_nx, result_mlir)
+    end
+  end
+
+  describe "reverse" do
+    test "works" do
+      t = Nx.iota({2, 3, 4})
+      axes = [[], 0, 1, 2]
+
+      for ax1 <- axes, ax2 <- axes, ax3 <- axes do
+        axes = Enum.uniq(List.flatten([ax1, ax2, ax3]))
+        function = fn t -> Nx.reverse(t, axes: axes) end
+        result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
+        result_mlir = Nx.Defn.jit_apply(function, [t])
+
+        assert result_nx.shape == result_mlir.shape
+        assert result_nx.type == result_mlir.type
+        assert_equal(result_nx, result_mlir)
       end
     end
   end

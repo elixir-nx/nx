@@ -45,6 +45,27 @@ defmodule EXLA.MLIR.Value do
     end
   end
 
+  def reshape(%Value{function: %Function{} = func} = op, shape_tuple) do
+    ref = EXLA.NIF.mlir_reshape(func.ref, op.ref, shape_tuple) |> unwrap!()
+    %Value{op | ref: ref}
+  end
+
+  def reverse(%Value{function: %Function{} = func} = op, dims) do
+    ref = EXLA.NIF.mlir_reverse(func.ref, op.ref, dims) |> unwrap!()
+    %Value{op | ref: ref}
+  end
+
+  def slice(%Value{function: %Function{} = func} = op, starts, limits, strides) do
+    ref = EXLA.NIF.mlir_slice(func.ref, op.ref, starts, limits, strides) |> unwrap!()
+    %Value{op | ref: ref}
+  end
+
+  def dynamic_slice(%Value{function: %Function{} = func} = op, starts, lengths) do
+    starts = Enum.map(starts, fn %Value{ref: ref} -> ref end)
+    ref = EXLA.NIF.mlir_dynamic_slice(func.ref, op.ref, starts, lengths) |> unwrap!()
+    %Value{op | ref: ref}
+  end
+
   def tuple([%Value{function: %Function{} = func} | _rest] = vals) do
     refs = Enum.map(vals, fn %Value{ref: ref, function: ^func} -> ref end)
     ref = EXLA.NIF.mlir_tuple(func.ref, refs) |> unwrap!()

@@ -490,6 +490,105 @@ ERL_NIF_TERM mlir_iota(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   mlir::Value res = (*function)->IotaOp(*shape, dimension);
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
+ERL_NIF_TERM mlir_reshape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  std::vector<int64_t> shape;
+  mlir::Value* operand;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get_tuple(env, argv[2], shape)) {
+    return exla::nif::error(env, "Unable to get shape.");
+  }
+
+  mlir::Value res = (*function)->ReshapeOp(*operand, shape);
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+ERL_NIF_TERM mlir_reverse(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  std::vector<int64_t> dims;
+  mlir::Value* operand;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get_list(env, argv[2], dims)) {
+    return exla::nif::error(env, "Unable to get dims.");
+  }
+
+  mlir::Value res = (*function)->ReverseOp(*operand, dims);
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+ERL_NIF_TERM mlir_slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 5) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  std::vector<int64_t> starts, limits, strides;
+  mlir::Value* operand;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get_list(env, argv[2], starts)) {
+    return exla::nif::error(env, "Unable to get starts.");
+  }
+  if (!exla::nif::get_list(env, argv[3], limits)) {
+    return exla::nif::error(env, "Unable to get lwngths.");
+  }
+  if (!exla::nif::get_list(env, argv[4], strides)) {
+    return exla::nif::error(env, "Unable to get strides.");
+  }
+
+  mlir::Value res = (*function)->SliceOp(*operand, starts, limits, strides);
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
+ERL_NIF_TERM mlir_dynamic_slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 4) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  std::vector<mlir::Value> starts;
+  std::vector<int64_t> lengths;
+  mlir::Value* operand;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get_list<mlir::Value>(env, argv[2], starts)) {
+    return exla::nif::error(env, "Unable to get starts.");
+  }
+  if (!exla::nif::get_list(env, argv[3], lengths)) {
+    return exla::nif::error(env, "Unable to get lengths.");
+  }
+
+  mlir::Value res = (*function)->DynamicSliceOp(*operand, starts, lengths);
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
 
 ERL_NIF_TERM mlir_constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 3) {
@@ -1245,6 +1344,10 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_sqrt", 2, mlir_sqrt},
     {"mlir_cbrt", 2, mlir_cbrt},
     {"mlir_iota", 3, mlir_iota},
+    {"mlir_reshape", 3, mlir_reshape},
+    {"mlir_reverse", 3, mlir_reverse},
+    {"mlir_slice", 5, mlir_slice},
+    {"mlir_dynamic_slice", 4, mlir_dynamic_slice},
     {"mlir_constant_r0", 3, mlir_constant_r0},
     {"mlir_constant_from_binary", 4, mlir_constant_from_binary},
     {"mlir_bitwise_and", 3, mlir_bitwise_and},

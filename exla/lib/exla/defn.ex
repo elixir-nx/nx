@@ -653,6 +653,10 @@ defmodule EXLA.Defn do
 
   ## to_operator shape
 
+  defp to_operator(:reshape, [%Value{} = op], %{shape: shape}, _state) do
+    Value.reshape(op, shape)
+  end
+
   defp to_operator(:reshape, [op], %{shape: shape}, _state) do
     EXLA.Op.reshape(op, shape)
   end
@@ -1155,6 +1159,19 @@ defmodule EXLA.Defn do
     EXLA.Op.clamp(operand, min, max)
   end
 
+  defp to_operator(:slice, [%Value{} = tensor, start_indices, lengths, strides], ans, _state) do
+    all_static? = Enum.all?(start_indices, &is_integer/1)
+
+    if all_static? do
+      limit_indices = Enum.zip_with(start_indices, lengths, fn i, len -> i + len end)
+      Value.slice(tensor, start_indices, limit_indices, strides)
+    else
+      zeros = List.duplicate(0, tuple_size(ans.shape))
+      slice = Value.dynamic_slice(tensor, start_indices, lengths)
+      Value.slice(slice, zeros, lengths, strides)
+    end
+  end
+
   defp to_operator(:slice, [tensor, start_indices, lengths, strides], ans, _state) do
     all_static? = Enum.all?(start_indices, &is_integer/1)
 
@@ -1253,6 +1270,10 @@ defmodule EXLA.Defn do
       collapsed_slice_dims,
       start_index_map
     )
+  end
+
+  defp to_operator(:reverse, [%Value{} = tensor, axes], _ans, _state) do
+    Value.reverse(tensor, axes)
   end
 
   defp to_operator(:reverse, [tensor, axes], _ans, _state) do

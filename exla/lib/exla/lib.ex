@@ -5,6 +5,8 @@ defmodule EXLA.Lib do
 
   alias EXLA.{Builder, Op, Shape}
 
+  alias EXLA.MLIR.Value
+
   @doc """
   Element-wise tangent function.
   """
@@ -28,13 +30,17 @@ defmodule EXLA.Lib do
     Op.iota(builder, shape, axis)
   end
 
-  def iota(%EXLA.MLIR.Function{} = _function, _shape, nil) do
-    # total_elems = Nx.size(shape.dims)
-    raise "not implemented yet (depends on reshape)"
+  def iota(%EXLA.MLIR.Function{} = function, shape, nil) do
+    total_elems = Nx.size(shape.dims)
+
+    Value.reshape(
+      Value.iota(function, EXLA.Shape.make_shape(shape.dtype, {total_elems}), 0),
+      shape.dims
+    )
   end
 
   def iota(%EXLA.MLIR.Function{} = function, shape, axis) do
-    EXLA.MLIR.Value.iota(function, shape, axis)
+    Value.iota(function, shape, axis)
   end
 
   @doc """
