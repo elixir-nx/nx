@@ -10,9 +10,7 @@ path = "src/lib.rs"
 crate-type = ["cdylib"]
 
 [dependencies]
-# TODO: Uncomment back when https://github.com/huggingface/candle/pull/741 merged
-# candle-core = { git = "https://github.com/huggingface/candle" }
-candle-core = { git = "https://github.com/mimiquate/candle", branch = "custom-op-2" }
+candle-core = { git = "https://github.com/huggingface/candle" }
 half = "2.3.1"
 num-traits = "0.2.16"
 rustler = "0.29.1"
