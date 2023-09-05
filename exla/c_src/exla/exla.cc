@@ -507,7 +507,6 @@ ERL_NIF_TERM mlir_reshape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   mlir::Value res = (*function)->ReshapeOp(*operand, shape);
-  std::cout << "res" << std::endl;
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
 ERL_NIF_TERM mlir_constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
