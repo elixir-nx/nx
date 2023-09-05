@@ -426,7 +426,7 @@ mlir::Value MLIRFunction::RsqrtOp(mlir::Value operand) {
 
 mlir::Value MLIRFunction::ReshapeOp(mlir::Value operand, std::vector<int64_t> target_shape) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  mlir::RankedTensorType t_in = cast<mlir::RankedTensorType>(operand.getType());
+  mlir::RankedTensorType t_in = llvm::cast<mlir::RankedTensorType>(operand.getType());
   mlir::RankedTensorType type = mlir::RankedTensorType::get(target_shape, t_in.getElementType());
   return module_->builder()->create<mlir::mhlo::ReshapeOp>(module_->builder()->getUnknownLoc(), type, operand);
 }
