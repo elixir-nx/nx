@@ -346,7 +346,7 @@ defmodule EXLA.MLIR.ExecutableTest do
       axes = [0, 1, 2]
 
       for ax1 <- axes, ax2 <- axes, ax3 <- axes, ax1 != ax2 and ax1 != ax3 and ax2 != ax3 do
-        axes = List.flatten([ax1, ax2, ax3])
+        axes = [ax1, ax2, ax3]
         function = fn t -> Nx.transpose(t, axes: axes) end
         result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
         result_mlir = Nx.Defn.jit_apply(function, [t])
