@@ -310,7 +310,7 @@ defmodule EXLA.MLIR.ExecutableTest do
         assert result_nx.type == result_mlir.type
         assert_equal(result_nx, result_mlir)
 
-        function = fn t -> Nx.slice(t, [0, 0, 1], [2, 3, 4]) end
+        function = fn t -> Nx.slice(t, [0, Nx.tensor(0), Nx.tensor(1)], [2, 3, 4]) end
         result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
         result_mlir = Nx.Defn.jit_apply(function, [t])
 

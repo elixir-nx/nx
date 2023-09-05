@@ -1159,17 +1159,16 @@ defmodule EXLA.Defn do
     EXLA.Op.clamp(operand, min, max)
   end
 
-  defp to_operator(:slice, [%Value{} = tensor, start_indices, lengths, strides], _ans, _state) do
+  defp to_operator(:slice, [%Value{} = tensor, start_indices, lengths, strides], ans, _state) do
     all_static? = Enum.all?(start_indices, &is_integer/1)
 
     if all_static? do
       limit_indices = Enum.zip_with(start_indices, lengths, fn i, len -> i + len end)
       Value.slice(tensor, start_indices, limit_indices, strides)
     else
-      raise "dynamic_slice not implemented yet"
-      # zeros = List.duplicate(0, tuple_size(ans.shape))
-      # slice = Value.dynamic_slice(tensor, start_indices, lengths)
-      # Value.slice(slice, zeros, lengths, strides)
+      zeros = List.duplicate(0, tuple_size(ans.shape))
+      slice = Value.dynamic_slice(tensor, start_indices, lengths)
+      Value.slice(slice, zeros, lengths, strides)
     end
   end
 

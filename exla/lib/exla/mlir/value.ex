@@ -61,7 +61,11 @@ defmodule EXLA.MLIR.Value do
     %Value{op | ref: ref}
   end
 
-
+  def dynamic_slice(%Value{function: %Function{} = func} = op, starts, lengths) do
+    starts = Enum.map(starts, fn %Value{ref: ref} -> ref end)
+    ref = EXLA.NIF.mlir_dynamic_slice(func.ref, op.ref, starts, lengths) |> unwrap!()
+    %Value{op | ref: ref}
+  end
 
   def tuple([%Value{function: %Function{} = func} | _rest] = vals) do
     refs = Enum.map(vals, fn %Value{ref: ref, function: ^func} -> ref end)
