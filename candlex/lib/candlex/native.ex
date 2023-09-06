@@ -28,6 +28,7 @@ defmodule Candlex.Native do
         :cos,
         :exp,
         :floor,
+        :is_infinity,
         :log,
         :log1p,
         :negate,

@@ -657,6 +657,21 @@ defmodule CandlexTest do
       |> Nx.right_shift(t([1, 2, 3, 4]))
       |> assert_equal(t([8, 8, -8, -8]))
     end
+
+    test "is_infinity" do
+      t([:infinity, :nan, :neg_infinity, 1, 0])
+      |> Nx.is_infinity()
+      |> assert_equal(t([1, 0, 1, 0, 0]))
+
+      t([:infinity, 1, :neg_infinity])
+      |> Nx.is_infinity()
+      |> assert_equal(t([1, 0, 1]))
+
+      # TODO: Not supported for :s64
+      # t([1, 0])
+      # |> Nx.is_infinity()
+      # |> assert_equal(t([0, 0]))
+    end
   end
 
   defp t(values, opts \\ []) do

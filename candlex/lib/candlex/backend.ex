@@ -188,6 +188,7 @@ defmodule Candlex.Backend do
         :cos,
         :exp,
         :floor,
+        :is_infinity,
         :log,
         :log1p,
         :negate,

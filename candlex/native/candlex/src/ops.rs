@@ -37,6 +37,39 @@ macro_rules! custom_unary_op {
     };
 }
 
+macro_rules! custom_unary_bool_op {
+    ($struct_name:ident, $name:expr, $fn_name:ident, ($($dtypes:ident),+)) => {
+        pub(crate) struct $struct_name;
+
+        impl CustomOp1 for $struct_name {
+            // Box<dyn> does not support const yet, so use a function to get the name.
+            fn name(&self) -> &'static str {
+                $name
+            }
+
+            /// The forward pass, as run on a cpu device. Note that the storage can use arbitrary strides,
+            /// offsets etc so the associated layout should be used to access it.
+            fn cpu_fwd(
+                &self,
+                storage: &CpuStorage,
+                layout: &Layout,
+            ) -> Result<(CpuStorage, Shape), candle_core::Error> {
+                use candle_core::backend::BackendStorage;
+
+                match storage {
+                    $(
+                        CpuStorage::$dtypes(vec) => {
+                            let data = candle_core::cpu_backend::unary_map(vec, layout, |v| u8::from(v.$fn_name()));
+                            Ok((CpuStorage::U8(data), layout.shape().clone()))
+                        }
+                    )*
+                    s => Err(Error::UnsupportedDTypeForOp(s.dtype(), $name).bt())?
+                }
+            }
+        }
+    };
+}
+
 macro_rules! custom_unary_op_closure {
     ($struct_name:ident, $name:expr, $closure:expr) => {
         pub(crate) struct $struct_name;
@@ -149,6 +182,7 @@ custom_unary_op!(Floor, "floor", floor);
 custom_unary_op!(Log1p, "ln_1p", ln_1p);
 custom_unary_op!(Round, "round", round);
 custom_unary_op!(Tan, "tan", tan);
+custom_unary_bool_op!(IsInf, "is_inf", is_infinite, (F32, F64));
 custom_unary_op_closure!(BitNot, "bit_not", |v| !v);
 
 custom_binary_op!(BitAnd, "bit_and", |v1, v2| v1 & v2);
