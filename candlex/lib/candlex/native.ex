@@ -26,6 +26,7 @@ defmodule Candlex.Native do
         :cbrt,
         :ceil,
         :cos,
+        :erf_inv,
         :exp,
         :floor,
         :is_infinity,

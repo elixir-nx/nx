@@ -54,6 +54,7 @@ rustler::init! {
         tensors::ceil,
         tensors::cos,
         tensors::sin,
+        tensors::erf_inv,
         tensors::exp,
         tensors::floor,
         tensors::is_infinity,

@@ -697,6 +697,16 @@ defmodule CandlexTest do
         ]
       ))
     end
+
+    test "erf_inv" do
+      t(0.10000000149011612, type: :f64)
+      |> Nx.erf_inv()
+      |> assert_close(t(0.08885598927736282, type: :f64))
+
+      t([0.10000000149011612, 0.5, 0.8999999761581421], type: :f64)
+      |> Nx.erf_inv()
+      |> assert_close(t([0.0888559891358877, 0.47693629334671295, 1.1630870196442271], type: :f64))
+    end
   end
 
   defp t(values, opts \\ []) do

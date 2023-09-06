@@ -197,6 +197,7 @@ defmodule Candlex.Backend do
         :cbrt,
         :ceil,
         :cos,
+        :erf_inv,
         :exp,
         :floor,
         :is_infinity,
@@ -216,13 +217,6 @@ defmodule Candlex.Backend do
       |> Native.unquote(op)()
       |> unwrap!()
       |> to_nx(out)
-    end
-  end
-
-  for op <- [:erf_inv] do
-    @impl true
-    def unquote(op)(out, t) do
-      unsupported_op(unquote(op))
     end
   end
 
