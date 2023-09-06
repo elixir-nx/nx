@@ -162,7 +162,17 @@ defmodule Candlex.Backend do
     end
   end
 
-  for op <- [:bitwise_and, :bitwise_or, :bitwise_xor, :equal, :greater_equal, :left_shift, :less, :less_equal, :right_shift] do
+  for op <- [
+        :bitwise_and,
+        :bitwise_or,
+        :bitwise_xor,
+        :equal,
+        :greater_equal,
+        :left_shift,
+        :less,
+        :less_equal,
+        :right_shift
+      ] do
     @impl true
     def unquote(op)(%T{} = out, %T{} = left, %T{} = right) do
       {left, right} = maybe_upcast(left, right)
