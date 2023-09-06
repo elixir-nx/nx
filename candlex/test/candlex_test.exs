@@ -601,6 +601,10 @@ defmodule CandlexTest do
       |> Nx.bitwise_xor(2)
       |> assert_equal(t([3, 0, 1]))
 
+      t([1, 2, 3], type: :u32)
+      |> Nx.bitwise_xor(2)
+      |> assert_equal(t([3, 0, 1]))
+
       t([-1, -2, -3])
       |> Nx.bitwise_xor(2)
       |> assert_equal(t([-3, -4, -1]))

@@ -182,6 +182,9 @@ defmodule Candlex.Backend do
       left
       |> Native.unquote(op)(right)
       |> unwrap!()
+      # TODO: Do this conditionally or as part of native op
+      |> Native.to_type(to_candle_dtype(out.type))
+      |> unwrap!()
       |> to_nx(out)
     end
   end
