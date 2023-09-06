@@ -444,20 +444,20 @@ defmodule Candlex.Backend do
     %{t | data: backend_tensor}
   end
 
-  defp to_candle_dtype({:s, 8}), do: unsupported_dtype()
-  defp to_candle_dtype({:s, 16}), do: unsupported_dtype()
-  defp to_candle_dtype({:s, 32}), do: unsupported_dtype()
+  defp to_candle_dtype({:s, 8} = t), do: unsupported_dtype(t)
+  defp to_candle_dtype({:s, 16} = t), do: unsupported_dtype(t)
+  defp to_candle_dtype({:s, 32} = t), do: unsupported_dtype(t)
   defp to_candle_dtype({:s, 64}), do: "i64"
   defp to_candle_dtype({:u, 8}), do: "u8"
-  defp to_candle_dtype({:u, 16}), do: unsupported_dtype()
+  defp to_candle_dtype({:u, 16} = t), do: unsupported_dtype(t)
   defp to_candle_dtype({:u, 32}), do: "u32"
-  defp to_candle_dtype({:u, 64}), do: unsupported_dtype()
+  defp to_candle_dtype({:u, 64} = t), do: unsupported_dtype(t)
   defp to_candle_dtype({:f, 16}), do: "f16"
   defp to_candle_dtype({:f, 32}), do: "f32"
   defp to_candle_dtype({:f, 64}), do: "f64"
   defp to_candle_dtype({:bf, 16}), do: "bf16"
-  defp to_candle_dtype({:c, 64}), do: unsupported_dtype()
-  defp to_candle_dtype({:c, 128}), do: unsupported_dtype()
+  defp to_candle_dtype({:c, 64} = t), do: unsupported_dtype(t)
+  defp to_candle_dtype({:c, 128} = t), do: unsupported_dtype(t)
 
   defp from_candle_dtype("i64"), do: {:s, 64}
   defp from_candle_dtype("u8"), do: {:u, 8}
@@ -489,8 +489,8 @@ defmodule Candlex.Backend do
     Native.is_cuda_available()
   end
 
-  defp unsupported_dtype do
-    raise("Unsupported candle dtype")
+  defp unsupported_dtype(t) do
+    raise("Unsupported candle dtype for #{inspect(t)}")
   end
 
   defp unsupported_op(op_name) do
