@@ -672,6 +672,31 @@ defmodule CandlexTest do
       # |> Nx.is_infinity()
       # |> assert_equal(t([0, 0]))
     end
+
+    test "logical_or" do
+      Nx.logical_or(0, t([-1, 0, 1]))
+      |> assert_equal(t([1, 0, 1]))
+
+      t([-1, 0, 1])
+      |> Nx.logical_or(t([[-1], [0], [1]]))
+      |> assert_equal(t(
+        [
+          [1, 1, 1],
+          [1, 0, 1],
+          [1, 1, 1]
+        ]
+      ))
+
+      t([-1.0, 0.0, 1.0])
+      |> Nx.logical_or(t([[-1], [0], [1]]))
+      |> assert_equal(t(
+        [
+          [1, 1, 1],
+          [1, 0, 1],
+          [1, 1, 1]
+        ]
+      ))
+    end
   end
 
   defp t(values, opts \\ []) do

@@ -51,6 +51,7 @@ defmodule Candlex.Native do
         :left_shift,
         :less,
         :less_equal,
+        :logical_or,
         :matmul,
         :max,
         :min,

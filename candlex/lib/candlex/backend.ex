@@ -171,6 +171,7 @@ defmodule Candlex.Backend do
         :left_shift,
         :less,
         :less_equal,
+        :logical_or,
         :right_shift
       ] do
     @impl true

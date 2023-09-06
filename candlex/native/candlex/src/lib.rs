@@ -67,6 +67,7 @@ rustler::init! {
         tensors::bitwise_and,
         tensors::bitwise_or,
         tensors::bitwise_xor,
+        tensors::logical_or,
         tensors::left_shift,
         tensors::right_shift,
         devices::is_cuda_available
