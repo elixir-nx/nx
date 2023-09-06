@@ -1,6 +1,10 @@
 use candle_core::{CpuStorage, CustomOp1, CustomOp2, Error, Layout, Shape};
 use num_traits::Float;
-use statrs::function::erf::erf_inv;
+use num_traits::cast::FromPrimitive;
+
+fn erf_inv<T: Float + num_traits::FromPrimitive>(v: T) -> T {
+    FromPrimitive::from_f64(statrs::function::erf::erf_inv(v.to_f64().unwrap())).unwrap()
+}
 
 macro_rules! custom_unary_op {
     ($struct_name:ident, $name:expr, $fn_name:ident, ($($dtypes:ident),+)) => {
@@ -196,7 +200,7 @@ custom_unary_op!(Round, "round", round, (BF16, F16, F32, F64));
 custom_unary_op!(Tan, "tan", tan, (BF16, F16, F32, F64));
 custom_unary_bool_op!(IsInf, "is_inf", is_infinite, (F32, F64));
 custom_unary_op_closure!(BitNot, "bit_not", |v| !v, (U8, U32, I64));
-custom_unary_op_closure!(ErfInv, "erf_inv", |v| erf_inv(v), (F64));
+custom_unary_op_closure!(ErfInv, "erf_inv", |v| erf_inv(v), (F32, F64));
 
 custom_binary_op!(BitAnd, "bit_and", |v1, v2| v1 & v2, (U32, I64));
 custom_binary_op!(BitOr, "bit_or", |v1, v2| v1 | v2, (U32, I64));

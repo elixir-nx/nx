@@ -227,15 +227,6 @@ defmodule CandlexTest do
       |> assert_equal(t([0.0, 0.0, 0.0]))
     end
 
-    # test "erf_inv" do
-    #   Nx.erf_inv(0.10000000149011612)
-    #   |> assert_equal(t(0.08885598927736282))
-
-    #   t([0.10000000149011612, 0.5, 0.8999999761581421])
-    #   |> Nx.erf_inv()
-    #   |> assert_equal(t([0.08885598927736282, 0.4769362807273865, 1.163087010383606]))
-    # end
-
     test "eye" do
       Nx.eye(2)
       |> assert_equal(t([[1, 0], [0, 1]]))
@@ -699,6 +690,13 @@ defmodule CandlexTest do
     end
 
     test "erf_inv" do
+      Nx.erf_inv(0.10000000149011612)
+      |> assert_close(t(0.08885598927736282))
+
+      t([0.10000000149011612, 0.5, 0.8999999761581421])
+      |> Nx.erf_inv()
+      |> assert_close(t([0.08885598927736282, 0.4769362807273865, 1.163087010383606]))
+
       t(0.10000000149011612, type: :f64)
       |> Nx.erf_inv()
       |> assert_close(t(0.08885598927736282, type: :f64))
