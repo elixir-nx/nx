@@ -200,7 +200,7 @@ custom_unary_op!(Round, "round", round, (BF16, F16, F32, F64));
 custom_unary_op!(Tan, "tan", tan, (BF16, F16, F32, F64));
 custom_unary_bool_op!(IsInf, "is_inf", is_infinite, (F32, F64));
 custom_unary_op_closure!(BitNot, "bit_not", |v| !v, (U8, U32, I64));
-custom_unary_op_closure!(ErfInv, "erf_inv", |v| erf_inv(v), (F32, F64));
+custom_unary_op_closure!(ErfInv, "erf_inv", |v| erf_inv(v), (BF16, F16, F32, F64));
 
 custom_binary_op!(BitAnd, "bit_and", |v1, v2| v1 & v2, (U32, I64));
 custom_binary_op!(BitOr, "bit_or", |v1, v2| v1 | v2, (U32, I64));
