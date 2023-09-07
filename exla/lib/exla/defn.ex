@@ -696,6 +696,31 @@ defmodule EXLA.Defn do
 
   defp to_operator(
          :dot,
+         [
+           %Value{} = left,
+           contract_axes1,
+           batch_axes1,
+           %Value{} = right,
+           contract_axes2,
+           batch_axes2
+         ],
+         %{type: type, shape: shape},
+         state
+       ) do
+    precision = state.precision
+    output_shape = EXLA.Shape.make_shape(type, shape)
+
+    Value.dot_general(
+      output_shape,
+      left,
+      right,
+      {contract_axes1, batch_axes1, contract_axes2, batch_axes2},
+      precision
+    )
+  end
+
+  defp to_operator(
+         :dot,
          [left, contract_axes1, batch_axes1, right, contract_axes2, batch_axes2],
          %{type: type},
          state

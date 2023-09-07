@@ -52,6 +52,25 @@ mlir::TensorType GetMLIRType(mlir::OpBuilder *builder, std::vector<tsl::int64> d
   return mlir::RankedTensorType::get(dims, type);
 }
 
+mlir::mhlo::DotDimensionNumbersAttr ConvertDotDimensionNumbersToAttr(mlir::OpBuilder *builder, const xla::DotDimensionNumbers &dotDimNumbers) {
+  std::vector<int64_t> lhsContractingVec(dotDimNumbers.lhs_contracting_dimensions().begin(),
+                                         dotDimNumbers.lhs_contracting_dimensions().end());
+  std::vector<int64_t> rhsContractingVec(dotDimNumbers.rhs_contracting_dimensions().begin(),
+                                         dotDimNumbers.rhs_contracting_dimensions().end());
+  std::vector<int64_t> lhsBatchVec(dotDimNumbers.lhs_batch_dimensions().begin(),
+                                   dotDimNumbers.lhs_batch_dimensions().end());
+  std::vector<int64_t> rhsBatchVec(dotDimNumbers.rhs_batch_dimensions().begin(),
+                                   dotDimNumbers.rhs_batch_dimensions().end());
+
+  return mlir::mhlo::DotDimensionNumbersAttr::get(
+    builder->getContext(),
+    lhsBatchVec,
+    rhsBatchVec,
+    lhsContractingVec,
+    rhsContractingVec
+  );
+}
+
 int MLIRFunction::get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *type) {
   auto builder = module_->builder();
   std::string type_str;
@@ -496,6 +515,33 @@ mlir::Value MLIRFunction::IotaOp(xla::Shape shape, int64_t dimension) {
   mlir::TensorType type = GetMLIRType(module_->builder(), dimensions, shape.element_type());
 
   return module_->builder()->create<mlir::mhlo::IotaOp>(module_->builder()->getUnknownLoc(), type, dimension);
+}
+
+mlir::Value MLIRFunction::DotGeneralOp(
+  xla::Shape output_shape,
+  mlir::Value lhs,
+  mlir::Value rhs,
+  xla::DotDimensionNumbers dnums,
+  xla::PrecisionConfig config
+) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+
+  absl::Span<const int64_t> dimensions_span = output_shape.dimensions();
+  std::vector<int64_t> dimensions(dimensions_span.begin(), dimensions_span.end());
+  
+  mlir::TensorType output_type = GetMLIRType(module_->builder(), dimensions, output_shape.element_type());
+  auto mlir_dnums = ConvertDotDimensionNumbersToAttr(module_->builder(), dnums);
+
+  auto op = module_->builder()->create<mlir::mhlo::DotGeneralOp>(
+    module_->builder()->getUnknownLoc(),
+    output_type,
+    lhs,
+    rhs,
+    mlir_dnums,
+    nullptr
+  );
+
+  return op;
 }
 
 template <typename T>

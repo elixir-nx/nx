@@ -83,6 +83,7 @@ class MLIRFunction {
   mlir::Value ReverseOp(mlir::Value operand, std::vector<int64_t> dims);
   mlir::Value SliceOp(mlir::Value operand, std::vector<int64_t> starts, std::vector<int64_t> limites, std::vector<int64_t> strides);
   mlir::Value DynamicSliceOp(mlir::Value operand, std::vector<mlir::Value> starts, std::vector<int64_t> lengths);
+  mlir::Value DotGeneralOp(xla::Shape output_shape, mlir::Value lhs, mlir::Value rhs, xla::DotDimensionNumbers dnums, xla::PrecisionConfig config);
   ERL_NIF_TERM ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM value_ptr, std::vector<int64_t> dims = {});
   int get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *type);
 

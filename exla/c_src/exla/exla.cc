@@ -654,6 +654,42 @@ ERL_NIF_TERM mlir_constant_from_binary(ErlNifEnv* env, int argc, const ERL_NIF_T
   return (*function)->ConstantOp(type, env, argv[1], dims);
 }
 
+ERL_NIF_TERM mlir_dot_general(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 6) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  xla::Shape* output_shape;
+  mlir::Value* lhs;
+  mlir::Value* rhs;
+  xla::DotDimensionNumbers dnums;
+  xla::PrecisionConfig config;
+
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<xla::Shape>(env, argv[1], output_shape)) {
+    return exla::nif::error(env, "Unable to get shape.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[2], lhs)) {
+    return exla::nif::error(env, "Unable to get lhs.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[3], rhs)) {
+    return exla::nif::error(env, "Unable to get rhs.");
+  }
+  if (!exla::nif::get_dot_dimension_numbers(env, argv[4], &dnums)) {
+    return exla::nif::error(env, "Unable to get dot dimensions.");
+  }
+  if (!exla::nif::get_precision_config(env, argv[5], 2, &config)) {
+    return exla::nif::error(env, "Unable to get precision configuration.");
+  }
+
+  mlir::Value res = (*function)->DotGeneralOp(*output_shape, *lhs, *rhs, dnums, config);
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
 ERL_NIF_TERM mlir_build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
@@ -1391,6 +1427,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_is_nan", 2, mlir_is_nan},
     {"mlir_rsqrt", 2, mlir_rsqrt},
     {"mlir_count_leading_zeros", 2, mlir_clz},
+    {"mlir_dot_general", 6, mlir_dot_general},
     // XlaBuilder
     {"new_builder", 1, new_builder},
     {"create_sub_builder", 2, create_sub_builder},

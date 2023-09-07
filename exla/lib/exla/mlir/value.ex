@@ -120,6 +120,44 @@ defmodule EXLA.MLIR.Value do
     %Value{ref: ref, function: func}
   end
 
+  def dot_general(
+        output_shape,
+        %Value{function: func} = lhs,
+        %Value{function: func} = rhs,
+        dnums,
+        precision_config
+      ) do
+    config = get_precision_config_int(precision_config)
+
+    ref =
+      EXLA.NIF.mlir_dot_general(func.ref, output_shape.ref, lhs.ref, rhs.ref, dnums, config)
+      |> unwrap!()
+
+    %Value{ref: ref, function: func}
+  end
+
+  defp get_precision_config_int(precision_config) do
+    case precision_config do
+      :default ->
+        0
+
+      :high ->
+        1
+
+      :highest ->
+        2
+
+      :packed_nibble ->
+        3
+
+      _ ->
+        raise ArgumentError,
+              "expected precision configuration to be one of" <>
+                " :default, :high, :highest, or :packed_nibble," <>
+                " got: #{inspect(precision_config)}"
+    end
+  end
+
   defp unwrap!({:ok, value}), do: value
   defp unwrap!(other), do: raise("#{inspect(other)}")
 end
