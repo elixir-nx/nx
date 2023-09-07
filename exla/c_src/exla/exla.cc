@@ -467,6 +467,9 @@ ERL_NIF_TERM mlir_rsqrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 ERL_NIF_TERM mlir_clz(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_UNARY_OP(ClzOp);
 }
+ERL_NIF_TERM mlir_population_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(PopulationCountOp);
+}
 
 ERL_NIF_TERM mlir_iota(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 3) {
@@ -1428,6 +1431,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_rsqrt", 2, mlir_rsqrt},
     {"mlir_count_leading_zeros", 2, mlir_clz},
     {"mlir_dot_general", 6, mlir_dot_general},
+    {"mlir_population_count", 2, mlir_population_count},
     // XlaBuilder
     {"new_builder", 1, new_builder},
     {"create_sub_builder", 2, create_sub_builder},
