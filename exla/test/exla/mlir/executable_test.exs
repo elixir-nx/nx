@@ -184,7 +184,7 @@ defmodule EXLA.MLIR.ExecutableTest do
       assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
     end
 
-    for op <- [:count_leading_zeros, :bitwise_not] do
+    for op <- [:count_leading_zeros, :bitwise_not, :population_count] do
       test "#{op}" do
         function = fn t -> Nx.unquote(op)(t) end
 

@@ -29,7 +29,8 @@ defmodule EXLA.NIF do
                [:sin, :acos, :asin, :atan, :cosh, :sinh] ++
                [:tanh, :acosh, :asinh, :atanh, :sqrt, :cbrt] ++
                [:bitwise_not, :erf, :erfc, :erf_inv] ++
-               [:is_infinity, :is_nan, :rsqrt, :negate, :count_leading_zeros]
+               [:is_infinity, :is_nan, :rsqrt, :negate, :count_leading_zeros] ++
+               [:population_count]
 
   for op <- @unary_ops do
     mlir_op = :"mlir_#{op}"
