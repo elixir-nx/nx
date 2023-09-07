@@ -358,4 +358,19 @@ defmodule EXLA.MLIR.ExecutableTest do
       |> then(fn x -> assert length(x) == 6 end)
     end
   end
+
+  describe "dot_general" do
+    test "works" do
+      lhs = Nx.iota({2, 3, 4}, type: {:f, 32})
+      rhs = Nx.iota({2, 3, 4}, type: {:f, 32})
+
+      function = fn lhs, rhs -> Nx.dot(lhs, [2], [0], rhs, [2], [0]) end
+      result_nx = Nx.Defn.jit_apply(function, [lhs, rhs], compiler: Nx.Defn.Evaluator)
+      result_mlir = Nx.Defn.jit_apply(function, [lhs, rhs])
+
+      assert result_nx.shape == result_mlir.shape
+      assert result_nx.type == result_mlir.type
+      assert_equal(result_nx, result_mlir)
+    end
+  end
 end

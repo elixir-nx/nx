@@ -30,8 +30,7 @@ defmodule EXLA.MLIR.Module do
         %Shape{ref: return_shape_ref} = return_shape
       )
       when is_binary(name) do
-    arg_shape_refs =
-      Enum.map(arg_shapes, fn %Shape{ref: ref} -> ref end)
+    arg_shape_refs = Enum.map(arg_shapes, fn %Shape{ref: ref} -> ref end)
 
     ref =
       EXLA.NIF.create_mlir_function(module_ref, name, arg_shape_refs, return_shape_ref)
