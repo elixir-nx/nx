@@ -48,6 +48,7 @@ defmodule Candlex.Native do
         :bitwise_and,
         :bitwise_or,
         :bitwise_xor,
+        :divide,
         :equal,
         :greater_equal,
         :left_shift,
