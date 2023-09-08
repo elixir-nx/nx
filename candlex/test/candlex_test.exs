@@ -375,13 +375,13 @@ defmodule CandlexTest do
       # ))
     end
 
-    # TODO:
-    # test "dot/6" do
+    test "dot/6" do
       # Contracting along axes
 
-      # t1 = t([[1.0, 2], [3, 4]], names: [:x, :y])
-      # t2 = t([[10.0, 20], [30, 40]], names: [:height, :width])
+      t1 = t([[1.0, 2], [3, 4]], names: [:x, :y])
+      t2 = t([[10.0, 20], [30, 40]], names: [:height, :width])
 
+      # TODO:
       # t1
       # |> Nx.dot([0], [], t2, [0], [])
       # |> assert_equal(t(
@@ -400,14 +400,14 @@ defmodule CandlexTest do
       #   ]
       # ))
 
-      # t1
-      # |> Nx.dot([1], [], t2, [0], [])
-      # |> assert_equal(t(
-      #   [
-      #     [70, 100],
-      #     [150, 220]
-      #   ]
-      # ))
+      t1
+      |> Nx.dot([1], [], t2, [0], [])
+      |> assert_equal(t(
+        [
+          [70, 100],
+          [150, 220]
+        ]
+      ))
 
       # t1
       # |> Nx.dot([1], [], t2, [1], [])
@@ -421,7 +421,7 @@ defmodule CandlexTest do
       # t1
       # |> Nx.dot([0, 1], [], t2, [0, 1], [])
       # |> assert_equal(t(300))
-    # end
+    end
 
     test "negate" do
       # TODO: candle doesn't support unary functions for integers yet

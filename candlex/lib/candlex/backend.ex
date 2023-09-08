@@ -257,10 +257,10 @@ defmodule Candlex.Backend do
   def dot(
         %T{type: _out_type} = out,
         %T{shape: left_shape, type: _left_type} = left,
-        _left_axes,
+        [1] = _left_axes,
         [] = _left_batched_axes,
         %T{shape: right_shape, type: _right_type} = right,
-        _right_axes,
+        [0] = _right_axes,
         [] = _right_batched_axes
       )
       when tuple_size(left_shape) == 2 and tuple_size(right_shape) == 2 do
