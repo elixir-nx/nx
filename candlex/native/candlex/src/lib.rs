@@ -40,6 +40,7 @@ rustler::init! {
         tensors::where_cond,
         tensors::narrow,
         tensors::squeeze,
+        tensors::transpose,
         tensors::arange,
         tensors::to_type,
         tensors::broadcast_to,

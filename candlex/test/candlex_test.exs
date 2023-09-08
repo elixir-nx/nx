@@ -381,16 +381,16 @@ defmodule CandlexTest do
       t1 = t([[1.0, 2], [3, 4]], names: [:x, :y])
       t2 = t([[10.0, 20], [30, 40]], names: [:height, :width])
 
-      # TODO:
-      # t1
-      # |> Nx.dot([0], [], t2, [0], [])
-      # |> assert_equal(t(
-      #   [
-      #     [100, 140],
-      #     [140, 200]
-      #   ]
-      # ))
+      t1
+      |> Nx.dot([0], [], t2, [0], [])
+      |> assert_equal(t(
+        [
+          [100, 140],
+          [140, 200]
+        ]
+      ))
 
+      # TODO:
       # t1
       # |> Nx.dot([0], [], t2, [1], [])
       # |> assert_equal(t(

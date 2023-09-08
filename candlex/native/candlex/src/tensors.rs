@@ -78,6 +78,11 @@ pub fn squeeze(t: ExTensor, dim: usize) -> Result<ExTensor, CandlexError> {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+pub fn transpose(t: ExTensor, dim1: usize, dim2: usize) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(t.transpose(dim1, dim2)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 pub fn arange(
     start: i64,
     end: i64,

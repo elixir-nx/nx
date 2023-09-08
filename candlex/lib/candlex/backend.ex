@@ -272,6 +272,18 @@ defmodule Candlex.Backend do
     |> to_nx(out)
   end
 
+  def dot(out, %T{shape: left_shape} = left, [0], [], right, [0], []) when tuple_size(left_shape) == 2 do
+    dot(
+      out,
+      left |> Nx.transpose(axes: [1, 0]),
+      [1],
+      [],
+      right,
+      [0],
+      []
+    )
+  end
+
   # Shape
 
   @impl true
@@ -301,6 +313,14 @@ defmodule Candlex.Backend do
         |> Native.squeeze(axis)
         |> unwrap!()
     end
+    |> to_nx(out)
+  end
+
+  @impl true
+  def transpose(out, %T{} = t, [dim1, dim2] = axes) do
+    from_nx(t)
+    |> Native.transpose(dim1, dim2)
+    |> unwrap!()
     |> to_nx(out)
   end
 
