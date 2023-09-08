@@ -962,6 +962,15 @@ defmodule CandlexTest do
         ]
       ))
     end
+
+    test "sigmoid/1" do
+      Nx.sigmoid(1.0)
+      |> assert_close(t(0.7310585975646973))
+
+      t([1.0, 2, 3])
+      |> Nx.sigmoid()
+      |> assert_close(t([0.7310585975646973, 0.8807970881462097, 0.9525741338729858]))
+    end
   end
 
   defp t(values, opts \\ []) do

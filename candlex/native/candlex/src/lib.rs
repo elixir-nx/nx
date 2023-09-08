@@ -58,6 +58,7 @@ rustler::init! {
         tensors::cbrt,
         tensors::ceil,
         tensors::cos,
+        tensors::sigmoid,
         tensors::sin,
         tensors::erf_inv,
         tensors::exp,
