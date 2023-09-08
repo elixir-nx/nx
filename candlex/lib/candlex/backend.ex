@@ -272,15 +272,45 @@ defmodule Candlex.Backend do
     |> to_nx(out)
   end
 
-  def dot(out, %T{shape: left_shape} = left, [0], [], right, [0], []) when tuple_size(left_shape) == 2 do
+  def dot(
+        out,
+        %T{shape: left_shape} = left,
+        [0],
+        left_batched_axes,
+        right,
+        right_axes,
+        right_batched_axes
+      )
+      when tuple_size(left_shape) == 2 do
     dot(
       out,
       left |> Nx.transpose(axes: [1, 0]),
       [1],
-      [],
+      left_batched_axes,
       right,
+      right_axes,
+      right_batched_axes
+    )
+  end
+
+  def dot(
+        out,
+        left,
+        left_axes,
+        left_batched_axes,
+        %T{shape: right_shape} = right,
+        [1],
+        right_batched_axes
+      )
+      when tuple_size(right_shape) == 2 do
+    dot(
+      out,
+      left,
+      left_axes,
+      left_batched_axes,
+      right |> Nx.transpose(axes: [1, 0]),
       [0],
-      []
+      right_batched_axes
     )
   end
 

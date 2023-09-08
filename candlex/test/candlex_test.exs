@@ -391,14 +391,14 @@ defmodule CandlexTest do
       ))
 
       # TODO:
-      # t1
-      # |> Nx.dot([0], [], t2, [1], [])
-      # |> assert_equal(t(
-      #   [
-      #     [70, 150],
-      #     [100, 220]
-      #   ]
-      # ))
+      t1
+      |> Nx.dot([0], [], t2, [1], [])
+      |> assert_equal(t(
+        [
+          [70, 150],
+          [100, 220]
+        ]
+      ))
 
       t1
       |> Nx.dot([1], [], t2, [0], [])
