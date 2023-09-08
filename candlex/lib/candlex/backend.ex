@@ -490,6 +490,20 @@ defmodule Candlex.Backend do
 
   ## Conversions
 
+  @impl true
+  def to_batched(%T{shape: out_shape} = out, %T{shape: shape} = t, _opts) do
+    # TODO: dont ignore opts
+    batch_size = elem(out_shape, 0)
+    t_axis_0 = elem(shape, 0)
+    num_batches = div(t_axis_0, batch_size)
+
+    t
+    |> from_nx()
+    |> Native.chunk(num_batches)
+    |> unwrap!()
+    |> Stream.map(&to_nx(&1, out))
+  end
+
   @doc false
   defp from_nx(%T{data: %CB{} = data}), do: data
 
@@ -499,11 +513,16 @@ defmodule Candlex.Backend do
     |> from_nx()
   end
 
-  defp to_nx(%CB{resource: ref} = backend_tensor, %T{type: nx_type} = t) when is_reference(ref) do
+  defp to_nx(%CB{resource: ref} = backend_tensor, %T{type: nx_type, shape: nx_shape} = t) when is_reference(ref) do
     {:ok, candle_dtype} = Native.dtype(backend_tensor)
+    {:ok, candle_shape} = Native.t_shape(backend_tensor)
 
     if nx_type != from_candle_dtype(candle_dtype) do
       raise "tensor type mismatch, Nx (#{inspect(nx_type)}) and Candle (#{inspect(candle_dtype)})"
+    end
+
+    if nx_shape != candle_shape do
+      raise "tensor shape mismatch, Nx (#{inspect(nx_shape)}) and Candle (#{inspect(candle_shape)})"
     end
 
     %{t | data: backend_tensor}

@@ -6,7 +6,7 @@ use crate::ops::{
 };
 use candle_core::{DType, Device, Tensor};
 use half::{bf16, f16};
-use rustler::{Atom, Binary, Env, NewBinary, NifStruct, ResourceArc, Term};
+use rustler::{Atom, Binary, Env, Encoder, NewBinary, NifStruct, ResourceArc, Term};
 use std::ops::Deref;
 use std::result::Result;
 use std::str::FromStr;
@@ -70,6 +70,11 @@ pub fn narrow(
     length: usize,
 ) -> Result<ExTensor, CandlexError> {
     Ok(ExTensor::new(t.narrow(dim, start, length)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn chunk(t: ExTensor, num_chunks: usize) -> Result<Vec<ExTensor>, CandlexError> {
+    Ok(t.chunk(num_chunks, 0)?.into_iter().map(|t| ExTensor::new(t)).collect())
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
@@ -182,6 +187,11 @@ pub fn dtype(t: ExTensor) -> Result<&'static str, CandlexError> {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+pub fn t_shape(env: Env, t: ExTensor) -> Result<Term, CandlexError> {
+    Ok(vec_to_tuple(env, t.shape().clone().into_dims()).unwrap())
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 pub fn concatenate(ex_tensors: Vec<ExTensor>, dim: usize) -> Result<ExTensor, CandlexError> {
     let tensors = ex_tensors
         .iter()
@@ -277,6 +287,10 @@ fn tuple_to_vec(term: Term) -> Result<Vec<usize>, rustler::Error> {
         .iter()
         .map(|elem| elem.decode())
         .collect::<Result<_, _>>()?)
+}
+
+fn vec_to_tuple(env: Env, vec: Vec<usize>) -> Result<Term, rustler::Error> {
+    Ok(rustler::types::tuple::make_tuple(env, &vec.into_iter().map(|elem| elem.encode(env)).collect::<Vec<_>>()))
 }
 
 fn device_from_atom(atom: Atom) -> Result<Device, CandlexError> {

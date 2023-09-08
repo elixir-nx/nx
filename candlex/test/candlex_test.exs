@@ -935,6 +935,33 @@ defmodule CandlexTest do
         ]
       ))
     end
+
+    test "to_batched/2" do
+      [first, second] =
+        Nx.iota({2, 2, 2})
+        |> Nx.to_batched(1)
+        |> Enum.to_list()
+
+      first
+      |> assert_equal(t(
+        [
+          [
+            [0, 1],
+            [2, 3]
+          ]
+        ]
+      ))
+
+      second
+      |> assert_equal(t(
+        [
+          [
+            [4, 5],
+            [6, 7]
+          ]
+        ]
+      ))
+    end
   end
 
   defp t(values, opts \\ []) do

@@ -9,6 +9,7 @@ defmodule Candlex.Native do
   def all(_tensor), do: error()
   def where_cond(_tensor, _on_true, _on_false), do: error()
   def narrow(_tensor, _dim, _start, _length), do: error()
+  def chunk(_tensor, _num_chunks), do: error()
   def squeeze(_tensor, _dim), do: error()
   def arange(_start, _end, _dtype, _shape, _device), do: error()
   def broadcast_to(_tensor, _shape), do: error()
@@ -16,6 +17,7 @@ defmodule Candlex.Native do
   def transpose(_tensor, _dim1, _dim2), do: error()
   def to_type(_tensor, _dtype), do: error()
   def dtype(_tensor), do: error()
+  def t_shape(_tensor), do: error()
   def concatenate(_tensors, _axis), do: error()
 
   for op <- [
