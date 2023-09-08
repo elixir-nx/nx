@@ -288,6 +288,7 @@ defmodule CandlexTest do
       # |> Nx.dot(t([1, 2, 3]))
       # |> assert_equal(t(14.0))
 
+      # TODO: Candle matmul doesn't support integers yet
       # t([[1, 2, 3], [4, 5, 6]])
       # |> Nx.dot(t([[7, 8], [9, 10], [11, 12]]))
       # |> assert_equal(t(
@@ -296,6 +297,15 @@ defmodule CandlexTest do
       #     [139, 154]
       #   ]
       # ))
+
+      t([[1.0, 2, 3], [4, 5, 6]])
+      |> Nx.dot(t([[7.0, 8], [9, 10], [11, 12]]))
+      |> assert_equal(t(
+        [
+          [58.0, 64],
+          [139, 154]
+        ]
+      ))
     end
 
     test "negate" do
