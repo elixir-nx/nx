@@ -269,7 +269,9 @@ defmodule CandlexTest do
       # ))
     end
 
-    test "dot" do
+    test "dot/2" do
+      # Dot product of scalars
+
       Nx.dot(5, 5)
       |> assert_equal(t(25))
 
@@ -279,6 +281,8 @@ defmodule CandlexTest do
       Nx.dot(2, 2.0)
       |> assert_equal(t(4.0))
 
+      # Dot product of vectors
+
       # TODO:
       # t([1, 2, 3])
       # |> Nx.dot(t([4, 5, 6]))
@@ -287,6 +291,8 @@ defmodule CandlexTest do
       # t([1.0, 2.0, 3.0])
       # |> Nx.dot(t([1, 2, 3]))
       # |> assert_equal(t(14.0))
+
+      # Dot product of matrices (2-D tensors)
 
       # TODO: Candle matmul doesn't support integers yet
       # t([[1, 2, 3], [4, 5, 6]])
@@ -306,7 +312,116 @@ defmodule CandlexTest do
           [139, 154]
         ]
       ))
+
+      # Dot product of vector and n-D tensor
+
+      # t([[[1.0, 2], [3, 4]], [[5, 6], [7, 8]]], names: [:i, :j, :k])
+      # |> Nx.dot(t([5.0, 10], names: [:x]))
+      # |> assert_equal(t(
+      #   [
+      #     [25, 55],
+      #     [85, 115]
+      #   ]
+      # ))
+
+      # t([5.0, 10], names: [:x])
+      # |> Nx.dot(t([[1.0, 2, 3], [4, 5, 6]], names: [:i, :j]))
+      # |> assert_equal(t(
+      #   [45, 60, 75]
+      # ))
+
+      # t([[[[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]]]], names: [:shard, :batch, :x, :y, :z])
+      # |> Nx.dot(t([2.0, 2.0], names: [:data]))
+      # |> assert_equal(t(
+      #   [
+      #     [
+      #       [
+      #         [6.0, 14.0],
+      #         [22.0, 30.0]
+      #       ]
+      #     ]
+      #   ]
+      # ))
+
+      # Dot product of n-D and m-D tensors
+
+      # t([[[1.0, 2, 3], [4, 5, 6], [7, 8, 9]], [[1, 2, 3], [4, 5, 6], [7, 8, 9]]], names: [:x, :y, :z])
+      # |> Nx.dot(t([[[1.0, 2, 3], [3, 4, 5], [5, 6, 7]]], names: [:i, :j, :k]))
+      # |> assert_equal(t(
+      #   [
+      #     [
+      #       [
+      #         [22, 28, 34]
+      #       ],
+      #       [
+      #         [49, 64, 79]
+      #       ],
+      #       [
+      #         [76, 100, 124]
+      #       ]
+      #     ],
+      #     [
+      #       [
+      #         [22, 28, 34]
+      #       ],
+      #       [
+      #         [49, 64, 79]
+      #       ],
+      #       [
+      #         [76, 100, 124]
+      #       ]
+      #     ]
+      #   ]
+      # ))
     end
+
+    # TODO:
+    # test "dot/6" do
+      # Contracting along axes
+
+      # t1 = t([[1.0, 2], [3, 4]], names: [:x, :y])
+      # t2 = t([[10.0, 20], [30, 40]], names: [:height, :width])
+
+      # t1
+      # |> Nx.dot([0], [], t2, [0], [])
+      # |> assert_equal(t(
+      #   [
+      #     [100, 140],
+      #     [140, 200]
+      #   ]
+      # ))
+
+      # t1
+      # |> Nx.dot([0], [], t2, [1], [])
+      # |> assert_equal(t(
+      #   [
+      #     [70, 150],
+      #     [100, 220]
+      #   ]
+      # ))
+
+      # t1
+      # |> Nx.dot([1], [], t2, [0], [])
+      # |> assert_equal(t(
+      #   [
+      #     [70, 100],
+      #     [150, 220]
+      #   ]
+      # ))
+
+      # t1
+      # |> Nx.dot([1], [], t2, [1], [])
+      # |> assert_equal(t(
+      #   [
+      #     [50, 110],
+      #     [110, 250]
+      #   ]
+      # ))
+
+      # t1
+      # |> Nx.dot([0, 1], [], t2, [0, 1], [])
+      # |> assert_equal(t(300))
+    # end
 
     test "negate" do
       # TODO: candle doesn't support unary functions for integers yet
