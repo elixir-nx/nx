@@ -64,6 +64,8 @@ defmodule Candlex.Native do
     def unquote(op)(_left, _right), do: error()
   end
 
+  def sum(_tensor, _dims, _keep_dims), do: error()
+
   for op <- [:argmax, :argmin] do
     def unquote(op)(_tensor, _dim, _keep_dim), do: error()
   end

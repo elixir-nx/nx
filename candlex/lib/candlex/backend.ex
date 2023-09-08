@@ -99,6 +99,18 @@ defmodule Candlex.Backend do
     |> to_nx(out)
   end
 
+  @impl true
+  def sum(%T{} = out, %T{} = t, opts) do
+    axes = opts[:axes] || Nx.axes(t)
+    keep_axes = opts[:keep_axes] || false
+
+    t
+    |> from_nx()
+    |> Native.sum(axes, keep_axes)
+    |> unwrap!()
+    |> to_nx(out)
+  end
+
   for op <- [:argmax, :argmin] do
     @impl true
     def unquote(op)(%T{} = out, %T{shape: {}} = _tensor, _opts) do

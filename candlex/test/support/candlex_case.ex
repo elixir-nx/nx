@@ -19,7 +19,7 @@ defmodule Candlex.Case do
       |> Nx.all()
       |> Nx.to_number()
 
-    if equals != 1 do
+    if equals != 1 || Nx.shape(left) != Nx.shape(right) do
       flunk("""
       Tensor assertion failed.
       left: #{inspect(left)}

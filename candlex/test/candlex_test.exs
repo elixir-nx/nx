@@ -840,6 +840,64 @@ defmodule CandlexTest do
       |> Nx.erf_inv()
       |> assert_close(t([0.0888559891358877, 0.47693629334671295, 1.1630870196442271], type: :f64))
     end
+
+    test "sum/2" do
+      t(42)
+      |> Nx.sum()
+      |> assert_equal(t(42))
+
+      t([1, 2, 3])
+      |> Nx.sum()
+      |> assert_equal(t(6))
+
+      t([[1.0, 2.0], [3.0, 4.0]])
+      |> Nx.sum()
+      |> assert_equal(t(10.0))
+
+      t = Nx.iota({2, 2, 3}, names: [:x, :y, :z])
+      Nx.sum(t, axes: [:x])
+      |> assert_equal(t(
+        [
+          [6, 8, 10],
+          [12, 14, 16]
+        ]
+      ))
+
+      Nx.sum(t, axes: [:y])
+      |> assert_equal(t(
+        [
+          [3, 5, 7],
+          [15, 17, 19]
+        ]
+      ))
+
+      Nx.sum(t, axes: [:z])
+      |> assert_equal(t(
+        [
+          [3, 12],
+          [21, 30]
+        ]
+      ))
+
+      Nx.sum(t, axes: [:x, :z])
+      |> assert_equal(t([24, 42]))
+
+      Nx.sum(t, axes: [-3])
+      |> assert_equal(t(
+        [
+          [6, 8, 10],
+          [12, 14, 16]
+        ]
+      ))
+
+      t([[1, 2], [3, 4]], names: [:x, :y])
+      |> Nx.sum(axes: [:x], keep_axes: true)
+      |> assert_equal(t(
+        [
+          [4, 6]
+        ]
+      ))
+    end
   end
 
   defp t(values, opts \\ []) do

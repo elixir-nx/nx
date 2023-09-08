@@ -140,6 +140,17 @@ pub fn argmin(ex_tensor: ExTensor, dim: usize, keep_dim: bool) -> Result<ExTenso
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+pub fn sum(ex_tensor: ExTensor, dims: Vec<usize>, keep_dims: bool) -> Result<ExTensor, CandlexError> {
+    let t = if keep_dims {
+        ex_tensor.sum_keepdim(dims)?
+    } else {
+        ex_tensor.sum(dims)?
+    };
+
+    Ok(ExTensor::new(t))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 pub fn broadcast_to(t: ExTensor, shape: Term) -> Result<ExTensor, CandlexError> {
     Ok(ExTensor::new(t.broadcast_as(tuple_to_vec(shape).unwrap())?))
 }

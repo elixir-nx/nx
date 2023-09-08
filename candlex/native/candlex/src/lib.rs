@@ -33,6 +33,7 @@ rustler::init! {
         tensors::less_equal,
         tensors::subtract,
         tensors::all,
+        tensors::sum,
         tensors::dtype,
         tensors::argmax,
         tensors::argmin,
