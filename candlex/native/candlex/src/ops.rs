@@ -1,6 +1,6 @@
 use candle_core::{CpuStorage, CustomOp1, CustomOp2, Error, Layout, Shape};
-use num_traits::Float;
 use num_traits::cast::FromPrimitive;
+use num_traits::Float;
 
 fn erf_inv<T: Float + num_traits::FromPrimitive>(v: T) -> T {
     FromPrimitive::from_f64(statrs::function::erf::erf_inv(v.to_f64().unwrap())).unwrap()

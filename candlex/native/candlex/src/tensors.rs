@@ -6,7 +6,7 @@ use crate::ops::{
 };
 use candle_core::{DType, Device, Tensor};
 use half::{bf16, f16};
-use rustler::{Atom, Binary, Env, Encoder, NewBinary, NifStruct, ResourceArc, Term};
+use rustler::{Atom, Binary, Encoder, Env, NewBinary, NifStruct, ResourceArc, Term};
 use std::ops::Deref;
 use std::result::Result;
 use std::str::FromStr;
@@ -24,7 +24,7 @@ impl ExTensor {
     pub fn new(tensor: Tensor) -> Self {
         let dev_string = match tensor.device() {
             Device::Cpu => String::from("cpu"),
-            Device::Cuda(_) => String::from("cuda")
+            Device::Cuda(_) => String::from("cuda"),
         };
 
         Self {
@@ -81,7 +81,10 @@ pub fn narrow(
 
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn chunk(t: ExTensor, num_chunks: usize) -> Result<Vec<ExTensor>, CandlexError> {
-    Ok(t.chunk(num_chunks, 0)?.into_iter().map(|t| ExTensor::new(t)).collect())
+    Ok(t.chunk(num_chunks, 0)?
+        .into_iter()
+        .map(|t| ExTensor::new(t))
+        .collect())
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
@@ -152,7 +155,11 @@ pub fn argmin(ex_tensor: ExTensor, dim: usize, keep_dim: bool) -> Result<ExTenso
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-pub fn sum(ex_tensor: ExTensor, dims: Vec<usize>, keep_dims: bool) -> Result<ExTensor, CandlexError> {
+pub fn sum(
+    ex_tensor: ExTensor,
+    dims: Vec<usize>,
+    keep_dims: bool,
+) -> Result<ExTensor, CandlexError> {
     let t = if keep_dims {
         ex_tensor.sum_keepdim(dims)?
     } else {
@@ -298,7 +305,12 @@ fn tuple_to_vec(term: Term) -> Result<Vec<usize>, rustler::Error> {
 }
 
 fn vec_to_tuple(env: Env, vec: Vec<usize>) -> Result<Term, rustler::Error> {
-    Ok(rustler::types::tuple::make_tuple(env, &vec.into_iter().map(|elem| elem.encode(env)).collect::<Vec<_>>()))
+    Ok(rustler::types::tuple::make_tuple(
+        env,
+        &vec.into_iter()
+            .map(|elem| elem.encode(env))
+            .collect::<Vec<_>>(),
+    ))
 }
 
 fn device_from_atom(atom: Atom) -> Result<Device, CandlexError> {
