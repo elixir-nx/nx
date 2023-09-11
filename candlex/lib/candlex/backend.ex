@@ -518,8 +518,10 @@ defmodule Candlex.Backend do
     {:ok, candle_dtype} = Native.dtype(backend_tensor)
     {:ok, candle_shape} = Native.t_shape(backend_tensor)
 
-    if nx_type != from_candle_dtype(candle_dtype) do
-      raise "tensor type mismatch, Nx (#{inspect(nx_type)}) and Candle (#{inspect(candle_dtype)})"
+    case {nx_type, from_candle_dtype(candle_dtype)} do
+      {{:u, 64}, {:s, 64}} -> :ok
+      {type, type} -> :ok
+      {type, other_type} -> raise "tensor type mismatch, Nx (#{inspect(type)}) and Candle (#{inspect(other_type)})"
     end
 
     if nx_shape != candle_shape do
@@ -536,7 +538,7 @@ defmodule Candlex.Backend do
   defp to_candle_dtype({:u, 8}), do: "u8"
   defp to_candle_dtype({:u, 16} = t), do: unsupported_dtype(t)
   defp to_candle_dtype({:u, 32}), do: "u32"
-  defp to_candle_dtype({:u, 64} = t), do: unsupported_dtype(t)
+  defp to_candle_dtype({:u, 64} = t), do: "i64"
   defp to_candle_dtype({:f, 16}), do: "f16"
   defp to_candle_dtype({:f, 32}), do: "f32"
   defp to_candle_dtype({:f, 64}), do: "f64"

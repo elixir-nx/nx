@@ -6,6 +6,7 @@ defmodule CandlexTest do
     test "tensor" do
       check(255, type: :u8)
       check(100_002, type: :u32)
+      check(100_102, type: :u64)
       check(-101, type: :s64)
       check(1.16, type: :f16)
       check(1.32, type: :f32)
@@ -55,6 +56,10 @@ defmodule CandlexTest do
       |> Nx.add(t([10, 20, 30]))
       |> assert_equal(t([11, 22, 33]))
 
+      t([1, 2, 3], type: :u64)
+      |> Nx.add(t([10, 20, 30], type: :u64))
+      |> assert_equal(t([11, 22, 33]))
+
       Nx.add(1, 2.2)
       |> assert_equal(t(3.2))
 
@@ -71,6 +76,9 @@ defmodule CandlexTest do
       |> assert_equal(t(0.0))
 
       Nx.iota({5})
+      |> assert_equal(t([0, 1, 2, 3, 4]))
+
+      Nx.iota({5}, type: :u64)
       |> assert_equal(t([0, 1, 2, 3, 4]))
 
       Nx.iota({5}, type: :f32)
@@ -107,6 +115,10 @@ defmodule CandlexTest do
     test "multiply" do
       t([1, 2])
       |> Nx.multiply(t([3, 4]))
+      |> assert_equal(t([3, 8]))
+
+      t([1, 2], type: :u64)
+      |> Nx.multiply(t([3, 4], type: :u64))
       |> assert_equal(t([3, 8]))
 
       t([[1], [2]])
