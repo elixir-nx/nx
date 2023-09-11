@@ -3,7 +3,7 @@ defmodule Candlex.Backend do
   An opaque Nx backend with bindings to candle.
   """
 
-  defstruct [:resource]
+  defstruct [:device, :resource]
 
   @behaviour Nx.Backend
 
@@ -395,9 +395,9 @@ defmodule Candlex.Backend do
     |> maybe_add_signature(tensor)
   end
 
-  defp maybe_add_signature(result, %T{data: %CB{resource: ref}}) when is_reference(ref) do
+  defp maybe_add_signature(result, %T{data: %CB{device: device, resource: ref}}) when is_reference(ref) do
     Inspect.Algebra.concat([
-      "Candlex.Backend(#{:erlang.ref_to_list(ref)})",
+      "Candlex.Backend(#{device})",
       Inspect.Algebra.line(),
       result
     ])

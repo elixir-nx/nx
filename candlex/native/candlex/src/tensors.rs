@@ -16,12 +16,19 @@ pub(crate) struct TensorRef(Tensor);
 #[derive(NifStruct)]
 #[module = "Candlex.Backend"]
 pub struct ExTensor {
+    device: String,
     resource: ResourceArc<TensorRef>,
 }
 
 impl ExTensor {
     pub fn new(tensor: Tensor) -> Self {
+        let dev_string = match tensor.device() {
+            Device::Cpu => String::from("cpu"),
+            Device::Cuda(_) => String::from("cuda")
+        };
+
         Self {
+            device: dev_string,
             resource: ResourceArc::new(TensorRef(tensor)),
         }
     }
