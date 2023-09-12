@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.6.1 (2023-09-12)
+
+### Enhancements
+
+  * [Nx] Add multivariate normal distribution
+  * [Nx.Serving] Automatically split exceeding batch sizes
+
 ## v0.6.0 (2023-08-15)
 
 ### Enhancements
