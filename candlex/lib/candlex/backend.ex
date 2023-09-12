@@ -100,13 +100,15 @@ defmodule Candlex.Backend do
   end
 
   @impl true
-  def sum(%T{} = out, %T{} = t, opts) do
+  def sum(%T{type: out_type} = out, %T{} = t, opts) do
     axes = opts[:axes] || Nx.axes(t)
     keep_axes = opts[:keep_axes] || false
 
     t
     |> from_nx()
     |> Native.sum(axes, keep_axes)
+    |> unwrap!()
+    |> Native.to_type(to_candle_dtype(out_type))
     |> unwrap!()
     |> to_nx(out)
   end
