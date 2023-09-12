@@ -148,23 +148,22 @@ defmodule CandlexTest do
         ]
       ))
 
-      # TODO: Support integers
-      # 1
-      # |> Nx.divide(2)
-      # |> assert_equal(t(0.5))
+      1
+      |> Nx.divide(2)
+      |> assert_equal(t(0.5))
 
-      # t([1, 2, 3])
-      # |> Nx.divide(1)
-      # |> assert_equal(t([1.0, 2.0, 3.0]))
+      t([1, 2, 3])
+      |> Nx.divide(2)
+      |> assert_equal(t([0.5, 1.0, 1.5]))
 
-      # t([[1], [2]])
-      # |> Nx.divide(t([[10, 20]]))
-      # |> assert_equal(t(
-      #   [
-      #     [0.10000000149011612, 0.05000000074505806],
-      #     [0.20000000298023224, 0.10000000149011612]
-      #   ]
-      # ))
+      t([[1], [2]])
+      |> Nx.divide(t([[10, 20]]))
+      |> assert_equal(t(
+        [
+          [0.10000000149011612, 0.05000000074505806],
+          [0.20000000298023224, 0.10000000149011612]
+        ]
+      ))
     end
 
     test "broadcast" do

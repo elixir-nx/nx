@@ -214,6 +214,16 @@ pub fn concatenate(ex_tensors: Vec<ExTensor>, dim: usize) -> Result<ExTensor, Ca
     Ok(ExTensor::new(Tensor::cat(&tensors[..], dim)?))
 }
 
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn divide(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(
+        // Need to force float in case we receive integers, given
+        // candle rounds down integer division.
+        left.to_dtype(DType::F32)?
+            .broadcast_div(&right.to_dtype(DType::F32)?)?,
+    ))
+}
+
 macro_rules! unary_nif {
     ($nif_name:ident, $native_fn_name:ident) => {
         #[rustler::nif(schedule = "DirtyCpu")]
@@ -281,7 +291,6 @@ custom_unary_nif!(tan, Tan);
 binary_nif!(add, broadcast_add);
 binary_nif!(subtract, broadcast_sub);
 binary_nif!(multiply, broadcast_mul);
-binary_nif!(divide, broadcast_div);
 binary_nif!(max, broadcast_maximum);
 binary_nif!(min, broadcast_minimum);
 binary_nif!(equal, eq);
