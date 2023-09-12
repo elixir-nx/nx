@@ -872,6 +872,32 @@ defmodule CandlexTest do
       ))
     end
 
+    test "logical_xor" do
+      0
+      |> Nx.logical_xor(t([-1, 0, 1]))
+      |> assert_equal(t([1, 0, 1]))
+
+      t([-1, 0, 1])
+      |> Nx.logical_xor(t([[-1], [0], [1]]))
+      |> assert_equal(t(
+        [
+          [0, 1, 0],
+          [1, 0, 1],
+          [0, 1, 0]
+        ]
+      ))
+
+      t([-1.0, 0.0, 1.0])
+      |> Nx.logical_xor(t([[-1], [0], [1]]))
+      |> assert_equal(t(
+        [
+          [0, 1, 0],
+          [1, 0, 1],
+          [0, 1, 0]
+        ]
+      ))
+    end
+
     test "erf_inv" do
       Nx.erf_inv(0.10000000149011612)
       |> assert_close(t(0.08885598927736282))

@@ -2,7 +2,7 @@ use crate::atoms;
 use crate::error::CandlexError;
 use crate::ops::{
     Acos, Asin, Atan, BitAnd, BitNot, BitOr, BitXor, Cbrt, Ceil, ErfInv, Floor, IsInf, Log1p,
-    LogicalOr, Round, Shl, Shr, Sigmoid, Tan,
+    LogicalOr, LogicalXor, Round, Shl, Shr, Sigmoid, Tan,
 };
 use candle_core::{DType, Device, Tensor};
 use half::{bf16, f16};
@@ -304,6 +304,7 @@ custom_binary_nif!(bitwise_or, BitOr);
 custom_binary_nif!(bitwise_xor, BitXor);
 custom_binary_nif!(left_shift, Shl);
 custom_binary_nif!(logical_or, LogicalOr);
+custom_binary_nif!(logical_xor, LogicalXor);
 custom_binary_nif!(right_shift, Shr);
 
 fn tuple_to_vec(term: Term) -> Result<Vec<usize>, rustler::Error> {

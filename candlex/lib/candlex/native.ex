@@ -58,6 +58,7 @@ defmodule Candlex.Native do
         :less,
         :less_equal,
         :logical_or,
+        :logical_xor,
         :matmul,
         :max,
         :min,
