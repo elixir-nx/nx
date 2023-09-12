@@ -240,7 +240,7 @@ macro_rules! binary_nif {
     ($nif_name:ident, $native_fn_name:ident) => {
         #[rustler::nif(schedule = "DirtyCpu")]
         pub fn $nif_name(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
-            Ok(ExTensor::new(left.$native_fn_name(&right)?))
+            Ok(ExTensor::new(left.$native_fn_name(right.deref())?))
         }
     };
 }
