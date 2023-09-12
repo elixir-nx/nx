@@ -829,7 +829,7 @@ defmodule CandlexTest do
 
       t([16, 32, -64, -128], type: :u32)
       |> Nx.right_shift(t([1, 2, 3, 4]))
-      |> assert_equal(t([8, 8, 536870904, 268435448]))
+      |> assert_equal(t([8, 8, 536_870_904, 268_435_448]))
     end
 
     test "is_infinity" do
@@ -886,7 +886,9 @@ defmodule CandlexTest do
 
       t([0.10000000149011612, 0.5, 0.8999999761581421], type: :f64)
       |> Nx.erf_inv()
-      |> assert_close(t([0.0888559891358877, 0.47693629334671295, 1.1630870196442271], type: :f64))
+      |> assert_close(
+        t([0.0888559891358877, 0.47693629334671295, 1.1630870196442271], type: :f64)
+      )
     end
 
     test "sum/2" do

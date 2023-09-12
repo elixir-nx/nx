@@ -397,7 +397,8 @@ defmodule Candlex.Backend do
     |> maybe_add_signature(tensor)
   end
 
-  defp maybe_add_signature(result, %T{data: %CB{device: device, resource: ref}}) when is_reference(ref) do
+  defp maybe_add_signature(result, %T{data: %CB{device: device, resource: ref}})
+       when is_reference(ref) do
     Inspect.Algebra.concat([
       "Candlex.Backend(#{device})",
       Inspect.Algebra.line(),
@@ -516,14 +517,20 @@ defmodule Candlex.Backend do
     |> from_nx()
   end
 
-  defp to_nx(%CB{resource: ref} = backend_tensor, %T{type: nx_type, shape: nx_shape} = t) when is_reference(ref) do
+  defp to_nx(%CB{resource: ref} = backend_tensor, %T{type: nx_type, shape: nx_shape} = t)
+       when is_reference(ref) do
     {:ok, candle_dtype} = Native.dtype(backend_tensor)
     {:ok, candle_shape} = Native.t_shape(backend_tensor)
 
     case {nx_type, from_candle_dtype(candle_dtype)} do
-      {{:u, 64}, {:s, 64}} -> :ok
-      {type, type} -> :ok
-      {type, other_type} -> raise "tensor type mismatch, Nx (#{inspect(type)}) and Candle (#{inspect(other_type)})"
+      {{:u, 64}, {:s, 64}} ->
+        :ok
+
+      {type, type} ->
+        :ok
+
+      {type, other_type} ->
+        raise "tensor type mismatch, Nx (#{inspect(type)}) and Candle (#{inspect(other_type)})"
     end
 
     if nx_shape != candle_shape do
