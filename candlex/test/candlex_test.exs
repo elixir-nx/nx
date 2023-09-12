@@ -983,6 +983,20 @@ defmodule CandlexTest do
       |> Nx.sigmoid()
       |> assert_close(t([0.7310585975646973, 0.8807970881462097, 0.9525741338729858]))
     end
+
+    test "mean/1" do
+      t(42)
+      |> Nx.mean()
+      |> assert_equal(t(42.0))
+
+      t([1, 2, 3])
+      |> Nx.mean()
+      |> assert_equal(t(2.0))
+
+      t([0.1, 0.2, 0.3])
+      |> Nx.mean()
+      |> assert_equal(t(0.2))
+    end
   end
 
   defp t(values, opts \\ []) do
