@@ -175,6 +175,18 @@ defmodule EXLA.MLIR.Value do
     %Value{ref: ref, function: func}
   end
 
+  def select(
+        %Value{function: func} = pred,
+        %Value{function: func} = on_true,
+        %Value{function: func} = on_false
+      ) do
+    ref =
+      EXLA.NIF.mlir_select(func.ref, pred.ref, on_true.ref, on_false.ref)
+      |> unwrap!()
+
+    %Value{ref: ref, function: func}
+  end
+
   defp get_precision_config_int(precision_config) do
     case precision_config do
       :default ->
