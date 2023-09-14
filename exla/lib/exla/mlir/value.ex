@@ -137,6 +137,16 @@ defmodule EXLA.MLIR.Value do
     %Value{ref: ref, function: func}
   end
 
+  def concatenate([%Value{function: func} | _rest] = operands, dimension) do
+    refs = Enum.map(operands, & &1.ref)
+
+    ref =
+      EXLA.NIF.mlir_concatenate(func.ref, refs, dimension)
+      |> unwrap!()
+
+    %Value{ref: ref, function: func}
+  end
+
   defp get_precision_config_int(precision_config) do
     case precision_config do
       :default ->

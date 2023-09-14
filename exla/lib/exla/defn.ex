@@ -1309,6 +1309,14 @@ defmodule EXLA.Defn do
     EXLA.Op.reverse(tensor, axes)
   end
 
+  defp to_operator(:concatenate, [[%Value{} | _rest] = tensors, axis], ans, _state) do
+    tensors =
+      tensors
+      |> Enum.map(&to_type(&1, ans.type))
+
+    Value.concatenate(tensors, axis)
+  end
+
   defp to_operator(:concatenate, [tensors, axis], ans, _state) do
     tensors =
       tensors

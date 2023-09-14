@@ -549,6 +549,13 @@ mlir::Value MLIRFunction::DotGeneralOp(
   return op;
 }
 
+mlir::Value MLIRFunction::ConcatenateOp(std::vector<mlir::Value> operands, int64_t dimension) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  mlir::ValueRange operands_range(llvm::ArrayRef<mlir::Value>(operands.data(), operands.size()));
+  auto op = module_->builder()->create<mlir::mhlo::ConcatenateOp>(module_->builder()->getUnknownLoc(), operands_range, dimension);
+  return op;
+}
+
 template <typename T>
 ERL_NIF_TERM ConstantOpImpl(mlir::OpBuilder *builder, mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM term, std::vector<int64_t> dims) {
   mlir::RankedTensorType ty = mlir::RankedTensorType::get(dims, type);

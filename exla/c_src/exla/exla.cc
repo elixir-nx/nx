@@ -759,6 +759,30 @@ ERL_NIF_TERM mlir_get_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   return exla::nif::ok(env, exla::nif::make<xla::Shape>(env, shape));
 }
 
+ERL_NIF_TERM mlir_concatenate(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 2) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  std::vector<mlir::Value> vals;
+  exla::int64 dimension;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get_list<mlir::Value>(env, argv[1], vals)) {
+    return exla::nif::error(env, "Unable to get values.");
+  }
+  if (!exla::nif::get(env, argv[2], &dimension)) {
+    return exla::nif::error(env, "Unable to get dimension");
+  }
+
+  mlir::Value res = (*function)->ConcatenateOp(vals, dimension);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
 ERL_NIF_TERM dump_mlir_module(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 1) {
     return exla::nif::error(env, "Bad argument count.");
@@ -1432,6 +1456,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_count_leading_zeros", 2, mlir_clz},
     {"mlir_dot_general", 6, mlir_dot_general},
     {"mlir_population_count", 2, mlir_population_count},
+    {"mlir_concatenate", 3, mlir_concatenate},
     // XlaBuilder
     {"new_builder", 1, new_builder},
     {"create_sub_builder", 2, create_sub_builder},
