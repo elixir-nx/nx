@@ -709,10 +709,10 @@ ERL_NIF_TERM mlir_select(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get<mlir::Value>(env, argv[1], pred)) {
     return exla::nif::error(env, "Unable to get pred.");
   }
-  if (!exla::nif::get<mlir::Value>(env, argv[2], pred)) {
+  if (!exla::nif::get<mlir::Value>(env, argv[2], on_true)) {
     return exla::nif::error(env, "Unable to get on true.");
   }
-  if (!exla::nif::get<mlir::Value>(env, argv[3], pred)) {
+  if (!exla::nif::get<mlir::Value>(env, argv[3], on_false)) {
     return exla::nif::error(env, "Unable to get on false.");
   }
 

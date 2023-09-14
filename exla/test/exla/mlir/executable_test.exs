@@ -416,4 +416,23 @@ defmodule EXLA.MLIR.ExecutableTest do
       assert_equal(result_nx, result_mlir)
     end
   end
+
+  describe "select" do
+    test "works" do
+      pred = Nx.tensor([0, 1, 0, 1])
+      on_true = Nx.tensor([1, 2, 3, 4])
+      on_false = Nx.tensor([5, 6, 7, 8])
+
+      function = fn x, y, z -> Nx.select(x, y, z) end
+
+      result_nx =
+        Nx.Defn.jit_apply(function, [pred, on_true, on_false], compiler: Nx.Defn.Evaluator)
+
+      result_mlir = Nx.Defn.jit_apply(function, [pred, on_true, on_false])
+
+      assert result_nx.shape == result_mlir.shape
+      assert result_nx.type == result_mlir.type
+      assert_equal(result_nx, result_mlir)
+    end
+  end
 end

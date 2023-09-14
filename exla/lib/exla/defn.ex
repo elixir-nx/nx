@@ -792,15 +792,17 @@ defmodule EXLA.Defn do
        ) do
     pred = to_type(pred, {:pred, 8})
 
+    out_shape = EXLA.Shape.make_shape(type, shape)
+
     on_true =
       on_true
       |> to_type(type)
-      |> Value.broadcast_in_dim(shape, broadcast_axes(op_shape(on_true), shape))
+      |> Value.broadcast_in_dim(out_shape, broadcast_axes(op_shape(on_true), shape))
 
     on_false =
       on_false
       |> to_type(type)
-      |> Value.broadcast_in_dim(shape, broadcast_axes(op_shape(on_false), shape))
+      |> Value.broadcast_in_dim(out_shape, broadcast_axes(op_shape(on_false), shape))
 
     Value.select(pred, on_true, on_false)
   end
