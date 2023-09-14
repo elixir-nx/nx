@@ -137,6 +137,18 @@ defmodule EXLA.MLIR.Value do
     %Value{ref: ref, function: func}
   end
 
+  def clamp(
+        %Value{function: func} = operand,
+        %Value{function: func} = min,
+        %Value{function: func} = max
+      ) do
+    ref =
+      EXLA.NIF.mlir_clamp(func.ref, operand.ref, min.ref, max.ref)
+      |> unwrap!()
+
+    %Value{ref: ref, function: func}
+  end
+
   defp get_precision_config_int(precision_config) do
     case precision_config do
       :default ->
