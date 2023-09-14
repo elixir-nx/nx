@@ -549,6 +549,12 @@ mlir::Value MLIRFunction::DotGeneralOp(
   return op;
 }
 
+mlir::Value MLIRFunction::OptimizationBarrierOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  auto op = module_->builder()->create<mlir::mhlo::OptimizationBarrierOp>(module_->builder()->getUnknownLoc(), operand);
+  return op.getResult()[0];
+}
+
 mlir::Value MLIRFunction::ClampOp(mlir::Value min, mlir::Value operand, mlir::Value max) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   auto op = module_->builder()->create<mlir::mhlo::ClampOp>(module_->builder()->getUnknownLoc(), min, operand, max);
