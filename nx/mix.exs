@@ -6,7 +6,7 @@ defmodule Nx.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx"
-  @version "0.5.1"
+  @version "0.7.0-dev"
 
   def project do
     [
@@ -41,7 +41,7 @@ defmodule Nx.MixProject do
     [
       {:complex, "~> 0.5"},
       {:telemetry, "~> 0.4.0 or ~> 1.0"},
-      {:ex_doc, "~> 0.29.0", only: :docs}
+      {:ex_doc, "~> 0.29", only: :docs}
     ]
   end
 
@@ -62,6 +62,7 @@ defmodule Nx.MixProject do
       extras: [
         "guides/intro-to-nx.livemd",
         "guides/tensor-aggregation-101.livemd",
+        "guides/vectorization.livemd",
         "CHANGELOG.md"
       ],
       skip_undefined_reference_warnings_on: ["CHANGELOG.md"],

@@ -250,8 +250,6 @@ defmodule EXLA.Backend do
     [
       {:eye, [:backend_options], []},
       {:iota, [:axis, :backend_options], []},
-      {:random_uniform, [:min, :max, :backend_options], [:min, :max]},
-      {:random_normal, [:mu, :sigma, :backend_options], [:mu, :sigma]},
       {:as_type, [:tensor], [:tensor]},
       {:bitcast, [:tensor], [:tensor]},
       {:reshape, [:tensor], [:tensor]},

@@ -248,12 +248,6 @@ defmodule Nx.Defn.Kernel do
     Nx.Defn.Expr.metadata(expr, %{stop_grad: true, inspect: :stop_grad})
   end
 
-  @doc false
-  @deprecated "custom_grad/2 is deprecated, use custom_grad/3 instead"
-  def custom_grad(expr, fun) when is_function(fun, 2) do
-    Nx.Defn.Expr.metadata(expr, %{custom_grad: fun, inspect: :custom_grad})
-  end
-
   @doc """
   Defines a custom gradient for the given expression.
 
@@ -1169,6 +1163,13 @@ defmodule Nx.Defn.Kernel do
     while(pattern, pattern, vars, values, :none, condition, block, opts)
   end
 
+  defmacro while(_var, _cond, _opts, other) do
+    Kernel.raise(
+      ArgumentError,
+      "expected last argument of \"while\" to be a do-block, got: #{Macro.to_string(other)}"
+    )
+  end
+
   defp while(initial, pattern, vars, values, generator, condition, block, opts) do
     __defn__!(:while, 4)
 
@@ -1198,13 +1199,6 @@ defmodule Nx.Defn.Kernel do
         unquote(opts)
       )
     end
-  end
-
-  defmacro while(_var, _cond, _opts, other) do
-    Kernel.raise(
-      ArgumentError,
-      "expected last argument of \"while\" to be a do-block, got: #{Macro.to_string(other)}"
-    )
   end
 
   @doc false
@@ -1670,64 +1664,6 @@ defmodule Nx.Defn.Kernel do
       Elixir.Kernel.<>(unquote(left), unquote(right))
     end
   end
-
-  @doc false
-  @deprecated "Use deftransform/2 or deftransformp/2 from Nx.Defn instead"
-  def transform(arg, fun) when is_function(fun, 1) do
-    fun.(arg)
-  end
-
-  @doc false
-  @deprecated "Use print_expr/2 instead"
-  def inspect_expr(expr, opts \\ []) do
-    IO.inspect(expr, opts)
-  end
-
-  @doc false
-  @deprecated "Use print_value/2 instead"
-  def inspect_value(expr, opts \\ []) do
-    hook(expr, &IO.inspect(&1, opts))
-  end
-
-  @doc false
-  @deprecated "Use case+raise instead"
-  def assert_shape(tensor, shape) when is_tuple(shape) do
-    case Nx.shape(tensor) do
-      ^shape ->
-        tensor
-
-      other ->
-        Kernel.raise(
-          ArgumentError,
-          "expected tensor to #{shape_to_string(shape)}, got tensor with shape #{Kernel.inspect(other)}"
-        )
-    end
-  end
-
-  defp shape_to_string({}), do: "be a scalar"
-  defp shape_to_string(shape), do: "have shape #{Kernel.inspect(shape)}"
-
-  @doc false
-  @deprecated "Use case+raise instead"
-  defmacro assert_shape_pattern(tensor, shape) do
-    shape_pattern_string = shape_pattern_to_string(shape)
-
-    quote do
-      tensor = unquote(tensor)
-
-      case Nx.shape(tensor) do
-        unquote(shape) ->
-          tensor
-
-        shape ->
-          raise ArgumentError,
-                "expected tensor to #{unquote(shape_pattern_string)}, got tensor with shape #{Nx.Defn.Kernel.inspect(shape)}"
-      end
-    end
-  end
-
-  defp shape_pattern_to_string({:{}, _, []}), do: "be a scalar"
-  defp shape_pattern_to_string(pattern), do: "match shape #{Macro.to_string(pattern)}"
 
   @definitions (Module.definitions_in(__MODULE__, :def) ++
                   Module.definitions_in(__MODULE__, :defmacro)) --

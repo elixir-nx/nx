@@ -4,8 +4,11 @@ defmodule Torchx.NIF do
 
   def __on_load__ do
     case :os.type() do
-      {:win32, _} -> DLLLoaderHelper.addDLLDirectory("#{:code.priv_dir(:torchx)}/libtorch")
-      _ -> :ok
+      {:win32, _} ->
+        :dll_loader_helper_beam.add_dll_directory("#{:code.priv_dir(:torchx)}/libtorch")
+
+      _ ->
+        :ok
     end
 
     path = :filename.join(:code.priv_dir(:torchx), ~c"torchx")

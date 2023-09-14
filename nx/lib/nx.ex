@@ -45,8 +45,7 @@ defmodule Nx do
   ## Creating tensors
 
   The main APIs for creating tensors are `tensor/2`, `from_binary/2`,
-  `iota/2`, `eye/2`, `random_uniform/2`, `random_normal/2`, and
-  `broadcast/3`.
+  `iota/2`, `eye/2`, and `broadcast/3`.
 
   The tensor types can be one of:
 
@@ -951,101 +950,6 @@ defmodule Nx do
     tensor_or_container
     |> Nx.LazyContainer.traverse(:ok, fn template, _fun, :ok -> {template, :ok} end)
     |> then(fn {template, :ok} -> template end)
-  end
-
-  @doc false
-  @deprecated "Use Nx.Random.uniform/2 instead"
-  def random_uniform(tensor_or_shape, opts \\ []) do
-    random_uniform(tensor_or_shape, 0.0, 1.0, opts)
-  end
-
-  @doc false
-  @deprecated "Use Nx.Random.uniform/2 instead"
-  def random_uniform(tensor_or_shape, min, max, opts \\ []) do
-    opts = keyword!(opts, [:type, :names, :backend])
-    %T{type: min_type, shape: min_shape} = min = to_tensor(min)
-    %T{type: max_type, shape: max_shape} = max = to_tensor(max)
-
-    Nx.Shared.raise_vectorization_not_supported(min, __ENV__.function)
-    Nx.Shared.raise_vectorization_not_supported(max, __ENV__.function)
-
-    shape = shape(tensor_or_shape)
-    names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
-    range_type = Nx.Type.merge(min_type, max_type)
-    type = Nx.Type.normalize!(opts[:type] || range_type)
-
-    unless min_shape == {} and max_shape == {} do
-      raise ArgumentError,
-            "random_uniform/3 expects min and max to be scalars, got:" <>
-              " min shape: #{inspect(min_shape)} and max shape: #{inspect(max_shape)}"
-    end
-
-    unless Nx.Type.float?(type) or (Nx.Type.integer?(type) and Nx.Type.integer?(range_type)) do
-      raise ArgumentError,
-            "random_uniform/3 expects compatible types, got: #{inspect(type)}" <>
-              " with range #{inspect(range_type)}"
-    end
-
-    {backend, backend_options} = backend_from_options!(opts) || default_backend()
-    backend.random_uniform(%T{shape: shape, type: type, names: names}, min, max, backend_options)
-  end
-
-  @doc false
-  @deprecated "Use Nx.Random instead"
-  def random_normal(tensor_or_shape, opts \\ []) do
-    random_normal(tensor_or_shape, 0.0, 1.0, opts)
-  end
-
-  @doc false
-  @deprecated "Use Nx.Random instead"
-  def random_normal(tensor_or_shape, mu, sigma, opts \\ []) do
-    opts = keyword!(opts, [:type, :names, :backend])
-    %T{type: mu_type, shape: mu_shape} = mu = to_tensor(mu)
-    %T{type: sigma_type, shape: sigma_shape} = sigma = to_tensor(sigma)
-
-    Nx.Shared.raise_vectorization_not_supported(mu, __ENV__.function)
-    Nx.Shared.raise_vectorization_not_supported(sigma, __ENV__.function)
-
-    shape = shape(tensor_or_shape)
-    names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
-    type = Nx.Type.normalize!(opts[:type] || {:f, 32})
-
-    unless mu_shape == {} and sigma_shape == {} do
-      raise ArgumentError,
-            "random_normal/3 expects mu and sigma to be scalars" <>
-              " got: mu shape: #{inspect(mu_shape)} and sigma shape: #{inspect(sigma_shape)}"
-    end
-
-    unless Nx.Type.float?(mu_type) and Nx.Type.float?(sigma_type) do
-      raise ArgumentError,
-            "random_normal/3 expects mu and sigma to be float types," <>
-              " got: mu type: #{inspect(mu_type)} and sigma type: #{inspect(sigma_type)}"
-    end
-
-    unless Nx.Type.float?(type) do
-      raise ArgumentError, "random_normal/3 expects float type, got: #{inspect(type)}"
-    end
-
-    {backend, backend_options} = backend_from_options!(opts) || default_backend()
-    backend.random_normal(%T{shape: shape, type: type, names: names}, mu, sigma, backend_options)
-  end
-
-  @doc false
-  @deprecated "Use Nx.Random.shuffle/2 instead"
-  def shuffle(tensor, opts \\ []) do
-    opts = keyword!(opts, [:axis])
-    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
-
-    if axis = opts[:axis] do
-      axis = Nx.Shape.normalize_axis(shape, axis, names)
-      size = Nx.axis_size(tensor, axis)
-      permutation = random_uniform({size}) |> Nx.argsort()
-      Nx.take(tensor, permutation, axis: axis)
-    else
-      flattened = Nx.flatten(tensor)
-      permutation = flattened |> random_uniform() |> Nx.argsort()
-      flattened |> Nx.take(permutation) |> Nx.reshape(tensor)
-    end
   end
 
   @doc """
@@ -2255,13 +2159,6 @@ defmodule Nx do
   defp chunk_each(dim, data, acc, dims, type) do
     {entry, rest} = chunk(dims, data, type)
     chunk_each(dim - 1, rest, [entry | acc], dims, type)
-  end
-
-  @doc false
-  @deprecated "Use to_batched/3 instead"
-  def to_batched_list(tensor, batch_size, opts \\ []) do
-    Nx.Shared.raise_vectorization_not_supported(tensor, __ENV__.function)
-    tensor |> to_batched(batch_size, opts) |> Enum.to_list()
   end
 
   @doc """
@@ -4062,7 +3959,7 @@ defmodule Nx do
       shape = Nx.Shape.pad(tensor.shape, padding_config)
 
       out = %{tensor | type: output_type, shape: shape}
-      impl!(tensor).pad(out, tensor, pad_value, padding_config)
+      impl!(tensor, pad_value).pad(out, tensor, pad_value, padding_config)
     end)
   end
 
@@ -5824,10 +5721,6 @@ defmodule Nx do
   """
   @doc type: :element
   def pow(left, right), do: element_wise_bin_op(left, right, :pow, & &1)
-
-  @deprecated "Use pow/2 instead"
-  @doc false
-  def power(left, right), do: pow(left, right)
 
   @doc """
   Element-wise remainder of two tensors.
@@ -7704,10 +7597,10 @@ defmodule Nx do
         [0, 2, 4]
       >
 
-      iex> Nx.indexed_put(Nx.tensor([0, 0, 0]), Nx.tensor([[1], [2], [1]]), Nx.tensor([3, 4, 2]))
+      iex> Nx.indexed_put(Nx.tensor([0, 0, 0]), Nx.tensor([[1], [2]]), Nx.tensor([3, 4]))
       #Nx.Tensor<
         s64[3]
-        [0, 2, 4]
+        [0, 3, 4]
       >
 
       iex> t = Nx.iota({1, 2, 3})
@@ -13726,18 +13619,6 @@ defmodule Nx do
     end
   end
 
-  @doc false
-  @deprecated "Use slice_along_axis/4 instead"
-  def slice_axis(tensor, start_index, len, axis, opts \\ []) when is_integer(len) do
-    slice_along_axis(tensor, start_index, len, [axis: axis] ++ opts)
-  end
-
-  @doc false
-  @deprecated "Use sigmoid/1 instead"
-  def logistic(tensor) do
-    sigmoid(tensor)
-  end
-
   @doc """
   Puts the given `slice` into the given `tensor` at the given
   `start_indices`.
@@ -14432,7 +14313,7 @@ defmodule Nx do
   Concatenates tensors along the given axis.
 
   Tensors can be a tuple or any `Nx.Container` or `Nx.LazyContainer`.
-  This means you can easily concatenate all columns in a datafrane
+  This means you can easily concatenate all columns in a dataframe
   and other data structures. For convenience, this function also allows
   a list of tensors to be given, which may be common outside of `defn`.
 
@@ -14631,7 +14512,7 @@ defmodule Nx do
   Stacks a list of tensors with the same shape along a new axis.
 
   Tensors can be a tuple or any `Nx.Container` or `Nx.LazyContainer`.
-  This means you can easily concatenate all columns in a datafrane
+  This means you can easily concatenate all columns in a dataframe
   and other data structures. For convenience, this function also allows
   a list of tensors to be given, which may be common outside of `defn`.
 
@@ -15412,6 +15293,18 @@ defmodule Nx do
     end
   end
 
+  defp parse_type(<<?', ?|, type, ?1, ?'>>) do
+    type =
+      case type do
+        ?u -> :u
+        ?i -> :s
+        ?f -> :f
+        _ -> raise "unsupported numpy type: #{type}"
+      end
+
+    {System.endianness(), {type, 8}}
+  end
+
   defp parse_type(<<?', byte_order, type, size, ?'>>) do
     byte_order =
       case byte_order do
@@ -15689,6 +15582,109 @@ defmodule Nx do
   @spec standard_deviation(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
   def standard_deviation(tensor, opts \\ []) do
     sqrt(variance(tensor, opts))
+  end
+
+  @doc """
+  A shortcut to `covariance/3` with either `opts` or `mean` as second argument.
+  """
+  @doc type: :aggregation
+  @spec covariance(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
+  def covariance(tensor, opts \\ [])
+
+  @spec covariance(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
+  def covariance(tensor, opts) when is_list(opts),
+    do: covariance(tensor, Nx.mean(tensor, axes: [-2]), opts)
+
+  @spec covariance(tensor :: Nx.Tensor.t(), mean :: Nx.Tensor.t()) :: Nx.Tensor.t()
+  def covariance(tensor, mean), do: covariance(tensor, mean, [])
+
+  @doc """
+  Computes the covariance matrix of the input tensor.
+
+  The covariance of two random variables X and Y is calculated as $Cov(X, Y) = \\frac{1}{N}\\sum_{i=0}^{N-1}{(X_i - \\overline{X}) * (Y_i - \\overline{Y})}$.
+
+  The tensor must be at least of rank 2, with shape `{n, d}`. Any additional
+  dimension will be treated as batch dimensions.
+
+  The column mean can be provided as the second argument and it must be
+  a tensor of shape `{..., d}`, where the batch shape is broadcastable with
+  that of the input tensor. If not provided, the mean is estimated using `Nx.mean/2`.
+
+  If the `:ddof` (delta degrees of freedom) option is given, the divisor `n - ddof`
+  is used for the sum of the products.
+
+  ## Examples
+
+      iex> Nx.covariance(Nx.tensor([[1, 2], [3, 4], [5, 6]]))
+      #Nx.Tensor<
+        f32[2][2]
+        [
+          [2.6666667461395264, 2.6666667461395264],
+          [2.6666667461395264, 2.6666667461395264]
+        ]
+      >
+
+      iex> Nx.covariance(Nx.tensor([[[1, 2], [3, 4], [5, 6]], [[7, 8], [9, 10], [11, 12]]]))
+      #Nx.Tensor<
+        f32[2][2][2]
+        [
+          [
+            [2.6666667461395264, 2.6666667461395264],
+            [2.6666667461395264, 2.6666667461395264]
+          ],
+          [
+            [2.6666667461395264, 2.6666667461395264],
+            [2.6666667461395264, 2.6666667461395264]
+          ]
+        ]
+      >
+
+      iex> Nx.covariance(Nx.tensor([[1, 2], [3, 4], [5, 6]]), ddof: 1)
+      #Nx.Tensor<
+        f32[2][2]
+        [
+          [4.0, 4.0],
+          [4.0, 4.0]
+        ]
+      >
+
+      iex> Nx.covariance(Nx.tensor([[1, 2], [3, 4], [5, 6]]), Nx.tensor([4, 3]))
+      #Nx.Tensor<
+        f32[2][2]
+        [
+          [3.6666667461395264, 1.6666666269302368],
+          [1.6666666269302368, 3.6666667461395264]
+        ]
+      >
+  """
+  @doc type: :aggregation
+  @spec covariance(tensor :: Nx.Tensor.t(), mean :: Nx.Tensor.t(), opts :: Keyword.t()) ::
+          Nx.Tensor.t()
+  def covariance(tensor, mean, opts) do
+    tensor = to_tensor(tensor)
+    mean = to_tensor(mean)
+    opts = keyword!(opts, ddof: 0)
+    tensor_rank = Nx.rank(tensor)
+
+    if tensor_rank < 2 do
+      raise ArgumentError, "expected input tensor of rank at least 2, got #{tensor_rank}"
+    end
+
+    if Nx.rank(mean) == 0 do
+      raise ArgumentError, "expected mean of rank at least 1, got 0"
+    end
+
+    ddof = opts[:ddof]
+
+    if not is_integer(ddof) or ddof < 0 do
+      raise ArgumentError, "expected ddof to be a non-negative integer, got #{ddof}"
+    end
+
+    tensor = tensor |> subtract(new_axis(mean, -2)) |> rename(nil)
+    conj = if Nx.Type.complex?(Nx.type(tensor)), do: Nx.conjugate(tensor), else: tensor
+    batch_axes = 0..(Nx.rank(tensor) - 3)//1 |> Enum.to_list()
+    total = Nx.axis_size(tensor, -2)
+    Nx.dot(conj, [-2], batch_axes, tensor, [-2], batch_axes) |> divide(total - ddof)
   end
 
   @doc """

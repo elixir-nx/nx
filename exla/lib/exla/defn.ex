@@ -6,6 +6,8 @@ defmodule EXLA.Defn do
   alias Nx.Defn.{Composite, Expr, Tree}
   alias Nx.Tensor, as: T
 
+  alias EXLA.MLIR.Value
+
   @doc false
   def __partitions_options__(options) do
     client_name = Keyword.get_lazy(options, :client, &EXLA.Client.default_name/0)
@@ -414,7 +416,8 @@ defmodule EXLA.Defn do
             end)
 
           inputs_and_shapes = Enum.reverse(reverse_inputs_and_shapes)
-          builder = EXLA.Builder.new(inspect(key))
+          mode = options[:compiler_mode] || :xla
+          builder = EXLA.Builder.new(inspect(key), inputs_and_shapes, outputs, mode)
 
           outfeed =
             outfeed
@@ -459,6 +462,7 @@ defmodule EXLA.Defn do
       :telemetry.execute([:exla, :compilation], measurements, %{key: key})
     end
 
+    outfeed = Outfeed.with_user_hooks(outfeed, hooks)
     {executable, used_inputs, outputs, outfeed, extra, debug?}
   end
 
@@ -622,30 +626,14 @@ defmodule EXLA.Defn do
       {} ->
         to_constant(state.builder, Nx.to_number(tensor), tensor.type)
 
+      shape when is_struct(state.builder, EXLA.MLIR.Function) ->
+        shape = EXLA.Shape.make_shape(tensor.type, shape)
+        Value.constant_from_binary(state.builder, Nx.to_binary(tensor), shape)
+
       shape ->
         shape = EXLA.Shape.make_shape(tensor.type, shape)
         EXLA.Op.constant_from_binary(state.builder, Nx.to_binary(tensor), shape)
     end
-  end
-
-  defp to_operator(:random_uniform, [min, max], %{type: type, shape: shape}, _state) do
-    if match?({int, size} when int in [:s, :u] and size < 32, type) do
-      raise ArgumentError,
-            "Nx.random_uniform/4 for EXLA requires signed and unsigned tensors to be " <>
-              "at least of size 32, got: #{elem(type, 1)}"
-    end
-
-    min = to_type(min, type)
-    max = to_type(max, type)
-    shape = EXLA.Shape.make_shape(type, shape)
-    EXLA.Op.rng_uniform(min, max, shape)
-  end
-
-  defp to_operator(:random_normal, [mu, sigma], %{type: type, shape: shape}, _state) do
-    mu = to_type(mu, type)
-    sigma = to_type(sigma, type)
-    shape = EXLA.Shape.make_shape(type, shape)
-    EXLA.Op.rng_normal(mu, sigma, shape)
   end
 
   defp to_operator(:iota, [axis], %{type: type, shape: shape}, state) do
@@ -665,6 +653,10 @@ defmodule EXLA.Defn do
 
   ## to_operator shape
 
+  defp to_operator(:reshape, [%Value{} = op], %{shape: shape}, _state) do
+    Value.reshape(op, shape)
+  end
+
   defp to_operator(:reshape, [op], %{shape: shape}, _state) do
     EXLA.Op.reshape(op, shape)
   end
@@ -675,6 +667,10 @@ defmodule EXLA.Defn do
 
   defp to_operator(:broadcast, [op, _shape, axes], ans, _state) do
     EXLA.Op.broadcast_in_dim(op, ans.shape, List.to_tuple(axes))
+  end
+
+  defp to_operator(:transpose, [%Value{} = op, axes], _ans, _state) do
+    Value.transpose(op, axes)
   end
 
   defp to_operator(:transpose, [op, axes], _ans, _state) do
@@ -696,6 +692,31 @@ defmodule EXLA.Defn do
 
   defp to_operator(:elem, [op, index], _ans, _state) do
     EXLA.Op.get_tuple_element(op, index)
+  end
+
+  defp to_operator(
+         :dot,
+         [
+           %Value{} = left,
+           contract_axes1,
+           batch_axes1,
+           %Value{} = right,
+           contract_axes2,
+           batch_axes2
+         ],
+         %{type: type, shape: shape},
+         state
+       ) do
+    precision = state.precision
+    output_shape = EXLA.Shape.make_shape(type, shape)
+
+    Value.dot_general(
+      output_shape,
+      left,
+      right,
+      {contract_axes1, batch_axes1, contract_axes2, batch_axes2},
+      precision
+    )
   end
 
   defp to_operator(
@@ -819,15 +840,41 @@ defmodule EXLA.Defn do
 
   ## to_operator element-wise
 
+  defp to_operator(:negate, [%Value{} = op], _ans, _state), do: Value.negate(op)
   defp to_operator(:negate, [op], _ans, _state), do: EXLA.Op.negate(op)
 
+  defp to_operator(:abs, [%Value{} = op], _ans, _state), do: Value.abs(op)
   defp to_operator(:abs, [op], _ans, _state), do: EXLA.Op.abs(op)
+
+  defp to_operator(:sign, [%Value{} = op], %{type: type}, _state) do
+    case type do
+      # {:u, _} -> Value.min(op, Value.constant_r0(state.builder, 1, type))
+      {:u, _} -> raise "sign not implemented yet for unsigned inputs"
+      _ -> Value.sign(op)
+    end
+  end
 
   defp to_operator(:sign, [op], %{type: type}, state) do
     case type do
       {:u, _} -> EXLA.Op.min(op, EXLA.Op.constant_r0(state.builder, 1, type))
       _ -> EXLA.Op.sign(op)
     end
+  end
+
+  defp to_operator(
+         :right_shift,
+         [%Value{} = left, %Value{} = right],
+         %{type: type},
+         _state
+       ) do
+    # dims = broadcast_axes(op_shape(left), op_shape(right))
+
+    op =
+      if match?({:u, _}, type),
+        do: :right_shift_logical,
+        else: :right_shift_arithmetic
+
+    apply(Value, op, [to_type(left, type), to_type(right, type)])
   end
 
   defp to_operator(:right_shift, [left, right], %{type: type}, _state) do
@@ -844,6 +891,11 @@ defmodule EXLA.Defn do
   @bin_op [:add, :subtract, :multiply, :min, :max, :remainder, :pow, :divide, :atan2] ++
             [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift]
 
+  defp to_operator(op, [%Value{} = left, %Value{} = right], out, _state)
+       when op in @bin_op do
+    apply(Value, op, [to_type(left, out.type), to_type(right, out.type)])
+  end
+
   defp to_operator(op, [left, right], %{type: type}, _state) when op in @bin_op do
     dims = broadcast_axes(op_shape(left), op_shape(right))
     apply(EXLA.Op, op, [to_type(left, type), to_type(right, type), dims])
@@ -855,6 +907,19 @@ defmodule EXLA.Defn do
   end
 
   @bin_comp_op [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
+
+  defp to_operator(op, [%Value{} = left, %Value{} = right], _ans, _state)
+       when op in @bin_comp_op do
+    # The answer type is always {:u, 8} but we need cast the inputs
+    # to the same type which is not necessarily the answer type.
+    # left_shape = EXLA.Op.get_shape(left)
+    # right_shape = EXLA.Op.get_shape(right)
+    # type = merge_type(left_shape.dtype, right_shape.dtype)
+    # dims = broadcast_axes(left_shape.dims, right_shape.dims)
+    # apply(EXLA.Op, op, [to_type(left, type), to_type(right, type), dims])
+    # TO-DO (mlir): apply type casting
+    apply(Value, op, [left, right])
+  end
 
   defp to_operator(op, [left, right], _ans, _state) when op in @bin_comp_op do
     # The answer type is always {:u, 8} but we need cast the inputs
@@ -881,6 +946,10 @@ defmodule EXLA.Defn do
               [:asin, :atan, :floor, :ceil, :round, :acosh, :asinh, :atanh, :erf] ++
               [:erfc, :erf_inv, :conjugate]
 
+  defp to_operator(op, [%Value{} = arg], %{type: type}, _state) when op in @unary_op do
+    apply(Value, op, [to_type(arg, type)])
+  end
+
   defp to_operator(op, [arg], %{type: type}, _state) when op in @unary_op do
     apply(EXLA.Op, op, [to_type(arg, type)])
   end
@@ -888,8 +957,14 @@ defmodule EXLA.Defn do
   defp to_operator(:fft, args, out, state), do: fft(&EXLA.Op.fft/2, args, out, state)
   defp to_operator(:ifft, args, out, state), do: fft(&EXLA.Op.ifft/2, args, out, state)
 
+  defp to_operator(:is_nan, [%Value{} = arg], _out, _state),
+    do: Value.is_nan(arg)
+
   defp to_operator(:is_nan, [arg], out, state),
     do: EXLA.Op.is_nan(arg, op_type(arg), out.shape, Nx.axes(out), state)
+
+  defp to_operator(:is_infinity, [%Value{} = arg], _out, _state),
+    do: Value.is_infinity(arg)
 
   defp to_operator(:is_infinity, [arg], out, state),
     do: EXLA.Op.is_infinity(arg, op_type(arg), out.shape, Nx.axes(out), state)
@@ -1113,6 +1188,19 @@ defmodule EXLA.Defn do
     EXLA.Op.clamp(operand, min, max)
   end
 
+  defp to_operator(:slice, [%Value{} = tensor, start_indices, lengths, strides], ans, _state) do
+    all_static? = Enum.all?(start_indices, &is_integer/1)
+
+    if all_static? do
+      limit_indices = Enum.zip_with(start_indices, lengths, fn i, len -> i + len end)
+      Value.slice(tensor, start_indices, limit_indices, strides)
+    else
+      zeros = List.duplicate(0, tuple_size(ans.shape))
+      slice = Value.dynamic_slice(tensor, start_indices, lengths)
+      Value.slice(slice, zeros, lengths, strides)
+    end
+  end
+
   defp to_operator(:slice, [tensor, start_indices, lengths, strides], ans, _state) do
     all_static? = Enum.all?(start_indices, &is_integer/1)
 
@@ -1211,6 +1299,10 @@ defmodule EXLA.Defn do
       collapsed_slice_dims,
       start_index_map
     )
+  end
+
+  defp to_operator(:reverse, [%Value{} = tensor, axes], _ans, _state) do
+    Value.reverse(tensor, axes)
   end
 
   defp to_operator(:reverse, [tensor, axes], _ans, _state) do
@@ -1752,11 +1844,22 @@ defmodule EXLA.Defn do
 
   ## Op Helpers
 
-  defp op_type(op), do: EXLA.Op.get_shape(op).dtype
-  defp op_shape(op), do: EXLA.Op.get_shape(op).dims
+  defp op_type(%EXLA.Op{} = op), do: EXLA.Op.get_shape(op).dtype
+  defp op_type(%Value{} = op), do: Value.get_shape(op).dtype
 
-  defp to_type(op, type) do
+  defp op_shape(%EXLA.Op{} = op), do: EXLA.Op.get_shape(op).dims
+  defp op_shape(%Value{} = op), do: Value.get_shape(op).dims
+
+  defp to_type(%EXLA.Op{} = op, type) do
     if op_type(op) == type, do: op, else: EXLA.Op.convert_element_type(op, type)
+  end
+
+  defp to_type(%Value{} = op, type) do
+    if op_type(op) == type do
+      op
+    else
+      Value.convert(op, type)
+    end
   end
 
   # Inside cond/while, we need to convert pred to u8.
@@ -1776,13 +1879,21 @@ defmodule EXLA.Defn do
   defp to_nx_type({:pred, 8}), do: {:u, 8}
   defp to_nx_type(type), do: type
 
-  defp to_constant(builder, constant, type) do
+  defp to_constant(%EXLA.Builder{} = builder, constant, type) do
     EXLA.Op.constant_r0(builder, constant, type)
+  end
+
+  defp to_constant(%EXLA.MLIR.Function{} = function, constant, type) do
+    Value.constant_r0(function, constant, type)
   end
 
   defp subbuilder(%EXLA.Builder{name: name} = builder, desc) do
     suffix = System.unique_integer([:positive])
     EXLA.Builder.new(builder, name <> "-" <> desc <> "-" <> Integer.to_string(suffix))
+  end
+
+  defp subbuilder(%EXLA.MLIR.Function{} = function, _description) do
+    function
   end
 
   # Helpers

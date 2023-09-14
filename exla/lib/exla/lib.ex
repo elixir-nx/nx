@@ -5,6 +5,8 @@ defmodule EXLA.Lib do
 
   alias EXLA.{Builder, Op, Shape}
 
+  alias EXLA.MLIR.Value
+
   @doc """
   Element-wise tangent function.
   """
@@ -15,7 +17,7 @@ defmodule EXLA.Lib do
   @doc """
   Builds iota along axis.
   """
-  def iota(builder, shape, nil) do
+  def iota(%Builder{} = builder, shape, nil) do
     total_elems = Nx.size(shape.dims)
 
     Op.reshape(
@@ -24,8 +26,21 @@ defmodule EXLA.Lib do
     )
   end
 
-  def iota(builder, shape, axis) do
+  def iota(%Builder{} = builder, shape, axis) do
     Op.iota(builder, shape, axis)
+  end
+
+  def iota(%EXLA.MLIR.Function{} = function, shape, nil) do
+    total_elems = Nx.size(shape.dims)
+
+    Value.reshape(
+      Value.iota(function, EXLA.Shape.make_shape(shape.dtype, {total_elems}), 0),
+      shape.dims
+    )
+  end
+
+  def iota(%EXLA.MLIR.Function{} = function, shape, axis) do
+    Value.iota(function, shape, axis)
   end
 
   @doc """
@@ -145,7 +160,6 @@ defmodule EXLA.Lib do
 
   defp min_binary({:pred, 8}), do: <<0>>
   defp min_binary(type), do: Nx.Type.min_binary(type)
-
   defp max_binary({:pred, 8}), do: <<1>>
   defp max_binary(type), do: Nx.Type.max_binary(type)
 

@@ -115,8 +115,10 @@ defmodule EXLA.Defn.APITest do
     deftransformp(merge_transform(params, init_map), do: Map.merge(params, init_map))
 
     defn init() do
-      %{"x" => Nx.random_uniform({}), "y" => Nx.random_uniform({})}
+      %{"x" => rand(), "y" => rand()}
     end
+
+    deftransformp rand, do: :rand.uniform()
 
     test "considers map keys in cache keys" do
       assert_equal(merge(%{"x" => 10})["x"], Nx.tensor(10))
@@ -308,6 +310,15 @@ defmodule EXLA.Defn.APITest do
       )
 
       assert_receive {:tag, tensor}
+      assert_equal(tensor, Nx.tensor(5))
+
+      # Executing again with another tag works
+      assert_equal(
+        EXLA.jit(&hook_default/2, hooks: %{default: send_to_self(:another_tag)}).(2, 3),
+        Nx.tensor(5)
+      )
+
+      assert_receive {:another_tag, tensor}
       assert_equal(tensor, Nx.tensor(5))
     end
 

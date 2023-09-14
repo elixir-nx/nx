@@ -389,17 +389,7 @@ defmodule Nx.Defn do
 
   """
   def jit(fun, opts \\ []) when is_function(fun) and is_list(opts) do
-    if Keyword.keyword?(opts) do
-      wrap(fun, &jit_apply(fun, &1, opts))
-    else
-      IO.warn("jit/3 is deprecated, use jit/2 instead")
-      jit_apply(fun, opts, [])
-    end
-  end
-
-  @deprecated "Use jit/2 instead"
-  def jit(fun, args, opts) when is_function(fun) and is_list(args) and is_list(opts) do
-    jit_apply(fun, args, opts)
+    wrap(fun, &jit_apply(fun, &1, opts))
   end
 
   @doc """
@@ -442,16 +432,6 @@ defmodule Nx.Defn do
     {fun, params, _templates, flatten} = Nx.Defn.Compiler.to_lazy_params(fun, args)
     [res] = Nx.Defn.Compiler.__jit__(fun, params, [flatten], opts)
     res
-  end
-
-  @deprecated "Use jit/2 or jit_apply/3 with the :on_conflict option"
-  def jit_or_apply(fun, args, opts \\ [])
-      when is_function(fun) and is_list(args) and is_list(opts) do
-    if Nx.Defn.Compiler.current() do
-      apply(fun, args)
-    else
-      jit(fun, args, opts)
-    end
   end
 
   @doc """

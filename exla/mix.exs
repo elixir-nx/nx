@@ -2,7 +2,7 @@ defmodule EXLA.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx"
-  @version "0.5.1"
+  @version "0.7.0-dev"
 
   def project do
     [
@@ -59,13 +59,13 @@ defmodule EXLA.MixProject do
 
   defp deps do
     [
-      # {:nx, "~> 0.5.1"},
+      # {:nx, "~> 0.6.0"},
       {:nx, path: "../nx"},
       {:telemetry, "~> 0.4.0 or ~> 1.0"},
-      {:xla, "~> 0.4.4", runtime: false},
+      {:xla, "~> 0.5.0", runtime: false},
       {:elixir_make, "~> 0.6", runtime: false},
       {:benchee, "~> 1.0", only: :dev},
-      {:ex_doc, "~> 0.29.0", only: :docs}
+      {:ex_doc, "~> 0.29", only: :docs}
     ]
   end
 

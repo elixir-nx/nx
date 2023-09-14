@@ -1988,6 +1988,11 @@ defmodule NxTest do
         end
       )
     end
+
+    test "works with infinities" do
+      t = Nx.tensor([1.0, 2.0, 3.0])
+      assert t == Nx.clip(t, Nx.Constants.neg_infinity(), Nx.Constants.infinity())
+    end
   end
 
   describe "concatenate/2" do
@@ -2532,6 +2537,9 @@ defmodule NxTest do
 
       assert Nx.load_numpy!(File.read!("test/fixtures/numpy/2d_float32.npy")) ==
                Nx.tensor([[1, 2], [3, 4], [5, 6]], type: {:f, 32})
+
+      assert Nx.load_numpy!(File.read!("test/fixtures/numpy/1d_uint8.npy")) ==
+               Nx.tensor([1, 2, 3], type: {:u, 8})
     end
   end
 
@@ -2674,6 +2682,72 @@ defmodule NxTest do
     test "uses optional keep axes" do
       t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
       assert Nx.standard_deviation(t, keep_axes: true) == Nx.tensor([[1.7078251838684082]])
+    end
+  end
+
+  describe "covariance/1" do
+    test "calculates the covariance of a tensor" do
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+
+      assert Nx.covariance(t) ==
+               Nx.tensor([
+                 [1.5555554628372192, 2.444444417953491],
+                 [2.444444417953491, 4.222222328186035]
+               ])
+    end
+
+    test "with tensor batch" do
+      t = Nx.tensor([[[4, 5], [2, 3], [1, 0]], [[10, 11], [8, 9], [7, 6]]])
+
+      assert Nx.covariance(t) ==
+               Nx.tensor([
+                 [
+                   [1.5555554628372192, 2.444444417953491],
+                   [2.444444417953491, 4.222222328186035]
+                 ],
+                 [
+                   [1.5555554628372192, 2.444444417953491],
+                   [2.444444417953491, 4.222222328186035]
+                 ]
+               ])
+    end
+
+    test "with mean" do
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+      mean = Nx.tensor([3, 2])
+
+      assert Nx.covariance(t, mean) ==
+               Nx.tensor([
+                 [2.0, 2.0],
+                 [2.0, 4.666666507720947]
+               ])
+    end
+
+    test "with mean batch" do
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+      mean = Nx.tensor([[3, 2], [2, 3]])
+
+      assert Nx.covariance(t, mean) ==
+               Nx.tensor([
+                 [
+                   [2.0, 2.0],
+                   [2.0, 4.666666507720947]
+                 ],
+                 [
+                   [1.6666666269302368, 2.3333332538604736],
+                   [2.3333332538604736, 4.333333492279053]
+                 ]
+               ])
+    end
+
+    test "uses optional ddof" do
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+
+      assert Nx.covariance(t, ddof: 1) ==
+               Nx.tensor([
+                 [2.3333332538604736, 3.6666667461395264],
+                 [3.6666667461395264, 6.333333492279053]
+               ])
     end
   end
 

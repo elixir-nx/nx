@@ -1,6 +1,8 @@
 defmodule EXLA.BackendTest do
   use EXLA.Case, async: true
 
+  import Nx, only: [sigil_V: 2]
+
   setup do
     Nx.default_backend(EXLA.Backend)
     :ok
@@ -22,7 +24,8 @@ defmodule EXLA.BackendTest do
     sigmoid: 1,
     fft: 2,
     ifft: 2,
-    logsumexp: 2
+    logsumexp: 2,
+    conjugate: 1
   ]
 
   @temporarily_broken_doctests [
@@ -38,6 +41,23 @@ defmodule EXLA.BackendTest do
   @unrelated_doctests [
     default_backend: 1
   ]
+
+  case EXLAHelpers.client() do
+    %EXLA.Client{platform: :cuda} ->
+      @precision_error_doctests [
+                                  standard_deviation: 2,
+                                  rsqrt: 1,
+                                  acos: 1,
+                                  variance: 2,
+                                  atan2: 2,
+                                  weighted_mean: 3,
+                                  cbrt: 1
+                                ] ++ @precision_error_doctests
+      @inherently_unsupported_doctests [conv: 3] ++ @inherently_unsupported_doctests
+
+    _ ->
+      nil
+  end
 
   doctest Nx,
     except:
@@ -126,6 +146,13 @@ defmodule EXLA.BackendTest do
     end
   end
 
+  test "Nx.pad/3 with multiple backends" do
+    t = Nx.tensor([1, 1], backend: Nx.BinaryBackend)
+    pad_value = Nx.tensor(0, backend: EXLA.Backend)
+    result = Nx.pad(t, pad_value, [{1, 1, 0}])
+    assert_equal(result, Nx.tensor([0, 1, 1, 0]))
+  end
+
   test "Nx.LinAlg.svd/2" do
     t = Nx.iota({4, 4})
     assert {u, s, vt} = Nx.LinAlg.svd(t, max_iter: 10_000)
@@ -174,5 +201,10 @@ defmodule EXLA.BackendTest do
                      Nx.backend_transfer(Nx.tensor([1, 2]), {EXLA.Backend, client: :unknown})
                    end
     end
+  end
+
+  test "conjugate" do
+    assert inspect(Nx.conjugate(~V[1 2-0i 3+0i 0-i 0-2i])) =~
+             "1.0-0.0i, 2.0+0.0i, 3.0-0.0i, 0.0+1.0i, 0.0+2.0i"
   end
 end

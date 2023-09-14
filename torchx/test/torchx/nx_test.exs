@@ -553,42 +553,6 @@ defmodule Torchx.NxTest do
         )
       )
     end
-
-    test "random_uniform" do
-      t = Nx.random_uniform({30, 50})
-
-      t
-      |> Nx.backend_transfer()
-      |> Nx.to_flat_list()
-      |> Enum.all?(&(&1 > 0.0 and &1 < 1.0))
-    end
-
-    test "random_uniform with range" do
-      t = Nx.random_uniform({30, 50}, 7, 12)
-
-      t
-      |> Nx.backend_transfer()
-      |> Nx.to_flat_list()
-      |> Enum.all?(&(&1 > 7.0 and &1 < 12.0))
-    end
-
-    test "random_normal" do
-      t = Nx.random_normal({30, 50})
-
-      t
-      |> Nx.backend_transfer()
-      |> Nx.to_flat_list()
-      |> Enum.all?(&(&1 > 0.0 and &1 < 1.0))
-    end
-
-    test "random_normal with range" do
-      t = Nx.random_normal({30, 50}, 7.0, 3.0)
-
-      t
-      |> Nx.backend_transfer()
-      |> Nx.to_flat_list()
-      |> Enum.all?(&(&1 > 7.0 - 3.0 and &1 < 7.0 + 3.0))
-    end
   end
 
   describe "rounding error tests" do

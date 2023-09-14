@@ -7,6 +7,70 @@ defmodule EXLA.NIF do
     :erlang.load_nif(path, 0)
   end
 
+  def new_mlir_module, do: :erlang.nif_error(:undef)
+
+  def create_mlir_function(_module, _name, _arg_types, _ret_type), do: :erlang.nif_error(:undef)
+
+  def get_mlir_function_arguments(_function), do: :erlang.nif_error(:undef)
+
+  @bin_ops [:add, :subtract, :multiply, :divide, :pow, :min] ++
+             [:max, :remainder, :atan2, :equal, :not_equal] ++
+             [:less, :less_equal, :greater, :greater_equal] ++
+             [:bitwise_and, :bitwise_or, :bitwise_xor] ++
+             [:left_shift, :right_shift_arithmetic, :right_shift_logical]
+
+  for op <- @bin_ops do
+    mlir_op = :"mlir_#{op}"
+    def unquote(mlir_op)(_function, _lhs, _rhs), do: :erlang.nif_error(:undef)
+  end
+
+  @unary_ops [:abs, :exp, :expm1, :floor, :ceil, :round] ++
+               [:log, :log1p, :sigmoid, :sign, :cos] ++
+               [:sin, :acos, :asin, :atan, :cosh, :sinh] ++
+               [:tanh, :acosh, :asinh, :atanh, :sqrt, :cbrt] ++
+               [:bitwise_not, :erf, :erfc, :erf_inv] ++
+               [:is_infinity, :is_nan, :rsqrt, :negate, :count_leading_zeros] ++
+               [:population_count]
+
+  for op <- @unary_ops do
+    mlir_op = :"mlir_#{op}"
+    def unquote(mlir_op)(_function, _operand), do: :erlang.nif_error(:undef)
+  end
+
+  def mlir_reshape(_function, _operand, _shape), do: :erlang.nif_error(:undef)
+  def mlir_reverse(_function, _operand, _shape), do: :erlang.nif_error(:undef)
+  def mlir_transpose(_function, _operand, _shape), do: :erlang.nif_error(:undef)
+  def mlir_slice(_function, _operand, _starts, _limits, _strides), do: :erlang.nif_error(:undef)
+  def mlir_dynamic_slice(_function, _operand, _starts, _lengths), do: :erlang.nif_error(:undef)
+  def mlir_tuple(_function, _vals), do: :erlang.nif_error(:undef)
+  def mlir_get_tuple_element(_function, _tuple, _index), do: :erlang.nif_error(:undef)
+
+  def mlir_build(_function, _root), do: :erlang.nif_error(:undef)
+
+  def mlir_compile(
+        _client,
+        _computation,
+        _argument_layouts,
+        _num_replicas,
+        _num_partitions,
+        _use_spmd,
+        _device_id
+      ),
+      do: :erlang.nif_error(:undef)
+
+  def mlir_convert(_function, _tensor, _type), do: :erlang.nif_error(:undef)
+
+  def mlir_get_shape(_tensor), do: :erlang.nif_error(:undef)
+
+  def dump_mlir_module(_builder), do: :erlang.nif_error(:undef)
+
+  def mlir_iota(_function, _shape, _dim), do: :erlang.nif_error(:undef)
+  def mlir_constant_r0(_function, _value, _type), do: :erlang.nif_error(:undef)
+  def mlir_constant_from_binary(_function, _data, _type, _dims), do: :erlang.nif_error(:undef)
+
+  def mlir_dot_general(_function, _shape, _lhs, _rhs, _dims, _precision),
+    do: :erlang.nif_error(:undef)
+
   def new_builder(_name),
     do: :erlang.nif_error(:undef)
 
@@ -41,7 +105,7 @@ defmodule EXLA.NIF do
 
   unary_ops =
     [:exp, :expm1, :log, :log1p, :sigmoid, :cos, :sin, :tanh, :real, :imag, :erf_inv] ++
-      [:is_finite, :conj, :acos, :asin, :atan, :cosh, :sinh, :erf, :erfc] ++
+      [:conj, :acos, :asin, :atan, :cosh, :sinh, :erf, :erfc] ++
       [:acosh, :asinh, :atanh, :sqrt, :rsqrt, :cbrt, :is_nan, :is_infinity, :negate, :sign, :abs] ++
       [:bitwise_not, :population_count, :count_leading_zeros, :floor, :ceil, :round]
 
@@ -295,4 +359,8 @@ defmodule EXLA.NIF do
 
   def start_log_sink(_sink_pid),
     do: :erlang.nif_error(:undef)
+
+  def get_c_api_client(_device_type), do: :erlang.nif_error(:undef)
+
+  def load_pjrt_plugin(_device_type, _library_path), do: :erlang.nif_error(:undef)
 end

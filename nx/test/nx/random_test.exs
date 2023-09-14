@@ -154,6 +154,51 @@ defmodule Nx.RandomTest do
       assert Nx.Random.normal_split(key, 0, 100, type: :f64) ==
                Nx.tensor(-0.7426618728545261, type: :f64)
     end
+
+    test "multivariate_normal" do
+      key = Nx.Random.key(12)
+
+      # zero mean and identity covariance
+      assert Nx.Random.multivariate_normal_split(
+               key,
+               Nx.tensor([0.0], type: :f32),
+               Nx.eye(1, type: :f32)
+             ) == Nx.tensor([-0.5135871767997742], type: :f32)
+
+      assert Nx.Random.multivariate_normal_split(
+               key,
+               Nx.tensor([0.0, 0.0], type: :f32),
+               Nx.eye(2, type: :f32)
+             ) == Nx.tensor([0.37033146619796753, -0.9389335513114929], type: :f32)
+
+      # int to float cast
+      assert Nx.Random.multivariate_normal_split(key, Nx.tensor([0, 0]), Nx.eye(2)) ==
+               Nx.tensor([0.37033146619796753, -0.9389335513114929], type: :f32)
+
+      # f32 to bf16 downcast
+      assert Nx.Random.multivariate_normal_split(
+               key,
+               Nx.tensor([0.0, 0.0], type: :f32),
+               Nx.eye(2, type: :f32),
+               type: :bf16
+             ) == Nx.tensor([0.0146484375, 0.1318359375], type: :bf16)
+
+      # f32 to f16 downcast
+      assert Nx.Random.multivariate_normal_split(
+               key,
+               Nx.tensor([0.0, 0.0], type: :f32),
+               Nx.eye(2, type: :f32),
+               type: :f16
+             ) == Nx.tensor([0.037322998046875, 0.1455078125], type: :f16)
+
+      # upcast
+      assert Nx.Random.multivariate_normal_split(
+               key,
+               Nx.tensor([0.0, 0.0], type: :f32),
+               Nx.eye(2, type: :f32),
+               type: :f64
+             ) == Nx.tensor([-1.3117988877107423, -0.708217598850204], type: :f64)
+    end
   end
 
   describe "shapes" do
@@ -176,6 +221,19 @@ defmodule Nx.RandomTest do
       tensor = Nx.Random.normal_split(key, 0, 100, names: [:foo, :bar], shape: {10, 10})
       assert tensor.names == [:foo, :bar]
       assert tensor.shape == {10, 10}
+    end
+
+    test "multivariate_normal" do
+      key = Nx.Random.key(12)
+
+      tensor =
+        Nx.Random.multivariate_normal_split(key, Nx.tensor([0, 0]), Nx.eye(2),
+          names: [:foo, :bar, :baz],
+          shape: {10, 10}
+        )
+
+      assert tensor.names == [:foo, :bar, :baz]
+      assert tensor.shape == {10, 10, 2}
     end
   end
 
@@ -252,6 +310,29 @@ defmodule Nx.RandomTest do
 
       assert_all_close(Nx.mean(normal), 10, rtol: 0.1)
       assert_all_close(Nx.standard_deviation(normal), 5, rtol: 0.1)
+    end
+
+    test "multivariate_normal properties" do
+      key = Nx.Random.key(:rand.uniform(10_000))
+
+      mean = Nx.tensor([10, 10])
+      covariance = Nx.tensor([[25, 25], [25, 25]])
+
+      multivariate_normal =
+        Nx.Random.multivariate_normal_split(
+          key,
+          mean,
+          covariance,
+          shape: {1_000}
+        )
+
+      assert_all_close(Nx.mean(multivariate_normal, axes: [0]), mean, rtol: 0.1)
+
+      assert_all_close(
+        Nx.covariance(multivariate_normal, mean),
+        covariance,
+        rtol: 0.1
+      )
     end
   end
 end

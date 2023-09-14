@@ -65,6 +65,12 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def parameter(%EXLA.MLIR.Function{} = function, i, _shape, _name) do
+    function
+    |> EXLA.MLIR.Function.get_arguments()
+    |> Enum.fetch!(i)
+  end
+
   @doc """
   Builds a tuple with the given elements.
   """
@@ -72,6 +78,12 @@ defmodule EXLA.Op do
     element_refs = Enum.map(elements, & &1.ref)
     ref = EXLA.NIF.tuple(builder, element_refs) |> unwrap!()
     %Op{builder: builder, ref: ref}
+  end
+
+  def tuple(%EXLA.MLIR.Function{} = function, elements) when is_list(elements) do
+    elements
+    |> Enum.map(fn %{function: ^function} = e -> e end)
+    |> EXLA.MLIR.Value.tuple()
   end
 
   @doc """
@@ -224,6 +236,10 @@ defmodule EXLA.Op do
   def get_tuple_element(%Op{ref: operand} = op, index) when is_integer(index) do
     ref = EXLA.NIF.get_tuple_element(operand, index) |> unwrap!()
     %{op | ref: ref}
+  end
+
+  def get_tuple_element(%EXLA.MLIR.Value{} = operand, index) when is_integer(index) do
+    EXLA.MLIR.Value.get_tuple_element(operand, index)
   end
 
   def conditional(
@@ -803,6 +819,11 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def create_token(%EXLA.MLIR.Function{} = function) do
+    # TO-DO (mlir): actually do something here
+    function
+  end
+
   def create_token(%Builder{ref: builder}) do
     ref = EXLA.NIF.create_token(builder) |> unwrap!()
     %Op{builder: builder, ref: ref}
@@ -816,11 +837,6 @@ defmodule EXLA.Op do
   def outfeed(%Op{builder: builder, ref: operand}, %Op{builder: builder, ref: token}) do
     shape_ref = EXLA.NIF.get_shape(builder, operand) |> unwrap!()
     ref = EXLA.NIF.outfeed(operand, token, shape_ref) |> unwrap!()
-    %Op{builder: builder, ref: ref}
-  end
-
-  def outfeed(%Op{builder: builder, ref: operand}) do
-    ref = EXLA.NIF.optimization_barrier(operand) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 

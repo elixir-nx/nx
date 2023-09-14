@@ -38,50 +38,6 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def random_uniform(%{type: type, shape: shape} = out, min, max, _backend_options) do
-    min = scalar_to_number(min)
-    max = scalar_to_number(max)
-
-    gen_float = fn -> (max - min) * :rand.uniform() + min end
-
-    gen =
-      case type do
-        {:s, _} -> fn -> min + :rand.uniform(max - min) - 1 end
-        {:u, _} -> fn -> min + :rand.uniform(max - min) - 1 end
-        {:c, _} -> fn -> Complex.new(gen_float.(), gen_float.()) end
-        {_, _} -> gen_float
-      end
-
-    data = for _ <- 1..Nx.size(shape), into: "", do: number_to_binary(gen.(), type)
-    from_binary(out, data)
-  end
-
-  @impl true
-  def random_normal(%{type: type, shape: shape} = out, mu, sigma, _backend_options) do
-    mu = scalar_to_number(mu)
-    sigma = scalar_to_number(sigma)
-    variance = sigma * sigma
-
-    gen =
-      case type do
-        {:c, _} ->
-          fn ->
-            Complex.new(:rand.normal(mu, variance), :rand.normal(mu, variance))
-          end
-
-        _ ->
-          fn -> :rand.normal(mu, variance) end
-      end
-
-    data =
-      for _ <- 1..Nx.size(shape),
-          into: "",
-          do: number_to_binary(gen.(), type)
-
-    from_binary(out, data)
-  end
-
-  @impl true
   def iota(%{shape: {}, type: type} = out, nil, _backend_options) do
     from_binary(out, number_to_binary(0, type))
   end
@@ -1885,7 +1841,23 @@ defmodule Nx.BinaryBackend do
     in_data = to_binary(tensor)
     min = binary_to_number(to_binary(min), min.type)
     max = binary_to_number(to_binary(max), max.type)
-    out_data = binary_to_binary(in_data, tensor.type, out.type, &min(max(&1, min), max))
+
+    comparison_fn = fn x ->
+      clipped_min =
+        if element_greater(nil, x, min) == 1 do
+          x
+        else
+          min
+        end
+
+      if element_less(nil, clipped_min, max) == 1 do
+        clipped_min
+      else
+        max
+      end
+    end
+
+    out_data = binary_to_binary(in_data, tensor.type, out.type, comparison_fn)
     from_binary(out, out_data)
   end
 

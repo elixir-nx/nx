@@ -1,7 +1,7 @@
 defmodule Torchx.Nx.RandomTest do
   use Torchx.Case, async: true
 
-  doctest Nx.Random, except: [normal: 2, normal: 4, gumbel: 2]
+  doctest Nx.Random, except: [normal: 2, normal: 4, gumbel: 2, multivariate_normal: 4]
 
   describe "key/1" do
     test "transforms given integer into PRNG key" do

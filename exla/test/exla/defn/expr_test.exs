@@ -1816,7 +1816,6 @@ defmodule EXLA.Defn.ExprTest do
 
       indices =
         Nx.tensor([
-          [0, 0, 0],
           [0, 0, 1],
           [0, 0, 0],
           [0, 1, 1],
@@ -1827,7 +1826,6 @@ defmodule EXLA.Defn.ExprTest do
 
       updates =
         Nx.tensor([
-          1,
           1,
           -1,
           2,
@@ -3192,106 +3190,6 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
-  describe "random uniform" do
-    defn random_uniform_fixed, do: Nx.random_uniform({30, 20})
-
-    test "generates with shape" do
-      t = random_uniform_fixed()
-      assert Nx.shape(t) == {30, 20}
-      assert Nx.type(t) == {:f, 32}
-
-      for <<x::float-32-native <- Nx.to_binary(t)>> do
-        assert x >= 0.0 and x < 1
-      end
-    end
-
-    defn random_uniform_min_max_int, do: Nx.random_uniform({30, 20}, 5, 10)
-    defn random_uniform_min_max_float, do: Nx.random_uniform({30, 20}, 5.0, 10.0)
-
-    test "generates with min/max" do
-      t = random_uniform_min_max_int()
-      assert Nx.shape(t) == {30, 20}
-      assert Nx.type(t) == {:s, 64}
-
-      for <<x::signed-64-native <- Nx.to_binary(t)>> do
-        assert x >= 5 and x < 10
-      end
-
-      t = random_uniform_min_max_float()
-      assert Nx.shape(t) == {30, 20}
-      assert Nx.type(t) == {:f, 32}
-
-      for <<x::float-32-native <- Nx.to_binary(t)>> do
-        assert x >= 5.0 and x < 10.0
-      end
-    end
-
-    defn random_uniform_u32, do: Nx.random_uniform({30, 20}, 5, 10, type: {:u, 32})
-    defn random_uniform_f64, do: Nx.random_uniform({30, 20}, 5.0, 10.0, type: {:f, 64})
-
-    @tag :unsupported_64_bit_op
-    test "generates with type" do
-      t = random_uniform_u32()
-      assert Nx.shape(t) == {30, 20}
-      assert Nx.type(t) == {:u, 32}
-
-      for <<x::unsigned-32-native <- Nx.to_binary(t)>> do
-        assert x >= 5 and x < 10
-      end
-
-      t = random_uniform_f64()
-      assert Nx.shape(t) == {30, 20}
-      assert Nx.type(t) == {:f, 64}
-
-      for <<x::float-64-native <- Nx.to_binary(t)>> do
-        assert x >= 5.0 and x < 10.0
-      end
-    end
-
-    defn random_uniform_tensor(min, max), do: Nx.random_uniform({30, 20}, min, max)
-
-    test "generates with min/max tensor" do
-      t = random_uniform_tensor(Nx.tensor(-100.0), Nx.tensor(100.0))
-      assert Nx.shape(t) == {30, 20}
-      assert Nx.type(t) == {:f, 32}
-    end
-  end
-
-  describe "random normal" do
-    defn random_normal_fixed, do: Nx.random_normal({30, 20})
-
-    test "generates with shape" do
-      t = random_uniform_fixed()
-      assert Nx.shape(t) == {30, 20}
-      assert Nx.type(t) == {:f, 32}
-    end
-
-    defn random_normal_mu_sigma, do: Nx.random_normal({30, 20}, 5.0, 10.0)
-
-    test "generates with mu/sigma" do
-      t = random_normal_mu_sigma()
-      assert Nx.shape(t) == {30, 20}
-      assert Nx.type(t) == {:f, 32}
-    end
-
-    defn random_normal_f64, do: Nx.random_normal({30, 20}, 5.0, 10.0, type: {:f, 64})
-
-    @tag :unsupported_64_bit_op
-    test "generates with type" do
-      t = random_normal_f64()
-      assert Nx.shape(t) == {30, 20}
-      assert Nx.type(t) == {:f, 64}
-    end
-
-    defn random_normal_tensor(mu, sigma), do: Nx.random_normal({30, 20}, mu, sigma)
-
-    test "generates with tensor mu/sigma" do
-      t = random_normal_tensor(Nx.tensor(1.0), Nx.tensor(1.0))
-      assert Nx.shape(t) == {30, 20}
-      assert Nx.type(t) == {:f, 32}
-    end
-  end
-
   describe "iota" do
     defn iota_with_shape, do: Nx.iota({3, 4, 2, 3}, axis: 2)
 
@@ -4053,7 +3951,13 @@ defmodule EXLA.Defn.ExprTest do
     end
 
     test "works on a 50x50 matrix" do
-      tensor = Nx.random_normal({50, 50})
+      tensor =
+        Nx.tensor(
+          for _ <- 1..50 do
+            for _ <- 1..50, do: :rand.normal()
+          end
+        )
+
       tensor = Nx.dot(tensor, Nx.transpose(tensor))
       tensor = Nx.add(tensor, Nx.multiply(50, Nx.eye(Nx.shape(tensor))))
 
