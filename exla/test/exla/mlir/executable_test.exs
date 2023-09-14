@@ -381,7 +381,7 @@ defmodule EXLA.MLIR.ExecutableTest do
       function = fn tensors -> Nx.concatenate(tensors, axis: 0) end
       result_nx = Nx.Defn.jit_apply(function, [inputs], compiler: Nx.Defn.Evaluator)
       result_mlir = Nx.Defn.jit_apply(function, [inputs])
-      
+
       assert result_nx.shape == result_mlir.shape
       assert result_nx.type == result_mlir.type
       assert_equal(result_nx, result_mlir)

@@ -143,7 +143,7 @@ defmodule EXLA.MLIR.Value do
     ref =
       EXLA.NIF.mlir_concatenate(func.ref, refs, dimension)
       |> unwrap!()
-    
+
     %Value{ref: ref, function: func}
   end
 
