@@ -145,6 +145,14 @@ mlir::Value MLIRFunction::SubtractOp(mlir::Value lhs, mlir::Value rhs) {
   return op;
 }
 
+mlir::Value MLIRFunction::BitcastConvertOp(mlir::Value operand, mlir::Type type) {
+  mlir::OpBuilder *builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+
+  auto op = builder->create<mlir::mhlo::BitcastConvertOp>(builder->getUnknownLoc(), type, operand);
+  return op;
+}
+
 mlir::Value MLIRFunction::ConvertOp(mlir::Value operand, mlir::Type type) {
   mlir::OpBuilder *builder = module_->builder();
   builder->setInsertionPointToEnd(&func_->getBody().back());

@@ -67,6 +67,17 @@ defmodule EXLA.MLIR.ExecutableTest do
     end
   end
 
+  describe "bitcast_convert" do
+    test "works" do
+      t = Nx.tensor([[1], [2]], type: :f32)
+      expected = Nx.bitcast(t, :s32)
+
+      result = Nx.Defn.jit_apply(&Nx.bitcast(&1, :s32), [t])
+      assert result.type == expected.type
+      assert_equal(result, expected)
+    end
+  end
+
   describe "binary ops" do
     @bin_ops [:add, :subtract, :multiply, :pow, :min] ++
                [:max, :remainder, :atan2, :equal, :not_equal] ++
