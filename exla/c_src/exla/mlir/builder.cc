@@ -549,6 +549,13 @@ mlir::Value MLIRFunction::DotGeneralOp(
   return op;
 }
 
+mlir::Value MLIRFunction::ConcatenateOp(std::vector<mlir::Value> operands, int64_t dimension) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  mlir::ValueRange operands_range(llvm::ArrayRef<mlir::Value>(operands.data(), operands.size()));
+  auto op = module_->builder()->create<mlir::mhlo::ConcatenateOp>(module_->builder()->getUnknownLoc(), operands_range, dimension);
+  return op;
+}
+
 mlir::Value MLIRFunction::OptimizationBarrierOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   auto op = module_->builder()->create<mlir::mhlo::OptimizationBarrierOp>(module_->builder()->getUnknownLoc(), operand);

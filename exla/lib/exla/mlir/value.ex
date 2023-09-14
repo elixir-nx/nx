@@ -137,6 +137,16 @@ defmodule EXLA.MLIR.Value do
     %Value{ref: ref, function: func}
   end
 
+  def concatenate([%Value{function: func} | _rest] = operands, dimension) do
+    refs = Enum.map(operands, & &1.ref)
+
+    ref =
+      EXLA.NIF.mlir_concatenate(func.ref, refs, dimension)
+      |> unwrap!()
+
+    %Value{ref: ref, function: func}
+  end
+
   def optimization_barrier(%Value{function: func} = operand) do
     ref =
       EXLA.NIF.mlir_optimization_barrier(func.ref, operand.ref)
