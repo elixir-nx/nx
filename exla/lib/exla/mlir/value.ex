@@ -141,10 +141,10 @@ defmodule EXLA.MLIR.Value do
     ref =
       EXLA.NIF.mlir_optimization_barrier(func.ref, operand.ref)
       |> unwrap!()
-    
+
     %Value{ref: ref, function: func}
   end
- 
+
   def clamp(
         %Value{function: func} = operand,
         %Value{function: func} = min,
