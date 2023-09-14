@@ -143,6 +143,26 @@ defmodule EXLA.MLIR.Value do
     ref =
       EXLA.NIF.mlir_concatenate(func.ref, refs, dimension)
       |> unwrap!()
+    
+    %Value{ref: ref, function: func}
+  end
+
+  def optimization_barrier(%Value{function: func} = operand) do
+    ref =
+      EXLA.NIF.mlir_optimization_barrier(func.ref, operand.ref)
+      |> unwrap!()
+
+    %Value{ref: ref, function: func}
+  end
+
+  def clamp(
+        %Value{function: func} = operand,
+        %Value{function: func} = min,
+        %Value{function: func} = max
+      ) do
+    ref =
+      EXLA.NIF.mlir_clamp(func.ref, operand.ref, min.ref, max.ref)
+      |> unwrap!()
 
     %Value{ref: ref, function: func}
   end

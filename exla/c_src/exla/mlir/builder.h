@@ -86,6 +86,8 @@ class MLIRFunction {
   mlir::Value DynamicSliceOp(mlir::Value operand, std::vector<mlir::Value> starts, std::vector<int64_t> lengths);
   mlir::Value DotGeneralOp(xla::Shape output_shape, mlir::Value lhs, mlir::Value rhs, xla::DotDimensionNumbers dnums, xla::PrecisionConfig config);
   mlir::Value ConcatenateOp(std::vector<mlir::Value> operands, int64_t dimension);
+  mlir::Value OptimizationBarrierOp(mlir::Value operand);
+  mlir::Value ClampOp(mlir::Value min, mlir::Value operand, mlir::Value max);
   ERL_NIF_TERM ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM value_ptr, std::vector<int64_t> dims = {});
   int get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *type);
 

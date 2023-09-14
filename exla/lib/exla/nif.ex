@@ -72,6 +72,8 @@ defmodule EXLA.NIF do
     do: :erlang.nif_error(:undef)
 
   def mlir_concatenate(_function, _operands, _dimension), do: :erlang.nif_error(:undef)
+  def mlir_optimization_barrier(_function, _operand), do: :erlang.nif_error(:undef)
+  def mlir_clamp(_function, _operand, _min, _max), do: :erlang.nif_error(:undef)
 
   def new_builder(_name),
     do: :erlang.nif_error(:undef)
