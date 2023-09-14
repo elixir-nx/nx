@@ -741,10 +741,10 @@ ERL_NIF_TERM mlir_optimization_barrier(ErlNifEnv* env, int argc, const ERL_NIF_T
   if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
   }
-
+  
   exla::MLIRFunction** function;
   mlir::Value* t;
-
+  
   if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
     return exla::nif::error(env, "Unable to get function.");
   }
@@ -753,6 +753,33 @@ ERL_NIF_TERM mlir_optimization_barrier(ErlNifEnv* env, int argc, const ERL_NIF_T
   }
 
   mlir::Value result = (*function)->OptimizationBarrierOp(*t);
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
+}
+
+ERL_NIF_TERM mlir_clamp(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 4) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* operand;
+  mlir::Value* min;
+  mlir::Value* max;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[2], min)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[3], max)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+
+  mlir::Value result = (*function)->ClampOp(*min, *operand, *max);
 
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
 }
@@ -1451,6 +1478,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_rsqrt", 2, mlir_rsqrt},
     {"mlir_count_leading_zeros", 2, mlir_clz},
     {"mlir_dot_general", 6, mlir_dot_general},
+    {"mlir_clamp", 4, mlir_clamp},
     {"mlir_population_count", 2, mlir_population_count},
     {"mlir_optimization_barrier", 2, mlir_optimization_barrier},
     // XlaBuilder

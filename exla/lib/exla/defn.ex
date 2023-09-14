@@ -1180,6 +1180,14 @@ defmodule EXLA.Defn do
     apply(EXLA.Lib, op, [state.builder, arg, [type: ans.type] ++ opts])
   end
 
+  defp to_operator(:clip, [%Value{} = operand, %Value{} = min, %Value{} = max], ans, _state) do
+    min = to_type(min, ans.type)
+    max = to_type(max, ans.type)
+    operand = to_type(operand, ans.type)
+
+    Value.clamp(operand, min, max)
+  end
+
   defp to_operator(:clip, [operand, min, max], ans, _state) do
     min = to_type(min, ans.type)
     max = to_type(max, ans.type)
