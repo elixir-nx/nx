@@ -549,6 +549,19 @@ mlir::Value MLIRFunction::DotGeneralOp(
   return op;
 }
 
+mlir::Value MLIRFunction::BroadcastInDimOp(mlir::Value operand, xla::Shape shape, std::vector<int64_t> axes) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+
+  absl::Span<const int64_t> dimensions_span = shape.dimensions();
+  std::vector<int64_t> dimensions(dimensions_span.begin(), dimensions_span.end());
+  mlir::TensorType result_type = GetMLIRType(module_->builder(), dimensions, shape.element_type());
+
+  auto axes_attr = Int64ToDenseIntElementsAttr(module_->builder(), axes);
+
+  auto op = module_->builder()->create<mlir::mhlo::BroadcastInDimOp>(module_->builder()->getUnknownLoc(), result_type, operand, axes_attr);
+  return op;
+}
+
 template <typename T>
 ERL_NIF_TERM ConstantOpImpl(mlir::OpBuilder *builder, mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM term, std::vector<int64_t> dims) {
   mlir::RankedTensorType ty = mlir::RankedTensorType::get(dims, type);

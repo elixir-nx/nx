@@ -137,6 +137,14 @@ defmodule EXLA.MLIR.Value do
     %Value{ref: ref, function: func}
   end
 
+  def broadcast_in_dim(%Value{function: func} = operand, output_shape, axes) do
+    ref =
+      EXLA.NIF.mlir_broadcast_in_dim(func.ref, output_shape.ref, operand.ref, axes)
+      |> unwrap!()
+
+    %Value{ref: ref, function: func}
+  end
+
   defp get_precision_config_int(precision_config) do
     case precision_config do
       :default ->

@@ -71,6 +71,8 @@ defmodule EXLA.NIF do
   def mlir_dot_general(_function, _shape, _lhs, _rhs, _dims, _precision),
     do: :erlang.nif_error(:undef)
 
+  def mlir_broadcast_in_dim(_function, _shape, _operand, _axes), do: :erlang.nif_error(:undef)
+
   def new_builder(_name),
     do: :erlang.nif_error(:undef)
 
