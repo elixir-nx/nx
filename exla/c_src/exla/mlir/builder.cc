@@ -76,6 +76,10 @@ int MLIRFunction::get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *t
   std::string type_str;
   if (!exla::nif::get(env, term, type_str)) return 1;
 
+  if (type_str == "pred") {
+    *type = builder->getIntegerType(1);
+    return 0;
+  }
   if (type_str == "u8") {
     *type = builder->getIntegerType(8, false);
     return 0;
@@ -578,6 +582,12 @@ mlir::Value MLIRFunction::OptimizationBarrierOp(mlir::Value operand) {
 mlir::Value MLIRFunction::ClampOp(mlir::Value min, mlir::Value operand, mlir::Value max) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   auto op = module_->builder()->create<mlir::mhlo::ClampOp>(module_->builder()->getUnknownLoc(), min, operand, max);
+  return op;
+}
+
+mlir::Value MLIRFunction::SelectOp(mlir::Value pred, mlir::Value on_true, mlir::Value on_false) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  auto op = module_->builder()->create<mlir::mhlo::SelectOp>(module_->builder()->getUnknownLoc(), pred, on_true, on_false);
   return op;
 }
 

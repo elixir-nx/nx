@@ -693,6 +693,33 @@ ERL_NIF_TERM mlir_dot_general(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
 
+ERL_NIF_TERM mlir_select(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 4) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* pred;
+  mlir::Value* on_true;
+  mlir::Value* on_false;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], pred)) {
+    return exla::nif::error(env, "Unable to get pred.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[2], on_true)) {
+    return exla::nif::error(env, "Unable to get on true.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[3], on_false)) {
+    return exla::nif::error(env, "Unable to get on false.");
+  }
+
+  mlir::Value res = (*function)->SelectOp(*pred, *on_true, *on_false);
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
 ERL_NIF_TERM mlir_build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
@@ -1535,6 +1562,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_broadcast_in_dim", 4, mlir_broadcast_in_dim},
     {"mlir_concatenate", 3, mlir_concatenate},
     {"mlir_optimization_barrier", 2, mlir_optimization_barrier},
+    {"mlir_select", 4, mlir_select},
     // XlaBuilder
     {"new_builder", 1, new_builder},
     {"create_sub_builder", 2, create_sub_builder},

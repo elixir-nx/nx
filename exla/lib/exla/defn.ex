@@ -784,6 +784,29 @@ defmodule EXLA.Defn do
     )
   end
 
+  defp to_operator(
+         :select,
+         [%Value{} = pred, %Value{} = on_true, %Value{} = on_false],
+         %{type: type, shape: shape},
+         _state
+       ) do
+    pred = to_type(pred, {:pred, 8})
+
+    out_shape = EXLA.Shape.make_shape(type, shape)
+
+    on_true =
+      on_true
+      |> to_type(type)
+      |> Value.broadcast_in_dim(out_shape, broadcast_axes(op_shape(on_true), shape))
+
+    on_false =
+      on_false
+      |> to_type(type)
+      |> Value.broadcast_in_dim(out_shape, broadcast_axes(op_shape(on_false), shape))
+
+    Value.select(pred, on_true, on_false)
+  end
+
   defp to_operator(:select, [pred, on_true, on_false], %{type: type, shape: shape}, _state) do
     pred = to_type(pred, {:pred, 8})
 

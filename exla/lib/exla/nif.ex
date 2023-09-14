@@ -76,6 +76,9 @@ defmodule EXLA.NIF do
   def mlir_optimization_barrier(_function, _operand), do: :erlang.nif_error(:undef)
   def mlir_clamp(_function, _operand, _min, _max), do: :erlang.nif_error(:undef)
 
+  def mlir_select(_function, _pred, _on_true, _on_false),
+    do: :erlang.nif_error(:undef)
+
   def new_builder(_name),
     do: :erlang.nif_error(:undef)
 
