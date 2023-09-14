@@ -194,6 +194,7 @@ defmodule Candlex.Backend do
         :bitwise_or,
         :bitwise_xor,
         :equal,
+        :greater,
         :greater_equal,
         :left_shift,
         :less,

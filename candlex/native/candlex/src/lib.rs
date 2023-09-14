@@ -31,6 +31,7 @@ rustler::init! {
         tensors::max,
         tensors::min,
         tensors::equal,
+        tensors::greater,
         tensors::greater_equal,
         tensors::less,
         tensors::less_equal,

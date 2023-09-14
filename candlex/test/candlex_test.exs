@@ -219,6 +219,27 @@ defmodule CandlexTest do
       )
     end
 
+    test "greater" do
+      Nx.greater(1, 2)
+      |> assert_equal(t(0))
+
+      Nx.greater(1, t([1, 2, 3]))
+      |> assert_equal(t([0, 0, 0]))
+
+      t([1, 2, 3])
+      |> Nx.greater(t([1, 2, 2]))
+      |> assert_equal(t([0, 0, 1]))
+
+      t([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+      |> Nx.greater(t([1, 2, 3]))
+      |> assert_equal(t(
+        [
+          [0, 0, 0],
+          [1, 1, 1]
+        ]
+      ))
+    end
+
     test "less" do
       Nx.less(1, 2)
       |> assert_equal(t(1))
