@@ -381,6 +381,35 @@ defmodule EXLA.MLIR.ExecutableTest do
       function = fn tensor -> Nx.broadcast(tensor, {3, 2, 3}) end
       result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
       result_mlir = Nx.Defn.jit_apply(function, [t])
+      assert result_nx.shape == result_mlir.shape
+      assert result_nx.type == result_mlir.type
+      assert_equal(result_nx, result_mlir)
+    end
+  end
+
+  describe "concatenate" do
+    test "works" do
+      inputs = [Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]), Nx.tensor([7, 8, 9])]
+
+      function = fn tensors -> Nx.concatenate(tensors, axis: 0) end
+      result_nx = Nx.Defn.jit_apply(function, [inputs], compiler: Nx.Defn.Evaluator)
+      result_mlir = Nx.Defn.jit_apply(function, [inputs])
+
+      assert result_nx.shape == result_mlir.shape
+      assert result_nx.type == result_mlir.type
+      assert_equal(result_nx, result_mlir)
+    end
+  end
+
+  describe "clamp" do
+    test "works" do
+      value = Nx.tensor([-2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0])
+      min = Nx.tensor(1)
+      max = Nx.tensor(3)
+
+      function = fn value, min, max -> Nx.clip(value, min, max) end
+      result_nx = Nx.Defn.jit_apply(function, [value, min, max], compiler: Nx.Defn.Evaluator)
+      result_mlir = Nx.Defn.jit_apply(function, [value, min, max])
 
       assert result_nx.shape == result_mlir.shape
       assert result_nx.type == result_mlir.type

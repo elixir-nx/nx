@@ -1185,6 +1185,14 @@ defmodule EXLA.Defn do
     apply(EXLA.Lib, op, [state.builder, arg, [type: ans.type] ++ opts])
   end
 
+  defp to_operator(:clip, [%Value{} = operand, %Value{} = min, %Value{} = max], ans, _state) do
+    min = to_type(min, ans.type)
+    max = to_type(max, ans.type)
+    operand = to_type(operand, ans.type)
+
+    Value.clamp(operand, min, max)
+  end
+
   defp to_operator(:clip, [operand, min, max], ans, _state) do
     min = to_type(min, ans.type)
     max = to_type(max, ans.type)
@@ -1312,6 +1320,14 @@ defmodule EXLA.Defn do
 
   defp to_operator(:reverse, [tensor, axes], _ans, _state) do
     EXLA.Op.reverse(tensor, axes)
+  end
+
+  defp to_operator(:concatenate, [[%Value{} | _rest] = tensors, axis], ans, _state) do
+    tensors =
+      tensors
+      |> Enum.map(&to_type(&1, ans.type))
+
+    Value.concatenate(tensors, axis)
   end
 
   defp to_operator(:concatenate, [tensors, axis], ans, _state) do
