@@ -137,6 +137,14 @@ defmodule EXLA.MLIR.Value do
     %Value{ref: ref, function: func}
   end
 
+  def optimization_barrier(%Value{function: func} = operand) do
+    ref =
+      EXLA.NIF.mlir_optimization_barrier(func.ref, operand.ref)
+      |> unwrap!()
+
+    %Value{ref: ref, function: func}
+  end
+
   defp get_precision_config_int(precision_config) do
     case precision_config do
       :default ->

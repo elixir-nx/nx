@@ -737,6 +737,26 @@ ERL_NIF_TERM mlir_convert(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
 }
 
+ERL_NIF_TERM mlir_optimization_barrier(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 2) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* t;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], t)) {
+    return exla::nif::error(env, "Unable to get tensor.");
+  }
+
+  mlir::Value result = (*function)->OptimizationBarrierOp(*t);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
+}
+
 ERL_NIF_TERM mlir_get_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 1) {
     return exla::nif::error(env, "Bad argument count.");
@@ -1432,6 +1452,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_count_leading_zeros", 2, mlir_clz},
     {"mlir_dot_general", 6, mlir_dot_general},
     {"mlir_population_count", 2, mlir_population_count},
+    {"mlir_optimization_barrier", 2, mlir_optimization_barrier},
     // XlaBuilder
     {"new_builder", 1, new_builder},
     {"create_sub_builder", 2, create_sub_builder},
