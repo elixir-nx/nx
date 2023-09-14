@@ -176,6 +176,19 @@ defmodule Candlex.Backend do
     end
   end
 
+  for op <- [:pow] do
+    @impl true
+    def unquote(op)(%T{} = out, %T{} = left, %T{} = right) do
+      {left, right} = maybe_upcast(left, right)
+      {left, right} = maybe_broadcast_bin_args(out.shape, left, right)
+
+      left
+      |> Native.unquote(op)(right)
+      |> unwrap!()
+      |> to_nx(out)
+    end
+  end
+
   for op <- [
         :bitwise_and,
         :bitwise_or,

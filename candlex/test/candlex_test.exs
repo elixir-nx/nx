@@ -1024,6 +1024,32 @@ defmodule CandlexTest do
       |> Nx.mean()
       |> assert_equal(t(0.2))
     end
+
+    test "pow" do
+      # Nx.pow(2, 4)
+      # |> assert_equal(t(16))
+
+      # t([1, 2, 3], type: :u32)
+      # |> Nx.pow(t(2, type: :u32))
+      # |> assert_equal(t([1, 4, 9]))
+
+      t([1.0, 2.0, 3.0])
+      |> Nx.pow(2)
+      |> assert_equal(t([1.0, 4.0, 9.0]))
+
+      2
+      |> Nx.pow(t([1.0, 2.0, 3.0]))
+      |> assert_equal(t([2.0, 4.0, 8.0]))
+
+      # t([[2], [3]])
+      # |> Nx.pow(t([[4, 5]]))
+      # |> assert_equal(t(
+      #   [
+      #     [16, 32],
+      #     [81, 243]
+      #   ]
+      # ))
+    end
   end
 
   defp t(values, opts \\ []) do

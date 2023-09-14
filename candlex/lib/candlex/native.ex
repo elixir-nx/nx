@@ -63,6 +63,7 @@ defmodule Candlex.Native do
         :max,
         :min,
         :multiply,
+        :pow,
         :right_shift,
         :subtract
       ] do
