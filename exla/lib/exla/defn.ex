@@ -667,7 +667,7 @@ defmodule EXLA.Defn do
 
   defp to_operator(:broadcast, [%Value{} = op, _shape, axes], ans, _state) do
     out_shape = EXLA.Shape.make_shape(ans.type, ans.shape)
-    Value.broadcast_in_dim(op, out_shape, List.to_tuple(axes))    
+    Value.broadcast_in_dim(op, out_shape, List.to_tuple(axes))
   end
 
   defp to_operator(:broadcast, [op, _shape, axes], ans, _state) do

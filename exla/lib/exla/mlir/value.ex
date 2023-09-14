@@ -141,10 +141,10 @@ defmodule EXLA.MLIR.Value do
     ref =
       EXLA.NIF.mlir_broadcast_in_dim(func.ref, output_shape.ref, operand.ref, axes)
       |> unwrap!()
-    
+
     %Value{function: func, ref: ref}
   end
- 
+
   def concatenate([%Value{function: func} | _rest] = operands, dimension) do
     refs = Enum.map(operands, & &1.ref)
 
