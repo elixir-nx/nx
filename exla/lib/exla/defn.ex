@@ -665,6 +665,11 @@ defmodule EXLA.Defn do
     EXLA.Op.pad(to_type(op, type), to_type(value, type), padding_config)
   end
 
+  defp to_operator(:broadcast, [%Value{} = op, _shape, axes], ans, _state) do
+    out_shape = EXLA.Shape.make_shape(ans.type, ans.shape)
+    Value.broadcast_in_dim(op, out_shape, List.to_tuple(axes))
+  end
+
   defp to_operator(:broadcast, [op, _shape, axes], ans, _state) do
     EXLA.Op.broadcast_in_dim(op, ans.shape, List.to_tuple(axes))
   end

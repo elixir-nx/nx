@@ -806,6 +806,34 @@ ERL_NIF_TERM mlir_get_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   return exla::nif::ok(env, exla::nif::make<xla::Shape>(env, shape));
 }
 
+ERL_NIF_TERM mlir_broadcast_in_dim(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 4) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+  
+  exla::MLIRFunction** function;
+  std::vector<int64_t> axes;
+  xla::Shape* output_shape;
+  mlir::Value* operand;
+  
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<xla::Shape>(env, argv[1], output_shape)) {
+    return exla::nif::error(env, "Unable to get shape.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[2], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get_tuple(env, argv[3], axes)) {
+    return exla::nif::error(env, "Unable to get broadcast dimensions.");
+  }
+  
+  mlir::Value res = (*function)->BroadcastInDimOp(*operand, *output_shape, axes);
+  
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
 ERL_NIF_TERM mlir_concatenate(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
@@ -1504,6 +1532,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_dot_general", 6, mlir_dot_general},
     {"mlir_clamp", 4, mlir_clamp},
     {"mlir_population_count", 2, mlir_population_count},
+    {"mlir_broadcast_in_dim", 4, mlir_broadcast_in_dim},
     {"mlir_concatenate", 3, mlir_concatenate},
     {"mlir_optimization_barrier", 2, mlir_optimization_barrier},
     // XlaBuilder

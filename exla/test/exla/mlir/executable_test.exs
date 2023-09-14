@@ -374,6 +374,19 @@ defmodule EXLA.MLIR.ExecutableTest do
     end
   end
 
+  describe "broadcast_in_dim" do
+    test "works" do
+      t = Nx.iota({1, 2, 3})
+
+      function = fn tensor -> Nx.broadcast(tensor, {3, 2, 3}) end
+      result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
+      result_mlir = Nx.Defn.jit_apply(function, [t])
+      assert result_nx.shape == result_mlir.shape
+      assert result_nx.type == result_mlir.type
+      assert_equal(result_nx, result_mlir)
+    end
+  end
+
   describe "concatenate" do
     test "works" do
       inputs = [Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]), Nx.tensor([7, 8, 9])]
