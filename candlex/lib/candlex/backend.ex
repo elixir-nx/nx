@@ -510,17 +510,42 @@ defmodule Candlex.Backend do
   ## Conversions
 
   @impl true
-  def to_batched(%T{shape: out_shape} = out, %T{shape: shape} = t, _opts) do
-    # TODO: dont ignore opts
-    batch_size = elem(out_shape, 0)
-    t_axis_0 = elem(shape, 0)
-    num_batches = div(t_axis_0, batch_size)
+  def to_batched(%T{shape: out_shape} = out, %T{shape: shape} = t, opts) do
+    leftover = opts[:leftover]
+    first_dimension = 0
+    batch_size = elem(out_shape, first_dimension)
+    axis_total = elem(shape, first_dimension)
+    remainder = rem(axis_total, batch_size)
+    num_batches = div(axis_total, batch_size)
+    native_tensor = from_nx(t)
 
-    t
-    |> from_nx()
-    |> Native.chunk(num_batches)
-    |> unwrap!()
-    |> Stream.map(&to_nx(&1, out))
+    native_batches =
+      cond do
+        remainder == 0 ->
+          native_tensor
+          |> Native.chunk(num_batches)
+          |> unwrap!()
+        remainder > 0 && leftover == :repeat ->
+          slice_shape =
+            shape
+            |> Tuple.delete_at(first_dimension)
+            |> Tuple.insert_at(first_dimension, remainder)
+
+          [
+            native_tensor,
+            Native.narrow(native_tensor, first_dimension, 0, batch_size - remainder)
+            |> unwrap!()
+          ]
+          |> Native.concatenate(first_dimension)
+          |> unwrap!()
+          |> Native.chunk(num_batches + 1)
+          |> unwrap!()
+        true ->
+          raise "not implemented"
+      end
+
+      native_batches
+      |> Stream.map(&to_nx(&1, out))
   end
 
   @doc false

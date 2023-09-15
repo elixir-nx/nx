@@ -1021,6 +1021,46 @@ defmodule CandlexTest do
           ]
         ]
       ))
+
+      [first, second] =
+        Nx.iota({10})
+        |> Nx.to_batched(5)
+        |> Enum.to_list()
+
+      first
+      |> assert_equal(Nx.tensor([0, 1, 2, 3, 4]))
+
+      second
+      |> assert_equal(Nx.tensor([5, 6, 7, 8, 9]))
+
+      [first, second, third, fourth] =
+        Nx.iota({10})
+        |> Nx.to_batched(3)
+        |> Enum.to_list()
+
+      first
+      |> assert_equal(Nx.tensor([0, 1, 2]))
+
+      second
+      |> assert_equal(Nx.tensor([3, 4, 5]))
+
+      third
+      |> assert_equal(Nx.tensor([6, 7, 8]))
+
+      fourth
+      |> assert_equal(Nx.tensor([9, 0, 1]))
+
+      # TODO: Implement with discard
+      # [first, second] =
+      #   Nx.iota({10})
+      #   |> Nx.to_batched(4, leftover: :discard)
+      #   |> Enum.to_list()
+
+      # first
+      # |> assert_equal(Nx.tensor([0, 1, 2, 3]))
+
+      # second
+      # |> assert_equal(Nx.tensor([4, 5, 6, 7]))
     end
 
     test "sigmoid/1" do
