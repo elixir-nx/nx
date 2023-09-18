@@ -39,6 +39,7 @@ defmodule Candlex.Native do
         :log1p,
         :negate,
         :round,
+        :rsqrt,
         :sigmoid,
         :sin,
         :sqrt,

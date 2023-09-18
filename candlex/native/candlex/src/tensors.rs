@@ -98,6 +98,11 @@ pub fn transpose(t: ExTensor, dim1: usize, dim2: usize) -> Result<ExTensor, Cand
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+pub fn rsqrt(t: ExTensor) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(t.sqrt()?.recip()?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 pub fn arange(
     start: i64,
     end: i64,

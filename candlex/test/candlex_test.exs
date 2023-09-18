@@ -565,6 +565,15 @@ defmodule CandlexTest do
       |> assert_equal(t([1.0, 1.4142135381698608, 1.7320507764816284]))
     end
 
+    test "rsqrt" do
+      Nx.rsqrt(1.0)
+      |> assert_equal(t(1.0))
+
+      t([1.0, 2, 3])
+      |> Nx.rsqrt()
+      |> assert_equal(t([1.0, 0.7071067690849304, 0.5773502588272095]))
+    end
+
     test "argmax" do
       Nx.argmax(4)
       |> assert_equal(t(0))

@@ -237,6 +237,7 @@ defmodule Candlex.Backend do
         :log1p,
         :negate,
         :round,
+        :rsqrt,
         :sigmoid,
         :sin,
         :sqrt,
