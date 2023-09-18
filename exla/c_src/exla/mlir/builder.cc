@@ -76,6 +76,10 @@ int MLIRFunction::get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *t
   std::string type_str;
   if (!exla::nif::get(env, term, type_str)) return 1;
 
+  if (type_str == "pred") {
+    *type = builder->getIntegerType(1);
+    return 0;
+  }
   if (type_str == "u8") {
     *type = builder->getIntegerType(8, false);
     return 0;
@@ -546,6 +550,44 @@ mlir::Value MLIRFunction::DotGeneralOp(
     nullptr
   );
 
+  return op;
+}
+
+mlir::Value MLIRFunction::BroadcastInDimOp(mlir::Value operand, xla::Shape shape, std::vector<int64_t> axes) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+
+  absl::Span<const int64_t> dimensions_span = shape.dimensions();
+  std::vector<int64_t> dimensions(dimensions_span.begin(), dimensions_span.end());
+  mlir::TensorType result_type = GetMLIRType(module_->builder(), dimensions, shape.element_type());
+
+  auto axes_attr = Int64ToDenseIntElementsAttr(module_->builder(), axes);
+
+  auto op = module_->builder()->create<mlir::mhlo::BroadcastInDimOp>(module_->builder()->getUnknownLoc(), result_type, operand, axes_attr);
+  return op;
+}
+
+mlir::Value MLIRFunction::ConcatenateOp(std::vector<mlir::Value> operands, int64_t dimension) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  mlir::ValueRange operands_range(llvm::ArrayRef<mlir::Value>(operands.data(), operands.size()));
+  auto op = module_->builder()->create<mlir::mhlo::ConcatenateOp>(module_->builder()->getUnknownLoc(), operands_range, dimension);
+  return op;
+}
+
+mlir::Value MLIRFunction::OptimizationBarrierOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  auto op = module_->builder()->create<mlir::mhlo::OptimizationBarrierOp>(module_->builder()->getUnknownLoc(), operand);
+  return op.getResult()[0];
+}
+
+mlir::Value MLIRFunction::ClampOp(mlir::Value min, mlir::Value operand, mlir::Value max) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  auto op = module_->builder()->create<mlir::mhlo::ClampOp>(module_->builder()->getUnknownLoc(), min, operand, max);
+  return op;
+}
+
+mlir::Value MLIRFunction::SelectOp(mlir::Value pred, mlir::Value on_true, mlir::Value on_false) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  auto op = module_->builder()->create<mlir::mhlo::SelectOp>(module_->builder()->getUnknownLoc(), pred, on_true, on_false);
   return op;
 }
 

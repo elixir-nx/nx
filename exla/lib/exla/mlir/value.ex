@@ -137,6 +137,56 @@ defmodule EXLA.MLIR.Value do
     %Value{ref: ref, function: func}
   end
 
+  def broadcast_in_dim(%Value{function: func} = operand, output_shape, axes) do
+    ref =
+      EXLA.NIF.mlir_broadcast_in_dim(func.ref, output_shape.ref, operand.ref, axes)
+      |> unwrap!()
+
+    %Value{function: func, ref: ref}
+  end
+
+  def concatenate([%Value{function: func} | _rest] = operands, dimension) do
+    refs = Enum.map(operands, & &1.ref)
+
+    ref =
+      EXLA.NIF.mlir_concatenate(func.ref, refs, dimension)
+      |> unwrap!()
+
+    %Value{ref: ref, function: func}
+  end
+
+  def optimization_barrier(%Value{function: func} = operand) do
+    ref =
+      EXLA.NIF.mlir_optimization_barrier(func.ref, operand.ref)
+      |> unwrap!()
+
+    %Value{ref: ref, function: func}
+  end
+
+  def clamp(
+        %Value{function: func} = operand,
+        %Value{function: func} = min,
+        %Value{function: func} = max
+      ) do
+    ref =
+      EXLA.NIF.mlir_clamp(func.ref, operand.ref, min.ref, max.ref)
+      |> unwrap!()
+
+    %Value{ref: ref, function: func}
+  end
+
+  def select(
+        %Value{function: func} = pred,
+        %Value{function: func} = on_true,
+        %Value{function: func} = on_false
+      ) do
+    ref =
+      EXLA.NIF.mlir_select(func.ref, pred.ref, on_true.ref, on_false.ref)
+      |> unwrap!()
+
+    %Value{ref: ref, function: func}
+  end
+
   defp get_precision_config_int(precision_config) do
     case precision_config do
       :default ->
