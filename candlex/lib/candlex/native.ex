@@ -19,6 +19,8 @@ defmodule Candlex.Native do
   def dtype(_tensor), do: error()
   def t_shape(_tensor), do: error()
   def concatenate(_tensors, _axis), do: error()
+  def conv1d(_tensor, _kernel), do: error()
+  def conv2d(_tensor, _kernel), do: error()
 
   for op <- [
         :abs,
@@ -72,6 +74,7 @@ defmodule Candlex.Native do
   end
 
   def sum(_tensor, _dims, _keep_dims), do: error()
+  def permute(_tensor, _dims), do: error()
 
   for op <- [:argmax, :argmin] do
     def unquote(op)(_tensor, _dim, _keep_dim), do: error()

@@ -170,6 +170,11 @@ pub fn sum(
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+pub fn permute(ex_tensor: ExTensor, dims: Vec<usize>) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(ex_tensor.permute(dims)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 pub fn broadcast_to(t: ExTensor, shape: Term) -> Result<ExTensor, CandlexError> {
     Ok(ExTensor::new(t.broadcast_as(tuple_to_vec(shape).unwrap())?))
 }
@@ -212,6 +217,26 @@ pub fn concatenate(ex_tensors: Vec<ExTensor>, dim: usize) -> Result<ExTensor, Ca
         .map(|t| t.deref())
         .collect::<Vec<&Tensor>>();
     Ok(ExTensor::new(Tensor::cat(&tensors[..], dim)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn conv1d(tensor: ExTensor, kernel: ExTensor) -> Result<ExTensor, CandlexError> {
+    let padding = 0;
+    let stride = 1;
+    let dilation = 1;
+    let groups = 1;
+
+    Ok(ExTensor::new(tensor.conv1d(kernel.deref(), padding, stride, dilation, groups)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn conv2d(tensor: ExTensor, kernel: ExTensor) -> Result<ExTensor, CandlexError> {
+    let padding = 0;
+    let stride = 1;
+    let dilation = 1;
+    let groups = 1;
+
+    Ok(ExTensor::new(tensor.conv2d(kernel.deref(), padding, stride, dilation, groups)?))
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]

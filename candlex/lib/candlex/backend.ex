@@ -284,6 +284,59 @@ defmodule Candlex.Backend do
   end
 
   @impl true
+  def conv(%T{type: out_type} = out, %T{shape: shape} = tensor, %T{} = kernel, opts) do
+    # TODO: Support more opts
+    unsupported_option!(opts, :batch_group_size, 1)
+    unsupported_option!(opts, :feature_group_size, 1)
+
+    # For now we assume:
+    # strides = opts[:strides] # [1, 1]
+    # padding = opts[:padding] # [{0, 0}, {0, 0}]
+    # input_dilation = opts[:input_dilation] # [1, 1]
+    # kernel_dilation = opts[:kernel_dilation] # [1, 1]
+
+    input_permutation = opts[:input_permutation]
+    kernel_permutation = opts[:kernel_permutation]
+
+    output_permutation =
+      case opts[:output_permutation] do
+        nil ->
+          nil
+
+        l ->
+          # The permutation that Nx.Shape expects is actually the reverse permutation
+          # for the given input
+          l |> Enum.with_index() |> Enum.sort() |> Enum.map(&elem(&1, 1))
+      end
+
+    native_tensor =
+      tensor
+      |> from_nx()
+      |> permute(input_permutation)
+      |> Native.to_type(to_candle_dtype(out_type))
+      |> unwrap!()
+
+    native_kernel =
+      kernel
+      |> from_nx()
+      |> permute(kernel_permutation)
+      |> Native.to_type(to_candle_dtype(out_type))
+      |> unwrap!()
+
+    native_result =
+      case Nx.rank(shape) do
+        3 -> Native.conv1d(native_tensor, native_kernel)
+        4 -> Native.conv2d(native_tensor, native_kernel)
+        rank -> raise("unsupported conv for tensor of rank #{rank}, only 3 or 4 supported")
+      end
+
+    native_result
+    |> unwrap!()
+    |> permute(output_permutation)
+    |> to_nx(out)
+  end
+
+  @impl true
   def dot(
         %T{type: _out_type} = out,
         %T{shape: left_shape, type: _left_type} = left,
@@ -548,6 +601,12 @@ defmodule Candlex.Backend do
       |> Stream.map(&to_nx(&1, out))
   end
 
+  defp permute(native_tensor, permutation) do
+    native_tensor
+    |> Native.permute(permutation)
+    |> unwrap!()
+  end
+
   @doc false
   defp from_nx(%T{data: %CB{} = data}), do: data
 
@@ -631,6 +690,12 @@ defmodule Candlex.Backend do
 
   defp unsupported_op(op_name) do
     raise("Unsupported candlex operation '#{op_name}'")
+  end
+
+  defp unsupported_option!(opts, key, acceptable_default) do
+    if opts[key] != nil and opts[key] != acceptable_default do
+      raise "#{inspect(key)} option with #{inspect(opts[key])} is not supported"
+    end
   end
 
   defp unwrap!({:ok, result}), do: result
