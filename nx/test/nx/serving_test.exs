@@ -91,12 +91,31 @@ defmodule Nx.ServingTest do
       serving =
         Nx.Serving.new(fn opts ->
           fn batch ->
+            send(self(), batch)
             Nx.Defn.jit_apply(&Nx.multiply(&1, 2), [Nx.Batch.pad(batch, 4)], opts)
           end
         end)
+        |> Nx.Serving.batch_size(4)
 
       batch = Nx.Batch.stack([Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])])
       assert Nx.Serving.run(serving, batch) == Nx.tensor([[2, 4, 6], [8, 10, 12]])
+      assert_receive %Nx.Batch{size: 2}
+    end
+
+    test "with splitting" do
+      serving =
+        Nx.Serving.new(fn opts ->
+          fn batch ->
+            send(self(), batch)
+            Nx.Defn.jit_apply(&Nx.multiply(&1, 2), [Nx.Batch.pad(batch, 2 - batch.size)], opts)
+          end
+        end)
+        |> Nx.Serving.batch_size(2)
+
+      batch = Nx.Batch.concatenate([Nx.tensor([1, 2, 3])])
+      assert Nx.Serving.run(serving, batch) == Nx.tensor([2, 4, 6])
+      assert_receive %Nx.Batch{size: 2}
+      assert_receive %Nx.Batch{size: 1}
     end
 
     test "with module callbacks" do
@@ -714,11 +733,11 @@ defmodule Nx.ServingTest do
 
     test "conflict on batch size" do
       assert_raise ArgumentError,
-                   ~r":batch_size has been set when starting an Nx.Serving process \(15\) but a conflicting value was already set on the Nx.Serving struct \(30\)",
+                   "the batch size set via Nx.Serving.batch_size/2 (30) does not match the batch size given to the serving process (15)",
                    fn ->
                      serving =
                        Nx.Serving.new(Simple, self())
-                       |> Nx.Serving.process_options(batch_size: 30)
+                       |> Nx.Serving.batch_size(30)
 
                      Nx.Serving.start_link(name: :unused, serving: serving, batch_size: 15)
                    end
