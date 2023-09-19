@@ -214,6 +214,30 @@ defmodule Nx.ServingTest do
                [{:batch, Nx.tensor([[2, 4, 6], [8, 10, 12]]), :server_info}]
     end
 
+    test "with splitting" do
+      parent = self()
+
+      serving =
+        Nx.Serving.new(fn opts ->
+          fn batch ->
+            send(parent, batch)
+            Nx.Defn.jit_apply(&Nx.multiply(&1, 2), [Nx.Batch.pad(batch, 2 - batch.size)], opts)
+          end
+        end)
+        |> Nx.Serving.batch_size(2)
+        |> Nx.Serving.streaming()
+
+      batch = Nx.Batch.concatenate([Nx.tensor([1, 2, 3])])
+
+      assert Nx.Serving.run(serving, batch) |> Enum.to_list() == [
+               {:batch, Nx.tensor([2, 4]), :server_info},
+               {:batch, Nx.tensor([6]), :server_info}
+             ]
+
+      assert_receive %Nx.Batch{size: 2}
+      assert_receive %Nx.Batch{size: 1}
+    end
+
     test "with module callbacks" do
       serving = Nx.Serving.new(Simple, self(), garbage_collect: 1) |> Nx.Serving.streaming()
       batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
@@ -221,7 +245,7 @@ defmodule Nx.ServingTest do
       assert Nx.Serving.run(serving, batch) |> Enum.to_list() ==
                [{:batch, Nx.tensor([[2, 4, 6]]), :metadata}]
 
-      assert_received {:init, :inline, [[batch_keys: [:default], hooks: %{}, garbage_collect: 1]]}
+      assert_received {:init, :inline, [[batch_keys: [:default], garbage_collect: 1]]}
       assert_received {:batch, 0, batch}
       assert_received :execute
       assert batch.size == 1
@@ -246,7 +270,7 @@ defmodule Nx.ServingTest do
       {stream, :preprocessing!} = Nx.Serving.run(serving, pre)
       assert Enum.to_list(stream) == [{:batch, Nx.tensor([[2, 4], [6, 8]]), :metadata}]
 
-      assert_received {:init, :inline, [[batch_keys: [:default], hooks: %{}]]}
+      assert_received {:init, :inline, [[batch_keys: [:default]]]}
       assert_received {:pre, ^pre}
       assert_received {:batch, 0, batch}
       assert_received :execute
