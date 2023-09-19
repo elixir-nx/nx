@@ -1221,6 +1221,43 @@ defmodule CandlexTest do
       #   ]
       # ))
     end
+
+    test "reduce_max" do
+      t(42)
+      |> Nx.reduce_max()
+      |> assert_equal(t(42))
+
+      t(42.0)
+      |> Nx.reduce_max()
+      |> assert_equal(t(42.0))
+
+      t([1, 2, 3])
+      |> Nx.reduce_max()
+      |> assert_equal(t(3))
+
+      t([[3, 1, 4], [2, 1, 1]], names: [:x, :y])
+      |> Nx.reduce_max(axes: [:x])
+      |> assert_equal(t([3, 1, 4]))
+
+      t([[3, 1, 4], [2, 1, 1]], names: [:x, :y])
+      |> Nx.reduce_max(axes: [:y])
+      |> assert_equal(t([4, 2]))
+
+      # t([[[1, 2], [4, 5]], [[2, 4], [3, 8]]], names: [:x, :y, :z])
+      # |> Nx.reduce_max(axes: [:x, :z])
+      # |> assert_equal(t([4, 8]))
+
+      # t([[[1, 2], [4, 5]], [[2, 4], [3, 8]]], names: [:x, :y, :z])
+      # |> Nx.reduce_max(axes: [:x, :z], keep_axes: true)
+      # |> assert_equal(t(
+      #   [
+      #     [
+      #       [4],
+      #       [8]
+      #     ]
+      #   ]
+      # ))
+    end
   end
 
   defp t(values, opts \\ []) do

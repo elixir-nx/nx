@@ -41,6 +41,7 @@ rustler::init! {
         tensors::t_shape,
         tensors::argmax,
         tensors::argmin,
+        tensors::reduce_max,
         tensors::negate,
         tensors::where_cond,
         tensors::narrow,

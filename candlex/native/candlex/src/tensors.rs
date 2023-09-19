@@ -160,6 +160,17 @@ pub fn argmin(ex_tensor: ExTensor, dim: usize, keep_dim: bool) -> Result<ExTenso
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+pub fn reduce_max(ex_tensor: ExTensor, dim: usize, keep_dim: bool) -> Result<ExTensor, CandlexError> {
+    let t = if keep_dim {
+        ex_tensor.max_keepdim(dim)?
+    } else {
+        ex_tensor.max(dim)?
+    };
+
+    Ok(ExTensor::new(t))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 pub fn sum(
     ex_tensor: ExTensor,
     dims: Vec<usize>,
