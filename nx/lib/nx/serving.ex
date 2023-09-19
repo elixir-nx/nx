@@ -332,6 +332,7 @@ defmodule Nx.Serving do
     :client_preprocessing,
     :client_postprocessing,
     :streaming,
+    :batch_size,
     distributed_postprocessing: &Function.identity/1,
     process_options: [],
     defn_options: []
@@ -352,7 +353,8 @@ defmodule Nx.Serving do
           distributed_postprocessing: distributed_postprocessing(),
           process_options: keyword(),
           defn_options: keyword(),
-          streaming: nil | %{hooks: [atom()]}
+          streaming: nil | %{hooks: [atom()]},
+          batch_size: nil | pos_integer()
         }
 
   @axis 0
@@ -431,6 +433,37 @@ defmodule Nx.Serving do
 
   def new(module, arg) when is_atom(module) do
     new(module, arg, [])
+  end
+
+  @doc """
+  Sets the batch size for this serving.
+
+  This batch size is used to split batches given to both `run/2` and
+  `batched_run/2`, enforcing that the batch size never goes over a limit.
+  If you only want to batch within the serving process, you must set
+  `:batch_size` via `process_options/2` (or on `start_link/1`).
+
+  Note that `:batch_size` only guarantees a batch does not go over a limit.
+  Batches are not automatically padded to the batch size. Such can be done
+  as necessary inside your serving function by calling `Nx.Batch.pad/2`.
+
+  > #### Why batch on `run/2`? {: .info}
+  >
+  > By default, `run/2` does not place a limit on its input size. It always
+  > processes inputs directly within the current process. On the other hand,
+  > `batched_run/2` always sends your input to a separate process, which
+  > will batch and execute the serving only once the batch is full or a
+  > timeout has elapsed.
+  >
+  > However, in some situations, an input given to `run/2` needs to be
+  > broken into several batches. If we were to very large batches to our
+  > computation, the computation could require too much memory. In such
+  > cases, setting a batch size even on `run/2` is beneficial, because
+  > Nx.Serving takes care of splitting a large batch into smaller ones
+  > that do not exceed the `batch_size` value.
+  """
+  def batch_size(%Nx.Serving{} = serving, batch_size) when batch_size > 0 do
+    %{serving | batch_size: batch_size}
   end
 
   @doc """
@@ -595,6 +628,10 @@ defmodule Nx.Serving do
 
   @doc """
   Runs `serving` with the given `input` inline with the current process.
+
+  The `serving` is executed immediately, without waiting or batching inputs
+  from other processes. If a `batch_size/2` is specified, then the input may
+  be split or padded, but they are still executed immediately inline.
   """
   def run(%Nx.Serving{} = serving, input) do
     %{
@@ -603,31 +640,58 @@ defmodule Nx.Serving do
       client_preprocessing: preprocessing,
       client_postprocessing: postprocessing,
       defn_options: defn_options,
-      streaming: streaming
+      streaming: streaming,
+      batch_size: limit
     } = serving
 
     {ref, defn_options} = run_streaming(streaming, defn_options)
     {%{size: size, key: key} = batch, info} = handle_preprocessing(preprocessing, input)
     {:ok, state} = handle_init(module, :inline, arg, [[batch_keys: [key]] ++ defn_options])
-    {:execute, function, _} = handle_batch(module, batch, 0, state)
 
     execution_result =
       if ref do
+        if is_integer(limit) and size > limit do
+          raise ArgumentError,
+                "batch size (#{size}) cannot exceed Nx.Serving batch size of #{limit} when streaming hooks"
+        end
+
         parent = self()
 
         spawn_link(fn ->
-          {output, metadata} = run_execute(module, function, size)
+          {output, metadata} = run_execute(batch, module, state)
+          output = remove_maybe_padded(output, 0, size)
           send(parent, {ref, {0, size, output, metadata}})
           :ok
         end)
 
         receive_stream("run/2", ref, size)
       else
-        run_execute(module, function, size)
+        batch
+        |> split_batches(limit || size)
+        |> Enum.map(&{run_execute(&1, module, state), &1.size})
+        |> case do
+          [{{output, metadata}, size}] ->
+            {remove_maybe_padded(output, 0, size), metadata}
+
+          [{{output, metadata}, _size} | _] = all ->
+            output =
+              all
+              |> Enum.map(fn {{output, _}, size} -> composite_to_tensors(output, 0, size) end)
+              |> tensors_to_composite(output)
+
+            {output, metadata}
+        end
       end
 
     handle_postprocessing(postprocessing, execution_result, info)
   end
+
+  defp split_batches(batch, limit) when batch.size > limit do
+    {head, rest} = Nx.Batch.split(batch, limit)
+    [head | split_batches(rest, limit)]
+  end
+
+  defp split_batches(batch, _limit), do: [batch]
 
   defp run_streaming(nil, defn_options), do: {nil, defn_options}
 
@@ -649,16 +713,37 @@ defmodule Nx.Serving do
     send(pid, {ref, {hook, 0, result}})
   end
 
-  defp run_execute(module, function, size) do
+  defp run_execute(batch, module, state) do
+    {:execute, function, _} = handle_batch(module, batch, 0, state)
+
     :telemetry.span([:nx, :serving, :execute], %{module: module}, fn ->
       {output, metadata} = handle_executed(module, function.())
-      output = remove_maybe_padded(output, 0, size)
       {{output, metadata}, %{module: module, metadata: metadata}}
     end)
   end
 
   defp remove_maybe_padded(output, start, size) do
     Nx.Defn.Composite.traverse(output, &Nx.slice_along_axis(&1, start, size, axis: @axis))
+  end
+
+  defp composite_to_tensors(output, start, size) do
+    output
+    |> Nx.Defn.Composite.reduce(
+      [],
+      &[Nx.slice_along_axis(&1, start, size, axis: @axis) | &2]
+    )
+    |> Enum.reverse()
+  end
+
+  defp tensors_to_composite(tensors, template) do
+    concat = Enum.zip_with(tensors, &Nx.concatenate(&1, axis: @axis))
+
+    {output, []} =
+      Nx.Defn.Composite.traverse(template, concat, fn _template, [tensor | tensors] ->
+        {tensor, tensors}
+      end)
+
+    output
   end
 
   ## Process API
@@ -686,6 +771,9 @@ defmodule Nx.Serving do
 
   ## Options
 
+  All options, except `:name` and `:serving`, can also be set via
+  `process_options/2`.
+
     * `:name` - an atom with the name of the process
 
     * `:serving` - a `Nx.Serving` struct with the serving configuration
@@ -694,13 +782,14 @@ defmodule Nx.Serving do
       to accumulate different batches with different properties. Defaults to
       `[:default]`
 
-    * `:batch_size` - the maximum batch size. A value is first read
-      from the `Nx.Serving` struct and then it falls back to this option
-      (which defaults to `1`)
+    * `:batch_size` - the maximum batch size. A default value can be set with
+      `batch_size/2`, which applies to both `run/2` and `batched_run/2`.
+      Setting this option only affects `batched_run/2` and it defaults to `1`
+      if none is set. Note batches received by the serving are not automatically
+      padded to the batch size, such can be done with `Nx.Batch.pad/2`.
 
     * `:batch_timeout` - the maximum time to wait, in milliseconds,
-      before executing the batch. A value is first read from the `Nx.Serving`
-      struct and then it falls back to this option (which defaults to `100`ms)
+      before executing the batch (defaults to `100`ms)
 
     * `:partitions` - when `true`, starts several partitions under this serving.
       The number of partitions will be determined according to your compiler
@@ -716,23 +805,23 @@ defmodule Nx.Serving do
     opts = Keyword.validate!(opts, [:name, :serving] ++ @process_keys)
     name = Keyword.fetch!(opts, :name)
     serving = Keyword.fetch!(opts, :serving)
+    opts = Keyword.merge(serving.process_options, opts)
 
-    opts =
-      Keyword.merge(serving.process_options, opts, fn
-        k, v1, v2 when k == :batch_size and v1 != v2 ->
-          raise ArgumentError,
-                "#{inspect(k)} has been set when starting an Nx.Serving process (#{inspect(v2)}) " <>
-                  "but a conflicting value was already set on the Nx.Serving struct (#{inspect(v1)}). " <>
-                  "Please remove the option given to the Nx.Serving process"
+    serving_batch_size = serving.batch_size
+    opts_batch_size = opts[:batch_size]
 
-        _k, _v1, v2 ->
-          v2
-      end)
+    batch_size =
+      if serving_batch_size && opts_batch_size && serving_batch_size != opts_batch_size do
+        raise ArgumentError,
+              "the batch size set via Nx.Serving.batch_size/2 (#{serving_batch_size}) " <>
+                "does not match the batch size given to the serving process (#{opts_batch_size})"
+      else
+        serving_batch_size || opts_batch_size || 1
+      end
 
     shutdown = Keyword.get(opts, :shutdown, 30_000)
     partitions = Keyword.get(opts, :partitions, false)
     batch_keys = Keyword.get(opts, :batch_keys, [:default])
-    batch_size = Keyword.get(opts, :batch_size, 1)
     batch_timeout = Keyword.get(opts, :batch_timeout, 100)
     process_options = Keyword.take(opts, [:name, :hibernate_after, :spawn_opt])
 
@@ -992,17 +1081,7 @@ defmodule Nx.Serving do
   end
 
   defp receive_execute(_ref, size, size, acc, {template, metadata}) do
-    tensors =
-      acc
-      |> Enum.reverse()
-      |> Enum.zip_with(&Nx.concatenate(&1, axis: @axis))
-
-    {output, []} =
-      Nx.Defn.Composite.traverse(template, tensors, fn _template, [tensor | tensors] ->
-        {tensor, tensors}
-      end)
-
-    {:ok, output, metadata}
+    {:ok, acc |> Enum.reverse() |> tensors_to_composite(template), metadata}
   end
 
   defp receive_execute(ref, size, index, acc, _template_metadata) do
@@ -1013,14 +1092,7 @@ defmodule Nx.Serving do
         if acc == [] and output_size == size - index do
           {:ok, remove_maybe_padded(output, output_start, output_size), metadata}
         else
-          funs =
-            output
-            |> Nx.Defn.Composite.reduce(
-              [],
-              &[Nx.slice_along_axis(&1, output_start, output_size, axis: @axis) | &2]
-            )
-            |> Enum.reverse()
-
+          funs = composite_to_tensors(output, output_start, output_size)
           receive_execute(ref, size, index + output_size, [funs | acc], {output, metadata})
         end
 

@@ -13,7 +13,8 @@ defmodule Nx.Application do
 end
 
 defmodule Nx.HiddenServing do
-  # Module to connect hidden nodes with serving
+  # Module to connect hidden nodes with serving.
+  # It relies on sending private pg messages to Nx serving.
   @moduledoc false
   use GenServer
 
