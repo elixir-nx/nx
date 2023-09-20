@@ -91,12 +91,46 @@ defmodule Nx.ServingTest do
       serving =
         Nx.Serving.new(fn opts ->
           fn batch ->
+            send(self(), batch)
             Nx.Defn.jit_apply(&Nx.multiply(&1, 2), [Nx.Batch.pad(batch, 4)], opts)
           end
         end)
+        |> Nx.Serving.batch_size(4)
 
       batch = Nx.Batch.stack([Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])])
       assert Nx.Serving.run(serving, batch) == Nx.tensor([[2, 4, 6], [8, 10, 12]])
+      assert_receive %Nx.Batch{size: 2}
+    end
+
+    test "with splitting" do
+      serving =
+        Nx.Serving.new(fn opts ->
+          fn batch ->
+            send(self(), batch)
+            Nx.Defn.jit_apply(&Nx.multiply(&1, 2), [Nx.Batch.pad(batch, 2 - batch.size)], opts)
+          end
+        end)
+        |> Nx.Serving.batch_size(2)
+
+      batch = Nx.Batch.concatenate([Nx.tensor([1, 2, 3])])
+      assert Nx.Serving.run(serving, batch) == Nx.tensor([2, 4, 6])
+      assert_receive %Nx.Batch{size: 2}
+      assert_receive %Nx.Batch{size: 1}
+    end
+
+    test "with input streaming" do
+      serving = Nx.Serving.jit(&Nx.multiply(&1, 2))
+      stream = Stream.map([[1, 2], [3]], &Nx.Batch.concatenate([Nx.tensor(&1)]))
+      assert Nx.Serving.run(serving, stream) == Nx.tensor([2, 4, 6])
+    end
+
+    test "with input streaming above batch size" do
+      serving = Nx.Serving.jit(&Nx.multiply(&1, 2)) |> Nx.Serving.batch_size(1)
+      stream = Stream.map([[1, 2], [3]], &Nx.Batch.concatenate([Nx.tensor(&1)]))
+
+      assert_raise RuntimeError,
+                   ~r"client_preprocessing must return a stream of Nx.Batch of maximum size 1",
+                   fn -> Nx.Serving.run(serving, stream) end
     end
 
     test "with module callbacks" do
@@ -195,6 +229,58 @@ defmodule Nx.ServingTest do
                [{:batch, Nx.tensor([[2, 4, 6], [8, 10, 12]]), :server_info}]
     end
 
+    test "with splitting" do
+      parent = self()
+
+      serving =
+        Nx.Serving.new(fn opts ->
+          fn batch ->
+            send(parent, batch)
+            Nx.Defn.jit_apply(&Nx.multiply(&1, 2), [Nx.Batch.pad(batch, 2 - batch.size)], opts)
+          end
+        end)
+        |> Nx.Serving.batch_size(2)
+        |> Nx.Serving.streaming()
+
+      batch = Nx.Batch.concatenate([Nx.tensor([1, 2, 3])])
+
+      assert Nx.Serving.run(serving, batch) |> Enum.to_list() == [
+               {:batch, Nx.tensor([2, 4]), :server_info},
+               {:batch, Nx.tensor([6]), :server_info}
+             ]
+
+      assert_receive %Nx.Batch{size: 2}
+      assert_receive %Nx.Batch{size: 1}
+    end
+
+    test "with input streaming" do
+      serving = Nx.Serving.jit(&Nx.multiply(&1, 2)) |> Nx.Serving.streaming()
+      stream = Stream.map([[1, 2], [3]], &Nx.Batch.concatenate([Nx.tensor(&1)]))
+
+      assert Nx.Serving.run(serving, stream) |> Enum.to_list() == [
+               {:batch, Nx.tensor([2, 4]), :server_info},
+               {:batch, Nx.tensor([6]), :server_info}
+             ]
+    end
+
+    @tag :capture_log
+    test "with input streaming and non-batch" do
+      Process.flag(:trap_exit, true)
+      serving = Nx.Serving.jit(&Nx.multiply(&1, 2)) |> Nx.Serving.streaming()
+      stream = Stream.map([[1, 2], [3]], &Nx.tensor(&1))
+
+      assert catch_exit(serving |> Nx.Serving.run(stream) |> Enum.to_list())
+    end
+
+    test "with input streaming and hooks" do
+      serving = Nx.Serving.jit(&Nx.multiply(&1, 2)) |> Nx.Serving.streaming(hooks: [:foo, :bar])
+      stream = Stream.map([[1, 2], [3]], &Nx.Batch.concatenate([Nx.tensor(&1)]))
+
+      assert_raise ArgumentError,
+                   ~r"streaming hooks do not support input streaming, input must be a Nx.Batch",
+                   fn -> Nx.Serving.run(serving, stream) end
+    end
+
     test "with module callbacks" do
       serving = Nx.Serving.new(Simple, self(), garbage_collect: 1) |> Nx.Serving.streaming()
       batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
@@ -202,7 +288,7 @@ defmodule Nx.ServingTest do
       assert Nx.Serving.run(serving, batch) |> Enum.to_list() ==
                [{:batch, Nx.tensor([[2, 4, 6]]), :metadata}]
 
-      assert_received {:init, :inline, [[batch_keys: [:default], hooks: %{}, garbage_collect: 1]]}
+      assert_received {:init, :inline, [[batch_keys: [:default], garbage_collect: 1]]}
       assert_received {:batch, 0, batch}
       assert_received :execute
       assert batch.size == 1
@@ -227,7 +313,7 @@ defmodule Nx.ServingTest do
       {stream, :preprocessing!} = Nx.Serving.run(serving, pre)
       assert Enum.to_list(stream) == [{:batch, Nx.tensor([[2, 4], [6, 8]]), :metadata}]
 
-      assert_received {:init, :inline, [[batch_keys: [:default], hooks: %{}]]}
+      assert_received {:init, :inline, [[batch_keys: [:default]]]}
       assert_received {:pre, ^pre}
       assert_received {:batch, 0, batch}
       assert_received :execute
@@ -699,13 +785,36 @@ defmodule Nx.ServingTest do
                Nx.tensor([[22, 24], [26, 28], [30, 32], [34, 36]])
     end
 
+    test "with input streaming", config do
+      simple_supervised!(config, batch_size: 2)
+      stream = Stream.map([[1, 2], [3]], &Nx.Batch.concatenate([Nx.tensor(&1)]))
+      assert Nx.Serving.batched_run(config.test, stream) == Nx.tensor([2, 4, 6])
+      assert_received {:init, :process, [[batch_keys: [:default]]]}
+      assert_received {:batch, 0, batch1}
+      assert_received {:batch, 0, batch2}
+      assert_received :execute
+      assert batch1.size == 2
+      assert batch1.pad == 0
+      assert batch2.size == 1
+      assert batch2.pad == 0
+
+      # Assert we don't leak down messages
+      refute_received {:DOWN, _, _, _, _}
+    end
+
+    @tag :capture_log
+    test "with input streaming and non-batch", config do
+      Process.flag(:trap_exit, true)
+      simple_supervised!(config, batch_size: 2)
+      stream = Stream.map([[1, 2], [3]], &Nx.tensor(&1))
+      assert catch_exit(config.test |> Nx.Serving.batched_run(stream) |> Enum.to_list())
+    end
+
     test "instrumenting with telemetry", config do
       ref = :telemetry_test.attach_event_handlers(self(), [[:nx, :serving, :execute, :stop]])
-
       simple_supervised!(config)
 
       batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
-
       Nx.Serving.batched_run(config.test, batch)
 
       assert_receive {[:nx, :serving, :execute, :stop], ^ref, _measure, meta}
@@ -714,11 +823,11 @@ defmodule Nx.ServingTest do
 
     test "conflict on batch size" do
       assert_raise ArgumentError,
-                   ~r":batch_size has been set when starting an Nx.Serving process \(15\) but a conflicting value was already set on the Nx.Serving struct \(30\)",
+                   "the batch size set via Nx.Serving.batch_size/2 (30) does not match the batch size given to the serving process (15)",
                    fn ->
                      serving =
                        Nx.Serving.new(Simple, self())
-                       |> Nx.Serving.process_options(batch_size: 30)
+                       |> Nx.Serving.batch_size(30)
 
                      Nx.Serving.start_link(name: :unused, serving: serving, batch_size: 15)
                    end
@@ -977,6 +1086,39 @@ defmodule Nx.ServingTest do
       Task.await(t2, :infinity)
     end
 
+    test "with input streaming", config do
+      serving = Nx.Serving.new(Simple, self()) |> Nx.Serving.streaming()
+      simple_supervised!(config, batch_size: 2, serving: serving)
+      stream = Stream.map([[1, 2], [3]], &Nx.Batch.concatenate([Nx.tensor(&1)]))
+
+      assert Nx.Serving.batched_run(config.test, stream) |> Enum.to_list() == [
+               {:batch, Nx.tensor([2, 4]), :metadata},
+               {:batch, Nx.tensor([6]), :metadata}
+             ]
+
+      assert_received {:init, :process, [[batch_keys: [:default]]]}
+      assert_received {:batch, 0, batch1}
+      assert_received {:batch, 0, batch2}
+      assert_received :execute
+      assert batch1.size == 2
+      assert batch1.pad == 0
+      assert batch2.size == 1
+      assert batch2.pad == 0
+
+      # Assert we don't leak down messages
+      refute_received {:DOWN, _, _, _, _}
+    end
+
+    test "with input streaming and hooks", config do
+      serving = Nx.Serving.new(Simple, self()) |> Nx.Serving.streaming(hooks: [:foo, :bar])
+      simple_supervised!(config, batch_size: 2, serving: serving)
+      stream = Stream.map([[1, 2], [3]], &Nx.Batch.concatenate([Nx.tensor(&1)]))
+
+      assert_raise ArgumentError,
+                   "streaming hooks do not support input streaming, input must be a Nx.Batch",
+                   fn -> Nx.Serving.batched_run(config.test, stream) end
+    end
+
     test "errors on batch size", config do
       serving =
         Nx.Serving.jit(&add_five_round_about/1)
@@ -1003,11 +1145,9 @@ defmodule Nx.ServingTest do
       simple_supervised!(config, serving: serving)
 
       batch = Nx.Batch.stack([Nx.tensor([1, 2, 3])])
-
       stream = Nx.Serving.batched_run(config.test, batch)
 
       {_pid, ref} = spawn_monitor(fn -> Enum.to_list(stream) end)
-
       assert_receive {:DOWN, ^ref, _, _, {%RuntimeError{message: message}, _}}
 
       assert message ==
