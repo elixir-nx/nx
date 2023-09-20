@@ -51,6 +51,23 @@ defmodule Candlex.Backend do
     |> to_nx(out)
   end
 
+  def iota(%T{shape: shape, type: type} = out, axis, backend_options) do
+    # Build in one dimension, then broadcast
+    axis_size = elem(shape, axis)
+
+    Native.arange(
+      0,
+      axis_size,
+      to_candle_dtype(type),
+      Tuple.duplicate(1, Nx.rank(shape)) |> put_elem(axis, axis_size),
+      device_option(backend_options)
+    )
+    |> unwrap!()
+    |> Native.broadcast_to(shape)
+    |> unwrap!()
+    |> to_nx(out)
+  end
+
   @impl true
   def eye(%T{shape: shape, type: type} = out, backend_options) do
     iota = Nx.iota(shape, backend_options)
