@@ -9,6 +9,7 @@ defmodule Candlex.Native do
   def all(_tensor), do: error()
   def where_cond(_tensor, _on_true, _on_false), do: error()
   def narrow(_tensor, _dim, _start, _length), do: error()
+  def gather(_tensor, _indexes, _dim), do: error()
   def chunk(_tensor, _num_chunks), do: error()
   def squeeze(_tensor, _dim), do: error()
   def arange(_start, _end, _dtype, _shape, _device), do: error()

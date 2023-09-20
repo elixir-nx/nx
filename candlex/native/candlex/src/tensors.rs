@@ -80,6 +80,11 @@ pub fn narrow(
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+pub fn gather(t: ExTensor, indexes: ExTensor, dim: usize) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(t.gather(indexes.deref(), dim)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 pub fn chunk(t: ExTensor, num_chunks: usize) -> Result<Vec<ExTensor>, CandlexError> {
     Ok(t.chunk(num_chunks, 0)?
         .into_iter()

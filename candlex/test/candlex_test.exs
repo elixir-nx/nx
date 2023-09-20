@@ -1258,6 +1258,44 @@ defmodule CandlexTest do
       #   ]
       # ))
     end
+
+    test "take_along_axis" do
+      t([[1, 2, 3], [4, 5, 6]])
+      |> Nx.take_along_axis(
+        t(
+          [
+            [0, 0, 2, 2, 1, 1],
+            [2, 2, 1, 1, 0, 0]
+          ]
+        ),
+        axis: 1
+      )
+      |> assert_equal(t(
+        [
+          [1, 1, 3, 3, 2, 2],
+          [6, 6, 5, 5, 4, 4]
+        ]
+      ))
+
+      t([[1, 2, 3], [4, 5, 6]])
+      |> Nx.take_along_axis(
+        t(
+          [
+            [0, 1, 1],
+            [1, 0, 0],
+            [0, 1, 0]
+          ]
+        ),
+        axis: 0
+      )
+      |> assert_equal(t(
+        [
+          [1, 5, 6],
+          [4, 2, 3],
+          [1, 5, 3]
+        ]
+      ))
+    end
   end
 
   defp t(values, opts \\ []) do

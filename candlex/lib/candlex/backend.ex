@@ -295,6 +295,15 @@ defmodule Candlex.Backend do
     |> to_nx(out)
   end
 
+  @impl true
+  def take_along_axis(%T{} = out, %T{} = tensor, %T{} = indexes, axis) do
+    tensor
+    |> from_nx()
+    |> Native.gather(from_nx(indexes), axis)
+    |> unwrap!()
+    |> to_nx(out)
+  end
+
   # N-dim
 
   @impl true
