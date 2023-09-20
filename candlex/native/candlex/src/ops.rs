@@ -218,6 +218,10 @@ custom_binary_bool_op!(
 custom_binary_bool_op!(
     LogicalXor,
     "logical_xor",
-    |v1, v2| if (v1 as i8 != 0) == (v2 as i8 != 0) { 0 } else { 1 },
+    |v1, v2| if (v1 as i8 != 0) == (v2 as i8 != 0) {
+        0
+    } else {
+        1
+    },
     (U8, U32, I64, F32, F64)
 );

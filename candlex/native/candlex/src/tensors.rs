@@ -165,7 +165,11 @@ pub fn argmin(ex_tensor: ExTensor, dim: usize, keep_dim: bool) -> Result<ExTenso
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-pub fn reduce_max(ex_tensor: ExTensor, dim: usize, keep_dim: bool) -> Result<ExTensor, CandlexError> {
+pub fn reduce_max(
+    ex_tensor: ExTensor,
+    dim: usize,
+    keep_dim: bool,
+) -> Result<ExTensor, CandlexError> {
     let t = if keep_dim {
         ex_tensor.max_keepdim(dim)?
     } else {
@@ -247,7 +251,13 @@ pub fn conv1d(tensor: ExTensor, kernel: ExTensor) -> Result<ExTensor, CandlexErr
     let dilation = 1;
     let groups = 1;
 
-    Ok(ExTensor::new(tensor.conv1d(kernel.deref(), padding, stride, dilation, groups)?))
+    Ok(ExTensor::new(tensor.conv1d(
+        kernel.deref(),
+        padding,
+        stride,
+        dilation,
+        groups,
+    )?))
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
@@ -257,7 +267,13 @@ pub fn conv2d(tensor: ExTensor, kernel: ExTensor) -> Result<ExTensor, CandlexErr
     let dilation = 1;
     let groups = 1;
 
-    Ok(ExTensor::new(tensor.conv2d(kernel.deref(), padding, stride, dilation, groups)?))
+    Ok(ExTensor::new(tensor.conv2d(
+        kernel.deref(),
+        padding,
+        stride,
+        dilation,
+        groups,
+    )?))
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
