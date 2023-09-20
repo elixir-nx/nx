@@ -157,6 +157,7 @@ defmodule Candlex.Backend do
     out
     |> from_binary(to_binary(tensor), [])
   end
+
   def reduce_max(%T{} = out, %T{} = tensor, opts) do
     axis =
       case opts[:axes] do
@@ -622,33 +623,32 @@ defmodule Candlex.Backend do
     num_batches = div(axis_total, batch_size)
     native_tensor = from_nx(t)
 
-    native_batches =
-      cond do
-        remainder == 0 ->
-          native_tensor
-          |> Native.chunk(num_batches)
-          |> unwrap!()
-        remainder > 0 && leftover == :repeat ->
-          slice_shape =
-            shape
-            |> Tuple.delete_at(first_dimension)
-            |> Tuple.insert_at(first_dimension, remainder)
+    cond do
+      remainder == 0 ->
+        native_tensor
+        |> Native.chunk(num_batches)
+        |> unwrap!()
 
-          [
-            native_tensor,
-            Native.narrow(native_tensor, first_dimension, 0, batch_size - remainder)
-            |> unwrap!()
-          ]
-          |> Native.concatenate(first_dimension)
-          |> unwrap!()
-          |> Native.chunk(num_batches + 1)
-          |> unwrap!()
-        true ->
-          raise "not implemented"
-      end
+      remainder > 0 && leftover == :repeat ->
+        slice_shape =
+          shape
+          |> Tuple.delete_at(first_dimension)
+          |> Tuple.insert_at(first_dimension, remainder)
 
-      native_batches
-      |> Stream.map(&to_nx(&1, out))
+        [
+          native_tensor,
+          Native.narrow(native_tensor, first_dimension, 0, batch_size - remainder)
+          |> unwrap!()
+        ]
+        |> Native.concatenate(first_dimension)
+        |> unwrap!()
+        |> Native.chunk(num_batches + 1)
+        |> unwrap!()
+
+      true ->
+        raise "not implemented"
+    end
+    |> Stream.map(&to_nx(&1, out))
   end
 
   defp permute(native_tensor, permutation) do
