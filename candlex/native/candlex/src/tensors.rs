@@ -212,6 +212,11 @@ pub fn reshape(t: ExTensor, shape: Term) -> Result<ExTensor, CandlexError> {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+pub fn slice_scatter(t: ExTensor, src: ExTensor, dim: usize, start: usize) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(t.slice_scatter(src.deref(), dim, start)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 pub fn where_cond(
     t: ExTensor,
     on_true: ExTensor,

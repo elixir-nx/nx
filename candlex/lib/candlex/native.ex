@@ -21,6 +21,7 @@ defmodule Candlex.Native do
   def concatenate(_tensors, _axis), do: error()
   def conv1d(_tensor, _kernel), do: error()
   def conv2d(_tensor, _kernel), do: error()
+  def slice_scatter(_tensor, _src, _dim, _start), do: error()
 
   for op <- [
         :abs,

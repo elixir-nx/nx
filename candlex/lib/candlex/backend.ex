@@ -302,6 +302,27 @@ defmodule Candlex.Backend do
   # Indexed
 
   @impl true
+  def put_slice(%T{} = out, %T{} = t, [start] = _start_indices, slice) do
+    t
+    |> from_nx()
+    |> Native.slice_scatter(from_nx(slice), 0, Nx.to_number(start))
+    |> unwrap!()
+    |> to_nx(out)
+  end
+
+  def put_slice(%T{} = out, %T{} = t, [start1, start2] = _start_indices, slice) do
+    if Nx.equal(start1, 0) do
+      t
+      |> from_nx()
+      |> Native.slice_scatter(from_nx(slice), 1, Nx.to_number(start2))
+      |> unwrap!()
+      |> to_nx(out)
+    else
+      raise "unsupported"
+    end
+  end
+
+  @impl true
   def slice(
         %T{shape: _output_shape} = out,
         %T{shape: input_shape} = t,
