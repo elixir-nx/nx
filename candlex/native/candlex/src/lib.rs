@@ -7,6 +7,8 @@ mod atoms {
 
 mod devices;
 mod error;
+#[cfg(feature = "cuda")]
+mod kernels;
 mod ops;
 mod tensors;
 

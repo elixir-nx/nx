@@ -17,5 +17,8 @@ rustler = "0.29.1"
 statrs = "0.16.0"
 thiserror = "1.0.47"
 
+[build-dependencies]
+anyhow = "1.0.75"
+
 [features]
 cuda = ["candle-core/cuda"]

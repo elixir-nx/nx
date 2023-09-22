@@ -12,6 +12,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.75"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
+
+[[package]]
 name = "approx"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -47,7 +53,7 @@ checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 [[package]]
 name = "candle-core"
 version = "0.2.3"
-source = "git+https://github.com/mimiquate/candle?branch=cuda#de3f2be78379ffdaf404bb3d46b3578e6a005957"
+source = "git+https://github.com/mimiquate/candle?branch=cuda#18ba60c1de589473abd53d4757e4e87484856b4e"
 dependencies = [
  "byteorder",
  "candle-gemm",
@@ -193,7 +199,7 @@ dependencies = [
 [[package]]
 name = "candle-kernels"
 version = "0.2.3"
-source = "git+https://github.com/mimiquate/candle?branch=cuda#de3f2be78379ffdaf404bb3d46b3578e6a005957"
+source = "git+https://github.com/mimiquate/candle?branch=cuda#18ba60c1de589473abd53d4757e4e87484856b4e"
 dependencies = [
  "glob",
  "rayon",
@@ -203,6 +209,7 @@ dependencies = [
 name = "candlex"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "candle-core",
  "half",
  "num-traits",

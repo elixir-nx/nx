@@ -1,3 +1,5 @@
+#[cfg(feature = "cuda")]
+use candle_core::CudaStorage;
 use candle_core::{CpuStorage, CustomOp1, CustomOp2, Error, Layout, Shape};
 use num_traits::cast::FromPrimitive;
 use num_traits::Float;
@@ -35,6 +37,55 @@ macro_rules! custom_unary_op {
                     s => Err(Error::UnsupportedDTypeForOp(s.dtype(), $name).bt())?
                 }
             }
+
+            #[cfg(feature = "cuda")]
+            fn cuda_fwd(
+                &self,
+                storage: &CudaStorage,
+                layout: &Layout,
+            ) -> Result<(CudaStorage, Shape), candle_core::Error> {
+                use crate::kernels;
+                use candle_core::cuda_backend::cudarc::driver::{CudaSlice, DeviceRepr, LaunchAsync, LaunchConfig};
+                use candle_core::cuda_backend::{kernel_name, Map1, WrapErr};
+                use candle_core::{CudaDevice, WithDType};
+
+                impl Map1 for $struct_name {
+                    fn f<T: DeviceRepr + WithDType>(
+                        &self,
+                        src: &CudaSlice<T>,
+                        device: &CudaDevice,
+                        layout: &Layout,
+                    ) -> Result<CudaSlice<T>, candle_core::Error> {
+                        let src = src.slice(layout.start_offset()..);
+                        let func = device.get_or_load_func(&kernel_name::<T>($name), kernels::CUSTOM_UNARY)?;
+                        let dims = layout.shape().dims();
+                        let elem_count = layout.shape().elem_count();
+                        let launch_config = LaunchConfig::for_num_elems(elem_count as u32);
+                        let dims_and_strides = device.htod_copy([dims, layout.stride()].concat()).w()?;
+                        // SAFETY: Set later by running the kernel.
+                        let dst = unsafe { device.alloc::<T>(elem_count) }.w()?;
+                        let params = (elem_count, dims.len(), &dims_and_strides, &src, &dst);
+                        // SAFETY: ffi.
+                        unsafe { func.launch(launch_config, params) }.w()?;
+
+                        Ok(dst)
+                    }
+                }
+
+                use candle_core::backend::BackendStorage;
+                let device = storage.device();
+                let slice = $struct_name.map(&storage.slice, device, layout)?;
+
+                Ok(
+                    (
+                        CudaStorage {
+                            slice,
+                            device: device.clone(),
+                        },
+                        layout.shape().clone()
+                    )
+                )
+            }
         }
     };
 }
@@ -68,12 +119,62 @@ macro_rules! custom_unary_bool_op {
                     s => Err(Error::UnsupportedDTypeForOp(s.dtype(), $name).bt())?
                 }
             }
+
+            #[cfg(feature = "cuda")]
+            fn cuda_fwd(
+                &self,
+                storage: &CudaStorage,
+                layout: &Layout,
+            ) -> Result<(CudaStorage, Shape), candle_core::Error> {
+                use crate::kernels;
+                use candle_core::cuda_backend::cudarc::driver::{CudaSlice, DeviceRepr, LaunchAsync, LaunchConfig, ValidAsZeroBits};
+                use candle_core::cuda_backend::{kernel_name, CudaStorageSlice, Map1Any, WrapErr};
+                use candle_core::{CudaDevice, WithDType};
+
+                impl Map1Any for $struct_name {
+                    fn f<T: DeviceRepr + WithDType + ValidAsZeroBits, W: Fn(CudaSlice<T>) -> CudaStorageSlice>(
+                        &self,
+                        src: &CudaSlice<T>,
+                        device: &CudaDevice,
+                        layout: &Layout,
+                        _wrap: W,
+                    ) -> Result<CudaStorageSlice, candle_core::Error> {
+                        let src = src.slice(layout.start_offset()..);
+                        let func = device.get_or_load_func(&kernel_name::<T>($name), kernels::CUSTOM_UNARY)?;
+                        let dims = layout.shape().dims();
+                        let elem_count = layout.shape().elem_count();
+                        let launch_config = LaunchConfig::for_num_elems(elem_count as u32);
+                        let dims_and_strides = device.htod_copy([dims, layout.stride()].concat()).w()?;
+                        // SAFETY: Set later by running the kernel.
+                        let dst = unsafe { device.alloc::<u8>(elem_count) }.w()?;
+                        let params = (elem_count, dims.len(), &dims_and_strides, &src, &dst);
+                        // SAFETY: ffi.
+                        unsafe { func.launch(launch_config, params) }.w()?;
+
+                        Ok(CudaStorageSlice::U8(dst))
+                    }
+                }
+
+                use candle_core::backend::BackendStorage;
+                let device = storage.device();
+                let slice = $struct_name.map(&storage.slice, device, layout)?;
+
+                Ok(
+                    (
+                        CudaStorage {
+                            slice,
+                            device: device.clone(),
+                        },
+                        layout.shape().clone()
+                    )
+                )
+            }
         }
     };
 }
 
 macro_rules! custom_unary_op_closure {
-    ($struct_name:ident, $name:expr, $closure:expr, ($($dtypes:ident),+)) => {
+    ($struct_name:ident, $name:expr, $cpu_closure:expr, ($($dtypes:ident),+)) => {
         pub(crate) struct $struct_name;
 
         impl CustomOp1 for $struct_name {
@@ -94,19 +195,68 @@ macro_rules! custom_unary_op_closure {
                 match storage {
                     $(
                         CpuStorage::$dtypes(vec) => {
-                            let data = candle_core::cpu_backend::unary_map(vec, layout, $closure);
+                            let data = candle_core::cpu_backend::unary_map(vec, layout, $cpu_closure);
                             Ok((CpuStorage::$dtypes(data), layout.shape().clone()))
                         }
                     )*
                     s => Err(Error::UnsupportedDTypeForOp(s.dtype(), $name).bt())?
                 }
             }
+
+            #[cfg(feature = "cuda")]
+            fn cuda_fwd(
+                &self,
+                storage: &CudaStorage,
+                layout: &Layout,
+            ) -> Result<(CudaStorage, Shape), candle_core::Error> {
+                use crate::kernels;
+                use candle_core::cuda_backend::cudarc::driver::{CudaSlice, DeviceRepr, LaunchAsync, LaunchConfig};
+                use candle_core::cuda_backend::{kernel_name, Map1, WrapErr};
+                use candle_core::{CudaDevice, WithDType};
+
+                impl Map1 for $struct_name {
+                    fn f<T: DeviceRepr + WithDType>(
+                        &self,
+                        src: &CudaSlice<T>,
+                        device: &CudaDevice,
+                        layout: &Layout,
+                    ) -> Result<CudaSlice<T>, candle_core::Error> {
+                        let src = src.slice(layout.start_offset()..);
+                        let func = device.get_or_load_func(&kernel_name::<T>($name), kernels::CUSTOM_UNARY)?;
+                        let dims = layout.shape().dims();
+                        let elem_count = layout.shape().elem_count();
+                        let launch_config = LaunchConfig::for_num_elems(elem_count as u32);
+                        let dims_and_strides = device.htod_copy([dims, layout.stride()].concat()).w()?;
+                        // SAFETY: Set later by running the kernel.
+                        let dst = unsafe { device.alloc::<T>(elem_count) }.w()?;
+                        let params = (elem_count, dims.len(), &dims_and_strides, &src, &dst);
+                        // SAFETY: ffi.
+                        unsafe { func.launch(launch_config, params) }.w()?;
+
+                        Ok(dst)
+                    }
+                }
+
+                use candle_core::backend::BackendStorage;
+                let device = storage.device();
+                let slice = $struct_name.map(&storage.slice, device, layout)?;
+
+                Ok(
+                    (
+                        CudaStorage {
+                            slice,
+                            device: device.clone(),
+                        },
+                        layout.shape().clone()
+                    )
+                )
+            }
         }
     };
 }
 
 macro_rules! custom_binary_op {
-    ($struct_name:ident, $name:literal, $closure:expr, ($($dtypes:ident),+)) => {
+    ($struct_name:ident, $name:literal, $cpu_closure:expr, ($($dtypes:ident),+)) => {
         pub(crate) struct $struct_name;
 
         impl CustomOp2 for $struct_name {
@@ -128,7 +278,7 @@ macro_rules! custom_binary_op {
                 match (s1, s2) {
                     $(
                         (CpuStorage::$dtypes(lhs), CpuStorage::$dtypes(rhs)) => {
-                            let data = candle_core::cpu_backend::binary_map(l1, l2, lhs, rhs, $closure);
+                            let data = candle_core::cpu_backend::binary_map(l1, l2, lhs, rhs, $cpu_closure);
 
                             Ok((CpuStorage::$dtypes(data), l1.shape().clone()))
                         }
@@ -143,12 +293,69 @@ macro_rules! custom_binary_op {
                     }
                 }
             }
+
+            #[cfg(feature = "cuda")]
+            fn cuda_fwd(
+                &self,
+                s1: &CudaStorage,
+                l1: &Layout,
+                s2: &CudaStorage,
+                l2: &Layout,
+            ) -> Result<(CudaStorage, Shape), candle_core::Error> {
+                use crate::kernels;
+                use candle_core::cuda_backend::cudarc::driver::{CudaSlice, DeviceRepr, LaunchAsync, LaunchConfig, ValidAsZeroBits};
+                use candle_core::cuda_backend::{kernel_name, Map2, WrapErr};
+                use candle_core::{CudaDevice, WithDType};
+
+                impl Map2 for $struct_name {
+                    fn f<T: DeviceRepr + WithDType + ValidAsZeroBits>(
+                        &self,
+                        src1: &CudaSlice<T>,
+                        layout1: &Layout,
+                        src2: &CudaSlice<T>,
+                        layout2: &Layout,
+                        device: &CudaDevice,
+                    ) -> Result<CudaSlice<T>, candle_core::Error> {
+                        let shape1 = layout1.shape();
+                        let dims1 = shape1.dims();
+                        let elem_count1 = shape1.elem_count();
+                        let launch_config = LaunchConfig::for_num_elems(elem_count1 as u32);
+                        let dims_and_strides = device
+                            .htod_copy([dims1, layout1.stride(), layout2.stride()].concat())
+                            .w()?;
+                        let src1 = src1.slice(layout1.start_offset()..);
+                        let src2 = src2.slice(layout2.start_offset()..);
+                        let func = device.get_or_load_func(&kernel_name::<T>($name), kernels::CUSTOM_BINARY)?;
+                        // SAFETY: Set later by running the kernel.
+                        let out = unsafe { device.alloc::<T>(elem_count1) }.w()?;
+                        let params = (elem_count1, dims1.len(), &dims_and_strides, &src1, &src2, &out);
+                        // SAFETY: ffi
+                        unsafe { func.launch(launch_config, params) }.w()?;
+
+                        Ok(out)
+                    }
+                }
+
+                use candle_core::backend::BackendStorage;
+                let device = s1.device();
+                let slice = $struct_name.map(&s1.slice, l1, &s2.slice, l2, device)?;
+
+                Ok(
+                    (
+                        CudaStorage {
+                            slice,
+                            device: device.clone(),
+                        },
+                        l1.shape().clone()
+                    )
+                )
+            }
         }
     }
 }
 
 macro_rules! custom_binary_bool_op {
-    ($struct_name:ident, $name:literal, $closure:expr, ($($dtypes:ident),+)) => {
+    ($struct_name:ident, $name:literal, $cpu_closure:expr, ($($dtypes:ident),+)) => {
         pub(crate) struct $struct_name;
 
         impl CustomOp2 for $struct_name {
@@ -170,7 +377,7 @@ macro_rules! custom_binary_bool_op {
                 match (s1, s2) {
                     $(
                         (CpuStorage::$dtypes(lhs), CpuStorage::$dtypes(rhs)) => {
-                            let data = candle_core::cpu_backend::binary_map(l1, l2, lhs, rhs, |v1, v2| u8::from($closure(v1, v2)));
+                            let data = candle_core::cpu_backend::binary_map(l1, l2, lhs, rhs, |v1, v2| u8::from($cpu_closure(v1, v2)));
 
                             Ok((CpuStorage::U8(data), l1.shape().clone()))
                         }
@@ -184,6 +391,63 @@ macro_rules! custom_binary_bool_op {
                         .bt())
                     }
                 }
+            }
+
+            #[cfg(feature = "cuda")]
+            fn cuda_fwd(
+                &self,
+                s1: &CudaStorage,
+                l1: &Layout,
+                s2: &CudaStorage,
+                l2: &Layout,
+            ) -> Result<(CudaStorage, Shape), candle_core::Error> {
+                use crate::kernels;
+                use candle_core::cuda_backend::cudarc::driver::{CudaSlice, DeviceRepr, LaunchAsync, LaunchConfig, ValidAsZeroBits};
+                use candle_core::cuda_backend::{kernel_name, CudaStorageSlice, Map2Any, WrapErr};
+                use candle_core::{CudaDevice, WithDType};
+
+                impl Map2Any for $struct_name {
+                    fn f<T: DeviceRepr + WithDType + ValidAsZeroBits>(
+                        &self,
+                        src1: &CudaSlice<T>,
+                        layout1: &Layout,
+                        src2: &CudaSlice<T>,
+                        layout2: &Layout,
+                        device: &CudaDevice,
+                    ) -> Result<CudaStorageSlice, candle_core::Error> {
+                        let shape1 = layout1.shape();
+                        let dims1 = shape1.dims();
+                        let elem_count1 = shape1.elem_count();
+                        let launch_config = LaunchConfig::for_num_elems(elem_count1 as u32);
+                        let dims_and_strides = device
+                            .htod_copy([dims1, layout1.stride(), layout2.stride()].concat())
+                            .w()?;
+                        let src1 = src1.slice(layout1.start_offset()..);
+                        let src2 = src2.slice(layout2.start_offset()..);
+                        let func = device.get_or_load_func(&kernel_name::<T>($name), kernels::CUSTOM_BINARY)?;
+                        // SAFETY: Set later by running the kernel.
+                        let out = unsafe { device.alloc::<u8>(elem_count1) }.w()?;
+                        let params = (elem_count1, dims1.len(), &dims_and_strides, &src1, &src2, &out);
+                        // SAFETY: ffi
+                        unsafe { func.launch(launch_config, params) }.w()?;
+
+                        Ok(CudaStorageSlice::U8(out))
+                    }
+                }
+
+                use candle_core::backend::BackendStorage;
+                let device = s1.device();
+                let slice = $struct_name.map(&s1.slice, l1, &s2.slice, l2, device)?;
+
+                Ok(
+                    (
+                        CudaStorage {
+                            slice,
+                            device: device.clone(),
+                        },
+                        l1.shape().clone()
+                    )
+                )
             }
         }
     }
