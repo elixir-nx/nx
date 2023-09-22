@@ -62,7 +62,9 @@ pub fn from_binary(
 
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn to_device(ex_tensor: ExTensor, device: Atom) -> Result<ExTensor, CandlexError> {
-    Ok(ExTensor::new(ex_tensor.to_device(&device_from_atom(device)?)?))
+    Ok(ExTensor::new(
+        ex_tensor.to_device(&device_from_atom(device)?)?,
+    ))
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
