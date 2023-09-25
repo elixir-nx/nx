@@ -3516,8 +3516,6 @@ defmodule Nx do
 
   ### Without axes
 
-  ## Examples
-
       iex> Nx.broadcast(1, {1, 2, 3})
       #Nx.Tensor<
         s64[1][2][3]
