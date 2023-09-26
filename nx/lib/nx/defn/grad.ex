@@ -1501,7 +1501,7 @@ defmodule Nx.Defn.Grad do
     end
   end
 
-  defp zero?(%T{data: %{op: :constant, args: [0.0]}}), do: true
+  defp zero?(%T{data: %{op: :constant, args: [num]}}) when num == 0.0, do: true
   defp zero?(_), do: false
 
   defp zip_filter([head | tail], [true | mask]), do: [head | zip_filter(tail, mask)]
