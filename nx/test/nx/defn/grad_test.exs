@@ -4143,4 +4143,35 @@ defmodule Nx.Defn.GradTest do
       assert init_value_grad == Nx.tensor(2 * 24 + 20) |> Nx.add(Nx.sum(expected_source_grad))
     end
   end
+
+  describe "vectorization" do
+    test "supports vectorization" do
+      x = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      y = Nx.tensor([10, 20])
+
+      # first case: y is vectorized scalar, x is vectorized vectors, different vectorized axis names
+      # expected result: equivalent to fully broadcasting one tensor onto the other
+      x_vec = Nx.vectorize(x, :x)
+      y_vec = Nx.vectorize(y, :y)
+      {grad_x_vec, grad_y_vec} = Nx.Defn.grad({x_vec, y_vec}, fn {a, b} -> Nx.multiply(a, b) end)
+
+      assert grad_x_vec ==
+               Nx.tensor([[30.0, 30.0, 30.0], [30.0, 30.0, 30.0]])
+               |> Nx.vectorize(x_vec.vectorized_axes)
+
+      assert grad_y_vec == Nx.tensor([21.0, 21.0]) |> Nx.vectorize(y_vec.vectorized_axes)
+
+      # second case: y is vectorized scalar, x is vectorized vectors, same vectorized axis name
+      # expected result: equivalent to "row-wise" broadcasting
+      x_vec = Nx.vectorize(x, :x)
+      y_vec = Nx.vectorize(y, :x)
+      {grad_x_vec, grad_y_vec} = Nx.Defn.grad({x_vec, y_vec}, fn {a, b} -> Nx.multiply(a, b) end)
+
+      assert grad_x_vec ==
+               Nx.tensor([[10.0, 10.0, 10.0], [20.0, 20.0, 20.0]])
+               |> Nx.vectorize(x_vec.vectorized_axes)
+
+      assert grad_y_vec == Nx.tensor([6.0, 15.0]) |> Nx.vectorize(y_vec.vectorized_axes)
+    end
+  end
 end

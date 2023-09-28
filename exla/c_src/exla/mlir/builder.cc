@@ -157,6 +157,19 @@ mlir::Value MLIRFunction::ConvertOp(mlir::Value operand, mlir::Type type) {
   return op;
 }
 
+mlir::Value MLIRFunction::BitcastConvertOp(mlir::Value operand, xla::Shape shape) {
+  mlir::OpBuilder *builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+
+  absl::Span<const int64_t> dimensions_span = shape.dimensions();
+  std::vector<int64_t> dimensions(dimensions_span.begin(), dimensions_span.end());
+
+  mlir::TensorType type = GetMLIRType(module_->builder(), dimensions, shape.element_type());
+
+  auto op = builder->create<mlir::mhlo::BitcastConvertOp>(builder->getUnknownLoc(), type, operand);
+  return op;
+}
+
 mlir::Value MLIRFunction::AddOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   auto op = module_->builder()->create<mlir::mhlo::AddOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
@@ -537,7 +550,7 @@ mlir::Value MLIRFunction::DotGeneralOp(
 
   absl::Span<const int64_t> dimensions_span = output_shape.dimensions();
   std::vector<int64_t> dimensions(dimensions_span.begin(), dimensions_span.end());
-  
+
   mlir::TensorType output_type = GetMLIRType(module_->builder(), dimensions, output_shape.element_type());
   auto mlir_dnums = ConvertDotDimensionNumbersToAttr(module_->builder(), dnums);
 
