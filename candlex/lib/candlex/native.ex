@@ -15,7 +15,6 @@ defmodule Candlex.Native do
   def arange(_start, _end, _dtype, _shape, _device), do: error()
   def broadcast_to(_tensor, _shape), do: error()
   def reshape(_tensor, _shape), do: error()
-  def transpose(_tensor, _dim1, _dim2), do: error()
   def to_type(_tensor, _dtype), do: error()
   def dtype(_tensor), do: error()
   def t_shape(_tensor), do: error()

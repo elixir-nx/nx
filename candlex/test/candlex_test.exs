@@ -1344,6 +1344,112 @@ defmodule CandlexTest do
         ]
       ))
     end
+
+    test "transpose" do
+      t(1)
+      |> Nx.transpose()
+      |> assert_equal(t(1))
+
+      Nx.iota({2, 3, 4}, names: [:x, :y, :z])
+      |> Nx.transpose()
+      |> assert_equal(t(
+        [
+          [
+            [0, 12],
+            [4, 16],
+            [8, 20]
+          ],
+          [
+            [1, 13],
+            [5, 17],
+            [9, 21]
+          ],
+          [
+            [2, 14],
+            [6, 18],
+            [10, 22]
+          ],
+          [
+            [3, 15],
+            [7, 19],
+            [11, 23]
+          ]
+        ]
+      ))
+
+      t(1)
+      |> Nx.transpose(axes: [])
+      |> assert_equal(t(1))
+
+      Nx.iota({2, 3, 4}, names: [:batch, :x, :y])
+      |> Nx.transpose(axes: [2, 1, :batch])
+      |> assert_equal(t(
+        [
+          [
+            [0, 12],
+            [4, 16],
+            [8, 20]
+          ],
+          [
+            [1, 13],
+            [5, 17],
+            [9, 21]
+          ],
+          [
+            [2, 14],
+            [6, 18],
+            [10, 22]
+          ],
+          [
+            [3, 15],
+            [7, 19],
+            [11, 23]
+          ]
+        ]
+      ))
+
+      Nx.iota({2, 3, 4}, names: [:batch, :x, :y])
+      |> Nx.transpose(axes: [:y, :batch, :x])
+      |> assert_equal(t(
+        [
+          [
+            [0, 4, 8],
+            [12, 16, 20]
+          ],
+          [
+            [1, 5, 9],
+            [13, 17, 21]
+          ],
+          [
+            [2, 6, 10],
+            [14, 18, 22]
+          ],
+          [
+            [3, 7, 11],
+            [15, 19, 23]
+          ]
+        ]
+      ))
+
+      Nx.iota({2, 3, 4}, names: [:batch, :x, :y])
+      |> Nx.transpose(axes: [:batch, :y, :x])
+      |> assert_equal(t(
+        [
+          [
+            [0, 4, 8],
+            [1, 5, 9],
+            [2, 6, 10],
+            [3, 7, 11]
+          ],
+          [
+            [12, 16, 20],
+            [13, 17, 21],
+            [14, 18, 22],
+            [15, 19, 23]
+          ]
+        ]
+      ))
+    end
   end
 
   defp t(values, opts \\ []) do

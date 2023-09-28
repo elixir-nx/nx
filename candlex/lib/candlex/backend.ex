@@ -485,9 +485,9 @@ defmodule Candlex.Backend do
   end
 
   @impl true
-  def transpose(out, %T{} = t, [dim1, dim2] = axes) do
+  def transpose(out, %T{} = t, axes) do
     from_nx(t)
-    |> Native.transpose(dim1, dim2)
+    |> Native.permute(axes)
     |> unwrap!()
     |> to_nx(out)
   end
