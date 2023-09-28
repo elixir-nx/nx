@@ -30,9 +30,13 @@ defmodule EXLA.MLIR.ExecutableTest do
 
   describe "bitcast" do
     test "converts between same bitwidth" do
-      t = (Nx.s32([1337, 42]))
+      t = Nx.s32([1337, 42])
       result = Nx.Defn.jit_apply(&Nx.bitcast(&1, :f32), [t], compiler_mode: :mlir)
-      assert_equal(result, Nx.from_binary(<<1337::32-integer-native, 42::32-integer-native>>, :f32))
+
+      assert_equal(
+        result,
+        Nx.from_binary(<<1337::32-integer-native, 42::32-integer-native>>, :f32)
+      )
     end
   end
 
