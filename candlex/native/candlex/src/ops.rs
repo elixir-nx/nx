@@ -28,8 +28,12 @@ macro_rules! custom_unary_op {
                 match storage {
                     $(
                         CpuStorage::$dtypes(vec) => {
-                            let data = candle_core::cpu_backend::unary_map(vec, layout, $closure);
-                            Ok((CpuStorage::$dtypes(data), layout.shape().clone()))
+                            Ok(
+                                (
+                                    CpuStorage::$dtypes(candle_core::cpu_backend::unary_map(vec, layout, $closure)),
+                                    layout.shape().clone()
+                                )
+                            )
                         }
                     )*
                     s => Err(Error::UnsupportedDTypeForOp(s.dtype(), $name).bt())?
@@ -61,8 +65,14 @@ macro_rules! custom_unary_bool_op {
                 match storage {
                     $(
                         CpuStorage::$dtypes(vec) => {
-                            let data = candle_core::cpu_backend::unary_map(vec, layout, |v| u8::from(v.$fn_name()));
-                            Ok((CpuStorage::U8(data), layout.shape().clone()))
+                            Ok(
+                                (
+                                    CpuStorage::U8(
+                                        candle_core::cpu_backend::unary_map(vec, layout, |v| u8::from(v.$fn_name()))
+                                    ),
+                                    layout.shape().clone()
+                                )
+                            )
                         }
                     )*
                     s => Err(Error::UnsupportedDTypeForOp(s.dtype(), $name).bt())?
@@ -95,9 +105,14 @@ macro_rules! custom_binary_op {
                 match (s1, s2) {
                     $(
                         (CpuStorage::$dtypes(lhs), CpuStorage::$dtypes(rhs)) => {
-                            let data = candle_core::cpu_backend::binary_map(l1, l2, lhs, rhs, $closure);
-
-                            Ok((CpuStorage::$dtypes(data), l1.shape().clone()))
+                            Ok(
+                                (
+                                    CpuStorage::$dtypes(
+                                        candle_core::cpu_backend::binary_map(l1, l2, lhs, rhs, $closure)
+                                    ),
+                                    l1.shape().clone()
+                                )
+                            )
                         }
                     )*
                     _ => {
@@ -137,9 +152,20 @@ macro_rules! custom_binary_bool_op {
                 match (s1, s2) {
                     $(
                         (CpuStorage::$dtypes(lhs), CpuStorage::$dtypes(rhs)) => {
-                            let data = candle_core::cpu_backend::binary_map(l1, l2, lhs, rhs, |v1, v2| u8::from($closure(v1, v2)));
-
-                            Ok((CpuStorage::U8(data), l1.shape().clone()))
+                            Ok(
+                                (
+                                    CpuStorage::U8(
+                                        candle_core::cpu_backend::binary_map(
+                                            l1,
+                                            l2,
+                                            lhs,
+                                            rhs,
+                                            |v1, v2| u8::from($closure(v1, v2))
+                                        )
+                                    ),
+                                    l1.shape().clone()
+                                )
+                            )
                         }
                     )*
                     _ => {
