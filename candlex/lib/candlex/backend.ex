@@ -486,6 +486,22 @@ defmodule Candlex.Backend do
   end
 
   @impl true
+  def pad(%T{} = out, %T{} = t, pad_value, []) do
+    out
+  end
+  def pad(%T{} = out, %T{} = t, %T{shape: {}} = pad_value, [{low, high, 0 = _inner}]) do
+    if !Nx.equal(pad_value, 0) do
+      raise "only pad_value=0 supported for now"
+    end
+
+    t
+    |> from_nx()
+    |> Native.pad_with_zeros(low, high)
+    |> unwrap!()
+    |> to_nx(out)
+  end
+
+  @impl true
   def reshape(%T{shape: shape} = out, %T{} = t) do
     from_nx(t)
     |> Native.reshape(shape)

@@ -57,6 +57,7 @@ rustler::init! {
         tensors::conv2d,
         tensors::permute,
         tensors::slice_scatter,
+        tensors::pad_with_zeros,
         tensors::matmul,
         tensors::abs,
         tensors::acos,

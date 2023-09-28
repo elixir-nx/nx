@@ -217,6 +217,11 @@ pub fn slice_scatter(t: ExTensor, src: ExTensor, dim: usize, start: usize) -> Re
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+pub fn pad_with_zeros(t: ExTensor, left: usize, right: usize) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(t.pad_with_zeros(0, left, right)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 pub fn where_cond(
     t: ExTensor,
     on_true: ExTensor,

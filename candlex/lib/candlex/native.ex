@@ -22,6 +22,7 @@ defmodule Candlex.Native do
   def conv1d(_tensor, _kernel), do: error()
   def conv2d(_tensor, _kernel), do: error()
   def slice_scatter(_tensor, _src, _dim, _start), do: error()
+  def pad_with_zeros(_tensor, _left, _right), do: error()
 
   for op <- [
         :abs,
