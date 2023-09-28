@@ -9,7 +9,7 @@ fn erf_inv<T: Float + num_traits::FromPrimitive>(v: T) -> T {
 }
 
 macro_rules! custom_unary_op {
-    ($struct_name:ident, $name:expr, $fn_name:ident, ($($dtypes:ident),+)) => {
+    ($struct_name:ident, $name:expr, $cpu_closure:expr, ($($dtypes:ident),+)) => {
         pub(crate) struct $struct_name;
 
         impl CustomOp1 for $struct_name {
@@ -30,7 +30,7 @@ macro_rules! custom_unary_op {
                 match storage {
                     $(
                         CpuStorage::$dtypes(vec) => {
-                            let data = candle_core::cpu_backend::unary_map(vec, layout, |v| v.$fn_name());
+                            let data = candle_core::cpu_backend::unary_map(vec, layout, $cpu_closure);
                             Ok((CpuStorage::$dtypes(data), layout.shape().clone()))
                         }
                     )*
@@ -152,88 +152,6 @@ macro_rules! custom_unary_bool_op {
                         unsafe { func.launch(launch_config, params) }.w()?;
 
                         Ok(CudaStorageSlice::U8(dst))
-                    }
-                }
-
-                use candle_core::backend::BackendStorage;
-                let device = storage.device();
-                let slice = $struct_name.map(&storage.slice, device, layout)?;
-
-                Ok(
-                    (
-                        CudaStorage {
-                            slice,
-                            device: device.clone(),
-                        },
-                        layout.shape().clone()
-                    )
-                )
-            }
-        }
-    };
-}
-
-macro_rules! custom_unary_op_closure {
-    ($struct_name:ident, $name:expr, $cpu_closure:expr, ($($dtypes:ident),+)) => {
-        pub(crate) struct $struct_name;
-
-        impl CustomOp1 for $struct_name {
-            // Box<dyn> does not support const yet, so use a function to get the name.
-            fn name(&self) -> &'static str {
-                $name
-            }
-
-            /// The forward pass, as run on a cpu device. Note that the storage can use arbitrary strides,
-            /// offsets etc so the associated layout should be used to access it.
-            fn cpu_fwd(
-                &self,
-                storage: &CpuStorage,
-                layout: &Layout,
-            ) -> Result<(CpuStorage, Shape), candle_core::Error> {
-                use candle_core::backend::BackendStorage;
-
-                match storage {
-                    $(
-                        CpuStorage::$dtypes(vec) => {
-                            let data = candle_core::cpu_backend::unary_map(vec, layout, $cpu_closure);
-                            Ok((CpuStorage::$dtypes(data), layout.shape().clone()))
-                        }
-                    )*
-                    s => Err(Error::UnsupportedDTypeForOp(s.dtype(), $name).bt())?
-                }
-            }
-
-            #[cfg(feature = "cuda")]
-            fn cuda_fwd(
-                &self,
-                storage: &CudaStorage,
-                layout: &Layout,
-            ) -> Result<(CudaStorage, Shape), candle_core::Error> {
-                use crate::kernels;
-                use candle_core::cuda_backend::cudarc::driver::{CudaSlice, DeviceRepr, LaunchAsync, LaunchConfig};
-                use candle_core::cuda_backend::{kernel_name, Map1, WrapErr};
-                use candle_core::{CudaDevice, WithDType};
-
-                impl Map1 for $struct_name {
-                    fn f<T: DeviceRepr + WithDType>(
-                        &self,
-                        src: &CudaSlice<T>,
-                        device: &CudaDevice,
-                        layout: &Layout,
-                    ) -> Result<CudaSlice<T>, candle_core::Error> {
-                        let src = src.slice(layout.start_offset()..);
-                        let func = device.get_or_load_func(&kernel_name::<T>($name), kernels::CUSTOM_UNARY)?;
-                        let dims = layout.shape().dims();
-                        let elem_count = layout.shape().elem_count();
-                        let launch_config = LaunchConfig::for_num_elems(elem_count as u32);
-                        let dims_and_strides = device.htod_copy([dims, layout.stride()].concat()).w()?;
-                        // SAFETY: Set later by running the kernel.
-                        let dst = unsafe { device.alloc::<T>(elem_count) }.w()?;
-                        let params = (elem_count, dims.len(), &dims_and_strides, &src, &dst);
-                        // SAFETY: ffi.
-                        unsafe { func.launch(launch_config, params) }.w()?;
-
-                        Ok(dst)
                     }
                 }
 
@@ -453,19 +371,19 @@ macro_rules! custom_binary_bool_op {
     }
 }
 
-custom_unary_op!(Acos, "acos", acos, (BF16, F16, F32, F64));
-custom_unary_op!(Asin, "asin", asin, (BF16, F16, F32, F64));
-custom_unary_op!(Atan, "atan", atan, (BF16, F16, F32, F64));
-custom_unary_op!(Cbrt, "cbrt", cbrt, (BF16, F16, F32, F64));
-custom_unary_op!(Ceil, "ceil", ceil, (BF16, F16, F32, F64));
-custom_unary_op!(Floor, "floor", floor, (BF16, F16, F32, F64));
-custom_unary_op!(Log1p, "ln_1p", ln_1p, (BF16, F16, F32, F64));
-custom_unary_op!(Round, "round", round, (BF16, F16, F32, F64));
-custom_unary_op!(Tan, "tan", tan, (BF16, F16, F32, F64));
+custom_unary_op!(Acos, "acos", |v| v.acos(), (BF16, F16, F32, F64));
+custom_unary_op!(Asin, "asin", |v| v.asin(), (BF16, F16, F32, F64));
+custom_unary_op!(Atan, "atan", |v| v.atan(), (BF16, F16, F32, F64));
+custom_unary_op!(BitNot, "bit_not", |v| !v, (U8, U32, I64));
+custom_unary_op!(Cbrt, "cbrt", |v| v.cbrt(), (BF16, F16, F32, F64));
+custom_unary_op!(Ceil, "ceil", |v| v.ceil(), (BF16, F16, F32, F64));
+custom_unary_op!(ErfInv, "erf_inv", |v| erf_inv(v), (BF16, F16, F32, F64));
+custom_unary_op!(Floor, "floor", |v| v.floor(), (BF16, F16, F32, F64));
+custom_unary_op!(Log1p, "ln_1p", |v| v.ln_1p(), (BF16, F16, F32, F64));
+custom_unary_op!(Round, "round", |v| v.round(), (BF16, F16, F32, F64));
+custom_unary_op!(Sigmoid, "sigmoid", |v| 1. / (1. + (-v).exp()), (F32, F64));
+custom_unary_op!(Tan, "tan", |v| v.tan(), (BF16, F16, F32, F64));
 custom_unary_bool_op!(IsInf, "is_inf", is_infinite, (F32, F64));
-custom_unary_op_closure!(BitNot, "bit_not", |v| !v, (U8, U32, I64));
-custom_unary_op_closure!(ErfInv, "erf_inv", |v| erf_inv(v), (BF16, F16, F32, F64));
-custom_unary_op_closure!(Sigmoid, "sigmoid", |v| 1. / (1. + (-v).exp()), (F32, F64));
 
 custom_binary_op!(BitAnd, "bit_and", |v1, v2| v1 & v2, (U32, I64));
 custom_binary_op!(BitOr, "bit_or", |v1, v2| v1 | v2, (U32, I64));
