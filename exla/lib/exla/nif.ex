@@ -44,6 +44,7 @@ defmodule EXLA.NIF do
   def mlir_dynamic_slice(_function, _operand, _starts, _lengths), do: :erlang.nif_error(:undef)
   def mlir_tuple(_function, _vals), do: :erlang.nif_error(:undef)
   def mlir_get_tuple_element(_function, _tuple, _index), do: :erlang.nif_error(:undef)
+  def mlir_pad(_function, _tensor, _pad, _low, _high, _mid), do: :erlang.nif_error(:undef)
 
   def mlir_build(_function, _root), do: :erlang.nif_error(:undef)
 
