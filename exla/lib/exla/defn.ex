@@ -1023,6 +1023,14 @@ defmodule EXLA.Defn do
     to_type(arg, type)
   end
 
+  defp to_operator(:bitcast, [%Value{} = arg], %{type: type}, _state) do
+    if op_type(arg) == type do
+      arg
+    else
+      Value.bitcast_convert(arg, type)
+    end
+  end
+
   defp to_operator(:bitcast, [arg], %{type: type}, _state) do
     if op_type(arg) == type do
       arg
