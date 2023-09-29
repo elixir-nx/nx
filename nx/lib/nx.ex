@@ -15693,6 +15693,7 @@ defmodule Nx do
     * `:eps` - Threshold which backends can use for cleaning-up results. Defaults to `1.0e-10`.
     * `:length` - Either a positive integer or `:power_of_two`. Will pad or slice the tensor
       accordingly. `:power_of_two` will automatically pad to the next power of two.
+    * `:axis` - the axis upon which the DFT will be calculated. Defaults to the last axis.
 
   ## Examples
 
@@ -15706,6 +15707,26 @@ defmodule Nx do
       #Nx.Tensor<
         c64[6]
         [5.0+0.0i, 1.0+0.0i, -1.0+0.0i, 1.0+0.0i, -1.0+0.0i, 1.0+0.0i]
+      >
+
+  The calculation can happen on a specific axis:
+
+      iex> tensor = Nx.tensor([[1, 1, 1, 0, 1, 1], [1, 1, 1, 0, 1, 1]])
+      iex> Nx.fft(tensor, axis: -1)
+      #Nx.Tensor<
+        c64[2][6]
+        [
+          [5.0+0.0i, 1.0+0.0i, -1.0+0.0i, 1.0+0.0i, -1.0+0.0i, 1.0+0.0i],
+          [5.0+0.0i, 1.0+0.0i, -1.0+0.0i, 1.0+0.0i, -1.0+0.0i, 1.0+0.0i]
+        ]
+      >
+      iex> Nx.fft(tensor, axis: -2)
+      #Nx.Tensor<
+        c64[2][6]
+        [
+          [2.0+0.0i, 2.0+0.0i, 2.0+0.0i, 0.0+0.0i, 2.0+0.0i, 2.0+0.0i],
+          [0.0+0.0i, 0.0+0.0i, 0.0+0.0i, 0.0+0.0i, 0.0+0.0i, 0.0+0.0i]
+        ]
       >
 
   Padding and slicing can be introduced through `:length`:
@@ -15770,6 +15791,7 @@ defmodule Nx do
     * `:eps` - Threshold which backends can use for cleaning-up results. Defaults to `1.0e-10`.
     * `:length` - Either a positive integer or `:power_of_two`. Will pad or slice the tensor
       accordingly. `:power_of_two` will automatically pad to the next power of two.
+    * `:axis` - the axis upon which the Inverse DFT will be calculated. Defaults to the last axis.
 
   ## Examples
 
@@ -15783,6 +15805,26 @@ defmodule Nx do
       #Nx.Tensor<
         c64[6]
         [1.0+0.0i, 1.0+0.0i, 1.0+0.0i, 0.0+0.0i, 1.0+0.0i, 1.0+0.0i]
+      >
+
+  The calculation can happen on a specific axis:
+
+      iex> tensor = Nx.tensor([[5, 1, -1, 1, -1, 1], [5, 1, -1, 1, -1, 1]])
+      iex> Nx.ifft(tensor, axis: -1)
+      #Nx.Tensor<
+        c64[2][6]
+        [
+          [1.0+0.0i, 1.0+0.0i, 1.0+0.0i, 0.0+0.0i, 1.0+0.0i, 1.0+0.0i],
+          [1.0+0.0i, 1.0+0.0i, 1.0+0.0i, 0.0+0.0i, 1.0+0.0i, 1.0+0.0i]
+        ]
+      >
+      iex> Nx.ifft(tensor, axis: -2)
+      #Nx.Tensor<
+        c64[2][6]
+        [
+          [5.0+0.0i, 1.0+0.0i, -1.0+0.0i, 1.0+0.0i, -1.0+0.0i, 1.0+0.0i],
+          [0.0+0.0i, 0.0+0.0i, 0.0+0.0i, 0.0+0.0i, 0.0+0.0i, 0.0+0.0i]
+        ]
       >
 
   Padding and slicing can be introduced through `:length`:
@@ -15842,15 +15884,18 @@ defmodule Nx do
   defp call_fft(tensor, opts, kind) do
     apply_vectorized(tensor, fn tensor, offset ->
       shape = Nx.Shape.fft(tensor.shape)
-      n = elem(shape, tuple_size(shape) - 1)
-      opts = Keyword.validate!(opts, axis: -1, length: n, eps: 1.0e-10)
+      opts = Keyword.validate!(opts, [:length, axis: -1, eps: 1.0e-10])
 
       axis = Nx.Shape.normalize_axis(shape, opts[:axis], tensor.names, offset)
+      n = elem(shape, axis)
 
       length =
         case opts[:length] do
           :power_of_two ->
             2 ** Kernel.ceil(:math.log2(n))
+
+          nil ->
+            n
 
           n when is_integer(n) and n > 0 ->
             n
