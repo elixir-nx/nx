@@ -15840,10 +15840,12 @@ defmodule Nx do
   def ifft(tensor, opts \\ []), do: call_fft(tensor, opts, :ifft)
 
   defp call_fft(tensor, opts, kind) do
-    apply_vectorized(tensor, fn tensor ->
+    apply_vectorized(tensor, fn tensor, offset ->
       shape = Nx.Shape.fft(tensor.shape)
       n = elem(shape, tuple_size(shape) - 1)
-      opts = Keyword.validate!(opts, length: n, eps: 1.0e-10)
+      opts = Keyword.validate!(opts, axis: -1, length: n, eps: 1.0e-10)
+
+      axis = Nx.Shape.normalize_axis(shape, opts[:axis], tensor.names, offset)
 
       length =
         case opts[:length] do
@@ -15857,15 +15859,101 @@ defmodule Nx do
             raise "expected an integer or :power_of_two as length, got: #{inspect(length)}"
         end
 
-      opts = Keyword.put(opts, :length, length)
+      opts = Keyword.merge(opts, length: length, axis: axis)
 
       output_shape =
         shape
-        |> Tuple.insert_at(tuple_size(shape) - 1, length)
-        |> Tuple.delete_at(tuple_size(shape))
+        |> Tuple.insert_at(axis, length)
+        |> Tuple.delete_at(axis + 1)
 
       out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_complex(tensor.type)})
       apply(impl!(tensor), kind, [out, tensor, opts])
+    end)
+  end
+
+  def fft2(tensor, opts \\ []), do: call_fft2(tensor, opts, :fft2)
+  def ifft2(tensor, opts \\ []), do: call_fft2(tensor, opts, :ifft2)
+
+  defp call_fft2(tensor, opts, kind) do
+    apply_vectorized(tensor, fn tensor, offset ->
+      shape = Nx.Shape.fft2(tensor.shape)
+
+      opts =
+        Keyword.validate!(opts, [:lengths, axes: [-2, -1], eps: 1.0e-10])
+
+      [ax1, ax2] =
+        case opts[:axes] do
+          [ax1, ax2] ->
+            Nx.Shape.normalize_axes(tensor.shape, [ax1, ax2], tensor.names, offset)
+
+          axes ->
+            raise ArgumentError, "expected :axes to be a list with 2 axes, got: #{inspect(axes)}"
+        end
+
+      m = elem(shape, ax1)
+      n = elem(shape, ax2)
+
+      [l1, l2] =
+        case opts[:lengths] do
+          [l1, l2]
+          when (is_integer(l1) or l1 == :power_of_two) and (is_integer(l2) or l2 == :power_of_two) ->
+            [l1, l2]
+
+          nil ->
+            [m, n]
+
+          lengths ->
+            raise ArgumentError,
+                  "expected :lengths to be a list of lengths or :power_of_two, got: #{inspect(lengths)}"
+        end
+
+      l1 =
+        case l1 do
+          :power_of_two ->
+            2 ** Kernel.ceil(:math.log2(m))
+
+          m when is_integer(m) and m > 0 ->
+            m
+        end
+
+      l2 =
+        case l2 do
+          :power_of_two ->
+            2 ** Kernel.ceil(:math.log2(n))
+
+          n when is_integer(n) and n > 0 ->
+            n
+        end
+
+      output_shape =
+        shape
+        |> Tuple.insert_at(ax1, l1)
+        |> Tuple.delete_at(ax1 + 1)
+        |> Tuple.insert_at(ax2, l2)
+        |> Tuple.delete_at(ax2 + 1)
+
+      out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_complex(tensor.type)})
+
+      opts = Keyword.take(opts, [:eps]) |> Keyword.merge(lengths: [l1, l2], axes: [ax1, ax2])
+
+      Nx.Shared.optional(kind, [tensor, opts], out, fn tensor, opts ->
+        [ax1, ax2] = opts[:axes]
+        [l1, l2] = opts[:lengths]
+        eps = opts[:eps]
+
+        dbg({ax1, ax2})
+        dbg({l1, l2})
+
+        if kind == :fft2 do
+          tensor
+          |> fft(axis: ax2, length: l2, eps: eps)
+          |> fft(axis: ax1, length: l1, eps: eps)
+        else
+          tensor
+          |> ifft(axis: ax2, length: l2, eps: eps)
+          |> ifft(axis: ax1, length: l1, eps: eps)
+        end
+      end)
     end)
   end
 
