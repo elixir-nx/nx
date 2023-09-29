@@ -1389,6 +1389,10 @@ defmodule EXLA.Defn do
     EXLA.Op.select(EXLA.Op.less_equal(iota_one, iota_zero), cholesky, zeros)
   end
 
+  defp to_operator(:sort, [%Value{} = tensor, opts], _ans, _state) do
+    Value.sort(tensor, opts[:axis], opts[:direction])
+  end
+
   defp to_operator(:sort, [tensor, opts], ans, state) do
     dimension = opts[:axis]
 

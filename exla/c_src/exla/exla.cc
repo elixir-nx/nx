@@ -581,7 +581,7 @@ ERL_NIF_TERM mlir_slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Unable to get starts.");
   }
   if (!exla::nif::get_list(env, argv[3], limits)) {
-    return exla::nif::error(env, "Unable to get lwngths.");
+    return exla::nif::error(env, "Unable to get lengths.");
   }
   if (!exla::nif::get_list(env, argv[4], strides)) {
     return exla::nif::error(env, "Unable to get strides.");
@@ -761,6 +761,48 @@ ERL_NIF_TERM mlir_convert(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   mlir::Value result = (*function)->ConvertOp(*t, type);
 
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
+}
+
+ERL_NIF_TERM mlir_sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 4) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  std::vector<mlir::Value> operands;
+  exla::int64 axis;
+  bool desc;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get_list(env, argv[1], operands)) {
+    return exla::nif::error(env, "Unable to get operands.");
+  }
+  if (!exla::nif::get(env, argv[2], &axis)) {
+    return exla::nif::error(env, "Unable to get axis.");
+  }
+  std::cout << "after axis" << std::endl;
+  if (!exla::nif::get(env, argv[3], &desc)) {
+    return exla::nif::error(env, "Unable to get desc.");
+  }
+  std::cout << "after desc" << std::endl;
+
+  std::cout << "before sort" << std::endl;
+  std::vector<mlir::Value> res = (*function)->SortOp(operands, axis, desc);
+  std::cout << "after sort" << std::endl;
+  size_t n = res.size();
+
+  std::vector<ERL_NIF_TERM> nif_terms;
+  nif_terms.reserve(n);
+
+  for (size_t i = 0; i < n; i++) {
+    nif_terms[i] = exla::nif::make<mlir::Value>(env, res[i]);
+  }
+
+  auto data = nif_terms.data();
+  auto list = enif_make_list_from_array(env, &data[0], n);
+  return exla::nif::ok(env, list);
 }
 
 ERL_NIF_TERM mlir_bitcast_convert(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -1597,6 +1639,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_sqrt", 2, mlir_sqrt},
     {"mlir_cbrt", 2, mlir_cbrt},
     {"mlir_iota", 3, mlir_iota},
+    {"mlir_sort", 4, mlir_sort},
     {"mlir_reshape", 3, mlir_reshape},
     {"mlir_reverse", 3, mlir_reverse},
     {"mlir_transpose", 3, mlir_transpose},

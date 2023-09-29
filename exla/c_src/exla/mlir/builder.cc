@@ -12,12 +12,12 @@
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/OwningOpRef.h"
+#include "mlir/IR/PatternMatch.h"
 #include "xla/mlir_hlo/mhlo/IR/hlo_ops.h"
 #include "xla/primitive_util.h"
 #include "xla/types.h"
 
 namespace exla {
-
 mlir::Type TypeIntToMLIRType(mlir::OpBuilder *builder, int type_int) {
   switch (type_int) {
     case 2:
@@ -486,6 +486,56 @@ mlir::Value MLIRFunction::ReverseOp(mlir::Value operand, std::vector<int64_t> di
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   auto dims_attr = Int64ToDenseIntElementsAttr(module_->builder(), dims);
   return module_->builder()->create<mlir::mhlo::ReverseOp>(module_->builder()->getUnknownLoc(), operand, dims_attr);
+}
+
+class PublicPatternRewriter : public mlir::PatternRewriter {
+ public:
+  PublicPatternRewriter(mlir::MLIRContext *context) : mlir::PatternRewriter(context) {}
+};
+
+// Usage:
+mlir::MLIRContext context;
+PublicPatternRewriter rewriter(&context);
+
+std::vector<mlir::Value> MLIRFunction::SortOp(std::vector<mlir::Value> operands, int64_t dim, bool desc) {
+  std::cout << "1" << std::endl;
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+
+  std::cout << "2" << std::endl;
+  std::vector<mlir::Type> element_types;
+  element_types.reserve(operands.size());
+  for (size_t i = 0; i < element_types.size(); i++) {
+    element_types[i] = operands[i].getType();
+  }
+  std::cout << "3" << std::endl;
+
+  mlir::mhlo::ComparisonDirection direction = desc ? mlir::mhlo::ComparisonDirection::GT : mlir::mhlo::ComparisonDirection::LT;
+  std::cout << "4" << std::endl;
+
+  // auto loc = module_->builder()->getUnknownLoc();
+  // auto op = module_->builder()->create<mlir::mhlo::SortOp>(loc, mlir::ValueRange(operands), dim, true);
+  PublicPatternRewriter rewriter = PublicPatternRewriter(module_->builder()->getContext());
+
+  std::cout << "5" << std::endl;
+  mlir::mhlo::SortOp sort_op = mlir::mhlo::createSortOp(
+      (mlir::PatternRewriter *)&rewriter,
+      module_->builder()->getUnknownLoc(),
+      operands,
+      element_types,
+      dim,
+      true,
+      direction);
+
+      std::cout << "6" << std::endl;
+
+  std::vector<mlir::Value> result;
+  result.reserve(operands.size());
+  for (size_t i = 0; i < operands.size(); i++) {
+    result[i] = sort_op.getResult(i);
+  }
+
+  std::cout << "7" << std::endl;
+  return result;
 }
 
 mlir::Value MLIRFunction::SliceOp(mlir::Value operand, std::vector<int64_t> starts, std::vector<int64_t> limits, std::vector<int64_t> strides) {
