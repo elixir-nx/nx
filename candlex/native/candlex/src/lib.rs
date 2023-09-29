@@ -46,6 +46,7 @@ rustler::init! {
         tensors::where_cond,
         tensors::narrow,
         tensors::gather,
+        tensors::index_select,
         tensors::chunk,
         tensors::squeeze,
         tensors::arange,

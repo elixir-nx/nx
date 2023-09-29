@@ -339,6 +339,19 @@ defmodule Candlex.Backend do
   end
 
   @impl true
+  def take(%T{} = out, %T{} = tensor, %T{} = indexes, axis) do
+    if Nx.rank(indexes) > 1 do
+      raise "only indexes of rank=1 supported for now"
+    end
+
+    tensor
+    |> from_nx()
+    |> Native.index_select(from_nx(indexes), axis)
+    |> unwrap!()
+    |> to_nx(out)
+  end
+
+  @impl true
   def take_along_axis(%T{} = out, %T{} = tensor, %T{} = indexes, axis) do
     tensor
     |> from_nx()
