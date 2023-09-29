@@ -669,7 +669,6 @@ ERL_NIF_TERM mlir_dot_general(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
   xla::DotDimensionNumbers dnums;
   xla::PrecisionConfig config;
 
-
   if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
     return exla::nif::error(env, "Unable to get function.");
   }
@@ -793,6 +792,38 @@ ERL_NIF_TERM mlir_bitcast_convert(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   mlir::Value result = (*function)->BitcastConvertOp(*t, shape);
 
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
+}
+
+ERL_NIF_TERM mlir_pad(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 6) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  std::vector<int64_t> padding_high, padding_low, padding_mid;
+  mlir::Value *operand, *pad_value;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[2], pad_value)) {
+    return exla::nif::error(env, "Unable to get pad value.");
+  }
+  if (!exla::nif::get_list(env, argv[3], padding_low)) {
+    return exla::nif::error(env, "Unable to get padding_low.");
+  }
+  if (!exla::nif::get_list(env, argv[4], padding_high)) {
+    return exla::nif::error(env, "Unable to get padding_high.");
+  }
+  if (!exla::nif::get_list(env, argv[5], padding_mid)) {
+    return exla::nif::error(env, "Unable to get padding_mid.");
+  }
+
+  mlir::Value res = (*function)->PadOp(*operand, *pad_value, padding_low, padding_high, padding_mid);
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
 
 ERL_NIF_TERM mlir_optimization_barrier(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -1595,6 +1626,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_concatenate", 3, mlir_concatenate},
     {"mlir_optimization_barrier", 2, mlir_optimization_barrier},
     {"mlir_select", 4, mlir_select},
+    {"mlir_pad", 6, mlir_pad},
     // XlaBuilder
     {"new_builder", 1, new_builder},
     {"create_sub_builder", 2, create_sub_builder},

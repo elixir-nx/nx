@@ -202,6 +202,27 @@ defmodule EXLA.MLIR.Value do
     %Value{ref: ref, function: func}
   end
 
+  def pad(%Value{function: func} = operand, %Value{function: func} = pad, padding_config) do
+    {padding_low, padding_high, padding_mid} =
+      Enum.reduce(padding_config, {[], [], []}, fn {low, high, mid},
+                                                   {low_acc, high_acc, mid_acc} ->
+        {[low | low_acc], [high | high_acc], [mid | mid_acc]}
+      end)
+
+    ref =
+      EXLA.NIF.mlir_pad(
+        func.ref,
+        operand.ref,
+        pad.ref,
+        Enum.reverse(padding_low),
+        Enum.reverse(padding_high),
+        Enum.reverse(padding_mid)
+      )
+      |> unwrap!()
+
+    %Value{ref: ref, function: func}
+  end
+
   defp get_precision_config_int(precision_config) do
     case precision_config do
       :default ->

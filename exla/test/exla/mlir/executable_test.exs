@@ -40,6 +40,47 @@ defmodule EXLA.MLIR.ExecutableTest do
     end
   end
 
+  describe "pad" do
+    test "pads in all dims" do
+      result =
+        EXLA.jit(&Nx.pad(&1, &2, [{2, 3, 1}, {0, 0, 0}]), compiler_mode: :mlir).(
+          Nx.tensor([[1, 1, 1], [2, 2, 2], [3, 3, 3]]),
+          Nx.tensor(100)
+        )
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [100, 100, 100],
+          [100, 100, 100],
+          [1, 1, 1],
+          [100, 100, 100],
+          [2, 2, 2],
+          [100, 100, 100],
+          [3, 3, 3],
+          [100, 100, 100],
+          [100, 100, 100],
+          [100, 100, 100]
+        ])
+      )
+
+      result =
+        EXLA.jit(&Nx.pad(&1, &2, [{0, 0, 0}, {2, 3, 1}]), compiler_mode: :mlir).(
+          Nx.tensor([[1, 1, 1], [2, 2, 2], [3, 3, 3]]),
+          Nx.tensor(100)
+        )
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [100, 100, 1, 100, 1, 100, 1, 100, 100, 100],
+          [100, 100, 2, 100, 2, 100, 2, 100, 100, 100],
+          [100, 100, 3, 100, 3, 100, 3, 100, 100, 100]
+        ])
+      )
+    end
+  end
+
   describe "convert" do
     @types [s: 8, s: 16, s: 32, s: 64, u: 8, u: 16, u: 32, u: 64, f: 16, f: 32, f: 64, bf: 16]
 

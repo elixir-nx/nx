@@ -46,6 +46,7 @@ class MLIRFunction {
   mlir::Value ShiftRightArithmeticOp(mlir::Value lhs, mlir::Value rhs);
   mlir::Value ConvertOp(mlir::Value operand, mlir::Type type);
   mlir::Value BitcastConvertOp(mlir::Value operand, xla::Shape shape);
+  mlir::Value PadOp(mlir::Value op, mlir::Value pad, std::vector<int64_t> padding_low, std::vector<int64_t> padding_high, std::vector<int64_t> padding_mid);
   mlir::Value AbsOp(mlir::Value operand);
   mlir::Value ExpOp(mlir::Value operand);
   mlir::Value Expm1Op(mlir::Value operand);

@@ -63,12 +63,11 @@ mlir::mhlo::DotDimensionNumbersAttr ConvertDotDimensionNumbersToAttr(mlir::OpBui
                                    dotDimNumbers.rhs_batch_dimensions().end());
 
   return mlir::mhlo::DotDimensionNumbersAttr::get(
-    builder->getContext(),
-    lhsBatchVec,
-    rhsBatchVec,
-    lhsContractingVec,
-    rhsContractingVec
-  );
+      builder->getContext(),
+      lhsBatchVec,
+      rhsBatchVec,
+      lhsContractingVec,
+      rhsContractingVec);
 }
 
 int MLIRFunction::get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *type) {
@@ -216,6 +215,16 @@ mlir::Value MLIRFunction::Atan2Op(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   auto op = module_->builder()->create<mlir::mhlo::Atan2Op>(module_->builder()->getUnknownLoc(), lhs, rhs);
   return op;
+}
+
+mlir::Value MLIRFunction::PadOp(mlir::Value op, mlir::Value pad, std::vector<int64_t> padding_low, std::vector<int64_t> padding_high, std::vector<int64_t> padding_mid) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+
+  auto padding_low_attr = Int64ToDenseIntElementsAttr(module_->builder(), padding_low);
+  auto padding_high_attr = Int64ToDenseIntElementsAttr(module_->builder(), padding_high);
+  auto padding_mid_attr = Int64ToDenseIntElementsAttr(module_->builder(), padding_mid);
+
+  return module_->builder()->create<mlir::mhlo::PadOp>(module_->builder()->getUnknownLoc(), op, pad, padding_low_attr, padding_high_attr, padding_mid_attr);
 }
 
 mlir::Value compare_and_return_bool(mlir::OpBuilder *builder, mlir::Value lhs, mlir::Value rhs, mlir::mhlo::ComparisonDirection direction) {
@@ -540,12 +549,11 @@ mlir::Value MLIRFunction::IotaOp(xla::Shape shape, int64_t dimension) {
 }
 
 mlir::Value MLIRFunction::DotGeneralOp(
-  xla::Shape output_shape,
-  mlir::Value lhs,
-  mlir::Value rhs,
-  xla::DotDimensionNumbers dnums,
-  xla::PrecisionConfig config
-) {
+    xla::Shape output_shape,
+    mlir::Value lhs,
+    mlir::Value rhs,
+    xla::DotDimensionNumbers dnums,
+    xla::PrecisionConfig config) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
 
   absl::Span<const int64_t> dimensions_span = output_shape.dimensions();
@@ -555,13 +563,12 @@ mlir::Value MLIRFunction::DotGeneralOp(
   auto mlir_dnums = ConvertDotDimensionNumbersToAttr(module_->builder(), dnums);
 
   auto op = module_->builder()->create<mlir::mhlo::DotGeneralOp>(
-    module_->builder()->getUnknownLoc(),
-    output_type,
-    lhs,
-    rhs,
-    mlir_dnums,
-    nullptr
-  );
+      module_->builder()->getUnknownLoc(),
+      output_type,
+      lhs,
+      rhs,
+      mlir_dnums,
+      nullptr);
 
   return op;
 }
