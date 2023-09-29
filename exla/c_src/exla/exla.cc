@@ -763,6 +763,37 @@ ERL_NIF_TERM mlir_convert(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
 }
 
+ERL_NIF_TERM mlir_bitcast_convert(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 4) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* t;
+  mlir::Type type;
+  xla::PrimitiveType element_type;
+  std::vector<exla::int64> dims;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], t)) {
+    return exla::nif::error(env, "Unable to get tensor.");
+  }
+  if (!exla::nif::get_primitive_type(env, argv[2], &element_type)) {
+    return exla::nif::error(env, "Unable to get type.");
+  }
+  if (!exla::nif::get_tuple(env, argv[3], dims)) {
+    return exla::nif::error(env, "Unable to get dimensions.");
+  }
+
+  xla::Shape shape = xla::ShapeUtil::MakeShape(element_type, dims);
+
+  mlir::Value result = (*function)->BitcastConvertOp(*t, shape);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
+}
+
 ERL_NIF_TERM mlir_pad(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 6) {
     return exla::nif::error(env, "Bad argument count.");
@@ -1541,6 +1572,7 @@ static ErlNifFunc exla_funcs[] = {
     {"dump_mlir_module", 1, dump_mlir_module},
     {"mlir_get_shape", 1, mlir_get_shape},
     {"mlir_convert", 3, mlir_convert},
+    {"mlir_bitcast_convert", 4, mlir_bitcast_convert},
     {"mlir_abs", 2, mlir_abs},
     {"mlir_exp", 2, mlir_exp},
     {"mlir_expm1", 2, mlir_expm1},
