@@ -15847,7 +15847,7 @@ defmodule Nx do
         [0.5+0.0i, 0.25+0.25i, 0.0+0.0i, 0.25-0.25i]
       >
 
-  If an N-dimensional tensor is passed, the Inverse DFT is applied, by default, to its last axis:
+  If an N-dimensional tensor is passed, the Inverse DFT is applied, by default,to its last axis:
 
       iex> Nx.ifft(Nx.tensor([[1, 1, 0, 0, 2, 3], [1, 0, 0, 0, 2, 3]]), length: 4)
       #Nx.Tensor<
