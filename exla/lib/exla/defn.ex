@@ -1458,22 +1458,22 @@ defmodule EXLA.Defn do
 
     last_axis = tuple_size(shape) - 1
 
-      if axis != last_axis  do
-        permutation =
-          Enum.map(0..last_axis, fn
-            ^axis -> last_axis
-            ^last_axis -> axis
-            ax -> ax
-          end)
-          |> List.to_tuple()
+    if axis != last_axis do
+      permutation =
+        Enum.map(0..last_axis, fn
+          ^axis -> last_axis
+          ^last_axis -> axis
+          ax -> ax
+        end)
+        |> List.to_tuple()
 
-        tensor
-        |> EXLA.Op.transpose(permutation)
-        |> exla_op.([n])
-        |> EXLA.Op.transpose(permutation)
-      else
-        exla_op.(tensor, [n])
-      end
+      tensor
+      |> EXLA.Op.transpose(permutation)
+      |> exla_op.([n])
+      |> EXLA.Op.transpose(permutation)
+    else
+      exla_op.(tensor, [n])
+    end
   end
 
   defp fft2(exla_op, [tensor, opts], %{type: type}, state) do
@@ -1489,58 +1489,57 @@ defmodule EXLA.Defn do
     tensor = fft_pad_or_slice(tensor, m1, l1, ax1, shape, output_type, state)
     tensor = fft_pad_or_slice(tensor, m2, l2, ax2, op_shape(tensor), output_type, state)
 
-
     last_axis = tuple_size(shape) - 1
     penultimate_axis = last_axis - 1
     last_axes = [penultimate_axis, last_axis]
 
-      if axes != last_axes  do
-        permutation =
-          Enum.map(0..last_axis, fn
-            ^ax1 -> penultimate_axis
-            ^penultimate_axis -> ax1
-            ^ax2 -> last_axis
-            ^last_axis -> ax2
-            ax -> ax
-          end)
-          |> List.to_tuple()
+    if axes != last_axes do
+      permutation =
+        Enum.map(0..last_axis, fn
+          ^ax1 -> penultimate_axis
+          ^penultimate_axis -> ax1
+          ^ax2 -> last_axis
+          ^last_axis -> ax2
+          ax -> ax
+        end)
+        |> List.to_tuple()
 
-        tensor
-        |> EXLA.Op.transpose(permutation)
-        |> exla_op.(lengths)
-        |> EXLA.Op.transpose(permutation)
-      else
-        exla_op.(tensor, lengths)
-      end
+      tensor
+      |> EXLA.Op.transpose(permutation)
+      |> exla_op.(lengths)
+      |> EXLA.Op.transpose(permutation)
+    else
+      exla_op.(tensor, lengths)
+    end
   end
 
   defp fft_pad_or_slice(tensor, m, n, axis, shape, output_type, state) do
     cond do
-        m == n ->
-          tensor
+      m == n ->
+        tensor
 
-        m > n ->
-          lengths =
-            shape
-            |> Tuple.insert_at(axis + 1, n)
-            |> Tuple.delete_at(axis)
-            |> Tuple.to_list()
+      m > n ->
+        lengths =
+          shape
+          |> Tuple.insert_at(axis + 1, n)
+          |> Tuple.delete_at(axis)
+          |> Tuple.to_list()
 
-          starts = List.duplicate(0, tuple_size(shape))
-          strides = List.duplicate(1, tuple_size(shape))
+        starts = List.duplicate(0, tuple_size(shape))
+        strides = List.duplicate(1, tuple_size(shape))
 
-          EXLA.Op.slice(tensor, starts, lengths, strides)
+        EXLA.Op.slice(tensor, starts, lengths, strides)
 
-        m < n ->
-          zero = EXLA.Op.constant_r0(state.builder, Complex.new(0), output_type)
+      m < n ->
+        zero = EXLA.Op.constant_r0(state.builder, Complex.new(0), output_type)
 
-          padding_config =
-            {0, 0, 0}
-            |> List.duplicate(tuple_size(shape))
-            |> List.replace_at(axis, {0, n - m, 0})
+        padding_config =
+          {0, 0, 0}
+          |> List.duplicate(tuple_size(shape))
+          |> List.replace_at(axis, {0, n - m, 0})
 
-          EXLA.Op.pad(tensor, zero, padding_config)
-      end
+        EXLA.Op.pad(tensor, zero, padding_config)
+    end
   end
 
   defp scatter(scatter_fn, [target, indices, updates], %{type: type}) do
