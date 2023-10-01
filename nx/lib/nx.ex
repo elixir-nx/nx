@@ -15916,7 +15916,320 @@ defmodule Nx do
     end)
   end
 
+  @doc """
+  Calculates the 2D DFT of the given tensor.
+
+  ## Options
+
+    * `:eps` - Threshold which backends can use for cleaning-up results. Defaults to `1.0e-10`.
+    * `:lengths` - A 2 element list where each element is either a positive integer or `:power_of_two`.
+      Will pad or slice the tensor accordingly. `:power_of_two` will automatically pad to the next power of two.
+    * `:axes` - the 2 axes upon which the Inverse 2D DFT will be calculated. Defaults to the last 2 axes.
+
+  ## Examples
+
+      iex> Nx.fft2(Nx.tensor([[1, 0, 1, 0], [1, 1, 1, 1]]))
+      #Nx.Tensor<
+        c64[2][4]
+        [
+          [6.0+0.0i, 0.0+0.0i, 2.0+0.0i, 0.0+0.0i],
+          [-2.0+0.0i, 0.0+0.0i, 2.0+0.0i, 0.0+0.0i]
+        ]
+      >
+
+  The calculation can happen on a specific pair of axes:
+
+      iex> tensor = Nx.tensor([[[1, 0, 1, 0]], [[1, 1, 1, 1]]])
+      iex> Nx.fft2(tensor, axes: [0, -1])
+      #Nx.Tensor<
+        c64[2][1][4]
+        [
+          [
+            [6.0+0.0i, 0.0+0.0i, 2.0+0.0i, 0.0+0.0i]
+          ],
+          [
+            [-2.0+0.0i, 0.0+0.0i, 2.0+0.0i, 0.0+0.0i]
+          ]
+        ]
+      >
+      iex> Nx.fft2(tensor, axes: [-2, -1])
+      #Nx.Tensor<
+        c64[2][1][4]
+        [
+          [
+            [2.0+0.0i, 0.0+0.0i, 2.0+0.0i, 0.0+0.0i]
+          ],
+          [
+            [4.0+0.0i, 0.0+0.0i, 0.0+0.0i, 0.0+0.0i]
+          ]
+        ]
+      >
+
+  Padding and slicing can be introduced through `:lengths`:
+
+      iex> tensor = Nx.tensor([[1, 1], [1, 0]])
+      iex> Nx.fft2(tensor, lengths: [2, 4])
+      #Nx.Tensor<
+        c64[2][4]
+        [
+          [3.0+0.0i, 2.0-1.0i, 1.0+0.0i, 2.0+1.0i],
+          [1.0+0.0i, 0.0-1.0i, -1.0+0.0i, 0.0+1.0i]
+        ]
+      >
+      iex> Nx.fft2(tensor, lengths: [4, 2])
+      #Nx.Tensor<
+        c64[4][2]
+        [
+          [3.0+0.0i, 1.0+0.0i],
+          [2.0-1.0i, 0.0-1.0i],
+          [1.0+0.0i, -1.0+0.0i],
+          [2.0+1.0i, 0.0+1.0i]
+        ]
+      >
+
+      iex> Nx.fft2(Nx.tensor([[1, 1, 0], [1, 1, 0], [1, 1, -1]]), lengths: [:power_of_two, :power_of_two])
+      #Nx.Tensor<
+        c64[4][4]
+        [
+          [5.0+0.0i, 4.0-3.0i, -1.0+0.0i, 4.0+3.0i],
+          [1.0-2.0i, -2.0-1.0i, 1.0+0.0i, 0.0-1.0i],
+          [1.0+0.0i, 2.0-1.0i, -1.0+0.0i, 2.0+1.0i],
+          [1.0+2.0i, 0.0+1.0i, 1.0+0.0i, -2.0+1.0i]
+        ]
+      >
+
+      iex> Nx.fft2(Nx.tensor([[[1, 1, 0, 0, 2, 3]]]), axes: [0, 2], lengths: [2, 4])
+      #Nx.Tensor<
+        c64[2][1][4]
+        [
+          [
+            [2.0+0.0i, 1.0-1.0i, 0.0+0.0i, 1.0+1.0i]
+          ],
+          [
+            [2.0+0.0i, 1.0-1.0i, 0.0+0.0i, 1.0+1.0i]
+          ]
+        ]
+      >
+
+  If an N-dimensional tensor is passed, the DFT is, by default, applied to the last axes:
+
+      iex> tensor = Nx.tensor([
+      ...> [[[1, 0, 1, 0, 10, 10], [1, 1, 1, 1, 10, 10]]],
+      ...> [[[-2, -2, -2, -2, 20, 20], [0, 0, 0, 1, -20, -20]]]])
+      iex> Nx.fft2(tensor, lengths: [2, 4])
+      #Nx.Tensor<
+        c64[2][1][2][4]
+        [
+          [
+            [
+              [6.0+0.0i, 0.0+0.0i, 2.0+0.0i, 0.0+0.0i],
+              [-2.0+0.0i, 0.0+0.0i, 2.0+0.0i, 0.0+0.0i]
+            ]
+          ],
+          [
+            [
+              [-7.0+0.0i, 0.0+1.0i, -1.0+0.0i, 0.0-1.0i],
+              [-9.0+0.0i, 0.0-1.0i, 1.0+0.0i, 0.0+1.0i]
+            ]
+          ]
+        ]
+      >
+
+  ## Vectorized tensors
+
+  Vectorized tensors work the same as N-dimensional tensors
+
+      iex> tensor = Nx.tensor([
+      ...> [[[1, 0, 1, 0, 10, 10], [1, 1, 1, 1, 10, 10]]],
+      ...> [[[-2, -2, -2, -2, 20, 20], [0, 0, 0, 1, -20, -20]]]
+      ...> ]) |> Nx.vectorize(:x)
+      iex> Nx.fft2(tensor, lengths: [2, 4])
+      #Nx.Tensor<
+        vectorized[x: 2]
+        c64[1][2][4]
+        [
+          [
+            [
+              [6.0+0.0i, 0.0+0.0i, 2.0+0.0i, 0.0+0.0i],
+              [-2.0+0.0i, 0.0+0.0i, 2.0+0.0i, 0.0+0.0i]
+            ]
+          ],
+          [
+            [
+              [-7.0+0.0i, 0.0+1.0i, -1.0+0.0i, 0.0-1.0i],
+              [-9.0+0.0i, 0.0-1.0i, 1.0+0.0i, 0.0+1.0i]
+            ]
+          ]
+        ]
+      >
+
+  ## Error Cases
+
+      iex> Nx.fft2(Nx.tensor([[1, 1]]), lengths: [:invalid, 2])
+      ** (ArgumentError) expected :lengths to be a list of lengths or :power_of_two, got: [:invalid, 2]
+
+      iex> Nx.fft2(Nx.tensor([1, 1]), length: :invalid)
+      ** (ArgumentError) expected a tensor with rank > 1, got tensor with rank 1
+  """
+  @doc type: :ndim
   def fft2(tensor, opts \\ []), do: call_fft2(tensor, opts, :fft2)
+
+  @doc """
+  Calculates the Inverse 2D DFT of the given tensor.
+
+  ## Options
+
+    * `:eps` - Threshold which backends can use for cleaning-up results. Defaults to `1.0e-10`.
+    * `:lengths` - A 2 element list where each element is either a positive integer or `:power_of_two`.
+      Will pad or slice the tensor accordingly. `:power_of_two` will automatically pad to the next power of two.
+    * `:axes` - the 2 axes upon which the Inverse 2D DFT will be calculated. Defaults to the last 2 axes.
+
+  ## Examples
+
+      iex> Nx.ifft2(Nx.tensor([[6, 0, 2, 0], [-2, 0, 2, 0]]))
+      #Nx.Tensor<
+        c64[2][4]
+        [
+          [1.0+0.0i, 0.0+0.0i, 1.0+0.0i, 0.0+0.0i],
+          [1.0+0.0i, 1.0+0.0i, 1.0+0.0i, 1.0+0.0i]
+        ]
+      >
+
+  The calculation can happen on a specific pair of axes:
+
+      iex> tensor = Nx.tensor([[[6, 0, 2, 0]], [[-2, 0, 2, 0]]])
+      iex> Nx.ifft2(tensor, axes: [0, -1])
+      #Nx.Tensor<
+        c64[2][1][4]
+        [
+          [
+            [1.0+0.0i, 0.0+0.0i, 1.0+0.0i, 0.0+0.0i]
+          ],
+          [
+            [1.0+0.0i, 1.0+0.0i, 1.0+0.0i, 1.0+0.0i]
+          ]
+        ]
+      >
+      iex> Nx.ifft2(tensor, axes: [-2, -1])
+      #Nx.Tensor<
+        c64[2][1][4]
+        [
+          [
+            [2.0+0.0i, 1.0+0.0i, 2.0+0.0i, 1.0+0.0i]
+          ],
+          [
+            [0.0+0.0i, -1.0+0.0i, 0.0+0.0i, -1.0+0.0i]
+          ]
+        ]
+      >
+
+  Padding and slicing can be introduced through `:lengths`:
+
+      iex> tensor = Nx.tensor([[8, 8], [8, 0]])
+      iex> Nx.ifft2(tensor, lengths: [2, 4])
+      #Nx.Tensor<
+        c64[2][4]
+        [
+          [3.0+0.0i, 2.0+1.0i, 1.0+0.0i, 2.0-1.0i],
+          [1.0+0.0i, 0.0+1.0i, -1.0+0.0i, 0.0-1.0i]
+        ]
+      >
+      iex> Nx.ifft2(tensor, lengths: [4, 2])
+      #Nx.Tensor<
+        c64[4][2]
+        [
+          [3.0+0.0i, 1.0+0.0i],
+          [2.0+1.0i, 0.0+1.0i],
+          [1.0+0.0i, -1.0+0.0i],
+          [2.0-1.0i, 0.0-1.0i]
+        ]
+      >
+
+      iex> Nx.ifft2(Nx.tensor([[16, 16, 0], [16, 16, 0], [16, 16, -16]]), lengths: [:power_of_two, :power_of_two])
+      #Nx.Tensor<
+        c64[4][4]
+        [
+          [5.0+0.0i, 4.0+3.0i, -1.0+0.0i, 4.0-3.0i],
+          [1.0+2.0i, -2.0+1.0i, 1.0+0.0i, 0.0+1.0i],
+          [1.0+0.0i, 2.0+1.0i, -1.0+0.0i, 2.0-1.0i],
+          [1.0-2.0i, 0.0-1.0i, 1.0+0.0i, -2.0-1.0i]
+        ]
+      >
+
+      iex> Nx.ifft2(Nx.tensor([[[8, 8, 0, 0, 2, 3]]]), axes: [0, 2], lengths: [2, 4])
+      #Nx.Tensor<
+        c64[2][1][4]
+        [
+          [
+            [2.0+0.0i, 1.0+1.0i, 0.0+0.0i, 1.0-1.0i]
+          ],
+          [
+            [2.0+0.0i, 1.0+1.0i, 0.0+0.0i, 1.0-1.0i]
+          ]
+        ]
+      >
+
+  If an N-dimensional tensor is passed, the Inverse DFT is, by default, applied to the last axes:
+
+      iex> tensor = Nx.tensor([
+      ...> [[[8, 0, 8, 0, 10, 10], [8, 8, 8, 8, 10, 10]]],
+      ...> [[[-16, -16, -16, -16, 20, 20], [0, 0, 0, 8, -20, -20]]]])
+      iex> Nx.ifft2(tensor, lengths: [2, 4])
+      #Nx.Tensor<
+        c64[2][1][2][4]
+        [
+          [
+            [
+              [6.0+0.0i, 0.0+0.0i, 2.0+0.0i, 0.0+0.0i],
+              [-2.0+0.0i, 0.0+0.0i, 2.0+0.0i, 0.0+0.0i]
+            ]
+          ],
+          [
+            [
+              [-7.0+0.0i, 0.0-1.0i, -1.0+0.0i, 0.0+1.0i],
+              [-9.0+0.0i, 0.0+1.0i, 1.0+0.0i, 0.0-1.0i]
+            ]
+          ]
+        ]
+      >
+
+  ## Vectorized tensors
+
+  Vectorized tensors work the same as N-dimensional tensors
+
+      iex> tensor = Nx.tensor([
+      ...> [[[8, 0, 8, 0, 10, 10], [8, 8, 8, 8, 10, 10]]],
+      ...> [[[-16, -16, -16, -16, 20, 20], [0, 0, 0, 8, -20, -20]]]
+      ...> ]) |> Nx.vectorize(:x)
+      iex> Nx.ifft2(tensor, lengths: [2, 4])
+      #Nx.Tensor<
+        vectorized[x: 2]
+        c64[1][2][4]
+        [
+          [
+            [
+              [6.0+0.0i, 0.0+0.0i, 2.0+0.0i, 0.0+0.0i],
+              [-2.0+0.0i, 0.0+0.0i, 2.0+0.0i, 0.0+0.0i]
+            ]
+          ],
+          [
+            [
+              [-7.0+0.0i, 0.0-1.0i, -1.0+0.0i, 0.0+1.0i],
+              [-9.0+0.0i, 0.0+1.0i, 1.0+0.0i, 0.0-1.0i]
+            ]
+          ]
+        ]
+      >
+
+  ## Error Cases
+
+      iex> Nx.ifft2(Nx.tensor([[1, 1]]), lengths: [:invalid, 2])
+      ** (ArgumentError) expected :lengths to be a list of lengths or :power_of_two, got: [:invalid, 2]
+
+      iex> Nx.ifft2(Nx.tensor([1, 1]), length: :invalid)
+      ** (ArgumentError) expected a tensor with rank > 1, got tensor with rank 1
+  """
+  @doc type: :ndim
   def ifft2(tensor, opts \\ []), do: call_fft2(tensor, opts, :ifft2)
 
   defp call_fft2(tensor, opts, kind) do
@@ -15985,9 +16298,6 @@ defmodule Nx do
         [ax1, ax2] = opts[:axes]
         [l1, l2] = opts[:lengths]
         eps = opts[:eps]
-
-        dbg({ax1, ax2})
-        dbg({l1, l2})
 
         if kind == :fft2 do
           tensor
