@@ -2116,6 +2116,13 @@ defmodule Nx.Shape do
 
   def fft(shape) when is_tuple(shape), do: shape
 
+  def fft2(shape) when tuple_size(shape) in [0, 1] do
+    raise ArgumentError,
+          "expected a tensor with rank > 1, got tensor with rank #{tuple_size(shape)}"
+  end
+
+  def fft2(shape) when is_tuple(shape), do: shape
+
   @doc """
   Output shape after a top_k operation.
 

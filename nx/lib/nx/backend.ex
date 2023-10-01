@@ -105,6 +105,8 @@ defmodule Nx.Backend do
 
   @callback fft(out :: tensor, tensor, keyword) :: tensor
   @callback ifft(out :: tensor, tensor, keyword) :: tensor
+  @callback fft2(out :: tensor, tensor, keyword) :: tensor
+  @callback ifft2(out :: tensor, tensor, keyword) :: tensor
 
   binary_ops =
     [:add, :subtract, :multiply, :pow, :remainder, :divide, :atan2, :min, :max, :quotient] ++
@@ -162,7 +164,9 @@ defmodule Nx.Backend do
     cumulative_max: 3,
     all_close: 4,
     svd: 3,
-    top_k: 3
+    top_k: 3,
+    fft2: 3,
+    ifft2: 3
   ]
 
   ## Inspect implementation

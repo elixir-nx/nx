@@ -132,10 +132,12 @@ defmodule Nx.Defn.Evaluator do
 
   defp compute_cache(:optional, %{data: %Expr{args: args, id: id}}, state, cache) do
     [call, expr] = args
-    %{data: %{args: call_args, op: call_name}} = call
+    %{data: %{args: call_args_in, op: call_name}} = call
 
-    cache = Enum.reduce(call.data.args, cache, &compute_cache(&1, state, &2))
-    key = computation_key(call_name, call_args)
+    {call_args, opts} = Enum.split_while(call_args_in, &(not is_list(&1)))
+
+    cache = Enum.reduce(call_args, cache, &compute_cache(&1, state, &2))
+    key = computation_key(call_name, call_args ++ opts)
 
     {optional_expr_cache, cache} =
       case cache do
@@ -384,12 +386,18 @@ defmodule Nx.Defn.Evaluator do
     {{}, caches}
   end
 
-  defp eval_apply(:optional, %{data: %Expr{args: [call, _], id: id}}, state, caches) do
+  defp eval_apply(:optional, %{data: %Expr{args: [call, out], id: id}}, state, caches) do
     {args, caches} = Tree.apply_args(call, caches, &eval(&1, state, &2))
     backend = Nx.Shared.list_impl!(args)
 
     if function_exported?(backend, call.data.op, length(args) + 1) do
-      {apply(backend, call.data.op, [call | args]), caches}
+      out =
+        case call do
+          %{type: {:tuple, _}} -> out
+          _ -> call
+        end
+
+      {apply(backend, call.data.op, [out | args]), caches}
     else
       params = Enum.map(args, &fn -> &1 end)
       {{expr, optional_cache}, caches} = pop_cache!(caches, [:optional | id])

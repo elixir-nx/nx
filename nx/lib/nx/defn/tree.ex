@@ -125,7 +125,7 @@ defmodule Nx.Defn.Tree do
   By default, `type` is `:all`, which means all arguments
   are traversed. If `type` is `:scope`, only expressions
   that are in the same scope are traversed. Therefore,
-  expressions such as `while`'s condition and body, 
+  expressions such as `while`'s condition and body,
   `optional`'s default implementation, functions, and so forth
   are not traversed. Note `cond`s are always traversed because,
   while they introduce a new scope, they can also access its

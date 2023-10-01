@@ -191,13 +191,13 @@ defmodule EXLA.Op do
     end
   end
 
-  def fft(%Op{ref: ref} = op, fft_size) do
-    ref = EXLA.NIF.fft(ref, fft_size) |> unwrap!()
+  def fft(%Op{ref: ref} = op, fft_sizes) when is_list(fft_sizes) do
+    ref = EXLA.NIF.fft(ref, fft_sizes) |> unwrap!()
     %{op | ref: ref}
   end
 
-  def ifft(%Op{ref: ref} = op, fft_size) do
-    ref = EXLA.NIF.ifft(ref, fft_size) |> unwrap!()
+  def ifft(%Op{ref: ref} = op, fft_sizes) when is_list(fft_sizes) do
+    ref = EXLA.NIF.ifft(ref, fft_sizes) |> unwrap!()
     %{op | ref: ref}
   end
 

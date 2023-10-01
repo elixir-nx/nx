@@ -1,14 +1,14 @@
-#include "exla_nif_util.h"
 #include "exla_ops.h"
 
-#include "xla/client/xla_builder.h"
-#include "xla/client/xla_computation.h"
-#include "xla/client/lib/math.h"
+#include "exla_nif_util.h"
 #include "xla/client/lib/lu_decomposition.h"
+#include "xla/client/lib/math.h"
 #include "xla/client/lib/qr.h"
 #include "xla/client/lib/self_adjoint_eig.h"
-#include "xla/client/lib/svd.h"
 #include "xla/client/lib/sorting.h"
+#include "xla/client/lib/svd.h"
+#include "xla/client/xla_builder.h"
+#include "xla/client/xla_computation.h"
 
 // Parameters
 
@@ -195,8 +195,8 @@ ERL_NIF_TERM call(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
-  xla::XlaBuilder **builder;
-  xla::XlaComputation *fn;
+  xla::XlaBuilder** builder;
+  xla::XlaComputation* fn;
   // We will always wrap fn to expect a single tuple-arg
   // which contains all args because we can't call xla::Call
   // in a dynamically variadic way.
@@ -400,52 +400,42 @@ ERL_NIF_TERM select_and_scatter(ErlNifEnv* env, int argc, const ERL_NIF_TERM arg
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
-ERL_NIF_TERM scatter(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
-{
-  if (argc != 8)
-  {
+ERL_NIF_TERM scatter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 8) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
-  xla::XlaOp *target;
-  xla::XlaOp *indices;
-  xla::XlaOp *updates;
-  xla::XlaComputation *scatter_fn;
+  xla::XlaOp* target;
+  xla::XlaOp* indices;
+  xla::XlaOp* updates;
+  xla::XlaComputation* scatter_fn;
   exla::int64 index_vector_dim;
   std::vector<exla::int64> update_window_dims;
   std::vector<exla::int64> inserted_window_dims;
   std::vector<exla::int64> scatter_dims_to_operand_dims;
 
-  if (!exla::nif::get<xla::XlaOp>(env, argv[0], target))
-  {
+  if (!exla::nif::get<xla::XlaOp>(env, argv[0], target)) {
     return exla::nif::error(env, "Unable to get target.");
   }
-  if (!exla::nif::get<xla::XlaOp>(env, argv[1], indices))
-  {
+  if (!exla::nif::get<xla::XlaOp>(env, argv[1], indices)) {
     return exla::nif::error(env, "Unable to get indices.");
   }
-  if (!exla::nif::get<xla::XlaOp>(env, argv[2], updates))
-  {
+  if (!exla::nif::get<xla::XlaOp>(env, argv[2], updates)) {
     return exla::nif::error(env, "Unable to get updates.");
   }
-  if (!exla::nif::get<xla::XlaComputation>(env, argv[3], scatter_fn))
-  {
+  if (!exla::nif::get<xla::XlaComputation>(env, argv[3], scatter_fn)) {
     return exla::nif::error(env, "Unable to get scatter function.");
   }
-  if (!exla::nif::get(env, argv[4], &index_vector_dim))
-  {
+  if (!exla::nif::get(env, argv[4], &index_vector_dim)) {
     return exla::nif::error(env, "Unable to get index vector dim.");
   }
-  if (!exla::nif::get_list(env, argv[5], update_window_dims))
-  {
+  if (!exla::nif::get_list(env, argv[5], update_window_dims)) {
     return exla::nif::error(env, "Unable to get update window dims.");
   }
-  if (!exla::nif::get_list(env, argv[6], inserted_window_dims))
-  {
+  if (!exla::nif::get_list(env, argv[6], inserted_window_dims)) {
     return exla::nif::error(env, "Unable to get update window dims.");
   }
-  if (!exla::nif::get_list(env, argv[7], scatter_dims_to_operand_dims))
-  {
+  if (!exla::nif::get_list(env, argv[7], scatter_dims_to_operand_dims)) {
     return exla::nif::error(env, "Unable to get update window dims.");
   }
 
@@ -453,20 +443,16 @@ ERL_NIF_TERM scatter(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 
   scatter_dim_numbers.set_index_vector_dim(index_vector_dim);
 
-
-  for (size_t i = 0; i < update_window_dims.size(); i++)
-  {
+  for (size_t i = 0; i < update_window_dims.size(); i++) {
     // scatter_dim_numbers.set_update_window_dims(i, update_window_dims[i]);
     scatter_dim_numbers.add_update_window_dims(update_window_dims[i]);
   }
 
-  for (size_t i = 0; i < inserted_window_dims.size(); i++)
-  {
+  for (size_t i = 0; i < inserted_window_dims.size(); i++) {
     scatter_dim_numbers.add_inserted_window_dims(inserted_window_dims[i]);
   }
 
-  for (size_t i = 0; i < scatter_dims_to_operand_dims.size(); i++)
-  {
+  for (size_t i = 0; i < scatter_dims_to_operand_dims.size(); i++) {
     scatter_dim_numbers.add_scatter_dims_to_operand_dims(scatter_dims_to_operand_dims[i]);
   }
 
@@ -602,8 +588,7 @@ ERL_NIF_TERM constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     case xla::PrimitiveType::S64:
       op = xla::ConstantR0(*builder, exla::nif::get_value<xla::PrimitiveType::S64>(env, term));
       break;
-    case xla::PrimitiveType::F16:
-    {
+    case xla::PrimitiveType::F16: {
       // Not sure why the pattern breaks here
       double var;
       if (!enif_get_double(env, term, &var)) return exla::nif::error(env, "Unable to get constant");
@@ -650,7 +635,7 @@ ERL_NIF_TERM constant_from_binary(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     return exla::nif::error(env, "Unable to get shape.");
   }
 
-  char * data = const_cast<char*>(reinterpret_cast<char*>(binary.data));
+  char* data = const_cast<char*>(reinterpret_cast<char*>(binary.data));
   xla::BorrowingLiteral literal(data, *shape);
 
   xla::XlaOp op = xla::ConstantLiteral(*builder, literal);
@@ -663,13 +648,13 @@ ERL_NIF_TERM constant_from_binary(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 ERL_NIF_TERM xla_binary_op(ErlNifEnv* env,
                            int argc,
                            const ERL_NIF_TERM argv[],
-                           xla::XlaOp(*lambda)(xla::XlaOp, xla::XlaOp, absl::Span<const exla::int64>)) {
+                           xla::XlaOp (*lambda)(xla::XlaOp, xla::XlaOp, absl::Span<const exla::int64>)) {
   if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
-  xla::XlaOp *lhs;
-  xla::XlaOp *rhs;
+  xla::XlaOp* lhs;
+  xla::XlaOp* rhs;
   std::vector<exla::int64> broadcast_dims;
 
   if (!exla::nif::get<xla::XlaOp>(env, argv[0], lhs)) {
@@ -780,12 +765,12 @@ ERL_NIF_TERM atan2(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 ERL_NIF_TERM xla_unary_op(ErlNifEnv* env,
                           int argc,
                           const ERL_NIF_TERM argv[],
-                          xla::XlaOp(*lambda)(xla::XlaOp)) {
+                          xla::XlaOp (*lambda)(xla::XlaOp)) {
   if (argc != 1) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
-  xla::XlaOp *operand;
+  xla::XlaOp* operand;
 
   if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
     return exla::nif::error(env, "Unable to get operand.");
@@ -896,23 +881,19 @@ ERL_NIF_TERM sqrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Sqrt);
 }
 
-ERL_NIF_TERM cbrt(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
-{
+ERL_NIF_TERM cbrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Cbrt);
 }
 
-ERL_NIF_TERM is_nan(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
-{
+ERL_NIF_TERM is_nan(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::IsNan);
 }
 
-ERL_NIF_TERM is_infinity(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
-{
-  return xla_unary_op(env, argc, argv, [](xla::XlaOp op){return xla::IsInf(op);});
+ERL_NIF_TERM is_infinity(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, [](xla::XlaOp op) { return xla::IsInf(op); });
 }
 
-ERL_NIF_TERM rsqrt(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
-{
+ERL_NIF_TERM rsqrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Rsqrt);
 }
 
@@ -946,38 +927,32 @@ ERL_NIF_TERM population_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
 
 // LinAlg
 
-ERL_NIF_TERM execute_fft(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[], const xla::FftType fft_type)
-{
-  if (argc != 2)
-  {
+ERL_NIF_TERM execute_fft(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], const xla::FftType fft_type) {
+  if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
-  xla::XlaOp *operand;
-  exla::int64 fft_size;
+  xla::XlaOp* operand;
+  std::vector<exla::int64> fft_sizes;
 
-  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand))
-  {
+  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
     return exla::nif::error(env, "Unable to get operand.");
   }
 
-  if (!exla::nif::get(env, argv[1], &fft_size))
-  {
-    return exla::nif::error(env, "Unable to get fft_size.");
+  if (!exla::nif::get_list(env, argv[1], fft_sizes)) {
+    return exla::nif::error(env, "Unable to get fft_sizes.");
   }
 
-  xla::XlaOp op = xla::Fft(*operand, fft_type, {fft_size});
+  xla::XlaOp op = xla::Fft(*operand, fft_type, fft_sizes);
 
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
-ERL_NIF_TERM fft(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
-{
+ERL_NIF_TERM fft(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return execute_fft(env, argc, argv, xla::FftType::FFT);
 }
 
-ERL_NIF_TERM ifft(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
-{
+ERL_NIF_TERM ifft(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return execute_fft(env, argc, argv, xla::FftType::IFFT);
 }
 
@@ -999,32 +974,26 @@ ERL_NIF_TERM cholesky(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
-ERL_NIF_TERM eigh(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
-{
-  if (argc != 4)
-  {
+ERL_NIF_TERM eigh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 4) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
-  xla::XlaOp *operand;
+  xla::XlaOp* operand;
   bool lower;
   double eps;
   int64_t max_iter;
 
-  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand))
-  {
+  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
     return exla::nif::error(env, "Unable to get operand.");
   }
-  if (!exla::nif::get(env, argv[1], &lower))
-  {
+  if (!exla::nif::get(env, argv[1], &lower)) {
     return exla::nif::error(env, "Unable to get lower flag.");
   }
-  if (!exla::nif::get(env, argv[2], &eps))
-  {
+  if (!exla::nif::get(env, argv[2], &eps)) {
     return exla::nif::error(env, "Unable to get eps.");
   }
-  if (!exla::nif::get(env, argv[3], &max_iter))
-  {
+  if (!exla::nif::get(env, argv[3], &max_iter)) {
     return exla::nif::error(env, "Unable to get max_iter.");
   }
 
@@ -1342,7 +1311,7 @@ ERL_NIF_TERM get_shape_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   EXLA_ASSIGN_OR_RETURN_NIF(xla::Shape shape,
-    (*builder)->GetShape(*operand), env);
+                            (*builder)->GetShape(*operand), env);
 
   return exla::nif::ok(env, exla::nif::make<xla::Shape>(env, shape));
 }
@@ -1648,7 +1617,7 @@ ERL_NIF_TERM top_k(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Unable to get k.");
   }
 
-  xla::XlaOp op = xla::TopK(*operand, k);
+  xla::XlaOp op = xla::TopK(*operand, k, xla::PrimitiveType::S64);
 
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
