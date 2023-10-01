@@ -931,19 +931,32 @@ NIF(cbrt)
     TENSOR(torch::pow(*tensor, 1.0f / 3));
   }
 }
-
-NIF(fft)
-{
+NIF(fft) {
   TENSOR_PARAM(0, tensor);
   PARAM(1, int64_t, length);
-  TENSOR(torch::fft::fft(*tensor, length));
+  PARAM(2, int64_t, axis);
+  TENSOR(torch::fft::fft(*tensor, length, axis));
 }
 
-NIF(ifft)
-{
+NIF(ifft) {
   TENSOR_PARAM(0, tensor);
   PARAM(1, int64_t, length);
-  TENSOR(torch::fft::ifft(*tensor, length));
+  PARAM(2, int64_t, axis);
+  TENSOR(torch::fft::ifft(*tensor, length, axis));
+}
+
+NIF(fft2) {
+  TENSOR_PARAM(0, tensor);
+  LIST_PARAM(1, std::vector<int64_t>, lengths);
+  LIST_PARAM(2, std::vector<int64_t>, axes);
+  TENSOR(torch::fft::fft2(*tensor, lengths, axes));
+}
+
+NIF(ifft2) {
+  TENSOR_PARAM(0, tensor);
+  LIST_PARAM(1, std::vector<int64_t>, lengths);
+  LIST_PARAM(2, std::vector<int64_t>, axes);
+  TENSOR(torch::fft::ifft2(*tensor, lengths, axes));
 }
 
 NIF(is_nan)
@@ -1353,8 +1366,10 @@ static ErlNifFunc nif_functions[] = {
     DF(cbrt, 1),
     DF(is_nan, 1),
     DF(is_infinity, 1),
-    DF(fft, 2),
-    DF(ifft, 2),
+    DF(fft, 3),
+    DF(ifft, 3),
+    DF(fft2, 3),
+    DF(ifft2, 3),
 
     DF(tensordot, 6),
     DF(matmul, 2),

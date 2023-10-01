@@ -583,7 +583,7 @@ defmodule EXLA.Defn do
     {args, _opts} = Enum.split_while(in_args, &(not is_list(&1)))
 
     {call_args, cache} = Enum.map_reduce(args, cache, &recur_operator(&1, state, &2))
-    key = computation_key(op, call_args)
+    key = computation_key(op, call_args ++ opts)
 
     {call_body, cache} =
       case cache do
