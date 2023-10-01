@@ -580,7 +580,7 @@ defmodule EXLA.Defn do
     [call, expr] = args
     %{data: %{args: in_args, op: op}} = call
 
-    {args, _opts} = Enum.split_while(in_args, &(not is_list(&1)))
+    {args, opts} = Enum.split_while(in_args, &(not is_list(&1)))
 
     {call_args, cache} = Enum.map_reduce(args, cache, &recur_operator(&1, state, &2))
     key = computation_key(op, call_args ++ opts)
