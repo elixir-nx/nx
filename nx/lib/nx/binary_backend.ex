@@ -2262,8 +2262,9 @@ defmodule Nx.BinaryBackend do
   defp calculate_fft(out, %{shape: shape, type: {_, size}} = tensor, opts, kind) do
     eps = opts[:eps]
     n = opts[:length]
+    axis = opts[:axis]
 
-    input_view = aggregate_axes(to_binary(tensor), [tuple_size(shape) - 1], shape, size)
+    input_view = aggregate_axes(to_binary(tensor), [axis], shape, size)
 
     [row | _] =
       input_data =
@@ -2303,7 +2304,20 @@ defmodule Nx.BinaryBackend do
         end
       end
 
-    from_binary(out, output_data)
+    intermediate_shape = out.shape |> Tuple.delete_at(axis) |> Tuple.append(n)
+
+    permuted_output = from_binary(%{out | shape: intermediate_shape}, output_data)
+
+    last = tuple_size(intermediate_shape) - 1
+
+    output_axes =
+      Enum.map(0..last, fn
+        ^axis -> last
+        ^last -> axis
+        ax -> ax
+      end)
+
+    transpose(out, permuted_output, output_axes)
   end
 
   defp ifft_list(row, n) do

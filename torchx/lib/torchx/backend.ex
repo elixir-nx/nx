@@ -1025,20 +1025,44 @@ defmodule Torchx.Backend do
   @impl true
   def fft(out, tensor, opts) do
     length = opts[:length]
+    axis = opts[:axis]
 
     tensor
     |> from_nx()
-    |> Torchx.fft(length)
+    |> Torchx.fft(length, axis)
     |> to_nx(out)
   end
 
   @impl true
   def ifft(out, tensor, opts) do
     length = opts[:length]
+    axis = opts[:axis]
 
     tensor
     |> from_nx()
-    |> Torchx.ifft(length)
+    |> Torchx.ifft(length, axis)
+    |> to_nx(out)
+  end
+
+  @impl true
+  def fft2(out, tensor, opts) do
+    lengths = opts[:lengths]
+    axes = opts[:axes]
+
+    tensor
+    |> from_nx()
+    |> Torchx.fft2(lengths, axes)
+    |> to_nx(out)
+  end
+
+  @impl true
+  def ifft2(out, tensor, opts) do
+    lengths = opts[:lengths]
+    axes = opts[:axes]
+
+    tensor
+    |> from_nx()
+    |> Torchx.ifft2(lengths, axes)
     |> to_nx(out)
   end
 

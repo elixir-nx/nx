@@ -111,7 +111,7 @@ defmodule Nx.Defn.Grad do
     args = call.data.args
 
     # First traverse through all arguments
-    acc = Enum.reduce(args, acc, &recur_parents_tree(&1, &2, params))
+    acc = args |> Enum.reject(&is_list/1) |> Enum.reduce(acc, &recur_parents_tree(&1, &2, params))
 
     # Now traverse over the optional expression where args are the new parameters.
     # Once we access the parameter itself, we point the parameter to the arg.
