@@ -548,4 +548,52 @@ defmodule EXLA.MLIR.ExecutableTest do
       end
     end
   end
+
+  describe "argsort" do
+    test "sorts with axis and direction" do
+      for type <- [s: 64, u: 64, f: 32] do
+        t = Nx.tensor([[0, 2, 1, 10], [10, 10, 20, 0]], type: type)
+
+        result = EXLA.jit(&Nx.argsort(&1, direction: :asc, axis: 0), compiler_mode: :mlir).(t)
+
+        assert_equal(
+          result,
+          Nx.tensor([
+            [0, 0, 0, 1],
+            [1, 1, 1, 0]
+          ])
+        )
+
+        result = EXLA.jit(&Nx.argsort(&1, direction: :asc, axis: 1), compiler_mode: :mlir).(t)
+
+        assert_equal(
+          result,
+          Nx.tensor([
+            [0, 2, 1, 3],
+            [3, 0, 1, 2]
+          ])
+        )
+
+        result = EXLA.jit(&Nx.argsort(&1, direction: :desc, axis: 0), compiler_mode: :mlir).(t)
+
+        assert_equal(
+          result,
+          Nx.tensor([
+            [1, 1, 1, 0],
+            [0, 0, 0, 1]
+          ])
+        )
+
+        result = EXLA.jit(&Nx.argsort(&1, direction: :desc, axis: 1), compiler_mode: :mlir).(t)
+
+        assert_equal(
+          result,
+          Nx.tensor([
+            [3, 1, 2, 0],
+            [2, 0, 1, 3]
+          ])
+        )
+      end
+    end
+  end
 end
