@@ -111,6 +111,29 @@ defmodule EXLA.MLIR.Value do
     %Value{value | ref: out_ref}
   end
 
+  def sort(%Value{} = value, axis, direction) do
+    [result] = sort([value], axis, direction)
+    result
+  end
+
+  def sort([%Value{function: %Function{ref: func_ref}} | _] = values, axis, direction) do
+    desc = if direction == :desc, do: 1, else: 0
+
+    in_refs =
+      Enum.map(values, fn %Value{ref: ref, function: %Function{ref: ^func_ref}} -> ref end)
+
+    out_refs =
+      EXLA.NIF.mlir_sort(
+        func_ref,
+        in_refs,
+        axis,
+        desc
+      )
+      |> unwrap!()
+
+    Enum.zip_with(values, out_refs, fn value, out_ref -> %Value{value | ref: out_ref} end)
+  end
+
   def iota(%Function{} = func, shape, dim) do
     ref = EXLA.NIF.mlir_iota(func.ref, shape.ref, dim) |> unwrap!()
     %Value{ref: ref, function: func}

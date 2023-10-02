@@ -61,6 +61,7 @@ defmodule EXLA.NIF do
 
   def mlir_convert(_function, _tensor, _type), do: :erlang.nif_error(:undef)
   def mlir_bitcast_convert(_function, _tensor, _type, _dims), do: :erlang.nif_error(:undef)
+  def mlir_sort(_function, _tensors, _dim, _desc), do: :erlang.nif_error(:undef)
 
   def mlir_get_shape(_tensor), do: :erlang.nif_error(:undef)
 

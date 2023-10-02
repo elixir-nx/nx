@@ -12,12 +12,12 @@
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/OwningOpRef.h"
+#include "mlir/IR/PatternMatch.h"
 #include "xla/mlir_hlo/mhlo/IR/hlo_ops.h"
 #include "xla/primitive_util.h"
 #include "xla/types.h"
 
 namespace exla {
-
 mlir::Type TypeIntToMLIRType(mlir::OpBuilder *builder, int type_int) {
   switch (type_int) {
     case 2:
@@ -486,6 +486,68 @@ mlir::Value MLIRFunction::ReverseOp(mlir::Value operand, std::vector<int64_t> di
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   auto dims_attr = Int64ToDenseIntElementsAttr(module_->builder(), dims);
   return module_->builder()->create<mlir::mhlo::ReverseOp>(module_->builder()->getUnknownLoc(), operand, dims_attr);
+}
+
+class PublicPatternRewriter : public mlir::PatternRewriter {
+ public:
+  PublicPatternRewriter(mlir::MLIRContext *context) : mlir::PatternRewriter(context) {}
+};
+
+static void buildSortComparisonBody(llvm::ArrayRef<mlir::Type> elementTypes,
+                                    mlir::mhlo::ComparisonDirection direction,
+                                    std::optional<mlir::StringRef> compare_type,
+                                    mlir::Region *body, mlir::OpBuilder *builder) {
+  mlir::OpBuilder::InsertionGuard insertionPointGuard(*builder);
+  mlir::Location loc = body->getLoc();
+  mlir::Block *block = builder->createBlock(body);
+  // Add two arguments for each element type.
+  for (mlir::Type elementType : elementTypes) {
+    // mlir::ShapedType shapedType = mlir::RankedTensorType::get({}, elementType);
+    block->addArguments({elementType, elementType}, {loc, loc});
+  }
+  mlir::mhlo::ComparisonType type_attr;
+  if (compare_type) {
+    type_attr = mlir::mhlo::symbolizeComparisonType(*compare_type).value();
+  } else {
+    type_attr = mlir::mhlo::ComparisonType::NOTYPE;
+  }
+  mlir::BlockArgument arg0 = block->getArgument(0);
+  mlir::BlockArgument arg1 = block->getArgument(1);
+  mlir::Value compare = builder->create<mlir::mhlo::CompareOp>(loc, arg0, arg1, direction);
+  builder->create<mlir::mhlo::ReturnOp>(loc, compare);
+}
+
+std::vector<mlir::Value> MLIRFunction::SortOp(std::vector<mlir::Value> operands, int64_t dim, bool desc) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  std::vector<mlir::Type> element_types;
+  element_types.reserve(operands.size());
+  std::optional<mlir::StringRef> compare_type = std::nullopt;
+
+  for (auto element : operands) {
+    mlir::RankedTensorType ranked_type = llvm::cast<mlir::RankedTensorType>(element.getType());
+    mlir::Type type = mlir::RankedTensorType::get({}, ranked_type.getElementType());
+    element_types.push_back(type);
+    if (type.isa<mlir::FloatType>()) {
+      compare_type.emplace("TOTALORDER");
+    }
+  }
+
+  mlir::mhlo::ComparisonDirection direction = desc ? mlir::mhlo::ComparisonDirection::GT : mlir::mhlo::ComparisonDirection::LT;
+
+  mlir::OpBuilder *builder = module_->builder();
+
+  mlir::ValueRange value_range(operands);
+  mlir::mhlo::SortOp sort_op = builder->create<mlir::mhlo::SortOp>(
+      builder->getUnknownLoc(),
+      value_range,
+      dim,
+      true);
+
+  buildSortComparisonBody(element_types, direction, compare_type,
+                          &sort_op.getComparator(), builder);
+
+  mlir::Operation::result_range results = sort_op.getResults();
+  return std::vector<mlir::Value>(results.begin(), results.end());
 }
 
 mlir::Value MLIRFunction::SliceOp(mlir::Value operand, std::vector<int64_t> starts, std::vector<int64_t> limits, std::vector<int64_t> strides) {
