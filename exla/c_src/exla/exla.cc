@@ -782,15 +782,10 @@ ERL_NIF_TERM mlir_sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get(env, argv[2], &axis)) {
     return exla::nif::error(env, "Unable to get axis.");
   }
-  std::cout << "after axis" << std::endl;
   if (!exla::nif::get(env, argv[3], &desc)) {
     return exla::nif::error(env, "Unable to get desc.");
   }
-  std::cout << "after desc" << std::endl;
-
-  std::cout << "before sort" << std::endl;
   std::vector<mlir::Value> res = (*function)->SortOp(operands, axis, desc);
-  std::cout << "after sort" << std::endl;
   size_t n = res.size();
 
   std::vector<ERL_NIF_TERM> nif_terms;

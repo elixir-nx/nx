@@ -493,49 +493,61 @@ class PublicPatternRewriter : public mlir::PatternRewriter {
   PublicPatternRewriter(mlir::MLIRContext *context) : mlir::PatternRewriter(context) {}
 };
 
-// Usage:
-mlir::MLIRContext context;
-PublicPatternRewriter rewriter(&context);
+static void buildSortComparisonBody(llvm::ArrayRef<mlir::Type> elementTypes,
+                                    mlir::mhlo::ComparisonDirection direction,
+                                    std::optional<mlir::StringRef> compare_type,
+                                    mlir::Region *body, mlir::OpBuilder *builder) {
+  mlir::OpBuilder::InsertionGuard insertionPointGuard(*builder);
+  mlir::Location loc = body->getLoc();
+  mlir::Block *block = builder->createBlock(body);
+  // Add two arguments for each element type.
+  for (mlir::Type elementType : elementTypes) {
+    // mlir::ShapedType shapedType = mlir::RankedTensorType::get({}, elementType);
+    block->addArguments({elementType, elementType}, {loc, loc});
+  }
+  mlir::mhlo::ComparisonType type_attr;
+  if (compare_type) {
+    type_attr = mlir::mhlo::symbolizeComparisonType(*compare_type).value();
+  } else {
+    type_attr = mlir::mhlo::ComparisonType::NOTYPE;
+  }
+  mlir::BlockArgument arg0 = block->getArgument(0);
+  mlir::BlockArgument arg1 = block->getArgument(1);
+  mlir::Value compare = builder->create<mlir::mhlo::CompareOp>(builder->getUnknownLoc(), arg0, arg1, direction);
+  builder->create<mlir::mhlo::ReturnOp>(loc, compare);
+}
 
 std::vector<mlir::Value> MLIRFunction::SortOp(std::vector<mlir::Value> operands, int64_t dim, bool desc) {
-  std::cout << "1" << std::endl;
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-
-  std::cout << "2" << std::endl;
   std::vector<mlir::Type> element_types;
   element_types.reserve(operands.size());
-  for (size_t i = 0; i < element_types.size(); i++) {
-    element_types[i] = operands[i].getType();
+  std::optional<mlir::StringRef> compare_type = std::nullopt;
+
+  for (auto element : operands) {
+    mlir::RankedTensorType ranked_type = llvm::cast<mlir::RankedTensorType>(element.getType());
+    mlir::Type type = mlir::RankedTensorType::get({}, ranked_type.getElementType());
+    element_types.push_back(type);
+    if (type.isa<mlir::FloatType>()) {
+      compare_type.emplace("TOTALORDER");
+    }
   }
-  std::cout << "3" << std::endl;
 
   mlir::mhlo::ComparisonDirection direction = desc ? mlir::mhlo::ComparisonDirection::GT : mlir::mhlo::ComparisonDirection::LT;
-  std::cout << "4" << std::endl;
 
-  // auto loc = module_->builder()->getUnknownLoc();
-  // auto op = module_->builder()->create<mlir::mhlo::SortOp>(loc, mlir::ValueRange(operands), dim, true);
-  PublicPatternRewriter rewriter = PublicPatternRewriter(module_->builder()->getContext());
+  mlir::OpBuilder *builder = module_->builder();
 
-  std::cout << "5" << std::endl;
-  mlir::mhlo::SortOp sort_op = mlir::mhlo::createSortOp(
-      (mlir::PatternRewriter *)&rewriter,
-      module_->builder()->getUnknownLoc(),
-      operands,
-      element_types,
+  mlir::ValueRange value_range(operands);
+  mlir::mhlo::SortOp sort_op = builder->create<mlir::mhlo::SortOp>(
+      builder->getUnknownLoc(),
+      value_range,
       dim,
-      true,
-      direction);
+      true);
 
-      std::cout << "6" << std::endl;
+  buildSortComparisonBody(element_types, direction, compare_type,
+                          &sort_op.getComparator(), builder);
 
-  std::vector<mlir::Value> result;
-  result.reserve(operands.size());
-  for (size_t i = 0; i < operands.size(); i++) {
-    result[i] = sort_op.getResult(i);
-  }
-
-  std::cout << "7" << std::endl;
-  return result;
+  mlir::Operation::result_range results = sort_op.getResults();
+  return std::vector<mlir::Value>(results.begin(), results.end());
 }
 
 mlir::Value MLIRFunction::SliceOp(mlir::Value operand, std::vector<int64_t> starts, std::vector<int64_t> limits, std::vector<int64_t> strides) {

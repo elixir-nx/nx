@@ -488,4 +488,38 @@ defmodule EXLA.MLIR.ExecutableTest do
       assert_equal(result_nx, result_mlir)
     end
   end
+
+  describe "sort" do
+    test "sorts with axis and direction" do
+      for type <- [s: 64, u: 64, f: 32] do
+      t = Nx.tensor([[0, 2, 1, 10], [10, 10, 20, 0]], type: type)
+
+      result = EXLA.jit(&Nx.sort(&1, direction: :asc, axis: 0), compiler_mode: :mlir).(t)
+      assert_equal(result, Nx.tensor([
+        [0, 2, 1, 0],
+        [10, 10, 20, 10]
+      ], type: type))
+
+
+      result = EXLA.jit(&Nx.sort(&1, direction: :asc, axis: 1), compiler_mode: :mlir).(t)
+      assert_equal(result, Nx.tensor([
+        [0, 1, 2, 10],
+        [0, 10, 10, 20]
+      ], type: type))
+
+
+      result = EXLA.jit(&Nx.sort(&1, direction: :desc, axis: 0), compiler_mode: :mlir).(t)
+      assert_equal(result, Nx.tensor([
+        [10, 10, 20, 10],
+        [0, 2, 1, 0]
+      ], type: type))
+
+      result = EXLA.jit(&Nx.sort(&1, direction: :desc, axis: 1), compiler_mode: :mlir).(t)
+      assert_equal(result, Nx.tensor([
+        [10, 2, 1, 0],
+        [20, 10, 10, 0]
+      ], type: type))
+      end
+    end
+  end
 end

@@ -119,7 +119,8 @@ defmodule EXLA.MLIR.Value do
   def sort([%Value{function: %Function{ref: func_ref}} | _] = values, axis, direction) do
     desc = if direction == :desc, do: 1, else: 0
 
-    in_refs = Enum.map(values, fn %Value{ref: ref, function: %Function{ref: ^func_ref}} -> ref end)
+    in_refs =
+      Enum.map(values, fn %Value{ref: ref, function: %Function{ref: ^func_ref}} -> ref end)
 
     out_refs =
       EXLA.NIF.mlir_sort(
@@ -128,7 +129,6 @@ defmodule EXLA.MLIR.Value do
         axis,
         desc
       )
-      |> IO.inspect()
       |> unwrap!()
 
     Enum.zip_with(values, out_refs, fn value, out_ref -> %Value{value | ref: out_ref} end)
