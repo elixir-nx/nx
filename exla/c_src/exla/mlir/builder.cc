@@ -513,7 +513,7 @@ static void buildSortComparisonBody(llvm::ArrayRef<mlir::Type> elementTypes,
   }
   mlir::BlockArgument arg0 = block->getArgument(0);
   mlir::BlockArgument arg1 = block->getArgument(1);
-  mlir::Value compare = builder->create<mlir::mhlo::CompareOp>(builder->getUnknownLoc(), arg0, arg1, direction);
+  mlir::Value compare = builder->create<mlir::mhlo::CompareOp>(loc, arg0, arg1, direction);
   builder->create<mlir::mhlo::ReturnOp>(loc, compare);
 }
 
