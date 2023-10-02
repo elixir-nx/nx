@@ -56,8 +56,8 @@ $(EXLA_SO): $(EXLA_CACHE_SO)
 		ln -sf $(EXLA_CACHE_SO_LINK_PATH) $(EXLA_SO) ; \
 	fi
 
-$(EXLA_CACHE_SO): $(XLA_EXTENSION_DIR) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_ops.cc $(EXLA_DIR)/exla_ops.h $(EXLA_DIR)/mlir/builder.cc $(EXLA_DIR)/mlir/builder.h $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h
-	$(CXX) $(CFLAGS) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/mlir/builder.cc $(EXLA_DIR)/exla_ops.cc $(EXLA_DIR)/exla_client.cc -o $(EXLA_CACHE_SO) $(LDFLAGS)
+$(EXLA_CACHE_SO): $(XLA_EXTENSION_DIR) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_ops.cc $(EXLA_DIR)/exla_ops.h $(EXLA_DIR)/mlir/ops.cc $(EXLA_DIR)/mlir/ops.h $(EXLA_DIR)/mlir/builder.cc $(EXLA_DIR)/mlir/builder.h $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h
+	$(CXX) $(CFLAGS) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/mlir/ops.cc $(EXLA_DIR)/mlir/builder.cc $(EXLA_DIR)/exla_ops.cc $(EXLA_DIR)/exla_client.cc -o $(EXLA_CACHE_SO) $(LDFLAGS)
 	$(POST_INSTALL)
 
 clean:
