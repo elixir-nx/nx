@@ -1,19 +1,10 @@
 
+#include "ops.h"
+
 #include <llvm/Support/raw_os_ostream.h>
 
-// #include <functional>
-// #include <map>
-// #include <string>
-
 #include "../exla_client.h"
-// #include "exla_log_sink.h"
 #include "../exla_nif_util.h"
-#include "ops.h"
-// #include "xla/client/client.h"
-// #include "xla/client/xla_builder.h"
-// #include "xla/client/xla_computation.h"
-// #include "xla/primitive_util.h"
-// #include "xla/service/platform_util.h"
 #include "xla/shape_util.h"
 
 // MLIR Builder Functions
