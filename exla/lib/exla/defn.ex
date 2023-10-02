@@ -1429,6 +1429,15 @@ defmodule EXLA.Defn do
     EXLA.Op.sort(tensor, comp, dimension)
   end
 
+  defp to_operator(:argsort, [%Value{} = tensor, opts], ans, _state) do
+    dimension = opts[:axis]
+    dims = op_shape(tensor)
+    iota_shape = EXLA.Shape.make_shape({:s, 64}, dims)
+    iota = EXLA.Lib.iota(tensor.function, iota_shape, dimension)
+    [_, arg] = Value.sort([tensor, iota], dimension, opts[:direction])
+    arg
+  end
+
   defp to_operator(:argsort, [tensor, opts], ans, state) do
     dimension = opts[:axis]
 
