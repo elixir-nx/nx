@@ -7,7 +7,7 @@
 #include "exla_log_sink.h"
 #include "exla_nif_util.h"
 #include "exla_ops.h"
-#include "mlir/ogps.h"
+#include "mlir/ops.h"
 #include "xla/client/client.h"
 #include "xla/client/xla_builder.h"
 #include "xla/client/xla_computation.h"
