@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.6.2 (2023-09-21)
+
+### Enhancements
+
+  * [Nx.Serving] Add `Nx.Serving.batch_size/2` and perform batch splitting on run
+  * [Nx.Serving] Support input streaming
+
 ## v0.6.1 (2023-09-12)
 
 ### Enhancements
