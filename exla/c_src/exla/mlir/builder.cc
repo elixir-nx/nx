@@ -672,7 +672,7 @@ mlir::Value MLIRFunction::SelectOp(mlir::Value pred, mlir::Value on_true, mlir::
   return op;
 }
 
-static void buildScatterComputation(mlir::Type element_type, bool add_or_put, mlir::Region *body, mlir::OpBuilder *builder) {
+static void buildScatterComputation(mlir::Type element_type, bool add_or_put, mlir::Region *body, mlir::OpBuilder *builder) {
   mlir::OpBuilder::InsertionGuard insertionPointGuard(*builder);
   mlir::Location loc = body->getLoc();
   mlir::Block *block = builder->createBlock(body);
