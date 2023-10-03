@@ -721,4 +721,40 @@ defmodule EXLA.MLIR.ExecutableTest do
       assert_equal(result, Nx.as_type(t, :c64))
     end
   end
+
+  describe "conv" do
+    test "simple convolution" do
+      right = Nx.iota({4, 1, 1, 1})
+      left = Nx.iota({1, 1, 3, 3})
+      result = EXLA.jit(&Nx.conv(&1, &2, strides: [1, 1]), compiler_mode: :mlir).(left, right)
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [
+            [
+              [0.0, 0.0, 0.0],
+              [0.0, 0.0, 0.0],
+              [0.0, 0.0, 0.0]
+            ],
+            [
+              [0.0, 1.0, 2.0],
+              [3.0, 4.0, 5.0],
+              [6.0, 7.0, 8.0]
+            ],
+            [
+              [0.0, 2.0, 4.0],
+              [6.0, 8.0, 10.0],
+              [12.0, 14.0, 16.0]
+            ],
+            [
+              [0.0, 3.0, 6.0],
+              [9.0, 12.0, 15.0],
+              [18.0, 21.0, 24.0]
+            ]
+          ]
+        ])
+      )
+    end
+  end
 end

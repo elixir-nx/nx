@@ -360,6 +360,41 @@ defmodule EXLA.MLIR.Value do
     end
   end
 
+  def convolution(
+        %Value{function: func} = tensor,
+        %Value{function: func} = kernel,
+        strides,
+        padding,
+        input_dilation,
+        kernel_dilation,
+        dimension_numbers,
+        feature_group_count,
+        batch_group_count,
+        precision_config,
+        output_shape
+      ) do
+    precision_config = get_precision_config_int(precision_config)
+
+    ref =
+      EXLA.NIF.mlir_convolution(
+        func.ref,
+        tensor.ref,
+        kernel.ref,
+        strides,
+        padding,
+        input_dilation,
+        kernel_dilation,
+        dimension_numbers,
+        feature_group_count,
+        batch_group_count,
+        precision_config,
+        Tuple.to_list(output_shape)
+      )
+      |> unwrap!()
+
+    %Value{tensor | ref: ref}
+  end
+
   defp unwrap!({:ok, value}), do: value
   defp unwrap!(other), do: raise("#{inspect(other)}")
 end

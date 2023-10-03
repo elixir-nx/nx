@@ -1073,3 +1073,78 @@ ERL_NIF_TERM mlir_fft(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   mlir::Value res = (*function)->FFTOp(*operand, forward_fft, fft_length);
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
+
+ERL_NIF_TERM mlir_convolution(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 12) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value *tensor, *kernel;
+  std::vector<int64_t> strides;
+  std::vector<std::pair<int64_t, int64_t>> padding_config;
+  std::vector<int64_t> tensor_dilation;
+  std::vector<int64_t> kernel_dilation;
+  xla::ConvolutionDimensionNumbers dimension_numbers;
+  uint64_t feature_group_count, batch_group_count, precision_config;
+  std::vector<int64_t> output_dims;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], tensor)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[2], kernel)) {
+    return exla::nif::error(env, "Unable to get kernel.");
+  }
+  if (!exla::nif::get_list(env, argv[3], strides)) {
+    return exla::nif::error(env, "Unable to get strides.");
+  }
+  if (!exla::nif::get_general_padding(env, argv[4], padding_config)) {
+    return exla::nif::error(env, "Unable to get padding_config.");
+  }
+  if (!exla::nif::get_list(env, argv[5], tensor_dilation)) {
+    return exla::nif::error(env, "Unable to get operand dilation.");
+  }
+  if (!exla::nif::get_list(env, argv[6], kernel_dilation)) {
+    return exla::nif::error(env, "Unable to get kernel dilation.");
+  }
+  if (!exla::nif::get_conv_dimension_numbers(env, argv[7], &dimension_numbers)) {
+    return exla::nif::error(env, "Unable to get conv dimension numbers.");
+  }
+  if (!exla::nif::get(env, argv[8], &feature_group_count)) {
+    return exla::nif::error(env, "Unable to get feature groups.");
+  }
+  if (!exla::nif::get(env, argv[9], &batch_group_count)) {
+    return exla::nif::error(env, "Unable to get batch groups.");
+  }
+  if (!exla::nif::get(env, argv[10], &precision_config)) {
+    return exla::nif::error(env, "Unable to get precision config.");
+  }
+  if (!exla::nif::get_list(env, argv[11], output_dims)) {
+    return exla::nif::error(env, "Unable to get output_dims.");
+  }
+
+  std::vector<int64_t> padding;
+
+  for (std::pair<exla::int64, exla::int64> item : padding_config) {
+    padding.push_back(item.first);
+    padding.push_back(item.second);
+  }
+
+  mlir::Value res = (*function)->ConvOp(
+      *tensor,
+      *kernel,
+      strides,
+      padding,
+      tensor_dilation,
+      kernel_dilation,
+      dimension_numbers,
+      feature_group_count,
+      batch_group_count,
+      precision_config,
+      output_dims);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
