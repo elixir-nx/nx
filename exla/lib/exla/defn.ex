@@ -634,10 +634,15 @@ defmodule EXLA.Defn do
   defp to_operator(:constant, [constant], ans, state) do
     op = to_constant(state.builder, constant, ans.type)
 
-    if ans.shape == {} do
-      op
-    else
-      EXLA.Op.broadcast_in_dim(op, ans.shape, {})
+    cond do
+      ans.shape == {} ->
+        op
+
+      is_struct(op, EXLA.Op) ->
+        EXLA.Op.broadcast_in_dim(op, ans.shape, {})
+
+      is_struct(op, Value) ->
+        Value.broadcast_in_dim(op, EXLA.Shape.make_shape(ans.type, ans.shape), {})
     end
   end
 
@@ -1027,6 +1032,17 @@ defmodule EXLA.Defn do
   # we cannot mess with the output type (e.g. the to_type conversion)
   # because it will throw an error
   @complex_op [:real, :imag]
+
+  defp to_operator(op, [%Value{} = arg], %{type: type}, _state) when op in @complex_op do
+    maybe_cast_arg =
+      if Nx.Type.integer?(op_type(arg)) do
+        to_type(arg, type)
+      else
+        arg
+      end
+
+    apply(Value, op, [maybe_cast_arg])
+  end
 
   defp to_operator(op, [arg], %{type: type}, _state) when op in @complex_op do
     maybe_cast_arg =

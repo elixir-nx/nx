@@ -487,6 +487,22 @@ mlir::Value MLIRFunction::RsqrtOp(mlir::Value operand) {
   return module_->builder()->create<mlir::mhlo::RsqrtOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
+mlir::Value MLIRFunction::RealOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::RealOp>(module_->builder()->getUnknownLoc(), operand);
+}
+
+mlir::Value MLIRFunction::ImagOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::mhlo::ImagOp>(module_->builder()->getUnknownLoc(), operand);
+}
+
+mlir::Value MLIRFunction::ConjOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
+  return module_->builder()->create<mlir::chlo::ConjOp>(module_->builder()->getUnknownLoc(), operand);
+}
+
 mlir::Value MLIRFunction::TransposeOp(mlir::Value operand, std::vector<int64_t> axes) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   auto axes_attr = Int64ToDenseIntElementsAttr(module_->builder(), axes);

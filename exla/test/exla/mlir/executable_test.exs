@@ -189,7 +189,7 @@ defmodule EXLA.MLIR.ExecutableTest do
                  [:log, :log1p, :sign, :cosh, :sinh] ++
                  [:sqrt, :cbrt, :sin, :cos, :atan] ++
                  [:tanh, :sigmoid, :erf, :erfc, :rsqrt] ++
-                 [:negate]
+                 [:negate, :conjugate, :real, :imag]
 
     for op <- @unary_ops do
       test "#{op}" do

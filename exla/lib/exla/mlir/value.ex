@@ -35,7 +35,7 @@ defmodule EXLA.MLIR.Value do
                [:tanh, :acosh, :asinh, :atanh, :sqrt, :cbrt] ++
                [:bitwise_not, :erf, :erfc, :erf_inv] ++
                [:is_infinity, :is_nan, :rsqrt, :negate, :count_leading_zeros] ++
-               [:population_count]
+               [:population_count, :real, :imag, :conjugate]
 
   for op <- @unary_ops do
     mlir_op = :"mlir_#{op}"
