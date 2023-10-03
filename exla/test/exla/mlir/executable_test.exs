@@ -705,4 +705,20 @@ defmodule EXLA.MLIR.ExecutableTest do
       )
     end
   end
+
+  describe "fft" do
+    test "fft and ifft" do
+      t = Nx.tensor([[1, 0, 0, 0], [1, 1, 1, 1]])
+
+      result = EXLA.jit(&(&1 |> Nx.fft() |> Nx.ifft()), compiler_mode: :mlir).(t)
+      assert_equal(result, Nx.as_type(t, :c64))
+    end
+
+    test "fft2 and ifft2" do
+      t = Nx.tensor([[1, 0, 0, 0], [1, 1, 1, 1]])
+
+      result = EXLA.jit(&(&1 |> Nx.fft2() |> Nx.ifft2()), compiler_mode: :mlir).(t)
+      assert_equal(result, Nx.as_type(t, :c64))
+    end
+  end
 end

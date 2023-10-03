@@ -563,7 +563,14 @@ defmodule EXLA.Defn do
          cache
        ) do
     {tensor, cache} = recur_operator(tensor, state, cache)
-    {fft2(&EXLA.Op.fft/2, [tensor, opts], out, state), cache}
+
+    fft_fn =
+      case tensor do
+        %Value{} -> &Value.fft(&1, :fft, &2)
+        _ -> &EXLA.Op.fft/2
+      end
+
+    {fft2(fft_fn, [tensor, opts], out, state), cache}
   end
 
   defp cached_recur_operator(
@@ -573,7 +580,14 @@ defmodule EXLA.Defn do
          cache
        ) do
     {tensor, cache} = recur_operator(tensor, state, cache)
-    {fft2(&EXLA.Op.ifft/2, [tensor, opts], out, state), cache}
+
+    ifft_fn =
+      case tensor do
+        %Value{} -> &Value.fft(&1, :ifft, &2)
+        _ -> &EXLA.Op.ifft/2
+      end
+
+    {fft2(ifft_fn, [tensor, opts], out, state), cache}
   end
 
   defp cached_recur_operator(:optional, %T{data: %Expr{args: args}}, state, cache) do
@@ -1013,7 +1027,14 @@ defmodule EXLA.Defn do
     apply(EXLA.Op, op, [to_type(arg, type)])
   end
 
+  defp to_operator(:fft, [%Value{} | _] = args, out, state),
+    do: fft(&Value.fft(&1, :fft, &2), args, out, state)
+
   defp to_operator(:fft, args, out, state), do: fft(&EXLA.Op.fft/2, args, out, state)
+
+  defp to_operator(:ifft, [%Value{} | _] = args, out, state),
+    do: fft(&Value.fft(&1, :ifft, &2), args, out, state)
+
   defp to_operator(:ifft, args, out, state), do: fft(&EXLA.Op.ifft/2, args, out, state)
 
   defp to_operator(:is_nan, [%Value{} = arg], _out, _state),
@@ -1530,7 +1551,7 @@ defmodule EXLA.Defn do
     EXLA.Lib.argsort(state.builder, tensor, dimension, comp, ans.type)
   end
 
-  defp fft(exla_op, [tensor, opts], %{type: type}, state) do
+  defp fft(exla_op, [%mod{} = tensor, opts], %{type: type}, state) do
     n = opts[:length]
     axis = opts[:axis]
     output_type = Nx.Type.to_complex(type)
@@ -1553,15 +1574,15 @@ defmodule EXLA.Defn do
         |> List.to_tuple()
 
       tensor
-      |> EXLA.Op.transpose(permutation)
+      |> mod.transpose(permutation)
       |> exla_op.([n])
-      |> EXLA.Op.transpose(permutation)
+      |> mod.transpose(permutation)
     else
       exla_op.(tensor, [n])
     end
   end
 
-  defp fft2(exla_op, [tensor, opts], %{type: type}, state) do
+  defp fft2(exla_op, [%mod{} = tensor, opts], %{type: type}, state) do
     [l1, l2] = lengths = opts[:lengths]
     [ax1, ax2] = axes = opts[:axes]
     output_type = Nx.Type.to_complex(type)
@@ -1590,9 +1611,9 @@ defmodule EXLA.Defn do
         |> List.to_tuple()
 
       tensor
-      |> EXLA.Op.transpose(permutation)
+      |> mod.transpose(permutation)
       |> exla_op.(lengths)
-      |> EXLA.Op.transpose(permutation)
+      |> mod.transpose(permutation)
     else
       exla_op.(tensor, lengths)
     end
@@ -1613,17 +1634,37 @@ defmodule EXLA.Defn do
         starts = List.duplicate(0, tuple_size(shape))
         strides = List.duplicate(1, tuple_size(shape))
 
-        EXLA.Op.slice(tensor, starts, lengths, strides)
+        case tensor do
+          %Value{} ->
+            limit_indices = Enum.zip_with(starts, lengths, fn i, len -> i + len end)
+            Value.slice(tensor, starts, limit_indices, strides)
+
+          _ ->
+            EXLA.Op.slice(tensor, starts, lengths, strides)
+        end
 
       m < n ->
-        zero = EXLA.Op.constant_r0(state.builder, Complex.new(0), output_type)
+        zero =
+          case tensor do
+            %Value{function: func} ->
+              Value.constant_r0(func, Complex.new(0), output_type)
+
+            _ ->
+              EXLA.Op.constant_r0(state.builder, Complex.new(0), output_type)
+          end
 
         padding_config =
           {0, 0, 0}
           |> List.duplicate(tuple_size(shape))
           |> List.replace_at(axis, {0, n - m, 0})
 
-        EXLA.Op.pad(tensor, zero, padding_config)
+        case tensor do
+          %Value{} ->
+            Value.pad(tensor, zero, padding_config)
+
+          _ ->
+            EXLA.Op.pad(tensor, zero, padding_config)
+        end
     end
   end
 
