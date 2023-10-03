@@ -1785,6 +1785,28 @@ defmodule CandlexTest do
         ]
       ))
     end
+
+    test "not_equal" do
+      Nx.not_equal(1, 2)
+      |> assert_equal(t(1))
+
+      t([1, 2, 3])
+      |> Nx.not_equal(t(1))
+      |> assert_equal(t([0, 1, 1]))
+
+      t([1, 1, 2])
+      |> Nx.not_equal(t([1, 2, 3]))
+      |> assert_equal(t([0, 1, 1]))
+
+      t([[1, 4, 2], [4, 5, 6]])
+      |> Nx.not_equal(t([[1, 3, 2], [4, 2, 1]]))
+      |> assert_equal(t(
+        [
+          [0, 1, 0],
+          [0, 1, 1]
+        ]
+      ))
+    end
   end
 
   defp t(values, opts \\ []) do
