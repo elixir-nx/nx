@@ -97,6 +97,8 @@ defmodule EXLA.NIF do
       ),
       do: :erlang.nif_error(:undef)
 
+  def mlir_fft(_function, _tensor, _forward_fft, _fft_lenght), do: :erlang.nif_error(:undef)
+
   def new_builder(_name),
     do: :erlang.nif_error(:undef)
 

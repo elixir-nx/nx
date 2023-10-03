@@ -1045,3 +1045,31 @@ ERL_NIF_TERM mlir_select_and_scatter(ErlNifEnv* env, int argc, const ERL_NIF_TER
   mlir::Value res = (*function)->SelectAndScatterOp(*target, *source, *init_value, gt_or_lt, window_dimensions, window_strides, padding);
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
+
+ERL_NIF_TERM mlir_fft(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 4) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* operand;
+  bool forward_fft;
+
+  std::vector<int64_t> fft_length;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get(env, argv[2], &forward_fft)) {
+    return exla::nif::error(env, "Unable to get forward_fft.");
+  }
+  if (!exla::nif::get_list(env, argv[3], fft_length)) {
+    return exla::nif::error(env, "Unable to get fft_length.");
+  }
+
+  mlir::Value res = (*function)->FFTOp(*operand, forward_fft, fft_length);
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}

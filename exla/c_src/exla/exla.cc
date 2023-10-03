@@ -713,6 +713,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_optimization_barrier", 2, mlir_optimization_barrier},
     {"mlir_select", 4, mlir_select},
     {"mlir_pad", 6, mlir_pad},
+    {"mlir_fft", 4, mlir_fft},
     // XlaBuilder
     {"new_builder", 1, new_builder},
     {"create_sub_builder", 2, create_sub_builder},
@@ -758,7 +759,6 @@ static ErlNifFunc exla_funcs[] = {
     {"right_shift_logical", 3, shift_right_logical},
     {"right_shift_arithmetic", 3, shift_right_arithmetic},
     {"pow", 3, pow},
-    {"complex", 3, complex},
     {"atan2", 3, atan2},
     // Element-wise Binary comparison
     {"equal", 3, equal},

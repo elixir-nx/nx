@@ -273,6 +273,12 @@ defmodule EXLA.MLIR.Value do
     %Value{ref: ref, function: func}
   end
 
+  def fft(%Value{function: func} = value, fft_kind, fft_length) when fft_kind in [:fft, :ifft] when (is_list(fft_length) or is_integer(fft_length)) do
+    ref = EXLA.NIF.mlir_fft(func.ref, value.ref, if(fft_kind == :fft, do: 1, else: 0), List.wrap(fft_length)) |> unwrap!()
+
+    %Value{value | ref: ref}
+  end
+
   def scatter(
         %Value{function: func} = target,
         %Value{function: func} = indices,

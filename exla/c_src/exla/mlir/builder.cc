@@ -791,6 +791,14 @@ mlir::Value MLIRFunction::SelectAndScatterOp(
   return op.getResult();
 }
 
+mlir::Value MLIRFunction::FFTOp(mlir::Value tensor, bool forward_fft, std::vector<int64_t> fft_length) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+
+  auto fft_type = mlir::mhlo::FftTypeAttr::get(builder->getContext(), forward_fft ? mlir::mhlo::FftType::FFT : mlir::mhlo::FftType::IFFT);
+  return builder->create<mlir::mhlo::FftOp>(builder->getUnknownLoc(), tensor, fft_type, Int64ToDenseIntElementsAttr(builder, fft_length));
+}
+
 template <typename T>
 ERL_NIF_TERM ConstantOpImpl(mlir::OpBuilder *builder, mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM term, std::vector<int64_t> dims) {
   mlir::RankedTensorType ty = mlir::RankedTensorType::get(dims, type);
