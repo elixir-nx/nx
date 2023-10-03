@@ -183,6 +183,17 @@ defmodule Candlex.Backend do
   # Element-wise
 
   @impl true
+  def clip(%T{} = out, %T{} = t, %T{} = min, %T{} = max) do
+    [t, min, max] = maybe_upcast([t, min, max])
+
+    t
+    |> from_nx()
+    |> Native.clamp(from_nx(min), from_nx(max))
+    |> unwrap!()
+    |> to_nx(out)
+  end
+
+  @impl true
   def select(%T{shape: shape, type: type} = out, pred, on_true, on_false) do
     on_true =
       on_true
@@ -302,6 +313,27 @@ defmodule Candlex.Backend do
   # Indexed
 
   @impl true
+  def put_slice(%T{} = out, %T{} = t, [start] = _start_indices, slice) do
+    t
+    |> from_nx()
+    |> Native.slice_scatter(from_nx(slice), 0, Nx.to_number(start))
+    |> unwrap!()
+    |> to_nx(out)
+  end
+
+  def put_slice(%T{} = out, %T{} = t, [start1, start2] = _start_indices, slice) do
+    if Nx.equal(start1, 0) do
+      t
+      |> from_nx()
+      |> Native.slice_scatter(from_nx(slice), 1, Nx.to_number(start2))
+      |> unwrap!()
+      |> to_nx(out)
+    else
+      raise "unsupported"
+    end
+  end
+
+  @impl true
   def slice(
         %T{shape: _output_shape} = out,
         %T{shape: input_shape} = t,
@@ -314,6 +346,19 @@ defmodule Candlex.Backend do
     |> narrow(starts, lengths, 0, input_shape)
     # TODO: Support strides
     # |> stride(output_shape, lengths, strides)
+    |> to_nx(out)
+  end
+
+  @impl true
+  def take(%T{} = out, %T{} = tensor, %T{} = indexes, axis) do
+    if Nx.rank(indexes) > 1 do
+      raise "only indexes of rank=1 supported for now"
+    end
+
+    tensor
+    |> from_nx()
+    |> Native.index_select(from_nx(indexes), axis)
+    |> unwrap!()
     |> to_nx(out)
   end
 
@@ -465,6 +510,22 @@ defmodule Candlex.Backend do
   end
 
   @impl true
+  def pad(%T{} = out, %T{} = t, pad_value, []) do
+    out
+  end
+  def pad(%T{} = out, %T{} = t, %T{shape: {}} = pad_value, [{low, high, 0 = _inner}]) do
+    if !Nx.equal(pad_value, 0) do
+      raise "only pad_value=0 supported for now"
+    end
+
+    t
+    |> from_nx()
+    |> Native.pad_with_zeros(low, high)
+    |> unwrap!()
+    |> to_nx(out)
+  end
+
+  @impl true
   def reshape(%T{shape: shape} = out, %T{} = t) do
     from_nx(t)
     |> Native.reshape(shape)
@@ -485,9 +546,9 @@ defmodule Candlex.Backend do
   end
 
   @impl true
-  def transpose(out, %T{} = t, [dim1, dim2] = axes) do
+  def transpose(out, %T{} = t, axes) do
     from_nx(t)
-    |> Native.transpose(dim1, dim2)
+    |> Native.permute(axes)
     |> unwrap!()
     |> to_nx(out)
   end

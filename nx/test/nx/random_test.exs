@@ -323,7 +323,7 @@ defmodule Nx.RandomTest do
           key,
           mean,
           covariance,
-          shape: {1_000}
+          shape: {10_000}
         )
 
       assert_all_close(Nx.mean(multivariate_normal, axes: [0]), mean, rtol: 0.1)

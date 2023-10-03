@@ -7,7 +7,9 @@ defmodule Nx.Defn.Grad do
   def transform(to_grad, fun, transform) do
     {to_grad, ids} =
       Composite.traverse(to_grad, %{}, fn to_grad, ids ->
-        to_grad = Expr.metadata(to_grad, %{__MODULE__ => :to_grad})
+        to_grad =
+          Expr.metadata(to_grad, %{__MODULE__ => :to_grad})
+
         {to_grad, Map.put(ids, to_grad.data.id, :stop)}
       end)
 
@@ -17,15 +19,28 @@ defmodule Nx.Defn.Grad do
     {:env, env} = Function.info(fun, :env)
     ids = stop_grads(env, ids)
 
+    # save vectorized axes before devectorizing
     expr = to_grad |> fun.()
-    transformed_expr = transform.(expr) |> validate_expr!()
+
+    transformed_expr = transform.(expr) |> validate_expr!() |> Nx.devectorize(keep_names: false)
     {parents, nodes} = parents_tree(transformed_expr, ids)
 
     to_grad_ids = {to_grad, ids}
     grads = %{transformed_expr.data.id => [constant(1.0, transformed_expr)]}
 
     {graded, _} =
-      Composite.traverse(to_grad, {nodes, grads}, &to_grad(&1, to_grad_ids, parents, &2))
+      Composite.traverse(
+        to_grad,
+        {nodes, grads},
+        fn %{vectorized_axes: vectorized_axes} = node, acc ->
+          node
+          |> Nx.devectorize(keep_names: false)
+          |> to_grad(to_grad_ids, parents, acc)
+          |> then(fn {node, acc} ->
+            {Nx.vectorize(node, vectorized_axes), acc}
+          end)
+        end
+      )
 
     {expr, graded}
   end
@@ -1501,7 +1516,7 @@ defmodule Nx.Defn.Grad do
     end
   end
 
-  defp zero?(%T{data: %{op: :constant, args: [0.0]}}), do: true
+  defp zero?(%T{data: %{op: :constant, args: [num]}}) when num == 0.0, do: true
   defp zero?(_), do: false
 
   defp zip_filter([head | tail], [true | mask]), do: [head | zip_filter(tail, mask)]

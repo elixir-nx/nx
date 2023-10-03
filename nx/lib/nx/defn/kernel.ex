@@ -593,8 +593,7 @@ defmodule Nx.Defn.Kernel do
   defp logical_or(l, r) when Kernel.and(Kernel.==(l, 0), Kernel.==(r, 0)), do: zero()
   defp logical_or(_, _), do: one()
 
-  defp logical_not(0), do: one()
-  defp logical_not(0.0), do: one()
+  defp logical_not(num) when Kernel.==(num, 0.0), do: one()
   defp logical_not(_), do: zero()
 
   defp zero(), do: Nx.tensor(0, type: {:u, 8})

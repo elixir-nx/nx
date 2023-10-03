@@ -10,18 +10,21 @@ defmodule Candlex.Native do
   def where_cond(_tensor, _on_true, _on_false), do: error()
   def narrow(_tensor, _dim, _start, _length), do: error()
   def gather(_tensor, _indexes, _dim), do: error()
+  def index_select(_tensor, _indexes, _dim), do: error()
   def chunk(_tensor, _num_chunks), do: error()
   def squeeze(_tensor, _dim), do: error()
   def arange(_start, _end, _dtype, _shape, _device), do: error()
   def broadcast_to(_tensor, _shape), do: error()
   def reshape(_tensor, _shape), do: error()
-  def transpose(_tensor, _dim1, _dim2), do: error()
   def to_type(_tensor, _dtype), do: error()
   def dtype(_tensor), do: error()
   def t_shape(_tensor), do: error()
   def concatenate(_tensors, _axis), do: error()
   def conv1d(_tensor, _kernel), do: error()
   def conv2d(_tensor, _kernel), do: error()
+  def slice_scatter(_tensor, _src, _dim, _start), do: error()
+  def pad_with_zeros(_tensor, _left, _right), do: error()
+  def clamp(_tensor, _min, _max), do: error()
 
   for op <- [
         :abs,

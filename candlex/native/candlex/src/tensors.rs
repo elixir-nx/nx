@@ -92,6 +92,11 @@ pub fn gather(t: ExTensor, indexes: ExTensor, dim: usize) -> Result<ExTensor, Ca
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+pub fn index_select(t: ExTensor, indexes: ExTensor, dim: usize) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(t.index_select(indexes.deref(), dim)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 pub fn chunk(t: ExTensor, num_chunks: usize) -> Result<Vec<ExTensor>, CandlexError> {
     Ok(t.chunk(num_chunks, 0)?
         .into_iter()
@@ -105,8 +110,8 @@ pub fn squeeze(t: ExTensor, dim: usize) -> Result<ExTensor, CandlexError> {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-pub fn transpose(t: ExTensor, dim1: usize, dim2: usize) -> Result<ExTensor, CandlexError> {
-    Ok(ExTensor::new(t.transpose(dim1, dim2)?))
+pub fn clamp(t: ExTensor, min_val: ExTensor, max_val: ExTensor) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(t.clamp(&min_val.broadcast_as(t.shape())?, &max_val.broadcast_as(t.shape())?)?))
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
@@ -214,6 +219,16 @@ pub fn broadcast_to(t: ExTensor, shape: Term) -> Result<ExTensor, CandlexError> 
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn reshape(t: ExTensor, shape: Term) -> Result<ExTensor, CandlexError> {
     Ok(ExTensor::new(t.reshape(tuple_to_vec(shape).unwrap())?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn slice_scatter(t: ExTensor, src: ExTensor, dim: usize, start: usize) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(t.slice_scatter(src.deref(), dim, start)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn pad_with_zeros(t: ExTensor, left: usize, right: usize) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(t.pad_with_zeros(0, left, right)?))
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]

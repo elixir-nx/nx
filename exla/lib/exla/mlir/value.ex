@@ -96,6 +96,21 @@ defmodule EXLA.MLIR.Value do
     %Value{value | ref: out_ref}
   end
 
+  def bitcast_convert(%Value{ref: in_ref, function: %Function{} = func} = value, dtype) do
+    shape = get_shape(value)
+
+    out_ref =
+      EXLA.NIF.mlir_bitcast_convert(
+        func.ref,
+        in_ref,
+        EXLA.Shape.dtype_to_charlist(dtype),
+        shape.dims
+      )
+      |> unwrap!()
+
+    %Value{value | ref: out_ref}
+  end
+
   def iota(%Function{} = func, shape, dim) do
     ref = EXLA.NIF.mlir_iota(func.ref, shape.ref, dim) |> unwrap!()
     %Value{ref: ref, function: func}
