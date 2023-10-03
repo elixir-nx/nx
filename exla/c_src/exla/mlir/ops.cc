@@ -988,3 +988,51 @@ ERL_NIF_TERM mlir_scatter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   mlir::Value res = (*function)->ScatterOp(*target, *indices, *updates, add_or_put);
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
+
+ERL_NIF_TERM mlir_select_and_scatter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 8) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value *target, *source, *init_value;
+  bool add_or_put, gt_or_lt;
+
+  std::vector<int64_t> window_dimensions, window_strides;
+  std::vector<std::pair<exla::int64, exla::int64>> padding_config;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], target)) {
+    return exla::nif::error(env, "Unable to get target.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[2], source)) {
+    return exla::nif::error(env, "Unable to get source.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[3], init_value)) {
+    return exla::nif::error(env, "Unable to get init_value.");
+  }
+  if (!exla::nif::get(env, argv[4], &gt_or_lt)) {
+    return exla::nif::error(env, "Unable to get gt_or_lt.");
+  }
+  if (!exla::nif::get_list(env, argv[5], window_dimensions)) {
+    return exla::nif::error(env, "Unable to get window_dimensions.");
+  }
+  if (!exla::nif::get_list(env, argv[6], window_strides)) {
+    return exla::nif::error(env, "Unable to get window_strides.");
+  }
+  if (!exla::nif::get_general_padding(env, argv[7], padding_config)) {
+    return exla::nif::error(env, "Unable to get padding configuration.");
+  }
+
+  std::vector<int64_t> padding;
+
+  for (std::pair<exla::int64, exla::int64> item : padding_config) {
+    padding.push_back(item.first);
+    padding.push_back(item.second);
+  }
+
+  mlir::Value res = (*function)->SelectAndScatterOp(*target, *source, *init_value, gt_or_lt, window_dimensions, window_strides, padding);
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}

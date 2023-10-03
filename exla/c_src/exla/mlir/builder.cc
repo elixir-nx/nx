@@ -708,6 +708,54 @@ mlir::Value MLIRFunction::ScatterOp(mlir::Value target, mlir::Value indices, mli
   return scatter_op.getResult(0);
 }
 
+mlir::Value MLIRFunction::SelectAndScatterOp(
+    mlir::Value target,
+    mlir::Value source,
+    mlir::Value init_value,
+    bool gt_or_lt,
+    std::vector<int64_t> window_dimensions,
+    std::vector<int64_t> window_strides,
+    std::vector<int64_t> padding) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+  mlir::RankedTensorType type = llvm::cast<mlir::RankedTensorType>(target.getType());
+  int64_t rank = type.getShape().size();
+  std::vector<int64_t> axes(rank);
+  for (int64_t i = 0; i < rank; i++) {
+    axes[i] = i;
+  }
+  auto scatter_dimension_numbers = mlir::mhlo::ScatterDimensionNumbersAttr::get(builder->getContext(), {}, axes, axes, rank);
+
+  mlir::DenseIntElementsAttr window_dimensions_attr = Int64ToDenseIntElementsAttr(module_->builder(), window_dimensions);
+  mlir::DenseIntElementsAttr window_strides_attr = Int64ToDenseIntElementsAttr(module_->builder(), window_strides);
+  // mlir::DenseIntElementsAttr padding_attr = Int64ToDenseIntElementsAttr(module_->builder(), padding);
+
+  auto dense_attr_type = mlir::RankedTensorType::get({static_cast<int64_t>(padding.size() / 2), 2}, builder->getIntegerType(64));
+  auto dense_attr = mlir::DenseElementsAttr::get<int64_t>(dense_attr_type, llvm::ArrayRef<int64_t>(padding.data(), padding.size()));
+  auto padding_attr = llvm::cast<mlir::DenseIntElementsAttr>(dense_attr);
+
+  mlir::mhlo::SelectAndScatterOp op = builder->create<mlir::mhlo::SelectAndScatterOp>(
+      builder->getUnknownLoc(),
+      target,
+      source,
+      init_value,
+      window_dimensions_attr,
+      window_strides_attr,
+      padding_attr);
+
+  mlir::Type computation_operand_type = mlir::RankedTensorType::get({}, type.getElementType());
+  buildScatterComputation(computation_operand_type, true, &op.getScatter(), builder);
+
+  mlir::mhlo::ComparisonDirection direction = gt_or_lt ? mlir::mhlo::ComparisonDirection::GT : mlir::mhlo::ComparisonDirection::LT;
+  std::optional<mlir::StringRef> compare_type = std::nullopt;
+  if (type.isa<mlir::FloatType>()) {
+    compare_type.emplace("TOTALORDER");
+  }
+
+  buildSortComparisonBody({computation_operand_type}, direction, compare_type, &op.getSelect(), builder);
+  return op.getResult();
+}
+
 template <typename T>
 ERL_NIF_TERM ConstantOpImpl(mlir::OpBuilder *builder, mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM term, std::vector<int64_t> dims) {
   mlir::RankedTensorType ty = mlir::RankedTensorType::get(dims, type);
