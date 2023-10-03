@@ -378,6 +378,7 @@ binary_nif!(multiply, broadcast_mul);
 binary_nif!(max, broadcast_maximum);
 binary_nif!(min, broadcast_minimum);
 binary_nif!(equal, eq);
+binary_nif!(not_equal, ne);
 binary_nif!(greater, gt);
 binary_nif!(greater_equal, ge);
 binary_nif!(less, lt);

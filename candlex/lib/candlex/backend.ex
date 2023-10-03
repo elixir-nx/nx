@@ -257,6 +257,7 @@ defmodule Candlex.Backend do
         :less_equal,
         :logical_or,
         :logical_xor,
+        :not_equal,
         :right_shift
       ] do
     @impl true
