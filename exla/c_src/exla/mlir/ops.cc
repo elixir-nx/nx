@@ -959,3 +959,32 @@ ERL_NIF_TERM dump_mlir_module(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
 
   return exla::nif::ok(env);
 }
+
+ERL_NIF_TERM mlir_scatter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 5) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value *target, *indices, *updates;
+  bool add_or_put;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], target)) {
+    return exla::nif::error(env, "Unable to get target.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[2], indices)) {
+    return exla::nif::error(env, "Unable to get indices.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[3], updates)) {
+    return exla::nif::error(env, "Unable to get updates.");
+  }
+  if (!exla::nif::get(env, argv[4], &add_or_put)) {
+    return exla::nif::error(env, "Unable to get add_or_put.");
+  }
+
+  mlir::Value res = (*function)->ScatterOp(*target, *indices, *updates, add_or_put);
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}

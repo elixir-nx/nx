@@ -1204,6 +1204,10 @@ defmodule EXLA.Defn do
     )
   end
 
+  defp to_operator(:indexed_add, [%Value{} | _] = tensors, out, _state) do
+    mlir_scatter(tensors, out, :add)
+  end
+
   defp to_operator(
          :indexed_add,
          tensors,
@@ -1214,6 +1218,10 @@ defmodule EXLA.Defn do
     scatter_fn = op_computation(:add, args, state)
 
     scatter(scatter_fn, tensors, out)
+  end
+
+  defp to_operator(:indexed_put, [%Value{} | _] = tensors, out, _state) do
+    mlir_scatter(tensors, out, :put)
   end
 
   defp to_operator(:indexed_put, tensors, out, state) do
@@ -1553,6 +1561,35 @@ defmodule EXLA.Defn do
 
         EXLA.Op.pad(tensor, zero, padding_config)
     end
+  end
+
+  defp mlir_scatter([target, indices, updates], %{type: type}, kind) when kind in [:add, :put] do
+    target = to_type(target, type)
+    updates = to_type(updates, type)
+
+    rank = target |> op_shape() |> tuple_size()
+    # indices_rank is guaranteed to be 2 by Nx.Shape
+    indices_rank = 2
+    rank_diff = rank - indices_rank + 1
+
+    indices_shape = op_shape(indices)
+
+    indices_shape =
+      [List.duplicate(1, rank_diff) | Tuple.to_list(indices_shape)]
+      |> List.flatten()
+      |> List.to_tuple()
+
+    indices = Value.reshape(indices, indices_shape)
+
+    # If indices has shape {x, y}, updates is guaranteed by Nx.Shape to
+    # have shape {x}, so if we reshaped indices to {..., x, y}, we need to
+    # reshape updates to {..., x}
+
+    updates_shape = Tuple.delete_at(indices_shape, tuple_size(indices_shape) - 1)
+
+    updates = Value.reshape(updates, updates_shape)
+
+    Value.scatter(target, indices, updates, kind)
   end
 
   defp scatter(scatter_fn, [target, indices, updates], %{type: type}) do
