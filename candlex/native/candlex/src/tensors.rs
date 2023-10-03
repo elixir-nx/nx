@@ -410,11 +410,22 @@ fn vec_to_tuple(env: Env, vec: Vec<usize>) -> Result<Term, rustler::Error> {
     ))
 }
 
+static CUDA_DEVICE: std::sync::Mutex<Option<Device>> = std::sync::Mutex::new(None);
+
 fn device_from_atom(atom: Atom) -> Result<Device, CandlexError> {
     if atom == atoms::cpu() {
         Ok(Device::Cpu)
     } else if atom == atoms::cuda() {
-        Ok(Device::new_cuda(0)?)
+        let mut cuda_device = CUDA_DEVICE.lock().unwrap();
+
+        if let Some(device) = cuda_device.as_ref() {
+            Ok(device.clone())
+        } else {
+            let new_cuda_device = Device::new_cuda(0)?;
+            *cuda_device = Some(new_cuda_device.clone());
+
+            Ok(new_cuda_device)
+        }
     } else {
         Err(CandlexError::Other(format!(
             "unsupported device {:?}",
