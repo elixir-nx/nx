@@ -85,6 +85,18 @@ defmodule EXLA.NIF do
   def mlir_scatter(_function, _target, _indices, _updates, _add_or_put),
     do: :erlang.nif_error(:undef)
 
+  def mlir_select_and_scatter(
+        _function,
+        _target,
+        _source,
+        _init_value,
+        _gt_or_lt,
+        _window_dimensions,
+        _window_strides,
+        _padding
+      ),
+      do: :erlang.nif_error(:undef)
+
   def new_builder(_name),
     do: :erlang.nif_error(:undef)
 

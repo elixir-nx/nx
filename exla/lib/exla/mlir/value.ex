@@ -268,6 +268,34 @@ defmodule EXLA.MLIR.Value do
     %Value{target | ref: ref}
   end
 
+  def select_and_scatter(
+        %Value{function: func} = target,
+        %Value{function: func} = source,
+        %Value{function: func} = init_value,
+        comparison,
+        window_dimensions,
+        window_strides,
+        padding
+      )
+      when comparison in [:gt, :lt] do
+    gt_or_lt = if(comparison == :gt, do: 1, else: 0)
+
+    ref =
+      EXLA.NIF.mlir_select_and_scatter(
+        func.ref,
+        target.ref,
+        source.ref,
+        init_value.ref,
+        gt_or_lt,
+        window_dimensions,
+        window_strides,
+        padding
+      )
+      |> unwrap!()
+
+    %Value{target | ref: ref}
+  end
+
   defp get_precision_config_int(precision_config) do
     case precision_config do
       :default ->

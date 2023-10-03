@@ -1147,6 +1147,30 @@ defmodule EXLA.Defn do
 
   defp to_operator(
          :window_scatter_max,
+         [%Value{} = arg, %Value{} = source, %Value{} = init_value, window_dimensions, opts],
+         %{type: type},
+         _state
+       ) do
+    padding_config = opts[:padding]
+    strides = opts[:strides]
+
+    arg = to_type(arg, type)
+    source = to_type(source, type)
+    init_value = to_type(init_value, type)
+
+    Value.select_and_scatter(
+      arg,
+      source,
+      init_value,
+      :gt,
+      Tuple.to_list(window_dimensions),
+      strides,
+      padding_config
+    )
+  end
+
+  defp to_operator(
+         :window_scatter_max,
          [arg, source, init_value, window_dimensions, opts],
          %{type: type},
          state
@@ -1171,6 +1195,30 @@ defmodule EXLA.Defn do
       source,
       init_value,
       scatter_fn
+    )
+  end
+
+  defp to_operator(
+         :window_scatter_min,
+         [%Value{} = arg, %Value{} = source, %Value{} = init_value, window_dimensions, opts],
+         %{type: type},
+         _state
+       ) do
+    padding_config = opts[:padding]
+    strides = opts[:strides]
+
+    arg = to_type(arg, type)
+    source = to_type(source, type)
+    init_value = to_type(init_value, type)
+
+    Value.select_and_scatter(
+      arg,
+      source,
+      init_value,
+      :lt,
+      Tuple.to_list(window_dimensions),
+      strides,
+      padding_config
     )
   end
 
