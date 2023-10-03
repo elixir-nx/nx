@@ -183,6 +183,17 @@ defmodule Candlex.Backend do
   # Element-wise
 
   @impl true
+  def clip(%T{} = out, %T{} = t, %T{} = min, %T{} = max) do
+    [t, min, max] = maybe_upcast([t, min, max])
+
+    t
+    |> from_nx()
+    |> Native.clamp(from_nx(min), from_nx(max))
+    |> unwrap!()
+    |> to_nx(out)
+  end
+
+  @impl true
   def select(%T{shape: shape, type: type} = out, pred, on_true, on_false) do
     on_true =
       on_true

@@ -49,6 +49,7 @@ rustler::init! {
         tensors::index_select,
         tensors::chunk,
         tensors::squeeze,
+        tensors::clamp,
         tensors::arange,
         tensors::to_type,
         tensors::broadcast_to,

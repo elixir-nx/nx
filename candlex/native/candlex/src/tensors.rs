@@ -110,6 +110,11 @@ pub fn squeeze(t: ExTensor, dim: usize) -> Result<ExTensor, CandlexError> {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+pub fn clamp(t: ExTensor, min_val: ExTensor, max_val: ExTensor) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(t.clamp(&min_val.broadcast_as(t.shape())?, &max_val.broadcast_as(t.shape())?)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 pub fn rsqrt(t: ExTensor) -> Result<ExTensor, CandlexError> {
     Ok(ExTensor::new(t.sqrt()?.recip()?))
 }
