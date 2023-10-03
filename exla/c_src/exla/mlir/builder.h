@@ -116,8 +116,8 @@ class MLIRModule {
 
   MLIRFunction *CreateFunction(
       std::string name,
-      std::vector<std::pair<std::vector<tsl::int64>, int>> arg_types,
-      std::pair<std::vector<tsl::int64>, int> ret_type);
+      std::vector<std::pair<std::vector<tsl::int64>, xla::PrimitiveType>> arg_types,
+      std::pair<std::vector<tsl::int64>, xla::PrimitiveType> ret_type);
 
   mlir::ModuleOp module() { return module_.get(); }
   mlir::OpBuilder *builder() { return builder_.get(); }
@@ -131,7 +131,7 @@ class MLIRModule {
   std::vector<mlir::Type> input_types_;
 };
 
-mlir::Type TypeIntToMLIRType(mlir::OpBuilder *builder, int type_int);
+mlir::Type TypeIntToMLIRType(mlir::OpBuilder *builder, xla::PrimitiveType type_int);
 
 xla::PrimitiveType MLIRTypeToPrimitiveType(mlir::Type);
 }  // namespace exla

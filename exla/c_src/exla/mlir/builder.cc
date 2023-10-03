@@ -18,41 +18,42 @@
 #include "xla/types.h"
 
 namespace exla {
-mlir::Type TypeIntToMLIRType(mlir::OpBuilder *builder, int type_int) {
+mlir::Type TypeIntToMLIRType(mlir::OpBuilder *builder, xla::PrimitiveType type_int) {
   // type_int comes from the xla::PrimitiveType enum
+  using xla::PrimitiveType;
   switch (type_int) {
-    case 2:
+    case PrimitiveType::S8:
       return builder->getIntegerType(8);
-    case 3:
+    case PrimitiveType::S16:
       return builder->getIntegerType(16);
-    case 4:
+    case PrimitiveType::S32:
       return builder->getIntegerType(32);
-    case 5:
+    case PrimitiveType::S64:
       return builder->getIntegerType(64);
-    case 6:
+    case PrimitiveType::U8:
       return builder->getIntegerType(8, false);
-    case 7:
+    case PrimitiveType::U16:
       return builder->getIntegerType(16, false);
-    case 8:
+    case PrimitiveType::U32:
       return builder->getIntegerType(32, false);
-    case 9:
+    case PrimitiveType::U64:
       return builder->getIntegerType(64, false);
-    case 10:
+    case PrimitiveType::F16:
       return builder->getF16Type();
-    case 11:
+    case PrimitiveType::F32:
       return builder->getF32Type();
-    case 12:
+    case PrimitiveType::F64:
       return builder->getF64Type();
-    case 16:
+    case PrimitiveType::BF16:
       return builder->getBF16Type();
-    case 15:
+    case PrimitiveType::C64:
       return mlir::ComplexType::get(builder->getF32Type());
-    case 18:
+    case PrimitiveType::C128:
       return mlir::ComplexType::get(builder->getF64Type());
   }
 }
 
-mlir::TensorType GetMLIRType(mlir::OpBuilder *builder, std::vector<tsl::int64> dims, int type_int) {
+mlir::TensorType GetMLIRType(mlir::OpBuilder *builder, std::vector<tsl::int64> dims, xla::PrimitiveType type_int) {
   auto type = TypeIntToMLIRType(builder, type_int);
   return mlir::RankedTensorType::get(dims, type);
 }
@@ -951,8 +952,8 @@ xla::PrimitiveType MLIRTypeToPrimitiveType(mlir::Type type) {
 
 MLIRFunction *MLIRModule::CreateFunction(
     std::string name,
-    std::vector<std::pair<std::vector<tsl::int64>, int>> arg_types,
-    std::pair<std::vector<tsl::int64>, int> ret_type) {
+    std::vector<std::pair<std::vector<tsl::int64>, xla::PrimitiveType>> arg_types,
+    std::pair<std::vector<tsl::int64>, xla::PrimitiveType> ret_type) {
   std::vector<mlir::Type> types;
   types.reserve(arg_types.size());
   for (auto arg_type : arg_types) {
