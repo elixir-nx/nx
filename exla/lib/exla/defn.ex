@@ -580,6 +580,7 @@ defmodule EXLA.Defn do
          cache
        ) do
     {tensor, cache} = recur_operator(tensor, state, cache)
+
     ifft_fn =
       case tensor do
         %Value{} -> &Value.fft(&1, :ifft, &2)
@@ -1026,10 +1027,14 @@ defmodule EXLA.Defn do
     apply(EXLA.Op, op, [to_type(arg, type)])
   end
 
-  defp to_operator(:fft, [%Value{} | _] = args, out, state), do: fft(&Value.fft(&1, :fft, &2), args, out, state)
+  defp to_operator(:fft, [%Value{} | _] = args, out, state),
+    do: fft(&Value.fft(&1, :fft, &2), args, out, state)
+
   defp to_operator(:fft, args, out, state), do: fft(&EXLA.Op.fft/2, args, out, state)
 
-  defp to_operator(:ifft, [%Value{} | _] = args, out, state), do: fft(&Value.fft(&1, :ifft, &2), args, out, state)
+  defp to_operator(:ifft, [%Value{} | _] = args, out, state),
+    do: fft(&Value.fft(&1, :ifft, &2), args, out, state)
+
   defp to_operator(:ifft, args, out, state), do: fft(&EXLA.Op.ifft/2, args, out, state)
 
   defp to_operator(:is_nan, [%Value{} = arg], _out, _state),
@@ -1632,7 +1637,8 @@ defmodule EXLA.Defn do
         case tensor do
           %Value{} ->
             limit_indices = Enum.zip_with(starts, lengths, fn i, len -> i + len end)
-            Value.slice(tensor, starts, limit_indices , strides)
+            Value.slice(tensor, starts, limit_indices, strides)
+
           _ ->
             EXLA.Op.slice(tensor, starts, lengths, strides)
         end
@@ -1643,8 +1649,8 @@ defmodule EXLA.Defn do
             %Value{function: func} ->
               Value.constant_r0(func, Complex.new(0), output_type)
 
-              _ ->
-            EXLA.Op.constant_r0(state.builder, Complex.new(0), output_type)
+            _ ->
+              EXLA.Op.constant_r0(state.builder, Complex.new(0), output_type)
           end
 
         padding_config =
