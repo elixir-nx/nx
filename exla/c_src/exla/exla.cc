@@ -758,7 +758,6 @@ static ErlNifFunc exla_funcs[] = {
     {"right_shift_logical", 3, shift_right_logical},
     {"right_shift_arithmetic", 3, shift_right_arithmetic},
     {"pow", 3, pow},
-    {"complex", 3, complex},
     {"atan2", 3, atan2},
     // Element-wise Binary comparison
     {"equal", 3, equal},
