@@ -291,18 +291,18 @@ defmodule EXLA.MLIR.ExecutableTest do
     end
 
     # TO-DO (mlir): this case depends on broadcasting being available
-    # test "sign with unsigned input" do
-    #   function = fn t -> Nx.sign(t) end
+    test "sign with unsigned input" do
+      function = fn t -> Nx.sign(t) end
 
-    #   t = Nx.tensor([0, 1, 2], type: :u8)
+      t = Nx.tensor([0, 1, 2], type: :s8)
 
-    #   result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
-    #   result_mlir = Nx.Defn.jit_apply(function, [t])
+      result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
+      result_mlir = Nx.Defn.jit_apply(function, [t])
 
-    #   assert result_nx.shape == result_mlir.shape
-    #   assert result_nx.type == result_mlir.type
-    #   assert_equal(result_nx, result_mlir)
-    # end
+      assert result_nx.shape == result_mlir.shape
+      assert result_nx.type == result_mlir.type
+      assert_equal(result_nx, result_mlir)
+    end
   end
 
   describe "constants" do
@@ -594,6 +594,44 @@ defmodule EXLA.MLIR.ExecutableTest do
           ])
         )
       end
+    end
+  end
+
+  describe "indexed ops" do
+    test "indexed_add" do
+      t = Nx.iota({1, 2, 3})
+      indices = Nx.tensor([[0, 0, 0], [0, 1, 1], [0, 0, 0], [0, 0, 2], [0, 1, 2]])
+      updates = Nx.tensor([1, 3, 1, -2, 5])
+
+      result = EXLA.jit(&Nx.indexed_add/3, compiler_mode: :mlir).(t, indices, updates)
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [
+            [2, 1, 0],
+            [3, 7, 10]
+          ]
+        ])
+      )
+    end
+
+    test "indexed_put" do
+      t = Nx.iota({1, 2, 3})
+      indices = Nx.tensor([[0, 0, 0], [0, 1, 1], [0, 0, 0], [0, 0, 2], [0, 1, 2]])
+      updates = Nx.tensor([1, 3, 1, -2, 5])
+
+      result = EXLA.jit(&Nx.indexed_put/3, compiler_mode: :mlir).(t, indices, updates)
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [
+            [1, 1, -2],
+            [3, 3, 5]
+          ]
+        ])
+      )
     end
   end
 end

@@ -246,6 +246,28 @@ defmodule EXLA.MLIR.Value do
     %Value{ref: ref, function: func}
   end
 
+  def scatter(
+        %Value{function: func} = target,
+        %Value{function: func} = indices,
+        %Value{function: func} = updates,
+        kind
+      )
+      when kind in [:add, :put] do
+    add_or_put = if(kind == :add, do: 1, else: 0)
+
+    ref =
+      EXLA.NIF.mlir_scatter(
+        func.ref,
+        target.ref,
+        indices.ref,
+        updates.ref,
+        add_or_put
+      )
+      |> unwrap!()
+
+    %Value{target | ref: ref}
+  end
+
   defp get_precision_config_int(precision_config) do
     case precision_config do
       :default ->

@@ -542,7 +542,6 @@ std::vector<mlir::Value> MLIRFunction::SortOp(std::vector<mlir::Value> operands,
       value_range,
       dim,
       true);
-
   buildSortComparisonBody(element_types, direction, compare_type,
                           &sort_op.getComparator(), builder);
 
@@ -671,6 +670,42 @@ mlir::Value MLIRFunction::SelectOp(mlir::Value pred, mlir::Value on_true, mlir::
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   auto op = module_->builder()->create<mlir::mhlo::SelectOp>(module_->builder()->getUnknownLoc(), pred, on_true, on_false);
   return op;
+}
+
+static void buildScatterComputation(mlir::Type element_type, bool add_or_put, mlir::Region *body, mlir::OpBuilder *builder) {
+  mlir::OpBuilder::InsertionGuard insertionPointGuard(*builder);
+  mlir::Location loc = body->getLoc();
+  mlir::Block *block = builder->createBlock(body);
+  // Add two arguments for each element type.
+  block->addArguments({element_type, element_type}, {loc, loc});
+
+  if (add_or_put) {
+    mlir::BlockArgument arg0 = block->getArgument(0);
+    mlir::BlockArgument arg1 = block->getArgument(1);
+    mlir::Value add = builder->create<mlir::mhlo::AddOp>(loc, arg0, arg1);
+    builder->create<mlir::mhlo::ReturnOp>(loc, add);
+  } else {
+    mlir::BlockArgument arg1 = block->getArgument(1);
+    builder->create<mlir::mhlo::ReturnOp>(loc, arg1);
+  }
+}
+
+mlir::Value MLIRFunction::ScatterOp(mlir::Value target, mlir::Value indices, mlir::Value updates, bool add_or_put) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+  mlir::RankedTensorType type = llvm::cast<mlir::RankedTensorType>(target.getType());
+  int64_t rank = type.getShape().size();
+  std::vector<int64_t> axes(rank);
+  for (int64_t i = 0; i < rank; i++) {
+    axes[i] = i;
+  }
+
+  auto scatter_dimension_numbers = mlir::mhlo::ScatterDimensionNumbersAttr::get(builder->getContext(), {}, axes, axes, rank);
+
+  mlir::mhlo::ScatterOp scatter_op = builder->create<mlir::mhlo::ScatterOp>(builder->getUnknownLoc(), target, indices, updates, scatter_dimension_numbers);
+  mlir::Type computation_operand_type = mlir::RankedTensorType::get({}, type.getElementType());
+  buildScatterComputation(computation_operand_type, add_or_put, &scatter_op.getUpdateComputation(), builder);
+  return scatter_op.getResult(0);
 }
 
 template <typename T>
