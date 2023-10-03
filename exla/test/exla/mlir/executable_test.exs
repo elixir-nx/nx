@@ -82,7 +82,22 @@ defmodule EXLA.MLIR.ExecutableTest do
   end
 
   describe "convert" do
-    @types [s: 8, s: 16, s: 32, s: 64, u: 8, u: 16, u: 32, u: 64, f: 16, f: 32, f: 64, bf: 16]
+    @types [
+      s: 8,
+      s: 16,
+      s: 32,
+      s: 64,
+      u: 8,
+      u: 16,
+      u: 32,
+      u: 64,
+      f: 16,
+      f: 32,
+      f: 64,
+      bf: 16,
+      c: 64,
+      c: 128
+    ]
 
     for origin_type <- @types, dest_type <- @types do
       test "converts #{inspect(origin_type)} to #{inspect(dest_type)}" do
@@ -174,7 +189,7 @@ defmodule EXLA.MLIR.ExecutableTest do
                  [:log, :log1p, :sign, :cosh, :sinh] ++
                  [:sqrt, :cbrt, :sin, :cos, :atan] ++
                  [:tanh, :sigmoid, :erf, :erfc, :rsqrt] ++
-                 [:negate]
+                 [:negate, :conjugate, :real, :imag]
 
     for op <- @unary_ops do
       test "#{op}" do

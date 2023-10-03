@@ -78,8 +78,8 @@ ERL_NIF_TERM create_mlir_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 
   exla::MLIRModule** module;
   std::string func_name;
-  std::vector<std::pair<std::vector<exla::int64>, int>> arg_types;
-  std::pair<std::vector<exla::int64>, int> ret_type;
+  std::vector<std::pair<std::vector<exla::int64>, xla::PrimitiveType>> arg_types;
+  std::pair<std::vector<exla::int64>, xla::PrimitiveType> ret_type;
   std::vector<xla::Shape*> arg_shapes;
 
   if (!exla::nif::get<exla::MLIRModule*>(env, argv[0], module)) {
@@ -96,7 +96,7 @@ ERL_NIF_TERM create_mlir_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   absl::Span<const int64_t> span;
 
   for (xla::Shape* shape : arg_shapes) {
-    int type = shape->element_type();
+    xla::PrimitiveType type = shape->element_type();
     if (type == -1) {
       return exla::nif::error(env, "Invalid argument type received.");
     }
@@ -111,7 +111,7 @@ ERL_NIF_TERM create_mlir_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     return exla::nif::error(env, "Unable to get return.");
   }
 
-  int type = ret_shape->element_type();
+  xla::PrimitiveType type = ret_shape->element_type();
   if (type == -1) {
     return exla::nif::error(env, "Invalid output type received.");
   }
@@ -429,6 +429,15 @@ ERL_NIF_TERM mlir_clz(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 ERL_NIF_TERM mlir_population_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_UNARY_OP(PopulationCountOp);
+}
+ERL_NIF_TERM mlir_real(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(RealOp);
+}
+ERL_NIF_TERM mlir_imag(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(ImagOp);
+}
+ERL_NIF_TERM mlir_conjugate(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(ConjOp);
 }
 
 ERL_NIF_TERM mlir_iota(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
