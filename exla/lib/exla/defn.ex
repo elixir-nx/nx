@@ -795,8 +795,8 @@ defmodule EXLA.Defn do
     strides = opts[:strides]
     input_dilation = opts[:input_dilation]
     kernel_dilation = opts[:kernel_dilation]
-    feature_groups = opts[:feature_group_size]
-    batch_groups = opts[:batch_group_size]
+    feature_group_count = opts[:feature_group_size]
+    batch_group_count = opts[:batch_group_size]
 
     %{type: output_type} = ans
 
@@ -809,24 +809,42 @@ defmodule EXLA.Defn do
       opts[:output_permutation]
       |> List.to_tuple()
 
-    conv_dim_nos = {input_permutation, kernel_permutation, output_permutation}
+    dimension_numbers = {input_permutation, kernel_permutation, output_permutation}
 
     # Ensure both types are floating
     operand = to_type(operand, output_type)
     kernel = to_type(kernel, output_type)
 
-    EXLA.Op.conv_general_dilated(
-      operand,
-      kernel,
-      strides,
-      padding,
-      input_dilation,
-      kernel_dilation,
-      conv_dim_nos,
-      feature_groups,
-      batch_groups,
-      state.precision
-    )
+    case operand do
+      %Value{} ->
+        Value.convolution(
+          operand,
+          kernel,
+          strides,
+          padding,
+          input_dilation,
+          kernel_dilation,
+          dimension_numbers,
+          feature_group_count,
+          batch_group_count,
+          state.precision,
+          ans.shape
+        )
+
+      _ ->
+        EXLA.Op.conv_general_dilated(
+          operand,
+          kernel,
+          strides,
+          padding,
+          input_dilation,
+          kernel_dilation,
+          dimension_numbers,
+          feature_group_count,
+          batch_group_count,
+          state.precision
+        )
+    end
   end
 
   defp to_operator(

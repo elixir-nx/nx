@@ -99,6 +99,22 @@ defmodule EXLA.NIF do
 
   def mlir_fft(_function, _tensor, _forward_fft, _fft_lenght), do: :erlang.nif_error(:undef)
 
+  def mlir_convolution(
+        _function,
+        _tensor,
+        _kernel,
+        _strides,
+        _padding_config,
+        _tensor_dilation,
+        _kernel_dilation,
+        _dimension_numbers,
+        _feature_group_count,
+        _batch_group_count,
+        _precision_config,
+        _output_dims
+      ),
+      do: :erlang.nif_error(:undef)
+
   def new_builder(_name),
     do: :erlang.nif_error(:undef)
 

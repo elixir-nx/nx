@@ -763,7 +763,6 @@ mlir::Value MLIRFunction::SelectAndScatterOp(
 
   mlir::DenseIntElementsAttr window_dimensions_attr = Int64ToDenseIntElementsAttr(module_->builder(), window_dimensions);
   mlir::DenseIntElementsAttr window_strides_attr = Int64ToDenseIntElementsAttr(module_->builder(), window_strides);
-  // mlir::DenseIntElementsAttr padding_attr = Int64ToDenseIntElementsAttr(module_->builder(), padding);
 
   auto dense_attr_type = mlir::RankedTensorType::get({static_cast<int64_t>(padding.size() / 2), 2}, builder->getIntegerType(64));
   auto dense_attr = mlir::DenseElementsAttr::get<int64_t>(dense_attr_type, llvm::ArrayRef<int64_t>(padding.data(), padding.size()));
@@ -978,6 +977,59 @@ MLIRFunction *MLIRModule::CreateFunction(
   funcOp->addEntryBlock();
   builder_->setInsertionPointToStart(&funcOp->getBody().front());
   return new MLIRFunction(this, std::move(funcOp));
+}
+
+mlir::Value MLIRFunction::ConvOp(
+    mlir::Value tensor,
+    mlir::Value kernel,
+    std::vector<int64_t> window_strides,
+    std::vector<int64_t> padding,
+    std::vector<int64_t> tensor_dilation,
+    std::vector<int64_t> kernel_dilation,
+    xla::ConvolutionDimensionNumbers dimension_numbers,
+    uint64_t feature_group_count,
+    uint64_t batch_group_count,
+    uint64_t precision_config,
+    std::vector<int64_t> output_dims) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+
+  mlir::RankedTensorType t_in = llvm::cast<mlir::RankedTensorType>(tensor.getType());
+  mlir::RankedTensorType result_type = mlir::RankedTensorType::get(output_dims, t_in.getElementType());
+
+  auto window_strides_attr = Int64ToDenseIntElementsAttr(module_->builder(), window_strides);
+  auto tensor_dilation_attr = Int64ToDenseIntElementsAttr(module_->builder(), tensor_dilation);
+  auto kernel_dilation_attr = Int64ToDenseIntElementsAttr(module_->builder(), kernel_dilation);
+  auto dimension_numbers_attr = mlir::mhlo::ConvDimensionNumbersAttr::get(
+      builder->getContext(),
+      dimension_numbers.input_batch_dimension(),
+      dimension_numbers.input_feature_dimension(),
+      llvm::ArrayRef<int64_t>(dimension_numbers.input_spatial_dimensions().data(), dimension_numbers.input_spatial_dimensions_size()),
+      dimension_numbers.kernel_input_feature_dimension(),
+      dimension_numbers.kernel_output_feature_dimension(),
+      llvm::ArrayRef<int64_t>(dimension_numbers.kernel_spatial_dimensions().data(), dimension_numbers.kernel_spatial_dimensions_size()),
+      dimension_numbers.output_batch_dimension(),
+      dimension_numbers.output_feature_dimension(),
+      llvm::ArrayRef<int64_t>(dimension_numbers.output_spatial_dimensions().data(), dimension_numbers.output_spatial_dimensions_size()));
+
+  auto dense_attr_type = mlir::RankedTensorType::get({static_cast<int64_t>(padding.size() / 2), 2}, builder->getIntegerType(64));
+  auto dense_attr = mlir::DenseElementsAttr::get<int64_t>(dense_attr_type, llvm::ArrayRef<int64_t>(padding.data(), padding.size()));
+  auto padding_attr = llvm::cast<mlir::DenseIntElementsAttr>(dense_attr);
+
+  return builder->create<mlir::mhlo::ConvolutionOp>(
+      builder->getUnknownLoc(),
+      result_type,
+      tensor,
+      kernel,
+      window_strides_attr,
+      padding_attr,
+      tensor_dilation_attr,
+      kernel_dilation_attr,
+      nullptr,
+      dimension_numbers_attr,
+      feature_group_count,
+      batch_group_count,
+      nullptr);
 }
 
 }  // namespace exla
