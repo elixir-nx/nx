@@ -19,6 +19,7 @@
 
 namespace exla {
 mlir::Type TypeIntToMLIRType(mlir::OpBuilder *builder, int type_int) {
+  // type_int comes from the xla::PrimitiveType enum
   switch (type_int) {
     case 2:
       return builder->getIntegerType(8);
@@ -44,6 +45,10 @@ mlir::Type TypeIntToMLIRType(mlir::OpBuilder *builder, int type_int) {
       return builder->getF64Type();
     case 16:
       return builder->getBF16Type();
+    case 15:
+      return mlir::ComplexType::get(builder->getF32Type());
+    case 18:
+      return mlir::ComplexType::get(builder->getF64Type());
   }
 }
 
@@ -127,6 +132,14 @@ int MLIRFunction::get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *t
     *type = builder->getBF16Type();
     return 0;
   }
+  if (type_str == "c64") {
+    *type = mlir::ComplexType::get(builder->getF32Type());
+    return 0;
+  }
+  if (type_str == "c128") {
+    *type = mlir::ComplexType::get(builder->getF64Type());
+    return 0;
+  }
 
   return 1;
 }
@@ -151,6 +164,11 @@ mlir::Value MLIRFunction::SubtractOp(mlir::Value lhs, mlir::Value rhs) {
 mlir::Value MLIRFunction::ConvertOp(mlir::Value operand, mlir::Type type) {
   mlir::OpBuilder *builder = module_->builder();
   builder->setInsertionPointToEnd(&func_->getBody().back());
+
+  if (operand.getType().isa<mlir::ComplexType>() && !type.isa<mlir::ComplexType>()) {
+    // get the real part of the operand in case we're downcasting from complex to something else
+    operand = builder->create<mlir::mhlo::RealOp>(builder->getUnknownLoc(), operand);
+  }
 
   auto op = builder->create<mlir::mhlo::ConvertOp>(builder->getUnknownLoc(), operand, type);
   return op;
@@ -829,6 +847,15 @@ ERL_NIF_TERM MLIRFunction::ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_T
     return ConstantOpImpl<exla::float16>(module_->builder(), type, env, term, dims);
   }
 
+  if (type.isa<mlir::ComplexType>()) {
+    mlir::ComplexType complex_type = llvm::cast<mlir::ComplexType>(type);
+    if (complex_type.getElementType().isF32()) {
+      return ConstantOpImpl<exla::complex64>(module_->builder(), complex_type, env, term, dims);
+    } else {
+      return ConstantOpImpl<exla::complex128>(module_->builder(), complex_type, env, term, dims);
+    }
+  }
+
   if (type.isF32()) {
     return ConstantOpImpl<exla::float32>(module_->builder(), type, env, term, dims);
   }
@@ -836,6 +863,7 @@ ERL_NIF_TERM MLIRFunction::ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_T
   if (type.isF64()) {
     return ConstantOpImpl<exla::float64>(module_->builder(), type, env, term, dims);
   }
+
   return exla::nif::error(env, "invalid type received");
 }
 
@@ -892,8 +920,17 @@ xla::PrimitiveType MLIRTypeToPrimitiveType(mlir::Type type) {
   if (type.isF32()) {
     return xla::primitive_util::NativeToPrimitiveType<float>();
   }
-  // type.isF64()
-  return xla::primitive_util::NativeToPrimitiveType<double>();
+  if (type.isF64()) {
+    return xla::primitive_util::NativeToPrimitiveType<double>();
+  }
+  if (type.isa<mlir::ComplexType>()) {
+    mlir::ComplexType complex_type = llvm::cast<mlir::ComplexType>(type);
+    if (complex_type.getElementType().isF32()) {
+      return xla::primitive_util::NativeToPrimitiveType<xla::complex64>();
+    } else {
+      return xla::primitive_util::NativeToPrimitiveType<xla::complex128>();
+    }
+  }
 }
 
 MLIRFunction *MLIRModule::CreateFunction(

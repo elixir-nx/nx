@@ -139,6 +139,32 @@ defmodule EXLA.MLIR.Value do
     %Value{ref: ref, function: func}
   end
 
+  def constant_r0(%Function{} = func, value, {:c, width} = type) when type in [{:c, 64}, {:c, 128}] do
+    {re, im} =
+      case value do
+        %Complex{re: re, im: im} -> {re, im}
+        n when is_float(n) -> {n, 0.0}
+        n when is_integer(n)  -> {n * 1.0, 0.0}
+        true -> {1.0, 0.0}
+        false -> {0.0, 0.0}
+      end
+
+    width = div(width, 2)
+
+    data = <<re::float-native-size(width), im::float-native-size(width)>>
+
+    ref =
+      EXLA.NIF.mlir_constant_from_binary(
+        func.ref,
+        data,
+        EXLA.Shape.dtype_to_charlist(type),
+        {1}
+      )
+      |> unwrap!()
+
+    reshape(%Value{ref: ref, function: func}, {})
+  end
+
   def constant_r0(%Function{} = func, value, type) do
     ref =
       EXLA.NIF.mlir_constant_r0(func.ref, value, EXLA.Shape.dtype_to_charlist(type)) |> unwrap!()
