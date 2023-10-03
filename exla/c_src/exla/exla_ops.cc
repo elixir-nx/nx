@@ -752,10 +752,6 @@ ERL_NIF_TERM pow(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_binary_op(env, argc, argv, xla::Pow);
 }
 
-ERL_NIF_TERM complex(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  return xla_binary_op(env, argc, argv, xla::Complex);
-}
-
 ERL_NIF_TERM atan2(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_binary_op(env, argc, argv, xla::Atan2);
 }

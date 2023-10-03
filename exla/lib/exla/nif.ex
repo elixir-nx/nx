@@ -121,7 +121,7 @@ defmodule EXLA.NIF do
     [:add, :subtract, :multiply, :divide, :remainder, :min, :max] ++
       [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift_arithmetic] ++
       [:right_shift_logical, :equal, :not_equal, :greater_equal, :greater, :less_equal] ++
-      [:less, :pow, :complex, :atan2]
+      [:less, :pow, :atan2]
 
   for op <- binary_broadcast_ops do
     def unquote(op)(_a, _b, _broadcast_dims) do
