@@ -1807,6 +1807,32 @@ defmodule CandlexTest do
         ]
       ))
     end
+
+    if Candlex.Backend.cuda_available? do
+      test "different devices" do
+        t([1, 2, 3], backend: {Candlex.Backend, device: :cpu})
+        |> Nx.add(t([10, 20, 30], backend: {Candlex.Backend, device: :cuda}))
+        |> assert_equal(t([11, 22, 33]))
+
+        t([1, 2, 3], backend: {Candlex.Backend, device: :cuda})
+        |> Nx.add(t([10, 20, 30], backend: {Candlex.Backend, device: :cpu}))
+        |> assert_equal(t([11, 22, 33]))
+      end
+    end
+
+    test "backend_transfer" do
+      t([1, 2, 3], backend: Nx.BinaryBackend)
+      |> Nx.backend_transfer({Candlex.Backend, device: :cpu})
+      |> assert_equal(t([1, 2, 3]))
+
+      t([1, 2, 3], backend: {Candlex.Backend, device: :cpu})
+      |> Nx.backend_transfer(Nx.BinaryBackend)
+      |> assert_equal(t([1, 2, 3]))
+
+      t([1, 2, 3], backend: {Candlex.Backend, device: :cpu})
+      |> Nx.backend_transfer({Candlex.Backend, device: :cpu})
+      |> assert_equal(t([1, 2, 3]))
+    end
   end
 
   defp t(values, opts \\ []) do

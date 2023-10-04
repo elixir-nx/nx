@@ -74,6 +74,19 @@ defmodule Candlex.Backend do
   # Backend
 
   @impl true
+  def backend_transfer(tensor, backend, backend_options) do
+    if backend == __MODULE__ && same_device?(tensor, device_option(backend_options)) do
+      tensor
+    else
+      try do
+        backend_copy(tensor, backend, backend_options)
+      after
+        backend_deallocate(tensor)
+      end
+    end
+  end
+
+  @impl true
   def backend_copy(%T{} = tensor, Candlex.Backend, backend_options) do
     tensor
     |> from_nx()
@@ -84,13 +97,6 @@ defmodule Candlex.Backend do
 
   def backend_copy(%T{} = tensor, backend, backend_options) do
     backend.from_binary(tensor, to_binary(tensor), backend_options)
-  end
-
-  @impl true
-  def backend_transfer(tensor, backend, backend_options) do
-    backend_copy(tensor, backend, backend_options)
-  after
-    backend_deallocate(tensor)
   end
 
   @impl true
@@ -222,6 +228,7 @@ defmodule Candlex.Backend do
   for op <- [:add, :divide, :max, :min, :multiply, :subtract] do
     @impl true
     def unquote(op)(%T{} = out, %T{} = left, %T{} = right) do
+      {left, right} = maybe_transfer_device(left, right)
       {left, right} = maybe_upcast(left, right)
 
       from_nx(left)
@@ -261,6 +268,7 @@ defmodule Candlex.Backend do
       ] do
     @impl true
     def unquote(op)(%T{} = out, %T{} = left, %T{} = right) do
+      {left, right} = maybe_transfer_device(left, right)
       {left, right} = maybe_upcast(left, right)
       {left, right} = maybe_broadcast_bin_args(out.shape, left, right)
 
@@ -677,6 +685,37 @@ defmodule Candlex.Backend do
     }
   end
 
+  defp maybe_transfer_device(
+         %T{data: %__MODULE__{device: device}} = l,
+         %T{data: %__MODULE__{device: device}} = r
+       ) do
+    {l, r}
+  end
+
+  defp maybe_transfer_device(
+         %T{data: %__MODULE__{device: device}} = l,
+         %T{data: %__MODULE__{device: _other_device}} = r
+       ) do
+    {
+      l,
+      r |> Nx.backend_transfer({__MODULE__, device: device})
+    }
+  end
+
+  defp maybe_transfer_device(%T{} = l, %T{data: %__MODULE__{device: device}} = r) do
+    {
+      l |> Nx.backend_transfer({__MODULE__, device: device}),
+      r
+    }
+  end
+
+  defp maybe_transfer_device(%T{data: %__MODULE__{device: device}} = l, %T{} = r) do
+    {
+      l,
+      r |> Nx.backend_transfer({__MODULE__, device: device})
+    }
+  end
+
   ## Conversions
 
   @impl true
@@ -789,7 +828,15 @@ defmodule Candlex.Backend do
     end
   end
 
-  defp cuda_available? do
+  defp same_device?(%T{data: %__MODULE__{device: device}}, device) do
+    true
+  end
+
+  defp same_device?(_t, _d) do
+    false
+  end
+
+  def cuda_available? do
     Native.is_cuda_available()
   end
 
