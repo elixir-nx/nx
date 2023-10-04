@@ -22,23 +22,23 @@ impl KernelDirectories {
         ptx_file: &std::path::Path,
         compute_cap: usize,
     ) -> Result<()> {
-        let should_compile =
-            if ptx_file.exists() {
-                cu_file
-                    .metadata()?
-                    .modified()?
-                    .duration_since(ptx_file.metadata()?.modified()?)
-                    .is_ok()
-            } else {
-                true
-            };
+        let should_compile = if ptx_file.exists() {
+            cu_file
+                .metadata()?
+                .modified()?
+                .duration_since(ptx_file.metadata()?.modified()?)
+                .is_ok()
+        } else {
+            true
+        };
 
         if should_compile {
             #[cfg(feature = "cuda")]
             {
                 let mut command = std::process::Command::new("nvcc");
                 let out_dir = ptx_file.parent().context("no parent for ptx file")?;
-                let include_dirs: Vec<String> = self.include_dirs.iter().map(|c| format!("-I{c}")).collect();
+                let include_dirs: Vec<String> =
+                    self.include_dirs.iter().map(|c| format!("-I{c}")).collect();
 
                 command
                     .arg(format!("--gpu-architecture=sm_{compute_cap}"))
@@ -49,8 +49,7 @@ impl KernelDirectories {
                     .args(include_dirs)
                     .arg(cu_file);
 
-                let output =
-                    command
+                let output = command
                     .spawn()
                     .context("failed spawning nvcc")?
                     .wait_with_output()?;

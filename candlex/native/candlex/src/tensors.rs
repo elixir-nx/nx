@@ -1,8 +1,8 @@
 use crate::atoms;
 use crate::error::CandlexError;
 use crate::ops::{
-    Acos, Asin, Atan, BitAnd, BitNot, BitOr, BitXor, Cbrt, ErfInv, IsInf, Log1p,
-    LogicalOr, LogicalXor, Pow, Shl, Shr, Sigmoid, Tan,
+    Acos, Asin, Atan, BitAnd, BitNot, BitOr, BitXor, Cbrt, ErfInv, IsInf, Log1p, LogicalOr,
+    LogicalXor, Pow, Shl, Shr, Sigmoid, Tan,
 };
 use candle_core::{DType, Device, Tensor};
 use half::{bf16, f16};
@@ -111,7 +111,10 @@ pub fn squeeze(t: ExTensor, dim: usize) -> Result<ExTensor, CandlexError> {
 
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn clamp(t: ExTensor, min_val: ExTensor, max_val: ExTensor) -> Result<ExTensor, CandlexError> {
-    Ok(ExTensor::new(t.clamp(&min_val.broadcast_as(t.shape())?, &max_val.broadcast_as(t.shape())?)?))
+    Ok(ExTensor::new(t.clamp(
+        &min_val.broadcast_as(t.shape())?,
+        &max_val.broadcast_as(t.shape())?,
+    )?))
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
@@ -222,7 +225,12 @@ pub fn reshape(t: ExTensor, shape: Term) -> Result<ExTensor, CandlexError> {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-pub fn slice_scatter(t: ExTensor, src: ExTensor, dim: usize, start: usize) -> Result<ExTensor, CandlexError> {
+pub fn slice_scatter(
+    t: ExTensor,
+    src: ExTensor,
+    dim: usize,
+    start: usize,
+) -> Result<ExTensor, CandlexError> {
     Ok(ExTensor::new(t.slice_scatter(src.deref(), dim, start)?))
 }
 
