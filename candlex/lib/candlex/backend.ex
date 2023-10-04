@@ -514,6 +514,7 @@ defmodule Candlex.Backend do
   def pad(%T{} = out, %T{} = t, pad_value, []) do
     out
   end
+
   def pad(%T{} = out, %T{} = t, %T{shape: {}} = pad_value, [{low, high, 0 = _inner}]) do
     if !Nx.equal(pad_value, 0) do
       raise "only pad_value=0 supported for now"
