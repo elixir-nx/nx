@@ -8,7 +8,6 @@ defmodule Candlex.Backend do
   @behaviour Nx.Backend
 
   alias Nx.Tensor, as: T
-  alias Candlex.Backend, as: CB
   alias Candlex.Native
 
   @device_cuda :cuda
@@ -583,7 +582,7 @@ defmodule Candlex.Backend do
     |> maybe_add_signature(tensor)
   end
 
-  defp maybe_add_signature(result, %T{data: %CB{device: device, resource: ref}})
+  defp maybe_add_signature(result, %T{data: %__MODULE__{device: device, resource: ref}})
        when is_reference(ref) do
     Inspect.Algebra.concat([
       "Candlex.Backend(#{device})",
@@ -725,15 +724,15 @@ defmodule Candlex.Backend do
   end
 
   @doc false
-  defp from_nx(%T{data: %CB{} = data}), do: data
+  defp from_nx(%T{data: %__MODULE__{} = data}), do: data
 
   defp from_nx(%T{} = tensor) do
     tensor
-    |> Nx.backend_transfer(CB)
+    |> Nx.backend_transfer(__MODULE__)
     |> from_nx()
   end
 
-  defp to_nx(%CB{resource: ref} = backend_tensor, %T{type: nx_type, shape: nx_shape} = t)
+  defp to_nx(%__MODULE__{resource: ref} = backend_tensor, %T{type: nx_type, shape: nx_shape} = t)
        when is_reference(ref) do
     {:ok, candle_dtype} = Native.dtype(backend_tensor)
     {:ok, candle_shape} = Native.t_shape(backend_tensor)
