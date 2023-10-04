@@ -64,7 +64,7 @@ defmodule Candlex.Backend do
   end
 
   @impl true
-  def eye(%T{shape: shape, type: type} = out, backend_options) do
+  def eye(%T{shape: shape, type: type} = _out, backend_options) do
     iota = Nx.iota(shape, backend: {__MODULE__, backend_options})
 
     Nx.equal(Nx.tril(iota), Nx.triu(iota))
@@ -510,7 +510,7 @@ defmodule Candlex.Backend do
   end
 
   @impl true
-  def pad(%T{} = out, %T{} = t, pad_value, []) do
+  def pad(%T{} = out, %T{} = _t, _pad_value, []) do
     out
   end
 
@@ -696,11 +696,6 @@ defmodule Candlex.Backend do
         |> unwrap!()
 
       remainder > 0 && leftover == :repeat ->
-        slice_shape =
-          shape
-          |> Tuple.delete_at(first_dimension)
-          |> Tuple.insert_at(first_dimension, remainder)
-
         [
           native_tensor,
           Native.narrow(native_tensor, first_dimension, 0, batch_size - remainder)
@@ -762,7 +757,7 @@ defmodule Candlex.Backend do
   defp to_candle_dtype({:u, 8}), do: "u8"
   defp to_candle_dtype({:u, 16} = t), do: unsupported_dtype(t)
   defp to_candle_dtype({:u, 32}), do: "u32"
-  defp to_candle_dtype({:u, 64} = t), do: "i64"
+  defp to_candle_dtype({:u, 64}), do: "i64"
   defp to_candle_dtype({:f, 16}), do: "f16"
   defp to_candle_dtype({:f, 32}), do: "f32"
   defp to_candle_dtype({:f, 64}), do: "f64"
@@ -800,10 +795,6 @@ defmodule Candlex.Backend do
 
   defp unsupported_dtype(t) do
     raise("Unsupported candle dtype for #{inspect(t)}")
-  end
-
-  defp unsupported_op(op_name) do
-    raise("Unsupported candlex operation '#{op_name}'")
   end
 
   defp unsupported_option!(opts, key, acceptable_default) do
