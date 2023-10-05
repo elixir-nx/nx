@@ -97,3 +97,5 @@ CUSTOM_UNARY_OP(double, tan_f64, tang(x))
 
 CUSTOM_UNARY_OP_OUT(float, uint8_t, is_inf_f32, isinf(x) ? 1 : 0)
 CUSTOM_UNARY_OP_OUT(double, uint8_t, is_inf_f64, isinf(x) ? 1 : 0)
+CUSTOM_UNARY_OP_OUT(float, uint8_t, is_nan_f32, isnan(x) ? 1 : 0)
+CUSTOM_UNARY_OP_OUT(double, uint8_t, is_nan_f64, isnan(x) ? 1 : 0)

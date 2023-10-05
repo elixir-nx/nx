@@ -301,6 +301,7 @@ defmodule Candlex.Backend do
         :exp,
         :floor,
         :is_infinity,
+        :is_nan,
         :log,
         :log1p,
         :negate,

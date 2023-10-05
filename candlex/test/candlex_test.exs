@@ -970,6 +970,25 @@ defmodule CandlexTest do
       # |> assert_equal(t([0, 0]))
     end
 
+    test "is_nan" do
+      t([:nan, 1.0, 0.0])
+      |> Nx.is_nan()
+      |> assert_equal(t([1, 0, 0]))
+
+      t([:nan, :infinity])
+      |> Nx.is_nan()
+      |> assert_equal(t([1, 0]))
+
+      # Complex not yet supported
+      # t(Complex.new(0, :nan))
+      # |> Nx.is_nan()
+      # |> assert_equal(t(1))
+
+      t([1.0, 0.0])
+      |> Nx.is_nan()
+      |> assert_equal(t([0, 0]))
+    end
+
     test "logical_or" do
       Nx.logical_or(0, t([-1, 0, 1]))
       |> assert_equal(t([1, 0, 1]))

@@ -412,6 +412,7 @@ custom_unary_op!(Sigmoid, "sigmoid", |v| 1. / (1. + (-v).exp()), (F32, F64));
 custom_unary_op!(Sinh, "sinh", |v| v.sinh(), (BF16, F16, F32, F64));
 custom_unary_op!(Tan, "tan", |v| v.tan(), (BF16, F16, F32, F64));
 custom_unary_bool_op!(IsInf, "is_inf", is_infinite, (F32, F64));
+custom_unary_bool_op!(IsNan, "is_nan", is_nan, (F32, F64));
 
 custom_binary_op!(BitAnd, "bit_and", |v1, v2| v1 & v2, (U32, I64));
 custom_binary_op!(BitOr, "bit_or", |v1, v2| v1 | v2, (U32, I64));

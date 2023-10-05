@@ -82,6 +82,7 @@ rustler::init! {
         tensors::exp,
         tensors::floor,
         tensors::is_infinity,
+        tensors::is_nan,
         tensors::round,
         tensors::log,
         tensors::log1p,
