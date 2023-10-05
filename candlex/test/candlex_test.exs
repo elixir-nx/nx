@@ -1065,6 +1065,22 @@ defmodule CandlexTest do
       ))
     end
 
+    test "erf" do
+      Nx.erf(1.0)
+      |> assert_close(t(0.8427007794380188))
+
+      Nx.erf(t([1.0, 2, 3]))
+      |> assert_close(t([0.8427007794380188, 0.9953222870826721, 0.9999778866767883]))
+    end
+
+    test "erfc" do
+      Nx.erfc(1.0)
+      |> assert_close(t(0.15729920566082))
+
+      Nx.erfc(t([1.0, 2, 3]))
+      |> assert_close(t([0.15729920566082, 0.004677734803408384, 2.2090496713644825e-5]))
+    end
+
     test "erf_inv" do
       Nx.erf_inv(0.10000000149011612)
       |> assert_close(t(0.08885598927736282))

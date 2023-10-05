@@ -4,6 +4,10 @@ use candle_core::{CpuStorage, CustomOp1, CustomOp2, Error, Layout, Shape};
 use num_traits::cast::FromPrimitive;
 use num_traits::Float;
 
+fn erfc<T: Float + num_traits::FromPrimitive>(v: T) -> T {
+    FromPrimitive::from_f64(statrs::function::erf::erfc(v.to_f64().unwrap())).unwrap()
+}
+
 fn erf_inv<T: Float + num_traits::FromPrimitive>(v: T) -> T {
     FromPrimitive::from_f64(statrs::function::erf::erf_inv(v.to_f64().unwrap())).unwrap()
 }
@@ -406,6 +410,7 @@ custom_unary_op!(Atanh, "atanh", |v| v.atanh(), (BF16, F16, F32, F64));
 custom_unary_op!(BitNot, "bit_not", |v| !v, (U8, U32, I64));
 custom_unary_op!(Cbrt, "cbrt", |v| v.cbrt(), (BF16, F16, F32, F64));
 custom_unary_op!(Cosh, "cosh", |v| v.cosh(), (BF16, F16, F32, F64));
+custom_unary_op!(Erfc, "erfc", |v| erfc(v), (BF16, F16, F32, F64));
 custom_unary_op!(ErfInv, "erf_inv", |v| erf_inv(v), (BF16, F16, F32, F64));
 custom_unary_op!(Log1p, "ln_1p", |v| v.ln_1p(), (BF16, F16, F32, F64));
 custom_unary_op!(Sigmoid, "sigmoid", |v| 1. / (1. + (-v).exp()), (F32, F64));

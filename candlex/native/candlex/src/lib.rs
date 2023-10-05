@@ -78,6 +78,8 @@ rustler::init! {
         tensors::sigmoid,
         tensors::sin,
         tensors::sinh,
+        tensors::erf,
+        tensors::erfc,
         tensors::erf_inv,
         tensors::exp,
         tensors::floor,

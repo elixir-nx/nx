@@ -39,6 +39,8 @@ defmodule Candlex.Native do
         :ceil,
         :cos,
         :cosh,
+        :erf,
+        :erfc,
         :erf_inv,
         :exp,
         :floor,
