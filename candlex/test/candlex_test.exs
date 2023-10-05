@@ -562,6 +562,15 @@ defmodule CandlexTest do
       |> assert_close(t([0.8414709568023682, 0.9092974066734314, 0.14112000167369843]))
     end
 
+    test "sinh" do
+      Nx.sinh(1.0)
+      |> assert_close(t(1.175201177597046))
+
+      t([1.0, 2, 3])
+      |> Nx.sinh()
+      |> assert_close(t([1.175201177597046, 3.6268603801727295, 10.017874717712402]))
+    end
+
     test "exp" do
       Nx.exp(1.0)
       |> assert_equal(t(2.7182817459106445))
@@ -578,6 +587,15 @@ defmodule CandlexTest do
       t([1.0, 2, 3])
       |> Nx.cos()
       |> assert_close(t([0.5403022766113281, -0.416146844625473, -0.9899924993515015]))
+    end
+
+    test "cosh" do
+      Nx.cosh(1.0)
+      |> assert_close(t(1.5430806875228882))
+
+      t([1.0, 2, 3])
+      |> Nx.cosh()
+      |> assert_close(t([1.5430806875228882, 3.762195587158203, 10.067662239074707]))
     end
 
     test "log" do
@@ -717,6 +735,15 @@ defmodule CandlexTest do
       |> assert_equal(t([1.4706288576126099, 1.0471975803375244, 0.4510268568992615]))
     end
 
+    test "acosh" do
+      Nx.acosh(1.0)
+      |> assert_equal(t(0.0))
+
+      t([1.0, 2, 3])
+      |> Nx.acosh()
+      |> assert_close(t([0.0, 1.316957950592041, 1.7627471685409546]))
+    end
+
     test "asin" do
       Nx.asin(0.10000000149011612)
       |> assert_equal(t(0.1001674234867096))
@@ -724,6 +751,15 @@ defmodule CandlexTest do
       t([0.10000000149011612, 0.5, 0.8999999761581421])
       |> Nx.asin()
       |> assert_equal(t([0.1001674234867096, 0.5235987901687622, 1.1197694540023804]))
+    end
+
+    test "asinh" do
+      Nx.asinh(1.0)
+      |> assert_close(t(0.8813735842704773))
+
+      t([1.0, 2, 3])
+      |> Nx.asinh()
+      |> assert_close(t([0.8813735842704773, 1.4436354637145996, 1.8184465169906616]))
     end
 
     test "tan" do
@@ -742,6 +778,15 @@ defmodule CandlexTest do
       t([0.10000000149011612, 0.5, 0.8999999761581421])
       |> Nx.atan()
       |> assert_close(t([0.09966865181922913, 0.46364760398864746, 0.7328150868415833]))
+    end
+
+    test "atanh" do
+      Nx.atanh(0.10000000149011612)
+      |> assert_close(t(0.10033535212278366))
+
+      t([0.10000000149011612, 0.5, 0.8999999761581421])
+      |> Nx.atanh()
+      |> assert_close(t([0.10033535212278366, 0.5493061542510986, 1.4722193479537964]))
     end
 
     test "ceil" do

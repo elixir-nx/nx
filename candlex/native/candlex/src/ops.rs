@@ -398,13 +398,18 @@ macro_rules! custom_binary_bool_op {
 }
 
 custom_unary_op!(Acos, "acos", |v| v.acos(), (BF16, F16, F32, F64));
+custom_unary_op!(Acosh, "acosh", |v| v.acosh(), (BF16, F16, F32, F64));
 custom_unary_op!(Asin, "asin", |v| v.asin(), (BF16, F16, F32, F64));
+custom_unary_op!(Asinh, "asinh", |v| v.asinh(), (BF16, F16, F32, F64));
 custom_unary_op!(Atan, "atan", |v| v.atan(), (BF16, F16, F32, F64));
+custom_unary_op!(Atanh, "atanh", |v| v.atanh(), (BF16, F16, F32, F64));
 custom_unary_op!(BitNot, "bit_not", |v| !v, (U8, U32, I64));
 custom_unary_op!(Cbrt, "cbrt", |v| v.cbrt(), (BF16, F16, F32, F64));
+custom_unary_op!(Cosh, "cosh", |v| v.cosh(), (BF16, F16, F32, F64));
 custom_unary_op!(ErfInv, "erf_inv", |v| erf_inv(v), (BF16, F16, F32, F64));
 custom_unary_op!(Log1p, "ln_1p", |v| v.ln_1p(), (BF16, F16, F32, F64));
 custom_unary_op!(Sigmoid, "sigmoid", |v| 1. / (1. + (-v).exp()), (F32, F64));
+custom_unary_op!(Sinh, "sinh", |v| v.sinh(), (BF16, F16, F32, F64));
 custom_unary_op!(Tan, "tan", |v| v.tan(), (BF16, F16, F32, F64));
 custom_unary_bool_op!(IsInf, "is_inf", is_infinite, (F32, F64));
 
