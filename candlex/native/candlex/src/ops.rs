@@ -421,6 +421,12 @@ custom_binary_op!(Pow, "pow", |v1, v2| v1.powf(v2), (F32, F64));
 custom_binary_op!(Shl, "shl", |v1, v2| v1 << v2, (U32, I64));
 custom_binary_op!(Shr, "shr", |v1, v2| v1 >> v2, (U32, I64));
 custom_binary_bool_op!(
+    LogicalAnd,
+    "logical_and",
+    |v1, v2| if v1 as i8 != 0 && v2 as i8 != 0 { 1 } else { 0 },
+    (U8, U32, I64, F32, F64)
+);
+custom_binary_bool_op!(
     LogicalOr,
     "logical_or",
     |v1, v2| if v1 as i8 == 0 && v2 as i8 == 0 { 0 } else { 1 },

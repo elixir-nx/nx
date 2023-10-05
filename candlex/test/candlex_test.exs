@@ -989,6 +989,31 @@ defmodule CandlexTest do
       |> assert_equal(t([0, 0]))
     end
 
+    test "logical_and" do
+      Nx.logical_and(1, t([-1, 0, 1]))
+      |> assert_equal(t([1, 0, 1]))
+
+      t([-1, 0, 1])
+      |> Nx.logical_and(t([[-1], [0], [1]]))
+      |> assert_equal(t(
+        [
+          [1, 0, 1],
+          [0, 0, 0],
+          [1, 0, 1]
+        ]
+      ))
+
+      t([-1.0, 0.0, 1.0])
+      |> Nx.logical_and(t([[-1], [0], [1]]))\
+      |> assert_equal(t(
+        [
+          [1, 0, 1],
+          [0, 0, 0],
+          [1, 0, 1]
+        ]
+      ))
+    end
+
     test "logical_or" do
       Nx.logical_or(0, t([-1, 0, 1]))
       |> assert_equal(t([1, 0, 1]))

@@ -261,6 +261,7 @@ defmodule Candlex.Backend do
         :left_shift,
         :less,
         :less_equal,
+        :logical_and,
         :logical_or,
         :logical_xor,
         :not_equal,

@@ -94,6 +94,7 @@ rustler::init! {
         tensors::bitwise_and,
         tensors::bitwise_or,
         tensors::bitwise_xor,
+        tensors::logical_and,
         tensors::logical_or,
         tensors::logical_xor,
         tensors::left_shift,
