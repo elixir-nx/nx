@@ -53,7 +53,7 @@ checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 [[package]]
 name = "candle-core"
 version = "0.3.0"
-source = "git+https://github.com/huggingface/candle#c18a856e76cad9626406c3c483a53fb5b7eeef7b"
+source = "git+https://github.com/huggingface/candle#8f7973958c55324a24f0c514e7ac6ded6681980f"
 dependencies = [
  "byteorder",
  "candle-gemm",
@@ -200,7 +200,7 @@ dependencies = [
 [[package]]
 name = "candle-kernels"
 version = "0.3.0"
-source = "git+https://github.com/huggingface/candle#c18a856e76cad9626406c3c483a53fb5b7eeef7b"
+source = "git+https://github.com/huggingface/candle#8f7973958c55324a24f0c514e7ac6ded6681980f"
 dependencies = [
  "glob",
  "rayon",
