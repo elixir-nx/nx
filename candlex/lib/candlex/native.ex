@@ -43,6 +43,7 @@ defmodule Candlex.Native do
         :erfc,
         :erf_inv,
         :exp,
+        :expm1,
         :floor,
         :is_infinity,
         :is_nan,

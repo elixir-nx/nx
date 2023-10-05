@@ -82,6 +82,7 @@ rustler::init! {
         tensors::erfc,
         tensors::erf_inv,
         tensors::exp,
+        tensors::expm1,
         tensors::floor,
         tensors::is_infinity,
         tensors::is_nan,

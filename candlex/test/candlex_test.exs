@@ -580,6 +580,15 @@ defmodule CandlexTest do
       |> assert_equal(t([2.7182817459106445, 7.389056205749512, 20.08553695678711]))
     end
 
+    test "expm1" do
+      Nx.expm1(1.0)
+      |> assert_close(t(1.718281865119934))
+
+      t([1.0, 2, 3])
+      |> Nx.expm1()
+      |> assert_close(t([1.718281865119934, 6.389056205749512, 19.08553695678711]))
+    end
+
     test "cos" do
       Nx.cos(1.0)
       |> assert_close(t(0.5403022766113281))

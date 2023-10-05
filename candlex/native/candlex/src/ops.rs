@@ -412,6 +412,7 @@ custom_unary_op!(Cbrt, "cbrt", |v| v.cbrt(), (BF16, F16, F32, F64));
 custom_unary_op!(Cosh, "cosh", |v| v.cosh(), (BF16, F16, F32, F64));
 custom_unary_op!(Erfc, "erfc", |v| erfc(v), (BF16, F16, F32, F64));
 custom_unary_op!(ErfInv, "erf_inv", |v| erf_inv(v), (BF16, F16, F32, F64));
+custom_unary_op!(Expm1, "expm1", |v| v.exp_m1(), (BF16, F16, F32, F64));
 custom_unary_op!(Log1p, "ln_1p", |v| v.ln_1p(), (BF16, F16, F32, F64));
 custom_unary_op!(Sigmoid, "sigmoid", |v| 1. / (1. + (-v).exp()), (F32, F64));
 custom_unary_op!(Sinh, "sinh", |v| v.sinh(), (BF16, F16, F32, F64));
