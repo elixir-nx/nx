@@ -344,6 +344,21 @@ defmodule Candlex.Backend do
   end
 
   @impl true
+  def indexed_add(%T{} = out, %T{shape: {_}} = tensor, %T{} = indices, %T{} = updates) do
+    {tensor, updates} = maybe_upcast(tensor, updates)
+
+    tensor
+    |> from_nx()
+    |> Native.index_add(from_nx(Nx.flatten(indices)), from_nx(updates), 0)
+    |> unwrap!()
+    |> to_nx(out)
+  end
+
+  def indexed_add(%T{} = _out, %T{} = _tensor, %T{} = _indices, %T{} = _updates) do
+    raise("unsupported indexed_add for tensor of rank greater than 1")
+  end
+
+  @impl true
   def put_slice(%T{} = out, %T{} = t, [start] = _start_indices, slice) do
     t
     |> from_nx()

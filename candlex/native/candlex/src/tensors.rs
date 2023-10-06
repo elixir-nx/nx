@@ -98,6 +98,11 @@ pub fn index_select(t: ExTensor, indexes: ExTensor, dim: usize) -> Result<ExTens
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+pub fn index_add(t: ExTensor, indexes: ExTensor, source: ExTensor, dim: usize) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(t.index_add(indexes.deref(), source.deref(), dim)?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 pub fn chunk(t: ExTensor, num_chunks: usize) -> Result<Vec<ExTensor>, CandlexError> {
     Ok(t.chunk(num_chunks, 0)?
         .into_iter()

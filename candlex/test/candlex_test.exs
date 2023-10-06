@@ -1546,6 +1546,34 @@ defmodule CandlexTest do
       # |> assert_equal(t([1, 12, 112]))
     end
 
+    test "indexed_add" do
+      t([1.0])
+      |> Nx.indexed_add(t([[0], [0]]), t([1, 1]))
+      |> assert_equal(t([3.0]))
+
+      t([1])
+      |> Nx.indexed_add(t([[0], [0]]), t([1.0, 1.0]))
+      |> assert_equal(t([3.0]))
+
+      t([1], type: :u8)
+      |> Nx.indexed_add(t([[0], [0]]), t([1, 1], type: :s64))
+      |> assert_equal(t([3]))
+
+      # Nx.iota({1, 2, 3})
+      # |> Nx.indexed_add(
+      #   t([[0, 0, 0], [0, 1, 1], [0, 0, 0], [0, 0, 2], [0, 1, 2]]),
+      #   t([1, 3, 1, -2, 5])
+      # )
+      # |> assert_equal(t(
+      #   [
+      #     [
+      #       [2, 1, 0],
+      #       [3, 7, 10]
+      #     ]
+      #   ]
+      # ))
+    end
+
     test "transpose" do
       t(1)
       |> Nx.transpose()

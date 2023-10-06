@@ -11,6 +11,7 @@ defmodule Candlex.Native do
   def narrow(_tensor, _dim, _start, _length), do: error()
   def gather(_tensor, _indexes, _dim), do: error()
   def index_select(_tensor, _indexes, _dim), do: error()
+  def index_add(_tensor, _indexes, _source, _dim), do: error()
   def chunk(_tensor, _num_chunks), do: error()
   def squeeze(_tensor, _dim), do: error()
   def arange(_start, _end, _dtype, _shape, _device), do: error()

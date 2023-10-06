@@ -52,6 +52,7 @@ rustler::init! {
         tensors::narrow,
         tensors::gather,
         tensors::index_select,
+        tensors::index_add,
         tensors::chunk,
         tensors::squeeze,
         tensors::clamp,
