@@ -1523,6 +1523,29 @@ defmodule CandlexTest do
       ))
     end
 
+    test "gather" do
+      t([1, 2, 3, 4])
+      |> Nx.gather(t([[3], [1], [2]]))
+      |> assert_equal(t([4, 2, 3]))
+
+      # t([[1, 2], [3, 4]])
+      # |> Nx.gather(t([[1, 1], [0, 1], [1, 0]]))
+      # |> assert_equal(t([4, 2, 3]))
+
+      # t([[1, 2], [3, 4]])
+      # |> Nx.gather(t([[[1, 1], [0, 0]], [[1, 0], [0, 1]]]))
+      # |> assert_equal(t(
+      #   [
+      #     [4, 1],
+      #     [3, 2]
+      #   ]
+      # ))
+
+      # t([[[1, 2], [11, 12]], [[101, 102], [111, 112]]])
+      # |> Nx.gather(t([[0, 0, 0], [0, 1, 1], [1, 1, 1]]))
+      # |> assert_equal(t([1, 12, 112]))
+    end
+
     test "transpose" do
       t(1)
       |> Nx.transpose()

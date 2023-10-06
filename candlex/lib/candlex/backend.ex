@@ -331,6 +331,19 @@ defmodule Candlex.Backend do
   # Indexed
 
   @impl true
+  def gather(%T{} = out, %T{shape: {_}} = tensor, %T{} = indices) do
+    tensor
+    |> from_nx()
+    |> Native.gather(from_nx(Nx.flatten(indices)), 0)
+    |> unwrap!()
+    |> to_nx(out)
+  end
+
+  def gather(%T{} = _out, %T{} = _tensor, %T{} = _indices) do
+    raise("unsupported gather for tensor of rank greater than 1")
+  end
+
+  @impl true
   def put_slice(%T{} = out, %T{} = t, [start] = _start_indices, slice) do
     t
     |> from_nx()
