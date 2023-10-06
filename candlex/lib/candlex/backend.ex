@@ -812,6 +812,69 @@ defmodule Candlex.Backend do
     |> Stream.map(&to_nx(&1, out))
   end
 
+  for op <- [
+    :cholesky,
+    :conjugate,
+    :count_leading_zeros,
+    :imag,
+    :population_count,
+    :real
+  ] do
+    @impl true
+    def unquote(op)(_out, _tensor) do
+      raise "unsupported Candlex.Backend.#{unquote(op)} function"
+    end
+  end
+
+  for op <- [
+    :any,
+    :argsort,
+    :eigh,
+    :fft,
+    :ifft,
+    :lu,
+    :product,
+    :qr,
+    :reverse,
+    :sort,
+  ] do
+    @impl true
+    def unquote(op)(_out, _tensor, _) do
+      raise "unsupported Candlex.Backend.#{unquote(op)} function"
+    end
+  end
+
+  for op <- [
+    :indexed_put,
+    :map,
+    :triangular_solve,
+    :window_max,
+    :window_min,
+    :window_product,
+    :window_sum
+  ] do
+    @impl true
+    def unquote(op)(_out, _tensor, _, _) do
+      raise "unsupported Candlex.Backend.#{unquote(op)} function"
+    end
+  end
+
+  @impl true
+  def reduce(_out, _tensor, _, _, _) do
+    raise "unsupported Candlex.Backend.reduce function"
+  end
+
+  for op <- [
+    :window_reduce,
+    :window_scatter_max,
+    :window_scatter_min
+  ] do
+    @impl true
+    def unquote(op)(_out, _tensor, _, _, _, _) do
+      raise "unsupported Candlex.Backend.#{unquote(op)} function"
+    end
+  end
+
   defp permute(native_tensor, permutation) do
     native_tensor
     |> Native.permute(permutation)
