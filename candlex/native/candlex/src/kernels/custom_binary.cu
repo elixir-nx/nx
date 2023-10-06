@@ -8,6 +8,8 @@
 #define DEVICE_FN_DOUBLE_WRAPPER(FN_NAME) \
   __device__ __forceinline__ double FN_NAME##g(double a, double b) { return FN_NAME(a, b); }
 
+DEVICE_FN_FLOAT_WRAPPER(atan2)
+DEVICE_FN_DOUBLE_WRAPPER(atan2)
 DEVICE_FN_FLOAT_WRAPPER(pow)
 DEVICE_FN_DOUBLE_WRAPPER(pow)
 DEVICE_FN_FLOAT_WRAPPER(remainder)
@@ -80,6 +82,8 @@ extern "C" __global__ void FN_NAME( \
 #define CUSTOM_BINARY_OP(TYPENAME, FN_NAME, FUNC) \
   CUSTOM_BINARY_OP_OUT(TYPENAME, TYPENAME, FN_NAME, FUNC)
 
+CUSTOM_BINARY_OP(float, atan2_f32, atan2g(x, y))
+CUSTOM_BINARY_OP(double, atan2_f64, atan2g(x, y))
 CUSTOM_BINARY_OP(uint32_t, bit_and_u32, x & y)
 CUSTOM_BINARY_OP(int64_t, bit_and_i64, x & y)
 CUSTOM_BINARY_OP(uint32_t, bit_or_u32, x | y)

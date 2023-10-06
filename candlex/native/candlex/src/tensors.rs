@@ -1,9 +1,9 @@
 use crate::atoms;
 use crate::error::CandlexError;
 use crate::ops::{
-    Acos, Acosh, Asin, Asinh, Atan, Atanh, BitAnd, BitNot, BitOr, BitXor, Cbrt, Cosh, ErfInv, Erfc,
-    Expm1, IsInf, IsNan, Log1p, LogicalAnd, LogicalOr, LogicalXor, Pow, Remainder, Shl, Shr,
-    Sigmoid, Sinh, Tan,
+    Acos, Acosh, Asin, Asinh, Atan, Atan2, Atanh, BitAnd, BitNot, BitOr, BitXor, Cbrt, Cosh,
+    ErfInv, Erfc, Expm1, IsInf, IsNan, Log1p, LogicalAnd, LogicalOr, LogicalXor, Pow, Remainder,
+    Shl, Shr, Sigmoid, Sinh, Tan,
 };
 use candle_core::{DType, Device, Tensor};
 use half::{bf16, f16};
@@ -403,6 +403,7 @@ binary_nif!(less, lt);
 binary_nif!(less_equal, le);
 binary_nif!(matmul, broadcast_matmul);
 
+custom_binary_nif!(atan2, Atan2);
 custom_binary_nif!(bitwise_and, BitAnd);
 custom_binary_nif!(bitwise_or, BitOr);
 custom_binary_nif!(bitwise_xor, BitXor);

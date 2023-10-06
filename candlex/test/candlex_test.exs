@@ -256,6 +256,28 @@ defmodule CandlexTest do
       |> assert_equal(t(9))
     end
 
+    test "atan2" do
+      Nx.atan2(1.0, 2.0)
+      |> assert_close(t(0.46364760398864746))
+
+      t([1.0, 2, 3])
+      |> Nx.atan2(1)
+      |> assert_close(t([0.7853981852531433, 1.1071487665176392, 1.249045729637146]))
+
+      1.0
+      |> Nx.atan2(t([1.0, 2.0, 3.0]))
+      |> assert_close(t([0.7853981852531433, 0.46364760398864746, 0.32175055146217346]))
+
+      t([[-0.0], [0.0]], type: :f64)
+      |> Nx.atan2(t([-0.0, 0.0], type: :f64))
+      |> assert_close(t(
+        [
+          [-3.141592653589793, -0.0],
+          [3.141592653589793, 0.0]
+        ]
+      ))
+    end
+
     test "broadcast" do
       Nx.broadcast(1, {1, 2, 3})
       |> assert_equal(t([[[1, 1, 1], [1, 1, 1]]]))

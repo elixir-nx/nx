@@ -64,6 +64,7 @@ defmodule Candlex.Native do
 
   for op <- [
         :add,
+        :atan2,
         :bitwise_and,
         :bitwise_or,
         :bitwise_xor,

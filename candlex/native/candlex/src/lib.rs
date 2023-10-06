@@ -26,6 +26,7 @@ rustler::init! {
         tensors::from_binary,
         tensors::to_binary,
         tensors::add,
+        tensors::atan2,
         tensors::subtract,
         tensors::multiply,
         tensors::divide,
