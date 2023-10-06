@@ -2176,7 +2176,7 @@ defmodule CandlexTest do
     Nx.tensor(values, opts)
   end
 
-  defp check(value, opts \\ []) do
+  defp check(value, opts) do
     tensor = t(value, opts)
 
     tensor
