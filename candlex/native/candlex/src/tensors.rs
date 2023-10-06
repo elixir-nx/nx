@@ -422,6 +422,7 @@ custom_unary_nif!(tan, Tan);
 binary_nif!(add, broadcast_add);
 binary_nif!(subtract, broadcast_sub);
 binary_nif!(multiply, broadcast_mul);
+binary_nif!(quotient, broadcast_div);
 binary_nif!(max, broadcast_maximum);
 binary_nif!(min, broadcast_minimum);
 binary_nif!(equal, eq);

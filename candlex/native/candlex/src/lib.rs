@@ -30,6 +30,7 @@ rustler::init! {
         tensors::subtract,
         tensors::multiply,
         tensors::divide,
+        tensors::quotient,
         tensors::remainder,
         tensors::pow,
         tensors::max,

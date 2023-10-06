@@ -256,6 +256,46 @@ defmodule CandlexTest do
       |> assert_equal(t(9))
     end
 
+    test "quotient" do
+      Nx.quotient(11, 2)
+      |> assert_equal(t(5))
+
+      t([2, 4, 5])
+      |> Nx.quotient(2)
+      |> assert_equal(t([1, 2, 2]))
+
+      10
+      |> Nx.quotient(t([1, 2, 3]))
+      |> assert_equal(t([10, 5, 3]))
+
+      t([[10, 20]], names: [nil, :y])
+      |> Nx.quotient(t([[1], [2]], names: [:x, nil]))
+      |> assert_equal(t(
+        [
+          [10, 20],
+          [5, 10]
+        ]
+      ))
+
+      t([[10, 20]])
+      |> Nx.quotient(t([[1], [2]]))
+      |> assert_equal(t(
+        [
+          [10, 20],
+          [5, 10]
+        ]
+      ))
+
+      t([[10, 20]], type: :u8)
+      |> Nx.quotient(t([[1], [2]], type: :u32))
+      |> assert_equal(t(
+        [
+          [10, 20],
+          [5, 10]
+        ]
+      ))
+    end
+
     test "atan2" do
       Nx.atan2(1.0, 2.0)
       |> assert_close(t(0.46364760398864746))
