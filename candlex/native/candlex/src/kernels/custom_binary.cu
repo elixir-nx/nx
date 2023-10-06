@@ -10,10 +10,10 @@
 
 DEVICE_FN_FLOAT_WRAPPER(atan2)
 DEVICE_FN_DOUBLE_WRAPPER(atan2)
+DEVICE_FN_FLOAT_WRAPPER(fmod)
+DEVICE_FN_DOUBLE_WRAPPER(fmod)
 DEVICE_FN_FLOAT_WRAPPER(pow)
 DEVICE_FN_DOUBLE_WRAPPER(pow)
-DEVICE_FN_FLOAT_WRAPPER(remainder)
-DEVICE_FN_DOUBLE_WRAPPER(remainder)
 
 #define CUSTOM_BINARY_OP_OUT(TYPENAME, OUT_TYPENAME, FN_NAME, FUNC) \
 extern "C" __global__ void FN_NAME( \
@@ -92,8 +92,8 @@ CUSTOM_BINARY_OP(uint32_t, bit_xor_u32, x ^ y)
 CUSTOM_BINARY_OP(int64_t, bit_xor_i64, x ^ y)
 CUSTOM_BINARY_OP(float, pow_f32, powg(x, y))
 CUSTOM_BINARY_OP(double, pow_f64, powg(x, y))
-CUSTOM_BINARY_OP(float, remainder_f32, remainderg(x, y))
-CUSTOM_BINARY_OP(double, remainder_f64, remainderg(x, y))
+CUSTOM_BINARY_OP(float, remainder_f32, fmodg(x, y))
+CUSTOM_BINARY_OP(double, remainder_f64, fmodg(x, y))
 CUSTOM_BINARY_OP(uint32_t, shl_u32, x << y)
 CUSTOM_BINARY_OP(int64_t, shl_i64, x << y)
 CUSTOM_BINARY_OP(uint32_t, shr_u32, x >> y)
