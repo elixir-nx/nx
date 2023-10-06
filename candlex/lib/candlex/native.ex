@@ -95,7 +95,7 @@ defmodule Candlex.Native do
   def sum(_tensor, _dims, _keep_dims), do: error()
   def permute(_tensor, _dims), do: error()
 
-  for op <- [:argmax, :argmin, :reduce_max] do
+  for op <- [:argmax, :argmin, :reduce_max, :reduce_min] do
     def unquote(op)(_tensor, _dim, _keep_dim), do: error()
   end
 

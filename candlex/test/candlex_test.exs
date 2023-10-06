@@ -1485,6 +1485,40 @@ defmodule CandlexTest do
       # ))
     end
 
+    test "reduce_min" do
+      Nx.reduce_min(t(42))
+      |> assert_equal(t(42))
+
+      Nx.reduce_min(t(42.0))
+      |> assert_equal(t(42.0))
+
+      Nx.reduce_min(t([1, 2, 3]))
+      |> assert_equal(t(1))
+
+      t([[3, 1, 4], [2, 1, 1]], names: [:x, :y])
+      |> Nx.reduce_min(axes: [:x])
+      |> assert_equal(t([2, 1, 1]))
+
+      t([[3, 1, 4], [2, 1, 1]], names: [:x, :y])
+      |> Nx.reduce_min(axes: [:y])
+      |> assert_equal(t([1, 1]))
+
+      # t([[[1, 2], [4, 5]], [[2, 4], [3, 8]]], names: [:x, :y, :z])
+      # |> Nx.reduce_min(axes: [:x, :z])
+      # |> assert_equal(t([1, 3]))
+
+      # t([[[1, 2], [4, 5]], [[2, 4], [3, 8]]], names: [:x, :y, :z])
+      # |> Nx.reduce_min(axes: [:x, :z], keep_axes: true)
+      # |> assert_equal(t(
+      #   [
+      #     [
+      #       [1],
+      #       [3]
+      #     ]
+      #   ]
+      # ))
+    end
+
     test "take_along_axis" do
       t([[1, 2, 3], [4, 5, 6]])
       |> Nx.take_along_axis(

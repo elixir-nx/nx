@@ -185,6 +185,30 @@ defmodule Candlex.Backend do
     |> to_nx(out)
   end
 
+  @impl true
+  def reduce_min(%T{} = out, %T{shape: {}} = tensor, _opts) do
+    out
+    |> from_binary(to_binary(tensor), [])
+  end
+
+  def reduce_min(%T{} = out, %T{} = tensor, opts) do
+    axis =
+      case opts[:axes] do
+        nil -> 0
+        [] -> 0
+        [axis] -> axis
+        axes -> raise "doesn't support axes option with more than 1 axis, '#{inspect(axes)}'"
+      end
+
+    keep_axis = opts[:keep_axes] || false
+
+    tensor
+    |> from_nx()
+    |> Native.reduce_min(axis, keep_axis)
+    |> unwrap!()
+    |> to_nx(out)
+  end
+
   # Element-wise
 
   @impl true

@@ -47,6 +47,7 @@ rustler::init! {
         tensors::argmax,
         tensors::argmin,
         tensors::reduce_max,
+        tensors::reduce_min,
         tensors::negate,
         tensors::where_cond,
         tensors::narrow,
