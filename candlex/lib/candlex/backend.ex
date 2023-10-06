@@ -384,23 +384,21 @@ defmodule Candlex.Backend do
   end
 
   @impl true
-  def put_slice(%T{} = out, %T{} = t, [start] = _start_indices, slice) do
-    t
-    |> from_nx()
-    |> Native.slice_scatter(from_nx(slice), 0, Nx.to_number(start))
-    |> unwrap!()
-    |> to_nx(out)
-  end
+  def put_slice(%T{} = out, %T{} = t, [_ | _] = start_indices, slice) do
+    [last_start_index | leading_start_indices] = Enum.reverse(start_indices)
 
-  def put_slice(%T{} = out, %T{} = t, [start1, start2] = _start_indices, slice) do
-    if Nx.equal(start1, 0) do
+    if Enum.all?(leading_start_indices, fn i -> Nx.equal(i, 0) end) do
       t
       |> from_nx()
-      |> Native.slice_scatter(from_nx(slice), 1, Nx.to_number(start2))
+      |> Native.slice_scatter(
+        from_nx(slice),
+        length(start_indices) - 1,
+        Nx.to_number(last_start_index)
+      )
       |> unwrap!()
       |> to_nx(out)
     else
-      raise "unsupported"
+      raise "put_slice only supports last start index not to be 0 for now"
     end
   end
 
