@@ -81,6 +81,7 @@ rustler::init! {
         tensors::cos,
         tensors::cosh,
         tensors::sigmoid,
+        tensors::sign,
         tensors::sin,
         tensors::sinh,
         tensors::erf,

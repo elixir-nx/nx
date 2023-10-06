@@ -296,6 +296,12 @@ defmodule CandlexTest do
       ))
     end
 
+    test "sign" do
+      t([-2, -1, 0, 1, 2])
+      |> Nx.sign()
+      |> assert_equal(t([-1, -1, 0, 1, 1]))
+    end
+
     test "atan2" do
       Nx.atan2(1.0, 2.0)
       |> assert_close(t(0.46364760398864746))

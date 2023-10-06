@@ -54,6 +54,7 @@ defmodule Candlex.Native do
         :round,
         :rsqrt,
         :sigmoid,
+        :sign,
         :sin,
         :sinh,
         :sqrt,

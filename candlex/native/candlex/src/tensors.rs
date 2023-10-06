@@ -3,7 +3,7 @@ use crate::error::CandlexError;
 use crate::ops::{
     Acos, Acosh, Asin, Asinh, Atan, Atan2, Atanh, BitAnd, BitNot, BitOr, BitXor, Cbrt, Cosh,
     ErfInv, Erfc, Expm1, IsInf, IsNan, Log1p, LogicalAnd, LogicalOr, LogicalXor, Pow, Remainder,
-    Shl, Shr, Sigmoid, Sinh, Tan,
+    Shl, Shr, Sigmoid, Sign, Sinh, Tan,
 };
 use candle_core::{DType, Device, Tensor};
 use half::{bf16, f16};
@@ -416,6 +416,7 @@ custom_unary_nif!(is_infinity, IsInf);
 custom_unary_nif!(is_nan, IsNan);
 custom_unary_nif!(log1p, Log1p);
 custom_unary_nif!(sigmoid, Sigmoid);
+custom_unary_nif!(sign, Sign);
 custom_unary_nif!(sinh, Sinh);
 custom_unary_nif!(tan, Tan);
 

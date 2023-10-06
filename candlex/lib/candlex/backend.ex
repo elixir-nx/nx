@@ -336,6 +336,7 @@ defmodule Candlex.Backend do
         :round,
         :rsqrt,
         :sigmoid,
+        :sign,
         :sin,
         :sinh,
         :sqrt,
