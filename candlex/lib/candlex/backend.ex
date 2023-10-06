@@ -238,7 +238,7 @@ defmodule Candlex.Backend do
     end
   end
 
-  for op <- [:pow] do
+  for op <- [:pow, :remainder] do
     @impl true
     def unquote(op)(%T{} = out, %T{} = left, %T{} = right) do
       {left, right} = maybe_upcast(left, right)

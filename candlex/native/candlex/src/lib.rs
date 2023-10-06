@@ -29,6 +29,7 @@ rustler::init! {
         tensors::subtract,
         tensors::multiply,
         tensors::divide,
+        tensors::remainder,
         tensors::pow,
         tensors::max,
         tensors::min,

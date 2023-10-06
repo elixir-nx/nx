@@ -83,6 +83,7 @@ defmodule Candlex.Native do
         :multiply,
         :not_equal,
         :pow,
+        :remainder,
         :right_shift,
         :subtract
       ] do

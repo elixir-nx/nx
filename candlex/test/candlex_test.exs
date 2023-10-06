@@ -214,6 +214,48 @@ defmodule CandlexTest do
       ))
     end
 
+    test "remainder" do
+      Nx.remainder(1, 2)
+      |> assert_equal(t(1))
+
+      t([1, 2, 3])
+      |> Nx.remainder(2)
+      |> assert_equal(t([1, 0, 1]))
+
+      2
+      |> Nx.remainder(t([1.0, 2.0, 3.0]))
+      |> assert_equal(t([0.0, 0.0, 2.0]))
+
+      t([[10], [20]], names: [:x, :y])
+      |> Nx.remainder(t([[3, 4]], names: [nil, :y]))
+      |> assert_equal(t(
+        [
+          [1, 2],
+          [2, 0]
+        ]
+      ))
+
+      left = t(-11)
+      right = t(10, type: :u8)
+
+      Nx.remainder(left, right)
+      |> assert_equal(t(-1))
+
+      left
+      |> Nx.add(t(20))
+      |> Nx.remainder(right)
+      |> assert_equal(t(9))
+
+      positive_left = t(9, type: :u8)
+      Nx.remainder(positive_left, right)
+      |> assert_equal(t(9))
+
+      positive_left
+      |> Nx.add(Nx.tensor(20, type: :u8))
+      |> Nx.remainder(right)
+      |> assert_equal(t(9))
+    end
+
     test "broadcast" do
       Nx.broadcast(1, {1, 2, 3})
       |> assert_equal(t([[[1, 1, 1], [1, 1, 1]]]))
