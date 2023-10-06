@@ -98,8 +98,17 @@ pub fn index_select(t: ExTensor, indexes: ExTensor, dim: usize) -> Result<ExTens
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-pub fn index_add(t: ExTensor, indexes: ExTensor, source: ExTensor, dim: usize) -> Result<ExTensor, CandlexError> {
-    Ok(ExTensor::new(t.index_add(indexes.deref(), source.deref(), dim)?))
+pub fn index_add(
+    t: ExTensor,
+    indexes: ExTensor,
+    source: ExTensor,
+    dim: usize,
+) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(t.index_add(
+        indexes.deref(),
+        source.deref(),
+        dim,
+    )?))
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
@@ -201,7 +210,11 @@ pub fn reduce_max(
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-pub fn reduce_min(ex_tensor: ExTensor, dim: usize, keep_dim: bool) -> Result<ExTensor, CandlexError> {
+pub fn reduce_min(
+    ex_tensor: ExTensor,
+    dim: usize,
+    keep_dim: bool,
+) -> Result<ExTensor, CandlexError> {
     let t = if keep_dim {
         ex_tensor.min_keepdim(dim)?
     } else {
