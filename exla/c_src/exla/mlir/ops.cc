@@ -1148,3 +1148,19 @@ ERL_NIF_TERM mlir_convolution(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
 
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
+
+ERL_NIF_TERM mlir_create_token(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+
+  mlir::Value token = (*function)->CreateTokenOp();
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, token));
+}

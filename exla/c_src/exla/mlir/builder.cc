@@ -1032,4 +1032,10 @@ mlir::Value MLIRFunction::ConvOp(
       nullptr);
 }
 
+mlir::Value MLIRFunction::CreateTokenOp() {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+  return builder->create<mlir::mhlo::CreateTokenOp>(builder->getUnknownLoc());
+}
+
 }  // namespace exla
