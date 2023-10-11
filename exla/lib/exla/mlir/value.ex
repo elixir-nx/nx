@@ -121,6 +121,7 @@ defmodule EXLA.MLIR.Value do
 
     in_refs =
       Enum.map(values, fn %Value{ref: ref, function: %Function{ref: ^func_ref}} -> ref end)
+      dbg()
 
     out_refs =
       EXLA.NIF.mlir_sort(
@@ -375,7 +376,7 @@ defmodule EXLA.MLIR.Value do
       ) do
     precision_config = get_precision_config_int(precision_config)
 
-    [value_ref, idx_ref] =
+    ref =
       EXLA.NIF.mlir_convolution(
         func.ref,
         tensor.ref,
@@ -392,12 +393,35 @@ defmodule EXLA.MLIR.Value do
       )
       |> unwrap!()
 
-    {%Value{tensor | ref: value_ref}, %Value{tensor | ref: idx_ref}}
+    %{tensor | ref: ref}
   end
 
   def top_k(%Value{function: func} = tensor, k) do
-    ref = EXLA.NIF.mlir_top_k(func.ref, tensor.ref, k)
-    %{tensor | ref: ref}
+    # mlir::mhlo::TopKOp cannot be translated to XLA HLO, so we'll use
+    # variadic sort to implement it instead.
+
+    shape_ref = EXLA.NIF.mlir_get_shape(tensor.ref) |> unwrap!()
+    shape = EXLA.Shape.get_shape_info(shape_ref)
+    dims = shape.dims
+    rank = tuple_size(dims)
+    iota = iota(func, shape, rank - 1)
+
+    [values, indices] = sort([tensor, iota], rank - 1, :desc)
+
+    strides = List.duplicate(1, rank)
+    starts = List.duplicate(0, rank)
+    limits = Enum.map(0..(rank - 1), fn axis ->
+      if axis == rank - 1 do
+        k
+      else
+        elem(dims, axis)
+      end
+    end)
+
+    values = slice(values, starts, limits, strides)
+    indices = slice(indices, starts, limits, strides)
+
+    tuple([values, indices])
   end
 
   defp unwrap!({:ok, value}), do: value

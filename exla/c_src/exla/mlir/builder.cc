@@ -1065,15 +1065,4 @@ mlir::Value MLIRFunction::CreateTokenOp() {
   return builder->create<mlir::mhlo::CreateTokenOp>(builder->getUnknownLoc());
 }
 
-std::vector<mlir::Value> MLIRFunction::TopKOp(mlir::Value tensor, uint64_t k) {
-  auto builder = module_->builder();
-  builder->setInsertionPointToEnd(&func_->getBody().back());
-  mlir::mhlo::TopKOp top_k = builder->create<mlir::mhlo::TopKOp>(builder->getUnknownLoc(), tensor, k);
-
-  std::vector<mlir::Value> values(2);
-  values[0] = top_k.getValues();
-  values[1] = top_k.getIndices();
-  return values;
-}
-
 }  // namespace exla

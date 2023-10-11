@@ -117,8 +117,6 @@ defmodule EXLA.NIF do
 
   def mlir_create_token(_function), do: :erlang.nif_error(:undef)
 
-  def mlir_top_k(_function, _tensor, _k), do: :erlang.nif_error(:undef)
-
   def new_builder(_name),
     do: :erlang.nif_error(:undef)
 

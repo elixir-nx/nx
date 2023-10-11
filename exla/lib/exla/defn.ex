@@ -549,22 +549,12 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(
          :optional,
-         %T{data: %Expr{args: [%{data: %{op: :top_k, args: [%Value{} = tensor, opts]}}, _expr]}},
-         state,
-         cache
-       ) do
-    {tensor, cache} = recur_operator(tensor, state, cache)
-    {Value.top_k(tensor, Keyword.fetch!(opts, :k)), cache}
-  end
-
-  defp cached_recur_operator(
-         :optional,
          %T{data: %Expr{args: [%{data: %{op: :top_k, args: [tensor, opts]}}, _expr]}},
          state,
          cache
        ) do
-    {tensor, cache} = recur_operator(tensor, state, cache)
-    {EXLA.Op.top_k(tensor, Keyword.fetch!(opts, :k)), cache}
+    {%mod{} = tensor, cache} = recur_operator(tensor, state, cache)
+    {mod.top_k(tensor, Keyword.fetch!(opts, :k)), cache}
   end
 
   defp cached_recur_operator(
