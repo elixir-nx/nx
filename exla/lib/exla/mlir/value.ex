@@ -163,6 +163,13 @@ defmodule EXLA.MLIR.Value do
   end
 
   def constant_r0(%Function{} = func, value, type) do
+    value =
+      if Nx.Type.float?(type) and not is_float(value) do
+        value * 1.0
+      else
+        value
+      end
+
     ref =
       EXLA.NIF.mlir_constant_r0(func.ref, value, EXLA.Shape.dtype_to_charlist(type)) |> unwrap!()
 
