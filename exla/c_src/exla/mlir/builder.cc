@@ -776,7 +776,6 @@ std::vector<mlir::Value> MLIRFunction::ReduceOp(
   mlir::DenseIntElementsAttr dimensions_attr = Int64ToDenseIntElementsAttr(builder, dimensions);
 
   mlir::mhlo::ReduceOp reduce_op = builder->create<mlir::mhlo::ReduceOp>(builder->getUnknownLoc(), init_values_range, inputs_range, dimensions_attr);
-  
   mlir::Region &reduceBody = reduce_op.getRegion();
   mlir::Region &funcBody = reducer->function()->getBody();
   reduceBody.getBlocks().splice(reduceBody.end(), funcBody.getBlocks());

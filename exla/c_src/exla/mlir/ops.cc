@@ -774,7 +774,7 @@ ERL_NIF_TERM mlir_reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get_list(env, argv[3], inputs)) {
     return exla::nif::error(env, "Unable to get inputs.");
   }
-  if (!exla::nif::get_list(env, argv[4], dimensions)) {
+  if (!exla::nif::get_tuple(env, argv[4], dimensions)) {
     return exla::nif::error(env, "Unable to get dimensions.");
   }
 
