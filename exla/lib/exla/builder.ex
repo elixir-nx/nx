@@ -34,8 +34,8 @@ defmodule EXLA.Builder do
     |> EXLA.Shape.make_tuple_shape()
   end
 
-  defp exla_shape(%Nx.Tensor{} = t) do
-    EXLA.Shape.make_shape(t.type, t.shape)
+  defp exla_shape(%{shape: shape, type: type}) do
+    EXLA.Shape.make_shape(type, shape)
   end
 
   defp new(name) when is_binary(name) do

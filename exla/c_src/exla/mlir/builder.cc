@@ -762,6 +762,29 @@ mlir::Value MLIRFunction::ScatterOp(mlir::Value target, mlir::Value indices, mli
   return scatter_op.getResult(0);
 }
 
+std::vector<mlir::Value> MLIRFunction::ReduceOp(
+  MLIRFunction * reducer,
+  std::vector<mlir::Value> init_values,
+  std::vector<mlir::Value> inputs,
+  std::vector<int64_t> dimensions
+) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+
+  mlir::ValueRange init_values_range(init_values);
+  mlir::ValueRange inputs_range(inputs);
+  mlir::DenseIntElementsAttr dimensions_attr = Int64ToDenseIntElementsAttr(builder, dimensions);
+
+  mlir::mhlo::ReduceOp reduce_op = builder->create<mlir::mhlo::ReduceOp>(builder->getUnknownLoc(), init_values_range, inputs_range, dimensions_attr);
+  
+  mlir::Region &reduceBody = reduce_op.getRegion();
+  mlir::Region &funcBody = reducer->function()->getBody();
+  reduceBody.getBlocks().splice(reduceBody.end(), funcBody.getBlocks());
+
+  mlir::Operation::result_range results = reduce_op.getResults();
+  return std::vector<mlir::Value>(results.begin(), results.end());
+}
+
 mlir::Value MLIRFunction::SelectAndScatterOp(
     mlir::Value target,
     mlir::Value source,
