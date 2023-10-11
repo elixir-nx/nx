@@ -717,6 +717,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_convolution", 12, mlir_convolution},
     {"mlir_create_token", 1, mlir_create_token},
     {"mlir_triangular_solve", 6, mlir_triangular_solve},
+    {"mlir_dynamic_update_slice", 4, mlir_dynamic_update_slice},
     // XlaBuilder
     {"new_builder", 1, new_builder},
     {"create_sub_builder", 2, create_sub_builder},

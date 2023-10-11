@@ -1077,4 +1077,10 @@ mlir::Value MLIRFunction::TriangularSolveOp(mlir::Value a, mlir::Value b, bool l
   return builder->create<mlir::mhlo::TriangularSolveOp>(builder->getUnknownLoc(), a, b, left_side, lower, false, transpose);
 }
 
+mlir::Value MLIRFunction::DynamicUpdateSliceOp(mlir::Value operand, mlir::Value update, std::vector<mlir::Value> start_indices) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+  return builder->create<mlir::mhlo::DynamicUpdateSliceOp>(builder->getUnknownLoc(), operand, update, mlir::ValueRange(start_indices));
+}
+
 }  // namespace exla

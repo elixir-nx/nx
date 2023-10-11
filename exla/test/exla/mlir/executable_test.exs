@@ -851,4 +851,50 @@ defmodule EXLA.MLIR.ExecutableTest do
       )
     end
   end
+
+  describe "put_slice" do
+    test "purely static starts" do
+      t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      u = Nx.tensor([[7, 8], [9, 10]])
+
+      result = EXLA.jit(&Nx.put_slice(&1, [0, 1], &2)).(t, u)
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [1, 7, 8],
+          [4, 9, 10]
+        ])
+      )
+    end
+
+    test "purely dynamic starts" do
+      t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      u = Nx.tensor([[7, 8], [9, 10]])
+
+      result = EXLA.jit(&Nx.put_slice(&1, [Nx.tensor(0), Nx.tensor(1)], &2)).(t, u)
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [1, 7, 8],
+          [4, 9, 10]
+        ])
+      )
+    end
+
+    test "mixed starts" do
+      t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      u = Nx.tensor([[7, 8], [9, 10]])
+      result = EXLA.jit(&Nx.put_slice(&1, [Nx.tensor(1), 1], &2), compiler_mode: :mlir).(t, u)
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [1, 7, 8],
+          [4, 9, 10]
+        ])
+      )
+    end
+  end
 end

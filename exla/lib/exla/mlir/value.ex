@@ -440,6 +440,19 @@ defmodule EXLA.MLIR.Value do
     %{a | ref: ref}
   end
 
+  def dynamic_update_slice(operand, updates, starts) do
+    ref =
+      EXLA.NIF.mlir_dynamic_update_slice(
+        operand.function.ref,
+        operand.ref,
+        updates.ref,
+        Enum.map(starts, & &1.ref)
+      )
+      |> unwrap!()
+
+    %{operand | ref: ref}
+  end
+
   defp unwrap!({:ok, value}), do: value
   defp unwrap!(other), do: raise("#{inspect(other)}")
 end

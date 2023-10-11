@@ -1418,6 +1418,12 @@ defmodule EXLA.Defn do
     end
   end
 
+  defp to_operator(:put_slice, [%Value{} = tensor, start_indices, slice], ans, _state) do
+    tensor = to_type(tensor, ans.type)
+    slice = to_type(slice, ans.type)
+    Value.dynamic_update_slice(tensor, slice, start_indices)
+  end
+
   defp to_operator(:put_slice, [tensor, start_indices, slice], ans, _state) do
     tensor = to_type(tensor, ans.type)
     slice = to_type(slice, ans.type)

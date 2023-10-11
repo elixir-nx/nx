@@ -120,6 +120,9 @@ defmodule EXLA.NIF do
   def mlir_triangular_solve(_function, _a, _b, _left_side, _lower, _transpose_a),
     do: :erlang.nif_error(:undef)
 
+  def mlir_dynamic_update_slice(_function, _operand, _updates, _starts),
+    do: :erlang.nif_error(:undef)
+
   def new_builder(_name),
     do: :erlang.nif_error(:undef)
 
