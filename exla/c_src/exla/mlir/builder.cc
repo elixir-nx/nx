@@ -1063,4 +1063,18 @@ mlir::Value MLIRFunction::CreateTokenOp() {
   return builder->create<mlir::mhlo::CreateTokenOp>(builder->getUnknownLoc());
 }
 
+mlir::Value MLIRFunction::TriangularSolveOp(mlir::Value a, mlir::Value b, bool left_side, bool lower, bool transpose_a) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+  mlir::mhlo::Transpose transpose = mlir::mhlo::Transpose::NO_TRANSPOSE;
+
+  if (a.getType().isa<mlir::ComplexType>() and transpose_a) {
+    transpose = mlir::mhlo::Transpose::ADJOINT;
+  } else if (transpose_a) {
+    transpose = mlir::mhlo::Transpose::TRANSPOSE;
+  }
+
+  return builder->create<mlir::mhlo::TriangularSolveOp>(builder->getUnknownLoc(), a, b, left_side, lower, false, transpose);
+}
+
 }  // namespace exla

@@ -815,4 +815,40 @@ defmodule EXLA.MLIR.ExecutableTest do
       )
     end
   end
+
+  describe "triangular_solve" do
+    test "supports options" do
+      a = Nx.tensor([[1, 1, 1], [0, 1, 1], [0, 0, 1]])
+      b = Nx.tensor([[3, 1], [2, -1], [1, -1]])
+
+      result =
+        EXLA.jit(&Nx.LinAlg.triangular_solve(&1, &2, left_side: true), compiler_mode: :mlir).(
+          a,
+          b
+        )
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [3.0, 1.0],
+          [2.0, -1.0],
+          [1.0, -1.0]
+        ])
+      )
+
+      result =
+        EXLA.jit(&Nx.LinAlg.triangular_solve(&1, &2, left_side: true, lower: false),
+          compiler_mode: :mlir
+        ).(a, b)
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [1.0, 2.0],
+          [1.0, 0.0],
+          [1.0, -1.0]
+        ])
+      )
+    end
+  end
 end

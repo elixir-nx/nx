@@ -1141,3 +1141,37 @@ ERL_NIF_TERM mlir_create_token(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv
 
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, token));
 }
+
+ERL_NIF_TERM mlir_triangular_solve(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 6) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+  // mlir::Value TriangularSolveOp(mlir::Value a, mlir::Value b, bool left_side, bool lower, bool transpose_a);
+
+  exla::MLIRFunction** function;
+  mlir::Value *a, *b;
+  bool left_side, lower, transpose_a;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], a)) {
+    return exla::nif::error(env, "Unable to get a.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[2], b)) {
+    return exla::nif::error(env, "Unable to get b.");
+  }
+  if (!exla::nif::get(env, argv[3], &left_side)) {
+    return exla::nif::error(env, "Unable to get left_side.");
+  }
+  if (!exla::nif::get(env, argv[4], &lower)) {
+    return exla::nif::error(env, "Unable to get lower.");
+  }
+  if (!exla::nif::get(env, argv[5], &transpose_a)) {
+    return exla::nif::error(env, "Unable to get transpose_a.");
+  }
+
+  mlir::Value res = (*function)->TriangularSolveOp(*a, *b, left_side, lower, transpose_a);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}

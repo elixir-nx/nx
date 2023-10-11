@@ -887,6 +887,28 @@ defmodule EXLA.Defn do
     EXLA.Op.select(pred, on_true, on_false)
   end
 
+  defp to_operator(:triangular_solve, [%Value{} = a, b, opts], %{type: type}, _state) do
+    left_side = Keyword.fetch!(opts, :left_side)
+    lower = Keyword.fetch!(opts, :lower)
+    transform = Keyword.fetch!(opts, :transform_a)
+
+    case Value.get_shape(b).dims do
+      {_} = b_shape ->
+        b =
+          b
+          |> to_type(type)
+          |> Value.reshape(Tuple.append(b_shape, 1))
+
+        to_type(a, type)
+        |> Value.triangular_solve(b, left_side, lower, transform)
+        |> Value.reshape(b_shape)
+
+      _ ->
+        to_type(a, type)
+        |> Value.triangular_solve(to_type(b, type), left_side, lower, transform)
+    end
+  end
+
   defp to_operator(:triangular_solve, [a, b, opts], %{type: type}, _state) do
     left_side = Keyword.fetch!(opts, :left_side)
     lower = Keyword.fetch!(opts, :lower)
