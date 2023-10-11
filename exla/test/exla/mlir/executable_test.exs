@@ -814,6 +814,41 @@ defmodule EXLA.MLIR.ExecutableTest do
     end
   end
 
+  describe "reduce" do
+    test "sum defaults" do
+      tensor = Nx.tensor([1, 2, 3, 4.0])
+
+      function = &Nx.sum/1
+
+      result_nx = Nx.Defn.jit_apply(function, [tensor], compiler: Nx.Defn.Evaluator)
+      result_mlir = Nx.Defn.jit_apply(function, [tensor])
+
+      assert_equal(result_nx, result_mlir)
+    end
+
+    test "sum custom axes" do
+      tensor = Nx.tensor([[[1, 2, 3.0], [4, 5, 6]]])
+
+      function = &Nx.sum(&1, axes: [0, 2])
+
+      result_nx = Nx.Defn.jit_apply(function, [tensor], compiler: Nx.Defn.Evaluator)
+      result_mlir = Nx.Defn.jit_apply(function, [tensor])
+
+      assert_equal(result_nx, result_mlir)
+    end
+
+    test "sum keep axes" do
+      tensor = Nx.tensor([[[1, 2, 3.0], [4, 5, 6]]])
+
+      function = &Nx.sum(&1, axes: [0, 2], keep_axes: true)
+
+      result_nx = Nx.Defn.jit_apply(function, [tensor], compiler: Nx.Defn.Evaluator)
+      result_mlir = Nx.Defn.jit_apply(function, [tensor])
+
+      assert_equal(result_nx, result_mlir)
+    end
+  end
+
   describe "triangular_solve" do
     test "supports options" do
       a = Nx.tensor([[1, 1, 1], [0, 1, 1], [0, 0, 1]])

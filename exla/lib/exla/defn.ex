@@ -1792,7 +1792,6 @@ defmodule EXLA.Defn do
 
   ## Computation helpers
 
-<<<<<<< HEAD
   defp sort_computation(op, type, args, state) do
     subbuilder = subbuilder(state.builder, Atom.to_string(op))
 
@@ -1827,7 +1826,7 @@ defmodule EXLA.Defn do
         {"p#{i}", computation_arg_shape(arg)}
       end)
 
-    function = EXLA.Builder.new(Atom.to_string(op), arg_shapes, out, :mlir)
+    function = EXLA.Builder.new(Atom.to_string(op), arg_shapes, struct(Nx.Tensor, out), :mlir)
 
     args = EXLA.MLIR.Function.get_arguments(function)
 
