@@ -1175,3 +1175,30 @@ ERL_NIF_TERM mlir_triangular_solve(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
 
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
+
+ERL_NIF_TERM mlir_dynamic_update_slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 4) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value *operand, *updates;
+  std::vector<mlir::Value> starts;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[2], updates)) {
+    return exla::nif::error(env, "Unable to get updates.");
+  }
+  if (!exla::nif::get_list<mlir::Value>(env, argv[3], starts)) {
+    return exla::nif::error(env, "Unable to get starts.");
+  }
+
+  mlir::Value res = (*function)->DynamicUpdateSliceOp(*operand, *updates, starts);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
