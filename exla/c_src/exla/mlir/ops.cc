@@ -1180,7 +1180,6 @@ ERL_NIF_TERM mlir_dynamic_update_slice(ErlNifEnv* env, int argc, const ERL_NIF_T
   if (argc != 4) {
     return exla::nif::error(env, "Bad argument count.");
   }
-  // mlir::Value TriangularSolveOp(mlir::Value a, mlir::Value b, bool left_side, bool lower, bool transpose_a);
 
   exla::MLIRFunction** function;
   mlir::Value *operand, *updates;
