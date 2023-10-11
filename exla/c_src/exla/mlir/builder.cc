@@ -58,6 +58,31 @@ mlir::TensorType GetMLIRType(mlir::OpBuilder *builder, std::vector<tsl::int64> d
   return mlir::RankedTensorType::get(dims, type);
 }
 
+mlir::Type GetMLIRFunctionType(mlir::OpBuilder *builder, xla::Shape *shape) {
+  if (shape->IsTuple()) {
+    // iterate through tuple types
+    std::vector<mlir::Type> element_types;
+    for (xla::Shape element : shape->tuple_shapes()) {
+      mlir::Type element_type;
+      if (element.IsTuple()) {
+        element_type = GetMLIRFunctionType(builder, &element);
+      } else {
+        auto span = element.dimensions();
+        std::vector<tsl::int64> dims(span.begin(), span.end());
+        element_type = GetMLIRType(builder, dims, element.element_type());
+      }
+      element_types.push_back(element_type);
+    }
+
+    mlir::TupleType tuple = mlir::TupleType::get(builder->getContext(), mlir::TypeRange(element_types));
+    return tuple;
+  }
+
+  auto span = shape->dimensions();
+  std::vector<tsl::int64> dims(span.begin(), span.end());
+  return GetMLIRType(builder, dims, shape->element_type());
+}
+
 mlir::mhlo::DotDimensionNumbersAttr ConvertDotDimensionNumbersToAttr(mlir::OpBuilder *builder, const xla::DotDimensionNumbers &dotDimNumbers) {
   std::vector<int64_t> lhsContractingVec(dotDimNumbers.lhs_contracting_dimensions().begin(),
                                          dotDimNumbers.lhs_contracting_dimensions().end());
@@ -959,16 +984,16 @@ xla::PrimitiveType MLIRTypeToPrimitiveType(mlir::Type type) {
 
 MLIRFunction *MLIRModule::CreateFunction(
     std::string name,
-    std::vector<std::pair<std::vector<tsl::int64>, xla::PrimitiveType>> arg_types,
-    std::pair<std::vector<tsl::int64>, xla::PrimitiveType> ret_type) {
+    std::vector<xla::Shape *> arg_shapes,
+    xla::Shape *ret_shape) {
   std::vector<mlir::Type> types;
-  types.reserve(arg_types.size());
-  for (auto arg_type : arg_types) {
-    mlir::Type type = GetMLIRType(builder_.get(), arg_type.first, arg_type.second);
+  types.reserve(arg_shapes.size());
+  for (auto arg_shape : arg_shapes) {
+    mlir::Type type = GetMLIRFunctionType(builder_.get(), arg_shape);
     types.push_back(type);
   }
 
-  mlir::Type return_type = GetMLIRType(builder_.get(), ret_type.first, ret_type.second);
+  mlir::Type return_type = GetMLIRFunctionType(builder_.get(), ret_shape);
 
   auto funcType = builder_->getFunctionType(types, return_type);
   auto loc = builder_->getUnknownLoc();

@@ -347,7 +347,8 @@ defmodule EXLA.Defn do
 
       EXLA.Executable.run(executable, [buffers], run_options)
     else
-      [result] -> [EXLA.Defn.Buffers.to_nx!(result, outputs)]
+      [result] ->
+        [EXLA.Defn.Buffers.to_nx!(result, outputs)]
     after
       EXLA.Defn.Lock.unlock(lock)
     end
@@ -552,8 +553,8 @@ defmodule EXLA.Defn do
          state,
          cache
        ) do
-    {tensor, cache} = recur_operator(tensor, state, cache)
-    {EXLA.Op.top_k(tensor, Keyword.fetch!(opts, :k)), cache}
+    {%mod{} = tensor, cache} = recur_operator(tensor, state, cache)
+    {mod.top_k(tensor, Keyword.fetch!(opts, :k)), cache}
   end
 
   defp cached_recur_operator(

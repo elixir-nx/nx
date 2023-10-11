@@ -81,6 +81,7 @@ ERL_NIF_TERM create_mlir_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   std::vector<std::pair<std::vector<exla::int64>, xla::PrimitiveType>> arg_types;
   std::pair<std::vector<exla::int64>, xla::PrimitiveType> ret_type;
   std::vector<xla::Shape*> arg_shapes;
+  xla::Shape* ret_shape;
 
   if (!exla::nif::get<exla::MLIRModule*>(env, argv[0], module)) {
     return exla::nif::error(env, "Unable to get module.");
@@ -93,35 +94,11 @@ ERL_NIF_TERM create_mlir_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     return exla::nif::error(env, "Unable to get args.");
   }
 
-  absl::Span<const int64_t> span;
-
-  for (xla::Shape* shape : arg_shapes) {
-    xla::PrimitiveType type = shape->element_type();
-    if (type == -1) {
-      return exla::nif::error(env, "Invalid argument type received.");
-    }
-    span = shape->dimensions();
-    std::vector<exla::int64> dims(span.begin(), span.end());
-
-    arg_types.emplace_back(dims, type);
-  }
-
-  xla::Shape* ret_shape;
   if (!exla::nif::get<xla::Shape>(env, argv[3], ret_shape)) {
     return exla::nif::error(env, "Unable to get return.");
   }
 
-  xla::PrimitiveType type = ret_shape->element_type();
-  if (type == -1) {
-    return exla::nif::error(env, "Invalid output type received.");
-  }
-
-  span = ret_shape->dimensions();
-  std::vector<exla::int64> ret_dims(span.begin(), span.end());
-
-  ret_type = std::make_pair(ret_dims, type);
-
-  exla::MLIRFunction* func = (*module)->CreateFunction(func_name, arg_types, ret_type);
+  exla::MLIRFunction* func = (*module)->CreateFunction(func_name, arg_shapes, ret_shape);
 
   return exla::nif::ok(env, exla::nif::make<exla::MLIRFunction*>(env, func));
 }

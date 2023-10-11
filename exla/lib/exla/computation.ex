@@ -78,12 +78,13 @@ defmodule EXLA.Computation do
         arg_shapes,
         _opts
       ) do
+    assert_output_shape!(%{output_shape: return_shape})
+
     EXLA.MLIR.Module.compile(
       module,
       client,
       arg_shapes,
-      # TO-DO (mlir): do not hardcode this single-item tuple output type
-      EXLA.Shape.make_tuple_shape([return_shape])
+      return_shape
     )
   end
 
