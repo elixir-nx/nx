@@ -30,15 +30,11 @@ defmodule EXLA.MLIR.ExecutableTest do
 
   describe "create_function" do
     test "creates with tuple arguments" do
-      result = EXLA.jit(fn {{t1}, {t2}} -> Nx.add(t1, t2) end, compiler_mode: :xla).({{1}, {2}})
       result = EXLA.jit(fn {{t1}, {t2}} -> Nx.add(t1, t2) end, compiler_mode: :mlir).({{1}, {2}})
       assert_equal(result, Nx.tensor(3))
     end
 
     test "creates with tuple return" do
-      result =
-        EXLA.jit(fn t -> {Nx.as_type(t, :f32), Nx.as_type(t, :f16)} end, compiler_mode: :xla).(1)
-
       result =
         EXLA.jit(fn t -> {Nx.as_type(t, :f32), Nx.as_type(t, :f16)} end, compiler_mode: :mlir).(1)
 
@@ -625,6 +621,40 @@ defmodule EXLA.MLIR.ExecutableTest do
             [3, 1, 2, 0],
             [2, 0, 1, 3]
           ])
+        )
+      end
+    end
+  end
+
+
+  describe "top_k" do
+    test "sorts on the last axis" do
+      for type <- [s: 64, u: 64, f: 32] do
+        t = Nx.tensor([[0, 2, 1, 10], [10, 10, 20, 0]], type: type)
+
+        {result, indices} = EXLA.jit(&Nx.top_k(&1, k: 2), compiler_mode: :mlir).(t)
+
+
+        assert_equal(
+          result,
+          Nx.tensor(
+            [
+              [10, 2],
+              [20, 10]
+            ],
+            type: type
+          )
+        )
+
+        assert_equal(
+          indices,
+          Nx.tensor(
+            [
+              [3, 1],
+              [2, 0]
+            ],
+            type: :s64
+          )
         )
       end
     end

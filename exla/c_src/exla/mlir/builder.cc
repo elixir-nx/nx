@@ -59,8 +59,6 @@ mlir::TensorType GetMLIRType(mlir::OpBuilder *builder, std::vector<tsl::int64> d
 }
 
 mlir::Type GetMLIRFunctionType(mlir::OpBuilder *builder, xla::Shape *shape) {
-  std::cout << "getmlirtype with shape pointer" << std::endl;
-
   if (shape->IsTuple()) {
     // iterate through tuple types
     std::vector<mlir::Type> element_types;

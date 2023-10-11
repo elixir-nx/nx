@@ -121,7 +121,6 @@ defmodule EXLA.MLIR.Value do
 
     in_refs =
       Enum.map(values, fn %Value{ref: ref, function: %Function{ref: ^func_ref}} -> ref end)
-      dbg()
 
     out_refs =
       EXLA.NIF.mlir_sort(
@@ -404,7 +403,7 @@ defmodule EXLA.MLIR.Value do
     shape = EXLA.Shape.get_shape_info(shape_ref)
     dims = shape.dims
     rank = tuple_size(dims)
-    iota = iota(func, shape, rank - 1)
+    iota = iota(func, shape, rank - 1) |> convert({:s, 64})
 
     [values, indices] = sort([tensor, iota], rank - 1, :desc)
 
