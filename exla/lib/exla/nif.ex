@@ -117,6 +117,9 @@ defmodule EXLA.NIF do
 
   def mlir_create_token(_function), do: :erlang.nif_error(:undef)
 
+  def mlir_triangular_solve(_function, _a, _b, _left_side, _lower, _transpose_a),
+    do: :erlang.nif_error(:undef)
+
   def new_builder(_name),
     do: :erlang.nif_error(:undef)
 

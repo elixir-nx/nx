@@ -425,6 +425,21 @@ defmodule EXLA.MLIR.Value do
     tuple([values, indices])
   end
 
+  def triangular_solve(a, b, left_side, lower, transform) do
+    ref =
+      EXLA.NIF.mlir_triangular_solve(
+        a.function.ref,
+        a.ref,
+        b.ref,
+        if(left_side, do: 1, else: 0),
+        if(lower, do: 1, else: 0),
+        if(transform == :transpose, do: 1, else: 0)
+      )
+      |> unwrap!()
+
+    %{a | ref: ref}
+  end
+
   defp unwrap!({:ok, value}), do: value
   defp unwrap!(other), do: raise("#{inspect(other)}")
 end
