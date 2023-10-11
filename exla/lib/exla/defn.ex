@@ -347,7 +347,8 @@ defmodule EXLA.Defn do
 
       EXLA.Executable.run(executable, [buffers], run_options)
     else
-      [result] -> [EXLA.Defn.Buffers.to_nx!(result, outputs)]
+      [result] ->
+        [EXLA.Defn.Buffers.to_nx!(result, outputs)]
     after
       EXLA.Defn.Lock.unlock(lock)
     end

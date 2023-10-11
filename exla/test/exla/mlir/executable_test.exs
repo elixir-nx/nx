@@ -30,12 +30,18 @@ defmodule EXLA.MLIR.ExecutableTest do
 
   describe "create_function" do
     test "creates with tuple arguments" do
+      result = EXLA.jit(fn {{t1}, {t2}} -> Nx.add(t1, t2) end, compiler_mode: :xla).({{1}, {2}})
       result = EXLA.jit(fn {{t1}, {t2}} -> Nx.add(t1, t2) end, compiler_mode: :mlir).({{1}, {2}})
       assert_equal(result, Nx.tensor(3))
     end
 
     test "creates with tuple return" do
-      result = EXLA.jit(fn t -> {Nx.as_type(t, :f32), Nx.as_type(t, :f16)} end, compiler_mode: :mlir).(1)
+      result =
+        EXLA.jit(fn t -> {Nx.as_type(t, :f32), Nx.as_type(t, :f16)} end, compiler_mode: :xla).(1)
+
+      result =
+        EXLA.jit(fn t -> {Nx.as_type(t, :f32), Nx.as_type(t, :f16)} end, compiler_mode: :mlir).(1)
+
       assert_equal(result, {Nx.f32(1), Nx.f16(1)})
     end
   end

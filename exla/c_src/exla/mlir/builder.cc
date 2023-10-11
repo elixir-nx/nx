@@ -63,23 +63,18 @@ mlir::Type GetMLIRFunctionType(mlir::OpBuilder *builder, xla::Shape *shape) {
 
   if (shape->IsTuple()) {
     // iterate through tuple types
-    std::cout << "is tuple" << std::endl;
     std::vector<mlir::Type> element_types;
     for (xla::Shape element : shape->tuple_shapes()) {
       mlir::Type element_type;
       if (element.IsTuple()) {
-        std::cout << "element is tuple" << std::endl;
         element_type = GetMLIRFunctionType(builder, &element);
       } else {
-        std::cout << "element is not tuple" << std::endl;
         auto span = element.dimensions();
         std::vector<tsl::int64> dims(span.begin(), span.end());
         element_type = GetMLIRType(builder, dims, element.element_type());
       }
       element_types.push_back(element_type);
     }
-
-    std::cout << "before instantiate tuple type" << std::endl;
 
     mlir::TupleType tuple = mlir::TupleType::get(builder->getContext(), mlir::TypeRange(element_types));
     return tuple;
