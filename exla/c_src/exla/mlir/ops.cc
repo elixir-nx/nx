@@ -1202,3 +1202,51 @@ ERL_NIF_TERM mlir_dynamic_update_slice(ErlNifEnv* env, int argc, const ERL_NIF_T
 
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
+
+ERL_NIF_TERM mlir_infeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value *token;
+  std::vector<int64_t> dims;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], token)) {
+    return exla::nif::error(env, "Unable to get token.");
+  }
+  if (!exla::nif::get_list<int64_t>(env, argv[2], dims)) {
+    return exla::nif::error(env, "Unable to get dims.");
+  }
+
+  mlir::Value infeed = (*function)->InfeedOp(*token, dims);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, infeed));
+}
+
+ERL_NIF_TERM mlir_outfeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* token;
+  std::vector<mlir::Value> inputs;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get_list<mlir::Value>(env, argv[1], inputs)) {
+    return exla::nif::error(env, "Unable to get inputs.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[2], token)) {
+    return exla::nif::error(env, "Unable to get token.");
+  }
+
+  mlir::Value result = (*function)->OutfeedOp(inputs, *token);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
+}

@@ -104,6 +104,8 @@ class MLIRFunction {
   mlir::Value TriangularSolveOp(mlir::Value a, mlir::Value b, bool left_side, bool lower, bool transpose_a);
   mlir::Value DynamicUpdateSliceOp(mlir::Value operand, mlir::Value update, std::vector<mlir::Value> start_indices);
   ERL_NIF_TERM ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM value_ptr, std::vector<int64_t> dims = {});
+  mlir::Value InfeedOp(mlir::Value token, std::vector<int64_t> shape);
+  mlir::Value OutfeedOp(std::vector<mlir::Value> inputs, mlir::Value token);
   int get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *type);
 
   void Build(mlir::Value root);

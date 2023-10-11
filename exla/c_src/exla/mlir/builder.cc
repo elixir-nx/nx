@@ -1083,4 +1083,20 @@ mlir::Value MLIRFunction::DynamicUpdateSliceOp(mlir::Value operand, mlir::Value 
   return builder->create<mlir::mhlo::DynamicUpdateSliceOp>(builder->getUnknownLoc(), operand, update, mlir::ValueRange(start_indices));
 }
 
+mlir::Value MLIRFunction::InfeedOp(mlir::Value token, std::vector<int64_t> shape) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+
+  auto layout = mlir::ArrayAttr::get(builder->getContext(), Int64ToDenseIntElementsAttr(builder, shape));
+  auto infeed_op = builder->create<mlir::mhlo::InfeedOp>(builder->getUnknownLoc(), mlir::TypeRange(token.getType()), token, "", layout);
+  auto results = infeed_op.getResults();
+  return module_->builder()->create<mlir::mhlo::TupleOp>(module_->builder()->getUnknownLoc(), results);
+}
+
+mlir::Value MLIRFunction::OutfeedOp(std::vector<mlir::Value> inputs, mlir::Value token) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+  return builder->create<mlir::mhlo::OutfeedOp>(builder->getUnknownLoc(), mlir::ValueRange(inputs), token);
+}
+
 }  // namespace exla
