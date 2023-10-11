@@ -40,6 +40,14 @@ defmodule EXLA.MLIR.ExecutableTest do
 
       assert_equal(result, {Nx.f32(1), Nx.f16(1)})
     end
+
+    test "creates with mixed container result and input" do
+      result =
+        EXLA.jit(fn %{a: a, b: %{c: c, d: {d}}} ->
+          %{a: {Nx.add(a, c), %{b: Nx.multiply(c, d)}}} end, compiler_mode: :mlir).(%{a: 1, b: %{c: 10, d: {20}}})
+
+      assert_equal(result, %{a: {11, %{b: 200}}})
+    end
   end
 
   describe "bitcast" do
