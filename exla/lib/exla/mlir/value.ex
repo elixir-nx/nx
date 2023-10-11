@@ -375,7 +375,7 @@ defmodule EXLA.MLIR.Value do
       ) do
     precision_config = get_precision_config_int(precision_config)
 
-    ref =
+    [value_ref, idx_ref] =
       EXLA.NIF.mlir_convolution(
         func.ref,
         tensor.ref,
@@ -392,7 +392,12 @@ defmodule EXLA.MLIR.Value do
       )
       |> unwrap!()
 
-    %Value{tensor | ref: ref}
+    {%Value{tensor | ref: value_ref}, %Value{tensor | ref: idx_ref}}
+  end
+
+  def top_k(%Value{function: func} = tensor, k) do
+    ref = EXLA.NIF.mlir_top_k(func.ref, tensor.ref, k)
+    %{tensor | ref: ref}
   end
 
   defp unwrap!({:ok, value}), do: value
