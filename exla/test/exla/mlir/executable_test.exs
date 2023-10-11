@@ -626,14 +626,12 @@ defmodule EXLA.MLIR.ExecutableTest do
     end
   end
 
-
   describe "top_k" do
     test "sorts on the last axis" do
       for type <- [s: 64, u: 64, f: 32] do
         t = Nx.tensor([[0, 2, 1, 10], [10, 10, 20, 0]], type: type)
 
         {result, indices} = EXLA.jit(&Nx.top_k(&1, k: 2), compiler_mode: :mlir).(t)
-
 
         assert_equal(
           result,

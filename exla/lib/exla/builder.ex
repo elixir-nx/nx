@@ -19,7 +19,9 @@ defmodule EXLA.Builder do
   def new(_name, inputs, outputs, :mlir) do
     # TO-DO (mlir): check if using name makes sense
     arg_shapes = Enum.map(inputs, fn {_, %Shape{} = s} -> s end)
-    return_shape = [outputs] |> Nx.Defn.Composite.flatten_list() |> List.to_tuple() |>  exla_shape()
+
+    return_shape =
+      [outputs] |> Nx.Defn.Composite.flatten_list() |> List.to_tuple() |> exla_shape()
 
     module = M.new()
     M.create_function(module, "main", arg_shapes, return_shape)

@@ -409,13 +409,15 @@ defmodule EXLA.MLIR.Value do
 
     strides = List.duplicate(1, rank)
     starts = List.duplicate(0, rank)
-    limits = Enum.map(0..(rank - 1), fn axis ->
-      if axis == rank - 1 do
-        k
-      else
-        elem(dims, axis)
-      end
-    end)
+
+    limits =
+      Enum.map(0..(rank - 1), fn axis ->
+        if axis == rank - 1 do
+          k
+        else
+          elem(dims, axis)
+        end
+      end)
 
     values = slice(values, starts, limits, strides)
     indices = slice(indices, starts, limits, strides)
