@@ -866,14 +866,21 @@ ERL_NIF_TERM mlir_get_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   if (!exla::nif::get<mlir::Value>(env, argv[0], t)) {
     return exla::nif::error(env, "Unable to get tensor.");
   }
+  std::cout << "6" << std::endl;
 
   auto mlir_shape = mlir::ValueShapeRange({}).getShape(*t);
+  std::cout << "7" << std::endl;
+  mlir_shape.dump();
 
   mlir::Type type = mlir_shape.getElementType();
+  std::cout << "8" << std::endl;
   xla::PrimitiveType element_type = exla::MLIRTypeToPrimitiveType(type);
+  std::cout << "9" << std::endl;
   mlir::ShapedTypeComponents shape_dims(mlir_shape);
+  std::cout << "10" << std::endl;
 
   xla::Shape shape = xla::ShapeUtil::MakeShape(element_type, shape_dims.getDims());
+  std::cout << "11" << std::endl;
 
   return exla::nif::ok(env, exla::nif::make<xla::Shape>(env, shape));
 }

@@ -936,6 +936,11 @@ MLIRModule::MLIRModule() {
 }
 
 xla::PrimitiveType MLIRTypeToPrimitiveType(mlir::Type type) {
+  type.dump();
+  if (type.isa<mlir::TupleType>()) {
+    std::cout << "is tuple" << std::endl;
+    return xla::PrimitiveType::TUPLE;
+  }
   if (type.isUnsignedInteger(8)) {
     return xla::primitive_util::NativeToPrimitiveType<uint8_t>();
   }
@@ -980,6 +985,7 @@ xla::PrimitiveType MLIRTypeToPrimitiveType(mlir::Type type) {
       return xla::primitive_util::NativeToPrimitiveType<xla::complex128>();
     }
   }
+  std::cout << "here" << std::endl;
 }
 
 MLIRFunction *MLIRModule::CreateFunction(
@@ -1084,13 +1090,21 @@ mlir::Value MLIRFunction::DynamicUpdateSliceOp(mlir::Value operand, mlir::Value 
 }
 
 mlir::Value MLIRFunction::InfeedOp(mlir::Value token, std::vector<int64_t> shape) {
+  std::cout << "1" << std::endl;
   auto builder = module_->builder();
   builder->setInsertionPointToEnd(&func_->getBody().back());
+  std::cout << "2" << std::endl;
 
   auto layout = mlir::ArrayAttr::get(builder->getContext(), Int64ToDenseIntElementsAttr(builder, shape));
+  std::cout << "3" << std::endl;
   auto infeed_op = builder->create<mlir::mhlo::InfeedOp>(builder->getUnknownLoc(), mlir::TypeRange(token.getType()), token, "", layout);
-  auto results = infeed_op.getResults();
-  return module_->builder()->create<mlir::mhlo::TupleOp>(module_->builder()->getUnknownLoc(), results);
+  std::cout << "4" << std::endl;
+  auto tensor = infeed_op.getResult(0);
+
+  tensor.getType().dump();
+  // auto out_token = infeed_op.getResult(1);
+  std::cout << "5" << std::endl;
+  return module_->builder()->create<mlir::mhlo::TupleOp>(module_->builder()->getUnknownLoc(), mlir::ValueRange({tensor, token}));
 }
 
 mlir::Value MLIRFunction::OutfeedOp(std::vector<mlir::Value> inputs, mlir::Value token) {

@@ -80,11 +80,14 @@ defmodule EXLA.MLIR.Value do
 
   def get_tuple_element(%Value{function: %Function{} = func, ref: ref}, index)
       when is_integer(index) do
+        IO.inspect("b")
     ref = EXLA.NIF.mlir_get_tuple_element(func.ref, ref, index) |> unwrap!()
+        IO.inspect("c")
     %Value{ref: ref, function: func}
   end
 
   def get_shape(%Value{ref: ref}) do
+    dbg(ref)
     shape_ref = EXLA.NIF.mlir_get_shape(ref) |> unwrap!()
     EXLA.Shape.get_shape_info(shape_ref)
   end
@@ -454,14 +457,24 @@ defmodule EXLA.MLIR.Value do
   end
 
   def infeed(%Value{function: function} = token, dims) do
-    ref = EXLA.NIF.mlir_infeed(function.ref, token.ref, dims) |> unwrap!()
-    %{token | ref: ref}
+    ref = EXLA.NIF.mlir_infeed(function.ref, token.ref, Tuple.to_list(dims)) |> unwrap!()
+
+    %Value{token | ref: ref}
+    # |> tap(fn f ->
+    #   IO.puts("a")
+    #   get_shape(f) |> IO.inspect()
+    # end)
   end
 
   def outfeed(%Value{function: function} = token, inputs) do
     input_refs = Enum.map(inputs, & &1.ref)
     ref = EXLA.NIF.mlir_outfeed(function.ref, token.ref, input_refs) |> unwrap!()
     %{token | ref: ref}
+  end
+
+  def create_token(%Function{ref: ref} = function) do
+    ref = EXLA.NIF.mlir_create_token(ref) |> unwrap!()
+    %Value{ref: ref, function: function}
   end
 
 
