@@ -815,6 +815,14 @@ mlir::Value MLIRFunction::SelectAndScatterOp(
   return op.getResult();
 }
 
+mlir::Value MLIRFunction::GatherOp(mlir::Value source, mlir::Value indices, std::vector<int64_t> offset_dims, std::vector<int64_t> collapsed_slice_dims, std::vector<int64_t> start_index_map, std::vector<int64_t> slice_sizes, int64_t index_vector_dim) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+  auto gather_dimension_numbers = mlir::mhlo::GatherDimensionNumbersAttr::get(builder->getContext(), offset_dims, collapsed_slice_dims, start_index_map, index_vector_dim);
+  auto slice_sizes_attr = Int64ToDenseIntElementsAttr(module_->builder(), slice_sizes);
+  return builder->create<mlir::mhlo::GatherOp>(builder->getUnknownLoc(), source, indices, gather_dimension_numbers, slice_sizes_attr, false);
+}
+
 mlir::Value MLIRFunction::FFTOp(mlir::Value tensor, bool forward_fft, std::vector<int64_t> fft_length) {
   auto builder = module_->builder();
   builder->setInsertionPointToEnd(&func_->getBody().back());

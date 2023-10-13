@@ -1023,6 +1023,46 @@ ERL_NIF_TERM mlir_select_and_scatter(ErlNifEnv* env, int argc, const ERL_NIF_TER
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
 
+ERL_NIF_TERM mlir_gather(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 8) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value *source, *indices;
+
+  int64_t index_vector_dim;
+  std::vector<int64_t> slice_sizes, offset_dims, collapsed_slice_dims, start_index_map;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], source)) {
+    return exla::nif::error(env, "Unable to get source.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[2], indices)) {
+    return exla::nif::error(env, "Unable to get indices.");
+  }
+  if (!exla::nif::get_list(env, argv[3], slice_sizes)) {
+    return exla::nif::error(env, "Unable to get slice_sizes.");
+  }
+  if (!exla::nif::get_list(env, argv[4], offset_dims)) {
+    return exla::nif::error(env, "Unable to get offset_dims.");
+  }
+  if (!exla::nif::get_list(env, argv[5], collapsed_slice_dims)) {
+    return exla::nif::error(env, "Unable to get collapsed_slice_dims.");
+  }
+  if (!exla::nif::get_list(env, argv[6], start_index_map)) {
+    return exla::nif::error(env, "Unable to get start_index_map.");
+  }
+  if (!exla::nif::get(env, argv[7], &index_vector_dim)) {
+    return exla::nif::error(env, "Unable to get index_vector_dim.");
+  }
+
+  mlir::Value res = (*function)->GatherOp(*source, *indices, offset_dims, collapsed_slice_dims, start_index_map, slice_sizes, index_vector_dim);
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
 ERL_NIF_TERM mlir_fft(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 4) {
     return exla::nif::error(env, "Bad argument count.");

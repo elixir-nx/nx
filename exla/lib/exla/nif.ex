@@ -97,6 +97,18 @@ defmodule EXLA.NIF do
       ),
       do: :erlang.nif_error(:undef)
 
+  def mlir_gather(
+        _function,
+        _sorce,
+        _indices,
+        _slice_sizes,
+        _offset_dims,
+        _collapsed_slice_dims,
+        _start_index_map,
+        _index_vector_dim
+      ),
+      do: :erlang.nif_error(:undef)
+
   def mlir_fft(_function, _tensor, _forward_fft, _fft_lenght), do: :erlang.nif_error(:undef)
 
   def mlir_convolution(

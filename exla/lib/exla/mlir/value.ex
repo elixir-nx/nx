@@ -338,6 +338,31 @@ defmodule EXLA.MLIR.Value do
     %Value{target | ref: ref}
   end
 
+  def gather(
+        %Value{function: func} = source,
+        %Value{function: func} = indices,
+        slice_sizes,
+        offset_dims,
+        collapsed_slice_dims,
+        start_index_map,
+        index_vector_dim
+      ) do
+    ref =
+      EXLA.NIF.mlir_gather(
+        func.ref,
+        source.ref,
+        indices.ref,
+        slice_sizes,
+        offset_dims,
+        collapsed_slice_dims,
+        start_index_map,
+        index_vector_dim
+      )
+      |> unwrap!()
+
+    %Value{source | ref: ref}
+  end
+
   defp get_precision_config_int(precision_config) do
     case precision_config do
       :default ->
