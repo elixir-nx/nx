@@ -680,6 +680,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_sort", 4, mlir_sort},
     {"mlir_scatter", 5, mlir_scatter},
     {"mlir_select_and_scatter", 8, mlir_select_and_scatter},
+    {"mlir_gather", 8, mlir_gather},
     {"mlir_reshape", 3, mlir_reshape},
     {"mlir_reverse", 3, mlir_reverse},
     {"mlir_transpose", 3, mlir_transpose},

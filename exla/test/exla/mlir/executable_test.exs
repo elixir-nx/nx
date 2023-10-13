@@ -897,4 +897,20 @@ defmodule EXLA.MLIR.ExecutableTest do
       )
     end
   end
+
+  describe "gather" do
+    test "works" do
+      t = Nx.tensor([[1, 2], [3, 4]])
+      idx = Nx.tensor([[[1, 1], [0, 0]], [[1, 0], [0, 1]]])
+      result = EXLA.jit(fn t, idx -> Nx.gather(t, idx) end, compiler_mode: :mlir).(t, idx)
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [4, 1],
+          [3, 2]
+        ])
+      )
+    end
+  end
 end
