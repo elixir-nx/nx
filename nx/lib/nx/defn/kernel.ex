@@ -528,6 +528,8 @@ defmodule Nx.Defn.Kernel do
 
   It delegates to `Nx.logical_and/2` (supports broadcasting).
 
+  It does not support short-circuiting.
+
   ## Examples
 
       defn and_or(a, b) do
@@ -553,6 +555,8 @@ defmodule Nx.Defn.Kernel do
   are considered true.
 
   It delegates to `Nx.logical_or/2` (supports broadcasting).
+
+  It does not support short-circuiting.
 
   ## Examples
 

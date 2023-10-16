@@ -6314,6 +6314,8 @@ defmodule Nx do
   If you're using `Nx.Defn.defn/2`, you can use the `&&&` operator
   in place of this function: `left &&& right`.
 
+  It does not support short-circuiting.
+
   ## Examples
 
   ### bitwise and between scalars
@@ -6366,6 +6368,8 @@ defmodule Nx do
 
   If you're using `Nx.Defn.defn/2`, you can use the `|||` operator
   in place of this function: `left ||| right`.
+
+  It does not support short-circuiting.
 
   ## Examples
 
