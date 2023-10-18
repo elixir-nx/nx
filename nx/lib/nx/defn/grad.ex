@@ -239,6 +239,8 @@ defmodule Nx.Defn.Grad do
   end
 
   defp update_grads(:optional, [_call, expr], _ans, gs, _to_grad_ids, grads) do
+    gs = List.wrap(gs)
+
     {grads, []} =
       Composite.reduce(expr, {grads, gs}, fn child, {grads, [g | gs]} ->
         {Map.update(grads, child.data.id, [g], &[g | &1]), gs}
