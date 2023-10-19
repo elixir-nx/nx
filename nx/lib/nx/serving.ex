@@ -190,10 +190,15 @@ defmodule Nx.Serving do
   the same code and applications. It is only required that they run the
   same `Nx` version.
 
-  The load balancing between servings is done randomly, however, the number
-  of partitions are considered if the `partitions: true` option is also given.
+  The load balancing between servings is done randomly by default, however,
+  the number of partitions are considered if the `partitions: true` option is also given.
   For example, if you have a node with 2 GPUs and another with 4, the latter
   will receive the double of requests compared to the former.
+
+  Furthermore, the load balancing allows for assigning weights to servings.
+  Similarly to the number of partitions, when running a serving with `weight: 1`
+  and another one with `weight: 2`, the latter will receive double the requests
+  compared to the former.
 
   `batched_run/3` receives an optional `distributed_preprocessing` callback as
   third argument for preprocessing the input for distributed requests. When
@@ -388,7 +393,8 @@ defmodule Nx.Serving do
     :partitions,
     :shutdown,
     :hibernate_after,
-    :spawn_opt
+    :spawn_opt,
+    :weight
   ]
 
   @doc """
@@ -873,6 +879,11 @@ defmodule Nx.Serving do
       The number of partitions will be determined according to your compiler
       and for which host it is compiling. See the module docs for more information
 
+    * `:weight` - weight used for load balancing when running a distributed serving
+      Defaults to `1`. If it is set to a higher number `w`, the serving process
+      will receive, on average, `w` times the number of requests compared to a
+      process that uses `weight: 1`.
+
     * `:shutdown` - the maximum time for the serving to shutdown. This will
       block until the existing computation finishes (defaults to `30_000`ms)
 
@@ -901,11 +912,14 @@ defmodule Nx.Serving do
     partitions = Keyword.get(opts, :partitions, false)
     batch_keys = Keyword.get(opts, :batch_keys, [:default])
     batch_timeout = Keyword.get(opts, :batch_timeout, 100)
+    weight = opts |> Keyword.get(:weight, 1) |> max(1)
     process_options = Keyword.take(opts, [:name, :hibernate_after, :spawn_opt])
 
     supervisor = Module.concat(name, "Supervisor")
     task_supervisor = Module.concat(name, "TaskSupervisor")
-    arg = {name, serving, partitions, batch_keys, batch_size, batch_timeout, task_supervisor}
+
+    arg =
+      {name, serving, partitions, batch_keys, batch_size, batch_timeout, task_supervisor, weight}
 
     children = [
       {Task.Supervisor, name: task_supervisor},
@@ -1280,7 +1294,10 @@ defmodule Nx.Serving do
   @timeout_message {__MODULE__, :timeout}
 
   @impl true
-  def init({name, serving, partitions?, batch_keys, batch_size, batch_timeout, task_supervisor}) do
+  def init(
+        {name, serving, partitions?, batch_keys, batch_size, batch_timeout, task_supervisor,
+         weight}
+      ) do
     Process.flag(:trap_exit, true)
     partitions_opts = serving_partitions(serving, partitions?)
     partitions_count = length(partitions_opts)
@@ -1300,7 +1317,7 @@ defmodule Nx.Serving do
       }
     )
 
-    :pg.join(Nx.Serving.PG, __MODULE__, List.duplicate(self(), partitions_count))
+    :pg.join(Nx.Serving.PG, __MODULE__, List.duplicate(self(), weight * partitions_count))
 
     for batch_key <- batch_keys do
       stack_init(batch_key)
