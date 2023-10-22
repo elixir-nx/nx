@@ -1397,17 +1397,23 @@ defmodule Nx.Serving do
     {:noreply, state}
   end
 
-  def handle_info({@timeout_message, key}, %{out_queue: out_queue} = state) do
-    # We have processing power, so execute it immediately.
-    # Otherwise we will queue it but keep on increasing the batch.
-    if out_queue != @empty_queue do
-      {:noreply, server_execute(state, key)}
-    else
-      stack_update(key, fn {[_ | _] = stack, count, _timer} ->
-        {stack, count, :done}
-      end)
+  def handle_info({@timeout_message, key, ref}, %{out_queue: out_queue} = state) do
+    case stack_timer(key) do
+      # We have processing power, so execute it immediately.
+      {^ref, _timer_ref} when out_queue != @empty_queue ->
+        {:noreply, server_execute(state, key)}
 
-      {:noreply, update_in(state.in_queue, &:queue.in(key, &1))}
+      # Otherwise we will queue it but keep on increasing the batch.
+      {^ref, _timer_ref} ->
+        stack_update(key, fn {[_ | _] = stack, count, _timer} ->
+          {stack, count, :done}
+        end)
+
+        {:noreply, update_in(state.in_queue, &:queue.in(key, &1))}
+
+      # Otherwise this is an old timer message, just ignore it.
+      _ ->
+        {:noreply, state}
     end
   end
 
@@ -1514,7 +1520,8 @@ defmodule Nx.Serving do
     stack_update(key, fn {stack, count, timer} when batch.size + count <= limit ->
       timer =
         if timer == :none and timer_mode == :set_timer do
-          Process.send_after(self(), {@timeout_message, key}, state.timeout)
+          ref = make_ref()
+          {ref, Process.send_after(self(), {@timeout_message, key, ref}, state.timeout)}
         else
           timer
         end
@@ -1613,6 +1620,11 @@ defmodule Nx.Serving do
     count
   end
 
+  defp stack_timer(key) do
+    {_stack, _count, timer} = Process.get({__MODULE__, key})
+    timer
+  end
+
   defp stack_entries(key) do
     {stack, _count, _timer} = Process.get({__MODULE__, key})
     stack
@@ -1627,11 +1639,11 @@ defmodule Nx.Serving do
     {[_ | _] = stack, count, timer} = Process.get({__MODULE__, key})
     :ok = stack_init(key)
 
-    if is_reference(timer) do
-      Process.cancel_timer(timer)
+    with {ref, timer_ref} <- timer do
+      Process.cancel_timer(timer_ref)
 
       receive do
-        {@timeout_message, ^key} -> :ok
+        {@timeout_message, ^key, ^ref} -> :ok
       after
         0 -> :ok
       end
