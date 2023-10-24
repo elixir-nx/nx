@@ -1323,7 +1323,7 @@ defmodule Nx.Serving do
       }
     )
 
-    serving_weight = max(1, weight) * partitions_count
+    serving_weight = max(1, weight * partitions_count)
     :pg.join(Nx.Serving.PG, __MODULE__, List.duplicate(self(), serving_weight))
 
     for batch_key <- batch_keys do
