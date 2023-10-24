@@ -882,8 +882,8 @@ defmodule Nx.Serving do
     * `:distribution_weight` - weight used for load balancing when running
       a distributed serving. Defaults to `1`.
       If it is set to a higher number `w`, the serving process will receive,
-      on average, `w` times the number of requests compared to a process that
-      uses `weight: 1`. Note that the weight is multiplied with the number of
+      on average, `w` times the number of requests compared to the
+      default. Note that the weight is multiplied with the number of
       partitions, if partitioning is enabled.
 
     * `:shutdown` - the maximum time for the serving to shutdown. This will
@@ -914,7 +914,7 @@ defmodule Nx.Serving do
     partitions = Keyword.get(opts, :partitions, false)
     batch_keys = Keyword.get(opts, :batch_keys, [:default])
     batch_timeout = Keyword.get(opts, :batch_timeout, 100)
-    weight = opts |> Keyword.get(:distribution_weight, 1)
+    weight = Keyword.get(opts, :distribution_weight, 1)
     process_options = Keyword.take(opts, [:name, :hibernate_after, :spawn_opt])
 
     unless is_integer(weight) do
