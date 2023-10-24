@@ -196,8 +196,8 @@ defmodule Nx.Serving do
   will receive the double of requests compared to the former.
 
   Furthermore, the load balancing allows for assigning weights to servings.
-  Similarly to the number of partitions, when running a serving with `weight: 1`
-  and another one with `weight: 2`, the latter will receive double the requests
+  Similarly to the number of partitions, when running a serving with `distribution_weight: 1`
+  and another one with `distribution_weight: 2`, the latter will receive double the requests
   compared to the former.
 
   `batched_run/3` receives an optional `distributed_preprocessing` callback as
@@ -394,7 +394,7 @@ defmodule Nx.Serving do
     :shutdown,
     :hibernate_after,
     :spawn_opt,
-    :weight
+    :distribution_weight
   ]
 
   @doc """
@@ -879,10 +879,12 @@ defmodule Nx.Serving do
       The number of partitions will be determined according to your compiler
       and for which host it is compiling. See the module docs for more information
 
-    * `:weight` - weight used for load balancing when running a distributed serving
-      Defaults to `1`. If it is set to a higher number `w`, the serving process
-      will receive, on average, `w` times the number of requests compared to a
-      process that uses `weight: 1`.
+    * `:distribution_weight` - weight used for load balancing when running
+      a distributed serving. Defaults to `1`.
+      If it is set to a higher number `w`, the serving process will receive,
+      on average, `w` times the number of requests compared to a process that
+      uses `weight: 1`. Note that the weight is multiplied with the number of
+      partitions, if partitioning is enabled.
 
     * `:shutdown` - the maximum time for the serving to shutdown. This will
       block until the existing computation finishes (defaults to `30_000`ms)
@@ -912,8 +914,12 @@ defmodule Nx.Serving do
     partitions = Keyword.get(opts, :partitions, false)
     batch_keys = Keyword.get(opts, :batch_keys, [:default])
     batch_timeout = Keyword.get(opts, :batch_timeout, 100)
-    weight = opts |> Keyword.get(:weight, 1) |> max(1)
+    weight = opts |> Keyword.get(:distribution_weight, 1)
     process_options = Keyword.take(opts, [:name, :hibernate_after, :spawn_opt])
+
+    unless is_integer(weight) do
+      raise ArgumentError, ":distribution_weight must be an integer"
+    end
 
     supervisor = Module.concat(name, "Supervisor")
     task_supervisor = Module.concat(name, "TaskSupervisor")
@@ -1317,7 +1323,8 @@ defmodule Nx.Serving do
       }
     )
 
-    :pg.join(Nx.Serving.PG, __MODULE__, List.duplicate(self(), weight * partitions_count))
+    serving_weight = max(1, weight) * partitions_count
+    :pg.join(Nx.Serving.PG, __MODULE__, List.duplicate(self(), serving_weight))
 
     for batch_key <- batch_keys do
       stack_init(batch_key)
