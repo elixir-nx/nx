@@ -1295,6 +1295,31 @@ defmodule Nx.ServingTest do
 
     @tag :distributed
     @tag :capture_log
+    test "spawns distributed tasks over the network with different weights", config do
+      parent = self()
+
+      opts = [
+        name: config.test,
+        batch_size: 2,
+        shutdown: 1000,
+        distribution_weight: 1
+      ]
+      opts2 = Keyword.put(opts, :distribution_weight, 4)
+
+      Node.spawn_link(:"secondary@127.0.0.1", DistributedServings, :multiply, [parent, opts])
+      assert_receive {_, :join, Nx.Serving, pids}
+      assert length(pids) == 1
+
+      Node.spawn_link(:"tertiary@127.0.0.1", DistributedServings, :multiply, [parent, opts2])
+      assert_receive {_, :join, Nx.Serving, pids}
+      assert length(pids) == 4
+
+      members = :pg.get_members(Nx.Serving.PG, Nx.Serving)
+      assert length(members) == 5
+    end
+
+    @tag :distributed
+    @tag :capture_log
     test "spawns distributed tasks over the network with streaming", config do
       parent = self()
 
