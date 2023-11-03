@@ -3794,16 +3794,20 @@ defmodule Nx.Defn.GradTest do
     test "computes the grad" do
       a =
         Nx.tensor([
-          [1, 1, 1],
-          [0, 1, 1],
-          [0, 0, 1]
+          [1, 0, 1],
+          [0, 1, 0],
+          [-1, 0, 1]
         ])
 
       b = Nx.tensor([4, 3, 2])
 
       assert_all_close(
-        triangular_solve_grad_wrt_a(a, b),
-        Nx.tensor([[-4.0, 0.0, 0.0], [-0.0, -0.0, 0.0], [-0.0, -0.0, -0.0]])
+        solve_grad_wrt_a(a, b),
+        Nx.tensor([
+          [-1.0, -3.0, -3.0],
+          [-1.0, -3.0, -3.0],
+          [0.0, 0.0, 0.0]
+        ])
       )
     end
   end

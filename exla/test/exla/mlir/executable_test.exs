@@ -28,6 +28,32 @@ defmodule EXLA.MLIR.ExecutableTest do
     assert_equal(result, expected)
   end
 
+  describe "create_function" do
+    test "creates with tuple arguments" do
+      result = EXLA.jit(fn {{t1}, {t2}} -> Nx.add(t1, t2) end, compiler_mode: :mlir).({{1}, {2}})
+      assert_equal(result, Nx.tensor(3))
+    end
+
+    test "creates with tuple return" do
+      result =
+        EXLA.jit(fn t -> {Nx.as_type(t, :f32), Nx.as_type(t, :f16)} end, compiler_mode: :mlir).(1)
+
+      assert_equal(result, {Nx.f32(1), Nx.f16(1)})
+    end
+
+    test "creates with mixed container result and input" do
+      result =
+        EXLA.jit(
+          fn %{a: a, b: %{c: c, d: {d}}} ->
+            %{a: {Nx.add(a, c), %{b: Nx.multiply(c, d)}}}
+          end,
+          compiler_mode: :mlir
+        ).(%{a: 1, b: %{c: 10, d: {20}}})
+
+      assert_equal(result, %{a: {11, %{b: 200}}})
+    end
+  end
+
   describe "bitcast" do
     test "converts between same bitwidth" do
       t = Nx.s32([1337, 42])
@@ -40,8 +66,64 @@ defmodule EXLA.MLIR.ExecutableTest do
     end
   end
 
+  describe "pad" do
+    test "pads in all dims" do
+      result =
+        EXLA.jit(&Nx.pad(&1, &2, [{2, 3, 1}, {0, 0, 0}]), compiler_mode: :mlir).(
+          Nx.tensor([[1, 1, 1], [2, 2, 2], [3, 3, 3]]),
+          Nx.tensor(100)
+        )
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [100, 100, 100],
+          [100, 100, 100],
+          [1, 1, 1],
+          [100, 100, 100],
+          [2, 2, 2],
+          [100, 100, 100],
+          [3, 3, 3],
+          [100, 100, 100],
+          [100, 100, 100],
+          [100, 100, 100]
+        ])
+      )
+
+      result =
+        EXLA.jit(&Nx.pad(&1, &2, [{0, 0, 0}, {2, 3, 1}]), compiler_mode: :mlir).(
+          Nx.tensor([[1, 1, 1], [2, 2, 2], [3, 3, 3]]),
+          Nx.tensor(100)
+        )
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [100, 100, 1, 100, 1, 100, 1, 100, 100, 100],
+          [100, 100, 2, 100, 2, 100, 2, 100, 100, 100],
+          [100, 100, 3, 100, 3, 100, 3, 100, 100, 100]
+        ])
+      )
+    end
+  end
+
   describe "convert" do
-    @types [s: 8, s: 16, s: 32, s: 64, u: 8, u: 16, u: 32, u: 64, f: 16, f: 32, f: 64, bf: 16]
+    @types [
+      s: 8,
+      s: 16,
+      s: 32,
+      s: 64,
+      u: 8,
+      u: 16,
+      u: 32,
+      u: 64,
+      f: 16,
+      f: 32,
+      f: 64,
+      bf: 16,
+      c: 64,
+      c: 128
+    ]
 
     for origin_type <- @types, dest_type <- @types do
       test "converts #{inspect(origin_type)} to #{inspect(dest_type)}" do
@@ -133,7 +215,7 @@ defmodule EXLA.MLIR.ExecutableTest do
                  [:log, :log1p, :sign, :cosh, :sinh] ++
                  [:sqrt, :cbrt, :sin, :cos, :atan] ++
                  [:tanh, :sigmoid, :erf, :erfc, :rsqrt] ++
-                 [:negate]
+                 [:negate, :conjugate, :real, :imag]
 
     for op <- @unary_ops do
       test "#{op}" do
@@ -250,18 +332,18 @@ defmodule EXLA.MLIR.ExecutableTest do
     end
 
     # TO-DO (mlir): this case depends on broadcasting being available
-    # test "sign with unsigned input" do
-    #   function = fn t -> Nx.sign(t) end
+    test "sign with unsigned input" do
+      function = fn t -> Nx.sign(t) end
 
-    #   t = Nx.tensor([0, 1, 2], type: :u8)
+      t = Nx.tensor([0, 1, 2], type: :s8)
 
-    #   result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
-    #   result_mlir = Nx.Defn.jit_apply(function, [t])
+      result_nx = Nx.Defn.jit_apply(function, [t], compiler: Nx.Defn.Evaluator)
+      result_mlir = Nx.Defn.jit_apply(function, [t])
 
-    #   assert result_nx.shape == result_mlir.shape
-    #   assert result_nx.type == result_mlir.type
-    #   assert_equal(result_nx, result_mlir)
-    # end
+      assert result_nx.shape == result_mlir.shape
+      assert result_nx.type == result_mlir.type
+      assert_equal(result_nx, result_mlir)
+    end
   end
 
   describe "constants" do
@@ -445,6 +527,390 @@ defmodule EXLA.MLIR.ExecutableTest do
       assert result_nx.shape == result_mlir.shape
       assert result_nx.type == result_mlir.type
       assert_equal(result_nx, result_mlir)
+    end
+  end
+
+  describe "sort" do
+    test "sorts with axis and direction" do
+      for type <- [s: 64, u: 64, f: 32] do
+        t = Nx.tensor([[0, 2, 1, 10], [10, 10, 20, 0]], type: type)
+
+        result = EXLA.jit(&Nx.sort(&1, direction: :asc, axis: 0), compiler_mode: :mlir).(t)
+
+        assert_equal(
+          result,
+          Nx.tensor(
+            [
+              [0, 2, 1, 0],
+              [10, 10, 20, 10]
+            ],
+            type: type
+          )
+        )
+
+        result = EXLA.jit(&Nx.sort(&1, direction: :asc, axis: 1), compiler_mode: :mlir).(t)
+
+        assert_equal(
+          result,
+          Nx.tensor(
+            [
+              [0, 1, 2, 10],
+              [0, 10, 10, 20]
+            ],
+            type: type
+          )
+        )
+
+        result = EXLA.jit(&Nx.sort(&1, direction: :desc, axis: 0), compiler_mode: :mlir).(t)
+
+        assert_equal(
+          result,
+          Nx.tensor(
+            [
+              [10, 10, 20, 10],
+              [0, 2, 1, 0]
+            ],
+            type: type
+          )
+        )
+
+        result = EXLA.jit(&Nx.sort(&1, direction: :desc, axis: 1), compiler_mode: :mlir).(t)
+
+        assert_equal(
+          result,
+          Nx.tensor(
+            [
+              [10, 2, 1, 0],
+              [20, 10, 10, 0]
+            ],
+            type: type
+          )
+        )
+      end
+    end
+  end
+
+  describe "argsort" do
+    test "sorts with axis and direction" do
+      for type <- [s: 64, u: 64, f: 32] do
+        t = Nx.tensor([[0, 2, 1, 10], [10, 10, 20, 0]], type: type)
+
+        result = EXLA.jit(&Nx.argsort(&1, direction: :asc, axis: 0), compiler_mode: :mlir).(t)
+
+        assert_equal(
+          result,
+          Nx.tensor([
+            [0, 0, 0, 1],
+            [1, 1, 1, 0]
+          ])
+        )
+
+        result = EXLA.jit(&Nx.argsort(&1, direction: :asc, axis: 1), compiler_mode: :mlir).(t)
+
+        assert_equal(
+          result,
+          Nx.tensor([
+            [0, 2, 1, 3],
+            [3, 0, 1, 2]
+          ])
+        )
+
+        result = EXLA.jit(&Nx.argsort(&1, direction: :desc, axis: 0), compiler_mode: :mlir).(t)
+
+        assert_equal(
+          result,
+          Nx.tensor([
+            [1, 1, 1, 0],
+            [0, 0, 0, 1]
+          ])
+        )
+
+        result = EXLA.jit(&Nx.argsort(&1, direction: :desc, axis: 1), compiler_mode: :mlir).(t)
+
+        assert_equal(
+          result,
+          Nx.tensor([
+            [3, 1, 2, 0],
+            [2, 0, 1, 3]
+          ])
+        )
+      end
+    end
+  end
+
+  describe "top_k" do
+    test "sorts on the last axis" do
+      for type <- [s: 64, u: 64, f: 32] do
+        t = Nx.tensor([[0, 2, 1, 10], [10, 10, 20, 0]], type: type)
+
+        {result, indices} = EXLA.jit(&Nx.top_k(&1, k: 2), compiler_mode: :mlir).(t)
+
+        assert_equal(
+          result,
+          Nx.tensor(
+            [
+              [10, 2],
+              [20, 10]
+            ],
+            type: type
+          )
+        )
+
+        assert_equal(
+          indices,
+          Nx.tensor(
+            [
+              [3, 1],
+              [2, 0]
+            ],
+            type: :s64
+          )
+        )
+      end
+    end
+  end
+
+  describe "indexed ops" do
+    test "indexed_add" do
+      t = Nx.iota({1, 2, 3})
+      indices = Nx.tensor([[0, 0, 0], [0, 1, 1], [0, 0, 0], [0, 0, 2], [0, 1, 2]])
+      updates = Nx.tensor([1, 3, 1, -2, 5])
+
+      result = EXLA.jit(&Nx.indexed_add/3, compiler_mode: :mlir).(t, indices, updates)
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [
+            [2, 1, 0],
+            [3, 7, 10]
+          ]
+        ])
+      )
+    end
+
+    test "indexed_put" do
+      t = Nx.iota({1, 2, 3})
+      indices = Nx.tensor([[0, 0, 0], [0, 1, 1], [0, 0, 0], [0, 0, 2], [0, 1, 2]])
+      updates = Nx.tensor([1, 3, 1, -2, 5])
+
+      result = EXLA.jit(&Nx.indexed_put/3, compiler_mode: :mlir).(t, indices, updates)
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [
+            [1, 1, -2],
+            [3, 3, 5]
+          ]
+        ])
+      )
+    end
+  end
+
+  describe "window_scatter" do
+    test "window_scatter_max" do
+      t =
+        Nx.tensor([
+          [7, 2, 5, 3, 10, 2],
+          [3, 8, 9, 3, 4, 2],
+          [1, 5, 7, 5, 6, 1],
+          [0, 6, 2, 7, 2, 8]
+        ])
+
+      opts = [strides: [2, 3], padding: :valid]
+
+      result =
+        EXLA.jit(&Nx.window_scatter_max(&1, Nx.tensor([[2, 6], [3, 1]]), 0, {2, 3}, opts),
+          compiler_mode: :mlir
+        ).(t)
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [0, 0, 0, 0, 6, 0],
+          [0, 0, 2, 0, 0, 0],
+          [0, 0, 3, 0, 0, 0],
+          [0, 0, 0, 0, 0, 1]
+        ])
+      )
+    end
+
+    test "window_scatter_min" do
+      t =
+        Nx.tensor([
+          [7, 2, 5, 3, 10, 2],
+          [3, 8, 9, 3, 4, 2],
+          [1, 5, 7, 5, 6, 1],
+          [0, 6, 2, 7, 2, 8]
+        ])
+
+      opts = [strides: [2, 3], padding: :valid]
+
+      result =
+        EXLA.jit(&Nx.window_scatter_min(&1, Nx.tensor([[2, 6], [3, 1]]), 0, {2, 3}, opts),
+          compiler_mode: :mlir
+        ).(t)
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [0, 2, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 6],
+          [0, 0, 0, 0, 0, 1],
+          [3, 0, 0, 0, 0, 0]
+        ])
+      )
+    end
+  end
+
+  describe "fft" do
+    test "fft and ifft" do
+      t = Nx.tensor([[1, 0, 0, 0], [1, 1, 1, 1]])
+
+      result = EXLA.jit(&(&1 |> Nx.fft() |> Nx.ifft()), compiler_mode: :mlir).(t)
+      assert_equal(result, Nx.as_type(t, :c64))
+    end
+
+    test "fft2 and ifft2" do
+      t = Nx.tensor([[1, 0, 0, 0], [1, 1, 1, 1]])
+
+      result = EXLA.jit(&(&1 |> Nx.fft2() |> Nx.ifft2()), compiler_mode: :mlir).(t)
+      assert_equal(result, Nx.as_type(t, :c64))
+    end
+  end
+
+  describe "conv" do
+    test "simple convolution" do
+      right = Nx.iota({4, 1, 1, 1})
+      left = Nx.iota({1, 1, 3, 3})
+      result = EXLA.jit(&Nx.conv(&1, &2, strides: [1, 1]), compiler_mode: :mlir).(left, right)
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [
+            [
+              [0.0, 0.0, 0.0],
+              [0.0, 0.0, 0.0],
+              [0.0, 0.0, 0.0]
+            ],
+            [
+              [0.0, 1.0, 2.0],
+              [3.0, 4.0, 5.0],
+              [6.0, 7.0, 8.0]
+            ],
+            [
+              [0.0, 2.0, 4.0],
+              [6.0, 8.0, 10.0],
+              [12.0, 14.0, 16.0]
+            ],
+            [
+              [0.0, 3.0, 6.0],
+              [9.0, 12.0, 15.0],
+              [18.0, 21.0, 24.0]
+            ]
+          ]
+        ])
+      )
+    end
+  end
+
+  describe "triangular_solve" do
+    test "supports options" do
+      a = Nx.tensor([[1, 1, 1], [0, 1, 1], [0, 0, 1]])
+      b = Nx.tensor([[3, 1], [2, -1], [1, -1]])
+
+      result =
+        EXLA.jit(&Nx.LinAlg.triangular_solve(&1, &2, left_side: true), compiler_mode: :mlir).(
+          a,
+          b
+        )
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [3.0, 1.0],
+          [2.0, -1.0],
+          [1.0, -1.0]
+        ])
+      )
+
+      result =
+        EXLA.jit(&Nx.LinAlg.triangular_solve(&1, &2, left_side: true, lower: false),
+          compiler_mode: :mlir
+        ).(a, b)
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [1.0, 2.0],
+          [1.0, 0.0],
+          [1.0, -1.0]
+        ])
+      )
+    end
+  end
+
+  describe "put_slice" do
+    test "purely static starts" do
+      t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      u = Nx.tensor([[7, 8], [9, 10]])
+
+      result = EXLA.jit(&Nx.put_slice(&1, [0, 1], &2)).(t, u)
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [1, 7, 8],
+          [4, 9, 10]
+        ])
+      )
+    end
+
+    test "purely dynamic starts" do
+      t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      u = Nx.tensor([[7, 8], [9, 10]])
+
+      result = EXLA.jit(&Nx.put_slice(&1, [Nx.tensor(0), Nx.tensor(1)], &2)).(t, u)
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [1, 7, 8],
+          [4, 9, 10]
+        ])
+      )
+    end
+
+    test "mixed starts" do
+      t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      u = Nx.tensor([[7, 8], [9, 10]])
+      result = EXLA.jit(&Nx.put_slice(&1, [Nx.tensor(1), 1], &2), compiler_mode: :mlir).(t, u)
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [1, 7, 8],
+          [4, 9, 10]
+        ])
+      )
+    end
+  end
+
+  describe "gather" do
+    test "works" do
+      t = Nx.tensor([[1, 2], [3, 4]])
+      idx = Nx.tensor([[[1, 1], [0, 0]], [[1, 0], [0, 1]]])
+      result = EXLA.jit(fn t, idx -> Nx.gather(t, idx) end, compiler_mode: :mlir).(t, idx)
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [4, 1],
+          [3, 2]
+        ])
+      )
     end
   end
 end

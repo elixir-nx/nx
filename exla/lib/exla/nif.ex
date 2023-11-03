@@ -30,7 +30,7 @@ defmodule EXLA.NIF do
                [:tanh, :acosh, :asinh, :atanh, :sqrt, :cbrt] ++
                [:bitwise_not, :erf, :erfc, :erf_inv] ++
                [:is_infinity, :is_nan, :rsqrt, :negate, :count_leading_zeros] ++
-               [:population_count]
+               [:population_count, :real, :imag, :conjugate]
 
   for op <- @unary_ops do
     mlir_op = :"mlir_#{op}"
@@ -44,6 +44,7 @@ defmodule EXLA.NIF do
   def mlir_dynamic_slice(_function, _operand, _starts, _lengths), do: :erlang.nif_error(:undef)
   def mlir_tuple(_function, _vals), do: :erlang.nif_error(:undef)
   def mlir_get_tuple_element(_function, _tuple, _index), do: :erlang.nif_error(:undef)
+  def mlir_pad(_function, _tensor, _pad, _low, _high, _mid), do: :erlang.nif_error(:undef)
 
   def mlir_build(_function, _root), do: :erlang.nif_error(:undef)
 
@@ -60,6 +61,7 @@ defmodule EXLA.NIF do
 
   def mlir_convert(_function, _tensor, _type), do: :erlang.nif_error(:undef)
   def mlir_bitcast_convert(_function, _tensor, _type, _dims), do: :erlang.nif_error(:undef)
+  def mlir_sort(_function, _tensors, _dim, _desc), do: :erlang.nif_error(:undef)
 
   def mlir_get_shape(_tensor), do: :erlang.nif_error(:undef)
 
@@ -78,6 +80,59 @@ defmodule EXLA.NIF do
   def mlir_clamp(_function, _operand, _min, _max), do: :erlang.nif_error(:undef)
 
   def mlir_select(_function, _pred, _on_true, _on_false),
+    do: :erlang.nif_error(:undef)
+
+  def mlir_scatter(_function, _target, _indices, _updates, _add_or_put),
+    do: :erlang.nif_error(:undef)
+
+  def mlir_select_and_scatter(
+        _function,
+        _target,
+        _source,
+        _init_value,
+        _gt_or_lt,
+        _window_dimensions,
+        _window_strides,
+        _padding
+      ),
+      do: :erlang.nif_error(:undef)
+
+  def mlir_gather(
+        _function,
+        _sorce,
+        _indices,
+        _slice_sizes,
+        _offset_dims,
+        _collapsed_slice_dims,
+        _start_index_map,
+        _index_vector_dim
+      ),
+      do: :erlang.nif_error(:undef)
+
+  def mlir_fft(_function, _tensor, _forward_fft, _fft_lenght), do: :erlang.nif_error(:undef)
+
+  def mlir_convolution(
+        _function,
+        _tensor,
+        _kernel,
+        _strides,
+        _padding_config,
+        _tensor_dilation,
+        _kernel_dilation,
+        _dimension_numbers,
+        _feature_group_count,
+        _batch_group_count,
+        _precision_config,
+        _output_dims
+      ),
+      do: :erlang.nif_error(:undef)
+
+  def mlir_create_token(_function), do: :erlang.nif_error(:undef)
+
+  def mlir_triangular_solve(_function, _a, _b, _left_side, _lower, _transpose_a),
+    do: :erlang.nif_error(:undef)
+
+  def mlir_dynamic_update_slice(_function, _operand, _updates, _starts),
     do: :erlang.nif_error(:undef)
 
   def new_builder(_name),
@@ -104,7 +159,7 @@ defmodule EXLA.NIF do
     [:add, :subtract, :multiply, :divide, :remainder, :min, :max] ++
       [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift_arithmetic] ++
       [:right_shift_logical, :equal, :not_equal, :greater_equal, :greater, :less_equal] ++
-      [:less, :pow, :complex, :atan2]
+      [:less, :pow, :atan2]
 
   for op <- binary_broadcast_ops do
     def unquote(op)(_a, _b, _broadcast_dims) do

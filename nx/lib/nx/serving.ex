@@ -190,10 +190,15 @@ defmodule Nx.Serving do
   the same code and applications. It is only required that they run the
   same `Nx` version.
 
-  The load balancing between servings is done randomly, however, the number
-  of partitions are considered if the `partitions: true` option is also given.
+  The load balancing between servings is done randomly by default, however,
+  the number of partitions are considered if the `partitions: true` option is also given.
   For example, if you have a node with 2 GPUs and another with 4, the latter
   will receive the double of requests compared to the former.
+
+  Furthermore, the load balancing allows for assigning weights to servings.
+  Similarly to the number of partitions, when running a serving with `distribution_weight: 1`
+  and another one with `distribution_weight: 2`, the latter will receive double the requests
+  compared to the former.
 
   `batched_run/3` receives an optional `distributed_preprocessing` callback as
   third argument for preprocessing the input for distributed requests. When
@@ -388,7 +393,8 @@ defmodule Nx.Serving do
     :partitions,
     :shutdown,
     :hibernate_after,
-    :spawn_opt
+    :spawn_opt,
+    :distribution_weight
   ]
 
   @doc """
@@ -873,6 +879,13 @@ defmodule Nx.Serving do
       The number of partitions will be determined according to your compiler
       and for which host it is compiling. See the module docs for more information
 
+    * `:distribution_weight` - weight used for load balancing when running
+      a distributed serving. Defaults to `1`.
+      If it is set to a higher number `w`, the serving process will receive,
+      on average, `w` times the number of requests compared to the
+      default. Note that the weight is multiplied with the number of
+      partitions, if partitioning is enabled.
+
     * `:shutdown` - the maximum time for the serving to shutdown. This will
       block until the existing computation finishes (defaults to `30_000`ms)
 
@@ -901,11 +914,18 @@ defmodule Nx.Serving do
     partitions = Keyword.get(opts, :partitions, false)
     batch_keys = Keyword.get(opts, :batch_keys, [:default])
     batch_timeout = Keyword.get(opts, :batch_timeout, 100)
+    weight = Keyword.get(opts, :distribution_weight, 1)
     process_options = Keyword.take(opts, [:name, :hibernate_after, :spawn_opt])
+
+    unless is_integer(weight) do
+      raise ArgumentError, ":distribution_weight must be an integer"
+    end
 
     supervisor = Module.concat(name, "Supervisor")
     task_supervisor = Module.concat(name, "TaskSupervisor")
-    arg = {name, serving, partitions, batch_keys, batch_size, batch_timeout, task_supervisor}
+
+    arg =
+      {name, serving, partitions, batch_keys, batch_size, batch_timeout, task_supervisor, weight}
 
     children = [
       {Task.Supervisor, name: task_supervisor},
@@ -1280,7 +1300,10 @@ defmodule Nx.Serving do
   @timeout_message {__MODULE__, :timeout}
 
   @impl true
-  def init({name, serving, partitions?, batch_keys, batch_size, batch_timeout, task_supervisor}) do
+  def init(
+        {name, serving, partitions?, batch_keys, batch_size, batch_timeout, task_supervisor,
+         weight}
+      ) do
     Process.flag(:trap_exit, true)
     partitions_opts = serving_partitions(serving, partitions?)
     partitions_count = length(partitions_opts)
@@ -1300,7 +1323,8 @@ defmodule Nx.Serving do
       }
     )
 
-    :pg.join(Nx.Serving.PG, __MODULE__, List.duplicate(self(), partitions_count))
+    serving_weight = max(1, weight * partitions_count)
+    :pg.join(Nx.Serving.PG, __MODULE__, List.duplicate(self(), serving_weight))
 
     for batch_key <- batch_keys do
       stack_init(batch_key)
@@ -1397,17 +1421,23 @@ defmodule Nx.Serving do
     {:noreply, state}
   end
 
-  def handle_info({@timeout_message, key}, %{out_queue: out_queue} = state) do
-    # We have processing power, so execute it immediately.
-    # Otherwise we will queue it but keep on increasing the batch.
-    if out_queue != @empty_queue do
-      {:noreply, server_execute(state, key)}
-    else
-      stack_update(key, fn {[_ | _] = stack, count, _timer} ->
-        {stack, count, :done}
-      end)
+  def handle_info({@timeout_message, key, ref}, %{out_queue: out_queue} = state) do
+    case stack_timer(key) do
+      # We have processing power, so execute it immediately.
+      {^ref, _timer_ref} when out_queue != @empty_queue ->
+        {:noreply, server_execute(state, key)}
 
-      {:noreply, update_in(state.in_queue, &:queue.in(key, &1))}
+      # Otherwise we will queue it but keep on increasing the batch.
+      {^ref, _timer_ref} ->
+        stack_update(key, fn {[_ | _] = stack, count, _timer} ->
+          {stack, count, :done}
+        end)
+
+        {:noreply, update_in(state.in_queue, &:queue.in(key, &1))}
+
+      # Otherwise this is an old timer message, just ignore it.
+      _ ->
+        {:noreply, state}
     end
   end
 
@@ -1514,7 +1544,8 @@ defmodule Nx.Serving do
     stack_update(key, fn {stack, count, timer} when batch.size + count <= limit ->
       timer =
         if timer == :none and timer_mode == :set_timer do
-          Process.send_after(self(), {@timeout_message, key}, state.timeout)
+          ref = make_ref()
+          {ref, Process.send_after(self(), {@timeout_message, key, ref}, state.timeout)}
         else
           timer
         end
@@ -1613,6 +1644,11 @@ defmodule Nx.Serving do
     count
   end
 
+  defp stack_timer(key) do
+    {_stack, _count, timer} = Process.get({__MODULE__, key})
+    timer
+  end
+
   defp stack_entries(key) do
     {stack, _count, _timer} = Process.get({__MODULE__, key})
     stack
@@ -1627,11 +1663,11 @@ defmodule Nx.Serving do
     {[_ | _] = stack, count, timer} = Process.get({__MODULE__, key})
     :ok = stack_init(key)
 
-    if is_reference(timer) do
-      Process.cancel_timer(timer)
+    with {ref, timer_ref} <- timer do
+      Process.cancel_timer(timer_ref)
 
       receive do
-        {@timeout_message, ^key} -> :ok
+        {@timeout_message, ^key, ^ref} -> :ok
       after
         0 -> :ok
       end

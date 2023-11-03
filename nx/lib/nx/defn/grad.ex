@@ -111,7 +111,7 @@ defmodule Nx.Defn.Grad do
     args = call.data.args
 
     # First traverse through all arguments
-    acc = Enum.reduce(args, acc, &recur_parents_tree(&1, &2, params))
+    acc = args |> Enum.reject(&is_list/1) |> Enum.reduce(acc, &recur_parents_tree(&1, &2, params))
 
     # Now traverse over the optional expression where args are the new parameters.
     # Once we access the parameter itself, we point the parameter to the arg.
@@ -239,6 +239,8 @@ defmodule Nx.Defn.Grad do
   end
 
   defp update_grads(:optional, [_call, expr], _ans, gs, _to_grad_ids, grads) do
+    gs = List.wrap(gs)
+
     {grads, []} =
       Composite.reduce(expr, {grads, gs}, fn child, {grads, [g | gs]} ->
         {Map.update(grads, child.data.id, [g], &[g | &1]), gs}

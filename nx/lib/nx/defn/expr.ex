@@ -358,17 +358,17 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def optional(name, args, fun) do
-    {args, opts} = Enum.split_while(args, &(not is_list(&1)))
+  def optional(name, in_args, fun) do
+    {args, opts} = Enum.split_while(in_args, &(not is_list(&1)))
     params = Enum.with_index(args, &parameter/2)
 
     case apply(fun, params ++ opts) do
       %{data: %{context: context}} = res ->
-        expr(res, context, :optional, [expr(res, context, name, args), res])
+        expr(res, context, :optional, [expr(res, context, name, in_args), res])
 
       t when is_tuple(t) ->
         context = elem(t, 0).data.context
-        out = expr(tuple_out(tuple_size(t)), context, name, args)
+        out = expr(tuple_out(tuple_size(t)), context, name, in_args)
         tuple(expr(out, context, :optional, [out, t]), Tuple.to_list(t))
     end
   end

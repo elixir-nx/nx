@@ -35,7 +35,7 @@ defmodule EXLA.MLIR.Value do
                [:tanh, :acosh, :asinh, :atanh, :sqrt, :cbrt] ++
                [:bitwise_not, :erf, :erfc, :erf_inv] ++
                [:is_infinity, :is_nan, :rsqrt, :negate, :count_leading_zeros] ++
-               [:population_count]
+               [:population_count, :real, :imag, :conjugate]
 
   for op <- @unary_ops do
     mlir_op = :"mlir_#{op}"
@@ -111,9 +111,59 @@ defmodule EXLA.MLIR.Value do
     %Value{value | ref: out_ref}
   end
 
+  def sort(%Value{} = value, axis, direction) do
+    [result] = sort([value], axis, direction)
+    result
+  end
+
+  def sort([%Value{function: %Function{ref: func_ref}} | _] = values, axis, direction) do
+    desc = if direction == :desc, do: 1, else: 0
+
+    in_refs =
+      Enum.map(values, fn %Value{ref: ref, function: %Function{ref: ^func_ref}} -> ref end)
+
+    out_refs =
+      EXLA.NIF.mlir_sort(
+        func_ref,
+        in_refs,
+        axis,
+        desc
+      )
+      |> unwrap!()
+
+    Enum.zip_with(values, out_refs, fn value, out_ref -> %Value{value | ref: out_ref} end)
+  end
+
   def iota(%Function{} = func, shape, dim) do
     ref = EXLA.NIF.mlir_iota(func.ref, shape.ref, dim) |> unwrap!()
     %Value{ref: ref, function: func}
+  end
+
+  def constant_r0(%Function{} = func, value, {:c, width} = type)
+      when type in [{:c, 64}, {:c, 128}] do
+    {re, im} =
+      case value do
+        %Complex{re: re, im: im} -> {re, im}
+        n when is_float(n) -> {n, 0.0}
+        n when is_integer(n) -> {n * 1.0, 0.0}
+        true -> {1.0, 0.0}
+        false -> {0.0, 0.0}
+      end
+
+    width = div(width, 2)
+
+    data = <<re::float-native-size(width), im::float-native-size(width)>>
+
+    ref =
+      EXLA.NIF.mlir_constant_from_binary(
+        func.ref,
+        data,
+        EXLA.Shape.dtype_to_charlist(type),
+        {1}
+      )
+      |> unwrap!()
+
+    reshape(%Value{ref: ref, function: func}, {})
   end
 
   def constant_r0(%Function{} = func, value, type) do
@@ -202,6 +252,117 @@ defmodule EXLA.MLIR.Value do
     %Value{ref: ref, function: func}
   end
 
+  def pad(%Value{function: func} = operand, %Value{function: func} = pad, padding_config) do
+    {padding_low, padding_high, padding_mid} =
+      Enum.reduce(padding_config, {[], [], []}, fn {low, high, mid},
+                                                   {low_acc, high_acc, mid_acc} ->
+        {[low | low_acc], [high | high_acc], [mid | mid_acc]}
+      end)
+
+    ref =
+      EXLA.NIF.mlir_pad(
+        func.ref,
+        operand.ref,
+        pad.ref,
+        Enum.reverse(padding_low),
+        Enum.reverse(padding_high),
+        Enum.reverse(padding_mid)
+      )
+      |> unwrap!()
+
+    %Value{ref: ref, function: func}
+  end
+
+  def fft(%Value{function: func} = value, fft_kind, fft_length)
+      when fft_kind in [:fft, :ifft]
+      when is_list(fft_length) or is_integer(fft_length) do
+    ref =
+      EXLA.NIF.mlir_fft(
+        func.ref,
+        value.ref,
+        if(fft_kind == :fft, do: 1, else: 0),
+        List.wrap(fft_length)
+      )
+      |> unwrap!()
+
+    %Value{value | ref: ref}
+  end
+
+  def scatter(
+        %Value{function: func} = target,
+        %Value{function: func} = indices,
+        %Value{function: func} = updates,
+        kind
+      )
+      when kind in [:add, :put] do
+    add_or_put = if(kind == :add, do: 1, else: 0)
+
+    ref =
+      EXLA.NIF.mlir_scatter(
+        func.ref,
+        target.ref,
+        indices.ref,
+        updates.ref,
+        add_or_put
+      )
+      |> unwrap!()
+
+    %Value{target | ref: ref}
+  end
+
+  def select_and_scatter(
+        %Value{function: func} = target,
+        %Value{function: func} = source,
+        %Value{function: func} = init_value,
+        comparison,
+        window_dimensions,
+        window_strides,
+        padding
+      )
+      when comparison in [:gt, :lt] do
+    gt_or_lt = if(comparison == :gt, do: 1, else: 0)
+
+    ref =
+      EXLA.NIF.mlir_select_and_scatter(
+        func.ref,
+        target.ref,
+        source.ref,
+        init_value.ref,
+        gt_or_lt,
+        window_dimensions,
+        window_strides,
+        padding
+      )
+      |> unwrap!()
+
+    %Value{target | ref: ref}
+  end
+
+  def gather(
+        %Value{function: func} = source,
+        %Value{function: func} = indices,
+        slice_sizes,
+        offset_dims,
+        collapsed_slice_dims,
+        start_index_map,
+        index_vector_dim
+      ) do
+    ref =
+      EXLA.NIF.mlir_gather(
+        func.ref,
+        source.ref,
+        indices.ref,
+        slice_sizes,
+        offset_dims,
+        collapsed_slice_dims,
+        start_index_map,
+        index_vector_dim
+      )
+      |> unwrap!()
+
+    %Value{source | ref: ref}
+  end
+
   defp get_precision_config_int(precision_config) do
     case precision_config do
       :default ->
@@ -222,6 +383,99 @@ defmodule EXLA.MLIR.Value do
                 " :default, :high, :highest, or :packed_nibble," <>
                 " got: #{inspect(precision_config)}"
     end
+  end
+
+  def convolution(
+        %Value{function: func} = tensor,
+        %Value{function: func} = kernel,
+        strides,
+        padding,
+        input_dilation,
+        kernel_dilation,
+        dimension_numbers,
+        feature_group_count,
+        batch_group_count,
+        precision_config,
+        output_shape
+      ) do
+    precision_config = get_precision_config_int(precision_config)
+
+    ref =
+      EXLA.NIF.mlir_convolution(
+        func.ref,
+        tensor.ref,
+        kernel.ref,
+        strides,
+        padding,
+        input_dilation,
+        kernel_dilation,
+        dimension_numbers,
+        feature_group_count,
+        batch_group_count,
+        precision_config,
+        Tuple.to_list(output_shape)
+      )
+      |> unwrap!()
+
+    %{tensor | ref: ref}
+  end
+
+  def top_k(%Value{function: func} = tensor, k) do
+    # mlir::mhlo::TopKOp cannot be translated to XLA HLO, so we'll use
+    # variadic sort to implement it instead.
+
+    shape_ref = EXLA.NIF.mlir_get_shape(tensor.ref) |> unwrap!()
+    shape = EXLA.Shape.get_shape_info(shape_ref)
+    dims = shape.dims
+    rank = tuple_size(dims)
+    iota = iota(func, shape, rank - 1) |> convert({:s, 64})
+
+    [values, indices] = sort([tensor, iota], rank - 1, :desc)
+
+    strides = List.duplicate(1, rank)
+    starts = List.duplicate(0, rank)
+
+    limits =
+      Enum.map(0..(rank - 1), fn axis ->
+        if axis == rank - 1 do
+          k
+        else
+          elem(dims, axis)
+        end
+      end)
+
+    values = slice(values, starts, limits, strides)
+    indices = slice(indices, starts, limits, strides)
+
+    tuple([values, indices])
+  end
+
+  def triangular_solve(a, b, left_side, lower, transform) do
+    ref =
+      EXLA.NIF.mlir_triangular_solve(
+        a.function.ref,
+        a.ref,
+        b.ref,
+        if(left_side, do: 1, else: 0),
+        if(lower, do: 1, else: 0),
+        if(transform == :transpose, do: 1, else: 0)
+      )
+      |> unwrap!()
+
+    %{a | ref: ref}
+  end
+
+  def dynamic_update_slice(operand, updates, starts) do
+    ref =
+      EXLA.NIF.mlir_dynamic_update_slice(
+        operand.function.ref,
+        operand.ref,
+        updates.ref,
+        Enum.map(starts, & &1.ref)
+      )
+      |> unwrap!()
+
+    %{operand | ref: ref}
   end
 
   defp unwrap!({:ok, value}), do: value
