@@ -1304,6 +1304,7 @@ defmodule Nx.ServingTest do
         shutdown: 1000,
         distribution_weight: 1
       ]
+
       opts2 = Keyword.put(opts, :distribution_weight, 4)
 
       Node.spawn_link(:"secondary@127.0.0.1", DistributedServings, :multiply, [parent, opts])
