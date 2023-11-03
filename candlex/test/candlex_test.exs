@@ -1,5 +1,5 @@
 defmodule CandlexTest do
-  use Candlex.Case, async: true
+  use Nx.Case, async: true
   doctest Candlex
 
   describe "creation" do
@@ -83,26 +83,26 @@ defmodule CandlexTest do
       |> assert_equal(t([[0, 1, 2], [3, 4, 5]]))
 
       Nx.iota({3, 3}, axis: 1)
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [0, 1, 2],
           [0, 1, 2],
           [0, 1, 2]
-        ]
-      ))
+        ])
+      )
 
       Nx.iota({3, 3}, axis: -1)
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [0, 1, 2],
           [0, 1, 2],
           [0, 1, 2]
-        ]
-      ))
+        ])
+      )
 
       Nx.iota({3, 4, 3}, axis: 0, type: :f64)
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [
             [0.0, 0.0, 0.0],
             [0.0, 0.0, 0.0],
@@ -121,19 +121,19 @@ defmodule CandlexTest do
             [2.0, 2.0, 2.0],
             [2.0, 2.0, 2.0]
           ]
-        ]
-      ))
+        ])
+      )
 
       Nx.iota({1, 3, 2}, axis: 2)
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [
             [0, 1],
             [0, 1],
             [0, 1]
           ]
-        ]
-      ))
+        ])
+      )
     end
 
     test "max" do
@@ -189,12 +189,12 @@ defmodule CandlexTest do
 
       t([[1.0], [2]])
       |> Nx.divide(t([[10, 20]]))
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [0.10000000149011612, 0.05000000074505806],
           [0.20000000298023224, 0.10000000149011612]
-        ]
-      ))
+        ])
+      )
 
       1
       |> Nx.divide(2)
@@ -206,12 +206,12 @@ defmodule CandlexTest do
 
       t([[1], [2]])
       |> Nx.divide(t([[10, 20]]))
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [0.10000000149011612, 0.05000000074505806],
           [0.20000000298023224, 0.10000000149011612]
-        ]
-      ))
+        ])
+      )
     end
 
     test "remainder" do
@@ -228,12 +228,12 @@ defmodule CandlexTest do
 
       t([[10], [20]], names: [:x, :y])
       |> Nx.remainder(t([[3, 4]], names: [nil, :y]))
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [1, 2],
           [2, 0]
-        ]
-      ))
+        ])
+      )
 
       left = t(-11)
       right = t(10, type: :u8)
@@ -247,6 +247,7 @@ defmodule CandlexTest do
       |> assert_equal(t(9))
 
       positive_left = t(9, type: :u8)
+
       Nx.remainder(positive_left, right)
       |> assert_equal(t(9))
 
@@ -270,30 +271,30 @@ defmodule CandlexTest do
 
       t([[10, 20]], names: [nil, :y])
       |> Nx.quotient(t([[1], [2]], names: [:x, nil]))
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [10, 20],
           [5, 10]
-        ]
-      ))
+        ])
+      )
 
       t([[10, 20]])
       |> Nx.quotient(t([[1], [2]]))
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [10, 20],
           [5, 10]
-        ]
-      ))
+        ])
+      )
 
       t([[10, 20]], type: :u8)
       |> Nx.quotient(t([[1], [2]], type: :u32))
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [10, 20],
           [5, 10]
-        ]
-      ))
+        ])
+      )
     end
 
     test "sign" do
@@ -316,12 +317,12 @@ defmodule CandlexTest do
 
       t([[-0.0], [0.0]], type: :f64)
       |> Nx.atan2(t([-0.0, 0.0], type: :f64))
-      |> assert_close(t(
-        [
+      |> assert_close(
+        t([
           [-3.141592653589793, -0.0],
           [3.141592653589793, 0.0]
-        ]
-      ))
+        ])
+      )
     end
 
     test "broadcast" do
@@ -390,12 +391,12 @@ defmodule CandlexTest do
 
       t([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
       |> Nx.greater(t([1, 2, 3]))
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [0, 0, 0],
           [1, 1, 1]
-        ]
-      ))
+        ])
+      )
     end
 
     test "less" do
@@ -510,14 +511,13 @@ defmodule CandlexTest do
 
       # Dot product of vectors
 
-      # TODO:
-      # t([1, 2, 3])
-      # |> Nx.dot(t([4, 5, 6]))
-      # |> assert_equal(t(32))
+      t([1, 2, 3])
+      |> Nx.dot(t([4, 5, 6]))
+      |> assert_equal(t(32))
 
-      # t([1.0, 2.0, 3.0])
-      # |> Nx.dot(t([1, 2, 3]))
-      # |> assert_equal(t(14.0))
+      t([1.0, 2, 3])
+      |> Nx.dot(t([1, 2, 3]))
+      |> assert_equal(t(14.0))
 
       # Dot product of matrices (2-D tensors)
 
@@ -532,24 +532,28 @@ defmodule CandlexTest do
       # ))
 
       t([[1.0, 2, 3], [4, 5, 6]])
-      |> Nx.dot(t([[7.0, 8], [9, 10], [11, 12]]))
-      |> assert_equal(t(
-        [
+      |> Nx.dot(t([[7, 8], [9, 10], [11, 12]]))
+      |> assert_equal(
+        t([
           [58.0, 64],
           [139, 154]
-        ]
-      ))
+        ])
+      )
 
       # Dot product of vector and n-D tensor
 
-      # t([[[1.0, 2], [3, 4]], [[5, 6], [7, 8]]], names: [:i, :j, :k])
-      # |> Nx.dot(t([5.0, 10], names: [:x]))
-      # |> assert_equal(t(
-      #   [
-      #     [25, 55],
-      #     [85, 115]
-      #   ]
-      # ))
+      t([[0.0]])
+      |> Nx.dot(t([55.0]))
+      |> assert_equal(t([0.0]))
+
+      t([[[1.0, 2], [3, 4]], [[5, 6], [7, 8]]])
+      |> Nx.dot(t([5, 10]))
+      |> assert_equal(
+        t([
+          [25.0, 55],
+          [85, 115]
+        ])
+      )
 
       # t([5.0, 10], names: [:x])
       # |> Nx.dot(t([[1.0, 2, 3], [4, 5, 6]], names: [:i, :j]))
@@ -610,31 +614,31 @@ defmodule CandlexTest do
 
       t1
       |> Nx.dot([0], [], t2, [0], [])
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [100, 140],
           [140, 200]
-        ]
-      ))
+        ])
+      )
 
       # TODO:
       t1
       |> Nx.dot([0], [], t2, [1], [])
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [70, 150],
           [100, 220]
-        ]
-      ))
+        ])
+      )
 
       t1
       |> Nx.dot([1], [], t2, [0], [])
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [70, 100],
           [150, 220]
-        ]
-      ))
+        ])
+      )
 
       # t1
       # |> Nx.dot([1], [], t2, [1], [])
@@ -739,6 +743,10 @@ defmodule CandlexTest do
       t([-2.0, -1, 0, 1, 2])
       |> Nx.abs()
       |> assert_equal(t([2, 1, 0, 1, 2]))
+
+      t([-2, -1, 0, 1, 2])
+      |> Nx.abs()
+      |> assert_equal(t([2, 1, 0, 1, 2]))
     end
 
     test "sqrt" do
@@ -774,34 +782,34 @@ defmodule CandlexTest do
 
       t([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]])
       |> Nx.argmax(axis: 0)
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [1, 0, 0],
           [1, 1, 0]
-        ]
-      ))
+        ])
+      )
 
       t([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]], names: [:x, :y, :z])
       |> Nx.argmax(axis: :z)
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [0, 2],
           [0, 1]
-        ]
-      ))
+        ])
+      )
 
       t([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]], names: [:x, :y, :z])
       |> Nx.argmax(axis: :y, keep_axis: true)
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [
             [0, 0, 0]
           ],
           [
             [0, 1, 0]
           ]
-        ]
-      ))
+        ])
+      )
     end
 
     test "argmin" do
@@ -819,30 +827,30 @@ defmodule CandlexTest do
 
       t([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]])
       |> Nx.argmin(axis: 0)
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [0, 0, 0],
           [0, 0, 0]
-        ]
-      ))
+        ])
+      )
 
       t([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]], names: [:x, :y, :z])
       |> Nx.argmin(axis: 1)
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [1, 1, 0],
           [1, 0, 0]
-        ]
-      ))
+        ])
+      )
 
       t([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]], names: [:x, :y, :z])
       |> Nx.argmin(axis: :z)
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [1, 1],
           [1, 2]
-        ]
-      ))
+        ])
+      )
     end
 
     test "acos" do
@@ -1114,23 +1122,23 @@ defmodule CandlexTest do
 
       t([-1, 0, 1])
       |> Nx.logical_and(t([[-1], [0], [1]]))
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [1, 0, 1],
           [0, 0, 0],
           [1, 0, 1]
-        ]
-      ))
+        ])
+      )
 
       t([-1.0, 0.0, 1.0])
-      |> Nx.logical_and(t([[-1], [0], [1]]))\
-      |> assert_equal(t(
-        [
+      |> Nx.logical_and(t([[-1], [0], [1]]))
+      |> assert_equal(
+        t([
           [1, 0, 1],
           [0, 0, 0],
           [1, 0, 1]
-        ]
-      ))
+        ])
+      )
     end
 
     test "logical_or" do
@@ -1139,23 +1147,23 @@ defmodule CandlexTest do
 
       t([-1, 0, 1])
       |> Nx.logical_or(t([[-1], [0], [1]]))
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [1, 1, 1],
           [1, 0, 1],
           [1, 1, 1]
-        ]
-      ))
+        ])
+      )
 
       t([-1.0, 0.0, 1.0])
       |> Nx.logical_or(t([[-1], [0], [1]]))
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [1, 1, 1],
           [1, 0, 1],
           [1, 1, 1]
-        ]
-      ))
+        ])
+      )
     end
 
     test "logical_xor" do
@@ -1165,23 +1173,23 @@ defmodule CandlexTest do
 
       t([-1, 0, 1])
       |> Nx.logical_xor(t([[-1], [0], [1]]))
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [0, 1, 0],
           [1, 0, 1],
           [0, 1, 0]
-        ]
-      ))
+        ])
+      )
 
       t([-1.0, 0.0, 1.0])
       |> Nx.logical_xor(t([[-1], [0], [1]]))
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [0, 1, 0],
           [1, 0, 1],
           [0, 1, 0]
-        ]
-      ))
+        ])
+      )
     end
 
     test "erf" do
@@ -1233,48 +1241,49 @@ defmodule CandlexTest do
       |> assert_equal(t(10.0))
 
       t = Nx.iota({2, 2, 3}, names: [:x, :y, :z])
+
       Nx.sum(t, axes: [:x])
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [6, 8, 10],
           [12, 14, 16]
-        ]
-      ))
+        ])
+      )
 
       Nx.sum(t, axes: [:y])
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [3, 5, 7],
           [15, 17, 19]
-        ]
-      ))
+        ])
+      )
 
       Nx.sum(t, axes: [:z])
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [3, 12],
           [21, 30]
-        ]
-      ))
+        ])
+      )
 
       Nx.sum(t, axes: [:x, :z])
       |> assert_equal(t([24, 42]))
 
       Nx.sum(t, axes: [-3])
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [6, 8, 10],
           [12, 14, 16]
-        ]
-      ))
+        ])
+      )
 
       t([[1, 2], [3, 4]], names: [:x, :y])
       |> Nx.sum(axes: [:x], keep_axes: true)
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [4, 6]
-        ]
-      ))
+        ])
+      )
     end
 
     test "to_batched/2" do
@@ -1284,24 +1293,24 @@ defmodule CandlexTest do
         |> Enum.to_list()
 
       first
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [
             [0, 1],
             [2, 3]
           ]
-        ]
-      ))
+        ])
+      )
 
       second
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [
             [4, 5],
             [6, 7]
           ]
-        ]
-      ))
+        ])
+      )
 
       [first, second] =
         Nx.iota({10})
@@ -1401,8 +1410,8 @@ defmodule CandlexTest do
         |> Nx.reshape({4, 1, 1, 1}),
         strides: [1, 1]
       )
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [
             [
               [0.0, 0.0, 0.0],
@@ -1425,8 +1434,8 @@ defmodule CandlexTest do
               [18.0, 21.0, 24.0]
             ]
           ]
-        ]
-      ))
+        ])
+      )
 
       # input/output permutation
 
@@ -1441,8 +1450,8 @@ defmodule CandlexTest do
       assert result.shape == {1, 3, 3, 2}
 
       result
-      |> assert_close(t(
-        [
+      |> assert_close(
+        t([
           [
             [15.0, 15.0],
             [51.0, 51.0],
@@ -1458,8 +1467,8 @@ defmodule CandlexTest do
             [267.0, 267.0],
             [303.0, 303.0]
           ]
-        ]
-      ))
+        ])
+      )
 
       # Nx.iota({9})
       # |> Nx.reshape({1, 1, 3, 3})
@@ -1568,39 +1577,35 @@ defmodule CandlexTest do
     test "take_along_axis" do
       t([[1, 2, 3], [4, 5, 6]])
       |> Nx.take_along_axis(
-        t(
-          [
-            [0, 0, 2, 2, 1, 1],
-            [2, 2, 1, 1, 0, 0]
-          ]
-        ),
+        t([
+          [0, 0, 2, 2, 1, 1],
+          [2, 2, 1, 1, 0, 0]
+        ]),
         axis: 1
       )
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [1, 1, 3, 3, 2, 2],
           [6, 6, 5, 5, 4, 4]
-        ]
-      ))
+        ])
+      )
 
       t([[1, 2, 3], [4, 5, 6]])
       |> Nx.take_along_axis(
-        t(
-          [
-            [0, 1, 1],
-            [1, 0, 0],
-            [0, 1, 0]
-          ]
-        ),
+        t([
+          [0, 1, 1],
+          [1, 0, 0],
+          [0, 1, 0]
+        ]),
         axis: 0
       )
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [1, 5, 6],
           [4, 2, 3],
           [1, 5, 3]
-        ]
-      ))
+        ])
+      )
     end
 
     test "gather" do
@@ -1661,8 +1666,8 @@ defmodule CandlexTest do
 
       Nx.iota({2, 3, 4}, names: [:x, :y, :z])
       |> Nx.transpose()
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [
             [0, 12],
             [4, 16],
@@ -1683,8 +1688,8 @@ defmodule CandlexTest do
             [7, 19],
             [11, 23]
           ]
-        ]
-      ))
+        ])
+      )
 
       t(1)
       |> Nx.transpose(axes: [])
@@ -1692,8 +1697,8 @@ defmodule CandlexTest do
 
       Nx.iota({2, 3, 4}, names: [:batch, :x, :y])
       |> Nx.transpose(axes: [2, 1, :batch])
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [
             [0, 12],
             [4, 16],
@@ -1714,13 +1719,13 @@ defmodule CandlexTest do
             [7, 19],
             [11, 23]
           ]
-        ]
-      ))
+        ])
+      )
 
       Nx.iota({2, 3, 4}, names: [:batch, :x, :y])
       |> Nx.transpose(axes: [:y, :batch, :x])
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [
             [0, 4, 8],
             [12, 16, 20]
@@ -1737,13 +1742,13 @@ defmodule CandlexTest do
             [3, 7, 11],
             [15, 19, 23]
           ]
-        ]
-      ))
+        ])
+      )
 
       Nx.iota({2, 3, 4}, names: [:batch, :x, :y])
       |> Nx.transpose(axes: [:batch, :y, :x])
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [
             [0, 4, 8],
             [1, 5, 9],
@@ -1756,8 +1761,8 @@ defmodule CandlexTest do
             [14, 18, 22],
             [15, 19, 23]
           ]
-        ]
-      ))
+        ])
+      )
     end
 
     test "put_slice" do
@@ -1767,21 +1772,21 @@ defmodule CandlexTest do
 
       t([[1, 2, 3], [4, 5, 6]])
       |> Nx.put_slice([0, 0], t([[7, 8, 9], [10, 11, 12]]))
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [7, 8, 9],
           [10, 11, 12]
-        ]
-      ))
+        ])
+      )
 
       t([[1, 2, 3], [4, 5, 6]])
       |> Nx.put_slice([0, 1], t([[7, 8], [9, 10]]))
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [1, 7, 8],
           [4, 9, 10]
-        ]
-      ))
+        ])
+      )
 
       # t([[1, 2, 3], [4, 5, 6]])
       # |> Nx.put_slice([t(0), t(1)], t([[10.0, 11.0]]))
@@ -1979,27 +1984,27 @@ defmodule CandlexTest do
     test "take" do
       t([[1, 2], [3, 4]])
       |> Nx.take(t([1, 0, 1]))
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [3, 4],
           [1, 2],
           [3, 4]
-        ]
-      ))
+        ])
+      )
 
       t([[1, 2], [3, 4]])
       |> Nx.take(t([1, 0, 1]), axis: 1)
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [2, 1, 2],
           [4, 3, 4]
-        ]
-      ))
+        ])
+      )
 
       t([[[1, 2], [11, 12]], [[101, 102], [111, 112]]])
       |> Nx.take(t([1, 0, 1]), axis: 1)
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [
             [11, 12],
             [1, 2],
@@ -2010,8 +2015,8 @@ defmodule CandlexTest do
             [101, 102],
             [111, 112]
           ]
-        ]
-      ))
+        ])
+      )
 
       # t([[1, 2], [11, 12]])
       # |> Nx.take(t([[0, 0], [1, 1], [0, 0]]), axis: 1)
@@ -2075,48 +2080,48 @@ defmodule CandlexTest do
     test "clip" do
       t([[1, 2, 3], [4, 5, 6]])
       |> Nx.clip(2, 4)
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [2, 2, 3],
           [4, 4, 4]
-        ]
-      ))
+        ])
+      )
 
       t([[1, 2, 3], [4, 5, 6]])
       |> Nx.clip(2.0, 3)
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [2.0, 2.0, 3.0],
           [3.0, 3.0, 3.0]
-        ]
-      ))
+        ])
+      )
 
       t([[1, 2, 3], [4, 5, 6]])
       |> Nx.clip(t(2.0), Nx.max(1.0, 3.0))
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [2.0, 2.0, 3.0],
           [3.0, 3.0, 3.0]
-        ]
-      ))
+        ])
+      )
 
       t([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
       |> Nx.clip(2, 6.0)
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [2.0, 2.0, 3.0],
           [4.0, 5.0, 6.0]
-        ]
-      ))
+        ])
+      )
 
       t([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], type: :f32)
       |> Nx.clip(1, 4)
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [1.0, 2.0, 3.0],
           [4.0, 4.0, 4.0]
-        ]
-      ))
+        ])
+      )
     end
 
     test "not_equal" do
@@ -2133,15 +2138,118 @@ defmodule CandlexTest do
 
       t([[1, 4, 2], [4, 5, 6]])
       |> Nx.not_equal(t([[1, 3, 2], [4, 2, 1]]))
-      |> assert_equal(t(
-        [
+      |> assert_equal(
+        t([
           [0, 1, 0],
           [0, 1, 1]
-        ]
-      ))
+        ])
+      )
     end
 
-    if Candlex.Backend.cuda_available? do
+    test "all" do
+      t(0)
+      |> Nx.all()
+      |> assert_equal(t(0))
+
+      t(10)
+      |> Nx.all()
+      |> assert_equal(t(1))
+
+      t([0, 1, 2])
+      |> Nx.all()
+      |> assert_equal(t(0))
+
+      t([[-1, 0, 1], [2, 3, 4]], names: [:x, :y])
+      |> Nx.all(axes: [:x])
+      |> assert_equal(t([1, 0, 1]))
+
+      t([[-1, 0, 1], [2, 3, 4]], names: [:x, :y])
+      |> Nx.all(axes: [:y])
+      |> assert_equal(t([0, 1]))
+
+      t([[-1, 0, 1], [2, 3, 4]], names: [:x, :y])
+      |> Nx.all(axes: [:y], keep_axes: true)
+      |> assert_equal(
+        t([
+          [0],
+          [1]
+        ])
+      )
+
+      tensor = Nx.tensor([[[1, 2], [0, 4]], [[5, 6], [7, 8]]], names: [:x, :y, :z])
+
+      tensor
+      |> Nx.all(axes: [:x, :y])
+      |> assert_equal(t([0, 1]))
+
+      tensor
+      |> Nx.all(axes: [:y, :z])
+      |> assert_equal(t([0, 1]))
+
+      tensor
+      |> Nx.all(axes: [:x, :z])
+      |> assert_equal(t([1, 0]))
+
+      tensor
+      |> Nx.all(axes: [:x, :y], keep_axes: true)
+      |> assert_equal(
+        t([
+          [
+            [0, 1]
+          ]
+        ])
+      )
+
+      tensor
+      |> Nx.all(axes: [:y, :z], keep_axes: true)
+      |> assert_equal(
+        t([
+          [
+            [0]
+          ],
+          [
+            [1]
+          ]
+        ])
+      )
+
+      tensor
+      |> Nx.all(axes: [:x, :z], keep_axes: true)
+      |> assert_equal(
+        t([
+          [
+            [1],
+            [0]
+          ]
+        ])
+      )
+    end
+
+    test "any" do
+      t([0, 1, 2])
+      |> Nx.any()
+      |> assert_equal(t(1))
+
+      t([[0, 1, 0], [0, 1, 2]], names: [:x, :y])
+      |> Nx.any(axes: [:x])
+      |> assert_equal(t([0, 1, 1]))
+
+      t([[0, 1, 0], [0, 1, 2]], names: [:x, :y])
+      |> Nx.any(axes: [:y])
+      |> assert_equal(t([1, 1]))
+
+      tensor = t([[0, 1, 0], [0, 1, 2]], names: [:x, :y])
+
+      tensor
+      |> Nx.any(axes: [:x], keep_axes: true)
+      |> assert_equal(t([[0, 1, 1]]))
+
+      tensor
+      |> Nx.any(axes: [:y], keep_axes: true)
+      |> assert_equal(t([[1], [1]]))
+    end
+
+    if Candlex.Backend.cuda_available?() do
       test "different devices" do
         t([1, 2, 3], backend: {Candlex.Backend, device: :cpu})
         |> Nx.add(t([10, 20, 30], backend: {Candlex.Backend, device: :cuda}))
@@ -2182,6 +2290,7 @@ defmodule CandlexTest do
     tensor
     # |> IO.inspect()
     |> Nx.to_binary()
+
     # |> IO.inspect()
 
     opts =

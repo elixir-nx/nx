@@ -115,7 +115,7 @@ pub fn index_add(
 pub fn chunk(t: ExTensor, num_chunks: usize) -> Result<Vec<ExTensor>, CandlexError> {
     Ok(t.chunk(num_chunks, 0)?
         .into_iter()
-        .map(|t| ExTensor::new(t))
+        .map(ExTensor::new)
         .collect())
 }
 
@@ -154,22 +154,38 @@ pub fn arange(
 
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn all(ex_tensor: ExTensor) -> Result<ExTensor, CandlexError> {
-    let device = ex_tensor.device();
-    let t = ex_tensor.flatten_all()?;
-    let dims = t.shape().dims();
-    let on_true = Tensor::ones(dims, DType::U8, device)?;
-    let on_false = Tensor::zeros(dims, DType::U8, device)?;
+    Ok(ExTensor::new(_all(
+        &ex_tensor.flatten_all()?,
+        vec![0],
+        false,
+    )?))
+}
 
-    let bool_scalar = match t
-        .where_cond(&on_true, &on_false)?
-        .min(0)?
-        .to_scalar::<u8>()?
-    {
-        0 => 0u8,
-        _ => 1u8,
-    };
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn all_within_dims(
+    ex_tensor: ExTensor,
+    dims: Vec<usize>,
+    keep_dims: bool,
+) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(_all(ex_tensor.deref(), dims, keep_dims)?))
+}
 
-    Ok(ExTensor::new(Tensor::new(bool_scalar, device)?))
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn any(ex_tensor: ExTensor) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(_any(
+        &ex_tensor.flatten_all()?,
+        vec![0],
+        false,
+    )?))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn any_within_dims(
+    ex_tensor: ExTensor,
+    dims: Vec<usize>,
+    keep_dims: bool,
+) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(_any(ex_tensor.deref(), dims, keep_dims)?))
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
@@ -346,6 +362,14 @@ pub fn divide(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError>
     ))
 }
 
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn dot(left: ExTensor, right: ExTensor) -> Result<ExTensor, CandlexError> {
+    Ok(ExTensor::new(
+        left.mul(&right.broadcast_as(left.shape())?)?
+            .sum(left.rank() - 1)?,
+    ))
+}
+
 macro_rules! unary_nif {
     ($nif_name:ident, $native_fn_name:ident) => {
         #[rustler::nif(schedule = "DirtyCpu")]
@@ -446,11 +470,43 @@ custom_binary_nif!(pow, Pow);
 custom_binary_nif!(right_shift, Shr);
 custom_binary_nif!(remainder, Remainder);
 
+fn _any(tensor: &Tensor, dims: Vec<usize>, keep_dims: bool) -> Result<Tensor, CandlexError> {
+    let comparison = tensor.ne(&tensor.zeros_like()?)?;
+
+    let result = if keep_dims {
+        dims.iter()
+            .rev()
+            .fold(comparison, |t, dim| t.max_keepdim(*dim).unwrap())
+    } else {
+        dims.iter()
+            .rev()
+            .fold(comparison, |t, dim| t.max(*dim).unwrap())
+    };
+
+    Ok(result)
+}
+
+fn _all(tensor: &Tensor, dims: Vec<usize>, keep_dims: bool) -> Result<Tensor, CandlexError> {
+    let comparison = tensor.ne(&tensor.zeros_like()?)?;
+
+    let result = if keep_dims {
+        dims.iter()
+            .rev()
+            .fold(comparison, |t, dim| t.min_keepdim(*dim).unwrap())
+    } else {
+        dims.iter()
+            .rev()
+            .fold(comparison, |t, dim| t.min(*dim).unwrap())
+    };
+
+    Ok(result)
+}
+
 fn tuple_to_vec(term: Term) -> Result<Vec<usize>, rustler::Error> {
-    Ok(rustler::types::tuple::get_tuple(term)?
+    rustler::types::tuple::get_tuple(term)?
         .iter()
         .map(|elem| elem.decode())
-        .collect::<Result<_, _>>()?)
+        .collect::<Result<_, _>>()
 }
 
 fn vec_to_tuple(env: Env, vec: Vec<usize>) -> Result<Term, rustler::Error> {
