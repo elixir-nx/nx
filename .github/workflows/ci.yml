@@ -6,7 +6,7 @@ on:
   pull_request:
 jobs:
   main:
-    name: Linux (${{ matrix.working_directory == 'torchx' && format('torchx({0})', matrix.torch_version) || matrix.working_directory }}, ${{ matrix.elixir }}, ${{ matrix.otp }})
+    name: Linux (${{ matrix.working_directory }}, ${{ matrix.elixir }}, ${{ matrix.otp }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -14,14 +14,9 @@ jobs:
         working_directory: ["nx", "exla", "torchx"]
         elixir: ["1.14.5", "1.15.4"]
         otp: ["25.3"]
-        torch_version: ["2.0.0"]
         include:
           - elixir: "1.15.4"
             lint: true
-          - working_directory: torchx
-            elixir: "1.14.5"
-            otp: "25.3"
-            torch_version: "1.12.1"
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}

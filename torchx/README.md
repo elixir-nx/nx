@@ -33,15 +33,14 @@ Mix.install([
 
 We will automatically download a precompiled version of `LibTorch` that
 runs on the CPU. If you want to use another version, you can set `LIBTORCH_VERSION`
-to `1.12.1` or later.
+to `2.0.0` or later.
 
 If you want torch with CUDA support, please use `LIBTORCH_TARGET` to choose
 CUDA versions. The current supported targets are:
 
 - `cpu` default CPU only version
-- `cu102` CUDA 10.2 and CPU version (no OSX support)
-- `cu113` CUDA 11.3 and CPU version (no OSX support)
-- `cu116` CUDA 11.6 and CPU version (no OSX support)
+- `cu118` CUDA 11.8 and CPU version (no OSX support)
+- `cu121` CUDA 12.1 and CPU version (no OSX support)
 
 Once downloaded, we will compile `Torchx` bindings. You will need `make`/`nmake`,
 `cmake` (3.12+) and a `C++` compiler. If building on Windows, you will need:
