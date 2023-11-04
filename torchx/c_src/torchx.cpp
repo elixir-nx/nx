@@ -494,10 +494,11 @@ NIF(indexed_put)
 NIF(argsort)
 {
   TENSOR_PARAM(0, input);
-  PARAM(1, int64_t, axis);
-  PARAM(2, bool, is_descending);
+  PARAM(1, bool, stable);
+  PARAM(2, int64_t, axis);
+  PARAM(3, bool, is_descending);
 
-  TENSOR(torch::argsort(*input, axis, is_descending));
+  TENSOR(torch::argsort(*input, stable, axis, is_descending));
 }
 
 NIF(top_k)
@@ -835,10 +836,11 @@ NIF(determinant)
 NIF(sort)
 {
   TENSOR_PARAM(0, t);
-  PARAM(1, int64_t, axis);
-  PARAM(2, bool, descending);
+  PARAM(1, bool, stable);
+  PARAM(2, int64_t, axis);
+  PARAM(3, bool, descending);
 
-  std::tuple<torch::Tensor, torch::Tensor> result = t->sort(axis, descending);
+  std::tuple<torch::Tensor, torch::Tensor> result = t->sort(stable, axis, descending);
   TENSOR(std::get<0>(result));
 }
 
@@ -1279,7 +1281,7 @@ static ErlNifFunc nif_functions[] = {
     DF(gather, 3),
     DF(indexed_add, 4),
     DF(indexed_put, 4),
-    DF(argsort, 3),
+    DF(argsort, 4),
     DF(top_k, 2),
     DF(flip, 2),
     DF(unfold, 4),
@@ -1385,7 +1387,7 @@ static ErlNifFunc nif_functions[] = {
     DF(lu, 1),
     DF(triangular_solve, 4),
     DF(determinant, 1),
-    DF(sort, 3),
+    DF(sort, 4),
     DF(clip, 3),
     DF(where, 3),
     DF(amax, 3),

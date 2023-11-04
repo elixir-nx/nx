@@ -1573,7 +1573,7 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(:sort, [%Value{} = tensor, opts], _ans, _state) do
-    Value.sort(tensor, opts[:axis], opts[:direction])
+    Value.sort(tensor, opts[:axis], opts[:direction], opts[:stable] == true)
   end
 
   defp to_operator(:sort, [tensor, opts], ans, state) do
@@ -1587,20 +1587,22 @@ defmodule EXLA.Defn do
 
     args = [%{type: ans.type, shape: {}}, %{type: ans.type, shape: {}}]
     comp = op_computation(op, args, state)
-    EXLA.Op.sort(tensor, comp, dimension)
+    EXLA.Op.sort(tensor, comp, dimension, opts[:stable] == true)
   end
 
   defp to_operator(:argsort, [%Value{} = tensor, opts], ans, _state) do
     dimension = opts[:axis]
+    stable = opts[:stable] == true
     dims = op_shape(tensor)
     iota_shape = EXLA.Shape.make_shape(ans.type, dims)
     iota = EXLA.Lib.iota(tensor.function, iota_shape, dimension)
-    [_, arg] = Value.sort([tensor, iota], dimension, opts[:direction])
+    [_, arg] = Value.sort([tensor, iota], dimension, opts[:direction], stable)
     arg
   end
 
   defp to_operator(:argsort, [tensor, opts], ans, state) do
     dimension = opts[:axis]
+    stable = opts[:stable] == true
 
     op =
       case opts[:direction] do
@@ -1616,7 +1618,7 @@ defmodule EXLA.Defn do
     ]
 
     comp = op_computation(op, args, state, fn [arg1, arg2 | _] -> [arg1, arg2] end)
-    EXLA.Lib.argsort(state.builder, tensor, dimension, comp, ans.type)
+    EXLA.Lib.argsort(state.builder, tensor, dimension, stable, comp, ans.type)
   end
 
   defp fft(exla_op, [%mod{} = tensor, opts], %{type: type}, state) do

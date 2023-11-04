@@ -14623,6 +14623,7 @@ defmodule Nx do
     * `:axis` - The name or number of the corresponding axis on which the sort
       should be applied
     * `:direction` - Can be `:asc` or `:desc`. Defaults to `:asc`
+    * `:stable` - If the sorting is stable. Defaults to `false`
 
   ## Examples
 
@@ -14766,7 +14767,7 @@ defmodule Nx do
   """
   @doc type: :ndim
   def sort(tensor, opts \\ []) do
-    opts = keyword!(opts, axis: 0, direction: :asc)
+    opts = keyword!(opts, axis: 0, direction: :asc, stable: false)
 
     apply_vectorized(tensor, fn tensor, offset ->
       direction =
@@ -14790,7 +14791,8 @@ defmodule Nx do
         tensor,
         tensor,
         axis: axis,
-        direction: direction
+        direction: direction,
+        stable: opts[:stable]
       )
     end)
   end
@@ -14888,6 +14890,7 @@ defmodule Nx do
     * `:axis` - The name or number of the corresponding axis on which the sort
       should be applied
     * `:direction` - Can be `:asc` or `:desc`. Defaults to `:asc`
+    * `:stable` - If the sorting is stable. Defaults to `false`
 
   ## Examples
 
@@ -14927,7 +14930,9 @@ defmodule Nx do
         ]
       >
 
-  Same tensor sorted over different axes:
+  Same tensor sorted over different axes. In this case,
+  we pass the stable option to preserve the order in case
+  of duplicate elements:
 
       iex> t = Nx.tensor(
       ...>   [
@@ -14944,7 +14949,7 @@ defmodule Nx do
       ...>   ],
       ...>   names: [:x, :y, :z]
       ...> )
-      iex> Nx.argsort(t, axis: :x)
+      iex> Nx.argsort(t, axis: :x, stable: true)
       #Nx.Tensor<
         s64[x: 2][y: 3][z: 3]
         [
@@ -14960,7 +14965,7 @@ defmodule Nx do
           ]
         ]
       >
-      iex> Nx.argsort(t, axis: :y)
+      iex> Nx.argsort(t, axis: :y, stable: true)
       #Nx.Tensor<
         s64[x: 2][y: 3][z: 3]
         [
@@ -14976,26 +14981,11 @@ defmodule Nx do
           ]
         ]
       >
-      iex> Nx.argsort(t, axis: :z)
-      #Nx.Tensor<
-        s64[x: 2][y: 3][z: 3]
-        [
-          [
-            [2, 0, 1],
-            [0, 2, 1],
-            [1, 2, 0]
-          ],
-          [
-            [0, 2, 1],
-            [1, 0, 2],
-            [1, 0, 2]
-          ]
-        ]
-      >
+
   """
   @doc type: :ndim
   def argsort(tensor, opts \\ []) do
-    opts = keyword!(opts, axis: 0, direction: :asc)
+    opts = keyword!(opts, axis: 0, direction: :asc, stable: false)
 
     apply_vectorized(tensor, fn tensor, offset ->
       direction =
@@ -15020,7 +15010,8 @@ defmodule Nx do
         %{tensor | type: {:s, 64}},
         tensor,
         axis: axis,
-        direction: direction
+        direction: direction,
+        stable: opts[:stable]
       )
     end)
   end

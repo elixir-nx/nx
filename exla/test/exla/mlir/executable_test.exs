@@ -593,7 +593,7 @@ defmodule EXLA.MLIR.ExecutableTest do
   describe "argsort" do
     test "sorts with axis and direction" do
       for type <- [s: 64, u: 64, f: 32] do
-        t = Nx.tensor([[0, 2, 1, 10], [10, 10, 20, 0]], type: type)
+        t = Nx.tensor([[0, 2, 1, 10], [10, 11, 20, 0]], type: type)
 
         result = EXLA.jit(&Nx.argsort(&1, direction: :asc, axis: 0), compiler_mode: :mlir).(t)
 
@@ -631,7 +631,7 @@ defmodule EXLA.MLIR.ExecutableTest do
           result,
           Nx.tensor([
             [3, 1, 2, 0],
-            [2, 0, 1, 3]
+            [2, 1, 0, 3]
           ])
         )
       end
@@ -641,7 +641,7 @@ defmodule EXLA.MLIR.ExecutableTest do
   describe "top_k" do
     test "sorts on the last axis" do
       for type <- [s: 64, u: 64, f: 32] do
-        t = Nx.tensor([[0, 2, 1, 10], [10, 10, 20, 0]], type: type)
+        t = Nx.tensor([[0, 2, 1, 10], [10, 11, 20, 0]], type: type)
 
         {result, indices} = EXLA.jit(&Nx.top_k(&1, k: 2), compiler_mode: :mlir).(t)
 
@@ -650,7 +650,7 @@ defmodule EXLA.MLIR.ExecutableTest do
           Nx.tensor(
             [
               [10, 2],
-              [20, 10]
+              [20, 11]
             ],
             type: type
           )
@@ -661,7 +661,7 @@ defmodule EXLA.MLIR.ExecutableTest do
           Nx.tensor(
             [
               [3, 1],
-              [2, 0]
+              [2, 1]
             ],
             type: :s64
           )

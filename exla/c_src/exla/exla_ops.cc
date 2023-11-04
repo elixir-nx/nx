@@ -1575,13 +1575,14 @@ ERL_NIF_TERM concatenate(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 
 ERL_NIF_TERM sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 3) {
+  if (argc != 4) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   xla::XlaOp* operand;
   xla::XlaComputation* comparator;
   exla::int64 dimension;
+  bool stable;
 
   if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
     return exla::nif::error(env, "Unable to get operand.");
@@ -1592,8 +1593,11 @@ ERL_NIF_TERM sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get(env, argv[2], &dimension)) {
     return exla::nif::error(env, "Unable to get dimension.");
   }
+  if (!exla::nif::get(env, argv[3], &stable)) {
+    return exla::nif::error(env, "Unable to get stable flag.");
+  }
 
-  xla::XlaOp op = xla::Sort({*operand}, *comparator, dimension, true);
+  xla::XlaOp op = xla::Sort({*operand}, *comparator, dimension, stable);
 
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
@@ -1619,13 +1623,14 @@ ERL_NIF_TERM top_k(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 
 ERL_NIF_TERM variadic_sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 3) {
+  if (argc != 4) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   std::vector<xla::XlaOp> operands;
   xla::XlaComputation* comparator;
   exla::int64 dimension;
+  bool stable;
 
   if (!exla::nif::get_list<xla::XlaOp>(env, argv[0], operands)) {
     return exla::nif::error(env, "Unable to get operands.");
@@ -1636,8 +1641,11 @@ ERL_NIF_TERM variadic_sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
   if (!exla::nif::get(env, argv[2], &dimension)) {
     return exla::nif::error(env, "Unable to get dimension.");
   }
+  if (!exla::nif::get(env, argv[3], &stable)) {
+    return exla::nif::error(env, "Unable to get stable flag.");
+  }
 
-  xla::XlaOp op = xla::Sort(operands, *comparator, dimension, true);
+  xla::XlaOp op = xla::Sort(operands, *comparator, dimension, stable);
 
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }

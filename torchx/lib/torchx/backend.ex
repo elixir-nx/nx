@@ -552,10 +552,11 @@ defmodule Torchx.Backend do
   def argsort(out, tensor, opts) do
     axis = opts[:axis]
     is_descending = opts[:direction] == :desc
+    stable = opts[:stable] == true
 
     tensor
     |> from_nx()
-    |> Torchx.argsort(axis, is_descending)
+    |> Torchx.argsort(stable, axis, is_descending)
     |> to_nx(out)
   end
 
@@ -1361,10 +1362,11 @@ defmodule Torchx.Backend do
   def sort(%T{} = out, %T{} = t, opts) do
     axis = opts[:axis]
     descending = opts[:direction] == :desc
+    stable = opts[:stable] == true
 
     t
     |> from_nx()
-    |> Torchx.sort(axis, descending)
+    |> Torchx.sort(stable, axis, descending)
     |> to_nx(out)
   end
 

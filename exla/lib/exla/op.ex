@@ -798,8 +798,10 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def sort(%Op{builder: builder, ref: operand}, %Computation{ref: comparator}, dimension) do
-    ref = EXLA.NIF.sort(operand, comparator, dimension) |> unwrap!()
+  def sort(%Op{builder: builder, ref: operand}, %Computation{ref: comparator}, dimension, stable)
+      when is_integer(dimension) and is_boolean(stable) do
+    stable = if stable, do: 1, else: 0
+    ref = EXLA.NIF.sort(operand, comparator, dimension, stable) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -812,10 +814,13 @@ defmodule EXLA.Op do
         %Builder{ref: builder},
         operands,
         %Computation{ref: comparator},
-        dimension
-      ) do
+        dimension,
+        stable
+      )
+      when is_integer(dimension) and is_boolean(stable) do
+    stable = if stable, do: 1, else: 0
     operand_refs = Enum.map(operands, & &1.ref)
-    ref = EXLA.NIF.variadic_sort(operand_refs, comparator, dimension) |> unwrap!()
+    ref = EXLA.NIF.variadic_sort(operand_refs, comparator, dimension, stable) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 

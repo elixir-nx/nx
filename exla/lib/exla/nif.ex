@@ -61,7 +61,7 @@ defmodule EXLA.NIF do
 
   def mlir_convert(_function, _tensor, _type), do: :erlang.nif_error(:undef)
   def mlir_bitcast_convert(_function, _tensor, _type, _dims), do: :erlang.nif_error(:undef)
-  def mlir_sort(_function, _tensors, _dim, _desc), do: :erlang.nif_error(:undef)
+  def mlir_sort(_function, _tensors, _dim, _desc, _stable), do: :erlang.nif_error(:undef)
 
   def mlir_get_shape(_tensor), do: :erlang.nif_error(:undef)
 
@@ -326,12 +326,12 @@ defmodule EXLA.NIF do
   def concatenate(_builder, _operands, _dimension),
     do: :erlang.nif_error(:undef)
 
-  def sort(_operand, _comparator, _dimension),
+  def sort(_operand, _comparator, _dimension, _stable),
     do: :erlang.nif_error(:undef)
 
   def top_k(_operand, _k), do: :erlang.nif_error(:undef)
 
-  def variadic_sort(_operands, _comparator, _dimension),
+  def variadic_sort(_operands, _comparator, _dimension, _stable),
     do: :erlang.nif_error(:undef)
 
   def tuple(_builder, _elements), do: :erlang.nif_error(:undef)

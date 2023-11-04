@@ -111,25 +111,21 @@ defmodule EXLA.MLIR.Value do
     %Value{value | ref: out_ref}
   end
 
-  def sort(%Value{} = value, axis, direction) do
-    [result] = sort([value], axis, direction)
+  def sort(%Value{} = value, axis, direction, stable) do
+    [result] = sort([value], axis, direction, stable)
     result
   end
 
-  def sort([%Value{function: %Function{ref: func_ref}} | _] = values, axis, direction) do
+  def sort([%Value{function: %Function{ref: func_ref}} | _] = values, axis, direction, stable)
+      when is_integer(axis) and is_boolean(stable) do
     desc = if direction == :desc, do: 1, else: 0
+    stable = if stable, do: 1, else: 0
 
     in_refs =
       Enum.map(values, fn %Value{ref: ref, function: %Function{ref: ^func_ref}} -> ref end)
 
     out_refs =
-      EXLA.NIF.mlir_sort(
-        func_ref,
-        in_refs,
-        axis,
-        desc
-      )
-      |> unwrap!()
+      EXLA.NIF.mlir_sort(func_ref, in_refs, axis, desc, stable) |> unwrap!()
 
     Enum.zip_with(values, out_refs, fn value, out_ref -> %Value{value | ref: out_ref} end)
   end
@@ -420,6 +416,7 @@ defmodule EXLA.MLIR.Value do
     %{tensor | ref: ref}
   end
 
+  # TODO: rely on Nx default implementation instead
   def top_k(%Value{function: func} = tensor, k) do
     # mlir::mhlo::TopKOp cannot be translated to XLA HLO, so we'll use
     # variadic sort to implement it instead.
@@ -430,7 +427,7 @@ defmodule EXLA.MLIR.Value do
     rank = tuple_size(dims)
     iota = iota(func, shape, rank - 1) |> convert({:s, 64})
 
-    [values, indices] = sort([tensor, iota], rank - 1, :desc)
+    [values, indices] = sort([tensor, iota], rank - 1, :desc, false)
 
     strides = List.duplicate(1, rank)
     starts = List.duplicate(0, rank)

@@ -577,7 +577,7 @@ static void buildSortComparisonBody(llvm::ArrayRef<mlir::Type> elementTypes,
   builder->create<mlir::mhlo::ReturnOp>(loc, compare);
 }
 
-std::vector<mlir::Value> MLIRFunction::SortOp(std::vector<mlir::Value> operands, int64_t dim, bool desc) {
+std::vector<mlir::Value> MLIRFunction::SortOp(std::vector<mlir::Value> operands, int64_t dim, bool desc, bool stable) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   std::vector<mlir::Type> element_types;
   element_types.reserve(operands.size());
@@ -601,7 +601,7 @@ std::vector<mlir::Value> MLIRFunction::SortOp(std::vector<mlir::Value> operands,
       builder->getUnknownLoc(),
       value_range,
       dim,
-      true);
+      stable);
   buildSortComparisonBody(element_types, direction, compare_type,
                           &sort_op.getComparator(), builder);
 
