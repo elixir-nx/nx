@@ -101,8 +101,7 @@ defmodule Torchx.MixProject do
 
   defp libtorch_config() do
     target = System.get_env("LIBTORCH_TARGET", "cpu")
-    default_version = "2.1.0"
-    version = System.get_env("LIBTORCH_VERSION", default_version)
+    version = System.get_env("LIBTORCH_VERSION", "2.1.0")
     env_dir = System.get_env("LIBTORCH_DIR")
 
     %{

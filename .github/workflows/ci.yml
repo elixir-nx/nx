@@ -23,7 +23,6 @@ jobs:
     env:
       MIX_ENV: test
       XLA_FLAGS: --xla_force_host_platform_device_count=2
-      LIBTORCH_VERSION: ${{ matrix.torch_version }}
       LIBTORCH_DIR: ${{ github.workspace }}/torchx/cache/libtorch-${{ matrix.torch_version }}
     steps:
       - uses: actions/checkout@v2
@@ -75,7 +74,6 @@ jobs:
     env:
       MIX_ENV: test
       XLA_FLAGS: --xla_force_host_platform_device_count=2
-      LIBTORCH_VERSION: ${{ matrix.torch_version }}
       LIBTORCH_DIR: ${{ github.workspace }}\torchx\cache\libtorch-${{ matrix.torch_version }}
     steps:
       - name: Configure Git
