@@ -14891,6 +14891,7 @@ defmodule Nx do
       should be applied
     * `:direction` - Can be `:asc` or `:desc`. Defaults to `:asc`
     * `:stable` - If the sorting is stable. Defaults to `false`
+    * `:type` - The type of the resulting tensor. Defaults to `:s64`.
 
   ## Examples
 
@@ -14921,9 +14922,9 @@ defmodule Nx do
       >
 
       iex> t = Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y])
-      iex> Nx.argsort(t, axis: :y, direction: :asc)
+      iex> Nx.argsort(t, axis: :y, direction: :asc, type: :u32)
       #Nx.Tensor<
-        s64[x: 2][y: 3]
+        u32[x: 2][y: 3]
         [
           [1, 0, 2],
           [0, 2, 1]
@@ -14985,7 +14986,7 @@ defmodule Nx do
   """
   @doc type: :ndim
   def argsort(tensor, opts \\ []) do
-    opts = keyword!(opts, axis: 0, direction: :asc, stable: false)
+    opts = keyword!(opts, axis: 0, direction: :asc, stable: false, type: {:s, 64})
 
     apply_vectorized(tensor, fn tensor, offset ->
       direction =
@@ -15007,7 +15008,7 @@ defmodule Nx do
       Nx.Shared.raise_complex_not_supported(type, :argsort, 2)
 
       impl!(tensor).argsort(
-        %{tensor | type: {:s, 64}},
+        %{tensor | type: Nx.Type.normalize!(opts[:type])},
         tensor,
         axis: axis,
         direction: direction,
