@@ -1401,7 +1401,12 @@ defmodule EXLA.Defn do
     else
       zeros = List.duplicate(0, tuple_size(ans.shape))
       slice = Value.dynamic_slice(tensor, start_indices, lengths)
-      Value.slice(slice, zeros, lengths, strides)
+
+      if Enum.all?(strides, & &1 == 1) do
+        slice
+      else
+        Value.slice(slice, zeros, lengths, strides)
+      end
     end
   end
 
@@ -1414,7 +1419,12 @@ defmodule EXLA.Defn do
     else
       zeros = List.duplicate(0, tuple_size(ans.shape))
       slice = EXLA.Op.dynamic_slice(tensor, start_indices, lengths)
-      EXLA.Op.slice(slice, zeros, lengths, strides)
+
+      if Enum.all?(strides, & &1 == 1) do
+        slice
+      else
+        EXLA.Op.slice(slice, zeros, lengths, strides)
+      end
     end
   end
 
