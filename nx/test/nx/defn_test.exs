@@ -799,6 +799,18 @@ defmodule Nx.DefnTest do
              } = slice
     end
 
+    defn(mixed_access(t), do: t[[.., Nx.u32(0)]])
+
+    test "multi dimensional mixed-type access" do
+      assert %T{data: %Expr{op: :squeeze, args: [slice, [1]]}, shape: {3}} =
+               mixed_access(Nx.iota({3, 4}))
+
+      assert %T{data: %Expr{op: :slice, args: [_, [i, j], [3, 1], [1, 1]]}, shape: {3, 1}} = slice
+
+      assert i.type == {:u, 32}
+      assert j.type == {:u, 32}
+    end
+
     defn(keyword_access(t), do: t[[z: 1..-2//1]][[y: 1..2]])
 
     test "multi dimensional multi-access with keywords is collapsed" do

@@ -14474,7 +14474,7 @@ defmodule Nx do
           end)
 
         axis = Nx.Shape.normalize_axis(s1, axis, n1, offset)
-        output_type = Enum.reduce(types, fn t1, t2 -> Nx.Type.merge(t1, t2) end)
+        output_type = Enum.reduce(types, &Nx.Type.merge/2)
 
         {output_shape, output_names} =
           Nx.Shape.concatenate(Enum.reverse(shapes), Enum.reverse(names), axis)
@@ -16900,25 +16900,33 @@ defmodule Nx do
     if all_static? do
       start_indices
     else
-      Enum.with_index(start_indices, fn index, i ->
-        %T{shape: idx_shape, type: idx_type} = t = to_tensor(index)
+      output_type = Enum.reduce(start_indices, &binary_type/2)
 
-        if t.vectorized_axes != [] do
-          raise ArgumentError, "index for axis #{i} must be non-vectorized"
-        end
+      Enum.with_index(start_indices, fn
+        index, _i when is_integer(index) ->
+          {backend, options} = default_backend()
+          out = %T{shape: {}, type: output_type, names: []}
+          backend.constant(out, index, options)
 
-        unless idx_shape == {} do
-          raise ArgumentError,
-                "index must be scalar, got shape #{inspect(idx_shape)}" <>
-                  " for axis #{i}"
-        end
+        index, i ->
+          %T{shape: idx_shape, type: idx_type} = t = to_tensor(index)
 
-        unless Nx.Type.integer?(idx_type) do
-          raise ArgumentError,
-                "index must be integer type, got #{inspect(idx_type)} for axis #{i}"
-        end
+          if t.vectorized_axes != [] do
+            raise ArgumentError, "index for axis #{i} must be non-vectorized"
+          end
 
-        t
+          unless idx_shape == {} do
+            raise ArgumentError,
+                  "index must be scalar, got shape #{inspect(idx_shape)}" <>
+                    " for axis #{i}"
+          end
+
+          unless Nx.Type.integer?(idx_type) do
+            raise ArgumentError,
+                  "index must be integer type, got #{inspect(idx_type)} for axis #{i}"
+          end
+
+          t
       end)
     end
   end
