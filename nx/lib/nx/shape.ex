@@ -952,7 +952,7 @@ defmodule Nx.Shape do
               "expected the leading axis of indices (#{inspect(indices_shape)}) " <>
                 "and leading axis of updates (#{inspect(updates_shape)}) to match"
 
-      {_, n} when tuple_size(updates_shape) == n + r + 1 ->
+      {_, n} when u - 1 + n != r ->
         raise ArgumentError,
               "expected the rank of updates (#{u}) to be equal to trailing axis of indices (#{inspect(indices_shape)}) " <>
                 "plus the rank of the input (#{r}) plus one"
