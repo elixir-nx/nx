@@ -910,7 +910,7 @@ defmodule Nx.Shape do
   defp validate_strides!(_, _), do: :ok
 
   @doc "Validates the input shapes for `Nx.indexed_*/3`"
-  def indexed(
+  def indexed_scalar(
         %Nx.Tensor{shape: target_shape},
         %Nx.Tensor{shape: indices_shape},
         %Nx.Tensor{shape: updates_shape}
@@ -926,22 +926,36 @@ defmodule Nx.Shape do
         raise ArgumentError,
               "updates must be a scalar tensor when indices has rank 1, got: #{inspect(updates_shape)}"
 
+      {_, _} ->
+        :ok
+    end
+  end
+
+  @doc "Validates the input shapes for `Nx.indexed_*/3`"
+  def indexed(
+        %Nx.Tensor{shape: target_shape},
+        %Nx.Tensor{shape: indices_shape},
+        %Nx.Tensor{shape: updates_shape}
+      ) do
+    r = tuple_size(target_shape)
+    u = tuple_size(updates_shape)
+
+    case indices_shape do
       _ when tuple_size(indices_shape) > 2 ->
         raise(
           ArgumentError,
           "indices must be a rank 1 or 2 tensor, got: #{tuple_size(indices_shape)}"
         )
 
-      _ when tuple_size(indices_shape) > 1 and tuple_size(updates_shape) != 1 ->
-        raise(ArgumentError, "updates must be a rank 1 tensor, got: #{tuple_size(updates_shape)}")
-
-      {{_, n}, _} when n != r ->
+      {n, _} when n != elem(updates_shape, 0) ->
         raise ArgumentError,
-              "expected indices to have shape {*, #{r}}, got: #{inspect(indices_shape)}"
+              "expected the leading axis of indices (#{inspect(indices_shape)}) " <>
+                "and leading axis of updates (#{inspect(updates_shape)}) to match"
 
-      {{n, _}, {m}} when n != m ->
+      {_, n} when tuple_size(updates_shape) == n + r + 1 ->
         raise ArgumentError,
-              "expected updates tensor to match the first axis of indices tensor with shape #{inspect(indices_shape)}, got {#{m}}"
+              "expected the rank of updates (#{u}) to be equal to trailing axis of indices (#{inspect(indices_shape)}) " <>
+                "plus the rank of the input (#{r}) plus one"
 
       _ ->
         :ok
