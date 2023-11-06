@@ -954,10 +954,27 @@ defmodule Nx.Shape do
 
       {_, n} when u - 1 + n != r ->
         raise ArgumentError,
-              "expected the rank of updates (#{u}) to be equal to trailing axis of indices (#{inspect(indices_shape)}) " <>
-                "plus the rank of the input (#{r}) plus one"
+              "expected the rank of the input (#{r}) to be equal to " <>
+                "the rank of the updates (#{u}) plus " <>
+                "the trailing axis of indices (#{inspect(indices_shape)}) minus one"
+
+      _ when u == 1 ->
+        :ok
 
       _ ->
+        last_updates = updates_shape |> Tuple.to_list() |> Enum.take(-u + 1)
+        last_target = target_shape |> Tuple.to_list() |> Enum.take(-u + 1)
+
+        Enum.zip_reduce(last_updates, last_target, -1, fn update, target, acc ->
+          if update > target do
+            raise ArgumentError,
+                  "axis (#{acc}) of updates (#{inspect(updates_shape)}) must be less than " <>
+                    "or equal to the axis (#{acc}) of #{inspect(target_shape)})"
+          else
+            acc - 1
+          end
+        end)
+
         :ok
     end
   end
