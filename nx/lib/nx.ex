@@ -7682,6 +7682,9 @@ defmodule Nx do
 
       iex> Nx.indexed_add(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2]]), Nx.tensor([0, 1]))
       ** (ArgumentError) expected the leading axis of indices ({1, 2}) and leading axis of updates ({2}) to match
+
+      iex> Nx.indexed_add(Nx.tensor([[1, 2, 3]]), Nx.tensor([[0]]), Nx.tensor([[1, 2, 3, 4, 5]]))
+      ** (ArgumentError) axis (-1) of updates ({1, 5}) must be less than or equal to the axis (-1) of {1, 3})
   """
   @doc type: :indexed
   def indexed_add(target, indices, updates) do
