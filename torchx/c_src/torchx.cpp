@@ -471,25 +471,20 @@ NIF(gather)
   TENSOR(torch::gather(*input, axis, *indices));
 }
 
-NIF(indexed_add)
-{
+NIF(index_put) {
   TENSOR_PARAM(0, input);
-  TENSOR_PARAM(1, indices);
+  LIST_PARAM(1, std::vector<torch::Tensor>, indices);
   TENSOR_PARAM(2, updates);
-  PARAM(3, int64_t, axis);
+  PARAM(3, bool, accumulate);
 
-  TENSOR(torch::scatter_add(*input, axis, *indices, *updates));
+  c10::List<c10::optional<at::Tensor>> convertedList;
+  for (const torch::Tensor& tensor : indices) {
+    convertedList.push_back(tensor);
+  }
+
+  TENSOR(torch::index_put(*input, convertedList, *updates, accumulate));
 }
 
-NIF(indexed_put)
-{
-  TENSOR_PARAM(0, input);
-  TENSOR_PARAM(1, indices);
-  TENSOR_PARAM(2, updates);
-  PARAM(3, int64_t, axis);
-
-  TENSOR(torch::scatter(*input, axis, *indices, *updates));
-}
 
 NIF(argsort)
 {
@@ -1279,8 +1274,7 @@ static ErlNifFunc nif_functions[] = {
     DF(as_strided, 4),
     DF(concatenate, 2),
     DF(gather, 3),
-    DF(indexed_add, 4),
-    DF(indexed_put, 4),
+    DF(index_put, 4),
     DF(argsort, 4),
     DF(top_k, 2),
     DF(flip, 2),

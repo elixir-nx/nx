@@ -1746,7 +1746,7 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def indexed_add(out, target, indices, updates) do
-    resolve_updates = fn upds -> Enum.reduce(upds, 0, &+/2) end
+    resolve_updates = fn upds -> Enum.zip_with(upds, fn row -> Enum.reduce(row, 0, &+/2) end) end
     update_element = &+/2
 
     indexed_op(out, target, indices, updates, resolve_updates, update_element)
@@ -1763,13 +1763,25 @@ defmodule Nx.BinaryBackend do
   defp indexed_op(
          %T{} = out,
          %T{shape: shape, type: {_, target_size}} = target,
-         %T{shape: {indices_rows, _indices_cols} = indices_shape} = indices,
-         %T{shape: {indices_rows}} = updates,
+         %T{shape: indices_shape} = indices,
+         %T{shape: updates_shape, type: {_, updates_size}} = updates,
          resolve_updates,
          update_element
        ) do
     indices_bin_list =
-      indices |> to_binary() |> aggregate_axes([1], indices_shape, elem(indices.type, 1))
+      indices
+      |> to_binary()
+      |> aggregate_axes([1], indices_shape, elem(indices.type, 1))
+
+    updates_binary = to_binary(updates)
+    updates_count = updates_shape |> Tuple.product() |> div(elem(updates_shape, 0))
+    updates_chunk = updates_count * updates_size
+    target_chunk = updates_count * target_size
+
+    updates_list =
+      for <<x::bitstring-size(updates_chunk) <- updates_binary>> do
+        binary_to_list(x, updates.type)
+      end
 
     offsets_list =
       for idx_bin <- indices_bin_list do
@@ -1778,8 +1790,6 @@ defmodule Nx.BinaryBackend do
         offset * target_size
       end
 
-    updates_list = binary_to_list(to_binary(updates), updates.type)
-
     {offsets_with_updates, _last_offset} =
       offsets_list
       |> Enum.zip(updates_list)
@@ -1787,7 +1797,7 @@ defmodule Nx.BinaryBackend do
       |> Enum.sort_by(fn {off, _} -> off end)
       |> Enum.map_reduce(0, fn {next_offset, upds}, previous_offset ->
         {{
-           previous_offset + target_size,
+           previous_offset + target_chunk,
            next_offset,
            resolve_updates.(upds)
          }, next_offset}
@@ -1801,17 +1811,21 @@ defmodule Nx.BinaryBackend do
       end)
 
     {result, tail} =
-      for {previous, current, update} <- offsets_with_updates, reduce: {<<>>, target_binary} do
+      for {previous, current, updates} <- offsets_with_updates, reduce: {<<>>, target_binary} do
         {traversed, to_traverse} ->
           before_slice_size = current - previous
 
-          {before_offset, updated_element, to_traverse} =
-            match_types [target.type, out.type] do
-              <<before_offset::bitstring-size(before_slice_size), match!(element, 0),
-                to_traverse::bitstring>> = to_traverse
+          <<before_offset::bitstring-size(before_slice_size),
+            current_bitstring::bitstring-size(target_chunk),
+            to_traverse::bitstring>> = to_traverse
 
-              updated_element = <<write!(update_element.(read!(element, 0), update), 1)>>
-              {before_offset, updated_element, to_traverse}
+          updated_elements =
+            match_types [target.type, out.type] do
+              current = for <<match!(element, 0) <- current_bitstring>>, do: read!(element, 0)
+
+              Enum.zip_with(current, updates, fn left, right ->
+                <<write!(update_element.(left, right), 1)>>
+              end)
             end
 
           # this can be a list of binaries because we are accumulation an iodata list
@@ -1822,7 +1836,7 @@ defmodule Nx.BinaryBackend do
               binary_to_binary(before_offset, target.type, out.type, & &1)
             end
 
-          {[traversed, before_offset | updated_element], to_traverse}
+          {[traversed, before_offset | updated_elements], to_traverse}
       end
 
     # this can be a list of binaries because we are accumulation an iodata list
@@ -2060,7 +2074,7 @@ defmodule Nx.BinaryBackend do
   end
 
   defp index_to_binary_offset(index, input_shape) when is_list(index) and is_tuple(input_shape) do
-    {offset, []} =
+    {offset, _} =
       index
       |> Enum.with_index()
       |> Enum.reduce(

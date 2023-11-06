@@ -402,11 +402,8 @@ defmodule Torchx.Backend do
       t.shape
       |> Tuple.to_list()
       |> Enum.with_index(fn
-        _x, ^axis ->
-          1
-
-        x, _ ->
-          x
+        _x, ^axis -> 1
+        x, _ -> x
       end)
 
     indices_for_axis =
@@ -448,28 +445,39 @@ defmodule Torchx.Backend do
 
   @impl true
   def indexed_add(out, tensor, indices, updates) do
-    indexed(out, tensor, indices, updates, :indexed_add)
+    indexed(out, tensor, indices, updates, true)
   end
 
   @impl true
   def indexed_put(out, tensor, indices, updates) do
-    indexed(out, tensor, indices, updates, :indexed_put)
+    indexed(out, tensor, indices, updates, false)
   end
 
-  defp indexed(out, tensor, indices, updates, function) do
-    linear_indices_tx = as_torchx_linear_indices(tensor.shape, indices)
+  defp indexed(out, tensor, indices, updates, accumulate?) do
+    {device, _} =
+      tensor_tx =
+      tensor
+      |> from_nx()
+      |> Torchx.to_type(to_torch_type(out.type))
+
+    shape = tensor.shape
+    indices = Nx.transpose(indices)
+    {n, _} = indices.shape
+    zero = Torchx.scalar_tensor(0, :long, device)
+
+    indices_tx =
+      Enum.map(0..(n - 1), fn i ->
+        limit = Torchx.scalar_tensor(elem(shape, i) - 1, :long, device)
+        indices[i] |> from_nx |> Torchx.clip(zero, limit)
+      end)
 
     updates_tx =
       updates
       |> from_nx()
       |> Torchx.to_type(to_torch_type(out.type))
 
-    tensor
-    |> from_nx()
-    |> Torchx.to_type(to_torch_type(out.type))
-    |> Torchx.reshape({Tuple.product(tensor.shape)})
-    |> then(&apply(Torchx, function, [&1, linear_indices_tx, updates_tx, 0]))
-    |> Torchx.reshape(out.shape)
+    tensor_tx
+    |> Torchx.index_put(indices_tx, updates_tx, accumulate?)
     |> to_nx(out)
   end
 

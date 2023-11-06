@@ -7482,6 +7482,21 @@ defmodule Nx do
 
   ## Examples
 
+  ### Adding a single entry as a scalar
+
+  As a shorthand notation, rank-1 indices can be used for updating a single entry:
+
+        iex> Nx.indexed_add(Nx.tensor([[1], [2]]), Nx.tensor([1, 0]), 8)
+        #Nx.Tensor<
+          s64[2][1]
+          [
+            [1],
+            [10]
+          ]
+        >
+
+  ### Adding multiple scalar entries
+
       iex> t = Nx.iota({1, 2, 3})
       #Nx.Tensor<
         s64[1][2][3]
@@ -7505,6 +7520,8 @@ defmodule Nx do
         ]
       >
 
+  ### Type promotions
+
   Type promotions should happen automatically, with the resulting type being the combination
   of the `target` type and the `updates` type.
 
@@ -7524,17 +7541,6 @@ defmodule Nx do
       #Nx.Tensor<
         s64[1]
         [3]
-      >
-
-  As a shorthand notation, rank-1 indices can be used for updating a single entry:
-
-      iex> Nx.indexed_add(Nx.tensor([[1], [2]]), Nx.tensor([1, 0]), 8)
-      #Nx.Tensor<
-        s64[2][1]
-        [
-          [1],
-          [10]
-        ]
       >
 
   ## Vectorized tensors
@@ -7563,17 +7569,12 @@ defmodule Nx do
       >
 
   ## Error cases
+
       iex> Nx.indexed_add(Nx.tensor([[1], [2]]), Nx.tensor([[[1, 2, 3]]]), Nx.tensor([0]))
       ** (ArgumentError) indices must be a rank 1 or 2 tensor, got: 3
 
-      iex> Nx.indexed_add(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2]]), Nx.tensor([[0]]))
-      ** (ArgumentError) updates must be a rank 1 tensor, got: 2
-
-      iex> Nx.indexed_add(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2, 3]]), Nx.tensor([0]))
-      ** (ArgumentError) expected indices to have shape {*, 2}, got: {1, 3}
-
       iex> Nx.indexed_add(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2]]), Nx.tensor([0, 1]))
-      ** (ArgumentError) expected updates tensor to match the first axis of indices tensor with shape {1, 2}, got {2}
+      ** (ArgumentError) expected the leading axis of indices ({1, 2}) and leading axis of updates ({2}) to match
   """
   @doc type: :indexed
   def indexed_add(target, indices, updates) do
@@ -7583,8 +7584,9 @@ defmodule Nx do
   @doc """
   Puts individual values from `updates` into the given tensor at the corresponding `indices`.
 
-  `indices` must be a fully qualified tensor of shape `{n, Nx.rank(target)}`, with `n`
-  being an arbitrary number of indices, while `updates` must have a compatible `{n}` shape.
+  `indices` must be a fully qualified tensor of shape `{n, i}`, with `n` being an arbitrary
+  number of indices, while `updates` must have a compatible `{n, ...j}` shape, such that
+  `i + j = rank(tensor)`.
 
   In case of repeating indices, the result is non-determinstic, since the operation happens
   in parallel when running on devices such as the GPU.
@@ -7592,6 +7594,21 @@ defmodule Nx do
   See also: `indexed_add/3`, `put_slice/3`.
 
   ## Examples
+
+  ### Storing a single entry as a scalar
+
+  As a shorthand notation, rank-1 indices can be used for updating a single entry:
+
+      iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([1, 0]), 10)
+      #Nx.Tensor<
+        s64[2][1]
+        [
+          [1],
+          [10]
+        ]
+      >
+
+  ### Storing multiple scalar entries scalars
 
       iex> Nx.indexed_put(Nx.tensor([0, 0, 0]), Nx.tensor([[1], [2]]), Nx.tensor([2, 4]))
       #Nx.Tensor<
@@ -7628,6 +7645,35 @@ defmodule Nx do
         ]
       >
 
+  ### Storing non-scalars on a given dimension
+
+        iex> t = Nx.iota({1, 3, 2})
+        #Nx.Tensor<
+          s64[1][3][2]
+          [
+            [
+              [0, 1],
+              [2, 3],
+              [4, 5]
+            ]
+          ]
+        >
+        iex> indices = Nx.tensor([[0, 0], [0, 2]])
+        iex> updates = Nx.tensor([[0, 10], [40, 50]])
+        iex> Nx.indexed_put(t, indices, updates)
+        #Nx.Tensor<
+          s64[1][3][2]
+          [
+            [
+              [0, 10],
+              [2, 3],
+              [40, 50]
+            ]
+          ]
+        >
+
+  ### Type promotions
+
   Type promotions should happen automatically, with the resulting type being the combination
   of the `target` type and the `updates` type.
 
@@ -7647,17 +7693,6 @@ defmodule Nx do
       #Nx.Tensor<
         s64[1]
         [3]
-      >
-
-  As a shorthand notation, rank-1 indices can be used for updating a single entry:
-
-      iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([1, 0]), 10)
-      #Nx.Tensor<
-        s64[2][1]
-        [
-          [1],
-          [10]
-        ]
       >
 
   ## Vectorized tensors
@@ -7690,14 +7725,8 @@ defmodule Nx do
       iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([[[1, 2, 3]]]), Nx.tensor([0]))
       ** (ArgumentError) indices must be a rank 1 or 2 tensor, got: 3
 
-      iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2]]), Nx.tensor([[0]]))
-      ** (ArgumentError) updates must be a rank 1 tensor, got: 2
-
-      iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2, 3]]), Nx.tensor([0]))
-      ** (ArgumentError) expected indices to have shape {*, 2}, got: {1, 3}
-
       iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2]]), Nx.tensor([0, 1]))
-      ** (ArgumentError) expected updates tensor to match the first axis of indices tensor with shape {1, 2}, got {2}
+      ** (ArgumentError) expected the leading axis of indices ({1, 2}) and leading axis of updates ({2}) to match
   """
   @doc type: :indexed
   def indexed_put(target, indices, updates) do
@@ -7706,7 +7735,7 @@ defmodule Nx do
 
   defp indexed_op(target, %Nx.Tensor{shape: {_}} = index, update, op) when is_tensor(update) do
     update = to_tensor(update)
-    Nx.Shape.indexed(target, index, update)
+    Nx.Shape.indexed_scalar(target, index, update)
     indexed_op(target, Nx.new_axis(index, 0), Nx.new_axis(update, 0), op)
   end
 
@@ -13632,7 +13661,7 @@ defmodule Nx do
   The number of elements in `start_indices` should match the
   rank of the tensor.
 
-  See also: `indexed_add/3`, `put_slice/3`.
+  See also: `indexed_add/3`, `indexed_put/3`.
 
   ## Examples
 
