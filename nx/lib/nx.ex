@@ -14917,7 +14917,8 @@ defmodule Nx do
   """
   @doc type: :ndim
   def sort(tensor, opts \\ []) do
-    opts = keyword!(opts, axis: 0, direction: :asc)
+    # Stable is unused for now, provided for future compatibility
+    opts = keyword!(opts, axis: 0, direction: :asc, stable: true)
 
     apply_vectorized(tensor, fn tensor, offset ->
       direction =
@@ -15147,7 +15148,8 @@ defmodule Nx do
   """
   @doc type: :ndim
   def argsort(tensor, opts \\ []) do
-    opts = keyword!(opts, axis: 0, direction: :asc, type: {:s, 64})
+    # Stable is unused for now, provided for future compatibility
+    opts = keyword!(opts, axis: 0, direction: :asc, type: {:s, 64}, stable: true)
 
     apply_vectorized(tensor, fn tensor, offset ->
       direction =
