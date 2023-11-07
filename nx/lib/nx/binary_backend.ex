@@ -1745,19 +1745,19 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def indexed_add(out, target, indices, updates) do
+  def indexed_add(out, target, indices, updates, opts) do
     resolve_updates = fn upds -> Enum.zip_with(upds, fn row -> Enum.reduce(row, 0, &+/2) end) end
     update_element = &+/2
 
-    indexed_op(out, target, indices, updates, resolve_updates, update_element)
+    indexed_op(out, target, indices, updates, opts, resolve_updates, update_element)
   end
 
   @impl true
-  def indexed_put(out, target, indices, updates) do
+  def indexed_put(out, target, indices, updates, opts) do
     resolve_updates = fn upds -> Enum.at(upds, -1) end
     update_element = fn _cur, upd -> upd end
 
-    indexed_op(out, target, indices, updates, resolve_updates, update_element)
+    indexed_op(out, target, indices, updates, opts, resolve_updates, update_element)
   end
 
   defp indexed_op(
@@ -1765,6 +1765,8 @@ defmodule Nx.BinaryBackend do
          %T{shape: shape, type: {_, target_size}} = target,
          %T{shape: indices_shape} = indices,
          %T{shape: updates_shape, type: {_, updates_size}} = updates,
+         # TODO: Use opts
+         _opts,
          resolve_updates,
          update_element
        ) do
@@ -2051,7 +2053,9 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def gather(out, tensor, indices) do
+  def gather(out, tensor, indices, _opts) do
+    # TODO: Use opts
+    # TODO: Implement partial gets
     %T{type: {_, size}, shape: shape} = tensor
     %T{type: {_, idx_size}} = indices
 

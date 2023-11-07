@@ -1004,17 +1004,17 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def indexed_add(out, target, indices, updates) do
+  def indexed_add(out, target, indices, updates, opts) do
     {[target, indices, updates], context} = to_exprs([target, indices, updates])
 
-    expr(out, context, :indexed_add, [target, indices, updates])
+    expr(out, context, :indexed_add, [target, indices, updates, opts])
   end
 
   @impl true
-  def indexed_put(out, target, indices, updates) do
+  def indexed_put(out, target, indices, updates, opts) do
     {[target, indices, updates], context} = to_exprs([target, indices, updates])
 
-    expr(out, context, :indexed_put, [target, indices, updates])
+    expr(out, context, :indexed_put, [target, indices, updates, opts])
   end
 
   @impl true
@@ -1191,9 +1191,9 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def gather(out, tensor, indices) do
+  def gather(out, tensor, indices, opts) do
     {[tensor, indices], context} = to_exprs([tensor, indices])
-    expr(out, context, :gather, [tensor, indices])
+    expr(out, context, :gather, [tensor, indices, opts])
   end
 
   @impl true

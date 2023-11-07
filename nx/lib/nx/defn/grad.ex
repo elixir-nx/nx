@@ -475,19 +475,18 @@ defmodule Nx.Defn.Grad do
     [{x, operand_t}, {update, update_t}]
   end
 
-  defp grad(:indexed_put, [target, indices, updates], _ans, g) do
+  defp grad(:indexed_put, [target, indices, updates, opts], _ans, g) do
     zeros = Nx.broadcast(Expr.tensor(0.0), updates)
-
-    target_g = Nx.indexed_put(g, indices, zeros)
-    updates_g = g |> Nx.gather(indices) |> Nx.reshape(updates.shape)
+    target_g = Nx.indexed_put(g, indices, zeros, opts)
+    updates_g = g |> Nx.gather(indices, opts) |> Nx.reshape(updates.shape)
     indices_g = Nx.broadcast(Expr.tensor(0.0), indices)
 
     [{target, target_g}, {indices, indices_g}, {updates, updates_g}]
   end
 
-  defp grad(:indexed_add, [target, indices, updates], _ans, g) do
+  defp grad(:indexed_add, [target, indices, updates, opts], _ans, g) do
     target_g = g
-    updates_g = g |> Nx.gather(indices) |> Nx.reshape(updates.shape)
+    updates_g = g |> Nx.gather(indices, opts) |> Nx.reshape(updates.shape)
     indices_g = Nx.broadcast(Expr.tensor(0.0), indices)
 
     [{target, target_g}, {indices, indices_g}, {updates, updates_g}]
@@ -819,14 +818,14 @@ defmodule Nx.Defn.Grad do
     [{t, g}]
   end
 
-  defp grad(:gather, [t, i], _ans, g) do
+  defp grad(:gather, [t, i, opts], _ans, g) do
     rank = Nx.rank(t)
     num_elements = i.shape |> Tuple.product() |> div(rank)
 
     indices = Nx.reshape(i, {num_elements, rank})
     updates = Nx.reshape(g, {num_elements})
 
-    g = t |> Expr.broadcast(0, t.shape, Nx.axes(t)) |> Nx.indexed_add(indices, updates)
+    g = t |> Expr.broadcast(0, t.shape, Nx.axes(t)) |> Nx.indexed_add(indices, updates, opts)
     [{t, g}]
   end
 
