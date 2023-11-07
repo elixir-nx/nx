@@ -428,48 +428,54 @@ defmodule Torchx.Backend do
       end)
       |> Nx.concatenate(axis: 1)
 
-    gather(out, t, indices)
+    # TODO: maybe rewrite it as gather knows behave differently
+    gather(out, t, indices, [])
   end
 
   @impl true
-  def gather(out, tensor, idx) do
-    linear_indices_tx = as_torchx_linear_indices(tensor.shape, idx)
+  # TODO: Use opts
+  def gather(out, tensor, indices, opts) do
+    {tensor_tx, indices_tx} = indices_from_nx(tensor, indices)
 
-    tensor
-    |> from_nx()
-    |> Torchx.reshape({Tuple.product(tensor.shape)})
-    |> Torchx.gather(linear_indices_tx, 0)
+    tensor_tx
+    |> Torchx.index(indices_tx)
     |> Torchx.reshape(out.shape)
     |> to_nx(out)
   end
 
-  @impl true
-  def indexed_add(out, tensor, indices, updates) do
-    indexed(out, tensor, indices, updates, true)
-  end
-
-  @impl true
-  def indexed_put(out, tensor, indices, updates) do
-    indexed(out, tensor, indices, updates, false)
-  end
-
-  defp indexed(out, tensor, indices, updates, accumulate?) do
-    {device, _} =
-      tensor_tx =
-      tensor
-      |> from_nx()
-      |> Torchx.to_type(to_torch_type(out.type))
-
+  defp indices_from_nx(tensor, indices) do
+    {device, _} = tensor_tx = from_nx(tensor)
     shape = tensor.shape
-    indices = Nx.transpose(indices)
-    {n, _} = indices.shape
+
+    indices_rank = tuple_size(indices.shape)
+    transpose_axes = [indices_rank - 1 | Enum.to_list(0..(indices_rank - 2))]
+    indices = Nx.transpose(indices, axes: transpose_axes)
+
+    n = elem(indices.shape, 0)
     zero = Torchx.scalar_tensor(0, :long, device)
 
     indices_tx =
       Enum.map(0..(n - 1), fn i ->
         limit = Torchx.scalar_tensor(elem(shape, i) - 1, :long, device)
-        indices[i] |> from_nx |> Torchx.clip(zero, limit)
+        indices[i] |> from_nx() |> Torchx.clip(zero, limit)
       end)
+
+    {tensor_tx, indices_tx}
+  end
+
+  @impl true
+  def indexed_add(out, tensor, indices, updates, opts) do
+    indexed(out, tensor, indices, updates, opts, true)
+  end
+
+  @impl true
+  def indexed_put(out, tensor, indices, updates, opts) do
+    indexed(out, tensor, indices, updates, opts, false)
+  end
+
+  # TODO: Use opts
+  defp indexed(out, tensor, indices, updates, opts, accumulate?) do
+    {tensor_tx, indices_tx} = indices_from_nx(tensor, indices)
 
     updates_tx =
       updates
@@ -477,6 +483,7 @@ defmodule Torchx.Backend do
       |> Torchx.to_type(to_torch_type(out.type))
 
     tensor_tx
+    |> Torchx.to_type(to_torch_type(out.type))
     |> Torchx.index_put(indices_tx, updates_tx, accumulate?)
     |> to_nx(out)
   end

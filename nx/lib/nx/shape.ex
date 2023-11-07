@@ -1603,28 +1603,29 @@ defmodule Nx.Shape do
 
   ## Examples
 
-      iex> Nx.Shape.gather({2, 3}, {10, 2})
+      iex> Nx.Shape.gather({2, 3}, {10, 2}, [0, 1])
       {{10}, [nil]}
 
-      iex> Nx.Shape.gather({2, 3}, {4, 5, 2})
+      iex> Nx.Shape.gather({2, 3}, {4, 5, 2}, [0, 1])
       {{4, 5}, [nil, nil]}
 
-      iex> Nx.Shape.gather({2}, {4, 5, 1})
+      iex> Nx.Shape.gather({2}, {4, 5, 1}, [0])
       {{4, 5}, [nil, nil]}
 
-      iex> Nx.Shape.gather({2, 2, 2, 2, 2}, {3, 3, 5})
+      iex> Nx.Shape.gather({2, 2, 2, 2, 2}, {3, 3, 5}, [0, 1, 2, 3, 4])
       {{3, 3}, [nil, nil]}
 
-      iex> Nx.Shape.gather({2, 2, 2}, {3})
+      iex> Nx.Shape.gather({2, 2, 2}, {3}, [0, 1, 2])
       {{}, []}
+
+      iex> Nx.Shape.gather({2, 2, 2, 2, 2}, {3, 3, 3}, [0, 1, 2])
+      {{3, 3, 2, 2}, [nil, nil, nil, nil]}
 
   ## Error cases
 
-      iex> Nx.Shape.gather({2, 3}, {})
+      iex> Nx.Shape.gather({2, 3}, {}, [])
       ** (ArgumentError) expected indices rank to be at least 1, got: 0
 
-      iex> Nx.Shape.gather({2, 3}, {1})
-      ** (ArgumentError) expected the last indices dimension size (1) to match the tensor rank (2)
   """
   def gather(shape, indices_shape, axes) do
     rank = tuple_size(shape)
@@ -1641,7 +1642,7 @@ defmodule Nx.Shape do
     end
 
     inner_shape = for i <- 0..(rank - 1), i not in axes, do: elem(shape, i)
-    shape = List.to_tuple(inner_shape ++ outer_shape)
+    shape = List.to_tuple(outer_shape ++ inner_shape)
     names = List.duplicate(nil, tuple_size(shape))
     {shape, names}
   end

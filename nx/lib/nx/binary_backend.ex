@@ -1766,7 +1766,7 @@ defmodule Nx.BinaryBackend do
          %T{shape: indices_shape} = indices,
          %T{shape: updates_shape, type: {_, updates_size}} = updates,
          # TODO: Use opts
-         _opts,
+         opts,
          resolve_updates,
          update_element
        ) do
@@ -2053,25 +2053,28 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def gather(out, tensor, indices, _opts) do
+  def gather(out, tensor, indices, opts) do
     # TODO: Use opts
-    # TODO: Implement partial gets
     %T{type: {_, size}, shape: shape} = tensor
-    %T{type: {_, idx_size}} = indices
+    %T{type: {_, indices_size}, shape: indices_shape} = indices
+
+    indices_rank = tuple_size(indices_shape)
+    indices_depth = elem(indices_shape, indices_rank - 1)
+    indices_count = Tuple.product(indices_shape)
+    last_dim_bin_size = indices_depth * indices_size
 
     data = to_binary(tensor)
-    rank = tuple_size(shape)
     byte_size = div(size, 8)
-
-    idx_last_dim_bin_size = rank * idx_size
+    byte_count = div(Tuple.product(out.shape), div(indices_count, indices_depth))
 
     new_data =
-      for <<bin::size(idx_last_dim_bin_size)-bitstring <- to_binary(indices)>>, into: <<>> do
+      for <<bin::size(last_dim_bin_size)-bitstring <- to_binary(indices)>>, into: <<>> do
         slice_start =
-          for <<bin::size(idx_size)-bitstring <- bin>>, do: binary_to_number(bin, indices.type)
+          for <<bin::size(indices_size)-bitstring <- bin>>,
+            do: binary_to_number(bin, indices.type)
 
         offset = index_to_binary_offset(slice_start, shape)
-        binary_part(data, offset * byte_size, byte_size)
+        binary_part(data, offset * byte_size, byte_size * byte_count)
       end
 
     from_binary(out, new_data)

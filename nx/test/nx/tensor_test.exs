@@ -113,21 +113,17 @@ defmodule Nx.TensorTest do
 
     test "raises for negative steps" do
       iota = Nx.iota({2, 5})
-
-      range = 4..0//-2
       base_message = "range step must be positive, got range: 4..0//-2"
 
       assert_raise ArgumentError, base_message, fn ->
-        iota[[0, range]]
+        iota[[0, 4..0//-2]]
       end
-
-      range = 1..-1
 
       message =
         "range step must be positive, got range: 1..-1//-1. Did you mean to pass the range 1..-1//1 instead?"
 
       assert_raise ArgumentError, message, fn ->
-        iota[[1, range]]
+        iota[[1, 1..-1//-1]]
       end
     end
   end
