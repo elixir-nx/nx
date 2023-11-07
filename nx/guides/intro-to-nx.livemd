@@ -140,7 +140,7 @@ up the tensor. If all of our data only uses positive numbers from
 Nx.tensor([[1, 2], [3, 4]], type: :u8) |> Nx.to_binary()
 ```
 
-If you have already have binary, you can directly convert it to a tensor
+If you already have a binary, you can directly convert it to a tensor
 by passing the binary and the type:
 
 ```elixir
