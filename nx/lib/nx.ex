@@ -14330,26 +14330,27 @@ defmodule Nx do
 
   ### Gathering subsets
 
-      iex> t = Nx.tensor([[1, 2], [3, 4]])
-      iex> Nx.gather(t, Nx.tensor([[1], [0]]))
+      iex> t = Nx.tensor([[1, 2, 3], [3, 4, 5]])
+      iex> Nx.gather(t, Nx.tensor([[1], [0], [1]]))
       #Nx.Tensor<
-        s64[2][2]
+        s64[3][3]
         [
-          [3, 4],
-          [1, 2]
+          [3, 4, 5],
+          [1, 2, 3],
+          [3, 4, 5]
         ]
       >
 
   The `:axes` option controls which dimensions the indexes point to,
   this can be useful, for example, to access columns instead of rows:
 
-      iex> t = Nx.tensor([[1, 2], [3, 4]])
-      iex> Nx.gather(t, Nx.tensor([[1], [0], [1]]), axes: [1])
+      iex> t = Nx.tensor([[1, 2, 3], [3, 4, 5]])
+      iex> Nx.gather(t, Nx.tensor([[1], [0]]), axes: [1])
       #Nx.Tensor<
-        s64[2][3]
+        s64[2][2]
         [
-          [2, 1, 2],
-          [4, 3, 4]
+          [2, 1],
+          [4, 3]
         ]
       >
 
