@@ -1745,22 +1745,58 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def indexed_add(out, target, indices, updates) do
+  def indexed_add(out, target, indices, updates, opts) do
     resolve_updates = fn upds -> Enum.zip_with(upds, fn row -> Enum.reduce(row, 0, &+/2) end) end
     update_element = &+/2
 
-    indexed_op(out, target, indices, updates, resolve_updates, update_element)
+    indexed_op(out, target, indices, updates, opts, resolve_updates, update_element)
   end
 
   @impl true
-  def indexed_put(out, target, indices, updates) do
+  def indexed_put(out, target, indices, updates, opts) do
     resolve_updates = fn upds -> Enum.at(upds, -1) end
     update_element = fn _cur, upd -> upd end
 
-    indexed_op(out, target, indices, updates, resolve_updates, update_element)
+    indexed_op(out, target, indices, updates, opts, resolve_updates, update_element)
   end
 
-  defp indexed_op(
+  defp indexed_op(out, target, indices, updates, opts, resolve_updates, update_element) do
+    axes = opts[:axes]
+    target_axes = Nx.axes(target)
+
+    {permutation_fn, inverse_permutation_fn, out_shape} =
+      if axes && axes != target_axes do
+        permutation = axes ++ (target_axes -- axes)
+
+        inverse_permutation =
+          permutation
+          |> Enum.with_index()
+          |> Enum.sort_by(fn {x, _} -> x end)
+          |> Enum.map(fn {_, i} -> i end)
+
+        transposed_out_shape = Enum.map(permutation, &elem(out.shape, &1)) |> List.to_tuple()
+
+        {
+          &Nx.transpose(&1, axes: permutation),
+          &Nx.transpose(&1, axes: inverse_permutation),
+          transposed_out_shape
+        }
+      else
+        {& &1, & &1, out.shape}
+      end
+
+    %{out | shape: out_shape}
+    |> indexed_op_on_first_dims(
+      permutation_fn.(target),
+      indices,
+      updates,
+      resolve_updates,
+      update_element
+    )
+    |> then(inverse_permutation_fn)
+  end
+
+  defp indexed_op_on_first_dims(
          %T{} = out,
          %T{shape: shape, type: {_, target_size}} = target,
          %T{shape: indices_shape} = indices,
@@ -2051,23 +2087,55 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def gather(out, tensor, indices) do
+  def gather(out, tensor, indices, opts) do
+    axes = opts[:axes]
+    tensor_axes = Nx.axes(tensor)
+
+    {permutation_fn, inverse_permutation_fn} =
+      if axes && axes != tensor_axes do
+        permutation = axes ++ (tensor_axes -- axes)
+
+        inverse_permutation =
+          permutation
+          |> Enum.with_index()
+          |> Enum.sort_by(fn {x, _} -> x end)
+          |> Enum.map(fn {_, i} -> i end)
+
+        {
+          &Nx.transpose(&1, axes: permutation),
+          &Nx.transpose(&1, axes: inverse_permutation)
+        }
+      else
+        {& &1, & &1}
+      end
+
+    out
+    |> gather(permutation_fn.(tensor), indices)
+    |> then(inverse_permutation_fn)
+    |> Nx.reshape(out.shape)
+  end
+
+  defp gather(out, tensor, indices) do
     %T{type: {_, size}, shape: shape} = tensor
-    %T{type: {_, idx_size}} = indices
+    %T{type: {_, indices_size}, shape: indices_shape} = indices
+
+    indices_rank = tuple_size(indices_shape)
+    indices_depth = elem(indices_shape, indices_rank - 1)
+    indices_count = Tuple.product(indices_shape)
+    last_dim_bin_size = indices_depth * indices_size
 
     data = to_binary(tensor)
-    rank = tuple_size(shape)
     byte_size = div(size, 8)
-
-    idx_last_dim_bin_size = rank * idx_size
+    byte_count = div(Tuple.product(out.shape), div(indices_count, indices_depth))
 
     new_data =
-      for <<bin::size(idx_last_dim_bin_size)-bitstring <- to_binary(indices)>>, into: <<>> do
+      for <<bin::size(last_dim_bin_size)-bitstring <- to_binary(indices)>>, into: <<>> do
         slice_start =
-          for <<bin::size(idx_size)-bitstring <- bin>>, do: binary_to_number(bin, indices.type)
+          for <<bin::size(indices_size)-bitstring <- bin>>,
+            do: binary_to_number(bin, indices.type)
 
         offset = index_to_binary_offset(slice_start, shape)
-        binary_part(data, offset * byte_size, byte_size)
+        binary_part(data, offset * byte_size, byte_size * byte_count)
       end
 
     from_binary(out, new_data)

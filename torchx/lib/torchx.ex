@@ -243,6 +243,7 @@ defmodule Torchx do
   deftensor as_strided(tensor, size, strides, offset)
   deftensor concatenate(tensors, axis)
   deftensor gather(tensor_input, tensor_indices, axis)
+  deftensor index(tensor_input, tensor_indices)
   deftensor index_put(tensor_input, tensor_indices, tensor_updates, accumulate)
   deftensor argsort(tensor, axis, is_descending, stable)
   deftensor flip(tensor, axis)

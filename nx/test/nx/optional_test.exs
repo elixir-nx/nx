@@ -125,12 +125,12 @@ defmodule Nx.OptionalTest do
       |> Nx.backend_transfer(__MODULE__)
     end
 
-    def gather(_, t, indices) do
+    def gather(_, t, indices, opts) do
       send(self(), {:called_default_impl, :gather})
 
       t
       |> Nx.backend_transfer(BinaryBackend)
-      |> Nx.gather(indices)
+      |> Nx.gather(indices, opts)
       |> Nx.backend_transfer(__MODULE__)
     end
 

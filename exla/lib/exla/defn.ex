@@ -1500,46 +1500,37 @@ defmodule EXLA.Defn do
     )
   end
 
-  defp to_operator(:gather, [%Value{} = tensor, indices], _ans, _state) do
-    tensor_rank = tensor |> op_shape() |> tuple_size()
-    indices_rank = indices |> op_shape() |> tuple_size()
+  defp to_operator(:gather, [%Value{} = tensor, indices, opts], _ans, _state) do
+    axes = Keyword.fetch!(opts, :axes)
+    tensor_shape = op_shape(tensor)
+    tensor_rank = tuple_size(tensor_shape)
+    index_vector_dim = tuple_size(op_shape(indices)) - 1
 
-    index_vector_dim = indices_rank - 1
-    slice_sizes = List.duplicate(1, tensor_rank)
-    offset_dims = []
-    collapsed_slice_dims = axes_for_rank(tensor_rank)
-    start_index_map = axes_for_rank(tensor_rank)
+    slice_sizes =
+      for i <- 0..(tensor_rank - 1) do
+        if i in axes, do: 1, else: elem(tensor_shape, i)
+      end
 
-    Value.gather(
-      tensor,
-      indices,
-      slice_sizes,
-      offset_dims,
-      collapsed_slice_dims,
-      start_index_map,
-      index_vector_dim
-    )
+    offset_dims = axes_for_rank(tensor_rank) -- axes
+    Value.gather(tensor, indices, slice_sizes, offset_dims, axes, axes, index_vector_dim)
   end
 
-  defp to_operator(:gather, [tensor, indices], _ans, _state) do
-    tensor_rank = tensor |> op_shape() |> tuple_size()
-    indices_rank = indices |> op_shape() |> tuple_size()
+  defp to_operator(:gather, [tensor, indices, opts], ans, _state) do
+    axes = Keyword.fetch!(opts, :axes)
+    tensor_shape = op_shape(tensor)
+    tensor_rank = tuple_size(tensor_shape)
+    index_vector_dim = tuple_size(op_shape(indices)) - 1
 
-    index_vector_dim = indices_rank - 1
-    slice_sizes = List.duplicate(1, tensor_rank)
-    offset_dims = []
-    collapsed_slice_dims = axes_for_rank(tensor_rank)
-    start_index_map = axes_for_rank(tensor_rank)
+    slice_sizes =
+      for i <- 0..(tensor_rank - 1) do
+        if i in axes, do: 1, else: elem(tensor_shape, i)
+      end
 
-    EXLA.Op.gather(
-      tensor,
-      indices,
-      index_vector_dim,
-      slice_sizes,
-      offset_dims,
-      collapsed_slice_dims,
-      start_index_map
-    )
+    offset_dims = axes_for_rank(tensor_rank) -- axes
+
+    tensor
+    |> EXLA.Op.gather(indices, index_vector_dim, slice_sizes, offset_dims, axes, axes)
+    |> EXLA.Op.reshape(ans.shape)
   end
 
   defp to_operator(:reverse, [%Value{} = tensor, axes], _ans, _state) do
@@ -1748,7 +1739,8 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp mlir_scatter([target, indices, updates], %{type: type}, kind) when kind in [:add, :put] do
+  defp mlir_scatter([target, indices, updates, _opts], %{type: type}, kind)
+       when kind in [:add, :put] do
     target = to_type(target, type)
     updates = to_type(updates, type)
 
@@ -1772,13 +1764,12 @@ defmodule EXLA.Defn do
     Value.scatter(target, indices, updates, kind)
   end
 
-  defp scatter(scatter_fn, [target, indices, updates], %{type: type}) do
+  defp scatter(scatter_fn, [target, indices, updates, opts], %{type: type}) do
     target = to_type(target, type)
     updates = to_type(updates, type)
-    target_rank = target |> op_shape() |> tuple_size()
     update_rank = updates |> op_shape() |> tuple_size()
     update_axes = tl(axes_for_rank(update_rank))
-    index_axes = axes_for_rank(target_rank - update_rank + 1)
+    index_axes = Keyword.fetch!(opts, :axes)
     EXLA.Op.scatter(target, indices, updates, scatter_fn, 1, update_axes, index_axes, index_axes)
   end
 

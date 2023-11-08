@@ -7480,6 +7480,13 @@ defmodule Nx do
 
   See also: `indexed_add/3`, `gather/2`, `take/3`, `take_along_axis/3`
 
+  ## Options
+
+    * `:axes` - controls which dimensions the indexes apply to.
+      It must be a sorted list of axes and be of the same size
+      as the second (last) dimension of the indexes tensor.
+      It defaults to the leading axes of the tensor.
+
   ## Examples
 
   ### Adding a single entry as a scalar
@@ -7577,11 +7584,11 @@ defmodule Nx do
       ** (ArgumentError) expected the leading axis of indices ({1, 2}) and leading axis of updates ({2}) to match
 
       iex> Nx.indexed_add(Nx.tensor([[1, 2, 3]]), Nx.tensor([[0]]), Nx.tensor([[1, 2, 3, 4, 5]]))
-      ** (ArgumentError) axis (-1) of updates ({1, 5}) must be less than or equal to the axis (-1) of {1, 3})
+      ** (ArgumentError) axis (1) of updates ({1, 5}) must be less than or equal to the axis (1) of {1, 3})
   """
   @doc type: :indexed
-  def indexed_add(target, indices, updates) do
-    indexed_op(target, indices, updates, :indexed_add)
+  def indexed_add(target, indices, updates, opts \\ []) do
+    indexed_op(target, indices, updates, opts, :indexed_add)
   end
 
   @doc """
@@ -7595,6 +7602,13 @@ defmodule Nx do
   in parallel when running on devices such as the GPU.
 
   See also: `indexed_add/3`, `put_slice/3`.
+
+  ## Options
+
+    * `:axes` - controls which dimensions the indexes apply to.
+      It must be a sorted list of axes and be of the same size
+      as the second (last) dimension of the indexes tensor.
+      It defaults to the leading axes of the tensor.
 
   ## Examples
 
@@ -7675,6 +7689,33 @@ defmodule Nx do
           ]
         >
 
+  The `:axes` option controls which dimensions the indexes apply to.
+  It must be a sorted list of axes. All non-listed axes are taken as
+  the update dimensions:
+
+      iex> t = Nx.iota({1, 2, 3})
+      #Nx.Tensor<
+        s64[1][2][3]
+        [
+          [
+            [0, 1, 2],
+            [3, 4, 5]
+          ]
+        ]
+      >
+      iex> indices = Nx.tensor([[0, 0], [0, 2]])
+      iex> updates = Nx.tensor([[0, 30], [20, 50]])
+      iex> Nx.indexed_put(t, indices, updates, axes: [0, 2])
+      #Nx.Tensor<
+        s64[1][2][3]
+        [
+          [
+            [0, 1, 20],
+            [30, 4, 50]
+          ]
+        ]
+      >
+
   ### Type promotions
 
   Type promotions should happen automatically, with the resulting type being the combination
@@ -7730,37 +7771,41 @@ defmodule Nx do
 
       iex> Nx.indexed_put(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2]]), Nx.tensor([0, 1]))
       ** (ArgumentError) expected the leading axis of indices ({1, 2}) and leading axis of updates ({2}) to match
+
+      iex> Nx.indexed_put(Nx.iota({1, 2, 3}), Nx.tensor([[0, 1, 2]]), 10, axes: [1, 0, 2])
+      ** (ArgumentError) :axes must be an ordered list
   """
   @doc type: :indexed
-  def indexed_put(target, indices, updates) do
-    indexed_op(target, indices, updates, :indexed_put)
+  def indexed_put(target, indices, updates, opts \\ []) do
+    indexed_op(target, indices, updates, opts, :indexed_put)
   end
 
-  defp indexed_op(target, %Nx.Tensor{shape: {_}} = index, update, op) when is_tensor(update) do
+  defp indexed_op(target, %Nx.Tensor{shape: {_}} = index, update, opts, op)
+       when is_tensor(update) do
     update = to_tensor(update)
-    Nx.Shape.indexed_scalar(target, index, update)
-    indexed_op(target, Nx.new_axis(index, 0), Nx.new_axis(update, 0), op)
+    Nx.Shape.indexed_scalar(target.shape, index.shape, update.shape)
+    indexed_op(target, Nx.new_axis(index, 0), Nx.new_axis(update, 0), opts, op)
   end
 
-  defp indexed_op(target, indices, updates, op) do
+  defp indexed_op(target, indices, updates, opts, op) do
+    opts = keyword!(opts, [:axes])
+
     [%T{vectorized_axes: vectorized_axes} = target, indices, updates] =
       broadcast_vectors([target, indices, updates])
 
-    idx_type = type(indices)
-
-    unless Nx.Type.integer?(idx_type) do
-      raise ArgumentError, "indices must be an integer tensor, got type: #{inspect(idx_type)}"
+    unless Nx.Type.integer?(indices.type) do
+      raise ArgumentError, "indices must be an integer tensor, got type: #{inspect(indices.type)}"
     end
 
+    axes = indexed_axes(target, indices, opts)
+    Nx.Shape.indexed(target.shape, indices.shape, updates.shape, axes)
+
     type = binary_type(target, updates)
-
-    Nx.Shape.indexed(target, indices, updates)
-
     target = devectorize(target)
     indices = devectorize(indices)
     updates = devectorize(updates)
 
-    {indices, updates} =
+    {indices, updates, axes} =
       if vectorized_axes != [] do
         offset = length(vectorized_axes)
         iota_shape = put_elem(indices.shape, tuple_size(indices.shape) - 1, 1)
@@ -7777,16 +7822,31 @@ defmodule Nx do
           |> concatenate(axis: -1)
           |> reshape({:auto, offset + n})
 
-        {indices, flatten(updates)}
+        axes = Enum.to_list(0..(offset - 1)) ++ Enum.map(axes, &(&1 + offset))
+        {indices, flatten(updates), axes}
       else
-        {indices, updates}
+        {indices, updates, axes}
       end
 
-    out = %{target | type: type}
+    impl!(target, indices, updates)
+    |> apply(op, [%{target | type: type}, target, indices, updates, [axes: axes]])
+    |> vectorize(vectorized_axes)
+  end
 
-    result = apply(impl!(target, indices, updates), op, [out, target, indices, updates])
+  defp indexed_axes(tensor, indices, opts) do
+    if axes = opts[:axes] do
+      axes = Nx.Shape.normalize_axes(tensor.shape, axes, tensor.names)
 
-    vectorize(result, vectorized_axes)
+      Enum.reduce(axes, fn
+        next, prev when prev < next -> next
+        _, _ -> raise ArgumentError, ":axes must be an ordered list"
+      end)
+
+      axes
+    else
+      n = elem(indices.shape, tuple_size(indices.shape) - 1)
+      Enum.to_list(0..(n - 1))
+    end
   end
 
   ## Unary ops
@@ -9097,8 +9157,8 @@ defmodule Nx do
     %T{shape: weights_shape} = weights = to_tensor(weights)
 
     axes =
-      if opts[:axes] do
-        Nx.Shape.normalize_axes(shape, opts[:axes], names)
+      if axes = opts[:axes] do
+        Nx.Shape.normalize_axes(shape, axes, names)
       end
 
     weights =
@@ -14233,10 +14293,16 @@ defmodule Nx do
   Builds a new tensor by taking individual values from the original
   tensor at the given indices.
 
-  The last dimension in indices must have the same size as the tensor
-  rank, think of it as one value per axis.
+  ## Options
+
+    * `:axes` - controls which dimensions the indexes apply to.
+      It must be a sorted list of axes and be of the same size
+      as the second (last) dimension of the indexes tensor.
+      It defaults to the leading axes of the tensor.
 
   ## Examples
+
+  ### Gathering scalars
 
       iex> t = Nx.tensor([[1, 2], [3, 4]])
       iex> Nx.gather(t, Nx.tensor([[1, 1], [0, 1], [1, 0]]))
@@ -14260,6 +14326,38 @@ defmodule Nx do
       #Nx.Tensor<
         s64[3]
         [1, 12, 112]
+      >
+
+  ### Gathering subsets
+
+      iex> t = Nx.tensor([[1, 2, 3], [3, 4, 5]])
+      iex> Nx.gather(t, Nx.tensor([[1], [0], [1]]))
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [3, 4, 5],
+          [1, 2, 3],
+          [3, 4, 5]
+        ]
+      >
+
+  The `:axes` option controls which dimensions the indexes point to,
+  this can be useful, for example, to access columns instead of rows:
+
+      iex> t = Nx.tensor([[[1, 2, 3]], [[4, 5, 6]]])
+      iex> Nx.gather(t, Nx.tensor([[1], [0]]), axes: [2])
+      #Nx.Tensor<
+        s64[2][2][1]
+        [
+          [
+            [2],
+            [1]
+          ],
+          [
+            [5],
+            [4]
+          ]
+        ]
       >
 
   ## Vectorized tensors
@@ -14306,9 +14404,13 @@ defmodule Nx do
       ** (ArgumentError) indices must be an integer tensor, got {:f, 32}
   """
   @doc type: :indexed
-  def gather(tensor, indices) do
+  def gather(tensor, indices, opts \\ []) do
+    opts = keyword!(opts, [:axes])
+
     [%T{vectorized_axes: vectorized_axes} = tensor, indices] =
       broadcast_vectors([tensor, indices], align_ranks: false)
+
+    axes = indexed_axes(tensor, indices, opts)
 
     unless Nx.Type.integer?(indices.type) do
       raise ArgumentError, "indices must be an integer tensor, got #{inspect(indices.type)}"
@@ -14316,7 +14418,7 @@ defmodule Nx do
 
     offset = length(vectorized_axes)
 
-    {tensor, indices} =
+    {tensor, indices, axes} =
       if offset != 0 do
         tensor = devectorize(tensor, keep_names: false)
         indices = devectorize(indices, keep_names: false)
@@ -14331,15 +14433,15 @@ defmodule Nx do
           |> Enum.reduce([indices], &[Nx.iota(iota_shape, axis: &1) | &2])
           |> concatenate(axis: -1)
 
-        {tensor, indices}
+        axes = Enum.to_list(0..(offset - 1)) ++ Enum.map(axes, &(&1 + offset))
+        {tensor, indices, axes}
       else
-        {tensor, indices}
+        {tensor, indices, axes}
       end
 
-    {shape, names} = Nx.Shape.gather(tensor.shape, indices.shape)
-
-    result = impl!(tensor).gather(%{tensor | shape: shape, names: names}, tensor, indices)
-
+    {shape, names} = Nx.Shape.gather(tensor.shape, indices.shape, axes)
+    out = %{tensor | shape: shape, names: names}
+    result = impl!(tensor).gather(out, tensor, indices, axes: axes)
     vectorize(result, vectorized_axes)
   end
 
