@@ -468,7 +468,8 @@ NIF(put) {
   LIST_PARAM(1, std::vector<int64_t>, indices);
   TENSOR_PARAM(2, source);
 
-  torch::Tensor destination = input->clone();
+  torch::Tensor output = input->clone();
+  torch::Tensor destination = output;
 
   auto source_shape = source->sizes();
 
@@ -482,7 +483,7 @@ NIF(put) {
   auto start = indices[dim];
   destination.slice(dim, start, start + source_shape[dim]) = *source;
 
-  TENSOR(destination);
+  TENSOR(output);
 }
 
 NIF(permute) {
