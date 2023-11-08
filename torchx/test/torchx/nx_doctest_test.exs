@@ -23,7 +23,8 @@ defmodule Torchx.NxDoctestTest do
     round: 1,
     sigmoid: 1,
     fft: 2,
-    ifft: 2
+    ifft: 2,
+    standard_deviation: 2
   ]
 
   if Application.compile_env(:torchx, :is_apple_arm64) do
