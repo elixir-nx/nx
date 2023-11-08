@@ -1760,13 +1760,47 @@ defmodule Nx.BinaryBackend do
     indexed_op(out, target, indices, updates, opts, resolve_updates, update_element)
   end
 
-  defp indexed_op(
+  defp indexed_op(out, target, indices, updates, opts, resolve_updates, update_element) do
+    axes = opts[:axes]
+    target_axes = Nx.axes(target)
+
+    {permutation_fn, inverse_permutation_fn, out_shape} =
+      if axes && axes != target_axes do
+        permutation = axes ++ (target_axes -- axes)
+
+        inverse_permutation =
+          permutation
+          |> Enum.with_index()
+          |> Enum.sort_by(fn {x, _} -> x end)
+          |> Enum.map(fn {_, i} -> i end)
+
+        transposed_out_shape = Enum.map(permutation, &elem(out.shape, &1)) |> List.to_tuple()
+
+        {
+          &Nx.transpose(&1, axes: permutation),
+          &Nx.transpose(&1, axes: inverse_permutation),
+          transposed_out_shape
+        }
+      else
+        {& &1, & &1, out.shape}
+      end
+
+    %{out | shape: out_shape}
+    |> indexed_op_on_first_dims(
+      permutation_fn.(target),
+      indices,
+      updates,
+      resolve_updates,
+      update_element
+    )
+    |> then(inverse_permutation_fn)
+  end
+
+  defp indexed_op_on_first_dims(
          %T{} = out,
          %T{shape: shape, type: {_, target_size}} = target,
          %T{shape: indices_shape} = indices,
          %T{shape: updates_shape, type: {_, updates_size}} = updates,
-         # TODO: Use opts
-         opts,
          resolve_updates,
          update_element
        ) do
@@ -2054,7 +2088,34 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def gather(out, tensor, indices, opts) do
-    # TODO: Use opts
+    axes = opts[:axes]
+    tensor_axes = Nx.axes(tensor)
+
+    {permutation_fn, inverse_permutation_fn} =
+      if axes && axes != tensor_axes do
+        permutation = axes ++ (tensor_axes -- axes)
+
+        inverse_permutation =
+          permutation
+          |> Enum.with_index()
+          |> Enum.sort_by(fn {x, _} -> x end)
+          |> Enum.map(fn {_, i} -> i end)
+
+        {
+          &Nx.transpose(&1, axes: permutation),
+          &Nx.transpose(&1, axes: inverse_permutation)
+        }
+      else
+        {& &1, & &1}
+      end
+
+    out
+    |> gather(permutation_fn.(tensor), indices)
+    |> then(inverse_permutation_fn)
+    |> Nx.reshape(out.shape)
+  end
+
+  defp gather(out, tensor, indices) do
     %T{type: {_, size}, shape: shape} = tensor
     %T{type: {_, indices_size}, shape: indices_shape} = indices
 

@@ -1515,7 +1515,7 @@ defmodule EXLA.Defn do
     Value.gather(tensor, indices, slice_sizes, offset_dims, axes, axes, index_vector_dim)
   end
 
-  defp to_operator(:gather, [tensor, indices, opts], _ans, _state) do
+  defp to_operator(:gather, [tensor, indices, opts], ans, _state) do
     axes = Keyword.fetch!(opts, :axes)
     tensor_shape = op_shape(tensor)
     tensor_rank = tuple_size(tensor_shape)
@@ -1527,7 +1527,10 @@ defmodule EXLA.Defn do
       end
 
     offset_dims = axes_for_rank(tensor_rank) -- axes
-    EXLA.Op.gather(tensor, indices, index_vector_dim, slice_sizes, offset_dims, axes, axes)
+
+    tensor
+    |> EXLA.Op.gather(indices, index_vector_dim, slice_sizes, offset_dims, axes, axes)
+    |> EXLA.Op.reshape(ans.shape)
   end
 
   defp to_operator(:reverse, [%Value{} = tensor, axes], _ans, _state) do

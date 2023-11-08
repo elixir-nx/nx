@@ -14344,13 +14344,19 @@ defmodule Nx do
   The `:axes` option controls which dimensions the indexes point to,
   this can be useful, for example, to access columns instead of rows:
 
-      iex> t = Nx.tensor([[1, 2, 3], [3, 4, 5]])
-      iex> Nx.gather(t, Nx.tensor([[1], [0]]), axes: [1])
+      iex> t = Nx.tensor([[[1, 2, 3]], [[4, 5, 6]]])
+      iex> Nx.gather(t, Nx.tensor([[1], [0]]), axes: [2])
       #Nx.Tensor<
-        s64[2][2]
+        s64[2][2][1]
         [
-          [2, 1],
-          [4, 3]
+          [
+            [2],
+            [1]
+          ],
+          [
+            [5],
+            [4]
+          ]
         ]
       >
 
