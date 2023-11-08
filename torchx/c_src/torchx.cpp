@@ -485,6 +485,17 @@ NIF(index_put) {
   TENSOR(torch::index_put(*input, convertedList, *updates, accumulate));
 }
 
+NIF(index) {
+  TENSOR_PARAM(0, input);
+  LIST_PARAM(1, std::vector<torch::Tensor>, indices);
+
+  c10::List<c10::optional<at::Tensor>> convertedList;
+  for (const torch::Tensor& tensor : indices) {
+    convertedList.push_back(tensor);
+  }
+
+  TENSOR(torch::index(*input, convertedList));
+}
 
 NIF(argsort)
 {
@@ -1260,6 +1271,7 @@ static ErlNifFunc nif_functions[] = {
     DF(concatenate, 2),
     DF(gather, 3),
     DF(argsort, 3),
+    DF(index, 2),
     DF(index_put, 4),
     DF(top_k, 2),
     DF(flip, 2),
