@@ -533,13 +533,27 @@ NIF(unfold)
   TENSOR(at::native::unfold(*input, dim, size, step));
 }
 
-NIF(put)
-{
+NIF(put) {
   TENSOR_PARAM(0, input);
-  TENSOR_PARAM(1, index);
+  LIST_PARAM(1, std::vector<int64_t>, indices);
   TENSOR_PARAM(2, source);
 
-  TENSOR(at::put(*input, *index, *source));
+  torch::Tensor output = input->clone();
+  torch::Tensor destination = output;
+
+  auto source_shape = source->sizes();
+
+  size_t dim = 0;
+  for (dim = 0; dim < indices.size() - 1; dim++) {
+    auto start = indices[dim];
+    // arguments are dimension, start index and NON-INCLUSIVE end index
+    destination = destination.slice(dim, start, start + source_shape[dim]);
+  }
+
+  auto start = indices[dim];
+  destination.slice(dim, start, start + source_shape[dim]) = *source;
+
+  TENSOR(output);
 }
 
 NIF(permute)
