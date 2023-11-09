@@ -288,9 +288,14 @@ defmodule EXLA.MLIR.Value do
         %Value{function: func} = target,
         %Value{function: func} = indices,
         %Value{function: func} = updates,
-        kind
+        kind,
+        indices_rank,
+        update_window_dims,
+        inserted_window_dims,
+        index_dims_to_window_dims
       )
-      when kind in [:add, :put] do
+      when kind in [:add, :put] and is_integer(indices_rank) and is_list(update_window_dims) and
+             is_list(inserted_window_dims) and is_list(index_dims_to_window_dims) do
     add_or_put = if(kind == :add, do: 1, else: 0)
 
     ref =
@@ -299,7 +304,11 @@ defmodule EXLA.MLIR.Value do
         target.ref,
         indices.ref,
         updates.ref,
-        add_or_put
+        add_or_put,
+        indices_rank,
+        update_window_dims,
+        inserted_window_dims,
+        index_dims_to_window_dims
       )
       |> unwrap!()
 

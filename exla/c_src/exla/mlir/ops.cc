@@ -952,13 +952,15 @@ ERL_NIF_TERM dump_mlir_module(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
 }
 
 ERL_NIF_TERM mlir_scatter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 5) {
+  if (argc != 9) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   exla::MLIRFunction** function;
   mlir::Value *target, *indices, *updates;
   bool add_or_put;
+  int64_t indices_rank;
+  std::vector<int64_t> update_window_dims, inserted_window_dims, index_dims_to_window_dims;
 
   if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
     return exla::nif::error(env, "Unable to get function.");
@@ -975,8 +977,28 @@ ERL_NIF_TERM mlir_scatter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get(env, argv[4], &add_or_put)) {
     return exla::nif::error(env, "Unable to get add_or_put.");
   }
+  if (!exla::nif::get(env, argv[5], &indices_rank)) {
+    return exla::nif::error(env, "Unable to get indices_rank.");
+  }
+  if (!exla::nif::get_list(env, argv[6], update_window_dims)) {
+    return exla::nif::error(env, "Unable to get update_window_dims.");
+  }
+  if (!exla::nif::get_list(env, argv[7], inserted_window_dims)) {
+    return exla::nif::error(env, "Unable to get inserted_window_dims.");
+  }
+  if (!exla::nif::get_list(env, argv[8], index_dims_to_window_dims)) {
+    return exla::nif::error(env, "Unable to get index_dims_to_window_dims.");
+  }
 
-  mlir::Value res = (*function)->ScatterOp(*target, *indices, *updates, add_or_put);
+  mlir::Value res = (*function)->ScatterOp(
+      *target,
+      *indices,
+      *updates,
+      add_or_put,
+      indices_rank,
+      update_window_dims,
+      inserted_window_dims,
+      index_dims_to_window_dims);
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
 

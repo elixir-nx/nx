@@ -706,6 +706,36 @@ defmodule EXLA.MLIR.ExecutableTest do
         ])
       )
     end
+
+    test "axes option support" do
+      t = Nx.iota({1, 2, 3})
+      indices = Nx.tensor([[0, 0], [0, 2]])
+      updates = Nx.tensor([[0, 30], [20, 50]])
+
+      result = EXLA.jit(&Nx.indexed_put(&1, &2, &3, axes: [0, 2])).(t, indices, updates)
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [
+            [0, 1, 20],
+            [30, 4, 50]
+          ]
+        ])
+      )
+
+      result = EXLA.jit(&Nx.indexed_add(&1, &2, &3, axes: [0, 2])).(t, indices, updates)
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [
+            [0, 1, 22],
+            [33, 4, 55]
+          ]
+        ])
+      )
+    end
   end
 
   describe "window_scatter" do

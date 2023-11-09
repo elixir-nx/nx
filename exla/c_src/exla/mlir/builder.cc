@@ -750,17 +750,11 @@ static void buildScatterComputation(mlir::Type element_type, bool add_or_put, ml
   }
 }
 
-mlir::Value MLIRFunction::ScatterOp(mlir::Value target, mlir::Value indices, mlir::Value updates, bool add_or_put) {
+mlir::Value MLIRFunction::ScatterOp(mlir::Value target, mlir::Value indices, mlir::Value updates, bool add_or_put, int64_t indices_rank, std::vector<int64_t> update_window_dims, std::vector<int64_t> inserted_window_dims, std::vector<int64_t> index_dims_to_window_dims) {
   auto builder = module_->builder();
   builder->setInsertionPointToEnd(&func_->getBody().back());
   mlir::RankedTensorType type = llvm::cast<mlir::RankedTensorType>(target.getType());
-  int64_t rank = type.getShape().size();
-  std::vector<int64_t> axes(rank);
-  for (int64_t i = 0; i < rank; i++) {
-    axes[i] = i;
-  }
-
-  auto scatter_dimension_numbers = mlir::mhlo::ScatterDimensionNumbersAttr::get(builder->getContext(), {}, axes, axes, rank);
+  auto scatter_dimension_numbers = mlir::mhlo::ScatterDimensionNumbersAttr::get(builder->getContext(), update_window_dims, inserted_window_dims, index_dims_to_window_dims, indices_rank);
 
   mlir::mhlo::ScatterOp scatter_op = builder->create<mlir::mhlo::ScatterOp>(builder->getUnknownLoc(), target, indices, updates, scatter_dimension_numbers);
   mlir::Type computation_operand_type = mlir::RankedTensorType::get({}, type.getElementType());
