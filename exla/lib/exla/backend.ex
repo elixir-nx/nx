@@ -317,25 +317,25 @@ defmodule EXLA.Backend do
     end
   end
 
-  defp jit(backend_options, fun, args), do: jit(backend_options, fun, args, args)
+  defp jit(opts, fun, args), do: jit(opts, fun, args, args)
 
-  defp jit(backend_options, fun, tensors, args) do
-    client =
-      for %T{data: %B{buffer: %EXLA.DeviceBuffer{client_name: client_name}}} <- tensors,
-          reduce: nil do
-        acc when acc != nil and acc != client_name ->
-          if EXLA.Client.fetch!(client_name).platform == :host do
-            acc
-          else
-            client_name
+  defp jit(opts, fun, tensors, args) do
+    {client, device_id} =
+      for %T{data: %B{buffer: %EXLA.DeviceBuffer{client_name: client_name, device_id: device_id}}} <-
+            tensors,
+          reduce: {nil, nil} do
+        {^client_name, ^device_id} = acc ->
+          acc
+
+        acc ->
+          case EXLA.Client.fetch!(client_name) do
+            %{platform: :host, default_device_id: ^device_id} -> acc
+            _ -> {client_name, device_id}
           end
-
-        _ ->
-          client_name
       end
 
-    client = backend_options[:client] || client
-
-    EXLA.jit_apply(fun, args, on_conflict: :force, client: client || EXLA.Client.default_name())
+    client = opts[:client] || client || EXLA.Client.default_name()
+    device_id = opts[:device_id] || device_id || EXLA.Client.fetch!(client).default_device_id
+    EXLA.jit_apply(fun, args, on_conflict: :force, client: client, device_id: device_id)
   end
 end
