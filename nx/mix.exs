@@ -6,7 +6,7 @@ defmodule Nx.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx"
-  @version "0.6.2"
+  @version "0.6.3"
 
   def project do
     [
@@ -61,7 +61,7 @@ defmodule Nx.MixProject do
       before_closing_body_tag: &before_closing_body_tag/1,
       extras: [
         "guides/intro-to-nx.livemd",
-        "guides/tensor-aggregation-101.livemd",
+        # "guides/tensor-aggregation-101.livemd",
         "guides/vectorization.livemd",
         "CHANGELOG.md"
       ],

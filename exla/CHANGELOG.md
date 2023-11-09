@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.6.3 (2023-11-09)
+
+  * Update to latest Nx
+  * Fix mixed device usage on EXLA.Backend
+
 ## v0.6.1 (2023-09-12)
 
   * Update to latest Nx
