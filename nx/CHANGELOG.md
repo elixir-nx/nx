@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.7.0-dev
+
+### Enhancements
+
+  * [Nx] Add `fft2` and `ifft2`
+
+### Bug fixes
+
+  * [Nx.Defn] Do not discard arguments on optional grads
+
+### Incompatible changes
+
+  * [Nx] Default to non-stable sorting
+  * [Nx] Remove deprecated random_uniform, random_normal, shuffle
+  * [Nx.Defn] `Nx.Defn.rewrite_types/2` has been removed
+
 ## v0.6.3 (2023-11-09)
 
 ### Enhancements
