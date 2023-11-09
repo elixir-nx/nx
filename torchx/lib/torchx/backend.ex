@@ -151,11 +151,9 @@ defmodule Torchx.Backend do
 
     to_batch =
       if remainder != 0 and leftover == :repeat do
-        slice_shape = t.shape |> Tuple.delete_at(0) |> Tuple.insert_at(0, remainder)
-
         t_torchx = from_nx(t)
 
-        slice = torchx_slice(t_torchx, t.shape, slice_shape, [0], [remainder], [1])
+        slice = torchx_slice(t_torchx, t.shape, [0], [remainder], [1])
 
         Torchx.concatenate([t_torchx, slice], 0)
       else
@@ -286,7 +284,7 @@ defmodule Torchx.Backend do
 
   @impl true
   def slice(
-        %T{shape: output_shape} = out,
+        out,
         %T{shape: input_shape} = t,
         start_indices,
         lengths,
@@ -294,47 +292,19 @@ defmodule Torchx.Backend do
       ) do
     t
     |> from_nx()
-    |> torchx_slice(input_shape, output_shape, start_indices, lengths, strides)
+    |> torchx_slice(input_shape, start_indices, lengths, strides)
     |> to_nx(out)
   end
 
-  defp torchx_slice(t, input_shape, output_shape, start_indices, lengths, strides) do
-    t
-    |> narrow(start_indices, lengths, 0, input_shape)
-    |> stride(output_shape, lengths, strides)
-  end
+  defp torchx_slice(t, input_shape, start_indices, lengths, strides) do
+    starts =
+      start_indices
+      |> Enum.zip(lengths)
+      |> Enum.with_index(fn {start, len}, axis ->
+        min(to_number(start), elem(input_shape, axis) - len)
+      end)
 
-  defp narrow(ref, [start | starts], [length | lengths], axis, shape) do
-    dim = elem(shape, axis)
-    start = to_number(start)
-    start = min(start, dim - length)
-
-    # Nothing to narrow
-    if start == 0 and length == dim do
-      narrow(ref, starts, lengths, axis + 1, shape)
-    else
-      ref
-      |> Torchx.narrow(axis, start, length)
-      |> narrow(starts, lengths, axis + 1, shape)
-    end
-  end
-
-  defp narrow(ref, [], [], _axis, _shape), do: ref
-
-  defp stride(ref, shape, lengths, strides) do
-    if Enum.all?(strides, &(&1 == 1)) do
-      ref
-    else
-      ref
-      |> Torchx.as_strided(shape, steps_to_strides(lengths, strides), 0)
-    end
-  end
-
-  def steps_to_strides(shape, steps) do
-    for {dim, step} <- Enum.zip(shape, steps) |> Enum.reverse(), reduce: {1, []} do
-      {offset, strides} -> {offset * dim, [offset * step | strides]}
-    end
-    |> elem(1)
+    Torchx.slice(t, starts, lengths, strides)
   end
 
   @impl true
@@ -996,7 +966,7 @@ defmodule Torchx.Backend do
     strides = List.duplicate(1, tuple_size(as_real_shape))
 
     as_real
-    |> torchx_slice(as_real_shape, shape, starts, lengths, strides)
+    |> torchx_slice(as_real_shape, starts, lengths, strides)
     |> Torchx.reshape(shape)
   end
 
@@ -1208,7 +1178,6 @@ defmodule Torchx.Backend do
       |> Torchx.reshape(shape_after_pad)
       |> torchx_slice(
         shape_after_pad,
-        List.to_tuple(final_sizes),
         List.duplicate(0, rank),
         final_sizes,
         List.duplicate(1, rank)
@@ -1249,7 +1218,7 @@ defmodule Torchx.Backend do
         |> Enum.unzip()
 
       strides = List.duplicate(1, tuple_size(shape))
-      torchx_slice(t_tx, shape, List.to_tuple(lengths), starts, lengths, strides)
+      torchx_slice(t_tx, shape, starts, lengths, strides)
     else
       t_tx
     end
