@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.6.3 (2023-11-09)
+
+### Enhancements
+
+  * [Nx] Allow non-scalars as updates on `indexed_add` and `indexed_put`
+  * [Nx] Allow non-scalars as return of `gather`
+  * [Nx] Support the `:axes` option in `gather`, `indexed_add`, and `indexed_put`
+  * [Nx] Add `Nx.covariance`
+  * [Nx] Support `:type` in argsort
+  * [Nx] Support `:stable` option in argsort for future compatibility
+  * [Nx.Serving] Add `:weight` option for static load balancing
+
+### Bug fixes
+
+  * [Nx] Cast input types on slicing
+  * [Nx.Defn] Support vectorized tensors in grad
+  * [Nx.Defn] Fix bugs when diffing tensor expressions
+  * [Nx.Serving] Handle serving getting stuck on timer messages
+
 ## v0.6.2 (2023-09-21)
 
 ### Enhancements
@@ -13,6 +32,13 @@
 
   * [Nx] Add multivariate normal distribution
   * [Nx.Serving] Automatically split exceeding batch sizes
+
+### Bug fixes
+
+  * [Nx] Fix `Nx.pad/2` with different backends
+  * [Nx] Fix `Nx.clip/3` with non-finite values
+  * [Nx.Serving] Emit batches as they arrive in `Nx.Serving.streaming/2`
+  * [Nx.Serving] Ensure batch key is preserved when a batch is split
 
 ## v0.6.0 (2023-08-15)
 
