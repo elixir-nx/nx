@@ -1,38 +1,40 @@
 defmodule Nx.Defn.TemplateDiff do
   @moduledoc false
+  import Nx, only: [is_tensor: 1]
   defstruct [:left, :right, :left_title, :right_title, :compatible]
 
-  defp is_valid_container?(impl) do
-    not is_nil(impl) and impl != Nx.Container.Any
+  def build(left, right, left_title, right_title, _compatibility_fn \\ &Nx.compatible?/2)
+
+  def build(left, right, left_title, right_title, compatibility_fn)
+      when is_tensor(left) and is_tensor(right) do
+    %__MODULE__{
+      left: left,
+      left_title: left_title,
+      right: right,
+      right_title: right_title,
+      compatible: compatibility_fn.(left, right)
+    }
   end
 
-  def build(left, right, left_title, right_title, compatibility_fn \\ &Nx.compatible?/2) do
+  def build(left, right, left_title, right_title, compatibility_fn) do
     left_impl = Nx.Container.impl_for(left)
     right_impl = Nx.Container.impl_for(right)
 
-    l = is_valid_container?(left_impl)
-    r = is_valid_container?(right_impl)
+    if left_impl == right_impl and left_impl != nil do
+      flatten = right |> Nx.Container.reduce([], &[&1 | &2]) |> Enum.reverse()
 
-    cond do
-      not l and not r ->
-        %__MODULE__{
-          left: left,
-          left_title: left_title,
-          right: right,
-          right_title: right_title,
-          compatible: left == right
-        }
+      {diff, acc} =
+        Nx.Container.traverse(left, flatten, fn
+          left, [] ->
+            {%__MODULE__{left: left}, :incompatible_sizes}
 
-      not l or not r ->
-        %__MODULE__{
-          left: left,
-          left_title: left_title,
-          right: right,
-          right_title: right_title,
-          compatible: false
-        }
+          left, [right | acc] ->
+            {build(left, right, left_title, right_title, compatibility_fn), acc}
+        end)
 
-      left_impl != right_impl ->
+      if acc == [] and compatible_keys?(left_impl, left, right) do
+        diff
+      else
         %__MODULE__{
           left: left,
           left_title: left_title,
@@ -40,39 +42,23 @@ defmodule Nx.Defn.TemplateDiff do
           right_title: right_title,
           compatible: false
         }
-
-      l and r ->
-        {diff, acc} =
-          Nx.Defn.Composite.traverse(left, Nx.Defn.Composite.flatten_list([right]), fn
-            left, [] ->
-              {%__MODULE__{left: left}, :incompatible_sizes}
-
-            left, [right | acc] ->
-              {
-                %__MODULE__{
-                  left: left,
-                  right: right,
-                  left_title: left_title,
-                  right_title: right_title,
-                  compatible: compatibility_fn.(left, right)
-                },
-                acc
-              }
-          end)
-
-        if acc == :incompatible_sizes do
-          %__MODULE__{
-            left: left,
-            left_title: left_title,
-            right: right,
-            right_title: right_title,
-            compatible: false
-          }
-        else
-          diff
-        end
+      end
+    else
+      %__MODULE__{
+        left: left,
+        left_title: left_title,
+        right: right,
+        right_title: right_title,
+        compatible: false
+      }
     end
   end
+
+  defp compatible_keys?(Nx.Container.Map, left, right),
+    do: Enum.all?(Map.keys(left), &is_map_key(right, &1))
+
+  defp compatible_keys?(_, _, _),
+    do: true
 
   def build_and_inspect(
         left,
@@ -145,8 +131,7 @@ defmodule Nx.Defn.TemplateDiff do
     end
 
     defp inspect_as_template(data, opts) do
-      if is_number(data) or is_tuple(data) or
-           (is_map(data) and Nx.Container.impl_for(data) != Nx.Container.Any) do
+      if Nx.Container.impl_for(data) != nil do
         data
         |> Nx.to_template()
         |> to_doc(
