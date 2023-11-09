@@ -1741,29 +1741,15 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp mlir_scatter([target, indices, updates, _opts], %{type: type}, kind)
+  defp mlir_scatter([target, indices, updates, opts], %{type: type}, kind)
        when kind in [:add, :put] do
     target = to_type(target, type)
     updates = to_type(updates, type)
+    update_rank = updates |> op_shape() |> tuple_size()
+    update_axes = tl(axes_for_rank(update_rank))
+    index_axes = Keyword.fetch!(opts, :axes)
 
-    rank = target |> op_shape() |> tuple_size()
-    # indices_rank is guaranteed to be 2 by Nx.Shape
-    indices_rank = 2
-    rank_diff = rank - indices_rank + 1
-
-    indices_shape = op_shape(indices)
-    indices_shape = List.to_tuple(List.duplicate(1, rank_diff) ++ Tuple.to_list(indices_shape))
-    indices = Value.reshape(indices, indices_shape)
-
-    # If indices has shape {x, y}, updates is guaranteed by Nx.Shape to
-    # have shape {x}, so if we reshaped indices to {..., x, y}, we need to
-    # reshape updates to {..., x}
-
-    updates_shape = Tuple.delete_at(indices_shape, tuple_size(indices_shape) - 1)
-
-    updates = Value.reshape(updates, updates_shape)
-
-    Value.scatter(target, indices, updates, kind)
+    Value.scatter(target, indices, updates, kind, 1, update_axes, index_axes, index_axes)
   end
 
   defp scatter(scatter_fn, [target, indices, updates, opts], %{type: type}) do
