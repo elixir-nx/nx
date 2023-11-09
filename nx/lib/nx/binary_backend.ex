@@ -2097,9 +2097,19 @@ defmodule Nx.BinaryBackend do
 
         inverse_permutation =
           permutation
+          |> Enum.filter(&(&1 in Nx.axes(out)))
           |> Enum.with_index()
           |> Enum.sort_by(fn {x, _} -> x end)
           |> Enum.map(fn {_, i} -> i end)
+
+        diff = Nx.rank(out) - length(inverse_permutation)
+
+        inverse_permutation =
+          if diff > 0 do
+            Enum.to_list(0..(diff - 1)) ++ Enum.map(inverse_permutation, &(&1 + diff))
+          else
+            inverse_permutation
+          end
 
         {
           &Nx.transpose(&1, axes: permutation),
