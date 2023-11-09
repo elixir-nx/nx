@@ -93,60 +93,47 @@ defmodule Nx.Defn.Grad do
                [:equal, :greater, :greater_equal, :less, :less_equal, :not_equal, :argsort]
 
   defp parents_tree(expr, nodes) do
-    Composite.reduce(expr, {%{}, nodes}, &recur_parents_tree(&1, &2, nil))
+    Composite.reduce(expr, {%{}, nodes}, &recur_parents_tree/2)
   end
 
-  defp recur_parents_tree(%T{data: %Expr{id: id, op: op}} = t, {parents, nodes}, params) do
+  defp recur_parents_tree(%T{data: %Expr{id: id, op: op}} = t, {parents, nodes}) do
     case nodes do
       %{^id => _} -> {parents, nodes}
-      %{} -> parents_args(op, t, id, {parents, Map.put(nodes, id, t)}, params)
+      %{} -> parents_args(op, t, id, {parents, Map.put(nodes, id, t)})
     end
   end
 
-  defp parents_args(:metadata, %{data: %{args: [_, %{stop_grad: true}]}}, _id, acc, _params) do
+  defp parents_args(:metadata, %{data: %{args: [_, %{stop_grad: true}]}}, _id, acc) do
     acc
   end
 
-  defp parents_args(:optional, %{data: %{args: [call, expr]}}, id, acc, params) do
-    args = call.data.args
-
-    # First traverse through all arguments
-    acc = args |> Enum.reject(&is_list/1) |> Enum.reduce(acc, &recur_parents_tree(&1, &2, params))
+  defp parents_args(:optional, %{data: %{args: [call, _expr, callback]}} = t, id, acc) do
+    expr = apply(callback, call.data.args)
 
     # Now traverse over the optional expression where args are the new parameters.
     # Once we access the parameter itself, we point the parameter to the arg.
-    Composite.reduce(expr, acc, fn expr, {parents, nodes} ->
-      parents = Map.update(parents, expr.data.id, [id], &[id | &1])
-      recur_parents_tree(expr, {parents, nodes}, args)
-    end)
-  end
+    {parents, nodes} =
+      Composite.reduce(expr, acc, fn expr, {parents, nodes} ->
+        parents = Map.update(parents, expr.data.id, [id], &[id | &1])
+        recur_parents_tree(expr, {parents, nodes})
+      end)
 
-  defp parents_args(
-         :parameter,
-         %{data: %{args: [pos]}} = t,
-         id,
-         {parents, nodes},
-         [_ | _] = params
-       ) do
-    arg = Enum.fetch!(params, pos)
-
-    {Map.update(parents, arg.data.id, [id], &[id | &1]),
-     Map.put(nodes, id, put_in(t.data.args, [arg]))}
+    {parents, Map.put(nodes, id, put_in(t.data.args, [call, expr, callback]))}
   end
 
   # We register cond as a special node to avoid pretraversing it.
   # Instead we traverse it early on on the grad computation.
-  defp parents_args(:cond, _, id, {parents, nodes}, _params) do
+  defp parents_args(:cond, _, id, {parents, nodes}) do
     {Map.update(parents, __MODULE__, [id], &[id | &1]), nodes}
   end
 
-  defp parents_args(op, t, parent_id, acc, params) do
+  defp parents_args(op, t, parent_id, acc) do
     reduce_args(op, t, acc, fn arg, {parents, nodes} ->
       if arg.data.op in @constants do
         {parents, nodes}
       else
         parents = Map.update(parents, arg.data.id, [parent_id], &[parent_id | &1])
-        recur_parents_tree(arg, {parents, nodes}, params)
+        recur_parents_tree(arg, {parents, nodes})
       end
     end)
   end
@@ -238,7 +225,7 @@ defmodule Nx.Defn.Grad do
     end)
   end
 
-  defp update_grads(:optional, [_call, expr], _ans, gs, _to_grad_ids, grads) do
+  defp update_grads(:optional, [_call, expr, _callback], _ans, gs, _to_grad_ids, grads) do
     gs = List.wrap(gs)
 
     {grads, []} =

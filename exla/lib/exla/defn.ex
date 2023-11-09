@@ -549,7 +549,7 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(
          :optional,
-         %T{data: %Expr{args: [%{data: %{op: :top_k, args: [tensor, opts]}}, _expr]}},
+         %T{data: %Expr{args: [%{data: %{op: :top_k, args: [tensor, opts]}}, _expr, _callback]}},
          state,
          cache
        ) do
@@ -559,7 +559,8 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(
          :optional,
-         %T{data: %Expr{args: [%{data: %{op: :fft2, args: [tensor, opts]}}, _expr]}} = out,
+         %T{data: %Expr{args: [%{data: %{op: :fft2, args: [tensor, opts]}}, _expr, _callback]}} =
+           out,
          state,
          cache
        ) do
@@ -576,7 +577,8 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(
          :optional,
-         %T{data: %Expr{args: [%{data: %{op: :ifft2, args: [tensor, opts]}}, _expr]}} = out,
+         %T{data: %Expr{args: [%{data: %{op: :ifft2, args: [tensor, opts]}}, _expr, _callback]}} =
+           out,
          state,
          cache
        ) do
@@ -592,7 +594,7 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(:optional, %T{data: %Expr{args: args}}, state, cache) do
-    [call, expr] = args
+    [call, expr, _callback] = args
     %{data: %{args: in_args, op: op}} = call
 
     {args, opts} = Enum.split_while(in_args, &(not is_list(&1)))

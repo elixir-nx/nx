@@ -364,12 +364,12 @@ defmodule Nx.Defn.Expr do
 
     case apply(fun, params ++ opts) do
       %{data: %{context: context}} = res ->
-        expr(res, context, :optional, [expr(res, context, name, in_args), res])
+        expr(res, context, :optional, [expr(res, context, name, in_args), res, fun])
 
       t when is_tuple(t) ->
         context = elem(t, 0).data.context
         out = expr(tuple_out(tuple_size(t)), context, name, in_args)
-        tuple(expr(out, context, :optional, [out, t]), Tuple.to_list(t))
+        tuple(expr(out, context, :optional, [out, t, fun]), Tuple.to_list(t))
     end
   end
 
@@ -1581,7 +1581,7 @@ defmodule Nx.Defn.Expr do
     recur_inspect(tensor, state)
   end
 
-  defp recur_inspect(%T{data: %Expr{op: :optional, args: [expr, _default]}}, state) do
+  defp recur_inspect(%T{data: %Expr{op: :optional, args: [expr, _default, _callback]}}, state) do
     recur_inspect(expr, state)
   end
 
@@ -1636,7 +1636,7 @@ defmodule Nx.Defn.Expr do
     {doc_inspect(term, state.opts), state}
   end
 
-  defp cached_recur_inspect(:parameter, [pos], type_shape, state) do
+  defp cached_recur_inspect(:parameter, [pos], type_shape, state) when is_integer(pos) do
     var_name = var_name(state)
     parameter = "parameter #{var_name}:#{pos}"
     {var_name, store_line(state, :parameters, parameter, type_shape)}

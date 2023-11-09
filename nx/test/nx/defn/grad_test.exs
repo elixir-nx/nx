@@ -3810,6 +3810,37 @@ defmodule Nx.Defn.GradTest do
         ])
       )
     end
+
+    defn solve_grad_wrt_add(w, a, b) do
+      grad(a, fn a ->
+        w
+        |> Nx.add(a)
+        |> Nx.LinAlg.solve(b)
+        |> Nx.sum()
+      end)
+    end
+
+    test "computes the grad with operations before solve" do
+      w = Nx.tensor([0, 0, 0])
+
+      a =
+        Nx.tensor([
+          [1, 0, 1],
+          [0, 1, 0],
+          [-1, 0, 1]
+        ])
+
+      b = Nx.tensor([4, 3, 2])
+
+      assert_all_close(
+        solve_grad_wrt_add(w, a, b),
+        Nx.tensor([
+          [-1.0, -3.0, -3.0],
+          [-1.0, -3.0, -3.0],
+          [0.0, 0.0, 0.0]
+        ])
+      )
+    end
   end
 
   describe "triangular_solve" do

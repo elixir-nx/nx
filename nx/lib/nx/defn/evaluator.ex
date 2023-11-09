@@ -131,7 +131,7 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp compute_cache(:optional, %{data: %Expr{args: args, id: id}}, state, cache) do
-    [call, expr] = args
+    [call, expr, _callback] = args
     %{data: %{args: call_args_in, op: call_name}} = call
 
     {call_args, opts} = Enum.split_while(call_args_in, &(not is_list(&1)))
@@ -386,7 +386,7 @@ defmodule Nx.Defn.Evaluator do
     {{}, caches}
   end
 
-  defp eval_apply(:optional, %{data: %Expr{args: [call, out], id: id}}, state, caches) do
+  defp eval_apply(:optional, %{data: %Expr{args: [call, out, _callback], id: id}}, state, caches) do
     {args, caches} = Tree.apply_args(call, caches, &eval(&1, state, &2))
     backend = Nx.Shared.list_impl!(args)
 

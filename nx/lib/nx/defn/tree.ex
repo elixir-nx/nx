@@ -180,7 +180,7 @@ defmodule Nx.Defn.Tree do
   end
 
   def apply_args(%T{data: %Expr{op: :optional, args: args}}, type, acc, fun) do
-    [call, expr] = args
+    [call, expr, callback] = args
     {call, acc} = fun.(call, acc)
 
     {expr, acc} =
@@ -189,7 +189,7 @@ defmodule Nx.Defn.Tree do
         :scope -> {expr, acc}
       end
 
-    {[call, expr], acc}
+    {[call, expr, callback], acc}
   end
 
   def apply_args(%T{data: %Expr{op: :token, args: [token]}}, _type, acc, fun) do
