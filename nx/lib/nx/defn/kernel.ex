@@ -211,29 +211,6 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
-  Rewrites the types of `expr` recursively according to `opts`
-
-  ## Options
-
-    * `:max_unsigned_type` - replaces all signed tensors with size
-      equal to or greater then the given type by the given type
-
-    * `:max_signed_type` - replaces all signed tensors with size
-      equal to or greater then the given type by the given type
-
-    * `:max_float_type` - replaces all float tensors with size
-      equal to or greater then the given type by the given type
-
-  ## Examples
-
-      rewrite_types(expr, max_float_type: {:f, 32})
-
-  """
-  def rewrite_types(expr, opts) do
-    Nx.Defn.Tree.rewrite_types(expr, opts)
-  end
-
-  @doc """
   Stops computing the gradient for the given expression.
 
   It effectively annotates the gradient for the given
