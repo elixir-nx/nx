@@ -1,0 +1,196 @@
+# Exercises: 1-20
+
+```elixir
+Mix.install([{:nx, github: "elixir-nx/nx", sparse: "nx"}])
+```
+
+## Introduction
+
+Inspired by the Python notebook _100 Numpy Exercises_:
+
+https://www.kaggle.com/code/utsav15/100-numpy-exercises/notebook
+
+## 1-10
+
+1. Install Nx in a Livebook (★☆☆)
+
+```elixir
+Mix.install([{:nx, github: "elixir-nx/nx", sparse: "nx"}])
+```
+
+2. Print the Nx version and the configuration (★☆☆)
+
+```elixir
+version = Application.spec(:nx, :vsn)
+# I'm not sure if there's an equivalent for "configuration"
+```
+
+3. Create a 1-D tensor of 10 zeros (★☆☆)
+
+```elixir
+# I'm not sure what the best way to do this is.
+# I think Nx could use a function like: `Nx.fill(value, shape)`
+
+# 1.
+#    0 |> List.duplicate(10) |> Nx.tensor()
+
+# 2.
+#    [0] |> Nx.tensor() |> Nx.tile([10])
+
+# 3.
+#    i = Nx.iota({10})
+#    Nx.subtract(i, i)
+
+0 |> List.duplicate(10) |> Nx.tensor()
+```
+
+4. How to find the memory size of any tensor (★☆☆)
+
+```elixir
+Nx.byte_size(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
+```
+
+5. How to get the documentation of the `add/2` function from the command line? (★☆☆)
+
+```elixir
+# I don't know if this is possible.
+# iex> h Nx.add
+```
+
+6. Create a tensor of zeros of size 10 but the fifth value which is 1 (★☆☆)
+
+```elixir
+zeros = 0 |> List.duplicate(10) |> Nx.tensor()
+index = Nx.tensor([4])
+Nx.indexed_put(zeros, index, 1)
+```
+
+7. Create a tensor with values ranging from 10 to 49 (★☆☆)
+
+```elixir
+# 1.
+#    Nx.iota({40}) |> Nx.add(10)
+
+# 2.
+#    Nx.linspace(10, 49, n: 39, type: :s8)
+
+Nx.linspace(10, 49, n: 39, type: :s8)
+```
+
+8. Reverse a tensor (first element becomes last) (★☆☆)
+
+```elixir
+Nx.iota({10})
+|> Nx.reverse()
+```
+
+9. Create a 3x3 tensor with values ranging from 0 to 8 (★☆☆)
+
+```elixir
+Nx.iota({3, 3})
+```
+
+10. Find indices of non-zero elements from [1,2,0,0,4,0] (★☆☆)
+
+```elixir
+Nx.tensor([1, 2, 0, 0, 4, 0])
+|> Nx.not_equal(0)
+```
+
+## 11-20
+
+11. Create a 3x3 identity tensor (★☆☆)
+
+```elixir
+Nx.eye(3)
+```
+
+12. Create a 3x3x3 tensor with random values (★☆☆)
+
+```elixir
+key = Nx.Random.key(0)
+{random, _} = Nx.Random.normal(key, shape: {3, 3})
+random
+```
+
+13. Create a 10x10 tensor with random values and find the minimum and maximum values (★☆☆)
+
+```elixir
+# This felt a little awkward. Is there a better way?
+
+key = Nx.Random.key(0)
+{r, _} = Nx.Random.normal(key, shape: {3, 3})
+r |> IO.inspect()
+r_1d = Nx.reshape(r, {:auto})
+
+%{
+  min: Nx.to_number(r_1d[Nx.argmin(r)]),
+  max: Nx.to_number(r_1d[Nx.argmax(r)])
+}
+```
+
+14. Create a random 1D tensor of size 30 and find the mean value (★☆☆)
+
+```elixir
+key = Nx.Random.key(0)
+{r, _} = Nx.Random.normal(key, shape: {30})
+r |> Nx.mean() |> Nx.to_number()
+```
+
+15. Create a 5x5 tensor with 1 on the border and 0 inside (★☆☆)
+
+```elixir
+zeros_3x3 = Nx.make_diagonal(Nx.tensor([0, 0, 0]))
+Nx.pad(zeros_3x3, 1, [{1, 1, 0}, {1, 1, 0}])
+```
+
+16. How to add a border (filled with 0's) around an existing array? (★☆☆)
+
+```elixir
+ones_3x3 = 1 |> List.duplicate(9) |> Nx.tensor() |> Nx.reshape({3, 3})
+Nx.pad(ones_3x3, 0, [{1, 1, 0}, {1, 1, 0}])
+```
+
+17. What are the results of the following expressions? (★☆☆)
+
+```elixir
+nan = Nx.Constants.nan()
+IO.inspect(Nx.multiply(0, nan))
+IO.inspect(Nx.equal(nan, nan))
+IO.inspect(Nx.greater(nan, nan))
+IO.inspect(Nx.subtract(nan, nan))
+IO.inspect(Enum.member?(MapSet.new([nan]), nan))
+IO.inspect(0.3 == 3 * 0.1)
+```
+
+18. Create a 5x5 tensor with values 1,2,3,4 just below the diagonal (★☆☆)
+
+```elixir
+Nx.make_diagonal(Nx.tensor([1, 2, 3, 4]), offset: -1)
+```
+
+19. Create a 8x8 tensor of 0s and 1s in a checkerboard pattern with 0 as the first element (★☆☆)
+
+```elixir
+Nx.tensor([0, 0, 0, 0])
+|> Nx.make_diagonal()
+|> Nx.pad(1, [{0, 0, 1}, {0, 0, 1}])
+```
+
+20. What is the index (x,y,z) of the 100th element of a 6x7x8 tensor?
+
+```elixir
+# The numpy solution is to use `unravel_index`. I didn't see an equivalent.
+# https://numpy.org/doc/stable/reference/generated/numpy.unravel_index.html
+dims = [6, 7, 8]
+target = 100
+
+# This is how I'd do it with Enum.
+dims
+|> Enum.map_reduce({target, Enum.product(dims)}, fn dim, {remaining, step_size} ->
+  step_size = div(step_size, dim)
+  num_steps = div(remaining, step_size)
+  {num_steps, {remaining - num_steps * step_size, step_size}}
+end)
+|> then(fn {indices, {0, 1}} -> indices end)
+```
