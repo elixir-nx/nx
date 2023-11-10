@@ -354,12 +354,12 @@ ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape);
 // Return status if not ok.
 #define EXLA_EFFECT_OR_RETURN(rexpr)                                         \
   EXLA_EFFECT_OR_RETURN_IMPL(                                                \
-    EXLA_STATUS_MACROS_CONCAT_NAME(_status, __COUNTER__), rexpr)
+    EXLA_STATUS_MACROS_CONCAT_NAME(_statusor, __COUNTER__), rexpr)
 
-#define EXLA_EFFECT_OR_RETURN_IMPL(status, rexpr)                            \
-  auto status = (rexpr);                                                     \
-  if (!status.ok()) {                                                        \
-    return status;                                                           \
+#define EXLA_EFFECT_OR_RETURN_IMPL(statusor, rexpr)                          \
+  auto statusor = (rexpr);                                                   \
+  if (!statusor.ok()) {                                                      \
+    return statusor.status();                                                \
   }
 
 // Macro to be used to consume StatusOr from within a NIF. Will

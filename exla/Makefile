@@ -31,18 +31,13 @@ CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -O3 -Wall -Wno-sign-c
 LDFLAGS = -L$(XLA_EXTENSION_LIB) -lxla_extension
 
 ifeq ($(shell uname -s), Darwin)
-	LDFLAGS += -flat_namespace -undefined suppress
-	POST_INSTALL = install_name_tool \
-			-change bazel-out/darwin_arm64-opt/bin/xla/extension/libxla_extension.so @loader_path/xla_extension/lib/libxla_extension.so \
-			-change bazel-out/darwin-opt/bin/xla/extension/libxla_extension.so @loader_path/xla_extension/lib/libxla_extension.so \
-		$(EXLA_CACHE_SO)
+	LDFLAGS += -flat_namespace -undefined suppress -rpath @loader_path/xla_extension/lib
 else
 	# Use a relative RPATH, so at runtime libexla.so looks for libxla_extension.so
 	# in ./lib regardless of the absolute location. This way priv can be safely
 	# packed into an Elixir release. Also, we use $$ to escape Makefile variable
 	# and single quotes to escape shell variable
 	LDFLAGS += -Wl,-rpath,'$$ORIGIN/xla_extension/lib'
-	POST_INSTALL = $(NOOP)
 endif
 
 $(EXLA_SO): $(EXLA_CACHE_SO)
@@ -58,7 +53,6 @@ $(EXLA_SO): $(EXLA_CACHE_SO)
 
 $(EXLA_CACHE_SO): $(XLA_EXTENSION_DIR) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_ops.cc $(EXLA_DIR)/exla_ops.h $(EXLA_DIR)/mlir/ops.cc $(EXLA_DIR)/mlir/ops.h $(EXLA_DIR)/mlir/builder.cc $(EXLA_DIR)/mlir/builder.h $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h
 	$(CXX) $(CFLAGS) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/mlir/ops.cc $(EXLA_DIR)/mlir/builder.cc $(EXLA_DIR)/exla_ops.cc $(EXLA_DIR)/exla_client.cc -o $(EXLA_CACHE_SO) $(LDFLAGS)
-	$(POST_INSTALL)
 
 clean:
 	rm -rf cache
