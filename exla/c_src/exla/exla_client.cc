@@ -5,8 +5,8 @@
 #include "xla/pjrt/tfrt_cpu_pjrt_client.h"
 #include "xla/pjrt/gpu/se_gpu_pjrt_client.h"
 #include "xla/pjrt/pjrt_c_api_client.h"
-#include "xla/pjrt/tpu_client.h"
 #include "xla/pjrt/pjrt_compiler.h"
+#include "xla/pjrt/pjrt_api.h"
 
 namespace exla {
 
@@ -340,6 +340,19 @@ xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromBinary(ErlNifEnv* env,
   return exla_buffer;
 }
 
+xla::StatusOr<std::optional<std::string>> ExecutableFingerprint(std::unique_ptr<xla::PjRtLoadedExecutable>& executable) {
+  auto fingerprint = executable->FingerprintExecutable();
+
+  if (fingerprint.ok()) {
+    return {fingerprint.value()};
+  } else if (fingerprint.status().code() == absl::StatusCode::kUnimplemented) {
+    // Return nullopt in case of unimplemented error.
+    return std::nullopt;
+  } else {
+    return fingerprint.status();
+  }
+}
+
 xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& computation,
                                                    std::vector<xla::Shape*> argument_layouts,
                                                    xla::ExecutableBuildOptions& options,
@@ -361,7 +374,7 @@ xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& co
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtLoadedExecutable> executable,
     client_->Compile(computation, std::move(compile_opts)));
   EXLA_ASSIGN_OR_RETURN(absl::optional<std::string> fingerprint,
-    client_->ExecutableFingerprint(*executable));
+    ExecutableFingerprint(executable));
 
   return new ExlaExecutable(std::move(executable), std::move(fingerprint), this);
 }
@@ -387,7 +400,7 @@ xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const mlir::OwningOpRef<mlir:
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtLoadedExecutable> executable,
     client_->Compile(*module, std::move(compile_opts)));
   EXLA_ASSIGN_OR_RETURN(absl::optional<std::string> fingerprint,
-    client_->ExecutableFingerprint(*executable));
+    ExecutableFingerprint(executable));
 
   return new ExlaExecutable(std::move(executable), std::move(fingerprint), this);
 }
@@ -488,8 +501,16 @@ xla::StatusOr<ExlaClient*> GetGpuClient(double memory_fraction,
 }
 
 xla::StatusOr<ExlaClient*> GetTpuClient() {
-  EXLA_ASSIGN_OR_RETURN(std::shared_ptr<xla::PjRtClient> client,
-    xla::GetTpuClient(32));
+  EXLA_EFFECT_OR_RETURN(pjrt::LoadPjrtPlugin("tpu", "libtpu.so"));
+
+  xla::Status status = pjrt::InitializePjrtPlugin("tpu");
+
+  if (!status.ok()) {
+    return status;
+  }
+
+  EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtClient> client,
+    xla::GetCApiClient("TPU"));
 
   return new ExlaClient(std::move(client));
 }
