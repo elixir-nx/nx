@@ -2,7 +2,6 @@ defmodule Nx.Defn.TreeTest do
   use ExUnit.Case, async: true
 
   alias Nx.Defn.{Expr, Tree}
-  alias Nx.Tensor, as: T
   doctest Nx.Defn.Tree
 
   import Nx.Defn
