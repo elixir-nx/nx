@@ -108,11 +108,10 @@ random
 key = Nx.Random.key(0)
 {r, _} = Nx.Random.normal(key, shape: {3, 3})
 r |> IO.inspect()
-r_1d = Nx.reshape(r, {:auto})
 
 %{
-  min: Nx.to_number(r_1d[Nx.argmin(r)]),
-  max: Nx.to_number(r_1d[Nx.argmax(r)])
+  min: Nx.reduce_min(r),
+  max: Nx.reduce_max(r)
 }
 ```
 
@@ -121,7 +120,7 @@ r_1d = Nx.reshape(r, {:auto})
 ```elixir
 key = Nx.Random.key(0)
 {r, _} = Nx.Random.normal(key, shape: {30})
-r |> Nx.mean() |> Nx.to_number()
+Nx.mean(r)
 ```
 
 1. Create a 5x5 tensor with 1 on the border and 0 inside (★☆☆)
