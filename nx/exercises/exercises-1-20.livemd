@@ -24,10 +24,18 @@ Mix.install([{:nx, "~> 0.6"}])
 Nx.broadcast(0, {10})
 ```
 
+1. How to find the number of elements in a tensor (★☆☆)
+
+```elixir
+Nx.tensor([[1, 2, 3], [4, 5, 6]])
+|> Nx.size()
+```
+
 1. How to find the memory size of any tensor (★☆☆)
 
 ```elixir
-Nx.byte_size(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
+Nx.tensor([[1, 2, 3], [4, 5, 6]])
+|> Nx.byte_size()
 ```
 
 1. How to get the documentation of the `add/2` function from the command line? (★☆☆)
