@@ -149,9 +149,8 @@ Nx.make_diagonal(Nx.tensor([1, 2, 3, 4]), offset: -1)
 1. Create a 8x8 tensor of 0 and 1 in a checkerboard pattern with 0 as the first element (★☆☆)
 
 ```elixir
-Nx.tensor([0, 0, 0, 0])
-|> Nx.make_diagonal()
-|> Nx.pad(1, [{0, 0, 1}, {0, 0, 1}])
+Nx.tensor([[0, 1], [1, 0]])
+|> Nx.tile([4, 4])
 ```
 
 1. What is the index (x,y,z) of the 100th element of a 6x7x8 tensor?
