@@ -806,19 +806,21 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:gather, [t, i, opts], _ans, g) do
-    leading_i_shape = Tuple.delete_at(i.shape, tuple_size(i.shape) - 1)
-    num_elements = Tuple.product(leading_i_shape)
+    i_axes = opts[:axes]
+    i_shape = i.shape
+    t_shape = t.shape
+
+    num_elements = Tuple.product(i_shape) |> div(elem(i_shape, tuple_size(i_shape) - 1))
+    updates_shape = for i <- Nx.axes(t), i not in i_axes, do: elem(t_shape, i)
 
     indices = Nx.reshape(i, {num_elements, :auto})
+    updates = Nx.reshape(g, List.to_tuple([num_elements | updates_shape]))
 
-    updates_shape =
-      Enum.reduce(Enum.sort(opts[:axes], :desc), t.shape, fn axis, shape ->
-        Tuple.delete_at(shape, axis)
-      end)
+    g =
+      0
+      |> Nx.broadcast(t_shape)
+      |> Nx.indexed_add(indices, updates, opts)
 
-    updates = Nx.reshape(g, Tuple.insert_at(updates_shape, 0, num_elements))
-
-    g = t |> Expr.broadcast(0, t.shape, Nx.axes(t)) |> Nx.indexed_add(indices, updates, opts)
     [{t, g}]
   end
 
