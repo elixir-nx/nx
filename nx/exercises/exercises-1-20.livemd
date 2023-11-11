@@ -89,7 +89,7 @@ Nx.eye(3)
 
 ```elixir
 key = Nx.Random.key(0)
-{random, _} = Nx.Random.normal(key, shape: {3, 3})
+{random, _} = Nx.Random.normal(key, shape: {3, 3, 3})
 random
 ```
 
