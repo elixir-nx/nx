@@ -22,7 +22,6 @@ Mix.install([{:nx, github: "elixir-nx/nx", sparse: "nx"}])
 
 ```elixir
 version = Application.spec(:nx, :vsn)
-# I'm not sure if there's an equivalent for "configuration"
 ```
 
 1. Create a 1-D tensor of 10 zeros (★☆☆)
@@ -55,12 +54,6 @@ Nx.indexed_put(zeros, index, 1)
 1. Create a tensor with values ranging from 10 to 49 (★☆☆)
 
 ```elixir
-# 1.
-#    Nx.iota({40}) |> Nx.add(10)
-
-# 2.
-#    Nx.linspace(10, 49, n: 39, type: :s8)
-
 Nx.linspace(10, 49, n: 39, type: :s8)
 ```
 
