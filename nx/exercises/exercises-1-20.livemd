@@ -146,7 +146,7 @@ IO.inspect(Nx.subtract(nan, nan))
 Nx.make_diagonal(Nx.tensor([1, 2, 3, 4]), offset: -1)
 ```
 
-1. Create a 8x8 tensor of 0s and 1s in a checkerboard pattern with 0 as the first element (★☆☆)
+1. Create a 8x8 tensor of 0 and 1 in a checkerboard pattern with 0 as the first element (★☆☆)
 
 ```elixir
 Nx.tensor([0, 0, 0, 0])
