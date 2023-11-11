@@ -1641,7 +1641,7 @@ defmodule Nx.Shape do
             "expected the last indices dimension size (#{last_size}) to be less than or equal to the tensor rank (#{rank})"
     end
 
-    inner_shape = for i <- 0..(rank - 1), i not in axes, do: elem(shape, i)
+    inner_shape = for i <- Nx.axes(shape), i not in axes, do: elem(shape, i)
     shape = List.to_tuple(outer_shape ++ inner_shape)
     names = List.duplicate(nil, tuple_size(shape))
     {shape, names}
