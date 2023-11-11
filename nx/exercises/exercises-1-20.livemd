@@ -12,40 +12,40 @@ https://www.kaggle.com/code/utsav15/100-numpy-exercises/notebook
 
 ## 1-10
 
-1. Install Nx in a Livebook (★☆☆)
+**1. Install Nx in a Livebook (★☆☆)**
 
 ```elixir
 Mix.install([{:nx, "~> 0.6"}])
 ```
 
-1. Create a 1-D tensor of 10 zeros (★☆☆)
+**2. Create a 1-D tensor of 10 zeros (★☆☆)**
 
 ```elixir
 Nx.broadcast(0, {10})
 ```
 
-1. How to find the number of elements in a tensor (★☆☆)
+**3. How to find the number of elements in a tensor (★☆☆)**
 
 ```elixir
 Nx.tensor([[1, 2, 3], [4, 5, 6]])
 |> Nx.size()
 ```
 
-1. How to find the memory size of any tensor (★☆☆)
+**4. How to find the memory size of any tensor (★☆☆)**
 
 ```elixir
 Nx.tensor([[1, 2, 3], [4, 5, 6]])
 |> Nx.byte_size()
 ```
 
-1. How to get the documentation of the `add/2` function from the command line? (★☆☆)
+**5. How to get the documentation of the `add/2` function from the command line? (★☆☆)**
 
 ```elixir
 # I don't know if this is possible.
 # iex> h Nx.add
 ```
 
-1. Create a tensor of zeros of size 10 but the fifth value which is 1 (★☆☆)
+**6. Create a tensor of zeros of size 10 but the fifth value which is 1 (★☆☆)**
 
 ```elixir
 zeros = Nx.broadcast(0, {10})
@@ -53,26 +53,26 @@ index = Nx.tensor([4])
 Nx.indexed_put(zeros, index, 1)
 ```
 
-1. Create a tensor with values ranging from 10 to 49 (★☆☆)
+**7. Create a tensor with values ranging from 10 to 49 (★☆☆)**
 
 ```elixir
 Nx.linspace(10, 49, n: 39, type: :s8)
 ```
 
-1. Reverse a tensor (first element becomes last) (★☆☆)
+**8. Reverse a tensor (first element becomes last) (★☆☆)**
 
 ```elixir
 Nx.iota({10})
 |> Nx.reverse()
 ```
 
-1. Create a 3x3 tensor with values ranging from 0 to 8 (★☆☆)
+**9. Create a 3x3 tensor with values ranging from 0 to 8 (★☆☆)**
 
 ```elixir
 Nx.iota({3, 3})
 ```
 
-1. Find indices of non-zero elements from [1,2,0,0,4,0] (★☆☆)
+**10. Find indices of non-zero elements from [1,2,0,0,4,0] (★☆☆)**
 
 ```elixir
 Nx.tensor([1, 2, 0, 0, 4, 0])
@@ -81,13 +81,13 @@ Nx.tensor([1, 2, 0, 0, 4, 0])
 
 ## 11-20
 
-1. Create a 3x3 identity tensor (★☆☆)
+**11. Create a 3x3 identity tensor (★☆☆)**
 
 ```elixir
 Nx.eye(3)
 ```
 
-1. Create a 3x3x3 tensor with random values (★☆☆)
+**12. Create a 3x3x3 tensor with random values (★☆☆)**
 
 ```elixir
 key = Nx.Random.key(0)
@@ -95,7 +95,7 @@ key = Nx.Random.key(0)
 random
 ```
 
-1. Create a 10x10 tensor with random values and find the minimum and maximum values (★☆☆)
+**13. Create a 10x10 tensor with random values and find the minimum and maximum values (★☆☆)**
 
 ```elixir
 # This felt a little awkward. Is there a better way?
@@ -110,7 +110,7 @@ r |> IO.inspect()
 }
 ```
 
-1. Create a random 1D tensor of size 30 and find the mean value (★☆☆)
+**14. Create a random 1D tensor of size 30 and find the mean value (★☆☆)**
 
 ```elixir
 key = Nx.Random.key(0)
@@ -118,21 +118,21 @@ key = Nx.Random.key(0)
 Nx.mean(r)
 ```
 
-1. Create a 5x5 tensor with 1 on the border and 0 inside (★☆☆)
+**15. Create a 5x5 tensor with 1 on the border and 0 inside (★☆☆)**
 
 ```elixir
 Nx.broadcast(0, {3, 3})
 |> Nx.pad(1, [{1, 1, 0}, {1, 1, 0}])
 ```
 
-1. How to add a border (filled with 0's) around an existing array? (★☆☆)
+**16. How to add a border (filled with 0's) around an existing array? (★☆☆)**
 
 ```elixir
 Nx.broadcast(1, {3, 3})
 |> Nx.pad(0, [{1, 1, 0}, {1, 1, 0}])
 ```
 
-1. What are the results of the following expressions? (★☆☆)
+**17. What are the results of the following expressions? (★☆☆)**
 
 ```elixir
 nan = Nx.Constants.nan()
@@ -142,20 +142,20 @@ IO.inspect(Nx.greater(nan, nan))
 IO.inspect(Nx.subtract(nan, nan))
 ```
 
-1. Create a 5x5 tensor with values 1,2,3,4 just below the diagonal (★☆☆)
+**18. Create a 5x5 tensor with values 1,2,3,4 just below the diagonal (★☆☆)**
 
 ```elixir
 Nx.make_diagonal(Nx.tensor([1, 2, 3, 4]), offset: -1)
 ```
 
-1. Create a 8x8 tensor of 0 and 1 in a checkerboard pattern with 0 as the first element (★☆☆)
+**19. Create a 8x8 tensor of 0 and 1 in a checkerboard pattern with 0 as the first element (★☆☆)**
 
 ```elixir
 Nx.tensor([[0, 1], [1, 0]])
 |> Nx.tile([4, 4])
 ```
 
-1. What is the index (x,y,z) of the 100th element of a 6x7x8 tensor?
+**20. What is the index (x,y,z) of the 100th element of a 6x7x8 tensor?**
 
 ```elixir
 # The numpy solution is to use `unravel_index`. I didn't see an equivalent.
