@@ -99,7 +99,7 @@ random
 # This felt a little awkward. Is there a better way?
 
 key = Nx.Random.key(0)
-{r, _} = Nx.Random.normal(key, shape: {3, 3})
+{r, _} = Nx.Random.normal(key, shape: {10, 10})
 r |> IO.inspect()
 
 %{
