@@ -12663,48 +12663,6 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.transpose(Nx.iota({2, 3, 4}, names: [:batch, :x, :y]), axes: [:y, :batch, :x])
-      #Nx.Tensor<
-        s64[y: 4][batch: 2][x: 3]
-        [
-          [
-            [0, 4, 8],
-            [12, 16, 20]
-          ],
-          [
-            [1, 5, 9],
-            [13, 17, 21]
-          ],
-          [
-            [2, 6, 10],
-            [14, 18, 22]
-          ],
-          [
-            [3, 7, 11],
-            [15, 19, 23]
-          ]
-        ]
-      >
-
-      iex> Nx.transpose(Nx.iota({2, 3, 4}, names: [:batch, :x, :y]), axes: [:batch, :y, :x])
-      #Nx.Tensor<
-        s64[batch: 2][y: 4][x: 3]
-        [
-          [
-            [0, 4, 8],
-            [1, 5, 9],
-            [2, 6, 10],
-            [3, 7, 11]
-          ],
-          [
-            [12, 16, 20],
-            [13, 17, 21],
-            [14, 18, 22],
-            [15, 19, 23]
-          ]
-        ]
-      >
-
   ### Vectorized tensors
 
   For vectorized tensors, transpose will manipulate the inner shape only,
@@ -14331,31 +14289,53 @@ defmodule Nx do
   ### Gathering subsets
 
       iex> t = Nx.tensor([[1, 2, 3], [3, 4, 5]])
-      iex> Nx.gather(t, Nx.tensor([[1], [0], [1]]))
+      iex> Nx.gather(t, Nx.tensor([[1], [0]]))
       #Nx.Tensor<
-        s64[3][3]
+        s64[2][3]
         [
           [3, 4, 5],
-          [1, 2, 3],
-          [3, 4, 5]
+          [1, 2, 3]
         ]
       >
 
   The `:axes` option controls which dimensions the indexes point to,
-  this can be useful, for example, to access columns instead of rows:
+  this can be useful, for example, to access columns instead of rows.
+  Note can also access the same index several times:
 
-      iex> t = Nx.tensor([[[1, 2, 3]], [[4, 5, 6]]])
-      iex> Nx.gather(t, Nx.tensor([[1], [0]]), axes: [2])
+      iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      iex> Nx.gather(t, Nx.tensor([[1], [0], [2], [1]]), axes: [1])
       #Nx.Tensor<
-        s64[2][2][1]
+        s64[4][2]
+        [
+          [2, 5],
+          [1, 4],
+          [3, 6],
+          [2, 5]
+        ]
+      >
+
+  The overall output shape will have the format of the indices shape
+  (except the last element) followed by all non-indexed dimensions of
+  the tensor. Here is a more complex example:
+
+      iex> t = Nx.iota({2, 1, 3})
+      iex> Nx.gather(t, Nx.tensor([[[1], [0], [2]]]), axes: [2])
+      #Nx.Tensor<
+        s64[1][3][2][1]
         [
           [
-            [2],
-            [1]
-          ],
-          [
-            [5],
-            [4]
+            [
+              [1],
+              [4]
+            ],
+            [
+              [0],
+              [3]
+            ],
+            [
+              [2],
+              [5]
+            ]
           ]
         ]
       >

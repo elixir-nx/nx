@@ -2091,38 +2091,14 @@ defmodule Nx.BinaryBackend do
     axes = opts[:axes]
     tensor_axes = Nx.axes(tensor)
 
-    {permutation_fn, inverse_permutation_fn} =
-      if axes && axes != tensor_axes do
-        permutation = axes ++ (tensor_axes -- axes)
-
-        inverse_permutation =
-          permutation
-          |> Enum.filter(&(&1 in Nx.axes(out)))
-          |> Enum.with_index()
-          |> Enum.sort_by(fn {x, _} -> x end)
-          |> Enum.map(fn {_, i} -> i end)
-
-        diff = Nx.rank(out) - length(inverse_permutation)
-
-        inverse_permutation =
-          if diff > 0 do
-            Enum.to_list(0..(diff - 1)) ++ Enum.map(inverse_permutation, &(&1 + diff))
-          else
-            inverse_permutation
-          end
-
-        {
-          &Nx.transpose(&1, axes: permutation),
-          &Nx.transpose(&1, axes: inverse_permutation)
-        }
+    tensor =
+      if List.starts_with?(tensor_axes, axes) do
+        tensor
       else
-        {& &1, & &1}
+        Nx.transpose(tensor, axes: axes ++ (tensor_axes -- axes))
       end
 
-    out
-    |> gather(permutation_fn.(tensor), indices)
-    |> then(inverse_permutation_fn)
-    |> Nx.reshape(out.shape)
+    gather(out, tensor, indices)
   end
 
   defp gather(out, tensor, indices) do
