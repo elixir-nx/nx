@@ -386,34 +386,19 @@ defmodule Torchx.Backend do
   @impl true
   def gather(out, tensor, indices, opts) do
     tensor_axes = Nx.axes(tensor)
-
     axes = opts[:axes]
 
-    {permutation_fn, inverse_permutation_fn} =
-      if axes && axes != tensor_axes do
-        permutation = axes ++ (tensor_axes -- axes)
-
-        inverse_permutation =
-          permutation
-          |> Enum.with_index()
-          |> Enum.sort_by(fn {x, _} -> x end)
-          |> Enum.map(fn {_, i} -> i end)
-
-        {
-          &Torchx.permute(&1, permutation),
-          &Torchx.permute(&1, inverse_permutation)
-        }
+    tensor =
+      if is_nil(axes) or List.starts_with?(tensor_axes, axes) do
+        tensor
       else
-        {& &1, & &1}
+        Nx.transpose(tensor, axes: axes ++ (tensor_axes -- axes))
       end
 
     {tensor_tx, indices_tx} = indices_from_nx(tensor, indices)
 
     tensor_tx
-    |> then(permutation_fn)
     |> Torchx.index(indices_tx)
-    |> Torchx.reshape(out.shape)
-    |> then(inverse_permutation_fn)
     |> Torchx.reshape(out.shape)
     |> to_nx(out)
   end

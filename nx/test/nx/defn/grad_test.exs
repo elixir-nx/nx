@@ -3355,13 +3355,13 @@ defmodule Nx.Defn.GradTest do
       )
     end
 
-    defn grad_sum_log_power_gather_cos(t, i) do
+    defn grad_sum_log_power_gather_cos(t, i, opts \\ []) do
       grad(
         t,
         fn t ->
           t
           |> Nx.cos()
-          |> Nx.gather(i)
+          |> Nx.gather(i, opts)
           |> Nx.pow(2)
           |> Nx.log()
           |> Nx.sum()
@@ -3427,26 +3427,34 @@ defmodule Nx.Defn.GradTest do
                  ])
                )
 
-      assert Nx.tensor([
-               [-0.0, -9.34444522857666, 4.370079040527344, -0.0],
-               [-2.3156425952911377, 6.7610297203063965, 0.0, -0.0],
-               [13.5994234085083, -0.0, -1.2967215776443481, 1355.705078125]
-             ]) ==
-               grad_sum_log_power_gather_cos(
-                 Nx.tensor([
-                   [0, 1, 2, 3],
-                   [4, 5, 6, 7],
-                   [8, 9, 10, 11]
-                 ]),
-                 Nx.tensor([
-                   [
-                     [[0, 0], [0, 1], [0, 2]],
-                     [[2, 0], [1, 0], [0, 1]],
-                     [[0, 1], [1, 1], [2, 2]],
-                     [[2, 3], [2, 3], [2, 3]]
-                   ]
-                 ])
-               )
+      t =
+        Nx.tensor([
+          [0, 1, 2, 3],
+          [4, 5, 6, 7],
+          [8, 9, 10, 11]
+        ])
+
+      i =
+        Nx.tensor([
+          [
+            [[0, 0], [0, 1], [0, 2]],
+            [[2, 0], [1, 0], [0, 1]],
+            [[0, 1], [1, 1], [2, 2]],
+            [[2, 3], [2, 3], [2, 3]]
+          ]
+        ])
+
+      result =
+        Nx.tensor([
+          [-0.0, -9.34444522857666, 4.370079040527344, -0.0],
+          [-2.3156425952911377, 6.7610297203063965, 0.0, -0.0],
+          [13.5994234085083, -0.0, -1.2967215776443481, 1355.705078125]
+        ])
+
+      assert result == grad_sum_log_power_gather_cos(t, i)
+
+      assert Nx.new_axis(result, 1) ==
+               grad_sum_log_power_gather_cos(Nx.new_axis(t, 1), i, axes: [0, 2])
     end
   end
 
@@ -3555,11 +3563,11 @@ defmodule Nx.Defn.GradTest do
   describe "indexed_put" do
     defn grad_indexed_put_target(t, i, u), do: grad(t, &Nx.sum(Nx.indexed_put(&1, i, u)))
 
-    defn grad_indexed_put_target_composite(t, i, u) do
+    defn grad_indexed_put_target_composite(t, i, u, opts \\ []) do
       grad(t, fn t ->
         t
         |> Nx.cos()
-        |> Nx.indexed_put(i, u)
+        |> Nx.indexed_put(i, u, opts)
         |> Nx.sin()
         |> Nx.sum()
       end)
@@ -3567,10 +3575,10 @@ defmodule Nx.Defn.GradTest do
 
     defn grad_indexed_put_updates(t, i, u), do: grad(u, &Nx.sum(Nx.indexed_put(t, i, &1)))
 
-    defn grad_indexed_put_updates_composite(t, i, u) do
+    defn grad_indexed_put_updates_composite(t, i, u, opts \\ []) do
       grad(u, fn u ->
         t
-        |> Nx.indexed_put(i, Nx.cos(u))
+        |> Nx.indexed_put(i, Nx.cos(u), opts)
         |> Nx.sin()
         |> Nx.sum()
       end)
@@ -3578,19 +3586,19 @@ defmodule Nx.Defn.GradTest do
 
     defn grad_indexed_put_indices(t, i, u), do: grad(i, &Nx.sum(Nx.indexed_put(t, &1, u)))
 
-    defn grad_indexed_put_indices_composite(t, i, u) do
+    defn grad_indexed_put_indices_composite(t, i, u, opts \\ []) do
       grad(i, fn i ->
         t
-        |> Nx.indexed_put(Nx.multiply(i, 2), u)
+        |> Nx.indexed_put(Nx.multiply(i, 2), u, opts)
         |> Nx.sin()
         |> Nx.sum()
       end)
     end
 
-    defn grad_indexed_put_simultaneous_composite(t, i) do
+    defn grad_indexed_put_simultaneous_composite(t, i, opts \\ []) do
       grad(t, fn t ->
         t
-        |> Nx.indexed_put(i, Nx.cos(t))
+        |> Nx.indexed_put(i, Nx.cos(t), opts)
         |> Nx.sin()
         |> Nx.sum()
       end)
@@ -3618,6 +3626,16 @@ defmodule Nx.Defn.GradTest do
         ]),
         grad_indexed_put_target_composite(t, i, u)
       )
+
+      assert_all_close(
+        Nx.tensor([
+          [0, 0, -0.8316, -0.0774],
+          [0, 0.9206, 0.1602, -0.4789],
+          [-0.9789, -0.2525, 0, 0]
+        ])
+        |> Nx.new_axis(1),
+        grad_indexed_put_target_composite(Nx.new_axis(t, 1), i, Nx.new_axis(u, 1), axes: [0, 2])
+      )
     end
 
     test "grad wrt to source" do
@@ -3631,6 +3649,11 @@ defmodule Nx.Defn.GradTest do
       # f'(x) = cos(cos(x)) * (-sin(x))
       expected = u |> Nx.cos() |> Nx.cos() |> Nx.multiply(Nx.sin(u)) |> Nx.negate()
       assert_all_close(expected, grad_indexed_put_updates_composite(t, i, u))
+
+      assert_all_close(
+        Nx.new_axis(expected, 1),
+        grad_indexed_put_updates_composite(Nx.new_axis(t, 1), i, Nx.new_axis(u, 1), axes: [0, 2])
+      )
     end
 
     test "grad wrt to indices" do
@@ -3640,6 +3663,11 @@ defmodule Nx.Defn.GradTest do
 
       assert_all_close(Nx.broadcast(0, i), grad_indexed_put_indices(t, i, u))
       assert_all_close(Nx.broadcast(0, i), grad_indexed_put_indices_composite(t, i, u))
+
+      assert_all_close(
+        Nx.broadcast(0, i),
+        grad_indexed_put_indices_composite(Nx.new_axis(t, 1), i, Nx.new_axis(u, 1), axes: [0, 2])
+      )
     end
 
     test "grad wrt to both source and target simultaneously" do
@@ -3653,6 +3681,11 @@ defmodule Nx.Defn.GradTest do
       expected = t |> Nx.cos() |> Nx.cos() |> Nx.multiply(Nx.sin(t)) |> Nx.negate()
 
       assert_all_close(expected, grad_indexed_put_simultaneous_composite(t, i))
+
+      assert_all_close(
+        Nx.new_axis(expected, 1),
+        grad_indexed_put_simultaneous_composite(Nx.new_axis(t, 1), i, axes: [0])
+      )
     end
   end
 
@@ -3666,11 +3699,11 @@ defmodule Nx.Defn.GradTest do
       end)
     end
 
-    defn grad_indexed_add_target_composite(t, i, u) do
+    defn grad_indexed_add_target_composite(t, i, u, opts \\ []) do
       grad(t, fn t ->
         t
         |> Nx.cos()
-        |> Nx.indexed_add(i, u)
+        |> Nx.indexed_add(i, u, opts)
         |> Nx.sin()
         |> Nx.sum()
       end)
@@ -3685,10 +3718,10 @@ defmodule Nx.Defn.GradTest do
       end)
     end
 
-    defn grad_indexed_add_updates_composite(t, i, u) do
+    defn grad_indexed_add_updates_composite(t, i, u, opts \\ []) do
       grad(u, fn u ->
         t
-        |> Nx.indexed_add(i, Nx.cos(u))
+        |> Nx.indexed_add(i, Nx.cos(u), opts)
         |> Nx.sin()
         |> Nx.sum()
       end)
@@ -3696,19 +3729,19 @@ defmodule Nx.Defn.GradTest do
 
     defn grad_indexed_add_indices(t, i, u), do: grad(i, &Nx.sum(Nx.indexed_add(t, &1, u)))
 
-    defn grad_indexed_add_indices_composite(t, i, u) do
+    defn grad_indexed_add_indices_composite(t, i, u, opts \\ []) do
       grad(i, fn i ->
         t
-        |> Nx.indexed_add(Nx.multiply(i, 2), u)
+        |> Nx.indexed_add(Nx.multiply(i, 2), u, opts)
         |> Nx.sin()
         |> Nx.sum()
       end)
     end
 
-    defn grad_indexed_add_simultaneous_composite(t, i) do
+    defn grad_indexed_add_simultaneous_composite(t, i, opts \\ []) do
       grad(t, fn t ->
         t
-        |> Nx.indexed_add(i, Nx.cos(t))
+        |> Nx.indexed_add(i, Nx.cos(t), opts)
         |> Nx.sin()
         |> Nx.sum()
       end)
@@ -3739,6 +3772,16 @@ defmodule Nx.Defn.GradTest do
         ]),
         grad_indexed_add_target_composite(t, i, u)
       )
+
+      assert_all_close(
+        Nx.tensor([
+          [0, -0.0932, -0.8316, -0.0774],
+          [0.1684, 0.9206, 0.1602, -0.4789],
+          [-0.9789, -0.2525, -0.1442, -0.9905]
+        ])
+        |> Nx.new_axis(1),
+        grad_indexed_add_target_composite(Nx.new_axis(t, 1), i, Nx.new_axis(u, 1), axes: [0, 2])
+      )
     end
 
     test "grad wrt to source" do
@@ -3756,6 +3799,11 @@ defmodule Nx.Defn.GradTest do
       expected = cosx_tn |> Nx.cos() |> Nx.multiply(Nx.sin(u)) |> Nx.negate()
 
       assert_all_close(expected, grad_indexed_add_updates_composite(t, i, u))
+
+      assert_all_close(
+        Nx.new_axis(expected, 1),
+        grad_indexed_add_updates_composite(Nx.new_axis(t, 1), i, Nx.new_axis(u, 1), axes: [0, 2])
+      )
     end
 
     test "grad wrt to indices" do
@@ -3765,6 +3813,11 @@ defmodule Nx.Defn.GradTest do
 
       assert_all_close(Nx.broadcast(0, i), grad_indexed_add_indices(t, i, u))
       assert_all_close(Nx.broadcast(0, i), grad_indexed_add_indices_composite(t, i, u))
+
+      assert_all_close(
+        Nx.broadcast(0, i),
+        grad_indexed_add_indices_composite(Nx.new_axis(t, 1), i, Nx.new_axis(u, 1), axes: [0, 2])
+      )
     end
 
     test "grad wrt to both source and target simultaneously" do
@@ -3779,6 +3832,11 @@ defmodule Nx.Defn.GradTest do
       expected = cosx_tn |> Nx.cos() |> Nx.multiply(Nx.subtract(1, Nx.sin(t)))
 
       assert_all_close(expected, grad_indexed_add_simultaneous_composite(t, i))
+
+      assert_all_close(
+        Nx.new_axis(expected, 1),
+        grad_indexed_add_simultaneous_composite(Nx.new_axis(t, 1), i, axes: [0])
+      )
     end
   end
 

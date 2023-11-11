@@ -1517,22 +1517,21 @@ defmodule EXLA.Defn do
     Value.gather(tensor, indices, slice_sizes, offset_dims, axes, axes, index_vector_dim)
   end
 
-  defp to_operator(:gather, [tensor, indices, opts], ans, _state) do
+  defp to_operator(:gather, [tensor, indices, opts], _ans, _state) do
     axes = Keyword.fetch!(opts, :axes)
     tensor_shape = op_shape(tensor)
     tensor_rank = tuple_size(tensor_shape)
+    tensor_axes = axes_for_rank(tensor_rank)
     index_vector_dim = tuple_size(op_shape(indices)) - 1
 
     slice_sizes =
-      for i <- 0..(tensor_rank - 1) do
+      for i <- tensor_axes do
         if i in axes, do: 1, else: elem(tensor_shape, i)
       end
 
-    offset_dims = axes_for_rank(tensor_rank) -- axes
-
-    tensor
-    |> EXLA.Op.gather(indices, index_vector_dim, slice_sizes, offset_dims, axes, axes)
-    |> EXLA.Op.reshape(ans.shape)
+    batch_size = tensor_rank - length(axes)
+    offset_dims = count_up(batch_size, batch_size)
+    EXLA.Op.gather(tensor, indices, index_vector_dim, slice_sizes, offset_dims, axes, axes)
   end
 
   defp to_operator(:reverse, [%Value{} = tensor, axes], _ans, _state) do

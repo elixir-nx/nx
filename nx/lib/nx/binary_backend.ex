@@ -1761,129 +1761,92 @@ defmodule Nx.BinaryBackend do
   end
 
   defp indexed_op(out, target, indices, updates, opts, resolve_updates, update_element) do
-    axes = opts[:axes]
-    target_axes = Nx.axes(target)
+    with_permutation(target, out, opts, fn target, out ->
+      %T{shape: shape, type: {_, target_size}} = target
+      %T{shape: indices_shape} = indices
+      %T{shape: updates_shape, type: {_, updates_size}} = updates
 
-    {permutation_fn, inverse_permutation_fn, out_shape} =
-      if axes && axes != target_axes do
-        permutation = axes ++ (target_axes -- axes)
+      indices_bin_list =
+        indices
+        |> to_binary()
+        |> aggregate_axes([1], indices_shape, elem(indices.type, 1))
 
-        inverse_permutation =
-          permutation
-          |> Enum.with_index()
-          |> Enum.sort_by(fn {x, _} -> x end)
-          |> Enum.map(fn {_, i} -> i end)
+      updates_binary = to_binary(updates)
+      updates_count = updates_shape |> Tuple.product() |> div(elem(updates_shape, 0))
+      updates_chunk = updates_count * updates_size
+      target_chunk = updates_count * target_size
 
-        transposed_out_shape = Enum.map(permutation, &elem(out.shape, &1)) |> List.to_tuple()
+      updates_list =
+        for <<x::bitstring-size(updates_chunk) <- updates_binary>> do
+          binary_to_list(x, updates.type)
+        end
 
-        {
-          &Nx.transpose(&1, axes: permutation),
-          &Nx.transpose(&1, axes: inverse_permutation),
-          transposed_out_shape
-        }
-      else
-        {& &1, & &1, out.shape}
-      end
+      offsets_list =
+        for idx_bin <- indices_bin_list do
+          idx = binary_to_list(idx_bin, indices.type)
+          offset = index_to_binary_offset(idx, shape)
+          offset * target_size
+        end
 
-    %{out | shape: out_shape}
-    |> indexed_op_on_first_dims(
-      permutation_fn.(target),
-      indices,
-      updates,
-      resolve_updates,
-      update_element
-    )
-    |> then(inverse_permutation_fn)
-  end
+      {offsets_with_updates, _last_offset} =
+        offsets_list
+        |> Enum.zip(updates_list)
+        |> Enum.group_by(fn {off, _} -> off end, fn {_, upd} -> upd end)
+        |> Enum.sort_by(fn {off, _} -> off end)
+        |> Enum.map_reduce(0, fn {next_offset, upds}, previous_offset ->
+          {{
+             previous_offset + target_chunk,
+             next_offset,
+             resolve_updates.(upds)
+           }, next_offset}
+        end)
 
-  defp indexed_op_on_first_dims(
-         %T{} = out,
-         %T{shape: shape, type: {_, target_size}} = target,
-         %T{shape: indices_shape} = indices,
-         %T{shape: updates_shape, type: {_, updates_size}} = updates,
-         resolve_updates,
-         update_element
-       ) do
-    indices_bin_list =
-      indices
-      |> to_binary()
-      |> aggregate_axes([1], indices_shape, elem(indices.type, 1))
+      target_binary = to_binary(target)
 
-    updates_binary = to_binary(updates)
-    updates_count = updates_shape |> Tuple.product() |> div(elem(updates_shape, 0))
-    updates_chunk = updates_count * updates_size
-    target_chunk = updates_count * target_size
+      offsets_with_updates =
+        List.update_at(offsets_with_updates, 0, fn {_prev, current, update} ->
+          {0, current, update}
+        end)
 
-    updates_list =
-      for <<x::bitstring-size(updates_chunk) <- updates_binary>> do
-        binary_to_list(x, updates.type)
-      end
+      {result, tail} =
+        for {previous, current, updates} <- offsets_with_updates, reduce: {<<>>, target_binary} do
+          {traversed, to_traverse} ->
+            before_slice_size = current - previous
 
-    offsets_list =
-      for idx_bin <- indices_bin_list do
-        idx = binary_to_list(idx_bin, indices.type)
-        offset = index_to_binary_offset(idx, shape)
-        offset * target_size
-      end
+            <<before_offset::bitstring-size(before_slice_size),
+              current_bitstring::bitstring-size(target_chunk),
+              to_traverse::bitstring>> = to_traverse
 
-    {offsets_with_updates, _last_offset} =
-      offsets_list
-      |> Enum.zip(updates_list)
-      |> Enum.group_by(fn {off, _} -> off end, fn {_, upd} -> upd end)
-      |> Enum.sort_by(fn {off, _} -> off end)
-      |> Enum.map_reduce(0, fn {next_offset, upds}, previous_offset ->
-        {{
-           previous_offset + target_chunk,
-           next_offset,
-           resolve_updates.(upds)
-         }, next_offset}
-      end)
+            updated_elements =
+              match_types [target.type, out.type] do
+                current = for <<match!(element, 0) <- current_bitstring>>, do: read!(element, 0)
 
-    target_binary = to_binary(target)
+                Enum.zip_with(current, updates, fn left, right ->
+                  <<write!(update_element.(left, right), 1)>>
+                end)
+              end
 
-    offsets_with_updates =
-      List.update_at(offsets_with_updates, 0, fn {_prev, current, update} ->
-        {0, current, update}
-      end)
+            # this can be a list of binaries because we are accumulation an iodata list
+            before_offset =
+              if target.type == out.type do
+                before_offset
+              else
+                binary_to_binary(before_offset, target.type, out.type, & &1)
+              end
 
-    {result, tail} =
-      for {previous, current, updates} <- offsets_with_updates, reduce: {<<>>, target_binary} do
-        {traversed, to_traverse} ->
-          before_slice_size = current - previous
+            {[traversed, before_offset | updated_elements], to_traverse}
+        end
 
-          <<before_offset::bitstring-size(before_slice_size),
-            current_bitstring::bitstring-size(target_chunk),
-            to_traverse::bitstring>> = to_traverse
+      # this can be a list of binaries because we are accumulation an iodata list
+      tail =
+        if target.type == out.type do
+          tail
+        else
+          binary_to_binary(tail, target.type, out.type, & &1)
+        end
 
-          updated_elements =
-            match_types [target.type, out.type] do
-              current = for <<match!(element, 0) <- current_bitstring>>, do: read!(element, 0)
-
-              Enum.zip_with(current, updates, fn left, right ->
-                <<write!(update_element.(left, right), 1)>>
-              end)
-            end
-
-          # this can be a list of binaries because we are accumulation an iodata list
-          before_offset =
-            if target.type == out.type do
-              before_offset
-            else
-              binary_to_binary(before_offset, target.type, out.type, & &1)
-            end
-
-          {[traversed, before_offset | updated_elements], to_traverse}
-      end
-
-    # this can be a list of binaries because we are accumulation an iodata list
-    tail =
-      if target.type == out.type do
-        tail
-      else
-        binary_to_binary(tail, target.type, out.type, & &1)
-      end
-
-    from_binary(out, IO.iodata_to_binary([result, tail]))
+      from_binary(out, IO.iodata_to_binary([result, tail]))
+    end)
   end
 
   @impl true
@@ -2057,12 +2020,7 @@ defmodule Nx.BinaryBackend do
       |> List.delete(axis)
       |> List.insert_at(Nx.rank(tensor) - 1, axis)
 
-    inverse_permutation =
-      permutation
-      |> Enum.with_index()
-      |> Enum.sort_by(fn {x, _} -> x end)
-      |> Enum.map(fn {_, i} -> i end)
-
+    inverse_permutation = inverse_permutation(permutation)
     shape_list = Tuple.to_list(output.shape)
     permuted_shape = permutation |> Enum.map(&Enum.at(shape_list, &1)) |> List.to_tuple()
 
@@ -2091,28 +2049,14 @@ defmodule Nx.BinaryBackend do
     axes = opts[:axes]
     tensor_axes = Nx.axes(tensor)
 
-    {permutation_fn, inverse_permutation_fn} =
-      if axes && axes != tensor_axes do
-        permutation = axes ++ (tensor_axes -- axes)
-
-        inverse_permutation =
-          permutation
-          |> Enum.with_index()
-          |> Enum.sort_by(fn {x, _} -> x end)
-          |> Enum.map(fn {_, i} -> i end)
-
-        {
-          &Nx.transpose(&1, axes: permutation),
-          &Nx.transpose(&1, axes: inverse_permutation)
-        }
+    tensor =
+      if List.starts_with?(tensor_axes, axes) do
+        tensor
       else
-        {& &1, & &1}
+        Nx.transpose(tensor, axes: axes ++ (tensor_axes -- axes))
       end
 
-    out
-    |> gather(permutation_fn.(tensor), indices)
-    |> then(inverse_permutation_fn)
-    |> Nx.reshape(out.shape)
+    gather(out, tensor, indices)
   end
 
   defp gather(out, tensor, indices) do
@@ -2609,6 +2553,33 @@ defmodule Nx.BinaryBackend do
         <<write!(fun.(read!(seg, 0)), 1)>>
       end
     end
+  end
+
+  ## Permutation helpers
+
+  defp with_permutation(target, out, opts, fun) do
+    axes = opts[:axes]
+    target_axes = Nx.axes(target)
+
+    if is_nil(axes) or List.starts_with?(target_axes, axes) do
+      fun.(target, out)
+    else
+      permutation = axes ++ (target_axes -- axes)
+      inverse_permutation = inverse_permutation(permutation)
+      out_shape = Enum.map(permutation, &elem(out.shape, &1)) |> List.to_tuple()
+
+      target
+      |> Nx.transpose(axes: permutation)
+      |> fun.(%{out | shape: out_shape})
+      |> Nx.transpose(axes: inverse_permutation)
+    end
+  end
+
+  defp inverse_permutation(permutation) do
+    permutation
+    |> Enum.with_index()
+    |> Enum.sort_by(fn {x, _} -> x end)
+    |> Enum.map(fn {_, i} -> i end)
   end
 
   ## Aggregation helpers
