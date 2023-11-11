@@ -138,8 +138,6 @@ IO.inspect(Nx.multiply(0, nan))
 IO.inspect(Nx.equal(nan, nan))
 IO.inspect(Nx.greater(nan, nan))
 IO.inspect(Nx.subtract(nan, nan))
-IO.inspect(Enum.member?(MapSet.new([nan]), nan))
-IO.inspect(0.3 == 3 * 0.1)
 ```
 
 1. Create a 5x5 tensor with values 1,2,3,4 just below the diagonal (★☆☆)
