@@ -72,11 +72,18 @@ Nx.iota({10})
 Nx.iota({3, 3})
 ```
 
-**10. Find indices of non-zero elements from [1,2,0,0,4,0] (★☆☆)**
+**10a. Given an initial `tensor_10`, build a "mask" of non-zero elements. That is, build a second tensor with the same shape as the original, but that has a 1 wherever the original has a non-zero element and a 0 elsewhere. (★☆☆)**
 
 ```elixir
-Nx.tensor([1, 2, 0, 0, 4, 0])
-|> Nx.not_equal(0)
+tensor_10 = Nx.tensor([1, 2, 0, 0, 4, 0])
+
+mask = Nx.not_equal(tensor_10, 0)
+```
+
+**10b. Use the mask from 10a to replace each 0 from `tensor_10` with -1. (★☆☆)**
+
+```elixir
+Nx.select(mask, tensor_10, -1)
 ```
 
 ## 11-20
