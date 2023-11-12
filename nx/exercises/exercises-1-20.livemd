@@ -41,8 +41,8 @@ Nx.tensor([[1, 2, 3], [4, 5, 6]])
 **5. How to get the documentation of the `add/2` function from the command line? (★☆☆)**
 
 ```elixir
-# I don't know if this is possible.
-# iex> h Nx.add
+import IEx.Helpers
+h(Nx.add())
 ```
 
 **6. Create a tensor of zeros of size 10 but the fifth value which is 1 (★☆☆)**
