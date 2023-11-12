@@ -11,8 +11,8 @@ defmodule EXLA.Client do
 
   @name __MODULE__
 
-  @enforce_keys [:ref, :platform, :name, :device_count, :default_device_id]
-  defstruct [:ref, :platform, :name, :device_count, :default_device_id]
+  @enforce_keys [:ref, :platform, :name, :device_count, :default_device_id, :automatic_transfers]
+  defstruct [:ref, :platform, :name, :device_count, :default_device_id, :automatic_transfers]
 
   @doc """
   Returns the name of the default client.
@@ -140,12 +140,9 @@ defmodule EXLA.Client do
 
   defp build_client(name, options) do
     platform = Keyword.get(options, :platform)
-    default_device_id = Keyword.get(options, :default_device_id, 0)
     memory_fraction = Keyword.get(options, :memory_fraction, 0.9)
-
     preallocate = Keyword.get(options, :preallocate, true)
     preallocate_int = if preallocate, do: 1, else: 0
-
     platforms = Map.keys(EXLA.Client.get_supported_platforms())
 
     ref =
@@ -176,17 +173,21 @@ defmodule EXLA.Client do
       |> unwrap!()
 
     device_count = EXLA.NIF.get_device_count(ref) |> unwrap!()
+    default_device_id = Keyword.get(options, :default_device_id, 0)
 
     if default_device_id not in 0..(device_count - 1) do
       raise ArgumentError, ":default_device_id must be a number between 0 and #{device_count - 1}"
     end
+
+    automatic_transfers = Keyword.get(options, :automatic_transfers, platform == :host)
 
     %EXLA.Client{
       ref: ref,
       platform: platform,
       name: name,
       device_count: device_count,
-      default_device_id: default_device_id
+      default_device_id: default_device_id,
+      automatic_transfers: automatic_transfers
     }
   end
 

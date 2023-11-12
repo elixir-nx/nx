@@ -49,8 +49,7 @@ defmodule EXLA.MixProject do
           tpu: [platform: :tpu],
           host: [platform: :host]
         ],
-        preferred_clients: [:cuda, :rocm, :tpu, :host],
-        automatic_device_transfer_platforms: [:host]
+        preferred_clients: [:cuda, :rocm, :tpu, :host]
       ]
     ]
   end
