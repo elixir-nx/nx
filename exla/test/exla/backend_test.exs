@@ -169,8 +169,17 @@ defmodule EXLA.BackendTest do
 
   @tag :multi_device
   test "multi-device" do
+    a = Nx.tensor(1, backend: {EXLA.Backend, client: :other_host, device_id: 0})
+    assert_equal(Nx.add(a, 2), Nx.tensor(3))
+
     a = Nx.tensor(1, backend: {EXLA.Backend, client: :other_host, device_id: 1})
     assert_equal(Nx.add(a, 2), Nx.tensor(3))
+
+    a = Nx.tensor([[1]], backend: {EXLA.Backend, client: :other_host, device_id: 0})
+    assert Nx.reshape(a, {1}).data.buffer.client_name == :other_host
+
+    a = Nx.tensor([[1]], backend: {EXLA.Backend, client: :other_host, device_id: 1})
+    assert Nx.reshape(a, {1}).data.buffer.client_name == :other_host
   end
 
   test "Kernel.inspect/2" do
