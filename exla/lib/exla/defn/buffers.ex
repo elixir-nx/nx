@@ -116,9 +116,8 @@ defmodule EXLA.Defn.Buffers do
       when transfer? and buffer.client_name != executable.client.name
       when transfer? and buffer.device_id != executable.device_id ->
         buffer_client = EXLA.Client.fetch!(buffer.client_name)
-        automatic = Application.fetch_env!(:exla, :automatic_device_transfer_platforms)
 
-        if buffer_client.platform in automatic do
+        if buffer_client.automatic_transfers do
           EXLA.DeviceBuffer.copy_to_device(buffer, executable.client, executable.device_id)
         else
           default = EXLA.Client.fetch!(EXLA.Client.default_name())
@@ -129,7 +128,7 @@ defmodule EXLA.Defn.Buffers do
           but one of the input tensors are allocated on #{buffer_client.name} \
           ##{buffer.device_id} (#{buffer_client.platform}).
 
-          EXLA only transfers tensors allocated on host to other clients. \
+          EXLA by default only transfers tensors allocated on host to other clients. \
           You can force `:host` as your default backend with:
 
               # via config
