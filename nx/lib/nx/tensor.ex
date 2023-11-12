@@ -43,8 +43,11 @@ defmodule Nx.Tensor do
           "cannot use the tensor[index] syntax on scalar tensor #{inspect(tensor)}"
   end
 
-  def fetch(tensor, %Nx.Tensor{} = index),
+  def fetch(tensor, %Nx.Tensor{shape: {}} = index),
     do: {:ok, fetch_axes(tensor, [{0, index}])}
+
+  def fetch(tensor, %Nx.Tensor{} = index),
+    do: {:ok, Nx.take(tensor, index)}
 
   def fetch(tensor, index) when is_integer(index),
     do: {:ok, fetch_axes(tensor, [{0, index}])}
@@ -67,8 +70,8 @@ defmodule Nx.Tensor do
 
       * an integer or a scalar tensor representing a zero-based index
       * a first..last//step range representing inclusive start-stop indexes with an optional positive step
-      * a list of integers and ranges
-      * a keyword list of integers and ranges
+      * a list of integers, scalar tensors, and ranges
+      * a keyword list of integers, scalar tensors, and ranges
 
     Got #{inspect(value)}
     """
@@ -95,7 +98,13 @@ defmodule Nx.Tensor do
 
   defp fetch_axes(axis, axes, shape, start, lengths, squeeze, strides) when axis >= 0 do
     case List.keytake(axes, axis, 0) do
-      {{^axis, %Nx.Tensor{} = index}, axes} ->
+      {{^axis, %Nx.Tensor{shape: index_shape} = index}, axes} ->
+        if index_shape != {} do
+          raise ArgumentError,
+                "tensor must be a scalar when accessing a list/keyword of dimensions, " <>
+                  "got: #{inspect(index)}"
+        end
+
         fetch_axes(
           axis - 1,
           axes,
