@@ -207,9 +207,10 @@ defmodule Nx do
       iex> Nx.tensor([1, 2])[-3]
       ** (ArgumentError) index -3 is out of bounds for axis 0 in shape {2}
 
-  The index can also be another tensor but in such cases it must be
-  a scalar between 0 and the dimension size. Out of bound dynamic indexes
-  are always clamped to the tensor dimensions:
+  The index can also be another tensor. If the tensor is a scalar, it must
+  be a value between 0 and the dimension size, and it behaves the same as
+  an integer. Out of bound dynamic indexes are always clamped to the tensor
+  dimensions:
 
       iex> two = Nx.tensor(2)
       iex> t = Nx.tensor([[1, 2], [3, 4]])
@@ -227,6 +228,37 @@ defmodule Nx do
       #Nx.Tensor<
         s64
         1
+      >
+
+  A multi-dimensional tensor uses its values to fetch the leading
+  dimension of the tensor, placing them within the shape of the
+  indexing tensor. It is equivalent to `take/3`:
+
+      iex> t = Nx.tensor([[1, 2], [3, 4]])
+      iex> t[Nx.tensor([1, 0])]
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [3, 4],
+          [1, 2]
+        ]
+      >
+
+  The example shows how the retrieved indexes are nested
+  with the accessed shape and that you may also access
+  repeated indices:
+
+      iex> t = Nx.tensor([[1, 2], [3, 4]])
+      iex> t[Nx.tensor([[1, 0, 1]])]
+      #Nx.Tensor<
+        s64[1][3][2]
+        [
+          [
+            [3, 4],
+            [1, 2],
+            [3, 4]
+          ]
+        ]
       >
 
   Access also accepts ranges. Ranges in Elixir are inclusive:
