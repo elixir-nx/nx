@@ -543,16 +543,6 @@ defmodule EXLA.Defn do
     {fun_computation(name, args, expr, type, state), cache}
   end
 
-  defp cached_recur_operator(
-         :optional,
-         %T{data: %Expr{args: [%{data: %{op: :top_k, args: [tensor, opts]}}, _expr]}},
-         state,
-         cache
-       ) do
-    {tensor, cache} = recur_operator(tensor, state, cache)
-    {EXLA.Op.top_k(tensor, Keyword.fetch!(opts, :k)), cache}
-  end
-
   defp cached_recur_operator(:optional, %T{data: %Expr{args: args}}, state, cache) do
     [call, expr] = args
     %{data: %{args: args, op: op}} = call
@@ -890,10 +880,10 @@ defmodule EXLA.Defn do
   defp to_operator(:ifft, args, out, state), do: fft(&EXLA.Op.ifft/2, args, out, state)
 
   defp to_operator(:is_nan, [arg], out, state),
-    do: EXLA.Op.is_nan(arg, op_type(arg), out.shape, Nx.axes(out), state)
+    do: EXLA.Op.is_nan(arg, op_type(arg), out.shape, state.builder)
 
   defp to_operator(:is_infinity, [arg], out, state),
-    do: EXLA.Op.is_infinity(arg, op_type(arg), out.shape, Nx.axes(out), state)
+    do: EXLA.Op.is_infinity(arg, op_type(arg), out.shape, state.builder)
 
   # These operations do the type conversion implicitly, and so
   # we cannot mess with the output type (e.g. the to_type conversion)
@@ -1253,7 +1243,7 @@ defmodule EXLA.Defn do
       end
 
     args = [%{type: ans.type, shape: {}}, %{type: ans.type, shape: {}}]
-    comp = op_computation(op, args, state)
+    comp = sort_computation(op, ans.type, args, state)
     EXLA.Op.sort(tensor, comp, dimension)
   end
 
@@ -1266,14 +1256,16 @@ defmodule EXLA.Defn do
         :desc -> :greater
       end
 
+    type = op_type(tensor)
+
     args = [
-      %{type: op_type(tensor), shape: {}},
-      %{type: op_type(tensor), shape: {}},
+      %{type: type, shape: {}},
+      %{type: type, shape: {}},
       %{type: ans.type, shape: {}},
       %{type: ans.type, shape: {}}
     ]
 
-    comp = op_computation(op, args, state, fn [arg1, arg2 | _] -> [arg1, arg2] end)
+    comp = sort_computation(op, type, args, state)
     EXLA.Lib.argsort(state.builder, tensor, dimension, comp, ans.type)
   end
 
@@ -1349,6 +1341,32 @@ defmodule EXLA.Defn do
   defp put_outfeed(cache, outfeed), do: %{cache | __MODULE__ => outfeed}
 
   ## Computation helpers
+
+  defp sort_computation(op, type, args, state) do
+    subbuilder = subbuilder(state.builder, Atom.to_string(op))
+
+    [arg1, arg2 | _] =
+      Enum.with_index(args, fn arg, i ->
+        fun_shape = computation_arg_shape(arg)
+        EXLA.Op.parameter(subbuilder, i, fun_shape, "p#{i}")
+      end)
+
+    op =
+      cond do
+        Nx.Type.integer?(type) ->
+          apply(EXLA.Op, op, [arg1, arg2])
+
+        op == :less ->
+          is_nan = EXLA.Op.is_nan(arg2, type, {}, subbuilder)
+          EXLA.Op.bitwise_or(is_nan, EXLA.Op.less(arg1, arg2))
+
+        op == :greater ->
+          is_nan = EXLA.Op.is_nan(arg1, type, {}, subbuilder)
+          EXLA.Op.bitwise_or(is_nan, EXLA.Op.greater(arg1, arg2))
+      end
+
+    EXLA.Builder.build(op)
+  end
 
   defp op_computation(op, args, state, prepare_args \\ & &1) do
     subbuilder = subbuilder(state.builder, Atom.to_string(op))
