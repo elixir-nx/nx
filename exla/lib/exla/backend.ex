@@ -320,22 +320,34 @@ defmodule EXLA.Backend do
   defp jit(opts, fun, args), do: jit(opts, fun, args, args)
 
   defp jit(opts, fun, tensors, args) do
-    {client, device_id} =
+    {priority_client, priority_did, backup_client, backup_did} =
       for %T{data: %B{buffer: %EXLA.DeviceBuffer{client_name: client_name, device_id: device_id}}} <-
             tensors,
-          reduce: {nil, nil} do
-        {^client_name, ^device_id} = acc ->
+          reduce: {nil, nil, nil, nil} do
+        {^client_name, ^device_id, _, _} = acc ->
           acc
 
-        acc ->
+        {priority_client, priority_did, backup_client, backup_did} ->
+          # If the client supports automatic transfers (typically host),
+          # it should not win over the cuda/rocm. At the same time,
+          # if it is the only device, we don't want to discard it.
           case EXLA.Client.fetch!(client_name) do
-            %{platform: :host, default_device_id: ^device_id} -> acc
-            _ -> {client_name, device_id}
+            %{automatic_transfers: true, default_device_id: ^device_id} ->
+              {priority_client, priority_did, client_name, device_id}
+
+            _ ->
+              {client_name, device_id, backup_client, backup_did}
           end
       end
 
-    client = opts[:client] || client || EXLA.Client.default_name()
-    device_id = opts[:device_id] || device_id || EXLA.Client.fetch!(client).default_device_id
+    client =
+      opts[:client] || priority_client || backup_client ||
+        EXLA.Client.default_name()
+
+    device_id =
+      opts[:device_id] || priority_did || backup_did ||
+        EXLA.Client.fetch!(client).default_device_id
+
     EXLA.jit_apply(fun, args, on_conflict: :force, client: client, device_id: device_id)
   end
 end
