@@ -98,8 +98,6 @@ random
 **13. Create a 10x10 tensor with random values and find the minimum and maximum values (★☆☆)**
 
 ```elixir
-# This felt a little awkward. Is there a better way?
-
 key = Nx.Random.key(0)
 {r, _} = Nx.Random.normal(key, shape: {10, 10})
 r |> IO.inspect()
