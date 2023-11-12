@@ -14910,6 +14910,22 @@ defmodule Nx do
           ]
         ]
       >
+
+  When it comes to NaN and infinities, NaN always sorts higher than
+  everything else:
+
+      iex> t = Nx.tensor([:nan, :neg_infinity, 0.0, :infinity])
+      iex> Nx.sort(t)
+      #Nx.Tensor<
+        f32[4]
+        [-Inf, 0.0, Inf, NaN]
+      >
+      iex> Nx.sort(t, direction: :desc)
+      #Nx.Tensor<
+        f32[4]
+        [NaN, Inf, 0.0, -Inf]
+      >
+
   """
   @doc type: :ndim
   def sort(tensor, opts \\ []) do
@@ -14985,6 +15001,22 @@ defmodule Nx do
           [2],
           [2]
         ]
+      >
+
+  When it comes to NaN and infinities, NaN always sorts higher than
+  everything else:
+
+      iex> t = Nx.tensor([:nan, :neg_infinity, :infinity, 0.0])
+      iex> {values, indices} = Nx.top_k(t, k: 3)
+      iex> values
+      #Nx.Tensor<
+        f32[3]
+        [NaN, Inf, 0.0]
+      >
+      iex> indices
+      #Nx.Tensor<
+        s64[3]
+        [0, 2, 3]
       >
 
   ## Error cases
@@ -15127,6 +15159,21 @@ defmodule Nx do
             [2, 0, 0]
           ]
         ]
+      >
+
+  When it comes to NaN and infinities, NaN always sorts higher than
+  everything else:
+
+      iex> t = Nx.tensor([:nan, :neg_infinity, :infinity, 0.0])
+      iex> Nx.argsort(t)
+      #Nx.Tensor<
+        s64[4]
+        [1, 3, 2, 0]
+      >
+      iex> Nx.argsort(t, direction: :desc)
+      #Nx.Tensor<
+        s64[4]
+        [0, 2, 3, 1]
       >
 
   """

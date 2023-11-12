@@ -2206,16 +2206,30 @@ defmodule Nx.BinaryBackend do
       case opts[:direction] do
         :desc ->
           fn a, b ->
-            a = binary_to_number(a, type)
-            b = binary_to_number(b, type)
-            a >= b
+            case {binary_to_number(a, type), binary_to_number(b, type)} do
+              {x, x} -> true
+              {:neg_infinity, _} -> false
+              {_, :neg_infinity} -> true
+              {:nan, _} -> true
+              {_, :nan} -> false
+              {:infinity, _} -> true
+              {_, :infinity} -> false
+              {a, b} -> a >= b
+            end
           end
 
         :asc ->
           fn a, b ->
-            a = binary_to_number(a, type)
-            b = binary_to_number(b, type)
-            a <= b
+            case {binary_to_number(a, type), binary_to_number(b, type)} do
+              {x, x} -> true
+              {:neg_infinity, _} -> true
+              {_, :neg_infinity} -> false
+              {:nan, _} -> false
+              {_, :nan} -> true
+              {:infinity, _} -> false
+              {_, :infinity} -> true
+              {a, b} -> a <= b
+            end
           end
       end
 
