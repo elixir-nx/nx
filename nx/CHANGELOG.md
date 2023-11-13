@@ -16,6 +16,20 @@
   * [Nx] Remove deprecated random_uniform, random_normal, shuffle
   * [Nx.Defn] `Nx.Defn.rewrite_types/2` has been removed
 
+## v0.6.4 (2023-11-13)
+
+### Enhancements
+
+  * [Nx] Allow non-scalar tensors on access
+
+### Bug fixes
+
+  * [Nx] Improve the `:axes` option in `gather`, `indexed_add`, and `indexed_put`
+  * [Nx] Fix grad of `gather`, `indexed_add`, and `indexed_put` with axes
+  * [Nx.BinaryBackend] Fix sorting of negative infinity
+  * [Nx.BinaryBackend] Always sort NaN last
+  * [Nx.Serving] Fix `Nx.Batch` padding with multi-device backends
+
 ## v0.6.3 (2023-11-09)
 
 ### Enhancements

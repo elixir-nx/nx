@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.6.4 (2023-11-13)
+
+  * Update to latest Nx
+  * Allow `:automatic_transfers` configuration on client
+  * Do not discard client/device in `EXLA.Backend` when it is host
+  * Always sort NaN last
+  * Improve the `:axes` option in `gather`, `indexed_add`, and `indexed_put`
+
 ## v0.6.3 (2023-11-09)
 
   * Update to latest Nx
