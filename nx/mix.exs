@@ -6,7 +6,7 @@ defmodule Nx.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx"
-  @version "0.6.3"
+  @version "0.6.4"
 
   def project do
     [
