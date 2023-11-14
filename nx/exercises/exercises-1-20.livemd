@@ -88,7 +88,27 @@ tensor = Nx.tensor([[1, 2, 3], [4, 5, 6]])
 
 <!-- livebook:{"break_markdown":true} -->
 
-**5. Use `IEx.Helpers` to print the documentation of the `Nx.add/2` function. (★☆☆)**
+**5a. Use `Nx.sum/2` to find the sum of all elements of `tensor`. (★☆☆)**
+
+```elixir
+tensor = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+# Add your solution here.
+```
+
+<details class="rounded-lg border-2 border-green-bright-300 p-2">
+  <summary class="cursor-pointer font-bold mx-2">Example solution</summary>
+  <div class="p-2">
+
+  ```elixir
+  Nx.sum(tensor)
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+**5b. Read the [documentation for `Nx.sum/2`](https://hexdocs.pm/nx/Nx.html#sum/2) then provide the correct option to sum across the _rows_. (★☆☆)**
 
 ```elixir
 # Add your solution here.
@@ -99,9 +119,18 @@ tensor = Nx.tensor([[1, 2, 3], [4, 5, 6]])
   <div class="p-2">
 
   ```elixir
-  import IEx.Helpers
-  h Nx.add
+  Nx.sum(tensor, axes: [1])
   ```
+
+  <div class="mt-4">
+    <div class="bg-blue-600 text-white font-bold rounded-t-lg px-4 py-2">
+      <span class="mr-1"><i class="ri-lightbulb-line"></i></span>
+      <span>Tip</span>
+    </div>
+    <div class="border border-t-0 border-blue-600 rounded-b-lg px-4">
+      <p>In Livebook, you can also hover over a function to display its documentation.</p>
+    </div>
+  </div>
 
   </div>
 </details>
