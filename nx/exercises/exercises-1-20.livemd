@@ -307,7 +307,7 @@ tensor_10 = Nx.tensor([1, 2, 0, 0, 4, 0])
 
 <!-- livebook:{"break_markdown":true} -->
 
-**14. Create a 1D tensor of size 30 then find its mean. (★☆☆)**
+**14. Create a random 1D tensor of size 30 then find its mean. (★☆☆)**
 
 ```elixir
 # Add your solution here.
