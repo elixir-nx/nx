@@ -9973,6 +9973,8 @@ defmodule Nx do
     * `:tie_break` - how to break ties. one of `:high`, or `:low`.
       default behavior is to always return the lower index.
 
+    * `:type` - The type of the resulting tensor. Defaults to `:s64`.
+
   ## Examples
 
       iex> Nx.argmax(4)
@@ -10041,9 +10043,9 @@ defmodule Nx do
       >
 
       iex> t = Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]], names: [:x, :y, :z])
-      iex> Nx.argmax(t, tie_break: :high, axis: :y)
+      iex> Nx.argmax(t, tie_break: :high, axis: :y, type: :u32)
       #Nx.Tensor<
-        s64[x: 2][z: 3]
+        u32[x: 2][z: 3]
         [
           [0, 0, 1],
           [0, 1, 1]
@@ -10109,6 +10111,8 @@ defmodule Nx do
 
     * `:tie_break` - how to break ties. one of `:high`, or `:low`.
       Default behavior is to always return the lower index.
+
+    * `:type` - The type of the resulting tensor. Defaults to `:s64`.
 
   ## Examples
 
@@ -10178,9 +10182,9 @@ defmodule Nx do
       >
 
       iex> t = Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]], names: [:x, :y, :z])
-      iex> Nx.argmin(t, tie_break: :high, axis: :y)
+      iex> Nx.argmin(t, tie_break: :high, axis: :y, type: :u32)
       #Nx.Tensor<
-        s64[x: 2][z: 3]
+        u32[x: 2][z: 3]
         [
           [1, 1, 1],
           [1, 0, 1]
@@ -10236,7 +10240,7 @@ defmodule Nx do
 
   defp argmin_or_max(tensor, op, opts) do
     apply_vectorized(tensor, fn tensor, offset ->
-      opts = keyword!(opts, [:axis, tie_break: :low, keep_axis: false])
+      opts = keyword!(opts, [:axis, tie_break: :low, keep_axis: false, type: {:s, 64}])
 
       tie_break =
         case opts[:tie_break] do
@@ -10287,7 +10291,7 @@ defmodule Nx do
             {reshaped_tensor, new_shape, new_names, offset}
         end
 
-      out = %{tensor | type: {:s, 64}, shape: shape, names: names}
+      out = %{tensor | type: Nx.Type.normalize!(opts[:type]), shape: shape, names: names}
       opts = [tie_break: tie_break, axis: axis, keep_axis: opts[:keep_axis]]
       apply(impl!(tensor), op, [out, tensor, opts])
     end)

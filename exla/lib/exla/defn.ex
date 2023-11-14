@@ -1361,11 +1361,8 @@ defmodule EXLA.Defn do
     EXLA.Op.map(arg, fun, Nx.axes(shape))
   end
 
-  @reduction_op [:argmax, :argmin, :reduce_max, :reduce_min]
-
-  defp to_operator(op, [arg, opts], ans, state)
-       when op in @reduction_op do
-    apply(EXLA.Lib, op, [state.builder, arg, [type: ans.type] ++ opts])
+  defp to_operator(op, [arg, opts], ans, state) when op in [:argmax, :argmin] do
+    apply(EXLA.Lib, op, [state.builder, arg, ans.type, opts])
   end
 
   defp to_operator(:clip, [%Value{} = operand, %Value{} = min, %Value{} = max], ans, _state) do

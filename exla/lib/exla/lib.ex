@@ -52,8 +52,8 @@ defmodule EXLA.Lib do
     * `:keep_axis` - whether or not to keep reduced axis
     * `:tie_break` - how to break ties
   """
-  def argmax(%Builder{} = builder, %Op{} = op, opts \\ []) do
-    argmin_or_max(builder, op, false, opts)
+  def argmax(%Builder{} = builder, %Op{} = op, type, opts \\ []) do
+    argmin_or_max(builder, op, false, type, opts)
   end
 
   @doc """
@@ -65,15 +65,14 @@ defmodule EXLA.Lib do
     * `:keep_axis` - whether or not to keep reduced axis
     * `:tie_break` - how to break ties
   """
-  def argmin(%Builder{} = builder, %Op{} = op, opts \\ []) do
-    argmin_or_max(builder, op, true, opts)
+  def argmin(%Builder{} = builder, %Op{} = op, type, opts \\ []) do
+    argmin_or_max(builder, op, true, type, opts)
   end
 
-  defp argmin_or_max(builder, op, is_min?, opts) do
+  defp argmin_or_max(builder, op, is_min?, type, opts) do
     tie_break = opts[:tie_break] || :low
     keep_axis = opts[:keep_axis] || false
     op_shape = Op.get_shape(op)
-    type = opts[:type] || op_shape.dtype
 
     init_value =
       if is_min?,
@@ -83,7 +82,7 @@ defmodule EXLA.Lib do
     axis = opts[:axis]
     index_init_value = Op.constant_r0(builder, 0, type)
     iota = iota(builder, Shape.make_shape(type, op_shape.dims), axis)
-    reduction = create_min_max_computation(builder, op_shape.dtype, is_min?, tie_break)
+    reduction = create_min_max_computation(builder, op_shape.dtype, type, is_min?, tie_break)
 
     result =
       builder
@@ -102,13 +101,13 @@ defmodule EXLA.Lib do
     end
   end
 
-  defp create_min_max_computation(builder, type, is_min?, tie_break) do
+  defp create_min_max_computation(builder, type, index_type, is_min?, tie_break) do
     sub_builder = subbuilder(builder, "min-max")
 
     lhs_value = Op.parameter(sub_builder, 0, Shape.make_shape(type, {}), "lhs_value")
-    lhs_index = Op.parameter(sub_builder, 1, Shape.make_shape({:s, 64}, {}), "lhs_index")
+    lhs_index = Op.parameter(sub_builder, 1, Shape.make_shape(index_type, {}), "lhs_index")
     rhs_value = Op.parameter(sub_builder, 2, Shape.make_shape(type, {}), "rhs_value")
-    rhs_index = Op.parameter(sub_builder, 3, Shape.make_shape({:s, 64}, {}), "rhs_index")
+    rhs_index = Op.parameter(sub_builder, 3, Shape.make_shape(index_type, {}), "rhs_index")
 
     cmp =
       if is_min?,
