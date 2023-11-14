@@ -160,7 +160,7 @@ defmodule Nx.Serving do
 
   You can start several partitions under the same serving by passing
   `partitions: true` when starting the serving. The number of partitions
-  will be determined according  your compiler and for which host it is
+  will be determined according your compiler and for which host it is
   compiling.
 
   For example, when creating the serving, you may pass the following
@@ -181,6 +181,14 @@ defmodule Nx.Serving do
 
   If you have two GPUs, `batched_run/3` will now gather batches and send
   them to the GPUs as they become available to process requests.
+
+  > #### Cross-device operations {: .warning}
+  >
+  > When `partitions: true` is set, you will receive results from
+  > different GPU devices and Nx won't automatically transfer data
+  > across devices to avoid surprising performance pitfalls, which
+  > may lead to errors. In such cases, you probably want to transfer
+  > tensors back to host on your serving execution.
 
   ### Distribution
 
