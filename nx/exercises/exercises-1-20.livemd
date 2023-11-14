@@ -48,10 +48,10 @@ Inspired by the Python notebook [100 Numpy Exercises](https://www.kaggle.com/cod
 
 <!-- livebook:{"break_markdown":true} -->
 
-**3. Find the number of elements in `tensor_03`. (★☆☆)**
+**3. Find the number of elements in `tensor`. (★☆☆)**
 
 ```elixir
-tensor_03 = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+tensor = Nx.tensor([[1, 2, 3], [4, 5, 6]])
 # Add your solution here.
 ```
 
@@ -60,7 +60,7 @@ tensor_03 = Nx.tensor([[1, 2, 3], [4, 5, 6]])
   <div class="p-2">
 
   ```elixir
-  Nx.size(tensor_03)
+  Nx.size(tensor)
   ```
 
   </div>
@@ -68,10 +68,10 @@ tensor_03 = Nx.tensor([[1, 2, 3], [4, 5, 6]])
 
 <!-- livebook:{"break_markdown":true} -->
 
-**4. Find the number of bytes of memory in `tensor_04`. (★☆☆)**
+**4. Find the number of bytes of memory in `tensor`. (★☆☆)**
 
 ```elixir
-tensor_04 = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+tensor = Nx.tensor([[1, 2, 3], [4, 5, 6]])
 # Add your solution here.
 ```
 
@@ -80,7 +80,7 @@ tensor_04 = Nx.tensor([[1, 2, 3], [4, 5, 6]])
   <div class="p-2">
 
   ```elixir
-  Nx.byte_size(tensor_04)
+  Nx.byte_size(tensor)
   ```
 
   </div>
@@ -148,10 +148,10 @@ tensor_04 = Nx.tensor([[1, 2, 3], [4, 5, 6]])
 
 <!-- livebook:{"break_markdown":true} -->
 
-**8. Reverse `tensor_08` (first element becomes last). (★☆☆)**
+**8. Reverse `tensor` (first element becomes last). (★☆☆)**
 
 ```elixir
-tensor_08 = Nx.tensor([2, 4, 6, 8])
+tensor = Nx.tensor([2, 4, 6, 8])
 # Add your solution here.
 ```
 
@@ -160,7 +160,7 @@ tensor_08 = Nx.tensor([2, 4, 6, 8])
   <div class="p-2">
 
   ```elixir
-  Nx.reverse(tensor_08)
+  Nx.reverse(tensor)
   ```
 
   </div>
@@ -187,10 +187,10 @@ tensor_08 = Nx.tensor([2, 4, 6, 8])
 
 <!-- livebook:{"break_markdown":true} -->
 
-**10a. Given an initial `tensor_10`, build a "mask" of non-zero elements. That is, build a second tensor with the same shape as the original, but that has a 1 wherever the original has a non-zero element and a 0 elsewhere. (★☆☆)**
+**10a. Given an initial `tensor`, build a "mask" of non-zero elements. That is, build a second tensor with the same shape as the original, but that has a 1 wherever the original has a non-zero element and a 0 elsewhere. (★☆☆)**
 
 ```elixir
-tensor_10 = Nx.tensor([1, 2, 0, 0, 4, 0])
+tensor = Nx.tensor([1, 2, 0, 0, 4, 0])
 # Add your solution here.
 ```
 
@@ -199,7 +199,7 @@ tensor_10 = Nx.tensor([1, 2, 0, 0, 4, 0])
   <div class="p-2">
 
   ```elixir
-  mask = Nx.not_equal(tensor_10, 0)
+  mask = Nx.not_equal(tensor, 0)
   ```
 
   </div>
@@ -207,7 +207,7 @@ tensor_10 = Nx.tensor([1, 2, 0, 0, 4, 0])
 
 <!-- livebook:{"break_markdown":true} -->
 
-**10b. Use the mask from 10a to replace each 0 from `tensor_10` with -1. (★☆☆)**
+**10b. Use the mask from 10a to replace each 0 from `tensor` with -1. (★☆☆)**
 
 ```elixir
 # Add your solution here.
@@ -218,7 +218,7 @@ tensor_10 = Nx.tensor([1, 2, 0, 0, 4, 0])
   <div class="p-2">
 
   ```elixir
-  Nx.select(mask, tensor_10, -1)
+  Nx.select(mask, tensor, -1)
   ```
 
   </div>
@@ -278,11 +278,11 @@ tensor_10 = Nx.tensor([1, 2, 0, 0, 4, 0])
 
   ```elixir
   key = Nx.Random.key(0)
-  {tensor_13, _} = Nx.Random.normal(key, shape: {10, 10})
+  {tensor, _} = Nx.Random.normal(key, shape: {10, 10})
 
   %{
-    min: Nx.reduce_min(tensor_13),
-    max: Nx.reduce_max(tensor_13)
+    min: Nx.reduce_min(tensor),
+    max: Nx.reduce_max(tensor)
   }
   ```
 
@@ -303,9 +303,9 @@ tensor_10 = Nx.tensor([1, 2, 0, 0, 4, 0])
 
   ```elixir
   key = Nx.Random.key(0)
-  {tensor_14, _} = Nx.Random.normal(key, shape: {30})
+  {tensor, _} = Nx.Random.normal(key, shape: {30})
 
-  Nx.mean(tensor_14)
+  Nx.mean(tensor)
   ```
 
   </div>
@@ -333,10 +333,10 @@ tensor_10 = Nx.tensor([1, 2, 0, 0, 4, 0])
 
 <!-- livebook:{"break_markdown":true} -->
 
-**16. Add a border of 0 around `tensor_16` (end result will be a 5x5 tensor). (★☆☆)**
+**16. Add a border of 0 around `tensor` (end result will be a 5x5 tensor). (★☆☆)**
 
 ```elixir
-tensor_16 = Nx.broadcast(1, {3, 3})
+tensor = Nx.broadcast(1, {3, 3})
 # Add your solution here.
 ```
 
@@ -345,7 +345,7 @@ tensor_16 = Nx.broadcast(1, {3, 3})
   <div class="p-2">
 
   ```elixir
-  Nx.pad(tensor_16, 0, [{1, 1, 0}, {1, 1, 0}])
+  Nx.pad(tensor, 0, [{1, 1, 0}, {1, 1, 0}])
   ```
 
   </div>
