@@ -6,9 +6,7 @@ Mix.install([{:nx, "~> 0.6"}])
 
 ## Introduction
 
-Inspired by the Python notebook _100 Numpy Exercises_:
-
-https://www.kaggle.com/code/utsav15/100-numpy-exercises/notebook
+Inspired by the Python notebook [100 Numpy Exercises](https://www.kaggle.com/code/utsav15/100-numpy-exercises/notebook).
 
 ## 1-10
 
