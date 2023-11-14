@@ -602,7 +602,7 @@ defmodule Nx.Defn do
   ## Examples
 
       defn tanh_grad(t) do
-        grad(t, &Nx.tanh/&1)
+        grad(t, &Nx.tanh/1)
       end
 
   To differentiate on multiple vars, pass a tuple as first argument:
@@ -658,7 +658,7 @@ defmodule Nx.Defn do
   ## Examples
 
       defn tanh_grad(t) do
-        value_and_grad(t, &Nx.tanh/&1)
+        value_and_grad(t, &Nx.tanh/1)
       end
 
   To differentiate on multiple vars, pass a tuple as first argument:
