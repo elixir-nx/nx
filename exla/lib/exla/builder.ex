@@ -12,16 +12,22 @@ defmodule EXLA.Builder do
   @enforce_keys [:ref]
   defstruct [:ref, :parent, :name]
 
-  def new(name, _inputs, _outputs, :xla) do
+  def new(name, inputs, outputs, type, sub? \\ false)
+
+  def new(name, _inputs, _outputs, :xla, _sub?) do
     new(name)
   end
 
-  def new(_name, inputs, outputs, :mlir) do
+  def new(_name, inputs, outputs, :mlir, sub?) do
     # TO-DO (mlir): check if using the function name makes sense
     arg_shapes = Enum.map(inputs, fn {_, %Shape{} = s} -> s end)
 
     return_shape =
-      [outputs] |> Nx.Defn.Composite.flatten_list() |> List.to_tuple() |> exla_shape()
+      if sub? do
+        exla_shape(outputs)
+      else
+        [outputs] |> Nx.Defn.Composite.flatten_list() |> List.to_tuple() |> exla_shape()
+      end
 
     module = M.new()
     M.create_function(module, "main", arg_shapes, return_shape)
@@ -48,26 +54,19 @@ defmodule EXLA.Builder do
     %__MODULE__{ref: ref, parent: builder, name: name}
   end
 
-  def build(%Op{} = root) do
+  def build(root, use_mhlo_return? \\ false)
+
+  def build(%Op{} = root, _) do
     shape = EXLA.Op.get_shape(root)
     {:ok, ref} = EXLA.NIF.build(root.builder, root.ref)
     %Computation{ref: ref, output_shape: shape}
   end
 
-  def build(%EXLA.MLIR.Value{function: %{return_shape: out_shape}} = val) do
-    val =
-      case out_shape do
-        %{dtype: {:tuple, _}} ->
-          EXLA.MLIR.Value.get_tuple_element(val, 0)
-
-        _ ->
-          val
-      end
-
-    %EXLA.MLIR.Value{function: function, ref: root_ref} = val
-
+  def build(%EXLA.MLIR.Value{function: function, ref: root_ref}, use_mhlo_return?) do
     %EXLA.MLIR.Function{ref: function_ref} = function
-    :ok = EXLA.NIF.mlir_build(function_ref, root_ref)
+    return_int = if use_mhlo_return?, do: 1, else: 0
+
+    :ok = EXLA.NIF.mlir_build(function_ref, root_ref, return_int)
     function
   end
 end

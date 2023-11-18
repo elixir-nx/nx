@@ -1171,7 +1171,7 @@ defmodule EXLA.Defn do
        ) do
     arg = to_type(arg, type)
     keep_axes = opts[:keep_axes]
-    [result] = Value.reduce([arg], [to_type(acc, type)], fun, reduce_axes(arg, opts[:axes]))
+    [result] = Value.reduce(fun, [to_type(acc, type)], [arg], reduce_axes(arg, opts[:axes]))
 
     if keep_axes do
       Value.reshape(result, shape)
@@ -1830,7 +1830,7 @@ defmodule EXLA.Defn do
 
     args = EXLA.MLIR.Function.get_arguments(function)
 
-    EXLA.Builder.build(apply(Value, op, prepare_args.(args)))
+    EXLA.Builder.build(apply(Value, op, prepare_args.(args)), true)
   end
 
   defp op_computation(op, args, _out, state, prepare_args) do

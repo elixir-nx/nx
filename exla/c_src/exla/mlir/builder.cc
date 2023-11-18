@@ -775,7 +775,7 @@ std::vector<mlir::Value> MLIRFunction::ReduceOp(
   mlir::ValueRange inputs_range(inputs);
   mlir::DenseIntElementsAttr dimensions_attr = Int64ToDenseIntElementsAttr(builder, dimensions);
 
-  mlir::mhlo::ReduceOp reduce_op = builder->create<mlir::mhlo::ReduceOp>(builder->getUnknownLoc(), init_values_range, inputs_range, dimensions_attr);
+  mlir::mhlo::ReduceOp reduce_op = builder->create<mlir::mhlo::ReduceOp>(builder->getUnknownLoc(), inputs_range, init_values_range, dimensions_attr);
   mlir::Region &reduceBody = reduce_op.getRegion();
   mlir::Region &funcBody = reducer->function()->getBody();
   reduceBody.getBlocks().splice(reduceBody.end(), funcBody.getBlocks());
@@ -940,9 +940,15 @@ ERL_NIF_TERM MLIRFunction::ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_T
   return exla::nif::error(env, "invalid type received");
 }
 
-void MLIRFunction::Build(mlir::Value root) {
+void MLIRFunction::Build(mlir::Value root, bool use_mhlo_return) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  auto op = module_->builder()->create<mlir::func::ReturnOp>(module_->builder()->getUnknownLoc(), root);
+
+  if (use_mhlo_return) {
+    module_->builder()->create<mlir::mhlo::ReturnOp>(module_->builder()->getUnknownLoc(), root);
+  } else {
+    module_->builder()->create<mlir::func::ReturnOp>(module_->builder()->getUnknownLoc(), root);
+  }
+
   return;
 }
 
