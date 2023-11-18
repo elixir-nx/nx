@@ -606,6 +606,8 @@ Here's the Elixir equivalent of those functions:
 
 ```elixir
 defmodule Funs do
+  import Nx.Defn
+
   defn poly(x) do
     3 * Nx.pow(x, 2) + 2 * x + 1
   end
