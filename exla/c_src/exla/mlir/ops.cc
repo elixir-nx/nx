@@ -666,12 +666,13 @@ ERL_NIF_TERM mlir_select(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 
 ERL_NIF_TERM mlir_build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 2) {
+  if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   exla::MLIRFunction** function;
   mlir::Value* root;
+  bool use_mhlo_return;
 
   if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
     return exla::nif::error(env, "Unable to get function.");
@@ -679,8 +680,11 @@ ERL_NIF_TERM mlir_build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get<mlir::Value>(env, argv[1], root)) {
     return exla::nif::error(env, "Unable to get root.");
   }
+  if (!exla::nif::get(env, argv[2], &use_mhlo_return)) {
+    return exla::nif::error(env, "Unable to get return");
+  }
 
-  (*function)->Build(*root);
+  (*function)->Build(*root, use_mhlo_return);
 
   return exla::nif::ok(env);
 }
@@ -748,6 +752,50 @@ ERL_NIF_TERM mlir_sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   auto data = nif_terms.data();
   auto list = enif_make_list_from_array(env, &data[0], n);
+  return exla::nif::ok(env, list);
+}
+
+ERL_NIF_TERM mlir_reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 5) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  exla::MLIRFunction** reducer;
+  std::vector<mlir::Value> init_values;
+  std::vector<mlir::Value> inputs;
+  std::vector<exla::int64> dimensions;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[1], reducer)) {
+    return exla::nif::error(env, "Unable to get reducer.");
+  }
+  if (!exla::nif::get_list(env, argv[2], init_values)) {
+    return exla::nif::error(env, "Unable to get init_values.");
+  }
+  if (!exla::nif::get_list(env, argv[3], inputs)) {
+    return exla::nif::error(env, "Unable to get inputs.");
+  }
+  if (!exla::nif::get_tuple(env, argv[4], dimensions)) {
+    return exla::nif::error(env, "Unable to get dimensions.");
+  }
+
+  std::vector<mlir::Value> res = (*function)->ReduceOp(*reducer, init_values, inputs, dimensions);
+
+  size_t n = res.size();
+
+  std::vector<ERL_NIF_TERM> nif_terms;
+  nif_terms.reserve(n);
+
+  for (size_t i = 0; i < n; i++) {
+    nif_terms[i] = exla::nif::make<mlir::Value>(env, res[i]);
+  }
+
+  auto data = nif_terms.data();
+  auto list = enif_make_list_from_array(env, &data[0], n);
+
   return exla::nif::ok(env, list);
 }
 

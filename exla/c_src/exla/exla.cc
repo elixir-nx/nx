@@ -648,7 +648,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_less_equal", 3, mlir_less_equal},
     {"mlir_greater", 3, mlir_greater},
     {"mlir_greater_equal", 3, mlir_greater_equal},
-    {"mlir_build", 2, mlir_build},
+    {"mlir_build", 3, mlir_build},
     {"dump_mlir_module", 1, dump_mlir_module},
     {"mlir_get_shape", 1, mlir_get_shape},
     {"mlir_convert", 3, mlir_convert},
@@ -719,6 +719,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_create_token", 1, mlir_create_token},
     {"mlir_triangular_solve", 6, mlir_triangular_solve},
     {"mlir_dynamic_update_slice", 4, mlir_dynamic_update_slice},
+    {"mlir_reduce", 5, mlir_reduce},
     // XlaBuilder
     {"new_builder", 1, new_builder},
     {"create_sub_builder", 2, create_sub_builder},

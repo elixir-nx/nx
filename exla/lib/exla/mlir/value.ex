@@ -163,6 +163,13 @@ defmodule EXLA.MLIR.Value do
   end
 
   def constant_r0(%Function{} = func, value, type) do
+    value =
+      if Nx.Type.float?(type) and not is_float(value) do
+        value * 1.0
+      else
+        value
+      end
+
     ref =
       EXLA.NIF.mlir_constant_r0(func.ref, value, EXLA.Shape.dtype_to_charlist(type)) |> unwrap!()
 
@@ -451,6 +458,22 @@ defmodule EXLA.MLIR.Value do
       |> unwrap!()
 
     %{operand | ref: ref}
+  end
+
+  def reduce(
+        %Function{ref: reducer},
+        [%Value{function: func} | _] = init_values,
+        [%Value{function: func} | _] = inputs,
+        dimensions
+      ) do
+    init_value_refs = Enum.map(init_values, & &1.ref)
+    input_refs = Enum.map(inputs, & &1.ref)
+
+    refs =
+      EXLA.NIF.mlir_reduce(func.ref, reducer, init_value_refs, input_refs, dimensions)
+      |> unwrap!()
+
+    Enum.map(refs, &%Value{ref: &1, function: func})
   end
 
   defp unwrap!({:ok, value}), do: value

@@ -762,6 +762,28 @@ mlir::Value MLIRFunction::ScatterOp(mlir::Value target, mlir::Value indices, mli
   return scatter_op.getResult(0);
 }
 
+std::vector<mlir::Value> MLIRFunction::ReduceOp(
+  MLIRFunction * reducer,
+  std::vector<mlir::Value> init_values,
+  std::vector<mlir::Value> inputs,
+  std::vector<int64_t> dimensions
+) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+
+  mlir::ValueRange init_values_range(init_values);
+  mlir::ValueRange inputs_range(inputs);
+  mlir::DenseIntElementsAttr dimensions_attr = Int64ToDenseIntElementsAttr(builder, dimensions);
+
+  mlir::mhlo::ReduceOp reduce_op = builder->create<mlir::mhlo::ReduceOp>(builder->getUnknownLoc(), inputs_range, init_values_range, dimensions_attr);
+  mlir::Region &reduceBody = reduce_op.getRegion();
+  mlir::Region &funcBody = reducer->function()->getBody();
+  reduceBody.getBlocks().splice(reduceBody.end(), funcBody.getBlocks());
+
+  mlir::Operation::result_range results = reduce_op.getResults();
+  return std::vector<mlir::Value>(results.begin(), results.end());
+}
+
 mlir::Value MLIRFunction::SelectAndScatterOp(
     mlir::Value target,
     mlir::Value source,
@@ -918,9 +940,15 @@ ERL_NIF_TERM MLIRFunction::ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_T
   return exla::nif::error(env, "invalid type received");
 }
 
-void MLIRFunction::Build(mlir::Value root) {
+void MLIRFunction::Build(mlir::Value root, bool use_mhlo_return) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  auto op = module_->builder()->create<mlir::func::ReturnOp>(module_->builder()->getUnknownLoc(), root);
+
+  if (use_mhlo_return) {
+    module_->builder()->create<mlir::mhlo::ReturnOp>(module_->builder()->getUnknownLoc(), root);
+  } else {
+    module_->builder()->create<mlir::func::ReturnOp>(module_->builder()->getUnknownLoc(), root);
+  }
+
   return;
 }
 

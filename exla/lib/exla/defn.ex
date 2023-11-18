@@ -1163,6 +1163,23 @@ defmodule EXLA.Defn do
     to_aggregate(:min, type, shape, arg, max_number, opts, state)
   end
 
+  defp to_operator(
+         :reduce,
+         [%Value{} = arg, %Value{} = acc, opts, fun],
+         %{type: type, shape: shape},
+         _state
+       ) do
+    arg = to_type(arg, type)
+    keep_axes = opts[:keep_axes]
+    [result] = Value.reduce(fun, [to_type(acc, type)], [arg], reduce_axes(arg, opts[:axes]))
+
+    if keep_axes do
+      Value.reshape(result, shape)
+    else
+      result
+    end
+  end
+
   defp to_operator(:reduce, [arg, acc, opts, fun], %{type: type, shape: shape}, _state) do
     arg = to_type(arg, type)
     keep_axes = opts[:keep_axes]
@@ -1253,8 +1270,8 @@ defmodule EXLA.Defn do
     init_value = to_type(init_value, type)
 
     args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
-    select_fn = op_computation(:greater, args, state)
-    scatter_fn = op_computation(:add, args, state)
+    select_fn = op_computation(:greater, args, :unused, state)
+    scatter_fn = op_computation(:add, args, :unused, state)
 
     EXLA.Op.select_and_scatter(
       arg,
@@ -1307,8 +1324,8 @@ defmodule EXLA.Defn do
 
     args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
 
-    select_fn = op_computation(:less, args, state)
-    scatter_fn = op_computation(:add, args, state)
+    select_fn = op_computation(:less, args, :unused, state)
+    scatter_fn = op_computation(:add, args, :unused, state)
 
     EXLA.Op.select_and_scatter(
       arg,
@@ -1333,7 +1350,7 @@ defmodule EXLA.Defn do
          state
        ) do
     args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
-    scatter_fn = op_computation(:add, args, state)
+    scatter_fn = op_computation(:add, args, :unused, state)
 
     scatter(scatter_fn, tensors, out)
   end
@@ -1575,6 +1592,7 @@ defmodule EXLA.Defn do
       end
 
     args = [%{type: ans.type, shape: {}}, %{type: ans.type, shape: {}}]
+
     comp = sort_computation(op, ans.type, args, state)
     EXLA.Op.sort(tensor, comp, dimension, opts[:stable] == true)
   end
@@ -1800,7 +1818,22 @@ defmodule EXLA.Defn do
     EXLA.Builder.build(op)
   end
 
-  defp op_computation(op, args, state, prepare_args \\ & &1) do
+  defp op_computation(op, args, out, state, prepare_args \\ & &1)
+
+  defp op_computation(op, args, out, %{builder: %EXLA.MLIR.Function{}}, prepare_args) do
+    arg_shapes =
+      Enum.with_index(args, fn arg, i ->
+        {"p#{i}", computation_arg_shape(arg)}
+      end)
+
+    function = EXLA.Builder.new(Atom.to_string(op), arg_shapes, struct(Nx.Tensor, out), :mlir)
+
+    args = EXLA.MLIR.Function.get_arguments(function)
+
+    EXLA.Builder.build(apply(Value, op, prepare_args.(args)), true)
+  end
+
+  defp op_computation(op, args, _out, state, prepare_args) do
     subbuilder = subbuilder(state.builder, Atom.to_string(op))
 
     args =
@@ -1981,6 +2014,28 @@ defmodule EXLA.Defn do
 
   ## Aggregation
 
+  defp to_aggregate(op, type, shape, %Value{} = arg, initial, opts, state) do
+    arg = to_type(arg, type)
+
+    acc =
+      case initial do
+        %Value{} = initial -> initial
+        initial when is_number(initial) -> Value.constant_r0(state.builder, initial, type)
+      end
+
+    args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
+    comp = op_computation(op, args, %{shape: shape, type: type}, state, &Enum.reverse/1)
+
+    keep_axes = opts[:keep_axes]
+    [result] = Value.reduce(comp, [acc], [arg], reduce_axes(arg, opts[:axes]))
+
+    if keep_axes do
+      Value.reshape(result, shape)
+    else
+      result
+    end
+  end
+
   defp to_aggregate(op, type, shape, arg, initial, opts, state) do
     arg = to_type(arg, type)
 
@@ -1995,7 +2050,7 @@ defmodule EXLA.Defn do
     # returns :nan but :infinity + :nan returns :infinity.
     # So we want to keep the current value as first argument
     # to preserve such properties.
-    comp = op_computation(op, args, state, &Enum.reverse/1)
+    comp = op_computation(op, args, :unused, state, &Enum.reverse/1)
 
     keep_axes = opts[:keep_axes]
     result = EXLA.Op.reduce(arg, acc, comp, reduce_axes(arg, opts[:axes]))
@@ -2024,7 +2079,7 @@ defmodule EXLA.Defn do
     # returns :nan but :infinity + :nan returns :infinity.
     # So we want to keep the current value as first argument
     # to preserve such properties.
-    comp = op_computation(op, args, state, &Enum.reverse/1)
+    comp = op_computation(op, args, :unused, state, &Enum.reverse/1)
 
     strides = opts[:strides]
     padding = opts[:padding]
