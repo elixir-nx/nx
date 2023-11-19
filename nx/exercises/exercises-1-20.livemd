@@ -442,7 +442,7 @@ Nx.subtract(nan, nan)
 
 <!-- livebook:{"break_markdown":true} -->
 
-**19. Create a 8x8 tensor of 0 and 1 in a checkerboard pattern with 0 as the first element. (★☆☆)**
+**19. Create a 8x8 tensor of 0 and 1 in a checkerboard pattern with 0 as the first element using [`Nx.tile`](https://hexdocs.pm/nx/Nx.html#tile/2). (★☆☆)**
 
 ```elixir
 # Add your solution here.
@@ -462,34 +462,38 @@ Nx.subtract(nan, nan)
 
 <!-- livebook:{"break_markdown":true} -->
 
-**20. Find the (x,y,z) index ([row major](https://en.wikipedia.org/wiki/Row-_and_column-major_order)) of the 100th element of a 6x7x8 tensor. (★★☆)**
+**20. Produce the same checkerboard pattern from exercise 19, but _without_ using `Nx.tile`. (★☆☆)**
 
 ```elixir
 # Add your solution here.
+# Hint: try using `Nx.iota` in combination with `Nx.remainder`.
 ```
 
 <details style="margin-left: 32px">
-  <summary style="cursor: pointer; font-weight: bold;">Example solution</summary>
+  <summary style="cursor: pointer; font-weight: bold;">Example solution 1</summary>
   <div style="padding-top: 8px">
 
   ```elixir
-  defmodule Exercise20 do
-    import Nx.Defn
+  t = Nx.iota({8, 1})
 
-    deftransform solve(shape, target) do
-      dims = Tuple.to_list(shape)
-      
-      dims
-      |> Enum.map_reduce({target, Enum.product(dims)}, fn dim, {remaining, step_size} ->
-        step_size = div(step_size, dim)
-        num_steps = div(remaining, step_size)
-        {num_steps, {remaining - num_steps * step_size, step_size}}
-      end)
-      |> then(fn {indices, {0, 1}} -> indices end)
-    end
-  end
+  Nx.transpose(t)
+  |> Nx.add(t)
+  |> Nx.remainder(2)
+  ```
 
-  Exercise20.solve({6, 7, 8}, 100)
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution 2</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  Nx.iota({9, 9})
+  |> Nx.remainder(2)
+  |> Nx.slice([0, 0], [8, 8])
   ```
 
   </div>
