@@ -12996,10 +12996,8 @@ defmodule Nx do
 
   ## Examples
 
-      iex> left = Nx.iota({9})
-      iex> left = Nx.reshape(left, {1, 1, 3, 3})
-      iex> right = Nx.iota({4})
-      iex> right = Nx.reshape(right, {4, 1, 1, 1})
+      iex> left = Nx.iota({1, 1, 3, 3})
+      iex> right = Nx.iota({4, 1, 1, 1})
       iex> Nx.conv(left, right, strides: [1, 1])
       #Nx.Tensor<
         f32[1][4][3][3]
@@ -13029,10 +13027,8 @@ defmodule Nx do
         ]
       >
 
-      iex> left = Nx.iota({9})
-      iex> left = Nx.reshape(left, {1, 1, 3, 3})
-      iex> right = Nx.iota({8})
-      iex> right = Nx.reshape(right, {4, 1, 2, 1})
+      iex> left = Nx.iota({1, 1, 3, 3})
+      iex> right = Nx.iota({4, 1, 2, 1})
       iex> Nx.conv(left, right, strides: 2, padding: :same, kernel_dilation: [2, 1])
       #Nx.Tensor<
         f32[1][4][2][2]
@@ -13379,8 +13375,7 @@ defmodule Nx do
 
   A more complex example:
 
-      iex> t = Nx.iota({900})
-      iex> t = Nx.reshape(t, {2, 15, 30})
+      iex> t = Nx.iota({2, 15, 30})
       iex> Nx.slice(t, [0, 4, 11], [2, 3, 9], strides: [2, 1, 3])
       #Nx.Tensor<
         s64[1][3][3]
