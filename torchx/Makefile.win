@@ -6,8 +6,8 @@ C_SRC = $(MAKEDIR)/c_src
 all: c_src/torchx.cpp c_src/nx_nif_utils.hpp
 	@ if not exist "$(PRIV_DIR)" mkdir "$(PRIV_DIR)"
 	@ if not exist "$(CMAKE_BUILD_DIR)" mkdir "$(CMAKE_BUILD_DIR)"
-	@ if not exist "$(PRIV_DIR)/$(LIBTORCH_BASE)" mkdir "$(PRIV_DIR)/$(LIBTORCH_BASE)"
-	@ xcopy /Y /Q "$(LIBTORCH_DIR)/lib"\*.dll "$(PRIV_DIR)/$(LIBTORCH_BASE)"
+	@ if not exist "$(PRIV_DIR)" mkdir "$(PRIV_DIR)"
+	@ xcopy /Y /Q "$(LIBTORCH_DIR)/lib"\*.dll "$(PRIV_DIR)"
 	@ cd "$(CMAKE_BUILD_DIR)" &&\
 		cmake -DCMAKE_PREFIX_PATH="$(LIBTORCH_DIR)" -DC_SRC="$(C_SRC)" \
 				-DLIBTORCH_BASE="$(LIBTORCH_BASE)" -DERTS_INCLUDE_DIR="$(ERTS_INCLUDE_DIR)" \
