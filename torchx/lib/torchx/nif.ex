@@ -3,7 +3,8 @@ defmodule Torchx.NIF do
   @on_load :__on_load__
 
   def __on_load__ do
-    IO.inspect(File.ls(:filename.join(:code.priv_dir(:torchx))))
+    IO.inspect(File.ls(:code.priv_dir(:torchx)))
+    :erlang.display(File.ls(:code.priv_dir(:torchx)))
     path = :filename.join(:code.priv_dir(:torchx), ~c"torchx")
     :erlang.load_nif(path, 0)
   end
