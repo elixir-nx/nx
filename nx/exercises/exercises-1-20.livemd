@@ -123,13 +123,7 @@ tensor = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
   ```
 
   <div style="padding-top: 16px">
-    <div style="background-color: rgb(62 100 255); color: white; font-weight: bold; border-top-left-radius: 8px; border-top-right-radius: 8px; padding: 8px 16px;">
-      <span style="padding-right: 4px"><i class="ri-lightbulb-line"></i></span>
-      <span>Tip</span>
-    </div>
-    <div style="border-width: 1px; border-color: rgb(62 100 255); border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; padding: 0px 16px;">
-      <p>In Livebook, you can also hover over a function to display its documentation.</p>
-    </div>
+    <i>Tip:</i> You can also hover over a function inside Livebook code cells to display its documentation.
   </div>
 
   </div>
