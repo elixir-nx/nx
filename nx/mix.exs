@@ -60,6 +60,7 @@ defmodule Nx.MixProject do
       source_url_pattern: "#{@source_url}/blob/v#{@version}/nx/%{path}#L%{line}",
       before_closing_body_tag: &before_closing_body_tag/1,
       extras: [
+        "exercises/exercises-1-20.livemd",
         "guides/intro-to-nx.livemd",
         "guides/vectorization.livemd",
         "CHANGELOG.md"
@@ -112,6 +113,10 @@ defmodule Nx.MixProject do
           Nx.Defn.Token,
           Nx.Defn.Tree
         ]
+      ],
+      groups_for_extras: [
+        Exercises: ~r"exercises/",
+        Guides: ~r"guides/"
       ]
     ]
   end
