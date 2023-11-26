@@ -152,7 +152,7 @@ tensor = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
 
 <!-- livebook:{"break_markdown":true} -->
 
-**7. Create a tensor with values ranging from 10 to 49. (★☆☆)**
+**7. Create a 3x3 tensor with values ranging from 0 to 8. (★☆☆)**
 
 ```elixir
 # Add your solution here.
@@ -163,7 +163,7 @@ tensor = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
   <div style="padding-top: 8px">
 
   ```elixir
-  Nx.linspace(10, 49, n: 39, type: :s8)
+  Nx.iota({3, 3})
   ```
 
   </div>
@@ -171,7 +171,40 @@ tensor = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
 
 <!-- livebook:{"break_markdown":true} -->
 
-**8. Reverse `tensor` (first element becomes last). (★☆☆)**
+**8. Create a tensor with values ranging from 10 to 49. (★☆☆)**
+
+```elixir
+# Add your solution here.
+```
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution 1</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  Nx.iota({39})
+  |> Nx.add(10)
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution 2</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  Nx.linspace(10, 49, n: 39, type: :s64)
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+**9. Reverse `tensor` (first element becomes last). (★☆☆)**
 
 ```elixir
 tensor = Nx.tensor([2, 4, 6, 8])
@@ -184,25 +217,6 @@ tensor = Nx.tensor([2, 4, 6, 8])
 
   ```elixir
   Nx.reverse(tensor)
-  ```
-
-  </div>
-</details>
-
-<!-- livebook:{"break_markdown":true} -->
-
-**9. Create a 3x3 tensor with values ranging from 0 to 8. (★☆☆)**
-
-```elixir
-# Add your solution here.
-```
-
-<details style="margin-left: 32px">
-  <summary style="cursor: pointer; font-weight: bold;">Example solution</summary>
-  <div style="padding-top: 8px">
-
-  ```elixir
-  Nx.iota({3, 3})
   ```
 
   </div>
