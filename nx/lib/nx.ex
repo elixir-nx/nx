@@ -985,6 +985,59 @@ defmodule Nx do
   end
 
   @doc """
+  Creates a tensor with the given shape, filled with zeros.
+
+  ## Options
+
+    * `:type` - the type of the tensor, defaults to `:s64` if not set
+
+    * `:names` - the names of the tensor dimensions
+
+    * `:backend` - the backend to allocate the tensor on. It is either
+      an atom or a tuple in the shape `{backend, options}`. It defaults
+      to `Nx.default_backend/0` for new tensors
+
+  ## Examples
+
+      iex> Nx.zeros({})
+      #Nx.Tensor<
+        s64
+        0
+      >
+
+      iex> Nx.zeros({5}, type: :f32)
+      #Nx.Tensor<
+        f32[5]
+        [0.0, 0.0, 0.0, 0.0, 0.0]
+      >
+
+      iex> Nx.zeros({3, 2, 3}, names: [:batch, :height, :width])
+      #Nx.Tensor<
+        s64[batch: 3][height: 2][width: 3]
+        [
+          [
+            [0, 0, 0],
+            [0, 0, 0]
+          ],
+          [
+            [0, 0, 0],
+            [0, 0, 0]
+          ],
+          [
+            [0, 0, 0],
+            [0, 0, 0]
+          ]
+        ]
+      >
+  """
+  @doc type: :creation
+  def zeros(shape, opts \\ []) do
+    opts = keyword!(opts, [:names, :backend, type: {:s, 64}])
+    {backend, _backend_options} = backend_from_options!(opts) || default_backend()
+    broadcast(tensor(0, type: opts[:type], backend: backend), shape, names: opts[:names])
+  end
+
+  @doc """
   Creates a tensor with the given shape which increments
   along the provided axis. You may optionally provide dimension
   names.
