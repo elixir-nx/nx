@@ -24,7 +24,7 @@ defmodule EXLA.NIF do
     def unquote(mlir_op)(_function, _lhs, _rhs), do: :erlang.nif_error(:undef)
   end
 
-  @unary_ops [:return, :abs, :exp, :expm1, :floor, :ceil, :round] ++
+  @unary_ops [:abs, :exp, :expm1, :floor, :ceil, :round] ++
                [:log, :log1p, :sigmoid, :sign, :cos] ++
                [:sin, :acos, :asin, :atan, :cosh, :sinh] ++
                [:tanh, :acosh, :asinh, :atanh, :sqrt, :cbrt] ++

@@ -755,38 +755,6 @@ ERL_NIF_TERM mlir_sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, list);
 }
 
-ERL_NIF_TERM mlir_return(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 2) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  exla::MLIRFunction** function;
-  mlir::Value *input;
-
-  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
-    return exla::nif::error(env, "Unable to get function.");
-  }
-  if (!exla::nif::get<mlir::Value>(env, argv[1], input)) {
-    return exla::nif::error(env, "Unable to get input.");
-  }
-
-  std::vector<mlir::Value> res = (*function)->ReturnOp(*input);
-
-  size_t n = res.size();
-
-  std::vector<ERL_NIF_TERM> nif_terms;
-  nif_terms.reserve(n);
-
-  for (size_t i = 0; i < n; i++) {
-    nif_terms[i] = exla::nif::make<mlir::Value>(env, res[i]);
-  }
-
-  auto data = nif_terms.data();
-  auto list = enif_make_list_from_array(env, &data[0], n);
-
-  return exla::nif::ok(env, list);
-}
-
 ERL_NIF_TERM mlir_reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 5) {
     return exla::nif::error(env, "Bad argument count.");

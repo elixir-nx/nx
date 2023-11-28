@@ -5,6 +5,8 @@
 #include "../exla_nif_util.h"
 #include "_virtual_includes/chlo_ops/stablehlo/dialect/ChloOps.h"
 #include "mhlo/IR/hlo_ops.h"
+#include "mhlo/transforms/rewriters.h"
+#include "mhlo/utils/type_conversion.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -214,7 +216,7 @@ mlir::Value MLIRFunction::BitcastConvertOp(mlir::Value operand, xla::Shape shape
 
 mlir::Value MLIRFunction::AddOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  auto op = module_->builder()->create<mlir::mhlo::AddOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  auto op = module_->builder()->create<mlir::stablehlo::AddOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
   return op;
 }
 
@@ -339,14 +341,6 @@ mlir::Value MLIRFunction::BitwiseNotOp(mlir::Value operand) {
 mlir::Value MLIRFunction::BitwiseXorOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   return module_->builder()->create<mlir::stablehlo::XorOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
-}
-
-std::vector<mlir::Value> MLIRFunction::ReturnOp(mlir::Value operand) {
-  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  mlir::mhlo::ReturnOp op = module_->builder()->create<mlir::mhlo::ReturnOp>(module_->builder()->getUnknownLoc(), operand);
-  auto result_range = op.getResults();
-  std::vector<mlir::Value> results(result_range.begin(), result_range.end());
-  return results;
 }
 
 mlir::Value MLIRFunction::AbsOp(mlir::Value operand) {
@@ -781,8 +775,9 @@ std::vector<mlir::Value> MLIRFunction::ReduceOp(
   mlir::ValueRange inputs_range(inputs);
   mlir::DenseIntElementsAttr dimensions_attr = Int64ToDenseIntElementsAttr(builder, dimensions);
 
-  mlir::mhlo::ReduceOp reduce_op = builder->create<mlir::mhlo::ReduceOp>(builder->getUnknownLoc(), inputs_range, init_values_range, dimensions_attr);
+  mlir::stablehlo::ReduceOp reduce_op = builder->create<mlir::stablehlo::ReduceOp>(builder->getUnknownLoc(), inputs_range, init_values_range, dimensions_attr);
   mlir::Region &reduceBody = reduce_op.getRegion();
+  // reducer->function() is mlir::func::FuncOp that's not necessarily from the same MLIR module
   mlir::Region &funcBody = reducer->function()->getBody();
   reduceBody.getBlocks().splice(reduceBody.end(), funcBody.getBlocks());
 
@@ -949,13 +944,13 @@ ERL_NIF_TERM MLIRFunction::ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_T
 void MLIRFunction::Build(mlir::Value root, bool use_stablehlo_return) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
 
-  if (use_stablehlo_return) {
-    module_->builder()->create<mlir::stablehlo::ReturnOp>(module_->builder()->getUnknownLoc(), root);
-  } else {
-    module_->builder()->create<mlir::func::ReturnOp>(module_->builder()->getUnknownLoc(), root);
-  }
+  // if (use_stablehlo_return) {
+  module_->builder()->create<mlir::stablehlo::ReturnOp>(module_->builder()->getUnknownLoc(), root);
+  // } else {
+  // module_->builder()->create<mlir::func::ReturnOp>(module_->builder()->getUnknownLoc(), root);
+  // }
 
-  return;
+  module_->LowerPatterns();
 }
 
 MLIRModule::MLIRModule() {
@@ -1118,6 +1113,21 @@ mlir::Value MLIRFunction::DynamicUpdateSliceOp(mlir::Value operand, mlir::Value 
   auto builder = module_->builder();
   builder->setInsertionPointToEnd(&func_->getBody().back());
   return builder->create<mlir::stablehlo::DynamicUpdateSliceOp>(builder->getUnknownLoc(), operand, update, mlir::ValueRange(start_indices));
+}
+
+void MLIRModule::LowerPatterns() {
+  mlir::ConversionTarget target(*context());
+  target.addIllegalDialect<mlir::stablehlo::StablehloDialect>();
+  target.addIllegalDialect<mlir::func::FuncDialect>();
+  target.addLegalDialect<mlir::mhlo::MhloDialect>();
+
+  mlir::stablehlo::StablehloToHloTypeConverter converter;
+  mlir::RewritePatternSet patterns(context());
+
+  mlir::stablehlo::registerFuncOpsForTypeConversion(target, patterns, converter);
+  mlir::stablehlo::populateStablehloToHloPatterns(&patterns, &converter, context());
+
+  mlir::applyPartialConversion(module(), target, std::move(patterns));
 }
 
 }  // namespace exla
