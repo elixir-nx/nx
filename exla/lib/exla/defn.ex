@@ -1830,7 +1830,7 @@ defmodule EXLA.Defn do
 
     args = EXLA.MLIR.Function.get_arguments(function)
 
-    [%{function: function}] = apply(Value, op, prepare_args.(args)) |> Value.return()
+    [%{function: function}] = apply(Value, op, args) |> Value.return()
     function
   end
 
