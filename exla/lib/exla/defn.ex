@@ -1830,7 +1830,8 @@ defmodule EXLA.Defn do
 
     args = EXLA.MLIR.Function.get_arguments(function)
 
-    EXLA.Builder.build(apply(Value, op, prepare_args.(args)), true)
+    [%{function: function}] = apply(Value, op, prepare_args.(args)) |> Value.return()
+    function
   end
 
   defp op_computation(op, args, _out, state, prepare_args) do

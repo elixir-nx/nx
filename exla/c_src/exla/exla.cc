@@ -632,6 +632,7 @@ static ErlNifFunc exla_funcs[] = {
     {"create_mlir_function", 4, create_mlir_function},
     {"get_mlir_function_arguments", 1, get_mlir_function_arguments},
     {"mlir_add", 3, mlir_add},
+    {"mlir_return", 2, mlir_return},
     {"mlir_subtract", 3, mlir_subtract},
     {"mlir_tuple", 2, mlir_tuple},
     {"mlir_get_tuple_element", 3, mlir_get_tuple_element},

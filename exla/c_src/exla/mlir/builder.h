@@ -47,6 +47,7 @@ class MLIRFunction {
   mlir::Value ConvertOp(mlir::Value operand, mlir::Type type);
   mlir::Value BitcastConvertOp(mlir::Value operand, xla::Shape shape);
   mlir::Value PadOp(mlir::Value op, mlir::Value pad, std::vector<int64_t> padding_low, std::vector<int64_t> padding_high, std::vector<int64_t> padding_mid);
+  std::vector<mlir::Value> ReturnOp(mlir::Value operand);
   mlir::Value AbsOp(mlir::Value operand);
   mlir::Value RealOp(mlir::Value operand);
   mlir::Value ImagOp(mlir::Value operand);

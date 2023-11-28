@@ -4,6 +4,7 @@
 
 #include "../exla_nif_util.h"
 #include "_virtual_includes/chlo_ops/stablehlo/dialect/ChloOps.h"
+#include "mhlo/IR/hlo_ops.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -213,7 +214,7 @@ mlir::Value MLIRFunction::BitcastConvertOp(mlir::Value operand, xla::Shape shape
 
 mlir::Value MLIRFunction::AddOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  auto op = module_->builder()->create<mlir::stablehlo::AddOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  auto op = module_->builder()->create<mlir::mhlo::AddOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
   return op;
 }
 
@@ -338,6 +339,14 @@ mlir::Value MLIRFunction::BitwiseNotOp(mlir::Value operand) {
 mlir::Value MLIRFunction::BitwiseXorOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   return module_->builder()->create<mlir::stablehlo::XorOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+}
+
+std::vector<mlir::Value> MLIRFunction::ReturnOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  mlir::mhlo::ReturnOp op = module_->builder()->create<mlir::mhlo::ReturnOp>(module_->builder()->getUnknownLoc(), operand);
+  auto result_range = op.getResults();
+  std::vector<mlir::Value> results(result_range.begin(), result_range.end());
+  return results;
 }
 
 mlir::Value MLIRFunction::AbsOp(mlir::Value operand) {
@@ -772,7 +781,7 @@ std::vector<mlir::Value> MLIRFunction::ReduceOp(
   mlir::ValueRange inputs_range(inputs);
   mlir::DenseIntElementsAttr dimensions_attr = Int64ToDenseIntElementsAttr(builder, dimensions);
 
-  mlir::stablehlo::ReduceOp reduce_op = builder->create<mlir::stablehlo::ReduceOp>(builder->getUnknownLoc(), inputs_range, init_values_range, dimensions_attr);
+  mlir::mhlo::ReduceOp reduce_op = builder->create<mlir::mhlo::ReduceOp>(builder->getUnknownLoc(), inputs_range, init_values_range, dimensions_attr);
   mlir::Region &reduceBody = reduce_op.getRegion();
   mlir::Region &funcBody = reducer->function()->getBody();
   reduceBody.getBlocks().splice(reduceBody.end(), funcBody.getBlocks());
@@ -956,6 +965,7 @@ MLIRModule::MLIRModule() {
   // manual?
   context_->loadDialect<mlir::func::FuncDialect>();
   context_->loadDialect<mlir::stablehlo::StablehloDialect>();
+  context_->loadDialect<mlir::mhlo::MhloDialect>();
 
   module_ = mlir::OwningOpRef<mlir::ModuleOp>(mlir::ModuleOp::create(mlir::UnknownLoc::get(context_.get())));
   builder_ = std::make_unique<mlir::OpBuilder>(context_.get());
