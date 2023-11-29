@@ -72,7 +72,7 @@ ERL_NIF_TERM new_mlir_module(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
 }
 
 ERL_NIF_TERM create_mlir_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 4) {
+  if (argc != 5) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
@@ -82,6 +82,7 @@ ERL_NIF_TERM create_mlir_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   std::pair<std::vector<exla::int64>, xla::PrimitiveType> ret_type;
   std::vector<xla::Shape*> arg_shapes;
   xla::Shape* ret_shape;
+  bool is_public;
 
   if (!exla::nif::get<exla::MLIRModule*>(env, argv[0], module)) {
     return exla::nif::error(env, "Unable to get module.");
@@ -97,8 +98,11 @@ ERL_NIF_TERM create_mlir_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   if (!exla::nif::get<xla::Shape>(env, argv[3], ret_shape)) {
     return exla::nif::error(env, "Unable to get return.");
   }
+  if (!exla::nif::get(env, argv[4], &is_public)) {
+    return exla::nif::error(env, "Unable to get is_public.");
+  }
 
-  exla::MLIRFunction* func = (*module)->CreateFunction(func_name, arg_shapes, ret_shape);
+  exla::MLIRFunction* func = (*module)->CreateFunction(func_name, arg_shapes, ret_shape, is_public);
 
   return exla::nif::ok(env, exla::nif::make<exla::MLIRFunction*>(env, func));
 }
@@ -797,6 +801,34 @@ ERL_NIF_TERM mlir_reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   auto list = enif_make_list_from_array(env, &data[0], n);
 
   return exla::nif::ok(env, list);
+}
+
+ERL_NIF_TERM mlir_map(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 4) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  exla::MLIRFunction** mapper;
+  std::vector<mlir::Value> inputs;
+  std::vector<exla::int64> dimensions;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[1], mapper)) {
+    return exla::nif::error(env, "Unable to get mapper.");
+  }
+  if (!exla::nif::get_list(env, argv[2], inputs)) {
+    return exla::nif::error(env, "Unable to get inputs.");
+  }
+  if (!exla::nif::get_tuple(env, argv[3], dimensions)) {
+    return exla::nif::error(env, "Unable to get dimensions.");
+  }
+
+  mlir::Value result = (*function)->MapOp(*mapper, inputs, dimensions);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
 }
 
 ERL_NIF_TERM mlir_bitcast_convert(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {

@@ -3,7 +3,6 @@
 #include <memory>
 
 #include "../exla_nif_util.h"
-#include "_virtual_includes/chlo_ops/stablehlo/dialect/ChloOps.h"
 #include "mhlo/IR/hlo_ops.h"
 #include "mhlo/transforms/rewriters.h"
 #include "mhlo/utils/type_conversion.h"
@@ -14,6 +13,7 @@
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/OwningOpRef.h"
 #include "mlir/IR/PatternMatch.h"
+#include "stablehlo/dialect/ChloOps.h"
 #include "stablehlo/dialect/StablehloOps.h"
 #include "xla/primitive_util.h"
 #include "xla/types.h"
@@ -785,6 +785,26 @@ std::vector<mlir::Value> MLIRFunction::ReduceOp(
   return std::vector<mlir::Value>(results.begin(), results.end());
 }
 
+mlir::Value MLIRFunction::MapOp(
+    MLIRFunction *mapper,
+    std::vector<mlir::Value> inputs,
+    std::vector<int64_t> dimensions) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+
+  mlir::ValueRange inputs_range(inputs);
+  mlir::DenseIntElementsAttr dimensions_attr = Int64ToDenseIntElementsAttr(builder, dimensions);
+
+  mlir::stablehlo::MapOp map_op = builder->create<mlir::stablehlo::MapOp>(builder->getUnknownLoc(), inputs[0].getType(), inputs_range, dimensions_attr);
+
+  mlir::Region &mapBody = map_op.getComputation();
+  // mapper->function() is mlir::func::FuncOp that's not necessarily from the same MLIR module
+  mlir::Region &funcBody = mapper->function()->getBody();
+  mapBody.getBlocks().splice(mapBody.end(), funcBody.getBlocks());
+
+  return map_op;
+}
+
 mlir::Value MLIRFunction::SelectAndScatterOp(
     mlir::Value target,
     mlir::Value source,
@@ -944,11 +964,11 @@ ERL_NIF_TERM MLIRFunction::ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_T
 void MLIRFunction::Build(mlir::Value root, bool use_stablehlo_return) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
 
-  // if (use_stablehlo_return) {
-  module_->builder()->create<mlir::stablehlo::ReturnOp>(module_->builder()->getUnknownLoc(), root);
-  // } else {
-  // module_->builder()->create<mlir::func::ReturnOp>(module_->builder()->getUnknownLoc(), root);
-  // }
+  if (use_stablehlo_return) {
+    module_->builder()->create<mlir::stablehlo::ReturnOp>(module_->builder()->getUnknownLoc(), root);
+  } else {
+    module_->builder()->create<mlir::func::ReturnOp>(module_->builder()->getUnknownLoc(), root);
+  }
 
   module_->LowerPatterns();
 }
@@ -1017,7 +1037,7 @@ xla::PrimitiveType MLIRTypeToPrimitiveType(mlir::Type type) {
 MLIRFunction *MLIRModule::CreateFunction(
     std::string name,
     std::vector<xla::Shape *> arg_shapes,
-    xla::Shape *ret_shape) {
+    xla::Shape *ret_shape, bool is_public) {
   std::vector<mlir::Type> types;
   types.reserve(arg_shapes.size());
   for (auto arg_shape : arg_shapes) {
@@ -1027,9 +1047,12 @@ MLIRFunction *MLIRModule::CreateFunction(
 
   mlir::Type return_type = GetMLIRFunctionType(builder_.get(), ret_shape);
 
+  auto visibility = is_public ? "public" : "nested";
+
   auto funcType = builder_->getFunctionType(types, return_type);
   auto loc = builder_->getUnknownLoc();
   auto funcOp = std::make_unique<mlir::func::FuncOp>(mlir::func::FuncOp::create(loc, name, funcType));
+  funcOp->setSymVisibility(visibility);
   module_->push_back(*funcOp);
   funcOp->addEntryBlock();
   builder_->setInsertionPointToStart(&funcOp->getBody().front());

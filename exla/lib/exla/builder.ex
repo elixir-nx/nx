@@ -18,9 +18,14 @@ defmodule EXLA.Builder do
     new(name)
   end
 
-  def new(_name, inputs, outputs, :mlir, sub?) do
-    # TO-DO (mlir): check if using the function name makes sense
+  def new(module_and_name, inputs, outputs, :mlir, sub?) do
     arg_shapes = Enum.map(inputs, fn {_, %Shape{} = s} -> s end)
+
+    {module, name, is_public} =
+      case module_and_name do
+        {%M{} = module, name} -> {module, name, false}
+        _name -> {M.new(), "main", true}
+      end
 
     return_shape =
       if sub? do
@@ -29,8 +34,7 @@ defmodule EXLA.Builder do
         [outputs] |> Nx.Defn.Composite.flatten_list() |> List.to_tuple() |> exla_shape()
       end
 
-    module = M.new()
-    M.create_function(module, "main", arg_shapes, return_shape)
+    M.create_function(module, name, arg_shapes, return_shape, is_public)
   end
 
   defp exla_shape(tensors) when is_tuple(tensors) do

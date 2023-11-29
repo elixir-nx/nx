@@ -1373,6 +1373,12 @@ defmodule EXLA.Defn do
     scatter(scatter_fn, tensors, out)
   end
 
+  defp to_operator(:map, [%Value{} = arg, _opts, fun], %{shape: shape, type: type}, _state) do
+    arg = to_type(arg, type)
+
+    Value.map(fun, [arg], Nx.axes(shape) |> List.to_tuple())
+  end
+
   defp to_operator(:map, [arg, _opts, fun], %{shape: shape, type: type}, _state) do
     arg = to_type(arg, type)
     EXLA.Op.map(arg, fun, Nx.axes(shape))
@@ -1820,17 +1826,34 @@ defmodule EXLA.Defn do
 
   defp op_computation(op, args, out, state, prepare_args \\ & &1)
 
-  defp op_computation(op, args, out, %{builder: %EXLA.MLIR.Function{}}, prepare_args) do
+  defp op_computation(
+         op,
+         args,
+         out,
+         %{builder: %EXLA.MLIR.Function{module: module}},
+         prepare_args
+       ) do
     arg_shapes =
       Enum.with_index(args, fn arg, i ->
         {"p#{i}", computation_arg_shape(arg)}
       end)
 
-    function = EXLA.Builder.new(Atom.to_string(op), arg_shapes, struct(Nx.Tensor, out), :mlir)
+    function =
+      EXLA.Builder.new(
+        {module, Atom.to_string(op)},
+        arg_shapes,
+        struct(Nx.Tensor, out),
+        :mlir,
+        false
+      )
+
+    dbg()
 
     args = EXLA.MLIR.Function.get_arguments(function)
 
     EXLA.Builder.build(apply(Value, op, prepare_args.(args)), true)
+    # %{function: fun} = apply(Value, op, prepare_args.(args))
+    # fun
   end
 
   defp op_computation(op, args, _out, state, prepare_args) do
@@ -1843,6 +1866,36 @@ defmodule EXLA.Defn do
       end)
 
     EXLA.Builder.build(apply(EXLA.Op, op, prepare_args.(args)))
+  end
+
+  defp fun_computation(
+         name,
+         args,
+         expr,
+         type,
+         %{builder: %EXLA.MLIR.Function{module: module}} = state
+       ) do
+    arg_shapes =
+      Enum.with_index(args, fn arg, i ->
+        {"p#{i}", computation_arg_shape(arg)}
+      end)
+
+    function = EXLA.Builder.new({module, Atom.to_string(name)}, arg_shapes, expr, :mlir, false)
+    mlir_args = EXLA.MLIR.Function.get_arguments(function)
+
+    arg_params = Enum.zip(args, mlir_args)
+
+    params = Enum.flat_map(arg_params, &computation_arg_param/1)
+
+    state = %{
+      state
+      | builder: function,
+        params: Map.new(params),
+        scope_ids: Tree.scope_ids(expr)
+    }
+
+    {res, _} = recur_composite(expr, state, no_token_cache())
+    EXLA.Builder.build(to_type(res, type), false)
   end
 
   defp fun_computation(name, args, expr, type, state) do
