@@ -2133,7 +2133,7 @@ defmodule EXLA.Defn do
 
   ## Cond
 
-  defp to_if(pred, on_true, on_false, state, cache) do
+  defp to_if(pred, on_true, on_false, %{builder: builder}, cache) do
     {pred_op, cache} = recur_operator(pred, state, cache)
     pred_op = to_type(pred_op, {:pred, 8})
 
@@ -2145,7 +2145,14 @@ defmodule EXLA.Defn do
     {false_args, false_comp, cache} =
       to_if_branch(false, on_false, false_ids, true_ids, state, cache)
 
-    {EXLA.Op.conditional(pred_op, true_args, true_comp, false_args, false_comp), cache}
+    case builder do
+      %EXLA.MLIR.Function{} ->
+        {Value.if(pred_op, op_shape(on_true), true_args ++ false_args, true_comp, false_comp),
+         cache}
+
+      _ ->
+        {EXLA.Op.conditional(pred_op, true_args, true_comp, false_args, false_comp), cache}
+    end
   end
 
   defp collect_arg?(_id, :parameter, _args, _shared_ids),
@@ -2320,7 +2327,8 @@ defmodule EXLA.Defn do
   end
 
   defp subbuilder(%EXLA.MLIR.Function{} = function, _description) do
-    function
+    suffix = System.unique_integer([:positive])
+    EXLA.Builder.new({function.module, name <> "-" <> desc <> "-" <> Integer.to_string(suffix)})
   end
 
   # Helpers

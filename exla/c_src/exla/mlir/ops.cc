@@ -831,6 +831,42 @@ ERL_NIF_TERM mlir_map(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
 }
 
+ERL_NIF_TERM mlir_if(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 6) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* pred;
+  std::vector<mlir::Value> implicit_args;
+  exla::MLIRFunction** on_true;
+  exla::MLIRFunction** on_false;
+  xla::Shape* output_shape;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<xla::Shape>(env, argv[1], output_shape)) {
+    return exla::nif::error(env, "Unable to get shape.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[2], pred)) {
+    return exla::nif::error(env, "Unable to get pred.");
+  }
+  if (!exla::nif::get_list(env, argv[3], implicit_args)) {
+    return exla::nif::error(env, "Unable to get implicit_args.");
+  }
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[4], on_true)) {
+    return exla::nif::error(env, "Unable to get on_true.");
+  }
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[5], on_false)) {
+    return exla::nif::error(env, "Unable to get on_false.");
+  }
+
+  mlir::Value result = (*function)->IfOp(*pred, output_shape, implicit_args, *on_true, *on_false);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
+}
+
 ERL_NIF_TERM mlir_bitcast_convert(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 4) {
     return exla::nif::error(env, "Bad argument count.");

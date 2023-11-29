@@ -803,6 +803,41 @@ mlir::Value MLIRFunction::MapOp(
   return map_op;
 }
 
+// adapted from xla/translate/hlo_to_mhlo/hlo_function_importer.cc
+// we need to adapt because we want to receive std::vector and
+// because we use stablehlo instead of mhlo here.
+void ReplaceBlockArgumentsWithImplicitOperands(mlir::Operation *op, std::vector<mlir::Value> implicit_operands) {
+  int implicit_operand_index = 0;
+  for (auto &region : op->getRegions()) {
+    for (auto arg : region.getArguments()) {
+      arg.replaceAllUsesWith(implicit_operands[implicit_operand_index++]);
+    }
+    region.front().eraseArguments(0, region.getNumArguments());
+  }
+}
+
+mlir::Value MLIRFunction::IfOp(mlir::Value pred, xla::Shape output_shape, std::vector<mlir::Value> implicit_arguments, MLIRFunction *on_true, MLIRFunction *on_false) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+
+  auto span = output_shape.dimensions();
+  std::vector<tsl::int64> dims(span.begin(), span.end());
+  mlir::Type output_type = GetMLIRType(builder, dims, output_shape.element_type());
+
+  mlir::stablehlo::IfOp if_op = builder->create<mlir::stablehlo::IfOp>(builder->getUnknownLoc(), mlir::TypeRange(output_type), pred);
+
+  mlir::Region &trueBody = if_op.getTrueBranch();
+  auto &onTrueBlocks = mapper->function()->getBody().getBlocks();
+  trueBody.getBlocks().splice(trueBody.end(), onTrueBlocks);
+  mlir::Region &falseBody = if_op.getFalseBranch();
+  auto &onFalseBlocks = mapper->function()->getBody().getBlocks();
+  falseBody.getBlocks().splice(falseBody.end(), onFalseBlocks);
+
+  ReplaceBlockArgumentsWithImplicitOperands(&if_op, implicit_arguments);
+
+  return if_op;
+}
+
 mlir::Value MLIRFunction::SelectAndScatterOp(
     mlir::Value target,
     mlir::Value source,
