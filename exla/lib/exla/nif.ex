@@ -9,7 +9,8 @@ defmodule EXLA.NIF do
 
   def new_mlir_module, do: :erlang.nif_error(:undef)
 
-  def create_mlir_function(_module, _name, _arg_types, _ret_type), do: :erlang.nif_error(:undef)
+  def create_mlir_function(_module, _name, _arg_types, _ret_type, _is_public),
+    do: :erlang.nif_error(:undef)
 
   def get_mlir_function_arguments(_function), do: :erlang.nif_error(:undef)
 
@@ -47,6 +48,9 @@ defmodule EXLA.NIF do
   def mlir_pad(_function, _tensor, _pad, _low, _high, _mid), do: :erlang.nif_error(:undef)
 
   def mlir_reduce(_function, _reducer, _init_values, _inputs, _dimensions),
+    do: :erlang.nif_error(:undef)
+
+  def mlir_map(_function, _mapper, _inputs, _dimensions),
     do: :erlang.nif_error(:undef)
 
   def mlir_build(_function, _root, _return?), do: :erlang.nif_error(:undef)

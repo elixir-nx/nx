@@ -476,6 +476,20 @@ defmodule EXLA.MLIR.Value do
     Enum.map(refs, &%Value{ref: &1, function: func})
   end
 
+  def map(
+        %Function{ref: mapper},
+        [%Value{function: func} | _] = inputs,
+        dimensions
+      ) do
+    input_refs = Enum.map(inputs, & &1.ref)
+
+    ref =
+      EXLA.NIF.mlir_map(func.ref, mapper, input_refs, dimensions)
+      |> unwrap!()
+
+    %Value{ref: ref, function: func}
+  end
+
   defp unwrap!({:ok, value}), do: value
   defp unwrap!(other), do: raise("#{inspect(other)}")
 end
