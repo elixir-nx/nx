@@ -1830,7 +1830,7 @@ defmodule EXLA.Defn do
          op,
          args,
          out,
-         %{builder: %EXLA.MLIR.Function{module: module}},
+         %{builder: %EXLA.MLIR.Function{}},
          prepare_args
        ) do
     arg_shapes =
