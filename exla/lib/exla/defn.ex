@@ -2133,7 +2133,7 @@ defmodule EXLA.Defn do
 
   ## Cond
 
-  defp to_if(pred, on_true, on_false, %{builder: builder}, cache) do
+  defp to_if(pred, on_true, on_false, %{builder: builder} = state, cache) do
     {pred_op, cache} = recur_operator(pred, state, cache)
     pred_op = to_type(pred_op, {:pred, 8})
 
@@ -2222,6 +2222,19 @@ defmodule EXLA.Defn do
 
     args = EXLA.Op.tuple(state.builder, args)
     {args, comp, merge_outfeed(cache, comp_cache)}
+  end
+
+  defp if_branch_computation(%EXLA.MLIR.Function{} = _function, _args, _cache, _fun) do
+    # TO-DO(mlir): deal with token
+
+    # function is actually the parent function still, so we need to actually create a new function
+    # with this name on the same module.
+
+    # tuple_shape = EXLA.Shape.make_tuple_shape(shapes)
+    # param = EXLA.Op.parameter(subbuilder, 0, tuple_shape, "p")
+    # params = Enum.with_index(args, fn _, i -> {i, EXLA.Op.get_tuple_element(param, i)} end)
+    # {res, comp_cache} = fun.(params, cache)
+    # {args, EXLA.Builder.build(res), comp_cache}
   end
 
   defp if_branch_computation(subbuilder, args, cache, fun) do
@@ -2321,13 +2334,14 @@ defmodule EXLA.Defn do
     Value.constant_r0(function, constant, type)
   end
 
-  defp subbuilder(%EXLA.Builder{name: name} = builder, desc) do
+  defp subbuilder(%EXLA.Builder{name: name} = builder, description) do
     suffix = System.unique_integer([:positive])
-    EXLA.Builder.new(builder, name <> "-" <> desc <> "-" <> Integer.to_string(suffix))
+    EXLA.Builder.new(builder, name <> "-" <> description <> "-" <> Integer.to_string(suffix))
   end
 
-  defp subbuilder(%EXLA.MLIR.Function{} = function, _description) do
-    function
+  defp subbuilder(%EXLA.MLIR.Function{name: name} = function, description) do
+    suffix = System.unique_integer([:positive])
+    %{function | name: name <> "-" <> description <> "-" <> Integer.to_string(suffix)}
   end
 
   # Helpers

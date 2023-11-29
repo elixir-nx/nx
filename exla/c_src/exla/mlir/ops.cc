@@ -862,7 +862,7 @@ ERL_NIF_TERM mlir_if(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Unable to get on_false.");
   }
 
-  mlir::Value result = (*function)->IfOp(*pred, output_shape, implicit_args, *on_true, *on_false);
+  mlir::Value result = (*function)->IfOp(*pred, *output_shape, implicit_args, *on_true, *on_false);
 
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
 }

@@ -827,15 +827,15 @@ mlir::Value MLIRFunction::IfOp(mlir::Value pred, xla::Shape output_shape, std::v
   mlir::stablehlo::IfOp if_op = builder->create<mlir::stablehlo::IfOp>(builder->getUnknownLoc(), mlir::TypeRange(output_type), pred);
 
   mlir::Region &trueBody = if_op.getTrueBranch();
-  auto &onTrueBlocks = mapper->function()->getBody().getBlocks();
+  auto &onTrueBlocks = on_true->function()->getBody().getBlocks();
   trueBody.getBlocks().splice(trueBody.end(), onTrueBlocks);
   mlir::Region &falseBody = if_op.getFalseBranch();
-  auto &onFalseBlocks = mapper->function()->getBody().getBlocks();
+  auto &onFalseBlocks = on_false->function()->getBody().getBlocks();
   falseBody.getBlocks().splice(falseBody.end(), onFalseBlocks);
 
-  ReplaceBlockArgumentsWithImplicitOperands(&if_op, implicit_arguments);
+  ReplaceBlockArgumentsWithImplicitOperands(if_op.getOperation(), implicit_arguments);
 
-  return if_op;
+  return if_op.getResult(0);
 }
 
 mlir::Value MLIRFunction::SelectAndScatterOp(

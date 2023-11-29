@@ -493,7 +493,7 @@ defmodule EXLA.MLIR.Value do
   def if(
         %Value{} = pred,
         %EXLA.Shape{} = output_shape,
-        implicit_args_refs,
+        implicit_args,
         %Value{} = on_true,
         %Value{} = on_false
       ) do
