@@ -821,7 +821,6 @@ static ErlNifFunc exla_funcs[] = {
     {"get_tuple_element", 2, get_tuple_element},
     // Control Flow
     {"conditional", 5, conditional_if},
-    {"conditional", 3, conditional_multi},
     {"select", 3, select},
     {"while", 3, while_loop},
     {"call", 3, call},

@@ -118,30 +118,6 @@ ERL_NIF_TERM conditional_if(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
-ERL_NIF_TERM conditional_multi(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 3) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  xla::XlaOp* index;
-  std::vector<xla::XlaComputation*> branches;
-  std::vector<xla::XlaOp> operands;
-
-  if (!exla::nif::get<xla::XlaOp>(env, argv[0], index)) {
-    return exla::nif::error(env, "Unable to get index.");
-  }
-  if (!exla::nif::get_list<xla::XlaComputation*>(env, argv[1], branches)) {
-    return exla::nif::error(env, "Unable to get branches.");
-  }
-  if (!exla::nif::get_list<xla::XlaOp>(env, argv[2], operands)) {
-    return exla::nif::error(env, "Unable to get operands.");
-  }
-
-  xla::XlaOp op = xla::Conditional(*index, branches, operands);
-
-  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
-}
-
 ERL_NIF_TERM select(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");
