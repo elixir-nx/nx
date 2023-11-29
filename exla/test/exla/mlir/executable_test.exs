@@ -849,6 +849,21 @@ defmodule EXLA.MLIR.ExecutableTest do
     end
   end
 
+  describe "map" do
+    test "works" do
+      for type <- @types do
+        tensor = Nx.tensor([1, 2, 3, 4], type: type)
+
+        function = fn t -> Nx.map(t, &Nx.add(&1, 1)) end
+
+        result_nx = Nx.Defn.jit_apply(function, [tensor], compiler: Nx.Defn.Evaluator)
+        result_mlir = Nx.Defn.jit_apply(function, [tensor])
+
+        assert_equal(result_nx, result_mlir)
+      end
+    end
+  end
+
   describe "triangular_solve" do
     test "supports options" do
       a = Nx.tensor([[1, 1, 1], [0, 1, 1], [0, 0, 1]])
