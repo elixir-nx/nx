@@ -2327,8 +2327,7 @@ defmodule EXLA.Defn do
   end
 
   defp subbuilder(%EXLA.MLIR.Function{} = function, _description) do
-    suffix = System.unique_integer([:positive])
-    EXLA.Builder.new({function.module, name <> "-" <> desc <> "-" <> Integer.to_string(suffix)})
+    function
   end
 
   # Helpers
