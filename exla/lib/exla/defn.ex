@@ -1851,9 +1851,7 @@ defmodule EXLA.Defn do
 
     args = EXLA.MLIR.Function.get_arguments(function)
 
-    EXLA.Builder.build(apply(Value, op, prepare_args.(args)), true)
-    # %{function: fun} = apply(Value, op, prepare_args.(args))
-    # fun
+    EXLA.Builder.build(apply(Value, op, prepare_args.(args)), false)
   end
 
   defp op_computation(op, args, _out, state, prepare_args) do
@@ -2080,7 +2078,9 @@ defmodule EXLA.Defn do
     comp = op_computation(op, args, %{shape: shape, type: type}, state, &Enum.reverse/1)
 
     keep_axes = opts[:keep_axes]
+    dbg("before Value.reduce")
     [result] = Value.reduce(comp, [acc], [arg], reduce_axes(arg, opts[:axes]))
+    dbg("after Value.reduce")
 
     if keep_axes do
       Value.reshape(result, shape)

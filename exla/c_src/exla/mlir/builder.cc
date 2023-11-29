@@ -777,7 +777,6 @@ std::vector<mlir::Value> MLIRFunction::ReduceOp(
 
   mlir::stablehlo::ReduceOp reduce_op = builder->create<mlir::stablehlo::ReduceOp>(builder->getUnknownLoc(), inputs_range, init_values_range, dimensions_attr);
   mlir::Region &reduceBody = reduce_op.getRegion();
-  // reducer->function() is mlir::func::FuncOp that's not necessarily from the same MLIR module
   mlir::Region &funcBody = reducer->function()->getBody();
   reduceBody.getBlocks().splice(reduceBody.end(), funcBody.getBlocks());
 
@@ -798,7 +797,6 @@ mlir::Value MLIRFunction::MapOp(
   mlir::stablehlo::MapOp map_op = builder->create<mlir::stablehlo::MapOp>(builder->getUnknownLoc(), inputs[0].getType(), inputs_range, dimensions_attr);
 
   mlir::Region &mapBody = map_op.getComputation();
-  // mapper->function() is mlir::func::FuncOp that's not necessarily from the same MLIR module
   mlir::Region &funcBody = mapper->function()->getBody();
   mapBody.getBlocks().splice(mapBody.end(), funcBody.getBlocks());
 
