@@ -815,7 +815,6 @@ defmodule EXLA.MLIR.ExecutableTest do
   end
 
   describe "reduce" do
-    @tag :focus
     test "sum defaults" do
       tensor = Nx.tensor([1, 2, 3, 4.0])
 

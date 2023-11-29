@@ -1839,19 +1839,11 @@ defmodule EXLA.Defn do
       end)
 
     function =
-      EXLA.Builder.new(
-        {module, Atom.to_string(op)},
-        arg_shapes,
-        struct(Nx.Tensor, out),
-        :mlir,
-        false
-      )
-
-    dbg()
+      EXLA.Builder.new(Atom.to_string(op), arg_shapes, struct(Nx.Tensor, out), :mlir)
 
     args = EXLA.MLIR.Function.get_arguments(function)
 
-    EXLA.Builder.build(apply(Value, op, prepare_args.(args)), false)
+    EXLA.Builder.build(apply(Value, op, prepare_args.(args)), true)
   end
 
   defp op_computation(op, args, _out, state, prepare_args) do
@@ -1893,7 +1885,7 @@ defmodule EXLA.Defn do
     }
 
     {res, _} = recur_composite(expr, state, no_token_cache())
-    EXLA.Builder.build(to_type(res, type), false)
+    EXLA.Builder.build(to_type(res, type), true)
   end
 
   defp fun_computation(name, args, expr, type, state) do
@@ -2078,9 +2070,7 @@ defmodule EXLA.Defn do
     comp = op_computation(op, args, %{shape: shape, type: type}, state, &Enum.reverse/1)
 
     keep_axes = opts[:keep_axes]
-    dbg("before Value.reduce")
     [result] = Value.reduce(comp, [acc], [arg], reduce_axes(arg, opts[:axes]))
-    dbg("after Value.reduce")
 
     if keep_axes do
       Value.reshape(result, shape)
