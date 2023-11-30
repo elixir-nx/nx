@@ -851,11 +851,6 @@ mlir::Value MLIRFunction::IfOp(mlir::Value pred, xla::Shape output_shape, std::v
   ReplaceBlockArgumentsWithImplicitOperands(if_op.getOperation(), implicit_arguments);
 
   return if_op.getResult(0);
-
-  mlir::Operation::result_range result_range = if_op.getResults();
-  std::vector<mlir::Value> results(result_range.begin(), result_range.begin() + 1);
-
-  return results[0];
 }
 
 mlir::Value MLIRFunction::SelectAndScatterOp(

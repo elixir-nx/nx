@@ -2138,7 +2138,7 @@ defmodule EXLA.Defn do
   defp to_if(pred, on_true, on_false, %{builder: builder} = state, cache) do
     {pred_op, cache} = recur_operator(pred, state, cache)
 
-    pred_op = to_type(pred_op, {:u, 8})
+    pred_op = to_type(pred_op, {:pred, 8})
 
     true_ids = Tree.scope_ids(on_true)
     false_ids = Tree.scope_ids(on_false)
