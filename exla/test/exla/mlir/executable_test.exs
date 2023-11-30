@@ -147,11 +147,16 @@ defmodule EXLA.MLIR.ExecutableTest do
                [:less, :less_equal, :greater, :greater_equal]
     for op <- @bin_ops do
       test "#{op}" do
-        for type1 <- @broadcast_types, type2 <- @broadcast_types do
+        for type1 <- @broadcast_types, type2 <- @broadcast_types, explicit_broadcast <- [true, false] do
           function = fn t1, t2 -> Nx.unquote(op)(t1, t2) end
 
           t1 = Nx.iota({2, 3, 1}, type: type1)
-          t2 = Nx.broadcast(Nx.tensor(2, type: type2), {2, 3, 1})
+          t2 =
+            if explicit_broadcast do
+              Nx.broadcast(Nx.tensor(2, type: type2), {2, 3, 1})
+            else
+              Nx.tensor(2, type: type2)
+            end
 
           result_nx = Nx.Defn.jit_apply(function, [t1, t2], compiler: Nx.Defn.Evaluator)
           result_mlir = Nx.Defn.jit_apply(function, [t1, t2])
@@ -174,11 +179,17 @@ defmodule EXLA.MLIR.ExecutableTest do
       test "#{op}" do
         for type1 <- @broadcast_types,
             type2 <- @broadcast_types,
+            explicit_broadcast <- [true, false],
             not Nx.Type.float?(type1) and not Nx.Type.float?(type2) do
           function = fn t1, t2 -> Nx.unquote(op)(t1, t2) end
 
           t1 = Nx.iota({2, 3, 1}, type: type1)
-          t2 = Nx.broadcast(Nx.tensor(2, type: type2), {2, 3, 1})
+          t2 =
+            if explicit_broadcast do
+              Nx.broadcast(Nx.tensor(2, type: type2), {2, 3, 1})
+            else
+              Nx.tensor(2, type: type2)
+            end
 
           result_nx = Nx.Defn.jit_apply(function, [t1, t2], compiler: Nx.Defn.Evaluator)
           result_mlir = Nx.Defn.jit_apply(function, [t1, t2])
@@ -190,16 +201,22 @@ defmodule EXLA.MLIR.ExecutableTest do
 
     for op <- [:left_shift, :right_shift], type <- [u: 8, s: 8] do
       test "#{op} #{inspect(type)}" do
+        for explicit_broadcast <- [true, false] do
         function = fn t1, t2 -> Nx.unquote(op)(t1, t2) end
 
         t1 = Nx.iota({2, 3, 1}, type: unquote(type))
-        t2 = Nx.broadcast(Nx.tensor(2, type: unquote(type)), {2, 3, 1})
-
+t2 =
+            if explicit_broadcast do
+              Nx.broadcast(Nx.tensor(2, type: unquote(type)), {2, 3, 1})
+            else
+              Nx.tensor(2, type: unquote(type))
+            end
         result_nx = Nx.Defn.jit_apply(function, [t1, t2], compiler: Nx.Defn.Evaluator)
         result_mlir = Nx.Defn.jit_apply(function, [t1, t2])
 
         assert_equal(result_nx, result_mlir)
       end
+    end
     end
   end
 
