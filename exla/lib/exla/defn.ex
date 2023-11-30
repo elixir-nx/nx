@@ -1023,7 +1023,7 @@ defmodule EXLA.Defn do
     type = merge_type(left_shape.dtype, right_shape.dtype)
     # dims = broadcast_axes(left_shape.dims, right_shape.dims)
     # apply(EXLA.Op, op, [to_type(left, type), to_type(right, type), dims])
-    # TO-DO (mlir): apply type casting
+    # TO-DO (mlir): apply broadcasting
     apply(Value, op, [to_type(left, type), to_type(right, type)])
   end
 
