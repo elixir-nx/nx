@@ -540,8 +540,9 @@ defmodule Nx.Shape do
         List.duplicate({0, 0}, tuple_size(shape))
 
       :same ->
-        Enum.zip_with(Tuple.to_list(shape), Tuple.to_list(kernel_size), fn dim, k ->
-          padding_size = max(dim - 1 + k - dim, 0)
+        Enum.map(Tuple.to_list(kernel_size), fn k ->
+          padding_size = max(k - 1, 0)
+
           {floor(padding_size / 2), ceil(padding_size / 2)}
         end)
 
