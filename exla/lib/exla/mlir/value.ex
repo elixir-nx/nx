@@ -493,11 +493,15 @@ defmodule EXLA.MLIR.Value do
   def if(
         %Value{} = pred,
         %EXLA.Shape{} = output_shape,
-        implicit_args,
+        true_args,
         %Function{} = on_true,
+        false_args,
         %Function{} = on_false
       ) do
-    implicit_args_refs = Enum.map(implicit_args, & &1.ref)
+
+        IO.inspect("if")
+        IO.inspect(true_args)
+    implicit_args_refs = Enum.map(true_args ++ false_args, & &1.ref)
 
     ref =
       EXLA.NIF.mlir_if(

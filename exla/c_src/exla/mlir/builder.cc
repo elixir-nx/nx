@@ -837,7 +837,7 @@ mlir::Value MLIRFunction::IfOp(mlir::Value pred, xla::Shape output_shape, std::v
 
   std::cout << "before create IfOp" << std::endl;
 
-  mlir::stablehlo::IfOp if_op = builder->create<mlir::stablehlo::IfOp>(builder->getUnknownLoc(), mlir::TypeRange({output_type}), operands);
+  mlir::stablehlo::IfOp if_op = builder->create<mlir::stablehlo::IfOp>(builder->getUnknownLoc(), mlir::TypeRange({output_type}), pred);
 
   std::cout << "created if_op" << std::endl;
 
@@ -1031,8 +1031,6 @@ void MLIRFunction::Build(mlir::Value root, bool use_stablehlo_return) {
   } else {
     module_->builder()->create<mlir::func::ReturnOp>(module_->builder()->getUnknownLoc(), root);
   }
-
-
 }
 
 MLIRModule::MLIRModule() {

@@ -2155,13 +2155,17 @@ defmodule EXLA.Defn do
 
         dbg(%{pred: pred, pred_op: pred_op, pred_op_shape: Value.get_shape(pred_op), on_true: on_true, true_args: true_args, false_args: false_args, true_comp: true_comp, false_comp: false_comp})
 
-        {Value.if(
+        if_op = Value.if(
            pred_op,
            EXLA.Shape.make_shape(on_true.type, on_true.shape),
-           true_args ++ false_args,
+           true_args,
            true_comp,
+           false_args,
            false_comp
-         ), cache}
+         )
+
+         # TO-DO(mlir): this tuple should probably be the outfeed tuple
+        {Value.tuple([if_op, if_op]), cache}
          |> tap(fn {%{function: %{module: mod}}, _} ->
           IO.puts("==== after adding if ====")
             EXLA.NIF.dump_mlir_module(mod.ref)
