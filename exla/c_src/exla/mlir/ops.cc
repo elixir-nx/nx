@@ -46,6 +46,9 @@ ERL_NIF_TERM mlir_compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   (*module)->LowerPatterns();
+  (*module)->module().dump();
+  (*module)->RemoveEmptyFunctions();
+  (*module)->module().dump();
 
   build_options.set_num_replicas(num_replicas);
   build_options.set_num_partitions(num_partitions);

@@ -1213,4 +1213,19 @@ void MLIRModule::LowerPatterns() {
   mlir::applyPartialConversion(module(), target, std::move(patterns));
 }
 
+void MLIRModule::RemoveEmptyFunctions() {
+  std::vector<mlir::func::FuncOp> unused_functions;
+  for (auto &op : module_->getOps()) {
+    if (auto func = llvm::dyn_cast<mlir::func::FuncOp>(op)) {
+      if (func.getBody().empty()) {
+        unused_functions.push_back(func);
+      }
+    }
+  }
+
+  for (auto func : unused_functions) {
+    func.erase();
+  }
+}
+
 }  // namespace exla

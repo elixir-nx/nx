@@ -1,6 +1,8 @@
 defmodule EXLA.MLIR.ExecutableTest do
   use EXLA.Case, async: true
 
+  import Nx.Defn
+
   setup do
     Nx.Defn.default_options(compiler: EXLA, compiler_mode: :mlir)
   end
@@ -959,6 +961,44 @@ defmodule EXLA.MLIR.ExecutableTest do
           [3, 2]
         ])
       )
+    end
+  end
+
+  describe "cond" do
+     defn cond_single_clause(t, x) do
+    pred = t ==  1
+    cond do
+        pred ->
+            t + 10 + pred
+        true ->
+            x - 20
+    end
+  end
+
+  defn cond_multi_clause(t, x) do
+    cond do
+        t == 1  ->
+          t + x
+
+        t == 2 ->
+          -t
+
+        true ->
+            x - 20
+    end
+  end
+
+    test "single-clause" do
+      f = EXLA.jit(&cond_single_clause/2, compiler_mode: :mlir)
+      assert_equal(f.(Nx.tensor(1), Nx.tensor(10)), 12)
+      assert_equal(f.(Nx.tensor(0), Nx.tensor(10.0)), -10.0)
+    end
+
+    test "multi-clause" do
+      f = EXLA.jit(&cond_multi_clause/2, compiler_mode: :mlir)
+      assert_equal(f.(Nx.tensor(1.0), Nx.tensor(10)), 11.0)
+      assert_equal(f.(Nx.tensor(2), Nx.tensor(10.0)), -2.0)
+      assert_equal(f.(Nx.tensor(3), Nx.tensor(10)), -10)
     end
   end
 end

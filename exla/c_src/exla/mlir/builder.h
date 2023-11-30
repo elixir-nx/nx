@@ -136,13 +136,12 @@ class MLIRModule {
   mlir::OpBuilder *builder() { return builder_.get(); }
   mlir::MLIRContext *context() { return context_.get(); }
   void LowerPatterns();
+  void RemoveEmptyFunctions();
 
  private:
   std::unique_ptr<mlir::MLIRContext> context_;
   mlir::OwningOpRef<mlir::ModuleOp> module_;
   std::unique_ptr<mlir::OpBuilder> builder_;
-
-  std::vector<mlir::Type> input_types_;
 };
 
 mlir::Type TypeIntToMLIRType(mlir::OpBuilder *builder, xla::PrimitiveType type_int);
