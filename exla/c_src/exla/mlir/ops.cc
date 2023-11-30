@@ -45,6 +45,9 @@ ERL_NIF_TERM mlir_compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Unable to get device ID.");
   }
 
+  (*module)->LowerPatterns();
+  (*module)->RemoveEmptyFunctions();
+
   build_options.set_num_replicas(num_replicas);
   build_options.set_num_partitions(num_partitions);
   build_options.set_use_spmd_partitioning(use_spmd);
@@ -827,6 +830,42 @@ ERL_NIF_TERM mlir_map(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   mlir::Value result = (*function)->MapOp(*mapper, inputs, dimensions);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
+}
+
+ERL_NIF_TERM mlir_if(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 6) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* pred;
+  std::vector<mlir::Value> implicit_args;
+  exla::MLIRFunction** on_true;
+  exla::MLIRFunction** on_false;
+  xla::Shape* output_shape;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], pred)) {
+    return exla::nif::error(env, "Unable to get pred.");
+  }
+  if (!exla::nif::get<xla::Shape>(env, argv[2], output_shape)) {
+    return exla::nif::error(env, "Unable to get shape.");
+  }
+  if (!exla::nif::get_list<mlir::Value>(env, argv[3], implicit_args)) {
+    return exla::nif::error(env, "Unable to get implicit_args.");
+  }
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[4], on_true)) {
+    return exla::nif::error(env, "Unable to get on_true.");
+  }
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[5], on_false)) {
+    return exla::nif::error(env, "Unable to get on_false.");
+  }
+
+  mlir::Value result = (*function)->IfOp(*pred, *output_shape, implicit_args, *on_true, *on_false);
 
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
 }

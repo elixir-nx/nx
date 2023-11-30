@@ -106,6 +106,7 @@ class MLIRFunction {
   mlir::Value DynamicUpdateSliceOp(mlir::Value operand, mlir::Value update, std::vector<mlir::Value> start_indices);
   std::vector<mlir::Value> ReduceOp(MLIRFunction *function, std::vector<mlir::Value> init_values, std::vector<mlir::Value> inputs, std::vector<int64_t> dimensions);
   mlir::Value MapOp(MLIRFunction *function, std::vector<mlir::Value> inputs, std::vector<int64_t> dimensions);
+  mlir::Value IfOp(mlir::Value pred, xla::Shape output_shape, std::vector<mlir::Value> implicit_args, MLIRFunction *on_true, MLIRFunction *on_false);
   ERL_NIF_TERM ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM value_ptr, std::vector<int64_t> dims = {});
   int get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *type);
 
@@ -118,6 +119,8 @@ class MLIRFunction {
  private:
   std::shared_ptr<MLIRModule> module_;
   std::unique_ptr<mlir::func::FuncOp> func_;
+
+  void dump_mlir_module();
 };
 
 class MLIRModule {
@@ -133,13 +136,12 @@ class MLIRModule {
   mlir::OpBuilder *builder() { return builder_.get(); }
   mlir::MLIRContext *context() { return context_.get(); }
   void LowerPatterns();
+  void RemoveEmptyFunctions();
 
  private:
   std::unique_ptr<mlir::MLIRContext> context_;
   mlir::OwningOpRef<mlir::ModuleOp> module_;
   std::unique_ptr<mlir::OpBuilder> builder_;
-
-  std::vector<mlir::Type> input_types_;
 };
 
 mlir::Type TypeIntToMLIRType(mlir::OpBuilder *builder, xla::PrimitiveType type_int);

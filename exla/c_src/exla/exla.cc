@@ -721,6 +721,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_dynamic_update_slice", 4, mlir_dynamic_update_slice},
     {"mlir_reduce", 5, mlir_reduce},
     {"mlir_map", 4, mlir_map},
+    {"mlir_if", 6, mlir_if},
     // XlaBuilder
     {"new_builder", 1, new_builder},
     {"create_sub_builder", 2, create_sub_builder},
@@ -821,7 +822,6 @@ static ErlNifFunc exla_funcs[] = {
     {"get_tuple_element", 2, get_tuple_element},
     // Control Flow
     {"conditional", 5, conditional_if},
-    {"conditional", 3, conditional_multi},
     {"select", 3, select},
     {"while", 3, while_loop},
     {"call", 3, call},

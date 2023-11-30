@@ -1,6 +1,8 @@
 defmodule EXLA.MLIR.ExecutableTest do
   use EXLA.Case, async: true
 
+  import Nx.Defn
+
   setup do
     Nx.Defn.default_options(compiler: EXLA, compiler_mode: :mlir)
   end
@@ -816,14 +818,16 @@ defmodule EXLA.MLIR.ExecutableTest do
 
   describe "reduce" do
     test "sum defaults" do
-      tensor = Nx.tensor([1, 2, 3, 4.0])
+      for type <- @types do
+        tensor = Nx.tensor([1, 2, 3, 4], type: type)
 
-      function = &Nx.sum/1
+        function = &Nx.sum/1
 
-      result_nx = Nx.Defn.jit_apply(function, [tensor], compiler: Nx.Defn.Evaluator)
-      result_mlir = Nx.Defn.jit_apply(function, [tensor])
+        result_nx = Nx.Defn.jit_apply(function, [tensor], compiler: Nx.Defn.Evaluator)
+        result_mlir = Nx.Defn.jit_apply(function, [tensor])
 
-      assert_equal(result_nx, result_mlir)
+        assert_equal(result_nx, result_mlir)
+      end
     end
 
     test "sum custom axes" do
@@ -959,6 +963,46 @@ defmodule EXLA.MLIR.ExecutableTest do
           [3, 2]
         ])
       )
+    end
+  end
+
+  describe "cond" do
+    defn cond_single_clause(t, x) do
+      pred = t == 1
+
+      cond do
+        pred ->
+          t + 10 + pred
+
+        true ->
+          x - 20
+      end
+    end
+
+    defn cond_multi_clause(t, x) do
+      cond do
+        t == 1 ->
+          t + x
+
+        t == 2 ->
+          -t
+
+        true ->
+          x - 20
+      end
+    end
+
+    test "single-clause" do
+      f = EXLA.jit(&cond_single_clause/2, compiler_mode: :mlir)
+      assert_equal(f.(Nx.tensor(1), Nx.tensor(10)), 12)
+      assert_equal(f.(Nx.tensor(0), Nx.tensor(10.0)), -10.0)
+    end
+
+    test "multi-clause" do
+      f = EXLA.jit(&cond_multi_clause/2, compiler_mode: :mlir)
+      assert_equal(f.(Nx.tensor(1.0), Nx.tensor(10)), 11.0)
+      assert_equal(f.(Nx.tensor(2), Nx.tensor(10.0)), -2.0)
+      assert_equal(f.(Nx.tensor(3), Nx.tensor(10)), -10)
     end
   end
 end

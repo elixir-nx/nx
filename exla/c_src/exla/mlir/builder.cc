@@ -102,6 +102,10 @@ mlir::stablehlo::DotDimensionNumbersAttr ConvertDotDimensionNumbersToAttr(mlir::
       rhsContractingVec);
 }
 
+void MLIRFunction::dump_mlir_module() {
+  module_->module().dump();
+}
+
 int MLIRFunction::get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *type) {
   auto builder = module_->builder();
   std::string type_str;
@@ -803,6 +807,52 @@ mlir::Value MLIRFunction::MapOp(
   return map_op;
 }
 
+// adapted from xla/translate/hlo_to_mhlo/hlo_function_importer.cc
+// we need to adapt because we want to receive std::vector and
+// because we use stablehlo instead of mhlo here.
+void ReplaceBlockArgumentsWithImplicitOperands(mlir::Operation *op, std::vector<mlir::Value> implicit_operands) {
+  if (!op) {
+    std::cerr << "op is null" << std::endl;
+    return;
+  }
+  int implicit_operand_index = 0;
+  for (auto &region : op->getRegions()) {
+    for (auto arg : region.getArguments()) {
+      arg.replaceAllUsesWith(implicit_operands[implicit_operand_index++]);
+    }
+    region.front().eraseArguments(0, region.getNumArguments());
+  }
+}
+
+mlir::Value MLIRFunction::IfOp(mlir::Value pred, xla::Shape output_shape, std::vector<mlir::Value> implicit_arguments, MLIRFunction *on_true, MLIRFunction *on_false) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+
+  auto span = output_shape.dimensions();
+  std::vector<tsl::int64> dims(span.begin(), span.end());
+  mlir::Type output_type = GetMLIRType(builder, dims, output_shape.element_type());
+
+  pred = builder->create<mlir::stablehlo::ConvertOp>(builder->getUnknownLoc(), pred, builder->getIntegerType(1));
+
+  implicit_arguments.insert(implicit_arguments.begin(), pred);
+  mlir::ValueRange operands(implicit_arguments);
+
+  mlir::stablehlo::IfOp if_op = builder->create<mlir::stablehlo::IfOp>(builder->getUnknownLoc(), mlir::TypeRange({output_type}), pred);
+
+  mlir::Region &trueBody = if_op.getTrueBranch();
+  auto &onTrueBlocks = on_true->function()->getBody().getBlocks();
+  trueBody.getBlocks().splice(trueBody.end(), onTrueBlocks);
+
+  mlir::Region &falseBody = if_op.getFalseBranch();
+  auto &onFalseBlocks = on_false->function()->getBody().getBlocks();
+  falseBody.getBlocks().splice(falseBody.end(), onFalseBlocks);
+
+  implicit_arguments.erase(implicit_arguments.begin());
+  ReplaceBlockArgumentsWithImplicitOperands(if_op.getOperation(), implicit_arguments);
+
+  return if_op.getResult(0);
+}
+
 mlir::Value MLIRFunction::SelectAndScatterOp(
     mlir::Value target,
     mlir::Value source,
@@ -967,8 +1017,6 @@ void MLIRFunction::Build(mlir::Value root, bool use_stablehlo_return) {
   } else {
     module_->builder()->create<mlir::func::ReturnOp>(module_->builder()->getUnknownLoc(), root);
   }
-
-  module_->LowerPatterns();
 }
 
 MLIRModule::MLIRModule() {
@@ -1149,6 +1197,21 @@ void MLIRModule::LowerPatterns() {
   mlir::stablehlo::populateStablehloToHloPatterns(&patterns, &converter, context());
 
   mlir::applyPartialConversion(module(), target, std::move(patterns));
+}
+
+void MLIRModule::RemoveEmptyFunctions() {
+  std::vector<mlir::func::FuncOp> unused_functions;
+  for (auto &op : module_->getOps()) {
+    if (auto func = llvm::dyn_cast<mlir::func::FuncOp>(op)) {
+      if (func.getBody().empty()) {
+        unused_functions.push_back(func);
+      }
+    }
+  }
+
+  for (auto func : unused_functions) {
+    func.erase();
+  }
 }
 
 }  // namespace exla

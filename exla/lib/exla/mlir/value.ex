@@ -490,6 +490,30 @@ defmodule EXLA.MLIR.Value do
     %Value{ref: ref, function: func}
   end
 
+  def if(
+        %Value{} = pred,
+        %EXLA.Shape{} = output_shape,
+        true_args,
+        %Function{} = on_true,
+        false_args,
+        %Function{} = on_false
+      ) do
+    implicit_args_refs = Enum.map(true_args ++ false_args, & &1.ref)
+
+    ref =
+      EXLA.NIF.mlir_if(
+        pred.function.ref,
+        pred.ref,
+        output_shape.ref,
+        implicit_args_refs,
+        on_true.ref,
+        on_false.ref
+      )
+      |> unwrap!()
+
+    %Value{ref: ref, function: pred.function}
+  end
+
   defp unwrap!({:ok, value}), do: value
   defp unwrap!(other), do: raise("#{inspect(other)}")
 end
