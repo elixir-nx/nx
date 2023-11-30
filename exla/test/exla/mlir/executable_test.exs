@@ -818,14 +818,16 @@ defmodule EXLA.MLIR.ExecutableTest do
 
   describe "reduce" do
     test "sum defaults" do
-      tensor = Nx.tensor([1, 2, 3, 4.0])
+      for type <- @types do
+        tensor = Nx.tensor([1, 2, 3, 4], type: type)
 
-      function = &Nx.sum/1
+        function = &Nx.sum/1
 
-      result_nx = Nx.Defn.jit_apply(function, [tensor], compiler: Nx.Defn.Evaluator)
-      result_mlir = Nx.Defn.jit_apply(function, [tensor])
+        result_nx = Nx.Defn.jit_apply(function, [tensor], compiler: Nx.Defn.Evaluator)
+        result_mlir = Nx.Defn.jit_apply(function, [tensor])
 
-      assert_equal(result_nx, result_mlir)
+        assert_equal(result_nx, result_mlir)
+      end
     end
 
     test "sum custom axes" do

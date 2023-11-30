@@ -513,7 +513,6 @@ defmodule EXLA.MLIR.Value do
         on_false.ref
       )
       |> unwrap!()
-      |> IO.inspect(label: "if result ref")
 
     %Value{ref: ref, function: pred.function}
   end

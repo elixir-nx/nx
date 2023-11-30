@@ -46,9 +46,7 @@ ERL_NIF_TERM mlir_compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   (*module)->LowerPatterns();
-  (*module)->module().dump();
   (*module)->RemoveEmptyFunctions();
-  (*module)->module().dump();
 
   build_options.set_num_replicas(num_replicas);
   build_options.set_num_partitions(num_partitions);
@@ -867,11 +865,7 @@ ERL_NIF_TERM mlir_if(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Unable to get on_false.");
   }
 
-  std::cout << "got all args" << std::endl;
-
   mlir::Value result = (*function)->IfOp(*pred, *output_shape, implicit_args, *on_true, *on_false);
-
-  std::cout << "got result" << std::endl;
 
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
 }

@@ -1830,7 +1830,7 @@ defmodule EXLA.Defn do
          op,
          args,
          out,
-         %{builder: %EXLA.MLIR.Function{}},
+         %{builder: %EXLA.MLIR.Function{} = builder},
          prepare_args
        ) do
     arg_shapes =
@@ -1838,8 +1838,10 @@ defmodule EXLA.Defn do
         {"p#{i}", computation_arg_shape(arg)}
       end)
 
+    %{module: module, name: name} = subbuilder(builder, Atom.to_string(op))
+
     function =
-      EXLA.Builder.new(Atom.to_string(op), arg_shapes, struct(Nx.Tensor, out), :mlir)
+      EXLA.Builder.new({module, name}, arg_shapes, struct(Nx.Tensor, out), :mlir, true)
 
     args = EXLA.MLIR.Function.get_arguments(function)
 
@@ -1863,14 +1865,16 @@ defmodule EXLA.Defn do
          args,
          expr,
          type,
-         %{builder: %EXLA.MLIR.Function{module: module}} = state
+         %{builder: %EXLA.MLIR.Function{}} = state
        ) do
     arg_shapes =
       Enum.with_index(args, fn arg, i ->
         {"p#{i}", computation_arg_shape(arg)}
       end)
 
-    function = EXLA.Builder.new({module, Atom.to_string(name)}, arg_shapes, expr, :mlir, false)
+    %{module: module, name: name} = subbuilder = subbuilder(state.builder, Atom.to_string(name))
+
+    function = EXLA.Builder.new({module, name}, arg_shapes, expr, :mlir, true)
     mlir_args = EXLA.MLIR.Function.get_arguments(function)
 
     arg_params = Enum.zip(args, mlir_args)
@@ -1879,7 +1883,7 @@ defmodule EXLA.Defn do
 
     state = %{
       state
-      | builder: function,
+      | builder: subbuilder,
         params: Map.new(params),
         scope_ids: Tree.scope_ids(expr)
     }
@@ -2136,7 +2140,6 @@ defmodule EXLA.Defn do
   defp to_if(pred, on_true, on_false, %{builder: builder} = state, cache) do
     {pred_op, cache} = recur_operator(pred, state, cache)
 
-    dbg({pred_op, Value.get_shape(pred_op)})
     pred_op = to_type(pred_op, {:u, 8})
 
     true_ids = Tree.scope_ids(on_true)
@@ -2149,12 +2152,6 @@ defmodule EXLA.Defn do
 
     case builder do
       %EXLA.MLIR.Function{} ->
-        IO.puts("==== before adding if ====")
-        EXLA.NIF.dump_mlir_module(builder.module.ref)
-        IO.puts("==== before adding if ====")
-
-        dbg(%{pred: pred, pred_op: pred_op, pred_op_shape: Value.get_shape(pred_op), on_true: on_true, true_args: true_args, false_args: false_args, true_comp: true_comp, false_comp: false_comp})
-
         if_op = Value.if(
            pred_op,
            EXLA.Shape.make_shape(on_true.type, on_true.shape),
@@ -2166,11 +2163,6 @@ defmodule EXLA.Defn do
 
          # TO-DO(mlir): this tuple should probably be the outfeed tuple
         {Value.tuple([if_op, if_op]), cache}
-         |> tap(fn {%{function: %{module: mod}}, _} ->
-          IO.puts("==== after adding if ====")
-            EXLA.NIF.dump_mlir_module(mod.ref)
-          IO.puts("==== after adding if ====")
-        end)
 
       _ ->
         {EXLA.Op.conditional(pred_op, true_args, true_comp, false_args, false_comp), cache}
@@ -2356,13 +2348,8 @@ defmodule EXLA.Defn do
   # the branches, but that gets tricky with cond/if,
   # so we always perform the operation.
   defp cast_pred_to_u8(%EXLA.MLIR.Value{} = op) do
+    # TO-DO(mlir): validate exactly if we should be just passing the pred as-is here
     op
-    # dbg({op, EXLA.MLIR.Value.get_shape(op)})
-
-    # case EXLA.MLIR.Value.get_shape(op).dtype do
-    #   {:pred, 8} -> EXLA.MLIR.Value.convert(op, {:u, 8})
-    #   _ -> op
-    # end
   end
 
   defp cast_pred_to_u8(op) do
