@@ -45,6 +45,9 @@ ERL_NIF_TERM mlir_compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Unable to get device ID.");
   }
 
+  (*module)->LowerPatterns();
+  (*module)->RemoveEmptyFunctions();
+
   build_options.set_num_replicas(num_replicas);
   build_options.set_num_partitions(num_partitions);
   build_options.set_use_spmd_partitioning(use_spmd);
@@ -72,7 +75,7 @@ ERL_NIF_TERM new_mlir_module(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
 }
 
 ERL_NIF_TERM create_mlir_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 4) {
+  if (argc != 5) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
@@ -82,6 +85,7 @@ ERL_NIF_TERM create_mlir_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   std::pair<std::vector<exla::int64>, xla::PrimitiveType> ret_type;
   std::vector<xla::Shape*> arg_shapes;
   xla::Shape* ret_shape;
+  bool is_public;
 
   if (!exla::nif::get<exla::MLIRModule*>(env, argv[0], module)) {
     return exla::nif::error(env, "Unable to get module.");
@@ -97,8 +101,11 @@ ERL_NIF_TERM create_mlir_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   if (!exla::nif::get<xla::Shape>(env, argv[3], ret_shape)) {
     return exla::nif::error(env, "Unable to get return.");
   }
+  if (!exla::nif::get(env, argv[4], &is_public)) {
+    return exla::nif::error(env, "Unable to get is_public.");
+  }
 
-  exla::MLIRFunction* func = (*module)->CreateFunction(func_name, arg_shapes, ret_shape);
+  exla::MLIRFunction* func = (*module)->CreateFunction(func_name, arg_shapes, ret_shape, is_public);
 
   return exla::nif::ok(env, exla::nif::make<exla::MLIRFunction*>(env, func));
 }
@@ -666,12 +673,13 @@ ERL_NIF_TERM mlir_select(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 
 ERL_NIF_TERM mlir_build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 2) {
+  if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   exla::MLIRFunction** function;
   mlir::Value* root;
+  bool use_mhlo_return;
 
   if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
     return exla::nif::error(env, "Unable to get function.");
@@ -679,8 +687,11 @@ ERL_NIF_TERM mlir_build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get<mlir::Value>(env, argv[1], root)) {
     return exla::nif::error(env, "Unable to get root.");
   }
+  if (!exla::nif::get(env, argv[2], &use_mhlo_return)) {
+    return exla::nif::error(env, "Unable to get return");
+  }
 
-  (*function)->Build(*root);
+  (*function)->Build(*root, use_mhlo_return);
 
   return exla::nif::ok(env);
 }
@@ -710,7 +721,7 @@ ERL_NIF_TERM mlir_convert(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 
 ERL_NIF_TERM mlir_sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 4) {
+  if (argc != 5) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
@@ -718,6 +729,7 @@ ERL_NIF_TERM mlir_sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   std::vector<mlir::Value> operands;
   exla::int64 axis;
   bool desc;
+  bool stable;
 
   if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
     return exla::nif::error(env, "Unable to get function.");
@@ -731,7 +743,11 @@ ERL_NIF_TERM mlir_sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get(env, argv[3], &desc)) {
     return exla::nif::error(env, "Unable to get desc.");
   }
-  std::vector<mlir::Value> res = (*function)->SortOp(operands, axis, desc);
+  if (!exla::nif::get(env, argv[4], &stable)) {
+    return exla::nif::error(env, "Unable to get stable flag.");
+  }
+
+  std::vector<mlir::Value> res = (*function)->SortOp(operands, axis, desc, stable);
   size_t n = res.size();
 
   std::vector<ERL_NIF_TERM> nif_terms;
@@ -744,6 +760,114 @@ ERL_NIF_TERM mlir_sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   auto data = nif_terms.data();
   auto list = enif_make_list_from_array(env, &data[0], n);
   return exla::nif::ok(env, list);
+}
+
+ERL_NIF_TERM mlir_reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 5) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  exla::MLIRFunction** reducer;
+  std::vector<mlir::Value> init_values;
+  std::vector<mlir::Value> inputs;
+  std::vector<exla::int64> dimensions;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[1], reducer)) {
+    return exla::nif::error(env, "Unable to get reducer.");
+  }
+  if (!exla::nif::get_list(env, argv[2], init_values)) {
+    return exla::nif::error(env, "Unable to get init_values.");
+  }
+  if (!exla::nif::get_list(env, argv[3], inputs)) {
+    return exla::nif::error(env, "Unable to get inputs.");
+  }
+  if (!exla::nif::get_tuple(env, argv[4], dimensions)) {
+    return exla::nif::error(env, "Unable to get dimensions.");
+  }
+
+  std::vector<mlir::Value> res = (*function)->ReduceOp(*reducer, init_values, inputs, dimensions);
+
+  size_t n = res.size();
+
+  std::vector<ERL_NIF_TERM> nif_terms;
+  nif_terms.reserve(n);
+
+  for (size_t i = 0; i < n; i++) {
+    nif_terms[i] = exla::nif::make<mlir::Value>(env, res[i]);
+  }
+
+  auto data = nif_terms.data();
+  auto list = enif_make_list_from_array(env, &data[0], n);
+
+  return exla::nif::ok(env, list);
+}
+
+ERL_NIF_TERM mlir_map(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 4) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  exla::MLIRFunction** mapper;
+  std::vector<mlir::Value> inputs;
+  std::vector<exla::int64> dimensions;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[1], mapper)) {
+    return exla::nif::error(env, "Unable to get mapper.");
+  }
+  if (!exla::nif::get_list(env, argv[2], inputs)) {
+    return exla::nif::error(env, "Unable to get inputs.");
+  }
+  if (!exla::nif::get_tuple(env, argv[3], dimensions)) {
+    return exla::nif::error(env, "Unable to get dimensions.");
+  }
+
+  mlir::Value result = (*function)->MapOp(*mapper, inputs, dimensions);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
+}
+
+ERL_NIF_TERM mlir_if(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 6) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* pred;
+  std::vector<mlir::Value> implicit_args;
+  exla::MLIRFunction** on_true;
+  exla::MLIRFunction** on_false;
+  xla::Shape* output_shape;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], pred)) {
+    return exla::nif::error(env, "Unable to get pred.");
+  }
+  if (!exla::nif::get<xla::Shape>(env, argv[2], output_shape)) {
+    return exla::nif::error(env, "Unable to get shape.");
+  }
+  if (!exla::nif::get_list<mlir::Value>(env, argv[3], implicit_args)) {
+    return exla::nif::error(env, "Unable to get implicit_args.");
+  }
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[4], on_true)) {
+    return exla::nif::error(env, "Unable to get on_true.");
+  }
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[5], on_false)) {
+    return exla::nif::error(env, "Unable to get on_false.");
+  }
+
+  mlir::Value result = (*function)->IfOp(*pred, *output_shape, implicit_args, *on_true, *on_false);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
 }
 
 ERL_NIF_TERM mlir_bitcast_convert(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -954,13 +1078,15 @@ ERL_NIF_TERM dump_mlir_module(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
 }
 
 ERL_NIF_TERM mlir_scatter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 5) {
+  if (argc != 9) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   exla::MLIRFunction** function;
   mlir::Value *target, *indices, *updates;
   bool add_or_put;
+  int64_t indices_rank;
+  std::vector<int64_t> update_window_dims, inserted_window_dims, index_dims_to_window_dims;
 
   if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
     return exla::nif::error(env, "Unable to get function.");
@@ -977,8 +1103,28 @@ ERL_NIF_TERM mlir_scatter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get(env, argv[4], &add_or_put)) {
     return exla::nif::error(env, "Unable to get add_or_put.");
   }
+  if (!exla::nif::get(env, argv[5], &indices_rank)) {
+    return exla::nif::error(env, "Unable to get indices_rank.");
+  }
+  if (!exla::nif::get_list(env, argv[6], update_window_dims)) {
+    return exla::nif::error(env, "Unable to get update_window_dims.");
+  }
+  if (!exla::nif::get_list(env, argv[7], inserted_window_dims)) {
+    return exla::nif::error(env, "Unable to get inserted_window_dims.");
+  }
+  if (!exla::nif::get_list(env, argv[8], index_dims_to_window_dims)) {
+    return exla::nif::error(env, "Unable to get index_dims_to_window_dims.");
+  }
 
-  mlir::Value res = (*function)->ScatterOp(*target, *indices, *updates, add_or_put);
+  mlir::Value res = (*function)->ScatterOp(
+      *target,
+      *indices,
+      *updates,
+      add_or_put,
+      indices_rank,
+      update_window_dims,
+      inserted_window_dims,
+      index_dims_to_window_dims);
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
 
@@ -1027,6 +1173,46 @@ ERL_NIF_TERM mlir_select_and_scatter(ErlNifEnv* env, int argc, const ERL_NIF_TER
   }
 
   mlir::Value res = (*function)->SelectAndScatterOp(*target, *source, *init_value, gt_or_lt, window_dimensions, window_strides, padding);
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
+ERL_NIF_TERM mlir_gather(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 8) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value *source, *indices;
+
+  int64_t index_vector_dim;
+  std::vector<int64_t> slice_sizes, offset_dims, collapsed_slice_dims, start_index_map;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], source)) {
+    return exla::nif::error(env, "Unable to get source.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[2], indices)) {
+    return exla::nif::error(env, "Unable to get indices.");
+  }
+  if (!exla::nif::get_list(env, argv[3], slice_sizes)) {
+    return exla::nif::error(env, "Unable to get slice_sizes.");
+  }
+  if (!exla::nif::get_list(env, argv[4], offset_dims)) {
+    return exla::nif::error(env, "Unable to get offset_dims.");
+  }
+  if (!exla::nif::get_list(env, argv[5], collapsed_slice_dims)) {
+    return exla::nif::error(env, "Unable to get collapsed_slice_dims.");
+  }
+  if (!exla::nif::get_list(env, argv[6], start_index_map)) {
+    return exla::nif::error(env, "Unable to get start_index_map.");
+  }
+  if (!exla::nif::get(env, argv[7], &index_vector_dim)) {
+    return exla::nif::error(env, "Unable to get index_vector_dim.");
+  }
+
+  mlir::Value res = (*function)->GatherOp(*source, *indices, offset_dims, collapsed_slice_dims, start_index_map, slice_sizes, index_vector_dim);
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
 

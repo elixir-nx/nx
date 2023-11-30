@@ -9,7 +9,8 @@ defmodule EXLA.NIF do
 
   def new_mlir_module, do: :erlang.nif_error(:undef)
 
-  def create_mlir_function(_module, _name, _arg_types, _ret_type), do: :erlang.nif_error(:undef)
+  def create_mlir_function(_module, _name, _arg_types, _ret_type, _is_public),
+    do: :erlang.nif_error(:undef)
 
   def get_mlir_function_arguments(_function), do: :erlang.nif_error(:undef)
 
@@ -46,7 +47,16 @@ defmodule EXLA.NIF do
   def mlir_get_tuple_element(_function, _tuple, _index), do: :erlang.nif_error(:undef)
   def mlir_pad(_function, _tensor, _pad, _low, _high, _mid), do: :erlang.nif_error(:undef)
 
-  def mlir_build(_function, _root), do: :erlang.nif_error(:undef)
+  def mlir_reduce(_function, _reducer, _init_values, _inputs, _dimensions),
+    do: :erlang.nif_error(:undef)
+
+  def mlir_map(_function, _mapper, _inputs, _dimensions),
+    do: :erlang.nif_error(:undef)
+
+  def mlir_if(_function, _pred, _output_shape, _implicit_args, _on_true, _on_false),
+    do: :erlang.nif_error(:undef)
+
+  def mlir_build(_function, _root, _return?), do: :erlang.nif_error(:undef)
 
   def mlir_compile(
         _client,
@@ -61,7 +71,7 @@ defmodule EXLA.NIF do
 
   def mlir_convert(_function, _tensor, _type), do: :erlang.nif_error(:undef)
   def mlir_bitcast_convert(_function, _tensor, _type, _dims), do: :erlang.nif_error(:undef)
-  def mlir_sort(_function, _tensors, _dim, _desc), do: :erlang.nif_error(:undef)
+  def mlir_sort(_function, _tensors, _dim, _desc, _stable), do: :erlang.nif_error(:undef)
 
   def mlir_get_shape(_tensor), do: :erlang.nif_error(:undef)
 
@@ -82,8 +92,18 @@ defmodule EXLA.NIF do
   def mlir_select(_function, _pred, _on_true, _on_false),
     do: :erlang.nif_error(:undef)
 
-  def mlir_scatter(_function, _target, _indices, _updates, _add_or_put),
-    do: :erlang.nif_error(:undef)
+  def mlir_scatter(
+        _function,
+        _target,
+        _indices,
+        _updates,
+        _add_or_put,
+        _indices_rank,
+        _update_window_dims,
+        _inserted_window_dims,
+        _index_axes_to_target_axes
+      ),
+      do: :erlang.nif_error(:undef)
 
   def mlir_select_and_scatter(
         _function,
@@ -94,6 +114,18 @@ defmodule EXLA.NIF do
         _window_dimensions,
         _window_strides,
         _padding
+      ),
+      do: :erlang.nif_error(:undef)
+
+  def mlir_gather(
+        _function,
+        _sorce,
+        _indices,
+        _slice_sizes,
+        _offset_dims,
+        _collapsed_slice_dims,
+        _start_index_map,
+        _index_vector_dim
       ),
       do: :erlang.nif_error(:undef)
 
@@ -317,12 +349,12 @@ defmodule EXLA.NIF do
   def concatenate(_builder, _operands, _dimension),
     do: :erlang.nif_error(:undef)
 
-  def sort(_operand, _comparator, _dimension),
+  def sort(_operand, _comparator, _dimension, _stable),
     do: :erlang.nif_error(:undef)
 
   def top_k(_operand, _k), do: :erlang.nif_error(:undef)
 
-  def variadic_sort(_operands, _comparator, _dimension),
+  def variadic_sort(_operands, _comparator, _dimension, _stable),
     do: :erlang.nif_error(:undef)
 
   def tuple(_builder, _elements), do: :erlang.nif_error(:undef)

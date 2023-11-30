@@ -1,0 +1,508 @@
+# Exercises: 1-20
+
+```elixir
+Mix.install([{:nx, "~> 0.6"}])
+```
+
+## Introduction
+
+Inspired by the Python notebook [100 Numpy Exercises](https://www.kaggle.com/code/utsav15/100-numpy-exercises/notebook).
+
+## 1-10
+
+**1. Install `Nx` in a Livebook. (★☆☆)**
+
+```elixir
+# Add your solution here.
+```
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  Mix.install([{:nx, "~> 0.6"}])
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+**2. Create a 1-D tensor of 10 zeros. (★☆☆)**
+
+```elixir
+# Add your solution here.
+```
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  Nx.broadcast(0, {10})
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+**3. Find the number of elements in `tensor`. (★☆☆)**
+
+```elixir
+tensor = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+# Add your solution here.
+```
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  Nx.size(tensor)
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+**4. Find the number of bytes of memory in `tensor`. (★☆☆)**
+
+```elixir
+tensor = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+# Add your solution here.
+```
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  Nx.byte_size(tensor)
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+**5a. Use `Nx.sum/2` to find the sum of all elements of `tensor`. (★☆☆)**
+
+```elixir
+tensor = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+# Add your solution here.
+```
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  Nx.sum(tensor)
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+**5b. Read the [documentation for `Nx.sum/2`](https://hexdocs.pm/nx/Nx.html#sum/2) then provide the correct option to sum across the _rows_. (★☆☆)**
+
+```elixir
+# Add your solution here.
+```
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  Nx.sum(tensor, axes: [1])
+  ```
+
+  <div style="padding-top: 16px">
+    <i>Tip:</i> You can also hover over a function inside Livebook code cells to display its documentation.
+  </div>
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+**6. Create a tensor of zeros of size 10 but where the fifth value is 1. (★☆☆)**
+
+```elixir
+# Add your solution here.
+```
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  zeros = Nx.broadcast(0, {10})
+  index = Nx.tensor([4])
+  Nx.indexed_put(zeros, index, 1)
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+**7. Create a 3x3 tensor with values ranging from 0 to 8. (★☆☆)**
+
+```elixir
+# Add your solution here.
+```
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  Nx.iota({3, 3})
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+**8. Create a tensor with values ranging from 10 to 49. (★☆☆)**
+
+```elixir
+# Add your solution here.
+```
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution 1</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  Nx.iota({39})
+  |> Nx.add(10)
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution 2</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  Nx.linspace(10, 49, n: 39, type: :s64)
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+**9. Reverse `tensor` (first element becomes last). (★☆☆)**
+
+```elixir
+tensor = Nx.tensor([2, 4, 6, 8])
+# Add your solution here.
+```
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  Nx.reverse(tensor)
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+**10a. Given an initial `tensor`, build a "mask" of non-zero elements. That is, build a second tensor with the same shape as the original, but that has a 1 wherever the original has a non-zero element and a 0 elsewhere. (★☆☆)**
+
+```elixir
+tensor = Nx.tensor([1, 2, 0, 0, 4, 0])
+# Add your solution here.
+```
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  mask = Nx.not_equal(tensor, 0)
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+**10b. Use the mask from 10a to replace each 0 from `tensor` with -1. (★☆☆)**
+
+```elixir
+# Add your solution here.
+```
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  Nx.select(mask, tensor, -1)
+  ```
+
+  </div>
+</details>
+
+## 11-20
+
+**11. Create a 3x3 identity tensor. (★☆☆)**
+
+```elixir
+# Add your solution here.
+```
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  Nx.eye(3)
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+**12. Create a 3x3x3 tensor with random values. (★☆☆)**
+
+```elixir
+# Add your solution here.
+```
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  key = Nx.Random.key(0)
+  {random, _} = Nx.Random.normal(key, shape: {3, 3, 3})
+  random
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+**13. Create a random 10x10 tensor then find its minimum and maximum values. (★☆☆)**
+
+```elixir
+# Add your solution here.
+```
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  key = Nx.Random.key(0)
+  {tensor, _} = Nx.Random.normal(key, shape: {10, 10})
+
+  %{
+    min: Nx.reduce_min(tensor),
+    max: Nx.reduce_max(tensor)
+  }
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+**14. Create a random 1D tensor of size 30 then find its mean. (★☆☆)**
+
+```elixir
+# Add your solution here.
+```
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  key = Nx.Random.key(0)
+  {tensor, _} = Nx.Random.normal(key, shape: {30})
+
+  Nx.mean(tensor)
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+**15. Create a 4x4 tensor with 1 on the border and 0 inside. (★☆☆)**
+
+```elixir
+# Add your solution here.
+```
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  Nx.broadcast(1, {4, 4})
+  |> Nx.put_slice([1, 1], Nx.broadcast(0, {2, 2}))
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+**16. Add a border of 0 around `tensor` (end result will be a 5x5 tensor). (★☆☆)**
+
+```elixir
+tensor = Nx.broadcast(1, {3, 3})
+# Add your solution here.
+```
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  Nx.pad(tensor, 0, [{1, 1, 0}, {1, 1, 0}])
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+**17. Determine the results of the following expressions. (★☆☆)**
+
+```elixir
+nan = Nx.Constants.nan()
+Nx.multiply(0, nan)
+Nx.equal(nan, nan)
+Nx.greater(nan, nan)
+Nx.subtract(nan, nan)
+
+# Add your solution here.
+```
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution</summary>
+  <div style="padding-top: 8px">
+
+  ```
+  #Nx.Tensor<
+    f32
+    NaN
+  >
+  #Nx.Tensor<
+    u8
+    0
+  >
+  #Nx.Tensor<
+    u8
+    0
+  >
+  #Nx.Tensor<
+    f32
+    NaN
+  >
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+**18. Create a 5x5 tensor with values 1,2,3,4 just below the diagonal. (★☆☆)**
+
+```elixir
+# Add your solution here.
+```
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  Nx.tensor([1, 2, 3, 4])
+  |> Nx.make_diagonal(offset: -1)
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+**19. Create a 8x8 tensor of 0 and 1 in a checkerboard pattern with 0 as the first element using [`Nx.tile`](https://hexdocs.pm/nx/Nx.html#tile/2). (★☆☆)**
+
+```elixir
+# Add your solution here.
+```
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  Nx.tensor([[0, 1], [1, 0]])
+  |> Nx.tile([4, 4])
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+**20. Produce the same checkerboard pattern from exercise 19, but _without_ using `Nx.tile`. (★☆☆)**
+
+```elixir
+# Add your solution here.
+# Hint: try using `Nx.iota` in combination with `Nx.remainder`.
+```
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution 1</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  t = Nx.iota({8, 1})
+
+  Nx.transpose(t)
+  |> Nx.add(t)
+  |> Nx.remainder(2)
+  ```
+
+  </div>
+</details>
+
+<!-- livebook:{"break_markdown":true} -->
+
+<details style="margin-left: 32px">
+  <summary style="cursor: pointer; font-weight: bold;">Example solution 2</summary>
+  <div style="padding-top: 8px">
+
+  ```elixir
+  Nx.iota({9, 9})
+  |> Nx.remainder(2)
+  |> Nx.slice([0, 0], [8, 8])
+  ```
+
+  </div>
+</details>

@@ -140,7 +140,7 @@ up the tensor. If all of our data only uses positive numbers from
 Nx.tensor([[1, 2], [3, 4]], type: :u8) |> Nx.to_binary()
 ```
 
-If you have already have binary, you can directly convert it to a tensor
+If you already have a binary, you can directly convert it to a tensor
 by passing the binary and the type:
 
 ```elixir
@@ -212,7 +212,7 @@ Nx.shape(tensor)
 We can also create a new tensor with a new shape using  `Nx.reshape/2`:
 
 ```elixir
-Nx.reshape(tensor, {1, 9}, names: [:batches, :values])
+Nx.reshape(tensor, {1, 4}, names: [:batches, :values])
 ```
 
 This operation reuses all of the tensor data and simply
@@ -606,6 +606,8 @@ Here's the Elixir equivalent of those functions:
 
 ```elixir
 defmodule Funs do
+  import Nx.Defn
+
   defn poly(x) do
     3 * Nx.pow(x, 2) + 2 * x + 1
   end

@@ -473,10 +473,10 @@ ERL_NIF_TERM load_pjrt_plugin(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
     return exla::nif::error(env, "Unable to get library path.");
   }
 
-  xla::Status result = pjrt::LoadPjrtPlugin(device_type, library_path);
+  auto result = pjrt::LoadPjrtPlugin(device_type, library_path);
 
   if (!result.ok()) {
-    return exla::nif::error(env, result.message().data());
+    return exla::nif::error(env, result.status().message().data());
   } else {
     return exla::nif::ok(env);
   }
@@ -629,7 +629,7 @@ ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 static ErlNifFunc exla_funcs[] = {
     // MLIR Builder
     {"new_mlir_module", 0, new_mlir_module},
-    {"create_mlir_function", 4, create_mlir_function},
+    {"create_mlir_function", 5, create_mlir_function},
     {"get_mlir_function_arguments", 1, get_mlir_function_arguments},
     {"mlir_add", 3, mlir_add},
     {"mlir_subtract", 3, mlir_subtract},
@@ -648,7 +648,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_less_equal", 3, mlir_less_equal},
     {"mlir_greater", 3, mlir_greater},
     {"mlir_greater_equal", 3, mlir_greater_equal},
-    {"mlir_build", 2, mlir_build},
+    {"mlir_build", 3, mlir_build},
     {"dump_mlir_module", 1, dump_mlir_module},
     {"mlir_get_shape", 1, mlir_get_shape},
     {"mlir_convert", 3, mlir_convert},
@@ -677,9 +677,10 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_sqrt", 2, mlir_sqrt},
     {"mlir_cbrt", 2, mlir_cbrt},
     {"mlir_iota", 3, mlir_iota},
-    {"mlir_sort", 4, mlir_sort},
-    {"mlir_scatter", 5, mlir_scatter},
+    {"mlir_sort", 5, mlir_sort},
+    {"mlir_scatter", 9, mlir_scatter},
     {"mlir_select_and_scatter", 8, mlir_select_and_scatter},
+    {"mlir_gather", 8, mlir_gather},
     {"mlir_reshape", 3, mlir_reshape},
     {"mlir_reverse", 3, mlir_reverse},
     {"mlir_transpose", 3, mlir_transpose},
@@ -720,6 +721,9 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_dynamic_update_slice", 4, mlir_dynamic_update_slice},
     {"mlir_infeed", 3, mlir_infeed},
     {"mlir_outfeed", 3, mlir_outfeed},
+    {"mlir_reduce", 5, mlir_reduce},
+    {"mlir_map", 4, mlir_map},
+    {"mlir_if", 6, mlir_if},
     // XlaBuilder
     {"new_builder", 1, new_builder},
     {"create_sub_builder", 2, create_sub_builder},
@@ -820,7 +824,6 @@ static ErlNifFunc exla_funcs[] = {
     {"get_tuple_element", 2, get_tuple_element},
     // Control Flow
     {"conditional", 5, conditional_if},
-    {"conditional", 3, conditional_multi},
     {"select", 3, select},
     {"while", 3, while_loop},
     {"call", 3, call},
@@ -855,9 +858,9 @@ static ErlNifFunc exla_funcs[] = {
     {"clamp", 3, clamp},
     {"reverse", 2, reverse},
     {"concatenate", 3, concatenate},
-    {"sort", 3, sort},
+    {"sort", 4, sort},
     {"top_k", 2, top_k},
-    {"variadic_sort", 3, variadic_sort},
+    {"variadic_sort", 4, variadic_sort},
     // LinAlg
     {"cholesky", 1, cholesky},
     {"eigh", 4, eigh},

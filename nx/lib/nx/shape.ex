@@ -540,8 +540,9 @@ defmodule Nx.Shape do
         List.duplicate({0, 0}, tuple_size(shape))
 
       :same ->
-        Enum.zip_with(Tuple.to_list(shape), Tuple.to_list(kernel_size), fn dim, k ->
-          padding_size = max(dim - 1 + k - dim, 0)
+        Enum.map(Tuple.to_list(kernel_size), fn k ->
+          padding_size = max(k - 1, 0)
+
           {floor(padding_size / 2), ceil(padding_size / 2)}
         end)
 
@@ -910,11 +911,7 @@ defmodule Nx.Shape do
   defp validate_strides!(_, _), do: :ok
 
   @doc "Validates the input shapes for `Nx.indexed_*/3`"
-  def indexed(
-        %Nx.Tensor{shape: target_shape},
-        %Nx.Tensor{shape: indices_shape},
-        %Nx.Tensor{shape: updates_shape}
-      ) do
+  def indexed_scalar(target_shape, indices_shape, updates_shape) do
     r = tuple_size(target_shape)
 
     case {indices_shape, updates_shape} do
@@ -926,24 +923,46 @@ defmodule Nx.Shape do
         raise ArgumentError,
               "updates must be a scalar tensor when indices has rank 1, got: #{inspect(updates_shape)}"
 
-      _ when tuple_size(indices_shape) > 2 ->
-        raise(
-          ArgumentError,
-          "indices must be a rank 1 or 2 tensor, got: #{tuple_size(indices_shape)}"
-        )
+      {_, _} ->
+        :ok
+    end
+  end
 
-      _ when tuple_size(indices_shape) > 1 and tuple_size(updates_shape) != 1 ->
-        raise(ArgumentError, "updates must be a rank 1 tensor, got: #{tuple_size(updates_shape)}")
+  @doc "Validates the input shapes for `Nx.indexed_*/3`"
+  def indexed(target_shape, indices_shape, updates_shape, axes) do
+    r = tuple_size(target_shape)
+    i = tuple_size(indices_shape)
+    u = tuple_size(updates_shape)
 
-      {{_, n}, _} when n != r ->
+    case indices_shape do
+      _ when i != 2 ->
+        raise ArgumentError, "indices must be a rank 1 or 2 tensor, got: #{i}"
+
+      {n, _} when n != elem(updates_shape, 0) ->
         raise ArgumentError,
-              "expected indices to have shape {*, #{r}}, got: #{inspect(indices_shape)}"
+              "expected the leading axis of indices (#{inspect(indices_shape)}) " <>
+                "and leading axis of updates (#{inspect(updates_shape)}) to match"
 
-      {{n, _}, {m}} when n != m ->
+      {_, n} when u - 1 + n != r ->
         raise ArgumentError,
-              "expected updates tensor to match the first axis of indices tensor with shape #{inspect(indices_shape)}, got {#{m}}"
+              "expected the rank of the input (#{r}) to be equal to " <>
+                "the rank of the updates (#{u}) plus " <>
+                "the trailing axis of indices (#{inspect(indices_shape)}) minus one"
+
+      _ when u == 1 ->
+        :ok
 
       _ ->
+        Enum.reduce(count_up(r, 0) -- axes, 1, fn target_axis, update_axis ->
+          if elem(updates_shape, update_axis) > elem(target_shape, target_axis) do
+            raise ArgumentError,
+                  "axis (#{update_axis}) of updates (#{inspect(updates_shape)}) must be less than " <>
+                    "or equal to the axis (#{target_axis}) of #{inspect(target_shape)})"
+          end
+
+          update_axis + 1
+        end)
+
         :ok
     end
   end
@@ -1585,46 +1604,46 @@ defmodule Nx.Shape do
 
   ## Examples
 
-      iex> Nx.Shape.gather({2, 3}, {10, 2})
+      iex> Nx.Shape.gather({2, 3}, {10, 2}, [0, 1])
       {{10}, [nil]}
 
-      iex> Nx.Shape.gather({2, 3}, {4, 5, 2})
+      iex> Nx.Shape.gather({2, 3}, {4, 5, 2}, [0, 1])
       {{4, 5}, [nil, nil]}
 
-      iex> Nx.Shape.gather({2}, {4, 5, 1})
+      iex> Nx.Shape.gather({2}, {4, 5, 1}, [0])
       {{4, 5}, [nil, nil]}
 
-      iex> Nx.Shape.gather({2, 2, 2, 2, 2}, {3, 3, 5})
+      iex> Nx.Shape.gather({2, 2, 2, 2, 2}, {3, 3, 5}, [0, 1, 2, 3, 4])
       {{3, 3}, [nil, nil]}
 
-      iex> Nx.Shape.gather({2, 2, 2}, {3})
+      iex> Nx.Shape.gather({2, 2, 2}, {3}, [0, 1, 2])
       {{}, []}
+
+      iex> Nx.Shape.gather({2, 2, 2, 2, 2}, {3, 3, 3}, [0, 1, 2])
+      {{3, 3, 2, 2}, [nil, nil, nil, nil]}
 
   ## Error cases
 
-      iex> Nx.Shape.gather({2, 3}, {})
+      iex> Nx.Shape.gather({2, 3}, {}, [])
       ** (ArgumentError) expected indices rank to be at least 1, got: 0
 
-      iex> Nx.Shape.gather({2, 3}, {1})
-      ** (ArgumentError) expected the last indices dimension size (1) to match the tensor rank (2)
   """
-  def gather(shape, indices_shape) do
-    shape = Tuple.to_list(shape)
-    rank = length(shape)
-    indices_shape = Tuple.to_list(indices_shape)
+  def gather(shape, indices_shape, axes) do
+    rank = tuple_size(shape)
 
-    if indices_shape == [] do
+    if indices_shape == {} do
       raise ArgumentError, "expected indices rank to be at least 1, got: 0"
     end
 
-    {outer_shape, [last_size]} = Enum.split(indices_shape, -1)
+    {outer_shape, [last_size]} = indices_shape |> Tuple.to_list() |> Enum.split(-1)
 
-    if last_size != rank do
+    if last_size > rank do
       raise ArgumentError,
-            "expected the last indices dimension size (#{last_size}) to match the tensor rank (#{rank})"
+            "expected the last indices dimension size (#{last_size}) to be less than or equal to the tensor rank (#{rank})"
     end
 
-    shape = List.to_tuple(outer_shape)
+    inner_shape = for i <- Nx.axes(shape), i not in axes, do: elem(shape, i)
+    shape = List.to_tuple(outer_shape ++ inner_shape)
     names = List.duplicate(nil, tuple_size(shape))
     {shape, names}
   end

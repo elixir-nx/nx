@@ -445,6 +445,6 @@ defimpl Nx.LazyContainer, for: Nx.Batch do
       |> List.duplicate(Nx.rank(tensor))
       |> List.replace_at(@axis, {0, pad_size, 0})
 
-    Nx.pad(tensor, Nx.tensor(0, type: Nx.type(tensor)), padding)
+    Nx.pad(tensor, Nx.tensor(0, type: Nx.type(tensor), backend: Nx.BinaryBackend), padding)
   end
 end

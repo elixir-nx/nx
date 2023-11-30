@@ -2093,30 +2093,6 @@ defmodule NxTest do
   end
 
   describe "sort/2" do
-    test "raises for unknown keys in options" do
-      t = Nx.tensor([3, 2, 1, 0])
-
-      assert_raise(
-        ArgumentError,
-        "unknown key :blep in [blep: :all_day], expected one of [:axis, :direction]",
-        fn ->
-          Nx.sort(t, blep: :all_day)
-        end
-      )
-    end
-
-    test "raises for non-keyword options" do
-      t = Nx.tensor([3, 2, 1, 0])
-
-      assert_raise(
-        ArgumentError,
-        "expected a keyword list with keys [:axis, :direction], got: [:blep]",
-        fn ->
-          Nx.sort(t, [:blep])
-        end
-      )
-    end
-
     test "raises for invalid direction" do
       t = Nx.tensor([3, 2, 1, 0])
 

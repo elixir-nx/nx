@@ -734,16 +734,6 @@ defmodule Nx.DefnTest do
     test "min/2" do
       assert %T{data: %Expr{op: :min, args: [_, _]}} = min_two(1, 2)
     end
-
-    defn(maxu(a), do: rewrite_types(a, max_unsigned_type: {:u, 32}))
-    defn(maxs(a), do: rewrite_types(a, max_signed_type: {:s, 32}))
-    defn(maxf(a), do: rewrite_types(a, max_float_type: {:f, 32}))
-
-    test "max_*_type/2" do
-      assert %T{data: %Expr{op: :as_type, args: [_]}} = maxu(Nx.tensor(1, type: {:u, 64}))
-      assert %T{data: %Expr{op: :as_type, args: [_]}} = maxs(Nx.tensor(1, type: {:s, 64}))
-      assert %T{data: %Expr{op: :as_type, args: [_]}} = maxf(Nx.tensor(1, type: {:f, 64}))
-    end
   end
 
   describe "access" do
@@ -797,6 +787,18 @@ defmodule Nx.DefnTest do
                data: %Expr{op: :slice, args: [_, [1, 1, 0], [1, 2, 5], [1, 1, 1]]},
                shape: {1, 2, 5}
              } = slice
+    end
+
+    defn(mixed_access(t), do: t[[.., Nx.u32(0)]])
+
+    test "multi dimensional mixed-type access" do
+      assert %T{data: %Expr{op: :squeeze, args: [slice, [1]]}, shape: {3}} =
+               mixed_access(Nx.iota({3, 4}))
+
+      assert %T{data: %Expr{op: :slice, args: [_, [i, j], [3, 1], [1, 1]]}, shape: {3, 1}} = slice
+
+      assert i.type == {:u, 32}
+      assert j.type == {:u, 32}
     end
 
     defn(keyword_access(t), do: t[[z: 1..-2//1]][[y: 1..2]])

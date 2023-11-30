@@ -180,7 +180,7 @@ defmodule Nx.Defn.Tree do
   end
 
   def apply_args(%T{data: %Expr{op: :optional, args: args}}, type, acc, fun) do
-    [call, expr] = args
+    [call, expr, callback] = args
     {call, acc} = fun.(call, acc)
 
     {expr, acc} =
@@ -189,7 +189,7 @@ defmodule Nx.Defn.Tree do
         :scope -> {expr, acc}
       end
 
-    {[call, expr], acc}
+    {[call, expr, callback], acc}
   end
 
   def apply_args(%T{data: %Expr{op: :token, args: [token]}}, _type, acc, fun) do
@@ -244,78 +244,5 @@ defmodule Nx.Defn.Tree do
       %T{data: %Expr{}} = arg, acc -> fun.(arg, acc)
       arg, acc -> {arg, acc}
     end)
-  end
-
-  ## Type helpers
-
-  @doc """
-  Rewrites the types of the given tensor expressions according to
-  the given options.
-
-  ## Options
-
-    * `:max_float_type` - set the max float type
-    * `:max_signed_type` - set the max signed integer type
-    * `:max_unsigned_type` - set the max unsigned integer type
-
-  """
-  def rewrite_types(tensor_expr, opts \\ []) when is_list(opts) do
-    {_, max_float_size} = max_float_type = opts[:max_float_type] || {:f, 64}
-    {_, max_signed_size} = max_signed_type = opts[:max_signed_type] || {:s, 64}
-    {_, max_unsigned_size} = max_unsigned_type = opts[:max_unsigned_type] || {:u, 64}
-
-    if not Nx.Type.float?(max_float_type) do
-      raise ArgumentError, ":max_float_type must be float type, got: #{inspect(max_float_type)}"
-    end
-
-    if max_float_type != {:f, 64} or max_signed_type != {:s, 64} or max_unsigned_type != {:u, 64} do
-      rewrite_type(tensor_expr, fn
-        {:u, size} when size >= max_unsigned_size -> max_unsigned_type
-        {:s, size} when size >= max_signed_size -> max_signed_type
-        {:f, size} when size >= max_float_size -> max_float_type
-        {:bf, size} when size >= max_float_size -> max_float_type
-        type -> type
-      end)
-    else
-      tensor_expr
-    end
-  end
-
-  defp rewrite_type(expr, fun) do
-    {res, _} = Composite.traverse(expr, %{}, &rewrite_type(&1, &2, fun))
-    res
-  end
-
-  defp rewrite_type(%T{data: %Expr{id: id, op: op}} = t, cache, fun) do
-    case cache do
-      %{^id => res} ->
-        {res, cache}
-
-      %{} ->
-        {args, cache} = apply_args(t, cache, &rewrite_type(&1, &2, fun))
-        res = rewrite_type(op, args, t, fun)
-        {res, Map.put(cache, id, res)}
-    end
-  end
-
-  defp rewrite_type(:parameter, _args, %{data: %{context: :root}} = t, type_fun) do
-    Nx.as_type(t, type_fun.(t.type))
-  end
-
-  defp rewrite_type(:tensor, [arg], t, type_fun) do
-    type = type_fun.(t.type)
-    rewrite_type_args(:tensor, t, type, [Nx.as_type(arg, type)])
-  end
-
-  defp rewrite_type(op, args, t, type_fun) do
-    rewrite_type_args(op, t, type_fun.(t.type), args)
-  end
-
-  defp rewrite_type_args(:constant, t, type, [arg]) do
-    Expr.constant(%{t | type: type}, arg, [])
-  end
-
-  defp rewrite_type_args(_op, %{data: data} = t, type, args) do
-    %{t | data: %{data | id: Expr.id(), args: args}, type: type}
   end
 end

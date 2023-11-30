@@ -151,11 +151,9 @@ defmodule Torchx.Backend do
 
     to_batch =
       if remainder != 0 and leftover == :repeat do
-        slice_shape = t.shape |> Tuple.delete_at(0) |> Tuple.insert_at(0, remainder)
-
         t_torchx = from_nx(t)
 
-        slice = torchx_slice(t_torchx, t.shape, slice_shape, [0], [remainder], [1])
+        slice = torchx_slice(t_torchx, t.shape, [0], [remainder], [1])
 
         Torchx.concatenate([t_torchx, slice], 0)
       else
@@ -286,7 +284,7 @@ defmodule Torchx.Backend do
 
   @impl true
   def slice(
-        %T{shape: output_shape} = out,
+        out,
         %T{shape: input_shape} = t,
         start_indices,
         lengths,
@@ -294,52 +292,24 @@ defmodule Torchx.Backend do
       ) do
     t
     |> from_nx()
-    |> torchx_slice(input_shape, output_shape, start_indices, lengths, strides)
+    |> torchx_slice(input_shape, start_indices, lengths, strides)
     |> to_nx(out)
   end
 
-  defp torchx_slice(t, input_shape, output_shape, start_indices, lengths, strides) do
-    t
-    |> narrow(start_indices, lengths, 0, input_shape)
-    |> stride(output_shape, lengths, strides)
-  end
+  defp torchx_slice(t, input_shape, start_indices, lengths, strides) do
+    starts =
+      start_indices
+      |> Enum.zip(lengths)
+      |> Enum.with_index(fn {start, len}, axis ->
+        min(to_number(start), elem(input_shape, axis) - len)
+      end)
 
-  defp narrow(ref, [start | starts], [length | lengths], axis, shape) do
-    dim = elem(shape, axis)
-    start = to_number(start)
-    start = min(start, dim - length)
-
-    # Nothing to narrow
-    if start == 0 and length == dim do
-      narrow(ref, starts, lengths, axis + 1, shape)
-    else
-      ref
-      |> Torchx.narrow(axis, start, length)
-      |> narrow(starts, lengths, axis + 1, shape)
-    end
-  end
-
-  defp narrow(ref, [], [], _axis, _shape), do: ref
-
-  defp stride(ref, shape, lengths, strides) do
-    if Enum.all?(strides, &(&1 == 1)) do
-      ref
-    else
-      ref
-      |> Torchx.as_strided(shape, steps_to_strides(lengths, strides), 0)
-    end
-  end
-
-  def steps_to_strides(shape, steps) do
-    for {dim, step} <- Enum.zip(shape, steps) |> Enum.reverse(), reduce: {1, []} do
-      {offset, strides} -> {offset * dim, [offset * step | strides]}
-    end
-    |> elem(1)
+    Torchx.slice(t, starts, lengths, strides)
   end
 
   @impl true
   def put_slice(out, input, start_indices_unbounded, slice) do
-    {device, _} = input_tx = from_nx(input)
+    input_tx = from_nx(input)
 
     slice_shape_list = Tuple.to_list(slice.shape)
 
@@ -351,30 +321,11 @@ defmodule Torchx.Backend do
         min(max(idx, 0), dim_size - len)
       end)
 
-    range_or_ranges =
-      [start_indices, slice_shape_list]
-      |> Enum.zip_with(fn [s, l] -> s..(s + l - 1)//1 end)
-      |> Enum.reverse()
-      |> Enum.reduce(fn range, acc -> for x <- range, y <- acc, do: List.flatten([x, y]) end)
-
-    # if below is needed for when the reduce receives a single-element list
-    linear_indices_tx =
-      if is_list(range_or_ranges) do
-        range_or_ranges
-        |> Nx.tensor(backend: {__MODULE__, device: device})
-        |> then(&as_torchx_linear_indices(input.shape, &1))
-      else
-        range_or_ranges
-        |> Enum.to_list()
-        |> Nx.tensor(backend: {__MODULE__, device: device})
-        |> Torchx.from_nx()
-      end
-
     slice_tx = slice |> from_nx() |> Torchx.to_type(to_torch_type(out.type))
 
     input_tx
     |> Torchx.to_type(to_torch_type(out.type))
-    |> Torchx.put(linear_indices_tx, slice_tx)
+    |> Torchx.put(start_indices, slice_tx)
     |> to_nx(out)
   end
 
@@ -402,11 +353,8 @@ defmodule Torchx.Backend do
       t.shape
       |> Tuple.to_list()
       |> Enum.with_index(fn
-        _x, ^axis ->
-          1
-
-        x, _ ->
-          x
+        _x, ^axis -> 1
+        x, _ -> x
       end)
 
     indices_for_axis =
@@ -431,111 +379,95 @@ defmodule Torchx.Backend do
       end)
       |> Nx.concatenate(axis: 1)
 
-    gather(out, t, indices)
+    # TODO: maybe rewrite it as gather now behaves differently
+    gather(out, t, indices, [])
   end
 
   @impl true
-  def gather(out, tensor, idx) do
-    linear_indices_tx = as_torchx_linear_indices(tensor.shape, idx)
+  def gather(out, tensor, indices, opts) do
+    tensor_axes = Nx.axes(tensor)
+    axes = opts[:axes]
 
-    tensor
-    |> from_nx()
-    |> Torchx.reshape({Tuple.product(tensor.shape)})
-    |> Torchx.gather(linear_indices_tx, 0)
+    tensor =
+      if is_nil(axes) or List.starts_with?(tensor_axes, axes) do
+        tensor
+      else
+        Nx.transpose(tensor, axes: axes ++ (tensor_axes -- axes))
+      end
+
+    {tensor_tx, indices_tx} = indices_from_nx(tensor, indices)
+
+    tensor_tx
+    |> Torchx.index(indices_tx)
     |> Torchx.reshape(out.shape)
     |> to_nx(out)
   end
 
-  @impl true
-  def indexed_add(out, tensor, indices, updates) do
-    indexed(out, tensor, indices, updates, :indexed_add)
+  defp indices_from_nx(tensor, indices) do
+    {device, _} = tensor_tx = from_nx(tensor)
+    shape = tensor.shape
+
+    indices_rank = tuple_size(indices.shape)
+    transpose_axes = [indices_rank - 1 | Enum.to_list(0..(indices_rank - 2))]
+    indices = Nx.transpose(indices, axes: transpose_axes)
+
+    n = elem(indices.shape, 0)
+    zero = Torchx.scalar_tensor(0, :long, device)
+
+    indices_tx =
+      Enum.map(0..(n - 1), fn i ->
+        limit = Torchx.scalar_tensor(elem(shape, i) - 1, :long, device)
+        indices[i] |> from_nx() |> Torchx.clip(zero, limit)
+      end)
+
+    {tensor_tx, indices_tx}
   end
 
   @impl true
-  def indexed_put(out, tensor, indices, updates) do
-    indexed(out, tensor, indices, updates, :indexed_put)
+  def indexed_add(out, tensor, indices, updates, opts) do
+    indexed(out, tensor, indices, updates, opts, true)
   end
 
-  defp indexed(out, tensor, indices, updates, function) do
-    linear_indices_tx = as_torchx_linear_indices(tensor.shape, indices)
+  @impl true
+  def indexed_put(out, tensor, indices, updates, opts) do
+    indexed(out, tensor, indices, updates, opts, false)
+  end
+
+  defp indexed(out, tensor, indices, updates, [axes: axes], accumulate?) do
+    tensor_axes = Nx.axes(tensor)
+
+    {permutation_fn, inverse_permutation_fn} =
+      if axes != tensor_axes do
+        permutation = axes ++ (tensor_axes -- axes)
+
+        inverse_permutation =
+          permutation
+          |> Enum.with_index()
+          |> Enum.sort_by(fn {x, _} -> x end)
+          |> Enum.map(fn {_, i} -> i end)
+
+        {
+          &Nx.transpose(&1, axes: permutation),
+          &Torchx.permute(&1, inverse_permutation)
+        }
+      else
+        {& &1, & &1}
+      end
+
+    tensor_transposed = permutation_fn.(tensor)
+
+    {tensor_tx, indices_tx} = indices_from_nx(tensor_transposed, indices)
 
     updates_tx =
       updates
       |> from_nx()
       |> Torchx.to_type(to_torch_type(out.type))
 
-    tensor
-    |> from_nx()
+    tensor_tx
     |> Torchx.to_type(to_torch_type(out.type))
-    |> Torchx.reshape({Tuple.product(tensor.shape)})
-    |> then(&apply(Torchx, function, [&1, linear_indices_tx, updates_tx, 0]))
-    |> Torchx.reshape(out.shape)
+    |> Torchx.index_put(indices_tx, updates_tx, accumulate?)
+    |> then(inverse_permutation_fn)
     |> to_nx(out)
-  end
-
-  defp as_torchx_linear_indices(shape, idx) do
-    # Nx provides indices as a tensor of shape {*, input_dims}
-    # However, torch expects indices to be a tensor of indices along a given axis.
-    # As such, we need to convert the indices tensor to linear indices.
-    # See the `linear_indices_offsets` function for an explanation on the offsets calculation.
-
-    # Index limit validation
-
-    ndims = tuple_size(shape)
-
-    flattened_idx = Nx.reshape(idx, {div(Nx.size(idx), ndims), ndims})
-    shape_tensor = shape |> Tuple.to_list() |> Nx.tensor()
-
-    upper_clamped_idx =
-      flattened_idx
-      |> Nx.greater_equal(shape_tensor)
-      |> Nx.select(Nx.subtract(shape_tensor, 1), flattened_idx)
-
-    lower_clamp_selector = Nx.less(upper_clamped_idx, 0)
-
-    fully_clamped_idx =
-      lower_clamp_selector |> Nx.select(0, upper_clamped_idx) |> Nx.reshape(idx.shape)
-
-    # Actual conversion algorithm
-
-    linear_indices_offsets =
-      shape
-      |> linear_indices_offsets()
-      |> from_nx()
-
-    lin_idx_num_elements =
-      idx.shape |> Tuple.delete_at(tuple_size(idx.shape) - 1) |> Tuple.product()
-
-    fully_clamped_idx
-    |> from_nx()
-    |> Torchx.tensordot(linear_indices_offsets, [tuple_size(idx.shape) - 1], [0])
-    |> Torchx.reshape({lin_idx_num_elements})
-  end
-
-  defp linear_indices_offsets(shape) do
-    # The offsets tensor calculated below follows a formula in which we
-    # multiply the index along each axis by the number of elements contained in all following axes
-    # For example, for a {3, 5, 7, 2} tensor, the offsets tensor is [70, 14, 2, 1]
-
-    # This offsets tensor is then applied to the indices tensor through matrix multiplication:
-    # indices = [[0, 2, 1, 0], [0, 0, 0, 1], [1, 4, 3, 2]]
-    # offsets = [70, 14, 2, 1]
-    # linear_indices = [14 * 2 + 2 * 1, 1 * 1, 70 * 1 + 14 * 4 + 2 * 3 + 1 * 2] = [30, 1, 134]
-
-    # By linear indices, we refer to the indices of a row-major representation of a tensor
-    # it's easy to see the expected values using Nx.iota(tensor), which will output a tensor
-    # which counts in exactly the same way, when provided no arguments. In effect, Nx.iota outputs
-    # the corresponding linear indices for a given tensor shape.
-
-    {offsets_list, _} =
-      shape
-      |> Tuple.to_list()
-      |> Enum.reverse()
-      |> Enum.reduce({[], 1}, fn x, {acc, multiplier} ->
-        {[multiplier | acc], multiplier * x}
-      end)
-
-    Nx.tensor(offsets_list, backend: __MODULE__)
   end
 
   @impl true
@@ -552,10 +484,11 @@ defmodule Torchx.Backend do
   def argsort(out, tensor, opts) do
     axis = opts[:axis]
     is_descending = opts[:direction] == :desc
+    stable = opts[:stable] == true
 
     tensor
     |> from_nx()
-    |> Torchx.argsort(axis, is_descending)
+    |> Torchx.argsort(stable, axis, is_descending)
     |> to_nx(out)
   end
 
@@ -1018,7 +951,7 @@ defmodule Torchx.Backend do
     strides = List.duplicate(1, tuple_size(as_real_shape))
 
     as_real
-    |> torchx_slice(as_real_shape, shape, starts, lengths, strides)
+    |> torchx_slice(as_real_shape, starts, lengths, strides)
     |> Torchx.reshape(shape)
   end
 
@@ -1230,7 +1163,6 @@ defmodule Torchx.Backend do
       |> Torchx.reshape(shape_after_pad)
       |> torchx_slice(
         shape_after_pad,
-        List.to_tuple(final_sizes),
         List.duplicate(0, rank),
         final_sizes,
         List.duplicate(1, rank)
@@ -1271,7 +1203,7 @@ defmodule Torchx.Backend do
         |> Enum.unzip()
 
       strides = List.duplicate(1, tuple_size(shape))
-      torchx_slice(t_tx, shape, List.to_tuple(lengths), starts, lengths, strides)
+      torchx_slice(t_tx, shape, starts, lengths, strides)
     else
       t_tx
     end
@@ -1361,10 +1293,11 @@ defmodule Torchx.Backend do
   def sort(%T{} = out, %T{} = t, opts) do
     axis = opts[:axis]
     descending = opts[:direction] == :desc
+    stable = opts[:stable] == true
 
     t
     |> from_nx()
-    |> Torchx.sort(axis, descending)
+    |> Torchx.sort(stable, axis, descending)
     |> to_nx(out)
   end
 

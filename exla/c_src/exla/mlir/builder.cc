@@ -3,17 +3,18 @@
 #include <memory>
 
 #include "../exla_nif_util.h"
-#include "_virtual_includes/chlo_ops/stablehlo/dialect/ChloOps.h"
-#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mhlo/IR/hlo_ops.h"
+#include "mhlo/transforms/rewriters.h"
+#include "mhlo/utils/type_conversion.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/OwningOpRef.h"
 #include "mlir/IR/PatternMatch.h"
-#include "xla/mlir_hlo/mhlo/IR/hlo_ops.h"
+#include "stablehlo/dialect/ChloOps.h"
+#include "stablehlo/dialect/StablehloOps.h"
 #include "xla/primitive_util.h"
 #include "xla/types.h"
 
@@ -83,7 +84,7 @@ mlir::Type GetMLIRFunctionType(mlir::OpBuilder *builder, xla::Shape *shape) {
   return GetMLIRType(builder, dims, shape->element_type());
 }
 
-mlir::mhlo::DotDimensionNumbersAttr ConvertDotDimensionNumbersToAttr(mlir::OpBuilder *builder, const xla::DotDimensionNumbers &dotDimNumbers) {
+mlir::stablehlo::DotDimensionNumbersAttr ConvertDotDimensionNumbersToAttr(mlir::OpBuilder *builder, const xla::DotDimensionNumbers &dotDimNumbers) {
   std::vector<int64_t> lhsContractingVec(dotDimNumbers.lhs_contracting_dimensions().begin(),
                                          dotDimNumbers.lhs_contracting_dimensions().end());
   std::vector<int64_t> rhsContractingVec(dotDimNumbers.rhs_contracting_dimensions().begin(),
@@ -93,12 +94,16 @@ mlir::mhlo::DotDimensionNumbersAttr ConvertDotDimensionNumbersToAttr(mlir::OpBui
   std::vector<int64_t> rhsBatchVec(dotDimNumbers.rhs_batch_dimensions().begin(),
                                    dotDimNumbers.rhs_batch_dimensions().end());
 
-  return mlir::mhlo::DotDimensionNumbersAttr::get(
+  return mlir::stablehlo::DotDimensionNumbersAttr::get(
       builder->getContext(),
       lhsBatchVec,
       rhsBatchVec,
       lhsContractingVec,
       rhsContractingVec);
+}
+
+void MLIRFunction::dump_mlir_module() {
+  module_->module().dump();
 }
 
 int MLIRFunction::get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *type) {
@@ -183,7 +188,7 @@ MLIRFunction::MLIRFunction(MLIRModule *module, std::unique_ptr<mlir::func::FuncO
 
 mlir::Value MLIRFunction::SubtractOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  auto op = module_->builder()->create<mlir::mhlo::SubtractOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  auto op = module_->builder()->create<mlir::stablehlo::SubtractOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
   return op;
 }
 
@@ -193,10 +198,10 @@ mlir::Value MLIRFunction::ConvertOp(mlir::Value operand, mlir::Type type) {
 
   if (operand.getType().isa<mlir::ComplexType>() && !type.isa<mlir::ComplexType>()) {
     // get the real part of the operand in case we're downcasting from complex to something else
-    operand = builder->create<mlir::mhlo::RealOp>(builder->getUnknownLoc(), operand);
+    operand = builder->create<mlir::stablehlo::RealOp>(builder->getUnknownLoc(), operand);
   }
 
-  auto op = builder->create<mlir::mhlo::ConvertOp>(builder->getUnknownLoc(), operand, type);
+  auto op = builder->create<mlir::stablehlo::ConvertOp>(builder->getUnknownLoc(), operand, type);
   return op;
 }
 
@@ -209,55 +214,55 @@ mlir::Value MLIRFunction::BitcastConvertOp(mlir::Value operand, xla::Shape shape
 
   mlir::TensorType type = GetMLIRType(module_->builder(), dimensions, shape.element_type());
 
-  auto op = builder->create<mlir::mhlo::BitcastConvertOp>(builder->getUnknownLoc(), type, operand);
+  auto op = builder->create<mlir::stablehlo::BitcastConvertOp>(builder->getUnknownLoc(), type, operand);
   return op;
 }
 
 mlir::Value MLIRFunction::AddOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  auto op = module_->builder()->create<mlir::mhlo::AddOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  auto op = module_->builder()->create<mlir::stablehlo::AddOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
   return op;
 }
 
 mlir::Value MLIRFunction::MulOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  auto op = module_->builder()->create<mlir::mhlo::MulOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  auto op = module_->builder()->create<mlir::stablehlo::MulOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
   return op;
 }
 
 mlir::Value MLIRFunction::MinOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  auto op = module_->builder()->create<mlir::mhlo::MinOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  auto op = module_->builder()->create<mlir::stablehlo::MinOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
   return op;
 }
 
 mlir::Value MLIRFunction::MaxOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  auto op = module_->builder()->create<mlir::mhlo::MaxOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  auto op = module_->builder()->create<mlir::stablehlo::MaxOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
   return op;
 }
 
 mlir::Value MLIRFunction::RemOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  auto op = module_->builder()->create<mlir::mhlo::RemOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  auto op = module_->builder()->create<mlir::stablehlo::RemOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
   return op;
 }
 
 mlir::Value MLIRFunction::PowOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  auto op = module_->builder()->create<mlir::mhlo::PowOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  auto op = module_->builder()->create<mlir::stablehlo::PowOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
   return op;
 }
 
 mlir::Value MLIRFunction::DivOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  auto op = module_->builder()->create<mlir::mhlo::DivOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  auto op = module_->builder()->create<mlir::stablehlo::DivOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
   return op;
 }
 
 mlir::Value MLIRFunction::Atan2Op(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  auto op = module_->builder()->create<mlir::mhlo::Atan2Op>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  auto op = module_->builder()->create<mlir::stablehlo::Atan2Op>(module_->builder()->getUnknownLoc(), lhs, rhs);
   return op;
 }
 
@@ -268,138 +273,138 @@ mlir::Value MLIRFunction::PadOp(mlir::Value op, mlir::Value pad, std::vector<int
   auto padding_high_attr = Int64ToDenseIntElementsAttr(module_->builder(), padding_high);
   auto padding_mid_attr = Int64ToDenseIntElementsAttr(module_->builder(), padding_mid);
 
-  return module_->builder()->create<mlir::mhlo::PadOp>(module_->builder()->getUnknownLoc(), op, pad, padding_low_attr, padding_high_attr, padding_mid_attr);
+  return module_->builder()->create<mlir::stablehlo::PadOp>(module_->builder()->getUnknownLoc(), op, pad, padding_low_attr, padding_high_attr, padding_mid_attr);
 }
 
-mlir::Value compare_and_return_bool(mlir::OpBuilder *builder, mlir::Value lhs, mlir::Value rhs, mlir::mhlo::ComparisonDirection direction) {
-  auto op = builder->create<mlir::mhlo::CompareOp>(builder->getUnknownLoc(), lhs, rhs, direction);
+mlir::Value compare_and_return_bool(mlir::OpBuilder *builder, mlir::Value lhs, mlir::Value rhs, mlir::stablehlo::ComparisonDirection direction) {
+  auto op = builder->create<mlir::stablehlo::CompareOp>(builder->getUnknownLoc(), lhs, rhs, direction);
   mlir::Type mlir_bool = builder->getIntegerType(8, false);
-  return builder->create<mlir::mhlo::ConvertOp>(builder->getUnknownLoc(), op, mlir_bool);
+  return builder->create<mlir::stablehlo::ConvertOp>(builder->getUnknownLoc(), op, mlir_bool);
 }
 
 mlir::Value MLIRFunction::EqualOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return compare_and_return_bool(module_->builder(), lhs, rhs, mlir::mhlo::ComparisonDirection::EQ);
+  return compare_and_return_bool(module_->builder(), lhs, rhs, mlir::stablehlo::ComparisonDirection::EQ);
 }
 
 mlir::Value MLIRFunction::NotEqualOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return compare_and_return_bool(module_->builder(), lhs, rhs, mlir::mhlo::ComparisonDirection::NE);
+  return compare_and_return_bool(module_->builder(), lhs, rhs, mlir::stablehlo::ComparisonDirection::NE);
 }
 
 mlir::Value MLIRFunction::LessOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return compare_and_return_bool(module_->builder(), lhs, rhs, mlir::mhlo::ComparisonDirection::LT);
+  return compare_and_return_bool(module_->builder(), lhs, rhs, mlir::stablehlo::ComparisonDirection::LT);
 }
 
 mlir::Value MLIRFunction::LessEqualOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return compare_and_return_bool(module_->builder(), lhs, rhs, mlir::mhlo::ComparisonDirection::LE);
+  return compare_and_return_bool(module_->builder(), lhs, rhs, mlir::stablehlo::ComparisonDirection::LE);
 }
 
 mlir::Value MLIRFunction::GreaterOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return compare_and_return_bool(module_->builder(), lhs, rhs, mlir::mhlo::ComparisonDirection::GT);
+  return compare_and_return_bool(module_->builder(), lhs, rhs, mlir::stablehlo::ComparisonDirection::GT);
 }
 
 mlir::Value MLIRFunction::GreaterEqualOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return compare_and_return_bool(module_->builder(), lhs, rhs, mlir::mhlo::ComparisonDirection::GE);
+  return compare_and_return_bool(module_->builder(), lhs, rhs, mlir::stablehlo::ComparisonDirection::GE);
 }
 
 mlir::Value MLIRFunction::ShiftLeftOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::ShiftLeftOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  return module_->builder()->create<mlir::stablehlo::ShiftLeftOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
 }
 
 mlir::Value MLIRFunction::ShiftRightLogicalOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::ShiftRightLogicalOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  return module_->builder()->create<mlir::stablehlo::ShiftRightLogicalOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
 }
 
 mlir::Value MLIRFunction::ShiftRightArithmeticOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::ShiftRightArithmeticOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  return module_->builder()->create<mlir::stablehlo::ShiftRightArithmeticOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
 }
 
 mlir::Value MLIRFunction::BitwiseAndOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::AndOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  return module_->builder()->create<mlir::stablehlo::AndOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
 }
 
 mlir::Value MLIRFunction::BitwiseOrOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::OrOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  return module_->builder()->create<mlir::stablehlo::OrOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
 }
 
 mlir::Value MLIRFunction::BitwiseNotOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::NotOp>(module_->builder()->getUnknownLoc(), operand);
+  return module_->builder()->create<mlir::stablehlo::NotOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::BitwiseXorOp(mlir::Value lhs, mlir::Value rhs) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::XorOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  return module_->builder()->create<mlir::stablehlo::XorOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
 }
 
 mlir::Value MLIRFunction::AbsOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::AbsOp>(module_->builder()->getUnknownLoc(), operand);
+  return module_->builder()->create<mlir::stablehlo::AbsOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::ExpOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::ExpOp>(module_->builder()->getUnknownLoc(), operand);
+  return module_->builder()->create<mlir::stablehlo::ExpOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::Expm1Op(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::Expm1Op>(module_->builder()->getUnknownLoc(), operand);
+  return module_->builder()->create<mlir::stablehlo::Expm1Op>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::FloorOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::FloorOp>(module_->builder()->getUnknownLoc(), operand);
+  return module_->builder()->create<mlir::stablehlo::FloorOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::CeilOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::CeilOp>(module_->builder()->getUnknownLoc(), operand);
+  return module_->builder()->create<mlir::stablehlo::CeilOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::RoundOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::RoundOp>(module_->builder()->getUnknownLoc(), operand);
+  return module_->builder()->create<mlir::stablehlo::RoundOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::LogOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::LogOp>(module_->builder()->getUnknownLoc(), operand);
+  return module_->builder()->create<mlir::stablehlo::LogOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::LogisticOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::LogisticOp>(module_->builder()->getUnknownLoc(), operand);
+  return module_->builder()->create<mlir::stablehlo::LogisticOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::Log1pOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::Log1pOp>(module_->builder()->getUnknownLoc(), operand);
+  return module_->builder()->create<mlir::stablehlo::Log1pOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::SignOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::SignOp>(module_->builder()->getUnknownLoc(), operand);
+  return module_->builder()->create<mlir::stablehlo::SignOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::CosOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::CosineOp>(module_->builder()->getUnknownLoc(), operand);
+  return module_->builder()->create<mlir::stablehlo::CosineOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::SinOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::SineOp>(module_->builder()->getUnknownLoc(), operand);
+  return module_->builder()->create<mlir::stablehlo::SineOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::AcosOp(mlir::Value operand) {
@@ -434,7 +439,7 @@ mlir::Value MLIRFunction::SinhOp(mlir::Value operand) {
 
 mlir::Value MLIRFunction::TanhOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::TanhOp>(module_->builder()->getUnknownLoc(), operand);
+  return module_->builder()->create<mlir::stablehlo::TanhOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::AcoshOp(mlir::Value operand) {
@@ -457,16 +462,16 @@ mlir::Value MLIRFunction::AtanhOp(mlir::Value operand) {
 
 mlir::Value MLIRFunction::SqrtOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::SqrtOp>(module_->builder()->getUnknownLoc(), operand);
+  return module_->builder()->create<mlir::stablehlo::SqrtOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::CbrtOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::CbrtOp>(module_->builder()->getUnknownLoc(), operand);
+  return module_->builder()->create<mlir::stablehlo::CbrtOp>(module_->builder()->getUnknownLoc(), operand);
 }
 mlir::Value MLIRFunction::NegateOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::NegOp>(module_->builder()->getUnknownLoc(), operand);
+  return module_->builder()->create<mlir::stablehlo::NegOp>(module_->builder()->getUnknownLoc(), operand);
 }
 mlir::Value MLIRFunction::ErfOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
@@ -489,7 +494,7 @@ mlir::Value MLIRFunction::IsInfOp(mlir::Value operand) {
   module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
   mlir::Value op = module_->builder()->create<mlir::chlo::IsInfOp>(module_->builder()->getUnknownLoc(), operand);
   mlir::Type mlir_bool = module_->builder()->getIntegerType(8, false);
-  return module_->builder()->create<mlir::mhlo::ConvertOp>(module_->builder()->getUnknownLoc(), op, mlir_bool);
+  return module_->builder()->create<mlir::stablehlo::ConvertOp>(module_->builder()->getUnknownLoc(), op, mlir_bool);
 }
 
 mlir::Value MLIRFunction::IsNanOp(mlir::Value operand) {
@@ -497,30 +502,30 @@ mlir::Value MLIRFunction::IsNanOp(mlir::Value operand) {
   module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
   mlir::Type mlir_bool = module_->builder()->getI1Type();
 
-  mlir::Value is_finite_op = module_->builder()->create<mlir::mhlo::IsFiniteOp>(module_->builder()->getUnknownLoc(), operand);
-  is_finite_op = module_->builder()->create<mlir::mhlo::ConvertOp>(module_->builder()->getUnknownLoc(), is_finite_op, mlir_bool);
+  mlir::Value is_finite_op = module_->builder()->create<mlir::stablehlo::IsFiniteOp>(module_->builder()->getUnknownLoc(), operand);
+  is_finite_op = module_->builder()->create<mlir::stablehlo::ConvertOp>(module_->builder()->getUnknownLoc(), is_finite_op, mlir_bool);
 
   mlir::Value is_inf_op = this->IsInfOp(operand);
-  is_inf_op = module_->builder()->create<mlir::mhlo::ConvertOp>(module_->builder()->getUnknownLoc(), is_inf_op, mlir_bool);
+  is_inf_op = module_->builder()->create<mlir::stablehlo::ConvertOp>(module_->builder()->getUnknownLoc(), is_inf_op, mlir_bool);
 
   mlir::Value is_nan_op = this->BitwiseAndOp(this->BitwiseNotOp(is_inf_op), this->BitwiseNotOp(is_finite_op));
   mlir_bool = module_->builder()->getIntegerType(8, false);
 
-  return module_->builder()->create<mlir::mhlo::ConvertOp>(module_->builder()->getUnknownLoc(), is_nan_op, mlir_bool);
+  return module_->builder()->create<mlir::stablehlo::ConvertOp>(module_->builder()->getUnknownLoc(), is_nan_op, mlir_bool);
 }
 mlir::Value MLIRFunction::RsqrtOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::RsqrtOp>(module_->builder()->getUnknownLoc(), operand);
+  return module_->builder()->create<mlir::stablehlo::RsqrtOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::RealOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::RealOp>(module_->builder()->getUnknownLoc(), operand);
+  return module_->builder()->create<mlir::stablehlo::RealOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::ImagOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::ImagOp>(module_->builder()->getUnknownLoc(), operand);
+  return module_->builder()->create<mlir::stablehlo::ImagOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::ConjOp(mlir::Value operand) {
@@ -532,20 +537,20 @@ mlir::Value MLIRFunction::ConjOp(mlir::Value operand) {
 mlir::Value MLIRFunction::TransposeOp(mlir::Value operand, std::vector<int64_t> axes) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   auto axes_attr = Int64ToDenseIntElementsAttr(module_->builder(), axes);
-  return module_->builder()->create<mlir::mhlo::TransposeOp>(module_->builder()->getUnknownLoc(), operand, axes_attr);
+  return module_->builder()->create<mlir::stablehlo::TransposeOp>(module_->builder()->getUnknownLoc(), operand, axes_attr);
 }
 
 mlir::Value MLIRFunction::ReshapeOp(mlir::Value operand, std::vector<int64_t> target_shape) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   mlir::RankedTensorType t_in = llvm::cast<mlir::RankedTensorType>(operand.getType());
   mlir::RankedTensorType type = mlir::RankedTensorType::get(target_shape, t_in.getElementType());
-  return module_->builder()->create<mlir::mhlo::ReshapeOp>(module_->builder()->getUnknownLoc(), type, operand);
+  return module_->builder()->create<mlir::stablehlo::ReshapeOp>(module_->builder()->getUnknownLoc(), type, operand);
 }
 
 mlir::Value MLIRFunction::ReverseOp(mlir::Value operand, std::vector<int64_t> dims) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   auto dims_attr = Int64ToDenseIntElementsAttr(module_->builder(), dims);
-  return module_->builder()->create<mlir::mhlo::ReverseOp>(module_->builder()->getUnknownLoc(), operand, dims_attr);
+  return module_->builder()->create<mlir::stablehlo::ReverseOp>(module_->builder()->getUnknownLoc(), operand, dims_attr);
 }
 
 class PublicPatternRewriter : public mlir::PatternRewriter {
@@ -554,7 +559,7 @@ class PublicPatternRewriter : public mlir::PatternRewriter {
 };
 
 static void buildSortComparisonBody(llvm::ArrayRef<mlir::Type> elementTypes,
-                                    mlir::mhlo::ComparisonDirection direction,
+                                    mlir::stablehlo::ComparisonDirection direction,
                                     std::optional<mlir::StringRef> compare_type,
                                     mlir::Region *body, mlir::OpBuilder *builder) {
   mlir::OpBuilder::InsertionGuard insertionPointGuard(*builder);
@@ -565,19 +570,19 @@ static void buildSortComparisonBody(llvm::ArrayRef<mlir::Type> elementTypes,
     // mlir::ShapedType shapedType = mlir::RankedTensorType::get({}, elementType);
     block->addArguments({elementType, elementType}, {loc, loc});
   }
-  mlir::mhlo::ComparisonType type_attr;
+  mlir::stablehlo::ComparisonType type_attr;
   if (compare_type) {
-    type_attr = mlir::mhlo::symbolizeComparisonType(*compare_type).value();
+    type_attr = mlir::stablehlo::symbolizeComparisonType(*compare_type).value();
   } else {
-    type_attr = mlir::mhlo::ComparisonType::NOTYPE;
+    type_attr = mlir::stablehlo::ComparisonType::NOTYPE;
   }
   mlir::BlockArgument arg0 = block->getArgument(0);
   mlir::BlockArgument arg1 = block->getArgument(1);
-  mlir::Value compare = builder->create<mlir::mhlo::CompareOp>(loc, arg0, arg1, direction);
-  builder->create<mlir::mhlo::ReturnOp>(loc, compare);
+  mlir::Value compare = builder->create<mlir::stablehlo::CompareOp>(loc, arg0, arg1, direction);
+  builder->create<mlir::stablehlo::ReturnOp>(loc, compare);
 }
 
-std::vector<mlir::Value> MLIRFunction::SortOp(std::vector<mlir::Value> operands, int64_t dim, bool desc) {
+std::vector<mlir::Value> MLIRFunction::SortOp(std::vector<mlir::Value> operands, int64_t dim, bool desc, bool stable) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   std::vector<mlir::Type> element_types;
   element_types.reserve(operands.size());
@@ -592,16 +597,16 @@ std::vector<mlir::Value> MLIRFunction::SortOp(std::vector<mlir::Value> operands,
     }
   }
 
-  mlir::mhlo::ComparisonDirection direction = desc ? mlir::mhlo::ComparisonDirection::GT : mlir::mhlo::ComparisonDirection::LT;
+  mlir::stablehlo::ComparisonDirection direction = desc ? mlir::stablehlo::ComparisonDirection::GT : mlir::stablehlo::ComparisonDirection::LT;
 
   mlir::OpBuilder *builder = module_->builder();
 
   mlir::ValueRange value_range(operands);
-  mlir::mhlo::SortOp sort_op = builder->create<mlir::mhlo::SortOp>(
+  mlir::stablehlo::SortOp sort_op = builder->create<mlir::stablehlo::SortOp>(
       builder->getUnknownLoc(),
       value_range,
       dim,
-      true);
+      stable);
   buildSortComparisonBody(element_types, direction, compare_type,
                           &sort_op.getComparator(), builder);
 
@@ -615,7 +620,7 @@ mlir::Value MLIRFunction::SliceOp(mlir::Value operand, std::vector<int64_t> star
   auto lim_attr = Int64ToDenseIntElementsAttr(module_->builder(), limits);
   auto strides_attr = Int64ToDenseIntElementsAttr(module_->builder(), strides);
 
-  return module_->builder()->create<mlir::mhlo::SliceOp>(
+  return module_->builder()->create<mlir::stablehlo::SliceOp>(
       module_->builder()->getUnknownLoc(),
       operand,
       idx_attr,
@@ -629,7 +634,7 @@ mlir::Value MLIRFunction::DynamicSliceOp(mlir::Value operand, std::vector<mlir::
   mlir::ValueRange starts_range(llvm::ArrayRef<mlir::Value>(starts.data(), starts.size()));
 
   return module_->builder()
-      ->create<mlir::mhlo::DynamicSliceOp>(
+      ->create<mlir::stablehlo::DynamicSliceOp>(
           module_->builder()->getUnknownLoc(),
           operand,
           starts_range,
@@ -638,23 +643,23 @@ mlir::Value MLIRFunction::DynamicSliceOp(mlir::Value operand, std::vector<mlir::
 
 mlir::Value MLIRFunction::ClzOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::ClzOp>(module_->builder()->getUnknownLoc(), operand);
+  return module_->builder()->create<mlir::stablehlo::ClzOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::PopulationCountOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  return module_->builder()->create<mlir::mhlo::PopulationCountOp>(module_->builder()->getUnknownLoc(), operand);
+  return module_->builder()->create<mlir::stablehlo::PopulationCountOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::TupleOp(std::vector<mlir::Value> vals) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  auto op = module_->builder()->create<mlir::mhlo::TupleOp>(module_->builder()->getUnknownLoc(), vals);
+  auto op = module_->builder()->create<mlir::stablehlo::TupleOp>(module_->builder()->getUnknownLoc(), vals);
   return op;
 }
 
 mlir::Value MLIRFunction::GetTupleElementOp(mlir::Value tuple, tsl::int64 index) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  auto op = module_->builder()->create<mlir::mhlo::GetTupleElementOp>(module_->builder()->getUnknownLoc(), tuple, index);
+  auto op = module_->builder()->create<mlir::stablehlo::GetTupleElementOp>(module_->builder()->getUnknownLoc(), tuple, index);
   return op;
 }
 
@@ -666,7 +671,7 @@ mlir::Value MLIRFunction::IotaOp(xla::Shape shape, int64_t dimension) {
 
   mlir::TensorType type = GetMLIRType(module_->builder(), dimensions, shape.element_type());
 
-  return module_->builder()->create<mlir::mhlo::IotaOp>(module_->builder()->getUnknownLoc(), type, dimension);
+  return module_->builder()->create<mlir::stablehlo::IotaOp>(module_->builder()->getUnknownLoc(), type, dimension);
 }
 
 mlir::Value MLIRFunction::DotGeneralOp(
@@ -683,7 +688,7 @@ mlir::Value MLIRFunction::DotGeneralOp(
   mlir::TensorType output_type = GetMLIRType(module_->builder(), dimensions, output_shape.element_type());
   auto mlir_dnums = ConvertDotDimensionNumbersToAttr(module_->builder(), dnums);
 
-  auto op = module_->builder()->create<mlir::mhlo::DotGeneralOp>(
+  auto op = module_->builder()->create<mlir::stablehlo::DotGeneralOp>(
       module_->builder()->getUnknownLoc(),
       output_type,
       lhs,
@@ -703,32 +708,32 @@ mlir::Value MLIRFunction::BroadcastInDimOp(mlir::Value operand, xla::Shape shape
 
   auto axes_attr = Int64ToDenseIntElementsAttr(module_->builder(), axes);
 
-  auto op = module_->builder()->create<mlir::mhlo::BroadcastInDimOp>(module_->builder()->getUnknownLoc(), result_type, operand, axes_attr);
+  auto op = module_->builder()->create<mlir::stablehlo::BroadcastInDimOp>(module_->builder()->getUnknownLoc(), result_type, operand, axes_attr);
   return op;
 }
 
 mlir::Value MLIRFunction::ConcatenateOp(std::vector<mlir::Value> operands, int64_t dimension) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   mlir::ValueRange operands_range(llvm::ArrayRef<mlir::Value>(operands.data(), operands.size()));
-  auto op = module_->builder()->create<mlir::mhlo::ConcatenateOp>(module_->builder()->getUnknownLoc(), operands_range, dimension);
+  auto op = module_->builder()->create<mlir::stablehlo::ConcatenateOp>(module_->builder()->getUnknownLoc(), operands_range, dimension);
   return op;
 }
 
 mlir::Value MLIRFunction::OptimizationBarrierOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  auto op = module_->builder()->create<mlir::mhlo::OptimizationBarrierOp>(module_->builder()->getUnknownLoc(), operand);
+  auto op = module_->builder()->create<mlir::stablehlo::OptimizationBarrierOp>(module_->builder()->getUnknownLoc(), operand);
   return op.getResult()[0];
 }
 
 mlir::Value MLIRFunction::ClampOp(mlir::Value min, mlir::Value operand, mlir::Value max) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  auto op = module_->builder()->create<mlir::mhlo::ClampOp>(module_->builder()->getUnknownLoc(), min, operand, max);
+  auto op = module_->builder()->create<mlir::stablehlo::ClampOp>(module_->builder()->getUnknownLoc(), min, operand, max);
   return op;
 }
 
 mlir::Value MLIRFunction::SelectOp(mlir::Value pred, mlir::Value on_true, mlir::Value on_false) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  auto op = module_->builder()->create<mlir::mhlo::SelectOp>(module_->builder()->getUnknownLoc(), pred, on_true, on_false);
+  auto op = module_->builder()->create<mlir::stablehlo::SelectOp>(module_->builder()->getUnknownLoc(), pred, on_true, on_false);
   return op;
 }
 
@@ -742,30 +747,110 @@ static void buildScatterComputation(mlir::Type element_type, bool add_or_put, ml
   if (add_or_put) {
     mlir::BlockArgument arg0 = block->getArgument(0);
     mlir::BlockArgument arg1 = block->getArgument(1);
-    mlir::Value add = builder->create<mlir::mhlo::AddOp>(loc, arg0, arg1);
-    builder->create<mlir::mhlo::ReturnOp>(loc, add);
+    mlir::Value add = builder->create<mlir::stablehlo::AddOp>(loc, arg0, arg1);
+    builder->create<mlir::stablehlo::ReturnOp>(loc, add);
   } else {
     mlir::BlockArgument arg1 = block->getArgument(1);
-    builder->create<mlir::mhlo::ReturnOp>(loc, arg1);
+    builder->create<mlir::stablehlo::ReturnOp>(loc, arg1);
   }
 }
 
-mlir::Value MLIRFunction::ScatterOp(mlir::Value target, mlir::Value indices, mlir::Value updates, bool add_or_put) {
+mlir::Value MLIRFunction::ScatterOp(mlir::Value target, mlir::Value indices, mlir::Value updates, bool add_or_put, int64_t indices_rank, std::vector<int64_t> update_window_dims, std::vector<int64_t> inserted_window_dims, std::vector<int64_t> index_dims_to_window_dims) {
   auto builder = module_->builder();
   builder->setInsertionPointToEnd(&func_->getBody().back());
   mlir::RankedTensorType type = llvm::cast<mlir::RankedTensorType>(target.getType());
-  int64_t rank = type.getShape().size();
-  std::vector<int64_t> axes(rank);
-  for (int64_t i = 0; i < rank; i++) {
-    axes[i] = i;
-  }
+  auto scatter_dimension_numbers = mlir::stablehlo::ScatterDimensionNumbersAttr::get(builder->getContext(), update_window_dims, inserted_window_dims, index_dims_to_window_dims, indices_rank);
 
-  auto scatter_dimension_numbers = mlir::mhlo::ScatterDimensionNumbersAttr::get(builder->getContext(), {}, axes, axes, rank);
-
-  mlir::mhlo::ScatterOp scatter_op = builder->create<mlir::mhlo::ScatterOp>(builder->getUnknownLoc(), target, indices, updates, scatter_dimension_numbers);
+  mlir::stablehlo::ScatterOp scatter_op = builder->create<mlir::stablehlo::ScatterOp>(builder->getUnknownLoc(), target, indices, updates, scatter_dimension_numbers);
   mlir::Type computation_operand_type = mlir::RankedTensorType::get({}, type.getElementType());
   buildScatterComputation(computation_operand_type, add_or_put, &scatter_op.getUpdateComputation(), builder);
   return scatter_op.getResult(0);
+}
+
+std::vector<mlir::Value> MLIRFunction::ReduceOp(
+    MLIRFunction *reducer,
+    std::vector<mlir::Value> init_values,
+    std::vector<mlir::Value> inputs,
+    std::vector<int64_t> dimensions) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+
+  mlir::ValueRange init_values_range(init_values);
+  mlir::ValueRange inputs_range(inputs);
+  mlir::DenseIntElementsAttr dimensions_attr = Int64ToDenseIntElementsAttr(builder, dimensions);
+
+  mlir::stablehlo::ReduceOp reduce_op = builder->create<mlir::stablehlo::ReduceOp>(builder->getUnknownLoc(), inputs_range, init_values_range, dimensions_attr);
+  mlir::Region &reduceBody = reduce_op.getRegion();
+  mlir::Region &funcBody = reducer->function()->getBody();
+  reduceBody.getBlocks().splice(reduceBody.end(), funcBody.getBlocks());
+
+  mlir::Operation::result_range results = reduce_op.getResults();
+  return std::vector<mlir::Value>(results.begin(), results.end());
+}
+
+mlir::Value MLIRFunction::MapOp(
+    MLIRFunction *mapper,
+    std::vector<mlir::Value> inputs,
+    std::vector<int64_t> dimensions) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+
+  mlir::ValueRange inputs_range(inputs);
+  mlir::DenseIntElementsAttr dimensions_attr = Int64ToDenseIntElementsAttr(builder, dimensions);
+
+  mlir::stablehlo::MapOp map_op = builder->create<mlir::stablehlo::MapOp>(builder->getUnknownLoc(), inputs[0].getType(), inputs_range, dimensions_attr);
+
+  mlir::Region &mapBody = map_op.getComputation();
+  mlir::Region &funcBody = mapper->function()->getBody();
+  mapBody.getBlocks().splice(mapBody.end(), funcBody.getBlocks());
+
+  return map_op;
+}
+
+// adapted from xla/translate/hlo_to_mhlo/hlo_function_importer.cc
+// we need to adapt because we want to receive std::vector and
+// because we use stablehlo instead of mhlo here.
+void ReplaceBlockArgumentsWithImplicitOperands(mlir::Operation *op, std::vector<mlir::Value> implicit_operands) {
+  if (!op) {
+    std::cerr << "op is null" << std::endl;
+    return;
+  }
+  int implicit_operand_index = 0;
+  for (auto &region : op->getRegions()) {
+    for (auto arg : region.getArguments()) {
+      arg.replaceAllUsesWith(implicit_operands[implicit_operand_index++]);
+    }
+    region.front().eraseArguments(0, region.getNumArguments());
+  }
+}
+
+mlir::Value MLIRFunction::IfOp(mlir::Value pred, xla::Shape output_shape, std::vector<mlir::Value> implicit_arguments, MLIRFunction *on_true, MLIRFunction *on_false) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+
+  auto span = output_shape.dimensions();
+  std::vector<tsl::int64> dims(span.begin(), span.end());
+  mlir::Type output_type = GetMLIRType(builder, dims, output_shape.element_type());
+
+  pred = builder->create<mlir::stablehlo::ConvertOp>(builder->getUnknownLoc(), pred, builder->getIntegerType(1));
+
+  implicit_arguments.insert(implicit_arguments.begin(), pred);
+  mlir::ValueRange operands(implicit_arguments);
+
+  mlir::stablehlo::IfOp if_op = builder->create<mlir::stablehlo::IfOp>(builder->getUnknownLoc(), mlir::TypeRange({output_type}), pred);
+
+  mlir::Region &trueBody = if_op.getTrueBranch();
+  auto &onTrueBlocks = on_true->function()->getBody().getBlocks();
+  trueBody.getBlocks().splice(trueBody.end(), onTrueBlocks);
+
+  mlir::Region &falseBody = if_op.getFalseBranch();
+  auto &onFalseBlocks = on_false->function()->getBody().getBlocks();
+  falseBody.getBlocks().splice(falseBody.end(), onFalseBlocks);
+
+  implicit_arguments.erase(implicit_arguments.begin());
+  ReplaceBlockArgumentsWithImplicitOperands(if_op.getOperation(), implicit_arguments);
+
+  return if_op.getResult(0);
 }
 
 mlir::Value MLIRFunction::SelectAndScatterOp(
@@ -784,7 +869,7 @@ mlir::Value MLIRFunction::SelectAndScatterOp(
   for (int64_t i = 0; i < rank; i++) {
     axes[i] = i;
   }
-  auto scatter_dimension_numbers = mlir::mhlo::ScatterDimensionNumbersAttr::get(builder->getContext(), {}, axes, axes, rank);
+  auto scatter_dimension_numbers = mlir::stablehlo::ScatterDimensionNumbersAttr::get(builder->getContext(), {}, axes, axes, rank);
 
   mlir::DenseIntElementsAttr window_dimensions_attr = Int64ToDenseIntElementsAttr(module_->builder(), window_dimensions);
   mlir::DenseIntElementsAttr window_strides_attr = Int64ToDenseIntElementsAttr(module_->builder(), window_strides);
@@ -793,7 +878,7 @@ mlir::Value MLIRFunction::SelectAndScatterOp(
   auto dense_attr = mlir::DenseElementsAttr::get<int64_t>(dense_attr_type, llvm::ArrayRef<int64_t>(padding.data(), padding.size()));
   auto padding_attr = llvm::cast<mlir::DenseIntElementsAttr>(dense_attr);
 
-  mlir::mhlo::SelectAndScatterOp op = builder->create<mlir::mhlo::SelectAndScatterOp>(
+  mlir::stablehlo::SelectAndScatterOp op = builder->create<mlir::stablehlo::SelectAndScatterOp>(
       builder->getUnknownLoc(),
       target,
       source,
@@ -805,7 +890,7 @@ mlir::Value MLIRFunction::SelectAndScatterOp(
   mlir::Type computation_operand_type = mlir::RankedTensorType::get({}, type.getElementType());
   buildScatterComputation(computation_operand_type, true, &op.getScatter(), builder);
 
-  mlir::mhlo::ComparisonDirection direction = gt_or_lt ? mlir::mhlo::ComparisonDirection::GT : mlir::mhlo::ComparisonDirection::LT;
+  mlir::stablehlo::ComparisonDirection direction = gt_or_lt ? mlir::stablehlo::ComparisonDirection::GT : mlir::stablehlo::ComparisonDirection::LT;
   std::optional<mlir::StringRef> compare_type = std::nullopt;
   if (type.isa<mlir::FloatType>()) {
     compare_type.emplace("TOTALORDER");
@@ -815,12 +900,20 @@ mlir::Value MLIRFunction::SelectAndScatterOp(
   return op.getResult();
 }
 
+mlir::Value MLIRFunction::GatherOp(mlir::Value source, mlir::Value indices, std::vector<int64_t> offset_dims, std::vector<int64_t> collapsed_slice_dims, std::vector<int64_t> start_index_map, std::vector<int64_t> slice_sizes, int64_t index_vector_dim) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+  auto gather_dimension_numbers = mlir::stablehlo::GatherDimensionNumbersAttr::get(builder->getContext(), offset_dims, collapsed_slice_dims, start_index_map, index_vector_dim);
+  auto slice_sizes_attr = Int64ToDenseIntElementsAttr(module_->builder(), slice_sizes);
+  return builder->create<mlir::stablehlo::GatherOp>(builder->getUnknownLoc(), source, indices, gather_dimension_numbers, slice_sizes_attr, false);
+}
+
 mlir::Value MLIRFunction::FFTOp(mlir::Value tensor, bool forward_fft, std::vector<int64_t> fft_length) {
   auto builder = module_->builder();
   builder->setInsertionPointToEnd(&func_->getBody().back());
 
-  auto fft_type = mlir::mhlo::FftTypeAttr::get(builder->getContext(), forward_fft ? mlir::mhlo::FftType::FFT : mlir::mhlo::FftType::IFFT);
-  return builder->create<mlir::mhlo::FftOp>(builder->getUnknownLoc(), tensor, fft_type, Int64ToDenseIntElementsAttr(builder, fft_length));
+  auto fft_type = mlir::stablehlo::FftTypeAttr::get(builder->getContext(), forward_fft ? mlir::stablehlo::FftType::FFT : mlir::stablehlo::FftType::IFFT);
+  return builder->create<mlir::stablehlo::FftOp>(builder->getUnknownLoc(), tensor, fft_type, Int64ToDenseIntElementsAttr(builder, fft_length));
 }
 
 template <typename T>
@@ -849,7 +942,7 @@ ERL_NIF_TERM ConstantOpImpl(mlir::OpBuilder *builder, mlir::Type type, ErlNifEnv
   }
 
   // We set a fixed scalar shape because we're using single values here.
-  mlir::Value op = builder->create<mlir::mhlo::ConstantOp>(builder->getUnknownLoc(), attr);
+  mlir::Value op = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), attr);
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, op));
 }
 
@@ -916,10 +1009,14 @@ ERL_NIF_TERM MLIRFunction::ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_T
   return exla::nif::error(env, "invalid type received");
 }
 
-void MLIRFunction::Build(mlir::Value root) {
+void MLIRFunction::Build(mlir::Value root, bool use_stablehlo_return) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  auto op = module_->builder()->create<mlir::func::ReturnOp>(module_->builder()->getUnknownLoc(), root);
-  return;
+
+  if (use_stablehlo_return) {
+    module_->builder()->create<mlir::stablehlo::ReturnOp>(module_->builder()->getUnknownLoc(), root);
+  } else {
+    module_->builder()->create<mlir::func::ReturnOp>(module_->builder()->getUnknownLoc(), root);
+  }
 }
 
 MLIRModule::MLIRModule() {
@@ -928,6 +1025,7 @@ MLIRModule::MLIRModule() {
   // TODO: Should we load all these up front, infer them, or make it
   // manual?
   context_->loadDialect<mlir::func::FuncDialect>();
+  context_->loadDialect<mlir::stablehlo::StablehloDialect>();
   context_->loadDialect<mlir::mhlo::MhloDialect>();
 
   module_ = mlir::OwningOpRef<mlir::ModuleOp>(mlir::ModuleOp::create(mlir::UnknownLoc::get(context_.get())));
@@ -991,7 +1089,7 @@ xla::PrimitiveType MLIRTypeToPrimitiveType(mlir::Type type) {
 MLIRFunction *MLIRModule::CreateFunction(
     std::string name,
     std::vector<xla::Shape *> arg_shapes,
-    xla::Shape *ret_shape) {
+    xla::Shape *ret_shape, bool is_public) {
   std::vector<mlir::Type> types;
   types.reserve(arg_shapes.size());
   for (auto arg_shape : arg_shapes) {
@@ -1001,9 +1099,12 @@ MLIRFunction *MLIRModule::CreateFunction(
 
   mlir::Type return_type = GetMLIRFunctionType(builder_.get(), ret_shape);
 
+  auto visibility = is_public ? "public" : "nested";
+
   auto funcType = builder_->getFunctionType(types, return_type);
   auto loc = builder_->getUnknownLoc();
   auto funcOp = std::make_unique<mlir::func::FuncOp>(mlir::func::FuncOp::create(loc, name, funcType));
+  funcOp->setSymVisibility(visibility);
   module_->push_back(*funcOp);
   funcOp->addEntryBlock();
   builder_->setInsertionPointToStart(&funcOp->getBody().front());
@@ -1031,7 +1132,7 @@ mlir::Value MLIRFunction::ConvOp(
   auto window_strides_attr = Int64ToDenseIntElementsAttr(module_->builder(), window_strides);
   auto tensor_dilation_attr = Int64ToDenseIntElementsAttr(module_->builder(), tensor_dilation);
   auto kernel_dilation_attr = Int64ToDenseIntElementsAttr(module_->builder(), kernel_dilation);
-  auto dimension_numbers_attr = mlir::mhlo::ConvDimensionNumbersAttr::get(
+  auto dimension_numbers_attr = mlir::stablehlo::ConvDimensionNumbersAttr::get(
       builder->getContext(),
       dimension_numbers.input_batch_dimension(),
       dimension_numbers.input_feature_dimension(),
@@ -1047,7 +1148,7 @@ mlir::Value MLIRFunction::ConvOp(
   auto dense_attr = mlir::DenseElementsAttr::get<int64_t>(dense_attr_type, llvm::ArrayRef<int64_t>(padding.data(), padding.size()));
   auto padding_attr = llvm::cast<mlir::DenseIntElementsAttr>(dense_attr);
 
-  return builder->create<mlir::mhlo::ConvolutionOp>(
+  return builder->create<mlir::stablehlo::ConvolutionOp>(
       builder->getUnknownLoc(),
       result_type,
       tensor,
@@ -1066,27 +1167,57 @@ mlir::Value MLIRFunction::ConvOp(
 mlir::Value MLIRFunction::CreateTokenOp() {
   auto builder = module_->builder();
   builder->setInsertionPointToEnd(&func_->getBody().back());
-  return builder->create<mlir::mhlo::CreateTokenOp>(builder->getUnknownLoc());
+  return builder->create<mlir::stablehlo::CreateTokenOp>(builder->getUnknownLoc());
 }
 
 mlir::Value MLIRFunction::TriangularSolveOp(mlir::Value a, mlir::Value b, bool left_side, bool lower, bool transpose_a) {
   auto builder = module_->builder();
   builder->setInsertionPointToEnd(&func_->getBody().back());
-  mlir::mhlo::Transpose transpose = mlir::mhlo::Transpose::NO_TRANSPOSE;
+  mlir::stablehlo::Transpose transpose = mlir::stablehlo::Transpose::NO_TRANSPOSE;
 
   if (a.getType().isa<mlir::ComplexType>() and transpose_a) {
-    transpose = mlir::mhlo::Transpose::ADJOINT;
+    transpose = mlir::stablehlo::Transpose::ADJOINT;
   } else if (transpose_a) {
-    transpose = mlir::mhlo::Transpose::TRANSPOSE;
+    transpose = mlir::stablehlo::Transpose::TRANSPOSE;
   }
 
-  return builder->create<mlir::mhlo::TriangularSolveOp>(builder->getUnknownLoc(), a, b, left_side, lower, false, transpose);
+  return builder->create<mlir::stablehlo::TriangularSolveOp>(builder->getUnknownLoc(), a, b, left_side, lower, false, transpose);
 }
 
 mlir::Value MLIRFunction::DynamicUpdateSliceOp(mlir::Value operand, mlir::Value update, std::vector<mlir::Value> start_indices) {
   auto builder = module_->builder();
   builder->setInsertionPointToEnd(&func_->getBody().back());
-  return builder->create<mlir::mhlo::DynamicUpdateSliceOp>(builder->getUnknownLoc(), operand, update, mlir::ValueRange(start_indices));
+  return builder->create<mlir::stablehlo::DynamicUpdateSliceOp>(builder->getUnknownLoc(), operand, update, mlir::ValueRange(start_indices));
+}
+
+void MLIRModule::LowerPatterns() {
+  mlir::ConversionTarget target(*context());
+  target.addIllegalDialect<mlir::stablehlo::StablehloDialect>();
+  target.addIllegalDialect<mlir::func::FuncDialect>();
+  target.addLegalDialect<mlir::mhlo::MhloDialect>();
+
+  mlir::stablehlo::StablehloToHloTypeConverter converter;
+  mlir::RewritePatternSet patterns(context());
+
+  mlir::stablehlo::registerFuncOpsForTypeConversion(target, patterns, converter);
+  mlir::stablehlo::populateStablehloToHloPatterns(&patterns, &converter, context());
+
+  mlir::applyPartialConversion(module(), target, std::move(patterns));
+}
+
+void MLIRModule::RemoveEmptyFunctions() {
+  std::vector<mlir::func::FuncOp> unused_functions;
+  for (auto &op : module_->getOps()) {
+    if (auto func = llvm::dyn_cast<mlir::func::FuncOp>(op)) {
+      if (func.getBody().empty()) {
+        unused_functions.push_back(func);
+      }
+    }
+  }
+
+  for (auto func : unused_functions) {
+    func.erase();
+  }
 }
 
 mlir::Value MLIRFunction::InfeedOp(mlir::Value token, std::vector<int64_t> shape) {

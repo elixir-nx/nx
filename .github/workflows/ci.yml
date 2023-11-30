@@ -6,7 +6,7 @@ on:
   pull_request:
 jobs:
   main:
-    name: Linux (${{ matrix.working_directory == 'torchx' && format('torchx({0})', matrix.torch_version) || matrix.working_directory }}, ${{ matrix.elixir }}, ${{ matrix.otp }})
+    name: Linux (${{ matrix.working_directory }}, ${{ matrix.elixir }}, ${{ matrix.otp }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -14,22 +14,15 @@ jobs:
         working_directory: ["nx", "exla", "torchx"]
         elixir: ["1.14.5", "1.15.4"]
         otp: ["25.3"]
-        torch_version: ["2.0.0"]
         include:
           - elixir: "1.15.4"
             lint: true
-          - working_directory: torchx
-            elixir: "1.14.5"
-            otp: "25.3"
-            torch_version: "1.12.1"
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}
     env:
       MIX_ENV: test
       XLA_FLAGS: --xla_force_host_platform_device_count=2
-      LIBTORCH_VERSION: ${{ matrix.torch_version }}
-      LIBTORCH_DIR: ${{ github.workspace }}/torchx/cache/libtorch-${{ matrix.torch_version }}
     steps:
       - uses: actions/checkout@v2
       - uses: erlef/setup-beam@v1
@@ -44,13 +37,6 @@ jobs:
         with:
           path: ${{ github.workspace }}/${{ matrix.working_directory }}/deps
           key: ${{ runner.os }}-Elixir-v${{ matrix.elixir }}-OTP-${{ matrix.otp }}-${{ hashFiles(format('{0}/{1}/mix.lock', github.workspace, matrix.working_directory)) }}
-      - name: Retrieve libtorch cache
-        if: ${{ matrix.working_directory == 'torchx' }}
-        uses: actions/cache@v3
-        id: libtorch-cache
-        with:
-          path: ${{ env.LIBTORCH_DIR }}
-          key: linux-v1-libtorch-${{ matrix.torch_version }}-cpu
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
@@ -65,7 +51,7 @@ jobs:
         run: mix test
 
   win:
-    name: Windows (${{ matrix.working_directory == 'torchx' && format('torchx({0})', matrix.torch_version) || matrix.working_directory }}, ${{ matrix.elixir }}, ${{ matrix.otp }})
+    name: Windows (${{ matrix.working_directory }}, ${{ matrix.elixir }}, ${{ matrix.otp }})
     runs-on: windows-2019
     strategy:
       fail-fast: false
@@ -73,15 +59,12 @@ jobs:
         working_directory: ["nx", "torchx"]
         elixir: ["1.14.5"]
         otp: ["25.2"]
-        torch_version: ["2.0.0"]
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}
     env:
       MIX_ENV: test
       XLA_FLAGS: --xla_force_host_platform_device_count=2
-      LIBTORCH_VERSION: ${{ matrix.torch_version }}
-      LIBTORCH_DIR: ${{ github.workspace }}\torchx\cache\libtorch-${{ matrix.torch_version }}
     steps:
       - name: Configure Git
         run: git config --global core.autocrlf input
@@ -104,13 +87,6 @@ jobs:
         with:
           path: ${{ github.workspace }}\${{ matrix.working_directory }}\deps
           key: ${{ runner.os }}-Elixir-v${{ matrix.elixir }}-OTP-${{ matrix.otp }}-${{ hashFiles(format('{0}\{1}\mix.lock', github.workspace, matrix.working_directory)) }}
-      - name: Retrieve libtorch cache
-        if: ${{ matrix.working_directory == 'torchx' }}
-        uses: actions/cache@v3
-        id: libtorch-cache-win
-        with:
-          path: ${{ env.LIBTORCH_DIR }}
-          key: win-v1-libtorch-${{ matrix.torch_version }}-cpu
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get

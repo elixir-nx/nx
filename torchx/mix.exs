@@ -101,12 +101,11 @@ defmodule Torchx.MixProject do
 
   defp libtorch_config() do
     target = System.get_env("LIBTORCH_TARGET", "cpu")
-    default_version = if(target in ["cu102", "cu113", "cu116"], do: "1.12.1", else: "2.0.0")
-    version = System.get_env("LIBTORCH_VERSION", default_version)
+    version = System.get_env("LIBTORCH_VERSION", "2.0.0")
     env_dir = System.get_env("LIBTORCH_DIR")
 
     %{
-      valid_targets: ["cpu", "cu102", "cu113", "cu116", "cu117", "cu118"],
+      valid_targets: ["cpu", "cu118", "cu121"],
       target: target,
       version: version,
       base: "libtorch",
