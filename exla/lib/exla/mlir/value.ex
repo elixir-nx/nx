@@ -498,7 +498,6 @@ defmodule EXLA.MLIR.Value do
         false_args,
         %Function{} = on_false
       ) do
-
     implicit_args_refs = Enum.map(true_args ++ false_args, & &1.ref)
 
     ref =

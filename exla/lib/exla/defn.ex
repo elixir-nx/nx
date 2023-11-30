@@ -2150,16 +2150,17 @@ defmodule EXLA.Defn do
 
     case builder do
       %EXLA.MLIR.Function{} ->
-        if_op = Value.if(
-           pred_op,
-           EXLA.Shape.make_shape(on_true.type, on_true.shape),
-           true_args,
-           true_comp,
-           false_args,
-           false_comp
-         )
+        if_op =
+          Value.if(
+            pred_op,
+            EXLA.Shape.make_shape(on_true.type, on_true.shape),
+            true_args,
+            true_comp,
+            false_args,
+            false_comp
+          )
 
-         # TO-DO(mlir): this tuple should probably be the outfeed tuple
+        # TO-DO(mlir): this tuple should probably be the outfeed tuple
         {Value.tuple([if_op, if_op]), cache}
 
       _ ->

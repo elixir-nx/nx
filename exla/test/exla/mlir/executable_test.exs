@@ -967,28 +967,30 @@ defmodule EXLA.MLIR.ExecutableTest do
   end
 
   describe "cond" do
-     defn cond_single_clause(t, x) do
-    pred = t ==  1
-    cond do
-        pred ->
-            t + 10 + pred
-        true ->
-            x - 20
-    end
-  end
+    defn cond_single_clause(t, x) do
+      pred = t == 1
 
-  defn cond_multi_clause(t, x) do
-    cond do
-        t == 1  ->
+      cond do
+        pred ->
+          t + 10 + pred
+
+        true ->
+          x - 20
+      end
+    end
+
+    defn cond_multi_clause(t, x) do
+      cond do
+        t == 1 ->
           t + x
 
         t == 2 ->
           -t
 
         true ->
-            x - 20
+          x - 20
+      end
     end
-  end
 
     test "single-clause" do
       f = EXLA.jit(&cond_single_clause/2, compiler_mode: :mlir)
