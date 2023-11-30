@@ -1865,16 +1865,14 @@ defmodule EXLA.Defn do
          args,
          expr,
          type,
-         %{builder: %EXLA.MLIR.Function{}} = state
+         %{builder: %EXLA.MLIR.Function{module: module}} = state
        ) do
     arg_shapes =
       Enum.with_index(args, fn arg, i ->
         {"p#{i}", computation_arg_shape(arg)}
       end)
 
-    %{module: module, name: name} = subbuilder = subbuilder(state.builder, Atom.to_string(name))
-
-    function = EXLA.Builder.new({module, name}, arg_shapes, expr, :mlir, true)
+    function = EXLA.Builder.new({module, Atom.to_string(name)}, arg_shapes, expr, :mlir, false)
     mlir_args = EXLA.MLIR.Function.get_arguments(function)
 
     arg_params = Enum.zip(args, mlir_args)
@@ -1883,7 +1881,7 @@ defmodule EXLA.Defn do
 
     state = %{
       state
-      | builder: subbuilder,
+      | builder: function,
         params: Map.new(params),
         scope_ids: Tree.scope_ids(expr)
     }
@@ -2263,10 +2261,6 @@ defmodule EXLA.Defn do
     params = EXLA.MLIR.Function.get_arguments(function)
 
     {res, comp_cache} = fun.(function, Enum.with_index(params, fn x, idx -> {idx, x} end), cache)
-
-    IO.puts("====if_branch_computation=====")
-    EXLA.NIF.dump_mlir_module(res.function.module.ref)
-    IO.puts("====if_branch_computation=====")
 
     {args, EXLA.Builder.build(res, true), comp_cache}
   end

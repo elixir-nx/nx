@@ -1,4 +1,0 @@
-c++ -fPIC -I/Users/paulo.valente/.asdf/installs/erlang/26.0.2/erts-14.0.2/include -Icache/xla_extension/include -O3 -Wall -Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers -Wno-comment -shared -std=c++17 -w -DLLVM_VERSION_STRING= c_src/exla/exla.cc c_src/exla/exla_nif_util.cc c_src/exla/mlir/ops.cc c_src/exla/mlir/builder.cc c_src/exla/exla_ops.cc c_src/exla/exla_client.cc -o cache/libexla.so -Lcache/xla_extension/lib -lxla_extension -flat_namespace -undefined suppress -rpath @loader_path/xla_extension/lib
-
-BREAK: (a)bort (A)bort with dump (c)ontinue (p)roc info (i)nfo
-       (l)oaded (v)ersion (k)ill (D)b-tables (d)istribution
