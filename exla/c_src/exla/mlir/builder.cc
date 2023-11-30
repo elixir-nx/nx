@@ -111,11 +111,7 @@ int MLIRFunction::get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *t
   std::string type_str;
   if (!exla::nif::get(env, term, type_str)) return 1;
 
-  if (type_str == "pred") {
-    *type = builder->getIntegerType(1);
-    return 0;
-  }
-  if (type_str == "u8") {
+  if (type_str == "pred" || type_str == "u8") {
     *type = builder->getIntegerType(8, false);
     return 0;
   }
@@ -832,10 +828,14 @@ mlir::Value MLIRFunction::IfOp(mlir::Value pred, xla::Shape output_shape, std::v
   std::vector<tsl::int64> dims(span.begin(), span.end());
   mlir::Type output_type = GetMLIRType(builder, dims, output_shape.element_type());
 
-  std::cout << "before create IfOp" << std::endl;
+  std::cout << "before convert pred" << std::endl;
+  pred = builder->create<mlir::stablehlo::ConvertOp>(builder->getUnknownLoc(), pred, builder->getIntegerType(1));
+  std::cout << "after convert pred" << std::endl;
 
   implicit_arguments.insert(implicit_arguments.begin(), pred);
   mlir::ValueRange operands(implicit_arguments);
+
+  std::cout << "before create IfOp" << std::endl;
 
   mlir::stablehlo::IfOp if_op = builder->create<mlir::stablehlo::IfOp>(builder->getUnknownLoc(), mlir::TypeRange({output_type}), operands);
 
@@ -853,9 +853,13 @@ mlir::Value MLIRFunction::IfOp(mlir::Value pred, xla::Shape output_shape, std::v
 
   std::cout << "spliced false blocks" << std::endl;
 
+  implicit_arguments.erase(implicit_arguments.begin());
   ReplaceBlockArgumentsWithImplicitOperands(if_op.getOperation(), implicit_arguments);
 
   std::cout << "replaced block arguments" << std::endl;
+  dump_mlir_module();
+
+  return if_op.getResult(0);
 
   mlir::Operation::result_range result_range = if_op.getResults();
   std::vector<mlir::Value> results(result_range.begin(), result_range.begin() + 1);
@@ -1028,7 +1032,7 @@ void MLIRFunction::Build(mlir::Value root, bool use_stablehlo_return) {
     module_->builder()->create<mlir::func::ReturnOp>(module_->builder()->getUnknownLoc(), root);
   }
 
-  module_->LowerPatterns();
+
 }
 
 MLIRModule::MLIRModule() {

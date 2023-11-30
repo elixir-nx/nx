@@ -45,6 +45,8 @@ ERL_NIF_TERM mlir_compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Unable to get device ID.");
   }
 
+  (*module)->LowerPatterns();
+
   build_options.set_num_replicas(num_replicas);
   build_options.set_num_partitions(num_partitions);
   build_options.set_use_spmd_partitioning(use_spmd);
@@ -852,7 +854,7 @@ ERL_NIF_TERM mlir_if(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get<xla::Shape>(env, argv[2], output_shape)) {
     return exla::nif::error(env, "Unable to get shape.");
   }
-  if (!exla::nif::get_list(env, argv[3], implicit_args)) {
+  if (!exla::nif::get_list<mlir::Value>(env, argv[3], implicit_args)) {
     return exla::nif::error(env, "Unable to get implicit_args.");
   }
   if (!exla::nif::get<exla::MLIRFunction*>(env, argv[4], on_true)) {

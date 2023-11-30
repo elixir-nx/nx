@@ -1,9 +1,10 @@
 defmodule M do
     import Nx.Defn
   defn f(t, x) do
+    pred = t ==  1
     cond do
-        t ==  1 ->
-            t + 10
+        pred ->
+            t + 10 + pred
         true ->
             x - 20
     end

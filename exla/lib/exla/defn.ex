@@ -2135,7 +2135,9 @@ defmodule EXLA.Defn do
 
   defp to_if(pred, on_true, on_false, %{builder: builder} = state, cache) do
     {pred_op, cache} = recur_operator(pred, state, cache)
-    pred_op = to_type(pred_op, {:pred, 8})
+
+    dbg({pred_op, Value.get_shape(pred_op)})
+    pred_op = to_type(pred_op, {:u, 8})
 
     true_ids = Tree.scope_ids(on_true)
     false_ids = Tree.scope_ids(on_false)
@@ -2151,7 +2153,7 @@ defmodule EXLA.Defn do
         EXLA.NIF.dump_mlir_module(builder.module.ref)
         IO.puts("==== before adding if ====")
 
-        dbg(%{pred_op: pred_op, on_true: on_true, true_args: true_args, false_args: false_args, true_comp: true_comp, false_comp: false_comp})
+        dbg(%{pred: pred, pred_op: pred_op, pred_op_shape: Value.get_shape(pred_op), on_true: on_true, true_args: true_args, false_args: false_args, true_comp: true_comp, false_comp: false_comp})
 
         {Value.if(
            pred_op,
@@ -2350,10 +2352,13 @@ defmodule EXLA.Defn do
   # the branches, but that gets tricky with cond/if,
   # so we always perform the operation.
   defp cast_pred_to_u8(%EXLA.MLIR.Value{} = op) do
-    case EXLA.MLIR.Value.get_shape(op).dtype do
-      {:pred, 8} -> EXLA.MLIR.Value.convert(op, {:u, 8})
-      _ -> op
-    end
+    op
+    # dbg({op, EXLA.MLIR.Value.get_shape(op)})
+
+    # case EXLA.MLIR.Value.get_shape(op).dtype do
+    #   {:pred, 8} -> EXLA.MLIR.Value.convert(op, {:u, 8})
+    #   _ -> op
+    # end
   end
 
   defp cast_pred_to_u8(op) do
