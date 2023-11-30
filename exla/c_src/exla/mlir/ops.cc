@@ -846,11 +846,11 @@ ERL_NIF_TERM mlir_if(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
     return exla::nif::error(env, "Unable to get function.");
   }
-  if (!exla::nif::get<xla::Shape>(env, argv[1], output_shape)) {
-    return exla::nif::error(env, "Unable to get shape.");
-  }
-  if (!exla::nif::get<mlir::Value>(env, argv[2], pred)) {
+  if (!exla::nif::get<mlir::Value>(env, argv[1], pred)) {
     return exla::nif::error(env, "Unable to get pred.");
+  }
+  if (!exla::nif::get<xla::Shape>(env, argv[2], output_shape)) {
+    return exla::nif::error(env, "Unable to get shape.");
   }
   if (!exla::nif::get_list(env, argv[3], implicit_args)) {
     return exla::nif::error(env, "Unable to get implicit_args.");
@@ -862,7 +862,11 @@ ERL_NIF_TERM mlir_if(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Unable to get on_false.");
   }
 
+  std::cout << "got all args" << std::endl;
+
   mlir::Value result = (*function)->IfOp(*pred, *output_shape, implicit_args, *on_true, *on_false);
+
+  std::cout << "got result" << std::endl;
 
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
 }

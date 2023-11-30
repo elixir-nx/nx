@@ -119,6 +119,8 @@ class MLIRFunction {
  private:
   std::shared_ptr<MLIRModule> module_;
   std::unique_ptr<mlir::func::FuncOp> func_;
+
+  void dump_mlir_module();
 };
 
 class MLIRModule {

@@ -102,6 +102,10 @@ mlir::stablehlo::DotDimensionNumbersAttr ConvertDotDimensionNumbersToAttr(mlir::
       rhsContractingVec);
 }
 
+void MLIRFunction::dump_mlir_module() {
+  module_->module().dump();
+}
+
 int MLIRFunction::get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *type) {
   auto builder = module_->builder();
   std::string type_str;
@@ -807,6 +811,10 @@ mlir::Value MLIRFunction::MapOp(
 // we need to adapt because we want to receive std::vector and
 // because we use stablehlo instead of mhlo here.
 void ReplaceBlockArgumentsWithImplicitOperands(mlir::Operation *op, std::vector<mlir::Value> implicit_operands) {
+  if (!op) {
+    std::cerr << "op is null" << std::endl;
+    return;
+  }
   int implicit_operand_index = 0;
   for (auto &region : op->getRegions()) {
     for (auto arg : region.getArguments()) {
@@ -824,18 +832,35 @@ mlir::Value MLIRFunction::IfOp(mlir::Value pred, xla::Shape output_shape, std::v
   std::vector<tsl::int64> dims(span.begin(), span.end());
   mlir::Type output_type = GetMLIRType(builder, dims, output_shape.element_type());
 
-  mlir::stablehlo::IfOp if_op = builder->create<mlir::stablehlo::IfOp>(builder->getUnknownLoc(), mlir::TypeRange(output_type), pred);
+  std::cout << "before create IfOp" << std::endl;
+
+  implicit_arguments.insert(implicit_arguments.begin(), pred);
+  mlir::ValueRange operands(implicit_arguments);
+
+  mlir::stablehlo::IfOp if_op = builder->create<mlir::stablehlo::IfOp>(builder->getUnknownLoc(), mlir::TypeRange({output_type}), operands);
+
+  std::cout << "created if_op" << std::endl;
 
   mlir::Region &trueBody = if_op.getTrueBranch();
   auto &onTrueBlocks = on_true->function()->getBody().getBlocks();
   trueBody.getBlocks().splice(trueBody.end(), onTrueBlocks);
+
+  std::cout << "spliced true blocks" << std::endl;
+
   mlir::Region &falseBody = if_op.getFalseBranch();
   auto &onFalseBlocks = on_false->function()->getBody().getBlocks();
   falseBody.getBlocks().splice(falseBody.end(), onFalseBlocks);
 
+  std::cout << "spliced false blocks" << std::endl;
+
   ReplaceBlockArgumentsWithImplicitOperands(if_op.getOperation(), implicit_arguments);
 
-  return if_op.getResult(0);
+  std::cout << "replaced block arguments" << std::endl;
+
+  mlir::Operation::result_range result_range = if_op.getResults();
+  std::vector<mlir::Value> results(result_range.begin(), result_range.begin() + 1);
+
+  return results[0];
 }
 
 mlir::Value MLIRFunction::SelectAndScatterOp(

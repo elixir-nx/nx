@@ -494,8 +494,8 @@ defmodule EXLA.MLIR.Value do
         %Value{} = pred,
         %EXLA.Shape{} = output_shape,
         implicit_args,
-        %Value{} = on_true,
-        %Value{} = on_false
+        %Function{} = on_true,
+        %Function{} = on_false
       ) do
     implicit_args_refs = Enum.map(implicit_args, & &1.ref)
 
@@ -509,6 +509,7 @@ defmodule EXLA.MLIR.Value do
         on_false.ref
       )
       |> unwrap!()
+      |> IO.inspect(label: "if result ref")
 
     %Value{ref: ref, function: pred.function}
   end

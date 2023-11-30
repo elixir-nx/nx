@@ -2147,8 +2147,24 @@ defmodule EXLA.Defn do
 
     case builder do
       %EXLA.MLIR.Function{} ->
-        {Value.if(pred_op, op_shape(on_true), true_args ++ false_args, true_comp, false_comp),
-         cache}
+        IO.puts("==== before adding if ====")
+        EXLA.NIF.dump_mlir_module(builder.module.ref)
+        IO.puts("==== before adding if ====")
+
+        dbg(%{pred_op: pred_op, on_true: on_true, true_args: true_args, false_args: false_args, true_comp: true_comp, false_comp: false_comp})
+
+        {Value.if(
+           pred_op,
+           EXLA.Shape.make_shape(on_true.type, on_true.shape),
+           true_args ++ false_args,
+           true_comp,
+           false_comp
+         ), cache}
+         |> tap(fn {%{function: %{module: mod}}, _} ->
+          IO.puts("==== after adding if ====")
+            EXLA.NIF.dump_mlir_module(mod.ref)
+          IO.puts("==== after adding if ====")
+        end)
 
       _ ->
         {EXLA.Op.conditional(pred_op, true_args, true_comp, false_args, false_comp), cache}
@@ -2209,7 +2225,7 @@ defmodule EXLA.Defn do
     subbuilder = subbuilder(state.builder, "if-#{Atom.to_string(bool)}")
 
     {args, comp, comp_cache} =
-      if_branch_computation(subbuilder, args, cache, fn params, comp_cache ->
+      if_branch_computation(subbuilder, expr, args, cache, fn subbuilder, params, comp_cache ->
         comp_state = %{
           state
           | builder: subbuilder,
@@ -2220,24 +2236,44 @@ defmodule EXLA.Defn do
         recur_composite(expr, &cast_pred_to_u8/1, comp_state, comp_cache)
       end)
 
-    args = EXLA.Op.tuple(state.builder, args)
+    args =
+      case state.builder do
+        %EXLA.MLIR.Function{} ->
+          args
+
+        _ ->
+          EXLA.Op.tuple(state.builder, args)
+      end
+
     {args, comp, merge_outfeed(cache, comp_cache)}
   end
 
-  defp if_branch_computation(%EXLA.MLIR.Function{} = _function, _args, _cache, _fun) do
+  defp if_branch_computation(
+         %EXLA.MLIR.Function{module: module, name: name},
+         out_expr,
+         args,
+         cache,
+         fun
+       ) do
     # TO-DO(mlir): deal with token
+    inputs = Enum.map(args, &{nil, EXLA.MLIR.Value.get_shape(&1)})
 
-    # function is actually the parent function still, so we need to actually create a new function
+    # input function is actually the parent function still, so we need to actually create a new function
     # with this name on the same module.
+    function = EXLA.Builder.new({module, name}, inputs, out_expr, :mlir, true)
 
-    # tuple_shape = EXLA.Shape.make_tuple_shape(shapes)
-    # param = EXLA.Op.parameter(subbuilder, 0, tuple_shape, "p")
-    # params = Enum.with_index(args, fn _, i -> {i, EXLA.Op.get_tuple_element(param, i)} end)
-    # {res, comp_cache} = fun.(params, cache)
-    # {args, EXLA.Builder.build(res), comp_cache}
+    params = EXLA.MLIR.Function.get_arguments(function)
+
+    {res, comp_cache} = fun.(function, Enum.with_index(params, fn x, idx -> {idx, x} end), cache)
+
+    IO.puts("====if_branch_computation=====")
+    EXLA.NIF.dump_mlir_module(res.function.module.ref)
+    IO.puts("====if_branch_computation=====")
+
+    {args, EXLA.Builder.build(res, true), comp_cache}
   end
 
-  defp if_branch_computation(subbuilder, args, cache, fun) do
+  defp if_branch_computation(subbuilder, _out_expr, args, cache, fun) do
     shapes = Enum.map(args, &EXLA.Op.get_shape/1)
 
     if token = get_token(cache) do
@@ -2247,14 +2283,14 @@ defmodule EXLA.Defn do
 
       comp_token = EXLA.Op.get_tuple_element(param, 0)
       comp_cache = reset_token(cache, comp_token)
-      {res, comp_cache} = fun.(params, comp_cache)
+      {res, comp_cache} = fun.(subbuilder, params, comp_cache)
       comp = EXLA.Builder.build(EXLA.Op.tuple(subbuilder, [get_token(comp_cache), res]))
       {[token | args], comp, comp_cache}
     else
       tuple_shape = EXLA.Shape.make_tuple_shape(shapes)
       param = EXLA.Op.parameter(subbuilder, 0, tuple_shape, "p")
       params = Enum.with_index(args, fn _, i -> {i, EXLA.Op.get_tuple_element(param, i)} end)
-      {res, comp_cache} = fun.(params, cache)
+      {res, comp_cache} = fun.(subbuilder, params, cache)
       {args, EXLA.Builder.build(res), comp_cache}
     end
   end
@@ -2313,6 +2349,13 @@ defmodule EXLA.Defn do
   # We could do so lazily by comparing the versions of
   # the branches, but that gets tricky with cond/if,
   # so we always perform the operation.
+  defp cast_pred_to_u8(%EXLA.MLIR.Value{} = op) do
+    case EXLA.MLIR.Value.get_shape(op).dtype do
+      {:pred, 8} -> EXLA.MLIR.Value.convert(op, {:u, 8})
+      _ -> op
+    end
+  end
+
   defp cast_pred_to_u8(op) do
     case EXLA.Op.get_shape(op).dtype do
       {:pred, 8} -> EXLA.Op.convert_element_type(op, {:u, 8})
