@@ -967,20 +967,13 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp to_operator(
-         :right_shift,
-         [%Value{} = left, %Value{} = right],
-         %{type: type},
-         _state
-       ) do
-    # dims = broadcast_axes(op_shape(left), op_shape(right))
-
+  defp to_operator(:right_shift, [%Value{} = left, %Value{} = right], out, _state) do
     op =
-      if match?({:u, _}, type),
+      if match?({:u, _}, out.type),
         do: :right_shift_logical,
         else: :right_shift_arithmetic
 
-    apply(Value, op, [to_type(left, type), to_type(right, type)])
+    apply_mlir_broadcasted_bin_op(op, out, left, right)
   end
 
   defp to_operator(:right_shift, [left, right], %{type: type}, _state) do
@@ -999,7 +992,7 @@ defmodule EXLA.Defn do
 
   defp to_operator(op, [%Value{} = left, %Value{} = right], out, _state)
        when op in @bin_op do
-    apply(Value, op, [to_type(left, out.type), to_type(right, out.type)])
+    apply_mlir_broadcasted_bin_op(op, out, left, right)
   end
 
   defp to_operator(op, [left, right], %{type: type}, _state) when op in @bin_op do
@@ -1014,17 +1007,9 @@ defmodule EXLA.Defn do
 
   @bin_comp_op [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
 
-  defp to_operator(op, [%Value{} = left, %Value{} = right], _ans, _state)
+  defp to_operator(op, [%Value{} = left, %Value{} = right], ans, _state)
        when op in @bin_comp_op do
-    # The answer type is always {:u, 8} but we need cast the inputs
-    # to the same type which is not necessarily the answer type.
-    left_shape = Value.get_shape(left)
-    right_shape = Value.get_shape(right)
-    type = merge_type(left_shape.dtype, right_shape.dtype)
-    # dims = broadcast_axes(left_shape.dims, right_shape.dims)
-    # apply(EXLA.Op, op, [to_type(left, type), to_type(right, type), dims])
-    # TO-DO (mlir): apply broadcasting
-    apply(Value, op, [to_type(left, type), to_type(right, type)])
+    apply_mlir_broadcasted_bin_op(op, ans, left, right)
   end
 
   defp to_operator(op, [left, right], _ans, _state) when op in @bin_comp_op do
@@ -2383,5 +2368,16 @@ defmodule EXLA.Defn do
   defp delete_slice(enumerable, index, length) do
     {left, right} = Enum.split(enumerable, index)
     left ++ Enum.drop(right, length)
+  end
+
+  defp apply_mlir_broadcasted_bin_op(op, out, left, right) do
+    left_shape = Value.get_shape(left)
+    right_shape = Value.get_shape(right)
+    dims = broadcast_axes(left_shape.dims, right_shape.dims)
+    out_shape = EXLA.Shape.make_shape(out.type, out.shape)
+    type = out_shape.dtype
+    left = left |> to_type(type) |> Value.broadcast_in_dim(out_shape, dims)
+    right = right |> to_type(type) |> Value.broadcast_in_dim(out_shape, dims)
+    apply(Value, op, [left, right])
   end
 end

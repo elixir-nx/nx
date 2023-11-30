@@ -7,28 +7,23 @@ defmodule EXLA.MLIR.ExecutableTest do
     Nx.Defn.default_options(compiler: EXLA, compiler_mode: :mlir)
   end
 
-  test "mvp" do
-    # TO-DO (mlir): this will probably be reorganized in the end
-    # This test is being added as an MVP for MLIR compilation
-
-    t1 = Nx.broadcast(0.0, {2, 3, 1})
-    t2 = Nx.broadcast(1.0, {2, 3, 1})
-
-    result =
-      Nx.Defn.jit_apply(
-        fn t1, t2 ->
-          t1
-          |> Nx.add(t2)
-          |> then(&{Nx.add(t2, &1), Nx.subtract(t2, &1)})
-          |> then(&elem(&1, 0))
-        end,
-        [t1, t2]
-      )
-
-    # expected = {Nx.add(t2, t2), t1}
-    expected = Nx.add(t2, t2)
-    assert_equal(result, expected)
-  end
+  @broadcast_types [s: 8, u: 8, s: 64, u: 64, f: 32, f: 16, f: 64]
+  @types [
+    s: 8,
+    s: 16,
+    s: 32,
+    s: 64,
+    u: 8,
+    u: 16,
+    u: 32,
+    u: 64,
+    f: 16,
+    f: 32,
+    f: 64,
+    bf: 16,
+    c: 64,
+    c: 128
+  ]
 
   describe "create_function" do
     test "creates with tuple arguments" do
@@ -110,23 +105,6 @@ defmodule EXLA.MLIR.ExecutableTest do
   end
 
   describe "convert" do
-    @types [
-      s: 8,
-      s: 16,
-      s: 32,
-      s: 64,
-      u: 8,
-      u: 16,
-      u: 32,
-      u: 64,
-      f: 16,
-      f: 32,
-      f: 64,
-      bf: 16,
-      c: 64,
-      c: 128
-    ]
-
     for origin_type <- @types, dest_type <- @types do
       test "converts #{inspect(origin_type)} to #{inspect(dest_type)}" do
         t = Nx.tensor([[1], [2]], type: unquote(origin_type))
@@ -167,47 +145,83 @@ defmodule EXLA.MLIR.ExecutableTest do
     @bin_ops [:add, :subtract, :multiply, :pow, :min] ++
                [:max, :remainder, :atan2, :equal, :not_equal] ++
                [:less, :less_equal, :greater, :greater_equal]
-    # TO-DO (mlir): test for type casting
-
     for op <- @bin_ops do
       test "#{op}" do
-        function = fn t1, t2 -> Nx.unquote(op)(t1, t2) end
+        for type1 <- @broadcast_types,
+            type2 <- @broadcast_types,
+            explicit_broadcast <- [true, false] do
+          function = fn t1, t2 -> Nx.unquote(op)(t1, t2) end
 
-        t1 = Nx.iota({2, 3, 1}, type: :f32)
-        t2 = Nx.broadcast(Nx.tensor(2, type: :f32), {2, 3, 1})
+          t1 = Nx.iota({2, 3, 1}, type: type1)
 
-        result_nx = Nx.Defn.jit_apply(function, [t1, t2], compiler: Nx.Defn.Evaluator)
-        result_mlir = Nx.Defn.jit_apply(function, [t1, t2])
+          t2 =
+            if explicit_broadcast do
+              Nx.broadcast(Nx.tensor(2, type: type2), {2, 3, 1})
+            else
+              Nx.tensor(2, type: type2)
+            end
 
-        assert_equal(result_nx, result_mlir)
+          result_nx = Nx.Defn.jit_apply(function, [t1, t2], compiler: Nx.Defn.Evaluator)
+          result_mlir = Nx.Defn.jit_apply(function, [t1, t2])
+
+          if Nx.Type.float?(result_mlir.type) do
+            assert result_nx.shape == result_mlir.shape
+            assert result_nx.type == result_mlir.type
+            # TO-DO (mlir): remove backend transfer when all_close is fully supported
+            assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir),
+              rtol: 1.0e-4
+            )
+          else
+            assert_equal(result_nx, result_mlir)
+          end
+        end
       end
     end
 
     for op <- [:bitwise_and, :bitwise_or, :bitwise_xor] do
       test "#{op}" do
-        function = fn t1, t2 -> Nx.unquote(op)(t1, t2) end
+        for type1 <- @broadcast_types,
+            type2 <- @broadcast_types,
+            explicit_broadcast <- [true, false],
+            not Nx.Type.float?(type1) and not Nx.Type.float?(type2) do
+          function = fn t1, t2 -> Nx.unquote(op)(t1, t2) end
 
-        t1 = Nx.iota({2, 3, 1}, type: :s64)
-        t2 = Nx.broadcast(Nx.tensor(2, type: :s64), {2, 3, 1})
+          t1 = Nx.iota({2, 3, 1}, type: type1)
 
-        result_nx = Nx.Defn.jit_apply(function, [t1, t2], compiler: Nx.Defn.Evaluator)
-        result_mlir = Nx.Defn.jit_apply(function, [t1, t2])
+          t2 =
+            if explicit_broadcast do
+              Nx.broadcast(Nx.tensor(2, type: type2), {2, 3, 1})
+            else
+              Nx.tensor(2, type: type2)
+            end
 
-        assert_equal(result_nx, result_mlir)
+          result_nx = Nx.Defn.jit_apply(function, [t1, t2], compiler: Nx.Defn.Evaluator)
+          result_mlir = Nx.Defn.jit_apply(function, [t1, t2])
+
+          assert_equal(result_nx, result_mlir)
+        end
       end
     end
 
     for op <- [:left_shift, :right_shift], type <- [u: 8, s: 8] do
       test "#{op} #{inspect(type)}" do
-        function = fn t1, t2 -> Nx.unquote(op)(t1, t2) end
+        for explicit_broadcast <- [true, false] do
+          function = fn t1, t2 -> Nx.unquote(op)(t1, t2) end
 
-        t1 = Nx.iota({2, 3, 1}, type: unquote(type))
-        t2 = Nx.broadcast(Nx.tensor(2, type: unquote(type)), {2, 3, 1})
+          t1 = Nx.iota({2, 3, 1}, type: unquote(type))
 
-        result_nx = Nx.Defn.jit_apply(function, [t1, t2], compiler: Nx.Defn.Evaluator)
-        result_mlir = Nx.Defn.jit_apply(function, [t1, t2])
+          t2 =
+            if explicit_broadcast do
+              Nx.broadcast(Nx.tensor(2, type: unquote(type)), {2, 3, 1})
+            else
+              Nx.tensor(2, type: unquote(type))
+            end
 
-        assert_equal(result_nx, result_mlir)
+          result_nx = Nx.Defn.jit_apply(function, [t1, t2], compiler: Nx.Defn.Evaluator)
+          result_mlir = Nx.Defn.jit_apply(function, [t1, t2])
+
+          assert_equal(result_nx, result_mlir)
+        end
       end
     end
   end
@@ -233,7 +247,7 @@ defmodule EXLA.MLIR.ExecutableTest do
 
         assert result_nx.shape == result_mlir.shape
         assert result_nx.type == result_mlir.type
-        # TO-DO (mlir): remove backend transfer
+        # TO-DO (mlir): remove backend transfer when all_close is fully supported
         assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
       end
     end
@@ -248,7 +262,7 @@ defmodule EXLA.MLIR.ExecutableTest do
 
       assert result_nx.shape == result_mlir.shape
       assert result_nx.type == result_mlir.type
-      # TO-DO (mlir): remove backend transfer
+      # TO-DO (mlir): remove backend transfer when all_close is fully supported
       assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
     end
 
@@ -262,7 +276,7 @@ defmodule EXLA.MLIR.ExecutableTest do
 
       assert result_nx.shape == result_mlir.shape
       assert result_nx.type == result_mlir.type
-      # TO-DO (mlir): remove backend transfer
+      # TO-DO (mlir): remove backend transfer when all_close is fully supported
       assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
     end
 
@@ -276,7 +290,7 @@ defmodule EXLA.MLIR.ExecutableTest do
 
       assert result_nx.shape == result_mlir.shape
       assert result_nx.type == result_mlir.type
-      # TO-DO (mlir): remove backend transfer
+      # TO-DO (mlir): remove backend transfer when all_close is fully supported
       assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
     end
 
@@ -308,7 +322,7 @@ defmodule EXLA.MLIR.ExecutableTest do
 
       assert result_nx.shape == result_mlir.shape
       assert result_nx.type == result_mlir.type
-      # TO-DO (mlir): remove backend transfer
+      # TO-DO (mlir): remove backend transfer when all_close is fully supported
       assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
     end
 
@@ -328,7 +342,7 @@ defmodule EXLA.MLIR.ExecutableTest do
 
         assert result_nx.shape == result_mlir.shape
         assert result_nx.type == result_mlir.type
-        # TO-DO (mlir): remove backend transfer
+        # TO-DO (mlir): remove backend transfer when all_close is fully supported
         assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
       end
     end
