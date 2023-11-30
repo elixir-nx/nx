@@ -1014,17 +1014,17 @@ defmodule EXLA.Defn do
 
   @bin_comp_op [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
 
-  defp to_operator(op, [%Value{} = left, %Value{} = right], _ans, _state)
+  defp to_operator(op, [%Value{} = left, %Value{} = right], ans, _state)
        when op in @bin_comp_op do
-    # The answer type is always {:u, 8} but we need cast the inputs
-    # to the same type which is not necessarily the answer type.
     left_shape = Value.get_shape(left)
     right_shape = Value.get_shape(right)
-    type = merge_type(left_shape.dtype, right_shape.dtype)
-    # dims = broadcast_axes(left_shape.dims, right_shape.dims)
-    # apply(EXLA.Op, op, [to_type(left, type), to_type(right, type), dims])
-    # TO-DO (mlir): apply broadcasting
-    apply(Value, op, [to_type(left, type), to_type(right, type)])
+    dims = broadcast_axes(left_shape.dims, right_shape.dims)
+    out_shape = EXLA.Shape.make_shape(ans.type, ans.shape)
+    type = out_shape.dtype
+    left = left |> to_type(type) |> Value.broadcast_in_dim(out_shape, dims)
+    right = right |> to_type(type) |> Value.broadcast_in_dim(out_shape, dims)
+
+    apply(Value, op, [left, right])
   end
 
   defp to_operator(op, [left, right], _ans, _state) when op in @bin_comp_op do
