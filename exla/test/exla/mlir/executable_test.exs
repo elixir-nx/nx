@@ -1042,11 +1042,12 @@ defmodule EXLA.MLIR.ExecutableFeedTest do
                Task.async(fn ->
                  run_one([], [compiler_mode: :mlir], Nx.template({}, {:s, 32}), fn b ->
                    token = Value.create_token(b)
-                   val_and_token = Value.infeed(token, t.shape.dims)
+                   val_and_token = Value.infeed(token, t.shape)
                    val = Value.get_tuple_element(val_and_token, 0)
                    new_token = Value.get_tuple_element(val_and_token, 1)
                    outfeed_val = Value.add(val, val)
-                   _outfeed_token = Value.outfeed(outfeed_val, new_token)
+
+                   _outfeed_token = Value.outfeed(new_token, [outfeed_val])
                    Value.tuple([Value.add(outfeed_val, val)])
                  end)
                end)

@@ -80,14 +80,11 @@ defmodule EXLA.MLIR.Value do
 
   def get_tuple_element(%Value{function: %Function{} = func, ref: ref}, index)
       when is_integer(index) do
-        IO.inspect("b")
     ref = EXLA.NIF.mlir_get_tuple_element(func.ref, ref, index) |> unwrap!()
-        IO.inspect("c")
     %Value{ref: ref, function: func}
   end
 
   def get_shape(%Value{ref: ref}) do
-    dbg(ref)
     shape_ref = EXLA.NIF.mlir_get_shape(ref) |> unwrap!()
     EXLA.Shape.get_shape_info(shape_ref)
   end
@@ -517,14 +514,10 @@ defmodule EXLA.MLIR.Value do
     %Value{ref: ref, function: pred.function}
   end
 
-  def infeed(%Value{function: function} = token, dims) do
-    ref = EXLA.NIF.mlir_infeed(function.ref, token.ref, Tuple.to_list(dims)) |> unwrap!()
+  def infeed(%Value{function: function} = token, %EXLA.Shape{} = shape) do
+    ref = EXLA.NIF.mlir_infeed(function.ref, token.ref, shape.ref) |> unwrap!()
 
     %Value{token | ref: ref}
-    # |> tap(fn f ->
-    #   IO.puts("a")
-    #   get_shape(f) |> IO.inspect()
-    # end)
   end
 
   def outfeed(%Value{function: function} = token, inputs) do
