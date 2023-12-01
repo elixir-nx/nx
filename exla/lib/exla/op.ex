@@ -678,10 +678,10 @@ defmodule EXLA.Op do
         args,
         %Computation{ref: body_fn}
       ) do
-    args_fn = Enum.map(args, & &1.ref)
+    args_ref = Enum.map(args, & &1.ref)
 
     # wrap args in an n-tuple to avoid nif variadic limitations
-    ref = EXLA.NIF.call(builder, args_fn, body_fn) |> unwrap!()
+    ref = EXLA.NIF.call(builder, args_ref, body_fn) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 

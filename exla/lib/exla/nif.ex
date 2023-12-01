@@ -158,6 +158,8 @@ defmodule EXLA.NIF do
   def mlir_infeed(_function, _token, _shape), do: :erlang.nif_error(:undef)
   def mlir_outfeed(_function, _token, _inputs), do: :erlang.nif_error(:undef)
 
+  def mlir_call(_function, _args, _computation), do: :erlang.nif_error(:undef)
+
   def new_builder(_name),
     do: :erlang.nif_error(:undef)
 

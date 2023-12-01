@@ -107,3 +107,4 @@ DEFINE_NIF(mlir_map);
 DEFINE_NIF(mlir_if);
 DEFINE_NIF(mlir_infeed);
 DEFINE_NIF(mlir_outfeed);
+DEFINE_NIF(mlir_call);

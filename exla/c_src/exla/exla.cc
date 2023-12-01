@@ -721,6 +721,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_dynamic_update_slice", 4, mlir_dynamic_update_slice},
     {"mlir_infeed", 3, mlir_infeed},
     {"mlir_outfeed", 3, mlir_outfeed},
+    {"mlir_call", 3, mlir_call},
     {"mlir_reduce", 5, mlir_reduce},
     {"mlir_map", 4, mlir_map},
     {"mlir_if", 6, mlir_if},
