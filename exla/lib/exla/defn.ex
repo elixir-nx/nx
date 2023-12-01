@@ -295,7 +295,7 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp to_root_computation(%Function{} = builder, expr, used_shapes, outfeed, options) do
+  defp to_root_computation(builder, expr, used_shapes, outfeed, options) do
     params =
       case builder do
         %Function{} ->
