@@ -1261,4 +1261,21 @@ mlir::Value MLIRFunction::CallOp(std::vector<mlir::Value> inputs, MLIRFunction *
   return call_op.getResult(0);
 }
 
+mlir::Value MLIRFunction::WhileOp(MLIRFunction *pred, MLIRFunction *body_function, std::vector<mlir::Value> initial) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+
+  auto while_op = builder->create<mlir::stablehlo::WhileOp>(builder->getUnknownLoc(), mlir::ValueRange(initial));
+
+  mlir::Region &cond = while_op.getCond();
+  auto &predBlocks = pred->function()->getBody().getBlocks();
+  cond.getBlocks().splice(cond.end(), predBlocks);
+
+  mlir::Region &body = while_op.getBody();
+  auto &bodyBlocks = body_function->function()->getBody().getBlocks();
+  body.getBlocks().splice(body.end(), bodyBlocks);
+
+  return while_op.getResult(0);
+}
+
 }  // namespace exla

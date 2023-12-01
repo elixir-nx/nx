@@ -537,6 +537,21 @@ defmodule EXLA.MLIR.Value do
     %Value{ref: ref, function: function}
   end
 
+  def while(%Function{ref: pred_ref}, %Function{ref: body_ref}, %Value{function: function} = initial) do
+    ref = EXLA.NIF.mlir_while(function.ref, pred_ref, body_ref, flatten_tuples(initial)) |> unwrap!()
+    %Value{function: function, ref: ref}
+  end
+
+  defp flatten_tuples(val) do
+    case get_shape(val) do
+      %{dtype: {:tuple, _}, dims: {n}} ->
+        Enum.flat_map(0..n - 1, fn i -> val |> get_tuple_element(i) |> flatten_tuples() end)
+
+      _ ->
+        [val]
+    end
+  end
+
   defp unwrap!({:ok, value}), do: value
   defp unwrap!(other), do: raise("#{inspect(other)}")
 end

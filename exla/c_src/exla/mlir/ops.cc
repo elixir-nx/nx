@@ -1468,3 +1468,29 @@ ERL_NIF_TERM mlir_call(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
 }
+
+ERL_NIF_TERM mlir_while(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 4) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction **function, **pred, **body;
+  std::vector<mlir::Value> initial;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[1], pred)) {
+    return exla::nif::error(env, "Unable to get pred.");
+  }
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[2], body)) {
+    return exla::nif::error(env, "Unable to get body.");
+  }
+  if (!exla::nif::get_list<mlir::Value>(env, argv[3], initial)) {
+    return exla::nif::error(env, "Unable to get initial.");
+  }
+
+  mlir::Value result = (*function)->WhileOp(*pred, *body, initial);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
+}

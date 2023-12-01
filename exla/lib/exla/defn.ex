@@ -516,9 +516,20 @@ defmodule EXLA.Defn do
     {body, cache} =
       while_computation(:while_body, arg, body, :with_token, &cast_pred_to_u8/1, state, cache)
 
-    while = EXLA.Op.while(pred, body, initial)
-    token = EXLA.Op.get_tuple_element(while, 0)
-    {EXLA.Op.get_tuple_element(while, 1), update_token(cache, token)}
+      mod =
+        case state.builder do
+          %Function{} -> Value
+          _ -> EXLA.Op
+        end
+
+    while = mod.while(pred, body, initial)
+
+    IO.puts("=== after while ===")
+    EXLA.NIF.dump_mlir_module(while.function.module.ref)
+    IO.puts("=== after while ===")
+
+    token = mod.get_tuple_element(while, 0)
+    {mod.get_tuple_element(while, 1), update_token(cache, token)}
   end
 
   defp cached_recur_operator(:cond, %T{data: %Expr{args: args}} = t, state, cache) do
@@ -1919,6 +1930,36 @@ defmodule EXLA.Defn do
     EXLA.Builder.build(to_type(res, type))
   end
 
+  defp while_computation(name, arg, expr, type, transform, %{builder: %Function{}} = state, cache) do
+    arg_shapes = while_arg_shape({%{type: :token}, arg}) |> Enum.with_index(fn shape, i -> {"p#{i}", shape} end)
+
+    %{module: module, name: name} = subbuilder(state.builder, Atom.to_string(name))
+    function = EXLA.Builder.new({module, name}, arg_shapes, expr, :mlir, false)
+    [arg_token | arg_params] = EXLA.MLIR.Function.get_arguments(function)
+
+    arg_params = Value.tuple(arg_params)
+
+    params = computation_arg_param({arg, arg_params})
+
+     state = %{
+      state
+      | builder: function,
+        params: Map.new(params),
+        scope_ids: Tree.scope_ids(expr)
+    }
+
+     {res, comp_cache} = recur_composite(expr, transform, state, reset_token(cache, arg_token))
+
+    res =
+      if type == :with_token do
+        Value.tuple([arg_token, res])
+      else
+        to_type(res, type)
+      end
+
+    {EXLA.Builder.build(res, true), merge_outfeed(cache, comp_cache)}
+  end
+
   defp while_computation(name, arg, expr, type, transform, state, cache) do
     subbuilder = subbuilder(state.builder, Atom.to_string(name))
     arg_shape = computation_arg_shape(arg)
@@ -2026,6 +2067,21 @@ defmodule EXLA.Defn do
     {op, keys}
   end
 
+  defp while_arg_shape(%{type: type, shape: shape}) do
+    EXLA.Shape.make_shape(type, shape)
+  end
+
+  defp while_arg_shape(%{type: :token}) do
+    EXLA.Shape.make_token_shape()
+  end
+
+  defp while_arg_shape(tuple) when is_tuple(tuple) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.map(&while_arg_shape/1)
+    |> List.flatten()
+  end
+
   defp computation_arg_shape(%{type: type, shape: shape}) do
     EXLA.Shape.make_shape(type, shape)
   end
@@ -2037,10 +2093,10 @@ defmodule EXLA.Defn do
     |> EXLA.Shape.make_tuple_shape()
   end
 
-  defp computation_arg_param({tuple, param}) when is_tuple(tuple) do
+  defp computation_arg_param({tuple, %mod{} = param}) when is_tuple(tuple) do
     tuple
     |> Tuple.to_list()
-    |> Enum.with_index(fn arg, i -> {arg, EXLA.Op.get_tuple_element(param, i)} end)
+    |> Enum.with_index(fn arg, i -> {arg, mod.get_tuple_element(param, i)} end)
     |> Enum.flat_map(&computation_arg_param/1)
   end
 
