@@ -133,7 +133,9 @@ class MLIRModule {
   MLIRFunction *CreateFunction(
       std::string name,
       std::vector<xla::Shape *> arg_shapes,
-      xla::Shape *ret_shape, bool is_public);
+      std::vector<std::string> arg_names,
+      xla::Shape *ret_shape,
+      bool is_public);
 
   mlir::ModuleOp module() { return module_.get(); }
   mlir::OpBuilder *builder() { return builder_.get(); }

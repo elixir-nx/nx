@@ -7,8 +7,6 @@ defmodule EXLA.Builder do
   alias EXLA.Op
   alias EXLA.MLIR.Module, as: M
 
-  alias EXLA.Shape
-
   @enforce_keys [:ref]
   defstruct [:ref, :parent, :name]
 
@@ -19,7 +17,13 @@ defmodule EXLA.Builder do
   end
 
   def new(module_and_name, inputs, outputs, :mlir, sub?) do
-    arg_shapes = Enum.map(inputs, fn {_, %Shape{} = s} -> s end)
+    {arg_names, arg_shapes} = Enum.unzip(inputs)
+
+    arg_names = Enum.map(arg_names, fn
+      num when is_integer(num) -> "arg#{num}"
+      name when is_binary(name) -> name
+      name -> raise ArgumentError, "Invalid argument name #{inspect(name)}"
+    end)
 
     {module, name, is_public} =
       case module_and_name do
@@ -34,7 +38,7 @@ defmodule EXLA.Builder do
         [outputs] |> Nx.Defn.Composite.flatten_list() |> List.to_tuple() |> exla_shape()
       end
 
-    M.create_function(module, name, arg_shapes, return_shape, is_public)
+    M.create_function(module, name, arg_shapes, arg_names, return_shape, is_public)
   end
 
   defp exla_shape(tensors) when is_tuple(tensors) do
@@ -44,6 +48,9 @@ defmodule EXLA.Builder do
     |> EXLA.Shape.make_tuple_shape()
   end
 
+  defp exla_shape(%{type: :token}) do
+    EXLA.Shape.make_token_shape()
+  end
   defp exla_shape(%{shape: shape, type: type}) do
     EXLA.Shape.make_shape(type, shape)
   end

@@ -75,7 +75,7 @@ ERL_NIF_TERM new_mlir_module(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
 }
 
 ERL_NIF_TERM create_mlir_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 5) {
+  if (argc != 6) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
@@ -86,6 +86,7 @@ ERL_NIF_TERM create_mlir_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   std::vector<xla::Shape*> arg_shapes;
   xla::Shape* ret_shape;
   bool is_public;
+  std::vector<std::string> arg_names;
 
   if (!exla::nif::get<exla::MLIRModule*>(env, argv[0], module)) {
     return exla::nif::error(env, "Unable to get module.");
@@ -93,19 +94,20 @@ ERL_NIF_TERM create_mlir_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   if (!exla::nif::get(env, argv[1], func_name)) {
     return exla::nif::error(env, "Unable to get function name.");
   }
-
-  if (!exla::nif::get_list<xla::Shape>(env, argv[2], arg_shapes)) {
+  if (!exla::nif::get_list<xla::Shape*>(env, argv[2], arg_shapes)) {
     return exla::nif::error(env, "Unable to get args.");
   }
-
-  if (!exla::nif::get<xla::Shape>(env, argv[3], ret_shape)) {
+  if (!exla::nif::get_list<std::string>(env, argv[3], arg_names)) {
+    return exla::nif::error(env, "Unable to get arg_names.");
+  }
+  if (!exla::nif::get<xla::Shape>(env, argv[4], ret_shape)) {
     return exla::nif::error(env, "Unable to get return.");
   }
-  if (!exla::nif::get(env, argv[4], &is_public)) {
+  if (!exla::nif::get(env, argv[5], &is_public)) {
     return exla::nif::error(env, "Unable to get is_public.");
   }
 
-  exla::MLIRFunction* func = (*module)->CreateFunction(func_name, arg_shapes, ret_shape, is_public);
+  exla::MLIRFunction* func = (*module)->CreateFunction(func_name, arg_shapes, arg_names, ret_shape, is_public);
 
   return exla::nif::ok(env, exla::nif::make<exla::MLIRFunction*>(env, func));
 }
@@ -991,12 +993,24 @@ ERL_NIF_TERM mlir_get_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     return exla::nif::error(env, "Unable to get tensor.");
   }
 
-  auto mlir_shape = mlir::ValueShapeRange({}).getShape(*t);
+  mlir::Type type = t->getType();
+  xla::Shape shape;
 
-  mlir::Type type = mlir_shape.getElementType();
-  xla::PrimitiveType element_type = exla::MLIRTypeToPrimitiveType(type);
-  mlir::ShapedTypeComponents shape_dims(mlir_shape);
-  xla::Shape shape = xla::ShapeUtil::MakeShape(element_type, shape_dims.getDims());
+  if (type.isa<mlir::RankedTensorType>()) {
+    auto tensorType = type.cast<mlir::RankedTensorType>();
+    // Get the shape (dimensions) of the tensor
+    std::vector<int64_t> dims = tensorType.getShape();
+    auto element_type = tensorType.getElementType();
+    shape = xla::ShapeUtil::MakeShape(exla::MLIRTypeToPrimitiveType(element_type), dims);
+  } else {
+    auto element_type = exla::MLIRTypeToPrimitiveType(type);
+
+    if (element_type == xla::PrimitiveType::TOKEN) {
+      shape = xla::ShapeUtil::MakeTokenShape();
+    } else {
+      shape = xla::ShapeUtil::MakeShape(element_type, {});
+    }
+  }
 
   return exla::nif::ok(env, exla::nif::make<xla::Shape>(env, shape));
 }

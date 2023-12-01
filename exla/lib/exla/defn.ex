@@ -603,6 +603,8 @@ defmodule EXLA.Defn do
           {computation, Map.put(cache, key, computation)}
       end
 
+    IO.puts("=== after call_body ===")
+
     mod = case state.builder do
       %Function{} ->
         Value
@@ -611,6 +613,12 @@ defmodule EXLA.Defn do
       end
 
     result = mod.call(state.builder, [get_token(cache) | call_args], call_body)
+
+    IO.puts("=== after call ===")
+    EXLA.NIF.dump_mlir_module(state.builder.module.ref)
+    IO.puts("=== after call ===")
+
+
     token = mod.get_tuple_element(result, 0)
     {mod.get_tuple_element(result, 1), update_token(cache, token)}
   end
@@ -1950,13 +1958,15 @@ defmodule EXLA.Defn do
     EXLA.NIF.dump_mlir_module(state.builder.module.ref)
     IO.puts("=== before subbuilder ===")
 
-    function = EXLA.Builder.new({module, name}, [{0, token_shape} | arg_shapes], expr, :mlir, false)
+    function = EXLA.Builder.new({module, name}, [{"p0", token_shape} | arg_shapes], {struct(Nx.Tensor, %{type: :token}), expr}, :mlir, false)
 
     IO.puts("=== After subbuilder ===")
     EXLA.NIF.dump_mlir_module(state.builder.module.ref)
     IO.puts("=== After subbuilder ===")
 
     [arg_token | _] = args = EXLA.MLIR.Function.get_arguments(function)
+
+    Value.get_shape(arg_token) |> dbg()
 
     params = Enum.with_index(args, fn param, i -> {i, param} end)
 
@@ -1967,7 +1977,13 @@ defmodule EXLA.Defn do
         scope_ids: Tree.scope_ids(expr)
     }
 
-    {res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
+    IO.puts("=== before reset token ===")
+    cache = reset_token(cache, arg_token)
+    IO.puts("=== before recur composite ===")
+    {res, comp_cache} = recur_composite(expr, state, cache)
+    IO.puts("=== before res tuple ===")
+    EXLA.NIF.dump_mlir_module(state.builder.module.ref)
+    IO.puts("=== before res tuple ===")
     res = Value.tuple([arg_token, res])
 
     IO.puts("=== before build ===")
@@ -2052,11 +2068,17 @@ defmodule EXLA.Defn do
       recur_composite(expr, transform, state, cache)
     else
       {elements, cache} = Enum.map_reduce(list, cache, &recur_composite(&1, transform, state, &2))
-      {EXLA.Op.tuple(state.builder, elements), cache}
+
+      tuple = case state.builder do
+        %Function{} -> Value.tuple(elements)
+        builder -> EXLA.Op.tuple(builder, elements)
+      end
+
+      {tuple, cache}
     end
   end
 
-  defp recur_composite(%EXLA.Op{} = op, transform, _state, cache) do
+  defp recur_composite(%mod{} = op, transform, _state, cache) when mod in [Value, EXLA.Op] do
     {transform.(op), cache}
   end
 
@@ -2289,7 +2311,7 @@ defmodule EXLA.Defn do
          fun
        ) do
     # TO-DO(mlir): deal with token
-    inputs = Enum.map(args, &{nil, Value.get_shape(&1)})
+    inputs = Enum.with_index(args, fn arg, idx -> {"p#{idx}", Value.get_shape(arg)} end)
 
     # input function is actually the parent function still, so we need to actually create a new function
     # with this name on the same module.
