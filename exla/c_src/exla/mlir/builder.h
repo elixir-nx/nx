@@ -110,6 +110,7 @@ class MLIRFunction {
   ERL_NIF_TERM ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM value_ptr, std::vector<int64_t> dims = {});
   mlir::Value InfeedOp(mlir::Value token, xla::Shape *shape);
   mlir::Value OutfeedOp(std::vector<mlir::Value> inputs, mlir::Value token);
+  mlir::Value CallOp(std::vector<mlir::Value> inputs, MLIRFunction *computation);
   int get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *type);
 
   void Build(mlir::Value root, bool use_mhlo_return);
@@ -132,7 +133,8 @@ class MLIRModule {
   MLIRFunction *CreateFunction(
       std::string name,
       std::vector<xla::Shape *> arg_shapes,
-      xla::Shape *ret_shape, bool is_public);
+      xla::Shape *ret_shape,
+      bool is_public);
 
   mlir::ModuleOp module() { return module_.get(); }
   mlir::OpBuilder *builder() { return builder_.get(); }

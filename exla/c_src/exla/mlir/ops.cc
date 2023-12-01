@@ -93,11 +93,9 @@ ERL_NIF_TERM create_mlir_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   if (!exla::nif::get(env, argv[1], func_name)) {
     return exla::nif::error(env, "Unable to get function name.");
   }
-
   if (!exla::nif::get_list<xla::Shape>(env, argv[2], arg_shapes)) {
     return exla::nif::error(env, "Unable to get args.");
   }
-
   if (!exla::nif::get<xla::Shape>(env, argv[3], ret_shape)) {
     return exla::nif::error(env, "Unable to get return.");
   }
@@ -991,12 +989,24 @@ ERL_NIF_TERM mlir_get_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     return exla::nif::error(env, "Unable to get tensor.");
   }
 
-  auto mlir_shape = mlir::ValueShapeRange({}).getShape(*t);
+  mlir::Type type = t->getType();
+  xla::Shape shape;
 
-  mlir::Type type = mlir_shape.getElementType();
-  xla::PrimitiveType element_type = exla::MLIRTypeToPrimitiveType(type);
-  mlir::ShapedTypeComponents shape_dims(mlir_shape);
-  xla::Shape shape = xla::ShapeUtil::MakeShape(element_type, shape_dims.getDims());
+  if (type.isa<mlir::RankedTensorType>()) {
+    auto tensorType = type.cast<mlir::RankedTensorType>();
+    // Get the shape (dimensions) of the tensor
+    std::vector<int64_t> dims = tensorType.getShape();
+    auto element_type = tensorType.getElementType();
+    shape = xla::ShapeUtil::MakeShape(exla::MLIRTypeToPrimitiveType(element_type), dims);
+  } else {
+    auto element_type = exla::MLIRTypeToPrimitiveType(type);
+
+    if (element_type == xla::PrimitiveType::TOKEN) {
+      shape = xla::ShapeUtil::MakeTokenShape();
+    } else {
+      shape = xla::ShapeUtil::MakeShape(element_type, {});
+    }
+  }
 
   return exla::nif::ok(env, exla::nif::make<xla::Shape>(env, shape));
 }
@@ -1432,6 +1442,29 @@ ERL_NIF_TERM mlir_outfeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   mlir::Value result = (*function)->OutfeedOp(inputs, *token);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
+}
+
+ERL_NIF_TERM mlir_call(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction **function, **computation;
+  std::vector<mlir::Value> arguments;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get_list<mlir::Value>(env, argv[1], arguments)) {
+    return exla::nif::error(env, "Unable to get arguments.");
+  }
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[2], computation)) {
+    return exla::nif::error(env, "Unable to get computation.");
+  }
+
+  mlir::Value result = (*function)->CallOp(arguments, *computation);
 
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
 }

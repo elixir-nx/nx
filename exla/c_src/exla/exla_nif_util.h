@@ -2,23 +2,23 @@
 #define EXLA_NIF_UTIL_H_
 
 #include <complex>
-#include <vector>
-#include <string>
-#include <memory>
-#include <utility>
 #include <map>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "erl_nif.h"
-#include "xla/xla_data.pb.h"
-#include "xla/types.h"
 #include "xla/shape.h"
+#include "xla/types.h"
+#include "xla/xla_data.pb.h"
 
 #if !defined(__GNUC__) && (defined(__WIN32__) || defined(_WIN32) || defined(_WIN32_))
-  typedef unsigned __int64 nif_uint64_t;
-  typedef signed __int64 nif_int64_t;
+typedef unsigned __int64 nif_uint64_t;
+typedef signed __int64 nif_int64_t;
 #else
-  typedef unsigned long nif_uint64_t;
-  typedef signed long nif_int64_t;
+typedef unsigned long nif_uint64_t;
+typedef signed long nif_int64_t;
 #endif
 
 // Implementation Notes:
@@ -104,7 +104,7 @@ ERL_NIF_TERM make(ErlNifEnv* env, int32 var);
 // We only define implementations for types we use in the
 // NIF.
 
-int get(ErlNifEnv* env, ERL_NIF_TERM term, std::string &var);
+int get(ErlNifEnv* env, ERL_NIF_TERM term, std::string& var);
 int get(ErlNifEnv* env, ERL_NIF_TERM term, bool* var);
 
 ERL_NIF_TERM make(ErlNifEnv* env, std::string var);
@@ -127,15 +127,16 @@ ERL_NIF_TERM atom(ErlNifEnv* env, const char* status);
 // C++11 wrapper around the Erlang NIF API.
 template <typename T>
 struct resource_object {
-  static ErlNifResourceType *type;
+  static ErlNifResourceType* type;
 };
-template<typename T> ErlNifResourceType* resource_object<T>::type = 0;
+template <typename T>
+ErlNifResourceType* resource_object<T>::type = 0;
 
 // Default destructor passed when opening a resource. The default
 // behavior is to invoke the underlying objects destructor and
 // set the resource pointer to NULL.
 template <typename T>
-void default_dtor(ErlNifEnv* env, void * obj) {
+void default_dtor(ErlNifEnv* env, void* obj) {
   T* resource = reinterpret_cast<T*>(obj);
   resource->~T();
   resource = nullptr;
@@ -152,8 +153,8 @@ int open_resource(ErlNifEnv* env,
   if (dtor == nullptr) {
     dtor = &default_dtor<T>;
   }
-  ErlNifResourceType *type;
-  ErlNifResourceFlags flags = ErlNifResourceFlags(ERL_NIF_RT_CREATE|ERL_NIF_RT_TAKEOVER);
+  ErlNifResourceType* type;
+  ErlNifResourceFlags flags = ErlNifResourceFlags(ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER);
   type = enif_open_resource_type(env, mod, name, dtor, flags, NULL);
   if (type == NULL) {
     resource_object<T>::type = 0;
@@ -166,7 +167,7 @@ int open_resource(ErlNifEnv* env,
 
 // Returns a resource of the given template type T.
 template <typename T>
-ERL_NIF_TERM get(ErlNifEnv* env, ERL_NIF_TERM term, T* &var) {
+ERL_NIF_TERM get(ErlNifEnv* env, ERL_NIF_TERM term, T*& var) {
   return enif_get_resource(env, term,
                            resource_object<T>::type,
                            reinterpret_cast<void**>(&var));
@@ -178,9 +179,9 @@ ERL_NIF_TERM get(ErlNifEnv* env, ERL_NIF_TERM term, T* &var) {
 // to represent a transfer of ownership of the object to
 // the VM.
 template <typename T>
-ERL_NIF_TERM make(ErlNifEnv* env, T &var) {
+ERL_NIF_TERM make(ErlNifEnv* env, T& var) {
   void* ptr = enif_alloc_resource(resource_object<T>::type, sizeof(T));
-  new(ptr) T(std::move(var));
+  new (ptr) T(std::move(var));
   ERL_NIF_TERM ret = enif_make_resource(env, ptr);
   enif_release_resource(ptr);
   return ret;
@@ -201,16 +202,16 @@ ERL_NIF_TERM make(ErlNifEnv* env, T &var) {
 
 int get_tuple(ErlNifEnv* env,
               ERL_NIF_TERM tuple,
-              std::vector<int64> &var);
+              std::vector<int64>& var);
 
 template <typename T>
-int get_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<T> &var) {
+int get_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<T>& var) {
   const ERL_NIF_TERM* terms;
   int length;
   if (!enif_get_tuple(env, tuple, &length, &terms)) return 0;
   var.reserve(length);
 
-  for (int i=0; i < length; i++) {
+  for (int i = 0; i < length; i++) {
     T* elem;
     if (!get<T>(env, terms[i], elem)) return 0;
     var.push_back(*elem);
@@ -220,13 +221,15 @@ int get_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<T> &var) {
 
 int get_list(ErlNifEnv* env,
              ERL_NIF_TERM list,
-             std::vector<int64> &var);
+             std::vector<int64>& var);
 int get_list(ErlNifEnv* env,
              ERL_NIF_TERM list,
-             std::vector<ErlNifBinary> &var);
+             std::vector<ErlNifBinary>& var);
+
+int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<std::string>& var);
 
 template <typename T>
-int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T*> &var) {
+int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T*>& var) {
   unsigned int length;
   if (!enif_get_list_length(env, list, &length)) return 0;
   var.reserve(length);
@@ -242,7 +245,7 @@ int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T*> &var) {
 }
 
 template <typename T>
-int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T> &var) {
+int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T>& var) {
   unsigned int length;
   if (!enif_get_list_length(env, list, &length)) return 0;
   var.reserve(length);
@@ -315,8 +318,8 @@ int get_primitive_type(ErlNifEnv* env, ERL_NIF_TERM term, xla::PrimitiveType* ty
 // Template for retrieving a value from a scalar. This is
 // necessary to avoid having to use templates in the NIF.
 template <
-  xla::PrimitiveType type,
-  typename T = typename xla::primitive_util::PrimitiveTypeToNative<type>::type>
+    xla::PrimitiveType type,
+    typename T = typename xla::primitive_util::PrimitiveTypeToNative<type>::type>
 T get_value(ErlNifEnv* env, ERL_NIF_TERM term) {
   T value;
   get(env, term, &value);
@@ -333,64 +336,64 @@ ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape);
 //
 // See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/stream_executor/lib/statusor.h
 
-#define EXLA_STATUS_MACROS_CONCAT_NAME(x, y)                                 \
+#define EXLA_STATUS_MACROS_CONCAT_NAME(x, y) \
   EXLA_STATUS_MACROS_CONCAT_NAME_IMPL(x, y)
 
 #define EXLA_STATUS_MACROS_CONCAT_NAME_IMPL(x, y) x##y
 
 // Macro to be used to consume Status from within a NIF.
 // Return `{:error, msg}` if not ok.
-#define EXLA_EFFECT_OR_RETURN_NIF(rexpr, env)                                \
-  EXLA_EFFECT_OR_RETURN_NIF_IMPL(                                            \
-    EXLA_STATUS_MACROS_CONCAT_NAME(_status, __COUNTER__), rexpr, env)
+#define EXLA_EFFECT_OR_RETURN_NIF(rexpr, env) \
+  EXLA_EFFECT_OR_RETURN_NIF_IMPL(             \
+      EXLA_STATUS_MACROS_CONCAT_NAME(_status, __COUNTER__), rexpr, env)
 
-#define EXLA_EFFECT_OR_RETURN_NIF_IMPL(status, rexpr, env)                   \
-  auto status = (rexpr);                                                     \
-  if (!status.ok()) {                                                        \
-    return exla::nif::error(env, status.message().data());            \
+#define EXLA_EFFECT_OR_RETURN_NIF_IMPL(status, rexpr, env) \
+  auto status = (rexpr);                                   \
+  if (!status.ok()) {                                      \
+    return exla::nif::error(env, status.message().data()); \
   }
 
 // Macro to be used to consume Status from within a NIF.
 // Return status if not ok.
-#define EXLA_EFFECT_OR_RETURN(rexpr)                                         \
-  EXLA_EFFECT_OR_RETURN_IMPL(                                                \
-    EXLA_STATUS_MACROS_CONCAT_NAME(_statusor, __COUNTER__), rexpr)
+#define EXLA_EFFECT_OR_RETURN(rexpr) \
+  EXLA_EFFECT_OR_RETURN_IMPL(        \
+      EXLA_STATUS_MACROS_CONCAT_NAME(_statusor, __COUNTER__), rexpr)
 
-#define EXLA_EFFECT_OR_RETURN_IMPL(statusor, rexpr)                          \
-  auto statusor = (rexpr);                                                   \
-  if (!statusor.ok()) {                                                      \
-    return statusor.status();                                                \
+#define EXLA_EFFECT_OR_RETURN_IMPL(statusor, rexpr) \
+  auto statusor = (rexpr);                          \
+  if (!statusor.ok()) {                             \
+    return statusor.status();                       \
   }
 
 // Macro to be used to consume StatusOr from within a NIF. Will
 // bind lhs to value if the status is OK, otherwise will return
 // `{:error, msg}`.
-#define EXLA_ASSIGN_OR_RETURN_NIF(lhs, rexpr, env)                           \
-  EXLA_ASSIGN_OR_RETURN_NIF_IMPL(                                            \
-    EXLA_STATUS_MACROS_CONCAT_NAME(_status_or_value, __COUNTER__),           \
-                                    lhs, rexpr, env)
+#define EXLA_ASSIGN_OR_RETURN_NIF(lhs, rexpr, env)                   \
+  EXLA_ASSIGN_OR_RETURN_NIF_IMPL(                                    \
+      EXLA_STATUS_MACROS_CONCAT_NAME(_status_or_value, __COUNTER__), \
+      lhs, rexpr, env)
 
-#define EXLA_ASSIGN_OR_RETURN_NIF_IMPL(statusor, lhs, rexpr, env)            \
-  auto statusor = (rexpr);                                                   \
-  if (!statusor.ok()) {                                                      \
+#define EXLA_ASSIGN_OR_RETURN_NIF_IMPL(statusor, lhs, rexpr, env)     \
+  auto statusor = (rexpr);                                            \
+  if (!statusor.ok()) {                                               \
     return exla::nif::error(env, statusor.status().message().data()); \
-  }                                                                          \
+  }                                                                   \
   lhs = std::move(statusor.value());
 
 // Macro to be used to consume StatusOr. Will bind lhs
 // to value if the status is OK, otherwise will return
 // the status.
-#define EXLA_ASSIGN_OR_RETURN(lhs, rexpr)                                    \
-  EXLA_ASSIGN_OR_RETURN_IMPL(                                                \
-    EXLA_STATUS_MACROS_CONCAT_NAME(                                          \
-      _status_or_value, __COUNTER__),                                        \
-  lhs, rexpr)
+#define EXLA_ASSIGN_OR_RETURN(lhs, rexpr) \
+  EXLA_ASSIGN_OR_RETURN_IMPL(             \
+      EXLA_STATUS_MACROS_CONCAT_NAME(     \
+          _status_or_value, __COUNTER__), \
+      lhs, rexpr)
 
-#define EXLA_ASSIGN_OR_RETURN_IMPL(statusor, lhs, rexpr)                     \
-  auto statusor = (rexpr);                                                   \
-  if (!statusor.ok()) {                                                      \
-    return statusor.status();                                                \
-  }                                                                          \
+#define EXLA_ASSIGN_OR_RETURN_IMPL(statusor, lhs, rexpr) \
+  auto statusor = (rexpr);                               \
+  if (!statusor.ok()) {                                  \
+    return statusor.status();                            \
+  }                                                      \
   lhs = std::move(statusor.value());
 
 #endif

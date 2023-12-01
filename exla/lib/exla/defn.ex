@@ -7,6 +7,7 @@ defmodule EXLA.Defn do
   alias Nx.Tensor, as: T
 
   alias EXLA.MLIR.Value
+  alias EXLA.MLIR.Function
 
   @doc false
   def __partitions_options__(options) do
@@ -296,9 +297,15 @@ defmodule EXLA.Defn do
 
   defp to_root_computation(builder, expr, used_shapes, outfeed, options) do
     params =
-      Enum.with_index(used_shapes, fn {pos, shape}, i ->
-        {pos, EXLA.Op.parameter(builder, i, shape, "p#{i}")}
-      end)
+      case builder do
+        %Function{} ->
+          Function.get_arguments(builder) |> Enum.with_index(fn arg, i -> {i, arg} end)
+
+        _ ->
+          Enum.with_index(used_shapes, fn {pos, shape}, i ->
+            {pos, EXLA.Op.parameter(builder, i, shape, "p#{i}")}
+          end)
+      end
 
     state = %{
       precision: Keyword.get(options, :precision, :default),
@@ -420,9 +427,15 @@ defmodule EXLA.Defn do
           mode = options[:compiler_mode] || :xla
           builder = EXLA.Builder.new(inspect(key), inputs_and_shapes, outputs, mode)
 
+          mod =
+            case mode do
+              :xla -> EXLA.Op
+              :mlir -> Value
+            end
+
           outfeed =
             outfeed
-            |> Outfeed.with_token(EXLA.Op.create_token(builder))
+            |> Outfeed.with_token(mod.create_token(builder))
             |> Outfeed.add_infeeds(builder, reverse_infeeds)
 
           expr = Nx.Defn.Composite.traverse(expr || fun.(vars), &Nx.devectorize/1)
@@ -602,9 +615,18 @@ defmodule EXLA.Defn do
           {computation, Map.put(cache, key, computation)}
       end
 
-    result = EXLA.Op.call(state.builder, [get_token(cache) | call_args], call_body)
-    token = EXLA.Op.get_tuple_element(result, 0)
-    {EXLA.Op.get_tuple_element(result, 1), update_token(cache, token)}
+    mod =
+      case state.builder do
+        %Function{} ->
+          Value
+
+        _ ->
+          EXLA.Op
+      end
+
+    result = mod.call(state.builder, [get_token(cache) | call_args], call_body)
+    token = mod.get_tuple_element(result, 0)
+    {mod.get_tuple_element(result, 1), update_token(cache, token)}
   end
 
   defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do
@@ -1927,6 +1949,42 @@ defmodule EXLA.Defn do
     {EXLA.Builder.build(res), merge_outfeed(cache, comp_cache)}
   end
 
+  defp token_computation(name, args, expr, %{builder: %Function{}} = state, cache) do
+    arg_shapes =
+      Enum.with_index(args, fn arg, i ->
+        {"p#{i + 1}", Value.get_shape(arg)}
+      end)
+
+    %Function{module: module, name: name} = subbuilder(state.builder, name)
+
+    token_shape = EXLA.Shape.make_token_shape()
+
+    function =
+      EXLA.Builder.new(
+        {module, name},
+        [{"p0", token_shape} | arg_shapes],
+        {struct(Nx.Tensor, %{type: :token}), expr},
+        :mlir,
+        false
+      )
+
+    [arg_token | _] = args = EXLA.MLIR.Function.get_arguments(function)
+
+    params = Enum.with_index(tl(args), fn param, i -> {i, param} end)
+
+    state = %{
+      state
+      | builder: function,
+        params: Map.new(params),
+        scope_ids: Tree.scope_ids(expr)
+    }
+
+    {res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
+    res = Value.tuple([arg_token, res])
+
+    {EXLA.Builder.build(res, true), merge_outfeed(cache, comp_cache)}
+  end
+
   defp token_computation(name, arg, expr, state, cache) do
     subbuilder = subbuilder(state.builder, name)
 
@@ -1957,8 +2015,8 @@ defmodule EXLA.Defn do
   defp computation_key(op, args) do
     keys =
       Enum.map(args, fn
-        %EXLA.Op{} = op ->
-          %{dims: dims, dtype: dtype} = EXLA.Op.get_shape(op)
+        %mod{} = op when mod in [EXLA.Op, Value] ->
+          %EXLA.Shape{dims: dims, dtype: dtype} = mod.get_shape(op)
           {dims, dtype}
 
         opts ->
@@ -2001,11 +2059,18 @@ defmodule EXLA.Defn do
       recur_composite(expr, transform, state, cache)
     else
       {elements, cache} = Enum.map_reduce(list, cache, &recur_composite(&1, transform, state, &2))
-      {EXLA.Op.tuple(state.builder, elements), cache}
+
+      tuple =
+        case state.builder do
+          %Function{} -> Value.tuple(elements)
+          builder -> EXLA.Op.tuple(builder, elements)
+        end
+
+      {tuple, cache}
     end
   end
 
-  defp recur_composite(%EXLA.Op{} = op, transform, _state, cache) do
+  defp recur_composite(%mod{} = op, transform, _state, cache) when mod in [Value, EXLA.Op] do
     {transform.(op), cache}
   end
 
@@ -2238,7 +2303,7 @@ defmodule EXLA.Defn do
          fun
        ) do
     # TO-DO(mlir): deal with token
-    inputs = Enum.map(args, &{nil, EXLA.MLIR.Value.get_shape(&1)})
+    inputs = Enum.with_index(args, fn arg, idx -> {"p#{idx}", Value.get_shape(arg)} end)
 
     # input function is actually the parent function still, so we need to actually create a new function
     # with this name on the same module.
@@ -2327,7 +2392,7 @@ defmodule EXLA.Defn do
   # We could do so lazily by comparing the versions of
   # the branches, but that gets tricky with cond/if,
   # so we always perform the operation.
-  defp cast_pred_to_u8(%EXLA.MLIR.Value{} = op) do
+  defp cast_pred_to_u8(%Value{} = op) do
     # TO-DO(mlir): validate exactly if we should be just passing the pred as-is here
     op
   end

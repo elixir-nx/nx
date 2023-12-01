@@ -7,8 +7,6 @@ defmodule EXLA.Builder do
   alias EXLA.Op
   alias EXLA.MLIR.Module, as: M
 
-  alias EXLA.Shape
-
   @enforce_keys [:ref]
   defstruct [:ref, :parent, :name]
 
@@ -19,7 +17,7 @@ defmodule EXLA.Builder do
   end
 
   def new(module_and_name, inputs, outputs, :mlir, sub?) do
-    arg_shapes = Enum.map(inputs, fn {_, %Shape{} = s} -> s end)
+    {_arg_names, arg_shapes} = Enum.unzip(inputs)
 
     {module, name, is_public} =
       case module_and_name do
@@ -42,6 +40,10 @@ defmodule EXLA.Builder do
     |> Tuple.to_list()
     |> Enum.map(&exla_shape/1)
     |> EXLA.Shape.make_tuple_shape()
+  end
+
+  defp exla_shape(%{type: :token}) do
+    EXLA.Shape.make_token_shape()
   end
 
   defp exla_shape(%{shape: shape, type: type}) do

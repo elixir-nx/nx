@@ -13,6 +13,7 @@
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/OwningOpRef.h"
 #include "mlir/IR/PatternMatch.h"
+#include "stablehlo/dialect/Base.h"
 #include "stablehlo/dialect/ChloOps.h"
 #include "stablehlo/dialect/StablehloOps.h"
 #include "xla/primitive_util.h"
@@ -61,12 +62,15 @@ GetMLIRType(mlir::OpBuilder *builder, std::vector<tsl::int64> dims, xla::Primiti
 }
 
 mlir::Type GetMLIRFunctionType(mlir::OpBuilder *builder, xla::Shape *shape) {
+  if (shape->IsToken()) {
+    return mlir::stablehlo::TokenType::get(builder->getContext());
+  }
   if (shape->IsTuple()) {
     // iterate through tuple types
     std::vector<mlir::Type> element_types;
     for (xla::Shape element : shape->tuple_shapes()) {
       mlir::Type element_type;
-      if (element.IsTuple()) {
+      if (element.IsTuple() or element.IsToken()) {
         element_type = GetMLIRFunctionType(builder, &element);
       } else {
         auto span = element.dimensions();
@@ -1035,6 +1039,13 @@ MLIRModule::MLIRModule() {
 }
 
 xla::PrimitiveType MLIRTypeToPrimitiveType(mlir::Type type) {
+  if (!type.getAsOpaquePointer()) {
+    std::cerr << "Type with no implementation received" << std::endl;
+    exit(1);
+  }
+  if (type.isa<mlir::stablehlo::TokenType>()) {
+    return xla::PrimitiveType::TOKEN;
+  }
   if (type.isa<mlir::TupleType>()) {
     return xla::PrimitiveType::TUPLE;
   }
@@ -1082,12 +1093,16 @@ xla::PrimitiveType MLIRTypeToPrimitiveType(mlir::Type type) {
       return xla::primitive_util::NativeToPrimitiveType<xla::complex128>();
     }
   }
+
+  std::cerr << "Invalid type received" << std::endl;
+  exit(1);
 }
 
 MLIRFunction *MLIRModule::CreateFunction(
     std::string name,
     std::vector<xla::Shape *> arg_shapes,
-    xla::Shape *ret_shape, bool is_public) {
+    xla::Shape *ret_shape,
+    bool is_public) {
   std::vector<mlir::Type> types;
   types.reserve(arg_shapes.size());
   for (auto arg_shape : arg_shapes) {
@@ -1106,6 +1121,7 @@ MLIRFunction *MLIRModule::CreateFunction(
   module_->push_back(*funcOp);
   funcOp->addEntryBlock();
   builder_->setInsertionPointToStart(&funcOp->getBody().front());
+
   return new MLIRFunction(this, std::move(funcOp));
 }
 
@@ -1235,6 +1251,14 @@ mlir::Value MLIRFunction::OutfeedOp(std::vector<mlir::Value> inputs, mlir::Value
   auto builder = module_->builder();
   builder->setInsertionPointToEnd(&func_->getBody().back());
   return builder->create<mlir::stablehlo::OutfeedOp>(builder->getUnknownLoc(), mlir::ValueRange(inputs), token);
+}
+
+mlir::Value MLIRFunction::CallOp(std::vector<mlir::Value> inputs, MLIRFunction *computation) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+  auto call_op = builder->create<mlir::func::CallOp>(builder->getUnknownLoc(), *computation->function(), mlir::ValueRange(inputs));
+
+  return call_op.getResult(0);
 }
 
 }  // namespace exla
