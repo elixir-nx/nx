@@ -45,6 +45,7 @@ defmodule EXLA.Builder do
   defp exla_shape(%{type: :token}) do
     EXLA.Shape.make_token_shape()
   end
+
   defp exla_shape(%{shape: shape, type: type}) do
     EXLA.Shape.make_shape(type, shape)
   end

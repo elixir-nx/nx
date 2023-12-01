@@ -1,4 +1,3 @@
-
 defmodule EXLA.MLIR.ExecutableFeedTest do
   # infeed/outfeed are global resources, so they either
   # need to be locked or we cannot run them concurrently.

@@ -296,14 +296,16 @@ defmodule EXLA.Defn do
   end
 
   defp to_root_computation(%Function{} = builder, expr, used_shapes, outfeed, options) do
-    params = case builder do
-      %Function{} -> Function.get_arguments(builder) |> Enum.with_index(fn arg, i -> {i, arg} end)
+    params =
+      case builder do
+        %Function{} ->
+          Function.get_arguments(builder) |> Enum.with_index(fn arg, i -> {i, arg} end)
 
-      _ ->
-      Enum.with_index(used_shapes, fn {pos, shape}, i ->
-        {pos, EXLA.Op.parameter(builder, i, shape, "p#{i}")}
-      end)
-    end
+        _ ->
+          Enum.with_index(used_shapes, fn {pos, shape}, i ->
+            {pos, EXLA.Op.parameter(builder, i, shape, "p#{i}")}
+          end)
+      end
 
     state = %{
       precision: Keyword.get(options, :precision, :default),
@@ -613,11 +615,13 @@ defmodule EXLA.Defn do
           {computation, Map.put(cache, key, computation)}
       end
 
-    mod = case state.builder do
-      %Function{} ->
-        Value
-      _ ->
-        EXLA.Op
+    mod =
+      case state.builder do
+        %Function{} ->
+          Value
+
+        _ ->
+          EXLA.Op
       end
 
     result = mod.call(state.builder, [get_token(cache) | call_args], call_body)
@@ -1893,7 +1897,6 @@ defmodule EXLA.Defn do
     EXLA.Builder.build(to_type(res, type), true)
   end
 
-
   defp fun_computation(name, args, expr, type, state) do
     subbuilder = subbuilder(state.builder, Atom.to_string(name))
 
@@ -1955,7 +1958,16 @@ defmodule EXLA.Defn do
     %Function{module: module, name: name} = subbuilder(state.builder, name)
 
     token_shape = EXLA.Shape.make_token_shape()
-    function = EXLA.Builder.new({module, name}, [{"p0", token_shape} | arg_shapes], {struct(Nx.Tensor, %{type: :token}), expr}, :mlir, false)
+
+    function =
+      EXLA.Builder.new(
+        {module, name},
+        [{"p0", token_shape} | arg_shapes],
+        {struct(Nx.Tensor, %{type: :token}), expr},
+        :mlir,
+        false
+      )
+
     [arg_token | _] = args = EXLA.MLIR.Function.get_arguments(function)
 
     params = Enum.with_index(tl(args), fn param, i -> {i, param} end)
@@ -2048,10 +2060,11 @@ defmodule EXLA.Defn do
     else
       {elements, cache} = Enum.map_reduce(list, cache, &recur_composite(&1, transform, state, &2))
 
-      tuple = case state.builder do
-        %Function{} -> Value.tuple(elements)
-        builder -> EXLA.Op.tuple(builder, elements)
-      end
+      tuple =
+        case state.builder do
+          %Function{} -> Value.tuple(elements)
+          builder -> EXLA.Op.tuple(builder, elements)
+        end
 
       {tuple, cache}
     end
