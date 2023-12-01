@@ -518,30 +518,29 @@ defmodule EXLA.Defn do
     {body, cache} =
       while_computation(:while_body, arg, body, :with_token, &cast_pred_to_u8/1, state, cache)
 
-      mod =
-        case state.builder do
-          %Function{} -> Value
-          _ -> EXLA.Op
-        end
+    mod =
+      case state.builder do
+        %Function{} -> Value
+        _ -> EXLA.Op
+      end
 
+    {token, result} =
+      case state.builder do
+        %Function{} ->
+          # for MLIR while, the return is variadic
+          # like it would have come from Nx.Defn.Composite.flatten_list.
+          # We need to collect the returned values into the nested tuples
+          # that should have come from the while expr
+          [token | results] = mod.while(pred, body, initial)
+          result = collect_while_results(results, initial_arg)
+          {token, result}
 
-        {token, result} =
-          case state.builder do
-            %Function{} ->
-              # for MLIR while, the return is variadic
-              # like it would have come from Nx.Defn.Composite.flatten_list.
-              # We need to collect the returned values into the nested tuples
-              # that should have come from the while expr
-              [token | results] = mod.while(pred, body, initial)
-              result = collect_while_results(results, initial_arg)
-              {token, result}
-
-            _ ->
-              while = mod.while(pred, body, initial)
-              token = mod.get_tuple_element(while, 0)
-              result = mod.get_tuple_element(while, 1)
-              {token, result}
-          end
+        _ ->
+          while = mod.while(pred, body, initial)
+          token = mod.get_tuple_element(while, 0)
+          result = mod.get_tuple_element(while, 1)
+          {token, result}
+      end
 
     {result, update_token(cache, token)}
   end
@@ -1945,7 +1944,9 @@ defmodule EXLA.Defn do
   end
 
   defp while_computation(name, arg, expr, type, transform, %{builder: %Function{}} = state, cache) do
-    arg_shapes = while_arg_shape({%{type: :token}, arg}) |> Enum.with_index(fn shape, i -> {"p#{i}", shape} end)
+    arg_shapes =
+      while_arg_shape({%{type: :token}, arg})
+      |> Enum.with_index(fn shape, i -> {"p#{i}", shape} end)
 
     %{module: module, name: name} = subbuilder(state.builder, Atom.to_string(name))
     function = EXLA.Builder.new({module, name}, arg_shapes, expr, :mlir, false, true)
@@ -1955,14 +1956,14 @@ defmodule EXLA.Defn do
 
     params = computation_arg_param({arg, arg_params})
 
-     state = %{
+    state = %{
       state
       | builder: function,
         params: Map.new(params),
         scope_ids: Tree.scope_ids(expr)
     }
 
-     {res, comp_cache} = recur_composite(expr, transform, state, reset_token(cache, arg_token))
+    {res, comp_cache} = recur_composite(expr, transform, state, reset_token(cache, arg_token))
 
     res =
       if type == :with_token do

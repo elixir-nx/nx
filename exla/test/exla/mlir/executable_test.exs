@@ -1087,7 +1087,7 @@ defmodule EXLA.MLIR.ExecutableTest do
   end
 
   describe "while" do
-   defn while_nested_results(x) do
+    defn while_nested_results(x) do
       {_i, results} =
         while {i = 0, {x, {y = 2 * x}}}, i < 10 do
           {i + 1, {x + x, {y + y}}}

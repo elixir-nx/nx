@@ -537,17 +537,24 @@ defmodule EXLA.MLIR.Value do
     %Value{ref: ref, function: function}
   end
 
-  def while(%Function{ref: pred_ref}, %Function{ref: body_ref}, %Value{function: function} = initial) do
-    refs = EXLA.NIF.mlir_while(function.ref, pred_ref, body_ref, flatten_tuples(initial)) |> unwrap!()
+  def while(
+        %Function{ref: pred_ref},
+        %Function{ref: body_ref},
+        %Value{function: function} = initial
+      ) do
+    refs =
+      EXLA.NIF.mlir_while(function.ref, pred_ref, body_ref, flatten_tuples(initial)) |> unwrap!()
+
     Enum.map(refs, &%Value{function: function, ref: &1})
   end
 
   def variadic_return([%Value{function: function} | _] = values, flatten_tuples? \\ false) do
-    refs = if flatten_tuples? do
-      flatten_tuples(values)
-    else
-      Enum.map(values, & &1.ref)
-    end
+    refs =
+      if flatten_tuples? do
+        flatten_tuples(values)
+      else
+        Enum.map(values, & &1.ref)
+      end
 
     refs = EXLA.NIF.mlir_return(function.ref, refs) |> unwrap!()
 
@@ -561,7 +568,7 @@ defmodule EXLA.MLIR.Value do
   defp flatten_tuples(val) do
     case get_shape(val) do
       %{dtype: {:tuple, _}, dims: {n}} ->
-        Enum.flat_map(0..n - 1, fn i -> val |> get_tuple_element(i) |> flatten_tuples() end)
+        Enum.flat_map(0..(n - 1), fn i -> val |> get_tuple_element(i) |> flatten_tuples() end)
 
       _ ->
         [val.ref]
