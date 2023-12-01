@@ -1101,7 +1101,6 @@ xla::PrimitiveType MLIRTypeToPrimitiveType(mlir::Type type) {
 MLIRFunction *MLIRModule::CreateFunction(
     std::string name,
     std::vector<xla::Shape *> arg_shapes,
-    std::vector<std::string> arg_names,
     xla::Shape *ret_shape,
     bool is_public) {
   std::vector<mlir::Type> types;
@@ -1119,14 +1118,10 @@ MLIRFunction *MLIRModule::CreateFunction(
   auto loc = builder_->getUnknownLoc();
   auto funcOp = std::make_unique<mlir::func::FuncOp>(mlir::func::FuncOp::create(loc, name, funcType));
   funcOp->setSymVisibility(visibility);
-
-  for (size_t i = 0; i < arg_names.size(); ++i) {
-    funcOp->setArgAttr(i, mlir::SymbolTable::getSymbolAttrName(), mlir::StringAttr::get(context_.get(), arg_names[i]));
-  }
-
   module_->push_back(*funcOp);
   funcOp->addEntryBlock();
   builder_->setInsertionPointToStart(&funcOp->getBody().front());
+
   return new MLIRFunction(this, std::move(funcOp));
 }
 

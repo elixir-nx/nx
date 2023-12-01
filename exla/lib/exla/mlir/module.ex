@@ -27,21 +27,17 @@ defmodule EXLA.MLIR.Module do
         %__MODULE__{ref: module_ref} = module,
         name,
         arg_shapes,
-        arg_names,
         %Shape{ref: return_shape_ref} = return_shape,
         is_public
       )
       when is_binary(name) do
     arg_shape_refs = Enum.map(arg_shapes, fn %Shape{ref: ref} -> ref end)
 
-    IO.inspect(arg_names)
-
     ref =
       EXLA.NIF.create_mlir_function(
         module_ref,
         name,
         arg_shape_refs,
-        arg_names,
         return_shape_ref,
         if(is_public, do: 1, else: 0)
       )

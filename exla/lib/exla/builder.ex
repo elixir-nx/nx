@@ -17,13 +17,7 @@ defmodule EXLA.Builder do
   end
 
   def new(module_and_name, inputs, outputs, :mlir, sub?) do
-    {arg_names, arg_shapes} = Enum.unzip(inputs)
-
-    arg_names = Enum.map(arg_names, fn
-      num when is_integer(num) -> "arg#{num}"
-      name when is_binary(name) -> name
-      name -> raise ArgumentError, "Invalid argument name #{inspect(name)}"
-    end)
+    {_arg_names, arg_shapes} = Enum.unzip(inputs)
 
     {module, name, is_public} =
       case module_and_name do
@@ -38,7 +32,7 @@ defmodule EXLA.Builder do
         [outputs] |> Nx.Defn.Composite.flatten_list() |> List.to_tuple() |> exla_shape()
       end
 
-    M.create_function(module, name, arg_shapes, arg_names, return_shape, is_public)
+    M.create_function(module, name, arg_shapes, return_shape, is_public)
   end
 
   defp exla_shape(tensors) when is_tuple(tensors) do

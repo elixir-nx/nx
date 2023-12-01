@@ -295,11 +295,15 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp to_root_computation(builder, expr, used_shapes, outfeed, options) do
-    params =
+  defp to_root_computation(%Function{} = builder, expr, used_shapes, outfeed, options) do
+    params = case builder do
+      %Function{} -> Function.get_arguments(builder) |> Enum.with_index(fn arg, i -> {i, arg} end)
+
+      _ ->
       Enum.with_index(used_shapes, fn {pos, shape}, i ->
         {pos, EXLA.Op.parameter(builder, i, shape, "p#{i}")}
       end)
+    end
 
     state = %{
       precision: Keyword.get(options, :precision, :default),
@@ -421,9 +425,15 @@ defmodule EXLA.Defn do
           mode = options[:compiler_mode] || :xla
           builder = EXLA.Builder.new(inspect(key), inputs_and_shapes, outputs, mode)
 
+          mod =
+            case mode do
+              :xla -> EXLA.Op
+              :mlir -> Value
+            end
+
           outfeed =
             outfeed
-            |> Outfeed.with_token(EXLA.Op.create_token(builder))
+            |> Outfeed.with_token(mod.create_token(builder))
             |> Outfeed.add_infeeds(builder, reverse_infeeds)
 
           expr = Nx.Defn.Composite.traverse(expr || fun.(vars), &Nx.devectorize/1)
@@ -603,8 +613,6 @@ defmodule EXLA.Defn do
           {computation, Map.put(cache, key, computation)}
       end
 
-    IO.puts("=== after call_body ===")
-
     mod = case state.builder do
       %Function{} ->
         Value
@@ -613,12 +621,6 @@ defmodule EXLA.Defn do
       end
 
     result = mod.call(state.builder, [get_token(cache) | call_args], call_body)
-
-    IO.puts("=== after call ===")
-    EXLA.NIF.dump_mlir_module(state.builder.module.ref)
-    IO.puts("=== after call ===")
-
-
     token = mod.get_tuple_element(result, 0)
     {mod.get_tuple_element(result, 1), update_token(cache, token)}
   end
@@ -1953,22 +1955,10 @@ defmodule EXLA.Defn do
     %Function{module: module, name: name} = subbuilder(state.builder, name)
 
     token_shape = EXLA.Shape.make_token_shape()
-
-    IO.puts("=== before subbuilder ===")
-    EXLA.NIF.dump_mlir_module(state.builder.module.ref)
-    IO.puts("=== before subbuilder ===")
-
     function = EXLA.Builder.new({module, name}, [{"p0", token_shape} | arg_shapes], {struct(Nx.Tensor, %{type: :token}), expr}, :mlir, false)
-
-    IO.puts("=== After subbuilder ===")
-    EXLA.NIF.dump_mlir_module(state.builder.module.ref)
-    IO.puts("=== After subbuilder ===")
-
     [arg_token | _] = args = EXLA.MLIR.Function.get_arguments(function)
 
-    Value.get_shape(arg_token) |> dbg()
-
-    params = Enum.with_index(args, fn param, i -> {i, param} end)
+    params = Enum.with_index(tl(args), fn param, i -> {i, param} end)
 
     state = %{
       state
@@ -1977,19 +1967,8 @@ defmodule EXLA.Defn do
         scope_ids: Tree.scope_ids(expr)
     }
 
-    IO.puts("=== before reset token ===")
-    cache = reset_token(cache, arg_token)
-    IO.puts("=== before recur composite ===")
-    {res, comp_cache} = recur_composite(expr, state, cache)
-    IO.puts("=== before res tuple ===")
-    EXLA.NIF.dump_mlir_module(state.builder.module.ref)
-    IO.puts("=== before res tuple ===")
+    {res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
     res = Value.tuple([arg_token, res])
-
-    IO.puts("=== before build ===")
-    EXLA.NIF.dump_mlir_module(state.builder.module.ref)
-    IO.puts("=== before build ===")
-
 
     {EXLA.Builder.build(res, true), merge_outfeed(cache, comp_cache)}
   end

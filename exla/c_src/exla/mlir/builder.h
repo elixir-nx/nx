@@ -133,7 +133,6 @@ class MLIRModule {
   MLIRFunction *CreateFunction(
       std::string name,
       std::vector<xla::Shape *> arg_shapes,
-      std::vector<std::string> arg_names,
       xla::Shape *ret_shape,
       bool is_public);
 

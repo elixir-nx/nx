@@ -24,9 +24,7 @@ defmodule EXLA.MLIR.Value do
           %Value{ref: lhs, function: %Function{} = func},
           %Value{ref: rhs, function: %Function{} = func}
         ) do
-      IO.puts("=== before #{unquote(op)} ===")
       ref = EXLA.NIF.unquote(mlir_op)(func.ref, lhs, rhs) |> unwrap!()
-      IO.puts("=== after #{unquote(op)} ===")
       %Value{ref: ref, function: func}
     end
   end

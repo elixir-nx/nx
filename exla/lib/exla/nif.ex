@@ -9,7 +9,7 @@ defmodule EXLA.NIF do
 
   def new_mlir_module, do: :erlang.nif_error(:undef)
 
-  def create_mlir_function(_module, _name, _arg_types, _arg_names, _ret_type, _is_public),
+  def create_mlir_function(_module, _name, _arg_types, _ret_type, _is_public),
     do: :erlang.nif_error(:undef)
 
   def get_mlir_function_arguments(_function), do: :erlang.nif_error(:undef)
