@@ -54,7 +54,8 @@ mlir::Type TypeIntToMLIRType(mlir::OpBuilder *builder, xla::PrimitiveType type_i
   }
 }
 
-mlir::TensorType GetMLIRType(mlir::OpBuilder *builder, std::vector<tsl::int64> dims, xla::PrimitiveType type_int) {
+mlir::TensorType
+GetMLIRType(mlir::OpBuilder *builder, std::vector<tsl::int64> dims, xla::PrimitiveType type_int) {
   auto type = TypeIntToMLIRType(builder, type_int);
   return mlir::RankedTensorType::get(dims, type);
 }
@@ -1034,6 +1035,9 @@ MLIRModule::MLIRModule() {
 }
 
 xla::PrimitiveType MLIRTypeToPrimitiveType(mlir::Type type) {
+  if (type.isa<mlir::TupleType>()) {
+    return xla::PrimitiveType::TUPLE;
+  }
   if (type.isUnsignedInteger(8)) {
     return xla::primitive_util::NativeToPrimitiveType<uint8_t>();
   }
@@ -1212,6 +1216,25 @@ void MLIRModule::RemoveEmptyFunctions() {
   for (auto func : unused_functions) {
     func.erase();
   }
+}
+
+mlir::Value MLIRFunction::InfeedOp(mlir::Value token, xla::Shape *shape) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+
+  auto span = shape->dimensions();
+  std::vector<tsl::int64> dims(span.begin(), span.end());
+  mlir::Type result_type = GetMLIRType(builder, dims, shape->element_type());
+
+  auto infeed_op = builder->create<mlir::stablehlo::InfeedOp>(builder->getUnknownLoc(), mlir::TypeRange({result_type, token.getType()}), token);
+  auto tuple = module_->builder()->create<mlir::stablehlo::TupleOp>(module_->builder()->getUnknownLoc(), infeed_op.getResults());
+  return tuple;
+}
+
+mlir::Value MLIRFunction::OutfeedOp(std::vector<mlir::Value> inputs, mlir::Value token) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+  return builder->create<mlir::stablehlo::OutfeedOp>(builder->getUnknownLoc(), mlir::ValueRange(inputs), token);
 }
 
 }  // namespace exla

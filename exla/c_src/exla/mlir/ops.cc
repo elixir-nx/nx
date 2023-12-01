@@ -996,7 +996,6 @@ ERL_NIF_TERM mlir_get_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   mlir::Type type = mlir_shape.getElementType();
   xla::PrimitiveType element_type = exla::MLIRTypeToPrimitiveType(type);
   mlir::ShapedTypeComponents shape_dims(mlir_shape);
-
   xla::Shape shape = xla::ShapeUtil::MakeShape(element_type, shape_dims.getDims());
 
   return exla::nif::ok(env, exla::nif::make<xla::Shape>(env, shape));
@@ -1387,4 +1386,52 @@ ERL_NIF_TERM mlir_dynamic_update_slice(ErlNifEnv* env, int argc, const ERL_NIF_T
   mlir::Value res = (*function)->DynamicUpdateSliceOp(*operand, *updates, starts);
 
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
+ERL_NIF_TERM mlir_infeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* token;
+  xla::Shape* shape;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], token)) {
+    return exla::nif::error(env, "Unable to get token.");
+  }
+  if (!exla::nif::get<xla::Shape>(env, argv[2], shape)) {
+    return exla::nif::error(env, "Unable to get shape.");
+  }
+
+  mlir::Value infeed = (*function)->InfeedOp(*token, shape);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, infeed));
+}
+
+ERL_NIF_TERM mlir_outfeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* token;
+  std::vector<mlir::Value> inputs;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], token)) {
+    return exla::nif::error(env, "Unable to get token.");
+  }
+  if (!exla::nif::get_list<mlir::Value>(env, argv[2], inputs)) {
+    return exla::nif::error(env, "Unable to get inputs.");
+  }
+
+  mlir::Value result = (*function)->OutfeedOp(inputs, *token);
+
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
 }
