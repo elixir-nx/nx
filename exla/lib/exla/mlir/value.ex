@@ -531,7 +531,6 @@ defmodule EXLA.MLIR.Value do
     %Value{ref: ref, function: function}
   end
 
-
   defp unwrap!({:ok, value}), do: value
   defp unwrap!(other), do: raise("#{inspect(other)}")
 end

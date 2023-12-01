@@ -16,14 +16,13 @@ defmodule EXLAHelpers do
       if opts[:compiler_mode] == :mlir do
         EXLA.MLIR.Function.get_arguments(builder)
       else
+        {params, _} =
+          Enum.map_reduce(shapes, 0, fn shape, pos ->
+            {EXLA.Op.parameter(builder, pos, shape, <<?a + pos>>), pos + 1}
+          end)
 
-    {params, _} =
-      Enum.map_reduce(shapes, 0, fn shape, pos ->
-        {EXLA.Op.parameter(builder, pos, shape, <<?a + pos>>), pos + 1}
-      end)
-
-      params
-    end
+        params
+      end
 
     fun
     |> apply([builder | params])

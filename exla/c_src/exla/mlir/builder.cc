@@ -1165,14 +1165,7 @@ mlir::Value MLIRFunction::ConvOp(
 mlir::Value MLIRFunction::CreateTokenOp() {
   auto builder = module_->builder();
   builder->setInsertionPointToEnd(&func_->getBody().back());
-  // auto token_type = mlir::stablehlo::TokenType::get(builder->getContext());
-  // auto type = GetMLIRType(builder, {}, xla::PrimitiveType::S32);
-
-  // mlir::TupleType tuple = mlir::TupleType::get(builder->getContext(), mlir::TypeRange({type, token_type}));
-
-  auto token = builder->create<mlir::stablehlo::CreateTokenOp>(builder->getUnknownLoc());
-
-  return token;
+  return builder->create<mlir::stablehlo::CreateTokenOp>(builder->getUnknownLoc());
 }
 
 mlir::Value MLIRFunction::TriangularSolveOp(mlir::Value a, mlir::Value b, bool left_side, bool lower, bool transpose_a) {
