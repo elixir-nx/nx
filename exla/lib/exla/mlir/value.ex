@@ -538,8 +538,24 @@ defmodule EXLA.MLIR.Value do
   end
 
   def while(%Function{ref: pred_ref}, %Function{ref: body_ref}, %Value{function: function} = initial) do
-    ref = EXLA.NIF.mlir_while(function.ref, pred_ref, body_ref, flatten_tuples(initial)) |> unwrap!()
-    %Value{function: function, ref: ref}
+    refs = EXLA.NIF.mlir_while(function.ref, pred_ref, body_ref, flatten_tuples(initial)) |> unwrap!()
+    Enum.map(refs, &%Value{function: function, ref: &1})
+  end
+
+  def variadic_return([%Value{function: function} | _] = values, flatten_tuples? \\ false) do
+    refs = if flatten_tuples? do
+      flatten_tuples(values)
+    else
+      Enum.map(values, & &1.ref)
+    end
+
+    refs = EXLA.NIF.mlir_return(function.ref, refs) |> unwrap!()
+
+    Enum.map(refs, fn ref -> %Value{function: function, ref: ref} end)
+  end
+
+  defp flatten_tuples(val) when is_list(val) do
+    Enum.flat_map(val, &flatten_tuples/1)
   end
 
   defp flatten_tuples(val) do
@@ -548,7 +564,7 @@ defmodule EXLA.MLIR.Value do
         Enum.flat_map(0..n - 1, fn i -> val |> get_tuple_element(i) |> flatten_tuples() end)
 
       _ ->
-        [val]
+        [val.ref]
     end
   end
 

@@ -10,13 +10,13 @@ defmodule EXLA.Builder do
   @enforce_keys [:ref]
   defstruct [:ref, :parent, :name]
 
-  def new(name, inputs, outputs, type, sub? \\ false)
+  def new(name, inputs, outputs, type, sub? \\ false, variadic_return? \\ false)
 
-  def new(name, _inputs, _outputs, :xla, _sub?) do
+  def new(name, _inputs, _outputs, :xla, _sub?, _variadic_return?) do
     new(name)
   end
 
-  def new(module_and_name, inputs, outputs, :mlir, sub?) do
+  def new(module_and_name, inputs, outputs, :mlir, sub?, variadic_return?) do
     {_arg_names, arg_shapes} = Enum.unzip(inputs)
 
     {module, name, is_public} =
@@ -29,10 +29,20 @@ defmodule EXLA.Builder do
       if sub? do
         exla_shape(outputs)
       else
-        [outputs] |> Nx.Defn.Composite.flatten_list() |> List.to_tuple() |> exla_shape()
+        out_types = [outputs] |> Nx.Defn.Composite.flatten_list()
+
+        if variadic_return? do
+          exla_shape(out_types)
+        else
+          out_types |> List.to_tuple() |> exla_shape()
+        end
       end
 
-    M.create_function(module, name, arg_shapes, return_shape, is_public)
+    M.create_function(module, name, arg_shapes, List.wrap(return_shape), is_public)
+  end
+
+  defp exla_shape(tensors) when is_list(tensors) do
+    Enum.map(tensors, &exla_shape/1)
   end
 
   defp exla_shape(tensors) when is_tuple(tensors) do

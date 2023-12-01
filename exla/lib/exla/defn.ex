@@ -506,10 +506,12 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(:while, %T{data: %Expr{args: args}}, state, cache) do
-    [initial, arg, pred, body] = args
+    [initial_arg, arg, pred, body] = args
+
+    initial_with_token = {get_token(cache), initial_arg}
 
     {initial, cache} =
-      recur_composite({get_token(cache), initial}, &cast_pred_to_u8/1, state, cache)
+      recur_composite(initial_with_token, &cast_pred_to_u8/1, state, cache)
 
     {pred, cache} = while_computation(:while_pred, arg, pred, {:pred, 8}, & &1, state, cache)
 
@@ -522,14 +524,26 @@ defmodule EXLA.Defn do
           _ -> EXLA.Op
         end
 
-    while = mod.while(pred, body, initial)
 
-    IO.puts("=== after while ===")
-    EXLA.NIF.dump_mlir_module(while.function.module.ref)
-    IO.puts("=== after while ===")
+        {token, result} =
+          case state.builder do
+            %Function{} ->
+              # for MLIR while, the return is variadic
+              # like it would have come from Nx.Defn.Composite.flatten_list.
+              # We need to collect the returned values into the nested tuples
+              # that should have come from the while expr
+              [token | results] = mod.while(pred, body, initial)
+              result = collect_while_results(results, initial_arg)
+              {token, result}
 
-    token = mod.get_tuple_element(while, 0)
-    {mod.get_tuple_element(while, 1), update_token(cache, token)}
+            _ ->
+              while = mod.while(pred, body, initial)
+              token = mod.get_tuple_element(while, 0)
+              result = mod.get_tuple_element(while, 1)
+              {token, result}
+          end
+
+    {result, update_token(cache, token)}
   end
 
   defp cached_recur_operator(:cond, %T{data: %Expr{args: args}} = t, state, cache) do
@@ -1934,7 +1948,7 @@ defmodule EXLA.Defn do
     arg_shapes = while_arg_shape({%{type: :token}, arg}) |> Enum.with_index(fn shape, i -> {"p#{i}", shape} end)
 
     %{module: module, name: name} = subbuilder(state.builder, Atom.to_string(name))
-    function = EXLA.Builder.new({module, name}, arg_shapes, expr, :mlir, false)
+    function = EXLA.Builder.new({module, name}, arg_shapes, expr, :mlir, false, true)
     [arg_token | arg_params] = EXLA.MLIR.Function.get_arguments(function)
 
     arg_params = Value.tuple(arg_params)
@@ -1952,12 +1966,14 @@ defmodule EXLA.Defn do
 
     res =
       if type == :with_token do
-        Value.tuple([arg_token, res])
+        [arg_token, res]
       else
-        to_type(res, type)
+        [to_type(res, type)]
       end
 
-    {EXLA.Builder.build(res, true), merge_outfeed(cache, comp_cache)}
+    [%{function: function} | _] = Value.variadic_return(res, true)
+
+    {function, merge_outfeed(cache, comp_cache)}
   end
 
   defp while_computation(name, arg, expr, type, transform, state, cache) do
@@ -2500,5 +2516,20 @@ defmodule EXLA.Defn do
     left = left |> to_type(type) |> Value.broadcast_in_dim(out_shape, dims)
     right = right |> to_type(type) |> Value.broadcast_in_dim(out_shape, dims)
     apply(Value, op, [left, right])
+  end
+
+  defp collect_while_results(flat_list, expected_container) do
+    {collected, []} = collect_while_results_unflatten(flat_list, expected_container)
+    collected
+  end
+
+  defp collect_while_results_unflatten(list, tuple) when is_list(list) and is_tuple(tuple) do
+    {elements, list} = Enum.split(list, tuple_size(tuple))
+    {unnested, list} = Enum.map_reduce(elements, list, &collect_while_results_unflatten/2)
+    {Value.tuple(unnested), list}
+  end
+
+  defp collect_while_results_unflatten(%Value{} = value, _) do
+    {value, []}
   end
 end

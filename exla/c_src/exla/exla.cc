@@ -726,6 +726,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_map", 4, mlir_map},
     {"mlir_if", 6, mlir_if},
     {"mlir_while", 4, mlir_while},
+    {"mlir_return", 2, mlir_return},
     // XlaBuilder
     {"new_builder", 1, new_builder},
     {"create_sub_builder", 2, create_sub_builder},
