@@ -3720,7 +3720,9 @@ defmodule Nx do
 
       tensor =
         if offset > 0 do
-          new_axis(tensor, offset)
+          new_shape = List.to_tuple(Tuple.to_list(tensor.shape) ++ List.duplicate(1, offset))
+          new_names = tensor.names ++ List.duplicate(nil, offset)
+          Nx.reshape(tensor, new_shape, names: new_names)
         else
           tensor
         end
@@ -3729,8 +3731,6 @@ defmodule Nx do
 
       opts_axes = opts[:axes]
 
-      actual_offset = if offset > 0, do: offset + 1, else: 0
-
       axes =
         if opts_axes do
           axes =
@@ -3738,14 +3738,10 @@ defmodule Nx do
               broadcast_shape,
               opts_axes,
               tensor.names,
-              actual_offset
+              offset
             )
 
-          if offset > 0 do
-            Enum.to_list(0..(actual_offset - 1)//1) ++ axes
-          else
-            axes
-          end
+          Enum.to_list(0..(offset - 1)//1) ++ axes
         else
           Nx.Shape.broadcast_axes(tensor.shape, broadcast_shape)
         end
@@ -3757,7 +3753,7 @@ defmodule Nx do
         if tensor.shape == broadcast_shape and is_nil(opts_axes) do
           out
         else
-          _ = Nx.Shape.broadcast!(tensor.shape, broadcast_shape, axes, actual_offset)
+          _ = Nx.Shape.broadcast!(tensor.shape, broadcast_shape, axes, offset)
           impl!(tensor).broadcast(out, tensor, broadcast_shape, axes)
         end
 
