@@ -108,3 +108,5 @@ DEFINE_NIF(mlir_if);
 DEFINE_NIF(mlir_infeed);
 DEFINE_NIF(mlir_outfeed);
 DEFINE_NIF(mlir_call);
+DEFINE_NIF(mlir_while);
+DEFINE_NIF(mlir_return);

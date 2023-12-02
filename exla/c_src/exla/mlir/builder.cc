@@ -1049,6 +1049,9 @@ xla::PrimitiveType MLIRTypeToPrimitiveType(mlir::Type type) {
   if (type.isa<mlir::TupleType>()) {
     return xla::PrimitiveType::TUPLE;
   }
+  if (type.isSignlessInteger(1)) {
+    return xla::PrimitiveType::PRED;
+  }
   if (type.isUnsignedInteger(8)) {
     return xla::primitive_util::NativeToPrimitiveType<uint8_t>();
   }
@@ -1101,7 +1104,7 @@ xla::PrimitiveType MLIRTypeToPrimitiveType(mlir::Type type) {
 MLIRFunction *MLIRModule::CreateFunction(
     std::string name,
     std::vector<xla::Shape *> arg_shapes,
-    xla::Shape *ret_shape,
+    std::vector<xla::Shape *> ret_shapes,
     bool is_public) {
   std::vector<mlir::Type> types;
   types.reserve(arg_shapes.size());
@@ -1110,11 +1113,17 @@ MLIRFunction *MLIRModule::CreateFunction(
     types.push_back(type);
   }
 
-  mlir::Type return_type = GetMLIRFunctionType(builder_.get(), ret_shape);
+  std::vector<mlir::Type> return_types;
+  return_types.reserve(ret_shapes.size());
+  for (auto ret_shape : ret_shapes) {
+    mlir::Type type = GetMLIRFunctionType(builder_.get(), ret_shape);
+    return_types.push_back(type);
+  }
+  // mlir::Type return_type = GetMLIRFunctionType(builder_.get(), ret_shape);
 
   auto visibility = is_public ? "public" : "nested";
 
-  auto funcType = builder_->getFunctionType(types, return_type);
+  auto funcType = builder_->getFunctionType(types, return_types);
   auto loc = builder_->getUnknownLoc();
   auto funcOp = std::make_unique<mlir::func::FuncOp>(mlir::func::FuncOp::create(loc, name, funcType));
   funcOp->setSymVisibility(visibility);
@@ -1259,6 +1268,32 @@ mlir::Value MLIRFunction::CallOp(std::vector<mlir::Value> inputs, MLIRFunction *
   auto call_op = builder->create<mlir::func::CallOp>(builder->getUnknownLoc(), *computation->function(), mlir::ValueRange(inputs));
 
   return call_op.getResult(0);
+}
+
+std::vector<mlir::Value> MLIRFunction::WhileOp(MLIRFunction *pred, MLIRFunction *body_function, std::vector<mlir::Value> initial) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+
+  auto while_op = builder->create<mlir::stablehlo::WhileOp>(builder->getUnknownLoc(), mlir::ValueRange(initial));
+
+  mlir::Region &cond = while_op.getCond();
+  auto &predBlocks = pred->function()->getBody().getBlocks();
+  cond.getBlocks().splice(cond.end(), predBlocks);
+
+  mlir::Region &body = while_op.getBody();
+  auto &bodyBlocks = body_function->function()->getBody().getBlocks();
+  body.getBlocks().splice(body.end(), bodyBlocks);
+
+  mlir::Operation::result_range results = while_op.getResults();
+  return std::vector<mlir::Value>(results.begin(), results.end());
+}
+
+std::vector<mlir::Value> MLIRFunction::ReturnOp(std::vector<mlir::Value> operands) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  auto ret_op = module_->builder()->create<mlir::stablehlo::ReturnOp>(module_->builder()->getUnknownLoc(), mlir::ValueRange(operands));
+
+  mlir::Operation::operand_range results = ret_op.getResults();
+  return std::vector<mlir::Value>(results.begin(), results.end());
 }
 
 }  // namespace exla

@@ -1085,4 +1085,23 @@ defmodule EXLA.MLIR.ExecutableTest do
       assert_equal(result, Nx.u8([0, 1, 0]))
     end
   end
+
+  describe "while" do
+    defn while_nested_results(x) do
+      {_i, results} =
+        while {i = 0, {x, {y = 2 * x}}}, i < 10 do
+          {i + 1, {x + x, {y + y}}}
+        end
+
+      results
+    end
+
+    test "works with nested containers" do
+      t = Nx.tensor([-1, 0, 1])
+      mlir_result = EXLA.jit(&while_nested_results/1, compiler_mode: :mlir).(t)
+      expected_result = Nx.Defn.jit(&while_nested_results/1, comiler: Nx.Defn.Evaluator).(t)
+
+      assert_equal(mlir_result, expected_result)
+    end
+  end
 end
