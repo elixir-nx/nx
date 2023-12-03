@@ -3699,28 +3699,40 @@ defmodule Nx do
   def broadcast(tensor, shape, opts \\ []) do
     opts = keyword!(opts, [:axes, :names])
 
+    tensor = to_tensor(tensor)
+    input_inner_shape = shape(tensor)
+
     apply_vectorized(tensor, fn tensor, offset ->
       broadcast_names = opts[:names] || names!(shape)
 
       broadcast_names =
         if offset > 0 and is_list(broadcast_names) do
-          List.duplicate(nil, offset + 1) ++ broadcast_names
+          List.duplicate(nil, offset) ++ broadcast_names
         else
           broadcast_names
         end
 
-      broadcast_shape_l = shape |> shape() |> Tuple.to_list()
+      shape = shape(shape)
+      broadcast_shape_l = Tuple.to_list(shape)
 
       offset_axes =
         if offset > 0 do
-          Enum.map(0..(offset - 1)//1, &elem(tensor.shape, &1)) ++ [1]
+          Enum.map(0..(offset - 1)//1, &elem(tensor.shape, &1))
         else
           []
         end
 
+      num_new_inner_axes = tuple_size(shape) - tuple_size(input_inner_shape)
+
       tensor =
         if offset > 0 do
-          new_axis(tensor, offset)
+          {vector_dims, inner_dims} = Enum.split(Tuple.to_list(tensor.shape), offset)
+          {vector_names, inner_names} = Enum.split(tensor.names, offset)
+
+          dims = vector_dims ++ List.duplicate(1, num_new_inner_axes) ++ inner_dims
+          names = vector_names ++ List.duplicate(nil, num_new_inner_axes) ++ inner_names
+
+          reshape(tensor, List.to_tuple(dims), names: names)
         else
           tensor
         end
@@ -3729,8 +3741,6 @@ defmodule Nx do
 
       opts_axes = opts[:axes]
 
-      actual_offset = if offset > 0, do: offset + 1, else: 0
-
       axes =
         if opts_axes do
           axes =
@@ -3738,11 +3748,11 @@ defmodule Nx do
               broadcast_shape,
               opts_axes,
               tensor.names,
-              actual_offset
+              offset
             )
 
           if offset > 0 do
-            Enum.to_list(0..(actual_offset - 1)//1) ++ axes
+            Enum.to_list(0..(offset + num_new_inner_axes - 1)//1) ++ axes
           else
             axes
           end
@@ -3757,15 +3767,15 @@ defmodule Nx do
         if tensor.shape == broadcast_shape and is_nil(opts_axes) do
           out
         else
-          _ = Nx.Shape.broadcast!(tensor.shape, broadcast_shape, axes, actual_offset)
+          _ = Nx.Shape.broadcast!(tensor.shape, broadcast_shape, axes, offset)
           impl!(tensor).broadcast(out, tensor, broadcast_shape, axes)
         end
 
-      if offset > 0 do
-        squeeze(out, axes: [offset])
-      else
-        out
-      end
+      # if offset > 0 do
+      #   squeeze(out, axes: [offset])
+      # else
+      out
+      # end
     end)
   end
 
