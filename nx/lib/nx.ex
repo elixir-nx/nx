@@ -3699,6 +3699,7 @@ defmodule Nx do
   def broadcast(tensor, shape, opts \\ []) do
     opts = keyword!(opts, [:axes, :names])
 
+    tensor = to_tensor(tensor)
     input_inner_shape = shape(tensor)
 
     apply_vectorized(tensor, fn tensor, offset ->
