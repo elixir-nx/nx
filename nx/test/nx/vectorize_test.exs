@@ -783,5 +783,27 @@ defmodule Nx.VectorizeTest do
                  i: 3
                )
     end
+
+    test "broadcast regression" do
+      t = Nx.iota({2, 3, 4}) |> Nx.vectorize([:a, :b])
+
+      result = Nx.broadcast(t[0], Nx.shape(t), names: Nx.names(t))
+
+      expected =
+        Nx.tensor([
+          [
+            [0, 0, 0, 0],
+            [4, 4, 4, 4],
+            [8, 8, 8, 8]
+          ],
+          [
+            [12, 12, 12, 12],
+            [16, 16, 16, 16],
+            [20, 20, 20, 20]
+          ]
+        ])
+
+      assert result == Nx.vectorize(expected, a: 2, b: 3)
+    end
   end
 end
