@@ -163,12 +163,7 @@ defmodule Nx.Defn.Expr do
 
       zero =
         Composite.traverse(last, fn leaf ->
-          vectorized_axes =
-            case leaf do
-              %{vectorized_axes: vectorized_axes} -> vectorized_axes
-              number when is_number(number) -> []
-              _ -> raise "unexpected leaf: #{inspect(leaf)}"
-            end
+          vectorized_axes = Nx.to_tensor(leaf).vectorized_axes
 
           Nx.broadcast(0, Nx.devectorize(leaf).shape) |> Nx.vectorize(vectorized_axes)
         end)

@@ -551,8 +551,8 @@ defmodule Nx.VectorizeTest do
 
     defn vectorized_cond_with_number_literal(value) do
       cond do
-        value == 1 -> {value + 1, 2}
-        true -> {value - 1, 1}
+        value == 1 -> {value + 1, 2, Nx.Constants.i()}
+        true -> {value - 1, 1, 0}
       end
     end
 
@@ -739,7 +739,11 @@ defmodule Nx.VectorizeTest do
       t = Nx.tensor([1, 2]) |> Nx.vectorize(:x)
 
       assert vectorized_cond_with_number_literal(t) ==
-               {Nx.tensor([2, 1]) |> Nx.vectorize(:x), Nx.tensor([2, 1]) |> Nx.vectorize(:x)}
+               {
+                 Nx.tensor([2, 1]) |> Nx.vectorize(:x),
+                 Nx.tensor([2, 1]) |> Nx.vectorize(:x),
+                 Nx.tensor([Complex.new(0, 1), 0]) |> Nx.vectorize(:x)
+               }
     end
   end
 
