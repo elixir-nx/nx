@@ -3699,6 +3699,8 @@ defmodule Nx do
   def broadcast(tensor, shape, opts \\ []) do
     opts = keyword!(opts, [:axes, :names])
 
+    input_inner_shape = shape(tensor)
+
     apply_vectorized(tensor, fn tensor, offset ->
       broadcast_names = opts[:names] || names!(shape)
 
@@ -3712,59 +3714,67 @@ defmodule Nx do
       shape = shape(shape)
       broadcast_shape_l = Tuple.to_list(shape)
 
-      offset_axes = 0..(offset - 1)//1
-
-      offset_shape_l =
+      offset_axes =
         if offset > 0 do
-          Enum.map(offset_axes, &elem(tensor.shape, &1))
+          Enum.map(0..(offset - 1)//1, &elem(tensor.shape, &1))
         else
           []
         end
 
-      broadcast_shape = List.to_tuple(offset_shape_l ++ broadcast_shape_l)
+      num_new_inner_axes = tuple_size(shape) - tuple_size(input_inner_shape)
+
+      tensor =
+        if offset > 0 do
+          {vector_dims, inner_dims} = Enum.split(Tuple.to_list(tensor.shape), offset)
+          {vector_names, inner_names} = Enum.split(tensor.names, offset)
+
+          dims = vector_dims ++ List.duplicate(1, num_new_inner_axes) ++ inner_dims
+          names = vector_names ++ List.duplicate(nil, num_new_inner_axes) ++ inner_names
+
+          reshape(tensor, List.to_tuple(dims), names: names)
+        else
+          tensor
+        end
+
+      broadcast_shape = List.to_tuple(offset_axes ++ broadcast_shape_l)
 
       opts_axes = opts[:axes]
 
       axes =
         if opts_axes do
-          Nx.Shape.normalize_axes(
-            broadcast_shape,
-            opts_axes,
-            tensor.names,
-            offset
-          )
+          axes =
+            Nx.Shape.normalize_axes(
+              broadcast_shape,
+              opts_axes,
+              tensor.names,
+              offset
+            )
+
+          if offset > 0 do
+            Enum.to_list(0..(offset + num_new_inner_axes - 1)//1) ++ axes
+          else
+            axes
+          end
         else
           Nx.Shape.broadcast_axes(tensor.shape, broadcast_shape)
         end
 
-      {_, [], [], reversed_dims, reversed_names} =
-        Enum.reduce(
-          0..(tuple_size(broadcast_shape) - 1)//1,
-          {axes, Tuple.to_list(tensor.shape), tensor.names, [], []},
-          fn
-            current_axis,
-            {[current_axis | axes], [pop_dim | dims], [pop_name | names], dims_acc, names_acc} ->
-              {axes, dims, names, [pop_dim | dims_acc], [pop_name | names_acc]}
-
-            _current_axis, {axes, dims, names, dims_acc, names_acc} ->
-              {axes, dims, names, dims_acc, names_acc}
-          end
-        )
-
-      tensor =
-        Nx.reshape(tensor, List.to_tuple(Enum.reverse(reversed_dims)),
-          names: Enum.reverse(reversed_names)
-        )
-
       broadcast_names = Nx.Shape.named_axes!(broadcast_names, broadcast_shape)
       out = %{tensor | names: broadcast_names, shape: broadcast_shape}
 
-      if tensor.shape == broadcast_shape and is_nil(opts_axes) do
-        out
-      else
-        _ = Nx.Shape.broadcast!(tensor.shape, broadcast_shape, axes, offset)
-        impl!(tensor).broadcast(out, tensor, broadcast_shape, axes)
-      end
+      out =
+        if tensor.shape == broadcast_shape and is_nil(opts_axes) do
+          out
+        else
+          _ = Nx.Shape.broadcast!(tensor.shape, broadcast_shape, axes, offset)
+          impl!(tensor).broadcast(out, tensor, broadcast_shape, axes)
+        end
+
+      # if offset > 0 do
+      #   squeeze(out, axes: [offset])
+      # else
+      out
+      # end
     end)
   end
 
