@@ -163,7 +163,9 @@ defmodule Nx.Defn.Expr do
 
       zero =
         Composite.traverse(last, fn leaf ->
-          Nx.broadcast(0, Nx.devectorize(leaf).shape) |> Nx.vectorize(leaf.vectorized_axes)
+          vectorized_axes = Nx.to_tensor(leaf).vectorized_axes
+
+          Nx.broadcast(0, Nx.devectorize(leaf).shape) |> Nx.vectorize(vectorized_axes)
         end)
 
       # here we build the `other` clauses into a remaining cond that also contains `last`.
