@@ -101,6 +101,9 @@ endif()
 # the DLLs need to be copied to avoid memory errors.
 if(MSVC)
   file(GLOB TORCH_DLLS "$ENV{LIBTORCH_DIR}/lib/*.dll")
+  if(NOT IS_DIRECTORY "${PRIV_DIR}/$ENV{LIBTORCH_BASE}")
+   file(MAKE_DIRECTORY "${PRIV_DIR}/$ENV{LIBTORCH_BASE}")
+  endif()
   add_custom_command(TARGET torchx
                     POST_BUILD
                     COMMAND ${CMAKE_COMMAND} -E copy_if_different
