@@ -1,8 +1,0 @@
-CMAKE_BUILD_DIR = $(MIX_APP_PATH)/cmake
-
-all: c_src/torchx.cpp c_src/nx_nif_utils.hpp
-	@ if not exist "$(CMAKE_BUILD_DIR)" mkdir "$(CMAKE_BUILD_DIR)"
-	@ cd "$(CMAKE_BUILD_DIR)" && \
-		cmake -S "$(MAKEDIR)" && \
-		cmake --build . --config Release && \
-		cmake --install . --config Release
