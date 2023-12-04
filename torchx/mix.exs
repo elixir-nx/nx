@@ -258,6 +258,7 @@ defmodule Torchx.MixProject do
 
     libtorch_config = libtorch_config()
     priv_path = Path.join(Mix.Project.app_path(), "priv")
+
     libtorch_link_path =
       libtorch_config.env_dir || relative_to(libtorch_config.dir, priv_path)
 
@@ -279,7 +280,7 @@ defmodule Torchx.MixProject do
   defp cmd!(exec, args) do
     opts = [
       into: IO.stream(:stdio, :line),
-      stderr_to_stdout: true,
+      stderr_to_stdout: true
     ]
 
     case System.cmd(exec, args, opts) do
