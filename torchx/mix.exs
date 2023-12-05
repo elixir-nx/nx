@@ -4,7 +4,7 @@ defmodule Torchx.MixProject do
   @source_url "https://github.com/elixir-nx/nx"
   @version "0.7.0-dev"
 
-  @libtorch_compilers [:torchx, :elixir_make]
+  @libtorch_compilers [:torchx, :cmake]
 
   def project do
     [
@@ -26,22 +26,7 @@ defmodule Torchx.MixProject do
 
       # Compilers
       compilers: @libtorch_compilers ++ Mix.compilers(),
-      aliases: aliases(),
-      make_env: fn ->
-        libtorch_config = libtorch_config()
-
-        priv_path = Path.join(Mix.Project.app_path(), "priv")
-
-        libtorch_link_path =
-          libtorch_config.env_dir || relative_to(libtorch_config.dir, priv_path)
-
-        %{
-          "LIBTORCH_DIR" => libtorch_config.dir,
-          "LIBTORCH_BASE" => libtorch_config.base,
-          "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}",
-          "LIBTORCH_LINK" => "#{libtorch_link_path}/lib"
-        }
-      end
+      aliases: aliases()
     ]
   end
 
@@ -95,7 +80,8 @@ defmodule Torchx.MixProject do
 
   defp aliases do
     [
-      "compile.torchx": &download_and_unzip/1
+      "compile.torchx": &download_and_unzip/1,
+      "compile.cmake": &cmake/1
     ]
   end
 
@@ -252,4 +238,61 @@ defmodule Torchx.MixProject do
 
   defp drop_common_prefix([h | left], [h | right]), do: drop_common_prefix(left, right)
   defp drop_common_prefix(left, right), do: {left, right}
+
+  def cmake(_args) do
+    priv? = File.dir?("priv")
+    Mix.Project.ensure_structure()
+
+    cmake = System.find_executable("cmake") || Mix.raise("cmake not found in the path")
+    cmake_build_type = System.get_env("CMAKE_BUILD_TYPE", "Release")
+    cmake_build_dir = Path.join(Mix.Project.app_path(), "cmake")
+    File.mkdir_p!(cmake_build_dir)
+
+    # IF there was no priv before and now there is one, we assume
+    # the user wants to copy it. If priv already existed and was
+    # written to it, then it won't be copied if build_embedded is
+    # set to true.
+    if not priv? and File.dir?("priv") do
+      Mix.Project.build_structure()
+    end
+
+    libtorch_config = libtorch_config()
+    mix_app_path = Mix.Project.app_path()
+    priv_path = Path.join(mix_app_path, "priv")
+
+    libtorch_link_path =
+      libtorch_config.env_dir || relative_to(libtorch_config.dir, priv_path)
+
+    erts_include_dir =
+      Path.join([:code.root_dir(), "erts-#{:erlang.system_info(:version)}", "include"])
+
+    env = %{
+      "LIBTORCH_DIR" => libtorch_config.dir,
+      "LIBTORCH_BASE" => libtorch_config.base,
+      "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}",
+      "LIBTORCH_LINK" => "#{libtorch_link_path}/lib",
+      "MIX_APP_PATH" => mix_app_path,
+      "PRIV_DIR" => priv_path,
+      "ERTS_INCLUDE_DIR" => erts_include_dir
+    }
+
+    cmd!(cmake, ["-S", ".", "-B", cmake_build_dir], env)
+    cmd!(cmake, ["--build", cmake_build_dir, "--config", cmake_build_type], env)
+    cmd!(cmake, ["--install", cmake_build_dir, "--config", cmake_build_type], env)
+
+    {:ok, []}
+  end
+
+  defp cmd!(exec, args, env) do
+    opts = [
+      into: IO.stream(:stdio, :line),
+      stderr_to_stdout: true,
+      env: env
+    ]
+
+    case System.cmd(exec, args, opts) do
+      {_, 0} -> :ok
+      {_, status} -> Mix.raise("cmake failed with status #{status}")
+    end
+  end
 end
