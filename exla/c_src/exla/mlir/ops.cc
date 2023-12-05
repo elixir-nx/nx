@@ -817,7 +817,7 @@ ERL_NIF_TERM mlir_window_reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM arg
   std::vector<exla::int64> window_strides;
   std::vector<exla::int64> input_dilations;
   std::vector<exla::int64> window_dilations;
-  std::vector<exla::int64> padding;
+  std::vector<std::pair<exla::int64, exla::int64>> padding;
 
   if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
     return exla::nif::error(env, "Unable to get function.");
@@ -843,7 +843,7 @@ ERL_NIF_TERM mlir_window_reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM arg
   if (!exla::nif::get_tuple(env, argv[7], window_dilations)) {
     return exla::nif::error(env, "Unable to get window_dilations.");
   }
-  if (!exla::nif::get_tuple(env, argv[8], padding)) {
+  if (!exla::nif::get_general_padding(env, argv[8], padding)) {
     return exla::nif::error(env, "Unable to get padding.");
   }
 

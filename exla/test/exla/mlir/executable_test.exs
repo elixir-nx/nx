@@ -1107,29 +1107,28 @@ defmodule EXLA.MLIR.ExecutableTest do
 
   describe "window_reduce" do
     test "works" do
-      t =
-        Nx.tensor(
-          [
-            [7, 2, 5, 3, 10, 2],
-            [3, 8, 9, 3, 4, 2],
-            [1, 5, 7, 5, 6, 1],
-            [0, 6, 2, 7, 2, 8]
-          ],
-          backend: EXLA.Backend
-        )
-
-      opts = [strides: [2, 3], padding: :valid]
+      init_value = Nx.Constants.min_finite(:s64)
+      t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+      opts = [padding: :same, strides: [1, 1]]
 
       result =
-        EXLA.jit(&Nx.window_scatter_max(&1, Nx.tensor([[2, 6], [3, 1]]), 0, {2, 3}, opts)).(t)
+        EXLA.jit(
+          &Nx.window_reduce(
+            &1,
+            init_value,
+            {2, 2},
+            opts,
+            fn x, acc -> Nx.max(x, acc) end
+          ),
+          compiler_mode: :mlir
+        ).(t)
 
       assert_equal(
         result,
         Nx.tensor([
-          [0, 0, 0, 0, 6, 0],
-          [0, 0, 2, 0, 0, 0],
-          [0, 0, 3, 0, 0, 0],
-          [0, 0, 0, 0, 0, 1]
+          [5, 6, 6],
+          [8, 9, 9],
+          [8, 9, 9]
         ])
       )
     end

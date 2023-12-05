@@ -1259,9 +1259,9 @@ defmodule EXLA.Defn do
         [acc],
         [arg],
         window_dimensions,
-        strides,
-        List.duplicate(1, Nx.rank(arg)),
-        window_dilations,
+        List.to_tuple(strides),
+        Tuple.duplicate(1, tuple_size(op_shape(arg))),
+        List.to_tuple(window_dilations),
         padding_config
       )
 
