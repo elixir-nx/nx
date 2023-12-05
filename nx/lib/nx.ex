@@ -9391,6 +9391,74 @@ defmodule Nx do
     end
   end
 
+  def lazy_select(tensor, opts \\ []) do
+    k = opts[:k]
+
+    if rank(tensor) != 1 do
+      raise ArgumentError, "expected a vector, got a #{inspect(tensor)}"
+    end
+
+    if k >= size(tensor) do
+      raise ArgumentError, "k must be less than the size of the tensor"
+    end
+
+    len = size(tensor)
+    selection_len = :math.pow(len, 3 / 4) |> trunc()
+    opts = Keyword.put(opts, :selection_len, selection_len)
+    lazy_select_core(tensor, opts)
+  end
+
+  def lazy_select_core(tensor, opts \\ []) do
+    k = opts[:k]
+    selection_len = opts[:selection_len]
+
+    type = Nx.type(tensor)
+    max_val = Nx.Constants.max(type)
+
+    key = Nx.Random.key(System.system_time())
+    len = size(tensor)
+
+    Enum.reduce_while(1..1000, key, fn _, key ->
+      {candidates, new_key} = Nx.Random.choice(key, tensor, samples: selection_len)
+      candidates = sort(candidates)
+      x = as_type(multiply(divide(k, len), pow(len, divide(3, 4))), :s64)
+
+      low_index = as_type(Nx.max(0, subtract(x, sqrt(len))), :s64)
+      high_index = as_type(Nx.min(selection_len - 1, add(x, sqrt(len))), :s64)
+
+      low = take(candidates, low_index)
+      high = take(candidates, high_index)
+
+      low_pos = sum(greater(low, tensor))
+      high_pos = sum(greater(high, tensor))
+
+      indices_to_append = logical_and(greater_equal(tensor, low), less_equal(tensor, high))
+
+      {agg_index, agg} =
+        Enum.reduce(0..(len - 1), {0, broadcast(max_val, {len})}, fn index,
+                                                                     {curr_agg_index, curr_agg} ->
+          cond do
+            indices_to_append[index] == Nx.tensor(1, type: :u8) ->
+              {curr_agg_index + 1,
+               indexed_put(curr_agg, new_axis(curr_agg_index, -1), tensor[index])}
+
+            true ->
+              {curr_agg_index, curr_agg}
+          end
+        end)
+
+      if logical_and(
+           logical_and(less_equal(low_pos, k), less_equal(k, high_pos)),
+           less_equal(agg_index, 4 * selection_len + 1)
+         ) == Nx.tensor(1, type: :u8) do
+        agg = sort(agg)
+        {:halt, agg[subtract(k, low_pos)]}
+      else
+        {:cont, new_key}
+      end
+    end)
+  end
+
   @doc """
   Returns the mode of a tensor.
 
