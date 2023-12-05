@@ -262,25 +262,26 @@ defmodule Torchx.MixProject do
     libtorch_link_path =
       libtorch_config.env_dir || relative_to(libtorch_config.dir, priv_path)
 
-    System.put_env(%{
+    env = %{
       "LIBTORCH_DIR" => libtorch_config.dir,
       "LIBTORCH_BASE" => libtorch_config.base,
       "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}",
       "LIBTORCH_LINK" => "#{libtorch_link_path}/lib",
       "MIX_APP_PATH" => Mix.Project.app_path()
-    })
+    }
 
-    cmd!(cmake, ["-S", ".", "-B", cmake_build_dir])
-    cmd!(cmake, ["--build", cmake_build_dir, "--config", cmake_build_type])
-    cmd!(cmake, ["--install", cmake_build_dir, "--config", cmake_build_type])
+    cmd!(cmake, ["-S", ".", "-B", cmake_build_dir], env)
+    cmd!(cmake, ["--build", cmake_build_dir, "--config", cmake_build_type], env)
+    cmd!(cmake, ["--install", cmake_build_dir, "--config", cmake_build_type], env)
 
     {:ok, []}
   end
 
-  defp cmd!(exec, args) do
+  defp cmd!(exec, args, env) do
     opts = [
       into: IO.stream(:stdio, :line),
-      stderr_to_stdout: true
+      stderr_to_stdout: true,
+      env: env
     ]
 
     case System.cmd(exec, args, opts) do
