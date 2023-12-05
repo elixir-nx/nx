@@ -1104,4 +1104,34 @@ defmodule EXLA.MLIR.ExecutableTest do
       assert_equal(mlir_result, expected_result)
     end
   end
+
+  describe "window_reduce" do
+    test "works" do
+      t =
+        Nx.tensor(
+          [
+            [7, 2, 5, 3, 10, 2],
+            [3, 8, 9, 3, 4, 2],
+            [1, 5, 7, 5, 6, 1],
+            [0, 6, 2, 7, 2, 8]
+          ],
+          backend: EXLA.Backend
+        )
+
+      opts = [strides: [2, 3], padding: :valid]
+
+      result =
+        EXLA.jit(&Nx.window_scatter_max(&1, Nx.tensor([[2, 6], [3, 1]]), 0, {2, 3}, opts)).(t)
+
+      assert_equal(
+        result,
+        Nx.tensor([
+          [0, 0, 0, 0, 6, 0],
+          [0, 0, 2, 0, 0, 0],
+          [0, 0, 3, 0, 0, 0],
+          [0, 0, 0, 0, 0, 1]
+        ])
+      )
+    end
+  end
 end

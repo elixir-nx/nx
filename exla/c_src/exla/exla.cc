@@ -723,6 +723,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_outfeed", 3, mlir_outfeed},
     {"mlir_call", 3, mlir_call},
     {"mlir_reduce", 5, mlir_reduce},
+    {"mlir_window_reduce", 9, mlir_window_reduce},
     {"mlir_map", 4, mlir_map},
     {"mlir_if", 6, mlir_if},
     {"mlir_while", 4, mlir_while},

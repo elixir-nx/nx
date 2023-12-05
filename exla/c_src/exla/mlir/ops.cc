@@ -804,6 +804,73 @@ ERL_NIF_TERM mlir_reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, list);
 }
 
+ERL_NIF_TERM mlir_window_reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 9) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  exla::MLIRFunction** reducer;
+  std::vector<mlir::Value> init_values;
+  std::vector<mlir::Value> inputs;
+  std::vector<exla::int64> window_dimensions;
+  std::vector<exla::int64> window_strides;
+  std::vector<exla::int64> input_dilations;
+  std::vector<exla::int64> window_dilations;
+  std::vector<exla::int64> padding;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[1], reducer)) {
+    return exla::nif::error(env, "Unable to get reducer.");
+  }
+  if (!exla::nif::get_list(env, argv[2], init_values)) {
+    return exla::nif::error(env, "Unable to get init_values.");
+  }
+  if (!exla::nif::get_list(env, argv[3], inputs)) {
+    return exla::nif::error(env, "Unable to get inputs.");
+  }
+  if (!exla::nif::get_tuple(env, argv[4], window_dimensions)) {
+    return exla::nif::error(env, "Unable to get window_dimensions.");
+  }
+  if (!exla::nif::get_tuple(env, argv[5], window_strides)) {
+    return exla::nif::error(env, "Unable to get window_strides.");
+  }
+  if (!exla::nif::get_tuple(env, argv[6], input_dilations)) {
+    return exla::nif::error(env, "Unable to get input_dilations.");
+  }
+  if (!exla::nif::get_tuple(env, argv[7], window_dilations)) {
+    return exla::nif::error(env, "Unable to get window_dilations.");
+  }
+  if (!exla::nif::get_tuple(env, argv[8], padding)) {
+    return exla::nif::error(env, "Unable to get padding.");
+  }
+
+  std::vector<mlir::Value> res = (*function)->WindowReduceOp(*reducer,
+                                                             init_values,
+                                                             inputs,
+                                                             window_dimensions,
+                                                             window_strides,
+                                                             input_dilations,
+                                                             window_dilations,
+                                                             padding);
+
+  size_t n = res.size();
+
+  std::vector<ERL_NIF_TERM> nif_terms;
+  nif_terms.reserve(n);
+
+  for (size_t i = 0; i < n; i++) {
+    nif_terms[i] = exla::nif::make<mlir::Value>(env, res[i]);
+  }
+
+  auto data = nif_terms.data();
+  auto list = enif_make_list_from_array(env, &data[0], n);
+
+  return exla::nif::ok(env, list);
+}
+
 ERL_NIF_TERM mlir_map(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 4) {
     return exla::nif::error(env, "Bad argument count.");

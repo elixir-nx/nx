@@ -476,6 +476,36 @@ defmodule EXLA.MLIR.Value do
     Enum.map(refs, &%Value{ref: &1, function: func})
   end
 
+  def window_reduce(
+        %Function{ref: reducer},
+        [%Value{function: func} | _] = init_values,
+        [%Value{function: func} | _] = inputs,
+        window_dimensions,
+        window_strides,
+        input_dilations,
+        window_dilations,
+        padding
+      ) do
+    init_value_refs = Enum.map(init_values, & &1.ref)
+    input_refs = Enum.map(inputs, & &1.ref)
+
+    refs =
+      EXLA.NIF.mlir_window_reduce(
+        func.ref,
+        reducer,
+        init_value_refs,
+        input_refs,
+        window_dimensions,
+        window_strides,
+        input_dilations,
+        window_dilations,
+        padding
+      )
+      |> unwrap!()
+
+    Enum.map(refs, &%Value{ref: &1, function: func})
+  end
+
   def map(
         %Function{ref: mapper},
         [%Value{function: func} | _] = inputs,

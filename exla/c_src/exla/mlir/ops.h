@@ -103,6 +103,7 @@ DEFINE_NIF(mlir_create_token);
 DEFINE_NIF(mlir_triangular_solve);
 DEFINE_NIF(mlir_dynamic_update_slice);
 DEFINE_NIF(mlir_reduce);
+DEFINE_NIF(mlir_window_reduce);
 DEFINE_NIF(mlir_map);
 DEFINE_NIF(mlir_if);
 DEFINE_NIF(mlir_infeed);

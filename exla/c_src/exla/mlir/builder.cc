@@ -772,6 +772,45 @@ mlir::Value MLIRFunction::ScatterOp(mlir::Value target, mlir::Value indices, mli
   return scatter_op.getResult(0);
 }
 
+std::vector<mlir::Value> MLIRFunction::WindowReduceOp(
+    MLIRFunction *reducer,
+    std::vector<mlir::Value> init_values,
+    std::vector<mlir::Value> inputs,
+    std::vector<int64_t> window_dimensions,
+    std::vector<int64_t> window_strides,
+    std::vector<int64_t> input_dilations,
+    std::vector<int64_t> window_dilations,
+    std::vector<int64_t> padding) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+
+  mlir::ValueRange init_values_range(init_values);
+  mlir::ValueRange inputs_range(inputs);
+  mlir::DenseIntElementsAttr window_dimensions_attr = Int64ToDenseIntElementsAttr(builder, window_dimensions);
+  mlir::DenseIntElementsAttr window_strides_attr = Int64ToDenseIntElementsAttr(builder, window_strides);
+  mlir::DenseIntElementsAttr input_dilations_attr = Int64ToDenseIntElementsAttr(builder, input_dilations);
+  mlir::DenseIntElementsAttr window_dilations_attr = Int64ToDenseIntElementsAttr(builder, window_dilations);
+  mlir::DenseIntElementsAttr padding_attr = Int64ToDenseIntElementsAttr(builder, padding);
+
+  std::cout << "1" << std::endl;
+  dump_mlir_module();
+  mlir::stablehlo::ReduceWindowOp reduce_window_op = builder->create<mlir::stablehlo::ReduceWindowOp>(
+      builder->getUnknownLoc(),
+      inputs_range,
+      init_values_range,
+      window_dimensions_attr,
+      window_strides_attr,
+      input_dilations_attr,
+      window_dilations_attr,
+      padding_attr);
+  mlir::Region &reduceBody = reduce_window_op.getRegion();
+  mlir::Region &funcBody = reducer->function()->getBody();
+  reduceBody.getBlocks().splice(reduceBody.end(), funcBody.getBlocks());
+
+  mlir::Operation::result_range results = reduce_window_op.getResults();
+  return std::vector<mlir::Value>(results.begin(), results.end());
+}
+
 std::vector<mlir::Value> MLIRFunction::ReduceOp(
     MLIRFunction *reducer,
     std::vector<mlir::Value> init_values,
