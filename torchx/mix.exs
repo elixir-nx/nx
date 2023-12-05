@@ -257,17 +257,23 @@ defmodule Torchx.MixProject do
     end
 
     libtorch_config = libtorch_config()
-    priv_path = Path.join(Mix.Project.app_path(), "priv")
+    mix_app_path = Mix.Project.app_path()
+    priv_path = Path.join(mix_app_path, "priv")
 
     libtorch_link_path =
       libtorch_config.env_dir || relative_to(libtorch_config.dir, priv_path)
+
+    erts_include_dir =
+      Path.join([:code.root_dir(), "erts-#{:erlang.system_info(:version)}", "include"])
 
     env = %{
       "LIBTORCH_DIR" => libtorch_config.dir,
       "LIBTORCH_BASE" => libtorch_config.base,
       "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}",
       "LIBTORCH_LINK" => "#{libtorch_link_path}/lib",
-      "MIX_APP_PATH" => Mix.Project.app_path()
+      "MIX_APP_PATH" => mix_app_path,
+      "PRIV_DIR" => priv_path,
+      "ERTS_INCLUDE_DIR" => erts_include_dir
     }
 
     cmd!(cmake, ["-S", ".", "-B", cmake_build_dir], env)
