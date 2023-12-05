@@ -6,7 +6,7 @@ if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
   set(CMAKE_CUDA_ARCHITECTURES 75)
 endif()
 
-if(NOT DEFINED ENV{CMAKE_TOOLCHAIN_FILE})
+if(DEFINED ENV{CMAKE_TOOLCHAIN_FILE})
   set(CMAKE_TOOLCHAIN_FILE $ENV{CMAKE_TOOLCHAIN_FILE})
 endif()
 
@@ -14,25 +14,20 @@ if(NOT DEFINED CMAKE_BUILD_TYPE OR "${CMAKE_BUILD_TYPE}" STREQUAL "")
     set(CMAKE_BUILD_TYPE "Release")
 endif()
 
-if(DEFINED ENV{MIX_APP_PATH})
-    set(PRIV_DIR "$ENV{MIX_APP_PATH}/priv")
-else()
-    set(PRIV_DIR "${CMAKE_CURRENT_SOURCE_DIR}/priv")
-endif()
-set(CMAKE_INSTALL_PREFIX "${PRIV_DIR}")
-if(NOT IS_DIRECTORY "${PRIV_DIR}")
-  file(MAKE_DIRECTORY "${PRIV_DIR}")
+set(C_SRC "${CMAKE_CURRENT_SOURCE_DIR}/c_src")
+set(CMAKE_INSTALL_PREFIX "$ENV{PRIV_DIR}")
+if(NOT IS_DIRECTORY "$ENV{PRIV_DIR}")
+  file(MAKE_DIRECTORY "$ENV{PRIV_DIR}")
 endif()
 
-set(C_SRC "${CMAKE_CURRENT_SOURCE_DIR}/c_src")
 set(Torch_DIR "$ENV{LIBTORCH_DIR}/share/cmake/Torch")
 list(APPEND CMAKE_PREFIX_PATH $ENV{LIBTORCH_DIR})
 
+message(STATUS "CMAKE_TOOLCHAIN_FILE: $ENV{CMAKE_TOOLCHAIN_FILE}")
 message(STATUS "C_SRC: ${C_SRC}")
-message(STATUS "MIX_APP_PATH: $ENV{MIX_APP_PATH}")
-message(STATUS "PRIV_DIR: ${PRIV_DIR}")
-message(STATUS "ERTS_INCLUDE_DIR: $ENV{ERTS_INCLUDE_DIR}")
+message(STATUS "PRIV_DIR: $ENV{PRIV_DIR}")
 message(STATUS "LIBTORCH_DIR: $ENV{LIBTORCH_DIR}")
+message(STATUS "ERTS_INCLUDE_DIR: $ENV{ERTS_INCLUDE_DIR}")
 message(STATUS "LIBTORCH_BASE: $ENV{LIBTORCH_BASE}")
 message(STATUS "MIX_BUILD_EMBEDDED $ENV{MIX_BUILD_EMBEDDED}")
 message(STATUS "LIBTORCH_LINK $ENV{LIBTORCH_LINK}")
@@ -52,7 +47,7 @@ target_include_directories(torchx PUBLIC $ENV{ERTS_INCLUDE_DIR})
 
 install(
     TARGETS torchx
-    DESTINATION "${PRIV_DIR}"
+    DESTINATION "$ENV{PRIV_DIR}"
 )
 SET_TARGET_PROPERTIES(torchx PROPERTIES PREFIX "")
 if(NOT WIN32)
@@ -97,14 +92,14 @@ endif()
 # the DLLs need to be copied to avoid memory errors.
 if(MSVC)
   file(GLOB TORCH_DLLS "$ENV{LIBTORCH_DIR}/lib/*.dll")
-  if(NOT IS_DIRECTORY "${PRIV_DIR}/$ENV{LIBTORCH_BASE}")
-   file(MAKE_DIRECTORY "${PRIV_DIR}/$ENV{LIBTORCH_BASE}")
+  if(NOT IS_DIRECTORY "$ENV{PRIV_DIR}/$ENV{LIBTORCH_BASE}")
+   file(MAKE_DIRECTORY "$ENV{PRIV_DIR}/$ENV{LIBTORCH_BASE}")
   endif()
   add_custom_command(TARGET torchx
                     POST_BUILD
                     COMMAND ${CMAKE_COMMAND} -E copy_if_different
                     ${TORCH_DLLS}
-                    "${PRIV_DIR}/$ENV{LIBTORCH_BASE}")
+                    "$ENV{PRIV_DIR}/$ENV{LIBTORCH_BASE}")
 else()
   if(ENV{MIX_BUILD_EMBEDDED} STREQUAL "true")
     set(EMBEDDED_TYPE copy_directory)
@@ -115,5 +110,5 @@ else()
                       POST_BUILD
                       COMMAND ${CMAKE_COMMAND} -E "${EMBEDDED_TYPE}"
                       "$ENV{LIBTORCH_DIR}/lib"
-                      "${PRIV_DIR}/$ENV{LIBTORCH_BASE}")
+                      "$ENV{PRIV_DIR}/$ENV{LIBTORCH_BASE}")
 endif()
