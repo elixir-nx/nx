@@ -1,4 +1,4 @@
-defmodule EXLA.MLIR.SanityCheckTest do
+defmodule EXLA.MLIR.CompilerTest do
   use EXLA.Case, async: true
 
   import Nx.Defn
