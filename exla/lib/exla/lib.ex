@@ -3,15 +3,19 @@ defmodule EXLA.Lib do
   High-level operations built on top of `EXLA.Op`.
   """
 
-  alias EXLA.{Builder, Op, Shape}
+  alias EXLA.Builder
+  alias EXLA.Op
+  alias EXLA.Shape
 
+  alias EXLA.MLIR.Function
   alias EXLA.MLIR.Value
 
   @doc """
   Element-wise tangent function.
   """
-  def tan(%Op{} = op) do
-    Op.divide(Op.sin(op), Op.cos(op))
+  def tan(%mod{} = op) when mod in [Op, Value] do
+    # TO-DO (mlir): Add NIF for chlo::TanOp instead
+    mod.divide(mod.sin(op), mod.cos(op))
   end
 
   @doc """
@@ -141,6 +145,10 @@ defmodule EXLA.Lib do
   """
   def min_number(%Builder{} = builder, type) do
     Op.constant_from_binary(builder, min_binary(type), Shape.make_shape(type, {}))
+  end
+
+  def min_number(%Function{} = builder, type) do
+    Value.constant_from_binary(builder, min_binary(type), Shape.make_shape(type, {}))
   end
 
   @doc """
