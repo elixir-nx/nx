@@ -2557,11 +2557,12 @@ defmodule EXLA.Defn do
   defp apply_mlir_broadcasted_bin_op(op, out, left, right) do
     left_shape = Value.get_shape(left)
     right_shape = Value.get_shape(right)
-    dims = broadcast_axes(left_shape.dims, right_shape.dims)
     out_shape = EXLA.Shape.make_shape(out.type, out.shape)
+    left_dims = broadcast_axes(left_shape.dims, out_shape.dims)
+    right_dims = broadcast_axes(right_shape.dims, out_shape.dims)
     type = out_shape.dtype
-    left = left |> to_type(type) |> Value.broadcast_in_dim(out_shape, dims)
-    right = right |> to_type(type) |> Value.broadcast_in_dim(out_shape, dims)
+    left = left |> to_type(type) |> Value.broadcast_in_dim(out_shape, left_dims)
+    right = right |> to_type(type) |> Value.broadcast_in_dim(out_shape, right_dims)
     apply(Value, op, [left, right])
   end
 
