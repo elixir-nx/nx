@@ -9417,14 +9417,14 @@ defmodule Nx do
 
     key = Nx.Random.key(System.system_time())
     len = size(tensor)
+    x = as_type(multiply(k, pow(len, negate(divide(1, 4)))), :s64)
+    len_sqrt = sqrt(len)
+    low_index = as_type(Nx.max(0, subtract(x, len_sqrt)), :s64)
+    high_index = as_type(Nx.min(selection_len - 1, add(x, len_sqrt)), :s64)
 
-    Enum.reduce_while(1..1000, key, fn _, key ->
+    Enum.reduce_while(1..99999, key, fn _, key ->
       {candidates, new_key} = Nx.Random.choice(key, tensor, samples: selection_len)
       candidates = sort(candidates)
-      x = as_type(multiply(divide(k, len), pow(len, divide(3, 4))), :s64)
-
-      low_index = as_type(Nx.max(0, subtract(x, sqrt(len))), :s64)
-      high_index = as_type(Nx.min(selection_len - 1, add(x, sqrt(len))), :s64)
 
       low = take(candidates, low_index)
       high = take(candidates, high_index)
@@ -9451,8 +9451,7 @@ defmodule Nx do
            logical_and(less_equal(low_pos, k), less_equal(k, high_pos)),
            less_equal(agg_index, 4 * selection_len + 1)
          ) == Nx.tensor(1, type: :u8) do
-        agg = sort(agg)
-        {:halt, agg[subtract(k, low_pos)]}
+        {:halt, sort(agg[0..Kernel.min(4 * selection_len, len-1)])[subtract(k, low_pos)]}
       else
         {:cont, new_key}
       end
