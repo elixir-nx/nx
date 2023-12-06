@@ -44,9 +44,8 @@ int get(ErlNifEnv* env, ERL_NIF_TERM term, int32* var) {
 }
 
 int get(ErlNifEnv* env, ERL_NIF_TERM term, int64* var) {
-  int result = enif_get_int64(env, term, reinterpret_cast<nif_int64_t*>(var));
-
-  return result || *var == INT64_MIN || *var == INT64_MAX;
+  return enif_get_int64(env, term,
+                        reinterpret_cast<nif_int64_t*>(var));
 }
 
 int get(ErlNifEnv* env, ERL_NIF_TERM term, uint8* var) {
