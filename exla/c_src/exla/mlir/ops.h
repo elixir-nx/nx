@@ -47,6 +47,7 @@ DEFINE_NIF(mlir_log1p);
 DEFINE_NIF(mlir_sign);
 DEFINE_NIF(mlir_cos);
 DEFINE_NIF(mlir_sin);
+DEFINE_NIF(mlir_tan);
 DEFINE_NIF(mlir_acos);
 DEFINE_NIF(mlir_asin);
 DEFINE_NIF(mlir_atan);

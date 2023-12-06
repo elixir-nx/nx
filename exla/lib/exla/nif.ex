@@ -27,7 +27,7 @@ defmodule EXLA.NIF do
 
   @unary_ops [:abs, :exp, :expm1, :floor, :ceil, :round] ++
                [:log, :log1p, :sigmoid, :sign, :cos] ++
-               [:sin, :acos, :asin, :atan, :cosh, :sinh] ++
+               [:sin, :tan, :acos, :asin, :atan, :cosh, :sinh] ++
                [:tanh, :acosh, :asinh, :atanh, :sqrt, :cbrt] ++
                [:bitwise_not, :erf, :erfc, :erf_inv] ++
                [:is_infinity, :is_nan, :rsqrt, :negate, :count_leading_zeros] ++

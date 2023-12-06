@@ -13,9 +13,12 @@ defmodule EXLA.Lib do
   @doc """
   Element-wise tangent function.
   """
-  def tan(%mod{} = op) when mod in [Op, Value] do
-    # TO-DO (mlir): Add NIF for chlo::TanOp instead
-    mod.divide(mod.sin(op), mod.cos(op))
+  def tan(%Value{} = op) do
+    Value.tan(op)
+  end
+
+  def tan(%Op{} = op) do
+    Op.divide(Op.sin(op), Op.cos(op))
   end
 
   @doc """

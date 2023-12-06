@@ -427,6 +427,11 @@ mlir::Value MLIRFunction::SinOp(mlir::Value operand) {
   return module_->builder()->create<mlir::stablehlo::SineOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
+mlir::Value MLIRFunction::TanOp(mlir::Value operand) {
+  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
+  return module_->builder()->create<mlir::chlo::TanOp>(module_->builder()->getUnknownLoc(), operand);
+}
+
 mlir::Value MLIRFunction::AcosOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();

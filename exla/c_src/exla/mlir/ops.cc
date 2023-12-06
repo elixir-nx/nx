@@ -340,6 +340,9 @@ ERL_NIF_TERM mlir_sign(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 ERL_NIF_TERM mlir_cos(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_UNARY_OP(CosOp);
 }
+ERL_NIF_TERM mlir_tan(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return MLIR_UNARY_OP(TanOp);
+}
 ERL_NIF_TERM mlir_sin(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return MLIR_UNARY_OP(SinOp);
 }
