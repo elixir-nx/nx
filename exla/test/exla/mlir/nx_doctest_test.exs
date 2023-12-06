@@ -52,10 +52,7 @@ defmodule EXLA.MLIR.NxDoctestTest do
     tri: 3,
     sort: 2,
     argsort: 2,
-    all_close: 3,
-    logical_or: 2,
-    logical_and: 2,
-    logical_xor: 2
+    all_close: 3
   ]
   @excluded_doctests @argument_count_error_doctests ++
                        @function_clause_error_doctests ++
