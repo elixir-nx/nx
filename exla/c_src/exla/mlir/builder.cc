@@ -521,8 +521,8 @@ mlir::Value MLIRFunction::IsInfOp(mlir::Value operand) {
     auto real_op = module_->builder()->create<mlir::stablehlo::RealOp>(module_->builder()->getUnknownLoc(), operand);
     auto imag_op = module_->builder()->create<mlir::stablehlo::ImagOp>(module_->builder()->getUnknownLoc(), operand);
 
-    auto is_inf_real_op = this->ConvertOp(this->IsInfOp(real_op), type);
-    auto is_inf_imag_op = this->ConvertOp(this->IsInfOp(imag_op), type);
+    auto is_inf_real_op = this->ConvertOp(this->IsInfOp(real_op), element_type);
+    auto is_inf_imag_op = this->ConvertOp(this->IsInfOp(imag_op), element_type);
     result = this->AddOp(is_inf_real_op, is_inf_imag_op);
   } else if (element_type.isa<mlir::IntegerType>()) {
     // integers are never infinity

@@ -7,7 +7,17 @@ defmodule EXLA.MLIR.NxDoctestTest do
   end
 
   @invalid_type_error_doctests [all_close: 3]
-  @broadcast_error_doctests [atan2: 2, logical_or: 2, logical_and: 2, logical_xor: 2]
+  @broadcast_error_doctests [
+    equal: 2,
+    greater: 2,
+    less_equal: 2,
+    greater_equal: 2,
+    less: 2,
+    atan2: 2,
+    logical_or: 2,
+    logical_and: 2,
+    logical_xor: 2
+  ]
   @function_clause_error_doctests [
     gather: 3,
     median: 2,
@@ -49,16 +59,10 @@ defmodule EXLA.MLIR.NxDoctestTest do
   ]
   @sign_error_doctests [logical_not: 1, ceil: 1, conjugate: 1]
   @incorrect_results_error_doctests [
-    equal: 2,
-    greater: 2,
-    less_equal: 2,
-    greater_equal: 2,
-    less: 2,
     is_nan: 1,
     tril: 2,
     tri: 3,
-    sort: 2,
-    is_infinity: 1,
+    sort: 2
     argsort: 2
   ]
   @excluded_doctests @broadcast_error_doctests ++
