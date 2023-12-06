@@ -44,18 +44,8 @@ defmodule EXLA.MLIR.NxDoctestTest do
     logsumexp: 2
   ]
   @argument_count_error_doctests [
-    stack: 2,
     reflect: 2,
-    concatenate: 2,
-    to_batched: 3,
-    cumulative_sum: 2,
-    cumulative_product: 2,
-    cumulative_min: 2,
-    cumulative_max: 2,
-    indexed_add: 4,
-    indexed_put: 4,
-    mode: 2,
-    slice: 4
+    mode: 2
   ]
   @sign_error_doctests [logical_not: 1, ceil: 1, conjugate: 1]
   @incorrect_results_error_doctests [
