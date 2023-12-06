@@ -1072,13 +1072,11 @@ defmodule EXLA.Defn do
 
   for {logical, bitwise} <- @bin_pred_op do
     defp to_operator(unquote(logical), [%Value{} = left, %Value{} = right], ans, _state) do
-      type = {:u, 8}
-
       apply_mlir_broadcasted_bin_op(
         unquote(bitwise),
         ans,
-        to_type(left, type),
-        to_type(right, type)
+        to_mlir_logical(left),
+        to_mlir_logical(right)
       )
     end
 
@@ -2582,8 +2580,6 @@ defmodule EXLA.Defn do
   end
 
   defp to_mlir_logical(%Value{} = value) do
-    shape = Value.get_shape(value)
-    zero = Value.constant_r0(value.function, 0, shape.dtype)
-    apply_mlir_broadcasted_bin_op(:not_equal, %{type: {:u, 8}, shape: shape.dims}, value, zero)
+    to_type(value, {:pred, 8})
   end
 end
