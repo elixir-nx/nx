@@ -2512,7 +2512,6 @@ defmodule EXLA.Defn do
   # the branches, but that gets tricky with cond/if,
   # so we always perform the operation.
   defp cast_pred_to_u8(%Value{} = op) do
-    # TO-DO(mlir): validate exactly if we should be just passing the pred as-is here
     op
   end
 

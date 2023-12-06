@@ -665,6 +665,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_sign", 2, mlir_sign},
     {"mlir_cos", 2, mlir_cos},
     {"mlir_sin", 2, mlir_sin},
+    {"mlir_tan", 2, mlir_tan},
     {"mlir_acos", 2, mlir_acos},
     {"mlir_asin", 2, mlir_asin},
     {"mlir_atan", 2, mlir_atan},

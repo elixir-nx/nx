@@ -347,7 +347,6 @@ defmodule EXLA.MLIR.CompilerTest do
       end
     end
 
-    # TO-DO (mlir): this case depends on broadcasting being available
     test "sign with unsigned input" do
       function = fn t -> Nx.sign(t) end
 
