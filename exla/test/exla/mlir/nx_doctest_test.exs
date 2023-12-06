@@ -6,7 +6,8 @@ defmodule EXLA.MLIR.NxDoctestTest do
     Nx.Defn.default_options(compiler: EXLA, compiler_mode: :mlir)
   end
 
-  @invalid_type_error_doctests [all_close: 3, any: 2, atan2: 2]
+  @invalid_type_error_doctests [all_close: 3]
+  @broadcast_error_doctests [atan2: 2, logical_or: 2, logical_and: 2, logical_xor: 2]
   @function_clause_error_doctests [
     gather: 3,
     median: 2,
@@ -25,9 +26,6 @@ defmodule EXLA.MLIR.NxDoctestTest do
     quotient: 2,
     eye: 2,
     iota: 2,
-    logical_or: 2,
-    logical_xor: 2,
-    logical_and: 2,
     ifft2: 2,
     ifft: 2,
     fft: 2,
@@ -73,7 +71,8 @@ defmodule EXLA.MLIR.NxDoctestTest do
     is_infinity: 1,
     argsort: 2
   ]
-  @excluded_doctests @argument_count_error_doctests ++
+  @excluded_doctests @broadcast_error_doctests ++
+                       @argument_count_error_doctests ++
                        @function_clause_error_doctests ++
                        @rounding_error_doctests ++
                        @invalid_type_error_doctests ++
