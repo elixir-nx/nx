@@ -9451,7 +9451,7 @@ defmodule Nx do
            logical_and(less_equal(low_pos, k), less_equal(k, high_pos)),
            less_equal(agg_index, 4 * selection_len + 1)
          ) == Nx.tensor(1, type: :u8) do
-        {:halt, sort(agg[0..Kernel.min(4 * selection_len, len-1)])[subtract(k, low_pos)]}
+        {:halt, sort(agg[0..Kernel.min(4 * selection_len, len - 1)])[subtract(k, low_pos)]}
       else
         {:cont, new_key}
       end
