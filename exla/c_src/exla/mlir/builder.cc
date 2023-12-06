@@ -512,9 +512,26 @@ mlir::Value MLIRFunction::ErfcOp(mlir::Value operand) {
 mlir::Value MLIRFunction::IsInfOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
   module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
-  mlir::Value op = module_->builder()->create<mlir::chlo::IsInfOp>(module_->builder()->getUnknownLoc(), operand);
+  mlir::Value result;
+
+  mlir::RankedTensorType type = llvm::cast<mlir::RankedTensorType>(operand.getType());
+  mlir::Type element_type = type.getElementType();
+
+  if (element_type.isa<mlir::ComplexType>()) {
+    auto real_op = module_->builder()->create<mlir::stablehlo::RealOp>(module_->builder()->getUnknownLoc(), operand);
+    auto imag_op = module_->builder()->create<mlir::stablehlo::ImagOp>(module_->builder()->getUnknownLoc(), operand);
+
+    auto is_inf_real_op = this->ConvertOp(this->IsInfOp(real_op), element_type);
+    auto is_inf_imag_op = this->ConvertOp(this->IsInfOp(imag_op), element_type);
+    result = this->AddOp(is_inf_real_op, is_inf_imag_op);
+  } else if (element_type.isa<mlir::IntegerType>()) {
+    // integers are never infinity
+    return this->NotEqualOp(operand, operand);
+  } else {
+    result = module_->builder()->create<mlir::chlo::IsInfOp>(module_->builder()->getUnknownLoc(), operand);
+  }
   mlir::Type mlir_bool = module_->builder()->getIntegerType(8, false);
-  return module_->builder()->create<mlir::stablehlo::ConvertOp>(module_->builder()->getUnknownLoc(), op, mlir_bool);
+  return module_->builder()->create<mlir::stablehlo::ConvertOp>(module_->builder()->getUnknownLoc(), result, mlir_bool);
 }
 
 mlir::Value MLIRFunction::IsNanOp(mlir::Value operand) {
@@ -975,12 +992,14 @@ mlir::Value MLIRFunction::FFTOp(mlir::Value tensor, bool forward_fft, std::vecto
 }
 
 template <typename T>
-ERL_NIF_TERM ConstantOpImpl(mlir::OpBuilder *builder, mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM term, std::vector<int64_t> dims) {
+ERL_NIF_TERM ConstantOpImpl(mlir::OpBuilder *builder, mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM term, std::optional<std::vector<int64_t>> dims_opt) {
+  bool scalar = !dims_opt;
+  std::vector<int64_t> dims = scalar ? std::vector<int64_t>(0) : dims_opt.value();
+
   mlir::RankedTensorType ty = mlir::RankedTensorType::get(dims, type);
   mlir::DenseElementsAttr attr;
 
-  if (dims.size() == 0) {
-    // this is the scalar case
+  if (scalar) {
     T value;
     if (!exla::nif::get(env, term, &value)) {
       return exla::nif::error(env, "Unable to cast scalar to type.");
@@ -1004,7 +1023,7 @@ ERL_NIF_TERM ConstantOpImpl(mlir::OpBuilder *builder, mlir::Type type, ErlNifEnv
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, op));
 }
 
-ERL_NIF_TERM MLIRFunction::ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM term, std::vector<int64_t> dims) {
+ERL_NIF_TERM MLIRFunction::ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM term, std::optional<std::vector<int64_t>> dims) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
 
   if (type.isUnsignedInteger(8)) {

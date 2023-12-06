@@ -766,8 +766,8 @@ defmodule EXLA.Defn do
     EXLA.Op.transpose(op, List.to_tuple(axes))
   end
 
-  defp to_operator(:squeeze, [op, _axes], ans, _state) do
-    EXLA.Op.reshape(op, ans.shape)
+  defp to_operator(:squeeze, [%mod{} = op, _axes], ans, _state) when mod in [EXLA.Op, Value] do
+    mod.reshape(op, ans.shape)
   end
 
   ## to_operator others
@@ -1071,6 +1071,17 @@ defmodule EXLA.Defn do
   @bin_pred_op [logical_and: :bitwise_and, logical_or: :bitwise_or, logical_xor: :bitwise_xor]
 
   for {logical, bitwise} <- @bin_pred_op do
+    defp to_operator(unquote(logical), [%Value{} = left, %Value{} = right], ans, _state) do
+      type = {:u, 8}
+
+      apply_mlir_broadcasted_bin_op(
+        unquote(bitwise),
+        ans,
+        to_type(left, type),
+        to_type(right, type)
+      )
+    end
+
     defp to_operator(unquote(logical), [left, right], _ans, _state) do
       type = {:pred, 8}
       dims = broadcast_axes(op_shape(left), op_shape(right))
@@ -1167,6 +1178,14 @@ defmodule EXLA.Defn do
   end
 
   ## to_operator reduction
+
+  defp to_operator(:all, [arg, opts], %{shape: shape}, %{builder: %Function{}} = state) do
+    to_aggregate(:bitwise_and, {:u, 8}, shape, to_mlir_logical(arg), 1, opts, state)
+  end
+
+  defp to_operator(:any, [arg, opts], %{shape: shape}, %{builder: %Function{}} = state) do
+    to_aggregate(:bitwise_or, {:u, 8}, shape, to_mlir_logical(arg), 0, opts, state)
+  end
 
   defp to_operator(:all, [arg, opts], %{shape: shape}, state) do
     to_aggregate(:bitwise_and, {:pred, 8}, shape, arg, 1, opts, state)
@@ -2538,11 +2557,12 @@ defmodule EXLA.Defn do
   defp apply_mlir_broadcasted_bin_op(op, out, left, right) do
     left_shape = Value.get_shape(left)
     right_shape = Value.get_shape(right)
-    dims = broadcast_axes(left_shape.dims, right_shape.dims)
     out_shape = EXLA.Shape.make_shape(out.type, out.shape)
+    left_dims = broadcast_axes(left_shape.dims, out_shape.dims)
+    right_dims = broadcast_axes(right_shape.dims, out_shape.dims)
     type = out_shape.dtype
-    left = left |> to_type(type) |> Value.broadcast_in_dim(out_shape, dims)
-    right = right |> to_type(type) |> Value.broadcast_in_dim(out_shape, dims)
+    left = left |> to_type(type) |> Value.broadcast_in_dim(out_shape, left_dims)
+    right = right |> to_type(type) |> Value.broadcast_in_dim(out_shape, right_dims)
     apply(Value, op, [left, right])
   end
 
@@ -2559,5 +2579,11 @@ defmodule EXLA.Defn do
 
   defp collect_while_results_unflatten(%Value{} = value, _) do
     {value, []}
+  end
+
+  defp to_mlir_logical(%Value{} = value) do
+    shape = Value.get_shape(value)
+    zero = Value.constant_r0(value.function, 0, shape.dtype)
+    apply_mlir_broadcasted_bin_op(:not_equal, %{type: {:u, 8}, shape: shape.dims}, value, zero)
   end
 end

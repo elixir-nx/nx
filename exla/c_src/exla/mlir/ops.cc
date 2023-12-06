@@ -1120,7 +1120,7 @@ ERL_NIF_TERM mlir_broadcast_in_dim(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
 }
 
 ERL_NIF_TERM mlir_concatenate(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 2) {
+  if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
