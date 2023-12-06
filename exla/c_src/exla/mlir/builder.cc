@@ -187,6 +187,21 @@ mlir::DenseIntElementsAttr Int64ToDenseIntElementsAttr(mlir::OpBuilder *builder,
   return llvm::cast<mlir::DenseIntElementsAttr>(dense_attr);
 }
 
+mlir::DenseIntElementsAttr Int64ToDenseIntElementsAttr(mlir::OpBuilder *builder, std::vector<std::pair<int64_t, int64_t>> vec_in) {
+  std::vector<int64_t> vec;
+  int64_t num_pairs = vec_in.size();
+  vec.reserve(num_pairs * 2);
+  for (auto pair : vec_in) {
+    vec.push_back(pair.first);
+    vec.push_back(pair.second);
+  }
+
+  int64_t num_entries[] = {num_pairs, 2};
+  auto type = mlir::RankedTensorType::get(llvm::ArrayRef(num_entries, 2), builder->getIntegerType(64));
+  auto dense_attr = mlir::DenseElementsAttr::get<int64_t>(type, llvm::ArrayRef<int64_t>(vec.data(), vec.size()));
+  return llvm::cast<mlir::DenseIntElementsAttr>(dense_attr);
+}
+
 MLIRFunction::MLIRFunction(MLIRModule *module, std::unique_ptr<mlir::func::FuncOp> func)
     : func_(std::move(func)),
       module_(module) {}
@@ -770,6 +785,44 @@ mlir::Value MLIRFunction::ScatterOp(mlir::Value target, mlir::Value indices, mli
   mlir::Type computation_operand_type = mlir::RankedTensorType::get({}, type.getElementType());
   buildScatterComputation(computation_operand_type, add_or_put, &scatter_op.getUpdateComputation(), builder);
   return scatter_op.getResult(0);
+}
+
+std::vector<mlir::Value> MLIRFunction::WindowReduceOp(
+    MLIRFunction *reducer,
+    std::vector<mlir::Value> init_values,
+    std::vector<mlir::Value> inputs,
+    std::vector<int64_t> window_dimensions,
+    std::vector<int64_t> window_strides,
+    std::vector<int64_t> input_dilations,
+    std::vector<int64_t> window_dilations,
+    std::vector<std::pair<int64_t, int64_t>> padding) {
+  auto builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+
+  mlir::ValueRange init_values_range(init_values);
+  mlir::ValueRange inputs_range(inputs);
+  mlir::DenseIntElementsAttr window_dimensions_attr = Int64ToDenseIntElementsAttr(builder, window_dimensions);
+  mlir::DenseIntElementsAttr window_strides_attr = Int64ToDenseIntElementsAttr(builder, window_strides);
+  mlir::DenseIntElementsAttr input_dilations_attr = Int64ToDenseIntElementsAttr(builder, input_dilations);
+  mlir::DenseIntElementsAttr window_dilations_attr = Int64ToDenseIntElementsAttr(builder, window_dilations);
+  mlir::DenseIntElementsAttr padding_attr = Int64ToDenseIntElementsAttr(builder, padding);
+
+  mlir::stablehlo::ReduceWindowOp reduce_window_op = builder->create<mlir::stablehlo::ReduceWindowOp>(
+      builder->getUnknownLoc(),
+      inputs_range,
+      init_values_range,
+      window_dimensions_attr,
+      window_strides_attr,
+      input_dilations_attr,
+      window_dilations_attr,
+      padding_attr);
+
+  mlir::Region &reduceBody = reduce_window_op.getRegion();
+  mlir::Region &funcBody = reducer->function()->getBody();
+  reduceBody.getBlocks().splice(reduceBody.end(), funcBody.getBlocks());
+
+  mlir::Operation::result_range results = reduce_window_op.getResults();
+  return std::vector<mlir::Value>(results.begin(), results.end());
 }
 
 std::vector<mlir::Value> MLIRFunction::ReduceOp(

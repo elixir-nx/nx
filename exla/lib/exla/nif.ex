@@ -50,6 +50,19 @@ defmodule EXLA.NIF do
   def mlir_reduce(_function, _reducer, _init_values, _inputs, _dimensions),
     do: :erlang.nif_error(:undef)
 
+  def mlir_window_reduce(
+        _function,
+        _reducer,
+        _init_values,
+        _inputs,
+        _window_dimensions,
+        _window_strides,
+        _input_dilations,
+        _window_dilations,
+        _padding
+      ),
+      do: :erlang.nif_error(:undef)
+
   def mlir_map(_function, _mapper, _inputs, _dimensions),
     do: :erlang.nif_error(:undef)
 

@@ -1245,6 +1245,33 @@ defmodule EXLA.Defn do
          :window_reduce,
          [arg, acc, window_dimensions, opts, fun],
          %{type: type},
+         %{builder: %Function{}}
+       ) do
+    padding_config = opts[:padding]
+    strides = opts[:strides]
+    window_dilations = opts[:window_dilations]
+    arg = to_type(arg, type)
+    acc = to_type(acc, type)
+
+    [result] =
+      Value.window_reduce(
+        fun,
+        [acc],
+        [arg],
+        window_dimensions,
+        List.to_tuple(strides),
+        Tuple.duplicate(1, tuple_size(op_shape(arg))),
+        List.to_tuple(window_dilations),
+        padding_config
+      )
+
+    result
+  end
+
+  defp to_operator(
+         :window_reduce,
+         [arg, acc, window_dimensions, opts, fun],
+         %{type: type},
          _state
        ) do
     padding_config = opts[:padding]
