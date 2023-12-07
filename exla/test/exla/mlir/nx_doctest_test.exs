@@ -50,14 +50,7 @@ defmodule EXLA.MLIR.NxDoctestTest do
     tril: 2,
     tri: 3,
     sort: 2,
-    argsort: 2,
-    standard_deviation: 2,
-    variance: 2,
-    covariance: 3,
-    weighted_mean: 3,
-    mean: 2,
-    atan2: 2,
-    linspace: 3
+    argsort: 2
   ]
   @excluded_doctests @argument_count_error_doctests ++
                        @function_clause_error_doctests ++
