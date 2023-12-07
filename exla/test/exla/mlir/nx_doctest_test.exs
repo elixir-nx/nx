@@ -27,7 +27,9 @@ defmodule EXLA.MLIR.NxDoctestTest do
     ifft2: 2,
     ifft: 2,
     fft: 2,
-    fft2: 2
+    fft2: 2,
+    reflect: 2,
+    mode: 2
   ]
   @rounding_error_doctests [
     tan: 1,
@@ -41,19 +43,14 @@ defmodule EXLA.MLIR.NxDoctestTest do
     asinh: 1,
     logsumexp: 2
   ]
-  @argument_count_error_doctests [
-    reflect: 2,
-    mode: 2
-  ]
-  @sign_error_doctests [logical_not: 1, ceil: 1, conjugate: 1]
+  @sign_error_doctests [ceil: 1, conjugate: 1]
   @incorrect_results_error_doctests [
     tril: 2,
     tri: 3,
     sort: 2,
     argsort: 2
   ]
-  @excluded_doctests @argument_count_error_doctests ++
-                       @function_clause_error_doctests ++
+  @excluded_doctests @function_clause_error_doctests ++
                        @rounding_error_doctests ++
                        @sign_error_doctests ++
                        @incorrect_results_error_doctests ++
