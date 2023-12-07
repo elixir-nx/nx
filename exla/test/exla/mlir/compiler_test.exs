@@ -167,10 +167,7 @@ defmodule EXLA.MLIR.CompilerTest do
           if Nx.Type.float?(result_mlir.type) do
             assert result_nx.shape == result_mlir.shape
             assert result_nx.type == result_mlir.type
-            # TO-DO (mlir): remove backend transfer when all_close is fully supported
-            assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir),
-              rtol: 1.0e-4
-            )
+            assert_all_close(result_nx, result_mlir, rtol: 1.0e-4)
           else
             assert_equal(result_nx, result_mlir)
           end
@@ -247,8 +244,7 @@ defmodule EXLA.MLIR.CompilerTest do
 
         assert result_nx.shape == result_mlir.shape
         assert result_nx.type == result_mlir.type
-        # TO-DO (mlir): remove backend transfer when all_close is fully supported
-        assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
+        assert_all_close(result_nx, result_mlir)
       end
     end
 
@@ -262,8 +258,7 @@ defmodule EXLA.MLIR.CompilerTest do
 
       assert result_nx.shape == result_mlir.shape
       assert result_nx.type == result_mlir.type
-      # TO-DO (mlir): remove backend transfer when all_close is fully supported
-      assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
+      assert_all_close(result_nx, result_mlir)
     end
 
     test "is_nan" do
@@ -276,8 +271,7 @@ defmodule EXLA.MLIR.CompilerTest do
 
       assert result_nx.shape == result_mlir.shape
       assert result_nx.type == result_mlir.type
-      # TO-DO (mlir): remove backend transfer when all_close is fully supported
-      assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
+      assert_all_close(result_nx, result_mlir)
     end
 
     test "erf_inf" do
@@ -290,8 +284,7 @@ defmodule EXLA.MLIR.CompilerTest do
 
       assert result_nx.shape == result_mlir.shape
       assert result_nx.type == result_mlir.type
-      # TO-DO (mlir): remove backend transfer when all_close is fully supported
-      assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
+      assert_all_close(result_nx, result_mlir)
     end
 
     for op <- [:count_leading_zeros, :bitwise_not, :population_count] do
@@ -322,8 +315,7 @@ defmodule EXLA.MLIR.CompilerTest do
 
       assert result_nx.shape == result_mlir.shape
       assert result_nx.type == result_mlir.type
-      # TO-DO (mlir): remove backend transfer when all_close is fully supported
-      assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
+      assert_all_close(result_nx, result_mlir)
     end
 
     for op <- [:acos, :atanh, :asin, :asinh] do
@@ -342,8 +334,7 @@ defmodule EXLA.MLIR.CompilerTest do
 
         assert result_nx.shape == result_mlir.shape
         assert result_nx.type == result_mlir.type
-        # TO-DO (mlir): remove backend transfer when all_close is fully supported
-        assert_all_close(Nx.backend_transfer(result_nx), Nx.backend_transfer(result_mlir))
+        assert_all_close(result_nx, result_mlir)
       end
     end
 
