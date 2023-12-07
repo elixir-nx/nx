@@ -69,7 +69,7 @@ defmodule EXLA.NIF do
   def mlir_if(_function, _pred, _output_shape, _implicit_args, _on_true, _on_false),
     do: :erlang.nif_error(:undef)
 
-  def mlir_build(_function, _root, _return?), do: :erlang.nif_error(:undef)
+  def mlir_build(_function, _root), do: :erlang.nif_error(:undef)
 
   def mlir_compile(
         _client,

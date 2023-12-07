@@ -70,19 +70,17 @@ defmodule EXLA.Builder do
     %__MODULE__{ref: ref, parent: builder, name: name}
   end
 
-  def build(root, use_mhlo_return? \\ false)
+  def build(root)
 
-  def build(%Op{} = root, _) do
+  def build(%Op{} = root) do
     shape = EXLA.Op.get_shape(root)
     {:ok, ref} = EXLA.NIF.build(root.builder, root.ref)
     %Computation{ref: ref, output_shape: shape}
   end
 
-  def build(%EXLA.MLIR.Value{function: function, ref: root_ref}, use_mhlo_return?) do
+  def build(%EXLA.MLIR.Value{function: function, ref: root_ref}) do
     %EXLA.MLIR.Function{ref: function_ref} = function
-    return_int = if use_mhlo_return?, do: 1, else: 0
-
-    :ok = EXLA.NIF.mlir_build(function_ref, root_ref, return_int)
+    :ok = EXLA.NIF.mlir_build(function_ref, root_ref)
     function
   end
 end

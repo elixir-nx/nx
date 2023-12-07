@@ -1112,14 +1112,9 @@ ERL_NIF_TERM MLIRFunction::ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_T
   return exla::nif::error(env, "invalid type received");
 }
 
-void MLIRFunction::Build(mlir::Value root, bool use_stablehlo_return) {
+void MLIRFunction::Build(mlir::Value root) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-
-  if (use_stablehlo_return) {
-    module_->builder()->create<mlir::stablehlo::ReturnOp>(module_->builder()->getUnknownLoc(), root);
-  } else {
-    module_->builder()->create<mlir::func::ReturnOp>(module_->builder()->getUnknownLoc(), root);
-  }
+  module_->builder()->create<mlir::stablehlo::ReturnOp>(module_->builder()->getUnknownLoc(), root);
 }
 
 MLIRModule::MLIRModule() {
