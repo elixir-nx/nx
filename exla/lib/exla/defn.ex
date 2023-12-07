@@ -726,9 +726,15 @@ defmodule EXLA.Defn do
     iota_shape = EXLA.Shape.make_shape(iota_type, shape)
     rank = tuple_size(shape)
 
-    i0 = EXLA.Op.iota(state.builder, iota_shape, rank - 2)
-    i1 = EXLA.Op.iota(state.builder, iota_shape, rank - 1)
-    to_type(EXLA.Op.equal(i0, i1), type)
+    mod =
+      case state.builder do
+        %Function{} -> Value
+        _ -> EXLA.Op
+      end
+
+    i0 = mod.iota(state.builder, iota_shape, rank - 2)
+    i1 = mod.iota(state.builder, iota_shape, rank - 1)
+    to_type(mod.equal(i0, i1), type)
   end
 
   ## to_operator shape
@@ -1046,9 +1052,8 @@ defmodule EXLA.Defn do
     apply(EXLA.Op, op, [to_type(left, type), to_type(right, type), dims])
   end
 
-  defp to_operator(:quotient, [left, right], %{type: type}, _state) do
-    dims = broadcast_axes(op_shape(left), op_shape(right))
-    apply(EXLA.Op, :divide, [to_type(left, type), to_type(right, type), dims])
+  defp to_operator(:quotient, [left, right], ans, state) do
+    to_operator(:divide, [to_type(left, ans.type), to_type(right, ans.type)], ans, state)
   end
 
   @bin_comp_op [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
@@ -2262,13 +2267,19 @@ defmodule EXLA.Defn do
   defp to_window_aggregate(op, type, arg, initial, window_dimensions, opts, state) do
     arg = to_type(arg, type)
 
+    mod =
+      case state.builder do
+        %Function{} -> Value
+        _ -> EXLA.Op
+      end
+
     acc =
       case initial do
-        %EXLA.Op{} = initial ->
+        %^mod{} = initial ->
           initial
 
         initial when is_number(initial) ->
-          EXLA.Op.constant_r0(state.builder, initial, type)
+          mod.constant_r0(state.builder, initial, type)
       end
 
     args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
@@ -2276,13 +2287,43 @@ defmodule EXLA.Defn do
     # returns :nan but :infinity + :nan returns :infinity.
     # So we want to keep the current value as first argument
     # to preserve such properties.
-    comp = op_computation(op, args, :unused, state, &Enum.reverse/1)
+    comp =
+      op_computation(
+        op,
+        args,
+        %{type: type, shape: {}},
+        state,
+        &Enum.reverse/1
+      )
 
     strides = opts[:strides]
     padding = opts[:padding]
     window_dilations = opts[:window_dilations]
 
-    EXLA.Op.window_reduce(arg, acc, comp, window_dimensions, strides, window_dilations, padding)
+    case mod do
+      Value ->
+        Value.window_reduce(
+          comp,
+          [acc],
+          [arg],
+          window_dimensions,
+          List.to_tuple(strides),
+          Tuple.duplicate(1, tuple_size(op_shape(arg))),
+          List.to_tuple(window_dilations),
+          padding
+        )
+
+      _ ->
+        EXLA.Op.window_reduce(
+          arg,
+          acc,
+          comp,
+          window_dimensions,
+          strides,
+          window_dilations,
+          padding
+        )
+    end
   end
 
   ## Cond

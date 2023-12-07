@@ -315,7 +315,7 @@ mlir::Value compare_and_return_bool(mlir::OpBuilder *builder, mlir::Value lhs, m
   }
 
   auto op = builder->create<mlir::stablehlo::CompareOp>(builder->getUnknownLoc(), lhs, rhs, direction, comparison_type_attr);
-  mlir::Type mlir_bool = builder->getIntegerType(8, false);
+  mlir::Type mlir_bool = builder->getIntegerType(1);
   return builder->create<mlir::stablehlo::ConvertOp>(builder->getUnknownLoc(), op, mlir_bool);
 }
 
