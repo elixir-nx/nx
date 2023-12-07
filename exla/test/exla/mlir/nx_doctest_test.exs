@@ -8,10 +8,6 @@ defmodule EXLA.MLIR.NxDoctestTest do
 
   @function_clause_error_doctests [
     top_k: 2,
-    ifft2: 2,
-    ifft: 2,
-    fft: 2,
-    fft2: 2,
     mode: 2
   ]
   # These tests fail due to the fact that the order of NaNs is
