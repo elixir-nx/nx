@@ -6,17 +6,6 @@ defmodule EXLA.MLIR.NxDoctestTest do
     Nx.Defn.default_options(compiler: EXLA, compiler_mode: :mlir)
   end
 
-  @function_clause_error_doctests [
-    top_k: 2,
-    mode: 2
-  ]
-  # These tests fail due to the fact that the order of NaNs is
-  # not being properly calculated in SortOp
-  @nan_order_error_doctests [
-    sort: 2,
-    argsort: 2
-  ]
-
   # Rounding error doctests are tests that are expected to fail due to rounding errors.
   # This is a permanent category.
   @rounding_error_doctests [
@@ -35,10 +24,8 @@ defmodule EXLA.MLIR.NxDoctestTest do
   # instead of 0.0. This is a permanent category.
   @sign_error_doctests [ceil: 1, conjugate: 1]
 
-  @excluded_doctests @function_clause_error_doctests ++
-                       @rounding_error_doctests ++
+  @excluded_doctests @rounding_error_doctests ++
                        @sign_error_doctests ++
-                       @nan_order_error_doctests ++
                        [:moduledoc]
 
   doctest Nx, except: @excluded_doctests

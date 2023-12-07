@@ -586,6 +586,29 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(
          :optional,
+         %T{data: %Expr{args: [%{data: %{op: :top_k, args: [tensor, opts]}}, _expr, _callback]}} =
+           _out,
+         state,
+         cache
+       ) do
+    {tensor, cache} = recur_operator(tensor, state, cache)
+
+    result =
+      case state.builder do
+        %Function{} ->
+          tensor
+          |> Value.top_k(opts[:k])
+          |> Value.tuple()
+
+        %EXLA.Builder{} ->
+          EXLA.Op.top_k(tensor, opts[:k])
+      end
+
+    {result, cache}
+  end
+
+  defp cached_recur_operator(
+         :optional,
          %T{data: %Expr{args: [%{data: %{op: :fft2, args: [tensor, opts]}}, _expr, _callback]}} =
            out,
          state,
@@ -1649,11 +1672,7 @@ defmodule EXLA.Defn do
     EXLA.Op.select(EXLA.Op.less_equal(iota_one, iota_zero), cholesky, zeros)
   end
 
-  defp to_operator(:sort, [%Value{} = tensor, opts], _ans, _state) do
-    Value.sort(tensor, opts[:axis], opts[:direction], opts[:stable] == true)
-  end
-
-  defp to_operator(:sort, [tensor, opts], ans, state) do
+  defp to_operator(:sort, [%mod{} = tensor, opts], ans, state) do
     dimension = opts[:axis]
 
     op =
@@ -1665,17 +1684,7 @@ defmodule EXLA.Defn do
     args = [%{type: ans.type, shape: {}}, %{type: ans.type, shape: {}}]
 
     comp = sort_computation(op, ans.type, args, state)
-    EXLA.Op.sort(tensor, comp, dimension, opts[:stable] == true)
-  end
-
-  defp to_operator(:argsort, [%Value{} = tensor, opts], ans, _state) do
-    dimension = opts[:axis]
-    stable = opts[:stable] == true
-    dims = op_shape(tensor)
-    iota_shape = EXLA.Shape.make_shape(ans.type, dims)
-    iota = EXLA.Lib.iota(tensor.function, iota_shape, dimension)
-    [_, arg] = Value.sort([tensor, iota], dimension, opts[:direction], stable)
-    arg
+    mod.sort(tensor, comp, dimension, opts[:stable] == true)
   end
 
   defp to_operator(:argsort, [tensor, opts], ans, state) do
@@ -1698,6 +1707,7 @@ defmodule EXLA.Defn do
     ]
 
     comp = sort_computation(op, type, args, state)
+
     EXLA.Lib.argsort(state.builder, tensor, dimension, stable, comp, ans.type)
   end
 
@@ -1862,6 +1872,42 @@ defmodule EXLA.Defn do
   defp put_outfeed(cache, outfeed), do: %{cache | __MODULE__ => outfeed}
 
   ## Computation helpers
+
+  defp sort_computation(op, type, args, %{builder: %EXLA.MLIR.Function{} = builder}) do
+    %{module: module, name: name} = subbuilder(builder, Atom.to_string(op))
+
+    arg_shapes =
+      Enum.with_index(args, fn arg, i ->
+        {"p#{i}", computation_arg_shape(arg)}
+      end)
+
+    function =
+      EXLA.Builder.new(
+        {module, name},
+        arg_shapes,
+        struct(Nx.Tensor, %{type: {:pred, 8}, shape: {}}),
+        :mlir,
+        true
+      )
+
+    [lhs, rhs | _] = EXLA.MLIR.Function.get_arguments(function)
+
+    op =
+      cond do
+        Nx.Type.integer?(type) ->
+          apply(Value, op, [lhs, rhs])
+
+        op == :less ->
+          is_nan = Value.is_nan(rhs)
+          Value.bitwise_or(is_nan, Value.less(lhs, rhs))
+
+        op == :greater ->
+          is_nan = Value.is_nan(lhs)
+          Value.bitwise_or(is_nan, Value.greater(lhs, rhs))
+      end
+
+    EXLA.Builder.build(op)
+  end
 
   defp sort_computation(op, type, args, state) do
     subbuilder = subbuilder(state.builder, Atom.to_string(op))

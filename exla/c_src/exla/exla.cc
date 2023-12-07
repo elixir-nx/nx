@@ -678,6 +678,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_sqrt", 2, mlir_sqrt},
     {"mlir_cbrt", 2, mlir_cbrt},
     {"mlir_iota", 3, mlir_iota},
+    {"mlir_top_k", 3, mlir_top_k},
     {"mlir_sort", 5, mlir_sort},
     {"mlir_scatter", 9, mlir_scatter},
     {"mlir_select_and_scatter", 8, mlir_select_and_scatter},

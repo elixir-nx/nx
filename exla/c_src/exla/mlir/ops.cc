@@ -716,6 +716,39 @@ ERL_NIF_TERM mlir_convert(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
 }
+ERL_NIF_TERM mlir_top_k(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* operand;
+  int64_t k;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get(env, argv[1], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get(env, argv[2], &k)) {
+    return exla::nif::error(env, "Unable to get k.");
+  }
+
+  std::vector<mlir::Value> res = (*function)->TopKOp(*operand, k);
+  size_t n = res.size();
+
+  std::vector<ERL_NIF_TERM> nif_terms;
+  nif_terms.reserve(n);
+
+  for (size_t i = 0; i < n; i++) {
+    nif_terms[i] = exla::nif::make<mlir::Value>(env, res[i]);
+  }
+
+  auto data = nif_terms.data();
+  auto list = enif_make_list_from_array(env, &data[0], n);
+  return exla::nif::ok(env, list);
+}
 
 ERL_NIF_TERM mlir_sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 5) {
@@ -725,7 +758,7 @@ ERL_NIF_TERM mlir_sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   exla::MLIRFunction** function;
   std::vector<mlir::Value> operands;
   exla::int64 axis;
-  bool desc;
+  exla::MLIRFunction** comparator;
   bool stable;
 
   if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
@@ -737,14 +770,14 @@ ERL_NIF_TERM mlir_sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get(env, argv[2], &axis)) {
     return exla::nif::error(env, "Unable to get axis.");
   }
-  if (!exla::nif::get(env, argv[3], &desc)) {
-    return exla::nif::error(env, "Unable to get desc.");
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[3], comparator)) {
+    return exla::nif::error(env, "Unable to get comparator.");
   }
   if (!exla::nif::get(env, argv[4], &stable)) {
     return exla::nif::error(env, "Unable to get stable flag.");
   }
 
-  std::vector<mlir::Value> res = (*function)->SortOp(operands, axis, desc, stable);
+  std::vector<mlir::Value> res = (*function)->SortOp(*comparator, operands, axis, stable);
   size_t n = res.size();
 
   std::vector<ERL_NIF_TERM> nif_terms;
