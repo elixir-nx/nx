@@ -26,7 +26,7 @@ defmodule EXLA.MLIR.NxDoctestTest do
 
   @excluded_doctests @rounding_error_doctests ++
                        @sign_error_doctests ++
-                       [:moduledoc] ++ [top_k: 2]
+                       [:moduledoc]
 
   doctest Nx, except: @excluded_doctests
 end

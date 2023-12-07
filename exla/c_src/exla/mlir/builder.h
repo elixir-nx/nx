@@ -89,6 +89,7 @@ class MLIRFunction {
   mlir::Value ReshapeOp(mlir::Value operand, std::vector<int64_t> target_shape);
   mlir::Value ReverseOp(mlir::Value operand, std::vector<int64_t> dims);
   mlir::Value SliceOp(mlir::Value operand, std::vector<int64_t> starts, std::vector<int64_t> limites, std::vector<int64_t> strides);
+  std::vector<mlir::Value> TopKOp(mlir::Value operand, int64_t k);
   std::vector<mlir::Value> SortOp(MLIRFunction *comparator, std::vector<mlir::Value> operand, int64_t dim, bool status);
   mlir::Value DynamicSliceOp(mlir::Value operand, std::vector<mlir::Value> starts, std::vector<int64_t> lengths);
   mlir::Value BroadcastInDimOp(mlir::Value operand, xla::Shape result_shape, std::vector<int64_t> axes);

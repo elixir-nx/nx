@@ -645,23 +645,17 @@ static void buildSortComparisonBody(llvm::ArrayRef<mlir::Type> elementTypes,
   builder->create<mlir::stablehlo::ReturnOp>(loc, compare);
 }
 
-std::vector<mlir::Value> MLIRFunction::SortOp(MLIRFunction *comparator, std::vector<mlir::Value> operands, int64_t dim, bool stable) {
-  module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  std::vector<mlir::Type> element_types;
-  element_types.reserve(operands.size());
-  std::optional<mlir::StringRef> compare_type = std::nullopt;
-
-  for (auto element : operands) {
-    mlir::RankedTensorType ranked_type = llvm::cast<mlir::RankedTensorType>(element.getType());
-    mlir::Type type = mlir::RankedTensorType::get({}, ranked_type.getElementType());
-    element_types.push_back(type);
-    if (type.isa<mlir::FloatType>()) {
-      compare_type.emplace("TOTALORDER");
-    }
-  }
-
+std::vector<mlir::Value> MLIRFunction::TopKOp(mlir::Value operand, int64_t k) {
   mlir::OpBuilder *builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
+  mlir::chlo::TopKOp top_k_op = builder->create<mlir::chlo::TopKOp>(builder->getUnknownLoc(), operand, k);
+  mlir::Operation::result_range results = top_k_op.getResults();
+  return std::vector<mlir::Value>(results.begin(), results.end());
+}
 
+std::vector<mlir::Value> MLIRFunction::SortOp(MLIRFunction *comparator, std::vector<mlir::Value> operands, int64_t dim, bool stable) {
+  mlir::OpBuilder *builder = module_->builder();
+  builder->setInsertionPointToEnd(&func_->getBody().back());
   mlir::ValueRange value_range(operands);
   mlir::stablehlo::SortOp sort_op = builder->create<mlir::stablehlo::SortOp>(
       builder->getUnknownLoc(),

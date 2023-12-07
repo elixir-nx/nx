@@ -586,6 +586,29 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(
          :optional,
+         %T{data: %Expr{args: [%{data: %{op: :top_k, args: [tensor, opts]}}, _expr, _callback]}} =
+           out,
+         state,
+         cache
+       ) do
+    {tensor, cache} = recur_operator(tensor, state, cache)
+
+    result =
+      case state.builder do
+        %Function{} ->
+          tensor
+          |> Value.top_k(opts[:k])
+          |> Value.tuple()
+
+        %EXLA.Op{} ->
+          EXLA.Op.top_k(tensor, opts[:k])
+      end
+
+    {result, cache}
+  end
+
+  defp cached_recur_operator(
+         :optional,
          %T{data: %Expr{args: [%{data: %{op: :fft2, args: [tensor, opts]}}, _expr, _callback]}} =
            out,
          state,
@@ -1684,6 +1707,7 @@ defmodule EXLA.Defn do
     ]
 
     comp = sort_computation(op, type, args, state)
+
     EXLA.Lib.argsort(state.builder, tensor, dimension, stable, comp, ans.type)
   end
 
