@@ -80,9 +80,9 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def tuple(%EXLA.MLIR.Function{} = function, elements) when is_list(elements) do
+  def tuple(%EXLA.MLIR.Function{}, elements) when is_list(elements) do
     elements
-    |> Enum.map(fn %{function: ^function} = e -> e end)
+    |> List.flatten()
     |> EXLA.MLIR.Value.tuple()
   end
 

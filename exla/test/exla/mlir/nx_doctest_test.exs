@@ -8,13 +8,6 @@ defmodule EXLA.MLIR.NxDoctestTest do
 
   @function_clause_error_doctests [
     top_k: 2,
-    reduce_max: 2,
-    reduce_min: 2,
-    window_sum: 3,
-    window_mean: 3,
-    window_product: 3,
-    window_min: 3,
-    window_max: 3,
     ifft2: 2,
     ifft: 2,
     fft: 2,
