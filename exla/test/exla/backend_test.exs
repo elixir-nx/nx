@@ -20,12 +20,10 @@ defmodule EXLA.BackendTest do
     asin: 1,
     asinh: 1,
     atanh: 1,
-    ceil: 1,
     sigmoid: 1,
     fft: 2,
     ifft: 2,
-    logsumexp: 2,
-    conjugate: 1
+    logsumexp: 2
   ]
 
   @temporarily_broken_doctests [

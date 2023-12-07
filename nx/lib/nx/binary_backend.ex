@@ -831,7 +831,10 @@ defmodule Nx.BinaryBackend do
   def abs(out, tensor), do: element_wise_unary_op(out, tensor, &Complex.abs/1)
 
   @impl true
-  def conjugate(out, tensor), do: element_wise_unary_op(out, tensor, &Complex.conjugate/1)
+  def conjugate(out, tensor), do: element_wise_unary_op(out, tensor, &conjugate_fun/1)
+
+  defp conjugate_fun(n) when is_number(n), do: Complex.new(n, -0.0)
+  defp conjugate_fun(z), do: Complex.conjugate(z)
 
   @impl true
   def real(%{type: {_, component_size}} = out, %{type: {:c, _}} = tensor) do
@@ -900,10 +903,10 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def ceil(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.ceil/1)
+  def ceil(out, tensor), do: element_wise_unary_op(out, tensor, &:math.ceil/1)
 
   @impl true
-  def floor(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.floor/1)
+  def floor(out, tensor), do: element_wise_unary_op(out, tensor, &:math.floor/1)
 
   @impl true
   def negate(out, tensor), do: element_wise_unary_op(out, tensor, &Complex.negate/1)

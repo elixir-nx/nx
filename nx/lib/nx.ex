@@ -8118,7 +8118,7 @@ defmodule Nx do
        iex> Nx.conjugate(1)
        #Nx.Tensor<
          c64
-         1.0+0.0i
+         1.0-0.0i
        >
 
        iex> Nx.conjugate(Nx.tensor([Complex.new(1, 2), Complex.new(2, -4)]))
@@ -8443,8 +8443,13 @@ defmodule Nx do
     end)
   end
 
-  for {name, desc} <- [floor: "floor", ceil: "ceil", round: "round (away from zero)"] do
-    [res1, res2, res3, res4] = Enum.map([-1.5, -0.5, 0.5, 1.5], &apply(:erlang, name, [&1]))
+  for {name, {desc, fun}} <- [
+        floor: {"floor", &:math.floor/1},
+        ceil: {"ceil", &:math.ceil/1},
+        round: {"round (away from zero)", &:erlang.round/1}
+      ] do
+    [res1, res2, res3, res4] =
+      Enum.map([-1.5, -0.5, 0.5, 1.5], fn x -> fun.(x) * 1.0 end)
 
     @doc """
     Calculates the #{desc} of each element in the tensor.
@@ -8464,7 +8469,7 @@ defmodule Nx do
         iex> Nx.#{name}(Nx.tensor([-1.5, -0.5, 0.5, 1.5], names: [:x]))
         #Nx.Tensor<
           f32[x: 4]
-          [#{res1}.0, #{res2}.0, #{res3}.0, #{res4}.0]
+          [#{res1}, #{res2}, #{res3}, #{res4}]
         >
 
     """

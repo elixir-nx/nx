@@ -20,13 +20,8 @@ defmodule EXLA.MLIR.NxDoctestTest do
     asinh: 1,
     logsumexp: 2
   ]
-  # Sign error doctests are tests that are expected to fail due them returning -0.0
-  # instead of 0.0. This is a permanent category.
-  @sign_error_doctests [ceil: 1, conjugate: 1]
 
-  @excluded_doctests @rounding_error_doctests ++
-                       @sign_error_doctests ++
-                       [:moduledoc]
+  @excluded_doctests @rounding_error_doctests ++ [:moduledoc]
 
   doctest Nx, except: @excluded_doctests
 end

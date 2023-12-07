@@ -911,8 +911,8 @@ defmodule Torchx.Backend do
   def conjugate(out, tensor) do
     tensor
     |> from_nx()
-    |> Torchx.conjugate()
     |> Torchx.to_type(to_torch_type(out.type))
+    |> Torchx.conjugate()
     |> to_nx(out)
   end
 
