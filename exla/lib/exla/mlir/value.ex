@@ -56,6 +56,10 @@ defmodule EXLA.MLIR.Value do
     %Value{op | ref: ref}
   end
 
+  def transpose(%Value{} = op, axes) when is_tuple(axes) do
+    transpose(op, Tuple.to_list(axes))
+  end
+
   def transpose(%Value{function: %Function{} = func} = op, axes) do
     ref = EXLA.NIF.mlir_transpose(func.ref, op.ref, axes) |> unwrap!()
     %Value{op | ref: ref}
