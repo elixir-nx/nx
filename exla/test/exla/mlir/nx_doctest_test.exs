@@ -47,7 +47,6 @@ defmodule EXLA.MLIR.NxDoctestTest do
   ]
   @sign_error_doctests [logical_not: 1, ceil: 1, conjugate: 1]
   @incorrect_results_error_doctests [
-    is_nan: 1,
     tril: 2,
     tri: 3,
     sort: 2,
