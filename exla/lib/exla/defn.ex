@@ -2568,11 +2568,20 @@ defmodule EXLA.Defn do
       |> Value.broadcast_in_dim(broadcast_shape, left_dims)
 
     right =
-      right |> to_type(type) |> Value.broadcast_in_dim(broadcast_shape, right_dims)
+      right
+      |> to_type(type)
+      |> Value.broadcast_in_dim(broadcast_shape, right_dims)
+
+    {left, right} =
+      if not Nx.Type.float?(type) and Nx.Type.float?(out.type) do
+        {to_type(left, out.type), to_type(right, out.type)}
+      else
+        {left, right}
+      end
 
     Value
     |> apply(op, [left, right])
-    |> to_type(out_shape.dtype)
+    |> to_type(out.type)
   end
 
   defp collect_while_results(flat_list, expected_container) do

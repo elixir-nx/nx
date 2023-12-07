@@ -55,7 +55,6 @@ defmodule EXLA.MLIR.NxDoctestTest do
     variance: 2,
     covariance: 3,
     weighted_mean: 3,
-    divide: 2,
     mean: 2,
     atan2: 2,
     linspace: 3
