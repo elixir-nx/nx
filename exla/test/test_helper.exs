@@ -1,6 +1,14 @@
 target = System.get_env("EXLA_TARGET", "host")
 client = EXLAHelpers.client()
-Nx.Defn.global_default_options(compiler: EXLA)
+
+compiler_mode =
+  case System.get_env("EXLA_COMPILER_MODE", "xla") do
+    "xla" -> :xla
+    "mlir" -> :mlir
+    _ -> raise "Invalid EXLA_COMPILER_MODE"
+  end
+
+Nx.Defn.global_default_options(compiler: EXLA, compiler_mode: compiler_mode)
 
 exclude_multi_device =
   if client.device_count > 1 and client.platform == :host, do: [], else: [:multi_device]
@@ -10,6 +18,13 @@ exclude =
     :tpu -> [:unsupported_dilated_window_reduce, :unsupported_64_bit_op]
     :host -> []
     _ -> [:conditional_inside_map_reduce]
+  end
+
+exclude =
+  if compiler_mode == :mlir do
+    [:mlir_not_supported_yet | exclude]
+  else
+    exclude
   end
 
 if client.platform == :host and client.device_count == 1 and System.schedulers_online() > 1 do
