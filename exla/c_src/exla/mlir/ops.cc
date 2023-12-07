@@ -725,7 +725,7 @@ ERL_NIF_TERM mlir_sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   exla::MLIRFunction** function;
   std::vector<mlir::Value> operands;
   exla::int64 axis;
-  bool desc;
+  exla::MLIRFunction** comparator;
   bool stable;
 
   if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
@@ -737,14 +737,14 @@ ERL_NIF_TERM mlir_sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get(env, argv[2], &axis)) {
     return exla::nif::error(env, "Unable to get axis.");
   }
-  if (!exla::nif::get(env, argv[3], &desc)) {
-    return exla::nif::error(env, "Unable to get desc.");
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[3], comparator)) {
+    return exla::nif::error(env, "Unable to get comparator.");
   }
   if (!exla::nif::get(env, argv[4], &stable)) {
     return exla::nif::error(env, "Unable to get stable flag.");
   }
 
-  std::vector<mlir::Value> res = (*function)->SortOp(operands, axis, desc, stable);
+  std::vector<mlir::Value> res = (*function)->SortOp(*comparator, operands, axis, stable);
   size_t n = res.size();
 
   std::vector<ERL_NIF_TERM> nif_terms;

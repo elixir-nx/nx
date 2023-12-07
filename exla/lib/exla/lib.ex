@@ -256,6 +256,15 @@ defmodule EXLA.Lib do
   @doc """
   Sorts a tensor and returns the corresponding indices in the new positions.
   """
+  def argsort(builder, %Value{} = operand, dimension, stable, comparator, iota_type) do
+    shape = Value.get_shape(operand)
+    iota = iota(builder, Shape.make_shape(iota_type, shape.dims), dimension)
+
+    [_, result] = Value.sort([operand, iota], comparator, dimension, stable)
+
+    result
+  end
+
   def argsort(builder, operand, dimension, stable, comparator, iota_type) do
     shape = EXLA.Op.get_shape(operand)
     iota = iota(builder, Shape.make_shape(iota_type, shape.dims), dimension)
