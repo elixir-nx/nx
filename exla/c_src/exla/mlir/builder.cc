@@ -544,16 +544,34 @@ mlir::Value MLIRFunction::IsNanOp(mlir::Value operand) {
   module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
   mlir::Type mlir_bool = module_->builder()->getI1Type();
 
-  mlir::Value is_finite_op = module_->builder()->create<mlir::stablehlo::IsFiniteOp>(module_->builder()->getUnknownLoc(), operand);
-  is_finite_op = module_->builder()->create<mlir::stablehlo::ConvertOp>(module_->builder()->getUnknownLoc(), is_finite_op, mlir_bool);
+  mlir::RankedTensorType type = llvm::cast<mlir::RankedTensorType>(operand.getType());
+  mlir::Type element_type = type.getElementType();
 
-  mlir::Value is_inf_op = this->IsInfOp(operand);
-  is_inf_op = module_->builder()->create<mlir::stablehlo::ConvertOp>(module_->builder()->getUnknownLoc(), is_inf_op, mlir_bool);
+  mlir::Value result;
 
-  mlir::Value is_nan_op = this->BitwiseAndOp(this->BitwiseNotOp(is_inf_op), this->BitwiseNotOp(is_finite_op));
+  if (element_type.isa<mlir::ComplexType>()) {
+    auto real_op = module_->builder()->create<mlir::stablehlo::RealOp>(module_->builder()->getUnknownLoc(), operand);
+    auto imag_op = module_->builder()->create<mlir::stablehlo::ImagOp>(module_->builder()->getUnknownLoc(), operand);
+
+    auto is_inf_real_op = this->ConvertOp(this->IsNanOp(real_op), element_type);
+    auto is_inf_imag_op = this->ConvertOp(this->IsNanOp(imag_op), element_type);
+    result = this->AddOp(is_inf_real_op, is_inf_imag_op);
+  } else if (element_type.isa<mlir::IntegerType>()) {
+    // integers are never nan
+    return this->NotEqualOp(operand, operand);
+  } else {
+    mlir::Value is_finite_op = module_->builder()->create<mlir::stablehlo::IsFiniteOp>(module_->builder()->getUnknownLoc(), operand);
+    is_finite_op = module_->builder()->create<mlir::stablehlo::ConvertOp>(module_->builder()->getUnknownLoc(), is_finite_op, mlir_bool);
+
+    mlir::Value is_inf_op = this->IsInfOp(operand);
+    is_inf_op = module_->builder()->create<mlir::stablehlo::ConvertOp>(module_->builder()->getUnknownLoc(), is_inf_op, mlir_bool);
+
+    result = this->BitwiseAndOp(this->BitwiseNotOp(is_inf_op), this->BitwiseNotOp(is_finite_op));
+  }
+
   mlir_bool = module_->builder()->getIntegerType(8, false);
 
-  return module_->builder()->create<mlir::stablehlo::ConvertOp>(module_->builder()->getUnknownLoc(), is_nan_op, mlir_bool);
+  return module_->builder()->create<mlir::stablehlo::ConvertOp>(module_->builder()->getUnknownLoc(), result, mlir_bool);
 }
 mlir::Value MLIRFunction::RsqrtOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
