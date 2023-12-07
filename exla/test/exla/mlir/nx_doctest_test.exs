@@ -7,7 +7,6 @@ defmodule EXLA.MLIR.NxDoctestTest do
   end
 
   @function_clause_error_doctests [
-    median: 2,
     top_k: 2,
     reduce_max: 2,
     reduce_min: 2,
@@ -20,12 +19,10 @@ defmodule EXLA.MLIR.NxDoctestTest do
     argmax: 2,
     quotient: 2,
     eye: 2,
-    iota: 2,
     ifft2: 2,
     ifft: 2,
     fft: 2,
     fft2: 2,
-    reflect: 2,
     mode: 2
   ]
   @rounding_error_doctests [
@@ -42,8 +39,6 @@ defmodule EXLA.MLIR.NxDoctestTest do
   ]
   @sign_error_doctests [ceil: 1, conjugate: 1]
   @incorrect_results_error_doctests [
-    tril: 2,
-    tri: 3,
     sort: 2,
     argsort: 2
   ]
