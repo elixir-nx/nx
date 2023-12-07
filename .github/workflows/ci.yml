@@ -6,7 +6,7 @@ on:
   pull_request:
 jobs:
   main:
-    name: Linux (${{ matrix.working_directory }}, ${{ matrix.elixir }}, ${{ matrix.otp }}${{ matrix.use_mlir && format(', {0}', matrix.exla_compiler_mode) }})
+    name: Linux (${{ matrix.working_directory }}, ${{ matrix.elixir }}, ${{ matrix.otp }}${{ matrix.use_mlir && ', mlir' }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
