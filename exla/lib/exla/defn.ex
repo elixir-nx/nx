@@ -1527,6 +1527,28 @@ defmodule EXLA.Defn do
     EXLA.Op.dynamic_update_slice(tensor, slice, start_indices)
   end
 
+  defp to_operator(:take, [%Value{} = tensor, indices, axis], _ans, _state) do
+    tensor_rank = tensor |> op_shape() |> tuple_size()
+    indices_rank = indices |> op_shape() |> tuple_size()
+    result_rank = tensor_rank - 1 + indices_rank
+
+    index_vector_dim = indices_rank
+    slice_sizes = tensor |> op_shape() |> put_elem(axis, 1) |> Tuple.to_list()
+    offset_dims = result_rank |> axes_for_rank() |> delete_slice(axis, indices_rank)
+    collapsed_slice_dims = [axis]
+    start_index_map = [axis]
+
+    Value.gather(
+      tensor,
+      indices,
+      slice_sizes,
+      offset_dims,
+      collapsed_slice_dims,
+      start_index_map,
+      index_vector_dim
+    )
+  end
+
   defp to_operator(:take, [tensor, indices, axis], _ans, _state) do
     tensor_rank = tensor |> op_shape() |> tuple_size()
     indices_rank = indices |> op_shape() |> tuple_size()
@@ -1549,7 +1571,7 @@ defmodule EXLA.Defn do
     )
   end
 
-  defp to_operator(:take_along_axis, [tensor, indices, axis], _ans, state) do
+  defp to_operator(:take_along_axis, [%mod{} = tensor, indices, axis], _ans, state) do
     indices_shape = op_shape(indices)
     indices_rank = tuple_size(indices_shape)
 
@@ -1561,11 +1583,11 @@ defmodule EXLA.Defn do
     collapsed_slice_dims = Enum.to_list(axes_range)
     start_index_map = Enum.to_list(axes_range)
 
-    indices_exla_shape = EXLA.Op.get_shape(indices)
+    indices_exla_shape = mod.get_shape(indices)
 
     iotas =
       Enum.map(axes_range, fn axis ->
-        EXLA.Op.iota(state.builder, indices_exla_shape, axis)
+        mod.iota(state.builder, indices_exla_shape, axis)
       end)
 
     new_axis_shape = Tuple.append(indices_shape, 1)
@@ -1573,32 +1595,48 @@ defmodule EXLA.Defn do
     indices =
       iotas
       |> List.replace_at(axis, indices)
-      |> Enum.map(&EXLA.Op.reshape(&1, new_axis_shape))
-      |> EXLA.Op.concatenate(indices_rank)
+      |> Enum.map(&mod.reshape(&1, new_axis_shape))
+      |> mod.concatenate(indices_rank)
 
-    EXLA.Op.gather(
-      tensor,
-      indices,
-      index_vector_dim,
-      slice_sizes,
-      offset_dims,
-      collapsed_slice_dims,
-      start_index_map
-    )
+    case mod do
+      Value ->
+        Value.gather(
+          tensor,
+          indices,
+          slice_sizes,
+          offset_dims,
+          collapsed_slice_dims,
+          start_index_map,
+          index_vector_dim
+        )
+
+      _ ->
+        EXLA.Op.gather(
+          tensor,
+          indices,
+          index_vector_dim,
+          slice_sizes,
+          offset_dims,
+          collapsed_slice_dims,
+          start_index_map
+        )
+    end
   end
 
   defp to_operator(:gather, [%Value{} = tensor, indices, opts], _ans, _state) do
     axes = Keyword.fetch!(opts, :axes)
     tensor_shape = op_shape(tensor)
     tensor_rank = tuple_size(tensor_shape)
+    tensor_axes = axes_for_rank(tensor_rank)
     index_vector_dim = tuple_size(op_shape(indices)) - 1
 
     slice_sizes =
-      for i <- 0..(tensor_rank - 1) do
+      for i <- tensor_axes do
         if i in axes, do: 1, else: elem(tensor_shape, i)
       end
 
-    offset_dims = axes_for_rank(tensor_rank) -- axes
+    batch_size = tensor_rank - length(axes)
+    offset_dims = count_up(batch_size, batch_size)
     Value.gather(tensor, indices, slice_sizes, offset_dims, axes, axes, index_vector_dim)
   end
 
