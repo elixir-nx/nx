@@ -117,7 +117,7 @@ class MLIRFunction {
   std::vector<mlir::Value> ReturnOp(std::vector<mlir::Value> values);
   int get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *type);
 
-  void Build(mlir::Value root, bool use_mhlo_return);
+  void Build(mlir::Value root);
 
   llvm::MutableArrayRef<mlir::BlockArgument> get_arguments() { return func_->getBody().front().getArguments(); }
 

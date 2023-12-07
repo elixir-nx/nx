@@ -1920,7 +1920,7 @@ defmodule EXLA.Defn do
 
     args = EXLA.MLIR.Function.get_arguments(function)
 
-    EXLA.Builder.build(apply(Value, op, prepare_args.(args)), true)
+    EXLA.Builder.build(apply(Value, op, prepare_args.(args)))
   end
 
   defp op_computation(op, args, _out, state, prepare_args) do
@@ -1962,7 +1962,7 @@ defmodule EXLA.Defn do
     }
 
     {res, _} = recur_composite(expr, state, no_token_cache())
-    EXLA.Builder.build(to_type(res, type), true)
+    EXLA.Builder.build(to_type(res, type))
   end
 
   defp fun_computation(name, args, expr, type, state) do
@@ -2084,7 +2084,7 @@ defmodule EXLA.Defn do
     {res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
     res = Value.tuple([arg_token, res])
 
-    {EXLA.Builder.build(res, true), merge_outfeed(cache, comp_cache)}
+    {EXLA.Builder.build(res), merge_outfeed(cache, comp_cache)}
   end
 
   defp token_computation(name, arg, expr, state, cache) do
@@ -2430,7 +2430,7 @@ defmodule EXLA.Defn do
 
     {res, comp_cache} = fun.(function, Enum.with_index(params, fn x, idx -> {idx, x} end), cache)
 
-    {args, EXLA.Builder.build(res, true), comp_cache}
+    {args, EXLA.Builder.build(res), comp_cache}
   end
 
   defp if_branch_computation(subbuilder, _out_expr, args, cache, fun) do
