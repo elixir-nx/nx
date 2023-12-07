@@ -1128,7 +1128,7 @@ MLIRModule::MLIRModule() {
   context_->loadDialect<mlir::func::FuncDialect>();
   context_->loadDialect<mlir::stablehlo::StablehloDialect>();
   context_->loadDialect<mlir::mhlo::MhloDialect>();
-  context->LoadDialect<mlir::chlo::ChloDialect>();
+  context_->loadDialect<mlir::chlo::ChloDialect>();
 
   module_ = mlir::OwningOpRef<mlir::ModuleOp>(mlir::ModuleOp::create(mlir::UnknownLoc::get(context_.get())));
   builder_ = std::make_unique<mlir::OpBuilder>(context_.get());
