@@ -7,11 +7,8 @@ defmodule EXLA.MLIR.NxDoctestTest do
   end
 
   @function_clause_error_doctests [
-    # gather: 3,
     median: 2,
     top_k: 2,
-    # take: 3,
-    # take_along_axis: 3,
     reduce_max: 2,
     reduce_min: 2,
     window_sum: 3,
