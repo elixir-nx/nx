@@ -726,9 +726,15 @@ defmodule EXLA.Defn do
     iota_shape = EXLA.Shape.make_shape(iota_type, shape)
     rank = tuple_size(shape)
 
-    i0 = EXLA.Op.iota(state.builder, iota_shape, rank - 2)
-    i1 = EXLA.Op.iota(state.builder, iota_shape, rank - 1)
-    to_type(EXLA.Op.equal(i0, i1), type)
+    mod =
+      case state.builder do
+        %Function{} -> Value
+        _ -> Op
+      end
+
+    i0 = mod.iota(state.builder, iota_shape, rank - 2)
+    i1 = mod.iota(state.builder, iota_shape, rank - 1)
+    to_type(mod.equal(i0, i1), type)
   end
 
   ## to_operator shape
@@ -1046,9 +1052,8 @@ defmodule EXLA.Defn do
     apply(EXLA.Op, op, [to_type(left, type), to_type(right, type), dims])
   end
 
-  defp to_operator(:quotient, [left, right], %{type: type}, _state) do
-    dims = broadcast_axes(op_shape(left), op_shape(right))
-    apply(EXLA.Op, :divide, [to_type(left, type), to_type(right, type), dims])
+  defp to_operator(:quotient, [left, right], ans, state) do
+    to_operator(:divide, [to_type(left, ans.type), to_type(right, ans.type)], ans, state)
   end
 
   @bin_comp_op [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
