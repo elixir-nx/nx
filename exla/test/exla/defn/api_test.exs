@@ -7,6 +7,7 @@ defmodule EXLA.Defn.APITest do
   defn add_two(a, b), do: a + b
 
   describe "multi-client" do
+    @tag :mlir_token_error
     test "converts from host to separate client" do
       a = Nx.tensor(1, backend: {EXLA.Backend, client: :host})
       b = Nx.tensor(2, backend: {EXLA.Backend, client: :host})
@@ -17,6 +18,7 @@ defmodule EXLA.Defn.APITest do
       )
     end
 
+    @tag :mlir_token_error
     test "converts from host to separate client through lazy transfers" do
       a = Nx.tensor(1, backend: {EXLA.Backend, client: :host})
       b = Nx.tensor(2, backend: {EXLA.Backend, client: :host})
@@ -29,6 +31,7 @@ defmodule EXLA.Defn.APITest do
   end
 
   describe "options" do
+    @tag :mlir_token_error
     test "logs when debugging" do
       logs =
         capture_log(fn ->
@@ -76,6 +79,7 @@ defmodule EXLA.Defn.APITest do
       assert_equal(container_as_input(inp), Nx.tensor(15))
     end
 
+    @tag :mlir_not_a_tuple
     test "updated" do
       inp = %Container{a: Nx.tensor(1), b: 2, c: :reset, d: :keep}
 
@@ -129,6 +133,7 @@ defmodule EXLA.Defn.APITest do
   describe "stream" do
     defn defn_sum(entry, acc), do: {acc, entry + acc}
 
+    @tag :mlir_token_error
     test "immediately done" do
       stream = EXLA.stream(&defn_sum/2, [0, 0])
       assert %Nx.Tensor{data: %EXLA.Backend{}} = done = Nx.Stream.done(stream)
@@ -139,6 +144,7 @@ defmodule EXLA.Defn.APITest do
       assert_equal(Nx.backend_transfer(done), Nx.tensor(2))
     end
 
+    @tag :mlir_token_error
     test "send/recv" do
       %_{} = stream = EXLA.stream(&defn_sum/2, [0, 0])
       assert Nx.Stream.send(stream, 1) == :ok
@@ -150,6 +156,7 @@ defmodule EXLA.Defn.APITest do
       assert_equal(Nx.Stream.done(stream), Nx.tensor(3))
     end
 
+    @tag :mlir_token_error
     test "send x2/recv x2" do
       %_{} = stream = EXLA.stream(&defn_sum/2, [0, 0])
       assert Nx.Stream.send(stream, 1) == :ok
@@ -168,6 +175,7 @@ defmodule EXLA.Defn.APITest do
       {{{a, b}, c}, {a, {b, c}}}
     end
 
+    @tag :mlir_token_error
     test "send/recv with composite types" do
       %_{} = stream = EXLA.stream(&stream_composite/2, [0, {0, {1, 2}}])
       assert Nx.Stream.send(stream, 1) == :ok
@@ -181,6 +189,7 @@ defmodule EXLA.Defn.APITest do
 
     defn stream_empty_outfeed(i, t), do: {{}, i + t}
 
+    @tag :mlir_token_error
     test "send/recv with empty outfeed" do
       %_{} = stream = EXLA.stream(&stream_empty_outfeed/2, [0, 0])
       assert Nx.Stream.send(stream, 1) == :ok
@@ -194,6 +203,7 @@ defmodule EXLA.Defn.APITest do
 
     defn stream_empty_acc(i, {}), do: {i * i, {}}
 
+    @tag :mlir_token_error
     test "send/recv with empty acc" do
       %_{} = stream = EXLA.stream(&stream_empty_acc/2, [0, {}])
       assert Nx.Stream.send(stream, 1) == :ok
@@ -205,6 +215,7 @@ defmodule EXLA.Defn.APITest do
       assert Nx.Stream.done(stream) == {}
     end
 
+    @tag :mlir_token_error
     test "handles failure before writing" do
       {_, ref} = spawn_monitor(fn -> EXLA.stream(&defn_sum/2, [0, 0]) end)
       assert_receive {:DOWN, ^ref, _, _, _}
@@ -215,6 +226,7 @@ defmodule EXLA.Defn.APITest do
       assert_equal(Nx.Stream.done(stream), Nx.tensor(1))
     end
 
+    @tag :mlir_token_error
     test "handles failure after writing" do
       {_, ref} =
         spawn_monitor(fn ->
@@ -230,6 +242,7 @@ defmodule EXLA.Defn.APITest do
       assert_equal(Nx.Stream.done(stream), Nx.tensor(1))
     end
 
+    @tag :mlir_token_error
     test "raises if recv is pending on done" do
       %_{} = stream = EXLA.stream(&defn_sum/2, [0, 0])
       assert Nx.Stream.send(stream, 1) == :ok
@@ -239,6 +252,7 @@ defmodule EXLA.Defn.APITest do
                    fn -> Nx.Stream.done(stream) end
     end
 
+    @tag :mlir_token_error
     test "raises if stream is done when recving" do
       %_{} = stream = EXLA.stream(&defn_sum/2, [0, 0])
       assert_equal(Nx.Stream.done(stream), Nx.tensor(0))
@@ -252,6 +266,7 @@ defmodule EXLA.Defn.APITest do
       {%{elem | a: a + b}, %{acc | b: a + b}}
     end
 
+    @tag :mlir_token_error
     test "container in and out" do
       args = [%Container{a: 0, b: 0, c: :reset, d: :elem}, %Container{a: 0, b: 0, d: :acc}]
       %_{} = stream = EXLA.stream(&container_stream/2, args)
@@ -271,6 +286,7 @@ defmodule EXLA.Defn.APITest do
       {acc, acc + a - c}
     end
 
+    @tag :mlir_token_error
     test "lazy container in" do
       args = [%LazyOnly{a: 0, b: 0, c: 0}, 0]
       %_{} = stream = EXLA.stream(&lazy_container_stream/2, args)
@@ -297,12 +313,14 @@ defmodule EXLA.Defn.APITest do
       hook(a + b, :default, send_to_self(:default))
     end
 
+    @tag :mlir_token_error
     test "executes hook with default" do
       assert hook_default(2, 3)
       assert_receive {:default, tensor}
       assert_equal(tensor, Nx.tensor(5))
     end
 
+    @tag :mlir_token_error
     test "executes hook with callback" do
       assert_equal(
         EXLA.jit(&hook_default/2, hooks: %{default: send_to_self(:tag)}).(2, 3),
@@ -326,6 +344,7 @@ defmodule EXLA.Defn.APITest do
       hook(a + b, :optional)
     end
 
+    @tag :mlir_token_error
     test "executes optional hook" do
       assert_equal(hook_optional(2, 3), Nx.tensor(5))
 
@@ -347,6 +366,7 @@ defmodule EXLA.Defn.APITest do
       factorial
     end
 
+    @tag :mlir_token_error
     test "executes hook within while" do
       assert_equal(
         EXLA.jit(&hook_factorial/1, hooks: %{factorial: send_to_self(:tag)}).(5),
@@ -371,6 +391,7 @@ defmodule EXLA.Defn.APITest do
       end
     end
 
+    @tag :mlir_token_error
     test "executes hook within cond" do
       assert_equal(
         EXLA.jit(&hook_cond/2, hooks: %{cond: send_to_self(:tag)}).(1, 4),
@@ -401,6 +422,7 @@ defmodule EXLA.Defn.APITest do
       hook(container, :container)
     end
 
+    @tag :mlir_token_error
     test "executes hook with container" do
       container = %Container{a: 1, b: 2, c: :reset, d: :elem}
       EXLA.jit(&hook_container/1, hooks: %{container: send_to_self(:tag)}).(container)
@@ -412,6 +434,7 @@ defmodule EXLA.Defn.APITest do
 
     defn hook_stream(entry, acc), do: hook({acc, entry + acc}, :stream)
 
+    @tag :mlir_token_error
     test "executes hook with stream" do
       %_{} = stream = EXLA.stream(&hook_stream/2, [0, 0], hooks: %{stream: send_to_self(:tag)})
       assert Nx.Stream.send(stream, 1) == :ok

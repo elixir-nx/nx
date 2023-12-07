@@ -1,6 +1,14 @@
 defmodule EXLATest do
   use EXLA.Case, async: true
-  doctest EXLA
+
+  exclude =
+    if Nx.Defn.default_options()[:compiler_mode] == :mlir do
+      [stream_cached?: 3]
+    else
+      []
+    end
+
+  doctest EXLA, except: exclude
 
   describe "integration" do
     @describetag :integration

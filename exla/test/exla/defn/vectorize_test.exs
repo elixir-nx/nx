@@ -4,6 +4,8 @@ defmodule EXLA.Defn.VectorizeTest do
   import Nx.Defn
   import Nx, only: :sigils
 
+  @moduletag :mlir_vectorization
+
   setup do
     Nx.default_backend(EXLA.Backend)
 

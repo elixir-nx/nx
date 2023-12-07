@@ -71,6 +71,7 @@ defmodule EXLA.Defn.ExprTest do
     defn neg_infinity, do: Nx.Constants.neg_infinity()
     defn nan, do: Nx.Constants.nan()
 
+    @tag :mlir_bad_arithmetic_argument
     test "handles non-finite constants correctly" do
       assert_equal(infinity(), Nx.Constants.infinity())
       assert_equal(neg_infinity(), Nx.Constants.neg_infinity())
@@ -80,6 +81,7 @@ defmodule EXLA.Defn.ExprTest do
     defn negate_infinity, do: Nx.negate(Nx.Constants.infinity())
     defn negate_neg_infinity, do: Nx.negate(Nx.Constants.infinity())
 
+    @tag :mlir_bad_arithmetic_argument
     test "sanity check constants" do
       assert_equal(negate_infinity(), Nx.Constants.neg_infinity())
       assert_equal(infinity(), Nx.Constants.infinity())
@@ -1068,6 +1070,7 @@ defmodule EXLA.Defn.ExprTest do
       defn_var = Macro.var(defn_fun, __MODULE__)
       defn unquote(defn_fun)(t), do: Nx.unquote(fun)(t)
 
+      @tag :mlir_no_clause_matching
       test "#{fun}" do
         assert_all_close(
           unquote(defn_fun)(@uint_tensor),
@@ -1172,6 +1175,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn if_tuple(a, b, c), do: if(a, do: {{a, b}, c}, else: {{c, b}, a})
 
+    @tag :mlir_cond_error
     test "with tuples" do
       assert_equal(
         if_tuple(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)),
@@ -1199,6 +1203,7 @@ defmodule EXLA.Defn.ExprTest do
       x * y - z
     end
 
+    @tag :mlir_cond_error
     test "with matched tuples" do
       assert_equal(if_tuple_match(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)), Nx.tensor(200))
       assert_equal(if_tuple_match(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)), Nx.tensor(-10))
@@ -1210,6 +1215,7 @@ defmodule EXLA.Defn.ExprTest do
       a + b
     end
 
+    @tag :mlir_not_a_tuple
     test "with matched tuples twice" do
       assert_equal(if_tuple_match_twice(Nx.tensor(1), Nx.tensor(1)), Nx.tensor(2))
     end
@@ -1219,6 +1225,7 @@ defmodule EXLA.Defn.ExprTest do
       xy
     end
 
+    @tag :mlir_not_a_tuple
     test "with return tuple" do
       assert_equal(
         if_tuple_return(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)),
@@ -1233,6 +1240,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn if_map(a, b, c), do: if(a, do: {%{a: a, b: b, c: 1}, c}, else: {%{a: c, b: b, c: 2}, a})
 
+    @tag :mlir_not_a_tuple
     test "with map" do
       assert_equal(
         if_map(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)),
@@ -1260,6 +1268,7 @@ defmodule EXLA.Defn.ExprTest do
       x * y - z
     end
 
+    @tag :mlir_not_a_tuple
     test "with matched map" do
       assert_equal(if_map_match(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)), Nx.tensor(200))
       assert_equal(if_map_match(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)), Nx.tensor(-10))
@@ -1280,6 +1289,7 @@ defmodule EXLA.Defn.ExprTest do
       end)
     end
 
+    @tag :mlir_not_a_tuple
     test "grad with tuple" do
       assert_equal(grad_if_tuple(Nx.tensor(1)), Nx.tensor(9.0))
       assert_equal(grad_if_tuple(Nx.tensor(2)), Nx.tensor(112.0))
@@ -1291,6 +1301,7 @@ defmodule EXLA.Defn.ExprTest do
   describe "metadata" do
     defn add_with_stop_grad(a, b), do: stop_grad(Nx.add(a, b))
 
+    @tag :mlir_not_a_tuple
     test "ignores metadata nodes" do
       assert_equal(add_with_stop_grad(1, 2), Nx.tensor(3))
     end
@@ -1307,6 +1318,7 @@ defmodule EXLA.Defn.ExprTest do
       end
     end
 
+    @tag :mlir_cond_error
     test "computes cond" do
       assert_equal(cond3(Nx.tensor([-1, 0, 1]), Nx.tensor(2), Nx.tensor(3.0)), Nx.tensor(-5.0))
       assert_equal(cond3(Nx.tensor([1, 2, 3]), Nx.tensor(2), Nx.tensor(3.0)), Nx.tensor(36.0))
@@ -1321,6 +1333,7 @@ defmodule EXLA.Defn.ExprTest do
       end
     end
 
+    @tag :mlir_not_a_tuple
     test "computes cond with slice and unused vars" do
       assert_equal(cond_unused_and_slice(Nx.tensor(1), Nx.iota({5})), Nx.tensor(2))
 
@@ -1347,6 +1360,7 @@ defmodule EXLA.Defn.ExprTest do
       end
     end
 
+    @tag :mlir_cond_error
     test "computes cond with cond as parameter" do
       assert_equal(nested_cond(Nx.tensor(10)), Nx.tensor(1))
       assert_equal(nested_cond(Nx.tensor(-10)), Nx.tensor(0))
@@ -1359,6 +1373,7 @@ defmodule EXLA.Defn.ExprTest do
       end
     end
 
+    @tag :mlir_no_clause_matching
     test "with predicate" do
       assert_equal(cond_predicate(Nx.tensor(1), Nx.tensor(2)), Nx.tensor(1, type: {:u, 8}))
       assert_equal(cond_predicate(Nx.tensor(1), Nx.tensor(-2)), Nx.tensor(0, type: {:u, 8}))
@@ -1372,6 +1387,7 @@ defmodule EXLA.Defn.ExprTest do
       end
     end
 
+    @tag :mlir_not_a_tuple
     test "simple" do
       assert_equal(upto10(0), Nx.tensor(10))
       assert_equal(upto10(5), Nx.tensor(10))
@@ -1468,6 +1484,7 @@ defmodule EXLA.Defn.ExprTest do
 
     @tag :conditional_inside_map_reduce
     @tag :unsupported_64_bit_op
+    @tag :mlir_token_error
     test "maps a function with conditional" do
       assert_equal(
         map_conditional(Nx.tensor([-2, -1, 0, 1, 2])),
@@ -1488,6 +1505,7 @@ defmodule EXLA.Defn.ExprTest do
       end
     end
 
+    @tag :mlir_cond_error
     test "while inside if" do
       assert %{a: a, b: b} = while_inside_if(1, %{a: 1, b: 2.0})
       assert_all_close(a, 1)
@@ -2332,6 +2350,7 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
+    @tag :mlir_no_clause_matching
     test "computes the mean of a window" do
       assert_equal(
         window_mean1(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]])),
@@ -2355,6 +2374,7 @@ defmodule EXLA.Defn.ExprTest do
     end
 
     @tag :unsupported_dilated_window_reduce
+    @tag :mlir_no_clause_matching
     test "computes the mean of a dilated window" do
       t = Nx.iota({8, 10, 12})
       lhs = dilated_window_mean(t)
@@ -3720,6 +3740,7 @@ defmodule EXLA.Defn.ExprTest do
     defn qr(t), do: Nx.LinAlg.qr(t)
     defn qr_complete(t), do: Nx.LinAlg.qr(t, mode: :complete)
 
+    @tag :mlir_not_supported_yet
     test "qr" do
       input = Nx.iota({3, 2})
       output = Nx.as_type(input, {:f, 32})
@@ -3737,6 +3758,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn svd(t), do: Nx.LinAlg.svd(t)
 
+    @tag :mlir_not_supported_yet
     test "svd" do
       input = Nx.iota({3, 3})
       output = Nx.as_type(input, {:f, 32})
@@ -3753,6 +3775,7 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
+    @tag :mlir_not_supported_yet
     test "svd (tall matrix)" do
       input = Nx.tensor([[2, 0], [0, 1], [0, 0]])
       output = Nx.as_type(input, {:f, 32})
@@ -3769,6 +3792,7 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
+    @tag :mlir_not_supported_yet
     test "svd (wide matrix)" do
       input = Nx.tensor([[2, 0, 0], [0, 1, 0]])
       output = Nx.as_type(input, {:f, 32})
@@ -3918,6 +3942,7 @@ defmodule EXLA.Defn.ExprTest do
   describe "cholesky" do
     defn cholesky(t), do: Nx.LinAlg.cholesky(t)
 
+    @tag :mlir_not_supported_yet
     test "works on 2x2 matrix" do
       lhs = cholesky(Nx.tensor([[20.0, 17.6], [17.6, 16.0]]))
       rhs = Nx.tensor([[4.47213595499958, 0.0], [3.93547964039963, 0.7155417527999305]])
@@ -3928,6 +3953,7 @@ defmodule EXLA.Defn.ExprTest do
       assert_all_close(lhs, rhs)
     end
 
+    @tag :mlir_not_supported_yet
     test "works on a 4x4 matrix" do
       lhs =
         cholesky(
@@ -3950,6 +3976,7 @@ defmodule EXLA.Defn.ExprTest do
       assert_all_close(lhs, rhs)
     end
 
+    @tag :mlir_not_supported_yet
     test "works on a 50x50 matrix" do
       tensor =
         Nx.tensor(
@@ -3979,6 +4006,7 @@ defmodule EXLA.Defn.ExprTest do
   describe "precision" do
     defn precision(t1, t2), do: Nx.dot(t1, t2)
 
+    @tag :mlir_precision
     test "raises on bad precision" do
       assert_raise ArgumentError,
                    "expected precision configuration to be one of" <>
@@ -4096,6 +4124,7 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
+  @tag :mlir_cond_error
   test "computes while inside cond" do
     assert {i} = while_in_cond(0)
     assert_equal(i, Nx.tensor(5))
