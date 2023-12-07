@@ -751,7 +751,7 @@ defmodule EXLA.Defn do
 
   defp to_operator(:broadcast, [%Value{} = op, _shape, axes], ans, _state) do
     out_shape = EXLA.Shape.make_shape(ans.type, ans.shape)
-    Value.broadcast_in_dim(op, out_shape, List.to_tuple(axes))
+    Value.broadcast_in_dim(to_type(op, ans.type), out_shape, List.to_tuple(axes))
   end
 
   defp to_operator(:broadcast, [op, _shape, axes], ans, _state) do
@@ -2557,10 +2557,22 @@ defmodule EXLA.Defn do
     out_shape = EXLA.Shape.make_shape(out.type, out.shape)
     left_dims = broadcast_axes(left_shape.dims, out_shape.dims)
     right_dims = broadcast_axes(right_shape.dims, out_shape.dims)
-    type = out_shape.dtype
-    left = left |> to_type(type) |> Value.broadcast_in_dim(out_shape, left_dims)
-    right = right |> to_type(type) |> Value.broadcast_in_dim(out_shape, right_dims)
-    apply(Value, op, [left, right])
+
+    type = merge_type(left_shape.dtype, right_shape.dtype)
+
+    broadcast_shape = EXLA.Shape.make_shape(type, out_shape.dims)
+
+    left =
+      left
+      |> to_type(type)
+      |> Value.broadcast_in_dim(broadcast_shape, left_dims)
+
+    right =
+      right |> to_type(type) |> Value.broadcast_in_dim(broadcast_shape, right_dims)
+
+    Value
+    |> apply(op, [left, right])
+    |> to_type(out_shape.dtype)
   end
 
   defp collect_while_results(flat_list, expected_container) do

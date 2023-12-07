@@ -32,6 +32,8 @@ mlir::Type TypeIntToMLIRType(mlir::OpBuilder *builder, xla::PrimitiveType type_i
       return builder->getIntegerType(32);
     case PrimitiveType::S64:
       return builder->getIntegerType(64);
+    case PrimitiveType::PRED:
+      return builder->getIntegerType(1);
     case PrimitiveType::U8:
       return builder->getIntegerType(8, false);
     case PrimitiveType::U16:
@@ -52,6 +54,9 @@ mlir::Type TypeIntToMLIRType(mlir::OpBuilder *builder, xla::PrimitiveType type_i
       return mlir::ComplexType::get(builder->getF32Type());
     case PrimitiveType::C128:
       return mlir::ComplexType::get(builder->getF64Type());
+    default:
+      std::cerr << "Unknown type: " << type_int << std::endl;
+      exit(1);
   }
 }
 
@@ -297,7 +302,19 @@ mlir::Value MLIRFunction::PadOp(mlir::Value op, mlir::Value pad, std::vector<int
 }
 
 mlir::Value compare_and_return_bool(mlir::OpBuilder *builder, mlir::Value lhs, mlir::Value rhs, mlir::stablehlo::ComparisonDirection direction) {
-  auto op = builder->create<mlir::stablehlo::CompareOp>(builder->getUnknownLoc(), lhs, rhs, direction);
+  mlir::stablehlo::ComparisonType comparison_type_attr;
+  mlir::RankedTensorType ranked_type = llvm::cast<mlir::RankedTensorType>(lhs.getType());
+  mlir::Type left_type = mlir::RankedTensorType::get({}, ranked_type.getElementType());
+
+  ranked_type = llvm::cast<mlir::RankedTensorType>(rhs.getType());
+  mlir::Type right_type = mlir::RankedTensorType::get({}, ranked_type.getElementType());
+  if (left_type.isa<mlir::FloatType>() || right_type.isa<mlir::FloatType>()) {
+    comparison_type_attr = mlir::stablehlo::symbolizeComparisonType("TOTALORDER").value();
+  } else {
+    comparison_type_attr = mlir::stablehlo::ComparisonType::NOTYPE;
+  }
+
+  auto op = builder->create<mlir::stablehlo::CompareOp>(builder->getUnknownLoc(), lhs, rhs, direction, comparison_type_attr);
   mlir::Type mlir_bool = builder->getIntegerType(8, false);
   return builder->create<mlir::stablehlo::ConvertOp>(builder->getUnknownLoc(), op, mlir_bool);
 }
