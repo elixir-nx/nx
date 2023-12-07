@@ -15,8 +15,6 @@ defmodule EXLA.MLIR.NxDoctestTest do
     window_product: 3,
     window_min: 3,
     window_max: 3,
-    argmin: 2,
-    argmax: 2,
     ifft2: 2,
     ifft: 2,
     fft: 2,

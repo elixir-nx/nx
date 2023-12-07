@@ -729,7 +729,7 @@ defmodule EXLA.Defn do
     mod =
       case state.builder do
         %Function{} -> Value
-        _ -> Op
+        _ -> EXLA.Op
       end
 
     i0 = mod.iota(state.builder, iota_shape, rank - 2)
