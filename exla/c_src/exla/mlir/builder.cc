@@ -451,31 +451,26 @@ mlir::Value MLIRFunction::TanOp(mlir::Value operand) {
 
 mlir::Value MLIRFunction::AcosOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
   return module_->builder()->create<mlir::chlo::AcosOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::AsinOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
   return module_->builder()->create<mlir::chlo::AsinOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::AtanOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
   return module_->builder()->create<mlir::chlo::AtanOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::CoshOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
   return module_->builder()->create<mlir::chlo::CoshOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::SinhOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
   return module_->builder()->create<mlir::chlo::SinhOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
@@ -486,19 +481,16 @@ mlir::Value MLIRFunction::TanhOp(mlir::Value operand) {
 
 mlir::Value MLIRFunction::AcoshOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
   return module_->builder()->create<mlir::chlo::AcoshOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::AsinhOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
   return module_->builder()->create<mlir::chlo::AsinhOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::AtanhOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
   return module_->builder()->create<mlir::chlo::AtanhOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
@@ -517,23 +509,19 @@ mlir::Value MLIRFunction::NegateOp(mlir::Value operand) {
 }
 mlir::Value MLIRFunction::ErfOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
   return module_->builder()->create<mlir::chlo::ErfOp>(module_->builder()->getUnknownLoc(), operand);
 }
 mlir::Value MLIRFunction::ErfInvOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
   return module_->builder()->create<mlir::chlo::ErfInvOp>(module_->builder()->getUnknownLoc(), operand);
 }
 mlir::Value MLIRFunction::ErfcOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
   return module_->builder()->create<mlir::chlo::ErfcOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
 mlir::Value MLIRFunction::IsInfOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
   mlir::Value result;
 
   mlir::RankedTensorType type = llvm::cast<mlir::RankedTensorType>(operand.getType());
@@ -558,7 +546,6 @@ mlir::Value MLIRFunction::IsInfOp(mlir::Value operand) {
 
 mlir::Value MLIRFunction::IsNanOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
   mlir::Type mlir_bool = module_->builder()->getI1Type();
 
   mlir::RankedTensorType type = llvm::cast<mlir::RankedTensorType>(operand.getType());
@@ -607,7 +594,6 @@ mlir::Value MLIRFunction::ImagOp(mlir::Value operand) {
 
 mlir::Value MLIRFunction::ConjOp(mlir::Value operand) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
-  module_->context()->getOrLoadDialect<mlir::chlo::ChloDialect>();
   return module_->builder()->create<mlir::chlo::ConjOp>(module_->builder()->getUnknownLoc(), operand);
 }
 
@@ -1139,11 +1125,10 @@ void MLIRFunction::Build(mlir::Value root, bool use_stablehlo_return) {
 MLIRModule::MLIRModule() {
   context_ = std::make_unique<mlir::MLIRContext>();
 
-  // TODO: Should we load all these up front, infer them, or make it
-  // manual?
   context_->loadDialect<mlir::func::FuncDialect>();
   context_->loadDialect<mlir::stablehlo::StablehloDialect>();
   context_->loadDialect<mlir::mhlo::MhloDialect>();
+  context->LoadDialect<mlir::chlo::ChloDialect>();
 
   module_ = mlir::OwningOpRef<mlir::ModuleOp>(mlir::ModuleOp::create(mlir::UnknownLoc::get(context_.get())));
   builder_ = std::make_unique<mlir::OpBuilder>(context_.get());
