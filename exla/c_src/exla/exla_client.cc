@@ -495,7 +495,7 @@ xla::StatusOr<ExlaClient*> GetGpuClient(double memory_fraction,
   };
 
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtClient> client,
-    xla::GetStreamExecutorGpuClient(false, allocator_config, 0, 0));
+    xla::GetStreamExecutorGpuClient(false, allocator_config, 0));
 
   return new ExlaClient(std::move(client));
 }
