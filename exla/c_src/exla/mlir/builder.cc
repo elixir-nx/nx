@@ -648,9 +648,15 @@ static void buildSortComparisonBody(llvm::ArrayRef<mlir::Type> elementTypes,
 std::vector<mlir::Value> MLIRFunction::TopKOp(mlir::Value operand, int64_t k) {
   mlir::OpBuilder *builder = module_->builder();
   builder->setInsertionPointToEnd(&func_->getBody().back());
+
   mlir::chlo::TopKOp top_k_op = builder->create<mlir::chlo::TopKOp>(builder->getUnknownLoc(), operand, k);
   mlir::Operation::result_range results = top_k_op.getResults();
-  return std::vector<mlir::Value>(results.begin(), results.end());
+
+  auto results_vec = std::vector<mlir::Value>(results.begin(), results.end());
+
+  mlir::Value idx = builder->create<mlir::stablehlo::ConvertOp>(builder->getUnknownLoc(), results_vec[1], builder->getI64Type());
+  results_vec[1] = idx;
+  return results_vec;
 }
 
 std::vector<mlir::Value> MLIRFunction::SortOp(MLIRFunction *comparator, std::vector<mlir::Value> operands, int64_t dim, bool stable) {

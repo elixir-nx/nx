@@ -587,7 +587,7 @@ defmodule EXLA.Defn do
   defp cached_recur_operator(
          :optional,
          %T{data: %Expr{args: [%{data: %{op: :top_k, args: [tensor, opts]}}, _expr, _callback]}} =
-           out,
+           _out,
          state,
          cache
        ) do
@@ -600,7 +600,7 @@ defmodule EXLA.Defn do
           |> Value.top_k(opts[:k])
           |> Value.tuple()
 
-        %EXLA.Op{} ->
+        %EXLA.Builder{} ->
           EXLA.Op.top_k(tensor, opts[:k])
       end
 

@@ -115,14 +115,14 @@ defmodule EXLA.MLIR.Value do
     %Value{value | ref: out_ref}
   end
 
-  def sort(%Value{} = value, comparator_fun, axis, stable) do
-    [result] = sort([value], comparator_fun, axis, stable)
-    result
-  end
-
   def top_k(%Value{function: %Function{ref: func_ref}, ref: op_ref} = val, k) do
     [val_ref, idx_ref] = EXLA.NIF.mlir_top_k(func_ref, op_ref, k) |> unwrap!()
     [%Value{val | ref: val_ref}, %Value{val | ref: idx_ref}]
+  end
+
+  def sort(%Value{} = value, comparator_fun, axis, stable) do
+    [result] = sort([value], comparator_fun, axis, stable)
+    result
   end
 
   def sort(
