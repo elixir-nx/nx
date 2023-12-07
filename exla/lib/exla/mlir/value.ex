@@ -353,11 +353,11 @@ defmodule EXLA.MLIR.Value do
   def gather(
         %Value{function: func} = source,
         %Value{function: func} = indices,
+        index_vector_dim,
         slice_sizes,
         offset_dims,
         collapsed_slice_dims,
-        start_index_map,
-        index_vector_dim
+        start_index_map
       ) do
     ref =
       EXLA.NIF.mlir_gather(
