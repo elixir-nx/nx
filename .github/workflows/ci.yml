@@ -53,7 +53,7 @@ jobs:
       - name: Run epmd for distributed tests
         run: epmd -daemon
       - name: Run tests
-        run: ${{matrix.use_mlir && 'EXLA_COMPILER_MODE=mlir'}} mix test
+        run: ${{if(matrix.use_mlir,'EXLA_COMPILER_MODE=mlir','')}} mix test
 
   win:
     name: Windows (${{ matrix.working_directory }}, ${{ matrix.elixir }}, ${{ matrix.otp }})
