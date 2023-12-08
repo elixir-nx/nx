@@ -4004,11 +4004,17 @@ defmodule EXLA.Defn.ExprTest do
   describe "precision" do
     defn precision(t1, t2), do: Nx.dot(t1, t2)
 
-    @tag :mlir_precision
     test "raises on bad precision" do
+      valid_precision =
+        if Nx.Defn.default_options()[:compiler_mode] == :mlir do
+          ":default, :high, :highest, or :packed_nibble"
+        else
+          ":default, :high, or :highest"
+        end
+
       assert_raise ArgumentError,
                    "expected precision configuration to be one of" <>
-                     " :default, :high, or :highest, got: :bad",
+                     " #{valid_precision}, got: :bad",
                    fn ->
                      EXLA.jit(&precision/2, precision: :bad).(
                        Nx.tensor([1, 2, 3], type: {:bf, 16}),

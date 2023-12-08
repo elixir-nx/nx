@@ -27,7 +27,6 @@ exclude =
         :mlir_linalg_nor_supported_yet,
         :mlir_cond_error,
         :mlir_not_a_tuple,
-        :mlir_precision,
         :mlir_token_error,
         :mlir_no_clause_matching,
         :mlir_vectorization
