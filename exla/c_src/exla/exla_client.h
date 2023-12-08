@@ -87,6 +87,8 @@ class ExlaClient {
                                               xla::Shape& shape,
                                               int device_id);
 
+  xla::StatusOr<ExlaExecutable*> DeserializeExecutable(std::string serialized_executable);
+
   // TODO(seanmor5): This is device logic and should be refactored
   xla::Status TransferToInfeed(ErlNifEnv* env,
                                ERL_NIF_TERM data,

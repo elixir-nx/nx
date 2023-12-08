@@ -619,7 +619,28 @@ ERL_NIF_TERM serialize_executable(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   return exla::nif::ok(exla::nif::make(env, serialize));
 }
 
-// Serialization
+ERL_NIF_TERM deserialize_executable(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 2) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  std::string serialized;
+  exla::ExlaClient** client;
+
+  if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
+    return exla::nif::error(env, "Unable to get client.");
+  }
+  if (!exla::nif::get(env, argv[1], serialized)) {
+    return exla::nif::error(env, "Unable to get executable.");
+  }
+
+  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaExecutable * executable,
+    (*client)->DeserializeExecutable(serialized));
+
+  return exla::nif::ok(env, exla::nif::make<exla::ExlaExecutable*>(env, executable));
+}
+
+// Logging
 
 ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 1) {
