@@ -614,9 +614,9 @@ ERL_NIF_TERM serialize_executable(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     return exla::nif::error(env, "Unable to get executable.");
   }
 
-  EXLA_ASSIGN_OR_RETURN_NIF(std::string serialized, (*executable)->Serialize(), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(std::string serialized, (*executable)->SerializeExecutable(), env);
 
-  return exla::nif::ok(exla::nif::make(env, serialize));
+  return exla::nif::ok(env, exla::nif::make(env, serialized));
 }
 
 ERL_NIF_TERM deserialize_executable(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -635,7 +635,7 @@ ERL_NIF_TERM deserialize_executable(ErlNifEnv* env, int argc, const ERL_NIF_TERM
   }
 
   EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaExecutable * executable,
-    (*client)->DeserializeExecutable(serialized));
+    (*client)->DeserializeExecutable(serialized), env);
 
   return exla::nif::ok(env, exla::nif::make<exla::ExlaExecutable*>(env, executable));
 }
@@ -921,7 +921,8 @@ static ErlNifFunc exla_funcs[] = {
     // Log Sink
     {"start_log_sink", 1, start_log_sink},
     // Serialization
-    {"serialize_executable", 1, serialize_executable}
+    {"serialize_executable", 1, serialize_executable},
+    {"deserialize_executable", 2, deserialize_executable}
   };
 
 ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, NULL, NULL);

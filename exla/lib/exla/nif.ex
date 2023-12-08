@@ -428,8 +428,8 @@ defmodule EXLA.NIF do
       ),
       do: :erlang.nif_error(:undef)
 
-  def serialize(_executable), do: :erlang.nif_error(:undef)
-  def deserialize(_client, _string), do: :erlang.nif_error(:undef)
+  def serialize_executable(_executable), do: :erlang.nif_error(:undef)
+  def deserialize_executable(_client, _string), do: :erlang.nif_error(:undef)
 
   def run_cpu(
         _client,

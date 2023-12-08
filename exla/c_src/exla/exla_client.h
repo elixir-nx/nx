@@ -55,7 +55,7 @@ class ExlaExecutable {
                                   ERL_NIF_TERM arguments,
                                   int device_id);
 
-  xla::StatusOr<std::string> Serialize() { return executable_->Serialize(); }
+  xla::StatusOr<std::string> SerializeExecutable() { return executable_->SerializeExecutable(); }
 
  private:
   std::unique_ptr<xla::PjRtLoadedExecutable> executable_;
