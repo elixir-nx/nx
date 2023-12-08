@@ -1068,7 +1068,6 @@ defmodule EXLA.Defn.ExprTest do
       defn_var = Macro.var(defn_fun, __MODULE__)
       defn unquote(defn_fun)(t), do: Nx.unquote(fun)(t)
 
-      @tag :mlir_no_clause_matching
       test "#{fun}" do
         assert_all_close(
           unquote(defn_fun)(@uint_tensor),
