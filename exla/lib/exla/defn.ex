@@ -1027,11 +1027,27 @@ defmodule EXLA.Defn do
   defp to_operator(:abs, [%Value{} = op], _ans, _state), do: Value.abs(op)
   defp to_operator(:abs, [op], _ans, _state), do: EXLA.Op.abs(op)
 
-  defp to_operator(:sign, [%Value{} = op], %{type: type}, _state) do
+  defp to_operator(:sign, [%Value{} = op], %{shape: shape, type: type}, state) do
     case type do
-      # {:u, _} -> Value.min(op, Value.constant_r0(state.builder, 1, type))
-      {:u, _} -> raise "sign not implemented yet for unsigned inputs"
-      _ -> Value.sign(op)
+      {:u, _} ->
+        ones_shape = Tuple.duplicate(1, tuple_size(shape))
+
+        one = Enum.reduce(1..tuple_size(shape), 1, fn _, acc -> [acc] end)
+
+        one =
+          one
+          |> Nx.tensor(type: type, backend: Nx.BinaryBackend)
+          |> Nx.to_binary()
+          |> then(
+            &Value.constant_from_binary(state.builder, &1, %{dtype: type, dims: ones_shape})
+          )
+
+        one
+        |> Value.broadcast_in_dim(Value.get_shape(op), List.to_tuple(Nx.axes(shape)))
+        |> Value.min(op)
+
+      _ ->
+        Value.sign(op)
     end
   end
 

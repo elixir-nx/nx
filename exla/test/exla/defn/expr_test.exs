@@ -71,7 +71,6 @@ defmodule EXLA.Defn.ExprTest do
     defn neg_infinity, do: Nx.Constants.neg_infinity()
     defn nan, do: Nx.Constants.nan()
 
-    @tag :mlir_bad_arithmetic_argument
     test "handles non-finite constants correctly" do
       assert_equal(infinity(), Nx.Constants.infinity())
       assert_equal(neg_infinity(), Nx.Constants.neg_infinity())
@@ -81,7 +80,6 @@ defmodule EXLA.Defn.ExprTest do
     defn negate_infinity, do: Nx.negate(Nx.Constants.infinity())
     defn negate_neg_infinity, do: Nx.negate(Nx.Constants.infinity())
 
-    @tag :mlir_bad_arithmetic_argument
     test "sanity check constants" do
       assert_equal(negate_infinity(), Nx.Constants.neg_infinity())
       assert_equal(infinity(), Nx.Constants.infinity())
@@ -1070,7 +1068,6 @@ defmodule EXLA.Defn.ExprTest do
       defn_var = Macro.var(defn_fun, __MODULE__)
       defn unquote(defn_fun)(t), do: Nx.unquote(fun)(t)
 
-      @tag :mlir_no_clause_matching
       test "#{fun}" do
         assert_all_close(
           unquote(defn_fun)(@uint_tensor),
@@ -3740,7 +3737,7 @@ defmodule EXLA.Defn.ExprTest do
     defn qr(t), do: Nx.LinAlg.qr(t)
     defn qr_complete(t), do: Nx.LinAlg.qr(t, mode: :complete)
 
-    @tag :mlir_not_supported_yet
+    @tag :mlir_linalg_nor_supported_yet
     test "qr" do
       input = Nx.iota({3, 2})
       output = Nx.as_type(input, {:f, 32})
@@ -3758,7 +3755,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn svd(t), do: Nx.LinAlg.svd(t)
 
-    @tag :mlir_not_supported_yet
+    @tag :mlir_linalg_nor_supported_yet
     test "svd" do
       input = Nx.iota({3, 3})
       output = Nx.as_type(input, {:f, 32})
@@ -3775,7 +3772,7 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
-    @tag :mlir_not_supported_yet
+    @tag :mlir_linalg_nor_supported_yet
     test "svd (tall matrix)" do
       input = Nx.tensor([[2, 0], [0, 1], [0, 0]])
       output = Nx.as_type(input, {:f, 32})
@@ -3792,7 +3789,7 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
-    @tag :mlir_not_supported_yet
+    @tag :mlir_linalg_nor_supported_yet
     test "svd (wide matrix)" do
       input = Nx.tensor([[2, 0, 0], [0, 1, 0]])
       output = Nx.as_type(input, {:f, 32})
@@ -3942,7 +3939,7 @@ defmodule EXLA.Defn.ExprTest do
   describe "cholesky" do
     defn cholesky(t), do: Nx.LinAlg.cholesky(t)
 
-    @tag :mlir_not_supported_yet
+    @tag :mlir_linalg_nor_supported_yet
     test "works on 2x2 matrix" do
       lhs = cholesky(Nx.tensor([[20.0, 17.6], [17.6, 16.0]]))
       rhs = Nx.tensor([[4.47213595499958, 0.0], [3.93547964039963, 0.7155417527999305]])
@@ -3953,7 +3950,7 @@ defmodule EXLA.Defn.ExprTest do
       assert_all_close(lhs, rhs)
     end
 
-    @tag :mlir_not_supported_yet
+    @tag :mlir_linalg_nor_supported_yet
     test "works on a 4x4 matrix" do
       lhs =
         cholesky(
@@ -3976,7 +3973,7 @@ defmodule EXLA.Defn.ExprTest do
       assert_all_close(lhs, rhs)
     end
 
-    @tag :mlir_not_supported_yet
+    @tag :mlir_linalg_nor_supported_yet
     test "works on a 50x50 matrix" do
       tensor =
         Nx.tensor(
@@ -4006,11 +4003,17 @@ defmodule EXLA.Defn.ExprTest do
   describe "precision" do
     defn precision(t1, t2), do: Nx.dot(t1, t2)
 
-    @tag :mlir_precision
     test "raises on bad precision" do
+      valid_precision =
+        if Nx.Defn.default_options()[:compiler_mode] == :mlir do
+          ":default, :high, :highest, or :packed_nibble"
+        else
+          ":default, :high, or :highest"
+        end
+
       assert_raise ArgumentError,
                    "expected precision configuration to be one of" <>
-                     " :default, :high, or :highest, got: :bad",
+                     " #{valid_precision}, got: :bad",
                    fn ->
                      EXLA.jit(&precision/2, precision: :bad).(
                        Nx.tensor([1, 2, 3], type: {:bf, 16}),

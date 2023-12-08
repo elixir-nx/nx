@@ -166,7 +166,7 @@ defmodule EXLA.BackendTest do
     assert_equal(result, Nx.tensor([0, 1, 1, 0]))
   end
 
-  @tag :mlir_not_supported_yet
+  @tag :mlir_linalg_nor_supported_yet
   test "Nx.LinAlg.svd/2" do
     t = Nx.iota({4, 4})
     assert {u, s, vt} = Nx.LinAlg.svd(t, max_iter: 10_000)

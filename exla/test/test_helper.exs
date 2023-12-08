@@ -24,11 +24,9 @@ exclude =
   if compiler_mode == :mlir do
     exclude ++
       [
-        :mlir_not_supported_yet,
-        :mlir_bad_arithmetic_argument,
+        :mlir_linalg_nor_supported_yet,
         :mlir_cond_error,
         :mlir_not_a_tuple,
-        :mlir_precision,
         :mlir_token_error,
         :mlir_no_clause_matching,
         :mlir_vectorization
