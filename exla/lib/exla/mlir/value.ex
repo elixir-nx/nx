@@ -175,6 +175,25 @@ defmodule EXLA.MLIR.Value do
     reshape(%Value{ref: ref, function: func}, {})
   end
 
+  def constant_r0(%Function{} = func, value, type)
+      when value in [:infinity, :nan, :neg_infinity] do
+    data =
+      value
+      |> Nx.tensor(backend: Nx.BinaryBackend, type: type)
+      |> Nx.to_binary()
+
+    ref =
+      EXLA.NIF.mlir_constant_from_binary(
+        func.ref,
+        data,
+        EXLA.Shape.dtype_to_charlist(type),
+        {}
+      )
+      |> unwrap!()
+
+    %Value{ref: ref, function: func}
+  end
+
   def constant_r0(%Function{} = func, value, type) do
     value =
       if Nx.Type.float?(type) and not is_float(value) do
