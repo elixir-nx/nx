@@ -21,6 +21,18 @@ defmodule EXLA.Executable do
     end
   end
 
+  def serialize(%Executable{ref: executable}) do
+    executable
+    |> EXLA.NIF.serialize_executable()
+    |> unwrap!()
+  end
+
+  def deserialize(client, binary) do
+    binary
+    |> then(&EXLA.NIF.deserialize_executable(client.ref, &1))
+    |> unwrap!()
+  end
+
   defp run(client, ref, device_id, inputs, _options) do
     inputs =
       for subinputs <- inputs do
