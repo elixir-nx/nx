@@ -608,6 +608,24 @@ ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     return exla::nif::error(env, "Bad argument count.");
   }
 
+  exla::ExlaExecutable** executable;
+
+  if (!exla::nif::get<exla::ExlaExecutable*>(env, argv[0], executable)) {
+    return exla::nif::error(env, "Unable to get executable.");
+  }
+
+  EXLA_ASSIGN_OR_RETURN_NIF(std::string serialized, (*executable)->Serialize(), env);
+
+  return exla::nif::ok(exla::nif::make(env, serialized));
+}
+
+// Serialization
+
+ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
   ErlNifPid logger_pid;
 
   if (!enif_get_local_pid(env, argv[0], &logger_pid)) {
@@ -880,6 +898,9 @@ static ErlNifFunc exla_funcs[] = {
     // Special
     {"optimization_barrier", 1, optimization_barrier},
     // Log Sink
-    {"start_log_sink", 1, start_log_sink}};
+    {"start_log_sink", 1, start_log_sink},
+    // Serialization
+    {"serialize_executable", 1, serialize_executable}
+  };
 
 ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, NULL, NULL);
