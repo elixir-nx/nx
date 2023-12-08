@@ -18,7 +18,7 @@ defmodule Nx.Serving do
       defmodule MyDefn do
         import Nx.Defn
 
-        defnp print_and_multiply(x) do
+        defn print_and_multiply(x) do
           x = print_value(x, label: "debug")
           x * 2
         end
