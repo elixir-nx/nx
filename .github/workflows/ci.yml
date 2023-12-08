@@ -20,6 +20,9 @@ jobs:
           - elixir: "1.15.4"
             working_directory: "exla"
             use_mlir: true
+          - elixir: "1.15.4"
+            working_directory: "exla"
+            use_mlir: false
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}
