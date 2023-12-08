@@ -14,15 +14,13 @@ jobs:
         working_directory: ["nx", "exla", "torchx"]
         elixir: ["1.14.5", "1.15.4"]
         otp: ["25.3"]
+        use_mlir: [false]
         include:
           - elixir: "1.15.4"
             lint: true
           - elixir: "1.15.4"
             working_directory: "exla"
             use_mlir: true
-          - elixir: "1.15.4"
-            working_directory: "exla"
-            use_mlir: false
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}
