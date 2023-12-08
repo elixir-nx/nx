@@ -601,9 +601,9 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return term;
 }
 
-// Logging Functions
+// Serialization Functions
 
-ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM serialize_executable(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 1) {
     return exla::nif::error(env, "Bad argument count.");
   }
@@ -616,7 +616,7 @@ ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 
   EXLA_ASSIGN_OR_RETURN_NIF(std::string serialized, (*executable)->Serialize(), env);
 
-  return exla::nif::ok(exla::nif::make(env, serialized));
+  return exla::nif::ok(exla::nif::make(env, serialize));
 }
 
 // Serialization
