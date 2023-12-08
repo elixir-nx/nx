@@ -7,6 +7,7 @@ defmodule EXLA.NxRandomTest do
   end
 
   describe "range" do
+    @tag :mlir_not_a_tuple
     test "randint" do
       key = Nx.Random.key(127)
 
