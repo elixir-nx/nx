@@ -398,7 +398,7 @@ defmodule Nx do
   """
 
   import Nx.Shared
-  import Nx.Defn.Kernel, only: [keyword!: 2, stop_grad: 1]
+  import Nx.Defn.Kernel, only: [keyword!: 2]
 
   alias Nx.Tensor, as: T
 
@@ -17170,10 +17170,7 @@ defmodule Nx do
     opts = keyword!(opts, [:axes, :exp_scaling_factor, :keep_axes])
     axes = opts[:axes]
     keep_axes = opts[:keep_axes]
-    # We can treat max as a constant
-    # and avoid differentiating through it
-    # https://github.com/google/jax/pull/2260
-    max = stop_grad(reduce_max(tensor, axes: axes, keep_axes: true))
+    max = reduce_max(tensor, axes: axes, keep_axes: true)
     infinity_mask = is_infinity(max)
     max = select(infinity_mask, Nx.tensor(0, type: type), max)
     exponentials = tensor |> subtract(max) |> exp()
