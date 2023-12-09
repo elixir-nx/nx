@@ -80,7 +80,7 @@ defmodule Nx.LinAlg.QR do
         # "Matrix Computations" by Golub and Van Loan: Section 5.4.1
         # describes the problem of computing QR factorization for wide matrices,
         # and suggests adding rows of zeros as a solution.
-        a = Nx.pad(a, 0, [{0, m - n, 0}, {0, 0, 0}])
+        a = Nx.pad(a, 0, [{0, n - m, 0}, {0, 0, 0}])
         {a, n, n, n, true, n - 1}
 
       {m, n} ->
@@ -98,7 +98,7 @@ defmodule Nx.LinAlg.QR do
 
     type = Nx.Type.to_floating(Nx.type(a))
 
-    base_h = Nx.eye(m, type: type, vectorized_axes: a.vectorized_axes)
+    base_h = Nx.eye({k, n}, type: type, vectorized_axes: a.vectorized_axes)
     column_iota = Nx.iota({Nx.axis_size(a, 0)}, vectorized_axes: a.vectorized_axes)
 
     {{q, r}, _} =
@@ -106,6 +106,7 @@ defmodule Nx.LinAlg.QR do
         x = r[[.., i]]
         x = Nx.select(column_iota < i, 0, x)
         h = householder_reflector(x, i, eps)
+        print_expr({q, r, h})
         r = Nx.dot(h, r)
         q = Nx.dot(q, h)
         {{q, r}, {column_iota}}
