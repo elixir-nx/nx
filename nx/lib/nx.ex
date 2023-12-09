@@ -398,7 +398,7 @@ defmodule Nx do
   """
 
   import Nx.Shared
-  import Nx.Defn.Kernel, only: [keyword!: 2]
+  import Nx.Defn.Kernel, only: [keyword!: 2, stop_grad: 1]
 
   alias Nx.Tensor, as: T
 
@@ -16771,6 +16771,28 @@ defmodule Nx do
     divide(log(tensor), log(base))
   end
 
+  @doc """
+  Calculates the element-wise square of a tensor.
+
+  ## Examples
+
+    iex> Nx.square(2)
+    #Nx.Tensor<
+      s64
+      4
+    >
+
+    iex> Nx.square(Nx.tensor([-1, 0, 1, 2, 3, 4])
+    #Nx.Tensor<
+      s64[6]
+      [1, 0, 1, 4, 9, 16]
+    >
+  """
+  @doc type: :element
+  def square(tensor) do
+    multiply(tensor, tensor)
+  end
+
   ## Sigils
 
   @doc """
@@ -17148,7 +17170,10 @@ defmodule Nx do
     opts = keyword!(opts, [:axes, :exp_scaling_factor, :keep_axes])
     axes = opts[:axes]
     keep_axes = opts[:keep_axes]
-    max = reduce_max(tensor, axes: axes, keep_axes: true)
+    # We can treat max as a constant
+    # and avoid differentiating through it
+    # https://github.com/google/jax/pull/2260
+    max = stop_grad(reduce_max(tensor, axes: axes, keep_axes: true))
     infinity_mask = is_infinity(max)
     max = select(infinity_mask, Nx.tensor(0, type: type), max)
     exponentials = tensor |> subtract(max) |> exp()
