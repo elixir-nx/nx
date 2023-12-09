@@ -1092,38 +1092,39 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) invalid :mode received. Expected one of [:reduced, :complete], received: :error_test
   """
   def qr(tensor, opts \\ []) do
-    apply_vectorized(tensor, fn tensor ->
-      opts = keyword!(opts, mode: :reduced, eps: 1.0e-10)
-      %T{type: type, shape: shape} = tensor
+    opts = keyword!(opts, mode: :reduced, eps: 1.0e-10)
+    %T{vectorized_axes: vectorized_axes} = tensor = Nx.to_tensor(tensor)
 
-      mode = opts[:mode]
-      valid_modes = [:reduced, :complete]
+    %T{type: type, shape: shape} = tensor = Nx.devectorize(tensor)
 
-      unless mode in valid_modes do
-        raise ArgumentError,
-              "invalid :mode received. Expected one of #{inspect(valid_modes)}, received: #{inspect(mode)}"
-      end
+    mode = opts[:mode]
+    valid_modes = [:reduced, :complete]
 
-      output_type = Nx.Type.to_floating(type)
-      {q_shape, r_shape} = Nx.Shape.qr(shape, opts)
+    unless mode in valid_modes do
+      raise ArgumentError,
+            "invalid :mode received. Expected one of #{inspect(valid_modes)}, received: #{inspect(mode)}"
+    end
 
-      impl!(tensor).qr(
-        {%{
-           tensor
-           | type: output_type,
-             shape: q_shape,
-             names: List.duplicate(nil, tuple_size(q_shape))
-         },
-         %{
-           tensor
-           | type: output_type,
-             shape: r_shape,
-             names: List.duplicate(nil, tuple_size(r_shape))
-         }},
-        tensor,
-        opts
-      )
-    end)
+    output_type = Nx.Type.to_floating(type)
+    {q_shape, r_shape} = Nx.Shape.qr(shape, opts)
+
+    output =
+      {%{
+         tensor
+         | type: output_type,
+           shape: q_shape,
+           names: List.duplicate(nil, tuple_size(q_shape))
+       },
+       %{
+         tensor
+         | type: output_type,
+           shape: r_shape,
+           names: List.duplicate(nil, tuple_size(r_shape))
+       }}
+
+    :qr
+    |> Nx.Shared.optional([tensor, opts], output, &Nx.LinAlg.QR.qr/2)
+    |> Nx.vectorize(vectorized_axes)
   end
 
   @doc """

@@ -1248,28 +1248,6 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def qr(
-        {%{shape: q_holder_shape, type: output_type} = q_holder,
-         %{shape: r_holder_shape, type: output_type} = r_holder},
-        %{type: input_type, shape: input_shape} = tensor,
-        opts
-      ) do
-    bin = to_binary(tensor)
-    rank = tuple_size(input_shape)
-    m = elem(q_holder_shape, rank - 2)
-    k = elem(q_holder_shape, rank - 1)
-    n = elem(r_holder_shape, rank - 1)
-
-    {q, r} =
-      bin_batch_reduce(bin, m * n, input_type, {<<>>, <<>>}, fn matrix, {q_acc, r_acc} ->
-        {q, r} = B.Matrix.qr(matrix, input_type, {m, n}, output_type, m, k, n, opts)
-        {q_acc <> q, r_acc <> r}
-      end)
-
-    {from_binary(q_holder, q), from_binary(r_holder, r)}
-  end
-
-  @impl true
   def eigh(
         {%{type: output_type} = eigenvals_holder, eigenvecs_holder},
         %{type: input_type, shape: input_shape} = tensor,

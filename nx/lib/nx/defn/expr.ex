@@ -1231,14 +1231,6 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def qr({q, r}, t, opts) do
-    tensor = to_expr(t)
-    context = tensor.data.context
-    out = %T{names: [], shape: {}, type: {:tuple, 2}}
-    tuple(expr(out, context, :qr, [{q, r}, tensor, opts]), [q, r])
-  end
-
-  @impl true
   def eigh({evals, evecs}, tensor, opts) do
     tensor = to_expr(tensor)
     context = tensor.data.context
