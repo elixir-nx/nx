@@ -11,12 +11,14 @@ defmodule Nx.LinAlg.QR do
     |> Nx.revectorize([collapsed_axes: :auto],
       target_shape: {Nx.axis_size(a, -2), Nx.axis_size(a, -1)}
     )
-    |> qr_matrix(opts[:eps])
+    |> qr_matrix(opts)
     |> revectorize_result(a.shape, vectorized_axes, opts)
   end
 
   deftransformp revectorize_result({q, r}, shape, vectorized_axes, opts) do
     {q_shape, r_shape} = Nx.Shape.qr(shape, opts)
+
+    dbg({q_shape, r_shape, shape, opts, vectorized_axes, q, r})
 
     {
       Nx.revectorize(q, vectorized_axes, target_shape: q_shape),
@@ -74,36 +76,74 @@ defmodule Nx.LinAlg.QR do
   #   {matrix_to_binary(q_matrix, output_type), matrix_to_binary(r_matrix, output_type)}
   # end
 
-  defnp qr_matrix(a, eps) do
-    {m, n} = Nx.shape(a)
+  deftransformp wide_mode_extension(a) do
+    case Nx.shape(a) do
+      {m, n} when m < n ->
+        # "Matrix Computations" by Golub and Van Loan: Section 5.4.1
+        # describes the problem of computing QR factorization for wide matrices,
+        # and suggests adding rows of zeros as a solution.
+        a = Nx.pad(a, 0, [{0, m - n, 0}, {0, 0, 0}])
+        {a, n, n, n, true}
+
+      {m, n} ->
+        {a, m, n, min(m, n), false}
+    end
+  end
+
+  defnp qr_matrix(a, opts \\ []) do
+    mode = opts[:mode]
+    eps = opts[:eps]
+    {m_in, n_in} = Nx.shape(a)
+
+    {a, m, n, k, wide_mode} = wide_mode_extension(a)
 
     type = Nx.Type.to_floating(Nx.type(a))
 
     base_h = Nx.eye(m, type: type, vectorized_axes: a.vectorized_axes)
-    take_column_shape = {Nx.axis_size(a, 0), 1}
-    column_iota = Nx.iota({Nx.axis_size(a, 1), 1}, vectorized_axes: a.vectorized_axes)
+    column_iota = Nx.iota({Nx.axis_size(a, 0)}, vectorized_axes: a.vectorized_axes)
 
     {{q, r}, _} =
       while {{q = base_h, r = Nx.as_type(a, type)}, {column_iota}}, i <- 0..(n - 2) do
-        x = Nx.take_along_axis(r, Nx.broadcast(i, take_column_shape), axis: 1)
-        x = Nx.select(column_iota < i, 0, x) |> Nx.flatten()
+        x = r[[.., i]]
+        x = Nx.select(column_iota < i, 0, x)
         h = householder_reflector(x, i)
         r = Nx.dot(h, r)
         q = Nx.dot(q, h)
         {{q, r}, {column_iota}}
       end
 
-    q = Nx.select(Nx.abs(q) < eps, 0, q)
-    r = Nx.select(Nx.abs(q) < eps, 0, r)
+    q = approximate_zeros(q, eps)
+    r = approximate_zeros(r, eps)
 
-    {q, r}
+    output_mode_handling(q, r, m_in, n_in, k, wide_mode, mode)
   end
+
+  deftransformp output_mode_handling(q, r, m_in, n_in, k, wide_mode, mode) do
+    {m, _} = Nx.shape(q)
+    {_, n} = Nx.shape(r)
+
+    cond do
+      wide_mode ->
+        # output {m, m} and {m, n} from q {n, n} and r {n, n}
+        {q[[0..(m_in - 1), 0..(m_in - 1)]], r[[0..(m_in - 1), 0..(n_in - 1)]]}
+
+      mode == :reduced and m > n ->
+        # output {m, m} and {n, n} from q {m, n} and r {n, n}
+        {q[[.., 0..(k - 1)]], r[[0..(n_in - 1), 0..(n_in - 1)]]}
+
+      true ->
+        {q, r}
+    end
+  end
+
+  defnp approximate_zeros(matrix, eps), do: Nx.select(Nx.abs(matrix) <= eps, 0, matrix)
 
   defn householder_reflector(x, i) do
     # x is a {n} tensor
     norm_x = Nx.LinAlg.norm(x)
+    x_i = x[i]
 
-    norm_sq_1on = norm_x ** 2 - x[i] ** 2
+    norm_sq_1on = norm_x ** 2 - x_i ** 2
 
     {v, scale} =
       case Nx.type(x) do
@@ -121,16 +161,20 @@ defmodule Nx.LinAlg.QR do
 
             true ->
               v_0 =
-                if x[i] <= 0 do
-                  x[i] - norm_x
+                if x_i <= 0 do
+                  x_i - norm_x
                 else
-                  -norm_sq_1on / (x[i] + norm_x)
+                  -norm_sq_1on / (x_i + norm_x)
                 end
 
-              v_0_sq = v_0 * v_0
-              scale = 2 * v_0_sq / (norm_sq_1on + v_0_sq)
+              v = Nx.put_slice(x, [i], Nx.reshape(v_0, {1}))
+              v = v / v_0
+              scale = 2 / Nx.dot(v, v)
 
-              v = Nx.put_slice(x / v_0, [i], Nx.tensor([1], type: Nx.type(x)))
+              # v_0_sq = v_0 ** 2
+              # scale = 2 * v_0_sq / (norm_sq_1on + v_0_sq)
+
+              # v = Nx.put_slice(x / v_0, [i], Nx.tensor([1], type: Nx.type(x)))
 
               {v, scale}
           end
