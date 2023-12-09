@@ -16782,7 +16782,7 @@ defmodule Nx do
       4
     >
 
-    iex> Nx.square(Nx.tensor([-1, 0, 1, 2, 3, 4])
+    iex> Nx.square(Nx.tensor([-1, 0, 1, 2, 3, 4]))
     #Nx.Tensor<
       s64[6]
       [1, 0, 1, 4, 9, 16]
