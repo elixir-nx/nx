@@ -98,7 +98,7 @@ defmodule Nx.LinAlg.QR do
 
     type = Nx.Type.to_floating(Nx.type(a))
 
-    base_h = Nx.eye({k, n}, type: type, vectorized_axes: a.vectorized_axes)
+    base_h = Nx.eye({m, m}, type: type, vectorized_axes: a.vectorized_axes)
     column_iota = Nx.iota({Nx.axis_size(a, 0)}, vectorized_axes: a.vectorized_axes)
 
     {{q, r}, _} =
@@ -106,7 +106,6 @@ defmodule Nx.LinAlg.QR do
         x = r[[.., i]]
         x = Nx.select(column_iota < i, 0, x)
         h = householder_reflector(x, i, eps)
-        print_expr({q, r, h})
         r = Nx.dot(h, r)
         q = Nx.dot(q, h)
         {{q, r}, {column_iota}}
