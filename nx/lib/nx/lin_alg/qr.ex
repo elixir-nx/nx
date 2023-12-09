@@ -18,8 +18,6 @@ defmodule Nx.LinAlg.QR do
   deftransformp revectorize_result({q, r}, shape, vectorized_axes, opts) do
     {q_shape, r_shape} = Nx.Shape.qr(shape, opts)
 
-    dbg({q_shape, r_shape, shape, opts, vectorized_axes, q, r})
-
     {
       Nx.revectorize(q, vectorized_axes, target_shape: q_shape),
       Nx.revectorize(r, vectorized_axes, target_shape: r_shape)
@@ -83,10 +81,11 @@ defmodule Nx.LinAlg.QR do
         # describes the problem of computing QR factorization for wide matrices,
         # and suggests adding rows of zeros as a solution.
         a = Nx.pad(a, 0, [{0, m - n, 0}, {0, 0, 0}])
-        {a, n, n, n, true}
+        {a, n, n, n, true, n - 1}
 
       {m, n} ->
-        {a, m, n, min(m, n), false}
+        max_i = if m == n, do: n - 2, else: n - 1
+        {a, m, n, min(m, n), false, max_i}
     end
   end
 
@@ -95,7 +94,7 @@ defmodule Nx.LinAlg.QR do
     eps = opts[:eps]
     {m_in, n_in} = Nx.shape(a)
 
-    {a, m, n, k, wide_mode} = wide_mode_extension(a)
+    {a, m, n, k, wide_mode, max_i} = wide_mode_extension(a)
 
     type = Nx.Type.to_floating(Nx.type(a))
 
@@ -103,10 +102,10 @@ defmodule Nx.LinAlg.QR do
     column_iota = Nx.iota({Nx.axis_size(a, 0)}, vectorized_axes: a.vectorized_axes)
 
     {{q, r}, _} =
-      while {{q = base_h, r = Nx.as_type(a, type)}, {column_iota}}, i <- 0..(n - 2) do
+      while {{q = base_h, r = Nx.as_type(a, type)}, {column_iota}}, i <- 0..max_i do
         x = r[[.., i]]
         x = Nx.select(column_iota < i, 0, x)
-        h = householder_reflector(x, i)
+        h = householder_reflector(x, i, eps)
         r = Nx.dot(h, r)
         q = Nx.dot(q, h)
         {{q, r}, {column_iota}}
@@ -138,7 +137,7 @@ defmodule Nx.LinAlg.QR do
 
   defnp approximate_zeros(matrix, eps), do: Nx.select(Nx.abs(matrix) <= eps, 0, matrix)
 
-  defn householder_reflector(x, i) do
+  defn householder_reflector(x, i, eps) do
     # x is a {n} tensor
     norm_x = Nx.LinAlg.norm(x)
     x_i = x[i]
@@ -148,14 +147,14 @@ defmodule Nx.LinAlg.QR do
     {v, scale} =
       case Nx.type(x) do
         {:c, _} ->
-          alpha = Nx.exp(Nx.Constants.i() * Nx.phase(x[0]))
-          u = x + Nx.indexed_put(Nx.broadcast(0, x), Nx.new_axis(i, 0), alpha * norm_x)
+          alpha = Nx.exp(Nx.Constants.i() * Nx.phase(x[i]))
+          u = Nx.indexed_add(x, Nx.new_axis(i, 0), alpha * norm_x)
           v = u / Nx.LinAlg.norm(u)
           {v, 2}
 
         type ->
           cond do
-            norm_sq_1on < Nx.Constants.epsilon(Nx.Type.to_floating(type)) ->
+            norm_sq_1on < eps ->
               v = Nx.put_slice(x, [i], Nx.tensor([1], type: Nx.type(x)))
               {v, 0}
 
@@ -170,11 +169,6 @@ defmodule Nx.LinAlg.QR do
               v = Nx.put_slice(x, [i], Nx.reshape(v_0, {1}))
               v = v / v_0
               scale = 2 / Nx.dot(v, v)
-
-              # v_0_sq = v_0 ** 2
-              # scale = 2 * v_0_sq / (norm_sq_1on + v_0_sq)
-
-              # v = Nx.put_slice(x / v_0, [i], Nx.tensor([1], type: Nx.type(x)))
 
               {v, scale}
           end
