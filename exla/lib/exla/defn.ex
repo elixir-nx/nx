@@ -1002,11 +1002,6 @@ defmodule EXLA.Defn do
     raise ArgumentError, "XLA does not currently support the LU operation"
   end
 
-  defp to_operator(:qr, [{%{type: type}, %{type: type}}, tensor, opts], _ans, state) do
-    {q, r} = EXLA.Op.qr(to_type(tensor, type), opts[:mode] != :reduced)
-    EXLA.Op.tuple(state.builder, [q, r])
-  end
-
   defp to_operator(:eigh, [{%{type: type}, %{type: type}}, tensor, opts], _ans, state) do
     {eigvec, eigval} =
       EXLA.Op.eigh(

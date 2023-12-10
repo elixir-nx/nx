@@ -871,7 +871,6 @@ static ErlNifFunc exla_funcs[] = {
     {"cholesky", 1, cholesky},
     {"eigh", 4, eigh},
     {"lu", 1, lu},
-    {"qr", 2, qr},
     {"triangular_solve", 6, triangular_solve},
     // Infeed/Outfeed
     {"infeed", 2, infeed},

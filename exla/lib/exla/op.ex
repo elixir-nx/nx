@@ -758,17 +758,6 @@ defmodule EXLA.Op do
     }
   end
 
-  def qr(%Op{builder: builder, ref: operand}, full_matrices)
-      when is_boolean(full_matrices) do
-    full_matrices = boolean_to_int(full_matrices)
-    {q_ref, r_ref} = EXLA.NIF.qr(operand, full_matrices) |> unwrap!()
-
-    {
-      %Op{builder: builder, ref: q_ref},
-      %Op{builder: builder, ref: r_ref}
-    }
-  end
-
   def triangular_solve(
         %Op{builder: builder, ref: a},
         %Op{builder: builder, ref: b},
