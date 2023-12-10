@@ -41,22 +41,22 @@ defmodule EXLA.Builder do
     M.create_function(module, name, arg_shapes, List.wrap(return_shape), is_public)
   end
 
-  defp exla_shape(tensors) when is_list(tensors) do
+  def exla_shape(tensors) when is_list(tensors) do
     Enum.map(tensors, &exla_shape/1)
   end
 
-  defp exla_shape(tensors) when is_tuple(tensors) do
+  def exla_shape(tensors) when is_tuple(tensors) do
     tensors
     |> Tuple.to_list()
     |> Enum.map(&exla_shape/1)
     |> EXLA.Shape.make_tuple_shape()
   end
 
-  defp exla_shape(%{type: :token}) do
+  def exla_shape(%{type: :token}) do
     EXLA.Shape.make_token_shape()
   end
 
-  defp exla_shape(%{shape: shape, type: type}) do
+  def exla_shape(%{shape: shape, type: type}) do
     EXLA.Shape.make_shape(type, shape)
   end
 

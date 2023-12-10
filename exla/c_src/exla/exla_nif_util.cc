@@ -476,6 +476,7 @@ int get_primitive_type(ErlNifEnv* env, ERL_NIF_TERM term, xla::PrimitiveType* ty
   return 1;
 }
 
+
 ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape) {
   if (shape.IsTuple()) {
     int element_count = xla::ShapeUtil::TupleElementCount(shape);

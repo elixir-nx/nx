@@ -62,6 +62,10 @@ mlir::Type TypeIntToMLIRType(mlir::OpBuilder *builder, xla::PrimitiveType type_i
 
 mlir::TensorType
 GetMLIRType(mlir::OpBuilder *builder, std::vector<tsl::int64> dims, xla::PrimitiveType type_int) {
+  if (type_int == xla::PrimitiveType::TUPLE) {
+    std::cerr << "Tuples are not supported yet" << std::endl;
+    exit(1);
+  }
   auto type = TypeIntToMLIRType(builder, type_int);
   return mlir::RankedTensorType::get(dims, type);
 }
@@ -237,7 +241,7 @@ mlir::Value MLIRFunction::BitcastConvertOp(mlir::Value operand, xla::Shape shape
   absl::Span<const int64_t> dimensions_span = shape.dimensions();
   std::vector<int64_t> dimensions(dimensions_span.begin(), dimensions_span.end());
 
-  mlir::TensorType type = GetMLIRType(module_->builder(), dimensions, shape.element_type());
+  mlir::Type type = GetMLIRFunctionType(module_->builder(), &shape);
 
   auto op = builder->create<mlir::stablehlo::BitcastConvertOp>(builder->getUnknownLoc(), type, operand);
   return op;
@@ -732,7 +736,7 @@ mlir::Value MLIRFunction::IotaOp(xla::Shape shape, int64_t dimension) {
   absl::Span<const int64_t> dimensions_span = shape.dimensions();
   std::vector<int64_t> dimensions(dimensions_span.begin(), dimensions_span.end());
 
-  mlir::TensorType type = GetMLIRType(module_->builder(), dimensions, shape.element_type());
+  mlir::Type type = GetMLIRFunctionType(module_->builder(), &shape);
 
   return module_->builder()->create<mlir::stablehlo::IotaOp>(module_->builder()->getUnknownLoc(), type, dimension);
 }
@@ -748,7 +752,7 @@ mlir::Value MLIRFunction::DotGeneralOp(
   absl::Span<const int64_t> dimensions_span = output_shape.dimensions();
   std::vector<int64_t> dimensions(dimensions_span.begin(), dimensions_span.end());
 
-  mlir::TensorType output_type = GetMLIRType(module_->builder(), dimensions, output_shape.element_type());
+  mlir::Type output_type = GetMLIRFunctionType(module_->builder(), &output_shape);
   auto mlir_dnums = ConvertDotDimensionNumbersToAttr(module_->builder(), dnums);
 
   auto op = module_->builder()->create<mlir::stablehlo::DotGeneralOp>(
@@ -767,7 +771,7 @@ mlir::Value MLIRFunction::BroadcastInDimOp(mlir::Value operand, xla::Shape shape
 
   absl::Span<const int64_t> dimensions_span = shape.dimensions();
   std::vector<int64_t> dimensions(dimensions_span.begin(), dimensions_span.end());
-  mlir::TensorType result_type = GetMLIRType(module_->builder(), dimensions, shape.element_type());
+  mlir::Type result_type = GetMLIRFunctionType(module_->builder(), &shape);
 
   auto axes_attr = Int64ToDenseIntElementsAttr(module_->builder(), axes);
 
@@ -925,20 +929,24 @@ void ReplaceBlockArgumentsWithImplicitOperands(mlir::Operation *op, std::vector<
   }
 }
 
-mlir::Value MLIRFunction::IfOp(mlir::Value pred, xla::Shape output_shape, std::vector<mlir::Value> implicit_arguments, MLIRFunction *on_true, MLIRFunction *on_false) {
+std::vector<mlir::Value> MLIRFunction::IfOp(mlir::Value pred, std::vector<xla::Shape> output_shapes, std::vector<mlir::Value> implicit_arguments, MLIRFunction *on_true, MLIRFunction *on_false) {
   auto builder = module_->builder();
   builder->setInsertionPointToEnd(&func_->getBody().back());
 
-  auto span = output_shape.dimensions();
-  std::vector<tsl::int64> dims(span.begin(), span.end());
-  mlir::Type output_type = GetMLIRType(builder, dims, output_shape.element_type());
+  std::vector<mlir::Type> output_types;
+  output_types.reserve(output_shapes.size());
+
+  for (auto shape : output_shapes) {
+    auto type = GetMLIRFunctionType(builder, &shape);
+    output_types.push_back(type);
+  }
 
   pred = builder->create<mlir::stablehlo::ConvertOp>(builder->getUnknownLoc(), pred, builder->getIntegerType(1));
 
   implicit_arguments.insert(implicit_arguments.begin(), pred);
   mlir::ValueRange operands(implicit_arguments);
 
-  mlir::stablehlo::IfOp if_op = builder->create<mlir::stablehlo::IfOp>(builder->getUnknownLoc(), mlir::TypeRange({output_type}), pred);
+  mlir::stablehlo::IfOp if_op = builder->create<mlir::stablehlo::IfOp>(builder->getUnknownLoc(), mlir::TypeRange(output_types), pred);
 
   mlir::Region &trueBody = if_op.getTrueBranch();
   auto &onTrueBlocks = on_true->function()->getBody().getBlocks();
@@ -951,7 +959,10 @@ mlir::Value MLIRFunction::IfOp(mlir::Value pred, xla::Shape output_shape, std::v
   implicit_arguments.erase(implicit_arguments.begin());
   ReplaceBlockArgumentsWithImplicitOperands(if_op.getOperation(), implicit_arguments);
 
-  return if_op.getResult(0);
+  mlir::Operation::result_range result_range = if_op.getResults();
+  std::vector<mlir::Value> results(result_range.begin(), result_range.end());
+
+  return results;
 }
 
 mlir::Value MLIRFunction::SelectAndScatterOp(
@@ -1341,7 +1352,7 @@ mlir::Value MLIRFunction::InfeedOp(mlir::Value token, xla::Shape *shape) {
 
   auto span = shape->dimensions();
   std::vector<tsl::int64> dims(span.begin(), span.end());
-  mlir::Type result_type = GetMLIRType(builder, dims, shape->element_type());
+  mlir::Type result_type = GetMLIRFunctionType(builder, shape);
 
   auto infeed_op = builder->create<mlir::stablehlo::InfeedOp>(builder->getUnknownLoc(), mlir::TypeRange({result_type, token.getType()}), token);
   auto tuple = module_->builder()->create<mlir::stablehlo::TupleOp>(module_->builder()->getUnknownLoc(), infeed_op.getResults());

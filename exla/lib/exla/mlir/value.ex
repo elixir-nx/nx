@@ -22,7 +22,7 @@ defmodule EXLA.MLIR.Value do
 
     def unquote(op)(
           %Value{ref: lhs, function: %Function{} = func},
-          %Value{ref: rhs, function: %Function{} = func}
+          %Value{ref: rhs, function: %Function{}}
         ) do
       ref = EXLA.NIF.unquote(mlir_op)(func.ref, lhs, rhs) |> unwrap!()
       %Value{ref: ref, function: func}
@@ -77,7 +77,7 @@ defmodule EXLA.MLIR.Value do
   end
 
   def tuple([%Value{function: %Function{} = func} | _rest] = vals) do
-    refs = Enum.map(vals, fn %Value{ref: ref, function: ^func} -> ref end)
+    refs = Enum.map(vals, fn %Value{ref: ref, function: _} -> ref end)
     ref = EXLA.NIF.mlir_tuple(func.ref, refs) |> unwrap!()
     %Value{ref: ref, function: func}
   end
@@ -135,7 +135,7 @@ defmodule EXLA.MLIR.Value do
     stable = if stable, do: 1, else: 0
 
     in_refs =
-      Enum.map(values, fn %Value{ref: ref, function: %Function{ref: ^func_ref}} -> ref end)
+      Enum.map(values, fn %Value{ref: ref} -> ref end)
 
     out_refs =
       EXLA.NIF.mlir_sort(func_ref, in_refs, axis, comparator_fun, stable) |> unwrap!()
@@ -277,8 +277,8 @@ defmodule EXLA.MLIR.Value do
 
   def select(
         %Value{function: func} = pred,
-        %Value{function: func} = on_true,
-        %Value{function: func} = on_false
+        %Value{} = on_true,
+        %Value{} = on_false
       ) do
     ref =
       EXLA.NIF.mlir_select(func.ref, pred.ref, on_true.ref, on_false.ref)
@@ -554,7 +554,7 @@ defmodule EXLA.MLIR.Value do
 
   def if(
         %Value{} = pred,
-        %EXLA.Shape{} = output_shape,
+        [%EXLA.Shape{} | _] = output_shapes,
         true_args,
         %Function{} = on_true,
         false_args,
@@ -562,18 +562,18 @@ defmodule EXLA.MLIR.Value do
       ) do
     implicit_args_refs = Enum.map(true_args ++ false_args, & &1.ref)
 
-    ref =
+    refs =
       EXLA.NIF.mlir_if(
         pred.function.ref,
         pred.ref,
-        output_shape.ref,
+        Enum.map(output_shapes, & &1.ref),
         implicit_args_refs,
         on_true.ref,
         on_false.ref
       )
       |> unwrap!()
 
-    %Value{ref: ref, function: pred.function}
+    Enum.map(refs, &%Value{ref: &1, function: pred.function})
   end
 
   def infeed(%Value{function: function} = token, %EXLA.Shape{} = shape) do

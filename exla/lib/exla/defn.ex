@@ -532,7 +532,7 @@ defmodule EXLA.Defn do
           # We need to collect the returned values into the nested tuples
           # that should have come from the while expr
           [token | results] = mod.while(pred, body, initial)
-          result = collect_while_results(results, initial_arg)
+          result = collect_container_results(results, initial_arg)
           {token, result}
 
         _ ->
@@ -2108,14 +2108,10 @@ defmodule EXLA.Defn do
 
     token_shape = EXLA.Shape.make_token_shape()
 
+    output = {struct(Nx.Tensor, %{type: :token}), expr}
+
     function =
-      EXLA.Builder.new(
-        {module, name},
-        [{"p0", token_shape} | arg_shapes],
-        {struct(Nx.Tensor, %{type: :token}), expr},
-        :mlir,
-        false
-      )
+      EXLA.Builder.new({module, name}, [{"p0", token_shape} | arg_shapes], output, :mlir, true)
 
     [arg_token | _] = args = EXLA.MLIR.Function.get_arguments(function)
 
@@ -2129,8 +2125,8 @@ defmodule EXLA.Defn do
     }
 
     {res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
-    res = Value.tuple([arg_token, res])
 
+    res = collect_container_results(List.flatten([arg_token, res]), output)
     {EXLA.Builder.build(res), merge_outfeed(cache, comp_cache)}
   end
 
@@ -2398,20 +2394,12 @@ defmodule EXLA.Defn do
     {false_args, false_comp, cache} =
       to_if_branch(false, on_false, false_ids, true_ids, state, cache)
 
+    output_shape = [on_true] |> Nx.Defn.Composite.flatten_list() |> EXLA.Builder.exla_shape()
+
     case builder do
       %EXLA.MLIR.Function{} ->
-        if_op =
-          Value.if(
-            pred_op,
-            EXLA.Shape.make_shape(on_true.type, on_true.shape),
-            true_args,
-            true_comp,
-            false_args,
-            false_comp
-          )
-
-        # TO-DO(mlir): this tuple should probably be the outfeed tuple
-        {Value.tuple([if_op, if_op]), cache}
+        if_op = Value.if(pred_op, output_shape, true_args, true_comp, false_args, false_comp)
+        {Value.tuple([get_token(cache), collect_container_results(if_op, on_true)]), cache}
 
       _ ->
         {EXLA.Op.conditional(pred_op, true_args, true_comp, false_args, false_comp), cache}
@@ -2458,9 +2446,9 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp to_if_branch(bool, expr, current_ids, other_ids, %{scope_ids: ids} = state, cache) do
+  defp to_if_branch(bool, expr_in, current_ids, other_ids, %{scope_ids: ids} = state, cache) do
     {expr, {_, ids_args}} =
-      Composite.traverse(expr, {%{}, %{}}, &collect_args(&1, &2, {ids, other_ids}))
+      Composite.traverse(expr_in, {%{}, %{}}, &collect_args(&1, &2, {ids, other_ids}))
 
     sorted_ids_args = Enum.sort_by(ids_args, fn {_id, {i, _old, _new}} -> i end)
 
@@ -2483,13 +2471,14 @@ defmodule EXLA.Defn do
         recur_composite(expr, &cast_pred_to_u8/1, comp_state, comp_cache)
       end)
 
-    args =
+    {args, comp} =
       case state.builder do
         %EXLA.MLIR.Function{} ->
-          args
+          [%{function: fun} | _] = Value.variadic_return(comp, true)
+          {args, fun}
 
         _ ->
-          EXLA.Op.tuple(state.builder, args)
+          {EXLA.Op.tuple(state.builder, args), comp}
       end
 
     {args, comp, merge_outfeed(cache, comp_cache)}
@@ -2502,18 +2491,37 @@ defmodule EXLA.Defn do
          cache,
          fun
        ) do
-    # TO-DO(mlir): deal with token
-    inputs = Enum.with_index(args, fn arg, idx -> {"p#{idx}", Value.get_shape(arg)} end)
+    inputs = Enum.with_index(args, fn arg, idx -> {"p#{idx + 1}", Value.get_shape(arg)} end)
 
-    # input function is actually the parent function still, so we need to actually create a new function
-    # with this name on the same module.
-    function = EXLA.Builder.new({module, name}, inputs, out_expr, :mlir, true)
+    token = get_token(cache)
+    # TO-DO(mlir): add proper check for token
+    if false and token do
+      function =
+        EXLA.Builder.new(
+          {module, name},
+          [{"p0", Value.get_shape(token)} | inputs],
+          {struct(Nx.Tensor, type: :token), out_expr},
+          :mlir,
+          false,
+          true
+        )
 
-    params = EXLA.MLIR.Function.get_arguments(function)
+      [comp_token | params] = EXLA.MLIR.Function.get_arguments(function)
+      params = Enum.with_index(params, fn x, idx -> {idx, x} end)
+      comp_cache = reset_token(cache, comp_token)
+      {res, comp_cache} = fun.(function, params, comp_cache)
+      {[token | args], [get_token(comp_cache), res], comp_cache}
+    else
+      function = EXLA.Builder.new({module, name}, inputs, out_expr, :mlir, false, true)
 
-    {res, comp_cache} = fun.(function, Enum.with_index(params, fn x, idx -> {idx, x} end), cache)
+      params =
+        EXLA.MLIR.Function.get_arguments(function) |> Enum.with_index(fn x, idx -> {idx, x} end)
 
-    {args, EXLA.Builder.build(res), comp_cache}
+      {res, comp_cache} = fun.(function, params, cache)
+
+      EXLA.NIF.dump_mlir_module(function.module.ref)
+      {args, [res], comp_cache}
+    end
   end
 
   defp if_branch_computation(subbuilder, _out_expr, args, cache, fun) do
@@ -2667,18 +2675,22 @@ defmodule EXLA.Defn do
     |> to_type(out.type)
   end
 
-  defp collect_while_results(flat_list, expected_container) do
-    {collected, []} = collect_while_results_unflatten(flat_list, expected_container)
+  defp collect_container_results(flat_list, expected_container) do
+    {collected, []} = collect_container_results_unflatten(flat_list, expected_container)
     collected
   end
 
-  defp collect_while_results_unflatten(list, tuple) when is_list(list) and is_tuple(tuple) do
+  defp collect_container_results_unflatten(list, tuple) when is_list(list) and is_tuple(tuple) do
     {elements, list} = Enum.split(list, tuple_size(tuple))
-    {unnested, list} = Enum.map_reduce(elements, list, &collect_while_results_unflatten/2)
+    {unnested, list} = Enum.map_reduce(elements, list, &collect_container_results_unflatten/2)
     {Value.tuple(unnested), list}
   end
 
-  defp collect_while_results_unflatten(%Value{} = value, _) do
+  defp collect_container_results_unflatten([%Value{} = value], %Nx.Tensor{}) do
+    {value, []}
+  end
+
+  defp collect_container_results_unflatten(%Value{} = value, _) do
     {value, []}
   end
 

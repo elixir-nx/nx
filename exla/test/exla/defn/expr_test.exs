@@ -3738,6 +3738,7 @@ defmodule EXLA.Defn.ExprTest do
     defn qr_complete(t), do: Nx.LinAlg.qr(t, mode: :complete)
 
     test "qr" do
+      IO.gets("PID #{:os.getpid()}")
       input = Nx.iota({3, 2})
       output = Nx.as_type(input, {:f, 32})
 
@@ -3754,6 +3755,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn svd(t), do: Nx.LinAlg.svd(t)
 
+    @tag :mlir_linalg_nor_supported_yet
     test "svd" do
       input = Nx.iota({3, 3})
       output = Nx.as_type(input, {:f, 32})

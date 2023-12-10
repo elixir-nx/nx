@@ -996,6 +996,18 @@ defmodule EXLA.MLIR.CompilerTest do
       end
     end
 
+    defn cond_single_clause_container(t, x) do
+      pred = t == 1
+
+      cond do
+        pred ->
+          {t, {x + 10}}
+
+        true ->
+          {t, {x - 10}}
+      end
+    end
+
     test "single-clause" do
       f = EXLA.jit(&cond_single_clause/2, compiler_mode: :mlir)
       assert_equal(f.(Nx.tensor(1), Nx.tensor(10)), 12)
@@ -1007,6 +1019,12 @@ defmodule EXLA.MLIR.CompilerTest do
       assert_equal(f.(Nx.tensor(1.0), Nx.tensor(10)), 11.0)
       assert_equal(f.(Nx.tensor(2), Nx.tensor(10.0)), -2.0)
       assert_equal(f.(Nx.tensor(3), Nx.tensor(10)), -10)
+    end
+
+    test "single-clause container" do
+      f = EXLA.jit(&cond_single_clause_container/2, compiler_mode: :mlir)
+      assert_equal(f.(Nx.tensor(1), Nx.tensor(10)), {1, {20}})
+      assert_equal(f.(Nx.tensor(0), Nx.tensor(10.0)), {0, {0.0}})
     end
   end
 

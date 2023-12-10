@@ -735,19 +735,8 @@ ERL_NIF_TERM mlir_top_k(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Unable to get k.");
   }
 
-  std::vector<mlir::Value> res = (*function)->TopKOp(*operand, k);
-  size_t n = res.size();
-
-  std::vector<ERL_NIF_TERM> nif_terms;
-  nif_terms.reserve(n);
-
-  for (size_t i = 0; i < n; i++) {
-    nif_terms[i] = exla::nif::make<mlir::Value>(env, res[i]);
-  }
-
-  auto data = nif_terms.data();
-  auto list = enif_make_list_from_array(env, &data[0], n);
-  return exla::nif::ok(env, list);
+  std::vector<mlir::Value> result = (*function)->TopKOp(*operand, k);
+  return exla::nif::ok(env, exla::nif::make_list<mlir::Value>(env, result));
 }
 
 ERL_NIF_TERM mlir_sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -778,18 +767,7 @@ ERL_NIF_TERM mlir_sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   std::vector<mlir::Value> res = (*function)->SortOp(*comparator, operands, axis, stable);
-  size_t n = res.size();
-
-  std::vector<ERL_NIF_TERM> nif_terms;
-  nif_terms.reserve(n);
-
-  for (size_t i = 0; i < n; i++) {
-    nif_terms[i] = exla::nif::make<mlir::Value>(env, res[i]);
-  }
-
-  auto data = nif_terms.data();
-  auto list = enif_make_list_from_array(env, &data[0], n);
-  return exla::nif::ok(env, list);
+  return exla::nif::ok(env, exla::nif::make_list<mlir::Value>(env, res));
 }
 
 ERL_NIF_TERM mlir_reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -820,20 +798,7 @@ ERL_NIF_TERM mlir_reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   std::vector<mlir::Value> res = (*function)->ReduceOp(*reducer, init_values, inputs, dimensions);
-
-  size_t n = res.size();
-
-  std::vector<ERL_NIF_TERM> nif_terms;
-  nif_terms.reserve(n);
-
-  for (size_t i = 0; i < n; i++) {
-    nif_terms[i] = exla::nif::make<mlir::Value>(env, res[i]);
-  }
-
-  auto data = nif_terms.data();
-  auto list = enif_make_list_from_array(env, &data[0], n);
-
-  return exla::nif::ok(env, list);
+  return exla::nif::ok(env, exla::nif::make_list<mlir::Value>(env, res));
 }
 
 ERL_NIF_TERM mlir_window_reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -888,19 +853,7 @@ ERL_NIF_TERM mlir_window_reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM arg
                                                              window_dilations,
                                                              padding);
 
-  size_t n = res.size();
-
-  std::vector<ERL_NIF_TERM> nif_terms;
-  nif_terms.reserve(n);
-
-  for (size_t i = 0; i < n; i++) {
-    nif_terms[i] = exla::nif::make<mlir::Value>(env, res[i]);
-  }
-
-  auto data = nif_terms.data();
-  auto list = enif_make_list_from_array(env, &data[0], n);
-
-  return exla::nif::ok(env, list);
+  return exla::nif::ok(env, exla::nif::make_list<mlir::Value>(env, res));
 }
 
 ERL_NIF_TERM mlir_map(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -941,7 +894,7 @@ ERL_NIF_TERM mlir_if(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   std::vector<mlir::Value> implicit_args;
   exla::MLIRFunction** on_true;
   exla::MLIRFunction** on_false;
-  xla::Shape* output_shape;
+  std::vector<xla::Shape> output_shapes;
 
   if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
     return exla::nif::error(env, "Unable to get function.");
@@ -949,8 +902,8 @@ ERL_NIF_TERM mlir_if(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get<mlir::Value>(env, argv[1], pred)) {
     return exla::nif::error(env, "Unable to get pred.");
   }
-  if (!exla::nif::get<xla::Shape>(env, argv[2], output_shape)) {
-    return exla::nif::error(env, "Unable to get shape.");
+  if (!exla::nif::get_list<xla::Shape>(env, argv[2], output_shapes)) {
+    return exla::nif::error(env, "Unable to get output shapes.");
   }
   if (!exla::nif::get_list<mlir::Value>(env, argv[3], implicit_args)) {
     return exla::nif::error(env, "Unable to get implicit_args.");
@@ -962,9 +915,9 @@ ERL_NIF_TERM mlir_if(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Unable to get on_false.");
   }
 
-  mlir::Value result = (*function)->IfOp(*pred, *output_shape, implicit_args, *on_true, *on_false);
+  std::vector<mlir::Value> result = (*function)->IfOp(*pred, output_shapes, implicit_args, *on_true, *on_false);
 
-  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
+  return exla::nif::ok(env, exla::nif::make_list<mlir::Value>(env, result));
 }
 
 ERL_NIF_TERM mlir_bitcast_convert(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -1604,18 +1557,7 @@ ERL_NIF_TERM mlir_while(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   std::vector<mlir::Value> result = (*function)->WhileOp(*pred, *body, initial);
 
-  size_t n = result.size();
-
-  std::vector<ERL_NIF_TERM> nif_terms;
-  nif_terms.reserve(n);
-
-  for (size_t i = 0; i < n; i++) {
-    nif_terms[i] = exla::nif::make<mlir::Value>(env, result[i]);
-  }
-
-  auto data = nif_terms.data();
-  auto list = enif_make_list_from_array(env, &data[0], n);
-  return exla::nif::ok(env, list);
+  return exla::nif::ok(env, exla::nif::make_list<mlir::Value>(env, result));
 }
 
 ERL_NIF_TERM mlir_return(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -1634,18 +1576,5 @@ ERL_NIF_TERM mlir_return(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   std::vector<mlir::Value> res = (*function)->ReturnOp(operands);
-
-  size_t n = res.size();
-
-  std::vector<ERL_NIF_TERM> nif_terms;
-  nif_terms.reserve(n);
-
-  for (size_t i = 0; i < n; i++) {
-    nif_terms[i] = exla::nif::make<mlir::Value>(env, res[i]);
-  }
-
-  auto data = nif_terms.data();
-  auto list = enif_make_list_from_array(env, &data[0], n);
-
-  return exla::nif::ok(env, list);
+  return exla::nif::ok(env, exla::nif::make_list<mlir::Value>(env, res));
 }
