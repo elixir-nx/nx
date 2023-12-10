@@ -74,7 +74,7 @@ defmodule EXLA.Builder do
     EXLA.Shape.make_token_shape()
   end
 
-  def exla_shape(%Nx.Tensor{type: {:tuple, _size}, data: %{args: args}} = input, flatten_tuple) do
+  def exla_shape(%Nx.Tensor{type: {:tuple, _size}, data: %{args: args}}, flatten_tuple) do
     tuple = Enum.map(args, &exla_shape(&1, flatten_tuple))
 
     if flatten_tuple do
