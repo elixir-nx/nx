@@ -3,10 +3,6 @@ defmodule EXLA.MLIR.CompilerTest do
 
   import Nx.Defn
 
-  setup do
-    Nx.Defn.default_options(compiler: EXLA, compiler_mode: :mlir)
-  end
-
   @broadcast_types [s: 8, u: 8, s: 64, u: 64, f: 32, f: 16, f: 64]
   @types [
     s: 8,
@@ -24,6 +20,9 @@ defmodule EXLA.MLIR.CompilerTest do
     c: 64,
     c: 128
   ]
+
+  skip = Nx.Defn.default_options()[:compiler_mode] != :mlir
+  @moduletag skip: skip
 
   describe "create_function" do
     test "creates with tuple arguments" do

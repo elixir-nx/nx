@@ -22,7 +22,7 @@ defmodule EXLA.MLIR.Value do
 
     def unquote(op)(
           %Value{ref: lhs, function: %Function{} = func},
-          %Value{ref: rhs, function: %Function{}}
+          %Value{ref: rhs, function: %Function{} = func}
         ) do
       ref = EXLA.NIF.unquote(mlir_op)(func.ref, lhs, rhs) |> unwrap!()
       %Value{ref: ref, function: func}
@@ -77,7 +77,7 @@ defmodule EXLA.MLIR.Value do
   end
 
   def tuple([%Value{function: %Function{} = func} | _rest] = vals) do
-    refs = Enum.map(vals, fn %Value{ref: ref, function: _} -> ref end)
+    refs = Enum.map(vals, fn %Value{ref: ref, function: ^func} -> ref end)
     ref = EXLA.NIF.mlir_tuple(func.ref, refs) |> unwrap!()
     %Value{ref: ref, function: func}
   end
@@ -135,7 +135,7 @@ defmodule EXLA.MLIR.Value do
     stable = if stable, do: 1, else: 0
 
     in_refs =
-      Enum.map(values, fn %Value{ref: ref} -> ref end)
+      Enum.map(values, fn %Value{ref: ref, function: %Function{ref: ^func_ref}} -> ref end)
 
     out_refs =
       EXLA.NIF.mlir_sort(func_ref, in_refs, axis, comparator_fun, stable) |> unwrap!()
@@ -277,8 +277,8 @@ defmodule EXLA.MLIR.Value do
 
   def select(
         %Value{function: func} = pred,
-        %Value{} = on_true,
-        %Value{} = on_false
+        %Value{function: func} = on_true,
+        %Value{function: func} = on_false
       ) do
     ref =
       EXLA.NIF.mlir_select(func.ref, pred.ref, on_true.ref, on_false.ref)
