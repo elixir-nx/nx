@@ -1000,10 +1000,10 @@ defmodule EXLA.MLIR.CompilerTest do
 
       cond do
         pred ->
-          {t, {x + 10}}
+          {t * 1.0, {x + 10}}
 
         true ->
-          {t, {x - 10}}
+          {t * 1.0, {x - 10}}
       end
     end
 
@@ -1020,16 +1020,15 @@ defmodule EXLA.MLIR.CompilerTest do
       assert_equal(f.(Nx.tensor(3), Nx.tensor(10)), -10)
     end
 
-    @tag :skip
     test "single-clause container" do
       f = EXLA.jit(&cond_single_clause_container/2, compiler_mode: :mlir)
-      assert_equal(f.(Nx.tensor(1), Nx.tensor(10)), {1, {20}})
-      assert_equal(f.(Nx.tensor(0), Nx.tensor(10.0)), {0, {0.0}})
+      assert_equal(f.(Nx.tensor(1), Nx.tensor(10)), {1.0, {20}})
+      assert_equal(f.(Nx.tensor(0), Nx.tensor(10.0)), {0.0, {0.0}})
     end
   end
 
   describe "call" do
-    test "enables optional callbacks" do
+    test "enables optional callba\cks" do
       t = Nx.tensor([-1, 0, 1])
 
       # ensure that the callback is not implemented in the backend
