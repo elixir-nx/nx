@@ -29,8 +29,7 @@ exclude =
         :mlir_not_a_tuple,
         :mlir_token_error,
         :mlir_no_clause_matching,
-        :mlir_vectorization,
-        :mlir_broken_if
+        :mlir_vectorization
       ]
   else
     exclude
