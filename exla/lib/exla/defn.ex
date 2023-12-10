@@ -2410,7 +2410,7 @@ defmodule EXLA.Defn do
         if_results =
           Value.if(
             pred_op,
-            [EXLA.Builder.exla_shape(on_true)],
+            List.wrap(EXLA.Builder.exla_shape(on_true, true)),
             true_args,
             true_comp,
             false_args,
@@ -2692,6 +2692,10 @@ defmodule EXLA.Defn do
     {elements, list} = Enum.split(list, tuple_size(tuple))
     {unnested, list} = Enum.map_reduce(elements, list, &collect_container_results_unflatten/2)
     {Value.tuple(unnested), list}
+  end
+
+  defp collect_container_results_unflatten([%Value{} = value], _) do
+    {value, []}
   end
 
   defp collect_container_results_unflatten(%Value{} = value, _) do
