@@ -177,55 +177,6 @@ defmodule Nx.BinaryBackend.Matrix do
 
   defp do_ts([], [], _idx, acc), do: acc
 
-  def qr(input_data, {_, s} = input_type, input_shape, output_type, m_in, k_in, n_in, opts) do
-    mode = opts[:mode]
-    eps = opts[:eps]
-
-    {input_data, m, n, k, wide_mode} =
-      if m_in < n_in do
-        # "Matrix Computations" by Golub and Van Loan: Section 5.4.1
-        # describes the problem of computing QR factorization for wide matrices,
-        # and suggests adding rows of zeros as a solution.
-
-        ext_size = s * (n_in - m_in) * n_in
-        extended = input_data <> <<0::size(ext_size)>>
-        {extended, n_in, n_in, n_in, true}
-      else
-        {input_data, m_in, n_in, k_in, false}
-      end
-
-    {q_matrix, r_matrix} =
-      input_data
-      |> binary_to_matrix(input_type, input_shape)
-      |> qr_decomposition(m, n, eps)
-
-    {q_matrix, r_matrix} =
-      cond do
-        wide_mode ->
-          # output {m, m} and {m, n} from q {n, n} and r {n, n}
-          q_matrix =
-            q_matrix
-            |> get_matrix_columns(0..(m_in - 1))
-            |> Enum.take(m_in)
-
-          r_matrix = Enum.take(r_matrix, m_in)
-          {q_matrix, r_matrix}
-
-        mode == :reduced and m > n ->
-          # output {m, m} and {n, n} from q {m, n} and r {n, n}
-          q_matrix = get_matrix_columns(q_matrix, 0..(k - 1))
-
-          r_matrix = Enum.drop(r_matrix, k - m)
-
-          {q_matrix, r_matrix}
-
-        true ->
-          {q_matrix, r_matrix}
-      end
-
-    {matrix_to_binary(q_matrix, output_type), matrix_to_binary(r_matrix, output_type)}
-  end
-
   defp qr_decomposition(matrix, m, n, eps) when m >= n do
     # QR decomposition is performed by using Householder transform
 

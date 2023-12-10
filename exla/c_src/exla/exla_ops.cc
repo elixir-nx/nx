@@ -1000,31 +1000,6 @@ ERL_NIF_TERM lu(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, enif_make_tuple3(env, lu, pivots, permutation));
 }
 
-ERL_NIF_TERM qr(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 2) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  xla::XlaOp* operand;
-  bool full_matrices;
-
-  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
-    return exla::nif::error(env, "Unable to get operand.");
-  }
-  if (!exla::nif::get(env, argv[1], &full_matrices)) {
-    return exla::nif::error(env, "Unable to get full matrices flag.");
-  }
-
-  xla::XlaOp q, r;
-
-  QrExplicit(*operand, full_matrices, q, r);
-
-  ERL_NIF_TERM q_term = exla::nif::make<xla::XlaOp>(env, q);
-  ERL_NIF_TERM r_term = exla::nif::make<xla::XlaOp>(env, r);
-
-  return exla::nif::ok(env, enif_make_tuple2(env, q_term, r_term));
-}
-
 ERL_NIF_TERM triangular_solve(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 6) {
     return exla::nif::error(env, "Bad argument count.");

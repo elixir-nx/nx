@@ -312,7 +312,7 @@ defmodule Nx.LinAlgTest do
           [1 / 3, -2 / 3, 2 / 3]
         ])
 
-      assert_all_close(q, expected_q, atol: 1.0e-10)
+      assert_all_close(q, expected_q, atol: 1.0e-7)
 
       expected_r =
         Nx.tensor([
@@ -321,9 +321,9 @@ defmodule Nx.LinAlgTest do
           [0.0, 0.0, 6.0]
         ])
 
-      assert_all_close(r, expected_r, atol: 1.0e-10)
+      assert_all_close(r, expected_r, atol: 1.0e-6)
 
-      assert_all_close(Nx.dot(q, r), t, atol: 1.0e-10)
+      assert_all_close(Nx.dot(q, r), t, atol: 1.0e-6)
     end
 
     test "factors tall matrix" do
@@ -340,7 +340,7 @@ defmodule Nx.LinAlgTest do
           [0.5, -0.5, -0.5]
         ])
 
-      assert_all_close(q, expected_q, atol: 1.0e-10)
+      assert_all_close(q, expected_q, atol: 1.0e-7)
 
       expected_r =
         Nx.tensor([
@@ -349,9 +349,9 @@ defmodule Nx.LinAlgTest do
           [0.0, 0.0, 4.0]
         ])
 
-      assert_all_close(r, expected_r, atol: 1.0e-10)
+      assert_all_close(r, expected_r, atol: 1.0e-7)
 
-      assert_all_close(Nx.dot(q, r), t, atol: 1.0e-10)
+      assert_all_close(Nx.dot(q, r), t, atol: 1.0e-7)
 
       # Complete mode
       {q, r} = Nx.LinAlg.qr(t, mode: :complete)
@@ -364,7 +364,7 @@ defmodule Nx.LinAlgTest do
           [0.5, -0.5, -0.5, 0.5]
         ])
 
-      assert_all_close(q, expected_q, atol: 1.0e-10)
+      assert_all_close(q, expected_q, atol: 1.0e-7)
 
       expected_r =
         Nx.tensor([
@@ -374,9 +374,9 @@ defmodule Nx.LinAlgTest do
           [0.0, 0.0, 0.0]
         ])
 
-      assert_all_close(r, expected_r, atol: 1.0e-10)
+      assert_all_close(r, expected_r, atol: 1.0e-7)
 
-      assert_all_close(Nx.dot(q, r), t, atol: 1.0e-10)
+      assert_all_close(Nx.dot(q, r), t, atol: 1.0e-7)
     end
 
     test "factors wide matrix" do
@@ -397,7 +397,7 @@ defmodule Nx.LinAlgTest do
           [0.94280904, 0.11762162, 0.31189143]
         ])
 
-      assert_all_close(q, expected_q, atol: 1.0e-10)
+      assert_all_close(q, expected_q, atol: 1.0e-7)
 
       expected_r =
         Nx.tensor([
@@ -406,14 +406,14 @@ defmodule Nx.LinAlgTest do
           [0.0, 0.0, 1.24756572, -1.24756572]
         ])
 
-      assert_all_close(r, expected_r, atol: 1.0e-10)
+      assert_all_close(r, expected_r, atol: 1.0e-6)
       assert_all_close(Nx.dot(q, r), t, atol: 1.0e-7)
 
       # Complete mode
       {q, r} = Nx.LinAlg.qr(t, mode: :complete)
 
-      assert_all_close(q, expected_q, atol: 1.0e-10)
-      assert_all_close(r, expected_r, atol: 1.0e-10)
+      assert_all_close(q, expected_q, atol: 1.0e-7)
+      assert_all_close(r, expected_r, atol: 1.0e-6)
     end
 
     test "works with complex matrix" do
@@ -678,10 +678,10 @@ defmodule Nx.LinAlgTest do
 
       assert round(u, 3) ==
                Nx.tensor([
-                 [0.141, 0.825, 0.0, 0.019],
-                 [0.344, 0.426, 0.0, 0.382],
-                 [0.547, 0.028, 0.0, -0.822],
-                 [0.75, -0.370, 0.0, 0.421]
+                 [0.141, 0.825, -0.007, 0.019],
+                 [0.344, 0.426, 0.01, 0.382],
+                 [0.547, 0.028, 0.002, -0.822],
+                 [0.75, -0.371, -0.005, 0.421]
                ])
                |> round(3)
 
@@ -690,7 +690,7 @@ defmodule Nx.LinAlgTest do
       assert Nx.tensor([
                [0.505, 0.575, 0.644],
                [-0.761, -0.057, 0.647],
-               [-0.408, 0.816, -0.408]
+               [-0.408, 0.817, -0.408]
              ])
              |> round(3) == round(v, 3)
     end

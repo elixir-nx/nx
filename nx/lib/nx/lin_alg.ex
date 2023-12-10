@@ -1008,8 +1008,8 @@ defmodule Nx.LinAlg do
         [
           [1.0, 0.0, 0.0],
           [0.0, 1.0, 0.0],
-          [0.0, 0.0, 0.7071067690849304],
-          [0.0, 0.0, 0.7071067690849304]
+          [0.0, 0.0, 0.7071068286895752],
+          [0.0, 0.0, 0.7071067094802856]
         ]
       >
       iex> r
@@ -1092,38 +1092,39 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) invalid :mode received. Expected one of [:reduced, :complete], received: :error_test
   """
   def qr(tensor, opts \\ []) do
-    apply_vectorized(tensor, fn tensor ->
-      opts = keyword!(opts, mode: :reduced, eps: 1.0e-10)
-      %T{type: type, shape: shape} = tensor
+    opts = keyword!(opts, mode: :reduced, eps: 1.0e-10)
+    %T{vectorized_axes: vectorized_axes} = tensor = Nx.to_tensor(tensor)
 
-      mode = opts[:mode]
-      valid_modes = [:reduced, :complete]
+    %T{type: type, shape: shape} = tensor = Nx.devectorize(tensor)
 
-      unless mode in valid_modes do
-        raise ArgumentError,
-              "invalid :mode received. Expected one of #{inspect(valid_modes)}, received: #{inspect(mode)}"
-      end
+    mode = opts[:mode]
+    valid_modes = [:reduced, :complete]
 
-      output_type = Nx.Type.to_floating(type)
-      {q_shape, r_shape} = Nx.Shape.qr(shape, opts)
+    unless mode in valid_modes do
+      raise ArgumentError,
+            "invalid :mode received. Expected one of #{inspect(valid_modes)}, received: #{inspect(mode)}"
+    end
 
-      impl!(tensor).qr(
-        {%{
-           tensor
-           | type: output_type,
-             shape: q_shape,
-             names: List.duplicate(nil, tuple_size(q_shape))
-         },
-         %{
-           tensor
-           | type: output_type,
-             shape: r_shape,
-             names: List.duplicate(nil, tuple_size(r_shape))
-         }},
-        tensor,
-        opts
-      )
-    end)
+    output_type = Nx.Type.to_floating(type)
+    {q_shape, r_shape} = Nx.Shape.qr(shape, opts)
+
+    output =
+      {%{
+         tensor
+         | type: output_type,
+           shape: q_shape,
+           names: List.duplicate(nil, tuple_size(q_shape))
+       },
+       %{
+         tensor
+         | type: output_type,
+           shape: r_shape,
+           names: List.duplicate(nil, tuple_size(r_shape))
+       }}
+
+    :qr
+    |> Nx.Shared.optional([tensor, opts], output, &Nx.LinAlg.QR.qr/2)
+    |> Nx.vectorize(vectorized_axes)
   end
 
   @doc """
@@ -1168,8 +1169,8 @@ defmodule Nx.LinAlg do
       #Nx.Tensor<
         f32[2][2]
         [
-          [3.9924843311309814, -1.0052789449691772],
-          [-3.005120038986206, 1.0071183443069458]
+          [3.992475986480713, -1.0052766799926758],
+          [-3.0051136016845703, 1.007116675376892]
         ]
       >
 
@@ -1177,7 +1178,7 @@ defmodule Nx.LinAlg do
       #Nx.Tensor<
         f32[2][3]
         [
-          [0.9999999403953552, 0.0, 0.9999999403953552],
+          [1.0, 0.0, 0.9999998807907104],
           [0.0, 1.0, 0.0]
         ]
       >
@@ -1422,7 +1423,7 @@ defmodule Nx.LinAlg do
       #Nx.Tensor<
         f32[4][4]
         [
-          [0.0, 0.9999999403953552, 0.0, 0.0],
+          [0.0, 1.0, 0.0, 0.0],
           [1.0, 0.0, 0.0, 0.0],
           [0.0, 0.0, -1.0, 0.0],
           [0.0, 0.0, 0.0, 1.0]
@@ -1431,7 +1432,7 @@ defmodule Nx.LinAlg do
       iex> s
       #Nx.Tensor<
         f32[3]
-        [3.0, 1.9999998807907104, 1.0]
+        [3.0, 2.0, 1.0]
       >
       iex> vt
       #Nx.Tensor<
@@ -1448,7 +1449,7 @@ defmodule Nx.LinAlg do
       #Nx.Tensor<
         f32[4][3]
         [
-          [0.0, 0.9999999403953552, 0.0],
+          [0.0, 1.0, 0.0],
           [1.0, 0.0, 0.0],
           [0.0, 0.0, -1.0],
           [0.0, 0.0, 0.0]
@@ -1457,7 +1458,7 @@ defmodule Nx.LinAlg do
       iex> s
       #Nx.Tensor<
         f32[3]
-        [3.0, 1.9999998807907104, 1.0]
+        [3.0, 2.0, 1.0]
       >
       iex> vt
       #Nx.Tensor<
@@ -1761,8 +1762,8 @@ defmodule Nx.LinAlg do
       #Nx.Tensor<
         f32[2][2]
         [
-          [-2.0, 1.0],
-          [1.5, -0.5]
+          [-2.000000476837158, 1.0000003576278687],
+          [1.5000004768371582, -0.5000002384185791]
         ]
       >
 
@@ -1790,8 +1791,8 @@ defmodule Nx.LinAlg do
             [2.75, -0.75]
           ],
           [
-            [-110.37469482421875, 76.8747787475586],
-            [92.249755859375, -64.24981689453125]
+            [-110.37397766113281, 76.8742904663086],
+            [92.24915313720703, -64.2494125366211]
           ]
         ]
       >

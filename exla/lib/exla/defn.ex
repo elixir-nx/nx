@@ -1002,11 +1002,6 @@ defmodule EXLA.Defn do
     raise ArgumentError, "XLA does not currently support the LU operation"
   end
 
-  defp to_operator(:qr, [{%{type: type}, %{type: type}}, tensor, opts], _ans, state) do
-    {q, r} = EXLA.Op.qr(to_type(tensor, type), opts[:mode] != :reduced)
-    EXLA.Op.tuple(state.builder, [q, r])
-  end
-
   defp to_operator(:eigh, [{%{type: type}, %{type: type}}, tensor, opts], _ans, state) do
     {eigvec, eigval} =
       EXLA.Op.eigh(
@@ -2405,10 +2400,10 @@ defmodule EXLA.Defn do
 
     case builder do
       %EXLA.MLIR.Function{} ->
-        if_op =
+        [if_op] =
           Value.if(
             pred_op,
-            EXLA.Shape.make_shape(on_true.type, on_true.shape),
+            [EXLA.Builder.exla_shape(on_true)],
             true_args,
             true_comp,
             false_args,

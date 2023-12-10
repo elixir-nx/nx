@@ -178,6 +178,7 @@ ERL_NIF_TERM get(ErlNifEnv* env, ERL_NIF_TERM term, T*& var) {
 // objects delete the copy-constructor. The move is intended
 // to represent a transfer of ownership of the object to
 // the VM.
+
 template <typename T>
 ERL_NIF_TERM make(ErlNifEnv* env, T& var) {
   void* ptr = enif_alloc_resource(resource_object<T>::type, sizeof(T));
@@ -187,6 +188,21 @@ ERL_NIF_TERM make(ErlNifEnv* env, T& var) {
   return ret;
 }
 
+template <typename T>
+ERL_NIF_TERM make_list(ErlNifEnv* env, std::vector<T> result) {
+  size_t n = result.size();
+
+  std::vector<ERL_NIF_TERM> nif_terms;
+  nif_terms.reserve(n);
+
+  for (size_t i = 0; i < n; i++) {
+    nif_terms[i] = exla::nif::make<T>(env, result[i]);
+  }
+
+  auto data = nif_terms.data();
+  auto list = enif_make_list_from_array(env, &data[0], n);
+  return list;
+}
 // Containers
 //
 // Both tuples and lists are treated as vectors, but extracting

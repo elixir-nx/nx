@@ -658,22 +658,6 @@ defmodule Nx.Defn.Grad do
     [{input, dl}]
   end
 
-  defp grad(:qr, [{q, r}, input, _opts], ans, [dq, dr]) do
-    # Definition taken from https://arxiv.org/pdf/2009.10071.pdf
-    # Equation (3)
-    {q, r} = Nx.Defn.Expr.tuple(ans, [q, r])
-    r_inv = Nx.LinAlg.invert(r)
-
-    m = Nx.dot(r, Nx.LinAlg.adjoint(dr)) |> Nx.subtract(Nx.dot(Nx.LinAlg.adjoint(dq), q))
-
-    # copyltu
-    m_ltu = Nx.tril(m) |> Nx.add(m |> Nx.tril(k: -1) |> Nx.LinAlg.adjoint())
-
-    da = dq |> Nx.add(Nx.dot(q, m_ltu)) |> Nx.dot(Nx.LinAlg.adjoint(r_inv))
-
-    [{input, da}]
-  end
-
   defp grad(:lu, [{p, l, u}, input, _opts], ans, [_dp, dl, du]) do
     # Definition taken from: https://sethaxen.com/blog/2021/02/differentiating-the-lu-decomposition/
     # Where dF = tril_strict(L^* . dL) + triu(dU . U^*)

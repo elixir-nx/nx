@@ -554,7 +554,7 @@ defmodule EXLA.MLIR.Value do
 
   def if(
         %Value{} = pred,
-        %EXLA.Shape{} = output_shape,
+        [%EXLA.Shape{} | _] = output_shapes,
         true_args,
         %Function{} = on_true,
         false_args,
@@ -562,18 +562,18 @@ defmodule EXLA.MLIR.Value do
       ) do
     implicit_args_refs = Enum.map(true_args ++ false_args, & &1.ref)
 
-    ref =
+    refs =
       EXLA.NIF.mlir_if(
         pred.function.ref,
         pred.ref,
-        output_shape.ref,
+        Enum.map(output_shapes, & &1.ref),
         implicit_args_refs,
         on_true.ref,
         on_false.ref
       )
       |> unwrap!()
 
-    %Value{ref: ref, function: pred.function}
+    Enum.map(refs, &%Value{ref: &1, function: pred.function})
   end
 
   def infeed(%Value{function: function} = token, %EXLA.Shape{} = shape) do

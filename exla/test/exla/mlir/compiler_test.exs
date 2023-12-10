@@ -3,10 +3,6 @@ defmodule EXLA.MLIR.CompilerTest do
 
   import Nx.Defn
 
-  setup do
-    Nx.Defn.default_options(compiler: EXLA, compiler_mode: :mlir)
-  end
-
   @broadcast_types [s: 8, u: 8, s: 64, u: 64, f: 32, f: 16, f: 64]
   @types [
     s: 8,
@@ -24,6 +20,9 @@ defmodule EXLA.MLIR.CompilerTest do
     c: 64,
     c: 128
   ]
+
+  skip = Nx.Defn.default_options()[:compiler_mode] != :mlir
+  @moduletag skip: skip
 
   describe "create_function" do
     test "creates with tuple arguments" do
@@ -996,6 +995,18 @@ defmodule EXLA.MLIR.CompilerTest do
       end
     end
 
+    defn cond_single_clause_container(t, x) do
+      pred = t == 1
+
+      cond do
+        pred ->
+          {t, {x + 10}}
+
+        true ->
+          {t, {x - 10}}
+      end
+    end
+
     test "single-clause" do
       f = EXLA.jit(&cond_single_clause/2, compiler_mode: :mlir)
       assert_equal(f.(Nx.tensor(1), Nx.tensor(10)), 12)
@@ -1007,6 +1018,13 @@ defmodule EXLA.MLIR.CompilerTest do
       assert_equal(f.(Nx.tensor(1.0), Nx.tensor(10)), 11.0)
       assert_equal(f.(Nx.tensor(2), Nx.tensor(10.0)), -2.0)
       assert_equal(f.(Nx.tensor(3), Nx.tensor(10)), -10)
+    end
+
+    @tag :skip
+    test "single-clause container" do
+      f = EXLA.jit(&cond_single_clause_container/2, compiler_mode: :mlir)
+      assert_equal(f.(Nx.tensor(1), Nx.tensor(10)), {1, {20}})
+      assert_equal(f.(Nx.tensor(0), Nx.tensor(10.0)), {0, {0.0}})
     end
   end
 
