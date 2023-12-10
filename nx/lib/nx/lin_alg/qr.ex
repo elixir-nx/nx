@@ -137,9 +137,20 @@ defmodule Nx.LinAlg.QR do
 
   defnp approximate_zeros(matrix, eps), do: Nx.select(Nx.abs(matrix) <= eps, 0, matrix)
 
+  defnp norm(x) do
+    case Nx.type(x) do
+      {:c, _} ->
+        Nx.sqrt(Nx.dot(x, Nx.conjugate(x)))
+
+      _ ->
+        Nx.sqrt(Nx.dot(x, x))
+    end
+  end
+
   defn householder_reflector(x, i, eps) do
     # x is a {n} tensor
-    norm_x = Nx.LinAlg.norm(x)
+    norm_x = norm(x)
+
     x_i = x[i]
 
     norm_sq_1on = norm_x ** 2 - x_i ** 2
@@ -149,7 +160,7 @@ defmodule Nx.LinAlg.QR do
         {:c, _} ->
           alpha = Nx.exp(Nx.Constants.i() * Nx.phase(x[i]))
           u = Nx.indexed_add(x, Nx.new_axis(i, 0), alpha * norm_x)
-          v = u / Nx.LinAlg.norm(u)
+          v = u / norm(u)
           {v, 2}
 
         type ->
