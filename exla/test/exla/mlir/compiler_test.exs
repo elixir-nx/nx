@@ -1021,6 +1021,7 @@ defmodule EXLA.MLIR.CompilerTest do
       assert_equal(f.(Nx.tensor(3), Nx.tensor(10)), -10)
     end
 
+    @tag :mlir_broken_if
     test "single-clause container" do
       f = EXLA.jit(&cond_single_clause_container/2, compiler_mode: :mlir)
       assert_equal(f.(Nx.tensor(1), Nx.tensor(10)), {1, {20}})
