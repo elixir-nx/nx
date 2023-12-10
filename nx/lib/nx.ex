@@ -12633,7 +12633,18 @@ defmodule Nx do
         {lhs, rhs} -> [hd(lhs), List.last(rhs)]
       end
 
-    %{multiply(reshape(t1, {size(t1), 1}), reshape(t2, {1, size(t2)})) | names: names}
+    out_type = binary_type(t1, t2)
+
+    lhs = reshape(t1, {size(t1), 1})
+
+    rhs =
+      if Nx.Type.complex?(out_type) do
+        reshape(conjugate(t2), {1, size(t2)})
+      else
+        reshape(t2, {1, size(t2)})
+      end
+
+    %{multiply(lhs, rhs) | names: names}
   end
 
   @doc """

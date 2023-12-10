@@ -153,13 +153,15 @@ defmodule Nx.LinAlg.QR do
 
     x_i = x[i]
 
-    norm_sq_1on = norm_x ** 2 - x_i ** 2
+    norm_sq_1on = norm_x ** 2 - Nx.abs(x_i) ** 2
 
     {v, scale} =
       case Nx.type(x) do
         {:c, _} ->
-          alpha = Nx.exp(Nx.Constants.i() * Nx.phase(x[i]))
-          u = Nx.indexed_add(x, Nx.new_axis(i, 0), alpha * norm_x)
+          phase = Nx.phase(x_i)
+          arg = Nx.complex(0, phase)
+          alpha = Nx.exp(arg) * norm_x
+          u = Nx.indexed_add(x, Nx.new_axis(i, 0), alpha)
           v = u / norm(u)
           {v, 2}
 
