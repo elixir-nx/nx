@@ -1000,10 +1000,23 @@ defmodule EXLA.MLIR.CompilerTest do
 
       cond do
         pred ->
-          {t, {x + 10}}
+          {t * 1.0, {x + 10}}
 
         true ->
-          {t, {x - 10}}
+          {t * 1.0, {x - 10}}
+      end
+    end
+
+    defn cond_multi_clause_container(t, x) do
+      cond do
+        t == 1 ->
+          %{a: t * 1.0, b: {x - 10}}
+
+        t == 2 ->
+          %{a: t * 2.0, b: {x - 20}}
+
+        true ->
+          %{a: t * 3.0, b: {x - 30}}
       end
     end
 
@@ -1020,11 +1033,17 @@ defmodule EXLA.MLIR.CompilerTest do
       assert_equal(f.(Nx.tensor(3), Nx.tensor(10)), -10)
     end
 
-    @tag :skip
     test "single-clause container" do
       f = EXLA.jit(&cond_single_clause_container/2, compiler_mode: :mlir)
-      assert_equal(f.(Nx.tensor(1), Nx.tensor(10)), {1, {20}})
-      assert_equal(f.(Nx.tensor(0), Nx.tensor(10.0)), {0, {0.0}})
+      assert_equal(f.(Nx.tensor(1), Nx.tensor(10)), {1.0, {20}})
+      assert_equal(f.(Nx.tensor(0), Nx.tensor(10.0)), {0.0, {0.0}})
+    end
+
+    test "multi-clause container" do
+      f = EXLA.jit(&cond_multi_clause_container/2, compiler_mode: :mlir)
+      assert_equal(f.(Nx.tensor(1), Nx.tensor(10)), %{a: 1.0, b: {0}})
+      assert_equal(f.(Nx.tensor(2), Nx.tensor(10.0)), %{a: 4.0, b: {-10.0}})
+      assert_equal(f.(Nx.tensor(3), Nx.u8(40)), %{a: 9.0, b: {Nx.u8(10)}})
     end
   end
 

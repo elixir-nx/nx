@@ -27,37 +27,69 @@ defmodule EXLA.Builder do
 
     return_shape =
       if sub? do
-        exla_shape(outputs)
+        exla_shape(outputs, false)
       else
         out_types = [outputs] |> Nx.Defn.Composite.flatten_list()
 
         if variadic_return? do
-          exla_shape(out_types)
+          exla_shape(out_types, true)
         else
-          out_types |> List.to_tuple() |> exla_shape()
+          out_types |> List.to_tuple() |> exla_shape(false)
         end
       end
 
-    M.create_function(module, name, arg_shapes, List.wrap(return_shape), is_public)
+    M.create_function(
+      module,
+      name,
+      exla_shape(arg_shapes, false),
+      List.wrap(return_shape),
+      is_public
+    )
   end
 
-  def exla_shape(tensors) when is_list(tensors) do
-    Enum.map(tensors, &exla_shape/1)
+  def exla_shape(tensors, flatten_tuple) when is_list(tensors) do
+    result = Enum.map(tensors, &exla_shape(&1, flatten_tuple))
+
+    if flatten_tuple do
+      List.flatten(result)
+    else
+      result
+    end
   end
 
-  def exla_shape(tensors) when is_tuple(tensors) do
-    tensors
-    |> Tuple.to_list()
-    |> Enum.map(&exla_shape/1)
-    |> EXLA.Shape.make_tuple_shape()
+  def exla_shape(tensors, flatten_tuple) when is_tuple(tensors) do
+    tuple =
+      tensors
+      |> Tuple.to_list()
+      |> Enum.map(&exla_shape(&1, flatten_tuple))
+
+    if flatten_tuple do
+      List.flatten(tuple)
+    else
+      EXLA.Shape.make_tuple_shape(tuple)
+    end
   end
 
-  def exla_shape(%{type: :token}) do
+  def exla_shape(%{type: :token}, _flatten_tuple) do
     EXLA.Shape.make_token_shape()
   end
 
-  def exla_shape(%{shape: shape, type: type}) do
+  def exla_shape(%Nx.Tensor{type: {:tuple, _size}, data: %{args: args}}, flatten_tuple) do
+    tuple = Enum.map(args, &exla_shape(&1, flatten_tuple))
+
+    if flatten_tuple do
+      List.flatten(tuple)
+    else
+      EXLA.Shape.make_tuple_shape(tuple)
+    end
+  end
+
+  def exla_shape(%{shape: shape, type: type}, _flatten_tuple) do
     EXLA.Shape.make_shape(type, shape)
+  end
+
+  def exla_shape(%EXLA.Shape{} = shape, _flatten_tuple) do
+    shape
   end
 
   defp new(name) when is_binary(name) do

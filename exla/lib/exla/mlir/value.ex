@@ -566,7 +566,7 @@ defmodule EXLA.MLIR.Value do
       EXLA.NIF.mlir_if(
         pred.function.ref,
         pred.ref,
-        Enum.map(output_shapes, & &1.ref),
+        flatten_shapes(output_shapes),
         implicit_args_refs,
         on_true.ref,
         on_false.ref
@@ -621,6 +621,20 @@ defmodule EXLA.MLIR.Value do
     refs = EXLA.NIF.mlir_return(function.ref, refs) |> unwrap!()
 
     Enum.map(refs, fn ref -> %Value{function: function, ref: ref} end)
+  end
+
+  defp flatten_shapes(val) when is_list(val) do
+    Enum.flat_map(val, &flatten_shapes/1)
+  end
+
+  defp flatten_shapes(val) do
+    case val do
+      %EXLA.Shape{dtype: {:tuple, element_shapes}} ->
+        Enum.flat_map(element_shapes, fn shape -> flatten_shapes(shape) end)
+
+      _ ->
+        [val.ref]
+    end
   end
 
   defp flatten_tuples(val) when is_list(val) do
