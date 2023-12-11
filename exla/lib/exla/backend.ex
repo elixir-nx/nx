@@ -290,7 +290,6 @@ defmodule EXLA.Backend do
       {:indexed_put, [:tensor, :indices, :updates, :opts], [:tensor, :indices, :updates]},
       {:lu, [:tensor, :opts], [:tensor]},
       {:triangular_solve, [:a, :b, :opts], [:a, :b]},
-      {:eigh, [:tensor, :opts], [:tensor]},
       {:fft, [:tensor, :opts], [:tensor]},
       {:ifft, [:tensor, :opts], [:tensor]}
     ] ++

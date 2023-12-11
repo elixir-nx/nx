@@ -868,7 +868,6 @@ static ErlNifFunc exla_funcs[] = {
     {"top_k", 2, top_k},
     {"variadic_sort", 4, variadic_sort},
     // LinAlg
-    {"eigh", 4, eigh},
     {"lu", 1, lu},
     {"triangular_solve", 6, triangular_solve},
     // Infeed/Outfeed

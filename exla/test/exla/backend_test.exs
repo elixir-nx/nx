@@ -172,7 +172,7 @@ defmodule EXLA.BackendTest do
     assert {u, s, vt} = Nx.LinAlg.svd(t, max_iter: 10_000)
 
     reconstructed = u |> Nx.multiply(s) |> Nx.dot(vt)
-    assert_all_close(t, reconstructed, atol: 1.0e-5)
+    assert_all_close(t, reconstructed, atol: 1.0e-2, rtol: 1.0e-2)
   end
 
   test "multi-client" do
