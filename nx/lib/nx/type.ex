@@ -67,7 +67,7 @@ defmodule Nx.Type do
   def min_finite_binary({:s, 32}), do: <<-2_147_483_648::32-signed-native>>
   def min_finite_binary({:s, 64}), do: <<-9_223_372_036_854_775_808::64-signed-native>>
   def min_finite_binary({:u, size}), do: <<0::size(size)-native>>
-  def min_finite_binary({:bf, 16}), do: <<0xFF80::16-native>>
+  def min_finite_binary({:bf, 16}), do: <<0xFF7F::16-native>>
   def min_finite_binary({:f, 16}), do: <<0xFBFF::16-native>>
   def min_finite_binary({:f, 32}), do: <<0xFF7FFFFF::32-native>>
   def min_finite_binary({:f, 64}), do: <<0xFFEFFFFFFFFFFFFF::64-native>>
@@ -92,7 +92,7 @@ defmodule Nx.Type do
   def max_finite_binary({:u, 16}), do: <<65535::16-native>>
   def max_finite_binary({:u, 32}), do: <<4_294_967_295::32-native>>
   def max_finite_binary({:u, 64}), do: <<18_446_744_073_709_551_615::64-native>>
-  def max_finite_binary({:bf, 16}), do: <<0x7F80::16-native>>
+  def max_finite_binary({:bf, 16}), do: <<0x7F7F::16-native>>
   def max_finite_binary({:f, 16}), do: <<0x7BFF::16-native>>
   def max_finite_binary({:f, 32}), do: <<0x7F7FFFFF::32-native>>
   def max_finite_binary({:f, 64}), do: <<0x7FEFFFFFFFFFFFFF::64-native>>
