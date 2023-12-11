@@ -75,7 +75,7 @@ defmodule Nx.LinAlg do
         f32[2][2]
         [
           [4.4721360206604, 0.0],
-          [3.9354796409606934, 0.7155413031578064]
+          [3.9354796409606934, 0.7155418395996094]
         ]
       >
 
@@ -85,7 +85,7 @@ defmodule Nx.LinAlg do
         [
           [
             [1.4142135381698608, 0.0],
-            [2.1213202476501465, 0.7071067690849304]
+            [2.1213204860687256, 0.7071064710617065]
           ],
           [
             [1.0, 0.0],
@@ -105,9 +105,9 @@ defmodule Nx.LinAlg do
         f32[4][4]
         [
           [2.4494898319244385, 0.0, 0.0, 0.0],
-          [1.2247449159622192, 2.1213202476501465, 0.0, 0.0],
-          [1.632993221282959, 1.4142135381698608, 2.309401035308838, 0.0],
-          [3.265986442565918, -1.4142135381698608, 1.5877132415771484, 3.132491111755371]
+          [1.2247447967529297, 2.1213202476501465, 0.0, 0.0],
+          [1.6329931020736694, 1.41421377658844, 2.309401035308838, 0.0],
+          [3.265986204147339, -1.4142134189605713, 1.5877134799957275, 3.132491111755371]
         ]
       >
 
@@ -128,7 +128,7 @@ defmodule Nx.LinAlg do
         [
           [
             [1.4142135381698608, 0.0],
-            [2.1213202476501465, 0.7071067690849304]
+            [2.1213204860687256, 0.7071064710617065]
           ],
           [
             [1.0, 0.0],
@@ -136,23 +136,22 @@ defmodule Nx.LinAlg do
           ]
         ]
       >
-
-  ## Error cases
-
-      iex> Nx.LinAlg.cholesky(Nx.tensor([[1.0, 2.0], [3.0, 4.0]]))
-      ** (ArgumentError) matrix must be hermitian, a matrix is hermitian iff X = adjoint(X)
   """
   def cholesky(tensor) do
-    apply_vectorized(tensor, fn tensor ->
-      %T{type: type, shape: shape, names: names} = tensor
+    %T{vectorized_axes: vectorized_axes} = tensor = Nx.to_tensor(tensor)
 
-      output_type = Nx.Type.to_floating(type)
+    %T{type: type, shape: shape, names: names} =
+      tensor = Nx.devectorize(tensor, keep_names: false)
 
-      {output_shape, output_names} = Nx.Shape.cholesky(shape, names)
+    output_type = Nx.Type.to_floating(type)
 
-      out = %{tensor | type: output_type, shape: output_shape, names: output_names}
-      impl!(tensor).cholesky(out, tensor)
-    end)
+    {output_shape, output_names} = Nx.Shape.cholesky(shape, names)
+
+    out = %{tensor | type: output_type, shape: output_shape, names: output_names}
+
+    :cholesky
+    |> Nx.Shared.optional([tensor], out, &Nx.LinAlg.Cholesky.cholesky/1)
+    |> Nx.vectorize(vectorized_axes)
   end
 
   @doc """
@@ -1169,8 +1168,8 @@ defmodule Nx.LinAlg do
       #Nx.Tensor<
         f32[2][2]
         [
-          [3.992475986480713, -1.0052766799926758],
-          [-3.0051136016845703, 1.007116675376892]
+          [3.9924778938293457, -1.0052770376205444],
+          [-3.005115032196045, 1.0071169137954712]
         ]
       >
 

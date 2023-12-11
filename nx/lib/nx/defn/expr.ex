@@ -1211,12 +1211,6 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def cholesky(out, tensor) do
-    tensor = to_expr(tensor)
-    expr(out, tensor.data.context, :cholesky, [tensor])
-  end
-
-  @impl true
   def triangular_solve(out, a, b, opts) do
     {[a, b], context} = to_exprs([a, b])
     expr(out, context, :triangular_solve, [a, b, opts])

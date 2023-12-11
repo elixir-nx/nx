@@ -96,7 +96,6 @@ defmodule Nx.Backend do
   @callback indexed_put(out :: tensor, tensor, indices :: tensor, updates :: tensor, keyword) ::
               tensor
 
-  @callback cholesky(out :: tensor, tensor) :: tensor
   @callback lu({p :: tensor, l :: tensor, u :: tensor}, tensor, keyword) :: tensor
   @callback triangular_solve(out :: tensor, a :: tensor, b :: tensor, keyword) :: tensor
   @callback eigh({eigenvals :: tensor, eigenvecs :: tensor}, tensor, keyword) :: tensor
@@ -139,6 +138,7 @@ defmodule Nx.Backend do
   @callback optional(atom, [term], fun) :: tensor
 
   @callback qr({q :: tensor, r :: tensor}, tensor, keyword) :: tensor
+  @callback cholesky(out :: tensor, tensor) :: tensor
   @callback solve(out :: tensor, a :: tensor, b :: tensor) :: tensor
   @callback determinant(out :: tensor, t :: tensor) :: tensor
   @callback logical_not(out :: tensor, t :: tensor) :: tensor
@@ -167,7 +167,8 @@ defmodule Nx.Backend do
     top_k: 3,
     fft2: 3,
     ifft2: 3,
-    qr: 3
+    qr: 3,
+    cholesky: 2
   ]
 
   ## Inspect implementation

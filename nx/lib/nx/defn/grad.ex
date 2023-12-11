@@ -636,28 +636,6 @@ defmodule Nx.Defn.Grad do
     pairs
   end
 
-  defp grad(:cholesky, [input], l, g) do
-    num = g |> Nx.tril() |> Nx.dot([0], l, [0]) |> Nx.transpose()
-    den = l |> Nx.shape() |> Nx.eye() |> Nx.add(1)
-    phi_tril = num |> Nx.divide(den) |> Nx.tril()
-
-    bm = Nx.LinAlg.triangular_solve(l, phi_tril, transform_a: :transpose)
-
-    dl =
-      l
-      |> conjugate_if_complex()
-      |> Nx.LinAlg.triangular_solve(bm, left_side: false)
-
-    # If we end up supporting the "make_symmetric" option for Nx.LinAlg.cholesky
-    # we need to apply: dl := (adjoint(dl) + dl)/2 when the option is true.
-    # If the option is applied as Nx.add(tensor, adjoint(tensor)) |> Nx.divide(2)
-    # on the expression, no modifications are needed here, because
-    # the grad for the transformation is actually the same transformation
-    # applied on the grad
-
-    [{input, dl}]
-  end
-
   defp grad(:lu, [{p, l, u}, input, _opts], ans, [_dp, dl, du]) do
     # Definition taken from: https://sethaxen.com/blog/2021/02/differentiating-the-lu-decomposition/
     # Where dF = tril_strict(L^* . dL) + triu(dU . U^*)
@@ -1507,9 +1485,6 @@ defmodule Nx.Defn.Grad do
   defp up_to(_, _), do: []
 
   defp argsort(list), do: list |> Enum.with_index() |> Enum.sort() |> Enum.map(&elem(&1, 1))
-
-  defp conjugate_if_complex(%{type: {:c, _}} = t), do: Nx.conjugate(t)
-  defp conjugate_if_complex(t), do: t
 
   defp grad_fft(kind, [t, opts], _ans, g) do
     nfft = opts[:length]

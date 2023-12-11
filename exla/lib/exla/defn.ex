@@ -1674,22 +1674,6 @@ defmodule EXLA.Defn do
     EXLA.Op.concatenate(tensors, axis)
   end
 
-  defp to_operator(:cholesky, [tensor], ans, state) do
-    tensor = to_type(tensor, ans.type)
-    cholesky = EXLA.Op.cholesky(tensor)
-
-    zeros =
-      state.builder
-      |> to_constant(0.0, ans.type)
-      |> EXLA.Op.broadcast_in_dim(ans.shape, broadcast_axes({}, ans.shape))
-
-    iota_shape = EXLA.Shape.make_shape({:s, 64}, ans.shape)
-    iota_one = EXLA.Op.iota(state.builder, iota_shape, 1)
-    iota_zero = EXLA.Op.iota(state.builder, iota_shape, 0)
-
-    EXLA.Op.select(EXLA.Op.less_equal(iota_one, iota_zero), cholesky, zeros)
-  end
-
   defp to_operator(:sort, [%mod{} = tensor, opts], ans, state) do
     dimension = opts[:axis]
 

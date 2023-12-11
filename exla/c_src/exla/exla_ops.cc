@@ -930,22 +930,6 @@ ERL_NIF_TERM ifft(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
 // LinAlg Functions
 
-ERL_NIF_TERM cholesky(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 1) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  xla::XlaOp* operand;
-
-  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
-    return exla::nif::error(env, "Unable to get operand.");
-  }
-
-  xla::XlaOp op = xla::Cholesky(*operand, true);
-
-  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
-}
-
 ERL_NIF_TERM eigh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 4) {
     return exla::nif::error(env, "Bad argument count.");

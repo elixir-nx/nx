@@ -734,11 +734,6 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def cholesky(%Op{builder: builder, ref: operand}) do
-    ref = EXLA.NIF.cholesky(operand) |> unwrap!()
-    %Op{builder: builder, ref: ref}
-  end
-
   def eigh(%Op{builder: builder, ref: operand}, lower, eps, max_iter) do
     {v_ref, w_ref} = EXLA.NIF.eigh(operand, lower, eps, max_iter) |> unwrap!()
 
