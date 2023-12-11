@@ -1230,24 +1230,6 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def cholesky(
-        %T{type: output_type, shape: output_shape} = out,
-        %T{type: input_type} = tensor
-      ) do
-    data = to_binary(tensor)
-    rank = tuple_size(output_shape)
-    n = elem(output_shape, rank - 1)
-
-    l =
-      bin_batch_reduce(data, n * n, input_type, <<>>, fn matrix, acc ->
-        l = B.Matrix.cholesky(matrix, input_type, {n, n}, output_type)
-        acc <> l
-      end)
-
-    from_binary(out, l)
-  end
-
-  @impl true
   def eigh(
         {%{type: output_type} = eigenvals_holder, eigenvecs_holder},
         %{type: input_type, shape: input_shape} = tensor,

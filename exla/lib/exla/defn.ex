@@ -809,9 +809,20 @@ defmodule EXLA.Defn do
   ## to_operator others
 
   defp to_operator(:metadata, [op, _metadata], _ans, state) do
+    %builder_mod{} = state.builder
+
     case op do
-      %EXLA.Op{} -> op
-      _ -> EXLA.Op.tuple(state.builder, Tuple.to_list(op))
+      %Value{} ->
+        op
+
+      %EXLA.Op{} ->
+        op
+
+      op when is_tuple(op) and builder_mod == EXLA.Builder ->
+        EXLA.Op.tuple(state.builder, Tuple.to_list(op))
+
+      op when is_tuple(op) ->
+        Value.tuple(Tuple.to_list(op))
     end
   end
 
@@ -1674,22 +1685,6 @@ defmodule EXLA.Defn do
     EXLA.Op.concatenate(tensors, axis)
   end
 
-  defp to_operator(:cholesky, [tensor], ans, state) do
-    tensor = to_type(tensor, ans.type)
-    cholesky = EXLA.Op.cholesky(tensor)
-
-    zeros =
-      state.builder
-      |> to_constant(0.0, ans.type)
-      |> EXLA.Op.broadcast_in_dim(ans.shape, broadcast_axes({}, ans.shape))
-
-    iota_shape = EXLA.Shape.make_shape({:s, 64}, ans.shape)
-    iota_one = EXLA.Op.iota(state.builder, iota_shape, 1)
-    iota_zero = EXLA.Op.iota(state.builder, iota_shape, 0)
-
-    EXLA.Op.select(EXLA.Op.less_equal(iota_one, iota_zero), cholesky, zeros)
-  end
-
   defp to_operator(:sort, [%mod{} = tensor, opts], ans, state) do
     dimension = opts[:axis]
 
@@ -1947,6 +1942,7 @@ defmodule EXLA.Defn do
 
         op == :greater ->
           is_nan = EXLA.Op.is_nan(arg1, type, {}, subbuilder)
+
           EXLA.Op.bitwise_or(is_nan, EXLA.Op.greater(arg1, arg2))
       end
 
