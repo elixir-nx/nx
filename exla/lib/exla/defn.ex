@@ -2121,7 +2121,7 @@ defmodule EXLA.Defn do
         [{"p0", token_shape} | arg_shapes],
         {struct(Nx.Tensor, %{type: :token}), expr},
         :mlir,
-        false
+        true
       )
 
     [arg_token | _] = args = EXLA.MLIR.Function.get_arguments(function)
@@ -2438,10 +2438,10 @@ defmodule EXLA.Defn do
 
   defp collect_args(%T{data: %Expr{id: id, op: op, args: args}} = expr, {cache, ids}, shared_ids) do
     cond do
-      op == :constant ->
-        {expr, {cache, ids}}
+      # op == :constant ->
+      #   {expr, {cache, ids}}
 
-      collect_arg?(id, op, args, shared_ids) ->
+      op == :constant == collect_arg?(id, op, args, shared_ids) ->
         case ids do
           %{^id => {_, _, new}} ->
             {new, {cache, ids}}
