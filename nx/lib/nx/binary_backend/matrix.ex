@@ -217,7 +217,6 @@ defmodule Nx.BinaryBackend.Matrix do
   end
 
   def eigh(input_data, input_type, {n, n} = input_shape, output_type, opts) do
-    
     eps = opts[:eps]
     max_iter = opts[:max_iter]
 

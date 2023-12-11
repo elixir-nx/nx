@@ -5,7 +5,7 @@ defmodule Nx.LinAlg.Eigh do
 
   defn eigh(a, opts \\ []) do
     opts =
-      keyword!(opts, eps: 1.0e-10, max_iter: 1_000)
+      keyword!(opts, eps: 1.0e-10, max_iter: 10_000)
 
     a
     |> Nx.revectorize([collapsed_axes: :auto],
@@ -25,12 +25,6 @@ defmodule Nx.LinAlg.Eigh do
       Nx.revectorize(eigenvecs, a.vectorized_axes, target_shape: shape)
     }
   end
-
-  # |> Nx.revectorize(vectorized_axes, target_shape: a.shape)
-
-  # custom_grad(result, [a], fn g ->
-  #   eigh_grad(result, a, g)
-  # end)
 
   defn eigh_matrix(a, opts \\ []) do
     # The input Hermitian matrix A reduced to Hessenberg matrix H by Householder transform.
