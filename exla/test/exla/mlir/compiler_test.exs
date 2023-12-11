@@ -1048,7 +1048,7 @@ defmodule EXLA.MLIR.CompilerTest do
   end
 
   describe "call" do
-    test "enables optional callba\cks" do
+    test "enables optional callbacks" do
       t = Nx.tensor([-1, 0, 1])
 
       # ensure that the callback is not implemented in the backend
