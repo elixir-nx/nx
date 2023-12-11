@@ -1346,30 +1346,27 @@ defmodule Nx.LinAlg do
 
       iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
       ** (ArgumentError) tensor must be a square matrix or a batch of square matrices, got shape: {2, 3}
-
-      iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2], [3, 4]]))
-      ** (ArgumentError) matrix must be hermitian, a matrix is hermitian iff X = adjoint(X)
   """
   def eigh(tensor, opts \\ []) do
-    apply_vectorized(tensor, fn tensor ->
-      opts = keyword!(opts, max_iter: 1_000, eps: 1.0e-4)
-      %T{type: type, shape: shape} = tensor
+    opts = keyword!(opts, max_iter: 1_000, eps: 1.0e-4)
+    %T{vectorized_axes: vectorized_axes} = tensor = Nx.to_tensor(tensor)
+    %T{type: type, shape: shape} = tensor = Nx.devectorize(tensor)
 
-      output_type = Nx.Type.to_floating(type)
+    output_type = Nx.Type.to_floating(type)
 
-      {eigenvals_shape, eigenvecs_shape} = Nx.Shape.eigh(shape)
-      rank = tuple_size(shape)
+    {eigenvals_shape, eigenvecs_shape} = Nx.Shape.eigh(shape)
+    rank = tuple_size(shape)
 
-      eigenvecs_name = List.duplicate(nil, rank)
-      eigenvals_name = tl(eigenvecs_name)
+    eigenvecs_name = List.duplicate(nil, rank)
+    eigenvals_name = tl(eigenvecs_name)
 
-      impl!(tensor).eigh(
-        {%{tensor | names: eigenvals_name, type: output_type, shape: eigenvals_shape},
-         %{tensor | names: eigenvecs_name, type: output_type, shape: eigenvecs_shape}},
-        tensor,
-        opts
-      )
-    end)
+    output =
+      {%{tensor | names: eigenvals_name, type: output_type, shape: eigenvals_shape},
+       %{tensor | names: eigenvecs_name, type: output_type, shape: eigenvecs_shape}}
+
+    :eigh
+    |> Nx.Shared.optional([tensor, opts], output, &Nx.LinAlg.Eigh.eigh/2)
+    |> Nx.vectorize(vectorized_axes)
   end
 
   @doc """

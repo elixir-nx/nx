@@ -1225,14 +1225,6 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def eigh({evals, evecs}, tensor, opts) do
-    tensor = to_expr(tensor)
-    context = tensor.data.context
-    out = %T{names: [], shape: {}, type: {:tuple, 2}}
-    tuple(expr(out, context, :eigh, [{evals, evecs}, tensor, opts]), [evals, evecs])
-  end
-
-  @impl true
   def sort(out, tensor, opts) do
     %{data: %{context: context}} = tensor = to_expr(tensor)
     expr(out, context, :sort, [tensor, opts])

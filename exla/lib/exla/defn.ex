@@ -1020,18 +1020,6 @@ defmodule EXLA.Defn do
     raise ArgumentError, "XLA does not currently support the LU operation"
   end
 
-  defp to_operator(:eigh, [{%{type: type}, %{type: type}}, tensor, opts], _ans, state) do
-    {eigvec, eigval} =
-      EXLA.Op.eigh(
-        to_type(tensor, type),
-        1,
-        Keyword.fetch!(opts, :eps),
-        Keyword.fetch!(opts, :max_iter)
-      )
-
-    EXLA.Op.tuple(state.builder, [eigval, eigvec])
-  end
-
   ## to_operator element-wise
 
   defp to_operator(:negate, [%Value{} = op], _ans, _state), do: Value.negate(op)

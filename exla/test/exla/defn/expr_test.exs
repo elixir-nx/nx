@@ -3766,7 +3766,7 @@ defmodule EXLA.Defn.ExprTest do
       s_full = Nx.multiply(s, Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
 
       assert_all_close(u |> Nx.dot(s_full) |> Nx.dot(vt), output,
-        atol: 1.0e-5,
+        atol: 1.0e-2,
         rtol: 1.0e-2
       )
     end

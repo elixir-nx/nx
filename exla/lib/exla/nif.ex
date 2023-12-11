@@ -379,8 +379,6 @@ defmodule EXLA.NIF do
 
   def get_tuple_element(_operand, _index), do: :erlang.nif_error(:undef)
 
-  def eigh(_operand, _lower, _eps, _max_iter), do: :erlang.nif_error(:undef)
-
   def lu(_operand), do: :erlang.nif_error(:undef)
 
   def triangular_solve(_a, _b, _left_side, _lower, _unit_diagonal, _transpose_a),

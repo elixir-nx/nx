@@ -930,40 +930,6 @@ ERL_NIF_TERM ifft(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
 // LinAlg Functions
 
-ERL_NIF_TERM eigh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 4) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  xla::XlaOp* operand;
-  bool lower;
-  double eps;
-  int64_t max_iter;
-
-  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
-    return exla::nif::error(env, "Unable to get operand.");
-  }
-  if (!exla::nif::get(env, argv[1], &lower)) {
-    return exla::nif::error(env, "Unable to get lower flag.");
-  }
-  if (!exla::nif::get(env, argv[2], &eps)) {
-    return exla::nif::error(env, "Unable to get eps.");
-  }
-  if (!exla::nif::get(env, argv[3], &max_iter)) {
-    return exla::nif::error(env, "Unable to get max_iter.");
-  }
-
-  xla::SelfAdjointEigResult eigh_result = xla::SelfAdjointEig(*operand,
-                                                              lower,
-                                                              max_iter,
-                                                              eps);
-
-  ERL_NIF_TERM v = exla::nif::make<xla::XlaOp>(env, eigh_result.v);
-  ERL_NIF_TERM w = exla::nif::make<xla::XlaOp>(env, eigh_result.w);
-
-  return exla::nif::ok(env, enif_make_tuple2(env, v, w));
-}
-
 ERL_NIF_TERM lu(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 1) {
     return exla::nif::error(env, "Bad argument count.");
