@@ -809,9 +809,20 @@ defmodule EXLA.Defn do
   ## to_operator others
 
   defp to_operator(:metadata, [op, _metadata], _ans, state) do
+    %builder_mod{} = state.builder
+
     case op do
-      %EXLA.Op{} -> op
-      _ -> EXLA.Op.tuple(state.builder, Tuple.to_list(op))
+      %Value{} ->
+        op
+
+      %EXLA.Op{} ->
+        op
+
+      op when is_tuple(op) and builder_mod == EXLA.Builder ->
+        EXLA.Op.tuple(state.builder, Tuple.to_list(op))
+
+      op when is_tuple(op) ->
+        Value.tuple(Tuple.to_list(op))
     end
   end
 

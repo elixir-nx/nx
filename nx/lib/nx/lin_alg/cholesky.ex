@@ -30,7 +30,7 @@ defmodule Nx.LinAlg.Cholesky do
     n = Nx.axis_size(a, 0)
 
     {l, _} =
-      while {l = Nx.multiply(0, a), {a}}, i <- 0..(n - 1) do
+      while {l = Nx.multiply(0.0, a), {a}}, i <- 0..(n - 1) do
         {l, _} =
           while {l, {a, i, j = 0}}, j <= i do
             value =
