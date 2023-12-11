@@ -217,10 +217,7 @@ defmodule Nx.BinaryBackend.Matrix do
   end
 
   def eigh(input_data, input_type, {n, n} = input_shape, output_type, opts) do
-    # The input Hermitian matrix A reduced to Hessenberg matrix H by Householder transform.
-    # Then, by using QR iteration it converges to AQ = QΛ,
-    # where Λ is the diagonal matrix of eigenvalues and the columns of Q are the eigenvectors.
-
+    
     eps = opts[:eps]
     max_iter = opts[:max_iter]
 
