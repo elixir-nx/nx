@@ -14,7 +14,6 @@ defmodule EXLA.MLIR.NxLinAlgDoctestTest do
     lu: 2,
     solve: 2,
     determinant: 1,
-    qr: 2,
     invert: 1,
     matrix_power: 2
   ]
