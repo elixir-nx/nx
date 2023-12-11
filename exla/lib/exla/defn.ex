@@ -1942,6 +1942,7 @@ defmodule EXLA.Defn do
 
         op == :greater ->
           is_nan = EXLA.Op.is_nan(arg1, type, {}, subbuilder)
+
           EXLA.Op.bitwise_or(is_nan, EXLA.Op.greater(arg1, arg2))
       end
 

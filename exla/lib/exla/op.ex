@@ -220,11 +220,18 @@ defmodule EXLA.Op do
     %{op | ref: result_ref}
   end
 
-  defp is_non_finite(_nif_function, _op, _type, shape, builder) do
+  defp is_non_finite(_nif_function, _op, type, shape, builder) do
     # For non-floating types, we can just return
     # a boolean 0 tensor in the output shape
+
+    out_type =
+      case type do
+        {:pred, 8} -> {:pred, 8}
+        _ -> {:u, 8}
+      end
+
     builder
-    |> constant_r0(0, {:u, 8})
+    |> constant_r0(0, out_type)
     |> reshape(Tuple.duplicate(1, tuple_size(shape)))
     |> broadcast_in_dim(shape, List.to_tuple(Nx.axes(shape)))
   end
