@@ -2438,10 +2438,7 @@ defmodule EXLA.Defn do
 
   defp collect_args(%T{data: %Expr{id: id, op: op, args: args}} = expr, {cache, ids}, shared_ids) do
     cond do
-      # op == :constant ->
-      #   {expr, {cache, ids}}
-
-      op == :constant == collect_arg?(id, op, args, shared_ids) ->
+      op == :constant or collect_arg?(id, op, args, shared_ids) ->
         case ids do
           %{^id => {_, _, new}} ->
             {new, {cache, ids}}
