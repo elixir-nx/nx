@@ -3737,7 +3737,6 @@ defmodule EXLA.Defn.ExprTest do
     defn qr(t), do: Nx.LinAlg.qr(t)
     defn qr_complete(t), do: Nx.LinAlg.qr(t, mode: :complete)
 
-    @tag :mlir_linalg_nor_supported_yet
     test "qr" do
       input = Nx.iota({3, 2})
       output = Nx.as_type(input, {:f, 32})

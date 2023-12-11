@@ -112,6 +112,7 @@ defmodule EXLA.Builder do
 
   def build(%EXLA.MLIR.Value{function: function, ref: root_ref}) do
     %EXLA.MLIR.Function{ref: function_ref} = function
+
     :ok = EXLA.NIF.mlir_build(function_ref, root_ref)
     function
   end
