@@ -379,6 +379,16 @@ xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& co
   return new ExlaExecutable(std::move(executable), std::move(fingerprint), this);
 }
 
+xla::StatusOr<ExlaExecutable*> ExlaClient::DeserializeExecutable(std::string deserialized_executable) {
+  EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtLoadedExecutable> executable,
+    client_->DeserializeExecutable(deserialized_executable, std::nullopt));
+
+  EXLA_ASSIGN_OR_RETURN(absl::optional<std::string> fingerprint,
+    ExecutableFingerprint(executable));
+
+  return new ExlaExecutable(std::move(executable), std::move(fingerprint), this);
+}
+
 xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const mlir::OwningOpRef<mlir::ModuleOp>& module,
                                                    std::vector<xla::Shape*> argument_layouts,
                                                    xla::ExecutableBuildOptions& options,

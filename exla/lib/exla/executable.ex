@@ -21,6 +21,50 @@ defmodule EXLA.Executable do
     end
   end
 
+  def serialize(%Executable{
+        ref: executable,
+        output_shape: out_shape,
+        num_replicas: num_replicas,
+        num_partitions: num_partitions,
+        device_id: device_id
+      }) do
+    serialized_exec =
+      executable
+      |> EXLA.NIF.serialize_executable()
+      |> unwrap!()
+      |> IO.iodata_to_binary()
+
+    stripped_shape = strip_shape(out_shape)
+
+    %{
+      serialized: serialized_exec,
+      output_shape: stripped_shape,
+      num_replicas: num_replicas,
+      num_partitions: num_partitions,
+      device_id: device_id
+    }
+    |> :erlang.term_to_binary()
+  end
+
+  def deserialize(client, binary) do
+    case :erlang.binary_to_term(binary) do
+      %{serialized: serialized_exec} = exec_data ->
+        ref =
+          serialized_exec
+          |> then(&EXLA.NIF.deserialize_executable(client.ref, &1))
+          |> unwrap!()
+
+        exec_data
+        |> Map.put(:ref, ref)
+        |> Map.put(:client, client)
+        |> Map.update!(:output_shape, &reconstruct_shapes/1)
+        |> then(&struct(__MODULE__, &1))
+
+      _other ->
+        raise "invalid serialized executable"
+    end
+  end
+
   defp run(client, ref, device_id, inputs, _options) do
     inputs =
       for subinputs <- inputs do
@@ -49,6 +93,22 @@ defmodule EXLA.Executable do
       buf, subshape when is_binary(buf) ->
         BinaryBuffer.from_binary(buf, subshape)
     end)
+  end
+
+  defp strip_shape(%Shape{dtype: {:tuple, shapes}}) do
+    subshapes = Enum.map(shapes, &strip_shape/1)
+    %{dtype: {:tuple, subshapes}, dims: {length(subshapes)}}
+  end
+
+  defp strip_shape(%Shape{dtype: dtype, dims: dims}), do: %{dtype: dtype, dims: dims}
+
+  defp reconstruct_shapes(%{dtype: {:tuple, shapes}}) do
+    subshapes = Enum.map(shapes, &reconstruct_shapes/1)
+    EXLA.Shape.make_tuple_shape(subshapes)
+  end
+
+  defp reconstruct_shapes(%{dtype: dtype, dims: dims}) do
+    EXLA.Shape.make_shape(dtype, dims)
   end
 
   defp unwrap!(:ok), do: :ok

@@ -601,7 +601,49 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return term;
 }
 
-// Logging Functions
+// Serialization Functions
+
+ERL_NIF_TERM serialize_executable(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::ExlaExecutable** executable;
+
+  if (!exla::nif::get<exla::ExlaExecutable*>(env, argv[0], executable)) {
+    return exla::nif::error(env, "Unable to get executable.");
+  }
+
+  EXLA_ASSIGN_OR_RETURN_NIF(std::string serialized, (*executable)->SerializeExecutable(), env);
+  ErlNifBinary raw;
+  enif_alloc_binary(serialized.size(), &raw);
+  std::memcpy((&raw)->data, serialized.data(), serialized.size());
+
+  return exla::nif::ok(env, exla::nif::make(env, raw));
+}
+
+ERL_NIF_TERM deserialize_executable(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 2) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::ExlaClient** client;
+  std::string serialized;
+
+  if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
+    return exla::nif::error(env, "Unable to get client.");
+  }
+  if (!exla::nif::get(env, argv[1], serialized)) {
+    return exla::nif::error(env, "Unable to get executable.");
+  }
+
+  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaExecutable * executable,
+    (*client)->DeserializeExecutable(serialized), env);
+
+  return exla::nif::ok(env, exla::nif::make<exla::ExlaExecutable*>(env, executable));
+}
+
+// Logging
 
 ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 1) {
@@ -877,6 +919,10 @@ static ErlNifFunc exla_funcs[] = {
     // Special
     {"optimization_barrier", 1, optimization_barrier},
     // Log Sink
-    {"start_log_sink", 1, start_log_sink}};
+    {"start_log_sink", 1, start_log_sink},
+    // Serialization
+    {"serialize_executable", 1, serialize_executable},
+    {"deserialize_executable", 2, deserialize_executable}
+  };
 
 ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, NULL, NULL);

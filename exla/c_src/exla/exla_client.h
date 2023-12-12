@@ -55,6 +55,8 @@ class ExlaExecutable {
                                   ERL_NIF_TERM arguments,
                                   int device_id);
 
+  xla::StatusOr<std::string> SerializeExecutable() { return executable_->SerializeExecutable(); }
+
  private:
   std::unique_ptr<xla::PjRtLoadedExecutable> executable_;
   absl::optional<std::string> fingerprint_;
@@ -84,6 +86,8 @@ class ExlaClient {
                                               ERL_NIF_TERM binary_term,
                                               xla::Shape& shape,
                                               int device_id);
+
+  xla::StatusOr<ExlaExecutable*> DeserializeExecutable(std::string serialized_executable);
 
   // TODO(seanmor5): This is device logic and should be refactored
   xla::Status TransferToInfeed(ErlNifEnv* env,
