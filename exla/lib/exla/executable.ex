@@ -54,7 +54,6 @@ defmodule EXLA.Executable do
           |> then(&EXLA.NIF.deserialize_executable(client.ref, &1))
           |> unwrap!()
 
-
         exec_data
         |> Map.put(:ref, ref)
         |> Map.put(:client, client)
