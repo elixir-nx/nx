@@ -302,7 +302,7 @@ defmodule Nx.Constants do
   end
 
   @doc """
-  Returns a scalar tensor with the maximum finite value for the given type.
+  Returns a scalar tensor with the smallest positive value for the given type.
 
   ## Options
 
