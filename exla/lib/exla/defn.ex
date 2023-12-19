@@ -17,6 +17,18 @@ defmodule EXLA.Defn do
   end
 
   @doc false
+  def __to_backend__(options) do
+    client_name = Keyword.get_lazy(options, :client, &EXLA.Client.default_name/0)
+
+    device_id =
+      Keyword.get_lazy(options, :device_id, fn ->
+        EXLA.Client.fetch!(client_name).default_device_id
+      end)
+
+    {EXLA.Backend, [client: client_name, device_id: device_id]}
+  end
+
+  @doc false
   def __stream__(key, input, acc, vars, fun, [args], options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
 

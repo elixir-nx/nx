@@ -29,6 +29,11 @@ defmodule Nx.Defn.Evaluator do
   end
 
   @impl true
+  def __to_backend__(_opts) do
+    Nx.default_backend()
+  end
+
+  @impl true
   def __stream__(_key, input, acc, vars, fun, [args], opts) do
     count = Nx.Defn.Composite.count(input) + Nx.Defn.Composite.count(acc)
     rest_params = Enum.drop(args, count)

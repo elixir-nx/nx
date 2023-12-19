@@ -7,6 +7,9 @@ defmodule Nx.Defn.Debug do
   def __partitions_options__(_), do: raise("not implemented")
 
   @impl true
+  def __to_backend__(_), do: raise("not implemented")
+
+  @impl true
   def __stream__(_, _, _, _, _, _, _), do: raise("not implemented")
 
   @impl true
