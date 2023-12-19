@@ -89,6 +89,15 @@ defmodule Nx.Defn.Compiler do
   """
   @callback __partitions_options__(keyword) :: [keyword]
 
+  @doc """
+  Receives a keyword list of compiler options and returns a backend
+  with options that corresponds to the same allocation.
+
+  The backend is expected to match what would be returned from a
+  computation defined by the compiler.
+  """
+  @callback __to_backend__(keyword) :: {module, keyword}
+
   # Modules allowed in defn
   @allowed_modules [Nx.Constants, Nx.Defn, Nx.Defn.Kernel, Nx.LinAlg, Nx.Type]
 
@@ -122,6 +131,12 @@ defmodule Nx.Defn.Compiler do
   """
   def defn?() do
     Process.get(Nx.Defn, false)
+  end
+
+  @doc false
+  def __to_backend__(opts) do
+    {compiler, opts} = Keyword.pop(opts, :compiler, Nx.Defn.Evaluator)
+    compiler.__to_backend__(opts)
   end
 
   ## JIT/Stream

@@ -443,4 +443,7 @@ defmodule EXLA do
 
   @impl true
   defdelegate __partitions_options__(opts), to: EXLA.Defn
+
+  @impl true
+  defdelegate __to_backend__(opts), to: EXLA.Defn
 end
