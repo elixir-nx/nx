@@ -263,6 +263,17 @@ defmodule Nx.Defn do
   end
 
   @doc """
+  Returns a backend corresponding to the compiler options.
+
+  The backend matches the backend used for outputs from computations
+  defined by the given compiler.
+  """
+  def to_backend(opts) do
+    opts = prepare_options(opts)
+    Nx.Defn.Compiler.__to_backend__(opts)
+  end
+
+  @doc """
   Compiles the given anonymous function with the given tensor shapes.
 
   While `jit/2` compiles a function just-in time based on the

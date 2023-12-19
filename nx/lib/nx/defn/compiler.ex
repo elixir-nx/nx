@@ -133,13 +133,8 @@ defmodule Nx.Defn.Compiler do
     Process.get(Nx.Defn, false)
   end
 
-  @doc """
-  Returns a backend corresponding to the compiler options.
-
-  The backend matches the backend used for outputs from computations
-  defined by the given compiler.
-  """
-  def to_backend(opts) do
+  @doc false
+  def __to_backend__(opts) do
     {compiler, opts} = Keyword.pop(opts, :compiler, Nx.Defn.Evaluator)
     compiler.__to_backend__(opts)
   end
