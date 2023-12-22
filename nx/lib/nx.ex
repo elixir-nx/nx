@@ -8448,8 +8448,7 @@ defmodule Nx do
         ceil: {"ceil", &:math.ceil/1},
         round: {"round (away from zero)", &:erlang.round/1}
       ] do
-    [res1, res2, res3, res4] =
-      Enum.map([-1.5, -0.5, 0.5, 1.5], fn x -> fun.(x) * 1.0 end)
+    [res1, res2, res3, res4] = Enum.map([-1.5, -0.5, 0.5, 1.5], fn x -> fun.(x) * 1.0 end)
 
     @doc """
     Calculates the #{desc} of each element in the tensor.
@@ -16450,8 +16449,7 @@ defmodule Nx do
     apply_vectorized(tensor, fn tensor, offset ->
       shape = Nx.Shape.fft2(tensor.shape)
 
-      opts =
-        Keyword.validate!(opts, [:lengths, axes: [-2, -1], eps: 1.0e-10])
+      opts = Keyword.validate!(opts, [:lengths, axes: [-2, -1], eps: 1.0e-10])
 
       [ax1, ax2] =
         case opts[:axes] do
@@ -17270,5 +17268,33 @@ defmodule Nx do
     |> sum(axes: axes, keep_axes: keep_axes)
     |> log()
     |> add(max)
+  end
+
+  @doc """
+  Removes duplicate data from a single dimension tensor.
+
+  ## Examples
+
+      iex> Nx.uniq(Nx.tensor([1,2,3,3,4,5,5,6,7,8]))
+      #Nx.Tensor<
+        s64[8]
+        [1, 2, 3, 4, 5, 6, 7, 8]
+      >
+  """
+  @doc type: :creation
+  def uniq(tensor) do
+    rank_limit = 1
+
+    apply_vectorized(tensor, fn t ->
+      if rank(t) == rank_limit do
+        tensor
+        |> to_list()
+        |> Enum.uniq()
+        |> tensor(type: tensor.type, names: tensor.names)
+      else
+        raise ArgumentError,
+              "uniq/1 expects a tensor with 1 dimension, got: #{inspect(rank(t))}"
+      end
+    end)
   end
 end

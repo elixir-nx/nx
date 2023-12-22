@@ -3259,4 +3259,22 @@ defmodule NxTest do
                ])
     end
   end
+
+  describe "uniq/1" do
+    test "removes duplicate data" do
+      tensor = Nx.tensor([1, 2, 3, 3, 4, 5, 5, 6, 7, 8], names: [:x], type: {:f, 32})
+      expected = Nx.tensor([1, 2, 3, 4, 5, 6, 7, 8], names: [:x], type: {:f, 32})
+      assert ^expected = Nx.uniq(tensor)
+    end
+
+    test "raises exception when tensor rank is greater than one" do
+      tensor = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+
+      assert_raise ArgumentError,
+                   "uniq/1 expects a tensor with 1 dimension, got: 2",
+                   fn ->
+                     Nx.uniq(tensor)
+                   end
+    end
+  end
 end

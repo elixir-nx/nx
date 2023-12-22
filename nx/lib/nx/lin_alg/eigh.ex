@@ -4,8 +4,7 @@ defmodule Nx.LinAlg.Eigh do
   alias Nx.LinAlg.QR
 
   defn eigh(a, opts \\ []) do
-    opts =
-      keyword!(opts, eps: 1.0e-10, max_iter: 10_000)
+    opts = keyword!(opts, eps: 1.0e-10, max_iter: 10_000)
 
     a
     |> Nx.revectorize([collapsed_axes: :auto],

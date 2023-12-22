@@ -2,8 +2,7 @@ defmodule Nx.LinAlg.Cholesky do
   import Nx.Defn
 
   defn cholesky(a, opts \\ []) do
-    opts =
-      keyword!(opts, eps: 1.0e-10)
+    opts = keyword!(opts, eps: 1.0e-10)
 
     vectorized_axes = a.vectorized_axes
 

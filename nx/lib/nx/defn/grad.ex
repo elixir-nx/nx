@@ -7,8 +7,7 @@ defmodule Nx.Defn.Grad do
   def transform(to_grad, fun, transform) do
     {to_grad, ids} =
       Composite.traverse(to_grad, %{}, fn to_grad, ids ->
-        to_grad =
-          Expr.metadata(to_grad, %{__MODULE__ => :to_grad})
+        to_grad = Expr.metadata(to_grad, %{__MODULE__ => :to_grad})
 
         {to_grad, Map.put(ids, to_grad.data.id, :stop)}
       end)
