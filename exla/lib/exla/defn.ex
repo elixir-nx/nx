@@ -2362,16 +2362,19 @@ defmodule EXLA.Defn do
 
     case mod do
       Value ->
-        Value.window_reduce(
-          comp,
-          [acc],
-          [arg],
-          window_dimensions,
-          List.to_tuple(strides),
-          Tuple.duplicate(1, tuple_size(op_shape(arg))),
-          List.to_tuple(window_dilations),
-          padding
-        )
+        [result] =
+          Value.window_reduce(
+            comp,
+            [acc],
+            [arg],
+            window_dimensions,
+            List.to_tuple(strides),
+            Tuple.duplicate(1, tuple_size(op_shape(arg))),
+            List.to_tuple(window_dilations),
+            padding
+          )
+
+        result
 
       _ ->
         EXLA.Op.window_reduce(
