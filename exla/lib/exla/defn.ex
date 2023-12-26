@@ -311,7 +311,9 @@ defmodule EXLA.Defn do
     params =
       case builder do
         %Function{} ->
-          Function.get_arguments(builder) |> Enum.with_index(fn arg, i -> {i, arg} end)
+          Enum.zip_with(used_shapes, Function.get_arguments(builder), fn {pos, _shape}, arg ->
+            {pos, arg}
+          end)
 
         _ ->
           Enum.with_index(used_shapes, fn {pos, shape}, i ->
