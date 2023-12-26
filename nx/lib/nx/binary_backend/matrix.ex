@@ -60,8 +60,8 @@ defmodule Nx.BinaryBackend.Matrix do
     a_matrix =
       a_data
       |> binary_to_matrix(a_type, a_shape)
-      |> then(&((transpose_a? && transpose_matrix(&1)) || &1))
-      |> then(&((reverse_a? && reverse_matrix(&1)) || &1))
+      |> then(&if(transpose_a?, do: transpose_matrix(&1), else: &1))
+      |> then(&if(reverse_a?, do: reverse_matrix(&1), else: &1))
 
     b_matrix_or_vec =
       case b_shape do
@@ -71,8 +71,8 @@ defmodule Nx.BinaryBackend.Matrix do
         {_rows} ->
           b_data |> binary_to_vector(b_type)
       end
-      |> then(&((transpose_b? && transpose_matrix(&1)) || &1))
-      |> then(&((reverse_b? && reverse_matrix(&1)) || &1))
+      |> then(&if(transpose_b?, do: transpose_matrix(&1), else: &1))
+      |> then(&if(reverse_b?, do: reverse_matrix(&1), else: &1))
 
     b_shape =
       case {b_shape, transpose_b?} do
@@ -83,8 +83,8 @@ defmodule Nx.BinaryBackend.Matrix do
     result =
       a_matrix
       |> do_ts(b_matrix_or_vec, b_shape)
-      |> then(&((transpose_x? && transpose_matrix(&1)) || &1))
-      |> then(&((reverse_x? && reverse_matrix(&1)) || &1))
+      |> then(&if(transpose_x?, do: transpose_matrix(&1), else: &1))
+      |> then(&if(reverse_x?, do: reverse_matrix(&1), else: &1))
 
     matrix_to_binary(result, output_type)
   end
