@@ -16,6 +16,37 @@ defmodule Nx.LinAlgTest do
       assert Nx.dot(a, [2], [0], Nx.LinAlg.triangular_solve(a, b), [1], [0]) == b
     end
 
+    test "works with B that has more columns than rows" do
+      a =
+        Nx.tensor(
+          [
+            [1, 0],
+            [1, 1]
+          ],
+          type: :f64
+        )
+
+      b =
+        Nx.tensor(
+          [
+            [1, 1, 1],
+            [2, 2, 2]
+          ],
+          type: :f64
+        )
+
+      x = Nx.LinAlg.triangular_solve(a, b)
+
+      assert x ==
+               Nx.tensor(
+                 [
+                   [1, 1, 1],
+                   [1, 1, 1]
+                 ],
+                 type: :f64
+               )
+    end
+
     test "property" do
       a = Nx.tensor([[1, 0, 0], [1, 1, 0], [0, 1, 1]])
       b = Nx.tensor([[1.0, 2.0, 3.0], [2.0, 2.0, 4.0], [2.0, 0.0, 1.0]])

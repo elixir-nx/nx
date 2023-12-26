@@ -7,151 +7,90 @@ defmodule Nx.BinaryBackend.Matrix do
   import Nx.Shared
 
   def ts(a_data, a_type, a_shape, b_data, b_type, b_shape, output_type, input_opts) do
-    transform_a = input_opts[:transform_a]
-    lower_input = input_opts[:lower]
+    # Here's Paulo Valente's proof in the deleted function ts_handle_opts/3.
 
-    # if transform_a != none, the upper will become lower and vice-versa
-    lower = transform_a == :none == lower_input
+    # When lower: false, we need the following procedure
+    # for reusing the lower_triangular engine:
+    #
+    # First, we need to reverse both rows and columns
+    # so we can turn an upper-triangular matrix
+    # into a lower-triangular one.
+    # The result will also be reversed in this case.
+    #
+    # Proof:
+    # For a result [x1, x2, x3.., xn] and a row [a1, a2, a4, ..., an]
+    # we have the corresponding b = a1 * x1 + a2 * x2 + a3 * x3 + ...+ an * xn
+    # Since the addition of a_i * x_i is commutative, by reversing the columns
+    # of a, the yielded x will be reversed.
+    # Furthermore, if we reverse the rows of a, we need to reverse the rows of b
+    # so each row is kept together with it's corresponding result.
+    #
+    # For example, the system:
+    # A = [[a b c], [0 d e], [0 0 f]]
+    # b = [b1, b2, b3, b4]
+    # which yields x = [x1, x2, x3, x4]
+    # is therefore equivalent to:
+    # A = [[f 0 0], [e d 0], [c b a]]
+    # b = [b4, b3, b2, b1]
+    # which yields [x4, x3, x2, x1]
 
-    opts = %{
-      lower: lower,
-      left_side: input_opts[:left_side]
-    }
+    # For handling left_side: false
+    # Let's notate the system matrix as L when it's a lower triangular matrix
+    # and U when it's upper triangular
+    #
+    # To solve X.L = B, we can then transpose both sides:
+    # transpose(X.L) = transpose(L).X_t = U.X_t = b_t
+    # This equation, in turn, has the same shape (U.X = B) as the one we can solve through
+    # applying `ts_handle_lower_opt` properly, which would yield X_t.
+    # Transposing the result suffices for yielding the final result.
+
+    opt_left_side = !!input_opts[:left_side]
+    opt_lower = !!input_opts[:lower]
+    opt_transpose_a = input_opts[:transform_a] == :transpose
+
+    transpose_a? = opt_left_side == opt_transpose_a
+    reverse_a? = opt_left_side == (opt_lower == opt_transpose_a)
+
+    transpose_b? = not opt_left_side and match?({_, _}, b_shape)
+    reverse_b? = reverse_a?
+
+    transpose_x? = transpose_b?
+    reverse_x? = reverse_b?
 
     a_matrix =
       a_data
       |> binary_to_matrix(a_type, a_shape)
-      |> ts_transform_a(transform_a)
-      |> ts_handle_opts(opts, :a)
+      |> then(&if(transpose_a?, do: transpose_matrix(&1), else: &1))
+      |> then(&if(reverse_a?, do: reverse_matrix(&1), else: &1))
 
     b_matrix_or_vec =
       case b_shape do
         {_rows, _cols} ->
-          b_data |> binary_to_matrix(b_type, b_shape) |> ts_handle_opts(opts, :b)
+          b_data |> binary_to_matrix(b_type, b_shape)
 
         {_rows} ->
-          b_data |> binary_to_vector(b_type) |> ts_handle_opts(opts, :b)
+          b_data |> binary_to_vector(b_type)
+      end
+      |> then(&if(transpose_b?, do: transpose_matrix(&1), else: &1))
+      |> then(&if(reverse_b?, do: reverse_matrix(&1), else: &1))
+
+    b_shape =
+      case {b_shape, transpose_b?} do
+        {{rows, cols}, true} -> {cols, rows}
+        _ -> b_shape
       end
 
     result =
       a_matrix
       |> do_ts(b_matrix_or_vec, b_shape)
-      |> ts_handle_opts(opts, :result)
+      |> then(&if(transpose_x?, do: transpose_matrix(&1), else: &1))
+      |> then(&if(reverse_x?, do: reverse_matrix(&1), else: &1))
 
     matrix_to_binary(result, output_type)
   end
 
-  # For ts_handle_opts/3, we need some theoretical proofs:
-
-  # When lower: false, we need the following procedure
-  # for reusing the lower_triangular engine:
-  #
-  # First, we need to reverse both rows and columns
-  # so we can turn an upper-triangular matrix
-  # into a lower-triangular one.
-  # The result will also be reversed in this case.
-  #
-  # Proof:
-  # For a result [x1, x2, x3.., xn] and a row [a1, a2, a4, ..., an]
-  # we have the corresponding b = a1 * x1 + a2 * x2 + a3 * x3 + ...+ an * xn
-  # Since the addition of a_i * x_i is commutative, by reversing the columns
-  # of a, the yielded x will be reversed.
-  # Furthermore, if we reverse the rows of a, we need to reverse the rows of b
-  # so each row is kept together with it's corresponding result.
-  #
-  # For example, the system:
-  # A = [[a b c], [0 d e], [0 0 f]]
-  # b = [b1, b2, b3, b4]
-  # which yields x = [x1, x2, x3, x4]
-  # is therefore equivalent to:
-  # A = [[f 0 0], [e d 0], [c b a]]
-  # b = [b4, b3, b2, b1]
-  # which yields [x4, x3, x2, x1]
-
-  # For handling left_side: false
-  # Let's notate the system matrix as L when it's a lower triangular matrix
-  # and U when it's upper triangular
-  #
-  # To solve X.L = B, we can then transpose both sides:
-  # transpose(X.L) = transpose(L).X_t = U.X_t = b_t
-  # This equation, in turn, has the same shape (U.X = B) as the one we can solve through
-  # applying `ts_handle_lower_opt` properly, which would yield X_t.
-  # Transposing the result suffices for yielding the final result.
-
-  defp ts_handle_opts(
-         matrix,
-         %{lower: true, left_side: true},
-         _matrix_type
-       ) do
-    # Base case (lower: true, left_side: true)
-    matrix
-  end
-
-  defp ts_handle_opts(
-         matrix,
-         %{lower: false, left_side: true},
-         matrix_type
-       ) do
-    # lower: false, left_side: true
-    # We need to follow the row-col reversing procedure
-    case matrix_type do
-      :a ->
-        matrix
-        |> Enum.map(&Enum.reverse/1)
-        |> Enum.reverse()
-
-      _ ->
-        Enum.reverse(matrix)
-    end
-  end
-
-  defp ts_handle_opts(
-         [row_or_elem | _] = matrix,
-         %{lower: lower, left_side: false},
-         matrix_type
-       ) do
-    # left_side: false
-    # transpose both sides of the equation (yielding X_t as the result)
-    # We need to treat the transposed result as equivalent to lower: not lower, left_side: true,
-    # (not lower) because the triangular matrix is transposed
-
-    new_opts = %{lower: not lower, transform_a: :none, left_side: true}
-
-    case matrix_type do
-      :a ->
-        matrix
-        |> transpose_matrix()
-        |> ts_handle_opts(new_opts, :a)
-
-      :b when is_list(row_or_elem) ->
-        matrix
-        |> transpose_matrix()
-        |> ts_handle_opts(new_opts, :b)
-
-      :b ->
-        ts_handle_opts(matrix, new_opts, :b)
-
-      :result when is_list(row_or_elem) and lower ->
-        matrix
-        |> Enum.reverse()
-        |> transpose_matrix()
-
-      :result when is_list(row_or_elem) and not lower ->
-        transpose_matrix(matrix)
-
-      :result when lower ->
-        Enum.reverse(matrix)
-
-      :result when not lower ->
-        matrix
-    end
-  end
-
-  defp ts_transform_a(matrix, :transpose), do: transpose_matrix(matrix)
-  defp ts_transform_a(matrix, _), do: matrix
-
-  defp do_ts(a_matrix, b_matrix, {rows, cols}) do
-    1..min(rows, cols)//1
+  defp do_ts(a_matrix, b_matrix, {_rows, cols}) do
+    1..cols//1
     |> Enum.map(fn b_col ->
       b_vector = get_matrix_column(b_matrix, b_col - 1)
 
@@ -576,6 +515,16 @@ defmodule Nx.BinaryBackend.Matrix do
 
   defp transpose_matrix(m) do
     Enum.zip_with(m, & &1)
+  end
+
+  defp reverse_matrix([x | _] = m) when not is_list(x) do
+    Enum.reverse(m)
+  end
+
+  defp reverse_matrix(m) do
+    m
+    |> Enum.map(&Enum.reverse/1)
+    |> Enum.reverse()
   end
 
   defp matrix_to_binary([r | _] = m, type) when is_list(r) do
