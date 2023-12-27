@@ -25,7 +25,7 @@ defmodule EXLA.MLIR.ExecutableFeedTest do
               outfeed_val = Value.add(val, val)
 
               _outfeed_token = Value.outfeed(new_token, [outfeed_val])
-              Value.tuple([Value.add(outfeed_val, val)])
+              Value.tuple(b, [Value.add(outfeed_val, val)])
             end)
           end)
         end)

@@ -76,8 +76,8 @@ defmodule EXLA.MLIR.Value do
     %Value{op | ref: ref}
   end
 
-  def tuple([%Value{function: %Function{} = func} | _rest] = vals) do
-    refs = Enum.map(vals, fn %Value{ref: ref, function: ^func} -> ref end)
+  def tuple(%Function{} = func, vals) when is_list(vals) do
+    refs = Enum.map(vals, fn %Value{ref: ref} -> ref end)
     ref = EXLA.NIF.mlir_tuple(func.ref, refs) |> unwrap!()
     %Value{ref: ref, function: func}
   end
