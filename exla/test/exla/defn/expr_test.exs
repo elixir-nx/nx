@@ -1433,6 +1433,20 @@ defmodule EXLA.Defn.ExprTest do
       assert_equal(truth, Nx.tensor(0, type: {:u, 8}))
       assert_equal(double, Nx.tensor([1.0, 4.0, 9.0]))
     end
+
+    defn while_nested_initial(x, y) do
+      while {x, {y, z = x + y, {i = 0}}}, i < 10 do
+        {x + 1, {y + 1, z + 1, {i + 1}}}
+      end
+    end
+
+    test "nested initial argument" do
+      assert {a, {b, c, {d}}} = while_nested_initial(1, 2)
+      assert_equal(a, 11)
+      assert_equal(b, 12)
+      assert_equal(c, 13)
+      assert_equal(d, 10)
+    end
   end
 
   describe "map" do
