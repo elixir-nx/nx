@@ -2183,8 +2183,7 @@ defmodule EXLA.Defn do
           opts
       end)
 
-    0
-    {op, keys}
+      {op, keys}
   end
 
   defp while_arg_shape(%{type: type, shape: shape}) do
