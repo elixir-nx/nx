@@ -1212,7 +1212,6 @@ defmodule EXLA.Defn.ExprTest do
       a + b
     end
 
-    @tag :mlir_not_a_tuple
     test "with matched tuples twice" do
       assert_equal(if_tuple_match_twice(Nx.tensor(1), Nx.tensor(1)), Nx.tensor(2))
     end
@@ -1222,7 +1221,6 @@ defmodule EXLA.Defn.ExprTest do
       xy
     end
 
-    @tag :mlir_not_a_tuple
     test "with return tuple" do
       assert_equal(
         if_tuple_return(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)),
@@ -1237,7 +1235,6 @@ defmodule EXLA.Defn.ExprTest do
 
     defn if_map(a, b, c), do: if(a, do: {%{a: a, b: b, c: 1}, c}, else: {%{a: c, b: b, c: 2}, a})
 
-    @tag :mlir_not_a_tuple
     test "with map" do
       assert_equal(
         if_map(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)),
@@ -1265,7 +1262,6 @@ defmodule EXLA.Defn.ExprTest do
       x * y - z
     end
 
-    @tag :mlir_not_a_tuple
     test "with matched map" do
       assert_equal(if_map_match(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)), Nx.tensor(200))
       assert_equal(if_map_match(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)), Nx.tensor(-10))
@@ -1286,7 +1282,6 @@ defmodule EXLA.Defn.ExprTest do
       end)
     end
 
-    @tag :mlir_not_a_tuple
     test "grad with tuple" do
       assert_equal(grad_if_tuple(Nx.tensor(1)), Nx.tensor(9.0))
       assert_equal(grad_if_tuple(Nx.tensor(2)), Nx.tensor(112.0))
@@ -1298,7 +1293,6 @@ defmodule EXLA.Defn.ExprTest do
   describe "metadata" do
     defn add_with_stop_grad(a, b), do: stop_grad(Nx.add(a, b))
 
-    @tag :mlir_not_a_tuple
     test "ignores metadata nodes" do
       assert_equal(add_with_stop_grad(1, 2), Nx.tensor(3))
     end
@@ -1330,7 +1324,6 @@ defmodule EXLA.Defn.ExprTest do
       end
     end
 
-    @tag :mlir_not_a_tuple
     test "computes cond with slice and unused vars" do
       assert_equal(cond_unused_and_slice(Nx.tensor(1), Nx.iota({5})), Nx.tensor(2))
 
@@ -1370,7 +1363,6 @@ defmodule EXLA.Defn.ExprTest do
       end
     end
 
-    @tag :mlir_no_clause_matching
     test "with predicate" do
       assert_equal(cond_predicate(Nx.tensor(1), Nx.tensor(2)), Nx.tensor(1, type: {:u, 8}))
       assert_equal(cond_predicate(Nx.tensor(1), Nx.tensor(-2)), Nx.tensor(0, type: {:u, 8}))
@@ -1384,7 +1376,6 @@ defmodule EXLA.Defn.ExprTest do
       end
     end
 
-    @tag :mlir_not_a_tuple
     test "simple" do
       assert_equal(upto10(0), Nx.tensor(10))
       assert_equal(upto10(5), Nx.tensor(10))
@@ -2347,7 +2338,6 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
-    @tag :mlir_no_clause_matching
     test "computes the mean of a window" do
       assert_equal(
         window_mean1(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]])),
@@ -2371,7 +2361,6 @@ defmodule EXLA.Defn.ExprTest do
     end
 
     @tag :unsupported_dilated_window_reduce
-    @tag :mlir_no_clause_matching
     test "computes the mean of a dilated window" do
       t = Nx.iota({8, 10, 12})
       lhs = dilated_window_mean(t)

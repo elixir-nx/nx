@@ -79,7 +79,6 @@ defmodule EXLA.Defn.APITest do
       assert_equal(container_as_input(inp), Nx.tensor(15))
     end
 
-    @tag :mlir_not_a_tuple
     test "updated" do
       inp = %Container{a: Nx.tensor(1), b: 2, c: :reset, d: :keep}
 

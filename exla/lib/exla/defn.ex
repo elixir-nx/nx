@@ -2048,9 +2048,19 @@ defmodule EXLA.Defn do
     function = EXLA.Builder.new({module, name}, arg_shapes, expr, :mlir, false, true)
     [arg_token | arg_params] = EXLA.MLIR.Function.get_arguments(function)
 
-    arg_params = Value.tuple(arg_params)
+    params =
+      case arg_params do
+        _ when is_tuple(arg) ->
+          {arg, Value.tuple(arg_params)}
 
-    params = computation_arg_param({arg, arg_params})
+        _ when is_list(arg) ->
+          arg |> Enum.zip(arg_params) |> List.to_tuple()
+
+        [arg_param] ->
+          {arg, arg_param}
+      end
+
+    params = computation_arg_param(params)
 
     state = %{
       state
