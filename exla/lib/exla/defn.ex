@@ -2049,15 +2049,11 @@ defmodule EXLA.Defn do
     [arg_token | arg_params] = EXLA.MLIR.Function.get_arguments(function)
 
     params =
-      case arg_params do
-        _ when is_tuple(arg) ->
-          {arg, Value.tuple(arg_params)}
-
-        _ when is_list(arg) ->
-          arg |> Enum.zip(arg_params) |> List.to_tuple()
-
-        [arg_param] ->
-          {arg, arg_param}
+      if is_tuple(arg) do
+        {arg, Value.tuple(arg_params)}
+      else
+        [arg_param] = arg_params
+        {arg, arg_param}
       end
 
     params = computation_arg_param(params)
@@ -2187,6 +2183,7 @@ defmodule EXLA.Defn do
           opts
       end)
 
+    0
     {op, keys}
   end
 
