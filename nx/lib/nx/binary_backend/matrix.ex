@@ -471,9 +471,7 @@ defmodule Nx.BinaryBackend.Matrix do
   defp dot_matrix(_, []), do: 0
 
   defp dot_matrix([h1 | _] = v1, [h2 | _] = v2) when not is_list(h1) and not is_list(h2) do
-    v1
-    |> Enum.zip(v2)
-    |> Enum.reduce(0, fn {x, y}, acc -> x * y + acc end)
+    Enum.zip_reduce(v1, v2, 0, fn x, y, acc -> x * y + acc end)
   end
 
   defp dot_matrix(m1, m2) do
@@ -482,9 +480,7 @@ defmodule Nx.BinaryBackend.Matrix do
       m2
       |> transpose_matrix()
       |> Enum.map(fn col ->
-        row
-        |> Enum.zip(col)
-        |> Enum.reduce(0, fn {x, y}, acc -> acc + x * Complex.conjugate(y) end)
+        Enum.zip_reduce(row, col, 0, fn x, y, acc -> acc + x * Complex.conjugate(y) end)
       end)
     end)
   end
@@ -494,9 +490,7 @@ defmodule Nx.BinaryBackend.Matrix do
       m2
       |> transpose_matrix()
       |> Enum.map(fn col ->
-        row
-        |> Enum.zip(col)
-        |> Enum.reduce(0, fn {x, y}, acc -> acc + x * y end)
+        Enum.zip_reduce(row, col, 0, fn x, y, acc -> acc + x * y end)
       end)
     end)
   end

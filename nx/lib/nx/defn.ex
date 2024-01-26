@@ -38,7 +38,8 @@ defmodule Nx.Defn do
 
   Please consult `Nx.Defn.Kernel` for a complete reference.
 
-  This module can be used in `defn`.
+  Some of the functions in this module may also be used within
+  `defn`.
 
   ## Operators
 
@@ -201,6 +202,13 @@ defmodule Nx.Defn do
       %{map | a: update_a(map)}
 
   `Nx` will only send the parts of the map that matters.
+
+  ## Recursion and loops
+
+  Given numerical definition first build a representation of
+  your code, it is not possible to write recursive (nor tail
+  recursive) code inside `defn`. Instead, one must use
+  `Nx.Defn.Kernel.while/4`.
   """
 
   @compiler_key {Nx.Defn, :default_compiler}
