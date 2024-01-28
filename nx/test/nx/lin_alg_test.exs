@@ -976,7 +976,7 @@ defmodule Nx.LinAlgTest do
     end)
   end
 
-  describe "lstsq" do
+  describe "least_squares" do
     test "properties for linear equations" do
       key = Nx.Random.key(System.unique_integer())
 
@@ -1002,7 +1002,7 @@ defmodule Nx.LinAlgTest do
           y = Nx.add(y_base, y_noise)
 
           # Calculate least-squares solution to a linear matrix equation Ax = y
-          x = Nx.LinAlg.lstsq(a, y)
+          x = Nx.LinAlg.least_squares(a, y)
 
           # Check linear matrix equation
           Nx.dot(a, x)

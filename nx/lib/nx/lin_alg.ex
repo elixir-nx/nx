@@ -2143,19 +2143,19 @@ defmodule Nx.LinAlg do
 
   ## Examples
 
-      iex> Nx.LinAlg.lstsq(Nx.tensor([[1, 2], [2, 3]]), Nx.tensor([1, 2]))
+      iex> Nx.LinAlg.least_squares(Nx.tensor([[1, 2], [2, 3]]), Nx.tensor([1, 2]))
       #Nx.Tensor<
         f32[2]
         [1.0000004768371582, -2.665601925855299e-7]
       >
 
-      iex> Nx.LinAlg.lstsq(Nx.tensor([[0, 1], [1, 1], [2, 1], [3, 1]]), Nx.tensor([-1, 0.2, 0.9, 2.1]))
+      iex> Nx.LinAlg.least_squares(Nx.tensor([[0, 1], [1, 1], [2, 1], [3, 1]]), Nx.tensor([-1, 0.2, 0.9, 2.1]))
       #Nx.Tensor<
         f32[2]
         [0.9966150522232056, -0.9479667544364929]
       >
 
-      iex> Nx.LinAlg.lstsq(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([1, 2]))
+      iex> Nx.LinAlg.least_squares(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([1, 2]))
       #Nx.Tensor<
         f32[3]
         [-0.05531728267669678, 0.11113593727350235, 0.27758902311325073]
@@ -2163,20 +2163,20 @@ defmodule Nx.LinAlg do
 
   ## Error cases
 
-      iex> Nx.LinAlg.lstsq(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2]))
+      iex> Nx.LinAlg.least_squares(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2]))
       ** (ArgumentError) tensor of 1st argument must have rank 2, got rank 1 with shape {3}
 
-      iex> Nx.LinAlg.lstsq(Nx.tensor([[1, 2], [2, 3]]), Nx.tensor([[1, 2], [3, 4]]))
+      iex> Nx.LinAlg.least_squares(Nx.tensor([[1, 2], [2, 3]]), Nx.tensor([[1, 2], [3, 4]]))
       ** (ArgumentError) tensor of 2nd argument must have rank 1, got rank 2 with shape {2, 2}
 
-      iex> Nx.LinAlg.lstsq(Nx.tensor([[1, Complex.new(0, 2)], [3, Complex.new(0, -4)]]),  Nx.tensor([1, 2]))
-      ** (ArgumentError) Nx.LinAlg.lstsq/2 is not yet implemented for complex inputs
+      iex> Nx.LinAlg.least_squares(Nx.tensor([[1, Complex.new(0, 2)], [3, Complex.new(0, -4)]]),  Nx.tensor([1, 2]))
+      ** (ArgumentError) Nx.LinAlg.least_squares/2 is not yet implemented for complex inputs
 
-      iex> Nx.LinAlg.lstsq(Nx.tensor([[1, 2], [2, 3]]), Nx.tensor([1, 2, 3]))
+      iex> Nx.LinAlg.least_squares(Nx.tensor([[1, 2], [2, 3]]), Nx.tensor([1, 2, 3]))
       ** (ArgumentError) The number of rows of the matrix as the 1st argument and the number of columns of the vector as the 2nd argument must be the same, got 1st argument shape {2, 2} and 2nd argument shape {3}
   """
   @doc from_backend: false
-  defn lstsq(a, b) do
+  defn least_squares(a, b) do
     %T{type: a_type, shape: a_shape} = Nx.to_tensor(a)
     a_size = Nx.rank(a_shape)
     %T{type: b_type, shape: b_shape} = Nx.to_tensor(b)
@@ -2184,7 +2184,7 @@ defmodule Nx.LinAlg do
 
     case a_type do
       {:c, _} ->
-        raise ArgumentError, "Nx.LinAlg.lstsq/2 is not yet implemented for complex inputs"
+        raise ArgumentError, "Nx.LinAlg.least_squares/2 is not yet implemented for complex inputs"
 
       _ ->
         nil
@@ -2192,7 +2192,7 @@ defmodule Nx.LinAlg do
 
     case b_type do
       {:c, _} ->
-        raise ArgumentError, "Nx.LinAlg.lstsq/2 is not yet implemented for complex inputs"
+        raise ArgumentError, "Nx.LinAlg.least_squares/2 is not yet implemented for complex inputs"
 
       _ ->
         nil
