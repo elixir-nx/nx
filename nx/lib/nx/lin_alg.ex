@@ -2214,12 +2214,13 @@ defmodule Nx.LinAlg do
 
     {a1, _a2} = a_shape
     {b1} = b_shape
+
     if a1 != b1 do
       raise(
         ArgumentError,
         "The number of rows of the matrix as the 1st argument and " <>
-        "the number of columns of the vector as the 2nd argument must be the same, " <>
-        "got 1st argument shape #{inspect(a_shape)} and 2nd argument shape #{inspect(b_shape)}"
+          "the number of columns of the vector as the 2nd argument must be the same, " <>
+          "got 1st argument shape #{inspect(a_shape)} and 2nd argument shape #{inspect(b_shape)}"
       )
     end
 

@@ -1007,6 +1007,7 @@ defmodule Nx.LinAlgTest do
           # Check linear matrix equation
           Nx.dot(a, x)
           |> assert_all_close(y, atol: noise_eps * 10)
+
           key
       end
     end
