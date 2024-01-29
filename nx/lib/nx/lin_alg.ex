@@ -2173,7 +2173,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) Nx.LinAlg.least_squares/2 is not yet implemented for complex inputs
 
       iex> Nx.LinAlg.least_squares(Nx.tensor([[1, 2], [2, 3]]), Nx.tensor([1, 2, 3]))
-      ** (ArgumentError) The number of rows of the matrix as the 1st argument and the number of columns of the vector as the 2nd argument must be the same, got 1st argument shape {2, 2} and 2nd argument shape {3}
+      ** (ArgumentError) the number of rows of the matrix as the 1st argument and the number of columns of the vector as the 2nd argument must be the same, got 1st argument shape {2, 2} and 2nd argument shape {3}
   """
   @doc from_backend: false
   defn least_squares(a, b) do
@@ -2218,7 +2218,7 @@ defmodule Nx.LinAlg do
     if a1 != b1 do
       raise(
         ArgumentError,
-        "The number of rows of the matrix as the 1st argument and " <>
+        "the number of rows of the matrix as the 1st argument and " <>
           "the number of columns of the vector as the 2nd argument must be the same, " <>
           "got 1st argument shape #{inspect(a_shape)} and 2nd argument shape #{inspect(b_shape)}"
       )
