@@ -2138,6 +2138,105 @@ defmodule Nx.LinAlg do
     Nx.sum(s > tol)
   end
 
+  @doc """
+  Return the least-squares solution to a linear matrix equation Ax = b.
+
+  ## Examples
+
+      iex> Nx.LinAlg.least_squares(Nx.tensor([[1, 2], [2, 3]]), Nx.tensor([1, 2]))
+      #Nx.Tensor<
+        f32[2]
+        [1.0000004768371582, -2.665601925855299e-7]
+      >
+
+      iex> Nx.LinAlg.least_squares(Nx.tensor([[0, 1], [1, 1], [2, 1], [3, 1]]), Nx.tensor([-1, 0.2, 0.9, 2.1]))
+      #Nx.Tensor<
+        f32[2]
+        [0.9966150522232056, -0.9479667544364929]
+      >
+
+      iex> Nx.LinAlg.least_squares(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([1, 2]))
+      #Nx.Tensor<
+        f32[3]
+        [-0.05531728267669678, 0.11113593727350235, 0.27758902311325073]
+      >
+
+  ## Error cases
+
+      iex> Nx.LinAlg.least_squares(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2]))
+      ** (ArgumentError) tensor of 1st argument must have rank 2, got rank 1 with shape {3}
+
+      iex> Nx.LinAlg.least_squares(Nx.tensor([[1, 2], [2, 3]]), Nx.tensor([[1, 2], [3, 4]]))
+      ** (ArgumentError) tensor of 2nd argument must have rank 1, got rank 2 with shape {2, 2}
+
+      iex> Nx.LinAlg.least_squares(Nx.tensor([[1, Complex.new(0, 2)], [3, Complex.new(0, -4)]]),  Nx.tensor([1, 2]))
+      ** (ArgumentError) Nx.LinAlg.least_squares/2 is not yet implemented for complex inputs
+
+      iex> Nx.LinAlg.least_squares(Nx.tensor([[1, 2], [2, 3]]), Nx.tensor([1, 2, 3]))
+      ** (ArgumentError) the number of rows of the matrix as the 1st argument and the number of columns of the vector as the 2nd argument must be the same, got 1st argument shape {2, 2} and 2nd argument shape {3}
+  """
+  @doc from_backend: false
+  defn least_squares(a, b) do
+    %T{type: a_type, shape: a_shape} = Nx.to_tensor(a)
+    a_size = Nx.rank(a_shape)
+    %T{type: b_type, shape: b_shape} = Nx.to_tensor(b)
+    b_size = Nx.rank(b_shape)
+
+    case a_type do
+      {:c, _} ->
+        raise ArgumentError, "Nx.LinAlg.least_squares/2 is not yet implemented for complex inputs"
+
+      _ ->
+        nil
+    end
+
+    case b_type do
+      {:c, _} ->
+        raise ArgumentError, "Nx.LinAlg.least_squares/2 is not yet implemented for complex inputs"
+
+      _ ->
+        nil
+    end
+
+    if a_size != 2 do
+      raise(
+        ArgumentError,
+        "tensor of 1st argument must have rank 2, got rank #{inspect(a_size)} with shape #{inspect(a_shape)}"
+      )
+    end
+
+    if b_size != 1 do
+      raise(
+        ArgumentError,
+        "tensor of 2nd argument must have rank 1, got rank #{inspect(b_size)} with shape #{inspect(b_shape)}"
+      )
+    end
+
+    {a1, _a2} = a_shape
+    {b1} = b_shape
+
+    if a1 != b1 do
+      raise(
+        ArgumentError,
+        "the number of rows of the matrix as the 1st argument and " <>
+          "the number of columns of the vector as the 2nd argument must be the same, " <>
+          "got 1st argument shape #{inspect(a_shape)} and 2nd argument shape #{inspect(b_shape)}"
+      )
+    end
+
+    case a_shape do
+      {m, n} when m == n ->
+        Nx.LinAlg.solve(a, b)
+
+      {m, n} when m != n ->
+        Nx.LinAlg.pinv(a, eps: 1.0e-15)
+        |> Nx.dot(b)
+
+      _ ->
+        nil
+    end
+  end
+
   defp apply_vectorized(tensor, fun) when is_function(fun, 1) do
     # same as Nx's apply_vectorized defp, but written in a "public-api" way!
     %T{vectorized_axes: vectorized_axes} = tensor = Nx.to_tensor(tensor)

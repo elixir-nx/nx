@@ -975,4 +975,41 @@ defmodule Nx.LinAlgTest do
       end
     end)
   end
+
+  describe "least_squares" do
+    test "properties for linear equations" do
+      key = Nx.Random.key(System.unique_integer())
+
+      # Calucate linear equations Ax = y by using least-squares solution
+      for {m, n} <- [{2, 2}, {3, 2}, {4, 3}], reduce: key do
+        key ->
+          # Generate x as temporary solution and A as base matrix
+          {a_base, key} = Nx.Random.randint(key, 1, 10, shape: {m, n})
+          {x_temp, key} = Nx.Random.randint(key, 1, 10, shape: {n})
+
+          # Generate y as base vector by x and A
+          # to prepare an equation that can be solved exactly
+          y_base = Nx.dot(a_base, x_temp)
+
+          # Generate y as random noise vector and A as random noise matrix
+          noise_eps = 1.0e-2
+          {a_noise, key} = Nx.Random.uniform(key, 0, noise_eps, shape: {m, n})
+          {y_noise, key} = Nx.Random.uniform(key, 0, noise_eps, shape: {m})
+
+          # Add noise to prepare equations that cannot be solved without approximation,
+          # such as the least-squares method
+          a = Nx.add(a_base, a_noise)
+          y = Nx.add(y_base, y_noise)
+
+          # Calculate least-squares solution to a linear matrix equation Ax = y
+          x = Nx.LinAlg.least_squares(a, y)
+
+          # Check linear matrix equation
+          Nx.dot(a, x)
+          |> assert_all_close(y, atol: noise_eps * 10)
+
+          key
+      end
+    end
+  end
 end
