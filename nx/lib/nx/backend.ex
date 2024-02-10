@@ -169,7 +169,8 @@ defmodule Nx.Backend do
     ifft2: 3,
     qr: 3,
     cholesky: 2,
-    eigh: 3
+    eigh: 3,
+    take_along_axis: 4
   ]
 
   ## Inspect implementation
