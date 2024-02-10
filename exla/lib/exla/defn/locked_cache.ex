@@ -88,6 +88,9 @@ defmodule EXLA.Defn.LockedCache do
       %{^key => {ref, waiting}} ->
         {:noreply, put_in(state.keys[key], {ref, [from | waiting]})}
 
+      %{^key => :cached} ->
+        {:reply, :cached, state}
+
       %{} ->
         {:noreply, lock(key, from, [], state)}
     end
@@ -97,9 +100,9 @@ defmodule EXLA.Defn.LockedCache do
   def handle_cast({:cached, ref}, state) do
     Process.demonitor(ref, [:flush])
     {key, state} = pop_in(state.ref_to_key[ref])
-    {{^ref, waiting}, state} = pop_in(state.keys[key])
+    {^ref, waiting} = state.keys[key]
     for from <- waiting, do: GenServer.reply(from, :cached)
-    {:noreply, state}
+    {:noreply, put_in(state.keys[key], :cached)}
   end
 
   @impl true
