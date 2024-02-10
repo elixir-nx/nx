@@ -1586,28 +1586,6 @@ defmodule EXLA.Defn do
     EXLA.Op.dynamic_update_slice(tensor, slice, start_indices)
   end
 
-  defp to_operator(:take, [%mod{} = tensor, indices, axis], _ans, _state) do
-    tensor_rank = tensor |> op_shape() |> tuple_size()
-    indices_rank = indices |> op_shape() |> tuple_size()
-    result_rank = tensor_rank - 1 + indices_rank
-
-    index_vector_dim = indices_rank
-    slice_sizes = tensor |> op_shape() |> put_elem(axis, 1) |> Tuple.to_list()
-    offset_dims = result_rank |> axes_for_rank() |> delete_slice(axis, indices_rank)
-    collapsed_slice_dims = [axis]
-    start_index_map = [axis]
-
-    mod.gather(
-      tensor,
-      indices,
-      index_vector_dim,
-      slice_sizes,
-      offset_dims,
-      collapsed_slice_dims,
-      start_index_map
-    )
-  end
-
   defp to_operator(:take_along_axis, [%mod{} = tensor, indices, axis], _ans, state) do
     indices_shape = op_shape(indices)
     indices_rank = tuple_size(indices_shape)
@@ -2648,11 +2626,6 @@ defmodule EXLA.Defn do
   end
 
   # Helpers
-
-  defp delete_slice(enumerable, index, length) do
-    {left, right} = Enum.split(enumerable, index)
-    left ++ Enum.drop(right, length)
-  end
 
   defp apply_mlir_broadcasted_bin_op(op, out, left, right) do
     left_shape = Value.get_shape(left)
