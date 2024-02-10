@@ -51,9 +51,15 @@ defmodule EXLA.Defn.LockedCache do
     end
   end
 
+  ## ETS functions
+
   defp init(), do: :ets.new(@name, [:public, :set, :named_table, read_concurrency: true])
+
   defp write(key, value), do: :ets.insert(@name, {key, value})
-  defp hard_read(key), do: :ets.lookup_element(@name, key, 2)
+
+  defp hard_read(key) do
+    :ets.lookup_element(@name, key, 2)
+  end
 
   defp soft_read(key) do
     try do
