@@ -1608,44 +1608,6 @@ defmodule EXLA.Defn do
     )
   end
 
-  defp to_operator(:take_along_axis, [%mod{} = tensor, indices, axis], _ans, state) do
-    indices_shape = op_shape(indices)
-    indices_rank = tuple_size(indices_shape)
-
-    axes_range = 0..(indices_rank - 1)//1
-
-    index_vector_dim = indices_rank
-    slice_sizes = List.duplicate(1, indices_rank)
-    offset_dims = []
-    collapsed_slice_dims = Enum.to_list(axes_range)
-    start_index_map = Enum.to_list(axes_range)
-
-    indices_exla_shape = mod.get_shape(indices)
-
-    iotas =
-      Enum.map(axes_range, fn axis ->
-        mod.iota(state.builder, indices_exla_shape, axis)
-      end)
-
-    new_axis_shape = Tuple.append(indices_shape, 1)
-
-    indices =
-      iotas
-      |> List.replace_at(axis, indices)
-      |> Enum.map(&mod.reshape(&1, new_axis_shape))
-      |> mod.concatenate(indices_rank)
-
-    mod.gather(
-      tensor,
-      indices,
-      index_vector_dim,
-      slice_sizes,
-      offset_dims,
-      collapsed_slice_dims,
-      start_index_map
-    )
-  end
-
   defp to_operator(:gather, [%mod{} = tensor, indices, opts], _ans, _state) do
     axes = Keyword.fetch!(opts, :axes)
     tensor_shape = op_shape(tensor)
