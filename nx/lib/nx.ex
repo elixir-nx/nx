@@ -16875,6 +16875,65 @@ defmodule Nx do
     divide(log(tensor), log(base))
   end
 
+  @doc """
+  Replaces every value in `tensor` with `value`.
+
+  The returned tensor has the same shape, names and vectorized axes
+  as the given one. The type defaults to the type of `tensor`, however
+  type promotions apply.
+
+  ## Examples
+
+      iex> tensor = Nx.iota({2, 2})
+      iex> Nx.fill(tensor, 5)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [5, 5],
+          [5, 5]
+        ]
+      >
+
+      iex> tensor = Nx.iota({2, 2}) |> Nx.vectorize(:x)
+      iex> Nx.fill(tensor, 5)
+      #Nx.Tensor<
+        s64[x: 2][2]
+        [
+          [5, 5],
+          [5, 5]
+        ]
+      >
+
+  ### Type promotions
+
+  Type promotions should happen automatically, with the resulting type being the combination
+  of the `tensor` type and the `value` type.
+
+      iex> tensor = Nx.iota({2, 2})
+      iex> Nx.fill(tensor, 5.0)
+      #Nx.Tensor<
+        f32[2][2]
+        [
+          [5.0, 5.0],
+          [5.0, 5.0]
+        ]
+      >
+
+  """
+  @doc type: :element
+  def fill(tensor, value) do
+    type = binary_type(tensor, value)
+
+    value = to_tensor(value)
+
+    %{shape: shape, names: names, vectorized_axes: vectorized_axes} = devectorize(tensor)
+
+    value
+    |> as_type(type)
+    |> broadcast(shape, names: names)
+    |> vectorize(vectorized_axes)
+  end
+
   ## Sigils
 
   @doc """
