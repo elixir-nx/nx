@@ -2088,17 +2088,26 @@ defmodule Nx.BinaryBackend do
     rank = tuple_size(output_shape)
     steps = product_part(output_shape, 0, axis)
 
+    # We don't use a comprehension here on purpose. Because the number of
+    # steps can be really large, doing a comprehension with two generators
+    # would mean creating a really large list at the end and then reversing
+    # it. Since we are calling `iodata_to_binary` anyway, we work with lists
+    # of lists.
     data =
-      for step <- 1..steps,
-          {binary, shape} <- binaries_with_shape do
-        product = product_part(shape, axis, rank) * size
-        before = (step - 1) * product
-        <<_::bitstring-size(before), part::bitstring-size(product), _::bitstring>> = binary
-        part
-      end
+      repeat(1, steps, fn step ->
+        Enum.map(binaries_with_shape, fn {binary, shape} ->
+          product = product_part(shape, axis, rank) * size
+          before = (step - 1) * product
+          <<_::bitstring-size(before), part::bitstring-size(product), _::bitstring>> = binary
+          part
+        end)
+      end)
 
     IO.iodata_to_binary(data)
   end
+
+  defp repeat(limit, limit, fun), do: [fun.(limit)]
+  defp repeat(i, limit, fun), do: [fun.(i) | repeat(i + 1, limit, fun)]
 
   defp product_part(_tuple, n, n), do: 1
   defp product_part(tuple, n, limit), do: elem(tuple, n) * product_part(tuple, n + 1, limit)
