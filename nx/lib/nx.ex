@@ -16904,7 +16904,8 @@ defmodule Nx do
       iex> tensor = Nx.iota({2, 2}) |> Nx.vectorize(:x)
       iex> Nx.fill(tensor, 5)
       #Nx.Tensor<
-        s64[x: 2][2]
+        vectorized[x: 2]
+        s64[2]
         [
           [5, 5],
           [5, 5]
@@ -16945,12 +16946,12 @@ defmodule Nx do
     type = Nx.Type.normalize!(opts[:type] || binary_type(tensor, value))
     value = to_tensor(value)
 
-    %{shape: shape, names: names, vectorized_axes: vectorized_axes} = devectorize(tensor)
+    %{shape: shape, names: names} = devectorize(tensor)
 
     value
     |> as_type(type)
     |> broadcast(shape, names: names)
-    |> vectorize(vectorized_axes)
+    |> vectorize(tensor.vectorized_axes)
   end
 
   ## Sigils
