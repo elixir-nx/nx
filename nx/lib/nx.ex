@@ -16875,6 +16875,84 @@ defmodule Nx do
     divide(log(tensor), log(base))
   end
 
+  @doc """
+  Replaces every value in `tensor` with `value`.
+
+  The returned tensor has the same shape, names and vectorized axes
+  as the given one. The type will be computed based on the type of
+  `tensor` and `value`. You can also pass a `:type` option to change
+  this behaviour.
+
+  ## Options
+
+    * `:type` - sets the type of the returned tensor. If one is not
+      given, it is automatically inferred based on the inputs, with
+      type promotions
+
+  ## Examples
+
+      iex> tensor = Nx.iota({2, 2})
+      iex> Nx.fill(tensor, 5)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [5, 5],
+          [5, 5]
+        ]
+      >
+
+      iex> tensor = Nx.iota({2, 2}) |> Nx.vectorize(:x)
+      iex> Nx.fill(tensor, 5)
+      #Nx.Tensor<
+        s64[x: 2][2]
+        [
+          [5, 5],
+          [5, 5]
+        ]
+      >
+
+      iex> tensor = Nx.iota({2, 2})
+      iex> Nx.fill(tensor, 5, type: :u8)
+      #Nx.Tensor<
+        u8[2][2]
+        [
+          [5, 5],
+          [5, 5]
+        ]
+      >
+
+
+  ### Type promotions
+
+  Type promotions should happen automatically, with the resulting type being the combination
+  of the `tensor` type and the `value` type.
+
+      iex> tensor = Nx.iota({2, 2})
+      iex> Nx.fill(tensor, 5.0)
+      #Nx.Tensor<
+        f32[2][2]
+        [
+          [5.0, 5.0],
+          [5.0, 5.0]
+        ]
+      >
+
+  """
+  @doc type: :element
+  def fill(tensor, value, opts \\ []) do
+    opts = Keyword.validate!(opts, [:type])
+
+    type = Nx.Type.normalize!(opts[:type] || binary_type(tensor, value))
+    value = to_tensor(value)
+
+    %{shape: shape, names: names, vectorized_axes: vectorized_axes} = devectorize(tensor)
+
+    value
+    |> as_type(type)
+    |> broadcast(shape, names: names)
+    |> vectorize(vectorized_axes)
+  end
+
   ## Sigils
 
   @doc """
