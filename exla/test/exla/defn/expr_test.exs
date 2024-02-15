@@ -1447,6 +1447,24 @@ defmodule EXLA.Defn.ExprTest do
       assert_equal(c, 13)
       assert_equal(d, 10)
     end
+
+    defn while_inside_cond(tensor, condition) do
+      if condition do
+        tensor
+      else
+        {_i, tensor} =
+          while {i = 0, tensor}, i < 1 do
+            {i + 1, tensor + 1}
+          end
+
+        tensor
+      end
+    end
+
+    test "while inside cond" do
+      assert_equal(while_inside_cond(1, 1), 1)
+      assert_equal(while_inside_cond(1, 0), 2)
+    end
   end
 
   describe "map" do
