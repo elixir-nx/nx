@@ -1500,7 +1500,6 @@ defmodule EXLA.Defn.ExprTest do
 
     @tag :conditional_inside_map_reduce
     @tag :unsupported_64_bit_op
-    @tag :mlir_token_error
     test "maps a function with conditional" do
       assert_equal(
         map_conditional(Nx.tensor([-2, -1, 0, 1, 2])),
