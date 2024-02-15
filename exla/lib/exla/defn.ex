@@ -2272,7 +2272,7 @@ defmodule EXLA.Defn do
 
     res =
       if type == :with_token do
-        EXLA.Op.tuple(subbuilder, [arg_token, res])
+        EXLA.Op.tuple(subbuilder, [get_token(comp_cache), res])
       else
         to_type(res, type)
       end

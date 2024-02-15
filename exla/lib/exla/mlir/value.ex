@@ -655,6 +655,8 @@ defmodule EXLA.MLIR.Value do
         []
 
       %{dtype: {:tuple, _}, dims: {n}} ->
+        # TO-DO(mlir): maybe we can avoid building tuples altogether.
+        # Nx should be returning all tuples as flattened anyway.
         Enum.flat_map(0..(n - 1), fn i -> val |> get_tuple_element(i) |> flatten_tuples() end)
 
       _ ->
