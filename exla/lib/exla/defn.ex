@@ -924,15 +924,15 @@ defmodule EXLA.Defn do
     iota_shape = EXLA.Shape.make_shape(iota_type, shape)
     rank = tuple_size(shape)
 
-    mod =
+    {mod, equal_fn} =
       case state.builder do
-        %Function{} -> Value
-        _ -> EXLA.Op
+        %Function{} -> {Value, &Value.equal(state.builder, &1, &2)}
+        _ -> {EXLA.Op, &EXLA.Op.equal/2}
       end
 
     i0 = mod.iota(state.builder, iota_shape, rank - 2)
     i1 = mod.iota(state.builder, iota_shape, rank - 1)
-    to_type(mod.equal(i0, i1), type)
+    to_type(equal_fn.(i0, i1), type)
   end
 
   ## to_operator shape
@@ -1854,6 +1854,7 @@ defmodule EXLA.Defn do
     args = [%{type: ans.type, shape: {}}, %{type: ans.type, shape: {}}]
 
     comp = sort_computation(op, ans.type, args, state)
+
     mod.sort(tensor, comp, dimension, opts[:stable] == true)
   end
 
@@ -2065,15 +2066,15 @@ defmodule EXLA.Defn do
     op =
       cond do
         Nx.Type.integer?(type) ->
-          apply(Value, op, [builder, lhs, rhs])
+          apply(Value, op, [function, lhs, rhs])
 
         op == :less ->
           is_nan = Value.is_nan(rhs)
-          Value.bitwise_or(builder, is_nan, Value.less(builder, lhs, rhs))
+          Value.bitwise_or(function, is_nan, Value.less(function, lhs, rhs))
 
         op == :greater ->
           is_nan = Value.is_nan(lhs)
-          Value.bitwise_or(builder, is_nan, Value.greater(builder, lhs, rhs))
+          Value.bitwise_or(function, is_nan, Value.greater(function, lhs, rhs))
       end
 
     EXLA.Builder.build(op)
@@ -2127,7 +2128,7 @@ defmodule EXLA.Defn do
 
     args = EXLA.MLIR.Function.get_arguments(function)
 
-    EXLA.Builder.build(apply(Value, op, prepare_args.(args)))
+    EXLA.Builder.build(apply(Value, op, [function | prepare_args.(args)]))
   end
 
   defp op_computation(op, args, _out, state, prepare_args) do

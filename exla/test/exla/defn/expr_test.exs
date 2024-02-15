@@ -3878,6 +3878,7 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
+
   describe "argsort" do
     defn argsort0(t), do: Nx.argsort(t, axis: 0)
     defn argsort1(t), do: Nx.argsort(t, axis: 1)
