@@ -177,7 +177,22 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
+  Shortcut for `print_value/3`.
+  """
+  def print_value(expr, opts_or_fun \\ [])
+
+  def print_value(expr, fun) when is_function(fun, 1) do
+    print_value(expr, fun, [])
+  end
+
+  def print_value(expr, opts) when is_list(opts) do
+    print_value(expr, &Function.identity/1, opts)
+  end
+
+  @doc """
   Prints the value at runtime to the terminal.
+
+  The given expression is transformed with `fun` before printing.
 
   This function is implemented on top of `hook/3` and therefore
   has the following restrictions:
@@ -205,9 +220,19 @@ defmodule Nx.Defn.Kernel do
         end)
       end
 
+      defn tanh_grad(t) do
+        grad(t, fn t ->
+          t
+          |> Nx.tanh()
+          |> print_value(fn t -> Nx.sum(t) end)
+        end)
+      end
+
   """
-  def print_value(expr, opts \\ []) do
-    hook(expr, &IO.inspect(&1, opts))
+  def print_value(expr, fun, opts) when Kernel.and(is_function(fun, 1), is_list(opts)) do
+    token = create_token()
+    {token, _} = hook_token(token, fun.(expr), &IO.inspect(&1, opts))
+    attach_token(token, expr)
   end
 
   @doc """
