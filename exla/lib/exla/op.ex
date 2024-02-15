@@ -80,10 +80,8 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def tuple(%EXLA.MLIR.Function{}, elements) when is_list(elements) do
-    elements
-    |> List.flatten()
-    |> EXLA.MLIR.Value.tuple()
+  def tuple(%EXLA.MLIR.Function{} = function, elements) when is_list(elements) do
+    EXLA.MLIR.Value.tuple(function, List.flatten(elements))
   end
 
   @doc """

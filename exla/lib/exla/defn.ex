@@ -540,13 +540,13 @@ defmodule EXLA.Defn do
 
     {token, result} =
       case state.builder do
-        %Function{} ->
+        %Function{} = function ->
           # for MLIR while, the return is variadic
           # like it would have come from Nx.Defn.Composite.flatten_list.
           # We need to collect the returned values into the nested tuples
           # that should have come from the while expr
           [token | results] = mod.while(pred, body, initial)
-          result = collect_container_results(results, initial_arg)
+          result = collect_container_results(function, results, initial_arg)
           {token, result}
 
         _ ->
@@ -617,9 +617,8 @@ defmodule EXLA.Defn do
     result =
       case state.builder do
         %Function{} ->
-          tensor
-          |> Value.top_k(opts[:k])
-          |> Value.tuple()
+          results = Value.top_k(tensor, opts[:k])
+          Value.tuple(state.builder, results)
 
         %EXLA.Builder{} ->
           EXLA.Op.top_k(tensor, opts[:k])
@@ -836,7 +835,7 @@ defmodule EXLA.Defn do
         EXLA.Op.tuple(state.builder, Tuple.to_list(op))
 
       op when is_tuple(op) ->
-        Value.tuple(Tuple.to_list(op))
+        Value.tuple(state.builder, Tuple.to_list(op))
     end
   end
 
@@ -2050,7 +2049,7 @@ defmodule EXLA.Defn do
 
     params =
       if is_tuple(arg) do
-        {arg, Value.tuple(arg_params)}
+        {arg, Value.tuple(function, arg_params)}
       else
         [arg_param] = arg_params
         {arg, arg_param}
@@ -2140,7 +2139,7 @@ defmodule EXLA.Defn do
     }
 
     {res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
-    res = Value.tuple([arg_token, res])
+    res = Value.tuple(function, [arg_token, res])
 
     {EXLA.Builder.build(res), merge_outfeed(cache, comp_cache)}
   end
@@ -2237,7 +2236,7 @@ defmodule EXLA.Defn do
 
       tuple =
         case state.builder do
-          %Function{} -> Value.tuple(elements)
+          %Function{} = function -> Value.tuple(function, elements)
           builder -> EXLA.Op.tuple(builder, elements)
         end
 
@@ -2413,7 +2412,7 @@ defmodule EXLA.Defn do
       to_if_branch(false, on_false, false_ids, true_ids, state, cache)
 
     case builder do
-      %EXLA.MLIR.Function{} ->
+      %EXLA.MLIR.Function{} = function ->
         if_results =
           Value.if(
             pred_op,
@@ -2424,7 +2423,7 @@ defmodule EXLA.Defn do
             false_comp
           )
 
-        {collect_container_results(if_results, on_true), cache}
+        {collect_container_results(function, if_results, on_true), cache}
 
       _ ->
         {EXLA.Op.conditional(pred_op, true_args, true_comp, false_args, false_comp), cache}
@@ -2687,22 +2686,26 @@ defmodule EXLA.Defn do
     |> to_type(out.type)
   end
 
-  defp collect_container_results(flat_list, expected_container) do
-    {collected, []} = collect_container_results_unflatten(flat_list, expected_container)
+  defp collect_container_results(function, flat_list, expected_container) do
+    {collected, []} = collect_container_results_unflatten(function, flat_list, expected_container)
     collected
   end
 
-  defp collect_container_results_unflatten(list, tuple) when is_list(list) and is_tuple(tuple) do
+  defp collect_container_results_unflatten(function, list, tuple)
+       when is_list(list) and is_tuple(tuple) do
     {elements, list} = Enum.split(list, tuple_size(tuple))
-    {unnested, list} = Enum.map_reduce(elements, list, &collect_container_results_unflatten/2)
-    {Value.tuple(unnested), list}
+
+    {unnested, list} =
+      Enum.map_reduce(elements, list, &collect_container_results_unflatten(function, &1, &2))
+
+    {Value.tuple(function, unnested), list}
   end
 
-  defp collect_container_results_unflatten([%Value{} = value], _) do
+  defp collect_container_results_unflatten(_, [%Value{} = value], _) do
     {value, []}
   end
 
-  defp collect_container_results_unflatten(%Value{} = value, _) do
+  defp collect_container_results_unflatten(_, %Value{} = value, _) do
     {value, []}
   end
 
