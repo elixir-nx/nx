@@ -17,6 +17,7 @@ defmodule EXLA.Builder do
   end
 
   def new(module_and_name, inputs, outputs, :mlir, sub?, variadic_return?) do
+    # TO-DO(mlir): this module shouldn't have to know about Nx
     {_arg_names, arg_shapes} = Enum.unzip(inputs)
 
     {module, name, is_public} =
