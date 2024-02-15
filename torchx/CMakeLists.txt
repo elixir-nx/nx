@@ -54,6 +54,18 @@ if(NOT WIN32)
     set_target_properties(torchx PROPERTIES SUFFIX ".so")
 endif()
 
+if(WIN32)
+  file(GLOB torchx_dll_loader_sources CONFIGURE_DEPENDS "${C_SRC}/dll_loader/*.cpp")
+  add_library(torchx_dll_loader SHARED ${torchx_dll_loader_sources})
+  set_property(TARGET torchx_dll_loader PROPERTY CXX_STANDARD 17)
+  target_include_directories(torchx_dll_loader PUBLIC $ENV{ERTS_INCLUDE_DIR})
+  install(
+    TARGETS torchx_dll_loader
+    DESTINATION "$ENV{PRIV_DIR}"
+  )
+  SET_TARGET_PROPERTIES(torchx_dll_loader PROPERTIES PREFIX "")
+endif()
+
 if (Torch_VERSION_MAJOR EQUAL 1)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSING_TORCH_V1")
 endif()
