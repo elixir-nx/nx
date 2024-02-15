@@ -190,14 +190,14 @@ defmodule EXLA.Defn.APITest do
 
     @tag :mlir_token_error
     test "send/recv with empty outfeed" do
-      %_{} = stream = EXLA.stream(&stream_empty_outfeed/2, [0, 0])
+      %_{} = stream = EXLA.stream(&stream_empty_outfeed/2, [0, 0.0])
       assert Nx.Stream.send(stream, 1) == :ok
       assert Nx.Stream.recv(stream) == {}
 
       assert Nx.Stream.send(stream, 2) == :ok
       assert Nx.Stream.recv(stream) == {}
 
-      assert_equal(Nx.Stream.done(stream), Nx.tensor(3))
+      assert_equal(Nx.Stream.done(stream), Nx.tensor(3.0))
     end
 
     defn stream_empty_acc(i, {}), do: {i * i, {}}
