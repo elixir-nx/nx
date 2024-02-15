@@ -14124,13 +14124,11 @@ defmodule Nx do
     else
       tensor = devectorize(tensor, keep_names: false)
       indices = devectorize(indices, keep_names: false)
+      idx = reshape(indices, indices |> shape |> Tuple.append(1))
 
-      impl!(tensor).take(
-        %{tensor | shape: inner_shape, names: inner_names},
-        tensor,
-        indices,
-        axis
-      )
+      tensor
+      |> gather(idx)
+      |> reshape(inner_shape, names: inner_names)
     end
   end
 
