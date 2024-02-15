@@ -324,7 +324,9 @@ defmodule Nx.Defn.EvaluatorTest do
   defn mapped_inspect(a, b), do: print_value(a + b, fn x -> x * 2 end)
 
   test "print_value/2 with mapping function" do
-    assert ExUnit.CaptureIO.capture_io(fn -> mapped_inspect(1, 2) end) ==
+    assert ExUnit.CaptureIO.capture_io(fn ->
+             assert mapped_inspect(1, 2) == Nx.tensor(3)
+           end) ==
              """
              #Nx.Tensor<
                s64
@@ -689,7 +691,7 @@ defmodule Nx.Defn.EvaluatorTest do
       t = Nx.iota({2, 3}, vectorized_axes: [a: 1], type: :s64)
 
       message = """
-      test/nx/defn/evaluator_test.exs:658: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
+      test/nx/defn/evaluator_test.exs:660: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
 
       {\e[32m
        <<<<< Body (do-block) <<<<<
@@ -721,7 +723,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
       error =
         """
-        test/nx/defn/evaluator_test.exs:658: condition must be a scalar tensor, got: #Nx.Tensor<
+        test/nx/defn/evaluator_test.exs:660: condition must be a scalar tensor, got: #Nx.Tensor<
           vectorized[x: 1]
           u8[1]
         \s\s
