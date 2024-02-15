@@ -1222,7 +1222,7 @@ defmodule EXLA.Defn do
 
   defp to_operator(:sign, [op], %{type: type}, state) do
     case type do
-      {:u, _} -> EXLA.Op.min(state.builder, op, EXLA.Op.constant_r0(state.builder, 1, type))
+      {:u, _} -> EXLA.Op.min(op, EXLA.Op.constant_r0(state.builder, 1, type))
       _ -> EXLA.Op.sign(op)
     end
   end
