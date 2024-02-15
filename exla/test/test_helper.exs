@@ -24,9 +24,7 @@ exclude =
   if compiler_mode == :mlir do
     exclude ++
       [
-        :mlir_linalg_nor_supported_yet,
         :mlir_token_error,
-        :mlir_cond_inside_while,
         :mlir_vectorization
       ]
   else
