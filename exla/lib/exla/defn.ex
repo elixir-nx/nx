@@ -480,6 +480,7 @@ defmodule EXLA.Defn do
 
     {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
     outfeed = cache |> get_outfeed() |> Outfeed.close(builder)
+
     {EXLA.Builder.build(res), :ok, outfeed}
   end
 
@@ -597,7 +598,7 @@ defmodule EXLA.Defn do
               inputs_and_shapes
             end
 
-          builder = EXLA.Builder.new(inspect(key), comp_arg_shapes, outputs, mode)
+          builder = EXLA.Builder.new(inspect(key), comp_arg_shapes, Nx.devectorize(outputs), mode)
 
           mod =
             case mode do
@@ -2311,7 +2312,7 @@ defmodule EXLA.Defn do
     }
 
     {res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
-    res = Value.tuple(function, [arg_token, res])
+    res = Value.tuple(function, [get_token(comp_cache), res])
 
     {EXLA.Builder.build(res), merge_outfeed(cache, comp_cache)}
   end

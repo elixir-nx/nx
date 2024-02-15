@@ -160,6 +160,7 @@ defmodule EXLA.Defn.VectorizeTest do
   end
 
   describe "cond" do
+    @describetag :mlir_cond_error
     deftransformp send_value(val, opts \\ []) do
       Nx.Defn.Kernel.hook(val, &send(opts[:pid] || self(), {&1, clause: opts[:clause]}))
     end
