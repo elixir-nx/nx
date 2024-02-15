@@ -260,14 +260,18 @@ defmodule EXLA.Defn do
         true
       )
 
-    [acc] = EXLA.MLIR.Function.get_arguments(builder)
+    args = EXLA.MLIR.Function.get_arguments(builder)
+
+    collected_args = collect_container_results(builder, args, {acc_shape, constant_shape})
+
+    acc = Value.get_tuple_element(collected_args, 0)
+    constant = Value.get_tuple_element(collected_args, 1)
 
     init =
       Value.tuple(builder, [
         Value.infeed(root_token, flag_shape),
         acc,
-        # TO-DO: figure out the proper constant init
-        Value.tuple(builder, [])
+        constant
       ])
 
     [_flag, token | results] = Value.while(pred, body, init)
@@ -2201,16 +2205,27 @@ defmodule EXLA.Defn do
       |> Enum.with_index(fn shape, i -> {"p#{i}", shape} end)
 
     %{module: module, name: name} = subbuilder(state.builder, Atom.to_string(name))
-    function = EXLA.Builder.new({module, name}, arg_shapes, expr, :mlir, false, true)
+
+    out_expr =
+      if type == :with_token do
+        {%Nx.Tensor{type: :token, shape: {}, names: []}, expr}
+      else
+        expr
+      end
+
+    function =
+      EXLA.Builder.new(
+        {module, name},
+        arg_shapes,
+        out_expr,
+        :mlir,
+        false,
+        true
+      )
+
     [arg_token | arg_params] = EXLA.MLIR.Function.get_arguments(function)
 
-    params =
-      if is_tuple(arg) do
-        {arg, Value.tuple(function, arg_params)}
-      else
-        [arg_param] = arg_params
-        {arg, arg_param}
-      end
+    params = {arg, collect_container_results(function, arg_params, arg)}
 
     params = computation_arg_param(params)
 
@@ -2225,7 +2240,7 @@ defmodule EXLA.Defn do
 
     res =
       if type == :with_token do
-        [arg_token, res]
+        [get_token(comp_cache), res]
       else
         [to_type(res, type)]
       end
