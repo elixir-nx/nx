@@ -14,11 +14,7 @@ defmodule EXLA.Defn do
     client_name = Keyword.get_lazy(options, :client, &EXLA.Client.default_name/0)
     device_count = EXLA.Client.fetch!(client_name).device_count
 
-    result = Enum.map(1..device_count//1, &Keyword.put(options, :device_id, &1 - 1))
-
-    dbg()
-
-    result
+    Enum.map(1..device_count//1, &Keyword.put(options, :device_id, &1 - 1))
   end
 
   @doc false
@@ -537,8 +533,6 @@ defmodule EXLA.Defn do
   ## Compile
 
   defp compile(client, key, vars, fun, options, used_buffers, used_inputs, to_computation) do
-    dbg(options)
-
     {{expr_cache_fun, comp_cache_fun}, options} =
       case Keyword.pop(options, :cache, true) do
         {true, options} ->
@@ -630,8 +624,6 @@ defmodule EXLA.Defn do
           {xla_time, executable} =
             :timer.tc(fn ->
               shapes = for {i, shape} <- inputs_and_shapes, i >= used_buffers, do: shape
-
-              dbg(options)
 
               EXLA.Computation.compile(computation, client, shapes, options)
             end)
