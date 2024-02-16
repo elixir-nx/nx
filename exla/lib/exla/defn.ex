@@ -2711,7 +2711,6 @@ defmodule EXLA.Defn do
          fun
        ) do
     if token = get_token(cache) do
-      # TO-DO(mlir): deal with token
       inputs = Enum.with_index(args, fn arg, idx -> {"p#{idx + 1}", Value.get_shape(arg)} end)
       inputs = [{"p0", EXLA.Shape.make_token_shape()} | inputs]
 
