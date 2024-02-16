@@ -76,7 +76,7 @@ defmodule EXLA.Computation do
         %EXLA.MLIR.Function{module: module, return_shape: [return_shape]},
         client,
         arg_shapes,
-        _opts
+        opts
       ) do
     assert_output_shape!(%{output_shape: return_shape})
 
@@ -84,7 +84,8 @@ defmodule EXLA.Computation do
       module,
       client,
       arg_shapes,
-      return_shape
+      return_shape,
+      opts
     )
   end
 

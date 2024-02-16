@@ -13,7 +13,12 @@ defmodule EXLA.Defn do
   def __partitions_options__(options) do
     client_name = Keyword.get_lazy(options, :client, &EXLA.Client.default_name/0)
     device_count = EXLA.Client.fetch!(client_name).device_count
-    Enum.map(1..device_count//1, &Keyword.put(options, :device_id, &1 - 1))
+
+    result = Enum.map(1..device_count//1, &Keyword.put(options, :device_id, &1 - 1))
+
+    dbg()
+
+    result
   end
 
   @doc false
@@ -429,6 +434,7 @@ defmodule EXLA.Defn do
       Keyword.pop_lazy(compile_options, :client, &EXLA.Client.default_name/0)
 
     client = EXLA.Client.fetch!(client_name)
+
     callback = &to_root_computation(&1, &2, &3, &4, compile_options)
 
     {executable, used_inputs, outputs, outfeed, :ok, debug?} =
@@ -531,6 +537,8 @@ defmodule EXLA.Defn do
   ## Compile
 
   defp compile(client, key, vars, fun, options, used_buffers, used_inputs, to_computation) do
+    dbg(options)
+
     {{expr_cache_fun, comp_cache_fun}, options} =
       case Keyword.pop(options, :cache, true) do
         {true, options} ->
@@ -574,7 +582,9 @@ defmodule EXLA.Defn do
     end
 
     {hooks, options} = Keyword.pop(options, :hooks, %{})
+
     outfeed = Outfeed.new(hooks, defined_hooks)
+
     comp_key = {ref, client.name, outfeed.used_hooks, lazy_transfers, options}
 
     {comp_time, {evaled, {xla_time, executable, extra, outfeed}}} =
@@ -589,6 +599,7 @@ defmodule EXLA.Defn do
             end)
 
           inputs_and_shapes = Enum.reverse(reverse_inputs_and_shapes)
+
           mode = options[:compiler_mode] || :xla
 
           comp_arg_shapes =
@@ -619,6 +630,8 @@ defmodule EXLA.Defn do
           {xla_time, executable} =
             :timer.tc(fn ->
               shapes = for {i, shape} <- inputs_and_shapes, i >= used_buffers, do: shape
+
+              dbg(options)
 
               EXLA.Computation.compile(computation, client, shapes, options)
             end)
