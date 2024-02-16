@@ -22,7 +22,7 @@ exclude =
 
 exclude =
   if compiler_mode == :mlir do
-    exclude ++ [:mlir_cond_error, :mlir_multi_device_error]
+    exclude ++ [:mlir_multi_device_error]
   else
     exclude
   end
