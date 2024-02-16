@@ -22,10 +22,10 @@ defmodule EXLA.MLIR.ExecutableFeedTest do
               val_and_token = Value.infeed(token, t.shape)
               val = Value.get_tuple_element(val_and_token, 0)
               new_token = Value.get_tuple_element(val_and_token, 1)
-              outfeed_val = Value.add(val, val)
+              outfeed_val = Value.add(b, val, val)
 
-              _outfeed_token = Value.outfeed(new_token, [outfeed_val])
-              Value.tuple(b, [Value.add(outfeed_val, val)])
+              _outfeed_token = Value.outfeed([outfeed_val], new_token)
+              Value.tuple(b, [Value.add(b, outfeed_val, val)])
             end)
           end)
         end)

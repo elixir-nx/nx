@@ -5,6 +5,9 @@ defmodule EXLA.Defn.Outfeed do
   alias Nx.Defn.{Expr, Tree, Composite}
   alias Nx.Tensor, as: T
 
+  alias EXLA.MLIR.Function
+  alias EXLA.MLIR.Value
+
   defstruct user_hooks: %{},
             default_hooks: %{},
             used_hooks: [],
@@ -121,15 +124,16 @@ defmodule EXLA.Defn.Outfeed do
         next_flag = next_hook(compiled_hooks)
         compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed, pos, shape})
 
-        case builder do
-          %EXLA.MLIR.Function{} -> raise "add_infeeds is not supported in MLIR yet"
-          _ -> nil
-        end
+        mod =
+          case builder do
+            %Function{} -> Value
+            _ -> EXLA.Op
+          end
 
-        token = EXLA.Op.outfeed(EXLA.Op.constant_r0(builder, next_flag, {:u, 16}), token)
-        infeed = EXLA.Op.infeed(token, shape)
-        input = EXLA.Op.get_tuple_element(infeed, 0)
-        token = EXLA.Op.get_tuple_element(infeed, 1)
+        token = mod.outfeed(mod.constant_r0(builder, next_flag, {:u, 16}), token)
+        infeed = mod.infeed(token, shape)
+        input = mod.get_tuple_element(infeed, 0)
+        token = mod.get_tuple_element(infeed, 1)
 
         {{pos, input}, {compiled_hooks, token}}
       end)
@@ -176,6 +180,11 @@ defmodule EXLA.Defn.Outfeed do
 
   Note the outfeed may be closed before the computation finishes.
   """
+  def close(outfeed, builder)
+
+  def close(%Outfeed{} = outfeed, %Function{} = builder) when will_outfeed(outfeed),
+    do: update_in(outfeed.token, &Value.outfeed(Value.constant_r0(builder, 0, {:u, 16}), &1))
+
   def close(%Outfeed{} = outfeed, builder) when will_outfeed(outfeed),
     do: update_in(outfeed.token, &EXLA.Op.outfeed(EXLA.Op.constant_r0(builder, 0, {:u, 16}), &1))
 
@@ -183,13 +192,19 @@ defmodule EXLA.Defn.Outfeed do
     do: outfeed
 
   defp outfeed_flat_tuple(%Outfeed{token: token, compiled_hooks: ch} = outfeed, builder, tuple) do
+    mod =
+      case builder do
+        %Function{} -> Value
+        _ -> EXLA.Op
+      end
+
     flag = next_hook(ch)
-    token = EXLA.Op.outfeed(EXLA.Op.constant_r0(builder, flag, {:u, 16}), token)
-    %EXLA.Shape{dims: {size}, dtype: {:tuple, shapes}} = EXLA.Op.get_shape(tuple)
+    token = mod.outfeed(mod.constant_r0(builder, flag, {:u, 16}), token)
+    %EXLA.Shape{dims: {size}, dtype: {:tuple, shapes}} = mod.get_shape(tuple)
 
     token =
       Enum.reduce(1..size//1, token, fn pos, token ->
-        EXLA.Op.outfeed(EXLA.Op.get_tuple_element(tuple, pos - 1), token)
+        mod.outfeed(mod.get_tuple_element(tuple, pos - 1), token)
       end)
 
     {%{outfeed | token: token}, flag, shapes}

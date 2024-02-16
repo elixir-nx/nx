@@ -1500,7 +1500,6 @@ defmodule EXLA.Defn.ExprTest do
 
     @tag :conditional_inside_map_reduce
     @tag :unsupported_64_bit_op
-    @tag :mlir_token_error
     test "maps a function with conditional" do
       assert_equal(
         map_conditional(Nx.tensor([-2, -1, 0, 1, 2])),
@@ -1521,7 +1520,6 @@ defmodule EXLA.Defn.ExprTest do
       end
     end
 
-    @tag :mlir_cond_inside_while
     test "while inside if" do
       assert %{a: a, b: b} = while_inside_if(1, %{a: 1, b: 2.0})
       assert_all_close(a, 1)
@@ -3771,7 +3769,6 @@ defmodule EXLA.Defn.ExprTest do
 
     defn svd(t), do: Nx.LinAlg.svd(t)
 
-    @tag :mlir_linalg_nor_supported_yet
     test "svd" do
       input = Nx.iota({3, 3})
       output = Nx.as_type(input, {:f, 32})
@@ -3788,7 +3785,6 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
-    @tag :mlir_linalg_nor_supported_yet
     test "svd (tall matrix)" do
       input = Nx.tensor([[2, 0], [0, 1], [0, 0]])
       output = Nx.as_type(input, {:f, 32})
@@ -3805,7 +3801,6 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
-    @tag :mlir_linalg_nor_supported_yet
     test "svd (wide matrix)" do
       input = Nx.tensor([[2, 0, 0], [0, 1, 0]])
       output = Nx.as_type(input, {:f, 32})
@@ -4140,7 +4135,6 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
-  @tag :mlir_cond_inside_while
   test "computes while inside cond" do
     assert {i} = while_in_cond(0)
     assert_equal(i, Nx.tensor(5))

@@ -1063,6 +1063,9 @@ ERL_NIF_TERM ConstantOpImpl(mlir::OpBuilder *builder, mlir::Type type, ErlNifEnv
 ERL_NIF_TERM MLIRFunction::ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM term, std::optional<std::vector<int64_t>> dims) {
   module_->builder()->setInsertionPointToEnd(&func_->getBody().back());
 
+  if (type.isSignlessInteger(1)) {
+    return ConstantOpImpl<exla::uint8>(module_->builder(), type, env, term, dims);
+  }
   if (type.isUnsignedInteger(8)) {
     return ConstantOpImpl<exla::uint8>(module_->builder(), type, env, term, dims);
   }

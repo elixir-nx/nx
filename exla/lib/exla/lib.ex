@@ -159,8 +159,8 @@ defmodule EXLA.Lib do
 
     cmp =
       if is_min?,
-        do: Value.less_equal(lhs_value, rhs_value),
-        else: Value.greater_equal(lhs_value, rhs_value)
+        do: Value.less_equal(function, lhs_value, rhs_value),
+        else: Value.greater_equal(function, lhs_value, rhs_value)
 
     max = Value.select(cmp, lhs_value, rhs_value)
     arg_max = Value.select(cmp, lhs_index, rhs_index)
@@ -168,13 +168,13 @@ defmodule EXLA.Lib do
     arg_max =
       case tie_break do
         :low ->
-          eq? = Value.equal(lhs_value, rhs_value)
-          id = Value.min(lhs_index, rhs_index)
+          eq? = Value.equal(function, lhs_value, rhs_value)
+          id = Value.min(function, lhs_index, rhs_index)
           Value.select(eq?, id, arg_max)
 
         :high ->
-          eq? = Value.equal(lhs_value, rhs_value)
-          id = Value.max(lhs_index, rhs_index)
+          eq? = Value.equal(function, lhs_value, rhs_value)
+          id = Value.max(function, lhs_index, rhs_index)
           Value.select(eq?, id, arg_max)
       end
 

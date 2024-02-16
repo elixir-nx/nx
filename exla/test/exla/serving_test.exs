@@ -67,8 +67,7 @@ defmodule EXLA.ServingTest do
 
   describe "partitioning" do
     @describetag :multi_device
-    @describetag :mlir_token_error
-
+    @describetag :mlir_multi_device_error
     for backend <- [Nx.BinaryBackend, EXLA.Backend] do
       test "spawns tasks concurrently with #{inspect(backend)}", config do
         execute_sync_supervised!(config, batch_size: 2, partitions: true)

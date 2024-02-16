@@ -21,8 +21,9 @@ defmodule EXLA.MLIR.Value do
     mlir_op = :"mlir_#{op}"
 
     def unquote(op)(
-          %Value{ref: lhs, function: %Function{} = func},
-          %Value{ref: rhs, function: %Function{} = func}
+          func,
+          %Value{ref: lhs},
+          %Value{ref: rhs}
         ) do
       ref = EXLA.NIF.unquote(mlir_op)(func.ref, lhs, rhs) |> unwrap!()
       %Value{ref: ref, function: func}
@@ -203,7 +204,12 @@ defmodule EXLA.MLIR.Value do
       end
 
     ref =
-      EXLA.NIF.mlir_constant_r0(func.ref, value, EXLA.Shape.dtype_to_charlist(type)) |> unwrap!()
+      EXLA.NIF.mlir_constant_r0(
+        func.ref,
+        value,
+        EXLA.Shape.dtype_to_charlist(type)
+      )
+      |> unwrap!()
 
     %Value{ref: ref, function: func}
   end
@@ -582,7 +588,9 @@ defmodule EXLA.MLIR.Value do
     %Value{token | ref: ref}
   end
 
-  def outfeed(%Value{function: function} = token, inputs) do
+  def outfeed(%Value{} = input, token), do: outfeed([input], token)
+
+  def outfeed(inputs, %Value{function: function} = token) do
     input_refs = Enum.map(inputs, & &1.ref)
     ref = EXLA.NIF.mlir_outfeed(function.ref, token.ref, input_refs) |> unwrap!()
     %{token | ref: ref}
@@ -643,7 +651,12 @@ defmodule EXLA.MLIR.Value do
 
   defp flatten_tuples(val) do
     case get_shape(val) do
+      %{dtype: {:tuple, _}, dims: {0}} ->
+        []
+
       %{dtype: {:tuple, _}, dims: {n}} ->
+        # TO-DO(mlir): maybe we can avoid building tuples altogether.
+        # Nx should be returning all tuples as flattened anyway.
         Enum.flat_map(0..(n - 1), fn i -> val |> get_tuple_element(i) |> flatten_tuples() end)
 
       _ ->
