@@ -371,7 +371,6 @@ defmodule EXLA.Defn.APITest do
       end
     end
 
-    @tag :mlir_cond_error
     test "executes hook within cond" do
       assert_equal(
         EXLA.jit(&hook_cond/2, hooks: %{cond: send_to_self(:tag)}).(1, 4),

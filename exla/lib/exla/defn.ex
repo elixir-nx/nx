@@ -13,6 +13,7 @@ defmodule EXLA.Defn do
   def __partitions_options__(options) do
     client_name = Keyword.get_lazy(options, :client, &EXLA.Client.default_name/0)
     device_count = EXLA.Client.fetch!(client_name).device_count
+
     Enum.map(1..device_count//1, &Keyword.put(options, :device_id, &1 - 1))
   end
 
@@ -429,6 +430,7 @@ defmodule EXLA.Defn do
       Keyword.pop_lazy(compile_options, :client, &EXLA.Client.default_name/0)
 
     client = EXLA.Client.fetch!(client_name)
+
     callback = &to_root_computation(&1, &2, &3, &4, compile_options)
 
     {executable, used_inputs, outputs, outfeed, :ok, debug?} =
@@ -574,7 +576,9 @@ defmodule EXLA.Defn do
     end
 
     {hooks, options} = Keyword.pop(options, :hooks, %{})
+
     outfeed = Outfeed.new(hooks, defined_hooks)
+
     comp_key = {ref, client.name, outfeed.used_hooks, lazy_transfers, options}
 
     {comp_time, {evaled, {xla_time, executable, extra, outfeed}}} =
@@ -589,6 +593,7 @@ defmodule EXLA.Defn do
             end)
 
           inputs_and_shapes = Enum.reverse(reverse_inputs_and_shapes)
+
           mode = options[:compiler_mode] || :xla
 
           comp_arg_shapes =
@@ -743,8 +748,12 @@ defmodule EXLA.Defn do
 
     case state.builder do
       %Function{} ->
-        # TO-DO(mlir): deal with token
-        {cond_op, cache}
+        if get_token(cache) do
+          {token, results} = cond_op
+          {results, update_token(cache, token)}
+        else
+          {cond_op, cache}
+        end
 
       _ ->
         if get_token(cache) do
@@ -2588,17 +2597,32 @@ defmodule EXLA.Defn do
 
     case builder do
       %EXLA.MLIR.Function{} = function ->
+        token_shape =
+          if get_token(cache) do
+            [EXLA.Shape.make_token_shape()]
+          else
+            []
+          end
+
         if_results =
           Value.if(
             pred_op,
-            List.wrap(EXLA.Builder.exla_shape(on_true, true)),
+            token_shape ++ List.wrap(EXLA.Builder.exla_shape(on_true, true)),
             true_args,
             true_comp,
             false_args,
             false_comp
           )
 
-        {collect_container_results(function, if_results, on_true), cache}
+        results =
+          if get_token(cache) do
+            [token | results] = if_results
+            {token, collect_container_results(function, results, on_true)}
+          else
+            collect_container_results(function, if_results, on_true)
+          end
+
+        {results, cache}
 
       _ ->
         {EXLA.Op.conditional(pred_op, true_args, true_comp, false_args, false_comp), cache}
@@ -2686,28 +2710,63 @@ defmodule EXLA.Defn do
          cache,
          fun
        ) do
-    # TO-DO(mlir): deal with token
-    inputs = Enum.with_index(args, fn arg, idx -> {"p#{idx}", Value.get_shape(arg)} end)
+    if token = get_token(cache) do
+      inputs = Enum.with_index(args, fn arg, idx -> {"p#{idx + 1}", Value.get_shape(arg)} end)
+      inputs = [{"p0", EXLA.Shape.make_token_shape()} | inputs]
 
-    # input function is actually the parent function still, so we need to actually create a new function
-    # with this name on the same module.
-    function = EXLA.Builder.new({module, name}, inputs, out_expr, :mlir, false, true)
+      # input function is actually the parent function still, so we need to actually create a new function
+      # with this name on the same module.
+      function =
+        EXLA.Builder.new(
+          {module, name},
+          inputs,
+          {struct(Nx.Tensor, type: :token), out_expr},
+          :mlir,
+          false,
+          true
+        )
 
-    case function.return_shape do
-      [%{dtype: {:tuple, _}}] ->
-        raise "MLIR cannot return tuple from if branch"
+      case function.return_shape do
+        [%{dtype: {:tuple, _}}] ->
+          raise "MLIR cannot return tuple from if branch"
 
-      _ ->
-        nil
+        _ ->
+          nil
+      end
+
+      [comp_token | params] = EXLA.MLIR.Function.get_arguments(function)
+      comp_cache = reset_token(cache, comp_token)
+
+      {res, comp_cache} =
+        fun.(function, Enum.with_index(params, fn x, idx -> {idx, x} end), comp_cache)
+
+      [_, res | _] = Value.variadic_return([get_token(comp_cache), res], true)
+
+      {[token | args], res.function, comp_cache}
+    else
+      inputs = Enum.with_index(args, fn arg, idx -> {"p#{idx}", Value.get_shape(arg)} end)
+
+      # input function is actually the parent function still, so we need to actually create a new function
+      # with this name on the same module.
+      function = EXLA.Builder.new({module, name}, inputs, out_expr, :mlir, false, true)
+
+      case function.return_shape do
+        [%{dtype: {:tuple, _}}] ->
+          raise "MLIR cannot return tuple from if branch"
+
+        _ ->
+          nil
+      end
+
+      params = EXLA.MLIR.Function.get_arguments(function)
+
+      {res, comp_cache} =
+        fun.(function, Enum.with_index(params, fn x, idx -> {idx, x} end), cache)
+
+      [res | _] = Value.variadic_return([res], true)
+
+      {args, res.function, comp_cache}
     end
-
-    params = EXLA.MLIR.Function.get_arguments(function)
-
-    {res, comp_cache} = fun.(function, Enum.with_index(params, fn x, idx -> {idx, x} end), cache)
-
-    [res | _] = Value.variadic_return([res], true)
-
-    {args, res.function, comp_cache}
   end
 
   defp if_branch_computation(subbuilder, _out_expr, args, cache, fun) do

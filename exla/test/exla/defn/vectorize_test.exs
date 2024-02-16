@@ -4,8 +4,6 @@ defmodule EXLA.Defn.VectorizeTest do
   import Nx.Defn
   import Nx, only: :sigils
 
-  @moduletag :mlir_vectorization
-
   setup do
     Nx.default_backend(EXLA.Backend)
 
@@ -160,7 +158,6 @@ defmodule EXLA.Defn.VectorizeTest do
   end
 
   describe "cond" do
-    @describetag :mlir_cond_error
     deftransformp send_value(val, opts \\ []) do
       Nx.Defn.Kernel.hook(val, &send(opts[:pid] || self(), {&1, clause: opts[:clause]}))
     end

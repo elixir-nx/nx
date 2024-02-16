@@ -20,13 +20,6 @@ exclude =
     _ -> [:conditional_inside_map_reduce]
   end
 
-exclude =
-  if compiler_mode == :mlir do
-    exclude ++ [:mlir_cond_error, :mlir_multi_device_error]
-  else
-    exclude
-  end
-
 if client.platform == :host and client.device_count == 1 and System.schedulers_online() > 1 do
   IO.puts(
     "To run multi-device tests: XLA_FLAGS=--xla_force_host_platform_device_count=#{System.schedulers_online()} mix test"
