@@ -10,90 +10,67 @@ defmodule EXLA.Builder do
   @enforce_keys [:ref]
   defstruct [:ref, :parent, :name]
 
-  def new(name, inputs, outputs, type, sub? \\ false, variadic_return? \\ false)
+  def new(name, inputs, outputs, type)
 
-  def new(name, _inputs, _outputs, :xla, _sub?, _variadic_return?) do
+  def new(name, _inputs, _outputs, :xla) do
     new(name)
   end
 
-  def new(module_and_name, inputs, outputs, :mlir, sub?, variadic_return?) do
-    # TO-DO(mlir): this module shouldn't have to know about Nx
-    {_arg_names, arg_shapes} = Enum.unzip(inputs)
-
+  def new(module_and_name, arg_shapes, outputs, :mlir) do
     {module, name, is_public} =
       case module_and_name do
         {%M{} = module, name} -> {module, name, false}
         _name -> {M.new(), "main", true}
       end
 
-    return_shape =
-      if sub? do
-        exla_shape(outputs, false)
-      else
-        out_types = [outputs] |> Nx.Defn.Composite.flatten_list()
+    return_shape = exla_shape(outputs)
 
-        if variadic_return? do
-          exla_shape(out_types, true)
-        else
-          out_types |> List.to_tuple() |> exla_shape(false)
-        end
-      end
+    arg_shapes = exla_shape(arg_shapes)
+
+    if Enum.any?(arg_shapes, &match?({:tuple, _}, &1.dtype)) do
+      raise "Tuple shapes are not allowed"
+    end
+
+    if Enum.any?(return_shape, &match?({:tuple, _}, &1.dtype)) do
+      raise "Tuple shapes are not allowed"
+    end
 
     M.create_function(
       module,
       name,
-      exla_shape(arg_shapes, false),
-      List.wrap(return_shape),
+      arg_shapes,
+      return_shape,
       is_public
     )
   end
 
-  def exla_shape(tensors, flatten_tuple) when is_list(tensors) do
-    result = Enum.map(tensors, &exla_shape(&1, flatten_tuple))
-
-    if flatten_tuple do
-      List.flatten(result)
-    else
-      result
-    end
+  def exla_shape(tensors) when is_list(tensors) do
+    Enum.flat_map(tensors, &exla_shape/1)
   end
 
-  def exla_shape(tensors, flatten_tuple) when is_tuple(tensors) do
-    tuple =
-      tensors
-      |> Tuple.to_list()
-      |> Enum.map(&exla_shape(&1, flatten_tuple))
-
-    if flatten_tuple do
-      List.flatten(tuple)
-    else
-      EXLA.Shape.make_tuple_shape(tuple)
-    end
+  def exla_shape(tensors) when is_tuple(tensors) do
+    tensors
+    |> Tuple.to_list()
+    |> Enum.flat_map(&exla_shape/1)
   end
 
-  def exla_shape(%{type: :token}, _flatten_tuple) do
-    EXLA.Shape.make_token_shape()
+  def exla_shape(%{type: :token}) do
+    [EXLA.Shape.make_token_shape()]
   end
 
-  def exla_shape(%Nx.Tensor{type: {:tuple, _size}, data: %{args: args}}, flatten_tuple) do
-    tuple = Enum.map(args, &exla_shape(&1, flatten_tuple))
-
-    if flatten_tuple do
-      List.flatten(tuple)
-    else
-      EXLA.Shape.make_tuple_shape(tuple)
-    end
+  def exla_shape(%Nx.Tensor{type: {:tuple, _size}, data: %{args: args}}) do
+    Enum.flat_map(args, &exla_shape/1)
   end
 
-  def exla_shape(%{shape: shape, type: type}, _flatten_tuple) do
-    EXLA.Shape.make_shape(type, shape)
+  def exla_shape(%{shape: shape, type: type}) do
+    [EXLA.Shape.make_shape(type, shape)]
   end
 
-  def exla_shape(%EXLA.Shape{} = shape, _flatten_tuple) do
-    shape
+  def exla_shape(%EXLA.Shape{} = shape) do
+    [shape]
   end
 
-  defp new(name) when is_binary(name) do
+  def new(name) when is_binary(name) do
     {:ok, ref} = EXLA.NIF.new_builder(name)
     %__MODULE__{ref: ref, parent: nil, name: name}
   end

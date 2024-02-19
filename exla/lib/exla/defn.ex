@@ -149,6 +149,8 @@ defmodule EXLA.Defn do
 
     {input_shapes, used_shapes} = Enum.split_while(used_shapes, fn {i, _} -> i < input_length end)
 
+    out_flat = Nx.Defn.Composite.flatten_list([expr])
+
     # Get all input indexes and shape
     input_indexes = Enum.map(input_shapes, &elem(&1, 0))
     input_shape = EXLA.Shape.make_tuple_shape(Enum.map(input_shapes, &elem(&1, 1)))
@@ -171,15 +173,12 @@ defmodule EXLA.Defn do
 
     flag_shape = %{type: {:pred, 8}, shape: {}}
     token_shape = %{type: :token}
-    infeed_shape = {flag_shape, token_shape}
+    infeed_shape = [flag_shape, token_shape]
 
-    arg_shapes =
-      {infeed_shape, acc_shape, constant_shape}
-      |> while_arg_shape()
-      |> Enum.with_index(fn shape, i -> {"p#{i}", shape} end)
+    arg_shapes = while_arg_shape(infeed_shape ++ acc_shapes_l ++ constant_shapes_l)
 
     %{module: module, name: name} = subbuilder(builder, "while-pred")
-    pred_fun = EXLA.Builder.new({module, name}, arg_shapes, expr, :mlir, false, true)
+    pred_fun = EXLA.Builder.new({module, name}, arg_shapes, out_flat, :mlir_binary_op)
 
     [flag | _] = EXLA.MLIR.Function.get_arguments(pred_fun)
 
@@ -191,7 +190,7 @@ defmodule EXLA.Defn do
 
     %{module: module, name: name} = subbuilder(builder, "while-body")
 
-    body_fun = EXLA.Builder.new({module, name}, arg_shapes, expr, :mlir, false, true)
+    body_fun = EXLA.Builder.new({module, name}, arg_shapes, out_flat, :mlir)
 
     [_flag, token | args] = EXLA.MLIR.Function.get_arguments(body_fun)
 
@@ -596,14 +595,29 @@ defmodule EXLA.Defn do
 
           mode = options[:compiler_mode] || :xla
 
-          comp_arg_shapes =
+          builder =
             if mode == :mlir do
-              for {i, _shape} = item <- inputs_and_shapes, i >= used_buffers, do: item
-            else
-              inputs_and_shapes
-            end
+              arg_shapes =
+                inputs_and_shapes
+                |> Enum.filter(fn {i, _} -> i >= used_buffers end)
+                |> Enum.map(fn {_, shape} ->
+                  EXLA.Builder.exla_shape(shape)
+                end)
 
-          builder = EXLA.Builder.new(inspect(key), comp_arg_shapes, Nx.devectorize(outputs), mode)
+              outputs =
+                [outputs]
+                |> Nx.Defn.Composite.flatten_list()
+                |> Enum.map(&(&1 |> Nx.devectorize() |> EXLA.Builder.exla_shape()))
+
+              EXLA.Builder.new(
+                inspect(key),
+                arg_shapes,
+                outputs,
+                :mlir
+              )
+            else
+              EXLA.Builder.new(inspect(key))
+            end
 
           mod =
             case mode do
@@ -851,18 +865,18 @@ defmodule EXLA.Defn do
           {computation, Map.put(cache, key, computation)}
       end
 
-    mod =
+    {token, result} =
       case state.builder do
         %Function{} ->
-          Value
+          [token | result] = Value.call(state.builder, [get_token(cache) | call_args], call_body)
+          {token, result}
 
         _ ->
-          EXLA.Op
+          result = EXLA.Op.call(state.builder, [get_token(cache) | call_args], call_body)
+          {EXLA.Op.get_tuple_element(result, 0), EXLA.Op.get_tuple_element(result, 1)}
       end
 
-    result = mod.call(state.builder, [get_token(cache) | call_args], call_body)
-    token = mod.get_tuple_element(result, 0)
-    {mod.get_tuple_element(result, 1), update_token(cache, token)}
+    {result, update_token(cache, token)}
   end
 
   defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do
@@ -2061,18 +2075,14 @@ defmodule EXLA.Defn do
   defp sort_computation(op, type, args, %{builder: %EXLA.MLIR.Function{} = builder}) do
     %{module: module, name: name} = subbuilder(builder, Atom.to_string(op))
 
-    arg_shapes =
-      Enum.with_index(args, fn arg, i ->
-        {"p#{i}", computation_arg_shape(arg)}
-      end)
+    arg_shapes = Enum.map(args, &computation_arg_shape/1)
 
     function =
       EXLA.Builder.new(
         {module, name},
         arg_shapes,
-        struct(Nx.Tensor, %{type: {:pred, 8}, shape: {}}),
-        :mlir,
-        true
+        [EXLA.Shape.make_shape({:pred, 8}, {})],
+        :mlir
       )
 
     [lhs, rhs | _] = EXLA.MLIR.Function.get_arguments(function)
@@ -2130,15 +2140,12 @@ defmodule EXLA.Defn do
          %{builder: %EXLA.MLIR.Function{} = builder},
          prepare_args
        ) do
-    arg_shapes =
-      Enum.with_index(args, fn arg, i ->
-        {"p#{i}", computation_arg_shape(arg)}
-      end)
+    arg_shapes = Enum.map(args, &computation_arg_shape/1)
 
     %{module: module, name: name} = subbuilder(builder, Atom.to_string(op))
 
     function =
-      EXLA.Builder.new({module, name}, arg_shapes, struct(Nx.Tensor, out), :mlir, true)
+      EXLA.Builder.new({module, name}, arg_shapes, struct(Nx.Tensor, out), :mlir)
 
     args = EXLA.MLIR.Function.get_arguments(function)
 
@@ -2165,11 +2172,9 @@ defmodule EXLA.Defn do
          %{builder: %EXLA.MLIR.Function{module: module}} = state
        ) do
     arg_shapes =
-      Enum.with_index(args, fn arg, i ->
-        {"p#{i}", computation_arg_shape(arg)}
-      end)
+      Enum.map(args, &computation_arg_shape/1)
 
-    function = EXLA.Builder.new({module, Atom.to_string(name)}, arg_shapes, expr, :mlir, false)
+    function = EXLA.Builder.new({module, Atom.to_string(name)}, arg_shapes, expr, :mlir)
     mlir_args = EXLA.MLIR.Function.get_arguments(function)
 
     arg_params = Enum.zip(args, mlir_args)
@@ -2212,7 +2217,6 @@ defmodule EXLA.Defn do
   defp while_computation(name, arg, expr, type, transform, %{builder: %Function{}} = state, cache) do
     arg_shapes =
       while_arg_shape({%{type: :token}, arg})
-      |> Enum.with_index(fn shape, i -> {"p#{i}", shape} end)
 
     %{module: module, name: name} = subbuilder(state.builder, Atom.to_string(name))
 
@@ -2224,14 +2228,7 @@ defmodule EXLA.Defn do
       end
 
     function =
-      EXLA.Builder.new(
-        {module, name},
-        arg_shapes,
-        out_expr,
-        :mlir,
-        false,
-        true
-      )
+      EXLA.Builder.new({module, name}, arg_shapes, out_expr, :mlir)
 
     [arg_token | arg_params] = EXLA.MLIR.Function.get_arguments(function)
 
@@ -2292,22 +2289,14 @@ defmodule EXLA.Defn do
 
   defp token_computation(name, args, expr, %{builder: %Function{}} = state, cache) do
     arg_shapes =
-      Enum.with_index(args, fn arg, i ->
-        {"p#{i + 1}", Value.get_shape(arg)}
-      end)
+      Enum.map(args, &Value.get_shape/1)
 
     %Function{module: module, name: name} = subbuilder(state.builder, name)
 
     token_shape = EXLA.Shape.make_token_shape()
 
     function =
-      EXLA.Builder.new(
-        {module, name},
-        [{"p0", token_shape} | arg_shapes],
-        {struct(Nx.Tensor, %{type: :token}), expr},
-        :mlir,
-        true
-      )
+      EXLA.Builder.new({module, name}, [token_shape | arg_shapes], [token_shape, expr], :mlir)
 
     [arg_token | _] = args = EXLA.MLIR.Function.get_arguments(function)
 
@@ -2321,9 +2310,9 @@ defmodule EXLA.Defn do
     }
 
     {res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
-    res = Value.tuple(function, [get_token(comp_cache), res])
+    Value.variadic_return([get_token(comp_cache), res], true)
 
-    {EXLA.Builder.build(res), merge_outfeed(cache, comp_cache)}
+    {function, merge_outfeed(cache, comp_cache)}
   end
 
   defp token_computation(name, arg, expr, state, cache) do
@@ -2607,7 +2596,7 @@ defmodule EXLA.Defn do
         if_results =
           Value.if(
             pred_op,
-            token_shape ++ List.wrap(EXLA.Builder.exla_shape(on_true, true)),
+            token_shape ++ List.wrap(EXLA.Builder.exla_shape(on_true)),
             true_args,
             true_comp,
             false_args,
@@ -2710,21 +2699,20 @@ defmodule EXLA.Defn do
          cache,
          fun
        ) do
+    out_flat =
+      [out_expr]
+      |> Nx.Defn.Composite.flatten_list()
+      |> Enum.map(&EXLA.Builder.exla_shape/1)
+
     if token = get_token(cache) do
-      inputs = Enum.with_index(args, fn arg, idx -> {"p#{idx + 1}", Value.get_shape(arg)} end)
-      inputs = [{"p0", EXLA.Shape.make_token_shape()} | inputs]
+      inputs = Enum.map(args, &Value.get_shape/1)
+      token_shape = EXLA.Shape.make_token_shape()
+      inputs = [token_shape | inputs]
 
       # input function is actually the parent function still, so we need to actually create a new function
       # with this name on the same module.
       function =
-        EXLA.Builder.new(
-          {module, name},
-          inputs,
-          {struct(Nx.Tensor, type: :token), out_expr},
-          :mlir,
-          false,
-          true
-        )
+        EXLA.Builder.new({module, name}, inputs, [token_shape | out_flat], :mlir)
 
       case function.return_shape do
         [%{dtype: {:tuple, _}}] ->
@@ -2740,15 +2728,15 @@ defmodule EXLA.Defn do
       {res, comp_cache} =
         fun.(function, Enum.with_index(params, fn x, idx -> {idx, x} end), comp_cache)
 
-      [_, res | _] = Value.variadic_return([get_token(comp_cache), res], true)
+      Value.variadic_return([get_token(comp_cache), res], true)
 
-      {[token | args], res.function, comp_cache}
+      {[token | args], function, comp_cache}
     else
-      inputs = Enum.with_index(args, fn arg, idx -> {"p#{idx}", Value.get_shape(arg)} end)
+      inputs = Enum.map(args, &Value.get_shape/1)
 
       # input function is actually the parent function still, so we need to actually create a new function
       # with this name on the same module.
-      function = EXLA.Builder.new({module, name}, inputs, out_expr, :mlir, false, true)
+      function = EXLA.Builder.new({module, name}, inputs, out_flat, :mlir)
 
       case function.return_shape do
         [%{dtype: {:tuple, _}}] ->

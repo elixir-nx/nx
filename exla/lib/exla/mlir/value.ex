@@ -603,8 +603,8 @@ defmodule EXLA.MLIR.Value do
 
   def call(%Function{ref: fun_ref} = function, args, %Function{ref: computation_ref}) do
     arg_refs = Enum.map(args, & &1.ref)
-    ref = EXLA.NIF.mlir_call(fun_ref, arg_refs, computation_ref) |> unwrap!()
-    %Value{ref: ref, function: function}
+    refs = EXLA.NIF.mlir_call(fun_ref, arg_refs, computation_ref) |> unwrap!()
+    Enum.map(refs, &%Value{ref: &1, function: function})
   end
 
   def while(
