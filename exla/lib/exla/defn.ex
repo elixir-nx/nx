@@ -701,15 +701,15 @@ defmodule EXLA.Defn do
         %Function{} ->
           [token | results] = Value.while(state.builder, pred, body, initial)
 
-          # result =
-          #   if is_tuple(initial_arg) do
-          #     Value.tuple(state.builder, results)
-          #   else
-          #     [result] = results
-          #     result
-          #   end
+          result =
+            if is_tuple(initial_arg) do
+              results
+            else
+              [result] = results
+              result
+            end
 
-          {token, results}
+          {token, result}
 
         _ ->
           while = EXLA.Op.while(pred, body, initial)
@@ -747,6 +747,7 @@ defmodule EXLA.Defn do
       %Function{} ->
         if get_token(cache) do
           {token, results} = cond_op
+
           {results, update_token(cache, token)}
         else
           {cond_op, cache}
@@ -1005,7 +1006,11 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(:elem, [op, index], _ans, %{builder: %Function{}}) do
-    Enum.fetch!(op, index)
+    if is_list(op) do
+      Enum.fetch!(op, index)
+    else
+      Value.get_tuple_element(op, index)
+    end
   end
 
   defp to_operator(:elem, [op, index], _ans, _state) do
@@ -2175,7 +2180,15 @@ defmodule EXLA.Defn do
     }
 
     {res, _} = recur_composite(expr, state, no_token_cache())
-    EXLA.Builder.build(to_type(res, type))
+
+    converted =
+      if is_list(res) do
+        Enum.map(res, &to_type(&1, type))
+      else
+        to_type(res, type)
+      end
+
+    EXLA.Builder.build(converted)
   end
 
   defp fun_computation(name, args, expr, type, state) do
@@ -2408,7 +2421,7 @@ defmodule EXLA.Defn do
 
       tuple =
         case state.builder do
-          %Function{} = function -> List.flatten(elements)
+          %Function{} -> List.flatten(elements)
           builder -> EXLA.Op.tuple(builder, elements)
         end
 
@@ -2606,23 +2619,23 @@ defmodule EXLA.Defn do
           if get_token(cache) do
             [token | results] = if_results
 
-            # results =
-            #   if is_tuple(on_true) do
-            #     Value.tuple(builder, results)
-            #   else
-            #     [res] = results
-            #     res
-            #   end
+            results =
+              if is_tuple(on_true) do
+                Value.tuple(builder, results)
+              else
+                [res] = results
+                res
+              end
 
             {token, results}
           else
-            if_results
-            # if is_tuple(on_true) do
-            #   Value.tuple(builder, if_results)
-            # else
-            #   [res] = if_results
-            #   res
-            # end
+            # if_results
+            if is_tuple(on_true) do
+              Value.tuple(builder, if_results)
+            else
+              [res] = if_results
+              res
+            end
           end
 
         {results, cache}
@@ -2830,6 +2843,7 @@ defmodule EXLA.Defn do
 
   defp op_shape(%EXLA.Op{} = op), do: EXLA.Op.get_shape(op).dims
   defp op_shape(%Value{} = op), do: Value.get_shape(op).dims
+  defp op_shape(op) when is_list(op), do: Enum.map(op, &op_shape/1)
 
   defp to_type(%EXLA.Op{} = op, type) do
     if op_type(op) == type, do: op, else: EXLA.Op.convert_element_type(op, type)
