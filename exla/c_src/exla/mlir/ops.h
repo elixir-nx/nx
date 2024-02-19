@@ -85,7 +85,6 @@ DEFINE_NIF(mlir_constant_r0);
 DEFINE_NIF(mlir_constant_from_binary);
 DEFINE_NIF(mlir_dot_general);
 DEFINE_NIF(mlir_select);
-DEFINE_NIF(mlir_build);
 DEFINE_NIF(mlir_convert);
 DEFINE_NIF(mlir_top_k);
 DEFINE_NIF(mlir_sort);

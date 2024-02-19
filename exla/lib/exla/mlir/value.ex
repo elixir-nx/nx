@@ -608,9 +608,10 @@ defmodule EXLA.MLIR.Value do
   end
 
   def while(
+        %Function{} = function,
         %Function{ref: pred_ref},
         %Function{ref: body_ref},
-        %Value{function: function} = initial
+        initial
       ) do
     refs =
       EXLA.NIF.mlir_while(function.ref, pred_ref, body_ref, flatten_tuples(initial)) |> unwrap!()
@@ -618,7 +619,7 @@ defmodule EXLA.MLIR.Value do
     Enum.map(refs, &%Value{function: function, ref: &1})
   end
 
-  def variadic_return([%Value{function: function} | _] = values, flatten_tuples? \\ false) do
+  def variadic_return(function, values, flatten_tuples? \\ false) do
     refs =
       if flatten_tuples? do
         flatten_tuples(values)
