@@ -32,7 +32,7 @@ defmodule EXLA.Builder do
         if variadic_return? do
           exla_shape(out_types, true)
         else
-          out_types |> List.to_tuple() |> exla_shape(false)
+          out_types |> List.to_tuple() |> exla_shape(true)
         end
       end
 

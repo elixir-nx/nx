@@ -1368,12 +1368,13 @@ mlir::Value MLIRFunction::OutfeedOp(std::vector<mlir::Value> inputs, mlir::Value
   return builder->create<mlir::stablehlo::OutfeedOp>(builder->getUnknownLoc(), mlir::ValueRange(inputs), token);
 }
 
-mlir::Value MLIRFunction::CallOp(std::vector<mlir::Value> inputs, MLIRFunction *computation) {
+std::vector<mlir::Value> MLIRFunction::CallOp(std::vector<mlir::Value> inputs, MLIRFunction *computation) {
   auto builder = module_->builder();
   builder->setInsertionPointToEnd(&func_->getBody().back());
   auto call_op = builder->create<mlir::func::CallOp>(builder->getUnknownLoc(), *computation->function(), mlir::ValueRange(inputs));
 
-  return call_op.getResult(0);
+  mlir::Operation::result_range results = call_op.getResults();
+  return std::vector<mlir::Value>(results.begin(), results.end());
 }
 
 std::vector<mlir::Value> MLIRFunction::WhileOp(MLIRFunction *pred, MLIRFunction *body_function, std::vector<mlir::Value> initial) {

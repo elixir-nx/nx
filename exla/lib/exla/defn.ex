@@ -272,7 +272,7 @@ defmodule EXLA.Defn do
         constant
       ])
 
-    [_flag, token | results] = Value.while(pred, body, init)
+    [_flag, token | results] = Value.while(builder, pred, body, init)
     while = collect_container_results(builder, results, {acc_shape, constant_shape})
 
     acc = Value.get_tuple_element(while, 0)
@@ -480,7 +480,17 @@ defmodule EXLA.Defn do
     {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
     outfeed = cache |> get_outfeed() |> Outfeed.close(builder)
 
-    {EXLA.Builder.build(res), :ok, outfeed}
+    func =
+      case state.builder do
+        %Function{} = function ->
+          Value.variadic_return(res)
+          function
+
+        _ ->
+          EXLA.Builder.build(res)
+      end
+
+    {func, :ok, outfeed}
   end
 
   defp maybe_outfeed(lock, executable, args, used_inputs, outputs, outfeed, run_options)
@@ -663,6 +673,16 @@ defmodule EXLA.Defn do
 
   ## Operator handling
 
+  defp recur_flatten(composite, %{builder: %Function{}} = state, cache) do
+    {acc, cache} =
+      Composite.reduce(composite, {[], cache}, fn %T{} = expr, {acc, cache} ->
+        {expr, cache} = recur_operator(expr, state, cache)
+        {[acc, expr], cache}
+      end)
+
+    {List.flatten(acc), cache}
+  end
+
   defp recur_flatten(composite, state, cache) do
     {acc, cache} =
       Composite.reduce(composite, {[], cache}, fn %T{} = expr, {acc, cache} ->
@@ -697,12 +717,6 @@ defmodule EXLA.Defn do
     {body, cache} =
       while_computation(:while_body, arg, body, :with_token, &cast_pred_to_u8/1, state, cache)
 
-    mod =
-      case state.builder do
-        %Function{} -> Value
-        _ -> EXLA.Op
-      end
-
     {token, result} =
       case state.builder do
         %Function{} = function ->
@@ -710,14 +724,14 @@ defmodule EXLA.Defn do
           # like it would have come from Nx.Defn.Composite.flatten_list.
           # We need to collect the returned values into the nested tuples
           # that should have come from the while expr
-          [token | results] = mod.while(pred, body, initial)
+          [token | results] = Value.while(function, pred, body, initial)
           result = collect_container_results(function, results, initial_arg)
           {token, result}
 
         _ ->
-          while = mod.while(pred, body, initial)
-          token = mod.get_tuple_element(while, 0)
-          result = mod.get_tuple_element(while, 1)
+          while = EXLA.Op.while(pred, body, initial)
+          token = EXLA.Op.get_tuple_element(while, 0)
+          result = EXLA.Op.get_tuple_element(while, 1)
           {token, result}
       end
 
@@ -787,7 +801,7 @@ defmodule EXLA.Defn do
       case state.builder do
         %Function{} ->
           results = Value.top_k(tensor, opts[:k])
-          Value.tuple(state.builder, results)
+          results
 
         %EXLA.Builder{} ->
           EXLA.Op.top_k(tensor, opts[:k])
@@ -851,18 +865,20 @@ defmodule EXLA.Defn do
           {computation, Map.put(cache, key, computation)}
       end
 
-    mod =
+    {token, results} =
       case state.builder do
         %Function{} ->
-          Value
+          [token | results] =
+            Value.call(state.builder, [get_token(cache) | call_args], call_body)
+
+          {token, results}
 
         _ ->
-          EXLA.Op
+          result = EXLA.Op.call(state.builder, [get_token(cache) | call_args], call_body)
+          {EXLA.Op.get_tuple_element(result, 0), EXLA.Op.get_tuple_element(result, 1)}
       end
 
-    result = mod.call(state.builder, [get_token(cache) | call_args], call_body)
-    token = mod.get_tuple_element(result, 0)
-    {mod.get_tuple_element(result, 1), update_token(cache, token)}
+    {results, update_token(cache, token)}
   end
 
   defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do
@@ -1006,6 +1022,10 @@ defmodule EXLA.Defn do
       op when is_tuple(op) ->
         Value.tuple(state.builder, Tuple.to_list(op))
     end
+  end
+
+  defp to_operator(:elem, [op, index], _ans, %{builder: %Function{}}) do
+    Enum.fetch!(op, index)
   end
 
   defp to_operator(:elem, [op, index], _ans, _state) do
@@ -2069,7 +2089,7 @@ defmodule EXLA.Defn do
         arg_shapes,
         struct(Nx.Tensor, %{type: {:pred, 8}, shape: {}}),
         :mlir,
-        true
+        false
       )
 
     [lhs, rhs | _] = EXLA.MLIR.Function.get_arguments(function)
@@ -2132,7 +2152,7 @@ defmodule EXLA.Defn do
     %{module: module, name: name} = subbuilder(builder, Atom.to_string(op))
 
     function =
-      EXLA.Builder.new({module, name}, arg_shapes, struct(Nx.Tensor, out), :mlir, true)
+      EXLA.Builder.new({module, name}, arg_shapes, struct(Nx.Tensor, out), :mlir, false)
 
     args = EXLA.MLIR.Function.get_arguments(function)
 
@@ -2292,6 +2312,7 @@ defmodule EXLA.Defn do
         arg_shapes,
         {struct(Nx.Tensor, %{type: :token}), expr},
         :mlir,
+        false,
         true
       )
 
@@ -2307,9 +2328,8 @@ defmodule EXLA.Defn do
     }
 
     {res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
-    res = Value.tuple(function, [get_token(comp_cache), res])
-
-    {EXLA.Builder.build(res), merge_outfeed(cache, comp_cache)}
+    Value.variadic_return([get_token(comp_cache), res], true)
+    {function, merge_outfeed(cache, comp_cache)}
   end
 
   defp token_computation(name, arg, expr, state, cache) do
@@ -2381,6 +2401,13 @@ defmodule EXLA.Defn do
     |> EXLA.Shape.make_tuple_shape()
   end
 
+  defp computation_arg_param({tuple, params}) when is_tuple(tuple) and is_list(params) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.zip(params)
+    |> Enum.flat_map(&computation_arg_param/1)
+  end
+
   defp computation_arg_param({tuple, %mod{} = param}) when is_tuple(tuple) do
     tuple
     |> Tuple.to_list()
@@ -2406,7 +2433,7 @@ defmodule EXLA.Defn do
 
       tuple =
         case state.builder do
-          %Function{} = function -> Value.tuple(function, elements)
+          %Function{} = function -> elements
           builder -> EXLA.Op.tuple(builder, elements)
         end
 
@@ -2830,15 +2857,16 @@ defmodule EXLA.Defn do
   # We could do so lazily by comparing the versions of
   # the branches, but that gets tricky with cond/if,
   # so we always perform the operation.
-  defp cast_pred_to_u8(%Value{} = op) do
-    op
-  end
 
-  defp cast_pred_to_u8(op) do
+  defp cast_pred_to_u8(%EXLA.Op{} = op) do
     case EXLA.Op.get_shape(op).dtype do
       {:pred, 8} -> EXLA.Op.convert_element_type(op, {:u, 8})
       _ -> op
     end
+  end
+
+  defp cast_pred_to_u8(op) do
+    op
   end
 
   defp merge_type({:pred, 8}, {:pred, 8}), do: {:pred, 8}
@@ -2906,8 +2934,10 @@ defmodule EXLA.Defn do
   end
 
   defp collect_container_results(function, flat_list, expected_container) do
-    {collected, []} = collect_container_results_unflatten(function, expected_container, flat_list)
-    collected
+    # {collected, []} = collect_container_results_unflatten(function, expected_container, flat_list)
+    # collected
+
+    flat_list
   end
 
   defp collect_container_results_unflatten(function, tuple, acc) when is_tuple(tuple) do
