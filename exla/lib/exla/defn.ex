@@ -176,7 +176,7 @@ defmodule EXLA.Defn do
     %{module: module, name: name} = subbuilder(builder, "while-pred")
     out_types = container_to_exla_shape(expr)
 
-    pred_fun = new_mlir_function({module, name}, arg_shapes, out_types, false)
+    pred_fun = EXLA.Builder.new_mlir({module, name}, arg_shapes, out_types)
 
     [flag | _] = EXLA.MLIR.Function.get_arguments(pred_fun)
 
@@ -188,7 +188,7 @@ defmodule EXLA.Defn do
 
     %{module: module, name: name} = subbuilder(builder, "while-body")
 
-    body_fun = new_mlir_function({module, name}, arg_shapes, out_types, false)
+    body_fun = EXLA.Builder.new_mlir({module, name}, arg_shapes, out_types)
 
     [_flag, token | args] = EXLA.MLIR.Function.get_arguments(body_fun)
 
@@ -601,7 +601,7 @@ defmodule EXLA.Defn do
                     |> then(&EXLA.Shape.make_shape(&1.type, &1.shape))
                   end)
 
-                {Value, new_mlir_function(inspect(key), comp_arg_shapes, out_types, true)}
+                {Value, EXLA.Builder.new_mlir(inspect(key), comp_arg_shapes, out_types)}
             end
 
           outfeed =
@@ -2052,11 +2052,10 @@ defmodule EXLA.Defn do
     arg_shapes = Enum.map(args, &EXLA.Shape.make_shape(&1.type, &1.shape))
 
     function =
-      new_mlir_function(
+      EXLA.Builder.new_mlir(
         {module, name},
         arg_shapes,
-        [EXLA.Shape.make_shape({:pred, 8}, {})],
-        false
+        [EXLA.Shape.make_shape({:pred, 8}, {})]
       )
 
     [lhs, rhs | _] = EXLA.MLIR.Function.get_arguments(function)
@@ -2116,7 +2115,7 @@ defmodule EXLA.Defn do
        ) do
     %{module: module, name: name} = subbuilder(builder, Atom.to_string(op))
 
-    function = new_mlir_function({module, name}, arg_shapes, out, false)
+    function = EXLA.Builder.new_mlir({module, name}, arg_shapes, out)
 
     args = EXLA.MLIR.Function.get_arguments(function)
 
@@ -2146,7 +2145,7 @@ defmodule EXLA.Defn do
 
     out_type = container_to_exla_shape(expr)
 
-    function = new_mlir_function({module, Atom.to_string(name)}, arg_shapes, out_type, false)
+    function = EXLA.Builder.new_mlir({module, Atom.to_string(name)}, arg_shapes, out_type)
     mlir_args = EXLA.MLIR.Function.get_arguments(function)
 
     arg_params = Enum.zip(args, mlir_args)
@@ -2204,7 +2203,7 @@ defmodule EXLA.Defn do
         out_types
       end
 
-    function = new_mlir_function({module, name}, arg_shapes, out_types, false)
+    function = EXLA.Builder.new_mlir({module, name}, arg_shapes, out_types)
 
     [arg_token | arg_params] = EXLA.MLIR.Function.get_arguments(function)
 
@@ -2273,12 +2272,7 @@ defmodule EXLA.Defn do
     out_shapes = container_to_exla_shape(expr)
 
     function =
-      new_mlir_function(
-        {module, name},
-        [token_shape | arg_shapes],
-        [token_shape | out_shapes],
-        false
-      )
+      EXLA.Builder.new_mlir({module, name}, [token_shape | arg_shapes], [token_shape | out_shapes])
 
     [arg_token | tail] = EXLA.MLIR.Function.get_arguments(function)
 
@@ -2689,7 +2683,7 @@ defmodule EXLA.Defn do
       # input function is actually the parent function still, so we need to actually create a new function
       # with this name on the same module.
       function =
-        new_mlir_function({module, name}, inputs, [Value.get_shape(token) | out_type], false)
+        EXLA.Builder.new_mlir({module, name}, inputs, [Value.get_shape(token) | out_type])
 
       case function.return_shape do
         [%{dtype: {:tuple, _}}] ->
@@ -2712,7 +2706,7 @@ defmodule EXLA.Defn do
       # input function is actually the parent function still, so we need to actually create a new function
       # with this name on the same module.
       function =
-        new_mlir_function({module, name}, arg_shapes, out_type, false)
+        EXLA.Builder.new_mlir({module, name}, arg_shapes, out_type)
 
       case function.return_shape do
         [%{dtype: {:tuple, _}}] ->
@@ -2886,18 +2880,6 @@ defmodule EXLA.Defn do
 
   defp to_mlir_logical(%Value{} = value) do
     to_type(value, {:pred, 8})
-  end
-
-  defp new_mlir_function(module_and_name, in_shape, out_shape, output_tuple?)
-       when is_list(in_shape) and is_list(out_shape) do
-    out_shape =
-      if output_tuple? do
-        [EXLA.Shape.make_tuple_shape(out_shape)]
-      else
-        out_shape
-      end
-
-    EXLA.Builder.new_mlir(module_and_name, in_shape, out_shape)
   end
 
   defp container_to_exla_shape(container) do
