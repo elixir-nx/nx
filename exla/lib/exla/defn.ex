@@ -845,18 +845,16 @@ defmodule EXLA.Defn do
           {computation, Map.put(cache, key, computation)}
       end
 
-    mod =
-      case state.builder do
-        %Function{} ->
-          Value
+    case state.builder do
+      %Function{} = function ->
+        [token | result] = Value.call(state.builder, [get_token(cache) | call_args], call_body)
+        {wrap_tuple_result(function, result, expr), update_token(cache, token)}
 
-        _ ->
-          EXLA.Op
-      end
-
-    result = mod.call(state.builder, [get_token(cache) | call_args], call_body)
-    token = mod.get_tuple_element(result, 0)
-    {mod.get_tuple_element(result, 1), update_token(cache, token)}
+      _ ->
+        result = EXLA.Op.call(state.builder, [get_token(cache) | call_args], call_body)
+        token = EXLA.Op.get_tuple_element(result, 0)
+        {EXLA.Op.get_tuple_element(result, 1), update_token(cache, token)}
+    end
   end
 
   defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do
@@ -2275,27 +2273,16 @@ defmodule EXLA.Defn do
   end
 
   defp token_computation(name, args, expr, %{builder: %Function{}} = state, cache) do
-    arg_shapes =
-      Enum.with_index(args, fn arg, i ->
-        {"p#{i + 1}", Value.get_shape(arg)}
-      end)
-
     %Function{module: module, name: name} = subbuilder(state.builder, name)
 
     token_shape = EXLA.Shape.make_token_shape()
 
     function =
-      EXLA.Builder.new(
-        {module, name},
-        [{"p0", token_shape} | arg_shapes],
-        {struct(Nx.Tensor, %{type: :token}), expr},
-        :mlir,
-        true
-      )
+      new_mlir_builder({module, name}, [token_shape | args], {token_shape, expr}, false)
 
-    [arg_token | _] = args = EXLA.MLIR.Function.get_arguments(function)
+    [arg_token | tail] = EXLA.MLIR.Function.get_arguments(function)
 
-    params = Enum.with_index(tl(args), fn param, i -> {i, param} end)
+    params = Enum.with_index(tail, fn param, i -> {i, param} end)
 
     state = %{
       state
@@ -2304,10 +2291,11 @@ defmodule EXLA.Defn do
         scope_ids: Tree.scope_ids(expr)
     }
 
-    {res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
-    res = Value.tuple(function, [get_token(comp_cache), res])
+    {%Value{} = res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
 
-    {EXLA.Builder.build(res), merge_outfeed(cache, comp_cache)}
+    Value.variadic_return([get_token(comp_cache), res], true)
+
+    {function, merge_outfeed(cache, comp_cache)}
   end
 
   defp token_computation(name, arg, expr, state, cache) do

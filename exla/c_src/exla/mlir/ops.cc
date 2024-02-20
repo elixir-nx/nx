@@ -1529,9 +1529,9 @@ ERL_NIF_TERM mlir_call(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Unable to get computation.");
   }
 
-  mlir::Value result = (*function)->CallOp(arguments, *computation);
+  std::vector<mlir::Value> result = (*function)->CallOp(arguments, *computation);
 
-  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
+  return exla::nif::ok(env, exla::nif::make_list<mlir::Value>(env, result));
 }
 
 ERL_NIF_TERM mlir_while(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
