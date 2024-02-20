@@ -581,7 +581,7 @@ defmodule EXLA.Defn do
 
           inputs_and_shapes = Enum.reverse(reverse_inputs_and_shapes)
 
-          mode = options[:compiler_mode] || :xla
+          mode = options[:compiler_mode] || Application.get_env(:exla, :compiler_mode, :mlir)
 
           {mod, builder} =
             case mode do
