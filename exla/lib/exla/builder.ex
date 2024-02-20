@@ -10,16 +10,13 @@ defmodule EXLA.Builder do
   @enforce_keys [:ref]
   defstruct [:ref, :parent, :name]
 
-  def new(name, inputs, outputs, type, sub? \\ false, variadic_return? \\ false)
+  def new(name, arg_shapes, outputs, type, sub? \\ false, variadic_return? \\ false)
 
-  def new(name, _inputs, _outputs, :xla, _sub?, _variadic_return?) do
+  def new(name, _arg_shapes, _outputs, :xla, _sub?, _variadic_return?) do
     new(name)
   end
 
-  def new(module_and_name, inputs, outputs, :mlir, sub?, variadic_return?) do
-    # TO-DO(mlir): this module shouldn't have to know about Nx
-    {_arg_names, arg_shapes} = Enum.unzip(inputs)
-
+  def new(module_and_name, arg_shapes, outputs, :mlir, sub?, variadic_return?) do
     {module, name, is_public} =
       case module_and_name do
         {%M{} = module, name} -> {module, name, false}
@@ -47,6 +44,8 @@ defmodule EXLA.Builder do
       is_public
     )
   end
+
+  def exla_shape(tensors, flatten_tuple \\ false)
 
   def exla_shape(tensors, flatten_tuple) when is_list(tensors) do
     result = Enum.map(tensors, &exla_shape(&1, flatten_tuple))
@@ -93,7 +92,7 @@ defmodule EXLA.Builder do
     shape
   end
 
-  defp new(name) when is_binary(name) do
+  def new(name) when is_binary(name) do
     {:ok, ref} = EXLA.NIF.new_builder(name)
     %__MODULE__{ref: ref, parent: nil, name: name}
   end

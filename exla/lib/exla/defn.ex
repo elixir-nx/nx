@@ -173,10 +173,7 @@ defmodule EXLA.Defn do
     token_shape = %{type: :token}
     infeed_shape = {flag_shape, token_shape}
 
-    arg_shapes =
-      {infeed_shape, acc_shape, constant_shape}
-      |> while_arg_shape()
-      |> Enum.with_index(fn shape, i -> {"p#{i}", shape} end)
+    arg_shapes = while_arg_shape({infeed_shape, acc_shape, constant_shape})
 
     %{module: module, name: name} = subbuilder(builder, "while-pred")
     pred_fun = EXLA.Builder.new({module, name}, arg_shapes, expr, :mlir, false, true)
@@ -596,14 +593,17 @@ defmodule EXLA.Defn do
 
           mode = options[:compiler_mode] || :xla
 
-          comp_arg_shapes =
+          builder =
             if mode == :mlir do
-              for {i, _shape} = item <- inputs_and_shapes, i >= used_buffers, do: item
-            else
-              inputs_and_shapes
-            end
+              comp_arg_shapes =
+                for {i, shape} = item <- inputs_and_shapes, i >= used_buffers do
+                  EXLA.Builder.exla_shape(shape)
+                end
 
-          builder = EXLA.Builder.new(inspect(key), comp_arg_shapes, Nx.devectorize(outputs), mode)
+              EXLA.Builder.new(inspect(key), comp_arg_shapes, Nx.devectorize(outputs), mode)
+            else
+              EXLA.Builder.new(inspect(key))
+            end
 
           mod =
             case mode do
@@ -2061,10 +2061,7 @@ defmodule EXLA.Defn do
   defp sort_computation(op, type, args, %{builder: %EXLA.MLIR.Function{} = builder}) do
     %{module: module, name: name} = subbuilder(builder, Atom.to_string(op))
 
-    arg_shapes =
-      Enum.with_index(args, fn arg, i ->
-        {"p#{i}", computation_arg_shape(arg)}
-      end)
+    arg_shapes = Enum.map(args, &computation_arg_shape/1)
 
     function =
       EXLA.Builder.new(
@@ -2130,10 +2127,7 @@ defmodule EXLA.Defn do
          %{builder: %EXLA.MLIR.Function{} = builder},
          prepare_args
        ) do
-    arg_shapes =
-      Enum.with_index(args, fn arg, i ->
-        {"p#{i}", computation_arg_shape(arg)}
-      end)
+    arg_shapes = Enum.map(args, &computation_arg_shape/1)
 
     %{module: module, name: name} = subbuilder(builder, Atom.to_string(op))
 
@@ -2164,10 +2158,7 @@ defmodule EXLA.Defn do
          type,
          %{builder: %EXLA.MLIR.Function{module: module}} = state
        ) do
-    arg_shapes =
-      Enum.with_index(args, fn arg, i ->
-        {"p#{i}", computation_arg_shape(arg)}
-      end)
+    arg_shapes = Enum.map(args, &computation_arg_shape/1)
 
     function = EXLA.Builder.new({module, Atom.to_string(name)}, arg_shapes, expr, :mlir, false)
     mlir_args = EXLA.MLIR.Function.get_arguments(function)
@@ -2210,9 +2201,7 @@ defmodule EXLA.Defn do
   end
 
   defp while_computation(name, arg, expr, type, transform, %{builder: %Function{}} = state, cache) do
-    arg_shapes =
-      while_arg_shape({%{type: :token}, arg})
-      |> Enum.with_index(fn shape, i -> {"p#{i}", shape} end)
+    arg_shapes = while_arg_shape({%{type: :token}, arg})
 
     %{module: module, name: name} = subbuilder(state.builder, Atom.to_string(name))
 
@@ -2291,19 +2280,16 @@ defmodule EXLA.Defn do
   end
 
   defp token_computation(name, args, expr, %{builder: %Function{}} = state, cache) do
-    arg_shapes =
-      Enum.with_index(args, fn arg, i ->
-        {"p#{i + 1}", Value.get_shape(arg)}
-      end)
-
     %Function{module: module, name: name} = subbuilder(state.builder, name)
 
     token_shape = EXLA.Shape.make_token_shape()
 
+    arg_shapes = [token_shape | Enum.map(args, &Value.get_shape/1)]
+
     function =
       EXLA.Builder.new(
         {module, name},
-        [{"p0", token_shape} | arg_shapes],
+        arg_shapes,
         {struct(Nx.Tensor, %{type: :token}), expr},
         :mlir,
         true
@@ -2711,8 +2697,7 @@ defmodule EXLA.Defn do
          fun
        ) do
     if token = get_token(cache) do
-      inputs = Enum.with_index(args, fn arg, idx -> {"p#{idx + 1}", Value.get_shape(arg)} end)
-      inputs = [{"p0", EXLA.Shape.make_token_shape()} | inputs]
+      inputs = [EXLA.Shape.make_token_shape() | Enum.map(args, &Value.get_shape/1)]
 
       # input function is actually the parent function still, so we need to actually create a new function
       # with this name on the same module.
@@ -2744,7 +2729,7 @@ defmodule EXLA.Defn do
 
       {[token | args], res.function, comp_cache}
     else
-      inputs = Enum.with_index(args, fn arg, idx -> {"p#{idx}", Value.get_shape(arg)} end)
+      inputs = Enum.map(args, &Value.get_shape/1)
 
       # input function is actually the parent function still, so we need to actually create a new function
       # with this name on the same module.

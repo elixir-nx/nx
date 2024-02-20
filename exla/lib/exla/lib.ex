@@ -143,10 +143,10 @@ defmodule EXLA.Lib do
       EXLA.Builder.new(
         {module, name},
         [
-          {"p0", EXLA.Shape.make_shape(type, {})},
-          {"p1", EXLA.Shape.make_shape(index_type, {})},
-          {"p2", EXLA.Shape.make_shape(type, {})},
-          {"p3", EXLA.Shape.make_shape(index_type, {})}
+          EXLA.Shape.make_shape(type, {}),
+          EXLA.Shape.make_shape(index_type, {}),
+          EXLA.Shape.make_shape(type, {}),
+          EXLA.Shape.make_shape(index_type, {})
         ],
         {struct(Nx.Tensor, type: type, shape: {}),
          struct(Nx.Tensor, type: index_type, shape: {})},
