@@ -173,13 +173,12 @@ defmodule EXLA.Defn do
     token_shape = %{type: :token}
     infeed_shape = {flag_shape, token_shape}
 
-    arg_shapes =
-      {infeed_shape, acc_shape, constant_shape}
-      |> while_arg_shape()
-      |> Enum.with_index(fn shape, i -> {"p#{i}", shape} end)
+    arg_shapes = while_arg_shape({infeed_shape, acc_shape, constant_shape})
 
     %{module: module, name: name} = subbuilder(builder, "while-pred")
-    pred_fun = EXLA.Builder.new({module, name}, arg_shapes, expr, :mlir, false, true)
+    out_types = [expr] |> Nx.Defn.Composite.flatten_list() |> Enum.map(&exla_shape/1)
+
+    pred_fun = new_mlir_function({module, name}, arg_shapes, out_types, false)
 
     [flag | _] = EXLA.MLIR.Function.get_arguments(pred_fun)
 
@@ -191,7 +190,7 @@ defmodule EXLA.Defn do
 
     %{module: module, name: name} = subbuilder(builder, "while-body")
 
-    body_fun = EXLA.Builder.new({module, name}, arg_shapes, expr, :mlir, false, true)
+    body_fun = new_mlir_function({module, name}, arg_shapes, out_types, false)
 
     [_flag, token | args] = EXLA.MLIR.Function.get_arguments(body_fun)
 
@@ -270,15 +269,15 @@ defmodule EXLA.Defn do
 
     init =
       Value.tuple(builder, [
-        Value.infeed(root_token, flag_shape),
-        acc,
-        constant
+        Value.infeed(root_token, flag_shape)
+        | args
       ])
 
     [_flag, token | results] = Value.while(pred, body, init)
-    while = collect_container_results(builder, results, {acc_shape, constant_shape})
 
-    acc = Value.get_tuple_element(while, 0)
+    acc = Enum.take(results, acc_length)
+
+    acc = wrap_tuple_result(builder, acc, acc_shape)
     outfeed = outfeed |> Outfeed.with_token(token) |> Outfeed.close(builder)
 
     {EXLA.Builder.build(acc), {input_shape, input_indexes}, outfeed}
