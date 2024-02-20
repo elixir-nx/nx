@@ -1557,7 +1557,8 @@ defmodule EXLA.Defn do
     source = to_type(source, type)
     init_value = to_type(init_value, type)
 
-    args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
+    arg_shape = EXLA.Shape.make_shape(type, {})
+    args = [arg_shape, arg_shape]
     select_fn = op_computation(:greater, args, :unused, state)
     scatter_fn = op_computation(:add, args, :unused, state)
 
@@ -1610,7 +1611,8 @@ defmodule EXLA.Defn do
     source = to_type(source, type)
     init_value = to_type(init_value, type)
 
-    args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
+    arg_shape = EXLA.Shape.make_shape(type, {})
+    args = [arg_shape, arg_shape]
 
     select_fn = op_computation(:less, args, :unused, state)
     scatter_fn = op_computation(:add, args, :unused, state)
@@ -1637,7 +1639,8 @@ defmodule EXLA.Defn do
          %{type: type} = out,
          state
        ) do
-    args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
+    arg_shape = EXLA.Shape.make_shape(type, {})
+    args = [arg_shape, arg_shape]
     scatter_fn = op_computation(:add, args, :unused, state)
 
     scatter(scatter_fn, tensors, out)
@@ -2124,8 +2127,7 @@ defmodule EXLA.Defn do
     subbuilder = subbuilder(state.builder, Atom.to_string(op))
 
     args =
-      Enum.with_index(args, fn arg, i ->
-        fun_shape = computation_arg_shape(arg)
+      Enum.with_index(args, fn fun_shape, i ->
         EXLA.Op.parameter(subbuilder, i, fun_shape, "p#{i}")
       end)
 
@@ -2463,7 +2465,8 @@ defmodule EXLA.Defn do
         initial when is_number(initial) -> EXLA.Op.constant_r0(state.builder, initial, type)
       end
 
-    args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
+    arg_shape = EXLA.Shape.make_shape(type, {})
+    args = [arg_shape, arg_shape]
     # We reverse the argument order because :nan + :infinity
     # returns :nan but :infinity + :nan returns :infinity.
     # So we want to keep the current value as first argument
