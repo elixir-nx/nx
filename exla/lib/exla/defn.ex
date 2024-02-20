@@ -697,12 +697,6 @@ defmodule EXLA.Defn do
     {body, cache} =
       while_computation(:while_body, arg, body, :with_token, &cast_pred_to_u8/1, state, cache)
 
-    mod =
-      case state.builder do
-        %Function{} -> Value
-        _ -> EXLA.Op
-      end
-
     {token, result} =
       case state.builder do
         %Function{} = function ->
@@ -710,14 +704,14 @@ defmodule EXLA.Defn do
           # like it would have come from Nx.Defn.Composite.flatten_list.
           # We need to collect the returned values into the nested tuples
           # that should have come from the while expr
-          [token | results] = mod.while(pred, body, initial)
-          result = collect_container_results(function, results, initial_arg)
+          [token | results] = Value.while(pred, body, initial)
+          result = wrap_tuple_result(function, results, initial_arg)
           {token, result}
 
         _ ->
-          while = mod.while(pred, body, initial)
-          token = mod.get_tuple_element(while, 0)
-          result = mod.get_tuple_element(while, 1)
+          while = EXLA.Op.while(pred, body, initial)
+          token = EXLA.Op.get_tuple_element(while, 0)
+          result = EXLA.Op.get_tuple_element(while, 1)
           {token, result}
       end
 
@@ -2210,32 +2204,22 @@ defmodule EXLA.Defn do
   end
 
   defp while_computation(name, arg, expr, type, transform, %{builder: %Function{}} = state, cache) do
-    arg_shapes =
-      while_arg_shape({%{type: :token}, arg})
-      |> Enum.with_index(fn shape, i -> {"p#{i}", shape} end)
+    arg_shapes = while_arg_shape({%{type: :token}, arg})
 
     %{module: module, name: name} = subbuilder(state.builder, Atom.to_string(name))
 
     out_expr =
       if type == :with_token do
-        {%Nx.Tensor{type: :token, shape: {}, names: []}, expr}
+        [EXLA.Shape.make_token_shape(), expr]
       else
         expr
       end
 
-    function =
-      EXLA.Builder.new(
-        {module, name},
-        arg_shapes,
-        out_expr,
-        :mlir,
-        false,
-        true
-      )
+    function = new_mlir_builder({module, name}, arg_shapes, out_expr, false)
 
     [arg_token | arg_params] = EXLA.MLIR.Function.get_arguments(function)
 
-    params = {arg, collect_container_results(function, arg_params, arg)}
+    params = {arg, arg_params}
 
     params = computation_arg_param(params)
 
@@ -2255,7 +2239,7 @@ defmodule EXLA.Defn do
         [to_type(res, type)]
       end
 
-    [%{function: function} | _] = Value.variadic_return(res, true)
+    Value.variadic_return(res, true)
 
     {function, merge_outfeed(cache, comp_cache)}
   end
@@ -2395,11 +2379,22 @@ defmodule EXLA.Defn do
     |> EXLA.Shape.make_tuple_shape()
   end
 
+  defp computation_arg_param({tuple, params}) when is_tuple(tuple) and is_list(params) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.zip(params)
+    |> Enum.flat_map(&computation_arg_param/1)
+  end
+
   defp computation_arg_param({tuple, %mod{} = param}) when is_tuple(tuple) do
     tuple
     |> Tuple.to_list()
     |> Enum.with_index(fn arg, i -> {arg, mod.get_tuple_element(param, i)} end)
     |> Enum.flat_map(&computation_arg_param/1)
+  end
+
+  defp computation_arg_param({%T{data: %Expr{op: :parameter, args: [pos]}}, [param]}) do
+    [{pos, param}]
   end
 
   defp computation_arg_param({%T{data: %Expr{op: :parameter, args: [pos]}}, param}) do
