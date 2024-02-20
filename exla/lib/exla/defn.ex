@@ -2906,10 +2906,8 @@ defmodule EXLA.Defn do
     to_type(value, {:pred, 8})
   end
 
-  defp new_mlir_function(module_and_name, arg_shapes, return_shape, output_tuple?) do
-    in_shape = arg_shapes
-    out_shape = return_shape
-
+  defp new_mlir_function(module_and_name, in_shape, out_shape, output_tuple?)
+       when is_list(in_shape) and is_list(out_shape) do
     out_shape =
       if output_tuple? do
         [EXLA.Shape.make_tuple_shape(out_shape)]
