@@ -167,7 +167,6 @@ defmodule EXLA.Defn do
     acc_shape = List.to_tuple(acc_shapes_l)
 
     constant_shapes_l = Enum.map(used_shapes, &elem(&1, 1))
-    constant_shape = List.to_tuple(constant_shapes_l)
 
     flag_shape = EXLA.Shape.make_shape({:pred, 8}, {})
     token_shape = EXLA.Shape.make_token_shape()
