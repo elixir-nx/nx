@@ -2137,10 +2137,7 @@ defmodule EXLA.Defn do
     arg_shapes =
       Enum.map(args, fn %{type: type, shape: shape} -> EXLA.Shape.make_shape(type, shape) end)
 
-    out_type =
-      [expr]
-      |> Nx.Defn.Composite.flatten_list()
-      |> Enum.map(&EXLA.Shape.make_shape(&1.type, &1.shape))
+    out_type = container_to_exla_shape(expr)
 
     function = new_mlir_function({module, Atom.to_string(name)}, arg_shapes, out_type, false)
     mlir_args = EXLA.MLIR.Function.get_arguments(function)
@@ -2183,10 +2180,7 @@ defmodule EXLA.Defn do
   end
 
   defp while_computation(name, arg, expr, type, transform, %{builder: %Function{}} = state, cache) do
-    arg_shapes =
-      [arg]
-      |> Nx.Defn.Composite.flatten_list()
-      |> Enum.map(&EXLA.Shape.make_shape(&1.type, &1.shape))
+    arg_shapes = container_to_exla_shape(arg)
 
     arg_shapes = [
       EXLA.Shape.make_token_shape() | arg_shapes
@@ -2194,10 +2188,7 @@ defmodule EXLA.Defn do
 
     %{module: module, name: name} = subbuilder(state.builder, Atom.to_string(name))
 
-    out_types =
-      [expr]
-      |> Nx.Defn.Composite.flatten_list()
-      |> Enum.map(&EXLA.Shape.make_shape(&1.type, &1.shape))
+    out_types = container_to_exla_shape(expr)
 
     out_types =
       if type == :with_token do
@@ -2272,10 +2263,7 @@ defmodule EXLA.Defn do
 
     arg_shapes = Enum.map(args, &Value.get_shape/1)
 
-    out_shapes =
-      [expr]
-      |> Nx.Defn.Composite.flatten_list()
-      |> Enum.map(&EXLA.Shape.make_shape(&1.type, &1.shape))
+    out_shapes = container_to_exla_shape(expr)
 
     function =
       new_mlir_function(
@@ -2700,12 +2688,16 @@ defmodule EXLA.Defn do
          cache,
          fun
        ) do
+    arg_shapes = Enum.map(args, &Value.get_shape/1)
+
+    out_type = container_to_exla_shape(out_expr)
+
     if token = get_token(cache) do
-      inputs = [EXLA.Shape.make_token_shape() | args]
+      inputs = [EXLA.Shape.make_token_shape() | arg_shapes]
 
       # input function is actually the parent function still, so we need to actually create a new function
       # with this name on the same module.
-      function = new_mlir_function({module, name}, inputs, [token, out_expr], false)
+      function = new_mlir_function({module, name}, inputs, [token | out_type], false)
 
       case function.return_shape do
         [%{dtype: {:tuple, _}}] ->
@@ -2727,7 +2719,8 @@ defmodule EXLA.Defn do
     else
       # input function is actually the parent function still, so we need to actually create a new function
       # with this name on the same module.
-      function = new_mlir_function({module, name}, args, out_expr, false)
+      function =
+        new_mlir_function({module, name}, arg_shapes, out_type, false)
 
       case function.return_shape do
         [%{dtype: {:tuple, _}}] ->
@@ -2915,6 +2908,19 @@ defmodule EXLA.Defn do
       end
 
     EXLA.Builder.new_mlir(module_and_name, in_shape, out_shape)
+  end
+
+  defp container_to_exla_shape(container) do
+    container
+    |> List.wrap()
+    |> Nx.Defn.Composite.flatten_list()
+    |> Enum.flat_map(fn
+      %Nx.Tensor{type: {:tuple, _}, data: %{args: values}} ->
+        Enum.flat_map(values, &container_to_exla_shape/1)
+
+      t ->
+        [EXLA.Shape.make_shape(t.type, t.shape)]
+    end)
   end
 
   defp exla_shape(tensors) when is_list(tensors) do
