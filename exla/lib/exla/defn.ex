@@ -194,10 +194,7 @@ defmodule EXLA.Defn do
 
     [_flag, token | args] = EXLA.MLIR.Function.get_arguments(body_fun)
 
-    body_args = collect_container_results(body_fun, args, {acc_shape, constant_shape})
-
-    acc = Value.get_tuple_element(body_args, 0)
-    constant = Value.get_tuple_element(body_args, 1)
+    {acc, constant} = Enum.split(args, acc_length)
 
     # EXLA on host does not support tuples, so we emit multiple infeed operations.
     {input_params, token} =
@@ -221,12 +218,12 @@ defmodule EXLA.Defn do
         {output_expr, acc_expr} ->
           acc_params =
             Enum.map(acc_shapes, fn {pos, _shape} ->
-              {pos, Value.get_tuple_element(acc, pos - input_length)}
+              {pos, Enum.fetch!(acc, pos - input_length)}
             end)
 
           constant_params =
             Enum.with_index(used_shapes, fn {pos, _shape}, index ->
-              {pos, Value.get_tuple_element(constant, index)}
+              {pos, Enum.fetch!(constant, index)}
             end)
 
           state = %{
@@ -2871,22 +2868,6 @@ defmodule EXLA.Defn do
     Value
     |> apply(op, [function, left, right])
     |> to_type(out.type)
-  end
-
-  defp collect_container_results(function, flat_list, expected_container) do
-    {collected, []} = collect_container_results_unflatten(function, expected_container, flat_list)
-    collected
-  end
-
-  defp collect_container_results_unflatten(function, tuple, acc) when is_tuple(tuple) do
-    tuple
-    |> Tuple.to_list()
-    |> Enum.map_reduce(acc, &collect_container_results_unflatten(function, &1, &2))
-    |> then(fn {list, acc} -> {Value.tuple(function, list), acc} end)
-  end
-
-  defp collect_container_results_unflatten(_, _, [%Value{} = value | list]) do
-    {value, list}
   end
 
   defp to_mlir_logical(%Value{} = value) do
