@@ -78,8 +78,6 @@ defmodule EXLA.Computation do
         arg_shapes,
         opts
       ) do
-    assert_output_shape!(%{output_shape: return_shape})
-
     EXLA.MLIR.Module.compile(
       module,
       client,

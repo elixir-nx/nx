@@ -26,42 +26,14 @@ defmodule EXLA.Builder do
     )
   end
 
-  def new(name, inputs, outputs, type, sub? \\ false, variadic_return? \\ false)
-
-  def new(name, _inputs, _outputs, :xla, _sub?, _variadic_return?) do
-    new(name)
+  def new(name) when is_binary(name) do
+    {:ok, ref} = EXLA.NIF.new_builder(name)
+    %__MODULE__{ref: ref, parent: nil, name: name}
   end
 
-  def new(module_and_name, inputs, outputs, :mlir, sub?, variadic_return?) do
-    # TO-DO(mlir): this module shouldn't have to know about Nx
-    {_arg_names, arg_shapes} = Enum.unzip(inputs)
-
-    {module, name, is_public} =
-      case module_and_name do
-        {%M{} = module, name} -> {module, name, false}
-        _name -> {M.new(), "main", true}
-      end
-
-    return_shape =
-      if sub? do
-        exla_shape(outputs, false)
-      else
-        out_types = [outputs] |> Nx.Defn.Composite.flatten_list()
-
-        if variadic_return? do
-          exla_shape(out_types, true)
-        else
-          out_types |> List.to_tuple() |> exla_shape(false)
-        end
-      end
-
-    M.create_function(
-      module,
-      name,
-      exla_shape(arg_shapes, false),
-      List.wrap(return_shape),
-      is_public
-    )
+  def new(builder = %__MODULE__{ref: ref}, name) when is_binary(name) do
+    {:ok, ref} = EXLA.NIF.create_sub_builder(ref, name)
+    %__MODULE__{ref: ref, parent: builder, name: name}
   end
 
   def exla_shape(tensors, flatten_tuple) when is_list(tensors) do
@@ -107,16 +79,6 @@ defmodule EXLA.Builder do
 
   def exla_shape(%EXLA.Shape{} = shape, _flatten_tuple) do
     shape
-  end
-
-  def new(name) when is_binary(name) do
-    {:ok, ref} = EXLA.NIF.new_builder(name)
-    %__MODULE__{ref: ref, parent: nil, name: name}
-  end
-
-  def new(builder = %__MODULE__{ref: ref}, name) when is_binary(name) do
-    {:ok, ref} = EXLA.NIF.create_sub_builder(ref, name)
-    %__MODULE__{ref: ref, parent: builder, name: name}
   end
 
   def build(root)
