@@ -638,7 +638,7 @@ ERL_NIF_TERM deserialize_executable(ErlNifEnv* env, int argc, const ERL_NIF_TERM
   }
 
   EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaExecutable * executable,
-    (*client)->DeserializeExecutable(serialized), env);
+                            (*client)->DeserializeExecutable(serialized), env);
 
   return exla::nif::ok(env, exla::nif::make<exla::ExlaExecutable*>(env, executable));
 }
@@ -690,7 +690,6 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_less_equal", 3, mlir_less_equal},
     {"mlir_greater", 3, mlir_greater},
     {"mlir_greater_equal", 3, mlir_greater_equal},
-    {"mlir_build", 2, mlir_build},
     {"dump_mlir_module", 1, dump_mlir_module},
     {"mlir_get_shape", 1, mlir_get_shape},
     {"mlir_convert", 3, mlir_convert},
@@ -922,7 +921,6 @@ static ErlNifFunc exla_funcs[] = {
     {"start_log_sink", 1, start_log_sink},
     // Serialization
     {"serialize_executable", 1, serialize_executable},
-    {"deserialize_executable", 2, deserialize_executable}
-  };
+    {"deserialize_executable", 2, deserialize_executable}};
 
 ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, NULL, NULL);

@@ -89,10 +89,8 @@ defmodule EXLA.Builder do
     %Computation{ref: ref, output_shape: shape}
   end
 
-  def build(%EXLA.MLIR.Value{function: function, ref: root_ref}) do
-    %EXLA.MLIR.Function{ref: function_ref} = function
-
-    :ok = EXLA.NIF.mlir_build(function_ref, root_ref)
+  def build(%EXLA.MLIR.Value{function: function} = value) do
+    EXLA.MLIR.Value.variadic_return([value])
     function
   end
 end

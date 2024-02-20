@@ -673,26 +673,6 @@ ERL_NIF_TERM mlir_select(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
 
-ERL_NIF_TERM mlir_build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 2) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  exla::MLIRFunction** function;
-  mlir::Value* root;
-
-  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
-    return exla::nif::error(env, "Unable to get function.");
-  }
-  if (!exla::nif::get<mlir::Value>(env, argv[1], root)) {
-    return exla::nif::error(env, "Unable to get root.");
-  }
-
-  (*function)->Build(*root);
-
-  return exla::nif::ok(env);
-}
-
 ERL_NIF_TERM mlir_convert(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");
