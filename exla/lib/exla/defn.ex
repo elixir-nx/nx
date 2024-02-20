@@ -2101,14 +2101,11 @@ defmodule EXLA.Defn do
 
   defp op_computation(
          op,
-         args,
+         arg_shapes,
          out,
          %{builder: %EXLA.MLIR.Function{} = builder},
          prepare_args
        ) do
-    arg_shapes =
-      Enum.map(args, &computation_arg_shape/1)
-
     %{module: module, name: name} = subbuilder(builder, Atom.to_string(op))
 
     function = new_mlir_function({module, name}, arg_shapes, out, false)
@@ -2437,8 +2434,9 @@ defmodule EXLA.Defn do
         initial when is_number(initial) -> Value.constant_r0(state.builder, initial, type)
       end
 
-    args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
-    comp = op_computation(op, args, %{shape: shape, type: type}, state, &Enum.reverse/1)
+    arg_shape = EXLA.Shape.make_shape(type, {})
+    args = [arg_shape, arg_shape]
+    comp = op_computation(op, args, [EXLA.Shape.make_shape(type, shape)], state, &Enum.reverse/1)
 
     keep_axes = opts[:keep_axes]
     [result] = Value.reduce(comp, [acc], [arg], reduce_axes(arg, opts[:axes]))
@@ -2494,7 +2492,8 @@ defmodule EXLA.Defn do
           mod.constant_r0(state.builder, initial, type)
       end
 
-    args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
+    arg_shape = EXLA.Shape.make_shape(type, {})
+    args = [arg_shape, arg_shape]
     # We reverse the argument order because :nan + :infinity
     # returns :nan but :infinity + :nan returns :infinity.
     # So we want to keep the current value as first argument
@@ -2503,7 +2502,7 @@ defmodule EXLA.Defn do
       op_computation(
         op,
         args,
-        %{type: type, shape: {}},
+        [arg_shape],
         state,
         &Enum.reverse/1
       )
