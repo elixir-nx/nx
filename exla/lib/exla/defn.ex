@@ -2114,14 +2114,11 @@ defmodule EXLA.Defn do
          prepare_args
        ) do
     arg_shapes =
-      Enum.with_index(args, fn arg, i ->
-        {"p#{i}", computation_arg_shape(arg)}
-      end)
+      Enum.map(args, &computation_arg_shape/1)
 
     %{module: module, name: name} = subbuilder(builder, Atom.to_string(op))
 
-    function =
-      EXLA.Builder.new({module, name}, arg_shapes, struct(Nx.Tensor, out), :mlir, true)
+    function = new_mlir_function({module, name}, arg_shapes, out, false)
 
     args = EXLA.MLIR.Function.get_arguments(function)
 
