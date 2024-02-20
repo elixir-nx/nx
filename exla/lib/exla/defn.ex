@@ -2183,18 +2183,30 @@ defmodule EXLA.Defn do
   end
 
   defp while_computation(name, arg, expr, type, transform, %{builder: %Function{}} = state, cache) do
-    arg_shapes = while_arg_shape({%{type: :token}, arg})
+    arg_shapes =
+      [arg]
+      |> Nx.Defn.Composite.flatten_list()
+      |> Enum.map(&EXLA.Shape.make_shape(&1.type, &1.shape))
+
+    arg_shapes = [
+      EXLA.Shape.make_token_shape() | arg_shapes
+    ]
 
     %{module: module, name: name} = subbuilder(state.builder, Atom.to_string(name))
 
-    out_expr =
+    out_types =
+      [expr]
+      |> Nx.Defn.Composite.flatten_list()
+      |> Enum.map(&EXLA.Shape.make_shape(&1.type, &1.shape))
+
+    out_types =
       if type == :with_token do
-        [EXLA.Shape.make_token_shape(), expr]
+        [EXLA.Shape.make_token_shape(), out_types]
       else
-        expr
+        out_types
       end
 
-    function = new_mlir_function({module, name}, arg_shapes, out_expr, false)
+    function = new_mlir_function({module, name}, arg_shapes, out_types, false)
 
     [arg_token | arg_params] = EXLA.MLIR.Function.get_arguments(function)
 
@@ -2258,8 +2270,20 @@ defmodule EXLA.Defn do
 
     token_shape = EXLA.Shape.make_token_shape()
 
+    arg_shapes = Enum.map(args, &Value.get_shape/1)
+
+    out_shapes =
+      [expr]
+      |> Nx.Defn.Composite.flatten_list()
+      |> Enum.map(&EXLA.Shape.make_shape(&1.type, &1.shape))
+
     function =
-      new_mlir_function({module, name}, [token_shape | args], {token_shape, expr}, false)
+      new_mlir_function(
+        {module, name},
+        [token_shape | arg_shapes],
+        [token_shape | out_shapes],
+        false
+      )
 
     [arg_token | tail] = EXLA.MLIR.Function.get_arguments(function)
 
