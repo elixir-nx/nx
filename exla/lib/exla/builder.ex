@@ -109,7 +109,7 @@ defmodule EXLA.Builder do
     shape
   end
 
-  defp new(name) when is_binary(name) do
+  def new(name) when is_binary(name) do
     {:ok, ref} = EXLA.NIF.new_builder(name)
     %__MODULE__{ref: ref, parent: nil, name: name}
   end

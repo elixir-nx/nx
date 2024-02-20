@@ -262,11 +262,6 @@ defmodule EXLA.Defn do
 
     args = EXLA.MLIR.Function.get_arguments(builder)
 
-    collected_args = collect_container_results(builder, args, {acc_shape, constant_shape})
-
-    acc = Value.get_tuple_element(collected_args, 0)
-    constant = Value.get_tuple_element(collected_args, 1)
-
     init =
       Value.tuple(builder, [
         Value.infeed(root_token, flag_shape)
@@ -595,19 +590,21 @@ defmodule EXLA.Defn do
 
           mode = options[:compiler_mode] || :xla
 
-          comp_arg_shapes =
-            if mode == :mlir do
-              for {i, _shape} = item <- inputs_and_shapes, i >= used_buffers, do: item
-            else
-              inputs_and_shapes
-            end
-
-          builder = EXLA.Builder.new(inspect(key), comp_arg_shapes, Nx.devectorize(outputs), mode)
-
-          mod =
+          {mod, builder} =
             case mode do
-              :xla -> EXLA.Op
-              :mlir -> Value
+              :xla ->
+                {EXLA.Op, EXLA.Builder.new(inspect(key))}
+
+              :mlir ->
+                comp_arg_shapes =
+                  for {i, shape} <- inputs_and_shapes, i >= used_buffers, do: shape
+
+                out_types =
+                  [outputs]
+                  |> Nx.Defn.Composite.flatten_list()
+                  |> Enum.map(&(&1 |> Nx.devectorize() |> exla_shape()))
+
+                {Value, new_mlir_function(inspect(key), comp_arg_shapes, out_types, true)}
             end
 
           outfeed =
