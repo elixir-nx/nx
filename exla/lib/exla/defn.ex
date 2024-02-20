@@ -169,11 +169,10 @@ defmodule EXLA.Defn do
     constant_shapes_l = Enum.map(used_shapes, &elem(&1, 1))
     constant_shape = List.to_tuple(constant_shapes_l)
 
-    flag_shape = %{type: {:pred, 8}, shape: {}}
-    token_shape = %{type: :token}
-    infeed_shape = {flag_shape, token_shape}
+    flag_shape = EXLA.Shape.make_shape({:pred, 8}, {})
+    token_shape = EXLA.Shape.make_token_shape()
 
-    arg_shapes = while_arg_shape({infeed_shape, acc_shape, constant_shape})
+    arg_shapes = [flag_shape, token_shape] ++ acc_shapes_l ++ constant_shapes_l
 
     %{module: module, name: name} = subbuilder(builder, "while-pred")
     out_types = container_to_exla_shape(expr)
@@ -243,8 +242,6 @@ defmodule EXLA.Defn do
           raise "expected the function given to Nx.stream/3 to return a two-element tuple, got: " <>
                   inspect(expr)
       end
-
-    flag_shape = EXLA.Shape.make_shape(flag_shape.type, flag_shape.shape)
 
     # Emit the stream hook to signal loop output
     [%{function: body} | _] =
@@ -2339,23 +2336,6 @@ defmodule EXLA.Defn do
       end)
 
     {op, keys}
-  end
-
-  defp while_arg_shape(%EXLA.Shape{} = shape), do: shape
-
-  defp while_arg_shape(%{type: type, shape: shape}) do
-    EXLA.Shape.make_shape(type, shape)
-  end
-
-  defp while_arg_shape(%{type: :token}) do
-    EXLA.Shape.make_token_shape()
-  end
-
-  defp while_arg_shape(tuple) when is_tuple(tuple) do
-    tuple
-    |> Tuple.to_list()
-    |> Enum.map(&while_arg_shape/1)
-    |> List.flatten()
   end
 
   defp computation_arg_shape(%{type: type, shape: shape}) do
