@@ -2053,19 +2053,10 @@ defmodule EXLA.Defn do
   defp sort_computation(op, type, args, %{builder: %EXLA.MLIR.Function{} = builder}) do
     %{module: module, name: name} = subbuilder(builder, Atom.to_string(op))
 
-    arg_shapes =
-      Enum.with_index(args, fn arg, i ->
-        {"p#{i}", computation_arg_shape(arg)}
-      end)
+    arg_shapes = Enum.map(args, &computation_arg_shape/1)
 
     function =
-      EXLA.Builder.new(
-        {module, name},
-        arg_shapes,
-        struct(Nx.Tensor, %{type: {:pred, 8}, shape: {}}),
-        :mlir,
-        true
-      )
+      new_mlir_function({module, name}, arg_shapes, EXLA.Shape.make_shape({:pred, 8}, {}), false)
 
     [lhs, rhs | _] = EXLA.MLIR.Function.get_arguments(function)
 
@@ -2213,7 +2204,7 @@ defmodule EXLA.Defn do
         expr
       end
 
-    function = new_mlir_builder({module, name}, arg_shapes, out_expr, false)
+    function = new_mlir_function({module, name}, arg_shapes, out_expr, false)
 
     [arg_token | arg_params] = EXLA.MLIR.Function.get_arguments(function)
 
@@ -2278,7 +2269,7 @@ defmodule EXLA.Defn do
     token_shape = EXLA.Shape.make_token_shape()
 
     function =
-      new_mlir_builder({module, name}, [token_shape | args], {token_shape, expr}, false)
+      new_mlir_function({module, name}, [token_shape | args], {token_shape, expr}, false)
 
     [arg_token | tail] = EXLA.MLIR.Function.get_arguments(function)
 
@@ -2698,7 +2689,7 @@ defmodule EXLA.Defn do
 
       # input function is actually the parent function still, so we need to actually create a new function
       # with this name on the same module.
-      function = new_mlir_builder({module, name}, inputs, [token, out_expr], false)
+      function = new_mlir_function({module, name}, inputs, [token, out_expr], false)
 
       case function.return_shape do
         [%{dtype: {:tuple, _}}] ->
@@ -2720,7 +2711,7 @@ defmodule EXLA.Defn do
     else
       # input function is actually the parent function still, so we need to actually create a new function
       # with this name on the same module.
-      function = new_mlir_builder({module, name}, args, out_expr, false)
+      function = new_mlir_function({module, name}, args, out_expr, false)
 
       case function.return_shape do
         [%{dtype: {:tuple, _}}] ->
@@ -2912,7 +2903,7 @@ defmodule EXLA.Defn do
     to_type(value, {:pred, 8})
   end
 
-  defp new_mlir_builder(module_and_name, arg_shapes, return_shape, output_tuple?) do
+  defp new_mlir_function(module_and_name, arg_shapes, return_shape, output_tuple?) do
     in_shape = exla_shape(arg_shapes)
     out_shape = exla_shape(return_shape)
 
