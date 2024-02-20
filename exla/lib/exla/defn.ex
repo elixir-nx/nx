@@ -2607,7 +2607,7 @@ defmodule EXLA.Defn do
         if_results =
           Value.if(
             pred_op,
-            token_shape ++ List.wrap(EXLA.Builder.exla_shape(on_true, true)),
+            token_shape ++ exla_shape(on_true),
             true_args,
             true_comp,
             false_args,
@@ -2617,9 +2617,9 @@ defmodule EXLA.Defn do
         results =
           if get_token(cache) do
             [token | results] = if_results
-            {token, collect_container_results(function, results, on_true)}
+            {token, wrap_tuple_result(function, results, on_true)}
           else
-            collect_container_results(function, if_results, on_true)
+            wrap_tuple_result(function, if_results, on_true)
           end
 
         {results, cache}
@@ -2711,20 +2711,11 @@ defmodule EXLA.Defn do
          fun
        ) do
     if token = get_token(cache) do
-      inputs = Enum.with_index(args, fn arg, idx -> {"p#{idx + 1}", Value.get_shape(arg)} end)
-      inputs = [{"p0", EXLA.Shape.make_token_shape()} | inputs]
+      inputs = [EXLA.Shape.make_token_shape() | args]
 
       # input function is actually the parent function still, so we need to actually create a new function
       # with this name on the same module.
-      function =
-        EXLA.Builder.new(
-          {module, name},
-          inputs,
-          {struct(Nx.Tensor, type: :token), out_expr},
-          :mlir,
-          false,
-          true
-        )
+      function = new_mlir_builder({module, name}, inputs, [token, out_expr], false)
 
       case function.return_shape do
         [%{dtype: {:tuple, _}}] ->
@@ -2740,15 +2731,13 @@ defmodule EXLA.Defn do
       {res, comp_cache} =
         fun.(function, Enum.with_index(params, fn x, idx -> {idx, x} end), comp_cache)
 
-      [_, res | _] = Value.variadic_return([get_token(comp_cache), res], true)
+      Value.variadic_return([get_token(comp_cache), res], true)
 
-      {[token | args], res.function, comp_cache}
+      {[token | args], function, comp_cache}
     else
-      inputs = Enum.with_index(args, fn arg, idx -> {"p#{idx}", Value.get_shape(arg)} end)
-
       # input function is actually the parent function still, so we need to actually create a new function
       # with this name on the same module.
-      function = EXLA.Builder.new({module, name}, inputs, out_expr, :mlir, false, true)
+      function = new_mlir_builder({module, name}, args, out_expr, false)
 
       case function.return_shape do
         [%{dtype: {:tuple, _}}] ->
@@ -2763,9 +2752,9 @@ defmodule EXLA.Defn do
       {res, comp_cache} =
         fun.(function, Enum.with_index(params, fn x, idx -> {idx, x} end), cache)
 
-      [res | _] = Value.variadic_return([res], true)
+      Value.variadic_return([res], true)
 
-      {args, res.function, comp_cache}
+      {args, function, comp_cache}
     end
   end
 
@@ -2939,4 +2928,58 @@ defmodule EXLA.Defn do
   defp to_mlir_logical(%Value{} = value) do
     to_type(value, {:pred, 8})
   end
+
+  defp new_mlir_builder(module_and_name, arg_shapes, return_shape, output_tuple?) do
+    in_shape = exla_shape(arg_shapes)
+    out_shape = exla_shape(return_shape)
+
+    out_shape =
+      if output_tuple? do
+        [EXLA.Shape.make_tuple_shape(out_shape)]
+      else
+        out_shape
+      end
+
+    EXLA.Builder.new_mlir(module_and_name, in_shape, out_shape)
+  end
+
+  defp exla_shape(tensors) when is_list(tensors) do
+    Enum.flat_map(tensors, &exla_shape/1)
+  end
+
+  defp exla_shape(tensors) when is_tuple(tensors) do
+    tensors
+    |> Tuple.to_list()
+    |> Enum.flat_map(&exla_shape/1)
+  end
+
+  defp exla_shape(%Nx.Tensor{type: {:tuple, _size}, data: %{args: args}}) do
+    Enum.flat_map(args, &exla_shape/1)
+  end
+
+  defp exla_shape(%{type: :token}) do
+    [EXLA.Shape.make_token_shape()]
+  end
+
+  defp exla_shape(%{shape: shape, type: type}) do
+    [EXLA.Shape.make_shape(type, shape)]
+  end
+
+  defp exla_shape(%EXLA.Shape{} = shape) do
+    [shape]
+  end
+
+  defp exla_shape(%Value{} = value) do
+    [Value.get_shape(value)]
+  end
+
+  defp wrap_tuple_result(function, list, template) when is_tuple(template) do
+    Value.tuple(function, list)
+  end
+
+  defp wrap_tuple_result(function, list, %Nx.Tensor{type: {:tuple, _}}) do
+    Value.tuple(function, list)
+  end
+
+  defp wrap_tuple_result(_, [value], _), do: value
 end
