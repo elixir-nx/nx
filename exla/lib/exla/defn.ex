@@ -2134,9 +2134,15 @@ defmodule EXLA.Defn do
          type,
          %{builder: %EXLA.MLIR.Function{module: module}} = state
        ) do
-    arg_shapes = Enum.map(args, &computation_arg_shape/1)
+    arg_shapes =
+      Enum.map(args, fn %{type: type, shape: shape} -> EXLA.Shape.make_shape(type, shape) end)
 
-    function = new_mlir_function({module, Atom.to_string(name)}, arg_shapes, expr, false)
+    out_type =
+      [expr]
+      |> Nx.Defn.Composite.flatten_list()
+      |> Enum.map(&EXLA.Shape.make_shape(&1.type, &1.shape))
+
+    function = new_mlir_function({module, Atom.to_string(name)}, arg_shapes, out_type, false)
     mlir_args = EXLA.MLIR.Function.get_arguments(function)
 
     arg_params = Enum.zip(args, mlir_args)
