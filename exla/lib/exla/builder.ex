@@ -10,42 +10,30 @@ defmodule EXLA.Builder do
   @enforce_keys [:ref]
   defstruct [:ref, :parent, :name]
 
-  def new(name, inputs, outputs, type, sub? \\ false, variadic_return? \\ false)
-
-  def new(name, _inputs, _outputs, :xla, _sub?, _variadic_return?) do
-    new(name)
-  end
-
-  def new(module_and_name, inputs, outputs, :mlir, sub?, variadic_return?) do
-    # TO-DO(mlir): this module shouldn't have to know about Nx
-    {_arg_names, arg_shapes} = Enum.unzip(inputs)
-
+  def new_mlir(module_and_name, arg_shapes, return_shape) do
     {module, name, is_public} =
       case module_and_name do
         {%M{} = module, name} -> {module, name, false}
         _name -> {M.new(), "main", true}
       end
 
-    return_shape =
-      if sub? do
-        exla_shape(outputs, false)
-      else
-        out_types = [outputs] |> Nx.Defn.Composite.flatten_list()
-
-        if variadic_return? do
-          exla_shape(out_types, true)
-        else
-          out_types |> List.to_tuple() |> exla_shape(false)
-        end
-      end
-
     M.create_function(
       module,
       name,
-      exla_shape(arg_shapes, false),
-      List.wrap(return_shape),
+      arg_shapes,
+      return_shape,
       is_public
     )
+  end
+
+  def new(name) when is_binary(name) do
+    {:ok, ref} = EXLA.NIF.new_builder(name)
+    %__MODULE__{ref: ref, parent: nil, name: name}
+  end
+
+  def new(builder = %__MODULE__{ref: ref}, name) when is_binary(name) do
+    {:ok, ref} = EXLA.NIF.create_sub_builder(ref, name)
+    %__MODULE__{ref: ref, parent: builder, name: name}
   end
 
   def exla_shape(tensors, flatten_tuple) when is_list(tensors) do
@@ -93,16 +81,6 @@ defmodule EXLA.Builder do
     shape
   end
 
-  defp new(name) when is_binary(name) do
-    {:ok, ref} = EXLA.NIF.new_builder(name)
-    %__MODULE__{ref: ref, parent: nil, name: name}
-  end
-
-  def new(builder = %__MODULE__{ref: ref}, name) when is_binary(name) do
-    {:ok, ref} = EXLA.NIF.create_sub_builder(ref, name)
-    %__MODULE__{ref: ref, parent: builder, name: name}
-  end
-
   def build(root)
 
   def build(%Op{} = root) do
@@ -111,10 +89,8 @@ defmodule EXLA.Builder do
     %Computation{ref: ref, output_shape: shape}
   end
 
-  def build(%EXLA.MLIR.Value{function: function, ref: root_ref}) do
-    %EXLA.MLIR.Function{ref: function_ref} = function
-
-    :ok = EXLA.NIF.mlir_build(function_ref, root_ref)
+  def build(%EXLA.MLIR.Value{function: function} = value) do
+    EXLA.MLIR.Value.variadic_return([value])
     function
   end
 end

@@ -113,7 +113,7 @@ class MLIRFunction {
   ERL_NIF_TERM ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM value_ptr, std::optional<std::vector<int64_t>> dims = std::nullopt);
   mlir::Value InfeedOp(mlir::Value token, xla::Shape *shape);
   mlir::Value OutfeedOp(std::vector<mlir::Value> inputs, mlir::Value token);
-  mlir::Value CallOp(std::vector<mlir::Value> inputs, MLIRFunction *computation);
+  std::vector<mlir::Value> CallOp(std::vector<mlir::Value> inputs, MLIRFunction *computation);
   std::vector<mlir::Value> WhileOp(MLIRFunction *pred, MLIRFunction *body, std::vector<mlir::Value> initial);
   std::vector<mlir::Value> ReturnOp(std::vector<mlir::Value> values);
   int get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *type);

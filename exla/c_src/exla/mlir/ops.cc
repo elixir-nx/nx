@@ -673,26 +673,6 @@ ERL_NIF_TERM mlir_select(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
 
-ERL_NIF_TERM mlir_build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 2) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  exla::MLIRFunction** function;
-  mlir::Value* root;
-
-  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
-    return exla::nif::error(env, "Unable to get function.");
-  }
-  if (!exla::nif::get<mlir::Value>(env, argv[1], root)) {
-    return exla::nif::error(env, "Unable to get root.");
-  }
-
-  (*function)->Build(*root);
-
-  return exla::nif::ok(env);
-}
-
 ERL_NIF_TERM mlir_convert(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");
@@ -1529,9 +1509,9 @@ ERL_NIF_TERM mlir_call(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Unable to get computation.");
   }
 
-  mlir::Value result = (*function)->CallOp(arguments, *computation);
+  std::vector<mlir::Value> result = (*function)->CallOp(arguments, *computation);
 
-  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
+  return exla::nif::ok(env, exla::nif::make_list<mlir::Value>(env, result));
 }
 
 ERL_NIF_TERM mlir_while(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {

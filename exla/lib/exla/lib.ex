@@ -140,19 +140,15 @@ defmodule EXLA.Lib do
     %{module: module, name: name} = subbuilder(builder, "min-max")
 
     function =
-      EXLA.Builder.new(
+      EXLA.Builder.new_mlir(
         {module, name},
         [
-          {"p0", EXLA.Shape.make_shape(type, {})},
-          {"p1", EXLA.Shape.make_shape(index_type, {})},
-          {"p2", EXLA.Shape.make_shape(type, {})},
-          {"p3", EXLA.Shape.make_shape(index_type, {})}
+          EXLA.Shape.make_shape(type, {}),
+          EXLA.Shape.make_shape(index_type, {}),
+          EXLA.Shape.make_shape(type, {}),
+          EXLA.Shape.make_shape(index_type, {})
         ],
-        {struct(Nx.Tensor, type: type, shape: {}),
-         struct(Nx.Tensor, type: index_type, shape: {})},
-        :mlir,
-        false,
-        true
+        [EXLA.Shape.make_shape(type, {}), EXLA.Shape.make_shape(index_type, {})]
       )
 
     [lhs_value, lhs_index, rhs_value, rhs_index] = EXLA.MLIR.Function.get_arguments(function)
