@@ -62,17 +62,7 @@ defmodule Torchx.MixProject do
       maintainers: ["Paulo Valente", "José Valim"],
       licenses: ["Apache-2.0"],
       links: %{"GitHub" => @source_url},
-      files: [
-        "lib",
-        "mix.exs",
-        "README.md",
-        "LICENSE",
-        "CHANGELOG.md",
-        "c_src",
-        "CMakeLists.txt",
-        "Makefile",
-        "Makefile.win"
-      ]
+      files: ["lib", "mix.exs", "README.md", "LICENSE", "CHANGELOG.md", "c_src", "CMakeLists.txt"]
     ]
   end
 
