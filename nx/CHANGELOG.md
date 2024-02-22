@@ -1,13 +1,22 @@
 # Changelog
 
-## v0.7.0-dev
+## v0.7.0 (2024-02-22)
 
 ### Enhancements
 
-  * [Nx] Add `fft2` and `ifft2`
+  * [Nx] Add `Nx.fft2` and `Nx.ifft2`
+  * [Nx] Add `Nx.fill/2`
+  * [Nx] Implement QR decomposition as optional callback
+  * [Nx] Support `:type` option in argmin/argmax
+  * [Nx] Default all sorting operations to unstable sorting (pass `stable: true` to change it)
+  * [Nx.BinaryBackend] Improve performance of `Nx.concatenate/2`
+  * [Nx.Defn] Support a mapping function in `print_value/2`
+  * [Nx.Defn] Add `c:Nx.Defn.Compiler.__to_backend__/1` callback
+  * [Nx.LinAlg] Add `Nx.least_squares/2`
 
 ### Bug fixes
 
+  * [Nx.Constants] Fix min and max finite values for `:bf16`
   * [Nx.Defn] Do not discard arguments on optional grads
 
 ### Incompatible changes
