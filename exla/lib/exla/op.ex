@@ -802,11 +802,6 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def create_token(%EXLA.MLIR.Function{} = function) do
-    # TO-DO (mlir): actually do something here
-    function
-  end
-
   def create_token(%Builder{ref: builder}) do
     ref = EXLA.NIF.create_token(builder) |> unwrap!()
     %Op{builder: builder, ref: ref}

@@ -697,6 +697,9 @@ defmodule EXLA.Defn do
           # like it would have come from Nx.Defn.Composite.flatten_list.
           # We need to collect the returned values into the nested tuples
           # that should have come from the while expr
+
+          # TO-DO: This while can be build in a manner similar to if, where
+          # we can write directly to the destination regions inside while_computation
           [token | results] = Value.while(pred, body, initial)
           result = wrap_tuple_result(function, results, initial_arg)
           {token, result}
@@ -735,13 +738,7 @@ defmodule EXLA.Defn do
 
     case state.builder do
       %Function{} ->
-        case cond_op do
-          {token, results} ->
-            {results, update_token(cache, token)}
-
-          results ->
-            {results, cache}
-        end
+        {cond_op, cache}
 
       _ ->
         if get_token(cache) do
@@ -2189,9 +2186,7 @@ defmodule EXLA.Defn do
   defp while_computation(name, arg, expr, type, transform, %{builder: %Function{}} = state, cache) do
     arg_shapes = container_to_exla_shape(arg)
 
-    arg_shapes = [
-      EXLA.Shape.make_token_shape() | arg_shapes
-    ]
+    arg_shapes = [EXLA.Shape.make_token_shape() | arg_shapes]
 
     %{module: module, name: name} = subbuilder(state.builder, Atom.to_string(name))
 
@@ -2570,23 +2565,13 @@ defmodule EXLA.Defn do
 
     cache = to_mlir_if_branch(true, node, on_true, true_ids, state, cache)
 
-    # We need to set the outer token back in the cache so that the false branch also
-    # sees the same input token. The branch that executes will either update or return the token as is,
-    # but both branch off of the same token.
+    cache = to_mlir_if_branch(false, node, on_false, false_ids, state, cache)
 
-    # the output token is `node` as above, if the computation does indeed contain a token.
-
-    cache =
-      to_mlir_if_branch(false, node, on_false, false_ids, state, update_token(cache, in_token))
-
-    result =
-      if in_token do
-        {node, wrap_tuple_result(function, tl(if_results), on_true)}
-      else
-        wrap_tuple_result(function, if_results, on_true)
-      end
-
-    {result, cache}
+    if in_token do
+      {wrap_tuple_result(function, tl(if_results), on_true), update_token(cache, node)}
+    else
+      {wrap_tuple_result(function, if_results, on_true), cache}
+    end
   end
 
   defp to_if(pred, on_true, on_false, state, cache) do
@@ -2660,18 +2645,11 @@ defmodule EXLA.Defn do
     end)
   end
 
-  defp to_mlir_if_branch(
-         bool,
-         node,
-         expr,
-         current_ids,
-         state,
-         cache
-       ) do
+  defp to_mlir_if_branch(bool, node, expr, current_ids, state, cache) do
     comp_state = %{state | scope_ids: current_ids}
 
     Value.set_if_block(node, bool)
-    {res, cache} = recur_composite(expr, &cast_pred_to_u8/1, comp_state, cache)
+    {res, res_cache} = recur_composite(expr, &cast_pred_to_u8/1, comp_state, cache)
 
     if token = get_token(cache) do
       Value.variadic_return([token, res], true)
@@ -2680,7 +2658,7 @@ defmodule EXLA.Defn do
     end
 
     Function.reset_region(state.builder)
-    cache
+    merge_outfeed(cache, res_cache)
   end
 
   defp to_if_branch(bool, expr, current_ids, other_ids, %{scope_ids: ids} = state, cache) do
@@ -2708,14 +2686,7 @@ defmodule EXLA.Defn do
         recur_composite(expr, &cast_pred_to_u8/1, comp_state, comp_cache)
       end)
 
-    args =
-      case state.builder do
-        %EXLA.MLIR.Function{} ->
-          args
-
-        _ ->
-          EXLA.Op.tuple(state.builder, args)
-      end
+    args = EXLA.Op.tuple(state.builder, args)
 
     {args, comp, merge_outfeed(cache, comp_cache)}
   end
