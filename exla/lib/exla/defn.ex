@@ -2657,7 +2657,7 @@ defmodule EXLA.Defn do
       Value.variadic_return([res], true)
     end
 
-    Function.reset_region(state.builder)
+    Function.pop_region(state.builder)
     merge_outfeed(cache, res_cache)
   end
 

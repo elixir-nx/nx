@@ -71,7 +71,7 @@ defmodule EXLA.NIF do
 
   def mlir_set_if_block(_function, _node, _true_or_false), do: :erlang.nif_error(:undef)
 
-  def mlir_reset_region(_function),
+  def mlir_pop_region(_function),
     do: :erlang.nif_error(:undef)
 
   def mlir_build(_function, _root), do: :erlang.nif_error(:undef)

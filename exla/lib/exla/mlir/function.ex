@@ -16,8 +16,8 @@ defmodule EXLA.MLIR.Function do
     Enum.map(arg_refs, fn arg -> %Value{ref: arg, function: function} end)
   end
 
-  def reset_region(%Function{ref: ref}) do
-    EXLA.NIF.mlir_reset_region(ref)
+  def pop_region(%Function{ref: ref}) do
+    EXLA.NIF.mlir_pop_region(ref)
   end
 
   defp unwrap!({:ok, value}), do: value

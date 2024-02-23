@@ -909,7 +909,7 @@ ERL_NIF_TERM mlir_set_if_block(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv
   return exla::nif::ok(env);
 }
 
-ERL_NIF_TERM mlir_reset_region(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM mlir_pop_region(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 1) {
     return exla::nif::error(env, "Bad argument count.");
   }
