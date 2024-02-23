@@ -121,7 +121,7 @@ class MLIRFunction {
   std::vector<mlir::Value> WhileOp(MLIRFunction *pred, MLIRFunction *body, std::vector<mlir::Value> initial);
   std::vector<mlir::Value> ReturnOp(std::vector<mlir::Value> values);
   int get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *type);
-  void ResetRegion();
+  void PopRegion();
 
   void Build(mlir::Value root);
 

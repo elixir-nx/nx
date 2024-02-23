@@ -920,7 +920,7 @@ ERL_NIF_TERM mlir_reset_region(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv
     return exla::nif::error(env, "Unable to get function.");
   }
 
-  (*function)->ResetRegion();
+  (*function)->PopRegion();
   return exla::nif::ok(env);
 }
 

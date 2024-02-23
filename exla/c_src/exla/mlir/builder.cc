@@ -917,23 +917,6 @@ mlir::Value MLIRFunction::MapOp(
   return map_op;
 }
 
-// adapted from xla/translate/hlo_to_mhlo/hlo_function_importer.cc
-// we need to adapt because we want to receive std::vector and
-// because we use stablehlo instead of mhlo here.
-void ReplaceBlockArgumentsWithImplicitOperands(mlir::Operation *op, std::vector<mlir::Value> implicit_operands) {
-  if (!op) {
-    std::cerr << "op is null" << std::endl;
-    return;
-  }
-  int implicit_operand_index = 0;
-  for (auto &region : op->getRegions()) {
-    for (auto arg : region.getArguments()) {
-      arg.replaceAllUsesWith(implicit_operands[implicit_operand_index++]);
-    }
-    region.front().eraseArguments(0, region.getNumArguments());
-  }
-}
-
 std::vector<mlir::Value> MLIRFunction::IfOp(mlir::Value pred, std::vector<xla::Shape> output_shapes) {
   auto builder = module_->builder();
   setInsertionPoint();
@@ -965,7 +948,7 @@ void MLIRFunction::SetIfOpBlock(mlir::Value node, bool true_or_false) {
   setInsertionPoint();
 }
 
-void MLIRFunction::ResetRegion() {
+void MLIRFunction::PopRegion() {
   regions.pop();
   setInsertionPoint();
 }

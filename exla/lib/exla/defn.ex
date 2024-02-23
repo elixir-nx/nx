@@ -2548,7 +2548,6 @@ defmodule EXLA.Defn do
 
   defp to_if(pred, on_true, on_false, %{builder: %Function{} = function} = state, cache) do
     {pred_op, cache} = recur_operator(pred, state, cache)
-    # pred_op = to_type(pred_op, {:pred, 8})
 
     true_ids = Tree.scope_ids(on_true)
     false_ids = Tree.scope_ids(on_false)
@@ -2576,7 +2575,6 @@ defmodule EXLA.Defn do
     # but both branch off of the same token.
 
     # the output token is `node` as above, if the computation does indeed contain a token.
-
     cache =
       to_mlir_if_branch(false, node, on_false, false_ids, state, update_token(cache, in_token))
 
@@ -2603,13 +2601,7 @@ defmodule EXLA.Defn do
     {false_args, false_comp, cache} =
       to_if_branch(false, on_false, false_ids, true_ids, state, cache)
 
-    case builder do
-      %EXLA.MLIR.Function{} ->
-        raise "asdf"
-
-      _ ->
-        {EXLA.Op.conditional(pred_op, true_args, true_comp, false_args, false_comp), cache}
-    end
+    {EXLA.Op.conditional(pred_op, true_args, true_comp, false_args, false_comp), cache}
   end
 
   defp collect_arg?(_id, :parameter, _args, _shared_ids),
@@ -2660,8 +2652,6 @@ defmodule EXLA.Defn do
         {_, acc} = collect_args(node, acc, {ids, other_ids})
         acc
       end)
-
-    # sorted_ids_args = Enum.sort_by(ids_args, fn {_id, {i, _old, _new}} -> i end)
 
     Enum.reduce(ids_args, cache, fn {_, {_, old, _}}, cache ->
       {_, cache} = recur_operator(old, state, cache)
