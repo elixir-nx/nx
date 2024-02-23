@@ -2575,6 +2575,7 @@ defmodule EXLA.Defn do
     # but both branch off of the same token.
 
     # the output token is `node` as above, if the computation does indeed contain a token.
+
     cache =
       to_mlir_if_branch(false, node, on_false, false_ids, state, update_token(cache, in_token))
 
@@ -2588,7 +2589,7 @@ defmodule EXLA.Defn do
     {result, cache}
   end
 
-  defp to_if(pred, on_true, on_false, %{builder: builder} = state, cache) do
+  defp to_if(pred, on_true, on_false, state, cache) do
     {pred_op, cache} = recur_operator(pred, state, cache)
 
     pred_op = to_type(pred_op, {:pred, 8})

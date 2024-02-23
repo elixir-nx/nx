@@ -1115,11 +1115,6 @@ ERL_NIF_TERM MLIRFunction::ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_T
   return exla::nif::error(env, "invalid type received");
 }
 
-void MLIRFunction::Build(mlir::Value root) {
-  setInsertionPoint();
-  module_->builder()->create<mlir::stablehlo::ReturnOp>(module_->builder()->getUnknownLoc(), root);
-}
-
 MLIRModule::MLIRModule() {
   context_ = std::make_unique<mlir::MLIRContext>();
 
