@@ -26,8 +26,6 @@ if client.platform == :host and client.device_count == 1 and System.schedulers_o
   )
 end
 
-IO.gets("Press enter to continue... PID: #{System.pid()}}")
-
 ExUnit.start(
   exclude: [:platform, :integration] ++ exclude_multi_device ++ exclude,
   include: [platform: String.to_atom(target)],
