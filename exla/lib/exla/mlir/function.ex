@@ -20,10 +20,6 @@ defmodule EXLA.MLIR.Function do
     EXLA.NIF.mlir_reset_region(ref)
   end
 
-  # def reset_region(%Function{ref: ref}) do
-  #   EXLA.NIF.mlir_reset_region(ref)
-  # end
-
   defp unwrap!({:ok, value}), do: value
   defp unwrap!(_other), do: raise("unable to get value")
 end

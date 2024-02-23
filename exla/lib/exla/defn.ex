@@ -2556,8 +2556,6 @@ defmodule EXLA.Defn do
     cache = recur_shared_ids(on_true, false_ids, state, cache)
     cache = recur_shared_ids(on_false, true_ids, state, cache)
 
-    # add token here
-
     out_shape = container_to_exla_shape(on_true)
 
     in_token = get_token(cache)
@@ -2573,6 +2571,12 @@ defmodule EXLA.Defn do
 
     cache = to_mlir_if_branch(true, node, on_true, true_ids, state, cache)
 
+    # We need to set the outer token back in the cache so that the false branch also
+    # sees the same input token. The branch that executes will either update or return the token as is,
+    # but both branch off of the same token.
+
+    # the output token is `node` as above, if the computation does indeed contain a token.
+
     cache =
       to_mlir_if_branch(false, node, on_false, false_ids, state, update_token(cache, in_token))
 
@@ -2583,7 +2587,6 @@ defmodule EXLA.Defn do
         wrap_tuple_result(function, if_results, on_true)
       end
 
-    # wrap tuple result on if output too
     {result, cache}
   end
 
