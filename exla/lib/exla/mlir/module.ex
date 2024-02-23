@@ -11,11 +11,22 @@ defmodule EXLA.MLIR.Module do
   alias EXLA.Executable
   alias EXLA.Shape
 
+  @context_key {__MODULE__, :mlir_context}
+  def init do
+    :persistent_term.put(@context_key, EXLA.NIF.new_mlir_context() |> unwrap!())
+  end
+
   @doc """
   Creates a new MLIR module.
   """
   def new() do
-    ref = EXLA.NIF.new_mlir_module() |> unwrap!()
+    context = :persistent_term.get(@context_key, nil)
+
+    unless context do
+      raise "No MLIR context found"
+    end
+
+    ref = EXLA.NIF.new_mlir_module(context) |> unwrap!()
     %__MODULE__{ref: ref}
   end
 

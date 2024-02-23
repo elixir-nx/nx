@@ -63,12 +63,28 @@ ERL_NIF_TERM mlir_compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, exla::nif::make<exla::ExlaExecutable*>(env, executable));
 }
 
-ERL_NIF_TERM new_mlir_module(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM new_mlir_context(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 0) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
-  exla::MLIRModule* module = new exla::MLIRModule();
+  mlir::MLIRContext* context = new mlir::MLIRContext();
+  auto ret = exla::nif::make<mlir::MLIRContext*>(env, context);
+  return exla::nif::ok(env, ret);
+}
+
+ERL_NIF_TERM new_mlir_module(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  mlir::MLIRContext** ctx;
+
+  if (!exla::nif::get<mlir::MLIRContext*>(env, argv[0], ctx)) {
+    return exla::nif::error(env, "Unable to get context.");
+  }
+
+  exla::MLIRModule* module = new exla::MLIRModule(*ctx);
 
   return exla::nif::ok(env, exla::nif::make<exla::MLIRModule*>(env, module));
 }

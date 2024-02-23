@@ -10,6 +10,8 @@ defmodule EXLA.Application do
       _ -> :os.set_signal(:sigchld, :default)
     end
 
+    EXLA.MLIR.Module.init()
+
     children = [
       EXLA.Logger,
       EXLA.Client,
