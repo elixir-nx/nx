@@ -153,7 +153,6 @@ class MLIRModule {
   mlir::OpBuilder *builder() { return builder_.get(); }
   mlir::MLIRContext *context() { return context_.get(); }
   void LowerPatterns();
-  void RemoveEmptyFunctions();
 
  private:
   std::unique_ptr<mlir::MLIRContext> context_;

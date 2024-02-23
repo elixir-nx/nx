@@ -677,6 +677,7 @@ std::vector<mlir::Value> MLIRFunction::SortOp(MLIRFunction *comparator, std::vec
   mlir::Region &compareBody = sort_op.getComparator();
   mlir::Region &comparatorBody = comparator->function()->getBody();
   compareBody.getBlocks().splice(compareBody.end(), comparatorBody.getBlocks());
+  comparator->function()->erase();
 
   mlir::Operation::result_range results = sort_op.getResults();
   return std::vector<mlir::Value>(results.begin(), results.end());
@@ -868,6 +869,7 @@ std::vector<mlir::Value> MLIRFunction::WindowReduceOp(
   mlir::Region &reduceBody = reduce_window_op.getRegion();
   mlir::Region &funcBody = reducer->function()->getBody();
   reduceBody.getBlocks().splice(reduceBody.end(), funcBody.getBlocks());
+  reducer->function()->erase();
 
   mlir::Operation::result_range results = reduce_window_op.getResults();
   return std::vector<mlir::Value>(results.begin(), results.end());
@@ -889,6 +891,7 @@ std::vector<mlir::Value> MLIRFunction::ReduceOp(
   mlir::Region &reduceBody = reduce_op.getRegion();
   mlir::Region &funcBody = reducer->function()->getBody();
   reduceBody.getBlocks().splice(reduceBody.end(), funcBody.getBlocks());
+  reducer->function()->erase();
 
   mlir::Operation::result_range results = reduce_op.getResults();
   return std::vector<mlir::Value>(results.begin(), results.end());
@@ -909,6 +912,7 @@ mlir::Value MLIRFunction::MapOp(
   mlir::Region &mapBody = map_op.getComputation();
   mlir::Region &funcBody = mapper->function()->getBody();
   mapBody.getBlocks().splice(mapBody.end(), funcBody.getBlocks());
+  mapper->function()->erase();
 
   return map_op;
 }
@@ -956,52 +960,15 @@ void MLIRFunction::SetIfOpBlock(mlir::Value node, bool true_or_false) {
   mlir::stablehlo::IfOp op = node.getDefiningOp<mlir::stablehlo::IfOp>();
 
   mlir::Region &region = true_or_false ? op.getTrueBranch() : op.getFalseBranch();
-  mlir::Block &block = region.emplaceBlock();
-  builder->setInsertionPointToEnd(&block);
-
+  region.emplaceBlock();
   regions.push(&region);
+  setInsertionPoint();
 }
 
 void MLIRFunction::ResetRegion() {
   regions.pop();
   setInsertionPoint();
 }
-
-// std::vector<mlir::Value> MLIRFunction::IfOp(mlir::Value pred, std::vector<xla::Shape> output_shapes, std::vector<mlir::Value> implicit_arguments, MLIRFunction *on_true, MLIRFunction *on_false) {
-//   auto builder = module_->builder();
-//   setInsertionPointToEnd(builder);
-
-//   std::vector<mlir::Type> output_types;
-//   output_types.reserve(output_shapes.size());
-
-//   for (auto shape : output_shapes) {
-//     auto type = GetMLIRFunctionType(builder, &shape);
-//     output_types.push_back(type);
-//   }
-
-//   pred = builder->create<mlir::stablehlo::ConvertOp>(builder->getUnknownLoc(), pred, builder->getIntegerType(1));
-
-//   implicit_arguments.insert(implicit_arguments.begin(), pred);
-//   mlir::ValueRange operands(implicit_arguments);
-
-//   mlir::stablehlo::IfOp if_op = builder->create<mlir::stablehlo::IfOp>(builder->getUnknownLoc(), mlir::TypeRange(output_types), pred);
-
-//   mlir::Operation::result_range result_range = if_op.getResults();
-//   std::vector<mlir::Value> results(result_range.begin(), result_range.end());
-
-//   mlir::Region &trueBody = if_op.getTrueBranch();
-//   auto &onTrueBlocks = on_true->function()->getBody().getBlocks();
-//   trueBody.getBlocks().splice(trueBody.end(), onTrueBlocks);
-
-//   mlir::Region &falseBody = if_op.getFalseBranch();
-//   auto &onFalseBlocks = on_false->function()->getBody().getBlocks();
-//   falseBody.getBlocks().splice(falseBody.end(), onFalseBlocks);
-
-//   implicit_arguments.erase(implicit_arguments.begin());
-//   ReplaceBlockArgumentsWithImplicitOperands(if_op.getOperation(), implicit_arguments);
-
-//   return results;
-// }
 
 mlir::Value MLIRFunction::SelectAndScatterOp(
     mlir::Value target,
@@ -1264,7 +1231,6 @@ MLIRFunction *MLIRModule::CreateFunction(
     mlir::Type type = GetMLIRFunctionType(builder_.get(), ret_shape);
     return_types.push_back(type);
   }
-  // mlir::Type return_type = GetMLIRFunctionType(builder_.get(), ret_shape);
 
   auto visibility = is_public ? "public" : "nested";
 
@@ -1373,21 +1339,6 @@ void MLIRModule::LowerPatterns() {
   mlir::applyPartialConversion(module(), target, std::move(patterns));
 }
 
-void MLIRModule::RemoveEmptyFunctions() {
-  std::vector<mlir::func::FuncOp> unused_functions;
-  for (auto &op : module_->getOps()) {
-    if (auto func = llvm::dyn_cast<mlir::func::FuncOp>(op)) {
-      if (func.getBody().empty()) {
-        unused_functions.push_back(func);
-      }
-    }
-  }
-
-  for (auto func : unused_functions) {
-    func.erase();
-  }
-}
-
 mlir::Value MLIRFunction::InfeedOp(mlir::Value token, xla::Shape *shape) {
   auto builder = module_->builder();
   setInsertionPoint();
@@ -1425,10 +1376,12 @@ std::vector<mlir::Value> MLIRFunction::WhileOp(MLIRFunction *pred, MLIRFunction 
   mlir::Region &cond = while_op.getCond();
   auto &predBlocks = pred->function()->getBody().getBlocks();
   cond.getBlocks().splice(cond.end(), predBlocks);
+  pred->function()->erase();
 
   mlir::Region &body = while_op.getBody();
   auto &bodyBlocks = body_function->function()->getBody().getBlocks();
   body.getBlocks().splice(body.end(), bodyBlocks);
+  body_function->function()->erase();
 
   mlir::Operation::result_range results = while_op.getResults();
   return std::vector<mlir::Value>(results.begin(), results.end());
