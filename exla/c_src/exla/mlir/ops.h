@@ -107,6 +107,8 @@ DEFINE_NIF(mlir_reduce);
 DEFINE_NIF(mlir_window_reduce);
 DEFINE_NIF(mlir_map);
 DEFINE_NIF(mlir_if);
+DEFINE_NIF(mlir_set_if_block);
+DEFINE_NIF(mlir_pop_region);
 DEFINE_NIF(mlir_infeed);
 DEFINE_NIF(mlir_outfeed);
 DEFINE_NIF(mlir_call);

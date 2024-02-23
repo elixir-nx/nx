@@ -697,6 +697,9 @@ defmodule EXLA.Defn do
           # like it would have come from Nx.Defn.Composite.flatten_list.
           # We need to collect the returned values into the nested tuples
           # that should have come from the while expr
+
+          # TO-DO: This while can be build in a manner similar to if, where
+          # we can write directly to the destination regions inside while_computation
           [token | results] = Value.while(pred, body, initial)
           result = wrap_tuple_result(function, results, initial_arg)
           {token, result}
@@ -735,12 +738,7 @@ defmodule EXLA.Defn do
 
     case state.builder do
       %Function{} ->
-        if get_token(cache) do
-          {token, results} = cond_op
-          {results, update_token(cache, token)}
-        else
-          {cond_op, cache}
-        end
+        {cond_op, cache}
 
       _ ->
         if get_token(cache) do
@@ -2188,9 +2186,7 @@ defmodule EXLA.Defn do
   defp while_computation(name, arg, expr, type, transform, %{builder: %Function{}} = state, cache) do
     arg_shapes = container_to_exla_shape(arg)
 
-    arg_shapes = [
-      EXLA.Shape.make_token_shape() | arg_shapes
-    ]
+    arg_shapes = [EXLA.Shape.make_token_shape() | arg_shapes]
 
     %{module: module, name: name} = subbuilder(state.builder, Atom.to_string(name))
 
@@ -2545,7 +2541,40 @@ defmodule EXLA.Defn do
 
   ## Cond
 
-  defp to_if(pred, on_true, on_false, %{builder: builder} = state, cache) do
+  defp to_if(pred, on_true, on_false, %{builder: %Function{} = function} = state, cache) do
+    {pred_op, cache} = recur_operator(pred, state, cache)
+
+    true_ids = Tree.scope_ids(on_true)
+    false_ids = Tree.scope_ids(on_false)
+
+    cache = recur_shared_ids(on_true, false_ids, state, cache)
+    cache = recur_shared_ids(on_false, true_ids, state, cache)
+
+    out_shape = container_to_exla_shape(on_true)
+
+    in_token = get_token(cache)
+
+    result_shapes =
+      if in_token do
+        [EXLA.Shape.make_token_shape() | out_shape]
+      else
+        out_shape
+      end
+
+    [node | _] = if_results = Value.if_op(pred_op, result_shapes)
+
+    cache = to_mlir_if_branch(true, node, on_true, true_ids, state, cache)
+
+    cache = to_mlir_if_branch(false, node, on_false, false_ids, state, cache)
+
+    if in_token do
+      {wrap_tuple_result(function, tl(if_results), on_true), update_token(cache, node)}
+    else
+      {wrap_tuple_result(function, if_results, on_true), cache}
+    end
+  end
+
+  defp to_if(pred, on_true, on_false, state, cache) do
     {pred_op, cache} = recur_operator(pred, state, cache)
 
     pred_op = to_type(pred_op, {:pred, 8})
@@ -2558,38 +2587,7 @@ defmodule EXLA.Defn do
     {false_args, false_comp, cache} =
       to_if_branch(false, on_false, false_ids, true_ids, state, cache)
 
-    case builder do
-      %EXLA.MLIR.Function{} = function ->
-        token_shape =
-          if get_token(cache) do
-            [EXLA.Shape.make_token_shape()]
-          else
-            []
-          end
-
-        if_results =
-          Value.if(
-            pred_op,
-            token_shape ++ container_to_exla_shape(on_true),
-            true_args,
-            true_comp,
-            false_args,
-            false_comp
-          )
-
-        results =
-          if get_token(cache) do
-            [token | results] = if_results
-            {token, wrap_tuple_result(function, results, on_true)}
-          else
-            wrap_tuple_result(function, if_results, on_true)
-          end
-
-        {results, cache}
-
-      _ ->
-        {EXLA.Op.conditional(pred_op, true_args, true_comp, false_args, false_comp), cache}
-    end
+    {EXLA.Op.conditional(pred_op, true_args, true_comp, false_args, false_comp), cache}
   end
 
   defp collect_arg?(_id, :parameter, _args, _shared_ids),
@@ -2629,6 +2627,40 @@ defmodule EXLA.Defn do
     end
   end
 
+  defp recur_shared_ids(
+         expr,
+         other_ids,
+         %{scope_ids: ids} = state,
+         cache
+       ) do
+    {_, ids_args} =
+      Composite.reduce(expr, {%{}, %{}}, fn node, acc ->
+        {_, acc} = collect_args(node, acc, {ids, other_ids})
+        acc
+      end)
+
+    Enum.reduce(ids_args, cache, fn {_, {_, old, _}}, cache ->
+      {_, cache} = recur_operator(old, state, cache)
+      cache
+    end)
+  end
+
+  defp to_mlir_if_branch(bool, node, expr, current_ids, state, cache) do
+    comp_state = %{state | scope_ids: current_ids}
+
+    Value.set_if_block(node, bool)
+    {res, res_cache} = recur_composite(expr, &cast_pred_to_u8/1, comp_state, cache)
+
+    if token = get_token(cache) do
+      Value.variadic_return([token, res], true)
+    else
+      Value.variadic_return([res], true)
+    end
+
+    Function.pop_region(state.builder)
+    merge_outfeed(cache, res_cache)
+  end
+
   defp to_if_branch(bool, expr, current_ids, other_ids, %{scope_ids: ids} = state, cache) do
     {expr, {_, ids_args}} =
       Composite.traverse(expr, {%{}, %{}}, &collect_args(&1, &2, {ids, other_ids}))
@@ -2654,77 +2686,9 @@ defmodule EXLA.Defn do
         recur_composite(expr, &cast_pred_to_u8/1, comp_state, comp_cache)
       end)
 
-    args =
-      case state.builder do
-        %EXLA.MLIR.Function{} ->
-          args
-
-        _ ->
-          EXLA.Op.tuple(state.builder, args)
-      end
+    args = EXLA.Op.tuple(state.builder, args)
 
     {args, comp, merge_outfeed(cache, comp_cache)}
-  end
-
-  defp if_branch_computation(
-         %EXLA.MLIR.Function{module: module, name: name},
-         out_expr,
-         args,
-         cache,
-         fun
-       ) do
-    arg_shapes = Enum.map(args, &Value.get_shape/1)
-
-    out_type = container_to_exla_shape(out_expr)
-
-    if token = get_token(cache) do
-      inputs = [EXLA.Shape.make_token_shape() | arg_shapes]
-
-      # input function is actually the parent function still, so we need to actually create a new function
-      # with this name on the same module.
-      function =
-        EXLA.Builder.new_mlir({module, name}, inputs, [Value.get_shape(token) | out_type])
-
-      case function.return_shape do
-        [%{dtype: {:tuple, _}}] ->
-          raise "MLIR cannot return tuple from if branch"
-
-        _ ->
-          nil
-      end
-
-      [comp_token | params] = EXLA.MLIR.Function.get_arguments(function)
-      comp_cache = reset_token(cache, comp_token)
-
-      {res, comp_cache} =
-        fun.(function, Enum.with_index(params, fn x, idx -> {idx, x} end), comp_cache)
-
-      Value.variadic_return([get_token(comp_cache), res], true)
-
-      {[token | args], function, comp_cache}
-    else
-      # input function is actually the parent function still, so we need to actually create a new function
-      # with this name on the same module.
-      function =
-        EXLA.Builder.new_mlir({module, name}, arg_shapes, out_type)
-
-      case function.return_shape do
-        [%{dtype: {:tuple, _}}] ->
-          raise "MLIR cannot return tuple from if branch"
-
-        _ ->
-          nil
-      end
-
-      params = EXLA.MLIR.Function.get_arguments(function)
-
-      {res, comp_cache} =
-        fun.(function, Enum.with_index(params, fn x, idx -> {idx, x} end), cache)
-
-      Value.variadic_return([res], true)
-
-      {args, function, comp_cache}
-    end
   end
 
   defp if_branch_computation(subbuilder, _out_expr, args, cache, fun) do

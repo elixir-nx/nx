@@ -66,7 +66,12 @@ defmodule EXLA.NIF do
   def mlir_map(_function, _mapper, _inputs, _dimensions),
     do: :erlang.nif_error(:undef)
 
-  def mlir_if(_function, _pred, _output_shape, _implicit_args, _on_true, _on_false),
+  def mlir_if(_function, _pred, _output_shape),
+    do: :erlang.nif_error(:undef)
+
+  def mlir_set_if_block(_function, _node, _true_or_false), do: :erlang.nif_error(:undef)
+
+  def mlir_pop_region(_function),
     do: :erlang.nif_error(:undef)
 
   def mlir_build(_function, _root), do: :erlang.nif_error(:undef)

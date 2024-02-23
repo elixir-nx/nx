@@ -1,6 +1,8 @@
 #ifndef EXLA_MLIR_BUILDER_H_
 #define EXLA_MLIR_BUILDER_H_
 
+#include <stack>
+
 #include "../exla_nif_util.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Builders.h"
@@ -8,6 +10,7 @@
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/OwningOpRef.h"
+#include "stablehlo/dialect/StablehloOps.h"
 #include "stablehlo/reference/Types.h"
 #include "xla/shape.h"
 #include "xla/types.h"
@@ -109,7 +112,8 @@ class MLIRFunction {
   std::vector<mlir::Value> ReduceOp(MLIRFunction *function, std::vector<mlir::Value> init_values, std::vector<mlir::Value> inputs, std::vector<int64_t> dimensions);
   std::vector<mlir::Value> WindowReduceOp(MLIRFunction *function, std::vector<mlir::Value> init_values, std::vector<mlir::Value> inputs, std::vector<int64_t> window_dimensions, std::vector<int64_t> window_strides, std::vector<int64_t> input_dilations, std::vector<int64_t> window_dilations, std::vector<std::pair<int64_t, int64_t>> padding);
   mlir::Value MapOp(MLIRFunction *function, std::vector<mlir::Value> inputs, std::vector<int64_t> dimensions);
-  std::vector<mlir::Value> IfOp(mlir::Value pred, std::vector<xla::Shape> output_shape, std::vector<mlir::Value> implicit_args, MLIRFunction *on_true, MLIRFunction *on_false);
+  std::vector<mlir::Value> IfOp(mlir::Value pred, std::vector<xla::Shape> output_shape);
+  void SetIfOpBlock(mlir::Value node, bool true_or_false_branch);
   ERL_NIF_TERM ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM value_ptr, std::optional<std::vector<int64_t>> dims = std::nullopt);
   mlir::Value InfeedOp(mlir::Value token, xla::Shape *shape);
   mlir::Value OutfeedOp(std::vector<mlir::Value> inputs, mlir::Value token);
@@ -117,6 +121,7 @@ class MLIRFunction {
   std::vector<mlir::Value> WhileOp(MLIRFunction *pred, MLIRFunction *body, std::vector<mlir::Value> initial);
   std::vector<mlir::Value> ReturnOp(std::vector<mlir::Value> values);
   int get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *type);
+  void PopRegion();
 
   void Build(mlir::Value root);
 
@@ -128,7 +133,10 @@ class MLIRFunction {
   std::shared_ptr<MLIRModule> module_;
   std::unique_ptr<mlir::func::FuncOp> func_;
 
+  std::stack<mlir::Region *> regions;
+
   void dump_mlir_module();
+  void setInsertionPoint();
 };
 
 class MLIRModule {
@@ -145,7 +153,6 @@ class MLIRModule {
   mlir::OpBuilder *builder() { return builder_.get(); }
   mlir::MLIRContext *context() { return context_.get(); }
   void LowerPatterns();
-  void RemoveEmptyFunctions();
 
  private:
   std::unique_ptr<mlir::MLIRContext> context_;

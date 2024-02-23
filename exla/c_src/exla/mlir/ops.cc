@@ -46,7 +46,6 @@ ERL_NIF_TERM mlir_compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   (*module)->LowerPatterns();
-  (*module)->RemoveEmptyFunctions();
 
   build_options.set_num_replicas(num_replicas);
   build_options.set_num_partitions(num_partitions);
@@ -865,15 +864,12 @@ ERL_NIF_TERM mlir_map(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 
 ERL_NIF_TERM mlir_if(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 6) {
+  if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   exla::MLIRFunction** function;
   mlir::Value* pred;
-  std::vector<mlir::Value> implicit_args;
-  exla::MLIRFunction** on_true;
-  exla::MLIRFunction** on_false;
   std::vector<xla::Shape> output_shapes;
 
   if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
@@ -885,19 +881,47 @@ ERL_NIF_TERM mlir_if(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get_list<xla::Shape>(env, argv[2], output_shapes)) {
     return exla::nif::error(env, "Unable to get output shapes.");
   }
-  if (!exla::nif::get_list<mlir::Value>(env, argv[3], implicit_args)) {
-    return exla::nif::error(env, "Unable to get implicit_args.");
-  }
-  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[4], on_true)) {
-    return exla::nif::error(env, "Unable to get on_true.");
-  }
-  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[5], on_false)) {
-    return exla::nif::error(env, "Unable to get on_false.");
-  }
 
-  std::vector<mlir::Value> result = (*function)->IfOp(*pred, output_shapes, implicit_args, *on_true, *on_false);
-
+  std::vector<mlir::Value> result = (*function)->IfOp(*pred, output_shapes);
   return exla::nif::ok(env, exla::nif::make_list<mlir::Value>(env, result));
+}
+
+ERL_NIF_TERM mlir_set_if_block(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* node;
+  bool true_or_false_branch;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], node)) {
+    return exla::nif::error(env, "Unable to get node.");
+  }
+  if (!exla::nif::get(env, argv[2], &true_or_false_branch)) {
+    return exla::nif::error(env, "Unable to get true_or_false_branch.");
+  }
+
+  (*function)->SetIfOpBlock(*node, true_or_false_branch);
+  return exla::nif::ok(env);
+}
+
+ERL_NIF_TERM mlir_pop_region(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+
+  (*function)->PopRegion();
+  return exla::nif::ok(env);
 }
 
 ERL_NIF_TERM mlir_bitcast_convert(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
