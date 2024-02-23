@@ -735,12 +735,7 @@ defmodule EXLA.Defn do
 
     case state.builder do
       %Function{} ->
-        if get_token(cache) do
-          {token, results} = cond_op
-          {results, update_token(cache, token)}
-        else
-          {cond_op, cache}
-        end
+        {cond_op, cache}
 
       _ ->
         if get_token(cache) do
@@ -2545,6 +2540,24 @@ defmodule EXLA.Defn do
 
   ## Cond
 
+  defp to_if(pred, on_true, on_false, %{builder: %Function{} = function} = state, cache) do
+    {pred_op, cache} = recur_operator(pred, state, cache)
+
+    [r | _] = if_results = Value.if_op(pred_op, container_to_exla_shape(on_true))
+
+    Value.set_if_block(r, true)
+    {_, cache} = recur_composite(on_true, &cast_pred_to_u8/1, state, cache)
+
+    Value.set_if_block(r, false)
+    {_, cache} = recur_composite(on_false, &cast_pred_to_u8/1, state, cache)
+
+    Function.reset_region(function)
+
+    results = wrap_tuple_result(function, if_results, on_true)
+
+    {results, cache}
+  end
+
   defp to_if(pred, on_true, on_false, %{builder: builder} = state, cache) do
     {pred_op, cache} = recur_operator(pred, state, cache)
 
@@ -2559,33 +2572,8 @@ defmodule EXLA.Defn do
       to_if_branch(false, on_false, false_ids, true_ids, state, cache)
 
     case builder do
-      %EXLA.MLIR.Function{} = function ->
-        token_shape =
-          if get_token(cache) do
-            [EXLA.Shape.make_token_shape()]
-          else
-            []
-          end
-
-        if_results =
-          Value.if(
-            pred_op,
-            token_shape ++ container_to_exla_shape(on_true),
-            true_args,
-            true_comp,
-            false_args,
-            false_comp
-          )
-
-        results =
-          if get_token(cache) do
-            [token | results] = if_results
-            {token, wrap_tuple_result(function, results, on_true)}
-          else
-            wrap_tuple_result(function, if_results, on_true)
-          end
-
-        {results, cache}
+      %EXLA.MLIR.Function{} ->
+        raise "asdf"
 
       _ ->
         {EXLA.Op.conditional(pred_op, true_args, true_comp, false_args, false_comp), cache}
