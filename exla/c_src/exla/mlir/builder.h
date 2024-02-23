@@ -1,6 +1,8 @@
 #ifndef EXLA_MLIR_BUILDER_H_
 #define EXLA_MLIR_BUILDER_H_
 
+#include <stack>
+
 #include "../exla_nif_util.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Builders.h"
@@ -131,16 +133,10 @@ class MLIRFunction {
   std::shared_ptr<MLIRModule> module_;
   std::unique_ptr<mlir::func::FuncOp> func_;
 
-  mlir::Region *current_region;
+  std::stack<mlir::Region *> regions;
 
   void dump_mlir_module();
-  void setInsertionPointToEnd(mlir::OpBuilder *builder) {
-    if (current_region) {
-      builder->setInsertionPointToEnd(&current_region->back());
-    } else {
-      builder->setInsertionPointToEnd(&func_->getBody().back());
-    }
-  };
+  void setInsertionPoint();
 };
 
 class MLIRModule {
