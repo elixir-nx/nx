@@ -121,25 +121,18 @@ defmodule Nx.LinAlg.QR do
           {v, 2}
 
         _type ->
-          cond do
-            norm_sq_1on < eps ->
-              v = Nx.put_slice(x, [i], Nx.tensor([1], type: Nx.type(x)))
-              {v, 0}
+          v_0 = Nx.select(x_i <= 0, x_i - norm_x, -norm_sq_1on / (x_i + norm_x))
 
-            true ->
-              v_0 =
-                if x_i <= 0 do
-                  x_i - norm_x
-                else
-                  -norm_sq_1on / (x_i + norm_x)
-                end
+          norm_selector = norm_sq_1on < eps
 
-              v = Nx.put_slice(x, [i], Nx.reshape(v_0, {1}))
-              v = v / v_0
-              scale = 2 / Nx.dot(v, v)
+          replace_value =
+            Nx.select(norm_selector, Nx.tensor([1], type: x.type), Nx.reshape(v_0, {1}))
 
-              {v, scale}
-          end
+          v = Nx.put_slice(x, [i], replace_value)
+          v = v / Nx.select(norm_selector, 1, v_0)
+          scale_den = Nx.select(norm_selector, 1, Nx.dot(v, v))
+          scale = Nx.select(norm_selector, 0, 2 / scale_den)
+          {v, scale}
       end
 
     selector = Nx.iota({Nx.size(x)}) |> Nx.greater_equal(i) |> then(&Nx.outer(&1, &1))
