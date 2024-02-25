@@ -1,5 +1,5 @@
 defmodule EXLA.MLIR.ContextPool do
-  @doc false
+  @moduledoc false
   # Internal pool for MLIRContext reference management
   @behaviour NimblePool
 

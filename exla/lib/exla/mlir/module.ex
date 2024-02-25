@@ -32,10 +32,6 @@ defmodule EXLA.MLIR.Module do
     create_function(module, name, arg_shapes, return_shapes, false)
   end
 
-  # @doc """
-  # Creates a new MLIR function with the given name belonging
-  # to the given MLIR module.
-  # """
   defp create_function(
          %__MODULE__{ref: module_ref} = module,
          name,
