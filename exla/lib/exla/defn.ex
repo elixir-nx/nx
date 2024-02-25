@@ -176,7 +176,7 @@ defmodule EXLA.Defn do
     %{module: module, name: name} = subbuilder(builder, "while-pred")
     out_types = container_to_exla_shape(expr)
 
-    pred_fun = EXLA.Builder.new_mlir({module, name}, arg_shapes, out_types)
+    pred_fun = EXLA.MLIR.Module.add_function(module, name, arg_shapes, out_types)
 
     [flag | _] = EXLA.MLIR.Function.get_arguments(pred_fun)
 
@@ -188,7 +188,7 @@ defmodule EXLA.Defn do
 
     %{module: module, name: name} = subbuilder(builder, "while-body")
 
-    body_fun = EXLA.Builder.new_mlir({module, name}, arg_shapes, out_types)
+    body_fun = EXLA.MLIR.Module.add_function(module, name, arg_shapes, out_types)
 
     [_flag, token | args] = EXLA.MLIR.Function.get_arguments(body_fun)
 
@@ -583,45 +583,44 @@ defmodule EXLA.Defn do
 
           mode = options[:compiler_mode] || Application.get_env(:exla, :compiler_mode, :mlir)
 
-          {mod, builder} =
+          {mod, compile_fn} =
             case mode do
-              :xla ->
-                {EXLA.Op, EXLA.Builder.new(inspect(key))}
-
-              :mlir ->
-                comp_arg_shapes =
-                  for {i, shape} <- inputs_and_shapes, i >= used_buffers, do: shape
-
-                out_types =
-                  [outputs]
-                  |> Nx.Defn.Composite.flatten_list()
-                  |> Enum.map(fn t ->
-                    t
-                    |> Nx.devectorize()
-                    |> then(&EXLA.Shape.make_shape(&1.type, &1.shape))
-                  end)
-
-                {Value, EXLA.Builder.new_mlir(inspect(key), comp_arg_shapes, out_types)}
+              :xla -> {EXLA.Op, fn _, _, fun -> fun.(EXLA.Builder.new(inspect(key))) end}
+              :mlir -> {Value, &EXLA.MLIR.Module.new/3}
             end
 
-          outfeed =
-            outfeed
-            |> Outfeed.with_token(mod.create_token(builder))
-            |> Outfeed.add_infeeds(builder, reverse_infeeds)
+          comp_arg_shapes =
+            for {i, shape} <- inputs_and_shapes, i >= used_buffers, do: shape
 
-          expr = Nx.Defn.Composite.traverse(expr || fun.(vars), &Nx.devectorize/1)
-
-          {computation, extra, outfeed} =
-            to_computation.(builder, expr, inputs_and_shapes, outfeed)
-
-          {xla_time, executable} =
-            :timer.tc(fn ->
-              shapes = for {i, shape} <- inputs_and_shapes, i >= used_buffers, do: shape
-
-              EXLA.Computation.compile(computation, client, shapes, options)
+          out_types =
+            [outputs]
+            |> Nx.Defn.Composite.flatten_list()
+            |> Enum.map(fn t ->
+              t
+              |> Nx.devectorize()
+              |> then(&EXLA.Shape.make_shape(&1.type, &1.shape))
             end)
 
-          {:ok, {xla_time, executable, extra, %{outfeed | infeeds: []}}}
+          compile_fn.(comp_arg_shapes, out_types, fn builder ->
+            outfeed =
+              outfeed
+              |> Outfeed.with_token(mod.create_token(builder))
+              |> Outfeed.add_infeeds(builder, reverse_infeeds)
+
+            expr = Nx.Defn.Composite.traverse(expr || fun.(vars), &Nx.devectorize/1)
+
+            {computation, extra, outfeed} =
+              to_computation.(builder, expr, inputs_and_shapes, outfeed)
+
+            {xla_time, executable} =
+              :timer.tc(fn ->
+                shapes = for {i, shape} <- inputs_and_shapes, i >= used_buffers, do: shape
+
+                EXLA.Computation.compile(computation, client, shapes, options)
+              end)
+
+            {:ok, {xla_time, executable, extra, %{outfeed | infeeds: []}}}
+          end)
         end)
       end)
 
@@ -2050,11 +2049,9 @@ defmodule EXLA.Defn do
     arg_shapes = Enum.map(args, &EXLA.Shape.make_shape(&1.type, &1.shape))
 
     function =
-      EXLA.Builder.new_mlir(
-        {module, name},
-        arg_shapes,
-        [EXLA.Shape.make_shape({:pred, 8}, {})]
-      )
+      EXLA.MLIR.Module.add_function(module, name, arg_shapes, [
+        EXLA.Shape.make_shape({:pred, 8}, {})
+      ])
 
     [lhs, rhs | _] = EXLA.MLIR.Function.get_arguments(function)
 
@@ -2113,7 +2110,7 @@ defmodule EXLA.Defn do
        ) do
     %{module: module, name: name} = subbuilder(builder, Atom.to_string(op))
 
-    function = EXLA.Builder.new_mlir({module, name}, arg_shapes, out)
+    function = EXLA.MLIR.Module.add_function(module, name, arg_shapes, out)
 
     args = EXLA.MLIR.Function.get_arguments(function)
 
@@ -2143,7 +2140,7 @@ defmodule EXLA.Defn do
 
     out_type = container_to_exla_shape(expr)
 
-    function = EXLA.Builder.new_mlir({module, Atom.to_string(name)}, arg_shapes, out_type)
+    function = EXLA.MLIR.Module.add_function(module, Atom.to_string(name), arg_shapes, out_type)
     mlir_args = EXLA.MLIR.Function.get_arguments(function)
 
     arg_params = Enum.zip(args, mlir_args)
@@ -2199,7 +2196,7 @@ defmodule EXLA.Defn do
         out_types
       end
 
-    function = EXLA.Builder.new_mlir({module, name}, arg_shapes, out_types)
+    function = EXLA.MLIR.Module.add_function(module, name, arg_shapes, out_types)
 
     [arg_token | arg_params] = EXLA.MLIR.Function.get_arguments(function)
 
@@ -2268,7 +2265,9 @@ defmodule EXLA.Defn do
     out_shapes = container_to_exla_shape(expr)
 
     function =
-      EXLA.Builder.new_mlir({module, name}, [token_shape | arg_shapes], [token_shape | out_shapes])
+      EXLA.MLIR.Module.add_function(module, name, [token_shape | arg_shapes], [
+        token_shape | out_shapes
+      ])
 
     [arg_token | tail] = EXLA.MLIR.Function.get_arguments(function)
 

@@ -5,26 +5,9 @@ defmodule EXLA.Builder do
 
   alias EXLA.Computation
   alias EXLA.Op
-  alias EXLA.MLIR.Module, as: M
 
   @enforce_keys [:ref]
   defstruct [:ref, :parent, :name]
-
-  def new_mlir(module_and_name, arg_shapes, return_shape) do
-    {module, name, is_public} =
-      case module_and_name do
-        {%M{} = module, name} -> {module, name, false}
-        _name -> {M.new(), "main", true}
-      end
-
-    M.create_function(
-      module,
-      name,
-      arg_shapes,
-      return_shape,
-      is_public
-    )
-  end
 
   def new(name) when is_binary(name) do
     {:ok, ref} = EXLA.NIF.new_builder(name)

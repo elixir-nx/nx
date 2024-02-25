@@ -10,10 +10,13 @@ defmodule EXLA.Application do
       _ -> :os.set_signal(:sigchld, :default)
     end
 
-    EXLA.MLIR.Module.init()
-
     children = [
       EXLA.Logger,
+      {NimblePool,
+       worker: {EXLA.MLIR.ContextPool, :pool_state},
+       pool_size: System.schedulers_online(),
+       name: EXLA.MLIR.ContextPool,
+       lazy: true},
       EXLA.Client,
       EXLA.Defn.Lock,
       EXLA.Defn.LockedCache,

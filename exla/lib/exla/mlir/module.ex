@@ -5,43 +5,45 @@ defmodule EXLA.MLIR.Module do
 
   defstruct [:ref]
 
+  alias EXLA.MLIR.ContextPool
   alias EXLA.MLIR.Function
 
   alias EXLA.Client
   alias EXLA.Executable
   alias EXLA.Shape
 
-  @context_key {__MODULE__, :mlir_context}
-  def init do
-    :persistent_term.put(@context_key, EXLA.NIF.new_mlir_context() |> unwrap!())
-  end
-
   @doc """
   Creates a new MLIR module.
   """
-  def new() do
-    context = :persistent_term.get(@context_key, nil)
+  def new(arg_shapes, return_shape, fun) when is_function(fun, 1) do
+    ContextPool.checkout(fn context ->
+      ref = context |> EXLA.NIF.new_mlir_module() |> unwrap!()
 
-    unless context do
-      raise "No MLIR context found"
-    end
-
-    ref = EXLA.NIF.new_mlir_module(context) |> unwrap!()
-    %__MODULE__{ref: ref}
+      %__MODULE__{ref: ref}
+      |> create_function("main", arg_shapes, return_shape, true)
+      |> fun.()
+    end)
   end
 
   @doc """
-  Creates a new MLIR function with the given name belonging
-  to the given MLIR module.
+  Adds a new function to the MLIR module.
   """
-  def create_function(
-        %__MODULE__{ref: module_ref} = module,
-        name,
-        arg_shapes,
-        return_shapes,
-        is_public
-      )
-      when is_binary(name) do
+  def add_function(module, name, arg_shapes, return_shapes) do
+    create_function(module, name, arg_shapes, return_shapes, false)
+  end
+
+  # @doc """
+  # Creates a new MLIR function with the given name belonging
+  # to the given MLIR module.
+  # """
+  defp create_function(
+         %__MODULE__{ref: module_ref} = module,
+         name,
+         arg_shapes,
+         return_shapes,
+         is_public
+       )
+       when is_binary(name) do
     arg_shape_refs = Enum.map(arg_shapes, fn %Shape{ref: ref} -> ref end)
     return_shape_refs = Enum.map(return_shapes, fn %Shape{ref: ref} -> ref end)
 

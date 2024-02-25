@@ -21,8 +21,7 @@ defmodule EXLA.MLIR.CompilerTest do
     c: 128
   ]
 
-  skip = Nx.Defn.default_options()[:compiler_mode] != :mlir
-  @moduletag skip: skip
+  @moduletag :mlir
 
   describe "create_function" do
     test "creates with tuple arguments" do

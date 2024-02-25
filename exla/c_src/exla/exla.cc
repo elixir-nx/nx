@@ -86,6 +86,7 @@ static int open_resources(ErlNifEnv* env) {
   if (!exla::nif::open_resource<exla::MLIRModule*>(env, mod, "ExlaMLIRModule")) {
     return -1;
   }
+
   if (!exla::nif::open_resource<mlir::MLIRContext*>(env, mod, "MLIRContext")) {
     return -1;
   }
