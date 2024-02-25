@@ -10,6 +10,7 @@ defmodule EXLA.MLIR.ExecutableFeedTest do
   alias EXLA.MLIR.Value
   import EXLAHelpers
 
+  @moduletag :mlir
   describe "infeed/outfeed" do
     test "successfully sends to/from device asynchronously" do
       t = BinaryBuffer.from_binary(<<1::32-native>>, Shape.make_shape({:s, 32}, {}))

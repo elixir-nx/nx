@@ -76,14 +76,18 @@ static int open_resources(ErlNifEnv* env) {
   if (!exla::nif::open_resource<exla::ExlaBuffer*>(env, mod, "ExlaBuffer", free_exla_buffer)) {
     return -1;
   }
+  // MLIR
   if (!exla::nif::open_resource<exla::MLIRFunction*>(env, mod, "MLIRBlock")) {
     return -1;
   }
   if (!exla::nif::open_resource<mlir::Value>(env, mod, "MLIRValue")) {
     return -1;
   }
-  // MLIR
   if (!exla::nif::open_resource<exla::MLIRModule*>(env, mod, "ExlaMLIRModule")) {
+    return -1;
+  }
+
+  if (!exla::nif::open_resource<mlir::MLIRContext*>(env, mod, "MLIRContext")) {
     return -1;
   }
   return 1;
@@ -670,7 +674,8 @@ ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 
 static ErlNifFunc exla_funcs[] = {
     // MLIR Builder
-    {"new_mlir_module", 0, new_mlir_module},
+    {"new_mlir_context", 0, new_mlir_context},
+    {"new_mlir_module", 1, new_mlir_module},
     {"create_mlir_function", 5, create_mlir_function},
     {"get_mlir_function_arguments", 1, get_mlir_function_arguments},
     {"mlir_add", 3, mlir_add},

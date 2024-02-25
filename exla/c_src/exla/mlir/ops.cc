@@ -5,6 +5,10 @@
 
 #include "../exla_client.h"
 #include "../exla_nif_util.h"
+#include "mhlo/IR/hlo_ops.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "stablehlo/dialect/ChloOps.h"
+#include "stablehlo/dialect/StablehloOps.h"
 #include "xla/shape_util.h"
 
 // MLIR Builder Functions
@@ -45,8 +49,6 @@ ERL_NIF_TERM mlir_compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Unable to get device ID.");
   }
 
-  (*module)->LowerPatterns();
-
   build_options.set_num_replicas(num_replicas);
   build_options.set_num_partitions(num_partitions);
   build_options.set_use_spmd_partitioning(use_spmd);
@@ -63,12 +65,33 @@ ERL_NIF_TERM mlir_compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, exla::nif::make<exla::ExlaExecutable*>(env, executable));
 }
 
-ERL_NIF_TERM new_mlir_module(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM new_mlir_context(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 0) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
-  exla::MLIRModule* module = new exla::MLIRModule();
+  mlir::MLIRContext* context = new mlir::MLIRContext();
+  context->getOrLoadDialect<mlir::func::FuncDialect>();
+  context->getOrLoadDialect<mlir::stablehlo::StablehloDialect>();
+  context->getOrLoadDialect<mlir::mhlo::MhloDialect>();
+  context->getOrLoadDialect<mlir::chlo::ChloDialect>();
+
+  auto ret = exla::nif::make<mlir::MLIRContext*>(env, context);
+  return exla::nif::ok(env, ret);
+}
+
+ERL_NIF_TERM new_mlir_module(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  mlir::MLIRContext** ctx;
+
+  if (!exla::nif::get<mlir::MLIRContext*>(env, argv[0], ctx)) {
+    return exla::nif::error(env, "Unable to get context.");
+  }
+
+  exla::MLIRModule* module = new exla::MLIRModule(*ctx);
 
   return exla::nif::ok(env, exla::nif::make<exla::MLIRModule*>(env, module));
 }

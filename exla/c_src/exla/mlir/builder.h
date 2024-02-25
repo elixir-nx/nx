@@ -141,7 +141,7 @@ class MLIRFunction {
 
 class MLIRModule {
  public:
-  MLIRModule();
+  MLIRModule(mlir::MLIRContext *context);
 
   MLIRFunction *CreateFunction(
       std::string name,
@@ -151,16 +151,18 @@ class MLIRModule {
 
   mlir::ModuleOp module() { return module_.get(); }
   mlir::OpBuilder *builder() { return builder_.get(); }
-  mlir::MLIRContext *context() { return context_.get(); }
+  mlir::MLIRContext *context() { return context_; }
+
   void LowerPatterns();
 
  private:
-  std::unique_ptr<mlir::MLIRContext> context_;
+  mlir::MLIRContext *context_;
   mlir::OwningOpRef<mlir::ModuleOp> module_;
   std::unique_ptr<mlir::OpBuilder> builder_;
 };
 
-mlir::Type TypeIntToMLIRType(mlir::OpBuilder *builder, xla::PrimitiveType type_int);
+mlir::Type
+TypeIntToMLIRType(mlir::OpBuilder *builder, xla::PrimitiveType type_int);
 
 xla::PrimitiveType MLIRTypeToPrimitiveType(mlir::Type);
 }  // namespace exla

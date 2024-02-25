@@ -140,8 +140,9 @@ defmodule EXLA.Lib do
     %{module: module, name: name} = subbuilder(builder, "min-max")
 
     function =
-      EXLA.Builder.new_mlir(
-        {module, name},
+      EXLA.MLIR.Module.add_function(
+        module,
+        name,
         [
           EXLA.Shape.make_shape(type, {}),
           EXLA.Shape.make_shape(index_type, {}),

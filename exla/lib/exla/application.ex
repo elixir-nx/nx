@@ -12,6 +12,11 @@ defmodule EXLA.Application do
 
     children = [
       EXLA.Logger,
+      {NimblePool,
+       worker: {EXLA.MLIR.ContextPool, :pool_state},
+       pool_size: System.schedulers_online(),
+       name: EXLA.MLIR.ContextPool,
+       lazy: true},
       EXLA.Client,
       EXLA.Defn.Lock,
       EXLA.Defn.LockedCache,

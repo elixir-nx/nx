@@ -1115,16 +1115,10 @@ ERL_NIF_TERM MLIRFunction::ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_T
   return exla::nif::error(env, "invalid type received");
 }
 
-MLIRModule::MLIRModule() {
-  context_ = std::make_unique<mlir::MLIRContext>();
-
-  context_->loadDialect<mlir::func::FuncDialect>();
-  context_->loadDialect<mlir::stablehlo::StablehloDialect>();
-  context_->loadDialect<mlir::mhlo::MhloDialect>();
-  context_->loadDialect<mlir::chlo::ChloDialect>();
-
-  module_ = mlir::OwningOpRef<mlir::ModuleOp>(mlir::ModuleOp::create(mlir::UnknownLoc::get(context_.get())));
-  builder_ = std::make_unique<mlir::OpBuilder>(context_.get());
+MLIRModule::MLIRModule(mlir::MLIRContext *context) {
+  context_ = context;
+  module_ = mlir::OwningOpRef<mlir::ModuleOp>(mlir::ModuleOp::create(mlir::UnknownLoc::get(context_)));
+  builder_ = std::make_unique<mlir::OpBuilder>(context_);
   builder_->setInsertionPointToStart(module_->getBody());
 }
 

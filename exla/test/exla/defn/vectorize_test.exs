@@ -159,7 +159,10 @@ defmodule EXLA.Defn.VectorizeTest do
 
   describe "cond" do
     deftransformp send_value(val, opts \\ []) do
-      Nx.Defn.Kernel.hook(val, &send(opts[:pid] || self(), {&1, clause: opts[:clause]}))
+      Nx.Defn.Kernel.hook(
+        val,
+        &send(opts[:pid] || self(), {:vectorization_test, &1, clause: opts[:clause]})
+      )
     end
 
     defn vectorized_if(pred, then, other, opts \\ []) do
@@ -183,11 +186,11 @@ defmodule EXLA.Defn.VectorizeTest do
 
       assert_equal(vectorized_if(pred, 1, 2, pid: self()), Nx.vectorize(~V[2 1 2], :pred))
 
-      assert_received {t, clause: "if"}
+      assert_received {:vectorization_test, t, clause: "if"}
       assert_equal(t, Nx.tensor(1))
-      assert_received {t, clause: "else"}
+      assert_received {:vectorization_test, t, clause: "else"}
       assert_equal(t, Nx.tensor(2))
-      refute_received _
+      refute_received {:vectorization_test, _, _}
     end
 
     test "simple cond" do
@@ -200,11 +203,11 @@ defmodule EXLA.Defn.VectorizeTest do
         Nx.vectorize(~V[1 3 3], :pred)
       )
 
-      assert_received {t, clause: "clause_1"}
+      assert_received {:vectorization_test, t, clause: "clause_1"}
       assert_equal(t, Nx.tensor(1))
-      assert_received {t, clause: "clause_3"}
+      assert_received {:vectorization_test, t, clause: "clause_3"}
       assert_equal(t, Nx.tensor(3))
-      refute_received _
+      refute_received {:vectorization_test, _, _}
     end
 
     test "if with container result" do
@@ -228,11 +231,11 @@ defmodule EXLA.Defn.VectorizeTest do
                 ], pred: 3, x: 3)
       })
 
-      assert_received {t, clause: "if"}
+      assert_received {:vectorization_test, t, clause: "if"}
       assert_equal(t, {Nx.tensor(1), Nx.tensor(2), Nx.tensor(3)})
-      assert_received {t, clause: "else"}
+      assert_received {:vectorization_test, t, clause: "else"}
       assert_equal(t, {Nx.tensor(7), Nx.tensor(8), Nx.vectorize(Nx.tensor([9, 10, 11]), :x)})
-      refute_received _
+      refute_received {:vectorization_test, _, _}
     end
 
     defn cond4(p1, c1, p2, c2, p3, c3, c4, opts \\ []) do
@@ -251,9 +254,9 @@ defmodule EXLA.Defn.VectorizeTest do
       assert = fn res, val, clause ->
         t = Nx.tensor(val)
         assert_equal(Nx.vectorize(Nx.new_axis(t, 0), :pred), res)
-        assert_received {rec_t, clause: ^clause}
+        assert_received {:vectorization_test, rec_t, clause: ^clause}
         assert_equal(rec_t, t)
-        refute_received _
+        refute_received {:vectorization_test, _, _}
       end
 
       assert.(cond4(t, 10, 0, 20, 0, 30, 40, pid: self()), 10, "c1")

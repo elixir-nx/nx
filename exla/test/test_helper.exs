@@ -26,8 +26,15 @@ if client.platform == :host and client.device_count == 1 and System.schedulers_o
   )
 end
 
+exclude_mlir =
+  if compiler_mode != :mlir do
+    [:mlir]
+  else
+    []
+  end
+
 ExUnit.start(
-  exclude: [:platform, :integration] ++ exclude_multi_device ++ exclude,
+  exclude: [:platform, :integration] ++ exclude_multi_device ++ exclude ++ exclude_mlir,
   include: [platform: String.to_atom(target)],
   assert_receive_timeout: 1000
 )
