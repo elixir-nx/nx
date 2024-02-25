@@ -151,16 +151,7 @@ class MLIRModule {
 
   mlir::ModuleOp module() { return module_.get(); }
   mlir::OpBuilder *builder() { return builder_.get(); }
-  mlir::MLIRContext *context() {
-    if (!context_) {
-      throw std::runtime_error("invalid context");
-    }
-    return context_;
-  }
-
-  void setContext(mlir::MLIRContext *context) {
-    context_ = context;
-  }
+  mlir::MLIRContext *context() { return context_; }
 
   void LowerPatterns();
 

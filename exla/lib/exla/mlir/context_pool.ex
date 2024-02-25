@@ -1,4 +1,6 @@
 defmodule EXLA.MLIR.ContextPool do
+  @doc false
+  # Internal pool for MLIRContext reference management
   @behaviour NimblePool
 
   def checkout(fun) when is_function(fun, 1) do
@@ -17,13 +19,13 @@ defmodule EXLA.MLIR.ContextPool do
   end
 
   @impl NimblePool
-  # Transfer the port to the caller
   def handle_checkout(:checkout, _from, context, pool_state) do
     {:ok, context, context, pool_state}
   end
 
   @impl NimblePool
   def handle_checkin(:ok, _from, context, pool_state) do
+    # We just keep the references around and let them die out upon worker termination/GC
     {:ok, context, pool_state}
   end
 
