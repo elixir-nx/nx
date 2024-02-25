@@ -1309,9 +1309,6 @@ void MLIRModule::LowerPatterns() {
   mlir::stablehlo::populateStablehloToHloPatterns(&patterns, &converter, context());
 
   mlir::applyPartialConversion(module(), target, std::move(patterns));
-
-  target.addLegalDialect<mlir::stablehlo::StablehloDialect>();
-  target.addLegalDialect<mlir::func::FuncDialect>();
 }
 
 mlir::Value MLIRFunction::InfeedOp(mlir::Value token, xla::Shape *shape) {
