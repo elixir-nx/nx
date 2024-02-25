@@ -70,7 +70,7 @@ ERL_NIF_TERM new_mlir_context(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
     return exla::nif::error(env, "Bad argument count.");
   }
 
-  mlir::MLIRContext* context = new mlir::MLIRContext(mlir::MLIRContext::Threading::DISABLED);
+  mlir::MLIRContext* context = new mlir::MLIRContext();
   context->getOrLoadDialect<mlir::func::FuncDialect>();
   context->getOrLoadDialect<mlir::stablehlo::StablehloDialect>();
   context->getOrLoadDialect<mlir::mhlo::MhloDialect>();
