@@ -1,7 +1,3 @@
-if System.get_env("DEBUG", "false") in ["true", "1"] do
-  IO.gets("Press enter to continue... - #{System.pid()}")
-end
-
 target = System.get_env("EXLA_TARGET", "host")
 client = EXLAHelpers.client()
 
