@@ -88,6 +88,7 @@ defmodule EXLA.Defn.Stream do
 
       data_and_shapes =
         if client.platform == :host do
+          # TODO: Remove first-clause once EXLA.OP is removed
           shapes =
             case send_shape do
               %EXLA.Shape{dtype: {:tuple, shapes}} -> shapes
