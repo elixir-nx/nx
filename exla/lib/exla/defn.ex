@@ -2547,14 +2547,15 @@ defmodule EXLA.Defn do
         out_shape
       end
 
-    [node | _] = if_results = Value.if_op(pred_op, result_shapes)
+    {if_results, true_region, false_region} = Value.if_op(pred_op, result_shapes)
 
-    cache = to_mlir_if_branch(true, node, on_true, true_ids, state, cache)
+    cache = to_mlir_if_branch(true_region, on_true, true_ids, state, cache)
 
-    cache = to_mlir_if_branch(false, node, on_false, false_ids, state, cache)
+    cache = to_mlir_if_branch(false_region, on_false, false_ids, state, cache)
 
     if in_token do
-      {wrap_tuple_result(function, tl(if_results), on_true), update_token(cache, node)}
+      [token | results] = if_results
+      {wrap_tuple_result(function, results, on_true), update_token(cache, token)}
     else
       {wrap_tuple_result(function, if_results, on_true), cache}
     end
@@ -2631,10 +2632,10 @@ defmodule EXLA.Defn do
     end)
   end
 
-  defp to_mlir_if_branch(bool, node, expr, current_ids, state, cache) do
+  defp to_mlir_if_branch(region, expr, current_ids, state, cache) do
     comp_state = %{state | scope_ids: current_ids}
 
-    Value.set_if_block(node, bool)
+    Function.push_region(state.builder, region)
     {res, res_cache} = recur_composite(expr, &cast_pred_to_u8/1, comp_state, cache)
 
     if token = get_token(cache) do

@@ -9,6 +9,7 @@ defmodule EXLA.MLIR.Value do
   defstruct [:ref, :function]
 
   alias __MODULE__, as: Value
+  alias EXLA.MLIR.Region
   alias EXLA.MLIR.Function
 
   @bin_ops [:add, :subtract, :multiply, :divide, :pow, :min] ++
@@ -559,7 +560,7 @@ defmodule EXLA.MLIR.Value do
   end
 
   def if_op(%Value{} = pred, [%EXLA.Shape{} | _] = output_shapes) do
-    refs =
+    {refs, true_region, false_region} =
       EXLA.NIF.mlir_if(
         pred.function.ref,
         pred.ref,
@@ -567,13 +568,9 @@ defmodule EXLA.MLIR.Value do
       )
       |> unwrap!()
 
-    Enum.map(refs, &%Value{ref: &1, function: pred.function})
-  end
+    results = Enum.map(refs, &%Value{ref: &1, function: pred.function})
 
-  def set_if_block(%Value{} = node, branch) do
-    node.function.ref
-    |> EXLA.NIF.mlir_set_if_block(node.ref, if(branch, do: 1, else: 0))
-    |> unwrap!()
+    {results, %Region{ref: true_region}, %Region{ref: false_region}}
   end
 
   def infeed(%Value{} = token, %EXLA.Shape{} = shape) do

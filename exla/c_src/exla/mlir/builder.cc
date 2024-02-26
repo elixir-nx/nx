@@ -917,7 +917,7 @@ mlir::Value MLIRFunction::MapOp(
   return map_op;
 }
 
-std::vector<mlir::Value> MLIRFunction::IfOp(mlir::Value pred, std::vector<xla::Shape> output_shapes) {
+std::pair<std::vector<mlir::Value>, std::pair<mlir::Region *, mlir::Region *>> MLIRFunction::IfOp(mlir::Value pred, std::vector<xla::Shape> output_shapes) {
   auto builder = module_->builder();
   setInsertionPoint();
 
@@ -935,16 +935,17 @@ std::vector<mlir::Value> MLIRFunction::IfOp(mlir::Value pred, std::vector<xla::S
 
   mlir::Operation::result_range result_range = if_op.getResults();
   std::vector<mlir::Value> results(result_range.begin(), result_range.end());
-  return results;
+
+  mlir::Region *true_region = &if_op.getTrueBranch();
+  true_region->emplaceBlock();
+  mlir::Region *false_region = &if_op.getFalseBranch();
+  false_region->emplaceBlock();
+
+  return std::make_pair(results, std::make_pair(true_region, false_region));
 }
 
-void MLIRFunction::SetIfOpBlock(mlir::Value node, bool true_or_false) {
-  auto builder = module_->builder();
-  mlir::stablehlo::IfOp op = node.getDefiningOp<mlir::stablehlo::IfOp>();
-
-  mlir::Region &region = true_or_false ? op.getTrueBranch() : op.getFalseBranch();
-  region.emplaceBlock();
-  regions.push(&region);
+void MLIRFunction::PushRegion(mlir::Region *region) {
+  regions.push(std::move(region));
   setInsertionPoint();
 }
 
