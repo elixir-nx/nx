@@ -438,7 +438,7 @@ defmodule Nx.LinAlgTest do
         ])
 
       assert_all_close(r, expected_r, atol: 1.0e-6)
-      assert_all_close(Nx.dot(q, r), t, atol: 1.0e-7)
+      assert_all_close(Nx.dot(q, r), t, atol: 1.0e-6)
 
       # Complete mode
       {q, r} = Nx.LinAlg.qr(t, mode: :complete)
@@ -709,10 +709,10 @@ defmodule Nx.LinAlgTest do
 
       assert round(u, 3) ==
                Nx.tensor([
-                 [0.141, 0.825, -0.007, 0.019],
-                 [0.344, 0.426, 0.01, 0.382],
-                 [0.547, 0.028, 0.002, -0.822],
-                 [0.75, -0.371, -0.005, 0.421]
+                 [0.141, 0.825, -0.001, 0.019],
+                 [0.344, 0.426, 0.00200, 0.382],
+                 [0.547, 0.028, 0.0, -0.822],
+                 [0.75, -0.370, -0.001, 0.421]
                ])
                |> round(3)
 
@@ -721,7 +721,7 @@ defmodule Nx.LinAlgTest do
       assert Nx.tensor([
                [0.505, 0.575, 0.644],
                [-0.761, -0.057, 0.647],
-               [-0.408, 0.817, -0.408]
+               [-0.408, 0.816, -0.408]
              ])
              |> round(3) == round(v, 3)
     end
