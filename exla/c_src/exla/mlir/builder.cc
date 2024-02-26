@@ -1311,17 +1311,26 @@ void MLIRModule::LowerPatterns() {
   mlir::applyPartialConversion(module(), target, std::move(patterns));
 }
 
-mlir::Value MLIRFunction::InfeedOp(mlir::Value token, xla::Shape *shape) {
+std::pair<mlir::Value, std::vector<mlir::Value>> MLIRFunction::InfeedOp(mlir::Value token, std::vector<xla::Shape> shapes) {
   auto builder = module_->builder();
   setInsertionPoint();
 
-  auto span = shape->dimensions();
-  std::vector<tsl::int64> dims(span.begin(), span.end());
-  mlir::Type result_type = GetMLIRFunctionType(builder, shape);
+  std::vector<mlir::Type> types;
+  for (auto shape : shapes) {
+    types.push_back(GetMLIRFunctionType(builder, &shape));
+  }
+  types.push_back(token.getType());
 
-  auto infeed_op = builder->create<mlir::stablehlo::InfeedOp>(builder->getUnknownLoc(), mlir::TypeRange({result_type, token.getType()}), token);
-  auto tuple = module_->builder()->create<mlir::stablehlo::TupleOp>(module_->builder()->getUnknownLoc(), infeed_op.getResults());
-  return tuple;
+  auto infeed_op = builder->create<mlir::stablehlo::InfeedOp>(builder->getUnknownLoc(), mlir::TypeRange(types), token);
+
+  mlir::Operation::result_range results = infeed_op.getResults();
+
+  std::vector<mlir::Value> output(results.begin(), results.end());
+
+  mlir::Value out_token = output.back();
+  output.pop_back();
+
+  return std::make_pair(out_token, output);
 }
 
 mlir::Value MLIRFunction::OutfeedOp(std::vector<mlir::Value> inputs, mlir::Value token) {

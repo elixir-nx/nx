@@ -135,7 +135,7 @@ defmodule EXLA.Defn do
   end
 
   defp to_stream_computation(
-         client,
+         _client,
          input_length,
          acc_length,
          %Function{} = builder,
@@ -145,13 +145,11 @@ defmodule EXLA.Defn do
          options
        ) do
     %{token: root_token, infeeds: []} = outfeed
-    %{platform: platform} = client
 
     {input_shapes, used_shapes} = Enum.split_while(used_shapes, fn {i, _} -> i < input_length end)
 
     # Get all input indexes and shape
     input_indexes = Enum.map(input_shapes, &elem(&1, 0))
-    input_shape = EXLA.Shape.make_tuple_shape(Enum.map(input_shapes, &elem(&1, 1)))
 
     # Drop all accumulator entries from used_shapes as we will handle it separately.
     {acc_shapes, used_shapes} = Enum.split(used_shapes, acc_length)
@@ -194,22 +192,10 @@ defmodule EXLA.Defn do
 
     {acc, constant} = Enum.split(args, acc_length)
 
-    # EXLA on host does not support tuples, so we emit multiple infeed operations.
-    {input_params, token} =
-      if platform == :host do
-        Enum.map_reduce(input_shapes, token, fn {pos, shape}, token ->
-          infeed = Value.infeed(token, shape)
-          {{pos, Value.get_tuple_element(infeed, 0)}, Value.get_tuple_element(infeed, 1)}
-        end)
-      else
-        infeed = Value.infeed(token, input_shape)
-        input = Value.get_tuple_element(infeed, 0)
-        token = Value.get_tuple_element(infeed, 1)
+    {indices, input_shape} = Enum.unzip(input_shapes)
+    {token, input} = Value.infeed(token, input_shape)
 
-        {Enum.with_index(input_shapes, fn {pos, _shape}, i ->
-           {pos, Value.get_tuple_element(input, i)}
-         end), token}
-      end
+    input_params = Enum.zip(indices, input)
 
     {%Outfeed{token: token} = outfeed, acc} =
       case expr do
@@ -243,10 +229,13 @@ defmodule EXLA.Defn do
       end
 
     # Emit the stream hook to signal loop output
+    {token, [flag]} = Value.infeed(token, flag_shape)
+
     [%{function: body} | _] =
       Value.variadic_return(
         [
-          Value.infeed(token, flag_shape),
+          flag,
+          token,
           acc,
           constant
         ],
@@ -255,11 +244,9 @@ defmodule EXLA.Defn do
 
     args = EXLA.MLIR.Function.get_arguments(builder)
 
-    init =
-      Value.tuple(builder, [
-        Value.infeed(root_token, flag_shape)
-        | args
-      ])
+    {token, [flag]} = Value.infeed(root_token, flag_shape)
+
+    init = Value.tuple(builder, [flag, token | args])
 
     [_flag, token | results] = Value.while(pred, body, init)
 

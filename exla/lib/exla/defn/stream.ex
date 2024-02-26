@@ -88,7 +88,13 @@ defmodule EXLA.Defn.Stream do
 
       data_and_shapes =
         if client.platform == :host do
-          %EXLA.Shape{dtype: {:tuple, shapes}} = send_shape
+          # TODO: Remove first-clause once EXLA.OP is removed
+          shapes =
+            case send_shape do
+              %EXLA.Shape{dtype: {:tuple, shapes}} -> shapes
+              l when is_list(l) -> l
+            end
+
           Enum.zip(buffers, shapes)
         else
           [{buffers, send_shape}]

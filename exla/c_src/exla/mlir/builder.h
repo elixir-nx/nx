@@ -115,7 +115,7 @@ class MLIRFunction {
   std::vector<mlir::Value> IfOp(mlir::Value pred, std::vector<xla::Shape> output_shape);
   void SetIfOpBlock(mlir::Value node, bool true_or_false_branch);
   ERL_NIF_TERM ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM value_ptr, std::optional<std::vector<int64_t>> dims = std::nullopt);
-  mlir::Value InfeedOp(mlir::Value token, xla::Shape *shape);
+  std::pair<mlir::Value, std::vector<mlir::Value>> InfeedOp(mlir::Value token, std::vector<xla::Shape> shapes);
   mlir::Value OutfeedOp(std::vector<mlir::Value> inputs, mlir::Value token);
   std::vector<mlir::Value> CallOp(std::vector<mlir::Value> inputs, MLIRFunction *computation);
   std::vector<mlir::Value> WhileOp(MLIRFunction *pred, MLIRFunction *body, std::vector<mlir::Value> initial);
