@@ -9,31 +9,6 @@ defmodule EXLA.ExecutableTest do
   alias EXLA.MLIR.Value
   import EXLAHelpers
 
-  # MLIR actually allows for more than just tuples at the root
-  @tag skip: :mlir
-  test "raises on invalid tuples" do
-    t1 = BinaryBuffer.from_binary(<<1::32-native>>, Shape.make_shape({:s, 32}, {}))
-    t2 = BinaryBuffer.from_binary(<<2::32-native>>, Shape.make_shape({:s, 32}, {}))
-
-    assert_raise ArgumentError, ~r"can only compile computations with a tuple at the root", fn ->
-      run_one(
-        [t1, t2],
-        [],
-        Shape.make_tuple_shape([
-          Shape.make_tuple_shape([t1.shape]),
-          Shape.make_tuple_shape([t2.shape])
-        ]),
-        fn b, x, y ->
-          mod().tuple(b, [mod().tuple(b, [x]), mod().tuple(b, [y])])
-        end
-      )
-    end
-
-    assert_raise ArgumentError, ~r"can only compile computations with a tuple at the root", fn ->
-      run_one([t1, t2], [], fn _b, x, y -> add(x, y) end)
-    end
-  end
-
   describe "run" do
     test "with no inputs and default options" do
       assert [a = %DeviceBuffer{}] =
