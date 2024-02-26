@@ -1,7 +1,6 @@
 defmodule EXLA.MLIR.NxLinAlgDoctestTest do
   use EXLA.Case, async: true
 
-  @moduletag :mlir
   @invalid_type_error_doctests [svd: 2, pinv: 2, matrix_rank: 2]
   @function_clause_error_doctests [
     norm: 2,

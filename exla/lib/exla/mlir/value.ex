@@ -604,8 +604,14 @@ defmodule EXLA.MLIR.Value do
   def while(
         %Function{ref: pred_ref},
         %Function{ref: body_ref},
-        %Value{function: function} = initial
+        initial
       ) do
+    function =
+      case initial do
+        [%Value{function: function} | _] -> function
+        %Value{function: function} -> function
+      end
+
     refs =
       EXLA.NIF.mlir_while(function.ref, pred_ref, body_ref, flatten_tuples(initial)) |> unwrap!()
 
