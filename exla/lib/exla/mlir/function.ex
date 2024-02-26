@@ -17,8 +17,11 @@ defmodule EXLA.MLIR.Function do
     Enum.map(arg_refs, fn arg -> %Value{ref: arg, function: function} end)
   end
 
-  def push_region(%Function{ref: ref}, %Region{ref: region}) do
-    EXLA.NIF.mlir_push_region(ref, region) |> unwrap!()
+  def push_region(%Function{ref: ref} = function, %Region{ref: region}) do
+    ref
+    |> EXLA.NIF.mlir_push_region(region)
+    |> unwrap!()
+    |> Enum.map(&%Value{function: function, ref: &1})
   end
 
   def pop_region(%Function{ref: ref}) do

@@ -164,6 +164,7 @@ defmodule EXLA.ExecutableFeedTest do
   alias EXLA.Client
   alias EXLA.Op
   alias EXLA.Shape
+  alias EXLA.MLIR.Function
   alias EXLA.MLIR.Value
   import EXLAHelpers
 
@@ -217,39 +218,26 @@ defmodule EXLA.ExecutableFeedTest do
                Task.async(fn ->
                  run_one([], [], {token_shape, t.shape}, fn b ->
                    if mod() == Value do
-                     condition =
-                       EXLA.MLIR.Module.add_function(
-                         b.module,
-                         "condition",
-                         [token_shape, t.shape],
-                         [
-                           token_shape,
-                           Shape.make_shape({:pred, 8}, {})
-                         ]
-                       )
-
-                     [_token, val] = EXLA.MLIR.Function.get_arguments(condition)
-                     zero = Value.constant_r0(condition, 0, {:s, 32})
-                     Value.variadic_return([Value.not_equal(condition, val, zero)])
-
-                     body =
-                       EXLA.MLIR.Module.add_function(b.module, "body", [token_shape, t.shape], [
-                         token_shape,
-                         t.shape
-                       ])
-
-                     [token, val] = EXLA.MLIR.Function.get_arguments(body)
-
-                     token = Value.outfeed(Value.add(body, val, val), token)
-
-                     {token, [input]} = Value.infeed(token, t.shape)
-
-                     Value.variadic_return([token, input])
-
                      token = Value.create_token(b)
-                     {token, [input]} = Value.infeed(token, t.shape)
 
-                     [_token, result] = Value.while(condition, body, [token, input])
+                     {token, [val]} = Value.infeed(token, t.shape)
+
+                     {[_token, result], condition_region, body_region} =
+                       Value.while(b, [token, val])
+
+                     [_token, val] = Function.push_region(b, condition_region)
+                     zero = Value.constant_r0(b, 0, {:s, 32})
+                     Value.variadic_return([Value.not_equal(b, val, zero)])
+                     Function.pop_region(b)
+
+                     [body_token, val] = Function.push_region(b, body_region)
+
+                     body_token = Value.outfeed(Value.add(b, val, val), body_token)
+                     {body_token, [input]} = Value.infeed(body_token, t.shape)
+
+                     Value.variadic_return([body_token, input])
+                     Function.pop_region(b)
+
                      Value.tuple(b, [result])
                    else
                      tuple_shape = Shape.make_tuple_shape([t.shape, Shape.make_token_shape()])
