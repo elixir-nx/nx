@@ -183,9 +183,18 @@ defmodule EXLA.ExecutableFeedTest do
                Task.async(fn ->
                  run_one([], [], Shape.make_tuple_shape([Shape.make_token_shape()]), fn b ->
                    token = mod().create_token(b)
-                   val_and_token = mod().infeed(token, t.shape)
-                   val = mod().get_tuple_element(val_and_token, 0)
-                   new_token = mod().get_tuple_element(val_and_token, 1)
+
+                   {new_token, val} =
+                     if mod() == Value do
+                       {new_token, [val]} = Value.infeed(token, t.shape)
+                       {new_token, val}
+                     else
+                       val_and_token = Op.infeed(token, t.shape)
+                       val = Op.get_tuple_element(val_and_token, 1)
+                       new_token = Op.get_tuple_element(val_and_token, 0)
+                       {new_token, val}
+                     end
+
                    outfeed_val = add(val, val)
                    _outfeed_token = mod().outfeed(outfeed_val, new_token)
                    mod().tuple(b, [add(outfeed_val, val)])
@@ -233,16 +242,12 @@ defmodule EXLA.ExecutableFeedTest do
 
                      token = Value.outfeed(Value.add(body, val, val), token)
 
-                     infeed = Value.infeed(token, t.shape)
-                     input = Value.get_tuple_element(infeed, 0)
-                     token = Value.get_tuple_element(infeed, 1)
+                     {token, [input]} = Value.infeed(token, t.shape)
 
                      Value.variadic_return([token, input])
 
                      token = Value.create_token(b)
-                     infeed = Value.infeed(token, t.shape)
-                     input = Value.get_tuple_element(infeed, 0)
-                     token = Value.get_tuple_element(infeed, 1)
+                     {token, [input]} = Value.infeed(token, t.shape)
 
                      [_token, result] = Value.while(condition, body, [token, input])
                      Value.tuple(b, [result])

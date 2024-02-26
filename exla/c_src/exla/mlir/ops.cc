@@ -1497,7 +1497,7 @@ ERL_NIF_TERM mlir_infeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   exla::MLIRFunction** function;
   mlir::Value* token;
-  xla::Shape* shape;
+  std::vector<xla::Shape> shapes;
 
   if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
     return exla::nif::error(env, "Unable to get function.");
@@ -1505,13 +1505,16 @@ ERL_NIF_TERM mlir_infeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get<mlir::Value>(env, argv[1], token)) {
     return exla::nif::error(env, "Unable to get token.");
   }
-  if (!exla::nif::get<xla::Shape>(env, argv[2], shape)) {
-    return exla::nif::error(env, "Unable to get shape.");
+  if (!exla::nif::get_list<xla::Shape>(env, argv[2], shapes)) {
+    return exla::nif::error(env, "Unable to get shapes.");
   }
 
-  mlir::Value infeed = (*function)->InfeedOp(*token, shape);
+  std::pair<mlir::Value, std::vector<mlir::Value>> infeed = (*function)->InfeedOp(*token, shapes);
 
-  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, infeed));
+  ERL_NIF_TERM out_token = exla::nif::make<mlir::Value>(env, infeed.first);
+  ERL_NIF_TERM results = exla::nif::make_list<mlir::Value>(env, infeed.second);
+
+  return exla::nif::ok(env, enif_make_tuple2(env, out_token, results));
 }
 
 ERL_NIF_TERM mlir_outfeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {

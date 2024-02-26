@@ -576,10 +576,15 @@ defmodule EXLA.MLIR.Value do
     |> unwrap!()
   end
 
-  def infeed(%Value{function: function} = token, %EXLA.Shape{} = shape) do
-    ref = EXLA.NIF.mlir_infeed(function.ref, token.ref, shape.ref) |> unwrap!()
+  def infeed(%Value{} = token, %EXLA.Shape{} = shape) do
+    infeed(token, [shape])
+  end
 
-    %Value{token | ref: ref}
+  def infeed(%Value{function: function} = token, [%EXLA.Shape{} | _] = shapes) do
+    {token_ref, result_refs} =
+      EXLA.NIF.mlir_infeed(function.ref, token.ref, Enum.map(shapes, & &1.ref)) |> unwrap!()
+
+    {%Value{token | ref: token_ref}, Enum.map(result_refs, &%Value{token | ref: &1})}
   end
 
   def outfeed(%Value{} = input, token), do: outfeed([input], token)
