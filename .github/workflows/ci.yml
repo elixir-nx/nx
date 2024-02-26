@@ -21,7 +21,7 @@ jobs:
           - elixir: "1.15.4"
             working_directory: "exla"
             otp: "25.3"
-            use_mlir: true
+            use_mlir: mlir
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}

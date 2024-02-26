@@ -3,6 +3,7 @@ defmodule EXLA.BuilderTest do
 
   alias EXLA.{Builder, Computation, Op}
 
+  @moduletag skip: :mlir
   test "new/1 succeeds in creating a new builder" do
     assert b = %Builder{} = Builder.new("builder")
     assert b.name == "builder"

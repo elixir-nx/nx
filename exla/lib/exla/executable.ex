@@ -83,13 +83,15 @@ defmodule EXLA.Executable do
     unwrap!(data)
   end
 
-  defp decompose_output({data, device_id}, shape, client) do
+  defp decompose_output({data, device_id}, shapes, client) do
     shapes =
-      case shape do
-        %Shape{dtype: {:tuple, shapes}} -> shapes
-        shapes when is_list(shapes) -> shapes
-        %Shape{} -> [shape]
-      end
+      Enum.flat_map(List.wrap(shapes), fn shape ->
+        case shape do
+          %Shape{dtype: {:tuple, shapes}} -> shapes
+          shapes when is_list(shapes) -> shapes
+          %Shape{} -> [shape]
+        end
+      end)
 
     Enum.zip_with(data, shapes, fn
       buf, subshape when is_reference(buf) ->

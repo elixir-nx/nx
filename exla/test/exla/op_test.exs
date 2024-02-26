@@ -3,6 +3,7 @@ defmodule EXLA.OpTest do
 
   alias EXLA.{Builder, Shape, Op}
 
+  @moduletag skip: :mlir
   test "parameter/4 successfully creates op" do
     builder = Builder.new("test")
     shape = Shape.make_shape({:s, 32}, {1, 1})

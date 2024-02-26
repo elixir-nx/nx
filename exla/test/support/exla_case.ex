@@ -11,6 +11,10 @@ defmodule EXLA.Case do
     end
   end
 
+  def compiler_mode do
+    Application.get_env(:exla, :compiler_mode) || Nx.Defn.default_options()[:compiler_mode]
+  end
+
   defmacro assert_equal(left, right) do
     # Assert against binary backend tensors to show diff on failure
     quote do

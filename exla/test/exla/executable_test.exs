@@ -1,29 +1,19 @@
 defmodule EXLA.ExecutableTest do
   use ExUnit.Case, async: true
 
-  alias EXLA.{BinaryBuffer, DeviceBuffer, Executable, Op, Shape}
+  alias EXLA.BinaryBuffer
+  alias EXLA.DeviceBuffer
+  alias EXLA.Executable
+  alias EXLA.Op
+  alias EXLA.Shape
+  alias EXLA.MLIR.Value
   import EXLAHelpers
-
-  test "raises on invalid tuples" do
-    t1 = BinaryBuffer.from_binary(<<1::32-native>>, Shape.make_shape({:s, 32}, {}))
-    t2 = BinaryBuffer.from_binary(<<2::32-native>>, Shape.make_shape({:s, 32}, {}))
-
-    assert_raise ArgumentError, ~r"can only compile computations with a tuple at the root", fn ->
-      run_one([t1, t2], [], fn b, x, y ->
-        Op.tuple(b, [Op.tuple(b, [x]), Op.tuple(b, [y])])
-      end)
-    end
-
-    assert_raise ArgumentError, ~r"can only compile computations with a tuple at the root", fn ->
-      run_one([t1, t2], [], fn _b, x, y -> Op.add(x, y) end)
-    end
-  end
 
   describe "run" do
     test "with no inputs and default options" do
       assert [a = %DeviceBuffer{}] =
-               run_one([], fn b ->
-                 Op.tuple(b, [Op.constant_r0(b, 1, {:s, 32})])
+               run_one([], [], Shape.make_shape({:s, 32}, {}), fn b ->
+                 mod().tuple(b, [mod().constant_r0(b, 1, {:s, 32})])
                end)
 
       assert <<1::32-native>> == DeviceBuffer.read(a)
@@ -34,7 +24,9 @@ defmodule EXLA.ExecutableTest do
       t2 = BinaryBuffer.from_binary(<<1::32-native>>, Shape.make_shape({:s, 32}, {}))
 
       assert [a = %DeviceBuffer{}] =
-               run_one([t1, t2], fn b, x, y -> Op.tuple(b, [Op.add(x, y)]) end)
+               run_one([t1, t2], [], Shape.make_tuple_shape([t1.shape]), fn b, x, y ->
+                 mod().tuple(b, [add(x, y)])
+               end)
 
       assert <<2::32-native>> == DeviceBuffer.read(a)
     end
@@ -57,13 +49,13 @@ defmodule EXLA.ExecutableTest do
         )
 
       assert [%DeviceBuffer{}] =
-               run_one([t1, t2], [], fn b, x, y ->
-                 Op.tuple(b, [Op.add(x, y)])
+               run_one([t1, t2], [], t1.shape, fn b, x, y ->
+                 mod().tuple(b, [add(x, y)])
                end)
 
       assert [%DeviceBuffer{}] =
-               run_one([t1, t2], [], fn b, x, y ->
-                 Op.tuple(b, [Op.add(x, y)])
+               run_one([t1, t2], [], Shape.make_tuple_shape([t1.shape]), fn b, x, y ->
+                 mod().tuple(b, [add(x, y)])
                end)
 
       assert DeviceBuffer.read(t1) == <<1::32-native>>
@@ -74,7 +66,11 @@ defmodule EXLA.ExecutableTest do
       t1 = BinaryBuffer.from_binary(<<1::32-native>>, Shape.make_shape({:s, 32}, {}))
       t2 = BinaryBuffer.from_binary(<<1::32-native>>, Shape.make_shape({:s, 32}, {}))
 
-      exec = compile([t1.shape, t2.shape], fn b, x, y -> Op.tuple(b, [Op.add(x, y)]) end)
+      exec =
+        compile([t1.shape, t2.shape], [], [t1.shape], fn b, x, y ->
+          mod().tuple(b, [add(x, y)])
+        end)
+
       assert [[t3 = %DeviceBuffer{}]] = Executable.run(exec, [[t1, t2]])
       assert [[a = %DeviceBuffer{}]] = Executable.run(exec, [[t3, t3]])
 
@@ -93,7 +89,7 @@ defmodule EXLA.ExecutableTest do
       t2 = BinaryBuffer.from_binary(<<2::32-native>>, Shape.make_shape({:s, 32}, {}))
 
       assert [a = %DeviceBuffer{}] =
-               run_one([t1, t2], fn b, x, y -> Op.tuple(b, [Op.add(x, y)]) end)
+               run_one([t1, t2], [], {t1.shape}, fn b, x, y -> mod().tuple(b, [add(x, y)]) end)
 
       assert <<3::32-native>> == DeviceBuffer.read(a)
     end
@@ -103,7 +99,9 @@ defmodule EXLA.ExecutableTest do
       t2 = BinaryBuffer.from_binary(<<2::32-native>>, Shape.make_shape({:s, 32}, {}))
 
       assert [a = %DeviceBuffer{}, b = %DeviceBuffer{}] =
-               run_one([t1, t2], fn b, x, y -> Op.tuple(b, [x, y]) end)
+               run_one([t1, t2], [], Shape.make_tuple_shape([t1.shape, t2.shape]), fn b, x, y ->
+                 mod().tuple(b, [x, y])
+               end)
 
       assert <<1::32-native>> == DeviceBuffer.read(a)
       assert <<2::32-native>> == DeviceBuffer.read(b)
@@ -115,9 +113,14 @@ defmodule EXLA.ExecutableTest do
       t2 = BinaryBuffer.from_binary(<<2::32-native>>, Shape.make_shape({:s, 32}, {}))
 
       assert [a = %DeviceBuffer{}, b = %DeviceBuffer{}, c = %DeviceBuffer{}] =
-               run_one([t1, t2], [device_id: 1], fn b, x, y ->
-                 Op.tuple(b, [x, y, Op.add(x, y)])
-               end)
+               run_one(
+                 [t1, t2],
+                 [device_id: 1],
+                 EXLA.Shape.make_tuple_shape([t1.shape, t2.shape, t1.shape]),
+                 fn b, x, y ->
+                   mod().tuple(b, [x, y, add(x, y)])
+                 end
+               )
 
       assert <<1::32-native>> == DeviceBuffer.read(a)
       assert a.device_id == 1
@@ -127,10 +130,26 @@ defmodule EXLA.ExecutableTest do
       assert c.device_id == 1
 
       assert_raise RuntimeError, ~r"Expected buffer to be placed on device 0", fn ->
-        run_one([a, b], [device_id: 0], fn b, x, y ->
-          Op.tuple(b, [Op.add(x, y)])
+        run_one([a, b], [device_id: 0], t1.shape, fn b, x, y ->
+          mod().tuple(b, [add(x, y)])
         end)
       end
+    end
+  end
+
+  defp add(x, y) do
+    if mod() == Value do
+      Value.add(x.function, x, y)
+    else
+      Op.add(x, y)
+    end
+  end
+
+  defp mod do
+    if Application.get_env(:exla, :compiler_mode) == :mlir do
+      Value
+    else
+      Op
     end
   end
 end
@@ -140,8 +159,21 @@ defmodule EXLA.ExecutableFeedTest do
   # need to be locked or we cannot run them concurrently.
   use ExUnit.Case, async: false
 
-  alias EXLA.{BinaryBuffer, DeviceBuffer, Client, Op, Shape}
+  alias EXLA.BinaryBuffer
+  alias EXLA.DeviceBuffer
+  alias EXLA.Client
+  alias EXLA.Op
+  alias EXLA.Shape
+  alias EXLA.MLIR.Value
   import EXLAHelpers
+
+  defp mod do
+    if Application.get_env(:exla, :compiler_mode) == :mlir do
+      Value
+    else
+      Op
+    end
+  end
 
   describe "infeed/outfeed" do
     test "successfully sends to/from device asynchronously" do
@@ -149,14 +181,14 @@ defmodule EXLA.ExecutableFeedTest do
 
       assert res =
                Task.async(fn ->
-                 run_one([], [], fn b ->
-                   token = Op.create_token(b)
-                   val_and_token = Op.infeed(token, t.shape)
-                   val = Op.get_tuple_element(val_and_token, 0)
-                   new_token = Op.get_tuple_element(val_and_token, 1)
-                   outfeed_val = Op.add(val, val)
-                   _outfeed_token = Op.outfeed(outfeed_val, new_token)
-                   Op.tuple(b, [Op.add(outfeed_val, val)])
+                 run_one([], [], Shape.make_tuple_shape([Shape.make_token_shape()]), fn b ->
+                   token = mod().create_token(b)
+                   val_and_token = mod().infeed(token, t.shape)
+                   val = mod().get_tuple_element(val_and_token, 0)
+                   new_token = mod().get_tuple_element(val_and_token, 1)
+                   outfeed_val = add(val, val)
+                   _outfeed_token = mod().outfeed(outfeed_val, new_token)
+                   mod().tuple(b, [add(outfeed_val, val)])
                  end)
                end)
 
@@ -170,28 +202,69 @@ defmodule EXLA.ExecutableFeedTest do
     test "successfully sends to/from device asynchronously in a loop" do
       t = BinaryBuffer.from_binary(<<1::32-native>>, Shape.make_shape({:s, 32}, {}))
 
+      token_shape = Shape.make_token_shape()
+
       assert res =
                Task.async(fn ->
-                 run_one([], [], fn b ->
-                   token_shape = Shape.make_token_shape()
-                   tuple_shape = Shape.make_tuple_shape([t.shape, token_shape])
+                 run_one([], [], {token_shape, t.shape}, fn b ->
+                   if mod() == Value do
+                     condition =
+                       EXLA.MLIR.Module.add_function(
+                         b.module,
+                         "condition",
+                         [token_shape, t.shape],
+                         [
+                           token_shape,
+                           Shape.make_shape({:pred, 8}, {})
+                         ]
+                       )
 
-                   condition_b = EXLA.Builder.new(b, "condition")
-                   param = EXLA.Op.parameter(condition_b, 0, tuple_shape, "arg")
-                   zero = Op.constant_r0(condition_b, 0, {:s, 32})
-                   val = Op.get_tuple_element(param, 0)
-                   condition = EXLA.Builder.build(Op.not_equal(val, zero))
+                     [_token, val] = EXLA.MLIR.Function.get_arguments(condition)
+                     zero = Value.constant_r0(condition, 0, {:s, 32})
+                     Value.variadic_return([Value.not_equal(condition, val, zero)])
 
-                   while_b = EXLA.Builder.new(b, "while")
-                   param = EXLA.Op.parameter(while_b, 0, tuple_shape, "arg")
-                   val = Op.get_tuple_element(param, 0)
-                   token = Op.get_tuple_element(param, 1)
-                   token = Op.outfeed(Op.add(val, val), token)
-                   while = EXLA.Builder.build(Op.infeed(token, t.shape))
+                     body =
+                       EXLA.MLIR.Module.add_function(b.module, "body", [token_shape, t.shape], [
+                         token_shape,
+                         t.shape
+                       ])
 
-                   token = Op.create_token(b)
-                   while = Op.while(condition, while, Op.infeed(token, t.shape))
-                   Op.tuple(b, [Op.get_tuple_element(while, 0)])
+                     [token, val] = EXLA.MLIR.Function.get_arguments(body)
+
+                     token = Value.outfeed(Value.add(body, val, val), token)
+
+                     infeed = Value.infeed(token, t.shape)
+                     input = Value.get_tuple_element(infeed, 0)
+                     token = Value.get_tuple_element(infeed, 1)
+
+                     Value.variadic_return([token, input])
+
+                     token = Value.create_token(b)
+                     infeed = Value.infeed(token, t.shape)
+                     input = Value.get_tuple_element(infeed, 0)
+                     token = Value.get_tuple_element(infeed, 1)
+
+                     [_token, result] = Value.while(condition, body, [token, input])
+                     Value.tuple(b, [result])
+                   else
+                     tuple_shape = Shape.make_tuple_shape([t.shape, Shape.make_token_shape()])
+                     condition_b = EXLA.Builder.new(b, "condition")
+                     param = mod().parameter(condition_b, 0, tuple_shape, "arg")
+                     zero = mod().constant_r0(condition_b, 0, {:s, 32})
+                     val = mod().get_tuple_element(param, 0)
+                     condition = EXLA.Builder.build(mod().not_equal(val, zero))
+
+                     while_b = EXLA.Builder.new(b, "while")
+                     param = mod().parameter(while_b, 0, tuple_shape, "arg")
+                     val = mod().get_tuple_element(param, 0)
+                     token = mod().get_tuple_element(param, 1)
+                     token = mod().outfeed(add(val, val), token)
+                     while = EXLA.Builder.build(mod().infeed(token, t.shape))
+
+                     token = mod().create_token(b)
+                     while = mod().while(condition, while, mod().infeed(token, t.shape))
+                     mod().tuple(b, [mod().get_tuple_element(while, 0)])
+                   end
                  end)
                end)
 
@@ -214,6 +287,14 @@ defmodule EXLA.ExecutableFeedTest do
 
     receive do
       {^ref, msg} -> msg
+    end
+  end
+
+  defp add(x, y) do
+    if mod() == Value do
+      Value.add(x.function, x, y)
+    else
+      Op.add(x, y)
     end
   end
 end

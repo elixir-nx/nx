@@ -4013,7 +4013,7 @@ defmodule EXLA.Defn.ExprTest do
 
     test "raises on bad precision" do
       valid_precision =
-        if Nx.Defn.default_options()[:compiler_mode] == :mlir do
+        if compiler_mode() == :mlir do
           ":default, :high, :highest, or :packed_nibble"
         else
           ":default, :high, or :highest"
