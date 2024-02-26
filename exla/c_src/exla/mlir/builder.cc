@@ -307,21 +307,26 @@ mlir::Value MLIRFunction::PadOp(mlir::Value op, mlir::Value pad, std::vector<int
 }
 
 mlir::Value compare_and_return_bool(mlir::OpBuilder *builder, mlir::Value lhs, mlir::Value rhs, mlir::stablehlo::ComparisonDirection direction) {
-  mlir::stablehlo::ComparisonType comparison_type_attr;
+  mlir::stablehlo::ComparisonType comparison_type;
   mlir::RankedTensorType ranked_type = llvm::cast<mlir::RankedTensorType>(lhs.getType());
   mlir::Type left_type = mlir::RankedTensorType::get({}, ranked_type.getElementType());
 
   ranked_type = llvm::cast<mlir::RankedTensorType>(rhs.getType());
   mlir::Type right_type = mlir::RankedTensorType::get({}, ranked_type.getElementType());
   if (left_type.isa<mlir::FloatType>() || right_type.isa<mlir::FloatType>()) {
-    comparison_type_attr = mlir::stablehlo::symbolizeComparisonType("TOTALORDER").value();
+    comparison_type = mlir::stablehlo::symbolizeComparisonType("TOTALORDER").value();
   } else {
-    comparison_type_attr = mlir::stablehlo::ComparisonType::NOTYPE;
+    comparison_type = mlir::stablehlo::ComparisonType::NOTYPE;
   }
 
-  auto op = builder->create<mlir::stablehlo::CompareOp>(builder->getUnknownLoc(), lhs, rhs, direction, comparison_type_attr);
+  auto direction_attr = mlir::stablehlo::ComparisonDirectionAttr::get(builder->getContext(), direction);
+  auto comparison_type_attr = mlir::stablehlo::ComparisonTypeAttr::get(builder->getContext(), comparison_type);
   mlir::Type mlir_bool = builder->getIntegerType(1);
-  return builder->create<mlir::stablehlo::ConvertOp>(builder->getUnknownLoc(), op, mlir_bool);
+  auto shape = llvm::cast<mlir::RankedTensorType>(lhs.getType()).getShape();
+
+  mlir::Type out_type = mlir::RankedTensorType::get(shape, builder->getIntegerType(1));
+  auto op = builder->create<mlir::stablehlo::CompareOp>(builder->getUnknownLoc(), out_type, lhs, rhs, direction_attr, comparison_type_attr);
+  return op;
 }
 
 mlir::Value MLIRFunction::EqualOp(mlir::Value lhs, mlir::Value rhs) {
