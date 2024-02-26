@@ -124,16 +124,20 @@ defmodule EXLA.Defn.Outfeed do
         next_flag = next_hook(compiled_hooks)
         compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed, pos, shape})
 
-        mod =
+        {token, input} =
           case builder do
-            %Function{} -> Value
-            _ -> EXLA.Op
-          end
+            %Function{} ->
+              token = Value.outfeed(Value.constant_r0(builder, next_flag, {:u, 16}), token)
+              {token, [input]} = Value.infeed(token, shape)
+              {token, input}
 
-        token = mod.outfeed(mod.constant_r0(builder, next_flag, {:u, 16}), token)
-        infeed = mod.infeed(token, shape)
-        input = mod.get_tuple_element(infeed, 0)
-        token = mod.get_tuple_element(infeed, 1)
+            _ ->
+              token = EXLA.Op.outfeed(EXLA.Op.constant_r0(builder, next_flag, {:u, 16}), token)
+              infeed = EXLA.Op.infeed(token, shape)
+              input = EXLA.Op.get_tuple_element(infeed, 0)
+              token = EXLA.Op.get_tuple_element(infeed, 1)
+              {token, input}
+          end
 
         {{pos, input}, {compiled_hooks, token}}
       end)
