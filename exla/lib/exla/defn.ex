@@ -2180,6 +2180,13 @@ defmodule EXLA.Defn do
         scope_ids: Tree.scope_ids(expr)
     }
 
+    expr =
+      if type == {:pred, 8} and expr.type == {:u, 8} do
+        %{expr | type: {:pred, 8}}
+      else
+        expr
+      end
+
     {res, comp_cache} = recur_composite(expr, & &1, state, reset_token(cache, arg_token))
 
     res =
@@ -2619,7 +2626,7 @@ defmodule EXLA.Defn do
     comp_state = %{state | scope_ids: current_ids}
 
     [] = Function.push_region(state.builder, region)
-    {res, res_cache} = recur_composite(expr, &cast_pred_to_u8/1, comp_state, cache)
+    {res, res_cache} = recur_composite(expr, & &1, comp_state, cache)
 
     if token = get_token(cache) do
       Value.variadic_return([token, res], true)
@@ -2787,24 +2794,26 @@ defmodule EXLA.Defn do
     right_dims = broadcast_axes(right_shape.dims, out_shape.dims)
 
     type = merge_type(left_shape.dtype, right_shape.dtype)
+    type = merge_type(type, out.type)
 
     broadcast_shape = EXLA.Shape.make_shape(type, out_shape.dims)
 
+    left = to_type(left, type)
+
     left =
-      left
-      |> to_type(type)
-      |> Value.broadcast_in_dim(broadcast_shape, left_dims)
+      if left_shape.dims == broadcast_shape.dims do
+        left
+      else
+        Value.broadcast_in_dim(left, broadcast_shape, left_dims)
+      end
+
+    right = to_type(right, type)
 
     right =
-      right
-      |> to_type(type)
-      |> Value.broadcast_in_dim(broadcast_shape, right_dims)
-
-    {left, right} =
-      if not Nx.Type.float?(type) and Nx.Type.float?(out.type) do
-        {to_type(left, out.type), to_type(right, out.type)}
+      if right_shape.dims == broadcast_shape.dims do
+        right
       else
-        {left, right}
+        Value.broadcast_in_dim(right, broadcast_shape, right_dims)
       end
 
     Value
