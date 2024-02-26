@@ -570,6 +570,7 @@ mlir::Value MLIRFunction::IsNanOp(mlir::Value operand) {
     auto is_inf_real_op = this->ConvertOp(this->IsNanOp(real_op), element_type);
     auto is_inf_imag_op = this->ConvertOp(this->IsNanOp(imag_op), element_type);
     result = this->AddOp(is_inf_real_op, is_inf_imag_op);
+    return module_->builder()->create<mlir::stablehlo::ConvertOp>(module_->builder()->getUnknownLoc(), result, mlir_bool);
   } else if (element_type.isa<mlir::IntegerType>()) {
     // integers are never nan
     return this->NotEqualOp(operand, operand);
@@ -580,12 +581,8 @@ mlir::Value MLIRFunction::IsNanOp(mlir::Value operand) {
     mlir::Value is_inf_op = this->IsInfOp(operand);
     is_inf_op = module_->builder()->create<mlir::stablehlo::ConvertOp>(module_->builder()->getUnknownLoc(), is_inf_op, mlir_bool);
 
-    result = this->BitwiseAndOp(this->BitwiseNotOp(is_inf_op), this->BitwiseNotOp(is_finite_op));
+    return this->BitwiseAndOp(this->BitwiseNotOp(is_inf_op), this->BitwiseNotOp(is_finite_op));
   }
-
-  mlir_bool = module_->builder()->getIntegerType(1);
-
-  return module_->builder()->create<mlir::stablehlo::ConvertOp>(module_->builder()->getUnknownLoc(), result, mlir_bool);
 }
 mlir::Value MLIRFunction::RsqrtOp(mlir::Value operand) {
   setInsertionPoint();
@@ -935,7 +932,11 @@ std::pair<std::vector<mlir::Value>, std::pair<mlir::Region *, mlir::Region *>> M
     output_types.push_back(type);
   }
 
-  pred = builder->create<mlir::stablehlo::ConvertOp>(builder->getUnknownLoc(), pred, builder->getIntegerType(1));
+  mlir::Type pred_type = llvm::cast<mlir::RankedTensorType>(pred.getType()).getElementType();
+  if (!pred_type.isInteger(1)) {
+    pred = builder->create<mlir::stablehlo::ConvertOp>(builder->getUnknownLoc(), pred, builder->getIntegerType(1));
+  }
+
   mlir::stablehlo::IfOp if_op = builder->create<mlir::stablehlo::IfOp>(builder->getUnknownLoc(), mlir::TypeRange(output_types), pred);
 
   mlir::Operation::result_range result_range = if_op.getResults();
