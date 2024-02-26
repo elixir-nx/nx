@@ -164,31 +164,27 @@ defmodule EXLA.Defn do
     acc_shapes_l = Enum.map(acc_shapes, &elem(&1, 1))
     acc_shape = List.to_tuple(acc_shapes_l)
 
-    constant_shapes_l = Enum.map(used_shapes, &elem(&1, 1))
-
     flag_shape = EXLA.Shape.make_shape({:pred, 8}, {})
-    token_shape = EXLA.Shape.make_token_shape()
 
-    arg_shapes = [flag_shape, token_shape] ++ acc_shapes_l ++ constant_shapes_l
+    args = EXLA.MLIR.Function.get_arguments(builder)
 
-    %{module: module, name: name} = subbuilder(builder, "while-pred")
-    out_types = container_to_exla_shape(expr)
+    {token, [flag]} = Value.infeed(root_token, flag_shape)
 
-    pred_fun = EXLA.MLIR.Module.add_function(module, name, arg_shapes, out_types)
+    init = Value.tuple(builder, [flag, token | args])
 
-    [flag | _] = EXLA.MLIR.Function.get_arguments(pred_fun)
+    {[_flag, out_token | results], pred_region, body_region} = Value.while(builder, init)
 
-    r0 = Value.constant_r0(pred_fun, 1, {:pred, 8})
+    acc = Enum.take(results, acc_length)
 
-    pred_op = Value.equal(pred_fun, flag, r0)
+    output = wrap_tuple_result(builder, acc, acc_shape)
 
-    pred = EXLA.Builder.build(pred_op)
+    [flag | _] = Function.push_region(builder, pred_region)
+    r0 = Value.constant_r0(builder, 1, {:pred, 8})
+    pred_op = Value.equal(builder, flag, r0)
+    Value.variadic_return([pred_op], true)
+    Function.pop_region(builder)
 
-    %{module: module, name: name} = subbuilder(builder, "while-body")
-
-    body_fun = EXLA.MLIR.Module.add_function(module, name, arg_shapes, out_types)
-
-    [_flag, token | args] = EXLA.MLIR.Function.get_arguments(body_fun)
+    [_flag, token | args] = Function.push_region(builder, body_region)
 
     {acc, constant} = Enum.split(args, acc_length)
 
@@ -211,8 +207,8 @@ defmodule EXLA.Defn do
             end)
 
           state = %{
+            builder: builder,
             precision: Keyword.get(options, :precision, :default),
-            builder: body_fun,
             params: Map.new(input_params ++ acc_params ++ constant_params),
             scope_ids: Tree.scope_ids(expr)
           }
@@ -220,7 +216,7 @@ defmodule EXLA.Defn do
           outfeed = Outfeed.with_token(outfeed, token)
           {output, cache} = recur_flatten(output_expr, state, new_cache(outfeed))
           {acc, cache} = recur_flatten(acc_expr, state, cache)
-          outfeed = cache |> get_outfeed() |> Outfeed.add_stream_hook(body_fun, output)
+          outfeed = cache |> get_outfeed() |> Outfeed.add_stream_hook(builder, output)
           {outfeed, acc}
 
         _ ->
@@ -231,31 +227,22 @@ defmodule EXLA.Defn do
     # Emit the stream hook to signal loop output
     {token, [flag]} = Value.infeed(token, flag_shape)
 
-    [%{function: body} | _] =
-      Value.variadic_return(
-        [
-          flag,
-          token,
-          acc,
-          constant
-        ],
-        true
-      )
+    Value.variadic_return(
+      [
+        flag,
+        token,
+        acc,
+        constant
+      ],
+      true
+    )
 
-    args = EXLA.MLIR.Function.get_arguments(builder)
+    Function.pop_region(builder)
 
-    {token, [flag]} = Value.infeed(root_token, flag_shape)
+    outfeed = outfeed |> Outfeed.with_token(out_token) |> Outfeed.close(builder)
+    EXLA.MLIR.Value.variadic_return([output])
 
-    init = Value.tuple(builder, [flag, token | args])
-
-    [_flag, token | results] = Value.while(pred, body, init)
-
-    acc = Enum.take(results, acc_length)
-
-    acc = wrap_tuple_result(builder, acc, acc_shape)
-    outfeed = outfeed |> Outfeed.with_token(token) |> Outfeed.close(builder)
-
-    {EXLA.Builder.build(acc), {input_shape, input_indexes}, outfeed}
+    {builder, {input_shape, input_indexes}, outfeed}
   end
 
   defp to_stream_computation(
@@ -663,7 +650,33 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp cached_recur_operator(:while, %T{data: %Expr{args: args}}, state, cache) do
+  defp cached_recur_operator(
+         :while,
+         %T{data: %Expr{args: args}},
+         %{builder: %Function{} = function} = state,
+         cache
+       ) do
+    [initial_arg, _arg, pred, body] = args
+    initial_with_token = {get_token(cache), initial_arg}
+
+    {initial, cache} =
+      recur_composite(initial_with_token, &cast_pred_to_u8/1, state, cache)
+
+    {[token | results], pred_region, body_region} = Value.while(function, initial)
+    result = wrap_tuple_result(function, results, initial_arg)
+
+    cache = mlir_while_computation(pred_region, pred, {:pred, 8}, state, cache)
+    cache = mlir_while_computation(body_region, body, :with_token, state, cache)
+
+    {result, update_token(cache, token)}
+  end
+
+  defp cached_recur_operator(
+         :while,
+         %T{data: %Expr{args: args}},
+         %{builder: %EXLA.Builder{}} = state,
+         cache
+       ) do
     [initial_arg, arg, pred, body] = args
 
     initial_with_token = {get_token(cache), initial_arg}
@@ -676,26 +689,9 @@ defmodule EXLA.Defn do
     {body, cache} =
       while_computation(:while_body, arg, body, :with_token, &cast_pred_to_u8/1, state, cache)
 
-    {token, result} =
-      case state.builder do
-        %Function{} = function ->
-          # for MLIR while, the return is variadic
-          # like it would have come from Nx.Defn.Composite.flatten_list.
-          # We need to collect the returned values into the nested tuples
-          # that should have come from the while expr
-
-          # TO-DO: This while can be build in a manner similar to if, where
-          # we can write directly to the destination regions inside while_computation
-          [token | results] = Value.while(pred, body, initial)
-          result = wrap_tuple_result(function, results, initial_arg)
-          {token, result}
-
-        _ ->
-          while = EXLA.Op.while(pred, body, initial)
-          token = EXLA.Op.get_tuple_element(while, 0)
-          result = EXLA.Op.get_tuple_element(while, 1)
-          {token, result}
-      end
+    while = EXLA.Op.while(pred, body, initial)
+    token = EXLA.Op.get_tuple_element(while, 0)
+    result = EXLA.Op.get_tuple_element(while, 1)
 
     {result, update_token(cache, token)}
   end
@@ -2167,38 +2163,24 @@ defmodule EXLA.Defn do
     EXLA.Builder.build(to_type(res, type))
   end
 
-  defp while_computation(name, arg, expr, type, transform, %{builder: %Function{}} = state, cache) do
-    arg_shapes = container_to_exla_shape(arg)
+  defp mlir_while_computation(
+         region,
+         expr,
+         type,
+         %{builder: %Function{} = function} = state,
+         cache
+       ) do
+    [arg_token | arg_params] = Function.push_region(function, region)
 
-    arg_shapes = [EXLA.Shape.make_token_shape() | arg_shapes]
-
-    %{module: module, name: name} = subbuilder(state.builder, Atom.to_string(name))
-
-    out_types = container_to_exla_shape(expr)
-
-    out_types =
-      if type == :with_token do
-        [EXLA.Shape.make_token_shape() | out_types]
-      else
-        out_types
-      end
-
-    function = EXLA.MLIR.Module.add_function(module, name, arg_shapes, out_types)
-
-    [arg_token | arg_params] = EXLA.MLIR.Function.get_arguments(function)
-
-    params = {arg, arg_params}
-
-    params = computation_arg_param(params)
+    params = Enum.with_index(arg_params, &{&2, &1})
 
     state = %{
       state
-      | builder: function,
-        params: Map.new(params),
+      | params: Map.new(params),
         scope_ids: Tree.scope_ids(expr)
     }
 
-    {res, comp_cache} = recur_composite(expr, transform, state, reset_token(cache, arg_token))
+    {res, comp_cache} = recur_composite(expr, & &1, state, reset_token(cache, arg_token))
 
     res =
       if type == :with_token do
@@ -2208,8 +2190,9 @@ defmodule EXLA.Defn do
       end
 
     Value.variadic_return(res, true)
+    Function.pop_region(function)
 
-    {function, merge_outfeed(cache, comp_cache)}
+    merge_outfeed(cache, comp_cache)
   end
 
   defp while_computation(name, arg, expr, type, transform, state, cache) do
@@ -2547,14 +2530,15 @@ defmodule EXLA.Defn do
         out_shape
       end
 
-    [node | _] = if_results = Value.if_op(pred_op, result_shapes)
+    {if_results, true_region, false_region} = Value.if_op(pred_op, result_shapes)
 
-    cache = to_mlir_if_branch(true, node, on_true, true_ids, state, cache)
+    cache = to_mlir_if_branch(true_region, on_true, true_ids, state, cache)
 
-    cache = to_mlir_if_branch(false, node, on_false, false_ids, state, cache)
+    cache = to_mlir_if_branch(false_region, on_false, false_ids, state, cache)
 
     if in_token do
-      {wrap_tuple_result(function, tl(if_results), on_true), update_token(cache, node)}
+      [token | results] = if_results
+      {wrap_tuple_result(function, results, on_true), update_token(cache, token)}
     else
       {wrap_tuple_result(function, if_results, on_true), cache}
     end
@@ -2631,10 +2615,10 @@ defmodule EXLA.Defn do
     end)
   end
 
-  defp to_mlir_if_branch(bool, node, expr, current_ids, state, cache) do
+  defp to_mlir_if_branch(region, expr, current_ids, state, cache) do
     comp_state = %{state | scope_ids: current_ids}
 
-    Value.set_if_block(node, bool)
+    [] = Function.push_region(state.builder, region)
     {res, res_cache} = recur_composite(expr, &cast_pred_to_u8/1, comp_state, cache)
 
     if token = get_token(cache) do

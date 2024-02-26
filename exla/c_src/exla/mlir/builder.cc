@@ -917,7 +917,7 @@ mlir::Value MLIRFunction::MapOp(
   return map_op;
 }
 
-std::vector<mlir::Value> MLIRFunction::IfOp(mlir::Value pred, std::vector<xla::Shape> output_shapes) {
+std::pair<std::vector<mlir::Value>, std::pair<mlir::Region *, mlir::Region *>> MLIRFunction::IfOp(mlir::Value pred, std::vector<xla::Shape> output_shapes) {
   auto builder = module_->builder();
   setInsertionPoint();
 
@@ -935,17 +935,26 @@ std::vector<mlir::Value> MLIRFunction::IfOp(mlir::Value pred, std::vector<xla::S
 
   mlir::Operation::result_range result_range = if_op.getResults();
   std::vector<mlir::Value> results(result_range.begin(), result_range.end());
-  return results;
+
+  mlir::Region *true_region = &if_op.getTrueBranch();
+  true_region->emplaceBlock();
+  mlir::Region *false_region = &if_op.getFalseBranch();
+  false_region->emplaceBlock();
+
+  return std::make_pair(results, std::make_pair(true_region, false_region));
 }
 
-void MLIRFunction::SetIfOpBlock(mlir::Value node, bool true_or_false) {
-  auto builder = module_->builder();
-  mlir::stablehlo::IfOp op = node.getDefiningOp<mlir::stablehlo::IfOp>();
+std::vector<mlir::Value> MLIRFunction::PushRegion(mlir::Region *region) {
+  std::vector<mlir::Value> args;
+  mlir::Block &block = region->front();
+  for (auto &arg : block.getArguments()) {
+    args.push_back(arg);
+  }
 
-  mlir::Region &region = true_or_false ? op.getTrueBranch() : op.getFalseBranch();
-  region.emplaceBlock();
-  regions.push(&region);
+  regions.push(std::move(region));
   setInsertionPoint();
+
+  return args;
 }
 
 void MLIRFunction::PopRegion() {
@@ -1348,24 +1357,32 @@ std::vector<mlir::Value> MLIRFunction::CallOp(std::vector<mlir::Value> inputs, M
   return std::vector<mlir::Value>(results.begin(), results.end());
 }
 
-std::vector<mlir::Value> MLIRFunction::WhileOp(MLIRFunction *pred, MLIRFunction *body_function, std::vector<mlir::Value> initial) {
+void addRegionArguments(mlir::OpBuilder *builder, mlir::Region *region, std::vector<mlir::Value> args) {
+  mlir::OpBuilder::InsertionGuard insertionPointGuard(*builder);
+  mlir::Location loc = region->getLoc();
+  mlir::Block *block = builder->createBlock(region);
+  // Add two arguments for each element type.
+  for (mlir::Value arg : args) {
+    block->addArgument(arg.getType(), loc);
+  }
+}
+
+std::pair<std::vector<mlir::Value>, std::pair<mlir::Region *, mlir::Region *>> MLIRFunction::WhileOp(std::vector<mlir::Value> initial) {
   auto builder = module_->builder();
   setInsertionPoint();
 
   auto while_op = builder->create<mlir::stablehlo::WhileOp>(builder->getUnknownLoc(), mlir::ValueRange(initial));
 
-  mlir::Region &cond = while_op.getCond();
-  auto &predBlocks = pred->function()->getBody().getBlocks();
-  cond.getBlocks().splice(cond.end(), predBlocks);
-  pred->function()->erase();
+  mlir::Region *cond = &while_op.getCond();
+  addRegionArguments(builder, cond, initial);
 
-  mlir::Region &body = while_op.getBody();
-  auto &bodyBlocks = body_function->function()->getBody().getBlocks();
-  body.getBlocks().splice(body.end(), bodyBlocks);
-  body_function->function()->erase();
+  mlir::Region *body = &while_op.getBody();
+  addRegionArguments(builder, body, initial);
 
   mlir::Operation::result_range results = while_op.getResults();
-  return std::vector<mlir::Value>(results.begin(), results.end());
+  std::vector<mlir::Value> output(results.begin(), results.end());
+
+  return std::make_pair(output, std::make_pair(cond, body));
 }
 
 std::vector<mlir::Value> MLIRFunction::ReturnOp(std::vector<mlir::Value> operands) {

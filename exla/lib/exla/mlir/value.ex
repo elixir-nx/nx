@@ -9,6 +9,7 @@ defmodule EXLA.MLIR.Value do
   defstruct [:ref, :function]
 
   alias __MODULE__, as: Value
+  alias EXLA.MLIR.Region
   alias EXLA.MLIR.Function
 
   @bin_ops [:add, :subtract, :multiply, :divide, :pow, :min] ++
@@ -559,7 +560,7 @@ defmodule EXLA.MLIR.Value do
   end
 
   def if_op(%Value{} = pred, [%EXLA.Shape{} | _] = output_shapes) do
-    refs =
+    {refs, true_region, false_region} =
       EXLA.NIF.mlir_if(
         pred.function.ref,
         pred.ref,
@@ -567,13 +568,9 @@ defmodule EXLA.MLIR.Value do
       )
       |> unwrap!()
 
-    Enum.map(refs, &%Value{ref: &1, function: pred.function})
-  end
+    results = Enum.map(refs, &%Value{ref: &1, function: pred.function})
 
-  def set_if_block(%Value{} = node, branch) do
-    node.function.ref
-    |> EXLA.NIF.mlir_set_if_block(node.ref, if(branch, do: 1, else: 0))
-    |> unwrap!()
+    {results, %Region{ref: true_region}, %Region{ref: false_region}}
   end
 
   def infeed(%Value{} = token, %EXLA.Shape{} = shape) do
@@ -606,21 +603,13 @@ defmodule EXLA.MLIR.Value do
     Enum.map(refs, &%Value{ref: &1, function: function})
   end
 
-  def while(
-        %Function{ref: pred_ref},
-        %Function{ref: body_ref},
-        initial
-      ) do
-    function =
-      case initial do
-        [%Value{function: function} | _] -> function
-        %Value{function: function} -> function
-      end
+  def while(function, initial) do
+    {result_refs, pred_ref, body_ref} =
+      EXLA.NIF.mlir_while(function.ref, flatten_tuples(initial)) |> unwrap!()
 
-    refs =
-      EXLA.NIF.mlir_while(function.ref, pred_ref, body_ref, flatten_tuples(initial)) |> unwrap!()
+    results = Enum.map(result_refs, &%Value{function: function, ref: &1})
 
-    Enum.map(refs, &%Value{function: function, ref: &1})
+    {results, %Region{ref: pred_ref}, %Region{ref: body_ref}}
   end
 
   def variadic_return([%Value{function: function} | _] = values, flatten_tuples? \\ false) do

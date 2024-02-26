@@ -71,7 +71,7 @@ defmodule EXLA.NIF do
   def mlir_if(_function, _pred, _output_shape),
     do: :erlang.nif_error(:undef)
 
-  def mlir_set_if_block(_function, _node, _true_or_false), do: :erlang.nif_error(:undef)
+  def mlir_push_region(_function, _region), do: :erlang.nif_error(:undef)
 
   def mlir_pop_region(_function),
     do: :erlang.nif_error(:undef)
@@ -180,7 +180,7 @@ defmodule EXLA.NIF do
   def mlir_outfeed(_function, _token, _inputs), do: :erlang.nif_error(:undef)
 
   def mlir_call(_function, _args, _computation), do: :erlang.nif_error(:undef)
-  def mlir_while(_function, _pred, _body, _initial), do: :erlang.nif_error(:undef)
+  def mlir_while(_function, _initial), do: :erlang.nif_error(:undef)
   def mlir_return(_function, _operands), do: :erlang.nif_error(:undef)
 
   def new_builder(_name),

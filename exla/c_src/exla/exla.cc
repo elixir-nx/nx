@@ -83,6 +83,9 @@ static int open_resources(ErlNifEnv* env) {
   if (!exla::nif::open_resource<mlir::Value>(env, mod, "MLIRValue")) {
     return -1;
   }
+  if (!exla::nif::open_resource<mlir::Region*>(env, mod, "MLIRRegion")) {
+    return -1;
+  }
   if (!exla::nif::open_resource<exla::MLIRModule*>(env, mod, "ExlaMLIRModule")) {
     return -1;
   }
@@ -774,9 +777,9 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_window_reduce", 9, mlir_window_reduce},
     {"mlir_map", 4, mlir_map},
     {"mlir_if", 3, mlir_if},
-    {"mlir_set_if_block", 3, mlir_set_if_block},
+    {"mlir_push_region", 2, mlir_push_region},
     {"mlir_pop_region", 1, mlir_pop_region},
-    {"mlir_while", 4, mlir_while},
+    {"mlir_while", 2, mlir_while},
     {"mlir_return", 2, mlir_return},
     // XlaBuilder
     {"new_builder", 1, new_builder},

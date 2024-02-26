@@ -905,34 +905,35 @@ ERL_NIF_TERM mlir_if(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Unable to get output shapes.");
   }
 
-  std::vector<mlir::Value> result = (*function)->IfOp(*pred, output_shapes);
-  return exla::nif::ok(env, exla::nif::make_list<mlir::Value>(env, result));
+  auto result = (*function)->IfOp(*pred, output_shapes);
+
+  ERL_NIF_TERM res = exla::nif::make_list<mlir::Value>(env, result.first);
+  ERL_NIF_TERM true_region = exla::nif::make<mlir::Region*>(env, result.second.first);
+  ERL_NIF_TERM false_region = exla::nif::make<mlir::Region*>(env, result.second.second);
+  return exla::nif::ok(env, enif_make_tuple3(env, res, true_region, false_region));
 }
 
-ERL_NIF_TERM mlir_set_if_block(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 3) {
+ERL_NIF_TERM mlir_push_region(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   exla::MLIRFunction** function;
-  mlir::Value* node;
-  bool true_or_false_branch;
+  mlir::Region** region;
 
   if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
     return exla::nif::error(env, "Unable to get function.");
   }
-  if (!exla::nif::get<mlir::Value>(env, argv[1], node)) {
-    return exla::nif::error(env, "Unable to get node.");
-  }
-  if (!exla::nif::get(env, argv[2], &true_or_false_branch)) {
-    return exla::nif::error(env, "Unable to get true_or_false_branch.");
+  if (!exla::nif::get<mlir::Region*>(env, argv[1], region)) {
+    return exla::nif::error(env, "Unable to get region.");
   }
 
-  (*function)->SetIfOpBlock(*node, true_or_false_branch);
-  return exla::nif::ok(env);
+  std::vector<mlir::Value> args = (*function)->PushRegion(*region);
+  return exla::nif::ok(env, exla::nif::make_list<mlir::Value>(env, args));
 }
 
-ERL_NIF_TERM mlir_pop_region(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM
+mlir_pop_region(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 1) {
     return exla::nif::error(env, "Bad argument count.");
   }
@@ -1565,29 +1566,26 @@ ERL_NIF_TERM mlir_call(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 
 ERL_NIF_TERM mlir_while(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 4) {
+  if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
-  exla::MLIRFunction **function, **pred, **body;
+  exla::MLIRFunction** function;
   std::vector<mlir::Value> initial;
 
   if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
     return exla::nif::error(env, "Unable to get function.");
   }
-  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[1], pred)) {
-    return exla::nif::error(env, "Unable to get pred.");
-  }
-  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[2], body)) {
-    return exla::nif::error(env, "Unable to get body.");
-  }
-  if (!exla::nif::get_list<mlir::Value>(env, argv[3], initial)) {
+  if (!exla::nif::get_list<mlir::Value>(env, argv[1], initial)) {
     return exla::nif::error(env, "Unable to get initial.");
   }
 
-  std::vector<mlir::Value> result = (*function)->WhileOp(*pred, *body, initial);
+  auto result = (*function)->WhileOp(initial);
 
-  return exla::nif::ok(env, exla::nif::make_list<mlir::Value>(env, result));
+  ERL_NIF_TERM res = exla::nif::make_list<mlir::Value>(env, result.first);
+  ERL_NIF_TERM pred_region = exla::nif::make<mlir::Region*>(env, result.second.first);
+  ERL_NIF_TERM body_region = exla::nif::make<mlir::Region*>(env, result.second.second);
+  return exla::nif::ok(env, enif_make_tuple3(env, res, pred_region, body_region));
 }
 
 ERL_NIF_TERM mlir_return(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {

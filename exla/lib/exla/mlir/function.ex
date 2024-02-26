@@ -6,6 +6,7 @@ defmodule EXLA.MLIR.Function do
 
   alias __MODULE__, as: Function
   alias EXLA.MLIR.Value
+  alias EXLA.MLIR.Region
 
   @doc """
   Returns a list of references to the function's positional arguments
@@ -16,10 +17,18 @@ defmodule EXLA.MLIR.Function do
     Enum.map(arg_refs, fn arg -> %Value{ref: arg, function: function} end)
   end
 
-  def pop_region(%Function{ref: ref}) do
-    EXLA.NIF.mlir_pop_region(ref)
+  def push_region(%Function{ref: ref} = function, %Region{ref: region}) do
+    ref
+    |> EXLA.NIF.mlir_push_region(region)
+    |> unwrap!()
+    |> Enum.map(&%Value{function: function, ref: &1})
   end
 
+  def pop_region(%Function{ref: ref}) do
+    EXLA.NIF.mlir_pop_region(ref) |> unwrap!()
+  end
+
+  defp unwrap!(:ok), do: :ok
   defp unwrap!({:ok, value}), do: value
-  defp unwrap!(_other), do: raise("unable to get value")
+  defp unwrap!(other), do: raise("error: #{inspect(other)}")
 end

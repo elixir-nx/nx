@@ -112,17 +112,16 @@ class MLIRFunction {
   std::vector<mlir::Value> ReduceOp(MLIRFunction *function, std::vector<mlir::Value> init_values, std::vector<mlir::Value> inputs, std::vector<int64_t> dimensions);
   std::vector<mlir::Value> WindowReduceOp(MLIRFunction *function, std::vector<mlir::Value> init_values, std::vector<mlir::Value> inputs, std::vector<int64_t> window_dimensions, std::vector<int64_t> window_strides, std::vector<int64_t> input_dilations, std::vector<int64_t> window_dilations, std::vector<std::pair<int64_t, int64_t>> padding);
   mlir::Value MapOp(MLIRFunction *function, std::vector<mlir::Value> inputs, std::vector<int64_t> dimensions);
-  std::vector<mlir::Value> IfOp(mlir::Value pred, std::vector<xla::Shape> output_shape);
-  void SetIfOpBlock(mlir::Value node, bool true_or_false_branch);
+  std::pair<std::vector<mlir::Value>, std::pair<mlir::Region *, mlir::Region *>> IfOp(mlir::Value pred, std::vector<xla::Shape> output_shape);
   ERL_NIF_TERM ConstantOp(mlir::Type type, ErlNifEnv *env, ERL_NIF_TERM value_ptr, std::optional<std::vector<int64_t>> dims = std::nullopt);
   std::pair<mlir::Value, std::vector<mlir::Value>> InfeedOp(mlir::Value token, std::vector<xla::Shape> shapes);
   mlir::Value OutfeedOp(std::vector<mlir::Value> inputs, mlir::Value token);
   std::vector<mlir::Value> CallOp(std::vector<mlir::Value> inputs, MLIRFunction *computation);
-  std::vector<mlir::Value> WhileOp(MLIRFunction *pred, MLIRFunction *body, std::vector<mlir::Value> initial);
+  std::pair<std::vector<mlir::Value>, std::pair<mlir::Region *, mlir::Region *>> WhileOp(std::vector<mlir::Value> initial);
   std::vector<mlir::Value> ReturnOp(std::vector<mlir::Value> values);
   int get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *type);
+  std::vector<mlir::Value> PushRegion(mlir::Region *region);
   void PopRegion();
-
   void Build(mlir::Value root);
 
   llvm::MutableArrayRef<mlir::BlockArgument> get_arguments() { return func_->getBody().front().getArguments(); }
