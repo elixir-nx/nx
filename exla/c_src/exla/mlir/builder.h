@@ -117,10 +117,10 @@ class MLIRFunction {
   std::pair<mlir::Value, std::vector<mlir::Value>> InfeedOp(mlir::Value token, std::vector<xla::Shape> shapes);
   mlir::Value OutfeedOp(std::vector<mlir::Value> inputs, mlir::Value token);
   std::vector<mlir::Value> CallOp(std::vector<mlir::Value> inputs, MLIRFunction *computation);
-  std::vector<mlir::Value> WhileOp(MLIRFunction *pred, MLIRFunction *body, std::vector<mlir::Value> initial);
+  std::pair<std::vector<mlir::Value>, std::pair<mlir::Region *, mlir::Region *>> WhileOp(std::vector<mlir::Value> initial);
   std::vector<mlir::Value> ReturnOp(std::vector<mlir::Value> values);
   int get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *type);
-  void PushRegion(mlir::Region *region);
+  std::vector<mlir::Value> PushRegion(mlir::Region *region);
   void PopRegion();
   void Build(mlir::Value root);
 

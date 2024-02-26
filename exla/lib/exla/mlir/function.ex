@@ -18,13 +18,14 @@ defmodule EXLA.MLIR.Function do
   end
 
   def push_region(%Function{ref: ref}, %Region{ref: region}) do
-    EXLA.NIF.mlir_push_region(ref, region)
+    EXLA.NIF.mlir_push_region(ref, region) |> unwrap!()
   end
 
   def pop_region(%Function{ref: ref}) do
-    EXLA.NIF.mlir_pop_region(ref)
+    EXLA.NIF.mlir_pop_region(ref) |> unwrap!()
   end
 
+  defp unwrap!(:ok), do: :ok
   defp unwrap!({:ok, value}), do: value
-  defp unwrap!(_other), do: raise("unable to get value")
+  defp unwrap!(other), do: raise("error: #{inspect(other)}")
 end

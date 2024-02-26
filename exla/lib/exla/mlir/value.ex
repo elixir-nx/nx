@@ -603,21 +603,13 @@ defmodule EXLA.MLIR.Value do
     Enum.map(refs, &%Value{ref: &1, function: function})
   end
 
-  def while(
-        %Function{ref: pred_ref},
-        %Function{ref: body_ref},
-        initial
-      ) do
-    function =
-      case initial do
-        [%Value{function: function} | _] -> function
-        %Value{function: function} -> function
-      end
+  def while(function, initial) do
+    {result_refs, pred_ref, body_ref} =
+      EXLA.NIF.mlir_while(function.ref, flatten_tuples(initial)) |> unwrap!()
 
-    refs =
-      EXLA.NIF.mlir_while(function.ref, pred_ref, body_ref, flatten_tuples(initial)) |> unwrap!()
+    results = Enum.map(result_refs, &%Value{function: function, ref: &1})
 
-    Enum.map(refs, &%Value{function: function, ref: &1})
+    {results, %Region{ref: pred_ref}, %Region{ref: body_ref}}
   end
 
   def variadic_return([%Value{function: function} | _] = values, flatten_tuples? \\ false) do
