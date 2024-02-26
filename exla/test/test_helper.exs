@@ -2,7 +2,7 @@ target = System.get_env("EXLA_TARGET", "host")
 client = EXLAHelpers.client()
 
 compiler_mode =
-  case System.get_env("EXLA_COMPILER_MODE", "xla") do
+  case System.get_env("EXLA_COMPILER_MODE", "mlir") do
     "xla" -> :xla
     "mlir" -> :mlir
     _ -> raise "Invalid EXLA_COMPILER_MODE"
