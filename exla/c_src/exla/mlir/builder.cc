@@ -1422,11 +1422,24 @@ std::pair<mlir::Value, mlir::Value> MLIRFunction::QRCpuCustomCall(mlir::Value op
   mlir::Value q_dims = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseIntElementsAttr(builder, q_shape));
   mlir::Value r_dims = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseIntElementsAttr(builder, r_shape));
 
-  bool is_f32 = op_type.getElementType().isF32();
-  std::string call_target_name = is_f32 ? "qr_cpu_custom_call_f32" : "qr_cpu_custom_call_f64";
-  auto function = is_f32 ? qr_cpu_custom_call_f32 : qr_cpu_custom_call_f64;
+  auto element_type = op_type.getElementType();
+  std::string call_target_name = "qr_cpu_custom_call_f32";
 
-  XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM(call_target_name, function);
+  if (element_type.isF32()) {
+    XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM(call_target_name, qr_cpu_custom_call_f32);
+  } else if (element_type.isF64()) {
+    call_target_name = "qr_cpu_custom_call_f64";
+    XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM(call_target_name, qr_cpu_custom_call_f64);
+  } else if (element_type.isF16()) {
+    call_target_name = "qr_cpu_custom_call_f16";
+    XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM(call_target_name, qr_cpu_custom_call_f16);
+  } else if (element_type.isBF16()) {
+    call_target_name = "qr_cpu_custom_call_bf16";
+    XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM(call_target_name, qr_cpu_custom_call_bf16);
+  } else {
+    std::cerr << "Unsupported type for QR decomposition" << std::endl;
+    exit(1);
+  }
 
   auto call_target_name_attr = mlir::NamedAttribute(builder->getStringAttr("call_target_name"), builder->getStringAttr(call_target_name));
   auto backend_config_attr = mlir::NamedAttribute(builder->getStringAttr("backend_config"), builder->getStringAttr("Host"));
