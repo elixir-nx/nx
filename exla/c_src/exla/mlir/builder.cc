@@ -307,21 +307,26 @@ mlir::Value MLIRFunction::PadOp(mlir::Value op, mlir::Value pad, std::vector<int
 }
 
 mlir::Value compare_and_return_bool(mlir::OpBuilder *builder, mlir::Value lhs, mlir::Value rhs, mlir::stablehlo::ComparisonDirection direction) {
-  mlir::stablehlo::ComparisonType comparison_type_attr;
+  mlir::stablehlo::ComparisonType comparison_type;
   mlir::RankedTensorType ranked_type = llvm::cast<mlir::RankedTensorType>(lhs.getType());
   mlir::Type left_type = mlir::RankedTensorType::get({}, ranked_type.getElementType());
 
   ranked_type = llvm::cast<mlir::RankedTensorType>(rhs.getType());
   mlir::Type right_type = mlir::RankedTensorType::get({}, ranked_type.getElementType());
   if (left_type.isa<mlir::FloatType>() || right_type.isa<mlir::FloatType>()) {
-    comparison_type_attr = mlir::stablehlo::symbolizeComparisonType("TOTALORDER").value();
+    comparison_type = mlir::stablehlo::symbolizeComparisonType("TOTALORDER").value();
   } else {
-    comparison_type_attr = mlir::stablehlo::ComparisonType::NOTYPE;
+    comparison_type = mlir::stablehlo::ComparisonType::NOTYPE;
   }
 
-  auto op = builder->create<mlir::stablehlo::CompareOp>(builder->getUnknownLoc(), lhs, rhs, direction, comparison_type_attr);
+  auto direction_attr = mlir::stablehlo::ComparisonDirectionAttr::get(builder->getContext(), direction);
+  auto comparison_type_attr = mlir::stablehlo::ComparisonTypeAttr::get(builder->getContext(), comparison_type);
   mlir::Type mlir_bool = builder->getIntegerType(1);
-  return builder->create<mlir::stablehlo::ConvertOp>(builder->getUnknownLoc(), op, mlir_bool);
+  auto shape = llvm::cast<mlir::RankedTensorType>(lhs.getType()).getShape();
+
+  mlir::Type out_type = mlir::RankedTensorType::get(shape, builder->getIntegerType(1));
+  auto op = builder->create<mlir::stablehlo::CompareOp>(builder->getUnknownLoc(), out_type, lhs, rhs, direction_attr, comparison_type_attr);
+  return op;
 }
 
 mlir::Value MLIRFunction::EqualOp(mlir::Value lhs, mlir::Value rhs) {
@@ -565,6 +570,7 @@ mlir::Value MLIRFunction::IsNanOp(mlir::Value operand) {
     auto is_inf_real_op = this->ConvertOp(this->IsNanOp(real_op), element_type);
     auto is_inf_imag_op = this->ConvertOp(this->IsNanOp(imag_op), element_type);
     result = this->AddOp(is_inf_real_op, is_inf_imag_op);
+    return module_->builder()->create<mlir::stablehlo::ConvertOp>(module_->builder()->getUnknownLoc(), result, mlir_bool);
   } else if (element_type.isa<mlir::IntegerType>()) {
     // integers are never nan
     return this->NotEqualOp(operand, operand);
@@ -575,12 +581,8 @@ mlir::Value MLIRFunction::IsNanOp(mlir::Value operand) {
     mlir::Value is_inf_op = this->IsInfOp(operand);
     is_inf_op = module_->builder()->create<mlir::stablehlo::ConvertOp>(module_->builder()->getUnknownLoc(), is_inf_op, mlir_bool);
 
-    result = this->BitwiseAndOp(this->BitwiseNotOp(is_inf_op), this->BitwiseNotOp(is_finite_op));
+    return this->BitwiseAndOp(this->BitwiseNotOp(is_inf_op), this->BitwiseNotOp(is_finite_op));
   }
-
-  mlir_bool = module_->builder()->getIntegerType(1);
-
-  return module_->builder()->create<mlir::stablehlo::ConvertOp>(module_->builder()->getUnknownLoc(), result, mlir_bool);
 }
 mlir::Value MLIRFunction::RsqrtOp(mlir::Value operand) {
   setInsertionPoint();
@@ -930,7 +932,11 @@ std::pair<std::vector<mlir::Value>, std::pair<mlir::Region *, mlir::Region *>> M
     output_types.push_back(type);
   }
 
-  pred = builder->create<mlir::stablehlo::ConvertOp>(builder->getUnknownLoc(), pred, builder->getIntegerType(1));
+  mlir::Type pred_type = llvm::cast<mlir::RankedTensorType>(pred.getType()).getElementType();
+  if (!pred_type.isInteger(1)) {
+    pred = builder->create<mlir::stablehlo::ConvertOp>(builder->getUnknownLoc(), pred, builder->getIntegerType(1));
+  }
+
   mlir::stablehlo::IfOp if_op = builder->create<mlir::stablehlo::IfOp>(builder->getUnknownLoc(), mlir::TypeRange(output_types), pred);
 
   mlir::Operation::result_range result_range = if_op.getResults();
