@@ -747,15 +747,18 @@ defmodule EXLA.Defn do
          :optional,
          %T{
            data: %Expr{
-             args: [%{data: %{op: :qr, args: [tensor, opts]}}, {q_expr, _r_expr}, _callback]
+             args: [%{data: %{op: :qr, args: [tensor, _opts]}}, {q_expr, r_expr}, _callback]
            }
          } =
            _out,
          %{client: %EXLA.Client{platform: :host}, builder: %Function{} = function} = state,
          cache
-       ) do
+       )
+       when elem(tensor.shape, tuple_size(tensor.shape) - 2) >=
+              elem(tensor.shape, tuple_size(tensor.shape) - 1) do
     # We match only on platform: :host for MLIR, as we want to support
     # QR-on-cpu as a custom call only in this case
+    # TO-DO: Add support for wide-mode inputs as well
     {tensor, cache} = recur_operator(tensor, state, cache)
 
     tensor =
@@ -765,7 +768,7 @@ defmodule EXLA.Defn do
         tensor
       end
 
-    {q, r} = Value.qr(tensor, opts[:mode] == :complete)
+    {q, r} = Value.qr(tensor, q_expr.shape, r_expr.shape)
     {Value.tuple(function, [q, r]), cache}
   end
 

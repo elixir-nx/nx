@@ -1409,15 +1409,13 @@ void MLIRFunction::setInsertionPoint() {
   }
 }
 
-std::pair<mlir::Value, mlir::Value> MLIRFunction::QRCpuCustomCall(mlir::Value operand) {
+std::pair<mlir::Value, mlir::Value> MLIRFunction::QRCpuCustomCall(mlir::Value operand, std::vector<int64_t> q_shape, std::vector<int64_t> r_shape) {
   auto builder = module_->builder();
   setInsertionPoint();
 
   mlir::RankedTensorType op_type = llvm::cast<mlir::RankedTensorType>(operand.getType());
 
   auto op_shape = op_type.getShape();
-  auto q_shape = op_shape;
-  auto r_shape = {op_shape[1], op_shape[1]};
 
   mlir::Value dim_sizes = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseIntElementsAttr(builder, std::vector<int64_t>({2, 2, 2})));
   mlir::Value operand_dims = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseIntElementsAttr(builder, op_shape));
@@ -1426,7 +1424,7 @@ std::pair<mlir::Value, mlir::Value> MLIRFunction::QRCpuCustomCall(mlir::Value op
 
   bool is_f32 = op_type.getElementType().isF32();
   std::string call_target_name = is_f32 ? "qr_cpu_custom_call_f32" : "qr_cpu_custom_call_f64";
-  auto function = is_f32 ? qr_cpu_custom_call<float> : qr_cpu_custom_call<double>;
+  auto function = is_f32 ? qr_cpu_custom_call_f32 : qr_cpu_custom_call_f64;
 
   XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM(call_target_name, function);
 

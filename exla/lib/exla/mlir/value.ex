@@ -625,8 +625,11 @@ defmodule EXLA.MLIR.Value do
     Enum.map(refs, fn ref -> %Value{function: function, ref: ref} end)
   end
 
-  def qr(%Value{function: function, ref: ref}, opts) do
-    {q_ref, r_ref} = EXLA.NIF.mlir_qr(function.ref, ref) |> unwrap!()
+  def qr(%Value{function: function, ref: ref}, q_shape, r_shape)
+      when is_tuple(q_shape) and is_tuple(r_shape) do
+    {q_ref, r_ref} =
+      EXLA.NIF.mlir_qr(function.ref, ref, Tuple.to_list(q_shape), Tuple.to_list(r_shape))
+      |> unwrap!()
 
     {
       %Value{function: function, ref: q_ref},
