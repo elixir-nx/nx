@@ -747,13 +747,17 @@ defmodule EXLA.Defn do
          :optional,
          %T{
            data: %Expr{
-             args: [%{data: %{op: :qr, args: [tensor, _opts]}}, {q_expr, r_expr}, _callback]
+             args: [
+               %{data: %{op: :qr, args: [tensor, _opts]}},
+               {%{type: {type_kind, _}} = q_expr, r_expr},
+               _callback
+             ]
            }
-         } =
-           _out,
+         },
          %{client: %EXLA.Client{platform: :host}, builder: %Function{} = function} = state,
          cache
-       ) do
+       )
+       when type_kind != :c do
     # We match only on platform: :host for MLIR, as we want to support
     # QR-on-cpu as a custom call only in this case
     {tensor, cache} = recur_operator(tensor, state, cache)
