@@ -3770,7 +3770,6 @@ defmodule EXLA.Defn.ExprTest do
 
     defn svd(t), do: Nx.LinAlg.svd(t)
 
-    @tag :skip
     test "svd" do
       input = Nx.iota({3, 3})
       output = Nx.as_type(input, {:f, 32})
@@ -3787,7 +3786,6 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
-    @tag :skip
     test "svd (tall matrix)" do
       input = Nx.tensor([[2, 0], [0, 1], [0, 0]])
       output = Nx.as_type(input, {:f, 32})
@@ -3804,7 +3802,6 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
-    @tag :skip
     test "svd (wide matrix)" do
       input = Nx.tensor([[2, 0, 0], [0, 1, 0]])
       output = Nx.as_type(input, {:f, 32})
