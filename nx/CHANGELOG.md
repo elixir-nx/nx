@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.1 (2024-02-27)
+
+  * [Nx.LinAlg] Minor speed up to `Nx.LinAlg.qr/2` default implementation
+
 ## v0.7.0 (2024-02-22)
 
 ### Enhancements

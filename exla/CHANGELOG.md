@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.1 (2024-02-27)
+
+  * Add CustomCallOp for QR decomposition
+  * Minor improvements to the MLIR modules generated
+  * MLIR Context pooling for better concurrency
+
 ## v0.7.0 (2024-02-22)
 
   * Update to latest Nx
