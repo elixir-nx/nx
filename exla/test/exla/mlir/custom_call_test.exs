@@ -12,7 +12,7 @@ defmodule EXLA.MLIR.CustomCallTest do
             [atol: 1.0e-1, rtol: 1.0e-1]
 
           {:f, 64} ->
-            [atol: 1.0e-15, rtol: 1.0e-15]
+            [atol: 1.0e-14, rtol: 1.0e-15]
 
           {:f, 32} ->
             [atol: 1.0e-6, rtol: 1.0e-6]

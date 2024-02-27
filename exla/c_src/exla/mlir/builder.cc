@@ -1417,7 +1417,7 @@ std::pair<mlir::Value, mlir::Value> MLIRFunction::QRCpuCustomCall(mlir::Value op
 
   auto op_shape = op_type.getShape();
 
-  mlir::Value dim_sizes = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseIntElementsAttr(builder, std::vector<int64_t>({op_shape.size(), q_shape.size(), r_shape.size()})));
+  mlir::Value dim_sizes = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseIntElementsAttr(builder, std::vector<int64_t>({static_cast<int64_t>(op_shape.size()), static_cast<int64_t>(q_shape.size()), static_cast<int64_t>(r_shape.size())})));
   mlir::Value operand_dims = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseIntElementsAttr(builder, op_shape));
   mlir::Value q_dims = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseIntElementsAttr(builder, q_shape));
   mlir::Value r_dims = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseIntElementsAttr(builder, r_shape));
