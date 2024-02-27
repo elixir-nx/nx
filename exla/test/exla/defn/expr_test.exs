@@ -3766,6 +3766,13 @@ defmodule EXLA.Defn.ExprTest do
       assert q.shape == {3, 3}
       assert r.shape == {3, 2}
       assert_all_close(Nx.dot(q, r), output, atol: 1.0e-5, rtol: 1.0e-5)
+
+      input = Nx.iota({2, 3})
+      output = Nx.as_type(input, {:f, 32})
+      assert {q, r} = qr_complete(input)
+      assert q.shape == {2, 2}
+      assert r.shape == {2, 3}
+      assert_all_close(Nx.dot(q, r), output, atol: 1.0e-5, rtol: 1.0e-5)
     end
 
     defn svd(t), do: Nx.LinAlg.svd(t)

@@ -753,12 +753,9 @@ defmodule EXLA.Defn do
            _out,
          %{client: %EXLA.Client{platform: :host}, builder: %Function{} = function} = state,
          cache
-       )
-       when elem(tensor.shape, tuple_size(tensor.shape) - 2) >=
-              elem(tensor.shape, tuple_size(tensor.shape) - 1) do
+       ) do
     # We match only on platform: :host for MLIR, as we want to support
     # QR-on-cpu as a custom call only in this case
-    # TO-DO: Add support for wide-mode inputs as well
     {tensor, cache} = recur_operator(tensor, state, cache)
 
     tensor =
