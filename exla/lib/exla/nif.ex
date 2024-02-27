@@ -183,6 +183,8 @@ defmodule EXLA.NIF do
   def mlir_while(_function, _initial), do: :erlang.nif_error(:undef)
   def mlir_return(_function, _operands), do: :erlang.nif_error(:undef)
 
+  def mlir_qr(_function, _operand, _q_shape, _r_shape), do: :erlang.nif_error(:undef)
+
   def new_builder(_name),
     do: :erlang.nif_error(:undef)
 

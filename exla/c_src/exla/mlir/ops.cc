@@ -1606,3 +1606,33 @@ ERL_NIF_TERM mlir_return(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   std::vector<mlir::Value> res = (*function)->ReturnOp(operands);
   return exla::nif::ok(env, exla::nif::make_list<mlir::Value>(env, res));
 }
+
+ERL_NIF_TERM mlir_qr(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 4) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* value;
+  std::vector<int64_t> q_shape, r_shape;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], value)) {
+    return exla::nif::error(env, "Unable to get value.");
+  }
+  if (!exla::nif::get_list(env, argv[2], q_shape)) {
+    return exla::nif::error(env, "Unable to get Q shape.");
+  }
+  if (!exla::nif::get_list(env, argv[3], r_shape)) {
+    return exla::nif::error(env, "Unable to get R shape.");
+  }
+
+  std::pair<mlir::Value, mlir::Value> result = (*function)->QRCpuCustomCall(*value, q_shape, r_shape);
+
+  ERL_NIF_TERM q = exla::nif::make<mlir::Value>(env, result.first);
+  ERL_NIF_TERM r = exla::nif::make<mlir::Value>(env, result.second);
+
+  return exla::nif::ok(env, enif_make_tuple2(env, q, r));
+}

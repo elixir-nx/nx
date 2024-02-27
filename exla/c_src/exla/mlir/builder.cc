@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "../exla_nif_util.h"
+#include "custom_calls.h"
 #include "mhlo/IR/hlo_ops.h"
 #include "mhlo/transforms/rewriters.h"
 #include "mhlo/utils/type_conversion.h"
@@ -17,6 +18,7 @@
 #include "stablehlo/dialect/ChloOps.h"
 #include "stablehlo/dialect/StablehloOps.h"
 #include "xla/primitive_util.h"
+#include "xla/service/custom_call_target_registry.h"
 #include "xla/types.h"
 
 namespace exla {
@@ -1406,4 +1408,59 @@ void MLIRFunction::setInsertionPoint() {
     module_->builder()->setInsertionPointToEnd(&regions.top()->back());
   }
 }
+
+std::pair<mlir::Value, mlir::Value> MLIRFunction::QRCpuCustomCall(mlir::Value operand, std::vector<int64_t> q_shape, std::vector<int64_t> r_shape) {
+  auto builder = module_->builder();
+  setInsertionPoint();
+
+  mlir::RankedTensorType op_type = llvm::cast<mlir::RankedTensorType>(operand.getType());
+
+  auto op_shape = op_type.getShape();
+
+  mlir::Value dim_sizes = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseIntElementsAttr(builder, std::vector<int64_t>({op_shape.size(), q_shape.size(), r_shape.size()})));
+  mlir::Value operand_dims = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseIntElementsAttr(builder, op_shape));
+  mlir::Value q_dims = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseIntElementsAttr(builder, q_shape));
+  mlir::Value r_dims = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseIntElementsAttr(builder, r_shape));
+
+  auto element_type = op_type.getElementType();
+  std::string call_target_name = "qr_cpu_custom_call_f32";
+
+  if (element_type.isF32()) {
+    XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM(call_target_name, qr_cpu_custom_call_f32);
+  } else if (element_type.isF64()) {
+    call_target_name = "qr_cpu_custom_call_f64";
+    XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM(call_target_name, qr_cpu_custom_call_f64);
+  } else if (element_type.isF16()) {
+    call_target_name = "qr_cpu_custom_call_f16";
+    XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM(call_target_name, qr_cpu_custom_call_f16);
+  } else if (element_type.isBF16()) {
+    call_target_name = "qr_cpu_custom_call_bf16";
+    XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM(call_target_name, qr_cpu_custom_call_bf16);
+  } else {
+    std::cerr << "Unsupported type for QR decomposition" << std::endl;
+    exit(1);
+  }
+
+  auto call_target_name_attr = mlir::NamedAttribute(builder->getStringAttr("call_target_name"), builder->getStringAttr(call_target_name));
+  auto backend_config_attr = mlir::NamedAttribute(builder->getStringAttr("backend_config"), builder->getStringAttr("Host"));
+  auto named_attrs = {call_target_name_attr, backend_config_attr};
+
+  mlir::Type q_type = mlir::RankedTensorType::get(q_shape, op_type.getElementType());
+  mlir::Type r_type = mlir::RankedTensorType::get(r_shape, op_type.getElementType());
+
+  mlir::TupleType out_tuple_type = mlir::TupleType::get(builder->getContext(), mlir::TypeRange({q_type, r_type}));
+
+  auto custom_call = builder->create<mlir::stablehlo::CustomCallOp>(
+      builder->getUnknownLoc(),
+      mlir::TypeRange({out_tuple_type}),
+      mlir::ValueRange({operand, dim_sizes, operand_dims, q_dims, r_dims}),
+      llvm::ArrayRef<mlir::NamedAttribute>(named_attrs));
+
+  mlir::Value out_tuple = custom_call.getResult(0);
+  mlir::Value q = this->GetTupleElementOp(out_tuple, 0);
+  mlir::Value r = this->GetTupleElementOp(out_tuple, 1);
+
+  return std::make_pair(q, r);
+}
+
 }  // namespace exla

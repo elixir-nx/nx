@@ -135,7 +135,7 @@ defmodule EXLA.Defn do
   end
 
   defp to_stream_computation(
-         _client,
+         client,
          input_length,
          acc_length,
          %Function{} = builder,
@@ -207,6 +207,7 @@ defmodule EXLA.Defn do
             end)
 
           state = %{
+            client: client,
             builder: builder,
             precision: Keyword.get(options, :precision, :default),
             params: Map.new(input_params ++ acc_params ++ constant_params),
@@ -330,6 +331,7 @@ defmodule EXLA.Defn do
             end)
 
           state = %{
+            client: client,
             precision: Keyword.get(options, :precision, :default),
             builder: body_b,
             params: Map.new(input_params ++ acc_params ++ constant_params),
@@ -392,7 +394,7 @@ defmodule EXLA.Defn do
 
     client = EXLA.Client.fetch!(client_name)
 
-    callback = &to_root_computation(&1, &2, &3, &4, compile_options)
+    callback = &to_root_computation(&1, &2, &3, &4, Keyword.put(compile_options, :client, client))
 
     {executable, used_inputs, outputs, outfeed, :ok, debug?} =
       compile(client, key, vars, fun, compile_options, 0, [], callback)
@@ -434,7 +436,14 @@ defmodule EXLA.Defn do
           end)
       end
 
+    client = Keyword.fetch!(options, :client)
+
+    unless client do
+      raise ArgumentError, "missing client"
+    end
+
     state = %{
+      client: client,
       precision: Keyword.get(options, :precision, :default),
       builder: builder,
       params: Map.new(params ++ outfeed.infeeds),
@@ -739,6 +748,36 @@ defmodule EXLA.Defn do
   defp cached_recur_operator(:fun, %T{data: %Expr{args: args}, type: type}, state, cache) do
     [args, expr, {_, name, _}] = args
     {fun_computation(name, args, expr, type, state), cache}
+  end
+
+  defp cached_recur_operator(
+         :optional,
+         %T{
+           data: %Expr{
+             args: [
+               %{data: %{op: :qr, args: [tensor, _opts]}},
+               {%{type: {type_kind, _}} = q_expr, r_expr},
+               _callback
+             ]
+           }
+         },
+         %{client: %EXLA.Client{platform: :host}, builder: %Function{} = function} = state,
+         cache
+       )
+       when type_kind != :c do
+    # We match only on platform: :host for MLIR, as we want to support
+    # QR-on-cpu as a custom call only in this case
+    {tensor, cache} = recur_operator(tensor, state, cache)
+
+    tensor =
+      if op_type(tensor) != q_expr.type do
+        to_type(tensor, q_expr.type)
+      else
+        tensor
+      end
+
+    {q, r} = Value.qr(tensor, q_expr.shape, r_expr.shape)
+    {Value.tuple(function, [q, r]), cache}
   end
 
   defp cached_recur_operator(
