@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "../exla_nif_util.h"
+#include "custom_calls.h"
 #include "mhlo/IR/hlo_ops.h"
 #include "mhlo/transforms/rewriters.h"
 #include "mhlo/utils/type_conversion.h"
@@ -17,6 +18,7 @@
 #include "stablehlo/dialect/ChloOps.h"
 #include "stablehlo/dialect/StablehloOps.h"
 #include "xla/primitive_util.h"
+#include "xla/service/custom_call_target_registry.h"
 #include "xla/types.h"
 
 namespace exla {
@@ -1406,4 +1408,48 @@ void MLIRFunction::setInsertionPoint() {
     module_->builder()->setInsertionPointToEnd(&regions.top()->back());
   }
 }
+
+std::pair<mlir::Value, mlir::Value> MLIRFunction::QRCpuCustomCall(mlir::Value operand) {
+  auto builder = module_->builder();
+  setInsertionPoint();
+
+  mlir::RankedTensorType op_type = llvm::cast<mlir::RankedTensorType>(operand.getType());
+
+  auto op_shape = op_type.getShape();
+  auto q_shape = op_shape;
+  auto r_shape = {op_shape[1], op_shape[1]};
+
+  mlir::Value dim_sizes = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseIntElementsAttr(builder, std::vector<int64_t>({2, 2, 2})));
+  mlir::Value operand_dims = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseIntElementsAttr(builder, op_shape));
+  mlir::Value q_dims = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseIntElementsAttr(builder, q_shape));
+  mlir::Value r_dims = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseIntElementsAttr(builder, r_shape));
+
+  bool is_f32 = op_type.getElementType().isF32();
+  std::string call_target_name = is_f32 ? "qr_cpu_custom_call_f32" : "qr_cpu_custom_call_f64";
+  auto function = is_f32 ? qr_cpu_custom_call<float> : qr_cpu_custom_call<double>;
+
+  XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM(call_target_name, function);
+
+  auto call_target_name_attr = mlir::NamedAttribute(builder->getStringAttr("call_target_name"), builder->getStringAttr(call_target_name));
+  auto backend_config_attr = mlir::NamedAttribute(builder->getStringAttr("backend_config"), builder->getStringAttr("Host"));
+  auto named_attrs = {call_target_name_attr, backend_config_attr};
+
+  mlir::Type q_type = mlir::RankedTensorType::get(q_shape, op_type.getElementType());
+  mlir::Type r_type = mlir::RankedTensorType::get(r_shape, op_type.getElementType());
+
+  mlir::TupleType out_tuple_type = mlir::TupleType::get(builder->getContext(), mlir::TypeRange({q_type, r_type}));
+
+  auto custom_call = builder->create<mlir::stablehlo::CustomCallOp>(
+      builder->getUnknownLoc(),
+      mlir::TypeRange({out_tuple_type}),
+      mlir::ValueRange({operand, dim_sizes, operand_dims, q_dims, r_dims}),
+      llvm::ArrayRef<mlir::NamedAttribute>(named_attrs));
+
+  mlir::Value out_tuple = custom_call.getResult(0);
+  mlir::Value q = this->GetTupleElementOp(out_tuple, 0);
+  mlir::Value r = this->GetTupleElementOp(out_tuple, 1);
+
+  return std::make_pair(q, r);
+}
+
 }  // namespace exla

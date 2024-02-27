@@ -121,6 +121,7 @@ class MLIRFunction {
   std::vector<mlir::Value> ReturnOp(std::vector<mlir::Value> values);
   int get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *type);
   std::vector<mlir::Value> PushRegion(mlir::Region *region);
+  std::pair<mlir::Value, mlir::Value> QRCpuCustomCall(mlir::Value operand);
   void PopRegion();
   void Build(mlir::Value root);
 

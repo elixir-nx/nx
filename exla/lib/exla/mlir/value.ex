@@ -625,6 +625,15 @@ defmodule EXLA.MLIR.Value do
     Enum.map(refs, fn ref -> %Value{function: function, ref: ref} end)
   end
 
+  def qr(%Value{function: function, ref: ref}, opts) do
+    {q_ref, r_ref} = EXLA.NIF.mlir_qr(function.ref, ref) |> unwrap!()
+
+    {
+      %Value{function: function, ref: q_ref},
+      %Value{function: function, ref: r_ref}
+    }
+  end
+
   defp flatten_shapes(val) when is_list(val) do
     Enum.flat_map(val, &flatten_shapes/1)
   end
