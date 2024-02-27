@@ -191,8 +191,8 @@ defmodule EXLA.ExecutableFeedTest do
                        {new_token, val}
                      else
                        val_and_token = Op.infeed(token, t.shape)
-                       val = Op.get_tuple_element(val_and_token, 1)
-                       new_token = Op.get_tuple_element(val_and_token, 0)
+                       val = Op.get_tuple_element(val_and_token, 0)
+                       new_token = Op.get_tuple_element(val_and_token, 1)
                        {new_token, val}
                      end
 

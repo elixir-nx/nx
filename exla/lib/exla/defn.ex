@@ -135,7 +135,7 @@ defmodule EXLA.Defn do
   end
 
   defp to_stream_computation(
-         _client,
+         client,
          input_length,
          acc_length,
          %Function{} = builder,
@@ -207,6 +207,7 @@ defmodule EXLA.Defn do
             end)
 
           state = %{
+            client: client,
             builder: builder,
             precision: Keyword.get(options, :precision, :default),
             params: Map.new(input_params ++ acc_params ++ constant_params),
@@ -435,8 +436,14 @@ defmodule EXLA.Defn do
           end)
       end
 
+    client = Keyword.fetch!(options, :client)
+
+    unless client do
+      raise ArgumentError, "missing client"
+    end
+
     state = %{
-      client: Keyword.fetch!(options, :client),
+      client: client,
       precision: Keyword.get(options, :precision, :default),
       builder: builder,
       params: Map.new(params ++ outfeed.infeeds),
