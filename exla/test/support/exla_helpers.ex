@@ -19,8 +19,8 @@ defmodule EXLAHelpers do
 
       EXLA.MLIR.Module.compile(
         builder.module,
-        client,
-        arg_shapes,
+        client(),
+        Enum.map(params, &EXLA.MLIR.Value.get_shape/1),
         builder.return_shape,
         opts
       )

@@ -499,58 +499,6 @@ ERL_NIF_TERM get_supported_platforms(ErlNifEnv* env, int argc, const ERL_NIF_TER
   return exla::nif::ok(env, exla::nif::make_map(env, platform_info));
 }
 
-ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 7) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  exla::ExlaClient** client;
-  xla::XlaComputation* computation;
-  std::vector<xla::Shape*> argument_layouts;
-  xla::ExecutableBuildOptions build_options;
-  int num_replicas;
-  int num_partitions;
-  bool use_spmd;
-  int device_id;
-
-  if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
-    return exla::nif::error(env, "Unable to get client.");
-  }
-  if (!exla::nif::get<xla::XlaComputation>(env, argv[1], computation)) {
-    return exla::nif::error(env, "Unable to get computation.");
-  }
-  if (!exla::nif::get_list<xla::Shape>(env, argv[2], argument_layouts)) {
-    return exla::nif::error(env, "Unable to get argument layouts.");
-  }
-  if (!exla::nif::get(env, argv[3], &num_replicas)) {
-    return exla::nif::error(env, "Unable to get Number of Replicas.");
-  }
-  if (!exla::nif::get(env, argv[4], &num_partitions)) {
-    return exla::nif::error(env, "Unable to get Number of Partitions.");
-  }
-  if (!exla::nif::get(env, argv[5], &use_spmd)) {
-    return exla::nif::error(env, "Unable to get SPMD Partitioning Flag.");
-  }
-  if (!exla::nif::get(env, argv[6], &device_id)) {
-    return exla::nif::error(env, "Unable to get device ID.");
-  }
-
-  build_options.set_num_replicas(num_replicas);
-  build_options.set_num_partitions(num_partitions);
-  build_options.set_use_spmd_partitioning(use_spmd);
-
-  bool compile_portable_executable = false;
-  if (device_id >= 0) {
-    compile_portable_executable = true;
-    build_options.set_device_ordinal(device_id);
-  }
-
-  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaExecutable * executable,
-                            (*client)->Compile(*computation, argument_layouts, build_options, compile_portable_executable), env);
-
-  return exla::nif::ok(env, exla::nif::make<exla::ExlaExecutable*>(env, executable));
-}
-
 // ExlaExecutable Functions
 
 ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {

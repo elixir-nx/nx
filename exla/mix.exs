@@ -86,17 +86,10 @@ defmodule EXLA.MixProject do
         Bindings: [
           EXLA.BinaryBuffer,
           EXLA.Client,
-          EXLA.Computation,
           EXLA.DeviceBuffer,
           EXLA.Executable,
           EXLA.Lib,
           EXLA.Shape
-        ],
-        MLIR: [
-          EXLA.MLIR.Module,
-          EXLA.MLIR.Function,
-          EXLA.MLIR.Region,
-          EXLA.MLIR.Value
         ]
       ]
     ]

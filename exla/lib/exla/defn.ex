@@ -243,7 +243,7 @@ defmodule EXLA.Defn do
     outfeed = outfeed |> Outfeed.with_token(out_token) |> Outfeed.close(builder)
     EXLA.MLIR.Value.variadic_return([output])
 
-    {builder, {input_shape, input_indexes}, outfeed}
+    {{input_shape, input_indexes}, outfeed}
   end
 
   @doc false
@@ -313,7 +313,7 @@ defmodule EXLA.Defn do
 
     Value.variadic_return([res])
 
-    {function, :ok, outfeed}
+    {:ok, outfeed}
   end
 
   defp maybe_outfeed(lock, executable, args, used_inputs, outputs, outfeed, run_options)
@@ -444,14 +444,20 @@ defmodule EXLA.Defn do
 
             expr = Nx.Defn.Composite.traverse(expr || fun.(vars), &Nx.devectorize/1)
 
-            {computation, extra, outfeed} =
+            {extra, outfeed} =
               to_computation.(builder, expr, inputs_and_shapes, outfeed)
 
             {xla_time, executable} =
               :timer.tc(fn ->
                 shapes = for {i, shape} <- inputs_and_shapes, i >= used_buffers, do: shape
 
-                EXLA.Computation.compile(computation, client, shapes, options)
+                EXLA.MLIR.Module.compile(
+                  builder.module,
+                  client,
+                  shapes,
+                  builder.return_shape,
+                  options
+                )
               end)
 
             {:ok, {xla_time, executable, extra, %{outfeed | infeeds: []}}}
