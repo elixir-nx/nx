@@ -1,11 +1,10 @@
 defmodule EXLA.MLIR.Value do
-  @moduledoc """
-  Representation of an MLIR Value.
+  @moduledoc false
+  # Representation of an MLIR Value.
+  # MLIR Values are SSA and generally are either operations or
+  # block arguments. This module is used to construct most of the
+  # MLIR operations.
 
-  MLIR Values are SSA and generally are either operations or
-  block arguments. This module is used to construct most of the
-  MLIR operations.
-  """
   defstruct [:ref, :function]
 
   alias __MODULE__, as: Value
