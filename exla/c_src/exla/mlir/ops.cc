@@ -11,7 +11,7 @@
 #include "stablehlo/dialect/StablehloOps.h"
 #include "xla/shape_util.h"
 
-// MLIR Builder Functions
+// MLIR Functions
 
 ERL_NIF_TERM mlir_compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 7) {

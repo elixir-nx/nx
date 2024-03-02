@@ -124,20 +124,8 @@ defmodule EXLA.Defn.Outfeed do
         next_flag = next_hook(compiled_hooks)
         compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed, pos, shape})
 
-        {token, input} =
-          case builder do
-            %Function{} ->
-              token = Value.outfeed(Value.constant_r0(builder, next_flag, {:u, 16}), token)
-              {token, [input]} = Value.infeed(token, shape)
-              {token, input}
-
-            _ ->
-              token = EXLA.Op.outfeed(EXLA.Op.constant_r0(builder, next_flag, {:u, 16}), token)
-              infeed = EXLA.Op.infeed(token, shape)
-              input = EXLA.Op.get_tuple_element(infeed, 0)
-              token = EXLA.Op.get_tuple_element(infeed, 1)
-              {token, input}
-          end
+        token = Value.outfeed(Value.constant_r0(builder, next_flag, {:u, 16}), token)
+        {token, [input]} = Value.infeed(token, shape)
 
         {{pos, input}, {compiled_hooks, token}}
       end)
@@ -189,26 +177,17 @@ defmodule EXLA.Defn.Outfeed do
   def close(%Outfeed{} = outfeed, %Function{} = builder) when will_outfeed(outfeed),
     do: update_in(outfeed.token, &Value.outfeed(Value.constant_r0(builder, 0, {:u, 16}), &1))
 
-  def close(%Outfeed{} = outfeed, builder) when will_outfeed(outfeed),
-    do: update_in(outfeed.token, &EXLA.Op.outfeed(EXLA.Op.constant_r0(builder, 0, {:u, 16}), &1))
-
   def close(%Outfeed{} = outfeed, _builder),
     do: outfeed
 
   defp outfeed_flat_tuple(%Outfeed{token: token, compiled_hooks: ch} = outfeed, builder, tuple) do
-    mod =
-      case builder do
-        %Function{} -> Value
-        _ -> EXLA.Op
-      end
-
     flag = next_hook(ch)
-    token = mod.outfeed(mod.constant_r0(builder, flag, {:u, 16}), token)
-    %EXLA.Shape{dims: {size}, dtype: {:tuple, shapes}} = mod.get_shape(tuple)
+    token = Value.outfeed(Value.constant_r0(builder, flag, {:u, 16}), token)
+    %EXLA.Shape{dims: {size}, dtype: {:tuple, shapes}} = Value.get_shape(tuple)
 
     token =
       Enum.reduce(1..size//1, token, fn pos, token ->
-        mod.outfeed(mod.get_tuple_element(tuple, pos - 1), token)
+        Value.outfeed(Value.get_tuple_element(tuple, pos - 1), token)
       end)
 
     {%{outfeed | token: token}, flag, shapes}

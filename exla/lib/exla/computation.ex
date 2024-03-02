@@ -6,8 +6,6 @@ defmodule EXLA.Computation do
   @enforce_keys [:ref, :output_shape]
   defstruct [:ref, :output_shape]
 
-  alias EXLA.{Client, Computation, Executable}
-
   @doc """
   Compiles a computation into an executable.
 
@@ -35,43 +33,6 @@ defmodule EXLA.Computation do
   """
   def compile(computation, client, argument_shapes, options \\ [])
 
-  def compile(computation = %Computation{}, client = %Client{}, argument_shapes, options) do
-    num_replicas = Keyword.get(options, :num_replicas, 1)
-    num_partitions = Keyword.get(options, :num_partitions, 1)
-
-    # JAX comments say SPMD can lead to subtle bugs so they only enable
-    # when strictly necessary, which is when num_partitions is greater than 1.
-    use_spmd = if Keyword.get(options, :use_spmd, true) or num_partitions >= 1, do: 1, else: 0
-
-    device_id =
-      if num_replicas > 1 or num_partitions > 1,
-        do: -1,
-        else: Keyword.get(options, :device_id, client.default_device_id)
-
-    output_shape = assert_output_shape!(computation)
-
-    ref =
-      EXLA.NIF.compile(
-        client.ref,
-        computation.ref,
-        Enum.map(argument_shapes, & &1.ref),
-        num_replicas,
-        num_partitions,
-        use_spmd,
-        device_id
-      )
-      |> unwrap!()
-
-    %Executable{
-      client: client,
-      ref: ref,
-      output_shape: output_shape,
-      num_replicas: num_replicas,
-      num_partitions: num_partitions,
-      device_id: device_id
-    }
-  end
-
   def compile(
         %EXLA.MLIR.Function{module: module, return_shape: return_shape},
         client,
@@ -86,25 +47,4 @@ defmodule EXLA.Computation do
       opts
     )
   end
-
-  defp assert_output_shape!(%{output_shape: output_shape}) do
-    if root_tuple_only?(output_shape) do
-      output_shape
-    else
-      raise ArgumentError,
-            "can only compile computations with a tuple at the root (and only at the root), " <>
-              "got: #{inspect(output_shape)}"
-    end
-  end
-
-  defp root_tuple_only?(shape) do
-    case shape do
-      %{dtype: {:tuple, inner}} -> Enum.all?(inner, &(not match?({:tuple, _}, &1.dtype)))
-      %{} -> false
-    end
-  end
-
-  defp unwrap!(:ok), do: :ok
-  defp unwrap!({:ok, ref}), do: ref
-  defp unwrap!({:error, error}), do: raise(List.to_string(error))
 end
