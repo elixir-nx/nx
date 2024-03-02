@@ -2,23 +2,20 @@
 #define EXLA_CLIENT_H_
 
 #include <memory>
-#include <vector>
 #include <utility>
+#include <vector>
 
 #include "exla_nif_util.h"
-#include "tsl/platform/types.h"
+#include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/OwningOpRef.h"
 #include "tsl/platform/status.h"
+#include "tsl/platform/types.h"
 #include "xla/pjrt/gpu/gpu_helpers.h"
 #include "xla/pjrt/pjrt_client.h"
-
-#include "mlir/IR/OwningOpRef.h"
-#include "mlir/IR/BuiltinOps.h"
-
 
 // The implementations in this module are designed after implementations
 // in the XLA runtime, PjRt. Deviations are made where it makes sense
 // to work better with the VM.
-
 
 namespace exla {
 
@@ -30,7 +27,7 @@ class ExlaBuffer {
 
   int device_id() { return buffer_->device()->id(); }
   xla::PjRtBuffer* buffer() { return buffer_.get(); }
-  xla::StatusOr<ExlaBuffer*> CopyToDevice(xla::PjRtDevice * dst_device);
+  xla::StatusOr<ExlaBuffer*> CopyToDevice(xla::PjRtDevice* dst_device);
   xla::StatusOr<ERL_NIF_TERM> ToBinary(ErlNifEnv* env, exla::int64 size);
   xla::Status Deallocate();
 
@@ -72,15 +69,11 @@ class ExlaClient {
   xla::PjRtClient* client() { return client_.get(); }
 
   // Compiles the given computation with the given compile options
-  xla::StatusOr<ExlaExecutable*> Compile(const xla::XlaComputation& computation,
+
+  xla::StatusOr<ExlaExecutable*> Compile(const mlir::OwningOpRef<mlir::ModuleOp>& computation,
                                          std::vector<xla::Shape*> argument_layouts,
                                          xla::ExecutableBuildOptions& options,
                                          bool compile_portable_executable);
-
-    xla::StatusOr<ExlaExecutable*> Compile(const mlir::OwningOpRef<mlir::ModuleOp>& computation,
-                                           std::vector<xla::Shape*> argument_layouts,
-                                           xla::ExecutableBuildOptions& options,
-                                           bool compile_portable_executable);
 
   xla::StatusOr<ExlaBuffer*> BufferFromBinary(ErlNifEnv* env,
                                               ERL_NIF_TERM binary_term,
@@ -110,6 +103,6 @@ xla::StatusOr<ExlaClient*> GetGpuClient(double memory_fraction,
 xla::StatusOr<ExlaClient*> GetTpuClient();
 
 xla::StatusOr<ExlaClient*> GetCApiClient(std::string device_type);
-} // namespace exla
+}  // namespace exla
 
 #endif

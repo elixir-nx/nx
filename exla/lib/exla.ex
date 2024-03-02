@@ -71,17 +71,6 @@ defmodule EXLA do
       * `:highest` - Slowest but most accurate. Performs computations in float32
         or float64 as applicable
 
-    * `:compiler_mode` - the mode to use for the compiler. It must be one of:
-
-      * `:mlir` - The default mode. Uses MLIR to compile the computation
-
-      * `:xla` - Legacy implementation. Uses XLA to compile the computation
-
-    The `:compiler_mode` can also be set globally through a specific fallback config:
-
-        config :exla, :compiler_mode, :mlir
-
-
   ## Clients
 
   The `EXLA` library uses a client for compiling and executing code.

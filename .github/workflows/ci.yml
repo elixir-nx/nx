@@ -6,7 +6,7 @@ on:
   pull_request:
 jobs:
   main:
-    name: Linux (${{ matrix.working_directory }}, ${{ matrix.elixir }}, ${{ matrix.otp }}${{ (matrix.use_mlir && ', mlir' || '') }})
+    name: Linux (${{ matrix.working_directory }}, ${{ matrix.elixir }}, ${{ matrix.otp }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -14,14 +14,9 @@ jobs:
         working_directory: ["nx", "exla", "torchx"]
         elixir: ["1.14.5", "1.15.4"]
         otp: ["25.3"]
-        use_mlir: [false]
         include:
           - elixir: "1.15.4"
             lint: true
-          - elixir: "1.15.4"
-            working_directory: "exla"
-            otp: "25.3"
-            use_mlir: mlir
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}
@@ -53,7 +48,7 @@ jobs:
       - name: Run epmd for distributed tests
         run: epmd -daemon
       - name: Run tests
-        run: ${{(matrix.use_mlir && 'EXLA_COMPILER_MODE=mlir') || ''}} mix test
+        run: mix test
 
   win:
     name: Windows (${{ matrix.working_directory }}, ${{ matrix.elixir }}, ${{ matrix.otp }})

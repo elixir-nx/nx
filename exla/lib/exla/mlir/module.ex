@@ -1,7 +1,6 @@
 defmodule EXLA.MLIR.Module do
-  @moduledoc """
-  Representation of an MLIR module.
-  """
+  @moduledoc false
+  # Representation of an MLIR module.
 
   defstruct [:ref]
 

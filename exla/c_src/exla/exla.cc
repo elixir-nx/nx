@@ -6,7 +6,6 @@
 #include "exla_client.h"
 #include "exla_log_sink.h"
 #include "exla_nif_util.h"
-#include "exla_ops.h"
 #include "mlir/ops.h"
 #include "xla/client/client.h"
 #include "xla/client/xla_builder.h"
@@ -55,13 +54,7 @@ void free_exla_buffer(ErlNifEnv* env, void* obj) {
 static int open_resources(ErlNifEnv* env) {
   const char* mod = "EXLA";
 
-  if (!exla::nif::open_resource<xla::XlaOp>(env, mod, "Op")) {
-    return -1;
-  }
   if (!exla::nif::open_resource<xla::Shape>(env, mod, "Shape")) {
-    return -1;
-  }
-  if (!exla::nif::open_resource<xla::XlaComputation>(env, mod, "Computation")) {
     return -1;
   }
   if (!exla::nif::open_resource<exla::ExlaExecutable*>(env, mod, "Executable", free_exla_executable)) {
@@ -137,27 +130,6 @@ ERL_NIF_TERM create_sub_builder(ErlNifEnv* env, int argc, const ERL_NIF_TERM arg
   auto uniq_sub_builder = (*builder)->CreateSubBuilder(name);
   xla::XlaBuilder* sub_builder = uniq_sub_builder.release();
   return exla::nif::ok(env, exla::nif::make<xla::XlaBuilder*>(env, sub_builder));
-}
-
-ERL_NIF_TERM build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 2) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  xla::XlaBuilder** builder;
-  xla::XlaOp* root;
-
-  if (!exla::nif::get<xla::XlaBuilder*>(env, argv[0], builder)) {
-    return exla::nif::error(env, "Bad argument passed to build.");
-  }
-  if (!exla::nif::get<xla::XlaOp>(env, argv[1], root)) {
-    return exla::nif::error(env, "Bad argument passed to build.");
-  }
-
-  EXLA_ASSIGN_OR_RETURN_NIF(xla::XlaComputation computation,
-                            (*builder)->Build(*root), env);
-
-  return exla::nif::ok(env, exla::nif::make<xla::XlaComputation>(env, computation));
 }
 
 // ExlaBuffer Functions
@@ -527,58 +499,6 @@ ERL_NIF_TERM get_supported_platforms(ErlNifEnv* env, int argc, const ERL_NIF_TER
   return exla::nif::ok(env, exla::nif::make_map(env, platform_info));
 }
 
-ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 7) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  exla::ExlaClient** client;
-  xla::XlaComputation* computation;
-  std::vector<xla::Shape*> argument_layouts;
-  xla::ExecutableBuildOptions build_options;
-  int num_replicas;
-  int num_partitions;
-  bool use_spmd;
-  int device_id;
-
-  if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
-    return exla::nif::error(env, "Unable to get client.");
-  }
-  if (!exla::nif::get<xla::XlaComputation>(env, argv[1], computation)) {
-    return exla::nif::error(env, "Unable to get computation.");
-  }
-  if (!exla::nif::get_list<xla::Shape>(env, argv[2], argument_layouts)) {
-    return exla::nif::error(env, "Unable to get argument layouts.");
-  }
-  if (!exla::nif::get(env, argv[3], &num_replicas)) {
-    return exla::nif::error(env, "Unable to get Number of Replicas.");
-  }
-  if (!exla::nif::get(env, argv[4], &num_partitions)) {
-    return exla::nif::error(env, "Unable to get Number of Partitions.");
-  }
-  if (!exla::nif::get(env, argv[5], &use_spmd)) {
-    return exla::nif::error(env, "Unable to get SPMD Partitioning Flag.");
-  }
-  if (!exla::nif::get(env, argv[6], &device_id)) {
-    return exla::nif::error(env, "Unable to get device ID.");
-  }
-
-  build_options.set_num_replicas(num_replicas);
-  build_options.set_num_partitions(num_partitions);
-  build_options.set_use_spmd_partitioning(use_spmd);
-
-  bool compile_portable_executable = false;
-  if (device_id >= 0) {
-    compile_portable_executable = true;
-    build_options.set_device_ordinal(device_id);
-  }
-
-  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaExecutable * executable,
-                            (*client)->Compile(*computation, argument_layouts, build_options, compile_portable_executable), env);
-
-  return exla::nif::ok(env, exla::nif::make<exla::ExlaExecutable*>(env, executable));
-}
-
 // ExlaExecutable Functions
 
 ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -782,11 +702,6 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_while", 2, mlir_while},
     {"mlir_return", 2, mlir_return},
     {"mlir_qr", 4, mlir_qr},
-    // XlaBuilder
-    {"new_builder", 1, new_builder},
-    {"create_sub_builder", 2, create_sub_builder},
-    {"build", 2, build},
-    {"parameter", 4, parameter},
     // ExlaClient
     {"get_host_client", 0, get_host_client},
     {"get_gpu_client", 2, get_gpu_client},
@@ -795,7 +710,6 @@ static ErlNifFunc exla_funcs[] = {
     {"load_pjrt_plugin", 2, load_pjrt_plugin},
     {"get_device_count", 1, get_device_count},
     {"get_supported_platforms", 0, get_supported_platforms},
-    {"compile", 7, compile, ERL_NIF_DIRTY_JOB_CPU_BOUND},
     {"mlir_compile", 7, mlir_compile, ERL_NIF_DIRTY_JOB_CPU_BOUND},
     // ExlaBuffer
     {"binary_to_device_mem", 4, binary_to_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
@@ -812,122 +726,6 @@ static ErlNifFunc exla_funcs[] = {
     {"make_token_shape", 0, make_token_shape},
     {"make_tuple_shape", 1, make_tuple_shape},
     {"get_shape_info", 1, get_shape_info},
-    // Element-wise Binary
-    {"add", 3, add},
-    {"subtract", 3, sub},
-    {"multiply", 3, mul},
-    {"divide", 3, div},
-    {"remainder", 3, rem},
-    {"min", 3, min},
-    {"max", 3, max},
-    {"bitwise_and", 3, bitwise_and},
-    {"bitwise_or", 3, bitwise_or},
-    {"bitwise_xor", 3, bitwise_xor},
-    {"left_shift", 3, shift_left},
-    {"right_shift_logical", 3, shift_right_logical},
-    {"right_shift_arithmetic", 3, shift_right_arithmetic},
-    {"pow", 3, pow},
-    {"atan2", 3, atan2},
-    // Element-wise Binary comparison
-    {"equal", 3, equal},
-    {"not_equal", 3, not_equal},
-    {"greater", 3, greater},
-    {"greater_equal", 3, greater_equal},
-    {"less", 3, less},
-    {"less_equal", 3, less_equal},
-    // Element-wise Unary
-    {"abs", 1, abs},
-    {"exp", 1, exp},
-    {"expm1", 1, expm1},
-    {"floor", 1, floor},
-    {"ceil", 1, ceil},
-    {"round", 1, round},
-    {"log", 1, log},
-    {"log1p", 1, log1p},
-    {"sigmoid", 1, sigmoid},
-    {"sign", 1, sign},
-    {"cos", 1, cos},
-    {"sin", 1, sin},
-    {"acos", 1, acos},
-    {"asin", 1, asin},
-    {"atan", 1, atan},
-    {"cosh", 1, cosh},
-    {"fft", 2, fft},
-    {"ifft", 2, ifft},
-    {"sinh", 1, sinh},
-    {"tanh", 1, tanh},
-    {"acosh", 1, acosh},
-    {"asinh", 1, asinh},
-    {"atanh", 1, atanh},
-    {"real", 1, real},
-    {"imag", 1, imag},
-    {"sqrt", 1, sqrt},
-    {"rsqrt", 1, rsqrt},
-    {"cbrt", 1, cbrt},
-    {"is_nan", 1, is_nan},
-    {"is_infinity", 1, is_infinity},
-    {"erf", 1, erf},
-    {"erfc", 1, erfc},
-    {"erf_inv", 1, erf_inv},
-    {"negate", 1, neg},
-    {"conj", 1, conj},
-    {"bitwise_not", 1, bitwise_not},
-    {"count_leading_zeros", 1, clz},
-    {"population_count", 1, population_count},
-    // Constant Creation
-    {"constant_r0", 3, constant_r0},
-    {"constant_from_binary", 3, constant_from_binary},
-    // Tuples
-    {"tuple", 2, tuple},
-    {"get_tuple_element", 2, get_tuple_element},
-    // Control Flow
-    {"conditional", 5, conditional_if},
-    {"select", 3, select},
-    {"while", 3, while_loop},
-    {"call", 3, call},
-    // Slicing
-    {"slice", 4, slice},
-    {"dynamic_slice", 3, dynamic_slice},
-    {"dynamic_update_slice", 3, dynamic_update_slice},
-    {"gather", 7, gather},
-    // Tensor Creation
-    {"rng_normal", 3, rng_normal},
-    {"rng_uniform", 3, rng_uniform},
-    {"iota", 3, iota},
-    // Functional Ops
-    {"reduce", 4, reduce},
-    {"variadic_reduce", 5, variadic_reduce},
-    {"window_reduce", 7, window_reduce},
-    {"select_and_scatter", 8, select_and_scatter},
-    {"scatter", 8, scatter},
-    {"map", 4, map},
-    // Shape/Type Manipulation
-    {"broadcast_in_dim", 3, broadcast_in_dim},
-    {"reshape", 2, reshape},
-    {"get_shape", 2, get_shape_op},
-    {"convert_element_type", 2, convert_element_type},
-    {"bitcast_convert_type", 2, bitcast_convert_type},
-    {"transpose", 2, transpose},
-    // Other
-    {"dot", 3, dot},
-    {"dot_general", 4, dot_general},
-    {"conv_general_dilated", 10, conv_general_dilated},
-    {"pad", 3, pad},
-    {"clamp", 3, clamp},
-    {"reverse", 2, reverse},
-    {"concatenate", 3, concatenate},
-    {"sort", 4, sort},
-    {"top_k", 2, top_k},
-    {"variadic_sort", 4, variadic_sort},
-    // LinAlg
-    {"lu", 1, lu},
-    {"triangular_solve", 6, triangular_solve},
-    // Infeed/Outfeed
-    {"infeed", 2, infeed},
-    {"outfeed", 3, outfeed},
-    {"create_token", 1, create_token},
-    // Special
-    {"optimization_barrier", 1, optimization_barrier},
     // Log Sink
     {"start_log_sink", 1, start_log_sink},
     // Serialization

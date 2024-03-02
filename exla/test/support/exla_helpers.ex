@@ -10,34 +10,25 @@ defmodule EXLAHelpers do
   It expects a list of shapes which will be given as parameters.
   """
   def compile(shapes, opts \\ [], output \\ nil, fun) do
-    opts = Keyword.put_new(opts, :compiler_mode, Application.get_env(:exla, :compiler_mode))
-
     compile_fn = fn builder ->
-      params =
-        if opts[:compiler_mode] == :mlir do
-          EXLA.MLIR.Function.get_arguments(builder)
-        else
-          {params, _} =
-            Enum.map_reduce(shapes, 0, fn shape, pos ->
-              {EXLA.Op.parameter(builder, pos, shape, <<?a + pos>>), pos + 1}
-            end)
-
-          params
-        end
+      params = EXLA.MLIR.Function.get_arguments(builder)
 
       fun
       |> apply([builder | params])
-      |> EXLA.Builder.build()
-      |> EXLA.Computation.compile(client(), shapes, opts)
+      |> then(&EXLA.MLIR.Value.variadic_return(List.wrap(&1)))
+
+      EXLA.MLIR.Module.compile(
+        builder.module,
+        client(),
+        Enum.map(params, &EXLA.MLIR.Value.get_shape/1),
+        builder.return_shape,
+        opts
+      )
     end
 
-    if opts[:compiler_mode] != :mlir do
-      compile_fn.(EXLA.Builder.new("test"))
-    else
-      shapes = exla_shape(shapes)
-      output = exla_shape(output)
-      EXLA.MLIR.Module.new(List.wrap(shapes), List.wrap(output), compile_fn)
-    end
+    shapes = exla_shape(shapes)
+    output = exla_shape(output)
+    EXLA.MLIR.Module.new(List.wrap(shapes), List.wrap(output), compile_fn)
   end
 
   @doc """

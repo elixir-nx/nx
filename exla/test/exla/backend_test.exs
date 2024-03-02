@@ -8,74 +8,18 @@ defmodule EXLA.BackendTest do
     :ok
   end
 
-  if Nx.Defn.default_options()[:compiler_mode] == :mlir do
-    @excluded_doctests [
-      tan: 1,
-      atanh: 1,
-      cosh: 1,
-      sigmoid: 1,
-      expm1: 1,
-      erf: 1,
-      erfc: 1,
-      tanh: 1,
-      asinh: 1,
-      logsumexp: 2
-    ]
-  else
-    @precision_error_doctests [
-      expm1: 1,
-      erfc: 1,
-      erf: 1,
-      sin: 1,
-      cos: 1,
-      tan: 1,
-      cosh: 1,
-      tanh: 1,
-      asin: 1,
-      asinh: 1,
-      atanh: 1,
-      sigmoid: 1,
-      fft: 2,
-      ifft: 2,
-      logsumexp: 2
-    ]
-
-    @temporarily_broken_doctests [
-      # XLA currently doesn't support complex conversion
-      as_type: 2
-    ]
-
-    @inherently_unsupported_doctests [
-      # XLA requires signed and unsigned tensors to be at least of size 32
-      random_uniform: 4
-    ]
-
-    @unrelated_doctests [
-      default_backend: 1
-    ]
-
-    case EXLAHelpers.client() do
-      %EXLA.Client{platform: :cuda} ->
-        @precision_error_doctests [
-                                    standard_deviation: 2,
-                                    rsqrt: 1,
-                                    acos: 1,
-                                    variance: 2,
-                                    atan2: 2,
-                                    weighted_mean: 3,
-                                    cbrt: 1
-                                  ] ++ @precision_error_doctests
-        @inherently_unsupported_doctests [conv: 3] ++ @inherently_unsupported_doctests
-
-      _ ->
-        nil
-    end
-
-    @excluded_doctests @precision_error_doctests ++
-                         @temporarily_broken_doctests ++
-                         @inherently_unsupported_doctests ++
-                         @unrelated_doctests
-  end
+  @excluded_doctests [
+    tan: 1,
+    atanh: 1,
+    cosh: 1,
+    sigmoid: 1,
+    expm1: 1,
+    erf: 1,
+    erfc: 1,
+    tanh: 1,
+    asinh: 1,
+    logsumexp: 2
+  ]
 
   doctest Nx,
     except: [:moduledoc] ++ @excluded_doctests
