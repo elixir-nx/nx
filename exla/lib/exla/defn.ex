@@ -551,7 +551,6 @@ defmodule EXLA.Defn do
           end)
 
         to_if(pred, on_true, on_false, state, cache)
-        to_if(pred, on_true, on_false, state, cache)
     end
   end
 
