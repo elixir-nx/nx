@@ -88,7 +88,6 @@ defmodule EXLA.MixProject do
           EXLA.Client,
           EXLA.DeviceBuffer,
           EXLA.Executable,
-          EXLA.Lib,
           EXLA.Shape
         ]
       ]

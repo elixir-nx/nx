@@ -1,7 +1,6 @@
 defmodule EXLA.Lib do
-  @moduledoc """
-  High-level operations built on top of `EXLA.Op`.
-  """
+  @moduledoc false
+  # High-level operations built on top of `EXLA.MLIR.Value`.
 
   alias EXLA.Shape
 
