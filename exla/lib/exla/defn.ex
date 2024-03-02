@@ -1543,7 +1543,7 @@ defmodule EXLA.Defn do
     }
 
     {res, _} = recur_composite(expr, state, no_token_cache())
-    Value.variadic_return(function, [to_type(res, type)])
+    Value.variadic_return([to_type(res, type)])
     function
   end
 
@@ -1739,7 +1739,15 @@ defmodule EXLA.Defn do
   defp to_window_aggregate(op, type, arg, initial, window_dimensions, opts, state) do
     arg = to_type(arg, type)
 
-    acc = initial
+    acc =
+      case initial do
+        %Value{} = initial ->
+          initial
+
+        initial when is_number(initial) ->
+          Value.constant_r0(state.builder, initial, type)
+      end
+
     arg_shape = EXLA.Shape.make_shape(type, {})
     args = [arg_shape, arg_shape]
     # We reverse the argument order because :nan + :infinity

@@ -4,7 +4,6 @@ defmodule EXLA.ExecutableTest do
   alias EXLA.BinaryBuffer
   alias EXLA.DeviceBuffer
   alias EXLA.Executable
-  alias EXLA.Op
   alias EXLA.Shape
   alias EXLA.MLIR.Value
   import EXLAHelpers
@@ -162,8 +161,7 @@ defmodule EXLA.ExecutableFeedTest do
                  run_one([], [], Shape.make_tuple_shape([Shape.make_token_shape()]), fn b ->
                    token = Value.create_token(b)
 
-                   {new_token, val} =
-                     {new_token, [val]} = Value.infeed(token, t.shape)
+                   {new_token, [val]} = Value.infeed(token, t.shape)
 
                    outfeed_val = Value.add(b, val, val)
                    _outfeed_token = Value.outfeed(outfeed_val, new_token)
