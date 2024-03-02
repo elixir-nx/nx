@@ -57,9 +57,6 @@ static int open_resources(ErlNifEnv* env) {
   if (!exla::nif::open_resource<xla::Shape>(env, mod, "Shape")) {
     return -1;
   }
-  if (!exla::nif::open_resource<xla::XlaComputation>(env, mod, "Computation")) {
-    return -1;
-  }
   if (!exla::nif::open_resource<exla::ExlaExecutable*>(env, mod, "Executable", free_exla_executable)) {
     return -1;
   }

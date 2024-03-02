@@ -77,10 +77,10 @@ class ExlaClient {
                                          xla::ExecutableBuildOptions& options,
                                          bool compile_portable_executable);
 
-    xla::StatusOr<ExlaExecutable*> Compile(const mlir::OwningOpRef<mlir::ModuleOp>& computation,
-                                           std::vector<xla::Shape*> argument_layouts,
-                                           xla::ExecutableBuildOptions& options,
-                                           bool compile_portable_executable);
+  xla::StatusOr<ExlaExecutable*> Compile(const mlir::OwningOpRef<mlir::ModuleOp>& computation,
+                                          std::vector<xla::Shape*> argument_layouts,
+                                          xla::ExecutableBuildOptions& options,
+                                          bool compile_portable_executable);
 
   xla::StatusOr<ExlaBuffer*> BufferFromBinary(ErlNifEnv* env,
                                               ERL_NIF_TERM binary_term,

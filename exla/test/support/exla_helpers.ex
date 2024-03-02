@@ -17,7 +17,13 @@ defmodule EXLAHelpers do
       |> apply([builder | params])
       |> then(&EXLA.MLIR.Value.variadic_return(List.wrap(&1)))
 
-      EXLA.Computation.compile(builder, client(), shapes, opts)
+      EXLA.MLIR.Module.compile(
+        builder.module,
+        client,
+        arg_shapes,
+        builder.return_shape,
+        opts
+      )
     end
 
     shapes = exla_shape(shapes)
