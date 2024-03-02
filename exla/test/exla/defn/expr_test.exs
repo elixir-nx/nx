@@ -4021,11 +4021,7 @@ defmodule EXLA.Defn.ExprTest do
 
     test "raises on bad precision" do
       valid_precision =
-        if compiler_mode() == :mlir do
-          ":default, :high, :highest, or :packed_nibble"
-        else
-          ":default, :high, or :highest"
-        end
+        ":default, :high, :highest, or :packed_nibble"
 
       assert_raise ArgumentError,
                    "expected precision configuration to be one of" <>

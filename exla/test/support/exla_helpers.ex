@@ -10,8 +10,6 @@ defmodule EXLAHelpers do
   It expects a list of shapes which will be given as parameters.
   """
   def compile(shapes, opts \\ [], output \\ nil, fun) do
-    opts = Keyword.put_new(opts, :compiler_mode, Application.get_env(:exla, :compiler_mode))
-
     compile_fn = fn builder ->
       params = EXLA.MLIR.Function.get_arguments(builder)
 

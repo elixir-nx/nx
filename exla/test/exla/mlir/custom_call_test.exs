@@ -24,13 +24,10 @@ defmodule EXLA.MLIR.CustomCallTest do
         wide = Nx.iota({3, 4}, type: unquote(type))
 
         fun =
-          EXLA.jit(
-            fn t ->
-              {q, r} = Nx.LinAlg.qr(t, mode: :reduced)
-              Nx.dot(q, r)
-            end,
-            compiler_mode: :mlir
-          )
+          EXLA.jit(fn t ->
+            {q, r} = Nx.LinAlg.qr(t, mode: :reduced)
+            Nx.dot(q, r)
+          end)
 
         assert_all_close(fun.(square), square, unquote(tol_opts))
         assert_all_close(fun.(tall), tall, unquote(tol_opts))
