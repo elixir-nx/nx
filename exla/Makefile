@@ -7,6 +7,10 @@ XLA_EXTENSION_DIR = cache/xla_extension
 XLA_EXTENSION_LIB = $(XLA_EXTENSION_DIR)/lib
 XLA_INCLUDE_PATH = $(XLA_EXTENSION_DIR)/include
 
+IREE_COMPILER_DIR = iree/build/lib
+IREE_COMPILER_LIB = $(XLA_EXTENSION_DIR)/$(IREE_COMPILER_DIR)
+IREE_COMPILER_INCLUDE_PATH = $(XLA_EXTENSION_DIR)/$(IREE_COMPILER_DIR)/compiler/bindings/c
+
 # Cache configuration
 EXLA_CACHE_SO = cache/libexla.so
 EXLA_CACHE_OBJ_DIR = cache/objs
@@ -16,9 +20,11 @@ EXLA_DIR = c_src/exla
 PRIV_DIR = $(MIX_APP_PATH)/priv
 EXLA_SO = $(PRIV_DIR)/libexla.so
 EXLA_LIB_DIR = $(PRIV_DIR)/xla_extension/lib
+EXLA_IREE_LIB_DIR = $(PRIV_DIR)/$(IREE_COMPILER_DIR)
 
 # Link paths
-XLA_EXTENSION_LIB_LINK_PATH = ../$(CWD_RELATIVE_TO_PRIV_PATH)/$(XLA_EXTENSION_LIB)
+XLA_EXTENSION_LIB_LINK_PATH = ../$(CWD_RELATIVE_TO_PRIV_PATH)/$(XLA_EXTENSION_DIR)/$(XLA_EXTENSION_LIB)
+IREE_COMPILER_LIB_LINK_PATH = ../../$(CWD_RELATIVE_TO_PRIV_PATH)/$(IREE_COMPILER_LIB)
 EXLA_CACHE_SO_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(EXLA_CACHE_SO)
 
 # Build flags
@@ -35,26 +41,29 @@ else
 	CFLAGS += -O3
 endif
 
-LDFLAGS = -L$(XLA_EXTENSION_LIB) -lxla_extension -shared
+LDFLAGS = -L$(XLA_EXTENSION_LIB) -lxla_extension -shared -L$(IREE_COMPILER_LIB) -lIREECompiler
 
 ifeq ($(shell uname -s), Darwin)
-	LDFLAGS += -flat_namespace -undefined suppress -rpath @loader_path/xla_extension/lib
+	LDFLAGS += -flat_namespace -undefined suppress -rpath @loader_path/xla_extension/lib -rpath @loader_path/xla_extension/$(IREE_COMPILER_DIR)
 else
 	# Use a relative RPATH, so at runtime libexla.so looks for libxla_extension.so
 	# in ./lib regardless of the absolute location. This way priv can be safely
 	# packed into an Elixir release. Also, we use $$ to escape Makefile variable
 	# and single quotes to escape shell variable
-	LDFLAGS += -Wl,-rpath,'$$ORIGIN/xla_extension/lib'
+	LDFLAGS += -Wl,-rpath,'$$ORIGIN/xla_extension/lib' -Wl,-rpath,'$$ORIGIN/xla_extension/$(IREE_COMPILER_DIR)'
 endif
 
 $(EXLA_SO): $(EXLA_CACHE_SO)
 	@ mkdir -p $(PRIV_DIR)
 	@ mkdir -p $(PRIV_DIR)/xla_extension
+	@ mkdir -p $(PRIV_DIR)/xla_extension/iree/build
 	@ if [ "${MIX_BUILD_EMBEDDED}" = "true" ]; then \
 		cp -a $(abspath $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR) ; \
+		cp -a $(abspath $(IREE_COMPILER_LIB)) $(EXLA_IREE_LIB_DIR) ; \
 		cp -a $(abspath $(EXLA_CACHE_SO)) $(EXLA_SO) ; \
 	else \
 		ln -sf $(XLA_EXTENSION_LIB_LINK_PATH) $(EXLA_LIB_DIR) ; \
+		ln -sf $(IREE_COMPILER_LIB_LINK_PATH) $(EXLA_IREE_LIB_DIR) ; \
 		ln -sf $(EXLA_CACHE_SO_LINK_PATH) $(EXLA_SO) ; \
 	fi
 
