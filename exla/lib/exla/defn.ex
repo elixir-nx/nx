@@ -1823,59 +1823,57 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp collect_arg?(_id, :parameter, _args, _shared_ids),
-    do: true
-
-  # We never pass reference to tuples around, only through their elements,
-  # so if a tuple is in a predicate, then it all must be in a predicate.
-  defp collect_arg?(_id, :elem, [%T{data: %Expr{id: tuple_id}}, _pos], {parent_ids, sibling_ids})
-       when is_map_key(parent_ids, tuple_id) or is_map_key(sibling_ids, tuple_id),
-       do: true
-
-  defp collect_arg?(id, _op, _args, {parent_ids, sibling_ids}),
-    do: is_map_key(parent_ids, id) or is_map_key(sibling_ids, id)
-
-  defp collect_args(%T{data: %Expr{id: id, op: op, args: args}} = expr, {cache, ids}, shared_ids) do
-    cond do
-      op == :constant or collect_arg?(id, op, args, shared_ids) ->
-        case ids do
-          %{^id => {_, _, new}} ->
-            {new, {cache, ids}}
-
-          %{} ->
-            i = map_size(ids)
-            param = Expr.parameter(expr, i)
-            {param, {Map.put(cache, id, param), Map.put(ids, id, {i, expr, param})}}
-        end
-
-      expr = Map.get(cache, id) ->
-        {expr, {cache, ids}}
-
-      true ->
-        {args, {cache, ids}} =
-          Tree.apply_args(expr, :scope, {cache, ids}, &collect_args(&1, &2, shared_ids))
-
-        expr = put_in(expr.data.args, args)
-        {expr, {Map.put(cache, id, expr), ids}}
-    end
-  end
-
   defp recur_shared_ids(
          expr,
          other_ids,
          %{scope_ids: ids} = state,
          cache
        ) do
-    {_, ids_args} =
-      Composite.reduce(expr, {%{}, %{}}, fn node, acc ->
-        {_, acc} = collect_args(node, acc, {ids, other_ids})
-        acc
+    {_, cache} =
+      Composite.reduce(expr, {%{}, cache}, fn node, acc ->
+        do_recur_shared_ids(node, state, acc, {ids, other_ids})
       end)
 
-    Enum.reduce(ids_args, cache, fn {_, {_, old, _}}, cache ->
-      {_, cache} = recur_operator(old, state, cache)
-      cache
-    end)
+    cache
+  end
+
+  defp shared?(_id, :parameter, _args, _shared_ids),
+    do: true
+
+  # We never pass reference to tuples around, only through their elements,
+  # so if a tuple is in a predicate, then it all must be in a predicate.
+  defp shared?(_id, :elem, [%T{data: %Expr{id: tuple_id}}, _pos], {parent_ids, sibling_ids})
+       when is_map_key(parent_ids, tuple_id) or is_map_key(sibling_ids, tuple_id),
+       do: true
+
+  defp shared?(id, _op, _args, {parent_ids, sibling_ids}),
+    do: is_map_key(parent_ids, id) or is_map_key(sibling_ids, id)
+
+  defp do_recur_shared_ids(
+         %T{data: %Expr{id: id, op: op, args: args}} = expr,
+         state,
+         {visited, cache},
+         shared_ids
+       ) do
+    cond do
+      Map.has_key?(visited, id) ->
+        {visited, cache}
+
+      op == :constant or shared?(id, op, args, shared_ids) ->
+        {_, cache} = recur_operator(expr, state, cache)
+        {Map.put(visited, id, true), cache}
+
+      true ->
+        {_, {visited, cache}} =
+          Tree.apply_args(
+            expr,
+            :scope,
+            {visited, cache},
+            &{&1, do_recur_shared_ids(&1, state, &2, shared_ids)}
+          )
+
+        {Map.put(visited, id, true), cache}
+    end
   end
 
   defp to_mlir_if_branch(region, expr, current_ids, state, cache) do
