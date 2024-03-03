@@ -70,5 +70,9 @@ $(EXLA_CACHE_OBJ_DIR)/%.o: $(EXLA_DIR)/%.cc $(HEADERS)
 $(EXLA_CACHE_SO): $(XLA_EXTENSION_DIR) $(OBJECTS)
 	$(CXX) $(OBJECTS) -o $(EXLA_CACHE_SO) $(LDFLAGS)
 
+.PHONY: clean clean_objs
+clean_objs:
+	rm -rf $(EXLA_CACHE_OBJ_DIR)
+
 clean:
 	rm -rf cache

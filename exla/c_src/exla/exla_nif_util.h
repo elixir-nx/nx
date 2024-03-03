@@ -203,6 +203,7 @@ ERL_NIF_TERM make_list(ErlNifEnv* env, std::vector<T> result) {
   auto list = enif_make_list_from_array(env, &data[0], n);
   return list;
 }
+
 // Containers
 //
 // Both tuples and lists are treated as vectors, but extracting
@@ -285,13 +286,6 @@ ERL_NIF_TERM make_map(ErlNifEnv* env, std::map<std::string, int>& map);
 // See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/xla_data.proto
 // for more details on each type and additional types not listed here.
 
-// Gets a padding configuration from `list`. A padding configuration
-// is a list of 3-tuples representing edge high, edge low, and interior
-// padding.
-int get_padding_config(ErlNifEnv* env,
-                       ERL_NIF_TERM list,
-                       xla::PaddingConfig* padding_config);
-
 // Gets dimension numbers for usage in the XLA DotGeneral operation.
 // Dot dimension numbers are a 2-tuple of lists. The first list
 // represents the lhs contraction dimensions. The second list
@@ -319,9 +313,7 @@ int get_conv_dimension_numbers(ErlNifEnv* env,
                                ERL_NIF_TERM tuple,
                                xla::ConvolutionDimensionNumbers* dimension_numbers);
 
-// Gets a general padding configuration. This is slightly different from
-// get_padding_config for usage in a convolution. The convolution only
-// supports passing padding as a vector of pairs of edge high, edge low padding
+// The convolution only supports passing padding as a vector of pairs of edge high, edge low padding
 // values. We receive the padding configuration as a list of 2-tuples.
 int get_general_padding(ErlNifEnv* env,
                         ERL_NIF_TERM padding_term,
@@ -330,17 +322,6 @@ int get_general_padding(ErlNifEnv* env,
 // Gets the primitive type from the given term. The term is a string
 // encoding one of the XLA primitive types.
 int get_primitive_type(ErlNifEnv* env, ERL_NIF_TERM term, xla::PrimitiveType* type);
-
-// Template for retrieving a value from a scalar. This is
-// necessary to avoid having to use templates in the NIF.
-template <
-    xla::PrimitiveType type,
-    typename T = typename xla::primitive_util::PrimitiveTypeToNative<type>::type>
-T get_value(ErlNifEnv* env, ERL_NIF_TERM term) {
-  T value;
-  get(env, term, &value);
-  return value;
-}
 
 // Extracts information from `GetShape` into a usable term.
 ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape);

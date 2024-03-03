@@ -262,31 +262,6 @@ ERL_NIF_TERM make_map(ErlNifEnv* env, std::map<std::string, int>& map) {
 
 // Protobuf types
 
-int get_padding_config(ErlNifEnv* env,
-                       ERL_NIF_TERM list,
-                       xla::PaddingConfig* padding_config) {
-  ERL_NIF_TERM head, tail;
-  while (enif_get_list_cell(env, list, &head, &tail)) {
-    const ERL_NIF_TERM* terms;
-    int length;
-    if (!enif_get_tuple(env, head, &length, &terms)) return 0;
-    if (length != 3) return 0;
-
-    int64 pad_lo, pad_hi, interior;
-    if (!get(env, terms[0], &pad_lo)) return 0;
-    if (!get(env, terms[1], &pad_hi)) return 0;
-    if (!get(env, terms[2], &interior)) return 0;
-
-    auto dim = padding_config->add_dimensions();
-    dim->set_edge_padding_low(pad_lo);
-    dim->set_edge_padding_high(pad_hi);
-    dim->set_interior_padding(interior);
-
-    list = tail;
-  }
-  return 1;
-}
-
 int get_dot_dimension_numbers(ErlNifEnv* env,
                               ERL_NIF_TERM tuple,
                               xla::DotDimensionNumbers* dims) {
@@ -475,7 +450,6 @@ int get_primitive_type(ErlNifEnv* env, ERL_NIF_TERM term, xla::PrimitiveType* ty
   *type = type_status.value();
   return 1;
 }
-
 
 ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape) {
   if (shape.IsTuple()) {
