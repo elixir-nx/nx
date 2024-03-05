@@ -578,8 +578,7 @@ defmodule EXLA.Defn do
        when type_kind != :c do
     # We match only on platform: :host for MLIR, as we want to support
     # QR-on-cpu as a custom call only in this case
-    {t, cache} = recur_operator(tensor, state, cache)
-    [tensor] = List.wrap(t)
+    {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
     tensor =
       if op_type(tensor) != q_expr.type do
@@ -599,8 +598,7 @@ defmodule EXLA.Defn do
          state,
          cache
        ) do
-    {t, cache} = recur_operator(tensor, state, cache)
-    [tensor] = List.wrap(t)
+    {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
     results = Value.top_k(tensor, opts[:k])
     {results, cache}
@@ -613,8 +611,7 @@ defmodule EXLA.Defn do
          state,
          cache
        ) do
-    {t, cache} = recur_operator(tensor, state, cache)
-    [tensor] = List.wrap(t)
+    {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
     {fft2(&Value.fft(&1, :fft, &2), [tensor, opts], out, state), cache}
   end
@@ -626,8 +623,7 @@ defmodule EXLA.Defn do
          state,
          cache
        ) do
-    {t, cache} = recur_operator(tensor, state, cache)
-    [tensor] = List.wrap(t)
+    {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
     {fft2(&Value.fft(&1, :ifft, &2), [tensor, opts], out, state), cache}
   end
@@ -1670,7 +1666,13 @@ defmodule EXLA.Defn do
   defp recur_composite(expr, transform, state, cache) do
     {op, cache} = recur_operator(expr, state, cache)
 
-    result = op |> List.wrap() |> Enum.map(transform)
+    result =
+      if is_list(op) do
+        Enum.map(op, transform)
+      else
+        [transform.(op)]
+      end
+
     {result, cache}
   end
 
@@ -1776,8 +1778,7 @@ defmodule EXLA.Defn do
   ## Cond
 
   defp to_if(pred, on_true, on_false, %{builder: %Function{}} = state, cache) do
-    {t, cache} = recur_operator(pred, state, cache)
-    [pred_op] = List.wrap(t)
+    {pred_op, cache} = recur_operator(pred, state, cache) |> unwrap_single_tensor!()
 
     true_ids = Tree.scope_ids(on_true)
     false_ids = Tree.scope_ids(on_false)
@@ -1993,8 +1994,7 @@ defmodule EXLA.Defn do
   end
 
   defp container_to_exla_shape(container) do
-    container
-    |> List.wrap()
+    [container]
     |> Nx.Defn.Composite.flatten_list()
     |> Enum.flat_map(fn
       %Nx.Tensor{type: {:tuple, _}, data: %{args: values}} ->
@@ -2014,4 +2014,7 @@ defmodule EXLA.Defn do
   end
 
   defp wrap_tuple_result([value], _), do: value
+
+  defp unwrap_single_tensor!({[%Value{} = op], cache}), do: {op, cache}
+  defp unwrap_single_tensor!({%Value{} = op, cache}), do: {op, cache}
 end
