@@ -183,11 +183,11 @@ defmodule EXLA.Defn.Outfeed do
   defp outfeed_flat_tuple(%Outfeed{token: token, compiled_hooks: ch} = outfeed, builder, tuple) do
     flag = next_hook(ch)
     token = Value.outfeed(Value.constant_r0(builder, flag, {:u, 16}), token)
-    %EXLA.Shape{dims: {size}, dtype: {:tuple, shapes}} = Value.get_shape(tuple)
+    shapes = Enum.map(tuple, &Value.get_shape/1)
 
     token =
-      Enum.reduce(1..size//1, token, fn pos, token ->
-        Value.outfeed(Value.get_tuple_element(tuple, pos - 1), token)
+      Enum.reduce(tuple, token, fn elem, token ->
+        Value.outfeed(elem, token)
       end)
 
     {%{outfeed | token: token}, flag, shapes}

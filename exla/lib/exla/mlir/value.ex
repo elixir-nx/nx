@@ -611,13 +611,8 @@ defmodule EXLA.MLIR.Value do
     {results, %Region{ref: pred_ref}, %Region{ref: body_ref}}
   end
 
-  def variadic_return(function, values, flatten_tuples? \\ false) when is_list(values) do
-    refs =
-      if flatten_tuples? do
-        flatten_tuples(values)
-      else
-        Enum.map(values, & &1.ref)
-      end
+  def variadic_return(function, values) when is_list(values) do
+    refs = Enum.map(values, & &1.ref)
 
     refs = EXLA.NIF.mlir_return(function.ref, refs) |> unwrap!()
 
