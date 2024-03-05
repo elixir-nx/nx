@@ -43,4 +43,8 @@ defmodule EXLA.Case do
       """)
     end
   end
+
+  def is_mac_arm? do
+    Application.fetch_env!(:exla, :is_mac_arm)
+  end
 end

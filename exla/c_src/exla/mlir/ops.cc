@@ -153,50 +153,6 @@ ERL_NIF_TERM get_mlir_function_arguments(ErlNifEnv* env, int argc, const ERL_NIF
   return exla::nif::ok(env, enif_make_list_from_array(env, terms.data(), terms.size()));
 }
 
-ERL_NIF_TERM mlir_tuple(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 2) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  exla::MLIRFunction** function;
-  std::vector<mlir::Value> vals;
-
-  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
-    return exla::nif::error(env, "Unable to get function.");
-  }
-  if (!exla::nif::get_list<mlir::Value>(env, argv[1], vals)) {
-    return exla::nif::error(env, "Unable to get values.");
-  }
-
-  mlir::Value res = (*function)->TupleOp(vals);
-
-  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
-}
-
-ERL_NIF_TERM mlir_get_tuple_element(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 3) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  exla::MLIRFunction** function;
-  mlir::Value* tuple;
-  exla::int64 index;
-
-  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
-    return exla::nif::error(env, "Unable to get function.");
-  }
-  if (!exla::nif::get<mlir::Value>(env, argv[1], tuple)) {
-    return exla::nif::error(env, "Unable to get tuple.");
-  }
-  if (!exla::nif::get(env, argv[2], &index)) {
-    return exla::nif::error(env, "Unable to get index.");
-  }
-
-  mlir::Value res = (*function)->GetTupleElementOp(*tuple, index);
-
-  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
-}
-
 ERL_NIF_TERM mlir_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], std::function<mlir::Value(exla::MLIRFunction*, mlir::Value*, mlir::Value*)> op) {
   if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");

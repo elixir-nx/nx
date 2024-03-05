@@ -77,18 +77,6 @@ defmodule EXLA.MLIR.Value do
     %Value{op | ref: ref}
   end
 
-  def tuple(%Function{} = func, vals) when is_list(vals) do
-    refs = Enum.map(vals, fn %Value{ref: ref} -> ref end)
-    ref = EXLA.NIF.mlir_tuple(func.ref, refs) |> unwrap!()
-    %Value{ref: ref, function: func}
-  end
-
-  def get_tuple_element(%Value{function: %Function{} = func, ref: ref}, index)
-      when is_integer(index) do
-    ref = EXLA.NIF.mlir_get_tuple_element(func.ref, ref, index) |> unwrap!()
-    %Value{ref: ref, function: func}
-  end
-
   def get_shape(%Value{ref: ref}) do
     shape_ref = EXLA.NIF.mlir_get_shape(ref) |> unwrap!()
     EXLA.Shape.get_shape_info(shape_ref)
@@ -611,13 +599,8 @@ defmodule EXLA.MLIR.Value do
     {results, %Region{ref: pred_ref}, %Region{ref: body_ref}}
   end
 
-  def variadic_return([%Value{function: function} | _] = values, flatten_tuples? \\ false) do
-    refs =
-      if flatten_tuples? do
-        flatten_tuples(values)
-      else
-        Enum.map(values, & &1.ref)
-      end
+  def variadic_return(function, values) when is_list(values) do
+    refs = Enum.map(values, & &1.ref)
 
     refs = EXLA.NIF.mlir_return(function.ref, refs) |> unwrap!()
 
@@ -641,33 +624,14 @@ defmodule EXLA.MLIR.Value do
   end
 
   defp flatten_shapes(val) do
-    case val do
-      %EXLA.Shape{dtype: {:tuple, element_shapes}} ->
-        Enum.flat_map(element_shapes, fn shape -> flatten_shapes(shape) end)
-
-      _ ->
-        [val.ref]
-    end
+    [val.ref]
   end
 
   defp flatten_tuples(val) when is_list(val) do
     Enum.flat_map(val, &flatten_tuples/1)
   end
 
-  defp flatten_tuples(val) do
-    case get_shape(val) do
-      %{dtype: {:tuple, _}, dims: {0}} ->
-        []
-
-      %{dtype: {:tuple, _}, dims: {n}} ->
-        # TO-DO(mlir): maybe we can avoid building tuples altogether.
-        # Nx should be returning all tuples as flattened anyway.
-        Enum.flat_map(0..(n - 1), fn i -> val |> get_tuple_element(i) |> flatten_tuples() end)
-
-      _ ->
-        [val.ref]
-    end
-  end
+  defp flatten_tuples(val), do: [val.ref]
 
   defp unwrap!(:ok), do: :ok
   defp unwrap!({:ok, value}), do: value

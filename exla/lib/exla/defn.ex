@@ -170,18 +170,18 @@ defmodule EXLA.Defn do
 
     {token, [flag]} = Value.infeed(root_token, flag_shape)
 
-    init = Value.tuple(builder, [flag, token | args])
+    init = [flag, token | args]
 
     {[_flag, out_token | results], pred_region, body_region} = Value.while(builder, init)
 
     acc = Enum.take(results, acc_length)
 
-    output = wrap_tuple_result(builder, acc, acc_shape)
+    output = wrap_tuple_result(acc, acc_shape)
 
     [flag | _] = Function.push_region(builder, pred_region)
     r0 = Value.constant_r0(builder, 1, {:pred, 8})
     pred_op = Value.equal(builder, flag, r0)
-    Value.variadic_return([pred_op], true)
+    Value.variadic_return(builder, [pred_op])
     Function.pop_region(builder)
 
     [_flag, token | args] = Function.push_region(builder, body_region)
@@ -228,20 +228,12 @@ defmodule EXLA.Defn do
     # Emit the stream hook to signal loop output
     {token, [flag]} = Value.infeed(token, flag_shape)
 
-    Value.variadic_return(
-      [
-        flag,
-        token,
-        acc,
-        constant
-      ],
-      true
-    )
+    Value.variadic_return(flag.function, [flag, token | acc] ++ List.flatten(constant))
 
     Function.pop_region(builder)
 
     outfeed = outfeed |> Outfeed.with_token(out_token) |> Outfeed.close(builder)
-    EXLA.MLIR.Value.variadic_return([output])
+    Value.variadic_return(builder, output)
 
     {{input_shape, input_indexes}, outfeed}
   end
@@ -311,7 +303,7 @@ defmodule EXLA.Defn do
     {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
     outfeed = cache |> get_outfeed() |> Outfeed.close(function)
 
-    Value.variadic_return([res])
+    Value.variadic_return(function, res)
 
     {:ok, outfeed}
   end
@@ -500,10 +492,10 @@ defmodule EXLA.Defn do
     {acc, cache} =
       Composite.reduce(composite, {[], cache}, fn %T{} = expr, {acc, cache} ->
         {expr, cache} = recur_operator(expr, state, cache)
-        {[expr | acc], cache}
+        {[acc, expr], cache}
       end)
 
-    {Value.tuple(state.builder, Enum.reverse(acc)), cache}
+    {List.flatten(acc), cache}
   end
 
   defp recur_operator(%T{data: %Expr{id: id, op: op}} = expr, state, cache) do
@@ -530,7 +522,7 @@ defmodule EXLA.Defn do
       recur_composite(initial_with_token, &cast_pred_to_u8/1, state, cache)
 
     {[token | results], pred_region, body_region} = Value.while(function, initial)
-    result = wrap_tuple_result(function, results, initial_arg)
+    result = wrap_tuple_result(results, initial_arg)
 
     cache = mlir_while_computation(pred_region, pred, {:pred, 8}, state, cache)
     cache = mlir_while_computation(body_region, body, :with_token, state, cache)
@@ -580,13 +572,13 @@ defmodule EXLA.Defn do
              ]
            }
          },
-         %{client: %EXLA.Client{platform: :host}, builder: %Function{} = function} = state,
+         %{client: %EXLA.Client{platform: :host}, builder: %Function{}} = state,
          cache
        )
        when type_kind != :c do
     # We match only on platform: :host for MLIR, as we want to support
     # QR-on-cpu as a custom call only in this case
-    {tensor, cache} = recur_operator(tensor, state, cache)
+    {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
     tensor =
       if op_type(tensor) != q_expr.type do
@@ -596,7 +588,7 @@ defmodule EXLA.Defn do
       end
 
     {q, r} = Value.qr(tensor, q_expr.shape, r_expr.shape)
-    {Value.tuple(function, [q, r]), cache}
+    {[q, r], cache}
   end
 
   defp cached_recur_operator(
@@ -606,10 +598,10 @@ defmodule EXLA.Defn do
          state,
          cache
        ) do
-    {tensor, cache} = recur_operator(tensor, state, cache)
+    {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
     results = Value.top_k(tensor, opts[:k])
-    {Value.tuple(state.builder, results), cache}
+    {results, cache}
   end
 
   defp cached_recur_operator(
@@ -619,7 +611,7 @@ defmodule EXLA.Defn do
          state,
          cache
        ) do
-    {tensor, cache} = recur_operator(tensor, state, cache)
+    {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
     {fft2(&Value.fft(&1, :fft, &2), [tensor, opts], out, state), cache}
   end
@@ -631,7 +623,7 @@ defmodule EXLA.Defn do
          state,
          cache
        ) do
-    {tensor, cache} = recur_operator(tensor, state, cache)
+    {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
     {fft2(&Value.fft(&1, :ifft, &2), [tensor, opts], out, state), cache}
   end
@@ -656,7 +648,7 @@ defmodule EXLA.Defn do
       end
 
     [token | result] = Value.call(state.builder, [get_token(cache) | call_args], call_body)
-    {wrap_tuple_result(state.builder, result, expr), update_token(cache, token)}
+    {wrap_tuple_result(result, expr), update_token(cache, token)}
   end
 
   defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do
@@ -680,7 +672,7 @@ defmodule EXLA.Defn do
         |> then(&put_outfeed(cache, &1))
       end)
 
-    {Value.tuple(builder, []), cache}
+    {[], cache}
   end
 
   defp cached_recur_operator(op, expr, state, cache) do
@@ -753,18 +745,18 @@ defmodule EXLA.Defn do
 
   ## to_operator others
 
-  defp to_operator(:metadata, [op, _metadata], _ans, state) do
+  defp to_operator(:metadata, [op, _metadata], _ans, _state) do
     case op do
       %Value{} ->
         op
 
       op when is_tuple(op) ->
-        Value.tuple(state.builder, Tuple.to_list(op))
+        Tuple.to_list(op)
     end
   end
 
-  defp to_operator(:elem, [op, index], _ans, _state) do
-    Value.get_tuple_element(op, index)
+  defp to_operator(:elem, [op, index], _ans, _state) when is_list(op) do
+    Enum.fetch!(op, index)
   end
 
   defp to_operator(
@@ -1499,7 +1491,7 @@ defmodule EXLA.Defn do
           Value.bitwise_or(function, is_nan, Value.greater(function, lhs, rhs))
       end
 
-    Value.variadic_return([op])
+    Value.variadic_return(function, [op])
     function
   end
 
@@ -1517,7 +1509,7 @@ defmodule EXLA.Defn do
     args = EXLA.MLIR.Function.get_arguments(function)
 
     op = apply(Value, op, [function | prepare_args.(args)])
-    Value.variadic_return([op])
+    Value.variadic_return(function, [op])
     function
   end
 
@@ -1548,7 +1540,7 @@ defmodule EXLA.Defn do
     }
 
     {res, _} = recur_composite(expr, state, no_token_cache())
-    Value.variadic_return([to_type(res, type)])
+    Value.variadic_return(function, Enum.map(res, &to_type(&1, type)))
     function
   end
 
@@ -1580,12 +1572,12 @@ defmodule EXLA.Defn do
 
     res =
       if type == :with_token do
-        [get_token(comp_cache), res]
+        [get_token(comp_cache) | List.flatten(res)]
       else
-        [to_type(res, type)]
+        Enum.map(res, &to_type(&1, type))
       end
 
-    Value.variadic_return(res, true)
+    Value.variadic_return(function, res)
     Function.pop_region(function)
 
     merge_outfeed(cache, comp_cache)
@@ -1616,9 +1608,9 @@ defmodule EXLA.Defn do
         scope_ids: Tree.scope_ids(expr)
     }
 
-    {%Value{} = res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
+    {res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
 
-    Value.variadic_return([get_token(comp_cache), res], true)
+    Value.variadic_return(function, [get_token(comp_cache) | List.flatten(res)])
 
     {function, merge_outfeed(cache, comp_cache)}
   end
@@ -1645,13 +1637,6 @@ defmodule EXLA.Defn do
     |> Enum.flat_map(&computation_arg_param/1)
   end
 
-  defp computation_arg_param({tuple, %mod{} = param}) when is_tuple(tuple) do
-    tuple
-    |> Tuple.to_list()
-    |> Enum.with_index(fn arg, i -> {arg, mod.get_tuple_element(param, i)} end)
-    |> Enum.flat_map(&computation_arg_param/1)
-  end
-
   defp computation_arg_param({%T{data: %Expr{op: :parameter, args: [pos]}}, [param]}) do
     [{pos, param}]
   end
@@ -1670,22 +1655,25 @@ defmodule EXLA.Defn do
     if expr = full_tuple(list) do
       recur_composite(expr, transform, state, cache)
     else
-      {elements, cache} = Enum.map_reduce(list, cache, &recur_composite(&1, transform, state, &2))
-
-      tuple =
-        Value.tuple(state.builder, elements)
-
-      {tuple, cache}
+      Enum.map_reduce(list, cache, &recur_composite(&1, transform, state, &2))
     end
   end
 
   defp recur_composite(%Value{} = op, transform, _state, cache) do
-    {transform.(op), cache}
+    {[transform.(op)], cache}
   end
 
   defp recur_composite(expr, transform, state, cache) do
     {op, cache} = recur_operator(expr, state, cache)
-    {transform.(op), cache}
+
+    result =
+      if is_list(op) do
+        Enum.map(op, transform)
+      else
+        [transform.(op)]
+      end
+
+    {result, cache}
   end
 
   # If each element of the tuple is just a reference to the parent expression,
@@ -1789,8 +1777,8 @@ defmodule EXLA.Defn do
 
   ## Cond
 
-  defp to_if(pred, on_true, on_false, %{builder: %Function{} = function} = state, cache) do
-    {pred_op, cache} = recur_operator(pred, state, cache)
+  defp to_if(pred, on_true, on_false, %{builder: %Function{}} = state, cache) do
+    {pred_op, cache} = recur_operator(pred, state, cache) |> unwrap_single_tensor!()
 
     true_ids = Tree.scope_ids(on_true)
     false_ids = Tree.scope_ids(on_false)
@@ -1817,9 +1805,9 @@ defmodule EXLA.Defn do
 
     if in_token do
       [token | results] = if_results
-      {wrap_tuple_result(function, results, on_true), update_token(cache, token)}
+      {wrap_tuple_result(results, on_true), update_token(cache, token)}
     else
-      {wrap_tuple_result(function, if_results, on_true), cache}
+      {wrap_tuple_result(if_results, on_true), cache}
     end
   end
 
@@ -1883,9 +1871,9 @@ defmodule EXLA.Defn do
     {res, res_cache} = recur_composite(expr, & &1, comp_state, cache)
 
     if token = get_token(cache) do
-      Value.variadic_return([token, res], true)
+      Value.variadic_return(state.builder, [token | List.flatten(res)])
     else
-      Value.variadic_return([res], true)
+      Value.variadic_return(state.builder, List.flatten(res))
     end
 
     Function.pop_region(state.builder)
@@ -2006,8 +1994,7 @@ defmodule EXLA.Defn do
   end
 
   defp container_to_exla_shape(container) do
-    container
-    |> List.wrap()
+    [container]
     |> Nx.Defn.Composite.flatten_list()
     |> Enum.flat_map(fn
       %Nx.Tensor{type: {:tuple, _}, data: %{args: values}} ->
@@ -2018,13 +2005,16 @@ defmodule EXLA.Defn do
     end)
   end
 
-  defp wrap_tuple_result(function, list, template) when is_tuple(template) do
-    Value.tuple(function, list)
+  defp wrap_tuple_result(list, template) when is_tuple(template) do
+    list
   end
 
-  defp wrap_tuple_result(function, list, %Nx.Tensor{type: {:tuple, _}}) do
-    Value.tuple(function, list)
+  defp wrap_tuple_result(list, %Nx.Tensor{type: {:tuple, _}}) do
+    list
   end
 
-  defp wrap_tuple_result(_, [value], _), do: value
+  defp wrap_tuple_result([value], _), do: value
+
+  defp unwrap_single_tensor!({[%Value{} = op], cache}), do: {op, cache}
+  defp unwrap_single_tensor!({%Value{} = op, cache}), do: {op, cache}
 end

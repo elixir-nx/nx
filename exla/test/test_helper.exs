@@ -17,6 +17,14 @@ exclude =
     _ -> [:conditional_inside_map_reduce]
   end
 
+case {:os.type(), List.to_string(:erlang.system_info(:system_architecture))} do
+  {{:unix, :darwin}, "aarch64" <> _} ->
+    Application.put_env(:exla, :is_mac_arm, true)
+
+  _ ->
+    Application.put_env(:exla, :is_mac_arm, false)
+end
+
 if client.platform == :host and client.device_count == 1 and System.schedulers_online() > 1 do
   IO.puts(
     "To run multi-device tests: XLA_FLAGS=--xla_force_host_platform_device_count=#{System.schedulers_online()} mix test"

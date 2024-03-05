@@ -12,7 +12,7 @@ defmodule EXLA.ExecutableTest do
     test "with no inputs and default options" do
       assert [a = %DeviceBuffer{}] =
                run_one([], [], Shape.make_shape({:s, 32}, {}), fn b ->
-                 Value.tuple(b, [Value.constant_r0(b, 1, {:s, 32})])
+                 [Value.constant_r0(b, 1, {:s, 32})]
                end)
 
       assert <<1::32-native>> == DeviceBuffer.read(a)
@@ -24,7 +24,7 @@ defmodule EXLA.ExecutableTest do
 
       assert [a = %DeviceBuffer{}] =
                run_one([t1, t2], [], Shape.make_tuple_shape([t1.shape]), fn b, x, y ->
-                 Value.tuple(b, [Value.add(b, x, y)])
+                 [Value.add(b, x, y)]
                end)
 
       assert <<2::32-native>> == DeviceBuffer.read(a)
@@ -49,12 +49,12 @@ defmodule EXLA.ExecutableTest do
 
       assert [%DeviceBuffer{}] =
                run_one([t1, t2], [], t1.shape, fn b, x, y ->
-                 Value.tuple(b, [Value.add(b, x, y)])
+                 [Value.add(b, x, y)]
                end)
 
       assert [%DeviceBuffer{}] =
                run_one([t1, t2], [], Shape.make_tuple_shape([t1.shape]), fn b, x, y ->
-                 Value.tuple(b, [Value.add(b, x, y)])
+                 [Value.add(b, x, y)]
                end)
 
       assert DeviceBuffer.read(t1) == <<1::32-native>>
@@ -67,7 +67,7 @@ defmodule EXLA.ExecutableTest do
 
       exec =
         compile([t1.shape, t2.shape], [], [t1.shape], fn b, x, y ->
-          Value.tuple(b, [Value.add(b, x, y)])
+          [Value.add(b, x, y)]
         end)
 
       assert [[t3 = %DeviceBuffer{}]] = Executable.run(exec, [[t1, t2]])
@@ -89,7 +89,7 @@ defmodule EXLA.ExecutableTest do
 
       assert [a = %DeviceBuffer{}] =
                run_one([t1, t2], [], {t1.shape}, fn b, x, y ->
-                 Value.tuple(b, [Value.add(b, x, y)])
+                 [Value.add(b, x, y)]
                end)
 
       assert <<3::32-native>> == DeviceBuffer.read(a)
@@ -100,8 +100,8 @@ defmodule EXLA.ExecutableTest do
       t2 = BinaryBuffer.from_binary(<<2::32-native>>, Shape.make_shape({:s, 32}, {}))
 
       assert [a = %DeviceBuffer{}, b = %DeviceBuffer{}] =
-               run_one([t1, t2], [], Shape.make_tuple_shape([t1.shape, t2.shape]), fn b, x, y ->
-                 Value.tuple(b, [x, y])
+               run_one([t1, t2], [], Shape.make_tuple_shape([t1.shape, t2.shape]), fn _b, x, y ->
+                 [x, y]
                end)
 
       assert <<1::32-native>> == DeviceBuffer.read(a)
@@ -119,7 +119,7 @@ defmodule EXLA.ExecutableTest do
                  [device_id: 1],
                  EXLA.Shape.make_tuple_shape([t1.shape, t2.shape, t1.shape]),
                  fn b, x, y ->
-                   Value.tuple(b, [x, y, Value.add(b, x, y)])
+                   [x, y, Value.add(b, x, y)]
                  end
                )
 
@@ -132,7 +132,7 @@ defmodule EXLA.ExecutableTest do
 
       assert_raise RuntimeError, ~r"Expected buffer to be placed on device 0", fn ->
         run_one([a, b], [device_id: 0], t1.shape, fn b, x, y ->
-          Value.tuple(b, [Value.add(b, x, y)])
+          [Value.add(b, x, y)]
         end)
       end
     end
@@ -165,7 +165,7 @@ defmodule EXLA.ExecutableFeedTest do
 
                    outfeed_val = Value.add(b, val, val)
                    _outfeed_token = Value.outfeed(outfeed_val, new_token)
-                   Value.tuple(b, [Value.add(b, outfeed_val, val)])
+                   [Value.add(b, outfeed_val, val)]
                  end)
                end)
 
@@ -193,7 +193,7 @@ defmodule EXLA.ExecutableFeedTest do
 
                    [_token, val] = Function.push_region(b, condition_region)
                    zero = Value.constant_r0(b, 0, {:s, 32})
-                   Value.variadic_return([Value.not_equal(b, val, zero)])
+                   Value.variadic_return(b, [Value.not_equal(b, val, zero)])
                    Function.pop_region(b)
 
                    [body_token, val] = Function.push_region(b, body_region)
@@ -201,10 +201,10 @@ defmodule EXLA.ExecutableFeedTest do
                    body_token = Value.outfeed(Value.add(b, val, val), body_token)
                    {body_token, [input]} = Value.infeed(body_token, t.shape)
 
-                   Value.variadic_return([body_token, input])
+                   Value.variadic_return(b, [body_token, input])
                    Function.pop_region(b)
 
-                   Value.tuple(b, [result])
+                   [result]
                  end)
                end)
 
