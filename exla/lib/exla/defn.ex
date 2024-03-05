@@ -578,7 +578,8 @@ defmodule EXLA.Defn do
        when type_kind != :c do
     # We match only on platform: :host for MLIR, as we want to support
     # QR-on-cpu as a custom call only in this case
-    {tensor, cache} = recur_operator(tensor, state, cache)
+    {t, cache} = recur_operator(tensor, state, cache)
+    [tensor] = List.wrap(t)
 
     tensor =
       if op_type(tensor) != q_expr.type do
@@ -598,7 +599,8 @@ defmodule EXLA.Defn do
          state,
          cache
        ) do
-    {tensor, cache} = recur_operator(tensor, state, cache)
+    {t, cache} = recur_operator(tensor, state, cache)
+    [tensor] = List.wrap(t)
 
     results = Value.top_k(tensor, opts[:k])
     {results, cache}
@@ -611,7 +613,8 @@ defmodule EXLA.Defn do
          state,
          cache
        ) do
-    {tensor, cache} = recur_operator(tensor, state, cache)
+    {t, cache} = recur_operator(tensor, state, cache)
+    [tensor] = List.wrap(t)
 
     {fft2(&Value.fft(&1, :fft, &2), [tensor, opts], out, state), cache}
   end
@@ -623,7 +626,8 @@ defmodule EXLA.Defn do
          state,
          cache
        ) do
-    {tensor, cache} = recur_operator(tensor, state, cache)
+    {t, cache} = recur_operator(tensor, state, cache)
+    [tensor] = List.wrap(t)
 
     {fft2(&Value.fft(&1, :ifft, &2), [tensor, opts], out, state), cache}
   end
@@ -672,7 +676,7 @@ defmodule EXLA.Defn do
         |> then(&put_outfeed(cache, &1))
       end)
 
-    {Value.tuple(builder, []), cache}
+    {[], cache}
   end
 
   defp cached_recur_operator(op, expr, state, cache) do
@@ -745,13 +749,13 @@ defmodule EXLA.Defn do
 
   ## to_operator others
 
-  defp to_operator(:metadata, [op, _metadata], _ans, state) do
+  defp to_operator(:metadata, [op, _metadata], _ans, _state) do
     case op do
       %Value{} ->
         op
 
       op when is_tuple(op) ->
-        Value.tuple(state.builder, Tuple.to_list(op))
+        Tuple.to_list(op)
     end
   end
 
@@ -1676,7 +1680,9 @@ defmodule EXLA.Defn do
 
   defp recur_composite(expr, transform, state, cache) do
     {op, cache} = recur_operator(expr, state, cache)
-    {[transform.(op)], cache}
+
+    result = op |> List.wrap() |> Enum.map(transform)
+    {result, cache}
   end
 
   # If each element of the tuple is just a reference to the parent expression,
@@ -1781,7 +1787,8 @@ defmodule EXLA.Defn do
   ## Cond
 
   defp to_if(pred, on_true, on_false, %{builder: %Function{}} = state, cache) do
-    {pred_op, cache} = recur_operator(pred, state, cache)
+    {t, cache} = recur_operator(pred, state, cache)
+    [pred_op] = List.wrap(t)
 
     true_ids = Tree.scope_ids(on_true)
     false_ids = Tree.scope_ids(on_false)
