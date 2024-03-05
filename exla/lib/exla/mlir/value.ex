@@ -624,28 +624,14 @@ defmodule EXLA.MLIR.Value do
   end
 
   defp flatten_shapes(val) do
-    case val do
-      %EXLA.Shape{dtype: {:tuple, element_shapes}} ->
-        Enum.flat_map(element_shapes, fn shape -> flatten_shapes(shape) end)
-
-      _ ->
-        [val.ref]
-    end
+    [val.ref]
   end
 
   defp flatten_tuples(val) when is_list(val) do
     Enum.flat_map(val, &flatten_tuples/1)
   end
 
-  defp flatten_tuples(val) do
-    case get_shape(val) do
-      %{dtype: {:tuple, _}, dims: {0}} ->
-        []
-
-      _ ->
-        [val.ref]
-    end
-  end
+  defp flatten_tuples(val), do: [val.ref]
 
   defp unwrap!(:ok), do: :ok
   defp unwrap!({:ok, value}), do: value
