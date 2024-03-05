@@ -170,7 +170,7 @@ defmodule EXLA.Defn do
 
     {token, [flag]} = Value.infeed(root_token, flag_shape)
 
-    init = Value.tuple(builder, [flag, token | args])
+    init = [flag, token | args]
 
     {[_flag, out_token | results], pred_region, body_region} = Value.while(builder, init)
 
@@ -596,7 +596,7 @@ defmodule EXLA.Defn do
       end
 
     {q, r} = Value.qr(tensor, q_expr.shape, r_expr.shape)
-    {Value.tuple(function, [q, r]), cache}
+    {[q, r], cache}
   end
 
   defp cached_recur_operator(
@@ -609,7 +609,7 @@ defmodule EXLA.Defn do
     {tensor, cache} = recur_operator(tensor, state, cache)
 
     results = Value.top_k(tensor, opts[:k])
-    {Value.tuple(state.builder, results), cache}
+    {results, cache}
   end
 
   defp cached_recur_operator(
@@ -761,6 +761,10 @@ defmodule EXLA.Defn do
       op when is_tuple(op) ->
         Value.tuple(state.builder, Tuple.to_list(op))
     end
+  end
+
+  defp to_operator(:elem, [op, index], _ans, _state) when is_list(op) do
+    Enum.fetch!(op, index)
   end
 
   defp to_operator(:elem, [op, index], _ans, _state) do
@@ -1548,7 +1552,7 @@ defmodule EXLA.Defn do
     }
 
     {res, _} = recur_composite(expr, state, no_token_cache())
-    Value.variadic_return([to_type(res, type)])
+    Value.variadic_return(Enum.map(res, &to_type(&1, type)))
     function
   end
 
@@ -1580,9 +1584,9 @@ defmodule EXLA.Defn do
 
     res =
       if type == :with_token do
-        [get_token(comp_cache), res]
+        [get_token(comp_cache) | res]
       else
-        [to_type(res, type)]
+        Enum.map(res, &to_type(&1, type))
       end
 
     Value.variadic_return(res, true)
@@ -1616,9 +1620,9 @@ defmodule EXLA.Defn do
         scope_ids: Tree.scope_ids(expr)
     }
 
-    {%Value{} = res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
+    {res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
 
-    Value.variadic_return([get_token(comp_cache), res], true)
+    Value.variadic_return([get_token(comp_cache) | res], true)
 
     {function, merge_outfeed(cache, comp_cache)}
   end
@@ -1670,22 +1674,17 @@ defmodule EXLA.Defn do
     if expr = full_tuple(list) do
       recur_composite(expr, transform, state, cache)
     else
-      {elements, cache} = Enum.map_reduce(list, cache, &recur_composite(&1, transform, state, &2))
-
-      tuple =
-        Value.tuple(state.builder, elements)
-
-      {tuple, cache}
+      Enum.map_reduce(list, cache, &recur_composite(&1, transform, state, &2))
     end
   end
 
   defp recur_composite(%Value{} = op, transform, _state, cache) do
-    {transform.(op), cache}
+    {[transform.(op)], cache}
   end
 
   defp recur_composite(expr, transform, state, cache) do
     {op, cache} = recur_operator(expr, state, cache)
-    {transform.(op), cache}
+    {[transform.(op)], cache}
   end
 
   # If each element of the tuple is just a reference to the parent expression,
@@ -1883,9 +1882,9 @@ defmodule EXLA.Defn do
     {res, res_cache} = recur_composite(expr, & &1, comp_state, cache)
 
     if token = get_token(cache) do
-      Value.variadic_return([token, res], true)
+      Value.variadic_return([token | res], true)
     else
-      Value.variadic_return([res], true)
+      Value.variadic_return(res, true)
     end
 
     Function.pop_region(state.builder)
