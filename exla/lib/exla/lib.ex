@@ -131,7 +131,7 @@ defmodule EXLA.Lib do
           Value.select(eq?, id, arg_max)
       end
 
-    [%{function: function}, _] = Value.variadic_return([max, arg_max])
+    Value.variadic_return(function, [max, arg_max])
     function
   end
 

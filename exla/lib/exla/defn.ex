@@ -181,7 +181,7 @@ defmodule EXLA.Defn do
     [flag | _] = Function.push_region(builder, pred_region)
     r0 = Value.constant_r0(builder, 1, {:pred, 8})
     pred_op = Value.equal(builder, flag, r0)
-    Value.variadic_return([pred_op], true)
+    Value.variadic_return(builder, [pred_op], true)
     Function.pop_region(builder)
 
     [_flag, token | args] = Function.push_region(builder, body_region)
@@ -229,6 +229,7 @@ defmodule EXLA.Defn do
     {token, [flag]} = Value.infeed(token, flag_shape)
 
     Value.variadic_return(
+      flag.function,
       [
         flag,
         token,
@@ -241,7 +242,7 @@ defmodule EXLA.Defn do
     Function.pop_region(builder)
 
     outfeed = outfeed |> Outfeed.with_token(out_token) |> Outfeed.close(builder)
-    EXLA.MLIR.Value.variadic_return([output])
+    EXLA.MLIR.Value.variadic_return(builder, output)
 
     {{input_shape, input_indexes}, outfeed}
   end
@@ -311,7 +312,7 @@ defmodule EXLA.Defn do
     {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
     outfeed = cache |> get_outfeed() |> Outfeed.close(function)
 
-    Value.variadic_return([res])
+    Value.variadic_return(function, [res])
 
     {:ok, outfeed}
   end
@@ -1503,7 +1504,7 @@ defmodule EXLA.Defn do
           Value.bitwise_or(function, is_nan, Value.greater(function, lhs, rhs))
       end
 
-    Value.variadic_return([op])
+    Value.variadic_return(function, [op])
     function
   end
 
@@ -1521,7 +1522,7 @@ defmodule EXLA.Defn do
     args = EXLA.MLIR.Function.get_arguments(function)
 
     op = apply(Value, op, [function | prepare_args.(args)])
-    Value.variadic_return([op])
+    Value.variadic_return(function, [op])
     function
   end
 
@@ -1552,7 +1553,7 @@ defmodule EXLA.Defn do
     }
 
     {res, _} = recur_composite(expr, state, no_token_cache())
-    Value.variadic_return(Enum.map(res, &to_type(&1, type)))
+    Value.variadic_return(function, Enum.map(res, &to_type(&1, type)))
     function
   end
 
@@ -1589,7 +1590,7 @@ defmodule EXLA.Defn do
         Enum.map(res, &to_type(&1, type))
       end
 
-    Value.variadic_return(res, true)
+    Value.variadic_return(function, res, true)
     Function.pop_region(function)
 
     merge_outfeed(cache, comp_cache)
@@ -1622,7 +1623,7 @@ defmodule EXLA.Defn do
 
     {res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
 
-    Value.variadic_return([get_token(comp_cache) | res], true)
+    Value.variadic_return(function, [get_token(comp_cache) | res], true)
 
     {function, merge_outfeed(cache, comp_cache)}
   end
@@ -1882,9 +1883,9 @@ defmodule EXLA.Defn do
     {res, res_cache} = recur_composite(expr, & &1, comp_state, cache)
 
     if token = get_token(cache) do
-      Value.variadic_return([token | res], true)
+      Value.variadic_return(state.builder, [token | res], true)
     else
-      Value.variadic_return(res, true)
+      Value.variadic_return(state.builder, res, true)
     end
 
     Function.pop_region(state.builder)
@@ -2018,11 +2019,11 @@ defmodule EXLA.Defn do
   end
 
   defp wrap_tuple_result(function, list, template) when is_tuple(template) do
-    Value.tuple(function, list)
+    list
   end
 
   defp wrap_tuple_result(function, list, %Nx.Tensor{type: {:tuple, _}}) do
-    Value.tuple(function, list)
+    list
   end
 
   defp wrap_tuple_result(_, [value], _), do: value

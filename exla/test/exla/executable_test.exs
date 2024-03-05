@@ -193,7 +193,7 @@ defmodule EXLA.ExecutableFeedTest do
 
                    [_token, val] = Function.push_region(b, condition_region)
                    zero = Value.constant_r0(b, 0, {:s, 32})
-                   Value.variadic_return([Value.not_equal(b, val, zero)])
+                   Value.variadic_return(b, [Value.not_equal(b, val, zero)])
                    Function.pop_region(b)
 
                    [body_token, val] = Function.push_region(b, body_region)
@@ -201,7 +201,7 @@ defmodule EXLA.ExecutableFeedTest do
                    body_token = Value.outfeed(Value.add(b, val, val), body_token)
                    {body_token, [input]} = Value.infeed(body_token, t.shape)
 
-                   Value.variadic_return([body_token, input])
+                   Value.variadic_return(b, [body_token, input])
                    Function.pop_region(b)
 
                    Value.tuple(b, [result])

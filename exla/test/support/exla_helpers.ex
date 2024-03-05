@@ -15,7 +15,7 @@ defmodule EXLAHelpers do
 
       fun
       |> apply([builder | params])
-      |> then(&EXLA.MLIR.Value.variadic_return(List.wrap(&1)))
+      |> then(&EXLA.MLIR.Value.variadic_return(builder, List.wrap(&1)))
 
       EXLA.MLIR.Module.compile(
         builder.module,

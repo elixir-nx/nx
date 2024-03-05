@@ -611,7 +611,7 @@ defmodule EXLA.MLIR.Value do
     {results, %Region{ref: pred_ref}, %Region{ref: body_ref}}
   end
 
-  def variadic_return([%Value{function: function} | _] = values, flatten_tuples? \\ false) do
+  def variadic_return(function, values, flatten_tuples? \\ false) when is_list(values) do
     refs =
       if flatten_tuples? do
         flatten_tuples(values)
