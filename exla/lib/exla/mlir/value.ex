@@ -77,18 +77,6 @@ defmodule EXLA.MLIR.Value do
     %Value{op | ref: ref}
   end
 
-  def tuple(%Function{} = func, vals) when is_list(vals) do
-    refs = Enum.map(vals, fn %Value{ref: ref} -> ref end)
-    ref = EXLA.NIF.mlir_tuple(func.ref, refs) |> unwrap!()
-    %Value{ref: ref, function: func}
-  end
-
-  def get_tuple_element(%Value{function: %Function{} = func, ref: ref}, index)
-      when is_integer(index) do
-    ref = EXLA.NIF.mlir_get_tuple_element(func.ref, ref, index) |> unwrap!()
-    %Value{ref: ref, function: func}
-  end
-
   def get_shape(%Value{ref: ref}) do
     shape_ref = EXLA.NIF.mlir_get_shape(ref) |> unwrap!()
     EXLA.Shape.get_shape_info(shape_ref)
@@ -653,11 +641,6 @@ defmodule EXLA.MLIR.Value do
     case get_shape(val) do
       %{dtype: {:tuple, _}, dims: {0}} ->
         []
-
-      %{dtype: {:tuple, _}, dims: {n}} ->
-        # TO-DO(mlir): maybe we can avoid building tuples altogether.
-        # Nx should be returning all tuples as flattened anyway.
-        Enum.flat_map(0..(n - 1), fn i -> val |> get_tuple_element(i) |> flatten_tuples() end)
 
       _ ->
         [val.ref]

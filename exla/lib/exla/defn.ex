@@ -763,10 +763,6 @@ defmodule EXLA.Defn do
     Enum.fetch!(op, index)
   end
 
-  defp to_operator(:elem, [op, index], _ans, _state) do
-    Value.get_tuple_element(op, index)
-  end
-
   defp to_operator(
          :dot,
          [
@@ -1642,13 +1638,6 @@ defmodule EXLA.Defn do
     tuple
     |> Tuple.to_list()
     |> Enum.zip(params)
-    |> Enum.flat_map(&computation_arg_param/1)
-  end
-
-  defp computation_arg_param({tuple, %mod{} = param}) when is_tuple(tuple) do
-    tuple
-    |> Tuple.to_list()
-    |> Enum.with_index(fn arg, i -> {arg, mod.get_tuple_element(param, i)} end)
     |> Enum.flat_map(&computation_arg_param/1)
   end
 
