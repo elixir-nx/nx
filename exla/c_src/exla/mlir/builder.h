@@ -152,6 +152,13 @@ class MLIRModule {
   mlir::ModuleOp module() { return module_.get(); }
   mlir::OpBuilder *builder() { return builder_.get(); }
   mlir::MLIRContext *context() { return context_; }
+  std::string toMLIRString() {
+    std::string moduleStr;
+    llvm::raw_string_ostream os(moduleStr);
+    module_.get().print(os);
+    os.flush();  // Ensure the string stream is updated with the module's string representation
+    return moduleStr;
+  }
 
   void LowerPatterns();
 

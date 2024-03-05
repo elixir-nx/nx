@@ -9,7 +9,9 @@ XLA_INCLUDE_PATH = $(XLA_EXTENSION_DIR)/include
 
 IREE_COMPILER_DIR = iree/build/lib
 IREE_COMPILER_LIB = $(XLA_EXTENSION_DIR)/$(IREE_COMPILER_DIR)
-IREE_COMPILER_INCLUDE_PATH = $(XLA_EXTENSION_DIR)/$(IREE_COMPILER_DIR)/compiler/bindings/c
+IREE_COMPILER_INCLUDE_PATH = $(XLA_EXTENSION_DIR)/iree/compiler/bindings/c
+
+LLVM_MLIR_INCLUDE_PATH = $(XLA_EXTENSION_DIR)/iree/third_party/llvm-project/mlir/include
 
 # Cache configuration
 EXLA_CACHE_SO = cache/libexla.so
@@ -31,7 +33,7 @@ EXLA_CACHE_SO_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(EXLA_CACHE_SO)
 # c++17 is needed, otherwise xla headers
 # break on some conflicting llvm/std definitions
 # Note: this is on :xla 0.5.0 -- things can change with later versions
-CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -Wall -Wno-sign-compare \
+CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -I$(IREE_COMPILER_INCLUDE_PATH) -I$(LLVM_MLIR_INCLUDE_PATH) -Wall -Wno-sign-compare \
 	 -Wno-unused-parameter -Wno-missing-field-initializers -Wno-comment \
 	 -std=c++17 -w -DLLVM_VERSION_STRING=
 
@@ -67,8 +69,8 @@ $(EXLA_SO): $(EXLA_CACHE_SO)
 		ln -sf $(EXLA_CACHE_SO_LINK_PATH) $(EXLA_SO) ; \
 	fi
 
-SOURCES = $(EXLA_DIR)/exla.cc $(EXLA_DIR)/mlir/ops.cc $(EXLA_DIR)/mlir/builder.cc $(EXLA_DIR)/mlir/custom_calls.cc $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_nif_util.cc
-HEADERS = $(EXLA_DIR)/mlir/ops.h $(EXLA_DIR)/mlir/builder.h $(EXLA_DIR)/mlir/custom_calls.h $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h
+SOURCES = $(EXLA_DIR)/exla.cc $(EXLA_DIR)/mlir/ops.cc $(EXLA_DIR)/mlir/builder.cc $(EXLA_DIR)/mlir/custom_calls.cc $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/mlir/iree_compiler.cc
+HEADERS = $(EXLA_DIR)/mlir/ops.h $(EXLA_DIR)/mlir/builder.h $(EXLA_DIR)/mlir/custom_calls.h $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h $(EXLA_DIR)/mlir/iree_compiler.h
 OBJECTS = $(patsubst $(EXLA_DIR)/%.cc,$(EXLA_CACHE_OBJ_DIR)/%.o,$(SOURCES))
 
 $(EXLA_CACHE_OBJ_DIR)/%.o: $(EXLA_DIR)/%.cc $(HEADERS)

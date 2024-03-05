@@ -78,6 +78,8 @@ defmodule EXLA.NIF do
 
   def mlir_build(_function, _root), do: :erlang.nif_error(:undef)
 
+  def iree_compile_mlir_module(_module, _target), do: :erlang.nif_error(:undef)
+
   def mlir_compile(
         _client,
         _computation,

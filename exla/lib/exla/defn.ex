@@ -451,6 +451,8 @@ defmodule EXLA.Defn do
               :timer.tc(fn ->
                 shapes = for {i, shape} <- inputs_and_shapes, i >= used_buffers, do: shape
 
+                EXLA.NIF.iree_compile_mlir_module(builder.module.ref, "metal")
+
                 EXLA.MLIR.Module.compile(
                   builder.module,
                   client,
