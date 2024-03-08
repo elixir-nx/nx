@@ -35,6 +35,11 @@ void cleanup_compiler_state(compiler_state_t s) {
   ireeCompilerGlobalShutdown();
 }
 
+ERL_NIF_TERM iree_compiler_global_initialize(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
+  ireeCompilerGlobalInitialize();
+  return exla::nif::ok(env);
+}
+
 static void initializeCompiler(struct compiler_state_t *state) {
   ireeCompilerGlobalInitialize();
   state->session = ireeCompilerSessionCreate();
@@ -66,19 +71,30 @@ ERL_NIF_TERM iree_compile_mlir_module(ErlNifEnv *env, int argc, const ERL_NIF_TE
 
   initializeCompiler(&state);
 
+  // (*module)->LowerPatterns();
   std::string module_str = (*module)->toMLIRString();
   MlirOperation module_op = mlirOperationCreateParse(
       state.context,
       mlirStringRefCreateFromCString(module_str.c_str()),
-      mlirStringRefCreateFromCString("source.mlir"));
+      mlirStringRefCreateFromCString("source.stablehlo"));
   if (mlirOperationIsNull(module_op)) {
     return exla::nif::error(env, "Unable to create MlirOperation module.");
   }
 
+  std::cout << module_str << std::endl;
+
   // Set flags.
   iree_compiler_error_t *err;
   const char *flags[] = {
-      "--iree-hal-target-backends=vmvx",
+      "--iree-hal-target-backends=metal-spirv",
+      "--iree-input-type=stablehlo",
+      // "--iree-vm-target-extension-f32",
+      // "--iree-vm-target-index-bits=64",
+      "--iree-metal-target-platform=macos"
+      // "--iree-opt-demote-f32-to-f16=false",
+      // "--iree-opt-demote-i64-to-i32=false",
+      // "--iree-input-demote-f64-to-f32=false",
+      // "--iree-input-demote-i64-to-i32=false",
   };
   err = ireeCompilerSessionSetFlags(state.session, 1, flags);
   if (err) {
@@ -87,7 +103,7 @@ ERL_NIF_TERM iree_compile_mlir_module(ErlNifEnv *env, int argc, const ERL_NIF_TE
   }
 
   state.invocation = ireeCompilerInvocationCreate(state.session);
-  ireeCompilerInvocationEnableConsoleDiagnostics(state.invocation);
+  // ireeCompilerInvocationEnableConsoleDiagnostics(state.invocation);
 
   if (!ireeCompilerInvocationImportStealModule(state.invocation, module_op)) {
     cleanup_compiler_state(state);
@@ -95,7 +111,7 @@ ERL_NIF_TERM iree_compile_mlir_module(ErlNifEnv *env, int argc, const ERL_NIF_TE
   }
 
   // Compile.
-  if (!ireeCompilerInvocationPipeline(state.invocation, iree_compiler_pipeline_t::IREE_COMPILER_PIPELINE_PRECOMPILE)) {
+  if (!ireeCompilerInvocationPipeline(state.invocation, iree_compiler_pipeline_t::IREE_COMPILER_PIPELINE_STD)) {
     cleanup_compiler_state(state);
     return exla::nif::error(env, "Unable to compile module.");
   }

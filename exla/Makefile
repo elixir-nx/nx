@@ -8,10 +8,10 @@ XLA_EXTENSION_LIB = $(XLA_EXTENSION_DIR)/lib
 XLA_INCLUDE_PATH = $(XLA_EXTENSION_DIR)/include
 
 IREE_COMPILER_DIR = iree/build/lib
-IREE_COMPILER_LIB = $(XLA_EXTENSION_DIR)/$(IREE_COMPILER_DIR)
-IREE_COMPILER_INCLUDE_PATH = $(XLA_EXTENSION_DIR)/iree/compiler/bindings/c
+IREE_COMPILER_LIB = cache/$(IREE_COMPILER_DIR)
+IREE_COMPILER_INCLUDE_PATH = cache/iree/compiler/bindings/c
 
-LLVM_MLIR_INCLUDE_PATH = $(XLA_EXTENSION_DIR)/iree/third_party/llvm-project/mlir/include
+LLVM_MLIR_INCLUDES = -Icache/iree/third_party/llvm-project/mlir/include
 
 # Cache configuration
 EXLA_CACHE_SO = cache/libexla.so
@@ -33,7 +33,7 @@ EXLA_CACHE_SO_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(EXLA_CACHE_SO)
 # c++17 is needed, otherwise xla headers
 # break on some conflicting llvm/std definitions
 # Note: this is on :xla 0.5.0 -- things can change with later versions
-CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -I$(IREE_COMPILER_INCLUDE_PATH) -I$(LLVM_MLIR_INCLUDE_PATH) -Wall -Wno-sign-compare \
+CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -I$(IREE_COMPILER_INCLUDE_PATH) $(LLVM_MLIR_INCLUDES) -Wall -Wno-sign-compare \
 	 -Wno-unused-parameter -Wno-missing-field-initializers -Wno-comment \
 	 -std=c++17 -w -DLLVM_VERSION_STRING=
 
@@ -46,19 +46,19 @@ endif
 LDFLAGS = -L$(XLA_EXTENSION_LIB) -lxla_extension -shared -L$(IREE_COMPILER_LIB) -lIREECompiler
 
 ifeq ($(shell uname -s), Darwin)
-	LDFLAGS += -flat_namespace -undefined suppress -rpath @loader_path/xla_extension/lib -rpath @loader_path/xla_extension/$(IREE_COMPILER_DIR)
+	LDFLAGS += -flat_namespace -undefined suppress -rpath @loader_path/xla_extension/lib -rpath @loader_path/$(IREE_COMPILER_DIR)
 else
 	# Use a relative RPATH, so at runtime libexla.so looks for libxla_extension.so
 	# in ./lib regardless of the absolute location. This way priv can be safely
 	# packed into an Elixir release. Also, we use $$ to escape Makefile variable
 	# and single quotes to escape shell variable
-	LDFLAGS += -Wl,-rpath,'$$ORIGIN/xla_extension/lib' -Wl,-rpath,'$$ORIGIN/xla_extension/$(IREE_COMPILER_DIR)'
+	LDFLAGS += -Wl,-rpath,'$$ORIGIN/xla_extension/lib' -Wl,-rpath,'$$ORIGIN/$(IREE_COMPILER_DIR)'
 endif
 
 $(EXLA_SO): $(EXLA_CACHE_SO)
 	@ mkdir -p $(PRIV_DIR)
 	@ mkdir -p $(PRIV_DIR)/xla_extension
-	@ mkdir -p $(PRIV_DIR)/xla_extension/iree/build
+	@ mkdir -p $(PRIV_DIR)/iree/build
 	@ if [ "${MIX_BUILD_EMBEDDED}" = "true" ]; then \
 		cp -a $(abspath $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR) ; \
 		cp -a $(abspath $(IREE_COMPILER_LIB)) $(EXLA_IREE_LIB_DIR) ; \
@@ -78,7 +78,10 @@ $(EXLA_CACHE_OBJ_DIR)/%.o: $(EXLA_DIR)/%.cc $(HEADERS)
 	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)/mlir
 	$(CXX) $(CFLAGS) -c $< -o $@
 
-$(EXLA_CACHE_SO): $(XLA_EXTENSION_DIR) $(OBJECTS)
+$(IREE_COMPILER_LIB):
+	ln -s ../../../xla/third_party/iree cache/iree
+
+$(EXLA_CACHE_SO): $(XLA_EXTENSION_DIR) $(IREE_COMPILER_LIB) $(OBJECTS)
 	$(CXX) $(OBJECTS) -o $(EXLA_CACHE_SO) $(LDFLAGS)
 
 clean:

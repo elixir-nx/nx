@@ -598,6 +598,7 @@ ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 
 static ErlNifFunc exla_funcs[] = {
     // MLIR Builder
+    {"iree_compiler_global_initialize", 0, iree_compiler_global_initialize},
     {"new_mlir_context", 0, new_mlir_context},
     {"new_mlir_module", 1, new_mlir_module},
     {"create_mlir_function", 5, create_mlir_function},
