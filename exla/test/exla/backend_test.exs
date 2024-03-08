@@ -21,8 +21,14 @@ defmodule EXLA.BackendTest do
     logsumexp: 2
   ]
 
+  if is_mac_arm?() do
+    @skip_mac_arm [asin: 1, sin: 1, cos: 1]
+  else
+    @skip_mac_arm []
+  end
+
   doctest Nx,
-    except: [:moduledoc] ++ @excluded_doctests
+    except: [:moduledoc] ++ @excluded_doctests ++ @skip_mac_arm
 
   test "Nx.to_binary/1" do
     t = Nx.tensor([1, 2, 3, 4], backend: EXLA.Backend)
@@ -157,7 +163,7 @@ defmodule EXLA.BackendTest do
     # This is not really meant to work in practice,
     # but it does work with the Nx.BinaryBackend so
     # we make it work for EXLA too.
-    defn double(fun), do: double_transform(fun.())
+    defn(double(fun), do: double_transform(fun.()))
 
     deftransformp(double_transform(x), do: Nx.backend_transfer(Nx.Defn.Kernel.*(x, x)))
 

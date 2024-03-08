@@ -9,8 +9,6 @@ DEFINE_NIF(new_mlir_module);
 DEFINE_NIF(new_mlir_context);
 DEFINE_NIF(create_mlir_function);
 DEFINE_NIF(get_mlir_function_arguments);
-DEFINE_NIF(mlir_tuple);
-DEFINE_NIF(mlir_get_tuple_element);
 
 // Binary Ops
 DEFINE_NIF(mlir_add);
