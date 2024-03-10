@@ -452,7 +452,6 @@ defmodule EXLA.Defn do
                   builder.return_shape,
                   options
                 )
-                |> tap(fn _ -> dbg("compiled module") end)
               end)
 
             {:ok, {xla_time, executable, extra, %{outfeed | infeeds: []}}}
@@ -1487,7 +1486,9 @@ defmodule EXLA.Defn do
 
         op == :less ->
           is_nan = Value.is_nan(rhs)
+
           Value.bitwise_or(function, is_nan, Value.less(function, lhs, rhs))
+          |> tap(fn _ -> EXLA.NIF.dump_mlir_module(function.module.ref) end)
 
         op == :greater ->
           is_nan = Value.is_nan(lhs)

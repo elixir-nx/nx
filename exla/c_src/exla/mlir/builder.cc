@@ -313,11 +313,13 @@ mlir::Value MLIRFunction::PadOp(mlir::Value op, mlir::Value pad, std::vector<int
 mlir::Value compare_and_return_bool(mlir::OpBuilder *builder, mlir::Value lhs, mlir::Value rhs, mlir::stablehlo::ComparisonDirection direction) {
   mlir::stablehlo::ComparisonType comparison_type;
   mlir::RankedTensorType ranked_type = llvm::cast<mlir::RankedTensorType>(lhs.getType());
-  mlir::Type left_type = mlir::RankedTensorType::get({}, ranked_type.getElementType());
+  mlir::Type left_element_type = ranked_type.getElementType();
+  mlir::Type left_type = mlir::RankedTensorType::get({}, left_element_type);
 
   ranked_type = llvm::cast<mlir::RankedTensorType>(rhs.getType());
-  mlir::Type right_type = mlir::RankedTensorType::get({}, ranked_type.getElementType());
-  if (left_type.isa<mlir::FloatType>() || right_type.isa<mlir::FloatType>()) {
+  mlir::Type right_element_type = ranked_type.getElementType();
+  mlir::Type right_type = mlir::RankedTensorType::get({}, right_element_type);
+  if (left_element_type.isa<mlir::FloatType>() || right_element_type.isa<mlir::FloatType>()) {
     comparison_type = mlir::stablehlo::symbolizeComparisonType("TOTALORDER").value();
   } else {
     comparison_type = mlir::stablehlo::ComparisonType::NOTYPE;
