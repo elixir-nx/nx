@@ -32,7 +32,7 @@ void cleanup_compiler_state(compiler_state_t s) {
     ireeCompilerSourceDestroy(s.source);
   if (s.session)
     ireeCompilerSessionDestroy(s.session);
-  ireeCompilerGlobalShutdown();
+  // ireeCompilerGlobalShutdown();
 }
 
 ERL_NIF_TERM iree_compiler_global_initialize(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
@@ -41,14 +41,14 @@ ERL_NIF_TERM iree_compiler_global_initialize(ErlNifEnv *env, int argc, const ERL
 }
 
 static void initializeCompiler(struct compiler_state_t *state) {
-  ireeCompilerGlobalInitialize();
+  // ireeCompilerGlobalInitialize();
   state->session = ireeCompilerSessionCreate();
   state->context = ireeCompilerSessionBorrowContext(state->session);
 }
 
 static void shutdownCompiler(struct compiler_state_t *state) {
   ireeCompilerSessionDestroy(state->session);
-  ireeCompilerGlobalShutdown();
+  // ireeCompilerGlobalShutdown();
 }
 
 ERL_NIF_TERM iree_compile_mlir_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
@@ -73,6 +73,7 @@ ERL_NIF_TERM iree_compile_mlir_module(ErlNifEnv *env, int argc, const ERL_NIF_TE
 
   // (*module)->LowerPatterns();
   std::string module_str = (*module)->toMLIRString();
+  std::cout << module_str << std::endl;
   MlirOperation module_op = mlirOperationCreateParse(
       state.context,
       mlirStringRefCreateFromCString(module_str.c_str()),
@@ -81,21 +82,15 @@ ERL_NIF_TERM iree_compile_mlir_module(ErlNifEnv *env, int argc, const ERL_NIF_TE
     return exla::nif::error(env, "Unable to create MlirOperation module.");
   }
 
-  std::cout << module_str << std::endl;
-
   // Set flags.
   iree_compiler_error_t *err;
   const char *flags[] = {
-      "--iree-hal-target-backends=metal-spirv",
-      "--iree-input-type=stablehlo",
-      // "--iree-vm-target-extension-f32",
-      // "--iree-vm-target-index-bits=64",
-      "--iree-metal-target-platform=macos"
-      // "--iree-opt-demote-f32-to-f16=false",
-      // "--iree-opt-demote-i64-to-i32=false",
-      // "--iree-input-demote-f64-to-f32=false",
-      // "--iree-input-demote-i64-to-i32=false",
-  };
+      "--iree-hal-target-backends=llvm-cpu",
+      "--iree-input-type=auto",
+      "--iree-input-demote-i64-to-i32=false",
+      "--disable-inlining",
+      "--iree-execution-model=async-external",
+      "--iree-flow-inline-constants-max-byte-length=0"};
   err = ireeCompilerSessionSetFlags(state.session, 1, flags);
   if (err) {
     cleanup_compiler_state(state);
@@ -103,7 +98,7 @@ ERL_NIF_TERM iree_compile_mlir_module(ErlNifEnv *env, int argc, const ERL_NIF_TE
   }
 
   state.invocation = ireeCompilerInvocationCreate(state.session);
-  // ireeCompilerInvocationEnableConsoleDiagnostics(state.invocation);
+  ireeCompilerInvocationEnableConsoleDiagnostics(state.invocation);
 
   if (!ireeCompilerInvocationImportStealModule(state.invocation, module_op)) {
     cleanup_compiler_state(state);
@@ -115,7 +110,26 @@ ERL_NIF_TERM iree_compile_mlir_module(ErlNifEnv *env, int argc, const ERL_NIF_TE
     cleanup_compiler_state(state);
     return exla::nif::error(env, "Unable to compile module.");
   }
+  std::cout << "Compilation successful, output:\n\n";
+  fflush(stdout);
+  error = ireeCompilerOutputOpenFD(fileno(stdout), &state.output);
+  if (error) {
+    handle_compiler_error(error);
+    cleanup_compiler_state(state);
+    return exla::nif::error(env, "Error opening output file descriptor");
+  }
 
-  shutdownCompiler(&state);
+  // Print IR to the output stream.
+  // When compiling to the 'end' phase, a compiler tool would typically use
+  // either |ireeCompilerInvocationOutputVMBytecode| or
+  // |ireeCompilerInvocationOutputVMCSource|.
+  error = ireeCompilerInvocationOutputIR(state.invocation, state.output);
+  if (error) {
+    handle_compiler_error(error);
+    cleanup_compiler_state(state);
+    return 1;
+  }
+
+  cleanup_compiler_state(state);
   return exla::nif::ok(env);
 }

@@ -6,6 +6,7 @@
 #include "../exla_client.h"
 #include "../exla_nif_util.h"
 #include "mhlo/IR/hlo_ops.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "stablehlo/dialect/ChloOps.h"
 #include "stablehlo/dialect/StablehloOps.h"
@@ -75,6 +76,7 @@ ERL_NIF_TERM new_mlir_context(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
   context->getOrLoadDialect<mlir::stablehlo::StablehloDialect>();
   context->getOrLoadDialect<mlir::mhlo::MhloDialect>();
   context->getOrLoadDialect<mlir::chlo::ChloDialect>();
+  context->getOrLoadDialect<mlir::cf::ControlFlowDialect>();
 
   auto ret = exla::nif::make<mlir::MLIRContext*>(env, context);
   return exla::nif::ok(env, ret);
@@ -1499,12 +1501,13 @@ ERL_NIF_TERM mlir_outfeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 
 ERL_NIF_TERM mlir_call(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 3) {
+  if (argc != 4) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   exla::MLIRFunction **function, **computation;
   std::vector<mlir::Value> arguments;
+  bool inline_call;
 
   if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
     return exla::nif::error(env, "Unable to get function.");
@@ -1515,9 +1518,11 @@ ERL_NIF_TERM mlir_call(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get<exla::MLIRFunction*>(env, argv[2], computation)) {
     return exla::nif::error(env, "Unable to get computation.");
   }
+  if (!exla::nif::get(env, argv[3], &inline_call)) {
+    return exla::nif::error(env, "Unable to get inline_call.");
+  }
 
-  std::vector<mlir::Value> result = (*function)->CallOp(arguments, *computation);
-
+  std::vector<mlir::Value> result = inline_call ? (*function)->InlineCallOp(arguments, *computation) : (*function)->CallOp(arguments, *computation);
   return exla::nif::ok(env, exla::nif::make_list<mlir::Value>(env, result));
 }
 

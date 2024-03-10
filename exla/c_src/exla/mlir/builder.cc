@@ -7,10 +7,12 @@
 #include "mhlo/IR/hlo_ops.h"
 #include "mhlo/transforms/rewriters.h"
 #include "mhlo/utils/type_conversion.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/IRMapping.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/OwningOpRef.h"
 #include "mlir/IR/PatternMatch.h"
@@ -194,8 +196,8 @@ int MLIRFunction::get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *t
 mlir::DenseIntElementsAttr Int64ToDenseIntElementsAttr(mlir::OpBuilder *builder, std::vector<int64_t> vec) {
   int64_t num_entries[] = {static_cast<int64_t>(vec.size())};
   auto type = mlir::RankedTensorType::get(llvm::ArrayRef(num_entries, 1), builder->getIntegerType(64));
-  auto dense_attr = mlir::DenseElementsAttr::get<int64_t>(type, llvm::ArrayRef<int64_t>(vec.data(), vec.size()));
-  return llvm::cast<mlir::DenseIntElementsAttr>(dense_attr);
+  auto dense_attr = mlir::DenseIntElementsAttr::get(type, llvm::makeArrayRef(vec));
+  return dense_attr;
 }
 
 mlir::DenseIntElementsAttr Int64ToDenseIntElementsAttr(mlir::OpBuilder *builder, std::vector<std::pair<int64_t, int64_t>> vec_in) {
@@ -209,8 +211,8 @@ mlir::DenseIntElementsAttr Int64ToDenseIntElementsAttr(mlir::OpBuilder *builder,
 
   int64_t num_entries[] = {num_pairs, 2};
   auto type = mlir::RankedTensorType::get(llvm::ArrayRef(num_entries, 2), builder->getIntegerType(64));
-  auto dense_attr = mlir::DenseElementsAttr::get<int64_t>(type, llvm::ArrayRef<int64_t>(vec.data(), vec.size()));
-  return llvm::cast<mlir::DenseIntElementsAttr>(dense_attr);
+  auto dense_attr = mlir::DenseIntElementsAttr::get(type, llvm::makeArrayRef(vec));
+  return dense_attr;
 }
 
 MLIRFunction::MLIRFunction(MLIRModule *module, std::unique_ptr<mlir::func::FuncOp> func)
@@ -1317,6 +1319,7 @@ void MLIRModule::LowerPatterns() {
   mlir::ConversionTarget target(*context());
   target.addIllegalDialect<mlir::stablehlo::StablehloDialect>();
   target.addIllegalDialect<mlir::func::FuncDialect>();
+  target.addIllegalDialect<mlir::cf::ControlFlowDialect>();
   target.addLegalDialect<mlir::mhlo::MhloDialect>();
 
   mlir::stablehlo::StablehloToHloTypeConverter converter;
@@ -1354,6 +1357,49 @@ mlir::Value MLIRFunction::OutfeedOp(std::vector<mlir::Value> inputs, mlir::Value
   auto builder = module_->builder();
   setInsertionPoint();
   return builder->create<mlir::stablehlo::OutfeedOp>(builder->getUnknownLoc(), mlir::ValueRange(inputs), token);
+}
+
+std::vector<mlir::Value> MLIRFunction::InlineCallOp(std::vector<mlir::Value> inputs, MLIRFunction *computation) {
+  auto builder = module_->builder();
+  setInsertionPoint();
+
+  mlir::func::FuncOp *func = computation->function();
+  mlir::Region *region = builder->getInsertionBlock()->getParent();
+  // Save the last block in the region before cloning, this is bb0
+  mlir::Block &bb0 = region->back();
+
+  auto mapping = mlir::IRMapping();
+  // mapping.map(func->getBody().getArguments(), inputs);
+  func->getBody().cloneInto(region, mapping);
+  // The first block of the cloned content (bb1) is now the last block in the region
+  mlir::Block &bb1 = region->back();
+
+  // Create a BranchOp from bb0 to bb1
+  // Assuming no arguments need to be passed from bb0 to bb1
+  builder->setInsertionPointToEnd(&bb0);
+  builder->create<mlir::cf::BranchOp>(builder->getUnknownLoc(), &bb1, inputs);
+
+  // Remove the ReturnOp from bb1
+  mlir::Operation *returnOp = bb1.getTerminator();
+  std::vector<mlir::Value> returnOperands(returnOp->getOperands().begin(), returnOp->getOperands().end());
+  returnOp->erase();
+
+  // Create bb2 and add it to the region
+  auto bb2 = new mlir::Block();
+  region->push_back(bb2);
+
+  // For each return operand, add a corresponding argument to bb2 if you need to pass values
+  for (auto &val : returnOperands) {
+    bb2->addArgument(val.getType(), builder->getUnknownLoc());
+  }
+
+  // Create a BranchOp from bb1 to bb2, passing the return operands as arguments
+  builder->setInsertionPointToEnd(&bb1);
+  builder->create<mlir::cf::BranchOp>(builder->getUnknownLoc(), bb2, returnOperands);
+
+  builder->setInsertionPointToStart(bb2);
+  // To return the arguments of bb2, gather them into a vector
+  return std::vector<mlir::Value>(bb2->getArguments().begin(), bb2->getArguments().end());
 }
 
 std::vector<mlir::Value> MLIRFunction::CallOp(std::vector<mlir::Value> inputs, MLIRFunction *computation) {
@@ -1440,7 +1486,6 @@ std::pair<mlir::Value, mlir::Value> MLIRFunction::QRCpuCustomCall(mlir::Value op
     std::cerr << "Unsupported type for QR decomposition" << std::endl;
     exit(1);
   }
-  
 
   auto call_target_name_attr = mlir::NamedAttribute(builder->getStringAttr("call_target_name"), builder->getStringAttr(call_target_name));
   auto backend_config_attr = mlir::NamedAttribute(builder->getStringAttr("backend_config"), builder->getStringAttr("Host"));

@@ -586,7 +586,8 @@ defmodule EXLA.MLIR.Value do
 
   def call(%Function{ref: fun_ref} = function, args, %Function{ref: computation_ref}) do
     arg_refs = Enum.map(args, & &1.ref)
-    refs = EXLA.NIF.mlir_call(fun_ref, arg_refs, computation_ref) |> unwrap!()
+    # TO-DO: Add support for inline=false back again
+    refs = EXLA.NIF.mlir_call(fun_ref, arg_refs, computation_ref, 1) |> unwrap!()
     Enum.map(refs, &%Value{ref: &1, function: function})
   end
 

@@ -296,12 +296,12 @@ defmodule EXLA.Defn do
       client: client,
       precision: Keyword.get(options, :precision, :default),
       builder: function,
-      params: Map.new(params ++ outfeed.infeeds),
+      params: Map.new(params),
       scope_ids: Tree.scope_ids(expr)
     }
 
     {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
-    outfeed = cache |> get_outfeed() |> Outfeed.close(function)
+    # outfeed = cache |> get_outfeed() |> Outfeed.close(function)
 
     Value.variadic_return(function, res)
 
@@ -431,7 +431,7 @@ defmodule EXLA.Defn do
           EXLA.MLIR.Module.new(comp_arg_shapes, out_types, fn builder ->
             outfeed =
               outfeed
-              |> Outfeed.with_token(Value.create_token(builder))
+              |> Outfeed.with_token(Value.constant_r0(builder, 0, {:pred, 8}))
               |> Outfeed.add_infeeds(builder, reverse_infeeds)
 
             expr = Nx.Defn.Composite.traverse(expr || fun.(vars), &Nx.devectorize/1)
@@ -443,7 +443,7 @@ defmodule EXLA.Defn do
               :timer.tc(fn ->
                 shapes = for {i, shape} <- inputs_and_shapes, i >= used_buffers, do: shape
 
-                EXLA.NIF.iree_compile_mlir_module(builder.module.ref, "metal")
+                :ok = EXLA.NIF.iree_compile_mlir_module(builder.module.ref, "metal")
 
                 EXLA.MLIR.Module.compile(
                   builder.module,
@@ -452,6 +452,7 @@ defmodule EXLA.Defn do
                   builder.return_shape,
                   options
                 )
+                |> tap(fn _ -> dbg("compiled module") end)
               end)
 
             {:ok, {xla_time, executable, extra, %{outfeed | infeeds: []}}}
@@ -1588,7 +1589,7 @@ defmodule EXLA.Defn do
   defp token_computation(name, args, expr, %{builder: %Function{}} = state, cache) do
     %Function{module: module, name: name} = subbuilder(state.builder, name)
 
-    token_shape = EXLA.Shape.make_token_shape()
+    token_shape = EXLA.Shape.make_shape({:pred, 8}, {})
 
     arg_shapes = Enum.map(args, &Value.get_shape/1)
 
@@ -1794,7 +1795,7 @@ defmodule EXLA.Defn do
 
     result_shapes =
       if in_token do
-        [EXLA.Shape.make_token_shape() | out_shape]
+        [EXLA.Shape.make_shape({:pred, 8}, {}) | out_shape]
       else
         out_shape
       end
