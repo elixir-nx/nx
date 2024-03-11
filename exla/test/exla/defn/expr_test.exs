@@ -3466,7 +3466,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "gather" do
-    @describetag :skip
+    # @describetag :skip
     defn gather(t, idx), do: Nx.gather(t, idx)
 
     test "1d result" do

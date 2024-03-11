@@ -1026,7 +1026,14 @@ mlir::Value MLIRFunction::GatherOp(mlir::Value source, mlir::Value indices, std:
   setInsertionPoint();
   auto gather_dimension_numbers = mlir::stablehlo::GatherDimensionNumbersAttr::get(builder->getContext(), offset_dims, collapsed_slice_dims, start_index_map, index_vector_dim);
   auto slice_sizes_attr = Int64ToDenseIntElementsAttr(module_->builder(), slice_sizes);
-  return builder->create<mlir::stablehlo::GatherOp>(builder->getUnknownLoc(), source, indices, gather_dimension_numbers, slice_sizes_attr, false);
+  auto result = builder->create<mlir::stablehlo::GatherOp>(builder->getUnknownLoc(), source, indices, gather_dimension_numbers, slice_sizes_attr, false);
+  dump_mlir_module();
+  std::vector<mlir::IntegerAttr> slice_sizes_attr_vector;
+  for (auto slice_size : slice_sizes) {
+    slice_sizes_attr_vector.push_back(builder->getI64IntegerAttr(slice_size));
+  }
+  result.setSliceSizesAttr(*((mlir::DenseIntElementsAttr *)(&slice_sizes_attr)));
+  return result;
 }
 
 mlir::Value MLIRFunction::FFTOp(mlir::Value tensor, bool forward_fft, std::vector<int64_t> fft_length) {

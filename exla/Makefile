@@ -33,7 +33,7 @@ EXLA_CACHE_SO_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(EXLA_CACHE_SO)
 # c++17 is needed, otherwise xla headers
 # break on some conflicting llvm/std definitions
 # Note: this is on :xla 0.5.0 -- things can change with later versions
-CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -I$(IREE_COMPILER_INCLUDE_PATH) $(LLVM_MLIR_INCLUDES) -Wall -Wno-sign-compare \
+CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(IREE_COMPILER_INCLUDE_PATH) $(LLVM_MLIR_INCLUDES) -I$(XLA_INCLUDE_PATH) -Wall -Wno-sign-compare \
 	 -Wno-unused-parameter -Wno-missing-field-initializers -Wno-comment \
 	 -std=c++17 -w -DLLVM_VERSION_STRING=
 
