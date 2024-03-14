@@ -193,14 +193,11 @@ int MLIRFunction::get_mlir_type(ErlNifEnv *env, ERL_NIF_TERM term, mlir::Type *t
   return 1;
 }
 
-mlir::DenseIntElementsAttr Int64ToDenseIntElementsAttr(mlir::OpBuilder *builder, std::vector<int64_t> vec) {
-  int64_t num_entries[] = {static_cast<int64_t>(vec.size())};
-  auto type = mlir::RankedTensorType::get(llvm::ArrayRef(num_entries, 1), builder->getIntegerType(64));
-  auto dense_attr = mlir::DenseIntElementsAttr::get(type, llvm::makeArrayRef(vec));
-  return dense_attr;
+mlir::DenseI64ArrayAttr Int64ToDenseI64ArrayAttr(mlir::OpBuilder *builder, std::vector<int64_t> vec) {
+  return builder->getDenseI64ArrayAttr(vec);
 }
 
-mlir::DenseIntElementsAttr Int64ToDenseIntElementsAttr(mlir::OpBuilder *builder, std::vector<std::pair<int64_t, int64_t>> vec_in) {
+mlir::DenseIntElementsAttr Int64PairToDenseIntElementsAttr(mlir::OpBuilder *builder, std::vector<std::pair<int64_t, int64_t>> vec_in) {
   std::vector<int64_t> vec;
   int64_t num_pairs = vec_in.size();
   vec.reserve(num_pairs * 2);
@@ -211,7 +208,7 @@ mlir::DenseIntElementsAttr Int64ToDenseIntElementsAttr(mlir::OpBuilder *builder,
 
   int64_t num_entries[] = {num_pairs, 2};
   auto type = mlir::RankedTensorType::get(llvm::ArrayRef(num_entries, 2), builder->getIntegerType(64));
-  auto dense_attr = mlir::DenseIntElementsAttr::get(type, llvm::makeArrayRef(vec));
+  auto dense_attr = mlir::DenseIntElementsAttr::get(type, vec);
   return dense_attr;
 }
 
@@ -303,9 +300,9 @@ mlir::Value MLIRFunction::Atan2Op(mlir::Value lhs, mlir::Value rhs) {
 mlir::Value MLIRFunction::PadOp(mlir::Value op, mlir::Value pad, std::vector<int64_t> padding_low, std::vector<int64_t> padding_high, std::vector<int64_t> padding_mid) {
   setInsertionPoint();
 
-  auto padding_low_attr = Int64ToDenseIntElementsAttr(module_->builder(), padding_low);
-  auto padding_high_attr = Int64ToDenseIntElementsAttr(module_->builder(), padding_high);
-  auto padding_mid_attr = Int64ToDenseIntElementsAttr(module_->builder(), padding_mid);
+  auto padding_low_attr = Int64ToDenseI64ArrayAttr(module_->builder(), padding_low);
+  auto padding_high_attr = Int64ToDenseI64ArrayAttr(module_->builder(), padding_high);
+  auto padding_mid_attr = Int64ToDenseI64ArrayAttr(module_->builder(), padding_mid);
 
   return module_->builder()->create<mlir::stablehlo::PadOp>(module_->builder()->getUnknownLoc(), op, pad, padding_low_attr, padding_high_attr, padding_mid_attr);
 }
@@ -612,7 +609,7 @@ mlir::Value MLIRFunction::ConjOp(mlir::Value operand) {
 
 mlir::Value MLIRFunction::TransposeOp(mlir::Value operand, std::vector<int64_t> axes) {
   setInsertionPoint();
-  auto axes_attr = Int64ToDenseIntElementsAttr(module_->builder(), axes);
+  auto axes_attr = Int64ToDenseI64ArrayAttr(module_->builder(), axes);
   return module_->builder()->create<mlir::stablehlo::TransposeOp>(module_->builder()->getUnknownLoc(), operand, axes_attr);
 }
 
@@ -625,7 +622,7 @@ mlir::Value MLIRFunction::ReshapeOp(mlir::Value operand, std::vector<int64_t> ta
 
 mlir::Value MLIRFunction::ReverseOp(mlir::Value operand, std::vector<int64_t> dims) {
   setInsertionPoint();
-  auto dims_attr = Int64ToDenseIntElementsAttr(module_->builder(), dims);
+  auto dims_attr = Int64ToDenseI64ArrayAttr(module_->builder(), dims);
   return module_->builder()->create<mlir::stablehlo::ReverseOp>(module_->builder()->getUnknownLoc(), operand, dims_attr);
 }
 
@@ -693,9 +690,9 @@ std::vector<mlir::Value> MLIRFunction::SortOp(MLIRFunction *comparator, std::vec
 
 mlir::Value MLIRFunction::SliceOp(mlir::Value operand, std::vector<int64_t> starts, std::vector<int64_t> limits, std::vector<int64_t> strides) {
   setInsertionPoint();
-  auto idx_attr = Int64ToDenseIntElementsAttr(module_->builder(), starts);
-  auto lim_attr = Int64ToDenseIntElementsAttr(module_->builder(), limits);
-  auto strides_attr = Int64ToDenseIntElementsAttr(module_->builder(), strides);
+  auto idx_attr = Int64ToDenseI64ArrayAttr(module_->builder(), starts);
+  auto lim_attr = Int64ToDenseI64ArrayAttr(module_->builder(), limits);
+  auto strides_attr = Int64ToDenseI64ArrayAttr(module_->builder(), strides);
 
   return module_->builder()->create<mlir::stablehlo::SliceOp>(
       module_->builder()->getUnknownLoc(),
@@ -707,7 +704,7 @@ mlir::Value MLIRFunction::SliceOp(mlir::Value operand, std::vector<int64_t> star
 
 mlir::Value MLIRFunction::DynamicSliceOp(mlir::Value operand, std::vector<mlir::Value> starts, std::vector<int64_t> lengths) {
   setInsertionPoint();
-  auto len_attr = Int64ToDenseIntElementsAttr(module_->builder(), lengths);
+  auto len_attr = Int64ToDenseI64ArrayAttr(module_->builder(), lengths);
   mlir::ValueRange starts_range(llvm::ArrayRef<mlir::Value>(starts.data(), starts.size()));
 
   return module_->builder()
@@ -783,7 +780,7 @@ mlir::Value MLIRFunction::BroadcastInDimOp(mlir::Value operand, xla::Shape shape
   std::vector<int64_t> dimensions(dimensions_span.begin(), dimensions_span.end());
   mlir::Type result_type = GetMLIRFunctionType(module_->builder(), &shape);
 
-  auto axes_attr = Int64ToDenseIntElementsAttr(module_->builder(), axes);
+  auto axes_attr = Int64ToDenseI64ArrayAttr(module_->builder(), axes);
 
   auto op = module_->builder()->create<mlir::stablehlo::BroadcastInDimOp>(module_->builder()->getUnknownLoc(), result_type, operand, axes_attr);
   return op;
@@ -858,11 +855,12 @@ std::vector<mlir::Value> MLIRFunction::WindowReduceOp(
 
   mlir::ValueRange init_values_range(init_values);
   mlir::ValueRange inputs_range(inputs);
-  mlir::DenseIntElementsAttr window_dimensions_attr = Int64ToDenseIntElementsAttr(builder, window_dimensions);
-  mlir::DenseIntElementsAttr window_strides_attr = Int64ToDenseIntElementsAttr(builder, window_strides);
-  mlir::DenseIntElementsAttr input_dilations_attr = Int64ToDenseIntElementsAttr(builder, input_dilations);
-  mlir::DenseIntElementsAttr window_dilations_attr = Int64ToDenseIntElementsAttr(builder, window_dilations);
-  mlir::DenseIntElementsAttr padding_attr = Int64ToDenseIntElementsAttr(builder, padding);
+  mlir::DenseI64ArrayAttr window_dimensions_attr = Int64ToDenseI64ArrayAttr(builder, window_dimensions);
+  mlir::DenseI64ArrayAttr window_strides_attr = Int64ToDenseI64ArrayAttr(builder, window_strides);
+  mlir::DenseI64ArrayAttr input_dilations_attr = Int64ToDenseI64ArrayAttr(builder, input_dilations);
+  mlir::DenseI64ArrayAttr window_dilations_attr = Int64ToDenseI64ArrayAttr(builder, window_dilations);
+
+  mlir::DenseIntElementsAttr padding_attr = Int64PairToDenseIntElementsAttr(builder, padding);
 
   mlir::stablehlo::ReduceWindowOp reduce_window_op = builder->create<mlir::stablehlo::ReduceWindowOp>(
       builder->getUnknownLoc(),
@@ -893,7 +891,7 @@ std::vector<mlir::Value> MLIRFunction::ReduceOp(
 
   mlir::ValueRange init_values_range(init_values);
   mlir::ValueRange inputs_range(inputs);
-  mlir::DenseIntElementsAttr dimensions_attr = Int64ToDenseIntElementsAttr(builder, dimensions);
+  mlir::DenseI64ArrayAttr dimensions_attr = Int64ToDenseI64ArrayAttr(builder, dimensions);
 
   mlir::stablehlo::ReduceOp reduce_op = builder->create<mlir::stablehlo::ReduceOp>(builder->getUnknownLoc(), inputs_range, init_values_range, dimensions_attr);
   mlir::Region &reduceBody = reduce_op.getRegion();
@@ -913,7 +911,7 @@ mlir::Value MLIRFunction::MapOp(
   setInsertionPoint();
 
   mlir::ValueRange inputs_range(inputs);
-  mlir::DenseIntElementsAttr dimensions_attr = Int64ToDenseIntElementsAttr(builder, dimensions);
+  mlir::DenseI64ArrayAttr dimensions_attr = Int64ToDenseI64ArrayAttr(builder, dimensions);
 
   mlir::stablehlo::MapOp map_op = builder->create<mlir::stablehlo::MapOp>(builder->getUnknownLoc(), inputs[0].getType(), inputs_range, dimensions_attr);
 
@@ -992,12 +990,15 @@ mlir::Value MLIRFunction::SelectAndScatterOp(
   }
   auto scatter_dimension_numbers = mlir::stablehlo::ScatterDimensionNumbersAttr::get(builder->getContext(), {}, axes, axes, rank);
 
-  mlir::DenseIntElementsAttr window_dimensions_attr = Int64ToDenseIntElementsAttr(module_->builder(), window_dimensions);
-  mlir::DenseIntElementsAttr window_strides_attr = Int64ToDenseIntElementsAttr(module_->builder(), window_strides);
+  mlir::DenseI64ArrayAttr window_dimensions_attr = Int64ToDenseI64ArrayAttr(module_->builder(), window_dimensions);
+  mlir::DenseI64ArrayAttr window_strides_attr = Int64ToDenseI64ArrayAttr(module_->builder(), window_strides);
 
-  auto dense_attr_type = mlir::RankedTensorType::get({static_cast<int64_t>(padding.size() / 2), 2}, builder->getIntegerType(64));
-  auto dense_attr = mlir::DenseElementsAttr::get<int64_t>(dense_attr_type, llvm::ArrayRef<int64_t>(padding.data(), padding.size()));
-  auto padding_attr = llvm::cast<mlir::DenseIntElementsAttr>(dense_attr);
+  std::vector<std::pair<int64_t, int64_t>> padding_pairs;
+  for (int64_t i = 0; i < padding.size(); i += 2) {
+    padding_pairs.push_back(std::make_pair(padding[i], padding[i + 1]));
+  }
+
+  mlir::DenseIntElementsAttr padding_attr = Int64PairToDenseIntElementsAttr(builder, padding_pairs);
 
   mlir::stablehlo::SelectAndScatterOp op = builder->create<mlir::stablehlo::SelectAndScatterOp>(
       builder->getUnknownLoc(),
@@ -1025,14 +1026,14 @@ mlir::Value MLIRFunction::GatherOp(mlir::Value source, mlir::Value indices, std:
   auto builder = module_->builder();
   setInsertionPoint();
   auto gather_dimension_numbers = mlir::stablehlo::GatherDimensionNumbersAttr::get(builder->getContext(), offset_dims, collapsed_slice_dims, start_index_map, index_vector_dim);
-  auto slice_sizes_attr = Int64ToDenseIntElementsAttr(module_->builder(), slice_sizes);
+  auto slice_sizes_attr = Int64ToDenseI64ArrayAttr(module_->builder(), slice_sizes);
   auto result = builder->create<mlir::stablehlo::GatherOp>(builder->getUnknownLoc(), source, indices, gather_dimension_numbers, slice_sizes_attr, false);
   dump_mlir_module();
   std::vector<mlir::IntegerAttr> slice_sizes_attr_vector;
   for (auto slice_size : slice_sizes) {
     slice_sizes_attr_vector.push_back(builder->getI64IntegerAttr(slice_size));
   }
-  result.setSliceSizesAttr(*((mlir::DenseIntElementsAttr *)(&slice_sizes_attr)));
+  result.setSliceSizesAttr(*((mlir::DenseI64ArrayAttr *)(&slice_sizes_attr)));
   return result;
 }
 
@@ -1041,7 +1042,7 @@ mlir::Value MLIRFunction::FFTOp(mlir::Value tensor, bool forward_fft, std::vecto
   setInsertionPoint();
 
   auto fft_type = mlir::stablehlo::FftTypeAttr::get(builder->getContext(), forward_fft ? mlir::stablehlo::FftType::FFT : mlir::stablehlo::FftType::IFFT);
-  return builder->create<mlir::stablehlo::FftOp>(builder->getUnknownLoc(), tensor, fft_type, Int64ToDenseIntElementsAttr(builder, fft_length));
+  return builder->create<mlir::stablehlo::FftOp>(builder->getUnknownLoc(), tensor, fft_type, Int64ToDenseI64ArrayAttr(builder, fft_length));
 }
 
 template <typename T>
@@ -1263,9 +1264,9 @@ mlir::Value MLIRFunction::ConvOp(
   mlir::RankedTensorType t_in = llvm::cast<mlir::RankedTensorType>(tensor.getType());
   mlir::RankedTensorType result_type = mlir::RankedTensorType::get(output_dims, t_in.getElementType());
 
-  auto window_strides_attr = Int64ToDenseIntElementsAttr(module_->builder(), window_strides);
-  auto tensor_dilation_attr = Int64ToDenseIntElementsAttr(module_->builder(), tensor_dilation);
-  auto kernel_dilation_attr = Int64ToDenseIntElementsAttr(module_->builder(), kernel_dilation);
+  auto window_strides_attr = Int64ToDenseI64ArrayAttr(module_->builder(), window_strides);
+  auto tensor_dilation_attr = Int64ToDenseI64ArrayAttr(module_->builder(), tensor_dilation);
+  auto kernel_dilation_attr = Int64ToDenseI64ArrayAttr(module_->builder(), kernel_dilation);
   auto dimension_numbers_attr = mlir::stablehlo::ConvDimensionNumbersAttr::get(
       builder->getContext(),
       dimension_numbers.input_batch_dimension(),
@@ -1280,7 +1281,7 @@ mlir::Value MLIRFunction::ConvOp(
 
   auto dense_attr_type = mlir::RankedTensorType::get({static_cast<int64_t>(padding.size() / 2), 2}, builder->getIntegerType(64));
   auto dense_attr = mlir::DenseElementsAttr::get<int64_t>(dense_attr_type, llvm::ArrayRef<int64_t>(padding.data(), padding.size()));
-  auto padding_attr = llvm::cast<mlir::DenseIntElementsAttr>(dense_attr);
+  auto padding_attr = builder->getI64VectorAttr(padding);
 
   return builder->create<mlir::stablehlo::ConvolutionOp>(
       builder->getUnknownLoc(),
@@ -1472,10 +1473,10 @@ std::pair<mlir::Value, mlir::Value> MLIRFunction::QRCpuCustomCall(mlir::Value op
 
   auto op_shape = op_type.getShape();
 
-  mlir::Value dim_sizes = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseIntElementsAttr(builder, std::vector<int64_t>({static_cast<int64_t>(op_shape.size()), static_cast<int64_t>(q_shape.size()), static_cast<int64_t>(r_shape.size())})));
-  mlir::Value operand_dims = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseIntElementsAttr(builder, op_shape));
-  mlir::Value q_dims = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseIntElementsAttr(builder, q_shape));
-  mlir::Value r_dims = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseIntElementsAttr(builder, r_shape));
+  mlir::Value dim_sizes = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseI64ArrayAttr(builder, std::vector<int64_t>({static_cast<int64_t>(op_shape.size()), static_cast<int64_t>(q_shape.size()), static_cast<int64_t>(r_shape.size())})));
+  mlir::Value operand_dims = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseI64ArrayAttr(builder, op_shape));
+  mlir::Value q_dims = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseI64ArrayAttr(builder, q_shape));
+  mlir::Value r_dims = builder->create<mlir::stablehlo::ConstantOp>(builder->getUnknownLoc(), Int64ToDenseI64ArrayAttr(builder, r_shape));
 
   auto element_type = op_type.getElementType();
   std::string call_target_name = "qr_cpu_custom_call_f32";

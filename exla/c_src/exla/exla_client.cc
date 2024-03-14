@@ -477,8 +477,12 @@ xla::StatusOr<ExlaClient*> GetGpuClient(double memory_fraction,
       .memory_fraction = memory_fraction,
       .preallocate = preallocate};
 
+  xla::GpuClientOptions client_options = {
+      .allocator_config = allocator_config,
+      .platform_name = "GPU"};
+
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtClient> client,
-                        xla::GetStreamExecutorGpuClient(false, allocator_config, 0));
+                        xla::GetStreamExecutorGpuClient(client_options));
 
   return new ExlaClient(std::move(client));
 }
