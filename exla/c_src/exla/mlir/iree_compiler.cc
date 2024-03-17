@@ -1,11 +1,14 @@
 #include "iree_compiler.h"
 
+#include <fcntl.h>  // For O_WRONLY, O_CREAT, O_TRUNC
 #include <inttypes.h>
 #include <iree/compiler/embedding_api.h>
 #include <iree/compiler/loader.h>
 #include <iree/compiler/mlir_interop.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>  // For mode constants
+#include <unistd.h>    // For open, close
 
 #include "builder.h"
 
@@ -81,6 +84,7 @@ ERL_NIF_TERM iree_compile_mlir_module(ErlNifEnv *env, int argc, const ERL_NIF_TE
     return exla::nif::error(env, "Unable to create MlirOperation module.");
   }
 
+
   // Set flags.
   iree_compiler_error_t *err;
   const char *flags[] = {
@@ -106,25 +110,25 @@ ERL_NIF_TERM iree_compile_mlir_module(ErlNifEnv *env, int argc, const ERL_NIF_TE
     cleanup_compiler_state(state);
     return exla::nif::error(env, "Unable to compile module.");
   }
-  // std::cout << "Compilation successful, output:\n\n";
-  // fflush(stdout);
-  // error = ireeCompilerOutputOpenFD(fileno(stdout), &state.output);
-  // if (error) {
-  //   handle_compiler_error(error);
-  //   cleanup_compiler_state(state);
-  //   return exla::nif::error(env, "Error opening output file descriptor");
-  // }
+  fflush(stdout);
+  auto fd = open("/tmp/iree_output.metal", O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+  error = ireeCompilerOutputOpenFD(fd, &state.output);
+  if (error) {
+    handle_compiler_error(error);
+    cleanup_compiler_state(state);
+    return exla::nif::error(env, "Error opening output file descriptor");
+  }
 
   // Print IR to the output stream.
   // When compiling to the 'end' phase, a compiler tool would typically use
   // either |ireeCompilerInvocationOutputVMBytecode| or
   // |ireeCompilerInvocationOutputVMCSource|.
-  // error = ireeCompilerInvocationOutputIR(state.invocation, state.output);
-  // if (error) {
-  //   handle_compiler_error(error);
-  //   cleanup_compiler_state(state);
-  //   return 1;
-  // }
+  error = ireeCompilerInvocationOutputVMBytecode(state.invocation, state.output);
+  if (error) {
+    handle_compiler_error(error);
+    cleanup_compiler_state(state);
+    return 1;
+  }
 
   cleanup_compiler_state(state);
   return exla::nif::ok(env);
