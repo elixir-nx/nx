@@ -162,7 +162,7 @@ class MLIRModule {
     return moduleStr;
   }
 
-  void LowerPatterns();
+  // void LowerPatterns();
 
  private:
   mlir::MLIRContext *context_;

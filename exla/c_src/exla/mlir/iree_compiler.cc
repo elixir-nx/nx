@@ -71,9 +71,8 @@ ERL_NIF_TERM iree_compile_mlir_module(ErlNifEnv *env, int argc, const ERL_NIF_TE
 
   initializeCompiler(&state);
 
-  // (*module)->LowerPatterns();
   std::string module_str = (*module)->toMLIRString();
-  std::cout << module_str << std::endl;
+  // std::cout << module_str << std::endl;
   MlirOperation module_op = mlirOperationCreateParse(
       state.context,
       mlirStringRefCreateFromCString(module_str.c_str()),
@@ -107,26 +106,49 @@ ERL_NIF_TERM iree_compile_mlir_module(ErlNifEnv *env, int argc, const ERL_NIF_TE
     cleanup_compiler_state(state);
     return exla::nif::error(env, "Unable to compile module.");
   }
-  std::cout << "Compilation successful, output:\n\n";
-  fflush(stdout);
-  error = ireeCompilerOutputOpenFD(fileno(stdout), &state.output);
-  if (error) {
-    handle_compiler_error(error);
-    cleanup_compiler_state(state);
-    return exla::nif::error(env, "Error opening output file descriptor");
-  }
+  // std::cout << "Compilation successful, output:\n\n";
+  // fflush(stdout);
+  // error = ireeCompilerOutputOpenFD(fileno(stdout), &state.output);
+  // if (error) {
+  //   handle_compiler_error(error);
+  //   cleanup_compiler_state(state);
+  //   return exla::nif::error(env, "Error opening output file descriptor");
+  // }
 
   // Print IR to the output stream.
   // When compiling to the 'end' phase, a compiler tool would typically use
   // either |ireeCompilerInvocationOutputVMBytecode| or
   // |ireeCompilerInvocationOutputVMCSource|.
-  error = ireeCompilerInvocationOutputIR(state.invocation, state.output);
-  if (error) {
-    handle_compiler_error(error);
-    cleanup_compiler_state(state);
-    return 1;
-  }
+  // error = ireeCompilerInvocationOutputIR(state.invocation, state.output);
+  // if (error) {
+  //   handle_compiler_error(error);
+  //   cleanup_compiler_state(state);
+  //   return 1;
+  // }
 
   cleanup_compiler_state(state);
   return exla::nif::ok(env);
 }
+
+static ErlNifFunc iree_funcs[] = {
+    // MLIR Builder
+    {"iree_compiler_global_initialize", 0, iree_compiler_global_initialize},
+    {"iree_compile_mlir_module", 2, iree_compile_mlir_module, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+};
+
+static int open_resources(ErlNifEnv *env) {
+  const char *mod = "EXLA";
+
+  if (!exla::nif::open_resource<exla::MLIRModule *>(env, mod, "ExlaMLIRModule")) {
+    return -1;
+  }
+  return 1;
+}
+
+static int load(ErlNifEnv *env, void **priv, ERL_NIF_TERM load_info) {
+  if (open_resources(env) == -1) return -1;
+
+  return 0;
+}
+
+ERL_NIF_INIT(Elixir.EXLA.MLIR.IREE, iree_funcs, &load, NULL, NULL, NULL);

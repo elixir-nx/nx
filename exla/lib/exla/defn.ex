@@ -300,7 +300,7 @@ defmodule EXLA.Defn do
       scope_ids: Tree.scope_ids(expr)
     }
 
-    {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
+    {res, _cache} = recur_flatten(expr, state, new_cache(outfeed))
     # outfeed = cache |> get_outfeed() |> Outfeed.close(function)
 
     Value.variadic_return(function, res)
@@ -443,7 +443,7 @@ defmodule EXLA.Defn do
               :timer.tc(fn ->
                 shapes = for {i, shape} <- inputs_and_shapes, i >= used_buffers, do: shape
 
-                :ok = EXLA.NIF.iree_compile_mlir_module(builder.module.ref, "metal")
+                :ok = EXLA.MLIR.IREE.iree_compile_mlir_module(builder.module.ref, "metal")
 
                 EXLA.MLIR.Module.compile(
                   builder.module,
@@ -1486,9 +1486,7 @@ defmodule EXLA.Defn do
 
         op == :less ->
           is_nan = Value.is_nan(rhs)
-
           Value.bitwise_or(function, is_nan, Value.less(function, lhs, rhs))
-          |> tap(fn _ -> EXLA.NIF.dump_mlir_module(function.module.ref) end)
 
         op == :greater ->
           is_nan = Value.is_nan(lhs)

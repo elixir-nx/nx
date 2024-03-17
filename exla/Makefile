@@ -16,11 +16,13 @@ LLVM_MLIR_INCLUDES = -Icache/iree/third_party/llvm-project/mlir/include
 # Cache configuration
 EXLA_CACHE_SO = cache/libexla.so
 EXLA_CACHE_OBJ_DIR = cache/objs
+EXLA_CACHE_IREE_COMPILER_SO = cache/libireecompiler.so
 
 # Private configuration
 EXLA_DIR = c_src/exla
 PRIV_DIR = $(MIX_APP_PATH)/priv
 EXLA_SO = $(PRIV_DIR)/libexla.so
+EXLA_IREE_COMPILER_SO = $(PRIV_DIR)/libireecompiler.so
 EXLA_LIB_DIR = $(PRIV_DIR)/xla_extension/lib
 EXLA_IREE_LIB_DIR = $(PRIV_DIR)/$(IREE_COMPILER_DIR)
 
@@ -28,14 +30,18 @@ EXLA_IREE_LIB_DIR = $(PRIV_DIR)/$(IREE_COMPILER_DIR)
 XLA_EXTENSION_LIB_LINK_PATH = ../$(CWD_RELATIVE_TO_PRIV_PATH)/$(XLA_EXTENSION_DIR)/$(XLA_EXTENSION_LIB)
 IREE_COMPILER_LIB_LINK_PATH = ../../$(CWD_RELATIVE_TO_PRIV_PATH)/$(IREE_COMPILER_LIB)
 EXLA_CACHE_SO_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(EXLA_CACHE_SO)
+EXLA_CACHE_SO_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(EXLA_CACHE_SO)
+EXLA_CACHE_IREE_COMPILER_SO_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(EXLA_CACHE_IREE_COMPILER_SO)
 
 # Build flags
 # c++17 is needed, otherwise xla headers
 # break on some conflicting llvm/std definitions
 # Note: this is on :xla 0.5.0 -- things can change with lat'er versions
-CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(IREE_COMPILER_INCLUDE_PATH) $(LLVM_MLIR_INCLUDES) -I$(XLA_INCLUDE_PATH) -Wall -Wno-sign-compare \
+CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -Wall -Wno-sign-compare \
 	 -Wno-unused-parameter -Wno-missing-field-initializers -Wno-comment \
 	 -std=c++17 -w -DLLVM_VERSION_STRING=
+
+IREE_CFLAGS = $(CFLAGS) -I$(IREE_COMPILER_INCLUDE_PATH)
 
 ifdef DEBUG
 	CFLAGS += -g
@@ -43,7 +49,8 @@ else
 	CFLAGS += -O3
 endif
 
-LDFLAGS = -L$(XLA_EXTENSION_LIB) -lxla_extension -shared -L$(IREE_COMPILER_LIB) -lIREECompiler
+LDFLAGS = -L$(XLA_EXTENSION_LIB) -lxla_extension -shared
+IREE_LDFLAGS = $(LDFLAGS) -lIREECompiler
 
 ifeq ($(shell uname -s), Darwin)
 	LDFLAGS += -flat_namespace -undefined suppress -rpath @loader_path/xla_extension/lib -rpath @loader_path/$(IREE_COMPILER_DIR)
@@ -55,7 +62,7 @@ else
 	LDFLAGS += -Wl,-rpath,'$$ORIGIN/xla_extension/lib' -Wl,-rpath,'$$ORIGIN/$(IREE_COMPILER_DIR)'
 endif
 
-$(EXLA_SO): $(EXLA_CACHE_SO)
+$(EXLA_SO): $(EXLA_CACHE_SO) $(EXLA_CACHE_IREE_COMPILER_SO)
 	@ mkdir -p $(PRIV_DIR)
 	@ mkdir -p $(PRIV_DIR)/xla_extension
 	@ mkdir -p $(PRIV_DIR)/iree/build
@@ -63,23 +70,35 @@ $(EXLA_SO): $(EXLA_CACHE_SO)
 		cp -a $(abspath $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR) ; \
 		cp -a $(abspath $(IREE_COMPILER_LIB)) $(EXLA_IREE_LIB_DIR) ; \
 		cp -a $(abspath $(EXLA_CACHE_SO)) $(EXLA_SO) ; \
+		cp -a $(abspath $(EXLA_CACHE_IREE_COMPILER_SO)) $(EXLA_IREE_COMPILER_SO) ; \
 	else \
 		ln -sf $(XLA_EXTENSION_LIB_LINK_PATH) $(EXLA_LIB_DIR) ; \
 		ln -sf $(IREE_COMPILER_LIB_LINK_PATH) $(EXLA_IREE_LIB_DIR) ; \
 		ln -sf $(EXLA_CACHE_SO_LINK_PATH) $(EXLA_SO) ; \
+		ln -sf $(EXLA_CACHE_IREE_COMPILER_SO_LINK_PATH) $(EXLA_IREE_COMPILER_SO) ; \
 	fi
 
-SOURCES = $(EXLA_DIR)/exla.cc $(EXLA_DIR)/mlir/ops.cc $(EXLA_DIR)/mlir/builder.cc $(EXLA_DIR)/mlir/custom_calls.cc $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/mlir/iree_compiler.cc
-HEADERS = $(EXLA_DIR)/mlir/ops.h $(EXLA_DIR)/mlir/builder.h $(EXLA_DIR)/mlir/custom_calls.h $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h $(EXLA_DIR)/mlir/iree_compiler.h
+SOURCES = $(EXLA_DIR)/exla.cc $(EXLA_DIR)/mlir/ops.cc $(EXLA_DIR)/mlir/builder.cc $(EXLA_DIR)/mlir/custom_calls.cc $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_nif_util.cc
+HEADERS = $(EXLA_DIR)/mlir/ops.h $(EXLA_DIR)/mlir/builder.h $(EXLA_DIR)/mlir/custom_calls.h $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h
 OBJECTS = $(patsubst $(EXLA_DIR)/%.cc,$(EXLA_CACHE_OBJ_DIR)/%.o,$(SOURCES))
+
+$(EXLA_CACHE_OBJ_DIR)/mlir/iree_compiler.o:  $(EXLA_DIR)/mlir/iree_compiler.cc $(EXLA_DIR)/mlir/iree_compiler.h
+	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)/mlir
+	$(CXX) $(IREE_CFLAGS) $(LLVM_MLIR_INCLUDES) -c $< -o $@
 
 $(EXLA_CACHE_OBJ_DIR)/%.o: $(EXLA_DIR)/%.cc $(HEADERS)
 	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)
 	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)/mlir
 	$(CXX) $(CFLAGS) -c $< -o $@
 
+
+$(EXLA_CACHE_IREE_COMPILER_SO): $(EXLA_CACHE_OBJ_DIR)/mlir/iree_compiler.o $(EXLA_CACHE_OBJ_DIR)/exla_nif_util.o
+	$(CXX) $^ -o $@ $(IREE_LDFLAGS)
+
 $(IREE_COMPILER_LIB):
-	ln -s ../../../xla/third_party/iree cache/iree
+	@ln -s $(HOME)/coding/iree cache/iree
+	cmake -G Ninja -B cache/iree/build -DIREE_BUILD_TESTS=OFF -DIREE_BUILD_SAMPLES=OFF -DIREE_ENABLE_ASSERTIONS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS="-fvisibility=hidden" cache/iree
+	cmake --build cache/iree/build
 
 $(EXLA_CACHE_SO): $(XLA_EXTENSION_DIR) $(IREE_COMPILER_LIB) $(OBJECTS)
 	$(CXX) $(OBJECTS) -o $(EXLA_CACHE_SO) $(LDFLAGS)

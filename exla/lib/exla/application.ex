@@ -10,7 +10,7 @@ defmodule EXLA.Application do
       _ -> :os.set_signal(:sigchld, :default)
     end
 
-    EXLA.NIF.iree_compiler_global_initialize()
+    EXLA.MLIR.IREE.iree_compiler_global_initialize()
 
     children = [
       EXLA.Logger,

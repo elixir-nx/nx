@@ -6,7 +6,6 @@
 #include "exla_client.h"
 #include "exla_log_sink.h"
 #include "exla_nif_util.h"
-#include "mlir/iree_compiler.h"
 #include "mlir/ops.h"
 #include "xla/client/client.h"
 #include "xla/client/xla_builder.h"
@@ -598,7 +597,6 @@ ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 
 static ErlNifFunc exla_funcs[] = {
     // MLIR Builder
-    {"iree_compiler_global_initialize", 0, iree_compiler_global_initialize},
     {"new_mlir_context", 0, new_mlir_context},
     {"new_mlir_module", 1, new_mlir_module},
     {"create_mlir_function", 5, create_mlir_function},
@@ -711,7 +709,6 @@ static ErlNifFunc exla_funcs[] = {
     {"get_device_count", 1, get_device_count},
     {"get_supported_platforms", 0, get_supported_platforms},
     {"mlir_compile", 7, mlir_compile, ERL_NIF_DIRTY_JOB_CPU_BOUND},
-    {"iree_compile_mlir_module", 2, iree_compile_mlir_module, ERL_NIF_DIRTY_JOB_CPU_BOUND},
     // ExlaBuffer
     {"binary_to_device_mem", 4, binary_to_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"read_device_mem", 2, read_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
