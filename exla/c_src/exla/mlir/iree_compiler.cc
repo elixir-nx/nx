@@ -75,7 +75,6 @@ ERL_NIF_TERM iree_compile_mlir_module(ErlNifEnv *env, int argc, const ERL_NIF_TE
   initializeCompiler(&state);
 
   std::string module_str = (*module)->toMLIRString();
-  // std::cout << module_str << std::endl;
   MlirOperation module_op = mlirOperationCreateParse(
       state.context,
       mlirStringRefCreateFromCString(module_str.c_str()),
@@ -110,6 +109,7 @@ ERL_NIF_TERM iree_compile_mlir_module(ErlNifEnv *env, int argc, const ERL_NIF_TE
     cleanup_compiler_state(state);
     return exla::nif::error(env, "Unable to compile module.");
   }
+  
   fflush(stdout);
   auto fd = open("/tmp/iree_output.metal", O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
   error = ireeCompilerOutputOpenFD(fd, &state.output);
