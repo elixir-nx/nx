@@ -7,7 +7,9 @@ defmodule EXLA.MLIR.IREE do
     :erlang.load_nif(path, 0)
   end
 
-  def iree_compile_mlir_module(_module, _target), do: :erlang.nif_error(:undef)
+  def compile(_module, _target), do: :erlang.nif_error(:undef)
 
-  def iree_compiler_global_initialize, do: :erlang.nif_error(:undef)
+  def global_initialize, do: :erlang.nif_error(:undef)
+
+  def run_module(_module, _inputs), do: :erlang.nif_error(:undef)
 end

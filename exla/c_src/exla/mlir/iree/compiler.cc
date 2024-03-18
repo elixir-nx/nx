@@ -1,4 +1,4 @@
-#include "iree_compiler.h"
+#include "compiler.h"
 
 #include <fcntl.h>  // For O_WRONLY, O_CREAT, O_TRUNC
 #include <inttypes.h>
@@ -10,7 +10,7 @@
 #include <sys/stat.h>  // For mode constants
 #include <unistd.h>    // For open, close
 
-#include "builder.h"
+#include "../builder.h"
 
 typedef struct compiler_state_t {
   iree_compiler_session_t *session;
@@ -38,11 +38,6 @@ void cleanup_compiler_state(compiler_state_t s) {
   // ireeCompilerGlobalShutdown();
 }
 
-ERL_NIF_TERM iree_compiler_global_initialize(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
-  ireeCompilerGlobalInitialize();
-  return exla::nif::ok(env);
-}
-
 static void initializeCompiler(struct compiler_state_t *state) {
   // ireeCompilerGlobalInitialize();
   state->session = ireeCompilerSessionCreate();
@@ -54,7 +49,7 @@ static void shutdownCompiler(struct compiler_state_t *state) {
   // ireeCompilerGlobalShutdown();
 }
 
-ERL_NIF_TERM iree_compile_mlir_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM compile(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
   }
@@ -83,7 +78,6 @@ ERL_NIF_TERM iree_compile_mlir_module(ErlNifEnv *env, int argc, const ERL_NIF_TE
     return exla::nif::error(env, "Unable to create MlirOperation module.");
   }
 
-
   // Set flags.
   iree_compiler_error_t *err;
   const char *flags[] = {
@@ -109,7 +103,7 @@ ERL_NIF_TERM iree_compile_mlir_module(ErlNifEnv *env, int argc, const ERL_NIF_TE
     cleanup_compiler_state(state);
     return exla::nif::error(env, "Unable to compile module.");
   }
-  
+
   fflush(stdout);
   auto fd = open("/tmp/iree_output.metal", O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
   error = ireeCompilerOutputOpenFD(fd, &state.output);
@@ -133,26 +127,3 @@ ERL_NIF_TERM iree_compile_mlir_module(ErlNifEnv *env, int argc, const ERL_NIF_TE
   cleanup_compiler_state(state);
   return exla::nif::ok(env);
 }
-
-static ErlNifFunc iree_funcs[] = {
-    // MLIR Builder
-    {"iree_compiler_global_initialize", 0, iree_compiler_global_initialize},
-    {"iree_compile_mlir_module", 2, iree_compile_mlir_module, ERL_NIF_DIRTY_JOB_CPU_BOUND},
-};
-
-static int open_resources(ErlNifEnv *env) {
-  const char *mod = "EXLA";
-
-  if (!exla::nif::open_resource<exla::MLIRModule *>(env, mod, "ExlaMLIRModule")) {
-    return -1;
-  }
-  return 1;
-}
-
-static int load(ErlNifEnv *env, void **priv, ERL_NIF_TERM load_info) {
-  if (open_resources(env) == -1) return -1;
-
-  return 0;
-}
-
-ERL_NIF_INIT(Elixir.EXLA.MLIR.IREE, iree_funcs, &load, NULL, NULL, NULL);

@@ -82,17 +82,24 @@ SOURCES = $(EXLA_DIR)/exla.cc $(EXLA_DIR)/mlir/ops.cc $(EXLA_DIR)/mlir/builder.c
 HEADERS = $(EXLA_DIR)/mlir/ops.h $(EXLA_DIR)/mlir/builder.h $(EXLA_DIR)/mlir/custom_calls.h $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h
 OBJECTS = $(patsubst $(EXLA_DIR)/%.cc,$(EXLA_CACHE_OBJ_DIR)/%.o,$(SOURCES))
 
-$(EXLA_CACHE_OBJ_DIR)/mlir/iree_compiler.o:  $(EXLA_DIR)/mlir/iree_compiler.cc $(EXLA_DIR)/mlir/iree_compiler.h
+IREE_SOURCES = $(EXLA_DIR)/mlir/iree/iree.cc $(EXLA_DIR)/mlir/iree/compiler.cc $(EXLA_DIR)/mlir/iree/runtime.cc
+IREE_HEADERS = $(EXLA_DIR)/mlir/iree/compiler.h $(EXLA_DIR)/mlir/iree/runtime.h $(EXLA_DIR)/exla_nif_util.h
+IREE_OBJECTS = $(patsubst $(EXLA_DIR)/%.cc,$(EXLA_CACHE_OBJ_DIR)/%.o,$(IREE_SOURCES))
+
+$(EXLA_CACHE_OBJ_DIR)/mlir/iree.o:  $(EXLA_DIR)/mlir/iree.cc $(IREE_HEADERS)
 	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)/mlir
 	$(CXX) $(IREE_CFLAGS) $(LLVM_MLIR_INCLUDES) -c $< -o $@
 
+$(EXLA_CACHE_OBJ_DIR)/mlir/iree/%.o:  $(EXLA_DIR)/mlir/iree/%.cc $(IREE_HEADERS)
+	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)/mlir/iree
+	$(CXX) $(IREE_CFLAGS) $(LLVM_MLIR_INCLUDES) -c $< -o $@
+
 $(EXLA_CACHE_OBJ_DIR)/%.o: $(EXLA_DIR)/%.cc $(HEADERS)
-	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)
-	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)/mlir
+	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)/mlir/iree
 	$(CXX) $(CFLAGS) -c $< -o $@
 
 
-$(EXLA_CACHE_IREE_COMPILER_SO): $(EXLA_CACHE_OBJ_DIR)/mlir/iree_compiler.o $(EXLA_CACHE_OBJ_DIR)/exla_nif_util.o
+$(EXLA_CACHE_IREE_COMPILER_SO): $(EXLA_CACHE_OBJ_DIR)/mlir/iree.o $(EXLA_CACHE_OBJ_DIR)/mlir/iree/compiler.o $(EXLA_CACHE_OBJ_DIR)/mlir/iree/runtime.o $(EXLA_CACHE_OBJ_DIR)/exla_nif_util.o
 	$(CXX) $^ -o $@ $(IREE_LDFLAGS)
 
 $(IREE_COMPILER_LIB):

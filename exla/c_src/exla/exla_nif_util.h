@@ -13,6 +13,8 @@
 #include "xla/types.h"
 #include "xla/xla_data.pb.h"
 
+#define DEFINE_NIF(FUNCTION_NAME) ERL_NIF_TERM FUNCTION_NAME(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+
 #if !defined(__GNUC__) && (defined(__WIN32__) || defined(_WIN32) || defined(_WIN32_))
 typedef unsigned __int64 nif_uint64_t;
 typedef signed __int64 nif_int64_t;
