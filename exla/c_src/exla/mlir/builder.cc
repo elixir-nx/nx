@@ -72,6 +72,26 @@ GetMLIRType(mlir::OpBuilder *builder, std::vector<tsl::int64> dims, xla::Primiti
   return mlir::RankedTensorType::get(dims, type);
 }
 
+mlir::quant::UniformQuantizedType
+GetMLIRQuantizedType(
+  mlir::OpBuilder *builder,
+  mlir::Type expressed_type,
+  double scale,
+  int zero_point
+) {
+  auto shape = llvm::cast<mlir::RankedTensorType>(expressed_type).getShape();
+  auto storage_type = GetMLIRType(builder, shape, xla::PrimitiveType::S8);
+  return mlir::quant::UniformQuantizedType::get(
+    mlir::quant::QuantizationFlags::Signed,
+    storage_type,
+    expressed_type,
+    scale,
+    zero_point,
+    -128,
+    127
+  );
+}
+
 mlir::Type GetMLIRFunctionType(mlir::OpBuilder *builder, xla::Shape *shape) {
   if (shape->IsToken()) {
     return mlir::stablehlo::TokenType::get(builder->getContext());
@@ -220,6 +240,16 @@ MLIRFunction::MLIRFunction(MLIRModule *module, std::unique_ptr<mlir::func::FuncO
 mlir::Value MLIRFunction::SubtractOp(mlir::Value lhs, mlir::Value rhs) {
   setInsertionPoint();
   auto op = module_->builder()->create<mlir::stablehlo::SubtractOp>(module_->builder()->getUnknownLoc(), lhs, rhs);
+  return op;
+}
+
+mlir::Value MLIRFunction::UniformQuantizeOp(mlir::Value operand, double scale, int zero_point) {
+  auto builder = module_->builder();
+
+  setInsertionPoint();
+
+  auto quant_type = GetMLIRQuantizedType(builder, operand.getType(), scale, zero_point);
+  auto op = builder->create<mlir::stablehlo::UniformQuantizeOp>(builder->getUnknownLoc(), quant_type, operand);
   return op;
 }
 

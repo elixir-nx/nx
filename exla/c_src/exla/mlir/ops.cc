@@ -651,6 +651,33 @@ ERL_NIF_TERM mlir_select(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
 }
 
+ERL_NIF_TERM mlir_uniform_quantize(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 4) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  mlir::Value* t;
+  double scale;
+  int zero_point;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get<mlir::Value>(env, argv[1], t)) {
+    return exla::nif::error(env, "Unable to get tensor.");
+  }
+  if (!exla::nif::get(env, argv[2], &scale)) {
+    return exla::nif::error(env, "Unable to get scale.");
+  }
+  if (!exla::nif::get(env, argv[3], &zero_point)) {
+    return exla::nif::error(env, "Unable to get zero point");
+  }
+
+  mlir::Value res = (*function)->UniformQuantizeOp(*t, scale, zero_point);
+  return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, res));
+}
+
 ERL_NIF_TERM mlir_convert(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");
@@ -674,6 +701,7 @@ ERL_NIF_TERM mlir_convert(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   return exla::nif::ok(env, exla::nif::make<mlir::Value>(env, result));
 }
+
 ERL_NIF_TERM mlir_top_k(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");

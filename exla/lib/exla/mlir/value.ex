@@ -82,6 +82,11 @@ defmodule EXLA.MLIR.Value do
     EXLA.Shape.get_shape_info(shape_ref)
   end
 
+  def uniform_quantize(%Value{ref: in_ref, function: %Function{} = func} = value, scale, zero) do
+    out_ref = EXLA.NIF.mlir_uniform_quantize(func.ref, in_ref, scale, zero) |> unwrap!()
+    %Value{value | ref: out_ref}    
+  end
+
   def convert(%Value{ref: in_ref, function: %Function{} = func} = value, dtype) do
     out_ref =
       EXLA.NIF.mlir_convert(func.ref, in_ref, EXLA.Shape.dtype_to_charlist(dtype)) |> unwrap!()

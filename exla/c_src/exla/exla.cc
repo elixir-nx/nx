@@ -618,6 +618,7 @@ static ErlNifFunc exla_funcs[] = {
     {"mlir_greater_equal", 3, mlir_greater_equal},
     {"dump_mlir_module", 1, dump_mlir_module},
     {"mlir_get_shape", 1, mlir_get_shape},
+    {"mlir_uniform_quantize", 4, mlir_uniform_quantize},
     {"mlir_convert", 3, mlir_convert},
     {"mlir_bitcast_convert", 4, mlir_bitcast_convert},
     {"mlir_abs", 2, mlir_abs},
