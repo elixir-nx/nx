@@ -17332,6 +17332,16 @@ defmodule Nx do
     axes = opts[:axes]
     keep_axes = opts[:keep_axes]
     max = reduce_max(tensor, axes: axes, keep_axes: true)
+
+    max =
+      case max do
+        %T{data: %Nx.Defn.Expr{}} = t ->
+          Nx.Defn.Kernel.stop_grad(t)
+
+        t ->
+          t
+      end
+
     infinity_mask = is_infinity(max)
     max = select(infinity_mask, Nx.tensor(0, type: type), max)
     exponentials = tensor |> subtract(max) |> exp()
