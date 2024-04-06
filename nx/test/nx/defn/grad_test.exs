@@ -4267,6 +4267,4 @@ defmodule Nx.Defn.GradTest do
       assert grad_y_vec == Nx.tensor([6.0, 15.0]) |> Nx.vectorize(y_vec.vectorized_axes)
     end
   end
-
-  
 end
