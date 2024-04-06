@@ -188,6 +188,16 @@ defmodule Nx.Defn.ExprTest do
       named = Nx.tensor([4], names: [:dim])
       assert %T{type: {:f, 32}, names: [:dim]} = Nx.multiply(Expr.tensor(named), Expr.tensor(1.0))
     end
+
+    test "logsumexp" do
+      expr = Nx.logsumexp(Expr.tensor(Nx.tensor([1, 2, 3, 4, 5, 6])))
+
+      assert inspect(expr) =~ """
+               tensor a                                       s64[6]
+               b = reduce_max a, axes: [0], keep_axes: true   s64[1]
+               c = metadata b, :stop_grad                     s64[1]
+             """
+    end
   end
 
   describe "inspect" do
