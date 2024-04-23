@@ -31,6 +31,14 @@ class ExlaBuffer {
   xla::StatusOr<ERL_NIF_TERM> ToBinary(ErlNifEnv* env, exla::int64 size);
   xla::Status Deallocate();
 
+  xla::StatusOr<std::uintptr_t> GetDevicePointer(xla::PjRtClient* client) {
+    return client->UnsafeBufferPointer(buffer_.get());
+  }
+
+  xla::StatusOr<size_t> GetOnDeviceSizeInBytes() {
+    return buffer_.get()->GetOnDeviceSizeInBytes();
+  }
+
   ~ExlaBuffer() {
     // Theoretically this may block if a computation is running
     // but we always block the host until the computation is done.
