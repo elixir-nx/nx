@@ -7,8 +7,8 @@ IO.inspect(t, limit: :infinity)
 IO.inspect(t.data, limit: :infinity)
 
 IO.puts("Loading another buffer with a local pointer")
-{:ok, {pointer, size}} = EXLA.NIF.get_buffer_device_pointer(client.ref, buffer.ref, :cuda_local) |> IO.inspect(limit: :infinity)
-{:ok, new_buffer_ref} = EXLA.NIF.create_buffer_from_device_pointer(client.ref, pointer, :cuda_local, buffer.shape.ref, buffer.device_id)
+{:ok, {pointer, size}} = EXLA.NIF.get_buffer_device_pointer(client.ref, buffer.ref, :local) |> IO.inspect(limit: :infinity)
+{:ok, new_buffer_ref} = EXLA.NIF.create_buffer_from_device_pointer(client.ref, pointer, :local, buffer.shape.ref, buffer.device_id)
 
 t2 = put_in(t.data.buffer.ref, new_buffer_ref)
 

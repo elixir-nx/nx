@@ -158,7 +158,7 @@ ERL_NIF_TERM get_buffer_device_pointer(ErlNifEnv* env, int argc, const ERL_NIF_T
                             (*buffer)->GetDevicePointer((*client)->client()), env);
 
   std::vector<unsigned char> pointer_vec;
-  if (pointer_kind == "cuda_local") {
+  if (pointer_kind == "local") {
     unsigned char* bytePtr = reinterpret_cast<unsigned char*>(&ptr);
     for (size_t i = 0; i < sizeof(void*); i++) {
       pointer_vec.push_back(bytePtr[i]);
@@ -220,7 +220,7 @@ ERL_NIF_TERM create_buffer_from_device_pointer(ErlNifEnv* env, int argc, const E
   }
 
   void* ptr;
-  if (pointer_kind == "cuda_local") {
+  if (pointer_kind == "local") {
     unsigned char* bytePtr = reinterpret_cast<unsigned char*>(&ptr);
     for (size_t i = 0; i < sizeof(void*); i++) {
       bytePtr[i] = pointer_vec[i];
