@@ -41,8 +41,8 @@ defmodule Torchx.MixProject do
 
   defp deps do
     [
-      {:nx, "~> 0.7.1"},
-      # {:nx, path: "../nx"},
+      # {:nx, "~> 0.7.1"},
+      {:nx, path: "../nx"},
       {:ex_doc, "~> 0.29", only: :docs}
     ]
   end

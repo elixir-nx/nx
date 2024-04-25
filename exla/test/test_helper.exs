@@ -31,8 +31,15 @@ if client.platform == :host and client.device_count == 1 and System.schedulers_o
   )
 end
 
+cuda_required =
+  if Map.has_key?(EXLA.Client.get_supported_platforms(), :cuda) do
+    []
+  else
+    [:cuda_required]
+  end
+
 ExUnit.start(
-  exclude: [:platform, :integration] ++ exclude_multi_device ++ exclude,
+  exclude: [:platform, :integration] ++ exclude_multi_device ++ exclude ++ cuda_required,
   include: [platform: String.to_atom(target)],
   assert_receive_timeout: 1000
 )

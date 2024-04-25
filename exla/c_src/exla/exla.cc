@@ -4,6 +4,7 @@
 #include <string>
 
 #include "exla_client.h"
+#include "exla_cuda.h"
 #include "exla_log_sink.h"
 #include "exla_nif_util.h"
 #include "mlir/ops.h"
@@ -133,6 +134,104 @@ ERL_NIF_TERM create_sub_builder(ErlNifEnv* env, int argc, const ERL_NIF_TERM arg
 }
 
 // ExlaBuffer Functions
+
+ERL_NIF_TERM get_buffer_device_pointer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::ExlaClient** client;
+  exla::ExlaBuffer** buffer;
+  std::string pointer_kind;
+
+  if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
+    return exla::nif::error(env, "Unable to get client.");
+  }
+  if (!exla::nif::get<exla::ExlaBuffer*>(env, argv[1], buffer)) {
+    return exla::nif::error(env, "Unable to get buffer.");
+  }
+  if (!exla::nif::get_atom(env, argv[2], pointer_kind)) {
+    return exla::nif::error(env, "Unable to get device pointer kind.");
+  }
+
+  EXLA_ASSIGN_OR_RETURN_NIF(std::uintptr_t ptr,
+                            (*buffer)->GetDevicePointer((*client)->client()), env);
+
+  std::vector<unsigned char> pointer_vec;
+  if (pointer_kind == "local") {
+    unsigned char* bytePtr = reinterpret_cast<unsigned char*>(&ptr);
+    for (size_t i = 0; i < sizeof(void*); i++) {
+      pointer_vec.push_back(bytePtr[i]);
+    }
+  } else if (pointer_kind == "cuda_ipc") {
+    auto result = get_cuda_ipc_handle(ptr);
+    if (result.second) {
+      return exla::nif::error(env, "Unable to get cuda IPC handle");
+    }
+    pointer_vec = result.first;
+  }
+
+  EXLA_ASSIGN_OR_RETURN_NIF(unsigned long device_size, (*buffer)->GetOnDeviceSizeInBytes(), env);
+
+  ERL_NIF_TERM handle_list[pointer_vec.size()];
+  for (int i = 0; i < pointer_vec.size(); i++) {
+    handle_list[i] = enif_make_uint(env, pointer_vec[i]);
+  }
+
+  ERL_NIF_TERM handle_list_term = enif_make_list_from_array(env, handle_list, pointer_vec.size());
+  ERL_NIF_TERM device_size_term = enif_make_uint64(env, device_size);
+
+  return exla::nif::ok(env, enif_make_tuple2(env, handle_list_term, device_size_term));
+}
+
+ERL_NIF_TERM create_buffer_from_device_pointer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 5) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::ExlaClient** client;
+  std::vector<int64_t> pointer_vec;
+  xla::Shape* shape;
+  int device_id;
+  std::string pointer_kind;
+
+  if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
+    return exla::nif::error(env, "Unable to get client.");
+  }
+  if (!exla::nif::get_list(env, argv[1], pointer_vec)) {
+    return exla::nif::error(env, "Unable to get device pointer.");
+  }
+  if (!exla::nif::get_atom(env, argv[2], pointer_kind)) {
+    return exla::nif::error(env, "Unable to get device pointer kind.");
+  }
+  if (!exla::nif::get<xla::Shape>(env, argv[3], shape)) {
+    return exla::nif::error(env, "Unable to get shape.");
+  }
+  if (!exla::nif::get(env, argv[4], &device_id)) {
+    return exla::nif::error(env, "Unable to get device ordinal.");
+  }
+
+  void* ptr;
+  if (pointer_kind == "local") {
+    unsigned char* bytePtr = reinterpret_cast<unsigned char*>(&ptr);
+    for (size_t i = 0; i < sizeof(void*); i++) {
+      bytePtr[i] = pointer_vec[i];
+    }
+  } else if (pointer_kind == "cuda_ipc") {
+    auto result = get_pointer_for_ipc_handle(pointer_vec);
+    if (result.second) {
+      return exla::nif::error(env, "Unable to get pointer for IPC handle.");
+    }
+    ptr = result.first;
+  }
+
+  EXLA_ASSIGN_OR_RETURN_NIF(xla::PjRtDevice * device, (*client)->client()->LookupDevice(device_id), env);
+
+  std::function<void()> on_delete_callback = []() {};
+  EXLA_ASSIGN_OR_RETURN_NIF(std::unique_ptr<xla::PjRtBuffer> buffer, (*client)->client()->CreateViewOfDeviceBuffer(ptr, *shape, device, on_delete_callback), env);
+  exla::ExlaBuffer* exla_buffer = new exla::ExlaBuffer(std::move(buffer));
+  return exla::nif::ok(env, exla::nif::make<exla::ExlaBuffer*>(env, exla_buffer));
+}
 
 ERL_NIF_TERM binary_to_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 4) {
@@ -710,6 +809,8 @@ static ErlNifFunc exla_funcs[] = {
     {"get_supported_platforms", 0, get_supported_platforms},
     {"mlir_compile", 7, mlir_compile, ERL_NIF_DIRTY_JOB_CPU_BOUND},
     // ExlaBuffer
+    {"get_buffer_device_pointer", 3, get_buffer_device_pointer},
+    {"create_buffer_from_device_pointer", 5, create_buffer_from_device_pointer},
     {"binary_to_device_mem", 4, binary_to_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"read_device_mem", 2, read_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"deallocate_device_mem", 1, deallocate_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},

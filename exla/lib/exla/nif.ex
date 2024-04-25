@@ -229,6 +229,17 @@ defmodule EXLA.NIF do
       ),
       do: :erlang.nif_error(:undef)
 
+  def get_buffer_device_pointer(_client, _buffer, _pointer_kind), do: :erlang.nif_error(:undef)
+
+  def create_buffer_from_device_pointer(
+        _client,
+        _opaque_pointer,
+        _pointer_kind,
+        _shape,
+        _device_id
+      ),
+      do: :erlang.nif_error(:undef)
+
   def binary_to_device_mem(_client, _binary, _shape, _device_ordinal),
     do: :erlang.nif_error(:undef)
 

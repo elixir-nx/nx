@@ -105,7 +105,7 @@ defmodule Nx.Defn.Compiler do
   @forbidden_ops [:backend_copy, :backend_deallocate, :backend_transfer, :to_list] ++
                    [:to_binary, :to_number, :to_flat_list, :to_heatmap, :to_batched] ++
                    [:load_numpy, :load_numpy_archive!, :compatible?, :default_backend] ++
-                   [:serialize, :deserialize]
+                   [:serialize, :deserialize, :from_pointer, :to_pointer]
 
   defguardp is_var(var)
             when is_tuple(var) and tuple_size(var) == 3 and is_atom(elem(var, 0)) and

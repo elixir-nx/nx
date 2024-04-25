@@ -16680,6 +16680,84 @@ defmodule Nx do
   end
 
   @doc """
+  Creates an Nx-tensor from an already-allocated memory space.
+
+  This function should be used with caution, as it is very backend-specific.
+
+  The `backend` argument is either the backend module (such as `Nx.BinaryBackend`),
+  or a tuple of `{module, keyword()}` with specific backend configuration.
+  `opaque_pointer` is the corresponding value that would be returned from
+  a call to `get_pointer/2`.
+
+  ## Options
+
+  Besides the options listed below, all other options are forwarded to the
+  underlying implementation.
+
+    * `:names` - refer to `tensor/2`
+
+  ## Examples
+
+      Nx.from_pointer(MyBackend, <<1, 2, 3, 4>>, {:s, 64}, {1, 3})
+      #Nx.Tensor<
+        s64[1][3]
+        [
+          [10, 20, 30]
+        ]
+      >
+
+      Nx.from_pointer({MyBackend, some: :opt}, <<5, 6, 7>>, {:s, 64}, {1, 3}, names: [nil, :col], another: :option)
+      #Nx.Tensor<
+        s64[1][col: 3]
+        [
+          [10, 20, 30]
+        ]
+      >
+  """
+  @doc type: :creation
+  def from_pointer(backend, opaque_pointer, type, shape, opts \\ [])
+      when is_atom(backend) or is_tuple(backend) do
+    Nx.Shape.validate!(shape, :shape)
+    type = Nx.Type.normalize!(type)
+    opts = Keyword.put_new_lazy(opts, :names, fn -> List.duplicate(nil, tuple_size(shape)) end)
+
+    {backend, backend_opts} =
+      case backend do
+        {backend, opts} when is_list(opts) -> {backend, opts}
+        backend -> {backend, []}
+      end
+
+    backend.from_pointer(opaque_pointer, type, shape, backend_opts, opts)
+  end
+
+  @doc """
+  Returns an opaque pointer for a given tensor.
+
+  Can be used in conjunction with `from_pointer/5` to share the same memory
+  for multiple tensors, as well as for interoperability with other programming
+  languages.
+
+  ## Options
+
+  All options are backend-specific.
+
+  ## Examples
+
+      t = Nx.tensor([10, 20, 30])
+      Nx.to_pointer(t)
+      <<1, 2, 3, 4>>
+
+      t = Nx.tensor([1, 2, 3])
+      Nx.to_pointer(t, some: :option)
+      <<4, 3, 2, 1>>
+  """
+  @doc type: :creation
+  def to_pointer(tensor, opts \\ []) do
+    tensor = to_tensor(tensor)
+    impl!(tensor).to_pointer(tensor, opts)
+  end
+
+  @doc """
   Pads a tensor of rank 1 or greater along the given axes through periodic reflections.
 
   ## Options

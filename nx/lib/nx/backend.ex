@@ -51,6 +51,14 @@ defmodule Nx.Backend do
   @callback to_batched(out :: tensor, tensor, keyword) :: [tensor]
   @callback to_binary(tensor, limit :: non_neg_integer) :: binary
   @callback inspect(tensor, Inspect.Opts.t()) :: tensor
+  @callback from_pointer(
+              opaque_pointer :: term(),
+              type :: tuple(),
+              shape :: tuple(),
+              backend_opts :: keyword(),
+              opts :: keyword()
+            ) :: {:ok, tensor} | {:error, term()}
+  @callback to_pointer(tensor, opts :: keyword) :: {:ok, term()} | {:error, term()}
 
   @callback as_type(out :: tensor, tensor) :: tensor
   @callback bitcast(out :: tensor, tensor) :: tensor

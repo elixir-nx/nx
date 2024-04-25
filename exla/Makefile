@@ -29,8 +29,11 @@ CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -Wall -Wno-sign-compa
 	 -Wno-unused-parameter -Wno-missing-field-initializers -Wno-comment \
 	 -std=c++17 -w -DLLVM_VERSION_STRING=
 
+NVCCFLAGS = -shared -Xcompiler -fPIC
+
 ifdef DEBUG
 	CFLAGS += -g
+	NVCCFLAGS += -g
 else
 	CFLAGS += -O3
 endif
@@ -60,7 +63,23 @@ $(EXLA_SO): $(EXLA_CACHE_SO)
 
 SOURCES = $(EXLA_DIR)/exla.cc $(EXLA_DIR)/mlir/ops.cc $(EXLA_DIR)/mlir/builder.cc $(EXLA_DIR)/mlir/custom_calls.cc $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_nif_util.cc
 HEADERS = $(EXLA_DIR)/mlir/ops.h $(EXLA_DIR)/mlir/builder.h $(EXLA_DIR)/mlir/custom_calls.h $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h
-OBJECTS = $(patsubst $(EXLA_DIR)/%.cc,$(EXLA_CACHE_OBJ_DIR)/%.o,$(SOURCES))
+OBJECTS = $(patsubst $(EXLA_DIR)/%.cc,$(EXLA_CACHE_OBJ_DIR)/%.o,$(SOURCES)) $(EXLA_CACHE_OBJ_DIR)/exla_cuda.o
+
+
+NVCC_RESULT := $(shell which nvcc 2> NULL)
+NVCC_TEST := $(notdir $(NVCC_RESULT))
+
+ifeq ($(NVCC_TEST),nvcc)
+  NVCC := nvcc
+	NVCCFLAGS += -DCUDA_ENABLED
+else
+  NVCC := g++
+	NVCCFLAGS = $(CFLAGS)
+endif
+
+$(EXLA_CACHE_OBJ_DIR)/exla_cuda.o: $(EXLA_DIR)/exla_cuda.cc $(EXLA_DIR)/exla_cuda.h
+	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)
+	$(NVCC) $(NVCCFLAGS) -c $< -o $@
 
 $(EXLA_CACHE_OBJ_DIR)/%.o: $(EXLA_DIR)/%.cc $(HEADERS)
 	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)

@@ -117,7 +117,7 @@ ERL_NIF_TERM make(ErlNifEnv* env, const char* string);
 // their signatures are the same for retrieving/returning
 // regular strings.
 
-int get_atom(ErlNifEnv* env, ERL_NIF_TERM term, std::string* var);
+int get_atom(ErlNifEnv* env, ERL_NIF_TERM term, std::string& var);
 
 ERL_NIF_TERM atom(ErlNifEnv* env, const char* status);
 

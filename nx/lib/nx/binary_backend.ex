@@ -162,6 +162,16 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
+  def from_pointer(_, _, _, _, _) do
+    raise ArgumentError, "#{inspect(__MODULE__)} does not support pointer manipulation"
+  end
+
+  @impl true
+  def to_pointer(_, _) do
+    raise ArgumentError, "#{inspect(__MODULE__)} does not support pointer manipulation"
+  end
+
+  @impl true
   def to_batched(out, %{type: {_, size}} = tensor, opts) do
     leftover = opts[:leftover]
 
