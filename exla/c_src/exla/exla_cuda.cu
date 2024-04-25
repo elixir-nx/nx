@@ -1,8 +1,8 @@
+#include "exla_cuda.h"
+#ifdef CUDA_ENABLED
 #include <cuda_runtime.h>
 
 #include <iostream>
-
-#include "exla_cuda.h"
 
 std::pair<std::vector<unsigned char>, int> get_cuda_ipc_handle(std::uintptr_t ptr) {
   cudaIpcMemHandle_t ipc_handle;
@@ -18,10 +18,10 @@ std::pair<std::vector<unsigned char>, int> get_cuda_ipc_handle(std::uintptr_t pt
   return std::make_pair(result, status != cudaSuccess);
 }
 
-std::pair<void*, int> get_pointer_for_ipc_handle(std::vector<unsigned char> handle_list) {
+std::pair<void*, int> get_pointer_for_ipc_handle(std::vector<int64_t> handle_list) {
   unsigned char ipc_handle_data[sizeof(cudaIpcMemHandle_t)];
   for (int i = 0; i < sizeof(cudaIpcMemHandle_t); i++) {
-    ipc_handle_data[i] = handle_list[i];
+    ipc_handle_data[i] = (uint8_t)handle_list[i];
   }
 
   cudaIpcMemHandle_t ipc_handle;
@@ -42,3 +42,12 @@ std::pair<void*, int> get_pointer_for_ipc_handle(std::vector<unsigned char> hand
 
   return std::make_pair(ptr, cuda_status != cudaSuccess);
 }
+#else
+std::pair<std::vector<unsigned char>, int> get_cuda_ipc_handle(std::uintptr_t ptr) {
+  return std::make_pair(std::vector<unsigned char>(0), 1);
+}
+
+std::pair<void*, int> get_pointer_for_ipc_handle(std::vector<int64_t> handle_list) {
+  return std::make_pair(nullptr, 1);
+}
+#endif

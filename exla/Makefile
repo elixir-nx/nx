@@ -65,9 +65,20 @@ SOURCES = $(EXLA_DIR)/exla.cc $(EXLA_DIR)/mlir/ops.cc $(EXLA_DIR)/mlir/builder.c
 HEADERS = $(EXLA_DIR)/mlir/ops.h $(EXLA_DIR)/mlir/builder.h $(EXLA_DIR)/mlir/custom_calls.h $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h
 OBJECTS = $(patsubst $(EXLA_DIR)/%.cc,$(EXLA_CACHE_OBJ_DIR)/%.o,$(SOURCES)) $(EXLA_CACHE_OBJ_DIR)/exla_cuda.o
 
+
+NVCC_RESULT := $(shell which nvcc 2> NULL)
+NVCC_TEST := $(notdir $(NVCC_RESULT))
+
+ifeq ($(NVCC_TEST),nvcc)
+  NVCC := nvcc
+	NVCCFLAGS += -DCUDA_ENABLED
+else
+  NVCC := g++
+endif
+
 $(EXLA_CACHE_OBJ_DIR)/exla_cuda.o: $(EXLA_DIR)/exla_cuda.cu $(EXLA_DIR)/exla_cuda.h
 	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)
-	nvcc $(NVCCFLAGS) $< -o $@
+	$(NVCC) $(NVCCFLAGS) $< -o $@
 
 $(EXLA_CACHE_OBJ_DIR)/%.o: $(EXLA_DIR)/%.cc $(HEADERS)
 	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)
