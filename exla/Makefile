@@ -77,7 +77,7 @@ else
 	NVCCFLAGS = $(CFLAGS)
 endif
 
-$(EXLA_CACHE_OBJ_DIR)/exla_cuda.o: $(EXLA_DIR)/exla_cuda.cu $(EXLA_DIR)/exla_cuda.h
+$(EXLA_CACHE_OBJ_DIR)/exla_cuda.o: $(EXLA_DIR)/exla_cuda.cc $(EXLA_DIR)/exla_cuda.h
 	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)
 	$(NVCC) $(NVCCFLAGS) -c $< -o $@
 
