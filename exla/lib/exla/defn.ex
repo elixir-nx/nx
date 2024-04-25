@@ -1721,6 +1721,15 @@ defmodule EXLA.Defn do
       limit_indices = Enum.zip_with(start_indices, lengths, fn i, len -> i + len end)
       Value.slice(tensor, start_indices, limit_indices, strides)
     else
+      sample = Enum.find(start_indices, &(not is_integer(&1)))
+
+      type =
+        Enum.reduce(start_indices, op_type(sample), fn
+          index, acc when is_integer(index) -> acc
+          value, acc -> merge_type(op_type(value), acc)
+        end)
+
+      start_indices = Enum.map(start_indices, &to_type(&1, type))
       zeros = List.duplicate(0, tuple_size(ans.shape))
       slice = Value.dynamic_slice(tensor, start_indices, lengths)
 
@@ -1739,6 +1748,15 @@ defmodule EXLA.Defn do
       limit_indices = Enum.zip_with(start_indices, lengths, fn i, len -> i + len end)
       EXLA.Op.slice(tensor, start_indices, limit_indices, strides)
     else
+      sample = Enum.find(start_indices, &(not is_integer(&1)))
+
+      type =
+        Enum.reduce(start_indices, op_type(sample), fn
+          index, acc when is_integer(index) -> acc
+          value, acc -> merge_type(op_type(value), acc)
+        end)
+
+      start_indices = Enum.map(start_indices, &to_type(&1, type))
       zeros = List.duplicate(0, tuple_size(ans.shape))
       slice = EXLA.Op.dynamic_slice(tensor, start_indices, lengths)
 
