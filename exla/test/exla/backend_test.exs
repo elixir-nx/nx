@@ -181,6 +181,16 @@ defmodule EXLA.BackendTest do
     end
   end
 
+  describe "access" do
+    test "multiple indexes" do
+      tensor = Nx.eye({4, 4})
+      index = Nx.u32(2)
+      swap = Nx.s64(0)
+      assert tensor[[index, swap]] |> Nx.to_number() == 0
+      assert tensor[[0, swap]] |> Nx.to_number() == 1
+    end
+  end
+
   test "conjugate" do
     assert inspect(Nx.conjugate(~V[1 2-0i 3+0i 0-i 0-2i])) =~
              "1.0-0.0i, 2.0+0.0i, 3.0-0.0i, 0.0+1.0i, 0.0+2.0i"
