@@ -162,13 +162,13 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def from_pointer(_, _, _, _) do
-    raise ArgumentError, "#{__MODULE__} does not support pointer manipulation"
+  def from_pointer(_, _, _, _, _) do
+    raise ArgumentError, "#{inspect(__MODULE__)} does not support pointer manipulation"
   end
 
   @impl true
   def to_pointer(_, _) do
-    raise ArgumentError, "#{__MODULE__} does not support pointer manipulation"
+    raise ArgumentError, "#{inspect(__MODULE__)} does not support pointer manipulation"
   end
 
   @impl true

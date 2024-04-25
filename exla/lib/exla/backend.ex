@@ -115,15 +115,16 @@ defmodule EXLA.Backend do
   end
 
   @impl true
-  def from_pointer(pointer, type, dims, opts) do
+  def from_pointer(pointer, type, dims, backend_opts, opts) do
+    backend_opts = Keyword.validate!(backend_opts, [:client_name, :device_id])
+    opts = Keyword.validate!(opts, [:names, mode: :local])
+
     template = Nx.template(dims, type, names: opts[:names])
 
-    opts = Keyword.validate!(opts[:backend_opts] || [], [:client_name, :device_id, mode: :local])
-
-    client_name = opts[:client_name] || EXLA.Client.default_name()
+    client_name = backend_opts[:client_name] || EXLA.Client.default_name()
     client = EXLA.Client.fetch!(client_name)
 
-    device_id = opts[:device_id] || client.default_device_id
+    device_id = backend_opts[:device_id] || client.default_device_id
 
     shape = EXLA.Shape.make_shape(type, dims)
 

@@ -55,7 +55,8 @@ defmodule Nx.Backend do
               opaque_pointer :: term(),
               type :: tuple(),
               shape :: tuple(),
-              opts :: keyword
+              backend_opts :: keyword(),
+              opts :: keyword()
             ) :: {:ok, tensor} | {:error, term()}
   @callback to_pointer(tensor, opts :: keyword) :: {:ok, term()} | {:error, term()}
 

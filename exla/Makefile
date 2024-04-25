@@ -1,4 +1,4 @@
-	# Environment variables passed via elixir_make
+# Environment variables passed via elixir_make
 # ERTS_INCLUDE_DIR
 # MIX_APP_PATH
 

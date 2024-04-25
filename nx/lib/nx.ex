@@ -16684,19 +16684,21 @@ defmodule Nx do
 
   This function should be used with caution, as it is very backend-specific.
 
-  The `backend` argument is the backend module (such as `Nx.BinaryBackend`).
+  The `backend` argument is either the backend module (such as `Nx.BinaryBackend`),
+  or a tuple of `{module, keyword()}` with specific backend configuration.
   `opaque_pointer` is the corresponding value that would be returned from
   a call to `get_pointer/2`.
 
   ## Options
 
+  Besides the options listed below, all other options are forwarded to the
+  underlying implementation.
+
     * `:names` - refer to `tensor/2`
-    * `:backend_opts` - options specific to the backend for handling
-      the pointer.
 
   ## Examples
 
-      Nx.from_pointer(<<1, 2, 3, 4>>, {:s, 64}, {1, 3})
+      Nx.from_pointer(MyBackend, <<1, 2, 3, 4>>, {:s, 64}, {1, 3})
       #Nx.Tensor<
         s64[1][3]
         [
@@ -16704,7 +16706,7 @@ defmodule Nx do
         ]
       >
 
-      Nx.from_pointer(<<5, 6, 7>>, {:s, 64}, {1, 3}, names: [nil, :col], backend_opts: [some: :option, another: :option])
+      Nx.from_pointer({MyBackend, some: :opt}, <<5, 6, 7>>, {:s, 64}, {1, 3}, names: [nil, :col], another: :option)
       #Nx.Tensor<
         s64[1][col: 3]
         [
@@ -16713,11 +16715,19 @@ defmodule Nx do
       >
   """
   @doc type: :creation
-  def from_pointer(backend, opaque_pointer, type, shape, opts \\ []) when is_atom(backend) do
+  def from_pointer(backend, opaque_pointer, type, shape, opts \\ [])
+      when is_atom(backend) or is_tuple(backend) do
     Nx.Shape.validate!(shape, :shape)
     type = Nx.Type.normalize!(type)
-    opts = keyword!(opts, [:names, :backend_opts])
-    backend.from_pointer(opaque_pointer, type, shape, opts)
+    opts = Keyword.put_new_lazy(opts, :names, fn -> List.duplicate(nil, tuple_size(shape)) end)
+
+    {backend, backend_opts} =
+      case backend do
+        {backend, opts} when is_list(opts) -> {backend, opts}
+        backend -> {backend, []}
+      end
+
+    backend.from_pointer(opaque_pointer, type, shape, backend_opts, opts)
   end
 
   @doc """
@@ -16729,7 +16739,7 @@ defmodule Nx do
 
   ## Options
 
-    All options are backend-specific
+  All options are backend-specific.
 
   ## Examples
 

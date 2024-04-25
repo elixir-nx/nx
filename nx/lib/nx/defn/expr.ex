@@ -1259,7 +1259,7 @@ defmodule Nx.Defn.Expr do
     backend_transfer: 3,
     to_binary: 2,
     to_batched: 3,
-    from_pointer: 4,
+    from_pointer: 5,
     to_pointer: 2
   ]
 
