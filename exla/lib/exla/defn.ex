@@ -1210,7 +1210,7 @@ defmodule EXLA.Defn do
     Value.dynamic_update_slice(tensor, slice, start_indices)
   end
 
-  defp to_operator(:take, [%mod{} = tensor, indices, axis], _ans, _state) do
+  defp to_operator(:take, [%Value{} = tensor, indices, axis], _ans, _state) do
     tensor_rank = tensor |> op_shape() |> tuple_size()
     indices_rank = indices |> op_shape() |> tuple_size()
     result_rank = tensor_rank - 1 + indices_rank
@@ -1221,7 +1221,7 @@ defmodule EXLA.Defn do
     collapsed_slice_dims = [axis]
     start_index_map = [axis]
 
-    mod.gather(
+    Value.gather(
       tensor,
       indices,
       index_vector_dim,
@@ -1232,7 +1232,7 @@ defmodule EXLA.Defn do
     )
   end
 
-  defp to_operator(:take_along_axis, [%mod{} = tensor, indices, axis], _ans, state) do
+  defp to_operator(:take_along_axis, [%Value{} = tensor, indices, axis], _ans, state) do
     indices_shape = op_shape(indices)
     indices_rank = tuple_size(indices_shape)
 
@@ -1244,11 +1244,11 @@ defmodule EXLA.Defn do
     collapsed_slice_dims = Enum.to_list(axes_range)
     start_index_map = Enum.to_list(axes_range)
 
-    indices_exla_shape = mod.get_shape(indices)
+    indices_exla_shape = Value.get_shape(indices)
 
     iotas =
       Enum.map(axes_range, fn axis ->
-        mod.iota(state.builder, indices_exla_shape, axis)
+        Value.iota(state.builder, indices_exla_shape, axis)
       end)
 
     new_axis_shape = Tuple.append(indices_shape, 1)
@@ -1256,10 +1256,10 @@ defmodule EXLA.Defn do
     indices =
       iotas
       |> List.replace_at(axis, indices)
-      |> Enum.map(&mod.reshape(&1, new_axis_shape))
-      |> mod.concatenate(indices_rank)
+      |> Enum.map(&Value.reshape(&1, new_axis_shape))
+      |> Value.concatenate(indices_rank)
 
-    mod.gather(
+    Value.gather(
       tensor,
       indices,
       index_vector_dim,
@@ -1270,7 +1270,7 @@ defmodule EXLA.Defn do
     )
   end
 
-  defp to_operator(:gather, [%mod{} = tensor, indices, opts], _ans, _state) do
+  defp to_operator(:gather, [%Value{} = tensor, indices, opts], _ans, _state) do
     axes = Keyword.fetch!(opts, :axes)
     tensor_shape = op_shape(tensor)
     tensor_rank = tuple_size(tensor_shape)
@@ -1284,7 +1284,7 @@ defmodule EXLA.Defn do
 
     batch_size = tensor_rank - length(axes)
     offset_dims = count_up(batch_size, batch_size)
-    mod.gather(tensor, indices, index_vector_dim, slice_sizes, offset_dims, axes, axes)
+    Value.gather(tensor, indices, index_vector_dim, slice_sizes, offset_dims, axes, axes)
   end
 
   defp to_operator(:reverse, [%Value{} = tensor, axes], _ans, _state) do
@@ -1339,7 +1339,7 @@ defmodule EXLA.Defn do
     EXLA.Lib.argsort(state.builder, tensor, dimension, stable, comp, ans.type)
   end
 
-  defp fft(exla_op, [%mod{} = tensor, opts], %{type: type}, state) do
+  defp fft(exla_op, [%Value{} = tensor, opts], %{type: type}, state) do
     n = opts[:length]
     axis = opts[:axis]
     output_type = Nx.Type.to_complex(type)
@@ -1362,15 +1362,15 @@ defmodule EXLA.Defn do
         |> List.to_tuple()
 
       tensor
-      |> mod.transpose(permutation)
+      |> Value.transpose(permutation)
       |> exla_op.([n])
-      |> mod.transpose(permutation)
+      |> Value.transpose(permutation)
     else
       exla_op.(tensor, [n])
     end
   end
 
-  defp fft2(exla_op, [%mod{} = tensor, opts], %{type: type}, state) do
+  defp fft2(exla_op, [%Value{} = tensor, opts], %{type: type}, state) do
     [l1, l2] = lengths = opts[:lengths]
     [ax1, ax2] = axes = opts[:axes]
     output_type = Nx.Type.to_complex(type)
@@ -1399,9 +1399,9 @@ defmodule EXLA.Defn do
         |> List.to_tuple()
 
       tensor
-      |> mod.transpose(permutation)
+      |> Value.transpose(permutation)
       |> exla_op.(lengths)
-      |> mod.transpose(permutation)
+      |> Value.transpose(permutation)
     else
       exla_op.(tensor, lengths)
     end
