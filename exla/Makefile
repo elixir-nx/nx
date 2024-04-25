@@ -79,7 +79,7 @@ endif
 
 $(EXLA_CACHE_OBJ_DIR)/exla_cuda.o: $(EXLA_DIR)/exla_cuda.cu $(EXLA_DIR)/exla_cuda.h
 	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)
-	$(NVCC) $(NVCCFLAGS) $< -o $@
+	$(NVCC) $(NVCCFLAGS) -c $< -o $@
 
 $(EXLA_CACHE_OBJ_DIR)/%.o: $(EXLA_DIR)/%.cc $(HEADERS)
 	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)
