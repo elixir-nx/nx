@@ -191,7 +191,7 @@ defmodule Nx.Defn.Expr do
     last
   end
 
-  defp non_vectorized_cond(clauses, last = out, context) do
+  defp non_vectorized_cond(clauses, last, context) do
     {preds, exprs} = Enum.unzip(clauses)
 
     {broadcasted_clauses, vectorized_axes} =
@@ -209,31 +209,17 @@ defmodule Nx.Defn.Expr do
 
     clauses = Enum.zip(preds, exprs)
 
-    types = Composite.flatten_list([last]) |> Enum.map(&Nx.type/1)
-
     out =
       if vectorized_axes == [] do
-        Composite.traverse(out, types, fn
-          %T{} = expr, [type | types] ->
-            {%{expr | type: type}, types}
-
-          expr, [type | types] when is_number(expr) ->
-            {Nx.as_type(expr, type), types}
-
-          expr, [_ | types] ->
-            {expr, types}
-        end)
+        last
       else
-        {result, {[], []}} =
-          Composite.traverse(out, {types, vectorized_axes}, fn
-            %T{} = expr, {[type | types_tail], [axes | tail]} ->
-              {%{expr | vectorized_axes: axes, type: type}, {types_tail, tail}}
+        {result, []} =
+          Composite.traverse(last, vectorized_axes, fn
+            %T{} = expr, [axes | tail] ->
+              {%{expr | vectorized_axes: axes}, tail}
 
-            expr, {[type | types_tail], [[] | tail]} when is_number(expr) ->
-              {Nx.as_type(expr, type), {types_tail, tail}}
-
-            expr, {[_type | types_tail], [[] | tail]} ->
-              {expr, {types_tail, tail}}
+            expr, [[] | tail] ->
+              {expr, tail}
           end)
 
         result
@@ -300,13 +286,6 @@ defmodule Nx.Defn.Expr do
       raise ArgumentError,
             "condition for while cannot be vectorized, got: #{inspect(condition)}"
     end
-
-    {initial, []} =
-      Composite.traverse(initial, Tuple.to_list(flatten_body), fn init, [body | tail] ->
-        type = binary_type(Nx.type(init), Nx.type(body))
-
-        {Nx.as_type(init, type), tail}
-      end)
 
     args = [flatten_initial, flatten_arg, condition, flatten_body]
     flatten_to_composite(initial, context, clauses, &expr(&1, context, :while, args))
@@ -561,6 +540,9 @@ defmodule Nx.Defn.Expr do
         {inner_arg, inner_context} = to_param_expr(inner_initial, :while)
         inner_condition = condition_body.(:condition, inner_arg) |> to_pred(line, file, :while)
         inner_body = condition_body.(:body, inner_arg) |> to_container_expr()
+
+        compatible_while!(file, line, initial, inner_body)
+
         inner_while = while(inner_initial, inner_context, inner_arg, inner_condition, inner_body)
 
         vectorized_while__build_outer_while(
