@@ -209,17 +209,31 @@ defmodule Nx.Defn.Expr do
 
     clauses = Enum.zip(preds, exprs)
 
+    types = Composite.flatten_list([last]) |> Enum.map(&Nx.type/1)
+
     out =
       if vectorized_axes == [] do
-        out
-      else
-        {result, []} =
-          Composite.traverse(out, vectorized_axes, fn
-            %T{} = expr, [axes | tail] ->
-              {%{expr | vectorized_axes: axes}, tail}
+        Composite.traverse(out, types, fn
+          %T{} = expr, [type | types] ->
+            {%{expr | type: type}, types}
 
-            expr, [[] | tail] ->
-              {expr, tail}
+          expr, [type | types] when is_number(expr) ->
+            {Nx.as_type(expr, type), types}
+
+          expr, [_ | types] ->
+            {expr, types}
+        end)
+      else
+        {result, {[], []}} =
+          Composite.traverse(out, {types, vectorized_axes}, fn
+            %T{} = expr, {[type | types_tail], [axes | tail]} ->
+              {%{expr | vectorized_axes: axes, type: type}, {types_tail, tail}}
+
+            expr, {[type | types_tail], [[] | tail]} when is_number(expr) ->
+              {Nx.as_type(expr, type), {types_tail, tail}}
+
+            expr, {[_type | types_tail], [[] | tail]} ->
+              {expr, {types_tail, tail}}
           end)
 
         result
@@ -287,6 +301,13 @@ defmodule Nx.Defn.Expr do
             "condition for while cannot be vectorized, got: #{inspect(condition)}"
     end
 
+    {initial, []} =
+      Composite.traverse(initial, Tuple.to_list(flatten_body), fn init, [body | tail] ->
+        type = binary_type(Nx.type(init), Nx.type(body))
+
+        {Nx.as_type(init, type), tail}
+      end)
+
     args = [flatten_initial, flatten_arg, condition, flatten_body]
     flatten_to_composite(initial, context, clauses, &expr(&1, context, :while, args))
   end
@@ -317,13 +338,15 @@ defmodule Nx.Defn.Expr do
 
     {out, {[], ^size, []}} =
       Composite.traverse(out, {Tuple.to_list(head), 0, vectorized_axes}, fn
-        _, {[head | tail], i, [axes | axes_tail]} ->
+        node, {[head | tail], i, [axes | axes_tail]} ->
           head =
             if axes do
               Nx.vectorize(head, axes)
             else
               head
             end
+
+          head = Nx.as_type(head, Nx.type(node))
 
           {expr(head, context, :elem, [expr, i]), {tail, i + 1, axes_tail}}
       end)
@@ -700,6 +723,7 @@ defmodule Nx.Defn.Expr do
         inner_while,
         Composite.flatten_list([outer_arg]),
         fn node, [target | targets] ->
+          # [node, target] = Nx.broadcast_vectors([node, target], align_ranks: true)
           target = Nx.devectorize(target)
           starts = [index_param | List.duplicate(0, tuple_size(target.shape) - 1)]
 
