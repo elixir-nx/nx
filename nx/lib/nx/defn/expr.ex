@@ -541,7 +541,7 @@ defmodule Nx.Defn.Expr do
         inner_condition = condition_body.(:condition, inner_arg) |> to_pred(line, file, :while)
         inner_body = condition_body.(:body, inner_arg) |> to_container_expr()
 
-        compatible_while!(file, line, initial, inner_body)
+        compatible_while!(file, line, inner_initial, inner_body)
 
         inner_while = while(inner_initial, inner_context, inner_arg, inner_condition, inner_body)
 
