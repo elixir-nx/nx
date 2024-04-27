@@ -317,15 +317,13 @@ defmodule Nx.Defn.Expr do
 
     {out, {[], ^size, []}} =
       Composite.traverse(out, {Tuple.to_list(head), 0, vectorized_axes}, fn
-        node, {[head | tail], i, [axes | axes_tail]} ->
+        _, {[head | tail], i, [axes | axes_tail]} ->
           head =
             if axes do
               Nx.vectorize(head, axes)
             else
               head
             end
-
-          head = Nx.as_type(head, binary_type(node, head))
 
           {expr(head, context, :elem, [expr, i]), {tail, i + 1, axes_tail}}
       end)
