@@ -1,4 +1,6 @@
-# Tensor Aggregation 101
+<!-- livebook:{"persist_outputs":true} -->
+
+# Aggregation
 
 ```elixir
 Mix.install([
@@ -6,18 +8,36 @@ Mix.install([
 ])
 ```
 
-## Aggregation operations on tensors
-
 ```elixir
 import Nx, only: :sigils
 ```
 
-You can apply [aggregation functions](https://hexdocs.pm/nx/Nx.html#functions-aggregates) on any tensor. The functions can be applied to the tensor as a whole or to a subsection of the tensor taken in an axis-wise fashion.
+<!-- livebook:{"output":true} -->
+
+```
+Nx
+```
+
+## What is aggregation?
+
+Aggregation is the process of reducing a tensor to a single value or a smaller tensor by applying specific operations across its dimensions. You can apply [aggregation functions](https://hexdocs.pm/nx/Nx.html#functions-aggregates) on any tensor. The functions can be applied to the tensor as a whole or to a subsection of the tensor taken in an axis-wise fashion.
 
 As a first example, let's take a 2D tensor of shape `{2, 3}`. Notice that we can _name_ the axes. The elements of the tensor `t` are the `t[i][j]` when $i$ is the row, and $j$ the column.
 
 ```elixir
 m = Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y])
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  s64[x: 2][y: 3]
+  [
+    [1, 2, 3],
+    [4, 5, 6]
+  ]
+>
 ```
 
 You can get the maximum number in a tensor with [Nx.reduce_max(m)](https://hexdocs.pm/nx/Nx.html#reduce_max/2), returning a 0D tensor. With a reduction, we lose a dimension per axis reduced, and since we applied the reduction globally, we lose all the dimensions. It should return `Nx.Tensor(6)` here.
@@ -33,11 +53,44 @@ max_y = Nx.reduce_max(m, axes: [:y])
 %{max: max, max_x: max_x, max_y: max_y}
 ```
 
+<!-- livebook:{"output":true} -->
+
+```
+%{
+  max: #Nx.Tensor<
+    s64
+    6
+  >,
+  max_x: #Nx.Tensor<
+    s64[y: 3]
+    [4, 5, 6]
+  >,
+  max_y: #Nx.Tensor<
+    s64[x: 2]
+    [3, 6]
+  >
+}
+```
+
 Let's consider another example with [Nx.weighted_mean](https://hexdocs.pm/nx/Nx.html#weighted_mean/3). It supports full-tensor and per axis operations. We display how to compute the _weighted mean aggregate_ of a matrix with the example below of a 2D tensor of shape `{2,2}` labeled `m`:
 
 ```elixir
-m = ~M(1 2
-  3 4)
+m = ~M[
+  1 2
+  3 4
+]
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  s64[2][2]
+  [
+    [1, 2],
+    [3, 4]
+  ]
+>
 ```
 
 First, we'll compute the full-tensor aggregation. The calculations are developed below. We calculate an "array product" (aka [Hadamard product](<https://en.wikipedia.org/wiki/Hadamard_product_(matrices)#:~:text=In%20mathematics%2C%20the%20Hadamard%20product,elements%20i%2C%20j%20of%20the>), an element-wise product) of our tensor with the tensor of weights, then sum all the elements and divide by the sum of the weights.
@@ -59,6 +112,12 @@ man_w_avg = (1 * 10 + 2 * 20 + 3 * 30 + 4 * 40) / (10 + 20 + 30 + 40)
 }
 ```
 
+<!-- livebook:{"output":true} -->
+
+```
+%{nx_weighted_avg: 3.0, manual_weighted_avg: 3.0}
+```
+
 The weighted mean can be computed _per axis_. Let's compute it along the _first_ axis (`axes: [0]`): you calculate "by column", so you aggregate/reduce along the first axis:
 
 ```elixir
@@ -75,6 +134,15 @@ man_w_avg_x = [(1 * 10 + 3 * 30) / (10 + 30), (2 * 20 + 4 * 40) / (20 + 40)]
   w_avg_x,
   man_w_avg_x
 }
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{#Nx.Tensor<
+   f32[2]
+   [2.5, 3.3333332538604736]
+ >, [2.5, 3.3333333333333335]}
 ```
 
 We calculate weighted mean of a square matrix along the _second_ axis (`axes: [1]`): you calculate per row, so you aggregate/reduce along the second axis.
@@ -95,6 +163,15 @@ man_w_avg_y = [(1 * 10 + 2 * 20) / (10 + 20), (3 * 30 + 4 * 40) / (30 + 40)]
 }
 ```
 
+<!-- livebook:{"output":true} -->
+
+```
+{#Nx.Tensor<
+   f32[2]
+   [1.6666666269302368, 3.5714285373687744]
+ >, [1.6666666666666667, 3.5714285714285716]}
+```
+
 #### Example with higher rank
 
 The example below will be used through the documentation.
@@ -102,7 +179,47 @@ The example below will be used through the documentation.
 Take a list of numbers of length $n=36$, and turn it into a tensor with the shape `{2,3,2,3}`; this is a tensor of rank 4. We will _name_ the axes, with `names: [:x, :y, :z, :t]`.
 
 ```elixir
-t = Nx.tensor(
+t =
+  Nx.tensor(
+    [
+      [
+        [
+          [1, 2, 3],
+          [1, -2, 3]
+        ],
+        [
+          [4, -3, 2],
+          [-4, 3, 2]
+        ],
+        [
+          [5, -1, 3],
+          [-5, 1, 3]
+        ]
+      ],
+      [
+        [
+          [4, 6, 1],
+          [4, -6, 1]
+        ],
+        [
+          [1, 2, 3],
+          [1, -2, 3]
+        ],
+        [
+          [4, -3, 2],
+          [-4, 3, 2]
+        ]
+      ]
+    ],
+    names: [:x, :y, :z, :t]
+  )
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  s64[x: 2][y: 3][z: 2][t: 3]
   [
     [
       [
@@ -116,7 +233,7 @@ t = Nx.tensor(
       [
         [5, -1, 3],
         [-5, 1, 3]
-      ],
+      ]
     ],
     [
       [
@@ -132,9 +249,8 @@ t = Nx.tensor(
         [-4, 3, 2]
       ]
     ]
-  ],
-  names: [:x, :y, :z, :t]
-)
+  ]
+>
 ```
 
 With the shape `{2,3,2,4}`, you obtain slices of length $2$,then $3$, then $2$ and, finally, $3$.
@@ -243,6 +359,47 @@ Firstly, let's check some characteristics of this tensor using full-tensor aggre
 }
 ```
 
+<!-- livebook:{"output":true} -->
+
+```
+%{
+  n: 36,
+  shape: {2, 3, 2, 3},
+  rank: 4,
+  dimensions: %{y: 3, x: 2, t: 3, z: 2},
+  analysis: %{
+    most_frequent_nb: #Nx.Tensor<
+      s64
+      3
+    >,
+    smallest_element: %{
+      position: #Nx.Tensor<
+        s64
+        22
+      >,
+      value: #Nx.Tensor<
+        s64
+        -6
+      >
+    },
+    greatest_element: %{
+      position: #Nx.Tensor<
+        s64
+        19
+      >,
+      value: #Nx.Tensor<
+        s64
+        6
+      >
+    },
+    no_zero_nb: #Nx.Tensor<
+      u8
+      1
+    >
+  }
+}
+```
+
 #### Single row aggregation, along an axis
 
 > ❗ We are going to use the key `:axis` below. The following functions `argmin`, `argmax`, `median` and `mode` use `:axis: <symbol> or number` in singular mode. All of the other aggregating functions use `axes: [<symbol> or number]`; these have multi-axis aggregation implemented.
@@ -332,6 +489,28 @@ $$
 Nx.argmin(t, axis: :x)
 ```
 
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  s64[y: 3][z: 2][t: 3]
+  [
+    [
+      [0, 0, 1],
+      [0, 1, 1]
+    ],
+    [
+      [1, 0, 0],
+      [0, 1, 0]
+    ],
+    [
+      [1, 1, 1],
+      [0, 0, 1]
+    ]
+  ]
+>
+```
+
 ###### Aggregate along the second axis `axis: :y` (equivalently `axis: 1`) .
 
 The axis `y` will collapse and the shape of the resultant tensor `r` is `[x: 2, z: 2, t: 3]`.
@@ -407,6 +586,24 @@ $$
 
 ```elixir
 Nx.argmin(t, axis: 1)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  s64[x: 2][z: 2][t: 3]
+  [
+    [
+      [0, 1, 1],
+      [2, 0, 1]
+    ],
+    [
+      [1, 2, 0],
+      [2, 0, 0]
+    ]
+  ]
+>
 ```
 
 ###### Aggregate along the `axis: :z` axis (equivalently `axis: 2`).
@@ -492,8 +689,30 @@ $$
 
 <!-- livebook:{"break_markdown":true} -->
 
+
+
 ```elixir
 Nx.argmax(t, axis: :z)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  s64[x: 2][y: 3][t: 3]
+  [
+    [
+      [0, 0, 0],
+      [0, 1, 0],
+      [0, 1, 0]
+    ],
+    [
+      [0, 0, 0],
+      [0, 0, 0],
+      [0, 1, 0]
+    ]
+  ]
+>
 ```
 
 ###### Aggregate along the last axis, `axis: :t` or (`axis: 3` or `axis: -1`).
@@ -566,8 +785,30 @@ $$
 
 <!-- livebook:{"break_markdown":true} -->
 
+
+
 ```elixir
 Nx.argmin(t, axis: 3)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  s64[x: 2][y: 3][z: 2]
+  [
+    [
+      [0, 1],
+      [1, 0],
+      [1, 0]
+    ],
+    [
+      [2, 1],
+      [0, 1],
+      [1, 0]
+    ]
+  ]
+>
 ```
 
 #### Option [:tie_break](https://hexdocs.pm/nx/Nx.html#argmax/2-tie-breaks)
@@ -583,6 +824,12 @@ t4 = ~V[2 0 0 0 1]
 }
 ```
 
+<!-- livebook:{"output":true} -->
+
+```
+%{argmin_with_default: 1, argmin_with_tie_break_high_option: 3}
+```
+
 #### Option [:keep_axis](https://hexdocs.pm/nx/Nx.html#argmax/2-keep-axis)
 
 Its default value is `false`. When this option set to `keep_axis: true`, you reduce but keep the dimension of the working axis to $1$. For example, with `t` of shape `{2,3,2,3}`, when you reduce along the third axis, `:z`, we saw that the shape is `{2,3,3}` but when you keep the axis, the shape is `{2,3,1,3}`:
@@ -590,6 +837,12 @@ Its default value is `false`. When this option set to `keep_axis: true`, you red
 ```elixir
 Nx.argmin(t, axis: 2, keep_axis: true) ==
   Nx.argmin(t, axis: 2) |> Nx.reshape({2, 3, 1, 3}, names: [:x, :y, :z, :t])
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+true
 ```
 
 $$
@@ -693,10 +946,48 @@ From this, it is easier to undertand what the aggregation returns:
 Nx.reduce_min(t, axes: [0, -1])
 ```
 
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  s64[y: 3][z: 2]
+  [
+    [1, -6],
+    [-3, -4],
+    [-3, -5]
+  ]
+>
+```
+
 ```elixir
 Nx.reduce_max(t, axes: [:x, :t])
 ```
 
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  s64[y: 3][z: 2]
+  [
+    [6, 4],
+    [4, 3],
+    [5, 3]
+  ]
+>
+```
+
 ```elixir
 Nx.mean(t, axes: [:x, :y])
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  f32[z: 2][t: 3]
+  [
+    [3.1666667461395264, 0.5, 2.3333332538604736],
+    [-1.1666666269302368, -0.5, 2.3333332538604736]
+  ]
+>
 ```

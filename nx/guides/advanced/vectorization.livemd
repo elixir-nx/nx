@@ -1,7 +1,11 @@
-# Introduction to Vectorization
+<!-- livebook:{"persist_outputs":true} -->
+
+# Vectorization
 
 ```elixir
-Mix.install([{:nx, github: "elixir-nx/nx", sparse: "nx"}])
+Mix.install([
+  {:nx, "~> 0.7"}
+])
 ```
 
 ## What is vectorization?
@@ -31,10 +35,25 @@ defmodule Example do
 end
 ```
 
+<!-- livebook:{"output":true} -->
+
+```
+{:module, Example, <<70, 79, 82, 49, 0, 0, 11, ...>>, true}
+```
+
 We can invoke it as:
 
 ```elixir
 Example.normalize(Nx.tensor([1, 2, 3]))
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  f32[3]
+  [0.0, 0.5, 1.0]
+>
 ```
 
 However, if we attempt to call it for any tensor with more than one dimension, it won't work. Let's first define a 2D tensor:
@@ -48,7 +67,22 @@ t =
   ])
 ```
 
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  s64[3][3]
+  [
+    [1, 2, 3],
+    [10, 20, 30],
+    [4, 5, 6]
+  ]
+>
+```
+
 Now if we attempt to invoke it:
+
+<!-- livebook:{"continue_on_error":true} -->
 
 ```elixir
 Example.normalize(t)
@@ -60,10 +94,38 @@ To address this, we can vectorize the tensor:
 vec = Nx.vectorize(t, :rows)
 ```
 
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  vectorized[rows: 3]
+  s64[3]
+  [
+    [1, 2, 3],
+    [10, 20, 30],
+    [4, 5, 6]
+  ]
+>
+```
+
 As we can see above, the newly vectorized `vec` is the same tensor as `t`, but the first axis is now a `vectorized` axis called `rows`, with size `3`. This means that for all intents and purposes, we can think of this tensor as a 1D tensor, on which our `normalize` function will now work as if we passed those 3 rows separately (thus the "for-each" semantics mentioned above). Let's give it a try:
 
 ```elixir
 normalized_vec = Example.normalize(vec)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  vectorized[rows: 3]
+  f32[3]
+  [
+    [0.0, 0.5, 1.0],
+    [0.0, 0.5, 1.0],
+    [0.0, 0.5, 1.0]
+  ]
+>
 ```
 
 While the tensor is vectorized, we can't treat it as a matrix (2D tensor):
@@ -81,6 +143,32 @@ right =
 Nx.add(normalized_vec, right)
 ```
 
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  vectorized[rows: 3]
+  f32[3][3]
+  [
+    [
+      [1.0, 2.5, 4.0],
+      [2.0, 3.5, 5.0],
+      [3.0, 4.5, 6.0]
+    ],
+    [
+      [1.0, 2.5, 4.0],
+      [2.0, 3.5, 5.0],
+      [3.0, 4.5, 6.0]
+    ],
+    [
+      [1.0, 2.5, 4.0],
+      [2.0, 3.5, 5.0],
+      [3.0, 4.5, 6.0]
+    ]
+  ]
+>
+```
+
 You can devectorize the tensor to get its original shape:
 
 ```elixir
@@ -88,15 +176,54 @@ You can devectorize the tensor to get its original shape:
 Nx.devectorize(normalized_vec)
 ```
 
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  f32[rows: 3][3]
+  [
+    [0.0, 0.5, 1.0],
+    [0.0, 0.5, 1.0],
+    [0.0, 0.5, 1.0]
+  ]
+>
+```
+
 ```elixir
 # If we want to drop the vectorized axes' names
 devec = Nx.devectorize(normalized_vec, keep_names: false)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  f32[3][3]
+  [
+    [0.0, 0.5, 1.0],
+    [0.0, 0.5, 1.0],
+    [0.0, 0.5, 1.0]
+  ]
+>
 ```
 
 Once devectorized, we can effectively add the two matrices together:
 
 ```elixir
 Nx.add(devec, right)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  f32[3][3]
+  [
+    [1.0, 2.5, 4.0],
+    [2.0, 3.5, 5.0],
+    [3.0, 4.5, 6.0]
+  ]
+>
 ```
 
 ## Revectorization
@@ -106,6 +233,49 @@ Now that we have the basics down, let's discuss `Nx.revectorize` with multi dime
 ```elixir
 # This version of vectorize also asserts on the size of the dimensions being vectorized
 t = Nx.iota({2, 1, 3, 2, 2}) |> Nx.vectorize(x: 2, y: 1, z: 3)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  vectorized[x: 2][y: 1][z: 3]
+  s64[2][2]
+  [
+    [
+      [
+        [
+          [0, 1],
+          [2, 3]
+        ],
+        [
+          [4, 5],
+          [6, 7]
+        ],
+        [
+          [8, 9],
+          [10, 11]
+        ]
+      ]
+    ],
+    [
+      [
+        [
+          [12, 13],
+          [14, 15]
+        ],
+        [
+          [16, 17],
+          [18, 19]
+        ],
+        [
+          [20, 21],
+          [22, 23]
+        ]
+      ]
+    ]
+  ]
+>
 ```
 
 Let's imagine we want to operate on the vectorized iota `t` above, adding a specific constant for each vectorized entry. We can do this through a bit of tensor introspection in conjunction with `revectorize/3`
@@ -123,6 +293,46 @@ constants =
 {constants, collapsed_t}
 ```
 
+<!-- livebook:{"output":true} -->
+
+```
+{#Nx.Tensor<
+   vectorized[vectors: 6]
+   s64
+   [0, 100, 200, 300, 400, 500]
+ >,
+ #Nx.Tensor<
+   vectorized[vectors: 6]
+   s64[2][2]
+   [
+     [
+       [0, 1],
+       [2, 3]
+     ],
+     [
+       [4, 5],
+       [6, 7]
+     ],
+     [
+       [8, 9],
+       [10, 11]
+     ],
+     [
+       [12, 13],
+       [14, 15]
+     ],
+     [
+       [16, 17],
+       [18, 19]
+     ],
+     [
+       [20, 21],
+       [22, 23]
+     ]
+   ]
+ >}
+```
+
 From the output above, we can see that we have a vectorized tensor of scalars as well a vectorized tensor with the same vectorized axis, containing matrices.
 
 Now we can add them together as we discussed above, and then re-expand the vectorized axes to the original shape.
@@ -131,6 +341,49 @@ Now we can add them together as we discussed above, and then re-expand the vecto
 collapsed_t
 |> Nx.add(constants)
 |> Nx.revectorize(t.vectorized_axes)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  vectorized[x: 2][y: 1][z: 3]
+  s64[2][2]
+  [
+    [
+      [
+        [
+          [0, 1],
+          [2, 3]
+        ],
+        [
+          [104, 105],
+          [106, 107]
+        ],
+        [
+          [208, 209],
+          [210, 211]
+        ]
+      ]
+    ],
+    [
+      [
+        [
+          [312, 313],
+          [314, 315]
+        ],
+        [
+          [416, 417],
+          [418, 419]
+        ],
+        [
+          [520, 521],
+          [522, 523]
+        ]
+      ]
+    ]
+  ]
+>
 ```
 
 Before we move on to the last two vectorization functions, let's see how we can replace a `while` loop with vectorization. The following module defines the same function twice, once for each method.
@@ -197,6 +450,12 @@ defmodule WhileExample do
 end
 ```
 
+<!-- livebook:{"output":true} -->
+
+```
+{:module, WhileExample, <<70, 79, 82, 49, 0, 0, 22, ...>>, true}
+```
+
 Let's give those definitions a try:
 
 ```elixir
@@ -221,6 +480,35 @@ y_vec = Nx.concatenate([y, Nx.multiply(y, 2)]) |> Nx.reshape({2, 3}) |> Nx.vecto
 }
 ```
 
+<!-- livebook:{"output":true} -->
+
+```
+{#Nx.Tensor<
+   s64[3]
+   [10, 6, 10]
+ >,
+ #Nx.Tensor<
+   s64[3]
+   [10, 6, 10]
+ >,
+ #Nx.Tensor<
+   vectorized[rows: 2]
+   s64[3]
+   [
+     [10, 6, 10],
+     [10, 6, 10]
+   ]
+ >,
+ #Nx.Tensor<
+   vectorized[rows: 2]
+   s64[3]
+   [
+     [10, 6, 10],
+     [14, 11, 16]
+   ]
+ >}
+```
+
 The advantage of vectorization is that the underlying compilers and hardware may do a much better job of optimizing tensor operations than `while` loops, which often run linearly.
 
 The eagle-eyed reader will have noticed that we inadvertently threw away the vectorized axes that we received from `y`. This is because our usage of `revectorize` disregards the possibility that the axes could be different in each input tensor. Luckily, we can tackle this problem too.
@@ -240,6 +528,23 @@ vec_j = Nx.vectorize(base, :j)
 Nx.multiply(vec_i, vec_j)
 ```
 
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  vectorized[i: 10][j: 10]
+  s64
+  [
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    [0, 2, 4, 6, 8, 10, 12, 14, 16, 18],
+    [0, 3, 6, 9, 12, 15, 18, 21, 24, 27],
+    [0, 4, 8, 12, 16, 20, 24, 28, 32, 36],
+    ...
+  ]
+>
+```
+
 Ok, now that we know that broadcasting will work on vectorized axes to add elements in our resulting tensor, we can look into the aforementioned functions.
 
 ```elixir
@@ -247,6 +552,51 @@ a = Nx.iota({2, 1}, vectorized_axes: [x: 2, y: 1])
 b = Nx.iota({}, vectorized_axes: [z: 2, x: 1])
 
 Nx.reshape_vectors([a, b], align_ranks: true)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[
+  #Nx.Tensor<
+    vectorized[x: 2][y: 1][z: 1]
+    s64[2][1]
+    [
+      [
+        [
+          [
+            [0],
+            [1]
+          ]
+        ]
+      ],
+      [
+        [
+          [
+            [0],
+            [1]
+          ]
+        ]
+      ]
+    ]
+  >,
+  #Nx.Tensor<
+    vectorized[x: 1][y: 1][z: 2]
+    s64[1][1]
+    [
+      [
+        [
+          [
+            [0]
+          ],
+          [
+            [0]
+          ]
+        ]
+      ]
+    ]
+  >
+]
 ```
 
 In the example above, we can see that both tensors end up containing vectorized axes `:x`, `:y`, and `:z`. Furthermore, we can also see that the `b` tensor was rearranged so that the `:x` axis comes first. All tensors end up with the same ordering of axes, but the axes aren't resized in any way.
@@ -260,6 +610,55 @@ x = Nx.iota({2, 1}, vectorized_axes: [x: 2, y: 1])
 y = Nx.iota({}, vectorized_axes: [z: 2, x: 1])
 
 Nx.broadcast_vectors([x, y])
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[
+  #Nx.Tensor<
+    vectorized[x: 2][y: 1][z: 2]
+    s64[2][1]
+    [
+      [
+        [
+          [
+            [0],
+            [1]
+          ],
+          [
+            [0],
+            [1]
+          ]
+        ]
+      ],
+      [
+        [
+          [
+            [0],
+            [1]
+          ],
+          [
+            [0],
+            [1]
+          ]
+        ]
+      ]
+    ]
+  >,
+  #Nx.Tensor<
+    vectorized[x: 2][y: 1][z: 2]
+    s64
+    [
+      [
+        [0, 0]
+      ],
+      [
+        [0, 0]
+      ]
+    ]
+  >
+]
 ```
 
 The key difference is that all vectorized axes will end up with the same size in all resulting tensors, effectively behaving the same as `Nx.broadcast` does for non-vectorized shapes. Specifically, we can see that the `x` tensor gets the new `z: 2` axis and `y` gets both `x: 2, y: 1`, where the `:x` axis was already present, but has now been resized.
@@ -303,6 +702,12 @@ defmodule BroadcastVectorsExample do
 end
 ```
 
+<!-- livebook:{"output":true} -->
+
+```
+{:module, BroadcastVectorsExample, <<70, 79, 82, 49, 0, 0, 15, ...>>, true}
+```
+
 Let's give it once again another try:
 
 ```elixir
@@ -323,4 +728,31 @@ y_vec = Nx.concatenate([y, Nx.multiply(y, 2)]) |> Nx.reshape({2, 3}) |> Nx.vecto
   BroadcastVectorsExample.vectorized_sum_and_multiply(x_vec, y),
   BroadcastVectorsExample.vectorized_sum_and_multiply(x_vec, y_vec)
 }
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{#Nx.Tensor<
+   vectorized[rows: 2]
+   s64[3]
+   [
+     [10, 6, 10],
+     [10, 6, 10]
+   ]
+ >,
+ #Nx.Tensor<
+   vectorized[rows: 2][cols: 2]
+   s64[3]
+   [
+     [
+       [10, 6, 10],
+       [14, 11, 16]
+     ],
+     [
+       [10, 6, 10],
+       [14, 11, 16]
+     ]
+   ]
+ >}
 ```
