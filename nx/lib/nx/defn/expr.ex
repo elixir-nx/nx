@@ -191,7 +191,7 @@ defmodule Nx.Defn.Expr do
     last
   end
 
-  defp non_vectorized_cond(clauses, last = out, context) do
+  defp non_vectorized_cond(clauses, out_template = last, context) do
     {preds, exprs} = Enum.unzip(clauses)
 
     {broadcasted_clauses, vectorized_axes} =
@@ -211,10 +211,10 @@ defmodule Nx.Defn.Expr do
 
     out =
       if vectorized_axes == [] do
-        out
+        out_template
       else
         {result, []} =
-          Composite.traverse(out, vectorized_axes, fn
+          Composite.traverse(out_template, vectorized_axes, fn
             %T{} = expr, [axes | tail] ->
               {%{expr | vectorized_axes: axes}, tail}
 
@@ -538,6 +538,9 @@ defmodule Nx.Defn.Expr do
         {inner_arg, inner_context} = to_param_expr(inner_initial, :while)
         inner_condition = condition_body.(:condition, inner_arg) |> to_pred(line, file, :while)
         inner_body = condition_body.(:body, inner_arg) |> to_container_expr()
+
+        compatible_while!(file, line, inner_initial, inner_body)
+
         inner_while = while(inner_initial, inner_context, inner_arg, inner_condition, inner_body)
 
         vectorized_while__build_outer_while(
