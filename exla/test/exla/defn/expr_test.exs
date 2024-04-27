@@ -1465,6 +1465,38 @@ defmodule EXLA.Defn.ExprTest do
       assert_equal(while_inside_cond(1, 1), 1)
       assert_equal(while_inside_cond(1, 0), 2)
     end
+
+    defn cond_inside_while_vectorized(t, size) do
+      down = Nx.u8(0)
+      up = Nx.u8(1)
+      mode = down
+      i = Nx.s64(0)
+
+      [t, node, i, size, mode] =
+        Nx.broadcast_vectors([t, 0, i, size, mode])
+
+      {t, _} =
+        while {t, {node, i, _mode = mode, size, up}},
+              node != -1 and i >= 0 do
+          mode =
+            cond do
+              node >= size -> up
+              true -> -1
+            end
+
+          {t, {node, i - 1, mode, size, up}}
+        end
+
+      t
+    end
+
+    test "cond inside vectorized while" do
+      assert_raise CompileError,
+                   ~r/the do-block in while must return tensors with the same shape, type, and names as the initial arguments./,
+                   fn ->
+                     cond_inside_while_vectorized(Nx.vectorize(Nx.tensor([1, 2, 3]), :a), 3)
+                   end
+    end
   end
 
   describe "map" do
