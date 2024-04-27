@@ -191,7 +191,7 @@ defmodule Nx.Defn.Expr do
     last
   end
 
-  defp non_vectorized_cond(clauses, last, context) do
+  defp non_vectorized_cond(clauses, out_template = last, context) do
     {preds, exprs} = Enum.unzip(clauses)
 
     {broadcasted_clauses, vectorized_axes} =
@@ -211,10 +211,10 @@ defmodule Nx.Defn.Expr do
 
     out =
       if vectorized_axes == [] do
-        last
+        out_template
       else
         {result, []} =
-          Composite.traverse(last, vectorized_axes, fn
+          Composite.traverse(out_template, vectorized_axes, fn
             %T{} = expr, [axes | tail] ->
               {%{expr | vectorized_axes: axes}, tail}
 
@@ -325,7 +325,7 @@ defmodule Nx.Defn.Expr do
               head
             end
 
-          head = Nx.as_type(head, Nx.type(node))
+          head = Nx.as_type(head, binary_type(node, head))
 
           {expr(head, context, :elem, [expr, i]), {tail, i + 1, axes_tail}}
       end)
