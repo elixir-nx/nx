@@ -703,7 +703,6 @@ defmodule Nx.Defn.Expr do
         inner_while,
         Composite.flatten_list([outer_arg]),
         fn node, [target | targets] ->
-          # [node, target] = Nx.broadcast_vectors([node, target], align_ranks: true)
           target = Nx.devectorize(target)
           starts = [index_param | List.duplicate(0, tuple_size(target.shape) - 1)]
 
