@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.2 (2024-04-27)
+
+  * Cast start indexes types when slicing a tensor
+
 ## v0.7.1 (2024-02-27)
 
   * Add CustomCallOp for QR decomposition

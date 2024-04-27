@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.2 (2024-04-27)
+
+  * [Nx] Ensure shapes and types are checked inside `while` when there are vectorized tensors
+
 ## v0.7.1 (2024-02-27)
 
   * [Nx.LinAlg] Minor speed up to `Nx.LinAlg.qr/2` default implementation
