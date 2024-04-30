@@ -12,7 +12,7 @@ defmodule EXLA.Shape do
   @doc false
   def get_shape_info(ref) when is_reference(ref) do
     {dims_term, type_str} = EXLA.NIF.get_shape_info(ref) |> unwrap!()
-     %Shape{dims: dims_term, dtype: charlist_to_dtype(type_str), ref: ref}
+    %Shape{dims: dims_term, dtype: charlist_to_dtype(type_str), ref: ref}
   end
 
   @doc """
