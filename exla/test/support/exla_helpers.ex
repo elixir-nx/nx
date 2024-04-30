@@ -47,16 +47,6 @@ defmodule EXLAHelpers do
     Enum.flat_map(tensors, &exla_shape/1)
   end
 
-  defp exla_shape(tensors) when is_tuple(tensors) do
-    tensors
-    |> Tuple.to_list()
-    |> Enum.flat_map(&exla_shape/1)
-  end
-
-  defp exla_shape(%Nx.Tensor{type: {:tuple, _size}, data: %{args: args}}) do
-    Enum.flat_map(args, &exla_shape/1)
-  end
-
   defp exla_shape(%{type: :token}) do
     [EXLA.Shape.make_token_shape()]
   end

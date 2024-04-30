@@ -191,9 +191,6 @@ defmodule EXLA.NIF do
   def make_token_shape(),
     do: :erlang.nif_error(:undef)
 
-  def make_tuple_shape(_shapes),
-    do: :erlang.nif_error(:undef)
-
   def get_host_client(),
     do: :erlang.nif_error(:undef)
 

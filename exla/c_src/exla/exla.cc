@@ -323,22 +323,6 @@ ERL_NIF_TERM make_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, exla::nif::make<xla::Shape>(env, shape));
 }
 
-ERL_NIF_TERM make_tuple_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 1) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  std::vector<xla::Shape> shapes;
-
-  if (!exla::nif::get_list<xla::Shape>(env, argv[0], shapes)) {
-    return exla::nif::error(env, "Unable to get shapes.");
-  }
-
-  xla::Shape shape = xla::ShapeUtil::MakeTupleShape(shapes);
-
-  return exla::nif::ok(env, exla::nif::make<xla::Shape>(env, shape));
-}
-
 ERL_NIF_TERM make_token_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 0) {
     return exla::nif::error(env, "Bad argument count.");
@@ -823,7 +807,6 @@ static ErlNifFunc exla_funcs[] = {
     // Shape
     {"make_shape", 2, make_shape},
     {"make_token_shape", 0, make_token_shape},
-    {"make_tuple_shape", 1, make_tuple_shape},
     {"get_shape_info", 1, get_shape_info},
     // Log Sink
     {"start_log_sink", 1, start_log_sink},

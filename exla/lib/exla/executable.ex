@@ -87,7 +87,6 @@ defmodule EXLA.Executable do
     shapes =
       Enum.flat_map(List.wrap(shapes), fn shape ->
         case shape do
-          %Shape{dtype: {:tuple, shapes}} -> shapes
           shapes when is_list(shapes) -> shapes
           %Shape{} -> [shape]
         end
@@ -102,17 +101,7 @@ defmodule EXLA.Executable do
     end)
   end
 
-  defp strip_shape(%Shape{dtype: {:tuple, shapes}}) do
-    subshapes = Enum.map(shapes, &strip_shape/1)
-    %{dtype: {:tuple, subshapes}, dims: {length(subshapes)}}
-  end
-
   defp strip_shape(%Shape{dtype: dtype, dims: dims}), do: %{dtype: dtype, dims: dims}
-
-  defp reconstruct_shapes(%{dtype: {:tuple, shapes}}) do
-    subshapes = Enum.map(shapes, &reconstruct_shapes/1)
-    EXLA.Shape.make_tuple_shape(subshapes)
-  end
 
   defp reconstruct_shapes(%{dtype: dtype, dims: dims}) do
     EXLA.Shape.make_shape(dtype, dims)

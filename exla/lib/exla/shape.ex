@@ -11,14 +11,8 @@ defmodule EXLA.Shape do
 
   @doc false
   def get_shape_info(ref) when is_reference(ref) do
-    case EXLA.NIF.get_shape_info(ref) |> unwrap!() do
-      {dims_term, type_str} ->
-        %Shape{dims: dims_term, dtype: charlist_to_dtype(type_str), ref: ref}
-
-      children when is_list(children) ->
-        children = Enum.map(children, &get_shape_info/1)
-        %Shape{dims: {length(children)}, dtype: {:tuple, children}, ref: ref}
-    end
+    {dims_term, type_str} = EXLA.NIF.get_shape_info(ref) |> unwrap!()
+    %Shape{dims: dims_term, dtype: charlist_to_dtype(type_str), ref: ref}
   end
 
   @doc """
@@ -38,18 +32,6 @@ defmodule EXLA.Shape do
     %Shape{dims: {}, dtype: :token, ref: ref}
   end
 
-  @doc """
-  Creates a tuple shape with the given shapes.
-  """
-  def make_tuple_shape(shapes) when is_list(shapes) do
-    refs =
-      shapes
-      |> Enum.map(& &1.ref)
-
-    ref = EXLA.NIF.make_tuple_shape(refs) |> unwrap!()
-    %Shape{dims: {length(shapes)}, dtype: {:tuple, shapes}, ref: ref}
-  end
-
   defp validate_dims!(_dims, 0), do: :ok
 
   defp validate_dims!(dims, i)
@@ -63,10 +45,6 @@ defmodule EXLA.Shape do
   @doc """
   Returns the shape size in bytes.
   """
-  def byte_size(%EXLA.Shape{dtype: {:tuple, shapes}}) do
-    Enum.reduce(shapes, 0, &(byte_size(&1) + &2))
-  end
-
   def byte_size(%EXLA.Shape{dtype: {_, bit_size}, dims: dims}) do
     Tuple.product(dims) * div(bit_size, 8)
   end

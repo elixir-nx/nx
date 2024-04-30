@@ -23,7 +23,7 @@ defmodule EXLA.ExecutableTest do
       t2 = BinaryBuffer.from_binary(<<1::32-native>>, Shape.make_shape({:s, 32}, {}))
 
       assert [a = %DeviceBuffer{}] =
-               run_one([t1, t2], [], Shape.make_tuple_shape([t1.shape]), fn b, x, y ->
+               run_one([t1, t2], [], [t1.shape], fn b, x, y ->
                  [Value.add(b, x, y)]
                end)
 
@@ -53,7 +53,7 @@ defmodule EXLA.ExecutableTest do
                end)
 
       assert [%DeviceBuffer{}] =
-               run_one([t1, t2], [], Shape.make_tuple_shape([t1.shape]), fn b, x, y ->
+               run_one([t1, t2], [], [t1.shape], fn b, x, y ->
                  [Value.add(b, x, y)]
                end)
 
@@ -88,7 +88,7 @@ defmodule EXLA.ExecutableTest do
       t2 = BinaryBuffer.from_binary(<<2::32-native>>, Shape.make_shape({:s, 32}, {}))
 
       assert [a = %DeviceBuffer{}] =
-               run_one([t1, t2], [], {t1.shape}, fn b, x, y ->
+               run_one([t1, t2], [], [t1.shape], fn b, x, y ->
                  [Value.add(b, x, y)]
                end)
 
@@ -100,7 +100,7 @@ defmodule EXLA.ExecutableTest do
       t2 = BinaryBuffer.from_binary(<<2::32-native>>, Shape.make_shape({:s, 32}, {}))
 
       assert [a = %DeviceBuffer{}, b = %DeviceBuffer{}] =
-               run_one([t1, t2], [], Shape.make_tuple_shape([t1.shape, t2.shape]), fn _b, x, y ->
+               run_one([t1, t2], [], [t1.shape, t2.shape], fn _b, x, y ->
                  [x, y]
                end)
 
@@ -117,7 +117,7 @@ defmodule EXLA.ExecutableTest do
                run_one(
                  [t1, t2],
                  [device_id: 1],
-                 EXLA.Shape.make_tuple_shape([t1.shape, t2.shape, t1.shape]),
+                 [t1.shape, t2.shape, t1.shape],
                  fn b, x, y ->
                    [x, y, Value.add(b, x, y)]
                  end
@@ -158,7 +158,7 @@ defmodule EXLA.ExecutableFeedTest do
 
       assert res =
                Task.async(fn ->
-                 run_one([], [], Shape.make_tuple_shape([Shape.make_token_shape()]), fn b ->
+                 run_one([], [], [Shape.make_token_shape()], fn b ->
                    token = Value.create_token(b)
 
                    {new_token, [val]} = Value.infeed(token, t.shape)
@@ -183,7 +183,7 @@ defmodule EXLA.ExecutableFeedTest do
 
       assert res =
                Task.async(fn ->
-                 run_one([], [], {token_shape, t.shape}, fn b ->
+                 run_one([], [], [token_shape, t.shape], fn b ->
                    token = Value.create_token(b)
 
                    {token, [val]} = Value.infeed(token, t.shape)

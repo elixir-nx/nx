@@ -393,38 +393,6 @@ xla::Status ExlaClient::TransferToInfeed(ErlNifEnv* env,
                                          ERL_NIF_TERM data,
                                          const xla::Shape& shape,
                                          int device_id) {
-  // Tuples need to be decomposed a bit
-  if (shape.IsTuple()) {
-    // unsupported right now
-    if (xla::ShapeUtil::IsNestedTuple(shape)) {
-      return xla::InvalidArgument("nested tuples are not supported in infeed operation");
-    }
-
-    int num_elements = xla::ShapeUtil::TupleElementCount(shape);
-    std::vector<const char*> buf_ptrs;
-    buf_ptrs.reserve(num_elements);
-
-    ERL_NIF_TERM head, tail;
-    while (enif_get_list_cell(env, data, &head, &tail)) {
-      ErlNifBinary tmp_bin;
-      if (!nif::get_binary(env, head, &tmp_bin)) {
-        return xla::InvalidArgument("infeed operation expects a list of binaries");
-      }
-
-      const char* data_ptr = const_cast<char*>(reinterpret_cast<char*>(tmp_bin.data));
-      buf_ptrs.push_back(data_ptr);
-      data = tail;
-    }
-
-    xla::BorrowingLiteral literal(buf_ptrs, shape);
-
-    EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice * device, client_->LookupDevice(device_id));
-
-    xla::Status status = device->TransferToInfeed(literal);
-
-    return status;
-  }
-
   // Fast path to avoid any traversal when not sending Tuples
   ERL_NIF_TERM head, tail;
   if (!enif_get_list_cell(env, data, &head, &tail)) {
