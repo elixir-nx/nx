@@ -479,15 +479,8 @@ int get_primitive_type(ErlNifEnv* env, ERL_NIF_TERM term, xla::PrimitiveType* ty
 
 ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape) {
   if (shape.IsTuple()) {
-    int element_count = xla::ShapeUtil::TupleElementCount(shape);
-    std::vector<ERL_NIF_TERM> terms;
-    terms.reserve(element_count);
-    for (int i = 0; i < element_count; i++) {
-      xla::Shape shape_elem = xla::ShapeUtil::GetTupleElementShape(shape, i);
-      ERL_NIF_TERM shape_term = make<xla::Shape>(env, shape_elem);
-      terms.push_back(shape_term);
-    }
-    return enif_make_list_from_array(env, &terms[0], element_count);
+    std::cerr << "Unexpected tuple shape" << std::endl;
+    exit(1);
   } else if (shape.IsArray()) {
     xla::PrimitiveType type = shape.element_type();
     absl::Span<const int64> dims = shape.dimensions();
