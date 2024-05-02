@@ -213,12 +213,17 @@ ERL_NIF_TERM create_buffer_from_device_pointer(ErlNifEnv* env, int argc, const E
 
   void* ptr;
   if (pointer_kind == "local") {
+    if (pointer_vec.size() != sizeof(void*)) {
+      // This helps prevent segfaults if someone passes an IPC handle instead of
+      // a local pointer.
+      return exla::nif::error(env, "Invalid pointer size for selected mode.");
+    }
     unsigned char* bytePtr = reinterpret_cast<unsigned char*>(&ptr);
     for (size_t i = 0; i < sizeof(void*); i++) {
       bytePtr[i] = pointer_vec[i];
     }
   } else if (pointer_kind == "cuda_ipc") {
-    auto result = get_pointer_for_ipc_handle(pointer_vec);
+    auto result = get_pointer_for_ipc_handle(pointer_vec, device_id);
     if (result.second) {
       return exla::nif::error(env, "Unable to get pointer for IPC handle.");
     }

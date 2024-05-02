@@ -25,4 +25,16 @@ defmodule EXLA.DeviceMemorySharingTest do
       assert Nx.to_binary(t1) == Nx.to_binary(t2)
     end
   end
+
+  @tag :cuda_required
+  test "ipc handles don't crash the runtime when :local mode is selected" do
+    assert {:error, ~c"Invalid pointer size for selected mode."} ==
+             Nx.from_pointer(
+               {EXLA.Backend, client_name: :cuda},
+               Enum.to_list(0..63),
+               {:f, 32},
+               {1},
+               mode: :local
+             )
+  end
 end

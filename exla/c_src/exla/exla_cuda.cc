@@ -20,7 +20,12 @@ std::pair<std::vector<unsigned char>, int> get_cuda_ipc_handle(std::uintptr_t pt
   return std::make_pair(result, status != cudaSuccess);
 }
 
-std::pair<void*, int> get_pointer_for_ipc_handle(std::vector<int64_t> handle_list) {
+std::pair<void*, int> get_pointer_for_ipc_handle(std::vector<int64_t> handle_list, int device_id) {
+  if (handle_list.size() != sizeof(cudaIpcMemHandle_t)) {
+    printf("Error: Invalid CUDA IPC memory handle size\n");
+    return std::make_pair(nullptr, 1);  // Return with error status
+  }
+
   unsigned char ipc_handle_data[sizeof(cudaIpcMemHandle_t)];
   for (int i = 0; i < sizeof(cudaIpcMemHandle_t); i++) {
     ipc_handle_data[i] = (uint8_t)handle_list[i];
@@ -30,7 +35,7 @@ std::pair<void*, int> get_pointer_for_ipc_handle(std::vector<int64_t> handle_lis
   memcpy(&ipc_handle, ipc_handle_data, sizeof(cudaIpcMemHandle_t));
 
   int* ptr;
-  cudaError_t cuda_status = cudaSetDevice(0);  // Assuming device 0, change as needed
+  cudaError_t cuda_status = cudaSetDevice(device_id);  // Assuming device 0, change as needed
   if (cuda_status != cudaSuccess) {
     printf("Error setting CUDA device: %s\n", cudaGetErrorString(cuda_status));
     return std::make_pair(nullptr, 1);  // Return with error status
