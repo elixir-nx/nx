@@ -54,7 +54,7 @@ std::pair<std::vector<unsigned char>, int> get_cuda_ipc_handle(std::uintptr_t pt
   return std::make_pair(std::vector<unsigned char>(0), 1);
 }
 
-std::pair<void*, int> get_pointer_for_ipc_handle(std::vector<int64_t> handle_list) {
+std::pair<void*, int> get_pointer_for_ipc_handle(std::vector<int64_t> handle_list, int device_id) {
   return std::make_pair(nullptr, 1);
 }
 #endif
