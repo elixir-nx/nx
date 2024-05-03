@@ -4,26 +4,27 @@ defmodule EXLA.Executable do
   """
 
   alias __MODULE__
-  alias EXLA.{BinaryBuffer, DeviceBuffer, Shape}
+  alias EXLA.{BinaryBuffer, DeviceBuffer}
 
-  @enforce_keys [:client, :ref, :output_shape, :num_replicas, :num_partitions, :device_id]
-  defstruct [:client, :ref, :output_shape, :num_replicas, :num_partitions, :device_id]
+  @enforce_keys [:client, :ref, :output_typespecs, :num_replicas, :num_partitions, :device_id]
+  defstruct [:client, :ref, :output_typespecs, :num_replicas, :num_partitions, :device_id]
 
   @doc """
   Runs the given executable with a list of lists as inputs and the given options.
   """
   def run(%Executable{} = executable, [subinputs | _] = inputs, options \\ [])
       when is_list(subinputs) do
-    %{client: client, device_id: device_id, output_shape: output_shape, ref: ref} = executable
+    %{client: client, device_id: device_id, output_typespecs: output_typespecs, ref: ref} =
+      executable
 
     for data_and_device_id <- run(client, ref, device_id, inputs, options) do
-      decompose_output(data_and_device_id, output_shape, client)
+      decompose_output(data_and_device_id, output_typespecs, client)
     end
   end
 
   def serialize(%Executable{
         ref: executable,
-        output_shape: out_shape,
+        output_typespecs: output_typespecs,
         num_replicas: num_replicas,
         num_partitions: num_partitions,
         device_id: device_id
@@ -34,11 +35,9 @@ defmodule EXLA.Executable do
       |> unwrap!()
       |> IO.iodata_to_binary()
 
-    stripped_shape = strip_shape(out_shape)
-
     %{
       serialized: serialized_exec,
-      output_shape: stripped_shape,
+      output_typespecs: output_typespecs,
       num_replicas: num_replicas,
       num_partitions: num_partitions,
       device_id: device_id
@@ -57,7 +56,6 @@ defmodule EXLA.Executable do
         exec_data
         |> Map.put(:ref, ref)
         |> Map.put(:client, client)
-        |> Map.update!(:output_shape, &reconstruct_shapes/1)
         |> then(&struct(__MODULE__, &1))
 
       _other ->
@@ -69,8 +67,11 @@ defmodule EXLA.Executable do
     inputs =
       for subinputs <- inputs do
         Enum.map(subinputs, fn
-          %DeviceBuffer{ref: ref} -> ref
-          %BinaryBuffer{data: data, shape: shape} -> {data, shape.ref}
+          %DeviceBuffer{ref: ref} ->
+            ref
+
+          %BinaryBuffer{data: data, typespec: typespec} ->
+            {data, EXLA.Typespec.nif_encode(typespec)}
         end)
       end
 
@@ -83,28 +84,14 @@ defmodule EXLA.Executable do
     unwrap!(data)
   end
 
-  defp decompose_output({data, device_id}, shapes, client) do
-    shapes =
-      Enum.flat_map(List.wrap(shapes), fn shape ->
-        case shape do
-          shapes when is_list(shapes) -> shapes
-          %Shape{} -> [shape]
-        end
-      end)
+  defp decompose_output({data, device_id}, output_typespecs, client) do
+    Enum.zip_with(data, output_typespecs, fn
+      buf, typespec when is_reference(buf) ->
+        DeviceBuffer.from_ref(buf, client, device_id, typespec)
 
-    Enum.zip_with(data, shapes, fn
-      buf, subshape when is_reference(buf) ->
-        DeviceBuffer.from_ref(buf, client, device_id, subshape)
-
-      buf, subshape when is_binary(buf) ->
-        BinaryBuffer.from_binary(buf, subshape)
+      buf, typespec when is_binary(buf) ->
+        BinaryBuffer.from_binary(buf, typespec)
     end)
-  end
-
-  defp strip_shape(%Shape{dtype: dtype, dims: dims}), do: %{dtype: dtype, dims: dims}
-
-  defp reconstruct_shapes(%{dtype: dtype, dims: dims}) do
-    EXLA.Shape.make_shape(dtype, dims)
   end
 
   defp unwrap!(:ok), do: :ok

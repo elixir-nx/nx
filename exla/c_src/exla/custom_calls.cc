@@ -1,9 +1,10 @@
 #include "custom_calls.h"
+#include "exla_nif_util.h"
 
-#include <Eigen/Dense>
-#include <Eigen/QR>
+#include "xla/service/custom_call_target_registry.h"
 
-#include "builder.h"
+#include "Eigen/Dense"
+#include "Eigen/QR"
 
 template <typename DataType>
 void single_matrix_qr_cpu_custom_call(DataType *q_out, DataType *r_out, DataType *in, int64_t m, int64_t k, int64_t n, bool complete) {
@@ -103,3 +104,8 @@ void qr_cpu_custom_call_f32(void *out[], const void *in[]) {
 void qr_cpu_custom_call_f64(void *out[], const void *in[]) {
   qr_cpu_custom_call<double>(out, in);
 }
+
+XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM("qr_cpu_custom_call_f32", qr_cpu_custom_call_f32);
+XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM("qr_cpu_custom_call_f64", qr_cpu_custom_call_f64);
+XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM("qr_cpu_custom_call_f16", qr_cpu_custom_call_f16);
+XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM("qr_cpu_custom_call_bf16", qr_cpu_custom_call_bf16);

@@ -120,12 +120,13 @@ defmodule EXLA.Defn.Outfeed do
     {infeeds, {compiled_hooks, token}} =
       entries
       |> List.keysort(1, :desc)
-      |> Enum.map_reduce({compiled_hooks, token}, fn {pos, _, shape}, {compiled_hooks, token} ->
+      |> Enum.map_reduce({compiled_hooks, token}, fn {pos, _, typespec},
+                                                     {compiled_hooks, token} ->
         next_flag = next_hook(compiled_hooks)
-        compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed, pos, shape})
+        compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed, pos, typespec})
 
-        token = Value.outfeed(Value.constant_r0(builder, next_flag, {:u, 16}), token)
-        {token, [input]} = Value.infeed(token, shape)
+        token = Value.outfeed(Value.constant(builder, [next_flag], flag_typespec()), token)
+        {token, [input]} = Value.infeed(token, [typespec])
 
         {{pos, input}, {compiled_hooks, token}}
       end)
@@ -133,14 +134,16 @@ defmodule EXLA.Defn.Outfeed do
     %{outfeed | compiled_hooks: compiled_hooks, token: token, infeeds: infeeds}
   end
 
+  defp flag_typespec(), do: EXLA.Typespec.tensor({:u, 16}, {})
+
   @doc """
   Adds a function hook if it has a callback defined for it.
   """
   def maybe_add_function_hook(%Outfeed{} = outfeed, builder, tuple, name, expr) do
     cond do
       name in outfeed.used_hooks ->
-        {outfeed, flag, shapes} = outfeed_flat_tuple(outfeed, builder, tuple)
-        put_in(outfeed.compiled_hooks[flag], {:function, shapes, name, Nx.to_template(expr)})
+        {outfeed, flag, typespecs} = outfeed_flat_tuple(outfeed, builder, tuple)
+        put_in(outfeed.compiled_hooks[flag], {:function, typespecs, name, Nx.to_template(expr)})
 
       outfeed.token ->
         outfeed
@@ -156,15 +159,15 @@ defmodule EXLA.Defn.Outfeed do
   Used by streams. Only one is allowed. Requires configuration.
   """
   def add_stream_hook(%Outfeed{} = outfeed, builder, tuple) do
-    {outfeed, flag, shapes} = outfeed_flat_tuple(outfeed, builder, tuple)
+    {outfeed, flag, typespecs} = outfeed_flat_tuple(outfeed, builder, tuple)
     # We don't know the pid+ref pair for the stream, so we store it
     # under a special key called :stream and revert to the flag once configured
-    put_in(outfeed.compiled_hooks[:stream], {flag, shapes})
+    put_in(outfeed.compiled_hooks[:stream], {flag, typespecs})
   end
 
   def configure_stream_hook(%Outfeed{} = outfeed, pid, ref) when is_pid(pid) do
-    {{flag, shapes}, outfeed} = pop_in(outfeed.compiled_hooks[:stream])
-    {shapes, put_in(outfeed.compiled_hooks[flag], {:stream, shapes, pid, ref})}
+    {{flag, typespecs}, outfeed} = pop_in(outfeed.compiled_hooks[:stream])
+    {typespecs, put_in(outfeed.compiled_hooks[flag], {:stream, typespecs, pid, ref})}
   end
 
   @doc """
@@ -175,22 +178,23 @@ defmodule EXLA.Defn.Outfeed do
   def close(outfeed, builder)
 
   def close(%Outfeed{} = outfeed, %Function{} = builder) when will_outfeed(outfeed),
-    do: update_in(outfeed.token, &Value.outfeed(Value.constant_r0(builder, 0, {:u, 16}), &1))
+    do:
+      update_in(outfeed.token, &Value.outfeed(Value.constant(builder, [0], flag_typespec()), &1))
 
   def close(%Outfeed{} = outfeed, _builder),
     do: outfeed
 
   defp outfeed_flat_tuple(%Outfeed{token: token, compiled_hooks: ch} = outfeed, builder, tuple) do
     flag = next_hook(ch)
-    token = Value.outfeed(Value.constant_r0(builder, flag, {:u, 16}), token)
-    shapes = Enum.map(tuple, &Value.get_shape/1)
+    token = Value.outfeed(Value.constant(builder, [flag], flag_typespec()), token)
+    typespecs = Enum.map(tuple, &Value.get_typespec/1)
 
     token =
       Enum.reduce(tuple, token, fn elem, token ->
         Value.outfeed(elem, token)
       end)
 
-    {%{outfeed | token: token}, flag, shapes}
+    {%{outfeed | token: token}, flag, typespecs}
   end
 
   # The index 0 is served for closing streams
@@ -200,7 +204,7 @@ defmodule EXLA.Defn.Outfeed do
 
   @doc """
   Receives a client, device_id, and mappings of u16 to
-  `{shapes, {pid, ref} | {fun, template}}` pairs to
+  `{typespecs, {pid, ref} | {fun, template}}` pairs to
   deliver/execute the outputs. The computation must emit
   a 0 flag on exit.
   """
@@ -227,12 +231,12 @@ defmodule EXLA.Defn.Outfeed do
     # Copy the group leader so we report to the proper device
     Process.group_leader(self(), group_leader)
     ref = make_ref()
-    shape = EXLA.Shape.make_shape({:u, 16}, {})
-    loop(client, device_id, ref, shape, hooks, compiled_hooks, infeeds)
+    typespec = EXLA.Typespec.tensor({:u, 16}, {})
+    loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
   end
 
-  defp loop(client, device_id, ref, shape, hooks, compiled_hooks, infeeds) do
-    :ok = EXLA.Client.from_outfeed(client, device_id, [shape], self(), ref)
+  defp loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds) do
+    :ok = EXLA.Client.from_outfeed(client, device_id, [typespec], self(), ref)
 
     receive do
       {^ref, <<0::native-unsigned-16>>} ->
@@ -240,30 +244,30 @@ defmodule EXLA.Defn.Outfeed do
 
       {^ref, <<flag::native-unsigned-16>>} ->
         case Map.fetch!(compiled_hooks, flag) do
-          {:infeed, index, data_shape} ->
+          {:infeed, index, data_typespec} ->
             data =
               case Map.fetch!(infeeds, index) do
                 %EXLA.DeviceBuffer{} = buffer -> EXLA.DeviceBuffer.read(buffer)
                 %EXLA.BinaryBuffer{data: data} -> data
               end
 
-            EXLA.Client.to_infeed(client, device_id, [{data, data_shape}])
-            loop(client, device_id, ref, shape, hooks, compiled_hooks, infeeds)
+            EXLA.Client.to_infeed(client, device_id, [{data, data_typespec}])
+            loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
 
-          {:stream, shapes, recv_pid, recv_ref} ->
-            :ok = EXLA.Client.from_outfeed(client, device_id, shapes, recv_pid, recv_ref)
-            loop(client, device_id, ref, shape, hooks, compiled_hooks, infeeds)
+          {:stream, typespecs, recv_pid, recv_ref} ->
+            :ok = EXLA.Client.from_outfeed(client, device_id, typespecs, recv_pid, recv_ref)
+            loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
 
-          {:function, shapes, name, template} ->
+          {:function, typespecs, name, template} ->
             fun = Map.fetch!(hooks, name)
-            length = length(shapes)
+            length = length(typespecs)
             parent = self()
             ref = make_ref()
             pid = spawn(fn -> apply_hook(parent, ref, length, fun, template) end)
-            :ok = EXLA.Client.from_outfeed(client, device_id, shapes, pid, ref)
+            :ok = EXLA.Client.from_outfeed(client, device_id, typespecs, pid, ref)
 
             receive do
-              ^ref -> loop(client, device_id, ref, shape, hooks, compiled_hooks, infeeds)
+              ^ref -> loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
             end
         end
     end

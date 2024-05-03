@@ -42,8 +42,8 @@ defmodule EXLA.Backend do
   @impl true
   def from_binary(%T{shape: shape, type: type} = tensor, binary, backend_options) do
     {client, device_id} = client_and_device_id(backend_options)
-    shape = EXLA.Shape.make_shape(type, shape)
-    buffer = EXLA.DeviceBuffer.place_on_device(binary, shape, client, device_id)
+    typespec = EXLA.Typespec.tensor(type, shape)
+    buffer = EXLA.DeviceBuffer.place_on_device(binary, typespec, client, device_id)
     put_in(tensor.data, %B{buffer: buffer})
   end
 
@@ -126,20 +126,20 @@ defmodule EXLA.Backend do
 
     device_id = backend_opts[:device_id] || client.default_device_id
 
-    shape = EXLA.Shape.make_shape(type, dims)
+    typespec = EXLA.Typespec.tensor(type, dims)
 
     result =
       EXLA.NIF.create_buffer_from_device_pointer(
         client.ref,
         pointer,
         opts[:mode],
-        shape.ref,
+        EXLA.Typespec.nif_encode(typespec),
         device_id
       )
 
     case result do
       {:ok, ref} ->
-        buffer = EXLA.DeviceBuffer.from_ref(ref, client, device_id, shape)
+        buffer = EXLA.DeviceBuffer.from_ref(ref, client, device_id, typespec)
         {:ok, %{template | data: %EXLA.Backend{buffer: buffer}}}
 
       error ->

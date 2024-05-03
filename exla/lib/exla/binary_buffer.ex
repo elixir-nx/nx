@@ -3,10 +3,10 @@ defmodule EXLA.BinaryBuffer do
   A buffer where data is kept in a binary.
   """
 
-  @enforce_keys [:data, :shape]
-  defstruct [:data, :shape]
+  @enforce_keys [:data, :typespec]
+  defstruct [:data, :typespec]
 
-  def from_binary(data, shape) do
-    %EXLA.BinaryBuffer{data: data, shape: shape}
+  def from_binary(data, typespec) do
+    %EXLA.BinaryBuffer{data: data, typespec: typespec}
   end
 end
