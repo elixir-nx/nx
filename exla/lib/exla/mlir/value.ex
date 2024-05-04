@@ -371,11 +371,7 @@ defmodule EXLA.MLIR.Value do
       when is_list(fft_length) or is_integer(fft_length) do
     result_types = typespecs_to_mlir_types([typespec])
 
-    fft_type =
-      case fft_kind do
-        :fft -> attr_fft_type(:fft)
-        :ifft -> attr_fft_type(:ifft)
-      end
+    fft_type = attr_fft_type(fft_kind)
 
     attributes = [
       fft_type: fft_type,

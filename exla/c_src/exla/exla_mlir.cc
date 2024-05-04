@@ -21,15 +21,13 @@ std::vector<mlir::Value> MLIRFunction::Op(
 
   auto named_attributes = std::vector<mlir::NamedAttribute>{};
   for (auto const &pair : attributes) {
-    auto key = pair.first;
     auto attribute = builder->getNamedAttr(pair.first, pair.second);
     named_attributes.push_back(attribute);
   }
 
   auto operands_range = mlir::ValueRange{
       llvm::ArrayRef<mlir::Value>(operands.data(), operands.size())};
-  auto attributes_array = llvm::ArrayRef<mlir::NamedAttribute>{
-      llvm::ArrayRef<mlir::NamedAttribute>{named_attributes}};
+  auto attributes_array = llvm::ArrayRef<mlir::NamedAttribute>{named_attributes};
 
   setInsertionPoint();
 
@@ -49,9 +47,7 @@ std::vector<mlir::Value> MLIRFunction::Op(
   auto op = builder->create(op_state);
 
   auto results = op->getResults();
-  auto results_vec = std::vector<mlir::Value>(results.begin(), results.end());
-
-  return results_vec;
+  return std::vector<mlir::Value>(results.begin(), results.end());
 }
 
 std::pair<mlir::Region *, std::vector<mlir::Value>> MLIRFunction::PushRegion(std::vector<mlir::Type> types) {
