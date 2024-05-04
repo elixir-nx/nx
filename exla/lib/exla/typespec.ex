@@ -50,12 +50,27 @@ defmodule EXLA.Typespec do
     %__MODULE__{shape: shape, type: charlist_to_type(type_charlist)}
   end
 
-  defp charlist_to_type(~c"token"), do: :token
-  defp charlist_to_type(~c"pred"), do: {:pred, 8}
-  defp charlist_to_type(~c"bf16"), do: {:bf, 16}
-  defp charlist_to_type([letter | int]), do: {List.to_atom([letter]), List.to_integer(int)}
+  type_to_charlist = %{
+    :token => ~c"token",
+    {:pred, 8} => ~c"pred",
+    {:s, 8} => ~c"s8",
+    {:s, 16} => ~c"s16",
+    {:s, 32} => ~c"s32",
+    {:s, 64} => ~c"s64",
+    {:u, 8} => ~c"u8",
+    {:u, 16} => ~c"u16",
+    {:u, 32} => ~c"u32",
+    {:u, 64} => ~c"u64",
+    {:f, 16} => ~c"f16",
+    {:f, 32} => ~c"f32",
+    {:f, 64} => ~c"f64",
+    {:bf, 16} => ~c"bf16",
+    {:c, 64} => ~c"c64",
+    {:c, 128} => ~c"c128"
+  }
 
-  defp type_to_charlist(:token), do: ~c"token"
-  defp type_to_charlist({:pred, 8}), do: ~c"pred"
-  defp type_to_charlist({type, size}), do: Atom.to_charlist(type) ++ Integer.to_charlist(size)
+  for {type, charlist} <- type_to_charlist do
+    defp charlist_to_type(unquote(charlist)), do: unquote(type)
+    defp type_to_charlist(unquote(type)), do: unquote(charlist)
+  end
 end

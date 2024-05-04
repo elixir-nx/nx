@@ -40,7 +40,7 @@ defmodule EXLA.MLIR.Value do
   for {op, op_name} <- @bin_ops do
     def unquote(op)(%Value{function: func} = lhs, %Value{function: func} = rhs, typespec) do
       result_types = typespecs_to_mlir_types([typespec])
-      op(func, unquote(op_name), [lhs, rhs], result_types) |> hd()
+      op(func, unquote(op_name), [lhs, rhs], result_types) |> one!()
     end
   end
 
@@ -77,7 +77,7 @@ defmodule EXLA.MLIR.Value do
 
     result_types = typespecs_to_mlir_types([Typespec.to_type(typespec, {:pred, 8})])
 
-    op(func, "stablehlo.compare", [lhs, rhs], result_types, attributes: attributes) |> hd()
+    op(func, "stablehlo.compare", [lhs, rhs], result_types, attributes: attributes) |> one!()
   end
 
   @unary_ops %{
@@ -121,7 +121,7 @@ defmodule EXLA.MLIR.Value do
   for {op, op_name} <- @unary_ops do
     def unquote(op)(%Value{function: func} = operand, typespec) do
       result_types = typespecs_to_mlir_types([typespec])
-      op(func, unquote(op_name), [operand], result_types, []) |> hd()
+      op(func, unquote(op_name), [operand], result_types, []) |> one!()
     end
   end
 
@@ -146,7 +146,7 @@ defmodule EXLA.MLIR.Value do
 
       true ->
         result_types = typespecs_to_mlir_types([typespec])
-        op(func, "chlo.is_inf", [operand], result_types) |> hd()
+        op(func, "chlo.is_inf", [operand], result_types) |> one!()
     end
   end
 
@@ -171,8 +171,8 @@ defmodule EXLA.MLIR.Value do
 
       true ->
         result_types = typespecs_to_mlir_types([typespec])
-        is_inf = op(func, "chlo.is_inf", [operand], result_types) |> hd()
-        is_finite = op(func, "stablehlo.is_finite", [operand], result_types) |> hd()
+        is_inf = op(func, "chlo.is_inf", [operand], result_types) |> one!()
+        is_finite = op(func, "stablehlo.is_finite", [operand], result_types) |> one!()
         is_not_inf = bitwise_not(is_inf, typespec)
         is_not_finite = bitwise_not(is_finite, typespec)
         bitwise_and(is_not_inf, is_not_finite, typespec)
@@ -181,19 +181,19 @@ defmodule EXLA.MLIR.Value do
 
   def reshape(%Value{function: func} = operand, typespec) do
     result_types = typespecs_to_mlir_types([typespec])
-    op(func, "stablehlo.reshape", [operand], result_types) |> hd()
+    op(func, "stablehlo.reshape", [operand], result_types) |> one!()
   end
 
   def reverse(%Value{function: func} = operand, dims, typespec) do
     result_types = typespecs_to_mlir_types([typespec])
     attributes = [dimensions: attr_dense_i64_elements(dims)]
-    op(func, "stablehlo.reverse", [operand], result_types, attributes: attributes) |> hd()
+    op(func, "stablehlo.reverse", [operand], result_types, attributes: attributes) |> one!()
   end
 
   def transpose(%Value{function: func} = operand, axes, typespec) do
     result_types = typespecs_to_mlir_types([typespec])
     attributes = [permutation: attr_dense_i64_elements(axes)]
-    op(func, "stablehlo.transpose", [operand], result_types, attributes: attributes) |> hd()
+    op(func, "stablehlo.transpose", [operand], result_types, attributes: attributes) |> one!()
   end
 
   def slice(%Value{function: func} = operand, starts, limits, strides, typespec) do
@@ -205,24 +205,24 @@ defmodule EXLA.MLIR.Value do
       strides: attr_dense_i64_elements(strides)
     ]
 
-    op(func, "stablehlo.slice", [operand], result_types, attributes: attributes) |> hd()
+    op(func, "stablehlo.slice", [operand], result_types, attributes: attributes) |> one!()
   end
 
   def dynamic_slice(%Value{function: func} = operand, starts, lengths, typespec) do
     result_types = typespecs_to_mlir_types([typespec])
     operands = [operand] ++ starts
     attributes = [slice_sizes: attr_dense_i64_elements(lengths)]
-    op(func, "stablehlo.dynamic_slice", operands, result_types, attributes: attributes) |> hd()
+    op(func, "stablehlo.dynamic_slice", operands, result_types, attributes: attributes) |> one!()
   end
 
   def convert(%Value{function: func} = operand, typespec) do
     result_types = typespecs_to_mlir_types([typespec])
-    op(func, "stablehlo.convert", [operand], result_types) |> hd()
+    op(func, "stablehlo.convert", [operand], result_types) |> one!()
   end
 
   def bitcast_convert(%Value{function: func} = operand, typespec) do
     result_types = typespecs_to_mlir_types([typespec])
-    op(func, "stablehlo.bitcast_convert", [operand], result_types) |> hd()
+    op(func, "stablehlo.bitcast_convert", [operand], result_types) |> one!()
   end
 
   def top_k(%Value{function: func} = operand, k, typespecs) do
@@ -260,14 +260,14 @@ defmodule EXLA.MLIR.Value do
   def iota(%Function{} = func, dim, typespec) do
     result_types = typespecs_to_mlir_types([typespec])
     attributes = [iota_dimension: attr_i64(dim)]
-    op(func, "stablehlo.iota", [], result_types, attributes: attributes) |> hd()
+    op(func, "stablehlo.iota", [], result_types, attributes: attributes) |> one!()
   end
 
   def constant(%Function{} = func, data, typespec) do
     result_types = typespecs_to_mlir_types([typespec])
     value = attr_dense_elements(data, typespec.type, typespec.shape)
     attributes = [value: value]
-    op(func, "stablehlo.constant", [], result_types, attributes: attributes) |> hd()
+    op(func, "stablehlo.constant", [], result_types, attributes: attributes) |> one!()
   end
 
   def dot_general(
@@ -296,7 +296,7 @@ defmodule EXLA.MLIR.Value do
       precision_config: "[#{attr_precision_config}, #{attr_precision_config}]"
     ]
 
-    op(func, "stablehlo.dot_general", [lhs, rhs], result_types, attributes: attributes) |> hd()
+    op(func, "stablehlo.dot_general", [lhs, rhs], result_types, attributes: attributes) |> one!()
   end
 
   def broadcast_in_dim(%Value{function: func} = operand, axes, typespec) do
@@ -307,13 +307,13 @@ defmodule EXLA.MLIR.Value do
     ]
 
     op(func, "stablehlo.broadcast_in_dim", [operand], result_types, attributes: attributes)
-    |> hd()
+    |> one!()
   end
 
   def concatenate([%Value{function: func} | _rest] = operands, dimension, typespec) do
     result_types = typespecs_to_mlir_types([typespec])
     attributes = [dimension: attr_i64(dimension)]
-    op(func, "stablehlo.concatenate", operands, result_types, attributes: attributes) |> hd()
+    op(func, "stablehlo.concatenate", operands, result_types, attributes: attributes) |> one!()
   end
 
   def clamp(
@@ -323,7 +323,7 @@ defmodule EXLA.MLIR.Value do
         typespec
       ) do
     result_types = typespecs_to_mlir_types([typespec])
-    op(func, "stablehlo.clamp", [min, operand, max], result_types) |> hd()
+    op(func, "stablehlo.clamp", [min, operand, max], result_types) |> one!()
   end
 
   def select(
@@ -333,7 +333,7 @@ defmodule EXLA.MLIR.Value do
         typespec
       ) do
     result_types = typespecs_to_mlir_types([typespec])
-    op(func, "stablehlo.select", [pred, on_true, on_false], result_types) |> hd()
+    op(func, "stablehlo.select", [pred, on_true, on_false], result_types) |> one!()
   end
 
   def pad(
@@ -352,7 +352,7 @@ defmodule EXLA.MLIR.Value do
       interior_padding: attr_dense_i64_elements(padding_mid)
     ]
 
-    op(func, "stablehlo.pad", [operand, pad], result_types, attributes: attributes) |> hd()
+    op(func, "stablehlo.pad", [operand, pad], result_types, attributes: attributes) |> one!()
   end
 
   defp unzip_padding_config(padding_config),
@@ -378,7 +378,7 @@ defmodule EXLA.MLIR.Value do
       fft_length: attr_dense_i64_elements(List.wrap(fft_length))
     ]
 
-    op(func, "stablehlo.fft", [value], result_types, attributes: attributes) |> hd()
+    op(func, "stablehlo.fft", [value], result_types, attributes: attributes) |> one!()
   end
 
   def scatter(
@@ -415,7 +415,7 @@ defmodule EXLA.MLIR.Value do
       attributes: attributes,
       regions: regions
     )
-    |> hd()
+    |> one!()
   end
 
   defp scatter_computation(%Function{} = function, kind, typespec) do
@@ -464,7 +464,7 @@ defmodule EXLA.MLIR.Value do
       attributes: attributes,
       regions: regions
     )
-    |> hd()
+    |> one!()
   end
 
   defp select_computation(function, direction, typespec) do
@@ -505,7 +505,8 @@ defmodule EXLA.MLIR.Value do
       indices_are_sorted: attr_boolean(false)
     ]
 
-    op(func, "stablehlo.gather", [source, indices], result_types, attributes: attributes) |> hd()
+    op(func, "stablehlo.gather", [source, indices], result_types, attributes: attributes)
+    |> one!()
   end
 
   defp attr_precision_config(precision_config) do
@@ -556,7 +557,7 @@ defmodule EXLA.MLIR.Value do
     ]
 
     op(func, "stablehlo.convolution", [tensor, kernel], result_types, attributes: attributes)
-    |> hd()
+    |> one!()
   end
 
   defp attr_conv_dimension_numbers(dimension_numbers) do
@@ -605,12 +606,14 @@ defmodule EXLA.MLIR.Value do
       transpose_a: transpose_a
     ]
 
-    op(func, "stablehlo.triangular_solve", [a, b], result_types, attributes: attributes) |> hd()
+    op(func, "stablehlo.triangular_solve", [a, b], result_types, attributes: attributes) |> one!()
   end
 
   def dynamic_update_slice(%Value{function: func} = operand, updates, starts, typespec) do
     result_types = typespecs_to_mlir_types([typespec])
-    op(func, "stablehlo.dynamic_update_slice", [operand, updates] ++ starts, result_types) |> hd()
+
+    op(func, "stablehlo.dynamic_update_slice", [operand, updates] ++ starts, result_types)
+    |> one!()
   end
 
   def reduce(
@@ -672,7 +675,7 @@ defmodule EXLA.MLIR.Value do
     regions = [mapper]
 
     op(func, "stablehlo.map", inputs, result_types, attributes: attributes, regions: regions)
-    |> hd()
+    |> one!()
   end
 
   def if_op(
@@ -698,12 +701,12 @@ defmodule EXLA.MLIR.Value do
 
   def outfeed(inputs, %Value{function: func} = token) do
     result_types = [type_token()]
-    op(func, "stablehlo.outfeed", inputs ++ [token], result_types) |> hd()
+    op(func, "stablehlo.outfeed", inputs ++ [token], result_types) |> one!()
   end
 
   def create_token(%Function{} = func) do
     result_types = [type_token()]
-    op(func, "stablehlo.create_token", [], result_types) |> hd()
+    op(func, "stablehlo.create_token", [], result_types) |> one!()
   end
 
   def call(%Function{} = func, args, %Function{} = computation, typespecs) do
@@ -760,7 +763,7 @@ defmodule EXLA.MLIR.Value do
     ]
 
     result =
-      op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes) |> hd()
+      op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes) |> one!()
 
     q = get_tuple_element(result, 0, q_typespec)
     r = get_tuple_element(result, 1, r_typespec)
@@ -773,7 +776,7 @@ defmodule EXLA.MLIR.Value do
     attributes = [index: attr_i32(index)]
 
     op(func, "stablehlo.get_tuple_element", [operand], result_types, attributes: attributes)
-    |> hd()
+    |> one!()
   end
 
   def get_typespec(value) do
@@ -792,6 +795,12 @@ defmodule EXLA.MLIR.Value do
   defp unwrap!(:ok), do: :ok
   defp unwrap!({:ok, value}), do: value
   defp unwrap!(other), do: raise("#{inspect(other)}")
+
+  defp one!([value]), do: value
+
+  defp one!(other) do
+    raise "expected a list with single element, got: #{inspect(other)}"
+  end
 
   defp complex_part_type({:c, size}), do: {:f, div(size, 2)}
 
@@ -853,6 +862,12 @@ defmodule EXLA.MLIR.Value do
         "(#{number_literal(re, subtype)}, #{number_literal(im, subtype)})"
 
       Nx.Type.float?(type) ->
+        # We pass floats using binary representation, because that is
+        # likely more robust and not a subject to formatting limits and
+        # rounding. Based on the examples in the docs, the hexadecimal
+        # representation is always big-endian.
+        #
+        # See https://mlir.llvm.org/docs/Dialects/Builtin/#floatattr
         hex_data = float_hex(value, type)
         "0x#{hex_data}"
 

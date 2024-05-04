@@ -58,6 +58,7 @@ class MLIRModule {
 
   std::string ToString();
 
+  // Note: returns nullptr if the parsing fails
   mlir::Type ParseType(std::string);
   mlir::Attribute ParseAttribute(std::string);
 

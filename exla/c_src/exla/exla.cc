@@ -82,6 +82,14 @@ static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info) {
 
 // MLIR Functions
 
+ERL_NIF_TERM type_parsing_error(ErlNifEnv* env, std::string type_string) {
+  return exla::nif::make(env, "Unable to parse MLIR type: " + type_string);
+}
+
+ERL_NIF_TERM attribute_parsing_error(ErlNifEnv* env, std::string attribute_string) {
+  return exla::nif::make(env, "Unable to parse MLIR attribute: " + attribute_string);
+}
+
 ERL_NIF_TERM mlir_compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 7) {
     return exla::nif::error(env, "Bad argument count.");
@@ -196,6 +204,9 @@ ERL_NIF_TERM mlir_create_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 
   for (auto const & type_string : arg_type_strings) {
     auto type = (*module)->ParseType(type_string);
+    if(type == nullptr) {
+      return type_parsing_error(env, type_string);
+    }
     arg_types.push_back(type);
   }
 
@@ -203,6 +214,9 @@ ERL_NIF_TERM mlir_create_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 
   for (auto const & type_string : ret_type_strings) {
     auto type = (*module)->ParseType(type_string);
+    if(type == nullptr) {
+      return type_parsing_error(env, type_string);
+    }
     ret_types.push_back(type);
   }
 
@@ -269,6 +283,9 @@ ERL_NIF_TERM mlir_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   for (auto const & type_string : result_type_strings) {
     auto type = (*function)->module()->ParseType(type_string);
+    if(type == nullptr) {
+      return type_parsing_error(env, type_string);
+    }
     result_types.push_back(type);
   }
 
@@ -276,6 +293,9 @@ ERL_NIF_TERM mlir_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   for (auto const & pair : attributes_kwlist) {
     auto attribute_value = (*function)->module()->ParseAttribute(pair.second);
+    if(attribute_value == nullptr) {
+      return attribute_parsing_error(env, pair.second);
+    }
     attributes.push_back(std::pair{pair.first, attribute_value});
   }
 
@@ -304,6 +324,9 @@ ERL_NIF_TERM mlir_push_region(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
 
   for (auto const & type_string : arg_types) {
     auto type = (*function)->module()->ParseType(type_string);
+    if(type == nullptr) {
+      return type_parsing_error(env, type_string);
+    }
     types.push_back(type);
   }
 

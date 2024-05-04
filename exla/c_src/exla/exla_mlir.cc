@@ -117,14 +117,7 @@ std::string MLIRModule::ToString() {
 }
 
 mlir::Type MLIRModule::ParseType(std::string string) {
-  auto type = mlir::parseType(string, context_);
-
-  if (type == nullptr) {
-    std::cerr << "Unable to parse MLIR type: " << string << std::endl;
-    exit(1);
-  }
-
-  return type;
+  return mlir::parseType(string, context_);
 }
 
 mlir::Attribute MLIRModule::ParseAttribute(std::string string) {
