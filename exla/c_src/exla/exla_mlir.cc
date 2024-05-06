@@ -121,14 +121,7 @@ mlir::Type MLIRModule::ParseType(std::string string) {
 }
 
 mlir::Attribute MLIRModule::ParseAttribute(std::string string) {
-  auto attribute = mlir::parseAttribute(string, context_);
-
-  if (attribute == nullptr) {
-    std::cerr << "Unable to parse MLIR attribute: " << string << std::endl;
-    exit(1);
-  }
-
-  return attribute;
+  return mlir::parseAttribute(string, context_);
 }
 
 }  // namespace exla
