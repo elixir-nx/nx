@@ -79,7 +79,7 @@ class ExlaClient {
   // Compiles the given computation with the given compile options
 
   xla::StatusOr<ExlaExecutable*> Compile(const mlir::OwningOpRef<mlir::ModuleOp>& computation,
-                                         std::vector<xla::Shape*> argument_layouts,
+                                         std::vector<xla::Shape> argument_layouts,
                                          xla::ExecutableBuildOptions& options,
                                          bool compile_portable_executable);
 

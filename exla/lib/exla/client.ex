@@ -86,37 +86,33 @@ defmodule EXLA.Client do
   end
 
   @doc """
-  Sends `data_and_shapes` to device infeed.
+  Sends `data_and_typespecs` to device infeed.
 
-  `data_and_shapes` must be a list of two element tuples where the
+  `data_and_typespecs` must be a list of two element tuples where the
   first element is a binary or a flat list of binaries and the second
-  element is a `EXLA.Shape`.
-
-  > Note: XLA does not support tuple infeed shapes when running on
-  > host. Passing one will simply block the operation indefinitely.
-  > Instead, convert the tuple into multiple infeed operations.
+  element is a `EXLA.Typespec`.
   """
-  def to_infeed(%EXLA.Client{ref: client}, device_id, data_and_shapes)
-      when is_list(data_and_shapes) do
-    data_and_shapes =
-      Enum.map(data_and_shapes, fn
-        {binary, %EXLA.Shape{ref: shape}} when is_binary(binary) -> {[binary], shape}
-        {[binary | _] = data, %EXLA.Shape{ref: shape}} when is_binary(binary) -> {data, shape}
+  def to_infeed(%EXLA.Client{ref: client}, device_id, data_and_typespecs)
+      when is_list(data_and_typespecs) do
+    data_and_typespecs =
+      Enum.map(data_and_typespecs, fn
+        {binary, typespec} when is_binary(binary) ->
+          {[binary], EXLA.Typespec.nif_encode(typespec)}
+
+        {[binary | _] = data, typespec} when is_binary(binary) ->
+          {data, EXLA.Typespec.nif_encode(typespec)}
       end)
 
-    EXLA.NIF.transfer_to_infeed(client, device_id, data_and_shapes) |> unwrap!()
+    EXLA.NIF.transfer_to_infeed(client, device_id, data_and_typespecs) |> unwrap!()
   end
 
   @doc """
   Sends buffer from device outfeed to the given process tagged by `ref`.
-
-  > Note: XLA does not support tuple outfeed shapes. Passing one will simply
-  > block the operation indefinitely. Instead, convert the tuple into multiple
-  > outfeed operations.
   """
-  def from_outfeed(%EXLA.Client{ref: client}, device_id, shapes, pid, ref) when is_list(shapes) do
-    shape_refs = Enum.map(shapes, fn %EXLA.Shape{ref: shape_ref} -> shape_ref end)
-    EXLA.NIF.transfer_from_outfeed(client, device_id, shape_refs, pid, ref) |> unwrap!()
+  def from_outfeed(%EXLA.Client{ref: client}, device_id, typespecs, pid, ref)
+      when is_list(typespecs) do
+    typespecs = Enum.map(typespecs, &EXLA.Typespec.nif_encode/1)
+    EXLA.NIF.transfer_from_outfeed(client, device_id, typespecs, pid, ref) |> unwrap!()
   end
 
   ## Callbacks

@@ -1,20 +1,18 @@
-#include <functional>
-#include <iostream>
-#include <map>
 #include <string>
 
+#include "exla_mlir.h"
 #include "exla_client.h"
 #include "exla_cuda.h"
 #include "exla_log_sink.h"
 #include "exla_nif_util.h"
-#include "mlir/ops.h"
-#include "xla/client/client.h"
-#include "xla/client/xla_builder.h"
-#include "xla/client/xla_computation.h"
+
 #include "xla/pjrt/pjrt_api.h"
-#include "xla/primitive_util.h"
 #include "xla/service/platform_util.h"
-#include "xla/shape_util.h"
+
+#include "mhlo/IR/hlo_ops.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "stablehlo/dialect/ChloOps.h"
+#include "stablehlo/dialect/StablehloOps.h"
 
 // All of these are created with calls to `new` and subsequently
 // passed to the VM as pointers-to-pointers so we balance it out
@@ -25,14 +23,6 @@ void free_exla_executable(ErlNifEnv* env, void* obj) {
   if (*executable != nullptr) {
     delete *executable;
     *executable = nullptr;
-  }
-}
-
-void free_xla_builder(ErlNifEnv* env, void* obj) {
-  xla::XlaBuilder** builder = reinterpret_cast<xla::XlaBuilder**>(obj);
-  if (*builder != nullptr) {
-    delete *builder;
-    *builder = nullptr;
   }
 }
 
@@ -55,13 +45,7 @@ void free_exla_buffer(ErlNifEnv* env, void* obj) {
 static int open_resources(ErlNifEnv* env) {
   const char* mod = "EXLA";
 
-  if (!exla::nif::open_resource<xla::Shape>(env, mod, "Shape")) {
-    return -1;
-  }
   if (!exla::nif::open_resource<exla::ExlaExecutable*>(env, mod, "Executable", free_exla_executable)) {
-    return -1;
-  }
-  if (!exla::nif::open_resource<xla::XlaBuilder*>(env, mod, "Builder", free_xla_builder)) {
     return -1;
   }
   if (!exla::nif::open_resource<exla::ExlaClient*>(env, mod, "ExlaClient", free_exla_client)) {
@@ -71,7 +55,7 @@ static int open_resources(ErlNifEnv* env) {
     return -1;
   }
   // MLIR
-  if (!exla::nif::open_resource<exla::MLIRFunction*>(env, mod, "MLIRBlock")) {
+  if (!exla::nif::open_resource<exla::MLIRFunction*>(env, mod, "MLIRFunction")) {
     return -1;
   }
   if (!exla::nif::open_resource<mlir::Value>(env, mod, "MLIRValue")) {
@@ -96,41 +80,308 @@ static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info) {
   return 0;
 }
 
-// XlaBuilder Functions
+// MLIR Functions
 
-ERL_NIF_TERM new_builder(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM type_parsing_error(ErlNifEnv* env, std::string type_string) {
+  return exla::nif::make(env, "Unable to parse MLIR type: " + type_string);
+}
+
+ERL_NIF_TERM attribute_parsing_error(ErlNifEnv* env, std::string attribute_string) {
+  return exla::nif::make(env, "Unable to parse MLIR attribute: " + attribute_string);
+}
+
+ERL_NIF_TERM mlir_compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 7) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::ExlaClient** client;
+  exla::MLIRModule** module;
+  std::vector<xla::Shape> argument_layouts;
+  xla::ExecutableBuildOptions build_options;
+  int num_replicas;
+  int num_partitions;
+  bool use_spmd;
+  int device_id;
+
+  if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
+    return exla::nif::error(env, "Unable to get client.");
+  }
+  if (!exla::nif::get<exla::MLIRModule*>(env, argv[1], module)) {
+    return exla::nif::error(env, "Unable to get module.");
+  }
+  if (!exla::nif::get_list(env, argv[2], argument_layouts)) {
+    return exla::nif::error(env, "Unable to get argument layouts.");
+  }
+  if (!exla::nif::get(env, argv[3], &num_replicas)) {
+    return exla::nif::error(env, "Unable to get Number of Replicas.");
+  }
+  if (!exla::nif::get(env, argv[4], &num_partitions)) {
+    return exla::nif::error(env, "Unable to get Number of Partitions.");
+  }
+  if (!exla::nif::get(env, argv[5], &use_spmd)) {
+    return exla::nif::error(env, "Unable to get SPMD Partitioning Flag.");
+  }
+  if (!exla::nif::get(env, argv[6], &device_id)) {
+    return exla::nif::error(env, "Unable to get device ID.");
+  }
+
+  build_options.set_num_replicas(num_replicas);
+  build_options.set_num_partitions(num_partitions);
+  build_options.set_use_spmd_partitioning(use_spmd);
+
+  bool compile_portable_executable = false;
+  if (device_id >= 0) {
+    compile_portable_executable = true;
+    build_options.set_device_ordinal(device_id);
+  }
+
+  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaExecutable * executable,
+                            (*client)->Compile((*module)->module(), argument_layouts, build_options, compile_portable_executable), env);
+
+  return exla::nif::ok(env, exla::nif::make<exla::ExlaExecutable*>(env, executable));
+}
+
+ERL_NIF_TERM mlir_new_context(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 0) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  mlir::MLIRContext* context = new mlir::MLIRContext();
+  context->getOrLoadDialect<mlir::func::FuncDialect>();
+  context->getOrLoadDialect<mlir::stablehlo::StablehloDialect>();
+  context->getOrLoadDialect<mlir::mhlo::MhloDialect>();
+  context->getOrLoadDialect<mlir::chlo::ChloDialect>();
+
+  auto ret = exla::nif::make<mlir::MLIRContext*>(env, context);
+  return exla::nif::ok(env, ret);
+}
+
+ERL_NIF_TERM mlir_new_module(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 1) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
-  std::string name;
-  if (!exla::nif::get(env, argv[0], name)) {
-    return exla::nif::error(env, "Unable to get builder name.");
+  mlir::MLIRContext** ctx;
+
+  if (!exla::nif::get<mlir::MLIRContext*>(env, argv[0], ctx)) {
+    return exla::nif::error(env, "Unable to get context.");
   }
 
-  xla::XlaBuilder* builder = new xla::XlaBuilder(name);
+  exla::MLIRModule* module = new exla::MLIRModule(*ctx);
 
-  return exla::nif::ok(env, exla::nif::make<xla::XlaBuilder*>(env, builder));
+  return exla::nif::ok(env, exla::nif::make<exla::MLIRModule*>(env, module));
 }
 
-ERL_NIF_TERM create_sub_builder(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM mlir_create_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 5) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRModule** module;
+  std::string func_name;
+  std::vector<std::string> arg_type_strings;
+  std::vector<std::string> ret_type_strings;
+  bool is_public;
+
+  if (!exla::nif::get<exla::MLIRModule*>(env, argv[0], module)) {
+    return exla::nif::error(env, "Unable to get module.");
+  }
+  if (!exla::nif::get(env, argv[1], func_name)) {
+    return exla::nif::error(env, "Unable to get function name.");
+  }
+  if (!exla::nif::get_list(env, argv[2], arg_type_strings)) {
+    return exla::nif::error(env, "Unable to get args.");
+  }
+  if (!exla::nif::get_list(env, argv[3], ret_type_strings)) {
+    return exla::nif::error(env, "Unable to get return.");
+  }
+  if (!exla::nif::get(env, argv[4], &is_public)) {
+    return exla::nif::error(env, "Unable to get is_public.");
+  }
+
+  auto arg_types = std::vector<mlir::Type>{};
+
+  for (auto const & type_string : arg_type_strings) {
+    auto type = (*module)->ParseType(type_string);
+    if(type == nullptr) {
+      return type_parsing_error(env, type_string);
+    }
+    arg_types.push_back(type);
+  }
+
+  auto ret_types = std::vector<mlir::Type>{};
+
+  for (auto const & type_string : ret_type_strings) {
+    auto type = (*module)->ParseType(type_string);
+    if(type == nullptr) {
+      return type_parsing_error(env, type_string);
+    }
+    ret_types.push_back(type);
+  }
+
+  exla::MLIRFunction* func = (*module)->CreateFunction(func_name, arg_types, ret_types, is_public);
+
+  return exla::nif::ok(env, exla::nif::make<exla::MLIRFunction*>(env, func));
+}
+
+ERL_NIF_TERM mlir_get_function_arguments(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+
+  llvm::MutableArrayRef<mlir::BlockArgument> args = (*function)->GetArguments();
+  std::vector<ERL_NIF_TERM> terms;
+  terms.reserve(args.size());
+
+  for (auto arg : args) {
+    ERL_NIF_TERM term = exla::nif::make<mlir::Value>(env, arg);
+    terms.push_back(term);
+  }
+
+  return exla::nif::ok(env, enif_make_list_from_array(env, terms.data(), terms.size()));
+}
+
+ERL_NIF_TERM mlir_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 6) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+  std::string op_name;
+  std::vector<mlir::Value> operands;
+  std::vector<std::string> result_type_strings;
+  std::vector<std::pair<std::string, std::string>> attributes_kwlist;
+  std::vector<mlir::Region*> regions;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get(env, argv[1], op_name)) {
+    return exla::nif::error(env, "Unable to get op name.");
+  }
+  if (!exla::nif::get_list<mlir::Value>(env, argv[2], operands)) {
+    return exla::nif::error(env, "Unable to get operands.");
+  }
+  if (!exla::nif::get_list(env, argv[3], result_type_strings)) {
+    return exla::nif::error(env, "Unable to get result types.");
+  }
+  if (!exla::nif::get_keyword_list<std::string>(env, argv[4], attributes_kwlist)) {
+    return exla::nif::error(env, "Unable to get attributes.");
+  }
+  if (!exla::nif::get_list<mlir::Region*>(env, argv[5], regions)) {
+    return exla::nif::error(env, "Unable to get regions.");
+  }
+
+  auto result_types = std::vector<mlir::Type>{};
+
+  for (auto const & type_string : result_type_strings) {
+    auto type = (*function)->module()->ParseType(type_string);
+    if(type == nullptr) {
+      return type_parsing_error(env, type_string);
+    }
+    result_types.push_back(type);
+  }
+
+  auto attributes = std::vector<std::pair<std::string, mlir::Attribute>>{};
+
+  for (auto const & pair : attributes_kwlist) {
+    auto attribute_value = (*function)->module()->ParseAttribute(pair.second);
+    if(attribute_value == nullptr) {
+      return attribute_parsing_error(env, pair.second);
+    }
+    attributes.push_back(std::pair{pair.first, attribute_value});
+  }
+
+  auto results = (*function)->Op(op_name, operands, result_types, attributes, regions);
+
+  return exla::nif::ok(env, exla::nif::make_list<mlir::Value>(env, results));
+}
+
+
+ERL_NIF_TERM mlir_push_region(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
-  xla::XlaBuilder** builder;
-  std::string name;
+  exla::MLIRFunction** function;
+  std::vector<std::string> arg_types;
 
-  if (!exla::nif::get<xla::XlaBuilder*>(env, argv[0], builder)) {
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+  if (!exla::nif::get_list(env, argv[1], arg_types)) {
+    return exla::nif::error(env, "Unable to get arg types.");
+  }
+
+  auto types = std::vector<mlir::Type>{};
+
+  for (auto const & type_string : arg_types) {
+    auto type = (*function)->module()->ParseType(type_string);
+    if(type == nullptr) {
+      return type_parsing_error(env, type_string);
+    }
+    types.push_back(type);
+  }
+
+  mlir::Region* region;
+  std::vector<mlir::Value> args;
+  std::tie(region, args) = (*function)->PushRegion(types);
+
+  return exla::nif::ok(env, enif_make_tuple2(env, exla::nif::make<mlir::Region*>(env, region), exla::nif::make_list<mlir::Value>(env, args)));
+}
+
+ERL_NIF_TERM mlir_pop_region(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRFunction** function;
+
+  if (!exla::nif::get<exla::MLIRFunction*>(env, argv[0], function)) {
+    return exla::nif::error(env, "Unable to get function.");
+  }
+
+  (*function)->PopRegion();
+  return exla::nif::ok(env);
+}
+
+ERL_NIF_TERM mlir_get_typespec(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  mlir::Value* t;
+
+  if (!exla::nif::get<mlir::Value>(env, argv[0], t)) {
+    return exla::nif::error(env, "Unable to get tensor.");
+  }
+
+  mlir::Type type = t->getType();
+
+  return exla::nif::ok(env, exla::nif::make_typespec(env, type));
+}
+
+ERL_NIF_TERM mlir_module_to_string(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::MLIRModule** module;
+
+  if (!exla::nif::get<exla::MLIRModule*>(env, argv[0], module)) {
     return exla::nif::error(env, "Unable to get builder.");
   }
-  if (!exla::nif::get(env, argv[1], name)) {
-    return exla::nif::error(env, "Unable to get name.");
-  }
 
-  auto uniq_sub_builder = (*builder)->CreateSubBuilder(name);
-  xla::XlaBuilder* sub_builder = uniq_sub_builder.release();
-  return exla::nif::ok(env, exla::nif::make<xla::XlaBuilder*>(env, sub_builder));
+  auto string = (*module)->ToString();
+
+  return exla::nif::ok(env, exla::nif::make(env, string));
 }
 
 // ExlaBuffer Functions
@@ -191,7 +442,7 @@ ERL_NIF_TERM create_buffer_from_device_pointer(ErlNifEnv* env, int argc, const E
 
   exla::ExlaClient** client;
   std::vector<int64_t> pointer_vec;
-  xla::Shape* shape;
+  xla::Shape shape;
   int device_id;
   std::string pointer_kind;
 
@@ -204,7 +455,7 @@ ERL_NIF_TERM create_buffer_from_device_pointer(ErlNifEnv* env, int argc, const E
   if (!exla::nif::get_atom(env, argv[2], pointer_kind)) {
     return exla::nif::error(env, "Unable to get device pointer kind.");
   }
-  if (!exla::nif::get<xla::Shape>(env, argv[3], shape)) {
+  if (!exla::nif::get_typespec_as_xla_shape(env, argv[3], &shape)) {
     return exla::nif::error(env, "Unable to get shape.");
   }
   if (!exla::nif::get(env, argv[4], &device_id)) {
@@ -233,7 +484,7 @@ ERL_NIF_TERM create_buffer_from_device_pointer(ErlNifEnv* env, int argc, const E
   EXLA_ASSIGN_OR_RETURN_NIF(xla::PjRtDevice * device, (*client)->client()->LookupDevice(device_id), env);
 
   std::function<void()> on_delete_callback = []() {};
-  EXLA_ASSIGN_OR_RETURN_NIF(std::unique_ptr<xla::PjRtBuffer> buffer, (*client)->client()->CreateViewOfDeviceBuffer(ptr, *shape, device, on_delete_callback), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(std::unique_ptr<xla::PjRtBuffer> buffer, (*client)->client()->CreateViewOfDeviceBuffer(ptr, shape, device, on_delete_callback), env);
   exla::ExlaBuffer* exla_buffer = new exla::ExlaBuffer(std::move(buffer));
   return exla::nif::ok(env, exla::nif::make<exla::ExlaBuffer*>(env, exla_buffer));
 }
@@ -244,7 +495,7 @@ ERL_NIF_TERM binary_to_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   }
 
   ErlNifBinary bin;
-  xla::Shape* shape;
+  xla::Shape shape;
   exla::ExlaClient** client;
   int device_id;
 
@@ -254,7 +505,7 @@ ERL_NIF_TERM binary_to_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   if (!exla::nif::get_binary(env, argv[1], &bin)) {
     return exla::nif::error(env, "Unable to get data.");
   }
-  if (!exla::nif::get<xla::Shape>(env, argv[2], shape)) {
+  if (!exla::nif::get_typespec_as_xla_shape(env, argv[2], &shape)) {
     return exla::nif::error(env, "Unable to get shape.");
   }
   if (!exla::nif::get(env, argv[3], &device_id)) {
@@ -262,7 +513,7 @@ ERL_NIF_TERM binary_to_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   }
 
   EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaBuffer * buffer,
-                            (*client)->BufferFromBinary(env, argv[1], *shape, device_id), env);
+                            (*client)->BufferFromBinary(env, argv[1], shape, device_id), env);
   return exla::nif::ok(env, exla::nif::make<exla::ExlaBuffer*>(env, buffer));
 }
 
@@ -306,51 +557,6 @@ ERL_NIF_TERM deallocate_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
   }
 }
 
-// Shape Functions
-
-ERL_NIF_TERM make_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 2) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  xla::PrimitiveType element_type;
-  std::vector<exla::int64> dims;
-
-  if (!exla::nif::get_primitive_type(env, argv[0], &element_type)) {
-    return exla::nif::error(env, "Unable to get type.");
-  }
-  if (!exla::nif::get_tuple(env, argv[1], dims)) {
-    return exla::nif::error(env, "Unable to get dimensions.");
-  }
-
-  xla::Shape shape = xla::ShapeUtil::MakeShape(element_type, dims);
-
-  return exla::nif::ok(env, exla::nif::make<xla::Shape>(env, shape));
-}
-
-ERL_NIF_TERM make_token_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 0) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  xla::Shape shape = xla::ShapeUtil::MakeTokenShape();
-  return exla::nif::ok(env, exla::nif::make<xla::Shape>(env, shape));
-}
-
-ERL_NIF_TERM get_shape_info(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 1) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  xla::Shape* shape;
-
-  if (!exla::nif::get<xla::Shape>(env, argv[0], shape)) {
-    return exla::nif::error(env, "Unable to get shape.");
-  }
-
-  return exla::nif::ok(env, exla::nif::make_shape_info(env, *shape));
-}
-
 ERL_NIF_TERM transfer_to_infeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");
@@ -371,17 +577,17 @@ ERL_NIF_TERM transfer_to_infeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM arg
   while (enif_get_list_cell(env, data, &head, &tail)) {
     const ERL_NIF_TERM* terms;
     int count;
-    xla::Shape* shape;
+    xla::Shape shape;
 
     if (!enif_get_tuple(env, head, &count, &terms) && count != 2) {
       return exla::nif::error(env, "Unable to binary-shape tuple.");
     }
 
-    if (!exla::nif::get<xla::Shape>(env, terms[1], shape)) {
+    if (!exla::nif::get_typespec_as_xla_shape(env, terms[1], &shape)) {
       return exla::nif::error(env, "Unable to get shape.");
     }
 
-    xla::Status transfer_status = (*client)->TransferToInfeed(env, terms[0], *shape, device_id);
+    xla::Status transfer_status = (*client)->TransferToInfeed(env, terms[0], shape, device_id);
 
     if (!transfer_status.ok()) {
       return exla::nif::error(env, transfer_status.message().data());
@@ -415,15 +621,15 @@ ERL_NIF_TERM transfer_from_outfeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
   ERL_NIF_TERM data = argv[2];
   ERL_NIF_TERM head, tail;
   while (enif_get_list_cell(env, data, &head, &tail)) {
-    xla::Shape* shape;
+    xla::Shape shape;
 
-    if (!exla::nif::get<xla::Shape>(env, head, shape)) {
+    if (!exla::nif::get_typespec_as_xla_shape(env, head, &shape)) {
       return exla::nif::error(env, "Unable to get shape.");
     }
 
     ErlNifEnv* penv = enif_alloc_env();
     ERL_NIF_TERM ref = enif_make_copy(penv, argv[4]);
-    auto statusor = (*client)->TransferFromOutfeed(penv, device_id, *shape);
+    auto statusor = (*client)->TransferFromOutfeed(penv, device_id, shape);
 
     if (!statusor.ok()) {
       enif_clear_env(penv);
@@ -685,109 +891,15 @@ ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 
 static ErlNifFunc exla_funcs[] = {
     // MLIR Builder
-    {"new_mlir_context", 0, new_mlir_context},
-    {"new_mlir_module", 1, new_mlir_module},
-    {"create_mlir_function", 5, create_mlir_function},
-    {"get_mlir_function_arguments", 1, get_mlir_function_arguments},
-    {"mlir_add", 3, mlir_add},
-    {"mlir_subtract", 3, mlir_subtract},
-    {"mlir_multiply", 3, mlir_multiply},
-    {"mlir_min", 3, mlir_min},
-    {"mlir_max", 3, mlir_max},
-    {"mlir_remainder", 3, mlir_remainder},
-    {"mlir_pow", 3, mlir_pow},
-    {"mlir_divide", 3, mlir_divide},
-    {"mlir_atan2", 3, mlir_atan2},
-    {"mlir_equal", 3, mlir_equal},
-    {"mlir_not_equal", 3, mlir_not_equal},
-    {"mlir_less", 3, mlir_less},
-    {"mlir_less_equal", 3, mlir_less_equal},
-    {"mlir_greater", 3, mlir_greater},
-    {"mlir_greater_equal", 3, mlir_greater_equal},
-    {"dump_mlir_module", 1, dump_mlir_module},
-    {"mlir_get_shape", 1, mlir_get_shape},
-    {"mlir_convert", 3, mlir_convert},
-    {"mlir_bitcast_convert", 4, mlir_bitcast_convert},
-    {"mlir_abs", 2, mlir_abs},
-    {"mlir_exp", 2, mlir_exp},
-    {"mlir_expm1", 2, mlir_expm1},
-    {"mlir_floor", 2, mlir_floor},
-    {"mlir_ceil", 2, mlir_ceil},
-    {"mlir_round", 2, mlir_round},
-    {"mlir_log", 2, mlir_log},
-    {"mlir_sigmoid", 2, mlir_sigmoid},
-    {"mlir_log1p", 2, mlir_log1p},
-    {"mlir_sign", 2, mlir_sign},
-    {"mlir_cos", 2, mlir_cos},
-    {"mlir_sin", 2, mlir_sin},
-    {"mlir_tan", 2, mlir_tan},
-    {"mlir_acos", 2, mlir_acos},
-    {"mlir_asin", 2, mlir_asin},
-    {"mlir_atan", 2, mlir_atan},
-    {"mlir_cosh", 2, mlir_cosh},
-    {"mlir_sinh", 2, mlir_sinh},
-    {"mlir_tanh", 2, mlir_tanh},
-    {"mlir_acosh", 2, mlir_acosh},
-    {"mlir_asinh", 2, mlir_asinh},
-    {"mlir_atanh", 2, mlir_atanh},
-    {"mlir_sqrt", 2, mlir_sqrt},
-    {"mlir_cbrt", 2, mlir_cbrt},
-    {"mlir_iota", 3, mlir_iota},
-    {"mlir_top_k", 3, mlir_top_k},
-    {"mlir_sort", 5, mlir_sort},
-    {"mlir_scatter", 9, mlir_scatter},
-    {"mlir_select_and_scatter", 8, mlir_select_and_scatter},
-    {"mlir_gather", 8, mlir_gather},
-    {"mlir_reshape", 3, mlir_reshape},
-    {"mlir_reverse", 3, mlir_reverse},
-    {"mlir_transpose", 3, mlir_transpose},
-    {"mlir_slice", 5, mlir_slice},
-    {"mlir_dynamic_slice", 4, mlir_dynamic_slice},
-    {"mlir_constant_r0", 3, mlir_constant_r0},
-    {"mlir_constant_from_binary", 4, mlir_constant_from_binary},
-    {"mlir_bitwise_and", 3, mlir_bitwise_and},
-    {"mlir_bitwise_or", 3, mlir_bitwise_or},
-    {"mlir_bitwise_xor", 3, mlir_bitwise_xor},
-    {"mlir_bitwise_not", 2, mlir_bitwise_not},
-    {"mlir_left_shift", 3, mlir_shift_left},
-    {"mlir_right_shift_logical", 3, mlir_shift_right_logical},
-    {"mlir_right_shift_arithmetic", 3, mlir_shift_right_arithmetic},
-    {"mlir_negate", 2, mlir_negate},
-    {"mlir_erf", 2, mlir_erf},
-    {"mlir_erfc", 2, mlir_erfc},
-    {"mlir_erf_inv", 2, mlir_erf_inv},
-    {"mlir_is_infinity", 2, mlir_is_infinity},
-    {"mlir_is_nan", 2, mlir_is_nan},
-    {"mlir_rsqrt", 2, mlir_rsqrt},
-    {"mlir_count_leading_zeros", 2, mlir_clz},
-    {"mlir_real", 2, mlir_real},
-    {"mlir_imag", 2, mlir_imag},
-    {"mlir_conjugate", 2, mlir_conjugate},
-    {"mlir_dot_general", 6, mlir_dot_general},
-    {"mlir_clamp", 4, mlir_clamp},
-    {"mlir_population_count", 2, mlir_population_count},
-    {"mlir_broadcast_in_dim", 4, mlir_broadcast_in_dim},
-    {"mlir_concatenate", 3, mlir_concatenate},
-    {"mlir_optimization_barrier", 2, mlir_optimization_barrier},
-    {"mlir_select", 4, mlir_select},
-    {"mlir_pad", 6, mlir_pad},
-    {"mlir_fft", 4, mlir_fft},
-    {"mlir_convolution", 12, mlir_convolution},
-    {"mlir_create_token", 1, mlir_create_token},
-    {"mlir_triangular_solve", 6, mlir_triangular_solve},
-    {"mlir_dynamic_update_slice", 4, mlir_dynamic_update_slice},
-    {"mlir_infeed", 3, mlir_infeed},
-    {"mlir_outfeed", 3, mlir_outfeed},
-    {"mlir_call", 3, mlir_call},
-    {"mlir_reduce", 5, mlir_reduce},
-    {"mlir_window_reduce", 9, mlir_window_reduce},
-    {"mlir_map", 4, mlir_map},
-    {"mlir_if", 3, mlir_if},
+    {"mlir_new_context", 0, mlir_new_context},
+    {"mlir_new_module", 1, mlir_new_module},
+    {"mlir_create_function", 5, mlir_create_function},
+    {"mlir_get_function_arguments", 1, mlir_get_function_arguments},
+    {"mlir_op", 6, mlir_op},
     {"mlir_push_region", 2, mlir_push_region},
+    {"mlir_get_typespec", 1, mlir_get_typespec},
     {"mlir_pop_region", 1, mlir_pop_region},
-    {"mlir_while", 2, mlir_while},
-    {"mlir_return", 2, mlir_return},
-    {"mlir_qr", 4, mlir_qr},
+    {"mlir_module_to_string", 1, mlir_module_to_string},
     // ExlaClient
     {"get_host_client", 0, get_host_client},
     {"get_gpu_client", 2, get_gpu_client},
@@ -809,10 +921,6 @@ static ErlNifFunc exla_funcs[] = {
     // ExlaExecutable
     {"run_io", 4, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"run_cpu", 4, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
-    // Shape
-    {"make_shape", 2, make_shape},
-    {"make_token_shape", 0, make_token_shape},
-    {"get_shape_info", 1, get_shape_info},
     // Log Sink
     {"start_log_sink", 1, start_log_sink},
     // Serialization

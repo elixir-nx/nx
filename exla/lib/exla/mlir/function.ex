@@ -2,7 +2,7 @@ defmodule EXLA.MLIR.Function do
   @moduledoc false
   # Representation of an MLIR Function or `func.func` type.
 
-  defstruct [:module, :ref, :name, :return_shape]
+  defstruct [:module, :ref, :name, :return_typespecs]
 
   alias __MODULE__, as: Function
   alias EXLA.MLIR.Value
@@ -13,17 +13,26 @@ defmodule EXLA.MLIR.Function do
   which can be used in MLIR operations.
   """
   def get_arguments(%Function{ref: ref} = function) do
-    arg_refs = EXLA.NIF.get_mlir_function_arguments(ref) |> unwrap!()
+    arg_refs = EXLA.NIF.mlir_get_function_arguments(ref) |> unwrap!()
     Enum.map(arg_refs, fn arg -> %Value{ref: arg, function: function} end)
   end
 
-  def push_region(%Function{ref: ref} = function, %Region{ref: region}) do
-    ref
-    |> EXLA.NIF.mlir_push_region(region)
-    |> unwrap!()
-    |> Enum.map(&%Value{function: function, ref: &1})
+  @doc """
+  Creates a new region within the current function and sets it as the
+  insertion point for subsequent operations.
+
+  Returns `{region, args}`, where args is a list of values referencing
+  the block arguments.
+  """
+  def push_region(%Function{ref: ref} = function, arg_typespecs) do
+    arg_mlir_types = Value.typespecs_to_mlir_types(arg_typespecs)
+    {region, args} = EXLA.NIF.mlir_push_region(ref, arg_mlir_types) |> unwrap!()
+    {%Region{ref: region}, Enum.map(args, &%Value{function: function, ref: &1})}
   end
 
+  @doc """
+  Pops region created with `push_region/2`.
+  """
   def pop_region(%Function{ref: ref}) do
     EXLA.NIF.mlir_pop_region(ref) |> unwrap!()
   end

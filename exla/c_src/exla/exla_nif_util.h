@@ -12,6 +12,7 @@
 #include "xla/shape.h"
 #include "xla/types.h"
 #include "xla/xla_data.pb.h"
+#include "mlir/IR/Builders.h"
 
 #if !defined(__GNUC__) && (defined(__WIN32__) || defined(_WIN32) || defined(_WIN32_))
 typedef unsigned __int64 nif_uint64_t;
@@ -80,7 +81,7 @@ ERL_NIF_TERM ok(ErlNifEnv* env);
 // Numeric types
 //
 // Floating/Complex types will never get used, except
-// when defining scalar-constants with `constant_r0`.
+// when defining scalar-constants with `constant`.
 
 int get(ErlNifEnv* env, ERL_NIF_TERM term, int8* var);
 int get(ErlNifEnv* env, ERL_NIF_TERM term, int16* var);
@@ -244,6 +245,8 @@ int get_list(ErlNifEnv* env,
 
 int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<std::string>& var);
 
+int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<xla::Shape>& var);
+
 template <typename T>
 int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T*>& var) {
   unsigned int length;
@@ -276,6 +279,32 @@ int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T>& var) {
   return 1;
 }
 
+template <typename T>
+int get_keyword_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<std::pair<std::string, T>>& var) {
+  unsigned int length;
+  if (!enif_get_list_length(env, list, &length)) return 0;
+  var.reserve(length);
+  ERL_NIF_TERM head, tail;
+
+  while (enif_get_list_cell(env, list, &head, &tail)) {
+    const ERL_NIF_TERM* terms;
+    int count;
+
+    if (!enif_get_tuple(env, head, &count, &terms)) return 0;
+    if (count != 2) return 0;
+
+    std::string lo;
+    T hi;
+    if (!get_atom(env, terms[0], lo)) return 0;
+    if (!get(env, terms[1], hi)) return 0;
+
+    var.push_back(std::pair<std::string, T>(lo, hi));
+
+    list = tail;
+  }
+  return 1;
+}
+
 int get_binary(ErlNifEnv* env, ERL_NIF_TERM term, ErlNifBinary* var);
 
 ERL_NIF_TERM make_map(ErlNifEnv* env, std::map<std::string, int>& map);
@@ -285,51 +314,12 @@ ERL_NIF_TERM make_map(ErlNifEnv* env, std::map<std::string, int>& map);
 // See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/xla_data.proto
 // for more details on each type and additional types not listed here.
 
-// Gets a padding configuration from `list`. A padding configuration
-// is a list of 3-tuples representing edge high, edge low, and interior
-// padding.
-int get_padding_config(ErlNifEnv* env,
-                       ERL_NIF_TERM list,
-                       xla::PaddingConfig* padding_config);
-
-// Gets dimension numbers for usage in the XLA DotGeneral operation.
-// Dot dimension numbers are a 2-tuple of lists. The first list
-// represents the lhs contraction dimensions. The second list
-// represents the rhs contraction dimensions. We do not match
-// on the batch dimensions for now.
-int get_dot_dimension_numbers(ErlNifEnv* env,
-                              ERL_NIF_TERM tuple,
-                              xla::DotDimensionNumbers* dims);
-
-// Gets a precision configuration from the configuration term.
-// The term should be an integer `0`, `1`, or `2` corresponding
-// to default, high, or highest precision respectively. Precision
-// configuration is set for each term in an operation.
-int get_precision_config(ErlNifEnv* env,
-                         ERL_NIF_TERM config_term,
-                         int num_operands,
-                         xla::PrecisionConfig* precision_config);
-
-// Gets the convolution dimension numbers. Convolutions are determined
-// based on input, kernel, and output batch and feature dimensions.
-// We receive the dimension numbers as a 3-tuple of tuples. Each tuple
-// corresponds to input batch/feature dimensions, kernel input/output
-// feature dimensions, and output batch/feature dimensions respectively.
-int get_conv_dimension_numbers(ErlNifEnv* env,
-                               ERL_NIF_TERM tuple,
-                               xla::ConvolutionDimensionNumbers* dimension_numbers);
-
-// Gets a general padding configuration. This is slightly different from
-// get_padding_config for usage in a convolution. The convolution only
-// supports passing padding as a vector of pairs of edge high, edge low padding
-// values. We receive the padding configuration as a list of 2-tuples.
-int get_general_padding(ErlNifEnv* env,
-                        ERL_NIF_TERM padding_term,
-                        std::vector<std::pair<int64, int64>>& padding);
-
 // Gets the primitive type from the given term. The term is a string
 // encoding one of the XLA primitive types.
 int get_primitive_type(ErlNifEnv* env, ERL_NIF_TERM term, xla::PrimitiveType* type);
+
+// Gets encoded EXLA.Typespec as xla::Shape.
+int get_typespec_as_xla_shape(ErlNifEnv* env, ERL_NIF_TERM term, xla::Shape* shape);
 
 // Template for retrieving a value from a scalar. This is
 // necessary to avoid having to use templates in the NIF.
@@ -343,7 +333,7 @@ T get_value(ErlNifEnv* env, ERL_NIF_TERM term) {
 }
 
 // Extracts information from `GetShape` into a usable term.
-ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape);
+ERL_NIF_TERM make_typespec(ErlNifEnv* env, mlir::Type type);
 
 }  // namespace nif
 }  // namespace exla

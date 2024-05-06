@@ -98,17 +98,17 @@ UnpackReplicaArguments(ErlNifEnv* env,
     if (enif_get_tuple(env, head, &arity, &tuple)) {
       // if the term is a tuple, that means it represents a {shape, binary}
       // tuple which we must convert into an exla buffer for use in the computation
-      xla::Shape* shape;
+      xla::Shape shape;
 
-      if (!nif::get<xla::Shape>(env, tuple[1], shape)) {
-        return xla::InvalidArgument("Expected argument to be shape reference.");
+      if (!nif::get_typespec_as_xla_shape(env, tuple[1], &shape)) {
+        return xla::InvalidArgument("Expected argument to be a typespec.");
       }
 
       // we convert the binary into a buffer and transfer it to the correct device,
       // this buffer is not managed by the erlang vm so it must be deallocated explicitly
       // after use by the execution
       EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtBuffer> buf,
-                            PjRtBufferFromBinary(client->client(), env, tuple[0], *shape, device));
+                            PjRtBufferFromBinary(client->client(), env, tuple[0], shape, device));
       replica_buffers.push_back(buf.release());
     } else if (nif::get<ExlaBuffer*>(env, head, buffer)) {
       // if the buffer is not a tuple it must be a reference to an exla buffer
@@ -364,13 +364,13 @@ xla::StatusOr<ExlaExecutable*> ExlaClient::DeserializeExecutable(std::string des
 }
 
 xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const mlir::OwningOpRef<mlir::ModuleOp>& module,
-                                                   std::vector<xla::Shape*> argument_layouts,
+                                                   std::vector<xla::Shape> argument_layouts,
                                                    xla::ExecutableBuildOptions& options,
                                                    bool compile_portable_executable) {
   std::vector<xla::Shape> layouts;
   layouts.reserve(argument_layouts.size());
   for (auto shape : argument_layouts) {
-    xla::Shape cpy_shape = xla::ShapeUtil::MakeShape(shape->element_type(), shape->dimensions());
+    xla::Shape cpy_shape = xla::ShapeUtil::MakeShape(shape.element_type(), shape.dimensions());
     xla::LayoutUtil::ClearLayout(&cpy_shape);
     layouts.push_back(cpy_shape);
   }

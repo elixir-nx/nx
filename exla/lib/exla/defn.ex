@@ -6,6 +6,7 @@ defmodule EXLA.Defn do
   alias Nx.Defn.{Composite, Expr, Tree}
   alias Nx.Tensor, as: T
 
+  alias EXLA.Typespec
   alias EXLA.MLIR.Value
   alias EXLA.MLIR.Function
 
@@ -62,7 +63,7 @@ defmodule EXLA.Defn do
         comp_fun
       )
 
-    {input_shape, input_indexes} = extra
+    {input_typespecs, input_indexes} = extra
 
     # Also discard the stream inputs from used inputs, similar to how it is done to buffers
     # Note we discard all lazy transfers too, as they are not possible with streams
@@ -107,7 +108,7 @@ defmodule EXLA.Defn do
 
         # The outfeed reader will redirect all outputs with flag 1 to the current
         # process. Once flag 0 is emitted, we know the stream is done.
-        {output_shapes, outfeed} = Outfeed.configure_stream_hook(outfeed, self(), lock)
+        {output_typespecs, outfeed} = Outfeed.configure_stream_hook(outfeed, self(), lock)
         {:ok, outfeed_pid} = Outfeed.start_child(executable, outfeed, Process.group_leader())
 
         stream =
@@ -117,10 +118,10 @@ defmodule EXLA.Defn do
             runner,
             outfeed_pid,
             input,
-            input_shape,
+            input_typespecs,
             input_indexes,
             output,
-            output_shapes,
+            output_typespecs,
             acc_output
           )
 
@@ -140,19 +141,20 @@ defmodule EXLA.Defn do
          acc_length,
          %Function{} = builder,
          expr,
-         used_shapes,
+         used_typespecs,
          outfeed,
          options
        ) do
     %{token: root_token, infeeds: []} = outfeed
 
-    {input_shapes, used_shapes} = Enum.split_while(used_shapes, fn {i, _} -> i < input_length end)
+    {input_typespecs, used_typespecs} =
+      Enum.split_while(used_typespecs, fn {i, _} -> i < input_length end)
 
     # Get all input indexes and shape
-    input_indexes = Enum.map(input_shapes, &elem(&1, 0))
+    input_indexes = Enum.map(input_typespecs, &elem(&1, 0))
 
-    # Drop all accumulator entries from used_shapes as we will handle it separately.
-    {acc_shapes, used_shapes} = Enum.split(used_shapes, acc_length)
+    # Drop all accumulator entries from used_typespecs as we will handle it separately.
+    {acc_typespecs, used_typespecs} = Enum.split(used_typespecs, acc_length)
 
     # The stream loop will be a three element tuple:
     #
@@ -161,35 +163,31 @@ defmodule EXLA.Defn do
     #   The looping constants.
     #
     # The input will be read as part of the infeed.
-    acc_shapes_l = Enum.map(acc_shapes, &elem(&1, 1))
-    acc_shape = List.to_tuple(acc_shapes_l)
+    acc_typespecs_l = Enum.map(acc_typespecs, &elem(&1, 1))
+    acc_typespec = List.to_tuple(acc_typespecs_l)
 
-    flag_shape = EXLA.Shape.make_shape({:pred, 8}, {})
+    flag_typespec = Typespec.tensor({:pred, 8}, {})
 
     args = EXLA.MLIR.Function.get_arguments(builder)
 
-    {token, [flag]} = Value.infeed(root_token, flag_shape)
+    {token, [flag]} = Value.infeed(root_token, [flag_typespec])
 
     init = [flag, token | args]
 
-    {[_flag, out_token | results], pred_region, body_region} = Value.while(builder, init)
-
-    acc = Enum.take(results, acc_length)
-
-    output = wrap_tuple_result(acc, acc_shape)
-
-    [flag | _] = Function.push_region(builder, pred_region)
-    r0 = Value.constant_r0(builder, 1, {:pred, 8})
-    pred_op = Value.equal(builder, flag, r0)
-    Value.variadic_return(builder, [pred_op])
+    arg_typespecs = Enum.map(init, &Value.get_typespec/1)
+    {pred_computation, [flag | _]} = Function.push_region(builder, arg_typespecs)
+    typespec = Typespec.tensor({:pred, 8}, {})
+    r0 = Value.constant(builder, [1], typespec)
+    pred_op = Value.equal(flag, r0, typespec)
+    Value.return(builder, [pred_op])
     Function.pop_region(builder)
 
-    [_flag, token | args] = Function.push_region(builder, body_region)
+    {body_computation, [_flag, token | args]} = Function.push_region(builder, arg_typespecs)
 
     {acc, constant} = Enum.split(args, acc_length)
 
-    {indices, input_shape} = Enum.unzip(input_shapes)
-    {token, input} = Value.infeed(token, input_shape)
+    {indices, input_typespecs} = Enum.unzip(input_typespecs)
+    {token, input} = Value.infeed(token, input_typespecs)
 
     input_params = Enum.zip(indices, input)
 
@@ -197,12 +195,12 @@ defmodule EXLA.Defn do
       case expr do
         {output_expr, acc_expr} ->
           acc_params =
-            Enum.map(acc_shapes, fn {pos, _shape} ->
+            Enum.map(acc_typespecs, fn {pos, _typespec} ->
               {pos, Enum.fetch!(acc, pos - input_length)}
             end)
 
           constant_params =
-            Enum.with_index(used_shapes, fn {pos, _shape}, index ->
+            Enum.with_index(used_typespecs, fn {pos, _typespec}, index ->
               {pos, Enum.fetch!(constant, index)}
             end)
 
@@ -226,16 +224,21 @@ defmodule EXLA.Defn do
       end
 
     # Emit the stream hook to signal loop output
-    {token, [flag]} = Value.infeed(token, flag_shape)
+    {token, [flag]} = Value.infeed(token, [flag_typespec])
 
-    Value.variadic_return(flag.function, [flag, token | acc] ++ List.flatten(constant))
+    Value.return(flag.function, [flag, token | acc] ++ List.flatten(constant))
 
     Function.pop_region(builder)
 
-    outfeed = outfeed |> Outfeed.with_token(out_token) |> Outfeed.close(builder)
-    Value.variadic_return(builder, output)
+    [_flag, out_token | results] = Value.while(builder, pred_computation, body_computation, init)
 
-    {{input_shape, input_indexes}, outfeed}
+    acc = Enum.take(results, acc_length)
+    output = wrap_tuple_result(acc, acc_typespec)
+
+    outfeed = outfeed |> Outfeed.with_token(out_token) |> Outfeed.close(builder)
+    Value.return(builder, output)
+
+    {{input_typespecs, input_indexes}, outfeed}
   end
 
   @doc false
@@ -280,9 +283,9 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp to_root_computation(%Function{} = function, expr, used_shapes, outfeed, options) do
+  defp to_root_computation(%Function{} = function, expr, used_typespecs, outfeed, options) do
     params =
-      Enum.zip_with(used_shapes, Function.get_arguments(function), fn {pos, _shape}, arg ->
+      Enum.zip_with(used_typespecs, Function.get_arguments(function), fn {pos, _typespec}, arg ->
         {pos, arg}
       end)
 
@@ -303,7 +306,7 @@ defmodule EXLA.Defn do
     {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
     outfeed = cache |> get_outfeed() |> Outfeed.close(function)
 
-    Value.variadic_return(function, res)
+    Value.return(function, res)
 
     {:ok, outfeed}
   end
@@ -406,29 +409,29 @@ defmodule EXLA.Defn do
     {comp_time, {evaled, {xla_time, executable, extra, outfeed}}} =
       :timer.tc(fn ->
         comp_cache_fun.(comp_key, fn ->
-          {reverse_inputs_and_shapes, reverse_infeeds} =
+          {reverse_inputs_and_typespecs, reverse_infeeds} =
             reverse_args_identifiers
             |> Enum.reverse()
             |> EXLA.Defn.Buffers.split_by_value(used_inputs, fn
-              {type, shape, _names}, i, nil -> {i, EXLA.Shape.make_shape(type, shape)}
-              {type, shape, _names}, i, depth -> {i, depth, EXLA.Shape.make_shape(type, shape)}
+              {type, shape, _names}, i, nil -> {i, Typespec.tensor(type, shape)}
+              {type, shape, _names}, i, depth -> {i, depth, Typespec.tensor(type, shape)}
             end)
 
-          inputs_and_shapes = Enum.reverse(reverse_inputs_and_shapes)
+          inputs_and_typespecs = Enum.reverse(reverse_inputs_and_typespecs)
 
-          comp_arg_shapes =
-            for {i, shape} <- inputs_and_shapes, i >= used_buffers, do: shape
+          comp_arg_typespecs =
+            for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
 
-          out_types =
+          out_typespecs =
             [outputs]
             |> Nx.Defn.Composite.flatten_list()
             |> Enum.map(fn t ->
               t
               |> Nx.devectorize()
-              |> then(&EXLA.Shape.make_shape(&1.type, &1.shape))
+              |> then(&Typespec.tensor(&1.type, &1.shape))
             end)
 
-          EXLA.MLIR.Module.new(comp_arg_shapes, out_types, fn builder ->
+          EXLA.MLIR.Module.new(comp_arg_typespecs, out_typespecs, fn builder ->
             outfeed =
               outfeed
               |> Outfeed.with_token(Value.create_token(builder))
@@ -437,17 +440,18 @@ defmodule EXLA.Defn do
             expr = Nx.Defn.Composite.traverse(expr || fun.(vars), &Nx.devectorize/1)
 
             {extra, outfeed} =
-              to_computation.(builder, expr, inputs_and_shapes, outfeed)
+              to_computation.(builder, expr, inputs_and_typespecs, outfeed)
 
             {xla_time, executable} =
               :timer.tc(fn ->
-                shapes = for {i, shape} <- inputs_and_shapes, i >= used_buffers, do: shape
+                typespecs =
+                  for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
 
                 EXLA.MLIR.Module.compile(
                   builder.module,
                   client,
-                  shapes,
-                  builder.return_shape,
+                  typespecs,
+                  builder.return_typespecs,
                   options
                 )
               end)
@@ -518,14 +522,15 @@ defmodule EXLA.Defn do
     [initial_arg, _arg, pred, body] = args
     initial_with_token = {get_token(cache), initial_arg}
 
-    {initial, cache} =
-      recur_composite(initial_with_token, &cast_pred_to_u8/1, state, cache)
+    {initial, cache} = recur_composite(initial_with_token, state, cache)
 
-    {[token | results], pred_region, body_region} = Value.while(function, initial)
+    {pred_computation, cache} = mlir_while_computation(pred, initial, {:pred, 8}, state, cache)
+    {body_computation, cache} = mlir_while_computation(body, initial, :with_token, state, cache)
+
+    [token | results] =
+      Value.while(function, pred_computation, body_computation, List.flatten(initial))
+
     result = wrap_tuple_result(results, initial_arg)
-
-    cache = mlir_while_computation(pred_region, pred, {:pred, 8}, state, cache)
-    cache = mlir_while_computation(body_region, body, :with_token, state, cache)
 
     {result, update_token(cache, token)}
   end
@@ -557,8 +562,8 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(:fun, %T{data: %Expr{args: args}, type: type}, state, cache) do
-    [args, expr, {_, name, _}] = args
-    {fun_computation(name, args, expr, type, state), cache}
+    [args, expr, {_, _, _}] = args
+    {fun_computation(args, expr, type, state), cache}
   end
 
   defp cached_recur_operator(
@@ -587,20 +592,21 @@ defmodule EXLA.Defn do
         tensor
       end
 
-    {q, r} = Value.qr(tensor, q_expr.shape, r_expr.shape)
+    {q, r} = Value.qr(tensor, expr_to_typespec(q_expr), expr_to_typespec(r_expr))
     {[q, r], cache}
   end
 
   defp cached_recur_operator(
          :optional,
-         %T{data: %Expr{args: [%{data: %{op: :top_k, args: [tensor, opts]}}, _expr, _callback]}} =
+         %T{data: %Expr{args: [%{data: %{op: :top_k, args: [tensor, opts]}}, expr, _callback]}} =
            _out,
          state,
          cache
        ) do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
-
-    results = Value.top_k(tensor, opts[:k])
+    {values, idx} = expr
+    typespecs = [expr_to_typespec(values), expr_to_typespec(idx)]
+    results = Value.top_k(tensor, opts[:k], typespecs)
     {results, cache}
   end
 
@@ -613,7 +619,7 @@ defmodule EXLA.Defn do
        ) do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
-    {fft2(&Value.fft(&1, :fft, &2), [tensor, opts], out, state), cache}
+    {fft2(&Value.fft(&1, :fft, &2, &3), [tensor, opts], out, state), cache}
   end
 
   defp cached_recur_operator(
@@ -625,7 +631,7 @@ defmodule EXLA.Defn do
        ) do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
-    {fft2(&Value.fft(&1, :ifft, &2), [tensor, opts], out, state), cache}
+    {fft2(&Value.fft(&1, :ifft, &2, &3), [tensor, opts], out, state), cache}
   end
 
   defp cached_recur_operator(:optional, %T{data: %Expr{args: args}}, state, cache) do
@@ -647,7 +653,11 @@ defmodule EXLA.Defn do
           {computation, Map.put(cache, key, computation)}
       end
 
-    [token | result] = Value.call(state.builder, [get_token(cache) | call_args], call_body)
+    typespecs = [Typespec.token() | container_to_typespecs(expr)]
+
+    [token | result] =
+      Value.call(state.builder, [get_token(cache) | call_args], call_body, typespecs)
+
     {wrap_tuple_result(result, expr), update_token(cache, token)}
   end
 
@@ -688,7 +698,7 @@ defmodule EXLA.Defn do
     if ans.shape == {} do
       op
     else
-      Value.broadcast_in_dim(op, EXLA.Shape.make_shape(ans.type, ans.shape), {})
+      Value.broadcast_in_dim(op, [], expr_to_typespec(ans))
     end
   end
 
@@ -700,47 +710,55 @@ defmodule EXLA.Defn do
         to_constant(state.builder, Nx.to_number(tensor), tensor.type)
 
       shape ->
-        shape = EXLA.Shape.make_shape(tensor.type, shape)
-        Value.constant_from_binary(state.builder, Nx.to_binary(tensor), shape)
+        Value.constant(
+          state.builder,
+          Nx.to_flat_list(tensor),
+          Typespec.tensor(tensor.type, shape)
+        )
     end
   end
 
-  defp to_operator(:iota, [axis], %{type: type, shape: shape}, state) do
-    shape = EXLA.Shape.make_shape(type, shape)
-    EXLA.Lib.iota(state.builder, shape, axis)
+  defp to_operator(:iota, [axis], ans, state) do
+    EXLA.Lib.iota(state.builder, axis, expr_to_typespec(ans))
   end
 
   defp to_operator(:eye, [], %{type: type, shape: shape}, state) do
     iota_type = Nx.Type.merge_number({:u, 8}, Tuple.product(shape))
-    iota_shape = EXLA.Shape.make_shape(iota_type, shape)
+    iota_typespec = Typespec.tensor(iota_type, shape)
     rank = tuple_size(shape)
 
-    i0 = Value.iota(state.builder, iota_shape, rank - 2)
-    i1 = Value.iota(state.builder, iota_shape, rank - 1)
-    to_type(Value.equal(state.builder, i0, i1), type)
+    i0 = Value.iota(state.builder, rank - 2, iota_typespec)
+    i1 = Value.iota(state.builder, rank - 1, iota_typespec)
+
+    typespec = Typespec.tensor({:pred, 8}, shape)
+    Value.equal(i0, i1, typespec) |> to_type(type)
   end
 
   ## to_operator shape
 
-  defp to_operator(:reshape, [%Value{} = op], %{shape: shape}, _state) do
-    Value.reshape(op, shape)
+  defp to_operator(:reshape, [%Value{} = op], ans, _state) do
+    Value.reshape(op, expr_to_typespec(ans))
   end
 
-  defp to_operator(:pad, [%Value{} = op, %Value{} = value, padding_config], %{type: type}, _state) do
-    Value.pad(to_type(op, type), to_type(value, type), padding_config)
+  defp to_operator(:pad, [%Value{} = op, %Value{} = value, padding_config], ans, _state) do
+    Value.pad(
+      to_type(op, ans.type),
+      to_type(value, ans.type),
+      padding_config,
+      expr_to_typespec(ans)
+    )
   end
 
   defp to_operator(:broadcast, [%Value{} = op, _shape, axes], ans, _state) do
-    out_shape = EXLA.Shape.make_shape(ans.type, ans.shape)
-    Value.broadcast_in_dim(to_type(op, ans.type), out_shape, List.to_tuple(axes))
+    Value.broadcast_in_dim(to_type(op, ans.type), axes, expr_to_typespec(ans))
   end
 
-  defp to_operator(:transpose, [%Value{} = op, axes], _ans, _state) do
-    Value.transpose(op, axes)
+  defp to_operator(:transpose, [%Value{} = op, axes], ans, _state) do
+    Value.transpose(op, axes, expr_to_typespec(ans))
   end
 
   defp to_operator(:squeeze, [%Value{} = op, _axes], ans, _state) do
-    Value.reshape(op, ans.shape)
+    Value.reshape(op, expr_to_typespec(ans))
   end
 
   ## to_operator others
@@ -769,18 +787,17 @@ defmodule EXLA.Defn do
            contract_axes2,
            batch_axes2
          ],
-         %{type: type, shape: shape},
+         ans,
          state
        ) do
     precision = state.precision
-    output_shape = EXLA.Shape.make_shape(type, shape)
 
     Value.dot_general(
-      output_shape,
       left,
       right,
       {contract_axes1, batch_axes1, contract_axes2, batch_axes2},
-      precision
+      precision,
+      expr_to_typespec(ans)
     )
   end
 
@@ -799,16 +816,8 @@ defmodule EXLA.Defn do
 
     %{type: output_type} = ans
 
-    # Build general conv dims
-    input_permutation = List.to_tuple(opts[:input_permutation])
-    [out_features, in_features | spatial_features] = opts[:kernel_permutation]
-    kernel_permutation = List.to_tuple([in_features, out_features | spatial_features])
-
-    output_permutation =
-      opts[:output_permutation]
-      |> List.to_tuple()
-
-    dimension_numbers = {input_permutation, kernel_permutation, output_permutation}
+    dimension_numbers =
+      {opts[:input_permutation], opts[:kernel_permutation], opts[:output_permutation]}
 
     # Ensure both types are floating
     operand = to_type(operand, output_type)
@@ -825,52 +834,58 @@ defmodule EXLA.Defn do
       feature_group_count,
       batch_group_count,
       state.precision,
-      ans.shape
+      expr_to_typespec(ans)
     )
   end
 
   defp to_operator(
          :select,
          [%Value{} = pred, %Value{} = on_true, %Value{} = on_false],
-         %{type: type, shape: shape},
+         %{type: type, shape: shape} = ans,
          _state
        ) do
     pred = to_type(pred, {:pred, 8})
 
-    out_shape = EXLA.Shape.make_shape(type, shape)
+    typespec = expr_to_typespec(ans)
 
     on_true =
       on_true
       |> to_type(type)
-      |> Value.broadcast_in_dim(out_shape, broadcast_axes(op_shape(on_true), shape))
+      |> Value.broadcast_in_dim(broadcast_axes(op_shape(on_true), shape), typespec)
 
     on_false =
       on_false
       |> to_type(type)
-      |> Value.broadcast_in_dim(out_shape, broadcast_axes(op_shape(on_false), shape))
+      |> Value.broadcast_in_dim(broadcast_axes(op_shape(on_false), shape), typespec)
 
-    Value.select(pred, on_true, on_false)
+    Value.select(pred, on_true, on_false, typespec)
   end
 
-  defp to_operator(:triangular_solve, [%Value{} = a, b, opts], %{type: type}, _state) do
+  defp to_operator(:triangular_solve, [%Value{} = a, b, opts], %{type: type} = ans, _state) do
     left_side = Keyword.fetch!(opts, :left_side)
     lower = Keyword.fetch!(opts, :lower)
     transform = Keyword.fetch!(opts, :transform_a)
 
-    case Value.get_shape(b).dims do
+    case Value.get_typespec(b).shape do
       {_} = b_shape ->
+        b_shape = Tuple.append(b_shape, 1)
+
         b =
           b
           |> to_type(type)
-          |> Value.reshape(Tuple.append(b_shape, 1))
+          |> Value.reshape(Typespec.tensor(type, b_shape))
+
+        typespec = Typespec.tensor(type, b_shape)
 
         to_type(a, type)
-        |> Value.triangular_solve(b, left_side, lower, transform)
-        |> Value.reshape(b_shape)
+        |> Value.triangular_solve(b, left_side, lower, transform, typespec)
+        |> Value.reshape(Typespec.tensor(type, ans.shape))
 
       _ ->
+        typespec = Typespec.tensor(type, ans.shape)
+
         to_type(a, type)
-        |> Value.triangular_solve(to_type(b, type), left_side, lower, transform)
+        |> Value.triangular_solve(to_type(b, type), left_side, lower, transform, typespec)
     end
   end
 
@@ -880,49 +895,42 @@ defmodule EXLA.Defn do
 
   ## to_operator element-wise
 
-  defp to_operator(:negate, [%Value{} = op], _ans, _state), do: Value.negate(op)
+  defp to_operator(:negate, [%Value{} = op], ans, _state),
+    do: Value.negate(op, expr_to_typespec(ans))
 
-  defp to_operator(:abs, [%Value{} = op], _ans, _state), do: Value.abs(op)
+  defp to_operator(:abs, [%Value{} = op], ans, _state), do: Value.abs(op, expr_to_typespec(ans))
 
-  defp to_operator(:sign, [%Value{} = op], %{shape: shape, type: type}, state) do
-    case type do
+  defp to_operator(:sign, [%Value{} = op], ans, state) do
+    typespec = expr_to_typespec(ans)
+
+    case typespec.type do
       {:u, _} ->
-        ones_shape = Tuple.duplicate(1, tuple_size(shape))
-
-        one = Enum.reduce(1..tuple_size(shape), 1, fn _, acc -> [acc] end)
-
-        one =
-          one
-          |> Nx.tensor(type: type, backend: Nx.BinaryBackend)
-          |> Nx.to_binary()
-          |> then(
-            &Value.constant_from_binary(state.builder, &1, %{dtype: type, dims: ones_shape})
-          )
+        one = Value.constant(state.builder, [1], Typespec.to_shape(typespec, {}))
 
         one
-        |> Value.broadcast_in_dim(Value.get_shape(op), List.to_tuple(Nx.axes(shape)))
-        |> then(&Value.min(state.builder, &1, op))
+        |> Value.broadcast_in_dim([], typespec)
+        |> Value.min(op, typespec)
 
       _ ->
-        Value.sign(op)
+        Value.sign(op, typespec)
     end
   end
 
-  defp to_operator(:right_shift, [%Value{} = left, %Value{} = right], out, state) do
+  defp to_operator(:right_shift, [%Value{} = left, %Value{} = right], out, _state) do
     op =
       if match?({:u, _}, out.type),
         do: :right_shift_logical,
         else: :right_shift_arithmetic
 
-    apply_mlir_broadcasted_bin_op(state.builder, op, out, left, right)
+    apply_mlir_broadcasted_bin_op(op, out, left, right)
   end
 
   @bin_op [:add, :subtract, :multiply, :min, :max, :remainder, :pow, :divide, :atan2] ++
             [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift]
 
-  defp to_operator(op, [%Value{} = left, %Value{} = right], out, state)
+  defp to_operator(op, [%Value{} = left, %Value{} = right], out, _state)
        when op in @bin_op do
-    apply_mlir_broadcasted_bin_op(state.builder, op, out, left, right)
+    apply_mlir_broadcasted_bin_op(op, out, left, right)
   end
 
   defp to_operator(:quotient, [left, right], ans, state) do
@@ -931,17 +939,16 @@ defmodule EXLA.Defn do
 
   @bin_comp_op [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
 
-  defp to_operator(op, [%Value{} = left, %Value{} = right], ans, state)
+  defp to_operator(op, [%Value{} = left, %Value{} = right], ans, _state)
        when op in @bin_comp_op do
-    apply_mlir_broadcasted_bin_op(state.builder, op, ans, left, right)
+    apply_mlir_broadcasted_bin_op(op, ans, left, right)
   end
 
   @bin_pred_op [logical_and: :bitwise_and, logical_or: :bitwise_or, logical_xor: :bitwise_xor]
 
   for {logical, bitwise} <- @bin_pred_op do
-    defp to_operator(unquote(logical), [%Value{} = left, %Value{} = right], ans, state) do
+    defp to_operator(unquote(logical), [%Value{} = left, %Value{} = right], ans, _state) do
       apply_mlir_broadcasted_bin_op(
-        state.builder,
         unquote(bitwise),
         ans,
         to_mlir_logical(left),
@@ -950,58 +957,54 @@ defmodule EXLA.Defn do
     end
   end
 
-  @unary_op [:exp, :expm1, :log, :log1p, :sigmoid, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
+  @unary_op [:exp, :expm1, :log, :log1p, :sigmoid, :cos, :sin, :tan, :tanh, :sqrt, :rsqrt, :cbrt] ++
               [:bitwise_not, :count_leading_zeros, :population_count, :cosh, :sinh, :acos] ++
               [:asin, :atan, :floor, :ceil, :round, :acosh, :asinh, :atanh, :erf] ++
               [:erfc, :erf_inv, :conjugate]
 
-  defp to_operator(op, [%Value{} = arg], %{type: type}, _state) when op in @unary_op do
-    apply(Value, op, [to_type(arg, type)])
+  defp to_operator(op, [%Value{} = arg], %{type: type} = ans, _state)
+       when op in @unary_op do
+    apply(Value, op, [to_type(arg, type), expr_to_typespec(ans)])
   end
 
   defp to_operator(:fft, [%Value{} | _] = args, out, state),
-    do: fft(&Value.fft(&1, :fft, &2), args, out, state)
+    do: fft(&Value.fft(&1, :fft, &2, &3), args, out, state)
 
   defp to_operator(:ifft, [%Value{} | _] = args, out, state),
-    do: fft(&Value.fft(&1, :ifft, &2), args, out, state)
+    do: fft(&Value.fft(&1, :ifft, &2, &3), args, out, state)
 
-  defp to_operator(:is_nan, [%Value{} = arg], _out, _state),
-    do: Value.is_nan(arg)
+  defp to_operator(:is_nan, [%Value{} = arg], out, _state),
+    do: Value.is_nan(arg, expr_to_typespec(out))
 
-  defp to_operator(:is_infinity, [%Value{} = arg], _out, _state),
-    do: Value.is_infinity(arg)
+  defp to_operator(:is_infinity, [%Value{} = arg], out, _state),
+    do: Value.is_infinity(arg, expr_to_typespec(out))
 
   # These operations do the type conversion implicitly, and so
   # we cannot mess with the output type (e.g. the to_type conversion)
   # because it will throw an error
   @complex_op [:real, :imag]
 
-  defp to_operator(op, [%Value{} = arg], %{type: type}, _state) when op in @complex_op do
+  defp to_operator(op, [%Value{} = arg], ans, _state)
+       when op in @complex_op do
     maybe_cast_arg =
       if Nx.Type.integer?(op_type(arg)) do
-        to_type(arg, type)
+        to_type(arg, ans.type)
       else
         arg
       end
 
-    apply(Value, op, [maybe_cast_arg])
-  end
-
-  @unary_lib_op [:tan]
-
-  defp to_operator(op, [arg], %{type: type}, _state) when op in @unary_lib_op do
-    apply(EXLA.Lib, op, [to_type(arg, type)])
+    apply(Value, op, [maybe_cast_arg, expr_to_typespec(ans)])
   end
 
   defp to_operator(:as_type, [arg], %{type: type}, _state) do
     to_type(arg, type)
   end
 
-  defp to_operator(:bitcast, [%Value{} = arg], %{type: type}, _state) do
-    if op_type(arg) == type do
+  defp to_operator(:bitcast, [%Value{} = arg], ans, _state) do
+    if op_type(arg) == ans.type do
       arg
     else
-      Value.bitcast_convert(arg, type)
+      Value.bitcast_convert(arg, expr_to_typespec(ans))
     end
   end
 
@@ -1049,37 +1052,40 @@ defmodule EXLA.Defn do
        ) do
     arg = to_type(arg, type)
     keep_axes = opts[:keep_axes]
-    [result] = Value.reduce(fun, [to_type(acc, type)], [arg], reduce_axes(arg, opts[:axes]))
+    reduce_axes = reduce_axes(arg, opts[:axes])
+
+    typespec = Typespec.tensor(type, remove_axes(op_shape(arg), reduce_axes))
+    [result] = Value.reduce(fun, [to_type(acc, type)], [arg], reduce_axes, [typespec])
 
     if keep_axes do
-      Value.reshape(result, shape)
+      Value.reshape(result, Typespec.tensor(type, shape))
     else
       result
     end
   end
 
-  defp to_operator(:window_sum, [arg, window_dims, opts], %{type: type}, state) do
-    to_window_aggregate(:add, type, arg, 0, window_dims, opts, state)
+  defp to_operator(:window_sum, [arg, window_dims, opts], ans, state) do
+    to_window_aggregate(:add, ans, arg, 0, window_dims, opts, state)
   end
 
-  defp to_operator(:window_max, [arg, window_dims, opts], %{type: type}, state) do
+  defp to_operator(:window_max, [arg, window_dims, opts], %{type: type} = ans, state) do
     min_number = EXLA.Lib.min_number(state.builder, type)
-    to_window_aggregate(:max, type, arg, min_number, window_dims, opts, state)
+    to_window_aggregate(:max, ans, arg, min_number, window_dims, opts, state)
   end
 
-  defp to_operator(:window_min, [arg, window_dims, opts], %{type: type}, state) do
+  defp to_operator(:window_min, [arg, window_dims, opts], %{type: type} = ans, state) do
     max_number = EXLA.Lib.max_number(state.builder, type)
-    to_window_aggregate(:min, type, arg, max_number, window_dims, opts, state)
+    to_window_aggregate(:min, ans, arg, max_number, window_dims, opts, state)
   end
 
-  defp to_operator(:window_product, [arg, window_dims, opts], %{type: type}, state) do
-    to_window_aggregate(:multiply, type, arg, 1, window_dims, opts, state)
+  defp to_operator(:window_product, [arg, window_dims, opts], ans, state) do
+    to_window_aggregate(:multiply, ans, arg, 1, window_dims, opts, state)
   end
 
   defp to_operator(
          :window_reduce,
          [arg, acc, window_dimensions, opts, fun],
-         %{type: type},
+         %{type: type} = ans,
          %{builder: %Function{}}
        ) do
     padding_config = opts[:padding]
@@ -1093,11 +1099,12 @@ defmodule EXLA.Defn do
         fun,
         [acc],
         [arg],
-        window_dimensions,
-        List.to_tuple(strides),
-        Tuple.duplicate(1, tuple_size(op_shape(arg))),
-        List.to_tuple(window_dilations),
-        padding_config
+        Tuple.to_list(window_dimensions),
+        strides,
+        List.duplicate(1, tuple_size(op_shape(arg))),
+        window_dilations,
+        padding_config,
+        [expr_to_typespec(ans)]
       )
 
     result
@@ -1106,7 +1113,7 @@ defmodule EXLA.Defn do
   defp to_operator(
          :window_scatter_max,
          [%Value{} = arg, %Value{} = source, %Value{} = init_value, window_dimensions, opts],
-         %{type: type},
+         %{type: type} = ans,
          _state
        ) do
     padding_config = opts[:padding]
@@ -1123,14 +1130,15 @@ defmodule EXLA.Defn do
       :gt,
       Tuple.to_list(window_dimensions),
       strides,
-      padding_config
+      padding_config,
+      expr_to_typespec(ans)
     )
   end
 
   defp to_operator(
          :window_scatter_min,
          [%Value{} = arg, %Value{} = source, %Value{} = init_value, window_dimensions, opts],
-         %{type: type},
+         %{type: type} = ans,
          _state
        ) do
     padding_config = opts[:padding]
@@ -1147,7 +1155,8 @@ defmodule EXLA.Defn do
       :lt,
       Tuple.to_list(window_dimensions),
       strides,
-      padding_config
+      padding_config,
+      expr_to_typespec(ans)
     )
   end
 
@@ -1159,10 +1168,9 @@ defmodule EXLA.Defn do
     mlir_scatter(tensors, out, :put)
   end
 
-  defp to_operator(:map, [%Value{} = arg, _opts, fun], %{shape: shape, type: type}, _state) do
-    arg = to_type(arg, type)
-
-    Value.map(fun, [arg], Nx.axes(shape) |> List.to_tuple())
+  defp to_operator(:map, [%Value{} = arg, _opts, fun], ans, _state) do
+    arg = to_type(arg, ans.type)
+    Value.map(fun, [arg], Nx.axes(ans.shape), expr_to_typespec(ans))
   end
 
   defp to_operator(op, [arg, opts], ans, state) when op in [:argmax, :argmin] do
@@ -1174,7 +1182,7 @@ defmodule EXLA.Defn do
     max = to_type(max, ans.type)
     operand = to_type(operand, ans.type)
 
-    Value.clamp(operand, min, max)
+    Value.clamp(operand, min, max, expr_to_typespec(ans))
   end
 
   defp to_operator(:slice, [%Value{} = tensor, start_indices, lengths, strides], ans, _state) do
@@ -1182,7 +1190,7 @@ defmodule EXLA.Defn do
 
     if all_static? do
       limit_indices = Enum.zip_with(start_indices, lengths, fn i, len -> i + len end)
-      Value.slice(tensor, start_indices, limit_indices, strides)
+      Value.slice(tensor, start_indices, limit_indices, strides, expr_to_typespec(ans))
     else
       sample = Enum.find(start_indices, &(not is_integer(&1)))
 
@@ -1194,12 +1202,14 @@ defmodule EXLA.Defn do
 
       start_indices = Enum.map(start_indices, &to_type(&1, type))
       zeros = List.duplicate(0, tuple_size(ans.shape))
-      slice = Value.dynamic_slice(tensor, start_indices, lengths)
+
+      typespec = Typespec.tensor(ans.type, List.to_tuple(lengths))
+      slice = Value.dynamic_slice(tensor, start_indices, lengths, typespec)
 
       if Enum.all?(strides, &(&1 == 1)) do
         slice
       else
-        Value.slice(slice, zeros, lengths, strides)
+        Value.slice(slice, zeros, lengths, strides, expr_to_typespec(ans))
       end
     end
   end
@@ -1207,10 +1217,10 @@ defmodule EXLA.Defn do
   defp to_operator(:put_slice, [%Value{} = tensor, start_indices, slice], ans, _state) do
     tensor = to_type(tensor, ans.type)
     slice = to_type(slice, ans.type)
-    Value.dynamic_update_slice(tensor, slice, start_indices)
+    Value.dynamic_update_slice(tensor, slice, start_indices, expr_to_typespec(ans))
   end
 
-  defp to_operator(:take, [%Value{} = tensor, indices, axis], _ans, _state) do
+  defp to_operator(:take, [%Value{} = tensor, indices, axis], ans, _state) do
     tensor_rank = tensor |> op_shape() |> tuple_size()
     indices_rank = indices |> op_shape() |> tuple_size()
     result_rank = tensor_rank - 1 + indices_rank
@@ -1228,12 +1238,13 @@ defmodule EXLA.Defn do
       slice_sizes,
       offset_dims,
       collapsed_slice_dims,
-      start_index_map
+      start_index_map,
+      expr_to_typespec(ans)
     )
   end
 
-  defp to_operator(:take_along_axis, [%Value{} = tensor, indices, axis], _ans, state) do
-    indices_shape = op_shape(indices)
+  defp to_operator(:take_along_axis, [%Value{} = tensor, indices, axis], ans, state) do
+    %{shape: indices_shape} = indices_typespec = Value.get_typespec(indices)
     indices_rank = tuple_size(indices_shape)
 
     axes_range = 0..(indices_rank - 1)//1
@@ -1244,33 +1255,32 @@ defmodule EXLA.Defn do
     collapsed_slice_dims = Enum.to_list(axes_range)
     start_index_map = Enum.to_list(axes_range)
 
-    indices_exla_shape = Value.get_shape(indices)
+    new_axis_typespec = Typespec.to_shape(indices_typespec, Tuple.append(indices_shape, 1))
 
-    iotas =
-      Enum.map(axes_range, fn axis ->
-        Value.iota(state.builder, indices_exla_shape, axis)
+    full_indices_typespec =
+      Typespec.to_shape(indices_typespec, Tuple.append(indices_shape, indices_rank))
+
+    full_indices =
+      axes_range
+      |> Enum.map(fn
+        ^axis -> Value.reshape(indices, new_axis_typespec)
+        axis -> Value.iota(state.builder, axis, new_axis_typespec)
       end)
-
-    new_axis_shape = Tuple.append(indices_shape, 1)
-
-    indices =
-      iotas
-      |> List.replace_at(axis, indices)
-      |> Enum.map(&Value.reshape(&1, new_axis_shape))
-      |> Value.concatenate(indices_rank)
+      |> Value.concatenate(indices_rank, full_indices_typespec)
 
     Value.gather(
       tensor,
-      indices,
+      full_indices,
       index_vector_dim,
       slice_sizes,
       offset_dims,
       collapsed_slice_dims,
-      start_index_map
+      start_index_map,
+      expr_to_typespec(ans)
     )
   end
 
-  defp to_operator(:gather, [%Value{} = tensor, indices, opts], _ans, _state) do
+  defp to_operator(:gather, [%Value{} = tensor, indices, opts], ans, _state) do
     axes = Keyword.fetch!(opts, :axes)
     tensor_shape = op_shape(tensor)
     tensor_rank = tuple_size(tensor_shape)
@@ -1284,11 +1294,21 @@ defmodule EXLA.Defn do
 
     batch_size = tensor_rank - length(axes)
     offset_dims = count_up(batch_size, batch_size)
-    Value.gather(tensor, indices, index_vector_dim, slice_sizes, offset_dims, axes, axes)
+
+    Value.gather(
+      tensor,
+      indices,
+      index_vector_dim,
+      slice_sizes,
+      offset_dims,
+      axes,
+      axes,
+      expr_to_typespec(ans)
+    )
   end
 
-  defp to_operator(:reverse, [%Value{} = tensor, axes], _ans, _state) do
-    Value.reverse(tensor, axes)
+  defp to_operator(:reverse, [%Value{} = tensor, axes], ans, _state) do
+    Value.reverse(tensor, axes, expr_to_typespec(ans))
   end
 
   defp to_operator(:concatenate, [[%Value{} | _rest] = tensors, axis], ans, _state) do
@@ -1296,7 +1316,7 @@ defmodule EXLA.Defn do
       tensors
       |> Enum.map(&to_type(&1, ans.type))
 
-    Value.concatenate(tensors, axis)
+    Value.concatenate(tensors, axis, expr_to_typespec(ans))
   end
 
   defp to_operator(:sort, [%Value{} = tensor, opts], ans, state) do
@@ -1308,11 +1328,12 @@ defmodule EXLA.Defn do
         :desc -> :greater
       end
 
-    args = [%{type: ans.type, shape: {}}, %{type: ans.type, shape: {}}]
+    arg_typespec = Typespec.tensor(ans.type, {})
+    arg_typespecs = [arg_typespec, arg_typespec]
 
-    comp = sort_computation(op, ans.type, args, state)
+    comp = sort_computation(op, ans.type, arg_typespecs, state)
 
-    Value.sort(tensor, comp, dimension, opts[:stable] == true)
+    Value.sort([tensor], comp, dimension, opts[:stable] == true, [expr_to_typespec(ans)]) |> hd()
   end
 
   defp to_operator(:argsort, [tensor, opts], ans, state) do
@@ -1327,19 +1348,16 @@ defmodule EXLA.Defn do
 
     type = op_type(tensor)
 
-    args = [
-      %{type: type, shape: {}},
-      %{type: type, shape: {}},
-      %{type: ans.type, shape: {}},
-      %{type: ans.type, shape: {}}
-    ]
+    value_typespec = Typespec.tensor(type, {})
+    idx_typespec = Typespec.tensor(ans.type, {})
+    arg_typespecs = [value_typespec, value_typespec, idx_typespec, idx_typespec]
 
-    comp = sort_computation(op, type, args, state)
+    comp = sort_computation(op, type, arg_typespecs, state)
 
     EXLA.Lib.argsort(state.builder, tensor, dimension, stable, comp, ans.type)
   end
 
-  defp fft(exla_op, [%Value{} = tensor, opts], %{type: type}, state) do
+  defp fft(exla_op, [%Value{} = tensor, opts], %{type: type} = ans, state) do
     n = opts[:length]
     axis = opts[:axis]
     output_type = Nx.Type.to_complex(type)
@@ -1359,18 +1377,20 @@ defmodule EXLA.Defn do
           ^last_axis -> axis
           ax -> ax
         end)
-        |> List.to_tuple()
+
+      {transposed_shape, _} = Nx.Shape.transpose(ans.shape, permutation, ans.names)
+      transposed_typespec = Typespec.tensor(ans.type, transposed_shape)
 
       tensor
-      |> Value.transpose(permutation)
-      |> exla_op.([n])
-      |> Value.transpose(permutation)
+      |> Value.transpose(permutation, transposed_typespec)
+      |> exla_op.([n], transposed_typespec)
+      |> Value.transpose(permutation, expr_to_typespec(ans))
     else
-      exla_op.(tensor, [n])
+      exla_op.(tensor, [n], expr_to_typespec(ans))
     end
   end
 
-  defp fft2(exla_op, [%Value{} = tensor, opts], %{type: type}, state) do
+  defp fft2(exla_op, [%Value{} = tensor, opts], %{type: type} = ans, state) do
     [l1, l2] = lengths = opts[:lengths]
     [ax1, ax2] = axes = opts[:axes]
     output_type = Nx.Type.to_complex(type)
@@ -1396,14 +1416,16 @@ defmodule EXLA.Defn do
           ^last_axis -> ax2
           ax -> ax
         end)
-        |> List.to_tuple()
+
+      {transposed_shape, _} = Nx.Shape.transpose(ans.shape, permutation, ans.names)
+      transposed_typespec = Typespec.tensor(ans.type, transposed_shape)
 
       tensor
-      |> Value.transpose(permutation)
-      |> exla_op.(lengths)
-      |> Value.transpose(permutation)
+      |> Value.transpose(permutation, transposed_typespec)
+      |> exla_op.(lengths, transposed_typespec)
+      |> Value.transpose(permutation, expr_to_typespec(ans))
     else
-      exla_op.(tensor, lengths)
+      exla_op.(tensor, lengths, expr_to_typespec(ans))
     end
   end
 
@@ -1423,22 +1445,27 @@ defmodule EXLA.Defn do
         strides = List.duplicate(1, tuple_size(shape))
 
         limit_indices = Enum.zip_with(starts, lengths, fn i, len -> i + len end)
-        Value.slice(tensor, starts, limit_indices, strides)
+
+        {_, shape} = Nx.Shape.slice(shape, starts, limit_indices, strides)
+        typespec = Typespec.tensor(output_type, shape)
+        Value.slice(tensor, starts, limit_indices, strides, typespec)
 
       m < n ->
         zero =
-          Value.constant_r0(state.builder, Complex.new(0), output_type)
+          Value.constant(state.builder, [Complex.new(0)], Typespec.tensor(output_type, {}))
 
         padding_config =
           {0, 0, 0}
           |> List.duplicate(tuple_size(shape))
           |> List.replace_at(axis, {0, n - m, 0})
 
-        Value.pad(tensor, zero, padding_config)
+        shape = Nx.Shape.pad(shape, padding_config)
+        typespec = Typespec.tensor(output_type, shape)
+        Value.pad(tensor, zero, padding_config, typespec)
     end
   end
 
-  defp mlir_scatter([target, indices, updates, opts], %{type: type}, kind)
+  defp mlir_scatter([target, indices, updates, opts], %{type: type} = ans, kind)
        when kind in [:add, :put] do
     target = to_type(target, type)
     updates = to_type(updates, type)
@@ -1446,7 +1473,17 @@ defmodule EXLA.Defn do
     update_axes = tl(axes_for_rank(update_rank))
     index_axes = Keyword.fetch!(opts, :axes)
 
-    Value.scatter(target, indices, updates, kind, 1, update_axes, index_axes, index_axes)
+    Value.scatter(
+      target,
+      indices,
+      updates,
+      kind,
+      1,
+      update_axes,
+      index_axes,
+      index_axes,
+      expr_to_typespec(ans)
+    )
   end
 
   ## Cache and hook helpers helpers
@@ -1474,68 +1511,48 @@ defmodule EXLA.Defn do
 
   ## Computation helpers
 
-  defp sort_computation(op, type, args, %{builder: %EXLA.MLIR.Function{} = builder}) do
-    %{module: module, name: name} = subbuilder(builder, Atom.to_string(op))
+  defp sort_computation(op, type, arg_typespecs, %{builder: %EXLA.MLIR.Function{} = function}) do
+    {region, [lhs, rhs | _]} = Function.push_region(function, arg_typespecs)
 
-    arg_shapes = Enum.map(args, &EXLA.Shape.make_shape(&1.type, &1.shape))
-
-    function =
-      EXLA.MLIR.Module.add_function(module, name, arg_shapes, [
-        EXLA.Shape.make_shape({:pred, 8}, {})
-      ])
-
-    [lhs, rhs | _] = EXLA.MLIR.Function.get_arguments(function)
+    typespec = Typespec.tensor({:pred, 8}, {})
 
     op =
       cond do
         Nx.Type.integer?(type) ->
-          apply(Value, op, [function, lhs, rhs])
+          apply(Value, op, [lhs, rhs, typespec])
 
         op == :less ->
-          is_nan = Value.is_nan(rhs)
-          Value.bitwise_or(function, is_nan, Value.less(function, lhs, rhs))
+          is_nan = Value.is_nan(rhs, typespec)
+          Value.bitwise_or(is_nan, Value.less(lhs, rhs, typespec), typespec)
 
         op == :greater ->
-          is_nan = Value.is_nan(lhs)
-          Value.bitwise_or(function, is_nan, Value.greater(function, lhs, rhs))
+          is_nan = Value.is_nan(lhs, typespec)
+          Value.bitwise_or(is_nan, Value.greater(lhs, rhs, typespec), typespec)
       end
 
-    Value.variadic_return(function, [op])
-    function
+    Value.return(function, [op])
+    Function.pop_region(function)
+    region
   end
 
   defp op_computation(
          op,
-         arg_shapes,
-         out,
+         arg_typespecs,
          %{builder: %EXLA.MLIR.Function{} = builder},
          prepare_args
        ) do
-    %{module: module, name: name} = subbuilder(builder, Atom.to_string(op))
-
-    function = EXLA.MLIR.Module.add_function(module, name, arg_shapes, out)
-
-    args = EXLA.MLIR.Function.get_arguments(function)
-
-    op = apply(Value, op, [function | prepare_args.(args)])
-    Value.variadic_return(function, [op])
-    function
+    {region, args} = Function.push_region(builder, arg_typespecs)
+    op = apply(Value, op, prepare_args.(args) ++ [hd(arg_typespecs)])
+    Value.return(builder, [op])
+    Function.pop_region(builder)
+    region
   end
 
-  defp fun_computation(
-         name,
-         args,
-         expr,
-         type,
-         %{builder: %EXLA.MLIR.Function{module: module}} = state
-       ) do
-    arg_shapes =
-      Enum.map(args, fn %{type: type, shape: shape} -> EXLA.Shape.make_shape(type, shape) end)
+  defp fun_computation(args, expr, type, %{builder: %Function{} = function} = state) do
+    arg_typespecs =
+      Enum.map(args, fn %{type: type, shape: shape} -> Typespec.tensor(type, shape) end)
 
-    out_type = container_to_exla_shape(expr)
-
-    function = EXLA.MLIR.Module.add_function(module, Atom.to_string(name), arg_shapes, out_type)
-    mlir_args = EXLA.MLIR.Function.get_arguments(function)
+    {region, mlir_args} = Function.push_region(function, arg_typespecs)
 
     arg_params = Enum.zip(args, mlir_args)
 
@@ -1549,18 +1566,15 @@ defmodule EXLA.Defn do
     }
 
     {res, _} = recur_composite(expr, state, no_token_cache())
-    Value.variadic_return(function, Enum.map(res, &to_type(&1, type)))
-    function
+    Value.return(function, Enum.map(res, &to_type(&1, type)))
+    Function.pop_region(function)
+    region
   end
 
-  defp mlir_while_computation(
-         region,
-         expr,
-         type,
-         %{builder: %Function{} = function} = state,
-         cache
-       ) do
-    [arg_token | arg_params] = Function.push_region(function, region)
+  defp mlir_while_computation(expr, initial, type, state, cache) do
+    arg_typespecs = Enum.map(List.flatten(initial), &Value.get_typespec/1)
+
+    {region, [arg_token | arg_params]} = Function.push_region(state.builder, arg_typespecs)
 
     params = Enum.with_index(arg_params, &{&2, &1})
 
@@ -1586,24 +1600,22 @@ defmodule EXLA.Defn do
         Enum.map(res, &to_type(&1, type))
       end
 
-    Value.variadic_return(function, res)
-    Function.pop_region(function)
+    Value.return(state.builder, res)
+    Function.pop_region(state.builder)
 
-    merge_outfeed(cache, comp_cache)
+    {region, merge_outfeed(cache, comp_cache)}
   end
 
   defp token_computation(name, args, expr, %{builder: %Function{}} = state, cache) do
     %Function{module: module, name: name} = subbuilder(state.builder, name)
 
-    token_shape = EXLA.Shape.make_token_shape()
-
-    arg_shapes = Enum.map(args, &Value.get_shape/1)
-
-    out_shapes = container_to_exla_shape(expr)
+    token_typespec = Typespec.token()
+    arg_typespecs = Enum.map(args, &Value.get_typespec/1)
+    out_typespecs = container_to_typespecs(expr)
 
     function =
-      EXLA.MLIR.Module.add_function(module, name, [token_shape | arg_shapes], [
-        token_shape | out_shapes
+      EXLA.MLIR.Module.add_function(module, name, [token_typespec | arg_typespecs], [
+        token_typespec | out_typespecs
       ])
 
     [arg_token | tail] = EXLA.MLIR.Function.get_arguments(function)
@@ -1619,7 +1631,7 @@ defmodule EXLA.Defn do
 
     {res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
 
-    Value.variadic_return(function, [get_token(comp_cache) | List.flatten(res)])
+    Value.return(function, [get_token(comp_cache) | List.flatten(res)])
 
     {function, merge_outfeed(cache, comp_cache)}
   end
@@ -1629,8 +1641,8 @@ defmodule EXLA.Defn do
     keys =
       Enum.map(args, fn
         %Value{} = op ->
-          %EXLA.Shape{dims: dims, dtype: dtype} = Value.get_shape(op)
-          {dims, dtype}
+          %Typespec{type: type, shape: shape} = Value.get_typespec(op)
+          {shape, type}
 
         opts ->
           opts
@@ -1720,25 +1732,30 @@ defmodule EXLA.Defn do
 
     acc =
       case initial do
-        %Value{} = initial -> initial
-        initial when is_number(initial) -> Value.constant_r0(state.builder, initial, type)
+        %Value{} = initial ->
+          initial
+
+        initial when is_number(initial) ->
+          Value.constant(state.builder, [initial], Typespec.tensor(type, {}))
       end
 
-    arg_shape = EXLA.Shape.make_shape(type, {})
-    args = [arg_shape, arg_shape]
-    comp = op_computation(op, args, [EXLA.Shape.make_shape(type, shape)], state, &Enum.reverse/1)
+    args = [Typespec.tensor(type, {}), Typespec.tensor(type, {})]
+    comp = op_computation(op, args, state, &Enum.reverse/1)
 
     keep_axes = opts[:keep_axes]
-    [result] = Value.reduce(comp, [acc], [arg], reduce_axes(arg, opts[:axes]))
+    reduce_axes = reduce_axes(arg, opts[:axes])
+
+    typespec = Typespec.tensor(type, remove_axes(op_shape(arg), reduce_axes))
+    [result] = Value.reduce(comp, [acc], [arg], reduce_axes, [typespec])
 
     if keep_axes do
-      Value.reshape(result, shape)
+      Value.reshape(result, Typespec.tensor(type, shape))
     else
       result
     end
   end
 
-  defp to_window_aggregate(op, type, arg, initial, window_dimensions, opts, state) do
+  defp to_window_aggregate(op, %{type: type} = ans, arg, initial, window_dimensions, opts, state) do
     arg = to_type(arg, type)
 
     acc =
@@ -1747,23 +1764,15 @@ defmodule EXLA.Defn do
           initial
 
         initial when is_number(initial) ->
-          Value.constant_r0(state.builder, initial, type)
+          Value.constant(state.builder, [initial], Typespec.tensor(type, {}))
       end
 
-    arg_shape = EXLA.Shape.make_shape(type, {})
-    args = [arg_shape, arg_shape]
+    args = [Typespec.tensor(type, {}), Typespec.tensor(type, {})]
     # We reverse the argument order because :nan + :infinity
     # returns :nan but :infinity + :nan returns :infinity.
     # So we want to keep the current value as first argument
     # to preserve such properties.
-    comp =
-      op_computation(
-        op,
-        args,
-        [arg_shape],
-        state,
-        &Enum.reverse/1
-      )
+    comp = op_computation(op, args, state, &Enum.reverse/1)
 
     strides = opts[:strides]
     padding = opts[:padding]
@@ -1774,11 +1783,12 @@ defmodule EXLA.Defn do
         comp,
         [acc],
         [arg],
-        window_dimensions,
-        List.to_tuple(strides),
-        Tuple.duplicate(1, tuple_size(op_shape(arg))),
-        List.to_tuple(window_dilations),
-        padding
+        Tuple.to_list(window_dimensions),
+        strides,
+        List.duplicate(1, tuple_size(op_shape(arg))),
+        window_dilations,
+        padding,
+        [expr_to_typespec(ans)]
       )
 
     result
@@ -1795,22 +1805,20 @@ defmodule EXLA.Defn do
     cache = recur_shared_ids(on_true, false_ids, state, cache)
     cache = recur_shared_ids(on_false, true_ids, state, cache)
 
-    out_shape = container_to_exla_shape(on_true)
+    out_typespecs = container_to_typespecs(on_true)
 
     in_token = get_token(cache)
 
-    result_shapes =
+    result_typespecs =
       if in_token do
-        [EXLA.Shape.make_token_shape() | out_shape]
+        [Typespec.token() | out_typespecs]
       else
-        out_shape
+        out_typespecs
       end
 
-    {if_results, true_region, false_region} = Value.if_op(pred_op, result_shapes)
-
-    cache = to_mlir_if_branch(true_region, on_true, true_ids, state, cache)
-
-    cache = to_mlir_if_branch(false_region, on_false, false_ids, state, cache)
+    {true_computation, cache} = to_mlir_if_branch(on_true, true_ids, state, cache)
+    {false_computation, cache} = to_mlir_if_branch(on_false, false_ids, state, cache)
+    if_results = Value.if_op(pred_op, true_computation, false_computation, result_typespecs)
 
     if in_token do
       [token | results] = if_results
@@ -1873,20 +1881,22 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp to_mlir_if_branch(region, expr, current_ids, state, cache) do
+  defp to_mlir_if_branch(expr, current_ids, state, cache) do
+    {region, []} = Function.push_region(state.builder, [])
+
     comp_state = %{state | scope_ids: current_ids}
 
-    [] = Function.push_region(state.builder, region)
     {res, res_cache} = recur_composite(expr, & &1, comp_state, cache)
 
     if token = get_token(cache) do
-      Value.variadic_return(state.builder, [token | List.flatten(res)])
+      Value.return(state.builder, [token | List.flatten(res)])
     else
-      Value.variadic_return(state.builder, List.flatten(res))
+      Value.return(state.builder, List.flatten(res))
     end
 
     Function.pop_region(state.builder)
-    merge_outfeed(cache, res_cache)
+
+    {region, merge_outfeed(cache, res_cache)}
   end
 
   ## Axes helpers
@@ -1897,16 +1907,14 @@ defmodule EXLA.Defn do
     max_size = tuple_size(max)
 
     # To reproduce Nx broadcast, we simply match the lower dimensions to the highest ones.
-    List.to_tuple(count_up(min_size, max_size - min_size))
+    count_up(min_size, max_size - min_size)
   end
 
   defp reduce_axes(op, axes) do
     if axes do
-      axes
-      |> Enum.sort()
-      |> List.to_tuple()
+      Enum.sort(axes)
     else
-      List.to_tuple(Nx.axes(op_shape(op)))
+      Nx.axes(op_shape(op))
     end
   end
 
@@ -1921,24 +1929,18 @@ defmodule EXLA.Defn do
 
   ## Op Helpers
 
-  defp op_type(%Value{} = op), do: Value.get_shape(op).dtype
+  defp op_type(%Value{} = op), do: Value.get_typespec(op).type
 
-  defp op_shape(%Value{} = op), do: Value.get_shape(op).dims
+  defp op_shape(%Value{} = op), do: Value.get_typespec(op).shape
 
   defp to_type(%Value{} = op, type) do
-    if op_type(op) == type do
+    typespec = Value.get_typespec(op)
+
+    if typespec.type == type do
       op
     else
-      Value.convert(op, type)
+      Value.convert(op, Typespec.to_type(typespec, type))
     end
-  end
-
-  # Inside cond/while, we need to convert pred to u8.
-  # We could do so lazily by comparing the versions of
-  # the branches, but that gets tricky with cond/if,
-  # so we always perform the operation.
-  defp cast_pred_to_u8(%Value{} = op) do
-    op
   end
 
   defp merge_type({:pred, 8}, {:pred, 8}), do: {:pred, 8}
@@ -1948,12 +1950,12 @@ defmodule EXLA.Defn do
   defp to_nx_type(type), do: type
 
   defp to_constant(%EXLA.MLIR.Function{} = function, constant, type) do
-    Value.constant_r0(function, constant, type)
+    Value.constant(function, [constant], Typespec.tensor(type, {}))
   end
 
   defp subbuilder(%EXLA.MLIR.Function{name: name} = function, description) do
     suffix = System.unique_integer([:positive])
-    %{function | name: name <> "-" <> description <> "-" <> Integer.to_string(suffix)}
+    %{function | name: name <> "_" <> description <> "_" <> Integer.to_string(suffix)}
   end
 
   # Helpers
@@ -1963,38 +1965,35 @@ defmodule EXLA.Defn do
     left ++ Enum.drop(right, length)
   end
 
-  defp apply_mlir_broadcasted_bin_op(function, op, out, left, right) do
-    left_shape = Value.get_shape(left)
-    right_shape = Value.get_shape(right)
-    out_shape = EXLA.Shape.make_shape(out.type, out.shape)
-    left_dims = broadcast_axes(left_shape.dims, out_shape.dims)
-    right_dims = broadcast_axes(right_shape.dims, out_shape.dims)
+  defp apply_mlir_broadcasted_bin_op(op, out, left, right) do
+    left_typespec = Value.get_typespec(left)
+    right_typespec = Value.get_typespec(right)
+    left_dims = broadcast_axes(left_typespec.shape, out.shape)
+    right_dims = broadcast_axes(right_typespec.shape, out.shape)
 
-    type = merge_type(left_shape.dtype, right_shape.dtype)
+    type = merge_type(left_typespec.type, right_typespec.type)
     type = merge_type(type, out.type)
-
-    broadcast_shape = EXLA.Shape.make_shape(type, out_shape.dims)
 
     left = to_type(left, type)
 
     left =
-      if left_shape.dims == broadcast_shape.dims do
+      if left_typespec.shape == out.shape do
         left
       else
-        Value.broadcast_in_dim(left, broadcast_shape, left_dims)
+        Value.broadcast_in_dim(left, left_dims, Typespec.tensor(type, out.shape))
       end
 
     right = to_type(right, type)
 
     right =
-      if right_shape.dims == broadcast_shape.dims do
+      if right_typespec.shape == out.shape do
         right
       else
-        Value.broadcast_in_dim(right, broadcast_shape, right_dims)
+        Value.broadcast_in_dim(right, right_dims, Typespec.tensor(type, out.shape))
       end
 
     Value
-    |> apply(op, [function, left, right])
+    |> apply(op, [left, right, Typespec.tensor(type, out.shape)])
     |> to_type(out.type)
   end
 
@@ -2002,15 +2001,15 @@ defmodule EXLA.Defn do
     to_type(value, {:pred, 8})
   end
 
-  defp container_to_exla_shape(container) do
+  defp container_to_typespecs(container) do
     [container]
     |> Nx.Defn.Composite.flatten_list()
     |> Enum.flat_map(fn
       %Nx.Tensor{type: {:tuple, _}, data: %{args: values}} ->
-        Enum.flat_map(values, &container_to_exla_shape/1)
+        Enum.flat_map(values, &container_to_typespecs/1)
 
       t ->
-        [EXLA.Shape.make_shape(t.type, t.shape)]
+        [Typespec.tensor(t.type, t.shape)]
     end)
   end
 
@@ -2026,4 +2025,14 @@ defmodule EXLA.Defn do
 
   defp unwrap_single_tensor!({[%Value{} = op], cache}), do: {op, cache}
   defp unwrap_single_tensor!({%Value{} = op, cache}), do: {op, cache}
+
+  defp remove_axes(shape, axes) do
+    axes
+    |> Enum.reverse()
+    |> Enum.reduce(shape, &Tuple.delete_at(&2, &1))
+  end
+
+  defp expr_to_typespec(expr) do
+    Typespec.tensor(expr.type, expr.shape)
+  end
 end

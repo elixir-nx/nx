@@ -2,7 +2,7 @@ defmodule EXLA.Defn.Stream do
   @moduledoc false
 
   keys =
-    [:lock, :outfeed, :pid, :runner, :send, :send_shape, :send_indexes] ++
+    [:lock, :outfeed, :pid, :runner, :send, :send_typespec, :send_indexes] ++
       [:recv, :recv_length, :done, :client, :device_id]
 
   @derive {Inspect, only: [:pid, :client, :device_id, :send, :recv]}
@@ -15,10 +15,10 @@ defmodule EXLA.Defn.Stream do
         runner,
         outfeed,
         send,
-        send_shape,
+        send_typespec,
         send_indexes,
         recv,
-        recv_shapes,
+        recv_typespecs,
         done
       ) do
     %{client: client, device_id: device_id} = executable
@@ -39,10 +39,10 @@ defmodule EXLA.Defn.Stream do
       outfeed: outfeed,
       lock: lock,
       send: send,
-      send_shape: send_shape,
+      send_typespec: send_typespec,
       send_indexes: send_indexes,
       recv: recv,
-      recv_length: length(recv_shapes),
+      recv_length: length(recv_typespecs),
       client: client,
       device_id: device_id,
       done: done
@@ -52,7 +52,7 @@ defmodule EXLA.Defn.Stream do
   # It is time to halt the stream, we do it by sending 0 for the loop infeed.
   # Then we wait for the outfeed process to read all.
   defp halt_stream(client, device_id, outfeed) do
-    pred = EXLA.Shape.make_shape({:pred, 8}, {})
+    pred = EXLA.Typespec.tensor({:pred, 8}, {})
     :ok = EXLA.Client.to_infeed(client, device_id, [{<<0::8-native>>, pred}])
     {:transfer, outfeed}
   end
@@ -64,7 +64,7 @@ defmodule EXLA.Defn.Stream do
         client: client,
         device_id: device_id,
         send: send,
-        send_shape: send_shape,
+        send_typespec: send_typespec,
         send_indexes: send_indexes
       } = stream
 
@@ -86,15 +86,17 @@ defmodule EXLA.Defn.Stream do
         """
       end
 
-      data_and_shapes =
+      data_and_typespecs =
         if client.platform == :host do
-          Enum.zip(buffers, send_shape)
+          Enum.zip(buffers, send_typespec)
         else
-          [{buffers, send_shape}]
+          [{buffers, send_typespec}]
         end
 
-      pred = EXLA.Shape.make_shape({:pred, 8}, {})
-      :ok = EXLA.Client.to_infeed(client, device_id, [{<<1::8-native>>, pred} | data_and_shapes])
+      pred = EXLA.Typespec.tensor({:pred, 8}, {})
+
+      :ok =
+        EXLA.Client.to_infeed(client, device_id, [{<<1::8-native>>, pred} | data_and_typespecs])
     end
 
     defp nx_to_io(container, indexes) do

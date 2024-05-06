@@ -4053,7 +4053,7 @@ defmodule EXLA.Defn.ExprTest do
 
     test "raises on bad precision" do
       valid_precision =
-        ":default, :high, :highest, or :packed_nibble"
+        ":default, :high, or :highest"
 
       assert_raise ArgumentError,
                    "expected precision configuration to be one of" <>

@@ -1,320 +1,384 @@
 defmodule EXLA.MLIR.Value do
   @moduledoc false
   # Representation of an MLIR Value.
+  #
   # MLIR Values are SSA and generally are either operations or
   # block arguments. This module is used to construct most of the
   # MLIR operations.
+  #
+  # See the full specification of the stablehlo MLIR dialect [1]. Note
+  # that the URL points to the exact stablehlo revision that we depend
+  # on via elixir-nx/xla.
+  #
+  # [1]: https://github.com/openxla/stablehlo/blob/04291aea6b50d9573e6f4de184938d83b9564cd0/docs/spec.md
 
   defstruct [:ref, :function]
 
-  alias __MODULE__, as: Value
+  alias __MODULE__
+  alias EXLA.Typespec
   alias EXLA.MLIR.Region
   alias EXLA.MLIR.Function
 
-  @bin_ops [:add, :subtract, :multiply, :divide, :pow, :min] ++
-             [:max, :remainder, :atan2, :equal, :less, :less_equal] ++
-             [:greater, :greater_equal, :not_equal, :bitwise_and] ++
-             [:bitwise_or, :bitwise_xor] ++
-             [:left_shift, :right_shift_arithmetic, :right_shift_logical]
+  @bin_ops %{
+    add: "stablehlo.add",
+    subtract: "stablehlo.subtract",
+    multiply: "stablehlo.multiply",
+    divide: "stablehlo.divide",
+    pow: "stablehlo.power",
+    min: "stablehlo.minimum",
+    max: "stablehlo.maximum",
+    remainder: "stablehlo.remainder",
+    atan2: "stablehlo.atan2",
+    bitwise_and: "stablehlo.and",
+    bitwise_or: "stablehlo.or",
+    bitwise_xor: "stablehlo.xor",
+    left_shift: "stablehlo.shift_left",
+    right_shift_arithmetic: "stablehlo.shift_right_arithmetic",
+    right_shift_logical: "stablehlo.shift_right_logical"
+  }
 
-  for op <- @bin_ops do
-    mlir_op = :"mlir_#{op}"
-
-    def unquote(op)(
-          func,
-          %Value{ref: lhs},
-          %Value{ref: rhs}
-        ) do
-      ref = EXLA.NIF.unquote(mlir_op)(func.ref, lhs, rhs) |> unwrap!()
-      %Value{ref: ref, function: func}
+  for {op, op_name} <- @bin_ops do
+    def unquote(op)(%Value{function: func} = lhs, %Value{function: func} = rhs, typespec) do
+      result_types = typespecs_to_mlir_types([typespec])
+      op(func, unquote(op_name), [lhs, rhs], result_types) |> one!()
     end
   end
 
-  @unary_ops [:abs, :exp, :expm1, :floor, :ceil, :round] ++
-               [:log, :log1p, :sigmoid, :sign, :cos] ++
-               [:sin, :tan, :acos, :asin, :atan, :cosh, :sinh] ++
-               [:tanh, :acosh, :asinh, :atanh, :sqrt, :cbrt] ++
-               [:bitwise_not, :erf, :erfc, :erf_inv] ++
-               [:is_infinity, :is_nan, :rsqrt, :negate, :count_leading_zeros] ++
-               [:population_count, :real, :imag, :conjugate]
+  @bin_comparison_ops %{
+    equal: :eq,
+    less: :lt,
+    less_equal: :le,
+    greater: :gt,
+    greater_equal: :ge,
+    not_equal: :ne
+  }
 
-  for op <- @unary_ops do
-    mlir_op = :"mlir_#{op}"
-
-    def unquote(op)(%Value{ref: operand, function: %Function{} = func}) do
-      ref = EXLA.NIF.unquote(mlir_op)(func.ref, operand) |> unwrap!()
-      %Value{ref: ref, function: func}
+  for {op, direction} <- @bin_comparison_ops do
+    def unquote(op)(%Value{function: func} = lhs, %Value{function: func} = rhs, typespec) do
+      compare_and_return_bool(func, lhs, rhs, typespec, unquote(direction))
     end
   end
 
-  def reshape(%Value{function: %Function{} = func} = op, shape_tuple) do
-    ref = EXLA.NIF.mlir_reshape(func.ref, op.ref, shape_tuple) |> unwrap!()
-    %Value{op | ref: ref}
+  defp compare_and_return_bool(func, lhs, rhs, typespec, direction) do
+    %{type: lhs_type} = get_typespec(lhs)
+    %{type: rhs_type} = get_typespec(rhs)
+
+    comparison_type =
+      if Nx.Type.float?(lhs_type) or Nx.Type.float?(rhs_type) do
+        attr_comparison_type(:totalorder)
+      else
+        attr_comparison_type(:notype)
+      end
+
+    attributes = [
+      comparison_direction: attr_comparison_direction(direction),
+      comparison_type: comparison_type
+    ]
+
+    result_types = typespecs_to_mlir_types([Typespec.to_type(typespec, {:pred, 8})])
+
+    op(func, "stablehlo.compare", [lhs, rhs], result_types, attributes: attributes) |> one!()
   end
 
-  def reverse(%Value{function: %Function{} = func} = op, dims) do
-    ref = EXLA.NIF.mlir_reverse(func.ref, op.ref, dims) |> unwrap!()
-    %Value{op | ref: ref}
+  @unary_ops %{
+    abs: "stablehlo.abs",
+    exp: "stablehlo.exponential",
+    expm1: "stablehlo.exponential_minus_one",
+    floor: "stablehlo.floor",
+    ceil: "stablehlo.ceil",
+    round: "stablehlo.round_nearest_afz",
+    log: "stablehlo.log",
+    log1p: "stablehlo.log_plus_one",
+    sigmoid: "stablehlo.logistic",
+    sign: "stablehlo.sign",
+    cos: "stablehlo.cosine",
+    sin: "stablehlo.sine",
+    tan: "chlo.tan",
+    acos: "chlo.acos",
+    asin: "chlo.asin",
+    atan: "chlo.atan",
+    cosh: "chlo.cosh",
+    sinh: "chlo.sinh",
+    tanh: "stablehlo.tanh",
+    acosh: "chlo.acosh",
+    asinh: "chlo.asinh",
+    atanh: "chlo.atanh",
+    sqrt: "stablehlo.sqrt",
+    cbrt: "stablehlo.cbrt",
+    bitwise_not: "stablehlo.not",
+    erf: "chlo.erf",
+    erfc: "chlo.erfc",
+    erf_inv: "chlo.erf_inv",
+    rsqrt: "stablehlo.rsqrt",
+    negate: "stablehlo.negate",
+    count_leading_zeros: "stablehlo.count_leading_zeros",
+    population_count: "stablehlo.popcnt",
+    real: "stablehlo.real",
+    imag: "stablehlo.imag",
+    conjugate: "chlo.conj"
+  }
+
+  for {op, op_name} <- @unary_ops do
+    def unquote(op)(%Value{function: func} = operand, typespec) do
+      result_types = typespecs_to_mlir_types([typespec])
+      op(func, unquote(op_name), [operand], result_types, []) |> one!()
+    end
   end
 
-  def transpose(%Value{} = op, axes) when is_tuple(axes) do
-    transpose(op, Tuple.to_list(axes))
+  def is_infinity(%Value{function: func} = operand, typespec) do
+    %{type: type} = get_typespec(operand)
+
+    typespec = Typespec.to_type(typespec, {:pred, 8})
+
+    cond do
+      Nx.Type.complex?(type) ->
+        float_typespec = Typespec.to_type(typespec, complex_part_type(type))
+        real = real(operand, float_typespec)
+        imag = imag(operand, float_typespec)
+        is_inf_real = is_infinity(real, typespec)
+        is_inf_imag = is_infinity(imag, typespec)
+        bitwise_or(is_inf_real, is_inf_imag, typespec)
+
+      Nx.Type.integer?(type) ->
+        # Integers are never infinity. We use inequality to make sure
+        # the operand is still a part of the computation
+        not_equal(operand, operand, typespec)
+
+      true ->
+        result_types = typespecs_to_mlir_types([typespec])
+        op(func, "chlo.is_inf", [operand], result_types) |> one!()
+    end
   end
 
-  def transpose(%Value{function: %Function{} = func} = op, axes) do
-    ref = EXLA.NIF.mlir_transpose(func.ref, op.ref, axes) |> unwrap!()
-    %Value{op | ref: ref}
+  def is_nan(%Value{function: func} = operand, typespec) do
+    %{type: type} = get_typespec(operand)
+
+    typespec = Typespec.to_type(typespec, {:pred, 8})
+
+    cond do
+      Nx.Type.complex?(type) ->
+        float_typespec = Typespec.to_type(typespec, complex_part_type(type))
+        real = real(operand, float_typespec)
+        imag = imag(operand, float_typespec)
+        is_nan_real = is_nan(real, typespec)
+        is_nan_imag = is_nan(imag, typespec)
+        bitwise_or(is_nan_real, is_nan_imag, typespec)
+
+      Nx.Type.integer?(type) ->
+        # Integers are never nan. We use inequality to make sure
+        # the operand is still a part of the computation
+        not_equal(operand, operand, typespec)
+
+      true ->
+        result_types = typespecs_to_mlir_types([typespec])
+        is_inf = op(func, "chlo.is_inf", [operand], result_types) |> one!()
+        is_finite = op(func, "stablehlo.is_finite", [operand], result_types) |> one!()
+        is_not_inf = bitwise_not(is_inf, typespec)
+        is_not_finite = bitwise_not(is_finite, typespec)
+        bitwise_and(is_not_inf, is_not_finite, typespec)
+    end
   end
 
-  def slice(%Value{function: %Function{} = func} = op, starts, limits, strides) do
-    ref = EXLA.NIF.mlir_slice(func.ref, op.ref, starts, limits, strides) |> unwrap!()
-    %Value{op | ref: ref}
+  def reshape(%Value{function: func} = operand, typespec) do
+    result_types = typespecs_to_mlir_types([typespec])
+    op(func, "stablehlo.reshape", [operand], result_types) |> one!()
   end
 
-  def dynamic_slice(%Value{function: %Function{} = func} = op, starts, lengths) do
-    starts = Enum.map(starts, fn %Value{ref: ref} -> ref end)
-    ref = EXLA.NIF.mlir_dynamic_slice(func.ref, op.ref, starts, lengths) |> unwrap!()
-    %Value{op | ref: ref}
+  def reverse(%Value{function: func} = operand, dims, typespec) do
+    result_types = typespecs_to_mlir_types([typespec])
+    attributes = [dimensions: attr_dense_i64_elements(dims)]
+    op(func, "stablehlo.reverse", [operand], result_types, attributes: attributes) |> one!()
   end
 
-  def get_shape(%Value{ref: ref}) do
-    shape_ref = EXLA.NIF.mlir_get_shape(ref) |> unwrap!()
-    EXLA.Shape.get_shape_info(shape_ref)
+  def transpose(%Value{function: func} = operand, axes, typespec) do
+    result_types = typespecs_to_mlir_types([typespec])
+    attributes = [permutation: attr_dense_i64_elements(axes)]
+    op(func, "stablehlo.transpose", [operand], result_types, attributes: attributes) |> one!()
   end
 
-  def convert(%Value{ref: in_ref, function: %Function{} = func} = value, dtype) do
-    out_ref =
-      EXLA.NIF.mlir_convert(func.ref, in_ref, EXLA.Shape.dtype_to_charlist(dtype)) |> unwrap!()
+  def slice(%Value{function: func} = operand, starts, limits, strides, typespec) do
+    result_types = typespecs_to_mlir_types([typespec])
 
-    %Value{value | ref: out_ref}
+    attributes = [
+      start_indices: attr_dense_i64_elements(starts),
+      limit_indices: attr_dense_i64_elements(limits),
+      strides: attr_dense_i64_elements(strides)
+    ]
+
+    op(func, "stablehlo.slice", [operand], result_types, attributes: attributes) |> one!()
   end
 
-  def bitcast_convert(%Value{ref: in_ref, function: %Function{} = func} = value, dtype) do
-    shape = get_shape(value)
-
-    out_ref =
-      EXLA.NIF.mlir_bitcast_convert(
-        func.ref,
-        in_ref,
-        EXLA.Shape.dtype_to_charlist(dtype),
-        shape.dims
-      )
-      |> unwrap!()
-
-    %Value{value | ref: out_ref}
+  def dynamic_slice(%Value{function: func} = operand, starts, lengths, typespec) do
+    result_types = typespecs_to_mlir_types([typespec])
+    operands = [operand] ++ starts
+    attributes = [slice_sizes: attr_dense_i64_elements(lengths)]
+    op(func, "stablehlo.dynamic_slice", operands, result_types, attributes: attributes) |> one!()
   end
 
-  def top_k(%Value{function: %Function{ref: func_ref}, ref: op_ref} = val, k) do
-    [val_ref, idx_ref] = EXLA.NIF.mlir_top_k(func_ref, op_ref, k) |> unwrap!()
-    [%Value{val | ref: val_ref}, %Value{val | ref: idx_ref}]
+  def convert(%Value{function: func} = operand, typespec) do
+    result_types = typespecs_to_mlir_types([typespec])
+    op(func, "stablehlo.convert", [operand], result_types) |> one!()
   end
 
-  def sort(%Value{} = value, comparator_fun, axis, stable) do
-    [result] = sort([value], comparator_fun, axis, stable)
-    result
+  def bitcast_convert(%Value{function: func} = operand, typespec) do
+    result_types = typespecs_to_mlir_types([typespec])
+    op(func, "stablehlo.bitcast_convert", [operand], result_types) |> one!()
+  end
+
+  def top_k(%Value{function: func} = operand, k, typespecs) do
+    [typespec, index_typespec] = typespecs
+    result_types = typespecs_to_mlir_types([typespec, Typespec.to_type(index_typespec, {:s, 32})])
+
+    attributes = [k: attr_i64(k)]
+    [result, idx] = op(func, "chlo.top_k", [operand], result_types, attributes: attributes)
+
+    idx = convert(idx, index_typespec)
+
+    [result, idx]
   end
 
   def sort(
-        [%Value{function: %Function{ref: func_ref}} | _] = values,
-        %Function{ref: comparator_fun},
+        [%Value{function: func} | _] = operands,
+        %Region{ref: comparator},
         axis,
-        stable
+        stable,
+        typespecs
       )
       when is_integer(axis) and is_boolean(stable) do
-    stable = if stable, do: 1, else: 0
+    result_types = typespecs_to_mlir_types(typespecs)
 
-    in_refs =
-      Enum.map(values, fn %Value{ref: ref, function: %Function{ref: ^func_ref}} -> ref end)
+    attributes = [
+      dimension: attr_i64(axis),
+      is_stable: attr_boolean(stable)
+    ]
 
-    out_refs =
-      EXLA.NIF.mlir_sort(func_ref, in_refs, axis, comparator_fun, stable) |> unwrap!()
+    regions = [comparator]
 
-    Enum.zip_with(values, out_refs, fn value, out_ref -> %Value{value | ref: out_ref} end)
+    op(func, "stablehlo.sort", operands, result_types, attributes: attributes, regions: regions)
   end
 
-  def iota(%Function{} = func, shape, dim) do
-    ref = EXLA.NIF.mlir_iota(func.ref, shape.ref, dim) |> unwrap!()
-    %Value{ref: ref, function: func}
+  def iota(%Function{} = func, dim, typespec) do
+    result_types = typespecs_to_mlir_types([typespec])
+    attributes = [iota_dimension: attr_i64(dim)]
+    op(func, "stablehlo.iota", [], result_types, attributes: attributes) |> one!()
   end
 
-  def constant_r0(%Function{} = func, value, {:c, width} = type)
-      when type in [{:c, 64}, {:c, 128}] do
-    {re, im} =
-      case value do
-        %Complex{re: re, im: im} -> {re, im}
-        n when is_float(n) -> {n, 0.0}
-        n when is_integer(n) -> {n * 1.0, 0.0}
-        true -> {1.0, 0.0}
-        false -> {0.0, 0.0}
-      end
-
-    width = div(width, 2)
-
-    data = <<re::float-native-size(width), im::float-native-size(width)>>
-
-    ref =
-      EXLA.NIF.mlir_constant_from_binary(
-        func.ref,
-        data,
-        EXLA.Shape.dtype_to_charlist(type),
-        {1}
-      )
-      |> unwrap!()
-
-    reshape(%Value{ref: ref, function: func}, {})
-  end
-
-  def constant_r0(%Function{} = func, value, type)
-      when value in [:infinity, :nan, :neg_infinity] do
-    data =
-      value
-      |> Nx.tensor(backend: Nx.BinaryBackend, type: type)
-      |> Nx.to_binary()
-
-    ref =
-      EXLA.NIF.mlir_constant_from_binary(
-        func.ref,
-        data,
-        EXLA.Shape.dtype_to_charlist(type),
-        {}
-      )
-      |> unwrap!()
-
-    %Value{ref: ref, function: func}
-  end
-
-  def constant_r0(%Function{} = func, value, type) do
-    value =
-      if Nx.Type.float?(type) and not is_float(value) do
-        value * 1.0
-      else
-        value
-      end
-
-    ref =
-      EXLA.NIF.mlir_constant_r0(
-        func.ref,
-        value,
-        EXLA.Shape.dtype_to_charlist(type)
-      )
-      |> unwrap!()
-
-    %Value{ref: ref, function: func}
-  end
-
-  def constant_from_binary(%Function{} = func, data, shape) do
-    ref =
-      EXLA.NIF.mlir_constant_from_binary(
-        func.ref,
-        data,
-        EXLA.Shape.dtype_to_charlist(shape.dtype),
-        shape.dims
-      )
-      |> unwrap!()
-
-    %Value{ref: ref, function: func}
+  def constant(%Function{} = func, data, typespec) do
+    result_types = typespecs_to_mlir_types([typespec])
+    value = attr_dense_elements(data, typespec.type, typespec.shape)
+    attributes = [value: value]
+    op(func, "stablehlo.constant", [], result_types, attributes: attributes) |> one!()
   end
 
   def dot_general(
-        output_shape,
         %Value{function: func} = lhs,
         %Value{function: func} = rhs,
         dnums,
-        precision_config
+        precision_config,
+        typespec
       ) do
-    config = get_precision_config_int(precision_config)
+    result_types = typespecs_to_mlir_types([typespec])
 
-    ref =
-      EXLA.NIF.mlir_dot_general(func.ref, output_shape.ref, lhs.ref, rhs.ref, dnums, config)
-      |> unwrap!()
+    attr_precision_config = attr_precision_config(precision_config)
 
-    %Value{ref: ref, function: func}
+    {contract_axes1, batch_axes1, contract_axes2, batch_axes2} = dnums
+
+    dot_dimension_numbers =
+      attr_struct("stablehlo.dot",
+        lhs_batching_dimensions: join_list(batch_axes1),
+        rhs_batching_dimensions: join_list(batch_axes2),
+        lhs_contracting_dimensions: join_list(contract_axes1),
+        rhs_contracting_dimensions: join_list(contract_axes2)
+      )
+
+    attributes = [
+      dot_dimension_numbers: dot_dimension_numbers,
+      precision_config: "[#{attr_precision_config}, #{attr_precision_config}]"
+    ]
+
+    op(func, "stablehlo.dot_general", [lhs, rhs], result_types, attributes: attributes) |> one!()
   end
 
-  def broadcast_in_dim(%Value{function: func} = operand, output_shape, axes) do
-    ref =
-      EXLA.NIF.mlir_broadcast_in_dim(func.ref, output_shape.ref, operand.ref, axes)
-      |> unwrap!()
+  def broadcast_in_dim(%Value{function: func} = operand, axes, typespec) do
+    result_types = typespecs_to_mlir_types([typespec])
 
-    %Value{function: func, ref: ref}
+    attributes = [
+      broadcast_dimensions: attr_dense_i64_elements(axes)
+    ]
+
+    op(func, "stablehlo.broadcast_in_dim", [operand], result_types, attributes: attributes)
+    |> one!()
   end
 
-  def concatenate([%Value{function: func} | _rest] = operands, dimension) do
-    refs = Enum.map(operands, & &1.ref)
-
-    ref =
-      EXLA.NIF.mlir_concatenate(func.ref, refs, dimension)
-      |> unwrap!()
-
-    %Value{ref: ref, function: func}
-  end
-
-  def optimization_barrier(%Value{function: func} = operand) do
-    ref =
-      EXLA.NIF.mlir_optimization_barrier(func.ref, operand.ref)
-      |> unwrap!()
-
-    %Value{ref: ref, function: func}
+  def concatenate([%Value{function: func} | _rest] = operands, dimension, typespec) do
+    result_types = typespecs_to_mlir_types([typespec])
+    attributes = [dimension: attr_i64(dimension)]
+    op(func, "stablehlo.concatenate", operands, result_types, attributes: attributes) |> one!()
   end
 
   def clamp(
         %Value{function: func} = operand,
         %Value{function: func} = min,
-        %Value{function: func} = max
+        %Value{function: func} = max,
+        typespec
       ) do
-    ref =
-      EXLA.NIF.mlir_clamp(func.ref, operand.ref, min.ref, max.ref)
-      |> unwrap!()
-
-    %Value{ref: ref, function: func}
+    result_types = typespecs_to_mlir_types([typespec])
+    op(func, "stablehlo.clamp", [min, operand, max], result_types) |> one!()
   end
 
   def select(
         %Value{function: func} = pred,
         %Value{function: func} = on_true,
-        %Value{function: func} = on_false
+        %Value{function: func} = on_false,
+        typespec
       ) do
-    ref =
-      EXLA.NIF.mlir_select(func.ref, pred.ref, on_true.ref, on_false.ref)
-      |> unwrap!()
-
-    %Value{ref: ref, function: func}
+    result_types = typespecs_to_mlir_types([typespec])
+    op(func, "stablehlo.select", [pred, on_true, on_false], result_types) |> one!()
   end
 
-  def pad(%Value{function: func} = operand, %Value{function: func} = pad, padding_config) do
-    {padding_low, padding_high, padding_mid} =
-      Enum.reduce(padding_config, {[], [], []}, fn {low, high, mid},
-                                                   {low_acc, high_acc, mid_acc} ->
-        {[low | low_acc], [high | high_acc], [mid | mid_acc]}
-      end)
+  def pad(
+        %Value{function: func} = operand,
+        %Value{function: func} = pad,
+        padding_config,
+        typespec
+      ) do
+    result_types = typespecs_to_mlir_types([typespec])
 
-    ref =
-      EXLA.NIF.mlir_pad(
-        func.ref,
-        operand.ref,
-        pad.ref,
-        Enum.reverse(padding_low),
-        Enum.reverse(padding_high),
-        Enum.reverse(padding_mid)
-      )
-      |> unwrap!()
+    {padding_low, padding_high, padding_mid} = unzip_padding_config(padding_config)
 
-    %Value{ref: ref, function: func}
+    attributes = [
+      edge_padding_low: attr_dense_i64_elements(padding_low),
+      edge_padding_high: attr_dense_i64_elements(padding_high),
+      interior_padding: attr_dense_i64_elements(padding_mid)
+    ]
+
+    op(func, "stablehlo.pad", [operand, pad], result_types, attributes: attributes) |> one!()
   end
 
-  def fft(%Value{function: func} = value, fft_kind, fft_length)
+  defp unzip_padding_config(padding_config),
+    do: unzip_padding_config(padding_config, {[], [], []})
+
+  defp unzip_padding_config([], {low_acc, high_acc, mid_acc}) do
+    {Enum.reverse(low_acc), Enum.reverse(high_acc), Enum.reverse(mid_acc)}
+  end
+
+  defp unzip_padding_config([{low, high, mid} | rest], {low_acc, high_acc, mid_acc}) do
+    unzip_padding_config(rest, {[low | low_acc], [high | high_acc], [mid | mid_acc]})
+  end
+
+  def fft(%Value{function: func} = value, fft_kind, fft_length, typespec)
       when fft_kind in [:fft, :ifft]
       when is_list(fft_length) or is_integer(fft_length) do
-    ref =
-      EXLA.NIF.mlir_fft(
-        func.ref,
-        value.ref,
-        if(fft_kind == :fft, do: 1, else: 0),
-        List.wrap(fft_length)
-      )
-      |> unwrap!()
+    result_types = typespecs_to_mlir_types([typespec])
 
-    %Value{value | ref: ref}
+    fft_type = attr_fft_type(fft_kind)
+
+    attributes = [
+      fft_type: fft_type,
+      fft_length: attr_dense_i64_elements(List.wrap(fft_length))
+    ]
+
+    op(func, "stablehlo.fft", [value], result_types, attributes: attributes) |> one!()
   end
 
   def scatter(
@@ -325,27 +389,50 @@ defmodule EXLA.MLIR.Value do
         indices_rank,
         update_window_dims,
         inserted_window_dims,
-        index_dims_to_window_dims
+        index_dims_to_window_dims,
+        typespec
       )
       when kind in [:add, :put] and is_integer(indices_rank) and is_list(update_window_dims) and
              is_list(inserted_window_dims) and is_list(index_dims_to_window_dims) do
-    add_or_put = if(kind == :add, do: 1, else: 0)
+    result_types = typespecs_to_mlir_types([typespec])
 
-    ref =
-      EXLA.NIF.mlir_scatter(
-        func.ref,
-        target.ref,
-        indices.ref,
-        updates.ref,
-        add_or_put,
-        indices_rank,
-        update_window_dims,
-        inserted_window_dims,
-        index_dims_to_window_dims
+    operands = [target, indices, updates]
+
+    scatter_dimension_numbers =
+      attr_struct("stablehlo.scatter",
+        update_window_dims: join_list(update_window_dims),
+        inserted_window_dims: join_list(inserted_window_dims),
+        scatter_dims_to_operand_dims: join_list(index_dims_to_window_dims),
+        index_vector_dim: Integer.to_string(indices_rank)
       )
-      |> unwrap!()
 
-    %Value{target | ref: ref}
+    attributes = [scatter_dimension_numbers: scatter_dimension_numbers]
+
+    scatter_computation = scatter_computation(func, kind, typespec)
+    regions = [scatter_computation.ref]
+
+    op(func, "stablehlo.scatter", operands, result_types,
+      attributes: attributes,
+      regions: regions
+    )
+    |> one!()
+  end
+
+  defp scatter_computation(%Function{} = function, kind, typespec) do
+    arg_typespec = Typespec.to_shape(typespec, {})
+    {region, [value, update]} = Function.push_region(function, [arg_typespec, arg_typespec])
+
+    res =
+      case kind do
+        :add -> add(value, update, arg_typespec)
+        :put -> update
+      end
+
+    return(function, [res])
+
+    Function.pop_region(function)
+
+    region
   end
 
   def select_and_scatter(
@@ -355,25 +442,41 @@ defmodule EXLA.MLIR.Value do
         comparison,
         window_dimensions,
         window_strides,
-        padding
+        padding,
+        typespec
       )
       when comparison in [:gt, :lt] do
-    gt_or_lt = if(comparison == :gt, do: 1, else: 0)
+    operands = [target, source, init_value]
 
-    ref =
-      EXLA.NIF.mlir_select_and_scatter(
-        func.ref,
-        target.ref,
-        source.ref,
-        init_value.ref,
-        gt_or_lt,
-        window_dimensions,
-        window_strides,
-        padding
-      )
-      |> unwrap!()
+    result_types = typespecs_to_mlir_types([typespec])
 
-    %Value{target | ref: ref}
+    attributes = [
+      window_dimensions: attr_dense_i64_elements(window_dimensions),
+      window_strides: attr_dense_i64_elements(window_strides),
+      padding: attr_padding(padding)
+    ]
+
+    select_computation = select_computation(func, comparison, typespec)
+    scatter_computation = scatter_computation(func, :add, typespec)
+    regions = [select_computation.ref, scatter_computation.ref]
+
+    op(func, "stablehlo.select_and_scatter", operands, result_types,
+      attributes: attributes,
+      regions: regions
+    )
+    |> one!()
+  end
+
+  defp select_computation(function, direction, typespec) do
+    arg_typespec = Typespec.to_shape(typespec, {})
+    {region, [arg0, arg1]} = Function.push_region(function, [arg_typespec, arg_typespec])
+
+    res = compare_and_return_bool(function, arg0, arg1, arg_typespec, direction)
+    return(function, [res])
+
+    Function.pop_region(function)
+
+    region
   end
 
   def gather(
@@ -383,42 +486,44 @@ defmodule EXLA.MLIR.Value do
         slice_sizes,
         offset_dims,
         collapsed_slice_dims,
-        start_index_map
-      ) do
-    ref =
-      EXLA.NIF.mlir_gather(
-        func.ref,
-        source.ref,
-        indices.ref,
-        slice_sizes,
-        offset_dims,
-        collapsed_slice_dims,
         start_index_map,
-        index_vector_dim
-      )
-      |> unwrap!()
+        typespec
+      ) do
+    result_types = typespecs_to_mlir_types([typespec])
 
-    %Value{source | ref: ref}
+    dimension_numbers =
+      attr_struct("stablehlo.gather",
+        offset_dims: join_list(offset_dims),
+        collapsed_slice_dims: join_list(collapsed_slice_dims),
+        start_index_map: join_list(start_index_map),
+        index_vector_dim: Integer.to_string(index_vector_dim)
+      )
+
+    attributes = [
+      dimension_numbers: dimension_numbers,
+      slice_sizes: attr_dense_i64_elements(slice_sizes),
+      indices_are_sorted: attr_boolean(false)
+    ]
+
+    op(func, "stablehlo.gather", [source, indices], result_types, attributes: attributes)
+    |> one!()
   end
 
-  defp get_precision_config_int(precision_config) do
+  defp attr_precision_config(precision_config) do
     case precision_config do
       :default ->
-        0
+        attr_precision(:default)
 
       :high ->
-        1
+        attr_precision(:high)
 
       :highest ->
-        2
-
-      :packed_nibble ->
-        3
+        attr_precision(:highest)
 
       _ ->
         raise ArgumentError,
               "expected precision configuration to be one of" <>
-                " :default, :high, :highest, or :packed_nibble," <>
+                " :default, :high, or :highest," <>
                 " got: #{inspect(precision_config)}"
     end
   end
@@ -434,206 +539,428 @@ defmodule EXLA.MLIR.Value do
         feature_group_count,
         batch_group_count,
         precision_config,
-        output_shape
+        typespec
       ) do
-    precision_config = get_precision_config_int(precision_config)
+    result_types = typespecs_to_mlir_types([typespec])
 
-    ref =
-      EXLA.NIF.mlir_convolution(
-        func.ref,
-        tensor.ref,
-        kernel.ref,
-        strides,
-        padding,
-        input_dilation,
-        kernel_dilation,
-        dimension_numbers,
-        feature_group_count,
-        batch_group_count,
-        precision_config,
-        Tuple.to_list(output_shape)
-      )
-      |> unwrap!()
+    attr_precision_config = attr_precision_config(precision_config)
 
-    %{tensor | ref: ref}
+    attributes = [
+      window_strides: attr_dense_i64_elements(strides),
+      padding: attr_padding(padding),
+      lhs_dilation: attr_dense_i64_elements(input_dilation),
+      rhs_dilation: attr_dense_i64_elements(kernel_dilation),
+      dimension_numbers: attr_conv_dimension_numbers(dimension_numbers),
+      feature_group_count: attr_i64(feature_group_count),
+      batch_group_count: attr_i64(batch_group_count),
+      precision_config: "[#{attr_precision_config}, #{attr_precision_config}]"
+    ]
+
+    op(func, "stablehlo.convolution", [tensor, kernel], result_types, attributes: attributes)
+    |> one!()
   end
 
-  def triangular_solve(a, b, left_side, lower, transform) do
-    ref =
-      EXLA.NIF.mlir_triangular_solve(
-        a.function.ref,
-        a.ref,
-        b.ref,
-        if(left_side, do: 1, else: 0),
-        if(lower, do: 1, else: 0),
-        if(transform == :transpose, do: 1, else: 0)
-      )
-      |> unwrap!()
-
-    %{a | ref: ref}
+  defp attr_conv_dimension_numbers(dimension_numbers) do
+    {input_permutation, kernel_permutation, output_permutation} = dimension_numbers
+    input_string = convolution_dims_permutation(input_permutation, "b", "f")
+    kernel_string = convolution_dims_permutation(kernel_permutation, "o", "i")
+    output_string = convolution_dims_permutation(output_permutation, "b", "f")
+    "#stablehlo.conv<[#{input_string}]x[#{kernel_string}]->[#{output_string}]>"
   end
 
-  def dynamic_update_slice(operand, updates, starts) do
-    ref =
-      EXLA.NIF.mlir_dynamic_update_slice(
-        operand.function.ref,
-        operand.ref,
-        updates.ref,
-        Enum.map(starts, & &1.ref)
-      )
-      |> unwrap!()
+  defp convolution_dims_permutation(permutation, dim1_mark, dim2_mark) do
+    [dim1, dim2 | spatial_dims] = permutation
 
-    %{operand | ref: ref}
+    dims_with_marks =
+      [{dim1, dim1_mark}, {dim2, dim2_mark}] ++
+        Enum.with_index(spatial_dims, fn dim, idx -> {dim, Integer.to_string(idx)} end)
+
+    dims_with_marks
+    |> Enum.sort()
+    |> Enum.map_join(",", fn {_dim, mark} -> mark end)
+  end
+
+  def triangular_solve(
+        %Value{function: func} = a,
+        %Value{function: func} = b,
+        left_side,
+        lower,
+        transform,
+        typespec
+      ) do
+    result_types = typespecs_to_mlir_types([typespec])
+
+    complex? = Nx.Type.complex?(typespec.type)
+
+    transpose_a =
+      case transform do
+        :transpose when complex? -> attr_transpose(:adjoint)
+        :transpose -> attr_transpose(:transpose)
+        :none -> attr_transpose(:no_transpose)
+      end
+
+    attributes = [
+      left_side: attr_boolean(left_side),
+      lower: attr_boolean(lower),
+      unit_diagonal: attr_boolean(false),
+      transpose_a: transpose_a
+    ]
+
+    op(func, "stablehlo.triangular_solve", [a, b], result_types, attributes: attributes) |> one!()
+  end
+
+  def dynamic_update_slice(%Value{function: func} = operand, updates, starts, typespec) do
+    result_types = typespecs_to_mlir_types([typespec])
+
+    op(func, "stablehlo.dynamic_update_slice", [operand, updates] ++ starts, result_types)
+    |> one!()
   end
 
   def reduce(
-        %Function{ref: reducer},
+        %Region{ref: reducer},
         [%Value{function: func} | _] = init_values,
         [%Value{function: func} | _] = inputs,
-        dimensions
+        dimensions,
+        typespecs
       ) do
-    init_value_refs = Enum.map(init_values, & &1.ref)
-    input_refs = Enum.map(inputs, & &1.ref)
-
-    refs =
-      EXLA.NIF.mlir_reduce(func.ref, reducer, init_value_refs, input_refs, dimensions)
-      |> unwrap!()
-
-    Enum.map(refs, &%Value{ref: &1, function: func})
+    operands = inputs ++ init_values
+    result_types = typespecs_to_mlir_types(typespecs)
+    attributes = [dimensions: attr_dense_i64_elements(dimensions)]
+    regions = [reducer]
+    op(func, "stablehlo.reduce", operands, result_types, attributes: attributes, regions: regions)
   end
 
   def window_reduce(
-        %Function{ref: reducer},
+        %Region{ref: reducer},
         [%Value{function: func} | _] = init_values,
         [%Value{function: func} | _] = inputs,
         window_dimensions,
         window_strides,
         input_dilations,
         window_dilations,
-        padding
+        padding,
+        typespecs
       ) do
-    init_value_refs = Enum.map(init_values, & &1.ref)
-    input_refs = Enum.map(inputs, & &1.ref)
+    operands = inputs ++ init_values
+    result_types = typespecs_to_mlir_types(typespecs)
 
-    refs =
-      EXLA.NIF.mlir_window_reduce(
-        func.ref,
-        reducer,
-        init_value_refs,
-        input_refs,
-        window_dimensions,
-        window_strides,
-        input_dilations,
-        window_dilations,
-        padding
-      )
-      |> unwrap!()
+    attributes = [
+      window_dimensions: attr_dense_i64_elements(window_dimensions),
+      window_strides: attr_dense_i64_elements(window_strides),
+      base_dilations: attr_dense_i64_elements(input_dilations),
+      window_dilations: attr_dense_i64_elements(window_dilations),
+      padding: attr_padding(padding)
+    ]
 
-    Enum.map(refs, &%Value{ref: &1, function: func})
+    regions = [reducer]
+
+    op(func, "stablehlo.reduce_window", operands, result_types,
+      attributes: attributes,
+      regions: regions
+    )
   end
 
   def map(
-        %Function{ref: mapper},
+        %Region{ref: mapper},
         [%Value{function: func} | _] = inputs,
-        dimensions
+        dimensions,
+        typespec
       ) do
-    input_refs = Enum.map(inputs, & &1.ref)
+    result_types = typespecs_to_mlir_types([typespec])
 
-    ref =
-      EXLA.NIF.mlir_map(func.ref, mapper, input_refs, dimensions)
-      |> unwrap!()
+    attributes = [
+      dimensions: attr_dense_i64_elements(dimensions)
+    ]
 
-    %Value{ref: ref, function: func}
+    regions = [mapper]
+
+    op(func, "stablehlo.map", inputs, result_types, attributes: attributes, regions: regions)
+    |> one!()
   end
 
-  def if_op(%Value{} = pred, [%EXLA.Shape{} | _] = output_shapes) do
-    {refs, true_region, false_region} =
-      EXLA.NIF.mlir_if(
-        pred.function.ref,
-        pred.ref,
-        flatten_shapes(output_shapes)
-      )
-      |> unwrap!()
-
-    results = Enum.map(refs, &%Value{ref: &1, function: pred.function})
-
-    {results, %Region{ref: true_region}, %Region{ref: false_region}}
+  def if_op(
+        %Value{function: func} = pred,
+        %Region{ref: on_true},
+        %Region{ref: on_false},
+        typespecs
+      ) do
+    result_types = typespecs_to_mlir_types(typespecs)
+    regions = [on_true, on_false]
+    pred = convert(pred, Typespec.tensor({:pred, 8}, {}))
+    op(func, "stablehlo.if", [pred], result_types, regions: regions)
   end
 
-  def infeed(%Value{} = token, %EXLA.Shape{} = shape) do
-    infeed(token, [shape])
-  end
-
-  def infeed(%Value{function: function} = token, [%EXLA.Shape{} | _] = shapes) do
-    {token_ref, result_refs} =
-      EXLA.NIF.mlir_infeed(function.ref, token.ref, Enum.map(shapes, & &1.ref)) |> unwrap!()
-
-    {%Value{token | ref: token_ref}, Enum.map(result_refs, &%Value{token | ref: &1})}
+  def infeed(%Value{function: func} = token, typespecs) do
+    result_types = typespecs_to_mlir_types(typespecs ++ [Typespec.token()])
+    results = op(func, "stablehlo.infeed", [token], result_types)
+    {results, [token]} = Enum.split(results, -1)
+    {token, results}
   end
 
   def outfeed(%Value{} = input, token), do: outfeed([input], token)
 
-  def outfeed(inputs, %Value{function: function} = token) do
-    input_refs = Enum.map(inputs, & &1.ref)
-    ref = EXLA.NIF.mlir_outfeed(function.ref, token.ref, input_refs) |> unwrap!()
-    %{token | ref: ref}
+  def outfeed(inputs, %Value{function: func} = token) do
+    result_types = [type_token()]
+    op(func, "stablehlo.outfeed", inputs ++ [token], result_types) |> one!()
   end
 
-  def create_token(%Function{ref: ref} = function) do
-    ref = EXLA.NIF.mlir_create_token(ref) |> unwrap!()
-    %Value{ref: ref, function: function}
+  def create_token(%Function{} = func) do
+    result_types = [type_token()]
+    op(func, "stablehlo.create_token", [], result_types) |> one!()
   end
 
-  def call(%Function{ref: fun_ref} = function, args, %Function{ref: computation_ref}) do
-    arg_refs = Enum.map(args, & &1.ref)
-    refs = EXLA.NIF.mlir_call(fun_ref, arg_refs, computation_ref) |> unwrap!()
-    Enum.map(refs, &%Value{ref: &1, function: function})
+  def call(%Function{} = func, args, %Function{} = computation, typespecs) do
+    result_types = typespecs_to_mlir_types(typespecs)
+    attributes = [callee: attr_symbol_reference(computation.name)]
+    op(func, "func.call", args, result_types, attributes: attributes)
   end
 
-  def while(function, initial) do
-    {result_refs, pred_ref, body_ref} =
-      EXLA.NIF.mlir_while(function.ref, flatten_tuples(initial)) |> unwrap!()
+  def while(%Function{} = func, %Region{ref: pred}, %Region{ref: body}, initial) do
+    typespecs = Enum.map(initial, &get_typespec/1)
+    result_types = typespecs_to_mlir_types(typespecs)
 
-    results = Enum.map(result_refs, &%Value{function: function, ref: &1})
+    regions = [pred, body]
 
-    {results, %Region{ref: pred_ref}, %Region{ref: body_ref}}
+    op(func, "stablehlo.while", initial, result_types, regions: regions)
   end
 
-  def variadic_return(function, values) when is_list(values) do
-    refs = Enum.map(values, & &1.ref)
-
-    refs = EXLA.NIF.mlir_return(function.ref, refs) |> unwrap!()
-
-    Enum.map(refs, fn ref -> %Value{function: function, ref: ref} end)
+  def return(func, values) when is_list(values) do
+    op(func, "stablehlo.return", values, [])
   end
 
-  def qr(%Value{function: function, ref: ref}, q_shape, r_shape)
-      when is_tuple(q_shape) and is_tuple(r_shape) do
-    {q_ref, r_ref} =
-      EXLA.NIF.mlir_qr(function.ref, ref, Tuple.to_list(q_shape), Tuple.to_list(r_shape))
-      |> unwrap!()
+  def qr(%Value{function: func} = value, q_typespec, r_typespec) do
+    %{type: op_type, shape: op_shape} = get_typespec(value)
+    %{type: q_type, shape: q_shape} = q_typespec
+    %{type: r_type, shape: r_shape} = r_typespec
 
-    {
-      %Value{function: function, ref: q_ref},
-      %Value{function: function, ref: r_ref}
-    }
+    dim_sizes = [tuple_size(op_shape), tuple_size(q_shape), tuple_size(r_shape)]
+    operand_dims = Tuple.to_list(op_shape)
+    q_dims = Tuple.to_list(q_shape)
+    r_dims = Tuple.to_list(r_shape)
+
+    dim_sizes = constant(func, dim_sizes, Typespec.tensor({:s, 64}, {length(dim_sizes)}))
+    operand_dims = constant(func, operand_dims, Typespec.tensor({:s, 64}, {length(operand_dims)}))
+    q_dims = constant(func, q_dims, Typespec.tensor({:s, 64}, {length(q_dims)}))
+    r_dims = constant(func, r_dims, Typespec.tensor({:s, 64}, {length(r_dims)}))
+    operands = [value, dim_sizes, operand_dims, q_dims, r_dims]
+
+    q_result_type = type_tensor(q_type, q_shape)
+    r_result_type = type_tensor(r_type, r_shape)
+    result_types = [type_tuple([q_result_type, r_result_type])]
+
+    call_target_name =
+      case op_type do
+        {:f, 32} -> "qr_cpu_custom_call_f32"
+        {:f, 64} -> "qr_cpu_custom_call_f64"
+        {:f, 16} -> "qr_cpu_custom_call_f16"
+        {:bf, 16} -> "qr_cpu_custom_call_bf16"
+        type -> raise "QR decomposition not supported for type #{inspect(type)}"
+      end
+
+    attributes = [
+      call_target_name: attr_string(call_target_name),
+      backend_config: attr_string("Host")
+    ]
+
+    result =
+      op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes) |> one!()
+
+    q = get_tuple_element(result, 0, q_typespec)
+    r = get_tuple_element(result, 1, r_typespec)
+
+    {q, r}
   end
 
-  defp flatten_shapes(val) when is_list(val) do
-    Enum.flat_map(val, &flatten_shapes/1)
+  def get_tuple_element(%Value{function: func} = operand, index, typespec) do
+    result_types = typespecs_to_mlir_types([typespec])
+    attributes = [index: attr_i32(index)]
+
+    op(func, "stablehlo.get_tuple_element", [operand], result_types, attributes: attributes)
+    |> one!()
   end
 
-  defp flatten_shapes(val) do
-    [val.ref]
+  def get_typespec(value) do
+    EXLA.NIF.mlir_get_typespec(value.ref)
+    |> unwrap!()
+    |> Typespec.nif_decode()
   end
 
-  defp flatten_tuples(val) when is_list(val) do
-    Enum.flat_map(val, &flatten_tuples/1)
+  def typespecs_to_mlir_types(shapes) do
+    Enum.map(shapes, &typespec_to_mlir_type/1)
   end
 
-  defp flatten_tuples(val), do: [val.ref]
+  defp typespec_to_mlir_type(%{type: :token}), do: type_token()
+  defp typespec_to_mlir_type(%{type: type, shape: shape}), do: type_tensor(type, shape)
 
   defp unwrap!(:ok), do: :ok
   defp unwrap!({:ok, value}), do: value
   defp unwrap!(other), do: raise("#{inspect(other)}")
+
+  defp one!([value]), do: value
+
+  defp one!(other) do
+    raise "expected a list with single element, got: #{inspect(other)}"
+  end
+
+  defp complex_part_type({:c, size}), do: {:f, div(size, 2)}
+
+  defp op(%Function{} = function, op_name, operands, result_types, opts \\ []) do
+    opts = Keyword.validate!(opts, attributes: [], regions: [])
+
+    %{ref: function_ref} = function
+
+    refs =
+      Enum.map(operands, fn
+        %Value{ref: ref, function: %Function{ref: ^function_ref}} -> ref
+      end)
+
+    refs =
+      EXLA.NIF.mlir_op(
+        function.ref,
+        op_name,
+        refs,
+        result_types,
+        opts[:attributes],
+        opts[:regions]
+      )
+      |> unwrap!()
+
+    Enum.map(refs, &%Value{function: function, ref: &1})
+  end
+
+  defp type_tensor(type, shape) do
+    shape_sequence = shape |> Tuple.to_list() |> Enum.map_join("", &"#{&1}x")
+    "tensor<#{shape_sequence}#{type_number(type)}>"
+  end
+
+  defp type_number({:pred, 8}), do: "i1"
+  defp type_number({:s, width}), do: "i#{width}"
+  defp type_number({:u, width}), do: "ui#{width}"
+  defp type_number({:f, width}), do: "f#{width}"
+  defp type_number({:bf, width}), do: "bf#{width}"
+  defp type_number({:c, 64}), do: "complex<f32>"
+  defp type_number({:c, 128}), do: "complex<f64>"
+
+  defp type_token(), do: "!stablehlo.token"
+
+  defp type_tuple(children) do
+    "tuple<#{Enum.join(children, ", ")}>"
+  end
+
+  defp number_literal(value, type) do
+    cond do
+      Nx.Type.complex?(type) ->
+        {re, im} =
+          case value do
+            %Complex{re: re, im: im} -> {re, im}
+            true -> {1, 0}
+            false -> {0, 0}
+            n -> {n, 0}
+          end
+
+        subtype = complex_part_type(type)
+        "(#{number_literal(re, subtype)}, #{number_literal(im, subtype)})"
+
+      Nx.Type.float?(type) ->
+        # We pass floats using binary representation, because that is
+        # likely more robust and not a subject to formatting limits and
+        # rounding. Based on the examples in the docs, the hexadecimal
+        # representation is always big-endian.
+        #
+        # See https://mlir.llvm.org/docs/Dialects/Builtin/#floatattr
+        hex_data = float_hex(value, type)
+        "0x#{hex_data}"
+
+      true ->
+        "#{value}"
+    end
+  end
+
+  defp float_hex(value, {_, size} = type) do
+    data =
+      case value do
+        :nan -> type |> Nx.Type.nan_binary() |> native_to_big()
+        :infinity -> type |> Nx.Type.infinity_binary() |> native_to_big()
+        :neg_infinity -> type |> Nx.Type.neg_infinity_binary() |> native_to_big()
+        value -> <<value::float-size(size)-big>>
+      end
+
+    Base.encode16(data)
+  end
+
+  defp native_to_big(binary) do
+    size = byte_size(binary) * 8
+    <<value::size(size)-native>> = binary
+    <<value::size(size)-big>>
+  end
+
+  defp attr_dense_i64_elements(list) do
+    attr_dense_elements(list, {:s, 64}, {length(list)})
+  end
+
+  defp attr_dense_elements([], type, {0} = shape) do
+    "dense<[]> : #{type_tensor(type, shape)}"
+  end
+
+  defp attr_dense_elements(list, type, shape) do
+    literals = Enum.map(list, &number_literal(&1, type))
+
+    list_literal =
+      shape
+      |> Tuple.to_list()
+      |> List.foldr(literals, fn size, acc ->
+        acc
+        |> Enum.chunk_every(size)
+        |> Enum.map(fn chunk ->
+          ["[", Enum.intersperse(chunk, ", "), "]"]
+        end)
+      end)
+      |> IO.iodata_to_binary()
+
+    "dense<#{list_literal}> : #{type_tensor(type, shape)}"
+  end
+
+  defp attr_string(string), do: ~s["#{string}"]
+
+  defp attr_symbol_reference(id), do: "@#{id}"
+
+  defp attr_boolean(true), do: "true"
+  defp attr_boolean(false), do: "false"
+
+  defp attr_i32(number), do: "#{number} : i32"
+  defp attr_i64(number), do: "#{number} : i64"
+
+  defp attr_padding(padding) do
+    list = Enum.flat_map(padding, &Tuple.to_list/1)
+    attr_dense_elements(list, {:s, 64}, {length(padding), 2})
+  end
+
+  defp attr_comparison_direction(value) when value in [:eq, :lt, :le, :gt, :ge, :ne],
+    do: attr_enum("stablehlo", "comparison_direction", value)
+
+  defp attr_comparison_type(value) when value in [:totalorder, :notype],
+    do: attr_enum("stablehlo", "comparison_type", value)
+
+  defp attr_precision(value) when value in [:default, :high, :highest],
+    do: attr_enum("stablehlo", "precision", value)
+
+  defp attr_transpose(value) when value in [:adjoint, :transpose, :no_transpose],
+    do: attr_enum("stablehlo", "transpose", value)
+
+  defp attr_fft_type(value) when value in [:fft, :ifft],
+    do: attr_enum("stablehlo", "fft_type", value)
+
+  defp attr_enum(dialect, enum_name, value) do
+    value = value |> Atom.to_string() |> String.upcase()
+    "##{dialect}<#{enum_name} #{value}>"
+  end
+
+  defp attr_struct(name, keyword_list) do
+    content = Enum.map_join(keyword_list, ", ", fn {key, value} -> "#{key} = #{value}" end)
+    "##{name}<#{content}>"
+  end
+
+  defp join_list(list) do
+    "[" <> Enum.join(list, ", ") <> "]"
+  end
 end
