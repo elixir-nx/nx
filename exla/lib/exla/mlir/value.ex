@@ -750,11 +750,21 @@ defmodule EXLA.MLIR.Value do
 
     call_target_name =
       case op_type do
-        {:f, 32} -> "qr_cpu_custom_call_f32"
-        {:f, 64} -> "qr_cpu_custom_call_f64"
-        {:f, 16} -> "qr_cpu_custom_call_f16"
-        {:bf, 16} -> "qr_cpu_custom_call_bf16"
-        type -> raise "QR decomposition not supported for type #{inspect(type)}"
+        {:f, 32} ->
+          "qr_cpu_custom_call_f32"
+
+        {:f, 64} ->
+          "qr_cpu_custom_call_f64"
+
+        {:f, 16} ->
+          "qr_cpu_custom_call_f16"
+
+        {:bf, 16} ->
+          "qr_cpu_custom_call_bf16"
+
+        type ->
+          # Due to matching on EXLA.Defn, we are sure that the device here is always :host
+          raise "QR decomposition not supported on :host device for type #{inspect(type)}"
       end
 
     attributes = [
