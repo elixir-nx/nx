@@ -107,8 +107,31 @@ defmodule EXLA.Backend do
     client = EXLA.Client.fetch!(buffer.client_name)
 
     case EXLA.NIF.get_buffer_device_pointer(client.ref, buffer.ref, mode) do
-      {:ok, {pointer, _size}} ->
-        {:ok, pointer}
+      {:ok, result} ->
+        dbg(result)
+
+        handle =
+          case {result, mode} do
+            {{ptr, size}, :local} when is_integer(ptr) ->
+              # pointer is an integer here
+              ptr
+
+            {{handle_name, fd, size}, :host_ipc} ->
+              %EXLA.IPCHandle.Host{
+                name: handle_name,
+                fd: fd,
+                size: size
+              }
+
+            {{handle, size}, :cuda_ipc} ->
+              %EXLA.IPCHandle.CUDA{
+                handle: handle,
+                device_id: buffer.device_id,
+                size: size
+              }
+          end
+
+        {:ok, handle}
 
       error ->
         error
@@ -116,24 +139,45 @@ defmodule EXLA.Backend do
   end
 
   @impl true
-  def from_pointer(pointer, type, dims, backend_opts, opts) do
-    backend_opts = Keyword.validate!(backend_opts, [:client_name, :device_id])
-    opts = Keyword.validate!(opts, [:names, mode: :local])
+  def from_pointer(handle, type, dims, backend_opts, opts) do
+    # mode is inferred from the handle kind
+    backend_opts = Keyword.validate!(backend_opts, [:client, :device_id])
+    opts = Keyword.validate!(opts, [:names])
 
     template = Nx.template(dims, type, names: opts[:names])
 
-    client_name = backend_opts[:client_name] || EXLA.Client.default_name()
+    client_name = backend_opts[:client] || EXLA.Client.default_name()
     client = EXLA.Client.fetch!(client_name)
 
     device_id = backend_opts[:device_id] || client.default_device_id
 
     typespec = EXLA.Typespec.tensor(type, dims)
 
+    num_elements = Tuple.product(dims)
+    {_, bits} = type
+    shape_size = num_elements * div(bits, 8)
+
+    {mode, handle_nif} =
+      case handle do
+        %{size: size} when size != shape_size ->
+          raise ArgumentError,
+                "invalid IPC handle size for shape, expected: #{shape_size}, got: #{size}"
+
+        %EXLA.IPCHandle.Host{fd: fd, name: name} ->
+          {:host_ipc, {fd, name}}
+
+        %EXLA.IPCHandle.CUDA{handle: handle} ->
+          {:cuda_ipc, handle}
+
+        _ when is_integer(handle) ->
+          {:local, handle}
+      end
+
     result =
       EXLA.NIF.create_buffer_from_device_pointer(
         client.ref,
-        pointer,
-        opts[:mode],
+        mode,
+        handle_nif,
         EXLA.Typespec.nif_encode(typespec),
         device_id
       )

@@ -409,12 +409,11 @@ ERL_NIF_TERM get_buffer_device_pointer(ErlNifEnv* env, int argc, const ERL_NIF_T
   EXLA_ASSIGN_OR_RETURN_NIF(std::uintptr_t ptr,
                             (*buffer)->GetDevicePointer((*client)->client()), env);
 
-  std::vector<unsigned char> pointer_vec;
+  ERL_NIF_TERM out_term;
   if (pointer_kind == "local") {
-    unsigned char* bytePtr = reinterpret_cast<unsigned char*>(&ptr);
-    for (size_t i = 0; i < sizeof(void*); i++) {
-      pointer_vec.push_back(bytePtr[i]);
-    }
+    ERL_NIF_TERM ptr_term = enif_make_ulong(env, ptr);
+    ERL_NIF_TERM size_term = enif_make_ulong(env, device_size);
+    out_term = enif_make_tuple2(env, ptr_term, size_term);
   } else if (pointer_kind == "host_ipc") {
     std::ostringstream handle_name_stream;
     handle_name_stream << "exla:ipc:" << device_size << ":" << ptr;
@@ -432,30 +431,33 @@ ERL_NIF_TERM get_buffer_device_pointer(ErlNifEnv* env, int argc, const ERL_NIF_T
 
     memcpy(ipc_ptr, (void*)ptr, device_size);
 
-    pointer_vec.resize(sizeof(int));
-    memcpy(pointer_vec.data(), &fd, sizeof(int));
-
-    for (char byte : handle_name) {
-      pointer_vec.push_back(byte);
+    ErlNifBinary handle_name_bin;
+    enif_alloc_binary(handle_name.size(), &handle_name_bin);
+    for (int i = 0; i < handle_name.size(); i++) {
+      handle_name_bin.data[i] = handle_name[i];
     }
-
+    ERL_NIF_TERM handle_name_term = enif_make_binary(env, &handle_name_bin);
+    ERL_NIF_TERM size_term = enif_make_uint64(env, device_size);
+    ERL_NIF_TERM fd_term = enif_make_int(env, fd);
+    out_term = enif_make_tuple3(env, handle_name_term, fd_term, size_term);
   } else if (pointer_kind == "cuda_ipc") {
     auto result = get_cuda_ipc_handle(ptr);
     if (result.second) {
       return exla::nif::error(env, "Unable to get cuda IPC handle");
     }
-    pointer_vec = result.first;
+    auto pointer_vec = result.first;
+
+    ErlNifBinary handle_bin;
+    enif_alloc_binary(pointer_vec.size(), &handle_bin);
+    for (int i = 0; i < pointer_vec.size(); i++) {
+      handle_bin.data[i] = pointer_vec[i];
+    }
+    ERL_NIF_TERM handle_term = enif_make_binary(env, &handle_bin);
+    ERL_NIF_TERM size_term = enif_make_uint64(env, device_size);
+    out_term = enif_make_tuple2(env, handle_term, size_term);
   }
 
-  ERL_NIF_TERM handle_list[pointer_vec.size()];
-  for (int i = 0; i < pointer_vec.size(); i++) {
-    handle_list[i] = enif_make_uint(env, pointer_vec[i]);
-  }
-
-  ERL_NIF_TERM handle_list_term = enif_make_list_from_array(env, handle_list, pointer_vec.size());
-  ERL_NIF_TERM device_size_term = enif_make_uint64(env, device_size);
-
-  return exla::nif::ok(env, enif_make_tuple2(env, handle_list_term, device_size_term));
+  return exla::nif::ok(env, out_term);
 }
 
 ERL_NIF_TERM create_buffer_from_device_pointer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -464,20 +466,46 @@ ERL_NIF_TERM create_buffer_from_device_pointer(ErlNifEnv* env, int argc, const E
   }
 
   exla::ExlaClient** client;
-  std::vector<int64_t> pointer_vec;
+  ErlNifBinary cuda_ipc_handle_bin;
+  int cuda_ipc_handle_size = 0;
   xla::Shape shape;
   int device_id;
   std::string pointer_kind;
+  void* ptr;
+  int fd = -1;
+  std::string memname;
 
   if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
     return exla::nif::error(env, "Unable to get client.");
   }
-  if (!exla::nif::get_list(env, argv[1], pointer_vec)) {
-    return exla::nif::error(env, "Unable to get device pointer.");
-  }
-  if (!exla::nif::get_atom(env, argv[2], pointer_kind)) {
+  if (!exla::nif::get_atom(env, argv[1], pointer_kind)) {
     return exla::nif::error(env, "Unable to get device pointer kind.");
   }
+
+  if (pointer_kind == "cuda_ipc") {
+    if (!enif_inspect_binary(env, argv[2], &cuda_ipc_handle_bin)) {
+      return exla::nif::error(env, "Unable to get CUDA IPC handle.");
+    }
+  } else if (pointer_kind == "host_ipc") {
+    const ERL_NIF_TERM* tuple;
+    int arity;
+    if (
+        !enif_get_tuple(env, argv[2], &arity, &tuple) ||
+        (arity != 2) ||
+        !exla::nif::get(env, tuple[0], &fd) ||
+        (fd == -1) ||
+        !exla::nif::get(env, tuple[1], memname)) {
+      return exla::nif::error(env, "Unable to get IPC handle.");
+    }
+  } else if (pointer_kind == "local") {
+    int64_t ptr_int;
+    if (!exla::nif::get(env, argv[2], &ptr_int)) {
+      return exla::nif::error(env, "Unable to get pointer.");
+    }
+
+    ptr = (void*)ptr_int;
+  }
+
   if (!exla::nif::get_typespec_as_xla_shape(env, argv[3], &shape)) {
     return exla::nif::error(env, "Unable to get shape.");
   }
@@ -485,40 +513,21 @@ ERL_NIF_TERM create_buffer_from_device_pointer(ErlNifEnv* env, int argc, const E
     return exla::nif::error(env, "Unable to get device ordinal.");
   }
 
-  void* ptr;
-  int fd = -1;
-  std::string memname;
-  size_t device_size;
-  if (pointer_kind == "local") {
-    if (pointer_vec.size() != sizeof(void*)) {
-      // This helps prevent segfaults if someone passes an IPC handle instead of
-      // a local pointer.
-      return exla::nif::error(env, "Invalid pointer size for selected mode.");
-    }
-    unsigned char* bytePtr = reinterpret_cast<unsigned char*>(&ptr);
-    for (size_t i = 0; i < sizeof(void*); i++) {
-      bytePtr[i] = pointer_vec[i];
-    }
-  } else if (pointer_kind == "host_ipc") {
-    if (pointer_vec.size() < sizeof(int)) {
-      return exla::nif::error(env, "Unable to get pointer for IPC handle.");
-    }
+  std::function<void()> on_delete_callback = []() {};
 
-    memcpy(&fd, pointer_vec.data(), sizeof(int));
-    memname = std::string(' ', pointer_vec.size() - sizeof(int));
-    for (int i = sizeof(int); i < pointer_vec.size(); i++) {
-      memname[i] = (char)pointer_vec[i];
-    }
-    std::cout << "memname: " << memname << std::endl;
-    std::cout << "fd: " << fd << std::endl;
+  if (pointer_kind == "host_ipc") {
+    size_t device_size = (size_t)xla::ShapeUtil::ByteSizeOf(shape);
 
-    device_size = (size_t)xla::ShapeUtil::ByteSizeOf(shape);
     ptr = open_ipc_handle(fd, device_size);
     if (ptr == nullptr) {
       return exla::nif::error(env, "Unable to get pointer for IPC handle.");
     }
+
+    on_delete_callback = [fd, memname, ptr, device_size]() {
+      close_ipc_handle(fd, ptr, (char*)memname.c_str(), device_size);
+    };
   } else if (pointer_kind == "cuda_ipc") {
-    auto result = get_pointer_for_ipc_handle(pointer_vec, device_id);
+    auto result = get_pointer_for_ipc_handle(cuda_ipc_handle_bin.data, cuda_ipc_handle_bin.size, device_id);
     if (result.second) {
       return exla::nif::error(env, "Unable to get pointer for IPC handle.");
     }
@@ -526,16 +535,8 @@ ERL_NIF_TERM create_buffer_from_device_pointer(ErlNifEnv* env, int argc, const E
   }
 
   EXLA_ASSIGN_OR_RETURN_NIF(xla::PjRtDevice * device, (*client)->client()->LookupDevice(device_id), env);
-
-  std::function<void()> on_delete_callback = []() {};
-
-  if (pointer_kind == "host_ipc" && fd != -1) {
-    on_delete_callback = [fd, memname, ptr, device_size]() {
-      close_ipc_handle(fd, ptr, (char*)memname.c_str(), device_size);
-    };
-  }
-
   EXLA_ASSIGN_OR_RETURN_NIF(std::unique_ptr<xla::PjRtBuffer> buffer, (*client)->client()->CreateViewOfDeviceBuffer(ptr, shape, device, on_delete_callback), env);
+
   exla::ExlaBuffer* exla_buffer = new exla::ExlaBuffer(std::move(buffer));
   return exla::nif::ok(env, exla::nif::make<exla::ExlaBuffer*>(env, exla_buffer));
 }
