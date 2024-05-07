@@ -88,11 +88,12 @@ defmodule EXLA.Backend do
 
     mode =
       case opts[:mode] do
-        mode when mode in [:local, :cuda_ipc] ->
+        mode when mode in [:local, :cuda_ipc, :host_ipc] ->
           mode
 
         mode ->
-          raise ArgumentError, "expected one of :local, :cuda_ipc, got: #{inspect(mode)}"
+          raise ArgumentError,
+                "expected one of :local, :cuda_ipc, :host_ipc, got: #{inspect(mode)}"
       end
 
     case buffer do

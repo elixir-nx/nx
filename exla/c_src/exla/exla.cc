@@ -1,18 +1,18 @@
+#include <sstream>
 #include <string>
 
-#include "exla_mlir.h"
 #include "exla_client.h"
 #include "exla_cuda.h"
 #include "exla_log_sink.h"
+#include "exla_mlir.h"
 #include "exla_nif_util.h"
-
-#include "xla/pjrt/pjrt_api.h"
-#include "xla/service/platform_util.h"
-
+#include "ipc.h"
 #include "mhlo/IR/hlo_ops.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "stablehlo/dialect/ChloOps.h"
 #include "stablehlo/dialect/StablehloOps.h"
+#include "xla/pjrt/pjrt_api.h"
+#include "xla/service/platform_util.h"
 
 // All of these are created with calls to `new` and subsequently
 // passed to the VM as pointers-to-pointers so we balance it out
@@ -202,9 +202,9 @@ ERL_NIF_TERM mlir_create_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 
   auto arg_types = std::vector<mlir::Type>{};
 
-  for (auto const & type_string : arg_type_strings) {
+  for (auto const& type_string : arg_type_strings) {
     auto type = (*module)->ParseType(type_string);
-    if(type == nullptr) {
+    if (type == nullptr) {
       return type_parsing_error(env, type_string);
     }
     arg_types.push_back(type);
@@ -212,9 +212,9 @@ ERL_NIF_TERM mlir_create_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 
   auto ret_types = std::vector<mlir::Type>{};
 
-  for (auto const & type_string : ret_type_strings) {
+  for (auto const& type_string : ret_type_strings) {
     auto type = (*module)->ParseType(type_string);
-    if(type == nullptr) {
+    if (type == nullptr) {
       return type_parsing_error(env, type_string);
     }
     ret_types.push_back(type);
@@ -281,9 +281,9 @@ ERL_NIF_TERM mlir_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   auto result_types = std::vector<mlir::Type>{};
 
-  for (auto const & type_string : result_type_strings) {
+  for (auto const& type_string : result_type_strings) {
     auto type = (*function)->module()->ParseType(type_string);
-    if(type == nullptr) {
+    if (type == nullptr) {
       return type_parsing_error(env, type_string);
     }
     result_types.push_back(type);
@@ -291,9 +291,9 @@ ERL_NIF_TERM mlir_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   auto attributes = std::vector<std::pair<std::string, mlir::Attribute>>{};
 
-  for (auto const & pair : attributes_kwlist) {
+  for (auto const& pair : attributes_kwlist) {
     auto attribute_value = (*function)->module()->ParseAttribute(pair.second);
-    if(attribute_value == nullptr) {
+    if (attribute_value == nullptr) {
       return attribute_parsing_error(env, pair.second);
     }
     attributes.push_back(std::pair{pair.first, attribute_value});
@@ -303,7 +303,6 @@ ERL_NIF_TERM mlir_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   return exla::nif::ok(env, exla::nif::make_list<mlir::Value>(env, results));
 }
-
 
 ERL_NIF_TERM mlir_push_region(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2) {
@@ -322,9 +321,9 @@ ERL_NIF_TERM mlir_push_region(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
 
   auto types = std::vector<mlir::Type>{};
 
-  for (auto const & type_string : arg_types) {
+  for (auto const& type_string : arg_types) {
     auto type = (*function)->module()->ParseType(type_string);
-    if(type == nullptr) {
+    if (type == nullptr) {
       return type_parsing_error(env, type_string);
     }
     types.push_back(type);
@@ -405,6 +404,8 @@ ERL_NIF_TERM get_buffer_device_pointer(ErlNifEnv* env, int argc, const ERL_NIF_T
     return exla::nif::error(env, "Unable to get device pointer kind.");
   }
 
+  EXLA_ASSIGN_OR_RETURN_NIF(unsigned long device_size, (*buffer)->GetOnDeviceSizeInBytes(), env);
+
   EXLA_ASSIGN_OR_RETURN_NIF(std::uintptr_t ptr,
                             (*buffer)->GetDevicePointer((*client)->client()), env);
 
@@ -414,6 +415,30 @@ ERL_NIF_TERM get_buffer_device_pointer(ErlNifEnv* env, int argc, const ERL_NIF_T
     for (size_t i = 0; i < sizeof(void*); i++) {
       pointer_vec.push_back(bytePtr[i]);
     }
+  } else if (pointer_kind == "host_ipc") {
+    std::ostringstream handle_name_stream;
+    handle_name_stream << "exla:ipc:" << device_size << ":" << ptr;
+    std::string handle_name = handle_name_stream.str();
+    int fd = get_ipc_handle((char*)handle_name.c_str(), device_size);
+
+    if (fd == -1) {
+      return exla::nif::error(env, "Unable to get IPC handle");
+    }
+
+    void* ipc_ptr = open_ipc_handle(fd, device_size);
+    if (ipc_ptr == nullptr) {
+      return exla::nif::error(env, "Unable to open IPC handle");
+    }
+
+    memcpy(ipc_ptr, (void*)ptr, device_size);
+
+    pointer_vec.resize(sizeof(int));
+    memcpy(pointer_vec.data(), &fd, sizeof(int));
+
+    for (char byte : handle_name) {
+      pointer_vec.push_back(byte);
+    }
+
   } else if (pointer_kind == "cuda_ipc") {
     auto result = get_cuda_ipc_handle(ptr);
     if (result.second) {
@@ -421,8 +446,6 @@ ERL_NIF_TERM get_buffer_device_pointer(ErlNifEnv* env, int argc, const ERL_NIF_T
     }
     pointer_vec = result.first;
   }
-
-  EXLA_ASSIGN_OR_RETURN_NIF(unsigned long device_size, (*buffer)->GetOnDeviceSizeInBytes(), env);
 
   ERL_NIF_TERM handle_list[pointer_vec.size()];
   for (int i = 0; i < pointer_vec.size(); i++) {
@@ -463,6 +486,9 @@ ERL_NIF_TERM create_buffer_from_device_pointer(ErlNifEnv* env, int argc, const E
   }
 
   void* ptr;
+  int fd = -1;
+  std::string memname;
+  size_t device_size;
   if (pointer_kind == "local") {
     if (pointer_vec.size() != sizeof(void*)) {
       // This helps prevent segfaults if someone passes an IPC handle instead of
@@ -472,6 +498,24 @@ ERL_NIF_TERM create_buffer_from_device_pointer(ErlNifEnv* env, int argc, const E
     unsigned char* bytePtr = reinterpret_cast<unsigned char*>(&ptr);
     for (size_t i = 0; i < sizeof(void*); i++) {
       bytePtr[i] = pointer_vec[i];
+    }
+  } else if (pointer_kind == "host_ipc") {
+    if (pointer_vec.size() < sizeof(int)) {
+      return exla::nif::error(env, "Unable to get pointer for IPC handle.");
+    }
+
+    memcpy(&fd, pointer_vec.data(), sizeof(int));
+    memname = std::string(' ', pointer_vec.size() - sizeof(int));
+    for (int i = sizeof(int); i < pointer_vec.size(); i++) {
+      memname[i] = (char)pointer_vec[i];
+    }
+    std::cout << "memname: " << memname << std::endl;
+    std::cout << "fd: " << fd << std::endl;
+
+    device_size = (size_t)xla::ShapeUtil::ByteSizeOf(shape);
+    ptr = open_ipc_handle(fd, device_size);
+    if (ptr == nullptr) {
+      return exla::nif::error(env, "Unable to get pointer for IPC handle.");
     }
   } else if (pointer_kind == "cuda_ipc") {
     auto result = get_pointer_for_ipc_handle(pointer_vec, device_id);
@@ -484,6 +528,13 @@ ERL_NIF_TERM create_buffer_from_device_pointer(ErlNifEnv* env, int argc, const E
   EXLA_ASSIGN_OR_RETURN_NIF(xla::PjRtDevice * device, (*client)->client()->LookupDevice(device_id), env);
 
   std::function<void()> on_delete_callback = []() {};
+
+  if (pointer_kind == "host_ipc" && fd != -1) {
+    on_delete_callback = [fd, memname, ptr, device_size]() {
+      close_ipc_handle(fd, ptr, (char*)memname.c_str(), device_size);
+    };
+  }
+
   EXLA_ASSIGN_OR_RETURN_NIF(std::unique_ptr<xla::PjRtBuffer> buffer, (*client)->client()->CreateViewOfDeviceBuffer(ptr, shape, device, on_delete_callback), env);
   exla::ExlaBuffer* exla_buffer = new exla::ExlaBuffer(std::move(buffer));
   return exla::nif::ok(env, exla::nif::make<exla::ExlaBuffer*>(env, exla_buffer));
