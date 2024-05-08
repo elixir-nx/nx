@@ -9,10 +9,10 @@
 #include <vector>
 
 #include "erl_nif.h"
+#include "mlir/IR/Builders.h"
 #include "xla/shape.h"
 #include "xla/types.h"
 #include "xla/xla_data.pb.h"
-#include "mlir/IR/Builders.h"
 
 #if !defined(__GNUC__) && (defined(__WIN32__) || defined(_WIN32) || defined(_WIN32_))
 typedef unsigned __int64 nif_uint64_t;
@@ -246,6 +246,7 @@ int get_list(ErlNifEnv* env,
 int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<std::string>& var);
 
 int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<xla::Shape>& var);
+int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<ERL_NIF_TERM>& var);
 
 template <typename T>
 int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T*>& var) {

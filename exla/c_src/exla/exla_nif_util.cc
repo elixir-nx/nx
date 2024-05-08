@@ -199,6 +199,22 @@ int get_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<int64>& var) {
 
 int get_list(ErlNifEnv* env,
              ERL_NIF_TERM list,
+             std::vector<ERL_NIF_TERM>& var) {
+  unsigned int length;
+  if (!enif_get_list_length(env, list, &length)) return 0;
+  var.reserve(length);
+  ERL_NIF_TERM head, tail;
+
+  while (enif_get_list_cell(env, list, &head, &tail)) {
+    var.push_back(head);
+    list = tail;
+  }
+
+  return 1;
+}
+
+int get_list(ErlNifEnv* env,
+             ERL_NIF_TERM list,
              std::vector<ErlNifBinary>& var) {
   unsigned int length;
   if (!enif_get_list_length(env, list, &length)) return 0;

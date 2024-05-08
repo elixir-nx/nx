@@ -10,6 +10,7 @@ XLA_INCLUDE_PATH = $(XLA_EXTENSION_DIR)/include
 IREE_COMPILER_DIR = iree/build/lib
 IREE_COMPILER_LIB = cache/$(IREE_COMPILER_DIR)
 IREE_COMPILER_INCLUDE_PATH = cache/iree/compiler/bindings/c
+IREE_RUNTIME_INCLUDE_PATH = cache/iree/runtime/src
 
 LLVM_MLIR_INCLUDES = -Icache/iree/third_party/llvm-project/mlir/include
 
@@ -40,7 +41,7 @@ CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -Wall -Wno-sign-compa
 	 -Wno-unused-parameter -Wno-missing-field-initializers -Wno-comment \
 	 -std=c++17 -w -DLLVM_VERSION_STRING=
 
-IREE_CFLAGS = $(CFLAGS) -I$(IREE_COMPILER_INCLUDE_PATH)
+IREE_CFLAGS = $(CFLAGS) -I$(IREE_COMPILER_INCLUDE_PATH) -I$(IREE_RUNTIME_INCLUDE_PATH)
 
 NVCCFLAGS = -shared -Xcompiler -fPIC
 
