@@ -295,20 +295,41 @@ defmodule EXLA.Defn do
       raise ArgumentError, "missing client"
     end
 
+    compiler_mode = Keyword.fetch!(options, :compiler_mode)
+
+    unless compiler_mode do
+      raise ArgumentError, "missing compiler_mode"
+    end
+
+    state_params =
+      if compiler_mode == :iree do
+        Map.new(params)
+      else
+        Map.new(params ++ outfeed.infeeds)
+      end
+
     state = %{
       client: client,
       precision: Keyword.get(options, :precision, :default),
       builder: function,
-      params: Map.new(params ++ outfeed.infeeds),
+      params: state_params,
       scope_ids: Tree.scope_ids(expr)
     }
 
-    {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
-    outfeed = cache |> get_outfeed() |> Outfeed.close(function)
+    if compiler_mode == :iree do
+      {res, _cache} = recur_flatten(expr, state, no_token_cache())
+      Value.return(function, res)
+      {:ok, nil}
+    else
+      {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
 
-    Value.return(function, res)
+      outfeed =
+        cache |> get_outfeed() |> Outfeed.close(function)
 
-    {:ok, outfeed}
+      Value.return(function, res)
+
+      {:ok, outfeed}
+    end
   end
 
   defp maybe_outfeed(lock, executable, args, used_inputs, outputs, outfeed, run_options)
@@ -369,6 +390,7 @@ defmodule EXLA.Defn do
       end
 
     {debug?, options} = Keyword.pop(options, :debug, false)
+    {compiler_mode, options} = Keyword.pop(options, :compiler_mode)
 
     {args_key, reverse_args_identifiers} =
       Enum.map_reduce(vars, [], fn var, acc ->
@@ -402,7 +424,8 @@ defmodule EXLA.Defn do
 
     {hooks, options} = Keyword.pop(options, :hooks, %{})
 
-    outfeed = Outfeed.new(hooks, defined_hooks)
+    outfeed =
+      Outfeed.new(hooks, defined_hooks)
 
     comp_key = {ref, client.name, outfeed.used_hooks, lazy_transfers, options}
 
@@ -433,9 +456,11 @@ defmodule EXLA.Defn do
 
           EXLA.MLIR.Module.new(comp_arg_typespecs, out_typespecs, fn builder ->
             outfeed =
-              outfeed
-              |> Outfeed.with_token(Value.create_token(builder))
-              |> Outfeed.add_infeeds(builder, reverse_infeeds)
+              if compiler_mode != :iree do
+                outfeed
+                |> Outfeed.with_token(Value.create_token(builder))
+                |> Outfeed.add_infeeds(builder, reverse_infeeds)
+              end
 
             expr = Nx.Defn.Composite.traverse(expr || fun.(vars), &Nx.devectorize/1)
 
@@ -447,13 +472,18 @@ defmodule EXLA.Defn do
                 typespecs =
                   for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
 
-                EXLA.MLIR.Module.compile(
-                  builder.module,
-                  client,
-                  typespecs,
-                  builder.return_typespecs,
-                  options
-                )
+                if compiler_mode == :iree do
+                  :ok = EXLA.MLIR.IREE.compile(builder.module.ref, "metal")
+                  raise "compiler not returning computation yet"
+                else
+                  EXLA.MLIR.Module.compile(
+                    builder.module,
+                    client,
+                    typespecs,
+                    builder.return_typespecs,
+                    options
+                  )
+                end
               end)
 
             {:ok, {xla_time, executable, extra, %{outfeed | infeeds: []}}}
@@ -649,9 +679,6 @@ defmodule EXLA.Defn do
           {computation, cache}
 
         %{} ->
-          {computation, cache} = token_computation("optional", call_args, expr, state, cache)
-          {computation, Map.put(cache, key, computation)}
-      end
 
     typespecs = [Typespec.token() | container_to_typespecs(expr)]
 
@@ -1606,21 +1633,41 @@ defmodule EXLA.Defn do
     {region, merge_outfeed(cache, comp_cache)}
   end
 
-  defp token_computation(name, args, expr, %{builder: %Function{}} = state, cache) do
+         expr,
+         %{builder: %Function{compiler: compiler}} = state,
+         cache
+       ) do
     %Function{module: module, name: name} = subbuilder(state.builder, name)
 
     token_typespec = Typespec.token()
     arg_typespecs = Enum.map(args, &Value.get_typespec/1)
     out_typespecs = container_to_typespecs(expr)
 
+    in_types =
+      if compiler == :iree do
+        arg_typespecs
+      else
+        [token_typespec | arg_typespecs]
+      end
+
+    out_types =
+      if compiler == :iree do
+        out_typespecs
+      else
+        [token_typespec | out_typespecs]
+      end
+
     function =
-      EXLA.MLIR.Module.add_function(module, name, [token_typespec | arg_typespecs], [
-        token_typespec | out_typespecs
-      ])
+      EXLA.MLIR.Module.add_function(module, name, in_types, out_types)
 
     [arg_token | tail] = EXLA.MLIR.Function.get_arguments(function)
 
-    params = Enum.with_index(tail, fn param, i -> {i, param} end)
+    params =
+      if compiler == :iree do
+        Enum.with_index([arg_token | tail], fn param, i -> {i, param} end)
+      else
+        Enum.with_index(tail, fn param, i -> {i, param} end)
+      end
 
     state = %{
       state
@@ -1629,11 +1676,15 @@ defmodule EXLA.Defn do
         scope_ids: Tree.scope_ids(expr)
     }
 
-    {res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
-
-    Value.return(function, [get_token(comp_cache) | List.flatten(res)])
-
-    {function, merge_outfeed(cache, comp_cache)}
+    if compiler_mode == :iree do
+      {res, comp_cache} = recur_composite(expr, state, cache)
+      Value.return(function, List.flatten(res))
+      {function, merge_outfeed(cache, comp_cache)}
+    else
+      {res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
+      Value.return(function, [get_token(comp_cache) | List.flatten(res)])
+      {function, merge_outfeed(cache, comp_cache)}
+    end
   end
 
   # The cache is built on top of call args because we need to handle pred/u8.
