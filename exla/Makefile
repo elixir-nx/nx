@@ -73,7 +73,7 @@ ifeq ($(NVCC_TEST),nvcc)
   NVCC := nvcc
 	NVCCFLAGS += -DCUDA_ENABLED
 else
-  NVCC := g++
+  NVCC := $(CXX)
 	NVCCFLAGS = $(CFLAGS)
 endif
 

@@ -5,6 +5,9 @@ defmodule EXLA.MixProject do
   @version "0.7.1"
 
   def project do
+    make_args =
+      Application.get_env(:exla, :make_args) || ["-j#{max(System.schedulers_online() - 2, 1)}"]
+
     [
       app: :exla,
       version: @version,
@@ -34,7 +37,8 @@ defmodule EXLA.MixProject do
           "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}",
           "CWD_RELATIVE_TO_PRIV_PATH" => cwd_relative_to_priv
         }
-      end
+      end,
+      make_args: make_args
     ]
   end
 
