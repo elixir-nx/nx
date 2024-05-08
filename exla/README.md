@@ -59,6 +59,8 @@ mix deps.get
 mix test
 ```
 
+By default, EXLA passes `["-jN"]` as a Make argument, where `N` is `System.schedulers_online() - 2`, capped at `1`. `config :exla, :make_args, ...` can be used to override this default setting.
+
 In order to run tests on a specific device, use the `EXLA_TARGET` environment variable, which is a dev-only variable for this project (it has no effect when using EXLA as a dependency). For example, `EXLA_TARGET=cuda` or `EXLA_TARGET=rocm`. Make sure to also specify `XLA_TARGET` to fetch or compile a proper version of the XLA binary.
 
 ### Building with Docker
