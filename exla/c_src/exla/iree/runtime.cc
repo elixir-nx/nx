@@ -5,5 +5,5 @@ ERL_NIF_TERM run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     return enif_make_badarg(env);
   }
 
-  return enif_make_atom(env, "ok");
+  return exla::nif::error(env, "runtime not implemented yet");
 }

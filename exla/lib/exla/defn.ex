@@ -482,8 +482,17 @@ defmodule EXLA.Defn do
                   for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
 
                 if compiler_mode == :iree do
-                  :ok = EXLA.MLIR.IREE.compile(builder.module.ref, "metal")
-                  raise "compiler not returning computation yet"
+                  {:ok, module_bytecode} = EXLA.MLIR.IREE.compile(builder.module.ref, "metal")
+
+                  %EXLA.Executable{
+                    client: client,
+                    ref: module_bytecode,
+                    output_typespecs: builder.return_typespecs,
+                    num_replicas: 1,
+                    num_partitions: 1,
+                    device_id: -1,
+                    runtime: :iree
+                  }
                 else
                   EXLA.MLIR.Module.compile(
                     builder.module,
@@ -495,7 +504,12 @@ defmodule EXLA.Defn do
                 end
               end)
 
-            {:ok, {xla_time, executable, extra, %{outfeed | infeeds: []}}}
+            outfeed =
+              if outfeed do
+                %{outfeed | infeeds: []}
+              end
+
+            {:ok, {xla_time, executable, extra, outfeed}}
           end)
         end)
       end)
@@ -523,7 +537,7 @@ defmodule EXLA.Defn do
       :telemetry.execute([:exla, :compilation], measurements, %{key: key})
     end
 
-    outfeed = Outfeed.with_user_hooks(outfeed, hooks)
+    outfeed = if outfeed, do: Outfeed.with_user_hooks(outfeed, hooks)
     {executable, used_inputs, outputs, outfeed, extra, debug?}
   end
 
@@ -716,7 +730,7 @@ defmodule EXLA.Defn do
   defp cached_recur_operator(
          :token,
          %T{data: %Expr{args: [_token]}},
-         %{builder: %Function{compiler: :iree}} = state,
+         %{builder: %Function{compiler: :iree}},
          cache
        ) do
     {[], cache}

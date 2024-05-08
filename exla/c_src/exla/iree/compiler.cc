@@ -10,6 +10,9 @@
 #include <sys/stat.h>  // For mode constants
 #include <unistd.h>    // For open, close
 
+#include <iostream>
+#include <sstream>
+
 #include "../exla_mlir.h"
 
 typedef struct compiler_state_t {
@@ -105,25 +108,36 @@ ERL_NIF_TERM compile(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   fflush(stdout);
-  auto fd = open("/tmp/iree_output.metal", O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-  error = ireeCompilerOutputOpenFD(fd, &state.output);
+
+  error = ireeCompilerOutputOpenMembuffer(&state.output);
   if (error) {
     handle_compiler_error(error);
     cleanup_compiler_state(state);
-    return exla::nif::error(env, "Error opening output file descriptor");
+    return exla::nif::error(env, "Error opening output membuffer");
   }
 
-  // Print IR to the output stream.
-  // When compiling to the 'end' phase, a compiler tool would typically use
-  // either |ireeCompilerInvocationOutputVMBytecode| or
-  // |ireeCompilerInvocationOutputVMCSource|.
   error = ireeCompilerInvocationOutputVMBytecode(state.invocation, state.output);
   if (error) {
     handle_compiler_error(error);
     cleanup_compiler_state(state);
-    return 1;
+    return exla::nif::error(env, "Failed to output VM Bytecode");
   }
 
+  uint64_t size;
+
+  ErlNifBinary binary;
+
+  error = ireeCompilerOutputMapMemory(state.output, reinterpret_cast<void **>(&binary.data), &size);
+
+  if (error) {
+    handle_compiler_error(error);
+    cleanup_compiler_state(state);
+    return exla::nif::error(env, "Failed to map output to output binary");
+  }
+
+  enif_alloc_binary(size, &binary);
+
   cleanup_compiler_state(state);
-  return exla::nif::ok(env);
+
+  return exla::nif::ok(env, enif_make_binary(env, &binary));
 }

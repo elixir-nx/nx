@@ -7,17 +7,31 @@ defmodule EXLA.Executable do
   alias EXLA.{BinaryBuffer, DeviceBuffer}
 
   @enforce_keys [:client, :ref, :output_typespecs, :num_replicas, :num_partitions, :device_id]
-  defstruct [:client, :ref, :output_typespecs, :num_replicas, :num_partitions, :device_id]
+  defstruct [
+    :client,
+    :ref,
+    :output_typespecs,
+    :num_replicas,
+    :num_partitions,
+    :device_id,
+    runtime: :xla
+  ]
 
   @doc """
   Runs the given executable with a list of lists as inputs and the given options.
   """
   def run(%Executable{} = executable, [subinputs | _] = inputs, options \\ [])
       when is_list(subinputs) do
-    %{client: client, device_id: device_id, output_typespecs: output_typespecs, ref: ref} =
+    %{
+      runtime: runtime,
+      client: client,
+      device_id: device_id,
+      output_typespecs: output_typespecs,
+      ref: ref
+    } =
       executable
 
-    for data_and_device_id <- run(client, ref, device_id, inputs, options) do
+    for data_and_device_id <- run(runtime, client, ref, device_id, inputs, options) do
       decompose_output(data_and_device_id, output_typespecs, client)
     end
   end
@@ -63,7 +77,7 @@ defmodule EXLA.Executable do
     end
   end
 
-  defp run(client, ref, device_id, inputs, _options) do
+  defp run(:xla, client, ref, device_id, inputs, _options) do
     inputs =
       for subinputs <- inputs do
         Enum.map(subinputs, fn
@@ -82,6 +96,20 @@ defmodule EXLA.Executable do
       end
 
     unwrap!(data)
+  end
+
+  defp run(:iree, _client, ref, _device_id, inputs, _options) do
+    inputs =
+      for subinputs <- inputs do
+        Enum.map(subinputs, fn
+          %BinaryBuffer{data: data, typespec: typespec} ->
+            {data, EXLA.Typespec.nif_encode(typespec)}
+        end)
+      end
+
+    ref
+    |> EXLA.MLIR.IREE.run_module(List.flatten(inputs))
+    |> unwrap!()
   end
 
   defp decompose_output({data, device_id}, output_typespecs, client) do
