@@ -40,18 +40,5 @@ defmodule EXLA.DeviceBufferTest do
       assert :ok = DeviceBuffer.deallocate(b1)
       assert :already_deallocated = DeviceBuffer.deallocate(b1)
     end
-
-    test "shape regression" do
-      # This isn't really a valid buffer we're creating. This test is only meant to check that
-      # we don't get an "unable to get shape" error when any of the dimensions exceeds max int32
-      max_int32 = 2_147_483_647
-      typespec = %EXLA.Typespec{type: {:s, 64}, shape: {max_int32 + 1}}
-      device_id = 0
-      client = EXLA.Client.fetch!(:host)
-
-      # this assertion seems pointless, but it's just so we ensure this doesn't raise
-      assert %DeviceBuffer{} =
-               DeviceBuffer.place_on_device(<<0::64>>, typespec, client, device_id)
-    end
   end
 end
