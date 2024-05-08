@@ -39,6 +39,7 @@ defmodule EXLA.Defn do
 
     client = EXLA.Client.fetch!(client_name)
     compile_options = Keyword.put(compile_options, :lazy_transfers, :never)
+    compile_options = Keyword.put_new(compile_options, :compiler_mode, :iree)
 
     input_length = length(Nx.Defn.Composite.flatten_list([input]))
     acc_length = length(Nx.Defn.Composite.flatten_list([acc]))
@@ -145,6 +146,10 @@ defmodule EXLA.Defn do
          outfeed,
          options
        ) do
+    if builder.compiler == :iree do
+      raise ArgumentError, "streaming not supported when compiling with IREE"
+    end
+
     %{token: root_token, infeeds: []} = outfeed
 
     {input_typespecs, used_typespecs} =
@@ -252,6 +257,8 @@ defmodule EXLA.Defn do
 
     {client_name, compile_options} =
       Keyword.pop_lazy(compile_options, :client, &EXLA.Client.default_name/0)
+
+    compile_options = Keyword.put_new(compile_options, :compiler_mode, :iree)
 
     client = EXLA.Client.fetch!(client_name)
 
@@ -455,6 +462,8 @@ defmodule EXLA.Defn do
             end)
 
           EXLA.MLIR.Module.new(comp_arg_typespecs, out_typespecs, fn builder ->
+            builder = %EXLA.MLIR.Function{builder | compiler: compiler_mode}
+
             outfeed =
               if compiler_mode != :iree do
                 outfeed
@@ -607,10 +616,10 @@ defmodule EXLA.Defn do
              ]
            }
          },
-         %{client: %EXLA.Client{platform: :host}, builder: %Function{}} = state,
+         %{client: %EXLA.Client{platform: :host}, builder: %Function{compiler: compiler}} = state,
          cache
        )
-       when type_kind != :c do
+       when type_kind != :c and compiler != :iree do
     # We match only on platform: :host for MLIR, as we want to support
     # QR-on-cpu as a custom call only in this case
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
@@ -679,19 +688,38 @@ defmodule EXLA.Defn do
           {computation, cache}
 
         %{} ->
+          {computation, cache} = token_computation("optional", call_args, expr, state, cache)
+          {computation, Map.put(cache, key, computation)}
+      end
 
-    typespecs = [Typespec.token() | container_to_typespecs(expr)]
+    if state.builder.compiler == :iree do
+      typespecs = container_to_typespecs(expr)
 
-    [token | result] =
-      Value.call(state.builder, [get_token(cache) | call_args], call_body, typespecs)
+      result = Value.call(state.builder, call_args, call_body, typespecs)
+      {wrap_tuple_result(result, expr), cache}
+    else
+      typespecs = [Typespec.token() | container_to_typespecs(expr)]
 
-    {wrap_tuple_result(result, expr), update_token(cache, token)}
+      [token | result] =
+        Value.call(state.builder, [get_token(cache) | call_args], call_body, typespecs)
+
+      {wrap_tuple_result(result, expr), update_token(cache, token)}
+    end
   end
 
   defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do
     {op, cache} = recur_operator(expr, state, cache)
     {_, cache} = recur_operator(token, state, cache)
     {op, cache}
+  end
+
+  defp cached_recur_operator(
+         :token,
+         %T{data: %Expr{args: [_token]}},
+         %{builder: %Function{compiler: :iree}} = state,
+         cache
+       ) do
+    {[], cache}
   end
 
   defp cached_recur_operator(:token, %T{data: %Expr{args: [token]}}, state, cache) do
@@ -1633,6 +1661,9 @@ defmodule EXLA.Defn do
     {region, merge_outfeed(cache, comp_cache)}
   end
 
+  defp token_computation(
+         name,
+         args,
          expr,
          %{builder: %Function{compiler: compiler}} = state,
          cache
@@ -1676,7 +1707,7 @@ defmodule EXLA.Defn do
         scope_ids: Tree.scope_ids(expr)
     }
 
-    if compiler_mode == :iree do
+    if compiler == :iree do
       {res, comp_cache} = recur_composite(expr, state, cache)
       Value.return(function, List.flatten(res))
       {function, merge_outfeed(cache, comp_cache)}

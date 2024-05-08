@@ -69,8 +69,7 @@ ERL_NIF_TERM compile(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
 
   initializeCompiler(&state);
 
-  // std::string module_str = (*module)->toMLIRString();
-  std::string module_str = "";
+  std::string module_str = (*module)->ToString();
   MlirOperation module_op = mlirOperationCreateParse(
       state.context,
       mlirStringRefCreateFromCString(module_str.c_str()),

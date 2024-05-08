@@ -85,7 +85,7 @@ HEADERS = $(EXLA_DIR)/exla_mlir.h $(EXLA_DIR)/custom_calls.h $(EXLA_DIR)/exla_cl
 OBJECTS = $(patsubst $(EXLA_DIR)/%.cc,$(EXLA_CACHE_OBJ_DIR)/%.o,$(SOURCES)) $(EXLA_CACHE_OBJ_DIR)/exla_cuda.o
 
 IREE_SOURCES = $(EXLA_DIR)/iree/iree.cc $(EXLA_DIR)/iree/compiler.cc $(EXLA_DIR)/iree/runtime.cc
-IREE_HEADERS = $(EXLA_DIR)/iree/compiler.h $(EXLA_DIR)/iree/runtime.h $(EXLA_DIR)/exla_nif_util.h
+IREE_HEADERS = $(EXLA_DIR)/iree/compiler.h $(EXLA_DIR)/iree/runtime.h $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_mlir.h
 IREE_OBJECTS = $(patsubst $(EXLA_DIR)/%.cc,$(EXLA_CACHE_OBJ_DIR)/%.o,$(IREE_SOURCES))
 
 NVCC_RESULT := $(shell which nvcc 2> /dev/null)
@@ -114,7 +114,7 @@ $(EXLA_CACHE_OBJ_DIR)/%.o: $(EXLA_DIR)/%.cc $(HEADERS)
 $(EXLA_CACHE_SO): $(XLA_EXTENSION_DIR) $(IREE_COMPILER_LIB) $(OBJECTS)
 	$(CXX) $(OBJECTS) -o $(EXLA_CACHE_SO) $(LDFLAGS)
 
-$(EXLA_CACHE_IREE_COMPILER_SO): $(EXLA_CACHE_OBJ_DIR)/iree/iree.o $(EXLA_CACHE_OBJ_DIR)/iree/compiler.o $(EXLA_CACHE_OBJ_DIR)/iree/runtime.o $(EXLA_CACHE_OBJ_DIR)/exla_nif_util.o
+$(EXLA_CACHE_IREE_COMPILER_SO): $(EXLA_CACHE_OBJ_DIR)/iree/iree.o $(EXLA_CACHE_OBJ_DIR)/iree/compiler.o $(EXLA_CACHE_OBJ_DIR)/iree/runtime.o $(EXLA_CACHE_OBJ_DIR)/exla_nif_util.o $(EXLA_CACHE_OBJ_DIR)/exla_mlir.o
 	$(CXX) $^ -o $@ $(IREE_LDFLAGS)
 
 $(IREE_COMPILER_LIB):
