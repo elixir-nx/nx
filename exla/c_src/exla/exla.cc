@@ -4,6 +4,7 @@
 #include "exla_cuda.h"
 #include "exla_log_sink.h"
 #include "exla_mlir.h"
+#include "exla_mlir_nif_util.h"
 #include "exla_nif_util.h"
 #include "mhlo/IR/hlo_ops.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"

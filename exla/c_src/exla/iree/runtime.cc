@@ -5,7 +5,7 @@
 typedef struct {
   void *data;
   size_t size;
-  std::vector<int64_t> dims;
+  std::vector<iree_hal_dim_t> dims;
   xla::PrimitiveType type;
 } IREEInput;
 
@@ -13,9 +13,10 @@ int load_inputs(ErlNifEnv *env, std::vector<ERL_NIF_TERM> terms, std::vector<IRE
   const ERL_NIF_TERM *tuple, *typespec;
   int length;
   ErlNifBinary bin;
-  xla::PrimitiveType type;
-  std::vector<int64_t> dims;
   IREEInput item;
+  std::vector<int64_t> dims;
+
+  loaded.reserve(terms.size());
 
   for (ERL_NIF_TERM term : terms) {
     if (!enif_get_tuple(env, term, &length, &tuple)) {
@@ -37,8 +38,13 @@ int load_inputs(ErlNifEnv *env, std::vector<ERL_NIF_TERM> terms, std::vector<IRE
       return 0;
     }
 
-    if (!exla::nif::get_tuple(env, typespec[1], item.dims)) {
+    if (!exla::nif::get_tuple(env, typespec[1], dims)) {
       return 0;
+    }
+
+    item.dims.reserve(dims.size());
+    for (int64_t dim : dims) {
+      item.dims.push_back(dim);
     }
 
     loaded.push_back(item);
@@ -47,7 +53,73 @@ int load_inputs(ErlNifEnv *env, std::vector<ERL_NIF_TERM> terms, std::vector<IRE
   return 1;
 }
 
-iree_status_t call_module(iree_runtime_session_t *session, std::vector<IREEInput> inputs) {
+std::pair<iree_hal_element_type_t, bool> primitive_type_to_iree_element_type(xla::PrimitiveType t) {
+  using xla::PrimitiveType;
+
+  switch (t) {
+    case PrimitiveType::PRED:
+      return {IREE_HAL_ELEMENT_TYPE_BOOL_8, true};
+    case PrimitiveType::S8:
+      return {IREE_HAL_ELEMENT_TYPE_INT_8, true};
+    case PrimitiveType::S16:
+      return {IREE_HAL_ELEMENT_TYPE_INT_16, true};
+    case PrimitiveType::S32:
+      return {IREE_HAL_ELEMENT_TYPE_INT_32, true};
+    case PrimitiveType::S64:
+      return {IREE_HAL_ELEMENT_TYPE_INT_64, true};
+    case PrimitiveType::U8:
+      return {IREE_HAL_ELEMENT_TYPE_UINT_8, true};
+    case PrimitiveType::U16:
+      return {IREE_HAL_ELEMENT_TYPE_UINT_16, true};
+    case PrimitiveType::U32:
+      return {IREE_HAL_ELEMENT_TYPE_UINT_32, true};
+    case PrimitiveType::U64:
+      return {IREE_HAL_ELEMENT_TYPE_UINT_64, true};
+    case PrimitiveType::BF16:
+      return {IREE_HAL_ELEMENT_TYPE_BFLOAT_16, true};
+    case PrimitiveType::F16:
+      return {IREE_HAL_ELEMENT_TYPE_FLOAT_16, true};
+    case PrimitiveType::F32:
+      return {IREE_HAL_ELEMENT_TYPE_FLOAT_32, true};
+    case PrimitiveType::F64:
+      return {IREE_HAL_ELEMENT_TYPE_FLOAT_64, true};
+    case PrimitiveType::C64:
+      return {IREE_HAL_ELEMENT_TYPE_COMPLEX_FLOAT_64, true};
+    case PrimitiveType::C128:
+      return {IREE_HAL_ELEMENT_TYPE_COMPLEX_FLOAT_128, true};
+    default:
+      return {IREE_HAL_ELEMENT_TYPE_BOOL_8, false};
+  }
+}
+
+iree_status_t iree_input_to_hal_arg(iree_hal_buffer_view_t **arg, IREEInput &input, iree_hal_device_t *device, iree_hal_allocator_t *device_allocator) {
+  auto result = primitive_type_to_iree_element_type(input.type);
+  if (!result.second) {
+    return iree_make_status(IREE_STATUS_INVALID_ARGUMENT);
+  }
+
+  auto type = result.first;
+  const iree_const_byte_span_t data_span = iree_make_const_byte_span(input.data, input.size);
+
+  iree_hal_buffer_params_t buffer_params = {
+      .type = IREE_HAL_MEMORY_TYPE_DEVICE_LOCAL,
+      .access = IREE_HAL_MEMORY_ACCESS_ALL,
+      .usage = IREE_HAL_BUFFER_USAGE_DEFAULT,
+  };
+
+  return iree_hal_buffer_view_allocate_buffer_copy(
+      device,
+      device_allocator,
+      input.dims.size(),
+      input.dims.data(),
+      type,
+      IREE_HAL_ENCODING_TYPE_DENSE_ROW_MAJOR,
+      buffer_params,
+      data_span,
+      arg);
+}
+
+iree_status_t call_module(iree_runtime_session_t *session, std::vector<IREEInput> inputs, std::vector<ErlNifBinary> *result) {
   iree_runtime_call_t call;
 
   IREE_RETURN_IF_ERROR(iree_runtime_call_initialize_by_name(
@@ -59,48 +131,40 @@ iree_status_t call_module(iree_runtime_session_t *session, std::vector<IREEInput
   iree_hal_device_t *device = iree_runtime_session_device(session);
   iree_hal_allocator_t *device_allocator =
       iree_runtime_session_device_allocator(session);
-  iree_allocator_t host_allocator =
-      iree_runtime_session_host_allocator(session);
-
-  iree_status_t status = iree_ok_status();
-  if (iree_status_is_ok(status)) {
-    // TO-DO: make this process inputs vector
-    // // %lhs: tensor<4xf32>
-    // iree_hal_buffer_view_t *lhs = NULL;
-    // if (iree_status_is_ok(status)) {
-    //   static const iree_hal_dim_t lhs_shape[1] = {4};
-    //   static const float lhs_data[4] = {1.0f, 1.1f, 1.2f, 1.3f};
-    //   status = iree_hal_buffer_view_allocate_buffer_copy(
-    //       device, device_allocator,
-    //       // Shape rank and dimensions:
-    //       IREE_ARRAYSIZE(lhs_shape), lhs_shape,
-    //       // Element type:
-    //       IREE_HAL_ELEMENT_TYPE_FLOAT_32,
-    //       // Encoding type:
-    //       IREE_HAL_ENCODING_TYPE_DENSE_ROW_MAJOR,
-    //       (iree_hal_buffer_params_t){
-    //           // Where to allocate (host or device):
-    //           .type = IREE_HAL_MEMORY_TYPE_DEVICE_LOCAL,
-    //           // Access to allow to this memory:
-    //           .access = IREE_HAL_MEMORY_ACCESS_ALL,
-    //           // Intended usage of the buffer (transfers, dispatches, etc):
-    //           .usage = IREE_HAL_BUFFER_USAGE_DEFAULT,
-    //       },
-    //       // The actual heap buffer to wrap or clone and its allocator:
-    //       iree_make_const_byte_span(lhs_data, sizeof(lhs_data)),
-    //       // Buffer view + storage are returned and owned by the caller:
-    //       &lhs);
-    // if (iree_status_is_ok(status)) {
-    //   IREE_IGNORE_ERROR(iree_hal_buffer_view_fprint(
-    //       stdout, lhs, /*max_element_count=*/4096, host_allocator));
-    //   // Add to the call inputs list (which retains the buffer view).
-    //   status = iree_runtime_call_inputs_push_back_buffer_view(&call, lhs);
-    // }
-    // // Since the call retains the buffer view we can release it here.
-    // iree_hal_buffer_view_release(lhs);
+  iree_hal_buffer_view_t *arg;
+  for (IREEInput input : inputs) {
+    IREE_RETURN_IF_ERROR(iree_input_to_hal_arg(&arg, input, device, device_allocator));
+    IREE_RETURN_IF_ERROR(iree_runtime_call_inputs_push_back_buffer_view(&call, arg));
+    iree_hal_buffer_view_release(arg);
   }
 
-  return 0;
+  std::cout << "before call\n";
+  IREE_RETURN_IF_ERROR(iree_runtime_call_invoke(&call, /*flags=*/0));
+  std::cout << "after call\n";
+
+  iree_vm_list_t *outputs = iree_runtime_call_outputs(&call);
+
+  std::cout << "size: " << iree_vm_list_size(outputs) << "\n";
+
+  ErlNifBinary binary;
+  size_t size = iree_vm_list_size(outputs);
+
+  // for (iree_vm_size_t i = 0; i < size; i++) {
+  //   iree_hal_buffer_view_t *out_buffer_view;
+  //   iree_runtime_call_outputs_pop_front_buffer_view(&call, &out_buffer_view);
+
+  //   auto length = iree_hal_buffer_view_byte_length(out_buffer_view);
+  //   iree_hal_buffer_t *buffer = iree_hal_buffer_view_buffer(out_buffer_view);
+
+  //   enif_alloc_binary(length, &binary);
+
+  //   IREE_RETURN_IF_ERROR(iree_hal_buffer_map_read(
+  //       buffer, 0, &binary.data, length));
+
+  //   result->push_back(binary);
+  // }
+
+  return iree_make_status(IREE_STATUS_OK);
 }
 
 ERL_NIF_TERM
@@ -109,12 +173,20 @@ run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     return enif_make_badarg(env);
   }
 
-  ErlNifBinary bytecode_binary;
+  std::vector<ERL_NIF_TERM> bytecode_vec;
   std::vector<ERL_NIF_TERM> input_terms;
   std::vector<IREEInput> inputs;
+  std::vector<uint8_t> bytecode;
 
-  if (!enif_inspect_binary(env, argv[0], &bytecode_binary)) {
+  if (!exla::nif::get_list(env, argv[0], bytecode_vec)) {
     return exla::nif::error(env, "Unable to load bytecode binary");
+  }
+
+  bytecode.resize(bytecode_vec.size());
+  unsigned int byte;
+  for (int i = 0; i < bytecode_vec.size(); i++) {
+    enif_get_uint(env, bytecode_vec[i], &byte);
+    bytecode[i] = static_cast<uint8_t>(byte);
   }
 
   if (!exla::nif::get_list(env, argv[1], input_terms)) {
@@ -132,7 +204,7 @@ run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   iree_status_t status = iree_runtime_instance_create(&instance_options, iree_allocator_system(), &instance);
 
   iree_hal_device_t *device = NULL;
-  char *device_uri = "metal";  // TO-DO: change this to an argument
+  char device_uri[] = "metal://0000000100000971";  // TO-DO: change this to an argument
   if (iree_status_is_ok(status)) {
     status = iree_hal_create_device(
         iree_runtime_instance_driver_registry(instance),
@@ -149,39 +221,43 @@ run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
         iree_runtime_instance_host_allocator(instance), &session);
   }
 
+  iree_const_byte_span_t span{.data = bytecode.data(), .data_length = bytecode.size()};
+
   if (iree_status_is_ok(status)) {
-    status = iree_runtime_session_append_bytecode_module_from_memory(session, reinterpret_cast<iree_const_byte_span_t>(bytecode_binary.data), iree_runtime_instance_host_allocator(instance));
+    status = iree_runtime_session_append_bytecode_module_from_memory(session, span, iree_runtime_instance_host_allocator(instance));
   }
 
+  std::vector<ErlNifBinary> results;
   if (iree_status_is_ok(status)) {
     // this is where we actually call code
     // status = iree_runtime_demo_perform_mul(session);
-    status = call_module(session, inputs)
+    status = call_module(session, inputs, &results);
   }
 
-  // Release the session and free all cached resources.
-  iree_runtime_session_release(session);
+  if (session) {
+    // Release the session and free all cached resources.
+    iree_runtime_session_release(session);
+  }
 
-  // Release shared device once all sessions using it have been released.
-  iree_hal_device_release(device);
+  if (device) {
+    // Release shared device once all sessions using it have been released.
+    iree_hal_device_release(device);
+  }
 
-  // Release the shared instance - it will be deallocated when all sessions
-  // using it have been released (here it is deallocated immediately).
-  iree_runtime_instance_release(instance);
+  if (instance) {
+    // Release the shared instance - it will be deallocated when all sessions
+    // using it have been released (here it is deallocated immediately).
+    iree_runtime_instance_release(instance);
+  }
 
-  int ret = (int)iree_status_code(status);
   if (!iree_status_is_ok(status)) {
     // Dump nice status messages to stderr on failure.
     // An application can route these through its own logging infrastructure as
     // needed. Note that the status is a handle and must be freed!
     iree_status_fprint(stderr, status);
     iree_status_ignore(status);
+    return exla::nif::error(env, "Failed to execute IREE runtime");
   }
 
-  if (!ret) {
-    exla::nif::error(env, "Fail to execute IREE runtime");
-  }
-
-  // TO-DO: we want to get output values too
-  return exla::nif::ok(env);
+  return exla::nif::ok(env, exla::nif::make_list(env, results));
 }

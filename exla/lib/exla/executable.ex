@@ -98,7 +98,7 @@ defmodule EXLA.Executable do
     unwrap!(data)
   end
 
-  defp run(:iree, _client, ref, _device_id, inputs, _options) do
+  defp run(:iree, _client, ref, device_id, inputs, _options) do
     inputs =
       for subinputs <- inputs do
         Enum.map(subinputs, fn
@@ -110,6 +110,8 @@ defmodule EXLA.Executable do
     ref
     |> EXLA.MLIR.IREE.run_module(List.flatten(inputs))
     |> unwrap!()
+    |> Enum.map(&{&1, device_id})
+    |> dbg()
   end
 
   defp decompose_output({data, device_id}, output_typespecs, client) do

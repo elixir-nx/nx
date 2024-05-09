@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "erl_nif.h"
-#include "mlir/IR/Builders.h"
 #include "xla/shape.h"
 #include "xla/types.h"
 #include "xla/xla_data.pb.h"
@@ -189,6 +188,8 @@ ERL_NIF_TERM make(ErlNifEnv* env, T& var) {
   return ret;
 }
 
+ERL_NIF_TERM make_list(ErlNifEnv* env, std::vector<ErlNifBinary> result);
+
 template <typename T>
 ERL_NIF_TERM make_list(ErlNifEnv* env, std::vector<T> result) {
   size_t n = result.size();
@@ -332,9 +333,6 @@ T get_value(ErlNifEnv* env, ERL_NIF_TERM term) {
   get(env, term, &value);
   return value;
 }
-
-// Extracts information from `GetShape` into a usable term.
-ERL_NIF_TERM make_typespec(ErlNifEnv* env, mlir::Type type);
 
 }  // namespace nif
 }  // namespace exla

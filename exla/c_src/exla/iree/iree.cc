@@ -7,6 +7,7 @@
 #include "runtime.h"
 
 ERL_NIF_TERM global_initialize(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
+  ireeCompilerLoadLibrary("libIREECompiler.dylib");
   ireeCompilerGlobalInitialize();
   return exla::nif::ok(env);
 }

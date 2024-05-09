@@ -13,8 +13,6 @@
 #include <iostream>
 #include <sstream>
 
-#include "../exla_mlir.h"
-
 typedef struct compiler_state_t {
   iree_compiler_session_t *session;
   iree_compiler_source_t *source;
@@ -57,9 +55,9 @@ ERL_NIF_TERM compile(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
-  exla::MLIRModule **module;
+  std::string module_str;
 
-  if (!exla::nif::get<exla::MLIRModule *>(env, argv[0], module)) {
+  if (!exla::nif::get(env, argv[0], module_str)) {
     return exla::nif::error(env, "Unable to get module.");
   }
 
@@ -72,10 +70,9 @@ ERL_NIF_TERM compile(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
 
   initializeCompiler(&state);
 
-  std::string module_str = (*module)->ToString();
   MlirOperation module_op = mlirOperationCreateParse(
       state.context,
-      mlirStringRefCreateFromCString(module_str.c_str()),
+      mlirStringRefCreate(module_str.c_str(), module_str.size()),
       mlirStringRefCreateFromCString("source.stablehlo"));
   if (mlirOperationIsNull(module_op)) {
     return exla::nif::error(env, "Unable to create MlirOperation module.");
@@ -86,7 +83,8 @@ ERL_NIF_TERM compile(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   const char *flags[] = {
       "--iree-hal-target-backends=metal-spirv",
       "--iree-input-type=stablehlo_xla",
-      "--iree-execution-model=async-external"};
+      "--iree-execution-model=async-internal",
+      "--output-format=vm-bytecode"};
   err = ireeCompilerSessionSetFlags(state.session, 1, flags);
   if (err) {
     cleanup_compiler_state(state);
@@ -123,11 +121,16 @@ ERL_NIF_TERM compile(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Failed to output VM Bytecode");
   }
 
+  uint8_t *contents;
   uint64_t size;
 
-  ErlNifBinary binary;
+  error = ireeCompilerOutputMapMemory(state.output, (void **)&contents, &size);
 
-  error = ireeCompilerOutputMapMemory(state.output, reinterpret_cast<void **>(&binary.data), &size);
+  std::vector<ERL_NIF_TERM> bytes_term;
+  bytes_term.resize(size);
+  for (size_t i = 0; i < size; i++) {
+    bytes_term[i] = enif_make_uint(env, static_cast<unsigned int>(contents[i]));
+  }
 
   if (error) {
     handle_compiler_error(error);
@@ -135,9 +138,7 @@ ERL_NIF_TERM compile(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Failed to map output to output binary");
   }
 
-  enif_alloc_binary(size, &binary);
-
   cleanup_compiler_state(state);
 
-  return exla::nif::ok(env, enif_make_binary(env, &binary));
+  return exla::nif::ok(env, enif_make_list_from_array(env, bytes_term.data(), bytes_term.size()));
 }

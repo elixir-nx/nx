@@ -12,7 +12,7 @@ IREE_COMPILER_LIB = cache/$(IREE_COMPILER_DIR)
 IREE_COMPILER_INCLUDE_PATH = cache/iree/compiler/bindings/c
 IREE_RUNTIME_INCLUDE_PATH = cache/iree/runtime/src
 
-LLVM_MLIR_INCLUDES = -Icache/iree/third_party/llvm-project/mlir/include
+IREE_INSTALL_PREFIX = $(abspath cache/iree/build/)
 
 # Cache configuration
 EXLA_CACHE_SO = cache/libexla.so
@@ -81,8 +81,8 @@ $(EXLA_SO): $(EXLA_CACHE_SO) $(EXLA_CACHE_IREE_COMPILER_SO)
 		ln -sf $(EXLA_CACHE_IREE_COMPILER_SO_LINK_PATH) $(EXLA_IREE_COMPILER_SO) ; \
 	fi
 
-SOURCES = $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_mlir.cc $(EXLA_DIR)/custom_calls.cc $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_nif_util.cc
-HEADERS = $(EXLA_DIR)/exla_mlir.h $(EXLA_DIR)/custom_calls.h $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h
+SOURCES = $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_mlir.cc $(EXLA_DIR)/custom_calls.cc $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/exla_mlir_nif_util.cc
+HEADERS = $(EXLA_DIR)/exla_mlir.h $(EXLA_DIR)/custom_calls.h $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h $(EXLA_DIR)/exla_mlir_nif_util.h
 OBJECTS = $(patsubst $(EXLA_DIR)/%.cc,$(EXLA_CACHE_OBJ_DIR)/%.o,$(SOURCES)) $(EXLA_CACHE_OBJ_DIR)/exla_cuda.o
 
 IREE_SOURCES = $(EXLA_DIR)/iree/iree.cc $(EXLA_DIR)/iree/compiler.cc $(EXLA_DIR)/iree/runtime.cc
@@ -100,10 +100,6 @@ else
 	NVCCFLAGS = $(CFLAGS)
 endif
 
-$(EXLA_CACHE_OBJ_DIR)/iree/%.o:  $(EXLA_DIR)/iree/%.cc $(IREE_HEADERS)
-	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)/iree
-	$(CXX) $(IREE_CFLAGS) $(LLVM_MLIR_INCLUDES) -c $< -o $@
-
 $(EXLA_CACHE_OBJ_DIR)/exla_cuda.o: $(EXLA_DIR)/exla_cuda.cc $(EXLA_DIR)/exla_cuda.h
 	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)
 	$(NVCC) $(NVCCFLAGS) -c $< -o $@
@@ -115,8 +111,30 @@ $(EXLA_CACHE_OBJ_DIR)/%.o: $(EXLA_DIR)/%.cc $(HEADERS)
 $(EXLA_CACHE_SO): $(XLA_EXTENSION_DIR) $(IREE_COMPILER_LIB) $(OBJECTS)
 	$(CXX) $(OBJECTS) -o $(EXLA_CACHE_SO) $(LDFLAGS)
 
-$(EXLA_CACHE_IREE_COMPILER_SO): $(EXLA_CACHE_OBJ_DIR)/iree/iree.o $(EXLA_CACHE_OBJ_DIR)/iree/compiler.o $(EXLA_CACHE_OBJ_DIR)/iree/runtime.o $(EXLA_CACHE_OBJ_DIR)/exla_nif_util.o $(EXLA_CACHE_OBJ_DIR)/exla_mlir.o
-	$(CXX) $^ -o $@ $(IREE_LDFLAGS)
+
+IREE_CMAKE_BUILD_DIR = cache/objs/exla_iree_cmake
+
+ifdef DEBUG
+	IREE_CMAKE_CONFIG = RelWithDebInfo
+else
+	IREE_CMAKE_CONFIG = Release
+endif
+
+$(EXLA_CACHE_IREE_COMPILER_SO):
+	@mkdir -p $(IREE_CMAKE_BUILD_DIR)
+	@mkdir -p cache/objs/iree_cmake_out
+	@mkdir -p cache/objs/mlir_cmake_out
+	@mkdir -p cache/objs/llvm_cmake_out
+	cmake -S c_src/iree_runtime -B $(IREE_CMAKE_BUILD_DIR) \
+		-DIREE_COMPILER_INCLUDE_PATH=$(IREE_COMPILER_INCLUDE_PATH) \
+		-DIREE_COMPILER_DIR=$(IREE_COMPILER_DIR) \
+		-DXLA_INCLUDE_PATH=$(abspath $(XLA_INCLUDE_PATH)) \
+		-DIREE_INSTALL_PREFIX=$(IREE_INSTALL_PREFIX) \
+		-DCACHE_DIR=cache\
+		-DXLA_EXTENSION_LIB=$(abspath $(XLA_EXTENSION_LIB))\
+		-DCMAKE_BUILD_TYPE=$(IREE_CMAKE_CONFIG)
+	cmake --build $(IREE_CMAKE_BUILD_DIR) --config $(IREE_CMAKE_CONFIG) --verbose
+	cmake --install $(IREE_CMAKE_BUILD_DIR) --config $(IREE_CMAKE_CONFIG) --prefix cache
 
 $(IREE_COMPILER_LIB):
   # TO-DO: setup proper download and caching of the iree compiler

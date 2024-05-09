@@ -375,6 +375,7 @@ defmodule EXLA.Defn do
       EXLA.Executable.run(executable, [buffers], run_options)
     else
       [result] ->
+        dbg(result)
         [EXLA.Defn.Buffers.to_nx!(result, outputs)]
     after
       EXLA.Defn.Lock.unlock(lock)
@@ -482,7 +483,10 @@ defmodule EXLA.Defn do
                   for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
 
                 if compiler_mode == :iree do
-                  {:ok, module_bytecode} = EXLA.MLIR.IREE.compile(builder.module.ref, "metal")
+                  {:ok, module_charlist} = EXLA.NIF.mlir_module_to_string(builder.module.ref)
+                  dbg(module_charlist)
+                  {:ok, module_bytecode} = EXLA.MLIR.IREE.compile(module_charlist, "metal")
+                  dbg(module_bytecode)
 
                   %EXLA.Executable{
                     client: client,

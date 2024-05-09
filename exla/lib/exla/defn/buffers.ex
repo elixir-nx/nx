@@ -108,6 +108,11 @@ defmodule EXLA.Defn.Buffers do
 
     case data do
       %EXLA.Backend{buffer: %EXLA.DeviceBuffer{ref: ref} = buffer}
+      when executable.runtime == :iree ->
+        binary = EXLA.DeviceBuffer.read(buffer)
+        EXLA.BinaryBuffer.from_binary(binary, to_typespec(tensor))
+
+      %EXLA.Backend{buffer: %EXLA.DeviceBuffer{ref: ref} = buffer}
       when node(ref) != node() ->
         binary = :erpc.call(node(ref), EXLA.DeviceBuffer, :read, [buffer])
         EXLA.BinaryBuffer.from_binary(binary, to_typespec(tensor))
