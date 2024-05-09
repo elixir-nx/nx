@@ -110,7 +110,7 @@ defmodule EXLA.Executable do
     ref
     |> EXLA.MLIR.IREE.run_module(List.flatten(inputs))
     |> unwrap!()
-    |> Enum.map(&{&1, device_id})
+    |> then(&[{&1, device_id}])
     |> dbg()
   end
 

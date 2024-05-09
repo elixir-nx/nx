@@ -152,87 +152,21 @@ iree_status_t call_module(iree_runtime_session_t *session, std::vector<IREEInput
   size_t size = iree_vm_list_size(outputs);
 
   for (iree_vm_size_t i = 0; i < size; i++) {
-    iree_vm_ref_t ref;
-    iree_hal_buffer_view_t *buffer_view;
-    iree_hal_buffer_t *out_buffer;
-    iree_hal_buffer_t *host_buffer;
+    iree_hal_buffer_view_t *buffer_view = nullptr;
 
-    IREE_RETURN_IF_ERROR(iree_vm_list_get_ref_assign(outputs, i, &ref));
+    iree_runtime_call_outputs_pop_front_buffer_view(&call, &buffer_view);
 
-    IREE_RETURN_IF_ERROR(iree_hal_buffer_view_check_deref(ref, &buffer_view));
-
-    out_buffer = iree_hal_buffer_view_buffer(buffer_view);
-
-    iree_hal_buffer_params_t buffer_params = {
-        .type = IREE_HAL_MEMORY_TYPE_HOST_LOCAL | IREE_HAL_MEMORY_TYPE_DEVICE_VISIBLE,
-        .usage = IREE_HAL_BUFFER_USAGE_MAPPING_SCOPED | IREE_HAL_BUFFER_USAGE_TRANSFER_TARGET};
-    IREE_RETURN_IF_ERROR(iree_hal_allocator_allocate_buffer(
-        device_allocator,
-        buffer_params,
-        iree_hal_buffer_byte_length(out_buffer),
-        &host_buffer));
-
-    iree_hal_semaphore_t *semaphore;
-    IREE_RETURN_IF_ERROR(iree_hal_semaphore_create(device, 0, &semaphore));
-
-    // IREE_API_EXPORT iree_status_t iree_hal_device_queue_copy(
-    //     iree_hal_device_t * device, iree_hal_queue_affinity_t queue_affinity,
-    //     const iree_hal_semaphore_list_t wait_semaphore_list,
-    //     const iree_hal_semaphore_list_t signal_semaphore_list,
-    //     iree_hal_buffer_t *source_buffer, iree_device_size_t source_offset,
-    //     iree_hal_buffer_t *target_buffer, iree_device_size_t target_offset,
-    //     iree_device_size_t length);
-
-    iree_hal_fence_t *wait_fence;
-    iree_hal_fence_t *signal_fence;
-    IREE_RETURN_IF_ERROR(iree_hal_fence_create_at(semaphore, 0, iree_allocator_system(), &wait_fence));
-    IREE_RETURN_IF_ERROR(iree_hal_fence_create_at(semaphore, 1, iree_allocator_system(), &signal_fence));
-
-    iree_hal_semaphore_list_t wait_semaphore_list = iree_hal_fence_semaphore_list(wait_fence);
-    iree_hal_semaphore_list_t signal_semaphore_list = iree_hal_fence_semaphore_list(signal_fence);
-
-    IREE_RETURN_IF_ERROR(iree_hal_device_queue_copy(
-        device,
-        IREE_HAL_QUEUE_AFFINITY_ANY,
-        wait_semaphore_list,
-        signal_semaphore_list,
-        out_buffer,
-        iree_hal_buffer_byte_offset(out_buffer),
-        host_buffer,
-        iree_hal_buffer_byte_offset(host_buffer),
-        iree_hal_buffer_byte_length(out_buffer)));
-
-    iree_hal_fence_t *result_fence;
-    IREE_RETURN_IF_ERROR(iree_hal_fence_create_at(semaphore, 1, iree_allocator_system(), &result_fence));
-    IREE_RETURN_IF_ERROR(iree_hal_fence_wait(result_fence, iree_infinite_timeout()));
-
-    iree_hal_element_type_t raw_dtype = iree_hal_buffer_view_element_type(buffer_view);
-
-    iree_hal_buffer_mapping_t mapped_memory;
-    size_t byte_size = iree_hal_buffer_byte_length(host_buffer);
-    IREE_RETURN_IF_ERROR(iree_hal_buffer_map_range(
-        host_buffer,
-        IREE_HAL_MAPPING_MODE_SCOPED,
-        IREE_HAL_MEMORY_ACCESS_READ,
-        0,
-        byte_size,
-        &mapped_memory));
-
-    // iree_hal_buffer_map_range(
-    //     iree_hal_buffer_t * buffer, iree_hal_mapping_mode_t mapping_mode,
-    //     iree_hal_memory_access_t memory_access, iree_device_size_t byte_offset,
-    //     iree_device_size_t byte_length,
-    //     iree_hal_buffer_mapping_t * out_buffer_mapping)
-
-    // HalElementType.map_to_dtype(self._buffer_view.element_type);
-
-    // iree_hal_allocator_allocate_buffer(
-    //     iree_hal_allocator_t * IREE_RESTRICT allocator,
-    //     iree_hal_buffer_params_t params, iree_device_size_t allocation_size,
-    //     iree_hal_buffer_t * *IREE_RESTRICT out_buffer)
+    size_t byte_size = iree_hal_buffer_view_byte_length(buffer_view);
 
     enif_alloc_binary(byte_size, &binary);
-    memcpy(binary.data, mapped_memory.contents.data, byte_size);
+
+    IREE_RETURN_IF_ERROR(iree_hal_device_transfer_d2h(
+        iree_runtime_session_device(session),
+        iree_hal_buffer_view_buffer(buffer_view), 0, binary.data,
+        byte_size, IREE_HAL_TRANSFER_BUFFER_FLAG_DEFAULT,
+        iree_infinite_timeout()));
+
+    iree_hal_buffer_view_release(buffer_view);
 
     result->push_back(binary);
   }
