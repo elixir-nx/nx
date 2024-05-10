@@ -76,7 +76,7 @@ else()
 endif()
 
 target_compile_options(${_NAME} PRIVATE ${IREE_DEFAULT_COPTS})
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -Wall -Wextra -Wno-unused-function -Wno-sign-compare -Wno-comment ")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -Wall -Wextra -Wno-unused-function -Wno-sign-compare -Wno-comment -Wno-macro-redefined")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-parameter -Wno-missing-field-initializers -DLLVM_VERSION_STRING= -std=c++17")
 
 if($ENV{DEBUG})

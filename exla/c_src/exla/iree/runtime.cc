@@ -8,8 +8,66 @@ typedef struct {
   void *data;
   size_t size;
   std::vector<iree_hal_dim_t> dims;
-  xla::PrimitiveType type;
+  iree_hal_element_type_t type;
 } IREEInput;
+
+bool primitive_type_to_iree_element_type(xla::PrimitiveType t, iree_hal_element_type_t *type) {
+  using xla::PrimitiveType;
+  using type_enum = iree_hal_element_types_t;
+
+  switch (t) {
+    case PrimitiveType::PRED:
+      *type = type_enum::IREE_HAL_ELEMENT_TYPE_BOOL_8;
+      return true;
+    case PrimitiveType::S8:
+      *type = type_enum::IREE_HAL_ELEMENT_TYPE_INT_8;
+      return true;
+    case PrimitiveType::S16:
+      *type = type_enum::IREE_HAL_ELEMENT_TYPE_INT_16;
+      return true;
+    case PrimitiveType::S32:
+      *type = type_enum::IREE_HAL_ELEMENT_TYPE_INT_32;
+      return true;
+    case PrimitiveType::S64:
+      // forced demotion from compiler
+      *type = type_enum::IREE_HAL_ELEMENT_TYPE_INT_32;
+      return true;
+    case PrimitiveType::U8:
+      *type = type_enum::IREE_HAL_ELEMENT_TYPE_UINT_8;
+      return true;
+    case PrimitiveType::U16:
+      *type = type_enum::IREE_HAL_ELEMENT_TYPE_UINT_16;
+      return true;
+    case PrimitiveType::U32:
+      *type = type_enum::IREE_HAL_ELEMENT_TYPE_UINT_32;
+      return true;
+    case PrimitiveType::U64:
+      // forced demotion from compiler
+      *type = type_enum::IREE_HAL_ELEMENT_TYPE_UINT_32;
+      return true;
+    case PrimitiveType::BF16:
+      *type = type_enum::IREE_HAL_ELEMENT_TYPE_BFLOAT_16;
+      return true;
+    case PrimitiveType::F16:
+      *type = type_enum::IREE_HAL_ELEMENT_TYPE_FLOAT_16;
+      return true;
+    case PrimitiveType::F32:
+      *type = type_enum::IREE_HAL_ELEMENT_TYPE_FLOAT_32;
+      return true;
+    case PrimitiveType::F64:
+      // forced demotion from compiler
+      *type = type_enum::IREE_HAL_ELEMENT_TYPE_FLOAT_32;
+      return true;
+    case PrimitiveType::C64:
+      *type = type_enum::IREE_HAL_ELEMENT_TYPE_COMPLEX_FLOAT_64;
+      return true;
+    case PrimitiveType::C128:
+      *type = type_enum::IREE_HAL_ELEMENT_TYPE_COMPLEX_FLOAT_128;
+      return true;
+    default:
+      return false;
+  }
+}
 
 int load_inputs(ErlNifEnv *env, std::vector<ERL_NIF_TERM> terms, std::vector<IREEInput> &loaded) {
   const ERL_NIF_TERM *tuple, *typespec;
@@ -17,6 +75,7 @@ int load_inputs(ErlNifEnv *env, std::vector<ERL_NIF_TERM> terms, std::vector<IRE
   ErlNifBinary bin;
   IREEInput item;
   std::vector<int64_t> dims;
+  xla::PrimitiveType primitive_type;
 
   loaded.reserve(terms.size());
 
@@ -36,7 +95,11 @@ int load_inputs(ErlNifEnv *env, std::vector<ERL_NIF_TERM> terms, std::vector<IRE
       return 0;
     }
 
-    if (!exla::nif::get_primitive_type(env, typespec[0], &item.type)) {
+    if (!exla::nif::get_primitive_type(env, typespec[0], &primitive_type)) {
+      return 0;
+    }
+
+    if (!primitive_type_to_iree_element_type(primitive_type, &(item.type))) {
       return 0;
     }
 
@@ -55,52 +118,7 @@ int load_inputs(ErlNifEnv *env, std::vector<ERL_NIF_TERM> terms, std::vector<IRE
   return 1;
 }
 
-std::pair<iree_hal_element_type_t, bool> primitive_type_to_iree_element_type(xla::PrimitiveType t) {
-  using xla::PrimitiveType;
-
-  switch (t) {
-    case PrimitiveType::PRED:
-      return {IREE_HAL_ELEMENT_TYPE_BOOL_8, true};
-    case PrimitiveType::S8:
-      return {IREE_HAL_ELEMENT_TYPE_INT_8, true};
-    case PrimitiveType::S16:
-      return {IREE_HAL_ELEMENT_TYPE_INT_16, true};
-    case PrimitiveType::S32:
-      return {IREE_HAL_ELEMENT_TYPE_INT_32, true};
-    case PrimitiveType::S64:
-      return {IREE_HAL_ELEMENT_TYPE_INT_64, true};
-    case PrimitiveType::U8:
-      return {IREE_HAL_ELEMENT_TYPE_UINT_8, true};
-    case PrimitiveType::U16:
-      return {IREE_HAL_ELEMENT_TYPE_UINT_16, true};
-    case PrimitiveType::U32:
-      return {IREE_HAL_ELEMENT_TYPE_UINT_32, true};
-    case PrimitiveType::U64:
-      return {IREE_HAL_ELEMENT_TYPE_UINT_64, true};
-    case PrimitiveType::BF16:
-      return {IREE_HAL_ELEMENT_TYPE_BFLOAT_16, true};
-    case PrimitiveType::F16:
-      return {IREE_HAL_ELEMENT_TYPE_FLOAT_16, true};
-    case PrimitiveType::F32:
-      return {IREE_HAL_ELEMENT_TYPE_FLOAT_32, true};
-    case PrimitiveType::F64:
-      return {IREE_HAL_ELEMENT_TYPE_FLOAT_64, true};
-    case PrimitiveType::C64:
-      return {IREE_HAL_ELEMENT_TYPE_COMPLEX_FLOAT_64, true};
-    case PrimitiveType::C128:
-      return {IREE_HAL_ELEMENT_TYPE_COMPLEX_FLOAT_128, true};
-    default:
-      return {IREE_HAL_ELEMENT_TYPE_BOOL_8, false};
-  }
-}
-
 iree_status_t iree_input_to_hal_arg(iree_hal_buffer_view_t **arg, IREEInput &input, iree_hal_device_t *device, iree_hal_allocator_t *device_allocator) {
-  auto result = primitive_type_to_iree_element_type(input.type);
-  if (!result.second) {
-    return iree_make_status(IREE_STATUS_INVALID_ARGUMENT);
-  }
-
-  auto type = result.first;
   const iree_const_byte_span_t data_span = iree_make_const_byte_span(input.data, input.size);
 
   iree_hal_buffer_params_t buffer_params = {
@@ -114,7 +132,7 @@ iree_status_t iree_input_to_hal_arg(iree_hal_buffer_view_t **arg, IREEInput &inp
       device_allocator,
       input.dims.size(),
       input.dims.data(),
-      type,
+      input.type,
       IREE_HAL_ENCODING_TYPE_DENSE_ROW_MAJOR,
       buffer_params,
       data_span,
@@ -123,9 +141,20 @@ iree_status_t iree_input_to_hal_arg(iree_hal_buffer_view_t **arg, IREEInput &inp
 
 iree_status_t call_module(iree_runtime_session_t *session, std::vector<IREEInput> inputs, std::vector<ErlNifBinary> *result) {
   iree_runtime_call_t call;
+  iree_vm_function_t function;
 
-  IREE_RETURN_IF_ERROR(iree_runtime_call_initialize_by_name(
-      session, iree_make_cstring_view("module.main"), &call));
+  IREE_RETURN_IF_ERROR(
+      iree_runtime_session_lookup_function(session, iree_make_cstring_view("module.main"), &function));
+
+  IREE_RETURN_IF_ERROR(iree_runtime_call_initialize(session, function, &call));
+
+  iree_vm_function_signature_t signature =
+      iree_vm_function_signature(&function);
+
+  iree_string_view_t arguments;
+  iree_string_view_t results;
+  IREE_RETURN_IF_ERROR(iree_vm_function_call_get_cconv_fragments(
+      &signature, &arguments, &results));
 
   // Append the function inputs with the HAL device allocator in use by the
   // session. The buffers will be usable within the session and _may_ be usable
@@ -133,8 +162,12 @@ iree_status_t call_module(iree_runtime_session_t *session, std::vector<IREEInput
   iree_hal_device_t *device = iree_runtime_session_device(session);
   iree_hal_allocator_t *device_allocator =
       iree_runtime_session_device_allocator(session);
-  iree_hal_buffer_view_t *arg;
-  for (IREEInput input : inputs) {
+
+  for (size_t i = 0; i < inputs.size(); i++) {
+    IREEInput input = inputs[i];
+    // iree_hal_buffer_view_t *buffer_view = nullptr;
+    iree_hal_buffer_view_t *arg = nullptr;
+
     IREE_RETURN_IF_ERROR(iree_input_to_hal_arg(&arg, input, device, device_allocator));
     IREE_RETURN_IF_ERROR(iree_runtime_call_inputs_push_back_buffer_view(&call, arg));
     iree_hal_buffer_view_release(arg);
@@ -146,15 +179,19 @@ iree_status_t call_module(iree_runtime_session_t *session, std::vector<IREEInput
 
   iree_vm_list_t *outputs = iree_runtime_call_outputs(&call);
 
-  std::cout << "size: " << iree_vm_list_size(outputs) << "\n";
-
   ErlNifBinary binary;
   size_t size = iree_vm_list_size(outputs);
 
   for (iree_vm_size_t i = 0; i < size; i++) {
     iree_hal_buffer_view_t *buffer_view = nullptr;
+    iree_vm_ref_t ref = iree_vm_ref_null();
+    IREE_RETURN_IF_ERROR(iree_vm_list_get_ref_assign(outputs, i, &ref));
+    iree_string_view_t str_view = iree_vm_ref_type_name(ref.type);
+    std::string type_str(str_view.data, str_view.size);
+    std::cout << "out_type: " << type_str << "\n";
 
-    iree_runtime_call_outputs_pop_front_buffer_view(&call, &buffer_view);
+    // iree_runtime_call_outputs_pop_front_buffer_view(&call, &buffer_view);
+    IREE_RETURN_IF_ERROR(iree_hal_buffer_view_check_deref(ref, &buffer_view));
 
     size_t byte_size = iree_hal_buffer_view_byte_length(buffer_view);
 
