@@ -29,7 +29,6 @@ bool primitive_type_to_iree_element_type(xla::PrimitiveType t, iree_hal_element_
       *type = type_enum::IREE_HAL_ELEMENT_TYPE_INT_32;
       return true;
     case PrimitiveType::S64:
-      // forced demotion from compiler
       *type = type_enum::IREE_HAL_ELEMENT_TYPE_INT_32;
       return true;
     case PrimitiveType::U8:
@@ -42,7 +41,6 @@ bool primitive_type_to_iree_element_type(xla::PrimitiveType t, iree_hal_element_
       *type = type_enum::IREE_HAL_ELEMENT_TYPE_UINT_32;
       return true;
     case PrimitiveType::U64:
-      // forced demotion from compiler
       *type = type_enum::IREE_HAL_ELEMENT_TYPE_UINT_32;
       return true;
     case PrimitiveType::BF16:
@@ -55,14 +53,67 @@ bool primitive_type_to_iree_element_type(xla::PrimitiveType t, iree_hal_element_
       *type = type_enum::IREE_HAL_ELEMENT_TYPE_FLOAT_32;
       return true;
     case PrimitiveType::F64:
-      // forced demotion from compiler
-      *type = type_enum::IREE_HAL_ELEMENT_TYPE_FLOAT_32;
+      *type = type_enum::IREE_HAL_ELEMENT_TYPE_FLOAT_64;
       return true;
     case PrimitiveType::C64:
       *type = type_enum::IREE_HAL_ELEMENT_TYPE_COMPLEX_FLOAT_64;
       return true;
     case PrimitiveType::C128:
       *type = type_enum::IREE_HAL_ELEMENT_TYPE_COMPLEX_FLOAT_128;
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool iree_element_type_to_nx_type(iree_hal_element_type_t type, std::string &nx_type) {
+  using type_enum = iree_hal_element_types_t;
+
+  switch (type) {
+    case type_enum::IREE_HAL_ELEMENT_TYPE_BOOL_8:
+      nx_type = "pred";
+      return true;
+    case type_enum::IREE_HAL_ELEMENT_TYPE_INT_8:
+      nx_type = "s8";
+      return true;
+    case type_enum::IREE_HAL_ELEMENT_TYPE_INT_16:
+      nx_type = "s16";
+      return true;
+    case type_enum::IREE_HAL_ELEMENT_TYPE_INT_32:
+      nx_type = "s32";
+      return true;
+    case type_enum::IREE_HAL_ELEMENT_TYPE_INT_64:
+      nx_type = "s64";
+      return true;
+    case type_enum::IREE_HAL_ELEMENT_TYPE_UINT_8:
+      nx_type = "u8";
+      return true;
+    case type_enum::IREE_HAL_ELEMENT_TYPE_UINT_16:
+      nx_type = "u16";
+      return true;
+    case type_enum::IREE_HAL_ELEMENT_TYPE_UINT_32:
+      nx_type = "u32";
+      return true;
+    case type_enum::IREE_HAL_ELEMENT_TYPE_UINT_64:
+      nx_type = "u64";
+      return true;
+    case type_enum::IREE_HAL_ELEMENT_TYPE_BFLOAT_16:
+      nx_type = "bf16";
+      return true;
+    case type_enum::IREE_HAL_ELEMENT_TYPE_FLOAT_16:
+      nx_type = "f16";
+      return true;
+    case type_enum::IREE_HAL_ELEMENT_TYPE_FLOAT_32:
+      nx_type = "f32";
+      return true;
+    case type_enum::IREE_HAL_ELEMENT_TYPE_FLOAT_64:
+      nx_type = "f32";
+      return true;
+    case type_enum::IREE_HAL_ELEMENT_TYPE_COMPLEX_FLOAT_64:
+      nx_type = "c64";
+      return true;
+    case type_enum::IREE_HAL_ELEMENT_TYPE_COMPLEX_FLOAT_128:
+      nx_type = "c64";
       return true;
     default:
       return false;
@@ -139,17 +190,21 @@ iree_status_t iree_input_to_hal_arg(iree_hal_buffer_view_t **arg, IREEInput &inp
       arg);
 }
 
-iree_status_t call_module(iree_runtime_session_t *session, std::vector<IREEInput> inputs, std::vector<ErlNifBinary> *result) {
+iree_status_t call_module(iree_runtime_session_t *session, std::vector<IREEInput> inputs, std::vector<std::pair<iree_hal_element_type_t, ErlNifBinary>> *result) {
   iree_runtime_call_t call;
   iree_vm_function_t function;
 
-  IREE_RETURN_IF_ERROR(
-      iree_runtime_session_lookup_function(session, iree_make_cstring_view("module.main"), &function));
+  IREE_RETURN_IF_ERROR(iree_runtime_session_lookup_function(session, iree_make_cstring_view("module.main"), &function));
 
   IREE_RETURN_IF_ERROR(iree_runtime_call_initialize(session, function, &call));
 
-  iree_vm_function_signature_t signature =
-      iree_vm_function_signature(&function);
+  iree_vm_function_t export_function;
+  iree_string_view_t export_function_name;
+  iree_vm_function_signature_t export_function_signature;
+
+  IREE_RETURN_IF_ERROR(function.module->get_function(function.module->self, IREE_VM_FUNCTION_LINKAGE_EXPORT, function.ordinal, &export_function, &export_function_name, &export_function_signature));
+
+  iree_vm_function_signature_t signature = iree_vm_function_signature(&function);
 
   iree_string_view_t arguments;
   iree_string_view_t results;
@@ -173,9 +228,7 @@ iree_status_t call_module(iree_runtime_session_t *session, std::vector<IREEInput
     iree_hal_buffer_view_release(arg);
   }
 
-  std::cout << "before call\n";
   IREE_RETURN_IF_ERROR(iree_runtime_call_invoke(&call, /*flags=*/0));
-  std::cout << "after call\n";
 
   iree_vm_list_t *outputs = iree_runtime_call_outputs(&call);
 
@@ -186,29 +239,50 @@ iree_status_t call_module(iree_runtime_session_t *session, std::vector<IREEInput
     iree_hal_buffer_view_t *buffer_view = nullptr;
     iree_vm_ref_t ref = iree_vm_ref_null();
     IREE_RETURN_IF_ERROR(iree_vm_list_get_ref_assign(outputs, i, &ref));
-    iree_string_view_t str_view = iree_vm_ref_type_name(ref.type);
-    std::string type_str(str_view.data, str_view.size);
-    std::cout << "out_type: " << type_str << "\n";
 
     // iree_runtime_call_outputs_pop_front_buffer_view(&call, &buffer_view);
     IREE_RETURN_IF_ERROR(iree_hal_buffer_view_check_deref(ref, &buffer_view));
+    iree_hal_element_type_t element_type = iree_hal_buffer_view_element_type(buffer_view);
 
-    size_t byte_size = iree_hal_buffer_view_byte_length(buffer_view);
-
+    iree_hal_buffer_t *buffer = iree_hal_buffer_view_buffer(buffer_view);
+    // size_t byte_size = iree_hal_buffer_view_byte_length(buffer_view);
+    size_t byte_size = iree_hal_buffer_byte_length(buffer);
     enif_alloc_binary(byte_size, &binary);
 
     IREE_RETURN_IF_ERROR(iree_hal_device_transfer_d2h(
         iree_runtime_session_device(session),
-        iree_hal_buffer_view_buffer(buffer_view), 0, binary.data,
+        buffer, iree_hal_buffer_byte_offset(buffer), binary.data,
         byte_size, IREE_HAL_TRANSFER_BUFFER_FLAG_DEFAULT,
         iree_infinite_timeout()));
 
     iree_hal_buffer_view_release(buffer_view);
 
-    result->push_back(binary);
+    result->push_back({element_type, binary});
   }
 
   return iree_make_status(IREE_STATUS_OK);
+}
+
+ERL_NIF_TERM return_results(ErlNifEnv *env, std::vector<std::pair<iree_hal_element_type_t, ErlNifBinary>> results) {
+  size_t n = results.size();
+
+  std::vector<ERL_NIF_TERM> nif_terms;
+  nif_terms.reserve(n);
+
+  for (auto [iree_type, binary] : results) {
+    std::string nx_type;
+    if (!iree_element_type_to_nx_type(iree_type, nx_type)) {
+      return exla::nif::error(env, "Unable to convert IREE type to NX type");
+    }
+    ERL_NIF_TERM type = exla::nif::make(env, nx_type);
+    ERL_NIF_TERM bin_term = enif_make_binary(env, &binary);
+
+    nif_terms.push_back(enif_make_tuple2(env, type, bin_term));
+  }
+
+  auto data = nif_terms.data();
+  auto list = enif_make_list_from_array(env, &data[0], n);
+  return exla::nif::ok(env, list);
 }
 
 ERL_NIF_TERM
@@ -271,7 +345,7 @@ run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     status = iree_runtime_session_append_bytecode_module_from_memory(session, span, iree_runtime_instance_host_allocator(instance));
   }
 
-  std::vector<ErlNifBinary> results;
+  std::vector<std::pair<iree_hal_element_type_t, ErlNifBinary>> results;
   if (iree_status_is_ok(status)) {
     // this is where we actually call code
     // status = iree_runtime_demo_perform_mul(session);
@@ -303,5 +377,5 @@ run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Failed to execute IREE runtime");
   }
 
-  return exla::nif::ok(env, exla::nif::make_list(env, results));
+  return return_results(env, results);
 }

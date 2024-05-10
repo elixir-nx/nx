@@ -84,7 +84,9 @@ ERL_NIF_TERM compile(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
       "--iree-hal-target-backends=metal-spirv",
       "--iree-input-type=stablehlo_xla",
       "--iree-execution-model=async-internal",
-      "--output-format=vm-bytecode"};
+      "--output-format=vm-bytecode",
+      "--iree-opt-demote-f64-to-f32=true",
+      "--iree-opt-demote-i64-to-i32=true"};
   err = ireeCompilerSessionSetFlags(state.session, 1, flags);
   if (err) {
     cleanup_compiler_state(state);

@@ -112,21 +112,6 @@ ERL_NIF_TERM make(ErlNifEnv* env, int32 var) {
   return enif_make_int(env, var);
 }
 
-ERL_NIF_TERM make_list(ErlNifEnv* env, std::vector<ErlNifBinary> result) {
-  size_t n = result.size();
-
-  std::vector<ERL_NIF_TERM> nif_terms;
-  nif_terms.reserve(n);
-
-  for (size_t i = 0; i < n; i++) {
-    nif_terms[i] = enif_make_binary(env, &result[i]);
-  }
-
-  auto data = nif_terms.data();
-  auto list = enif_make_list_from_array(env, &data[0], n);
-  return list;
-}
-
 // Standard types
 
 int get(ErlNifEnv* env, ERL_NIF_TERM term, std::string& var) {

@@ -188,8 +188,6 @@ ERL_NIF_TERM make(ErlNifEnv* env, T& var) {
   return ret;
 }
 
-ERL_NIF_TERM make_list(ErlNifEnv* env, std::vector<ErlNifBinary> result);
-
 template <typename T>
 ERL_NIF_TERM make_list(ErlNifEnv* env, std::vector<T> result) {
   size_t n = result.size();

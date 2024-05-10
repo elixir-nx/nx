@@ -107,7 +107,7 @@ defmodule EXLA.Defn.Buffers do
     %Nx.Tensor{data: data} = tensor = Nx.devectorize(fun.())
 
     case data do
-      %EXLA.Backend{buffer: %EXLA.DeviceBuffer{ref: ref} = buffer}
+      %EXLA.Backend{buffer: %EXLA.DeviceBuffer{} = buffer}
       when executable.runtime == :iree ->
         binary = EXLA.DeviceBuffer.read(buffer)
         EXLA.BinaryBuffer.from_binary(binary, to_typespec(tensor))
