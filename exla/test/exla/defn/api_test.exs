@@ -4,7 +4,7 @@ defmodule EXLA.Defn.APITest do
   import Nx.Defn
   import ExUnit.CaptureLog
 
-  defn add_two(a, b), do: a + b
+  defn(add_two(a, b), do: a + b)
 
   describe "multi-client" do
     @describetag :iree_key_not_found_error
@@ -30,7 +30,6 @@ defmodule EXLA.Defn.APITest do
   end
 
   describe "options" do
-    @tag :iree_shape_mismatch_error
     test "logs when debugging" do
       logs =
         capture_log(fn ->
@@ -40,7 +39,7 @@ defmodule EXLA.Defn.APITest do
       assert logs =~ ~r"EXLA defn evaluation #Function<[^>]+> cache (hit|miss) in \d+\.\dms"
       assert logs =~ ~r"EXLA compilation #Function<[^>]+> cache (hit|miss) in \d+\.\dms"
       assert logs =~ ~r"EXLA device -?\d lock in \d+\.\dms"
-      assert logs =~ ~r"EXLA execution on device \d in \d+\.\dms"
+      assert logs =~ ~r"EXLA execution on device -?\d in \d+\.\dms"
 
       logs =
         capture_log(fn ->
@@ -49,8 +48,8 @@ defmodule EXLA.Defn.APITest do
 
       assert logs =~ ~r"EXLA defn evaluation #Function<[^>]+> cache hit in \d+\.\dms"
       assert logs =~ ~r"EXLA compilation #Function<[^>]+> cache hit in \d+\.\dms"
-      assert logs =~ ~r"EXLA device \d lock in \d+\.\d+ms"
-      assert logs =~ ~r"EXLA execution on device \d in \d+\.\dms"
+      assert logs =~ ~r"EXLA device -?\d lock in \d+\.\d+ms"
+      assert logs =~ ~r"EXLA execution on device -?\d in \d+\.\dms"
     end
   end
 
@@ -100,7 +99,7 @@ defmodule EXLA.Defn.APITest do
   end
 
   describe "batch" do
-    @tag :iree_shape_mismatch_error
+    @tag :iree_resource_exhausted_error
     test "when padded" do
       input = Nx.tensor([[1, 2, 3]], backend: EXLA.Backend)
       batch = [input] |> Nx.Batch.concatenate() |> Nx.Batch.pad(1)
@@ -121,7 +120,7 @@ defmodule EXLA.Defn.APITest do
       %{"x" => rand(), "y" => rand()}
     end
 
-    deftransformp rand, do: :rand.uniform()
+    deftransformp(rand, do: :rand.uniform())
 
     test "considers map keys in cache keys" do
       assert_equal(merge(%{"x" => 10})["x"], Nx.tensor(10))
@@ -131,7 +130,7 @@ defmodule EXLA.Defn.APITest do
 
   describe "stream" do
     @describetag :token
-    defn defn_sum(entry, acc), do: {acc, entry + acc}
+    defn(defn_sum(entry, acc), do: {acc, entry + acc})
 
     test "immediately done" do
       stream = EXLA.stream(&defn_sum/2, [0, 0])
@@ -183,7 +182,7 @@ defmodule EXLA.Defn.APITest do
       assert_equal(Nx.Stream.done(stream), {Nx.tensor(3), {Nx.tensor(2), Nx.tensor(4)}})
     end
 
-    defn stream_empty_outfeed(i, t), do: {{}, i + t}
+    defn(stream_empty_outfeed(i, t), do: {{}, i + t})
 
     test "send/recv with empty outfeed" do
       %_{} = stream = EXLA.stream(&stream_empty_outfeed/2, [0, 0.0])
@@ -196,7 +195,7 @@ defmodule EXLA.Defn.APITest do
       assert_equal(Nx.Stream.done(stream), Nx.tensor(3.0))
     end
 
-    defn stream_empty_acc(i, {}), do: {i * i, {}}
+    defn(stream_empty_acc(i, {}), do: {i * i, {}})
 
     test "send/recv with empty acc" do
       %_{} = stream = EXLA.stream(&stream_empty_acc/2, [0, {}])
@@ -415,7 +414,7 @@ defmodule EXLA.Defn.APITest do
       assert_equal(b, Nx.tensor(2))
     end
 
-    defn hook_stream(entry, acc), do: hook({acc, entry + acc}, :stream)
+    defn(hook_stream(entry, acc), do: hook({acc, entry + acc}, :stream))
 
     test "executes hook with stream" do
       %_{} = stream = EXLA.stream(&hook_stream/2, [0, 0], hooks: %{stream: send_to_self(:tag)})
@@ -439,13 +438,12 @@ defmodule EXLA.Defn.APITest do
   end
 
   describe "telemetry" do
-    defn telemetry_add_two(a, b), do: a + b
+    defn(telemetry_add_two(a, b), do: a + b)
 
     def telemetry_handler(_event_name, measurements, metadata, _config) do
       send(self(), {measurements, metadata})
     end
 
-    @tag :iree_shape_mismatch_error
     test "executes event when function is compiled" do
       :ok =
         :telemetry.attach(__MODULE__, [:exla, :compilation], &__MODULE__.telemetry_handler/4, nil)

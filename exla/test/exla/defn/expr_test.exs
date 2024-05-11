@@ -149,7 +149,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "+/2" do
-    @describetag :iree_shape_mismatch_error
     defn add_two(a, b), do: a + b
 
     test "same shape and type" do
@@ -300,7 +299,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "element-wise arith operators" do
-    @describetag :iree_shape_mismatch_error
     @tensors [
       {1, 2},
       {1, Nx.tensor([1.0, 2.0, 3.0])},
@@ -312,6 +310,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn subtract_two(a, b), do: a - b
 
+    @tag :iree_shape_mismatch_error
     test "-" do
       for {left, right} <- @tensors do
         assert_all_close(subtract_two(left, right), Nx.subtract(left, right))
@@ -321,6 +320,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn multiply_two(a, b), do: a * b
 
+    @tag :iree_shape_mismatch_error
     test "*" do
       for {left, right} <- @tensors do
         assert_all_close(multiply_two(left, right), Nx.multiply(left, right))
@@ -330,6 +330,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn unary_minus(a), do: -a
 
+    @tag :iree_shape_mismatch_error
     test "negate" do
       for t <- [
             Nx.tensor([-1, 0, 1], type: {:u, 8}),
@@ -342,6 +343,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn max_two(a, b), do: max(a, b)
 
+    @tag :iree_shape_mismatch_error
     test "max" do
       for {left, right} <- @tensors do
         assert_all_close(max_two(left, right), Nx.max(left, right))
@@ -351,6 +353,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn min_two(a, b), do: min(a, b)
 
+    @tag :iree_shape_mismatch_error
     test "min" do
       for {left, right} <- @tensors do
         assert_all_close(min_two(left, right), Nx.min(left, right))
@@ -360,6 +363,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn power_two(a, b), do: Nx.pow(a, b)
 
+    @tag :iree_shape_mismatch_error
     test "pow" do
       for {left, right} <- @tensors do
         assert_all_close(power_two(left, right), Nx.pow(left, right))
@@ -369,6 +373,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn atan2_two(a, b), do: Nx.atan2(a, b)
 
+    @tag :iree_resource_exhausted_error
     test "atan2" do
       <<neg_zero::float>> = <<0x8000000000000000::64>>
       left = Nx.tensor([-1.0, neg_zero, 0.0, 1.0])
@@ -380,6 +385,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn quotient_two(a, b), do: Nx.quotient(a, b)
 
+    @tag :iree_shape_mismatch_error
     test "quotient" do
       int_tensors = [
         {1, 2},
@@ -398,12 +404,12 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "element-wise bitwise operators" do
-    @describetag :iree_shape_mismatch_error
     @left Nx.tensor([-2, -1, 0, 1, 2])
     @right Nx.tensor([[-2], [-1], [0], [1], [2]])
 
     defn bitwise_and(a, b), do: a &&& b
 
+    @tag :iree_resource_exhausted_error
     test "bitwise_and" do
       assert Nx.shape(bitwise_and(@left, @right)) == {5, 5}
       assert_equal(bitwise_and(@left, @right), Nx.bitwise_and(@left, @right))
@@ -411,6 +417,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn bitwise_or(a, b), do: a ||| b
 
+    @tag :iree_resource_exhausted_error
     test "bitwise_or" do
       assert Nx.shape(bitwise_or(@left, @right)) == {5, 5}
       assert_equal(bitwise_or(@left, @right), Nx.bitwise_or(@left, @right))
@@ -418,6 +425,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn bitwise_not(a), do: ~~~a
 
+    @tag :iree_resource_exhausted_error
     test "bitwise_not" do
       assert Nx.shape(bitwise_not(@left)) == {5}
       assert_equal(bitwise_not(@left), Nx.bitwise_not(@left))
@@ -425,6 +433,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn bitwise_pc(a), do: Nx.population_count(a)
 
+    @tag :iree_illegal_op_error
     test "population_count" do
       assert Nx.shape(bitwise_pc(@left)) == {5}
       assert_equal(bitwise_pc(@left), Nx.population_count(@left))
@@ -432,6 +441,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn bitwise_clz(a), do: Nx.count_leading_zeros(a)
 
+    @tag :iree_illegal_op_error
     test "count_leading_zeros" do
       assert Nx.shape(bitwise_clz(@left)) == {5}
       assert_equal(bitwise_clz(@left), Nx.count_leading_zeros(@left))
@@ -442,6 +452,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn left_shift(a, b), do: a <<< b
 
+    @tag :iree_resource_exhausted_error
     test "left_shift" do
       assert Nx.shape(left_shift(@left, @right)) == {5, 5}
       assert_equal(left_shift(@left, @right), Nx.left_shift(@left, @right))
@@ -455,6 +466,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn right_shift(a, b), do: a >>> b
 
+    @tag :iree_resource_exhausted_error
     test "right_shift" do
       assert Nx.shape(right_shift(@left_signed, @right_signed)) == {9, 9}
 
@@ -534,13 +546,14 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "not equal" do
-    @describetag :iree_shape_mismatch_error
     defn not_equal(a, b), do: Nx.not_equal(a, b)
 
+    @tag :iree_shape_mismatch_error
     test "computes equality of scalars" do
       assert_equal(not_equal(Nx.tensor(1), Nx.tensor(2)), Nx.tensor(1, type: {:u, 8}))
     end
 
+    @tag :iree_shape_mismatch_error
     test "computes equality with broadcasting" do
       assert_equal(
         not_equal(Nx.tensor(1), Nx.tensor([1, 2, 3])),
@@ -548,6 +561,7 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
+    @tag :iree_shape_mismatch_error
     test "computes equality with mixed types" do
       assert_equal(
         not_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])),
@@ -755,7 +769,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "select" do
-    @describetag :iree_shape_mismatch_error
     defn select(pred, x, y), do: Nx.select(pred, x, y)
 
     test "selects one or the other with a scalar" do
@@ -785,6 +798,7 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
+    @tag :iree_shape_mismatch_error
     test "selects with broadcasting" do
       assert_equal(
         select(Nx.tensor([1, 0, 1, 0, 1]), Nx.tensor([10]), Nx.tensor([1, 2, 3, 4, 5])),
@@ -1866,6 +1880,7 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
+    @tag :iree_resource_exhausted_error
     test "indexed_add handles different input types" do
       target = Nx.tensor([0])
       indices = Nx.tensor([[0]])
@@ -1894,11 +1909,11 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "indexed_put" do
-    @describetag :iree_shape_mismatch_error
     defn indexed_put(t, i, u) do
       Nx.indexed_put(t, i, u)
     end
 
+    @tag :iree_resource_exhausted_error
     test "indexed_add works for multi-dim tensor" do
       target = Nx.broadcast(0, {2, 3, 4})
 
@@ -1939,6 +1954,7 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
+    @tag :iree_resource_exhausted_error
     test "indexed_put handles different input types" do
       target = Nx.tensor([0])
       indices = Nx.tensor([[0]])
@@ -2223,6 +2239,7 @@ defmodule EXLA.Defn.ExprTest do
     defn reduce_max_keep(t), do: Nx.reduce_max(t, keep_axes: true)
     defn reduce_max_keep_2(t), do: Nx.reduce_max(t, axes: [0, 2], keep_axes: true)
 
+    @tag :iree_shape_mismatch_error
     test "keeps dimensions if keep_axes" do
       assert_equal(Nx.tensor([1, 2, 3]) |> reduce_max_keep(), Nx.tensor([3]))
       assert_equal(Nx.tensor([1.0, 2.0, 3.0]) |> reduce_max_keep(), Nx.tensor([3.0]))
@@ -2235,9 +2252,9 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "reduce_min" do
-    @describetag :iree_shape_mismatch_error
     defn reduce_min(t), do: Nx.reduce_min(t)
 
+    @tag :iree_resource_exhausted_error
     test "computes the minimum across types" do
       assert_equal(Nx.tensor([1, 2, 3]) |> reduce_min(), Nx.tensor(1))
 
@@ -2259,6 +2276,7 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
+    @tag :iree_resource_exhausted_error
     test "computes the minimum across nan" do
       assert_equal(Nx.tensor([:nan, :nan, :nan]) |> reduce_min(), Nx.tensor(:nan))
     end
@@ -2267,6 +2285,7 @@ defmodule EXLA.Defn.ExprTest do
     defn reduce_min_neg_axis(t), do: Nx.reduce_min(t, axes: [-3])
     defn reduce_min_pos_neg_axis(t), do: Nx.reduce_min(t, axes: [1, -3])
 
+    @tag :iree_shape_mismatch_error
     test "computes the min on a given axis" do
       t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
       assert_equal(reduce_min_pos_axis(t), Nx.reduce_min(t, axes: [1]))
@@ -2277,6 +2296,7 @@ defmodule EXLA.Defn.ExprTest do
     defn reduce_min_keep(t), do: Nx.reduce_min(t, keep_axes: true)
     defn reduce_min_keep_2(t), do: Nx.reduce_min(t, axes: [0, 2], keep_axes: true)
 
+    @tag :iree_shape_mismatch_error
     test "keeps dimensions if keep_axes" do
       assert_equal(Nx.tensor([1, 2, 3]) |> reduce_min_keep(), Nx.tensor([1]))
       assert_equal(Nx.tensor([1.0, 2.0, 3.0]) |> reduce_min_keep(), Nx.tensor([1.0]))
@@ -2935,6 +2955,7 @@ defmodule EXLA.Defn.ExprTest do
     end
 
     @tag :unsupported_64_bit_op
+    @tag :iree_resource_exhausted_error
     test "computes the convolution with general padding, stride" do
       img = Nx.iota({2, 1, 12, 24}, type: {:f, 64})
       kernel = Nx.iota({2, 1, 6, 6}, type: {:f, 64})
@@ -3805,9 +3826,9 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "decompositions" do
-    @describetag :iree_shape_mismatch_error
     defn ts(a, b, opts \\ []), do: Nx.LinAlg.triangular_solve(a, b, opts)
 
+    @tag :iree_key_not_found_error
     test "triangular_solve" do
       a = Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]])
       b = Nx.tensor([4, 2, 4, 2])
@@ -3826,6 +3847,7 @@ defmodule EXLA.Defn.ExprTest do
     defn qr(t), do: Nx.LinAlg.qr(t)
     defn qr_complete(t), do: Nx.LinAlg.qr(t, mode: :complete)
 
+    @tag :iree_key_not_found_error
     test "qr" do
       input = Nx.iota({3, 2})
       output = Nx.as_type(input, {:f, 32})
@@ -3851,6 +3873,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn svd(t), do: Nx.LinAlg.svd(t)
 
+    @tag :iree_key_not_found_error
     test "svd" do
       input = Nx.iota({3, 3})
       output = Nx.as_type(input, {:f, 32})
@@ -3867,6 +3890,7 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
+    @tag :iree_key_not_found_error
     test "svd (tall matrix)" do
       input = Nx.tensor([[2, 0], [0, 1], [0, 0]])
       output = Nx.as_type(input, {:f, 32})
@@ -3883,6 +3907,7 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
+    @tag :iree_key_not_found_error
     test "svd (wide matrix)" do
       input = Nx.tensor([[2, 0, 0], [0, 1, 0]])
       output = Nx.as_type(input, {:f, 32})
@@ -4088,9 +4113,9 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "bfloat16" do
-    @describetag :iree_shape_mismatch_error
     defn add(t1, t2), do: t1 + t2
 
+    @tag :iree_shape_mismatch_error
     test "accepts bfloat16 input" do
       lhs = Nx.tensor([1.0, 2.0, 3.0], type: {:bf, 16})
       rhs = Nx.tensor([4.0, 5.0, 6.0], type: {:bf, 16})

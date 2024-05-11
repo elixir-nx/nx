@@ -4,12 +4,46 @@
 #include <iree/modules/hal/types.h>
 #include <iree/runtime/api.h>
 
-typedef struct {
+class IREEInput {
+ public:
   void *data;
   size_t size;
-  std::vector<iree_hal_dim_t> dims;
+  iree_hal_dim_t *dims;
+  size_t rank;
   iree_hal_element_type_t type;
-} IREEInput;
+
+  // Default constructor
+  IREEInput(void *data, size_t size, std::vector<int64_t> in_dims, iree_hal_element_type_t type) : size(size), type(type) {
+    rank = in_dims.size();
+    dims = reinterpret_cast<iree_hal_dim_t *>(iree_alloca(rank * sizeof(iree_hal_dim_t)));
+
+    for (size_t i = 0; i < rank; i++) {
+      dims[i] = in_dims[i];
+    }
+
+    this->data = std::malloc(size);  // Allocate memory
+    std::memcpy(this->data, data, size);
+  }
+
+  // Destructor
+  ~IREEInput() {
+    if (data) {
+      std::free(data);
+      data = nullptr;
+    }
+
+    if (dims) {
+      std::free(dims);
+      dims = nullptr;
+    }
+  }
+
+  // Disable copy and move semantics for simplicity
+  IREEInput(const IREEInput &) = delete;
+  IREEInput &operator=(const IREEInput &) = delete;
+  IREEInput(IREEInput &&) = delete;
+  IREEInput &operator=(IREEInput &&) = delete;
+};
 
 bool primitive_type_to_iree_element_type(xla::PrimitiveType t, iree_hal_element_type_t *type) {
   using xla::PrimitiveType;
@@ -120,17 +154,20 @@ bool iree_element_type_to_nx_type(iree_hal_element_type_t type, std::string &nx_
   }
 }
 
-int load_inputs(ErlNifEnv *env, std::vector<ERL_NIF_TERM> terms, std::vector<IREEInput> &loaded) {
+int load_inputs(ErlNifEnv *env, std::vector<ERL_NIF_TERM> terms, std::vector<IREEInput *> &loaded) {
   const ERL_NIF_TERM *tuple, *typespec;
   int length;
   ErlNifBinary bin;
-  IREEInput item;
-  std::vector<int64_t> dims;
-  xla::PrimitiveType primitive_type;
 
-  loaded.reserve(terms.size());
+  loaded.clear();
+  loaded.resize(terms.size());
 
-  for (ERL_NIF_TERM term : terms) {
+  for (size_t i = 0; i < terms.size(); i++) {
+    ERL_NIF_TERM term = terms[i];
+    std::vector<int64_t> dims;
+    xla::PrimitiveType primitive_type;
+    iree_hal_element_type_t type;
+
     if (!enif_get_tuple(env, term, &length, &tuple)) {
       return 0;
     }
@@ -138,9 +175,6 @@ int load_inputs(ErlNifEnv *env, std::vector<ERL_NIF_TERM> terms, std::vector<IRE
     if (!enif_inspect_binary(env, tuple[0], &bin)) {
       return 0;
     }
-
-    item.data = bin.data;
-    item.size = bin.size;
 
     if (!enif_get_tuple(env, tuple[1], &length, &typespec)) {
       return 0;
@@ -150,7 +184,7 @@ int load_inputs(ErlNifEnv *env, std::vector<ERL_NIF_TERM> terms, std::vector<IRE
       return 0;
     }
 
-    if (!primitive_type_to_iree_element_type(primitive_type, &(item.type))) {
+    if (!primitive_type_to_iree_element_type(primitive_type, &type)) {
       return 0;
     }
 
@@ -158,19 +192,14 @@ int load_inputs(ErlNifEnv *env, std::vector<ERL_NIF_TERM> terms, std::vector<IRE
       return 0;
     }
 
-    item.dims.reserve(dims.size());
-    for (int64_t dim : dims) {
-      item.dims.push_back(dim);
-    }
-
-    loaded.push_back(item);
+    loaded[i] = new IREEInput(bin.data, bin.size, dims, type);
   }
 
   return 1;
 }
 
-iree_status_t iree_input_to_hal_arg(iree_hal_buffer_view_t **arg, IREEInput &input, iree_hal_device_t *device, iree_hal_allocator_t *device_allocator) {
-  const iree_const_byte_span_t data_span = iree_make_const_byte_span(input.data, input.size);
+iree_status_t iree_input_to_hal_arg(iree_hal_buffer_view_t **arg, IREEInput *input, iree_hal_device_t *device, iree_hal_allocator_t *device_allocator) {
+  const iree_const_byte_span_t data_span = iree_make_const_byte_span(input->data, input->size);
 
   iree_hal_buffer_params_t buffer_params = {
       .type = IREE_HAL_MEMORY_TYPE_DEVICE_LOCAL,
@@ -181,16 +210,16 @@ iree_status_t iree_input_to_hal_arg(iree_hal_buffer_view_t **arg, IREEInput &inp
   return iree_hal_buffer_view_allocate_buffer_copy(
       device,
       device_allocator,
-      input.dims.size(),
-      input.dims.data(),
-      input.type,
+      input->rank,
+      input->dims,
+      input->type,
       IREE_HAL_ENCODING_TYPE_DENSE_ROW_MAJOR,
       buffer_params,
       data_span,
       arg);
 }
 
-iree_status_t call_module(iree_runtime_session_t *session, std::vector<IREEInput> inputs, std::vector<std::pair<iree_hal_element_type_t, ErlNifBinary>> *result) {
+iree_status_t call_module(iree_runtime_session_t *session, std::vector<IREEInput *> inputs, std::vector<std::pair<iree_hal_element_type_t, ErlNifBinary>> *result) {
   iree_runtime_call_t call;
   iree_vm_function_t function;
 
@@ -219,7 +248,7 @@ iree_status_t call_module(iree_runtime_session_t *session, std::vector<IREEInput
       iree_runtime_session_device_allocator(session);
 
   for (size_t i = 0; i < inputs.size(); i++) {
-    IREEInput input = inputs[i];
+    IREEInput *input = inputs[i];
     // iree_hal_buffer_view_t *buffer_view = nullptr;
     iree_hal_buffer_view_t *arg = nullptr;
 
@@ -291,10 +320,10 @@ run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     return enif_make_badarg(env);
   }
 
-  std::vector<ERL_NIF_TERM> bytecode_vec;
-  std::vector<ERL_NIF_TERM> input_terms;
-  std::vector<IREEInput> inputs;
-  std::vector<uint8_t> bytecode;
+  std::vector<ERL_NIF_TERM> bytecode_vec = {};
+  std::vector<ERL_NIF_TERM> input_terms = {};
+  std::vector<IREEInput *> inputs = {};
+  std::vector<uint8_t> bytecode = {};
 
   if (!exla::nif::get_list(env, argv[0], bytecode_vec)) {
     return exla::nif::error(env, "Unable to load bytecode binary");
