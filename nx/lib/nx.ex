@@ -14124,10 +14124,16 @@ defmodule Nx do
     else
       tensor = devectorize(tensor, keep_names: false)
       indices = devectorize(indices, keep_names: false)
-      idx = reshape(indices, indices |> shape |> Tuple.append(1))
+      gather_indices = reshape(indices, indices |> shape |> Tuple.append(1))
+
+      {indices_axes, tensor_axes} = Enum.split(axes(inner_shape), rank(indices))
+      {leading, trailing} = Enum.split(tensor_axes, axis)
+
+      transpose_axes = leading ++ indices_axes ++ trailing
 
       tensor
-      |> gather(idx)
+      |> gather(gather_indices, axes: [axis])
+      |> transpose(axes: transpose_axes)
       |> reshape(inner_shape, names: inner_names)
     end
   end
