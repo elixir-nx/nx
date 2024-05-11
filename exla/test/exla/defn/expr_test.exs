@@ -9,6 +9,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "tuples" do
+    @describetag :iree_shape_mismatch_error
     defn add_subtract_tuple(a, b), do: {a + b, a - b}
 
     test "on results" do
@@ -148,6 +149,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "+/2" do
+    @describetag :iree_shape_mismatch_error
     defn add_two(a, b), do: a + b
 
     test "same shape and type" do
@@ -237,6 +239,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "//2" do
+    @describetag :iree_shape_mismatch_error
     defn divide_two(a, b), do: a / b
 
     test "parameters" do
@@ -277,6 +280,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "remainder" do
+    @describetag :iree_shape_mismatch_error
     defn remainder(a, b), do: Nx.remainder(a, b)
 
     test "integers" do
@@ -286,6 +290,7 @@ defmodule EXLA.Defn.ExprTest do
       assert_all_close(remainder(left, right), Nx.remainder(left, right))
     end
 
+    @tag :iree_shape_mismatch_error
     test "floats" do
       left = Nx.tensor([-8.3, -8.4, -8.5, 8.3, 8.4, 8.5])
       right = Nx.tensor([[-4.2], [-4.1], [-4.0], [4.0], [4.1], [4.2]])
@@ -295,6 +300,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "element-wise arith operators" do
+    @describetag :iree_shape_mismatch_error
     @tensors [
       {1, 2},
       {1, Nx.tensor([1.0, 2.0, 3.0])},
@@ -793,6 +799,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "unary float ops" do
+    @describetag :iree_shape_mismatch_error
     @int_tensor Nx.tensor([1, 2, 3])
     @float_tensor Nx.tensor([1.0, 2.0, 3.0])
 
@@ -1134,6 +1141,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "if" do
+    @describetag :iree_shape_mismatch_error
     defn if3(a, b, c), do: if(a, do: b, else: c)
 
     test "one param per branch" do
@@ -1307,6 +1315,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "cond" do
+    @describetag :iree_shape_mismatch_error
     defn cond3(a, b, c) do
       d = Nx.sum(a)
 
@@ -1511,6 +1520,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "map" do
+    @describetag :iree_shape_mismatch_error
     defn map_plus(t), do: Nx.map(t, fn x -> x + 1 end)
     defn map_equal(t), do: Nx.map(t, [type: {:f, 64}], fn x -> Nx.equal(x, 1) end)
     defn map_exp(t), do: Nx.map(t, [type: {:f, 64}], fn x -> Nx.exp(x) end)
@@ -1809,6 +1819,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "indexed_add" do
+    @describetag :iree_shape_mismatch_error
     defn indexed_add(t, i, u) do
       Nx.indexed_add(t, i, u)
     end
@@ -1883,6 +1894,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "indexed_put" do
+    @describetag :iree_shape_mismatch_error
     defn indexed_put(t, i, u) do
       Nx.indexed_put(t, i, u)
     end
@@ -2011,6 +2023,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "sum" do
+    @describetag :iree_shape_mismatch_error
     defn sum(t), do: Nx.sum(t)
 
     test "computes the sum across types" do
@@ -2059,6 +2072,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "product" do
+    @describetag :iree_shape_mismatch_error
     defn product(t), do: Nx.product(t)
 
     test "computes the product across types" do
@@ -2107,6 +2121,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "mean" do
+    @describetag :iree_shape_mismatch_error
     defn mean(t), do: Nx.mean(t)
 
     test "computes mean without axis" do
@@ -2170,6 +2185,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "reduce_max" do
+    @describetag :iree_shape_mismatch_error
     defn reduce_max(t), do: Nx.reduce_max(t)
 
     test "computes the maximum across types" do
@@ -2219,6 +2235,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "reduce_min" do
+    @describetag :iree_shape_mismatch_error
     defn reduce_min(t), do: Nx.reduce_min(t)
 
     test "computes the minimum across types" do
@@ -2642,6 +2659,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "dot product" do
+    @describetag :iree_shape_mismatch_error
     defn dot(a, b), do: Nx.dot(a, b)
 
     test "computes the dot product of scalars" do
@@ -3439,6 +3457,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "take" do
+    @describetag :iree_shape_mismatch_error
     defn take_axis_0(t, idx), do: Nx.take(t, idx)
     defn take_axis_1(t, idx), do: Nx.take(t, idx, axis: 1)
 
@@ -3501,6 +3520,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "gather" do
+    @describetag :iree_shape_mismatch_error
     defn gather(t, idx), do: Nx.gather(t, idx)
 
     test "1d result" do
@@ -3623,6 +3643,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "concatenate" do
+    @describetag :iree_shape_mismatch_error
     defn concatenate0(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], axis: 0)
     defn concatenate1(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], axis: 1)
     defn concatenate2(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], axis: 2)
@@ -3784,6 +3805,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "decompositions" do
+    @describetag :iree_shape_mismatch_error
     defn ts(a, b, opts \\ []), do: Nx.LinAlg.triangular_solve(a, b, opts)
 
     test "triangular_solve" do
@@ -3924,6 +3946,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "top_k" do
+    @describetag :iree_shape_mismatch_error
     defn top_1(t), do: Nx.top_k(t, k: 1)
 
     test "returns top 1 values and indices" do
@@ -3995,6 +4018,7 @@ defmodule EXLA.Defn.ExprTest do
   describe "optional" do
     defn determinant(t), do: Nx.LinAlg.determinant(t)
 
+    @tag :iree_key_not_found_error
     test "determinant" do
       two_by_two = Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
       assert_equal(determinant(two_by_two), Nx.tensor(-2.0))
@@ -4002,6 +4026,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn double_determinant(a, b), do: Nx.LinAlg.determinant(a) * Nx.LinAlg.determinant(b)
 
+    @tag :iree_key_not_found_error
     test "multiple determinant" do
       from_one = Nx.tensor([[1, 2], [3, 4]])
       from_ten = Nx.tensor([[10, 20], [30, 40]])
@@ -4010,6 +4035,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "cholesky" do
+    @describetag :iree_shape_mismatch_error
     defn cholesky(t), do: Nx.LinAlg.cholesky(t)
 
     test "works on 2x2 matrix" do
@@ -4022,6 +4048,7 @@ defmodule EXLA.Defn.ExprTest do
       assert_all_close(lhs, rhs)
     end
 
+    @tag :iree_key_not_found_error
     test "works on a 4x4 matrix" do
       lhs =
         cholesky(
@@ -4061,6 +4088,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "bfloat16" do
+    @describetag :iree_shape_mismatch_error
     defn add(t1, t2), do: t1 + t2
 
     test "accepts bfloat16 input" do
@@ -4071,6 +4099,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "precision" do
+    @describetag :iree_shape_mismatch_error
     defn precision(t1, t2), do: Nx.dot(t1, t2)
 
     test "raises on bad precision" do
@@ -4100,6 +4129,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "take_along_axis/3" do
+    @describetag :iree_shape_mismatch_error
     defn take_along_axis(t, idx, opts \\ [axis: 0]), do: Nx.take_along_axis(t, idx, opts)
 
     defn sort_with_take_along_axis(t, opts \\ []) do

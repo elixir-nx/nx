@@ -7,6 +7,7 @@ defmodule EXLA.Defn.APITest do
   defn add_two(a, b), do: a + b
 
   describe "multi-client" do
+    @describetag :iree_key_not_found_error
     test "converts from host to separate client" do
       a = Nx.tensor(1, backend: {EXLA.Backend, client: :host})
       b = Nx.tensor(2, backend: {EXLA.Backend, client: :host})
@@ -29,6 +30,7 @@ defmodule EXLA.Defn.APITest do
   end
 
   describe "options" do
+    @tag :iree_shape_mismatch_error
     test "logs when debugging" do
       logs =
         capture_log(fn ->
@@ -37,7 +39,7 @@ defmodule EXLA.Defn.APITest do
 
       assert logs =~ ~r"EXLA defn evaluation #Function<[^>]+> cache (hit|miss) in \d+\.\dms"
       assert logs =~ ~r"EXLA compilation #Function<[^>]+> cache (hit|miss) in \d+\.\dms"
-      assert logs =~ ~r"EXLA device \d lock in \d+\.\dms"
+      assert logs =~ ~r"EXLA device -?\d lock in \d+\.\dms"
       assert logs =~ ~r"EXLA execution on device \d in \d+\.\dms"
 
       logs =
