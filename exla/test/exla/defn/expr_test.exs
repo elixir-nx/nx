@@ -9,9 +9,9 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "tuples" do
-    @describetag :iree_shape_mismatch_error
     defn add_subtract_tuple(a, b), do: {a + b, a - b}
 
+    @tag :iree_offset_error
     test "on results" do
       assert_equal(add_subtract_tuple(2, 3), {Nx.tensor(5), Nx.tensor(-1)})
 
@@ -238,8 +238,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "//2" do
-    @describetag :iree_shape_mismatch_error
-    defn divide_two(a, b), do: a / b
+        defn divide_two(a, b), do: a / b
 
     test "parameters" do
       tensors = [
@@ -279,7 +278,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "remainder" do
-    @describetag :iree_shape_mismatch_error
     defn remainder(a, b), do: Nx.remainder(a, b)
 
     test "integers" do
@@ -289,7 +287,6 @@ defmodule EXLA.Defn.ExprTest do
       assert_all_close(remainder(left, right), Nx.remainder(left, right))
     end
 
-    @tag :iree_shape_mismatch_error
     test "floats" do
       left = Nx.tensor([-8.3, -8.4, -8.5, 8.3, 8.4, 8.5])
       right = Nx.tensor([[-4.2], [-4.1], [-4.0], [4.0], [4.1], [4.2]])
@@ -310,7 +307,6 @@ defmodule EXLA.Defn.ExprTest do
 
     defn subtract_two(a, b), do: a - b
 
-    @tag :iree_shape_mismatch_error
     test "-" do
       for {left, right} <- @tensors do
         assert_all_close(subtract_two(left, right), Nx.subtract(left, right))
@@ -320,7 +316,6 @@ defmodule EXLA.Defn.ExprTest do
 
     defn multiply_two(a, b), do: a * b
 
-    @tag :iree_shape_mismatch_error
     test "*" do
       for {left, right} <- @tensors do
         assert_all_close(multiply_two(left, right), Nx.multiply(left, right))
@@ -330,7 +325,6 @@ defmodule EXLA.Defn.ExprTest do
 
     defn unary_minus(a), do: -a
 
-    @tag :iree_shape_mismatch_error
     test "negate" do
       for t <- [
             Nx.tensor([-1, 0, 1], type: {:u, 8}),
@@ -343,7 +337,6 @@ defmodule EXLA.Defn.ExprTest do
 
     defn max_two(a, b), do: max(a, b)
 
-    @tag :iree_shape_mismatch_error
     test "max" do
       for {left, right} <- @tensors do
         assert_all_close(max_two(left, right), Nx.max(left, right))
@@ -353,7 +346,6 @@ defmodule EXLA.Defn.ExprTest do
 
     defn min_two(a, b), do: min(a, b)
 
-    @tag :iree_shape_mismatch_error
     test "min" do
       for {left, right} <- @tensors do
         assert_all_close(min_two(left, right), Nx.min(left, right))
@@ -363,7 +355,6 @@ defmodule EXLA.Defn.ExprTest do
 
     defn power_two(a, b), do: Nx.pow(a, b)
 
-    @tag :iree_shape_mismatch_error
     test "pow" do
       for {left, right} <- @tensors do
         assert_all_close(power_two(left, right), Nx.pow(left, right))
@@ -385,7 +376,6 @@ defmodule EXLA.Defn.ExprTest do
 
     defn quotient_two(a, b), do: Nx.quotient(a, b)
 
-    @tag :iree_shape_mismatch_error
     test "quotient" do
       int_tensors = [
         {1, 2},
@@ -516,7 +506,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "equal" do
-    @describetag :iree_shape_mismatch_error
     defn equal(a, b), do: Nx.equal(a, b)
 
     test "computes equality of scalars" do
@@ -548,12 +537,10 @@ defmodule EXLA.Defn.ExprTest do
   describe "not equal" do
     defn not_equal(a, b), do: Nx.not_equal(a, b)
 
-    @tag :iree_shape_mismatch_error
     test "computes equality of scalars" do
       assert_equal(not_equal(Nx.tensor(1), Nx.tensor(2)), Nx.tensor(1, type: {:u, 8}))
     end
 
-    @tag :iree_shape_mismatch_error
     test "computes equality with broadcasting" do
       assert_equal(
         not_equal(Nx.tensor(1), Nx.tensor([1, 2, 3])),
@@ -561,7 +548,6 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
-    @tag :iree_shape_mismatch_error
     test "computes equality with mixed types" do
       assert_equal(
         not_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])),
@@ -571,7 +557,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "less" do
-    @describetag :iree_shape_mismatch_error
     defn less(a, b), do: Nx.less(a, b)
 
     test "compares scalars" do
@@ -591,7 +576,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "greater" do
-    @describetag :iree_shape_mismatch_error
     defn greater(a, b), do: Nx.greater(a, b)
 
     test "compares scalars" do
@@ -614,7 +598,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "less equal" do
-    @describetag :iree_shape_mismatch_error
     defn less_equal(a, b), do: Nx.less_equal(a, b)
 
     test "compares scalars" do
@@ -637,7 +620,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "greater equal" do
-    @describetag :iree_shape_mismatch_error
     defn greater_equal(a, b), do: Nx.greater_equal(a, b)
 
     test "compares scalars" do
@@ -660,7 +642,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "logical" do
-    @describetag :iree_shape_mismatch_error
     defn logical_and(a, b), do: Nx.logical_and(a, b)
 
     test "and" do
@@ -747,6 +728,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn logical_not(a), do: Nx.logical_not(a)
 
+    @tag :iree_key_not_found_error
     test "not" do
       assert_equal(
         logical_not(Nx.tensor([-2, -1, 0, 1, 2])),
@@ -763,6 +745,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defnp is_finite(x), do: Nx.all(Nx.logical_not(Nx.is_infinity(x)))
 
+    @tag :iree_key_not_found_error
     test "logical and/not with all predicate" do
       assert_equal(logical_and_all_finite(1, 0, 2.0), Nx.u8(1))
     end
@@ -798,7 +781,6 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
-    @tag :iree_shape_mismatch_error
     test "selects with broadcasting" do
       assert_equal(
         select(Nx.tensor([1, 0, 1, 0, 1]), Nx.tensor([10]), Nx.tensor([1, 2, 3, 4, 5])),
@@ -813,7 +795,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "unary float ops" do
-    @describetag :iree_shape_mismatch_error
     @int_tensor Nx.tensor([1, 2, 3])
     @float_tensor Nx.tensor([1.0, 2.0, 3.0])
 
@@ -824,6 +805,7 @@ defmodule EXLA.Defn.ExprTest do
       defn_var = Macro.var(defn_fun, __MODULE__)
       defn unquote(defn_fun)(t), do: Nx.unquote(fun)(t)
 
+      @tag :iree_type_mismatch_error
       test "#{fun}" do
         assert_all_close(
           unquote(defn_fun)(@float_tensor),
@@ -1155,7 +1137,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "if" do
-    @describetag :iree_shape_mismatch_error
     defn if3(a, b, c), do: if(a, do: b, else: c)
 
     test "one param per branch" do
@@ -1265,6 +1246,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn if_map(a, b, c), do: if(a, do: {%{a: a, b: b, c: 1}, c}, else: {%{a: c, b: b, c: 2}, a})
 
+    @tag :iree_segfault_error
     test "with map" do
       assert_equal(
         if_map(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)),
@@ -1329,7 +1311,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "cond" do
-    @describetag :iree_shape_mismatch_error
     defn cond3(a, b, c) do
       d = Nx.sum(a)
 
@@ -1380,6 +1361,7 @@ defmodule EXLA.Defn.ExprTest do
       end
     end
 
+    @tag :iree_offset_error
     test "computes cond with cond as parameter" do
       assert_equal(nested_cond(Nx.tensor(10)), Nx.tensor(1))
       assert_equal(nested_cond(Nx.tensor(-10)), Nx.tensor(0))
@@ -1534,17 +1516,18 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "map" do
-    @describetag :iree_shape_mismatch_error
     defn map_plus(t), do: Nx.map(t, fn x -> x + 1 end)
     defn map_equal(t), do: Nx.map(t, [type: {:f, 64}], fn x -> Nx.equal(x, 1) end)
     defn map_exp(t), do: Nx.map(t, [type: {:f, 64}], fn x -> Nx.exp(x) end)
 
     @tag :unsupported_64_bit_op
+    @tag :iree_wrong_result_error
     test "maps a function over the tensor" do
       assert_equal(map_plus(Nx.tensor([[1, 2, 3], [4, 5, 6]])), Nx.tensor([[2, 3, 4], [5, 6, 7]]))
     end
 
     @tag :unsupported_64_bit_op
+    @tag :iree_illegal_op_error
     test "maps a function with an output type" do
       assert_equal(
         map_equal(Nx.tensor([[1, 2, 3], [4, 5, 6]])),
@@ -1567,6 +1550,7 @@ defmodule EXLA.Defn.ExprTest do
 
     @tag :conditional_inside_map_reduce
     @tag :unsupported_64_bit_op
+    @tag :iree_illegal_op_error
     test "maps a function with conditional" do
       assert_equal(
         map_conditional(Nx.tensor([-2, -1, 0, 1, 2])),
@@ -1587,6 +1571,7 @@ defmodule EXLA.Defn.ExprTest do
       end
     end
 
+    @tag :iree_key_not_found_error
     test "while inside if" do
       assert %{a: a, b: b} = while_inside_if(1, %{a: 1, b: 2.0})
       assert_all_close(a, 1)
@@ -1833,7 +1818,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "indexed_add" do
-    @describetag :iree_shape_mismatch_error
     defn indexed_add(t, i, u) do
       Nx.indexed_add(t, i, u)
     end
@@ -2039,7 +2023,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "sum" do
-    @describetag :iree_shape_mismatch_error
     defn sum(t), do: Nx.sum(t)
 
     test "computes the sum across types" do
@@ -2088,7 +2071,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "product" do
-    @describetag :iree_shape_mismatch_error
     defn product(t), do: Nx.product(t)
 
     test "computes the product across types" do
@@ -2137,7 +2119,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "mean" do
-    @describetag :iree_shape_mismatch_error
     defn mean(t), do: Nx.mean(t)
 
     test "computes mean without axis" do
@@ -2201,7 +2182,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "reduce_max" do
-    @describetag :iree_shape_mismatch_error
     defn reduce_max(t), do: Nx.reduce_max(t)
 
     test "computes the maximum across types" do
@@ -2239,7 +2219,6 @@ defmodule EXLA.Defn.ExprTest do
     defn reduce_max_keep(t), do: Nx.reduce_max(t, keep_axes: true)
     defn reduce_max_keep_2(t), do: Nx.reduce_max(t, axes: [0, 2], keep_axes: true)
 
-    @tag :iree_shape_mismatch_error
     test "keeps dimensions if keep_axes" do
       assert_equal(Nx.tensor([1, 2, 3]) |> reduce_max_keep(), Nx.tensor([3]))
       assert_equal(Nx.tensor([1.0, 2.0, 3.0]) |> reduce_max_keep(), Nx.tensor([3.0]))
@@ -2285,7 +2264,7 @@ defmodule EXLA.Defn.ExprTest do
     defn reduce_min_neg_axis(t), do: Nx.reduce_min(t, axes: [-3])
     defn reduce_min_pos_neg_axis(t), do: Nx.reduce_min(t, axes: [1, -3])
 
-    @tag :iree_shape_mismatch_error
+    @tag :iree_wrong_result_error
     test "computes the min on a given axis" do
       t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
       assert_equal(reduce_min_pos_axis(t), Nx.reduce_min(t, axes: [1]))
@@ -2296,7 +2275,7 @@ defmodule EXLA.Defn.ExprTest do
     defn reduce_min_keep(t), do: Nx.reduce_min(t, keep_axes: true)
     defn reduce_min_keep_2(t), do: Nx.reduce_min(t, axes: [0, 2], keep_axes: true)
 
-    @tag :iree_shape_mismatch_error
+    @tag :iree_wrong_result_error
     test "keeps dimensions if keep_axes" do
       assert_equal(Nx.tensor([1, 2, 3]) |> reduce_min_keep(), Nx.tensor([1]))
       assert_equal(Nx.tensor([1.0, 2.0, 3.0]) |> reduce_min_keep(), Nx.tensor([1.0]))
@@ -2679,7 +2658,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "dot product" do
-    @describetag :iree_shape_mismatch_error
     defn dot(a, b), do: Nx.dot(a, b)
 
     test "computes the dot product of scalars" do
@@ -2774,7 +2752,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "convolution" do
-    @describetag :iree_shape_mismatch_error
     defn conv_valid_no_stride(inp, kernel), do: Nx.conv(inp, kernel)
 
     defn conv_valid_stride(inp, kernel),
@@ -3439,7 +3416,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "put slice" do
-    @describetag :iree_shape_mismatch_error
     defn put_slice1(t1, t2), do: Nx.put_slice(t1, [2], t2)
     defn put_slice2(t1, t2), do: Nx.put_slice(t1, [1, 2], t2)
     defn put_slice3(t1, t2), do: Nx.put_slice(t1, [2, 2], t2)
@@ -3478,7 +3454,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "take" do
-    @describetag :iree_shape_mismatch_error
     defn take_axis_0(t, idx), do: Nx.take(t, idx)
     defn take_axis_1(t, idx), do: Nx.take(t, idx, axis: 1)
 
@@ -3541,7 +3516,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "gather" do
-    @describetag :iree_shape_mismatch_error
     defn gather(t, idx), do: Nx.gather(t, idx)
 
     test "1d result" do
@@ -3664,7 +3638,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "concatenate" do
-    @describetag :iree_shape_mismatch_error
     defn concatenate0(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], axis: 0)
     defn concatenate1(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], axis: 1)
     defn concatenate2(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], axis: 2)
@@ -3971,9 +3944,9 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "top_k" do
-    @describetag :iree_shape_mismatch_error
     defn top_1(t), do: Nx.top_k(t, k: 1)
 
+    @tag :iree_offset_error
     test "returns top 1 values and indices" do
       a = Nx.iota({5})
       assert_equal(top_1(a), {Nx.tensor([4]), Nx.tensor([4])})
@@ -3987,7 +3960,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "argsort" do
-    @describetag :iree_segfault_error
+    @describetag :iree_offset_error
     defn argsort0(t), do: Nx.argsort(t, axis: 0)
     defn argsort1(t), do: Nx.argsort(t, axis: 1)
     defn argsort1_asc(t), do: Nx.argsort(t, axis: 1, direction: :asc)
@@ -4060,9 +4033,9 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "cholesky" do
-    @describetag :iree_shape_mismatch_error
     defn cholesky(t), do: Nx.LinAlg.cholesky(t)
 
+    @tag :iree_key_not_found_error
     test "works on 2x2 matrix" do
       lhs = cholesky(Nx.tensor([[20.0, 17.6], [17.6, 16.0]]))
       rhs = Nx.tensor([[4.47213595499958, 0.0], [3.93547964039963, 0.7155417527999305]])
@@ -4096,6 +4069,7 @@ defmodule EXLA.Defn.ExprTest do
       assert_all_close(lhs, rhs)
     end
 
+    @tag :iree_key_not_found_error
     test "works on a 50x50 matrix" do
       tensor =
         Nx.tensor(
@@ -4115,7 +4089,6 @@ defmodule EXLA.Defn.ExprTest do
   describe "bfloat16" do
     defn add(t1, t2), do: t1 + t2
 
-    @tag :iree_shape_mismatch_error
     test "accepts bfloat16 input" do
       lhs = Nx.tensor([1.0, 2.0, 3.0], type: {:bf, 16})
       rhs = Nx.tensor([4.0, 5.0, 6.0], type: {:bf, 16})
@@ -4124,7 +4097,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "precision" do
-    @describetag :iree_shape_mismatch_error
     defn precision(t1, t2), do: Nx.dot(t1, t2)
 
     test "raises on bad precision" do
@@ -4154,7 +4126,6 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "take_along_axis/3" do
-    @describetag :iree_shape_mismatch_error
     defn take_along_axis(t, idx, opts \\ [axis: 0]), do: Nx.take_along_axis(t, idx, opts)
 
     defn sort_with_take_along_axis(t, opts \\ []) do

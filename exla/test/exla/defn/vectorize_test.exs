@@ -4,7 +4,7 @@ defmodule EXLA.Defn.VectorizeTest do
   import Nx.Defn
   import Nx, only: :sigils
 
-  @moduletag :iree_shape_mismatch_error
+  @moduletag :iree_hangup_error
 
   setup do
     Nx.default_backend(EXLA.Backend)
