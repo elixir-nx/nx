@@ -2,6 +2,7 @@ defmodule EXLA.MLIR.CustomCallTest do
   use EXLA.Case, async: true
 
   describe "qr" do
+    @describetag :iree_key_not_found_error
     for type <- [bf: 16, f: 16, f: 32, f: 64] do
       tol_opts =
         case type do

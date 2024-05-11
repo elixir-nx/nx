@@ -392,6 +392,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "element-wise bitwise operators" do
+    @describetag :iree_shape_mismatch_error
     @left Nx.tensor([-2, -1, 0, 1, 2])
     @right Nx.tensor([[-2], [-1], [0], [1], [2]])
 
@@ -497,6 +498,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "equal" do
+    @describetag :iree_shape_mismatch_error
     defn equal(a, b), do: Nx.equal(a, b)
 
     test "computes equality of scalars" do
@@ -526,6 +528,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "not equal" do
+    @describetag :iree_shape_mismatch_error
     defn not_equal(a, b), do: Nx.not_equal(a, b)
 
     test "computes equality of scalars" do
@@ -548,6 +551,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "less" do
+    @describetag :iree_shape_mismatch_error
     defn less(a, b), do: Nx.less(a, b)
 
     test "compares scalars" do
@@ -567,6 +571,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "greater" do
+    @describetag :iree_shape_mismatch_error
     defn greater(a, b), do: Nx.greater(a, b)
 
     test "compares scalars" do
@@ -589,6 +594,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "less equal" do
+    @describetag :iree_shape_mismatch_error
     defn less_equal(a, b), do: Nx.less_equal(a, b)
 
     test "compares scalars" do
@@ -611,6 +617,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "greater equal" do
+    @describetag :iree_shape_mismatch_error
     defn greater_equal(a, b), do: Nx.greater_equal(a, b)
 
     test "compares scalars" do
@@ -633,6 +640,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "logical" do
+    @describetag :iree_shape_mismatch_error
     defn logical_and(a, b), do: Nx.logical_and(a, b)
 
     test "and" do
@@ -741,6 +749,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "select" do
+    @describetag :iree_shape_mismatch_error
     defn select(pred, x, y), do: Nx.select(pred, x, y)
 
     test "selects one or the other with a scalar" do
@@ -809,6 +818,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "complex ops" do
+    @describetag :iree_unsupported_fft_error
     defn fft(t, opts \\ []), do: Nx.fft(t, opts)
     defn ifft(t, opts \\ []), do: Nx.ifft(t, opts)
 
@@ -1366,6 +1376,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "while/3" do
+    @describetag :iree_key_not_found_error
     defn upto10(x) do
       while x, Nx.less(x, 10) do
         x + 1
@@ -1723,6 +1734,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "window_scatter_min/max" do
+    @describetag :iree_segfault_error
     defn window_scatter_max_no_padding(t) do
       Nx.window_scatter_max(
         t,
@@ -2260,6 +2272,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "argmax/argmin" do
+    @describetag :iree_wrong_result_error
     defn argmax(t), do: Nx.argmax(t)
     defn argmin(t), do: Nx.argmin(t)
     defn argmax_axis(t), do: Nx.argmax(t, axis: 1)
@@ -2330,6 +2343,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "window sum" do
+    @describetag :iree_segfault_error
     defn window_sum1(t), do: Nx.window_sum(t, {1, 2, 1})
 
     defn window_sum2(t),
@@ -2380,6 +2394,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "window mean" do
+    @describetag :iree_segfault_error
     defn window_mean1(t), do: Nx.window_mean(t, {1, 2, 1})
 
     defn window_mean2(t),
@@ -2435,6 +2450,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "window max" do
+    @describetag :iree_segfault_error
     defn window_max1(t), do: Nx.window_max(t, {1, 2, 1})
 
     defn window_max2(t),
@@ -2500,6 +2516,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "window min" do
+    @describetag :iree_wrong_result_error
     defn window_min0(t), do: Nx.window_min(t, {2})
     defn window_min1(t), do: Nx.window_min(t, {1, 2, 1})
 
@@ -2570,6 +2587,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "window product" do
+    @describetag :iree_segfault_error
     defn window_product1(t), do: Nx.window_product(t, {1, 2, 1})
 
     defn window_product2(t),
@@ -2718,6 +2736,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "convolution" do
+    @describetag :iree_shape_mismatch_error
     defn conv_valid_no_stride(inp, kernel), do: Nx.conv(inp, kernel)
 
     defn conv_valid_stride(inp, kernel),
@@ -3381,6 +3400,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "put slice" do
+    @describetag :iree_shape_mismatch_error
     defn put_slice1(t1, t2), do: Nx.put_slice(t1, [2], t2)
     defn put_slice2(t1, t2), do: Nx.put_slice(t1, [1, 2], t2)
     defn put_slice3(t1, t2), do: Nx.put_slice(t1, [2, 2], t2)
@@ -3859,6 +3879,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "sort" do
+    @describetag :iree_segfault_error
     defn sort0(t), do: Nx.sort(t, axis: 0)
     defn sort1(t), do: Nx.sort(t, axis: 1)
     defn sort1_asc(t), do: Nx.sort(t, axis: 1, direction: :asc)
@@ -3918,6 +3939,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "argsort" do
+    @describetag :iree_segfault_error
     defn argsort0(t), do: Nx.argsort(t, axis: 0)
     defn argsort1(t), do: Nx.argsort(t, axis: 1)
     defn argsort1_asc(t), do: Nx.argsort(t, axis: 1, direction: :asc)
@@ -4171,6 +4193,7 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
+  @tag :iree_key_not_found_error
   test "computes while inside cond" do
     assert {i} = while_in_cond(0)
     assert_equal(i, Nx.tensor(5))

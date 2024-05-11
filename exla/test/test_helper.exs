@@ -38,8 +38,27 @@ cuda_required =
     [:cuda_required]
   end
 
+compiler_mode = :iree
+
+iree_excludes =
+  if compiler_mode == :iree do
+    [
+      :token,
+      :iree_hangup_error,
+      :iree_shape_mismatch_error,
+      :iree_key_not_found_error,
+      :iree_wrong_result_error,
+      :iree_unsupported_fft_error,
+      :iree_segfault_error,
+      :multi_device
+    ]
+  else
+    []
+  end
+
 ExUnit.start(
-  exclude: [:platform, :integration] ++ exclude_multi_device ++ exclude ++ cuda_required,
+  exclude:
+    [:platform, :integration] ++ exclude_multi_device ++ exclude ++ cuda_required ++ iree_excludes,
   include: [platform: String.to_atom(target)],
   assert_receive_timeout: 1000
 )

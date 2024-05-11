@@ -574,19 +574,31 @@ defmodule EXLA.Defn do
          cache
        ) do
     [initial_arg, _arg, pred, body] = args
-    initial_with_token = {get_token(cache), initial_arg}
+
+    initial_with_token =
+      if state.builder.compiler == :iree do
+        initial_arg
+      else
+        [get_token(cache), initial_arg]
+      end
 
     {initial, cache} = recur_composite(initial_with_token, state, cache)
 
     {pred_computation, cache} = mlir_while_computation(pred, initial, {:pred, 8}, state, cache)
     {body_computation, cache} = mlir_while_computation(body, initial, :with_token, state, cache)
 
-    [token | results] =
-      Value.while(function, pred_computation, body_computation, List.flatten(initial))
+    output = Value.while(function, pred_computation, body_computation, List.flatten(initial))
 
-    result = wrap_tuple_result(results, initial_arg)
+    case state.builder.compiler do
+      :iree ->
+        result = wrap_tuple_result(output, initial_arg)
+        {result, cache}
 
-    {result, update_token(cache, token)}
+      _ ->
+        [token | results] = output
+        result = wrap_tuple_result(results, initial_arg)
+        {result, update_token(cache, token)}
+    end
   end
 
   defp cached_recur_operator(:cond, %T{data: %Expr{args: args}} = t, state, cache) do
@@ -1706,11 +1718,13 @@ defmodule EXLA.Defn do
     function =
       EXLA.MLIR.Module.add_function(module, name, in_types, out_types)
 
+    function = %{function | compiler: compiler}
+
     [arg_token | tail] = EXLA.MLIR.Function.get_arguments(function)
 
     params =
       if compiler == :iree do
-        Enum.with_index([arg_token | tail], fn param, i -> {i, param} end)
+        Enum.with_index(tail, fn param, i -> {i, param} end)
       else
         Enum.with_index(tail, fn param, i -> {i, param} end)
       end

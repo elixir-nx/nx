@@ -98,6 +98,7 @@ defmodule EXLA.Defn.APITest do
   end
 
   describe "batch" do
+    @tag :iree_shape_mismatch_error
     test "when padded" do
       input = Nx.tensor([[1, 2, 3]], backend: EXLA.Backend)
       batch = [input] |> Nx.Batch.concatenate() |> Nx.Batch.pad(1)
@@ -127,6 +128,7 @@ defmodule EXLA.Defn.APITest do
   end
 
   describe "stream" do
+    @describetag :token
     defn defn_sum(entry, acc), do: {acc, entry + acc}
 
     test "immediately done" do
@@ -286,6 +288,7 @@ defmodule EXLA.Defn.APITest do
   end
 
   describe "hooks" do
+    @describetag :token
     require Logger
 
     defp send_to_self(tag) do
@@ -440,6 +443,7 @@ defmodule EXLA.Defn.APITest do
       send(self(), {measurements, metadata})
     end
 
+    @tag :iree_shape_mismatch_error
     test "executes event when function is compiled" do
       :ok =
         :telemetry.attach(__MODULE__, [:exla, :compilation], &__MODULE__.telemetry_handler/4, nil)

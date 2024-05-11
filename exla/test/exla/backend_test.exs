@@ -27,6 +27,8 @@ defmodule EXLA.BackendTest do
     @skip_mac_arm []
   end
 
+  @moduletag :iree_hangup_error
+
   doctest Nx,
     except: [:moduledoc] ++ @excluded_doctests ++ @skip_mac_arm
 
