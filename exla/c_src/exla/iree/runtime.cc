@@ -8,17 +8,15 @@ class IREEInput {
  public:
   void *data;
   size_t size;
-  iree_hal_dim_t *dims;
-  size_t rank;
+  std::vector<iree_hal_dim_t> dims;
   iree_hal_element_type_t type;
 
   // Default constructor
   IREEInput(void *data, size_t size, std::vector<int64_t> in_dims, iree_hal_element_type_t type) : size(size), type(type) {
-    rank = in_dims.size();
-    dims = reinterpret_cast<iree_hal_dim_t *>(iree_alloca(rank * sizeof(iree_hal_dim_t)));
+    dims.reserve(in_dims.size());
 
-    for (size_t i = 0; i < rank; i++) {
-      dims[i] = in_dims[i];
+    for (auto dim : in_dims) {
+      dims.push_back(static_cast<iree_hal_dim_t>(dim));
     }
 
     this->data = std::malloc(size);  // Allocate memory
@@ -30,11 +28,6 @@ class IREEInput {
     if (data) {
       std::free(data);
       data = nullptr;
-    }
-
-    if (dims) {
-      std::free(dims);
-      dims = nullptr;
     }
   }
 
@@ -160,10 +153,9 @@ int load_inputs(ErlNifEnv *env, std::vector<ERL_NIF_TERM> terms, std::vector<IRE
   ErlNifBinary bin;
 
   loaded.clear();
-  loaded.resize(terms.size());
+  loaded.reserve(terms.size());
 
-  for (size_t i = 0; i < terms.size(); i++) {
-    ERL_NIF_TERM term = terms[i];
+  for (auto term : terms) {
     std::vector<int64_t> dims;
     xla::PrimitiveType primitive_type;
     iree_hal_element_type_t type;
@@ -192,7 +184,7 @@ int load_inputs(ErlNifEnv *env, std::vector<ERL_NIF_TERM> terms, std::vector<IRE
       return 0;
     }
 
-    loaded[i] = new IREEInput(bin.data, bin.size, dims, type);
+    loaded.push_back(std::move(new IREEInput(bin.data, bin.size, dims, type)));
   }
 
   return 1;
@@ -210,8 +202,8 @@ iree_status_t iree_input_to_hal_arg(iree_hal_buffer_view_t **arg, IREEInput *inp
   return iree_hal_buffer_view_allocate_buffer_copy(
       device,
       device_allocator,
-      input->rank,
-      input->dims,
+      input->dims.size(),
+      input->dims.data(),
       input->type,
       IREE_HAL_ENCODING_TYPE_DENSE_ROW_MAJOR,
       buffer_params,
