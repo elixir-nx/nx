@@ -9,6 +9,7 @@ XLA_INCLUDE_PATH = $(XLA_EXTENSION_DIR)/include
 
 # Cache configuration
 EXLA_CACHE_SO = cache/libexla.so
+EXLA_CACHE_OBJ_DIR = cache/objs
 
 # Private configuration
 EXLA_DIR = c_src/exla
@@ -26,15 +27,18 @@ EXLA_CACHE_SO_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(EXLA_CACHE_SO)
 # Note: this is on :xla 0.5.0 -- things can change with later versions
 CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -Wall -Wno-sign-compare \
 	 -Wno-unused-parameter -Wno-missing-field-initializers -Wno-comment \
-	 -shared -std=c++17 -w -DLLVM_VERSION_STRING=
+	 -std=c++17 -w -DLLVM_VERSION_STRING=
+
+NVCCFLAGS = -shared -Xcompiler -fPIC
 
 ifdef DEBUG
 	CFLAGS += -g
+	NVCCFLAGS += -g
 else
 	CFLAGS += -O3
 endif
 
-LDFLAGS = -L$(XLA_EXTENSION_LIB) -lxla_extension
+LDFLAGS = -L$(XLA_EXTENSION_LIB) -lxla_extension -shared
 
 ifeq ($(shell uname -s), Darwin)
 	LDFLAGS += -flat_namespace -undefined suppress -rpath @loader_path/xla_extension/lib
@@ -57,8 +61,33 @@ $(EXLA_SO): $(EXLA_CACHE_SO)
 		ln -sf $(EXLA_CACHE_SO_LINK_PATH) $(EXLA_SO) ; \
 	fi
 
-$(EXLA_CACHE_SO): $(XLA_EXTENSION_DIR) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_ops.cc $(EXLA_DIR)/exla_ops.h $(EXLA_DIR)/mlir/ops.cc $(EXLA_DIR)/mlir/ops.h $(EXLA_DIR)/mlir/builder.cc $(EXLA_DIR)/mlir/builder.h $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h
-	$(CXX) $(CFLAGS) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/mlir/ops.cc $(EXLA_DIR)/mlir/builder.cc $(EXLA_DIR)/exla_ops.cc $(EXLA_DIR)/exla_client.cc -o $(EXLA_CACHE_SO) $(LDFLAGS)
+SOURCES = $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_mlir.cc $(EXLA_DIR)/custom_calls.cc $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_nif_util.cc
+HEADERS = $(EXLA_DIR)/exla_mlir.h $(EXLA_DIR)/custom_calls.h $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h
+OBJECTS = $(patsubst $(EXLA_DIR)/%.cc,$(EXLA_CACHE_OBJ_DIR)/%.o,$(SOURCES)) $(EXLA_CACHE_OBJ_DIR)/exla_cuda.o
+
+
+NVCC_RESULT := $(shell which nvcc 2> /dev/null)
+NVCC_TEST := $(notdir $(NVCC_RESULT))
+
+ifeq ($(NVCC_TEST),nvcc)
+  NVCC := nvcc
+	NVCCFLAGS += -DCUDA_ENABLED
+else
+  NVCC := $(CXX)
+	NVCCFLAGS = $(CFLAGS)
+endif
+
+$(EXLA_CACHE_OBJ_DIR)/exla_cuda.o: $(EXLA_DIR)/exla_cuda.cc $(EXLA_DIR)/exla_cuda.h
+	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)
+	$(NVCC) $(NVCCFLAGS) -c $< -o $@
+
+$(EXLA_CACHE_OBJ_DIR)/%.o: $(EXLA_DIR)/%.cc $(HEADERS)
+	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)
+	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)/mlir
+	$(CXX) $(CFLAGS) -c $< -o $@
+
+$(EXLA_CACHE_SO): $(XLA_EXTENSION_DIR) $(OBJECTS)
+	$(CXX) $(OBJECTS) -o $(EXLA_CACHE_SO) $(LDFLAGS)
 
 clean:
 	rm -rf cache

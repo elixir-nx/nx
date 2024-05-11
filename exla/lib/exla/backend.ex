@@ -42,8 +42,8 @@ defmodule EXLA.Backend do
   @impl true
   def from_binary(%T{shape: shape, type: type} = tensor, binary, backend_options) do
     {client, device_id} = client_and_device_id(backend_options)
-    shape = EXLA.Shape.make_shape(type, shape)
-    buffer = EXLA.DeviceBuffer.place_on_device(binary, shape, client, device_id)
+    typespec = EXLA.Typespec.tensor(type, shape)
+    buffer = EXLA.DeviceBuffer.place_on_device(binary, typespec, client, device_id)
     put_in(tensor.data, %B{buffer: buffer})
   end
 
@@ -80,6 +80,71 @@ defmodule EXLA.Backend do
   @impl true
   def backend_deallocate(%T{data: %B{buffer: buffer}}) do
     EXLA.DeviceBuffer.deallocate(buffer)
+  end
+
+  @impl true
+  def to_pointer(%T{data: %B{buffer: buffer}}, opts \\ []) do
+    opts = Keyword.validate!(opts, mode: :local)
+
+    mode =
+      case opts[:mode] do
+        mode when mode in [:local, :cuda_ipc] ->
+          mode
+
+        mode ->
+          raise ArgumentError, "expected one of :local, :cuda_ipc, got: #{inspect(mode)}"
+      end
+
+    case buffer do
+      %EXLA.DeviceBuffer{} ->
+        :ok
+
+      _ ->
+        raise ArgumentError, "tensor must be allocated via a #{DeviceBuffer}"
+    end
+
+    client = EXLA.Client.fetch!(buffer.client_name)
+
+    case EXLA.NIF.get_buffer_device_pointer(client.ref, buffer.ref, mode) do
+      {:ok, {pointer, _size}} ->
+        {:ok, pointer}
+
+      error ->
+        error
+    end
+  end
+
+  @impl true
+  def from_pointer(pointer, type, dims, backend_opts, opts) do
+    backend_opts = Keyword.validate!(backend_opts, [:client_name, :device_id])
+    opts = Keyword.validate!(opts, [:names, mode: :local])
+
+    template = Nx.template(dims, type, names: opts[:names])
+
+    client_name = backend_opts[:client_name] || EXLA.Client.default_name()
+    client = EXLA.Client.fetch!(client_name)
+
+    device_id = backend_opts[:device_id] || client.default_device_id
+
+    typespec = EXLA.Typespec.tensor(type, dims)
+
+    result =
+      EXLA.NIF.create_buffer_from_device_pointer(
+        client.ref,
+        pointer,
+        opts[:mode],
+        EXLA.Typespec.nif_encode(typespec),
+        device_id
+      )
+
+    case result do
+      {:ok, ref} ->
+        buffer = EXLA.DeviceBuffer.from_ref(ref, client, device_id, typespec)
+        {:ok, %{template | data: %EXLA.Backend{buffer: buffer}}}
+
+      error ->
+        error
+    end
   end
 
   @impl true

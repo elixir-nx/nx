@@ -1447,6 +1447,56 @@ defmodule EXLA.Defn.ExprTest do
       assert_equal(c, 13)
       assert_equal(d, 10)
     end
+
+    defn while_inside_cond(tensor, condition) do
+      if condition do
+        tensor
+      else
+        {_i, tensor} =
+          while {i = 0, tensor}, i < 1 do
+            {i + 1, tensor + 1}
+          end
+
+        tensor
+      end
+    end
+
+    test "while inside cond" do
+      assert_equal(while_inside_cond(1, 1), 1)
+      assert_equal(while_inside_cond(1, 0), 2)
+    end
+
+    defn cond_inside_while_vectorized(t, size) do
+      down = Nx.u8(0)
+      up = Nx.u8(1)
+      mode = down
+      i = Nx.s64(0)
+
+      [t, node, i, size, mode] =
+        Nx.broadcast_vectors([t, 0, i, size, mode])
+
+      {t, _} =
+        while {t, {node, i, _mode = mode, size, up}},
+              node != -1 and i >= 0 do
+          mode =
+            cond do
+              node >= size -> up
+              true -> -1
+            end
+
+          {t, {node, i - 1, mode, size, up}}
+        end
+
+      t
+    end
+
+    test "cond inside vectorized while" do
+      assert_raise CompileError,
+                   ~r/the do-block in while must return tensors with the same shape, type, and names as the initial arguments./,
+                   fn ->
+                     cond_inside_while_vectorized(Nx.vectorize(Nx.tensor([1, 2, 3]), :a), 3)
+                   end
+    end
   end
 
   describe "map" do
@@ -1482,7 +1532,6 @@ defmodule EXLA.Defn.ExprTest do
 
     @tag :conditional_inside_map_reduce
     @tag :unsupported_64_bit_op
-    @tag :mlir_token_error
     test "maps a function with conditional" do
       assert_equal(
         map_conditional(Nx.tensor([-2, -1, 0, 1, 2])),
@@ -1503,7 +1552,6 @@ defmodule EXLA.Defn.ExprTest do
       end
     end
 
-    @tag :mlir_cond_inside_while
     test "while inside if" do
       assert %{a: a, b: b} = while_inside_if(1, %{a: 1, b: 2.0})
       assert_all_close(a, 1)
@@ -3741,6 +3789,7 @@ defmodule EXLA.Defn.ExprTest do
       output = Nx.as_type(input, {:f, 32})
 
       assert {q, r} = qr(input)
+
       assert q.shape == {3, 2}
       assert r.shape == {2, 2}
       assert_all_close(Nx.dot(q, r), output)
@@ -3748,12 +3797,18 @@ defmodule EXLA.Defn.ExprTest do
       assert {q, r} = qr_complete(Nx.iota({3, 2}))
       assert q.shape == {3, 3}
       assert r.shape == {3, 2}
-      assert_all_close(Nx.dot(q, r), output)
+      assert_all_close(Nx.dot(q, r), output, atol: 1.0e-5, rtol: 1.0e-5)
+
+      input = Nx.iota({2, 3})
+      output = Nx.as_type(input, {:f, 32})
+      assert {q, r} = qr_complete(input)
+      assert q.shape == {2, 2}
+      assert r.shape == {2, 3}
+      assert_all_close(Nx.dot(q, r), output, atol: 1.0e-5, rtol: 1.0e-5)
     end
 
     defn svd(t), do: Nx.LinAlg.svd(t)
 
-    @tag :mlir_linalg_nor_supported_yet
     test "svd" do
       input = Nx.iota({3, 3})
       output = Nx.as_type(input, {:f, 32})
@@ -3770,7 +3825,6 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
-    @tag :mlir_linalg_nor_supported_yet
     test "svd (tall matrix)" do
       input = Nx.tensor([[2, 0], [0, 1], [0, 0]])
       output = Nx.as_type(input, {:f, 32})
@@ -3787,7 +3841,6 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
-    @tag :mlir_linalg_nor_supported_yet
     test "svd (wide matrix)" do
       input = Nx.tensor([[2, 0, 0], [0, 1, 0]])
       output = Nx.as_type(input, {:f, 32})
@@ -4000,11 +4053,7 @@ defmodule EXLA.Defn.ExprTest do
 
     test "raises on bad precision" do
       valid_precision =
-        if Nx.Defn.default_options()[:compiler_mode] == :mlir do
-          ":default, :high, :highest, or :packed_nibble"
-        else
-          ":default, :high, or :highest"
-        end
+        ":default, :high, or :highest"
 
       assert_raise ArgumentError,
                    "expected precision configuration to be one of" <>
@@ -4122,7 +4171,6 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
-  @tag :mlir_cond_inside_while
   test "computes while inside cond" do
     assert {i} = while_in_cond(0)
     assert_equal(i, Nx.tensor(5))

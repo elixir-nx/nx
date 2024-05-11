@@ -1,13 +1,13 @@
 defmodule EXLA.DeviceBufferTest do
   use ExUnit.Case, async: true
 
-  alias EXLA.{DeviceBuffer, Shape}
+  alias EXLA.{DeviceBuffer, Typespec}
 
   import EXLAHelpers
 
   describe "buffer" do
     test "place_on_device/4" do
-      b1 = DeviceBuffer.place_on_device(<<1::32>>, Shape.make_shape({:s, 32}, {}), client(), 0)
+      b1 = DeviceBuffer.place_on_device(<<1::32>>, Typespec.tensor({:s, 32}, {}), client(), 0)
       assert is_reference(b1.ref)
     end
 
@@ -15,7 +15,7 @@ defmodule EXLA.DeviceBufferTest do
       b1 =
         DeviceBuffer.place_on_device(
           <<1::32, 2::32, 3::32, 4::32>>,
-          Shape.make_shape({:s, 32}, {4}),
+          Typespec.tensor({:s, 32}, {4}),
           client(),
           0
         )
@@ -35,7 +35,7 @@ defmodule EXLA.DeviceBufferTest do
     end
 
     test "deallocate/1" do
-      b1 = DeviceBuffer.place_on_device(<<1::32>>, Shape.make_shape({:s, 32}, {}), client(), 0)
+      b1 = DeviceBuffer.place_on_device(<<1::32>>, Typespec.tensor({:s, 32}, {}), client(), 0)
 
       assert :ok = DeviceBuffer.deallocate(b1)
       assert :already_deallocated = DeviceBuffer.deallocate(b1)

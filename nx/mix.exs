@@ -6,7 +6,7 @@ defmodule Nx.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx"
-  @version "0.7.0-dev"
+  @version "0.7.1"
 
   def project do
     [
@@ -60,10 +60,11 @@ defmodule Nx.MixProject do
       source_url_pattern: "#{@source_url}/blob/v#{@version}/nx/%{path}#L%{line}",
       before_closing_body_tag: &before_closing_body_tag/1,
       extras: [
-        "exercises/exercises-1-20.livemd",
+        "CHANGELOG.md",
         "guides/intro-to-nx.livemd",
-        "guides/vectorization.livemd",
-        "CHANGELOG.md"
+        "guides/advanced/vectorization.livemd",
+        "guides/advanced/aggregation.livemd",
+        "guides/exercises/exercises-1-20.livemd"
       ],
       skip_undefined_reference_warnings_on: ["CHANGELOG.md"],
       groups_for_functions: [
@@ -115,8 +116,8 @@ defmodule Nx.MixProject do
         ]
       ],
       groups_for_extras: [
-        Exercises: ~r"exercises/",
-        Guides: ~r"guides/"
+        Exercises: ~r"^guides/exercises/",
+        Advanced: ~r"^guides/advanced/"
       ]
     ]
   end

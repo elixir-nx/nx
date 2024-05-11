@@ -8,77 +8,27 @@ defmodule EXLA.BackendTest do
     :ok
   end
 
-  if Nx.Defn.default_options()[:compiler_mode] == :mlir do
-    @excluded_doctests [
-      tan: 1,
-      atanh: 1,
-      cosh: 1,
-      sigmoid: 1,
-      expm1: 1,
-      erf: 1,
-      erfc: 1,
-      tanh: 1,
-      asinh: 1,
-      logsumexp: 2
-    ]
+  @excluded_doctests [
+    tan: 1,
+    atanh: 1,
+    cosh: 1,
+    sigmoid: 1,
+    expm1: 1,
+    erf: 1,
+    erfc: 1,
+    tanh: 1,
+    asinh: 1,
+    logsumexp: 2
+  ]
+
+  if is_mac_arm?() do
+    @skip_mac_arm [asin: 1, sin: 1, cos: 1]
   else
-    @precision_error_doctests [
-      expm1: 1,
-      erfc: 1,
-      erf: 1,
-      sin: 1,
-      cos: 1,
-      tan: 1,
-      cosh: 1,
-      tanh: 1,
-      asin: 1,
-      asinh: 1,
-      atanh: 1,
-      sigmoid: 1,
-      fft: 2,
-      ifft: 2,
-      logsumexp: 2
-    ]
-
-    @temporarily_broken_doctests [
-      # XLA currently doesn't support complex conversion
-      as_type: 2
-    ]
-
-    @inherently_unsupported_doctests [
-      # XLA requires signed and unsigned tensors to be at least of size 32
-      random_uniform: 4
-    ]
-
-    @unrelated_doctests [
-      default_backend: 1
-    ]
-
-    case EXLAHelpers.client() do
-      %EXLA.Client{platform: :cuda} ->
-        @precision_error_doctests [
-                                    standard_deviation: 2,
-                                    rsqrt: 1,
-                                    acos: 1,
-                                    variance: 2,
-                                    atan2: 2,
-                                    weighted_mean: 3,
-                                    cbrt: 1
-                                  ] ++ @precision_error_doctests
-        @inherently_unsupported_doctests [conv: 3] ++ @inherently_unsupported_doctests
-
-      _ ->
-        nil
-    end
-
-    @excluded_doctests @precision_error_doctests ++
-                         @temporarily_broken_doctests ++
-                         @inherently_unsupported_doctests ++
-                         @unrelated_doctests
+    @skip_mac_arm []
   end
 
   doctest Nx,
-    except: [:moduledoc] ++ @excluded_doctests
+    except: [:moduledoc] ++ @excluded_doctests ++ @skip_mac_arm
 
   test "Nx.to_binary/1" do
     t = Nx.tensor([1, 2, 3, 4], backend: EXLA.Backend)
@@ -166,7 +116,6 @@ defmodule EXLA.BackendTest do
     assert_equal(result, Nx.tensor([0, 1, 1, 0]))
   end
 
-  @tag :mlir_linalg_nor_supported_yet
   test "Nx.LinAlg.svd/2" do
     t = Nx.iota({4, 4})
     assert {u, s, vt} = Nx.LinAlg.svd(t, max_iter: 10_000)
@@ -214,7 +163,7 @@ defmodule EXLA.BackendTest do
     # This is not really meant to work in practice,
     # but it does work with the Nx.BinaryBackend so
     # we make it work for EXLA too.
-    defn double(fun), do: double_transform(fun.())
+    defn(double(fun), do: double_transform(fun.()))
 
     deftransformp(double_transform(x), do: Nx.backend_transfer(Nx.Defn.Kernel.*(x, x)))
 
@@ -229,6 +178,16 @@ defmodule EXLA.BackendTest do
                    fn ->
                      Nx.backend_transfer(Nx.tensor([1, 2]), {EXLA.Backend, client: :unknown})
                    end
+    end
+  end
+
+  describe "access" do
+    test "multiple indexes" do
+      tensor = Nx.eye({4, 4})
+      index = Nx.u32(2)
+      swap = Nx.s64(0)
+      assert tensor[[index, swap]] |> Nx.to_number() == 0
+      assert tensor[[0, swap]] |> Nx.to_number() == 1
     end
   end
 

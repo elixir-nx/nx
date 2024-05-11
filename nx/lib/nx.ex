@@ -16684,6 +16684,84 @@ defmodule Nx do
   end
 
   @doc """
+  Creates an Nx-tensor from an already-allocated memory space.
+
+  This function should be used with caution, as it is very backend-specific.
+
+  The `backend` argument is either the backend module (such as `Nx.BinaryBackend`),
+  or a tuple of `{module, keyword()}` with specific backend configuration.
+  `opaque_pointer` is the corresponding value that would be returned from
+  a call to `get_pointer/2`.
+
+  ## Options
+
+  Besides the options listed below, all other options are forwarded to the
+  underlying implementation.
+
+    * `:names` - refer to `tensor/2`
+
+  ## Examples
+
+      Nx.from_pointer(MyBackend, <<1, 2, 3, 4>>, {:s, 64}, {1, 3})
+      #Nx.Tensor<
+        s64[1][3]
+        [
+          [10, 20, 30]
+        ]
+      >
+
+      Nx.from_pointer({MyBackend, some: :opt}, <<5, 6, 7>>, {:s, 64}, {1, 3}, names: [nil, :col], another: :option)
+      #Nx.Tensor<
+        s64[1][col: 3]
+        [
+          [10, 20, 30]
+        ]
+      >
+  """
+  @doc type: :creation
+  def from_pointer(backend, opaque_pointer, type, shape, opts \\ [])
+      when is_atom(backend) or is_tuple(backend) do
+    Nx.Shape.validate!(shape, :shape)
+    type = Nx.Type.normalize!(type)
+    opts = Keyword.put_new_lazy(opts, :names, fn -> List.duplicate(nil, tuple_size(shape)) end)
+
+    {backend, backend_opts} =
+      case backend do
+        {backend, opts} when is_list(opts) -> {backend, opts}
+        backend -> {backend, []}
+      end
+
+    backend.from_pointer(opaque_pointer, type, shape, backend_opts, opts)
+  end
+
+  @doc """
+  Returns an opaque pointer for a given tensor.
+
+  Can be used in conjunction with `from_pointer/5` to share the same memory
+  for multiple tensors, as well as for interoperability with other programming
+  languages.
+
+  ## Options
+
+  All options are backend-specific.
+
+  ## Examples
+
+      t = Nx.tensor([10, 20, 30])
+      Nx.to_pointer(t)
+      <<1, 2, 3, 4>>
+
+      t = Nx.tensor([1, 2, 3])
+      Nx.to_pointer(t, some: :option)
+      <<4, 3, 2, 1>>
+  """
+  @doc type: :creation
+  def to_pointer(tensor, opts \\ []) do
+    tensor = to_tensor(tensor)
+    impl!(tensor).to_pointer(tensor, opts)
+  end
+
+  @doc """
   Pads a tensor of rank 1 or greater along the given axes through periodic reflections.
 
   ## Options
@@ -16877,6 +16955,85 @@ defmodule Nx do
     end
 
     divide(log(tensor), log(base))
+  end
+
+  @doc """
+  Replaces every value in `tensor` with `value`.
+
+  The returned tensor has the same shape, names and vectorized axes
+  as the given one. The type will be computed based on the type of
+  `tensor` and `value`. You can also pass a `:type` option to change
+  this behaviour.
+
+  ## Options
+
+    * `:type` - sets the type of the returned tensor. If one is not
+      given, it is automatically inferred based on the inputs, with
+      type promotions
+
+  ## Examples
+
+      iex> tensor = Nx.iota({2, 2})
+      iex> Nx.fill(tensor, 5)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [5, 5],
+          [5, 5]
+        ]
+      >
+
+      iex> tensor = Nx.iota({2, 2}) |> Nx.vectorize(:x)
+      iex> Nx.fill(tensor, 5)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        s64[2]
+        [
+          [5, 5],
+          [5, 5]
+        ]
+      >
+
+      iex> tensor = Nx.iota({2, 2})
+      iex> Nx.fill(tensor, 5, type: :u8)
+      #Nx.Tensor<
+        u8[2][2]
+        [
+          [5, 5],
+          [5, 5]
+        ]
+      >
+
+
+  ### Type promotions
+
+  Type promotions should happen automatically, with the resulting type being the combination
+  of the `tensor` type and the `value` type.
+
+      iex> tensor = Nx.iota({2, 2})
+      iex> Nx.fill(tensor, 5.0)
+      #Nx.Tensor<
+        f32[2][2]
+        [
+          [5.0, 5.0],
+          [5.0, 5.0]
+        ]
+      >
+
+  """
+  @doc type: :element
+  def fill(tensor, value, opts \\ []) do
+    opts = Keyword.validate!(opts, [:type])
+
+    type = Nx.Type.normalize!(opts[:type] || binary_type(tensor, value))
+    value = to_tensor(value)
+
+    %{shape: shape, names: names} = devectorize(tensor)
+
+    value
+    |> as_type(type)
+    |> broadcast(shape, names: names)
+    |> vectorize(tensor.vectorized_axes)
   end
 
   ## Sigils
@@ -17257,6 +17414,16 @@ defmodule Nx do
     axes = opts[:axes]
     keep_axes = opts[:keep_axes]
     max = reduce_max(tensor, axes: axes, keep_axes: true)
+
+    max =
+      case max do
+        %T{data: %Nx.Defn.Expr{}} = t ->
+          Nx.Defn.Kernel.stop_grad(t)
+
+        t ->
+          t
+      end
+
     infinity_mask = is_infinity(max)
     max = select(infinity_mask, Nx.tensor(0, type: type), max)
     exponentials = tensor |> subtract(max) |> exp()

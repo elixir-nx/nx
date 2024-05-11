@@ -70,21 +70,21 @@ defmodule EXLA.Defn.Buffers do
     %Nx.BinaryBackend{state: buffer}
   end
 
-  defp buffer_to_data(tensor, %EXLA.DeviceBuffer{shape: exla_shape} = buffer) do
-    validate_shape!(tensor, exla_shape)
+  defp buffer_to_data(tensor, %EXLA.DeviceBuffer{typespec: typespec} = buffer) do
+    validate_shape!(tensor, typespec)
     %EXLA.Backend{buffer: buffer}
   end
 
-  defp buffer_to_data(tensor, %EXLA.BinaryBuffer{data: data, shape: exla_shape}) do
-    validate_shape!(tensor, exla_shape)
+  defp buffer_to_data(tensor, %EXLA.BinaryBuffer{data: data, typespec: typespec}) do
+    validate_shape!(tensor, typespec)
     %Nx.BinaryBackend{state: data}
   end
 
-  defp validate_shape!(%Nx.Tensor{} = t, exla_shape) do
+  defp validate_shape!(%Nx.Tensor{} = t, typespec) do
     %{type: type, shape: shape} = Nx.devectorize(t)
 
-    nx_type = to_nx_type(exla_shape.dtype)
-    nx_shape = exla_shape.dims
+    nx_type = to_nx_type(typespec.type)
+    nx_shape = typespec.shape
 
     if type != nx_type do
       raise "internal bug! Nx.Defn expected a tensor with type #{inspect(type)} " <>
@@ -110,7 +110,7 @@ defmodule EXLA.Defn.Buffers do
       %EXLA.Backend{buffer: %EXLA.DeviceBuffer{ref: ref} = buffer}
       when node(ref) != node() ->
         binary = :erpc.call(node(ref), EXLA.DeviceBuffer, :read, [buffer])
-        EXLA.BinaryBuffer.from_binary(binary, to_exla_shape(tensor))
+        EXLA.BinaryBuffer.from_binary(binary, to_typespec(tensor))
 
       %EXLA.Backend{buffer: %EXLA.DeviceBuffer{} = buffer}
       when transfer? and buffer.client_name != executable.client.name
@@ -151,9 +151,9 @@ defmodule EXLA.Defn.Buffers do
               "cannot pass a tensor expression as argument to defn, got: #{inspect(tensor)}"
 
       _ ->
-        EXLA.BinaryBuffer.from_binary(Nx.to_binary(tensor), to_exla_shape(tensor))
+        EXLA.BinaryBuffer.from_binary(Nx.to_binary(tensor), to_typespec(tensor))
     end
   end
 
-  defp to_exla_shape(%Nx.Tensor{type: type, shape: shape}), do: EXLA.Shape.make_shape(type, shape)
+  defp to_typespec(%Nx.Tensor{type: type, shape: shape}), do: EXLA.Typespec.tensor(type, shape)
 end

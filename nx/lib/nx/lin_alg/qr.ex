@@ -95,20 +95,22 @@ defmodule Nx.LinAlg.QR do
   defnp norm(x) do
     case Nx.type(x) do
       {:c, _} ->
-        Nx.sqrt(Nx.dot(x, Nx.conjugate(x)))
+        n = Nx.dot(x, Nx.conjugate(x))
+        {Nx.sqrt(n), n}
 
       _ ->
-        Nx.sqrt(Nx.dot(x, x))
+        n = Nx.dot(x, x)
+        {Nx.sqrt(n), n}
     end
   end
 
   defn householder_reflector(x, i, eps) do
     # x is a {n} tensor
-    norm_x = norm(x)
+    {norm_x, norm_x_sq} = norm(x)
 
     x_i = x[i]
 
-    norm_sq_1on = norm_x ** 2 - Nx.abs(x_i) ** 2
+    norm_sq_1on = norm_x_sq - Nx.abs(x_i) ** 2
 
     {v, scale} =
       case Nx.type(x) do
@@ -117,29 +119,24 @@ defmodule Nx.LinAlg.QR do
           arg = Nx.complex(0, phase)
           alpha = Nx.exp(arg) * norm_x
           u = Nx.indexed_add(x, Nx.new_axis(i, 0), alpha)
-          v = u / norm(u)
+          {n_u, _} = norm(u)
+          v = u / n_u
           {v, 2}
 
         _type ->
-          cond do
-            norm_sq_1on < eps ->
-              v = Nx.put_slice(x, [i], Nx.tensor([1], type: Nx.type(x)))
-              {v, 0}
+          v_0 = Nx.select(x_i <= 0, x_i - norm_x, -norm_sq_1on / (x_i + norm_x))
 
-            true ->
-              v_0 =
-                if x_i <= 0 do
-                  x_i - norm_x
-                else
-                  -norm_sq_1on / (x_i + norm_x)
-                end
+          norm_selector = norm_sq_1on < eps
 
-              v = Nx.put_slice(x, [i], Nx.reshape(v_0, {1}))
-              v = v / v_0
-              scale = 2 / Nx.dot(v, v)
+          replace_value =
+            Nx.select(norm_selector, Nx.tensor([1], type: x.type), Nx.reshape(v_0, {1}))
 
-              {v, scale}
-          end
+          v = Nx.put_slice(x, [i], replace_value)
+          v = v / Nx.select(norm_selector, 1, v_0)
+          {_, n_v_sq} = norm(v)
+          scale_den = Nx.select(norm_selector, 1, n_v_sq)
+          scale = Nx.select(norm_selector, 0, 2 / scale_den)
+          {v, scale}
       end
 
     selector = Nx.iota({Nx.size(x)}) |> Nx.greater_equal(i) |> then(&Nx.outer(&1, &1))

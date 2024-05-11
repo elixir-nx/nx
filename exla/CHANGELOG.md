@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.7.1 (2024-02-27)
+
+  * Add CustomCallOp for QR decomposition
+  * Minor improvements to the MLIR modules generated
+  * MLIR Context pooling for better concurrency
+
+## v0.7.0 (2024-02-22)
+
+  * Update to latest Nx
+  * Introduce a `:mlir` based compiler and use it by default. The previous `:xla` based compiler is deprecatead. You can temporarily revert to the previous compiler by setting `config :exla, :compiler_mode, :xla`
+
 ## v0.6.4 (2023-11-13)
 
   * Update to latest Nx

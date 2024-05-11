@@ -51,9 +51,15 @@ defmodule EXLA.Defn.LockedCache do
     end
   end
 
+  ## ETS functions
+
   defp init(), do: :ets.new(@name, [:public, :set, :named_table, read_concurrency: true])
+
   defp write(key, value), do: :ets.insert(@name, {key, value})
-  defp hard_read(key), do: :ets.lookup_element(@name, key, 2)
+
+  defp hard_read(key) do
+    :ets.lookup_element(@name, key, 2)
+  end
 
   defp soft_read(key) do
     try do
@@ -82,6 +88,9 @@ defmodule EXLA.Defn.LockedCache do
       %{^key => {ref, waiting}} ->
         {:noreply, put_in(state.keys[key], {ref, [from | waiting]})}
 
+      %{^key => :cached} ->
+        {:reply, :cached, state}
+
       %{} ->
         {:noreply, lock(key, from, [], state)}
     end
@@ -91,9 +100,9 @@ defmodule EXLA.Defn.LockedCache do
   def handle_cast({:cached, ref}, state) do
     Process.demonitor(ref, [:flush])
     {key, state} = pop_in(state.ref_to_key[ref])
-    {{^ref, waiting}, state} = pop_in(state.keys[key])
+    {^ref, waiting} = state.keys[key]
     for from <- waiting, do: GenServer.reply(from, :cached)
-    {:noreply, state}
+    {:noreply, put_in(state.keys[key], :cached)}
   end
 
   @impl true

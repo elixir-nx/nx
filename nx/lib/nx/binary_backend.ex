@@ -162,6 +162,16 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
+  def from_pointer(_, _, _, _, _) do
+    raise ArgumentError, "#{inspect(__MODULE__)} does not support pointer manipulation"
+  end
+
+  @impl true
+  def to_pointer(_, _) do
+    raise ArgumentError, "#{inspect(__MODULE__)} does not support pointer manipulation"
+  end
+
+  @impl true
   def to_batched(out, %{type: {_, size}} = tensor, opts) do
     leftover = opts[:leftover]
 
@@ -2039,24 +2049,45 @@ defmodule Nx.BinaryBackend do
     |> then(&from_binary(out, &1))
   end
 
-  defp bin_concatenate(binaries_with_shape, _size, 0, _output_shape) do
-    binaries_with_shape |> Enum.map(&elem(&1, 0)) |> IO.iodata_to_binary()
+  defp bin_concatenate(binaries_shapes, _size, 0, _output_shape) do
+    binaries_shapes |> Enum.map(&elem(&1, 0)) |> IO.iodata_to_binary()
   end
 
-  defp bin_concatenate(binaries_with_shape, size, axis, output_shape) do
+  defp bin_concatenate(binaries_shapes, size, axis, output_shape) do
     rank = tuple_size(output_shape)
     steps = product_part(output_shape, 0, axis)
 
-    data =
-      for step <- 1..steps,
-          {binary, shape} <- binaries_with_shape do
-        product = product_part(shape, axis, rank) * size
-        before = (step - 1) * product
-        <<_::bitstring-size(before), part::bitstring-size(product), _::bitstring>> = binary
-        part
-      end
+    # We don't use lists plus IO.iodata_to_binary on purpose.
+    # Because the number of steps can be really large, we could create large
+    # intermediate lists. So we build the binary directly.
+    bin_concatenate_outer(0, steps, binaries_shapes, "", fn binary, shape, step ->
+      product = product_part(shape, axis, rank) * size
+      before = step * product
+      <<_::bitstring-size(before), part::bitstring-size(product), _::bitstring>> = binary
+      part
+    end)
+  end
 
-    IO.iodata_to_binary(data)
+  defp bin_concatenate_outer(limit, limit, _binaries_shapes, acc, _fun), do: acc
+
+  defp bin_concatenate_outer(step, limit, binaries_shapes, acc, fun) do
+    bin_concatenate_inner(binaries_shapes, step, acc, fun, {limit, binaries_shapes})
+  end
+
+  defp bin_concatenate_inner([{binary, shape} | binaries_shapes], step, acc, fun, next_outer) do
+    part = fun.(binary, shape, step)
+
+    bin_concatenate_inner(
+      binaries_shapes,
+      step,
+      <<acc::bitstring, part::bitstring>>,
+      fun,
+      next_outer
+    )
+  end
+
+  defp bin_concatenate_inner([], step, acc, fun, {limit, binaries_shapes}) do
+    bin_concatenate_outer(step + 1, limit, binaries_shapes, acc, fun)
   end
 
   defp product_part(_tuple, n, n), do: 1
