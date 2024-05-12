@@ -7876,6 +7876,8 @@ defmodule Nx do
   end
 
   defp indexed_axes(tensor, indices, opts) do
+    n = elem(indices.shape, tuple_size(indices.shape) - 1)
+
     if axes = opts[:axes] do
       axes = Nx.Shape.normalize_axes(tensor.shape, axes, tensor.names)
 
@@ -7884,9 +7886,13 @@ defmodule Nx do
         _, _ -> raise ArgumentError, ":axes must be an ordered list"
       end)
 
+      if length(axes) != n do
+        raise ArgumentError,
+              ":axes must have the same number of elements as the last dimension of indices"
+      end
+
       axes
     else
-      n = elem(indices.shape, tuple_size(indices.shape) - 1)
       Enum.to_list(0..(n - 1))
     end
   end

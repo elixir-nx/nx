@@ -1285,7 +1285,8 @@ defmodule EXLA.Defn do
     tensor_shape = op_shape(tensor)
     tensor_rank = tuple_size(tensor_shape)
     tensor_axes = axes_for_rank(tensor_rank)
-    index_vector_dim = tuple_size(op_shape(indices)) - 1
+    indices_rank = tuple_size(op_shape(indices))
+    index_vector_dim = indices_rank - 1
 
     slice_sizes =
       for i <- tensor_axes do
@@ -1293,7 +1294,8 @@ defmodule EXLA.Defn do
       end
 
     batch_size = tensor_rank - length(axes)
-    offset_dims = count_up(batch_size, batch_size)
+    offset_size = indices_rank - length(axes)
+    offset_dims = count_up(batch_size, offset_size)
 
     Value.gather(
       tensor,
