@@ -1940,47 +1940,6 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def take(out, tensor, indices, axis) do
-    # We iterate over the indices in a flat manner,
-    # and take a unit tensor slice along axis given
-    # by each index. Then we concatenate the tensors
-    # along the axis, which gives us the result with
-    # index dimensions flattened and we just reshape.
-
-    %T{type: {_, size}, shape: shape} = tensor
-    %T{type: {_, idx_size}} = indices
-
-    data = to_binary(tensor)
-    tensor_rank = tuple_size(shape)
-    slice_start = List.duplicate(0, tensor_rank)
-    slice_lengths = shape |> Tuple.to_list() |> List.replace_at(axis, 1)
-    slice_shape = List.to_tuple(slice_lengths)
-    strides = List.duplicate(1, tensor_rank)
-
-    slices =
-      for <<bin::size(idx_size)-bitstring <- to_binary(indices)>> do
-        idx = binary_to_number(bin, indices.type)
-
-        if idx < 0 or idx >= elem(shape, axis) do
-          raise ArgumentError,
-                "index #{idx} is out of bounds for axis #{axis} in shape #{inspect(shape)}"
-        end
-
-        slice_start = List.replace_at(slice_start, axis, idx)
-
-        slice_data =
-          bin_slice(data, shape, size, slice_start, slice_lengths, strides, slice_shape)
-
-        {slice_data, slice_shape}
-      end
-
-    concat_shape = put_elem(tensor.shape, axis, length(slices))
-    result_data = bin_concatenate(slices, size, axis, concat_shape)
-
-    from_binary(out, result_data)
-  end
-
-  @impl true
   def take_along_axis(
         %T{type: output_type} = output,
         %T{shape: t_shape, type: {_, t_size} = t_type} = tensor,

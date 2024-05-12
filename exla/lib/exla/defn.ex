@@ -1220,29 +1220,6 @@ defmodule EXLA.Defn do
     Value.dynamic_update_slice(tensor, slice, start_indices, expr_to_typespec(ans))
   end
 
-  defp to_operator(:take, [%Value{} = tensor, indices, axis], ans, _state) do
-    tensor_rank = tensor |> op_shape() |> tuple_size()
-    indices_rank = indices |> op_shape() |> tuple_size()
-    result_rank = tensor_rank - 1 + indices_rank
-
-    index_vector_dim = indices_rank
-    slice_sizes = tensor |> op_shape() |> put_elem(axis, 1) |> Tuple.to_list()
-    offset_dims = result_rank |> axes_for_rank() |> delete_slice(axis, indices_rank)
-    collapsed_slice_dims = [axis]
-    start_index_map = [axis]
-
-    Value.gather(
-      tensor,
-      indices,
-      index_vector_dim,
-      slice_sizes,
-      offset_dims,
-      collapsed_slice_dims,
-      start_index_map,
-      expr_to_typespec(ans)
-    )
-  end
-
   defp to_operator(:take_along_axis, [%Value{} = tensor, indices, axis], ans, state) do
     %{shape: indices_shape} = indices_typespec = Value.get_typespec(indices)
     indices_rank = tuple_size(indices_shape)
@@ -1961,11 +1938,6 @@ defmodule EXLA.Defn do
   end
 
   # Helpers
-
-  defp delete_slice(enumerable, index, length) do
-    {left, right} = Enum.split(enumerable, index)
-    left ++ Enum.drop(right, length)
-  end
 
   defp apply_mlir_broadcasted_bin_op(op, out, left, right) do
     left_typespec = Value.get_typespec(left)

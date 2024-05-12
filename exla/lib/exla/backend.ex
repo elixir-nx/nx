@@ -325,7 +325,6 @@ defmodule EXLA.Backend do
       {:reverse, [:tensor, :axes], [:tensor]},
       {:dot, [:left, :c1, :b1, :right, :c2, :b2], [:left, :right]},
       {:clip, [:tensor, :min, :max], [:tensor, :min, :max]},
-      {:take, [:tensor, :indices, :axis], [:tensor, :indices]},
       {:take_along_axis, [:tensor, :indices, :axis], [:tensor, :indices]},
       {:gather, [:input, :indices, :opts], [:input, :indices]},
       {:select, [:pred, :on_true, :on_false], [:pred, :on_true, :on_false]},
