@@ -598,8 +598,49 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(
          :optional,
-         %T{data: %Expr{args: [%{data: %{op: :top_k, args: [tensor, opts]}}, expr, _callback]}} =
-           _out,
+         %T{
+           data: %Expr{
+             args: [%{data: %{op: :take, args: [tensor, indices, opts]}}, expr, _callback]
+           }
+         },
+         state,
+         cache
+       ) do
+    axis = opts[:axis]
+    {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
+    {indices, cache} = recur_operator(indices, state, cache) |> unwrap_single_tensor!()
+
+    tensor_rank = tensor |> op_shape() |> tuple_size()
+    indices_rank = indices |> op_shape() |> tuple_size()
+    result_rank = tensor_rank - 1 + indices_rank
+
+    index_vector_dim = indices_rank
+    slice_sizes = tensor |> op_shape() |> put_elem(axis, 1) |> Tuple.to_list()
+
+    {left, right} = result_rank |> axes_for_rank() |> Enum.split(axis)
+    offset_dims = left ++ Enum.drop(right, indices_rank)
+
+    collapsed_slice_dims = [axis]
+    start_index_map = [axis]
+
+    result =
+      Value.gather(
+        tensor,
+        indices,
+        index_vector_dim,
+        slice_sizes,
+        offset_dims,
+        collapsed_slice_dims,
+        start_index_map,
+        expr_to_typespec(expr)
+      )
+
+    {result, cache}
+  end
+
+  defp cached_recur_operator(
+         :optional,
+         %T{data: %Expr{args: [%{data: %{op: :top_k, args: [tensor, opts]}}, expr, _callback]}},
          state,
          cache
        ) do
@@ -612,26 +653,24 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(
          :optional,
-         %T{data: %Expr{args: [%{data: %{op: :fft2, args: [tensor, opts]}}, _expr, _callback]}} =
-           out,
+         %T{data: %Expr{args: [%{data: %{op: :fft2, args: [tensor, opts]}}, expr, _callback]}},
          state,
          cache
        ) do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
-    {fft2(&Value.fft(&1, :fft, &2, &3), [tensor, opts], out, state), cache}
+    {fft2(&Value.fft(&1, :fft, &2, &3), [tensor, opts], expr, state), cache}
   end
 
   defp cached_recur_operator(
          :optional,
-         %T{data: %Expr{args: [%{data: %{op: :ifft2, args: [tensor, opts]}}, _expr, _callback]}} =
-           out,
+         %T{data: %Expr{args: [%{data: %{op: :ifft2, args: [tensor, opts]}}, expr, _callback]}},
          state,
          cache
        ) do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
-    {fft2(&Value.fft(&1, :ifft, &2, &3), [tensor, opts], out, state), cache}
+    {fft2(&Value.fft(&1, :ifft, &2, &3), [tensor, opts], expr, state), cache}
   end
 
   defp cached_recur_operator(:optional, %T{data: %Expr{args: args}}, state, cache) do

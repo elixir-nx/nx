@@ -14130,17 +14130,20 @@ defmodule Nx do
     else
       tensor = devectorize(tensor, keep_names: false)
       indices = devectorize(indices, keep_names: false)
-      gather_indices = new_axis(indices, rank(indices))
+      out = %{tensor | shape: inner_shape, names: inner_names}
 
-      {indices_axes, tensor_axes} = Enum.split(axes(inner_shape), rank(indices))
-      {leading, trailing} = Enum.split(tensor_axes, axis)
+      Nx.Shared.optional(:take, [tensor, indices, [axis: axis]], out, fn tensor, indices, _opts ->
+        gather_indices = new_axis(indices, rank(indices))
+        {indices_axes, tensor_axes} = Enum.split(axes(inner_shape), rank(indices))
+        {leading, trailing} = Enum.split(tensor_axes, axis)
 
-      transpose_axes = leading ++ indices_axes ++ trailing
+        transpose_axes = leading ++ indices_axes ++ trailing
 
-      tensor
-      |> gather(gather_indices, axes: [axis])
-      |> transpose(axes: transpose_axes)
-      |> reshape(inner_shape, names: inner_names)
+        tensor
+        |> gather(gather_indices, axes: [axis])
+        |> transpose(axes: transpose_axes)
+        |> reshape(inner_shape, names: inner_names)
+      end)
     end
   end
 
