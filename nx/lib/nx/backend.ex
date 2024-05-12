@@ -158,6 +158,7 @@ defmodule Nx.Backend do
 
   @callback all_close(out :: tensor, tensor, tensor, keyword) :: tensor
   @callback top_k(out :: tensor, tensor, keyword) :: tensor
+  @callback take(out :: tensor, input :: tensor, indices :: tensor, keyword) :: tensor
 
   @optional_callbacks [
     optional: 3,
@@ -176,7 +177,8 @@ defmodule Nx.Backend do
     ifft2: 3,
     qr: 3,
     cholesky: 2,
-    eigh: 3
+    eigh: 3,
+    take: 4
   ]
 
   ## Inspect implementation
