@@ -620,6 +620,21 @@ defmodule Nx.Defn.Grad do
     [{x, g}]
   end
 
+  defp grad(:stack, [tensors, axis], ans, g) do
+    zero_axes = List.duplicate(0, Nx.rank(ans))
+    ans_shape_list = Tuple.to_list(ans.shape)
+
+    {pairs, _} =
+      Enum.map_reduce(tensors, 0, fn t, limit ->
+        current_limit = 1 + limit
+        start = List.replace_at(zero_axes, axis, limit)
+        len = List.replace_at(ans_shape_list, axis, 1)
+        {{t, Nx.slice(g, start, len)}, current_limit}
+      end)
+
+    pairs
+  end
+
   defp grad(:concatenate, [tensors, axis], ans, g) do
     zero_axes = List.duplicate(0, Nx.rank(ans))
     ans_shape_list = Tuple.to_list(ans.shape)

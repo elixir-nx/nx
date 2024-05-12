@@ -1312,10 +1312,13 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(:concatenate, [[%Value{} | _rest] = tensors, axis], ans, _state) do
-    tensors =
-      tensors
-      |> Enum.map(&to_type(&1, ans.type))
+    tensors = Enum.map(tensors, &to_type(&1, ans.type))
+    Value.concatenate(tensors, axis, expr_to_typespec(ans))
+  end
 
+  defp to_operator(:stack, [[%Value{} | _rest] = tensors, axis], ans, _state) do
+    reshape_typespec = Typespec.tensor(ans.type, put_elem(ans.shape, axis, 1))
+    tensors = Enum.map(tensors, &(&1 |> to_type(ans.type) |> Value.reshape(reshape_typespec)))
     Value.concatenate(tensors, axis, expr_to_typespec(ans))
   end
 

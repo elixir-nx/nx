@@ -338,6 +338,16 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def stack(out, tensors, axis) do
+    reshape = put_elem(out.shape, axis, 1)
+
+    tensors
+    |> Enum.map(&(&1 |> from_nx() |> Torchx.reshape(reshape)))
+    |> Torchx.concatenate(axis)
+    |> to_nx(out)
+  end
+
+  @impl true
   def take(out, t, i, axis) do
     axes = Nx.axes(t)
 

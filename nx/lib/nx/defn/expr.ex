@@ -1214,6 +1214,12 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
+  def stack(out, tensors, axis) do
+    {tensors, context} = to_exprs(tensors)
+    expr(out, context, :stack, [tensors, axis])
+  end
+
+  @impl true
   def triangular_solve(out, a, b, opts) do
     {[a, b], context} = to_exprs([a, b])
     expr(out, context, :triangular_solve, [a, b, opts])

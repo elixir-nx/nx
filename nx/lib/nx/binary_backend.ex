@@ -2078,6 +2078,19 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
+  def stack(out, tensors, axis) do
+    %{shape: output_shape, type: {_, size} = output_type} = out
+
+    tensors
+    |> Enum.map(fn %{shape: shape} = t ->
+      t = as_type(%{t | type: output_type}, t)
+      {to_binary(t), Tuple.insert_at(shape, axis, 1)}
+    end)
+    |> bin_concatenate(size, axis, output_shape)
+    |> then(&from_binary(out, &1))
+  end
+
+  @impl true
   def concatenate(out, tensors, axis) do
     %{shape: output_shape, type: {_, size} = output_type} = out
 

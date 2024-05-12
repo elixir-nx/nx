@@ -77,6 +77,7 @@ defmodule Nx.Backend do
   @callback take_along_axis(out :: tensor, input :: tensor, indices :: tensor, axis) :: tensor
   @callback gather(out :: tensor, input :: tensor, indices :: tensor, keyword) :: tensor
   @callback concatenate(out :: tensor, tensor, axis) :: tensor
+  @callback stack(out :: tensor, tensor, axis) :: tensor
   @callback select(out :: tensor, tensor, tensor, tensor) :: tensor
 
   @callback conv(out :: tensor, tensor, kernel :: tensor, keyword) :: tensor

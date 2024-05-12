@@ -3251,20 +3251,9 @@ defmodule Nx do
   """
   @doc type: :shape, from_backend: false
   def new_axis(tensor, axis, name \\ nil) when is_integer(axis) do
-    apply_vectorized(tensor, fn tensor, offset ->
-      %{shape: shape, names: names} = tensor = to_tensor(tensor)
-      rank = tuple_size(shape)
-      norm = if axis < 0, do: axis + rank + 1, else: axis + offset
-
-      if norm not in offset..tuple_size(shape) do
-        raise ArgumentError,
-              "new axis position for shape #{inspect(shape)} must be " <>
-                "a number between #{-rank - 1 + offset} and #{rank - offset}, got: #{axis}"
-      end
-
-      new_shape = Tuple.insert_at(shape, norm, 1)
-      new_names = List.insert_at(names, norm, name)
-      impl!(tensor).reshape(%{tensor | shape: new_shape, names: new_names}, tensor)
+    apply_vectorized(tensor, fn %{shape: shape, names: names} = tensor, offset ->
+      {shape, names, _axis} = Nx.Shape.new_axis(shape, names, axis, name, 1, offset)
+      impl!(tensor).reshape(%{tensor | shape: shape, names: names}, tensor)
     end)
   end
 
@@ -14632,28 +14621,35 @@ defmodule Nx do
         t
 
       [_ | _] = tensors ->
-        [%T{vectorized_axes: vectorized_axes} | _] =
-          tensors = broadcast_vectors(tensors, align_ranks: true)
-
-        offset = length(vectorized_axes)
-        tensors = if vectorized_axes != [], do: Enum.map(tensors, &devectorize/1), else: tensors
-
-        {types, [s1 | _] = shapes, [n1 | _] = names} =
-          Enum.reduce(tensors, {[], [], []}, fn
-            %T{type: t, shape: s, names: n}, {types, shapes, names} ->
-              {[t | types], [s | shapes], [n | names]}
-          end)
-
-        axis = Nx.Shape.normalize_axis(s1, axis, n1, offset)
-        output_type = Enum.reduce(types, &Nx.Type.merge/2)
-
-        {output_shape, output_names} =
-          Nx.Shape.concatenate(Enum.reverse(shapes), Enum.reverse(names), axis)
-
-        out = %{hd(tensors) | type: output_type, shape: output_shape, names: output_names}
-        result = list_impl!(tensors).concatenate(out, tensors, axis)
-        vectorize(result, vectorized_axes)
+        concatenate_or_stack(
+          tensors,
+          fn shapes, names, offset -> Nx.Shape.concatenate(shapes, names, axis, offset) end,
+          fn out, tensors, axis -> list_impl!(tensors).concatenate(out, tensors, axis) end
+        )
     end
+  end
+
+  defp concatenate_or_stack(tensors, shape_and_name, callback) do
+    [%T{vectorized_axes: vectorized_axes} | _] =
+      tensors = broadcast_vectors(tensors, align_ranks: true)
+
+    offset = length(vectorized_axes)
+    tensors = if vectorized_axes != [], do: Enum.map(tensors, &devectorize/1), else: tensors
+
+    {types, shapes, names} =
+      Enum.reduce(tensors, {[], [], []}, fn
+        %T{type: t, shape: s, names: n}, {types, shapes, names} ->
+          {[t | types], [s | shapes], [n | names]}
+      end)
+
+    output_type = Enum.reduce(types, &Nx.Type.merge/2)
+
+    {output_shape, output_names, axis} =
+      shape_and_name.(Enum.reverse(shapes), Enum.reverse(names), offset)
+
+    out = %{hd(tensors) | type: output_type, shape: output_shape, names: output_names}
+    result = callback.(out, tensors, axis)
+    vectorize(result, vectorized_axes)
   end
 
   defp flatten_list_or_container(list) when is_list(list) do
@@ -14771,16 +14767,26 @@ defmodule Nx do
       >
 
   """
-  @doc type: :ndim, from_backend: false
+  @doc type: :ndim
   def stack(tensors, opts \\ []) do
     opts = keyword!(opts, axis: 0, name: nil)
     axis = opts[:axis]
     name = opts[:name]
 
-    tensors
-    |> flatten_list_or_container()
-    |> Enum.map(&Nx.new_axis(&1, axis, name))
-    |> Nx.concatenate(axis: axis)
+    case flatten_list_or_container(tensors) do
+      [] ->
+        raise ArgumentError, "no tensors were given to stack"
+
+      [t] ->
+        Nx.new_axis(t, axis, name)
+
+      [_ | _] = tensors ->
+        concatenate_or_stack(
+          tensors,
+          fn shapes, names, offset -> Nx.Shape.stack(shapes, names, axis, name, offset) end,
+          fn out, tensors, axis -> list_impl!(tensors).stack(out, tensors, axis) end
+        )
+    end
   end
 
   @doc """
