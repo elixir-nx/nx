@@ -14132,7 +14132,7 @@ defmodule Nx do
       indices = devectorize(indices, keep_names: false)
       out = %{tensor | shape: inner_shape, names: inner_names}
 
-      Nx.Shared.optional(:take, [tensor, indices, [axis: axis]], out, fn tensor, indices, _opts ->
+      Nx.Shared.optional(:take, [tensor, indices, axis], out, fn tensor, indices, axis ->
         gather_indices = new_axis(indices, rank(indices))
         {indices_axes, tensor_axes} = Enum.split(axes(inner_shape), rank(indices))
         {leading, trailing} = Enum.split(tensor_axes, axis)
@@ -14321,12 +14321,20 @@ defmodule Nx do
   Builds a new tensor by taking individual values from the original
   tensor at the given indices.
 
+  Indices must be a tensor where the last dimension is usually of the
+  same size as the `tensor` rank. Each entry in `indices` will be
+  part of the results. If the last dimension of indices is less than
+  the `tensor` rank, then a multidimensional tensor is gathered and
+  spliced into the result.
+
   ## Options
 
-    * `:axes` - controls which dimensions the indexes apply to.
-      It must be a sorted list of axes and be of the same size
-      as the second (last) dimension of the indexes tensor.
-      It defaults to the leading axes of the tensor.
+    * `:axes` - controls to which dimensions of `tensor`
+      each element in the last dimension of `indexes` applies to.
+      It defaults so the first element in indexes apply to the first
+      axis, the second to the second, and so on. It must be a sorted
+      list of axes and be of the same size as the last dimension of
+      the indexes tensor.
 
   ## Examples
 
