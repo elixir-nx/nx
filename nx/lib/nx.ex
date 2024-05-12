@@ -14132,7 +14132,7 @@ defmodule Nx do
       indices = devectorize(indices, keep_names: false)
       out = %{tensor | shape: inner_shape, names: inner_names}
 
-      Nx.Shared.optional(:take, [tensor, indices, axis], out, fn tensor, indices, axis ->
+      Nx.Shared.optional(:take, [tensor, indices, [axis: axis]], out, fn tensor, indices, _opts ->
         gather_indices = new_axis(indices, rank(indices))
         {indices_axes, tensor_axes} = Enum.split(axes(inner_shape), rank(indices))
         {leading, trailing} = Enum.split(tensor_axes, axis)
