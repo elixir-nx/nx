@@ -7865,6 +7865,8 @@ defmodule Nx do
   end
 
   defp indexed_axes(tensor, indices, opts) do
+    n = elem(indices.shape, tuple_size(indices.shape) - 1)
+
     if axes = opts[:axes] do
       axes = Nx.Shape.normalize_axes(tensor.shape, axes, tensor.names)
 
@@ -7873,9 +7875,13 @@ defmodule Nx do
         _, _ -> raise ArgumentError, ":axes must be an ordered list"
       end)
 
+      if length(axes) != n do
+        raise ArgumentError,
+              ":axes must have the same number of elements as the last dimension of indices"
+      end
+
       axes
     else
-      n = elem(indices.shape, tuple_size(indices.shape) - 1)
       Enum.to_list(0..(n - 1))
     end
   end
@@ -14113,13 +14119,20 @@ defmodule Nx do
     else
       tensor = devectorize(tensor, keep_names: false)
       indices = devectorize(indices, keep_names: false)
+      out = %{tensor | shape: inner_shape, names: inner_names}
 
-      impl!(tensor).take(
-        %{tensor | shape: inner_shape, names: inner_names},
-        tensor,
-        indices,
-        axis
-      )
+      Nx.Shared.optional(:take, [tensor, indices, [axis: axis]], out, fn tensor, indices, _opts ->
+        gather_indices = new_axis(indices, rank(indices))
+        {indices_axes, tensor_axes} = Enum.split(axes(inner_shape), rank(indices))
+        {leading, trailing} = Enum.split(tensor_axes, axis)
+
+        transpose_axes = leading ++ indices_axes ++ trailing
+
+        tensor
+        |> gather(gather_indices, axes: [axis])
+        |> transpose(axes: transpose_axes)
+        |> reshape(inner_shape, names: inner_names)
+      end)
     end
   end
 
@@ -14297,12 +14310,20 @@ defmodule Nx do
   Builds a new tensor by taking individual values from the original
   tensor at the given indices.
 
+  Indices must be a tensor where the last dimension is usually of the
+  same size as the `tensor` rank. Each entry in `indices` will be
+  part of the results. If the last dimension of indices is less than
+  the `tensor` rank, then a multidimensional tensor is gathered and
+  spliced into the result.
+
   ## Options
 
-    * `:axes` - controls which dimensions the indexes apply to.
-      It must be a sorted list of axes and be of the same size
-      as the second (last) dimension of the indexes tensor.
-      It defaults to the leading axes of the tensor.
+    * `:axes` - controls to which dimensions of `tensor`
+      each element in the last dimension of `indexes` applies to.
+      It defaults so the first element in indexes apply to the first
+      axis, the second to the second, and so on. It must be a sorted
+      list of axes and be of the same size as the last dimension of
+      the indexes tensor.
 
   ## Examples
 

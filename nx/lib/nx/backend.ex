@@ -73,7 +73,6 @@ defmodule Nx.Backend do
   @callback clip(out :: tensor, tensor, min :: tensor, max :: tensor) :: tensor
   @callback slice(out :: tensor, tensor, list, list, list) :: tensor
   @callback put_slice(out :: tensor, tensor, tensor, list) :: tensor
-  @callback take(out :: tensor, input :: tensor, indices :: tensor, axis) :: tensor
   @callback take_along_axis(out :: tensor, input :: tensor, indices :: tensor, axis) :: tensor
   @callback gather(out :: tensor, input :: tensor, indices :: tensor, keyword) :: tensor
   @callback concatenate(out :: tensor, tensor, axis) :: tensor
@@ -160,6 +159,7 @@ defmodule Nx.Backend do
 
   @callback all_close(out :: tensor, tensor, tensor, keyword) :: tensor
   @callback top_k(out :: tensor, tensor, keyword) :: tensor
+  @callback take(out :: tensor, input :: tensor, indices :: tensor, keyword) :: tensor
 
   @optional_callbacks [
     optional: 3,
@@ -178,7 +178,8 @@ defmodule Nx.Backend do
     ifft2: 3,
     qr: 3,
     cholesky: 2,
-    eigh: 3
+    eigh: 3,
+    take: 4
   ]
 
   ## Inspect implementation
