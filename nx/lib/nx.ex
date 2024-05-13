@@ -14142,7 +14142,7 @@ defmodule Nx do
         tensor
         |> gather(gather_indices, axes: [axis])
         |> transpose(axes: transpose_axes)
-        |> reshape(inner_shape, names: inner_names)
+        |> rename(inner_names)
       end)
     end
   end
@@ -14302,17 +14302,32 @@ defmodule Nx do
     end
 
     opts = keyword!(opts, axis: 0)
-
     tensor = devectorize(tensor, keep_names: false)
     indices = devectorize(indices, keep_names: false)
-
     offset = length(vectorized_axes)
 
     axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names, offset)
-
     shape = Nx.Shape.take_along_axis(tensor.shape, indices.shape, axis)
+    out = %{tensor | shape: shape}
 
-    result = impl!(tensor).take_along_axis(%{tensor | shape: shape}, tensor, indices, axis)
+    result =
+      Nx.Shared.optional(:take_along_axis, [tensor, indices, [axis: axis]], out, fn
+        tensor, indices, _opts ->
+          axes_range = axes(indices)
+          new_axis_shape = Tuple.append(shape(indices), 1)
+
+          full_indices =
+            axes_range
+            |> Enum.map(fn
+              ^axis -> reshape(indices, new_axis_shape)
+              axis -> iota(new_axis_shape, axis: axis)
+            end)
+            |> concatenate(axis: rank(indices))
+
+          tensor
+          |> gather(full_indices)
+          |> rename(tensor.names)
+      end)
 
     vectorize(result, vectorized_axes)
   end

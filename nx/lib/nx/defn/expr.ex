@@ -1184,12 +1184,6 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def take_along_axis(out, tensor, indices, axis) do
-    {[tensor, indices], context} = to_exprs([tensor, indices])
-    expr(out, context, :take_along_axis, [tensor, indices, axis])
-  end
-
-  @impl true
   def gather(out, tensor, indices, opts) do
     {[tensor, indices], context} = to_exprs([tensor, indices])
     expr(out, context, :gather, [tensor, indices, opts])
