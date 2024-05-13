@@ -14312,7 +14312,14 @@ defmodule Nx do
 
     shape = Nx.Shape.take_along_axis(tensor.shape, indices.shape, axis)
 
-    result = impl!(tensor).take_along_axis(%{tensor | shape: shape}, tensor, indices, axis)
+    out = %{tensor | shape: shape}
+
+    result =
+      Nx.Shared.optional(:take_along_axis, [tensor, indices, axis], out, fn _tensor,
+                                                                            _indices,
+                                                                            _axis ->
+        out
+      end)
 
     vectorize(result, vectorized_axes)
   end
