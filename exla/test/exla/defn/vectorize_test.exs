@@ -333,7 +333,15 @@ defmodule EXLA.Defn.VectorizeTest do
 
     test "2 vectorized preds with different axes" do
       assert_equal(
-        cond4(Nx.vectorize(~VEC[0 1 0], :pred1), 10, Nx.vectorize(~VEC[1 0], :pred2), 20, 0, 30, 40),
+        cond4(
+          Nx.vectorize(~VEC[0 1 0], :pred1),
+          10,
+          Nx.vectorize(~VEC[1 0], :pred2),
+          20,
+          0,
+          30,
+          40
+        ),
         Nx.vectorize(~MAT[
               20 40
               10 10
