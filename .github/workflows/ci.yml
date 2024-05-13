@@ -57,7 +57,7 @@ jobs:
       fail-fast: false
       matrix:
         working_directory: ["nx", "torchx"]
-        elixir: ["1.15.4"]
+        elixir: ["1.16.2"]
         otp: ["25.2"]
     defaults:
       run:
