@@ -87,14 +87,14 @@ defmodule Nx do
   is available:
 
       iex> import Nx, only: :sigils
-      iex> ~V[1 2 3]f32
+      iex> ~VEC[1 2 3]f32
       #Nx.Tensor<
         f32[3]
         [1.0, 2.0, 3.0]
       >
 
       iex> import Nx, only: :sigils
-      iex> ~M'''
+      iex> ~MAT'''
       ...> 1 2 3
       ...> 4 5 6
       ...> '''s32
@@ -8158,8 +8158,8 @@ defmodule Nx do
          0.0
        >
 
-       iex> import Nx, only: [sigil_V: 2]
-       iex> Nx.phase(~V[1+2i -2+1i])
+       iex> import Nx, only: [sigil_VEC: 2]
+       iex> Nx.phase(~VEC[1+2i -2+1i])
        #Nx.Tensor<
          f32[2]
          [1.1071487665176392, 2.677945137023926]
@@ -17070,8 +17070,30 @@ defmodule Nx do
 
   ## Sigils
 
+  @doc false
+  @deprecated "Use ~MAT instead"
+  defmacro sigil_M({:<<>>, _meta, [string]}, modifiers) do
+    {numbers, type} = string |> String.trim() |> binary_to_numbers()
+    numbers_to_tensor(numbers, type, modifiers)
+  end
+
+  @doc false
+  @deprecated "Use ~VEC instead"
+  defmacro sigil_V({:<<>>, _meta, [string]}, modifiers) do
+    string
+    |> String.trim()
+    |> binary_to_numbers()
+    |> case do
+      {[numbers], type} ->
+        numbers_to_tensor(numbers, type, modifiers)
+
+      _ ->
+        raise ArgumentError, "must be one-dimensional"
+    end
+  end
+
   @doc """
-  A convenient `~M` sigil for building matrices (two-dimensional tensors).
+  A convenient `~MAT` sigil for building matrices (two-dimensional tensors).
 
   ## Examples
 
@@ -17081,7 +17103,7 @@ defmodule Nx do
 
   Then you use the sigil to create matrices. The sigil:
 
-      ~M<
+      ~MAT<
         -1 0 0 1
         0 2 0 0
         0 0 3 0
@@ -17103,35 +17125,35 @@ defmodule Nx do
   as a sigil modifier:
 
       iex> import Nx, only: :sigils
-      iex> ~M[0.1 0.2 0.3 0.4]f16
+      iex> ~MAT[0.1 0.2 0.3 0.4]f16
       #Nx.Tensor<
         f16[1][4]
         [
           [0.0999755859375, 0.199951171875, 0.300048828125, 0.39990234375]
         ]
       >
-      iex> ~M[1+1i 2-2.0i -3]
+      iex> ~MAT[1+1i 2-2.0i -3]
       #Nx.Tensor<
         c64[1][3]
         [
           [1.0+1.0i, 2.0-2.0i, -3.0+0.0i]
         ]
       >
-      iex> ~M[1 Inf NaN]
+      iex> ~MAT[1 Inf NaN]
       #Nx.Tensor<
         f32[1][3]
         [
           [1.0, Inf, NaN]
         ]
       >
-      iex> ~M[1i Inf NaN]
+      iex> ~MAT[1i Inf NaN]
       #Nx.Tensor<
         c64[1][3]
         [
           [0.0+1.0i, Inf+0.0i, NaN+0.0i]
         ]
       >
-      iex> ~M[1i Inf+2i NaN-Infi]
+      iex> ~MAT[1i Inf+2i NaN-Infi]
       #Nx.Tensor<
         c64[1][3]
         [
@@ -17141,13 +17163,13 @@ defmodule Nx do
 
   """
   @doc type: :creation
-  defmacro sigil_M({:<<>>, _meta, [string]}, modifiers) do
+  defmacro sigil_MAT({:<<>>, _meta, [string]}, modifiers) do
     {numbers, type} = string |> String.trim() |> binary_to_numbers()
     numbers_to_tensor(numbers, type, modifiers)
   end
 
   @doc """
-  A convenient `~V` sigil for building vectors (one-dimensional tensors).
+  A convenient `~VEC` sigil for building vectors (one-dimensional tensors).
 
   ## Examples
 
@@ -17157,7 +17179,7 @@ defmodule Nx do
 
   Then you use the sigil to create vectors. The sigil:
 
-      ~V[-1 0 0 1]
+      ~VEC[-1 0 0 1]
 
   Is equivalent to:
 
@@ -17169,34 +17191,34 @@ defmodule Nx do
   as a sigil modifier:
 
       iex> import Nx, only: :sigils
-      iex> ~V[0.1 0.2 0.3 0.4]f16
+      iex> ~VEC[0.1 0.2 0.3 0.4]f16
       #Nx.Tensor<
         f16[4]
         [0.0999755859375, 0.199951171875, 0.300048828125, 0.39990234375]
       >
-      iex> ~V[1+1i 2-2.0i -3]
+      iex> ~VEC[1+1i 2-2.0i -3]
       #Nx.Tensor<
         c64[3]
         [1.0+1.0i, 2.0-2.0i, -3.0+0.0i]
       >
-      iex> ~V[1 Inf NaN]
+      iex> ~VEC[1 Inf NaN]
       #Nx.Tensor<
         f32[3]
         [1.0, Inf, NaN]
       >
-      iex> ~V[1i Inf NaN]
+      iex> ~VEC[1i Inf NaN]
       #Nx.Tensor<
         c64[3]
         [0.0+1.0i, Inf+0.0i, NaN+0.0i]
       >
-      iex> ~V[1i Inf+2i NaN-Infi]
+      iex> ~VEC[1i Inf+2i NaN-Infi]
       #Nx.Tensor<
         c64[3]
         [0.0+1.0i, Inf+2.0i, NaN-Infi]
       >
   """
   @doc type: :creation
-  defmacro sigil_V({:<<>>, _meta, [string]}, modifiers) do
+  defmacro sigil_VEC({:<<>>, _meta, [string]}, modifiers) do
     string
     |> String.trim()
     |> binary_to_numbers()

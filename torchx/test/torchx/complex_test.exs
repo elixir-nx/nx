@@ -201,13 +201,13 @@ defmodule Torchx.ComplexTest do
     end
 
     test "invert" do
-      a = ~M[
+      a = ~MAT[
         1 0 i
         0 -1i 0
         0 0 2
       ]
 
-      expected_result = ~M[
+      expected_result = ~MAT[
         1 0 -0.5i
         0 1i 0
         0 0 0.5
@@ -222,15 +222,15 @@ defmodule Torchx.ComplexTest do
     end
 
     test "solve" do
-      a = ~M[
+      a = ~MAT[
         1 0 i
        -1i 0 1i
         1 1 1
       ]
 
-      b = ~V[3+i 4 2-2i]
+      b = ~VEC[3+i 4 2-2i]
 
-      result = ~V[i 2 -3i]
+      result = ~VEC[i 2 -3i]
 
       assert_all_close(Nx.LinAlg.solve(a, b), result)
     end
@@ -238,7 +238,7 @@ defmodule Torchx.ComplexTest do
 
   describe "matrix_power" do
     test "supports complex with positive exponent" do
-      a = ~M[
+      a = ~MAT[
         1 1i
         -1i 1
       ]
@@ -249,7 +249,7 @@ defmodule Torchx.ComplexTest do
     end
 
     test "supports complex with 0 exponent" do
-      a = ~M[
+      a = ~MAT[
         1 1i
         -1i 1
       ]
@@ -258,12 +258,12 @@ defmodule Torchx.ComplexTest do
     end
 
     test "supports complex with negative exponent" do
-      a = ~M[
+      a = ~MAT[
         1 -0.5i
         0 0.5
       ]
 
-      result = ~M[
+      result = ~MAT[
         1 15i
         0 16
       ]

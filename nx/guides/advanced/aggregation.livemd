@@ -75,7 +75,7 @@ max_y = Nx.reduce_max(m, axes: [:y])
 Let's consider another example with [Nx.weighted_mean](https://hexdocs.pm/nx/Nx.html#weighted_mean/3). It supports full-tensor and per axis operations. We display how to compute the _weighted mean aggregate_ of a matrix with the example below of a 2D tensor of shape `{2,2}` labeled `m`:
 
 ```elixir
-m = ~M[
+m = ~MAT[
   1 2
   3 4
 ]
@@ -96,7 +96,7 @@ m = ~M[
 First, we'll compute the full-tensor aggregation. The calculations are developed below. We calculate an "array product" (aka [Hadamard product](<https://en.wikipedia.org/wiki/Hadamard_product_(matrices)#:~:text=In%20mathematics%2C%20the%20Hadamard%20product,elements%20i%2C%20j%20of%20the>), an element-wise product) of our tensor with the tensor of weights, then sum all the elements and divide by the sum of the weights.
 
 ```elixir
-w = ~M[
+w = ~MAT[
   10 20
   30 40
 ]
@@ -121,7 +121,7 @@ man_w_avg = (1 * 10 + 2 * 20 + 3 * 30 + 4 * 40) / (10 + 20 + 30 + 40)
 The weighted mean can be computed _per axis_. Let's compute it along the _first_ axis (`axes: [0]`): you calculate "by column", so you aggregate/reduce along the first axis:
 
 ```elixir
-w = ~M[
+w = ~MAT[
   10 20
   30 40
 ]
@@ -148,7 +148,7 @@ man_w_avg_x = [(1 * 10 + 3 * 30) / (10 + 30), (2 * 20 + 4 * 40) / (20 + 40)]
 We calculate weighted mean of a square matrix along the _second_ axis (`axes: [1]`): you calculate per row, so you aggregate/reduce along the second axis.
 
 ```elixir
-w = ~M[
+w = ~MAT[
   10 20
   30 40
 ]
@@ -816,7 +816,7 @@ Nx.argmin(t, axis: 3)
 You have the `:tie_break` option to decide how to operate with you have several occurences of the result. It defaults to `tie_break: :low`.
 
 ```elixir
-t4 = ~V[2 0 0 0 1]
+t4 = ~VEC[2 0 0 0 1]
 
 %{
   argmin_with_default: Nx.argmin(t4) |> Nx.to_number(),

@@ -815,17 +815,17 @@ defmodule EXLA.Defn.ExprTest do
     test "fft" do
       assert_all_close(
         fft(Nx.tensor([1, 1, 0, 0]), length: 5),
-        ~V[2.0+0.0i 1.3090-0.9511i 0.1909-0.5877i 0.1909+0.5877i 1.3090+0.9510i]
+        ~VEC[2.0+0.0i 1.3090-0.9511i 0.1909-0.5877i 0.1909+0.5877i 1.3090+0.9510i]
       )
 
       assert_all_close(
         fft(Nx.tensor([1, 1, 0, 0, 2, 3]), length: 4),
-        ~V[2.0+0.0i 1.0-1.0i 0.0+0.0i 1.0+1.0i]
+        ~VEC[2.0+0.0i 1.0-1.0i 0.0+0.0i 1.0+1.0i]
       )
 
       assert_all_close(
         fft(Nx.tensor([1, 1, 0]), length: :power_of_two),
-        ~V[2.0+0.0i 1.0-1.0i 0.0+0.0i 1.0+1.0i]
+        ~VEC[2.0+0.0i 1.0-1.0i 0.0+0.0i 1.0+1.0i]
       )
     end
 
@@ -847,12 +847,12 @@ defmodule EXLA.Defn.ExprTest do
           length: :power_of_two
         ),
         Nx.stack([
-          ~M[
+          ~MAT[
                 2 1.0-1.0i 0 1.0+1.0i
                 1 1 1 1
                 1 -1i -1 1i
               ],
-          ~M[
+          ~MAT[
                 1 -1i -1 1i
                 1 1 1 1
                 2 1.0-1.0i 0 1.0+1.0i
@@ -877,12 +877,12 @@ defmodule EXLA.Defn.ExprTest do
           length: 4
         ),
         Nx.stack([
-          ~M[
+          ~MAT[
                 2 1.0-1.0i 0 1.0+1.0i
                 1 1 1 1
                 1 -1i -1 1i
               ],
-          ~M[
+          ~MAT[
                 1 -1i -1 1i
                 1 1 1 1
                 2 1.0-1.0i 0 1.0+1.0i
@@ -907,12 +907,12 @@ defmodule EXLA.Defn.ExprTest do
           length: 4
         ),
         Nx.stack([
-          ~M[
+          ~MAT[
                 2 1.0-1.0i 0 1.0+1.0i
                 1 1 1 1
                 1 -1i -1 1i
               ],
-          ~M[
+          ~MAT[
                 1 -1i -1 1i
                 1 1 1 1
                 2 1.0-1.0i 0 1.0+1.0i
@@ -923,19 +923,19 @@ defmodule EXLA.Defn.ExprTest do
 
     test "ifft" do
       assert_all_close(
-        ifft(~V[5 5 5 5 5],
+        ifft(~VEC[5 5 5 5 5],
           length: 5
         ),
         Nx.tensor([5, 0, 0, 0, 0])
       )
 
       assert_all_close(
-        ifft(~V[2.0+0.0i 1.0-1.0i 0.0+0.0i 1.0+1.0i 5 6], length: 4),
+        ifft(~VEC[2.0+0.0i 1.0-1.0i 0.0+0.0i 1.0+1.0i 5 6], length: 4),
         Nx.tensor([1, 1, 0, 0])
       )
 
       assert_all_close(
-        ifft(~V[2 0 0], length: :power_of_two),
+        ifft(~VEC[2 0 0], length: :power_of_two),
         Nx.tensor([0.5, 0.5, 0.5, 0.5])
       )
     end
@@ -944,12 +944,12 @@ defmodule EXLA.Defn.ExprTest do
       assert_all_close(
         ifft(
           Nx.stack([
-            ~M[
+            ~MAT[
                 2 1.0-1.0i 0 1.0+1.0i
                 1 1 1 1
                 1 -1i -1 1i
               ],
-            ~M[
+            ~MAT[
                 1 -1i -1 1i
                 1 1 1 1
                 2 1.0-1.0i 0 1.0+1.0i
@@ -988,12 +988,12 @@ defmodule EXLA.Defn.ExprTest do
           length: 4
         ),
         Nx.stack([
-          ~M[
+          ~MAT[
                 2 1.0+1.0i 0 1.0-1.0i
                 1 1 1 1
                 1 1i -1 -1i
               ],
-          ~M[
+          ~MAT[
                 1 1i -1 -1i
                 1 1 1 1
                 2 1.0+1.0i 0 1.0-1.0i
@@ -1018,12 +1018,12 @@ defmodule EXLA.Defn.ExprTest do
           length: 4
         ),
         Nx.stack([
-          ~M[
+          ~MAT[
                 2 1.0+1.0i 0 1.0-1.0i
                 1 1 1 1
                 1 1i -1 -1i
               ],
-          ~M[
+          ~MAT[
                 1 1i -1 -1i
                 1 1 1 1
                 2 1.0+1.0i 0 1.0-1.0i

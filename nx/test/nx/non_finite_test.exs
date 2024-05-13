@@ -225,42 +225,42 @@ defmodule Nx.NonFiniteTest do
 
     test "max" do
       # infinity as right arg
-      assert ~V[Inf] == Nx.max(~V[-Inf], ~V[Inf])
-      assert ~V[Inf] == Nx.max(~V[1], ~V[Inf])
-      assert ~V[NaN] == Nx.max(~V[NaN], ~V[Inf])
-      assert ~V[Inf] == Nx.max(~V[Inf], ~V[Inf])
+      assert ~VEC[Inf] == Nx.max(~VEC[-Inf], ~VEC[Inf])
+      assert ~VEC[Inf] == Nx.max(~VEC[1], ~VEC[Inf])
+      assert ~VEC[NaN] == Nx.max(~VEC[NaN], ~VEC[Inf])
+      assert ~VEC[Inf] == Nx.max(~VEC[Inf], ~VEC[Inf])
 
       # neg_inf as right arg
-      assert ~V[-Inf] == Nx.max(~V[-Inf], ~V[-Inf])
-      assert ~V[1.0] == Nx.max(~V[1], ~V[-Inf])
-      assert ~V[NaN] == Nx.max(~V[NaN], ~V[-Inf])
-      assert ~V[Inf] == Nx.max(~V[Inf], ~V[-Inf])
+      assert ~VEC[-Inf] == Nx.max(~VEC[-Inf], ~VEC[-Inf])
+      assert ~VEC[1.0] == Nx.max(~VEC[1], ~VEC[-Inf])
+      assert ~VEC[NaN] == Nx.max(~VEC[NaN], ~VEC[-Inf])
+      assert ~VEC[Inf] == Nx.max(~VEC[Inf], ~VEC[-Inf])
 
       # nan as right arg
-      assert ~V[NaN] == Nx.max(~V[-Inf], ~V[NaN])
-      assert ~V[NaN] == Nx.max(~V[1], ~V[NaN])
-      assert ~V[NaN] == Nx.max(~V[NaN], ~V[NaN])
-      assert ~V[NaN] == Nx.max(~V[Inf], ~V[NaN])
+      assert ~VEC[NaN] == Nx.max(~VEC[-Inf], ~VEC[NaN])
+      assert ~VEC[NaN] == Nx.max(~VEC[1], ~VEC[NaN])
+      assert ~VEC[NaN] == Nx.max(~VEC[NaN], ~VEC[NaN])
+      assert ~VEC[NaN] == Nx.max(~VEC[Inf], ~VEC[NaN])
     end
 
     test "min" do
       # infinity as right arg
-      assert ~V[-Inf] == Nx.min(~V[-Inf], ~V[Inf])
-      assert ~V[1.0] == Nx.min(~V[1], ~V[Inf])
-      assert ~V[NaN] == Nx.min(~V[NaN], ~V[Inf])
-      assert ~V[Inf] == Nx.min(~V[Inf], ~V[Inf])
+      assert ~VEC[-Inf] == Nx.min(~VEC[-Inf], ~VEC[Inf])
+      assert ~VEC[1.0] == Nx.min(~VEC[1], ~VEC[Inf])
+      assert ~VEC[NaN] == Nx.min(~VEC[NaN], ~VEC[Inf])
+      assert ~VEC[Inf] == Nx.min(~VEC[Inf], ~VEC[Inf])
 
       # neg_inf as right arg
-      assert ~V[-Inf] == Nx.min(~V[-Inf], ~V[-Inf])
-      assert ~V[-Inf] == Nx.min(~V[1], ~V[-Inf])
-      assert ~V[NaN] == Nx.min(~V[NaN], ~V[-Inf])
-      assert ~V[-Inf] == Nx.min(~V[Inf], ~V[-Inf])
+      assert ~VEC[-Inf] == Nx.min(~VEC[-Inf], ~VEC[-Inf])
+      assert ~VEC[-Inf] == Nx.min(~VEC[1], ~VEC[-Inf])
+      assert ~VEC[NaN] == Nx.min(~VEC[NaN], ~VEC[-Inf])
+      assert ~VEC[-Inf] == Nx.min(~VEC[Inf], ~VEC[-Inf])
 
       # nan as right arg
-      assert ~V[NaN] == Nx.min(~V[-Inf], ~V[NaN])
-      assert ~V[NaN] == Nx.min(~V[1], ~V[NaN])
-      assert ~V[NaN] == Nx.min(~V[NaN], ~V[NaN])
-      assert ~V[NaN] == Nx.min(~V[Inf], ~V[NaN])
+      assert ~VEC[NaN] == Nx.min(~VEC[-Inf], ~VEC[NaN])
+      assert ~VEC[NaN] == Nx.min(~VEC[1], ~VEC[NaN])
+      assert ~VEC[NaN] == Nx.min(~VEC[NaN], ~VEC[NaN])
+      assert ~VEC[NaN] == Nx.min(~VEC[Inf], ~VEC[NaN])
     end
 
     test "remainder" do

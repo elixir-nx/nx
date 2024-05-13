@@ -1,7 +1,7 @@
 defmodule EXLA.BackendTest do
   use EXLA.Case, async: true
 
-  import Nx, only: [sigil_V: 2]
+  import Nx, only: [sigil_VEC: 2]
 
   setup do
     Nx.default_backend(EXLA.Backend)
@@ -192,7 +192,7 @@ defmodule EXLA.BackendTest do
   end
 
   test "conjugate" do
-    assert inspect(Nx.conjugate(~V[1 2-0i 3+0i 0-i 0-2i])) =~
+    assert inspect(Nx.conjugate(~VEC[1 2-0i 3+0i 0-i 0-2i])) =~
              "1.0-0.0i, 2.0+0.0i, 3.0-0.0i, 0.0+1.0i, 0.0+2.0i"
   end
 end

@@ -86,15 +86,15 @@ defmodule Nx.LinAlgTest do
     end
 
     test "works with complex tensors" do
-      a = ~M[
+      a = ~MAT[
         1 0 i
        -1i 0 1i
         1 1 1
       ]
 
-      b = ~V[3+i 4 2-2i]
+      b = ~VEC[3+i 4 2-2i]
 
-      result = ~V[i 2 -3i]
+      result = ~VEC[i 2 -3i]
 
       assert_all_close(Nx.LinAlg.solve(a, b), result)
     end
@@ -121,13 +121,13 @@ defmodule Nx.LinAlgTest do
     end
 
     test "works with complex tensors" do
-      a = ~M[
+      a = ~MAT[
         1 0 i
         0 -1i 0
         0 0 2
       ]
 
-      expected_result = ~M[
+      expected_result = ~MAT[
         1 0 -0.5i
         0 1i 0
         0 0 0.5
@@ -280,7 +280,7 @@ defmodule Nx.LinAlgTest do
 
   describe "matrix_power" do
     test "supports complex with positive exponent" do
-      a = ~M[
+      a = ~MAT[
         1 1i
         -1i 1
       ]
@@ -291,7 +291,7 @@ defmodule Nx.LinAlgTest do
     end
 
     test "supports complex with 0 exponent" do
-      a = ~M[
+      a = ~MAT[
         1 1i
         -1i 1
       ]
@@ -300,12 +300,12 @@ defmodule Nx.LinAlgTest do
     end
 
     test "supports complex with negative exponent" do
-      a = ~M[
+      a = ~MAT[
         1 -0.5i
         0 0.5
       ]
 
-      result = ~M[
+      result = ~MAT[
         1 15i
         0 16
       ]
@@ -448,7 +448,7 @@ defmodule Nx.LinAlgTest do
     end
 
     test "works with complex matrix" do
-      t = ~M[
+      t = ~MAT[
         1 0 1i
         0 2 -1i
         1 1 1
@@ -456,13 +456,13 @@ defmodule Nx.LinAlgTest do
 
       {q, r} = Nx.LinAlg.qr(t)
 
-      assert_all_close(q, ~M[
+      assert_all_close(q, ~MAT[
         -0.7071 0.2357  -0.6666
          0      -0.9428   -0.3333
         -0.7071 -0.2357  0.6666
       ])
 
-      assert_all_close(r, ~M[
+      assert_all_close(r, ~MAT[
         -1.4142 -0.7071 -0.7071-0.7071i
         0      -2.1213  -0.2357+1.1785i
         0      0      0.6666-0.3333i
@@ -849,7 +849,7 @@ defmodule Nx.LinAlgTest do
 
     test "works with f16" do
       x = Nx.tensor([[0, 0], [0, 0]], type: :f16)
-      assert Nx.LinAlg.svd(x) == {Nx.eye(2, type: :f16), ~V"0.0 0.0"f16, Nx.eye(2, type: :f16)}
+      assert Nx.LinAlg.svd(x) == {Nx.eye(2, type: :f16), ~VEC"0.0 0.0"f16, Nx.eye(2, type: :f16)}
 
       x = Nx.tensor([[1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4]], type: :f16)
       assert {u, s, vt} = Nx.LinAlg.svd(x)
@@ -860,7 +860,7 @@ defmodule Nx.LinAlgTest do
 
     test "works with f64" do
       x = Nx.tensor([[0, 0], [0, 0]], type: :f64)
-      assert Nx.LinAlg.svd(x) == {Nx.eye(2, type: :f64), ~V"0.0 0.0"f64, Nx.eye(2, type: :f64)}
+      assert Nx.LinAlg.svd(x) == {Nx.eye(2, type: :f64), ~VEC"0.0 0.0"f64, Nx.eye(2, type: :f64)}
 
       x = Nx.tensor([[1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4]], type: :f64)
       assert {u, s, vt} = Nx.LinAlg.svd(x)
