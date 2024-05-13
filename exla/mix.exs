@@ -11,7 +11,7 @@ defmodule EXLA.MixProject do
     [
       app: :exla,
       version: @version,
-      elixir: "~> 1.14",
+      elixir: "~> 1.15",
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       docs: docs(),
