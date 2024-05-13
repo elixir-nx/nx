@@ -566,40 +566,43 @@ defmodule Nx.LinAlgTest do
                ])
     end
 
-    test "computes eigenvalues and eigenvectors for a Hermitian matrix case" do
-      # Hermitian matrix
-      t =
-        Nx.tensor([
-          [1, Complex.new(0, 2), 2],
-          [Complex.new(0, -2), -3, Complex.new(0, 2)],
-          [2, Complex.new(0, -2), 1]
-        ])
+    # TODO: Remove conditional once we require 1.16+
+    if Version.match?(System.version(), "~> 1.16") do
+      test "computes eigenvalues and eigenvectors for a Hermitian matrix case" do
+        # Hermitian matrix
+        t =
+          Nx.tensor([
+            [1, Complex.new(0, 2), 2],
+            [Complex.new(0, -2), -3, Complex.new(0, 2)],
+            [2, Complex.new(0, -2), 1]
+          ])
 
-      assert {eigenvals, eigenvecs} = Nx.LinAlg.eigh(t, max_iter: 10_000)
+        assert {eigenvals, eigenvecs} = Nx.LinAlg.eigh(t, max_iter: 10_000)
 
-      # Eigenvalues
-      assert eigenvals ==
-               Nx.tensor([Complex.new(-5, 0), Complex.new(3, 0), Complex.new(1, 0)])
+        # Eigenvalues
+        assert eigenvals ==
+                 Nx.tensor([Complex.new(-5, 0), Complex.new(3, 0), Complex.new(1, 0)])
 
-      # Eigenvectors
-      assert round(eigenvecs, 3) ==
-               Nx.tensor([
-                 [
-                   Complex.new(-0.408, 0.0),
-                   Complex.new(-0.0, 0.707),
-                   Complex.new(0.577, 0.0)
-                 ],
-                 [
-                   Complex.new(-0.0, -0.816),
-                   Complex.new(0.0, 0.0),
-                   Complex.new(0.0, -0.577)
-                 ],
-                 [
-                   Complex.new(0.408, 0.0),
-                   Complex.new(-0.0, 0.707),
-                   Complex.new(-0.577, 0.0)
-                 ]
-               ])
+        # Eigenvectors
+        assert round(eigenvecs, 3) ==
+                 Nx.tensor([
+                   [
+                     Complex.new(-0.408, 0.0),
+                     Complex.new(-0.0, 0.707),
+                     Complex.new(0.577, 0.0)
+                   ],
+                   [
+                     Complex.new(-0.0, -0.816),
+                     Complex.new(0.0, 0.0),
+                     Complex.new(0.0, -0.577)
+                   ],
+                   [
+                     Complex.new(0.408, 0.0),
+                     Complex.new(-0.0, 0.707),
+                     Complex.new(-0.577, 0.0)
+                   ]
+                 ])
+      end
     end
 
     test "properties for matrices with different eigenvalues" do
