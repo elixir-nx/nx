@@ -14315,9 +14315,11 @@ defmodule Nx do
     out = %{tensor | shape: shape}
 
     result =
-      Nx.Shared.optional(:take_along_axis, [tensor, indices, axis], out, fn tensor,
-                                                                            indices,
-                                                                            axis ->
+      Nx.Shared.optional(:take_along_axis, [tensor, indices, [axis: axis]], out, fn tensor,
+                                                                                    indices,
+                                                                                    opts ->
+        axis = opts[:axis]
+
         axes_range = axes(indices)
         new_axis_shape = Tuple.append(shape(indices), 1)
 
