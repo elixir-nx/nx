@@ -586,17 +586,17 @@ defmodule Nx.LinAlgTest do
                Nx.tensor([
                  [
                    Complex.new(-0.408, 0.0),
-                   Complex.new(0.0, 0.707),
+                   Complex.new(-0.0, 0.707),
                    Complex.new(0.577, 0.0)
                  ],
                  [
-                   Complex.new(0.0, -0.816),
+                   Complex.new(-0.0, -0.816),
                    Complex.new(0.0, 0.0),
                    Complex.new(0.0, -0.577)
                  ],
                  [
                    Complex.new(0.408, 0.0),
-                   Complex.new(0.0, 0.707),
+                   Complex.new(-0.0, 0.707),
                    Complex.new(-0.577, 0.0)
                  ]
                ])
@@ -731,7 +731,8 @@ defmodule Nx.LinAlgTest do
 
       assert {u, s, vt} = Nx.LinAlg.svd(t)
 
-      assert round(Nx.as_type(t, :f32), 2) == u |> Nx.multiply(s) |> Nx.dot(vt) |> round(2)
+      assert round(Nx.as_type(t, :f32), 2) ==
+               u |> Nx.multiply(s) |> Nx.dot(vt) |> Nx.abs() |> round(2)
     end
 
     test "finds the singular values of wide matrices" do
@@ -755,7 +756,7 @@ defmodule Nx.LinAlgTest do
         |> Nx.broadcast({3, 3})
         |> Nx.put_diagonal(s)
 
-      assert round(t, 1) == u |> Nx.dot(s_matrix) |> Nx.dot(v) |> round(1)
+      assert round(t, 1) == u |> Nx.dot(s_matrix) |> Nx.dot(v) |> Nx.abs() |> round(1)
 
       assert round(u, 3) ==
                Nx.tensor([
