@@ -214,15 +214,11 @@ iree_status_t call_module(iree_runtime_session_t *session, std::vector<IREEInput
   iree_runtime_call_t call;
   iree_vm_function_t function;
 
+  std::cout << "inputs.size(): " << inputs.size() << "\n";
+
   IREE_RETURN_IF_ERROR(iree_runtime_session_lookup_function(session, iree_make_cstring_view("module.main"), &function));
 
   IREE_RETURN_IF_ERROR(iree_runtime_call_initialize(session, function, &call));
-
-  iree_vm_function_t export_function;
-  iree_string_view_t export_function_name;
-  iree_vm_function_signature_t export_function_signature;
-
-  IREE_RETURN_IF_ERROR(function.module->get_function(function.module->self, IREE_VM_FUNCTION_LINKAGE_EXPORT, function.ordinal, &export_function, &export_function_name, &export_function_signature));
 
   iree_vm_function_signature_t signature = iree_vm_function_signature(&function);
 
@@ -230,6 +226,9 @@ iree_status_t call_module(iree_runtime_session_t *session, std::vector<IREEInput
   iree_string_view_t results;
   IREE_RETURN_IF_ERROR(iree_vm_function_call_get_cconv_fragments(
       &signature, &arguments, &results));
+
+  std::cout << "arguments" << arguments.data << "\n";
+  std::cout << "results" << results.data << "\n";
 
   // Append the function inputs with the HAL device allocator in use by the
   // session. The buffers will be usable within the session and _may_ be usable
@@ -254,6 +253,9 @@ iree_status_t call_module(iree_runtime_session_t *session, std::vector<IREEInput
 
   ErlNifBinary binary;
   size_t size = iree_vm_list_size(outputs);
+
+  result->clear();
+  result->reserve(size);
 
   for (iree_vm_size_t i = 0; i < size; i++) {
     iree_hal_buffer_view_t *buffer_view = nullptr;
@@ -287,6 +289,7 @@ ERL_NIF_TERM return_results(ErlNifEnv *env, std::vector<std::pair<iree_hal_eleme
   size_t n = results.size();
 
   std::vector<ERL_NIF_TERM> nif_terms;
+  nif_terms.clear();
   nif_terms.reserve(n);
 
   for (auto [iree_type, binary] : results) {
@@ -326,6 +329,7 @@ run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Unable to load bytecode binary");
   }
 
+  bytecode.clear();
   bytecode.resize(bytecode_vec.size());
   unsigned int byte;
   for (int i = 0; i < bytecode_vec.size(); i++) {

@@ -11,14 +11,12 @@ defmodule EXLA.MLIR.IREE do
     global_initialize()
     {:ok, instance} = runtime_create_instance()
     :persistent_term.put({__MODULE__, :instance}, instance)
-    dbg(instance)
 
     :ok
   end
 
   def run(module, inputs) do
     instance = :persistent_term.get({__MODULE__, :instance})
-    dbg(instance)
     run_module(instance, module, inputs)
   end
 

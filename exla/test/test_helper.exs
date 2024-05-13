@@ -5,7 +5,9 @@ if System.get_env("DEBUG") in ["1", "true"] do
   IO.gets("Press enter to continue... -- PID: #{System.pid()}")
 end
 
-Nx.Defn.global_default_options(compiler: EXLA)
+runtime = if System.get_env("EXLA_RUNTIME") == "iree", do: :iree, else: :xla
+
+Nx.Defn.global_default_options(compiler: EXLA, runtime: runtime)
 
 exclude_multi_device =
   if client.device_count > 1 and client.platform == :host, do: [], else: [:multi_device]

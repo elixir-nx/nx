@@ -315,6 +315,7 @@ int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<xla::Shape>& var) {
   if (!enif_get_list_length(env, list, &length)) {
     return 0;
   }
+  var.clear();
   var.reserve(length);
   ERL_NIF_TERM head, tail;
 

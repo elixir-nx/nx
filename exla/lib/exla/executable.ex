@@ -99,8 +99,6 @@ defmodule EXLA.Executable do
   end
 
   defp run(:iree, _client, ref, device_id, inputs, _options) do
-    dbg()
-
     inputs =
       for subinputs <- inputs do
         Enum.map(subinputs, fn

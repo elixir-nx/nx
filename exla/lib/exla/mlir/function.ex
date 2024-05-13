@@ -2,7 +2,7 @@ defmodule EXLA.MLIR.Function do
   @moduledoc false
   # Representation of an MLIR Function or `func.func` type.
 
-  defstruct [:module, :ref, :name, :return_typespecs, :compiler]
+  defstruct [:module, :ref, :name, :return_typespecs, :runtime]
 
   alias __MODULE__, as: Function
   alias EXLA.MLIR.Value
