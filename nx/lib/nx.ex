@@ -14329,9 +14329,7 @@ defmodule Nx do
           end)
           |> concatenate(axis: rank(indices))
 
-        out = gather(tensor, full_indices)
-
-        %{out | shape: shape}
+        gather(tensor, full_indices)
       end)
 
     vectorize(result, vectorized_axes)
