@@ -14315,10 +14315,23 @@ defmodule Nx do
     out = %{tensor | shape: shape}
 
     result =
-      Nx.Shared.optional(:take_along_axis, [tensor, indices, axis], out, fn _tensor,
-                                                                            _indices,
-                                                                            _axis ->
-        out
+      Nx.Shared.optional(:take_along_axis, [tensor, indices, axis], out, fn tensor,
+                                                                            indices,
+                                                                            axis ->
+        axes_range = axes(indices)
+        new_axis_shape = Tuple.append(shape(indices), 1)
+
+        full_indices =
+          axes_range
+          |> Enum.map(fn
+            ^axis -> reshape(indices, new_axis_shape)
+            axis -> iota(new_axis_shape, axis: axis)
+          end)
+          |> concatenate(axis: rank(indices))
+
+        out = gather(tensor, full_indices)
+
+        %{out | shape: shape}
       end)
 
     vectorize(result, vectorized_axes)
