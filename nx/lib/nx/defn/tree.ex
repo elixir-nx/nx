@@ -202,7 +202,8 @@ defmodule Nx.Defn.Tree do
     {[%{token | hooks: hooks}], acc}
   end
 
-  def apply_args(%T{data: %Expr{op: :concatenate, args: [list | args]}}, _type, acc, fun) do
+  def apply_args(%T{data: %Expr{op: op, args: [list | args]}}, _type, acc, fun)
+      when op in [:concatenate, :stack] do
     {list, acc} = Enum.map_reduce(list, acc, fun)
     {[list | args], acc}
   end

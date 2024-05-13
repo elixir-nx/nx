@@ -20,7 +20,7 @@ defmodule Nx.Defn.Evaluator do
   alias Nx.Defn.{Composite, Expr, Tree}
 
   @creation_ops [:eye, :iota, :from_binary]
-  @list_ops [:concatenate]
+  @list_ops [:concatenate, :stack]
   @indices_ops [:slice, :put_slice]
 
   @impl true
