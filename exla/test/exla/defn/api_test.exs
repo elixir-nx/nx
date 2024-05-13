@@ -4,7 +4,7 @@ defmodule EXLA.Defn.APITest do
   import Nx.Defn
   import ExUnit.CaptureLog
 
-  defn(add_two(a, b), do: a + b)
+  defn add_two(a, b), do: a + b
 
   describe "multi-client" do
     @describetag :iree_key_not_found_error
@@ -130,7 +130,7 @@ defmodule EXLA.Defn.APITest do
 
   describe "stream" do
     @describetag :token
-    defn(defn_sum(entry, acc), do: {acc, entry + acc})
+    defn defn_sum(entry, acc), do: {acc, entry + acc}
 
     test "immediately done" do
       stream = EXLA.stream(&defn_sum/2, [0, 0])
@@ -182,7 +182,7 @@ defmodule EXLA.Defn.APITest do
       assert_equal(Nx.Stream.done(stream), {Nx.tensor(3), {Nx.tensor(2), Nx.tensor(4)}})
     end
 
-    defn(stream_empty_outfeed(i, t), do: {{}, i + t})
+    defn stream_empty_outfeed(i, t), do: {{}, i + t}
 
     test "send/recv with empty outfeed" do
       %_{} = stream = EXLA.stream(&stream_empty_outfeed/2, [0, 0.0])
@@ -195,7 +195,7 @@ defmodule EXLA.Defn.APITest do
       assert_equal(Nx.Stream.done(stream), Nx.tensor(3.0))
     end
 
-    defn(stream_empty_acc(i, {}), do: {i * i, {}})
+    defn stream_empty_acc(i, {}), do: {i * i, {}}
 
     test "send/recv with empty acc" do
       %_{} = stream = EXLA.stream(&stream_empty_acc/2, [0, {}])
@@ -414,7 +414,7 @@ defmodule EXLA.Defn.APITest do
       assert_equal(b, Nx.tensor(2))
     end
 
-    defn(hook_stream(entry, acc), do: hook({acc, entry + acc}, :stream))
+    defn hook_stream(entry, acc), do: hook({acc, entry + acc}, :stream)
 
     test "executes hook with stream" do
       %_{} = stream = EXLA.stream(&hook_stream/2, [0, 0], hooks: %{stream: send_to_self(:tag)})
@@ -438,7 +438,8 @@ defmodule EXLA.Defn.APITest do
   end
 
   describe "telemetry" do
-    defn(telemetry_add_two(a, b), do: a + b)
+    @describetag :iree_segfault_error
+    defn telemetry_add_two(a, b), do: a + b
 
     def telemetry_handler(_event_name, measurements, metadata, _config) do
       send(self(), {measurements, metadata})

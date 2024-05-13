@@ -16,12 +16,16 @@ static ErlNifFunc iree_funcs[] = {
     // MLIR Builder
     {"global_initialize", 0, global_initialize},
     {"compile", 2, compile, ERL_NIF_DIRTY_JOB_CPU_BOUND},
-    {"run_module", 2, run_module, ERL_NIF_DIRTY_JOB_IO_BOUND}};
+    {"runtime_create_instance", 0, runtime_create_instance},
+    {"run_module", 3, run_module, ERL_NIF_DIRTY_JOB_IO_BOUND}};
 
 static int open_resources(ErlNifEnv *env) {
   const char *mod = "EXLA";
 
   if (!exla::nif::open_resource<exla::MLIRModule *>(env, mod, "ExlaMLIRModule")) {
+    return -1;
+  }
+  if (!exla::nif::open_resource<exla::iree::runtime::Instance *>(env, mod, "ExlaIREERuntimeInstance")) {
     return -1;
   }
   return 1;

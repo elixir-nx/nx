@@ -483,6 +483,7 @@ defmodule EXLA.Defn do
 
                 if compiler_mode == :iree do
                   {:ok, module_charlist} = EXLA.NIF.mlir_module_to_string(builder.module.ref)
+
                   {:ok, module_bytecode} = EXLA.MLIR.IREE.compile(module_charlist, "metal")
 
                   %EXLA.Executable{

@@ -99,6 +99,8 @@ defmodule EXLA.Executable do
   end
 
   defp run(:iree, _client, ref, device_id, inputs, _options) do
+    dbg()
+
     inputs =
       for subinputs <- inputs do
         Enum.map(subinputs, fn
@@ -109,7 +111,12 @@ defmodule EXLA.Executable do
               target_type = {t, w2}
 
               data =
-                data |> Nx.from_binary(typespec.type) |> Nx.as_type(target_type) |> Nx.to_binary()
+                Nx.with_default_backend(Nx.BinaryBackend, fn ->
+                  data
+                  |> Nx.from_binary(typespec.type)
+                  |> Nx.as_type(target_type)
+                  |> Nx.to_binary()
+                end)
 
               data = <<data::bitstring, 0::size(w2)>>
 
@@ -121,7 +128,7 @@ defmodule EXLA.Executable do
       end
 
     ref
-    |> EXLA.MLIR.IREE.run_module(List.flatten(inputs))
+    |> EXLA.MLIR.IREE.run(List.flatten(inputs))
     |> unwrap!()
     |> then(&[{&1, device_id}])
   end
@@ -134,11 +141,13 @@ defmodule EXLA.Executable do
         if source_typespec == target_typespec do
           BinaryBuffer.from_binary(buf, target_typespec)
         else
-          buf
-          |> Nx.from_binary(source_typespec.type)
-          |> Nx.as_type(target_typespec.type)
-          |> Nx.to_binary()
-          |> BinaryBuffer.from_binary(target_typespec)
+          Nx.with_default_backend(Nx.BinaryBackend, fn ->
+            buf
+            |> Nx.from_binary(source_typespec.type)
+            |> Nx.as_type(target_typespec.type)
+            |> Nx.to_binary()
+            |> BinaryBuffer.from_binary(target_typespec)
+          end)
         end
 
       buf, typespec when is_reference(buf) ->

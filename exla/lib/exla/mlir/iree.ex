@@ -7,9 +7,26 @@ defmodule EXLA.MLIR.IREE do
     :erlang.load_nif(path, 0)
   end
 
+  def init do
+    global_initialize()
+    {:ok, instance} = runtime_create_instance()
+    :persistent_term.put({__MODULE__, :instance}, instance)
+    dbg(instance)
+
+    :ok
+  end
+
+  def run(module, inputs) do
+    instance = :persistent_term.get({__MODULE__, :instance})
+    dbg(instance)
+    run_module(instance, module, inputs)
+  end
+
   def compile(_module, _target), do: :erlang.nif_error(:undef)
 
   def global_initialize, do: :erlang.nif_error(:undef)
 
-  def run_module(_module, _inputs), do: :erlang.nif_error(:undef)
+  def runtime_create_instance, do: :erlang.nif_error(:undef)
+
+  def run_module(_instance, _module, _inputs), do: :erlang.nif_error(:undef)
 end

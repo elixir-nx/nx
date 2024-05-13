@@ -2143,6 +2143,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn mean_over_multiple_axes(t), do: Nx.mean(t, axes: [0, 2])
 
+    @tag :iree_segfault_error
     test "computes mean over multiple axes" do
       assert_equal(
         mean_over_multiple_axes(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])),
@@ -3378,6 +3379,7 @@ defmodule EXLA.Defn.ExprTest do
     defn slice3_dynamic(t),
       do: Nx.slice(t, [Nx.tensor(0), Nx.tensor(4), Nx.tensor(11)], [2, 3, 9], strides: [2, 1, 3])
 
+    @tag :iree_segfault_error
     test "works without stride" do
       t = Nx.iota({900})
       t = Nx.reshape(t, {2, 15, 30})
