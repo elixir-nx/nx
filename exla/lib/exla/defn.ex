@@ -1259,43 +1259,6 @@ defmodule EXLA.Defn do
     Value.dynamic_update_slice(tensor, slice, start_indices, expr_to_typespec(ans))
   end
 
-  defp to_operator(:take_along_axis, [%Value{} = tensor, indices, axis], ans, state) do
-    %{shape: indices_shape} = indices_typespec = Value.get_typespec(indices)
-    indices_rank = tuple_size(indices_shape)
-
-    axes_range = 0..(indices_rank - 1)//1
-
-    index_vector_dim = indices_rank
-    slice_sizes = List.duplicate(1, indices_rank)
-    offset_dims = []
-    collapsed_slice_dims = Enum.to_list(axes_range)
-    start_index_map = Enum.to_list(axes_range)
-
-    new_axis_typespec = Typespec.to_shape(indices_typespec, Tuple.append(indices_shape, 1))
-
-    full_indices_typespec =
-      Typespec.to_shape(indices_typespec, Tuple.append(indices_shape, indices_rank))
-
-    full_indices =
-      axes_range
-      |> Enum.map(fn
-        ^axis -> Value.reshape(indices, new_axis_typespec)
-        axis -> Value.iota(state.builder, axis, new_axis_typespec)
-      end)
-      |> Value.concatenate(indices_rank, full_indices_typespec)
-
-    Value.gather(
-      tensor,
-      full_indices,
-      index_vector_dim,
-      slice_sizes,
-      offset_dims,
-      collapsed_slice_dims,
-      start_index_map,
-      expr_to_typespec(ans)
-    )
-  end
-
   defp to_operator(:gather, [%Value{} = tensor, indices, opts], ans, _state) do
     axes = Keyword.fetch!(opts, :axes)
     tensor_shape = op_shape(tensor)
