@@ -2,6 +2,7 @@ target = System.get_env("EXLA_TARGET", "host")
 client = EXLAHelpers.client()
 
 if System.get_env("DEBUG") in ["1", "true"] do
+  dbg(System.schedulers_online())
   IO.gets("Press enter to continue... -- PID: #{System.pid()}")
 end
 
