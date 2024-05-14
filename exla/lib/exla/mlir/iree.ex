@@ -1,5 +1,7 @@
 defmodule EXLA.MLIR.IREE do
   @moduledoc false
+  alias EXLA.MLIR.IREE.InstancePool
+
   @on_load :__on_load__
 
   def __on_load__ do
@@ -7,17 +9,10 @@ defmodule EXLA.MLIR.IREE do
     :erlang.load_nif(path, 0)
   end
 
-  def init do
-    global_initialize()
-    {:ok, instance} = runtime_create_instance()
-    :persistent_term.put({__MODULE__, :instance}, instance)
-
-    :ok
-  end
-
   def run(module, inputs) do
-    instance = :persistent_term.get({__MODULE__, :instance})
-    run_module(instance, module, inputs)
+    InstancePool.checkout(fn instance ->
+      run_module(instance, module, inputs)
+    end)
   end
 
   def compile(_module, _target), do: :erlang.nif_error(:undef)

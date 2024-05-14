@@ -15,27 +15,17 @@ namespace exla {
 namespace iree {
 namespace runtime {
 
-template <typename T, void (*ReleaseFunc)(T*)>
-struct IREEDeleter {
-  void operator()(T* ptr) {
-    if (ptr) {
-      ReleaseFunc(ptr);  // Call the specific release function
-    }
-  }
-};
-
-using IREEInstanceDeleter = IREEDeleter<iree_runtime_instance_t, iree_runtime_instance_release>;
-using IREEDeviceDeleter = IREEDeleter<iree_hal_device_t, iree_hal_device_release>;
-using IREESessionDeleter = IREEDeleter<iree_runtime_session_t, iree_runtime_session_release>;
-
 class Instance {
  public:
   // Constructor
   explicit Instance(iree_runtime_instance_t* instance, iree_hal_device_t* device)
-      : instance_(instance, IREEInstanceDeleter{}), device_(device, IREEDeviceDeleter{}) {}
+      : instance_(instance), device_(device) {}
 
   // Default destructor is fine, unique_ptr will handle the resource release
-  ~Instance() = default;
+  ~Instance() {
+    iree_hal_device_release(device_);
+    iree_runtime_instance_release(instance_);
+  }
 
   // Copy and move operations are disabled to maintain unique ownership semantics
   Instance(const Instance&) = delete;
@@ -44,20 +34,20 @@ class Instance {
   Instance& operator=(Instance&&) noexcept = default;
 
   iree_runtime_instance_t* get() const {
-    return instance_.get();
+    return instance_;
   }
 
   iree_runtime_instance_t* operator->() const {
-    return instance_.get();
+    return instance_;
   }
 
   iree_hal_device_t* device() const {
-    return device_.get();
+    return device_;
   }
 
  private:
-  std::unique_ptr<iree_runtime_instance_t, IREEInstanceDeleter> instance_;
-  std::unique_ptr<iree_hal_device_t, IREEDeviceDeleter> device_;
+  iree_runtime_instance_t* instance_;
+  iree_hal_device_t* device_;
 };
 
 class Session {
@@ -69,22 +59,18 @@ class Session {
     iree_runtime_session_options_t session_options;
     iree_runtime_session_options_initialize(&session_options);
 
-    iree_runtime_session_t* session_ptr;
-
     iree_allocator_t host_allocator = iree_runtime_instance_host_allocator(instance_->get());
     iree_status_t status = iree_runtime_session_create_with_device(
         instance_->get(), &session_options, instance_->device(),
-        host_allocator, &session_ptr);
+        host_allocator, &session_);
 
     if (!iree_status_is_ok(status)) {
       return status;
     }
 
-    session_.reset(session_ptr);
-
     iree_const_byte_span_t span{.data = bytecode.data(), .data_length = bytecode.size()};
 
-    status = iree_runtime_session_append_bytecode_module_from_memory(session_.get(), span, host_allocator);
+    status = iree_runtime_session_append_bytecode_module_from_memory(session_, span, host_allocator);
 
     if (!iree_status_is_ok(status)) {
       return status;
@@ -93,8 +79,10 @@ class Session {
     return status;
   }
 
-  // Default destructor is fine, unique_ptr will handle the resource release
-  ~Session() = default;
+  ~Session() {
+    instance_ = nullptr;
+    iree_runtime_session_release(session_);
+  }
 
   // Copy and move operations are disabled to maintain unique ownership semantics
   Session(const Session&) = delete;
@@ -104,17 +92,21 @@ class Session {
 
   // Provide a way to access the underlying pointer like a raw pointer
   iree_runtime_session_t* get() const {
-    return session_.get();
+    return session_;
   }
 
   // Overload the arrow operator to enable direct member access to the iree_runtime_session_t
   iree_runtime_session_t* operator->() const {
-    return session_.get();
+    return session_;
+  }
+
+  Instance* instance() const {
+    return instance_;
   }
 
  private:
   Instance* instance_;
-  std::unique_ptr<iree_runtime_session_t, IREESessionDeleter> session_;
+  iree_runtime_session_t* session_;
 };
 
 }  // namespace runtime

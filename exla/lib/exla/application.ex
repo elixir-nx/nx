@@ -10,10 +10,15 @@ defmodule EXLA.Application do
       _ -> :os.set_signal(:sigchld, :default)
     end
 
-    EXLA.MLIR.IREE.init()
+    EXLA.MLIR.IREE.global_initialize()
 
     children = [
       EXLA.Logger,
+      {NimblePool,
+       worker: {EXLA.MLIR.IREE.InstancePool, :pool_state},
+       pool_size: 1,
+       name: EXLA.MLIR.IREE.InstancePool,
+       lazy: true},
       {NimblePool,
        worker: {EXLA.MLIR.ContextPool, :pool_state},
        pool_size: System.schedulers_online(),

@@ -210,39 +210,19 @@ iree_status_t iree_input_to_hal_arg(iree_hal_buffer_view_t **arg, IREEInput *inp
       arg);
 }
 
-iree_status_t call_module(iree_runtime_session_t *session, std::vector<IREEInput *> inputs, std::vector<std::pair<iree_hal_element_type_t, ErlNifBinary>> *result) {
+iree_status_t call_module(exla::iree::runtime::Session *session, std::vector<IREEInput *> inputs, std::vector<std::pair<iree_hal_element_type_t, ErlNifBinary>> *result) {
   iree_runtime_call_t call;
-  iree_vm_function_t function;
 
-  std::cout << "inputs.size(): " << inputs.size() << "\n";
+  IREE_RETURN_IF_ERROR(iree_runtime_call_initialize_by_name(session->get(), iree_make_cstring_view("module.main"), &call));
 
-  IREE_RETURN_IF_ERROR(iree_runtime_session_lookup_function(session, iree_make_cstring_view("module.main"), &function));
-
-  IREE_RETURN_IF_ERROR(iree_runtime_call_initialize(session, function, &call));
-
-  iree_vm_function_signature_t signature = iree_vm_function_signature(&function);
-
-  iree_string_view_t arguments;
-  iree_string_view_t results;
-  IREE_RETURN_IF_ERROR(iree_vm_function_call_get_cconv_fragments(
-      &signature, &arguments, &results));
-
-  std::cout << "arguments" << arguments.data << "\n";
-  std::cout << "results" << results.data << "\n";
-
-  // Append the function inputs with the HAL device allocator in use by the
-  // session. The buffers will be usable within the session and _may_ be usable
-  // in other sessions depending on whether they share a compatible device.
-  iree_hal_device_t *device = iree_runtime_session_device(session);
-  iree_hal_allocator_t *device_allocator =
-      iree_runtime_session_device_allocator(session);
+  iree_hal_allocator_t *device_allocator = iree_runtime_session_device_allocator(session->get());
 
   for (size_t i = 0; i < inputs.size(); i++) {
     IREEInput *input = inputs[i];
     // iree_hal_buffer_view_t *buffer_view = nullptr;
     iree_hal_buffer_view_t *arg = nullptr;
 
-    IREE_RETURN_IF_ERROR(iree_input_to_hal_arg(&arg, input, device, device_allocator));
+    IREE_RETURN_IF_ERROR(iree_input_to_hal_arg(&arg, input, session->instance()->device(), device_allocator));
     IREE_RETURN_IF_ERROR(iree_runtime_call_inputs_push_back_buffer_view(&call, arg));
     iree_hal_buffer_view_release(arg);
   }
@@ -272,8 +252,8 @@ iree_status_t call_module(iree_runtime_session_t *session, std::vector<IREEInput
     enif_alloc_binary(byte_size, &binary);
 
     IREE_RETURN_IF_ERROR(iree_hal_device_transfer_d2h(
-        iree_runtime_session_device(session),
-        buffer, iree_hal_buffer_byte_offset(buffer), binary.data,
+        iree_runtime_session_device(session->get()),
+        buffer, 0, binary.data,
         byte_size, IREE_HAL_TRANSFER_BUFFER_FLAG_DEFAULT,
         iree_infinite_timeout()));
 
@@ -281,6 +261,8 @@ iree_status_t call_module(iree_runtime_session_t *session, std::vector<IREEInput
 
     result->push_back({element_type, binary});
   }
+
+  iree_runtime_call_reset(&call);
 
   return iree_make_status(IREE_STATUS_OK);
 }
@@ -353,7 +335,7 @@ run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   std::vector<std::pair<iree_hal_element_type_t, ErlNifBinary>> results;
-  status = call_module(session->get(), inputs, &results);
+  status = call_module(session, inputs, &results);
 
   if (!iree_status_is_ok(status)) {
     // Dump nice status messages to stderr on failure.
@@ -374,6 +356,8 @@ run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
 
     return exla::nif::error(env, ss.str().c_str());
   }
+
+  delete session;
 
   return return_results(env, results);
 }
