@@ -4705,7 +4705,7 @@ defmodule Nx do
       iex> Nx.vectorize(t, :x)
       ** (ArgumentError) cannot use name :x for new vectorized axes because there's already a vectorized axis with the same name
   """
-  @doc type: :shape
+  @doc type: :vectorization
   @spec vectorize(
           tensor :: Nx.Tensor.t(),
           name_or_axes :: atom() | [atom() | {atom(), pos_integer()}]
@@ -4850,7 +4850,7 @@ defmodule Nx do
       >
 
   """
-  @doc type: :shape
+  @doc type: :vectorization
   def devectorize(tensor_or_container, opts \\ [])
 
   def devectorize(%T{shape: shape, names: names, vectorized_axes: vectorized_axes} = tensor, opts)
