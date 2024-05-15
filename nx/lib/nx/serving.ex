@@ -768,8 +768,7 @@ defmodule Nx.Serving do
         end
       end)
 
-    # TODO: Use Process.monitor/2 on Elixir v1.15+
-    {pid, :erlang.monitor(:process, pid, alias: :demonitor)}
+    {pid, Process.monitor(pid, alias: :demonitor)}
   end
 
   defp run_hook(ref, size, result, hook) do
@@ -1038,8 +1037,7 @@ defmodule Nx.Serving do
 
     {preprocessed, info} = handle_preprocessing(preprocessing, input)
 
-    # TODO: Use Process.monitor/2 on Elixir v1.15+
-    ref = :erlang.monitor(:process, pid, alias: :demonitor)
+    ref = Process.monitor(pid, alias: :demonitor)
 
     size_or_unknown =
       case preprocessed do
@@ -1396,8 +1394,7 @@ defmodule Nx.Serving do
 
   @impl true
   def handle_info({__MODULE__, :proxy_monitor, pid, ref}, state) do
-    # TODO: Use Process.monitor/2 on Elixir v1.15+
-    :erlang.monitor(:process, pid, tag: {:proxy, ref})
+    Process.monitor(pid, tag: {:proxy, ref})
     {:noreply, state}
   end
 
