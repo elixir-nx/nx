@@ -1,5 +1,8 @@
 #include "runtime.h"
 
+#include <iree/hal/api.h>
+#include <iree/hal/drivers/init.h>
+
 #include <iostream>
 #include <sstream>
 
@@ -155,11 +158,6 @@ int load_inputs(ErlNifEnv *env, std::vector<ERL_NIF_TERM> terms, std::vector<exl
   return 1;
 }
 
-iree_status_t call_module(exla::iree::runtime::Session *session, std::vector<exla::iree::runtime::IREEInput *> inputs, std::vector<std::pair<iree_hal_element_type_t, ErlNifBinary>> *result) {
-  IREE_RETURN_IF_ERROR(session->init_inputs_and_outputs(inputs));
-  return session->call(result);
-}
-
 ERL_NIF_TERM return_results(ErlNifEnv *env, std::vector<std::pair<iree_hal_element_type_t, ErlNifBinary>> results) {
   size_t n = results.size();
 
@@ -183,6 +181,82 @@ ERL_NIF_TERM return_results(ErlNifEnv *env, std::vector<std::pair<iree_hal_eleme
   return exla::nif::ok(env, list);
 }
 
+iree_status_t call(iree_hal_device_t *device, std::vector<uint8_t> bytecode, std::vector<exla::iree::runtime::IREEInput *> exla_inputs, std::vector<std::pair<iree_hal_element_type_t, ErlNifBinary>> &results) {
+  iree_vm_instance_t *instance = nullptr;
+  iree_vm_module_t *hal_module = nullptr;
+  iree_vm_module_t *bytecode_module = nullptr;
+  iree_vm_context_t *context = nullptr;
+  const char kMainFunctionName[] = "module.main";
+  iree_vm_function_t main_function;
+  iree_vm_list_t *inputs = nullptr;
+  iree_vm_list_t *outputs = nullptr;
+
+  IREE_RETURN_IF_ERROR(iree_vm_instance_create(
+      IREE_VM_TYPE_CAPACITY_DEFAULT, iree_allocator_system(), &instance));
+  IREE_RETURN_IF_ERROR(iree_hal_module_register_all_types(instance));
+
+  IREE_RETURN_IF_ERROR(iree_hal_module_create(
+      instance, /*device_count=*/1, &device, IREE_HAL_MODULE_FLAG_SYNCHRONOUS,
+      iree_allocator_system(), &hal_module));
+
+  // (kFloat4, sizeof(kFloat4))
+  const iree_const_byte_span_t module_data = iree_make_const_byte_span(bytecode.data(), bytecode.size());
+
+  IREE_RETURN_IF_ERROR(iree_vm_bytecode_module_create(
+      instance, module_data, iree_allocator_null(), iree_allocator_system(),
+      &bytecode_module));
+
+  iree_vm_module_t *modules[] = {hal_module, bytecode_module};
+  IREE_RETURN_IF_ERROR(iree_vm_context_create_with_modules(
+      instance, IREE_VM_CONTEXT_FLAG_NONE, IREE_ARRAYSIZE(modules), &modules[0],
+      iree_allocator_system(), &context));
+  iree_vm_module_release(hal_module);
+  iree_vm_module_release(bytecode_module);
+
+  IREE_RETURN_IF_ERROR(iree_vm_context_resolve_function(
+      context, iree_make_cstring_view(kMainFunctionName), &main_function));
+
+  IREE_RETURN_IF_ERROR(
+      iree_vm_list_create(iree_vm_make_undefined_type_def(), exla_inputs.size(), iree_allocator_system(), &inputs),
+      "can't allocate input vm list");
+
+  for (auto input : exla_inputs) {
+    iree_hal_buffer_view_t *arg_buffer_view = nullptr;
+    IREE_RETURN_IF_ERROR(iree_hal_buffer_view_allocate_buffer_copy(
+        device, iree_hal_device_allocator(device), input->dims.size(), input->dims.data(),
+        input->type, IREE_HAL_ENCODING_TYPE_DENSE_ROW_MAJOR,
+        (iree_hal_buffer_params_t){
+            .type = IREE_HAL_MEMORY_TYPE_DEVICE_LOCAL,
+            .usage = IREE_HAL_BUFFER_USAGE_DEFAULT,
+        },
+        input->data_byte_span(), &arg_buffer_view));
+
+    iree_vm_ref_t arg_buffer_view_ref = iree_hal_buffer_view_move_ref(arg_buffer_view);
+    IREE_RETURN_IF_ERROR(iree_vm_list_push_ref_move(inputs, &arg_buffer_view_ref));
+  }
+
+  iree_vm_function_signature_t signature =
+      iree_vm_function_signature(&main_function);
+  iree_string_view_t input_signature;
+  iree_string_view_t output_signature;
+
+  IREE_RETURN_IF_ERROR(iree_vm_function_call_get_cconv_fragments(
+      &signature, &input_signature, &output_signature));
+
+  IREE_RETURN_IF_ERROR(iree_vm_list_create(iree_vm_make_undefined_type_def(), output_signature.size, iree_allocator_system(), &outputs), "can't allocate output vm list");
+
+  // Synchronously invoke the function.
+  IREE_RETURN_IF_ERROR(iree_vm_invoke(
+      context, main_function, IREE_VM_INVOCATION_FLAG_NONE,
+      /*policy=*/NULL, inputs, outputs, iree_allocator_system()));
+
+  iree_vm_list_release(inputs);
+  iree_vm_list_release(outputs);
+  iree_vm_context_release(context);
+  iree_vm_instance_release(instance);
+  return iree_ok_status();
+}
+
 ERL_NIF_TERM
 run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 3) {
@@ -193,42 +267,11 @@ run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   std::vector<ERL_NIF_TERM> input_terms = {};
   std::vector<exla::iree::runtime::IREEInput *> inputs = {};
   std::vector<uint8_t> bytecode = {};
-  // exla::iree::runtime::Instance **instance;
-  // iree_status_t status;
+  iree_hal_device_t **device;
 
-  // if (!exla::nif::get<exla::iree::runtime::Instance *>(env, argv[0], instance)) {
-  //   return exla::nif::error(env, "Unable to get instance");
-  // }
-
-  iree_runtime_instance_options_t instance_options;
-  iree_runtime_instance_options_initialize(&instance_options);
-  iree_runtime_instance_options_use_all_available_drivers(&instance_options);
-  iree_runtime_instance_t *instance_ptr = NULL;
-  iree_status_t status = iree_runtime_instance_create(&instance_options, iree_allocator_system(), &instance_ptr);
-
-  if (!iree_status_is_ok(status)) {
-    iree_runtime_instance_release(instance_ptr);
-    return exla::nif::error(env, "Failed to create IREE runtime instance");
+  if (!exla::nif::get<iree_hal_device_t *>(env, argv[0], device)) {
+    return exla::nif::error(env, "Unable to load device");
   }
-
-  iree_hal_device_t *device_ptr = NULL;
-  char device_uri[] = "metal://0000000100000971";  // TO-DO: change this to an argument
-  status = iree_hal_create_device(
-      iree_runtime_instance_driver_registry(instance_ptr),
-      iree_make_cstring_view(device_uri),
-      iree_runtime_instance_host_allocator(instance_ptr), &device_ptr);
-
-  if (!iree_status_is_ok(status)) {
-    if (device_ptr) {
-      iree_hal_device_release(device_ptr);
-    }
-    if (instance_ptr) {
-      iree_runtime_instance_release(instance_ptr);
-    }
-    return exla::nif::error(env, "Failed to create IREE device instance");
-  }
-
-  exla::iree::runtime::Instance *instance = new exla::iree::runtime::Instance(instance_ptr, device_ptr);
 
   if (!exla::nif::get_list(env, argv[1], bytecode_vec)) {
     return exla::nif::error(env, "Unable to load bytecode binary");
@@ -250,16 +293,9 @@ run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Unable to decode input terms");
   }
 
-  exla::iree::runtime::Session *session = new exla::iree::runtime::Session(instance);
-  status = session->initialize(bytecode);
-
-  if (!iree_status_is_ok(status)) {
-    return exla::nif::error(env, "Failed to initialize IREE runtime session");
-  }
-
   std::vector<std::pair<iree_hal_element_type_t, ErlNifBinary>> results;
-  status = call_module(session, inputs, &results);
-  delete session;
+
+  iree_status_t status = call(*device, bytecode, inputs, results);
 
   if (!iree_status_is_ok(status)) {
     // Dump nice status messages to stderr on failure.
@@ -285,40 +321,19 @@ run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   return return_results(env, results);
 }
 
-ERL_NIF_TERM runtime_create_instance(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 0) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
+ERL_NIF_TERM setup_runtime(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
+  iree_hal_device_t *device = nullptr;
 
-  iree_runtime_instance_options_t instance_options;
-  iree_runtime_instance_options_initialize(&instance_options);
-  iree_runtime_instance_options_use_all_available_drivers(&instance_options);
-  iree_runtime_instance_t *instance_ptr = NULL;
-  iree_status_t status = iree_runtime_instance_create(&instance_options, iree_allocator_system(), &instance_ptr);
+  iree_status_t status = iree_hal_register_all_available_drivers(iree_hal_driver_registry_default());
 
-  if (!iree_status_is_ok(status)) {
-    iree_runtime_instance_release(instance_ptr);
-    return exla::nif::error(env, "Failed to create IREE runtime instance");
-  }
-
-  iree_hal_device_t *device_ptr = NULL;
   char device_uri[] = "metal://0000000100000971";  // TO-DO: change this to an argument
-  status = iree_hal_create_device(
-      iree_runtime_instance_driver_registry(instance_ptr),
-      iree_make_cstring_view(device_uri),
-      iree_runtime_instance_host_allocator(instance_ptr), &device_ptr);
 
-  if (!iree_status_is_ok(status)) {
-    if (device_ptr) {
-      iree_hal_device_release(device_ptr);
-    }
-    if (instance_ptr) {
-      iree_runtime_instance_release(instance_ptr);
-    }
-    return exla::nif::error(env, "Failed to create IREE device instance");
+  if (iree_status_is_ok(status)) {
+    status = iree_hal_create_device(
+        iree_hal_driver_registry_default(),
+        iree_make_cstring_view(device_uri),
+        iree_allocator_system(), &device);
   }
 
-  exla::iree::runtime::Instance *instance = new exla::iree::runtime::Instance(instance_ptr, device_ptr);
-
-  return exla::nif::ok(env, exla::nif::make(env, instance));
+  return iree_status_is_ok(status) ? exla::nif::ok(env, exla::nif::make<iree_hal_device_t *>(env, device)) : exla::nif::error(env, "Failed to setup IREE runtime");
 }

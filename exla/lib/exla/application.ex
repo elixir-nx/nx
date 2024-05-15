@@ -11,6 +11,8 @@ defmodule EXLA.Application do
     end
 
     EXLA.MLIR.IREE.global_initialize()
+    {:ok, device} = EXLA.MLIR.IREE.setup_runtime()
+    :persistent_term.put({EXLA.MLIR.IREE, :device}, device)
 
     children = [
       EXLA.Logger,

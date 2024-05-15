@@ -16,8 +16,8 @@ static ErlNifFunc iree_funcs[] = {
     // MLIR Builder
     {"global_initialize", 0, global_initialize},
     {"compile", 2, compile, ERL_NIF_DIRTY_JOB_CPU_BOUND},
-    {"runtime_create_instance", 0, runtime_create_instance},
-    {"run_module", 3, run_module, ERL_NIF_DIRTY_JOB_IO_BOUND}};
+    {"run_module", 3, run_module, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"setup_runtime", 0, setup_runtime, ERL_NIF_DIRTY_JOB_IO_BOUND}};
 
 static int open_resources(ErlNifEnv *env) {
   const char *mod = "EXLA";
@@ -25,7 +25,7 @@ static int open_resources(ErlNifEnv *env) {
   if (!exla::nif::open_resource<exla::MLIRModule *>(env, mod, "ExlaMLIRModule")) {
     return -1;
   }
-  if (!exla::nif::open_resource<exla::iree::runtime::Instance *>(env, mod, "ExlaIREERuntimeInstance")) {
+  if (!exla::nif::open_resource<iree_hal_device_t *>(env, mod, "ExlaIreeHalDevice")) {
     return -1;
   }
   return 1;

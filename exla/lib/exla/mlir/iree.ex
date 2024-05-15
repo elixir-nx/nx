@@ -10,16 +10,16 @@ defmodule EXLA.MLIR.IREE do
   end
 
   def run(module, inputs) do
-    InstancePool.checkout(fn instance ->
-      run_module(instance, module, inputs)
-    end)
+    device = :persistent_term.get({EXLA.MLIR.IREE, :device})
+
+    run_module(device, module, inputs)
   end
 
   def compile(_module, _target), do: :erlang.nif_error(:undef)
 
   def global_initialize, do: :erlang.nif_error(:undef)
 
-  def runtime_create_instance, do: :erlang.nif_error(:undef)
-
   def run_module(_instance, _module, _inputs), do: :erlang.nif_error(:undef)
+
+  def setup_runtime, do: :erlang.nif_error(:undef)
 end
