@@ -18,7 +18,7 @@ defmodule EXLA.Application do
       EXLA.Logger,
       {NimblePool,
        worker: {EXLA.MLIR.IREE.InstancePool, :pool_state},
-       pool_size: 1,
+       pool_size: System.schedulers_online(),
        name: EXLA.MLIR.IREE.InstancePool,
        lazy: true},
       {NimblePool,

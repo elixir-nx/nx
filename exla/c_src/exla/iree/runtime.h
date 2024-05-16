@@ -12,6 +12,7 @@
 
 ERL_NIF_TERM run_module(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 ERL_NIF_TERM setup_runtime(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
+ERL_NIF_TERM create_instance(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 
 namespace exla {
 namespace iree {

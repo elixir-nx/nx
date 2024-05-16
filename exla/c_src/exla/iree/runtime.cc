@@ -187,8 +187,7 @@ ERL_NIF_TERM return_results(ErlNifEnv *env, std::vector<std::pair<iree_hal_eleme
   }
 
 std::pair<iree_status_t, std::optional<std::vector<std::pair<iree_hal_element_type_t, ErlNifBinary>>>>
-call(iree_hal_device_t *device, std::vector<uint8_t> bytecode, std::vector<exla::iree::runtime::IREEInput *> exla_inputs) {
-  iree_vm_instance_t *instance = nullptr;
+call(iree_vm_instance_t *instance, iree_hal_device_t *device, std::vector<uint8_t> bytecode, std::vector<exla::iree::runtime::IREEInput *> exla_inputs) {
   iree_vm_module_t *hal_module = nullptr;
   iree_vm_module_t *bytecode_module = nullptr;
   iree_vm_context_t *context = nullptr;
@@ -196,10 +195,6 @@ call(iree_hal_device_t *device, std::vector<uint8_t> bytecode, std::vector<exla:
   iree_vm_function_t main_function;
   iree_vm_list_t *inputs = nullptr;
   iree_vm_list_t *outputs = nullptr;
-
-  RETURN_PAIR_IF_ERROR(iree_vm_instance_create(
-      IREE_VM_TYPE_CAPACITY_DEFAULT, iree_allocator_system(), &instance));
-  RETURN_PAIR_IF_ERROR(iree_hal_module_register_all_types(instance));
 
   RETURN_PAIR_IF_ERROR(iree_hal_module_create(
       instance, /*device_count=*/1, &device, IREE_HAL_MODULE_FLAG_SYNCHRONOUS,
@@ -286,13 +281,12 @@ call(iree_hal_device_t *device, std::vector<uint8_t> bytecode, std::vector<exla:
   iree_vm_list_release(inputs);
   iree_vm_list_release(outputs);
   iree_vm_context_release(context);
-  iree_vm_instance_release(instance);
   return {iree_ok_status(), results};
 }
 
 ERL_NIF_TERM
 run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 3) {
+  if (argc != 4) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
@@ -301,12 +295,17 @@ run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   std::vector<exla::iree::runtime::IREEInput *> inputs = {};
   std::vector<uint8_t> bytecode = {};
   iree_hal_device_t **device;
+  iree_vm_instance_t **instance;
 
-  if (!exla::nif::get<iree_hal_device_t *>(env, argv[0], device)) {
+  if (!exla::nif::get<iree_vm_instance_t *>(env, argv[0], instance)) {
     return exla::nif::error(env, "Unable to load device");
   }
 
-  if (!exla::nif::get_list(env, argv[1], bytecode_vec)) {
+  if (!exla::nif::get<iree_hal_device_t *>(env, argv[1], device)) {
+    return exla::nif::error(env, "Unable to load device");
+  }
+
+  if (!exla::nif::get_list(env, argv[2], bytecode_vec)) {
     return exla::nif::error(env, "Unable to load bytecode binary");
   }
 
@@ -318,7 +317,7 @@ run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     bytecode[i] = static_cast<uint8_t>(byte);
   }
 
-  if (!exla::nif::get_list(env, argv[2], input_terms)) {
+  if (!exla::nif::get_list(env, argv[3], input_terms)) {
     return exla::nif::error(env, "Unable to load input terms");
   }
 
@@ -326,7 +325,7 @@ run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Unable to decode input terms");
   }
 
-  auto [status, results] = call(*device, bytecode, inputs);
+  auto [status, results] = call(*instance, *device, bytecode, inputs);
 
   if (!iree_status_is_ok(status)) {
     // Dump nice status messages to stderr on failure.
@@ -367,4 +366,15 @@ ERL_NIF_TERM setup_runtime(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) 
   }
 
   return iree_status_is_ok(status) ? exla::nif::ok(env, exla::nif::make<iree_hal_device_t *>(env, device)) : exla::nif::error(env, "Failed to setup IREE runtime");
+}
+
+ERL_NIF_TERM create_instance(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
+  iree_vm_instance_t *instance = nullptr;
+  iree_status_t status = iree_vm_instance_create(IREE_VM_TYPE_CAPACITY_DEFAULT, iree_allocator_system(), &instance);
+
+  if (iree_status_is_ok(status)) {
+    status = iree_hal_module_register_all_types(instance);
+  }
+
+  return iree_status_is_ok(status) ? exla::nif::ok(env, exla::nif::make<iree_vm_instance_t *>(env, instance)) : exla::nif::error(env, "Failed to create IREE VM instance");
 }

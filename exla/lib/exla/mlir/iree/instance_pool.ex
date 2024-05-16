@@ -14,7 +14,7 @@ defmodule EXLA.MLIR.IREE.InstancePool do
 
   @impl NimblePool
   def init_worker(pool_state) do
-    {:ok, instance} = EXLA.MLIR.IREE.runtime_create_instance()
+    {:ok, instance} = EXLA.MLIR.IREE.create_instance()
     {:ok, instance, pool_state}
   end
 
