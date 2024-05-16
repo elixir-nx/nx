@@ -56,7 +56,8 @@ iree_excludes =
       :iree_segfault_error,
       :iree_illegal_op_error,
       :iree_offset_error,
-      :multi_device
+      :multi_device,
+      :unsupported_64_bit_op
     ]
   else
     []

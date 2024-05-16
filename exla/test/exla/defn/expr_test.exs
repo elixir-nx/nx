@@ -190,6 +190,13 @@ defmodule EXLA.Defn.ExprTest do
     defn add_two_int(t), do: t + 2
     defn add_two_float(t), do: t + 2.0
 
+    @tag :unsupported_64_bit_op
+    test "constants f64" do
+      t = Nx.tensor([1, 2], type: {:f, 64})
+      assert_equal(add_two_int(t), Nx.add(t, 2))
+      assert_equal(add_two_float(t), Nx.add(t, 2.0))
+    end
+    
     test "constants" do
       tensors = [
         Nx.tensor([1, 2], type: {:u, 8}),
@@ -198,7 +205,6 @@ defmodule EXLA.Defn.ExprTest do
         Nx.tensor([1, 2], type: {:s, 8}),
         Nx.tensor([1, 2], type: {:s, 32}),
         Nx.tensor([1, 2], type: {:f, 32}),
-        Nx.tensor([1, 2], type: {:f, 64})
       ]
 
       for t <- tensors do
