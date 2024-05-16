@@ -39,7 +39,7 @@ defmodule EXLA.BackendTest do
       median: 2,
       argsort: 2,
       sort: 2,
-      conv: 3,
+      conv: 3
     ]
   else
     @skip_iree []

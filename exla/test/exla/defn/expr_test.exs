@@ -196,7 +196,7 @@ defmodule EXLA.Defn.ExprTest do
       assert_equal(add_two_int(t), Nx.add(t, 2))
       assert_equal(add_two_float(t), Nx.add(t, 2.0))
     end
-    
+
     test "constants" do
       tensors = [
         Nx.tensor([1, 2], type: {:u, 8}),
@@ -204,7 +204,7 @@ defmodule EXLA.Defn.ExprTest do
         Nx.tensor([1, 2], type: {:u, 32}),
         Nx.tensor([1, 2], type: {:s, 8}),
         Nx.tensor([1, 2], type: {:s, 32}),
-        Nx.tensor([1, 2], type: {:f, 32}),
+        Nx.tensor([1, 2], type: {:f, 32})
       ]
 
       for t <- tensors do
@@ -244,7 +244,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "//2" do
-        defn divide_two(a, b), do: a / b
+    defn divide_two(a, b), do: a / b
 
     test "parameters" do
       tensors = [
