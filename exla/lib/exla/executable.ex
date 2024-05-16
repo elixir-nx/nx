@@ -31,7 +31,9 @@ defmodule EXLA.Executable do
     } =
       executable
 
-    for data_and_device_id <- run(runtime, client, ref, device_id, inputs, options) do
+    client = if runtime == :iree, do: :iree, else: client
+
+    for data_and_device_id <- run(client, ref, device_id, inputs, options) do
       decompose_output(data_and_device_id, output_typespecs, client)
     end
   end
@@ -77,7 +79,41 @@ defmodule EXLA.Executable do
     end
   end
 
-  defp run(:xla, client, ref, device_id, inputs, _options) do
+  defp run(:iree, ref, device_id, inputs, _options) do
+    inputs =
+      for subinputs <- inputs do
+        Enum.map(subinputs, fn
+          %DeviceBuffer{ref: ref} ->
+            ref
+
+          %BinaryBuffer{data: data, typespec: typespec} ->
+            if typespec.type in [f: 64, c: 128, s: 64, u: 64] do
+              {t, w} = typespec.type
+              w2 = div(w, 2)
+              target_type = {t, w2}
+
+              data =
+                Nx.with_default_backend(Nx.BinaryBackend, fn ->
+                  data
+                  |> Nx.from_binary(typespec.type)
+                  |> Nx.as_type(target_type)
+                  |> Nx.to_binary()
+                end)
+
+              {data, EXLA.Typespec.nif_encode(typespec)}
+            else
+              {data, EXLA.Typespec.nif_encode(typespec)}
+            end
+        end)
+      end
+
+    ref
+    |> EXLA.MLIR.IREE.run(List.flatten(inputs))
+    |> unwrap!()
+    |> then(&[{&1, device_id}])
+  end
+
+  defp run(client, ref, device_id, inputs, _options) do
     inputs =
       for subinputs <- inputs do
         Enum.map(subinputs, fn
@@ -98,56 +134,8 @@ defmodule EXLA.Executable do
     unwrap!(data)
   end
 
-  defp run(:iree, _client, ref, device_id, inputs, _options) do
-    inputs =
-      for subinputs <- inputs do
-        Enum.map(subinputs, fn
-          %BinaryBuffer{data: data, typespec: typespec} ->
-            if typespec.type in [f: 64, c: 128, s: 64, u: 64] do
-              {t, w} = typespec.type
-              w2 = div(w, 2)
-              target_type = {t, w2}
-
-              data =
-                Nx.with_default_backend(Nx.BinaryBackend, fn ->
-                  data
-                  |> Nx.from_binary(typespec.type)
-                  |> Nx.as_type(target_type)
-                  |> Nx.to_binary()
-                end)
-
-              data = <<data::bitstring, 0::size(w2)>>
-
-              {data, EXLA.Typespec.nif_encode(typespec)}
-            else
-              {data, EXLA.Typespec.nif_encode(typespec)}
-            end
-        end)
-      end
-
-    ref
-    |> EXLA.MLIR.IREE.run(List.flatten(inputs))
-    |> unwrap!()
-    |> then(&[{&1, device_id}])
-  end
-
   defp decompose_output({data, device_id}, output_typespecs, client) do
     Enum.zip_with(data, output_typespecs, fn
-      {type, buf}, target_typespec when is_binary(buf) and is_list(type) ->
-        source_typespec = EXLA.Typespec.nif_decode({type, target_typespec.shape})
-
-        if source_typespec == target_typespec do
-          BinaryBuffer.from_binary(buf, target_typespec)
-        else
-          Nx.with_default_backend(Nx.BinaryBackend, fn ->
-            buf
-            |> Nx.from_binary(source_typespec.type)
-            |> Nx.as_type(target_typespec.type)
-            |> Nx.to_binary()
-            |> BinaryBuffer.from_binary(target_typespec)
-          end)
-        end
-
       buf, typespec when is_reference(buf) ->
         DeviceBuffer.from_ref(buf, client, device_id, typespec)
 

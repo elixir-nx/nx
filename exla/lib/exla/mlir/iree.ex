@@ -16,6 +16,11 @@ defmodule EXLA.MLIR.IREE do
     end)
   end
 
+  def read(buffer, size) do
+    device = :persistent_term.get({EXLA.MLIR.IREE, :device})
+    read_buffer(buffer, device, size)
+  end
+
   def compile(_module, _target), do: :erlang.nif_error(:undef)
 
   def global_initialize, do: :erlang.nif_error(:undef)
@@ -25,4 +30,6 @@ defmodule EXLA.MLIR.IREE do
   def setup_runtime, do: :erlang.nif_error(:undef)
 
   def create_instance, do: :erlang.nif_error(:undef)
+
+  def read_buffer(_buffer, _device, _size), do: :erlang.nif_error(:undef)
 end

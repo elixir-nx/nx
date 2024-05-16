@@ -10,6 +10,10 @@ defmodule EXLA.DeviceBuffer do
   defstruct [:ref, :client_name, :device_id, :typespec]
 
   @doc false
+  def from_ref(ref, :iree, device_id, typespec) when is_reference(ref) do
+    %DeviceBuffer{ref: ref, client_name: :iree, device_id: device_id, typespec: typespec}
+  end
+
   def from_ref(ref, %Client{name: name}, device_id, typespec) when is_reference(ref) do
     %DeviceBuffer{ref: ref, client_name: name, device_id: device_id, typespec: typespec}
   end
@@ -47,7 +51,40 @@ defmodule EXLA.DeviceBuffer do
   without destroying it. If `size` is negative, then it
   reads the whole buffer.
   """
-  def read(%DeviceBuffer{ref: ref}, size \\ -1) do
+  def read(buffer, size \\ -1)
+
+  def read(%DeviceBuffer{typespec: typespec, ref: ref, client_name: :iree}, size) do
+    target_type = {s, w} = typespec.type
+
+    size =
+      if size == -1 do
+        div(w, 8) * Tuple.product(typespec.shape)
+      else
+        size
+      end
+
+    {read_size, source_type} =
+      if target_type in [f: 64, c: 128, s: 64, u: 64] do
+        {div(size, 2), {s, div(w, 2)}}
+      else
+        {size, target_type}
+      end
+
+    data = EXLA.MLIR.IREE.read(ref, read_size) |> unwrap!()
+
+    if source_type == target_type do
+      data
+    else
+      Nx.with_default_backend(Nx.BinaryBackend, fn ->
+        data
+        |> Nx.from_binary(source_type)
+        |> Nx.as_type(target_type)
+        |> Nx.to_binary()
+      end)
+    end
+  end
+
+  def read(%DeviceBuffer{ref: ref}, size) do
     EXLA.NIF.read_device_mem(ref, size) |> unwrap!()
   end
 

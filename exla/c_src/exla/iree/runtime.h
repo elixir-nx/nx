@@ -13,6 +13,7 @@
 ERL_NIF_TERM run_module(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 ERL_NIF_TERM setup_runtime(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 ERL_NIF_TERM create_instance(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
+ERL_NIF_TERM read_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 
 namespace exla {
 namespace iree {
@@ -24,6 +25,9 @@ class IREEInput {
   size_t size;
   std::vector<iree_hal_dim_t> dims;
   iree_hal_element_type_t type;
+  iree_hal_buffer_view_t* buffer_view;
+
+  IREEInput(iree_hal_buffer_view_t* buffer_view) : buffer_view(buffer_view) {}
 
   // Default constructor
   IREEInput(void* data, size_t size, std::vector<int64_t> in_dims, iree_hal_element_type_t type) : size(size), type(type) {

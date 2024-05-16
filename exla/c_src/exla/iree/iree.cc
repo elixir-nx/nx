@@ -19,7 +19,7 @@ static ErlNifFunc iree_funcs[] = {
     {"run_module", 4, run_module, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"setup_runtime", 0, setup_runtime, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"create_instance", 0, create_instance, ERL_NIF_DIRTY_JOB_IO_BOUND},
-};
+    {"read_buffer", 3, read_buffer, ERL_NIF_DIRTY_JOB_IO_BOUND}};
 
 static int open_resources(ErlNifEnv *env) {
   const char *mod = "EXLA";
@@ -31,6 +31,9 @@ static int open_resources(ErlNifEnv *env) {
     return -1;
   }
   if (!exla::nif::open_resource<iree_vm_instance_t *>(env, mod, "ExlaIreeVmInstance")) {
+    return -1;
+  }
+  if (!exla::nif::open_resource<iree_hal_buffer_view_t *>(env, mod, "ExlaIreeHallBuffer")) {
     return -1;
   }
   return 1;

@@ -119,6 +119,7 @@ int load_inputs(ErlNifEnv *env, std::vector<ERL_NIF_TERM> terms, std::vector<exl
   const ERL_NIF_TERM *tuple, *typespec;
   int length;
   ErlNifBinary bin;
+  iree_hal_buffer_view_t **buffer;
 
   loaded.clear();
   loaded.reserve(terms.size());
@@ -129,6 +130,10 @@ int load_inputs(ErlNifEnv *env, std::vector<ERL_NIF_TERM> terms, std::vector<exl
     iree_hal_element_type_t type;
 
     if (!enif_get_tuple(env, term, &length, &tuple)) {
+      if (!exla::nif::get<iree_hal_buffer_view_t *>(env, term, buffer)) {
+        loaded.push_back(std::move(new exla::iree::runtime::IREEInput(*buffer)));
+        continue;
+      }
       return 0;
     }
 
@@ -158,27 +163,8 @@ int load_inputs(ErlNifEnv *env, std::vector<ERL_NIF_TERM> terms, std::vector<exl
   return 1;
 }
 
-ERL_NIF_TERM return_results(ErlNifEnv *env, std::vector<std::pair<iree_hal_element_type_t, ErlNifBinary>> results) {
-  size_t n = results.size();
-
-  std::vector<ERL_NIF_TERM> nif_terms;
-  nif_terms.clear();
-  nif_terms.reserve(n);
-
-  for (auto [iree_type, binary] : results) {
-    std::string nx_type;
-    if (!iree_element_type_to_nx_type(iree_type, nx_type)) {
-      return exla::nif::error(env, "Unable to convert IREE type to Nx type");
-    }
-    ERL_NIF_TERM type = exla::nif::make(env, nx_type);
-    ERL_NIF_TERM bin_term = enif_make_binary(env, &binary);
-
-    nif_terms.push_back(enif_make_tuple2(env, type, bin_term));
-  }
-
-  auto data = nif_terms.data();
-  auto list = enif_make_list_from_array(env, &data[0], n);
-  return exla::nif::ok(env, list);
+ERL_NIF_TERM return_results(ErlNifEnv *env, std::vector<iree_hal_buffer_view_t *> results) {
+  return exla::nif::ok(env, exla::nif::make_list(env, results));
 }
 
 #define RETURN_PAIR_IF_ERROR(status) \
@@ -186,7 +172,7 @@ ERL_NIF_TERM return_results(ErlNifEnv *env, std::vector<std::pair<iree_hal_eleme
     return {status, std::nullopt};   \
   }
 
-std::pair<iree_status_t, std::optional<std::vector<std::pair<iree_hal_element_type_t, ErlNifBinary>>>>
+std::pair<iree_status_t, std::optional<std::vector<iree_hal_buffer_view_t *>>>
 call(iree_vm_instance_t *instance, iree_hal_device_t *device, std::vector<uint8_t> bytecode, std::vector<exla::iree::runtime::IREEInput *> exla_inputs) {
   iree_vm_module_t *hal_module = nullptr;
   iree_vm_module_t *bytecode_module = nullptr;
@@ -220,17 +206,23 @@ call(iree_vm_instance_t *instance, iree_hal_device_t *device, std::vector<uint8_
   RETURN_PAIR_IF_ERROR(iree_vm_list_create(iree_vm_make_undefined_type_def(), exla_inputs.size(), iree_allocator_system(), &inputs));
 
   for (auto input : exla_inputs) {
-    iree_hal_buffer_view_t *arg_buffer_view = nullptr;
-    RETURN_PAIR_IF_ERROR(iree_hal_buffer_view_allocate_buffer_copy(
-        device, iree_hal_device_allocator(device), input->dims.size(), input->dims.data(),
-        input->type, IREE_HAL_ENCODING_TYPE_DENSE_ROW_MAJOR,
-        (iree_hal_buffer_params_t){
-            .type = IREE_HAL_MEMORY_TYPE_DEVICE_LOCAL,
-            .usage = IREE_HAL_BUFFER_USAGE_DEFAULT,
-        },
-        input->data_byte_span(), &arg_buffer_view));
+    iree_vm_ref_t arg_buffer_view_ref;
 
-    iree_vm_ref_t arg_buffer_view_ref = iree_hal_buffer_view_move_ref(arg_buffer_view);
+    if (input->buffer_view) {
+      arg_buffer_view_ref = iree_hal_buffer_view_move_ref(input->buffer_view);
+    } else {
+      iree_hal_buffer_view_t *arg_buffer_view = nullptr;
+      RETURN_PAIR_IF_ERROR(iree_hal_buffer_view_allocate_buffer_copy(
+          device, iree_hal_device_allocator(device), input->dims.size(), input->dims.data(),
+          input->type, IREE_HAL_ENCODING_TYPE_DENSE_ROW_MAJOR,
+          (iree_hal_buffer_params_t){
+              .type = IREE_HAL_MEMORY_TYPE_DEVICE_LOCAL,
+              .usage = IREE_HAL_BUFFER_USAGE_DEFAULT,
+          },
+          input->data_byte_span(), &arg_buffer_view));
+
+      arg_buffer_view_ref = iree_hal_buffer_view_move_ref(arg_buffer_view);
+    }
     RETURN_PAIR_IF_ERROR(iree_vm_list_push_ref_move(inputs, &arg_buffer_view_ref));
   }
 
@@ -249,33 +241,15 @@ call(iree_vm_instance_t *instance, iree_hal_device_t *device, std::vector<uint8_
       context, main_function, IREE_VM_INVOCATION_FLAG_NONE,
       /*policy=*/NULL, inputs, outputs, iree_allocator_system()));
 
-  std::vector<std::pair<iree_hal_element_type_t, ErlNifBinary>> results;
+  std::vector<iree_hal_buffer_view_t *> results;
   results.resize(output_signature.size);
   for (int i = 0; i < output_signature.size; i++) {
-    iree_hal_buffer_view_t *output_buffer_view = iree_vm_list_get_buffer_view_assign(outputs, i);
+    iree_hal_buffer_view_t *output_buffer_view = iree_vm_list_get_buffer_view_retain(outputs, i);
     if (!output_buffer_view) {
       return {iree_make_status(IREE_STATUS_NOT_FOUND, "can't get output buffer view [index=%d]", i), std::nullopt};
     }
 
-    size_t num_bytes = iree_hal_buffer_view_byte_length(output_buffer_view);
-    void *out_buffer = malloc(num_bytes);
-    if (!out_buffer) {
-      return {iree_make_status(IREE_STATUS_RESOURCE_EXHAUSTED, "can't allocate output buffer [index=%d]", i), std::nullopt};
-    }
-
-    iree_hal_element_type_t element_type = iree_hal_buffer_view_element_type(output_buffer_view);
-
-    RETURN_PAIR_IF_ERROR(iree_hal_device_transfer_d2h(
-        device, iree_hal_buffer_view_buffer(output_buffer_view), 0, out_buffer,
-        num_bytes, IREE_HAL_TRANSFER_BUFFER_FLAG_DEFAULT,
-        iree_infinite_timeout()));
-
-    ErlNifBinary binary;
-    enif_alloc_binary(num_bytes, &binary);
-    std::memcpy(binary.data, out_buffer, num_bytes);
-
-    // TO - DO : free out_buffer or maybe just use binary.data in its stead
-    results[i] = std::make_pair(element_type, binary);
+    results[i] = output_buffer_view;
   }
 
   iree_vm_list_release(inputs);
@@ -377,4 +351,48 @@ ERL_NIF_TERM create_instance(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]
   }
 
   return iree_status_is_ok(status) ? exla::nif::ok(env, exla::nif::make<iree_vm_instance_t *>(env, instance)) : exla::nif::error(env, "Failed to create IREE VM instance");
+}
+
+ERL_NIF_TERM release_instance(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
+  iree_vm_instance_t **instance = nullptr;
+
+  if (!exla::nif::get<iree_vm_instance_t *>(env, argv[0], instance)) {
+    return exla::nif::error(env, "Unable to load device");
+  }
+
+  iree_vm_instance_release(*instance);
+
+  return exla::nif::ok(env);
+}
+
+ERL_NIF_TERM read_buffer(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
+  iree_hal_buffer_view_t **buffer_view = nullptr;
+  iree_hal_device_t **device = nullptr;
+  int64_t num_bytes;
+  ErlNifBinary binary;
+
+  if (!exla::nif::get<iree_hal_buffer_view_t *>(env, argv[0], buffer_view)) {
+    return exla::nif::error(env, "Unable to load buffer");
+  }
+
+  if (!exla::nif::get<iree_hal_device_t *>(env, argv[1], device)) {
+    return exla::nif::error(env, "Unable to load device");
+  }
+
+  if (!exla::nif::get(env, argv[2], &num_bytes)) {
+    return exla::nif::error(env, "Unable to get buffer size");
+  }
+
+  iree_hal_buffer_t *buffer = iree_hal_buffer_view_buffer(*buffer_view);
+
+  iree_device_size_t num_bytes_actual = num_bytes == -1 ? iree_hal_buffer_byte_length(buffer) : (iree_device_size_t)num_bytes;
+
+  enif_alloc_binary(num_bytes_actual, &binary);
+
+  iree_status_t status = iree_hal_device_transfer_d2h(
+      *device, buffer, 0, binary.data,
+      num_bytes_actual, IREE_HAL_TRANSFER_BUFFER_FLAG_DEFAULT,
+      iree_infinite_timeout());
+
+  return iree_status_is_ok(status) ? exla::nif::ok(env, exla::nif::make(env, binary)) : exla::nif::error(env, "Failed to read buffer");
 }

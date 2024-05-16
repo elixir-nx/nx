@@ -632,6 +632,10 @@ defmodule EXLA.Defn do
     {fun_computation(args, expr, type, state), cache}
   end
 
+  defp cached_recur_operator(:optional, _, %{builder: %{runtime: :iree}}, _cache) do
+    raise ArgumentError, "optional not supported yet when compiling with IREE"
+  end
+
   defp cached_recur_operator(
          :optional,
          %T{
