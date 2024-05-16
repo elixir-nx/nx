@@ -241,7 +241,7 @@ defmodule EXLA.Defn do
     output = wrap_tuple_result(acc, acc_typespec)
 
     outfeed = outfeed |> Outfeed.with_token(out_token) |> Outfeed.close(builder)
-    Value.return(builder, output)
+    Value.func_return(builder, output)
 
     {{input_typespecs, input_indexes}, outfeed}
   end
@@ -325,7 +325,7 @@ defmodule EXLA.Defn do
 
     if runtime == :iree do
       {res, _cache} = recur_flatten(expr, state, no_token_cache())
-      Value.return(function, res)
+      Value.func_return(function, res)
       {:ok, nil}
     else
       {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
@@ -333,7 +333,7 @@ defmodule EXLA.Defn do
       outfeed =
         cache |> get_outfeed() |> Outfeed.close(function)
 
-      Value.return(function, res)
+      Value.func_return(function, res)
 
       {:ok, outfeed}
     end
@@ -630,10 +630,6 @@ defmodule EXLA.Defn do
   defp cached_recur_operator(:fun, %T{data: %Expr{args: args}, type: type}, state, cache) do
     [args, expr, {_, _, _}] = args
     {fun_computation(args, expr, type, state), cache}
-  end
-
-  defp cached_recur_operator(:optional, _, %{builder: %{runtime: :iree}}, _cache) do
-    raise ArgumentError, "optional not supported yet when compiling with IREE"
   end
 
   defp cached_recur_operator(
@@ -1728,7 +1724,7 @@ defmodule EXLA.Defn do
 
     params =
       if runtime == :iree do
-        Enum.with_index(tail, fn param, i -> {i, param} end)
+        Enum.with_index([arg_token | tail], fn param, i -> {i, param} end)
       else
         Enum.with_index(tail, fn param, i -> {i, param} end)
       end
@@ -1742,11 +1738,11 @@ defmodule EXLA.Defn do
 
     if runtime == :iree do
       {res, comp_cache} = recur_composite(expr, state, cache)
-      Value.return(function, List.flatten(res))
+      Value.func_return(function, List.flatten(res))
       {function, merge_outfeed(cache, comp_cache)}
     else
       {res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
-      Value.return(function, [get_token(comp_cache) | List.flatten(res)])
+      Value.func_return(function, [get_token(comp_cache) | List.flatten(res)])
       {function, merge_outfeed(cache, comp_cache)}
     end
   end

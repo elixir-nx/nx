@@ -724,6 +724,11 @@ defmodule EXLA.MLIR.Value do
     op(func, "stablehlo.while", initial, result_types, regions: regions)
   end
 
+
+  def func_return(func, values) when is_list(values) do
+    op(func, "func.return", values, [])
+  end
+
   def return(func, values) when is_list(values) do
     op(func, "stablehlo.return", values, [])
   end
