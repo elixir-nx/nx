@@ -181,7 +181,13 @@ ERL_NIF_TERM return_results(ErlNifEnv *env, std::vector<std::pair<iree_hal_eleme
   return exla::nif::ok(env, list);
 }
 
-iree_status_t call(iree_hal_device_t *device, std::vector<uint8_t> bytecode, std::vector<exla::iree::runtime::IREEInput *> exla_inputs, std::vector<std::pair<iree_hal_element_type_t, ErlNifBinary>> &results) {
+#define RETURN_PAIR_IF_ERROR(status) \
+  if (!iree_status_is_ok(status)) {  \
+    return {status, std::nullopt};   \
+  }
+
+std::pair<iree_status_t, std::optional<std::vector<std::pair<iree_hal_element_type_t, ErlNifBinary>>>>
+call(iree_hal_device_t *device, std::vector<uint8_t> bytecode, std::vector<exla::iree::runtime::IREEInput *> exla_inputs) {
   iree_vm_instance_t *instance = nullptr;
   iree_vm_module_t *hal_module = nullptr;
   iree_vm_module_t *bytecode_module = nullptr;
@@ -191,38 +197,36 @@ iree_status_t call(iree_hal_device_t *device, std::vector<uint8_t> bytecode, std
   iree_vm_list_t *inputs = nullptr;
   iree_vm_list_t *outputs = nullptr;
 
-  IREE_RETURN_IF_ERROR(iree_vm_instance_create(
+  RETURN_PAIR_IF_ERROR(iree_vm_instance_create(
       IREE_VM_TYPE_CAPACITY_DEFAULT, iree_allocator_system(), &instance));
-  IREE_RETURN_IF_ERROR(iree_hal_module_register_all_types(instance));
+  RETURN_PAIR_IF_ERROR(iree_hal_module_register_all_types(instance));
 
-  IREE_RETURN_IF_ERROR(iree_hal_module_create(
+  RETURN_PAIR_IF_ERROR(iree_hal_module_create(
       instance, /*device_count=*/1, &device, IREE_HAL_MODULE_FLAG_SYNCHRONOUS,
       iree_allocator_system(), &hal_module));
 
   // (kFloat4, sizeof(kFloat4))
   const iree_const_byte_span_t module_data = iree_make_const_byte_span(bytecode.data(), bytecode.size());
 
-  IREE_RETURN_IF_ERROR(iree_vm_bytecode_module_create(
+  RETURN_PAIR_IF_ERROR(iree_vm_bytecode_module_create(
       instance, module_data, iree_allocator_null(), iree_allocator_system(),
       &bytecode_module));
 
   iree_vm_module_t *modules[] = {hal_module, bytecode_module};
-  IREE_RETURN_IF_ERROR(iree_vm_context_create_with_modules(
+  RETURN_PAIR_IF_ERROR(iree_vm_context_create_with_modules(
       instance, IREE_VM_CONTEXT_FLAG_NONE, IREE_ARRAYSIZE(modules), &modules[0],
       iree_allocator_system(), &context));
   iree_vm_module_release(hal_module);
   iree_vm_module_release(bytecode_module);
 
-  IREE_RETURN_IF_ERROR(iree_vm_context_resolve_function(
+  RETURN_PAIR_IF_ERROR(iree_vm_context_resolve_function(
       context, iree_make_cstring_view(kMainFunctionName), &main_function));
 
-  IREE_RETURN_IF_ERROR(
-      iree_vm_list_create(iree_vm_make_undefined_type_def(), exla_inputs.size(), iree_allocator_system(), &inputs),
-      "can't allocate input vm list");
+  RETURN_PAIR_IF_ERROR(iree_vm_list_create(iree_vm_make_undefined_type_def(), exla_inputs.size(), iree_allocator_system(), &inputs));
 
   for (auto input : exla_inputs) {
     iree_hal_buffer_view_t *arg_buffer_view = nullptr;
-    IREE_RETURN_IF_ERROR(iree_hal_buffer_view_allocate_buffer_copy(
+    RETURN_PAIR_IF_ERROR(iree_hal_buffer_view_allocate_buffer_copy(
         device, iree_hal_device_allocator(device), input->dims.size(), input->dims.data(),
         input->type, IREE_HAL_ENCODING_TYPE_DENSE_ROW_MAJOR,
         (iree_hal_buffer_params_t){
@@ -232,7 +236,7 @@ iree_status_t call(iree_hal_device_t *device, std::vector<uint8_t> bytecode, std
         input->data_byte_span(), &arg_buffer_view));
 
     iree_vm_ref_t arg_buffer_view_ref = iree_hal_buffer_view_move_ref(arg_buffer_view);
-    IREE_RETURN_IF_ERROR(iree_vm_list_push_ref_move(inputs, &arg_buffer_view_ref));
+    RETURN_PAIR_IF_ERROR(iree_vm_list_push_ref_move(inputs, &arg_buffer_view_ref));
   }
 
   iree_vm_function_signature_t signature =
@@ -240,21 +244,50 @@ iree_status_t call(iree_hal_device_t *device, std::vector<uint8_t> bytecode, std
   iree_string_view_t input_signature;
   iree_string_view_t output_signature;
 
-  IREE_RETURN_IF_ERROR(iree_vm_function_call_get_cconv_fragments(
+  RETURN_PAIR_IF_ERROR(iree_vm_function_call_get_cconv_fragments(
       &signature, &input_signature, &output_signature));
 
-  IREE_RETURN_IF_ERROR(iree_vm_list_create(iree_vm_make_undefined_type_def(), output_signature.size, iree_allocator_system(), &outputs), "can't allocate output vm list");
+  RETURN_PAIR_IF_ERROR(iree_vm_list_create(iree_vm_make_undefined_type_def(), output_signature.size, iree_allocator_system(), &outputs));
 
   // Synchronously invoke the function.
-  IREE_RETURN_IF_ERROR(iree_vm_invoke(
+  RETURN_PAIR_IF_ERROR(iree_vm_invoke(
       context, main_function, IREE_VM_INVOCATION_FLAG_NONE,
       /*policy=*/NULL, inputs, outputs, iree_allocator_system()));
+
+  std::vector<std::pair<iree_hal_element_type_t, ErlNifBinary>> results;
+  results.resize(output_signature.size);
+  for (int i = 0; i < output_signature.size; i++) {
+    iree_hal_buffer_view_t *output_buffer_view = iree_vm_list_get_buffer_view_assign(outputs, i);
+    if (!output_buffer_view) {
+      return {iree_make_status(IREE_STATUS_NOT_FOUND, "can't get output buffer view [index=%d]", i), std::nullopt};
+    }
+
+    size_t num_bytes = iree_hal_buffer_view_byte_length(output_buffer_view);
+    void *out_buffer = malloc(num_bytes);
+    if (!out_buffer) {
+      return {iree_make_status(IREE_STATUS_RESOURCE_EXHAUSTED, "can't allocate output buffer [index=%d]", i), std::nullopt};
+    }
+
+    iree_hal_element_type_t element_type = iree_hal_buffer_view_element_type(output_buffer_view);
+
+    RETURN_PAIR_IF_ERROR(iree_hal_device_transfer_d2h(
+        device, iree_hal_buffer_view_buffer(output_buffer_view), 0, out_buffer,
+        num_bytes, IREE_HAL_TRANSFER_BUFFER_FLAG_DEFAULT,
+        iree_infinite_timeout()));
+
+    ErlNifBinary binary;
+    enif_alloc_binary(num_bytes, &binary);
+    std::memcpy(binary.data, out_buffer, num_bytes);
+
+    // TO - DO : free out_buffer or maybe just use binary.data in its stead
+    results[i] = std::make_pair(element_type, binary);
+  }
 
   iree_vm_list_release(inputs);
   iree_vm_list_release(outputs);
   iree_vm_context_release(context);
   iree_vm_instance_release(instance);
-  return iree_ok_status();
+  return {iree_ok_status(), results};
 }
 
 ERL_NIF_TERM
@@ -293,9 +326,7 @@ run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Unable to decode input terms");
   }
 
-  std::vector<std::pair<iree_hal_element_type_t, ErlNifBinary>> results;
-
-  iree_status_t status = call(*device, bytecode, inputs, results);
+  auto [status, results] = call(*device, bytecode, inputs);
 
   if (!iree_status_is_ok(status)) {
     // Dump nice status messages to stderr on failure.
@@ -318,7 +349,7 @@ run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   iree_status_free(status);
-  return return_results(env, results);
+  return return_results(env, results.value());
 }
 
 ERL_NIF_TERM setup_runtime(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
