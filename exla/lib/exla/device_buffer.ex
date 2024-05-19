@@ -64,7 +64,7 @@ defmodule EXLA.DeviceBuffer do
       end
 
     {read_size, source_type} =
-      if target_type in [f: 64, c: 128, s: 64, u: 64] do
+      if target_type in [f: 64, c: 128] do
         {div(size, 2), {s, div(w, 2)}}
       else
         {size, target_type}
@@ -93,6 +93,9 @@ defmodule EXLA.DeviceBuffer do
 
   Returns `:ok` | `:already_deallocated`.
   """
+  def deallocate(%DeviceBuffer{ref: ref, client_name: :iree}),
+    do: EXLA.MLIR.IREE.deallocate_buffer(ref) |> unwrap!()
+
   def deallocate(%DeviceBuffer{ref: ref}),
     do: EXLA.NIF.deallocate_device_mem(ref) |> unwrap!()
 

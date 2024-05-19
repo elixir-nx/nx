@@ -24,7 +24,7 @@ bool primitive_type_to_iree_element_type(xla::PrimitiveType t, iree_hal_element_
       *type = type_enum::IREE_HAL_ELEMENT_TYPE_INT_32;
       return true;
     case PrimitiveType::S64:
-      *type = type_enum::IREE_HAL_ELEMENT_TYPE_INT_32;
+      *type = type_enum::IREE_HAL_ELEMENT_TYPE_INT_64;
       return true;
     case PrimitiveType::U8:
       *type = type_enum::IREE_HAL_ELEMENT_TYPE_UINT_8;
@@ -36,7 +36,7 @@ bool primitive_type_to_iree_element_type(xla::PrimitiveType t, iree_hal_element_
       *type = type_enum::IREE_HAL_ELEMENT_TYPE_UINT_32;
       return true;
     case PrimitiveType::U64:
-      *type = type_enum::IREE_HAL_ELEMENT_TYPE_UINT_32;
+      *type = type_enum::IREE_HAL_ELEMENT_TYPE_UINT_64;
       return true;
     case PrimitiveType::BF16:
       *type = type_enum::IREE_HAL_ELEMENT_TYPE_BFLOAT_16;
@@ -395,4 +395,16 @@ ERL_NIF_TERM read_buffer(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
       iree_infinite_timeout());
 
   return iree_status_is_ok(status) ? exla::nif::ok(env, exla::nif::make(env, binary)) : exla::nif::error(env, "Failed to read buffer");
+}
+
+ERL_NIF_TERM deallocate_buffer(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
+  iree_hal_buffer_view_t **buffer_view = nullptr;
+
+  if (!exla::nif::get<iree_hal_buffer_view_t *>(env, argv[0], buffer_view)) {
+    return exla::nif::error(env, "Unable to load buffer");
+  }
+
+  iree_hal_buffer_view_release(*buffer_view);
+
+  return exla::nif::ok(env);
 }

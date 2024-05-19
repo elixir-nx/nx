@@ -99,7 +99,6 @@ defmodule EXLA.Defn.APITest do
   end
 
   describe "batch" do
-    @tag :iree_resource_exhausted_error
     test "when padded" do
       input = Nx.tensor([[1, 2, 3]], backend: EXLA.Backend)
       batch = [input] |> Nx.Batch.concatenate() |> Nx.Batch.pad(1)

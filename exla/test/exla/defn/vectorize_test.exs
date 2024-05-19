@@ -160,6 +160,7 @@ defmodule EXLA.Defn.VectorizeTest do
   end
 
   describe "cond" do
+    @describetag :token
     deftransformp send_value(val, opts \\ []) do
       Nx.Defn.Kernel.hook(
         val,

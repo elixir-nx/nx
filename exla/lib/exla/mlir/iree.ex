@@ -21,7 +21,7 @@ defmodule EXLA.MLIR.IREE do
     read_buffer(buffer, device, size)
   end
 
-  def compile(_module, _target), do: :erlang.nif_error(:undef)
+  def compile(_module, _flags), do: :erlang.nif_error(:undef)
 
   def global_initialize, do: :erlang.nif_error(:undef)
 
@@ -30,6 +30,8 @@ defmodule EXLA.MLIR.IREE do
   def setup_runtime, do: :erlang.nif_error(:undef)
 
   def create_instance, do: :erlang.nif_error(:undef)
+
+  def deallocate_buffer(_buffer), do: :erlang.nif_error(:undef)
 
   def read_buffer(_buffer, _device, _size), do: :erlang.nif_error(:undef)
 end

@@ -56,9 +56,19 @@ ERL_NIF_TERM compile(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   std::string module_str;
+  std::vector<ErlNifBinary> flags_str;
+  std::vector<const char *> flags;
 
   if (!exla::nif::get(env, argv[0], module_str)) {
     return exla::nif::error(env, "Unable to get module.");
+  }
+
+  if (!exla::nif::get_list(env, argv[1], flags_str)) {
+    return exla::nif::error(env, "Unable to get list.");
+  }
+
+  for (auto &flag : flags_str) {
+    flags.push_back(reinterpret_cast<const char *>(flag.data));
   }
 
   compiler_state_t state;
@@ -80,14 +90,7 @@ ERL_NIF_TERM compile(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
 
   // Set flags.
   iree_compiler_error_t *err;
-  const char *flags[] = {
-      "--iree-hal-target-backends=metal-spirv",
-      "--iree-input-type=stablehlo_xla",
-      "--iree-execution-model=async-internal",
-      "--output-format=vm-bytecode",
-      "--iree-opt-demote-f64-to-f32=true",
-      "--iree-opt-demote-i64-to-i32=true"};
-  err = ireeCompilerSessionSetFlags(state.session, 1, flags);
+  err = ireeCompilerSessionSetFlags(state.session, 1, flags.data());
   if (err) {
     cleanup_compiler_state(state);
     return exla::nif::error(env, "Unable to set flags.");

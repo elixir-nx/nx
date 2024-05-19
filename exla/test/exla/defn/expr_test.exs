@@ -11,7 +11,6 @@ defmodule EXLA.Defn.ExprTest do
   describe "tuples" do
     defn add_subtract_tuple(a, b), do: {a + b, a - b}
 
-    @tag :iree_offset_error
     test "on results" do
       assert_equal(add_subtract_tuple(2, 3), {Nx.tensor(5), Nx.tensor(-1)})
 
@@ -370,7 +369,6 @@ defmodule EXLA.Defn.ExprTest do
 
     defn atan2_two(a, b), do: Nx.atan2(a, b)
 
-    @tag :iree_resource_exhausted_error
     test "atan2" do
       <<neg_zero::float>> = <<0x8000000000000000::64>>
       left = Nx.tensor([-1.0, neg_zero, 0.0, 1.0])
@@ -405,7 +403,6 @@ defmodule EXLA.Defn.ExprTest do
 
     defn bitwise_and(a, b), do: a &&& b
 
-    @tag :iree_resource_exhausted_error
     test "bitwise_and" do
       assert Nx.shape(bitwise_and(@left, @right)) == {5, 5}
       assert_equal(bitwise_and(@left, @right), Nx.bitwise_and(@left, @right))
@@ -413,7 +410,6 @@ defmodule EXLA.Defn.ExprTest do
 
     defn bitwise_or(a, b), do: a ||| b
 
-    @tag :iree_resource_exhausted_error
     test "bitwise_or" do
       assert Nx.shape(bitwise_or(@left, @right)) == {5, 5}
       assert_equal(bitwise_or(@left, @right), Nx.bitwise_or(@left, @right))
@@ -421,7 +417,6 @@ defmodule EXLA.Defn.ExprTest do
 
     defn bitwise_not(a), do: ~~~a
 
-    @tag :iree_resource_exhausted_error
     test "bitwise_not" do
       assert Nx.shape(bitwise_not(@left)) == {5}
       assert_equal(bitwise_not(@left), Nx.bitwise_not(@left))
@@ -448,7 +443,6 @@ defmodule EXLA.Defn.ExprTest do
 
     defn left_shift(a, b), do: a <<< b
 
-    @tag :iree_resource_exhausted_error
     test "left_shift" do
       assert Nx.shape(left_shift(@left, @right)) == {5, 5}
       assert_equal(left_shift(@left, @right), Nx.left_shift(@left, @right))
@@ -462,7 +456,6 @@ defmodule EXLA.Defn.ExprTest do
 
     defn right_shift(a, b), do: a >>> b
 
-    @tag :iree_resource_exhausted_error
     test "right_shift" do
       assert Nx.shape(right_shift(@left_signed, @right_signed)) == {9, 9}
 
@@ -811,7 +804,9 @@ defmodule EXLA.Defn.ExprTest do
       defn_var = Macro.var(defn_fun, __MODULE__)
       defn unquote(defn_fun)(t), do: Nx.unquote(fun)(t)
 
-      @tag :iree_type_mismatch_error
+      if fun in [:is_nan, :is_infinity, :rsqrt] do
+        @tag :iree_type_mismatch_error
+      end
       test "#{fun}" do
         assert_all_close(
           unquote(defn_fun)(@float_tensor),
@@ -827,7 +822,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "complex ops" do
-    @describetag :iree_unsupported_fft_error
+    @describetag :iree_illegal_op_error
     defn fft(t, opts \\ []), do: Nx.fft(t, opts)
     defn ifft(t, opts \\ []), do: Nx.ifft(t, opts)
 
@@ -1870,7 +1865,6 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
-    @tag :iree_resource_exhausted_error
     test "indexed_add handles different input types" do
       target = Nx.tensor([0])
       indices = Nx.tensor([[0]])
@@ -1903,7 +1897,6 @@ defmodule EXLA.Defn.ExprTest do
       Nx.indexed_put(t, i, u)
     end
 
-    @tag :iree_resource_exhausted_error
     test "indexed_add works for multi-dim tensor" do
       target = Nx.broadcast(0, {2, 3, 4})
 
@@ -1944,7 +1937,6 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
-    @tag :iree_resource_exhausted_error
     test "indexed_put handles different input types" do
       target = Nx.tensor([0])
       indices = Nx.tensor([[0]])
@@ -2240,7 +2232,6 @@ defmodule EXLA.Defn.ExprTest do
   describe "reduce_min" do
     defn reduce_min(t), do: Nx.reduce_min(t)
 
-    @tag :iree_resource_exhausted_error
     test "computes the minimum across types" do
       assert_equal(Nx.tensor([1, 2, 3]) |> reduce_min(), Nx.tensor(1))
 
@@ -2262,7 +2253,6 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
-    @tag :iree_resource_exhausted_error
     test "computes the minimum across nan" do
       assert_equal(Nx.tensor([:nan, :nan, :nan]) |> reduce_min(), Nx.tensor(:nan))
     end
@@ -2539,7 +2529,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "window min" do
-    @describetag :iree_wrong_result_error
+    @describetag :iree_segfault_error
     defn window_min0(t), do: Nx.window_min(t, {2})
     defn window_min1(t), do: Nx.window_min(t, {1, 2, 1})
 
@@ -2939,7 +2929,6 @@ defmodule EXLA.Defn.ExprTest do
     end
 
     @tag :unsupported_64_bit_op
-    @tag :iree_resource_exhausted_error
     test "computes the convolution with general padding, stride" do
       img = Nx.iota({2, 1, 12, 24}, type: {:f, 64})
       kernel = Nx.iota({2, 1, 6, 6}, type: {:f, 64})
@@ -3952,9 +3941,9 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "top_k" do
+    @describetag :iree_segfault_error
     defn top_1(t), do: Nx.top_k(t, k: 1)
 
-    @tag :iree_offset_error
     test "returns top 1 values and indices" do
       a = Nx.iota({5})
       assert_equal(top_1(a), {Nx.tensor([4]), Nx.tensor([4])})
@@ -3968,7 +3957,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "argsort" do
-    @describetag :iree_offset_error
+    @describetag :iree_segfault_error
     defn argsort0(t), do: Nx.argsort(t, axis: 0)
     defn argsort1(t), do: Nx.argsort(t, axis: 1)
     defn argsort1_asc(t), do: Nx.argsort(t, axis: 1, direction: :asc)

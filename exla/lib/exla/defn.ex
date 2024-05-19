@@ -483,7 +483,18 @@ defmodule EXLA.Defn do
 
                 if runtime == :iree do
                   {:ok, module_charlist} = EXLA.NIF.mlir_module_to_string(builder.module.ref)
-                  {:ok, module_bytecode} = EXLA.MLIR.IREE.compile(module_charlist, "metal")
+
+                  flags = [
+                    "--iree-hal-target-backends=metal-spirv",
+                    "--iree-input-type=stablehlo_xla",
+                    "--iree-execution-model=async-internal",
+                    "--output-format=vm-bytecode",
+                    "--iree-opt-demote-f64-to-f32=true",
+                    "--iree-opt-demote-i64-to-i32=false",
+                    "--iree-input-demote-i64-to-i32=false"
+                  ]
+
+                  {:ok, module_bytecode} = EXLA.MLIR.IREE.compile(module_charlist, flags)
 
                   %EXLA.Executable{
                     client: client,

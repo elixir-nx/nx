@@ -87,7 +87,7 @@ defmodule EXLA.Executable do
             ref
 
           %BinaryBuffer{data: data, typespec: typespec} ->
-            if typespec.type in [f: 64, c: 128, s: 64, u: 64] do
+            if typespec.type in [f: 64, c: 128] do
               {t, w} = typespec.type
               w2 = div(w, 2)
               target_type = {t, w2}

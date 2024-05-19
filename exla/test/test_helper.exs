@@ -46,17 +46,10 @@ iree_excludes =
   if compiler_mode == :iree do
     [
       :token,
-      :iree_hangup_error,
-      :iree_type_mismatch_error,
-      :iree_resource_exhausted_error,
-      :iree_key_not_found_error,
-      :iree_wrong_result_error,
-      :iree_unsupported_fft_error,
       :iree_segfault_error,
       :iree_illegal_op_error,
-      :iree_offset_error,
-      :multi_device,
-      :unsupported_64_bit_op
+      :iree_key_not_found_error,
+      :iree_type_mismatch_error
     ]
   else
     []
