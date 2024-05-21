@@ -804,9 +804,6 @@ defmodule EXLA.Defn.ExprTest do
       defn_var = Macro.var(defn_fun, __MODULE__)
       defn unquote(defn_fun)(t), do: Nx.unquote(fun)(t)
 
-      if fun in [:is_nan, :is_infinity, :rsqrt] do
-        @tag :iree_type_mismatch_error
-      end
       test "#{fun}" do
         assert_all_close(
           unquote(defn_fun)(@float_tensor),

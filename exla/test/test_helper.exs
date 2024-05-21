@@ -46,8 +46,7 @@ iree_excludes =
       :token,
       :iree_segfault_error,
       :iree_illegal_op_error,
-      :iree_key_not_found_error,
-      :iree_type_mismatch_error
+      :iree_key_not_found_error
     ]
   else
     []
