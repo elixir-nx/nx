@@ -326,16 +326,25 @@ run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
 }
 
 ERL_NIF_TERM setup_runtime(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
   iree_hal_device_t *device = nullptr;
+  std::string device_uri;
+
+  if (!exla::nif::get(env, argv[0], device_uri)) {
+    return exla::nif::error(env, "Unable to get buffer size");
+  }
 
   iree_status_t status = iree_hal_register_all_available_drivers(iree_hal_driver_registry_default());
 
-  char device_uri[] = "metal://0000000100000971";  // TO-DO: change this to an argument
+  // char device_uri[] = "metal://0000000100000971";  // TO-DO: change this to an argument
 
   if (iree_status_is_ok(status)) {
     status = iree_hal_create_device(
         iree_hal_driver_registry_default(),
-        iree_make_cstring_view(device_uri),
+        iree_make_cstring_view(device_uri.c_str()),
         iree_allocator_system(), &device);
   }
 

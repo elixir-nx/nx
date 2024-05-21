@@ -27,7 +27,7 @@ defmodule EXLA.MLIR.IREE do
 
   def run_module(_instance, _device, _module, _inputs), do: :erlang.nif_error(:undef)
 
-  def setup_runtime, do: :erlang.nif_error(:undef)
+  def setup_runtime(_device_uri), do: :erlang.nif_error(:undef)
 
   def create_instance, do: :erlang.nif_error(:undef)
 
