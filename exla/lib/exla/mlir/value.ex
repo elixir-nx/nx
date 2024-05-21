@@ -625,7 +625,7 @@ defmodule EXLA.MLIR.Value do
       ) do
     operands = inputs ++ init_values
     result_types = typespecs_to_mlir_types(typespecs)
-    attributes = [dimensions: attr_dense_i64_elements(dimensions)]
+    attributes = [dimensions: attr_array_i64_elements(dimensions)]
     regions = [reducer]
     op(func, "stablehlo.reduce", operands, result_types, attributes: attributes, regions: regions)
   end
@@ -902,6 +902,14 @@ defmodule EXLA.MLIR.Value do
     size = byte_size(binary) * 8
     <<value::size(size)-native>> = binary
     <<value::size(size)-big>>
+  end
+
+  defp attr_array_i64_elements([]) do
+    "array<i64>"
+  end
+
+  defp attr_array_i64_elements(list) do
+    "array<i64: #{Enum.join(list, ", ")}>"
   end
 
   defp attr_dense_i64_elements(list) do

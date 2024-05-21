@@ -98,6 +98,8 @@ defmodule EXLA.MLIR.Module do
         do: -1,
         else: Keyword.get(options, :device_id, client.default_device_id)
 
+    # module.ref |> EXLA.NIF.mlir_module_to_string() |> elem(1) |> IO.puts()
+
     ref =
       EXLA.NIF.mlir_compile(
         client.ref,
