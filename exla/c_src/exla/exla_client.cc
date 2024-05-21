@@ -8,6 +8,7 @@
 #include "xla/pjrt/pjrt_c_api_client.h"
 #include "xla/pjrt/pjrt_compiler.h"
 #include "xla/pjrt/tfrt_cpu_pjrt_client.h"
+#include "xla/shape_util.h"
 
 namespace exla {
 
@@ -61,10 +62,10 @@ xla::StatusOr<std::unique_ptr<xla::PjRtBuffer>> PjRtBufferFromBinary(xla::PjRtCl
     return xla::InvalidArgument("Expected buffer to be binary.");
   }
 
-  xla::PjRtClient::HostBufferSemantics semantics = xla::PjRtClient::HostBufferSemantics::kZeroCopy;
+  xla::PjRtClient::HostBufferSemantics semantics = xla::PjRtClient::HostBufferSemantics::kImmutableZeroCopy;
   std::function<void()> on_done_with_host_buffer = [copy_env]() { enif_free_env(copy_env); };
 
-  EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice * device, client->LookupDevice(device_id));
+  EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice * device, client->LookupDevice(xla::PjRtGlobalDeviceId(device_id)));
   EXLA_ASSIGN_OR_RETURN(auto buffer, client->BufferFromHostBuffer(
                                          binary.data, shape.element_type(), shape.dimensions(), std::nullopt, semantics, on_done_with_host_buffer, device));
 
@@ -292,7 +293,7 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
     // executable, meaning we need to find the device corresponding to the specific device
     // id and execute on that device, we've already guaranteed this executable only has 1
     // replica
-    EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice * device, client_->client()->LookupDevice(device_id));
+    EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice * device, client_->client()->LookupDevice(xla::PjRtGlobalDeviceId(device_id)));
     // because this is a portable executable, it only has 1 replica and so we only need
     // to get the arguments at the first position of the input buffers
     std::vector<xla::PjRtBuffer*> portable_args = input_buffers.at(0);
@@ -390,30 +391,49 @@ xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const mlir::OwningOpRef<mlir:
 }
 
 xla::Status ExlaClient::TransferToInfeed(ErlNifEnv* env,
-                                         ERL_NIF_TERM data,
-                                         const xla::Shape& shape,
+                                         std::vector<ErlNifBinary> buffer_bins,
+                                         std::vector<xla::Shape> shapes,
                                          int device_id) {
-  // Fast path to avoid any traversal when not sending Tuples
-  ERL_NIF_TERM head, tail;
-  if (!enif_get_list_cell(env, data, &head, &tail)) {
-    return xla::InvalidArgument("infeed operation expects a list of binaries");
+  std::vector<const char*> buf_ptrs;
+  buf_ptrs.reserve(buffer_bins.size());
+
+  for (const auto & buffer_bin : buffer_bins) {
+    const char* data_ptr = const_cast<char*>(reinterpret_cast<char*>(buffer_bin.data));
+    buf_ptrs.push_back(data_ptr);
   }
 
-  ErlNifBinary binary;
-  if (!nif::get_binary(env, head, &binary)) {
-    return xla::InvalidArgument("infeed operation expects a list of binaries");
-  }
+  auto shape = xla::ShapeUtil::MakeTupleShape(shapes);
 
-  const char* data_ptr = const_cast<char*>(reinterpret_cast<char*>(binary.data));
-  xla::BorrowingLiteral literal(data_ptr, shape);
+  // Instead of pushing each buffer separately, we create a flat tuple
+  // literal and push the whole group of buffers.
+  //
+  // On the CPU, XLA infeed reads buffers from a queue one at a time [1][2]
+  // (or rather, the infeed operation is lowered to multiple queue reads),
+  // hence pushing one at a time works fine. Pushing a flat tuple works
+  // effectively the same, since it basically adds each element to the
+  // queue [3].
+  //
+  // On the GPU, XLA infeed reads only a single "literal" from a queue [4]
+  // and expects it to carry all buffers for the given infeed operation.
+  // Consequently, we need to push all buffers as a single literal.
+  //
+  // Given that a flat tuple works in both cases, we just do that.
+  //
+  // [1]: https://github.com/openxla/xla/blob/fd58925adee147d38c25a085354e15427a12d00a/xla/service/cpu/ir_emitter.cc#L449-L450
+  // [2]: https://github.com/openxla/xla/blob/fd58925adee147d38c25a085354e15427a12d00a/xla/service/cpu/cpu_runtime.cc#L222
+  // [3]: https://github.com/openxla/xla/blob/fd58925adee147d38c25a085354e15427a12d00a/xla/service/cpu/cpu_xfeed.cc#L178
+  // [4]: https://github.com/openxla/xla/blob/fd58925adee147d38c25a085354e15427a12d00a/xla/service/gpu/runtime/infeed_thunk.cc#L40-L41
+  xla::BorrowingLiteral literal(buf_ptrs, shape);
 
-  EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice * device, client_->LookupDevice(device_id));
+  EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice * device, client_->LookupDevice(xla::PjRtGlobalDeviceId(device_id)));
 
-  return device->TransferToInfeed(literal);
+  xla::Status status = device->TransferToInfeed(literal);
+
+  return status;
 }
 
 xla::StatusOr<ERL_NIF_TERM> ExlaClient::TransferFromOutfeed(ErlNifEnv* env, int device_id, xla::Shape& shape) {
-  EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice * device, client_->LookupDevice(device_id));
+  EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice * device, client_->LookupDevice(xla::PjRtGlobalDeviceId(device_id)));
 
   auto literal = std::make_shared<xla::Literal>(shape);
 
@@ -445,8 +465,11 @@ xla::StatusOr<ExlaClient*> GetGpuClient(double memory_fraction,
       .memory_fraction = memory_fraction,
       .preallocate = preallocate};
 
+  xla::GpuClientOptions client_options = {
+      .allocator_config = allocator_config};
+
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtClient> client,
-                        xla::GetStreamExecutorGpuClient(false, allocator_config, 0));
+                        xla::GetStreamExecutorGpuClient(client_options));
 
   return new ExlaClient(std::move(client));
 }

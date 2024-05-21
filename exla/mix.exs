@@ -66,7 +66,7 @@ defmodule EXLA.MixProject do
       # {:nx, "~> 0.7.1"},
       {:nx, path: "../nx"},
       {:telemetry, "~> 0.4.0 or ~> 1.0"},
-      {:xla, "~> 0.6.0", runtime: false},
+      {:xla, "~> 0.7.0", runtime: false},
       {:elixir_make, "~> 0.6", runtime: false},
       {:benchee, "~> 1.0", only: :dev},
       {:ex_doc, "~> 0.29", only: :docs},

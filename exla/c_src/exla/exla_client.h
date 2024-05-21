@@ -92,8 +92,8 @@ class ExlaClient {
 
   // TODO(seanmor5): This is device logic and should be refactored
   xla::Status TransferToInfeed(ErlNifEnv* env,
-                               ERL_NIF_TERM data,
-                               const xla::Shape& shape,
+                               std::vector<ErlNifBinary> buffer_bins,
+                               std::vector<xla::Shape> shapes,
                                int device_id);
 
   xla::StatusOr<ERL_NIF_TERM> TransferFromOutfeed(ErlNifEnv* env, int device_id, xla::Shape& shape);

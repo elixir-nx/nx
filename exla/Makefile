@@ -41,7 +41,7 @@ endif
 LDFLAGS = -L$(XLA_EXTENSION_LIB) -lxla_extension -shared
 
 ifeq ($(shell uname -s), Darwin)
-	LDFLAGS += -flat_namespace -undefined suppress -rpath @loader_path/xla_extension/lib
+	LDFLAGS += -flat_namespace -undefined dynamic_lookup -rpath @loader_path/xla_extension/lib
 else
 	# Use a relative RPATH, so at runtime libexla.so looks for libxla_extension.so
 	# in ./lib regardless of the absolute location. This way priv can be safely

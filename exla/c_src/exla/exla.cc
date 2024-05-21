@@ -481,7 +481,7 @@ ERL_NIF_TERM create_buffer_from_device_pointer(ErlNifEnv* env, int argc, const E
     ptr = result.first;
   }
 
-  EXLA_ASSIGN_OR_RETURN_NIF(xla::PjRtDevice * device, (*client)->client()->LookupDevice(device_id), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(xla::PjRtDevice * device, (*client)->client()->LookupDevice(xla::PjRtGlobalDeviceId(device_id)), env);
 
   std::function<void()> on_delete_callback = []() {};
   EXLA_ASSIGN_OR_RETURN_NIF(std::unique_ptr<xla::PjRtBuffer> buffer, (*client)->client()->CreateViewOfDeviceBuffer(ptr, shape, device, on_delete_callback), env);
@@ -573,27 +573,38 @@ ERL_NIF_TERM transfer_to_infeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM arg
     return exla::nif::error(env, "Unable to get device ID.");
   }
 
+  std::vector<ErlNifBinary> buffer_bins;
+  std::vector<xla::Shape> shapes;
+
   ERL_NIF_TERM head, tail;
   while (enif_get_list_cell(env, data, &head, &tail)) {
     const ERL_NIF_TERM* terms;
     int count;
-    xla::Shape shape;
 
     if (!enif_get_tuple(env, head, &count, &terms) && count != 2) {
-      return exla::nif::error(env, "Unable to binary-shape tuple.");
+      return exla::nif::error(env, "Unable to {binary, shape} tuple.");
     }
 
+    ErlNifBinary buffer_bin;
+    if (!exla::nif::get_binary(env, terms[0], &buffer_bin)) {
+      return exla::nif::error(env, "Unable to binary.");
+    }
+
+    xla::Shape shape;
     if (!exla::nif::get_typespec_as_xla_shape(env, terms[1], &shape)) {
       return exla::nif::error(env, "Unable to get shape.");
     }
 
-    xla::Status transfer_status = (*client)->TransferToInfeed(env, terms[0], shape, device_id);
-
-    if (!transfer_status.ok()) {
-      return exla::nif::error(env, transfer_status.message().data());
-    }
+    buffer_bins.push_back(buffer_bin);
+    shapes.push_back(shape);
 
     data = tail;
+  }
+
+  xla::Status transfer_status = (*client)->TransferToInfeed(env, buffer_bins, shapes, device_id);
+
+  if (!transfer_status.ok()) {
+    return exla::nif::error(env, transfer_status.message().data());
   }
 
   return exla::nif::ok(env);
@@ -668,7 +679,7 @@ ERL_NIF_TERM copy_buffer_to_device(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
   }
 
   EXLA_ASSIGN_OR_RETURN_NIF(xla::PjRtDevice * device,
-                            (*client)->client()->LookupDevice(device_id), env);
+                            (*client)->client()->LookupDevice(xla::PjRtGlobalDeviceId(device_id)), env);
   EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaBuffer * buf,
                             (*buffer)->CopyToDevice(device), env);
 
