@@ -108,7 +108,7 @@ $(EXLA_CACHE_OBJ_DIR)/%.o: $(EXLA_DIR)/%.cc $(HEADERS)
 	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)/iree
 	$(CXX) $(CFLAGS) -c $< -o $@
 
-$(EXLA_CACHE_SO): $(XLA_EXTENSION_DIR) $(IREE_COMPILER_LIB) $(OBJECTS)
+$(EXLA_CACHE_SO): $(XLA_EXTENSION_DIR) cache/iree $(OBJECTS)
 	$(CXX) $(OBJECTS) -o $(EXLA_CACHE_SO) $(LDFLAGS)
 
 
@@ -120,7 +120,19 @@ else
 	IREE_CMAKE_CONFIG = Release
 endif
 
-$(EXLA_CACHE_IREE_COMPILER_SO):
+# This is gonna be extracted out to a library
+# For now, we're doing it here to get things working
+IREE_COMMIT := d4aa8491a755e31d590f00a507e6c3859dfa662d
+cache/iree:
+	@mkdir -p cache
+	@git clone https://github.com/iree-org/iree cache/iree
+	@cd cache/iree && git checkout $(IREE_COMMIT)
+	@cd cache/iree && git submodule update --init --recursive
+	@mkdir -p cache/iree/build
+	cmake -G Ninja -B cache/iree/build -DIREE_BUILD_TESTS=OFF -DIREE_BUILD_SAMPLES=OFF -DIREE_ENABLE_ASSERTIONS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS="-fvisibility=hidden" cache/iree
+	cmake --build cache/iree/build
+
+$(EXLA_CACHE_IREE_COMPILER_SO): cache/iree
 	@mkdir -p $(IREE_CMAKE_BUILD_DIR)
 	@mkdir -p cache/objs/iree_cmake_out
 	@mkdir -p cache/objs/mlir_cmake_out
@@ -135,12 +147,6 @@ $(EXLA_CACHE_IREE_COMPILER_SO):
 		-DCMAKE_BUILD_TYPE=$(IREE_CMAKE_CONFIG)
 	cmake --build $(IREE_CMAKE_BUILD_DIR) --config $(IREE_CMAKE_CONFIG) --verbose
 	cmake --install $(IREE_CMAKE_BUILD_DIR) --config $(IREE_CMAKE_CONFIG) --prefix cache
-
-$(IREE_COMPILER_LIB):
-  # TO-DO: setup proper download and caching of the iree compiler
-	@ln -s $(HOME)/coding/iree cache/iree
-	cmake -G Ninja -B cache/iree/build -DIREE_BUILD_TESTS=OFF -DIREE_BUILD_SAMPLES=OFF -DIREE_ENABLE_ASSERTIONS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS="-fvisibility=hidden" cache/iree
-	cmake --build cache/iree/build
 
 clean:
 	rm -rf cache

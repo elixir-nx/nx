@@ -40,10 +40,8 @@ cuda_required =
     [:cuda_required]
   end
 
-compiler_mode = :iree
-
 iree_excludes =
-  if compiler_mode == :iree do
+  if runtime == :iree do
     [
       :token,
       :iree_segfault_error,
