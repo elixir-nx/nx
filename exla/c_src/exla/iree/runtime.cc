@@ -102,13 +102,13 @@ bool iree_element_type_to_nx_type(iree_hal_element_type_t type, std::string &nx_
       nx_type = "f32";
       return true;
     case type_enum::IREE_HAL_ELEMENT_TYPE_FLOAT_64:
-      nx_type = "f32";
+      nx_type = "f64";
       return true;
     case type_enum::IREE_HAL_ELEMENT_TYPE_COMPLEX_FLOAT_64:
       nx_type = "c64";
       return true;
     case type_enum::IREE_HAL_ELEMENT_TYPE_COMPLEX_FLOAT_128:
-      nx_type = "c64";
+      nx_type = "c128";
       return true;
     default:
       return false;

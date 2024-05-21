@@ -87,23 +87,7 @@ defmodule EXLA.Executable do
             ref
 
           %BinaryBuffer{data: data, typespec: typespec} ->
-            if typespec.type in [f: 64, c: 128] do
-              {t, w} = typespec.type
-              w2 = div(w, 2)
-              target_type = {t, w2}
-
-              data =
-                Nx.with_default_backend(Nx.BinaryBackend, fn ->
-                  data
-                  |> Nx.from_binary(typespec.type)
-                  |> Nx.as_type(target_type)
-                  |> Nx.to_binary()
-                end)
-
-              {data, EXLA.Typespec.nif_encode(typespec)}
-            else
-              {data, EXLA.Typespec.nif_encode(typespec)}
-            end
+            {data, EXLA.Typespec.nif_encode(typespec)}
         end)
       end
 

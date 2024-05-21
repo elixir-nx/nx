@@ -54,7 +54,7 @@ defmodule EXLA.DeviceBuffer do
   def read(buffer, size \\ -1)
 
   def read(%DeviceBuffer{typespec: typespec, ref: ref, client_name: :iree}, size) do
-    target_type = {s, w} = typespec.type
+    {_s, w} = typespec.type
 
     size =
       if size == -1 do
@@ -63,25 +63,7 @@ defmodule EXLA.DeviceBuffer do
         size
       end
 
-    {read_size, source_type} =
-      if target_type in [f: 64, c: 128] do
-        {div(size, 2), {s, div(w, 2)}}
-      else
-        {size, target_type}
-      end
-
-    data = EXLA.MLIR.IREE.read(ref, read_size) |> unwrap!()
-
-    if source_type == target_type do
-      data
-    else
-      Nx.with_default_backend(Nx.BinaryBackend, fn ->
-        data
-        |> Nx.from_binary(source_type)
-        |> Nx.as_type(target_type)
-        |> Nx.to_binary()
-      end)
-    end
+    EXLA.MLIR.IREE.read(ref, size) |> unwrap!()
   end
 
   def read(%DeviceBuffer{ref: ref}, size) do
