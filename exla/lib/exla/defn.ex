@@ -485,7 +485,8 @@ defmodule EXLA.Defn do
                   {:ok, module_charlist} = EXLA.NIF.mlir_module_to_string(builder.module.ref)
 
                   flags = [
-                    "--iree-hal-target-backends=llvm-cpu",
+                    # "--iree-hal-target-backends=llvm-cpu",
+                    "--iree-hal-target-backends=metal-spirv",
                     "--iree-input-type=stablehlo_xla",
                     "--iree-execution-model=async-internal",
                     "--output-format=vm-bytecode",

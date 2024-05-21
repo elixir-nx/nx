@@ -11,8 +11,8 @@ defmodule EXLA.Application do
     end
 
     EXLA.MLIR.IREE.global_initialize()
-    # {:ok, device} = EXLA.MLIR.IREE.setup_runtime(~c"metal://0000000100000971")
-    {:ok, device} = EXLA.MLIR.IREE.setup_runtime(~c"local-sync://")
+    {:ok, device} = EXLA.MLIR.IREE.setup_runtime(~c"metal://0000000100000971")
+    # {:ok, device} = EXLA.MLIR.IREE.setup_runtime(~c"local-sync://")
     :persistent_term.put({EXLA.MLIR.IREE, :device}, device)
 
     children = [
