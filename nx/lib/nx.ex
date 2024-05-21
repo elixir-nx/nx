@@ -87,14 +87,14 @@ defmodule Nx do
   is available:
 
       iex> import Nx, only: :sigils
-      iex> ~V[1 2 3]f32
+      iex> ~VEC[1 2 3]f32
       #Nx.Tensor<
         f32[3]
         [1.0, 2.0, 3.0]
       >
 
       iex> import Nx, only: :sigils
-      iex> ~M'''
+      iex> ~MAT'''
       ...> 1 2 3
       ...> 4 5 6
       ...> '''s32
@@ -3251,20 +3251,9 @@ defmodule Nx do
   """
   @doc type: :shape, from_backend: false
   def new_axis(tensor, axis, name \\ nil) when is_integer(axis) do
-    apply_vectorized(tensor, fn tensor, offset ->
-      %{shape: shape, names: names} = tensor = to_tensor(tensor)
-      rank = tuple_size(shape)
-      norm = if axis < 0, do: axis + rank + 1, else: axis + offset
-
-      if norm not in offset..tuple_size(shape) do
-        raise ArgumentError,
-              "new axis position for shape #{inspect(shape)} must be " <>
-                "a number between #{-rank - 1 + offset} and #{rank - offset}, got: #{axis}"
-      end
-
-      new_shape = Tuple.insert_at(shape, norm, 1)
-      new_names = List.insert_at(names, norm, name)
-      impl!(tensor).reshape(%{tensor | shape: new_shape, names: new_names}, tensor)
+    apply_vectorized(tensor, fn %{shape: shape, names: names} = tensor, offset ->
+      {shape, names, _axis} = Nx.Shape.new_axis(shape, names, axis, name, 1, offset)
+      impl!(tensor).reshape(%{tensor | shape: shape, names: names}, tensor)
     end)
   end
 
@@ -4716,7 +4705,7 @@ defmodule Nx do
       iex> Nx.vectorize(t, :x)
       ** (ArgumentError) cannot use name :x for new vectorized axes because there's already a vectorized axis with the same name
   """
-  @doc type: :shape
+  @doc type: :vectorization
   @spec vectorize(
           tensor :: Nx.Tensor.t(),
           name_or_axes :: atom() | [atom() | {atom(), pos_integer()}]
@@ -4861,7 +4850,7 @@ defmodule Nx do
       >
 
   """
-  @doc type: :shape
+  @doc type: :vectorization
   def devectorize(tensor_or_container, opts \\ [])
 
   def devectorize(%T{shape: shape, names: names, vectorized_axes: vectorized_axes} = tensor, opts)
@@ -7876,6 +7865,8 @@ defmodule Nx do
   end
 
   defp indexed_axes(tensor, indices, opts) do
+    n = elem(indices.shape, tuple_size(indices.shape) - 1)
+
     if axes = opts[:axes] do
       axes = Nx.Shape.normalize_axes(tensor.shape, axes, tensor.names)
 
@@ -7884,9 +7875,13 @@ defmodule Nx do
         _, _ -> raise ArgumentError, ":axes must be an ordered list"
       end)
 
+      if length(axes) != n do
+        raise ArgumentError,
+              ":axes must have the same number of elements as the last dimension of indices"
+      end
+
       axes
     else
-      n = elem(indices.shape, tuple_size(indices.shape) - 1)
       Enum.to_list(0..(n - 1))
     end
   end
@@ -8152,8 +8147,8 @@ defmodule Nx do
          0.0
        >
 
-       iex> import Nx, only: [sigil_V: 2]
-       iex> Nx.phase(~V[1+2i -2+1i])
+       iex> import Nx, only: [sigil_VEC: 2]
+       iex> Nx.phase(~VEC[1+2i -2+1i])
        #Nx.Tensor<
          f32[2]
          [1.1071487665176392, 2.677945137023926]
@@ -14124,13 +14119,20 @@ defmodule Nx do
     else
       tensor = devectorize(tensor, keep_names: false)
       indices = devectorize(indices, keep_names: false)
+      out = %{tensor | shape: inner_shape, names: inner_names}
 
-      impl!(tensor).take(
-        %{tensor | shape: inner_shape, names: inner_names},
-        tensor,
-        indices,
-        axis
-      )
+      Nx.Shared.optional(:take, [tensor, indices, [axis: axis]], out, fn tensor, indices, _opts ->
+        gather_indices = new_axis(indices, rank(indices))
+        {indices_axes, tensor_axes} = Enum.split(axes(inner_shape), rank(indices))
+        {leading, trailing} = Enum.split(tensor_axes, axis)
+
+        transpose_axes = leading ++ indices_axes ++ trailing
+
+        tensor
+        |> gather(gather_indices, axes: [axis])
+        |> transpose(axes: transpose_axes)
+        |> rename(inner_names)
+      end)
     end
   end
 
@@ -14289,17 +14291,32 @@ defmodule Nx do
     end
 
     opts = keyword!(opts, axis: 0)
-
     tensor = devectorize(tensor, keep_names: false)
     indices = devectorize(indices, keep_names: false)
-
     offset = length(vectorized_axes)
 
     axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names, offset)
-
     shape = Nx.Shape.take_along_axis(tensor.shape, indices.shape, axis)
+    out = %{tensor | shape: shape}
 
-    result = impl!(tensor).take_along_axis(%{tensor | shape: shape}, tensor, indices, axis)
+    result =
+      Nx.Shared.optional(:take_along_axis, [tensor, indices, [axis: axis]], out, fn
+        tensor, indices, _opts ->
+          axes_range = axes(indices)
+          new_axis_shape = Tuple.append(shape(indices), 1)
+
+          full_indices =
+            axes_range
+            |> Enum.map(fn
+              ^axis -> reshape(indices, new_axis_shape)
+              axis -> iota(new_axis_shape, axis: axis)
+            end)
+            |> concatenate(axis: rank(indices))
+
+          tensor
+          |> gather(full_indices)
+          |> rename(tensor.names)
+      end)
 
     vectorize(result, vectorized_axes)
   end
@@ -14308,12 +14325,20 @@ defmodule Nx do
   Builds a new tensor by taking individual values from the original
   tensor at the given indices.
 
+  Indices must be a tensor where the last dimension is usually of the
+  same size as the `tensor` rank. Each entry in `indices` will be
+  part of the results. If the last dimension of indices is less than
+  the `tensor` rank, then a multidimensional tensor is gathered and
+  spliced into the result.
+
   ## Options
 
-    * `:axes` - controls which dimensions the indexes apply to.
-      It must be a sorted list of axes and be of the same size
-      as the second (last) dimension of the indexes tensor.
-      It defaults to the leading axes of the tensor.
+    * `:axes` - controls to which dimensions of `tensor`
+      each element in the last dimension of `indexes` applies to.
+      It defaults so the first element in indexes apply to the first
+      axis, the second to the second, and so on. It must be a sorted
+      list of axes and be of the same size as the last dimension of
+      the indexes tensor.
 
   ## Examples
 
@@ -14632,28 +14657,35 @@ defmodule Nx do
         t
 
       [_ | _] = tensors ->
-        [%T{vectorized_axes: vectorized_axes} | _] =
-          tensors = broadcast_vectors(tensors, align_ranks: true)
-
-        offset = length(vectorized_axes)
-        tensors = if vectorized_axes != [], do: Enum.map(tensors, &devectorize/1), else: tensors
-
-        {types, [s1 | _] = shapes, [n1 | _] = names} =
-          Enum.reduce(tensors, {[], [], []}, fn
-            %T{type: t, shape: s, names: n}, {types, shapes, names} ->
-              {[t | types], [s | shapes], [n | names]}
-          end)
-
-        axis = Nx.Shape.normalize_axis(s1, axis, n1, offset)
-        output_type = Enum.reduce(types, &Nx.Type.merge/2)
-
-        {output_shape, output_names} =
-          Nx.Shape.concatenate(Enum.reverse(shapes), Enum.reverse(names), axis)
-
-        out = %{hd(tensors) | type: output_type, shape: output_shape, names: output_names}
-        result = list_impl!(tensors).concatenate(out, tensors, axis)
-        vectorize(result, vectorized_axes)
+        concatenate_or_stack(
+          tensors,
+          fn shapes, names, offset -> Nx.Shape.concatenate(shapes, names, axis, offset) end,
+          fn out, tensors, axis -> list_impl!(tensors).concatenate(out, tensors, axis) end
+        )
     end
+  end
+
+  defp concatenate_or_stack(tensors, shape_and_name, callback) do
+    [%T{vectorized_axes: vectorized_axes} | _] =
+      tensors = broadcast_vectors(tensors, align_ranks: true)
+
+    offset = length(vectorized_axes)
+    tensors = if vectorized_axes != [], do: Enum.map(tensors, &devectorize/1), else: tensors
+
+    {types, shapes, names} =
+      Enum.reduce(tensors, {[], [], []}, fn
+        %T{type: t, shape: s, names: n}, {types, shapes, names} ->
+          {[t | types], [s | shapes], [n | names]}
+      end)
+
+    output_type = Enum.reduce(types, &Nx.Type.merge/2)
+
+    {output_shape, output_names, axis} =
+      shape_and_name.(Enum.reverse(shapes), Enum.reverse(names), offset)
+
+    out = %{hd(tensors) | type: output_type, shape: output_shape, names: output_names}
+    result = callback.(out, tensors, axis)
+    vectorize(result, vectorized_axes)
   end
 
   defp flatten_list_or_container(list) when is_list(list) do
@@ -14771,16 +14803,26 @@ defmodule Nx do
       >
 
   """
-  @doc type: :ndim, from_backend: false
+  @doc type: :ndim
   def stack(tensors, opts \\ []) do
     opts = keyword!(opts, axis: 0, name: nil)
     axis = opts[:axis]
     name = opts[:name]
 
-    tensors
-    |> flatten_list_or_container()
-    |> Enum.map(&Nx.new_axis(&1, axis, name))
-    |> Nx.concatenate(axis: axis)
+    case flatten_list_or_container(tensors) do
+      [] ->
+        raise ArgumentError, "no tensors were given to stack"
+
+      [t] ->
+        Nx.new_axis(t, axis, name)
+
+      [_ | _] = tensors ->
+        concatenate_or_stack(
+          tensors,
+          fn shapes, names, offset -> Nx.Shape.stack(shapes, names, axis, name, offset) end,
+          fn out, tensors, axis -> list_impl!(tensors).stack(out, tensors, axis) end
+        )
+    end
   end
 
   @doc """
@@ -17034,8 +17076,30 @@ defmodule Nx do
 
   ## Sigils
 
+  @doc false
+  @deprecated "Use ~MAT instead"
+  defmacro sigil_M({:<<>>, _meta, [string]}, modifiers) do
+    {numbers, type} = string |> String.trim() |> binary_to_numbers()
+    numbers_to_tensor(numbers, type, modifiers)
+  end
+
+  @doc false
+  @deprecated "Use ~VEC instead"
+  defmacro sigil_V({:<<>>, _meta, [string]}, modifiers) do
+    string
+    |> String.trim()
+    |> binary_to_numbers()
+    |> case do
+      {[numbers], type} ->
+        numbers_to_tensor(numbers, type, modifiers)
+
+      _ ->
+        raise ArgumentError, "must be one-dimensional"
+    end
+  end
+
   @doc """
-  A convenient `~M` sigil for building matrices (two-dimensional tensors).
+  A convenient `~MAT` sigil for building matrices (two-dimensional tensors).
 
   ## Examples
 
@@ -17045,7 +17109,7 @@ defmodule Nx do
 
   Then you use the sigil to create matrices. The sigil:
 
-      ~M<
+      ~MAT<
         -1 0 0 1
         0 2 0 0
         0 0 3 0
@@ -17067,35 +17131,35 @@ defmodule Nx do
   as a sigil modifier:
 
       iex> import Nx, only: :sigils
-      iex> ~M[0.1 0.2 0.3 0.4]f16
+      iex> ~MAT[0.1 0.2 0.3 0.4]f16
       #Nx.Tensor<
         f16[1][4]
         [
           [0.0999755859375, 0.199951171875, 0.300048828125, 0.39990234375]
         ]
       >
-      iex> ~M[1+1i 2-2.0i -3]
+      iex> ~MAT[1+1i 2-2.0i -3]
       #Nx.Tensor<
         c64[1][3]
         [
           [1.0+1.0i, 2.0-2.0i, -3.0+0.0i]
         ]
       >
-      iex> ~M[1 Inf NaN]
+      iex> ~MAT[1 Inf NaN]
       #Nx.Tensor<
         f32[1][3]
         [
           [1.0, Inf, NaN]
         ]
       >
-      iex> ~M[1i Inf NaN]
+      iex> ~MAT[1i Inf NaN]
       #Nx.Tensor<
         c64[1][3]
         [
           [0.0+1.0i, Inf+0.0i, NaN+0.0i]
         ]
       >
-      iex> ~M[1i Inf+2i NaN-Infi]
+      iex> ~MAT[1i Inf+2i NaN-Infi]
       #Nx.Tensor<
         c64[1][3]
         [
@@ -17105,13 +17169,13 @@ defmodule Nx do
 
   """
   @doc type: :creation
-  defmacro sigil_M({:<<>>, _meta, [string]}, modifiers) do
+  defmacro sigil_MAT({:<<>>, _meta, [string]}, modifiers) do
     {numbers, type} = string |> String.trim() |> binary_to_numbers()
     numbers_to_tensor(numbers, type, modifiers)
   end
 
   @doc """
-  A convenient `~V` sigil for building vectors (one-dimensional tensors).
+  A convenient `~VEC` sigil for building vectors (one-dimensional tensors).
 
   ## Examples
 
@@ -17121,7 +17185,7 @@ defmodule Nx do
 
   Then you use the sigil to create vectors. The sigil:
 
-      ~V[-1 0 0 1]
+      ~VEC[-1 0 0 1]
 
   Is equivalent to:
 
@@ -17133,34 +17197,34 @@ defmodule Nx do
   as a sigil modifier:
 
       iex> import Nx, only: :sigils
-      iex> ~V[0.1 0.2 0.3 0.4]f16
+      iex> ~VEC[0.1 0.2 0.3 0.4]f16
       #Nx.Tensor<
         f16[4]
         [0.0999755859375, 0.199951171875, 0.300048828125, 0.39990234375]
       >
-      iex> ~V[1+1i 2-2.0i -3]
+      iex> ~VEC[1+1i 2-2.0i -3]
       #Nx.Tensor<
         c64[3]
         [1.0+1.0i, 2.0-2.0i, -3.0+0.0i]
       >
-      iex> ~V[1 Inf NaN]
+      iex> ~VEC[1 Inf NaN]
       #Nx.Tensor<
         f32[3]
         [1.0, Inf, NaN]
       >
-      iex> ~V[1i Inf NaN]
+      iex> ~VEC[1i Inf NaN]
       #Nx.Tensor<
         c64[3]
         [0.0+1.0i, Inf+0.0i, NaN+0.0i]
       >
-      iex> ~V[1i Inf+2i NaN-Infi]
+      iex> ~VEC[1i Inf+2i NaN-Infi]
       #Nx.Tensor<
         c64[3]
         [0.0+1.0i, Inf+2.0i, NaN-Infi]
       >
   """
   @doc type: :creation
-  defmacro sigil_V({:<<>>, _meta, [string]}, modifiers) do
+  defmacro sigil_VEC({:<<>>, _meta, [string]}, modifiers) do
     string
     |> String.trim()
     |> binary_to_numbers()

@@ -244,6 +244,17 @@ defmodule EXLA.Backend do
   end
 
   @impl true
+  def stack(out, tensors, axis) do
+    out = Nx.to_template(out)
+
+    expr_fun = fn tensors ->
+      Nx.Defn.Expr.stack(out, Tuple.to_list(tensors), axis)
+    end
+
+    jit([], expr_fun, tensors, [List.to_tuple(tensors)])
+  end
+
+  @impl true
   def slice(out, tensor, start_indices, lengths, strides) do
     out = Nx.to_template(out)
 
@@ -325,8 +336,6 @@ defmodule EXLA.Backend do
       {:reverse, [:tensor, :axes], [:tensor]},
       {:dot, [:left, :c1, :b1, :right, :c2, :b2], [:left, :right]},
       {:clip, [:tensor, :min, :max], [:tensor, :min, :max]},
-      {:take, [:tensor, :indices, :axis], [:tensor, :indices]},
-      {:take_along_axis, [:tensor, :indices, :axis], [:tensor, :indices]},
       {:gather, [:input, :indices, :opts], [:input, :indices]},
       {:select, [:pred, :on_true, :on_false], [:pred, :on_true, :on_false]},
       {:conv, [:tensor, :kernel, :opts], [:tensor, :kernel]},

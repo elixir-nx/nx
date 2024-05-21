@@ -1242,11 +1242,11 @@ defmodule NxTest do
     test "non-composite types" do
       refute Nx.compatible?(Complex.new(0, 2), 2)
       refute Nx.compatible?(2, Complex.new(0, 2))
-      refute Nx.compatible?(Complex.new(0, 2), ~V[2])
-      refute Nx.compatible?(~V[2], Complex.new(0, 2))
-      refute Nx.compatible?(2, ~V[2i])
-      refute Nx.compatible?(~V[2i], 2)
-      refute Nx.compatible?(~V[2], ~V[2i])
+      refute Nx.compatible?(Complex.new(0, 2), ~VEC[2])
+      refute Nx.compatible?(~VEC[2], Complex.new(0, 2))
+      refute Nx.compatible?(2, ~VEC[2i])
+      refute Nx.compatible?(~VEC[2i], 2)
+      refute Nx.compatible?(~VEC[2], ~VEC[2i])
       assert Nx.compatible?(Complex.new(2), Complex.new(0, 2))
       assert Nx.compatible?(2, 0)
     end
@@ -2538,17 +2538,17 @@ defmodule NxTest do
     test "evaluates to tensor" do
       import Nx
 
-      assert ~M[-1 2 3 4] == Nx.tensor([[-1, 2, 3, 4]])
+      assert ~MAT[-1 2 3 4] == Nx.tensor([[-1, 2, 3, 4]])
 
-      assert ~M[1
+      assert ~MAT[1
                 2
                 3
                 4] == Nx.tensor([[1], [2], [3], [4]])
 
-      assert ~M[1.0 2  3
+      assert ~MAT[1.0 2  3
                 11  12 13] == Nx.tensor([[1.0, 2, 3], [11, 12, 13]])
 
-      assert ~V[4 3 2 1] == Nx.tensor([4, 3, 2, 1])
+      assert ~VEC[4 3 2 1] == Nx.tensor([4, 3, 2, 1])
     end
 
     test "raises when vector has more than one dimension" do
@@ -2556,17 +2556,17 @@ defmodule NxTest do
         ArgumentError,
         "must be one-dimensional",
         fn ->
-          eval(~S[~V<0 0 0 1
+          eval(~S[~VEC<0 0 0 1
                      1 0 0 0>])
         end
       )
     end
 
     test "evaluates with proper type" do
-      assert eval("~M[1 2 3 4]f32") == Nx.tensor([[1, 2, 3, 4]], type: {:f, 32})
-      assert eval("~M[4 3 2 1]u8") == Nx.tensor([[4, 3, 2, 1]], type: {:u, 8})
+      assert eval("~MAT[1 2 3 4]f32") == Nx.tensor([[1, 2, 3, 4]], type: {:f, 32})
+      assert eval("~MAT[4 3 2 1]u8") == Nx.tensor([[4, 3, 2, 1]], type: {:u, 8})
 
-      assert eval("~V[0 1 0 1]u8") == Nx.tensor([0, 1, 0, 1], type: {:u, 8})
+      assert eval("~VEC[0 1 0 1]u8") == Nx.tensor([0, 1, 0, 1], type: {:u, 8})
     end
 
     test "raises on invalid type" do
@@ -2574,7 +2574,7 @@ defmodule NxTest do
         ArgumentError,
         "invalid numerical type: {:f, 8} (see Nx.Type docs for all supported types)",
         fn ->
-          eval("~M[1 2 3 4]f8")
+          eval("~MAT[1 2 3 4]f8")
         end
       )
     end
@@ -2584,7 +2584,7 @@ defmodule NxTest do
         ArgumentError,
         "expected a numerical value for tensor, got x",
         fn ->
-          eval("~V[1 2 x 4]u8")
+          eval("~VEC[1 2 x 4]u8")
         end
       )
     end
@@ -3054,14 +3054,14 @@ defmodule NxTest do
     test "Bluestein clause" do
       # we need a tensor which isn't a power of 2 and is > than 1024 to actually
       # validate the bluestein implementation. No doctests check for it.
-      x = Nx.tile(~V[1 1 1 0 0 0], [400])
+      x = Nx.tile(~VEC[1 1 1 0 0 0], [400])
       x_fft = Nx.fft(x)
 
       # From numpy we expect the following indices to be the only non-zero values in the tensor
       non_zero_idx = Nx.tensor([0, 400, 1200, 2000])
-      assert Nx.take(x_fft, non_zero_idx) == ~V[1200 400-692.820323i 400 400+692.820323i]
+      assert Nx.take(x_fft, non_zero_idx) == ~VEC[1200 400-692.820323i 400 400+692.820323i]
 
-      zeros_check = Nx.indexed_put(x_fft, Nx.new_axis(non_zero_idx, 1), ~V[0 0 0 0])
+      zeros_check = Nx.indexed_put(x_fft, Nx.new_axis(non_zero_idx, 1), ~VEC[0 0 0 0])
       zeros = Nx.broadcast(0, x_fft)
       assert_all_close(Nx.real(zeros_check), zeros, atol: 1.0e-9)
       assert_all_close(Nx.imag(zeros_check), zeros, atol: 1.0e-9)

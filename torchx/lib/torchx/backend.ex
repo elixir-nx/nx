@@ -338,49 +338,13 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def take(out, t, i, axis) do
-    axes = Nx.axes(t)
+  def stack(out, tensors, axis) do
+    reshape = put_elem(out.shape, axis, 1)
 
-    indices_shape =
-      axes
-      |> Enum.map(fn
-        ^axis -> Tuple.product(i.shape)
-        _ -> 1
-      end)
-      |> List.to_tuple()
-
-    idx_tiling =
-      t.shape
-      |> Tuple.to_list()
-      |> Enum.with_index(fn
-        _x, ^axis -> 1
-        x, _ -> x
-      end)
-
-    indices_for_axis =
-      i
-      |> Nx.reshape(indices_shape)
-      |> Nx.tile(idx_tiling)
-
-    num_elements = Tuple.product(indices_for_axis.shape)
-
-    indices =
-      axes
-      |> Enum.map(fn
-        ^axis ->
-          Nx.reshape(indices_for_axis, {num_elements, 1})
-
-        current ->
-          # current when current < axis ->
-          indices_for_axis
-          |> Nx.shape()
-          |> Nx.iota(axis: current, backend: __MODULE__)
-          |> Nx.reshape({num_elements, 1})
-      end)
-      |> Nx.concatenate(axis: 1)
-
-    # TODO: maybe rewrite it as gather now behaves differently
-    gather(out, t, indices, [])
+    tensors
+    |> Enum.map(&(&1 |> from_nx() |> Torchx.reshape(reshape)))
+    |> Torchx.concatenate(axis)
+    |> to_nx(out)
   end
 
   @impl true
@@ -471,12 +435,12 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def take_along_axis(out, tensor, idx, axis) do
+  def take_along_axis(out, tensor, idx, opts) do
     idx_tx = idx |> from_nx() |> Torchx.to_type(:long)
 
     tensor
     |> from_nx()
-    |> Torchx.gather(idx_tx, axis)
+    |> Torchx.gather(idx_tx, opts[:axis])
     |> to_nx(out)
   end
 

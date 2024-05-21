@@ -953,21 +953,22 @@ defmodule Nx.DefnTest do
 
   describe "remote functions" do
     defmodule Remote do
-      defn(add_two(c, d), do: c + d)
+      defn add_two(c, d), do: c + d
     end
 
-    defn(add_two_remote(a, b), do: Remote.add_two(a, b))
+    defn add_two_remote(a, b), do: Remote.add_two(a, b)
 
     test "public" do
       assert %T{data: %Expr{op: :add, args: [_, _]}} = add_two_remote(1, 2)
     end
 
-    defn(add_two_unknown(a, b), do: Nx.DefnTest.unknown(a, b))
+    defn add_two_dynamic(a, b, opts \\ []), do: opts[:remote].add_two(a, b)
 
-    def not_defn(a, b), do: Nx.add(a, b)
-    defn(add_two_not_defn(a, b), do: Nx.DefnTest.not_defn(a, b))
+    test "dynamic" do
+      assert %T{data: %Expr{op: :add, args: [_, _]}} = add_two_remote(1, 2)
+    end
 
-    defn(add_two_io(a, b), do: IO.inspect({a, b}))
+    defn add_two_unknown(a, b), do: Nx.DefnTest.unknown(a, b)
 
     test "undefined remote" do
       assert_raise UndefinedFunctionError,
@@ -975,11 +976,16 @@ defmodule Nx.DefnTest do
                    fn -> add_two_unknown(1, 2) end
     end
 
+    def not_defn(a, b), do: Nx.add(a, b)
+    defn add_two_not_defn(a, b), do: Nx.DefnTest.not_defn(a, b)
+
     test "not defn remote" do
       assert_raise RuntimeError,
                    "cannot invoke Nx.DefnTest.not_defn/2 inside defn because it was not defined with defn",
                    fn -> add_two_not_defn(1, 2) end
     end
+
+    defn add_two_io(a, b), do: IO.inspect({a, b})
 
     test "IO remote" do
       assert_raise RuntimeError,

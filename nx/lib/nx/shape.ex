@@ -1649,16 +1649,64 @@ defmodule Nx.Shape do
   end
 
   @doc """
+  Returns the shape and name of new axis.
+  """
+  def new_axis(shape, names, axis, name, size, offset) do
+    rank = tuple_size(shape)
+    norm = if axis < 0, do: axis + rank + 1, else: axis + offset
+
+    if norm not in offset..tuple_size(shape) do
+      raise ArgumentError,
+            "new axis position for shape #{inspect(shape)} must be " <>
+              "a number between #{-rank - 1 + offset} and #{rank - offset}, got: #{axis}"
+    end
+
+    new_shape = Tuple.insert_at(shape, norm, size)
+    new_names = List.insert_at(names, norm, name)
+    {new_shape, new_names, norm}
+  end
+
+  @doc """
+  Returns the shape and names after a stack.
+
+  ## Examples
+
+      iex> Nx.Shape.stack([{3, 2}, {3, 2}, {3, 2}], [[nil, nil], [nil, :z], [:y, nil]], 0, :x, 0)
+      {{3, 3, 2}, [:x, :y, :z], 0}
+  """
+  def stack(shapes, names, axis, name, offset) do
+    names =
+      Enum.zip_with(names, fn zipped ->
+        Enum.reduce(zipped, &merge_names!(&1, &2, axis, axis))
+      end)
+
+    case Enum.uniq(shapes) do
+      [shape] ->
+        new_axis(shape, names, axis, name, length(shapes), offset)
+
+      shapes ->
+        raise ArgumentError,
+              "can only stack tensors of the same shape, got distinct shapes: #{inspect(shapes)}"
+    end
+  end
+
+  @doc """
   Returns the shape and names after a concat.
 
   ## Examples
 
-      iex> Nx.Shape.concatenate([{2, 3, 2}, {1, 3, 2}, {4, 3, 2}], [[:x, :y, :z], [:x, :y, :z], [:x, :y, :z]], 0)
-      {{7, 3, 2}, [:x, :y, :z]}
+      iex> Nx.Shape.concatenate([{2, 3, 2}, {1, 3, 2}, {4, 3, 2}], [[:x, :y, :z], [:x, :y, :z], [:x, :y, :z]], 0, 0)
+      {{7, 3, 2}, [:x, :y, :z], 0}
   """
-  def concatenate(shapes, names, axis) do
-    names = validate_concat_names!(names, axis)
-    {concat_dims(shapes, axis), names}
+  def concatenate([s1 | _] = shapes, [n1 | _] = names, axis, offset) do
+    axis = normalize_axis(s1, axis, n1, offset)
+
+    names =
+      Enum.zip_with(names, fn zipped ->
+        Enum.reduce(zipped, &merge_names!(&1, &2, axis, axis))
+      end)
+
+    {concat_dims(shapes, axis), names, axis}
   end
 
   defp concat_dims([s1 | shapes] = all_shapes, axis) do
@@ -2118,15 +2166,6 @@ defmodule Nx.Shape do
       "`a` tensor has incompatible dimensions, expected a square matrix or a batch of square matrices, got: " <>
         inspect(a_shape)
     )
-  end
-
-  defp validate_concat_names!(names, axis) do
-    _ =
-      Enum.zip_with(names, fn zipped ->
-        Enum.reduce(zipped, &merge_names!(&1, &2, axis, axis))
-      end)
-
-    hd(names)
   end
 
   def fft({}) do

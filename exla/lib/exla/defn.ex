@@ -675,8 +675,49 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(
          :optional,
-         %T{data: %Expr{args: [%{data: %{op: :top_k, args: [tensor, opts]}}, expr, _callback]}} =
-           _out,
+         %T{
+           data: %Expr{
+             args: [%{data: %{op: :take, args: [tensor, indices, opts]}}, expr, _callback]
+           }
+         },
+         state,
+         cache
+       ) do
+    axis = opts[:axis]
+    {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
+    {indices, cache} = recur_operator(indices, state, cache) |> unwrap_single_tensor!()
+
+    tensor_rank = tensor |> op_shape() |> tuple_size()
+    indices_rank = indices |> op_shape() |> tuple_size()
+    result_rank = tensor_rank - 1 + indices_rank
+
+    index_vector_dim = indices_rank
+    slice_sizes = tensor |> op_shape() |> put_elem(axis, 1) |> Tuple.to_list()
+
+    {left, right} = result_rank |> axes_for_rank() |> Enum.split(axis)
+    offset_dims = left ++ Enum.drop(right, indices_rank)
+
+    collapsed_slice_dims = [axis]
+    start_index_map = [axis]
+
+    result =
+      Value.gather(
+        tensor,
+        indices,
+        index_vector_dim,
+        slice_sizes,
+        offset_dims,
+        collapsed_slice_dims,
+        start_index_map,
+        expr_to_typespec(expr)
+      )
+
+    {result, cache}
+  end
+
+  defp cached_recur_operator(
+         :optional,
+         %T{data: %Expr{args: [%{data: %{op: :top_k, args: [tensor, opts]}}, expr, _callback]}},
          state,
          cache
        ) do
@@ -689,26 +730,24 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(
          :optional,
-         %T{data: %Expr{args: [%{data: %{op: :fft2, args: [tensor, opts]}}, _expr, _callback]}} =
-           out,
+         %T{data: %Expr{args: [%{data: %{op: :fft2, args: [tensor, opts]}}, expr, _callback]}},
          state,
          cache
        ) do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
-    {fft2(&Value.fft(&1, :fft, &2, &3), [tensor, opts], out, state), cache}
+    {fft2(&Value.fft(&1, :fft, &2, &3), [tensor, opts], expr, state), cache}
   end
 
   defp cached_recur_operator(
          :optional,
-         %T{data: %Expr{args: [%{data: %{op: :ifft2, args: [tensor, opts]}}, _expr, _callback]}} =
-           out,
+         %T{data: %Expr{args: [%{data: %{op: :ifft2, args: [tensor, opts]}}, expr, _callback]}},
          state,
          cache
        ) do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
-    {fft2(&Value.fft(&1, :ifft, &2, &3), [tensor, opts], out, state), cache}
+    {fft2(&Value.fft(&1, :ifft, &2, &3), [tensor, opts], expr, state), cache}
   end
 
   defp cached_recur_operator(:optional, %T{data: %Expr{args: args}}, state, cache) do
@@ -1313,72 +1352,13 @@ defmodule EXLA.Defn do
     Value.dynamic_update_slice(tensor, slice, start_indices, expr_to_typespec(ans))
   end
 
-  defp to_operator(:take, [%Value{} = tensor, indices, axis], ans, _state) do
-    tensor_rank = tensor |> op_shape() |> tuple_size()
-    indices_rank = indices |> op_shape() |> tuple_size()
-    result_rank = tensor_rank - 1 + indices_rank
-
-    index_vector_dim = indices_rank
-    slice_sizes = tensor |> op_shape() |> put_elem(axis, 1) |> Tuple.to_list()
-    offset_dims = result_rank |> axes_for_rank() |> delete_slice(axis, indices_rank)
-    collapsed_slice_dims = [axis]
-    start_index_map = [axis]
-
-    Value.gather(
-      tensor,
-      indices,
-      index_vector_dim,
-      slice_sizes,
-      offset_dims,
-      collapsed_slice_dims,
-      start_index_map,
-      expr_to_typespec(ans)
-    )
-  end
-
-  defp to_operator(:take_along_axis, [%Value{} = tensor, indices, axis], ans, state) do
-    %{shape: indices_shape} = indices_typespec = Value.get_typespec(indices)
-    indices_rank = tuple_size(indices_shape)
-
-    axes_range = 0..(indices_rank - 1)//1
-
-    index_vector_dim = indices_rank
-    slice_sizes = List.duplicate(1, indices_rank)
-    offset_dims = []
-    collapsed_slice_dims = Enum.to_list(axes_range)
-    start_index_map = Enum.to_list(axes_range)
-
-    new_axis_typespec = Typespec.to_shape(indices_typespec, Tuple.append(indices_shape, 1))
-
-    full_indices_typespec =
-      Typespec.to_shape(indices_typespec, Tuple.append(indices_shape, indices_rank))
-
-    full_indices =
-      axes_range
-      |> Enum.map(fn
-        ^axis -> Value.reshape(indices, new_axis_typespec)
-        axis -> Value.iota(state.builder, axis, new_axis_typespec)
-      end)
-      |> Value.concatenate(indices_rank, full_indices_typespec)
-
-    Value.gather(
-      tensor,
-      full_indices,
-      index_vector_dim,
-      slice_sizes,
-      offset_dims,
-      collapsed_slice_dims,
-      start_index_map,
-      expr_to_typespec(ans)
-    )
-  end
-
   defp to_operator(:gather, [%Value{} = tensor, indices, opts], ans, _state) do
     axes = Keyword.fetch!(opts, :axes)
     tensor_shape = op_shape(tensor)
     tensor_rank = tuple_size(tensor_shape)
     tensor_axes = axes_for_rank(tensor_rank)
-    index_vector_dim = tuple_size(op_shape(indices)) - 1
+    indices_rank = tuple_size(op_shape(indices))
+    index_vector_dim = indices_rank - 1
 
     slice_sizes =
       for i <- tensor_axes do
@@ -1386,7 +1366,8 @@ defmodule EXLA.Defn do
       end
 
     batch_size = tensor_rank - length(axes)
-    offset_dims = count_up(batch_size, batch_size)
+    offset_size = indices_rank - length(axes)
+    offset_dims = count_up(batch_size, offset_size)
 
     Value.gather(
       tensor,
@@ -1405,10 +1386,13 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(:concatenate, [[%Value{} | _rest] = tensors, axis], ans, _state) do
-    tensors =
-      tensors
-      |> Enum.map(&to_type(&1, ans.type))
+    tensors = Enum.map(tensors, &to_type(&1, ans.type))
+    Value.concatenate(tensors, axis, expr_to_typespec(ans))
+  end
 
+  defp to_operator(:stack, [[%Value{} | _rest] = tensors, axis], ans, _state) do
+    reshape_typespec = Typespec.tensor(ans.type, put_elem(ans.shape, axis, 1))
+    tensors = Enum.map(tensors, &(&1 |> to_type(ans.type) |> Value.reshape(reshape_typespec)))
     Value.concatenate(tensors, axis, expr_to_typespec(ans))
   end
 
@@ -2081,11 +2065,6 @@ defmodule EXLA.Defn do
   end
 
   # Helpers
-
-  defp delete_slice(enumerable, index, length) do
-    {left, right} = Enum.split(enumerable, index)
-    left ++ Enum.drop(right, length)
-  end
 
   defp apply_mlir_broadcasted_bin_op(op, out, left, right) do
     left_typespec = Value.get_typespec(left)

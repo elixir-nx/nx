@@ -2,7 +2,7 @@ defmodule EXLA.Defn.Stream do
   @moduledoc false
 
   keys =
-    [:lock, :outfeed, :pid, :runner, :send, :send_typespec, :send_indexes] ++
+    [:lock, :outfeed, :pid, :runner, :send, :send_typespecs, :send_indexes] ++
       [:recv, :recv_length, :done, :client, :device_id]
 
   @derive {Inspect, only: [:pid, :client, :device_id, :send, :recv]}
@@ -15,7 +15,7 @@ defmodule EXLA.Defn.Stream do
         runner,
         outfeed,
         send,
-        send_typespec,
+        send_typespecs,
         send_indexes,
         recv,
         recv_typespecs,
@@ -39,7 +39,7 @@ defmodule EXLA.Defn.Stream do
       outfeed: outfeed,
       lock: lock,
       send: send,
-      send_typespec: send_typespec,
+      send_typespecs: send_typespecs,
       send_indexes: send_indexes,
       recv: recv,
       recv_length: length(recv_typespecs),
@@ -64,7 +64,7 @@ defmodule EXLA.Defn.Stream do
         client: client,
         device_id: device_id,
         send: send,
-        send_typespec: send_typespec,
+        send_typespecs: send_typespecs,
         send_indexes: send_indexes
       } = stream
 
@@ -86,17 +86,11 @@ defmodule EXLA.Defn.Stream do
         """
       end
 
-      data_and_typespecs =
-        if client.platform == :host do
-          Enum.zip(buffers, send_typespec)
-        else
-          [{buffers, send_typespec}]
-        end
-
       pred = EXLA.Typespec.tensor({:pred, 8}, {})
+      data_and_typespecs = Enum.zip(buffers, send_typespecs)
 
-      :ok =
-        EXLA.Client.to_infeed(client, device_id, [{<<1::8-native>>, pred} | data_and_typespecs])
+      :ok = EXLA.Client.to_infeed(client, device_id, [{<<1::8-native>>, pred}])
+      :ok = EXLA.Client.to_infeed(client, device_id, data_and_typespecs)
     end
 
     defp nx_to_io(container, indexes) do

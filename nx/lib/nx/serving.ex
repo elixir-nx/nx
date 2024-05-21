@@ -585,7 +585,7 @@ defmodule Nx.Serving do
   Configure the serving to stream its results.
 
   Once `run/2` or `batched_run/2` are invoked, it will then
-  return a stream. The stream is must be consumed in the same
+  return a stream. The stream must be consumed in the same
   process that calls `run/2` or `batched_run/2`.
 
   Batches will be streamed as they arrive. You may also opt-in

@@ -139,7 +139,7 @@ defmodule EXLA do
 
   ### GPU Runtime Issues
 
-  GPU Executions run in dirty IO threads, which have a considerable smaller
+  GPU Executions run in dirty IO threads, which have a considerably smaller
   stack size than regular scheduler threads. This may lead to problems with
   certain CUDA or cuDNN versions, leading to segmentation fails. In a development
   environment, it is suggested to set:
@@ -156,11 +156,11 @@ defmodule EXLA do
   That's because when the Erlang VM runs as root, it has to manage
   all child programs.
 
-  At the same time, Google XLA's shells out to child programs and
+  At the same time, Google's XLA shells out to child programs and
   must retain control over how child programs terminate.
 
   To address this, simply make sure you wrap the Erlang VM in
-  another process, such as the shell one. In other words, if you
+  another process, such as a shell process. In other words, if you
   are using releases, instead of this:
 
       CMD path/to/release start

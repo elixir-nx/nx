@@ -130,7 +130,7 @@ defmodule Nx.TensorTest do
 
   describe "inspect" do
     test "prints with configured precision" do
-      assert inspect(~V[1], custom_options: [nx_precision: 5]) ==
+      assert inspect(~VEC[1], custom_options: [nx_precision: 5]) ==
                """
                #Nx.Tensor<
                  s64[1]
@@ -138,7 +138,7 @@ defmodule Nx.TensorTest do
                >\
                """
 
-      assert inspect(~V[1.0], custom_options: [nx_precision: 5]) ==
+      assert inspect(~VEC[1.0], custom_options: [nx_precision: 5]) ==
                """
                #Nx.Tensor<
                  f32[1]
@@ -146,7 +146,7 @@ defmodule Nx.TensorTest do
                >\
                """
 
-      assert inspect(~V[1.000042e-3], custom_options: [nx_precision: 5]) ==
+      assert inspect(~VEC[1.000042e-3], custom_options: [nx_precision: 5]) ==
                """
                #Nx.Tensor<
                  f32[1]
@@ -154,7 +154,7 @@ defmodule Nx.TensorTest do
                >\
                """
 
-      assert inspect(~V[42.1337e10], custom_options: [nx_precision: 5]) ==
+      assert inspect(~VEC[42.1337e10], custom_options: [nx_precision: 5]) ==
                """
                #Nx.Tensor<
                  f32[1]
@@ -162,7 +162,7 @@ defmodule Nx.TensorTest do
                >\
                """
 
-      assert inspect(~V[Inf -Inf NaN], custom_options: [nx_precision: 7]) ==
+      assert inspect(~VEC[Inf -Inf NaN], custom_options: [nx_precision: 7]) ==
                """
                #Nx.Tensor<
                  f32[3]
@@ -170,7 +170,7 @@ defmodule Nx.TensorTest do
                >\
                """
 
-      assert inspect(~V[Inf-Infi 1.0i 0 1000], custom_options: [nx_precision: 3]) ==
+      assert inspect(~VEC[Inf-Infi 1.0i 0 1000], custom_options: [nx_precision: 3]) ==
                """
                #Nx.Tensor<
                  c64[4]
@@ -178,7 +178,7 @@ defmodule Nx.TensorTest do
                >\
                """
 
-      assert inspect(~V[-0.0001], custom_options: [nx_precision: 3]) ==
+      assert inspect(~VEC[-0.0001], custom_options: [nx_precision: 3]) ==
                """
                #Nx.Tensor<
                  f32[1]
@@ -186,7 +186,7 @@ defmodule Nx.TensorTest do
                >\
                """
 
-      assert inspect(~V[-0.0001], custom_options: [nx_precision: 8]) ==
+      assert inspect(~VEC[-0.0001], custom_options: [nx_precision: 8]) ==
                """
                #Nx.Tensor<
                  f32[1]

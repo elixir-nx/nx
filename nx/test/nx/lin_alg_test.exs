@@ -86,15 +86,15 @@ defmodule Nx.LinAlgTest do
     end
 
     test "works with complex tensors" do
-      a = ~M[
+      a = ~MAT[
         1 0 i
        -1i 0 1i
         1 1 1
       ]
 
-      b = ~V[3+i 4 2-2i]
+      b = ~VEC[3+i 4 2-2i]
 
-      result = ~V[i 2 -3i]
+      result = ~VEC[i 2 -3i]
 
       assert_all_close(Nx.LinAlg.solve(a, b), result)
     end
@@ -121,13 +121,13 @@ defmodule Nx.LinAlgTest do
     end
 
     test "works with complex tensors" do
-      a = ~M[
+      a = ~MAT[
         1 0 i
         0 -1i 0
         0 0 2
       ]
 
-      expected_result = ~M[
+      expected_result = ~MAT[
         1 0 -0.5i
         0 1i 0
         0 0 0.5
@@ -280,7 +280,7 @@ defmodule Nx.LinAlgTest do
 
   describe "matrix_power" do
     test "supports complex with positive exponent" do
-      a = ~M[
+      a = ~MAT[
         1 1i
         -1i 1
       ]
@@ -291,7 +291,7 @@ defmodule Nx.LinAlgTest do
     end
 
     test "supports complex with 0 exponent" do
-      a = ~M[
+      a = ~MAT[
         1 1i
         -1i 1
       ]
@@ -300,12 +300,12 @@ defmodule Nx.LinAlgTest do
     end
 
     test "supports complex with negative exponent" do
-      a = ~M[
+      a = ~MAT[
         1 -0.5i
         0 0.5
       ]
 
-      result = ~M[
+      result = ~MAT[
         1 15i
         0 16
       ]
@@ -448,7 +448,7 @@ defmodule Nx.LinAlgTest do
     end
 
     test "works with complex matrix" do
-      t = ~M[
+      t = ~MAT[
         1 0 1i
         0 2 -1i
         1 1 1
@@ -456,13 +456,13 @@ defmodule Nx.LinAlgTest do
 
       {q, r} = Nx.LinAlg.qr(t)
 
-      assert_all_close(q, ~M[
+      assert_all_close(q, ~MAT[
         -0.7071 0.2357  -0.6666
          0      -0.9428   -0.3333
         -0.7071 -0.2357  0.6666
       ])
 
-      assert_all_close(r, ~M[
+      assert_all_close(r, ~MAT[
         -1.4142 -0.7071 -0.7071-0.7071i
         0      -2.1213  -0.2357+1.1785i
         0      0      0.6666-0.3333i
@@ -566,40 +566,43 @@ defmodule Nx.LinAlgTest do
                ])
     end
 
-    test "computes eigenvalues and eigenvectors for a Hermitian matrix case" do
-      # Hermitian matrix
-      t =
-        Nx.tensor([
-          [1, Complex.new(0, 2), 2],
-          [Complex.new(0, -2), -3, Complex.new(0, 2)],
-          [2, Complex.new(0, -2), 1]
-        ])
+    # TODO: Remove conditional once we require 1.16+
+    if Version.match?(System.version(), "~> 1.16") do
+      test "computes eigenvalues and eigenvectors for a Hermitian matrix case" do
+        # Hermitian matrix
+        t =
+          Nx.tensor([
+            [1, Complex.new(0, 2), 2],
+            [Complex.new(0, -2), -3, Complex.new(0, 2)],
+            [2, Complex.new(0, -2), 1]
+          ])
 
-      assert {eigenvals, eigenvecs} = Nx.LinAlg.eigh(t, max_iter: 10_000)
+        assert {eigenvals, eigenvecs} = Nx.LinAlg.eigh(t, max_iter: 10_000)
 
-      # Eigenvalues
-      assert eigenvals ==
-               Nx.tensor([Complex.new(-5, 0), Complex.new(3, 0), Complex.new(1, 0)])
+        # Eigenvalues
+        assert eigenvals ==
+                 Nx.tensor([Complex.new(-5, 0), Complex.new(3, 0), Complex.new(1, 0)])
 
-      # Eigenvectors
-      assert round(eigenvecs, 3) ==
-               Nx.tensor([
-                 [
-                   Complex.new(-0.408, 0.0),
-                   Complex.new(0.0, 0.707),
-                   Complex.new(0.577, 0.0)
-                 ],
-                 [
-                   Complex.new(0.0, -0.816),
-                   Complex.new(0.0, 0.0),
-                   Complex.new(0.0, -0.577)
-                 ],
-                 [
-                   Complex.new(0.408, 0.0),
-                   Complex.new(0.0, 0.707),
-                   Complex.new(-0.577, 0.0)
-                 ]
-               ])
+        # Eigenvectors
+        assert round(eigenvecs, 3) ==
+                 Nx.tensor([
+                   [
+                     Complex.new(-0.408, 0.0),
+                     Complex.new(-0.0, 0.707),
+                     Complex.new(0.577, 0.0)
+                   ],
+                   [
+                     Complex.new(-0.0, -0.816),
+                     Complex.new(0.0, 0.0),
+                     Complex.new(0.0, -0.577)
+                   ],
+                   [
+                     Complex.new(0.408, 0.0),
+                     Complex.new(-0.0, 0.707),
+                     Complex.new(-0.577, 0.0)
+                   ]
+                 ])
+      end
     end
 
     test "properties for matrices with different eigenvalues" do
@@ -731,7 +734,8 @@ defmodule Nx.LinAlgTest do
 
       assert {u, s, vt} = Nx.LinAlg.svd(t)
 
-      assert round(Nx.as_type(t, :f32), 2) == u |> Nx.multiply(s) |> Nx.dot(vt) |> round(2)
+      assert round(Nx.as_type(t, :f32), 2) ==
+               u |> Nx.multiply(s) |> Nx.dot(vt) |> Nx.abs() |> round(2)
     end
 
     test "finds the singular values of wide matrices" do
@@ -755,7 +759,7 @@ defmodule Nx.LinAlgTest do
         |> Nx.broadcast({3, 3})
         |> Nx.put_diagonal(s)
 
-      assert round(t, 1) == u |> Nx.dot(s_matrix) |> Nx.dot(v) |> round(1)
+      assert round(t, 1) == u |> Nx.dot(s_matrix) |> Nx.dot(v) |> Nx.abs() |> round(1)
 
       assert round(u, 3) ==
                Nx.tensor([
@@ -845,7 +849,7 @@ defmodule Nx.LinAlgTest do
 
     test "works with f16" do
       x = Nx.tensor([[0, 0], [0, 0]], type: :f16)
-      assert Nx.LinAlg.svd(x) == {Nx.eye(2, type: :f16), ~V"0.0 0.0"f16, Nx.eye(2, type: :f16)}
+      assert Nx.LinAlg.svd(x) == {Nx.eye(2, type: :f16), ~VEC"0.0 0.0"f16, Nx.eye(2, type: :f16)}
 
       x = Nx.tensor([[1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4]], type: :f16)
       assert {u, s, vt} = Nx.LinAlg.svd(x)
@@ -856,7 +860,7 @@ defmodule Nx.LinAlgTest do
 
     test "works with f64" do
       x = Nx.tensor([[0, 0], [0, 0]], type: :f64)
-      assert Nx.LinAlg.svd(x) == {Nx.eye(2, type: :f64), ~V"0.0 0.0"f64, Nx.eye(2, type: :f64)}
+      assert Nx.LinAlg.svd(x) == {Nx.eye(2, type: :f64), ~VEC"0.0 0.0"f64, Nx.eye(2, type: :f64)}
 
       x = Nx.tensor([[1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4]], type: :f64)
       assert {u, s, vt} = Nx.LinAlg.svd(x)
