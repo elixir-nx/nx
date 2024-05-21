@@ -408,7 +408,7 @@ xla::Status ExlaClient::TransferToInfeed(ErlNifEnv* env,
   // literal and push the whole group of buffers.
   //
   // On the CPU, XLA infeed reads buffers from a queue one at a time [1][2]
-  // (or rather, the infeed operation is lovered to multiple queue reads),
+  // (or rather, the infeed operation is lowered to multiple queue reads),
   // hence pushing one at a time works fine. Pushing a flat tuple works
   // effectively the same, since it basically adds each element to the
   // queue [3].
