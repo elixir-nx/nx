@@ -88,19 +88,15 @@ defmodule EXLA.Client do
   @doc """
   Sends `data_and_typespecs` to device infeed.
 
-  `data_and_typespecs` must be a list of two element tuples where the
-  first element is a binary or a flat list of binaries and the second
-  element is a `EXLA.Typespec`.
+  `data_and_typespecs` is a list of values corresponding to a single
+  infeed operation. It must be a list of two element tuples where the
+  first element is a binary and the second element is a `EXLA.Typespec`.
   """
   def to_infeed(%EXLA.Client{ref: client}, device_id, data_and_typespecs)
       when is_list(data_and_typespecs) do
     data_and_typespecs =
-      Enum.map(data_and_typespecs, fn
-        {binary, typespec} when is_binary(binary) ->
-          {[binary], EXLA.Typespec.nif_encode(typespec)}
-
-        {[binary | _] = data, typespec} when is_binary(binary) ->
-          {data, EXLA.Typespec.nif_encode(typespec)}
+      Enum.map(data_and_typespecs, fn {binary, typespec} when is_binary(binary) ->
+        {binary, EXLA.Typespec.nif_encode(typespec)}
       end)
 
     EXLA.NIF.transfer_to_infeed(client, device_id, data_and_typespecs) |> unwrap!()
