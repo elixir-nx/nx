@@ -9,6 +9,7 @@ defmodule EXLA.NxRandomTest do
   end
 
   describe "range" do
+    @tag :iree_operand_does_not_dominate_error
     test "randint" do
       key = Nx.Random.key(127)
 

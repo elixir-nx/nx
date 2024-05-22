@@ -490,7 +490,7 @@ defmodule EXLA.Defn do
                     "--iree-input-type=stablehlo_xla",
                     "--iree-execution-model=async-internal",
                     "--output-format=vm-bytecode",
-                    "--iree-input-demote-f64-to-f32=false",
+                    "--iree-input-demote-f64-to-f32=true",
                     "--iree-input-demote-i64-to-i32=false"
                   ]
 

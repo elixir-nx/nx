@@ -369,6 +369,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn atan2_two(a, b), do: Nx.atan2(a, b)
 
+    @tag :iree_wrong_result_error
     test "atan2" do
       <<neg_zero::float>> = <<0x8000000000000000::64>>
       left = Nx.tensor([-1.0, neg_zero, 0.0, 1.0])
@@ -456,6 +457,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn right_shift(a, b), do: a >>> b
 
+    @tag :iree_wrong_result_error
     test "right_shift" do
       assert Nx.shape(right_shift(@left_signed, @right_signed)) == {9, 9}
 
@@ -2822,6 +2824,7 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
+    @tag :iree_illegal_op_error
     test "computes a convolution with channels last" do
       img = Nx.iota({8, 12, 12, 3}, type: {:f, 32}, names: [:batch, :height, :width, :channels])
       kernel = Nx.iota({6, 3, 2, 2}, type: {:f, 32})
@@ -2839,6 +2842,7 @@ defmodule EXLA.Defn.ExprTest do
       assert %{names: [:batch, :height, :width, :channels], shape: {8, 11, 11, 6}} = lhs
     end
 
+    @tag :iree_illegal_op_error
     test "computes a convolution with a permutation" do
       img = Nx.iota({12, 12, 3, 4}, type: {:f, 32})
       kernel = Nx.iota({3, 2, 32, 2}, type: {:f, 32})
@@ -2875,6 +2879,7 @@ defmodule EXLA.Defn.ExprTest do
     end
 
     @tag :unsupported_64_bit_op
+    @tag :iree_illegal_op_error
     test "computes the convolution with valid padding, no stride" do
       img = Nx.iota({5, 1, 12, 12}, type: {:f, 64})
       kernel = Nx.iota({32, 1, 3, 3}, type: {:f, 64})
@@ -2885,6 +2890,7 @@ defmodule EXLA.Defn.ExprTest do
     end
 
     @tag :unsupported_64_bit_op
+    @tag :iree_illegal_op_error
     test "computes the convolution with valid padding, {2, 2} stride" do
       img = Nx.iota({25, 1, 11, 8}, type: {:f, 64})
       kernel = Nx.iota({32, 1, 3, 3}, type: {:f, 64})
@@ -2895,6 +2901,7 @@ defmodule EXLA.Defn.ExprTest do
     end
 
     @tag :unsupported_64_bit_op
+    @tag :iree_illegal_op_error
     test "computes the convolution with same padding, no stride" do
       img = Nx.iota({13, 3, 10, 6}, type: {:f, 64})
       kernel = Nx.iota({32, 3, 3, 3}, type: {:f, 64})
@@ -2905,6 +2912,7 @@ defmodule EXLA.Defn.ExprTest do
     end
 
     @tag :unsupported_64_bit_op
+    @tag :iree_illegal_op_error
     test "computes the convolution with same padding, stride" do
       img = Nx.iota({32, 1, 9, 9}, type: {:f, 64})
       kernel = Nx.iota({32, 1, 7, 7}, type: {:f, 64})
@@ -2958,6 +2966,7 @@ defmodule EXLA.Defn.ExprTest do
     end
 
     @tag :unsupported_64_bit_op
+    @tag :iree_illegal_op_error
     test "computes a dilated convolution" do
       img = Nx.iota({4, 3, 10, 10}, type: {:f, 64})
       kernel = Nx.iota({6, 3, 2, 2}, type: {:f, 64})
@@ -2978,6 +2987,7 @@ defmodule EXLA.Defn.ExprTest do
       assert_all_close(lhs, rhs)
     end
 
+    @tag :iree_illegal_op_error
     test "computes a conv with both dilations" do
       img = Nx.iota({4, 3, 15, 15}, type: {:f, 32})
       kernel = Nx.iota({6, 3, 3, 2}, type: {:f, 32})

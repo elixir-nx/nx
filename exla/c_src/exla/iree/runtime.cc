@@ -339,8 +339,6 @@ ERL_NIF_TERM setup_runtime(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) 
 
   iree_status_t status = iree_hal_register_all_available_drivers(iree_hal_driver_registry_default());
 
-  // char device_uri[] = "metal://0000000100000971";  // TO-DO: change this to an argument
-
   if (iree_status_is_ok(status)) {
     status = iree_hal_create_device(
         iree_hal_driver_registry_default(),

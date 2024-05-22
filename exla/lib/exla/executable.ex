@@ -87,7 +87,21 @@ defmodule EXLA.Executable do
             ref
 
           %BinaryBuffer{data: data, typespec: typespec} ->
-            {data, EXLA.Typespec.nif_encode(typespec)}
+            case typespec do
+              %{type: {:f, 64}} ->
+                data =
+                  Nx.with_default_backend(Nx.BinaryBackend, fn ->
+                    data
+                    |> Nx.from_binary(:f64)
+                    |> Nx.as_type(:f32)
+                    |> Nx.to_binary()
+                  end)
+
+                {data, EXLA.Typespec.nif_encode(%{typespec | type: {:f, 32}})}
+
+              _ ->
+                {data, EXLA.Typespec.nif_encode(typespec)}
+            end
         end)
       end
 
