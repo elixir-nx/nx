@@ -5,8 +5,10 @@ defmodule EXLA.MixProject do
   @version "0.7.1"
 
   def project do
+    n_jobs = to_string(max(System.schedulers_online() - 2, 1))
+
     make_args =
-      Application.get_env(:exla, :make_args) || ["-j#{max(System.schedulers_online() - 2, 1)}"]
+      Application.get_env(:exla, :make_args) || ["-j#{n_jobs}"]
 
     [
       app: :exla,
@@ -35,7 +37,8 @@ defmodule EXLA.MixProject do
 
         %{
           "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}",
-          "CWD_RELATIVE_TO_PRIV_PATH" => cwd_relative_to_priv
+          "CWD_RELATIVE_TO_PRIV_PATH" => cwd_relative_to_priv,
+          "MAKE_NUM_JOBS" => n_jobs
         }
       end,
       make_args: make_args

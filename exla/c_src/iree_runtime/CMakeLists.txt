@@ -46,7 +46,7 @@ target_include_directories(${_NAME} SYSTEM
     "${CMAKE_CURRENT_SOURCE_DIR}/../../cache/iree/third_party/llvm-project/mlir/include"
 )
 
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../cache/iree" "${CMAKE_CURRENT_SOURCE_DIR}/../../cache/objs/iree_cmake_out" EXCLUDE_FROM_ALL)
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../cache/iree" "${CMAKE_CURRENT_SOURCE_DIR}/../../cache/iree/build" EXCLUDE_FROM_ALL)
 
 install(
     TARGETS ${_NAME}
@@ -100,3 +100,7 @@ if(NOT APPLE)
 else()
   target_link_libraries(${_NAME} "${CMAKE_CURRENT_SOURCE_DIR}/../../cache/iree/build/lib/libIREECompiler.dylib")
 endif()
+
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../cache/iree/third_party/tracy" "${CMAKE_CURRENT_SOURCE_DIR}/../../cache/iree/third_party/tracy/build")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../cache/iree/third_party/tracy/public")
+target_link_libraries(${_NAME} TracyClient)

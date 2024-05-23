@@ -482,19 +482,34 @@ defmodule EXLA.Defn do
                   for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
 
                 if runtime == :iree do
-                  {:ok, module_charlist} = EXLA.NIF.mlir_module_to_string(builder.module.ref)
+                  {t1, {:ok, module_charlist}} =
+                    :timer.tc(fn ->
+                      {:ok, module_charlist} = EXLA.NIF.mlir_module_to_string(builder.module.ref)
+                    end)
+
+                  # :telemetry.execute(
+                  #   [:exla, :mlir, :iree, :compile],
+                  #   %{duration: t1}
+                  # )
 
                   flags = [
-                    # "--iree-hal-target-backends=llvm-cpu",
-                    "--iree-hal-target-backends=metal-spirv",
-                    "--iree-input-type=stablehlo_xla",
-                    "--iree-execution-model=async-internal",
-                    "--output-format=vm-bytecode",
-                    "--iree-input-demote-f64-to-f32=true",
-                    "--iree-input-demote-i64-to-i32=false"
+                    # ~c"--iree-hal-target-backends=llvm-cpu",
+                    ~c"--iree-hal-target-backends=metal-spirv",
+                    ~c"--iree-input-type=stablehlo_xla",
+                    ~c"--iree-execution-model=async-internal",
+                    ~c"--iree-input-demote-f64-to-f32=true",
+                    ~c"--iree-input-demote-i64-to-i32=false"
                   ]
 
-                  {:ok, module_bytecode} = EXLA.MLIR.IREE.compile(module_charlist, flags)
+                  {t2, {:ok, module_bytecode}} =
+                    :timer.tc(fn ->
+                      {:ok, module_bytecode} = EXLA.MLIR.IREE.compile(module_charlist, flags)
+                    end)
+
+                  :telemetry.execute(
+                    [:exla, :mlir, :iree, :compile],
+                    %{duration: t2}
+                  )
 
                   %EXLA.Executable{
                     client: client,

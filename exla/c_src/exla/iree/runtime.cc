@@ -5,6 +5,7 @@
 
 #include <iostream>
 #include <sstream>
+#include <tracy/Tracy.hpp>
 
 bool primitive_type_to_iree_element_type(xla::PrimitiveType t, iree_hal_element_type_t *type) {
   using xla::PrimitiveType;
@@ -173,7 +174,8 @@ ERL_NIF_TERM return_results(ErlNifEnv *env, std::vector<iree_hal_buffer_view_t *
   }
 
 std::pair<iree_status_t, std::optional<std::vector<iree_hal_buffer_view_t *>>>
-call(iree_vm_instance_t *instance, iree_hal_device_t *device, std::vector<uint8_t> bytecode, std::vector<exla::iree::runtime::IREEInput *> exla_inputs) {
+call(iree_vm_instance_t *instance, iree_hal_device_t *device, ErlNifBinary bytecode, std::vector<exla::iree::runtime::IREEInput *> exla_inputs) {
+  ZoneScoped;
   iree_vm_module_t *hal_module = nullptr;
   iree_vm_module_t *bytecode_module = nullptr;
   iree_vm_context_t *context = nullptr;
@@ -187,7 +189,7 @@ call(iree_vm_instance_t *instance, iree_hal_device_t *device, std::vector<uint8_
       iree_allocator_system(), &hal_module));
 
   // (kFloat4, sizeof(kFloat4))
-  const iree_const_byte_span_t module_data = iree_make_const_byte_span(bytecode.data(), bytecode.size());
+  const iree_const_byte_span_t module_data = iree_make_const_byte_span(bytecode.data, bytecode.size);
 
   RETURN_PAIR_IF_ERROR(iree_vm_bytecode_module_create(
       instance, module_data, iree_allocator_null(), iree_allocator_system(),
@@ -260,6 +262,7 @@ call(iree_vm_instance_t *instance, iree_hal_device_t *device, std::vector<uint8_
 
 ERL_NIF_TERM
 run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
+  ZoneScoped;
   if (argc != 4) {
     return exla::nif::error(env, "Bad argument count.");
   }
@@ -267,7 +270,7 @@ run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   std::vector<ERL_NIF_TERM> bytecode_vec = {};
   std::vector<ERL_NIF_TERM> input_terms = {};
   std::vector<exla::iree::runtime::IREEInput *> inputs = {};
-  std::vector<uint8_t> bytecode = {};
+  ErlNifBinary bytecode;
   iree_hal_device_t **device;
   iree_vm_instance_t **instance;
 
@@ -279,16 +282,8 @@ run_module(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Unable to load device");
   }
 
-  if (!exla::nif::get_list(env, argv[2], bytecode_vec)) {
+  if (!enif_inspect_binary(env, argv[2], &bytecode)) {
     return exla::nif::error(env, "Unable to load bytecode binary");
-  }
-
-  bytecode.clear();
-  bytecode.resize(bytecode_vec.size());
-  unsigned int byte;
-  for (int i = 0; i < bytecode_vec.size(); i++) {
-    enif_get_uint(env, bytecode_vec[i], &byte);
-    bytecode[i] = static_cast<uint8_t>(byte);
   }
 
   if (!exla::nif::get_list(env, argv[3], input_terms)) {

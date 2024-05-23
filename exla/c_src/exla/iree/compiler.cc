@@ -2,6 +2,7 @@
 
 #include <fcntl.h>  // For O_WRONLY, O_CREAT, O_TRUNC
 #include <inttypes.h>
+#include <iree/base/tracing.h>
 #include <iree/compiler/embedding_api.h>
 #include <iree/compiler/loader.h>
 #include <iree/compiler/mlir_interop.h>
@@ -12,6 +13,7 @@
 
 #include <iostream>
 #include <sstream>
+#include <tracy/Tracy.hpp>
 
 typedef struct compiler_state_t {
   iree_compiler_session_t *session;
@@ -36,39 +38,38 @@ void cleanup_compiler_state(compiler_state_t s) {
     ireeCompilerSourceDestroy(s.source);
   if (s.session)
     ireeCompilerSessionDestroy(s.session);
-  // ireeCompilerGlobalShutdown();
+  ireeCompilerGlobalShutdown();
 }
 
 static void initializeCompiler(struct compiler_state_t *state) {
-  // ireeCompilerGlobalInitialize();
+  ireeCompilerGlobalInitialize();
   state->session = ireeCompilerSessionCreate();
   state->context = ireeCompilerSessionBorrowContext(state->session);
 }
 
-static void shutdownCompiler(struct compiler_state_t *state) {
-  ireeCompilerSessionDestroy(state->session);
-  // ireeCompilerGlobalShutdown();
-}
-
 ERL_NIF_TERM compile(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
+  ZoneScopedN("compile main");
   if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   std::string module_str;
-  std::vector<ErlNifBinary> flags_str;
+  std::vector<std::string> flags_str;
   std::vector<const char *> flags;
 
-  if (!exla::nif::get(env, argv[0], module_str)) {
-    return exla::nif::error(env, "Unable to get module.");
-  }
+  {
+    ZoneScopedN("compiler get arguments");
+    if (!exla::nif::get(env, argv[0], module_str)) {
+      return exla::nif::error(env, "Unable to get module.");
+    }
 
-  if (!exla::nif::get_list(env, argv[1], flags_str)) {
-    return exla::nif::error(env, "Unable to get list.");
-  }
+    if (!exla::nif::get_list(env, argv[1], flags_str)) {
+      return exla::nif::error(env, "Unable to get list.");
+    }
 
-  for (auto &flag : flags_str) {
-    flags.push_back(reinterpret_cast<const char *>(flag.data));
+    for (auto &flag : flags_str) {
+      flags.push_back(flag.c_str());
+    }
   }
 
   compiler_state_t state;
@@ -80,61 +81,89 @@ ERL_NIF_TERM compile(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
 
   initializeCompiler(&state);
 
-  MlirOperation module_op = mlirOperationCreateParse(
-      state.context,
-      mlirStringRefCreate(module_str.c_str(), module_str.size()),
-      mlirStringRefCreateFromCString("source.stablehlo"));
-  if (mlirOperationIsNull(module_op)) {
-    return exla::nif::error(env, "Unable to create MlirOperation module.");
+  MlirOperation module_op;
+
+  {
+    ZoneScopedN("Parse module");
+    module_op = mlirOperationCreateParse(
+        state.context,
+        mlirStringRefCreate(module_str.c_str(), module_str.size()),
+        mlirStringRefCreateFromCString("source.stablehlo"));
+    if (mlirOperationIsNull(module_op)) {
+      return exla::nif::error(env, "Unable to create MlirOperation module.");
+    }
   }
 
   // Set flags.
-  iree_compiler_error_t *err;
-  err = ireeCompilerSessionSetFlags(state.session, 1, flags.data());
-  if (err) {
-    cleanup_compiler_state(state);
-    return exla::nif::error(env, "Unable to set flags.");
+  {
+    ZoneScopedN("Set flags");
+    error = ireeCompilerSessionSetFlags(state.session, flags.size(), flags.data());
+    if (error) {
+      const char *msg = ireeCompilerErrorGetMessage(error);
+
+      cleanup_compiler_state(state);
+
+      std::stringstream ss;
+      ss << "Unable to set flags due to error: ";
+      ss << msg;
+
+      return exla::nif::error(env, ss.str().c_str());
+    }
   }
 
-  state.invocation = ireeCompilerInvocationCreate(state.session);
-  ireeCompilerInvocationEnableConsoleDiagnostics(state.invocation);
+  {
+    ZoneScopedN("Create invocation");
+    state.invocation = ireeCompilerInvocationCreate(state.session);
+    ireeCompilerInvocationEnableConsoleDiagnostics(state.invocation);
+  }
 
-  if (!ireeCompilerInvocationImportStealModule(state.invocation, module_op)) {
-    cleanup_compiler_state(state);
-    return exla::nif::error(env, "Unable to import module.");
+  {
+    ZoneScopedN("Import module");
+    if (!ireeCompilerInvocationImportStealModule(state.invocation, module_op)) {
+      cleanup_compiler_state(state);
+      return exla::nif::error(env, "Unable to import module.");
+    }
   }
 
   // Compile.
-  if (!ireeCompilerInvocationPipeline(state.invocation, iree_compiler_pipeline_t::IREE_COMPILER_PIPELINE_STD)) {
-    cleanup_compiler_state(state);
-    return exla::nif::error(env, "Unable to compile module.");
+  {
+    ZoneScopedN("Invocation Pipeline");
+    if (!ireeCompilerInvocationPipeline(state.invocation, iree_compiler_pipeline_t::IREE_COMPILER_PIPELINE_STD)) {
+      cleanup_compiler_state(state);
+      return exla::nif::error(env, "Unable to compile module.");
+    }
   }
 
-  fflush(stdout);
-
-  error = ireeCompilerOutputOpenMembuffer(&state.output);
-  if (error) {
-    handle_compiler_error(error);
-    cleanup_compiler_state(state);
-    return exla::nif::error(env, "Error opening output membuffer");
+  {
+    ZoneScopedN("Open output membuffer");
+    error = ireeCompilerOutputOpenMembuffer(&state.output);
+    if (error) {
+      handle_compiler_error(error);
+      cleanup_compiler_state(state);
+      return exla::nif::error(env, "Error opening output membuffer");
+    }
   }
 
-  error = ireeCompilerInvocationOutputVMBytecode(state.invocation, state.output);
-  if (error) {
-    handle_compiler_error(error);
-    cleanup_compiler_state(state);
-    return exla::nif::error(env, "Failed to output VM Bytecode");
+  {
+    ZoneScopedN("Output VM Bytecode");
+    error = ireeCompilerInvocationOutputVMBytecode(state.invocation, state.output);
+    if (error) {
+      handle_compiler_error(error);
+      cleanup_compiler_state(state);
+      return exla::nif::error(env, "Failed to output VM Bytecode");
+    }
   }
 
   uint8_t *contents;
   uint64_t size;
+  ErlNifBinary output_binary;
 
-  error = ireeCompilerOutputMapMemory(state.output, (void **)&contents, &size);
+  {
+    ZoneScopedN("Map and copy output to binary");
+    error = ireeCompilerOutputMapMemory(state.output, (void **)&contents, &size);
 
-  std::vector<ERL_NIF_TERM> bytes_term;
-  bytes_term.resize(size);
-  for (size_t i = 0; i < size; i++) {
-    bytes_term[i] = enif_make_uint(env, static_cast<unsigned int>(contents[i]));
+    enif_alloc_binary(size, &output_binary);
+    memcpy(output_binary.data, contents, size);
   }
 
   if (error) {
@@ -145,5 +174,6 @@ ERL_NIF_TERM compile(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
 
   cleanup_compiler_state(state);
 
-  return exla::nif::ok(env, enif_make_list_from_array(env, bytes_term.data(), bytes_term.size()));
+  IREE_TRACE_ZONE_END(compile);
+  return exla::nif::ok(env, enif_make_binary(env, &output_binary));
 }

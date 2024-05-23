@@ -127,9 +127,9 @@ cache/iree:
 	@mkdir -p cache
 	@git clone https://github.com/iree-org/iree cache/iree
 	@cd cache/iree && git checkout $(IREE_COMMIT)
-	@cd cache/iree && git submodule update --init --recursive
+	@cd cache/iree && git submodule update --init --recursive --depth 1
 	@mkdir -p cache/iree/build
-	cmake -G Ninja -B cache/iree/build -DIREE_BUILD_TESTS=OFF -DIREE_BUILD_SAMPLES=OFF -DIREE_ENABLE_ASSERTIONS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS="-fvisibility=hidden" cache/iree
+	cmake -G Ninja -B cache/iree/build -DTRACY_ENABLE=ON -DIREE_ENABLE_RUNTIME_TRACING=ON -DIREE_ENABLE_COMPILER_TRACING=ON -DIREE_BUILD_TESTS=OFF -DIREE_BUILD_SAMPLES=OFF -DIREE_ENABLE_ASSERTIONS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS="-fvisibility=hidden" cache/iree
 	cmake --build cache/iree/build
 
 $(EXLA_CACHE_IREE_COMPILER_SO): cache/iree
@@ -140,12 +140,19 @@ $(EXLA_CACHE_IREE_COMPILER_SO): cache/iree
 	cmake -S c_src/iree_runtime -B $(IREE_CMAKE_BUILD_DIR) \
 		-DIREE_COMPILER_INCLUDE_PATH=$(IREE_COMPILER_INCLUDE_PATH) \
 		-DIREE_COMPILER_DIR=$(IREE_COMPILER_DIR) \
+		-DIREE_ENABLE_RUNTIME_TRACING=ON \
+		-DIREE_TRACING_MODE=ON \
+		-DTRACY_ENABLE=ON \
 		-DXLA_INCLUDE_PATH=$(abspath $(XLA_INCLUDE_PATH)) \
 		-DIREE_INSTALL_PREFIX=$(IREE_INSTALL_PREFIX) \
 		-DCACHE_DIR=cache\
 		-DXLA_EXTENSION_LIB=$(abspath $(XLA_EXTENSION_LIB))\
-		-DCMAKE_BUILD_TYPE=$(IREE_CMAKE_CONFIG)
-	cmake --build $(IREE_CMAKE_BUILD_DIR) --config $(IREE_CMAKE_CONFIG) --verbose
+		-DCMAKE_BUILD_TYPE=$(IREE_CMAKE_CONFIG)\
+		-DTRACY_ENABLE=1\
+		-DTRACY_CALLSTACK=ON\
+		-DTRACY_NO_SAMPLING=OFF\
+		-DTRACY_NO_VERIFY=ON
+	cmake --build $(IREE_CMAKE_BUILD_DIR) --config $(IREE_CMAKE_CONFIG)
 	cmake --install $(IREE_CMAKE_BUILD_DIR) --config $(IREE_CMAKE_CONFIG) --prefix cache
 
 clean:
