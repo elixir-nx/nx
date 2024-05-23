@@ -1562,20 +1562,6 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def map(%{type: output_type} = out, %{type: {_, size}} = tensor, _opts, fun) do
-    data = to_binary(tensor)
-    template = %{tensor | shape: {}}
-
-    output_data =
-      for <<bin::size(size)-bitstring <- data>>, into: <<>> do
-        tensor = put_in(template.data.state, bin)
-        number_to_binary(scalar_to_number(fun.(tensor)), output_type)
-      end
-
-    from_binary(out, output_data)
-  end
-
-  @impl true
   def window_scatter_max(out, tensor, source, init_value, window_dimensions, opts) do
     select_and_scatter(
       out,

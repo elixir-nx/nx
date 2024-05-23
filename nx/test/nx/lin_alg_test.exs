@@ -552,18 +552,24 @@ defmodule Nx.LinAlgTest do
       assert {eigenvals, eigenvecs} = Nx.LinAlg.eigh(t)
 
       # Eigenvalues
-      assert round(eigenvals, 3) ==
-               Nx.tensor([16.394, -9.738, 5.901, 4.334, -0.892])
+      assert_all_close(eigenvals, Nx.tensor([16.394, -9.738, 5.901, 4.334, -0.892]),
+        atol: 1.0e-3,
+        rtol: 1.0e-3
+      )
 
       # Eigenvectors
-      assert round(eigenvecs, 3) ==
-               Nx.tensor([
-                 [0.112, -0.005, -0.831, -0.436, -0.328],
-                 [0.395, 0.163, 0.530, -0.537, -0.497],
-                 [0.427, 0.326, -0.133, 0.700, -0.452],
-                 [0.603, -0.783, -0.007, 0.079, 0.130],
-                 [0.534, 0.504, -0.104, -0.160, 0.651]
-               ])
+      assert_all_close(
+        eigenvecs,
+        Nx.tensor([
+          [0.112, -0.005, -0.831, -0.436, -0.328],
+          [0.395, 0.163, 0.530, -0.537, -0.497],
+          [0.427, 0.326, -0.133, 0.700, -0.452],
+          [0.603, -0.783, -0.007, 0.079, 0.130],
+          [0.534, 0.504, -0.104, -0.160, 0.651]
+        ]),
+        atol: 1.0e-3,
+        rtol: 1.0e-3
+      )
     end
 
     # TODO: Remove conditional once we require 1.16+
@@ -584,24 +590,28 @@ defmodule Nx.LinAlgTest do
                  Nx.tensor([Complex.new(-5, 0), Complex.new(3, 0), Complex.new(1, 0)])
 
         # Eigenvectors
-        assert round(eigenvecs, 3) ==
-                 Nx.tensor([
-                   [
-                     Complex.new(-0.408, 0.0),
-                     Complex.new(-0.0, 0.707),
-                     Complex.new(0.577, 0.0)
-                   ],
-                   [
-                     Complex.new(-0.0, -0.816),
-                     Complex.new(0.0, 0.0),
-                     Complex.new(0.0, -0.577)
-                   ],
-                   [
-                     Complex.new(0.408, 0.0),
-                     Complex.new(-0.0, 0.707),
-                     Complex.new(-0.577, 0.0)
-                   ]
-                 ])
+        assert_all_close(
+          eigenvecs,
+          Nx.tensor([
+            [
+              Complex.new(-0.408, 0.0),
+              Complex.new(-0.0, 0.707),
+              Complex.new(0.577, 0.0)
+            ],
+            [
+              Complex.new(-0.0, -0.816),
+              Complex.new(0.0, 0.0),
+              Complex.new(0.0, -0.577)
+            ],
+            [
+              Complex.new(0.408, 0.0),
+              Complex.new(-0.0, 0.707),
+              Complex.new(-0.577, 0.0)
+            ]
+          ]),
+          atol: 1.0e-3,
+          rtol: 1.0e-3
+        )
       end
     end
 
@@ -641,7 +651,6 @@ defmodule Nx.LinAlgTest do
             |> Nx.LinAlg.adjoint()
             |> Nx.multiply(evals_test)
             |> Nx.dot([2], [0], q, [1], [0])
-            |> round(2)
 
           # Eigenvalues and eigenvectors
           assert {evals, evecs} = Nx.LinAlg.eigh(a, max_iter: 10_000)
@@ -684,7 +693,6 @@ defmodule Nx.LinAlgTest do
             |> Nx.LinAlg.adjoint()
             |> Nx.multiply(evals_test)
             |> Nx.dot([2], [0], q, [1], [0])
-            |> round(3)
 
           # Eigenvalues and eigenvectors
           assert {evals, evecs} = Nx.LinAlg.eigh(a)
@@ -708,25 +716,32 @@ defmodule Nx.LinAlgTest do
 
       s_matrix = 0 |> Nx.broadcast({4, 3}) |> Nx.put_diagonal(s)
 
-      assert round(t, 2) == u |> Nx.dot(s_matrix) |> Nx.dot(v) |> round(2)
+      assert_all_close(t, u |> Nx.dot(s_matrix) |> Nx.dot(v), atol: 1.0e-2, rtol: 1.0e-2)
 
-      assert round(u, 3) ==
-               Nx.tensor([
-                 [0.141, 0.825, -0.001, 0.019],
-                 [0.344, 0.426, 0.00200, 0.382],
-                 [0.547, 0.028, 0.0, -0.822],
-                 [0.75, -0.370, -0.001, 0.421]
-               ])
-               |> round(3)
+      assert_all_close(
+        u,
+        Nx.tensor([
+          [0.141, 0.825, -0.001, 0.019],
+          [0.344, 0.426, 0.00200, 0.382],
+          [0.547, 0.028, 0.0, -0.822],
+          [0.75, -0.370, -0.001, 0.421]
+        ]),
+        atol: 1.0e-3,
+        rtol: 1.0e-3
+      )
 
-      assert Nx.tensor([25.462, 1.291, 0.0]) |> round(3) == round(s, 3)
+      assert_all_close(Nx.tensor([25.462, 1.291, 0.0]), s, atol: 1.0e-3, rtol: 1.0e-3)
 
-      assert Nx.tensor([
-               [0.505, 0.575, 0.644],
-               [-0.761, -0.057, 0.647],
-               [-0.408, 0.816, -0.408]
-             ])
-             |> round(3) == round(v, 3)
+      assert_all_close(
+        Nx.tensor([
+          [0.505, 0.575, 0.644],
+          [-0.761, -0.057, 0.647],
+          [-0.408, 0.816, -0.408]
+        ]),
+        v,
+        atol: 1.0e-3,
+        rtol: 1.0e-3
+      )
     end
 
     test "finds the singular values of square matrices" do
@@ -734,8 +749,10 @@ defmodule Nx.LinAlgTest do
 
       assert {u, s, vt} = Nx.LinAlg.svd(t)
 
-      assert round(Nx.as_type(t, :f32), 2) ==
-               u |> Nx.multiply(s) |> Nx.dot(vt) |> Nx.abs() |> round(2)
+      assert_all_close(Nx.as_type(t, :f32), u |> Nx.multiply(s) |> Nx.dot(vt) |> Nx.abs(),
+        atol: 1.0e-2,
+        rtol: 1.0e-2
+      )
     end
 
     test "finds the singular values of wide matrices" do
@@ -743,8 +760,12 @@ defmodule Nx.LinAlgTest do
 
       assert {u, s, vt} = Nx.LinAlg.svd(t)
 
-      assert round(Nx.as_type(t, :f32), 1) ==
-               u |> Nx.dot(t.shape |> Nx.eye() |> Nx.put_diagonal(s)) |> Nx.dot(vt) |> round(1)
+      assert_all_close(
+        Nx.as_type(t, :f32),
+        u |> Nx.dot(t.shape |> Nx.eye() |> Nx.put_diagonal(s)) |> Nx.dot(vt),
+        atol: 1.0e-1,
+        rtol: 1.0e-1
+      )
     end
 
     test "finds the singular values triangular matrices" do
@@ -759,26 +780,36 @@ defmodule Nx.LinAlgTest do
         |> Nx.broadcast({3, 3})
         |> Nx.put_diagonal(s)
 
-      assert round(t, 1) == u |> Nx.dot(s_matrix) |> Nx.dot(v) |> Nx.abs() |> round(1)
+      assert_all_close(t, u |> Nx.dot(s_matrix) |> Nx.dot(v) |> Nx.abs(),
+        atol: 1.0e-1,
+        rtol: 1.0e-1
+      )
 
-      assert round(u, 3) ==
-               Nx.tensor([
-                 [0.336, -0.407, -0.849],
-                 [0.037, -0.895, 0.444],
-                 [0.941, 0.181, 0.286]
-               ])
-               |> round(3)
+      assert_all_close(
+        u,
+        Nx.tensor([
+          [0.336, -0.407, -0.849],
+          [0.037, -0.895, 0.444],
+          [0.941, 0.181, 0.286]
+        ]),
+        atol: 1.0e-3,
+        rtol: 1.0e-3
+      )
 
       # The expected value is ~ [9, 5, 1] since the eigenvalues of
       # a triangular matrix are the diagonal elements. Close enough!
-      assert Nx.tensor([9.52, 4.433, 0.853]) |> round(3) == round(s, 3)
+      assert_all_close(Nx.tensor([9.52, 4.433, 0.853]), s, atol: 1.0e-3, rtol: 1.0e-3)
 
-      assert Nx.tensor([
-               [0.035, 0.0869, 0.996],
-               [-0.091, -0.992, 0.09],
-               [-0.995, 0.094, 0.027]
-             ])
-             |> round(3) == round(v, 3)
+      assert_all_close(
+        Nx.tensor([
+          [0.035, 0.0869, 0.996],
+          [-0.091, -0.992, 0.09],
+          [-0.995, 0.094, 0.027]
+        ]),
+        v,
+        atol: 1.0e-3,
+        rtol: 1.0e-3
+      )
     end
 
     test "works with batched matrices" do
@@ -954,30 +985,6 @@ defmodule Nx.LinAlgTest do
           key
       end
     end
-  end
-
-  defp round(tensor, places) do
-    round_real = fn x -> Float.round(Complex.real(x), places) end
-    round_imag = fn x -> Float.round(Complex.imag(x), places) end
-
-    Nx.map(tensor, fn x ->
-      x = Nx.to_number(x)
-
-      cond do
-        is_integer(x) ->
-          x
-
-        is_float(x) ->
-          Float.round(x, places)
-
-        x in [:nan, :neg_infinity, :infinity] ->
-          x
-
-        true ->
-          # Complex case
-          Complex.new(round_real.(x), round_imag.(x))
-      end
-    end)
   end
 
   describe "least_squares" do

@@ -1515,49 +1515,6 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
-  describe "map" do
-    defn map_plus(t), do: Nx.map(t, fn x -> x + 1 end)
-    defn map_equal(t), do: Nx.map(t, [type: {:f, 64}], fn x -> Nx.equal(x, 1) end)
-    defn map_exp(t), do: Nx.map(t, [type: {:f, 64}], fn x -> Nx.exp(x) end)
-
-    @tag :unsupported_64_bit_op
-    @tag :iree_wrong_result_error
-    test "maps a function over the tensor" do
-      assert_equal(map_plus(Nx.tensor([[1, 2, 3], [4, 5, 6]])), Nx.tensor([[2, 3, 4], [5, 6, 7]]))
-    end
-
-    @tag :unsupported_64_bit_op
-    @tag :iree_illegal_op_error
-    test "maps a function with an output type" do
-      assert_equal(
-        map_equal(Nx.tensor([[1, 2, 3], [4, 5, 6]])),
-        Nx.tensor([[1.0, 0.0, 0.0], [0.0, 0.0, 0.0]], type: {:f, 64})
-      )
-
-      assert_equal(
-        map_exp(Nx.tensor([[1, 2, 3], [4, 5, 6]])),
-        Nx.tensor(
-          [
-            [2.718281828459045, 7.38905609893065, 20.085536923187668],
-            [54.598150033144236, 148.4131591025766, 403.4287934927351]
-          ],
-          type: {:f, 64}
-        )
-      )
-    end
-
-    defn map_conditional(t), do: Nx.map(t, fn x -> if x > 0, do: x, else: -x end)
-
-    @tag :conditional_inside_map_reduce
-    @tag :unsupported_64_bit_op
-    @tag :iree_illegal_op_error
-    test "maps a function with conditional" do
-      assert_equal(
-        map_conditional(Nx.tensor([-2, -1, 0, 1, 2])),
-        Nx.tensor([2, 1, 0, 1, 2])
-      )
-    end
-
     defn while_inside_if(pred, x) do
       if pred do
         {x, _} =
@@ -1571,7 +1528,6 @@ defmodule EXLA.Defn.ExprTest do
       end
     end
 
-    @tag :iree_key_not_found_error
     test "while inside if" do
       assert %{a: a, b: b} = while_inside_if(1, %{a: 1, b: 2.0})
       assert_all_close(a, 1)

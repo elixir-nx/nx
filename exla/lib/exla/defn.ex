@@ -1312,11 +1312,6 @@ defmodule EXLA.Defn do
     mlir_scatter(tensors, out, :put)
   end
 
-  defp to_operator(:map, [%Value{} = arg, _opts, fun], ans, _state) do
-    arg = to_type(arg, ans.type)
-    Value.map(fun, [arg], Nx.axes(ans.shape), expr_to_typespec(ans))
-  end
-
   defp to_operator(op, [arg, opts], ans, state) when op in [:argmax, :argmin] do
     apply(EXLA.Lib, op, [state.builder, arg, ans.type, opts])
   end
