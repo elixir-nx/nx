@@ -39,7 +39,7 @@ defmodule EXLA.Defn do
 
     client = EXLA.Client.fetch!(client_name)
     compile_options = Keyword.put(compile_options, :lazy_transfers, :never)
-    compile_options = Keyword.put_new(compile_options, :runtime, :iree)
+    compile_options = Keyword.put_new(compile_options, :runtime, :xla)
 
     input_length = length(Nx.Defn.Composite.flatten_list([input]))
     acc_length = length(Nx.Defn.Composite.flatten_list([acc]))
@@ -291,7 +291,7 @@ defmodule EXLA.Defn do
     {client_name, compile_options} =
       Keyword.pop_lazy(compile_options, :client, &EXLA.Client.default_name/0)
 
-    compile_options = Keyword.put_new(compile_options, :runtime, :iree)
+    compile_options = Keyword.put_new(compile_options, :runtime, :xla)
 
     client = EXLA.Client.fetch!(client_name)
 
@@ -612,8 +612,11 @@ defmodule EXLA.Defn do
        ) do
     [initial_arg, _arg, pred, body] = args
 
+    token = get_token(cache)
+    has_token = not is_nil(token)
+
     initial =
-      if token = get_token(cache) do
+      if has_token do
         {token, initial_arg}
       else
         initial_arg
@@ -627,7 +630,7 @@ defmodule EXLA.Defn do
     results =
       Value.while(function, pred_computation, body_computation, List.flatten(initial))
 
-    if get_token(cache) do
+    if has_token do
       [token | results] = results
       result = wrap_tuple_result(results, initial_arg)
       {result, update_token(cache, token)}
