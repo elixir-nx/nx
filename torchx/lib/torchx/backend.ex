@@ -1795,7 +1795,7 @@ defmodule Torchx.Backend do
 
   not_possible =
     [count_leading_zeros: 2, population_count: 2] ++
-      [map: 4, reduce: 5, window_reduce: 6, from_pointer: 5, to_pointer: 2]
+      [reduce: 5, window_reduce: 6, from_pointer: 5, to_pointer: 2]
 
   for {fun, arity} <- not_possible do
     args = Macro.generate_arguments(arity, __MODULE__)

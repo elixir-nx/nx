@@ -986,13 +986,6 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def map(%{type: type} = out, tensor, opts, fun) do
-    args = [parameter(new_context(:map), type, {}, 0)]
-    %{data: %{context: context}} = tensor = to_expr(tensor)
-    expr(out, context, :map, [tensor, opts, apply_fun(context, fun, args, type)])
-  end
-
-  @impl true
   def window_scatter_max(out, tensor, source, init_value, window_dims, opts) do
     {[tensor, source, init_value], context} = to_exprs([tensor, source, init_value])
 
