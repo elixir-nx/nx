@@ -396,7 +396,7 @@ defmodule EXLA.Defn do
 
     {eval_time, {expr, {ref, outputs, {used_inputs, defined_hooks}}}} =
       :timer.tc(fn ->
-        expr_cache_fun.({key, args_key}, fn ->
+        expr_cache_fun.({key, args_key, lazy_transfers}, fn ->
           expr = fun.(vars)
           inputs_and_hooks = Outfeed.used_inputs_and_hooks(expr, used_inputs, lazy_transfers)
           {expr, {make_ref(), Nx.to_template(expr), inputs_and_hooks}}
@@ -443,9 +443,9 @@ defmodule EXLA.Defn do
             end)
 
           EXLA.MLIR.Module.new(comp_arg_typespecs, out_typespecs, fn builder ->
+            # Only create the token when we know it will actually be
+            # used, that is: streaming, lazy transfers or hooks
             outfeed =
-              # Only create the token when we know it will actually be
-              # used, that is: streaming, lazy transfers or hooks
               if stream? or reverse_infeeds != [] or hooks != %{} or defined_hooks != %{} do
                 outfeed
                 |> Outfeed.with_token(Value.create_token(builder))
