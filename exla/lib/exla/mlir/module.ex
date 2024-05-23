@@ -106,16 +106,22 @@ defmodule EXLA.MLIR.Module do
     # module |> as_string() |> IO.puts()
 
     ref =
-      EXLA.NIF.mlir_compile(
-        client.ref,
-        module.ref,
-        Enum.map(argument_typespecs, &EXLA.Typespec.nif_encode/1),
-        num_replicas,
-        num_partitions,
-        use_spmd,
-        device_id
-      )
-      |> unwrap!()
+      case Keyword.get(options, :module_compilation, :to_pjrt) do
+        :to_mlir ->
+          module.ref
+
+        :to_pjrt ->
+          EXLA.NIF.mlir_compile(
+            client.ref,
+            module.ref,
+            Enum.map(argument_typespecs, &EXLA.Typespec.nif_encode/1),
+            num_replicas,
+            num_partitions,
+            use_spmd,
+            device_id
+          )
+          |> unwrap!()
+      end
 
     %Executable{
       client: client,
