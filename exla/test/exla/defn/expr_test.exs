@@ -1499,64 +1499,23 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
-  describe "map" do
-    defn map_plus(t), do: Nx.map(t, fn x -> x + 1 end)
-    defn map_equal(t), do: Nx.map(t, [type: {:f, 64}], fn x -> Nx.equal(x, 1) end)
-    defn map_exp(t), do: Nx.map(t, [type: {:f, 64}], fn x -> Nx.exp(x) end)
+  defn while_inside_if(pred, x) do
+    if pred do
+      {x, _} =
+        while {x, i = 0}, i < 10 do
+          {x, i + 1}
+        end
 
-    @tag :unsupported_64_bit_op
-    test "maps a function over the tensor" do
-      assert_equal(map_plus(Nx.tensor([[1, 2, 3], [4, 5, 6]])), Nx.tensor([[2, 3, 4], [5, 6, 7]]))
+      x
+    else
+      x
     end
+  end
 
-    @tag :unsupported_64_bit_op
-    test "maps a function with an output type" do
-      assert_equal(
-        map_equal(Nx.tensor([[1, 2, 3], [4, 5, 6]])),
-        Nx.tensor([[1.0, 0.0, 0.0], [0.0, 0.0, 0.0]], type: {:f, 64})
-      )
-
-      assert_equal(
-        map_exp(Nx.tensor([[1, 2, 3], [4, 5, 6]])),
-        Nx.tensor(
-          [
-            [2.718281828459045, 7.38905609893065, 20.085536923187668],
-            [54.598150033144236, 148.4131591025766, 403.4287934927351]
-          ],
-          type: {:f, 64}
-        )
-      )
-    end
-
-    defn map_conditional(t), do: Nx.map(t, fn x -> if x > 0, do: x, else: -x end)
-
-    @tag :conditional_inside_map_reduce
-    @tag :unsupported_64_bit_op
-    test "maps a function with conditional" do
-      assert_equal(
-        map_conditional(Nx.tensor([-2, -1, 0, 1, 2])),
-        Nx.tensor([2, 1, 0, 1, 2])
-      )
-    end
-
-    defn while_inside_if(pred, x) do
-      if pred do
-        {x, _} =
-          while {x, i = 0}, i < 10 do
-            {x, i + 1}
-          end
-
-        x
-      else
-        x
-      end
-    end
-
-    test "while inside if" do
-      assert %{a: a, b: b} = while_inside_if(1, %{a: 1, b: 2.0})
-      assert_all_close(a, 1)
-      assert_all_close(b, 2.0)
-    end
+  test "while inside if" do
+    assert %{a: a, b: b} = while_inside_if(1, %{a: 1, b: 2.0})
+    assert_all_close(a, 1)
+    assert_all_close(b, 2.0)
   end
 
   describe "reduce" do

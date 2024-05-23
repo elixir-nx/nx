@@ -660,24 +660,6 @@ defmodule EXLA.MLIR.Value do
     )
   end
 
-  def map(
-        %Region{ref: mapper},
-        [%Value{function: func} | _] = inputs,
-        dimensions,
-        typespec
-      ) do
-    result_types = typespecs_to_mlir_types([typespec])
-
-    attributes = [
-      dimensions: attr_array_i64_elements(dimensions)
-    ]
-
-    regions = [mapper]
-
-    op(func, "stablehlo.map", inputs, result_types, attributes: attributes, regions: regions)
-    |> one!()
-  end
-
   def if_op(
         %Value{function: func} = pred,
         %Region{ref: on_true},

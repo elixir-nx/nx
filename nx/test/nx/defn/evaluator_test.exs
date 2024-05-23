@@ -269,16 +269,6 @@ defmodule Nx.Defn.EvaluatorTest do
     test "calls external anonymous function via reduce" do
       assert calls_reduce_fun(&Nx.add/2, Nx.tensor([1, 2, 3])) == Nx.tensor(6)
     end
-
-    defn calls_map_fun(t) do
-      Nx.map(t, fn x ->
-        if Nx.equal(x, 0), do: 1, else: -x
-      end)
-    end
-
-    test "calls internal anonymous function via map" do
-      assert calls_map_fun(Nx.tensor([0, 1, 2])) == Nx.tensor([1, -1, -2])
-    end
   end
 
   describe "access" do
@@ -691,7 +681,7 @@ defmodule Nx.Defn.EvaluatorTest do
       t = Nx.iota({2, 3}, vectorized_axes: [a: 1], type: :s64)
 
       message = """
-      test/nx/defn/evaluator_test.exs:660: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
+      test/nx/defn/evaluator_test.exs:650: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
 
       {\e[32m
        <<<<< Body (do-block) <<<<<
@@ -723,7 +713,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
       error =
         """
-        test/nx/defn/evaluator_test.exs:660: condition must be a scalar tensor, got: #Nx.Tensor<
+        test/nx/defn/evaluator_test.exs:650: condition must be a scalar tensor, got: #Nx.Tensor<
           vectorized[x: 1]
           u8[1]
         \s\s

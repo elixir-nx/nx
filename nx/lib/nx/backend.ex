@@ -93,7 +93,6 @@ defmodule Nx.Backend do
   @callback window_product(out :: tensor, tensor, shape, keyword) :: tensor
   @callback window_max(out :: tensor, tensor, shape, keyword) :: tensor
   @callback window_min(out :: tensor, tensor, shape, keyword) :: tensor
-  @callback map(out :: tensor, tensor, keyword, fun) :: tensor
   @callback sort(out :: tensor, tensor, keyword) :: tensor
   @callback argsort(out :: tensor, tensor, keyword) :: tensor
   @callback window_scatter_max(out :: tensor, tensor, tensor, tensor, shape, keyword) :: tensor

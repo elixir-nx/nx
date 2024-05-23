@@ -353,7 +353,6 @@ defmodule EXLA.Backend do
       {:window_product, [:tensor, :shape, :opts], [:tensor]},
       {:window_max, [:tensor, :shape, :opts], [:tensor]},
       {:window_min, [:tensor, :shape, :opts], [:tensor]},
-      {:map, [:tensor, :opts, :fun], [:tensor]},
       {:sort, [:tensor, :opts], [:tensor]},
       {:argsort, [:tensor, :opts], [:tensor]},
       {:window_scatter_max, [:tensor, :source, :init_value, :window_dims, :opts],
