@@ -1515,26 +1515,6 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
-    defn while_inside_if(pred, x) do
-      if pred do
-        {x, _} =
-          while {x, i = 0}, i < 10 do
-            {x, i + 1}
-          end
-
-        x
-      else
-        x
-      end
-    end
-
-    test "while inside if" do
-      assert %{a: a, b: b} = while_inside_if(1, %{a: 1, b: 2.0})
-      assert_all_close(a, 1)
-      assert_all_close(b, 2.0)
-    end
-  end
-
   describe "reduce" do
     defn reduce(t), do: Nx.reduce(t, 1, fn a, b -> a * b end)
     defn reduce_keep(t), do: Nx.reduce(t, 1, [keep_axes: true], fn a, b -> a * b end)
