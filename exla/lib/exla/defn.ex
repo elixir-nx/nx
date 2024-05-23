@@ -284,7 +284,11 @@ defmodule EXLA.Defn do
   ## Examples
 
       iex> fun = fn x, y -> Nx.add(Nx.sin(x), Nx.cos(y)) end
-      iex> {:ok, %EXLA.Executable{}} = EXLA.Defn.export_executable(fun, [Nx.template({}, :f32), Nx.template({}, :f32)])
+      iex> args = [Nx.to_template(1.0), Nx.to_template(2.0)]
+      iex> {:ok, %EXLA.Executable{ref: ref}} = EXLA.Defn.export_executable(fun, args)
+      iex> is_reference(ref)
+      true
+      iex> {:ok, %EXLA.Executable{ref: nil, mlir_module: %EXLA.MLIR.Module{}}} = EXLA.Defn.export_executable(fun, args, compile_mlir: false)
   """
   def export_executable(fun, vars, options \\ []) do
     runtime_fun =

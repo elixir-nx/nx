@@ -101,21 +101,28 @@ defmodule EXLA.MLIR.Module do
     # Uncomment to debug the module MLIR source
     # module |> as_string() |> IO.puts()
 
+    compile_mlir = Keyword.get(options, :compile_mlir, true)
+
     ref =
-      EXLA.NIF.mlir_compile(
-        client.ref,
-        module.ref,
-        Enum.map(argument_typespecs, &EXLA.Typespec.nif_encode/1),
-        num_replicas,
-        num_partitions,
-        use_spmd,
-        device_id
-      )
-      |> unwrap!()
+      if compile_mlir do
+        EXLA.NIF.mlir_compile(
+          client.ref,
+          module.ref,
+          Enum.map(argument_typespecs, &EXLA.Typespec.nif_encode/1),
+          num_replicas,
+          num_partitions,
+          use_spmd,
+          device_id
+        )
+        |> unwrap!()
+      else
+        nil
+      end
 
     %Executable{
       client: client,
       ref: ref,
+      mlir_module: module,
       output_typespecs: return_typespecs,
       num_replicas: num_replicas,
       num_partitions: num_partitions,
