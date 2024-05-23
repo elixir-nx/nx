@@ -64,3 +64,6 @@ class IREEInput {
 }  // namespace runtime
 }  // namespace iree
 };  // namespace exla
+
+std::pair<iree_status_t, std::optional<std::vector<iree_hal_buffer_view_t*>>>
+call(iree_vm_instance_t* i, iree_hal_device_t*, unsigned char*, size_t, std::vector<exla::iree::runtime::IREEInput*>);

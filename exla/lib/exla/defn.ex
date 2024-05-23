@@ -255,17 +255,8 @@ defmodule EXLA.Defn do
   def __compile__(key, vars, fun, options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
 
-    {client_name, compile_options} =
-      Keyword.pop_lazy(compile_options, :client, &EXLA.Client.default_name/0)
-
-    compile_options = Keyword.put_new(compile_options, :runtime, :iree)
-
-    client = EXLA.Client.fetch!(client_name)
-
-    callback = &to_root_computation(&1, &2, &3, &4, Keyword.put(compile_options, :client, client))
-
     {executable, used_inputs, outputs, outfeed, :ok, debug?} =
-      compile(client, key, vars, fun, compile_options, 0, [], callback)
+      compile_executable(key, vars, fun, compile_options)
 
     fn [args] ->
       {time, lock} =
@@ -288,6 +279,26 @@ defmodule EXLA.Defn do
 
       res
     end
+  end
+
+  def export_executable(fun, vars, options) do
+    fun
+    |> compile_executable(vars, &Function.identity/1, Keyword.delete(options, :run_options))
+    |> elem(0)
+  end
+
+  defp compile_executable(key, vars, fun, compile_options) do
+    {client_name, compile_options} =
+      Keyword.pop_lazy(compile_options, :client, &EXLA.Client.default_name/0)
+
+    compile_options = Keyword.put_new(compile_options, :runtime, :iree)
+
+    client = EXLA.Client.fetch!(client_name)
+
+    callback = &to_root_computation(&1, &2, &3, &4, Keyword.put(compile_options, :client, client))
+
+    {executable, used_inputs, outputs, outfeed, :ok, debug?} =
+      compile(client, key, vars, fun, compile_options, 0, [], callback)
   end
 
   defp to_root_computation(%Function{} = function, expr, used_typespecs, outfeed, options) do
@@ -482,34 +493,20 @@ defmodule EXLA.Defn do
                   for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
 
                 if runtime == :iree do
-                  {t1, {:ok, module_charlist}} =
-                    :timer.tc(fn ->
-                      {:ok, module_charlist} = EXLA.NIF.mlir_module_to_string(builder.module.ref)
-                    end)
+                  {:ok, module_charlist} = EXLA.NIF.mlir_module_to_string(builder.module.ref)
 
-                  # :telemetry.execute(
-                  #   [:exla, :mlir, :iree, :compile],
-                  #   %{duration: t1}
-                  # )
+                  flags =
+                    options[:iree_flags] ||
+                      [
+                        # ~c"--iree-hal-target-backends=llvm-cpu",
+                        ~c"--iree-hal-target-backends=metal-spirv",
+                        ~c"--iree-input-type=stablehlo_xla",
+                        ~c"--iree-execution-model=async-internal",
+                        ~c"--iree-input-demote-f64-to-f32=true",
+                        ~c"--iree-input-demote-i64-to-i32=false"
+                      ]
 
-                  flags = [
-                    # ~c"--iree-hal-target-backends=llvm-cpu",
-                    ~c"--iree-hal-target-backends=metal-spirv",
-                    ~c"--iree-input-type=stablehlo_xla",
-                    ~c"--iree-execution-model=async-internal",
-                    ~c"--iree-input-demote-f64-to-f32=true",
-                    ~c"--iree-input-demote-i64-to-i32=false"
-                  ]
-
-                  {t2, {:ok, module_bytecode}} =
-                    :timer.tc(fn ->
-                      {:ok, module_bytecode} = EXLA.MLIR.IREE.compile(module_charlist, flags)
-                    end)
-
-                  :telemetry.execute(
-                    [:exla, :mlir, :iree, :compile],
-                    %{duration: t2}
-                  )
+                  {:ok, module_bytecode} = EXLA.MLIR.IREE.compile(module_charlist, flags)
 
                   %EXLA.Executable{
                     client: client,
