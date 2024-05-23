@@ -251,15 +251,8 @@ defmodule EXLA.Defn do
   def __compile__(key, vars, fun, options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
 
-    {client_name, compile_options} =
-      Keyword.pop_lazy(compile_options, :client, &EXLA.Client.default_name/0)
-
-    client = EXLA.Client.fetch!(client_name)
-
-    callback = &to_root_computation(&1, &2, &3, &4, Keyword.put(compile_options, :client, client))
-
-    {executable, used_inputs, outputs, outfeed, :ok, debug?} =
-      compile(client, key, vars, fun, compile_options, 0, [], _stream = false, callback)
+    {:ok, {executable, {used_inputs, outputs, outfeed, debug?}}} =
+      compile_executable(key, vars, fun, compile_options)
 
     fn [args] ->
       {time, lock} =
@@ -282,6 +275,60 @@ defmodule EXLA.Defn do
 
       res
     end
+  end
+
+  @doc """
+  Takes in a function, the templates variables and the compilation options
+  and returns the `EXLA.Executable` struct.
+
+  ## Examples
+
+      iex> fun = fn x, y -> Nx.add(Nx.sin(x), Nx.cos(y)) end
+      iex> {:ok, %EXLA.Executable{}} = EXLA.Defn.export_executable(fun, [Nx.template({}, :f32), Nx.template({}, :f32)])
+  """
+  def export_executable(fun, vars, options \\ []) do
+    runtime_fun =
+      fn args ->
+        fun
+        |> apply(args)
+        |> Nx.Defn.Composite.traverse(&Nx.Defn.Expr.tensor/1)
+      end
+
+    {params, _} =
+      Enum.map_reduce(vars, 0, fn
+        arg, i
+        when is_list(arg)
+        when is_function(arg)
+        when is_tuple(arg) and is_function(elem(arg, 0)) ->
+          {arg, i}
+
+        container, i ->
+          Nx.Defn.Composite.traverse(container, i, fn
+            template, i ->
+              {Nx.Defn.Expr.parameter(template, :root, i), i + 1}
+          end)
+      end)
+
+    {:ok, {executable, _}} =
+      compile_executable(fun, params, runtime_fun, Keyword.delete(options, :run_options))
+
+    {:ok, executable}
+  end
+
+  defp compile_executable(key, vars, fun, compile_options) do
+    {client_name, compile_options} =
+      Keyword.pop_lazy(compile_options, :client, &EXLA.Client.default_name/0)
+
+    compile_options = Keyword.put_new(compile_options, :runtime, :xla)
+
+    client = EXLA.Client.fetch!(client_name)
+
+    callback = &to_root_computation(&1, &2, &3, &4, Keyword.put(compile_options, :client, client))
+
+    {executable, used_inputs, outputs, outfeed, :ok, debug?} =
+      compile(client, key, vars, fun, compile_options, 0, [], _stream = false, callback)
+
+    {:ok, {executable, {used_inputs, outputs, outfeed, debug?}}}
   end
 
   defp to_root_computation(%Function{} = function, expr, used_typespecs, outfeed, options) do
