@@ -71,6 +71,10 @@ defmodule EXLA.MLIR.Module do
     * `:use_spmd` - enables Single-Program Multiple-Data partioning.
       This is set to true if `:num_partitions` is more than one, otherwise is `false`.
 
+    * `:module_compilation` - either `:to_mlir` or `:to_pjrt`. The default is `:to_pjrt`.
+    If `:to_pjrt`, the Executable `:ref` field will hold the reference to a PjRt executable.
+    If `:to_mlir`, the Executable `:ref` field will hold the reference to an MLIR executable.
+
   Currently those options do not have an effect as they related to running the
   same compiled executable on multiple replicas.
 

@@ -355,6 +355,21 @@ defmodule EXLA do
     Nx.Defn.stream(function, args, Keyword.put(options, :compiler, EXLA))
   end
 
+  def to_mlir_module(function, args, options \\ []) do
+    {expr_fun, _} = cached_check()
+
+    comp_fun = fn _key, callback ->
+      {:ok, {_xla_time, executable, _extra, _outfeed}} = callback.()
+      throw({:mlir_module, executable.ref})
+    end
+
+    function
+    |> jit([{EXLA, {expr_fun, comp_fun}}, {:module_compilation, :to_mlir} | options])
+    |> apply(args)
+  catch
+    {:mlir_module, ref} -> %EXLA.MLIR.Module{ref: ref}
+  end
+
   @doc """
   Checks if the compilation of function with args is cached.
 
