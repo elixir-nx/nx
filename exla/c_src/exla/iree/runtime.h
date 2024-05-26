@@ -7,14 +7,18 @@
 #include <iree/vm/bytecode/module.h>
 
 #include <memory>
+#include <optional>
+#include <vector>
 
+#ifndef BUILD_FOR_IOS
 #include "../exla_nif_util.h"
 
 ERL_NIF_TERM run_module(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 ERL_NIF_TERM setup_runtime(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 ERL_NIF_TERM create_instance(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
-ERL_NIF_TERM read_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
+ERL_NIF_TERM read_buffer_to_term(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 ERL_NIF_TERM deallocate_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
+#endif
 
 namespace exla {
 namespace iree {
@@ -65,5 +69,10 @@ class IREEInput {
 }  // namespace iree
 };  // namespace exla
 
+
+iree_vm_instance_t* create_instance();
+iree_hal_device_t* create_device(const std::string& device_uri);
 std::pair<iree_status_t, std::optional<std::vector<iree_hal_buffer_view_t*>>>
 call(iree_vm_instance_t* i, iree_hal_device_t*, unsigned char*, size_t, std::vector<exla::iree::runtime::IREEInput*>);
+iree_status_t read_buffer(iree_hal_device_t* device, iree_hal_buffer_view_t* buffer_view, void* output_buffer, size_t num_bytes);
+std::string get_status_message(iree_status_t status);

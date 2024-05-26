@@ -522,6 +522,10 @@ defmodule EXLA.Defn do
 
                   {:ok, module_bytecode} = EXLA.MLIR.IREE.compile(module_charlist, flags)
 
+                  if filename = options[:iree_filename] do
+                    File.write!(filename, module_bytecode)
+                  end
+
                   %EXLA.Executable{
                     client: client,
                     ref: module_bytecode,

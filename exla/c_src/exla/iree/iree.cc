@@ -19,7 +19,7 @@ static ErlNifFunc iree_funcs[] = {
     {"run_module", 4, run_module, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"setup_runtime", 1, setup_runtime},
     {"create_instance", 0, create_instance},
-    {"read_buffer", 3, read_buffer, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"read_buffer", 3, read_buffer_to_term, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"deallocate_buffer", 1, deallocate_buffer, ERL_NIF_DIRTY_JOB_IO_BOUND},
 };
 
