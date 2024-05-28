@@ -177,7 +177,7 @@ defmodule Nx.BinaryBackend.Matrix do
 
     # QR iteration for eigenvalues and eigenvectors
     {eigenvals_diag, eigenvecs} =
-      Enum.reduce_while(1..max_iter, {h, q_h}, fn _, {a_old, q_old} ->
+      Enum.reduce_while(1..max_iter//1, {h, q_h}, fn _, {a_old, q_old} ->
         # QR decomposition
         {q_now, r_now} = qr_decomposition(a_old, n, n, eps)
 
