@@ -26,7 +26,7 @@ defmodule Nx.LinAlg.Eigh do
     }
   end
 
-  defn eigh_matrix(a, opts \\ []) do
+  defnp eigh_matrix(a, opts \\ []) do
     case Nx.shape(a) do
       {1, 1} ->
         {a, Nx.fill(a, 1)}
@@ -66,7 +66,7 @@ defmodule Nx.LinAlg.Eigh do
     {eigenvals, eigenvecs}
   end
 
-  defn hessenberg_decomposition(matrix, eps) do
+  defnp hessenberg_decomposition(matrix, eps) do
     # The input Hermitian matrix A reduced to Hessenberg matrix H by Householder transform.
     # Then, by using QR iteration it converges to AQ = QΛ,
     # where Λ is the diagonal matrix of eigenvalues and the columns of Q are the eigenvectors.
