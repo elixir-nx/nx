@@ -1,12 +1,15 @@
 defmodule EXLA.NxRandomTest do
   use EXLA.Case, async: true
 
+  @moduletag :iree_hangup_error
+
   setup do
     Nx.default_backend(EXLA.Backend)
     :ok
   end
 
   describe "range" do
+    @tag :iree_operand_does_not_dominate_error
     test "randint" do
       key = Nx.Random.key(127)
 

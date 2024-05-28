@@ -10,6 +10,10 @@ defmodule EXLA.DeviceBuffer do
   defstruct [:ref, :client_name, :device_id, :typespec]
 
   @doc false
+  def from_ref(ref, :iree, device_id, typespec) when is_reference(ref) do
+    %DeviceBuffer{ref: ref, client_name: :iree, device_id: device_id, typespec: typespec}
+  end
+
   def from_ref(ref, %Client{name: name}, device_id, typespec) when is_reference(ref) do
     %DeviceBuffer{ref: ref, client_name: name, device_id: device_id, typespec: typespec}
   end
@@ -47,7 +51,39 @@ defmodule EXLA.DeviceBuffer do
   without destroying it. If `size` is negative, then it
   reads the whole buffer.
   """
-  def read(%DeviceBuffer{ref: ref}, size \\ -1) do
+  def read(buffer, size \\ -1)
+
+  @downcast_types [f: 64, c: 128]
+
+  def read(%DeviceBuffer{typespec: typespec, ref: ref, client_name: :iree}, size) do
+    {s, w} = typespec.type
+
+    size =
+      if size == -1 do
+        div(w, 8) * Tuple.product(typespec.shape)
+      else
+        size
+      end
+
+    read_size =
+      if {s, w} in @downcast_types do
+        div(size, 2)
+      else
+        size
+      end
+
+    data = EXLA.MLIR.IREE.read(ref, read_size) |> unwrap!()
+
+    if read_size != size do
+      Nx.with_default_backend(Nx.BinaryBackend, fn ->
+        data |> Nx.from_binary({s, div(w, 2)}) |> Nx.as_type({s, w}) |> Nx.to_binary()
+      end)
+    else
+      data
+    end
+  end
+
+  def read(%DeviceBuffer{ref: ref}, size) do
     EXLA.NIF.read_device_mem(ref, size) |> unwrap!()
   end
 
@@ -56,6 +92,9 @@ defmodule EXLA.DeviceBuffer do
 
   Returns `:ok` | `:already_deallocated`.
   """
+  def deallocate(%DeviceBuffer{ref: ref, client_name: :iree}),
+    do: EXLA.MLIR.IREE.deallocate_buffer(ref) |> unwrap!()
+
   def deallocate(%DeviceBuffer{ref: ref}),
     do: EXLA.NIF.deallocate_device_mem(ref) |> unwrap!()
 

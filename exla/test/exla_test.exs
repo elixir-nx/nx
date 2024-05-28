@@ -1,6 +1,7 @@
 defmodule EXLATest do
   use EXLA.Case, async: true
 
+  @moduletag :token
   doctest EXLA
 
   describe "integration" do

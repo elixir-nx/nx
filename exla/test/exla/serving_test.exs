@@ -1,6 +1,8 @@
 defmodule EXLA.ServingTest do
   use EXLA.Case, async: true
 
+  @moduletag :token
+
   defmodule ExecuteSync do
     @behaviour Nx.Serving
 

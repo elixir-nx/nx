@@ -155,6 +155,7 @@ defmodule EXLA.ExecutableFeedTest do
   import EXLAHelpers
 
   describe "infeed/outfeed" do
+    @describetag :token
     test "successfully sends to/from device asynchronously" do
       t = BinaryBuffer.from_binary(<<1::32-native>>, Typespec.tensor({:s, 32}, {}))
 

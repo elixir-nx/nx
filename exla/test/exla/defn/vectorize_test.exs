@@ -4,6 +4,8 @@ defmodule EXLA.Defn.VectorizeTest do
   import Nx.Defn
   import Nx, only: :sigils
 
+  @moduletag :iree_hangup_error
+
   setup do
     Nx.default_backend(EXLA.Backend)
 
@@ -18,7 +20,7 @@ defmodule EXLA.Defn.VectorizeTest do
     %{base: base, vectorized: vectorized}
   end
 
-  defn add_n(x, y), do: Nx.add(x, y)
+  defn(add_n(x, y), do: Nx.add(x, y))
 
   def add(x, y) do
     EXLA.jit_apply(&add_n/2, [x, y])
@@ -158,6 +160,7 @@ defmodule EXLA.Defn.VectorizeTest do
   end
 
   describe "cond" do
+    @describetag :token
     deftransformp send_value(val, opts \\ []) do
       Nx.Defn.Kernel.hook(
         val,

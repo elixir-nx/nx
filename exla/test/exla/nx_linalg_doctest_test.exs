@@ -12,9 +12,12 @@ defmodule EXLA.MLIR.NxLinAlgDoctestTest do
   ]
   @rounding_error_doctests [triangular_solve: 3, eigh: 2, cholesky: 1, least_squares: 2]
 
+  @iree_error_doctests [qr: 2]
+
   @excluded_doctests @function_clause_error_doctests ++
                        @rounding_error_doctests ++
                        @invalid_type_error_doctests ++
+                       @iree_error_doctests ++
                        [:moduledoc]
   doctest Nx.LinAlg, except: @excluded_doctests
 end

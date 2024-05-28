@@ -39,6 +39,7 @@ defmodule EXLA.Defn do
 
     client = EXLA.Client.fetch!(client_name)
     compile_options = Keyword.put(compile_options, :lazy_transfers, :never)
+    compile_options = Keyword.put_new(compile_options, :runtime, :xla)
 
     input_length = length(Nx.Defn.Composite.flatten_list([input]))
     acc_length = length(Nx.Defn.Composite.flatten_list([acc]))
@@ -146,6 +147,10 @@ defmodule EXLA.Defn do
          outfeed,
          options
        ) do
+    if builder.runtime == :iree do
+      raise ArgumentError, "streaming not supported when compiling with IREE"
+    end
+
     %{token: root_token, infeeds: []} = outfeed
 
     {input_typespecs, used_typespecs} =
@@ -237,7 +242,7 @@ defmodule EXLA.Defn do
     output = wrap_tuple_result(acc, acc_typespec)
 
     outfeed = outfeed |> Outfeed.with_token(out_token) |> Outfeed.close(builder)
-    Value.return(builder, output)
+    Value.func_return(builder, output)
 
     {{input_typespecs, input_indexes}, outfeed}
   end
@@ -251,15 +256,8 @@ defmodule EXLA.Defn do
   def __compile__(key, vars, fun, options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
 
-    {client_name, compile_options} =
-      Keyword.pop_lazy(compile_options, :client, &EXLA.Client.default_name/0)
-
-    client = EXLA.Client.fetch!(client_name)
-
-    callback = &to_root_computation(&1, &2, &3, &4, Keyword.put(compile_options, :client, client))
-
-    {executable, used_inputs, outputs, outfeed, :ok, debug?} =
-      compile(client, key, vars, fun, compile_options, 0, [], _stream = false, callback)
+    {:ok, {executable, {used_inputs, outputs, outfeed, debug?}}} =
+      compile_executable(key, vars, fun, compile_options)
 
     fn [args] ->
       {time, lock} =
@@ -284,6 +282,27 @@ defmodule EXLA.Defn do
     end
   end
 
+  def export_executable(fun, vars, options) do
+    {:ok, {executable, _}} =
+      compile_executable(fun, vars, & &1, Keyword.delete(options, :run_options))
+  end
+
+  defp compile_executable(key, vars, fun, compile_options) do
+    {client_name, compile_options} =
+      Keyword.pop_lazy(compile_options, :client, &EXLA.Client.default_name/0)
+
+    compile_options = Keyword.put_new(compile_options, :runtime, :xla)
+
+    client = EXLA.Client.fetch!(client_name)
+
+    callback = &to_root_computation(&1, &2, &3, &4, Keyword.put(compile_options, :client, client))
+
+    {executable, used_inputs, outputs, outfeed, :ok, debug?} =
+      compile(client, key, vars, fun, compile_options, 0, [], _stream = false, callback)
+
+    {:ok, {executable, {used_inputs, outputs, outfeed, debug?}}}
+  end
+
   defp to_root_computation(%Function{} = function, expr, used_typespecs, outfeed, options) do
     params =
       Enum.zip_with(used_typespecs, Function.get_arguments(function), fn {pos, _typespec}, arg ->
@@ -296,20 +315,41 @@ defmodule EXLA.Defn do
       raise ArgumentError, "missing client"
     end
 
+    runtime = Keyword.fetch!(options, :runtime)
+
+    unless runtime do
+      raise ArgumentError, "missing runtime"
+    end
+
+    state_params =
+      if runtime == :iree do
+        Map.new(params)
+      else
+        Map.new(params ++ outfeed.infeeds)
+      end
+
     state = %{
       client: client,
       precision: Keyword.get(options, :precision, :default),
       builder: function,
-      params: Map.new(params ++ outfeed.infeeds),
+      params: state_params,
       scope_ids: Tree.scope_ids(expr)
     }
 
-    {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
-    outfeed = cache |> get_outfeed() |> Outfeed.close(function)
+    if runtime == :iree do
+      {res, _cache} = recur_flatten(expr, state, no_token_cache())
+      Value.func_return(function, res)
+      {:ok, nil}
+    else
+      {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
 
-    Value.return(function, res)
+      outfeed =
+        cache |> get_outfeed() |> Outfeed.close(function)
 
-    {:ok, outfeed}
+      Value.func_return(function, res)
+
+      {:ok, outfeed}
+    end
   end
 
   defp maybe_outfeed(lock, executable, args, used_inputs, outputs, outfeed, run_options)
@@ -380,6 +420,7 @@ defmodule EXLA.Defn do
       end
 
     {debug?, options} = Keyword.pop(options, :debug, false)
+    {runtime, options} = Keyword.pop(options, :runtime)
 
     {args_key, reverse_args_identifiers} =
       Enum.map_reduce(vars, [], fn var, acc ->
@@ -413,7 +454,8 @@ defmodule EXLA.Defn do
 
     {hooks, options} = Keyword.pop(options, :hooks, %{})
 
-    outfeed = Outfeed.new(hooks, defined_hooks)
+    outfeed =
+      Outfeed.new(hooks, defined_hooks)
 
     comp_key = {ref, client.name, outfeed.used_hooks, lazy_transfers, options}
 
@@ -464,16 +506,52 @@ defmodule EXLA.Defn do
                 typespecs =
                   for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
 
-                EXLA.MLIR.Module.compile(
-                  builder.module,
-                  client,
-                  typespecs,
-                  builder.return_typespecs,
-                  options
-                )
+                if runtime == :iree do
+                  {:ok, module_charlist} = EXLA.NIF.mlir_module_to_string(builder.module.ref)
+
+                  flags =
+                    options[:iree_flags] ||
+                      [
+                        # ~c"--iree-hal-target-backends=llvm-cpu",
+                        ~c"--iree-hal-target-backends=metal-spirv",
+                        ~c"--iree-input-type=stablehlo_xla",
+                        ~c"--iree-execution-model=async-internal",
+                        ~c"--iree-input-demote-f64-to-f32=true",
+                        ~c"--iree-input-demote-i64-to-i32=false"
+                      ]
+
+                  {:ok, module_bytecode} = EXLA.MLIR.IREE.compile(module_charlist, flags)
+
+                  if filename = options[:iree_filename] do
+                    File.write!(filename, module_bytecode)
+                  end
+
+                  %EXLA.Executable{
+                    client: client,
+                    ref: module_bytecode,
+                    output_typespecs: builder.return_typespecs,
+                    num_replicas: 1,
+                    num_partitions: 1,
+                    device_id: -1,
+                    runtime: :iree
+                  }
+                else
+                  EXLA.MLIR.Module.compile(
+                    builder.module,
+                    client,
+                    typespecs,
+                    builder.return_typespecs,
+                    options
+                  )
+                end
               end)
 
-            {:ok, {xla_time, executable, extra, %{outfeed | infeeds: []}}}
+            outfeed =
+              if outfeed do
+                %{outfeed | infeeds: []}
+              end
+
+            {:ok, {xla_time, executable, extra, outfeed}}
           end)
         end)
       end)
@@ -501,7 +579,7 @@ defmodule EXLA.Defn do
       :telemetry.execute([:exla, :compilation], measurements, %{key: key})
     end
 
-    outfeed = Outfeed.with_user_hooks(outfeed, hooks)
+    outfeed = if outfeed, do: Outfeed.with_user_hooks(outfeed, hooks)
     {executable, used_inputs, outputs, outfeed, extra, debug?}
   end
 
@@ -538,8 +616,11 @@ defmodule EXLA.Defn do
        ) do
     [initial_arg, _arg, pred, body] = args
 
+    token = get_token(cache)
+    has_token = not is_nil(token)
+
     initial =
-      if token = get_token(cache) do
+      if has_token do
         {token, initial_arg}
       else
         initial_arg
@@ -553,7 +634,7 @@ defmodule EXLA.Defn do
     results =
       Value.while(function, pred_computation, body_computation, List.flatten(initial))
 
-    if get_token(cache) do
+    if has_token do
       [token | results] = results
       result = wrap_tuple_result(results, initial_arg)
       {result, update_token(cache, token)}
@@ -605,10 +686,10 @@ defmodule EXLA.Defn do
              ]
            }
          },
-         %{client: %EXLA.Client{platform: :host}, builder: %Function{}} = state,
+         %{client: %EXLA.Client{platform: :host}, builder: %Function{runtime: runtime}} = state,
          cache
        )
-       when type_kind != :c do
+       when type_kind != :c and runtime != :iree do
     # We match only on platform: :host for MLIR, as we want to support
     # QR-on-cpu as a custom call only in this case
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
@@ -735,6 +816,15 @@ defmodule EXLA.Defn do
     {op, cache} = recur_operator(expr, state, cache)
     {_, cache} = recur_operator(token, state, cache)
     {op, cache}
+  end
+
+  defp cached_recur_operator(
+         :token,
+         %T{data: %Expr{args: [_token]}},
+         %{builder: %Function{runtime: :iree}},
+         cache
+       ) do
+    {[], cache}
   end
 
   defp cached_recur_operator(:token, %T{data: %Expr{args: [token]}}, state, cache) do
@@ -1669,9 +1759,9 @@ defmodule EXLA.Defn do
     {res, comp_cache} = recur_composite(expr, state, reset_token(cache, inner_token))
 
     if outer_token do
-      Value.return(function, [get_token(comp_cache) | List.flatten(res)])
+      Value.func_return(function, [get_token(comp_cache) | List.flatten(res)])
     else
-      Value.return(function, List.flatten(res))
+      Value.func_return(function, List.flatten(res))
     end
 
     {function, merge_outfeed(cache, comp_cache)}

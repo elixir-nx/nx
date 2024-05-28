@@ -5,7 +5,9 @@ if System.get_env("DEBUG") in ["1", "true"] do
   IO.gets("Press enter to continue... -- PID: #{System.pid()}")
 end
 
-Nx.Defn.global_default_options(compiler: EXLA)
+runtime = if System.get_env("EXLA_RUNTIME") == "iree", do: :iree, else: :xla
+
+Nx.Defn.global_default_options(compiler: EXLA, runtime: runtime)
 
 exclude_multi_device =
   if client.device_count > 1 and client.platform == :host, do: [], else: [:multi_device]
@@ -38,8 +40,23 @@ cuda_required =
     [:cuda_required]
   end
 
+iree_excludes =
+  if runtime == :iree do
+    [
+      :token,
+      :iree_segfault_error,
+      :iree_illegal_op_error,
+      :iree_key_not_found_error,
+      :iree_wrong_result_error,
+      :iree_operand_does_not_dominate_error
+    ]
+  else
+    []
+  end
+
 ExUnit.start(
-  exclude: [:platform, :integration] ++ exclude_multi_device ++ exclude ++ cuda_required,
+  exclude:
+    [:platform, :integration] ++ exclude_multi_device ++ exclude ++ cuda_required ++ iree_excludes,
   include: [platform: String.to_atom(target)],
   assert_receive_timeout: 1000
 )

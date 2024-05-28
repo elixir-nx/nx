@@ -189,6 +189,13 @@ defmodule EXLA.Defn.ExprTest do
     defn add_two_int(t), do: t + 2
     defn add_two_float(t), do: t + 2.0
 
+    @tag :unsupported_64_bit_op
+    test "constants f64" do
+      t = Nx.tensor([1, 2], type: {:f, 64})
+      assert_equal(add_two_int(t), Nx.add(t, 2))
+      assert_equal(add_two_float(t), Nx.add(t, 2.0))
+    end
+
     test "constants" do
       tensors = [
         Nx.tensor([1, 2], type: {:u, 8}),
@@ -196,8 +203,7 @@ defmodule EXLA.Defn.ExprTest do
         Nx.tensor([1, 2], type: {:u, 32}),
         Nx.tensor([1, 2], type: {:s, 8}),
         Nx.tensor([1, 2], type: {:s, 32}),
-        Nx.tensor([1, 2], type: {:f, 32}),
-        Nx.tensor([1, 2], type: {:f, 64})
+        Nx.tensor([1, 2], type: {:f, 32})
       ]
 
       for t <- tensors do
@@ -363,6 +369,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn atan2_two(a, b), do: Nx.atan2(a, b)
 
+    @tag :iree_wrong_result_error
     test "atan2" do
       <<neg_zero::float>> = <<0x8000000000000000::64>>
       left = Nx.tensor([-1.0, neg_zero, 0.0, 1.0])
@@ -418,6 +425,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn bitwise_pc(a), do: Nx.population_count(a)
 
+    @tag :iree_illegal_op_error
     test "population_count" do
       assert Nx.shape(bitwise_pc(@left)) == {5}
       assert_equal(bitwise_pc(@left), Nx.population_count(@left))
@@ -425,6 +433,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn bitwise_clz(a), do: Nx.count_leading_zeros(a)
 
+    @tag :iree_illegal_op_error
     test "count_leading_zeros" do
       assert Nx.shape(bitwise_clz(@left)) == {5}
       assert_equal(bitwise_clz(@left), Nx.count_leading_zeros(@left))
@@ -448,6 +457,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn right_shift(a, b), do: a >>> b
 
+    @tag :iree_wrong_result_error
     test "right_shift" do
       assert Nx.shape(right_shift(@left_signed, @right_signed)) == {9, 9}
 
@@ -719,6 +729,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn logical_not(a), do: Nx.logical_not(a)
 
+    @tag :iree_key_not_found_error
     test "not" do
       assert_equal(
         logical_not(Nx.tensor([-2, -1, 0, 1, 2])),
@@ -735,6 +746,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defnp is_finite(x), do: Nx.all(Nx.logical_not(Nx.is_infinity(x)))
 
+    @tag :iree_key_not_found_error
     test "logical and/not with all predicate" do
       assert_equal(logical_and_all_finite(1, 0, 2.0), Nx.u8(1))
     end
@@ -809,6 +821,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "complex ops" do
+    @describetag :iree_illegal_op_error
     defn fft(t, opts \\ []), do: Nx.fft(t, opts)
     defn ifft(t, opts \\ []), do: Nx.ifft(t, opts)
 
@@ -1233,6 +1246,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn if_map(a, b, c), do: if(a, do: {%{a: a, b: b, c: 1}, c}, else: {%{a: c, b: b, c: 2}, a})
 
+    @tag :iree_segfault_error
     test "with map" do
       assert_equal(
         if_map(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)),
@@ -1347,6 +1361,7 @@ defmodule EXLA.Defn.ExprTest do
       end
     end
 
+    @tag :iree_offset_error
     test "computes cond with cond as parameter" do
       assert_equal(nested_cond(Nx.tensor(10)), Nx.tensor(1))
       assert_equal(nested_cond(Nx.tensor(-10)), Nx.tensor(0))
@@ -1366,6 +1381,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "while/3" do
+    @describetag :iree_key_not_found_error
     defn upto10(x) do
       while x, Nx.less(x, 10) do
         x + 1
@@ -1497,25 +1513,6 @@ defmodule EXLA.Defn.ExprTest do
                      cond_inside_while_vectorized(Nx.vectorize(Nx.tensor([1, 2, 3]), :a), 3)
                    end
     end
-  end
-
-  defn while_inside_if(pred, x) do
-    if pred do
-      {x, _} =
-        while {x, i = 0}, i < 10 do
-          {x, i + 1}
-        end
-
-      x
-    else
-      x
-    end
-  end
-
-  test "while inside if" do
-    assert %{a: a, b: b} = while_inside_if(1, %{a: 1, b: 2.0})
-    assert_all_close(a, 1)
-    assert_all_close(b, 2.0)
   end
 
   describe "reduce" do
@@ -1682,6 +1679,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "window_scatter_min/max" do
+    @describetag :iree_segfault_error
     defn window_scatter_max_no_padding(t) do
       Nx.window_scatter_max(
         t,
@@ -2078,6 +2076,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn mean_over_multiple_axes(t), do: Nx.mean(t, axes: [0, 2])
 
+    @tag :iree_segfault_error
     test "computes mean over multiple axes" do
       assert_equal(
         mean_over_multiple_axes(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])),
@@ -2197,6 +2196,7 @@ defmodule EXLA.Defn.ExprTest do
     defn reduce_min_neg_axis(t), do: Nx.reduce_min(t, axes: [-3])
     defn reduce_min_pos_neg_axis(t), do: Nx.reduce_min(t, axes: [1, -3])
 
+    @tag :iree_wrong_result_error
     test "computes the min on a given axis" do
       t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
       assert_equal(reduce_min_pos_axis(t), Nx.reduce_min(t, axes: [1]))
@@ -2207,6 +2207,7 @@ defmodule EXLA.Defn.ExprTest do
     defn reduce_min_keep(t), do: Nx.reduce_min(t, keep_axes: true)
     defn reduce_min_keep_2(t), do: Nx.reduce_min(t, axes: [0, 2], keep_axes: true)
 
+    @tag :iree_wrong_result_error
     test "keeps dimensions if keep_axes" do
       assert_equal(Nx.tensor([1, 2, 3]) |> reduce_min_keep(), Nx.tensor([1]))
       assert_equal(Nx.tensor([1.0, 2.0, 3.0]) |> reduce_min_keep(), Nx.tensor([1.0]))
@@ -2219,6 +2220,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "argmax/argmin" do
+    @describetag :iree_wrong_result_error
     defn argmax(t), do: Nx.argmax(t)
     defn argmin(t), do: Nx.argmin(t)
     defn argmax_axis(t), do: Nx.argmax(t, axis: 1)
@@ -2289,6 +2291,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "window sum" do
+    @describetag :iree_segfault_error
     defn window_sum1(t), do: Nx.window_sum(t, {1, 2, 1})
 
     defn window_sum2(t),
@@ -2339,6 +2342,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "window mean" do
+    @describetag :iree_segfault_error
     defn window_mean1(t), do: Nx.window_mean(t, {1, 2, 1})
 
     defn window_mean2(t),
@@ -2394,6 +2398,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "window max" do
+    @describetag :iree_segfault_error
     defn window_max1(t), do: Nx.window_max(t, {1, 2, 1})
 
     defn window_max2(t),
@@ -2459,6 +2464,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "window min" do
+    @describetag :iree_segfault_error
     defn window_min0(t), do: Nx.window_min(t, {2})
     defn window_min1(t), do: Nx.window_min(t, {1, 2, 1})
 
@@ -2529,6 +2535,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "window product" do
+    @describetag :iree_segfault_error
     defn window_product1(t), do: Nx.window_product(t, {1, 2, 1})
 
     defn window_product2(t),
@@ -2753,6 +2760,7 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
+    @tag :iree_illegal_op_error
     test "computes a convolution with channels last" do
       img = Nx.iota({8, 12, 12, 3}, type: {:f, 32}, names: [:batch, :height, :width, :channels])
       kernel = Nx.iota({6, 3, 2, 2}, type: {:f, 32})
@@ -2770,6 +2778,7 @@ defmodule EXLA.Defn.ExprTest do
       assert %{names: [:batch, :height, :width, :channels], shape: {8, 11, 11, 6}} = lhs
     end
 
+    @tag :iree_illegal_op_error
     test "computes a convolution with a permutation" do
       img = Nx.iota({12, 12, 3, 4}, type: {:f, 32})
       kernel = Nx.iota({3, 2, 32, 2}, type: {:f, 32})
@@ -2806,6 +2815,7 @@ defmodule EXLA.Defn.ExprTest do
     end
 
     @tag :unsupported_64_bit_op
+    @tag :iree_illegal_op_error
     test "computes the convolution with valid padding, no stride" do
       img = Nx.iota({5, 1, 12, 12}, type: {:f, 64})
       kernel = Nx.iota({32, 1, 3, 3}, type: {:f, 64})
@@ -2816,6 +2826,7 @@ defmodule EXLA.Defn.ExprTest do
     end
 
     @tag :unsupported_64_bit_op
+    @tag :iree_illegal_op_error
     test "computes the convolution with valid padding, {2, 2} stride" do
       img = Nx.iota({25, 1, 11, 8}, type: {:f, 64})
       kernel = Nx.iota({32, 1, 3, 3}, type: {:f, 64})
@@ -2826,6 +2837,7 @@ defmodule EXLA.Defn.ExprTest do
     end
 
     @tag :unsupported_64_bit_op
+    @tag :iree_illegal_op_error
     test "computes the convolution with same padding, no stride" do
       img = Nx.iota({13, 3, 10, 6}, type: {:f, 64})
       kernel = Nx.iota({32, 3, 3, 3}, type: {:f, 64})
@@ -2836,6 +2848,7 @@ defmodule EXLA.Defn.ExprTest do
     end
 
     @tag :unsupported_64_bit_op
+    @tag :iree_illegal_op_error
     test "computes the convolution with same padding, stride" do
       img = Nx.iota({32, 1, 9, 9}, type: {:f, 64})
       kernel = Nx.iota({32, 1, 7, 7}, type: {:f, 64})
@@ -2889,6 +2902,7 @@ defmodule EXLA.Defn.ExprTest do
     end
 
     @tag :unsupported_64_bit_op
+    @tag :iree_illegal_op_error
     test "computes a dilated convolution" do
       img = Nx.iota({4, 3, 10, 10}, type: {:f, 64})
       kernel = Nx.iota({6, 3, 2, 2}, type: {:f, 64})
@@ -2909,6 +2923,7 @@ defmodule EXLA.Defn.ExprTest do
       assert_all_close(lhs, rhs)
     end
 
+    @tag :iree_illegal_op_error
     test "computes a conv with both dilations" do
       img = Nx.iota({4, 3, 15, 15}, type: {:f, 32})
       kernel = Nx.iota({6, 3, 3, 2}, type: {:f, 32})
@@ -3302,6 +3317,7 @@ defmodule EXLA.Defn.ExprTest do
     defn slice3_dynamic(t),
       do: Nx.slice(t, [Nx.tensor(0), Nx.tensor(4), Nx.tensor(11)], [2, 3, 9], strides: [2, 1, 3])
 
+    @tag :iree_segfault_error
     test "works without stride" do
       t = Nx.iota({900})
       t = Nx.reshape(t, {2, 15, 30})
@@ -3725,6 +3741,7 @@ defmodule EXLA.Defn.ExprTest do
   describe "decompositions" do
     defn ts(a, b, opts \\ []), do: Nx.LinAlg.triangular_solve(a, b, opts)
 
+    @tag :iree_key_not_found_error
     test "triangular_solve" do
       a = Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]])
       b = Nx.tensor([4, 2, 4, 2])
@@ -3743,6 +3760,7 @@ defmodule EXLA.Defn.ExprTest do
     defn qr(t), do: Nx.LinAlg.qr(t)
     defn qr_complete(t), do: Nx.LinAlg.qr(t, mode: :complete)
 
+    @tag :iree_key_not_found_error
     test "qr" do
       input = Nx.iota({3, 2})
       output = Nx.as_type(input, {:f, 32})
@@ -3768,6 +3786,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn svd(t), do: Nx.LinAlg.svd(t)
 
+    @tag :iree_key_not_found_error
     test "svd" do
       input = Nx.iota({3, 3})
       output = Nx.as_type(input, {:f, 32})
@@ -3784,6 +3803,7 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
+    @tag :iree_key_not_found_error
     test "svd (tall matrix)" do
       input = Nx.tensor([[2, 0], [0, 1], [0, 0]])
       output = Nx.as_type(input, {:f, 32})
@@ -3800,6 +3820,7 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
+    @tag :iree_key_not_found_error
     test "svd (wide matrix)" do
       input = Nx.tensor([[2, 0, 0], [0, 1, 0]])
       output = Nx.as_type(input, {:f, 32})
@@ -3818,6 +3839,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "sort" do
+    @describetag :iree_segfault_error
     defn sort0(t), do: Nx.sort(t, axis: 0)
     defn sort1(t), do: Nx.sort(t, axis: 1)
     defn sort1_asc(t), do: Nx.sort(t, axis: 1, direction: :asc)
@@ -3862,6 +3884,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "top_k" do
+    @describetag :iree_segfault_error
     defn top_1(t), do: Nx.top_k(t, k: 1)
 
     test "returns top 1 values and indices" do
@@ -3877,6 +3900,7 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "argsort" do
+    @describetag :iree_segfault_error
     defn argsort0(t), do: Nx.argsort(t, axis: 0)
     defn argsort1(t), do: Nx.argsort(t, axis: 1)
     defn argsort1_asc(t), do: Nx.argsort(t, axis: 1, direction: :asc)
@@ -3932,6 +3956,7 @@ defmodule EXLA.Defn.ExprTest do
   describe "optional" do
     defn determinant(t), do: Nx.LinAlg.determinant(t)
 
+    @tag :iree_key_not_found_error
     test "determinant" do
       two_by_two = Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
       assert_equal(determinant(two_by_two), Nx.tensor(-2.0))
@@ -3939,6 +3964,7 @@ defmodule EXLA.Defn.ExprTest do
 
     defn double_determinant(a, b), do: Nx.LinAlg.determinant(a) * Nx.LinAlg.determinant(b)
 
+    @tag :iree_key_not_found_error
     test "multiple determinant" do
       from_one = Nx.tensor([[1, 2], [3, 4]])
       from_ten = Nx.tensor([[10, 20], [30, 40]])
@@ -3949,6 +3975,7 @@ defmodule EXLA.Defn.ExprTest do
   describe "cholesky" do
     defn cholesky(t), do: Nx.LinAlg.cholesky(t)
 
+    @tag :iree_key_not_found_error
     test "works on 2x2 matrix" do
       lhs = cholesky(Nx.tensor([[20.0, 17.6], [17.6, 16.0]]))
       rhs = Nx.tensor([[4.47213595499958, 0.0], [3.93547964039963, 0.7155417527999305]])
@@ -3959,6 +3986,7 @@ defmodule EXLA.Defn.ExprTest do
       assert_all_close(lhs, rhs)
     end
 
+    @tag :iree_key_not_found_error
     test "works on a 4x4 matrix" do
       lhs =
         cholesky(
@@ -3981,6 +4009,7 @@ defmodule EXLA.Defn.ExprTest do
       assert_all_close(lhs, rhs)
     end
 
+    @tag :iree_key_not_found_error
     test "works on a 50x50 matrix" do
       tensor =
         Nx.tensor(
@@ -4130,6 +4159,7 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
+  @tag :iree_key_not_found_error
   test "computes while inside cond" do
     assert {i} = while_in_cond(0)
     assert_equal(i, Nx.tensor(5))

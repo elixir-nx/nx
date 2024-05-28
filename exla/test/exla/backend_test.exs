@@ -27,8 +27,50 @@ defmodule EXLA.BackendTest do
     @skip_mac_arm []
   end
 
+  if iree_runtime?() do
+    @skip_iree [
+      # illegal op errors
+      conv: 3,
+      fft2: 2,
+      ifft2: 2,
+      fft: 2,
+      ifft: 2,
+      population_count: 1,
+      window_scatter_max: 5,
+      window_scatter_min: 5,
+      # clz is not fully supported
+      count_leading_zeros: 1,
+      # precision errors
+      atan2: 2,
+      acosh: 1,
+      phase: 1,
+      standard_deviation: 2,
+      weighted_mean: 3,
+      covariance: 3,
+      variance: 2,
+      atan: 1,
+      acos: 1,
+      cbrt: 1,
+      # wrong result (segfault in argsort and sort)
+      argsort: 2,
+      sort: 2,
+      is_nan: 1,
+      top_k: 2,
+      # cryptic crashes
+      median: 2,
+      window_min: 3,
+      window_max: 3,
+      window_sum: 3,
+      window_product: 3,
+      window_mean: 3,
+      all_close: 3,
+    ]
+  else
+    @skip_iree []
+  end
+
   doctest Nx,
-    except: [:moduledoc] ++ @excluded_doctests ++ @skip_mac_arm
+    except: [:moduledoc] ++ @excluded_doctests ++ @skip_mac_arm ++ @skip_iree
 
   test "Nx.to_binary/1" do
     t = Nx.tensor([1, 2, 3, 4], backend: EXLA.Backend)
@@ -116,6 +158,7 @@ defmodule EXLA.BackendTest do
     assert_equal(result, Nx.tensor([0, 1, 1, 0]))
   end
 
+  @tag :iree_key_not_found_error
   test "Nx.LinAlg.svd/2" do
     t = Nx.iota({4, 4})
     assert {u, s, vt} = Nx.LinAlg.svd(t, max_iter: 10_000)

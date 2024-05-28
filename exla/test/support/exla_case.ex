@@ -47,4 +47,8 @@ defmodule EXLA.Case do
   def is_mac_arm? do
     Application.fetch_env!(:exla, :is_mac_arm)
   end
+
+  def iree_runtime? do
+    Nx.Defn.default_options()[:runtime] == :iree
+  end
 end

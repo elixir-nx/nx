@@ -7,15 +7,31 @@ defmodule EXLA.Executable do
   alias EXLA.{BinaryBuffer, DeviceBuffer}
 
   @enforce_keys [:client, :ref, :output_typespecs, :num_replicas, :num_partitions, :device_id]
-  defstruct [:client, :ref, :output_typespecs, :num_replicas, :num_partitions, :device_id]
+  defstruct [
+    :client,
+    :ref,
+    :output_typespecs,
+    :num_replicas,
+    :num_partitions,
+    :device_id,
+    runtime: :xla
+  ]
 
   @doc """
   Runs the given executable with a list of lists as inputs and the given options.
   """
   def run(%Executable{} = executable, [subinputs | _] = inputs, options \\ [])
       when is_list(subinputs) do
-    %{client: client, device_id: device_id, output_typespecs: output_typespecs, ref: ref} =
+    %{
+      runtime: runtime,
+      client: client,
+      device_id: device_id,
+      output_typespecs: output_typespecs,
+      ref: ref
+    } =
       executable
+
+    client = if runtime == :iree, do: :iree, else: client
 
     for data_and_device_id <- run(client, ref, device_id, inputs, options) do
       decompose_output(data_and_device_id, output_typespecs, client)
@@ -61,6 +77,38 @@ defmodule EXLA.Executable do
       _other ->
         raise "invalid serialized executable"
     end
+  end
+
+  defp run(:iree, ref, device_id, inputs, _options) do
+    inputs =
+      for subinputs <- inputs do
+        Enum.map(subinputs, fn
+          %DeviceBuffer{ref: ref} ->
+            ref
+
+          %BinaryBuffer{data: data, typespec: typespec} ->
+            case typespec do
+              %{type: {:f, 64}} ->
+                data =
+                  Nx.with_default_backend(Nx.BinaryBackend, fn ->
+                    data
+                    |> Nx.from_binary(:f64)
+                    |> Nx.as_type(:f32)
+                    |> Nx.to_binary()
+                  end)
+
+                {data, EXLA.Typespec.nif_encode(%{typespec | type: {:f, 32}})}
+
+              _ ->
+                {data, EXLA.Typespec.nif_encode(typespec)}
+            end
+        end)
+      end
+
+    ref
+    |> EXLA.MLIR.IREE.run(List.flatten(inputs))
+    |> unwrap!()
+    |> then(&[{&1, device_id}])
   end
 
   defp run(client, ref, device_id, inputs, _options) do

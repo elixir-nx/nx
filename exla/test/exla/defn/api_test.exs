@@ -7,6 +7,7 @@ defmodule EXLA.Defn.APITest do
   defn add_two(a, b), do: a + b
 
   describe "multi-client" do
+    @describetag :iree_key_not_found_error
     test "converts from host to separate client" do
       a = Nx.tensor(1, backend: {EXLA.Backend, client: :host})
       b = Nx.tensor(2, backend: {EXLA.Backend, client: :host})
@@ -37,8 +38,8 @@ defmodule EXLA.Defn.APITest do
 
       assert logs =~ ~r"EXLA defn evaluation #Function<[^>]+> cache (hit|miss) in \d+\.\dms"
       assert logs =~ ~r"EXLA compilation #Function<[^>]+> cache (hit|miss) in \d+\.\dms"
-      assert logs =~ ~r"EXLA device \d lock in \d+\.\dms"
-      assert logs =~ ~r"EXLA execution on device \d in \d+\.\dms"
+      assert logs =~ ~r"EXLA device -?\d lock in \d+\.\dms"
+      assert logs =~ ~r"EXLA execution on device -?\d in \d+\.\dms"
 
       logs =
         capture_log(fn ->
@@ -47,8 +48,8 @@ defmodule EXLA.Defn.APITest do
 
       assert logs =~ ~r"EXLA defn evaluation #Function<[^>]+> cache hit in \d+\.\dms"
       assert logs =~ ~r"EXLA compilation #Function<[^>]+> cache hit in \d+\.\dms"
-      assert logs =~ ~r"EXLA device \d lock in \d+\.\d+ms"
-      assert logs =~ ~r"EXLA execution on device \d in \d+\.\dms"
+      assert logs =~ ~r"EXLA device -?\d lock in \d+\.\d+ms"
+      assert logs =~ ~r"EXLA execution on device -?\d in \d+\.\dms"
     end
   end
 
@@ -118,7 +119,7 @@ defmodule EXLA.Defn.APITest do
       %{"x" => rand(), "y" => rand()}
     end
 
-    deftransformp rand, do: :rand.uniform()
+    deftransformp(rand, do: :rand.uniform())
 
     test "considers map keys in cache keys" do
       assert_equal(merge(%{"x" => 10})["x"], Nx.tensor(10))
@@ -127,6 +128,7 @@ defmodule EXLA.Defn.APITest do
   end
 
   describe "stream" do
+    @describetag :token
     defn defn_sum(entry, acc), do: {acc, entry + acc}
 
     test "immediately done" do
@@ -286,6 +288,7 @@ defmodule EXLA.Defn.APITest do
   end
 
   describe "hooks" do
+    @describetag :token
     require Logger
 
     defp send_to_self(tag) do
@@ -434,6 +437,7 @@ defmodule EXLA.Defn.APITest do
   end
 
   describe "telemetry" do
+    @describetag :iree_segfault_error
     defn telemetry_add_two(a, b), do: a + b
 
     def telemetry_handler(_event_name, measurements, metadata, _config) do

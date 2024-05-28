@@ -10,8 +10,18 @@ defmodule EXLA.Application do
       _ -> :os.set_signal(:sigchld, :default)
     end
 
+    EXLA.MLIR.IREE.global_initialize()
+    {:ok, device} = EXLA.MLIR.IREE.setup_runtime(~c"metal://0000000100000971")
+    # {:ok, device} = EXLA.MLIR.IREE.setup_runtime(~c"local-sync://")
+    :persistent_term.put({EXLA.MLIR.IREE, :device}, device)
+    
     children = [
       EXLA.Logger,
+      {NimblePool,
+       worker: {EXLA.MLIR.IREE.InstancePool, :pool_state},
+       pool_size: System.schedulers_online(),
+       name: EXLA.MLIR.IREE.InstancePool,
+       lazy: true},
       {NimblePool,
        worker: {EXLA.MLIR.ContextPool, :pool_state},
        pool_size: System.schedulers_online(),

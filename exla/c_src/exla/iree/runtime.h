@@ -1,0 +1,78 @@
+#pragma once
+#include <iree/hal/api.h>
+#include <iree/modules/hal/module.h>
+#include <iree/modules/hal/types.h>
+#include <iree/runtime/api.h>
+#include <iree/vm/api.h>
+#include <iree/vm/bytecode/module.h>
+
+#include <memory>
+#include <optional>
+#include <vector>
+
+#ifndef BUILD_FOR_IOS
+#include "../exla_nif_util.h"
+
+ERL_NIF_TERM run_module(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
+ERL_NIF_TERM setup_runtime(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
+ERL_NIF_TERM create_instance(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
+ERL_NIF_TERM read_buffer_to_term(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
+ERL_NIF_TERM deallocate_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
+#endif
+
+namespace exla {
+namespace iree {
+namespace runtime {
+
+class IREEInput {
+ public:
+  void* data;
+  size_t size;
+  std::vector<iree_hal_dim_t> dims;
+  iree_hal_element_type_t type;
+  iree_hal_buffer_view_t* buffer_view;
+
+  IREEInput(iree_hal_buffer_view_t* buffer_view) : buffer_view(buffer_view) {}
+
+  // Default constructor
+  IREEInput(void* data, size_t size, std::vector<int64_t> in_dims, iree_hal_element_type_t type) : size(size), type(type) {
+    dims.reserve(in_dims.size());
+
+    for (auto dim : in_dims) {
+      dims.push_back(static_cast<iree_hal_dim_t>(dim));
+    }
+
+    this->data = std::malloc(size);  // Allocate memory
+    std::memcpy(this->data, data, size);
+  }
+
+  // Destructor
+  ~IREEInput() {
+    if (data) {
+      std::free(data);
+      data = nullptr;
+    }
+  }
+
+  // Disable copy and move semantics for simplicity
+  IREEInput(const IREEInput&) = delete;
+  IREEInput& operator=(const IREEInput&) = delete;
+  IREEInput(IREEInput&&) = delete;
+  IREEInput& operator=(IREEInput&&) = delete;
+
+  iree_const_byte_span_t data_byte_span() const {
+    return iree_make_const_byte_span(static_cast<uint8_t*>(data), size);
+  }
+};
+
+}  // namespace runtime
+}  // namespace iree
+};  // namespace exla
+
+
+iree_vm_instance_t* create_instance();
+iree_hal_device_t* create_device(const std::string& device_uri);
+std::pair<iree_status_t, std::optional<std::vector<iree_hal_buffer_view_t*>>>
+call(iree_vm_instance_t* i, iree_hal_device_t*, unsigned char*, size_t, std::vector<exla::iree::runtime::IREEInput*>);
+iree_status_t read_buffer(iree_hal_device_t* device, iree_hal_buffer_view_t* buffer_view, void* output_buffer, size_t num_bytes);
+std::string get_status_message(iree_status_t status);

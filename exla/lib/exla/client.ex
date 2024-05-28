@@ -56,6 +56,16 @@ defmodule EXLA.Client do
   @doc """
   Fetches a client with the given `name` from configuration.
   """
+  def fetch!(:iree),
+    do: %__MODULE__{
+      ref: nil,
+      platform: :iree,
+      name: :iree,
+      device_count: -1,
+      default_device_id: -1,
+      automatic_transfers: true
+    }
+
   def fetch!(name) when is_atom(name) do
     # We could use the LockedCache but that is ETS based and the clients
     # are static enough that we can keep them on `persistent_term`.
