@@ -216,12 +216,14 @@ defmodule Nx.Serving do
   This can be done by passing either `Nx.backend_transfer/1` or `Nx.backend_copy/1`
   as third argument:
 
-      Nx.Serving.batched_run(MyDistributedServing, input, &Nx.backend_copy/1)
+      Nx.Serving.batched_run(MyDistributedServing, input, &Nx.backend_copy(&1, Nx.BinaryBackend))
 
   Use `backend_transfer/1` if you know the input will no longer be used.
 
-  Similarly, the serving has a `distributed_postprocessing` callback which can do
-  equivalent before sending the reply to the caller.
+  Similarly, the serving has a `distributed_postprocessing` callback which is
+  called on the remote machine before sending the reply to the caller. It can
+  be used to transfer resources to the binary backend before sending them over
+  the network.
 
   The servings are dispatched using Erlang Distribution. You can use
   `Node.connect/1` to manually connect nodes. In a production setup, this is
