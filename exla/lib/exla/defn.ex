@@ -433,6 +433,15 @@ defmodule EXLA.Defn do
           comp_arg_typespecs =
             for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
 
+          outputs =
+            if stream? do
+              # The computation returns the final accumulator value
+              {_chunk_result, acc} = outputs
+              acc
+            else
+              outputs
+            end
+
           out_typespecs =
             [outputs]
             |> Nx.Defn.Composite.flatten_list()
