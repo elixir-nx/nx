@@ -150,10 +150,10 @@ defmodule EXLA.MLIR.Value do
           op(func, "chlo.is_inf", [operand], result_types) |> one!()
       end
 
-    if out_typespec.type == {:u, 8} do
-      convert(result, out_typespec)
-    else
+    if out_typespec.type == typespec.type do
       result
+    else
+      convert(result, out_typespec)
     end
   end
 
@@ -186,10 +186,10 @@ defmodule EXLA.MLIR.Value do
           bitwise_and(is_not_inf, is_not_finite, typespec)
       end
 
-    if out_typespec.type == {:u, 8} do
-      convert(result, out_typespec)
-    else
+    if out_typespec.type == typespec.type do
       result
+    else
+      convert(result, out_typespec)
     end
   end
 
