@@ -237,7 +237,7 @@ defmodule EXLA.Defn do
     output = wrap_tuple_result(acc, acc_typespec)
 
     outfeed = outfeed |> Outfeed.with_token(out_token) |> Outfeed.close(builder)
-    Value.return(builder, output)
+    Value.func_return(builder, output)
 
     {{input_typespecs, input_indexes}, outfeed}
   end
