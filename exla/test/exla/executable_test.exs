@@ -160,7 +160,7 @@ defmodule EXLA.ExecutableFeedTest do
 
       assert res =
                Task.async(fn ->
-                 run_one([], [], [Typespec.token()], fn b ->
+                 run_one([], [], [t.typespec], fn b ->
                    token = Value.create_token(b)
 
                    {new_token, [val]} = Value.infeed(token, [t.typespec])
@@ -185,7 +185,7 @@ defmodule EXLA.ExecutableFeedTest do
 
       assert res =
                Task.async(fn ->
-                 run_one([], [], [token_shape, t.typespec], fn b ->
+                 run_one([], [], [t.typespec], fn b ->
                    token = Value.create_token(b)
 
                    arg_shapes = [token_shape, t.typespec]

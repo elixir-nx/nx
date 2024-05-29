@@ -237,7 +237,7 @@ defmodule EXLA.Defn do
     output = wrap_tuple_result(acc, acc_typespec)
 
     outfeed = outfeed |> Outfeed.with_token(out_token) |> Outfeed.close(builder)
-    Value.return(builder, output)
+    Value.func_return(builder, output)
 
     {{input_typespecs, input_indexes}, outfeed}
   end
@@ -307,7 +307,7 @@ defmodule EXLA.Defn do
     {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
     outfeed = cache |> get_outfeed() |> Outfeed.close(function)
 
-    Value.return(function, res)
+    Value.func_return(function, res)
 
     {:ok, outfeed}
   end
@@ -432,6 +432,15 @@ defmodule EXLA.Defn do
 
           comp_arg_typespecs =
             for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
+
+          outputs =
+            if stream? do
+              # The computation returns the final accumulator value
+              {_chunk_result, acc} = outputs
+              acc
+            else
+              outputs
+            end
 
           out_typespecs =
             [outputs]
@@ -1669,9 +1678,9 @@ defmodule EXLA.Defn do
     {res, comp_cache} = recur_composite(expr, state, reset_token(cache, inner_token))
 
     if outer_token do
-      Value.return(function, [get_token(comp_cache) | List.flatten(res)])
+      Value.func_return(function, [get_token(comp_cache) | List.flatten(res)])
     else
-      Value.return(function, List.flatten(res))
+      Value.func_return(function, List.flatten(res))
     end
 
     {function, merge_outfeed(cache, comp_cache)}
