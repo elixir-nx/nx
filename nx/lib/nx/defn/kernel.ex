@@ -164,10 +164,10 @@ defmodule Nx.Defn.Kernel do
 
       #Nx.Tensor<
         Nx.Defn.Expr
-        parameter a s64
-        parameter c s64
+        parameter a s32
+        parameter c s32
         b = tanh [ a ] f64
-        d = pow [ c, 2 ] s64
+        d = pow [ c, 2 ] s32
         e = add [ b, d ] f64
       >
 
@@ -325,7 +325,7 @@ defmodule Nx.Defn.Kernel do
       iex> t = Nx.tensor([1, 2, 3])
       iex> t[..]
       #Nx.Tensor<
-        s64[3]
+        s32[3]
         [1, 2, 3]
       >
 
@@ -347,7 +347,7 @@ defmodule Nx.Defn.Kernel do
       iex> t = Nx.tensor([1, 2, 3])
       iex> t[1..2]
       #Nx.Tensor<
-        s64[2]
+        s32[2]
         [2, 3]
       >
 
@@ -364,7 +364,7 @@ defmodule Nx.Defn.Kernel do
       iex> t = Nx.tensor([1, 2, 3])
       iex> t[1..2//1]
       #Nx.Tensor<
-        s64[2]
+        s32[2]
         [2, 3]
       >
 
@@ -1368,11 +1368,11 @@ defmodule Nx.Defn.Kernel do
 
       Hooks.add_and_mult(2, 3)
       {:add, #Nx.Tensor<
-         s64
+         s32
          5
       >}
       {:mult, #Nx.Tensor<
-         s64
+         s32
          6
       >}
 

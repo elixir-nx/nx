@@ -55,7 +55,7 @@ defmodule Nx.Batch do
       8
       iex> Nx.Defn.jit_apply(&Function.identity/1, [batch])
       #Nx.Tensor<
-        s64[8]
+        s32[8]
         [1, 2, 3, 4, 5, 6, 7, 8]
       >
 
@@ -113,12 +113,12 @@ defmodule Nx.Batch do
       iex> {left, right} = Nx.Defn.jit_apply(&Function.identity/1, [Nx.Batch.split(batch, 3)])
       iex> left
       #Nx.Tensor<
-        s64[3]
+        s32[3]
         [1, 2, 3]
       >
       iex> right
       #Nx.Tensor<
-        s64[2]
+        s32[2]
         [4, 5]
       >
   """
@@ -173,7 +173,7 @@ defmodule Nx.Batch do
       iex> batch = Nx.Batch.stack([Nx.tensor(1), Nx.tensor(2), Nx.tensor(3)])
       iex> Nx.Defn.jit_apply(&Function.identity/1, [Nx.Batch.pad(batch, 2)])
       #Nx.Tensor<
-        s64[5]
+        s32[5]
         [1, 2, 3, 0, 0]
       >
   """
@@ -201,7 +201,7 @@ defmodule Nx.Batch do
       iex> batch = Nx.Batch.concatenate([Nx.tensor([1]), Nx.tensor([2]), Nx.tensor([3])])
       iex> Nx.Defn.jit_apply(&Function.identity/1, [batch])
       #Nx.Tensor<
-        s64[3]
+        s32[3]
         [1, 2, 3]
       >
 
@@ -211,7 +211,7 @@ defmodule Nx.Batch do
       iex> batch = Nx.Batch.concatenate(batch, [Nx.tensor([3]), Nx.tensor([4])])
       iex> Nx.Defn.jit_apply(&Function.identity/1, [batch])
       #Nx.Tensor<
-        s64[4]
+        s32[4]
         [1, 2, 3, 4]
       >
 
@@ -223,7 +223,7 @@ defmodule Nx.Batch do
       5
       iex> Nx.Defn.jit_apply(&Function.identity/1, [batch])
       #Nx.Tensor<
-        s64[5]
+        s32[5]
         [1, 2, 3, 4, 5]
       >
 
@@ -236,12 +236,12 @@ defmodule Nx.Batch do
       iex> {batched1, batched2} = Nx.Defn.jit_apply(&Function.identity/1, [batch])
       iex> batched1
       #Nx.Tensor<
-        s64[2]
+        s32[2]
         [11, 12]
       >
       iex> batched2
       #Nx.Tensor<
-        s64[2]
+        s32[2]
         [21, 22]
       >
 
@@ -268,7 +268,7 @@ defmodule Nx.Batch do
       3
       iex> Nx.Defn.jit_apply(&Function.identity/1, [batch])
       #Nx.Tensor<
-        s64[3]
+        s32[3]
         [1, 2, 3]
       >
 
@@ -280,7 +280,7 @@ defmodule Nx.Batch do
       4
       iex> Nx.Defn.jit_apply(&Function.identity/1, [batch])
       #Nx.Tensor<
-        s64[4]
+        s32[4]
         [1, 2, 3, 4]
       >
 
@@ -293,12 +293,12 @@ defmodule Nx.Batch do
       iex> {batched1, batched2} = Nx.Defn.jit_apply(&Function.identity/1, [batch])
       iex> batched1
       #Nx.Tensor<
-        s64[2]
+        s32[2]
         [11, 12]
       >
       iex> batched2
       #Nx.Tensor<
-        s64[2]
+        s32[2]
         [21, 22]
       >
 

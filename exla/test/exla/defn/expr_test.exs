@@ -1807,7 +1807,7 @@ defmodule EXLA.Defn.ExprTest do
       indices = Nx.tensor([[0]])
       updates = Nx.tensor([1])
 
-      assert_equal(indexed_add(target, indices, updates), Nx.tensor([1], type: {:s, 64}))
+      assert_equal(indexed_add(target, indices, updates), Nx.tensor([1], type: {:s, 32}))
 
       target = Nx.tensor([0])
       indices = Nx.tensor([[0]])
@@ -1879,7 +1879,7 @@ defmodule EXLA.Defn.ExprTest do
       indices = Nx.tensor([[0]])
       updates = Nx.tensor([1])
 
-      assert_equal(indexed_put(target, indices, updates), Nx.tensor([1], type: {:s, 64}))
+      assert_equal(indexed_put(target, indices, updates), Nx.tensor([1], type: {:s, 32}))
 
       target = Nx.tensor([0])
       indices = Nx.tensor([[0]])
@@ -1963,7 +1963,7 @@ defmodule EXLA.Defn.ExprTest do
     test "computes the sum across types" do
       assert_equal(Nx.tensor([1, 2, 3]) |> sum(), Nx.tensor(6))
       assert_equal(Nx.tensor([1, 2, 3], type: {:s, 8}) |> sum(), Nx.tensor(6))
-      assert_equal(Nx.tensor([1, 2, 3], type: {:u, 8}) |> sum(), Nx.tensor(6, type: {:u, 64}))
+      assert_equal(Nx.tensor([1, 2, 3], type: {:u, 8}) |> sum(), Nx.tensor(6, type: {:u, 32}))
       assert_equal(Nx.tensor([1.0, 2.0, 3.0]) |> sum(), Nx.tensor(6.0))
 
       assert_equal(
@@ -1986,9 +1986,9 @@ defmodule EXLA.Defn.ExprTest do
     defn sum_equal(t), do: Nx.sum(Nx.equal(t, 1.0))
 
     test "does not overflow" do
-      assert_equal(sum_equal(Nx.tensor(1)), Nx.tensor(1, type: {:u, 64}))
-      assert_equal(sum_equal(Nx.tensor([1, 1, 1])), Nx.tensor(3, type: {:u, 64}))
-      assert_equal(sum_equal(Nx.tensor([1, 2, 3])), Nx.tensor(1, type: {:u, 64}))
+      assert_equal(sum_equal(Nx.tensor(1)), Nx.tensor(1, type: {:u, 32}))
+      assert_equal(sum_equal(Nx.tensor([1, 1, 1])), Nx.tensor(3, type: {:u, 32}))
+      assert_equal(sum_equal(Nx.tensor([1, 2, 3])), Nx.tensor(1, type: {:u, 32}))
     end
 
     defn sum_keep(t), do: Nx.sum(t, keep_axes: true)
@@ -2011,7 +2011,7 @@ defmodule EXLA.Defn.ExprTest do
     test "computes the product across types" do
       assert_equal(Nx.tensor([1, 2, 3]) |> product(), Nx.tensor(6))
       assert_equal(Nx.tensor([1, 2, 3], type: {:s, 8}) |> product(), Nx.tensor(6))
-      assert_equal(Nx.tensor([1, 2, 3], type: {:u, 8}) |> product(), Nx.tensor(6, type: {:u, 64}))
+      assert_equal(Nx.tensor([1, 2, 3], type: {:u, 8}) |> product(), Nx.tensor(6, type: {:u, 32}))
       assert_equal(Nx.tensor([1.0, 2.0, 3.0]) |> product(), Nx.tensor(6.0))
 
       assert_equal(
@@ -2034,9 +2034,9 @@ defmodule EXLA.Defn.ExprTest do
     defn product_equal(t), do: Nx.product(Nx.equal(t, 1.0))
 
     test "does not overflow" do
-      assert_equal(product_equal(Nx.tensor(1)), Nx.tensor(1, type: {:u, 64}))
-      assert_equal(product_equal(Nx.tensor([1, 1, 1])), Nx.tensor(1, type: {:u, 64}))
-      assert_equal(product_equal(Nx.tensor([1, 2, 3])), Nx.tensor(0, type: {:u, 64}))
+      assert_equal(product_equal(Nx.tensor(1)), Nx.tensor(1, type: {:u, 32}))
+      assert_equal(product_equal(Nx.tensor([1, 1, 1])), Nx.tensor(1, type: {:u, 32}))
+      assert_equal(product_equal(Nx.tensor([1, 2, 3])), Nx.tensor(0, type: {:u, 32}))
     end
 
     defn product_keep(t), do: Nx.product(t, keep_axes: true)
@@ -2416,12 +2416,12 @@ defmodule EXLA.Defn.ExprTest do
         window_max2(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]])),
         Nx.tensor([
           [
-            [-9_223_372_036_854_775_808, -9_223_372_036_854_775_808],
-            [-9_223_372_036_854_775_808, 6]
+            [-2_147_483_648, -2_147_483_648],
+            [-2_147_483_648, 6]
           ],
           [
-            [-9_223_372_036_854_775_808, -9_223_372_036_854_775_808],
-            [-9_223_372_036_854_775_808, 6]
+            [-2_147_483_648, -2_147_483_648],
+            [-2_147_483_648, 6]
           ]
         ])
       )
@@ -2482,12 +2482,12 @@ defmodule EXLA.Defn.ExprTest do
         window_min2(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]])),
         Nx.tensor([
           [
-            [9_223_372_036_854_775_807, 9_223_372_036_854_775_807],
-            [9_223_372_036_854_775_807, 3]
+            [2_147_483_647, 2_147_483_647],
+            [2_147_483_647, 3]
           ],
           [
-            [9_223_372_036_854_775_807, 9_223_372_036_854_775_807],
-            [9_223_372_036_854_775_807, 3]
+            [2_147_483_647, 2_147_483_647],
+            [2_147_483_647, 3]
           ]
         ])
       )

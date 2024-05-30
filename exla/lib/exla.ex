@@ -220,7 +220,7 @@ defmodule EXLA do
 
       iex> EXLA.jit(&Nx.add(&1, &1)).(Nx.tensor([1, 2, 3]))
       #Nx.Tensor<
-        s64[3]
+        s32[3]
         [2, 4, 6]
       >
 
@@ -265,7 +265,7 @@ defmodule EXLA do
 
       iex> EXLA.jit_apply(&Nx.add(&1, &1), [Nx.tensor([1, 2, 3])])
       #Nx.Tensor<
-        s64[3]
+        s32[3]
         [2, 4, 6]
       >
 
@@ -278,10 +278,10 @@ defmodule EXLA do
   @doc """
   A shortcut for `Nx.Defn.compile/3` with the EXLA compiler.
 
-      iex> fun = EXLA.compile(&Nx.add(&1, &1), [Nx.template({3}, {:s, 64})])
+      iex> fun = EXLA.compile(&Nx.add(&1, &1), [Nx.template({3}, {:s, 32})])
       iex> fun.(Nx.tensor([1, 2, 3]))
       #Nx.Tensor<
-        s64[3]
+        s32[3]
         [2, 4, 6]
       >
 
@@ -328,7 +328,7 @@ defmodule EXLA do
 
   Now let's invoke it:
 
-      stream = EXLA.stream(&Streamed.sum/2, [Nx.template({}, {:s, 64}), 0])
+      stream = EXLA.stream(&Streamed.sum/2, [Nx.template({}, {:s, 32}), 0])
 
       for i <- 1..5 do
         Nx.Stream.send(stream, i)

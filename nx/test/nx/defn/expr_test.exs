@@ -17,7 +17,7 @@ defmodule Nx.Defn.ExprTest do
       assert %T{data: %Expr{op: :constant, args: [1.0]}, type: {:f, 32}, shape: {1, 2, 3}} =
                Nx.broadcast(Expr.tensor(1.0), {1, 2, 3})
 
-      param = Expr.parameter(nil, {:s, 64}, {2, 2}, 1)
+      param = Expr.parameter(nil, {:s, 32}, {2, 2}, 1)
 
       assert %T{
                data: %Expr{
@@ -36,16 +36,16 @@ defmodule Nx.Defn.ExprTest do
       assert %T{data: %Expr{op: :constant, args: [1.0]}, type: {:f, 32}, shape: {}} =
                Nx.as_type(Expr.tensor(1), {:f, 32})
 
-      assert %T{data: %Expr{op: :constant, args: [1]}, type: {:s, 64}, shape: {}} =
-               Nx.as_type(Expr.tensor(1.0), {:s, 64})
+      assert %T{data: %Expr{op: :constant, args: [1]}, type: {:s, 32}, shape: {}} =
+               Nx.as_type(Expr.tensor(1.0), {:s, 32})
     end
 
     test "add" do
       assert %T{data: %Expr{op: :constant, args: [3.0]}, type: {:f, 32}} =
                Nx.add(Expr.tensor(1.0), Expr.tensor(2))
 
-      param1 = Expr.parameter(nil, {:s, 64}, {2, 2}, 1)
-      param2 = Expr.parameter(nil, {:s, 64}, {2, 2}, 2)
+      param1 = Expr.parameter(nil, {:s, 32}, {2, 2}, 1)
+      param2 = Expr.parameter(nil, {:s, 32}, {2, 2}, 2)
 
       assert %T{data: %Expr{op: :as_type, args: [^param1]}, type: {:f, 32}} =
                Nx.add(param1, Expr.tensor(0.0))
@@ -64,7 +64,7 @@ defmodule Nx.Defn.ExprTest do
     end
 
     test "subtract" do
-      param = Expr.parameter(nil, {:s, 64}, {2, 2}, 2)
+      param = Expr.parameter(nil, {:s, 32}, {2, 2}, 2)
 
       assert ^param = Nx.subtract(param, Expr.tensor(0))
 
@@ -76,8 +76,8 @@ defmodule Nx.Defn.ExprTest do
       assert %T{data: %Expr{op: :constant, args: [4.0]}, type: {:f, 32}} =
                Nx.multiply(Expr.tensor(2.0), Expr.tensor(2))
 
-      param1 = Expr.parameter(nil, {:s, 64}, {2, 2}, 1)
-      param2 = Expr.parameter(nil, {:s, 64}, {2, 2}, 2)
+      param1 = Expr.parameter(nil, {:s, 32}, {2, 2}, 1)
+      param2 = Expr.parameter(nil, {:s, 32}, {2, 2}, 2)
 
       assert %T{data: %Expr{op: :as_type, args: [^param1]}, type: {:f, 32}} =
                Nx.multiply(param1, Expr.tensor(1.0))
@@ -96,7 +96,7 @@ defmodule Nx.Defn.ExprTest do
     end
 
     test "divide" do
-      param = Expr.parameter(nil, {:s, 64}, {2, 2}, 2)
+      param = Expr.parameter(nil, {:s, 32}, {2, 2}, 2)
 
       assert %T{data: %Expr{op: :as_type, args: [^param]}, type: {:f, 32}} =
                Nx.divide(param, Expr.tensor(1.0))
@@ -106,7 +106,7 @@ defmodule Nx.Defn.ExprTest do
     end
 
     test "pow" do
-      param = Expr.parameter(nil, {:s, 64}, {2, 2}, 2)
+      param = Expr.parameter(nil, {:s, 32}, {2, 2}, 2)
 
       assert ^param = Nx.pow(param, Expr.tensor(1))
 
@@ -115,9 +115,9 @@ defmodule Nx.Defn.ExprTest do
     end
 
     test "commute" do
-      param1 = Expr.parameter(nil, {:s, 64}, {2, 2}, 1)
-      param2 = Expr.parameter(nil, {:s, 64}, {2}, 2)
-      param3 = Expr.parameter(nil, {:s, 64}, {2}, 3)
+      param1 = Expr.parameter(nil, {:s, 32}, {2, 2}, 1)
+      param2 = Expr.parameter(nil, {:s, 32}, {2}, 2)
+      param3 = Expr.parameter(nil, {:s, 32}, {2}, 3)
 
       assert %T{
                data: %Expr{
@@ -193,9 +193,9 @@ defmodule Nx.Defn.ExprTest do
       expr = Nx.logsumexp(Expr.tensor(Nx.tensor([1, 2, 3, 4, 5, 6])))
 
       assert inspect(expr) =~ """
-               tensor a                                       s64[6]
-               b = reduce_max a, axes: [0], keep_axes: true   s64[1]
-               c = metadata b, :stop_grad                     s64[1]
+               tensor a                                       s32[6]
+               b = reduce_max a, axes: [0], keep_axes: true   s32[1]
+               c = metadata b, :stop_grad                     s32[1]
              """
     end
   end
@@ -204,7 +204,7 @@ defmodule Nx.Defn.ExprTest do
     test "with scalar" do
       assert inspect(Expr.tensor(Nx.tensor(0)), safe: false) == """
              #Nx.Tensor<
-               s64
+               s32
              \s\s
                Nx.Defn.Expr
                0
@@ -213,8 +213,8 @@ defmodule Nx.Defn.ExprTest do
     end
 
     test "with parameters" do
-      a = Expr.parameter(nil, {:s, 64}, {2, 2}, 0)
-      b = Expr.parameter(nil, {:s, 64}, {2, 2}, 1)
+      a = Expr.parameter(nil, {:s, 32}, {2, 2}, 0)
+      b = Expr.parameter(nil, {:s, 32}, {2, 2}, 1)
 
       assert Nx.sum(Nx.add(Nx.add(Nx.dot(a, a), Nx.tanh(b)), 2))
              |> inspect(safe: false) == """
@@ -222,9 +222,9 @@ defmodule Nx.Defn.ExprTest do
                f32
              \s\s
                Nx.Defn.Expr
-               parameter a:0                            s64[2][2]
-               parameter c:1                            s64[2][2]
-               b = dot a, [1], [], a, [0], []           s64[2][2]
+               parameter a:0                            s32[2][2]
+               parameter c:1                            s32[2][2]
+               b = dot a, [1], [], a, [0], []           s32[2][2]
                d = tanh c                               f32[2][2]
                e = add b, d                             f32[2][2]
                f = add 2, e                             f32[2][2]
@@ -234,68 +234,68 @@ defmodule Nx.Defn.ExprTest do
     end
 
     test "with tensors" do
-      a = Expr.parameter(nil, {:s, 64}, {2, 2}, 2)
+      a = Expr.parameter(nil, {:s, 32}, {2, 2}, 2)
       b = Nx.tensor([[1, 2], [1, 2]])
       c = Nx.iota({2, 2}, backend: Expr)
 
       assert Nx.argmin(Nx.add(Nx.tanh(Nx.dot(c, b)), a), tie_break: :high)
              |> inspect(safe: false) == """
              #Nx.Tensor<
-               s64
+               s32
              \s\s
                Nx.Defn.Expr
-               tensor b                                                      s64[2][2]
-               parameter e:2                                                 s64[2][2]
-               a = iota nil                                                  s64[2][2]
-               c = dot a, [1], [], b, [0], []                                s64[2][2]
+               tensor b                                                      s32[2][2]
+               parameter e:2                                                 s32[2][2]
+               a = iota nil                                                  s32[2][2]
+               c = dot a, [1], [], b, [0], []                                s32[2][2]
                d = tanh c                                                    f32[2][2]
                f = add d, e                                                  f32[2][2]
-               g = argmin f, tie_break: :high, axis: nil, keep_axis: false   s64
+               g = argmin f, tie_break: :high, axis: nil, keep_axis: false   s32
              >\
              """
     end
 
     test "with fun" do
-      a = Expr.parameter(nil, {:s, 64}, {2, 2}, 0)
+      a = Expr.parameter(nil, {:s, 32}, {2, 2}, 0)
 
       assert Nx.reduce(a, 0, [], &Nx.add/2) |> inspect(safe: false) == """
              #Nx.Tensor<
-               s64
+               s32
              \s\s
                Nx.Defn.Expr
-               parameter a:0                                             s64[2][2]
-               b = reduce a, 0, axes: nil, keep_axes: false, &Nx.add/2   s64
+               parameter a:0                                             s32[2][2]
+               b = reduce a, 0, axes: nil, keep_axes: false, &Nx.add/2   s32
              >\
              """
     end
 
     test "with metadata" do
-      a = Expr.parameter(nil, {:s, 64}, {}, 0)
+      a = Expr.parameter(nil, {:s, 32}, {}, 0)
 
       assert Expr.metadata(a, %{}) |> Nx.add(1) |> inspect(safe: false) == """
              #Nx.Tensor<
-               s64
+               s32
              \s\s
                Nx.Defn.Expr
-               parameter a:0   s64
-               b = add 1, a    s64
+               parameter a:0   s32
+               b = add 1, a    s32
              >\
              """
 
       assert Expr.metadata(a, %{inspect: :foo}) |> Nx.add(1) |> inspect(safe: false) == """
              #Nx.Tensor<
-               s64
+               s32
              \s\s
                Nx.Defn.Expr
-               parameter a:0          s64
-               b = metadata a, :foo   s64
-               c = add 1, b           s64
+               parameter a:0          s32
+               b = metadata a, :foo   s32
+               c = add 1, b           s32
              >\
              """
     end
 
     test "with tuple output" do
-      a = Expr.parameter(nil, {:s, 64}, {2, 2}, 0)
+      a = Expr.parameter(nil, {:s, 32}, {2, 2}, 0)
       {q, r} = Nx.LinAlg.qr(a)
 
       assert inspect(q, safe: false) == """
@@ -303,7 +303,7 @@ defmodule Nx.Defn.ExprTest do
                f32[2][2]
              \s\s
                Nx.Defn.Expr
-               parameter a:0                            s64[2][2]
+               parameter a:0                            s32[2][2]
                b = qr a, eps: 1.0e-10, mode: :reduced   tuple2
                c = elem b, 0                            f32[2][2]
              >\
@@ -314,7 +314,7 @@ defmodule Nx.Defn.ExprTest do
                f32[2][2]
              \s\s
                Nx.Defn.Expr
-               parameter a:0                            s64[2][2]
+               parameter a:0                            s32[2][2]
                b = qr a, eps: 1.0e-10, mode: :reduced   tuple2
                c = elem b, 1                            f32[2][2]
              >\
@@ -322,33 +322,33 @@ defmodule Nx.Defn.ExprTest do
     end
 
     test "with tuple and cond" do
-      a = Expr.parameter(nil, {:s, 64}, {}, 0)
-      b = Expr.parameter(nil, {:s, 64}, {}, 1)
+      a = Expr.parameter(nil, {:s, 32}, {}, 0)
+      b = Expr.parameter(nil, {:s, 32}, {}, 1)
       {left, right} = Expr.cond([{Nx.any(a), {a, b}}], {b, a})
 
       assert inspect(left, safe: false) == """
              #Nx.Tensor<
-               s64
+               s32
              \s\s
                Nx.Defn.Expr
-               parameter a:0                            s64
-               parameter c:1                            s64
+               parameter a:0                            s32
+               parameter c:1                            s32
                b = any a, axes: nil, keep_axes: false   u8
                d = cond b -> {a, c}, true -> {c, a}     tuple2
-               e = elem d, 0                            s64
+               e = elem d, 0                            s32
              >\
              """
 
       assert inspect(right, safe: false) == """
              #Nx.Tensor<
-               s64
+               s32
              \s\s
                Nx.Defn.Expr
-               parameter a:0                            s64
-               parameter c:1                            s64
+               parameter a:0                            s32
+               parameter c:1                            s32
                b = any a, axes: nil, keep_axes: false   u8
                d = cond b -> {a, c}, true -> {c, a}     tuple2
-               e = elem d, 1                            s64
+               e = elem d, 1                            s32
              >\
              """
     end
