@@ -613,7 +613,7 @@ defmodule Torchx.NxTest do
       assert Nx.as_type(Nx.tensor([0, 1, 2]), {:f, 32}) |> Nx.backend_transfer() ==
                Nx.tensor([0.0, 1.0, 2.0], backend: Nx.BinaryBackend)
 
-      assert Nx.as_type(Nx.tensor([0.0, 1.0, 2.0]), {:s, 64}) |> Nx.backend_transfer() ==
+      assert Nx.as_type(Nx.tensor([0.0, 1.0, 2.0]), {:s, 32}) |> Nx.backend_transfer() ==
                Nx.tensor([0, 1, 2], backend: Nx.BinaryBackend)
 
       assert Nx.as_type(Nx.tensor([0.0, 1.0, 2.0]), {:bf, 16}) |> Nx.backend_transfer() ==

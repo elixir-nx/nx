@@ -7,12 +7,12 @@ defmodule Nx.ContainerTest do
 
   test "to_template" do
     assert Nx.to_template(%Container{a: 1, b: 2, c: 3, d: 4}) ==
-             %Container{a: Nx.template({}, {:s, 64}), b: Nx.template({}, {:s, 64}), c: %{}, d: 4}
+             %Container{a: Nx.template({}, {:s, 32}), b: Nx.template({}, {:s, 32}), c: %{}, d: 4}
 
     assert Nx.to_template(%Container{a: 1, b: {2, 3.0}, c: 4, d: 5}) ==
              %Container{
-               a: Nx.template({}, {:s, 64}),
-               b: {Nx.template({}, {:s, 64}), Nx.template({}, {:f, 32})},
+               a: Nx.template({}, {:s, 32}),
+               b: {Nx.template({}, {:s, 32}), Nx.template({}, {:f, 32})},
                c: %{},
                d: 5
              }
@@ -58,11 +58,11 @@ defmodule Nx.ContainerTest do
     test "matches in signature" do
       inp = %Container{a: Nx.tensor(1), b: Nx.tensor(2)}
 
-      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :add, args: [left, right]}} =
+      assert %T{shape: {}, type: {:s, 32}, data: %Expr{op: :add, args: [left, right]}} =
                match_signature(inp)
 
-      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
-      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 64}} = right
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 32}} = left
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 32}} = right
     end
 
     defn match_alias(%C{a: a, b: b}) do
@@ -72,11 +72,11 @@ defmodule Nx.ContainerTest do
     test "matches alias" do
       inp = %Container{a: 1, b: 2}
 
-      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :add, args: [left, right]}} =
+      assert %T{shape: {}, type: {:s, 32}, data: %Expr{op: :add, args: [left, right]}} =
                match_alias(inp)
 
-      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
-      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 64}} = right
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 32}} = left
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 32}} = right
     end
 
     defn match_in_body(var) do
@@ -87,11 +87,11 @@ defmodule Nx.ContainerTest do
     test "matches in body" do
       inp = %Container{a: 1, b: 2}
 
-      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :add, args: [left, right]}} =
+      assert %T{shape: {}, type: {:s, 32}, data: %Expr{op: :add, args: [left, right]}} =
                match_in_body(inp)
 
-      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
-      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 64}} = right
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 32}} = left
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 32}} = right
     end
 
     defn dot(var) do
@@ -101,9 +101,9 @@ defmodule Nx.ContainerTest do
     test "uses dot" do
       inp = %Container{a: 1, b: 2}
 
-      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :add, args: [left, right]}} = dot(inp)
-      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
-      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 64}} = right
+      assert %T{shape: {}, type: {:s, 32}, data: %Expr{op: :add, args: [left, right]}} = dot(inp)
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 32}} = left
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 32}} = right
     end
 
     defn return_struct(x, y) do
@@ -128,12 +128,12 @@ defmodule Nx.ContainerTest do
       inp = %Container{a: 1, b: 2.0}
 
       assert %Container{a: a, b: b} = update_struct(inp, 8)
-      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :parameter, args: [0]}} = a
-      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :parameter, args: [2]}} = b
+      assert %T{shape: {}, type: {:s, 32}, data: %Expr{op: :parameter, args: [0]}} = a
+      assert %T{shape: {}, type: {:s, 32}, data: %Expr{op: :parameter, args: [2]}} = b
 
       assert %Container{a: a, b: b} = update_map(inp, 8)
-      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :parameter, args: [0]}} = a
-      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :parameter, args: [2]}} = b
+      assert %T{shape: {}, type: {:s, 32}, data: %Expr{op: :parameter, args: [0]}} = a
+      assert %T{shape: {}, type: {:s, 32}, data: %Expr{op: :parameter, args: [2]}} = b
     end
 
     defn dot_assert_fields(var) do
@@ -146,11 +146,11 @@ defmodule Nx.ContainerTest do
     test "keeps fields" do
       inp = %Container{a: 1, b: 2, c: :reset, d: :keep}
 
-      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :add, args: [left, right]}} =
+      assert %T{shape: {}, type: {:s, 32}, data: %Expr{op: :add, args: [left, right]}} =
                dot_assert_fields(inp)
 
-      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
-      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 64}} = right
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 32}} = left
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 32}} = right
     end
 
     defn dot_assert_fields_2(var) do
@@ -163,11 +163,11 @@ defmodule Nx.ContainerTest do
     test "keeps empty maps" do
       inp = %Container{a: 1, b: 2, c: :reset, d: %{}}
 
-      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :add, args: [left, right]}} =
+      assert %T{shape: {}, type: {:s, 32}, data: %Expr{op: :add, args: [left, right]}} =
                dot_assert_fields_2(inp)
 
-      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
-      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 64}} = right
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 32}} = left
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 32}} = right
     end
 
     defn container_while_raise_type_mismatching(x) do
@@ -194,7 +194,7 @@ defmodule Nx.ContainerTest do
       expected_error =
         [
           "the do-block in while must return tensors with the same shape, type, and names as the initial arguments.",
-          "\n\n{#Nx.Tensor<\n   s64\n >, %Container{a: #Nx.Tensor<\n     s64\n   >, b: #Nx.Tensor<\n     s64\n   >,",
+          "\n\n{#Nx.Tensor<\n   s32\n >, %Container{a: #Nx.Tensor<\n     s32\n   >, b: #Nx.Tensor<\n     s32\n   >,",
           " c: %{}, d: %{}}, \e\\[32m\n <<<<< Body \\(do-block\\) <<<<<\n #Nx.Tensor<\n   s16\n >\n ==========\n \e\\[31m#Nx.Tensor<\n   u8\n >\n >>>>>     Initial     >>>>>\n \e\\[0m}\n$"
         ]
         |> IO.iodata_to_binary()
@@ -210,8 +210,8 @@ defmodule Nx.ContainerTest do
         [
           "cond/if expects all branches to return compatible tensor types.",
           "\n\n\e\\[32m\n<<<<< First Branch \\(expected\\) <<<<<\n%Container",
-          "{a: #Nx.Tensor<\n    s64\n  >, b: #Nx.Tensor<\n    s64\n  >, c: %{}, d: %{}}",
-          "\n==========\n\e\\[31m#Nx.Tensor<\n  s64\n>\n>>>>>        Branch 1         >>>>>\n\e\\[0m\n$"
+          "{a: #Nx.Tensor<\n    s32\n  >, b: #Nx.Tensor<\n    s32\n  >, c: %{}, d: %{}}",
+          "\n==========\n\e\\[31m#Nx.Tensor<\n  s32\n>\n>>>>>        Branch 1         >>>>>\n\e\\[0m\n$"
         ]
         |> IO.iodata_to_binary()
         |> Regex.compile!()

@@ -30,7 +30,7 @@ defmodule Nx.DefnTest do
     end
 
     @tensor Nx.to_binary(Nx.tensor([1, 2, 3]))
-    defn(binary_constant, do: Nx.from_binary(@tensor, {:s, 64}))
+    defn(binary_constant, do: Nx.from_binary(@tensor, {:s, 32}))
 
     test "from binary" do
       assert %T{data: %Expr{op: :tensor}} = binary_constant()
@@ -62,7 +62,7 @@ defmodule Nx.DefnTest do
       assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} =
                tuple_shape_match_signature({1, 2.0})
 
-      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 32}} = left
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
     end
 
@@ -75,7 +75,7 @@ defmodule Nx.DefnTest do
       assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} =
                tuple_shape_match_alias({1, 2.0})
 
-      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 32}} = left
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
     end
 
@@ -88,7 +88,7 @@ defmodule Nx.DefnTest do
       assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} =
                tuple_shape_match_inside_body({1, 2.0})
 
-      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 32}} = left
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
     end
 
@@ -111,7 +111,7 @@ defmodule Nx.DefnTest do
       assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} =
                map_shape_match_signature(%{a: 1, b: 2.0})
 
-      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 32}} = left
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
     end
 
@@ -124,7 +124,7 @@ defmodule Nx.DefnTest do
       assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} =
                map_shape_match_alias(%{a: 1, b: 2.0})
 
-      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 32}} = left
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
     end
 
@@ -137,7 +137,7 @@ defmodule Nx.DefnTest do
       assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} =
                map_shape_match_inside_body(%{a: 1, b: 2.0})
 
-      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 32}} = left
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
     end
 
@@ -149,7 +149,7 @@ defmodule Nx.DefnTest do
       assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} =
                map_shape_access(%{a: 1, b: 2.0})
 
-      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 32}} = left
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
     end
 
@@ -161,7 +161,7 @@ defmodule Nx.DefnTest do
       assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} =
                map_shape_dot(%{a: 1, b: 2.0})
 
-      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 32}} = left
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
     end
 
@@ -187,7 +187,7 @@ defmodule Nx.DefnTest do
 
       assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [^a, b]}} = add
 
-      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = a
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 32}} = a
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = b
     end
 
@@ -220,14 +220,14 @@ defmodule Nx.DefnTest do
       assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} =
                calls_binary_fun(&Nx.add/2, 1, 2.0)
 
-      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 32}} = left
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
     end
 
     defn(calls_reduce_fun(fun, t), do: Nx.reduce(t, 0, fun))
 
     test "calls anonymous function via reduce" do
-      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :reduce}} =
+      assert %T{shape: {}, type: {:s, 32}, data: %Expr{op: :reduce}} =
                calls_reduce_fun(&Nx.add/2, Nx.tensor([1, 2, 3]))
     end
 
@@ -237,11 +237,11 @@ defmodule Nx.DefnTest do
       assert {fun_left, fun_right} = calls_binary_funs({&Nx.add/2, &Nx.subtract/2}, 1, 2.0)
 
       %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} = fun_left
-      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 32}} = left
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
 
       %T{shape: {}, type: {:f, 32}, data: %Expr{op: :subtract, args: [left, right]}} = fun_right
-      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 32}} = left
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
     end
   end
@@ -294,10 +294,10 @@ defmodule Nx.DefnTest do
     defn(add_two_float(t), do: Nx.add(t, 2))
 
     test "to expr" do
-      assert %T{shape: {3}, type: {:s, 64}, data: %Expr{op: :add, args: [_, _]}} =
+      assert %T{shape: {3}, type: {:s, 32}, data: %Expr{op: :add, args: [_, _]}} =
                add(Nx.tensor([1, 2, 3]), Nx.tensor(1))
 
-      assert %T{shape: {2, 2}, type: {:s, 64}, data: %Expr{op: :add, args: [_, _]}} =
+      assert %T{shape: {2, 2}, type: {:s, 32}, data: %Expr{op: :add, args: [_, _]}} =
                add(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([1, 2]))
 
       assert %T{shape: {2, 2}, type: {:f, 32}, data: %Expr{op: :add, args: [_, _]}} =
@@ -325,13 +325,13 @@ defmodule Nx.DefnTest do
     test "to expr" do
       assert %T{
                shape: {},
-               type: {:s, 64},
+               type: {:s, 32},
                data: %Expr{op: :sum, args: [_, [axes: nil, keep_axes: false]]}
              } = sum_all(Nx.tensor([1, 2, 3]))
 
       assert %T{
                shape: {},
-               type: {:s, 64},
+               type: {:s, 32},
                data: %Expr{op: :sum, args: [_, [axes: [0, 1], keep_axes: false]]}
              } = sum_pos(Nx.tensor([[1, 2, 3], [1, 2, 3]], type: {:s, 8}))
 
@@ -343,7 +343,7 @@ defmodule Nx.DefnTest do
 
       assert %T{
                shape: {},
-               type: {:u, 64},
+               type: {:u, 32},
                data: %Expr{op: :sum, args: [_, [axes: [1, 0], keep_axes: false]]}
              } = sum_neg(Nx.tensor([[1, 2, 3], [1, 2, 3]], type: {:u, 8}))
 
@@ -535,7 +535,7 @@ defmodule Nx.DefnTest do
     test "reduces with function" do
       assert %{
                data: %Expr{op: :reduce, args: [_, _, [axes: nil, keep_axes: false], fun]},
-               type: {:s, 64},
+               type: {:s, 32},
                shape: {}
              } = reduce(Nx.tensor([1, 2, 3]), 0)
 
@@ -553,7 +553,7 @@ defmodule Nx.DefnTest do
     test "reduces with constant" do
       assert %{
                data: %Expr{op: :reduce, args: [_, _, [axes: nil, keep_axes: false], fun]},
-               type: {:s, 64},
+               type: {:s, 32},
                shape: {}
              } = reduce_static(Nx.tensor([1, 2, 3]), 0)
 
@@ -1026,7 +1026,7 @@ defmodule Nx.DefnTest do
     end
 
     test "preserves maps" do
-      assert %{foo: %T{data: %Expr{op: :cond}, shape: {}, type: {:s, 64}}} =
+      assert %{foo: %T{data: %Expr{op: :cond}, shape: {}, type: {:s, 32}}} =
                if_map(Nx.tensor(0), Nx.tensor(1), Nx.tensor(2))
     end
 
@@ -1145,7 +1145,7 @@ defmodule Nx.DefnTest do
     end
 
     test "supports multiple clauses" do
-      assert %T{data: %Expr{op: :cond, args: [clauses, last]}, shape: {}, type: {:s, 64}} =
+      assert %T{data: %Expr{op: :cond, args: [clauses, last]}, shape: {}, type: {:s, 32}} =
                cond4(Nx.tensor(0), Nx.tensor(1), Nx.tensor(2), Nx.tensor(3))
 
       [{first_head, first_body}, {second_head, second_body}] = clauses
@@ -1274,26 +1274,26 @@ defmodule Nx.DefnTest do
                String.trim("""
                #Nx.Tensor<
                  vectorized[x: 2][y: 2]
-                 s64[2]
+                 s32[2]
                \s\s
                  Nx.Defn.Expr
-                 parameter a:0                           s64
-                 parameter c:1                           s64[2][1][2]
-                 parameter h:2                           s64
-                 parameter l:3                           s64[1][2]
+                 parameter a:0                           s32
+                 parameter c:1                           s32[2][1][2]
+                 parameter h:2                           s32
+                 parameter l:3                           s32[1][2]
                  b = greater a, 0                        u8
-                 d = reshape 1                           s64[1][1][1]
-                 e = add c, d                            s64[2][1][2]
-                 f = broadcast e, {2, 2, 2}, [0, 1, 2]   s64[2][2][2]
+                 d = reshape 1                           s32[1][1][1]
+                 e = add c, d                            s32[2][1][2]
+                 f = broadcast e, {2, 2, 2}, [0, 1, 2]   s32[2][2][2]
                  g = less a, 0                           u8
-                 i = subtract h, 1                       s64
-                 j = reshape i                           s64[1][1][1]
-                 k = broadcast j, {2, 2, 2}, [0, 1, 2]   s64[2][2][2]
-                 m = reshape 2                           s64[1][1]
-                 n = multiply l, m                       s64[1][2]
-                 o = reshape n                           s64[1][2][1]
-                 p = broadcast o, {2, 2, 2}, [0, 1, 2]   s64[2][2][2]
-                 q = cond b -> f, g -> k, true -> p      s64[2][2][2]
+                 i = subtract h, 1                       s32
+                 j = reshape i                           s32[1][1][1]
+                 k = broadcast j, {2, 2, 2}, [0, 1, 2]   s32[2][2][2]
+                 m = reshape 2                           s32[1][1]
+                 n = multiply l, m                       s32[1][2]
+                 o = reshape n                           s32[1][2][1]
+                 p = broadcast o, {2, 2, 2}, [0, 1, 2]   s32[2][2][2]
+                 q = cond b -> f, g -> k, true -> p      s32[2][2][2]
                >
                """)
 
@@ -1361,36 +1361,36 @@ defmodule Nx.DefnTest do
                String.trim("""
                {#Nx.Tensor<
                   vectorized[x: 2][y: 1]
-                  s64[2]
+                  s32[2]
                 \s\s
                   Nx.Defn.Expr
-                  parameter a:0                           s64
-                  parameter b:1                           s64[2][1][2]
-                  parameter c:2                           s64
-                  parameter f:3                           s64
-                  parameter i:4                           s64[1][2][1]
-                  d = reshape c                           s64[1][1][1]
-                  e = broadcast d, {1, 2, 1}, [0, 1, 2]   s64[1][2][1]
-                  g = reshape f                           s64[1][1][1]
-                  h = broadcast g, {2, 1, 2}, [0, 1, 2]   s64[2][1][2]
+                  parameter a:0                           s32
+                  parameter b:1                           s32[2][1][2]
+                  parameter c:2                           s32
+                  parameter f:3                           s32
+                  parameter i:4                           s32[1][2][1]
+                  d = reshape c                           s32[1][1][1]
+                  e = broadcast d, {1, 2, 1}, [0, 1, 2]   s32[1][2][1]
+                  g = reshape f                           s32[1][1][1]
+                  h = broadcast g, {2, 1, 2}, [0, 1, 2]   s32[2][1][2]
                   j = cond a -> {b, e}, true -> {h, i}    tuple2
-                  k = elem j, 0                           s64[2][1][2]
+                  k = elem j, 0                           s32[2][1][2]
                 >, #Nx.Tensor<
                   vectorized[z: 1][w: 2]
-                  s64[1]
+                  s32[1]
                 \s\s
                   Nx.Defn.Expr
-                  parameter a:0                           s64
-                  parameter b:1                           s64[2][1][2]
-                  parameter c:2                           s64
-                  parameter f:3                           s64
-                  parameter i:4                           s64[1][2][1]
-                  d = reshape c                           s64[1][1][1]
-                  e = broadcast d, {1, 2, 1}, [0, 1, 2]   s64[1][2][1]
-                  g = reshape f                           s64[1][1][1]
-                  h = broadcast g, {2, 1, 2}, [0, 1, 2]   s64[2][1][2]
+                  parameter a:0                           s32
+                  parameter b:1                           s32[2][1][2]
+                  parameter c:2                           s32
+                  parameter f:3                           s32
+                  parameter i:4                           s32[1][2][1]
+                  d = reshape c                           s32[1][1][1]
+                  e = broadcast d, {1, 2, 1}, [0, 1, 2]   s32[1][2][1]
+                  g = reshape f                           s32[1][1][1]
+                  h = broadcast g, {2, 1, 2}, [0, 1, 2]   s32[2][1][2]
                   j = cond a -> {b, e}, true -> {h, i}    tuple2
-                  k = elem j, 1                           s64[1][2][1]
+                  k = elem j, 1                           s32[1][2][1]
                 >}
                """)
 
@@ -1538,13 +1538,13 @@ defmodule Nx.DefnTest do
       assert %T{
                data: %Expr{op: :while, args: [initial, arg, condition, body]},
                shape: {},
-               type: {:s, 64}
+               type: {:s, 32}
              } = upto10(Nx.tensor(0))
 
-      assert %T{data: %Expr{op: :parameter}, shape: {}, type: {:s, 64}} = initial
-      assert %T{data: %Expr{op: :parameter}, shape: {}, type: {:s, 64}} = arg
+      assert %T{data: %Expr{op: :parameter}, shape: {}, type: {:s, 32}} = initial
+      assert %T{data: %Expr{op: :parameter}, shape: {}, type: {:s, 32}} = arg
       assert %T{data: %Expr{op: :less}, shape: {}, type: {:u, 8}} = condition
-      assert %T{data: %Expr{op: :add}, shape: {}, type: {:s, 64}} = body
+      assert %T{data: %Expr{op: :add}, shape: {}, type: {:s, 32}} = body
     end
 
     defn while_constant(x) do
@@ -1557,13 +1557,13 @@ defmodule Nx.DefnTest do
       assert %T{
                data: %Expr{op: :while, args: [initial, arg, condition, body]},
                shape: {},
-               type: {:s, 64}
+               type: {:s, 32}
              } = while_constant(Nx.tensor(0))
 
-      assert %T{data: %Expr{op: :parameter}, shape: {}, type: {:s, 64}} = initial
-      assert %T{data: %Expr{op: :parameter}, shape: {}, type: {:s, 64}} = arg
+      assert %T{data: %Expr{op: :parameter}, shape: {}, type: {:s, 32}} = initial
+      assert %T{data: %Expr{op: :parameter}, shape: {}, type: {:s, 32}} = arg
       assert %T{data: %Expr{op: :less}, shape: {}, type: {:u, 8}} = condition
-      assert %T{data: %Expr{op: :constant, args: [1]}, shape: {}, type: {:s, 64}} = body
+      assert %T{data: %Expr{op: :constant, args: [1]}, shape: {}, type: {:s, 32}} = body
     end
 
     defn factorial(x) do
@@ -1582,7 +1582,7 @@ defmodule Nx.DefnTest do
         [
           "the do-block in while must return tensors with the same shape, type, and names ",
           "as the initial arguments.\n\n\\{\e\\[32m\n <<<<< Body \\(do-block\\) <<<<<\n ",
-          "#Nx.Tensor<\n   f32\n >\n ==========\n \e\\[31m#Nx.Tensor<\n   s64\n >\n >>>>>",
+          "#Nx.Tensor<\n   f32\n >\n ==========\n \e\\[31m#Nx.Tensor<\n   s32\n >\n >>>>>",
           "     Initial     >>>>>\n \e\\[0m, #Nx.Tensor<\n   f32\n >\\}\n$"
         ]
         |> IO.iodata_to_binary()
@@ -1605,7 +1605,7 @@ defmodule Nx.DefnTest do
                #Nx.Tensor<
                  c64\n\s\s
                  Nx.Defn.Expr
-                 parameter a:0         s64
+                 parameter a:0         s32
                  b = add 0.0+2.0i, a   c64
                >
                """
@@ -1649,15 +1649,15 @@ defmodule Nx.DefnTest do
 
       assert inspect(expr) == """
              #Nx.Tensor<
-               s64
+               s32
              \s\s
                Nx.Defn.Expr
-               parameter a:0                s64[5]
-               b = slice a, [0], [1], [1]   s64[1]
-               c = squeeze b, [0]           s64
-               d = multiply 0, c            s64
+               parameter a:0                s32[5]
+               b = slice a, [0], [1], [1]   s32[1]
+               c = squeeze b, [0]           s32
+               d = multiply 0, c            s32
                e = while {0, a, d}          tuple3
-               f = elem e, 2                s64
+               f = elem e, 2                s32
              >\
              """
 
@@ -1670,20 +1670,20 @@ defmodule Nx.DefnTest do
 
       assert inspect(arg) == """
              {#Nx.Tensor<
-                s64
+                s32
               \s\s
                 Nx.Defn.Expr
-                parameter a:0   s64
+                parameter a:0   s32
               >, #Nx.Tensor<
-                s64[5]
+                s32[5]
               \s\s
                 Nx.Defn.Expr
-                parameter a:1   s64[5]
+                parameter a:1   s32[5]
               >, #Nx.Tensor<
-                s64
+                s32
               \s\s
                 Nx.Defn.Expr
-                parameter a:2   s64
+                parameter a:2   s32
               >}\
              """
 
@@ -1691,36 +1691,36 @@ defmodule Nx.DefnTest do
 
       assert inspect(counter) == """
              #Nx.Tensor<
-               s64
+               s32
              \s\s
                Nx.Defn.Expr
-               parameter a:0   s64
-               b = add 1, a    s64
+               parameter a:0   s32
+               b = add 1, a    s32
              >\
              """
 
       assert inspect(param) ==
                """
                #Nx.Tensor<
-                 s64[5]
+                 s32[5]
                \s\s
                  Nx.Defn.Expr
-                 parameter a:1   s64[5]
+                 parameter a:1   s32[5]
                >\
                """
 
       assert inspect(body) ==
                """
                #Nx.Tensor<
-                 s64
+                 s32
                \s\s
                  Nx.Defn.Expr
-                 parameter a:2                s64
-                 parameter b:1                s64[5]
-                 parameter c:0                s64
-                 d = slice b, [c], [1], [1]   s64[1]
-                 e = squeeze d, [0]           s64
-                 f = add a, e                 s64
+                 parameter a:2                s32
+                 parameter b:1                s32[5]
+                 parameter c:0                s32
+                 d = slice b, [c], [1], [1]   s32[1]
+                 e = squeeze d, [0]           s32
+                 f = add a, e                 s32
                >\
                """
     end
@@ -1728,18 +1728,18 @@ defmodule Nx.DefnTest do
     test "tensor generator unrolled" do
       assert while_generator_sum_unroll(Nx.tensor([1, 2, 3])) |> inspect() == """
              #Nx.Tensor<
-               s64
+               s32
              \s\s
                Nx.Defn.Expr
-               parameter a:0                s64[3]
-               b = slice a, [0], [1], [1]   s64[1]
-               c = squeeze b, [0]           s64
-               d = slice a, [1], [1], [1]   s64[1]
-               e = squeeze d, [0]           s64
-               f = add c, e                 s64
-               g = slice a, [2], [1], [1]   s64[1]
-               h = squeeze g, [0]           s64
-               i = add f, h                 s64
+               parameter a:0                s32[3]
+               b = slice a, [0], [1], [1]   s32[1]
+               c = squeeze b, [0]           s32
+               d = slice a, [1], [1], [1]   s32[1]
+               e = squeeze d, [0]           s32
+               f = add c, e                 s32
+               g = slice a, [2], [1], [1]   s32[1]
+               h = squeeze g, [0]           s32
+               i = add f, h                 s32
              >\
              """
     end
@@ -1762,12 +1762,12 @@ defmodule Nx.DefnTest do
 
       assert inspect(expr) == """
              #Nx.Tensor<
-               s64
+               s32
              \s\s
                Nx.Defn.Expr
-               parameter a:0         s64[6]
+               parameter a:0         s32[6]
                b = while {0, a, 0}   tuple3
-               c = elem b, 2         s64
+               c = elem b, 2         s32
              >\
              """
 
@@ -1782,42 +1782,42 @@ defmodule Nx.DefnTest do
 
       assert inspect(counter) == """
              #Nx.Tensor<
-               s64
+               s32
              \s\s
                Nx.Defn.Expr
-               parameter a:0   s64
-               b = add 3, a    s64
+               parameter a:0   s32
+               b = add 3, a    s32
              >\
              """
 
       assert inspect(param) == """
              #Nx.Tensor<
-               s64[6]
+               s32[6]
              \s\s
                Nx.Defn.Expr
-               parameter a:1   s64[6]
+               parameter a:1   s32[6]
              >\
              """
 
       assert inspect(body) == """
              #Nx.Tensor<
-               s64
+               s32
              \s\s
                Nx.Defn.Expr
-               parameter a:2                s64
-               parameter b:1                s64[6]
-               parameter c:0                s64
-               d = slice b, [c], [1], [1]   s64[1]
-               e = squeeze d, [0]           s64
-               f = add a, e                 s64
-               g = add 1, c                 s64
-               h = slice b, [g], [1], [1]   s64[1]
-               i = squeeze h, [0]           s64
-               j = add f, i                 s64
-               k = add 2, c                 s64
-               l = slice b, [k], [1], [1]   s64[1]
-               m = squeeze l, [0]           s64
-               n = add j, m                 s64
+               parameter a:2                s32
+               parameter b:1                s32[6]
+               parameter c:0                s32
+               d = slice b, [c], [1], [1]   s32[1]
+               e = squeeze d, [0]           s32
+               f = add a, e                 s32
+               g = add 1, c                 s32
+               h = slice b, [g], [1], [1]   s32[1]
+               i = squeeze h, [0]           s32
+               j = add f, i                 s32
+               k = add 2, c                 s32
+               l = slice b, [k], [1], [1]   s32[1]
+               m = squeeze l, [0]           s32
+               n = add j, m                 s32
              >\
              """
     end
@@ -1825,36 +1825,36 @@ defmodule Nx.DefnTest do
     test "tensor generator unrolled integer expression left-over" do
       assert while_generator_sum_unroll_int(Nx.tensor([1, 2, 3])) |> inspect() == """
              #Nx.Tensor<
-               s64
+               s32
              \s\s
                Nx.Defn.Expr
-               parameter a:0                s64[3]
-               b = slice a, [0], [1], [1]   s64[1]
-               c = squeeze b, [0]           s64
-               d = slice a, [1], [1], [1]   s64[1]
-               e = squeeze d, [0]           s64
-               f = add c, e                 s64
-               g = slice a, [2], [1], [1]   s64[1]
-               h = squeeze g, [0]           s64
-               i = add f, h                 s64
+               parameter a:0                s32[3]
+               b = slice a, [0], [1], [1]   s32[1]
+               c = squeeze b, [0]           s32
+               d = slice a, [1], [1], [1]   s32[1]
+               e = squeeze d, [0]           s32
+               f = add c, e                 s32
+               g = slice a, [2], [1], [1]   s32[1]
+               h = squeeze g, [0]           s32
+               i = add f, h                 s32
              >\
              """
 
       assert while_generator_sum_unroll_int(Nx.tensor([1, 2, 3, 4, 5, 6, 7, 8])) |> inspect() ==
                """
                #Nx.Tensor<
-                 s64
+                 s32
                \s\s
                  Nx.Defn.Expr
-                 parameter a:0                s64[8]
+                 parameter a:0                s32[8]
                  b = while {0, a, 0}          tuple3
-                 c = elem b, 2                s64
-                 d = slice a, [6], [1], [1]   s64[1]
-                 e = squeeze d, [0]           s64
-                 f = add c, e                 s64
-                 g = slice a, [7], [1], [1]   s64[1]
-                 h = squeeze g, [0]           s64
-                 i = add f, h                 s64
+                 c = elem b, 2                s32
+                 d = slice a, [6], [1], [1]   s32[1]
+                 e = squeeze d, [0]           s32
+                 f = add c, e                 s32
+                 g = slice a, [7], [1], [1]   s32[1]
+                 h = squeeze g, [0]           s32
+                 i = add f, h                 s32
                >\
                """
     end
@@ -1897,11 +1897,11 @@ defmodule Nx.DefnTest do
     test "range generator unrolled" do
       assert while_generator_range(0, range: 1..3, unroll: true) |> inspect() == """
              #Nx.Tensor<
-               s64
+               s32
              \s\s
                Nx.Defn.Expr
-               parameter a:0   s64
-               b = add 6, a    s64
+               parameter a:0   s32
+               b = add 6, a    s32
              >\
              """
     end
@@ -1911,12 +1911,12 @@ defmodule Nx.DefnTest do
 
       assert inspect(expr) == """
              #Nx.Tensor<
-               s64
+               s32
              \s\s
                Nx.Defn.Expr
-               parameter a:0      s64
+               parameter a:0      s32
                b = while {1, a}   tuple2
-               c = elem b, 1      s64
+               c = elem b, 1      s32
              >\
              """
 
@@ -1931,26 +1931,26 @@ defmodule Nx.DefnTest do
 
       assert inspect(counter) == """
              #Nx.Tensor<
-               s64
+               s32
              \s\s
                Nx.Defn.Expr
-               parameter a:0   s64
-               b = add 3, a    s64
+               parameter a:0   s32
+               b = add 3, a    s32
              >\
              """
 
       assert inspect(body) == """
              #Nx.Tensor<
-               s64
+               s32
              \s\s
                Nx.Defn.Expr
-               parameter a:0   s64
-               parameter b:1   s64
-               c = add b, a    s64
-               d = add c, a    s64
-               e = add a, d    s64
-               f = add 1, e    s64
-               g = add 2, f    s64
+               parameter a:0   s32
+               parameter b:1   s32
+               c = add b, a    s32
+               d = add c, a    s32
+               e = add a, d    s32
+               f = add 1, e    s32
+               g = add 2, f    s32
              >\
              """
     end
@@ -1958,37 +1958,37 @@ defmodule Nx.DefnTest do
     test "range generator unrolled integer expression left-over" do
       assert while_generator_range(0, range: 1..3, unroll: 3) |> inspect() == """
              #Nx.Tensor<
-               s64
+               s32
              \s\s
                Nx.Defn.Expr
-               parameter a:0   s64
-               b = add 6, a    s64
+               parameter a:0   s32
+               b = add 6, a    s32
              >\
              """
 
       assert while_generator_range(0, range: 1..8, unroll: 3) |> inspect() ==
                """
                #Nx.Tensor<
-                 s64
+                 s32
                \s\s
                  Nx.Defn.Expr
-                 parameter a:0      s64
+                 parameter a:0      s32
                  b = while {1, a}   tuple2
-                 c = elem b, 1      s64
-                 d = add 15, c      s64
+                 c = elem b, 1      s32
+                 d = add 15, c      s32
                >\
                """
 
       assert while_generator_range(0, range: 8..1//-1, unroll: 3) |> inspect() ==
                """
                #Nx.Tensor<
-                 s64
+                 s32
                \s\s
                  Nx.Defn.Expr
-                 parameter a:0      s64
+                 parameter a:0      s32
                  b = while {8, a}   tuple2
-                 c = elem b, 1      s64
-                 d = add 3, c       s64
+                 c = elem b, 1      s32
+                 d = add 3, c       s32
                >\
                """
     end
@@ -2003,8 +2003,8 @@ defmodule Nx.DefnTest do
       expected_error =
         [
           "the do-block in while must return tensors with the same shape, type, and names as the initial arguments.",
-          "\n\n\e\\[32m\n<<<<< Body \\(do-block\\) <<<<<\n%\\{a: #Nx.Tensor<\n    s64\n  >, b: #Nx.Tensor<\n    s64\n  >\\}",
-          "\n==========\n\e\\[31m\\{#Nx.Tensor<\n   s64\n >, #Nx.Tensor<\n   s64\n >\\}\n>>>>>     Initial     >>>>>\n\e\\[0m\n$"
+          "\n\n\e\\[32m\n<<<<< Body \\(do-block\\) <<<<<\n%\\{a: #Nx.Tensor<\n    s32\n  >, b: #Nx.Tensor<\n    s32\n  >\\}",
+          "\n==========\n\e\\[31m\\{#Nx.Tensor<\n   s32\n >, #Nx.Tensor<\n   s32\n >\\}\n>>>>>     Initial     >>>>>\n\e\\[0m\n$"
         ]
         |> IO.iodata_to_binary()
         |> Regex.compile!()
@@ -2086,10 +2086,10 @@ defmodule Nx.DefnTest do
                f32
              \s\s
                Nx.Defn.Expr
-               parameter a:0   s64
-               parameter c:1   s64
+               parameter a:0   s32
+               parameter c:1   s32
                b = tanh a      f32
-               d = pow c, 3    s64
+               d = pow c, 3    s32
                e = add b, d    f32
              >
              """
@@ -2099,10 +2099,10 @@ defmodule Nx.DefnTest do
                f32
              \s\s
                Nx.Defn.Expr
-               parameter a:0   s64
-               parameter c:1   s64
+               parameter a:0   s32
+               parameter c:1   s32
                b = tanh a      f32
-               d = pow c, 3    s64
+               d = pow c, 3    s32
                e = add b, d    f32
              >
              """
@@ -2255,19 +2255,19 @@ defmodule Nx.DefnTest do
 
     @tag compiler: Evaluator
     test "compiles defn function with options" do
-      fun = Nx.Defn.compile(&Nx.sum/2, [Nx.template({2, 2}, :s64), [axes: [1]]])
+      fun = Nx.Defn.compile(&Nx.sum/2, [Nx.template({2, 2}, :s32), [axes: [1]]])
       assert fun.(Nx.iota({2, 2})) == Nx.tensor([1, 5])
     end
 
     @tag compiler: Evaluator
     test "compiles with vectorized inputs" do
-      fun = Nx.Defn.compile(&Nx.add/2, [Nx.template({2, 2}, :s64) |> Nx.vectorize(:x), 0])
+      fun = Nx.Defn.compile(&Nx.add/2, [Nx.template({2, 2}, :s32) |> Nx.vectorize(:x), 0])
 
       assert fun.(Nx.iota({2, 2}) |> Nx.vectorize(:x), 1) ==
                Nx.tensor([[1, 2], [3, 4]]) |> Nx.vectorize(:x)
 
       fun = fn left, right -> Nx.subtract(right, Nx.add(left, left)) end
-      fun = Nx.Defn.compile(fun, [Nx.template({2, 2}, :s64) |> Nx.vectorize(:x), 0])
+      fun = Nx.Defn.compile(fun, [Nx.template({2, 2}, :s32) |> Nx.vectorize(:x), 0])
 
       assert fun.(Nx.iota({2, 2}) |> Nx.vectorize(:x), 1) ==
                Nx.tensor([[1, -1], [-3, -5]]) |> Nx.vectorize(:x)
@@ -2291,18 +2291,18 @@ defmodule Nx.DefnTest do
                """
                {#Nx.Tensor<
                vectorized[x: 2][y: 2]
-               s64[1]
+               s32[1]
 
                Nx.Defn.Expr
-               parameter a:0                           s64[2][1][1]
-               b = broadcast a, {2, 2, 1}, [0, 1, 2]   s64[2][2][1]
+               parameter a:0                           s32[2][1][1]
+               b = broadcast a, {2, 2, 1}, [0, 1, 2]   s32[2][2][1]
                >, #Nx.Tensor<
                vectorized[x: 2][y: 2]
-               s64[1]
+               s32[1]
 
                Nx.Defn.Expr
-               parameter a:1                           s64[1][2][1]
-               b = broadcast a, {2, 2, 1}, [0, 1, 2]   s64[2][2][1]
+               parameter a:1                           s32[1][2][1]
+               b = broadcast a, {2, 2, 1}, [0, 1, 2]   s32[2][2][1]
                >}
                """
                |> String.replace(~r/\s/, "")
@@ -2467,7 +2467,7 @@ defmodule Nx.DefnTest do
 
     @tag compiler: Evaluator
     test "exclusively" do
-      assert iota_opts([]).type == {:s, 64}
+      assert iota_opts([]).type == {:s, 32}
       assert iota_opts(type: {:f, 64}).type == {:f, 64}
     end
 
@@ -2625,14 +2625,14 @@ defmodule Nx.DefnTest do
 
       assert String.trim("""
              #Nx.Tensor<
-               s64
+               s32
              \s\s
                Nx.Defn.Expr
-               parameter a:0       s64
-               parameter c:1       s64
-               b = add 3, a        s64
-               d = add 4, c        s64
-               e = multiply b, d   s64
+               parameter a:0       s32
+               parameter c:1       s32
+               b = add 3, a        s32
+               d = add 4, c        s32
+               e = multiply b, d   s32
              >
              """) == inspect(result)
 
@@ -2742,13 +2742,13 @@ defmodule Nx.DefnTest do
                String.trim("""
                #Nx.Tensor<
                  vectorized[x: 2][y: 2]
-                 s64[2]
+                 s32[2]
                \s\s
                  Nx.Defn.Expr
-                 parameter a:0                s64[1][2][2]
-                 parameter c:1                s64[2][1][2]
-                 b = metadata a, :stop_grad   s64[1][2][2]
-                 d = add b, c                 s64[2][2][2]
+                 parameter a:0                s32[1][2][2]
+                 parameter c:1                s32[2][1][2]
+                 b = metadata a, :stop_grad   s32[1][2][2]
+                 d = add b, c                 s32[2][2][2]
                >
                """)
 
@@ -2756,15 +2756,15 @@ defmodule Nx.DefnTest do
                String.trim("""
                #Nx.Tensor<
                  vectorized[x: 2][y: 2]
-                 s64[2]
+                 s32[2]
                \s\s
                  Nx.Defn.Expr
-                 parameter a:0                     s64[1][2][2]
-                 parameter b:1                     s64[2][1][2]
+                 parameter a:0                     s32[1][2][2]
+                 parameter b:1                     s32[2][1][2]
                  c = metadata {a, b}, :stop_grad   tuple2
-                 d = elem c, 0                     s64[1][2][2]
-                 e = elem c, 1                     s64[2][1][2]
-                 f = add d, e                      s64[2][2][2]
+                 d = elem c, 0                     s32[1][2][2]
+                 e = elem c, 1                     s32[2][1][2]
+                 f = add d, e                      s32[2][2][2]
                >
                """)
 
@@ -2773,14 +2773,14 @@ defmodule Nx.DefnTest do
                String.trim("""
                #Nx.Tensor<
                  vectorized[x: 1][y: 2]
-                 s64[2]
+                 s32[2]
                \s\s
                  Nx.Defn.Expr
-                 parameter a:0                s64[1][2][2]
-                 parameter c:1                s64[1]
-                 b = metadata a, :stop_grad   s64[1][2][2]
-                 d = reshape c                s64[1][1][1]
-                 e = add b, d                 s64[1][2][2]
+                 parameter a:0                s32[1][2][2]
+                 parameter c:1                s32[1]
+                 b = metadata a, :stop_grad   s32[1][2][2]
+                 d = reshape c                s32[1][1][1]
+                 e = add b, d                 s32[1][2][2]
                >
                """)
 
@@ -2788,16 +2788,16 @@ defmodule Nx.DefnTest do
                String.trim("""
                #Nx.Tensor<
                  vectorized[x: 1][y: 2]
-                 s64[2]
+                 s32[2]
                \s\s
                  Nx.Defn.Expr
-                 parameter a:0                     s64[1][2][2]
-                 parameter b:1                     s64[1]
+                 parameter a:0                     s32[1][2][2]
+                 parameter b:1                     s32[1]
                  c = metadata {a, b}, :stop_grad   tuple2
-                 d = elem c, 0                     s64[1][2][2]
-                 e = elem c, 1                     s64[1]
-                 f = reshape e                     s64[1][1][1]
-                 g = add d, f                      s64[1][2][2]
+                 d = elem c, 0                     s32[1][2][2]
+                 e = elem c, 1                     s32[1]
+                 f = reshape e                     s32[1][1][1]
+                 g = add d, f                      s32[1][2][2]
                >
                """)
 

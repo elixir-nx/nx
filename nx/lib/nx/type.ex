@@ -137,14 +137,14 @@ defmodule Nx.Type do
   ## Examples
 
       iex> Nx.Type.infer(1)
-      {:s, 64}
+      {:s, 32}
       iex> Nx.Type.infer(1.0)
       {:f, 32}
       iex> Nx.Type.infer(Complex.new(1))
       {:c, 64}
 
   """
-  def infer(value) when is_integer(value), do: {:s, 64}
+  def infer(value) when is_integer(value), do: {:s, 32}
   def infer(value) when is_float(value), do: {:f, 32}
   def infer(value) when is_boolean(value), do: {:u, 8}
   def infer(%Complex{}), do: {:c, 64}
@@ -281,9 +281,11 @@ defmodule Nx.Type do
   ## Examples
 
       iex> Nx.Type.to_aggregate({:s, 8})
+      {:s, 32}
+      iex> Nx.Type.to_aggregate({:u, 16})
+      {:u, 32}
+      iex> Nx.Type.to_aggregate({:s, 64})
       {:s, 64}
-      iex> Nx.Type.to_aggregate({:u, 32})
-      {:u, 64}
       iex> Nx.Type.to_aggregate({:bf, 16})
       {:bf, 16}
       iex> Nx.Type.to_aggregate({:f, 32})
@@ -292,8 +294,10 @@ defmodule Nx.Type do
       {:c, 64}
 
   """
-  def to_aggregate({:u, _size}), do: {:u, 64}
-  def to_aggregate({:s, _size}), do: {:s, 64}
+  def to_aggregate({:u, 64}), do: {:s, 64}
+  def to_aggregate({:u, _size}), do: {:u, 32}
+  def to_aggregate({:s, 64}), do: {:s, 64}
+  def to_aggregate({:s, _size}), do: {:s, 32}
   def to_aggregate(type), do: type
 
   @doc """

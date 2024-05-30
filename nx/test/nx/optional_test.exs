@@ -225,7 +225,7 @@ defmodule Nx.OptionalTest do
                  f32
                \s\s
                  Nx.Defn.Expr
-                 parameter a:0       s64[3][3]
+                 parameter a:0       s32[3][3]
                  b = determinant a   f32
                >
                """
@@ -241,7 +241,7 @@ defmodule Nx.OptionalTest do
                  f32
                \s\s
                  Nx.Defn.Expr
-                 parameter a:0       s64[3][3]
+                 parameter a:0       s32[3][3]
                  b = determinant a   f32
                >
                """

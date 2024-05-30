@@ -296,7 +296,7 @@ defmodule Nx.Defn do
 
   You can jit and then apply it as:
 
-      fun = Nx.Defn.compile(&softmax/1, [Nx.template({3}, {:s, 64})], compiler: EXLA)
+      fun = Nx.Defn.compile(&softmax/1, [Nx.template({3}, {:s, 32})], compiler: EXLA)
       fun.(Nx.tensor([1, 2, 3]))
 
   You can also pass a mixture of templates and options when
@@ -304,7 +304,7 @@ defmodule Nx.Defn do
   the inputs when invoking the compiled function, as the options
   will already be embedded in its compiled value:
 
-      fun = Nx.Defn.compile(&Nx.sum/2, [Nx.template({2, 2}, {:s, 64}), [axes: [1]]])
+      fun = Nx.Defn.compile(&Nx.sum/2, [Nx.template({2, 2}, {:s, 32}), [axes: [1]]])
       fun.(Nx.iota({2, 2}))
 
   If the input tensors do not match the shape of the tensors
@@ -516,7 +516,7 @@ defmodule Nx.Defn do
 
   Now let's invoke it:
 
-      stream = Nx.Defn.stream(&Streamed.sum/2, [Nx.template({}, {:s, 64}), 0])
+      stream = Nx.Defn.stream(&Streamed.sum/2, [Nx.template({}, {:s, 32}), 0])
 
       for i <- 1..5 do
         Nx.Stream.send(stream, i)

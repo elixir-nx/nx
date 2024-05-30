@@ -40,7 +40,7 @@ defmodule NxTest do
         t = Nx.add(a, b)
 
         assert Nx.to_binary(t) ==
-                 <<11::64-native, 21::64-native, 12::64-native, 22::64-native>>
+                 <<11::32-native, 21::32-native, 12::32-native, 22::32-native>>
 
         assert Nx.shape(t) == {2, 2}
       end)
@@ -51,7 +51,7 @@ defmodule NxTest do
         t = Nx.add(a, b)
 
         assert Nx.to_binary(t) ==
-                 <<2::64-native, 4::64-native, 4::64-native, 6::64-native>>
+                 <<2::32-native, 4::32-native, 4::32-native, 6::32-native>>
 
         assert Nx.shape(t) == {2, 2}
       end)
@@ -68,8 +68,8 @@ defmodule NxTest do
         assert Nx.shape(t) == {2, 2, 2}
 
         assert Nx.to_binary(t) ==
-                 <<11::64-native, 12::64-native, 21::64-native, 22::64-native, 13::64-native,
-                   14::64-native, 23::64-native, 24::64-native>>
+                 <<11::32-native, 12::32-native, 21::32-native, 22::32-native, 13::32-native,
+                   14::32-native, 23::32-native, 24::32-native>>
       end)
     end
 
@@ -84,14 +84,14 @@ defmodule NxTest do
         assert Nx.shape(t) == {4, 3, 3}
 
         assert Nx.to_binary(t) ==
-                 <<101::64-native, 102::64-native, 103::64-native, 201::64-native, 202::64-native,
-                   203::64-native, 301::64-native, 302::64-native, 303::64-native, 104::64-native,
-                   105::64-native, 106::64-native, 204::64-native, 205::64-native, 206::64-native,
-                   304::64-native, 305::64-native, 306::64-native, 107::64-native, 108::64-native,
-                   109::64-native, 207::64-native, 208::64-native, 209::64-native, 307::64-native,
-                   308::64-native, 309::64-native, 110::64-native, 111::64-native, 112::64-native,
-                   210::64-native, 211::64-native, 212::64-native, 310::64-native, 311::64-native,
-                   312::64-native>>
+                 <<101::32-native, 102::32-native, 103::32-native, 201::32-native, 202::32-native,
+                   203::32-native, 301::32-native, 302::32-native, 303::32-native, 104::32-native,
+                   105::32-native, 106::32-native, 204::32-native, 205::32-native, 206::32-native,
+                   304::32-native, 305::32-native, 306::32-native, 107::32-native, 108::32-native,
+                   109::32-native, 207::32-native, 208::32-native, 209::32-native, 307::32-native,
+                   308::32-native, 309::32-native, 110::32-native, 111::32-native, 112::32-native,
+                   210::32-native, 211::32-native, 212::32-native, 310::32-native, 311::32-native,
+                   312::32-native>>
       end)
     end
 
@@ -106,8 +106,8 @@ defmodule NxTest do
         assert Nx.shape(t) == {1, 2, 2, 2}
 
         assert Nx.to_binary(t) ==
-                 <<11::64-native, 12::64-native, 21::64-native, 22::64-native, 33::64-native,
-                   34::64-native, 43::64-native, 44::64-native>>
+                 <<11::32-native, 12::32-native, 21::32-native, 22::32-native, 33::32-native,
+                   34::32-native, 43::32-native, 44::32-native>>
       end)
     end
 
@@ -122,10 +122,10 @@ defmodule NxTest do
         assert Nx.shape(t) == {2, 2, 2, 2}
 
         assert Nx.to_binary(t) ==
-                 <<11::64-native, 12::64-native, 21::64-native, 22::64-native, 31::64-native,
-                   32::64-native, 41::64-native, 42::64-native, 13::64-native, 14::64-native,
-                   23::64-native, 24::64-native, 33::64-native, 34::64-native, 43::64-native,
-                   44::64-native>>
+                 <<11::32-native, 12::32-native, 21::32-native, 22::32-native, 31::32-native,
+                   32::32-native, 41::32-native, 42::32-native, 13::32-native, 14::32-native,
+                   23::32-native, 24::32-native, 33::32-native, 34::32-native, 43::32-native,
+                   44::32-native>>
       end)
     end
 
@@ -137,8 +137,8 @@ defmodule NxTest do
         t = Nx.add(a, b)
 
         assert Nx.to_binary(t) ==
-                 <<11::64-native, 12::64-native, 21::64-native, 22::64-native, 33::64-native,
-                   34::64-native, 43::64-native, 44::64-native>>
+                 <<11::32-native, 12::32-native, 21::32-native, 22::32-native, 33::32-native,
+                   34::32-native, 43::32-native, 44::32-native>>
 
         assert Nx.shape(t) == {2, 2, 2}
       end)
@@ -617,7 +617,7 @@ defmodule NxTest do
     test "scalar" do
       assert inspect(Nx.tensor(123)) == """
              #Nx.Tensor<
-               s64
+               s32
                123
              >\
              """
@@ -626,7 +626,7 @@ defmodule NxTest do
     test "n-dimensional" do
       assert inspect(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == """
              #Nx.Tensor<
-               s64[2][3]
+               s32[2][3]
                [
                  [1, 2, 3],
                  [4, 5, 6]
@@ -648,14 +648,14 @@ defmodule NxTest do
     test "limit" do
       assert inspect(Nx.tensor([1, 2]), limit: :infinity) == """
              #Nx.Tensor<
-               s64[2]
+               s32[2]
                [1, 2]
              >\
              """
 
       assert inspect(Nx.tensor([[1, 2], [3, 4]]), limit: 3) == """
              #Nx.Tensor<
-               s64[2][2]
+               s32[2][2]
                [
                  [1, 2],
                  [3, ...]
@@ -665,7 +665,7 @@ defmodule NxTest do
 
       assert inspect(Nx.tensor([[1, 2], [3, 4], [5, 6]]), limit: 3) == """
              #Nx.Tensor<
-               s64[3][2]
+               s32[3][2]
                [
                  [1, 2],
                  [3, ...],
@@ -771,7 +771,7 @@ defmodule NxTest do
       assert inspect(Nx.tensor([[[1, 2, 3], [4, 5, 6], [7, 8, 9]]], names: [:batch, :x, :y])) ==
                """
                #Nx.Tensor<
-                 s64[batch: 1][x: 3][y: 3]
+                 s32[batch: 1][x: 3][y: 3]
                  [
                    [
                      [1, 2, 3],
@@ -787,7 +787,7 @@ defmodule NxTest do
       assert inspect(Nx.tensor([[[1, 2, 3], [4, 5, 6], [7, 8, 9]]], names: [:batch, nil, nil])) ==
                """
                #Nx.Tensor<
-                 s64[batch: 1][3][3]
+                 s32[batch: 1][3][3]
                  [
                    [
                      [1, 2, 3],
@@ -2474,8 +2474,8 @@ defmodule NxTest do
                serialized |> :erlang.iolist_to_binary() |> :erlang.binary_to_term()
 
       assert Nx.deserialize(serialized) == %Container{
-               a: {Nx.tensor(1), Nx.tensor(2)},
-               b: %{key: Nx.tensor(3)},
+               a: {Nx.tensor(1, type: :s64), Nx.tensor(2, type: :s64)},
+               b: %{key: Nx.tensor(3, type: :s64)},
                c: %{},
                d: :kept
              }

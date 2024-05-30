@@ -21,7 +21,7 @@ defmodule Nx.LinAlg do
 
       iex> Nx.LinAlg.adjoint(Nx.tensor([[1, 2], [3, 4]]))
       #Nx.Tensor<
-        s64[2][2]
+        s32[2][2]
         [
           [1, 3],
           [2, 4]
@@ -1499,7 +1499,7 @@ defmodule Nx.LinAlg do
       iex> {p, l, u} = Nx.LinAlg.lu(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]))
       iex> p
       #Nx.Tensor<
-        s64[3][3]
+        s32[3][3]
         [
           [0, 0, 1],
           [0, 1, 0],
@@ -1537,7 +1537,7 @@ defmodule Nx.LinAlg do
       iex> {p, l, u} = Nx.LinAlg.lu(Nx.tensor([[1, 0, 1], [-1, 0, -1], [1, 1, 1]]))
       iex> p
       #Nx.Tensor<
-        s64[3][3]
+        s32[3][3]
         [
           [1, 0, 0],
           [0, 0, 1],
@@ -1575,7 +1575,7 @@ defmodule Nx.LinAlg do
       iex> {p, l, u} = Nx.LinAlg.lu(Nx.tensor([[[9, 8, 7], [6, 5, 4], [3, 2, 1]], [[-1, 0, -1], [1, 0, 1], [1, 1, 1]]]))
       iex> p
       #Nx.Tensor<
-        s64[2][3][3]
+        s32[2][3][3]
         [
           [
             [1, 0, 0],
@@ -1643,7 +1643,7 @@ defmodule Nx.LinAlg do
       iex> p
       #Nx.Tensor<
         vectorized[x: 2]
-        s64[3][3]
+        s32[3][3]
         [
           [
             [1, 0, 0],
@@ -1728,7 +1728,7 @@ defmodule Nx.LinAlg do
 
       iex> Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4]]), 0)
       #Nx.Tensor<
-        s64[2][2]
+        s32[2][2]
         [
           [1, 0],
           [0, 1]
@@ -1737,7 +1737,7 @@ defmodule Nx.LinAlg do
 
       iex> Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4]]), 6)
       #Nx.Tensor<
-        s64[2][2]
+        s32[2][2]
         [
           [5743, 8370],
           [12555, 18298]
@@ -1746,7 +1746,7 @@ defmodule Nx.LinAlg do
 
       iex> Nx.LinAlg.matrix_power(Nx.eye(3), 65535)
       #Nx.Tensor<
-        s64[3][3]
+        s32[3][3]
         [
           [1, 0, 0],
           [0, 1, 0],
@@ -1765,7 +1765,7 @@ defmodule Nx.LinAlg do
 
       iex> Nx.LinAlg.matrix_power(Nx.iota({2, 2, 2}), 3)
       #Nx.Tensor<
-        s64[2][2][2]
+        s32[2][2][2]
         [
           [
             [6, 11],
@@ -2076,19 +2076,19 @@ defmodule Nx.LinAlg do
 
       iex> Nx.LinAlg.matrix_rank(Nx.tensor([[1, 2], [3, 4]]))
       #Nx.Tensor<
-        u64
+        u32
         2
       >
 
       iex> Nx.LinAlg.matrix_rank(Nx.tensor([[1, 1, 1, 1], [1, 1, 1, 1], [1, 2, 3, 4]]))
       #Nx.Tensor<
-        u64
+        u32
         2
       >
 
       iex> Nx.LinAlg.matrix_rank(Nx.tensor([[1, 1, 1], [2, 2, 2], [8, 9, 10], [-2, 1, 5]]))
       #Nx.Tensor<
-        u64
+        u32
         3
       >
 
