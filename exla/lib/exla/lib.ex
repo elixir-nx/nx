@@ -131,7 +131,7 @@ defmodule EXLA.Lib do
         :high -> &Value.greater/3
       end
 
-    # If lhs and rhs are not NaN and x = y, then pick index based on tie_break
+    # If lhs and rhs are equal (and not NaN), then pick index based on tie_break
     pick_lhs_idx =
       Value.bitwise_or(
         pick_lhs_value,
