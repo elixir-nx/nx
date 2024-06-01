@@ -157,34 +157,11 @@ defmodule EXLA.MLIR.Value do
     end
   end
 
-  def is_nan(%Value{function: func} = operand, out_typespec) do
-    %{type: type} = get_typespec(operand)
-
+  def is_nan(%Value{} = operand, out_typespec) do
     typespec = Typespec.to_type(out_typespec, {:pred, 8})
 
-    result =
-      cond do
-        Nx.Type.complex?(type) ->
-          float_typespec = Typespec.to_type(typespec, complex_part_type(type))
-          real = real(operand, float_typespec)
-          imag = imag(operand, float_typespec)
-          is_nan_real = is_nan(real, typespec)
-          is_nan_imag = is_nan(imag, typespec)
-          bitwise_or(is_nan_real, is_nan_imag, typespec)
-
-        Nx.Type.integer?(type) ->
-          # Integers are never nan. We use inequality to make sure
-          # the operand is still a part of the computation
-          not_equal(operand, operand, typespec)
-
-        true ->
-          result_types = typespecs_to_mlir_types([typespec])
-          is_inf = op(func, "chlo.is_inf", [operand], result_types) |> one!()
-          is_finite = op(func, "stablehlo.is_finite", [operand], result_types) |> one!()
-          is_not_inf = bitwise_not(is_inf, typespec)
-          is_not_finite = bitwise_not(is_finite, typespec)
-          bitwise_and(is_not_inf, is_not_finite, typespec)
-      end
+    # Only NaN is not equal to itself
+    result = not_equal(operand, operand, typespec)
 
     if out_typespec.type == typespec.type do
       result

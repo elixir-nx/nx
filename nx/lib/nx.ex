@@ -10008,6 +10008,15 @@ defmodule Nx do
         1
       >
 
+  If the tensor includes any NaNs, returns the index of any of them
+  (NaNs are not equal, hence tie-break does not apply):
+
+      iex> Nx.argmax(Nx.tensor([2.0, :nan, 4.0]))
+      #Nx.Tensor<
+        s64
+        1
+      >
+
   ### Aggregating over an axis
 
       iex> t = Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]])
@@ -10145,6 +10154,15 @@ defmodule Nx do
       #Nx.Tensor<
         s64
         0
+      >
+
+  If the tensor includes any NaNs, returns the index of any of them
+  (NaNs are not equal, hence tie-break does not apply):
+
+      iex> Nx.argmin(Nx.tensor([2.0, :nan, 4.0]))
+      #Nx.Tensor<
+        s64
+        1
       >
 
   ### Aggregating over an axis
