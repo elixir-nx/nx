@@ -27,8 +27,73 @@ defmodule EXLA.BackendTest do
     @skip_mac_arm []
   end
 
+  if EXLA.Client.default_name() == :mps do
+    @skip_mps [
+      # Missing support for "stablehlo.reduce_window".
+      # Reported in https://github.com/google/jax/issues/21387
+      window_max: 3,
+      window_min: 3,
+      window_sum: 3,
+      window_product: 3,
+      window_reduce: 5,
+      window_scatter_min: 5,
+      window_scatter_max: 5,
+      window_mean: 3,
+      # Argmax/armin fail when a custom :type is passed.
+      # Reported in https://github.com/google/jax/issues/21577
+      argmin: 2,
+      argmax: 2,
+      # Missing support for general "stablehlo.reduce". Some cases work
+      # becuase they are special-cased.
+      # Reported in https://github.com/google/jax/issues/21384
+      reduce: 4,
+      # Missing support for "stablehlo.popcnt", "stablehlo.count_leading_zeros",
+      # "stablehlo.cbrt".
+      # Reported in https://github.com/google/jax/issues/21389
+      count_leading_zeros: 1,
+      population_count: 1,
+      cbrt: 1,
+      # Matrix multiplication for integers is not supported
+      dot: 2,
+      dot: 4,
+      dot: 6,
+      covariance: 3,
+      # (edge case) Put slice with overflowing slice, different behaviour.
+      # Reported in https://github.com/google/jax/issues/21392
+      put_slice: 3,
+      # (edge case) Slice with overflowing index, different behaviour.
+      # Reported in https://github.com/google/jax/issues/21393
+      slice: 4,
+      # (edge case) Top-k wrong behaviour with NaNs.
+      # Reported in https://github.com/google/jax/issues/21397
+      top_k: 2,
+      # Missing support for complex numbers.
+      # Tracked in https://github.com/google/jax/issues/16416
+      complex: 2,
+      conjugate: 1,
+      conv: 3,
+      fft: 2,
+      fft2: 2,
+      ifft: 2,
+      ifft2: 2,
+      imag: 1,
+      is_infinity: 1,
+      is_nan: 1,
+      phase: 1,
+      real: 1,
+      sigil_MAT: 2,
+      # Missing support for float-64.
+      # Tracked in https://github.com/google/jax/issues/20938
+      iota: 2,
+      as_type: 2,
+      atan2: 2
+    ]
+  else
+    @skip_mps []
+  end
+
   doctest Nx,
-    except: [:moduledoc] ++ @excluded_doctests ++ @skip_mac_arm
+    except: [:moduledoc] ++ @excluded_doctests ++ @skip_mac_arm ++ @skip_mps
 
   test "Nx.to_binary/1" do
     t = Nx.tensor([1, 2, 3, 4], backend: EXLA.Backend)

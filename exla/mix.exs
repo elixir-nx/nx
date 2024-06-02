@@ -51,9 +51,10 @@ defmodule EXLA.MixProject do
           cuda: [platform: :cuda],
           rocm: [platform: :rocm],
           tpu: [platform: :tpu],
+          mps: [platform: :mps],
           host: [platform: :host]
         ],
-        preferred_clients: [:cuda, :rocm, :tpu, :host]
+        preferred_clients: [:cuda, :rocm, :tpu, :mps, :host]
       ]
     ]
   end
@@ -128,9 +129,29 @@ defmodule EXLA.MixProject do
           :ok -> File.write!(xla_snapshot_path, xla_archive_path)
           {:error, term} -> Mix.raise("failed to extract xla archive, reason: #{inspect(term)}")
         end
+
+        # TODO should be packed into the XLA archive
+        download_metal_plugin!(xla_extension_path)
     end
 
     {:ok, []}
+  end
+
+  defp download_metal_plugin!(xla_extension_path) do
+    plugin_path = Path.join(xla_extension_path, "lib/pjrt_plugin_metal.dylib")
+
+    wheel_url =
+      "https://files.pythonhosted.org/packages/d6/4f/f5d128a493b7387fbbe0e6906544214af2a6b86af30302dd6ffb9dc66a74/jax_metal-0.0.7-py3-none-macosx_13_0_arm64.whl"
+
+    wheel_path = Path.join(xla_extension_path, "jax_metal.whl")
+
+    {_, 0} = System.shell("wget --output-document=#{wheel_path} #{wheel_url}")
+    {_, 0} = System.shell("unzip #{wheel_path} -d #{xla_extension_path}")
+
+    wheel_plugin_path =
+      Path.join(xla_extension_path, "jax_plugins/metal_plugin/pjrt_plugin_metal_14.dylib")
+
+    File.cp!(wheel_plugin_path, plugin_path)
   end
 
   defp cached_make(_) do
