@@ -7941,6 +7941,16 @@ defmodule Nx do
     end
   end
 
+  # TODO remove this, or make it an optinal callback
+  # (Metal does not support stablehlo.logistic yet)
+  def sigmoid(x) do
+    x
+    |> Nx.negate()
+    |> Nx.exp()
+    |> Nx.add(1)
+    |> then(&Nx.divide(1, &1))
+  end
+
   ## Unary ops
   @disallow_complex_type_unary_ops [:erf, :erfc, :erf_inv]
 

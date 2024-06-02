@@ -712,6 +712,10 @@ defmodule EXLA.Defn do
        ) do
     precision = state.precision
 
+    # Ensure both have the same type
+    left = to_type(left, ans.type)
+    right = to_type(right, ans.type)
+
     Value.dot_general(
       left,
       right,

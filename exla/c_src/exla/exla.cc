@@ -144,7 +144,10 @@ ERL_NIF_TERM mlir_compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   build_options.set_use_spmd_partitioning(use_spmd);
 
   bool compile_portable_executable = false;
-  if (device_id >= 0) {
+
+  bool is_mps = (*client)->client()->platform_name() == "METAL";
+
+  if (device_id >= 0 && !is_mps) {
     compile_portable_executable = true;
     build_options.set_device_ordinal(device_id);
   }
@@ -877,6 +880,16 @@ ERL_NIF_TERM get_tpu_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   return exla::nif::ok(env, exla::nif::make<exla::ExlaClient*>(env, client));
 }
 
+ERL_NIF_TERM get_mps_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 0) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaClient * client, exla::GetMpsClient(), env);
+
+  return exla::nif::ok(env, exla::nif::make<exla::ExlaClient*>(env, client));
+}
+
 ERL_NIF_TERM get_c_api_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 1) {
     return exla::nif::error(env, "Bad argument count.");
@@ -1065,6 +1078,7 @@ static ErlNifFunc exla_funcs[] = {
     {"get_host_client", 0, get_host_client},
     {"get_gpu_client", 2, get_gpu_client},
     {"get_tpu_client", 0, get_tpu_client},
+    {"get_mps_client", 0, get_mps_client},
     {"get_c_api_client", 1, get_c_api_client},
     {"load_pjrt_plugin", 2, load_pjrt_plugin},
     {"get_device_count", 1, get_device_count},

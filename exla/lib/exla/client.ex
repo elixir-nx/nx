@@ -159,6 +159,9 @@ defmodule EXLA.Client do
         :tpu ->
           EXLA.NIF.get_tpu_client()
 
+        :mps ->
+          EXLA.NIF.get_mps_client()
+
         _ ->
           raise ArgumentError, "unknown EXLA platform: #{inspect(platform)}"
       end
