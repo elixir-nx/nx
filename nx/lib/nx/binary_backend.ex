@@ -1461,7 +1461,7 @@ defmodule Nx.BinaryBackend do
         bin, {i, cur_extreme_x, cur_extreme_i} ->
           x = binary_to_number(bin, type)
 
-          if cur_extreme_x == :first or comparator.(x, cur_extreme_x) do
+          if cur_extreme_x == :first or x == :nan or comparator.(x, cur_extreme_x) do
             {i, {i + 1, x, i}}
           else
             {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}
