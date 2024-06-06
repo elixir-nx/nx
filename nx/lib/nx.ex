@@ -51,7 +51,7 @@ defmodule Nx do
 
     * unsigned integers (`u8`, `u16`, `u32`, `u64`)
     * signed integers (`s8`, `s16`, `s32`, `s64`)
-    * floats (`f16`, `f32`, `f64`)
+    * floats (`f8` `f16`, `f32`, `f64`)
     * brain floats (`bf16`)
     * and complex numbers (`c64`, `c128`)
 
@@ -612,6 +612,15 @@ defmodule Nx do
         [1.0, 2.0, 3.0]
       >
 
+  Certain backends and compilers support 8-bit floats. On the binary
+  backend this behavior is emulated:
+
+      iex> Nx.tensor([1, 2, 3], type: :f8)
+      #Nx.Tensor<
+        f8[3]
+        [1.0, 2.0, 3.0]
+      >
+
   In all cases, the non-finite values negative infinity (-Inf),
   infinity (Inf), and "not a number" (NaN) can be represented by
   the atoms `:neg_infinity`, `:infinity`, and `:nan` respectively:
@@ -929,7 +938,7 @@ defmodule Nx do
     %T{shape: shape, type: type, names: names, data: %Nx.TemplateBackend{}}
   end
 
-  for t <- [:u8, :u16, :u32, :u64, :s8, :s16, :s32, :s64, :bf16, :f16, :f32, :f64] do
+  for t <- [:u8, :u16, :u32, :u64, :s8, :s16, :s32, :s64, :bf16, :f8, :f16, :f32, :f64] do
     @doc """
     Short-hand function for creating tensor of type `#{t}`.
 

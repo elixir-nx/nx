@@ -2572,9 +2572,9 @@ defmodule NxTest do
     test "raises on invalid type" do
       assert_raise(
         ArgumentError,
-        "invalid numerical type: {:f, 8} (see Nx.Type docs for all supported types)",
+        "invalid numerical type: {:f, 4} (see Nx.Type docs for all supported types)",
         fn ->
-          eval("~MAT[1 2 3 4]f8")
+          eval("~MAT[1 2 3 4]f4")
         end
       )
     end
