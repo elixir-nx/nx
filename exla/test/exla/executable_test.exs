@@ -11,7 +11,7 @@ defmodule EXLA.ExecutableTest do
   describe "run" do
     test "with no inputs and default options" do
       assert [a = %DeviceBuffer{}] =
-               run_one([], [], Typespec.tensor({:s, 32}, {}), fn b ->
+               run_one([], [], s32_typespec(), fn b ->
                  [Value.constant(b, [1], s32_typespec())]
                end)
 
@@ -19,8 +19,8 @@ defmodule EXLA.ExecutableTest do
     end
 
     test "with 2 inputs and default options" do
-      t1 = BinaryBuffer.from_binary(<<1::32-native>>, Typespec.tensor({:s, 32}, {}))
-      t2 = BinaryBuffer.from_binary(<<1::32-native>>, Typespec.tensor({:s, 32}, {}))
+      t1 = BinaryBuffer.from_binary(<<1::32-native>>, s32_typespec())
+      t2 = BinaryBuffer.from_binary(<<1::32-native>>, s32_typespec())
 
       assert [a = %DeviceBuffer{}] =
                run_one([t1, t2], [], [t1.typespec], fn _b, x, y ->
@@ -34,7 +34,7 @@ defmodule EXLA.ExecutableTest do
       t1 =
         DeviceBuffer.place_on_device(
           <<1::32-native>>,
-          Typespec.tensor({:s, 32}, {}),
+          s32_typespec(),
           client(),
           0
         )
@@ -42,7 +42,7 @@ defmodule EXLA.ExecutableTest do
       t2 =
         DeviceBuffer.place_on_device(
           <<1::32-native>>,
-          Typespec.tensor({:s, 32}, {}),
+          s32_typespec(),
           client(),
           0
         )
@@ -62,8 +62,8 @@ defmodule EXLA.ExecutableTest do
     end
 
     test "with data from a previous run" do
-      t1 = BinaryBuffer.from_binary(<<1::32-native>>, Typespec.tensor({:s, 32}, {}))
-      t2 = BinaryBuffer.from_binary(<<1::32-native>>, Typespec.tensor({:s, 32}, {}))
+      t1 = BinaryBuffer.from_binary(<<1::32-native>>, s32_typespec())
+      t2 = BinaryBuffer.from_binary(<<1::32-native>>, s32_typespec())
 
       exec =
         compile([t1.typespec, t2.typespec], [], [t1.typespec], fn _b, x, y ->
@@ -80,12 +80,12 @@ defmodule EXLA.ExecutableTest do
       t1 =
         DeviceBuffer.place_on_device(
           <<1::32-native>>,
-          Typespec.tensor({:s, 32}, {}),
+          s32_typespec(),
           client(),
           0
         )
 
-      t2 = BinaryBuffer.from_binary(<<2::32-native>>, Typespec.tensor({:s, 32}, {}))
+      t2 = BinaryBuffer.from_binary(<<2::32-native>>, s32_typespec())
 
       assert [a = %DeviceBuffer{}] =
                run_one([t1, t2], [], [t1.typespec], fn _b, x, y ->
@@ -96,8 +96,8 @@ defmodule EXLA.ExecutableTest do
     end
 
     test "with tuple return" do
-      t1 = BinaryBuffer.from_binary(<<1::32-native>>, Typespec.tensor({:s, 32}, {}))
-      t2 = BinaryBuffer.from_binary(<<2::32-native>>, Typespec.tensor({:s, 32}, {}))
+      t1 = BinaryBuffer.from_binary(<<1::32-native>>, s32_typespec())
+      t2 = BinaryBuffer.from_binary(<<2::32-native>>, s32_typespec())
 
       assert [a = %DeviceBuffer{}, b = %DeviceBuffer{}] =
                run_one([t1, t2], [], [t1.typespec, t2.typespec], fn _b, x, y ->
@@ -110,8 +110,8 @@ defmodule EXLA.ExecutableTest do
 
     @tag :multi_device
     test "runs on a specific device" do
-      t1 = BinaryBuffer.from_binary(<<1::32-native>>, Typespec.tensor({:s, 32}, {}))
-      t2 = BinaryBuffer.from_binary(<<2::32-native>>, Typespec.tensor({:s, 32}, {}))
+      t1 = BinaryBuffer.from_binary(<<1::32-native>>, s32_typespec())
+      t2 = BinaryBuffer.from_binary(<<2::32-native>>, s32_typespec())
 
       assert [a = %DeviceBuffer{}, b = %DeviceBuffer{}, c = %DeviceBuffer{}] =
                run_one(
@@ -135,6 +135,25 @@ defmodule EXLA.ExecutableTest do
           [Value.add(x, y, s32_typespec())]
         end)
       end
+    end
+  end
+
+  describe "serialization" do
+    test "run" do
+      t1 = BinaryBuffer.from_binary(<<1::32-native>>, s32_typespec())
+      t2 = BinaryBuffer.from_binary(<<1::32-native>>, s32_typespec())
+
+      exec =
+        compile([s32_typespec(), s32_typespec()], [], [s32_typespec()], fn _, x, y ->
+          [Value.add(x, y, s32_typespec())]
+        end)
+
+      binary = Executable.serialize(exec)
+      assert is_binary(binary)
+      exec = Executable.deserialize(client(), binary)
+
+      assert [[a = %DeviceBuffer{}]] = EXLA.Executable.run(exec, [[t1, t2]], [])
+      assert <<2::32-native>> == DeviceBuffer.read(a)
     end
   end
 
