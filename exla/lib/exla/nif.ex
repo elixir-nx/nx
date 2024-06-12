@@ -53,6 +53,8 @@ defmodule EXLA.NIF do
 
   def get_tpu_client(), do: :erlang.nif_error(:undef)
 
+  def get_mps_client(), do: :erlang.nif_error(:undef)
+
   def get_supported_platforms, do: :erlang.nif_error(:undef)
 
   def get_device_count(_client),

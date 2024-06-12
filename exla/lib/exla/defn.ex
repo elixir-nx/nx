@@ -871,6 +871,10 @@ defmodule EXLA.Defn do
        ) do
     precision = state.precision
 
+    # Ensure both have the same type
+    left = to_type(left, ans.type)
+    right = to_type(right, ans.type)
+
     Value.dot_general(
       left,
       right,
@@ -1341,7 +1345,7 @@ defmodule EXLA.Defn do
   defp to_operator(:sort, [%Value{} = tensor, opts], ans, state) do
     dimension = opts[:axis]
 
-    op =
+    operator =
       case opts[:direction] do
         :asc -> :less
         :desc -> :greater
@@ -1350,7 +1354,7 @@ defmodule EXLA.Defn do
     arg_typespec = Typespec.tensor(ans.type, {})
     arg_typespecs = [arg_typespec, arg_typespec]
 
-    comp = sort_computation(op, ans.type, arg_typespecs, state)
+    comp = sort_computation(operator, ans.type, arg_typespecs, state)
 
     Value.sort([tensor], comp, dimension, opts[:stable] == true, [expr_to_typespec(ans)]) |> hd()
   end
@@ -1530,28 +1534,43 @@ defmodule EXLA.Defn do
 
   ## Computation helpers
 
-  defp sort_computation(op, type, arg_typespecs, %{builder: %EXLA.MLIR.Function{} = function}) do
+  defp sort_computation(
+         operator,
+         type,
+         arg_typespecs,
+         %{builder: %EXLA.MLIR.Function{} = function}
+       ) do
     {region, [lhs, rhs | _]} = Function.push_region(function, arg_typespecs)
 
     typespec = Typespec.tensor({:pred, 8}, {})
 
-    op =
-      cond do
-        Nx.Type.integer?(type) ->
-          apply(Value, op, [lhs, rhs, typespec])
-
-        op == :less ->
-          is_nan = Value.is_nan(rhs, typespec)
-          Value.bitwise_or(is_nan, Value.less(lhs, rhs, typespec), typespec)
-
-        op == :greater ->
-          is_nan = Value.is_nan(lhs, typespec)
-          Value.bitwise_or(is_nan, Value.greater(lhs, rhs, typespec), typespec)
+    {lhs, rhs} =
+      if Nx.Type.float?(type) do
+        {canonicalize_float_for_sort(lhs), canonicalize_float_for_sort(rhs)}
+      else
+        {lhs, rhs}
       end
+
+    op = apply(Value, operator, [lhs, rhs, typespec, [total_order: true]])
 
     Value.return(function, [op])
     Function.pop_region(function)
     region
+  end
+
+  defp canonicalize_float_for_sort(%Value{function: func} = op) do
+    # Standardize the representation of NaNs (-NaN, NaN) and zeros (-0, 0).
+    # See https://github.com/google/jax/blob/e81c82605f0e1813080cfe1037d043b27b38291d/jax/_src/lax/lax.py#L4248-L4253
+
+    op_typespec = Value.get_typespec(op)
+
+    zero = Value.constant(func, [0], Typespec.to_shape(op_typespec, {}))
+    zeros = Value.constant(func, [0], op_typespec)
+    nans = Value.constant(func, [:nan], op_typespec)
+
+    pred_typespec = Typespec.tensor({:pred, 8}, {})
+    op = Value.select(Value.equal(op, zero, pred_typespec), zeros, op, op_typespec)
+    Value.select(Value.is_nan(op, pred_typespec), nans, op, op_typespec)
   end
 
   defp op_computation(

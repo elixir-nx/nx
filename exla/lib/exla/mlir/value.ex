@@ -54,12 +54,18 @@ defmodule EXLA.MLIR.Value do
   }
 
   for {op, direction} <- @bin_comparison_ops do
-    def unquote(op)(%Value{function: func} = lhs, %Value{function: func} = rhs, typespec) do
-      compare_and_return_bool(func, lhs, rhs, typespec, unquote(direction))
+    def unquote(op)(
+          %Value{function: func} = lhs,
+          %Value{function: func} = rhs,
+          typespec,
+          opts \\ []
+        ) do
+      opts = Keyword.validate!(opts, total_order: false)
+      compare_and_return_bool(func, lhs, rhs, typespec, unquote(direction), opts[:total_order])
     end
   end
 
-  defp compare_and_return_bool(func, lhs, rhs, typespec, direction) do
+  defp compare_and_return_bool(func, lhs, rhs, typespec, direction, total_order? \\ false) do
     %{type: lhs_type} = get_typespec(lhs)
     %{type: rhs_type} = get_typespec(rhs)
 
@@ -69,7 +75,11 @@ defmodule EXLA.MLIR.Value do
           attr_comparison_type(:float)
 
         Nx.Type.float?(lhs_type) or Nx.Type.float?(rhs_type) ->
-          attr_comparison_type(:float)
+          if total_order? do
+            attr_comparison_type(:totalorder)
+          else
+            attr_comparison_type(:float)
+          end
 
         true ->
           attr_comparison_type(:notype)
@@ -663,9 +673,15 @@ defmodule EXLA.MLIR.Value do
         typespecs
       ) do
     result_types = typespecs_to_mlir_types(typespecs)
-    regions = [on_true, on_false]
-    pred = convert(pred, Typespec.tensor({:pred, 8}, {}))
-    op(func, "stablehlo.if", [pred], result_types, regions: regions)
+
+    # TODO Jax does not support stablehlo.if, they use stablhelo.case instead.
+    # It most likely makes sense for use to do the same. That said, note that
+    # stablehlo.case is implemented for Metal, but does not lower reliably.
+    # Reported in https://github.com/google/jax/issues/21601
+
+    regions = [on_false, on_true]
+    pred = convert(pred, Typespec.tensor({:s, 32}, {}))
+    op(func, "stablehlo.case", [pred], result_types, regions: regions)
   end
 
   def infeed(%Value{function: func} = token, typespecs) do

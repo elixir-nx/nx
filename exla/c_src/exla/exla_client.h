@@ -110,6 +110,8 @@ xla::StatusOr<ExlaClient*> GetGpuClient(double memory_fraction,
 
 xla::StatusOr<ExlaClient*> GetTpuClient();
 
+xla::StatusOr<ExlaClient*> GetMpsClient();
+
 xla::StatusOr<ExlaClient*> GetCApiClient(std::string device_type);
 }  // namespace exla
 
