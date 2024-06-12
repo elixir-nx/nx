@@ -141,7 +141,7 @@ defmodule EXLA.MixProject do
     plugin_path = Path.join(xla_extension_path, "lib/pjrt_plugin_metal.dylib")
 
     wheel_url =
-      "https://files.pythonhosted.org/packages/d6/4f/f5d128a493b7387fbbe0e6906544214af2a6b86af30302dd6ffb9dc66a74/jax_metal-0.0.7-py3-none-macosx_13_0_arm64.whl"
+      "https://files.pythonhosted.org/packages/80/af/ed482a421a868726e7ca3f51ac19b0c9a8e37f33f54413312c37e9056acc/jax_metal-0.1.0-py3-none-macosx_11_0_arm64.whl"
 
     wheel_path = Path.join(xla_extension_path, "jax_metal.whl")
 

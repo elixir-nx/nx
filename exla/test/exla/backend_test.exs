@@ -39,8 +39,8 @@ defmodule EXLA.BackendTest do
       window_scatter_min: 5,
       window_scatter_max: 5,
       window_mean: 3,
-      # Argmax/armin fail when a custom :type is passed.
-      # Reported in https://github.com/google/jax/issues/21577
+      # (edge case) Argmax/argmin return wrong value in case of NaN.
+      # Reported in https://github.com/google/jax/issues/21821
       argmin: 2,
       argmax: 2,
       # Missing support for general "stablehlo.reduce". Some cases work

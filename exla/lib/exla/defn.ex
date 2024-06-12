@@ -663,9 +663,7 @@ defmodule EXLA.Defn do
     result =
       Value.gather(
         tensor,
-        # TODO remove conversion (unsigned indices fail)
-        # Reported in https://github.com/google/jax/issues/21547
-        to_type(indices, {:s, 32}),
+        indices,
         index_vector_dim,
         slice_sizes,
         offset_dims,
@@ -1297,9 +1295,6 @@ defmodule EXLA.Defn do
   defp to_operator(:put_slice, [%Value{} = tensor, start_indices, slice], ans, _state) do
     tensor = to_type(tensor, ans.type)
     slice = to_type(slice, ans.type)
-    # TODO remove conversion (unsigned indices fail)
-    # Reported in https://github.com/google/jax/issues/21547
-    start_indices = Enum.map(start_indices, &to_type(&1, {:s, 32}))
     Value.dynamic_update_slice(tensor, slice, start_indices, expr_to_typespec(ans))
   end
 
@@ -1322,9 +1317,7 @@ defmodule EXLA.Defn do
 
     Value.gather(
       tensor,
-      # TODO remove conversion (unsigned indices fail)
-      # Reported in https://github.com/google/jax/issues/21547
-      to_type(indices, {:s, 32}),
+      indices,
       index_vector_dim,
       slice_sizes,
       offset_dims,
