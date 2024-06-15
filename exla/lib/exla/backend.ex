@@ -234,24 +234,16 @@ defmodule EXLA.Backend do
 
   @impl true
   def concatenate(out, tensors, axis) do
-    out = Nx.to_template(out)
-
-    expr_fun = fn tensors ->
-      Nx.Defn.Expr.concatenate(out, Tuple.to_list(tensors), axis)
-    end
-
-    jit([], expr_fun, tensors, [List.to_tuple(tensors)])
+    copied = Enum.map(tensors, &Nx.backend_copy(&1, Nx.BinaryBackend))
+    result = Nx.BinaryBackend.concatenate(out, copied, axis)
+    Nx.backend_transfer(result, {EXLA.Backend, jit_opts([], tensors)})
   end
 
   @impl true
   def stack(out, tensors, axis) do
-    out = Nx.to_template(out)
-
-    expr_fun = fn tensors ->
-      Nx.Defn.Expr.stack(out, Tuple.to_list(tensors), axis)
-    end
-
-    jit([], expr_fun, tensors, [List.to_tuple(tensors)])
+    copied = Enum.map(tensors, &Nx.backend_copy(&1, Nx.BinaryBackend))
+    result = Nx.BinaryBackend.stack(out, copied, axis)
+    Nx.backend_transfer(result, {EXLA.Backend, jit_opts([], tensors)})
   end
 
   @impl true
@@ -390,6 +382,10 @@ defmodule EXLA.Backend do
   defp jit(opts, fun, args), do: jit(opts, fun, args, args)
 
   defp jit(opts, fun, tensors, args) do
+    EXLA.jit_apply(fun, args, [on_conflict: :force] ++ jit_opts(tensors, opts))
+  end
+
+  defp jit_opts(opts, tensors) do
     {priority_client, priority_did, backup_client, backup_did} =
       for %T{data: %B{buffer: %EXLA.DeviceBuffer{client_name: client_name, device_id: device_id}}} <-
             tensors,
@@ -418,6 +414,6 @@ defmodule EXLA.Backend do
       opts[:device_id] || priority_did || backup_did ||
         EXLA.Client.fetch!(client).default_device_id
 
-    EXLA.jit_apply(fun, args, on_conflict: :force, client: client, device_id: device_id)
+    [client: client, device_id: device_id]
   end
 end
