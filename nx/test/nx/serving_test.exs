@@ -1086,7 +1086,25 @@ defmodule Nx.ServingTest do
       Task.await(t2, :infinity)
     end
 
-    test "with input streaming", config do
+    test "with limited concurrent pushing", config do
+      serving = Nx.Serving.new(Simple, self())
+      simple_supervised!(config, batch_size: 4, serving: serving)
+
+      assert Task.async_stream(
+               1..4,
+               fn _ ->
+                 data = Stream.map([Nx.Batch.stack([Nx.tensor([1, 2, 3])])], & &1)
+
+                 Nx.Serving.batched_run(config.test, data)
+               end,
+               # A bug only shows with limited concurrency
+               max_concurrency: 2
+             )
+             |> Enum.map(fn {:ok, results} -> results end)
+             |> Enum.to_list() == List.duplicate(Nx.tensor([[2, 4, 6]]), 4)
+    end
+
+    test "with output streaming", config do
       serving = Nx.Serving.new(Simple, self()) |> Nx.Serving.streaming()
       simple_supervised!(config, batch_size: 2, serving: serving)
       stream = Stream.map([[1, 2], [3]], &Nx.Batch.concatenate([Nx.tensor(&1)]))
@@ -1109,7 +1127,7 @@ defmodule Nx.ServingTest do
       refute_received {:DOWN, _, _, _, _}
     end
 
-    test "with input streaming and hooks", config do
+    test "with output streaming and hooks", config do
       serving = Nx.Serving.new(Simple, self()) |> Nx.Serving.streaming(hooks: [:foo, :bar])
       simple_supervised!(config, batch_size: 2, serving: serving)
       stream = Stream.map([[1, 2], [3]], &Nx.Batch.concatenate([Nx.tensor(&1)]))

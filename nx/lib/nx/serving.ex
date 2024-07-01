@@ -1613,7 +1613,7 @@ defmodule Nx.Serving do
             send(ref, {ref, {:batch, {start, size, output, metadata}}})
 
             for pid <- pids do
-              send(pid, {ref, size - start})
+              send(pid, {ref, size})
             end
           end
 
