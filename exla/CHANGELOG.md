@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.3 (2024-07-01)
+
+  * Update to latest Nx
+
 ## v0.7.2 (2024-04-27)
 
   * Cast start indexes types when slicing a tensor

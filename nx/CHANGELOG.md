@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.3 (2024-07-01)
+
+  * [Nx.Serving] Fix requests never completing when streaming batch sizes as inputs
+
 ## v0.7.2 (2024-04-27)
 
   * [Nx] Ensure shapes and types are checked inside `while` when there are vectorized tensors
