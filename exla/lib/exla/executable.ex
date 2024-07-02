@@ -6,8 +6,24 @@ defmodule EXLA.Executable do
   alias __MODULE__
   alias EXLA.{BinaryBuffer, DeviceBuffer}
 
-  @enforce_keys [:client, :ref, :output_typespecs, :num_replicas, :num_partitions, :device_id]
-  defstruct [:client, :ref, :output_typespecs, :num_replicas, :num_partitions, :device_id]
+  @enforce_keys [
+    :client,
+    :ref,
+    :output_typespecs,
+    :num_replicas,
+    :num_partitions,
+    :device_id,
+    :mlir_module
+  ]
+  defstruct [
+    :client,
+    :ref,
+    :output_typespecs,
+    :num_replicas,
+    :num_partitions,
+    :device_id,
+    :mlir_module
+  ]
 
   @doc """
   Runs the given executable with a list of lists as inputs and the given options.

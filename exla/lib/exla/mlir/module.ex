@@ -71,6 +71,10 @@ defmodule EXLA.MLIR.Module do
     * `:use_spmd` - enables Single-Program Multiple-Data partioning.
       This is set to true if `:num_partitions` is more than one, otherwise is `false`.
 
+    * `:compile_mlir` - whether to compile the MLIR module. If set to `false`,
+      the `ref` field of the returned `Executable` struct will be `nil`. Useful
+      if you want to serialize the module and compile it with a different stack.
+
   Currently those options do not have an effect as they related to running the
   same compiled executable on multiple replicas.
 
@@ -101,21 +105,28 @@ defmodule EXLA.MLIR.Module do
     # Uncomment to debug the module MLIR source
     # module |> as_string() |> IO.puts()
 
+    compile_mlir = Keyword.get(options, :compile_mlir, true)
+
     ref =
-      EXLA.NIF.mlir_compile(
-        client.ref,
-        module.ref,
-        Enum.map(argument_typespecs, &EXLA.Typespec.nif_encode/1),
-        num_replicas,
-        num_partitions,
-        use_spmd,
-        device_id
-      )
-      |> unwrap!()
+      if compile_mlir do
+        EXLA.NIF.mlir_compile(
+          client.ref,
+          module.ref,
+          Enum.map(argument_typespecs, &EXLA.Typespec.nif_encode/1),
+          num_replicas,
+          num_partitions,
+          use_spmd,
+          device_id
+        )
+        |> unwrap!()
+      else
+        nil
+      end
 
     %Executable{
       client: client,
       ref: ref,
+      mlir_module: module,
       output_typespecs: return_typespecs,
       num_replicas: num_replicas,
       num_partitions: num_partitions,
