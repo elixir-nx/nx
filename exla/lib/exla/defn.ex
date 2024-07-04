@@ -637,6 +637,47 @@ defmodule EXLA.Defn do
          :optional,
          %T{
            data: %Expr{
+             args: [
+               %{data: %{op: :eigh, args: [tensor, _opts]}},
+               {%{type: {type_kind, _}} = eigenvecs_expr, eigenvals_expr},
+               _callback
+             ]
+           }
+         },
+         %{client: %EXLA.Client{platform: :host}, builder: %Function{}} = state,
+         cache
+       ) do
+    dbg({type_kind})
+    # We match only on platform: :host for MLIR, as we want to support
+    # eigh-on-cpu as a custom call only in this case
+    {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
+
+    # convert to float and ensure that we're either using f32 or f64
+    out_type = Nx.Type.merge(Nx.Type.to_floating(eigenvecs_expr.type), {:f, 32})
+
+    tensor =
+      if op_type(tensor) != out_type do
+        to_type(tensor, out_type)
+      else
+        tensor
+      end
+
+    {eigenvecs, eigenvals} =
+      Value.eigh(
+        tensor,
+        expr_to_typespec(%{eigenvecs_expr | type: out_type}),
+        expr_to_typespec(%{eigenvals_expr | type: out_type})
+      )
+
+    dbg(eigenvecs)
+
+    {[to_type(eigenvecs, eigenvecs_expr.type), to_type(eigenvals, eigenvals_expr.type)], cache}
+  end
+
+  defp cached_recur_operator(
+         :optional,
+         %T{
+           data: %Expr{
              args: [%{data: %{op: :take, args: [tensor, indices, opts]}}, expr, _callback]
            }
          },
