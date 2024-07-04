@@ -639,7 +639,7 @@ defmodule EXLA.Defn do
            data: %Expr{
              args: [
                %{data: %{op: :eigh, args: [tensor, _opts]}},
-               {%{type: {type_kind, _}} = eigenvecs_expr, eigenvals_expr},
+               {eigenvecs_expr, eigenvals_expr},
                _callback
              ]
            }
