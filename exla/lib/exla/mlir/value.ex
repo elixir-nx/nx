@@ -737,12 +737,6 @@ defmodule EXLA.MLIR.Value do
 
     call_target_name =
       case op_type do
-        {:bf, 16} ->
-          "eigh_cpu_custom_call_bf16"
-
-        {:f, 16} ->
-          "eigh_cpu_custom_call_f16"
-
         {:f, 32} ->
           "eigh_cpu_custom_call_f32"
 
