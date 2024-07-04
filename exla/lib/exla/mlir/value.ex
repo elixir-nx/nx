@@ -710,6 +710,58 @@ defmodule EXLA.MLIR.Value do
     op(func, "stablehlo.return", values, [])
   end
 
+  def eigh(%Value{function: func} = value, eigenvecs_typespec, eigenvals_typespec) do
+    %{type: op_type, shape: op_shape} = get_typespec(value)
+    %{type: eigenvecs_type, shape: eigenvecs_shape} = eigenvecs_typespec
+    %{type: eigenvals_type, shape: eigenvals_shape} = eigenvals_typespec
+
+    dim_sizes = [tuple_size(op_shape), tuple_size(eigenvecs_shape), tuple_size(eigenvals_shape)]
+    operand_dims = Tuple.to_list(op_shape)
+    eigenvecs_dims = Tuple.to_list(eigenvecs_shape)
+    eigenvals_dims = Tuple.to_list(eigenvals_shape)
+
+    dim_sizes = constant(func, dim_sizes, Typespec.tensor({:s, 64}, {length(dim_sizes)}))
+    operand_dims = constant(func, operand_dims, Typespec.tensor({:s, 64}, {length(operand_dims)}))
+
+    eigenvecs_dims =
+      constant(func, eigenvecs_dims, Typespec.tensor({:s, 64}, {length(eigenvecs_dims)}))
+
+    eigenvals_dims =
+      constant(func, eigenvals_dims, Typespec.tensor({:s, 64}, {length(eigenvals_dims)}))
+
+    operands = [value, dim_sizes, operand_dims, eigenvecs_dims, eigenvals_dims]
+
+    eigenvecs_result_type = type_tensor(eigenvecs_type, eigenvecs_shape)
+    eigenvals_result_type = type_tensor(eigenvals_type, eigenvals_shape)
+    result_types = [type_tuple([eigenvecs_result_type, eigenvals_result_type])]
+
+    call_target_name =
+      case op_type do
+        {:f, 32} ->
+          "eigh_cpu_custom_call_f32"
+
+        {:f, 64} ->
+          "eigh_cpu_custom_call_f64"
+
+        type ->
+          # Due to matching on EXLA.Defn, we are sure that the device here is always :host
+          raise "Eigh decomposition not supported on :host device for type #{inspect(type)}"
+      end
+
+    attributes = [
+      call_target_name: attr_string(call_target_name),
+      backend_config: attr_string("Host")
+    ]
+
+    result =
+      op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes) |> one!()
+
+    eigenvecs = get_tuple_element(result, 0, eigenvecs_typespec)
+    eigenvals = get_tuple_element(result, 1, eigenvals_typespec)
+
+    {eigenvecs, eigenvals}
+  end
+
   def qr(%Value{function: func} = value, q_typespec, r_typespec) do
     %{type: op_type, shape: op_shape} = get_typespec(value)
     %{type: q_type, shape: q_shape} = q_typespec
