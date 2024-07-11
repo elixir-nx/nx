@@ -78,6 +78,16 @@ static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info) {
   return 0;
 }
 
+static int upgrade(ErlNifEnv* env, void** priv_data, void** old_priv_data, ERL_NIF_TERM load_info) {
+  // Silence "unused var" warnings.
+  (void)(env);
+  (void)(priv_data);
+  (void)(old_priv_data);
+  (void)(load_info);
+
+  return 0;
+}
+
 // MLIR Functions
 
 ERL_NIF_TERM type_parsing_error(ErlNifEnv* env, std::string type_string) {
@@ -939,4 +949,4 @@ static ErlNifFunc exla_funcs[] = {
     {"serialize_executable", 1, serialize_executable},
     {"deserialize_executable", 2, deserialize_executable}};
 
-ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, NULL, NULL);
+ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, &upgrade, NULL);
