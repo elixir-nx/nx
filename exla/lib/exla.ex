@@ -370,7 +370,7 @@ defmodule EXLA do
           %0 = stablehlo.sine %arg0 : tensor<f32>
           %1 = stablehlo.cosine %arg1 : tensor<f32>
           %2 = stablehlo.add %0, %1 : tensor<f32>
-          stablehlo.return %2 : tensor<f32>
+          return %2 : tensor<f32>
         }
       }
       \"\"\"
