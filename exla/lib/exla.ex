@@ -355,16 +355,16 @@ defmodule EXLA do
     Nx.Defn.stream(function, args, Keyword.put(options, :compiler, EXLA))
   end
 
-  @doc """
-  Takes in a function, the templates variables and the compilation options
-  and returns the `EXLA.Executable` struct.
+  @doc ~S'''
+  Takes in a function, the argument templates and the compilation
+  options and returns the textual representation of the MLIR module.
 
   ## Examples
 
       iex> fun = fn x, y -> Nx.add(Nx.sin(x), Nx.cos(y)) end
       iex> args = [1.0, 2.0]
       iex> EXLA.to_mlir_module(fun, args)
-      \"\"\"
+      """
       module {
         func.func public @main(%arg0: tensor<f32>, %arg1: tensor<f32>) -> tensor<f32> {
           %0 = stablehlo.sine %arg0 : tensor<f32>
@@ -373,8 +373,8 @@ defmodule EXLA do
           return %2 : tensor<f32>
         }
       }
-      \"\"\"
-  """
+      """
+  '''
   def to_mlir_module(function, args, options \\ []) do
     comp_fun = fn _key, callback ->
       {:ok, {_xla_time, executable, _extra, _outfeed}} = callback.()
