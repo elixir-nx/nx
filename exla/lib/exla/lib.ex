@@ -34,7 +34,7 @@ defmodule EXLA.Lib do
   def argmax(builder, op, type, opts \\ [])
 
   def argmax(%Function{} = builder, %Value{} = op, type, opts) do
-    argmin_or_max(builder, op, false, type, opts)
+    argmin_or_max(builder, op, :max, type, opts)
   end
 
   @doc """
@@ -49,37 +49,43 @@ defmodule EXLA.Lib do
   def argmin(builder, op, type, opts \\ [])
 
   def argmin(%Function{} = builder, %Value{} = op, type, opts) do
-    argmin_or_max(builder, op, true, type, opts)
+    argmin_or_max(builder, op, :min, type, opts)
   end
 
-  defp argmin_or_max(builder, %Value{} = op, is_min?, type, opts) do
+  defp argmin_or_max(builder, %Value{} = op, variant, type, opts) do
     tie_break = opts[:tie_break] || :low
     keep_axis = opts[:keep_axis] || false
+    axis = opts[:axis]
 
     op_typespec = Value.get_typespec(op)
 
-    init_value =
-      if is_min?,
-        do: max_number(builder, op_typespec.type),
-        else: min_number(builder, op_typespec.type)
-
-    axis = opts[:axis]
-    index_init_value = Value.constant(builder, [0], Typespec.tensor(type, {}))
-    iota = iota(builder, axis, Typespec.to_type(op_typespec, type))
-    reduction = create_min_max_computation(builder, op_typespec.type, type, is_min?, tie_break)
-
-    dims =
-      if axis do
-        [axis]
+    {op, op_typespec} =
+      if axis == nil and Nx.rank(op_typespec.shape) != 1 do
+        # When no axis is given, we flatten the tensor and reduce over
+        # the first axis
+        typespec = Typespec.to_shape(op_typespec, {Nx.size(op_typespec.shape)})
+        {Value.reshape(op, typespec), typespec}
       else
-        Nx.axes(op_typespec.shape)
+        {op, op_typespec}
       end
 
-    shape = remove_axes(op_typespec.shape, dims)
+    axis = axis || 0
+
+    init_value =
+      case variant do
+        :min -> max_number(builder, op_typespec.type)
+        :max -> min_number(builder, op_typespec.type)
+      end
+
+    index_init_value = Value.constant(builder, [0], Typespec.tensor(type, {}))
+    iota = iota(builder, axis, Typespec.to_type(op_typespec, type))
+    reduction = create_min_max_computation(builder, op_typespec.type, type, variant, tie_break)
+
+    shape = Tuple.delete_at(op_typespec.shape, axis)
     typespecs = [Typespec.tensor(op_typespec.type, shape), Typespec.tensor(type, shape)]
 
     [_, result] =
-      Value.reduce(reduction, [init_value, index_init_value], [op, iota], dims, typespecs)
+      Value.reduce(reduction, [init_value, index_init_value], [op, iota], [axis], typespecs)
 
     if keep_axis do
       Value.reshape(result, Typespec.tensor(type, put_elem(op_typespec.shape, axis, 1)))
@@ -88,13 +94,7 @@ defmodule EXLA.Lib do
     end
   end
 
-  defp remove_axes(shape, axes) do
-    axes
-    |> Enum.reverse()
-    |> Enum.reduce(shape, &Tuple.delete_at(&2, &1))
-  end
-
-  defp create_min_max_computation(%Function{} = function, type, index_type, is_min?, tie_break) do
+  defp create_min_max_computation(%Function{} = function, type, index_type, variant, tie_break) do
     arg_typespecs = [
       Typespec.tensor(type, {}),
       Typespec.tensor(index_type, {}),
@@ -109,26 +109,41 @@ defmodule EXLA.Lib do
     value_typespec = Typespec.tensor(type, {})
     idx_typespec = Typespec.tensor(index_type, {})
 
-    cmp =
-      if is_min?,
-        do: Value.less_equal(lhs_value, rhs_value, pred_typespec),
-        else: Value.greater_equal(lhs_value, rhs_value, pred_typespec)
-
-    max = Value.select(cmp, lhs_value, rhs_value, value_typespec)
-    arg_max = Value.select(cmp, lhs_index, rhs_index, idx_typespec)
-
-    arg_max =
-      case tie_break do
-        :low ->
-          eq? = Value.equal(lhs_value, rhs_value, pred_typespec)
-          id = Value.min(lhs_index, rhs_index, idx_typespec)
-          Value.select(eq?, id, arg_max, idx_typespec)
-
-        :high ->
-          eq? = Value.equal(lhs_value, rhs_value, pred_typespec)
-          id = Value.max(lhs_index, rhs_index, idx_typespec)
-          Value.select(eq?, id, arg_max, idx_typespec)
+    comparator =
+      case variant do
+        :min -> &Value.less/3
+        :max -> &Value.greater/3
       end
+
+    # Pick lhs if strictly before or if it is NaN
+    pick_lhs_value =
+      Value.bitwise_or(
+        comparator.(lhs_value, rhs_value, pred_typespec),
+        Value.is_nan(lhs_value, pred_typespec),
+        pred_typespec
+      )
+
+    max = Value.select(pick_lhs_value, lhs_value, rhs_value, value_typespec)
+
+    idx_comparator =
+      case tie_break do
+        :low -> &Value.less/3
+        :high -> &Value.greater/3
+      end
+
+    # If lhs and rhs are equal (and not NaN), then pick index based on tie_break
+    pick_lhs_idx =
+      Value.bitwise_or(
+        pick_lhs_value,
+        Value.bitwise_and(
+          Value.equal(lhs_value, rhs_value, pred_typespec),
+          idx_comparator.(lhs_index, rhs_index, pred_typespec),
+          pred_typespec
+        ),
+        pred_typespec
+      )
+
+    arg_max = Value.select(pick_lhs_idx, lhs_index, rhs_index, idx_typespec)
 
     Value.return(function, [max, arg_max])
     Function.pop_region(function)

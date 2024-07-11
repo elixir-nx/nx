@@ -1856,7 +1856,7 @@ defmodule Nx.Shape do
     end
 
     # batch axes must be increasing starting from 0
-    valid_batch_axes = Enum.to_list(0..(length(b1) - 1))
+    valid_batch_axes = Enum.to_list(0..(length(b1) - 1)//1)
 
     # ensure normalized batch axis of left is valid value
     if left_batched? and b1 != valid_batch_axes do

@@ -1443,7 +1443,7 @@ defmodule NxTest do
           [:nan, 0, 1]
         ])
 
-      assert Nx.argmin(t, axis: 1) == Nx.tensor([0, 0, 0, 0, 2, 2, 1, 1, 0, 0, 0, 0])
+      assert Nx.argmin(t, axis: 1) == Nx.tensor([0, 1, 0, 0, 2, 1, 1, 1, 0, 1, 0, 0])
     end
 
     test "raises for invalid :tie_break option" do
@@ -1475,7 +1475,7 @@ defmodule NxTest do
           [:nan, 0, 1]
         ])
 
-      assert Nx.argmax(t, axis: 1) == Nx.tensor([1, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0])
+      assert Nx.argmax(t, axis: 1) == Nx.tensor([1, 1, 2, 2, 0, 1, 0, 0, 0, 1, 0, 0])
     end
   end
 

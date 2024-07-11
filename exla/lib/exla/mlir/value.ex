@@ -64,15 +64,20 @@ defmodule EXLA.MLIR.Value do
     %{type: rhs_type} = get_typespec(rhs)
 
     comparison_type =
-      if Nx.Type.float?(lhs_type) or Nx.Type.float?(rhs_type) do
-        attr_comparison_type(:totalorder)
-      else
-        attr_comparison_type(:notype)
+      cond do
+        Nx.Type.complex?(lhs_type) or Nx.Type.complex?(rhs_type) ->
+          attr_comparison_type(:float)
+
+        Nx.Type.float?(lhs_type) or Nx.Type.float?(rhs_type) ->
+          attr_comparison_type(:float)
+
+        true ->
+          attr_comparison_type(:notype)
       end
 
     attributes = [
       comparison_direction: attr_comparison_direction(direction),
-      comparison_type: comparison_type
+      compare_type: comparison_type
     ]
 
     result_types = typespecs_to_mlir_types([Typespec.to_type(typespec, {:pred, 8})])
@@ -125,57 +130,48 @@ defmodule EXLA.MLIR.Value do
     end
   end
 
-  def is_infinity(%Value{function: func} = operand, typespec) do
+  def is_infinity(%Value{function: func} = operand, out_typespec) do
     %{type: type} = get_typespec(operand)
 
-    typespec = Typespec.to_type(typespec, {:pred, 8})
+    typespec = Typespec.to_type(out_typespec, {:pred, 8})
 
-    cond do
-      Nx.Type.complex?(type) ->
-        float_typespec = Typespec.to_type(typespec, complex_part_type(type))
-        real = real(operand, float_typespec)
-        imag = imag(operand, float_typespec)
-        is_inf_real = is_infinity(real, typespec)
-        is_inf_imag = is_infinity(imag, typespec)
-        bitwise_or(is_inf_real, is_inf_imag, typespec)
+    result =
+      cond do
+        Nx.Type.complex?(type) ->
+          float_typespec = Typespec.to_type(typespec, complex_part_type(type))
+          real = real(operand, float_typespec)
+          imag = imag(operand, float_typespec)
+          is_inf_real = is_infinity(real, typespec)
+          is_inf_imag = is_infinity(imag, typespec)
+          bitwise_or(is_inf_real, is_inf_imag, typespec)
 
-      Nx.Type.integer?(type) ->
-        # Integers are never infinity. We use inequality to make sure
-        # the operand is still a part of the computation
-        not_equal(operand, operand, typespec)
+        Nx.Type.integer?(type) ->
+          # Integers are never infinity. We use inequality to make sure
+          # the operand is still a part of the computation
+          not_equal(operand, operand, typespec)
 
-      true ->
-        result_types = typespecs_to_mlir_types([typespec])
-        op(func, "chlo.is_inf", [operand], result_types) |> one!()
+        true ->
+          result_types = typespecs_to_mlir_types([typespec])
+          op(func, "chlo.is_inf", [operand], result_types) |> one!()
+      end
+
+    if out_typespec.type == typespec.type do
+      result
+    else
+      convert(result, out_typespec)
     end
   end
 
-  def is_nan(%Value{function: func} = operand, typespec) do
-    %{type: type} = get_typespec(operand)
+  def is_nan(%Value{} = operand, out_typespec) do
+    typespec = Typespec.to_type(out_typespec, {:pred, 8})
 
-    typespec = Typespec.to_type(typespec, {:pred, 8})
+    # Only NaN is not equal to itself
+    result = not_equal(operand, operand, typespec)
 
-    cond do
-      Nx.Type.complex?(type) ->
-        float_typespec = Typespec.to_type(typespec, complex_part_type(type))
-        real = real(operand, float_typespec)
-        imag = imag(operand, float_typespec)
-        is_nan_real = is_nan(real, typespec)
-        is_nan_imag = is_nan(imag, typespec)
-        bitwise_or(is_nan_real, is_nan_imag, typespec)
-
-      Nx.Type.integer?(type) ->
-        # Integers are never nan. We use inequality to make sure
-        # the operand is still a part of the computation
-        not_equal(operand, operand, typespec)
-
-      true ->
-        result_types = typespecs_to_mlir_types([typespec])
-        is_inf = op(func, "chlo.is_inf", [operand], result_types) |> one!()
-        is_finite = op(func, "stablehlo.is_finite", [operand], result_types) |> one!()
-        is_not_inf = bitwise_not(is_inf, typespec)
-        is_not_finite = bitwise_not(is_finite, typespec)
-        bitwise_and(is_not_inf, is_not_finite, typespec)
+    if out_typespec.type == typespec.type do
+      result
+    else
+      convert(result, out_typespec)
     end
   end
 
@@ -706,8 +702,64 @@ defmodule EXLA.MLIR.Value do
     op(func, "stablehlo.while", initial, result_types, regions: regions)
   end
 
+  def func_return(func, values) when is_list(values) do
+    op(func, "func.return", values, [])
+  end
+
   def return(func, values) when is_list(values) do
     op(func, "stablehlo.return", values, [])
+  end
+
+  def eigh(%Value{function: func} = value, eigenvecs_typespec, eigenvals_typespec) do
+    %{type: op_type, shape: op_shape} = get_typespec(value)
+    %{type: eigenvecs_type, shape: eigenvecs_shape} = eigenvecs_typespec
+    %{type: eigenvals_type, shape: eigenvals_shape} = eigenvals_typespec
+
+    dim_sizes = [tuple_size(op_shape), tuple_size(eigenvecs_shape), tuple_size(eigenvals_shape)]
+    operand_dims = Tuple.to_list(op_shape)
+    eigenvecs_dims = Tuple.to_list(eigenvecs_shape)
+    eigenvals_dims = Tuple.to_list(eigenvals_shape)
+
+    dim_sizes = constant(func, dim_sizes, Typespec.tensor({:s, 64}, {length(dim_sizes)}))
+    operand_dims = constant(func, operand_dims, Typespec.tensor({:s, 64}, {length(operand_dims)}))
+
+    eigenvecs_dims =
+      constant(func, eigenvecs_dims, Typespec.tensor({:s, 64}, {length(eigenvecs_dims)}))
+
+    eigenvals_dims =
+      constant(func, eigenvals_dims, Typespec.tensor({:s, 64}, {length(eigenvals_dims)}))
+
+    operands = [value, dim_sizes, operand_dims, eigenvecs_dims, eigenvals_dims]
+
+    eigenvecs_result_type = type_tensor(eigenvecs_type, eigenvecs_shape)
+    eigenvals_result_type = type_tensor(eigenvals_type, eigenvals_shape)
+    result_types = [type_tuple([eigenvecs_result_type, eigenvals_result_type])]
+
+    call_target_name =
+      case op_type do
+        {:f, 32} ->
+          "eigh_cpu_custom_call_f32"
+
+        {:f, 64} ->
+          "eigh_cpu_custom_call_f64"
+
+        type ->
+          # Due to matching on EXLA.Defn, we are sure that the device here is always :host
+          raise "Eigh decomposition not supported on :host device for type #{inspect(type)}"
+      end
+
+    attributes = [
+      call_target_name: attr_string(call_target_name),
+      backend_config: attr_string("Host")
+    ]
+
+    result =
+      op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes) |> one!()
+
+    eigenvecs = get_tuple_element(result, 0, eigenvecs_typespec)
+    eigenvals = get_tuple_element(result, 1, eigenvals_typespec)
+
+    {eigenvecs, eigenvals}
   end
 
   def qr(%Value{function: func} = value, q_typespec, r_typespec) do
@@ -934,7 +986,7 @@ defmodule EXLA.MLIR.Value do
   defp attr_comparison_direction(value) when value in [:eq, :lt, :le, :gt, :ge, :ne],
     do: attr_enum("stablehlo", "comparison_direction", value)
 
-  defp attr_comparison_type(value) when value in [:totalorder, :notype],
+  defp attr_comparison_type(value) when value in [:float, :totalorder, :notype],
     do: attr_enum("stablehlo", "comparison_type", value)
 
   defp attr_precision(value) when value in [:default, :high, :highest],

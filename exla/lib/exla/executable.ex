@@ -22,6 +22,9 @@ defmodule EXLA.Executable do
     end
   end
 
+  @doc """
+  Serializes the executable to a binary.
+  """
   def serialize(%Executable{
         ref: executable,
         output_typespecs: output_typespecs,
@@ -36,6 +39,7 @@ defmodule EXLA.Executable do
       |> IO.iodata_to_binary()
 
     %{
+      version: 1,
       serialized: serialized_exec,
       output_typespecs: output_typespecs,
       num_replicas: num_replicas,
@@ -45,21 +49,35 @@ defmodule EXLA.Executable do
     |> :erlang.term_to_binary()
   end
 
+  @doc """
+  Deserializes a previous serialized executable.
+  """
   def deserialize(client, binary) do
     case :erlang.binary_to_term(binary) do
-      %{serialized: serialized_exec} = exec_data ->
+      %{version: 1, serialized: serialized} = data ->
+        %{
+          output_typespecs: output_typespecs,
+          num_replicas: num_replicas,
+          num_partitions: num_partitions,
+          device_id: device_id
+        } = data
+
         ref =
-          serialized_exec
+          serialized
           |> then(&EXLA.NIF.deserialize_executable(client.ref, &1))
           |> unwrap!()
 
-        exec_data
-        |> Map.put(:ref, ref)
-        |> Map.put(:client, client)
-        |> then(&struct(__MODULE__, &1))
+        %EXLA.Executable{
+          output_typespecs: output_typespecs,
+          num_replicas: num_replicas,
+          num_partitions: num_partitions,
+          device_id: device_id,
+          ref: ref,
+          client: client
+        }
 
       _other ->
-        raise "invalid serialized executable"
+        raise ArgumentError, "invalid serialized executable"
     end
   end
 

@@ -237,7 +237,7 @@ defmodule EXLA.Defn do
     output = wrap_tuple_result(acc, acc_typespec)
 
     outfeed = outfeed |> Outfeed.with_token(out_token) |> Outfeed.close(builder)
-    Value.return(builder, output)
+    Value.func_return(builder, output)
 
     {{input_typespecs, input_indexes}, outfeed}
   end
@@ -307,7 +307,7 @@ defmodule EXLA.Defn do
     {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
     outfeed = cache |> get_outfeed() |> Outfeed.close(function)
 
-    Value.return(function, res)
+    Value.func_return(function, res)
 
     {:ok, outfeed}
   end
@@ -432,6 +432,15 @@ defmodule EXLA.Defn do
 
           comp_arg_typespecs =
             for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
+
+          outputs =
+            if stream? do
+              # The computation returns the final accumulator value
+              {_chunk_result, acc} = outputs
+              acc
+            else
+              outputs
+            end
 
           out_typespecs =
             [outputs]
@@ -622,6 +631,45 @@ defmodule EXLA.Defn do
 
     {q, r} = Value.qr(tensor, expr_to_typespec(q_expr), expr_to_typespec(r_expr))
     {[q, r], cache}
+  end
+
+  defp cached_recur_operator(
+         :optional,
+         %T{
+           data: %Expr{
+             args: [
+               %{data: %{op: :eigh, args: [tensor, _opts]}},
+               {eigenvecs_expr, eigenvals_expr},
+               _callback
+             ]
+           }
+         },
+         %{client: %EXLA.Client{platform: :host}, builder: %Function{}} = state,
+         cache
+       ) do
+    # We match only on platform: :host for MLIR, as we want to support
+    # eigh-on-cpu as a custom call only in this case
+    {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
+
+    # convert to float and ensure that we're either using f32 or f64, because Eigen
+    # only supports f32 and f64 easily.
+    out_type = Nx.Type.merge(Nx.Type.to_floating(eigenvecs_expr.type), {:f, 32})
+
+    tensor =
+      if op_type(tensor) != out_type do
+        to_type(tensor, out_type)
+      else
+        tensor
+      end
+
+    {eigenvecs, eigenvals} =
+      Value.eigh(
+        tensor,
+        expr_to_typespec(%{eigenvecs_expr | type: out_type}),
+        expr_to_typespec(%{eigenvals_expr | type: out_type})
+      )
+
+    {[to_type(eigenvecs, eigenvecs_expr.type), to_type(eigenvals, eigenvals_expr.type)], cache}
   end
 
   defp cached_recur_operator(
@@ -1669,9 +1717,9 @@ defmodule EXLA.Defn do
     {res, comp_cache} = recur_composite(expr, state, reset_token(cache, inner_token))
 
     if outer_token do
-      Value.return(function, [get_token(comp_cache) | List.flatten(res)])
+      Value.func_return(function, [get_token(comp_cache) | List.flatten(res)])
     else
-      Value.return(function, List.flatten(res))
+      Value.func_return(function, List.flatten(res))
     end
 
     {function, merge_outfeed(cache, comp_cache)}
