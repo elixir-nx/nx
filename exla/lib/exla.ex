@@ -363,9 +363,8 @@ defmodule EXLA do
 
       iex> fun = fn x, y -> Nx.add(Nx.sin(x), Nx.cos(y)) end
       iex> args = [1.0, 2.0]
-      iex> module = EXLA.to_mlir_module(fun, args)
-      iex> EXLA.MLIR.Module.as_string(module)
-      ~c\"\"\"
+      iex> EXLA.to_mlir_module(fun, args)
+      \"\"\"
       module {
         func.func public @main(%arg0: tensor<f32>, %arg1: tensor<f32>) -> tensor<f32> {
           %0 = stablehlo.sine %arg0 : tensor<f32>
@@ -389,7 +388,8 @@ defmodule EXLA do
     ])
     |> apply(args)
   catch
-    {:mlir_module, ref} -> %EXLA.MLIR.Module{ref: ref}
+    {:mlir_module, ref} ->
+      EXLA.MLIR.Module.as_string(%EXLA.MLIR.Module{ref: ref})
   end
 
   @doc """
