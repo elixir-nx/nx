@@ -120,7 +120,7 @@ defmodule Nx.Defn do
       deftransformp custom_elixir_code(value), do: IO.inspect(value)
 
   The only difference between using `deftransform` and `deftransformp`
-  is wether you want to expose and share the code with other modules,
+  is whether you want to expose and share the code with other modules,
   just like `def` and `defp`.
 
   Transforms are useful to manipulate tensor expressions or
