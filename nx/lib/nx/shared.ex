@@ -560,7 +560,7 @@ defmodule Nx.Shared do
 
   @doc false
   def raise_vectorization_not_supported(%T{vectorized_axes: [_ | _]}, {function, arity}) do
-    raise ArgumentError, "#{function}/#{arity} is does not support vectorized inputs"
+    raise ArgumentError, "#{function}/#{arity} does not support vectorized inputs"
   end
 
   def raise_vectorization_not_supported(_, _), do: nil
