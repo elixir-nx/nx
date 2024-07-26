@@ -68,7 +68,7 @@ defmodule EXLA.MLIR.Module do
       It defaults to 1 but you can set it if you want to enable single-program
       multiple data.
 
-    * `:use_spmd` - enables Single-Program Multiple-Data partioning.
+    * `:use_spmd` - enables Single-Program Multiple-Data partitioning.
       This is set to true if `:num_partitions` is more than one, otherwise is `false`.
 
     * `:module_compilation` - either `:to_mlir` or `:to_pjrt`. The default is `:to_pjrt`.
