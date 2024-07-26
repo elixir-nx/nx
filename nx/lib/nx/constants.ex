@@ -97,7 +97,7 @@ defmodule Nx.Constants do
   end
 
   @doc """
-  Returns infinity in f32.
+  Returns negative infinity in f32.
   """
   def neg_infinity, do: neg_infinity({:f, 32}, [])
 
@@ -265,7 +265,7 @@ defmodule Nx.Constants do
   end
 
   @doc """
-  Returns the imaginary constant in c64
+  Returns the imaginary constant in c64.
   """
   def i, do: i(:c64)
 

@@ -9,9 +9,9 @@ defmodule Nx.Shared do
   @doc """
   Match the cartesian product of all given types.
 
-  A macro that allows us to writes all possibles match types
+  A macro that allows us to write all possible match types
   in the most efficient format. This is done by looking at @0,
-  @1, etc., and replacing them by currently matched type at the
+  @1, etc., and replacing them with the currently matched type at the
   given position. In other words, this:
 
      match_types [input_type, output_type] do
@@ -22,9 +22,9 @@ defmodule Nx.Shared do
 
      for <<seg::float-native-size(...) <- data>>, into: <<>>, do: <<seg+right::float-native-size(...)>>
 
-  for all possible valid types between input and input types.
+  for all possible valid types between input and output types.
 
-  `match!` is used in matches and must be always followed by a `read!`.
+  `match!` is used in matches and must always be followed by a `read!`.
   `write!` is used to write to the binary.
 
   The implementation unfolds the loops at the top level. In particular,
@@ -34,7 +34,7 @@ defmodule Nx.Shared do
         <<seg+number::signed-integer-size(size)>>
       end
 
-  is twice as fast and uses twice less memory than:
+  is twice as fast and uses half the memory compared to:
 
       for <<seg::size(size)-signed-integer <- data>>, into: <<>> do
         case output_type do
