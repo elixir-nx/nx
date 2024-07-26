@@ -135,7 +135,7 @@ defmodule Nx.OptionalTest do
     end
 
     def broadcast(_, t, shape, axes) do
-      send(self(), {:called_default_impl, :reshape})
+      send(self(), {:called_default_impl, :broadcast})
 
       t
       |> Nx.backend_transfer(BinaryBackend)

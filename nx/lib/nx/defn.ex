@@ -288,7 +288,7 @@ defmodule Nx.Defn do
   input shapes, this function precompiles the given anonymous
   function based on the input shapes. This can be beneficial for
   large numerical definitions, where the cache mechanism in `jit/2`
-  may take miliseconds.
+  may take milliseconds.
 
   For example, take the following definition:
 

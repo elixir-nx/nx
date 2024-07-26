@@ -1,4 +1,4 @@
-defmodule Nx.LazyLazyOnlyTest do
+defmodule Nx.LazyOnlyTest do
   use ExUnit.Case, async: true
 
   test "to_tensor" do

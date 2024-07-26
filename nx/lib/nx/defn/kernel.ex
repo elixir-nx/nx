@@ -857,7 +857,7 @@ defmodule Nx.Defn.Kernel do
 
   The second argument must be a list of atoms, specifying
   a given key, or tuples specifying a key and a default value.
-  If any of the keys in the `keyword` is not defined on
+  If any of the keys in the `keyword` is not defined in
   `values`, it raises an error.
 
   This does not validate required keys. For such, use `assert_keys/2`

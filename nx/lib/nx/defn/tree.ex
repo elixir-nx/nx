@@ -47,7 +47,7 @@ defmodule Nx.Defn.Tree do
   in several distinct conds. Constants are also ignored, as they
   have global IDs based on the constants themselves.
 
-  An existing maps of `ids` can be given to accumulate on top of it.
+  An existing map of `ids` can be given to accumulate on top of it.
   """
   def scope_ids(expr, ids \\ %{}) do
     Composite.reduce(expr, {ids, %{}}, &scope_ids_each(&1, &2, nil)) |> elem(0)
