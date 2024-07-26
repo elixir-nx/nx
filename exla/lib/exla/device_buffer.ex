@@ -15,7 +15,7 @@ defmodule EXLA.DeviceBuffer do
   end
 
   @doc """
-  Places the given binary `buffer` on the given `device` using `client`.
+  Places the given binary `data` on the given `device` using `client`.
   """
   def place_on_device(data, %EXLA.Typespec{} = typespec, client = %Client{}, device_id)
       when is_integer(device_id) and is_binary(data) do

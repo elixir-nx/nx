@@ -194,7 +194,7 @@ defmodule EXLA.Defn.VectorizeTest do
     end
 
     test "simple cond" do
-      # this tests the case where we have a two vectorized predicates
+      # This tests the case where we have two vectorized predicates
       pred1 = Nx.vectorize(~VEC[1 0 0], :pred)
       pred2 = Nx.vectorize(~VEC[0 0 0], :pred)
 
