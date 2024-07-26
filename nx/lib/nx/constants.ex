@@ -158,7 +158,7 @@ defmodule Nx.Constants do
       iex> Nx.Constants.max_finite({:s, 16})
       #Nx.Tensor<
         s16
-        32677
+        32767
       >
 
       iex> Nx.Constants.max_finite({:f, 32})
@@ -220,7 +220,7 @@ defmodule Nx.Constants do
       iex> Nx.Constants.min_finite({:s, 16})
       #Nx.Tensor<
         s16
-        -32678
+        -32768
       >
 
       iex> Nx.Constants.min_finite({:f, 32})
