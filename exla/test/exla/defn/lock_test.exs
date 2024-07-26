@@ -96,7 +96,7 @@ defmodule EXLA.Defn.LockTest do
     assert Task.await(task3)
   end
 
-  test "transfers locks correctly", config do
+  test "transfers locks to another process", config do
     parent = self()
 
     task1 =
