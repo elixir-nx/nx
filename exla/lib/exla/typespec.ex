@@ -69,6 +69,9 @@ defmodule EXLA.Typespec do
     {:c, 128} => ~c"c128"
   }
 
+  defp type_to_charlist({:f, 8}), do: ~c"f8e5m2"
+  defp charlist_to_type(~c"f8"), do: {:f, 8}
+
   for {type, charlist} <- type_to_charlist do
     defp charlist_to_type(unquote(charlist)), do: unquote(type)
     defp type_to_charlist(unquote(type)), do: unquote(charlist)

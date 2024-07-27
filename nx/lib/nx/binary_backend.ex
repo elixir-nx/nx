@@ -2460,8 +2460,9 @@ defmodule Nx.BinaryBackend do
           "expected a number or a scalar tensor of type #{inspect(type)}, got: #{inspect(t)}"
   end
 
-  defp number_to_binary(number, type),
-    do: match_types([type], do: <<write!(number, 0)>>)
+  defp number_to_binary(number, type) do
+    match_types([type], do: <<write!(number, 0)>>)
+  end
 
   defp binary_to_number(bin, type) do
     match_types [type] do

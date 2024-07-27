@@ -3,6 +3,7 @@ defmodule Nx.Shared do
   @moduledoc false
 
   alias Nx.Tensor, as: T
+  import Bitwise
 
   ## Type macros
 
@@ -107,9 +108,13 @@ defmodule Nx.Shared do
 
   defp read_bin_modifier(var, :f, size) do
     quote do
-      case unquote(var) do
-        <<var::float-native-size(unquote(size))>> -> var
-        var -> Nx.Shared.read_non_finite(var, unquote(size))
+      if unquote(size) == 8 do
+        Nx.Shared.read_f8(unquote(var))
+      else
+        case unquote(var) do
+          <<var::float-native-size(unquote(size))>> -> var
+          var -> Nx.Shared.read_non_finite(var, unquote(size))
+        end
       end
     end
   end
@@ -154,9 +159,13 @@ defmodule Nx.Shared do
 
   defp write_bin_modifier(var, :f, size) do
     quote do
-      case unquote(var) do
-        x when is_number(x) -> <<x::float-native-size(unquote(size))>>
-        x -> Nx.Shared.write_non_finite(x, unquote(size))
+      if unquote(size) == 8 do
+        Nx.Shared.write_f8(unquote(var))
+      else
+        case unquote(var) do
+          x when is_number(x) -> <<x::float-native-size(unquote(size))>>
+          x -> Nx.Shared.write_non_finite(x, unquote(size))
+        end
       end :: binary
     end
   end
@@ -193,6 +202,14 @@ defmodule Nx.Shared do
   end
 
   @doc """
+  F8 read callback.
+  """
+  def read_f8(<<0xF8::8-native>>), do: :neg_infinity
+  def read_f8(<<0x78::8-native>>), do: :infinity
+  def read_f8(<<_sign::1, 15::4, mantissa::3>>) when mantissa != 0, do: :nan
+  def read_f8(f8_binary), do: fp8_to_erlang_float(f8_binary)
+
+  @doc """
   C64 and C128 callback.
   """
   def read_complex(val, size) do
@@ -226,6 +243,55 @@ defmodule Nx.Shared do
   end
 
   @doc """
+  BF16 write callback.
+  """
+  def write_f8(data) do
+    case data do
+      :infinity -> unquote(Nx.Type.infinity_binary({:f, 8}))
+      :neg_infinity -> unquote(Nx.Type.neg_infinity_binary({:f, 8}))
+      :nan -> unquote(Nx.Type.nan_binary({:f, 8}))
+      value -> Nx.Shared.erlang_float_to_fp8(value)
+    end
+  end
+
+  @doc """
+  Approximates an Erlang float as an 8-bit binary according to
+  the FP8 spec.
+  """
+  def erlang_float_to_fp8(float) do
+    {sign, pos_float} =
+      if float < 0,
+        do: {1, -float},
+        else: {0, float}
+
+    exponent = :math.log2(pos_float) |> Float.floor() |> Kernel.+(7) |> trunc()
+    mantissa = (Float.floor(pos_float / :math.pow(2, exponent - 7) * 8) - 8) |> trunc()
+
+    exponent_bin = exponent &&& 15
+    mantissa_bin = mantissa &&& 7
+
+    <<sign::size(1), exponent_bin::size(4), mantissa_bin::size(3)>>
+  end
+
+  @doc """
+  Converts an 8-bit binary back to an Erlang float.
+
+  We do this by expanding the 8-bit binary to a 16-bit binary
+  and then interpreting the binary as an F16 as that's the lowest
+  precision float supported by Erlang.
+  """
+  def fp8_to_erlang_float(<<sign::size(1), exponent_fp8::size(4), mantissa_fp8::size(3)>>) do
+    exponent_fp16 =
+      if exponent_fp8 == 0,
+        do: 0,
+        else: exponent_fp8 - 7 + 15
+
+    mantissa_fp16 = mantissa_fp8 <<< 7
+    <<x::float-16-big>> = <<sign::size(1), exponent_fp16::size(5), mantissa_fp16::size(10)>>
+    x
+  end
+
+  @doc """
   Complex write callback.
   """
   def write_complex(re, im, size) when is_number(re) and is_number(im) do
@@ -247,6 +313,13 @@ defmodule Nx.Shared do
   @doc """
   Non-finite read callback.
   """
+  def read_non_finite(data, 8) do
+    case data do
+      <<0xF8::8-native>> -> :neg_infinity
+      <<0x78::8-native>> -> :infinity
+    end
+  end
+
   def read_non_finite(data, 16) do
     case data do
       <<0xFC00::16-native>> -> :neg_infinity
@@ -274,7 +347,7 @@ defmodule Nx.Shared do
   @doc """
   Non-finite write callback.
   """
-  for size <- [16, 32, 64] do
+  for size <- [8, 16, 32, 64] do
     def write_non_finite(data, unquote(size)) do
       case data do
         :infinity -> unquote(Nx.Type.infinity_binary({:f, size}))
