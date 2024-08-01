@@ -1,6 +1,11 @@
 #include "exla_client.h"
 
 #include "exla_nif_util.h"
+#include "tsl/profiler/lib/profiler_factory.h"
+#include "tsl/profiler/lib/profiler_interface.h"
+#include "tsl/profiler/lib/profiler_session.h"
+#include "tsl/profiler/lib/traceme.h"
+#include "tsl/profiler/protobuf/profiler_options.pb.h"
 #include "xla/layout_util.h"
 #include "xla/pjrt/gpu/gpu_helpers.h"
 #include "xla/pjrt/gpu/se_gpu_pjrt_client.h"
@@ -11,6 +16,17 @@
 #include "xla/shape_util.h"
 
 namespace exla {
+
+ExlaProfilerSession::ExlaProfilerSession() {
+  profiler_session_ = std::move(tsl::ProfilerSession::Create(tsl::ProfilerSession::DefaultOptions()));
+}
+
+std::string ExlaProfilerSession::Stop() {
+  tensorflow::profiler::XSpace xspace;
+  profiler_session_->CollectData(&xspace);
+  std::string xspace_str = xspace.SerializeAsString();
+  return xspace_str;
+}
 
 ExlaBuffer::ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer) : buffer_(std::move(buffer)) {}
 

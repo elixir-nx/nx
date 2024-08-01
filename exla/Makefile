@@ -38,7 +38,7 @@ else
 	CFLAGS += -O3
 endif
 
-LDFLAGS = -L$(XLA_EXTENSION_LIB) -lxla_extension -shared
+LDFLAGS = -L$(XLA_EXTENSION_LIB) -L/opt/homebrew/lib -lprotobuf -lxla_extension -shared
 
 ifeq ($(shell uname -s), Darwin)
 	LDFLAGS += -flat_namespace -undefined dynamic_lookup -rpath @loader_path/xla_extension/lib

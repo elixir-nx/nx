@@ -10,6 +10,10 @@
 #include "mlir/IR/OwningOpRef.h"
 #include "tsl/platform/status.h"
 #include "tsl/platform/types.h"
+#include "tsl/profiler/lib/profiler_factory.h"
+#include "tsl/profiler/lib/profiler_interface.h"
+#include "tsl/profiler/lib/profiler_session.h"
+#include "tsl/profiler/lib/traceme.h"
 #include "xla/pjrt/gpu/gpu_helpers.h"
 #include "xla/pjrt/pjrt_client.h"
 
@@ -18,6 +22,15 @@
 // to work better with the VM.
 
 namespace exla {
+
+class ExlaProfilerSession {
+ public:
+  ExlaProfilerSession();
+  std::string Stop();
+
+ private:
+  std::unique_ptr<tsl::ProfilerSession> profiler_session_;
+};
 
 class ExlaClient;
 
