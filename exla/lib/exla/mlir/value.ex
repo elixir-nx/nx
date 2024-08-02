@@ -815,6 +815,27 @@ defmodule EXLA.MLIR.Value do
     {q, r}
   end
 
+  def plugin_custom_call(registered_name, [%Value{function: func} | _] = args, result_typespec) do
+    operand_shapes =
+      Enum.map(args, fn %Value{function: ^func} = value ->
+        %{shape: op_shape} = get_typespec(value)
+        constant(func, Tuple.to_list(op_shape), Typespec.tensor({:s, 64}, {length(op_shape)}))
+      end)
+
+    operands =
+      args
+      |> Enum.zip_with(operand_shapes, fn val, shape -> [val, shape] end)
+      |> List.flatten()
+
+    # TODO: GPU
+    attributes = [
+      call_target_name: attr_string(registered_name),
+      backend_config: attr_string("Host")
+    ]
+
+    op(func, "stablehlo.custom_call", operands, result_typespec, attributes: attributes)
+  end
+
   def get_tuple_element(%Value{function: func} = operand, index, typespec) do
     result_types = typespecs_to_mlir_types([typespec])
     attributes = [index: attr_i32(index)]
