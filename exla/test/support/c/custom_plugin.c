@@ -1,16 +1,16 @@
 #include <cstdint>
 #include <stddef.h>
 
-typedef void (*ExlaCustomCallFunction)(void *out[], const void *in[]);
+typedef void (*ExlaCustomCallFunction)(void *out[], const void *in[], int **dims);
 
 typedef struct {
   const char* name;
   ExlaCustomCallFunction func;
 } ExlaPluginCustomCall;
 
-void custom_increment(void *out[], const void *in[]) {
+extern "C" void custom_increment(void *out[], const void *in[], int **dims) {
   int64_t *operand = (int64_t *)in[0];
-  int64_t *dim_sizes = (int64_t *)in[1];
+  int64_t *dim_sizes = (int64_t *)dims[0];
 
   int64_t *out_buffer = (int64_t *)out[0];
 
@@ -20,8 +20,3 @@ void custom_increment(void *out[], const void *in[]) {
     out_buffer[i] = operand[i] + 1;
   }
 }
-
-extern "C" ExlaPluginCustomCall exla_custom_calls[] = {
-  {"custom_increment", custom_increment},
-  {NULL, NULL}
-};

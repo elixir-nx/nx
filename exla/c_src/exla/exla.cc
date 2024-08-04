@@ -26,7 +26,7 @@ typedef struct {
     void * handle;
 } ExlaPlugin;
 
-typedef void (*ExlaCustomCallFunction)(void *out[], const void *in[]);
+typedef void (*ExlaCustomCallFunction)(void *out[], const void *in[], int **dims);
 
 typedef struct {
   const char* name;
@@ -962,21 +962,6 @@ ERL_NIF_TERM load_custom_call_plugin_library(ErlNifEnv* env, int argc, const ERL
     return exla::nif::error(env, "Unable to open library.");
   }
 
-  const ExlaPluginCustomCall* custom_calls = (ExlaPluginCustomCall*) dlsym(handle, "exla_custom_calls");
-
-  if(!custom_calls) {
-    dlclose(handle);
-    return exla::nif::error(env, "Unable to find exla_custom_calls");
-  }
-
-  int i = 0;
-  ExlaPluginCustomCall func = custom_calls[i];
-  while (func.name != NULL) {
-    // TODO: GPU flags
-    XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM(func.name, func.func);
-    func = custom_calls[++i];
-  }
-
   ExlaPlugin* plugin = (ExlaPlugin*) enif_alloc_resource(exla_plugin_resource_type, sizeof(ExlaPlugin));
   plugin->handle = handle;
 
@@ -984,6 +969,53 @@ ERL_NIF_TERM load_custom_call_plugin_library(ErlNifEnv* env, int argc, const ERL
   enif_release_resource(plugin);
 
   return exla::nif::ok(env, result);
+}
+
+ERL_NIF_TERM register_custom_call_symbol(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  ExlaPlugin* plugin;
+  std::string symbol;
+  std::vector<std::vector<exla::int64>> dimensions;
+
+  if (!enif_get_resource(env, argv[0], exla_plugin_resource_type, (void **) &plugin)) {
+    return exla::nif::error(env, "Unable to get plugin.");
+  }
+  if (!exla::nif::get(env, argv[1], symbol)) {
+    return exla::nif::error(env, "Unable to get symbol.");
+  }
+  if (!exla::nif::get_list(env, argv[2], dimensions)) {
+    return exla::nif::error(env, "Unable to get dimensions.");
+  }
+
+  ExlaCustomCallFunction function = (ExlaCustomCallFunction) dlsym(plugin->handle, symbol.c_str());
+
+  if (!function) {
+    return exla::nif::error(env, "Could not find symbol.");
+  }
+
+  auto lambda = [&dimensions, function](void *in[], const void *out[]) {
+    std::vector<std::vector<int>> int_dims(dimensions.size());
+    for (size_t i = 0; i < dimensions.size(); ++i) {
+        int_dims[i].resize(dimensions[i].size());
+        std::transform(dimensions[i].begin(), dimensions[i].end(), int_dims[i].begin(),
+                       [](exla::int64 x) { return static_cast<int>(x); });
+    }
+
+    std::vector<int*> dims_ptrs;
+    for (auto& d : int_dims) {
+        dims_ptrs.push_back(d.data());
+    }
+
+    function(in, out, dims_ptrs.data());
+  };
+
+  // TODO: GPU/Client flag
+  XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM(symbol.c_str(), function);
+
+  return exla::nif::ok(env);
 }
 
 static ErlNifFunc exla_funcs[] = {
@@ -1024,7 +1056,8 @@ static ErlNifFunc exla_funcs[] = {
     {"serialize_executable", 1, serialize_executable},
     {"deserialize_executable", 2, deserialize_executable},
     // Plugins
-    {"load_custom_call_plugin_library", 1, load_custom_call_plugin_library}
+    {"load_custom_call_plugin_library", 1, load_custom_call_plugin_library},
+    {"register_custom_call_symbol", 3, register_custom_call_symbol}
   };
 
 ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, &upgrade, NULL);

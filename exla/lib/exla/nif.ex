@@ -114,4 +114,6 @@ defmodule EXLA.NIF do
   def load_pjrt_plugin(_device_type, _library_path), do: :erlang.nif_error(:undef)
 
   def load_custom_call_plugin_library(_library_path), do: :erlang.nif_error(:undef)
+
+  def register_custom_call_symbol(_plugin, _symbol, _dimensions), do: :erlang.nif_error(:undef)
 end
