@@ -26,7 +26,7 @@ namespace exla {
 class ExlaProfilerSession {
  public:
   ExlaProfilerSession();
-  std::string Stop();
+  xla::StatusOr<std::string> Stop(std::string export_directory);
 
  private:
   std::unique_ptr<tsl::ProfilerSession> profiler_session_;

@@ -6,6 +6,7 @@
 #include "tsl/profiler/lib/profiler_session.h"
 #include "tsl/profiler/lib/traceme.h"
 #include "tsl/profiler/protobuf/profiler_options.pb.h"
+#include "tsl/profiler/rpc/client/capture_profile.h"
 #include "xla/layout_util.h"
 #include "xla/pjrt/gpu/gpu_helpers.h"
 #include "xla/pjrt/gpu/se_gpu_pjrt_client.h"
@@ -21,11 +22,16 @@ ExlaProfilerSession::ExlaProfilerSession() {
   profiler_session_ = std::move(tsl::ProfilerSession::Create(tsl::ProfilerSession::DefaultOptions()));
 }
 
-std::string ExlaProfilerSession::Stop() {
+xla::StatusOr<std::string> ExlaProfilerSession::Stop(std::string export_directory) {
   tensorflow::profiler::XSpace xspace;
-  profiler_session_->CollectData(&xspace);
-  std::string xspace_str = xspace.SerializeAsString();
-  return xspace_str;
+  absl::Status result = profiler_session_->CollectData(&xspace);
+
+  if (result.ok() && xspace.ByteSizeLong()) {
+    tsl::profiler::ExportToTensorBoard(xspace, export_directory, true);
+    return "ok";
+  } else {
+    return xla::FailedPrecondition("Did not collect any data");
+  }
 }
 
 ExlaBuffer::ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer) : buffer_(std::move(buffer)) {}

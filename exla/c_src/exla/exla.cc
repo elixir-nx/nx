@@ -69,6 +69,9 @@ static int open_resources(ErlNifEnv* env) {
   if (!exla::nif::open_resource<mlir::MLIRContext*>(env, mod, "MLIRContext")) {
     return -1;
   }
+  if (!exla::nif::open_resource<exla::ExlaProfilerSession*>(env, mod, "ExlaProfilerSession")) {
+    return -1;
+  }
   return 1;
 }
 
@@ -911,6 +914,37 @@ ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   return exla::nif::ok(env);
 }
 
+// Profiler
+
+ERL_NIF_TERM start_profiler(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 0) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::ExlaProfilerSession* profiler_session = new exla::ExlaProfilerSession();
+  return exla::nif::ok(env, exla::nif::make<exla::ExlaProfilerSession*>(env, profiler_session));
+}
+
+ERL_NIF_TERM stop_profiler(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 2) {
+    return exla::nif::error(env, "Bad argument count");
+  }
+
+  exla::ExlaProfilerSession** profiler_session;
+  std::string export_directory;
+
+  if (!exla::nif::get<exla::ExlaProfilerSession*>(env, argv[0], profiler_session)) {
+    return exla::nif::error(env, "Unable to get profiler session.");
+  }
+  if (!exla::nif::get(env, argv[1], export_directory)) {
+    return exla::nif::error(env, "Unable to get export directory.");
+  }
+
+  EXLA_ASSIGN_OR_RETURN_NIF(std::string result, (*profiler_session)->Stop(export_directory), env);
+
+  return exla::nif::ok(env);
+}
+
 static ErlNifFunc exla_funcs[] = {
     // MLIR Builder
     {"mlir_new_context", 0, mlir_new_context},
@@ -947,6 +981,9 @@ static ErlNifFunc exla_funcs[] = {
     {"start_log_sink", 1, start_log_sink},
     // Serialization
     {"serialize_executable", 1, serialize_executable},
-    {"deserialize_executable", 2, deserialize_executable}};
+    {"deserialize_executable", 2, deserialize_executable},
+    // Profiler
+    {"start_profiler", 0, start_profiler},
+    {"stop_profiler", 2, stop_profiler}};
 
 ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, &upgrade, NULL);

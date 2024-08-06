@@ -112,4 +112,8 @@ defmodule EXLA.NIF do
   def get_c_api_client(_device_type), do: :erlang.nif_error(:undef)
 
   def load_pjrt_plugin(_device_type, _library_path), do: :erlang.nif_error(:undef)
+
+  def start_profiler(), do: :erlang.nif_error(:undef)
+
+  def stop_profiler(_ref, _export_directory), do: :erlang.nif_error(:undef)
 end
