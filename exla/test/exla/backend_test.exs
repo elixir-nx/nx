@@ -139,10 +139,12 @@ defmodule EXLA.BackendTest do
     assert_equal(Nx.add(a, 2), Nx.tensor(3))
 
     a = Nx.tensor([[1]], backend: {EXLA.Backend, client: :other_host, device_id: 0})
-    assert Nx.reshape(a, {1}).data.buffer.client_name == :other_host
+    assert %{device_id: 0, client_name: :other_host} = a.data.buffer
+    assert %{device_id: 0, client_name: :other_host} = Nx.reshape(a, {1}).data.buffer
 
     a = Nx.tensor([[1]], backend: {EXLA.Backend, client: :other_host, device_id: 1})
-    assert Nx.reshape(a, {1}).data.buffer.client_name == :other_host
+    assert %{device_id: 1, client_name: :other_host} = a.data.buffer
+    assert %{device_id: 1, client_name: :other_host} = Nx.reshape(a, {1}).data.buffer
   end
 
   test "Kernel.inspect/2" do

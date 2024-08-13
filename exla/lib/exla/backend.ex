@@ -385,7 +385,7 @@ defmodule EXLA.Backend do
     EXLA.jit_apply(fun, args, [on_conflict: :force] ++ jit_opts(tensors, opts))
   end
 
-  defp jit_opts(opts, tensors) do
+  defp jit_opts(tensors, opts) do
     {priority_client, priority_did, backup_client, backup_did} =
       for %T{data: %B{buffer: %EXLA.DeviceBuffer{client_name: client_name, device_id: device_id}}} <-
             tensors,
