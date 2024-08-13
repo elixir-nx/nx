@@ -381,12 +381,12 @@ defmodule EXLA do
       throw({:mlir_module, executable.ref})
     end
 
-    function
-    |> jit([
+    opts = [
       {EXLA, {&EXLA.Defn.LockedCache.run/2, comp_fun}},
       {:module_compilation, :to_mlir} | options
-    ])
-    |> apply(args)
+    ]
+
+    jit_apply(function, args, opts)
   catch
     {:mlir_module, ref} ->
       EXLA.MLIR.Module.as_string(%EXLA.MLIR.Module{ref: ref})
