@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+  * The precompiled XLA CUDA binaries now require CUDA 12.1+ and cuDNN 9.1+
+  * Renamed `XLA_TARGET` value "cuda120" to "cuda12"
+  * `XLA_TARGET` automatically defaults to "cuda12" when CUDA installation is detected
+
 ## v0.7.1 (2024-02-27)
 
   * Add CustomCallOp for QR decomposition
