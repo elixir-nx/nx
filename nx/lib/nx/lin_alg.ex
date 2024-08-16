@@ -388,6 +388,10 @@ defmodule Nx.LinAlg do
     # The idea is that by dividing the tensor by it, large values of
     # tensor entries and large values of p are reduced, which in turn
     # avoids numerical overflow.
+
+    keep_axes = opts[:keep_axes]
+
+    opts = Keyword.put(opts, :keep_axes, true)
     numerical_stability_coefficient = Nx.reduce_max(abs_t, opts)
 
     # This code prevents from division by zero.
@@ -398,12 +402,19 @@ defmodule Nx.LinAlg do
         1
       )
 
-    abs_t
-    |> Nx.divide(numerical_stability_coefficient)
-    |> Nx.pow(ord)
-    |> Nx.sum(opts)
-    |> Nx.pow(inv_ord)
-    |> Nx.multiply(numerical_stability_coefficient)
+    result =
+      abs_t
+      |> Nx.divide(numerical_stability_coefficient)
+      |> Nx.pow(ord)
+      |> Nx.sum(opts)
+      |> Nx.pow(inv_ord)
+      |> Nx.multiply(numerical_stability_coefficient)
+
+    if keep_axes do
+      result
+    else
+      Nx.squeeze(result, Keyword.take(opts, [:axes]))
+    end
   end
 
   @doc """
