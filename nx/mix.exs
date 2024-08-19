@@ -63,7 +63,7 @@ defmodule Nx.MixProject do
         "guides/exercises/exercises-1-20.livemd"
       ],
       skip_undefined_reference_warnings_on: ["CHANGELOG.md"],
-      groups_for_functions: [
+      groups_for_docs: [
         Guards: &(&1[:type] in [:guards]),
         "Functions: Aggregates": &(&1[:type] == :aggregation),
         "Functions: Backend": &(&1[:type] == :backend),
