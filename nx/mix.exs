@@ -1,12 +1,8 @@
-if :erlang.system_info(:otp_release) < ~c"24" do
-  Mix.raise("Nx requires Erlang/OTP 24+")
-end
-
 defmodule Nx.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx"
-  @version "0.7.1"
+  @version "0.8.0"
 
   def project do
     [
