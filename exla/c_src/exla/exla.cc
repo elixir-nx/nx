@@ -410,7 +410,7 @@ ERL_NIF_TERM get_buffer_device_pointer(ErlNifEnv* env, int argc, const ERL_NIF_T
     return exla::nif::error(env, "Unable to get client.");
   }
   if (!exla::nif::get<exla::ExlaBuffer*>(env, argv[1], buffer)) {
-    return exla::nif::error(env, "Unable to get buffer.");
+    return exla::nif::error(env, "Unable to get buffer (it may belong to another node or have been garbage collected, consider using Nx.backend_transfer/1).");
   }
   if (!exla::nif::get_atom(env, argv[2], pointer_kind)) {
     return exla::nif::error(env, "Unable to get device pointer kind.");
@@ -537,7 +537,7 @@ ERL_NIF_TERM read_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
   exla::int64 size;
 
   if (!exla::nif::get<exla::ExlaBuffer*>(env, argv[0], buffer)) {
-    return exla::nif::error(env, "Unable to get buffer.");
+    return exla::nif::error(env, "Unable to get buffer (it may belong to another node or have been garbage collected, consider using Nx.backend_transfer/1).");
   }
   if (!exla::nif::get(env, argv[1], &size)) {
     return exla::nif::error(env, "Unable to get size.");
@@ -556,7 +556,7 @@ ERL_NIF_TERM deallocate_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
   exla::ExlaBuffer** buffer;
 
   if (!exla::nif::get<exla::ExlaBuffer*>(env, argv[0], buffer)) {
-    return exla::nif::error(env, "Unable to get buffer.");
+    return exla::nif::error(env, "Unable to get buffer (it may belong to another node or have been garbage collected, consider using Nx.backend_transfer/1).");
   }
 
   xla::Status dealloc_status = (*buffer)->Deallocate();
@@ -683,7 +683,7 @@ ERL_NIF_TERM copy_buffer_to_device(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
     return exla::nif::error(env, "Unable to get client.");
   }
   if (!exla::nif::get<exla::ExlaBuffer*>(env, argv[1], buffer)) {
-    return exla::nif::error(env, "Unable to get buffer.");
+    return exla::nif::error(env, "Unable to get buffer (it may belong to another node or have been garbage collected, consider using Nx.backend_transfer/1).");
   }
   if (!exla::nif::get(env, argv[2], &device_id)) {
     return exla::nif::error(env, "Unable to get device ID.");
