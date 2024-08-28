@@ -18,15 +18,21 @@
 
 namespace exla {
 
-ExlaProfilerSession::ExlaProfilerSession() {
-  profiler_session_ = std::move(tsl::ProfilerSession::Create(tsl::ProfilerSession::DefaultOptions()));
+ExlaProfilerSession::ExlaProfilerSession() : trace_me_("test", tsl::profiler::TraceMeLevel::kVerbose) {
+  tensorflow::ProfileOptions options = tsl::ProfilerSession::DefaultOptions();
+  options.set_device_type(tensorflow::ProfileOptions::DeviceType(0));
+  options.set_host_tracer_level(3);
+  options.set_device_tracer_level(1);
+  options.set_python_tracer_level(0);
+  options.set_enable_hlo_proto(true);
+  profiler_session_ = tsl::ProfilerSession::Create(options);
 }
 
 xla::StatusOr<std::string> ExlaProfilerSession::Stop(std::string export_directory) {
   tensorflow::profiler::XSpace xspace;
   absl::Status result = profiler_session_->CollectData(&xspace);
 
-  if (result.ok() && xspace.ByteSizeLong()) {
+  if (result.ok()) {
     tsl::profiler::ExportToTensorBoard(xspace, export_directory, true);
     return "ok";
   } else {

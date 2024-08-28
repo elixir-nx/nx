@@ -30,6 +30,7 @@ class ExlaProfilerSession {
 
  private:
   std::unique_ptr<tsl::ProfilerSession> profiler_session_;
+  tsl::profiler::TraceMe trace_me_;
 };
 
 class ExlaClient;
