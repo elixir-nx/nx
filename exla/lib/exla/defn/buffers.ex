@@ -32,16 +32,19 @@ defmodule EXLA.Defn.Buffers do
 
   @doc """
   Splits the given args by value and returns them as is.
-
-  Entries with a map entry are discarded.
   """
   def split_by_value(args, %{} = map, callback) do
     {_i, left, right} =
       Enum.reduce(args, {0, [], []}, fn arg, {i, left, right} ->
         case map do
-          %{^i => nil} -> {i + 1, [callback.(arg, i, nil) | left], right}
-          %{^i => value} -> {i + 1, left, [callback.(arg, i, value) | right]}
-          %{} -> {i + 1, left, right}
+          %{^i => nil} ->
+            {i + 1, [callback.(arg, i, nil) | left], right}
+
+          %{^i => value} ->
+            {i + 1, left, [callback.(arg, i, value) | right]}
+
+          %{} ->
+            {i + 1, left, right}
         end
       end)
 
