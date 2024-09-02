@@ -224,6 +224,11 @@ defmodule EXLA do
   It accepts the same option as `Nx.Defn.jit/2` plus:
 
     * `:cache` - cache the results of compilation, defaults to `true`.
+      You may disable it by setting it to `false`. You can also set it
+      to a binary, representing a filesystem path to store the cache.
+      EXLA will ensure the arguments and parameters across invocations
+      have the same shape, but it is ultimately your responsibility
+      to provide a unique cache path.
 
     * `:client` - an atom representing the client to use. The default
       client is chosen on this order: `:cuda`, `:rocm`, `:tpu`, and `:host`.
@@ -275,22 +280,7 @@ defmodule EXLA do
   The backend will then block only when trying to read the data
   or when passing it to another operation.
 
-  ## Options
-
-  It accepts the same option as `Nx.Defn.compile/3` plus:
-
-    * `:debug` - print compile and debugging information, defaults to `false`.
-
-    * `:cache` - cache the results of compilation, defaults to `true`.
-      You can set it to false if you plan to compile the function only
-      once and store the compile contents somewhere.
-
-    * `:client` - an atom representing the client to use. The default
-      client is chosen on this order: `:cuda`, `:rocm`, `:tpu`, and `:host`.
-
-    * `:device_id` - the default device id to run the computation on.
-      Defaults to the `:default_device_id` on the client
-
+  See `jit/2` for supported options.
   """
   def compile(function, args, options \\ []) do
     Nx.Defn.compile(function, args, Keyword.put(options, :compiler, EXLA))

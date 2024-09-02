@@ -23,9 +23,11 @@ defmodule EXLA.Executable do
   end
 
   @doc """
-  Serializes the executable to a binary.
+  Dumps the executable to a data structure that can be serialized
+  with `term_to_binary`.
   """
-  def serialize(%Executable{
+  # If you change this function, you must bump the version in EXLA.Defn.Disk.
+  def dump(%Executable{
         ref: executable,
         output_typespecs: output_typespecs,
         num_replicas: num_replicas,
@@ -39,46 +41,39 @@ defmodule EXLA.Executable do
       |> IO.iodata_to_binary()
 
     %{
-      version: 1,
       serialized: serialized_exec,
       output_typespecs: output_typespecs,
       num_replicas: num_replicas,
       num_partitions: num_partitions,
       device_id: device_id
     }
-    |> :erlang.term_to_binary()
   end
 
   @doc """
-  Deserializes a previous serialized executable.
+  Loads a previously dumped executable.
   """
-  def deserialize(client, binary) do
-    case :erlang.binary_to_term(binary) do
-      %{version: 1, serialized: serialized} = data ->
-        %{
-          output_typespecs: output_typespecs,
-          num_replicas: num_replicas,
-          num_partitions: num_partitions,
-          device_id: device_id
-        } = data
+  def load(client, data) do
+    %{
+      serialized: serialized,
+      output_typespecs: output_typespecs,
+      num_replicas: num_replicas,
+      num_partitions: num_partitions,
+      device_id: device_id
+    } = data
 
-        ref =
-          serialized
-          |> then(&EXLA.NIF.deserialize_executable(client.ref, &1))
-          |> unwrap!()
+    ref =
+      serialized
+      |> then(&EXLA.NIF.deserialize_executable(client.ref, &1))
+      |> unwrap!()
 
-        %EXLA.Executable{
-          output_typespecs: output_typespecs,
-          num_replicas: num_replicas,
-          num_partitions: num_partitions,
-          device_id: device_id,
-          ref: ref,
-          client: client
-        }
-
-      _other ->
-        raise ArgumentError, "invalid serialized executable"
-    end
+    %EXLA.Executable{
+      output_typespecs: output_typespecs,
+      num_replicas: num_replicas,
+      num_partitions: num_partitions,
+      device_id: device_id,
+      ref: ref,
+      client: client
+    }
   end
 
   defp run(client, ref, device_id, inputs, _options) do

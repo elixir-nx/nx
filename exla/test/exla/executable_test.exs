@@ -148,9 +148,8 @@ defmodule EXLA.ExecutableTest do
           [Value.add(x, y, s32_typespec())]
         end)
 
-      binary = Executable.serialize(exec)
-      assert is_binary(binary)
-      exec = Executable.deserialize(client(), binary)
+      dumped = Executable.dump(exec)
+      exec = Executable.load(client(), dumped)
 
       assert [[a = %DeviceBuffer{}]] = EXLA.Executable.run(exec, [[t1, t2]], [])
       assert <<2::32-native>> == DeviceBuffer.read(a)
