@@ -149,6 +149,17 @@ defmodule EXLA do
   To increase the stack size of dirty IO threads from 40 kilowords to
   128 kilowords. In a release, you can set this flag in your `vm.args`.
 
+  ## Distribution
+
+  EXLA allows its tensors to be sent across nodes, as long as the parent
+  node (which effectively holds the tensor) keeps a reference to the
+  tensor while it is read by any other node it was sent to.
+
+  The result of `EXLA.compile/3` can also be shared across nodes.
+  On invocation, the underlying executable is automatically serialized
+  and sent to other nodes, without requiring a full recompilation,
+  as long as the same conditions as above apply.
+
   ## Docker considerations
 
   EXLA should run fine on Docker with one important consideration:
@@ -274,11 +285,11 @@ defmodule EXLA do
         [2, 4, 6]
       >
 
-  Results are allocated on the `EXLA.Backend`. Note that the
-  `EXLA.Backend` is asynchronous: operations on its tensors
-  *may* return immediately, before the tensor data is available.
-  The backend will then block only when trying to read the data
-  or when passing it to another operation.
+  The returned function can be sent across nodes, as long as the parent
+  node (which effectively holds the function) keeps a reference to the
+  function while it is invoked by any other node it was sent to. On
+  invocation, the underlying executable is automatically serialized
+  and sent to other nodes, without requiring a full recompilation.
 
   See `jit/2` for supported options.
   """
