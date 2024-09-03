@@ -335,7 +335,7 @@ defmodule Nx.Serving do
   but it could also be used to perform the same operation for different
   templates:
 
-      iex> args = [Nx.template({10}, :s64)]
+      iex> args = [Nx.template({10}, :s32)]
       iex> serving = Nx.Serving.new(fn
       ...>   :double, opts -> Nx.Defn.compile(&Nx.multiply(&1, 2), args, opts)
       ...>   :half, opts -> Nx.Defn.compile(&Nx.divide(&1, 2), args, opts)
@@ -343,7 +343,7 @@ defmodule Nx.Serving do
       iex> double_batch = Nx.Batch.concatenate([Nx.iota({10})]) |> Nx.Batch.key(:double)
       iex> Nx.Serving.run(serving, double_batch)
       #Nx.Tensor<
-        s64[10]
+        s32[10]
         [0, 2, 4, 6, 8, 10, 12, 14, 16, 18]
       >
       iex> half_batch = Nx.Batch.concatenate([Nx.iota({10})]) |> Nx.Batch.key(:half)

@@ -453,6 +453,7 @@ defmodule Torchx.Backend do
     tensor
     |> from_nx()
     |> Torchx.argsort(stable, axis, is_descending)
+    |> Torchx.to_type(to_torch_type(out.type))
     |> to_nx(out)
   end
 
@@ -462,6 +463,8 @@ defmodule Torchx.Backend do
       tensor
       |> from_nx()
       |> Torchx.top_k(Keyword.fetch!(opts, :k))
+
+    indices = Torchx.to_type(indices, to_torch_type(out_indices.type))
 
     {to_nx(values, out_values), to_nx(indices, out_indices)}
   end
@@ -484,6 +487,7 @@ defmodule Torchx.Backend do
     t
     |> from_nx()
     |> Torchx.sum(axes, keep_axes)
+    |> Torchx.to_type(to_torch_type(out.type))
     |> to_nx(out)
   end
 
@@ -499,7 +503,9 @@ defmodule Torchx.Backend do
         aggregate_over_axes(t, axes, keep_axes, &Torchx.product/3)
       end
 
-    to_nx(result, out)
+    result
+    |> Torchx.to_type(to_torch_type(out.type))
+    |> to_nx(out)
   end
 
   @impl true
@@ -622,6 +628,7 @@ defmodule Torchx.Backend do
 
     if tie_break == :low do
       apply(Torchx, fun, [t_tx, axis, keep_axis])
+      |> Torchx.to_type(to_torch_type(out.type))
       |> to_nx(out)
     else
       %{data: %{ref: {device, _}}, shape: shape} = t
@@ -633,6 +640,7 @@ defmodule Torchx.Backend do
 
       scalar
       |> Torchx.subtract(result)
+      |> Torchx.to_type(to_torch_type(out.type))
       |> to_nx(out)
     end
   end
@@ -675,9 +683,12 @@ defmodule Torchx.Backend do
     if reverse do
       result
       |> Torchx.flip([axis])
+      |> Torchx.to_type(to_torch_type(out.type))
       |> to_nx(out)
     else
-      to_nx(result, out)
+      result
+      |> Torchx.to_type(to_torch_type(out.type))
+      |> to_nx(out)
     end
   end
 
@@ -798,9 +809,6 @@ defmodule Torchx.Backend do
     type = Nx.Type.merge(left.type, right.type)
     {Nx.as_type(left, type), Nx.as_type(right, type)}
   end
-
-  defp maybe_broadcast_bin_args(_out_shape, %{shape: {}} = l, r), do: {from_nx(l), from_nx(r)}
-  defp maybe_broadcast_bin_args(_out_shape, l, %{shape: {}} = r), do: {from_nx(l), from_nx(r)}
 
   defp maybe_broadcast_bin_args(out_shape, l, r) do
     l_tx =

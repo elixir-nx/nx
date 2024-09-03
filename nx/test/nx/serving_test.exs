@@ -711,8 +711,8 @@ defmodule Nx.ServingTest do
     test "batch keys", config do
       serving =
         Nx.Serving.new(fn
-          :double, opts -> Nx.Defn.compile(&Nx.multiply(&1, 2), [Nx.template({3}, :s64)], opts)
-          :half, opts -> Nx.Defn.compile(&Nx.divide(&1, 2), [Nx.template({3}, :s64)], opts)
+          :double, opts -> Nx.Defn.compile(&Nx.multiply(&1, 2), [Nx.template({3}, :s32)], opts)
+          :half, opts -> Nx.Defn.compile(&Nx.divide(&1, 2), [Nx.template({3}, :s32)], opts)
         end)
 
       simple_supervised!(config,

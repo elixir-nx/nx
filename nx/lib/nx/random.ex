@@ -80,15 +80,24 @@ defmodule Nx.Random do
         [0, 12]
       >
 
-      iex> Nx.Random.key(999999999999)
+  A single key effectively consists of 64 bits, so all possible values
+  of a 64-bit integer result in a different key. However, when passing
+  an integer literal, Nx implicitly assumes its type to be `:s32`,
+  which would result in an overflow for large integers. Therefore,
+  when dealing with large seeds, make sure to explicitly use a 64 bit
+  type:
+
+      iex> Nx.Random.key(Nx.u64(999999999999))
       #Nx.Tensor<
         u32[2]
         [232, 3567587327]
       >
   """
   defn key(seed) do
+    seed = Nx.as_type(seed, :u64)
+
     k1 = Nx.right_shift(seed, 32)
-    k2 = Nx.bitwise_and(seed, 0xFFFFFFFF)
+    k2 = Nx.bitwise_and(seed, Nx.u64(0xFFFFFFFF))
 
     Nx.stack([k1, k2])
     |> Nx.as_type(:u32)
@@ -110,15 +119,15 @@ defmodule Nx.Random do
         ]
       >
 
-      iex> key = Nx.Random.key(999999999999)
+      iex> key = Nx.Random.key(1701)
       iex> Nx.Random.split(key, parts: 4)
       #Nx.Tensor<
         u32[4][2]
         [
-          [3959978897, 4079927650],
-          [3769699049, 3585271160],
-          [3182829676, 333122445],
-          [3185556048, 1258545461]
+          [4000152724, 2030591747],
+          [2287976877, 2598630646],
+          [2426625787, 580268518],
+          [3136765380, 433355682]
         ]
       >
   """
@@ -166,8 +175,10 @@ defmodule Nx.Random do
   defn fold_in(key, data) do
     assert_key!(key)
 
+    data = Nx.as_type(data, :u64)
+
     k1 = Nx.right_shift(data, 32)
-    k2 = Nx.bitwise_and(data, 0xFFFFFFFF)
+    k2 = Nx.bitwise_and(data, Nx.u64(0xFFFFFFFF))
 
     {x1, x2} =
       Nx.stack([k1, k2])
@@ -312,8 +323,8 @@ defmodule Nx.Random do
       iex> {randint, _new_key} = Nx.Random.randint(key, 1, 100)
       iex> randint
       #Nx.Tensor<
-        s64
-        66
+        s32
+        91
       >
 
       iex> key = Nx.Random.key(1701)
@@ -361,7 +372,7 @@ defmodule Nx.Random do
     span = Nx.as_type(max_val - min_val, {:u, nbits})
 
     multiplier =
-      Nx.pow(2, Nx.quotient(nbits, 2))
+      Nx.pow(Nx.u64(2), Nx.quotient(nbits, 2))
       |> Nx.remainder(span)
       |> Nx.pow(2)
       |> Nx.remainder(span)
@@ -747,7 +758,7 @@ defmodule Nx.Random do
       iex> {shuffled, _new_key} = Nx.Random.shuffle(key, Nx.iota({3, 4}, axis: 0))
       iex> shuffled
       #Nx.Tensor<
-        s64[3][4]
+        s32[3][4]
         [
           [2, 2, 2, 2],
           [0, 0, 0, 0],
@@ -759,7 +770,7 @@ defmodule Nx.Random do
       iex> {shuffled, _new_key} = Nx.Random.shuffle(key, Nx.iota({3, 4}, axis: 1), independent: true, axis: 1)
       iex> shuffled
       #Nx.Tensor<
-        s64[3][4]
+        s32[3][4]
         [
           [2, 1, 3, 0],
           [3, 0, 1, 2],
@@ -829,18 +840,18 @@ defmodule Nx.Random do
       iex> {result, _key} = Nx.Random.choice(k, t, samples: 4, axis: 0)
       iex> result
       #Nx.Tensor<
-        s64[4][3]
+        s32[4][3]
         [
           [6, 7, 8],
-          [3, 4, 5],
+          [9, 10, 11],
           [6, 7, 8],
-          [3, 4, 5]
+          [0, 1, 2]
         ]
       >
       iex> {result, _key} = Nx.Random.choice(k, t, samples: 4, axis: 0, replace: false)
       iex> result
       #Nx.Tensor<
-        s64[4][3]
+        s32[4][3]
         [
           [3, 4, 5],
           [9, 10, 11],
@@ -856,13 +867,13 @@ defmodule Nx.Random do
       iex> {result, _key} = Nx.Random.choice(k, t)
       iex> result
       #Nx.Tensor<
-        s64[1]
-        [3]
+        s32[1]
+        [4]
       >
       iex> {result, _key} = Nx.Random.choice(k, t, samples: 6, replace: false)
       iex> result
       #Nx.Tensor<
-        s64[6]
+        s32[6]
         [2, 0, 4, 5, 1, 3]
       >
   """
@@ -879,7 +890,7 @@ defmodule Nx.Random do
     tensor = Nx.reshape(tensor, tensor_shape)
 
     if replace do
-      {idx, key} = randint(key, 0, n_inputs, shape: {n_draws})
+      {idx, key} = randint(key, 0, n_inputs, shape: {n_draws}, type: :u32)
       result = Nx.take(tensor, idx, axis: axis)
       {result, key}
     else
@@ -906,7 +917,7 @@ defmodule Nx.Random do
       iex> {result, _key} = Nx.Random.choice(k, t, p, samples: 3, axis: 1)
       iex> result
       #Nx.Tensor<
-        s64[4][3]
+        s32[4][3]
         [
           [1, 0, 1],
           [4, 3, 4],
@@ -917,7 +928,7 @@ defmodule Nx.Random do
       iex> {result, _key} = Nx.Random.choice(k, t, p, samples: 3, axis: 1, replace: false)
       iex> result
       #Nx.Tensor<
-        s64[4][3]
+        s32[4][3]
         [
           [1, 2, 0],
           [4, 5, 3],
@@ -938,19 +949,19 @@ defmodule Nx.Random do
       iex> {result, _key} = Nx.Random.choice(k, t, p)
       iex> result
       #Nx.Tensor<
-        s64[1]
+        s32[1]
         [3]
       >
       iex> {result, _key} = Nx.Random.choice(k, t, p, samples: 6)
       iex> result
       #Nx.Tensor<
-        s64[6]
+        s32[6]
         [3, 3, 3, 0, 3, 3]
       >
       iex> {result, _key} = Nx.Random.choice(k, t, p, samples: 6, replace: false)
       iex> result
       #Nx.Tensor<
-        s64[6]
+        s32[6]
         [3, 1, 2, 5, 4, 0]
       >
   """
