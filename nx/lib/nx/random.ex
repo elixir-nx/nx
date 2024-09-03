@@ -94,8 +94,10 @@ defmodule Nx.Random do
       >
   """
   defn key(seed) do
+    seed = Nx.as_type(seed, :u64)
+
     k1 = Nx.right_shift(seed, 32)
-    k2 = Nx.bitwise_and(seed, 0xFFFFFFFF)
+    k2 = Nx.bitwise_and(seed, Nx.u64(0xFFFFFFFF))
 
     Nx.stack([k1, k2])
     |> Nx.as_type(:u32)
@@ -173,8 +175,10 @@ defmodule Nx.Random do
   defn fold_in(key, data) do
     assert_key!(key)
 
+    data = Nx.as_type(data, :u64)
+
     k1 = Nx.right_shift(data, 32)
-    k2 = Nx.bitwise_and(data, 0xFFFFFFFF)
+    k2 = Nx.bitwise_and(data, Nx.u64(0xFFFFFFFF))
 
     {x1, x2} =
       Nx.stack([k1, k2])
