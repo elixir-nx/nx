@@ -252,8 +252,10 @@ defmodule Nx.Random do
   end
 
   defnp rolled_loop_step(i, {{_xs1, _xs2} = xs, {k1, k2, k3}, {r1, r2}}) do
+    # TODO remove :unroll (dynamic slice inside while causes a segfault)
+    # Reported in https://github.com/google/jax/issues/21552
     {xs1, xs2} =
-      while xs, r <- r1 do
+      while xs, r <- r1, unroll: true do
         apply_round(xs, r)
       end
 
