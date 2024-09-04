@@ -7,7 +7,7 @@
 #include "xla/service/custom_call_target_registry.h"
 
 template <typename DataType>
-void single_matrix_eigh_cpu_custom_call(DataType *eigenvalues_out, DataType *eigenvectors_out, DataType *in, int64_t m, int64_t n) {
+void single_matrix_eigh_cpu_custom_call(DataType *eigenvalues_out, DataType *eigenvectors_out, DataType *in, uint64_t m, uint64_t n) {
   typedef Eigen::Matrix<DataType, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> RowMajorMatrix;
 
   // Map the input matrix
@@ -33,7 +33,7 @@ void single_matrix_eigh_cpu_custom_call(DataType *eigenvalues_out, DataType *eig
 }
 
 template <typename DataType>
-void single_matrix_qr_cpu_custom_call(DataType *q_out, DataType *r_out, DataType *in, int64_t m, int64_t k, int64_t n, bool complete) {
+void single_matrix_qr_cpu_custom_call(DataType *q_out, DataType *r_out, DataType *in, uint64_t m, uint64_t k, uint64_t n, bool complete) {
   typedef Eigen::Matrix<DataType, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> RowMajorMatrix;
 
   Eigen::Map<RowMajorMatrix> input(in, m, n);
@@ -48,8 +48,8 @@ void single_matrix_qr_cpu_custom_call(DataType *q_out, DataType *r_out, DataType
 
     num_bytes_q = m * m * sizeof(DataType);
 
-    for (int64_t i = 0; i < m; ++i) {
-      for (int64_t j = 0; j < n; ++j) {
+    for (uint64_t i = 0; i < m; ++i) {
+      for (uint64_t j = 0; j < n; ++j) {
         r_out[i * n + j] = (j >= i) ? R(i, j) : static_cast<DataType>(0.0);
       }
     }
@@ -59,8 +59,8 @@ void single_matrix_qr_cpu_custom_call(DataType *q_out, DataType *r_out, DataType
 
     num_bytes_q = m * k * sizeof(DataType);
 
-    for (int64_t i = 0; i < k; ++i) {
-      for (int64_t j = 0; j < n; ++j) {
+    for (uint64_t i = 0; i < k; ++i) {
+      for (uint64_t j = 0; j < n; ++j) {
         r_out[i * n + j] = (j >= i) ? R(i, j) : static_cast<DataType>(0.0);
       }
     }
@@ -73,40 +73,40 @@ template <typename DataType>
 void qr_cpu_custom_call(void *out[], const void *in[]) {
   DataType *operand = (DataType *)in[0];
 
-  int64_t *dim_sizes = (int64_t *)in[1];
-  int64_t num_operand_dims = dim_sizes[0];
-  int64_t num_q_dims = dim_sizes[1];
-  int64_t num_r_dims = dim_sizes[2];
+  uint64_t *dim_sizes = (uint64_t *)in[1];
+  uint64_t num_operand_dims = dim_sizes[0];
+  uint64_t num_q_dims = dim_sizes[1];
+  uint64_t num_r_dims = dim_sizes[2];
 
-  int64_t *operand_dims_ptr = (int64_t *)in[2];
-  std::vector<int64_t> operand_dims(operand_dims_ptr, operand_dims_ptr + num_operand_dims);
+  uint64_t *operand_dims_ptr = (uint64_t *)in[2];
+  std::vector<uint64_t> operand_dims(operand_dims_ptr, operand_dims_ptr + num_operand_dims);
 
-  int64_t *q_dims_ptr = (int64_t *)in[3];
-  std::vector<int64_t> q_dims(q_dims_ptr, q_dims_ptr + num_q_dims);
+  uint64_t *q_dims_ptr = (uint64_t *)in[3];
+  std::vector<uint64_t> q_dims(q_dims_ptr, q_dims_ptr + num_q_dims);
 
-  int64_t *r_dims_ptr = (int64_t *)in[4];
-  std::vector<int64_t> r_dims(r_dims_ptr, r_dims_ptr + num_r_dims);
+  uint64_t *r_dims_ptr = (uint64_t *)in[4];
+  std::vector<uint64_t> r_dims(r_dims_ptr, r_dims_ptr + num_r_dims);
 
-  int64_t m = q_dims[q_dims.size() - 2];
-  int64_t k = q_dims[q_dims.size() - 1];
-  int64_t n = r_dims[r_dims.size() - 1];
+  uint64_t m = q_dims[q_dims.size() - 2];
+  uint64_t k = q_dims[q_dims.size() - 1];
+  uint64_t n = r_dims[r_dims.size() - 1];
   bool complete = r_dims[r_dims.size() - 2] == m;
 
-  auto leading_dimensions = std::vector<int64_t>(operand_dims.begin(), operand_dims.end() - 2);
+  auto leading_dimensions = std::vector<uint64_t>(operand_dims.begin(), operand_dims.end() - 2);
 
-  int64_t batch_items = 1;
-  for (int64_t i = 0; i < leading_dimensions.size(); i++) {
+  uint64_t batch_items = 1;
+  for (uint64_t i = 0; i < leading_dimensions.size(); i++) {
     batch_items *= leading_dimensions[i];
   }
 
   DataType *q = (DataType *)out[0];
   DataType *r = (DataType *)out[1];
 
-  int64_t r_stride = r_dims[r_dims.size() - 1] * r_dims[r_dims.size() - 2] * sizeof(DataType);
-  int64_t q_stride = q_dims[q_dims.size() - 1] * q_dims[q_dims.size() - 2] * sizeof(DataType);
-  int64_t inner_stride = m * n * sizeof(DataType);
+  uint64_t r_stride = r_dims[r_dims.size() - 1] * r_dims[r_dims.size() - 2] * sizeof(DataType);
+  uint64_t q_stride = q_dims[q_dims.size() - 1] * q_dims[q_dims.size() - 2] * sizeof(DataType);
+  uint64_t inner_stride = m * n * sizeof(DataType);
 
-  for (int64_t i = 0; i < batch_items; i++) {
+  for (uint64_t i = 0; i < batch_items; i++) {
     single_matrix_qr_cpu_custom_call<DataType>(
         (DataType *)out[0] + i * q_stride,
         (DataType *)out[1] + i * r_stride,
@@ -119,38 +119,38 @@ template <typename DataType>
 void eigh_cpu_custom_call(void *out[], const void *in[]) {
   DataType *operand = (DataType *)in[0];
 
-  int64_t *dim_sizes = (int64_t *)in[1];
-  int64_t num_operand_dims = dim_sizes[0];
-  int64_t num_eigenvalues_dims = dim_sizes[1];
-  int64_t num_eigenvectors_dims = dim_sizes[2];
+  uint64_t *dim_sizes = (uint64_t *)in[1];
+  uint64_t num_operand_dims = dim_sizes[0];
+  uint64_t num_eigenvalues_dims = dim_sizes[1];
+  uint64_t num_eigenvectors_dims = dim_sizes[2];
 
-  int64_t *operand_dims_ptr = (int64_t *)in[2];
-  std::vector<int64_t> operand_dims(operand_dims_ptr, operand_dims_ptr + num_operand_dims);
+  uint64_t *operand_dims_ptr = (uint64_t *)in[2];
+  std::vector<uint64_t> operand_dims(operand_dims_ptr, operand_dims_ptr + num_operand_dims);
 
-  int64_t *eigenvalues_dims_ptr = (int64_t *)in[3];
-  std::vector<int64_t> eigenvalues_dims(eigenvalues_dims_ptr, eigenvalues_dims_ptr + num_eigenvalues_dims);
+  uint64_t *eigenvalues_dims_ptr = (uint64_t *)in[3];
+  std::vector<uint64_t> eigenvalues_dims(eigenvalues_dims_ptr, eigenvalues_dims_ptr + num_eigenvalues_dims);
 
-  int64_t *eigenvectors_dims_ptr = (int64_t *)in[4];
-  std::vector<int64_t> eigenvectors_dims(eigenvectors_dims_ptr, eigenvectors_dims_ptr + num_eigenvectors_dims);
+  uint64_t *eigenvectors_dims_ptr = (uint64_t *)in[4];
+  std::vector<uint64_t> eigenvectors_dims(eigenvectors_dims_ptr, eigenvectors_dims_ptr + num_eigenvectors_dims);
 
-  int64_t m = eigenvectors_dims[eigenvectors_dims.size() - 2];
-  int64_t n = eigenvectors_dims[eigenvectors_dims.size() - 1];
+  uint64_t m = eigenvectors_dims[eigenvectors_dims.size() - 2];
+  uint64_t n = eigenvectors_dims[eigenvectors_dims.size() - 1];
 
-  auto leading_dimensions = std::vector<int64_t>(operand_dims.begin(), operand_dims.end() - 2);
+  auto leading_dimensions = std::vector<uint64_t>(operand_dims.begin(), operand_dims.end() - 2);
 
-  int64_t batch_items = 1;
-  for (int64_t i = 0; i < leading_dimensions.size(); i++) {
+  uint64_t batch_items = 1;
+  for (uint64_t i = 0; i < leading_dimensions.size(); i++) {
     batch_items *= leading_dimensions[i];
   }
 
   DataType *eigenvalues = (DataType *)out[0];
   DataType *eigenvectors = (DataType *)out[1];
 
-  int64_t eigenvalues_stride = eigenvalues_dims[eigenvalues_dims.size() - 1] * sizeof(DataType);
-  int64_t eigenvectors_stride = eigenvectors_dims[eigenvectors_dims.size() - 1] * eigenvectors_dims[eigenvectors_dims.size() - 2] * sizeof(DataType);
-  int64_t inner_stride = m * n * sizeof(DataType);
+  uint64_t eigenvalues_stride = eigenvalues_dims[eigenvalues_dims.size() - 1] * sizeof(DataType);
+  uint64_t eigenvectors_stride = eigenvectors_dims[eigenvectors_dims.size() - 1] * eigenvectors_dims[eigenvectors_dims.size() - 2] * sizeof(DataType);
+  uint64_t inner_stride = m * n * sizeof(DataType);
 
-  for (int64_t i = 0; i < batch_items; i++) {
+  for (uint64_t i = 0; i < batch_items; i++) {
     single_matrix_eigh_cpu_custom_call<DataType>(
         eigenvalues + i * eigenvalues_stride,
         eigenvectors + i * eigenvectors_stride,
