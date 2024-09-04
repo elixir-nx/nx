@@ -51,7 +51,7 @@ defmodule Nx do
 
     * unsigned integers (`u8`, `u16`, `u32`, `u64`)
     * signed integers (`s8`, `s16`, `s32`, `s64`)
-    * floats (`f8` `f16`, `f32`, `f64`)
+    * floats (`f8`, `f16`, `f32`, `f64`)
     * brain floats (`bf16`)
     * and complex numbers (`c64`, `c128`)
 

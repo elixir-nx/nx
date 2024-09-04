@@ -1715,6 +1715,7 @@ defmodule Torchx.Backend do
   def from_torch_type(:int), do: {:s, 32}
   def from_torch_type(:long), do: {:s, 64}
   def from_torch_type(:brain), do: {:bf, 16}
+  def from_torch_type(:float8_e5m2), do: {:f, 8}
   def from_torch_type(:half), do: {:f, 16}
   def from_torch_type(:float), do: {:f, 32}
   def from_torch_type(:double), do: {:f, 64}
@@ -1731,6 +1732,7 @@ defmodule Torchx.Backend do
   defp to_torch_type({:s, 32}, _), do: :int
   defp to_torch_type({:s, 64}, _), do: :long
   defp to_torch_type({:bf, 16}, _), do: :brain
+  defp to_torch_type({:f, 8}, _), do: :float8_e5m2
   defp to_torch_type({:f, 16}, _), do: :half
   defp to_torch_type({:f, 32}, _), do: :float
   defp to_torch_type({:f, 64}, _), do: :double
