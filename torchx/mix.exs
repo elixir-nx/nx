@@ -75,7 +75,7 @@ defmodule Torchx.MixProject do
 
   defp libtorch_config() do
     target = System.get_env("LIBTORCH_TARGET", "cpu")
-    version = System.get_env("LIBTORCH_VERSION", "2.1.0")
+    version = System.get_env("LIBTORCH_VERSION", "2.4.0")
     env_dir = System.get_env("LIBTORCH_DIR")
 
     %{
@@ -135,18 +135,15 @@ defmodule Torchx.MixProject do
             "https://download.pytorch.org/libtorch/#{libtorch_config.target}/libtorch-cxx11-abi-shared-with-deps-#{libtorch_config.version}%2B#{libtorch_config.target}.zip"
 
           {:unix, :darwin} ->
-            # MacOS
-            # pytorch only provides official pre-built binaries for x86_64
             case List.to_string(:erlang.system_info(:system_architecture)) do
               "x86_64" <> _ ->
                 "https://download.pytorch.org/libtorch/#{libtorch_config.target}/libtorch-macos-#{libtorch_config.version}.zip"
 
               _ ->
-                "https://github.com/mlverse/libtorch-mac-m1/releases/download/LibTorch/libtorch-v#{libtorch_config.version}.zip"
+                "https://download.pytorch.org/libtorch/#{libtorch_config.target}/libtorch-macos-arm64-#{libtorch_config.version}.zip"
             end
 
           {:win32, :nt} ->
-            # Windows
             "https://download.pytorch.org/libtorch/#{libtorch_config.target}/libtorch-win-shared-with-deps-#{libtorch_config.version}%2B#{libtorch_config.target}.zip"
 
           os ->
