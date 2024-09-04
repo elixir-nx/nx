@@ -364,7 +364,8 @@ defmodule EXLA do
 
       iex> fun = fn x, y -> Nx.add(Nx.sin(x), Nx.cos(y)) end
       iex> args = [1.0, 2.0]
-      iex> EXLA.to_mlir_module(fun, args)
+      iex> %{mlir_module: mlir_module} = EXLA.to_mlir_module(fun, args)
+      iex> mlir_module
       """
       module {
         func.func public @main(%arg0: tensor<f32>, %arg1: tensor<f32>) -> tensor<f32> {
@@ -378,8 +379,8 @@ defmodule EXLA do
   '''
   def to_mlir_module(function, args, options \\ []) do
     comp_fun = fn _key, callback ->
-      {:ok, {_xla_time, executable, _extra, _outfeed}} = callback.()
-      throw({:mlir_module, executable.ref})
+      {:ok, {_xla_time, executable, {_, used_inputs, outputs}, _outfeed}} = callback.()
+      throw({:mlir_module, executable.ref, used_inputs, outputs})
     end
 
     opts = [
@@ -387,11 +388,16 @@ defmodule EXLA do
       {:module_compilation, :to_mlir} | options
     ]
 
-    jit_apply(function, args, opts)
+    compile(function, args, opts)
   catch
-    {:mlir_module, ref} ->
-      EXLA.MLIR.Module.as_string(%EXLA.MLIR.Module{ref: ref})
+    {:mlir_module, ref, used_inputs, output_container} ->
+      %{
+        used_inputs: used_inputs,
+        output_container: output_container,
+        mlir_module: EXLA.MLIR.Module.as_string(%EXLA.MLIR.Module{ref: ref})
+      }
   end
+
 
   @doc """
   Checks if the compilation of function with args is cached.

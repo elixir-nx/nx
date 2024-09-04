@@ -406,7 +406,8 @@ defmodule EXLA.Defn do
       outfeed = Outfeed.new(hooks, defined_hooks)
       comp_key = {ref, client.name, outfeed.used_hooks, lazy_transfers, options}
 
-      {comp_time, {evaled, {xla_time, executable, inputs_and_typespecs, outfeed}}} =
+      {comp_time,
+       {evaled, {xla_time, executable, {inputs_and_typespecs, _used_inputs, _outputs}, outfeed}}} =
         :timer.tc(fn ->
           comp_cache_fun.(comp_key, fn ->
             {reverse_inputs_and_typespecs, reverse_infeeds} =
@@ -466,7 +467,9 @@ defmodule EXLA.Defn do
                   )
                 end)
 
-              {:ok, {xla_time, executable, inputs_and_typespecs, %{outfeed | infeeds: []}}}
+              {:ok,
+               {xla_time, executable, {inputs_and_typespecs, used_inputs, outputs},
+                %{outfeed | infeeds: []}}}
             end)
           end)
         end)
