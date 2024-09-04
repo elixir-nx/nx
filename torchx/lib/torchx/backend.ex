@@ -1722,10 +1722,14 @@ defmodule Torchx.Backend do
   def from_torch_type(:complex_double), do: {:c, 128}
 
   defp to_torch_type(nx_type, hint \\ "")
+  defp to_torch_type({:u, 2}, _), do: :byte
+  defp to_torch_type({:u, 4}, _), do: :byte
   defp to_torch_type({:u, 8}, _), do: :byte
   defp to_torch_type({:u, 16}, _), do: :int
   defp to_torch_type({:u, 32}, _), do: :long
   defp to_torch_type({:u, 64}, _), do: :long
+  defp to_torch_type({:s, 2}, _), do: :char
+  defp to_torch_type({:s, 4}, _), do: :char
   defp to_torch_type({:s, 8}, _), do: :char
   defp to_torch_type({:s, 16}, _), do: :short
   defp to_torch_type({:s, 32}, _), do: :int
