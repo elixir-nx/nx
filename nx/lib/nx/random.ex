@@ -94,9 +94,13 @@ defmodule Nx.Random do
 
         %Nx.Tensor{} = seed when seed.type == {:u, 64} ->
           seed
-        
+
+        %Nx.Tensor{} = seed when seed.type == {:s, 64} ->
+          Nx.bitcast(seed, {:u, 64})
+
         other ->
-          raise ArgumentError, "expected seed to be an integer or :u64 tensor, got: #{inspect(other)}"
+          raise ArgumentError,
+                "expected seed to be an integer, u64 tensor or s64 tensor, got: #{inspect(other)}"
       end
 
     key_n(seed)
