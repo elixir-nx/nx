@@ -612,8 +612,10 @@ defmodule Nx do
         [1.0, 2.0, 3.0]
       >
 
-  Certain backends and compilers support 8-bit floats. On the binary
-  backend this behavior is emulated:
+  Certain backends and compilers support 8-bit floats. The precision
+  iomplementation of 8-bit floats may change per backend, so you must
+  be careful when transferring data across. The binary backend implements
+  F8E5M2:
 
       iex> Nx.tensor([1, 2, 3], type: :f8)
       #Nx.Tensor<
