@@ -118,7 +118,6 @@ defmodule Nx.BinaryBackend.Matrix do
 
   defp qr_decomposition(matrix, m, n, eps) when m >= n do
     # QR decomposition is performed by using Householder transform
-
     max_i = if m == n, do: n - 2, else: n - 1
 
     {q_matrix, r_matrix} =
