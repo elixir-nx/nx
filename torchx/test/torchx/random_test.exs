@@ -55,7 +55,7 @@ defmodule Torchx.Nx.RandomTest do
   describe "distributions" do
     defp distribution_case(name, args: args, expected: expected) do
       seed = :erlang.adler32("#{name}threefry2x32")
-      key = Nx.Random.key(Nx.u64(seed))
+      key = Nx.Random.key(seed)
       actual = apply(Nx.Random, name, [key | args])
 
       assert_all_close(actual, expected)
@@ -209,7 +209,7 @@ defmodule Torchx.Nx.RandomTest do
       |> assert_all_close(apply(expected_func, expected_args), rtol: 0.1)
 
       seed = :erlang.adler32("#{name}threefry2x32")
-      key = Nx.Random.key(Nx.tensor(seed, type: :u64))
+      key = Nx.Random.key(seed)
       t = apply(Nx.Random, name, [key | args])
 
       apply(Nx, moment, [t])
