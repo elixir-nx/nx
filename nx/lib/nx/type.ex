@@ -7,7 +7,7 @@ defmodule Nx.Type do
 
     * `:s` - signed integer (8, 16, 32, 64)
     * `:u` - unsigned integer (8, 16, 32, 64)
-    * `:f` - float (16, 32, 64)
+    * `:f` - float (8, 16, 32, 64)
     * `:bf` - a brain floating point (16)
     * `:c` - a complex number, represented as a pair of floats (64, 128)
 
@@ -33,6 +33,7 @@ defmodule Nx.Type do
           | {:u, 16}
           | {:u, 32}
           | {:u, 64}
+          | {:f, 8}
           | {:f, 16}
           | {:f, 32}
           | {:f, 64}
@@ -50,6 +51,7 @@ defmodule Nx.Type do
           | :u16
           | :u32
           | :u64
+          | :f8
           | :f16
           | :f32
           | :f64
@@ -68,6 +70,7 @@ defmodule Nx.Type do
   def min_finite_binary({:s, 64}), do: <<-9_223_372_036_854_775_808::64-signed-native>>
   def min_finite_binary({:u, size}), do: <<0::size(size)-native>>
   def min_finite_binary({:bf, 16}), do: <<0xFF7F::16-native>>
+  def min_finite_binary({:f, 8}), do: <<0xFB::8-native>>
   def min_finite_binary({:f, 16}), do: <<0xFBFF::16-native>>
   def min_finite_binary({:f, 32}), do: <<0xFF7FFFFF::32-native>>
   def min_finite_binary({:f, 64}), do: <<0xFFEFFFFFFFFFFFFF::64-native>>
@@ -93,6 +96,7 @@ defmodule Nx.Type do
   def max_finite_binary({:u, 32}), do: <<4_294_967_295::32-native>>
   def max_finite_binary({:u, 64}), do: <<18_446_744_073_709_551_615::64-native>>
   def max_finite_binary({:bf, 16}), do: <<0x7F7F::16-native>>
+  def max_finite_binary({:f, 8}), do: <<0x7B::8-native>>
   def max_finite_binary({:f, 16}), do: <<0x7BFF::16-native>>
   def max_finite_binary({:f, 32}), do: <<0x7F7FFFFF::32-native>>
   def max_finite_binary({:f, 64}), do: <<0x7FEFFFFFFFFFFFFF::64-native>>
@@ -109,6 +113,7 @@ defmodule Nx.Type do
   """
   def nan_binary(type)
   def nan_binary({:bf, 16}), do: <<0x7FC0::16-native>>
+  def nan_binary({:f, 8}), do: <<0x7E::8-native>>
   def nan_binary({:f, 16}), do: <<0x7E00::16-native>>
   def nan_binary({:f, 32}), do: <<0x7FC00000::32-native>>
   def nan_binary({:f, 64}), do: <<0x7FF8000000000000::64-native>>
@@ -118,6 +123,7 @@ defmodule Nx.Type do
   """
   def infinity_binary(type)
   def infinity_binary({:bf, 16}), do: <<0x7F80::16-native>>
+  def infinity_binary({:f, 8}), do: <<0x7C::8-native>>
   def infinity_binary({:f, 16}), do: <<0x7C00::16-native>>
   def infinity_binary({:f, 32}), do: <<0x7F800000::32-native>>
   def infinity_binary({:f, 64}), do: <<0x7FF0000000000000::64-native>>
@@ -127,6 +133,7 @@ defmodule Nx.Type do
   """
   def neg_infinity_binary(type)
   def neg_infinity_binary({:bf, 16}), do: <<0xFF80::16-native>>
+  def neg_infinity_binary({:f, 8}), do: <<0xFC::8-native>>
   def neg_infinity_binary({:f, 16}), do: <<0xFC00::16-native>>
   def neg_infinity_binary({:f, 32}), do: <<0xFF800000::32-native>>
   def neg_infinity_binary({:f, 64}), do: <<0xFFF0000000000000::64-native>>
@@ -186,7 +193,7 @@ defmodule Nx.Type do
   type_variants = [
     s: [8, 16, 32, 64],
     u: [8, 16, 32, 64],
-    f: [16, 32, 64],
+    f: [8, 16, 32, 64],
     bf: [16],
     c: [64, 128]
   ]
@@ -599,6 +606,7 @@ defmodule Nx.Type do
   """
   def smallest_positive_normal_binary(type)
   def smallest_positive_normal_binary({:bf, 16}), do: <<0x0080::16-native>>
+  def smallest_positive_normal_binary({:f, 8}), do: <<0x04::8-native>>
   def smallest_positive_normal_binary({:f, 16}), do: <<0x0400::16-native>>
   def smallest_positive_normal_binary({:f, 32}), do: <<0x0080_0000::32-native>>
   def smallest_positive_normal_binary({:f, 64}), do: <<0x0010_0000_0000_0000::64-native>>
@@ -611,6 +619,7 @@ defmodule Nx.Type do
   """
   def epsilon_binary(type)
   def epsilon_binary({:bf, 16}), do: <<0, 60>>
+  def epsilon_binary({:f, 8}), do: <<52>>
   def epsilon_binary({:f, 16}), do: <<0, 20>>
   def epsilon_binary({:f, 32}), do: <<0, 0, 0, 52>>
   def epsilon_binary({:f, 64}), do: <<0, 0, 0, 0, 0, 0, 176, 60>>
@@ -636,6 +645,7 @@ defmodule Nx.Type do
   """
   def pi_binary(type)
   def pi_binary({:bf, 16}), do: <<73, 64>>
+  def pi_binary({:f, 8}), do: <<66>>
   def pi_binary({:f, 16}), do: <<72, 66>>
   def pi_binary({:f, 32}), do: <<219, 15, 73, 64>>
   def pi_binary({:f, 64}), do: <<24, 45, 68, 84, 251, 33, 9, 64>>
@@ -648,6 +658,7 @@ defmodule Nx.Type do
   """
   def e_binary(type)
   def e_binary({:bf, 16}), do: <<45, 64>>
+  def e_binary({:f, 8}), do: <<65>>
   def e_binary({:f, 16}), do: <<112, 65>>
   def e_binary({:f, 32}), do: <<84, 248, 45, 64>>
   def e_binary({:f, 64}), do: <<105, 87, 20, 139, 10, 191, 5, 64>>
@@ -660,6 +671,7 @@ defmodule Nx.Type do
   """
   def euler_gamma_binary(type)
   def euler_gamma_binary({:bf, 16}), do: <<19, 63>>
+  def euler_gamma_binary({:f, 8}), do: <<56>>
   def euler_gamma_binary({:f, 16}), do: <<158, 56>>
   def euler_gamma_binary({:f, 32}), do: <<104, 196, 19, 63>>
   def euler_gamma_binary({:f, 64}), do: <<25, 182, 111, 252, 140, 120, 226, 63>>

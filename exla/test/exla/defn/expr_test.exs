@@ -86,6 +86,14 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
+  describe "float8" do
+    defn return_float8, do: Nx.tensor(1, type: {:f, 8})
+
+    test "supports float8 return types" do
+      assert_equal(return_float8(), Nx.tensor(1, type: {:f, 8}))
+    end
+  end
+
   describe "float16" do
     defn return_float, do: Nx.tensor(1, type: {:f, 16})
 
