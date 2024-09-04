@@ -87,7 +87,18 @@ defmodule Nx.Random do
       >
   """
   deftransform key(seed) do
-    seed = Nx.as_type(seed, :u64)
+    seed =
+      case seed do
+        seed when is_integer(seed) ->
+          Nx.u64(seed)
+
+        %Nx.Tensor{} = seed when seed.type == {:u, 64} ->
+          seed
+        
+        other ->
+          raise ArgumentError, "expected seed to be an integer or :u64 tensor, got: #{inspect(other)}"
+      end
+
     key_n(seed)
   end
 
