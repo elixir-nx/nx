@@ -21,7 +21,7 @@ defmodule Nx.Constants do
     * `:backend` - a backend to allocate the tensor on.
 
   ## Examples
-      
+
       iex> Nx.Constants.nan({:f, 8})
       #Nx.Tensor<
         f8
@@ -355,7 +355,7 @@ defmodule Nx.Constants do
       iex> Nx.Constants.smallest_positive_normal(:f8)
       #Nx.Tensor<
         f8
-        0.015625
+        6.103515625e-5
       >
 
       iex> Nx.Constants.smallest_positive_normal({:s, 32})
@@ -404,7 +404,7 @@ defmodule Nx.Constants do
       iex> Nx.Constants.epsilon(:f8)
       #Nx.Tensor<
         f8
-        0.125
+        0.25
       >
 
       iex> Nx.Constants.epsilon({:s, 32})
@@ -456,7 +456,7 @@ defmodule Nx.Constants do
       iex> Nx.Constants.pi({:f, 8})
       #Nx.Tensor<
         f8
-        3.25
+        3.0
       >
 
       iex> Nx.Constants.pi({:s, 32})
@@ -560,7 +560,7 @@ defmodule Nx.Constants do
       iex> Nx.Constants.euler_gamma({:f, 8})
       #Nx.Tensor<
         f8
-        0.5625
+        0.5
       >
 
       iex> Nx.Constants.euler_gamma({:s, 32})

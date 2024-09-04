@@ -299,7 +299,7 @@ defmodule Nx.Random do
   deftransformp mantissa_shift(nbits, type) do
     mantissa =
       case type do
-        {:f, 8} -> 3
+        {:f, 8} -> 2
         {:bf, 16} -> 7
         {:f, 16} -> 10
         {:f, 32} -> 23
