@@ -720,14 +720,14 @@ defmodule EXLA.MLIR.Value do
     eigenvecs_dims = Tuple.to_list(eigenvecs_shape)
     eigenvals_dims = Tuple.to_list(eigenvals_shape)
 
-    dim_sizes = constant(func, dim_sizes, Typespec.tensor({:s, 64}, {length(dim_sizes)}))
-    operand_dims = constant(func, operand_dims, Typespec.tensor({:s, 64}, {length(operand_dims)}))
+    dim_sizes = constant(func, dim_sizes, Typespec.tensor({:u, 64}, {length(dim_sizes)}))
+    operand_dims = constant(func, operand_dims, Typespec.tensor({:u, 64}, {length(operand_dims)}))
 
     eigenvecs_dims =
-      constant(func, eigenvecs_dims, Typespec.tensor({:s, 64}, {length(eigenvecs_dims)}))
+      constant(func, eigenvecs_dims, Typespec.tensor({:u, 64}, {length(eigenvecs_dims)}))
 
     eigenvals_dims =
-      constant(func, eigenvals_dims, Typespec.tensor({:s, 64}, {length(eigenvals_dims)}))
+      constant(func, eigenvals_dims, Typespec.tensor({:u, 64}, {length(eigenvals_dims)}))
 
     operands = [value, dim_sizes, operand_dims, eigenvecs_dims, eigenvals_dims]
 
@@ -772,10 +772,10 @@ defmodule EXLA.MLIR.Value do
     q_dims = Tuple.to_list(q_shape)
     r_dims = Tuple.to_list(r_shape)
 
-    dim_sizes = constant(func, dim_sizes, Typespec.tensor({:s, 64}, {length(dim_sizes)}))
-    operand_dims = constant(func, operand_dims, Typespec.tensor({:s, 64}, {length(operand_dims)}))
-    q_dims = constant(func, q_dims, Typespec.tensor({:s, 64}, {length(q_dims)}))
-    r_dims = constant(func, r_dims, Typespec.tensor({:s, 64}, {length(r_dims)}))
+    dim_sizes = constant(func, dim_sizes, Typespec.tensor({:u, 64}, {length(dim_sizes)}))
+    operand_dims = constant(func, operand_dims, Typespec.tensor({:u, 64}, {length(operand_dims)}))
+    q_dims = constant(func, q_dims, Typespec.tensor({:u, 64}, {length(q_dims)}))
+    r_dims = constant(func, r_dims, Typespec.tensor({:u, 64}, {length(r_dims)}))
     operands = [value, dim_sizes, operand_dims, q_dims, r_dims]
 
     q_result_type = type_tensor(q_type, q_shape)
