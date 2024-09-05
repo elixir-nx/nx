@@ -383,12 +383,14 @@ defmodule EXLA do
       throw({:mlir_module, executable.ref, used_inputs, outputs})
     end
 
-    opts = [
-      {EXLA, {&EXLA.Defn.LockedCache.run/2, comp_fun}},
-      {:module_compilation, :to_mlir} | options
-    ]
+    opts =
+      Keyword.merge(options, [
+        {EXLA, {&EXLA.Defn.LockedCache.run/2, comp_fun}},
+        module_compilation: :to_mlir,
+        compiler: EXLA
+      ])
 
-    compile(function, args, opts)
+    EXLA.Defn.__compile__(function, args, function, opts)
   catch
     {:mlir_module, ref, used_inputs, output_container} ->
       %{
@@ -397,7 +399,6 @@ defmodule EXLA do
         mlir_module: EXLA.MLIR.Module.as_string(%EXLA.MLIR.Module{ref: ref})
       }
   end
-
 
   @doc """
   Checks if the compilation of function with args is cached.
