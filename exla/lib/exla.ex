@@ -389,7 +389,7 @@ defmodule EXLA do
       throw({:mlir_module, executable.ref, used_inputs, outputs})
     end
 
-    {nested?, options} = Keyword.pop(options, :nested_defn_compilation, false)
+    {nested_compilation?, options} = Keyword.pop(options, :nested_defn_compilation, false)
 
     opts =
       Keyword.merge(options, [
@@ -398,7 +398,7 @@ defmodule EXLA do
         compiler: EXLA
       ])
 
-    if nested? do
+    if nested_compilation? do
       EXLA.Defn.__compile__(function, args, function, opts)
     else
       Nx.Defn.compile(function, args, opts)
