@@ -360,6 +360,12 @@ defmodule EXLA do
   Takes in a function, the argument templates and the compilation
   options and returns the textual representation of the MLIR module.
 
+  ## Options
+
+    * `:nested_defn_compilation` - a boolean that indicates whether
+      this function is being called from within a `defn` compiler.
+      Defaults to `false`.
+
   ## Examples
 
       iex> fun = fn x, y -> Nx.add(Nx.sin(x), Nx.cos(y)) end
@@ -383,6 +389,8 @@ defmodule EXLA do
       throw({:mlir_module, executable.ref, used_inputs, outputs})
     end
 
+    {nested?, options} = Keyword.pop(options, :nested_defn_compilation, false)
+
     opts =
       Keyword.merge(options, [
         {EXLA, {&EXLA.Defn.LockedCache.run/2, comp_fun}},
@@ -390,7 +398,11 @@ defmodule EXLA do
         compiler: EXLA
       ])
 
-    EXLA.Defn.__compile__(function, args, function, opts)
+    if nested? do
+      EXLA.Defn.__compile__(function, args, function, opts)
+    else
+      Nx.Defn.compile(function, args, opts)
+    end
   catch
     {:mlir_module, ref, used_inputs, output_container} ->
       %{
