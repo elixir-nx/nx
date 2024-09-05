@@ -250,6 +250,10 @@ defmodule EXLA.Defn do
     {executable, {used_inputs, outputs, outfeed, _input_typespecs?}} =
       compile(client, key, vars, fun, compile_options, 0, [], _stream = false, debug?, callback)
 
+    if compile_options[:module_compilation] == :to_mlir do
+      throw({:mlir_module, executable.ref, MapSet.new(Map.keys(used_inputs)), outputs})
+    end
+
     fn [args] ->
       {time, lock} =
         :timer.tc(fn ->
@@ -406,8 +410,7 @@ defmodule EXLA.Defn do
       outfeed = Outfeed.new(hooks, defined_hooks)
       comp_key = {ref, client.name, outfeed.used_hooks, lazy_transfers, options}
 
-      {comp_time,
-       {evaled, {xla_time, executable, {inputs_and_typespecs, _used_inputs, _outputs}, outfeed}}} =
+      {comp_time, {evaled, {xla_time, executable, inputs_and_typespecs, outfeed}}} =
         :timer.tc(fn ->
           comp_cache_fun.(comp_key, fn ->
             {reverse_inputs_and_typespecs, reverse_infeeds} =
@@ -467,9 +470,7 @@ defmodule EXLA.Defn do
                   )
                 end)
 
-              {:ok,
-               {xla_time, executable, {inputs_and_typespecs, used_inputs, outputs},
-                %{outfeed | infeeds: []}}}
+              {:ok, {xla_time, executable, inputs_and_typespecs, %{outfeed | infeeds: []}}}
             end)
           end)
         end)

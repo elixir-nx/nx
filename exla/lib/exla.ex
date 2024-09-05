@@ -362,7 +362,7 @@ defmodule EXLA do
 
   ## Options
 
-    * `:nested_defn_compilation` - a boolean that indicates whether
+    * `:within_defn_compiler` - a boolean that indicates whether
       this function is being called from within a `defn` compiler.
       Defaults to `false`.
 
@@ -384,19 +384,13 @@ defmodule EXLA do
       """
   '''
   def to_mlir_module(function, args, options \\ []) do
-    comp_fun = fn _key, callback ->
-      {:ok, {_xla_time, executable, {_, used_inputs, outputs}, _outfeed}} = callback.()
-      throw({:mlir_module, executable.ref, used_inputs, outputs})
-    end
-
-    {nested_compilation?, options} = Keyword.pop(options, :nested_defn_compilation, false)
+    {nested_compilation?, options} = Keyword.pop(options, :within_defn_compiler, false)
 
     opts =
-      Keyword.merge(options, [
-        {EXLA, {&EXLA.Defn.LockedCache.run/2, comp_fun}},
+      Keyword.merge(options,
         module_compilation: :to_mlir,
         compiler: EXLA
-      ])
+      )
 
     if nested_compilation? do
       EXLA.Defn.__compile__(function, args, function, opts)

@@ -24,7 +24,7 @@ defmodule EXLATest do
     end
 
     def __compile__(_key, vars, fun, opts) do
-      result = EXLA.to_mlir_module(fun, vars, Keyword.put(opts, :nested_defn_compilation, true))
+      result = EXLA.to_mlir_module(fun, vars, Keyword.put(opts, :within_defn_compiler, true))
       throw({__MODULE__, result})
     end
   end
@@ -35,7 +35,8 @@ defmodule EXLATest do
     end
 
     def __compile__(_key, vars, fun, opts) do
-      EXLA.to_mlir_module(fun, vars, Keyword.put(opts, :nested_defn_compilation, false))
+      # Keyword.delete to ensure default is false
+      EXLA.to_mlir_module(fun, vars, Keyword.delete(opts, :within_defn_compiler))
     end
   end
 
@@ -65,7 +66,7 @@ defmodule EXLATest do
 
           assert Nx.compatible?(container, Nx.template({}, :s32))
 
-          assert used_inputs == %{0 => nil, 1 => nil}
+          assert MapSet.equal?(used_inputs, MapSet.new([0, 1]))
       end
     end
   end
