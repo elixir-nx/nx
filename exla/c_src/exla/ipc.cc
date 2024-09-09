@@ -24,14 +24,11 @@ int get_ipc_handle(const char* memname, size_t memsize) {
 
 // Function to map the shared memory in this process
 void* open_ipc_handle(int fd, size_t memsize) {
-  std::cout << "fd: " << fd << std::endl;
-  std::cout << "memsize: " << memsize << std::endl;
   void* ptr = mmap(NULL, memsize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
   if (ptr == MAP_FAILED) {
     perror("mmap");
     return nullptr;
   }
-  std::cout << "ptr: " << ptr << std::endl;
   return ptr;
 }
 

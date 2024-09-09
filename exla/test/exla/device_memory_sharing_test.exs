@@ -15,7 +15,7 @@ defmodule EXLA.DeviceMemorySharingTest do
 
       assert {:ok, t2} =
                Nx.from_pointer(
-                 {EXLA.Backend, client_name: unquote(client_name)},
+                 {EXLA.Backend, client: unquote(client_name)},
                  pointer,
                  t1.type,
                  t1.shape
@@ -30,7 +30,7 @@ defmodule EXLA.DeviceMemorySharingTest do
   test "ipc handles don't crash the runtime when :local mode is selected" do
     assert {:error, ~c"Invalid pointer size for selected mode."} ==
              Nx.from_pointer(
-               {EXLA.Backend, client_name: :cuda},
+               {EXLA.Backend, client: :cuda},
                Enum.to_list(0..63),
                {:f, 32},
                {1},

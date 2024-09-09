@@ -108,11 +108,9 @@ defmodule EXLA.Backend do
 
     case EXLA.NIF.get_buffer_device_pointer(client.ref, buffer.ref, mode) do
       {:ok, result} ->
-        dbg(result)
-
         handle =
           case {result, mode} do
-            {{ptr, size}, :local} when is_integer(ptr) ->
+            {{ptr, _size}, :local} when is_integer(ptr) ->
               # pointer is an integer here
               ptr
 
