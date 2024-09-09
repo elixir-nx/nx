@@ -80,6 +80,16 @@ static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info) {
   return 0;
 }
 
+static int upgrade(ErlNifEnv* env, void** priv_data, void** old_priv_data, ERL_NIF_TERM load_info) {
+  // Silence "unused var" warnings.
+  (void)(env);
+  (void)(priv_data);
+  (void)(old_priv_data);
+  (void)(load_info);
+
+  return 0;
+}
+
 // MLIR Functions
 
 ERL_NIF_TERM type_parsing_error(ErlNifEnv* env, std::string type_string) {
@@ -378,9 +388,13 @@ ERL_NIF_TERM mlir_module_to_string(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
     return exla::nif::error(env, "Unable to get builder.");
   }
 
-  auto string = (*module)->ToString();
+  std::string string = (*module)->ToString();
 
-  return exla::nif::ok(env, exla::nif::make(env, string));
+  ErlNifBinary bin;
+  enif_alloc_binary(string.size(), &bin);
+  memcpy(bin.data, string.c_str(), string.size());
+
+  return exla::nif::ok(env, exla::nif::make(env, bin));
 }
 
 // ExlaBuffer Functions
@@ -398,7 +412,7 @@ ERL_NIF_TERM get_buffer_device_pointer(ErlNifEnv* env, int argc, const ERL_NIF_T
     return exla::nif::error(env, "Unable to get client.");
   }
   if (!exla::nif::get<exla::ExlaBuffer*>(env, argv[1], buffer)) {
-    return exla::nif::error(env, "Unable to get buffer.");
+    return exla::nif::error(env, "Unable to get buffer (it may belong to another node or have been garbage collected, consider using Nx.backend_transfer/1).");
   }
   if (!exla::nif::get_atom(env, argv[2], pointer_kind)) {
     return exla::nif::error(env, "Unable to get device pointer kind.");
@@ -534,7 +548,9 @@ ERL_NIF_TERM create_buffer_from_device_pointer(ErlNifEnv* env, int argc, const E
     ptr = result.first;
   }
 
-  EXLA_ASSIGN_OR_RETURN_NIF(xla::PjRtDevice * device, (*client)->client()->LookupDevice(device_id), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(xla::PjRtDevice * device, (*client)->client()->LookupDevice(xla::PjRtGlobalDeviceId(device_id)), env);
+
+  std::function<void()> on_delete_callback = []() {};
   EXLA_ASSIGN_OR_RETURN_NIF(std::unique_ptr<xla::PjRtBuffer> buffer, (*client)->client()->CreateViewOfDeviceBuffer(ptr, shape, device, on_delete_callback), env);
 
   exla::ExlaBuffer* exla_buffer = new exla::ExlaBuffer(std::move(buffer));
@@ -578,7 +594,7 @@ ERL_NIF_TERM read_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
   exla::int64 size;
 
   if (!exla::nif::get<exla::ExlaBuffer*>(env, argv[0], buffer)) {
-    return exla::nif::error(env, "Unable to get buffer.");
+    return exla::nif::error(env, "Unable to get buffer (it may belong to another node or have been garbage collected, consider using Nx.backend_transfer/1).");
   }
   if (!exla::nif::get(env, argv[1], &size)) {
     return exla::nif::error(env, "Unable to get size.");
@@ -597,7 +613,7 @@ ERL_NIF_TERM deallocate_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
   exla::ExlaBuffer** buffer;
 
   if (!exla::nif::get<exla::ExlaBuffer*>(env, argv[0], buffer)) {
-    return exla::nif::error(env, "Unable to get buffer.");
+    return exla::nif::error(env, "Unable to get buffer (it may belong to another node or have been garbage collected, consider using Nx.backend_transfer/1).");
   }
 
   xla::Status dealloc_status = (*buffer)->Deallocate();
@@ -625,27 +641,38 @@ ERL_NIF_TERM transfer_to_infeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM arg
     return exla::nif::error(env, "Unable to get device ID.");
   }
 
+  std::vector<ErlNifBinary> buffer_bins;
+  std::vector<xla::Shape> shapes;
+
   ERL_NIF_TERM head, tail;
   while (enif_get_list_cell(env, data, &head, &tail)) {
     const ERL_NIF_TERM* terms;
     int count;
-    xla::Shape shape;
 
     if (!enif_get_tuple(env, head, &count, &terms) && count != 2) {
-      return exla::nif::error(env, "Unable to binary-shape tuple.");
+      return exla::nif::error(env, "Unable to {binary, shape} tuple.");
     }
 
+    ErlNifBinary buffer_bin;
+    if (!exla::nif::get_binary(env, terms[0], &buffer_bin)) {
+      return exla::nif::error(env, "Unable to binary.");
+    }
+
+    xla::Shape shape;
     if (!exla::nif::get_typespec_as_xla_shape(env, terms[1], &shape)) {
       return exla::nif::error(env, "Unable to get shape.");
     }
 
-    xla::Status transfer_status = (*client)->TransferToInfeed(env, terms[0], shape, device_id);
-
-    if (!transfer_status.ok()) {
-      return exla::nif::error(env, transfer_status.message().data());
-    }
+    buffer_bins.push_back(buffer_bin);
+    shapes.push_back(shape);
 
     data = tail;
+  }
+
+  xla::Status transfer_status = (*client)->TransferToInfeed(env, buffer_bins, shapes, device_id);
+
+  if (!transfer_status.ok()) {
+    return exla::nif::error(env, transfer_status.message().data());
   }
 
   return exla::nif::ok(env);
@@ -713,14 +740,14 @@ ERL_NIF_TERM copy_buffer_to_device(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
     return exla::nif::error(env, "Unable to get client.");
   }
   if (!exla::nif::get<exla::ExlaBuffer*>(env, argv[1], buffer)) {
-    return exla::nif::error(env, "Unable to get buffer.");
+    return exla::nif::error(env, "Unable to get buffer (it may belong to another node or have been garbage collected, consider using Nx.backend_transfer/1).");
   }
   if (!exla::nif::get(env, argv[2], &device_id)) {
     return exla::nif::error(env, "Unable to get device ID.");
   }
 
   EXLA_ASSIGN_OR_RETURN_NIF(xla::PjRtDevice * device,
-                            (*client)->client()->LookupDevice(device_id), env);
+                            (*client)->client()->LookupDevice(xla::PjRtGlobalDeviceId(device_id)), env);
   EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaBuffer * buf,
                             (*buffer)->CopyToDevice(device), env);
 
@@ -979,4 +1006,4 @@ static ErlNifFunc exla_funcs[] = {
     {"serialize_executable", 1, serialize_executable},
     {"deserialize_executable", 2, deserialize_executable}};
 
-ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, NULL, NULL);
+ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, &upgrade, NULL);

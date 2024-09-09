@@ -33,11 +33,7 @@ defmodule EXLA.Defn do
   @doc false
   def __stream__(key, input, acc, vars, fun, [args], options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
-
-    {client_name, compile_options} =
-      Keyword.pop_lazy(compile_options, :client, &EXLA.Client.default_name/0)
-
-    client = EXLA.Client.fetch!(client_name)
+    debug? = Keyword.get(compile_options, :debug, false)
     compile_options = Keyword.put(compile_options, :lazy_transfers, :never)
 
     input_length = length(Nx.Defn.Composite.flatten_list([input]))
@@ -49,25 +45,17 @@ defmodule EXLA.Defn do
     used_inputs = Enum.to_list(input_length..(input_length + acc_length - 1)//1)
 
     comp_fun =
-      &to_stream_computation(client, input_length, acc_length, &1, &2, &3, &4, compile_options)
+      &to_stream_computation(input_length, acc_length, &1, &2, &3, &4, &5, compile_options)
 
-    {executable, used_inputs, {output, acc_output}, outfeed, extra, debug?} =
-      compile(
-        client,
-        {:stream, key},
-        vars,
-        fun,
-        compile_options,
-        used_buffers,
-        used_inputs,
-        comp_fun
-      )
+    {executable, {used_inputs, {output, acc_output}, outfeed, input_typespecs}} =
+      compile(key, vars, fun, compile_options, used_buffers, used_inputs, true, comp_fun)
 
-    {input_typespecs, input_indexes} = extra
+    # Now discard the infeed from used inputs, similar to how it is done to buffers.
+    # Note we discard all lazy transfers too, as they are not possible with streams.
+    used_inputs = for {i, nil} <- used_inputs, i >= used_buffers, do: {i, nil}, into: %{}
 
-    # Also discard the stream inputs from used inputs, similar to how it is done to buffers
-    # Note we discard all lazy transfers too, as they are not possible with streams
-    used_inputs = Enum.sort(for {i, nil} <- used_inputs, i >= used_buffers, do: i)
+    # And capture the typespecs for the infeed.
+    input_typespecs = Enum.take_while(input_typespecs, fn {i, _} -> i < input_length end)
 
     # Execution of streams requires the coordination of
     # multiple processes which is outlined below.
@@ -80,9 +68,7 @@ defmodule EXLA.Defn do
         EXLA.Defn.Lock.lock(run_key(executable))
       end)
 
-    if debug? do
-      Logger.debug("EXLA device #{executable.device_id} lock in #{us_to_ms(time)}ms")
-    end
+    debug? && Logger.debug("EXLA device #{executable.device_id} lock in #{us_to_ms(time)}ms")
 
     {time, streams} =
       :timer.tc(fn ->
@@ -119,7 +105,6 @@ defmodule EXLA.Defn do
             outfeed_pid,
             input,
             input_typespecs,
-            input_indexes,
             output,
             output_typespecs,
             acc_output
@@ -128,30 +113,26 @@ defmodule EXLA.Defn do
         [stream]
       end)
 
-    if debug? do
+    debug? &&
       Logger.debug("EXLA stream start on device #{executable.device_id} in #{us_to_ms(time)}ms")
-    end
 
     streams
   end
 
   defp to_stream_computation(
-         client,
          input_length,
          acc_length,
          %Function{} = builder,
          expr,
          used_typespecs,
          outfeed,
+         client,
          options
        ) do
     %{token: root_token, infeeds: []} = outfeed
 
     {input_typespecs, used_typespecs} =
       Enum.split_while(used_typespecs, fn {i, _} -> i < input_length end)
-
-    # Get all input indexes and shape
-    input_indexes = Enum.map(input_typespecs, &elem(&1, 0))
 
     # Drop all accumulator entries from used_typespecs as we will handle it separately.
     {acc_typespecs, used_typespecs} = Enum.split(used_typespecs, acc_length)
@@ -165,13 +146,10 @@ defmodule EXLA.Defn do
     # The input will be read as part of the infeed.
     acc_typespecs_l = Enum.map(acc_typespecs, &elem(&1, 1))
     acc_typespec = List.to_tuple(acc_typespecs_l)
-
     flag_typespec = Typespec.tensor({:pred, 8}, {})
 
     args = EXLA.MLIR.Function.get_arguments(builder)
-
     {token, [flag]} = Value.infeed(root_token, [flag_typespec])
-
     init = [flag, token | args]
 
     arg_typespecs = Enum.map(init, &Value.get_typespec/1)
@@ -185,11 +163,9 @@ defmodule EXLA.Defn do
     {body_computation, [_flag, token | args]} = Function.push_region(builder, arg_typespecs)
 
     {acc, constant} = Enum.split(args, acc_length)
-
-    {indices, input_typespecs} = Enum.unzip(input_typespecs)
+    {input_indices, input_typespecs} = Enum.unzip(input_typespecs)
     {token, input} = Value.infeed(token, input_typespecs)
-
-    input_params = Enum.zip(indices, input)
+    input_params = Enum.zip(input_indices, input)
 
     {%Outfeed{token: token} = outfeed, acc} =
       case expr do
@@ -225,9 +201,7 @@ defmodule EXLA.Defn do
 
     # Emit the stream hook to signal loop output
     {token, [flag]} = Value.infeed(token, [flag_typespec])
-
     Value.return(flag.function, [flag, token | acc] ++ List.flatten(constant))
-
     Function.pop_region(builder)
 
     [_flag, out_token | results] = Value.while(builder, pred_computation, body_computation, init)
@@ -236,9 +210,8 @@ defmodule EXLA.Defn do
     output = wrap_tuple_result(acc, acc_typespec)
 
     outfeed = outfeed |> Outfeed.with_token(out_token) |> Outfeed.close(builder)
-    Value.return(builder, output)
-
-    {{input_typespecs, input_indexes}, outfeed}
+    Value.func_return(builder, output)
+    outfeed
   end
 
   @doc false
@@ -249,16 +222,15 @@ defmodule EXLA.Defn do
   @doc false
   def __compile__(key, vars, fun, options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
+    debug? = Keyword.get(compile_options, :debug, false)
+    callback = &to_root_computation(&1, &2, &3, &4, &5, compile_options)
 
-    {client_name, compile_options} =
-      Keyword.pop_lazy(compile_options, :client, &EXLA.Client.default_name/0)
+    {executable, {used_inputs, outputs, outfeed, _input_typespecs?}} =
+      compile(key, vars, fun, compile_options, 0, [], _stream = false, callback)
 
-    client = EXLA.Client.fetch!(client_name)
-
-    callback = &to_root_computation(&1, &2, &3, &4, Keyword.put(compile_options, :client, client))
-
-    {executable, used_inputs, outputs, outfeed, :ok, debug?} =
-      compile(client, key, vars, fun, compile_options, 0, [], callback)
+    if compile_options[:module_compilation] == :to_mlir do
+      throw({:mlir_module, executable.ref, MapSet.new(Map.keys(used_inputs)), outputs})
+    end
 
     fn [args] ->
       {time, lock} =
@@ -266,30 +238,25 @@ defmodule EXLA.Defn do
           EXLA.Defn.Lock.lock(run_key(executable))
         end)
 
-      if debug? do
-        Logger.debug("EXLA device #{executable.device_id} lock in #{us_to_ms(time)}ms")
-      end
+      debug? && Logger.debug("EXLA device #{executable.device_id} lock in #{us_to_ms(time)}ms")
 
       {time, res} =
         :timer.tc(fn ->
           maybe_outfeed(lock, executable, args, used_inputs, outputs, outfeed, run_options)
         end)
 
-      if debug? do
+      debug? &&
         Logger.debug("EXLA execution on device #{executable.device_id} in #{us_to_ms(time)}ms")
-      end
 
       res
     end
   end
 
-  defp to_root_computation(%Function{} = function, expr, used_typespecs, outfeed, options) do
+  defp to_root_computation(%Function{} = function, expr, used_typespecs, outfeed, client, options) do
     params =
       Enum.zip_with(used_typespecs, Function.get_arguments(function), fn {pos, _typespec}, arg ->
         {pos, arg}
       end)
-
-    client = Keyword.fetch!(options, :client)
 
     unless client do
       raise ArgumentError, "missing client"
@@ -305,10 +272,8 @@ defmodule EXLA.Defn do
 
     {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
     outfeed = cache |> get_outfeed() |> Outfeed.close(function)
-
-    Value.return(function, res)
-
-    {:ok, outfeed}
+    Value.func_return(function, res)
+    outfeed
   end
 
   defp maybe_outfeed(lock, executable, args, used_inputs, outputs, outfeed, run_options)
@@ -357,18 +322,14 @@ defmodule EXLA.Defn do
 
   ## Compile
 
-  defp compile(client, key, vars, fun, options, used_buffers, used_inputs, to_computation) do
-    {{expr_cache_fun, comp_cache_fun}, options} =
-      case Keyword.pop(options, :cache, true) do
-        {true, options} ->
-          Keyword.pop(options, EXLA, {&EXLA.Defn.LockedCache.run/2, &EXLA.Defn.LockedCache.run/2})
-
-        {false, options} ->
-          cache_fun = fn _key, fun -> fun.() end
-          {{cache_fun, cache_fun}, options}
-      end
-
+  defp compile(key, vars, fun, options, used_buffers, used_inputs, stream?, to_computation) do
+    {cache, options} = Keyword.pop(options, :cache, true)
+    {hooks, options} = Keyword.pop(options, :hooks, %{})
     {debug?, options} = Keyword.pop(options, :debug, false)
+    {lazy_transfers, options} = Keyword.pop(options, :lazy_transfers, :opt_in)
+
+    {client_name, options} = Keyword.pop_lazy(options, :client, &EXLA.Client.default_name/0)
+    client = EXLA.Client.fetch!(client_name)
 
     {args_key, reverse_args_identifiers} =
       Enum.map_reduce(vars, [], fn var, acc ->
@@ -381,111 +342,134 @@ defmodule EXLA.Defn do
         end)
       end)
 
-    {lazy_transfers, options} = Keyword.pop(options, :lazy_transfers, :opt_in)
+    disk_key = %{
+      client: client.name,
+      args: args_key,
+      lazy_transfers: lazy_transfers,
+      hooks: Map.keys(hooks),
+      options: options
+    }
 
-    {eval_time, {expr, {ref, outputs, {used_inputs, defined_hooks}}}} =
-      :timer.tc(fn ->
-        expr_cache_fun.({key, args_key}, fn ->
-          expr = fun.(vars)
-          inputs_and_hooks = Outfeed.used_inputs_and_hooks(expr, used_inputs, lazy_transfers)
-          {expr, {make_ref(), Nx.to_template(expr), inputs_and_hooks}}
-        end)
-      end)
+    EXLA.Defn.Disk.cache(cache, client, disk_key, debug?, fn ->
+      {{expr_cache_fun, comp_cache_fun}, options} =
+        if cache do
+          Keyword.pop(options, EXLA, {&EXLA.Defn.LockedCache.run/2, &EXLA.Defn.LockedCache.run/2})
+        else
+          cache_fun = fn _key, fun -> fun.() end
+          {{cache_fun, cache_fun}, Keyword.delete(options, EXLA)}
+        end
 
-    if debug? do
-      hit_or_miss = if expr, do: "miss", else: "hit"
-
-      Logger.debug(
-        "EXLA defn evaluation #{inspect(key)} cache #{hit_or_miss} in #{us_to_ms(eval_time)}ms"
-      )
-    end
-
-    {hooks, options} = Keyword.pop(options, :hooks, %{})
-
-    outfeed = Outfeed.new(hooks, defined_hooks)
-
-    comp_key = {ref, client.name, outfeed.used_hooks, lazy_transfers, options}
-
-    {comp_time, {evaled, {xla_time, executable, extra, outfeed}}} =
-      :timer.tc(fn ->
-        comp_cache_fun.(comp_key, fn ->
-          {reverse_inputs_and_typespecs, reverse_infeeds} =
-            reverse_args_identifiers
-            |> Enum.reverse()
-            |> EXLA.Defn.Buffers.split_by_value(used_inputs, fn
-              {type, shape, _names}, i, nil -> {i, Typespec.tensor(type, shape)}
-              {type, shape, _names}, i, depth -> {i, depth, Typespec.tensor(type, shape)}
-            end)
-
-          inputs_and_typespecs = Enum.reverse(reverse_inputs_and_typespecs)
-
-          comp_arg_typespecs =
-            for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
-
-          out_typespecs =
-            [outputs]
-            |> Nx.Defn.Composite.flatten_list()
-            |> Enum.map(fn t ->
-              t
-              |> Nx.devectorize()
-              |> then(&Typespec.tensor(&1.type, &1.shape))
-            end)
-
-          EXLA.MLIR.Module.new(comp_arg_typespecs, out_typespecs, fn builder ->
-            outfeed =
-              outfeed
-              |> Outfeed.with_token(Value.create_token(builder))
-              |> Outfeed.add_infeeds(builder, reverse_infeeds)
-
-            expr = Nx.Defn.Composite.traverse(expr || fun.(vars), &Nx.devectorize/1)
-
-            {extra, outfeed} =
-              to_computation.(builder, expr, inputs_and_typespecs, outfeed)
-
-            {xla_time, executable} =
-              :timer.tc(fn ->
-                typespecs =
-                  for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
-
-                EXLA.MLIR.Module.compile(
-                  builder.module,
-                  client,
-                  typespecs,
-                  builder.return_typespecs,
-                  options
-                )
-              end)
-
-            {:ok, {xla_time, executable, extra, %{outfeed | infeeds: []}}}
+      {eval_time, {expr, {ref, outputs, {used_inputs, defined_hooks}}}} =
+        :timer.tc(fn ->
+          expr_cache_fun.({key, stream?, args_key, lazy_transfers}, fn ->
+            expr = fun.(vars)
+            inputs_and_hooks = Outfeed.used_inputs_and_hooks(expr, used_inputs, lazy_transfers)
+            {expr, {make_ref(), Nx.to_template(expr), inputs_and_hooks}}
           end)
         end)
-      end)
 
-    cond do
-      not debug? ->
-        :ok
+      if debug? do
+        hit_or_miss = if expr, do: "miss", else: "hit"
 
-      evaled ->
         Logger.debug(
-          "EXLA compilation #{inspect(key)} cache miss in #{us_to_ms(comp_time)}ms (#{us_to_ms(xla_time)}ms in XLA)"
+          "EXLA defn evaluation #{inspect(key)} cache #{hit_or_miss} in #{us_to_ms(eval_time)}ms"
         )
+      end
 
-      true ->
-        Logger.debug("EXLA compilation #{inspect(key)} cache hit in #{us_to_ms(comp_time)}ms")
-    end
+      outfeed = Outfeed.new(hooks, defined_hooks)
+      comp_key = {ref, client.name, outfeed.used_hooks, lazy_transfers, options}
 
-    if expr || evaled do
-      measurements = %{
-        eval_time: eval_time,
-        compile_time: comp_time,
-        total_time: eval_time + comp_time
-      }
+      {comp_time, {evaled, {xla_time, executable, inputs_and_typespecs, outfeed}}} =
+        :timer.tc(fn ->
+          comp_cache_fun.(comp_key, fn ->
+            {reverse_inputs_and_typespecs, reverse_infeeds} =
+              reverse_args_identifiers
+              |> Enum.reverse()
+              |> EXLA.Defn.Buffers.split_by_value(used_inputs, fn
+                {type, shape, _names}, i, nil -> {i, Typespec.tensor(type, shape)}
+                {type, shape, _names}, i, depth -> {i, depth, Typespec.tensor(type, shape)}
+              end)
 
-      :telemetry.execute([:exla, :compilation], measurements, %{key: key})
-    end
+            inputs_and_typespecs = Enum.reverse(reverse_inputs_and_typespecs)
 
-    outfeed = Outfeed.with_user_hooks(outfeed, hooks)
-    {executable, used_inputs, outputs, outfeed, extra, debug?}
+            comp_typespecs =
+              for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
+
+            outputs =
+              if stream? do
+                # The computation returns the final accumulator value
+                {_chunk_result, acc} = outputs
+                acc
+              else
+                outputs
+              end
+
+            out_typespecs =
+              [outputs]
+              |> Nx.Defn.Composite.flatten_list()
+              |> Enum.map(fn t ->
+                t
+                |> Nx.devectorize()
+                |> then(&Typespec.tensor(&1.type, &1.shape))
+              end)
+
+            EXLA.MLIR.Module.new(comp_typespecs, out_typespecs, fn builder ->
+              # Only create the token when we know it will actually be
+              # used, that is: streaming, lazy transfers or hooks
+              outfeed =
+                if stream? or reverse_infeeds != [] or hooks != %{} or defined_hooks != %{} do
+                  outfeed
+                  |> Outfeed.with_token(Value.create_token(builder))
+                  |> Outfeed.add_infeeds(builder, reverse_infeeds)
+                else
+                  outfeed
+                end
+
+              expr = Nx.Defn.Composite.traverse(expr || fun.(vars), &Nx.devectorize/1)
+              outfeed = to_computation.(builder, expr, inputs_and_typespecs, outfeed, client)
+
+              {xla_time, executable} =
+                :timer.tc(fn ->
+                  EXLA.MLIR.Module.compile(
+                    builder.module,
+                    client,
+                    comp_typespecs,
+                    builder.return_typespecs,
+                    options
+                  )
+                end)
+
+              {:ok, {xla_time, executable, inputs_and_typespecs, %{outfeed | infeeds: []}}}
+            end)
+          end)
+        end)
+
+      cond do
+        not debug? ->
+          :ok
+
+        evaled ->
+          Logger.debug(
+            "EXLA compilation #{inspect(key)} cache miss in #{us_to_ms(comp_time)}ms (#{us_to_ms(xla_time)}ms in XLA)"
+          )
+
+        true ->
+          Logger.debug("EXLA compilation #{inspect(key)} cache hit in #{us_to_ms(comp_time)}ms")
+      end
+
+      if expr || evaled do
+        measurements = %{
+          eval_time: eval_time,
+          compile_time: comp_time,
+          total_time: eval_time + comp_time
+        }
+
+        :telemetry.execute([:exla, :compilation], measurements, %{key: key})
+      end
+
+      outfeed = Outfeed.with_user_hooks(outfeed, hooks)
+      {executable, {used_inputs, outputs, outfeed, inputs_and_typespecs}}
+    end)
   end
 
   defp us_to_ms(time), do: Float.round(time / 1000, 1)
@@ -520,19 +504,30 @@ defmodule EXLA.Defn do
          cache
        ) do
     [initial_arg, _arg, pred, body] = args
-    initial_with_token = {get_token(cache), initial_arg}
 
-    {initial, cache} = recur_composite(initial_with_token, state, cache)
+    initial =
+      if token = get_token(cache) do
+        {token, initial_arg}
+      else
+        initial_arg
+      end
+
+    {initial, cache} = recur_composite(initial, state, cache)
 
     {pred_computation, cache} = mlir_while_computation(pred, initial, {:pred, 8}, state, cache)
     {body_computation, cache} = mlir_while_computation(body, initial, :with_token, state, cache)
 
-    [token | results] =
+    results =
       Value.while(function, pred_computation, body_computation, List.flatten(initial))
 
-    result = wrap_tuple_result(results, initial_arg)
-
-    {result, update_token(cache, token)}
+    if get_token(cache) do
+      [token | results] = results
+      result = wrap_tuple_result(results, initial_arg)
+      {result, update_token(cache, token)}
+    else
+      result = wrap_tuple_result(results, initial_arg)
+      {result, cache}
+    end
   end
 
   defp cached_recur_operator(:cond, %T{data: %Expr{args: args}} = t, state, cache) do
@@ -598,8 +593,88 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(
          :optional,
-         %T{data: %Expr{args: [%{data: %{op: :top_k, args: [tensor, opts]}}, expr, _callback]}} =
-           _out,
+         %T{
+           data: %Expr{
+             args: [
+               %{data: %{op: :eigh, args: [tensor, _opts]}},
+               {eigenvecs_expr, eigenvals_expr},
+               _callback
+             ]
+           }
+         },
+         %{client: %EXLA.Client{platform: :host}, builder: %Function{}} = state,
+         cache
+       ) do
+    # We match only on platform: :host for MLIR, as we want to support
+    # eigh-on-cpu as a custom call only in this case
+    {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
+
+    # convert to float and ensure that we're either using f32 or f64, because Eigen
+    # only supports f32 and f64 easily.
+    out_type = Nx.Type.merge(Nx.Type.to_floating(eigenvecs_expr.type), {:f, 32})
+
+    tensor =
+      if op_type(tensor) != out_type do
+        to_type(tensor, out_type)
+      else
+        tensor
+      end
+
+    {eigenvecs, eigenvals} =
+      Value.eigh(
+        tensor,
+        expr_to_typespec(%{eigenvecs_expr | type: out_type}),
+        expr_to_typespec(%{eigenvals_expr | type: out_type})
+      )
+
+    {[to_type(eigenvecs, eigenvecs_expr.type), to_type(eigenvals, eigenvals_expr.type)], cache}
+  end
+
+  defp cached_recur_operator(
+         :optional,
+         %T{
+           data: %Expr{
+             args: [%{data: %{op: :take, args: [tensor, indices, opts]}}, expr, _callback]
+           }
+         },
+         state,
+         cache
+       ) do
+    axis = opts[:axis]
+    {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
+    {indices, cache} = recur_operator(indices, state, cache) |> unwrap_single_tensor!()
+
+    tensor_rank = tensor |> op_shape() |> tuple_size()
+    indices_rank = indices |> op_shape() |> tuple_size()
+    result_rank = tensor_rank - 1 + indices_rank
+
+    index_vector_dim = indices_rank
+    slice_sizes = tensor |> op_shape() |> put_elem(axis, 1) |> Tuple.to_list()
+
+    {left, right} = result_rank |> axes_for_rank() |> Enum.split(axis)
+    offset_dims = left ++ Enum.drop(right, indices_rank)
+
+    collapsed_slice_dims = [axis]
+    start_index_map = [axis]
+
+    result =
+      Value.gather(
+        tensor,
+        indices,
+        index_vector_dim,
+        slice_sizes,
+        offset_dims,
+        collapsed_slice_dims,
+        start_index_map,
+        expr_to_typespec(expr)
+      )
+
+    {result, cache}
+  end
+
+  defp cached_recur_operator(
+         :optional,
+         %T{data: %Expr{args: [%{data: %{op: :top_k, args: [tensor, opts]}}, expr, _callback]}},
          state,
          cache
        ) do
@@ -612,26 +687,24 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(
          :optional,
-         %T{data: %Expr{args: [%{data: %{op: :fft2, args: [tensor, opts]}}, _expr, _callback]}} =
-           out,
+         %T{data: %Expr{args: [%{data: %{op: :fft2, args: [tensor, opts]}}, expr, _callback]}},
          state,
          cache
        ) do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
-    {fft2(&Value.fft(&1, :fft, &2, &3), [tensor, opts], out, state), cache}
+    {fft2(&Value.fft(&1, :fft, &2, &3), [tensor, opts], expr, state), cache}
   end
 
   defp cached_recur_operator(
          :optional,
-         %T{data: %Expr{args: [%{data: %{op: :ifft2, args: [tensor, opts]}}, _expr, _callback]}} =
-           out,
+         %T{data: %Expr{args: [%{data: %{op: :ifft2, args: [tensor, opts]}}, expr, _callback]}},
          state,
          cache
        ) do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
-    {fft2(&Value.fft(&1, :ifft, &2, &3), [tensor, opts], out, state), cache}
+    {fft2(&Value.fft(&1, :ifft, &2, &3), [tensor, opts], expr, state), cache}
   end
 
   defp cached_recur_operator(:optional, %T{data: %Expr{args: args}}, state, cache) do
@@ -649,16 +722,19 @@ defmodule EXLA.Defn do
           {computation, cache}
 
         %{} ->
-          {computation, cache} = token_computation("optional", call_args, expr, state, cache)
+          {computation, cache} = optional_computation("optional", call_args, expr, state, cache)
           {computation, Map.put(cache, key, computation)}
       end
 
-    typespecs = [Typespec.token() | container_to_typespecs(expr)]
-
-    [token | result] =
-      Value.call(state.builder, [get_token(cache) | call_args], call_body, typespecs)
-
-    {wrap_tuple_result(result, expr), update_token(cache, token)}
+    if token = get_token(cache) do
+      typespecs = [Typespec.token() | container_to_typespecs(expr)]
+      [token | result] = Value.call(state.builder, [token | call_args], call_body, typespecs)
+      {wrap_tuple_result(result, expr), update_token(cache, token)}
+    else
+      typespecs = container_to_typespecs(expr)
+      result = Value.call(state.builder, call_args, call_body, typespecs)
+      {wrap_tuple_result(result, expr), cache}
+    end
   end
 
   defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do
@@ -1168,11 +1244,6 @@ defmodule EXLA.Defn do
     mlir_scatter(tensors, out, :put)
   end
 
-  defp to_operator(:map, [%Value{} = arg, _opts, fun], ans, _state) do
-    arg = to_type(arg, ans.type)
-    Value.map(fun, [arg], Nx.axes(ans.shape), expr_to_typespec(ans))
-  end
-
   defp to_operator(op, [arg, opts], ans, state) when op in [:argmax, :argmin] do
     apply(EXLA.Lib, op, [state.builder, arg, ans.type, opts])
   end
@@ -1220,72 +1291,13 @@ defmodule EXLA.Defn do
     Value.dynamic_update_slice(tensor, slice, start_indices, expr_to_typespec(ans))
   end
 
-  defp to_operator(:take, [%Value{} = tensor, indices, axis], ans, _state) do
-    tensor_rank = tensor |> op_shape() |> tuple_size()
-    indices_rank = indices |> op_shape() |> tuple_size()
-    result_rank = tensor_rank - 1 + indices_rank
-
-    index_vector_dim = indices_rank
-    slice_sizes = tensor |> op_shape() |> put_elem(axis, 1) |> Tuple.to_list()
-    offset_dims = result_rank |> axes_for_rank() |> delete_slice(axis, indices_rank)
-    collapsed_slice_dims = [axis]
-    start_index_map = [axis]
-
-    Value.gather(
-      tensor,
-      indices,
-      index_vector_dim,
-      slice_sizes,
-      offset_dims,
-      collapsed_slice_dims,
-      start_index_map,
-      expr_to_typespec(ans)
-    )
-  end
-
-  defp to_operator(:take_along_axis, [%Value{} = tensor, indices, axis], ans, state) do
-    %{shape: indices_shape} = indices_typespec = Value.get_typespec(indices)
-    indices_rank = tuple_size(indices_shape)
-
-    axes_range = 0..(indices_rank - 1)//1
-
-    index_vector_dim = indices_rank
-    slice_sizes = List.duplicate(1, indices_rank)
-    offset_dims = []
-    collapsed_slice_dims = Enum.to_list(axes_range)
-    start_index_map = Enum.to_list(axes_range)
-
-    new_axis_typespec = Typespec.to_shape(indices_typespec, Tuple.append(indices_shape, 1))
-
-    full_indices_typespec =
-      Typespec.to_shape(indices_typespec, Tuple.append(indices_shape, indices_rank))
-
-    full_indices =
-      axes_range
-      |> Enum.map(fn
-        ^axis -> Value.reshape(indices, new_axis_typespec)
-        axis -> Value.iota(state.builder, axis, new_axis_typespec)
-      end)
-      |> Value.concatenate(indices_rank, full_indices_typespec)
-
-    Value.gather(
-      tensor,
-      full_indices,
-      index_vector_dim,
-      slice_sizes,
-      offset_dims,
-      collapsed_slice_dims,
-      start_index_map,
-      expr_to_typespec(ans)
-    )
-  end
-
   defp to_operator(:gather, [%Value{} = tensor, indices, opts], ans, _state) do
     axes = Keyword.fetch!(opts, :axes)
     tensor_shape = op_shape(tensor)
     tensor_rank = tuple_size(tensor_shape)
     tensor_axes = axes_for_rank(tensor_rank)
-    index_vector_dim = tuple_size(op_shape(indices)) - 1
+    indices_rank = tuple_size(op_shape(indices))
+    index_vector_dim = indices_rank - 1
 
     slice_sizes =
       for i <- tensor_axes do
@@ -1293,7 +1305,8 @@ defmodule EXLA.Defn do
       end
 
     batch_size = tensor_rank - length(axes)
-    offset_dims = count_up(batch_size, batch_size)
+    offset_size = indices_rank - length(axes)
+    offset_dims = count_up(batch_size, offset_size)
 
     Value.gather(
       tensor,
@@ -1312,10 +1325,13 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(:concatenate, [[%Value{} | _rest] = tensors, axis], ans, _state) do
-    tensors =
-      tensors
-      |> Enum.map(&to_type(&1, ans.type))
+    tensors = Enum.map(tensors, &to_type(&1, ans.type))
+    Value.concatenate(tensors, axis, expr_to_typespec(ans))
+  end
 
+  defp to_operator(:stack, [[%Value{} | _rest] = tensors, axis], ans, _state) do
+    reshape_typespec = Typespec.tensor(ans.type, put_elem(ans.shape, axis, 1))
+    tensors = Enum.map(tensors, &(&1 |> to_type(ans.type) |> Value.reshape(reshape_typespec)))
     Value.concatenate(tensors, axis, expr_to_typespec(ans))
   end
 
@@ -1574,7 +1590,17 @@ defmodule EXLA.Defn do
   defp mlir_while_computation(expr, initial, type, state, cache) do
     arg_typespecs = Enum.map(List.flatten(initial), &Value.get_typespec/1)
 
-    {region, [arg_token | arg_params]} = Function.push_region(state.builder, arg_typespecs)
+    {region, args} = Function.push_region(state.builder, arg_typespecs)
+
+    outer_token = get_token(cache)
+
+    {inner_token, arg_params} =
+      if outer_token do
+        [arg_token | arg_params] = args
+        {arg_token, arg_params}
+      else
+        {nil, args}
+      end
 
     params = Enum.with_index(arg_params, &{&2, &1})
 
@@ -1591,11 +1617,15 @@ defmodule EXLA.Defn do
         expr
       end
 
-    {res, comp_cache} = recur_composite(expr, & &1, state, reset_token(cache, arg_token))
+    {res, comp_cache} = recur_composite(expr, & &1, state, reset_token(cache, inner_token))
 
     res =
       if type == :with_token do
-        [get_token(comp_cache) | List.flatten(res)]
+        if outer_token do
+          [get_token(comp_cache) | List.flatten(res)]
+        else
+          List.flatten(res)
+        end
       else
         Enum.map(res, &to_type(&1, type))
       end
@@ -1606,21 +1636,34 @@ defmodule EXLA.Defn do
     {region, merge_outfeed(cache, comp_cache)}
   end
 
-  defp token_computation(name, args, expr, %{builder: %Function{}} = state, cache) do
+  defp optional_computation(name, args, expr, %{builder: %Function{}} = state, cache) do
     %Function{module: module, name: name} = subbuilder(state.builder, name)
 
-    token_typespec = Typespec.token()
     arg_typespecs = Enum.map(args, &Value.get_typespec/1)
     out_typespecs = container_to_typespecs(expr)
 
-    function =
-      EXLA.MLIR.Module.add_function(module, name, [token_typespec | arg_typespecs], [
-        token_typespec | out_typespecs
-      ])
+    outer_token = get_token(cache)
+    token_typespec = Typespec.token()
 
-    [arg_token | tail] = EXLA.MLIR.Function.get_arguments(function)
+    {arg_typespecs, out_typespecs} =
+      if outer_token do
+        {[token_typespec | arg_typespecs], [token_typespec | out_typespecs]}
+      else
+        {arg_typespecs, out_typespecs}
+      end
 
-    params = Enum.with_index(tail, fn param, i -> {i, param} end)
+    function = EXLA.MLIR.Module.add_function(module, name, arg_typespecs, out_typespecs)
+    args = EXLA.MLIR.Function.get_arguments(function)
+
+    {inner_token, args} =
+      if outer_token do
+        [arg_token | args] = args
+        {arg_token, args}
+      else
+        {nil, args}
+      end
+
+    params = Enum.with_index(args, fn param, i -> {i, param} end)
 
     state = %{
       state
@@ -1629,9 +1672,13 @@ defmodule EXLA.Defn do
         scope_ids: Tree.scope_ids(expr)
     }
 
-    {res, comp_cache} = recur_composite(expr, state, reset_token(cache, arg_token))
+    {res, comp_cache} = recur_composite(expr, state, reset_token(cache, inner_token))
 
-    Value.return(function, [get_token(comp_cache) | List.flatten(res)])
+    if outer_token do
+      Value.func_return(function, [get_token(comp_cache) | List.flatten(res)])
+    else
+      Value.func_return(function, List.flatten(res))
+    end
 
     {function, merge_outfeed(cache, comp_cache)}
   end
@@ -1807,10 +1854,10 @@ defmodule EXLA.Defn do
 
     out_typespecs = container_to_typespecs(on_true)
 
-    in_token = get_token(cache)
+    outer_token = get_token(cache)
 
     result_typespecs =
-      if in_token do
+      if outer_token do
         [Typespec.token() | out_typespecs]
       else
         out_typespecs
@@ -1820,7 +1867,7 @@ defmodule EXLA.Defn do
     {false_computation, cache} = to_mlir_if_branch(on_false, false_ids, state, cache)
     if_results = Value.if_op(pred_op, true_computation, false_computation, result_typespecs)
 
-    if in_token do
+    if outer_token do
       [token | results] = if_results
       {wrap_tuple_result(results, on_true), update_token(cache, token)}
     else
@@ -1959,11 +2006,6 @@ defmodule EXLA.Defn do
   end
 
   # Helpers
-
-  defp delete_slice(enumerable, index, length) do
-    {left, right} = Enum.split(enumerable, index)
-    left ++ Enum.drop(right, length)
-  end
 
   defp apply_mlir_broadcasted_bin_op(op, out, left, right) do
     left_typespec = Value.get_typespec(left)

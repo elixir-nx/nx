@@ -216,12 +216,14 @@ defmodule Nx.Serving do
   This can be done by passing either `Nx.backend_transfer/1` or `Nx.backend_copy/1`
   as third argument:
 
-      Nx.Serving.batched_run(MyDistributedServing, input, &Nx.backend_copy/1)
+      Nx.Serving.batched_run(MyDistributedServing, input, &Nx.backend_copy(&1, Nx.BinaryBackend))
 
   Use `backend_transfer/1` if you know the input will no longer be used.
 
-  Similarly, the serving has a `distributed_postprocessing` callback which can do
-  equivalent before sending the reply to the caller.
+  Similarly, the serving has a `distributed_postprocessing` callback which is
+  called on the remote machine before sending the reply to the caller. It can
+  be used to transfer resources to the binary backend before sending them over
+  the network.
 
   The servings are dispatched using Erlang Distribution. You can use
   `Node.connect/1` to manually connect nodes. In a production setup, this is
@@ -333,7 +335,7 @@ defmodule Nx.Serving do
   but it could also be used to perform the same operation for different
   templates:
 
-      iex> args = [Nx.template({10}, :s64)]
+      iex> args = [Nx.template({10}, :s32)]
       iex> serving = Nx.Serving.new(fn
       ...>   :double, opts -> Nx.Defn.compile(&Nx.multiply(&1, 2), args, opts)
       ...>   :half, opts -> Nx.Defn.compile(&Nx.divide(&1, 2), args, opts)
@@ -341,7 +343,7 @@ defmodule Nx.Serving do
       iex> double_batch = Nx.Batch.concatenate([Nx.iota({10})]) |> Nx.Batch.key(:double)
       iex> Nx.Serving.run(serving, double_batch)
       #Nx.Tensor<
-        s64[10]
+        s32[10]
         [0, 2, 4, 6, 8, 10, 12, 14, 16, 18]
       >
       iex> half_batch = Nx.Batch.concatenate([Nx.iota({10})]) |> Nx.Batch.key(:half)
@@ -585,7 +587,7 @@ defmodule Nx.Serving do
   Configure the serving to stream its results.
 
   Once `run/2` or `batched_run/2` are invoked, it will then
-  return a stream. The stream is must be consumed in the same
+  return a stream. The stream must be consumed in the same
   process that calls `run/2` or `batched_run/2`.
 
   Batches will be streamed as they arrive. You may also opt-in
@@ -768,8 +770,7 @@ defmodule Nx.Serving do
         end
       end)
 
-    # TODO: Use Process.monitor/2 on Elixir v1.15+
-    {pid, :erlang.monitor(:process, pid, alias: :demonitor)}
+    {pid, Process.monitor(pid, alias: :demonitor)}
   end
 
   defp run_hook(ref, size, result, hook) do
@@ -1038,8 +1039,7 @@ defmodule Nx.Serving do
 
     {preprocessed, info} = handle_preprocessing(preprocessing, input)
 
-    # TODO: Use Process.monitor/2 on Elixir v1.15+
-    ref = :erlang.monitor(:process, pid, alias: :demonitor)
+    ref = Process.monitor(pid, alias: :demonitor)
 
     size_or_unknown =
       case preprocessed do
@@ -1396,8 +1396,7 @@ defmodule Nx.Serving do
 
   @impl true
   def handle_info({__MODULE__, :proxy_monitor, pid, ref}, state) do
-    # TODO: Use Process.monitor/2 on Elixir v1.15+
-    :erlang.monitor(:process, pid, tag: {:proxy, ref})
+    Process.monitor(pid, tag: {:proxy, ref})
     {:noreply, state}
   end
 
@@ -1613,7 +1612,7 @@ defmodule Nx.Serving do
             send(ref, {ref, {:batch, {start, size, output, metadata}}})
 
             for pid <- pids do
-              send(pid, {ref, size - start})
+              send(pid, {ref, size})
             end
           end
 

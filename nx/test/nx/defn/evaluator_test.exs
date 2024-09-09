@@ -16,7 +16,7 @@ defmodule Nx.Defn.EvaluatorTest do
   defn iota(), do: Nx.iota({2, 2})
 
   test "iota" do
-    assert %T{shape: {2, 2}, type: {:s, 64}} = iota()
+    assert %T{shape: {2, 2}, type: {:s, 32}} = iota()
   end
 
   defn concatenate(a, b), do: Nx.concatenate([a, b])
@@ -45,7 +45,7 @@ defmodule Nx.Defn.EvaluatorTest do
   defn reshape(t), do: Nx.reshape(t, {3, 2})
 
   test "reshape" do
-    assert %T{shape: {3, 2}, type: {:s, 64}} = reshape(Nx.iota({2, 3}))
+    assert %T{shape: {3, 2}, type: {:s, 32}} = reshape(Nx.iota({2, 3}))
   end
 
   defn reduce_window(t1, acc),
@@ -269,16 +269,6 @@ defmodule Nx.Defn.EvaluatorTest do
     test "calls external anonymous function via reduce" do
       assert calls_reduce_fun(&Nx.add/2, Nx.tensor([1, 2, 3])) == Nx.tensor(6)
     end
-
-    defn calls_map_fun(t) do
-      Nx.map(t, fn x ->
-        if Nx.equal(x, 0), do: 1, else: -x
-      end)
-    end
-
-    test "calls internal anonymous function via map" do
-      assert calls_map_fun(Nx.tensor([0, 1, 2])) == Nx.tensor([1, -1, -2])
-    end
   end
 
   describe "access" do
@@ -315,7 +305,7 @@ defmodule Nx.Defn.EvaluatorTest do
     assert ExUnit.CaptureIO.capture_io(fn -> labelled_inspect(1, 2) end) ==
              """
              add: #Nx.Tensor<
-               s64
+               s32
                3
              >
              """
@@ -329,7 +319,7 @@ defmodule Nx.Defn.EvaluatorTest do
            end) ==
              """
              #Nx.Tensor<
-               s64
+               s32
                6
              >
              """
@@ -688,33 +678,33 @@ defmodule Nx.Defn.EvaluatorTest do
     end
 
     test "while raises on incompatible body/initial" do
-      t = Nx.iota({2, 3}, vectorized_axes: [a: 1], type: :s64)
+      t = Nx.iota({2, 3}, vectorized_axes: [a: 1], type: :s32)
 
       message = """
-      test/nx/defn/evaluator_test.exs:660: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
+      test/nx/defn/evaluator_test.exs:650: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
 
       {\e[32m
        <<<<< Body (do-block) <<<<<
        #Nx.Tensor<
          vectorized[a: 2]
-         s64[2][3]
+         s32[2][3]
        >
        ==========
        \e[31m#Nx.Tensor<
          vectorized[a: 1]
-         s64[2][3]
+         s32[2][3]
        >
        >>>>>     Initial     >>>>>
        \e[0m, #Nx.Tensor<
          vectorized[a: 2]
-         s64[2][3]
+         s32[2][3]
        >, #Nx.Tensor<
-         s64
+         s32
        >}
       """
 
       assert_raise CompileError, message, fn ->
-        vectorized_while(t, Nx.iota({2, 3}, vectorized_axes: [a: 2], type: :s64))
+        vectorized_while(t, Nx.iota({2, 3}, vectorized_axes: [a: 2], type: :s32))
       end
     end
 
@@ -723,13 +713,13 @@ defmodule Nx.Defn.EvaluatorTest do
 
       error =
         """
-        test/nx/defn/evaluator_test.exs:660: condition must be a scalar tensor, got: #Nx.Tensor<
+        test/nx/defn/evaluator_test.exs:650: condition must be a scalar tensor, got: #Nx.Tensor<
           vectorized[x: 1]
           u8[1]
         \s\s
           Nx.Defn.Expr
-          parameter a:2   s64[1][1]
-          b = reshape 2   s64[1][1]
+          parameter a:2   s32[1][1]
+          b = reshape 2   s32[1][1]
           c = less a, b   u8[1][1]
         >, consider using Nx.all/1 or Nx.any/1 to obtain a scalar predicate from tensor
         """

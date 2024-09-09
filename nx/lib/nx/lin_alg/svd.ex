@@ -1,7 +1,7 @@
 defmodule Nx.LinAlg.SVD do
   @moduledoc false
 
-  # Implementation of Singular Value Decompositon
+  # Implementation of Singular Value Decomposition
   # Inspired by the Jax code in https://github.com/google/jax/blob/ba557d5e1beb480851117a003ebf76c0ed2249e0/jax/_src/lax/svd.py
   # QDWH is QR-based Dynamically Weighted Halley iteration
   #

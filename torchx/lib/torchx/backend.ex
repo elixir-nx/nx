@@ -338,49 +338,13 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def take(out, t, i, axis) do
-    axes = Nx.axes(t)
+  def stack(out, tensors, axis) do
+    reshape = put_elem(out.shape, axis, 1)
 
-    indices_shape =
-      axes
-      |> Enum.map(fn
-        ^axis -> Tuple.product(i.shape)
-        _ -> 1
-      end)
-      |> List.to_tuple()
-
-    idx_tiling =
-      t.shape
-      |> Tuple.to_list()
-      |> Enum.with_index(fn
-        _x, ^axis -> 1
-        x, _ -> x
-      end)
-
-    indices_for_axis =
-      i
-      |> Nx.reshape(indices_shape)
-      |> Nx.tile(idx_tiling)
-
-    num_elements = Tuple.product(indices_for_axis.shape)
-
-    indices =
-      axes
-      |> Enum.map(fn
-        ^axis ->
-          Nx.reshape(indices_for_axis, {num_elements, 1})
-
-        current ->
-          # current when current < axis ->
-          indices_for_axis
-          |> Nx.shape()
-          |> Nx.iota(axis: current, backend: __MODULE__)
-          |> Nx.reshape({num_elements, 1})
-      end)
-      |> Nx.concatenate(axis: 1)
-
-    # TODO: maybe rewrite it as gather now behaves differently
-    gather(out, t, indices, [])
+    tensors
+    |> Enum.map(&(&1 |> from_nx() |> Torchx.reshape(reshape)))
+    |> Torchx.concatenate(axis)
+    |> to_nx(out)
   end
 
   @impl true
@@ -471,12 +435,12 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def take_along_axis(out, tensor, idx, axis) do
+  def take_along_axis(out, tensor, idx, opts) do
     idx_tx = idx |> from_nx() |> Torchx.to_type(:long)
 
     tensor
     |> from_nx()
-    |> Torchx.gather(idx_tx, axis)
+    |> Torchx.gather(idx_tx, opts[:axis])
     |> to_nx(out)
   end
 
@@ -489,6 +453,7 @@ defmodule Torchx.Backend do
     tensor
     |> from_nx()
     |> Torchx.argsort(stable, axis, is_descending)
+    |> Torchx.to_type(to_torch_type(out.type))
     |> to_nx(out)
   end
 
@@ -498,6 +463,8 @@ defmodule Torchx.Backend do
       tensor
       |> from_nx()
       |> Torchx.top_k(Keyword.fetch!(opts, :k))
+
+    indices = Torchx.to_type(indices, to_torch_type(out_indices.type))
 
     {to_nx(values, out_values), to_nx(indices, out_indices)}
   end
@@ -520,6 +487,7 @@ defmodule Torchx.Backend do
     t
     |> from_nx()
     |> Torchx.sum(axes, keep_axes)
+    |> Torchx.to_type(to_torch_type(out.type))
     |> to_nx(out)
   end
 
@@ -535,7 +503,9 @@ defmodule Torchx.Backend do
         aggregate_over_axes(t, axes, keep_axes, &Torchx.product/3)
       end
 
-    to_nx(result, out)
+    result
+    |> Torchx.to_type(to_torch_type(out.type))
+    |> to_nx(out)
   end
 
   @impl true
@@ -658,6 +628,7 @@ defmodule Torchx.Backend do
 
     if tie_break == :low do
       apply(Torchx, fun, [t_tx, axis, keep_axis])
+      |> Torchx.to_type(to_torch_type(out.type))
       |> to_nx(out)
     else
       %{data: %{ref: {device, _}}, shape: shape} = t
@@ -669,6 +640,7 @@ defmodule Torchx.Backend do
 
       scalar
       |> Torchx.subtract(result)
+      |> Torchx.to_type(to_torch_type(out.type))
       |> to_nx(out)
     end
   end
@@ -711,9 +683,12 @@ defmodule Torchx.Backend do
     if reverse do
       result
       |> Torchx.flip([axis])
+      |> Torchx.to_type(to_torch_type(out.type))
       |> to_nx(out)
     else
-      to_nx(result, out)
+      result
+      |> Torchx.to_type(to_torch_type(out.type))
+      |> to_nx(out)
     end
   end
 
@@ -834,9 +809,6 @@ defmodule Torchx.Backend do
     type = Nx.Type.merge(left.type, right.type)
     {Nx.as_type(left, type), Nx.as_type(right, type)}
   end
-
-  defp maybe_broadcast_bin_args(_out_shape, %{shape: {}} = l, r), do: {from_nx(l), from_nx(r)}
-  defp maybe_broadcast_bin_args(_out_shape, l, %{shape: {}} = r), do: {from_nx(l), from_nx(r)}
 
   defp maybe_broadcast_bin_args(out_shape, l, r) do
     l_tx =
@@ -1743,6 +1715,7 @@ defmodule Torchx.Backend do
   def from_torch_type(:int), do: {:s, 32}
   def from_torch_type(:long), do: {:s, 64}
   def from_torch_type(:brain), do: {:bf, 16}
+  def from_torch_type(:float8_e5m2), do: {:f, 8}
   def from_torch_type(:half), do: {:f, 16}
   def from_torch_type(:float), do: {:f, 32}
   def from_torch_type(:double), do: {:f, 64}
@@ -1759,6 +1732,7 @@ defmodule Torchx.Backend do
   defp to_torch_type({:s, 32}, _), do: :int
   defp to_torch_type({:s, 64}, _), do: :long
   defp to_torch_type({:bf, 16}, _), do: :brain
+  defp to_torch_type({:f, 8}, _), do: :float8_e5m2
   defp to_torch_type({:f, 16}, _), do: :half
   defp to_torch_type({:f, 32}, _), do: :float
   defp to_torch_type({:f, 64}, _), do: :double
@@ -1831,7 +1805,7 @@ defmodule Torchx.Backend do
 
   not_possible =
     [count_leading_zeros: 2, population_count: 2] ++
-      [map: 4, reduce: 5, window_reduce: 6, from_pointer: 5, to_pointer: 2]
+      [reduce: 5, window_reduce: 6, from_pointer: 5, to_pointer: 2]
 
   for {fun, arity} <- not_possible do
     args = Macro.generate_arguments(arity, __MODULE__)

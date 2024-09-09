@@ -612,7 +612,7 @@ defmodule Nx.Defn.Expr do
           {nil, range}
 
         unroll when is_integer(unroll) and unroll > 0 ->
-          {internal, external} = split_range(range, size - rem(size, unroll))
+          {internal, external} = Range.split(range, size - rem(size, unroll))
           {{internal, 0..(unroll - 1)//1}, external}
 
         unroll ->
@@ -728,33 +728,6 @@ defmodule Nx.Defn.Expr do
       %{vectorized_axes: [{^first_axis, _} | other_axes]} = leaf
       Nx.revectorize(leaf, vectorized_axes ++ other_axes)
     end)
-  end
-
-  # TODO: Use Range.split/2 when we require Elixir v1.15+
-  defp split_range(first..last//step = range, split) when is_integer(split) do
-    if split >= 0 do
-      split_range(first, last, step, split)
-    else
-      split_range(first, last, step, Range.size(range) + split)
-    end
-  end
-
-  defp split_range(first, last, step, split) when first < last or (first == last and step > 0) do
-    if step > 0 do
-      mid = max(min(first + step * (split - 1), last), first - step)
-      {first..mid//step, (mid + step)..last//step}
-    else
-      {first..(first - step)//step, (last + step)..last//step}
-    end
-  end
-
-  defp split_range(last, first, step, split) do
-    if step < 0 do
-      mid = min(max(last + step * (split - 1), first), last - step)
-      {last..mid//step, (mid + step)..first//step}
-    else
-      {last..(last - step)//step, (first + step)..first//step}
-    end
   end
 
   defp compatible_while!(file, line, initial, body) do
@@ -986,13 +959,6 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def map(%{type: type} = out, tensor, opts, fun) do
-    args = [parameter(new_context(:map), type, {}, 0)]
-    %{data: %{context: context}} = tensor = to_expr(tensor)
-    expr(out, context, :map, [tensor, opts, apply_fun(context, fun, args, type)])
-  end
-
-  @impl true
   def window_scatter_max(out, tensor, source, init_value, window_dims, opts) do
     {[tensor, source, init_value], context} = to_exprs([tensor, source, init_value])
 
@@ -1184,18 +1150,6 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def take(out, tensor, indices, axis) do
-    {[tensor, indices], context} = to_exprs([tensor, indices])
-    expr(out, context, :take, [tensor, indices, axis])
-  end
-
-  @impl true
-  def take_along_axis(out, tensor, indices, axis) do
-    {[tensor, indices], context} = to_exprs([tensor, indices])
-    expr(out, context, :take_along_axis, [tensor, indices, axis])
-  end
-
-  @impl true
   def gather(out, tensor, indices, opts) do
     {[tensor, indices], context} = to_exprs([tensor, indices])
     expr(out, context, :gather, [tensor, indices, opts])
@@ -1211,6 +1165,12 @@ defmodule Nx.Defn.Expr do
   def concatenate(out, tensors, axis) do
     {tensors, context} = to_exprs(tensors)
     expr(out, context, :concatenate, [tensors, axis])
+  end
+
+  @impl true
+  def stack(out, tensors, axis) do
+    {tensors, context} = to_exprs(tensors)
+    expr(out, context, :stack, [tensors, axis])
   end
 
   @impl true

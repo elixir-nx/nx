@@ -150,12 +150,6 @@ defmodule Nx.Defn.Grad do
   defp reduce_args(:put_slice, %{data: %{args: [arg, _, update | _]}}, acc, fun),
     do: fun.(arg, fun.(update, acc))
 
-  defp reduce_args(:take_along_axis, %{data: %{args: [arg | _]}}, acc, fun),
-    do: fun.(arg, acc)
-
-  defp reduce_args(:take, %{data: %{args: [arg | _]}}, acc, fun),
-    do: fun.(arg, acc)
-
   defp reduce_args(:gather, %{data: %{args: [arg | _]}}, acc, fun),
     do: fun.(arg, acc)
 
@@ -620,6 +614,21 @@ defmodule Nx.Defn.Grad do
     [{x, g}]
   end
 
+  defp grad(:stack, [tensors, axis], ans, g) do
+    zero_axes = List.duplicate(0, Nx.rank(ans))
+    ans_shape_list = Tuple.to_list(ans.shape)
+
+    {pairs, _} =
+      Enum.map_reduce(tensors, 0, fn t, limit ->
+        current_limit = 1 + limit
+        start = List.replace_at(zero_axes, axis, limit)
+        len = List.replace_at(ans_shape_list, axis, 1)
+        {{t, Nx.slice(g, start, len)}, current_limit}
+      end)
+
+    pairs
+  end
+
   defp grad(:concatenate, [tensors, axis], ans, g) do
     zero_axes = List.duplicate(0, Nx.rank(ans))
     ans_shape_list = Tuple.to_list(ans.shape)
@@ -666,107 +675,6 @@ defmodule Nx.Defn.Grad do
     [{t, g}]
   end
 
-  defp grad(:take_along_axis, [t, i, axis], _ans, g) do
-    num_elements = i |> Nx.shape() |> Tuple.product()
-
-    # Convert `i`, the take_along_axis indices, to a list of
-    # fully qualified (i.e. [0, 2, 1] for a {_, _, _}-shaped tensor)
-    # indices
-
-    indices =
-      0..(Nx.rank(g) - 1)//1
-      |> Enum.map(fn
-        # For the axis of interest, we'll use the actual take_along_axis indices
-        ^axis ->
-          Nx.reshape(i, {num_elements, 1})
-
-        axis ->
-          i
-          |> Nx.shape()
-          |> Nx.iota(axis: axis)
-          |> Nx.reshape({num_elements, 1})
-      end)
-      |> Nx.concatenate(axis: 1)
-
-    # Since g is produced through the given indices,
-    # we can reshape g to be a {num_elements} shaped tensor
-    # which will directly correspond to each of the reshaped
-    # indices above
-    updates = Nx.reshape(g, {num_elements})
-
-    # The intuition for this grad is that for each index taken, we'll
-    # add the corresponding result grad to the original
-    g =
-      t
-      |> Expr.broadcast(0, Nx.shape(t), Nx.axes(t))
-      |> Nx.indexed_add(indices, updates)
-
-    [{t, g}]
-  end
-
-  defp grad(:take, [t, i, axis], _ans, g) do
-    axes_range = 0..(Nx.rank(t) - 1)//1
-
-    indices_shape =
-      axes_range
-      |> Enum.flat_map(fn
-        ^axis -> Tuple.to_list(i.shape)
-        _ -> [1]
-      end)
-      |> List.to_tuple()
-
-    idx_tiling =
-      t.shape
-      |> Tuple.to_list()
-      |> Enum.with_index(fn
-        _x, ^axis ->
-          List.duplicate(1, Nx.rank(i))
-
-        x, _ ->
-          x
-      end)
-      |> List.flatten()
-
-    num_elements = Tuple.product(g.shape)
-
-    indices_for_axis =
-      i
-      |> Nx.reshape(indices_shape)
-      |> Nx.tile(idx_tiling)
-
-    axis_offset = Nx.rank(i) - 1
-
-    indices =
-      axes_range
-      |> Enum.map(fn
-        ^axis ->
-          indices_for_axis
-          |> Nx.reshape({num_elements, 1})
-
-        current when current < axis ->
-          indices_for_axis
-          |> Nx.shape()
-          |> Nx.iota(axis: current)
-          |> Nx.reshape({num_elements, 1})
-
-        current when current > axis ->
-          indices_for_axis
-          |> Nx.shape()
-          |> Nx.iota(axis: current + axis_offset)
-          |> Nx.reshape({num_elements, 1})
-      end)
-      |> Nx.concatenate(axis: 1)
-
-    updates = Nx.reshape(g, {num_elements})
-
-    g =
-      t
-      |> Expr.broadcast(0, Nx.shape(t), Nx.axes(t))
-      |> Nx.indexed_add(indices, updates)
-
-    [{t, g}]
-  end
-
   defp grad(:gather, [t, i, opts], _ans, g) do
     i_axes = opts[:axes]
     i_shape = i.shape
@@ -780,6 +688,7 @@ defmodule Nx.Defn.Grad do
 
     g =
       0
+      |> Nx.as_type(t.type)
       |> Nx.broadcast(t_shape)
       |> Nx.indexed_add(indices, updates, opts)
 

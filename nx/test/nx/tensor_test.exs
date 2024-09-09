@@ -6,21 +6,21 @@ defmodule Nx.TensorTest do
   describe "backend_transfer" do
     test "transfers existing tensor" do
       Nx.tensor([1, 2, 3]) |> Nx.backend_transfer({ProcessBackend, key: :example})
-      assert Process.get(:example) == <<1::64-native, 2::64-native, 3::64-native>>
+      assert Process.get(:example) == <<1::32-native, 2::32-native, 3::32-native>>
     end
   end
 
   describe "backend_copy" do
     test "copies existing tensor" do
       Nx.tensor([1, 2, 3]) |> Nx.backend_copy({ProcessBackend, key: :example})
-      assert Process.get(:example) == <<1::64-native, 2::64-native, 3::64-native>>
+      assert Process.get(:example) == <<1::32-native, 2::32-native, 3::32-native>>
     end
   end
 
   describe "backend_deallocate" do
     test "deallocates existing tensor" do
       t = Nx.tensor([1, 2, 3]) |> Nx.backend_transfer({ProcessBackend, key: :example})
-      assert Process.get(:example) == <<1::64-native, 2::64-native, 3::64-native>>
+      assert Process.get(:example) == <<1::32-native, 2::32-native, 3::32-native>>
       assert Nx.backend_deallocate(t) == :ok
       refute Process.get(:example)
       assert Nx.backend_deallocate(t) == :already_deallocated
@@ -130,15 +130,15 @@ defmodule Nx.TensorTest do
 
   describe "inspect" do
     test "prints with configured precision" do
-      assert inspect(~V[1], custom_options: [nx_precision: 5]) ==
+      assert inspect(~VEC[1], custom_options: [nx_precision: 5]) ==
                """
                #Nx.Tensor<
-                 s64[1]
+                 s32[1]
                  [1]
                >\
                """
 
-      assert inspect(~V[1.0], custom_options: [nx_precision: 5]) ==
+      assert inspect(~VEC[1.0], custom_options: [nx_precision: 5]) ==
                """
                #Nx.Tensor<
                  f32[1]
@@ -146,7 +146,7 @@ defmodule Nx.TensorTest do
                >\
                """
 
-      assert inspect(~V[1.000042e-3], custom_options: [nx_precision: 5]) ==
+      assert inspect(~VEC[1.000042e-3], custom_options: [nx_precision: 5]) ==
                """
                #Nx.Tensor<
                  f32[1]
@@ -154,7 +154,7 @@ defmodule Nx.TensorTest do
                >\
                """
 
-      assert inspect(~V[42.1337e10], custom_options: [nx_precision: 5]) ==
+      assert inspect(~VEC[42.1337e10], custom_options: [nx_precision: 5]) ==
                """
                #Nx.Tensor<
                  f32[1]
@@ -162,7 +162,7 @@ defmodule Nx.TensorTest do
                >\
                """
 
-      assert inspect(~V[Inf -Inf NaN], custom_options: [nx_precision: 7]) ==
+      assert inspect(~VEC[Inf -Inf NaN], custom_options: [nx_precision: 7]) ==
                """
                #Nx.Tensor<
                  f32[3]
@@ -170,7 +170,7 @@ defmodule Nx.TensorTest do
                >\
                """
 
-      assert inspect(~V[Inf-Infi 1.0i 0 1000], custom_options: [nx_precision: 3]) ==
+      assert inspect(~VEC[Inf-Infi 1.0i 0 1000], custom_options: [nx_precision: 3]) ==
                """
                #Nx.Tensor<
                  c64[4]
@@ -178,7 +178,7 @@ defmodule Nx.TensorTest do
                >\
                """
 
-      assert inspect(~V[-0.0001], custom_options: [nx_precision: 3]) ==
+      assert inspect(~VEC[-0.0001], custom_options: [nx_precision: 3]) ==
                """
                #Nx.Tensor<
                  f32[1]
@@ -186,7 +186,7 @@ defmodule Nx.TensorTest do
                >\
                """
 
-      assert inspect(~V[-0.0001], custom_options: [nx_precision: 8]) ==
+      assert inspect(~VEC[-0.0001], custom_options: [nx_precision: 8]) ==
                """
                #Nx.Tensor<
                  f32[1]

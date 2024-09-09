@@ -1,9 +1,9 @@
-defmodule EXLA.Defn.LockeTest do
+defmodule EXLA.Defn.LockTest do
   use ExUnit.Case, async: true
 
   alias EXLA.Defn.Lock, as: L
 
-  test "locks a given key while process is alive", config do
+  test "locks a given key while the process is alive", config do
     parent = self()
 
     task1 =
@@ -96,7 +96,7 @@ defmodule EXLA.Defn.LockeTest do
     assert Task.await(task3)
   end
 
-  test "transfers", config do
+  test "transfers locks to another process", config do
     parent = self()
 
     task1 =

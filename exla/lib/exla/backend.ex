@@ -279,13 +279,16 @@ defmodule EXLA.Backend do
 
   @impl true
   def concatenate(out, tensors, axis) do
-    out = Nx.to_template(out)
+    copied = Enum.map(tensors, &Nx.backend_copy(&1, Nx.BinaryBackend))
+    result = Nx.BinaryBackend.concatenate(out, copied, axis)
+    Nx.backend_transfer(result, {EXLA.Backend, jit_opts([], tensors)})
+  end
 
-    expr_fun = fn tensors ->
-      Nx.Defn.Expr.concatenate(out, Tuple.to_list(tensors), axis)
-    end
-
-    jit([], expr_fun, tensors, [List.to_tuple(tensors)])
+  @impl true
+  def stack(out, tensors, axis) do
+    copied = Enum.map(tensors, &Nx.backend_copy(&1, Nx.BinaryBackend))
+    result = Nx.BinaryBackend.stack(out, copied, axis)
+    Nx.backend_transfer(result, {EXLA.Backend, jit_opts([], tensors)})
   end
 
   @impl true
@@ -370,8 +373,6 @@ defmodule EXLA.Backend do
       {:reverse, [:tensor, :axes], [:tensor]},
       {:dot, [:left, :c1, :b1, :right, :c2, :b2], [:left, :right]},
       {:clip, [:tensor, :min, :max], [:tensor, :min, :max]},
-      {:take, [:tensor, :indices, :axis], [:tensor, :indices]},
-      {:take_along_axis, [:tensor, :indices, :axis], [:tensor, :indices]},
       {:gather, [:input, :indices, :opts], [:input, :indices]},
       {:select, [:pred, :on_true, :on_false], [:pred, :on_true, :on_false]},
       {:conv, [:tensor, :kernel, :opts], [:tensor, :kernel]},
@@ -389,7 +390,6 @@ defmodule EXLA.Backend do
       {:window_product, [:tensor, :shape, :opts], [:tensor]},
       {:window_max, [:tensor, :shape, :opts], [:tensor]},
       {:window_min, [:tensor, :shape, :opts], [:tensor]},
-      {:map, [:tensor, :opts, :fun], [:tensor]},
       {:sort, [:tensor, :opts], [:tensor]},
       {:argsort, [:tensor, :opts], [:tensor]},
       {:window_scatter_max, [:tensor, :source, :init_value, :window_dims, :opts],
@@ -427,6 +427,10 @@ defmodule EXLA.Backend do
   defp jit(opts, fun, args), do: jit(opts, fun, args, args)
 
   defp jit(opts, fun, tensors, args) do
+    EXLA.jit_apply(fun, args, [on_conflict: :force] ++ jit_opts(tensors, opts))
+  end
+
+  defp jit_opts(tensors, opts) do
     {priority_client, priority_did, backup_client, backup_did} =
       for %T{data: %B{buffer: %EXLA.DeviceBuffer{client_name: client_name, device_id: device_id}}} <-
             tensors,
@@ -455,6 +459,6 @@ defmodule EXLA.Backend do
       opts[:device_id] || priority_did || backup_did ||
         EXLA.Client.fetch!(client).default_device_id
 
-    EXLA.jit_apply(fun, args, on_conflict: :force, client: client, device_id: device_id)
+    [client: client, device_id: device_id]
   end
 end

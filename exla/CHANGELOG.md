@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.8.0 (2024-08-19)
+
+  * Add `EXLA.to_mlir_module/2`
+  * The precompiled XLA CUDA binaries now require CUDA 12.1+ and cuDNN 9.1+
+  * Renamed `XLA_TARGET` value "cuda120" to "cuda12"
+  * `XLA_TARGET` automatically defaults to "cuda12" when CUDA installation is detected
+  * Allow NIF modules to be upgradable
+
 ## v0.7.1 (2024-02-27)
 
   * Add CustomCallOp for QR decomposition

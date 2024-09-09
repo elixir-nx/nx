@@ -86,6 +86,14 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
+  describe "float8" do
+    defn return_float8, do: Nx.tensor(1, type: {:f, 8})
+
+    test "supports float8 return types" do
+      assert_equal(return_float8(), Nx.tensor(1, type: {:f, 8}))
+    end
+  end
+
   describe "float16" do
     defn return_float, do: Nx.tensor(1, type: {:f, 16})
 
@@ -815,17 +823,17 @@ defmodule EXLA.Defn.ExprTest do
     test "fft" do
       assert_all_close(
         fft(Nx.tensor([1, 1, 0, 0]), length: 5),
-        ~V[2.0+0.0i 1.3090-0.9511i 0.1909-0.5877i 0.1909+0.5877i 1.3090+0.9510i]
+        ~VEC[2.0+0.0i 1.3090-0.9511i 0.1909-0.5877i 0.1909+0.5877i 1.3090+0.9510i]
       )
 
       assert_all_close(
         fft(Nx.tensor([1, 1, 0, 0, 2, 3]), length: 4),
-        ~V[2.0+0.0i 1.0-1.0i 0.0+0.0i 1.0+1.0i]
+        ~VEC[2.0+0.0i 1.0-1.0i 0.0+0.0i 1.0+1.0i]
       )
 
       assert_all_close(
         fft(Nx.tensor([1, 1, 0]), length: :power_of_two),
-        ~V[2.0+0.0i 1.0-1.0i 0.0+0.0i 1.0+1.0i]
+        ~VEC[2.0+0.0i 1.0-1.0i 0.0+0.0i 1.0+1.0i]
       )
     end
 
@@ -847,12 +855,12 @@ defmodule EXLA.Defn.ExprTest do
           length: :power_of_two
         ),
         Nx.stack([
-          ~M[
+          ~MAT[
                 2 1.0-1.0i 0 1.0+1.0i
                 1 1 1 1
                 1 -1i -1 1i
               ],
-          ~M[
+          ~MAT[
                 1 -1i -1 1i
                 1 1 1 1
                 2 1.0-1.0i 0 1.0+1.0i
@@ -877,12 +885,12 @@ defmodule EXLA.Defn.ExprTest do
           length: 4
         ),
         Nx.stack([
-          ~M[
+          ~MAT[
                 2 1.0-1.0i 0 1.0+1.0i
                 1 1 1 1
                 1 -1i -1 1i
               ],
-          ~M[
+          ~MAT[
                 1 -1i -1 1i
                 1 1 1 1
                 2 1.0-1.0i 0 1.0+1.0i
@@ -907,12 +915,12 @@ defmodule EXLA.Defn.ExprTest do
           length: 4
         ),
         Nx.stack([
-          ~M[
+          ~MAT[
                 2 1.0-1.0i 0 1.0+1.0i
                 1 1 1 1
                 1 -1i -1 1i
               ],
-          ~M[
+          ~MAT[
                 1 -1i -1 1i
                 1 1 1 1
                 2 1.0-1.0i 0 1.0+1.0i
@@ -923,19 +931,19 @@ defmodule EXLA.Defn.ExprTest do
 
     test "ifft" do
       assert_all_close(
-        ifft(~V[5 5 5 5 5],
+        ifft(~VEC[5 5 5 5 5],
           length: 5
         ),
         Nx.tensor([5, 0, 0, 0, 0])
       )
 
       assert_all_close(
-        ifft(~V[2.0+0.0i 1.0-1.0i 0.0+0.0i 1.0+1.0i 5 6], length: 4),
+        ifft(~VEC[2.0+0.0i 1.0-1.0i 0.0+0.0i 1.0+1.0i 5 6], length: 4),
         Nx.tensor([1, 1, 0, 0])
       )
 
       assert_all_close(
-        ifft(~V[2 0 0], length: :power_of_two),
+        ifft(~VEC[2 0 0], length: :power_of_two),
         Nx.tensor([0.5, 0.5, 0.5, 0.5])
       )
     end
@@ -944,12 +952,12 @@ defmodule EXLA.Defn.ExprTest do
       assert_all_close(
         ifft(
           Nx.stack([
-            ~M[
+            ~MAT[
                 2 1.0-1.0i 0 1.0+1.0i
                 1 1 1 1
                 1 -1i -1 1i
               ],
-            ~M[
+            ~MAT[
                 1 -1i -1 1i
                 1 1 1 1
                 2 1.0-1.0i 0 1.0+1.0i
@@ -988,12 +996,12 @@ defmodule EXLA.Defn.ExprTest do
           length: 4
         ),
         Nx.stack([
-          ~M[
+          ~MAT[
                 2 1.0+1.0i 0 1.0-1.0i
                 1 1 1 1
                 1 1i -1 -1i
               ],
-          ~M[
+          ~MAT[
                 1 1i -1 -1i
                 1 1 1 1
                 2 1.0+1.0i 0 1.0-1.0i
@@ -1018,12 +1026,12 @@ defmodule EXLA.Defn.ExprTest do
           length: 4
         ),
         Nx.stack([
-          ~M[
+          ~MAT[
                 2 1.0+1.0i 0 1.0-1.0i
                 1 1 1 1
                 1 1i -1 -1i
               ],
-          ~M[
+          ~MAT[
                 1 1i -1 -1i
                 1 1 1 1
                 2 1.0+1.0i 0 1.0-1.0i
@@ -1499,64 +1507,23 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
-  describe "map" do
-    defn map_plus(t), do: Nx.map(t, fn x -> x + 1 end)
-    defn map_equal(t), do: Nx.map(t, [type: {:f, 64}], fn x -> Nx.equal(x, 1) end)
-    defn map_exp(t), do: Nx.map(t, [type: {:f, 64}], fn x -> Nx.exp(x) end)
+  defn while_inside_if(pred, x) do
+    if pred do
+      {x, _} =
+        while {x, i = 0}, i < 10 do
+          {x, i + 1}
+        end
 
-    @tag :unsupported_64_bit_op
-    test "maps a function over the tensor" do
-      assert_equal(map_plus(Nx.tensor([[1, 2, 3], [4, 5, 6]])), Nx.tensor([[2, 3, 4], [5, 6, 7]]))
+      x
+    else
+      x
     end
+  end
 
-    @tag :unsupported_64_bit_op
-    test "maps a function with an output type" do
-      assert_equal(
-        map_equal(Nx.tensor([[1, 2, 3], [4, 5, 6]])),
-        Nx.tensor([[1.0, 0.0, 0.0], [0.0, 0.0, 0.0]], type: {:f, 64})
-      )
-
-      assert_equal(
-        map_exp(Nx.tensor([[1, 2, 3], [4, 5, 6]])),
-        Nx.tensor(
-          [
-            [2.718281828459045, 7.38905609893065, 20.085536923187668],
-            [54.598150033144236, 148.4131591025766, 403.4287934927351]
-          ],
-          type: {:f, 64}
-        )
-      )
-    end
-
-    defn map_conditional(t), do: Nx.map(t, fn x -> if x > 0, do: x, else: -x end)
-
-    @tag :conditional_inside_map_reduce
-    @tag :unsupported_64_bit_op
-    test "maps a function with conditional" do
-      assert_equal(
-        map_conditional(Nx.tensor([-2, -1, 0, 1, 2])),
-        Nx.tensor([2, 1, 0, 1, 2])
-      )
-    end
-
-    defn while_inside_if(pred, x) do
-      if pred do
-        {x, _} =
-          while {x, i = 0}, i < 10 do
-            {x, i + 1}
-          end
-
-        x
-      else
-        x
-      end
-    end
-
-    test "while inside if" do
-      assert %{a: a, b: b} = while_inside_if(1, %{a: 1, b: 2.0})
-      assert_all_close(a, 1)
-      assert_all_close(b, 2.0)
-    end
+  test "while inside if" do
+    assert %{a: a, b: b} = while_inside_if(1, %{a: 1, b: 2.0})
+    assert_all_close(a, 1)
+    assert_all_close(b, 2.0)
   end
 
   describe "reduce" do
@@ -1848,7 +1815,7 @@ defmodule EXLA.Defn.ExprTest do
       indices = Nx.tensor([[0]])
       updates = Nx.tensor([1])
 
-      assert_equal(indexed_add(target, indices, updates), Nx.tensor([1], type: {:s, 64}))
+      assert_equal(indexed_add(target, indices, updates), Nx.tensor([1], type: {:s, 32}))
 
       target = Nx.tensor([0])
       indices = Nx.tensor([[0]])
@@ -1920,7 +1887,7 @@ defmodule EXLA.Defn.ExprTest do
       indices = Nx.tensor([[0]])
       updates = Nx.tensor([1])
 
-      assert_equal(indexed_put(target, indices, updates), Nx.tensor([1], type: {:s, 64}))
+      assert_equal(indexed_put(target, indices, updates), Nx.tensor([1], type: {:s, 32}))
 
       target = Nx.tensor([0])
       indices = Nx.tensor([[0]])
@@ -2004,7 +1971,7 @@ defmodule EXLA.Defn.ExprTest do
     test "computes the sum across types" do
       assert_equal(Nx.tensor([1, 2, 3]) |> sum(), Nx.tensor(6))
       assert_equal(Nx.tensor([1, 2, 3], type: {:s, 8}) |> sum(), Nx.tensor(6))
-      assert_equal(Nx.tensor([1, 2, 3], type: {:u, 8}) |> sum(), Nx.tensor(6, type: {:u, 64}))
+      assert_equal(Nx.tensor([1, 2, 3], type: {:u, 8}) |> sum(), Nx.tensor(6, type: {:u, 32}))
       assert_equal(Nx.tensor([1.0, 2.0, 3.0]) |> sum(), Nx.tensor(6.0))
 
       assert_equal(
@@ -2027,9 +1994,9 @@ defmodule EXLA.Defn.ExprTest do
     defn sum_equal(t), do: Nx.sum(Nx.equal(t, 1.0))
 
     test "does not overflow" do
-      assert_equal(sum_equal(Nx.tensor(1)), Nx.tensor(1, type: {:u, 64}))
-      assert_equal(sum_equal(Nx.tensor([1, 1, 1])), Nx.tensor(3, type: {:u, 64}))
-      assert_equal(sum_equal(Nx.tensor([1, 2, 3])), Nx.tensor(1, type: {:u, 64}))
+      assert_equal(sum_equal(Nx.tensor(1)), Nx.tensor(1, type: {:u, 32}))
+      assert_equal(sum_equal(Nx.tensor([1, 1, 1])), Nx.tensor(3, type: {:u, 32}))
+      assert_equal(sum_equal(Nx.tensor([1, 2, 3])), Nx.tensor(1, type: {:u, 32}))
     end
 
     defn sum_keep(t), do: Nx.sum(t, keep_axes: true)
@@ -2052,7 +2019,7 @@ defmodule EXLA.Defn.ExprTest do
     test "computes the product across types" do
       assert_equal(Nx.tensor([1, 2, 3]) |> product(), Nx.tensor(6))
       assert_equal(Nx.tensor([1, 2, 3], type: {:s, 8}) |> product(), Nx.tensor(6))
-      assert_equal(Nx.tensor([1, 2, 3], type: {:u, 8}) |> product(), Nx.tensor(6, type: {:u, 64}))
+      assert_equal(Nx.tensor([1, 2, 3], type: {:u, 8}) |> product(), Nx.tensor(6, type: {:u, 32}))
       assert_equal(Nx.tensor([1.0, 2.0, 3.0]) |> product(), Nx.tensor(6.0))
 
       assert_equal(
@@ -2075,9 +2042,9 @@ defmodule EXLA.Defn.ExprTest do
     defn product_equal(t), do: Nx.product(Nx.equal(t, 1.0))
 
     test "does not overflow" do
-      assert_equal(product_equal(Nx.tensor(1)), Nx.tensor(1, type: {:u, 64}))
-      assert_equal(product_equal(Nx.tensor([1, 1, 1])), Nx.tensor(1, type: {:u, 64}))
-      assert_equal(product_equal(Nx.tensor([1, 2, 3])), Nx.tensor(0, type: {:u, 64}))
+      assert_equal(product_equal(Nx.tensor(1)), Nx.tensor(1, type: {:u, 32}))
+      assert_equal(product_equal(Nx.tensor([1, 1, 1])), Nx.tensor(1, type: {:u, 32}))
+      assert_equal(product_equal(Nx.tensor([1, 2, 3])), Nx.tensor(0, type: {:u, 32}))
     end
 
     defn product_keep(t), do: Nx.product(t, keep_axes: true)
@@ -2457,12 +2424,12 @@ defmodule EXLA.Defn.ExprTest do
         window_max2(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]])),
         Nx.tensor([
           [
-            [-9_223_372_036_854_775_808, -9_223_372_036_854_775_808],
-            [-9_223_372_036_854_775_808, 6]
+            [-2_147_483_648, -2_147_483_648],
+            [-2_147_483_648, 6]
           ],
           [
-            [-9_223_372_036_854_775_808, -9_223_372_036_854_775_808],
-            [-9_223_372_036_854_775_808, 6]
+            [-2_147_483_648, -2_147_483_648],
+            [-2_147_483_648, 6]
           ]
         ])
       )
@@ -2523,12 +2490,12 @@ defmodule EXLA.Defn.ExprTest do
         window_min2(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]])),
         Nx.tensor([
           [
-            [9_223_372_036_854_775_807, 9_223_372_036_854_775_807],
-            [9_223_372_036_854_775_807, 3]
+            [2_147_483_647, 2_147_483_647],
+            [2_147_483_647, 3]
           ],
           [
-            [9_223_372_036_854_775_807, 9_223_372_036_854_775_807],
-            [9_223_372_036_854_775_807, 3]
+            [2_147_483_647, 2_147_483_647],
+            [2_147_483_647, 3]
           ]
         ])
       )

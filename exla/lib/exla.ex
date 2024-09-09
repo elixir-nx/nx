@@ -139,7 +139,7 @@ defmodule EXLA do
 
   ### GPU Runtime Issues
 
-  GPU Executions run in dirty IO threads, which have a considerable smaller
+  GPU Executions run in dirty IO threads, which have a considerably smaller
   stack size than regular scheduler threads. This may lead to problems with
   certain CUDA or cuDNN versions, leading to segmentation fails. In a development
   environment, it is suggested to set:
@@ -149,6 +149,17 @@ defmodule EXLA do
   To increase the stack size of dirty IO threads from 40 kilowords to
   128 kilowords. In a release, you can set this flag in your `vm.args`.
 
+  ## Distribution
+
+  EXLA allows its tensors to be sent across nodes, as long as the parent
+  node (which effectively holds the tensor) keeps a reference to the
+  tensor while it is read by any other node it was sent to.
+
+  The result of `EXLA.compile/3` can also be shared across nodes.
+  On invocation, the underlying executable is automatically serialized
+  and sent to other nodes, without requiring a full recompilation,
+  as long as the same conditions as above apply.
+
   ## Docker considerations
 
   EXLA should run fine on Docker with one important consideration:
@@ -156,11 +167,11 @@ defmodule EXLA do
   That's because when the Erlang VM runs as root, it has to manage
   all child programs.
 
-  At the same time, Google XLA's shells out to child programs and
+  At the same time, Google's XLA shells out to child programs and
   must retain control over how child programs terminate.
 
   To address this, simply make sure you wrap the Erlang VM in
-  another process, such as the shell one. In other words, if you
+  another process, such as a shell process. In other words, if you
   are using releases, instead of this:
 
       CMD path/to/release start
@@ -209,7 +220,7 @@ defmodule EXLA do
 
       iex> EXLA.jit(&Nx.add(&1, &1)).(Nx.tensor([1, 2, 3]))
       #Nx.Tensor<
-        s64[3]
+        s32[3]
         [2, 4, 6]
       >
 
@@ -224,6 +235,11 @@ defmodule EXLA do
   It accepts the same option as `Nx.Defn.jit/2` plus:
 
     * `:cache` - cache the results of compilation, defaults to `true`.
+      You may disable it by setting it to `false`. You can also set it
+      to a binary, representing a filesystem path to store the cache.
+      EXLA will ensure the arguments and parameters across invocations
+      have the same shape, but it is ultimately your responsibility
+      to provide a unique cache path.
 
     * `:client` - an atom representing the client to use. The default
       client is chosen on this order: `:cuda`, `:rocm`, `:tpu`, and `:host`.
@@ -249,7 +265,7 @@ defmodule EXLA do
 
       iex> EXLA.jit_apply(&Nx.add(&1, &1), [Nx.tensor([1, 2, 3])])
       #Nx.Tensor<
-        s64[3]
+        s32[3]
         [2, 4, 6]
       >
 
@@ -262,35 +278,20 @@ defmodule EXLA do
   @doc """
   A shortcut for `Nx.Defn.compile/3` with the EXLA compiler.
 
-      iex> fun = EXLA.compile(&Nx.add(&1, &1), [Nx.template({3}, {:s, 64})])
+      iex> fun = EXLA.compile(&Nx.add(&1, &1), [Nx.template({3}, {:s, 32})])
       iex> fun.(Nx.tensor([1, 2, 3]))
       #Nx.Tensor<
-        s64[3]
+        s32[3]
         [2, 4, 6]
       >
 
-  Results are allocated on the `EXLA.Backend`. Note that the
-  `EXLA.Backend` is asynchronous: operations on its tensors
-  *may* return immediately, before the tensor data is available.
-  The backend will then block only when trying to read the data
-  or when passing it to another operation.
+  The returned function can be sent across nodes, as long as the parent
+  node (which effectively holds the function) keeps a reference to the
+  function while it is invoked by any other node it was sent to. On
+  invocation, the underlying executable is automatically serialized
+  and sent to other nodes, without requiring a full recompilation.
 
-  ## Options
-
-  It accepts the same option as `Nx.Defn.compile/3` plus:
-
-    * `:debug` - print compile and debugging information, defaults to `false`.
-
-    * `:cache` - cache the results of compilation, defaults to `true`.
-      You can set it to false if you plan to compile the function only
-      once and store the compile contents somewhere.
-
-    * `:client` - an atom representing the client to use. The default
-      client is chosen on this order: `:cuda`, `:rocm`, `:tpu`, and `:host`.
-
-    * `:device_id` - the default device id to run the computation on.
-      Defaults to the `:default_device_id` on the client
-
+  See `jit/2` for supported options.
   """
   def compile(function, args, options \\ []) do
     Nx.Defn.compile(function, args, Keyword.put(options, :compiler, EXLA))
@@ -327,7 +328,7 @@ defmodule EXLA do
 
   Now let's invoke it:
 
-      stream = EXLA.stream(&Streamed.sum/2, [Nx.template({}, {:s, 64}), 0])
+      stream = EXLA.stream(&Streamed.sum/2, [Nx.template({}, {:s, 32}), 0])
 
       for i <- 1..5 do
         Nx.Stream.send(stream, i)
@@ -353,6 +354,56 @@ defmodule EXLA do
   """
   def stream(function, args, options \\ []) do
     Nx.Defn.stream(function, args, Keyword.put(options, :compiler, EXLA))
+  end
+
+  @doc ~S'''
+  Takes in a function, the argument templates and the compilation
+  options and returns the textual representation of the MLIR module.
+
+  ## Options
+
+    * `:within_defn_compiler` - a boolean that indicates whether
+      this function is being called from within a `defn` compiler.
+      Defaults to `false`.
+
+  ## Examples
+
+      iex> fun = fn x, y -> Nx.add(Nx.sin(x), Nx.cos(y)) end
+      iex> args = [1.0, 2.0]
+      iex> %{mlir_module: mlir_module} = EXLA.to_mlir_module(fun, args)
+      iex> mlir_module
+      """
+      module {
+        func.func public @main(%arg0: tensor<f32>, %arg1: tensor<f32>) -> tensor<f32> {
+          %0 = stablehlo.sine %arg0 : tensor<f32>
+          %1 = stablehlo.cosine %arg1 : tensor<f32>
+          %2 = stablehlo.add %0, %1 : tensor<f32>
+          return %2 : tensor<f32>
+        }
+      }
+      """
+  '''
+  def to_mlir_module(function, args, options \\ []) do
+    {nested_compilation?, options} = Keyword.pop(options, :within_defn_compiler, false)
+
+    opts =
+      Keyword.merge(options,
+        module_compilation: :to_mlir,
+        compiler: EXLA
+      )
+
+    if nested_compilation? do
+      EXLA.Defn.__compile__(function, args, function, opts)
+    else
+      Nx.Defn.compile(function, args, opts)
+    end
+  catch
+    {:mlir_module, ref, used_inputs, output_container} ->
+      %{
+        used_inputs: used_inputs,
+        output_container: output_container,
+        mlir_module: EXLA.MLIR.Module.as_string(%EXLA.MLIR.Module{ref: ref})
+      }
   end
 
   @doc """

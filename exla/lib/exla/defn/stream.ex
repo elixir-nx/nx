@@ -2,7 +2,7 @@ defmodule EXLA.Defn.Stream do
   @moduledoc false
 
   keys =
-    [:lock, :outfeed, :pid, :runner, :send, :send_typespec, :send_indexes] ++
+    [:lock, :outfeed, :pid, :runner, :send, :send_typespecs] ++
       [:recv, :recv_length, :done, :client, :device_id]
 
   @derive {Inspect, only: [:pid, :client, :device_id, :send, :recv]}
@@ -15,8 +15,7 @@ defmodule EXLA.Defn.Stream do
         runner,
         outfeed,
         send,
-        send_typespec,
-        send_indexes,
+        send_typespecs,
         recv,
         recv_typespecs,
         done
@@ -39,8 +38,7 @@ defmodule EXLA.Defn.Stream do
       outfeed: outfeed,
       lock: lock,
       send: send,
-      send_typespec: send_typespec,
-      send_indexes: send_indexes,
+      send_typespecs: send_typespecs,
       recv: recv,
       recv_length: length(recv_typespecs),
       client: client,
@@ -64,15 +62,14 @@ defmodule EXLA.Defn.Stream do
         client: client,
         device_id: device_id,
         send: send,
-        send_typespec: send_typespec,
-        send_indexes: send_indexes
+        send_typespecs: send_typespecs
       } = stream
 
       if pid != self() do
         raise "EXLA streams require recv to be called from the process that started the stream"
       end
 
-      {template, buffers} = nx_to_io(data, send_indexes)
+      {template, buffers} = nx_to_io(data, Enum.map(send_typespecs, &elem(&1, 0)))
 
       unless Nx.compatible?(send, template) do
         raise ArgumentError, """
@@ -86,17 +83,15 @@ defmodule EXLA.Defn.Stream do
         """
       end
 
-      data_and_typespecs =
-        if client.platform == :host do
-          Enum.zip(buffers, send_typespec)
-        else
-          [{buffers, send_typespec}]
-        end
-
       pred = EXLA.Typespec.tensor({:pred, 8}, {})
 
-      :ok =
-        EXLA.Client.to_infeed(client, device_id, [{<<1::8-native>>, pred} | data_and_typespecs])
+      data_and_typespecs =
+        Enum.zip_with(buffers, send_typespecs, fn buffer, {_index, typespec} ->
+          {buffer, typespec}
+        end)
+
+      :ok = EXLA.Client.to_infeed(client, device_id, [{<<1::8-native>>, pred}])
+      :ok = EXLA.Client.to_infeed(client, device_id, data_and_typespecs)
     end
 
     defp nx_to_io(container, indexes) do

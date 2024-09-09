@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.8.0 (2024-08-19)
+
+### Enhancements
+
+  * [Nx] Add `Nx.to_pointer/2` and `Nx.from_pointer/5`
+  * [Nx] Introduce `~VEC` sigil for 1d tensors
+  * [Nx] Introduce `~MAT` sigil for 2d tensors
+  * [Nx] Implement `stack` as a callback for performance
+  * [Nx] Make `take` an optional callback
+  * [Nx] Make `take_along_axis` an optional callback
+  * [Nx.LinAlg] Support `:keep_axes` in eigh
+
+### Bug fixes
+
+  * [Nx] Fix a bug with `gather` when `indices` had more dimensions than the input `tensor`
+  * [Nx] Fix min/max value for 16 bit signed type
+  * [Nx] Fix argmax/argmin behaviour with NaNs
+  * [Nx.Serving] Fix a bug where streaming responses were never closing
+
+### Deprecations and incompatibilities
+
+  * [Nx] Deprecate `~V` in favor of `~VEC`
+  * [Nx] Deprecate `~M` in favor of `~MAT`
+  * [Nx] Remove `Nx.map/2`
+
 ## v0.7.1 (2024-02-27)
 
   * [Nx.LinAlg] Minor speed up to `Nx.LinAlg.qr/2` default implementation

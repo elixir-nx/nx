@@ -568,19 +568,6 @@ defmodule Nx.Defn.Compiler do
     {{{:., dot_meta, [fun]}, meta, args}, state}
   end
 
-  # TODO: Remove me once transform/2 is removed.
-  defp normalize({{:., _, [Nx.Defn.Kernel, :transform]} = call, meta, [ast, fun]}, state) do
-    {ast, state} = normalize(ast, state)
-
-    fun =
-      Macro.prewalk(fun, fn
-        var when is_var(var) -> normalize_var(var)
-        node -> node
-      end)
-
-    {{call, meta, [ast, fun]}, state}
-  end
-
   defp normalize({{:., _, [Nx.Defn.Kernel, :hook]} = call, meta, [ast | rest]}, state) do
     {ast, state} = normalize(ast, state)
     {{call, meta, [ast | rest]}, state}
@@ -647,11 +634,10 @@ defmodule Nx.Defn.Compiler do
      state}
   end
 
-  defp normalize({{:., dot_meta, [remote, name]}, meta, args}, state)
-       # TODO: Remove args == [] once we require Elixir version where args are nil
-       when is_atom(name) and (args == nil or args == []) do
+  defp normalize({{:., dot_meta, [remote, name]}, meta, args}, state) when is_atom(name) do
     {remote, state} = normalize(remote, state)
-    {{{:., dot_meta, [Map, :fetch!]}, meta, [remote, name]}, state}
+    {args, state} = normalize_list(args, state)
+    {{{:., dot_meta, [remote, name]}, meta, args}, state}
   end
 
   defp normalize({left, right}, state) do

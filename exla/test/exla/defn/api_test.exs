@@ -126,6 +126,47 @@ defmodule EXLA.Defn.APITest do
     end
   end
 
+  describe "disk cache" do
+    @tag :tmp_dir
+    test "reads and writes", %{tmp_dir: dir} do
+      cache = Path.join(dir, "exla.cache")
+
+      assert capture_log(fn ->
+               assert_equal(
+                 EXLA.jit(&Nx.multiply/2, cache: cache, debug: true).(2, 3),
+                 Nx.tensor(6)
+               )
+             end) =~ "EXLA disk cache not found"
+
+      assert capture_log(fn ->
+               assert_equal(
+                 EXLA.jit(&Nx.multiply/2, cache: cache, debug: true).(3, 4),
+                 Nx.tensor(12)
+               )
+             end) =~ "EXLA disk cache found"
+
+      assert capture_log(fn ->
+               assert_equal(
+                 EXLA.jit(&Nx.multiply/2, cache: cache, debug: true).(
+                   Nx.tensor([3]),
+                   Nx.tensor([4])
+                 ),
+                 Nx.tensor([12])
+               )
+             end) =~ "EXLA disk cache does not match configuration"
+
+      assert capture_log(fn ->
+               assert_equal(
+                 EXLA.jit(&Nx.multiply/2, cache: cache, debug: true).(
+                   Nx.tensor([3]),
+                   Nx.tensor([4])
+                 ),
+                 Nx.tensor([12])
+               )
+             end) =~ "EXLA disk cache found"
+    end
+  end
+
   describe "stream" do
     defn defn_sum(entry, acc), do: {acc, entry + acc}
 

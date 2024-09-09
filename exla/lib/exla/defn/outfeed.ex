@@ -120,15 +120,15 @@ defmodule EXLA.Defn.Outfeed do
     {infeeds, {compiled_hooks, token}} =
       entries
       |> List.keysort(1, :desc)
-      |> Enum.map_reduce({compiled_hooks, token}, fn {pos, _, typespec},
-                                                     {compiled_hooks, token} ->
-        next_flag = next_hook(compiled_hooks)
-        compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed, pos, typespec})
+      |> Enum.map_reduce({compiled_hooks, token}, fn
+        {pos, _, typespec}, {compiled_hooks, token} ->
+          next_flag = next_hook(compiled_hooks)
+          compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed, pos, typespec})
 
-        token = Value.outfeed(Value.constant(builder, [next_flag], flag_typespec()), token)
-        {token, [input]} = Value.infeed(token, [typespec])
+          token = Value.outfeed(Value.constant(builder, [next_flag], flag_typespec()), token)
+          {token, [input]} = Value.infeed(token, [typespec])
 
-        {{pos, input}, {compiled_hooks, token}}
+          {{pos, input}, {compiled_hooks, token}}
       end)
 
     %{outfeed | compiled_hooks: compiled_hooks, token: token, infeeds: infeeds}

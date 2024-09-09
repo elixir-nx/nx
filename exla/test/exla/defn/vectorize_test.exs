@@ -182,9 +182,9 @@ defmodule EXLA.Defn.VectorizeTest do
 
     test "simple if" do
       # this tests the case where we have a single vectorized predicate
-      pred = Nx.vectorize(~V[0 1 0], :pred)
+      pred = Nx.vectorize(~VEC[0 1 0], :pred)
 
-      assert_equal(vectorized_if(pred, 1, 2, pid: self()), Nx.vectorize(~V[2 1 2], :pred))
+      assert_equal(vectorized_if(pred, 1, 2, pid: self()), Nx.vectorize(~VEC[2 1 2], :pred))
 
       assert_received {:vectorization_test, t, clause: "if"}
       assert_equal(t, Nx.tensor(1))
@@ -194,13 +194,13 @@ defmodule EXLA.Defn.VectorizeTest do
     end
 
     test "simple cond" do
-      # this tests the case where we have a two vectorized predicates
-      pred1 = Nx.vectorize(~V[1 0 0], :pred)
-      pred2 = Nx.vectorize(~V[0 0 0], :pred)
+      # This tests the case where we have two vectorized predicates
+      pred1 = Nx.vectorize(~VEC[1 0 0], :pred)
+      pred2 = Nx.vectorize(~VEC[0 0 0], :pred)
 
       assert_equal(
         vectorized_cond(pred1, 1, pred2, 2, 3, pid: self()),
-        Nx.vectorize(~V[1 3 3], :pred)
+        Nx.vectorize(~VEC[1 3 3], :pred)
       )
 
       assert_received {:vectorization_test, t, clause: "clause_1"}
@@ -211,20 +211,20 @@ defmodule EXLA.Defn.VectorizeTest do
     end
 
     test "if with container result" do
-      pred1 = Nx.vectorize(~V[2 0 0], :pred)
+      pred1 = Nx.vectorize(~VEC[2 0 0], :pred)
 
       result =
         vectorized_if(
           pred1,
           {1, 2, 3},
-          {7, 8, Nx.vectorize(~V[9 10 11], :x)},
+          {7, 8, Nx.vectorize(~VEC[9 10 11], :x)},
           pid: self()
         )
 
       assert_equal(result, {
-        Nx.vectorize(~V[1 7 7], :pred),
-        Nx.vectorize(~V[2 8 8], :pred),
-        Nx.vectorize(~M[
+        Nx.vectorize(~VEC[1 7 7], :pred),
+        Nx.vectorize(~VEC[2 8 8], :pred),
+        Nx.vectorize(~MAT[
                   3 3 3
                   9 10 11
                   9 10 11
@@ -248,8 +248,8 @@ defmodule EXLA.Defn.VectorizeTest do
     end
 
     test "only executes selected branches" do
-      t = Nx.vectorize(~V[1], :pred)
-      f = Nx.vectorize(~V[0], :pred)
+      t = Nx.vectorize(~VEC[1], :pred)
+      f = Nx.vectorize(~VEC[0], :pred)
 
       assert = fn res, val, clause ->
         t = Nx.tensor(val)
@@ -267,74 +267,82 @@ defmodule EXLA.Defn.VectorizeTest do
 
     test "1 vectorized pred in the beginning" do
       assert_equal(
-        cond4(Nx.vectorize(~V[0 1], :pred), 10, 0, 20, 0, 30, 40),
-        Nx.vectorize(~V[40 10], :pred)
+        cond4(Nx.vectorize(~VEC[0 1], :pred), 10, 0, 20, 0, 30, 40),
+        Nx.vectorize(~VEC[40 10], :pred)
       )
 
       assert_equal(
-        cond4(Nx.vectorize(~V[0 0], :pred), 10, 1, 20, 0, 30, 40),
-        Nx.vectorize(~V[20 20], :pred)
+        cond4(Nx.vectorize(~VEC[0 0], :pred), 10, 1, 20, 0, 30, 40),
+        Nx.vectorize(~VEC[20 20], :pred)
       )
 
       assert_equal(
-        cond4(Nx.vectorize(~V[0 0], :pred), 10, 0, 20, 1, 30, 40),
-        Nx.vectorize(~V[30 30], :pred)
+        cond4(Nx.vectorize(~VEC[0 0], :pred), 10, 0, 20, 1, 30, 40),
+        Nx.vectorize(~VEC[30 30], :pred)
       )
 
       assert_equal(
-        cond4(Nx.vectorize(~V[0 0], :pred), 10, 0, 20, 0, 30, 40),
-        Nx.vectorize(~V[40 40], :pred)
+        cond4(Nx.vectorize(~VEC[0 0], :pred), 10, 0, 20, 0, 30, 40),
+        Nx.vectorize(~VEC[40 40], :pred)
       )
     end
 
     test "1 vectorized pred in the second but not last position" do
       assert_equal(
-        cond4(0, 10, Nx.vectorize(~V[0 1], :pred), 20, 0, 30, 40),
-        Nx.vectorize(~V[40 20], :pred)
+        cond4(0, 10, Nx.vectorize(~VEC[0 1], :pred), 20, 0, 30, 40),
+        Nx.vectorize(~VEC[40 20], :pred)
       )
 
       assert_equal(
-        cond4(1, 10, Nx.vectorize(~V[0 1], :pred), 20, 0, 30, 40),
-        Nx.vectorize(~V[10 10], :pred)
+        cond4(1, 10, Nx.vectorize(~VEC[0 1], :pred), 20, 0, 30, 40),
+        Nx.vectorize(~VEC[10 10], :pred)
       )
 
       assert_equal(
-        cond4(0, 10, Nx.vectorize(~V[0 0], :pred), 20, 1, 30, 40),
-        Nx.vectorize(~V[30 30], :pred)
+        cond4(0, 10, Nx.vectorize(~VEC[0 0], :pred), 20, 1, 30, 40),
+        Nx.vectorize(~VEC[30 30], :pred)
       )
 
       assert_equal(
-        cond4(0, 10, Nx.vectorize(~V[0 0], :pred), 20, 0, 30, 40),
-        Nx.vectorize(~V[40 40], :pred)
+        cond4(0, 10, Nx.vectorize(~VEC[0 0], :pred), 20, 0, 30, 40),
+        Nx.vectorize(~VEC[40 40], :pred)
       )
     end
 
     test "1 vectorized pred in the last position" do
       assert_equal(
-        cond4(0, 10, 0, 20, Nx.vectorize(~V[0 1], :pred), 30, 40),
-        Nx.vectorize(~V[40 30], :pred)
+        cond4(0, 10, 0, 20, Nx.vectorize(~VEC[0 1], :pred), 30, 40),
+        Nx.vectorize(~VEC[40 30], :pred)
       )
 
       assert_equal(
-        cond4(1, 10, 0, 20, Nx.vectorize(~V[0 1], :pred), 30, 40),
-        Nx.vectorize(~V[10 10], :pred)
+        cond4(1, 10, 0, 20, Nx.vectorize(~VEC[0 1], :pred), 30, 40),
+        Nx.vectorize(~VEC[10 10], :pred)
       )
 
       assert_equal(
-        cond4(0, 10, 1, 20, Nx.vectorize(~V[0 1], :pred), 30, 40),
-        Nx.vectorize(~V[20 20], :pred)
+        cond4(0, 10, 1, 20, Nx.vectorize(~VEC[0 1], :pred), 30, 40),
+        Nx.vectorize(~VEC[20 20], :pred)
       )
 
       assert_equal(
-        cond4(0, 10, 0, 20, Nx.vectorize(~V[0 0], :pred), 30, 40),
-        Nx.vectorize(~V[40 40], :pred)
+        cond4(0, 10, 0, 20, Nx.vectorize(~VEC[0 0], :pred), 30, 40),
+        Nx.vectorize(~VEC[40 40], :pred)
       )
     end
 
     test "2 vectorized preds with different axes" do
       assert_equal(
-        cond4(Nx.vectorize(~V[0 1 0], :pred1), 10, Nx.vectorize(~V[1 0], :pred2), 20, 0, 30, 40),
-        Nx.vectorize(~M[
+        cond4(
+          Nx.vectorize(~VEC[0 1 0], :pred1),
+          10,
+          Nx.vectorize(~VEC[1 0], :pred2),
+          20,
+          0,
+          30,
+          40
+        ),
+        Nx.vectorize(~MAT[
               20 40
               10 10
               20 40
@@ -345,15 +353,15 @@ defmodule EXLA.Defn.VectorizeTest do
     test "2 vectorized preds with different axes + clauses that match either" do
       assert_equal(
         cond4(
-          Nx.vectorize(~V[0 1 0], :pred1),
-          Nx.vectorize(~V[10 100], :pred2),
-          Nx.vectorize(~V[1 0], :pred2),
-          Nx.vectorize(~V[20 200 2000], :pred1),
+          Nx.vectorize(~VEC[0 1 0], :pred1),
+          Nx.vectorize(~VEC[10 100], :pred2),
+          Nx.vectorize(~VEC[1 0], :pred2),
+          Nx.vectorize(~VEC[20 200 2000], :pred1),
           0,
           30,
           40
         ),
-        Nx.vectorize(~M[
+        Nx.vectorize(~MAT[
               20 40
               10 100
               2000 40

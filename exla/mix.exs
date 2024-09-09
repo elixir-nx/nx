@@ -2,13 +2,16 @@ defmodule EXLA.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx"
-  @version "0.7.1"
+  @version "0.8.0"
 
   def project do
+    make_args =
+      Application.get_env(:exla, :make_args) || ["-j#{max(System.schedulers_online() - 2, 1)}"]
+
     [
       app: :exla,
       version: @version,
-      elixir: "~> 1.14",
+      elixir: "~> 1.15",
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       docs: docs(),
@@ -34,7 +37,8 @@ defmodule EXLA.MixProject do
           "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}",
           "CWD_RELATIVE_TO_PRIV_PATH" => cwd_relative_to_priv
         }
-      end
+      end,
+      make_args: make_args
     ]
   end
 
@@ -59,10 +63,10 @@ defmodule EXLA.MixProject do
 
   defp deps do
     [
-      # {:nx, "~> 0.7.1"},
+      # {:nx, "~> 0.8.0"},
       {:nx, path: "../nx"},
       {:telemetry, "~> 0.4.0 or ~> 1.0"},
-      {:xla, "~> 0.6.0", runtime: false},
+      {:xla, "~> 0.8.0", runtime: false},
       {:elixir_make, "~> 0.6", runtime: false},
       {:benchee, "~> 1.0", only: :dev},
       {:ex_doc, "~> 0.29", only: :docs},
@@ -96,7 +100,7 @@ defmodule EXLA.MixProject do
 
   defp package do
     [
-      maintainers: ["Sean Moriarity", "José Valim"],
+      maintainers: ["Sean Moriarity", "José Valim", "Paulo Valente", "Jonatan Kłosko"],
       licenses: ["Apache-2.0"],
       links: %{"GitHub" => @source_url}
     ]

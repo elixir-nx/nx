@@ -1,10 +1,10 @@
 #include "exla_nif_util.h"
 
+#include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinTypes.h"
+#include "stablehlo/dialect/StablehloOps.h"
 #include "xla/primitive_util.h"
 #include "xla/shape_util.h"
-#include "mlir/IR/Builders.h"
-#include "stablehlo/dialect/StablehloOps.h"
 
 namespace exla {
 namespace nif {
@@ -190,7 +190,7 @@ int get_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<int64>& var) {
   var.reserve(length);
 
   for (int i = 0; i < length; i++) {
-    int data;
+    int64 data;
     if (!get(env, terms[i], &data)) return 0;
     var.push_back(data);
   }

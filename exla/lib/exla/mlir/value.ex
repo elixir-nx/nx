@@ -64,15 +64,20 @@ defmodule EXLA.MLIR.Value do
     %{type: rhs_type} = get_typespec(rhs)
 
     comparison_type =
-      if Nx.Type.float?(lhs_type) or Nx.Type.float?(rhs_type) do
-        attr_comparison_type(:totalorder)
-      else
-        attr_comparison_type(:notype)
+      cond do
+        Nx.Type.complex?(lhs_type) or Nx.Type.complex?(rhs_type) ->
+          attr_comparison_type(:float)
+
+        Nx.Type.float?(lhs_type) or Nx.Type.float?(rhs_type) ->
+          attr_comparison_type(:float)
+
+        true ->
+          attr_comparison_type(:notype)
       end
 
     attributes = [
       comparison_direction: attr_comparison_direction(direction),
-      comparison_type: comparison_type
+      compare_type: comparison_type
     ]
 
     result_types = typespecs_to_mlir_types([Typespec.to_type(typespec, {:pred, 8})])
@@ -125,57 +130,48 @@ defmodule EXLA.MLIR.Value do
     end
   end
 
-  def is_infinity(%Value{function: func} = operand, typespec) do
+  def is_infinity(%Value{function: func} = operand, out_typespec) do
     %{type: type} = get_typespec(operand)
 
-    typespec = Typespec.to_type(typespec, {:pred, 8})
+    typespec = Typespec.to_type(out_typespec, {:pred, 8})
 
-    cond do
-      Nx.Type.complex?(type) ->
-        float_typespec = Typespec.to_type(typespec, complex_part_type(type))
-        real = real(operand, float_typespec)
-        imag = imag(operand, float_typespec)
-        is_inf_real = is_infinity(real, typespec)
-        is_inf_imag = is_infinity(imag, typespec)
-        bitwise_or(is_inf_real, is_inf_imag, typespec)
+    result =
+      cond do
+        Nx.Type.complex?(type) ->
+          float_typespec = Typespec.to_type(typespec, complex_part_type(type))
+          real = real(operand, float_typespec)
+          imag = imag(operand, float_typespec)
+          is_inf_real = is_infinity(real, typespec)
+          is_inf_imag = is_infinity(imag, typespec)
+          bitwise_or(is_inf_real, is_inf_imag, typespec)
 
-      Nx.Type.integer?(type) ->
-        # Integers are never infinity. We use inequality to make sure
-        # the operand is still a part of the computation
-        not_equal(operand, operand, typespec)
+        Nx.Type.integer?(type) ->
+          # Integers are never infinity. We use inequality to make sure
+          # the operand is still a part of the computation
+          not_equal(operand, operand, typespec)
 
-      true ->
-        result_types = typespecs_to_mlir_types([typespec])
-        op(func, "chlo.is_inf", [operand], result_types) |> one!()
+        true ->
+          result_types = typespecs_to_mlir_types([typespec])
+          op(func, "chlo.is_inf", [operand], result_types) |> one!()
+      end
+
+    if out_typespec.type == typespec.type do
+      result
+    else
+      convert(result, out_typespec)
     end
   end
 
-  def is_nan(%Value{function: func} = operand, typespec) do
-    %{type: type} = get_typespec(operand)
+  def is_nan(%Value{} = operand, out_typespec) do
+    typespec = Typespec.to_type(out_typespec, {:pred, 8})
 
-    typespec = Typespec.to_type(typespec, {:pred, 8})
+    # Only NaN is not equal to itself
+    result = not_equal(operand, operand, typespec)
 
-    cond do
-      Nx.Type.complex?(type) ->
-        float_typespec = Typespec.to_type(typespec, complex_part_type(type))
-        real = real(operand, float_typespec)
-        imag = imag(operand, float_typespec)
-        is_nan_real = is_nan(real, typespec)
-        is_nan_imag = is_nan(imag, typespec)
-        bitwise_or(is_nan_real, is_nan_imag, typespec)
-
-      Nx.Type.integer?(type) ->
-        # Integers are never nan. We use inequality to make sure
-        # the operand is still a part of the computation
-        not_equal(operand, operand, typespec)
-
-      true ->
-        result_types = typespecs_to_mlir_types([typespec])
-        is_inf = op(func, "chlo.is_inf", [operand], result_types) |> one!()
-        is_finite = op(func, "stablehlo.is_finite", [operand], result_types) |> one!()
-        is_not_inf = bitwise_not(is_inf, typespec)
-        is_not_finite = bitwise_not(is_finite, typespec)
-        bitwise_and(is_not_inf, is_not_finite, typespec)
+    if out_typespec.type == typespec.type do
+      result
+    else
+      convert(result, out_typespec)
     end
   end
 
@@ -186,13 +182,13 @@ defmodule EXLA.MLIR.Value do
 
   def reverse(%Value{function: func} = operand, dims, typespec) do
     result_types = typespecs_to_mlir_types([typespec])
-    attributes = [dimensions: attr_dense_i64_elements(dims)]
+    attributes = [dimensions: attr_array_i64_elements(dims)]
     op(func, "stablehlo.reverse", [operand], result_types, attributes: attributes) |> one!()
   end
 
   def transpose(%Value{function: func} = operand, axes, typespec) do
     result_types = typespecs_to_mlir_types([typespec])
-    attributes = [permutation: attr_dense_i64_elements(axes)]
+    attributes = [permutation: attr_array_i64_elements(axes)]
     op(func, "stablehlo.transpose", [operand], result_types, attributes: attributes) |> one!()
   end
 
@@ -200,9 +196,9 @@ defmodule EXLA.MLIR.Value do
     result_types = typespecs_to_mlir_types([typespec])
 
     attributes = [
-      start_indices: attr_dense_i64_elements(starts),
-      limit_indices: attr_dense_i64_elements(limits),
-      strides: attr_dense_i64_elements(strides)
+      start_indices: attr_array_i64_elements(starts),
+      limit_indices: attr_array_i64_elements(limits),
+      strides: attr_array_i64_elements(strides)
     ]
 
     op(func, "stablehlo.slice", [operand], result_types, attributes: attributes) |> one!()
@@ -211,7 +207,7 @@ defmodule EXLA.MLIR.Value do
   def dynamic_slice(%Value{function: func} = operand, starts, lengths, typespec) do
     result_types = typespecs_to_mlir_types([typespec])
     operands = [operand] ++ starts
-    attributes = [slice_sizes: attr_dense_i64_elements(lengths)]
+    attributes = [slice_sizes: attr_array_i64_elements(lengths)]
     op(func, "stablehlo.dynamic_slice", operands, result_types, attributes: attributes) |> one!()
   end
 
@@ -303,7 +299,7 @@ defmodule EXLA.MLIR.Value do
     result_types = typespecs_to_mlir_types([typespec])
 
     attributes = [
-      broadcast_dimensions: attr_dense_i64_elements(axes)
+      broadcast_dimensions: attr_array_i64_elements(axes)
     ]
 
     op(func, "stablehlo.broadcast_in_dim", [operand], result_types, attributes: attributes)
@@ -347,9 +343,9 @@ defmodule EXLA.MLIR.Value do
     {padding_low, padding_high, padding_mid} = unzip_padding_config(padding_config)
 
     attributes = [
-      edge_padding_low: attr_dense_i64_elements(padding_low),
-      edge_padding_high: attr_dense_i64_elements(padding_high),
-      interior_padding: attr_dense_i64_elements(padding_mid)
+      edge_padding_low: attr_array_i64_elements(padding_low),
+      edge_padding_high: attr_array_i64_elements(padding_high),
+      interior_padding: attr_array_i64_elements(padding_mid)
     ]
 
     op(func, "stablehlo.pad", [operand, pad], result_types, attributes: attributes) |> one!()
@@ -375,7 +371,7 @@ defmodule EXLA.MLIR.Value do
 
     attributes = [
       fft_type: fft_type,
-      fft_length: attr_dense_i64_elements(List.wrap(fft_length))
+      fft_length: attr_array_i64_elements(List.wrap(fft_length))
     ]
 
     op(func, "stablehlo.fft", [value], result_types, attributes: attributes) |> one!()
@@ -451,8 +447,8 @@ defmodule EXLA.MLIR.Value do
     result_types = typespecs_to_mlir_types([typespec])
 
     attributes = [
-      window_dimensions: attr_dense_i64_elements(window_dimensions),
-      window_strides: attr_dense_i64_elements(window_strides),
+      window_dimensions: attr_array_i64_elements(window_dimensions),
+      window_strides: attr_array_i64_elements(window_strides),
       padding: attr_padding(padding)
     ]
 
@@ -501,7 +497,7 @@ defmodule EXLA.MLIR.Value do
 
     attributes = [
       dimension_numbers: dimension_numbers,
-      slice_sizes: attr_dense_i64_elements(slice_sizes),
+      slice_sizes: attr_array_i64_elements(slice_sizes),
       indices_are_sorted: attr_boolean(false)
     ]
 
@@ -546,10 +542,10 @@ defmodule EXLA.MLIR.Value do
     attr_precision_config = attr_precision_config(precision_config)
 
     attributes = [
-      window_strides: attr_dense_i64_elements(strides),
+      window_strides: attr_array_i64_elements(strides),
       padding: attr_padding(padding),
-      lhs_dilation: attr_dense_i64_elements(input_dilation),
-      rhs_dilation: attr_dense_i64_elements(kernel_dilation),
+      lhs_dilation: attr_array_i64_elements(input_dilation),
+      rhs_dilation: attr_array_i64_elements(kernel_dilation),
       dimension_numbers: attr_conv_dimension_numbers(dimension_numbers),
       feature_group_count: attr_i64(feature_group_count),
       batch_group_count: attr_i64(batch_group_count),
@@ -625,7 +621,7 @@ defmodule EXLA.MLIR.Value do
       ) do
     operands = inputs ++ init_values
     result_types = typespecs_to_mlir_types(typespecs)
-    attributes = [dimensions: attr_dense_i64_elements(dimensions)]
+    attributes = [dimensions: attr_array_i64_elements(dimensions)]
     regions = [reducer]
     op(func, "stablehlo.reduce", operands, result_types, attributes: attributes, regions: regions)
   end
@@ -645,10 +641,10 @@ defmodule EXLA.MLIR.Value do
     result_types = typespecs_to_mlir_types(typespecs)
 
     attributes = [
-      window_dimensions: attr_dense_i64_elements(window_dimensions),
-      window_strides: attr_dense_i64_elements(window_strides),
-      base_dilations: attr_dense_i64_elements(input_dilations),
-      window_dilations: attr_dense_i64_elements(window_dilations),
+      window_dimensions: attr_array_i64_elements(window_dimensions),
+      window_strides: attr_array_i64_elements(window_strides),
+      base_dilations: attr_array_i64_elements(input_dilations),
+      window_dilations: attr_array_i64_elements(window_dilations),
       padding: attr_padding(padding)
     ]
 
@@ -658,24 +654,6 @@ defmodule EXLA.MLIR.Value do
       attributes: attributes,
       regions: regions
     )
-  end
-
-  def map(
-        %Region{ref: mapper},
-        [%Value{function: func} | _] = inputs,
-        dimensions,
-        typespec
-      ) do
-    result_types = typespecs_to_mlir_types([typespec])
-
-    attributes = [
-      dimensions: attr_dense_i64_elements(dimensions)
-    ]
-
-    regions = [mapper]
-
-    op(func, "stablehlo.map", inputs, result_types, attributes: attributes, regions: regions)
-    |> one!()
   end
 
   def if_op(
@@ -724,8 +702,64 @@ defmodule EXLA.MLIR.Value do
     op(func, "stablehlo.while", initial, result_types, regions: regions)
   end
 
+  def func_return(func, values) when is_list(values) do
+    op(func, "func.return", values, [])
+  end
+
   def return(func, values) when is_list(values) do
     op(func, "stablehlo.return", values, [])
+  end
+
+  def eigh(%Value{function: func} = value, eigenvecs_typespec, eigenvals_typespec) do
+    %{type: op_type, shape: op_shape} = get_typespec(value)
+    %{type: eigenvecs_type, shape: eigenvecs_shape} = eigenvecs_typespec
+    %{type: eigenvals_type, shape: eigenvals_shape} = eigenvals_typespec
+
+    dim_sizes = [tuple_size(op_shape), tuple_size(eigenvecs_shape), tuple_size(eigenvals_shape)]
+    operand_dims = Tuple.to_list(op_shape)
+    eigenvecs_dims = Tuple.to_list(eigenvecs_shape)
+    eigenvals_dims = Tuple.to_list(eigenvals_shape)
+
+    dim_sizes = constant(func, dim_sizes, Typespec.tensor({:u, 64}, {length(dim_sizes)}))
+    operand_dims = constant(func, operand_dims, Typespec.tensor({:u, 64}, {length(operand_dims)}))
+
+    eigenvecs_dims =
+      constant(func, eigenvecs_dims, Typespec.tensor({:u, 64}, {length(eigenvecs_dims)}))
+
+    eigenvals_dims =
+      constant(func, eigenvals_dims, Typespec.tensor({:u, 64}, {length(eigenvals_dims)}))
+
+    operands = [value, dim_sizes, operand_dims, eigenvecs_dims, eigenvals_dims]
+
+    eigenvecs_result_type = type_tensor(eigenvecs_type, eigenvecs_shape)
+    eigenvals_result_type = type_tensor(eigenvals_type, eigenvals_shape)
+    result_types = [type_tuple([eigenvecs_result_type, eigenvals_result_type])]
+
+    call_target_name =
+      case op_type do
+        {:f, 32} ->
+          "eigh_cpu_custom_call_f32"
+
+        {:f, 64} ->
+          "eigh_cpu_custom_call_f64"
+
+        type ->
+          # Due to matching on EXLA.Defn, we are sure that the device here is always :host
+          raise "Eigh decomposition not supported on :host device for type #{inspect(type)}"
+      end
+
+    attributes = [
+      call_target_name: attr_string(call_target_name),
+      backend_config: attr_string("Host")
+    ]
+
+    result =
+      op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes) |> one!()
+
+    eigenvecs = get_tuple_element(result, 0, eigenvecs_typespec)
+    eigenvals = get_tuple_element(result, 1, eigenvals_typespec)
+
+    {eigenvecs, eigenvals}
   end
 
   def qr(%Value{function: func} = value, q_typespec, r_typespec) do
@@ -738,10 +772,10 @@ defmodule EXLA.MLIR.Value do
     q_dims = Tuple.to_list(q_shape)
     r_dims = Tuple.to_list(r_shape)
 
-    dim_sizes = constant(func, dim_sizes, Typespec.tensor({:s, 64}, {length(dim_sizes)}))
-    operand_dims = constant(func, operand_dims, Typespec.tensor({:s, 64}, {length(operand_dims)}))
-    q_dims = constant(func, q_dims, Typespec.tensor({:s, 64}, {length(q_dims)}))
-    r_dims = constant(func, r_dims, Typespec.tensor({:s, 64}, {length(r_dims)}))
+    dim_sizes = constant(func, dim_sizes, Typespec.tensor({:u, 64}, {length(dim_sizes)}))
+    operand_dims = constant(func, operand_dims, Typespec.tensor({:u, 64}, {length(operand_dims)}))
+    q_dims = constant(func, q_dims, Typespec.tensor({:u, 64}, {length(q_dims)}))
+    r_dims = constant(func, r_dims, Typespec.tensor({:u, 64}, {length(r_dims)}))
     operands = [value, dim_sizes, operand_dims, q_dims, r_dims]
 
     q_result_type = type_tensor(q_type, q_shape)
@@ -846,6 +880,7 @@ defmodule EXLA.MLIR.Value do
   defp type_number({:pred, 8}), do: "i1"
   defp type_number({:s, width}), do: "i#{width}"
   defp type_number({:u, width}), do: "ui#{width}"
+  defp type_number({:f, 8}), do: "f8E5M2"
   defp type_number({:f, width}), do: "f#{width}"
   defp type_number({:bf, width}), do: "bf#{width}"
   defp type_number({:c, 64}), do: "complex<f32>"
@@ -892,10 +927,15 @@ defmodule EXLA.MLIR.Value do
         :nan -> type |> Nx.Type.nan_binary() |> native_to_big()
         :infinity -> type |> Nx.Type.infinity_binary() |> native_to_big()
         :neg_infinity -> type |> Nx.Type.neg_infinity_binary() |> native_to_big()
+        value when size == 8 -> f8E5M2_to_big(value)
         value -> <<value::float-size(size)-big>>
       end
 
     Base.encode16(data)
+  end
+
+  defp f8E5M2_to_big(x) do
+    binary_part(<<x::float-big-16>>, 0, 1)
   end
 
   defp native_to_big(binary) do
@@ -904,8 +944,12 @@ defmodule EXLA.MLIR.Value do
     <<value::size(size)-big>>
   end
 
-  defp attr_dense_i64_elements(list) do
-    attr_dense_elements(list, {:s, 64}, {length(list)})
+  defp attr_array_i64_elements([]) do
+    "array<i64>"
+  end
+
+  defp attr_array_i64_elements(list) do
+    "array<i64: #{Enum.join(list, ", ")}>"
   end
 
   defp attr_dense_elements([], type, {0} = shape) do
@@ -948,7 +992,7 @@ defmodule EXLA.MLIR.Value do
   defp attr_comparison_direction(value) when value in [:eq, :lt, :le, :gt, :ge, :ne],
     do: attr_enum("stablehlo", "comparison_direction", value)
 
-  defp attr_comparison_type(value) when value in [:totalorder, :notype],
+  defp attr_comparison_type(value) when value in [:float, :totalorder, :notype],
     do: attr_enum("stablehlo", "comparison_type", value)
 
   defp attr_precision(value) when value in [:default, :high, :highest],

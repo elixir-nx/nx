@@ -1461,7 +1461,7 @@ defmodule Nx.BinaryBackend do
         bin, {i, cur_extreme_x, cur_extreme_i} ->
           x = binary_to_number(bin, type)
 
-          if cur_extreme_x == :first or comparator.(x, cur_extreme_x) do
+          if cur_extreme_x == :first or x == :nan or comparator.(x, cur_extreme_x) do
             {i, {i + 1, x, i}}
           else
             {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}
@@ -1559,20 +1559,6 @@ defmodule Nx.BinaryBackend do
 
     fun = fn a, b -> element_multiply(type, a, b) end
     window_reduce(out, tensor, init_value, window_dimensions, opts, fun)
-  end
-
-  @impl true
-  def map(%{type: output_type} = out, %{type: {_, size}} = tensor, _opts, fun) do
-    data = to_binary(tensor)
-    template = %{tensor | shape: {}}
-
-    output_data =
-      for <<bin::size(size)-bitstring <- data>>, into: <<>> do
-        tensor = put_in(template.data.state, bin)
-        number_to_binary(scalar_to_number(fun.(tensor)), output_type)
-      end
-
-    from_binary(out, output_data)
   end
 
   @impl true
@@ -1940,84 +1926,6 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def take(out, tensor, indices, axis) do
-    # We iterate over the indices in a flat manner,
-    # and take a unit tensor slice along axis given
-    # by each index. Then we concatenate the tensors
-    # along the axis, which gives us the result with
-    # index dimensions flattened and we just reshape.
-
-    %T{type: {_, size}, shape: shape} = tensor
-    %T{type: {_, idx_size}} = indices
-
-    data = to_binary(tensor)
-    tensor_rank = tuple_size(shape)
-    slice_start = List.duplicate(0, tensor_rank)
-    slice_lengths = shape |> Tuple.to_list() |> List.replace_at(axis, 1)
-    slice_shape = List.to_tuple(slice_lengths)
-    strides = List.duplicate(1, tensor_rank)
-
-    slices =
-      for <<bin::size(idx_size)-bitstring <- to_binary(indices)>> do
-        idx = binary_to_number(bin, indices.type)
-
-        if idx < 0 or idx >= elem(shape, axis) do
-          raise ArgumentError,
-                "index #{idx} is out of bounds for axis #{axis} in shape #{inspect(shape)}"
-        end
-
-        slice_start = List.replace_at(slice_start, axis, idx)
-
-        slice_data =
-          bin_slice(data, shape, size, slice_start, slice_lengths, strides, slice_shape)
-
-        {slice_data, slice_shape}
-      end
-
-    concat_shape = put_elem(tensor.shape, axis, length(slices))
-    result_data = bin_concatenate(slices, size, axis, concat_shape)
-
-    from_binary(out, result_data)
-  end
-
-  @impl true
-  def take_along_axis(
-        %T{type: output_type} = output,
-        %T{shape: t_shape, type: {_, t_size} = t_type} = tensor,
-        %T{shape: idx_shape, type: {_, idx_size} = idx_type} = indices,
-        axis
-      ) do
-    permutation =
-      tensor
-      |> Nx.axes()
-      |> List.delete(axis)
-      |> List.insert_at(Nx.rank(tensor) - 1, axis)
-
-    inverse_permutation = inverse_permutation(permutation)
-    shape_list = Tuple.to_list(output.shape)
-    permuted_shape = permutation |> Enum.map(&Enum.at(shape_list, &1)) |> List.to_tuple()
-
-    t_view = tensor |> to_binary() |> aggregate_axes([axis], t_shape, t_size)
-    idx_view = indices |> to_binary() |> aggregate_axes([axis], idx_shape, idx_size)
-
-    [t_view, idx_view]
-    |> Enum.zip_with(fn [data_bin, idx_bin] ->
-      data = binary_to_list(data_bin, t_type)
-
-      binary_to_binary(idx_bin, idx_type, output_type, fn idx ->
-        if idx < 0 or idx >= elem(tensor.shape, axis) do
-          raise ArgumentError,
-                "index #{idx} is out of bounds for axis #{axis} in shape #{inspect(tensor.shape)}"
-        end
-
-        Enum.at(data, idx)
-      end)
-    end)
-    |> then(&from_binary(%{output | shape: permuted_shape}, &1))
-    |> then(&transpose(output, &1, inverse_permutation))
-  end
-
-  @impl true
   def gather(out, tensor, indices, opts) do
     axes = opts[:axes]
     tensor_axes = Nx.axes(tensor)
@@ -2075,6 +1983,19 @@ defmodule Nx.BinaryBackend do
       )
 
     offset
+  end
+
+  @impl true
+  def stack(out, tensors, axis) do
+    %{shape: output_shape, type: {_, size} = output_type} = out
+
+    tensors
+    |> Enum.map(fn %{shape: shape} = t ->
+      t = as_type(%{t | type: output_type}, t)
+      {to_binary(t), Tuple.insert_at(shape, axis, 1)}
+    end)
+    |> bin_concatenate(size, axis, output_shape)
+    |> then(&from_binary(out, &1))
   end
 
   @impl true
@@ -2539,8 +2460,9 @@ defmodule Nx.BinaryBackend do
           "expected a number or a scalar tensor of type #{inspect(type)}, got: #{inspect(t)}"
   end
 
-  defp number_to_binary(number, type),
-    do: match_types([type], do: <<write!(number, 0)>>)
+  defp number_to_binary(number, type) do
+    match_types([type], do: <<write!(number, 0)>>)
+  end
 
   defp binary_to_number(bin, type) do
     match_types [type] do

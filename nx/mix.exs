@@ -1,18 +1,14 @@
-if :erlang.system_info(:otp_release) < ~c"24" do
-  Mix.raise("Nx requires Erlang/OTP 24+")
-end
-
 defmodule Nx.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx"
-  @version "0.7.1"
+  @version "0.8.0"
 
   def project do
     [
       app: :nx,
       version: @version,
-      elixir: "~> 1.14",
+      elixir: "~> 1.15",
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       docs: docs(),
@@ -67,7 +63,7 @@ defmodule Nx.MixProject do
         "guides/exercises/exercises-1-20.livemd"
       ],
       skip_undefined_reference_warnings_on: ["CHANGELOG.md"],
-      groups_for_functions: [
+      groups_for_docs: [
         Guards: &(&1[:type] in [:guards]),
         "Functions: Aggregates": &(&1[:type] == :aggregation),
         "Functions: Backend": &(&1[:type] == :backend),

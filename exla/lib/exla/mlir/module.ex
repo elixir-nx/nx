@@ -68,8 +68,13 @@ defmodule EXLA.MLIR.Module do
       It defaults to 1 but you can set it if you want to enable single-program
       multiple data.
 
-    * `:use_spmd` - enables Single-Program Multiple-Data partioning.
+    * `:use_spmd` - enables Single-Program Multiple-Data partitioning.
       This is set to true if `:num_partitions` is more than one, otherwise is `false`.
+
+    * `:module_compilation` - either `:to_mlir` or `:to_pjrt`. The default is `:to_pjrt`.
+
+      * `:to_pjrt` - the `EXLA.Executable` `:ref` field will hold the reference to a PjRt executable.
+      * `:to_mlir` - the `EXLA.Executable` `:ref` field will hold the reference to an MLIR module.
 
   Currently those options do not have an effect as they related to running the
   same compiled executable on multiple replicas.
@@ -98,17 +103,26 @@ defmodule EXLA.MLIR.Module do
         do: -1,
         else: Keyword.get(options, :device_id, client.default_device_id)
 
+    # Uncomment to debug the module MLIR source
+    # module |> as_string() |> IO.puts()
+
     ref =
-      EXLA.NIF.mlir_compile(
-        client.ref,
-        module.ref,
-        Enum.map(argument_typespecs, &EXLA.Typespec.nif_encode/1),
-        num_replicas,
-        num_partitions,
-        use_spmd,
-        device_id
-      )
-      |> unwrap!()
+      case Keyword.get(options, :module_compilation, :to_pjrt) do
+        :to_mlir ->
+          module.ref
+
+        :to_pjrt ->
+          EXLA.NIF.mlir_compile(
+            client.ref,
+            module.ref,
+            Enum.map(argument_typespecs, &EXLA.Typespec.nif_encode/1),
+            num_replicas,
+            num_partitions,
+            use_spmd,
+            device_id
+          )
+          |> unwrap!()
+      end
 
     %Executable{
       client: client,
@@ -124,7 +138,7 @@ defmodule EXLA.MLIR.Module do
   Returns a human-readable representation of the module using MLIR
   syntax.
   """
-  def to_string(module = %__MODULE__{}) do
+  def as_string(module = %__MODULE__{}) do
     EXLA.NIF.mlir_module_to_string(module.ref) |> unwrap!()
   end
 
