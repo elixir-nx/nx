@@ -22,6 +22,12 @@ defmodule Nx.Constants do
 
   ## Examples
 
+      iex> Nx.Constants.nan({:f, 8})
+      #Nx.Tensor<
+        f8
+        NaN
+      >
+
       iex> Nx.Constants.nan({:bf, 16})
       #Nx.Tensor<
         bf16
@@ -66,6 +72,12 @@ defmodule Nx.Constants do
 
   ## Examples
 
+      iex> Nx.Constants.infinity({:f, 8})
+      #Nx.Tensor<
+        f8
+        Inf
+      >
+
       iex> Nx.Constants.infinity({:bf, 16})
       #Nx.Tensor<
         bf16
@@ -109,6 +121,12 @@ defmodule Nx.Constants do
     * `:backend` - a backend to allocate the tensor on.
 
   ## Examples
+
+      iex> Nx.Constants.neg_infinity({:f, 8})
+      #Nx.Tensor<
+        f8
+        -Inf
+      >
 
       iex> Nx.Constants.neg_infinity({:bf, 16})
       #Nx.Tensor<
@@ -334,6 +352,12 @@ defmodule Nx.Constants do
         1.1754943508222875e-38
       >
 
+      iex> Nx.Constants.smallest_positive_normal(:f8)
+      #Nx.Tensor<
+        f8
+        6.103515625e-5
+      >
+
       iex> Nx.Constants.smallest_positive_normal({:s, 32})
       ** (ArgumentError) only floating types are supported, got: {:s, 32}
   """
@@ -375,6 +399,12 @@ defmodule Nx.Constants do
       #Nx.Tensor<
         bf16
         0.0078125
+      >
+
+      iex> Nx.Constants.epsilon(:f8)
+      #Nx.Tensor<
+        f8
+        0.25
       >
 
       iex> Nx.Constants.epsilon({:s, 32})
@@ -423,6 +453,12 @@ defmodule Nx.Constants do
         3.140625
       >
 
+      iex> Nx.Constants.pi({:f, 8})
+      #Nx.Tensor<
+        f8
+        3.0
+      >
+
       iex> Nx.Constants.pi({:s, 32})
       ** (ArgumentError) only floating types are supported, got: {:s, 32}
   """
@@ -469,6 +505,12 @@ defmodule Nx.Constants do
         2.703125
       >
 
+      iex> Nx.Constants.e({:f, 8})
+      #Nx.Tensor<
+        f8
+        2.5
+      >
+
       iex> Nx.Constants.e({:s, 32})
       ** (ArgumentError) only floating types are supported, got: {:s, 32}
   """
@@ -513,6 +555,12 @@ defmodule Nx.Constants do
       #Nx.Tensor<
         bf16
         0.57421875
+      >
+
+      iex> Nx.Constants.euler_gamma({:f, 8})
+      #Nx.Tensor<
+        f8
+        0.5
       >
 
       iex> Nx.Constants.euler_gamma({:s, 32})

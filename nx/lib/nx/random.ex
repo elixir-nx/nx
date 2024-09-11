@@ -80,22 +80,33 @@ defmodule Nx.Random do
         [0, 12]
       >
 
-  A single key effectively consists of 64 bits, so all possible values
-  of a 64-bit integer result in a different key. However, when passing
-  an integer literal, Nx implicitly assumes its type to be `:s32`,
-  which would result in an overflow for large integers. Therefore,
-  when dealing with large seeds, make sure to explicitly use a 64 bit
-  type:
-
-      iex> Nx.Random.key(Nx.u64(999999999999))
+      iex> Nx.Random.key(999999999999)
       #Nx.Tensor<
         u32[2]
         [232, 3567587327]
       >
   """
-  defn key(seed) do
-    seed = Nx.as_type(seed, :u64)
+  deftransform key(seed) do
+    seed =
+      case seed do
+        seed when is_integer(seed) ->
+          Nx.u64(seed)
 
+        %Nx.Tensor{} = seed when seed.type == {:u, 64} ->
+          seed
+
+        %Nx.Tensor{} = seed when seed.type == {:s, 64} ->
+          Nx.bitcast(seed, {:u, 64})
+
+        other ->
+          raise ArgumentError,
+                "expected seed to be an integer, u64 tensor or s64 tensor, got: #{inspect(other)}"
+      end
+
+    key_n(seed)
+  end
+
+  defnp key_n(seed) do
     k1 = Nx.right_shift(seed, 32)
     k2 = Nx.bitwise_and(seed, Nx.u64(0xFFFFFFFF))
 
@@ -299,6 +310,7 @@ defmodule Nx.Random do
   deftransformp mantissa_shift(nbits, type) do
     mantissa =
       case type do
+        {:f, 8} -> 2
         {:bf, 16} -> 7
         {:f, 16} -> 10
         {:f, 32} -> 23

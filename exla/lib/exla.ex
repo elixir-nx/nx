@@ -360,11 +360,18 @@ defmodule EXLA do
   Takes in a function, the argument templates and the compilation
   options and returns the textual representation of the MLIR module.
 
+  ## Options
+
+    * `:within_defn_compiler` - a boolean that indicates whether
+      this function is being called from within a `defn` compiler.
+      Defaults to `false`.
+
   ## Examples
 
       iex> fun = fn x, y -> Nx.add(Nx.sin(x), Nx.cos(y)) end
       iex> args = [1.0, 2.0]
-      iex> EXLA.to_mlir_module(fun, args)
+      iex> %{mlir_module: mlir_module} = EXLA.to_mlir_module(fun, args)
+      iex> mlir_module
       """
       module {
         func.func public @main(%arg0: tensor<f32>, %arg1: tensor<f32>) -> tensor<f32> {
@@ -377,20 +384,26 @@ defmodule EXLA do
       """
   '''
   def to_mlir_module(function, args, options \\ []) do
-    comp_fun = fn _key, callback ->
-      {:ok, {_xla_time, executable, _extra, _outfeed}} = callback.()
-      throw({:mlir_module, executable.ref})
+    {nested_compilation?, options} = Keyword.pop(options, :within_defn_compiler, false)
+
+    opts =
+      Keyword.merge(options,
+        module_compilation: :to_mlir,
+        compiler: EXLA
+      )
+
+    if nested_compilation? do
+      EXLA.Defn.__compile__(function, args, function, opts)
+    else
+      Nx.Defn.compile(function, args, opts)
     end
-
-    opts = [
-      {EXLA, {&EXLA.Defn.LockedCache.run/2, comp_fun}},
-      {:module_compilation, :to_mlir} | options
-    ]
-
-    jit_apply(function, args, opts)
   catch
-    {:mlir_module, ref} ->
-      EXLA.MLIR.Module.as_string(%EXLA.MLIR.Module{ref: ref})
+    {:mlir_module, ref, used_inputs, output_container} ->
+      %{
+        used_inputs: used_inputs,
+        output_container: output_container,
+        mlir_module: EXLA.MLIR.Module.as_string(%EXLA.MLIR.Module{ref: ref})
+      }
   end
 
   @doc """

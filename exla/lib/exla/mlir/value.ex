@@ -880,6 +880,7 @@ defmodule EXLA.MLIR.Value do
   defp type_number({:pred, 8}), do: "i1"
   defp type_number({:s, width}), do: "i#{width}"
   defp type_number({:u, width}), do: "ui#{width}"
+  defp type_number({:f, 8}), do: "f8E5M2"
   defp type_number({:f, width}), do: "f#{width}"
   defp type_number({:bf, width}), do: "bf#{width}"
   defp type_number({:c, 64}), do: "complex<f32>"
@@ -926,10 +927,15 @@ defmodule EXLA.MLIR.Value do
         :nan -> type |> Nx.Type.nan_binary() |> native_to_big()
         :infinity -> type |> Nx.Type.infinity_binary() |> native_to_big()
         :neg_infinity -> type |> Nx.Type.neg_infinity_binary() |> native_to_big()
+        value when size == 8 -> f8E5M2_to_big(value)
         value -> <<value::float-size(size)-big>>
       end
 
     Base.encode16(data)
+  end
+
+  defp f8E5M2_to_big(x) do
+    binary_part(<<x::float-big-16>>, 0, 1)
   end
 
   defp native_to_big(binary) do
