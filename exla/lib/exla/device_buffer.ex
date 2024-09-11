@@ -19,15 +19,6 @@ defmodule EXLA.DeviceBuffer do
   """
   def place_on_device(data, %EXLA.Typespec{} = typespec, client = %Client{}, device_id)
       when is_integer(device_id) and is_bitstring(data) do
-    # # Pad
-    # data =
-    #   if is_binary(data) do
-    #     data
-    #   else
-    #     remaining = byte_size(data) * 8 - bit_size(data)
-    #     <<data::bitstring, 0::size(remaining)>>
-    #   end
-
     # At the moment XLA does not support allocating a packed buffer,
     # so we unpack subbyte elements into their own bytes
     data =
