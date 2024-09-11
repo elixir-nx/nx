@@ -19,29 +19,32 @@ defmodule EXLA.DeviceBuffer do
   """
   def place_on_device(data, %EXLA.Typespec{} = typespec, client = %Client{}, device_id)
       when is_integer(device_id) and is_bitstring(data) do
-    padded =
-      if is_binary(data) do
-        data
-      else
-        remaining = byte_size(data) * 8 - bit_size(data)
-        <<data::bitstring, 0::size(remaining)>>
-      end
-
-    # padded =
-    #   case typespec.type do
-    #     {:u, size} when size in [2, 4] ->
-    #       for <<x::native-size(size) <- data>>, into: <<>>, do: <<x::native-8>>
-
-    #     {:s, size} when size in [2, 4] ->
-    #       for <<x::native-signed-size(size) <- data>>, into: <<>>, do: <<x::native-signed-8>>
-
-    #     _ ->
-    #       data
+    # # Pad
+    # data =
+    #   if is_binary(data) do
+    #     data
+    #   else
+    #     remaining = byte_size(data) * 8 - bit_size(data)
+    #     <<data::bitstring, 0::size(remaining)>>
     #   end
+
+    # At the moment XLA does not support allocating a packed buffer,
+    # so we unpack subbyte elements into their own bytes
+    data =
+      case typespec.type do
+        {:u, size} when size in [2, 4] ->
+          for <<x::native-size(size) <- data>>, into: <<>>, do: <<x::native-8>>
+
+        {:s, size} when size in [2, 4] ->
+          for <<x::native-signed-size(size) <- data>>, into: <<>>, do: <<x::native-signed-8>>
+
+        _ ->
+          data
+      end
 
     ref =
       client.ref
-      |> EXLA.NIF.binary_to_device_mem(padded, EXLA.Typespec.nif_encode(typespec), device_id)
+      |> EXLA.NIF.binary_to_device_mem(data, EXLA.Typespec.nif_encode(typespec), device_id)
       |> unwrap!()
 
     %DeviceBuffer{ref: ref, client_name: client.name, device_id: device_id, typespec: typespec}
@@ -67,8 +70,21 @@ defmodule EXLA.DeviceBuffer do
   without destroying it. If `size` is negative, then it
   reads the whole buffer.
   """
-  def read(%DeviceBuffer{ref: ref}, size \\ -1) do
-    EXLA.NIF.read_device_mem(ref, size) |> unwrap!()
+  def read(%DeviceBuffer{ref: ref, typespec: typespec}, size \\ -1) do
+    data = EXLA.NIF.read_device_mem(ref, size) |> unwrap!()
+
+    # At the moment XLA does not support reading a packed buffer,
+    # so we pack the elements ourselves
+    case typespec.type do
+      {:u, size} when size in [2, 4] ->
+        for <<x::native-8 <- data>>, into: <<>>, do: <<x::native-size(size)>>
+
+      {:s, size} when size in [2, 4] ->
+        for <<x::native-signed-8 <- data>>, into: <<>>, do: <<x::native-signed-size(size)>>
+
+      _ ->
+        data
+    end
   end
 
   @doc """

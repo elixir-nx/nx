@@ -200,6 +200,9 @@ defmodule EXLA.BackendTest do
 
   describe "quantized types" do
     test "s2" do
+      tensor = Nx.s2(-1)
+      assert <<-1::2-signed-native>> = Nx.to_binary(tensor)
+
       tensor = Nx.s2([-2, -1, 1])
       assert tensor.type == {:s, 2}
 
@@ -216,6 +219,9 @@ defmodule EXLA.BackendTest do
     end
 
     test "s4" do
+      tensor = Nx.s4(-1)
+      assert <<-1::4-signed-native>> = Nx.to_binary(tensor)
+
       tensor = Nx.s4([-8, -1, 7])
       assert tensor.type == {:s, 4}
 
@@ -232,6 +238,9 @@ defmodule EXLA.BackendTest do
     end
 
     test "u2" do
+      tensor = Nx.u2(1)
+      assert <<1::2-native>> = Nx.to_binary(tensor)
+
       tensor = Nx.u2([1, 2, 3])
       assert tensor.type == {:u, 2}
       assert <<1::2-native, 2::2-native, 3::2-native>> = Nx.to_binary(tensor)
@@ -245,6 +254,9 @@ defmodule EXLA.BackendTest do
     end
 
     test "u4" do
+      tensor = Nx.u4(1)
+      assert <<1::4-native>> = Nx.to_binary(tensor)
+
       tensor = Nx.u4([0, 7, 15])
       assert tensor.type == {:u, 4}
       assert <<0::4-native, 7::4-native, 15::4-native>> = Nx.to_binary(tensor)

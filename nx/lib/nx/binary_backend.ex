@@ -36,7 +36,7 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def constant(%{type: type, shape: shape} = out, constant, _backend_options) do
-    data = :binary.copy(number_to_binary(constant, type), Nx.size(shape))
+    data = bitstring_copy(number_to_binary(constant, type), Nx.size(shape))
     from_binary(out, data)
   end
 
@@ -2699,5 +2699,9 @@ defmodule Nx.BinaryBackend do
         else: d
 
     div(size, dilation_factor) * x + weighted_offset(dims, pos, dilation)
+  end
+
+  defp bitstring_copy(bitstring, n) do
+    for _ <- 1..n, into: <<>>, do: bitstring
   end
 end

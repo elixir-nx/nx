@@ -187,6 +187,8 @@ defmodule EXLA.Backend do
 
   @impl true
   def to_binary(%T{data: %B{buffer: buffer}, type: {_, size}}, limit) do
+    # Subbyte elements are read as individual bytes
+    size = max(size, 8)
     EXLA.DeviceBuffer.read(buffer, limit * div(size, 8))
   end
 

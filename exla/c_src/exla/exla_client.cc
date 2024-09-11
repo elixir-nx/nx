@@ -66,8 +66,11 @@ xla::StatusOr<std::unique_ptr<xla::PjRtBuffer>> PjRtBufferFromBinary(xla::PjRtCl
   std::function<void()> on_done_with_host_buffer = [copy_env]() { enif_free_env(copy_env); };
 
   EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice * device, client->LookupDevice(xla::PjRtGlobalDeviceId(device_id)));
+  // Passing std::nullopt should work, but it fails for subbyte types,
+  // so we build the default strides. See https://github.com/openxla/xla/issues/16795
+  auto byte_strides = xla::ShapeUtil::ByteStrides(shape);
   EXLA_ASSIGN_OR_RETURN(auto buffer, client->BufferFromHostBuffer(
-                                         binary.data, shape.element_type(), shape.dimensions(), std::nullopt, semantics, on_done_with_host_buffer, device));
+                                         binary.data, shape.element_type(), shape.dimensions(), byte_strides, semantics, on_done_with_host_buffer, device));
 
   return std::move(buffer);
 }
