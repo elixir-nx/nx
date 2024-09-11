@@ -2430,7 +2430,7 @@ defmodule NxTest do
     end
 
     test "works with all integer types in indices" do
-      for kind <- [:u, :s], width <- [8, 16, 32, 64] do
+      for kind <- [:u, :s], width <- [2, 4, 8, 16, 32, 64] do
         indices = Nx.tensor([[0, 0], [0, 1], [1, 0], [1, 1]], type: {kind, width})
 
         assert Nx.add(Nx.iota({2, 2}), 1) ==
@@ -3257,6 +3257,66 @@ defmodule NxTest do
                  :infinity,
                  0.6931471824645996
                ])
+    end
+  end
+
+  describe "quantized types" do
+    test "s2" do
+      tensor = Nx.s2([-2, -1, 1])
+      assert tensor.type == {:s, 2}
+
+      assert <<-2::2-signed-native, -1::2-signed-native, 1::2-signed-native>> =
+               Nx.to_binary(tensor)
+
+      assert [-2, -1, 1] = Nx.to_flat_list(tensor)
+      assert 0 = Nx.byte_size(tensor)
+      assert 6 = Nx.bit_size(tensor)
+
+      tensor = Nx.s2([-2, -1, 0, 1, 0, -1, -2])
+      assert 1 = Nx.byte_size(tensor)
+      assert 14 = Nx.bit_size(tensor)
+    end
+
+    test "s4" do
+      tensor = Nx.s4([-8, -1, 7])
+      assert tensor.type == {:s, 4}
+
+      assert <<-8::4-signed-native, -1::4-signed-native, 7::4-signed-native>> =
+               Nx.to_binary(tensor)
+
+      assert [-8, -1, 7] = Nx.to_flat_list(tensor)
+      assert 1 = Nx.byte_size(tensor)
+      assert 12 = Nx.bit_size(tensor)
+
+      tensor = Nx.s4([-8, -3, 0, 7, 0, -3, -8])
+      assert 3 = Nx.byte_size(tensor)
+      assert 28 = Nx.bit_size(tensor)
+    end
+
+    test "u2" do
+      tensor = Nx.u2([1, 2, 3])
+      assert tensor.type == {:u, 2}
+      assert <<1::2-native, 2::2-native, 3::2-native>> = Nx.to_binary(tensor)
+      assert [1, 2, 3] = Nx.to_flat_list(tensor)
+      assert 0 = Nx.byte_size(tensor)
+      assert 6 = Nx.bit_size(tensor)
+
+      tensor = Nx.u2([0, 1, 2, 3, 2, 1, 0])
+      assert 1 = Nx.byte_size(tensor)
+      assert 14 = Nx.bit_size(tensor)
+    end
+
+    test "u4" do
+      tensor = Nx.u4([0, 7, 15])
+      assert tensor.type == {:u, 4}
+      assert <<0::4-native, 7::4-native, 15::4-native>> = Nx.to_binary(tensor)
+      assert [0, 7, 15] = Nx.to_flat_list(tensor)
+      assert 1 = Nx.byte_size(tensor)
+      assert 12 = Nx.bit_size(tensor)
+
+      tensor = Nx.u4([0, 1, 2, 3, 13, 14, 15])
+      assert 3 = Nx.byte_size(tensor)
+      assert 28 = Nx.bit_size(tensor)
     end
   end
 end

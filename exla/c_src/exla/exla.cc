@@ -505,16 +505,12 @@ ERL_NIF_TERM binary_to_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     return exla::nif::error(env, "Bad argument count.");
   }
 
-  ErlNifBinary bin;
   xla::Shape shape;
   exla::ExlaClient** client;
   int device_id;
 
   if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
     return exla::nif::error(env, "Unable to get client.");
-  }
-  if (!exla::nif::get_binary(env, argv[1], &bin)) {
-    return exla::nif::error(env, "Unable to get data.");
   }
   if (!exla::nif::get_typespec_as_xla_shape(env, argv[2], &shape)) {
     return exla::nif::error(env, "Unable to get shape.");

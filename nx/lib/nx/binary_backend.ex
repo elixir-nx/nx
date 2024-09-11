@@ -20,6 +20,9 @@ defmodule Nx.BinaryBackend do
   import Nx.Shared
   import Bitwise, only: [>>>: 2, &&&: 2]
 
+  # Remove functions which work at the byte-level. We need to work at the bit-level.
+  import Kernel, except: [byte_size: 1, binary_part: 3, binary_slice: 2, binary_slice: 3]
+
   @impl true
   def init(opts) do
     if opts != [] do
@@ -33,7 +36,7 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def constant(%{type: type, shape: shape} = out, constant, _backend_options) do
-    data = :binary.copy(number_to_binary(constant, type), Nx.size(shape))
+    data = bitstring_copy(number_to_binary(constant, type), Nx.size(shape))
     from_binary(out, data)
   end
 
@@ -107,33 +110,28 @@ defmodule Nx.BinaryBackend do
   def from_binary(t, binary, _backend_options), do: from_binary(t, binary)
 
   if Application.compile_env(:nx, :verify_binary_size) do
-    defp from_binary(%{type: {_, bitsize}, shape: shape} = t, binary) when is_binary(binary) do
-      actual = byte_size(binary)
-      expected = Tuple.product(shape) * div(bitsize, 8)
+    defp from_binary(%{type: {_, bitsize}, shape: shape} = t, binary) when is_bitstring(binary) do
+      actual = bit_size(binary)
+      expected = Tuple.product(shape) * bitsize
 
       unless actual == expected do
         raise ArgumentError,
-              "unexpected size for tensor data, expected #{expected} bytes got: #{actual} bytes"
+              "unexpected size for tensor data, expected #{expected} bits got: #{actual} bits"
       end
 
       %{t | data: %B{state: binary}}
     end
   else
-    defp from_binary(t, binary) when is_binary(binary), do: %{t | data: %B{state: binary}}
+    defp from_binary(t, binary) when is_bitstring(binary), do: %{t | data: %B{state: binary}}
   end
 
-  defp from_binary(t, other), do: from_binary(t, IO.iodata_to_binary(other))
+  defp from_binary(t, other), do: from_binary(t, :erlang.list_to_bitstring(other))
 
   @impl true
   def to_binary(%{type: {_backend_options, size}} = t, limit) do
-    limit = limit * div(size, 8)
-    binary = to_binary(t)
-
-    if byte_size(binary) == limit do
-      binary
-    else
-      binary_part(binary, 0, limit)
-    end
+    t
+    |> to_binary()
+    |> bitstring_part(0, limit * size)
   end
 
   defp to_binary(%T{data: %{state: data}}), do: data
@@ -189,18 +187,21 @@ defmodule Nx.BinaryBackend do
       end
 
     binary = to_binary(tensor)
-    batch_bytes = Nx.size(out) * div(size, 8)
+    batch_bits = Nx.size(out) * size
 
     Stream.map(range, fn
       ^num_full_batches ->
-        before = num_full_batches * batch_bytes
-        available = byte_size(binary) - before
-        missing = batch_bytes - available
+        before = num_full_batches * batch_bits
+        available = bit_size(binary) - before
+        missing = batch_bits - available
 
-        from_binary(out, [binary_part(binary, before, available), binary_part(binary, 0, missing)])
+        from_binary(out, [
+          bitstring_part(binary, before, available),
+          bitstring_part(binary, 0, missing)
+        ])
 
       i ->
-        from_binary(out, binary_part(binary, i * batch_bytes, batch_bytes))
+        from_binary(out, bitstring_part(binary, i * batch_bits, batch_bits))
     end)
   end
 
@@ -237,7 +238,7 @@ defmodule Nx.BinaryBackend do
     new_shape
     |> Tuple.to_list()
     |> unary_broadcast(0, old_shape, 0, axes, to_binary(t), chunk_size)
-    |> IO.iodata_to_binary()
+    |> :erlang.list_to_bitstring()
   end
 
   # Old and new match
@@ -376,7 +377,7 @@ defmodule Nx.BinaryBackend do
             <<dim::size(size)-bitstring, interior_padding::bitstring>>
           end
 
-        new_bytes = byte_size(padded) * 8 - interior_padding_size
+        new_bytes = bit_size(padded) - interior_padding_size
         <<new_bin::size(new_bytes)-bitstring, _::bitstring>> = padded
         new_bin
       end
@@ -387,7 +388,7 @@ defmodule Nx.BinaryBackend do
           edge_low < 0 and edge_high < 0 ->
             low_byte = abs(edge_low) * size
             high_byte = abs(edge_high) * size
-            new_bytes = byte_size(bin) * 8 - high_byte - low_byte
+            new_bytes = bit_size(bin) - high_byte - low_byte
 
             <<_::size(low_byte)-bitstring, new_bin::size(new_bytes)-bitstring, _::bitstring>> =
               bin
@@ -401,7 +402,7 @@ defmodule Nx.BinaryBackend do
 
           edge_low >= 0 and edge_high < 0 ->
             high_byte = abs(edge_high) * size
-            new_bytes = byte_size(bin) * 8 - high_byte
+            new_bytes = bit_size(bin) - high_byte
             <<new_bin::size(new_bytes)-bitstring, _::bitstring>> = bin
             <<edge_low_padding::bitstring, new_bin::bitstring>>
 
@@ -1159,7 +1160,7 @@ defmodule Nx.BinaryBackend do
           window =
             batch_weighted_shape
             |> weighted_traverse(batch, input_size, offset)
-            |> IO.iodata_to_binary()
+            |> :erlang.list_to_bitstring()
 
           # The receptive field size of each binary in bytes
           input_field_size = Nx.size(filter_shape) * input_size
@@ -1290,21 +1291,21 @@ defmodule Nx.BinaryBackend do
 
     m = elem(a_shape, tuple_size(a_shape) - 1)
 
-    a_batch_byte_size = (m * m * a_size) |> div(8)
-    batches_num = byte_size(a_data) |> div(a_batch_byte_size)
+    a_batch_bit_size = m * m * a_size
+    batches_num = bit_size(a_data) |> div(a_batch_bit_size)
 
     a_batches =
       Enum.map(
         0..(batches_num - 1),
-        &binary_part(a_data, &1 * a_batch_byte_size, a_batch_byte_size)
+        &bitstring_part(a_data, &1 * a_batch_bit_size, a_batch_bit_size)
       )
 
-    b_batch_byte_size = byte_size(b_data) |> div(batches_num)
+    b_batch_bit_size = bit_size(b_data) |> div(batches_num)
 
     b_batches =
       Enum.map(
         0..(batches_num - 1),
-        &binary_part(b_data, &1 * b_batch_byte_size, b_batch_byte_size)
+        &bitstring_part(b_data, &1 * b_batch_bit_size, b_batch_bit_size)
       )
 
     b_batch_shape =
@@ -1503,7 +1504,9 @@ defmodule Nx.BinaryBackend do
       match_types [type] do
         for anchor <- anchors, into: <<>> do
           offset = weighted_offset(weighted_shape, anchor, dilations)
-          window = IO.iodata_to_binary(weighted_traverse(weighted_shape, data, size, offset))
+
+          window =
+            :erlang.list_to_bitstring(weighted_traverse(weighted_shape, data, size, offset))
 
           window_val =
             for <<match!(x, 0) <- window>>,
@@ -1619,7 +1622,9 @@ defmodule Nx.BinaryBackend do
         offset = weighted_offset(input_weighted_shape, anchor)
 
         window =
-          IO.iodata_to_binary(weighted_traverse(input_weighted_shape, input_data, size, offset))
+          :erlang.list_to_bitstring(
+            weighted_traverse(input_weighted_shape, input_data, size, offset)
+          )
 
         # Get the index where `select_fn` is true
         {_, index, _} =
@@ -1674,14 +1679,14 @@ defmodule Nx.BinaryBackend do
           num_vals_before = div(offset - acc_offset, output_size)
           vals_before = List.duplicate(init_binary, num_vals_before)
           source_val = to_binary(value)
-          new_binary = IO.iodata_to_binary([vals_before, source_val])
+          new_binary = :erlang.list_to_bitstring([vals_before, source_val])
 
           {offset + output_size,
            <<acc_binary::size(acc_offset)-bitstring, new_binary::bitstring>>}
       end
 
     num_vals_left = div(output_size * Nx.size(output_shape) - final_offset, output_size)
-    vals_left = IO.iodata_to_binary(List.duplicate(init_binary, num_vals_left))
+    vals_left = :erlang.list_to_bitstring(List.duplicate(init_binary, num_vals_left))
     output_data = <<unpadded_output_data::size(final_offset)-bitstring, vals_left::bitstring>>
 
     from_binary(out, output_data)
@@ -1804,7 +1809,7 @@ defmodule Nx.BinaryBackend do
           binary_to_binary(tail, target.type, out.type, & &1)
         end
 
-      from_binary(out, IO.iodata_to_binary([result, tail]))
+      from_binary(out, :erlang.list_to_bitstring([result, tail]))
     end)
   end
 
@@ -1851,9 +1856,9 @@ defmodule Nx.BinaryBackend do
     start_indices = clamp_indices(start_indices, shape, lengths)
 
     if hd(strides) == 1 and top_dimension_slice?(tuple_size(shape), shape, output_shape) do
-      length = Nx.size(output_shape) * div(size, 8)
+      length = Nx.size(output_shape) * size
       offset = div(length, elem(output_shape, 0)) * hd(start_indices)
-      binary_part(data, offset, length)
+      bitstring_part(data, offset, length)
     else
       # Anchored around the start indices
       weighted_shape = weighted_shape(shape, size, output_shape)
@@ -1866,7 +1871,7 @@ defmodule Nx.BinaryBackend do
           {d, dim_size + (s - 1) * dim_size}
         end)
 
-      IO.iodata_to_binary(weighted_traverse(weighted_shape, data, size, offset))
+      :erlang.list_to_bitstring(weighted_traverse(weighted_shape, data, size, offset))
     end
   end
 
@@ -1950,8 +1955,7 @@ defmodule Nx.BinaryBackend do
     last_dim_bin_size = indices_depth * indices_size
 
     data = to_binary(tensor)
-    byte_size = div(size, 8)
-    byte_count = div(Tuple.product(out.shape), div(indices_count, indices_depth))
+    count = div(Tuple.product(out.shape), div(indices_count, indices_depth))
 
     new_data =
       for <<bin::size(last_dim_bin_size)-bitstring <- to_binary(indices)>>, into: <<>> do
@@ -1960,7 +1964,7 @@ defmodule Nx.BinaryBackend do
             do: binary_to_number(bin, indices.type)
 
         offset = index_to_binary_offset(slice_start, shape)
-        binary_part(data, offset * byte_size, byte_size * byte_count)
+        bitstring_part(data, offset * size, size * count)
       end
 
     from_binary(out, new_data)
@@ -2012,14 +2016,14 @@ defmodule Nx.BinaryBackend do
   end
 
   defp bin_concatenate(binaries_shapes, _size, 0, _output_shape) do
-    binaries_shapes |> Enum.map(&elem(&1, 0)) |> IO.iodata_to_binary()
+    binaries_shapes |> Enum.map(&elem(&1, 0)) |> :erlang.list_to_bitstring()
   end
 
   defp bin_concatenate(binaries_shapes, size, axis, output_shape) do
     rank = tuple_size(output_shape)
     steps = product_part(output_shape, 0, axis)
 
-    # We don't use lists plus IO.iodata_to_binary on purpose.
+    # We don't use lists plus :erlang.list_to_bitstring on purpose.
     # Because the number of steps can be really large, we could create large
     # intermediate lists. So we build the binary directly.
     bin_concatenate_outer(0, steps, binaries_shapes, "", fn binary, shape, step ->
@@ -2202,7 +2206,7 @@ defmodule Nx.BinaryBackend do
             Enum.sort(data, comparator)
           end
 
-        IO.iodata_to_binary(sorted)
+        :erlang.list_to_bitstring(sorted)
       end
 
     from_binary(output, new_data)
@@ -2427,17 +2431,22 @@ defmodule Nx.BinaryBackend do
   end
 
   defp bin_batch_reduce(bin, batch_size, {_, size}, acc, fun) do
-    batch_byte_size = (batch_size * size) |> div(8)
-    batches = byte_size(bin) |> div(batch_byte_size)
+    batch_bit_size = batch_size * size
+    batches = bit_size(bin) |> div(batch_bit_size)
 
     for i <- 0..(batches - 1), reduce: acc do
       acc ->
-        batch = binary_part(bin, i * batch_byte_size, batch_byte_size)
+        batch = bitstring_part(bin, i * batch_bit_size, batch_bit_size)
         fun.(batch, acc)
     end
   end
 
   ## Conversion helpers
+
+  defp bitstring_part(bitstring, skip, size) do
+    <<_::size(skip)-bitstring, part::size(size)-bitstring, _::bitstring>> = bitstring
+    part
+  end
 
   defp scalar_to_number(n) when is_number(n) or n in [:nan, :neg_infinity, :infinity], do: n
   defp scalar_to_number(%Complex{} = n), do: n
@@ -2541,7 +2550,7 @@ defmodule Nx.BinaryBackend do
     {reverse_pos, read_size} =
       aggregate_read(reverse_pos, tuple_size(shape) - 1, Enum.reverse(axes), size)
 
-    path = Enum.reverse(reverse_pre, [(&IO.iodata_to_binary/1) | Enum.reverse(reverse_pos)])
+    path = Enum.reverse(reverse_pre, [(&:erlang.list_to_bitstring/1) | Enum.reverse(reverse_pos)])
     {chunk_size, read_size, path}
   end
 
@@ -2691,5 +2700,9 @@ defmodule Nx.BinaryBackend do
         else: d
 
     div(size, dilation_factor) * x + weighted_offset(dims, pos, dilation)
+  end
+
+  defp bitstring_copy(bitstring, n) do
+    for _ <- 1..n, into: <<>>, do: bitstring
   end
 end

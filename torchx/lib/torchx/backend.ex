@@ -223,6 +223,14 @@ defmodule Torchx.Backend do
     for <<x::native-size(size) <- bin>>, into: <<>>, do: <<x::native-size(double_size)>>
   end
 
+  defp maybe_pad_binary(bin, {:u, size}) when size in [2, 4] do
+    for <<x::native-size(size) <- bin>>, into: <<>>, do: <<x::native-8>>
+  end
+
+  defp maybe_pad_binary(bin, {:s, size}) when size in [2, 4] do
+    for <<x::native-signed-size(size) <- bin>>, into: <<>>, do: <<x::native-signed-8>>
+  end
+
   defp maybe_pad_binary(bin, _), do: bin
 
   ## Shape
@@ -1723,10 +1731,14 @@ defmodule Torchx.Backend do
   def from_torch_type(:complex_double), do: {:c, 128}
 
   defp to_torch_type(nx_type, hint \\ "")
+  defp to_torch_type({:u, 2}, _), do: :byte
+  defp to_torch_type({:u, 4}, _), do: :byte
   defp to_torch_type({:u, 8}, _), do: :byte
   defp to_torch_type({:u, 16}, _), do: :int
   defp to_torch_type({:u, 32}, _), do: :long
   defp to_torch_type({:u, 64}, _), do: :long
+  defp to_torch_type({:s, 2}, _), do: :char
+  defp to_torch_type({:s, 4}, _), do: :char
   defp to_torch_type({:s, 8}, _), do: :char
   defp to_torch_type({:s, 16}, _), do: :short
   defp to_torch_type({:s, 32}, _), do: :int
@@ -1744,6 +1756,12 @@ defmodule Torchx.Backend do
       current_type = Torchx.scalar_type(device_ref) |> from_torch_type()
 
       case {current_type, type} do
+        {{:s, 8}, {:s, qint}} when qint in [2, 4] ->
+          :ok
+
+        {{:u, 8}, {:u, qint}} when qint in [2, 4] ->
+          :ok
+
         {{:s, 32}, {:u, 16}} ->
           :ok
 
