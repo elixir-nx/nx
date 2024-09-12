@@ -18,6 +18,7 @@ defmodule EXLA.Application do
        name: EXLA.MLIR.ContextPool,
        lazy: true},
       EXLA.Client,
+      EXLA.Plugin,
       EXLA.Defn.Lock,
       EXLA.Defn.LockedCache,
       {Task.Supervisor, name: EXLA.Defn.TaskSupervisor}

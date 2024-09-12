@@ -1,4 +1,5 @@
 #include <string>
+#include <dlfcn.h>
 
 #include "exla_client.h"
 #include "exla_cuda.h"
@@ -11,10 +12,35 @@
 #include "stablehlo/dialect/StablehloOps.h"
 #include "xla/pjrt/pjrt_api.h"
 #include "xla/service/platform_util.h"
+#include "xla/service/custom_call_target_registry.h"
 
 // All of these are created with calls to `new` and subsequently
 // passed to the VM as pointers-to-pointers so we balance it out
 // with calls to delete rather than just using the default destructor.
+
+// We need to hold a reference to the `dlopen` handle for as long
+// as EXLA is running, so we have this resource which holds the handle,
+// then we define a custom free which calls `dlclose`. Then it's up to
+// the caller to keep this resource in scope so it's not garbage collected
+typedef struct {
+    void * handle;
+} ExlaPlugin;
+
+typedef void (*ExlaCustomCallFunction)(void *out[], const void *in[], int **dims);
+
+typedef struct {
+  const char* name;
+  ExlaCustomCallFunction func;
+} ExlaPluginCustomCall;
+
+static ErlNifResourceType* exla_plugin_resource_type;
+
+void free_exla_plugin(ErlNifEnv* env, void* obj) {
+  ExlaPlugin* plugin = reinterpret_cast<ExlaPlugin*>(obj);
+  if (plugin != nullptr) {
+    dlclose(plugin->handle);
+  }
+}
 
 void free_exla_executable(ErlNifEnv* env, void* obj) {
   exla::ExlaExecutable** executable = reinterpret_cast<exla::ExlaExecutable**>(obj);
@@ -65,10 +91,17 @@ static int open_resources(ErlNifEnv* env) {
   if (!exla::nif::open_resource<exla::MLIRModule*>(env, mod, "ExlaMLIRModule")) {
     return -1;
   }
-
   if (!exla::nif::open_resource<mlir::MLIRContext*>(env, mod, "MLIRContext")) {
     return -1;
   }
+
+  // Just a C Resource
+  ErlNifResourceFlags flags = ErlNifResourceFlags(ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER);
+  exla_plugin_resource_type = enif_open_resource_type(env, mod, "ExlaPlugin", free_exla_plugin, flags, NULL);
+  if (!exla_plugin_resource_type) {
+    return -1;
+  }
+
   return 1;
 }
 
@@ -907,6 +940,80 @@ ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   return exla::nif::ok(env);
 }
 
+// Plugins
+
+ERL_NIF_TERM load_custom_call_plugin_library(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  std::string library_path;
+
+  if (!exla::nif::get(env, argv[0], library_path)) {
+    return exla::nif::error(env, "Unable to get library path.");
+  }
+
+  void* handle = dlopen(library_path.c_str(), RTLD_NOW);
+  if (!handle) {
+    return exla::nif::error(env, "Unable to open library.");
+  }
+
+  ExlaPlugin* plugin = (ExlaPlugin*) enif_alloc_resource(exla_plugin_resource_type, sizeof(ExlaPlugin));
+  plugin->handle = handle;
+
+  ERL_NIF_TERM result = enif_make_resource(env, plugin);
+  enif_release_resource(plugin);
+
+  return exla::nif::ok(env, result);
+}
+
+ERL_NIF_TERM register_custom_call_symbol(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  ExlaPlugin* plugin;
+  std::string symbol;
+  std::vector<std::vector<exla::int64>> dimensions;
+
+  if (!enif_get_resource(env, argv[0], exla_plugin_resource_type, (void **) &plugin)) {
+    return exla::nif::error(env, "Unable to get plugin.");
+  }
+  if (!exla::nif::get(env, argv[1], symbol)) {
+    return exla::nif::error(env, "Unable to get symbol.");
+  }
+  if (!exla::nif::get_list(env, argv[2], dimensions)) {
+    return exla::nif::error(env, "Unable to get dimensions.");
+  }
+
+  ExlaCustomCallFunction function = (ExlaCustomCallFunction) dlsym(plugin->handle, symbol.c_str());
+
+  if (!function) {
+    return exla::nif::error(env, "Could not find symbol.");
+  }
+
+  auto lambda = [&dimensions, function](void *in[], const void *out[]) {
+    std::vector<std::vector<int>> int_dims(dimensions.size());
+    for (size_t i = 0; i < dimensions.size(); ++i) {
+        int_dims[i].resize(dimensions[i].size());
+        std::transform(dimensions[i].begin(), dimensions[i].end(), int_dims[i].begin(),
+                       [](exla::int64 x) { return static_cast<int>(x); });
+    }
+
+    std::vector<int*> dims_ptrs;
+    for (auto& d : int_dims) {
+        dims_ptrs.push_back(d.data());
+    }
+
+    function(in, out, dims_ptrs.data());
+  };
+
+  // TODO: GPU/Client flag
+  XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM(symbol.c_str(), function);
+
+  return exla::nif::ok(env);
+}
+
 static ErlNifFunc exla_funcs[] = {
     // MLIR Builder
     {"mlir_new_context", 0, mlir_new_context},
@@ -943,6 +1050,10 @@ static ErlNifFunc exla_funcs[] = {
     {"start_log_sink", 1, start_log_sink},
     // Serialization
     {"serialize_executable", 1, serialize_executable},
-    {"deserialize_executable", 2, deserialize_executable}};
+    {"deserialize_executable", 2, deserialize_executable},
+    // Plugins
+    {"load_custom_call_plugin_library", 1, load_custom_call_plugin_library},
+    {"register_custom_call_symbol", 3, register_custom_call_symbol}
+  };
 
 ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, &upgrade, NULL);
