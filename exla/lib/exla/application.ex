@@ -10,11 +10,13 @@ defmodule EXLA.Application do
       _ -> :os.set_signal(:sigchld, :default)
     end
 
+    pool_size = System.schedulers_online()
+
     children = [
       EXLA.Logger,
       {NimblePool,
-       worker: {EXLA.MLIR.ContextPool, :pool_state},
-       pool_size: System.schedulers_online(),
+       worker: {EXLA.MLIR.ContextPool, %{pool_size: pool_size}},
+       pool_size: pool_size,
        name: EXLA.MLIR.ContextPool,
        lazy: true},
       EXLA.Client,

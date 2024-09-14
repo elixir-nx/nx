@@ -7,7 +7,8 @@ defmodule EXLA.NIF do
     :erlang.load_nif(path, 0)
   end
 
-  def mlir_new_context, do: :erlang.nif_error(:undef)
+  def mlir_new_thread_pool(_concurrency), do: :erlang.nif_error(:undef)
+  def mlir_new_context(_thread_pool_ref), do: :erlang.nif_error(:undef)
 
   def mlir_new_module(_context), do: :erlang.nif_error(:undef)
 
