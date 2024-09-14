@@ -11,6 +11,7 @@
 #include "stablehlo/dialect/StablehloOps.h"
 #include "xla/pjrt/pjrt_api.h"
 #include "xla/service/platform_util.h"
+#include "llvm/Support/ThreadPool.h"
 
 // All of these are created with calls to `new` and subsequently
 // passed to the VM as pointers-to-pointers so we balance it out
@@ -67,6 +68,10 @@ static int open_resources(ErlNifEnv* env) {
   }
 
   if (!exla::nif::open_resource<mlir::MLIRContext*>(env, mod, "MLIRContext")) {
+    return -1;
+  }
+
+  if (!exla::nif::open_resource<llvm::StdThreadPool*>(env, mod, "TheadPool")) {
     return -1;
   }
   return 1;
@@ -150,12 +155,40 @@ ERL_NIF_TERM mlir_compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, exla::nif::make<exla::ExlaExecutable*>(env, executable));
 }
 
-ERL_NIF_TERM mlir_new_context(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 0) {
+
+ERL_NIF_TERM mlir_new_thread_pool(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
-  mlir::MLIRContext* context = new mlir::MLIRContext();
+  int concurrency;
+
+  if (!exla::nif::get(env, argv[0], &concurrency)) {
+    return exla::nif::error(env, "Unable to get concurrency.");
+  }
+
+  llvm::ThreadPoolStrategy strategy = llvm::hardware_concurrency(concurrency);
+  llvm::StdThreadPool* pool = new llvm::StdThreadPool(strategy);
+
+  auto ret = exla::nif::make<llvm::StdThreadPool*>(env, pool);
+  return exla::nif::ok(env, ret);
+}
+
+ERL_NIF_TERM mlir_new_context(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  llvm::StdThreadPool** thread_pool;
+
+  if (!exla::nif::get<llvm::StdThreadPool*>(env, argv[0], thread_pool)) {
+    return exla::nif::error(env, "Unable to get thread pool.");
+  }
+
+  mlir::MLIRContext* context = new mlir::MLIRContext(mlir::MLIRContext::Threading::DISABLED);
+
+  auto interface_ptr = reinterpret_cast<llvm::ThreadPoolInterface*>(*thread_pool);
+  context->setThreadPool(*interface_ptr);
   context->getOrLoadDialect<mlir::func::FuncDialect>();
   context->getOrLoadDialect<mlir::stablehlo::StablehloDialect>();
   context->getOrLoadDialect<mlir::mhlo::MhloDialect>();
@@ -909,7 +942,8 @@ ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 
 static ErlNifFunc exla_funcs[] = {
     // MLIR Builder
-    {"mlir_new_context", 0, mlir_new_context},
+    {"mlir_new_thread_pool", 1, mlir_new_thread_pool},
+    {"mlir_new_context", 1, mlir_new_context},
     {"mlir_new_module", 1, mlir_new_module},
     {"mlir_create_function", 5, mlir_create_function},
     {"mlir_get_function_arguments", 1, mlir_get_function_arguments},
