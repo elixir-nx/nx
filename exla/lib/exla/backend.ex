@@ -87,22 +87,29 @@ defmodule EXLA.Backend do
     opts = Keyword.validate!(opts, mode: :local)
 
     mode =
-      case opts[:mode] do
-        mode when mode in [:local, :cuda_ipc, :host_ipc] ->
-          mode
+      case {opts[:mode], buffer} do
+        {:local, %EXLA.DeviceBuffer{client_name: :host}} ->
+          :local
 
-        mode ->
+        {:local, %EXLA.DeviceBuffer{client_name: :cuda}} ->
+          :local
+
+        {:ipc, %EXLA.DeviceBuffer{client_name: :host}} ->
+          :host_ipc
+
+        {:ipc, %EXLA.DeviceBuffer{client_name: :cuda}} ->
+          :cuda_ipc
+
+        {mode, %EXLA.DeviceBuffer{client_name: name}} when mode in [:local, :ipc] ->
+          raise ArgumentError, "Nx.to_pointer/2 is not supported for the #{name} client yet."
+
+        {_mode, %EXLA.BinaryBuffer{}} ->
+          raise ArgumentError, "tensor must be allocated via a #{EXLA.DeviceBuffer}"
+
+        {mode, _} ->
           raise ArgumentError,
                 "expected one of :local, :cuda_ipc, :host_ipc, got: #{inspect(mode)}"
       end
-
-    case buffer do
-      %EXLA.DeviceBuffer{} ->
-        :ok
-
-      _ ->
-        raise ArgumentError, "tensor must be allocated via a #{DeviceBuffer}"
-    end
 
     client = EXLA.Client.fetch!(buffer.client_name)
 
@@ -110,22 +117,24 @@ defmodule EXLA.Backend do
       {:ok, result} ->
         handle =
           case {result, mode} do
-            {{ptr, _size}, :local} when is_integer(ptr) ->
+            {{ptr, size}, :local} when is_integer(ptr) ->
               # pointer is an integer here
-              ptr
+              %Nx.Pointer{kind: :local, address: ptr, data_size: size}
 
             {{handle_name, fd, size}, :host_ipc} ->
-              %EXLA.IPCHandle.Host{
-                name: handle_name,
-                fd: fd,
-                size: size
+              %Nx.Pointer{
+                kind: :ipc,
+                handle: handle_name,
+                address: fd,
+                data_size: size
               }
 
             {{handle, size}, :cuda_ipc} ->
-              %EXLA.IPCHandle.CUDA{
+              %Nx.Pointer{
+                kind: :ipc,
                 handle: handle,
-                device_id: buffer.device_id,
-                size: size
+                address: buffer.device_id,
+                data_size: size
               }
           end
 
@@ -137,8 +146,7 @@ defmodule EXLA.Backend do
   end
 
   @impl true
-  def from_pointer(handle, type, dims, backend_opts, opts) do
-    # mode is inferred from the handle kind
+  def from_pointer(%Nx.Pointer{} = pointer, type, dims, backend_opts, opts) do
     backend_opts = Keyword.validate!(backend_opts, [:client, :device_id])
     opts = Keyword.validate!(opts, [:names])
 
@@ -156,19 +164,19 @@ defmodule EXLA.Backend do
     shape_size = num_elements * div(bits, 8)
 
     {mode, handle_nif} =
-      case handle do
-        %{size: size} when size != shape_size ->
+      case {pointer, client_name} do
+        {%Nx.Pointer{data_size: size}, _} when size != shape_size ->
           raise ArgumentError,
-                "invalid IPC handle size for shape, expected: #{shape_size}, got: #{size}"
+                "invalid pointer data_size for shape, expected: #{shape_size}, got: #{size}"
 
-        %EXLA.IPCHandle.Host{fd: fd, name: name} ->
-          {:host_ipc, {fd, name}}
+        {%Nx.Pointer{address: address, kind: :local}, _} ->
+          {:local, address}
 
-        %EXLA.IPCHandle.CUDA{handle: handle} ->
+        {%Nx.Pointer{kind: :ipc, address: fd, handle: handle}, :host} ->
+          {:host_ipc, {fd, handle}}
+
+        {%Nx.Pointer{kind: :ipc, handle: handle}, :cuda} ->
           {:cuda_ipc, handle}
-
-        _ when is_integer(handle) ->
-          {:local, handle}
       end
 
     result =
