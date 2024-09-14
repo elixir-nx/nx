@@ -25,10 +25,14 @@ defmodule Nx.Type do
   """
 
   @type t ::
-          {:s, 8}
+          {:s, 2}
+          | {:s, 4}
+          | {:s, 8}
           | {:s, 16}
           | {:s, 32}
           | {:s, 64}
+          | {:u, 2}
+          | {:u, 4}
           | {:u, 8}
           | {:u, 16}
           | {:u, 32}
@@ -64,6 +68,8 @@ defmodule Nx.Type do
   """
   def min_finite_binary(type)
 
+  def min_finite_binary({:s, 2}), do: <<-2::2-signed-native>>
+  def min_finite_binary({:s, 4}), do: <<-8::4-signed-native>>
   def min_finite_binary({:s, 8}), do: <<-128::8-signed-native>>
   def min_finite_binary({:s, 16}), do: <<-32768::16-signed-native>>
   def min_finite_binary({:s, 32}), do: <<-2_147_483_648::32-signed-native>>
@@ -87,10 +93,14 @@ defmodule Nx.Type do
   """
   def max_finite_binary(type)
 
+  def max_finite_binary({:s, 2}), do: <<1::2-signed-native>>
+  def max_finite_binary({:s, 4}), do: <<7::4-signed-native>>
   def max_finite_binary({:s, 8}), do: <<127::8-signed-native>>
   def max_finite_binary({:s, 16}), do: <<32767::16-signed-native>>
   def max_finite_binary({:s, 32}), do: <<2_147_483_647::32-signed-native>>
   def max_finite_binary({:s, 64}), do: <<9_223_372_036_854_775_807::64-signed-native>>
+  def max_finite_binary({:u, 2}), do: <<3::2-native>>
+  def max_finite_binary({:u, 4}), do: <<15::4-native>>
   def max_finite_binary({:u, 8}), do: <<255::8-native>>
   def max_finite_binary({:u, 16}), do: <<65535::16-native>>
   def max_finite_binary({:u, 32}), do: <<4_294_967_295::32-native>>
@@ -191,8 +201,8 @@ defmodule Nx.Type do
   end
 
   type_variants = [
-    s: [8, 16, 32, 64],
-    u: [8, 16, 32, 64],
+    s: [2, 4, 8, 16, 32, 64],
+    u: [2, 4, 8, 16, 32, 64],
     f: [8, 16, 32, 64],
     bf: [16],
     c: [64, 128]
