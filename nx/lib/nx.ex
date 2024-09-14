@@ -16705,11 +16705,11 @@ defmodule Nx do
   @doc """
   Creates an Nx-tensor from an already-allocated memory space.
 
-  This function should be used with caution, as it is very backend-specific.
+  This function should be used with caution, as it can lead to segmentation faults.
 
   The `backend` argument is either the backend module (such as `Nx.BinaryBackend`),
   or a tuple of `{module, keyword()}` with specific backend configuration.
-  `opaque_pointer` is the corresponding value that would be returned from
+  `pointer` is the corresponding value that would be returned from
   a call to `get_pointer/2`.
 
   ## Options
@@ -16721,7 +16721,8 @@ defmodule Nx do
 
   ## Examples
 
-      Nx.from_pointer(MyBackend, <<1, 2, 3, 4>>, {:s, 32}, {1, 3})
+      pointer = %Nx.Pointer{kind: :local, address: 1234}
+      Nx.from_pointer(MyBackend, pointer, {:s, 32}, {1, 3})
       #Nx.Tensor<
         s32[1][3]
         [
@@ -16729,7 +16730,8 @@ defmodule Nx do
         ]
       >
 
-      Nx.from_pointer({MyBackend, some: :opt}, <<5, 6, 7>>, {:s, 32}, {1, 3}, names: [nil, :col], another: :option)
+      pointer = %Nx.Pointer{kind: :ipc, handle: "some-ipc-handle"}
+      Nx.from_pointer({MyBackend, some: :opt}, pointer, {:s, 32}, {1, 3}, names: [nil, :col])
       #Nx.Tensor<
         s32[1][col: 3]
         [
@@ -16738,7 +16740,7 @@ defmodule Nx do
       >
   """
   @doc type: :creation
-  def from_pointer(backend, opaque_pointer, type, shape, opts \\ [])
+  def from_pointer(backend, pointer, type, shape, opts \\ [])
       when is_atom(backend) or is_tuple(backend) do
     Nx.Shape.validate!(shape, :shape)
     type = Nx.Type.normalize!(type)
@@ -16750,11 +16752,11 @@ defmodule Nx do
         backend -> {backend, []}
       end
 
-    backend.from_pointer(opaque_pointer, type, shape, backend_opts, opts)
+    backend.from_pointer(pointer, type, shape, backend_opts, opts)
   end
 
   @doc """
-  Returns an opaque pointer for a given tensor.
+  Returns an `Nx.Pointer` that represents either a local pointer or an IPC handle for the given tensor.
 
   Can be used in conjunction with `from_pointer/5` to share the same memory
   for multiple tensors, as well as for interoperability with other programming
@@ -16762,17 +16764,22 @@ defmodule Nx do
 
   ## Options
 
-  All options are backend-specific.
+    * `:kind` - one of `:local`, `:ipc`. `:local` means the returned value
+      represents a pointer internal to the current process. `:ipc` means
+      the returned value represents an IPC handle that can be shared between
+      processes. Defaults to `:local`.
+
+  Other options are relayed to the backend.
 
   ## Examples
 
-      t = Nx.tensor([10, 20, 30])
-      Nx.to_pointer(t)
-      <<1, 2, 3, 4>>
+      t = Nx.u8([10, 20, 30])
+      Nx.to_pointer(t, kind: :local)
+      %Nx.Pointer{kind: :local, address: 1234, data_size: 3, handle: nil}
 
-      t = Nx.tensor([1, 2, 3])
-      Nx.to_pointer(t, some: :option)
-      <<4, 3, 2, 1>>
+      t = Nx.s32([1, 2, 3])
+      Nx.to_pointer(t, kind: :ipc)
+      %Nx.Pointer{kind: :ipc, address: nil, data_size: 32, handle: "some-ipc-handle"}
   """
   @doc type: :creation
   def to_pointer(tensor, opts \\ []) do
