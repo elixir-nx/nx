@@ -5,12 +5,19 @@ defmodule Nx.Defn.Grad do
   alias Nx.Tensor, as: T
 
   def transform(to_grad, fun, transform) do
-    {to_grad, ids} =
-      Composite.traverse(to_grad, %{}, fn to_grad, ids ->
-        to_grad =
-          Expr.metadata(to_grad, %{__MODULE__ => :to_grad})
+    broadcasted_nodes =
+      [to_grad]
+      |> Composite.flatten_list()
+      |> Nx.broadcast_vectors()
 
-        {to_grad, Map.put(ids, to_grad.data.id, :stop)}
+    {to_grad, {ids, []}} =
+      Composite.traverse(to_grad, {%{}, broadcasted_nodes}, fn _to_grad,
+                                                               {ids, [broadcasted_node | nodes]} ->
+        to_grad =
+          Expr.metadata(broadcasted_node, %{__MODULE__ => :to_grad})
+
+        ids = Map.put(ids, to_grad.data.id, :stop)
+        {to_grad, {ids, nodes}}
       end)
 
     # Collect all IDs in the function environment and mark

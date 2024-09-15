@@ -4238,7 +4238,19 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "vectorization" do
-    test "supports vectorization" do
+    test "supports combination of vectorized and non-vectorized tensors" do
+      x = Nx.tensor([[1, 2, 3], [4, 5, 6]]) |> Nx.vectorize(:x)
+      y = Nx.tensor(1)
+
+      {grad_x, grad_y} = Nx.Defn.grad({x, y}, fn {a, b} -> Nx.add(a, b) end)
+
+      assert grad_x ==
+               Nx.tensor([[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]]) |> Nx.vectorize(x.vectorized_axes)
+
+      assert grad_y == Nx.tensor([3.0, 3.0]) |> Nx.vectorize(x.vectorized_axes)
+    end
+
+    test "supports heterogenous vectorization combinations" do
       x = Nx.tensor([[1, 2, 3], [4, 5, 6]])
       y = Nx.tensor([10, 20])
 
@@ -4246,13 +4258,53 @@ defmodule Nx.Defn.GradTest do
       # expected result: equivalent to fully broadcasting one tensor onto the other
       x_vec = Nx.vectorize(x, :x)
       y_vec = Nx.vectorize(y, :y)
-      {grad_x_vec, grad_y_vec} = Nx.Defn.grad({x_vec, y_vec}, fn {a, b} -> Nx.multiply(a, b) end)
+
+      grad_fun = fn x, y ->
+        Nx.Defn.grad({x, y}, fn {a, b} -> Nx.multiply(a, b) end)
+      end
+
+      {grad_x_vec, grad_y_vec} = grad_fun.(x_vec, y_vec)
+
+      # Explicit assertion on the results
+      assert grad_x_vec ==
+               Nx.tensor([
+                 [
+                   [10.0, 10.0, 10.0],
+                   [20.0, 20.0, 20.0]
+                 ],
+                 [
+                   [10.0, 10.0, 10.0],
+                   [20.0, 20.0, 20.0]
+                 ]
+               ])
+               |> Nx.vectorize([:x, :y])
+
+      assert grad_y_vec ==
+               Nx.tensor([
+                 [6.0, 6.0],
+                 [15.0, 15.0]
+               ])
+               |> Nx.vectorize([:x, :y])
+
+      # Conceptual assertion: the result should be equivalent to calling Nx.Defn.grad with
+      # each cross-entry of the combined vectors [(x0, y0), (x0, y1), (x1, y0), (x1, y1)]
+
+      {x0y0_wrt_x, x0y0_wrt_y} = grad_fun.(x[0], y[0])
+      {x0y1_wrt_x, x0y1_wrt_y} = grad_fun.(x[0], y[1])
+      {x1y0_wrt_x, x1y0_wrt_y} = grad_fun.(x[1], y[0])
+      {x1y1_wrt_x, x1y1_wrt_y} = grad_fun.(x[1], y[1])
 
       assert grad_x_vec ==
-               Nx.tensor([[30.0, 30.0, 30.0], [30.0, 30.0, 30.0]])
-               |> Nx.vectorize(x_vec.vectorized_axes)
+               [x0y0_wrt_x, x0y1_wrt_x, x1y0_wrt_x, x1y1_wrt_x]
+               |> Nx.stack()
+               |> Nx.reshape({2, 2, 3})
+               |> Nx.vectorize([:x, :y])
 
-      assert grad_y_vec == Nx.tensor([21.0, 21.0]) |> Nx.vectorize(y_vec.vectorized_axes)
+      assert grad_y_vec ==
+               [x0y0_wrt_y, x0y1_wrt_y, x1y0_wrt_y, x1y1_wrt_y]
+               |> Nx.stack()
+               |> Nx.reshape({2, 2})
+               |> Nx.vectorize([:x, :y])
 
       # second case: y is vectorized scalar, x is vectorized vectors, same vectorized axis name
       # expected result: equivalent to "row-wise" broadcasting
