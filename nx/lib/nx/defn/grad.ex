@@ -5,19 +5,23 @@ defmodule Nx.Defn.Grad do
   alias Nx.Tensor, as: T
 
   def transform(to_grad, fun, transform) do
-    broadcasted_nodes =
-      [to_grad]
-      |> Composite.flatten_list()
-      |> Nx.broadcast_vectors()
+    to_grad =
+      Composite.traverse(to_grad, fn to_grad ->
+        Expr.metadata(to_grad, %{__MODULE__ => :to_grad})
+      end)
 
-    {to_grad, {ids, []}} =
-      Composite.traverse(to_grad, {%{}, broadcasted_nodes}, fn _to_grad,
-                                                               {ids, [broadcasted_node | nodes]} ->
-        to_grad =
-          Expr.metadata(broadcasted_node, %{__MODULE__ => :to_grad})
+    # save vectorized axes before devectorizing
+    expr = fun.(to_grad)
 
-        ids = Map.put(ids, to_grad.data.id, :stop)
-        {to_grad, {ids, nodes}}
+    transformed_expr =
+      expr |> transform.() |> validate_expr!() |> Nx.devectorize(keep_names: false)
+
+    {to_grad, ids} =
+      Composite.traverse(to_grad, %{}, fn node, ids ->
+        [node, _expr] = Nx.broadcast_vectors([node, expr])
+        node = Expr.metadata(node, %{__MODULE__ => :to_grad})
+        ids = Map.put(ids, node.data.id, :stop)
+        {node, ids}
       end)
 
     # Collect all IDs in the function environment and mark
@@ -25,11 +29,6 @@ defmodule Nx.Defn.Grad do
     # traversing trees when not necessary.
     {:env, env} = Function.info(fun, :env)
     ids = stop_grads(env, ids)
-
-    # save vectorized axes before devectorizing
-    expr = to_grad |> fun.()
-
-    transformed_expr = transform.(expr) |> validate_expr!() |> Nx.devectorize(keep_names: false)
     {parents, nodes} = parents_tree(transformed_expr, ids)
 
     to_grad_ids = {to_grad, ids}

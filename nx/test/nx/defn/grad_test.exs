@@ -4240,14 +4240,11 @@ defmodule Nx.Defn.GradTest do
   describe "vectorization" do
     test "supports combination of vectorized and non-vectorized tensors" do
       x = Nx.tensor([[1, 2, 3], [4, 5, 6]]) |> Nx.vectorize(:x)
-      y = Nx.tensor(1)
+      y = 1
 
-      {grad_x, grad_y} = Nx.Defn.grad({x, y}, fn {a, b} -> Nx.add(a, b) end)
+      grad = Nx.Defn.grad(y, fn y -> Nx.add(x, y) end)
 
-      assert grad_x ==
-               Nx.tensor([[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]]) |> Nx.vectorize(x.vectorized_axes)
-
-      assert grad_y == Nx.tensor([3.0, 3.0]) |> Nx.vectorize(x.vectorized_axes)
+      assert grad == Nx.tensor([3.0, 3.0]) |> Nx.vectorize([:x])
     end
 
     test "supports heterogenous vectorization combinations" do
