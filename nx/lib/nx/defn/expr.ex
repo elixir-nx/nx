@@ -1394,6 +1394,11 @@ defmodule Nx.Defn.Expr do
 
   ## Constant helpers and related optimizations
 
+  defp constant(%{vectorized_axes: [_ | _]} = out, number) do
+    out = %{out | names: Enum.map(out.names, fn _ -> nil end)}
+    tensor(Nx.fill(out, number, type: out.type))
+  end
+
   defp constant(%{shape: shape, type: type} = out, number) do
     number =
       cond do

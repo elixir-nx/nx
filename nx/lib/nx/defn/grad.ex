@@ -34,16 +34,10 @@ defmodule Nx.Defn.Grad do
     {expr, graded}
   end
 
-  defp constant(float, shape) do
-    case shape do
-      %T{vectorized_axes: [_ | _]} = t ->
-        Expr.tensor(Nx.fill(t, float, type: :f32))
+  defp constant(float, %T{shape: shape} = t) do
+    names = List.duplicate(nil, tuple_size(shape))
 
-      t ->
-        shape = Nx.shape(t)
-        names = List.duplicate(nil, tuple_size(shape))
-        Expr.constant(%T{shape: shape, type: {:f, 32}, names: names}, float, [])
-    end
+    Expr.constant(%T{t | names: names, type: {:f, 32}}, float, [])
   end
 
   defp validate_expr!(%T{data: %Expr{}} = expr) do
@@ -1351,22 +1345,33 @@ defmodule Nx.Defn.Grad do
         %T{names: names} ->
           names = Enum.with_index(names, fn name, idx -> if(name, do: {name, idx}) end)
 
-          vectorized_axes =
+          {vectorized_axes, offset} =
             names
-            |> Enum.reduce([], fn
+            |> Enum.reduce({[], 0}, fn
               nil, acc ->
                 acc
 
-              {name, _idx}, acc ->
+              {name, _idx}, {acc, count} ->
                 if name in names_ans do
-                  [name | acc]
+                  {[name | acc], count + 1}
                 else
-                  acc
+                  {acc, count}
                 end
             end)
-            |> Enum.reverse()
 
-          Nx.vectorize(arg, vectorized_axes)
+          axes_names = Enum.reverse(vectorized_axes)
+
+          {vec_shape_list, shape_list} = arg.shape |> Tuple.to_list() |> Enum.split(offset)
+
+          vectorized_axes =
+            Enum.zip(axes_names, vec_shape_list)
+
+          %{
+            arg
+            | vectorized_axes: vectorized_axes,
+              names: Enum.drop(arg.names, offset),
+              shape: List.to_tuple(shape_list)
+          }
 
         arg ->
           arg
