@@ -29,19 +29,7 @@ defmodule Nx.Defn.Grad do
     grads = %{transformed_expr.data.id => [constant(1.0, transformed_expr)]}
 
     {graded, _} =
-      Composite.traverse(
-        to_grad,
-        {nodes, grads},
-        fn node, acc ->
-          node
-          # |> Nx.devectorize(keep_names: false)
-          |> to_grad(to_grad_ids, parents, acc)
-
-          # |> then(fn {node, acc} ->
-          #   {Nx.vectorize(node, vectorized_axes), acc}
-          # end)
-        end
-      )
+      Composite.traverse(to_grad, {nodes, grads}, &to_grad(&1, to_grad_ids, parents, &2))
 
     {expr, graded}
   end
