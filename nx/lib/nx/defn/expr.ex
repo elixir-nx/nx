@@ -1661,11 +1661,11 @@ defmodule Nx.Defn.Expr do
 
   defp counter_to_name(counter), do: [?a + counter]
 
-  defp to_type_shape(%{type: type, shape: shape}) do
-    brackets =
-      shape
-      |> Tuple.to_list()
-      |> Enum.map(&[?[, Integer.to_string(&1), ?]])
+  defp to_type_shape(%{vectorized_axes: vectorized_axes, type: type, shape: shape}) do
+    axes =
+      Keyword.values(vectorized_axes) ++ Tuple.to_list(shape)
+
+    brackets = Enum.map(axes, &[?[, Integer.to_string(&1), ?]])
 
     IO.iodata_to_binary([Nx.Type.to_string(type) | brackets])
   end
