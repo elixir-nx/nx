@@ -1378,8 +1378,6 @@ defmodule Nx.Defn.Grad do
     vectorized_axes_x = Keyword.keys(x.vectorized_axes)
     vectorized_axes_ans = Keyword.keys(ans.vectorized_axes)
 
-    # num_extra_axes = length(vectorized_axes_ans -- vectorized_axes_x)
-
     permutation =
       vectorized_axes_ans
       |> Enum.with_index()
