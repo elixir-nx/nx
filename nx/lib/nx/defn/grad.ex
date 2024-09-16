@@ -12,26 +12,17 @@ defmodule Nx.Defn.Grad do
         {node, ids}
       end)
 
-    expr = fun.(to_grad)
-
-    transformed_expr =
-      expr |> transform.() |> validate_expr!()
-
-    # |> Nx.devectorize(keep_names: false)
-
-    # to_grad =
-    #   Composite.traverse(to_grad, fn node ->
-    #     [_expr, node] = Nx.broadcast_vectors([expr, node])
-    #     # ids = Map.put(ids, node.data.id, :stop)
-    #     # {node, ids}
-    #     node
-    #   end)
-
     # Collect all IDs in the function environment and mark
     # them as stop grads. This is an optimization to avoid
     # traversing trees when not necessary.
     {:env, env} = Function.info(fun, :env)
     ids = stop_grads(env, ids)
+
+    expr = fun.(to_grad)
+
+    transformed_expr =
+      expr |> transform.() |> validate_expr!()
+
     {parents, nodes} = parents_tree(transformed_expr, ids)
 
     to_grad_ids = {to_grad, ids}
@@ -58,7 +49,6 @@ defmodule Nx.Defn.Grad do
   defp constant(float, shape) do
     case shape do
       %T{vectorized_axes: [_ | _]} = t ->
-        # [_expr, t] = Nx.broadcast_vectors([shape, float], align_ranks: false)
         Expr.tensor(Nx.fill(t, float, type: :f32))
 
       t ->
