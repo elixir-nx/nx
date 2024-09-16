@@ -5,24 +5,27 @@ defmodule Nx.Defn.Grad do
   alias Nx.Tensor, as: T
 
   def transform(to_grad, fun, transform) do
-    to_grad =
-      Composite.traverse(to_grad, fn to_grad ->
-        Expr.metadata(to_grad, %{__MODULE__ => :to_grad})
-      end)
-
-    # save vectorized axes before devectorizing
-    expr = fun.(to_grad)
-
-    transformed_expr =
-      expr |> transform.() |> validate_expr!() |> Nx.devectorize(keep_names: false)
-
     {to_grad, ids} =
       Composite.traverse(to_grad, %{}, fn node, ids ->
-        [node, _expr] = Nx.broadcast_vectors([node, expr])
         node = Expr.metadata(node, %{__MODULE__ => :to_grad})
         ids = Map.put(ids, node.data.id, :stop)
         {node, ids}
       end)
+
+    expr = fun.(to_grad)
+
+    transformed_expr =
+      expr |> transform.() |> validate_expr!()
+
+    # |> Nx.devectorize(keep_names: false)
+
+    # to_grad =
+    #   Composite.traverse(to_grad, fn node ->
+    #     [_expr, node] = Nx.broadcast_vectors([expr, node])
+    #     # ids = Map.put(ids, node.data.id, :stop)
+    #     # {node, ids}
+    #     node
+    #   end)
 
     # Collect all IDs in the function environment and mark
     # them as stop grads. This is an optimization to avoid
@@ -38,13 +41,14 @@ defmodule Nx.Defn.Grad do
       Composite.traverse(
         to_grad,
         {nodes, grads},
-        fn %{vectorized_axes: vectorized_axes} = node, acc ->
+        fn node, acc ->
           node
-          |> Nx.devectorize(keep_names: false)
+          # |> Nx.devectorize(keep_names: false)
           |> to_grad(to_grad_ids, parents, acc)
-          |> then(fn {node, acc} ->
-            {Nx.vectorize(node, vectorized_axes), acc}
-          end)
+
+          # |> then(fn {node, acc} ->
+          #   {Nx.vectorize(node, vectorized_axes), acc}
+          # end)
         end
       )
 
@@ -52,9 +56,16 @@ defmodule Nx.Defn.Grad do
   end
 
   defp constant(float, shape) do
-    shape = Nx.shape(shape)
-    names = List.duplicate(nil, tuple_size(shape))
-    Expr.constant(%T{shape: shape, type: {:f, 32}, names: names}, float, [])
+    case shape do
+      %T{vectorized_axes: [_ | _]} = t ->
+        # [_expr, t] = Nx.broadcast_vectors([shape, float], align_ranks: false)
+        Expr.tensor(Nx.fill(t, float, type: :f32))
+
+      t ->
+        shape = Nx.shape(t)
+        names = List.duplicate(nil, tuple_size(shape))
+        Expr.constant(%T{shape: shape, type: {:f, 32}, names: names}, float, [])
+    end
   end
 
   defp validate_expr!(%T{data: %Expr{}} = expr) do
@@ -344,6 +355,8 @@ defmodule Nx.Defn.Grad do
   @verify_grad Application.compile_env(:nx, :verify_grad, false)
 
   defp update_grads(op, args, ans, g, _to_grad_ids, grads) do
+    args = revectorize_args(args, ans)
+
     pairs = grad(op, args, ans, g)
 
     if @verify_grad do
@@ -1349,9 +1362,76 @@ defmodule Nx.Defn.Grad do
 
   ## General helpers
 
-  defp unbroadcast(%{shape: shape} = x, res, %{shape: shape}), do: {x, res}
+  defp revectorize_args(args, ans) do
+    names_ans =
+      Enum.with_index(Keyword.keys(ans.vectorized_axes) ++ ans.names, fn name, idx ->
+        if(name, do: name, else: {:ans, idx})
+      end)
 
-  defp unbroadcast(%{shape: shape} = x, res, %{shape: new_shape}) do
+    for arg <- args do
+      case arg do
+        %T{names: names} ->
+          names = Enum.with_index(names, fn name, idx -> if(name, do: {name, idx}) end)
+
+          vectorized_axes =
+            names
+            |> Enum.reduce([], fn
+              nil, acc ->
+                acc
+
+              {name, _idx}, acc ->
+                if name in names_ans do
+                  [name | acc]
+                else
+                  acc
+                end
+            end)
+            |> Enum.reverse()
+
+          Nx.vectorize(arg, vectorized_axes)
+
+        arg ->
+          arg
+      end
+    end
+  end
+
+  defp unbroadcast(x, res, ans) do
+    # ans := y, x
+
+    # y: [a, b, c]
+    # x: [b, d]
+    # ans: [b, a, c, d]
+
+    # res/dx -> [b, d] {a, c, ...}
+
+    vectorized_axes_x = Keyword.keys(x.vectorized_axes)
+    vectorized_axes_ans = Keyword.keys(ans.vectorized_axes)
+
+    # num_extra_axes = length(vectorized_axes_ans -- vectorized_axes_x)
+
+    permutation =
+      vectorized_axes_ans
+      |> Enum.with_index()
+      |> Enum.sort_by(fn {axis, _idx} -> axis in vectorized_axes_x end)
+      |> Enum.map(fn {_, idx} -> idx end)
+
+    num_vectorized_axes = length(permutation)
+
+    inner_axes = Enum.to_list(num_vectorized_axes..(num_vectorized_axes + Nx.rank(res) - 1)//1)
+
+    res =
+      res
+      |> Nx.devectorize()
+      |> Nx.transpose(axes: permutation ++ inner_axes)
+      |> Nx.vectorize(vectorized_axes_x)
+
+    unbroadcast2(x, res, ans)
+  end
+
+  defp unbroadcast2(%{shape: shape} = x, res, %{shape: shape}), do: {x, res}
+
+  defp unbroadcast2(%{shape: shape} = x, res, %{shape: new_shape}) do
     axes = Nx.Shape.broadcast_axes(shape, new_shape)
     {x, grad_broadcast(x, new_shape, axes, res)}
   end

@@ -5420,9 +5420,13 @@ defmodule Nx do
       {_, [], 0} ->
         fun.(left, right)
 
-      {[devec_left, devec_right], canonical_vectorized_axes, _offset} ->
-        devec_left
-        |> fun.(devec_right)
+      {[devec_left, devec_right], canonical_vectorized_axes, offset} ->
+        leading_names = Keyword.keys(canonical_vectorized_axes)
+        l = %{devec_left | names: leading_names ++ Enum.drop(devec_left.names, offset)}
+        r = %{devec_right | names: leading_names ++ Enum.drop(devec_right.names, offset)}
+
+        l
+        |> fun.(r)
         |> vectorize(canonical_vectorized_axes)
     end
   end
