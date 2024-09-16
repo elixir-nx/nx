@@ -1375,14 +1375,6 @@ defmodule Nx.Defn.Grad do
   end
 
   defp unbroadcast(x, res, ans) do
-    # ans := y, x
-
-    # y: [a, b, c]
-    # x: [b, d]
-    # ans: [b, a, c, d]
-
-    # res/dx -> [b, d] {a, c, ...}
-
     vectorized_axes_x = Keyword.keys(x.vectorized_axes)
     vectorized_axes_ans = Keyword.keys(ans.vectorized_axes)
 
@@ -1404,12 +1396,12 @@ defmodule Nx.Defn.Grad do
       |> Nx.transpose(axes: permutation ++ inner_axes)
       |> Nx.vectorize(vectorized_axes_x)
 
-    unbroadcast2(x, res, ans)
+    grad_broadcast(x, res, ans)
   end
 
-  defp unbroadcast2(%{shape: shape} = x, res, %{shape: shape}), do: {x, res}
+  defp grad_broadcast(%{shape: shape} = x, res, %{shape: shape}), do: {x, res}
 
-  defp unbroadcast2(%{shape: shape} = x, res, %{shape: new_shape}) do
+  defp grad_broadcast(%{shape: shape} = x, res, %{shape: new_shape}) do
     axes = Nx.Shape.broadcast_axes(shape, new_shape)
     {x, grad_broadcast(x, new_shape, axes, res)}
   end
