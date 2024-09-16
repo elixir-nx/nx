@@ -4247,6 +4247,17 @@ defmodule Nx.Defn.GradTest do
       assert grad == Nx.tensor([3.0, 3.0]) |> Nx.vectorize([:x])
     end
 
+    test "supports combination of vectorized and non-vectorized tensors over composed function" do
+      x = Nx.tensor([[1, 2, 3], [4, 5, 6]]) |> Nx.vectorize(:x)
+      y = 1
+
+      grad = Nx.Defn.grad(y, fn y -> Nx.add(y, Nx.sin(x)) end)
+      assert grad == Nx.tensor([3.0, 3.0]) |> Nx.vectorize([:x])
+
+      grad = Nx.Defn.grad(x, fn x -> Nx.add(y, Nx.sin(x)) end)
+      assert grad == Nx.cos(x)
+    end
+
     test "supports heterogenous vectorization combinations" do
       x = Nx.tensor([[1, 2, 3], [4, 5, 6]])
       y = Nx.tensor([10, 20])

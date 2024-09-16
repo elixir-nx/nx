@@ -36,7 +36,6 @@ defmodule Nx.Defn.Grad do
 
   defp constant(float, %T{shape: shape} = t) do
     names = List.duplicate(nil, tuple_size(shape))
-
     Expr.constant(%T{t | names: names, type: {:f, 32}}, float, [])
   end
 
