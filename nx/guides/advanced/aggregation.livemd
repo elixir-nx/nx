@@ -258,7 +258,7 @@ The picture below will help to understand the aggregations.
 
 <!-- livebook:{"break_markdown":true} -->
 
-$$
+```math
 \begin{bmatrix}
 x=0 &
 \begin{bmatrix}
@@ -327,7 +327,7 @@ z=1 & a_{1,2,1,0} & a_{1,2,1,1} & a_{1,2,1,2} \\
 \end{bmatrix}
 \end{bmatrix}
 \end{bmatrix}
-$$
+```
 
 <!-- livebook:{"break_markdown":true} -->
 
