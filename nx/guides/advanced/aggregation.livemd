@@ -217,7 +217,7 @@ t =
 
 <!-- livebook:{"output":true} -->
 
-```
+```elixir
 #Nx.Tensor<
   s64[x: 2][y: 3][z: 2][t: 3]
   [
@@ -361,7 +361,7 @@ Firstly, let's check some characteristics of this tensor using full-tensor aggre
 
 <!-- livebook:{"output":true} -->
 
-```
+```elixir
 %{
   n: 36,
   shape: {2, 3, 2, 3},
@@ -422,7 +422,7 @@ The aggregating function used below is [argmin](https://hexdocs.pm/nx/Nx.html#ar
 
 <!-- livebook:{"break_markdown":true} -->
 
-$$
+```math
 \begin{bmatrix}
 \begin{bmatrix}
 \begin{bmatrix}
@@ -483,7 +483,8 @@ $$
 & 0, 0,1 &
 \end{bmatrix}
 \end{bmatrix}
-$$
+```
+
 
 ```elixir
 Nx.argmin(t, axis: :x)
@@ -491,7 +492,7 @@ Nx.argmin(t, axis: :x)
 
 <!-- livebook:{"output":true} -->
 
-```
+```elixir
 #Nx.Tensor<
   s64[y: 3][z: 2][t: 3]
   [
@@ -529,7 +530,7 @@ In the example below, we used again the `argmin` function.
 
 <!-- livebook:{"break_markdown":true} -->
 
-$$
+```math
 \begin{bmatrix}
 \begin{bmatrix}
 \begin{bmatrix}
@@ -582,7 +583,7 @@ $$
 & 2,0,0 &
 \end{bmatrix}
 \end{bmatrix}
-$$
+```
 
 ```elixir
 Nx.argmin(t, axis: 1)
@@ -590,7 +591,7 @@ Nx.argmin(t, axis: 1)
 
 <!-- livebook:{"output":true} -->
 
-```
+```elixir
 #Nx.Tensor<
   s64[x: 2][z: 2][t: 3]
   [
@@ -618,7 +619,7 @@ In the example below, we used the `argmax` function.
 
 <!-- livebook:{"break_markdown":true} -->
 
-$$
+```math
 \begin{bmatrix}
 x=0 &
 \begin{bmatrix}
@@ -685,7 +686,7 @@ x=1 &
 0, 1, 0
 \end{bmatrix}
 \end{bmatrix}
-$$
+```
 
 <!-- livebook:{"break_markdown":true} -->
 
@@ -697,7 +698,7 @@ Nx.argmax(t, axis: :z)
 
 <!-- livebook:{"output":true} -->
 
-```
+```elixir
 #Nx.Tensor<
   s64[x: 2][y: 3][t: 3]
   [
