@@ -4,6 +4,8 @@ defmodule Nx.Defn.Grad do
   alias Nx.Defn.{Composite, Expr, Tree}
   alias Nx.Tensor, as: T
 
+  require Nx
+
   def transform(to_grad, fun, transform) do
     {to_grad, ids} =
       Composite.traverse(to_grad, %{}, fn node, ids ->
@@ -1350,42 +1352,42 @@ defmodule Nx.Defn.Grad do
 
     names_ans = names_ans |> Enum.filter(& &1) |> MapSet.new()
 
-    for arg <- args do
-      case Nx.devectorize(arg) do
-        %T{names: names} ->
-          names = Enum.with_index(names, fn name, idx -> if(name, do: {name, idx}) end)
+    {tensor_args, kw_args} = Enum.split_while(args, &Nx.is_tensor/1)
 
-          {vectorized_axes, offset} =
-            Enum.reduce(names, {[], 0}, fn
-              nil, acc ->
-                acc
+    revec_tensor_args =
+      for arg <- tensor_args do
+        %T{names: names} = arg = Nx.devectorize(arg)
+        names = Enum.with_index(names, fn name, idx -> if(name, do: {name, idx}) end)
 
-              {name, _idx}, {acc, count} ->
-                if name in names_ans do
-                  {[name | acc], count + 1}
-                else
-                  {acc, count}
-                end
-            end)
+        {vectorized_axes, offset} =
+          Enum.reduce(names, {[], 0}, fn
+            nil, acc ->
+              acc
 
-          axes_names = Enum.reverse(vectorized_axes)
+            {name, _idx}, {acc, count} ->
+              if name in names_ans do
+                {[name | acc], count + 1}
+              else
+                {acc, count}
+              end
+          end)
 
-          {vec_shape_list, shape_list} = arg.shape |> Tuple.to_list() |> Enum.split(offset)
+        axes_names = Enum.reverse(vectorized_axes)
 
-          vectorized_axes =
-            Enum.zip(axes_names, vec_shape_list)
+        {vec_shape_list, shape_list} = arg.shape |> Tuple.to_list() |> Enum.split(offset)
 
-          %{
-            arg
-            | vectorized_axes: vectorized_axes,
-              names: Enum.drop(arg.names, offset),
-              shape: List.to_tuple(shape_list)
-          }
+        vectorized_axes =
+          Enum.zip(axes_names, vec_shape_list)
 
-        _arg ->
+        %{
           arg
+          | vectorized_axes: vectorized_axes,
+            names: Enum.drop(arg.names, offset),
+            shape: List.to_tuple(shape_list)
+        }
       end
-    end
+
+    revec_tensor_args ++ kw_args
   end
 
   defp unbroadcast(x, res, ans) do
