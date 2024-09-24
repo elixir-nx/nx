@@ -1432,34 +1432,9 @@ defmodule Nx.Defn.Grad do
 
   ## General helpers
 
-  defp unbroadcast(x, res, ans) do
-    # vectorized_axes_x = Keyword.keys(x.vectorized_axes) ++ Enum.filter(x.names, & &1)
-    # vectorized_axes_ans = Keyword.keys(ans.vectorized_axes)
+  defp unbroadcast(%{shape: shape} = x, res, %{shape: shape}), do: {x, res}
 
-    # permutation =
-    #   vectorized_axes_ans
-    #   |> Enum.with_index()
-    #   |> Enum.sort_by(fn {axis, _idx} -> axis in vectorized_axes_x end)
-    #   |> Enum.map(fn {_, idx} -> idx end)
-
-    # num_vectorized_axes = length(permutation)
-
-    # inner_axes = Enum.to_list(num_vectorized_axes..(num_vectorized_axes + Nx.rank(res) - 1)//1)
-
-    # res =
-    #   res
-    #   |> Nx.devectorize()
-    #   |> Nx.transpose(axes: permutation ++ inner_axes)
-    #   |> Nx.vectorize(vectorized_axes_x)
-
-    # x = x |> Nx.devectorize(keep_names: false) |> Nx.vectorize(vectorized_axes_x)
-
-    grad_broadcast(x, res, ans)
-  end
-
-  defp grad_broadcast(%{shape: shape} = x, res, %{shape: shape}), do: {x, res}
-
-  defp grad_broadcast(%{shape: shape} = x, res, %{shape: new_shape}) do
+  defp unbroadcast(%{shape: shape} = x, res, %{shape: new_shape}) do
     axes = Nx.Shape.broadcast_axes(shape, new_shape)
     {x, grad_broadcast(x, new_shape, axes, res)}
   end
