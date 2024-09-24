@@ -272,7 +272,7 @@ defmodule Nx.Defn.Grad do
          %{vectorized_axes: vectorized_axes, names: names},
          parent_names
        ) do
-    Keyword.keys(vectorized_axes) ++ Enum.filter(names, & &1 in parent_names)
+    Keyword.keys(vectorized_axes) ++ Enum.filter(names, &(&1 in parent_names))
   end
 
   defp revectorize_node(node, vectorized_names) do
