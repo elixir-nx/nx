@@ -36,6 +36,16 @@ defmodule Nx.Defn.Grad do
     {expr, graded}
   end
 
+  defp revectorize_node(%{vectorized_axes: vectorized_axes, names: names} = node) do
+    vec_names = Enum.take_while(names, &(not is_nil(&1)))
+
+    node
+    |> Nx.devectorize()
+    |> Nx.vectorize(vectorized_axes ++ vec_names)
+  end
+
+  defp revectorize_node(arg), do: arg
+
   defp constant(float, %T{shape: shape} = t) do
     names = List.duplicate(nil, tuple_size(shape))
     Expr.constant(%T{t | names: names, type: {:f, 32}}, float, [])
@@ -184,6 +194,9 @@ defmodule Nx.Defn.Grad do
         %T{data: %Expr{op: op, args: args}} = ans
         {gs, grads} = Map.pop(grads, id)
 
+        args =
+          Enum.map(args, &revectorize_node/1)
+
         case gs do
           nil ->
             {nodes, grads}
@@ -328,8 +341,6 @@ defmodule Nx.Defn.Grad do
   @verify_grad Application.compile_env(:nx, :verify_grad, false)
 
   defp update_grads(op, args, ans, g, _to_grad_ids, grads) do
-    args = revectorize_args(args, ans, g)
-
     pairs = grad(op, args, ans, g)
 
     if @verify_grad do
@@ -1335,63 +1346,8 @@ defmodule Nx.Defn.Grad do
 
   ## General helpers
 
-  defp revectorize_args(args, [ans | _], g) do
-    revectorize_args(args, ans, g)
-  end
-
-  defp revectorize_args(args, %{} = ans, [g | _]) do
-    revectorize_args(args, ans, g)
-  end
-
-  defp revectorize_args(args, %{vectorized_axes: []}, %{vectorized_axes: []}) do
-    args
-  end
-
-  defp revectorize_args(args, ans, g) do
-    names_ans = Keyword.keys(ans.vectorized_axes) ++ Keyword.keys(g.vectorized_axes) ++ ans.names
-
-    names_ans = names_ans |> Enum.filter(& &1) |> MapSet.new()
-
-    {tensor_args, kw_args} = Enum.split_while(args, &Nx.is_tensor/1)
-
-    revec_tensor_args =
-      for arg <- tensor_args do
-        %T{names: names} = arg = Nx.devectorize(arg)
-        names = Enum.with_index(names, fn name, idx -> if(name, do: {name, idx}) end)
-
-        {vectorized_axes, offset} =
-          Enum.reduce(names, {[], 0}, fn
-            nil, acc ->
-              acc
-
-            {name, _idx}, {acc, count} ->
-              if name in names_ans do
-                {[name | acc], count + 1}
-              else
-                {acc, count}
-              end
-          end)
-
-        axes_names = Enum.reverse(vectorized_axes)
-
-        {vec_shape_list, shape_list} = arg.shape |> Tuple.to_list() |> Enum.split(offset)
-
-        vectorized_axes =
-          Enum.zip(axes_names, vec_shape_list)
-
-        %{
-          arg
-          | vectorized_axes: vectorized_axes,
-            names: Enum.drop(arg.names, offset),
-            shape: List.to_tuple(shape_list)
-        }
-      end
-
-    revec_tensor_args ++ kw_args
-  end
-
   defp unbroadcast(x, res, ans) do
-    vectorized_axes_x = Keyword.keys(x.vectorized_axes)
+    vectorized_axes_x = Keyword.keys(x.vectorized_axes) ++ Enum.filter(x.names, & &1)
     vectorized_axes_ans = Keyword.keys(ans.vectorized_axes)
 
     permutation =
@@ -1409,6 +1365,8 @@ defmodule Nx.Defn.Grad do
       |> Nx.devectorize()
       |> Nx.transpose(axes: permutation ++ inner_axes)
       |> Nx.vectorize(vectorized_axes_x)
+
+    x = x |> Nx.devectorize(keep_names: false) |> Nx.vectorize(vectorized_axes_x)
 
     grad_broadcast(x, res, ans)
   end
