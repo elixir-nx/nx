@@ -272,16 +272,7 @@ defmodule Nx.Defn.Grad do
          %{vectorized_axes: vectorized_axes, names: names},
          parent_names
        ) do
-    reversed_inner_axes =
-      Enum.reduce(names, [], fn name, acc ->
-        if name in parent_names do
-          [name | acc]
-        else
-          acc
-        end
-      end)
-
-    Keyword.keys(vectorized_axes) ++ Enum.reverse(reversed_inner_axes)
+    Keyword.keys(vectorized_axes) ++ Enum.filter(names, & &1 in parent_names)
   end
 
   defp revectorize_node(node, vectorized_names) do
