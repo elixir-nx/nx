@@ -701,7 +701,9 @@ defmodule Nx.Defn.Grad do
         current_limit = 1 + limit
         start = List.replace_at(zero_axes, axis, limit)
         len = List.replace_at(ans_shape_list, axis, 1)
-        {{t, Nx.slice(g, start, len)}, current_limit}
+        g = Nx.slice(g, start, len)
+        g = Nx.squeeze(g, axes: [axis])
+        {{t, g}, current_limit}
       end)
 
     pairs

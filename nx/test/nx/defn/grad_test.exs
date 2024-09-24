@@ -1773,6 +1773,24 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "stack" do
+    test "works on compound functions for more than 1 axis" do
+      # This is a test that ensures that the added axis from the
+      # stack operation is correctly squeezed back out by
+      # the gradient computation.
+      x = 2.0
+
+      assert grad(Nx.tensor([[x]]), fn t ->
+               a = Nx.pow(t, 2)
+               b = Nx.pow(t, 3)
+               c = Nx.pow(t, 4)
+
+               Nx.stack([a, b, c], axis: 1)
+               |> Nx.sum()
+             end) == Nx.tensor([[2 * x + 3 * x ** 2 + 4 * x ** 3]])
+    end
+  end
+
   describe "cholesky" do
     defn cholesky_grad(t) do
       grad(t, fn x -> x |> Nx.LinAlg.cholesky() |> Nx.sum() end)
