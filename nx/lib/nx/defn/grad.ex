@@ -8,10 +8,11 @@ defmodule Nx.Defn.Grad do
 
   def transform(to_grad, fun, transform) do
     {to_grad, ids} =
-      Composite.traverse(to_grad, %{}, fn node, ids ->
-        node = Expr.metadata(node, %{__MODULE__ => :to_grad})
-        ids = Map.put(ids, node.data.id, :stop)
-        {node, ids}
+      Composite.traverse(to_grad, %{}, fn to_grad, ids ->
+        to_grad =
+          Expr.metadata(to_grad, %{__MODULE__ => :to_grad})
+
+        {to_grad, Map.put(ids, to_grad.data.id, :stop)}
       end)
 
     # Collect all IDs in the function environment and mark
@@ -31,7 +32,13 @@ defmodule Nx.Defn.Grad do
     grads = %{transformed_expr.data.id => [constant(1.0, transformed_expr)]}
 
     {graded, _} =
-      Composite.traverse(to_grad, {nodes, grads}, &to_grad(&1, to_grad_ids, parents, &2))
+      Composite.traverse(
+        to_grad,
+        {nodes, grads},
+        fn %{vectorized_axes: vectorized_axes} = node, acc ->
+          to_grad(node, to_grad_ids, parents, acc)
+        end
+      )
 
     {expr, graded}
   end
@@ -96,6 +103,7 @@ defmodule Nx.Defn.Grad do
         {parents, nodes}
 
       %{} ->
+        # We use this to compute the proper axis sizes for the tensor
         parent_vectorized_axes = compute_arg_vectorized_axes(t, vectorized_axes)
 
         nodes = Map.put(nodes, id, {Nx.devectorize(t, keep_names: true), parent_vectorized_axes})

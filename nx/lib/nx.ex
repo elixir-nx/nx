@@ -4906,18 +4906,11 @@ defmodule Nx do
 
   def devectorize(%T{shape: shape, names: names, vectorized_axes: vectorized_axes} = tensor, opts)
       when vectorized_axes != [] do
-    opts = keyword!(opts, keep_names: true, drop_inner_names: false)
+    opts = keyword!(opts, keep_names: true)
     {vectorized_names, vectorized_sizes} = Enum.unzip(vectorized_axes)
 
     output_shape_l = vectorized_sizes ++ Tuple.to_list(shape)
     output_shape = List.to_tuple(output_shape_l)
-
-    names =
-      if opts[:drop_inner_names] do
-        Enum.map(names, fn _ -> nil end)
-      else
-        names
-      end
 
     output_names =
       if opts[:keep_names] do

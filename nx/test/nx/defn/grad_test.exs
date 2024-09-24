@@ -4258,6 +4258,22 @@ defmodule Nx.Defn.GradTest do
       assert grad == Nx.cos(x)
     end
 
+    # Skipping this as it's not supported yet.
+    @tag :skip
+    test "edge case where the same name changes meaning" do
+      x = Nx.tensor([[1], [2], [3]]) |> Nx.vectorize(x: 3)
+
+      grad =
+        Nx.Defn.grad(x, fn t ->
+          devec = Nx.devectorize(t, keep_names: true)
+          new_axis = Nx.reshape(devec, {1, 3, 1}, names: [:x, nil, nil])
+
+          Nx.vectorize(new_axis, x: 1)
+        end)
+
+      assert grad == Nx.tensor([[1], [1], [1]]) |> Nx.vectorize(x: 3)
+    end
+
     test "supports heterogenous vectorization combinations" do
       x = Nx.tensor([[1, 2, 3], [4, 5, 6]])
       y = Nx.tensor([10, 20])
