@@ -1,5 +1,5 @@
 defmodule Nx.Defn.TreeTest do
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
 
   alias Nx.Defn.{Expr, Tree}
   doctest Nx.Defn.Tree
