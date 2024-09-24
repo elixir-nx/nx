@@ -106,7 +106,7 @@ defmodule Nx.Defn.Grad do
         # We use this to compute the proper axis sizes for the tensor
         parent_vectorized_axes = compute_arg_vectorized_axes(t, vectorized_axes)
 
-        nodes = Map.put(nodes, id, {Nx.devectorize(t, keep_names: true), parent_vectorized_axes})
+        nodes = Map.put(nodes, id, {t, parent_vectorized_axes})
 
         parents_args(op, t, id, {parents, nodes}, vectorized_axes)
     end
@@ -134,10 +134,8 @@ defmodule Nx.Defn.Grad do
     # Now traverse over the optional expression where args are the new parameters.
     # Once we access the parameter itself, we point the parameter to the arg.
     {{parents, nodes}, _} =
-      Composite.reduce(
-        Nx.devectorize(expr, keep_names: true),
-        {acc, parent_vectorized_axes},
-        fn expr, {{parents, nodes}, expr_vectorized_axes} ->
+      Composite.reduce(expr, {acc, parent_vectorized_axes}, fn
+        expr, {{parents, nodes}, expr_vectorized_axes} ->
           arg_vectorized_axes = compute_arg_vectorized_axes(expr, expr_vectorized_axes)
           parents = Map.update(parents, expr.data.id, [id], &[id | &1])
 
@@ -149,12 +147,10 @@ defmodule Nx.Defn.Grad do
             )
 
           {acc, expr_vectorized_axes}
-        end
-      )
+      end)
 
     updated_node =
-      {put_in(t.data.args, [call, expr, callback]) |> Nx.devectorize(keep_names: true),
-       parent_vectorized_axes}
+      {put_in(t.data.args, [call, expr, callback]), parent_vectorized_axes}
 
     {parents, Map.put(nodes, id, updated_node)}
   end
@@ -173,11 +169,7 @@ defmodule Nx.Defn.Grad do
         arg_vectorized_axes = compute_arg_vectorized_axes(t, parent_vectorized_axes)
         parents = Map.update(parents, arg.data.id, [parent_id], &[parent_id | &1])
 
-        recur_parents_tree(
-          Nx.devectorize(arg, keep_names: true),
-          {parents, nodes},
-          arg_vectorized_axes
-        )
+        recur_parents_tree(arg, {parents, nodes}, arg_vectorized_axes)
       end
     end)
   end
