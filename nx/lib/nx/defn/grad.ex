@@ -287,9 +287,7 @@ defmodule Nx.Defn.Grad do
   defp revectorize_node(node, vectorized_names) do
     vectorized_names = compute_arg_vectorized_names(node, vectorized_names)
 
-    node
-    |> Nx.devectorize(keep_names: false)
-    |> Nx.vectorize(vectorized_names)
+    Nx.vectorize(node, vectorized_names)
   end
 
   defp update_grads(:elem, [%{type: {:tuple, size}} = tuple, pos], _ans, g, _to_grad_ids, grads) do
