@@ -1394,6 +1394,10 @@ defmodule Nx.Defn.Expr do
 
   ## Constant helpers and related optimizations
 
+  defp constant(%{vectorized_axes: [_ | _]} = out, number) do
+    tensor(Nx.fill(out, number, type: out.type))
+  end
+
   defp constant(%{shape: shape, type: type} = out, number) do
     number =
       cond do
@@ -1661,7 +1665,7 @@ defmodule Nx.Defn.Expr do
 
   defp counter_to_name(counter), do: [?a + counter]
 
-  defp to_type_shape(%{type: type, shape: shape}) do
+  defp to_type_shape(%{vectorized_axes: [], type: type, shape: shape}) do
     brackets =
       shape
       |> Tuple.to_list()
