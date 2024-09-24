@@ -83,47 +83,93 @@ defmodule Nx.Defn.Grad do
                [:equal, :greater, :greater_equal, :less, :less_equal, :not_equal, :argsort]
 
   defp parents_tree(expr, nodes) do
-    Composite.reduce(expr, {%{}, nodes}, &recur_parents_tree/2)
+    Composite.reduce(
+      expr,
+      {%{}, nodes},
+      &recur_parents_tree(Nx.devectorize(&1, keep_names: true), &2, &1.vectorized_axes)
+    )
   end
 
-  defp recur_parents_tree(%T{data: %Expr{id: id, op: op}} = t, {parents, nodes}) do
+  defp recur_parents_tree(%T{data: %Expr{id: id, op: op}} = t, {parents, nodes}, vectorized_axes) do
     case nodes do
-      %{^id => _} -> {parents, nodes}
-      %{} -> parents_args(op, t, id, {parents, Map.put(nodes, id, t)})
+      %{^id => _} ->
+        {parents, nodes}
+
+      %{} ->
+        parent_vectorized_axes = compute_arg_vectorized_axes(t, vectorized_axes)
+
+        nodes = Map.put(nodes, id, {Nx.devectorize(t, keep_names: true), parent_vectorized_axes})
+
+        parents_args(op, t, id, {parents, nodes}, vectorized_axes)
     end
   end
 
-  defp parents_args(:metadata, %{data: %{args: [_, %{stop_grad: true}]}}, _id, acc) do
+  defp parents_args(
+         :metadata,
+         %{data: %{args: [_, %{stop_grad: true}]}},
+         _id,
+         acc,
+         _parent_vectorized_axes
+       ) do
     acc
   end
 
-  defp parents_args(:optional, %{data: %{args: [call, _expr, callback]}} = t, id, acc) do
+  defp parents_args(
+         :optional,
+         %{data: %{args: [call, _expr, callback]}} = t,
+         id,
+         acc,
+         parent_vectorized_axes
+       ) do
     expr = apply(callback, call.data.args)
 
     # Now traverse over the optional expression where args are the new parameters.
     # Once we access the parameter itself, we point the parameter to the arg.
-    {parents, nodes} =
-      Composite.reduce(expr, acc, fn expr, {parents, nodes} ->
-        parents = Map.update(parents, expr.data.id, [id], &[id | &1])
-        recur_parents_tree(expr, {parents, nodes})
-      end)
+    {{parents, nodes}, _} =
+      Composite.reduce(
+        Nx.devectorize(expr, keep_names: true),
+        {acc, parent_vectorized_axes},
+        fn expr, {{parents, nodes}, expr_vectorized_axes} ->
+          arg_vectorized_axes = compute_arg_vectorized_axes(expr, expr_vectorized_axes)
+          parents = Map.update(parents, expr.data.id, [id], &[id | &1])
 
-    {parents, Map.put(nodes, id, put_in(t.data.args, [call, expr, callback]))}
+          acc =
+            recur_parents_tree(
+              expr,
+              {parents, nodes},
+              arg_vectorized_axes
+            )
+
+          {acc, expr_vectorized_axes}
+        end
+      )
+
+    updated_node =
+      {put_in(t.data.args, [call, expr, callback]) |> Nx.devectorize(keep_names: true),
+       parent_vectorized_axes}
+
+    {parents, Map.put(nodes, id, updated_node)}
   end
 
   # We register cond as a special node to avoid pretraversing it.
   # Instead we traverse it early on on the grad computation.
-  defp parents_args(:cond, _, id, {parents, nodes}) do
+  defp parents_args(:cond, _, id, {parents, nodes}, _parent_vectorized_axes) do
     {Map.update(parents, __MODULE__, [id], &[id | &1]), nodes}
   end
 
-  defp parents_args(op, t, parent_id, acc) do
+  defp parents_args(op, t, parent_id, acc, parent_vectorized_axes) do
     reduce_args(op, t, acc, fn arg, {parents, nodes} ->
       if arg.data.op in @constants do
         {parents, nodes}
       else
+        arg_vectorized_axes = compute_arg_vectorized_axes(t, parent_vectorized_axes)
         parents = Map.update(parents, arg.data.id, [parent_id], &[parent_id | &1])
-        recur_parents_tree(arg, {parents, nodes})
+
+        recur_parents_tree(
+          Nx.devectorize(arg, keep_names: true),
+          {parents, nodes},
+          arg_vectorized_axes
+        )
       end
     end)
   end
@@ -180,12 +226,26 @@ defmodule Nx.Defn.Grad do
     case nodes do
       %{^id => _} ->
         {nodes, grads} = traverse_parents(id, to_grad_ids, parents, {nodes, grads})
-        {ans, nodes} = Map.pop!(nodes, id)
+        {{ans, vectorized_axes}, nodes} = Map.pop!(nodes, id)
         %T{data: %Expr{op: op, args: args}} = ans
         {gs, grads} = Map.pop(grads, id)
 
-        args =
-          Enum.map(args, &revectorize_node/1)
+        {args, ans} =
+          if vectorized_axes != [] do
+            args =
+              Enum.map(args, fn
+                arg when Nx.is_tensor(arg) ->
+                  revectorize_node(arg, vectorized_axes)
+
+                opt ->
+                  opt
+              end)
+
+            ans = Nx.vectorize(ans, vectorized_axes)
+            {args, ans}
+          else
+            {args, ans}
+          end
 
         case gs do
           nil ->
@@ -205,27 +265,33 @@ defmodule Nx.Defn.Grad do
     end
   end
 
-  defp revectorize_node(%{shape: shape, vectorized_axes: vectorized_axes, names: names} = node) do
-    {reverse_vec_names, all_nil_names, reverse_inner_shape} =
-      Enum.zip_reduce(names, Tuple.to_list(shape), {[], [], []}, fn
-        nil, axis_size, {v, n, s} ->
-          {v, [nil | n], [axis_size | s]}
+  defp compute_arg_vectorized_axes(%{vectorized_axes: vectorized_axes}, []), do: vectorized_axes
 
-        name, axis_size, {v, n, s} ->
-          {[{name, axis_size} | v], n, s}
+  defp compute_arg_vectorized_axes(
+         %{vectorized_axes: vectorized_axes, names: names, shape: shape},
+         parent_vectorized_axes
+       ) do
+    parent_names = Keyword.keys(parent_vectorized_axes)
+
+    reversed_inner_axes =
+      Enum.zip_reduce(names, Tuple.to_list(shape), [], fn name, axis_size, acc ->
+        if name in parent_names do
+          [{name, axis_size} | acc]
+        else
+          acc
+        end
       end)
 
-    inner_shape = reverse_inner_shape |> Enum.reverse() |> List.to_tuple()
-
-    %{
-      node
-      | vectorized_axes: vectorized_axes ++ Enum.reverse(reverse_vec_names),
-        names: all_nil_names,
-        shape: inner_shape
-    }
+    vectorized_axes ++ Enum.reverse(reversed_inner_axes)
   end
 
-  defp revectorize_node(arg), do: arg
+  defp revectorize_node(node, vectorized_axes) do
+    vectorized_axes = compute_arg_vectorized_axes(node, vectorized_axes)
+
+    node
+    |> Nx.devectorize(keep_names: false)
+    |> Nx.vectorize(vectorized_axes)
+  end
 
   defp update_grads(:elem, [%{type: {:tuple, size}} = tuple, pos], _ans, g, _to_grad_ids, grads) do
     update_in(grads[tuple.data.id], fn tuple ->
@@ -1359,26 +1425,26 @@ defmodule Nx.Defn.Grad do
   ## General helpers
 
   defp unbroadcast(x, res, ans) do
-    vectorized_axes_x = Keyword.keys(x.vectorized_axes) ++ Enum.filter(x.names, & &1)
-    vectorized_axes_ans = Keyword.keys(ans.vectorized_axes)
+    # vectorized_axes_x = Keyword.keys(x.vectorized_axes) ++ Enum.filter(x.names, & &1)
+    # vectorized_axes_ans = Keyword.keys(ans.vectorized_axes)
 
-    permutation =
-      vectorized_axes_ans
-      |> Enum.with_index()
-      |> Enum.sort_by(fn {axis, _idx} -> axis in vectorized_axes_x end)
-      |> Enum.map(fn {_, idx} -> idx end)
+    # permutation =
+    #   vectorized_axes_ans
+    #   |> Enum.with_index()
+    #   |> Enum.sort_by(fn {axis, _idx} -> axis in vectorized_axes_x end)
+    #   |> Enum.map(fn {_, idx} -> idx end)
 
-    num_vectorized_axes = length(permutation)
+    # num_vectorized_axes = length(permutation)
 
-    inner_axes = Enum.to_list(num_vectorized_axes..(num_vectorized_axes + Nx.rank(res) - 1)//1)
+    # inner_axes = Enum.to_list(num_vectorized_axes..(num_vectorized_axes + Nx.rank(res) - 1)//1)
 
-    res =
-      res
-      |> Nx.devectorize()
-      |> Nx.transpose(axes: permutation ++ inner_axes)
-      |> Nx.vectorize(vectorized_axes_x)
+    # res =
+    #   res
+    #   |> Nx.devectorize()
+    #   |> Nx.transpose(axes: permutation ++ inner_axes)
+    #   |> Nx.vectorize(vectorized_axes_x)
 
-    x = x |> Nx.devectorize(keep_names: false) |> Nx.vectorize(vectorized_axes_x)
+    # x = x |> Nx.devectorize(keep_names: false) |> Nx.vectorize(vectorized_axes_x)
 
     grad_broadcast(x, res, ans)
   end

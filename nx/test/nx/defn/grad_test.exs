@@ -4248,7 +4248,7 @@ defmodule Nx.Defn.GradTest do
     end
 
     test "supports combination of vectorized and non-vectorized tensors over composed function" do
-      x = Nx.tensor([[1, 2, 3], [4, 5, 6]]) |> Nx.vectorize(:x)
+      x = Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]) |> Nx.vectorize(:x)
       y = 1
 
       grad = Nx.Defn.grad(y, fn y -> Nx.add(y, Nx.sin(x)) end)
