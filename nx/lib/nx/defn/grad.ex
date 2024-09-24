@@ -326,7 +326,7 @@ defmodule Nx.Defn.Grad do
   @verify_grad Application.compile_env(:nx, :verify_grad, false)
 
   defp update_grads(op, args, ans, g, _to_grad_ids, grads) do
-    args = revectorize_args(args, ans)
+    args = revectorize_args(args, ans, g)
 
     pairs = grad(op, args, ans, g)
 
@@ -1333,20 +1333,30 @@ defmodule Nx.Defn.Grad do
 
   ## General helpers
 
-  defp revectorize_args(args, ans) do
-    names_ans =
-      Enum.with_index(Keyword.keys(ans.vectorized_axes) ++ ans.names, fn name, idx ->
-        if(name, do: name, else: {:ans, idx})
-      end)
+  defp revectorize_args(args, [ans | _], g) do
+    revectorize_args(args, ans, g)
+  end
+
+  defp revectorize_args(args, %{} = ans, [g | _]) do
+    revectorize_args(args, ans, g)
+  end
+
+  defp revectorize_args(args, %{vectorized_axes: []}, %{vectorized_axes: []}) do
+    args
+  end
+
+  defp revectorize_args(args, ans, g) do
+    names_ans = Keyword.keys(ans.vectorized_axes) ++ Keyword.keys(g.vectorized_axes) ++ ans.names
+
+    names_ans = names_ans |> Enum.filter(& &1) |> MapSet.new()
 
     for arg <- args do
-      case arg do
+      case Nx.devectorize(arg) do
         %T{names: names} ->
           names = Enum.with_index(names, fn name, idx -> if(name, do: {name, idx}) end)
 
           {vectorized_axes, offset} =
-            names
-            |> Enum.reduce({[], 0}, fn
+            Enum.reduce(names, {[], 0}, fn
               nil, acc ->
                 acc
 
@@ -1372,7 +1382,7 @@ defmodule Nx.Defn.Grad do
               shape: List.to_tuple(shape_list)
           }
 
-        arg ->
+        _arg ->
           arg
       end
     end
