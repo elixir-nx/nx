@@ -36,16 +36,6 @@ defmodule Nx.Defn.Grad do
     {expr, graded}
   end
 
-  defp revectorize_node(%{vectorized_axes: vectorized_axes, names: names} = node) do
-    vec_names = Enum.take_while(names, &(not is_nil(&1)))
-
-    node
-    |> Nx.devectorize()
-    |> Nx.vectorize(vectorized_axes ++ vec_names)
-  end
-
-  defp revectorize_node(arg), do: arg
-
   defp constant(float, %T{shape: shape} = t) do
     names = List.duplicate(nil, tuple_size(shape))
     Expr.constant(%T{t | names: names, type: {:f, 32}}, float, [])
@@ -214,6 +204,28 @@ defmodule Nx.Defn.Grad do
         {nodes, grads}
     end
   end
+
+  defp revectorize_node(%{shape: shape, vectorized_axes: vectorized_axes, names: names} = node) do
+    {reverse_vec_names, all_nil_names, reverse_inner_shape} =
+      Enum.zip_reduce(names, Tuple.to_list(shape), {[], [], []}, fn
+        nil, axis_size, {v, n, s} ->
+          {v, [nil | n], [axis_size | s]}
+
+        name, axis_size, {v, n, s} ->
+          {[{name, axis_size} | v], n, s}
+      end)
+
+    inner_shape = reverse_inner_shape |> Enum.reverse() |> List.to_tuple()
+
+    %{
+      node
+      | vectorized_axes: vectorized_axes ++ Enum.reverse(reverse_vec_names),
+        names: all_nil_names,
+        shape: inner_shape
+    }
+  end
+
+  defp revectorize_node(arg), do: arg
 
   defp update_grads(:elem, [%{type: {:tuple, size}} = tuple, pos], _ans, g, _to_grad_ids, grads) do
     update_in(grads[tuple.data.id], fn tuple ->
