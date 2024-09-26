@@ -8,13 +8,11 @@
 #include "exla_nif_util.h"
 #include "ipc.h"
 #include "mhlo/IR/hlo_ops.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "stablehlo/dialect/ChloOps.h"
 #include "stablehlo/dialect/StablehloOps.h"
 #include "xla/pjrt/pjrt_api.h"
 #include "xla/service/platform_util.h"
 #include "llvm/Support/ThreadPool.h"
-#include "mlir/IR/Builders.h"
 
 // All of these are created with calls to `new` and subsequently
 // passed to the VM as pointers-to-pointers so we balance it out

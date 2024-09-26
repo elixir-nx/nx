@@ -206,22 +206,6 @@ int get_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<int64>& var) {
   return 1;
 }
 
-
-template <typename T>
-int get_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<T>& var) {
-  const ERL_NIF_TERM* terms;
-  int length;
-  if (!enif_get_tuple(env, tuple, &length, &terms)) return 0;
-  var.reserve(length);
-
-  for (int i = 0; i < length; i++) {
-    T* elem;
-    if (!get<T>(env, terms[i], elem)) return 0;
-    var.push_back(*elem);
-  }
-  return 1;
-}
-
 int get_list(ErlNifEnv* env,
              ERL_NIF_TERM list,
              std::vector<ErlNifBinary>& var) {
@@ -234,39 +218,6 @@ int get_list(ErlNifEnv* env,
     ErlNifBinary elem;
     if (!get_binary(env, head, &elem)) return 0;
     var.push_back(elem);
-    list = tail;
-  }
-  return 1;
-}
-
-
-template <typename T>
-int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T*>& var) {
-  unsigned int length;
-  if (!enif_get_list_length(env, list, &length)) return 0;
-  var.reserve(length);
-  ERL_NIF_TERM head, tail;
-
-  while (enif_get_list_cell(env, list, &head, &tail)) {
-    T* elem;
-    if (!get<T>(env, head, elem)) return 0;
-    var.push_back(elem);
-    list = tail;
-  }
-  return 1;
-}
-
-template <typename T>
-int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T>& var) {
-  unsigned int length;
-  if (!enif_get_list_length(env, list, &length)) return 0;
-  var.reserve(length);
-  ERL_NIF_TERM head, tail;
-
-  while (enif_get_list_cell(env, list, &head, &tail)) {
-    T* elem;
-    if (!get<T>(env, head, elem)) return 0;
-    var.push_back(*elem);
     list = tail;
   }
   return 1;
@@ -308,32 +259,6 @@ int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<std::string>& var) {
 
 int get_binary(ErlNifEnv* env, ERL_NIF_TERM term, ErlNifBinary* var) {
   return enif_inspect_binary(env, term, var);
-}
-
-template <typename T>
-int get_keyword_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<std::pair<std::string, T>>& var) {
-  unsigned int length;
-  if (!enif_get_list_length(env, list, &length)) return 0;
-  var.reserve(length);
-  ERL_NIF_TERM head, tail;
-
-  while (enif_get_list_cell(env, list, &head, &tail)) {
-    const ERL_NIF_TERM* terms;
-    int count;
-
-    if (!enif_get_tuple(env, head, &count, &terms)) return 0;
-    if (count != 2) return 0;
-
-    std::string lo;
-    T hi;
-    if (!get_atom(env, terms[0], lo)) return 0;
-    if (!get(env, terms[1], hi)) return 0;
-
-    var.push_back(std::pair<std::string, T>(lo, hi));
-
-    list = tail;
-  }
-  return 1;
 }
 
 ERL_NIF_TERM make_map(ErlNifEnv* env, std::map<std::string, int>& map) {
@@ -397,64 +322,6 @@ int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<xla::Shape>& var) {
   return 1;
 }
 
-template <typename T>
-void default_dtor(ErlNifEnv* env, void* obj) {
-  T* resource = reinterpret_cast<T*>(obj);
-  resource->~T();
-  resource = nullptr;
-}
-
-template <typename T>
-int open_resource(ErlNifEnv* env,
-                  const char* mod,
-                  const char* name,
-                  ErlNifResourceDtor* dtor) {
-  if (dtor == nullptr) {
-    dtor = &default_dtor<T>;
-  }
-  ErlNifResourceType* type;
-  ErlNifResourceFlags flags = ErlNifResourceFlags(ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER);
-  type = enif_open_resource_type(env, mod, name, dtor, flags, NULL);
-  if (type == NULL) {
-    resource_object<T>::type = 0;
-    return -1;
-  } else {
-    resource_object<T>::type = type;
-  }
-  return 1;
-}
-
-template <typename T>
-ERL_NIF_TERM make(ErlNifEnv* env, T& var) {
-  void* ptr = enif_alloc_resource(resource_object<T>::type, sizeof(T));
-  new (ptr) T(std::move(var));
-  ERL_NIF_TERM ret = enif_make_resource(env, ptr);
-  enif_release_resource(ptr);
-  return ret;
-}
-
-template <typename T>
-ERL_NIF_TERM make_list(ErlNifEnv* env, std::vector<T> result) {
-  size_t n = result.size();
-
-  std::vector<ERL_NIF_TERM> nif_terms;
-  nif_terms.reserve(n);
-
-  for (size_t i = 0; i < n; i++) {
-    nif_terms[i] = exla::nif::make<T>(env, result[i]);
-  }
-
-  auto data = nif_terms.data();
-  auto list = enif_make_list_from_array(env, &data[0], n);
-  return list;
-}
-
-template <typename T>
-ERL_NIF_TERM get(ErlNifEnv* env, ERL_NIF_TERM term, T*& var) {
-  return enif_get_resource(env, term,
-                           resource_object<T>::type,
-                           reinterpret_cast<void**>(&var));
-}
 
 
 
