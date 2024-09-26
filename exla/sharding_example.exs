@@ -1,7 +1,7 @@
 arg0_sharding = %{0 => [0..0, 1..1, 2..2]}
 arg1_sharding = %{1 => [0..0, 1..2]}
 
-Nx.default_backend(Nx.BinaryBackend)
+Nx.default_backend(EXLA.Backend)
 
 fun = &Nx.add(Nx.cos(&1), Nx.sin(&2))
 
@@ -15,7 +15,9 @@ inputs = [
     fun,
     inputs,
     compiler: Nx.Defn.ShardingCompiler,
-    sharding_config: [arg0_sharding, arg1_sharding]
+    sharding_config: [arg0_sharding, arg1_sharding],
+    sharding_compiler: EXLA,
+    sharding_compiler_options: []
   )
 
 sharded_result =
@@ -29,5 +31,4 @@ sharded_result =
   end)
   |> IO.inspect()
 
-
-IO.inspect(sharded_result == apply(fun, inputs))
+IO.inspect(Nx.equal(sharded_result, apply(fun, inputs)) |> Nx.all() |> Nx.to_number() |> Kernel.==(1))

@@ -99,6 +99,13 @@ defmodule Nx.Defn.ShardingCompiler do
 
   @impl true
   def __jit__(key, vars, fun, args, opts) do
+    opts =
+      Keyword.validate!(opts, [
+        :sharding_config,
+        sharding_compiler: Nx.Defn.Evaluator,
+        sharding_compiler_options: []
+      ])
+
     [args] = args
 
     [%T{shape: shape, type: type, data: %__MODULE__{sharding_config: output_config}}] =
@@ -144,18 +151,29 @@ defmodule Nx.Defn.ShardingCompiler do
         end
       end
 
+    sharding_compiler = opts[:sharding_compiler]
+    sharding_compiler_options = opts[:sharding_compiler_options]
+
     result =
       for instance <- sharded_args do
         args = Enum.map(instance, &elem(&1, 1))
         starts = Enum.map(instance, &elem(&1, 0))
-        compiled_fun = Nx.Defn.Evaluator.__compile__(key, args, fun, [])
+
+        vars =
+          Enum.with_index(args, fn arg, idx ->
+            arg
+            # |> Expr.tensor()
+            |> Expr.parameter(:root, idx)
+          end)
+
+        compiled_fun = sharding_compiler.__compile__(key, vars, fun, sharding_compiler_options)
 
         {
-          [args],
-          fn args ->
+          [List.to_tuple(args)],
+          fn [args] ->
             [res] =
               compiled_fun.([
-                Enum.map(args, fn arg ->
+                Enum.map(Tuple.to_list(args), fn arg ->
                   fn -> arg end
                 end)
               ])
@@ -180,7 +198,7 @@ defmodule Nx.Defn.ShardingCompiler do
   defp cartesian_product([]), do: [[]]
 
   @impl true
-  def __compile__(key, vars, fun, opts) do
+  def __compile__(_key, vars, fun, opts) do
     expr = fun.(vars)
 
     state_shard_configs =
