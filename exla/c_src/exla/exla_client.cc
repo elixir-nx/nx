@@ -1,6 +1,6 @@
 #include "exla_client.h"
 
-#include "exla_nif_util.h"
+#include "exla_types.h"
 #include "xla/layout_util.h"
 #include "xla/pjrt/gpu/gpu_helpers.h"
 #include "xla/pjrt/gpu/se_gpu_pjrt_client.h"

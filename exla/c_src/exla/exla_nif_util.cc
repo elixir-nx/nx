@@ -6,6 +6,14 @@
 #include "xla/primitive_util.h"
 #include "xla/shape_util.h"
 
+#if !defined(__GNUC__) && (defined(__WIN32__) || defined(_WIN32) || defined(_WIN32_))
+typedef unsigned __int64 nif_uint64_t;
+typedef signed __int64 nif_int64_t;
+#else
+typedef unsigned long nif_uint64_t;
+typedef signed long nif_int64_t;
+#endif
+
 namespace exla {
 namespace nif {
 
