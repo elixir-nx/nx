@@ -1,8 +1,5 @@
-#include "../custom_calls.h"
-#include "xla/service/custom_call_target_registry.h"
+#include "qr.h"
 
 void qr_cpu_custom_call_f64(void *out[], const void *in[]) {
   qr_cpu_custom_call<double>(out, in);
 }
-
-XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM("qr_cpu_custom_call_f64", qr_cpu_custom_call_f64);
