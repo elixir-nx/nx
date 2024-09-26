@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.9.0 (2024-09-26)
+
+### Enhancements
+
+  * Overall improvements to the Nx.Defn compiler
+  * Compiled functions now work across BEAM nodes
+
+### Bug fixes
+
+  * Use a single thread pool for MLIR contexts
+
 ## v0.8.0 (2024-08-19)
 
   * Add `EXLA.to_mlir_module/2`
