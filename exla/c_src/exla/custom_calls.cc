@@ -3,8 +3,6 @@
 #include "Eigen/Dense"
 #include "Eigen/Eigenvalues"
 #include "Eigen/QR"
-#include "exla_nif_util.h"
-#include "xla/service/custom_call_target_registry.h"
 
 template <typename DataType>
 void single_matrix_eigh_cpu_custom_call(DataType *eigenvalues_out, DataType *eigenvectors_out, DataType *in, uint64_t m, uint64_t n) {
@@ -158,36 +156,3 @@ void eigh_cpu_custom_call(void *out[], const void *in[]) {
         m, n);
   }
 }
-
-void qr_cpu_custom_call_bf16(void *out[], const void *in[]) {
-  qr_cpu_custom_call<exla::bfloat16>(out, in);
-}
-
-void qr_cpu_custom_call_f16(void *out[], const void *in[]) {
-  qr_cpu_custom_call<exla::float16>(out, in);
-}
-
-void qr_cpu_custom_call_f32(void *out[], const void *in[]) {
-  qr_cpu_custom_call<float>(out, in);
-}
-
-void qr_cpu_custom_call_f64(void *out[], const void *in[]) {
-  qr_cpu_custom_call<double>(out, in);
-}
-
-void eigh_cpu_custom_call_f32(void *out[], const void *in[]) {
-  eigh_cpu_custom_call<float>(out, in);
-}
-
-void eigh_cpu_custom_call_f64(void *out[], const void *in[]) {
-  eigh_cpu_custom_call<double>(out, in);
-}
-
-XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM("qr_cpu_custom_call_f32", qr_cpu_custom_call_f32);
-XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM("qr_cpu_custom_call_f64", qr_cpu_custom_call_f64);
-XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM("qr_cpu_custom_call_f16", qr_cpu_custom_call_f16);
-XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM("qr_cpu_custom_call_bf16", qr_cpu_custom_call_bf16);
-
-
-XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM("eigh_cpu_custom_call_f32", eigh_cpu_custom_call_f32);
-XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM("eigh_cpu_custom_call_f64", eigh_cpu_custom_call_f64);

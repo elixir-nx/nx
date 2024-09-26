@@ -62,6 +62,7 @@ $(EXLA_SO): $(EXLA_CACHE_SO)
 	fi
 
 SOURCES = $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_mlir.cc $(EXLA_DIR)/custom_calls.cc $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/ipc.cc
+SOURCES += $(EXLA_DIR)/custom_calls/qr_f32.cc $(EXLA_DIR)/custom_calls/qr_f64.cc $(EXLA_DIR)/custom_calls/qr_f16.cc $(EXLA_DIR)/custom_calls/qr_bf16.cc $(EXLA_DIR)/custom_calls/eigh_f32.cc $(EXLA_DIR)/custom_calls/eigh_f64.cc
 HEADERS = $(EXLA_DIR)/exla_mlir.h $(EXLA_DIR)/custom_calls.h $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h $(EXLA_DIR)/ipc.h
 OBJECTS = $(patsubst $(EXLA_DIR)/%.cc,$(EXLA_CACHE_OBJ_DIR)/%.o,$(SOURCES)) $(EXLA_CACHE_OBJ_DIR)/exla_cuda.o
 
@@ -83,7 +84,7 @@ $(EXLA_CACHE_OBJ_DIR)/exla_cuda.o: $(EXLA_DIR)/exla_cuda.cc $(EXLA_DIR)/exla_cud
 
 $(EXLA_CACHE_OBJ_DIR)/%.o: $(EXLA_DIR)/%.cc $(HEADERS)
 	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)
-	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)/mlir
+	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)/custom_calls
 	$(CXX) $(CFLAGS) -c $< -o $@
 
 $(EXLA_CACHE_SO): $(XLA_EXTENSION_DIR) $(OBJECTS)
