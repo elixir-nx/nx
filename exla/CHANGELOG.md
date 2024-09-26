@@ -6,6 +6,7 @@
 
   * Overall improvements to the Nx.Defn compiler
   * Compiled functions now work across BEAM nodes
+  * Add `cache: "path/to/file"` for disk caching JIT/compiled functions
 
 ### Bug fixes
 
