@@ -5,11 +5,10 @@
 ### Enhancements
 
   * [Nx] Added 8-bit Floating Point numerical type
-  * [Nx] New interface for `Nx.to_pointer` and `Nx.from_pointer`
 
 ### Bug fixes
 
-  * [Nx] Minor range slicing fixes on QR decomposition
+  * [Nx.LinAlg] Minor range slicing fixes on QR decomposition
   * [Nx] Nx.Defn.Grad now supports more vectorization cases
 
 ### Deprecations and incompatibilities
