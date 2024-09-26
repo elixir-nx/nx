@@ -271,6 +271,33 @@ defmodule Nx.Defn.ShardingCompiler do
     {res, Map.put(cache, id, res)}
   end
 
+  defp apply_op(:dot, ans, [arg0, contract0, [], arg1, contract1, []]) do
+    dbg({arg0, contract0})
+    dbg({arg1, contract1})
+
+    {config0, config1} =
+      Enum.zip_reduce(
+        contract0,
+        contract1,
+        {arg0.data.sharding_config, arg1.data.sharding_config},
+        fn
+          axis0, axis1, {config0, config1} ->
+            entry0 = Enum.fetch!(config0, axis0)
+            entry1 = Enum.fetch!(config1, axis1)
+
+            unless is_nil(entry0) or is_nil(entry1) do
+              raise "incompatible sharding"
+            end
+
+            {List.replace_at(config0, axis0, :delete), List.replace_at(config1, axis1, :delete)}
+        end
+      )
+
+    config = Enum.reject(config0, &(&1 == :delete)) ++ Enum.reject(config1, &(&1 == :delete))
+
+    shard(ans, config) |> dbg()
+  end
+
   @unary_ops [:exp, :expm1, :log, :log1p, :sigmoid, :cos, :sin, :tan, :cosh, :sinh, :tanh] ++
                [:acosh, :asinh, :atanh, :sqrt, :rsqrt, :cbrt, :negate, :sign, :abs, :bitwise_not] ++
                [:is_nan, :is_infinity] ++
