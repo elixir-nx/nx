@@ -11,6 +11,14 @@
 #include "exla_types.h"
 
 
+#if !defined(__GNUC__) && (defined(__WIN32__) || defined(_WIN32) || defined(_WIN32_))
+typedef unsigned __int64 nif_uint64_t;
+typedef signed __int64 nif_int64_t;
+#else
+typedef unsigned long nif_uint64_t;
+typedef signed long nif_int64_t;
+#endif
+
 // Implementation Notes:
 //
 // In most of these implementations you'll find we prefer output parameters
@@ -112,7 +120,6 @@ void default_dtor(ErlNifEnv* env, void* obj) {
 // Opens a resource for the given template type T. If no
 // destructor is given, uses the default destructor defined
 // above.
-
 template <typename T>
 int open_resource(ErlNifEnv* env,
                   const char* mod,
@@ -140,7 +147,6 @@ ERL_NIF_TERM get(ErlNifEnv* env, ERL_NIF_TERM term, T*& var) {
                            resource_object<T>::type,
                            reinterpret_cast<void**>(&var));
 }
-
 
 // Creates a reference to the given resource of type T. We
 // use the move constructor by default because some XLA
@@ -172,7 +178,6 @@ ERL_NIF_TERM make_list(ErlNifEnv* env, std::vector<T> result) {
   auto list = enif_make_list_from_array(env, &data[0], n);
   return list;
 }
-
 // Containers
 //
 // Both tuples and lists are treated as vectors, but extracting
@@ -189,7 +194,6 @@ ERL_NIF_TERM make_list(ErlNifEnv* env, std::vector<T> result) {
 int get_tuple(ErlNifEnv* env,
               ERL_NIF_TERM tuple,
               std::vector<int64>& var);
-
 
 template <typename T>
 int get_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<T>& var) {
@@ -215,6 +219,7 @@ int get_list(ErlNifEnv* env,
 
 int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<std::string>& var);
 
+int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<xla::Shape>& var);
 
 template <typename T>
 int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T*>& var) {
@@ -247,7 +252,6 @@ int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T>& var) {
   }
   return 1;
 }
-
 
 template <typename T>
 int get_keyword_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<std::pair<std::string, T>>& var) {
