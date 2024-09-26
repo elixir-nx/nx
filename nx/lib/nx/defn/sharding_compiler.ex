@@ -101,26 +101,8 @@ defmodule Nx.Defn.ShardingCompiler do
   def __jit__(key, vars, fun, args, opts) do
     [args] = args
 
-    expr = fun.(vars)
-
-    state_shard_configs =
-      opts
-      |> Keyword.get(:sharding_config)
-      |> Enum.with_index(fn x, idx -> {idx, x} end)
-      |> Map.new()
-
-    state_params = vars |> Enum.with_index(fn x, idx -> {idx, x} end) |> Map.new()
-
-    {%T{shape: shape, type: type, data: %__MODULE__{sharding_config: output_config}}, _cache} =
-      composite_eval(
-        expr,
-        %{
-          gc?: opts[:garbage_collect] || false,
-          params: state_params,
-          sharding_configs: state_shard_configs
-        },
-        %{}
-      )
+    [%T{shape: shape, type: type, data: %__MODULE__{sharding_config: output_config}}] =
+      __compile__(key, vars, fun, opts).([args])
 
     slices =
       Enum.with_index(output_config, fn
@@ -199,7 +181,30 @@ defmodule Nx.Defn.ShardingCompiler do
 
   @impl true
   def __compile__(key, vars, fun, opts) do
-    Nx.Defn.Evaluator.__compile__(key, vars, fun, opts)
+    expr = fun.(vars)
+
+    state_shard_configs =
+      opts
+      |> Keyword.get(:sharding_config)
+      |> Enum.with_index(fn x, idx -> {idx, x} end)
+      |> Map.new()
+
+    fn [params] ->
+      state_params = params |> Enum.with_index(fn x, idx -> {idx, x} end) |> Map.new()
+
+      {container, _cache} =
+        composite_eval(
+          expr,
+          %{
+            gc?: opts[:garbage_collect] || false,
+            params: state_params,
+            sharding_configs: state_shard_configs
+          },
+          %{}
+        )
+
+      [container]
+    end
   end
 
   defp composite_eval(expr, state, cache) do
@@ -229,7 +234,7 @@ defmodule Nx.Defn.ShardingCompiler do
   end
 
   defp eval_apply(:parameter, %T{data: %Expr{id: id, args: [i]}}, state, cache) do
-    %T{} = tensor = Map.fetch!(state.params, i)
+    %T{} = tensor = Map.fetch!(state.params, i).()
     config = Map.fetch!(state.sharding_configs, i)
     res = tensor |> Nx.devectorize() |> shard(config)
     {res, Map.put(cache, id, res)}
