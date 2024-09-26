@@ -7,7 +7,6 @@
 #include "exla_mlir.h"
 #include "exla_nif_util.h"
 #include "ipc.h"
-#include "mhlo/IR/hlo_ops.h"
 #include "stablehlo/dialect/ChloOps.h"
 #include "stablehlo/dialect/StablehloOps.h"
 #include "xla/pjrt/pjrt_api.h"
@@ -192,7 +191,6 @@ ERL_NIF_TERM mlir_new_context(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
   context->setThreadPool(*interface_ptr);
   context->getOrLoadDialect<mlir::func::FuncDialect>();
   context->getOrLoadDialect<mlir::stablehlo::StablehloDialect>();
-  context->getOrLoadDialect<mlir::mhlo::MhloDialect>();
   context->getOrLoadDialect<mlir::chlo::ChloDialect>();
 
   auto ret = exla::nif::make<mlir::MLIRContext*>(env, context);
