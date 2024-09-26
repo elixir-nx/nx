@@ -5,13 +5,13 @@ defmodule Nx.Defn.ShardingCompiler do
 
   @behaviour Nx.Defn.Compiler
 
-  defstruct [:sharding_config]
+  defstruct [:sharding_config, :input_sharding_configs, :contracted_sharding_configs]
 
   defmodule AxisConfig do
     @derive Inspect
-    defstruct [:slices]
+    defstruct [:slices, :id, :input_axis]
 
-    def inspect(%__MODULE__{slices: slices}, _inspect_opts) do
+    def inspect(%__MODULE__{id: id, input_axis: input_axis, slices: slices}, _inspect_opts) do
       doc =
         slices
         |> Enum.map(fn start..slice_end//1 -> "#{start}..#{slice_end}" end)
@@ -19,6 +19,7 @@ defmodule Nx.Defn.ShardingCompiler do
         |> Inspect.Algebra.concat()
 
       Inspect.Algebra.concat([
+        "(#{input_axis}, #{inspect(id)}) ",
         "[",
         doc,
         "]"
@@ -85,7 +86,7 @@ defmodule Nx.Defn.ShardingCompiler do
 
     Enum.map(Nx.axes(tensor), fn axis ->
       if slices = Map.get(config, axis) do
-        %AxisConfig{slices: slices}
+        %AxisConfig{id: make_ref(), input_axis: axis, slices: slices}
       end
     end)
   end
@@ -108,14 +109,28 @@ defmodule Nx.Defn.ShardingCompiler do
 
     [args] = args
 
-    [%T{shape: shape, type: type, data: %__MODULE__{sharding_config: output_config}}] =
+    [
+      %T{
+        shape: shape,
+        type: type,
+        data: %__MODULE__{
+          input_sharding_configs: input_sharding_configs,
+          contracted_sharding_configs: contracted_sharding_configs,
+          sharding_config: output_config
+        }
+      }
+    ] =
       __compile__(key, vars, fun, opts).([args])
+
+    dbg({output_config, contracted_sharding_configs})
 
     slices =
       Enum.with_index(output_config, fn
         nil, axis -> {axis, [..]}
         %AxisConfig{slices: slices}, axis -> {axis, slices}
       end)
+
+    dbg(input_sharding_configs)
 
     shards = cartesian_product(slices)
 
@@ -204,84 +219,92 @@ defmodule Nx.Defn.ShardingCompiler do
     state_shard_configs =
       opts
       |> Keyword.get(:sharding_config)
+      |> Enum.zip_with(vars, fn config, var ->
+        build_sharding_config(var, config)
+      end)
       |> Enum.with_index(fn x, idx -> {idx, x} end)
       |> Map.new()
 
     fn [params] ->
       state_params = params |> Enum.with_index(fn x, idx -> {idx, x} end) |> Map.new()
 
-      {container, _cache} =
+      {container, {_cache, state}} =
         composite_eval(
           expr,
           %{
             gc?: opts[:garbage_collect] || false,
             params: state_params,
-            sharding_configs: state_shard_configs
+            sharding_configs: state_shard_configs,
+            contracted_sharding_configs: %{}
           },
           %{}
         )
 
+      container =
+        put_in(container.data.contracted_sharding_configs, state.contracted_sharding_configs)
+
+      container = put_in(container.data.input_sharding_configs, state_shard_configs)
       [container]
     end
   end
 
   defp composite_eval(expr, state, cache) do
-    Composite.traverse(expr, cache, &eval(&1, state, &2))
+    Composite.traverse(expr, {cache, state}, &eval/2)
   end
 
-  defp eval(%T{data: %Expr{op: :tensor, args: [t]}}, _state, cache) do
-    {t, cache}
+  defp eval(%T{data: %Expr{op: :tensor, args: [t]}}, {cache, state}) do
+    {t, {cache, state}}
   end
 
-  defp eval(%T{data: %Expr{op: :constant, args: [_constant]}} = ans, _state, cache) do
-    {ans, cache}
+  defp eval(%T{data: %Expr{op: :constant, args: [_constant]}} = ans, {cache, state}) do
+    {ans, {cache, state}}
   end
 
-  defp eval(%T{data: %Expr{op: :metadata, args: [expr, _meta]}}, state, cache) do
+  defp eval(%T{data: %Expr{op: :metadata, args: [expr, _meta]}}, {cache, state}) do
     composite_eval(expr, state, cache)
   end
 
-  defp eval(%T{data: %Expr{op: op}} = ans, state, cache) do
-    {res, cache} = eval_apply(op, ans, state, cache)
+  defp eval(%T{data: %Expr{op: op}} = ans, {cache, state}) do
+    {res, {cache, state}} = eval_apply(op, ans, {cache, state})
     state.gc? && :erlang.garbage_collect(self())
-    {res, cache}
+    {res, {cache, state}}
   end
 
-  defp eval(other, _state, [_ | _] = cache) do
-    {other, cache}
+  defp eval(other, {cache, state}) do
+    {other, {cache, state}}
   end
 
-  defp eval_apply(:parameter, %T{data: %Expr{id: id, args: [i]}}, state, cache) do
+  defp eval_apply(:parameter, %T{data: %Expr{id: id, args: [i]}}, {cache, state}) do
     %T{} = tensor = Map.fetch!(state.params, i).()
     config = Map.fetch!(state.sharding_configs, i)
     res = tensor |> Nx.devectorize() |> shard(config)
-    {res, Map.put(cache, id, res)}
+    {res, {Map.put(cache, id, res), state}}
   end
 
-  defp eval_apply(:elem, %T{data: %Expr{id: id, args: [tuple, i]}}, state, cache) do
+  defp eval_apply(:elem, %T{data: %Expr{id: id, args: [tuple, i]}}, {cache, state}) do
     {tuple, cache} = composite_eval(tuple, state, cache)
     res = elem(tuple, i)
-    {res, Map.put(cache, id, res)}
+    {res, {Map.put(cache, id, res), state}}
   end
 
-  defp eval_apply(op, %T{data: %Expr{id: id}} = ans, state, cache) do
-    {args, cache} = Nx.Defn.Tree.apply_args(ans, cache, &eval(&1, state, &2))
+  defp eval_apply(op, %T{data: %Expr{id: id}} = ans, {cache, state}) do
+    {args, {cache, state}} = Nx.Defn.Tree.apply_args(ans, {cache, state}, &eval/2)
 
-    res = apply_op(op, ans, args)
-    {res, Map.put(cache, id, res)}
+    {res, state} = apply_op(op, ans, args, state)
+    {res, {Map.put(cache, id, res), state}}
   end
 
-  defp apply_op(:dot, ans, [arg0, contract0, [], arg1, contract1, []]) do
+  defp apply_op(:dot, ans, [arg0, contract0, [], arg1, contract1, []], state) do
     dbg({arg0, contract0})
     dbg({arg1, contract1})
 
-    {config0, config1} =
+    {config0, config1, contracted_sharding_configs} =
       Enum.zip_reduce(
         contract0,
         contract1,
-        {arg0.data.sharding_config, arg1.data.sharding_config},
+        {arg0.data.sharding_config, arg1.data.sharding_config, state.contracted_sharding_configs},
         fn
-          axis0, axis1, {config0, config1} ->
+          axis0, axis1, {config0, config1, contracted_sharding_configs} ->
             entry0 = Enum.fetch!(config0, axis0)
             entry1 = Enum.fetch!(config1, axis1)
 
@@ -289,13 +312,34 @@ defmodule Nx.Defn.ShardingCompiler do
               raise "incompatible sharding"
             end
 
-            {List.replace_at(config0, axis0, :delete), List.replace_at(config1, axis1, :delete)}
+            dbg(entry0)
+
+            contracted_sharding_configs =
+              if entry0 do
+                Map.put(contracted_sharding_configs, entry0.id, entry0)
+              else
+                contracted_sharding_configs
+              end
+
+            contracted_sharding_configs =
+              if entry1 do
+                Map.put(contracted_sharding_configs, entry1.id, entry1)
+              else
+                contracted_sharding_configs
+              end
+
+            {
+              List.replace_at(config0, axis0, :delete),
+              List.replace_at(config1, axis1, :delete),
+              contracted_sharding_configs
+            }
         end
       )
 
     config = Enum.reject(config0, &(&1 == :delete)) ++ Enum.reject(config1, &(&1 == :delete))
 
-    shard(ans, config) |> dbg()
+    {shard(ans, config),
+     Map.put(state, :contracted_sharding_configs, contracted_sharding_configs)}
   end
 
   @unary_ops [:exp, :expm1, :log, :log1p, :sigmoid, :cos, :sin, :tan, :cosh, :sinh, :tanh] ++
@@ -304,8 +348,8 @@ defmodule Nx.Defn.ShardingCompiler do
                [:conjugate, :population_count, :count_leading_zeros, :floor, :ceil, :round] ++
                [:erf, :erfc, :erf_inv, :acos, :asin, :atan, :bitcast, :real, :imag]
 
-  defp apply_op(op, ans, [arg]) when op in @unary_ops do
-    shard(ans, arg.data.sharding_config)
+  defp apply_op(op, ans, [arg], state) when op in @unary_ops do
+    {shard(ans, arg.data.sharding_config), state}
   end
 
   @binary_ops [
@@ -324,9 +368,10 @@ defmodule Nx.Defn.ShardingCompiler do
                 [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] ++
                 [:logical_and, :logical_or, :logical_xor]
 
-  defp apply_op(op, ans, [arg0, arg1]) when op in @binary_ops do
+  defp apply_op(op, ans, [arg0, arg1], state) when op in @binary_ops do
     sharding_config = merge_sharding_config(arg0, arg1)
-    shard(ans, sharding_config)
+    dbg({sharding_config, arg0, arg1})
+    {shard(ans, sharding_config), state}
   end
 
   defp merge_sharding_config(
