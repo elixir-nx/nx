@@ -1,18 +1,13 @@
 #ifndef EXLA_NIF_UTIL_H_
 #define EXLA_NIF_UTIL_H_
 
-#include <complex>
 #include <map>
 #include <memory>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "erl_nif.h"
-#include "mlir/IR/Builders.h"
 #include "xla/shape.h"
-#include "xla/types.h"
-#include "xla/xla_data.pb.h"
 #include "exla_types.h"
 
 
@@ -186,9 +181,6 @@ ERL_NIF_TERM make_map(ErlNifEnv* env, std::map<std::string, int>& map);
 
 // Gets encoded EXLA.Typespec as xla::Shape.
 int get_typespec_as_xla_shape(ErlNifEnv* env, ERL_NIF_TERM term, xla::Shape* shape);
-
-// Extracts information from `GetShape` into a usable term.
-ERL_NIF_TERM make_typespec(ErlNifEnv* env, mlir::Type type);
 
 }  // namespace nif
 }  // namespace exla
