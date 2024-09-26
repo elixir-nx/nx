@@ -74,7 +74,7 @@ defmodule Nx.Defn.ShardingCompiler.ShardingBackend do
   @doc """
   config is a map of axis index or name -> slices
   """
-  def build_sharding_config(tensor, config) when is_list(config) do
+  def build_sharding_config(_tensor, config) when is_list(config) do
     config
   end
 
@@ -135,12 +135,12 @@ defmodule Nx.Defn.ShardingCompiler.ShardingBackend do
   end
 
   defp unary_op(out, tensor) do
-    put_in(out.data.sharding_config, tensor.data.sharding_config)
+    shard(out, tensor.data.sharding_config)
   end
 
   defp binary_op(out, t1, t2) do
     sharding_config = merge_sharding_config(t1, t2)
-    put_in(out.data.sharding_config, sharding_config)
+    shard(out, sharding_config)
   end
 
   defp merge_sharding_config(
@@ -160,9 +160,5 @@ defmodule Nx.Defn.ShardingCompiler.ShardingBackend do
       %AxisConfig{}, %AxisConfig{} ->
         raise "conflict resolution not supported yet"
     end)
-  end
-
-  def slice(out, tensor, _starts, _lengths, _strides) do
-    dbg(out)
   end
 end
