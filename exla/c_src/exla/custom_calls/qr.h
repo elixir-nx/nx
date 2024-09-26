@@ -3,8 +3,6 @@
 
 #include "Eigen/QR"
 
-#include <iostream>
-
 template <typename DataType>
 void single_matrix_qr_cpu_custom_call(DataType *q_out, DataType *r_out, DataType *in, uint64_t m, uint64_t k, uint64_t n, bool complete) {
   typedef Eigen::Matrix<DataType, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> RowMajorMatrix;

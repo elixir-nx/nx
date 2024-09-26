@@ -10,7 +10,6 @@
 #include "xla/shape.h"
 #include "exla_types.h"
 
-
 #if !defined(__GNUC__) && (defined(__WIN32__) || defined(_WIN32) || defined(_WIN32_))
 typedef unsigned __int64 nif_uint64_t;
 typedef signed __int64 nif_int64_t;
