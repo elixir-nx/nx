@@ -1,19 +1,11 @@
 #ifndef EXLA_MLIR_BUILDER_H_
 #define EXLA_MLIR_BUILDER_H_
 
-#include <stack>
-
-#include "exla_nif_util.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
-#include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/OwningOpRef.h"
-#include "stablehlo/dialect/StablehloOps.h"
-#include "stablehlo/reference/Types.h"
-#include "xla/shape.h"
-#include "xla/types.h"
 
 namespace exla {
 
@@ -24,11 +16,11 @@ class MLIRFunction {
   MLIRFunction(MLIRModule *module, std::unique_ptr<mlir::func::FuncOp> func);
 
   std::vector<mlir::Value> Op(
-    std::string op_name,
-    std::vector<mlir::Value> operands,
-    std::vector<mlir::Type> result_types,
-    std::vector<std::pair<std::string, mlir::Attribute>> attributes,
-    std::vector<mlir::Region *> regions);
+      std::string op_name,
+      std::vector<mlir::Value> operands,
+      std::vector<mlir::Type> result_types,
+      std::vector<std::pair<std::string, mlir::Attribute>> attributes,
+      std::vector<mlir::Region *> regions);
 
   std::pair<mlir::Region *, std::vector<mlir::Value>> PushRegion(std::vector<mlir::Type> types);
   void PopRegion();

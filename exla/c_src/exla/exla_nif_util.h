@@ -159,8 +159,6 @@ int get_list(ErlNifEnv* env,
 
 int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<std::string>& var);
 
-int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<xla::Shape>& var);
-
 template <typename T>
 int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T*>& var);
 
