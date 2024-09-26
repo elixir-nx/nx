@@ -512,12 +512,6 @@ ERL_NIF_TERM get(ErlNifEnv* env, ERL_NIF_TERM term, T*& var) {
 }
 
 
-template <xla::PrimitiveType type, typename T>
-T get_value(ErlNifEnv* env, ERL_NIF_TERM term) {
-  T value;
-  get(env, term, &value);
-  return value;
-}
 
 }  // namespace nif
 }  // namespace exla

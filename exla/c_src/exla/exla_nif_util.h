@@ -184,19 +184,8 @@ ERL_NIF_TERM make_map(ErlNifEnv* env, std::map<std::string, int>& map);
 // See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/xla_data.proto
 // for more details on each type and additional types not listed here.
 
-// Gets the primitive type from the given term. The term is a string
-// encoding one of the XLA primitive types.
-int get_primitive_type(ErlNifEnv* env, ERL_NIF_TERM term, xla::PrimitiveType* type);
-
 // Gets encoded EXLA.Typespec as xla::Shape.
 int get_typespec_as_xla_shape(ErlNifEnv* env, ERL_NIF_TERM term, xla::Shape* shape);
-
-// Template for retrieving a value from a scalar. This is
-// necessary to avoid having to use templates in the NIF.
-template <
-    xla::PrimitiveType type,
-    typename T = typename xla::primitive_util::PrimitiveTypeToNative<type>::type>
-T get_value(ErlNifEnv* env, ERL_NIF_TERM term);
 
 // Extracts information from `GetShape` into a usable term.
 ERL_NIF_TERM make_typespec(ErlNifEnv* env, mlir::Type type);
@@ -212,30 +201,6 @@ ERL_NIF_TERM make_typespec(ErlNifEnv* env, mlir::Type type);
   EXLA_STATUS_MACROS_CONCAT_NAME_IMPL(x, y)
 
 #define EXLA_STATUS_MACROS_CONCAT_NAME_IMPL(x, y) x##y
-
-// Macro to be used to consume Status from within a NIF.
-// Return `{:error, msg}` if not ok.
-#define EXLA_EFFECT_OR_RETURN_NIF(rexpr, env) \
-  EXLA_EFFECT_OR_RETURN_NIF_IMPL(             \
-      EXLA_STATUS_MACROS_CONCAT_NAME(_status, __COUNTER__), rexpr, env)
-
-#define EXLA_EFFECT_OR_RETURN_NIF_IMPL(status, rexpr, env) \
-  auto status = (rexpr);                                   \
-  if (!status.ok()) {                                      \
-    return exla::nif::error(env, status.message().data()); \
-  }
-
-// Macro to be used to consume Status from within a NIF.
-// Return status if not ok.
-#define EXLA_EFFECT_OR_RETURN(rexpr) \
-  EXLA_EFFECT_OR_RETURN_IMPL(        \
-      EXLA_STATUS_MACROS_CONCAT_NAME(_statusor, __COUNTER__), rexpr)
-
-#define EXLA_EFFECT_OR_RETURN_IMPL(statusor, rexpr) \
-  auto statusor = (rexpr);                          \
-  if (!statusor.ok()) {                             \
-    return statusor.status();                       \
-  }
 
 // Macro to be used to consume StatusOr from within a NIF. Will
 // bind lhs to value if the status is OK, otherwise will return

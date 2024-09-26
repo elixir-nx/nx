@@ -1,8 +1,6 @@
 #ifndef EXLA_MLIR_CUSTOM_CALLS_H_
 #define EXLA_MLIR_CUSTOM_CALLS_H_
 
-#include "xla/service/custom_call_target_registry.h"
-
 template <typename DataType>
 void qr_cpu_custom_call(void *out[], const void *in[]);
 
