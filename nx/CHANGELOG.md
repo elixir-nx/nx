@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.9.0 (2024-09-26)
+
+### Enhancements
+
+  * [Nx] Add 8-bit Floating Point numerical type
+  * [Nx] Added `s4` and `s2` quantized integer types
+  * [Nx] Add quantized int types (s2, s4, u2, u4)
+
+### Bug fixes
+
+  * [Nx.LinAlg] Minor range slicing fixes on QR decomposition
+  * [Nx] Nx.Defn.Grad now supports more vectorization cases
+
+### Deprecations and incompatibilities
+
+  * [Nx] Default integer type is now `s32`
+  * [Nx] Interface breaking changes for `Nx.to_pointer` and `Nx.from_pointer`
+
 ## v0.8.0 (2024-08-19)
 
 ### Enhancements
