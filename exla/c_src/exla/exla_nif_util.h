@@ -1,18 +1,14 @@
 #ifndef EXLA_NIF_UTIL_H_
 #define EXLA_NIF_UTIL_H_
 
-#include <complex>
 #include <map>
 #include <memory>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "erl_nif.h"
 #include "xla/shape.h"
-#include "xla/types.h"
-#include "xla/xla_data.pb.h"
-#include "mlir/IR/Builders.h"
+#include "exla_types.h"
 
 #if !defined(__GNUC__) && (defined(__WIN32__) || defined(_WIN32) || defined(_WIN32_))
 typedef unsigned __int64 nif_uint64_t;
@@ -41,29 +37,6 @@ typedef signed long nif_int64_t;
 // the format we receive the protobuf in is correct.
 
 namespace exla {
-
-// We standardize numeric types with tensorflow to ensure we are always
-// getting an input with the correct width and to ensure that tensorflow
-// is happy with what we're giving it.
-//
-// Most of these types will only ever be used when creating scalar constants;
-// however, some methods require a 64-bit integer. You should prefer standard
-// types over these unless you are (1) working with computations, or
-// (2) require a non-standard width numeric type (like 64-bit integer).
-using int8 = tsl::int8;
-using int16 = tsl::int16;
-using int32 = tsl::int32;
-using int64 = tsl::int64;
-using uint8 = tsl::uint8;
-using uint16 = tsl::uint16;
-using uint32 = tsl::uint32;
-using uint64 = tsl::uint64;
-using float16 = Eigen::half;
-using bfloat16 = tsl::bfloat16;
-using float32 = float;
-using float64 = double;
-using complex64 = std::complex<float>;
-using complex128 = std::complex<double>;
 
 namespace nif {
 
@@ -314,26 +287,8 @@ ERL_NIF_TERM make_map(ErlNifEnv* env, std::map<std::string, int>& map);
 // See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/xla_data.proto
 // for more details on each type and additional types not listed here.
 
-// Gets the primitive type from the given term. The term is a string
-// encoding one of the XLA primitive types.
-int get_primitive_type(ErlNifEnv* env, ERL_NIF_TERM term, xla::PrimitiveType* type);
-
 // Gets encoded EXLA.Typespec as xla::Shape.
 int get_typespec_as_xla_shape(ErlNifEnv* env, ERL_NIF_TERM term, xla::Shape* shape);
-
-// Template for retrieving a value from a scalar. This is
-// necessary to avoid having to use templates in the NIF.
-template <
-    xla::PrimitiveType type,
-    typename T = typename xla::primitive_util::PrimitiveTypeToNative<type>::type>
-T get_value(ErlNifEnv* env, ERL_NIF_TERM term) {
-  T value;
-  get(env, term, &value);
-  return value;
-}
-
-// Extracts information from `GetShape` into a usable term.
-ERL_NIF_TERM make_typespec(ErlNifEnv* env, mlir::Type type);
 
 }  // namespace nif
 }  // namespace exla
@@ -346,30 +301,6 @@ ERL_NIF_TERM make_typespec(ErlNifEnv* env, mlir::Type type);
   EXLA_STATUS_MACROS_CONCAT_NAME_IMPL(x, y)
 
 #define EXLA_STATUS_MACROS_CONCAT_NAME_IMPL(x, y) x##y
-
-// Macro to be used to consume Status from within a NIF.
-// Return `{:error, msg}` if not ok.
-#define EXLA_EFFECT_OR_RETURN_NIF(rexpr, env) \
-  EXLA_EFFECT_OR_RETURN_NIF_IMPL(             \
-      EXLA_STATUS_MACROS_CONCAT_NAME(_status, __COUNTER__), rexpr, env)
-
-#define EXLA_EFFECT_OR_RETURN_NIF_IMPL(status, rexpr, env) \
-  auto status = (rexpr);                                   \
-  if (!status.ok()) {                                      \
-    return exla::nif::error(env, status.message().data()); \
-  }
-
-// Macro to be used to consume Status from within a NIF.
-// Return status if not ok.
-#define EXLA_EFFECT_OR_RETURN(rexpr) \
-  EXLA_EFFECT_OR_RETURN_IMPL(        \
-      EXLA_STATUS_MACROS_CONCAT_NAME(_statusor, __COUNTER__), rexpr)
-
-#define EXLA_EFFECT_OR_RETURN_IMPL(statusor, rexpr) \
-  auto statusor = (rexpr);                          \
-  if (!statusor.ok()) {                             \
-    return statusor.status();                       \
-  }
 
 // Macro to be used to consume StatusOr from within a NIF. Will
 // bind lhs to value if the status is OK, otherwise will return
