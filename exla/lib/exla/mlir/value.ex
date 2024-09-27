@@ -921,13 +921,14 @@ defmodule EXLA.MLIR.Value do
     end
   end
 
-  defp float_hex(value, {_, size} = type) do
+  defp float_hex(value, {mod, size} = type) do
     data =
       case value do
         :nan -> type |> Nx.Type.nan_binary() |> native_to_big()
         :infinity -> type |> Nx.Type.infinity_binary() |> native_to_big()
         :neg_infinity -> type |> Nx.Type.neg_infinity_binary() |> native_to_big()
         value when size == 8 -> f8E5M2_to_big(value)
+        value when mod == :bf and size == 16 -> bf16_to_big(value)
         value -> <<value::float-size(size)-big>>
       end
 
@@ -936,6 +937,10 @@ defmodule EXLA.MLIR.Value do
 
   defp f8E5M2_to_big(x) do
     binary_part(<<x::float-big-16>>, 0, 1)
+  end
+
+  defp bf16_to_big(x) do
+    binary_part(<<x::float-big-32>>, 0, 2)
   end
 
   defp native_to_big(binary) do
