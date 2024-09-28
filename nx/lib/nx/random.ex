@@ -18,10 +18,6 @@ defmodule Nx.Random do
   Or for example:
 
       iex> Nx.Random.key(System.os_time())
-      #Nx.Tensor<
-        u32[2]
-        [0, 12]
-      >
 
   This key can then be used in any of Nx’s random number generation
   routines:
