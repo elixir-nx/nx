@@ -558,6 +558,7 @@ defmodule Nx.Defn do
   above and you will have to restructure your code to manipulate the
   input before streaming starts.
   """
+  @deprecated "Move the streaming loop to Elixir instead"
   def stream(fun, args, opts \\ [])
       when is_function(fun) and is_list(args) and is_list(opts) do
     if Nx.Defn.Compiler.current() do
