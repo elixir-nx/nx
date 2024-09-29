@@ -8,27 +8,52 @@ defmodule Nx.Defn.ShardingCompiler do
   defstruct [:tensor_sharding, :input_tensor_shardings]
 
   defmodule Shard do
-    @derive Inspect
-    defstruct [:slices, :id, :axis, :input_id]
+    import Inspect.Algebra
+    defstruct [:id, :axis, :input_id, :start, :length, :parents]
 
-    def inspect(%__MODULE__{id: id, axis: axis, slices: slices}, _inspect_opts) do
-      doc =
-        slices
-        |> Enum.map(fn start..slice_end//1 -> "#{start}..#{slice_end}" end)
-        |> Enum.intersperse(", ")
-        |> Inspect.Algebra.concat()
+    def inspect(%__MODULE__{start: start, length: length}, inspect_opts)
+        when is_nil(start) or is_nil(length) do
+      color("Shard<>", :map, inspect_opts)
+    end
 
-      Inspect.Algebra.concat([
-        "(#{inspect(id)}) ",
-        "[",
-        doc,
-        "]"
-      ])
+    def inspect(%__MODULE__{id: id, axis: axis, start: start, length: length}, inspect_opts) do
+      single_line = inspect_opts.custom_options[:single_line]
+      print_axis = inspect_opts.custom_options[:print_axis]
+
+      if single_line do
+        concat([
+          color("Shard<", :map, inspect_opts),
+          if(print_axis && axis, do: "#{axis}: ", else: ""),
+          "#{start}..#{start + length - 1}",
+          " (#{inspect(id)})",
+          color(">", :map, inspect_opts)
+        ])
+      else
+        concat([
+          color("Shard<", :map, inspect_opts),
+          nest(
+            concat([
+              line(),
+              if(print_axis && axis, do: "#{axis}: ", else: ""),
+              "#{start}..#{start + length}",
+              line(),
+              "(#{inspect(id)})"
+            ]),
+            2
+          ),
+          line(),
+          color(">", :map, inspect_opts)
+        ])
+      end
+    end
+
+    defimpl Inspect do
+      def inspect(mod, opts), do: Shard.inspect(mod, opts)
     end
   end
 
   defmodule TensorSharding do
-    defstruct [:shards, :id, :shard_interactions]
+    defstruct [:shards, :id]
 
     @doc """
     config is a map of axis index or name -> slices
@@ -53,16 +78,28 @@ defmodule Nx.Defn.ShardingCompiler do
 
       shards =
         Map.new(config, fn
-          {name, slices} when is_atom(name) ->
-            axis = Nx.axis_index(tensor, name)
-            id = make_ref()
+          {axis_or_name, slices} ->
+            axis =
+              if is_atom(axis_or_name) do
+                Nx.axis_index(tensor, axis_or_name)
+              else
+                axis_or_name
+              end
 
-            {axis, %Shard{id: id, axis: axis, slices: slices, input_id: input_id}}
+            shards =
+              Enum.map(slices, fn start..finish//1 ->
+                id = make_ref()
 
-          {axis, slices} ->
-            id = make_ref()
+                %Shard{
+                  id: id,
+                  axis: axis,
+                  start: start,
+                  length: finish - start + 1,
+                  input_id: input_id
+                }
+              end)
 
-            {axis, %Shard{id: id, axis: axis, slices: slices, input_id: input_id}}
+            {axis, shards}
         end)
 
       shards =
@@ -71,45 +108,65 @@ defmodule Nx.Defn.ShardingCompiler do
             shards
           else
             id = make_ref()
-            axis_size = Nx.axis_size(tensor, axis)
-            shard = %Shard{id: id, axis: axis, slices: [], input_id: input_id}
-            Map.put(shards, axis, shard)
+
+            shard = %Shard{
+              id: id,
+              axis: axis,
+              start: 0,
+              length: Nx.axis_size(tensor, axis),
+              input_id: input_id
+            }
+
+            Map.put(shards, axis, [shard])
           end
         end)
 
-      shard_interactions = %{}
-
-      %TensorSharding{shard_interactions: shard_interactions, shards: shards, id: make_ref()}
+      %TensorSharding{shards: shards, id: make_ref()}
     end
 
     def inspect(%__MODULE__{shards: shards}, opts) do
       import Inspect.Algebra
+      dbg(shards)
 
       shards =
         shards
-        |> Enum.sort_by(fn {_id, %{axis: axis}} -> axis end)
-        |> Enum.map(fn {_id, %Shard{axis: axis} = shard} ->
+        |> Enum.sort_by(fn {axis, _} -> axis end)
+        |> Enum.map(fn {axis, shards} ->
           axis_name = opts.custom_options[:axis_names][axis] || axis
+
+          shard_doc =
+            shards
+            |> Enum.flat_map(fn %Shard{} = shard ->
+              opts = put_in(opts.custom_options[:single_line], true)
+              opts = put_in(opts.custom_options[:print_axis], false)
+
+              [
+                line(),
+                Shard.inspect(shard, opts)
+              ]
+            end)
+            |> concat()
+            |> nest(2)
 
           concat([
             "#{axis_name}: ",
-            Shard.inspect(shard, opts)
+            shard_doc
           ])
         end)
         |> Enum.intersperse(line())
         |> concat()
 
       if shards != :doc_nil do
-        nest(
+        concat([
           concat([
             color("TensorSharding<", :map, opts),
             line(),
-            shards,
-            line(),
-            color(">", :map, opts)
-          ]),
-          2
-        )
+            shards
+          ])
+          |> nest(2),
+          line(),
+          color(">", :map, opts)
+        ])
       else
         string("TensorSharding<>")
       end
@@ -181,38 +238,38 @@ defmodule Nx.Defn.ShardingCompiler do
     ] =
       __compile__(key, vars, fun, sharding_config: opts[:sharding_config]).([args])
 
-    args_with_slices =
-      Enum.with_index(args, fn lazy_input, idx ->
-        input = lazy_input.()
-        input_sharding = input_tensor_shardings[idx]
+    # args_with_slices =
+    #   Enum.with_index(args, fn lazy_input, idx ->
+    #     input = lazy_input.()
+    #     input_sharding = input_tensor_shardings[idx]
 
-        shards =
-          for {axis, %Shard{id: id}} <- input_sharding.shards do
-            {axis, output_config.shard_interactions[id]}
-          end
+    #     shards =
+    #       for {axis, %Shard{id: id}} <- input_sharding.shards do
+    #         {axis, output_config.shard_interactions[id]}
+    #       end
 
-        dbg({idx, shards})
+    #     dbg({idx, shards})
 
-        # Here, shards is a list containing all possible slicing combinations.
-        # We need to obtain the proper cartesian product of all these combinations.
-        slices =
-          cartesian_product(
-            Enum.map(shards, fn {axis, shard} ->
-              slices =
-                if shard.slices == [] do
-                  [0..(Nx.axis_size(input, axis) - 1)//1]
-                else
-                  shard.slices
-                end
+    #     # Here, shards is a list containing all possible slicing combinations.
+    #     # We need to obtain the proper cartesian product of all these combinations.
+    #     slices =
+    #       cartesian_product(
+    #         Enum.map(shards, fn {axis, shard} ->
+    #           slices =
+    #             if shard.slices == [] do
+    #               [0..(Nx.axis_size(input, axis) - 1)//1]
+    #             else
+    #               shard.slices
+    #             end
 
-              {axis, slices}
-            end)
-          )
+    #           {axis, slices}
+    #         end)
+    #       )
 
-        [input, slices]
-      end)
+    #     [input, slices]
+    #   end)
 
-    dbg(args_with_slices)
+    # dbg(args_with_slices)
 
     raise "asdf"
     # sharding_compiler = opts[:sharding_compiler]
@@ -470,89 +527,89 @@ defmodule Nx.Defn.ShardingCompiler do
       end)
       |> Map.new()
 
-    output_shard_and_interactions =
-      Enum.map(Nx.axes(out_shape), fn axis ->
-        left = left_shards[axis]
-        right = right_shards[axis]
+    # output_shard_and_interactions =
+    #   Enum.map(Nx.axes(out_shape), fn axis ->
+    #     left = left_shards[axis]
+    #     right = right_shards[axis]
 
-        dbg({left, right})
+    #     dbg({left, right})
 
-        {shard, left_slices, right_slices} =
-          case {left, right} do
-            {%Shard{slices: []}, right} ->
-              {right, right.slices, right.slices}
+    # {shard, left_slices, right_slices} =
+    #   case {left, right} do
+    #     {%Shard{slices: []}, right} ->
+    #       {right, right.slices, right.slices}
 
-            {left, %Shard{slices: []}} ->
-              {left, left.slices, left.slices}
+    #     {left, %Shard{slices: []}} ->
+    #       {left, left.slices, left.slices}
 
-            {nil, right} ->
-              {right, right.slices, right.slices}
+    #     {nil, right} ->
+    #       {right, right.slices, right.slices}
 
-            {left, nil} ->
-              {left, left.slices, left.slices}
+    #     {left, nil} ->
+    #       {left, left.slices, left.slices}
 
-            {shard, shard} ->
-              {shard, shard.slices, shard.slices}
+    #     {shard, shard} ->
+    #       {shard, shard.slices, shard.slices}
 
-            {left, right} ->
-              raise "Sharding conflict on output axis #{axis}"
-          end
+    #     {left, right} ->
+    #       raise "Sharding conflict on output axis #{axis}"
+    #   end
 
-        dbg({axis, left_slices, left_shape, left_axis_sizes})
-        out_axis_size = elem(out_shape, axis)
+    # dbg({axis, left_slices, left_shape, left_axis_sizes})
+    # out_axis_size = elem(out_shape, axis)
 
-        left_slices =
-          if left_axis_sizes[axis] == 1 do
-            # List.duplicate(0..0//1, out_axis_size)
-            []
-          else
-            left_slices
-          end
+    # left_slices =
+    #   if left_axis_sizes[axis] == 1 do
+    #     # List.duplicate(0..0//1, out_axis_size)
+    #     []
+    #   else
+    #     left_slices
+    #   end
 
-        dbg(left_slices)
+    # dbg(left_slices)
 
-        right_slices =
-          if right_axis_sizes[axis] == 1 do
-            # List.duplicate(0..0//1, out_axis_size)
-            []
-          else
-            right_slices
-          end
+    # right_slices =
+    #   if right_axis_sizes[axis] == 1 do
+    #     # List.duplicate(0..0//1, out_axis_size)
+    #     []
+    #   else
+    #     right_slices
+    #   end
 
-        {
-          %Shard{shard | axis: axis},
-          left && %Shard{left | slices: left_slices},
-          right && %Shard{right | slices: right_slices}
-        }
-      end)
+    # {
+    #   %Shard{shard | axis: axis},
+    #   left && %Shard{left | slices: left_slices},
+    #   right && %Shard{right | slices: right_slices}
+    # }
+    # end)
 
-    interactions = Map.merge(left_config.shard_interactions, right_config.shard_interactions)
+    # # interactions = Map.merge(left_config.shard_interactions, right_config.shard_interactions)
 
-    for {shard, left_shard, right_shard} <- output_shard_and_interactions,
-        reduce: %TensorSharding{shards: %{}, shard_interactions: interactions} do
-      %TensorSharding{
-        shards: output_shards,
-        shard_interactions: interactions
-      } = acc ->
-        interactions =
-          if left_shard do
-            Map.put(interactions, left_shard.id, left_shard)
-          else
-            interactions
-          end
+    # for {shard, left_shard, right_shard} <- output_shard_and_interactions,
+    #     reduce: %TensorSharding{shards: %{}, shard_interactions: interactions} do
+    #   %TensorSharding{
+    #     shards: output_shards,
+    #     shard_interactions: interactions
+    #   } = acc ->
+    #     interactions =
+    #       if left_shard do
+    #         Map.put(interactions, left_shard.id, left_shard)
+    #       else
+    #         interactions
+    #       end
 
-        interactions =
-          if right_shard do
-            Map.put(interactions, right_shard.id, right_shard)
-          else
-            interactions
-          end
+    #     interactions =
+    #       if right_shard do
+    #         Map.put(interactions, right_shard.id, right_shard)
+    #       else
+    #         interactions
+    #       end
 
-        %TensorSharding{
-          acc
-          | shards: Map.put(output_shards, shard.axis, shard),
-            shard_interactions: interactions
-        }
-    end
+    #     %TensorSharding{
+    #       acc
+    #       | shards: Map.put(output_shards, shard.axis, shard),
+    #         shard_interactions: interactions
+    #     }
+    # end
   end
 end
