@@ -5,7 +5,6 @@
 ### Enhancements
 
   * [Nx] Add 8-bit Floating Point numerical type
-  * [Nx] Added `s4` and `s2` quantized integer types
   * [Nx] Add quantized int types (s2, s4, u2, u4)
 
 ### Bug fixes
