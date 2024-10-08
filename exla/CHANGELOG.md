@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.9.1 (2024-10-08)
+
+### Enhancements
+
+  * Improve compilation times of native code
+
+### Bug fixes
+
+  * Fix encoding of binary floats
+
 ## v0.9.0 (2024-09-26)
 
 ### Enhancements

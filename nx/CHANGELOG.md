@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.9.1 (2024-10-08)
+
+### Deprecations
+
+  * [Nx] Deprecate `Nx.Defn.stream`
+
 ## v0.9.0 (2024-09-26)
 
 ### Enhancements
