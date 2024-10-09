@@ -40,7 +40,28 @@ endif
 
 LDFLAGS = -L$(XLA_EXTENSION_LIB) -lxla_extension -shared
 
-ifeq ($(shell uname -s), Darwin)
+ifeq ($(CROSSCOMPILE),)
+	# Interrogate the system for local compilation
+	UNAME_S = $(shell uname -s)
+
+	NVCC_RESULT := $(shell which nvcc 2> /dev/null)
+	NVCC_TEST := $(notdir $(NVCC_RESULT))
+
+ifeq ($(NVCC_TEST),nvcc)
+	NVCC := nvcc
+	NVCCFLAGS += -DCUDA_ENABLED
+else
+	NVCC := $(CXX)
+	NVCCFLAGS = $(CFLAGS)
+endif
+else
+	# Determine settings for cross-compiled builds like for Nerves
+	UNAME_S = Linux
+	NVCC := $(CXX)
+	NVCCFLAGS = $(CFLAGS)
+endif
+
+ifeq ($(UNAME_S), Darwin)
 	LDFLAGS += -flat_namespace -undefined dynamic_lookup -rpath @loader_path/xla_extension/lib
 else
 	# Use a relative RPATH, so at runtime libexla.so looks for libxla_extension.so
@@ -66,17 +87,6 @@ SOURCES += $(wildcard $(EXLA_DIR)/custom_calls/*.cc)
 HEADERS = $(EXLA_DIR)/exla_mlir.h $(EXLA_DIR)/custom_calls/qr.h $(EXLA_DIR)/custom_calls/eigh.h $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h $(EXLA_DIR)/ipc.h
 OBJECTS = $(patsubst $(EXLA_DIR)/%.cc,$(EXLA_CACHE_OBJ_DIR)/%.o,$(SOURCES)) $(EXLA_CACHE_OBJ_DIR)/exla_cuda.o
 
-
-NVCC_RESULT := $(shell which nvcc 2> /dev/null)
-NVCC_TEST := $(notdir $(NVCC_RESULT))
-
-ifeq ($(NVCC_TEST),nvcc)
-  NVCC := nvcc
-	NVCCFLAGS += -DCUDA_ENABLED
-else
-  NVCC := $(CXX)
-	NVCCFLAGS = $(CFLAGS)
-endif
 
 $(EXLA_CACHE_OBJ_DIR)/exla_cuda.o: $(EXLA_DIR)/exla_cuda.cc $(EXLA_DIR)/exla_cuda.h
 	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)
