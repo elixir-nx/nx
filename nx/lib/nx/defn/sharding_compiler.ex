@@ -5,7 +5,7 @@ defmodule Nx.Defn.ShardingCompiler do
 
   @behaviour Nx.Defn.Compiler
 
-  defstruct [:tensor_sharding, :input_tensor_shardings]
+  defstruct [:id, :tensor_sharding, :input_tensor_shardings]
 
   defmodule Shard do
     import Inspect.Algebra
@@ -16,11 +16,15 @@ defmodule Nx.Defn.ShardingCompiler do
       color("Shard<>", :map, inspect_opts)
     end
 
-    def inspect(%__MODULE__{id: id, axis: axis, start: start, length: length}, inspect_opts) do
+    def inspect(
+          %__MODULE__{id: id, axis: axis, start: start, length: length, input_id: input_id},
+          inspect_opts
+        ) do
       single_line = inspect_opts.custom_options[:single_line]
       print_axis = inspect_opts.custom_options[:print_axis]
 
       range_doc = "#{start}..#{start + length - 1}"
+      input_id_doc = if(input_id, do: "(#{inspect(input_id)})", else: "")
 
       if single_line do
         concat([
@@ -28,6 +32,7 @@ defmodule Nx.Defn.ShardingCompiler do
           if(print_axis && axis, do: "#{axis}: ", else: ""),
           range_doc,
           " (#{inspect(id)})",
+          input_id_doc,
           color(">", :map, inspect_opts)
         ])
       else
@@ -39,7 +44,9 @@ defmodule Nx.Defn.ShardingCompiler do
               if(print_axis && axis, do: "#{axis}: ", else: ""),
               range_doc,
               line(),
-              "(#{inspect(id)})"
+              "(#{inspect(id)})",
+              line(),
+              input_id_doc
             ]),
             2
           ),
@@ -98,7 +105,7 @@ defmodule Nx.Defn.ShardingCompiler do
                   start: start,
                   length: finish - start + 1,
                   input_id: input_id,
-                  parents: MapSet.new()
+                  parents: []
                 }
               end)
 
@@ -106,22 +113,28 @@ defmodule Nx.Defn.ShardingCompiler do
         end)
 
       shards =
-        Enum.reduce(Nx.axes(tensor), shards, fn axis, shards ->
-          if Map.has_key?(shards, axis) do
-            shards
+        Enum.reduce(Nx.axes(tensor), shards, fn axis, shards_by_axis ->
+          if Map.has_key?(shards_by_axis, axis) do
+            shards_by_axis
           else
-            id = make_ref()
+            # If no shards are given, assume a fully independent axis by default.
+            # We can group shards as needed later.
 
-            shard = %Shard{
-              id: id,
-              axis: axis,
-              start: 0,
-              length: Nx.axis_size(tensor, axis),
-              input_id: input_id,
-              parents: MapSet.new()
-            }
+            shards =
+              Enum.map(0..(Nx.axis_size(tensor, axis) - 1), fn start ->
+                id = make_ref()
 
-            Map.put(shards, axis, [shard])
+                %Shard{
+                  id: id,
+                  axis: axis,
+                  start: start,
+                  length: 1,
+                  input_id: input_id,
+                  parents: []
+                }
+              end)
+
+            Map.put(shards_by_axis, axis, shards)
           end
         end)
 
@@ -203,7 +216,7 @@ defmodule Nx.Defn.ShardingCompiler do
       case tensor.data do
         %__MODULE__{tensor_sharding: old_config} = data ->
           used_shards =
-            Map.merge(old_config.used_shards, config.shards, fn k, old, new ->
+            Map.merge(old_config.used_shards, config.shards, fn _k, old, new ->
               unless old == new do
                 raise "Unexpected sharding conflict"
               end
@@ -212,7 +225,7 @@ defmodule Nx.Defn.ShardingCompiler do
           %__MODULE__{data | tensor_sharding: %{tensor_sharding | used_shards: used_shards}}
 
         _ ->
-          %__MODULE__{tensor_sharding: tensor_sharding}
+          %__MODULE__{id: make_ref(), tensor_sharding: tensor_sharding}
       end
 
     %{tensor | data: data}
@@ -241,77 +254,13 @@ defmodule Nx.Defn.ShardingCompiler do
     ] =
       __compile__(key, vars, fun, sharding_config: opts[:sharding_config]).([args])
 
-    # args_with_slices =
-    #   Enum.with_index(args, fn lazy_input, idx ->
-    #     input = lazy_input.()
-    #     input_sharding = input_tensor_shardings[idx]
+    dbg(output_config)
 
-    #     shards =
-    #       for {axis, %Shard{id: id}} <- input_sharding.shards do
-    #         {axis, output_config.shard_interactions[id]}
-    #       end
+    data_sections = cartesian_product(Enum.to_list(output_config.shards))
 
-    #     dbg({idx, shards})
-
-    #     # Here, shards is a list containing all possible slicing combinations.
-    #     # We need to obtain the proper cartesian product of all these combinations.
-    #     slices =
-    #       cartesian_product(
-    #         Enum.map(shards, fn {axis, shard} ->
-    #           slices =
-    #             if shard.slices == [] do
-    #               [0..(Nx.axis_size(input, axis) - 1)//1]
-    #             else
-    #               shard.slices
-    #             end
-
-    #           {axis, slices}
-    #         end)
-    #       )
-
-    #     [input, slices]
-    #   end)
-
-    # dbg(args_with_slices)
+    dbg(data_sections)
 
     raise "asdf"
-    # sharding_compiler = opts[:sharding_compiler]
-    # sharding_compiler_options = opts[:sharding_compiler_options]
-
-    # result =
-    #   for instance <- sharded_args do
-    #     args = Enum.map(instance, &elem(&1, 1))
-    #     starts = Enum.map(instance, &elem(&1, 0))
-
-    #     vars =
-    #       Enum.with_index(args, fn arg, idx ->
-    #         arg
-    #         # |> Expr.tensor()
-    #         |> Expr.parameter(:root, idx)
-    #       end)
-
-    #     compiled_fun = sharding_compiler.__compile__(key, vars, fun, sharding_compiler_options)
-
-    #     {
-    #       [List.to_tuple(args)],
-    #       fn [args] ->
-    #         [res] =
-    #           compiled_fun.([
-    #             Enum.map(Tuple.to_list(args), fn arg ->
-    #               fn -> arg end
-    #             end)
-    #           ])
-
-    #         res
-    #       end,
-    #       fn result, acc ->
-    #         Nx.put_slice(acc, hd(starts), result)
-    #       end
-    #     }
-    #   end
-
-    # output_holder = Nx.iota(shape, type: type)
-
     # [{output_holder, result}]
   end
 
@@ -390,7 +339,7 @@ defmodule Nx.Defn.ShardingCompiler do
     config = Map.fetch!(state.tensor_shardings, i)
     res = tensor |> Nx.devectorize() |> shard(config, input_id: id)
 
-    state = put_in(state.params.parameter_ids_to_index, res.data.id, i)
+    state = put_in(state.parameter_ids_to_index[res.data.id], i)
     {res, {Map.put(cache, id, res), state}}
   end
 
@@ -406,49 +355,6 @@ defmodule Nx.Defn.ShardingCompiler do
     {res, state} = apply_op(op, ans, args, state)
     {res, {Map.put(cache, id, res), state}}
   end
-
-  # defp apply_op(:dot, ans, [arg0, contract0, [], arg1, contract1, []], state) do
-  #   {config0, config1, contracted_tensor_shardings} =
-  #     Enum.zip_reduce(
-  #       contract0,
-  #       contract1,
-  #       {arg0.data.tensor_sharding, arg1.data.tensor_sharding, state.contracted_tensor_shardings},
-  #       fn
-  #         axis0, axis1, {config0, config1, contracted_tensor_shardings} ->
-  #           entry0 = Enum.fetch!(config0, axis0)
-  #           entry1 = Enum.fetch!(config1, axis1)
-
-  #           unless is_nil(entry0) or is_nil(entry1) do
-  #             raise "incompatible sharding"
-  #           end
-
-  #           contracted_tensor_shardings =
-  #             if entry0 do
-  #               Map.put(contracted_tensor_shardings, entry0.id, entry0)
-  #             else
-  #               contracted_tensor_shardings
-  #             end
-
-  #           contracted_tensor_shardings =
-  #             if entry1 do
-  #               Map.put(contracted_tensor_shardings, entry1.id, entry1)
-  #             else
-  #               contracted_tensor_shardings
-  #             end
-
-  #           {
-  #             List.replace_at(config0, axis0, :delete),
-  #             List.replace_at(config1, axis1, :delete),
-  #             contracted_tensor_shardings
-  #           }
-  #       end
-  #     )
-
-  #   config = Enum.reject(config0, &(&1 == :delete)) ++ Enum.reject(config1, &(&1 == :delete))
-
-  #   {shard(ans, config),
-  #    Map.put(state, :contracted_tensor_shardings, contracted_tensor_shardings)}
-  # end
 
   @unary_ops [:exp, :expm1, :log, :log1p, :sigmoid, :cos, :sin, :tan, :cosh, :sinh, :tanh] ++
                [:acosh, :asinh, :atanh, :sqrt, :rsqrt, :cbrt, :negate, :sign, :abs, :bitwise_not] ++
@@ -546,201 +452,108 @@ defmodule Nx.Defn.ShardingCompiler do
         right_shards[axis] || []
       end)
 
-    dbg(out_axes)
-
     result =
-      Enum.reduce(out_axes, {left_shards_list, right_shards_list, [], [], []}, fn
-        axis,
-        {[left_shards | left_acc], [right_shards | right_acc], out_acc, left_out_acc,
-         right_out_acc} ->
-          {out_shards, left_shards, right_shards} =
+      Enum.reduce(out_axes, {left_shards_list, right_shards_list, []}, fn
+        axis, {[left_shards | left_acc], [right_shards | right_acc], out_acc} ->
+          out_shards =
             case {left_shards, right_shards} do
               {[], shards} ->
-                out_shards =
-                  Enum.map(shards, fn shard ->
-                    %Shard{
-                      id: make_ref(),
-                      axis: axis,
-                      start: shard.start,
-                      length: shard.length,
-                      input_id: nil,
-                      parents: MapSet.put(shard.parents, shard.id)
-                    }
-                  end)
-
-                {out_shards, [], shards}
+                make_child_shards(shards, axis)
 
               {shards, []} ->
-                out_shards =
-                  Enum.map(shards, fn shard ->
-                    %Shard{
-                      id: make_ref(),
-                      axis: axis,
-                      start: shard.start,
-                      length: shard.length,
-                      input_id: nil,
-                      parents: MapSet.put(shard.parents, shard.id)
-                    }
-                  end)
-
-                {out_shards, shards, []}
+                make_child_shards(shards, axis)
 
               {[], []} ->
-                {[], [], []}
+                []
 
               {left, right} ->
-                # We can resolve a conflict iff one of the shards is sharding over the full axis.
+                # If we are dealing with a broadcast axis on either tensor, we can
+                # map the single shard to all shards on the other tensor.
+
+                left_size = left_axis_sizes[axis]
+                right_size = right_axis_sizes[axis]
+
+                left_is_broadcasting = left_size != right_size and left_size == 1
+                right_is_broadcasting = left_size != right_size and right_size == 1
+
                 resolve_sharding_broadcast(
+                  axis,
                   left,
-                  left_axis_sizes[axis],
+                  left_is_broadcasting,
                   right,
-                  right_axis_sizes[axis]
+                  right_is_broadcasting
                 )
             end
 
           {
             left_acc,
             right_acc,
-            [out_shards | out_acc],
-            [left_shards | left_out_acc],
-            [right_shards | right_out_acc]
+            [out_shards | out_acc]
           }
       end)
 
-    {[], [], out_shards_reverse, left_shards_reverse, right_shards_reverse} = result
+    {[], [], out_reverse_shards} = result
 
-    out_shards = Enum.reverse(out_shards_reverse)
-    left_shards_broadcasted = Enum.reverse(left_shards_reverse)
-    right_shards_broadcasted = Enum.reverse(right_shards_reverse)
+    out_shards =
+      out_reverse_shards
+      |> Enum.reverse()
+      |> Enum.with_index()
+      |> Map.new(fn {shards, idx} -> {idx, shards} end)
 
-    left_shards = Enum.map(left_broadcast_axes, &Enum.fetch!(left_shards_broadcasted, &1))
-    right_shards = Enum.map(right_broadcast_axes, &Enum.fetch!(right_shards_broadcasted, &1))
-
-    dbg(left_shards)
-    dbg(right_shards)
-    dbg(out_shards)
-
-    raise "asdf"
+    out_sharding = %TensorSharding{shards: out_shards, id: make_ref()}
+    {out_sharding, state}
   end
 
-  defp resolve_sharding_broadcast(
-         [%Shard{start: 0, length: 1, id: id, parents: parents}] = left,
-         1,
-         right,
-         _right_axis_size
-       ) do
-    out_shards =
-      Enum.map(right, fn shard ->
-        %{
-          shard
-          | id: make_ref(),
-            start: shard.start,
-            length: shard.length,
-            parents: shard.parents |> MapSet.union(parents) |> MapSet.put(id)
-        }
+  defp get_root_parents(shard, acc \\ [])
+
+  defp get_root_parents(%Shard{parents: []} = shard, acc), do: List.flatten([shard | acc])
+
+  defp get_root_parents(%Shard{parents: parents}, acc) do
+    Enum.reduce(parents, acc, &get_root_parents/2)
+    |> List.flatten()
+  end
+
+  defp resolve_sharding_broadcast(axis, [left_shard], true, right_shards, false) do
+    # We have a single shard on the left that we'll map onto the right shards.
+    make_child_shards(right_shards, axis, [left_shard])
+  end
+
+  defp resolve_sharding_broadcast(axis, left_shards, false, [right_shard], true) do
+    # We have a single shard on the right that we'll map onto the left shards.
+    make_child_shards(left_shards, axis, [right_shard])
+  end
+
+  defp resolve_sharding_broadcast(axis, left_shards, false, right_shards, false) do
+    # We have a shard on both sides. We need to determine the intersection of the two.
+    # This is fine only if all shards are equal
+    {reverse_out_shards, all_shards_match} =
+      Enum.zip_reduce(left_shards, right_shards, {[], true}, fn left,
+                                                                right,
+                                                                {out_acc, match_acc} ->
+        match_acc = match_acc and left.start == right.start and left.length == right.length
+
+        out_acc = make_child_shards([left], axis, [right]) ++ out_acc
+
+        {out_acc, match_acc}
       end)
 
-    {out_shards, left, right}
-  end
-
-  defp resolve_sharding_broadcast(
-         left,
-         _left_axis_size,
-         [%Shard{start: 0, length: 1, id: id, parents: parents}] = right,
-         1
-       ) do
-    out_shards =
-      Enum.map(left, fn shard ->
-        %{
-          shard
-          | id: make_ref(),
-            start: shard.start,
-            length: shard.length,
-            parents: shard.parents |> MapSet.union(parents) |> MapSet.put(id)
-        }
-      end)
-
-    {out_shards, left, right}
-  end
-
-  defp resolve_sharding_broadcast(left, left_axis_size, right, right_axis_size) do
-    dbg({left, right})
-    # if we have a single axis-length shard on either end, we can re-slice it according to
-    # the slicing on the other side
-    case {left, right} do
-      {[
-         %Shard{
-           id: id,
-           axis: axis,
-           input_id: input_id,
-           start: 0,
-           length: ^left_axis_size,
-           parents: parents
-         }
-       ], right_shards} ->
-        left_shards =
-          Enum.map(right_shards, fn shard ->
-            %Shard{
-              id: make_ref(),
-              axis: axis,
-              start: shard.start,
-              length: shard.length,
-              input_id: input_id,
-              parents: MapSet.put(parents, id)
-            }
-          end)
-
-        out_shards =
-          Enum.zip_with(left_shards, right_shards, fn left, right ->
-            %{
-              left
-              | id: make_ref(),
-                input_id: nil,
-                parents: MapSet.union(left.parents, right.parents)
-            }
-          end)
-
-        {out_shards, left_shards, right_shards}
-
-      {left_shards,
-       [
-         %Shard{
-           id: id,
-           axis: axis,
-           input_id: input_id,
-           start: 0,
-           length: ^right_axis_size,
-           parents: parents
-         }
-       ]} ->
-        right_shards =
-          Enum.map(left_shards, fn shard ->
-            %Shard{
-              id: make_ref(),
-              axis: axis,
-              start: shard.start,
-              length: shard.length,
-              input_id: input_id,
-              parents: MapSet.put(parents, id)
-            }
-          end)
-
-        out_shards =
-          Enum.zip_with(left_shards, right_shards, fn left, right ->
-            %{
-              right
-              | id: make_ref(),
-                input_id: nil,
-                parents: MapSet.union(left.parents, right.parents)
-            }
-          end)
-
-        {out_shards, left_shards, right_shards}
-
-      {l, r} ->
-        dbg({l, r})
-        raise "incompatible sharding"
+    if not all_shards_match do
+      raise "incompatible sharding"
     end
-    |> dbg()
+
+    Enum.reverse(reverse_out_shards)
+  end
+
+  defp make_child_shards(shards, axis, extra_parents \\ []) do
+    Enum.map(shards, fn shard ->
+      %Shard{
+        id: make_ref(),
+        axis: axis,
+        start: shard.start,
+        length: shard.length,
+        input_id: nil,
+        parents: [shard | extra_parents]
+      }
+    end)
   end
 end
