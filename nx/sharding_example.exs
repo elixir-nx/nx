@@ -1,14 +1,14 @@
-arg0_sharding = %{2 => [0..0, 1..1, 2..2]}
-arg1_sharding = %{1 => [0..0, 1..1]}
+arg0_sharding = %{0 => [0..1]}
+arg1_sharding = %{2 => [0..0, 1..1]}
 
 Nx.default_backend(Nx.BinaryBackend)
 
-# fun = &Nx.dot(&1, [2, 3], &2, [2, 1])
-fun = &Nx.add(&1, &2)
+fun = &Nx.dot(&1, [1, 2], &2, [1, 0])
+# fun = &Nx.add(&1, &2)
 
 inputs = [
-  Nx.iota({1, 1, 3}, type: :f32),
-  Nx.add(Nx.iota({1, 2, 3}), 10)
+  Nx.iota({2, 2, 3}, type: :f32),
+  Nx.add(Nx.iota({3, 2, 2}), 10)
 ]
 
 {output_holder, shards} =

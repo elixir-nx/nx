@@ -254,6 +254,8 @@ defmodule Nx.Defn.ShardingCompiler do
     ] =
       __compile__(key, vars, fun, sharding_config: opts[:sharding_config]).([args])
 
+    dbg(output_config.shards)
+
     data_sections =
       output_config.shards |> Enum.sort_by(fn {axis, _} -> axis end) |> cartesian_product()
 
@@ -484,6 +486,71 @@ defmodule Nx.Defn.ShardingCompiler do
   defp apply_op(op, ans, [arg0, arg1], state) when op in @binary_ops do
     {tensor_sharding, state} = bin_op_tensor_sharding(arg0, arg1, ans, state)
     {shard(ans, tensor_sharding), state}
+  end
+
+  defp apply_op(:dot, ans, [t0, c0, b0, t1, c1, b1], state) do
+    left_sharding =
+      Enum.reduce(c0, t0.data.tensor_sharding.shards, fn axis, acc ->
+        Map.put(acc, axis, %Shard{
+          id: make_ref(),
+          axis: axis,
+          start: 0,
+          length: elem(t0.shape, axis),
+          parents: []
+        })
+      end)
+
+    right_sharding =
+      Enum.reduce(c1, t1.data.tensor_sharding.shards, fn axis, acc ->
+        Map.put(acc, axis, %Shard{
+          id: make_ref(),
+          axis: axis,
+          start: 0,
+          length: elem(t1.shape, axis),
+          parents: []
+        })
+      end)
+
+    dbg({left_sharding, right_sharding})
+    offset = length(b0)
+
+    dbg(offset)
+
+    batch_shards =
+      Enum.zip_with([b0, b1, 0..(offset - 1)], fn left_axis, right_axis, axis ->
+        left_shards = Map.fetch!(left_sharding, left_axis)
+        right_shards = Map.fetch!(right_sharding, right_axis)
+        resolve_sharding_broadcast(axis, left_shards, false, right_shards, false)
+      end)
+
+    dbg(batch_shards)
+    dbg(ans.shape)
+
+    out_shards_left =
+      Enum.with_index(Nx.axes(t0) -- c0, fn axis, idx ->
+        {idx + offset,
+         left_sharding
+         |> Map.fetch!(axis)
+         |> make_child_shards(idx + offset)}
+      end)
+
+    offset = offset + length(out_shards_left)
+
+    out_shards_right =
+      Enum.with_index(Nx.axes(t1) -- c1, fn axis, idx ->
+        {idx + offset,
+         right_sharding
+         |> Map.fetch!(axis)
+         |> make_child_shards(idx + offset)}
+      end)
+
+    out_shards = Map.new(batch_shards ++ out_shards_left ++ out_shards_right)
+    out_sharding = %TensorSharding{shards: out_shards, id: make_ref()}
+    {shard(ans, out_sharding), state}
+  end
+
+  defp apply_op(op, _ans, _args, _state) do
+    raise "Unsupported op: #{op}"
   end
 
   defp bin_op_tensor_sharding(
