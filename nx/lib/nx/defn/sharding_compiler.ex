@@ -410,11 +410,11 @@ defmodule Nx.Defn.ShardingCompiler do
   end
 
   defp eval(%T{data: %Expr{op: :tensor, args: [t]}}, {cache, state}) do
-    {t, {cache, state}}
+    {shard(t, %{}), {cache, state}}
   end
 
   defp eval(%T{data: %Expr{op: :constant, args: [_constant]}} = ans, {cache, state}) do
-    {ans, {cache, state}}
+    {shard(ans, %{}), {cache, state}}
   end
 
   defp eval(%T{data: %Expr{op: :metadata, args: [expr, _meta]}}, {cache, state}) do
@@ -489,26 +489,32 @@ defmodule Nx.Defn.ShardingCompiler do
   end
 
   defp apply_op(:dot, ans, [t0, c0, b0, t1, c1, b1], state) do
+    # TO-DO: Make it so that sharding over a contracting axis becomes
+    # an all-reduce op instead of simply ignoring the sharding
     left_sharding =
       Enum.reduce(c0, t0.data.tensor_sharding.shards, fn axis, acc ->
-        Map.put(acc, axis, %Shard{
-          id: make_ref(),
-          axis: axis,
-          start: 0,
-          length: elem(t0.shape, axis),
-          parents: []
-        })
+        Map.put(acc, axis, [
+          %Shard{
+            id: make_ref(),
+            axis: axis,
+            start: 0,
+            length: elem(t0.shape, axis),
+            parents: []
+          }
+        ])
       end)
 
     right_sharding =
       Enum.reduce(c1, t1.data.tensor_sharding.shards, fn axis, acc ->
-        Map.put(acc, axis, %Shard{
-          id: make_ref(),
-          axis: axis,
-          start: 0,
-          length: elem(t1.shape, axis),
-          parents: []
-        })
+        Map.put(acc, axis, [
+          %Shard{
+            id: make_ref(),
+            axis: axis,
+            start: 0,
+            length: elem(t1.shape, axis),
+            parents: []
+          }
+        ])
       end)
 
     dbg({left_sharding, right_sharding})

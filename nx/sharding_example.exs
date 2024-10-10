@@ -1,9 +1,15 @@
-arg0_sharding = %{0 => [0..1]}
+arg0_sharding = %{0 => [0..1], 1 => [0..1]}
 arg1_sharding = %{2 => [0..0, 1..1]}
 
 Nx.default_backend(Nx.BinaryBackend)
 
-fun = &Nx.dot(&1, [1, 2], &2, [1, 0])
+fun = fn l, r ->
+  x = Nx.add(l, 1)
+  y = Nx.subtract(r, 1)
+  Nx.dot(x, [1, 2], y, [1, 0])
+end
+
+# fun = &Nx.dot(&1, [1, 2], &2, [1, 0])
 # fun = &Nx.add(&1, &2)
 
 inputs = [
