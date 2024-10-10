@@ -247,7 +247,6 @@ defmodule Nx.Defn.ShardingCompiler do
         shape: shape,
         type: type,
         data: %__MODULE__{
-          input_tensor_shardings: input_tensor_shardings,
           tensor_sharding: output_config,
           parameter_ids_to_index: parameter_ids_to_index
         }
