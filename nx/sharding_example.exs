@@ -4,7 +4,7 @@ arg1_sharding = %{2 => [0..0, 1..1]}
 Nx.default_backend(Nx.BinaryBackend)
 
 fun = fn l, r ->
-  x = Nx.add(l, 1)
+  x = Nx.add(l, Nx.tensor([[1]]))
   y = Nx.subtract(r, 1)
   Nx.dot(x, [1, 2], y, [1, 0])
 end
