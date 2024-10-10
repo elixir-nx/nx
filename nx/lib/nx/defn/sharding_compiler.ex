@@ -488,6 +488,46 @@ defmodule Nx.Defn.ShardingCompiler do
     {shard(ans, tensor_sharding), state}
   end
 
+  # defp apply_op(:reshape, ans, [arg], state) do
+  # TODO: support reshape: we need to find a way to map the shards to the new shape
+  # This can be achieved in a few cases, but not all.
+  # Examples:
+  #   [2, 3] -> [3, 2] works iff both axes are fully sharded
+  #   [2, 6] -> [2, 1, 3, 2] works if we can fit the shards of axis 1 into [3, 2]
+  # end
+
+  defp apply_op(:squeeze, ans, [arg, squeeze_axes], state) do
+    shards = Enum.sort_by(arg.data.tensor_sharding.shards, fn {axis, _} -> axis end)
+
+    {[], _, out_shards} =
+      Enum.reduce(shards, {Enum.sort(squeeze_axes, :asc), 0, %{}}, fn
+        {axis, _shards}, {[axis | squeeze_axes], num_squeezed_axes, out_shards} ->
+          {squeeze_axes, num_squeezed_axes + 1, out_shards}
+
+        {axis, shards}, {squeeze_axes, num_squeezed_axes, out_shards} ->
+          {squeeze_axes, num_squeezed_axes, Map.put(out_shards, axis - num_squeezed_axes, shards)}
+      end)
+
+    tensor_sharding = %TensorSharding{shards: out_shards, id: make_ref()}
+    {shard(ans, tensor_sharding), state}
+  end
+
+  defp apply_op(:transpose, ans, [arg, axes], state) do
+    shards = arg.data.tensor_sharding.shards
+
+    out_shards =
+      axes
+      |> Enum.with_index(fn out_axis, in_axis ->
+        out_shards = make_child_shards(Map.fetch!(shards, in_axis), out_axis)
+        {out_axis, out_shards}
+      end)
+      |> Map.new()
+
+    tensor_sharding = %TensorSharding{shards: out_shards, id: make_ref()}
+
+    {shard(ans, tensor_sharding), state}
+  end
+
   defp apply_op(:dot, ans, [t0, c0, b0, t1, c1, b1], state) do
     # TO-DO: Make it so that sharding over a contracting axis becomes
     # an all-reduce op instead of simply ignoring the sharding

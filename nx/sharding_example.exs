@@ -1,12 +1,14 @@
 arg0_sharding = %{0 => [0..1], 1 => [0..1]}
-arg1_sharding = %{2 => [0..0, 1..1]}
+arg1_sharding = %{4 => [0..0, 1..1]}
 
 Nx.default_backend(Nx.BinaryBackend)
 
 fun = fn l, r ->
   x = Nx.add(l, Nx.tensor([[1]]))
+  x = Nx.transpose(x, axes: [0, 2, 1])
   y = Nx.subtract(r, 1)
-  Nx.dot(x, [1, 2], y, [1, 0])
+  y = Nx.squeeze(y, axes: [0, 1])
+  Nx.dot(x, [2, 1], y, [1, 0])
 end
 
 # fun = &Nx.dot(&1, [1, 2], &2, [1, 0])
@@ -14,7 +16,7 @@ end
 
 inputs = [
   Nx.iota({2, 2, 3}, type: :f32),
-  Nx.add(Nx.iota({3, 2, 2}), 10)
+  Nx.add(Nx.iota({1, 1, 3, 2, 2}), 10)
 ]
 
 {output_holder, shards} =
