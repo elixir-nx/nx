@@ -121,10 +121,19 @@ defmodule Nx.Defn.ShardingCompilerTest do
   end
 
   test "works with literal tensors" do
-    fun = fn x -> Nx.add(x, Nx.tensor([1, 1, 1, 1])) end
+    fun = fn x -> Nx.add(x, Nx.tensor([1])) end
 
     {_, shards} = assert_sharded_results(fun, [Nx.iota({4})], [%{}])
     assert length(shards) == 4
+
+    # This case raises because all literal tensors are forced
+    # to be not sharded. We can in the future fix this by adding
+    # fan-in and fan-out operations to the sharding compiler.
+    fun = fn x -> Nx.add(x, Nx.tensor([1, 1, 1, 1])) end
+
+    assert_raise RuntimeError, "incompatible sharding", fn ->
+      assert_sharded_results(fun, [Nx.iota({4})], [%{}])
+    end
   end
 
   test "squeeze" do
@@ -135,8 +144,9 @@ defmodule Nx.Defn.ShardingCompilerTest do
 
   test "transpose" do
     fun = &Nx.transpose(&1, axes: [2, 0, 1])
-    {_, shards} = assert_sharded_results(fun, [Nx.iota({1, 1, 4})], [%{}])
-    assert length(shards) == 1
+    {output_holder, shards} = assert_sharded_results(fun, [Nx.iota({2, 3, 4})], [%{}])
+    assert output_holder.shape == {4, 2, 3}
+    assert length(shards) == 2 * 3 * 4
   end
 
   defp assert_sharded_results(fun, inputs, sharding) do

@@ -253,11 +253,18 @@ defmodule Nx.Defn.ShardingCompiler do
   end
 
   defp eval(%T{data: %Expr{op: :tensor, args: [t]}}, {cache, state}) do
-    {shard_from_config(t, %{}), {cache, state}}
+    config =
+      t
+      |> Nx.axes()
+      |> Map.new(fn axis ->
+        {axis, [0..(elem(t.shape, axis) - 1)]}
+      end)
+
+    {shard_from_config(t, config), {cache, state}}
   end
 
   defp eval(%T{data: %Expr{op: :constant, args: [_constant]}} = ans, {cache, state}) do
-    {shard_from_config(ans, %{}), {cache, state}}
+    {shard_from_config(ans, %{0 => [0..0]}), {cache, state}}
   end
 
   defp eval(%T{data: %Expr{op: :metadata, args: [expr, _meta]}}, {cache, state}) do
@@ -359,7 +366,7 @@ defmodule Nx.Defn.ShardingCompiler do
 
     out_shards =
       axes
-      |> Enum.with_index(fn out_axis, in_axis ->
+      |> Enum.with_index(fn in_axis, out_axis ->
         out_shards = make_child_shards(Map.fetch!(shards, in_axis), out_axis)
         {out_axis, out_shards}
       end)
