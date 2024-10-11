@@ -3,232 +3,66 @@ defmodule Nx.Defn.ShardingCompiler do
   alias Nx.Tensor, as: T
   alias Nx.Defn.Expr
 
+  alias Nx.Defn.ShardingCompiler.Shard
+
   @behaviour Nx.Defn.Compiler
 
-  defstruct [:id, :tensor_sharding, :input_tensor_shardings, :parameter_ids_to_index]
-
-  defmodule Shard do
-    import Inspect.Algebra
-    defstruct [:id, :axis, :input_id, :start, :length, :parents]
-
-    def inspect(%__MODULE__{start: start, length: length}, inspect_opts)
-        when is_nil(start) or is_nil(length) do
-      color("Shard<>", :map, inspect_opts)
-    end
-
-    def inspect(
-          %__MODULE__{id: id, axis: axis, start: start, length: length, input_id: input_id},
-          inspect_opts
-        ) do
-      single_line = inspect_opts.custom_options[:single_line]
-      print_axis = inspect_opts.custom_options[:print_axis]
-
-      range_doc = "#{start}..#{start + length - 1}"
-      input_id_doc = if(input_id, do: "(#{inspect(input_id)})", else: "")
-
-      if single_line do
-        concat([
-          color("Shard<", :map, inspect_opts),
-          if(print_axis && axis, do: "#{axis}: ", else: ""),
-          range_doc,
-          " (#{inspect(id)})",
-          input_id_doc,
-          color(">", :map, inspect_opts)
-        ])
-      else
-        concat([
-          color("Shard<", :map, inspect_opts),
-          nest(
-            concat([
-              line(),
-              if(print_axis && axis, do: "#{axis}: ", else: ""),
-              range_doc,
-              line(),
-              "(#{inspect(id)})",
-              line(),
-              input_id_doc
-            ]),
-            2
-          ),
-          line(),
-          color(">", :map, inspect_opts)
-        ])
-      end
-    end
-
-    defimpl Inspect do
-      def inspect(mod, opts), do: Shard.inspect(mod, opts)
-    end
-  end
-
-  defmodule TensorSharding do
-    defstruct [:shards, :id]
-
-    @doc """
-    config is a map of axis index or name -> slices
-    """
-    def new(tensor, config, opts \\ [])
-
-    def new(_tensor, %TensorSharding{} = config, opts) do
-      if input_id = opts[:input_id] do
-        shards =
-          Map.new(config.shards, fn {axis, shards} ->
-            {axis, Enum.map(shards, &Map.put(&1, :input_id, &1.input_id || input_id))}
-          end)
-
-        %TensorSharding{config | shards: shards}
-      else
-        config
-      end
-    end
-
-    def new(tensor, config, opts) when is_map(config) do
-      input_id = opts[:input_id]
-
-      shards =
-        Map.new(config, fn
-          {axis_or_name, slices} ->
-            axis =
-              if is_atom(axis_or_name) do
-                Nx.axis_index(tensor, axis_or_name)
-              else
-                axis_or_name
-              end
-
-            shards =
-              Enum.map(slices, fn start..finish//1 ->
-                id = make_ref()
-
-                %Shard{
-                  id: id,
-                  axis: axis,
-                  start: start,
-                  length: finish - start + 1,
-                  input_id: input_id,
-                  parents: []
-                }
-              end)
-
-            {axis, shards}
-        end)
-
-      shards =
-        Enum.reduce(Nx.axes(tensor), shards, fn axis, shards_by_axis ->
-          if Map.has_key?(shards_by_axis, axis) do
-            shards_by_axis
-          else
-            # If no shards are given, assume a fully independent axis by default.
-            # We can group shards as needed later.
-
-            shards =
-              Enum.map(0..(Nx.axis_size(tensor, axis) - 1), fn start ->
-                id = make_ref()
-
-                %Shard{
-                  id: id,
-                  axis: axis,
-                  start: start,
-                  length: 1,
-                  input_id: input_id,
-                  parents: []
-                }
-              end)
-
-            Map.put(shards_by_axis, axis, shards)
-          end
-        end)
-
-      %TensorSharding{shards: shards, id: make_ref()}
-    end
-
-    def inspect(%__MODULE__{shards: shards}, opts) do
-      import Inspect.Algebra
-
-      shards =
-        shards
-        |> Enum.sort_by(fn {axis, _} -> axis end)
-        |> Enum.map(fn {axis, shards} ->
-          axis_name = opts.custom_options[:axis_names][axis] || axis
-
-          shard_doc =
-            shards
-            |> Enum.flat_map(fn %Shard{} = shard ->
-              opts = put_in(opts.custom_options[:single_line], true)
-              opts = put_in(opts.custom_options[:print_axis], false)
-
-              [
-                line(),
-                Shard.inspect(shard, opts)
-              ]
-            end)
-            |> concat()
-            |> nest(2)
-
-          concat([
-            "#{axis_name}: ",
-            shard_doc
-          ])
-        end)
-        |> Enum.intersperse(line())
-        |> concat()
-
-      if shards != :doc_nil do
-        concat([
-          concat([
-            color("TensorSharding<", :map, opts),
-            line(),
-            shards
-          ])
-          |> nest(2),
-          line(),
-          color(">", :map, opts)
-        ])
-      else
-        string("TensorSharding<>")
-      end
-    end
-
-    defimpl Inspect do
-      def inspect(mod, opts), do: TensorSharding.inspect(mod, opts)
-    end
-  end
+  defstruct [:id, :shards, :input_tensor_shardings, :parameter_ids_to_index]
 
   @impl true
   def inspect(
-        %T{
-          shape: shape,
-          names: names,
-          data: %__MODULE__{tensor_sharding: tensor_sharding}
-        },
+        %T{data: %__MODULE__{shards: shards}},
         inspect_opts
       ) do
     import Inspect.Algebra
 
-    TensorSharding.inspect(tensor_sharding, custom_options: [axis_names: names])
+    shards
+    |> Enum.sort_by(fn {axis, _} -> axis end)
+    |> Enum.map(fn {axis, shards} ->
+      axis_name = inspect_opts.custom_options[:axis_names][axis] || axis
+
+      shard_doc =
+        shards
+        |> Enum.flat_map(fn %Shard{} = shard ->
+          opts = put_in(inspect_opts.custom_options[:single_line], true)
+          opts = put_in(opts.custom_options[:print_axis], false)
+
+          [
+            line(),
+            Shard.inspect(shard, opts)
+          ]
+        end)
+        |> concat()
+        |> nest(2)
+
+      concat([
+        "#{axis_name}: ",
+        shard_doc
+      ])
+    end)
+    |> Enum.intersperse(line())
+    |> concat()
   end
 
   def init(opts), do: opts
 
-  def shard(tensor, config, opts \\ []) do
-    tensor_sharding = TensorSharding.new(tensor, config, opts)
-
-    data =
-      case tensor.data do
-        %__MODULE__{tensor_sharding: old_config} = data ->
-          used_shards =
-            Map.merge(old_config.used_shards, config.shards, fn _k, old, new ->
-              unless old == new do
-                raise "Unexpected sharding conflict"
-              end
-            end)
-
-          %__MODULE__{data | tensor_sharding: %{tensor_sharding | used_shards: used_shards}}
-
-        _ ->
-          %__MODULE__{id: make_ref(), tensor_sharding: tensor_sharding}
+  def put_shards(tensor, shards, opts \\ []) do
+    shards =
+      if input_id = opts[:input_id] do
+        Map.new(shards, fn {axis, shards} ->
+          {axis, Enum.map(shards, &%Shard{&1 | input_id: input_id})}
+        end)
+      else
+        shards
       end
 
+    data = %__MODULE__{id: make_ref(), shards: shards}
     %{tensor | data: data}
+  end
+
+  def shard_from_config(tensor, config, opts \\ []) do
+    shards = Shard.from_config(tensor, config, opts)
+    put_shards(tensor, shards, opts)
   end
 
   @impl true
@@ -247,17 +81,15 @@ defmodule Nx.Defn.ShardingCompiler do
         shape: shape,
         type: type,
         data: %__MODULE__{
-          tensor_sharding: output_config,
+          shards: output_shards,
           parameter_ids_to_index: parameter_ids_to_index
         }
       }
     ] =
       __compile__(key, vars, fun, sharding_config: opts[:sharding_config]).([args])
 
-    dbg(output_config.shards)
-
     data_sections =
-      output_config.shards |> Enum.sort_by(fn {axis, _} -> axis end) |> cartesian_product()
+      output_shards |> Enum.sort_by(fn {axis, _} -> axis end) |> cartesian_product()
 
     # Find the parents for each data section
     # Group by inputs
@@ -267,8 +99,6 @@ defmodule Nx.Defn.ShardingCompiler do
 
     result =
       for section <- data_sections do
-        dbg(section)
-
         shards_by_input_id =
           section
           |> Enum.flat_map(fn {_axis, shard} ->
@@ -337,7 +167,6 @@ defmodule Nx.Defn.ShardingCompiler do
         vars =
           Enum.with_index(sliced_inputs, fn arg, idx ->
             arg
-            # |> Expr.tensor()
             |> Expr.parameter(:root, idx)
           end)
 
@@ -377,7 +206,7 @@ defmodule Nx.Defn.ShardingCompiler do
       opts
       |> Keyword.get(:sharding_config)
       |> Enum.zip_with(vars, fn config, var ->
-        TensorSharding.new(var, config)
+        Shard.from_config(var, config)
       end)
       |> Enum.with_index(fn x, idx -> {idx, x} end)
       |> Map.new()
@@ -410,11 +239,11 @@ defmodule Nx.Defn.ShardingCompiler do
   end
 
   defp eval(%T{data: %Expr{op: :tensor, args: [t]}}, {cache, state}) do
-    {shard(t, %{}), {cache, state}}
+    {shard_from_config(t, %{}), {cache, state}}
   end
 
   defp eval(%T{data: %Expr{op: :constant, args: [_constant]}} = ans, {cache, state}) do
-    {shard(ans, %{}), {cache, state}}
+    {shard_from_config(ans, %{}), {cache, state}}
   end
 
   defp eval(%T{data: %Expr{op: :metadata, args: [expr, _meta]}}, {cache, state}) do
@@ -437,8 +266,8 @@ defmodule Nx.Defn.ShardingCompiler do
 
   defp eval_apply(:parameter, %T{data: %Expr{id: id, args: [i]}}, {cache, state}) do
     %T{} = tensor = Map.fetch!(state.params, i).()
-    config = Map.fetch!(state.tensor_shardings, i)
-    res = tensor |> Nx.devectorize() |> shard(config, input_id: id)
+    shards = Map.fetch!(state.tensor_shardings, i)
+    res = tensor |> Nx.devectorize() |> put_shards(shards, input_id: id)
 
     state = put_in(state.parameter_ids_to_index[id], i)
     {res, {Map.put(cache, id, res), state}}
@@ -464,7 +293,7 @@ defmodule Nx.Defn.ShardingCompiler do
                [:erf, :erfc, :erf_inv, :acos, :asin, :atan, :bitcast, :real, :imag]
 
   defp apply_op(op, ans, [arg], state) when op in @unary_ops do
-    {shard(ans, arg.data.tensor_sharding), state}
+    {put_shards(ans, arg.data.shards), state}
   end
 
   @binary_ops [
@@ -484,8 +313,8 @@ defmodule Nx.Defn.ShardingCompiler do
                 [:logical_and, :logical_or, :logical_xor]
 
   defp apply_op(op, ans, [arg0, arg1], state) when op in @binary_ops do
-    {tensor_sharding, state} = bin_op_tensor_sharding(arg0, arg1, ans, state)
-    {shard(ans, tensor_sharding), state}
+    {shards, state} = bin_op_tensor_sharding(arg0, arg1, ans, state)
+    {put_shards(ans, shards), state}
   end
 
   # defp apply_op(:reshape, ans, [arg], state) do
@@ -497,7 +326,7 @@ defmodule Nx.Defn.ShardingCompiler do
   # end
 
   defp apply_op(:squeeze, ans, [arg, squeeze_axes], state) do
-    shards = Enum.sort_by(arg.data.tensor_sharding.shards, fn {axis, _} -> axis end)
+    shards = Enum.sort_by(arg.data.shards, fn {axis, _} -> axis end)
 
     {[], _, out_shards} =
       Enum.reduce(shards, {Enum.sort(squeeze_axes, :asc), 0, %{}}, fn
@@ -508,12 +337,11 @@ defmodule Nx.Defn.ShardingCompiler do
           {squeeze_axes, num_squeezed_axes, Map.put(out_shards, axis - num_squeezed_axes, shards)}
       end)
 
-    tensor_sharding = %TensorSharding{shards: out_shards, id: make_ref()}
-    {shard(ans, tensor_sharding), state}
+    {put_shards(ans, out_shards), state}
   end
 
   defp apply_op(:transpose, ans, [arg, axes], state) do
-    shards = arg.data.tensor_sharding.shards
+    shards = arg.data.shards
 
     out_shards =
       axes
@@ -523,16 +351,14 @@ defmodule Nx.Defn.ShardingCompiler do
       end)
       |> Map.new()
 
-    tensor_sharding = %TensorSharding{shards: out_shards, id: make_ref()}
-
-    {shard(ans, tensor_sharding), state}
+    {put_shards(ans, out_shards), state}
   end
 
   defp apply_op(:dot, ans, [t0, c0, b0, t1, c1, b1], state) do
     # TO-DO: Make it so that sharding over a contracting axis becomes
     # an all-reduce op instead of simply ignoring the sharding
     left_sharding =
-      Enum.reduce(c0, t0.data.tensor_sharding.shards, fn axis, acc ->
+      Enum.reduce(c0, t0.data.shards, fn axis, acc ->
         Map.put(acc, axis, [
           %Shard{
             id: make_ref(),
@@ -545,7 +371,7 @@ defmodule Nx.Defn.ShardingCompiler do
       end)
 
     right_sharding =
-      Enum.reduce(c1, t1.data.tensor_sharding.shards, fn axis, acc ->
+      Enum.reduce(c1, t1.data.shards, fn axis, acc ->
         Map.put(acc, axis, [
           %Shard{
             id: make_ref(),
@@ -557,10 +383,7 @@ defmodule Nx.Defn.ShardingCompiler do
         ])
       end)
 
-    dbg({left_sharding, right_sharding})
     offset = length(b0)
-
-    dbg(offset)
 
     batch_shards =
       Enum.zip_with([b0, b1, 0..(offset - 1)], fn left_axis, right_axis, axis ->
@@ -568,9 +391,6 @@ defmodule Nx.Defn.ShardingCompiler do
         right_shards = Map.fetch!(right_sharding, right_axis)
         resolve_sharding_broadcast(axis, left_shards, false, right_shards, false)
       end)
-
-    dbg(batch_shards)
-    dbg(ans.shape)
 
     out_shards_left =
       Enum.with_index(Nx.axes(t0) -- c0, fn axis, idx ->
@@ -591,8 +411,7 @@ defmodule Nx.Defn.ShardingCompiler do
       end)
 
     out_shards = Map.new(batch_shards ++ out_shards_left ++ out_shards_right)
-    out_sharding = %TensorSharding{shards: out_shards, id: make_ref()}
-    {shard(ans, out_sharding), state}
+    {put_shards(ans, out_shards), state}
   end
 
   defp apply_op(op, _ans, _args, _state) do
@@ -603,24 +422,24 @@ defmodule Nx.Defn.ShardingCompiler do
          %T{
            shape: left_shape,
            data: %__MODULE__{
-             tensor_sharding: left_config
+             shards: left_config
            }
          },
          %T{
            shape: right_shape,
            data: %__MODULE__{
-             tensor_sharding: right_config
+             shards: right_config
            }
          },
-         %T{shape: out_shape} = out,
-         %{tensor_shardings: tensor_shardings} = state
+         %T{shape: out_shape},
+         state
        ) do
     left_broadcast_axes = Nx.Shape.broadcast_axes(left_shape, out_shape)
     right_broadcast_axes = Nx.Shape.broadcast_axes(right_shape, out_shape)
 
     left_shards =
       Enum.map(Nx.axes(left_shape), fn axis ->
-        {axis, left_config.shards[axis]}
+        {axis, left_config[axis]}
       end)
 
     left_shards =
@@ -637,7 +456,7 @@ defmodule Nx.Defn.ShardingCompiler do
 
     right_shards =
       Enum.map(Nx.axes(right_shape), fn axis ->
-        {axis, right_config.shards[axis]}
+        {axis, right_config[axis]}
       end)
 
     right_axis_sizes =
@@ -669,14 +488,14 @@ defmodule Nx.Defn.ShardingCompiler do
         axis, {[left_shards | left_acc], [right_shards | right_acc], out_acc} ->
           out_shards =
             case {left_shards, right_shards} do
+              {[], []} ->
+                []
+
               {[], shards} ->
                 make_child_shards(shards, axis)
 
               {shards, []} ->
                 make_child_shards(shards, axis)
-
-              {[], []} ->
-                []
 
               {left, right} ->
                 # If we are dealing with a broadcast axis on either tensor, we can
@@ -712,8 +531,7 @@ defmodule Nx.Defn.ShardingCompiler do
       |> Enum.with_index()
       |> Map.new(fn {shards, idx} -> {idx, shards} end)
 
-    out_sharding = %TensorSharding{shards: out_shards, id: make_ref()}
-    {out_sharding, state}
+    {out_shards, state}
   end
 
   defp get_root_parents(shard, acc \\ [])
