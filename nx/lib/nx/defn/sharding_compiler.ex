@@ -10,62 +10,6 @@ defmodule Nx.Defn.ShardingCompiler do
   defstruct [:id, :shards, :input_tensor_shardings, :parameter_ids_to_index]
 
   @impl true
-  def inspect(
-        %T{data: %__MODULE__{shards: shards}},
-        inspect_opts
-      ) do
-    import Inspect.Algebra
-
-    shards
-    |> Enum.sort_by(fn {axis, _} -> axis end)
-    |> Enum.map(fn {axis, shards} ->
-      axis_name = inspect_opts.custom_options[:axis_names][axis] || axis
-
-      shard_doc =
-        shards
-        |> Enum.flat_map(fn %Shard{} = shard ->
-          opts = put_in(inspect_opts.custom_options[:single_line], true)
-          opts = put_in(opts.custom_options[:print_axis], false)
-
-          [
-            line(),
-            Shard.inspect(shard, opts)
-          ]
-        end)
-        |> concat()
-        |> nest(2)
-
-      concat([
-        "#{axis_name}: ",
-        shard_doc
-      ])
-    end)
-    |> Enum.intersperse(line())
-    |> concat()
-  end
-
-  def init(opts), do: opts
-
-  def put_shards(tensor, shards, opts \\ []) do
-    shards =
-      if input_id = opts[:input_id] do
-        Map.new(shards, fn {axis, shards} ->
-          {axis, Enum.map(shards, &%Shard{&1 | input_id: input_id})}
-        end)
-      else
-        shards
-      end
-
-    data = %__MODULE__{id: make_ref(), shards: shards}
-    %{tensor | data: data}
-  end
-
-  def shard_from_config(tensor, config, opts \\ []) do
-    shards = Shard.from_config(tensor, config, opts)
-    put_shards(tensor, shards, opts)
-  end
-
-  @impl true
   def __jit__(key, vars, fun, args, opts) do
     opts =
       Keyword.validate!(opts, [
@@ -232,6 +176,76 @@ defmodule Nx.Defn.ShardingCompiler do
 
       [container]
     end
+  end
+
+  @impl true
+  def __stream__(_key, _input, _acc, _vars, _fun, _args_list, _opts) do
+    raise "__stream__ not supported"
+  end
+
+  @impl true
+  def __partitions_options__(_keyword) do
+    raise "__partitions_options__ not supported"
+  end
+
+  @impl true
+  def __to_backend__(_keyword) do
+    raise "__to_backend__ not supported"
+  end
+
+  def init(opts), do: opts
+
+  def inspect(
+        %T{data: %__MODULE__{shards: shards}},
+        inspect_opts
+      ) do
+    import Inspect.Algebra
+
+    shards
+    |> Enum.sort_by(fn {axis, _} -> axis end)
+    |> Enum.map(fn {axis, shards} ->
+      axis_name = inspect_opts.custom_options[:axis_names][axis] || axis
+
+      shard_doc =
+        shards
+        |> Enum.flat_map(fn %Shard{} = shard ->
+          opts = put_in(inspect_opts.custom_options[:single_line], true)
+          opts = put_in(opts.custom_options[:print_axis], false)
+
+          [
+            line(),
+            Shard.inspect(shard, opts)
+          ]
+        end)
+        |> concat()
+        |> nest(2)
+
+      concat([
+        "#{axis_name}: ",
+        shard_doc
+      ])
+    end)
+    |> Enum.intersperse(line())
+    |> concat()
+  end
+
+  defp put_shards(tensor, shards, opts \\ []) do
+    shards =
+      if input_id = opts[:input_id] do
+        Map.new(shards, fn {axis, shards} ->
+          {axis, Enum.map(shards, &%Shard{&1 | input_id: input_id})}
+        end)
+      else
+        shards
+      end
+
+    data = %__MODULE__{id: make_ref(), shards: shards}
+    %{tensor | data: data}
+  end
+
+  def shard_from_config(tensor, config, opts \\ []) do
+    shards = Shard.from_config(tensor, config, opts)
+    put_shards(tensor, shards, opts)
   end
 
   defp composite_eval(expr, state, cache) do
