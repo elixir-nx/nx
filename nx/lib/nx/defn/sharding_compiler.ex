@@ -64,23 +64,23 @@ defmodule Nx.Defn.ShardingCompiler do
             {_, _, starts_reverse, lengths_reverse} =
               Enum.reduce(Tuple.to_list(input.shape), {shards_by_axis, 0, [], []}, fn
                 axis_size, {shards_by_axis, axis, starts, lengths} ->
-                {shards, shards_by_axis} = Map.pop(shards_by_axis, axis)
+                  {shards, shards_by_axis} = Map.pop(shards_by_axis, axis)
 
-                {starts, lengths} =
-                  if shards do
-                    min_start = Enum.min(Enum.map(shards, & &1.start))
-                    max_end = Enum.max(Enum.map(shards, &(&1.start + &1.length - 1)))
+                  {starts, lengths} =
+                    if shards do
+                      min_start = Enum.min(Enum.map(shards, & &1.start))
+                      max_end = Enum.max(Enum.map(shards, &(&1.start + &1.length - 1)))
 
-                    starts = [min_start | starts]
-                    lengths = [max_end - min_start + 1 | lengths]
-                    {starts, lengths}
-                  else
-                    starts = [0 | starts]
-                    lengths = [axis_size | lengths]
-                    {starts, lengths}
-                  end
+                      starts = [min_start | starts]
+                      lengths = [max_end - min_start + 1 | lengths]
+                      {starts, lengths}
+                    else
+                      starts = [0 | starts]
+                      lengths = [axis_size | lengths]
+                      {starts, lengths}
+                    end
 
-                {shards_by_axis, axis + 1, starts, lengths}
+                  {shards_by_axis, axis + 1, starts, lengths}
               end)
 
             starts = Enum.reverse(starts_reverse)
