@@ -58,31 +58,6 @@ defmodule Nx.Defn.Compiler do
             when vars: [Nx.Container.t()]
 
   @doc """
-  Callback for streaming (on top of JIT compilation).
-
-  It receives the same arguments as `c:__jit__/5` with the addition
-  of the streaming input and accumulator templates. If the input
-  and accumulator are containers, they are kept in their container
-  shapes. As in `c:__jit__/5`, both `vars` and `args_list` are flat
-  lists of tensors (without their container shape).
-
-  It must return a struct that implements the `Nx.Stream` protocol.
-  """
-  @callback __stream__(
-              key :: term,
-              input,
-              acc,
-              vars,
-              fun :: (vars -> {output, acc}),
-              args_list :: [[(-> Nx.t())]],
-              opts :: keyword
-            ) :: [Nx.Stream.t()]
-            when input: Nx.Container.t(),
-                 output: Nx.Container.t(),
-                 acc: Nx.Container.t(),
-                 vars: [Nx.Container.t()]
-
-  @doc """
   Receives a keyword list of compiler options and
   returns a list of compiler options, each to run
   on a separate partition/device.
@@ -151,12 +126,6 @@ defmodule Nx.Defn.Compiler do
   def __jit__(fun, params, args_list, opts) do
     {compiler, runtime_fun, opts} = prepare_options(fun, opts)
     compiler.__jit__(fun, params, runtime_fun, args_list, opts)
-  end
-
-  @doc false
-  def __stream__(fun, input, acc, params, args_list, opts) do
-    {compiler, runtime_fun, opts} = prepare_options(fun, opts)
-    compiler.__stream__(fun, input, acc, params, runtime_fun, args_list, opts)
   end
 
   defp prepare_options(fun, opts) do

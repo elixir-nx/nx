@@ -16,7 +16,7 @@ Nx is a multi-dimensional tensors library for Elixir with multi-staged compilati
 
   * Built-in distributed² serving: encapsulate complex numerical pipelines into `Nx.Serving`. Servings provide batching, streaming, and partitioning out of the box. You can distribute servings over multiple CPU cores and GPU devices, as well as over a cluster of machines;
 
-  * Support for data streaming and hooks, allowing developers to send and receive data from CPUs/GPUs/TPUs while computations are running;
+  * Support for hooks, allowing developers to send and receive data from CPUs/GPUs/TPUs while computations are running;
 
   * Support for linear algebra primitives via `Nx.LinAlg`;
 

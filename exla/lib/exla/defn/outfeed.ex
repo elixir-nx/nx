@@ -154,23 +154,6 @@ defmodule EXLA.Defn.Outfeed do
   end
 
   @doc """
-  Adds a stream hook.
-
-  Used by streams. Only one is allowed. Requires configuration.
-  """
-  def add_stream_hook(%Outfeed{} = outfeed, builder, tuple) do
-    {outfeed, flag, typespecs} = outfeed_flat_tuple(outfeed, builder, tuple)
-    # We don't know the pid+ref pair for the stream, so we store it
-    # under a special key called :stream and revert to the flag once configured
-    put_in(outfeed.compiled_hooks[:stream], {flag, typespecs})
-  end
-
-  def configure_stream_hook(%Outfeed{} = outfeed, pid, ref) when is_pid(pid) do
-    {{flag, typespecs}, outfeed} = pop_in(outfeed.compiled_hooks[:stream])
-    {typespecs, put_in(outfeed.compiled_hooks[flag], {:stream, typespecs, pid, ref})}
-  end
-
-  @doc """
   Closes the outfeed at the end of a pipeline.
 
   Note the outfeed may be closed before the computation finishes.
@@ -252,10 +235,6 @@ defmodule EXLA.Defn.Outfeed do
               end
 
             EXLA.Client.to_infeed(client, device_id, [{data, data_typespec}])
-            loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
-
-          {:stream, typespecs, recv_pid, recv_ref} ->
-            :ok = EXLA.Client.from_outfeed(client, device_id, typespecs, recv_pid, recv_ref)
             loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
 
           {:function, typespecs, name, template} ->
