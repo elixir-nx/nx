@@ -62,11 +62,8 @@ defmodule Nx.Defn.ShardingCompiler do
             shards_by_axis = Enum.group_by(shards, & &1.axis)
 
             {_, _, starts_reverse, lengths_reverse} =
-              Enum.reduce(Tuple.to_list(input.shape), {shards_by_axis, 0, [], []}, fn axis_size,
-                                                                                      {shards_by_axis,
-                                                                                       axis,
-                                                                                       starts,
-                                                                                       lengths} ->
+              Enum.reduce(Tuple.to_list(input.shape), {shards_by_axis, 0, [], []}, fn
+                axis_size, {shards_by_axis, axis, starts, lengths} ->
                 {shards, shards_by_axis} = Map.pop(shards_by_axis, axis)
 
                 {starts, lengths} =
