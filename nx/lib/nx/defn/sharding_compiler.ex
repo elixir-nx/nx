@@ -176,11 +176,6 @@ defmodule Nx.Defn.ShardingCompiler do
   end
 
   @impl true
-  def __stream__(_key, _input, _acc, _vars, _fun, _args_list, _opts) do
-    raise "__stream__ not supported"
-  end
-
-  @impl true
   def __partitions_options__(_keyword) do
     raise "__partitions_options__ not supported"
   end
