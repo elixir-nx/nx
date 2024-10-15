@@ -34,26 +34,6 @@ defmodule Nx.Defn.Evaluator do
   end
 
   @impl true
-  def __stream__(_key, input, acc, vars, fun, [args], opts) do
-    count = Nx.Defn.Composite.count(input) + Nx.Defn.Composite.count(acc)
-    rest_params = Enum.drop(args, count)
-    hooks = Keyword.get(opts, :hooks, %{})
-    gc? = Keyword.get(opts, :garbage_collect, false)
-    {expr, output, cache} = precompile(fun, vars, hooks)
-
-    [
-      Nx.Defn.Stream.start_link(input, acc, fn input_params, acc ->
-        acc_params = [acc] |> Nx.Defn.Composite.flatten_list() |> Enum.map(&fn -> &1 end)
-        params = input_params ++ acc_params ++ rest_params
-
-        expr
-        |> composite_eval(%{params: params, gc: gc?}, [cache])
-        |> apply_output(output)
-      end)
-    ]
-  end
-
-  @impl true
   def __jit__(key, vars, fun, args_list, opts) do
     __compile__(key, vars, fun, opts).(args_list)
   end

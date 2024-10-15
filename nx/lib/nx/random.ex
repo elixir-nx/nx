@@ -15,6 +15,10 @@ defmodule Nx.Random do
         [0, 12]
       >
 
+  Or for example:
+
+      iex> Nx.Random.key(System.os_time())
+
   This key can then be used in any of Nx’s random number generation
   routines:
 
