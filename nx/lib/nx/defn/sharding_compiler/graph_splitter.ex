@@ -13,13 +13,29 @@ defmodule Nx.Defn.ShardingCompiler.GraphSplitter do
     state = %{
       expression_chain: [],
       nodes_to_replace: %{},
-      num_args: 0
+      args: %{}
     }
 
     cache = %{}
-    {expr, {_cache, state}} = composite_eval(expr, state, cache)
+    {expr, {cache, state}} = composite_eval(expr, state, cache)
 
-    {expr, state}
+    expr_chain =
+      Enum.reduce(
+        [{:none, expr, state.nodes_to_replace} | state.expression_chain],
+        [],
+        fn {category, expr, nodes_to_replace}, acc ->
+          [
+            {category,
+             composite_rewrite_subtree(
+               expr,
+               {cache, %{state | nodes_to_replace: nodes_to_replace}}
+             )}
+            | acc
+          ]
+        end
+      )
+
+    {expr_chain, Map.delete(state, :expression_chain)}
   end
 
   defp composite_eval(expr, state, cache) do
@@ -27,23 +43,21 @@ defmodule Nx.Defn.ShardingCompiler.GraphSplitter do
   end
 
   defp eval(%T{data: %Expr{id: id, op: op}} = ans, {cache, state}) do
-    dbg({op, Map.has_key?(cache, id), state.nodes_to_replace})
-
     case {cache, state.nodes_to_replace} do
-      {%{^id => res}, _} ->
-        {res, {cache, state}}
-
       {_, %{^id => res}} ->
         # Replace the node with the corresponding parameter
+        {res, {Map.put(cache, id, res), state}}
+
+      {%{^id => res}, _} ->
         {res, {cache, state}}
 
       {_, _} ->
         cond do
           op in @gather_ops ->
-            rewrite_args(op, ans, :gather, {cache, state})
+            rewrite_args(ans, :gather, {cache, state})
 
           op in @reduction_ops ->
-            rewrite_args(op, ans, :reduce, {cache, state})
+            rewrite_args(ans, :reduce, {cache, state})
 
           true ->
             eval_apply(op, ans, {cache, state})
@@ -55,17 +69,21 @@ defmodule Nx.Defn.ShardingCompiler.GraphSplitter do
     {other, {cache, state}}
   end
 
-  defp rewrite_args(op, expr, category, {cache, state}) when op in [:dot] do
+  defp rewrite_args(expr, category, {cache, state}) do
     {args, {cache, state}} = Nx.Defn.Tree.apply_args(expr, {cache, state}, &eval/2)
+
+    # We need to save this so that each previous stage
+    # isn't affected by following ones
+    nodes_to_replace = state.nodes_to_replace
 
     {args, {tensor_args, state}} =
       Enum.map_reduce(args, {[], state}, fn
         %T{} = expr, {tensor_args, state} ->
-          arg = Expr.parameter(expr, state.num_args)
+          arg = Expr.parameter(expr, map_size(state.args))
 
           state = %{
             state
-            | num_args: state.num_args + 1,
+            | args: Map.put(state.args, arg.data.id, nil),
               nodes_to_replace: Map.put(state.nodes_to_replace, expr.data.id, arg)
           }
 
@@ -80,7 +98,7 @@ defmodule Nx.Defn.ShardingCompiler.GraphSplitter do
     state =
       update_in(
         state.expression_chain,
-        &[{category, List.to_tuple(Enum.reverse(tensor_args))} | &1]
+        &[{category, List.to_tuple(Enum.reverse(tensor_args)), nodes_to_replace} | &1]
       )
 
     cache = Map.put(cache, new_expr.data.id, new_expr)
@@ -89,7 +107,7 @@ defmodule Nx.Defn.ShardingCompiler.GraphSplitter do
   end
 
   defp eval_apply(:parameter, %T{data: %Expr{id: id}} = expr, {cache, state}) do
-    state = update_in(state.num_args, &(&1 + 1))
+    state = put_in(state.args[id], nil)
     {expr, {Map.put(cache, id, expr), state}}
   end
 
@@ -102,19 +120,42 @@ defmodule Nx.Defn.ShardingCompiler.GraphSplitter do
   defp eval_apply(op, %T{data: %Expr{id: id}} = ans, {cache, state}) do
     {args, {cache, state}} = Nx.Defn.Tree.apply_args(ans, {cache, state}, &eval/2)
 
-    args =
-      Enum.map(args, fn
-        %T{data: %Expr{id: id}} = arg ->
-          case state.nodes_to_replace do
-            %{^id => new_arg} -> new_arg
-            _ -> arg
-          end
+    # args = composite_rewrite_subtree(args, {cache, state})
 
-        arg ->
-          arg
-      end)
+    # if op == :multiply do
+    #   dbg(args)
+    #   dbg(state.nodes_to_replace)
+    # end
 
     ans = put_in(ans.data.args, args)
     {ans, {Map.put(cache, id, ans), state}}
   end
+
+  defp composite_rewrite_subtree(args, {cache, state}) when is_list(args) do
+    Enum.map(args, fn
+      arg when is_list(arg) ->
+        arg
+
+      arg ->
+        composite_rewrite_subtree(arg, {cache, state})
+    end)
+  end
+
+  defp composite_rewrite_subtree(arg, {cache, state}) do
+    Composite.traverse(arg, &rewrite_subtree(&1, {cache, state}))
+  end
+
+  defp rewrite_subtree(%T{data: %Expr{id: id, args: args}} = expr, {cache, state}) do
+    case state.nodes_to_replace do
+      %{^id => res} ->
+        res
+
+      _ ->
+        args = composite_rewrite_subtree(args, {cache, state})
+
+        put_in(expr.data.args, args)
+    end
+  end
+
+  defp rewrite_subtree(other, _), do: other
 end
