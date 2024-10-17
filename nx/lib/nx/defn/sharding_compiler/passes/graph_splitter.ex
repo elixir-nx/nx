@@ -3,7 +3,6 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
 
   alias Nx.Tensor, as: T
   alias Nx.Defn.Expr
-  alias Nx.Defn.ShardingCompiler.Passes.ShardPropagation
   alias Nx.Defn.ShardingCompiler.Shard
 
   @gather_ops [:dot]
