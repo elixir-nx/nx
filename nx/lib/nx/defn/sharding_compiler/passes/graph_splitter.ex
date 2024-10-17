@@ -1,4 +1,4 @@
-defmodule Nx.Defn.ShardingCompiler.GraphSplitter do
+defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
   alias Nx.Defn.Composite
 
   alias Nx.Tensor, as: T
@@ -9,7 +9,7 @@ defmodule Nx.Defn.ShardingCompiler.GraphSplitter do
 
   def traverse(expr) do
     # expression_chain is going to be a reverse-accumulation of {category, subexpr}
-    # that we can then compile and chain-execute elsewhere. category is either :gather, :reduce or :root
+    # that we can then compile and chain-execute elsewhere. category is either :gather, :reduce or :none
     state = %{
       expression_chain: [],
       nodes_to_replace: %{},
@@ -18,13 +18,24 @@ defmodule Nx.Defn.ShardingCompiler.GraphSplitter do
     }
 
     cache = %{}
-    {expr, {_cache, state}} = composite_eval(expr, state, cache)
+    {expr, {cache, state}} = composite_eval(expr, state, cache)
 
     expr_chain =
       Enum.reduce(
         [{make_ref(), :none, expr, state.nodes_to_replace} | state.expression_chain],
         [],
         fn {id, category, expr, nodes_to_replace}, acc ->
+          # TO-DO: we need to also do a pass to avoid recalculating results that have been previously calculated.
+          # For example:
+          # x = arg0 + arg1
+          # y = arg0 - arg1
+          # z = x + y
+          # -----
+          # w = dot(z, arg1)
+          # y + w <- here, we currently have to recalculate y given that only z, arg0 and arg1 will be passed as arguments.
+          #          ideally, we should also pass y as a value to avoid recalculating it.
+          #          We might be able to calculate this in the first traversal somehow.
+
           {expr, used_args} =
             composite_rewrite_subtree(
               expr,
@@ -46,7 +57,7 @@ defmodule Nx.Defn.ShardingCompiler.GraphSplitter do
         end
       )
 
-    {expr_chain, Map.delete(state, :expression_chain)}
+    {expr_chain, Map.delete(state, :expression_chain), cache}
   end
 
   defp composite_eval(expr, state, cache) do
@@ -146,7 +157,7 @@ defmodule Nx.Defn.ShardingCompiler.GraphSplitter do
       %T{} = arg, acc ->
         composite_rewrite_subtree(arg, state, acc)
 
-      arg, acc when is_list(arg) ->
+      arg, acc ->
         {arg, acc}
     end)
   end
