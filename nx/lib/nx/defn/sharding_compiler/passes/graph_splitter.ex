@@ -128,7 +128,11 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
   end
 
   defp must_split_expr?(:dot, [t0, c0, _b0, t1, c1, _b1], shards) do
-    left_shards = shards[t0.data.id].shards
+    left_shards =
+      case shards[t0.data.id] do
+        %{shards: shards} -> shards
+        _ -> nil
+      end
 
     left_valid =
       Enum.all?(c0, fn axis ->
@@ -138,7 +142,11 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
         end
       end)
 
-    right_shards = shards[t1.data.id].shards
+    right_shards =
+      case shards[t1.data.id] do
+        %{shards: shards} -> shards
+        _ -> nil
+      end
 
     right_valid =
       Enum.all?(c1, fn axis ->
