@@ -40,7 +40,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
           #          ideally, we should also pass y as a value to avoid recalculating it.
           #          We might be able to calculate this in the first traversal somehow.
 
-          {expr, used_args} =
+          {expr, %{used_args: used_args}} =
             composite_rewrite_subtree(
               expr,
               %{state | nodes_to_replace: nodes_to_replace}
@@ -48,16 +48,38 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
 
           arg_remapping =
             used_args
-            |> Enum.sort_by(fn %T{data: %Expr{op: :parameter, args: [idx]}} -> idx end)
-            |> Enum.with_index(fn expr, idx -> {expr.data.id, put_in(expr.data.args, [idx])} end)
+            |> Enum.sort_by(fn {_id, {%T{data: %Expr{op: :parameter, args: [idx]}}, _shards}} ->
+              idx
+            end)
+            |> Enum.with_index(fn
+              {id, {expr, nil}}, idx ->
+                {id, put_in(expr.data.args, [idx])}
+
+              {id, {expr, shard_propagation}}, idx ->
+                expr = put_in(expr.data.args, [idx])
+                expr = Expr.metadata(expr, %{shards: shard_propagation.shards})
+                {id, expr}
+            end)
             |> Map.new()
 
           {expr, _} =
             composite_rewrite_subtree(expr, %{state | nodes_to_replace: arg_remapping})
 
+          expr =
+            Composite.traverse(expr, fn
+              %T{data: %Expr{id: id}} = t ->
+                if shard_propagation = state.shards[id] do
+                  Expr.metadata(t, %{shards: shard_propagation.shards})
+                else
+                  t
+                end
+
+              other ->
+                other
+            end)
+
           argument_sources = Map.take(state.args, Map.keys(arg_remapping))
 
-          # TO-DO: collect shards for expr and arguments here and annotate them in the chain below
           [{id, category, expr, argument_sources} | acc]
         end
       )
@@ -148,7 +170,8 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
           state = %{
             state
             | args: Map.put(state.args, arg.data.id, {stage_id, out_position}),
-              nodes_to_replace: Map.put(state.nodes_to_replace, expr.data.id, arg)
+              nodes_to_replace: Map.put(state.nodes_to_replace, expr.data.id, arg),
+              shards: Map.put(state.shards, arg.data.id, state.shards[expr.data.id])
           }
 
           {arg, {[expr | tensor_args], out_position + 1, state}}
@@ -190,7 +213,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
     {ans, {Map.put(cache, id, ans), state}}
   end
 
-  defp composite_rewrite_subtree(args, state, acc \\ MapSet.new())
+  defp composite_rewrite_subtree(args, state, acc \\ %{used_args: %{}})
 
   defp composite_rewrite_subtree(args, state, acc) when is_list(args) do
     Enum.map_reduce(args, acc, fn
@@ -205,10 +228,10 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
   defp composite_rewrite_subtree(%T{data: %Expr{id: id, op: :parameter}} = expr, state, acc) do
     case state.nodes_to_replace do
       %{^id => res} ->
-        {res, MapSet.put(acc, res)}
+        {res, put_in(acc.used_args[id], {res, state.shards[id]})}
 
       _ ->
-        {expr, MapSet.put(acc, expr)}
+        {expr, put_in(acc.used_args[id], {expr, state.shards[id]})}
     end
   end
 
@@ -220,7 +243,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
     case state.nodes_to_replace do
       %{^id => res} ->
         # nodes_to_replace always contains a param
-        {res, MapSet.put(acc, res)}
+        {res, put_in(acc.used_args[id], res)}
 
       _ ->
         {args, acc} = composite_rewrite_subtree(args, state, acc)
