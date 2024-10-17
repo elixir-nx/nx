@@ -3,16 +3,20 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
 
   alias Nx.Tensor, as: T
   alias Nx.Defn.Expr
+  alias Nx.Defn.ShardingCompiler.Passes.ShardPropagation
+  alias Nx.Defn.ShardingCompiler.Shard
 
   @gather_ops [:dot]
   @reduction_ops [:sum]
 
-  def traverse(expr) do
+  def traverse(expr, expr_shards \\ %{}) do
     # expression_chain is going to be a reverse-accumulation of {category, subexpr}
     # that we can then compile and chain-execute elsewhere. category is either :gather, :reduce or :none
     state = %{
       expression_chain: [],
       nodes_to_replace: %{},
+      # contains the sharding configuration for each node by id
+      shards: expr_shards,
       # args is a map of id -> {stage_id, output_container_position}
       args: %{}
     }
@@ -94,6 +98,38 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
   defp rewrite_args(expr, category, {cache, state}) do
     {args, {cache, state}} = Nx.Defn.Tree.apply_args(expr, {cache, state}, &eval/2)
 
+    if must_split_expr?(expr.data.op, args, state.shards) do
+      split_expr(expr, args, category, {cache, state})
+    else
+      {expr, {cache, state}}
+    end
+  end
+
+  defp must_split_expr?(:dot, [t0, c0, _b0, t1, c1, _b1], shards) do
+    left_shards = shards[t0.data.id].shards
+
+    left_valid =
+      Enum.all?(c0, fn axis ->
+        case left_shards[axis] do
+          [%Shard{start: 0, length: length}] -> length == elem(t0.shape, axis)
+          _ -> false
+        end
+      end)
+
+    right_shards = shards[t1.data.id].shards
+
+    right_valid =
+      Enum.all?(c1, fn axis ->
+        case right_shards[axis] do
+          [%Shard{start: 0, length: length}] -> length == elem(t1.shape, axis)
+          _ -> false
+        end
+      end)
+
+    not (left_valid and right_valid)
+  end
+
+  defp split_expr(expr, args, category, {cache, state}) do
     # We need to save this so that each previous stage
     # isn't affected by following ones
     nodes_to_replace = state.nodes_to_replace

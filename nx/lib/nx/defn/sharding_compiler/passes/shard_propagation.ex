@@ -5,7 +5,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
 
   alias Nx.Defn.ShardingCompiler.Shard
 
-  defstruct [:id, :shards, :input_tensor_shardings, :parameter_ids_to_index]
+  defstruct [:id, :shards, :input_tensor_shardings, :parameter_ids_to_index, :expr]
 
   def traverse(expr, tensor_shardings) do
     {container, {cache, state}} =
@@ -13,7 +13,8 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
         expr,
         %{
           tensor_shardings: tensor_shardings,
-          parameter_ids_to_index: %{}
+          parameter_ids_to_index: %{},
+          expr_shards: %{}
         },
         %{}
       )
@@ -34,7 +35,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
         shards
       end
 
-    data = %__MODULE__{id: make_ref(), shards: shards}
+    data = %__MODULE__{id: make_ref(), shards: shards, expr: tensor.data}
     %{tensor | data: data}
   end
 
@@ -55,11 +56,15 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
         {axis, [0..(elem(t.shape, axis) - 1)]}
       end)
 
-    {shard_from_config(t, config), {cache, state}}
+    expr = shard_from_config(t, config)
+    state = put_in(state.expr_shards[expr.data.id], expr.data)
+    {expr, {cache, state}}
   end
 
   defp eval(%T{data: %Expr{op: :constant, args: [_constant]}} = ans, {cache, state}) do
-    {shard_from_config(ans, %{0 => [0..0]}), {cache, state}}
+    expr = shard_from_config(ans, %{0 => [0..0]})
+    state = put_in(state.expr_shards[expr.data.id], expr.data)
+    {expr, {cache, state}}
   end
 
   defp eval(%T{data: %Expr{op: :metadata, args: [expr, _meta]}}, {cache, state}) do
@@ -85,12 +90,15 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
     res = put_shards(expr, shards, input_id: id)
 
     state = put_in(state.parameter_ids_to_index[id], i)
+    state = put_in(state.expr_shards[id], res.data)
+
     {res, {Map.put(cache, id, res), state}}
   end
 
   defp eval_apply(:elem, %T{data: %Expr{id: id, args: [tuple, i]}}, {cache, state}) do
     {tuple, cache} = composite_traverse(tuple, state, cache)
     res = elem(tuple, i)
+    state = put_in(state.expr_shards[id], res.data)
     {res, {Map.put(cache, id, res), state}}
   end
 
@@ -98,6 +106,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
     {args, {cache, state}} = Nx.Defn.Tree.apply_args(ans, {cache, state}, &eval/2)
 
     {res, state} = apply_op(op, ans, args, state)
+    state = put_in(state.expr_shards[id], res.data)
     {res, {Map.put(cache, id, res), state}}
   end
 

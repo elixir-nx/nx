@@ -2,6 +2,9 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
   use ExUnit.Case, async: true
 
   alias Nx.Defn.ShardingCompiler.Passes.GraphSplitter
+  alias Nx.Defn.ShardingCompiler.Passes.ShardPropagation
+  alias Nx.Defn.ShardingCompiler.Shard
+
   alias Nx.Tensor, as: T
   alias Nx.Defn.Expr
 
@@ -233,6 +236,82 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
       assert %T{data: %Expr{id: ^arg_5_id, op: :parameter, args: [1]}} = a
 
       assert %{arg_2_id => nil, arg_5_id => {stage_1_id, 0}} == stage_2_argument_sources
+    end
+
+    test "does not split on dot if arguments are not sharded on the reduction axis" do
+      arg0 =
+        Nx.tensor([
+          [1, 2, 3],
+          [4, 5, 6]
+        ])
+
+      arg1 =
+        Nx.tensor([
+          [1, 2],
+          [3, 4],
+          [5, 6]
+        ])
+
+      expr =
+        Nx.Defn.debug_expr(fn arg0, arg1 ->
+          x = Nx.add(arg0, 1)
+          y = Nx.subtract(arg1, 2)
+          z = Nx.dot(x, y)
+          w = Nx.multiply(z, 3)
+          Nx.divide(w, 4)
+        end).(arg0, arg1)
+
+      {sharded_expr, _cache, %{expr_shards: expr_shards}} =
+        ShardPropagation.traverse(expr, %{
+          0 => Shard.from_config(arg0, %{0 => [0..0, 1..1], 1 => [0..2]}),
+          1 => Shard.from_config(arg1, %{0 => [0..2], 1 => [0..0, 1..1]})
+        })
+
+      assert {[{_id, :none, out_expr, sources}], _state, _cache} =
+               GraphSplitter.traverse(expr, expr_shards)
+
+      assert out_expr == expr
+      assert Enum.all?(sources, fn {_id, source} -> source == nil end)
+    end
+
+    test "splits on dot if arguments are not sharded on the reduction axis" do
+      arg0 =
+        Nx.tensor([
+          [1, 2, 3],
+          [4, 5, 6]
+        ])
+
+      arg1 =
+        Nx.tensor([
+          [1, 2],
+          [3, 4],
+          [5, 6]
+        ])
+
+      expr =
+        Nx.Defn.debug_expr(fn arg0, arg1 ->
+          x = Nx.add(arg0, 1)
+          y = Nx.subtract(arg1, 2)
+          z = Nx.dot(x, y)
+          w = Nx.multiply(z, 3)
+          Nx.divide(w, 4)
+        end).(arg0, arg1)
+
+      {_sharded_expr, _cache, %{expr_shards: expr_shards}} =
+        ShardPropagation.traverse(expr, %{
+          0 => Shard.from_config(arg0, %{}),
+          1 => Shard.from_config(arg1, %{0 => [0..2], 1 => [0..0, 1..1]})
+        })
+
+      assert {[_, _], _state, _cache} = GraphSplitter.traverse(expr, expr_shards)
+
+      {_sharded_expr, _cache, %{expr_shards: expr_shards}} =
+        ShardPropagation.traverse(expr, %{
+          0 => Shard.from_config(arg0, %{0 => [0..0, 1..1], 1 => [0..2]}),
+          1 => Shard.from_config(arg1, %{})
+        })
+
+      assert {[_, _], _state, _cache} = GraphSplitter.traverse(expr, expr_shards)
     end
   end
 end
