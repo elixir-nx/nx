@@ -1,12 +1,11 @@
 defmodule Nx.Defn.ShardingCompiler do
-  alias Nx.Defn.Composite
   alias Nx.Tensor, as: T
   alias Nx.Defn.Expr
 
   alias Nx.Defn.ShardingCompiler.Shard
 
   alias Nx.Defn.ShardingCompiler.Passes.ShardPropagation
-  alias Nx.Defn.ShardingCompiler.Passes.GraphSplitter
+  # alias Nx.Defn.ShardingCompiler.Passes.GraphSplitter
 
   @behaviour Nx.Defn.Compiler
 
