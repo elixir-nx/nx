@@ -83,7 +83,9 @@ defmodule EXLA.Defn do
       precision: Keyword.get(options, :precision, :default),
       builder: function,
       params: Map.new(params ++ outfeed.infeeds),
-      scope_ids: Tree.scope_ids(expr)
+      scope_ids: Tree.scope_ids(expr),
+      custom_operator_lowering_functions:
+        Keyword.get(options, :custom_operator_lowering_functions, %{})
     }
 
     {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
@@ -570,7 +572,14 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(op, expr, state, cache) do
     {args, cache} = Tree.apply_args(expr, cache, &recur_operator(&1, state, &2))
-    {to_operator(op, args, expr, state), cache}
+
+    case state.custom_operator_lowering_functions do
+      %{^op => fun} ->
+        {fun.(state.builder, expr, args), cache}
+
+      _ ->
+        {to_operator(op, args, expr, state), cache}
+    end
   end
 
   ## to_operator creation

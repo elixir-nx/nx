@@ -1,16 +1,17 @@
 defmodule EXLA.MLIR.Value do
-  @moduledoc false
-  # Representation of an MLIR Value.
-  #
-  # MLIR Values are SSA and generally are either operations or
-  # block arguments. This module is used to construct most of the
-  # MLIR operations.
-  #
-  # See the full specification of the stablehlo MLIR dialect [1]. Note
-  # that the URL points to the exact stablehlo revision that we depend
-  # on via elixir-nx/xla.
-  #
-  # [1]: https://github.com/openxla/stablehlo/blob/04291aea6b50d9573e6f4de184938d83b9564cd0/docs/spec.md
+  @moduledoc """
+  Representation of an MLIR Value.
+
+  MLIR Values are SSA and generally are either operations or
+  block arguments. This module is used to construct most of the
+  MLIR operations.
+
+  See the full specification of the stablehlo MLIR dialect [1]. Note
+  that the URL points to the exact stablehlo revision that we depend
+  on via elixir-nx/xla.
+
+  [1]: https://github.com/openxla/stablehlo/blob/04291aea6b50d9573e6f4de184938d83b9564cd0/docs/spec.md
+  """
 
   defstruct [:ref, :function]
 
