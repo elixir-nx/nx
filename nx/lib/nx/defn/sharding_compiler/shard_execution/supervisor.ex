@@ -84,12 +84,13 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.Supervisor do
               {root.id, shard}
             end
 
-          data_section_for_input =
+          data_section_id_for_input =
             Enum.map(output_roots_by_dim, fn {_axis, roots} ->
-              Enum.find(roots, &shards_by_root[&1.id])
+              %Shard{} = shard = Enum.find(roots, &shards_by_root[&1.id])
+              shard.id
             end)
 
-          {arg_idx, {arg_id, data_section_for_input}}
+          {arg_idx, {arg_id, data_section_id_for_input}}
         end
 
       {data_section_id, arg_sections, starts, lengths}
