@@ -267,7 +267,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
   end
 
   defp rewrite_subtree(
-         %T{data: %Expr{op: :optional, id: id, args: [_call, subexpr, _fun]}},
+         %T{data: %Expr{op: :optional, id: id, args: [call, subexpr, fun]}} = expr,
          state,
          acc
        ) do
@@ -276,9 +276,12 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
         {res, put_in(acc.used_args[id], {res, state.shards[id]})}
 
       _ ->
-        # TO-DO: allow for the optional node to go through the pipeline
-        # We're instead always relying on the default implementation here.
-        rewrite_subtree(subexpr, state, acc)
+        {call, acc} = rewrite_subtree(call, state, acc)
+        # `subexpr` is hermetic, in the sense that it is a self-contained scope
+        # from which the arguments always come from `call`, so we can
+        # keep it as is.
+
+        {put_in(expr.data.args, [call, subexpr, fun]), acc}
     end
   end
 
