@@ -502,5 +502,60 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
       assert subexpr_arg_0_id != arg_0_id
       assert subexpr_arg_0_id != arg_1_id
     end
+
+    test "supports in-line anonymous functions" do
+      arg0 =
+        Nx.u8([
+          [1, 0, 1],
+          [1, 1, 1]
+        ])
+
+      expr =
+        Nx.Defn.debug_expr(fn a, b ->
+          x = Nx.add(b, 1)
+          y = Nx.sum(x, axes: [1])
+          f = fn a -> Nx.equal(a, 0) end
+          z = f.(y)
+          Nx.subtract(z, a)
+        end).(1, arg0)
+
+      assert {[%Stage{} = stage_0, %Stage{} = stage_1], _cache, _state} =
+               GraphSplitter.traverse(expr)
+
+      [{arg1_id, %T{shape: {2, 3}, type: {:u, 8}, data: %Expr{args: [0]}}}] =
+        Enum.to_list(stage_0.arguments)
+
+      assert stage_0.argument_sources == %{arg1_id => {nil, 1}}
+
+      stage_1_args =
+        Enum.sort_by(stage_1.arguments, fn {_id, %T{data: %Expr{op: :parameter, args: [idx]}}} ->
+          idx
+        end)
+
+      assert [
+               {arg_0_id, %T{shape: {}, type: {:s, 32}}},
+               {arg_1_id, %T{shape: {2, 3}, type: {:u, 8}}}
+             ] =
+               stage_1_args
+
+      assert stage_1.argument_sources == %{arg_0_id => {nil, 0}, arg_1_id => {stage_0.id, 0}}
+
+      assert %T{data: %Expr{op: :subtract, args: [c, d]}} = stage_1.expr
+
+      assert %T{
+               data: %Expr{
+                 op: :equal,
+                 args: [
+                   left,
+                   %T{data: %Expr{op: :constant, args: [0]}}
+                 ]
+               }
+             } = c
+
+      assert %T{data: %Expr{id: ^arg_0_id, op: :parameter, args: [0]}} = d
+
+      assert %T{data: %Expr{op: :sum, args: [a, [axes: [1], keep_axes: false]]}} = left
+      assert %T{data: %Expr{id: ^arg_1_id, op: :parameter, args: [1]}} = a
+    end
   end
 end
