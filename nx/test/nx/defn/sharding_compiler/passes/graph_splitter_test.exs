@@ -379,7 +379,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
              end)
     end
 
-    test "splits on dot if arguments are not sharded on the reduction axis" do
+    test "splits on dot if arguments are sharded on the reduction axis" do
       arg0 =
         Nx.tensor([
           [1, 2, 3],
@@ -416,7 +416,8 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
           1 => Shard.from_config(arg1, %{})
         })
 
-      assert {[%Stage{expr: stage_0_expr}, %Stage{expr: stage_1_expr}], _cache, _state} =
+      assert {[%Stage{expr: stage_0_expr, arguments: args}, %Stage{expr: stage_1_expr}], _cache,
+              _state} =
                GraphSplitter.traverse(expr, expr_shards)
 
       assert {%T{data: %Expr{op: :metadata, args: [_left, %{shards: left_shards}]}},
