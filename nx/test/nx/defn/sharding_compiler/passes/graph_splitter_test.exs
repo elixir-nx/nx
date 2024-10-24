@@ -2,6 +2,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
   use ExUnit.Case, async: true
 
   alias Nx.Defn.ShardingCompiler.Passes.GraphSplitter
+  alias Nx.Defn.ShardingCompiler.Passes.GraphSplitter.Stage
   alias Nx.Defn.ShardingCompiler.Passes.ShardPropagation
   alias Nx.Defn.ShardingCompiler.Shard
 
@@ -19,14 +20,26 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
           Nx.divide(w, 4)
         end).(Nx.tensor([1, 2]), Nx.tensor([3, 4]))
 
-      {chain, state, cache} = GraphSplitter.traverse(expr)
+      {chain, cache, state} = GraphSplitter.traverse(expr)
 
       assert [
-               {stage_0_id, :gather, stage_0_expr, stage_0_argument_sources},
-               {_stage_1_id, :none, stage_1_expr, stage_1_argument_sources}
+               %Stage{
+                 id: stage_0_id,
+                 category: :gather,
+                 expr: stage_0_expr,
+                 argument_sources: stage_0_argument_sources
+               },
+               %Stage{
+                 id: _stage_1_id,
+                 category: :none,
+                 expr: stage_1_expr,
+                 argument_sources: stage_1_argument_sources
+               }
              ] = chain
 
-      assert Enum.all?(stage_0_argument_sources, fn {_id, source} -> source == nil end)
+      assert Enum.all?(stage_0_argument_sources, fn {_id, {source_id, _idx}} ->
+               source_id == nil
+             end)
 
       assert [{2, arg_2_original_node_id, arg_2_id}, {3, arg_3_original_node_id, arg_3_id}] =
                state.nodes_to_replace
@@ -123,15 +136,32 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
           |> Nx.subtract(arg2)
         end).(Nx.tensor([[1, 2]]), Nx.tensor([[3], [4]]), Nx.tensor([5, 6]))
 
-      {chain, state, cache} = GraphSplitter.traverse(expr)
+      {chain, cache, state} = GraphSplitter.traverse(expr)
 
       assert [
-               {stage_0_id, :gather, stage_0_expr, stage_0_argument_sources},
-               {stage_1_id, :reduce, stage_1_expr, stage_1_argument_sources},
-               {_stage_2_id, :none, stage_2_expr, stage_2_argument_sources}
+               %Stage{
+                 id: stage_0_id,
+                 category: :gather,
+                 expr: stage_0_expr,
+                 argument_sources: stage_0_argument_sources
+               },
+               %Stage{
+                 id: stage_1_id,
+                 category: :reduce,
+                 expr: stage_1_expr,
+                 argument_sources: stage_1_argument_sources
+               },
+               %Stage{
+                 id: _stage_2_id,
+                 category: :none,
+                 expr: stage_2_expr,
+                 argument_sources: stage_2_argument_sources
+               }
              ] = chain
 
-      assert Enum.all?(stage_0_argument_sources, fn {_id, source} -> source == nil end)
+      assert Enum.all?(stage_0_argument_sources, fn {_id, {source_id, _idx}} ->
+               source_id == nil
+             end)
 
       assert map_size(state.args) == 6
 
@@ -235,7 +265,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
       assert %T{data: %Expr{op: :sum, args: [^a, [axes: nil, keep_axes: false]]}} = b
       assert %T{data: %Expr{id: ^arg_5_id, op: :parameter, args: [1]}} = a
 
-      assert %{arg_2_id => nil, arg_5_id => {stage_1_id, 0}} == stage_2_argument_sources
+      assert %{arg_2_id => {nil, 2}, arg_5_id => {stage_1_id, 0}} == stage_2_argument_sources
     end
 
     test "does not split on dot if arguments are not sharded on the reduction axis" do
@@ -268,7 +298,8 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
         })
 
       # This ensures the data hasn't been split
-      assert {[{_id, :none, out_expr, sources}], _state, _cache} =
+      assert {[%Stage{category: :none, expr: out_expr, argument_sources: sources}], _cache,
+              _state} =
                GraphSplitter.traverse(expr, expr_shards)
 
       # Following assertions ensure that:
@@ -343,7 +374,9 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
                1 => [%Shard{start: 0, length: 1}, %Shard{start: 1, length: 1}]
              } = arg1_shards
 
-      assert Enum.all?(sources, fn {_id, source} -> source == nil end)
+      assert Enum.all?(sources, fn {_id, {source_id, _idx}} ->
+               source_id == nil
+             end)
     end
 
     test "splits on dot if arguments are not sharded on the reduction axis" do
@@ -375,7 +408,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
           1 => Shard.from_config(arg1, %{0 => [0..2], 1 => [0..0, 1..1]})
         })
 
-      assert {[_, _], _state, _cache} = GraphSplitter.traverse(expr, expr_shards)
+      assert {[_, _], _cache, _state} = GraphSplitter.traverse(expr, expr_shards)
 
       {sharded_expr, _cache, %{expr_shards: expr_shards}} =
         ShardPropagation.traverse(expr, %{
@@ -383,7 +416,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
           1 => Shard.from_config(arg1, %{})
         })
 
-      assert {[{_, _, stage_0_expr, _}, {_, _, stage_1_expr, _}], _state, _cache} =
+      assert {[%Stage{expr: stage_0_expr}, %Stage{expr: stage_1_expr}], _cache, _state} =
                GraphSplitter.traverse(expr, expr_shards)
 
       assert {%T{data: %Expr{op: :metadata, args: [_left, %{shards: left_shards}]}},
