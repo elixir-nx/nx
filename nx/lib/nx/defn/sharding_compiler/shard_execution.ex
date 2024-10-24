@@ -1,5 +1,14 @@
 defmodule Nx.Defn.ShardingCompiler.ShardExecution do
-  defstruct [:compiled_fun, :stage_id, :input_data_sections, :output_data_sections]
+  # processes a single shard of an output entry, given the corresponding input data sections (1 per input)
+  defstruct [
+    :compiled_fun,
+    :stage,
+    :input_data_sections,
+    :output_entry_index,
+    :output_data_section_id,
+    :output_starts,
+    :output_lengths
+  ]
 
   use GenServer
 
@@ -16,7 +25,7 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
     Process.send_after(self(), 0, :initialize)
 
     {:ok,
-     %{
+     %__MODULE__{
        stage: stage,
        input_data_sections: input_data_sections,
        output_entry_index: output_entry_index,
