@@ -35,7 +35,8 @@ defmodule EXLA.MixProject do
 
         %{
           "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}",
-          "CWD_RELATIVE_TO_PRIV_PATH" => cwd_relative_to_priv
+          "CWD_RELATIVE_TO_PRIV_PATH" => cwd_relative_to_priv,
+          "EXLA_VERSION" => "#{@version}"
         }
       end,
       make_args: make_args
@@ -133,7 +134,23 @@ defmodule EXLA.MixProject do
     {:ok, []}
   end
 
-  defp cached_make(_) do
+  defp cached_make(args) do
+    {parsed, _args, _invalid} =
+      OptionParser.parse(args, strict: [clean_libexla_cache: :boolean, force: :boolean])
+
+    clean_libexla_cache? = parsed[:clean_libexla_cache] == true
+    force? = parsed[:force] == true
+
+    if force? do
+      Mix.shell().info("Removing cached .o files in cache/#{@version}/objs")
+      File.rm_rf!("cache/#{@version}/objs")
+    end
+
+    if clean_libexla_cache? or force? do
+      Mix.shell().info("Removing cached libexla.so files in cache/libexla.so")
+      File.rm_rf!("cache/libexla.so")
+    end
+
     contents =
       for path <- Path.wildcard("c_src/**/*"),
           {:ok, contents} <- [File.read(path)],
@@ -150,14 +167,21 @@ defmodule EXLA.MixProject do
     cached_so = Path.join([xla_cache_dir(), "exla", cache_key, "libexla.so"])
     cached? = File.exists?(cached_so)
 
-    if cached? do
-      Mix.shell().info("Using libexla.so from #{cached_so}")
-      File.cp!(cached_so, "cache/libexla.so")
+    cond do
+      cached? and clean_libexla_cache? ->
+        Mix.shell().info("Removing libexla.so cache at #{cached_so}")
+
+      cached? ->
+        Mix.shell().info("Using libexla.so from #{cached_so}")
+        File.cp!(cached_so, "cache/libexla.so")
+
+      true ->
+        :ok
     end
 
-    result = Mix.Tasks.Compile.ElixirMake.run([])
+    result = Mix.Tasks.Compile.ElixirMake.run(args)
 
-    if not cached? and match?({:ok, _}, result) do
+    if (not cached? or clean_libexla_cache?) and match?({:ok, _}, result) do
       Mix.shell().info("Caching libexla.so at #{cached_so}")
       File.mkdir_p!(Path.dirname(cached_so))
       File.cp!("cache/libexla.so", cached_so)
