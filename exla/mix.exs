@@ -138,19 +138,19 @@ defmodule EXLA.MixProject do
     force_rebuild_mode =
       case System.get_env("EXLA_FORCE_REBUILD", "") do
         "" ->
-          false
+          :none
 
         "0" ->
-          false
+          :none
 
         "partial" ->
           :partial
 
         "true" ->
-          true
+          :full
 
         "1" ->
-          true
+          :full
 
         value ->
           Mix.raise(
@@ -161,7 +161,7 @@ defmodule EXLA.MixProject do
     File.mkdir_p!("cache/#{@version}")
 
     # remove only in full mode
-    if force_rebuild_mode == true do
+    if force_rebuild_mode in [:partial, :full] do
       Mix.shell().info("Removing cached .o files in cache/#{@version}/objs")
       File.rm_rf!("cache/#{@version}/objs")
     end
@@ -180,10 +180,9 @@ defmodule EXLA.MixProject do
       "elixir-#{System.version()}-erts-#{:erlang.system_info(:version)}-xla-#{Application.spec(:xla, :vsn)}-exla-#{@version}-#{md5}"
 
     cached_so = Path.join([xla_cache_dir(), "exla", cache_key, "libexla.so"])
-    cached? = File.exists?(cached_so) and force_rebuild_mode == false
+    cached? = File.exists?(cached_so) and force_rebuild_mode == :none
 
-    # remove in both partial and full modes
-    if force_rebuild_mode do
+    if force_rebuild_mode in [:partial, :full] do
       Mix.shell().info("Removing cached libexla.so file in cache/#{@version}/libexla.so")
       File.rm_rf!("cache/#{@version}/libexla.so")
 
