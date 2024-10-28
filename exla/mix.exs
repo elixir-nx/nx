@@ -135,11 +135,10 @@ defmodule EXLA.MixProject do
   end
 
   defp cached_make(args) do
-    {parsed, _args, _invalid} =
-      OptionParser.parse(args, strict: [clean_libexla_cache: :boolean, force: :boolean])
+    clean_libexla_cache? = System.get_env("EXLA_CLEAN_LIBEXLA_CACHE") in ["1", "true"]
+    force? = System.get_env("EXLA_FORCE") in ["1", "true"]
 
-    clean_libexla_cache? = parsed[:clean_libexla_cache] == true
-    force? = parsed[:force] == true
+    File.mkdir_p!("cache/#{@version}")
 
     if force? do
       Mix.shell().info("Removing cached .o files in cache/#{@version}/objs")
@@ -147,8 +146,8 @@ defmodule EXLA.MixProject do
     end
 
     if clean_libexla_cache? or force? do
-      Mix.shell().info("Removing cached libexla.so files in cache/libexla.so")
-      File.rm_rf!("cache/libexla.so")
+      Mix.shell().info("Removing cached libexla.so file in cache/#{@version}/libexla.so")
+      File.rm_rf!("cache/#{@version}/libexla.so")
     end
 
     contents =
@@ -173,7 +172,7 @@ defmodule EXLA.MixProject do
 
       cached? ->
         Mix.shell().info("Using libexla.so from #{cached_so}")
-        File.cp!(cached_so, "cache/libexla.so")
+        File.cp!(cached_so, "cache/#{@version}/libexla.so")
 
       true ->
         :ok
@@ -184,7 +183,7 @@ defmodule EXLA.MixProject do
     if (not cached? or clean_libexla_cache?) and match?({:ok, _}, result) do
       Mix.shell().info("Caching libexla.so at #{cached_so}")
       File.mkdir_p!(Path.dirname(cached_so))
-      File.cp!("cache/libexla.so", cached_so)
+      File.cp!("cache/#{@version}/libexla.so", cached_so)
     end
 
     result

@@ -58,7 +58,7 @@ We recommend following the steps below:
   1. If the error appeared after upgrading EXLA, ensure that you have the proper dependency versions given by [XLA](https://github.com/elixir-nx/xla). Afterwards, compile with `mix compile --clean-libexla-cache --force` to clean up all cached files.
      * Besides the XLA dependency versions, ensuring `gcc` (or your compiler of choice), `libc` and `make` are compatible is also important.
      * Remember to save the compilation logs from this step for further debugging.
-     * It is a good idea to save the `cache/libexla.so` file so that the team can inspect its contents if needed.
+     * It is a good idea to save the `cache/<version>/libexla.so` file so that the team can inspect its contents if needed.
   2. If the error persists, look for the `** (RuntimeError) Failed to load NIF library.` exception on application start-up.
     This exception should provide more information on what's the issue when loading the NIF. Share these logs in an issue on GitHub
     so that the Nx team can investigate further.
