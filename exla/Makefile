@@ -8,8 +8,8 @@ XLA_EXTENSION_LIB = $(XLA_EXTENSION_DIR)/lib
 XLA_INCLUDE_PATH = $(XLA_EXTENSION_DIR)/include
 
 # Cache configuration
-EXLA_CACHE_SO = cache/libexla.so
-EXLA_CACHE_OBJ_DIR = cache/objs
+EXLA_CACHE_SO = cache/$(EXLA_VERSION)/libexla.so
+EXLA_CACHE_OBJ_DIR = cache/$(EXLA_VERSION)/objs
 
 # Private configuration
 EXLA_DIR = c_src/exla

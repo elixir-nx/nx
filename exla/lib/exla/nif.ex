@@ -4,7 +4,20 @@ defmodule EXLA.NIF do
 
   def __on_load__ do
     path = :filename.join(:code.priv_dir(:exla), ~c"libexla")
-    :erlang.load_nif(path, 0)
+
+    case :erlang.load_nif(path, 0) do
+      :ok ->
+        :ok
+
+      {:error, {reason, text}} ->
+        raise """
+        Failed to load NIF library.
+        Follow the steps in the :exla README Troubleshooting section for more information.
+
+        #{inspect(reason)}
+        #{text}
+        """
+    end
   end
 
   def mlir_new_thread_pool(_concurrency), do: :erlang.nif_error(:undef)

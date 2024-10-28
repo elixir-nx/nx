@@ -35,7 +35,8 @@ defmodule EXLA.MixProject do
 
         %{
           "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}",
-          "CWD_RELATIVE_TO_PRIV_PATH" => cwd_relative_to_priv
+          "CWD_RELATIVE_TO_PRIV_PATH" => cwd_relative_to_priv,
+          "EXLA_VERSION" => "#{@version}"
         }
       end,
       make_args: make_args
@@ -133,7 +134,38 @@ defmodule EXLA.MixProject do
     {:ok, []}
   end
 
-  defp cached_make(_) do
+  defp cached_make(args) do
+    force_rebuild_mode =
+      case System.get_env("EXLA_FORCE_REBUILD", "") do
+        "" ->
+          :none
+
+        "0" ->
+          :none
+
+        "partial" ->
+          :partial
+
+        "true" ->
+          :full
+
+        "1" ->
+          :full
+
+        value ->
+          Mix.raise(
+            "invalid value for EXLA_FORCE_REBUILD: '#{value}'. Expected one of: partial, true"
+          )
+      end
+
+    File.mkdir_p!("cache/#{@version}")
+
+    # remove only in full mode
+    if force_rebuild_mode in [:partial, :full] do
+      Mix.shell().info("Removing cached .o files in cache/#{@version}/objs")
+      File.rm_rf!("cache/#{@version}/objs")
+    end
+
     contents =
       for path <- Path.wildcard("c_src/**/*"),
           {:ok, contents} <- [File.read(path)],
@@ -148,19 +180,27 @@ defmodule EXLA.MixProject do
       "elixir-#{System.version()}-erts-#{:erlang.system_info(:version)}-xla-#{Application.spec(:xla, :vsn)}-exla-#{@version}-#{md5}"
 
     cached_so = Path.join([xla_cache_dir(), "exla", cache_key, "libexla.so"])
-    cached? = File.exists?(cached_so)
+    cached? = File.exists?(cached_so) and force_rebuild_mode == :none
+
+    if force_rebuild_mode in [:partial, :full] do
+      Mix.shell().info("Removing cached libexla.so file in cache/#{@version}/libexla.so")
+      File.rm_rf!("cache/#{@version}/libexla.so")
+
+      Mix.shell().info("Removing libexla.so cache at #{cached_so}")
+      File.rm!(cached_so)
+    end
 
     if cached? do
       Mix.shell().info("Using libexla.so from #{cached_so}")
-      File.cp!(cached_so, "cache/libexla.so")
+      File.cp!(cached_so, "cache/#{@version}/libexla.so")
     end
 
-    result = Mix.Tasks.Compile.ElixirMake.run([])
+    result = Mix.Tasks.Compile.ElixirMake.run(args)
 
     if not cached? and match?({:ok, _}, result) do
       Mix.shell().info("Caching libexla.so at #{cached_so}")
       File.mkdir_p!(Path.dirname(cached_so))
-      File.cp!("cache/libexla.so", cached_so)
+      File.cp!("cache/#{@version}/libexla.so", cached_so)
     end
 
     result
