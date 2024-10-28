@@ -48,6 +48,26 @@ EXLA relies on the [XLA](https://github.com/elixir-nx/xla) package to provide th
 
 For cross-compilation, you need to [set your `XLA_TARGET_PLATFORM` variable](https://github.com/elixir-nx/xla#xla_target_platform) to the correct target platform value (i.e. `aarch64-linux-gnu` for the Raspberry Pi 4).
 
+## Troubleshooting
+
+EXLA uses NIFs (C-interface code called from Elixir) for part of its functionality.
+If for any reason these fail to compile or load, troubleshooting can be tricky.
+
+We recommend following the steps below:
+
+  1. If the error appeared after upgrading EXLA, ensure that you have the proper dependency versions given by [XLA](https://github.com/elixir-nx/xla). Afterwards, compile with `mix compile` after setting `EXLA_FORCE_REBUILD` to clean up cached files:
+     * `EXLA_FORCE_REBUILD=partial`: Removes the only the libexla.so caches (both local and global ones).
+     * `EXLA_FORCE_REBUILD=true`: Removes the libexla.so caches but also removes the intermediate `.o` compilation artifacts retained from previous builds.
+
+     Additional notes on compilation:
+     * Besides the XLA dependency versions, ensuring `gcc` (or your compiler of choice), `libc` and `make` are compatible is also important.
+     * Remember to save the compilation logs from this step for further debugging.
+     * It is a good idea to save the `cache/<version>/libexla.so` file so that the team can inspect its contents if needed.
+  2. If the error persists, look for the `** (RuntimeError) Failed to load NIF library.` exception on application start-up.
+    This exception should provide more information on what's the issue when loading the NIF. Share these logs in an issue on GitHub
+    so that the Nx team can investigate further.
+
+
 ## Contributing
 
 ### Building locally
