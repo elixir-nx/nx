@@ -14,7 +14,7 @@ defmodule EXLA.NIF do
         Failed to load NIF library.
         Follow the steps in the :exla README Troubleshooting section for more information.
 
-        #{reason}
+        #{inspect(reason)}
         #{text}
         """
     end
