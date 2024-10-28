@@ -135,19 +135,35 @@ defmodule EXLA.MixProject do
   end
 
   defp cached_make(args) do
-    clean_libexla_cache? = System.get_env("EXLA_CLEAN_LIBEXLA_CACHE") in ["1", "true"]
-    force? = System.get_env("EXLA_FORCE") in ["1", "true"]
+    force_rebuild_mode =
+      case System.get_env("EXLA_FORCE_REBUILD") do
+        "" ->
+          false
+
+        "0" ->
+          false
+
+        "partial" ->
+          :partial
+
+        "true" ->
+          true
+
+        "1" ->
+          true
+
+        value ->
+          Mix.raise(
+            "invalid value for EXLA_FORCE_REBUILD: #{value}. Expected one of: partial, true"
+          )
+      end
 
     File.mkdir_p!("cache/#{@version}")
 
-    if force? do
+    # remove only in full mode
+    if force_rebuild_mode == true do
       Mix.shell().info("Removing cached .o files in cache/#{@version}/objs")
       File.rm_rf!("cache/#{@version}/objs")
-    end
-
-    if clean_libexla_cache? or force? do
-      Mix.shell().info("Removing cached libexla.so file in cache/#{@version}/libexla.so")
-      File.rm_rf!("cache/#{@version}/libexla.so")
     end
 
     contents =
@@ -164,24 +180,25 @@ defmodule EXLA.MixProject do
       "elixir-#{System.version()}-erts-#{:erlang.system_info(:version)}-xla-#{Application.spec(:xla, :vsn)}-exla-#{@version}-#{md5}"
 
     cached_so = Path.join([xla_cache_dir(), "exla", cache_key, "libexla.so"])
-    cached? = File.exists?(cached_so)
+    cached? = File.exists?(cached_so) and force_rebuild_mode == false
 
-    cond do
-      cached? and clean_libexla_cache? ->
-        Mix.shell().info("Removing libexla.so cache at #{cached_so}")
-        File.rm!(cached_so)
+    # remove in both partial and full modes
+    if force_rebuild_mode do
+      Mix.shell().info("Removing cached libexla.so file in cache/#{@version}/libexla.so")
+      File.rm_rf!("cache/#{@version}/libexla.so")
 
-      cached? ->
-        Mix.shell().info("Using libexla.so from #{cached_so}")
-        File.cp!(cached_so, "cache/#{@version}/libexla.so")
+      Mix.shell().info("Removing libexla.so cache at #{cached_so}")
+      File.rm!(cached_so)
+    end
 
-      true ->
-        :ok
+    if cached? do
+      Mix.shell().info("Using libexla.so from #{cached_so}")
+      File.cp!(cached_so, "cache/#{@version}/libexla.so")
     end
 
     result = Mix.Tasks.Compile.ElixirMake.run(args)
 
-    if (not cached? or clean_libexla_cache?) and match?({:ok, _}, result) do
+    if not cached? and match?({:ok, _}, result) do
       Mix.shell().info("Caching libexla.so at #{cached_so}")
       File.mkdir_p!(Path.dirname(cached_so))
       File.cp!("cache/#{@version}/libexla.so", cached_so)

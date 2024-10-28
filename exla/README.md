@@ -55,9 +55,9 @@ If for any reason these fail to compile or load, troubleshooting can be tricky.
 
 We recommend following the steps below:
 
-  1. If the error appeared after upgrading EXLA, ensure that you have the proper dependency versions given by [XLA](https://github.com/elixir-nx/xla). Afterwards, compile with `mix compile` after setting the following environment variables to `1` or `true` to clean up all cached files:
-     * `EXLA_CLEAN_LIBEXLA_CACHE`: Removes the libexla.so caches (both local and global ones).
-     * `EXLA_FORCE`: Removes the intermediate `.o` compilation artifacts retained from previous builds.
+  1. If the error appeared after upgrading EXLA, ensure that you have the proper dependency versions given by [XLA](https://github.com/elixir-nx/xla). Afterwards, compile with `mix compile` after setting `EXLA_FORCE_REBUILD` to clean up cached files:
+     * `EXLA_FORCE_REBUILD=partial`: Removes the only the libexla.so caches (both local and global ones).
+     * `EXLA_FORCE_REBUILD=true`: Removes the libexla.so caches but also removes the intermediate `.o` compilation artifacts retained from previous builds.
 
      Additional notes on compilation:
      * Besides the XLA dependency versions, ensuring `gcc` (or your compiler of choice), `libc` and `make` are compatible is also important.
