@@ -169,6 +169,7 @@ defmodule EXLA.MixProject do
     cond do
       cached? and clean_libexla_cache? ->
         Mix.shell().info("Removing libexla.so cache at #{cached_so}")
+        File.rm!(cached_so)
 
       cached? ->
         Mix.shell().info("Using libexla.so from #{cached_so}")
