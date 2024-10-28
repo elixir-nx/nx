@@ -136,7 +136,7 @@ defmodule EXLA.MixProject do
 
   defp cached_make(args) do
     force_rebuild_mode =
-      case System.get_env("EXLA_FORCE_REBUILD") do
+      case System.get_env("EXLA_FORCE_REBUILD", "") do
         "" ->
           false
 
@@ -154,7 +154,7 @@ defmodule EXLA.MixProject do
 
         value ->
           Mix.raise(
-            "invalid value for EXLA_FORCE_REBUILD: #{value}. Expected one of: partial, true"
+            "invalid value for EXLA_FORCE_REBUILD: '#{value}'. Expected one of: partial, true"
           )
       end
 
