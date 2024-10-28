@@ -147,7 +147,7 @@ defmodule EXLA.MixProject do
     end
 
     if clean_libexla_cache? or force? do
-      Mix.shell().info("Removing cached libexla.so files in cache/libexla.so")
+      Mix.shell().info("Removing cached libexla.so file in cache/libexla.so")
       File.rm_rf!("cache/libexla.so")
     end
 
