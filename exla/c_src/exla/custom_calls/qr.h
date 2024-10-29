@@ -73,15 +73,15 @@ void qr_cpu_custom_call(void *out[], const void *in[]) {
   DataType *q = (DataType *)out[0];
   DataType *r = (DataType *)out[1];
 
-  uint64_t r_stride = r_dims[r_dims.size() - 1] * r_dims[r_dims.size() - 2] * sizeof(DataType);
-  uint64_t q_stride = q_dims[q_dims.size() - 1] * q_dims[q_dims.size() - 2] * sizeof(DataType);
-  uint64_t inner_stride = m * n * sizeof(DataType);
+  uint64_t r_stride = r_dims[r_dims.size() - 1] * r_dims[r_dims.size() - 2];
+  uint64_t q_stride = q_dims[q_dims.size() - 1] * q_dims[q_dims.size() - 2];
+  uint64_t inner_stride = m * n;
 
   for (uint64_t i = 0; i < batch_items; i++) {
     single_matrix_qr_cpu_custom_call<DataType>(
         (DataType *)out[0] + i * q_stride,
         (DataType *)out[1] + i * r_stride,
-        operand + i * inner_stride * sizeof(DataType),
+        operand + i * inner_stride,
         m, k, n, complete);
   }
 }

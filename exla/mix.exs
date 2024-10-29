@@ -187,7 +187,7 @@ defmodule EXLA.MixProject do
       File.rm_rf!("cache/#{@version}/libexla.so")
 
       Mix.shell().info("Removing libexla.so cache at #{cached_so}")
-      File.rm!(cached_so)
+      File.rm_rf!(cached_so)
     end
 
     if cached? do
