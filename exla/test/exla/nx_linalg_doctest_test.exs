@@ -14,7 +14,7 @@ defmodule EXLA.MLIR.NxLinAlgDoctestTest do
     triangular_solve: 3,
     eigh: 2,
     cholesky: 1,
-    least_squares: 2,
+    least_squares: 3,
     determinant: 1,
     matrix_power: 2,
     lu: 2
