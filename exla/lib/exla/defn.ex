@@ -544,6 +544,43 @@ defmodule EXLA.Defn do
     end
   end
 
+  defp cached_recur_operator(
+         :lu,
+         %T{data: %Expr{args: [{p_expr, l_expr, u_expr}, tensor, _opts]}},
+         state,
+         cache
+       ) do
+    %{type: {p_type_kind, _}} = p_expr
+    %{type: {out_type_kind, _}} = l_expr
+
+    if state.client.platform != :host do
+      raise ArgumentError, "XLA does not currently support the LU operation on non-host devices"
+    end
+
+    if p_type_kind == :c or out_type_kind == :c do
+      raise ArgumentError, "XLA does not currently support the LU operation for complex inputs"
+    end
+
+    {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
+
+    tensor =
+      if op_type(tensor) != u_expr.type do
+        to_type(tensor, u_expr.type)
+      else
+        tensor
+      end
+
+    {p, l, u} =
+      Value.lu(
+        tensor,
+        expr_to_typespec(p_expr),
+        expr_to_typespec(l_expr),
+        expr_to_typespec(u_expr)
+      )
+
+    {[p, l, u], cache}
+  end
+
   defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do
     {op, cache} = recur_operator(expr, state, cache)
     {_, cache} = recur_operator(token, state, cache)
@@ -770,10 +807,6 @@ defmodule EXLA.Defn do
         to_type(a, type)
         |> Value.triangular_solve(to_type(b, type), left_side, lower, transform, typespec)
     end
-  end
-
-  defp to_operator(:lu, [{_, _, _}, _tensor, _opts], _ans, _state) do
-    raise ArgumentError, "XLA does not currently support the LU operation"
   end
 
   ## to_operator element-wise

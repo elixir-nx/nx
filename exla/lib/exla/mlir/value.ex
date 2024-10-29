@@ -815,6 +815,81 @@ defmodule EXLA.MLIR.Value do
     {q, r}
   end
 
+  def lu(%Value{function: func} = value, p_typespec, l_typespec, u_typespec) do
+    %{type: op_type, shape: op_shape} = get_typespec(value)
+    %{type: _p_type, shape: p_shape} = p_typespec
+    %{type: l_type, shape: l_shape} = l_typespec
+    %{type: u_type, shape: u_shape} = u_typespec
+
+    dim_sizes = [
+      tuple_size(op_shape),
+      tuple_size(p_shape),
+      tuple_size(l_shape),
+      tuple_size(u_shape)
+    ]
+
+    operand_dims = Tuple.to_list(op_shape)
+    p_dims = Tuple.to_list(p_shape)
+    l_dims = Tuple.to_list(l_shape)
+    u_dims = Tuple.to_list(u_shape)
+
+    dim_sizes = constant(func, dim_sizes, Typespec.tensor({:u, 64}, {length(dim_sizes)}))
+    operand_dims = constant(func, operand_dims, Typespec.tensor({:u, 64}, {length(operand_dims)}))
+    p_dims = constant(func, p_dims, Typespec.tensor({:u, 64}, {length(p_dims)}))
+    l_dims = constant(func, l_dims, Typespec.tensor({:u, 64}, {length(l_dims)}))
+    u_dims = constant(func, u_dims, Typespec.tensor({:u, 64}, {length(u_dims)}))
+    operands = [value, dim_sizes, operand_dims, p_dims, l_dims, u_dims]
+
+    # Force P to always b u8 to avoid requiring too many template instances during custom_call registration
+    p_result_type = type_tensor({:u, 8}, p_shape)
+    l_result_type = type_tensor(l_type, l_shape)
+    u_result_type = type_tensor(u_type, u_shape)
+    result_types = [type_tuple([p_result_type, l_result_type, u_result_type])]
+
+    call_target_name =
+      case op_type do
+        {:f, 32} ->
+          "lu_cpu_custom_call_f32"
+
+        {:f, 64} ->
+          "lu_cpu_custom_call_f64"
+
+        {:f, 16} ->
+          "lu_cpu_custom_call_f16"
+
+        {:bf, 16} ->
+          "lu_cpu_custom_call_bf16"
+
+        type ->
+          # Due to matching on EXLA.Defn, we are sure that the device here is always :host
+          raise "LU decomposition not supported on :host device for type #{inspect(type)}"
+      end
+
+    attributes = [
+      call_target_name: attr_string(call_target_name),
+      backend_config: attr_string("Host")
+    ]
+
+    result =
+      op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes) |> one!()
+
+    # This is not the best approach, but the alternative would require many more template instances
+    u8_typespec = Typespec.to_type(p_typespec, {:u, 8})
+    p = get_tuple_element(result, 0, u8_typespec)
+
+    p =
+      if u8_typespec != p_typespec do
+        convert(p, p_typespec)
+      else
+        p
+      end
+
+    l = get_tuple_element(result, 1, l_typespec)
+    u = get_tuple_element(result, 2, u_typespec)
+
+    {p, l, u}
+  end
+
   def get_tuple_element(%Value{function: func} = operand, index, typespec) do
     result_types = typespecs_to_mlir_types([typespec])
     attributes = [index: attr_i32(index)]
