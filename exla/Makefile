@@ -61,15 +61,23 @@ else
 	NVCCFLAGS = $(CFLAGS)
 endif
 
+
+ifeq ($(MIX_BUILD_EMBEDDED), true)
+	XLA_EXTENSION_LIB_RPATH = "xla_extension/lib"
+else
+	XLA_EXTENSION_LIB_RPATH = "../xla_extension/lib"
+endif
+
 ifeq ($(UNAME_S), Darwin)
-	LDFLAGS += -flat_namespace -undefined dynamic_lookup -rpath @loader_path/xla_extension/lib
+	LDFLAGS += -flat_namespace -undefined dynamic_lookup -rpath @loader_path/$(XLA_EXTENSION_LIB_RPATH)
 else
 	# Use a relative RPATH, so at runtime libexla.so looks for libxla_extension.so
 	# in ./lib regardless of the absolute location. This way priv can be safely
 	# packed into an Elixir release. Also, we use $$ to escape Makefile variable
 	# and single quotes to escape shell variable
-	LDFLAGS += -Wl,-rpath,'$$ORIGIN/xla_extension/lib'
+	LDFLAGS += -Wl,-rpath,'$$ORIGIN/$(XLA_EXTENSION_LIB_RPATH)'
 endif
+
 
 $(EXLA_SO): $(EXLA_CACHE_SO)
 	@ mkdir -p $(PRIV_DIR)
