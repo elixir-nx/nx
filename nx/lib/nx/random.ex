@@ -799,15 +799,21 @@ defmodule Nx.Random do
     axis = opts[:axis]
 
     if opts[:independent] do
-      shuffle_independent(key, tensor, axis: axis)
+      shuffle_independent(key, tensor, axis: axis, independent: true)
     else
-      {idx, key} = shuffle_independent(key, Nx.iota({Nx.axis_size(tensor, axis)}), axis: 0)
+      {idx, key} =
+        shuffle_independent(key, Nx.iota({Nx.axis_size(tensor, axis)}),
+          axis: 0,
+          independent: false
+        )
+
       {Nx.take(tensor, idx, axis: axis), key}
     end
   end
 
   defnp shuffle_independent(key, tensor, opts) do
     axis = opts[:axis]
+    independent = opts[:independent]
 
     # reference: https://github.com/google/jax/blob/838bc454895ed2086563301936fb0d6d852fd198/jax/_src/random.py#L437
     exponent = 3
@@ -821,16 +827,25 @@ defmodule Nx.Random do
       while {i = 0, tensor, key}, i < num_rounds do
         keys = split(key)
         sort_keys = random_bits(keys[1], shape: tensor.shape)
-        tensor = sort_key_val(tensor, sort_keys, axis: axis)
+        tensor = sort_key_val(tensor, sort_keys, axis: axis, independent: independent)
         {i + 1, tensor, keys[0]}
       end
 
     {out, key}
   end
 
-  defnp sort_key_val(tensor, sort_keys, opts \\ []) do
+  deftransformp sort_key_val(tensor, sort_keys, opts \\ []) do
     idx = Nx.argsort(sort_keys, axis: opts[:axis])
-    Nx.take(tensor, idx, axis: opts[:axis])
+
+    if opts[:independent] do
+      # We need to use take_along_axis in the independent case because
+      # the sort_keys tensor has the same shape as the input tensor.
+      Nx.take_along_axis(tensor, idx, axis: opts[:axis])
+    else
+      # In the non-independent case, we use take because the sort_keys
+      # tensor is a 1D tensor.
+      Nx.take(tensor, idx, axis: opts[:axis])
+    end
   end
 
   @choice_options """
