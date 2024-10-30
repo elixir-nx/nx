@@ -180,7 +180,6 @@ defmodule EXLA.MixProject do
 
     if force_rebuild_mode in [:partial, :full] do
       Mix.shell().info("Removing cached libexla.so file in cache/libexla.so")
-
       File.rm_rf!("cache/libexla.so")
 
       Mix.shell().info("Removing libexla.so cache at #{cached_so}")
