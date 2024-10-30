@@ -135,26 +135,22 @@ defmodule EXLA.MixProject do
   end
 
   defp cached_make(args) do
+    force_rebuild_env_var = System.get_env("EXLA_FORCE_REBUILD", "")
+
     force_rebuild_mode =
-      case System.get_env("EXLA_FORCE_REBUILD", "") do
-        "" ->
+      cond do
+        force_rebuild_env_var in ["", "false", "0"] ->
           :none
 
-        "0" ->
-          :none
-
-        "partial" ->
+        force_rebuild_env_var == "partial" ->
           :partial
 
-        "true" ->
+        force_rebuild_env_var in ["true", "1"] ->
           :full
 
-        "1" ->
-          :full
-
-        value ->
+        true ->
           Mix.raise(
-            "invalid value for EXLA_FORCE_REBUILD: '#{value}'. Expected one of: partial, true"
+            "invalid value for EXLA_FORCE_REBUILD: '#{force_rebuild_env_var}'. Expected one of: partial, true, false"
           )
       end
 
@@ -183,8 +179,8 @@ defmodule EXLA.MixProject do
     cached? = File.exists?(cached_so) and force_rebuild_mode == :none
 
     if force_rebuild_mode in [:partial, :full] do
-      Mix.shell().info("Removing cached libexla.so file in cache/#{@version}/libexla.so")
-      File.rm_rf!("cache/#{@version}/libexla.so")
+      Mix.shell().info("Removing cached libexla.so file in cache/libexla.so")
+      File.rm_rf!("cache/libexla.so")
 
       Mix.shell().info("Removing libexla.so cache at #{cached_so}")
       File.rm_rf!(cached_so)
@@ -192,7 +188,7 @@ defmodule EXLA.MixProject do
 
     if cached? do
       Mix.shell().info("Using libexla.so from #{cached_so}")
-      File.cp!(cached_so, "cache/#{@version}/libexla.so")
+      File.cp!(cached_so, "cache/libexla.so")
     end
 
     result = Mix.Tasks.Compile.ElixirMake.run(args)
@@ -200,7 +196,7 @@ defmodule EXLA.MixProject do
     if not cached? and match?({:ok, _}, result) do
       Mix.shell().info("Caching libexla.so at #{cached_so}")
       File.mkdir_p!(Path.dirname(cached_so))
-      File.cp!("cache/#{@version}/libexla.so", cached_so)
+      File.cp!("cache/libexla.so", cached_so)
     end
 
     result
