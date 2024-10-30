@@ -148,7 +148,7 @@ defmodule EXLA.MixProject do
         force_rebuild_env_var in ["true", "1"] ->
           :full
 
-        value ->
+        true ->
           Mix.raise(
             "invalid value for EXLA_FORCE_REBUILD: '#{force_rebuild_env_var}'. Expected one of: partial, true, false"
           )
