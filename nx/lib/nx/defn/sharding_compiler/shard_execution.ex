@@ -8,7 +8,8 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
     :output_data_section_id,
     :output_starts,
     :output_lengths,
-    :fetched_inputs
+    :fetched_inputs,
+    :output
   ]
 
   use GenServer
@@ -24,7 +25,7 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
         output_starts,
         output_lengths
       ) do
-    Process.send_after(self(), 0, :initialize)
+    Process.send_after(self(), :fetch_inputs, 0)
 
     fetched_inputs = Map.new(input_data_sections, fn {_idx, {arg_id, _}} -> {arg_id, nil} end)
 
@@ -41,15 +42,11 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
   end
 
   def start_link(args) do
-    GenServer.start_link(__MODULE__, args)
+    GenServer.start_link(__MODULE__, args, name: via_tuple(args))
   end
 
-  def handle_info(:initialize, state) do
-    ShardRegistry.register_producer(
-      {state.stage.id, state.output_entry_index, state.output_data_section_id}
-    )
-
-    {:noreply, state}
+  defp via_tuple([stage, _input_data_sections, output_entry_index, output_data_section_id]) do
+    {:via, Registry, {ShardRegistry, {stage.id, output_entry_index, output_data_section_id}}}
   end
 
   def handle_info(:fetch_inputs, state) do
@@ -60,9 +57,7 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
         state ->
           {stage_id, stage_idx} = state.stage.argument_sources[arg_id]
 
-          key = {stage_id, stage_idx, data_section_id}
-
-          case ShardRegistry.get(key) do
+          case ShardRegistry.get(stage_id, stage_idx, data_section_id) do
             {:ok, data} ->
               put_in(state.fetched_inputs[arg_id], {arg_idx, data})
 
@@ -72,14 +67,35 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
       end
 
     if Enum.any?(state.fetched_inputs, fn {_arg_id, data} -> is_nil(data) end) do
-      Process.send_after(self(), 20, :fetch_inputs)
+      Process.send_after(self(), 10, :fetch_inputs)
       {:noreply, state}
     else
-      compute(state)
+      state = compute(state)
+      {:noreply, state}
     end
   end
 
+  def get(stage_id, stage_idx, data_section_id) do
+    key = {stage_id, stage_idx, data_section_id}
+
+    case ShardRegistry.lookup(key) do
+      {:ok, pid} -> GenServer.call(pid, :get)
+      {:error, :pending} -> {:error, :pending}
+    end
+  end
+
+  def handle_call(:get, _from, state) do
+    result =
+      case state.output do
+        nil -> {:error, :pending}
+        data -> {:ok, {data, state.output_starts, state.output_lengths}}
+      end
+
+    {:reply, result, state}
+  end
+
   defp compute(state) do
-    {:noreply, state}
+    output = state.compiled_fun.(state.fetched_inputs)
+    %{state | output: output}
   end
 end
