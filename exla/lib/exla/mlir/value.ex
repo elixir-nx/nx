@@ -54,31 +54,40 @@ defmodule EXLA.MLIR.Value do
   }
 
   for {op, direction} <- @bin_comparison_ops do
-    def unquote(op)(%Value{function: func} = lhs, %Value{function: func} = rhs, typespec) do
-      compare_and_return_bool(func, lhs, rhs, typespec, unquote(direction))
+    def unquote(op)(
+          %Value{function: func} = lhs,
+          %Value{function: func} = rhs,
+          typespec,
+          opts \\ []
+        ) do
+      compare_and_return_bool(func, lhs, rhs, typespec, unquote(direction), opts[:total_order])
     end
   end
 
-  defp compare_and_return_bool(func, lhs, rhs, typespec, direction) do
+  defp compare_and_return_bool(func, lhs, rhs, typespec, direction, total_order? \\ false) do
     %{type: lhs_type} = get_typespec(lhs)
     %{type: rhs_type} = get_typespec(rhs)
 
     comparison_type =
       cond do
         Nx.Type.complex?(lhs_type) or Nx.Type.complex?(rhs_type) ->
-          attr_comparison_type(:float)
+          [compare_type: attr_comparison_type(:float)]
 
         Nx.Type.float?(lhs_type) or Nx.Type.float?(rhs_type) ->
-          attr_comparison_type(:float)
+          attr =
+            if total_order? do
+              attr_comparison_type(:totalorder)
+            else
+              attr_comparison_type(:float)
+            end
+
+          [compare_type: attr]
 
         true ->
-          attr_comparison_type(:notype)
+          []
       end
 
-    attributes = [
-      comparison_direction: attr_comparison_direction(direction),
-      compare_type: comparison_type
-    ]
+    attributes = [comparison_direction: attr_comparison_direction(direction)] ++ comparison_type
 
     result_types = typespecs_to_mlir_types([Typespec.to_type(typespec, {:pred, 8})])
 
@@ -1072,7 +1081,7 @@ defmodule EXLA.MLIR.Value do
   defp attr_comparison_direction(value) when value in [:eq, :lt, :le, :gt, :ge, :ne],
     do: attr_enum("stablehlo", "comparison_direction", value)
 
-  defp attr_comparison_type(value) when value in [:float, :totalorder, :notype],
+  defp attr_comparison_type(value) when value in [:float, :totalorder],
     do: attr_enum("stablehlo", "comparison_type", value)
 
   defp attr_precision(value) when value in [:default, :high, :highest],
