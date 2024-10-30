@@ -1367,28 +1367,40 @@ defmodule EXLA.Defn do
 
   ## Computation helpers
 
-  defp sort_computation(op, type, arg_typespecs, %{builder: %EXLA.MLIR.Function{} = function}) do
+  defp sort_computation(operator, type, arg_typespecs, %{
+         builder: %EXLA.MLIR.Function{} = function
+       }) do
     {region, [lhs, rhs | _]} = Function.push_region(function, arg_typespecs)
 
     typespec = Typespec.tensor({:pred, 8}, {})
 
-    op =
-      cond do
-        Nx.Type.integer?(type) ->
-          apply(Value, op, [lhs, rhs, typespec])
-
-        op == :less ->
-          is_nan = Value.is_nan(rhs, typespec)
-          Value.bitwise_or(is_nan, Value.less(lhs, rhs, typespec), typespec)
-
-        op == :greater ->
-          is_nan = Value.is_nan(lhs, typespec)
-          Value.bitwise_or(is_nan, Value.greater(lhs, rhs, typespec), typespec)
+    {lhs, rhs} =
+      if Nx.Type.integer?(type) do
+        {lhs, rhs}
+      else
+        {sort_computation_canonicalize_float(lhs), sort_computation_canonicalize_float(rhs)}
       end
+
+    op = apply(Value, operator, [lhs, rhs, typespec, [total_order: true]])
 
     Value.return(function, [op])
     Function.pop_region(function)
     region
+  end
+
+  defp sort_computation_canonicalize_float(%Value{function: func} = op) do
+    # Standardize the representation of NaNs (-NaN, NaN) and zeros (-0, 0).
+    # See https://github.com/google/jax/blob/e81c82605f0e1813080cfe1037d043b27b38291d/jax/_src/lax/lax.py#L4248-L4253
+
+    op_typespec = Value.get_typespec(op)
+
+    zero = Value.constant(func, [0], Typespec.to_shape(op_typespec, {}))
+    zeros = Value.constant(func, [0], op_typespec)
+    nans = Value.constant(func, [:nan], op_typespec)
+
+    pred_typespec = Typespec.tensor({:pred, 8}, {})
+    op = Value.select(Value.equal(op, zero, pred_typespec), zeros, op, op_typespec)
+    Value.select(Value.is_nan(op, pred_typespec), nans, op, op_typespec)
   end
 
   defp op_computation(
