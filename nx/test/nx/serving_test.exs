@@ -607,9 +607,10 @@ defmodule Nx.ServingTest do
       # One task should succeed and the other terminate
       assert_receive {:DOWN, ref, _, _,
                       {{%RuntimeError{}, _}, {Nx.Serving, :local_batched_run, [_, _]}}}
-                     when ref in [ref1, ref2]
 
-      assert_receive {:DOWN, ref, _, _, :normal} when ref in [ref1, ref2]
+      assert [other_ref] = [ref1, ref2] -- [ref]
+
+      assert_receive {:DOWN, ^other_ref, _, _, :normal}
       refute_received {:execute, _partition, _executor}
     end
 
@@ -631,14 +632,14 @@ defmodule Nx.ServingTest do
 
       assert_receive {:execute, 0, executor}
       send(serving_pid, {:system, {self(), make_ref()}, {:terminate, :shutdown}})
-      send(executor, :continue)
 
-      # One task should succeed and the other terminate
-      assert_receive {:DOWN, ref, _, _, :normal}
-                     when ref in [ref1, ref2]
-
+      # The queued caller should be terminated with :noproc right away
       assert_receive {:DOWN, ref, _, _, {:noproc, {Nx.Serving, :local_batched_run, [_, _]}}}
-                     when ref in [ref1, ref2]
+      assert [other_ref] = [ref1, ref2] -- [ref]
+
+      # The executing caller should be able to finish
+      send(executor, :continue)
+      assert_receive {:DOWN, ^other_ref, _, _, :normal}
 
       refute_received {:execute, _partition, _executor}
     end
@@ -661,14 +662,14 @@ defmodule Nx.ServingTest do
 
       assert_receive {:execute, 0, executor}
       send(serving_pid, {:system, {self(), make_ref()}, {:terminate, :shutdown}})
-      send(executor, :continue)
 
-      # One task should succeed and the other terminate
-      assert_receive {:DOWN, ref, _, _, :normal}
-                     when ref in [ref1, ref2]
-
+      # The stacked caller should be terminated with :noproc right away
       assert_receive {:DOWN, ref, _, _, {:noproc, {Nx.Serving, :local_batched_run, [_, _]}}}
-                     when ref in [ref1, ref2]
+      assert [other_ref] = [ref1, ref2] -- [ref]
+
+      # The executing caller should be able to finish
+      send(executor, :continue)
+      assert_receive {:DOWN, ^other_ref, _, _, :normal}
 
       refute_received {:execute, _partition, _executor}
     end
