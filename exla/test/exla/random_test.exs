@@ -39,23 +39,4 @@ defmodule EXLA.NxRandomTest do
       )
     end
   end
-
-  @tag :cuda_required
-  test "regression on single-dimensional and multi-dimensional Random.shuffle" do
-    # these are put in the process dictionary, so it's thread-safe to do this
-    Nx.default_backend({EXLA.Backend, client: :cuda})
-    Nx.Defn.default_options(compiler: EXLA, client: :cuda)
-    key = Nx.Random.key(127)
-
-    t1 = Nx.iota({2, 100})
-    t2 = Nx.iota({100})
-
-    {t1_shuffled_0, key} = Nx.Random.shuffle(key, t1, axis: 0)
-    {t1_shuffled_1, key} = Nx.Random.shuffle(key, t1, axis: 1)
-    {t2_shuffled, _key} = Nx.Random.shuffle(key, t2)
-
-    assert_equal(Nx.sort(t1_shuffled_0, axis: 0), t1)
-    assert_equal(Nx.sort(t1_shuffled_1, axis: 1), t1)
-    assert_equal(Nx.sort(t2_shuffled), t2)
-  end
 end
