@@ -57,7 +57,7 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
         state ->
           {stage_id, stage_idx} = state.stage.argument_sources[arg_id]
 
-          case ShardRegistry.get(stage_id, stage_idx, data_section_id) do
+          case get(stage_id, stage_idx, data_section_id) do
             {:ok, data} ->
               put_in(state.fetched_inputs[arg_id], {arg_idx, data})
 
