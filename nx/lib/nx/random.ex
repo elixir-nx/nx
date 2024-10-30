@@ -830,7 +830,7 @@ defmodule Nx.Random do
 
   defnp sort_key_val(tensor, sort_keys, opts \\ []) do
     idx = Nx.argsort(sort_keys, axis: opts[:axis])
-    Nx.take_along_axis(tensor, idx, axis: opts[:axis])
+    Nx.take(tensor, idx, axis: opts[:axis])
   end
 
   @choice_options """
