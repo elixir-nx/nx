@@ -143,6 +143,9 @@ defmodule EXLA.MixProject do
         "0" ->
           :none
 
+        "false" ->
+          :none
+
         "partial" ->
           :partial
 
@@ -154,7 +157,7 @@ defmodule EXLA.MixProject do
 
         value ->
           Mix.raise(
-            "invalid value for EXLA_FORCE_REBUILD: '#{value}'. Expected one of: partial, true"
+            "invalid value for EXLA_FORCE_REBUILD: '#{value}'. Expected one of: partial, true, false"
           )
       end
 
@@ -183,8 +186,12 @@ defmodule EXLA.MixProject do
     cached? = File.exists?(cached_so) and force_rebuild_mode == :none
 
     if force_rebuild_mode in [:partial, :full] do
-      Mix.shell().info("Removing cached libexla.so file in cache/#{@version}/libexla.so")
+      Mix.shell().info(
+        "Removing cached libexla.so file in cache/#{@version}/libexla.so and cache/libexla.so"
+      )
+
       File.rm_rf!("cache/#{@version}/libexla.so")
+      File.rm_rf!("cache/libexla.so")
 
       Mix.shell().info("Removing libexla.so cache at #{cached_so}")
       File.rm_rf!(cached_so)
@@ -193,6 +200,7 @@ defmodule EXLA.MixProject do
     if cached? do
       Mix.shell().info("Using libexla.so from #{cached_so}")
       File.cp!(cached_so, "cache/#{@version}/libexla.so")
+      File.cp!(cached_so, "cache/libexla.so")
     end
 
     result = Mix.Tasks.Compile.ElixirMake.run(args)

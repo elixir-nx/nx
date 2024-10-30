@@ -8,7 +8,8 @@ XLA_EXTENSION_LIB = $(XLA_EXTENSION_DIR)/lib
 XLA_INCLUDE_PATH = $(XLA_EXTENSION_DIR)/include
 
 # Cache configuration
-EXLA_CACHE_SO = cache/$(EXLA_VERSION)/libexla.so
+EXLA_VERSIONED_CACHE_SO = cache/$(EXLA_VERSION)/libexla.so
+EXLA_CACHE_SO = cache/libexla.so
 EXLA_CACHE_OBJ_DIR = cache/$(EXLA_VERSION)/objs
 
 # Private configuration
@@ -61,21 +62,14 @@ else
 	NVCCFLAGS = $(CFLAGS)
 endif
 
-
-ifeq ($(MIX_BUILD_EMBEDDED), true)
-	XLA_EXTENSION_LIB_RPATH = "xla_extension/lib"
-else
-	XLA_EXTENSION_LIB_RPATH = "../xla_extension/lib"
-endif
-
 ifeq ($(UNAME_S), Darwin)
-	LDFLAGS += -flat_namespace -undefined dynamic_lookup -rpath @loader_path/$(XLA_EXTENSION_LIB_RPATH)
+	LDFLAGS += -flat_namespace -undefined dynamic_lookup -rpath @loader_path/xla_extension/lib
 else
 	# Use a relative RPATH, so at runtime libexla.so looks for libxla_extension.so
 	# in ./lib regardless of the absolute location. This way priv can be safely
 	# packed into an Elixir release. Also, we use $$ to escape Makefile variable
 	# and single quotes to escape shell variable
-	LDFLAGS += -Wl,-rpath,'$$ORIGIN/$(XLA_EXTENSION_LIB_RPATH)'
+	LDFLAGS += -Wl,-rpath,'$$ORIGIN/xla_extension/lib'
 endif
 
 
@@ -105,8 +99,11 @@ $(EXLA_CACHE_OBJ_DIR)/%.o: $(EXLA_DIR)/%.cc $(HEADERS)
 	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)/custom_calls
 	$(CXX) $(CFLAGS) -c $< -o $@
 
-$(EXLA_CACHE_SO): $(XLA_EXTENSION_DIR) $(OBJECTS)
-	$(CXX) $(OBJECTS) -o $(EXLA_CACHE_SO) $(LDFLAGS)
+$(EXLA_VERSIONED_CACHE_SO): $(XLA_EXTENSION_DIR) $(OBJECTS)
+	$(CXX) $(OBJECTS) -o $(EXLA_VERSIONED_CACHE_SO) $(LDFLAGS)
+
+$(EXLA_CACHE_SO): $(EXLA_VERSIONED_CACHE_SO)
+	cp $(EXLA_VERSIONED_CACHE_SO) $(EXLA_CACHE_SO)
 
 clean:
 	rm -rf cache
