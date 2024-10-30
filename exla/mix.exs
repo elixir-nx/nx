@@ -179,11 +179,8 @@ defmodule EXLA.MixProject do
     cached? = File.exists?(cached_so) and force_rebuild_mode == :none
 
     if force_rebuild_mode in [:partial, :full] do
-      Mix.shell().info(
-        "Removing cached libexla.so file in cache/#{@version}/libexla.so and cache/libexla.so"
-      )
+      Mix.shell().info("Removing cached libexla.so file in cache/libexla.so")
 
-      File.rm_rf!("cache/#{@version}/libexla.so")
       File.rm_rf!("cache/libexla.so")
 
       Mix.shell().info("Removing libexla.so cache at #{cached_so}")
@@ -192,7 +189,6 @@ defmodule EXLA.MixProject do
 
     if cached? do
       Mix.shell().info("Using libexla.so from #{cached_so}")
-      File.cp!(cached_so, "cache/#{@version}/libexla.so")
       File.cp!(cached_so, "cache/libexla.so")
     end
 
@@ -201,7 +197,7 @@ defmodule EXLA.MixProject do
     if not cached? and match?({:ok, _}, result) do
       Mix.shell().info("Caching libexla.so at #{cached_so}")
       File.mkdir_p!(Path.dirname(cached_so))
-      File.cp!("cache/#{@version}/libexla.so", cached_so)
+      File.cp!("cache/libexla.so", cached_so)
     end
 
     result
