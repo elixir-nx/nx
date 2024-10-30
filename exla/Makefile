@@ -71,7 +71,6 @@ else
 	LDFLAGS += -Wl,-rpath,'$$ORIGIN/xla_extension/lib'
 endif
 
-
 $(EXLA_SO): $(EXLA_CACHE_SO)
 	@ mkdir -p $(PRIV_DIR)
 	@ mkdir -p $(PRIV_DIR)/xla_extension
@@ -99,7 +98,7 @@ $(EXLA_CACHE_OBJ_DIR)/%.o: $(EXLA_DIR)/%.cc $(HEADERS)
 	$(CXX) $(CFLAGS) -c $< -o $@
 
 $(EXLA_CACHE_SO): $(XLA_EXTENSION_DIR) $(OBJECTS)
-	$(CXX) $(OBJECTS) -o $(EXLA_VERSIONED_CACHE_SO) $(LDFLAGS)
+	$(CXX) $(OBJECTS) -o $(EXLA_CACHE_SO) $(LDFLAGS)
 
 clean:
 	rm -rf cache
