@@ -1,4 +1,11 @@
 defmodule Nx.Defn.ShardingCompiler.ShardRegistry do
+  def child_spec(opts) do
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, [opts]}
+    }
+  end
+
   def start_link(_) do
     Registry.start_link(name: __MODULE__, keys: :unique)
   end

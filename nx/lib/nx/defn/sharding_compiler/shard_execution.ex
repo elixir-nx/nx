@@ -17,17 +17,77 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
   alias Nx.Defn.ShardingCompiler.Passes.GraphSplitter.Stage
   alias Nx.Defn.ShardingCompiler.ShardRegistry
 
-  def init(
+  alias Nx.Tensor, as: T
+  alias Nx.Defn.Expr
+
+  def init([
         %Stage{} = stage,
         input_data_sections,
         output_entry_index,
         output_data_section_id,
         output_starts,
         output_lengths
-      ) do
+      ]) do
     Process.send_after(self(), :fetch_inputs, 0)
 
     fetched_inputs = Map.new(input_data_sections, fn {_idx, {arg_id, _}} -> {arg_id, nil} end)
+
+    dbg(stage)
+
+    arg_templates =
+      Enum.map(input_data_sections, fn {idx, {arg_id, shard_ids}} ->
+        arg = stage.arguments[arg_id]
+
+        {shape, type} =
+          case arg do
+            %T{data: %Expr{op: :parameter, args: [_idx]}, shape: shape, type: type} ->
+              {shape, type}
+
+            %T{data: %Expr{op: :metadata, args: [_arg, %{shards: shards}]}, type: type} ->
+              shape =
+                Enum.with_index(shard_ids, fn shard_id, axis ->
+                  %{length: length} =
+                    Enum.find(shards[axis], fn shard -> shard.id == shard_id end)
+
+                  length
+                end)
+                |> List.to_tuple()
+
+              {shape, type}
+          end
+
+        arg = %T{
+          data: nil,
+          shape: shape,
+          type: type,
+          names: List.duplicate(nil, tuple_size(shape))
+        }
+
+        Expr.parameter(arg, :root, idx)
+      end)
+
+    dbg(stage.expr)
+
+    compiled_fun =
+      Nx.Defn.Evaluator.__compile__(
+        make_ref(),
+        arg_templates,
+        fn _ ->
+          stage.expr
+        end,
+        []
+      )
+
+    fun = fn [args] ->
+      [res] =
+        compiled_fun.([
+          Enum.map(Tuple.to_list(args), fn arg ->
+            fn -> arg end
+          end)
+        ])
+
+      res
+    end
 
     {:ok,
      %__MODULE__{
@@ -37,7 +97,9 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
        output_data_section_id: output_data_section_id,
        output_starts: output_starts,
        output_lengths: output_lengths,
-       fetched_inputs: fetched_inputs
+       fetched_inputs: fetched_inputs,
+       # TO-DO: pass compiled_fun as argument
+       compiled_fun: fun
      }}
   end
 
@@ -45,7 +107,14 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
     GenServer.start_link(__MODULE__, args, name: via_tuple(args))
   end
 
-  defp via_tuple([stage, _input_data_sections, output_entry_index, output_data_section_id]) do
+  defp via_tuple([
+         stage,
+         _input_data_sections,
+         output_entry_index,
+         output_data_section_id,
+         _starts,
+         _lengths
+       ]) do
     {:via, Registry, {ShardRegistry, {stage.id, output_entry_index, output_data_section_id}}}
   end
 
@@ -67,7 +136,7 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
       end
 
     if Enum.any?(state.fetched_inputs, fn {_arg_id, data} -> is_nil(data) end) do
-      Process.send_after(self(), 10, :fetch_inputs)
+      Process.send_after(self(), :fetch_inputs, 10)
       {:noreply, state}
     else
       state = compute(state)
@@ -95,7 +164,14 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
   end
 
   defp compute(state) do
-    output = state.compiled_fun.(state.fetched_inputs)
+    args =
+      state.fetched_inputs
+      |> Enum.map(fn {_id, {idx, data}} -> {idx, data} end)
+      |> Enum.sort()
+      |> Enum.map(fn {_idx, data} -> data end)
+      |> List.to_tuple()
+
+    output = state.compiled_fun.([args])
     %{state | output: output}
   end
 end

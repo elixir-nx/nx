@@ -61,9 +61,8 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
               {id, {expr, nil}}, idx ->
                 {id, put_in(expr.data.args, [idx])}
 
-              {id, {expr, shard_propagation}}, idx ->
+              {id, {expr, _shard_propagation}}, idx ->
                 expr = put_in(expr.data.args, [idx])
-                expr = Expr.metadata(expr, %{shards: shard_propagation.shards})
                 {id, expr}
             end)
             |> Map.new()
@@ -71,18 +70,8 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
           {expr, _} =
             composite_rewrite_subtree(expr, %{state | nodes_to_replace: arg_remapping})
 
-          expr =
-            Composite.traverse(expr, fn
-              %T{data: %Expr{id: id}} = t ->
-                if shard_propagation = state.shards[id] do
-                  Expr.metadata(t, %{shards: shard_propagation.shards})
-                else
-                  t
-                end
-
-              other ->
-                other
-            end)
+          # Traverse the expression to remap all shapes according to the sharding given
+          expr = set_shard_metadata(expr, state.shards)
 
           arguments = Map.new(arg_remapping, fn {_id, expr} -> {expr.data.id, expr} end)
 
@@ -298,4 +287,43 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
   end
 
   defp rewrite_subtree(other, _, acc), do: {other, acc}
+
+  defp set_shard_metadata(expr, shards) do
+    Composite.traverse(expr, fn
+      %T{data: %Expr{id: id}} = t ->
+        if shard_propagation = shards[id] do
+          shape =
+            shard_propagation.shards
+            |> Enum.sort()
+            |> Enum.map(fn {_axis, [%Shard{length: length} | _]} -> length end)
+            |> List.to_tuple()
+
+          t = do_set_shard_metadata(%{t | shape: shape}, shards)
+          Expr.metadata(t, %{shards: shard_propagation.shards})
+        else
+          do_set_shard_metadata(t, shards)
+        end
+
+      other ->
+        other
+    end)
+  end
+
+  defp do_set_shard_metadata(%T{data: %Expr{args: args}} = expr, shards) do
+    args =
+      Enum.map(args, fn
+        %T{} = arg ->
+          set_shard_metadata(arg, shards)
+
+        arg when is_list(arg) ->
+          Enum.map(arg, &do_set_shard_metadata(&1, shards))
+
+        arg ->
+          arg
+      end)
+
+    put_in(expr.data.args, args)
+  end
+
+  defp do_set_shard_metadata(other, _), do: other
 end

@@ -293,8 +293,8 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
 
       {sharded_expr, _cache, %{expr_shards: expr_shards}} =
         ShardPropagation.traverse(expr, %{
-          0 => Shard.from_config(arg0, %{0 => [0..0, 1..1], 1 => [0..2]}),
-          1 => Shard.from_config(arg1, %{0 => [0..2], 1 => [0..0, 1..1]})
+          0 => Shard.from_config(arg0, %{0 => 1, 1 => 3}),
+          1 => Shard.from_config(arg1, %{0 => 3, 1 => 1})
         })
 
       # This ensures the data hasn't been split
@@ -307,24 +307,15 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
       # - The expression is unchanged aside from extra metadata nodes;
       # - And that the shards are set to the parameters too
       assert %T{
+               shape: {1, 1},
                data: %Expr{
                  op: :metadata,
                  args: [
                    %T{
+                     shape: {1, 1},
                      data: %Expr{
                        op: :divide,
-                       args: [
-                         %T{
-                           data: %Expr{
-                             op: :multiply,
-                             args: [
-                               %T{data: %Expr{op: :constant, args: [3]}},
-                               %T{data: %Expr{op: :dot, args: [t0, _, _, t1, _, _]}}
-                             ]
-                           }
-                         },
-                         %T{data: %Expr{op: :constant, args: [4]}}
-                       ]
+                       args: [div_arg_meta, %T{data: %Expr{op: :constant, args: [4]}}]
                      }
                    },
                    %{shards: output_shards}
@@ -332,42 +323,69 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
                }
              } = out_expr
 
+      assert %T{shape: {1, 1}, data: %Expr{op: :metadata, args: [div_arg, _]}} = div_arg_meta
+
+      assert %T{
+               shape: {1, 1},
+               data: %Expr{
+                 op: :multiply,
+                 args: [
+                   %T{data: %Expr{op: :constant, args: [3]}},
+                   mul_arg
+                 ]
+               }
+             } = div_arg
+
+      assert %T{
+               shape: {1, 1},
+               data: %Expr{
+                 op: :metadata,
+                 args: [
+                   %T{shape: {1, 1}, data: %Expr{op: :dot, args: [t0_meta, _, _, t1_meta, _, _]}},
+                   _shards
+                 ]
+               }
+             } = mul_arg
+
       assert sharded_expr.data.shards == output_shards
 
-      %T{
-        data: %Expr{
-          op: :add,
-          args: [
-            %T{data: %Expr{op: :constant, args: [1]}},
-            %T{
-              data: %Expr{
-                op: :metadata,
-                args: [%T{data: %Expr{op: :parameter, args: [0]}}, %{shards: arg0_shards}]
-              }
-            }
-          ]
-        }
-      } = t0
+      assert %T{shape: {1, 3}, data: %Expr{op: :metadata, args: [t0, _]}} = t0_meta
+      assert %T{shape: {3, 1}, data: %Expr{op: :metadata, args: [t1, _]}} = t1_meta
+
+      assert %T{
+               data: %Expr{
+                 op: :add,
+                 args: [
+                   %T{data: %Expr{op: :constant, args: [1]}},
+                   %T{
+                     data: %Expr{
+                       op: :metadata,
+                       args: [%T{data: %Expr{op: :parameter, args: [0]}}, %{shards: arg0_shards}]
+                     }
+                   }
+                 ]
+               }
+             } = t0
 
       assert %{
                0 => [%Shard{start: 0, length: 1}, %Shard{start: 1, length: 1}],
                1 => [%Shard{start: 0, length: 3}]
              } = arg0_shards
 
-      %T{
-        data: %Expr{
-          op: :subtract,
-          args: [
-            %T{
-              data: %Expr{
-                op: :metadata,
-                args: [%T{data: %Expr{op: :parameter, args: [1]}}, %{shards: arg1_shards}]
-              }
-            },
-            %T{data: %Expr{op: :constant, args: [2]}}
-          ]
-        }
-      } = t1
+      assert %T{
+               data: %Expr{
+                 op: :subtract,
+                 args: [
+                   %T{
+                     data: %Expr{
+                       op: :metadata,
+                       args: [%T{data: %Expr{op: :parameter, args: [1]}}, %{shards: arg1_shards}]
+                     }
+                   },
+                   %T{data: %Expr{op: :constant, args: [2]}}
+                 ]
+               }
+             } = t1
 
       assert %{
                0 => [%Shard{start: 0, length: 3}],
@@ -405,19 +423,18 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
       {_sharded_expr, _cache, %{expr_shards: expr_shards}} =
         ShardPropagation.traverse(expr, %{
           0 => Shard.from_config(arg0, %{}),
-          1 => Shard.from_config(arg1, %{0 => [0..2], 1 => [0..0, 1..1]})
+          1 => Shard.from_config(arg1, %{0 => 3, 1 => 1})
         })
 
       assert {[_, _], _cache, _state} = GraphSplitter.traverse(expr, expr_shards)
 
       {sharded_expr, _cache, %{expr_shards: expr_shards}} =
         ShardPropagation.traverse(expr, %{
-          0 => Shard.from_config(arg0, %{0 => [0..0, 1..1], 1 => [0..2]}),
+          0 => Shard.from_config(arg0, %{0 => 1, 1 => 3}),
           1 => Shard.from_config(arg1, %{})
         })
 
-      assert {[%Stage{expr: stage_0_expr, arguments: args}, %Stage{expr: stage_1_expr}], _cache,
-              _state} =
+      assert {[%Stage{expr: stage_0_expr}, %Stage{expr: stage_1_expr}], _cache, _state} =
                GraphSplitter.traverse(expr, expr_shards)
 
       assert {%T{data: %Expr{op: :metadata, args: [_left, %{shards: left_shards}]}},

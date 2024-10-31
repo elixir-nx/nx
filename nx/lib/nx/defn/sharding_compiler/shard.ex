@@ -1,6 +1,6 @@
 defmodule Nx.Defn.ShardingCompiler.Shard do
   import Inspect.Algebra
-  defstruct [:id, :axis, :input_id, :start, :length, :parents]
+  defstruct [:id, :axis, :input_id, :start, :length, :parents, :debug_id]
 
   def inspect(%__MODULE__{start: start, length: length}, inspect_opts)
       when is_nil(start) or is_nil(length) do
@@ -8,11 +8,25 @@ defmodule Nx.Defn.ShardingCompiler.Shard do
   end
 
   def inspect(
-        %__MODULE__{id: id, axis: axis, start: start, length: length, input_id: input_id},
+        %__MODULE__{
+          debug_id: debug_id,
+          id: id,
+          axis: axis,
+          start: start,
+          length: length,
+          input_id: input_id
+        },
         inspect_opts
       ) do
     single_line = inspect_opts.custom_options[:single_line]
     print_axis = inspect_opts.custom_options[:print_axis]
+
+    id_doc =
+      if Application.get_env(:nx, :debug_shards) do
+        "(#{inspect(debug_id)} | #{inspect(id)})"
+      else
+        "(#{inspect(id)})"
+      end
 
     range_doc = "#{start}..#{start + length - 1}"
     input_id_doc = if(input_id, do: "(#{inspect(input_id)})", else: "")
@@ -22,7 +36,8 @@ defmodule Nx.Defn.ShardingCompiler.Shard do
         color("Shard<", :map, inspect_opts),
         if(print_axis && axis, do: "#{axis}: ", else: ""),
         range_doc,
-        " (#{inspect(id)})",
+        " ",
+        id_doc,
         input_id_doc,
         color(">", :map, inspect_opts)
       ])
@@ -35,7 +50,7 @@ defmodule Nx.Defn.ShardingCompiler.Shard do
             if(print_axis && axis, do: "#{axis}: ", else: ""),
             range_doc,
             line(),
-            "(#{inspect(id)})",
+            id_doc,
             line(),
             input_id_doc
           ]),
@@ -56,10 +71,11 @@ defmodule Nx.Defn.ShardingCompiler.Shard do
   """
   def from_config(tensor, config, opts \\ []) do
     input_id = opts[:input_id]
+    debug_id = opts[:debug_id]
 
     shards =
       Map.new(config, fn
-        {axis_or_name, slices} ->
+        {axis_or_name, length} ->
           axis =
             if is_atom(axis_or_name) do
               Nx.axis_index(tensor, axis_or_name)
@@ -67,15 +83,27 @@ defmodule Nx.Defn.ShardingCompiler.Shard do
               axis_or_name
             end
 
+          axis_size = Nx.axis_size(tensor, axis)
+
+          {slices, checksum} =
+            Enum.map_reduce(0..(axis_size - 1)//length, 0, fn start, checksum ->
+              {{start, length}, checksum + length}
+            end)
+
+          if checksum != axis_size do
+            raise "Shard length #{length} does not evenly divide axis #{inspect(axis_or_name)} of size #{axis_size}"
+          end
+
           shards =
-            Enum.map(slices, fn start..finish//1 ->
+            Enum.map(slices, fn {start, length} ->
               id = make_ref()
 
               %__MODULE__{
                 id: id,
+                debug_id: debug_id,
                 axis: axis,
                 start: start,
-                length: finish - start + 1,
+                length: length,
                 input_id: input_id,
                 parents: []
               }

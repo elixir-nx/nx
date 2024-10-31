@@ -53,7 +53,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
       t
       |> Nx.axes()
       |> Map.new(fn axis ->
-        {axis, [0..(elem(t.shape, axis) - 1)]}
+        {axis, elem(t.shape, axis)}
       end)
 
     expr = shard_from_config(t, config)
@@ -62,7 +62,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
   end
 
   defp eval(%T{data: %Expr{op: :constant, args: [_constant]}} = ans, {cache, state}) do
-    expr = shard_from_config(ans, %{0 => [0..0]})
+    expr = shard_from_config(ans, %{})
     state = put_in(state.expr_shards[expr.data.id], expr.data)
     {expr, {cache, state}}
   end
@@ -361,6 +361,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
   defp resolve_sharding_broadcast(axis, left_shards, false, right_shards, false) do
     # We have a shard on both sides. We need to determine the intersection of the two.
     # This is fine only if all shards are equal
+
     {reverse_out_shards, all_shards_match} =
       Enum.zip_reduce(left_shards, right_shards, {[], true}, fn left,
                                                                 right,
