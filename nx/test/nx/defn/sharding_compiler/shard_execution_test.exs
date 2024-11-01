@@ -41,16 +41,17 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecutionTest do
         1 => Shard.from_config(arg1, %{0 => 3}, debug_id: "arg 1")
       })
 
-    dbg(sharded_expr)
-
     assert {[stage0], _cache, _state} =
              GraphSplitter.traverse(%T{ans | data: sharded_expr}, expr_shards)
 
     args_by_idx = %{0 => arg0, 1 => arg1}
 
-    Enum.each(stage0.arguments, fn {id, expr} ->
-      start_shard_providers(expr, args_by_idx)
-    end)
+    arg_providers =
+      Enum.flat_map(stage0.arguments, fn {id, expr} ->
+        start_shard_providers(expr, args_by_idx)
+      end)
+
+    assert Enum.count(arg_providers, &match?({:ok, _}, &1)) == 4
 
     assert {:ok, pid} = ShardExecution.Supervisor.start_link(stage0)
 
@@ -98,24 +99,36 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecutionTest do
     assert {id0, [shard1.id, shard2.id]} == input_section0
     assert {id1, [shard3.id, shard5.id]} == input_section1
 
-    flunk("need to assert on results")
+    assert executor0_state.output ==
+             Nx.tensor([
+               [-2, 3, 12]
+             ])
+
+    assert executor1_state.output ==
+             Nx.tensor([
+               [0, 12, 28]
+             ])
+
+    dbg({sharded_expr.id, expr_shards})
   end
 
   defp start_shard_providers(sharded_expr, arg_data) do
     case sharded_expr do
       %T{data: %Expr{op: :parameter, args: [idx]}} ->
-        ShardExecution.ArgumentProvider.start_link([
-          sharded_expr,
-          idx,
-          arg_data[idx]
-        ])
+        [
+          ShardExecution.ArgumentProvider.start_link([
+            sharded_expr,
+            idx,
+            arg_data[idx]
+          ])
+        ]
 
       %T{data: %Expr{op: :metadata, args: [%T{data: %Expr{args: [idx]}}, %{shards: shards}]}} ->
         shards
         |> Enum.sort_by(fn {axis, _} -> axis end)
         |> Enum.map(fn {axis, shard} -> {shard, axis} end)
         |> cartesian_product()
-        |> Enum.each(fn sections ->
+        |> Enum.map(fn sections ->
           {starts, lengths} =
             sections
             |> Enum.map(fn {shard, _axis} -> {shard.start, shard.length} end)

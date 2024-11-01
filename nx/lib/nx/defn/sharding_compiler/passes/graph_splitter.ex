@@ -73,7 +73,10 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
           # Traverse the expression to remap all shapes according to the sharding given
           expr = set_shard_metadata(expr, state.shards)
 
-          arguments = Map.new(arg_remapping, fn {_id, expr} -> {expr.data.id, expr} end)
+          arguments =
+            Map.new(arg_remapping, fn {_id, arg_expr} ->
+              {arg_expr.data.id, set_shard_metadata(arg_expr, state.shards)}
+            end)
 
           argument_sources =
             state.args
