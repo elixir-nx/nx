@@ -23,10 +23,9 @@ defmodule Nx.Defn.ShardingCompiler do
     {%T{
        type: type,
        data: %ShardPropagation{
-         shards: output_shards,
-         parameter_ids_to_index: parameter_ids_to_index
+         shards: output_shards
        }
-     },
+     }, parameter_ids_to_index,
      shape} =
       propagate_shards(vars, fun, opts[:sharding_config] || [])
 
@@ -152,9 +151,9 @@ defmodule Nx.Defn.ShardingCompiler do
       |> Enum.with_index(fn x, idx -> {idx, x} end)
       |> Map.new()
 
-    {container, _cache, _state} = ShardPropagation.traverse(expr, tensor_shardings)
+    {container, _cache, state} = ShardPropagation.traverse(expr, tensor_shardings)
 
-    {container, expr.shape}
+    {container, state.parameter_ids_to_index, expr.shape}
   end
 
   @impl true

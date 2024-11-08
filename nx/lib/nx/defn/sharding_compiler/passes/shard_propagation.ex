@@ -5,7 +5,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
 
   alias Nx.Defn.ShardingCompiler.Shard
 
-  defstruct [:id, :shards, :input_tensor_shardings, :parameter_ids_to_index, :expr]
+  defstruct [:id, :shards, :expr]
 
   def traverse(expr, tensor_shardings) do
     {container, {cache, state}} =
@@ -18,9 +18,6 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
         },
         %{}
       )
-
-    container = put_in(container.data.input_tensor_shardings, tensor_shardings)
-    container = put_in(container.data.parameter_ids_to_index, state.parameter_ids_to_index)
 
     {container, cache, state}
   end

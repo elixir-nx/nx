@@ -32,8 +32,6 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
 
     fetched_inputs = Map.new(input_data_sections, fn {_idx, {arg_id, _}} -> {arg_id, nil} end)
 
-    dbg(stage)
-
     arg_templates =
       Enum.map(input_data_sections, fn {idx, {arg_id, shard_ids}} ->
         arg = stage.arguments[arg_id]
@@ -65,8 +63,6 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
 
         Expr.parameter(arg, :root, idx)
       end)
-
-    dbg(stage.expr)
 
     compiled_fun =
       Nx.Defn.Evaluator.__compile__(

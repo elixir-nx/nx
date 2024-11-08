@@ -24,30 +24,31 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecutionTest do
         [5, 6]
       ])
 
+    fun = fn arg0, arg1 ->
+      x = Nx.add(arg0, 1)
+      y = Nx.subtract(arg1, 2)
+
+      Nx.multiply(x, Nx.transpose(y))
+    end
+
+    expected_output = fun.(arg0, arg1)
+
     expr =
-      Nx.Defn.debug_expr(fn arg0, arg1 ->
-        x = Nx.add(arg0, 1)
-        y = Nx.subtract(arg1, 2)
+      Nx.Defn.debug_expr(fun).(arg0, arg1)
 
-        Nx.multiply(x, Nx.transpose(y))
-      end).(arg0, arg1)
-
-    {%T{
-       data: %ShardPropagation{expr: sharded_expr, parameter_ids_to_index: parameter_ids_to_index}
-     } = ans, _cache,
-     %{expr_shards: expr_shards}} =
+    {%T{data: %ShardPropagation{expr: sharded_expr}} = ans, _cache, %{expr_shards: expr_shards}} =
       ShardPropagation.traverse(expr, %{
         0 => Shard.from_config(arg0, %{0 => 1, 1 => 3}, debug_id: "arg 0"),
         1 => Shard.from_config(arg1, %{0 => 3}, debug_id: "arg 1")
       })
 
-    assert {[stage0], _cache, _state} =
+    assert {[%Stage{} = stage0], _cache, _state} =
              GraphSplitter.traverse(%T{ans | data: sharded_expr}, expr_shards)
 
     args_by_idx = %{0 => arg0, 1 => arg1}
 
     arg_providers =
-      Enum.flat_map(stage0.arguments, fn {id, expr} ->
+      Enum.flat_map(stage0.arguments, fn {_id, expr} ->
         start_shard_providers(expr, args_by_idx)
       end)
 
@@ -65,8 +66,8 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecutionTest do
 
     assert [executor0, executor1] = states
 
-    assert {key0, executor0_state} = executor0
-    assert {key1, executor1_state} = executor1
+    assert {_key0, executor0_state} = executor0
+    assert {_key1, executor1_state} = executor1
 
     idx_to_id =
       Map.new(stage0.arguments, fn
@@ -109,7 +110,12 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecutionTest do
                [0, 12, 28]
              ])
 
-    dbg({sharded_expr.id, expr_shards})
+    {:ok, output_collector_pid} =
+      ShardExecution.OutputCollector.start_link(ans, stage0.id, self())
+
+    assert_receive {ShardExecution.OutputCollector, :done, ^output_collector_pid, result}
+
+    assert expected_output == result
   end
 
   defp start_shard_providers(sharded_expr, arg_data) do
