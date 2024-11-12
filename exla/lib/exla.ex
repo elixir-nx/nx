@@ -14,7 +14,7 @@ defmodule EXLA do
 
   > #### Version requirements {: .info}
   >
-  > For precise requirements, such as CUDA and cuDNN versions, see the `XLA`.
+  > For precise requirements, such as CUDA and cuDNN versions, see `XLA` docs.
 
   ## Configuration
 
