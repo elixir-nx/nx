@@ -19,10 +19,11 @@ defmodule Nx.Defn.Grad do
     {:env, env} = Function.info(fun, :env)
     ids = stop_grads(env, ids)
 
-    # save vectorized axes before devectorizing
-    expr = to_grad |> fun.()
+    expr = fun.(to_grad)
 
-    transformed_expr = transform.(expr) |> validate_expr!() |> Nx.devectorize(keep_names: false)
+    transformed_expr =
+      expr |> transform.() |> validate_expr!()
+
     {parents, nodes} = parents_tree(transformed_expr, ids)
 
     to_grad_ids = {to_grad, ids}
@@ -32,23 +33,17 @@ defmodule Nx.Defn.Grad do
       Composite.traverse(
         to_grad,
         {nodes, grads},
-        fn %{vectorized_axes: vectorized_axes} = node, acc ->
-          node
-          |> Nx.devectorize(keep_names: false)
-          |> to_grad(to_grad_ids, parents, acc)
-          |> then(fn {node, acc} ->
-            {Nx.vectorize(node, vectorized_axes), acc}
-          end)
+        fn node, acc ->
+          to_grad(node, to_grad_ids, parents, acc)
         end
       )
 
     {expr, graded}
   end
 
-  defp constant(float, shape) do
-    shape = Nx.shape(shape)
+  defp constant(float, %T{shape: shape} = t) do
     names = List.duplicate(nil, tuple_size(shape))
-    Expr.constant(%T{shape: shape, type: {:f, 32}, names: names}, float, [])
+    Expr.constant(%T{t | names: names, type: {:f, 32}}, float, [])
   end
 
   defp validate_expr!(%T{data: %Expr{}} = expr) do
@@ -93,47 +88,88 @@ defmodule Nx.Defn.Grad do
                [:equal, :greater, :greater_equal, :less, :less_equal, :not_equal, :argsort]
 
   defp parents_tree(expr, nodes) do
-    Composite.reduce(expr, {%{}, nodes}, &recur_parents_tree/2)
+    Composite.reduce(
+      expr,
+      {%{}, nodes},
+      &recur_parents_tree(
+        Nx.devectorize(&1, keep_names: true),
+        &2,
+        Keyword.keys(&1.vectorized_axes)
+      )
+    )
   end
 
-  defp recur_parents_tree(%T{data: %Expr{id: id, op: op}} = t, {parents, nodes}) do
+  defp recur_parents_tree(%T{data: %Expr{id: id, op: op}} = t, {parents, nodes}, vectorized_names) do
     case nodes do
-      %{^id => _} -> {parents, nodes}
-      %{} -> parents_args(op, t, id, {parents, Map.put(nodes, id, t)})
+      %{^id => _} ->
+        {parents, nodes}
+
+      %{} ->
+        # We use this to compute the proper axis sizes for the tensor
+        nodes = Map.put(nodes, id, {t, vectorized_names})
+
+        parents_args(op, t, id, {parents, nodes}, vectorized_names)
     end
   end
 
-  defp parents_args(:metadata, %{data: %{args: [_, %{stop_grad: true}]}}, _id, acc) do
+  defp parents_args(
+         :metadata,
+         %{data: %{args: [_, %{stop_grad: true}]}},
+         _id,
+         acc,
+         _parent_vectorized_names
+       ) do
     acc
   end
 
-  defp parents_args(:optional, %{data: %{args: [call, _expr, callback]}} = t, id, acc) do
+  defp parents_args(
+         :optional,
+         %{data: %{args: [call, _expr, callback]}} = t,
+         id,
+         acc,
+         parent_vectorized_names
+       ) do
     expr = apply(callback, call.data.args)
 
     # Now traverse over the optional expression where args are the new parameters.
     # Once we access the parameter itself, we point the parameter to the arg.
-    {parents, nodes} =
-      Composite.reduce(expr, acc, fn expr, {parents, nodes} ->
-        parents = Map.update(parents, expr.data.id, [id], &[id | &1])
-        recur_parents_tree(expr, {parents, nodes})
+    {{parents, nodes}, _} =
+      Composite.reduce(expr, {acc, parent_vectorized_names}, fn
+        expr, {{parents, nodes}, expr_vectorized_names} ->
+          arg_vectorized_names = compute_arg_vectorized_names(expr, expr_vectorized_names)
+          parents = Map.update(parents, expr.data.id, [id], &[id | &1])
+
+          acc =
+            recur_parents_tree(
+              expr,
+              {parents, nodes},
+              arg_vectorized_names
+            )
+
+          {acc, expr_vectorized_names}
       end)
 
-    {parents, Map.put(nodes, id, put_in(t.data.args, [call, expr, callback]))}
+    updated_node =
+      {put_in(t.data.args, [call, expr, callback]), parent_vectorized_names}
+
+    {parents, Map.put(nodes, id, updated_node)}
   end
 
   # We register cond as a special node to avoid pretraversing it.
   # Instead we traverse it early on on the grad computation.
-  defp parents_args(:cond, _, id, {parents, nodes}) do
+  defp parents_args(:cond, _, id, {parents, nodes}, _parent_vectorized_names) do
     {Map.update(parents, __MODULE__, [id], &[id | &1]), nodes}
   end
 
-  defp parents_args(op, t, parent_id, acc) do
+  defp parents_args(op, t, parent_id, acc, parent_vectorized_names) do
     reduce_args(op, t, acc, fn arg, {parents, nodes} ->
       if arg.data.op in @constants do
         {parents, nodes}
       else
+        arg_vectorized_names = compute_arg_vectorized_names(t, parent_vectorized_names)
         parents = Map.update(parents, arg.data.id, [parent_id], &[parent_id | &1])
-        recur_parents_tree(arg, {parents, nodes})
+
+        recur_parents_tree(arg, {parents, nodes}, arg_vectorized_names)
       end
     end)
   end
@@ -190,9 +226,26 @@ defmodule Nx.Defn.Grad do
     case nodes do
       %{^id => _} ->
         {nodes, grads} = traverse_parents(id, to_grad_ids, parents, {nodes, grads})
-        {ans, nodes} = Map.pop!(nodes, id)
+        {{ans, vectorized_names}, nodes} = Map.pop!(nodes, id)
         %T{data: %Expr{op: op, args: args}} = ans
         {gs, grads} = Map.pop(grads, id)
+
+        {args, ans} =
+          if vectorized_names != [] do
+            args =
+              Enum.map(args, fn
+                %T{} = arg ->
+                  revectorize_node(arg, vectorized_names)
+
+                opt ->
+                  opt
+              end)
+
+            ans = Nx.vectorize(ans, vectorized_names)
+            {args, ans}
+          else
+            {args, ans}
+          end
 
         case gs do
           nil ->
@@ -210,6 +263,22 @@ defmodule Nx.Defn.Grad do
       %{} ->
         {nodes, grads}
     end
+  end
+
+  defp compute_arg_vectorized_names(%{vectorized_axes: vectorized_axes}, []),
+    do: Keyword.keys(vectorized_axes)
+
+  defp compute_arg_vectorized_names(
+         %{vectorized_axes: vectorized_axes, names: names},
+         parent_names
+       ) do
+    Keyword.keys(vectorized_axes) ++ Enum.filter(names, &(&1 in parent_names))
+  end
+
+  defp revectorize_node(node, vectorized_names) do
+    vectorized_names = compute_arg_vectorized_names(node, vectorized_names)
+
+    Nx.vectorize(node, vectorized_names)
   end
 
   defp update_grads(:elem, [%{type: {:tuple, size}} = tuple, pos], _ans, g, _to_grad_ids, grads) do
@@ -623,7 +692,9 @@ defmodule Nx.Defn.Grad do
         current_limit = 1 + limit
         start = List.replace_at(zero_axes, axis, limit)
         len = List.replace_at(ans_shape_list, axis, 1)
-        {{t, Nx.slice(g, start, len)}, current_limit}
+        g = Nx.slice(g, start, len)
+        g = Nx.squeeze(g, axes: [axis])
+        {{t, g}, current_limit}
       end)
 
     pairs

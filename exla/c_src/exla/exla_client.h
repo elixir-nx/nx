@@ -5,13 +5,13 @@
 #include <utility>
 #include <vector>
 
-#include "exla_nif_util.h"
+#include "erl_nif.h"
+#include "exla_types.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/OwningOpRef.h"
-#include "tsl/platform/status.h"
-#include "tsl/platform/types.h"
 #include "xla/pjrt/gpu/gpu_helpers.h"
 #include "xla/pjrt/pjrt_client.h"
+#include "xla/shape.h"
 
 // The implementations in this module are designed after implementations
 // in the XLA runtime, PjRt. Deviations are made where it makes sense

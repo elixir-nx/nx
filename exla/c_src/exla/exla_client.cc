@@ -400,7 +400,7 @@ xla::Status ExlaClient::TransferToInfeed(ErlNifEnv* env,
   std::vector<const char*> buf_ptrs;
   buf_ptrs.reserve(buffer_bins.size());
 
-  for (const auto & buffer_bin : buffer_bins) {
+  for (const auto& buffer_bin : buffer_bins) {
     const char* data_ptr = const_cast<char*>(reinterpret_cast<char*>(buffer_bin.data));
     buf_ptrs.push_back(data_ptr);
   }
@@ -478,7 +478,10 @@ xla::StatusOr<ExlaClient*> GetGpuClient(double memory_fraction,
 }
 
 xla::StatusOr<ExlaClient*> GetTpuClient() {
-  EXLA_EFFECT_OR_RETURN(pjrt::LoadPjrtPlugin("tpu", "libtpu.so"));
+  auto statusor = pjrt::LoadPjrtPlugin("tpu", "libtpu.so");
+  if (!statusor.ok()) {
+    return statusor.status();
+  }
 
   xla::Status status = pjrt::InitializePjrtPlugin("tpu");
 

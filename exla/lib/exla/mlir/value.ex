@@ -54,31 +54,40 @@ defmodule EXLA.MLIR.Value do
   }
 
   for {op, direction} <- @bin_comparison_ops do
-    def unquote(op)(%Value{function: func} = lhs, %Value{function: func} = rhs, typespec) do
-      compare_and_return_bool(func, lhs, rhs, typespec, unquote(direction))
+    def unquote(op)(
+          %Value{function: func} = lhs,
+          %Value{function: func} = rhs,
+          typespec,
+          opts \\ []
+        ) do
+      compare_and_return_bool(func, lhs, rhs, typespec, unquote(direction), opts[:total_order])
     end
   end
 
-  defp compare_and_return_bool(func, lhs, rhs, typespec, direction) do
+  defp compare_and_return_bool(func, lhs, rhs, typespec, direction, total_order? \\ false) do
     %{type: lhs_type} = get_typespec(lhs)
     %{type: rhs_type} = get_typespec(rhs)
 
     comparison_type =
       cond do
         Nx.Type.complex?(lhs_type) or Nx.Type.complex?(rhs_type) ->
-          attr_comparison_type(:float)
+          [compare_type: attr_comparison_type(:float)]
 
         Nx.Type.float?(lhs_type) or Nx.Type.float?(rhs_type) ->
-          attr_comparison_type(:float)
+          attr =
+            if total_order? do
+              attr_comparison_type(:totalorder)
+            else
+              attr_comparison_type(:float)
+            end
+
+          [compare_type: attr]
 
         true ->
-          attr_comparison_type(:notype)
+          []
       end
 
-    attributes = [
-      comparison_direction: attr_comparison_direction(direction),
-      compare_type: comparison_type
-    ]
+    attributes = [comparison_direction: attr_comparison_direction(direction)] ++ comparison_type
 
     result_types = typespecs_to_mlir_types([Typespec.to_type(typespec, {:pred, 8})])
 
@@ -815,6 +824,81 @@ defmodule EXLA.MLIR.Value do
     {q, r}
   end
 
+  def lu(%Value{function: func} = value, p_typespec, l_typespec, u_typespec) do
+    %{type: op_type, shape: op_shape} = get_typespec(value)
+    %{type: _p_type, shape: p_shape} = p_typespec
+    %{type: l_type, shape: l_shape} = l_typespec
+    %{type: u_type, shape: u_shape} = u_typespec
+
+    dim_sizes = [
+      tuple_size(op_shape),
+      tuple_size(p_shape),
+      tuple_size(l_shape),
+      tuple_size(u_shape)
+    ]
+
+    operand_dims = Tuple.to_list(op_shape)
+    p_dims = Tuple.to_list(p_shape)
+    l_dims = Tuple.to_list(l_shape)
+    u_dims = Tuple.to_list(u_shape)
+
+    dim_sizes = constant(func, dim_sizes, Typespec.tensor({:u, 64}, {length(dim_sizes)}))
+    operand_dims = constant(func, operand_dims, Typespec.tensor({:u, 64}, {length(operand_dims)}))
+    p_dims = constant(func, p_dims, Typespec.tensor({:u, 64}, {length(p_dims)}))
+    l_dims = constant(func, l_dims, Typespec.tensor({:u, 64}, {length(l_dims)}))
+    u_dims = constant(func, u_dims, Typespec.tensor({:u, 64}, {length(u_dims)}))
+    operands = [value, dim_sizes, operand_dims, p_dims, l_dims, u_dims]
+
+    # Force P to always b u8 to avoid requiring too many template instances during custom_call registration
+    p_result_type = type_tensor({:u, 8}, p_shape)
+    l_result_type = type_tensor(l_type, l_shape)
+    u_result_type = type_tensor(u_type, u_shape)
+    result_types = [type_tuple([p_result_type, l_result_type, u_result_type])]
+
+    call_target_name =
+      case op_type do
+        {:f, 32} ->
+          "lu_cpu_custom_call_f32"
+
+        {:f, 64} ->
+          "lu_cpu_custom_call_f64"
+
+        {:f, 16} ->
+          "lu_cpu_custom_call_f16"
+
+        {:bf, 16} ->
+          "lu_cpu_custom_call_bf16"
+
+        type ->
+          # Due to matching on EXLA.Defn, we are sure that the device here is always :host
+          raise "LU decomposition not supported on :host device for type #{inspect(type)}"
+      end
+
+    attributes = [
+      call_target_name: attr_string(call_target_name),
+      backend_config: attr_string("Host")
+    ]
+
+    result =
+      op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes) |> one!()
+
+    # This is not the best approach, but the alternative would require many more template instances
+    u8_typespec = Typespec.to_type(p_typespec, {:u, 8})
+    p = get_tuple_element(result, 0, u8_typespec)
+
+    p =
+      if u8_typespec != p_typespec do
+        convert(p, p_typespec)
+      else
+        p
+      end
+
+    l = get_tuple_element(result, 1, l_typespec)
+    u = get_tuple_element(result, 2, u_typespec)
+
+    {p, l, u}
+  end
+
   def get_tuple_element(%Value{function: func} = operand, index, typespec) do
     result_types = typespecs_to_mlir_types([typespec])
     attributes = [index: attr_i32(index)]
@@ -921,13 +1005,14 @@ defmodule EXLA.MLIR.Value do
     end
   end
 
-  defp float_hex(value, {_, size} = type) do
+  defp float_hex(value, {mod, size} = type) do
     data =
       case value do
         :nan -> type |> Nx.Type.nan_binary() |> native_to_big()
         :infinity -> type |> Nx.Type.infinity_binary() |> native_to_big()
         :neg_infinity -> type |> Nx.Type.neg_infinity_binary() |> native_to_big()
         value when size == 8 -> f8E5M2_to_big(value)
+        value when mod == :bf and size == 16 -> bf16_to_big(value)
         value -> <<value::float-size(size)-big>>
       end
 
@@ -936,6 +1021,10 @@ defmodule EXLA.MLIR.Value do
 
   defp f8E5M2_to_big(x) do
     binary_part(<<x::float-big-16>>, 0, 1)
+  end
+
+  defp bf16_to_big(x) do
+    binary_part(<<x::float-big-32>>, 0, 2)
   end
 
   defp native_to_big(binary) do
@@ -992,7 +1081,7 @@ defmodule EXLA.MLIR.Value do
   defp attr_comparison_direction(value) when value in [:eq, :lt, :le, :gt, :ge, :ne],
     do: attr_enum("stablehlo", "comparison_direction", value)
 
-  defp attr_comparison_type(value) when value in [:float, :totalorder, :notype],
+  defp attr_comparison_type(value) when value in [:float, :totalorder],
     do: attr_enum("stablehlo", "comparison_type", value)
 
   defp attr_precision(value) when value in [:default, :high, :highest],

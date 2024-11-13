@@ -5420,9 +5420,13 @@ defmodule Nx do
       {_, [], 0} ->
         fun.(left, right)
 
-      {[devec_left, devec_right], canonical_vectorized_axes, _offset} ->
-        devec_left
-        |> fun.(devec_right)
+      {[devec_left, devec_right], canonical_vectorized_axes, offset} ->
+        leading_names = Keyword.keys(canonical_vectorized_axes)
+        l = %{devec_left | names: leading_names ++ Enum.drop(devec_left.names, offset)}
+        r = %{devec_right | names: leading_names ++ Enum.drop(devec_right.names, offset)}
+
+        l
+        |> fun.(r)
         |> vectorize(canonical_vectorized_axes)
     end
   end
@@ -8678,7 +8682,7 @@ defmodule Nx do
   You may set the absolute tolerance, `:atol` and relative tolerance
   `:rtol`. Given tolerances, this functions returns 1 if
 
-     absolute(a - b) <= (atol + rtol * absolute(b))
+      absolute(a - b) <= (atol + rtol * absolute(b))
 
   is true for all elements of a and b.
 
@@ -8691,67 +8695,67 @@ defmodule Nx do
 
   ## Examples
 
-     iex> Nx.all_close(Nx.tensor([1.0e10, 1.0e-7]), Nx.tensor([1.00001e10, 1.0e-8]))
-     #Nx.Tensor<
-       u8
-       0
-     >
+      iex> Nx.all_close(Nx.tensor([1.0e10, 1.0e-7]), Nx.tensor([1.00001e10, 1.0e-8]))
+      #Nx.Tensor<
+        u8
+        0
+      >
 
-     iex> Nx.all_close(Nx.tensor([1.0e-8, 1.0e-8]), Nx.tensor([1.0e-8, 1.0e-9]))
-     #Nx.Tensor<
-       u8
-       1
-     >
+      iex> Nx.all_close(Nx.tensor([1.0e-8, 1.0e-8]), Nx.tensor([1.0e-8, 1.0e-9]))
+      #Nx.Tensor<
+        u8
+        1
+      >
 
   Although `NaN` by definition isn't equal to itself, so this implementation
   also considers all `NaN`s different from each other by default:
 
-     iex> Nx.all_close(Nx.tensor(:nan), Nx.tensor(:nan))
-     #Nx.Tensor<
-       u8
-       0
-     >
+      iex> Nx.all_close(Nx.tensor(:nan), Nx.tensor(:nan))
+      #Nx.Tensor<
+        u8
+        0
+      >
 
-     iex> Nx.all_close(Nx.tensor(:nan), Nx.tensor(0))
-     #Nx.Tensor<
-       u8
-       0
-     >
+      iex> Nx.all_close(Nx.tensor(:nan), Nx.tensor(0))
+      #Nx.Tensor<
+        u8
+        0
+      >
 
   We can change this behavior with the `:equal_nan` option:
 
-     iex> t = Nx.tensor([:nan, 1])
-     iex> Nx.all_close(t, t, equal_nan: true) # nan == nan -> true
-     #Nx.Tensor<
-       u8
-       1
-     >
-     iex> Nx.all_close(t, t, equal_nan: false) # nan == nan -> false, default behavior
-     #Nx.Tensor<
-       u8
-       0
-     >
+      iex> t = Nx.tensor([:nan, 1])
+      iex> Nx.all_close(t, t, equal_nan: true) # nan == nan -> true
+      #Nx.Tensor<
+        u8
+        1
+      >
+      iex> Nx.all_close(t, t, equal_nan: false) # nan == nan -> false, default behavior
+      #Nx.Tensor<
+        u8
+        0
+      >
 
   Infinities behave as expected, being "close" to themselves but not
   to other numbers:
 
-     iex> Nx.all_close(Nx.tensor(:infinity), Nx.tensor(:infinity))
-     #Nx.Tensor<
-       u8
-       1
-     >
+      iex> Nx.all_close(Nx.tensor(:infinity), Nx.tensor(:infinity))
+      #Nx.Tensor<
+        u8
+        1
+      >
 
-     iex> Nx.all_close(Nx.tensor(:infinity), Nx.tensor(:neg_infinity))
-     #Nx.Tensor<
-       u8
-       0
-     >
+      iex> Nx.all_close(Nx.tensor(:infinity), Nx.tensor(:neg_infinity))
+      #Nx.Tensor<
+        u8
+        0
+      >
 
-     iex> Nx.all_close(Nx.tensor(1.0e30), Nx.tensor(:infinity))
-     #Nx.Tensor<
-       u8
-       0
-     >
+      iex> Nx.all_close(Nx.tensor(1.0e30), Nx.tensor(:infinity))
+      #Nx.Tensor<
+        u8
+        0
+      >
 
   ## Vectorized tensors
 
