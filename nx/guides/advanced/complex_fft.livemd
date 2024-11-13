@@ -1,0 +1,259 @@
+# Discrete Fourrier Transform with Nx
+
+```elixir
+Mix.install(
+  [
+    {:nx, "~> 0.9.1"},
+    {:kino, "~> 0.14.2"},
+    {:kino_vega_lite, "~> 0.1.11"},
+    {:exla, "~> 0.9.1"},
+    {:nx_signal, "~> 0.2.0"}
+  ],
+  config: [nx: [default_backend: EXLA.Backend]]
+)
+
+Nx.Defn.global_default_options(compiler: EXLA, client: :host)
+```
+
+## Using complex numbers
+
+Take the complex number $1+i$.
+
+Since `Nx` brings in the library `Complex`, we define a complex number by `Complex.new/1`:
+
+```elixir
+one = Complex.new(1,1)
+```
+
+Its norm is $ \sqrt{2}$, and angle is $\pi/4$.
+
+Its polar form is:
+
+$ \sqrt{2}\big(\cos(\pi/4) + i\sin(\pi/4)\big) = \sqrt{2} \exp^{i \pi/4}$.
+
+We can use `Complex.from_polar/2`:
+
+```elixir
+sqrt_2 = :math.sqrt(2)
+a = :math.pi()/4
+
+cx_one = Complex.from_polar(sqrt_2, a)
+```
+
+We can also use `Nx` to build a complex:
+
+```elixir
+t_one = Nx.complex(Nx.tensor(1), Nx.tensor(1))
+```
+
+and compute its norm:
+
+```elixir
+Nx.abs(t_one)
+```
+
+It is "tensor" aware function.
+
+```elixir
+t = Nx.stack([
+  t_one,
+  Nx.complex(Nx.tensor(1), Nx.tensor(0)),
+  Nx.complex(Nx.tensor(0), Nx.tensor(1))
+])
+
+Nx.abs(t)
+```
+
+We also have:
+
+```elixir
+i = Nx.Constants.i()
+
+Nx.add(1 , i)
+```
+
+## Discrete Fourrier Transform
+
+Suppose we have a periodic signal that we sample in order to understand it.
+
+We will run a Fast Fourrier Transform. It transforms a time-domain function into the frequency domain.
+
+<https://en.wikipedia.org/wiki/Discrete_Fourier_transform>
+
+<!-- livebook:{"break_markdown":true} -->
+
+### Build the signal
+
+Lets build a signal that we want to discover!
+
+It will be the sum of two sinusoidal signals, one at 5Hz, and one at 20Hz with the corresponding amplitudes (1, 0.5).
+
+$\sin(2\pi*5*t) + \frac12 \sin(2\pi*20*t)$
+
+Suppose we have a sampling rate of `fs=50Hz` (meaning 50 samples per second) and our aquisition time is `duration = 1s`.
+We build a time series with a linear space of `fs` equally spaced points with the given `duration` with `Nx.linspace`. For each value of the discrete time $t$, we will calculate the "hidden" signal at $t$ in the module below. This will give us the sampling.
+
+```elixir
+defmodule Signal do
+  import Nx.Defn
+  import Nx.Constants, only: [pi: 0]
+
+  defn source(t) do
+    f1 = 5; f2 = 20;
+    Nx.sin(2 * pi() * f1 * t ) + 1/2 * Nx.sin(2 * pi() * f2 * t)
+  end
+
+  defn sample(opts) do
+    fs = opts[:fs]
+    duration = opts[:duration]
+    sampling = Nx.linspace(0, duration, n: fs, endpoint: false, type: {:f, 32})
+    source(sampling)
+  end
+end
+```
+
+We sample our signal at fs=50Hz during 1s:
+
+```elixir
+fs = 50; duration= 1
+
+samples = Signal.sample(fs: fs, duration: 1)
+```
+
+### Analyse the signal with DFT
+
+The DFT algorithm takes our sampling (a time-series) and **approximates the original signal**.
+
+It gives us the following information:
+
+> The Fourrier coefficient as the position $i$ of the DFT results list gives the recovered information of the amplitude (the norm of this coefficient) and the phase of the sampled signal at the frequency $i$ corresponding to the index.
+
+The `Nx.fft` function takes our sampling and returns a list of Fourrier coeficients: they are complex values indexed by the frequency.
+
+```elixir
+dft = Nx.fft(samples)
+```
+
+Our frequency resolution - the accuracy of the DFT algorithm - is limited by the Nyquist frequency, which is half the sampling rate, thus 25 Hz.
+
+[Nyquist](https://en.wikipedia.org/wiki/Nyquist_frequency)
+
+We will therefor limit our study points to the indices below this threshold value by slicing the tensor.
+
+```elixir
+n = Nx.size(dft)
+
+# Nyquist threshold:
+max_freq_index = div(n, 2)
+
+# thus we keep only the meaningfull values
+amplitudes =  Nx.abs(dft)[0..max_freq_index]
+
+# the frequency bins, "n" of them spaced with fs/n=1
+frequencies = NxSignal.fft_frequencies(fs, fft_length: n)[0..max_freq_index]
+
+data1 = %{
+  frequencies: Nx.to_list(frequencies),
+  amplitudes: Nx.to_list(amplitudes)
+}
+
+VegaLite.new(width: 700, height: 300)
+|> VegaLite.data_from_values(data1)
+|> VegaLite.mark(:bar)
+|> VegaLite.encode_field(:x, "frequencies",
+  type: :quantitative,
+  title: "frequency (Hz)",
+  scale: [domain: [0, 50]]
+)
+|> VegaLite.encode_field(:y, "amplitudes",
+  type: :quantitative,
+  title: "amplitutde",
+  scale: [domain: [0, 30]]
+)
+```
+
+We see the peaks at 5Hz, 20Hz with their amplitudes.
+
+This is indeed our incomming signal 🎉
+
+We can confirm this visual inspection with a peek into our data:
+
+```elixir
+{values, indices} = Nx.top_k(amplitudes, k: 5)
+
+filtered_top_frequencies = fn values, indices, threshold ->
+  v = Nx.to_list(values)
+  v0 = Enum.at(v,0)
+  Enum.zip(v, Nx.to_list(indices))
+  |> Enum.filter(fn {v,_idx} -> v >=  v0 * threshold end)
+  |> Enum.unzip()
+  |> elem(1)
+
+end
+
+IO.puts("The top frequencies are: #{inspect(filtered_top_frequencies.(values, indices, 0.001 ))}")
+```
+
+### Visualize the original signal and the IFFT reconstructed
+
+Let's visualize our incoming signal over 400ms. This correspond to 2 periods of our 5Hz signal.
+
+We compute the signal very (400/200=) 2ms to have a smooth curve.
+
+We also add the "reconstructed" signal via the **Inverse Fast Fourrier Transform** available as `Nx.ifft`. This gives us 50 points (we sampled as 50Hz during 1s). We display them as a bar chart next to the "smooth" real signal.
+
+```elixir
+#----------- REAL SIGNAL
+# compute 200 points of the "real" signal during 2/5=400ms (twice the main period)
+
+t = NxSignal.fft_frequencies(2/5, fft_length: 200)
+samples = Signal.source(t)
+
+#----------- RECONSTRUCTED IFFT
+# compute the reconstructed IFFT signal: we get fs=50 points in the range [0..duration=1s]
+y_ifft = Nx.ifft(dft) |> Nx.real()
+l = Nx.size(y_ifft)
+
+# for the graph, we reconstruct  a tensor of 400 points whose values are all zeros
+# except the 400/200 = 20 points spaced every 10th index
+# [y_ifft[0], 0,....,y_fft[1], 0,...., ]
+
+# because the time interval of real signal is 1000/50 = 20ms,
+# and here we draw a point every 400/200= 2ms
+
+
+nb = 20
+
+y_reconstructed =
+  Nx.indexed_put(
+    Nx.broadcast(0.0, {400}),
+    Nx.iota({nb}) |> Nx.dot(10) |> Nx.reshape({nb, 1}),
+    y_ifft[0..nb-1]
+  )
+#----------------
+
+
+data = %{
+  x: Nx.to_list(t),
+  y: Nx.to_list(samples),
+  yr: Nx.to_list(y_reconstructed)
+}
+
+
+VegaLite.new(width: 600, height: 300)
+|> VegaLite.data_from_values(data)
+|> VegaLite.layers([
+  VegaLite.new()
+  |> VegaLite.mark(:line)
+  |> VegaLite.encode_field(:x, "x", type: :quantitative, title: "time (ms)", scale: [domain: [0, 0.4]])
+  |> VegaLite.encode_field(:y, "y", type: :quantitative, title: "signal"),
+  VegaLite.new()
+  |> VegaLite.mark(:bar)
+  |> VegaLite.encode_field(:x, "x", type: :quantitative, scale: [domain: [0, 0.4]])
+  |> VegaLite.encode_field(:y, "yr", type: :quantitative, title: "reconstructed"),
+])
+|> VegaLite.resolve(:scale, y: :independent)
+
+```
+
+We see that during 400ms, we have 2 periods of a longer period signal, and 8 of a shorter and smaller perturbation period signal.
