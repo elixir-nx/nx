@@ -446,6 +446,13 @@ defmodule Nx.Shared do
   ## Helpers
 
   @doc """
+  Appends an element to a tuple.
+  """
+  def tuple_append(tuple, elem) do
+    Tuple.insert_at(tuple, tuple_size(tuple), elem)
+  end
+
+  @doc """
   Extracts the backend from the given options.
   """
   def backend_from_options!(opts) do
