@@ -6,6 +6,13 @@ defmodule Nx.Shared do
 
   ## Type macros
 
+  defmacro generated_case(expr, do: clauses) do
+    clauses =
+      Enum.map(clauses, fn {:->, meta, args} -> {:->, [generated: true] ++ meta, args} end)
+
+    {:case, [generated: true], [expr, [do: clauses]]}
+  end
+
   @doc """
   Match the cartesian product of all given types.
 
