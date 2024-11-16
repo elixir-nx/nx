@@ -2077,7 +2077,7 @@ defmodule Nx.BinaryBackend do
             for <<match!(x, 0) <- data>>, into: <<>> do
               x = read!(x, 0)
 
-              case x do
+              generated_case x do
                 %Complex{re: re} when float_output? and real_output? ->
                   number_to_binary(re, output_type)
 
@@ -2253,14 +2253,13 @@ defmodule Nx.BinaryBackend do
         end
       end
 
-    output_data =
-      match_types [out.type] do
-        for row <- result, %Complex{re: re, im: im} <- row, into: <<>> do
-          re = if abs(re) <= eps, do: 0, else: re
-          im = if abs(im) <= eps, do: 0, else: im
+    %{type: {_, output_size}} = out
 
-          <<write!(Complex.new(re, im), 0)>>
-        end
+    output_data =
+      for row <- result, %Complex{re: re, im: im} <- row, into: <<>> do
+        re = if abs(re) <= eps, do: 0, else: re
+        im = if abs(im) <= eps, do: 0, else: im
+        <<write_complex(re, im, div(output_size, 2))::binary>>
       end
 
     intermediate_shape = out.shape |> Tuple.delete_at(axis) |> Tuple.append(n)
@@ -2388,20 +2387,6 @@ defmodule Nx.BinaryBackend do
         end
 
       scalar_to_binary!(result, type)
-    end
-  end
-
-  defp bin_zip_reduce(t1, [], t2, [], type, acc, fun) do
-    %{type: {_, s1}} = t1
-    %{type: {_, s2}} = t2
-    b1 = to_binary(t1)
-    b2 = to_binary(t2)
-
-    match_types [t1.type, t2.type] do
-      for <<d1::size(s1)-bitstring <- b1>>, <<d2::size(s2)-bitstring <- b2>>, into: <<>> do
-        {result, _} = fun.(d1, d2, acc)
-        scalar_to_binary!(result, type)
-      end
     end
   end
 
