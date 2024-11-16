@@ -1995,7 +1995,7 @@ defmodule Nx.DefnTest do
 
     defn while_mixed_return(a, b) do
       while {a, b}, Nx.less(a, 10) do
-        %{a: a, b: b}
+        %{"a" => a, "b" => b}
       end
     end
 
@@ -2003,7 +2003,7 @@ defmodule Nx.DefnTest do
       expected_error =
         [
           "the do-block in while must return tensors with the same shape, type, and names as the initial arguments.",
-          "\n\n\e\\[32m\n<<<<< Body \\(do-block\\) <<<<<\n%\\{a: #Nx.Tensor<\n    s32\n  >, b: #Nx.Tensor<\n    s32\n  >\\}",
+          "\n\n\e\\[32m\n<<<<< Body \\(do-block\\) <<<<<\n%\\{\"a\" => #Nx.Tensor<\n    s32\n  >, \"b\" => #Nx.Tensor<\n    s32\n  >\\}",
           "\n==========\n\e\\[31m\\{#Nx.Tensor<\n   s32\n >, #Nx.Tensor<\n   s32\n >\\}\n>>>>>     Initial     >>>>>\n\e\\[0m\n$"
         ]
         |> IO.iodata_to_binary()
