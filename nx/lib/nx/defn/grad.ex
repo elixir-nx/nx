@@ -1157,7 +1157,7 @@ defmodule Nx.Defn.Grad do
 
     num_axes = tuple_size(window_dimensions)
 
-    indices = Nx.reshape(indices_to_flatten, Tuple.append(source.shape, num_axes))
+    indices = Nx.reshape(indices_to_flatten, Nx.Shared.tuple_append(source.shape, num_axes))
 
     dsource = Nx.gather(g, indices)
     dtensor = Nx.broadcast(0, tensor)
@@ -1490,7 +1490,7 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad_scatter_window__gather_windows(tensor, window_dimensions, strides, padding) do
-    tensor = Nx.pad(tensor, 0, Enum.map(padding, &Tuple.append(&1, 0)))
+    tensor = Nx.pad(tensor, 0, Enum.map(padding, &Nx.Shared.tuple_append(&1, 0)))
 
     shape_l = Tuple.to_list(tensor.shape)
     window_dims_l = Tuple.to_list(window_dimensions)

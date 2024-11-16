@@ -1305,7 +1305,7 @@ defmodule Nx do
       out =
         case shape do
           {n} ->
-            intermediate_shape = Tuple.duplicate(1, tuple_size(out_shape) - 1) |> Tuple.append(n)
+            intermediate_shape = Tuple.duplicate(1, tuple_size(out_shape) - 1) |> tuple_append(n)
 
             backend.eye(
               %T{type: type, shape: intermediate_shape, names: names},
@@ -1609,7 +1609,7 @@ defmodule Nx do
       t
     else
       diag_length = div(Nx.size(t), Tuple.product(batch_shape))
-      Nx.reshape(t, Tuple.append(batch_shape, diag_length))
+      Nx.reshape(t, tuple_append(batch_shape, diag_length))
     end
   end
 
@@ -10365,9 +10365,9 @@ defmodule Nx do
               if opts[:keep_axis] do
                 new_shape
                 |> Tuple.delete_at(tuple_size(new_shape) - 1)
-                |> Tuple.append(:auto)
+                |> tuple_append(:auto)
               else
-                Tuple.append(new_shape, :auto)
+                tuple_append(new_shape, :auto)
               end
 
             reshaped_tensor = reshape(tensor, flattened_shape)
@@ -13554,7 +13554,7 @@ defmodule Nx do
         end)
         |> Nx.stack()
         |> Nx.revectorize(vectorized_axes,
-          target_shape: Tuple.append(List.to_tuple(lengths), :auto)
+          target_shape: tuple_append(List.to_tuple(lengths), :auto)
         )
 
       Nx.gather(tensor, idx)
@@ -14288,7 +14288,7 @@ defmodule Nx do
       Nx.Shared.optional(:take_along_axis, [tensor, indices, [axis: axis]], out, fn
         tensor, indices, _opts ->
           axes_range = axes(indices)
-          new_axis_shape = Tuple.append(shape(indices), 1)
+          new_axis_shape = tuple_append(shape(indices), 1)
 
           full_indices =
             axes_range
@@ -14471,7 +14471,7 @@ defmodule Nx do
         indices = devectorize(indices, keep_names: false)
 
         iota_shape =
-          indices.shape |> Tuple.delete_at(tuple_size(indices.shape) - 1) |> Tuple.append(1)
+          indices.shape |> Tuple.delete_at(tuple_size(indices.shape) - 1) |> tuple_append(1)
 
         offset_axes = (offset - 1)..0//-1
 

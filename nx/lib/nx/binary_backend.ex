@@ -1492,7 +1492,7 @@ defmodule Nx.BinaryBackend do
     dilations = opts[:window_dilations]
 
     %T{shape: padded_shape, type: {_, size} = type} =
-      tensor = Nx.pad(tensor, acc, Enum.map(padding_config, &Tuple.append(&1, 0)))
+      tensor = Nx.pad(tensor, acc, Enum.map(padding_config, &tuple_append(&1, 0)))
 
     acc = scalar_to_number(acc)
 
@@ -1608,7 +1608,7 @@ defmodule Nx.BinaryBackend do
     init_value = scalar_to_number(init_value)
 
     %T{shape: padded_shape, type: {_, size} = type} =
-      tensor = Nx.pad(t, init_value, Enum.map(padding, &Tuple.append(&1, 0)))
+      tensor = Nx.pad(t, init_value, Enum.map(padding, &tuple_append(&1, 0)))
 
     input_data = to_binary(tensor)
     input_weighted_shape = weighted_shape(padded_shape, size, window_dimensions)
@@ -2262,7 +2262,7 @@ defmodule Nx.BinaryBackend do
         <<write_complex(re, im, div(output_size, 2))::binary>>
       end
 
-    intermediate_shape = out.shape |> Tuple.delete_at(axis) |> Tuple.append(n)
+    intermediate_shape = out.shape |> Tuple.delete_at(axis) |> tuple_append(n)
 
     permuted_output = from_binary(%{out | shape: intermediate_shape}, output_data)
 
