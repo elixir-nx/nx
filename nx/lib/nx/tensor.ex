@@ -220,7 +220,7 @@ defmodule Nx.Tensor do
       mean = tensor |> Nx.mean() |> Nx.to_number() |> :erlang.float()
       std = tensor |> Nx.standard_deviation() |> Nx.to_number() |> :erlang.float()
 
-      "n=#{n} " <>
+      " n=#{n} " <>
       "x∈[#{:io_lib.format("~.3f", [min])}, #{:io_lib.format("~.3f", [max])}] " <>
       "μ=#{:io_lib.format("~.3f", [mean])} σ=#{:io_lib.format("~.3f", [std])}"
     end
@@ -261,18 +261,17 @@ defmodule Nx.Tensor do
         # opts.custom_options[:lovely] ->
         opts.pretty ->
           stats = format_stats(tensor)
-          concat([line(), vectorized_shape, type, shape, line(), stats])
+          concat([vectorized_shape, type, shape, stats])
         data == empty() ->
-          concat([line(), vectorized_shape, type, shape, data])
+          concat([line(), vectorized_shape, type, shape, data, line()])
         true ->
-          concat([line(), vectorized_shape, type, shape, line(), data])
+          concat([line(), vectorized_shape, type, shape, line(), data, line()])
       end
 
       force_unfit(
         concat([
           color("#Nx.Tensor<", :map, opts),
           nest(inner, 2),
-          line(),
           color(">", :map, opts)
         ])
       )
