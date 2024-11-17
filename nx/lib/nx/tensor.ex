@@ -210,42 +210,63 @@ defmodule Nx.Tensor do
     raise "Access.pop/2 is not yet supported by Nx.Tensor"
   end
 
-  defimpl Inspect do
+  defimpl Inspect, for: Nx.Tensor do
     import Inspect.Algebra
 
-    def inspect(
-          %{shape: shape, names: names, type: type, vectorized_axes: vectorized_axes} = tensor,
-          opts
-        ) do
+    defp format_stats(tensor) do
+      n = Nx.size(tensor)
+      min = tensor |> Nx.reduce_min() |> Nx.to_number() |> :erlang.float()
+      max = tensor |> Nx.reduce_max() |> Nx.to_number() |> :erlang.float()
+      mean = tensor |> Nx.mean() |> Nx.to_number() |> :erlang.float()
+      std = tensor |> Nx.standard_deviation() |> Nx.to_number() |> :erlang.float()
+
+      "n=#{n} " <>
+      "x∈[#{:io_lib.format("~.3f", [min])}, #{:io_lib.format("~.3f", [max])}] " <>
+      "μ=#{:io_lib.format("~.3f", [mean])} σ=#{:io_lib.format("~.3f", [std])}"
+    end
+
+    defp format_vectorized_shape(vectorized_axes, open, close) do
+      if vectorized_axes == [] do
+        empty()
+      else
+        {names, sizes} = Enum.unzip(vectorized_axes)
+        shape_tuple = List.to_tuple(sizes)
+
+        concat([
+          "vectorized",
+          Nx.Shape.to_algebra(shape_tuple, names, open, close),
+          line()
+        ])
+      end
+    end
+
+    def inspect(tensor, opts) do
+      %{
+        shape: shape,
+        names: names,
+        type: type,
+        vectorized_axes: vectorized_axes,
+        data: data
+      } = tensor
+
       open = color("[", :list, opts)
       close = color("]", :list, opts)
       type = color(Nx.Type.to_string(type), :atom, opts)
 
-      {vectorized_names, vectorized_sizes} = Enum.unzip(vectorized_axes)
-      vectorized_shape_tuple = List.to_tuple(vectorized_sizes)
-
-      vectorized_shape =
-        if vectorized_axes == [] do
-          empty()
-        else
-          concat([
-            "vectorized",
-            Nx.Shape.to_algebra(vectorized_shape_tuple, vectorized_names, open, close),
-            line()
-          ])
-        end
-
+      vectorized_shape = format_vectorized_shape(vectorized_axes, open, close)
       shape = Nx.Shape.to_algebra(shape, names, open, close)
+      data = data.__struct__.inspect(Nx.devectorize(tensor), opts)
 
-      # TO-DO: this is not the right way, but helps validate results
-      data = tensor.data.__struct__.inspect(Nx.devectorize(tensor), opts)
-
-      inner =
-        if data == empty() do
+      inner = cond do
+        # opts.custom_options[:lovely] ->
+        opts.pretty ->
+          stats = format_stats(tensor)
+          concat([line(), vectorized_shape, type, shape, line(), stats])
+        data == empty() ->
           concat([line(), vectorized_shape, type, shape, data])
-        else
+        true ->
           concat([line(), vectorized_shape, type, shape, line(), data])
-        end
+      end
 
       force_unfit(
         concat([
