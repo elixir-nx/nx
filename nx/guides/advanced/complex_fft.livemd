@@ -1,4 +1,4 @@
-# Discrete Fourrier Transform with Nx
+# Discrete Fourier Transform with Nx
 
 ```elixir
 Mix.install(
