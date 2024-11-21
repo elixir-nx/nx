@@ -165,10 +165,8 @@ We are interested in the amplitudes only here. This is calculated by taking the 
 ```elixir
 n = Nx.size(dft)
 
-# Nyquist threshold:
 max_freq_index = div(n, 2)
 
-# thus we keep only the meaningfull values and calculate the amplitudes
 amplitudes =  Nx.abs(dft)[0..max_freq_index]
 
 # the frequency bins, "n" of them spaced by fs/n=1 unit:
