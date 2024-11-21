@@ -37,7 +37,7 @@ $ \sqrt{2} \exp^{i \pi/4} \coloneqq \sqrt{2}\lparen \cos(\pi/4) + i\sin(\pi/4) \
 We can use `Complex.from_polar/2` to build a complex number from it's polar definition:
 
 ```elixir
-cx_one = Complex.from_polar(sqrt_2, pi_4)
+z = Complex.from_polar(:math.sqrt(2), :math.pi() / 4)
 ```
 
 If we need a tensor from `z`, we can then do:
