@@ -63,7 +63,7 @@ and compute its norm and phase:
 These are "tensor" aware functions.
 
 ```elixir
-t = Nx.stack([t_one,Nx.complex(1,0)])
+t = Nx.stack([z, 1])
 
 Nx.abs(t)
 ```
