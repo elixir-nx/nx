@@ -105,7 +105,7 @@ Let's build a known signal that we will decompose and analyze later on.
 
 It will be the sum of two sinusoidal signals, one at 5Hz, and one at 20Hz with the corresponding amplitudes (1, 0.5).
 
-$f(t) = \sin(2\pi*5*t) + \frac12 \sin(2\pi*20*t)$
+$f(t) = \sin(2\pi*5*t) + \frac{1}{2} \sin(2\pi*20*t)$
 
 Suppose we can sample at `fs=50Hz` (meaning 50 samples per second) and our aquisition time is `duration = 1s`.
 
