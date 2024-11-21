@@ -223,54 +223,45 @@ Below, we display them as a bar chart under the line representing the ideal sign
 #----------- REAL SIGNAL
 # compute 200 points of the "real" signal during 2/5=400ms (twice the main period)
 
-t = NxSignal.fft_frequencies(2/5, fft_length: 200)
+t = Nx.linspace(0, 0.4, n: trunc(0.4 * 500))
 sample = Signal.source(t)
 
 #----------- RECONSTRUCTED IFFT
-# compute the reconstructed IFFT signal: we get fs=50 points in the range [0..duration=1s]
-y_ifft = Nx.ifft(dft) |> Nx.real()
-l = Nx.size(y_ifft)
+yr = Nx.ifft(dft) |> Nx.real()
+fs = 50
+tr = Nx.iota(yr.shape) |> Nx.divide(fs)
 
-# for the graph, we reconstruct  a tensor of 400 points whose values are all zeros
-# except the 400/200 = 20 points spaced every 10th index
-# [y_ifft[0], 0,....,y_fft[1], 0,...., ]
-
-# because the time interval of real signal is 1000/50 = 20ms,
-# and here we draw a point every 400/200= 2ms
-
-
-nb = 20
-
-y_reconstructed =
-  Nx.indexed_put(
-    Nx.broadcast(0.0, {400}),
-    Nx.iota({nb}) |> Nx.dot(10) |> Nx.reshape({nb, 1}),
-    y_ifft[0..nb-1]
-  )
+idx = Nx.less_equal(tr, 0.4)
+xr = Nx.select(idx, tr, :nan)
+yr = Nx.select(idx, yr, :nan)
 #----------------
 
 
 data = %{
   x: Nx.to_list(t),
-  y: Nx.to_list(sample),
-  yr: Nx.to_list(y_reconstructed)
+  y: Nx.to_list(sample)
 }
 
+data_r = %{
+  yr: Nx.to_list(yr),
+  xr: Nx.to_list(xr)
+}
 
 VegaLite.new(width: 600, height: 300)
-|> VegaLite.data_from_values(data)
 |> VegaLite.layers([
   VegaLite.new()
-  |> VegaLite.mark(:line)
+  |> VegaLite.data_from_values(data)
+  |> VegaLite.mark(:line, tooltip: true)
   |> VegaLite.encode_field(:x, "x", type: :quantitative, title: "time (ms)", scale: [domain: [0, 0.4]])
-  |> VegaLite.encode_field(:y, "y", type: :quantitative, title: "signal"),
+  |> VegaLite.encode_field(:y, "y", type: :quantitative, title: "signal")
+  |> VegaLite.encode_field(:order, "x"),
   VegaLite.new()
-  |> VegaLite.mark(:bar)
-  |> VegaLite.encode_field(:x, "x", type: :quantitative, scale: [domain: [0, 0.4]])
-  |> VegaLite.encode_field(:y, "yr", type: :quantitative, title: "reconstructed"),
+  |> VegaLite.data_from_values(data_r)
+  |> VegaLite.mark(:bar, tooltip: true)
+  |> VegaLite.encode_field(:x, "xr", type: :quantitative, scale: [domain: [0, 0.4]])
+  |> VegaLite.encode_field(:y, "yr", type: :quantitative, title: "reconstructed")
+  |> VegaLite.encode_field(:order, "xr")
 ])
-|> VegaLite.resolve(:scale, y: :independent)
-
 ```
 
 We see that during 400ms, we have 2 periods of a longer period signal, and 8 of a shorter and smaller perturbation period signal.
