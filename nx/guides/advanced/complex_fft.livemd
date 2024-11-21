@@ -51,14 +51,10 @@ We can use directly `Nx` to build a complex from its cartesian coordinates:
 t = Nx.complex(1,1)
 ```
 
-and compute its norm and phase:
+and compute its absolute value and phase:
 
 ```elixir
-{
-  Nx.abs(t_one),
-  Nx.phase(t_one)
-}
-```
+{Nx.abs(t), Nx.phase(t)}
 
 These are "tensor" aware functions.
 
