@@ -230,7 +230,7 @@ We also add the "reconstructed" signal via the **Inverse Fast Fourrier Transform
 
 This gives us 50 values  spaced by (1000 / 50) = 20ms (we sampled as 50Hz during 1s).
 
-We display them as a bar chart next to the "smooth" real signal.
+Below, we display them as a bar chart under the line representing the ideal signal.
 
 ```elixir
 #----------- REAL SIGNAL
