@@ -142,7 +142,7 @@ sample = Signal.sample(fs: fs, duration: 1)
 
 ### Analyse the signal with DFT
 
-The DFT algorithm will **approximates the original signal**. It gives us the following information:
+Because our signal contains many periods of the underlying function, the DFT results will contain some noise. This noise stem both from the fact that we're likely cutting of the signal before it repeats, and from the fact that we have a specific frequency resolution which ends up grouping our individual components into frequency bins - the latter isn't really a problem as we have chosen `fs` to be [fast enough](https://en.wikipedia.org/wiki/Nyquist%E2%80%93Shannon_sampling_theorem).
 
 > The number at the index $i$ of the DFT results gives an approximation of the amplitude and phase of the sampled signal at the frequency $i$.
 
