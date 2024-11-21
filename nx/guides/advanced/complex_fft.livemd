@@ -86,7 +86,7 @@ defmodule Example do
   end
 end
 
-Nx.equal(Example.rotate(one), Nx.complex(-1,1))
+Example.rotate(z)
 ```
 
 ## Discrete Fourrier Transform
