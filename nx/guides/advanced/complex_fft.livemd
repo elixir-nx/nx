@@ -32,7 +32,7 @@ Its absolute value is $ \sqrt{2} \approx 1.4142$ and its phase is $\pi/4 \approx
 
 Its polar form is:
 
-$ \sqrt{2}\big(\cos(\pi/4) + i\sin(\pi/4)\big) = \sqrt{2} \exp^{i \pi/4}$.
+$ \sqrt{2} \exp^{i \pi/4} \coloneqq \sqrt{2}\lparen \cos(\pi/4) + i\sin(\pi/4) \rparen$.
 
 We can use `Complex.from_polar/2` to build a complex number from it's polar definition:
 
