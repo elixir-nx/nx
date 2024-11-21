@@ -64,7 +64,7 @@ t = Nx.stack([z, 1])
 Nx.abs(t)
 ```
 
-We also have the imaginary number $i$ defined within `Nx.Constants`. Once imported, we can use it:
+We also have the imaginary constant $i$ defined within `Nx.Constants`:
 
 ```elixir
 i = Nx.Constants.i()
