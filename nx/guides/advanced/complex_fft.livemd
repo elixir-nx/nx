@@ -34,7 +34,7 @@ Its polar form is:
 
 $ \sqrt{2}\big(\cos(\pi/4) + i\sin(\pi/4)\big) = \sqrt{2} \exp^{i \pi/4}$.
 
-We can use `Complex.from_polar/2`:
+We can use `Complex.from_polar/2` to build a complex number from it's polar definition:
 
 ```elixir
 cx_one = Complex.from_polar(sqrt_2, pi_4)
