@@ -109,7 +109,7 @@ $f(t) = \sin(2\pi*5*t) + \frac12 \sin(2\pi*20*t)$
 
 Suppose we can sample at `fs=50Hz` (meaning 50 samples per second) and our aquisition time is `duration = 1s`.
 
-We build a time series of `fs` points equally spaced with the given `duration` interval with `Nx.linspace`.
+We build a time series of `t` points equally spaced with the given `duration` interval with `Nx.linspace`.
 
 For each value of this serie (the discrete time $t$), we will calculate the "hidden" signal $f(t)$ in the module below. This will give us the sampling.
 
