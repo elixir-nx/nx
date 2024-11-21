@@ -48,7 +48,7 @@ Nx.tensor(z)
 We can use directly `Nx` to build a complex from its cartesian coordinates:
 
 ```elixir
-t_one = Nx.complex(1,1)
+t = Nx.complex(1,1)
 ```
 
 and compute its norm and phase:
