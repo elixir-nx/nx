@@ -148,8 +148,6 @@ Because our signal contains many periods of the underlying function, the DFT res
 
 In other words, doing `Nx.fft(sample)` returns a list of numbers indexed by the frequency.
 
-These are complex numbers as they carry the amplitude and phase information.
-
 ```elixir
 dft = Nx.fft(sample)
 ```
