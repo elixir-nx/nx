@@ -179,7 +179,7 @@ data1 = %{
 
 VegaLite.new(width: 700, height: 300)
 |> VegaLite.data_from_values(data1)
-|> VegaLite.mark(:bar)
+|> VegaLite.mark(:bar, tooltip: true)
 |> VegaLite.encode_field(:x, "frequencies",
   type: :quantitative,
   title: "frequency (Hz)",
