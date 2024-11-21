@@ -91,7 +91,7 @@ Example.rotate(z)
 
 ## Advanced Applications - The Discrete Fourier Transform (DFT)
 
-Suppose we have a periodic signal, and we want to sample it to understand the signal.
+Suppose we have a periodic signal which we want to analyze.
 
 We will run a Fast Fourrier Transform. It transforms a time-domain function into the frequency domain. Let's see how.
 
