@@ -209,7 +209,7 @@ end
 IO.puts("The top frequencies are: #{inspect(filtered_top_frequencies.(values, indices, 0.001 ))}")
 ```
 
-### Visualize the original signal and the IFFT reconstructed
+### Visualizing the original signal and the Inverse Discrete Fourier Transform
 
 Let's visualize our incoming signal over 400ms. This correspond to 2 periods of our 5Hz component and 8 periods of our 20Hz component.
 
