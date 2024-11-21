@@ -105,7 +105,7 @@ We will run a Fast Fourrier Transform. It transforms a time-domain function into
 
 ### Build the signal
 
-Let's build a signal that we want to understand.
+Let's build a known signal that we will decompose and analyze later on.
 
 It will be the sum of two sinusoidal signals, one at 5Hz, and one at 20Hz with the corresponding amplitudes (1, 0.5).
 
