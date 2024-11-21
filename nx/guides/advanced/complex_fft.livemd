@@ -125,8 +125,8 @@ defmodule Signal do
   defn sample(opts) do
     fs = opts[:fs]
     duration = opts[:duration]
-    sampling = Nx.linspace(0, duration, n: fs, endpoint: false, type: {:f, 32})
-    source(sampling)
+    t = Nx.linspace(0, duration, n: trunc(duration * fs), endpoint: false, type: {:f, 32})
+    source(t)
   end
 end
 ```
