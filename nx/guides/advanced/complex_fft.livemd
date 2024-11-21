@@ -27,13 +27,7 @@ z = Complex.new(1,1)
 Its absolute value is $ \sqrt{2} \approx 1.4142$ and its phase is $\pi/4 \approx 0.7853$ radians.
 
 ```elixir
-sqrt_2 = :math.sqrt(2)
-pi_4 = :math.pi()/4
-
-{
-  Complex.abs(one) == sqrt_2,
-  Complex.phase(one) == pi_4
-}
+{Complex.abs(one), Complex.phase(one)}
 ```
 
 Its polar form is:
