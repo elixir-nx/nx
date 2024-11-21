@@ -40,11 +40,10 @@ We can use `Complex.from_polar/2` to build a complex number from it's polar defi
 cx_one = Complex.from_polar(sqrt_2, pi_4)
 ```
 
-If we need a tensor, we would do:
+If we need a tensor from `z`, we can then do:
 
 ```elixir
-Nx.tensor(one)
-```
+Nx.tensor(z)
 
 We can use directly `Nx` to build a complex from its cartesian coordinates:
 
