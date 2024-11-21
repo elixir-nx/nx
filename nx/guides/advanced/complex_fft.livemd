@@ -154,13 +154,8 @@ These are complex numbers as they carry the amplitude and phase information.
 dft = Nx.fft(sample)
 ```
 
-Our frequency resolution - the accuracy of the DFT algorithm - is limited by the Nyquist rate, which is half the sampling rate, thus 25 Hz.
-
-Check [Nyquist](https://en.wikipedia.org/wiki/Nyquist_rate) to read more.
-
-We will therefor limit our study points to the indices below this threshold value by slicing the tensor, thus retain the 25 first ones.
-
-We are interested in the amplitudes only here. This is calculated by taking the norm of each number (`Nx.abs`).
+We will limit our study points to the first half of the `dft` because it is symmetrical on the upper half.
+The phase doesn't really matter to us, so we'll use `Nx.abs` to obtain the absolute values at each point.
 
 ```elixir
 n = Nx.size(dft)
