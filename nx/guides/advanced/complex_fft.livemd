@@ -73,7 +73,6 @@ Nx.add(1 , i)
 ```
 
 It can be useful within a numerical function, defined using `defn`.
-
 For example, we can do:
 
 ```elixir
