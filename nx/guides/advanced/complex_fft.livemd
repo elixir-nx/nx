@@ -24,7 +24,7 @@ Since `Nx` depends in the library `Complex`, we can define a complex number by `
 ```elixir
 z = Complex.new(1,1)
 
-Its norm is $ \sqrt{2}$, and angle is $\pi/4$.
+Its absolute value is $ \sqrt{2} \approx 1.4142$ and its phase is $\pi/4 \approx 0.7853$ radians.
 
 ```elixir
 sqrt_2 = :math.sqrt(2)
