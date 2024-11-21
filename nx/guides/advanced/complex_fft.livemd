@@ -226,7 +226,7 @@ Let's visualize our incoming signal over 400ms. This correspond to 2 periods of 
 
 We compute 200 points to have a smooth curve, thus every (400/200=) 2ms.
 
-We also add the "reconstructed" signal via the **Inverse Fast Fourrier Transform** available as `Nx.ifft`.
+We also add the reconstructed signal via the **Inverse Discrete Fourier Transform** available as `Nx.ifft`.
 
 This gives us 50 values spaced by 1000ms / 50 = 20ms.
 
