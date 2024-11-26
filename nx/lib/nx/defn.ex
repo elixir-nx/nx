@@ -722,6 +722,7 @@ defmodule Nx.Defn do
     assert_no_guards!(kind, call, env)
     # Note name here is not necessarily an atom due to unquote(name) support
     {name, args} = decompose_call!(kind, call, env)
+    
     arity = length(args)
 
     defaults =
