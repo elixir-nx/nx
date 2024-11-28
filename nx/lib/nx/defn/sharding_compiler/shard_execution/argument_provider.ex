@@ -3,7 +3,7 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.ArgumentProvider do
 
   alias Nx.Defn.ShardingCompiler.ShardRegistry
 
-  def init(data) do
+  def init(%Nx.Tensor{} = data) do
     {:ok, data}
   end
 

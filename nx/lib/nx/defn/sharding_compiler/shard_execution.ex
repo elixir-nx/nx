@@ -20,6 +20,8 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
   alias Nx.Tensor, as: T
   alias Nx.Defn.Expr
 
+  require Logger
+
   def init([
         %Stage{} = stage,
         input_data_sections,
@@ -33,35 +35,50 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
     fetched_inputs = Map.new(input_data_sections, fn {_idx, {arg_id, _}} -> {arg_id, nil} end)
 
     arg_templates =
-      Enum.map(input_data_sections, fn {idx, {arg_id, shard_ids}} ->
-        arg = stage.arguments[arg_id]
+      Enum.map(input_data_sections, fn
+        {idx, {arg_id, :scalar}} ->
+          arg = stage.arguments[arg_id]
+          shape = arg.shape
+          type = arg.type
 
-        {shape, type} =
-          case arg do
-            %T{data: %Expr{op: :parameter, args: [_idx]}, shape: shape, type: type} ->
-              {shape, type}
+          arg = %T{
+            data: nil,
+            shape: shape,
+            type: type,
+            names: List.duplicate(nil, tuple_size(shape))
+          }
 
-            %T{data: %Expr{op: :metadata, args: [_arg, %{shards: shards}]}, type: type} ->
-              shape =
-                Enum.with_index(shard_ids, fn shard_id, axis ->
-                  %{length: length} =
-                    Enum.find(shards[axis], fn shard -> shard.id == shard_id end)
+          Expr.parameter(arg, :root, idx)
 
-                  length
-                end)
-                |> List.to_tuple()
+        {idx, {arg_id, shard_ids}} ->
+          arg = stage.arguments[arg_id]
 
-              {shape, type}
-          end
+          {shape, type} =
+            case arg do
+              %T{data: %Expr{op: :parameter, args: [_idx]}, shape: shape, type: type} ->
+                {shape, type}
 
-        arg = %T{
-          data: nil,
-          shape: shape,
-          type: type,
-          names: List.duplicate(nil, tuple_size(shape))
-        }
+              %T{data: %Expr{op: :metadata, args: [_arg, %{shards: shards}]}, type: type} ->
+                shape =
+                  Enum.with_index(shard_ids, fn shard_id, axis ->
+                    %{length: length} =
+                      Enum.find(shards[axis], fn shard -> shard.id == shard_id end)
 
-        Expr.parameter(arg, :root, idx)
+                    length
+                  end)
+                  |> List.to_tuple()
+
+                {shape, type}
+            end
+
+          arg = %T{
+            data: nil,
+            shape: shape,
+            type: type,
+            names: List.duplicate(nil, tuple_size(shape))
+          }
+
+          Expr.parameter(arg, :root, idx)
       end)
 
     compiled_fun =
@@ -84,6 +101,13 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
 
       res
     end
+
+    Logger.debug("Starting shard execution",
+      stage_id: inspect(stage.id),
+      input_data_sections: inspect(input_data_sections),
+      output_entry_index: inspect(output_entry_index),
+      output_data_section_id: inspect(output_data_section_id)
+    )
 
     {:ok,
      %__MODULE__{
@@ -166,6 +190,8 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
       |> Enum.sort()
       |> Enum.map(fn {_idx, data} -> data end)
       |> List.to_tuple()
+
+    dbg(args)
 
     output = state.compiled_fun.([args])
     %{state | output: output}

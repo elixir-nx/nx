@@ -5,12 +5,12 @@ defmodule Nx.Defn.ShardingCompiler do
   alias Nx.Defn.ShardingCompiler.Shard
 
   alias Nx.Defn.ShardingCompiler.Passes.ShardPropagation
-  # alias Nx.Defn.ShardingCompiler.Passes.GraphSplitter
-
+  alias Nx.Defn.ShardingCompiler.Passes.GraphSplitter
+  alias Nx.Defn.ShardingCompiler.ShardExecution
   @behaviour Nx.Defn.Compiler
 
   @impl true
-  def __jit__(key, vars, fun, args, opts) do
+  def __jit__(_key, vars, fun, args, opts) do
     opts =
       Keyword.validate!(opts, [
         :sharding_config,
@@ -20,117 +20,78 @@ defmodule Nx.Defn.ShardingCompiler do
 
     [args] = args
 
-    {%T{
-       type: type,
-       data: %ShardPropagation{
-         shards: output_shards
-       }
-     }, parameter_ids_to_index,
-     shape} =
-      propagate_shards(vars, fun, opts[:sharding_config] || [])
+    # TODO: support containers here
+    {%T{data: %ShardPropagation{expr: sharded_expr}} = ans, expr_shards} =
+      propagate_shards(vars, fun, opts[:sharding_config])
 
-    data_sections =
-      output_shards |> Enum.sort_by(fn {axis, _} -> axis end) |> cartesian_product()
+    args_by_idx = Enum.with_index(args, fn arg, idx -> {idx, arg} end) |> Map.new()
 
-    # Find the parents for each data section
-    # Group by inputs
-    # For each input, sort the shards by axis
-    # For each axis, find the minimum start and the maximum end (we need to test for slicing inside the code as well)
-    # it might be the case where an axis is not present in the mapping. This means we need the full axis.
+    {[first_stage | _] = stages, _cache, _state} =
+      GraphSplitter.traverse(%T{ans | data: sharded_expr}, expr_shards)
 
-    result =
-      for section <- data_sections do
-        shards_by_input_id =
-          section
-          |> Enum.flat_map(fn {_axis, shard} ->
-            get_root_parents(shard)
-          end)
-          |> Enum.group_by(fn shard -> shard.input_id end)
+    Enum.flat_map(first_stage.arguments, fn {_id, expr} ->
+      start_shard_providers(expr, args_by_idx)
+    end)
 
-        inputs_by_index =
-          parameter_ids_to_index
-          |> Enum.sort_by(fn {_id, idx} -> idx end)
-          |> Enum.map(fn {id, idx} -> {id, Enum.fetch!(args, idx)} end)
-
-        sliced_inputs =
-          for {input_id, input_fn} <- inputs_by_index do
-            input = input_fn.()
-            shards = shards_by_input_id[input_id]
-            shards_by_axis = Enum.group_by(shards, & &1.axis)
-
-            {_, _, starts_reverse, lengths_reverse} =
-              Enum.reduce(Tuple.to_list(input.shape), {shards_by_axis, 0, [], []}, fn
-                axis_size, {shards_by_axis, axis, starts, lengths} ->
-                  {shards, shards_by_axis} = Map.pop(shards_by_axis, axis)
-
-                  {starts, lengths} =
-                    if shards do
-                      min_start = Enum.min(Enum.map(shards, & &1.start))
-                      max_end = Enum.max(Enum.map(shards, &(&1.start + &1.length - 1)))
-
-                      starts = [min_start | starts]
-                      lengths = [max_end - min_start + 1 | lengths]
-                      {starts, lengths}
-                    else
-                      starts = [0 | starts]
-                      lengths = [axis_size | lengths]
-                      {starts, lengths}
-                    end
-
-                  {shards_by_axis, axis + 1, starts, lengths}
-              end)
-
-            starts = Enum.reverse(starts_reverse)
-            lengths = Enum.reverse(lengths_reverse)
-
-            Nx.slice(input, starts, lengths)
-          end
-
-        {out_starts, []} =
-          Enum.map_reduce(0..(tuple_size(shape) - 1)//1, section, fn
-            axis, [{axis, shard} | shards] ->
-              {shard.start, shards}
-
-            _axis, shards ->
-              {0, shards}
-          end)
-
-        caster_fn = fn result, acc ->
-          Nx.put_slice(acc, out_starts, result)
-        end
-
-        sharding_compiler = opts[:sharding_compiler]
-        sharding_compiler_options = opts[:sharding_compiler_options]
-
-        vars =
-          Enum.with_index(sliced_inputs, fn arg, idx ->
-            arg
-            |> Expr.parameter(:root, idx)
-          end)
-
-        compiled_fun =
-          sharding_compiler.__compile__({key, section}, vars, fun, sharding_compiler_options)
-
-        shard_fn = fn [args] ->
-          [res] =
-            compiled_fun.([
-              Enum.map(Tuple.to_list(args), fn arg ->
-                fn -> arg end
-              end)
-            ])
-
-          res
-        end
-
-        {[List.to_tuple(sliced_inputs)], shard_fn, caster_fn}
+    {last_stage, _last_stage_pid} =
+      for stage <- stages, reduce: nil do
+        _ ->
+          {:ok, pid} = ShardExecution.Supervisor.start_link(stage)
+          {stage, pid}
       end
 
-    output_holder = Nx.iota(shape, type: type)
-    [{output_holder, result}]
+    {:ok, output_collector_pid} =
+      ShardExecution.OutputCollector.start_link(ans, last_stage.id, self())
+
+    receive do
+      {ShardExecution.OutputCollector, :done, ^output_collector_pid, result} ->
+        [result]
+    end
   end
 
-  defp cartesian_product([{axis, first} | rest]) do
-    for x <- first, y <- cartesian_product(rest), do: [{axis, x} | y]
+  defp start_shard_providers(sharded_expr, arg_data) do
+    case sharded_expr do
+      %T{
+        shape: {},
+        data: %Expr{op: :metadata, args: [%T{data: %Expr{args: [idx]}}, %{shards: shards}]}
+      }
+      when map_size(shards) == 0 ->
+        [
+          ShardExecution.ArgumentProvider.start_link([
+            arg_data[idx].(),
+            idx,
+            :scalar
+          ])
+        ]
+
+      %T{data: %Expr{op: :metadata, args: [%T{data: %Expr{args: [idx]}}, %{shards: shards}]}} ->
+        shards
+        |> Enum.sort_by(fn {axis, _} -> axis end)
+        |> Enum.map(fn {axis, shard} -> {shard, axis} end)
+        |> cartesian_product()
+        |> Enum.map(fn sections ->
+          {starts, lengths} =
+            sections
+            |> Enum.map(fn {shard, _axis} -> {shard.start, shard.length} end)
+            |> Enum.unzip()
+
+          data_section_id = Enum.map(sections, fn {shard, _axis} -> shard.id end)
+
+          data = arg_data[idx].()
+
+          data_slice = Nx.slice(data, starts, lengths)
+
+          ShardExecution.ArgumentProvider.start_link([
+            data_slice,
+            idx,
+            data_section_id
+          ])
+        end)
+    end
+  end
+
+  defp cartesian_product([{data, meta} | rest]) do
+    for x <- data, y <- cartesian_product(rest), do: [{x, meta} | y]
   end
 
   defp cartesian_product([]), do: [[]]
@@ -143,6 +104,14 @@ defmodule Nx.Defn.ShardingCompiler do
   def propagate_shards(vars, fun, sharding_config) do
     expr = fun.(vars)
 
+    arity = length(vars)
+
+    sharding_config = sharding_config || List.duplicate(%{}, arity)
+
+    if length(sharding_config) != arity do
+      raise "Expected sharding config for function with #{arity} arguments to have the same length"
+    end
+
     tensor_shardings =
       sharding_config
       |> Enum.zip_with(vars, fn config, var ->
@@ -151,9 +120,10 @@ defmodule Nx.Defn.ShardingCompiler do
       |> Enum.with_index(fn x, idx -> {idx, x} end)
       |> Map.new()
 
-    {container, _cache, state} = ShardPropagation.traverse(expr, tensor_shardings)
+    {container, _cache, %{expr_shards: expr_shards}} =
+      ShardPropagation.traverse(expr, tensor_shardings)
 
-    {container, state.parameter_ids_to_index, expr.shape}
+    {container, expr_shards}
   end
 
   @impl true
@@ -167,13 +137,4 @@ defmodule Nx.Defn.ShardingCompiler do
   end
 
   def init(opts), do: opts
-
-  defp get_root_parents(shard, acc \\ [])
-
-  defp get_root_parents(%Shard{parents: []} = shard, acc), do: List.flatten([shard | acc])
-
-  defp get_root_parents(%Shard{parents: parents}, acc) do
-    Enum.reduce(parents, acc, &get_root_parents/2)
-    |> List.flatten()
-  end
 end

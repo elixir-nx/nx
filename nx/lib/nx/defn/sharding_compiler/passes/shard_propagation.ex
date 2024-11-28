@@ -294,6 +294,8 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
         right_shards[axis] || []
       end)
 
+    dbg({left_shards_list, right_shards_list})
+
     result =
       Enum.reduce(out_axes, {left_shards_list, right_shards_list, []}, fn
         axis, {[left_shards | left_acc], [right_shards | right_acc], out_acc} ->
@@ -341,6 +343,8 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
       |> Enum.reverse()
       |> Enum.with_index()
       |> Map.new(fn {shards, idx} -> {idx, shards} end)
+
+    dbg(out_shards)
 
     {out_shards, state}
   end

@@ -73,27 +73,36 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.Supervisor do
     for {data_section_id, {output_roots_by_dim, starts, lengths}} <- output_data_sections do
       arg_sections =
         for {arg_id, arg} <- arguments do
-          %T{data: %Expr{op: :metadata, args: [param, %{shards: shards}]}} = arg
-          %T{data: %Expr{op: :parameter, args: [arg_idx]}} = param
+          if arg.shape == {} do
+            %T{data: %Expr{op: :metadata, args: [param, _]}} = arg
+            %T{data: %Expr{op: :parameter, args: [arg_idx]}} = param
 
-          shards_by_root =
-            for {_axis, shards_for_axis} <- shards,
-                shard <- shards_for_axis,
-                root <- get_root_parents(shard),
-                into: %{} do
-              {root.id, shard}
-            end
+            {arg_idx, {arg_id, :scalar}}
+          else
+            %T{data: %Expr{op: :metadata, args: [param, %{shards: shards}]}} = arg
+            %T{data: %Expr{op: :parameter, args: [arg_idx]}} = param
 
-          data_section_id_for_input =
-            output_roots_by_dim
-            |> Enum.map(fn {_axis, roots} ->
-              %Shard{} = shard = Enum.find(roots, &shards_by_root[&1.id])
-              {shard.axis, shard.id}
-            end)
-            |> Enum.sort()
-            |> Enum.map(fn {_axis, id} -> id end)
+            shards_by_root =
+              for {_axis, shards_for_axis} <- shards,
+                  shard <- shards_for_axis,
+                  root <- get_root_parents(shard),
+                  into: %{} do
+                {root.id, shard}
+              end
 
-          {arg_idx, {arg_id, data_section_id_for_input}}
+            dbg({shards, arg, output_roots_by_dim, shards_by_root})
+
+            data_section_id_for_input =
+              output_roots_by_dim
+              |> Enum.map(fn {_axis, roots} ->
+                %Shard{} = shard = Enum.find(roots, &shards_by_root[&1.id])
+                {shard.axis, shard.id}
+              end)
+              |> Enum.sort()
+              |> Enum.map(fn {_axis, id} -> id end)
+
+            {arg_idx, {arg_id, data_section_id_for_input}}
+          end
         end
 
       {data_section_id, arg_sections, starts, lengths}
