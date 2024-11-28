@@ -4,16 +4,23 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
   alias Nx.Tensor, as: T
   alias Nx.Defn.Expr
   alias Nx.Defn.ShardingCompiler.Shard
+  alias Nx.Defn.ShardingCompiler.Passes.GraphSplitter.Stage
 
   @gather_ops [:dot]
   @reduction_ops [:sum]
 
-  def traverse(expr, expr_shards \\ %{}) do
+  @ops_to_split Map.merge(
+                  Map.new(@gather_ops, &{&1, :gather}),
+                  Map.new(@reduction_ops, &{&1, :reduce})
+                )
+
+  def traverse(expr, expr_shards \\ %{}, ops_to_split \\ @ops_to_split) do
     # expression_chain is going to be a reverse-accumulation of {category, subexpr}
     # that we can then compile and chain-execute elsewhere. category is either :gather, :reduce or :none
     state = %{
       expression_chain: [],
       nodes_to_replace: %{},
+      ops_to_split: ops_to_split,
       # contains the sharding configuration for each node by id
       shards: expr_shards,
       # args is a map of id -> {stage_id, output_container_position}
@@ -54,9 +61,8 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
               {id, {expr, nil}}, idx ->
                 {id, put_in(expr.data.args, [idx])}
 
-              {id, {expr, shard_propagation}}, idx ->
+              {id, {expr, _shard_propagation}}, idx ->
                 expr = put_in(expr.data.args, [idx])
-                expr = Expr.metadata(expr, %{shards: shard_propagation.shards})
                 {id, expr}
             end)
             |> Map.new()
@@ -64,26 +70,35 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
           {expr, _} =
             composite_rewrite_subtree(expr, %{state | nodes_to_replace: arg_remapping})
 
-          expr =
-            Composite.traverse(expr, fn
-              %T{data: %Expr{id: id}} = t ->
-                if shard_propagation = state.shards[id] do
-                  Expr.metadata(t, %{shards: shard_propagation.shards})
-                else
-                  t
-                end
+          # Traverse the expression to remap all shapes according to the sharding given
+          expr = set_shard_metadata(expr, state.shards)
 
-              other ->
-                other
+          arguments =
+            Map.new(arg_remapping, fn {_id, arg_expr} ->
+              {arg_expr.data.id, set_shard_metadata(arg_expr, state.shards)}
             end)
 
-          argument_sources = Map.take(state.args, Map.keys(arg_remapping))
+          argument_sources =
+            state.args
+            |> Map.take(Map.keys(arg_remapping))
+            |> Map.new(fn {remap_id, v} ->
+              {arg_remapping[remap_id].data.id, v}
+            end)
 
-          [{id, category, expr, argument_sources} | acc]
+          [
+            %Stage{
+              id: id,
+              category: category,
+              expr: expr,
+              arguments: arguments,
+              argument_sources: argument_sources
+            }
+            | acc
+          ]
         end
       )
 
-    {expr_chain, Map.delete(state, :expression_chain), cache}
+    {expr_chain, cache, Map.delete(state, :expression_chain)}
   end
 
   defp composite_eval(expr, state, cache) do
@@ -91,25 +106,19 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
   end
 
   defp eval(%T{data: %Expr{id: id, op: op}} = ans, {cache, state}) do
-    case {cache, state.nodes_to_replace} do
-      {_, %{^id => res}} ->
+    case {cache, state.nodes_to_replace, state.ops_to_split} do
+      {_, %{^id => res}, _} ->
         # Replace the node with the corresponding parameter
         {res, {Map.put(cache, id, res), state}}
 
-      {%{^id => res}, _} ->
+      {%{^id => res}, _, _} ->
         {res, {cache, state}}
 
-      {_, _} ->
-        cond do
-          op in @gather_ops ->
-            rewrite_args(ans, :gather, {cache, state})
+      {_, _, %{^op => category}} ->
+        rewrite_args(ans, category, {cache, state})
 
-          op in @reduction_ops ->
-            rewrite_args(ans, :reduce, {cache, state})
-
-          true ->
-            eval_apply(op, ans, {cache, state})
-        end
+      _ ->
+        eval_apply(op, ans, {cache, state})
     end
   end
 
@@ -203,8 +212,8 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
     {new_expr, {cache, state}}
   end
 
-  defp eval_apply(:parameter, %T{data: %Expr{id: id}} = expr, {cache, state}) do
-    state = put_in(state.args[id], nil)
+  defp eval_apply(:parameter, %T{data: %Expr{id: id, args: [idx]}} = expr, {cache, state}) do
+    state = put_in(state.args[id], {nil, idx})
     {expr, {Map.put(cache, id, expr), state}}
   end
 
@@ -220,11 +229,14 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
     {ans, {Map.put(cache, id, ans), state}}
   end
 
-  defp composite_rewrite_subtree(args, state, acc \\ %{used_args: %{}})
+  defp composite_rewrite_subtree(container, state, acc \\ %{used_args: %{}})
 
-  defp composite_rewrite_subtree(args, state, acc) when is_list(args) do
-    Enum.map_reduce(args, acc, fn
+  defp composite_rewrite_subtree(container, state, acc) when is_list(container) do
+    Enum.map_reduce(container, acc, fn
       %T{} = arg, acc ->
+        composite_rewrite_subtree(arg, state, acc)
+
+      arg, acc when is_list(arg) ->
         composite_rewrite_subtree(arg, state, acc)
 
       arg, acc ->
@@ -232,7 +244,11 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
     end)
   end
 
-  defp composite_rewrite_subtree(%T{data: %Expr{id: id, op: :parameter}} = expr, state, acc) do
+  defp composite_rewrite_subtree(container, state, acc) do
+    Composite.traverse(container, acc, &rewrite_subtree(&1, state, &2))
+  end
+
+  defp rewrite_subtree(%T{data: %Expr{id: id, op: :parameter}} = expr, state, acc) do
     case state.nodes_to_replace do
       %{^id => res} ->
         {res, put_in(acc.used_args[id], {res, state.shards[id]})}
@@ -242,22 +258,75 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
     end
   end
 
-  defp composite_rewrite_subtree(arg, state, acc) do
-    Composite.traverse(arg, acc, &rewrite_subtree(&1, state, &2))
+  defp rewrite_subtree(
+         %T{data: %Expr{op: :optional, id: id, args: [call, subexpr, fun]}} = expr,
+         state,
+         acc
+       ) do
+    case state.nodes_to_replace do
+      %{^id => res} ->
+        {res, put_in(acc.used_args[id], {res, state.shards[id]})}
+
+      _ ->
+        {call, acc} = rewrite_subtree(call, state, acc)
+        # `subexpr` is hermetic, in the sense that it is a self-contained scope
+        # from which the arguments always come from `call`, so we can
+        # keep it as is.
+
+        {put_in(expr.data.args, [call, subexpr, fun]), acc}
+    end
   end
 
   defp rewrite_subtree(%T{data: %Expr{id: id, args: args}} = expr, state, acc) do
     case state.nodes_to_replace do
       %{^id => res} ->
         # nodes_to_replace always contains a param
-        {res, put_in(acc.used_args[id], res)}
+        {res, put_in(acc.used_args[id], {res, state.shards[id]})}
 
       _ ->
         {args, acc} = composite_rewrite_subtree(args, state, acc)
-
         {put_in(expr.data.args, args), acc}
     end
   end
 
   defp rewrite_subtree(other, _, acc), do: {other, acc}
+
+  defp set_shard_metadata(expr, shards) do
+    Composite.traverse(expr, fn
+      %T{data: %Expr{id: id}} = t ->
+        if shard_propagation = shards[id] do
+          shape =
+            shard_propagation.shards
+            |> Enum.sort()
+            |> Enum.map(fn {_axis, [%Shard{length: length} | _]} -> length end)
+            |> List.to_tuple()
+
+          t = do_set_shard_metadata(%{t | shape: shape}, shards)
+          Expr.metadata(t, %{shards: shard_propagation.shards})
+        else
+          do_set_shard_metadata(t, shards)
+        end
+
+      other ->
+        other
+    end)
+  end
+
+  defp do_set_shard_metadata(%T{data: %Expr{args: args}} = expr, shards) do
+    args =
+      Enum.map(args, fn
+        %T{} = arg ->
+          set_shard_metadata(arg, shards)
+
+        arg when is_list(arg) ->
+          Enum.map(arg, &do_set_shard_metadata(&1, shards))
+
+        arg ->
+          arg
+      end)
+
+    put_in(expr.data.args, args)
+  end
+
+  defp do_set_shard_metadata(other, _), do: other
 end

@@ -4,6 +4,7 @@ defmodule Nx.Application do
 
   def start(_type, _args) do
     children = [
+      Nx.Defn.ShardingCompiler.ShardRegistry,
       %{id: Nx.Serving.PG, start: {:pg, :start_link, [Nx.Serving.PG]}},
       {Nx.HiddenServing, Nx.Serving.PG}
     ]

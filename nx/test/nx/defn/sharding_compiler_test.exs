@@ -15,8 +15,8 @@ defmodule Nx.Defn.ShardingCompilerTest do
 
     inputs = [in0, in1]
 
-    arg0_sharding = %{0 => [0..1], 1 => [0..1]}
-    arg1_sharding = %{4 => [0..0, 1..1]}
+    arg0_sharding = %{0 => 2, 1 => 2}
+    arg1_sharding = %{4 => 1}
 
     sharding = [arg0_sharding, arg1_sharding]
 
@@ -39,8 +39,8 @@ defmodule Nx.Defn.ShardingCompilerTest do
 
     inputs = [t, t]
 
-    arg0_sharding = %{0 => [0..0, 1..1, 2..2]}
-    arg1_sharding = %{1 => [0..0, 1..1, 2..2]}
+    arg0_sharding = %{0 => 1}
+    arg1_sharding = %{1 => 1}
 
     sharding = [arg0_sharding, arg1_sharding]
 
@@ -64,7 +64,7 @@ defmodule Nx.Defn.ShardingCompilerTest do
 
     inputs = [t]
 
-    arg0_sharding = %{0 => [0..0, 1..1, 2..2], 1 => [0..2]}
+    arg0_sharding = %{0 => 1, 1 => 3}
 
     sharding = [arg0_sharding]
 
@@ -88,8 +88,8 @@ defmodule Nx.Defn.ShardingCompilerTest do
 
     inputs = [t0, t1]
 
-    arg0_sharding = %{0 => [0..0, 1..1, 2..2]}
-    arg1_sharding = %{1 => [0..0, 1..1, 2..2]}
+    arg0_sharding = %{0 => 1}
+    arg1_sharding = %{1 => 1}
 
     sharding = [arg0_sharding, arg1_sharding]
 
