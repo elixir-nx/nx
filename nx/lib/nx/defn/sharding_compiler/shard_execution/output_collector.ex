@@ -44,7 +44,7 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.OutputCollector do
     GenServer.start_link(
       __MODULE__,
       [sharded_expr, previous_stage_id, listener_pid],
-      sharded_exprname: via_tuple(sharded_expr)
+      name: via_tuple(sharded_expr)
     )
   end
 

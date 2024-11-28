@@ -48,32 +48,14 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
 
           Expr.parameter(arg, :root, idx)
 
-        {idx, {arg_id, shard_ids}} ->
+        {idx, {arg_id, _shard_ids}} ->
           arg = stage.arguments[arg_id]
-
-          {shape, type} =
-            case arg do
-              %T{data: %Expr{op: :parameter, args: [_idx]}, shape: shape, type: type} ->
-                {shape, type}
-
-              %T{data: %Expr{op: :metadata, args: [_arg, %{shards: shards}]}, type: type} ->
-                shape =
-                  Enum.with_index(shard_ids, fn shard_id, axis ->
-                    %{length: length} =
-                      Enum.find(shards[axis], fn shard -> shard.id == shard_id end)
-
-                    length
-                  end)
-                  |> List.to_tuple()
-
-                {shape, type}
-            end
 
           arg = %T{
             data: nil,
-            shape: shape,
-            type: type,
-            names: List.duplicate(nil, tuple_size(shape))
+            shape: arg.shape,
+            type: arg.type,
+            names: arg.names
           }
 
           Expr.parameter(arg, :root, idx)

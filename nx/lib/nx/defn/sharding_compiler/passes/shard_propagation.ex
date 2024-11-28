@@ -141,13 +141,21 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
   defp apply_op(:squeeze, ans, [arg, squeeze_axes], state) do
     shards = Enum.sort_by(arg.data.shards, fn {axis, _} -> axis end)
 
-    {[], _, out_shards} =
-      Enum.reduce(shards, {Enum.sort(squeeze_axes, :asc), 0, %{}}, fn
-        {axis, _shards}, {[axis | squeeze_axes], num_squeezed_axes, out_shards} ->
-          {squeeze_axes, num_squeezed_axes + 1, out_shards}
+    {[], _, out_shards, squeezed_shards} =
+      Enum.reduce(shards, {Enum.sort(squeeze_axes, :asc), 0, %{}, []}, fn
+        {axis, shards}, {[axis | squeeze_axes], num_squeezed_axes, out_shards, squeezed_shards} ->
+          {squeeze_axes, num_squeezed_axes + 1, out_shards, shards ++ squeezed_shards}
 
-        {axis, shards}, {squeeze_axes, num_squeezed_axes, out_shards} ->
-          {squeeze_axes, num_squeezed_axes, Map.put(out_shards, axis - num_squeezed_axes, shards)}
+        {axis, shards}, {squeeze_axes, num_squeezed_axes, out_shards, squeezed_shards} ->
+          {squeeze_axes, num_squeezed_axes, Map.put(out_shards, axis - num_squeezed_axes, shards),
+           squeezed_shards}
+      end)
+
+    dbg(squeezed_shards)
+
+    out_shards =
+      Map.new(out_shards, fn {axis, shards} ->
+        {axis, make_child_shards(shards, axis, squeezed_shards)}
       end)
 
     {put_shards(ans, out_shards), state}
