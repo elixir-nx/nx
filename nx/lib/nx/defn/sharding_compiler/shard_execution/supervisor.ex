@@ -90,8 +90,6 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.Supervisor do
                 {root.id, shard}
               end
 
-            dbg({shards, arg, output_roots_by_dim, shards_by_root})
-
             data_section_id_for_input =
               output_roots_by_dim
               |> Enum.map(fn {_axis, roots} ->

@@ -20,8 +20,6 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
   alias Nx.Tensor, as: T
   alias Nx.Defn.Expr
 
-  require Logger
-
   def init([
         %Stage{} = stage,
         input_data_sections,
@@ -101,13 +99,6 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
 
       res
     end
-
-    Logger.debug("Starting shard execution",
-      stage_id: inspect(stage.id),
-      input_data_sections: inspect(input_data_sections),
-      output_entry_index: inspect(output_entry_index),
-      output_data_section_id: inspect(output_data_section_id)
-    )
 
     {:ok,
      %__MODULE__{
@@ -190,8 +181,6 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
       |> Enum.sort()
       |> Enum.map(fn {_idx, data} -> data end)
       |> List.to_tuple()
-
-    dbg(args)
 
     output = state.compiled_fun.([args])
     %{state | output: output}

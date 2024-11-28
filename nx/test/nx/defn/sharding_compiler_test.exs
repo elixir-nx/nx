@@ -1,6 +1,37 @@
 defmodule Nx.Defn.ShardingCompilerTest do
   use ExUnit.Case, async: true
 
+  test "end to end test with single stage" do
+    arg0 =
+      Nx.tensor([
+        [1, 2, 3],
+        [4, 5, 6]
+      ])
+
+    arg1 =
+      Nx.tensor([
+        [1, 2],
+        [3, 4],
+        [5, 6]
+      ])
+
+    fun = fn arg0, arg1, arg2 ->
+      x = Nx.add(arg0, 1)
+      y = Nx.subtract(arg1, 2)
+
+      Nx.multiply(x, Nx.transpose(y))
+      |> Nx.add(arg2)
+    end
+
+    result =
+      Nx.Defn.jit(fun,
+        compiler: Nx.Defn.ShardingCompiler,
+        sharding_config: [%{0 => 1, 1 => 3}, %{0 => 3, 1 => 1}, %{}]
+      ).(arg0, arg1, 1)
+
+    assert result == fun.(arg0, arg1, 1)
+  end
+
   test "composed test" do
     fun = fn l, r ->
       x = Nx.add(l, Nx.tensor([[1]]))
@@ -20,16 +51,10 @@ defmodule Nx.Defn.ShardingCompilerTest do
 
     sharding = [arg0_sharding, arg1_sharding]
 
-    {output_holder, shards} = assert_sharded_results(fun, inputs, sharding)
+    result = assert_sharded_results(fun, inputs, sharding)
 
-    assert output_holder.shape == {2, 2}
-    assert output_holder.type == {:f, 32}
-
-    # sharding on arg0, axis 1 is discarded by dot/4
-    assert [{[shard_args0], _fun0, _caster0}, {[shard_args1], _fun1, _caster1}] = shards
-
-    assert {in0, in1[[.., .., .., .., 0..0]]} == shard_args0
-    assert {in0, in1[[.., .., .., .., 1..1]]} == shard_args1
+    assert result.shape == {2, 2}
+    assert result.type == {:f, 32}
   end
 
   test "shards a binary op" do
@@ -44,17 +69,10 @@ defmodule Nx.Defn.ShardingCompilerTest do
 
     sharding = [arg0_sharding, arg1_sharding]
 
-    {output_holder, shards} = assert_sharded_results(fun, inputs, sharding)
+    result = assert_sharded_results(fun, inputs, sharding)
 
-    assert output_holder.shape == {3, 3}
-    assert output_holder.type == {:s, 32}
-
-    assert length(shards) == 9
-
-    assert Enum.with_index(shards, fn {[{arg0, arg1}], _fun, _caster}, idx ->
-             assert arg0 == Nx.tensor([[idx]])
-             assert arg1 == Nx.tensor([[idx]])
-           end)
+    assert result.shape == {3, 3}
+    assert result.type == {:s, 32}
   end
 
   test "shards a unary op" do
@@ -68,16 +86,10 @@ defmodule Nx.Defn.ShardingCompilerTest do
 
     sharding = [arg0_sharding]
 
-    {output_holder, shards} = assert_sharded_results(fun, inputs, sharding)
+    result = assert_sharded_results(fun, inputs, sharding)
 
-    assert output_holder.shape == {3, 3}
-    assert output_holder.type == {:f, 32}
-
-    assert length(shards) == 3
-
-    assert Enum.with_index(shards, fn {[{arg0}], _fun, _caster}, idx ->
-             assert arg0 == t[[idx..idx, ..]]
-           end)
+    assert result.shape == {3, 3}
+    assert result.type == {:f, 32}
   end
 
   test "shards dot product" do
@@ -93,38 +105,22 @@ defmodule Nx.Defn.ShardingCompilerTest do
 
     sharding = [arg0_sharding, arg1_sharding]
 
-    {output_holder, shards} = assert_sharded_results(fun, inputs, sharding)
+    result = assert_sharded_results(fun, inputs, sharding)
 
-    assert output_holder.shape == {3, 3}
-    assert output_holder.type == {:s, 32}
-
-    assert length(shards) == 9
-
-    # ensure that the shards are appearing in the expected order
-    # (although this doesn't have any practical effect, it's an important regression)
-    for idx0 <- 0..2, idx1 <- 0..2, reduce: shards do
-      [shard | shards] ->
-        {[{arg0, arg1}], _fun, _caster} = shard
-
-        assert arg0 == t0[[idx0..idx0, ..]]
-        assert arg1 == t1[[.., idx1..idx1]]
-
-        shards
-    end
+    assert result.shape == {3, 3}
+    assert result.type == {:s, 32}
   end
 
   test "works with literal scalars" do
     fun = fn x -> Nx.add(x, 1) end
 
-    {_, shards} = assert_sharded_results(fun, [Nx.iota({4})], [%{}])
-    assert length(shards) == 4
+    assert_sharded_results(fun, [Nx.iota({4})], [%{}])
   end
 
   test "works with literal tensors" do
     fun = fn x -> Nx.add(x, Nx.tensor([1])) end
 
-    {_, shards} = assert_sharded_results(fun, [Nx.iota({4})], [%{}])
-    assert length(shards) == 4
+    assert_sharded_results(fun, [Nx.iota({4})], [%{}])
 
     # This case raises because all literal tensors are forced
     # to be not sharded. We can in the future fix this by adding
@@ -138,19 +134,17 @@ defmodule Nx.Defn.ShardingCompilerTest do
 
   test "squeeze" do
     fun = &Nx.squeeze(&1, axes: [0, 1])
-    {_, shards} = assert_sharded_results(fun, [Nx.iota({1, 1, 4})], [%{}])
-    assert length(shards) == 4
+    assert_sharded_results(fun, [Nx.iota({1, 1, 4})], [%{}])
   end
 
   test "transpose" do
     fun = &Nx.transpose(&1, axes: [2, 0, 1])
-    {output_holder, shards} = assert_sharded_results(fun, [Nx.iota({2, 3, 4})], [%{}])
-    assert output_holder.shape == {4, 2, 3}
-    assert length(shards) == 2 * 3 * 4
+    result = assert_sharded_results(fun, [Nx.iota({2, 3, 4})], [%{}])
+    assert result.shape == {4, 2, 3}
   end
 
   defp assert_sharded_results(fun, inputs, sharding) do
-    {output_holder, shards} =
+    sharded_result =
       Nx.Defn.jit_apply(
         fun,
         inputs,
@@ -160,14 +154,7 @@ defmodule Nx.Defn.ShardingCompilerTest do
         sharding_compiler_options: []
       )
 
-    sharded_result =
-      Enum.reduce(shards, output_holder, fn {arg, fun, caster}, acc ->
-        result = fun.(arg)
-        caster.(result, acc)
-      end)
-
     assert sharded_result == apply(fun, inputs)
-
-    {output_holder, shards}
+    sharded_result
   end
 end

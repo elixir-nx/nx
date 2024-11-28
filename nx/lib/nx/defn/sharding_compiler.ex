@@ -10,42 +10,53 @@ defmodule Nx.Defn.ShardingCompiler do
   @behaviour Nx.Defn.Compiler
 
   @impl true
-  def __jit__(_key, vars, fun, args, opts) do
+  def __jit__(key, vars, fun, args, opts) do
+    __compile__(key, vars, fun, opts).(args)
+  end
+
+  @impl true
+  def __compile__(_key, vars, fun, opts) do
     opts =
       Keyword.validate!(opts, [
         :sharding_config,
+        timeout: :infinity,
         sharding_compiler: Nx.Defn.Evaluator,
         sharding_compiler_options: []
       ])
 
-    [args] = args
-
-    # TODO: support containers here
     {%T{data: %ShardPropagation{expr: sharded_expr}} = ans, expr_shards} =
       propagate_shards(vars, fun, opts[:sharding_config])
-
-    args_by_idx = Enum.with_index(args, fn arg, idx -> {idx, arg} end) |> Map.new()
 
     {[first_stage | _] = stages, _cache, _state} =
       GraphSplitter.traverse(%T{ans | data: sharded_expr}, expr_shards)
 
-    Enum.flat_map(first_stage.arguments, fn {_id, expr} ->
-      start_shard_providers(expr, args_by_idx)
-    end)
+    fn [args] ->
+      # use task here so that we don't pollute the caller with the output collector message
+      task =
+        Task.async(fn ->
+          args_by_idx = Enum.with_index(args, fn arg, idx -> {idx, arg} end) |> Map.new()
 
-    {last_stage, _last_stage_pid} =
-      for stage <- stages, reduce: nil do
-        _ ->
-          {:ok, pid} = ShardExecution.Supervisor.start_link(stage)
-          {stage, pid}
-      end
+          Enum.flat_map(first_stage.arguments, fn {_id, expr} ->
+            start_shard_providers(expr, args_by_idx)
+          end)
 
-    {:ok, output_collector_pid} =
-      ShardExecution.OutputCollector.start_link(ans, last_stage.id, self())
+          last_stage =
+            for stage <- stages, reduce: nil do
+              _ ->
+                {:ok, _pid} = ShardExecution.Supervisor.start_link(stage)
+                stage
+            end
 
-    receive do
-      {ShardExecution.OutputCollector, :done, ^output_collector_pid, result} ->
-        [result]
+          {:ok, output_collector_pid} =
+            ShardExecution.OutputCollector.start_link(ans, last_stage.id, self())
+
+          receive do
+            {ShardExecution.OutputCollector, :done, ^output_collector_pid, result} ->
+              [result]
+          end
+        end)
+
+      Task.await(task, opts[:timeout])
     end
   end
 
@@ -96,12 +107,7 @@ defmodule Nx.Defn.ShardingCompiler do
 
   defp cartesian_product([]), do: [[]]
 
-  @impl true
-  def __compile__(_key, _vars, _fun, _opts) do
-    raise "Not implemented yet"
-  end
-
-  def propagate_shards(vars, fun, sharding_config) do
+  defp propagate_shards(vars, fun, sharding_config) do
     expr = fun.(vars)
 
     arity = length(vars)
