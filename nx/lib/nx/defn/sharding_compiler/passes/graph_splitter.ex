@@ -375,7 +375,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
     end)
   end
 
-  defp gather_stage(%Stage{arguments: arguments} = stage) do
+  defp gather_stage(%Stage{arguments: arguments, argument_sources: argument_sources} = stage) do
     require IEx
     IEx.pry()
 
@@ -386,6 +386,102 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
     # 3. make it so that this new function is the argument source for the corresponding arguments in the input stage
     # 4. turn this function into a new intermediate collection stage
 
-    raise "not implemented"
+    {gather_stages, stage} =
+      Enum.map_reduce(arguments, stage, fn {arg_id, %T{type: type} = arg}, stage ->
+        case arg.data do
+          %Nx.Defn.Expr{op: :metadata, args: [_, %{shards: shards}]} ->
+            {wrapped_shards, any_contracted} =
+              Enum.map_reduce(shards, false, fn
+                {axis, {_, _} = contracted}, _acc -> {{axis, [contracted]}, true}
+                {axis, shards}, acc -> {{axis, shards}, acc}
+              end)
+
+            if any_contracted do
+              output_shape =
+                Enum.map(wrapped_shards, fn
+                  {_axis, [{[resulting], _shards}]} -> resulting.length
+                  {_axis, [shard | _]} -> shard.length
+                end)
+                |> List.to_tuple()
+
+              gather_args =
+                wrapped_shards
+                |> cartesian_product()
+                |> Enum.flat_map(fn sections ->
+                  {concatenation_arguments_set, _concatenation_axes_reverse} =
+                    sections
+                    |> Enum.map_reduce([], fn
+                      {axis, {_, parents}}, acc -> {{axis, parents}, [axis | acc]}
+                      {axis, shards}, acc -> {{axis, [shards]}, acc}
+                    end)
+                    |> dbg()
+
+                  cartesian_product(concatenation_arguments_set)
+                end)
+                |> Enum.with_index(fn shards, index ->
+                  arg_shape =
+                    Enum.map(shards, fn {_axis, shard} -> shard.length end) |> List.to_tuple()
+
+                  dbg(shards)
+
+                  arg = Expr.parameter(%{arg | shape: arg_shape}, index)
+                  Expr.metadata(arg, %{shards: Map.new(shards)})
+                end)
+
+              dbg(gather_args)
+
+              output_holder =
+                Nx.broadcast(Nx.tensor(0, type: type), output_shape, names: arg.names)
+
+              expr =
+                Enum.reduce(gather_args, output_holder, fn arg, acc ->
+                  %T{data: %Expr{op: :metadata, args: [slice, %{shards: shards}]}} = arg
+                  starts = Enum.map(shards, fn {_axis, shard} -> shard.start end)
+                  Nx.Defn.Expr.put_slice(acc, acc, starts, slice)
+                end)
+
+              gather_stage = %Stage{
+                id: make_ref(),
+                category: :none,
+                expr: expr,
+                arguments: gather_args,
+                argument_sources:
+                  Map.new(gather_args, fn %T{data: %Nx.Defn.Expr{id: id}} ->
+                    {id, argument_sources[arg_id]}
+                  end)
+              }
+
+              modified_stage = put_in(stage.argument_sources[arg_id], {gather_stage.id, 0})
+
+              modified_stage =
+                update_in(modified_stage.arguments[arg_id], fn arg ->
+                  %T{data: %Expr{op: :metadata, args: [slice, %{shards: shards}]}} = arg
+
+                  modified_shards =
+                    Map.new(shards, fn
+                      {axis, {resulting, _}} -> {axis, resulting}
+                      {axis, shards} -> {axis, shards}
+                    end)
+
+                  put_in(arg.data.args, [slice, %{shards: modified_shards}])
+                end)
+
+              {gather_stage, modified_stage}
+            else
+              {[], stage}
+            end
+
+          _ ->
+            {[], stage}
+        end
+      end)
+
+    List.flatten([stage | gather_stages])
   end
+
+  defp cartesian_product([{axis, entries} | rest]) do
+    for x <- entries, y <- cartesian_product(rest), do: [{axis, x} | y]
+  end
+
+  defp cartesian_product([]), do: [[]]
 end
