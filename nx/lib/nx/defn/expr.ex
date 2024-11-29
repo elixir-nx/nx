@@ -1,5 +1,5 @@
 defmodule Nx.Defn.Expr do
-  @doc """
+  @moduledoc """
   The expression used by `Nx.Defn.Compiler`.
 
   `Nx.Defn.Compiler` changes `Nx` default backend from `Nx.BinaryBackend`
