@@ -37,7 +37,7 @@ defmodule Nx.Defn.ShardingCompiler do
           args_by_idx = Enum.with_index(args, fn arg, idx -> {idx, arg} end) |> Map.new()
 
           Enum.flat_map(first_stage.arguments, fn {_id, expr} ->
-            start_shard_providers(expr, args_by_idx)
+            start_shard_providers(expr, args_by_idx, expr_shards)
           end)
 
           last_stage =
@@ -60,7 +60,7 @@ defmodule Nx.Defn.ShardingCompiler do
     end
   end
 
-  defp start_shard_providers(sharded_expr, arg_data) do
+  defp start_shard_providers(sharded_expr, arg_data, expr_shards) do
     case sharded_expr do
       %T{
         shape: {},
@@ -75,7 +75,14 @@ defmodule Nx.Defn.ShardingCompiler do
           ])
         ]
 
-      %T{data: %Expr{op: :metadata, args: [%T{data: %Expr{args: [idx]}}, %{shards: shards}]}} ->
+      %T{
+        data: %Expr{
+          op: :metadata,
+          args: [%T{data: %Expr{id: id, args: [idx]}}, %{shards: _shards}]
+        }
+      } ->
+        shards = expr_shards[id].shards
+
         shards
         |> Enum.sort_by(fn {axis, _} -> axis end)
         |> Enum.map(fn {axis, shard} -> {shard, axis} end)
@@ -91,6 +98,8 @@ defmodule Nx.Defn.ShardingCompiler do
           data = arg_data[idx].()
 
           data_slice = Nx.slice(data, starts, lengths)
+
+          dbg({data_slice, starts, lengths, idx, data_section_id})
 
           ShardExecution.ArgumentProvider.start_link([
             data_slice,
@@ -120,8 +129,8 @@ defmodule Nx.Defn.ShardingCompiler do
 
     tensor_shardings =
       sharding_config
-      |> Enum.zip_with(vars, fn config, var ->
-        Shard.from_config(var, config)
+      |> Enum.zip_with(Enum.with_index(vars), fn config, {var, idx} ->
+        Shard.from_config(var, config, debug_id: "arg #{idx}")
       end)
       |> Enum.with_index(fn x, idx -> {idx, x} end)
       |> Map.new()

@@ -30,11 +30,29 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
       ]) do
     Process.send_after(self(), :fetch_inputs, 0)
 
-    fetched_inputs = Map.new(input_data_sections, fn {_idx, {arg_id, _}} -> {arg_id, nil} end)
+    require IEx
+    IEx.pry()
+
+    input_data_sections =
+      input_data_sections
+      |> Enum.sort_by(fn {idx, _} -> idx end)
+      |> Enum.with_index(fn {_idx, {arg_id, shard_ids}}, idx ->
+        {idx, {arg_id, shard_ids}}
+      end)
+
+    fetched_inputs =
+      Map.new(input_data_sections, fn
+        {idx, {arg_id, nil}} ->
+          {arg_id, {idx, 0}}
+
+        {_idx, {arg_id, _}} ->
+          {arg_id, nil}
+      end)
 
     arg_templates =
-      Enum.map(input_data_sections, fn
-        {idx, {arg_id, :scalar}} ->
+      input_data_sections
+      |> Enum.with_index(fn
+        {_idx, {arg_id, :scalar}}, idx ->
           arg = stage.arguments[arg_id]
           shape = arg.shape
           type = arg.type
@@ -48,7 +66,20 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
 
           Expr.parameter(arg, :root, idx)
 
-        {idx, {arg_id, _shard_ids}} ->
+        {_idx, {_arg_id, nil}}, idx ->
+          # TO-DO: this is not the proper way to handle this case
+          # as we should be keeping the container together.
+          # This is a hack so we can get the POC running.
+          arg = %T{
+            data: nil,
+            shape: {},
+            type: {:u, 8},
+            names: []
+          }
+
+          Expr.parameter(arg, :root, idx)
+
+        {_idx, {arg_id, _shard_ids}}, idx ->
           arg = stage.arguments[arg_id]
 
           arg = %T{
@@ -66,7 +97,11 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
         make_ref(),
         arg_templates,
         fn _ ->
-          stage.expr
+          if is_tuple(stage.expr) do
+            elem(stage.expr, output_entry_index)
+          else
+            stage.expr
+          end
         end,
         []
       )
@@ -137,6 +172,10 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
     end
   end
 
+  def handle_info(_, state) do
+    {:noreply, state}
+  end
+
   def get(stage_id, stage_idx, data_section_id) do
     key = {stage_id, stage_idx, data_section_id}
 
@@ -165,6 +204,7 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
       |> List.to_tuple()
 
     output = state.compiled_fun.([args])
+
     %{state | output: output}
   end
 end

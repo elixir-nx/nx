@@ -23,13 +23,13 @@ defmodule Nx.Defn.ShardingCompiler.Shard do
 
     id_doc =
       if Application.get_env(:nx, :debug_shards) do
-        "(#{inspect(debug_id)} | #{inspect(id)})"
+        "(debug_id: #{inspect(debug_id)} | id: #{inspect(id)})"
       else
-        "(#{inspect(id)})"
+        "id: #{inspect(id)}"
       end
 
     range_doc = "#{start}..#{start + length - 1}"
-    input_id_doc = if(input_id, do: "(#{inspect(input_id)})", else: "")
+    input_id_doc = if(input_id, do: "input_id: #{inspect(input_id)}", else: "")
 
     if single_line do
       concat([
@@ -125,6 +125,7 @@ defmodule Nx.Defn.ShardingCompiler.Shard do
 
             %__MODULE__{
               id: id,
+              debug_id: debug_id,
               axis: axis,
               start: start,
               length: 1,
@@ -135,6 +136,20 @@ defmodule Nx.Defn.ShardingCompiler.Shard do
 
         Map.put(shards_by_axis, axis, shards)
       end
+    end)
+  end
+
+  def make_child_shards(shards, axis, extra_parents \\ []) do
+    Enum.map(shards, fn shard ->
+      %__MODULE__{
+        id: make_ref(),
+        axis: axis,
+        start: shard.start,
+        length: shard.length,
+        input_id: shard.input_id,
+        debug_id: shard.debug_id && shard.debug_id <> " > child",
+        parents: [shard | extra_parents]
+      }
     end)
   end
 end

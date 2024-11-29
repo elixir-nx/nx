@@ -151,11 +151,9 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
            squeezed_shards}
       end)
 
-    dbg(squeezed_shards)
-
     out_shards =
       Map.new(out_shards, fn {axis, shards} ->
-        {axis, make_child_shards(shards, axis, squeezed_shards)}
+        {axis, Shard.make_child_shards(shards, axis, squeezed_shards)}
       end)
 
     {put_shards(ans, out_shards), state}
@@ -167,7 +165,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
     out_shards =
       axes
       |> Enum.with_index(fn in_axis, out_axis ->
-        out_shards = make_child_shards(Map.fetch!(shards, in_axis), out_axis)
+        out_shards = Shard.make_child_shards(Map.fetch!(shards, in_axis), out_axis)
         {out_axis, out_shards}
       end)
       |> Map.new()
@@ -178,29 +176,53 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
   defp apply_op(:dot, ans, [t0, c0, b0, t1, c1, b1], state) do
     left_sharding =
       Enum.reduce(c0, t0.data.shards, fn axis, acc ->
+        shards = acc[axis]
+
         Map.put(acc, axis, [
           %Shard{
             id: make_ref(),
             axis: axis,
             start: 0,
             length: elem(t0.shape, axis),
-            parents: []
+            input_id: hd(shards).input_id,
+            debug_id: if(debug_id = hd(shards).debug_id, do: debug_id <> " > child"),
+            parents: shards
           }
         ])
       end)
 
     right_sharding =
       Enum.reduce(c1, t1.data.shards, fn axis, acc ->
+        shards = acc[axis]
+
         Map.put(acc, axis, [
           %Shard{
             id: make_ref(),
             axis: axis,
             start: 0,
             length: elem(t1.shape, axis),
-            parents: []
+            input_id: hd(shards).input_id,
+            debug_id: if(debug_id = hd(shards).debug_id, do: debug_id <> " > child"),
+            parents: shards
           }
         ])
       end)
+
+    left_contracted_shards =
+      left_sharding
+      |> Map.take(c0)
+      |> Enum.flat_map(fn {_axis, shards} ->
+        shards
+      end)
+
+    right_contracted_shards =
+      right_sharding
+      |> Map.take(c1)
+      |> Enum.flat_map(fn {_axis, shards} ->
+        shards
+      end)
+
+    contracted_shards = left_contracted_shards ++ right_contracted_shards
 
     offset = length(b0)
 
@@ -208,7 +230,15 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
       Enum.zip_with([b0, b1, 0..(offset - 1)], fn left_axis, right_axis, axis ->
         left_shards = Map.fetch!(left_sharding, left_axis)
         right_shards = Map.fetch!(right_sharding, right_axis)
-        resolve_sharding_broadcast(axis, left_shards, false, right_shards, false)
+
+        resolve_sharding_broadcast(
+          axis,
+          left_shards,
+          false,
+          right_shards,
+          false,
+          contracted_shards
+        )
       end)
 
     out_shards_left =
@@ -216,7 +246,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
         {idx + offset,
          left_sharding
          |> Map.fetch!(axis)
-         |> make_child_shards(idx + offset)}
+         |> Shard.make_child_shards(idx + offset, contracted_shards)}
       end)
 
     offset = offset + length(out_shards_left)
@@ -226,11 +256,13 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
         {idx + offset,
          right_sharding
          |> Map.fetch!(axis)
-         |> make_child_shards(idx + offset)}
+         |> Shard.make_child_shards(idx + offset, contracted_shards)}
       end)
 
     out_shards = Map.new(batch_shards ++ out_shards_left ++ out_shards_right)
-    {put_shards(ans, out_shards), state}
+
+    out = put_shards(ans, out_shards)
+    {out, state}
   end
 
   defp apply_op(op, _ans, _args, _state) do
@@ -311,10 +343,10 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
                 []
 
               {[], shards} ->
-                make_child_shards(shards, axis)
+                Shard.make_child_shards(shards, axis)
 
               {shards, []} ->
-                make_child_shards(shards, axis)
+                Shard.make_child_shards(shards, axis)
 
               {left, right} ->
                 # If we are dealing with a broadcast axis on either tensor, we can
@@ -353,17 +385,26 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
     {out_shards, state}
   end
 
-  defp resolve_sharding_broadcast(axis, [left_shard], true, right_shards, false) do
+  defp resolve_sharding_broadcast(
+         axis,
+         left_shards,
+         left_is_broadcasting,
+         right_shards,
+         right_is_broadcasting,
+         extra_parents \\ []
+       )
+
+  defp resolve_sharding_broadcast(axis, [left_shard], true, right_shards, false, extra_parents) do
     # We have a single shard on the left that we'll map onto the right shards.
-    make_child_shards(right_shards, axis, [left_shard])
+    Shard.make_child_shards(right_shards, axis, [left_shard | extra_parents])
   end
 
-  defp resolve_sharding_broadcast(axis, left_shards, false, [right_shard], true) do
+  defp resolve_sharding_broadcast(axis, left_shards, false, [right_shard], true, extra_parents) do
     # We have a single shard on the right that we'll map onto the left shards.
-    make_child_shards(left_shards, axis, [right_shard])
+    Shard.make_child_shards(left_shards, axis, [right_shard | extra_parents])
   end
 
-  defp resolve_sharding_broadcast(axis, left_shards, false, right_shards, false) do
+  defp resolve_sharding_broadcast(axis, left_shards, false, right_shards, false, extra_parents) do
     # We have a shard on both sides. We need to determine the intersection of the two.
     # This is fine only if all shards are equal
 
@@ -373,7 +414,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
                                                                 {out_acc, match_acc} ->
         match_acc = match_acc and left.start == right.start and left.length == right.length
 
-        out_acc = make_child_shards([left], axis, [right]) ++ out_acc
+        out_acc = Shard.make_child_shards([left], axis, [right | extra_parents]) ++ out_acc
 
         {out_acc, match_acc}
       end)
@@ -383,19 +424,6 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
     end
 
     Enum.reverse(reverse_out_shards)
-  end
-
-  defp make_child_shards(shards, axis, extra_parents \\ []) do
-    Enum.map(shards, fn shard ->
-      %Shard{
-        id: make_ref(),
-        axis: axis,
-        start: shard.start,
-        length: shard.length,
-        input_id: nil,
-        parents: [shard | extra_parents]
-      }
-    end)
   end
 
   def inspect(

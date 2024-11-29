@@ -98,7 +98,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
         end
       )
 
-    {expr_chain, cache, Map.delete(state, :expression_chain)}
+    {remap_chain(expr_chain), cache, Map.delete(state, :expression_chain)}
   end
 
   defp composite_eval(expr, state, cache) do
@@ -130,6 +130,10 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
     {args, {cache, state}} = Nx.Defn.Tree.apply_args(expr, {cache, state}, &eval/2)
 
     if must_split_expr?(expr.data.op, args, state.shards) do
+      shards = argument_combine_shards(state.shards, expr.data.op, args)
+
+      state = Map.put(state, :shards, shards)
+
       split_expr(expr, args, category, {cache, state})
     else
       {expr, {cache, state}}
@@ -170,6 +174,34 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
 
   # default to true so that we can optimize this gradually
   defp must_split_expr?(_, _, _), do: true
+
+  # This function is responsible for producing a valid list of arguments (same as the original)
+  # but with the shards combined properly for the given operation.
+  defp argument_combine_shards(shards, :dot, [t0, c0, _b0, t1, c1, _b1]) do
+    shard_propagation =
+      Enum.reduce(c0, shards[t0.data.id], fn axis, shard_propagation ->
+        axis_shards = shard_propagation.shards[axis]
+
+        shard = %{hd(axis_shards) | start: 0, length: elem(t0.shape, axis)}
+        child_axis_shards = Shard.make_child_shards([shard], axis, axis_shards)
+
+        put_in(shard_propagation.shards[axis], {child_axis_shards, axis_shards})
+      end)
+
+    shards = put_in(shards[t0.data.id], shard_propagation)
+
+    shard_propagation =
+      Enum.reduce(c1, shards[t1.data.id], fn axis, shard_propagation ->
+        axis_shards = shard_propagation.shards[axis]
+
+        shard = %{hd(axis_shards) | start: 0, length: elem(t1.shape, axis)}
+        axis_shards = Shard.make_child_shards([shard], axis, axis_shards)
+
+        put_in(shard_propagation.shards[axis], axis_shards)
+      end)
+
+    put_in(shards[t1.data.id], shard_propagation)
+  end
 
   defp split_expr(expr, args, category, {cache, state}) do
     # We need to save this so that each previous stage
@@ -298,7 +330,10 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
           shape =
             shard_propagation.shards
             |> Enum.sort()
-            |> Enum.map(fn {_axis, [%Shard{length: length} | _]} -> length end)
+            |> Enum.map(fn
+              {_axis, [%Shard{length: length} | _]} -> length
+              {_axis, {[%Shard{length: length}], _parent_shards}} -> length
+            end)
             |> List.to_tuple()
 
           t = do_set_shard_metadata(%{t | shape: shape}, shards)
@@ -329,4 +364,28 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
   end
 
   defp do_set_shard_metadata(other, _), do: other
+
+  defp remap_chain(expr_chain) do
+    Enum.flat_map(expr_chain, fn
+      %Stage{category: :gather} = stage ->
+        gather_stage(stage)
+
+      %Stage{category: :none} = stage ->
+        [stage]
+    end)
+  end
+
+  defp gather_stage(%Stage{arguments: arguments} = stage) do
+    require IEx
+    IEx.pry()
+
+    # TODO: we need to:
+    # 1. get the shards for each argument (they will either be a normal [shards] list or
+    #    a tuple of {[contracted], [parent_shards]})
+    # 2. write a function that takes this list of shards and concatenates them along the contracted dimensions
+    # 3. make it so that this new function is the argument source for the corresponding arguments in the input stage
+    # 4. turn this function into a new intermediate collection stage
+
+    raise "not implemented"
+  end
 end

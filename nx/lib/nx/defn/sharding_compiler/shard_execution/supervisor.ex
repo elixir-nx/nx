@@ -77,10 +77,13 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.Supervisor do
             %T{data: %Expr{op: :metadata, args: [param, _]}} = arg
             %T{data: %Expr{op: :parameter, args: [arg_idx]}} = param
 
+            # TODO: this is probably wrong
             {arg_idx, {arg_id, :scalar}}
           else
             %T{data: %Expr{op: :metadata, args: [param, %{shards: shards}]}} = arg
             %T{data: %Expr{op: :parameter, args: [arg_idx]}} = param
+
+            require IEx
 
             shards_by_root =
               for {_axis, shards_for_axis} <- shards,
@@ -92,16 +95,21 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.Supervisor do
 
             data_section_id_for_input =
               output_roots_by_dim
-              |> Enum.flat_map(fn {axis, roots} ->
-                [%Shard{} | _] = shards = Enum.filter(roots, &shards_by_root[&1.id])
-                Enum.map(shards, &{&1.axis, &1.id})
+              |> Enum.flat_map(fn {_axis, roots} ->
+                case Enum.filter(roots, &shards_by_root[&1.id]) do
+                  [] -> []
+                  shards -> Enum.map(shards, &{&1.axis, &1.id})
+                end
               end)
               |> Enum.sort()
+              |> Enum.uniq()
               |> Enum.map(fn {_axis, id} -> id end)
 
-            dbg(data_section_id_for_input)
-
-            {arg_idx, {arg_id, data_section_id_for_input}}
+            if length(data_section_id_for_input) == tuple_size(arg.shape) do
+              {arg_idx, {arg_id, data_section_id_for_input}}
+            else
+              {arg_idx, {arg_id, nil}}
+            end
           end
         end
 

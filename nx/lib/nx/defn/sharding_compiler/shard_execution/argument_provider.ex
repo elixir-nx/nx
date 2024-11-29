@@ -12,6 +12,7 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.ArgumentProvider do
   end
 
   defp via_tuple(idx, section_id) do
+    dbg({nil, idx, section_id})
     {:via, Registry, {ShardRegistry, {nil, idx, section_id}}}
   end
 

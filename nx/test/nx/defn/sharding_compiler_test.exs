@@ -100,8 +100,8 @@ defmodule Nx.Defn.ShardingCompilerTest do
 
     inputs = [t0, t1]
 
-    arg0_sharding = %{0 => 1}
-    arg1_sharding = %{1 => 1}
+    arg0_sharding = %{0 => 3}
+    arg1_sharding = %{1 => 3}
 
     sharding = [arg0_sharding, arg1_sharding]
 
