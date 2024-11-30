@@ -24,7 +24,7 @@ defmodule Nx.MixProject do
 
   def application do
     [
-      extra_applications: [:logger],
+      extra_applications: [:logger, :observer, :wx],
       mod: {Nx.Application, []},
       env: [default_backend: {Nx.BinaryBackend, []}, default_defn_options: []]
     ]

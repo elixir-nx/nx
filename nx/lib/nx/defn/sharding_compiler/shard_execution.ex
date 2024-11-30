@@ -20,6 +20,8 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
   alias Nx.Tensor, as: T
   alias Nx.Defn.Expr
 
+  require Logger
+
   def init([
         %Stage{} = stage,
         input_data_sections,
@@ -30,21 +32,27 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
       ]) do
     Process.send_after(self(), :fetch_inputs, 0)
 
-    require IEx
-    IEx.pry()
-
     input_data_sections =
       input_data_sections
       |> Enum.sort_by(fn {idx, _} -> idx end)
-      |> Enum.with_index(fn {_idx, {arg_id, shard_ids}}, idx ->
-        {idx, {arg_id, shard_ids}}
+      |> Enum.with_index(fn {_idx, {arg_id, data_section_id}}, idx ->
+        {idx, {arg_id, data_section_id}}
       end)
+
+    keep_indices =
+      input_data_sections
+      |> Enum.reject(fn {_idx, {_arg_id, data_section_id}} -> data_section_id == :ignore end)
+      |> MapSet.new(fn {idx, {_arg_id, _data_section_id}} -> idx end)
+
+    if MapSet.size(keep_indices) == 0 do
+      require IEx
+      IEx.pry()
+
+      raise "No inputs to compute output #{inspect(output_entry_index)} for stage #{inspect(stage.id)}"
+    end
 
     fetched_inputs =
       Map.new(input_data_sections, fn
-        {idx, {arg_id, nil}} ->
-          {arg_id, {idx, Nx.u8(0)}}
-
         {_idx, {arg_id, _}} ->
           {arg_id, nil}
       end)
@@ -66,7 +74,7 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
 
           Expr.parameter(arg, :root, idx)
 
-        {_idx, {_arg_id, nil}}, idx ->
+        {_idx, {_arg_id, :ignore}}, idx ->
           # TO-DO: this is not the proper way to handle this case
           # as we should be keeping the container together.
           # This is a hack so we can get the POC running.
@@ -107,12 +115,19 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
       )
 
     fun = fn [args] ->
-      [res] =
-        compiled_fun.([
-          Enum.map(Tuple.to_list(args), fn arg ->
+      args =
+        args
+        |> Tuple.to_list()
+        |> Enum.with_index()
+        |> Enum.map(fn {arg, idx} ->
+          if idx in keep_indices do
             fn -> arg end
-          end)
-        ])
+          else
+            nil
+          end
+        end)
+
+      [res] = compiled_fun.([args])
 
       res
     end
@@ -156,6 +171,10 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
 
           case get(stage_id, stage_idx, data_section_id) do
             {:ok, data} ->
+              Logger.debug(
+                "Fetched input #{inspect({arg_id, arg_idx, data_section_id})} from stage #{inspect({stage_id, stage_idx})} to stage #{inspect(state.stage.id)}"
+              )
+
               put_in(state.fetched_inputs[arg_id], {arg_idx, data})
 
             {:error, :pending} ->
@@ -204,6 +223,10 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
       |> List.to_tuple()
 
     output = state.compiled_fun.([args])
+
+    Logger.debug(
+      "Computed output #{inspect(state.stage.expr.data.id)} index #{inspect(state.output_entry_index)} for stage #{inspect(state.stage.id)}: #{inspect(output)}"
+    )
 
     %{state | output: output}
   end

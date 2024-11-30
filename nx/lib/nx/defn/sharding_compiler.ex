@@ -56,6 +56,8 @@ defmodule Nx.Defn.ShardingCompiler do
           end
         end)
 
+      require IEx
+      IEx.pry()
       Task.await(task, opts[:timeout])
     end
   end

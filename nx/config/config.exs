@@ -9,3 +9,5 @@ config :nx, :verify_binary_size, true
 # If set to true, shards and sharding stages will be
 # inspected with their debug ids alongside their unique ref ids
 config :nx, :debug_shards, true
+
+config :logger, :console, metadata: :all

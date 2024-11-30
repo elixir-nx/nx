@@ -98,7 +98,9 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
         end
       )
 
-    {remap_chain(expr_chain), cache, Map.delete(state, :expression_chain)}
+    remapped_chain = remap_chain(expr_chain)
+
+    {remapped_chain, cache, Map.delete(state, :expression_chain)}
   end
 
   defp composite_eval(expr, state, cache) do
@@ -190,6 +192,8 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
             from_contraction?: true,
             keep_shard_as_parent: false
           )
+
+        dbg({hd(axis_shards).id, shard.id})
 
         put_in(shard_propagation.shards[axis], axis_shards)
       end)
@@ -386,7 +390,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
     end)
   end
 
-  defp gather_stage(%Stage{arguments: arguments, argument_sources: argument_sources} = stage) do
+  defp gather_stage(%Stage{} = input_stage) do
     require IEx
 
     # TODO: we need to:
@@ -397,7 +401,8 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
     # 4. turn this function into a new intermediate collection stage
 
     {gather_stages, stage} =
-      Enum.map_reduce(arguments, stage, fn {arg_id, %T{type: type} = arg}, stage ->
+      Enum.map_reduce(input_stage.arguments, input_stage, fn {arg_id, %T{type: type} = arg},
+                                                             stage ->
         case arg.data do
           %Nx.Defn.Expr{op: :metadata, args: [_, %{shards: shards}]} ->
             any_contracted? =
@@ -442,8 +447,6 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
                   })
                 end)
 
-              IEx.pry()
-
               expr =
                 Nx.with_default_backend(Expr, fn ->
                   output_holder =
@@ -456,11 +459,13 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
                   end)
                 end)
 
-              dbg(shards)
+              gather_expr_shards =
+                Map.new(shards, fn
+                  {axis, shards} ->
+                    {axis, shards}
+                end)
 
-              expr = Expr.metadata(expr, %{shards: shards})
-
-              IEx.pry()
+              expr = Expr.metadata(expr, %{shards: gather_expr_shards})
 
               gather_stage = %Stage{
                 id: make_ref(),
@@ -469,11 +474,31 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
                 arguments: Map.new(gather_args, &{&1.data.id, &1}),
                 argument_sources:
                   Map.new(gather_args, fn %T{data: %Nx.Defn.Expr{id: id}} ->
-                    {id, argument_sources[arg_id]}
+                    {id, stage.argument_sources[arg_id]}
                   end)
               }
 
-              modified_stage = put_in(stage.argument_sources[arg_id], {gather_stage.id, 0})
+              modified_stage =
+                update_in(stage.expr, fn expr ->
+                  Nx.Defn.Composite.traverse(expr, fn
+                    %T{data: %Expr{op: :metadata, args: [subexpr, %{shards: shards}]}} = expr ->
+                      put_in(expr.data.args, [
+                        subexpr,
+                        %{
+                          shards:
+                            Map.new(shards, fn {axis, shards} ->
+                              {axis, contract_roots(shards)}
+                            end)
+                        }
+                      ])
+
+                    other ->
+                      other
+                  end)
+                end)
+
+              modified_stage =
+                put_in(modified_stage.argument_sources[arg_id], {gather_stage.id, 0})
 
               modified_stage =
                 update_in(modified_stage.arguments[arg_id], fn arg ->
@@ -481,8 +506,11 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
 
                   modified_shards =
                     Map.new(shards, fn
-                      {axis, {resulting, _}} -> {axis, resulting}
-                      {axis, shards} -> {axis, shards}
+                      {axis, [%Shard{from_contraction?: true} = shard]} ->
+                        {axis, [%Shard{shard | parents: []}]}
+
+                      {axis, shards} ->
+                        {axis, shards}
                     end)
 
                   put_in(arg.data.args, [slice, %{shards: modified_shards}])
@@ -499,7 +527,19 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
       end)
 
     List.flatten([stage | gather_stages])
-    |> dbg()
+  end
+
+  defp contract_roots(%Shard{from_contraction?: true} = shard) do
+    %Shard{shard | parents: []}
+  end
+
+  defp contract_roots(%Shard{} = shard) do
+    parents = Enum.map(shard.parents, &contract_roots/1)
+    %Shard{shard | parents: parents}
+  end
+
+  defp contract_roots(shards) do
+    Enum.map(shards, &contract_roots/1)
   end
 
   defp cartesian_product([{axis, entries} | rest]) do

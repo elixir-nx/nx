@@ -13,14 +13,10 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.Supervisor do
 
   @impl true
   def init(stage) do
-    dbg(stage.id)
-
     children =
       for {output_entry_index, output_data_sections} <- output_data_sections(stage),
           {output_data_section_id, input_data_sections, output_starts, output_lengths} <-
             input_data_sections(stage.arguments, output_data_sections) do
-        dbg({input_data_sections, output_data_sections})
-
         %{
           id: {stage.id, output_entry_index, output_data_section_id},
           start:
@@ -109,12 +105,13 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.Supervisor do
               |> Enum.uniq()
               |> Enum.map(fn {_axis, id} -> id end)
 
-            IEx.pry()
-
+              dbg(data_section_id_for_input)
             if length(data_section_id_for_input) == tuple_size(arg.shape) do
               {arg_idx, {arg_id, data_section_id_for_input}}
             else
-              {arg_idx, {arg_id, nil}}
+              require IEx
+              IEx.pry()
+              {arg_idx, {arg_id, :ignore}}
             end
           end
         end
