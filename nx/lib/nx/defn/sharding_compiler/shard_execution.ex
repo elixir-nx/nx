@@ -43,7 +43,7 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
     fetched_inputs =
       Map.new(input_data_sections, fn
         {idx, {arg_id, nil}} ->
-          {arg_id, {idx, 0}}
+          {arg_id, {idx, Nx.u8(0)}}
 
         {_idx, {arg_id, _}} ->
           {arg_id, nil}

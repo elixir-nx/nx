@@ -1,6 +1,6 @@
 defmodule Nx.Defn.ShardingCompiler.Shard do
   import Inspect.Algebra
-  defstruct [:id, :axis, :input_id, :start, :length, :parents, :debug_id]
+  defstruct [:id, :axis, :input_id, :start, :length, :parents, :debug_id, :from_contraction?]
 
   def inspect(%__MODULE__{start: start, length: length}, inspect_opts)
       when is_nil(start) or is_nil(length) do
@@ -139,8 +139,20 @@ defmodule Nx.Defn.ShardingCompiler.Shard do
     end)
   end
 
-  def make_child_shards(shards, axis, extra_parents \\ []) do
+  def make_child_shards(shards, axis, opts \\ []) do
+    opts = Keyword.validate!(opts, [:extra_parents, :from_contraction?, :keep_shard_as_parent])
+    extra_parents = opts[:extra_parents] || []
+    from_contraction? = opts[:from_contraction?] == true
+    keep_shard_as_parent = opts[:keep_shard_as_parent] == true
+
     Enum.map(shards, fn shard ->
+      parents =
+        if keep_shard_as_parent do
+          [shard | extra_parents]
+        else
+          extra_parents
+        end
+
       %__MODULE__{
         id: make_ref(),
         axis: axis,
@@ -148,8 +160,11 @@ defmodule Nx.Defn.ShardingCompiler.Shard do
         length: shard.length,
         input_id: shard.input_id,
         debug_id: shard.debug_id && shard.debug_id <> " > child",
-        parents: [shard | extra_parents]
+        parents: parents,
+        from_contraction?: from_contraction?
       }
     end)
   end
 end
+
+

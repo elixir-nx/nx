@@ -99,8 +99,6 @@ defmodule Nx.Defn.ShardingCompiler do
 
           data_slice = Nx.slice(data, starts, lengths)
 
-          dbg({data_slice, starts, lengths, idx, data_section_id})
-
           ShardExecution.ArgumentProvider.start_link([
             data_slice,
             idx,

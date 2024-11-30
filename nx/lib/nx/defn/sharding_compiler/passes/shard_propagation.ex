@@ -153,7 +153,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
 
     out_shards =
       Map.new(out_shards, fn {axis, shards} ->
-        {axis, Shard.make_child_shards(shards, axis, squeezed_shards)}
+        {axis, Shard.make_child_shards(shards, axis, extra_parents: squeezed_shards)}
       end)
 
     {put_shards(ans, out_shards), state}
@@ -246,7 +246,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
         {idx + offset,
          left_sharding
          |> Map.fetch!(axis)
-         |> Shard.make_child_shards(idx + offset, contracted_shards)}
+         |> Shard.make_child_shards(idx + offset, extra_parents: contracted_shards)}
       end)
 
     offset = offset + length(out_shards_left)
@@ -256,7 +256,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
         {idx + offset,
          right_sharding
          |> Map.fetch!(axis)
-         |> Shard.make_child_shards(idx + offset, contracted_shards)}
+         |> Shard.make_child_shards(idx + offset, extra_parents: contracted_shards)}
       end)
 
     out_shards = Map.new(batch_shards ++ out_shards_left ++ out_shards_right)
@@ -396,12 +396,12 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
 
   defp resolve_sharding_broadcast(axis, [left_shard], true, right_shards, false, extra_parents) do
     # We have a single shard on the left that we'll map onto the right shards.
-    Shard.make_child_shards(right_shards, axis, [left_shard | extra_parents])
+    Shard.make_child_shards(right_shards, axis, extra_parents: [left_shard | extra_parents])
   end
 
   defp resolve_sharding_broadcast(axis, left_shards, false, [right_shard], true, extra_parents) do
     # We have a single shard on the right that we'll map onto the left shards.
-    Shard.make_child_shards(left_shards, axis, [right_shard | extra_parents])
+    Shard.make_child_shards(left_shards, axis, extra_parents: [right_shard | extra_parents])
   end
 
   defp resolve_sharding_broadcast(axis, left_shards, false, right_shards, false, extra_parents) do
@@ -414,7 +414,8 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
                                                                 {out_acc, match_acc} ->
         match_acc = match_acc and left.start == right.start and left.length == right.length
 
-        out_acc = Shard.make_child_shards([left], axis, [right | extra_parents]) ++ out_acc
+        out_acc =
+          Shard.make_child_shards([left], axis, extra_parents: [right | extra_parents]) ++ out_acc
 
         {out_acc, match_acc}
       end)

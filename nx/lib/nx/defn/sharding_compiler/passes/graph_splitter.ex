@@ -183,9 +183,15 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
         axis_shards = shard_propagation.shards[axis]
 
         shard = %{hd(axis_shards) | start: 0, length: elem(t0.shape, axis)}
-        child_axis_shards = Shard.make_child_shards([shard], axis, axis_shards)
 
-        put_in(shard_propagation.shards[axis], {child_axis_shards, axis_shards})
+        axis_shards =
+          Shard.make_child_shards([shard], axis,
+            extra_parents: axis_shards,
+            from_contraction?: true,
+            keep_shard_as_parent: false
+          )
+
+        put_in(shard_propagation.shards[axis], axis_shards)
       end)
 
     shards = put_in(shards[t0.data.id], shard_propagation)
@@ -195,7 +201,13 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
         axis_shards = shard_propagation.shards[axis]
 
         shard = %{hd(axis_shards) | start: 0, length: elem(t1.shape, axis)}
-        axis_shards = Shard.make_child_shards([shard], axis, axis_shards)
+
+        axis_shards =
+          Shard.make_child_shards([shard], axis,
+            extra_parents: axis_shards,
+            from_contraction?: true,
+            keep_shard_as_parent: false
+          )
 
         put_in(shard_propagation.shards[axis], axis_shards)
       end)
@@ -332,7 +344,6 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
             |> Enum.sort()
             |> Enum.map(fn
               {_axis, [%Shard{length: length} | _]} -> length
-              {_axis, {[%Shard{length: length}], _parent_shards}} -> length
             end)
             |> List.to_tuple()
 
@@ -377,7 +388,6 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
 
   defp gather_stage(%Stage{arguments: arguments, argument_sources: argument_sources} = stage) do
     require IEx
-    IEx.pry()
 
     # TODO: we need to:
     # 1. get the shards for each argument (they will either be a normal [shards] list or
@@ -390,31 +400,34 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
       Enum.map_reduce(arguments, stage, fn {arg_id, %T{type: type} = arg}, stage ->
         case arg.data do
           %Nx.Defn.Expr{op: :metadata, args: [_, %{shards: shards}]} ->
-            {wrapped_shards, any_contracted} =
-              Enum.map_reduce(shards, false, fn
-                {axis, {_, _} = contracted}, _acc -> {{axis, [contracted]}, true}
-                {axis, shards}, acc -> {{axis, shards}, acc}
+            any_contracted? =
+              Enum.any?(shards, fn
+                {_axis, [%Shard{from_contraction?: from_contraction?, parents: _}]} ->
+                  from_contraction?
               end)
 
-            if any_contracted do
+            if any_contracted? do
               output_shape =
-                Enum.map(wrapped_shards, fn
-                  {_axis, [{[resulting], _shards}]} -> resulting.length
+                shards
+                |> Enum.map(fn
                   {_axis, [shard | _]} -> shard.length
                 end)
                 |> List.to_tuple()
 
               gather_args =
-                wrapped_shards
+                shards
+                |> Enum.to_list()
                 |> cartesian_product()
                 |> Enum.flat_map(fn sections ->
                   {concatenation_arguments_set, _concatenation_axes_reverse} =
                     sections
                     |> Enum.map_reduce([], fn
-                      {axis, {_, parents}}, acc -> {{axis, parents}, [axis | acc]}
-                      {axis, shards}, acc -> {{axis, [shards]}, acc}
+                      {axis, %Shard{from_contraction?: true, parents: parents}}, acc ->
+                        {{axis, parents}, [axis | acc]}
+
+                      {axis, %Shard{} = shard}, acc ->
+                        {{axis, [shard]}, acc}
                     end)
-                    |> dbg()
 
                   cartesian_product(concatenation_arguments_set)
                 end)
@@ -422,29 +435,38 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
                   arg_shape =
                     Enum.map(shards, fn {_axis, shard} -> shard.length end) |> List.to_tuple()
 
-                  dbg(shards)
+                  arg = Expr.parameter(%{arg | shape: arg_shape}, :root, index)
 
-                  arg = Expr.parameter(%{arg | shape: arg_shape}, index)
-                  Expr.metadata(arg, %{shards: Map.new(shards)})
+                  Expr.metadata(arg, %{
+                    shards: Map.new(shards, fn {axis, shard} -> {axis, [shard]} end)
+                  })
                 end)
 
-              dbg(gather_args)
-
-              output_holder =
-                Nx.broadcast(Nx.tensor(0, type: type), output_shape, names: arg.names)
+              IEx.pry()
 
               expr =
-                Enum.reduce(gather_args, output_holder, fn arg, acc ->
-                  %T{data: %Expr{op: :metadata, args: [slice, %{shards: shards}]}} = arg
-                  starts = Enum.map(shards, fn {_axis, shard} -> shard.start end)
-                  Nx.Defn.Expr.put_slice(acc, acc, starts, slice)
+                Nx.with_default_backend(Expr, fn ->
+                  output_holder =
+                    Nx.broadcast(Nx.tensor(0, type: type), output_shape, names: arg.names)
+
+                  Enum.reduce(gather_args, output_holder, fn arg, acc ->
+                    %T{data: %Expr{op: :metadata, args: [_slice, %{shards: shards}]}} = arg
+                    starts = Enum.map(shards, fn {_axis, [shard]} -> shard.start end)
+                    Nx.put_slice(acc, starts, arg)
+                  end)
                 end)
+
+              dbg(shards)
+
+              expr = Expr.metadata(expr, %{shards: shards})
+
+              IEx.pry()
 
               gather_stage = %Stage{
                 id: make_ref(),
                 category: :none,
                 expr: expr,
-                arguments: gather_args,
+                arguments: Map.new(gather_args, &{&1.data.id, &1}),
                 argument_sources:
                   Map.new(gather_args, fn %T{data: %Nx.Defn.Expr{id: id}} ->
                     {id, argument_sources[arg_id]}
@@ -477,6 +499,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
       end)
 
     List.flatten([stage | gather_stages])
+    |> dbg()
   end
 
   defp cartesian_product([{axis, entries} | rest]) do
