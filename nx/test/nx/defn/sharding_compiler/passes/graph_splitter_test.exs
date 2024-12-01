@@ -20,7 +20,17 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
           Nx.divide(w, 4)
         end).(Nx.tensor([1, 2]), Nx.tensor([3, 4]))
 
-      {chain, cache, state} = GraphSplitter.traverse(expr)
+      %{dot: {_, combine_fn, category}} =
+        split_rules = GraphSplitter.default_operation_split_rules()
+
+      split_rules =
+        Map.put(
+          split_rules,
+          :dot,
+          {fn _, _, _ -> true end, fn shards, _, _ -> shards end, category}
+        )
+
+      {chain, cache, state} = GraphSplitter.traverse(expr, %{}, split_rules)
 
       assert [
                %Stage{
@@ -136,7 +146,26 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
           |> Nx.subtract(arg2)
         end).(Nx.tensor([[1, 2]]), Nx.tensor([[3], [4]]), Nx.tensor([5, 6]))
 
-      {chain, cache, state} = GraphSplitter.traverse(expr)
+      %{dot: {_, combine_fn, category}} =
+        split_rules = GraphSplitter.default_operation_split_rules()
+
+      split_rules =
+        Map.put(
+          split_rules,
+          :dot,
+          {fn _, _, _ -> true end, fn shards, _, _ -> shards end, category}
+        )
+
+      %{sum: {_, combine_fn, category}} = split_rules
+
+      split_rules =
+        Map.put(
+          split_rules,
+          :sum,
+          {fn _, _, _ -> true end, fn shards, _, _ -> shards end, category}
+        )
+
+      {chain, cache, state} = GraphSplitter.traverse(expr, %{}, split_rules)
 
       assert [
                %Stage{
@@ -448,9 +477,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
 
       assert %{
                0 => [
-                 %Shard{start: 0, length: 1},
-                 %Shard{start: 1, length: 1},
-                 %Shard{start: 2, length: 1}
+                 %Shard{start: 0, length: 3}
                ],
                1 => [%Shard{start: 0, length: 1}, %Shard{start: 1, length: 1}]
              } = right_shards

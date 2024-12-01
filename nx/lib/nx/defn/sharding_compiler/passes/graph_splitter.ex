@@ -9,18 +9,20 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
   @gather_ops [:dot]
   @reduction_ops [:sum]
 
-  @ops_to_split Map.merge(
-                  Map.new(@gather_ops, &{&1, :gather}),
-                  Map.new(@reduction_ops, &{&1, :reduce})
-                )
+  def default_operation_split_rules do
+    %{
+      dot: {&must_split_expr?/3, &argument_combine_shards/3, :gather},
+      sum: {&must_split_expr?/3, &argument_combine_shards/3, :reduce}
+    }
+  end
 
-  def traverse(expr, expr_shards \\ %{}, ops_to_split \\ @ops_to_split) do
+  def traverse(expr, expr_shards \\ %{}, ops_split_rules \\ nil) do
     # expression_chain is going to be a reverse-accumulation of {category, subexpr}
     # that we can then compile and chain-execute elsewhere. category is either :gather, :reduce or :none
     state = %{
       expression_chain: [],
       nodes_to_replace: %{},
-      ops_to_split: ops_to_split,
+      ops_split_rules: ops_split_rules || default_operation_split_rules(),
       # contains the sharding configuration for each node by id
       shards: expr_shards,
       # args is a map of id -> {stage_id, output_container_position}
@@ -108,7 +110,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
   end
 
   defp eval(%T{data: %Expr{id: id, op: op}} = ans, {cache, state}) do
-    case {cache, state.nodes_to_replace, state.ops_to_split} do
+    case {cache, state.nodes_to_replace, state.ops_split_rules} do
       {_, %{^id => res}, _} ->
         # Replace the node with the corresponding parameter
         {res, {Map.put(cache, id, res), state}}
@@ -116,8 +118,8 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
       {%{^id => res}, _, _} ->
         {res, {cache, state}}
 
-      {_, _, %{^op => category}} ->
-        rewrite_args(ans, category, {cache, state})
+      {_, _, %{^op => {split_fn, combine_fn, category}}} ->
+        rewrite_args(ans, split_fn, combine_fn, category, {cache, state})
 
       _ ->
         eval_apply(op, ans, {cache, state})
@@ -128,11 +130,11 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
     {other, {cache, state}}
   end
 
-  defp rewrite_args(expr, category, {cache, state}) do
+  defp rewrite_args(expr, split_fn, combine_fn, category, {cache, state}) do
     {args, {cache, state}} = Nx.Defn.Tree.apply_args(expr, {cache, state}, &eval/2)
 
-    if must_split_expr?(expr.data.op, args, state.shards) do
-      shards = argument_combine_shards(state.shards, expr.data.op, args)
+    if split_fn.(expr.data.op, args, state.shards) do
+      shards = combine_fn.(state.shards, expr.data.op, args)
 
       state = Map.put(state, :shards, shards)
 
@@ -190,7 +192,6 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
           Shard.make_child_shards([shard], axis,
             extra_parents: axis_shards,
             from_contraction?: true
-            # keep_shard_as_parent: false
           )
 
         put_in(shard_propagation.shards[axis], axis_shards)
@@ -215,6 +216,10 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
       end)
 
     put_in(shards[t1.data.id], shard_propagation)
+  end
+
+  defp argument_combine_shards(shards, _, _) do
+    shards
   end
 
   defp split_expr(expr, args, category, {cache, state}) do
@@ -382,6 +387,10 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
     Enum.flat_map(expr_chain, fn
       %Stage{category: :gather} = stage ->
         gather_stage(stage)
+
+      %Stage{category: :reduce} = stage ->
+        # not implemented yet
+        [stage]
 
       %Stage{category: :none} = stage ->
         [stage]
