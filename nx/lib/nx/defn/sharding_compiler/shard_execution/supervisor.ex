@@ -24,9 +24,9 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.Supervisor do
              [
                [
                  stage,
-                 input_data_sections,
+                 dbg(input_data_sections),
                  output_entry_index,
-                 output_data_section_id,
+                 dbg(output_data_section_id),
                  output_starts,
                  output_lengths
                ]
@@ -60,7 +60,14 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.Supervisor do
         |> Enum.map(fn {shard, _axis} -> {shard.start, shard.length} end)
         |> Enum.unzip()
 
-      data_section_id = Enum.map(sections, fn {shard, _axis} -> shard.id end)
+      data_section_id =
+        Enum.flat_map(sections, fn
+          {%Shard{from_contraction?: true, parents: [_self | parents]}, _axis} ->
+            Enum.map(parents, & &1.id)
+
+          {shard, _axis} ->
+            [shard.id]
+        end)
 
       roots =
         Enum.map(sections, fn {shard, axis} -> {axis, get_root_parents(shard)} end)
@@ -101,16 +108,14 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.Supervisor do
                   shards -> Enum.map(shards, &{&1.axis, &1.id})
                 end
               end)
-              |> Enum.sort()
               |> Enum.uniq()
-              |> Enum.map(fn {_axis, id} -> id end)
+              |> Enum.group_by(fn {axis, _} -> axis end, fn {_, shards} -> shards end)
+              |> Enum.sort()
+              |> Enum.flat_map(fn {_axis, ids} -> List.flatten(ids) end)
 
-              dbg(data_section_id_for_input)
             if length(data_section_id_for_input) == tuple_size(arg.shape) do
               {arg_idx, {arg_id, data_section_id_for_input}}
             else
-              require IEx
-              IEx.pry()
               {arg_idx, {arg_id, :ignore}}
             end
           end
@@ -129,6 +134,11 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.Supervisor do
   defp get_root_parents(shard, acc \\ [])
 
   defp get_root_parents(%Shard{parents: []} = shard, acc), do: List.flatten([shard | acc])
+
+  # defp get_root_parents(%Shard{from_contraction?: true, parents: [_self | parents]}, acc) do
+  #   Enum.reduce(parents, acc, &get_root_parents/2)
+  #   |> List.flatten()
+  # end
 
   defp get_root_parents(%Shard{parents: parents}, acc) do
     Enum.reduce(parents, acc, &get_root_parents/2)

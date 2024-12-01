@@ -407,6 +407,9 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
               Enum.any?(shards, fn
                 {_axis, [%Shard{from_contraction?: from_contraction?, parents: _}]} ->
                   from_contraction?
+
+                _ ->
+                  false
               end)
 
             if any_contracted? do

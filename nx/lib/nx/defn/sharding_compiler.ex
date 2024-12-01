@@ -40,12 +40,16 @@ defmodule Nx.Defn.ShardingCompiler do
             start_shard_providers(expr, args_by_idx, expr_shards)
           end)
 
+          dbg(stages)
+
           last_stage =
             for stage <- stages, reduce: nil do
               _ ->
                 {:ok, _pid} = ShardExecution.Supervisor.start_link(stage)
                 stage
             end
+
+          dbg(last_stage)
 
           {:ok, output_collector_pid} =
             ShardExecution.OutputCollector.start_link(ans, last_stage.id, self())
@@ -56,8 +60,6 @@ defmodule Nx.Defn.ShardingCompiler do
           end
         end)
 
-      require IEx
-      IEx.pry()
       Task.await(task, opts[:timeout])
     end
   end
