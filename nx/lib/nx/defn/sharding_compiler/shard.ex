@@ -1,6 +1,17 @@
 defmodule Nx.Defn.ShardingCompiler.Shard do
   import Inspect.Algebra
-  defstruct [:id, :axis, :input_id, :start, :length, :parents, :debug_id, :from_contraction?]
+
+  defstruct [
+    :id,
+    :axis,
+    :input_id,
+    :node_id,
+    :start,
+    :length,
+    :parents,
+    :debug_id,
+    :from_contraction?
+  ]
 
   def inspect(%__MODULE__{start: start, length: length}, inspect_opts)
       when is_nil(start) or is_nil(length) do
@@ -14,7 +25,8 @@ defmodule Nx.Defn.ShardingCompiler.Shard do
           axis: axis,
           start: start,
           length: length,
-          input_id: input_id
+          input_id: input_id,
+          node_id: node_id
         },
         inspect_opts
       ) do
@@ -30,6 +42,7 @@ defmodule Nx.Defn.ShardingCompiler.Shard do
 
     range_doc = "#{start}..#{start + length - 1}"
     input_id_doc = if(input_id, do: "input_id: #{inspect(input_id)}", else: "")
+    node_id_doc = if(node_id, do: "node_id: #{inspect(node_id)}", else: "")
 
     if single_line do
       concat([
@@ -39,6 +52,7 @@ defmodule Nx.Defn.ShardingCompiler.Shard do
         " ",
         id_doc,
         input_id_doc,
+        node_id_doc,
         color(">", :map, inspect_opts)
       ])
     else
@@ -52,7 +66,9 @@ defmodule Nx.Defn.ShardingCompiler.Shard do
             line(),
             id_doc,
             line(),
-            input_id_doc
+            input_id_doc,
+            line(),
+            node_id_doc
           ]),
           2
         ),
@@ -101,6 +117,7 @@ defmodule Nx.Defn.ShardingCompiler.Shard do
               %__MODULE__{
                 id: id,
                 debug_id: debug_id,
+                node_id: tensor.data.id,
                 axis: axis,
                 start: start,
                 length: length,
@@ -125,6 +142,7 @@ defmodule Nx.Defn.ShardingCompiler.Shard do
 
             %__MODULE__{
               id: id,
+              node_id: tensor.data.id,
               debug_id: debug_id,
               axis: axis,
               start: start,
@@ -140,10 +158,16 @@ defmodule Nx.Defn.ShardingCompiler.Shard do
   end
 
   def make_child_shards(shards, axis, opts \\ []) do
-    opts = Keyword.validate!(opts, [:extra_parents, :from_contraction?, :keep_shard_as_parent])
+    opts =
+      Keyword.validate!(opts, [
+        :extra_parents,
+        from_contraction?: false,
+        keep_shard_as_parent: true
+      ])
+
     extra_parents = opts[:extra_parents] || []
     from_contraction? = opts[:from_contraction?] == true
-    keep_shard_as_parent = opts[:keep_shard_as_parent] == true
+    keep_shard_as_parent = opts[:keep_shard_as_parent]
 
     Enum.map(shards, fn shard ->
       parents =
@@ -166,5 +190,3 @@ defmodule Nx.Defn.ShardingCompiler.Shard do
     end)
   end
 end
-
-

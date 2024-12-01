@@ -26,7 +26,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
     shards =
       if input_id = opts[:input_id] do
         Map.new(shards, fn {axis, shards} ->
-          {axis, Enum.map(shards, &%Shard{&1 | input_id: input_id})}
+          {axis, Enum.map(shards, &%Shard{&1 | node_id: tensor.data.id, input_id: input_id})}
         end)
       else
         shards
@@ -183,6 +183,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
             id: make_ref(),
             axis: axis,
             start: 0,
+            node_id: t0.node.id,
             length: elem(t0.shape, axis),
             input_id: hd(shards).input_id,
             debug_id: if(debug_id = hd(shards).debug_id, do: debug_id <> " > child"),
@@ -200,6 +201,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.ShardPropagation do
             id: make_ref(),
             axis: axis,
             start: 0,
+            node_id: t1.node.id,
             length: elem(t1.shape, axis),
             input_id: hd(shards).input_id,
             debug_id: if(debug_id = hd(shards).debug_id, do: debug_id <> " > child"),

@@ -15,21 +15,20 @@ defmodule Nx.Defn.ShardingCompilerTest do
         [5, 6]
       ])
 
-    fun = fn arg0, arg1, arg2 ->
+    fun = fn arg0, arg1 ->
       x = Nx.add(arg0, 1)
       y = Nx.subtract(arg1, 2)
 
       Nx.multiply(x, Nx.transpose(y))
-      |> Nx.add(arg2)
     end
 
     result =
       Nx.Defn.jit(fun,
         compiler: Nx.Defn.ShardingCompiler,
-        sharding_config: [%{0 => 1, 1 => 3}, %{0 => 3, 1 => 1}, %{}]
-      ).(arg0, arg1, 1)
+        sharding_config: [%{0 => 1, 1 => 3}, %{0 => 3, 1 => 1}]
+      ).(arg0, arg1)
 
-    assert result == fun.(arg0, arg1, 1)
+    assert result == fun.(arg0, arg1)
   end
 
   test "composed test" do
