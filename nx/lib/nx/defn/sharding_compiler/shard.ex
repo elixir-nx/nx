@@ -117,7 +117,7 @@ defmodule Nx.Defn.ShardingCompiler.Shard do
               %__MODULE__{
                 id: id,
                 debug_id: debug_id,
-                node_id: tensor.data.id,
+                node_id: input_id,
                 axis: axis,
                 start: start,
                 length: length,
@@ -142,7 +142,7 @@ defmodule Nx.Defn.ShardingCompiler.Shard do
 
             %__MODULE__{
               id: id,
-              node_id: tensor.data.id,
+              node_id: input_id,
               debug_id: debug_id,
               axis: axis,
               start: start,
