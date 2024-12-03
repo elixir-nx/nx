@@ -218,8 +218,6 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
   end
 
   defp compute(state) do
-    dbg(state.fetched_inputs)
-
     args =
       state.fetched_inputs
       |> Enum.map(fn {_id, {idx, data}} -> {idx, data} end)

@@ -74,7 +74,7 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.OutputCollector do
         data_sections =
           for {data_section_id, starts, nil} <- data_sections do
             case ShardExecution.get(state.previous_stage_id, idx, data_section_id) do
-              {:ok, {data, _starts, _lenghts}} ->
+              {:ok, data} ->
                 {data_section_id, starts, data}
 
               {:error, :pending} ->
