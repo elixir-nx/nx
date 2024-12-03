@@ -29,8 +29,6 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
     cache = %{}
     {expr, {cache, state}} = composite_eval(expr, state, cache)
 
-    dbg(state.args)
-
     expr_chain =
       Enum.reduce(
         [{make_ref(), :none, expr, state.nodes_to_replace} | state.expression_chain],
@@ -130,7 +128,6 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
       state = Map.put(state, :shards, shards)
 
       split_expr(expr, args, category, {cache, state})
-      |> dbg()
     else
       {expr, {cache, state}}
     end
@@ -173,7 +170,8 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
 
   # This function is responsible for producing a valid list of arguments (same as the original)
   # but with the shards combined properly for the given operation.
-  defp argument_combine_shards(shards, :dot, [t0, c0, _b0, t1, c1, _b1]) do
+  defp argument_combine_shards(shards, :dot, [t0, c0, _b0, t1, c1, _b1])
+       when is_map_key(shards, t0.data.id) and is_map_key(shards, t1.data.id) do
     shard_propagation =
       Enum.reduce(c0, shards[t0.data.id], fn axis, shard_propagation ->
         axis_shards = shard_propagation.shards[axis]

@@ -131,6 +131,10 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.OutputCollector do
     end)
   end
 
+  defp starts_and_data_section_ids(%T{shape: shape, data: %Nx.Defn.Expr{id: id}}) do
+    [List.duplicate(0, tuple_size(shape)), {:unsharded, id}]
+  end
+
   defp cartesian_product([{data, meta} | rest]) do
     for x <- data, y <- cartesian_product(rest), do: [{x, meta} | y]
   end

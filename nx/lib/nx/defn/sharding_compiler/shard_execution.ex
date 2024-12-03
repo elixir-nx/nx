@@ -225,9 +225,17 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
     output = state.compiled_fun.([args])
 
     Logger.debug(
-      "Computed output #{inspect(state.stage.expr.data.id)} index #{inspect(state.output_entry_index)} for stage #{inspect(state.stage.id)}: #{inspect(output)}"
+      "Computed output #{inspect(expr_id(state.stage.expr))} index #{inspect(state.output_entry_index)} for stage #{inspect(state.stage.id)}: #{inspect(output)}"
     )
 
     %{state | output: output}
+  end
+
+  defp expr_id(%T{data: %Expr{id: id}}), do: id
+
+  defp expr_id(tuple) when is_tuple(tuple) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.map(&expr_id/1)
   end
 end

@@ -24,9 +24,9 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.Supervisor do
              [
                [
                  stage,
-                 dbg(input_data_sections),
+                 input_data_sections,
                  output_entry_index,
-                 dbg(output_data_section_id),
+                 output_data_section_id,
                  output_starts,
                  output_lengths
                ]
@@ -76,52 +76,68 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.Supervisor do
     end)
   end
 
+  defp output_data_sections_for_expr(%T{data: %Expr{id: id}}) do
+    [{{:unsharded, id}, :unsharded}]
+  end
+
   defp input_data_sections(arguments, output_data_sections) do
-    for {data_section_id, {output_roots_by_dim, starts, lengths}} <- output_data_sections do
-      arg_sections =
-        for {arg_id, arg} <- arguments do
-          if arg.shape == {} do
-            %T{data: %Expr{op: :metadata, args: [param, _]}} = arg
-            %T{data: %Expr{op: :parameter, args: [arg_idx]}} = param
-
-            # TODO: this is probably wrong
-            {arg_idx, {arg_id, :scalar}}
-          else
-            %T{data: %Expr{op: :metadata, args: [param, %{shards: shards}]}} = arg
-            %T{data: %Expr{op: :parameter, args: [arg_idx]}} = param
-
-            require IEx
-
-            shards_by_root =
-              for {_axis, shards_for_axis} <- shards,
-                  shard <- shards_for_axis,
-                  root <- get_root_parents(shard),
-                  into: %{} do
-                {root.id, shard}
-              end
-
-            data_section_id_for_input =
-              output_roots_by_dim
-              |> Enum.flat_map(fn {_axis, roots} ->
-                case Enum.filter(roots, &shards_by_root[&1.id]) do
-                  [] -> []
-                  shards -> Enum.map(shards, &{&1.axis, &1.id})
-                end
-              end)
-              |> Enum.uniq()
-              |> Enum.group_by(fn {axis, _} -> axis end, fn {_, shards} -> shards end)
-              |> Enum.sort()
-              |> Enum.flat_map(fn {_axis, ids} -> List.flatten(ids) end)
-
-            if length(data_section_id_for_input) == tuple_size(arg.shape) do
-              {arg_idx, {arg_id, data_section_id_for_input}}
-            else
-              {arg_idx, {arg_id, :ignore}}
+    for {data_section_id, data_section_info} <- output_data_sections do
+      case data_section_info do
+        :unsharded ->
+          input_data_sections =
+            for {arg_id, arg} <- arguments do
+              %T{data: %Expr{op: :parameter, args: [arg_idx]}} = arg
+              {arg_idx, {arg_id, {:unsharded, arg_id}}}
             end
-          end
-        end
 
-      {data_section_id, arg_sections, starts, lengths}
+          {data_section_id, input_data_sections, [], []}
+
+        {output_roots_by_dim, starts, lengths} ->
+          arg_sections =
+            for {arg_id, arg} <- arguments do
+              if arg.shape == {} do
+                %T{data: %Expr{op: :metadata, args: [param, _]}} = arg
+                %T{data: %Expr{op: :parameter, args: [arg_idx]}} = param
+
+                # TODO: this is probably wrong
+                {arg_idx, {arg_id, :scalar}}
+              else
+                %T{data: %Expr{op: :metadata, args: [param, %{shards: shards}]}} = arg
+                %T{data: %Expr{op: :parameter, args: [arg_idx]}} = param
+
+                require IEx
+
+                shards_by_root =
+                  for {_axis, shards_for_axis} <- shards,
+                      shard <- shards_for_axis,
+                      root <- get_root_parents(shard),
+                      into: %{} do
+                    {root.id, shard}
+                  end
+
+                data_section_id_for_input =
+                  output_roots_by_dim
+                  |> Enum.flat_map(fn {_axis, roots} ->
+                    case Enum.filter(roots, &shards_by_root[&1.id]) do
+                      [] -> []
+                      shards -> Enum.map(shards, &{&1.axis, &1.id})
+                    end
+                  end)
+                  |> Enum.uniq()
+                  |> Enum.group_by(fn {axis, _} -> axis end, fn {_, shards} -> shards end)
+                  |> Enum.sort()
+                  |> Enum.flat_map(fn {_axis, ids} -> List.flatten(ids) end)
+
+                if length(data_section_id_for_input) == tuple_size(arg.shape) do
+                  {arg_idx, {arg_id, data_section_id_for_input}}
+                else
+                  {arg_idx, {arg_id, :ignore}}
+                end
+              end
+            end
+
+          {data_section_id, arg_sections, starts, lengths}
+      end
     end
   end
 

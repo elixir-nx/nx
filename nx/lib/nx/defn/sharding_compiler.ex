@@ -24,11 +24,19 @@ defmodule Nx.Defn.ShardingCompiler do
         sharding_compiler_options: []
       ])
 
-    {%T{data: %ShardPropagation{expr: sharded_expr}} = ans, expr_shards} =
-      propagate_shards(vars, fun, opts[:sharding_config])
+    {ans, sharded_expr, expr_shards} =
+      case propagate_shards(vars, fun, opts[:sharding_config]) do
+        {%T{data: %ShardPropagation{expr: sharded_expr}} = ans, expr_shards} ->
+          {ans, sharded_expr, expr_shards}
 
-    {[first_stage | _] = stages, _cache, _state} =
+        {expr, shards} ->
+          {expr, expr.data, shards}
+      end
+
+    {[first_stage | _] = stages, _cache, state} =
       GraphSplitter.traverse(%T{ans | data: sharded_expr}, expr_shards)
+
+    dbg({state.args, first_stage.arguments})
 
     fn [args] ->
       # use task here so that we don't pollute the caller with the output collector message
@@ -36,11 +44,13 @@ defmodule Nx.Defn.ShardingCompiler do
         Task.async(fn ->
           args_by_idx = Enum.with_index(args, fn arg, idx -> {idx, arg} end) |> Map.new()
 
-          Enum.flat_map(first_stage.arguments, fn {_id, expr} ->
-            start_shard_providers(expr, args_by_idx, expr_shards)
-          end)
+          Enum.flat_map(state.args, fn
+            {id, {nil, idx}} ->
+              start_argument_shard_providers(id, idx, args_by_idx[idx], expr_shards[id])
 
-          dbg(stages)
+            _ ->
+              []
+          end)
 
           last_stage =
             for stage <- stages, reduce: nil do
@@ -62,52 +72,41 @@ defmodule Nx.Defn.ShardingCompiler do
     end
   end
 
-  defp start_shard_providers(sharded_expr, arg_data, expr_shards) do
-    case sharded_expr do
-      %T{
-        shape: {},
-        data: %Expr{op: :metadata, args: [%T{data: %Expr{args: [idx]}}, %{shards: shards}]}
-      }
-      when map_size(shards) == 0 ->
-        [
-          ShardExecution.ArgumentProvider.start_link([
-            arg_data[idx].(),
-            idx,
-            :scalar
-          ])
-        ]
+  defp start_argument_shard_providers(argument_id, argument_idx, arg_data, nil) do
+    [
+      ShardExecution.ArgumentProvider.start_link([
+        arg_data.(),
+        argument_idx,
+        {:unsharded, argument_id}
+      ])
+    ]
+  end
 
-      %T{
-        data: %Expr{
-          op: :metadata,
-          args: [%T{data: %Expr{id: id, args: [idx]}}, %{shards: _shards}]
-        }
-      } ->
-        shards = expr_shards[id].shards
+  defp start_argument_shard_providers(_arg_id, arg_idx, arg_data, %ShardPropagation{
+         shards: shards
+       }) do
+    shards
+    |> Enum.sort_by(fn {axis, _} -> axis end)
+    |> Enum.map(fn {axis, shard} -> {shard, axis} end)
+    |> cartesian_product()
+    |> Enum.map(fn sections ->
+      {starts, lengths} =
+        sections
+        |> Enum.map(fn {shard, _axis} -> {shard.start, shard.length} end)
+        |> Enum.unzip()
 
-        shards
-        |> Enum.sort_by(fn {axis, _} -> axis end)
-        |> Enum.map(fn {axis, shard} -> {shard, axis} end)
-        |> cartesian_product()
-        |> Enum.map(fn sections ->
-          {starts, lengths} =
-            sections
-            |> Enum.map(fn {shard, _axis} -> {shard.start, shard.length} end)
-            |> Enum.unzip()
+      data_section_id = Enum.map(sections, fn {shard, _axis} -> shard.id end)
 
-          data_section_id = Enum.map(sections, fn {shard, _axis} -> shard.id end)
+      data = arg_data.()
 
-          data = arg_data[idx].()
+      data_slice = Nx.slice(data, starts, lengths)
 
-          data_slice = Nx.slice(data, starts, lengths)
-
-          ShardExecution.ArgumentProvider.start_link([
-            data_slice,
-            idx,
-            data_section_id
-          ])
-        end)
-    end
+      ShardExecution.ArgumentProvider.start_link([
+        data_slice,
+        arg_idx,
+        data_section_id
+      ])
+    end)
   end
 
   defp cartesian_product([{data, meta} | rest]) do
@@ -115,6 +114,12 @@ defmodule Nx.Defn.ShardingCompiler do
   end
 
   defp cartesian_product([]), do: [[]]
+
+  defp propagate_shards(vars, fun, :disable) do
+    expr = fun.(vars)
+
+    {expr, %{}}
+  end
 
   defp propagate_shards(vars, fun, sharding_config) do
     expr = fun.(vars)
