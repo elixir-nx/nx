@@ -39,7 +39,7 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.Supervisor do
     Supervisor.init(children, strategy: :one_for_one)
   end
 
-  defp output_data_sections(%Stage{expr: expr}) do
+  defp output_data_sections(%Stage{id: _id, expr: expr}) do
     if is_tuple(expr) do
       expr
       |> Tuple.to_list()
@@ -76,8 +76,8 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.Supervisor do
     end)
   end
 
-  defp output_data_sections_for_expr(%T{data: %Expr{id: id}}) do
-    [{{:unsharded, id}, :unsharded}]
+  defp output_data_sections_for_expr(%T{}) do
+    [{:unsharded, :unsharded}]
   end
 
   defp input_data_sections(arguments, output_data_sections) do
@@ -87,7 +87,7 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.Supervisor do
           input_data_sections =
             for {arg_id, arg} <- arguments do
               %T{data: %Expr{op: :parameter, args: [arg_idx]}} = arg
-              {arg_idx, {arg_id, {:unsharded, arg_id}}}
+              {arg_idx, {arg_id, :unsharded}}
             end
 
           {data_section_id, input_data_sections, [], []}

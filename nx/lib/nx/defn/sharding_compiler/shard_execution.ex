@@ -45,9 +45,6 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
       |> MapSet.new(fn {idx, {_arg_id, _data_section_id}} -> idx end)
 
     if MapSet.size(keep_indices) == 0 do
-      require IEx
-      IEx.pry()
-
       raise "No inputs to compute output #{inspect(output_entry_index)} for stage #{inspect(stage.id)}"
     end
 
@@ -207,14 +204,22 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
   def handle_call(:get, _from, state) do
     result =
       case state.output do
-        nil -> {:error, :pending}
-        data -> {:ok, {data, state.output_starts, state.output_lengths}}
+        nil ->
+          {:error, :pending}
+
+        data ->
+          case {state.output_starts, state.output_lengths} do
+            {[], []} -> {:ok, data}
+            {starts, lengths} -> {:ok, Nx.slice(data, starts, lengths)}
+          end
       end
 
     {:reply, result, state}
   end
 
   defp compute(state) do
+    dbg(state.fetched_inputs)
+
     args =
       state.fetched_inputs
       |> Enum.map(fn {_id, {idx, data}} -> {idx, data} end)
@@ -223,6 +228,8 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
       |> List.to_tuple()
 
     output = state.compiled_fun.([args])
+
+    Logger.debug("Expr: #{inspect(state.stage.expr)} for stage #{inspect(state.stage.id)}")
 
     Logger.debug(
       "Computed output #{inspect(expr_id(state.stage.expr))} index #{inspect(state.output_entry_index)} for stage #{inspect(state.stage.id)}: #{inspect(output)}"

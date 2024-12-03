@@ -19,6 +19,7 @@ defmodule Nx.Defn.ShardingCompiler do
     opts =
       Keyword.validate!(opts, [
         :sharding_config,
+        :ops_split_rules,
         timeout: :infinity,
         sharding_compiler: Nx.Defn.Evaluator,
         sharding_compiler_options: []
@@ -33,10 +34,8 @@ defmodule Nx.Defn.ShardingCompiler do
           {expr, expr.data, shards}
       end
 
-    {[first_stage | _] = stages, _cache, state} =
-      GraphSplitter.traverse(%T{ans | data: sharded_expr}, expr_shards)
-
-    dbg({state.args, first_stage.arguments})
+    {[_first_stage | _] = stages, _cache, state} =
+      GraphSplitter.traverse(%T{ans | data: sharded_expr}, expr_shards, opts[:ops_split_rules])
 
     fn [args] ->
       # use task here so that we don't pollute the caller with the output collector message
@@ -77,7 +76,7 @@ defmodule Nx.Defn.ShardingCompiler do
       ShardExecution.ArgumentProvider.start_link([
         arg_data.(),
         argument_idx,
-        {:unsharded, argument_id}
+        :unsharded
       ])
     ]
   end

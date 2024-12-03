@@ -16,6 +16,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
   def traverse(expr, expr_shards \\ %{}, ops_split_rules \\ nil) do
     # expression_chain is going to be a reverse-accumulation of {category, subexpr}
     # that we can then compile and chain-execute elsewhere. category is either :gather, :reduce or :none
+
     state = %{
       expression_chain: [],
       nodes_to_replace: %{},
@@ -54,10 +55,16 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
               idx
             end)
             |> Enum.with_index(fn
-              {id, {expr, nil}}, idx ->
-                {id, put_in(expr.data.args, [idx])}
+              # {id, {expr, nil}}, idx ->
+              #   {id, put_in(expr.data.args, [idx])}
 
               {id, {expr, _shard_propagation}}, idx ->
+                id =
+                  case nodes_to_replace[id] do
+                    %T{data: %Expr{id: id}} -> id
+                    _ -> id
+                  end
+
                 expr = put_in(expr.data.args, [idx])
                 {id, expr}
             end)
