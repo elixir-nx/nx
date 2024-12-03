@@ -49,8 +49,6 @@ defmodule Nx.Defn.ShardingCompiler do
                 stage
             end
 
-          dbg(last_stage)
-
           {:ok, output_collector_pid} =
             ShardExecution.OutputCollector.start_link(ans, last_stage.id, self())
 

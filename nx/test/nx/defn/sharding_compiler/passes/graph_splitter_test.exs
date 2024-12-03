@@ -20,7 +20,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
           Nx.divide(w, 4)
         end).(Nx.tensor([1, 2]), Nx.tensor([3, 4]))
 
-      %{dot: {_, combine_fn, category}} =
+      %{dot: {_, _combine_fn, category}} =
         split_rules = GraphSplitter.default_operation_split_rules()
 
       split_rules =
@@ -132,6 +132,115 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
              } = stage_1_expr
     end
 
+    test "cause splits on a custom metadata node" do
+      expr =
+        Nx.Defn.debug_expr(fn arg0, arg1, arg2 ->
+          x = Nx.add(arg0, 1)
+          y = Nx.subtract(arg1, 2)
+          # this will cause a split on xz so that all tensor args
+          # of the metadata node become "reference" arguments from the previous stage
+          # i.e. x becomes a :parameter node with index 0 on stage 0
+          xz = Nx.Defn.Expr.metadata(x, %{split: true})
+          yz = Nx.Defn.Expr.metadata(y, %{split: false})
+
+          w = Nx.multiply(xz, yz)
+
+          Nx.add(w, arg2)
+        end).(Nx.tensor([1, 2]), Nx.tensor([3, 4]), Nx.tensor([5, 6]))
+
+      split_fn = fn
+        :metadata, [_expr, %{split: split}], _shards -> split
+        _, _, _ -> false
+      end
+
+      combine_fn = fn shards, _, _ -> shards end
+
+      split_rules =
+        Map.put(
+          GraphSplitter.default_operation_split_rules(),
+          :metadata,
+          {split_fn, combine_fn, :none}
+        )
+
+      {chain, _cache, state} = GraphSplitter.traverse(expr, %{}, split_rules)
+
+      [
+        {arg_0_id, {nil, 0}},
+        {arg_1_id, {nil, 1}},
+        {arg_2_id, {nil, 2}},
+        {arg_xz_id, {stage_0_id, 0}}
+      ] =
+        Enum.sort_by(state.args, fn {_, {ref, idx}} ->
+          {if(is_reference(ref), do: 1, else: 0), idx}
+        end)
+
+      assert [
+               %Stage{
+                 id: ^stage_0_id,
+                 category: :none,
+                 expr: stage_0_expr,
+                 arguments: stage_0_arguments,
+                 argument_sources: stage_0_argument_sources
+               },
+               %Stage{
+                 id: _stage_1_id,
+                 category: :none,
+                 expr: stage_1_expr,
+                 argument_sources: stage_1_argument_sources,
+                 arguments: stage_1_arguments
+               }
+             ] = chain
+
+      assert stage_0_argument_sources == %{arg_0_id => {nil, 0}}
+      assert %{^arg_0_id => %T{data: %Expr{args: [0]}}} = stage_0_arguments
+
+      assert stage_1_argument_sources == %{
+               arg_1_id => {nil, 1},
+               arg_2_id => {nil, 2},
+               arg_xz_id => {stage_0_id, 0}
+             }
+
+      %{
+        ^arg_1_id => %T{data: %Expr{args: [arg_1_idx]}},
+        ^arg_2_id => %T{data: %Expr{args: [arg_2_idx]}},
+        ^arg_xz_id => %T{data: %Expr{args: [arg_xz_idx]}}
+      } = stage_1_arguments
+
+      assert {%T{
+                data: %Expr{
+                  op: :add,
+                  args: [
+                    %T{data: %Expr{op: :constant, args: [1]}},
+                    %T{data: %Expr{op: :parameter, id: ^arg_0_id, args: [0]}}
+                  ]
+                }
+              }} = stage_0_expr
+
+      assert %T{
+               data: %Expr{
+                 op: :add,
+                 args: [d, e]
+               }
+             } = stage_1_expr
+
+      assert %T{
+               data: %Expr{
+                 op: :multiply,
+                 args: [
+                   %T{data: %Expr{op: :metadata, args: [a, %{split: true}]}},
+                   %T{data: %Expr{op: :metadata, args: [c, %{split: false}]}}
+                 ]
+               }
+             } = d
+
+      assert %T{data: %Expr{op: :subtract, args: [b, %T{data: %Expr{op: :constant, args: [2]}}]}} =
+               c
+
+      assert %T{data: %Expr{id: ^arg_xz_id, op: :parameter, args: [^arg_xz_idx]}} = a
+      assert %T{data: %Expr{id: ^arg_1_id, op: :parameter, args: [^arg_1_idx]}} = b
+      assert %T{data: %Expr{id: ^arg_2_id, op: :parameter, args: [^arg_2_idx]}} = e
+    end
+
     test "expression with 2 splits, common nodes and argument separation" do
       expr =
         Nx.Defn.debug_expr(fn arg0, arg1, arg2 ->
@@ -146,7 +255,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
           |> Nx.subtract(arg2)
         end).(Nx.tensor([[1, 2]]), Nx.tensor([[3], [4]]), Nx.tensor([5, 6]))
 
-      %{dot: {_, combine_fn, category}} =
+      %{dot: {_, _combine_fn, category}} =
         split_rules = GraphSplitter.default_operation_split_rules()
 
       split_rules =
@@ -156,7 +265,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitterTest do
           {fn _, _, _ -> true end, fn shards, _, _ -> shards end, category}
         )
 
-      %{sum: {_, combine_fn, category}} = split_rules
+      %{sum: {_, _combine_fn, category}} = split_rules
 
       split_rules =
         Map.put(

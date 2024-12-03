@@ -6,9 +6,6 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
   alias Nx.Defn.ShardingCompiler.Shard
   alias Nx.Defn.ShardingCompiler.Passes.GraphSplitter.Stage
 
-  @gather_ops [:dot]
-  @reduction_ops [:sum]
-
   def default_operation_split_rules do
     %{
       dot: {&must_split_expr?/3, &argument_combine_shards/3, :gather},
@@ -32,6 +29,8 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
     cache = %{}
     {expr, {cache, state}} = composite_eval(expr, state, cache)
 
+    dbg(state.args)
+
     expr_chain =
       Enum.reduce(
         [{make_ref(), :none, expr, state.nodes_to_replace} | state.expression_chain],
@@ -49,10 +48,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
           #          We might be able to calculate this in the first traversal somehow.
 
           {expr, %{used_args: used_args}} =
-            composite_rewrite_subtree(
-              expr,
-              %{state | nodes_to_replace: nodes_to_replace}
-            )
+            composite_rewrite_subtree(expr, %{state | nodes_to_replace: nodes_to_replace})
 
           arg_remapping =
             used_args
@@ -80,12 +76,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
               {arg_expr.data.id, set_shard_metadata(arg_expr, state.shards)}
             end)
 
-          argument_sources =
-            state.args
-            |> Map.take(Map.keys(arg_remapping))
-            |> Map.new(fn {remap_id, v} ->
-              {arg_remapping[remap_id].data.id, v}
-            end)
+          argument_sources = Map.take(state.args, Map.keys(arguments))
 
           [
             %Stage{
@@ -139,6 +130,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
       state = Map.put(state, :shards, shards)
 
       split_expr(expr, args, category, {cache, state})
+      |> dbg()
     else
       {expr, {cache, state}}
     end
@@ -341,6 +333,8 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
   end
 
   defp rewrite_subtree(other, _, acc), do: {other, acc}
+
+  defp set_shard_metadata(expr, shards) when map_size(shards) == 0, do: expr
 
   defp set_shard_metadata(expr, shards) do
     Composite.traverse(expr, fn
