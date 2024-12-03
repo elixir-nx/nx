@@ -7,7 +7,7 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.OutputCollector do
 
   alias Nx.Tensor, as: T
 
-  def init([expr, previous_stage_id, listener_pid]) do
+  def init([expr, previous_stage_id, listener_pid, is_sharded]) do
     {expr_tuple, unwrap_result} =
       if is_tuple(expr) do
         {expr, false}
@@ -16,16 +16,20 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.OutputCollector do
       end
 
     data_sections_by_index =
-      expr_tuple
-      |> Tuple.to_list()
-      |> Enum.with_index(fn expr, idx ->
-        sections =
-          for {starts, data_section_id} <- starts_and_data_section_ids(expr) do
-            {data_section_id, starts, nil}
-          end
+      if is_sharded do
+        expr_tuple
+        |> Tuple.to_list()
+        |> Enum.with_index(fn expr, idx ->
+          sections =
+            for {starts, data_section_id} <- starts_and_data_section_ids(expr) do
+              {data_section_id, starts, nil}
+            end
 
-        {idx, sections}
-      end)
+          {idx, sections}
+        end)
+      else
+        Map.new(0..(tuple_size(expr_tuple) - 1), fn idx -> {idx, [{:unsharded, nil, nil}]} end)
+      end
 
     Process.send_after(self(), :collect_data, 0)
 
@@ -36,14 +40,15 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.OutputCollector do
        previous_stage_id: previous_stage_id,
        unwrap_result: unwrap_result,
        data_sections_by_index: data_sections_by_index,
-       output: nil
+       output: nil,
+       is_sharded: is_sharded
      }}
   end
 
-  def start_link(sharded_expr, previous_stage_id, listener_pid) do
+  def start_link(sharded_expr, previous_stage_id, listener_pid, is_sharded) do
     GenServer.start_link(
       __MODULE__,
-      [sharded_expr, previous_stage_id, listener_pid],
+      [sharded_expr, previous_stage_id, listener_pid, is_sharded],
       name: via_tuple(sharded_expr)
     )
   end
@@ -92,7 +97,7 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.OutputCollector do
 
     output =
       if finished do
-        out_list = produce_output(state.expr_tuple, data_sections_by_index)
+        out_list = produce_output(state.expr_tuple, data_sections_by_index, state.is_sharded)
 
         if state.unwrap_result do
           [out] = out_list
@@ -141,7 +146,13 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.OutputCollector do
 
   defp cartesian_product([]), do: [[]]
 
-  defp produce_output(expr_tuple, data_sections_by_index) do
+  defp produce_output(_expr_tuple, data_sections_by_index, false) do
+    data_sections_by_index
+    |> Enum.sort_by(fn {idx, _} -> idx end)
+    |> Enum.map(fn {_idx, [{_, _, data}]} -> data end)
+  end
+
+  defp produce_output(expr_tuple, data_sections_by_index, true) do
     Enum.map(data_sections_by_index, fn {idx, data_sections} ->
       hole_template = elem(expr_tuple, idx)
       hole = Nx.broadcast(Nx.tensor(0, type: hole_template.type), hole_template.shape)
@@ -151,7 +162,9 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.OutputCollector do
           Nx.put_slice(acc, starts, data)
         end)
 
-      data
+      {idx, data}
     end)
+    |> Enum.sort_by(fn {idx, _} -> idx end)
+    |> Enum.map(fn {_, data} -> data end)
   end
 end

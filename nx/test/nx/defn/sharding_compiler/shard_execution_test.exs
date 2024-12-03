@@ -111,7 +111,7 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecutionTest do
              ])
 
     {:ok, output_collector_pid} =
-      ShardExecution.OutputCollector.start_link(ans, stage0.id, self())
+      ShardExecution.OutputCollector.start_link(ans, stage0.id, self(), true)
 
     assert_receive {ShardExecution.OutputCollector, :done, ^output_collector_pid, result}
 

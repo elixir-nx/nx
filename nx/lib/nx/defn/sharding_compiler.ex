@@ -59,7 +59,12 @@ defmodule Nx.Defn.ShardingCompiler do
             end
 
           {:ok, output_collector_pid} =
-            ShardExecution.OutputCollector.start_link(ans, last_stage.id, self())
+            ShardExecution.OutputCollector.start_link(
+              ans,
+              last_stage.id,
+              self(),
+              map_size(expr_shards) != 0
+            )
 
           receive do
             {ShardExecution.OutputCollector, :done, ^output_collector_pid, result} ->
@@ -71,7 +76,7 @@ defmodule Nx.Defn.ShardingCompiler do
     end
   end
 
-  defp start_argument_shard_providers(argument_id, argument_idx, arg_data, nil) do
+  defp start_argument_shard_providers(_argument_id, argument_idx, arg_data, nil) do
     [
       ShardExecution.ArgumentProvider.start_link([
         arg_data.(),
