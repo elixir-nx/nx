@@ -32,6 +32,8 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
       ]) do
     Process.send_after(self(), :fetch_inputs, 0)
 
+    Logger.debug("Stage #{inspect(stage)}")
+
     input_data_sections =
       input_data_sections
       |> Enum.sort_by(fn {idx, _} -> idx end)
@@ -168,9 +170,9 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
 
           case get(stage_id, stage_idx, data_section_id) do
             {:ok, data} ->
-              Logger.debug(
-                "Fetched input #{inspect({arg_id, arg_idx, data_section_id})} from stage #{inspect({stage_id, stage_idx})} to stage #{inspect(state.stage.id)}"
-              )
+              # Logger.debug(
+              #   "Fetched input #{inspect({arg_id, arg_idx, data_section_id})} from stage #{inspect({stage_id, stage_idx})} to stage #{inspect(state.stage.id)}"
+              # )
 
               put_in(state.fetched_inputs[arg_id], {arg_idx, data})
 
@@ -227,11 +229,11 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
 
     output = state.compiled_fun.([args])
 
-    Logger.debug("Expr: #{inspect(state.stage.expr)} for stage #{inspect(state.stage.id)}")
+    # Logger.debug("Expr: #{inspect(state.stage.expr)} for stage #{inspect(state.stage.id)}")
 
-    Logger.debug(
-      "Computed output #{inspect(expr_id(state.stage.expr))} index #{inspect(state.output_entry_index)} for stage #{inspect(state.stage.id)}: #{inspect(output)}"
-    )
+    # Logger.debug(
+    #   "Computed output #{inspect(expr_id(state.stage.expr))} index #{inspect(state.output_entry_index)} for stage #{inspect(state.stage.id)}: #{inspect(output)}"
+    # )
 
     %{state | output: output}
   end

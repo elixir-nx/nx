@@ -6,6 +6,7 @@ defmodule Nx.Defn.ShardingCompiler do
 
   alias Nx.Defn.ShardingCompiler.Passes.ShardPropagation
   alias Nx.Defn.ShardingCompiler.Passes.GraphSplitter
+  alias Nx.Defn.ShardingCompiler.Passes.GraphSplitter.Stage
   alias Nx.Defn.ShardingCompiler.ShardExecution
   @behaviour Nx.Defn.Compiler
 
@@ -22,20 +23,21 @@ defmodule Nx.Defn.ShardingCompiler do
         :ops_split_rules,
         timeout: :infinity,
         sharding_compiler: Nx.Defn.Evaluator,
-        sharding_compiler_options: []
+        sharding_compiler_options: [],
+        stage_allocator: fn _, _ -> Node.self() end
       ])
 
-    {ans, sharded_expr, expr_shards} =
+    {ans, expr_shards} =
       case propagate_shards(vars, fun, opts[:sharding_config]) do
-        {%T{data: %ShardPropagation{expr: sharded_expr}} = ans, expr_shards} ->
-          {ans, sharded_expr, expr_shards}
+        {%T{data: %ShardPropagation{expr: _sharded_expr}} = ans, expr_shards} ->
+          {ans, expr_shards}
 
         {expr, shards} ->
-          {expr, expr.data, shards}
+          {expr, shards}
       end
 
     {[_first_stage | _] = stages, _cache, state} =
-      GraphSplitter.traverse(%T{ans | data: sharded_expr}, expr_shards, opts[:ops_split_rules])
+      GraphSplitter.traverse(ans, expr_shards, opts[:ops_split_rules])
 
     fn [args] ->
       # use task here so that we don't pollute the caller with the output collector message
