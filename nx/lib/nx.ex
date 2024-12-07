@@ -12919,6 +12919,11 @@ defmodule Nx do
   of summing the element-wise products in the window across
   each input channel.
 
+  > #### Kernel Reflection {: .info}
+  >
+  > See the note at the end of this section for more details
+  > on the convention for kernel reflection and conjugation.
+
   The ranks of both `input` and `kernel` must match. By
   default, both `input` and `kernel` are expected to have shapes
   of the following form:
@@ -12999,6 +13004,28 @@ defmodule Nx do
   specifying `:batch_group_size`. This will compute a grouped convolution
   in the same way as with `:feature_group_size`, however, the input
   tensor will be split into groups along the batch dimension.
+
+  > #### Convolution vs Correlation {: .tip}
+  >
+  > `conv/3` does not perform reversion nor conjugation of the kernel.
+  > This means that if you come from a Signal Processing background,
+  > you might call this operation "correlation" instead of convolution.
+  >
+  > If you need the proper Signal Processing convolution, you can use
+  > `reverse/2` and `conjugate/1`, like in the example:
+  >
+  > ```elixir
+  > axes = Nx.axes(kernel) |> Enum.drop(2)
+  >
+  > kernel =
+  >   if Nx.Type.complex?(Nx.type(kernel)) do
+  >     Nx.conjugate(Nx.reverse(kernel, axes: axes))
+  >   else
+  >     Nx.reverse(kernel, axes: axes)
+  >   end
+  >
+  > Nx.conv(img, kernel)
+  > ```
 
   ## Examples
 
