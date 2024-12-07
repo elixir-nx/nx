@@ -12920,6 +12920,7 @@ defmodule Nx do
   each input channel.
 
   > #### Kernel Reflection {: .info}
+  >
   > See the note at the end of this section for more details
   > on the convention for kernel reflection and conjugation.
 
@@ -13003,7 +13004,6 @@ defmodule Nx do
   specifying `:batch_group_size`. This will compute a grouped convolution
   in the same way as with `:feature_group_size`, however, the input
   tensor will be split into groups along the batch dimension.
-
 
   > #### Convolution vs Correlation {: .tip}
   >
