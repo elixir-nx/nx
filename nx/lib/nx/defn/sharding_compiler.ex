@@ -54,10 +54,17 @@ defmodule Nx.Defn.ShardingCompiler do
           end)
 
           last_stage =
-            for stage <- stages, reduce: nil do
+            for {stage, idx} <- Enum.with_index(stages), reduce: nil do
               _ ->
-                {:ok, _pid} = ShardExecution.Supervisor.start_link(stage)
-                stage
+                node = opts[:stage_allocator].(stage, idx)
+
+                ShardExecution.Supervisor.start_link(
+                  %{stage | node: node},
+                  opts[:sharding_compiler],
+                  opts[:sharding_compiler_options]
+                )
+
+                %{stage | node: node}
             end
 
           {:ok, output_collector_pid} =

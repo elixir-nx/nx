@@ -7,12 +7,12 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.Supervisor do
   alias Nx.Defn.Expr
   alias Nx.Tensor, as: T
 
-  def start_link(%Stage{} = stage) do
-    Supervisor.start_link(__MODULE__, stage)
+  def start_link(%Stage{} = stage, sharding_compiler, sharding_compiler_options) do
+    Supervisor.start_link(__MODULE__, [stage, sharding_compiler, sharding_compiler_options])
   end
 
   @impl true
-  def init(stage) do
+  def init([stage, sharding_compiler, sharding_compiler_options]) do
     children =
       for {output_entry_index, output_data_sections} <- output_data_sections(stage),
           {output_data_section_id, input_data_sections, output_starts, output_lengths} <-
@@ -28,7 +28,9 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution.Supervisor do
                  output_entry_index,
                  output_data_section_id,
                  output_starts,
-                 output_lengths
+                 output_lengths,
+                 sharding_compiler,
+                 sharding_compiler_options
                ]
              ]},
           restart: :permanent,

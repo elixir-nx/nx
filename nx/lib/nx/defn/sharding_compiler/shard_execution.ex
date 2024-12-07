@@ -28,11 +28,13 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
         output_entry_index,
         output_data_section_id,
         output_starts,
-        output_lengths
+        output_lengths,
+        compiler,
+        compiler_options
       ]) do
     Process.send_after(self(), :fetch_inputs, 0)
 
-    Logger.debug("Stage #{inspect(stage)}")
+    Logger.debug("Stage #{inspect(stage.id)}: #{inspect(stage.expr)}")
 
     input_data_sections =
       input_data_sections
@@ -100,8 +102,8 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
       end)
 
     compiled_fun =
-      Nx.Defn.Evaluator.__compile__(
-        make_ref(),
+      compiler.__compile__(
+        stage.expr,
         arg_templates,
         fn _ ->
           if is_tuple(stage.expr) do
@@ -110,7 +112,7 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
             stage.expr
           end
         end,
-        []
+        compiler_options
       )
 
     fun = fn [args] ->
@@ -127,7 +129,6 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
         end)
 
       [res] = compiled_fun.([args])
-
       res
     end
 
@@ -155,7 +156,9 @@ defmodule Nx.Defn.ShardingCompiler.ShardExecution do
          output_entry_index,
          output_data_section_id,
          _starts,
-         _lengths
+         _lengths,
+         _compiler,
+         _compiler_options
        ]) do
     {:via, Registry, {ShardRegistry, {stage.id, output_entry_index, output_data_section_id}}}
   end
