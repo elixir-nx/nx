@@ -13007,24 +13007,41 @@ defmodule Nx do
 
   > #### Convolution vs Correlation {: .tip}
   >
-  > `conv/3` does not perform reversion nor conjugation of the kernel.
+  > `conv/3` does not perform reversion of the kernel.
   > This means that if you come from a Signal Processing background,
-  > you might call this operation "correlation" instead of convolution.
+  > you might treat it as a cross-correlation operation instead of a convolution.
   >
-  > If you need the proper Signal Processing convolution, you can use
-  > `reverse/2` and `conjugate/1`, like in the example:
+  > This function is not exactly a cross-correlation function, as it does not
+  > perform conjugation of the kernel, as is done in [scipy.signal.correlate](https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.correlate.html).
+  > This can be remedied via `Nx.conjugate/1`, as seen below:
   >
   > ```elixir
-  > axes = Nx.axes(kernel) |> Enum.drop(2)
-  >
   > kernel =
   >   if Nx.Type.complex?(Nx.type(kernel)) do
-  >     Nx.conjugate(Nx.reverse(kernel, axes: axes))
+  >     Nx.conjugate(kernel)
   >   else
-  >     Nx.reverse(kernel, axes: axes)
+  >     kernel
   >   end
   >
-  > Nx.conv(img, kernel)
+  > Nx.conv(tensor, kernel)
+  > ```
+  >
+  > If you need the proper Signal Processing convolution, such as the one in
+  > [scipy.signal.convolve](https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.convolve.html),
+  > you can use `reverse/2`, like in the example:
+  >
+  > ```elixir
+  > reversal_axes =
+  >   case Nx.rank(kernel) do
+  >     0 -> []
+  >     1 -> [1]
+  >     2 -> [0, 1]
+  >     _ -> Enum.drop(Nx.axes(kernel), 2)
+  >   end
+  >
+  > kernel = Nx.reverse(kernel, axes: reversal_axes)
+  >
+  > Nx.conv(tensor, kernel)
   > ```
 
   ## Examples
