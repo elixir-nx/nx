@@ -495,6 +495,30 @@ xla::StatusOr<ExlaClient*> GetTpuClient() {
   return new ExlaClient(std::move(client));
 }
 
+xla::StatusOr<ExlaClient*> GetMpsClient() {
+  // The plugin may be compiled for a different version of PjRt C API
+  // than present in our XLA compilation. By default pjrt::LoadPjrtPlugin
+  // raises if the version does not match. By setting this environment
+  // variable, we relax this check to allow different versions, as long
+  // as they satisfy compatibility constraints.
+  //
+  // See https://github.com/openxla/xla/blob/4e8e23f16bc925b6f27817de098a8e1e81296bb5/xla/pjrt/pjrt_api.cc
+  setenv("ENABLE_PJRT_COMPATIBILITY", "1", 1);
+
+  EXLA_ASSIGN_OR_RETURN(const PJRT_Api* pjrt_api, pjrt::LoadPjrtPlugin("METAL", "pjrt_plugin_metal.dylib"));
+
+  xla::Status status = pjrt::InitializePjrtPlugin("METAL");
+
+  if (!status.ok()) {
+    return status;
+  }
+
+  EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtClient> client,
+                        xla::GetCApiClient("METAL"));
+
+  return new ExlaClient(std::move(client));
+}
+
 xla::StatusOr<ExlaClient*> GetCApiClient(std::string device_type) {
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtClient> client,
                         xla::GetCApiClient(device_type));
