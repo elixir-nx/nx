@@ -38,7 +38,7 @@ defmodule Nx.LinAlg.BlockEigh do
     pred = Nx.abs(tr) <= 1.0e-5 * Nx.min(Nx.abs(br), Nx.abs(tl))
     t = Nx.select(pred, Nx.tensor(0, type: tl.type), t)
 
-    c = 1.0 / Nx.sqrt(1.0 + Nx.pow(t, 2))
+    c = 1.0 / Nx.sqrt(1.0 + t ** 2)
     s = if complex?, do: Nx.complex(t * c, 0) * w, else: t * c
 
     rt1 = tl - t * tr
