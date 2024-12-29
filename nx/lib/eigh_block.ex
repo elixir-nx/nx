@@ -13,28 +13,41 @@ defmodule Nx.LinAlg.BlockEigh do
   import Nx.Defn
 
   defn calc_rot(tl, tr, br) do
-    a = Nx.take_diagonal(br)
-    b = Nx.take_diagonal(tr)
-    c = Nx.take_diagonal(tl)
+    complex? = tl |> Nx.type() |> Nx.Type.complex?()
+    br = Nx.take_diagonal(br) |> Nx.real()
+    tr = Nx.take_diagonal(tr)
+    tl = Nx.take_diagonal(tl) |> Nx.real()
 
-    tau = (a - c) / (2 * b)
+    {tr, w} =
+      if complex? do
+        abs_tr = Nx.abs(tr)
+        pred = Nx.equal(abs_tr, 0)
+        {abs_tr, Nx.select(pred, 1, Nx.conjugate(tr) / Nx.complex(abs_tr, 0))}
+      else
+        {tr, 1}
+      end
+
+    z_tr = Nx.equal(tr, 0)
+    s_tr = Nx.select(z_tr, 1, tr)
+    tau = Nx.select(z_tr, 0, (br - tl) / (2 * s_tr))
+
     t = Nx.sqrt(1 + Nx.pow(tau, 2))
-    t = Nx.select(Nx.greater_equal(tau, 0), 1 / (tau + t), 1 / (tau - t))
 
-    pred = Nx.less_equal(Nx.abs(b), 0.1 * 1.0e-4 * Nx.min(Nx.abs(a), Nx.abs(c)))
-    t = Nx.select(pred, 0.0, t)
+    t = 1 / (tau + Nx.select(Nx.greater_equal(tau, 0), t, -t))
+
+    pred = Nx.less_equal(Nx.abs(tr), 1.0e-5 * Nx.min(Nx.abs(br), Nx.abs(tl)))
+    t = Nx.select(pred, Nx.tensor(0, type: tl.type), t)
 
     c = 1.0 / Nx.sqrt(1.0 + Nx.pow(t, 2))
-    s = t * c
+    s = if complex?, do: Nx.complex(t * c, 0) * w, else: t * c
 
     rt1 = tl - t * tr
     rt2 = br + t * tr
-
     {rt1, rt2, c, s}
   end
 
   defn sq_norm(tl, tr, bl, br) do
-    Nx.sum(Nx.pow(tl, 2) + Nx.pow(tr, 2) + Nx.pow(bl, 2) + Nx.pow(br, 2))
+    Nx.sum(Nx.abs(tl) ** 2 + Nx.abs(tr) ** 2 + Nx.abs(bl) ** 2 + Nx.abs(br) ** 2)
   end
 
   defn off_norm(tl, tr, bl, br) do
@@ -43,7 +56,7 @@ defmodule Nx.LinAlg.BlockEigh do
     o_tl = Nx.put_diagonal(tl, diag)
     o_br = Nx.put_diagonal(br, diag)
 
-    Nx.sum(Nx.pow(o_tl, 2) + Nx.pow(tr, 2) + Nx.pow(bl, 2) + Nx.pow(o_br, 2))
+    sq_norm(o_tl, tr, bl, o_br)
   end
 
   @doc """
@@ -53,18 +66,19 @@ defmodule Nx.LinAlg.BlockEigh do
   defn norms(tl, tr, bl, br) do
     frob = sq_norm(tl, tr, bl, br)
     off = off_norm(tl, tr, bl, br)
+
     {frob, off}
   end
 
-  defn eigh(matrix) do
+  defn eigh(matrix, opts \\ []) do
+    opts = keyword!(opts, eps: 1.0e-4, max_iter: 15)
+
     matrix
     |> Nx.revectorize([collapsed_axes: :auto],
       target_shape: {Nx.axis_size(matrix, -2), Nx.axis_size(matrix, -1)}
     )
-    |> decompose()
-    |> then(fn {w, v} ->
-      revectorize_result({w, v}, matrix)
-    end)
+    |> decompose(opts)
+    |> revectorize_result(matrix)
   end
 
   deftransformp revectorize_result({eigenvals, eigenvecs}, a) do
@@ -78,17 +92,22 @@ defmodule Nx.LinAlg.BlockEigh do
     }
   end
 
-  defn decompose(matrix) do
+  defnp decompose(matrix, opts) do
     {n, _} = Nx.shape(matrix)
 
     if n > 1 do
-      m_decompose(matrix)
+      m_decompose(matrix, opts)
     else
-      {Nx.tensor([1], type: matrix.type), Nx.take_diagonal(matrix)}
+      {Nx.take_diagonal(Nx.real(matrix)), Nx.tensor([1], type: matrix.type)}
     end
   end
 
-  defn m_decompose(matrix) do
+  defnp m_decompose(matrix, opts) do
+    eps = opts[:eps]
+    max_iter = opts[:max_iter]
+
+    out_type = Nx.Type.to_floating(Nx.type(matrix))
+    matrix = Nx.as_type(matrix, out_type)
     {n, _} = Nx.shape(matrix)
     i_n = n - 1
     {mid, _} = Nx.shape(matrix[[0..i_n//2, 0..i_n//2]])
@@ -110,10 +129,11 @@ defmodule Nx.LinAlg.BlockEigh do
       end
 
     # Initialze tensors to hold eigenvectors
-    v_tl = Nx.eye(mid, type: :f32)
-    v_tr = Nx.broadcast(0.0, {mid, mid})
-    v_bl = Nx.broadcast(0.0, {mid, mid})
-    v_br = Nx.eye(mid, type: :f32)
+    type = tl |> Nx.type() |> Nx.Type.to_floating()
+    v_tl = Nx.eye(mid, type: type)
+    v_tr = Nx.broadcast(Nx.tensor(0, type: type), {mid, mid})
+    v_bl = Nx.broadcast(Nx.tensor(0, type: type), {mid, mid})
+    v_br = Nx.eye(mid, type: type)
 
     {frob_norm, off_norm} = norms(tl, tr, bl, br)
 
@@ -125,65 +145,18 @@ defmodule Nx.LinAlg.BlockEigh do
     #
     # The inner loop performs "sweep" rounds of n - 1, which is enough permutations to allow
     # all sub matrices to share the needed values.
-    {_, _, tl, _tr, _bl, br, v_tl, v_tr, v_bl, v_br, _} =
-      while {frob_norm, off_norm, tl, tr, bl, br, v_tl, v_tr, v_bl, v_br, i = 0},
-            off_norm > Nx.pow(1.0e-10, 2) * frob_norm and i < 15 do
+    {{tl, br, v_tl, v_tr, v_bl, v_br}, _} =
+      while {{tl, br, v_tl, v_tr, v_bl, v_br}, {frob_norm, off_norm, tr, bl, i = 0}},
+            off_norm > Nx.pow(eps, 2) * frob_norm and i < max_iter do
         {tl, tr, bl, br, v_tl, v_tr, v_bl, v_br} =
-          while {tl, tr, bl, br, v_tl, v_tr, v_bl, v_br}, _n <- 0..i_n do
-            {rt1, rt2, c, s} = calc_rot(tl, tr, br)
-            # build row and column vectors for parrelelized rotations
-            c_v = Nx.reshape(c, {mid, 1})
-            s_v = Nx.reshape(s, {mid, 1})
-            c_h = Nx.reshape(c, {1, mid})
-            s_h = Nx.reshape(s, {1, mid})
-
-            # Rotate rows
-            {tl, tr, bl, br} = {
-              tl * c_v - bl * s_v,
-              tr * c_v - br * s_v,
-              tl * s_v + bl * c_v,
-              tr * s_v + br * c_v
-            }
-
-            # Rotate cols
-            {tl, tr, bl, br} = {
-              tl * c_h - tr * s_h,
-              tl * s_h + tr * c_h,
-              bl * c_h - br * s_h,
-              bl * s_h + br * c_h
-            }
-
-            # Store results and permute values across sub matrices
-            tl = Nx.put_diagonal(tl, Nx.take_diagonal(rt1))
-            tr = Nx.put_diagonal(tr, Nx.broadcast(0, {mid}))
-            bl = Nx.put_diagonal(bl, Nx.broadcast(0, {mid}))
-            br = Nx.put_diagonal(br, Nx.take_diagonal(rt2))
-
-            {tl, tr} = permute_cols_in_row(tl, tr)
-            {bl, br} = permute_cols_in_row(bl, br)
-            {tl, bl} = permute_rows_in_col(tl, bl)
-            {tr, br} = permute_rows_in_col(tr, br)
-
-            # Rotate to calc vectors
-            {v_tl, v_tr, v_bl, v_br} = {
-              v_tl * c_v - v_bl * s_v,
-              v_tr * c_v - v_br * s_v,
-              v_tl * s_v + v_bl * c_v,
-              v_tr * s_v + v_br * c_v
-            }
-
-            # permute for vectors
-            {v_tl, v_bl} = permute_rows_in_col(v_tl, v_bl)
-            {v_tr, v_br} = permute_rows_in_col(v_tr, v_br)
-
-            {tl, tr, bl, br, v_tl, v_tr, v_bl, v_br}
-          end
+          perform_sweeps(tl, tr, bl, br, v_tl, v_tr, v_bl, v_br, mid, i_n)
 
         {frob_norm, off_norm} = norms(tl, tr, bl, br)
 
-        {frob_norm, off_norm, tl, tr, bl, br, v_tl, v_tr, v_bl, v_br, i + 1}
+        {{tl, br, v_tl, v_tr, v_bl, v_br}, {frob_norm, off_norm, tr, bl, i + 1}}
       end
 
+    # Recombine
     w = Nx.concatenate([Nx.take_diagonal(tl), Nx.take_diagonal(br)])
 
     v =
@@ -191,16 +164,80 @@ defmodule Nx.LinAlg.BlockEigh do
         Nx.concatenate([v_tl, v_tr], axis: 1),
         Nx.concatenate([v_bl, v_br], axis: 1)
       ])
+      |> Nx.LinAlg.adjoint()
 
     # trim padding
-    if Nx.remainder(n, 2) == 1 do
-      {w[0..i_n], Nx.transpose(v[[0..i_n, 0..i_n]])}
-    else
-      {w, v}
+    {w, v} =
+      if Nx.remainder(n, 2) == 1 do
+        {w[0..i_n], v[[0..i_n, 0..i_n]]}
+      else
+        {w, v}
+      end
+
+    sort_ind = Nx.argsort(Nx.abs(w), direction: :desc)
+
+    w = Nx.take(w, sort_ind) |> approximate_zeros(eps)
+    v = Nx.take(v, sort_ind, axis: 1) |> approximate_zeros(eps)
+
+    {w, v}
+  end
+
+  defnp perform_sweeps(tl, tr, bl, br, v_tl, v_tr, v_bl, v_br, mid, i_n) do
+    while {tl, tr, bl, br, v_tl, v_tr, v_bl, v_br}, _n <- 0..i_n do
+      {rt1, rt2, c, s} = calc_rot(tl, tr, br)
+      # build row and column vectors for parrelelized rotations
+      c_v = Nx.reshape(c, {mid, 1})
+      s_v = Nx.reshape(s, {mid, 1})
+      c_h = Nx.reshape(c, {1, mid})
+      s_h = Nx.reshape(s, {1, mid})
+
+      # Rotate rows
+      {tl, tr, bl, br} = {
+        tl * c_v - bl * s_v,
+        tr * c_v - br * s_v,
+        tl * s_v + bl * c_v,
+        tr * s_v + br * c_v
+      }
+
+      # Rotate cols
+      {tl, tr, bl, br} = {
+        tl * c_h - tr * s_h,
+        tl * s_h + tr * c_h,
+        bl * c_h - br * s_h,
+        bl * s_h + br * c_h
+      }
+
+      # Store results and permute values across sub matrices
+      tl = Nx.put_diagonal(tl, rt1)
+      tr = Nx.put_diagonal(tr, Nx.broadcast(0, {mid}))
+      bl = Nx.put_diagonal(bl, Nx.broadcast(0, {mid}))
+      br = Nx.put_diagonal(br, rt2)
+
+      {tl, tr} = permute_cols_in_row(tl, tr)
+      {bl, br} = permute_cols_in_row(bl, br)
+      {tl, bl} = permute_rows_in_col(tl, bl)
+      {tr, br} = permute_rows_in_col(tr, br)
+
+      # Rotate to calc vectors
+      {v_tl, v_tr, v_bl, v_br} = {
+        v_tl * c_v - v_bl * s_v,
+        v_tr * c_v - v_br * s_v,
+        v_tl * s_v + v_bl * c_v,
+        v_tr * s_v + v_br * c_v
+      }
+
+      # permute for vectors
+      {v_tl, v_bl} = permute_rows_in_col(v_tl, v_bl)
+      {v_tr, v_br} = permute_rows_in_col(v_tr, v_br)
+
+      {tl, tr, bl, br, v_tl, v_tr, v_bl, v_br}
     end
   end
 
-  defn permute_rows_in_col(top, bottom) do
+  defnp approximate_zeros(matrix, eps), do: Nx.select(Nx.abs(matrix) <= eps, 0, matrix)
+
+  # https://github.com/openxla/xla/blob/main/xla/hlo/transforms/expanders/eigh_expander.cc#L200-L239
+  defnp permute_rows_in_col(top, bottom) do
     {k, _} = Nx.shape(top)
 
     {top_out, bottom_out} =
@@ -222,7 +259,7 @@ defmodule Nx.LinAlg.BlockEigh do
           {Nx.concatenate([top[0..0], bottom[0..0], top[1..(k - 2)]], axis: 0),
            Nx.concatenate(
              [
-               bottom[1..-1],
+               bottom[1..-1//1],
                top[(k - 1)..(k - 1)]
              ],
              axis: 0
