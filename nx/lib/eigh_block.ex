@@ -33,9 +33,9 @@ defmodule Nx.LinAlg.BlockEigh do
 
     t = Nx.sqrt(1 + Nx.pow(tau, 2))
 
-    t = 1 / (tau + Nx.select(Nx.greater_equal(tau, 0), t, -t))
+    t = 1 / (tau + Nx.select(tau >= 0, t, -t))
 
-    pred = Nx.less_equal(Nx.abs(tr), 1.0e-5 * Nx.min(Nx.abs(br), Nx.abs(tl)))
+    pred = Nx.abs(tr) <= 1.0e-5 * Nx.min(Nx.abs(br), Nx.abs(tl))
     t = Nx.select(pred, Nx.tensor(0, type: tl.type), t)
 
     c = 1.0 / Nx.sqrt(1.0 + Nx.pow(t, 2))
