@@ -31,7 +31,7 @@ defmodule Nx.LinAlg.BlockEigh do
     s_tr = Nx.select(z_tr, 1, tr)
     tau = Nx.select(z_tr, 0, (br - tl) / (2 * s_tr))
 
-    t = Nx.sqrt(1 + Nx.pow(tau, 2))
+    t = Nx.sqrt(1 + tau ** 2)
 
     t = 1 / (tau + Nx.select(tau >= 0, t, -t))
 
