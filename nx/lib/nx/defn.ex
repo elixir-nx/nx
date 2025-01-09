@@ -120,7 +120,7 @@ defmodule Nx.Defn do
       deftransformp custom_elixir_code(value), do: IO.inspect(value)
 
   The only difference between using `deftransform` and `deftransformp`
-  is wether you want to expose and share the code with other modules,
+  is whether you want to expose and share the code with other modules,
   just like `def` and `defp`.
 
   Transforms are useful to manipulate tensor expressions or
@@ -288,7 +288,7 @@ defmodule Nx.Defn do
   input shapes, this function precompiles the given anonymous
   function based on the input shapes. This can be beneficial for
   large numerical definitions, where the cache mechanism in `jit/2`
-  may take miliseconds.
+  may take milliseconds.
 
   For example, take the following definition:
 
@@ -296,7 +296,7 @@ defmodule Nx.Defn do
 
   You can jit and then apply it as:
 
-      fun = Nx.Defn.compile(&softmax/1, [Nx.template({3}, {:s, 64})], compiler: EXLA)
+      fun = Nx.Defn.compile(&softmax/1, [Nx.template({3}, {:s, 32})], compiler: EXLA)
       fun.(Nx.tensor([1, 2, 3]))
 
   You can also pass a mixture of templates and options when
@@ -304,7 +304,7 @@ defmodule Nx.Defn do
   the inputs when invoking the compiled function, as the options
   will already be embedded in its compiled value:
 
-      fun = Nx.Defn.compile(&Nx.sum/2, [Nx.template({2, 2}, {:s, 64}), [axes: [1]]])
+      fun = Nx.Defn.compile(&Nx.sum/2, [Nx.template({2, 2}, {:s, 32}), [axes: [1]]])
       fun.(Nx.iota({2, 2}))
 
   If the input tensors do not match the shape of the tensors
@@ -483,99 +483,6 @@ defmodule Nx.Defn do
     {fun, params, _templates, flatten} = Nx.Defn.Compiler.to_lazy_params(fun, args)
     [res] = Nx.Defn.Compiler.__jit__(fun, params, [flatten], opts)
     res
-  end
-
-  @doc """
-  Starts streaming the given anonymous function with just-in-time
-  compilation.
-
-  At least two arguments are expected:
-
-    1. The first argument is a tensor template of the data to
-       be streamed in
-
-    2. The second argument is a tensor with the stream initial state
-
-  The streaming function must return a two element tuple, the
-  first element is the data to be sent and the second is the
-  accumulator.
-
-  For each streamed chunk, you must call `Nx.Stream.send/2` and
-  `Nx.Stream.recv/1`. You don't need to call `recv` immediately
-  after `send`, but doing so can be a useful mechanism to provide
-  backpressure. Once all chunks are sent, you must use `Nx.Stream.done/1`
-  to receive the accumulated result. Let's see an example:
-
-      defmodule Streamed do
-        import Nx.Defn
-
-        defn sum(tensor, acc) do
-          {acc, tensor + acc}
-        end
-      end
-
-  Now let's invoke it:
-
-      stream = Nx.Defn.stream(&Streamed.sum/2, [Nx.template({}, {:s, 64}), 0])
-
-      for i <- 1..5 do
-        Nx.Stream.send(stream, i)
-        IO.inspect {:chunk, Nx.Stream.recv(stream)}
-      end
-
-      IO.inspect {:result, Nx.Stream.done(stream)}
-
-  It will print:
-
-      {:chunk, 0}
-      {:chunk, 1}
-      {:chunk, 2}
-      {:chunk, 3}
-      {:chunk, 4}
-      {:result, 5}
-
-  ## Options
-
-    * `:hooks` - a map of hooks to execute. See `Nx.Defn.Kernel.hook/3`
-
-  ## Beware: deadlocks
-
-  Some backends (such as XLA) place locks around devices. For example,
-  if you start streaming on the GPU, you cannot perform any other
-  operation on the GPU until streaming is over.
-
-  This means if we modify the loop above to the following:
-
-      for i <- 1..5 do
-        Nx.Stream.send(stream, Nx.tensor(i) |> Nx.multiply(2))
-        IO.inspect {:chunk, Nx.Stream.recv(stream)}
-      end
-
-  The loop may deadlock at the time it performs the multiplication.
-  In practice, this means you should perform the streaming on the GPU
-  and the remaining operations on the CPU. If you only have a single
-  device (i.e. only a CPU), then it may not be possible to perform the
-  above and you will have to restructure your code to manipulate the
-  input before streaming starts.
-  """
-  def stream(fun, args, opts \\ [])
-      when is_function(fun) and is_list(args) and is_list(opts) do
-    if Nx.Defn.Compiler.current() do
-      raise "cannot call Nx.Defn.stream/3 when there is a JIT compilation happening"
-    end
-
-    opts = prepare_options(opts)
-    {fun, params, _templates, flatten} = Nx.Defn.Compiler.to_lazy_params(fun, args)
-
-    case args do
-      [_input, acc | _] ->
-        acc = Nx.Defn.Composite.traverse(acc, &Nx.to_tensor/1)
-        [stream] = Nx.Defn.Compiler.__stream__(fun, hd(params), acc, params, [flatten], opts)
-        stream
-
-      _ ->
-        raise ArgumentError, "Nx.Defn.stream/3 expects at least two arguments"
-    end
   end
 
   defp prepare_options(opts) do

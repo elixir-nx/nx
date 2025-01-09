@@ -120,15 +120,15 @@ defmodule EXLA.Defn.Outfeed do
     {infeeds, {compiled_hooks, token}} =
       entries
       |> List.keysort(1, :desc)
-      |> Enum.map_reduce({compiled_hooks, token}, fn {pos, _, typespec},
-                                                     {compiled_hooks, token} ->
-        next_flag = next_hook(compiled_hooks)
-        compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed, pos, typespec})
+      |> Enum.map_reduce({compiled_hooks, token}, fn
+        {pos, _, typespec}, {compiled_hooks, token} ->
+          next_flag = next_hook(compiled_hooks)
+          compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed, pos, typespec})
 
-        token = Value.outfeed(Value.constant(builder, [next_flag], flag_typespec()), token)
-        {token, [input]} = Value.infeed(token, [typespec])
+          token = Value.outfeed(Value.constant(builder, [next_flag], flag_typespec()), token)
+          {token, [input]} = Value.infeed(token, [typespec])
 
-        {{pos, input}, {compiled_hooks, token}}
+          {{pos, input}, {compiled_hooks, token}}
       end)
 
     %{outfeed | compiled_hooks: compiled_hooks, token: token, infeeds: infeeds}
@@ -151,23 +151,6 @@ defmodule EXLA.Defn.Outfeed do
       true ->
         raise "hooks are not supported inside #{builder.name}"
     end
-  end
-
-  @doc """
-  Adds a stream hook.
-
-  Used by streams. Only one is allowed. Requires configuration.
-  """
-  def add_stream_hook(%Outfeed{} = outfeed, builder, tuple) do
-    {outfeed, flag, typespecs} = outfeed_flat_tuple(outfeed, builder, tuple)
-    # We don't know the pid+ref pair for the stream, so we store it
-    # under a special key called :stream and revert to the flag once configured
-    put_in(outfeed.compiled_hooks[:stream], {flag, typespecs})
-  end
-
-  def configure_stream_hook(%Outfeed{} = outfeed, pid, ref) when is_pid(pid) do
-    {{flag, typespecs}, outfeed} = pop_in(outfeed.compiled_hooks[:stream])
-    {typespecs, put_in(outfeed.compiled_hooks[flag], {:stream, typespecs, pid, ref})}
   end
 
   @doc """
@@ -252,10 +235,6 @@ defmodule EXLA.Defn.Outfeed do
               end
 
             EXLA.Client.to_infeed(client, device_id, [{data, data_typespec}])
-            loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
-
-          {:stream, typespecs, recv_pid, recv_ref} ->
-            :ok = EXLA.Client.from_outfeed(client, device_id, typespecs, recv_pid, recv_ref)
             loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
 
           {:function, typespecs, name, template} ->

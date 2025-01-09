@@ -57,7 +57,7 @@ defmodule Nx.LinAlg.QR do
     column_iota = Nx.iota({Nx.axis_size(a, 0)}, vectorized_axes: a.vectorized_axes)
 
     {{q, r}, _} =
-      while {{q = base_h, r = Nx.as_type(a, type)}, {column_iota}}, i <- 0..max_i do
+      while {{q = base_h, r = Nx.as_type(a, type)}, {column_iota}}, i <- 0..max_i//1 do
         x = r[[.., i]]
         x = Nx.select(column_iota < i, 0, x)
         h = householder_reflector(x, i, eps)

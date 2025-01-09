@@ -65,7 +65,7 @@ defmodule Torchx.Nx.RandomTest do
       # Output does not match Nx because of the sign of the remainder.
       distribution_case(:randint_split,
         args: [0, 10, [shape: {5}]],
-        expected: Nx.tensor([3, 2, 6, 0, 0], type: :s64)
+        expected: Nx.tensor([1, 1, 4, 1, 9], type: :s64)
       )
     end
 
@@ -209,7 +209,7 @@ defmodule Torchx.Nx.RandomTest do
       |> assert_all_close(apply(expected_func, expected_args), rtol: 0.1)
 
       seed = :erlang.adler32("#{name}threefry2x32")
-      key = Nx.Random.key(Nx.tensor(seed, type: :u64))
+      key = Nx.Random.key(seed)
       t = apply(Nx.Random, name, [key | args])
 
       apply(Nx, moment, [t])

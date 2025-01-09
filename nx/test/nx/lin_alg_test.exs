@@ -276,6 +276,19 @@ defmodule Nx.LinAlgTest do
         Nx.LinAlg.norm(t, ord: -3)
       end)
     end
+
+    test "correctly support axes option" do
+      t =
+        Nx.tensor([
+          [-1.0, -1.0],
+          [0.0, 0.0],
+          [1.0, 1.0]
+        ])
+
+      result = Nx.tensor([1.4142135381698608, 0.0, 1.4142135381698608])
+      assert Nx.LinAlg.norm(t, axes: [1]) == result
+      assert Nx.LinAlg.norm(t, axes: [1], keep_axes: true) == Nx.reshape(result, {3, 1})
+    end
   end
 
   describe "matrix_power" do

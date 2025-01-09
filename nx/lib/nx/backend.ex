@@ -208,7 +208,7 @@ defmodule Nx.Backend do
     sep = IA.color(",", :list, inspect_opts)
     close = IA.color("]", :list, inspect_opts)
 
-    # TO-DO: This is a paliative accessibility-related solution
+    # TODO: This is a palliative accessibility-related solution
     precision = inspect_opts.custom_options[:nx_precision]
 
     dims = Tuple.to_list(shape)

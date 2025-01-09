@@ -1,5 +1,42 @@
 # Changelog
 
+## v0.9.2 (2024-11-16)
+
+### Enhancements
+
+  * Support cross-compilation for use with Nerves
+  * Optimize LU with a custom call
+
+## v0.9.1 (2024-10-08)
+
+### Enhancements
+
+  * Improve compilation times of native code
+
+### Bug fixes
+
+  * Fix encoding of binary floats
+
+## v0.9.0 (2024-09-26)
+
+### Enhancements
+
+  * Overall improvements to the Nx.Defn compiler
+  * Compiled functions now work across BEAM nodes
+  * Add `cache: "path/to/file"` for disk caching JIT/compiled functions
+
+### Bug fixes
+
+  * Use a single thread pool for MLIR contexts
+
+## v0.8.0 (2024-08-19)
+
+  * Add `EXLA.to_mlir_module/2`
+  * The precompiled XLA CUDA binaries now require CUDA 12.1+ and cuDNN 9.1+
+  * Renamed `XLA_TARGET` value "cuda120" to "cuda12"
+  * `XLA_TARGET` automatically defaults to "cuda12" when CUDA installation is detected
+  * Allow NIF modules to be upgradable
+
 ## v0.7.1 (2024-02-27)
 
   * Add CustomCallOp for QR decomposition

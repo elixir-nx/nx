@@ -223,6 +223,14 @@ defmodule Torchx.Backend do
     for <<x::native-size(size) <- bin>>, into: <<>>, do: <<x::native-size(double_size)>>
   end
 
+  defp maybe_pad_binary(bin, {:u, size}) when size in [2, 4] do
+    for <<x::native-size(size) <- bin>>, into: <<>>, do: <<x::native-8>>
+  end
+
+  defp maybe_pad_binary(bin, {:s, size}) when size in [2, 4] do
+    for <<x::native-signed-size(size) <- bin>>, into: <<>>, do: <<x::native-signed-8>>
+  end
+
   defp maybe_pad_binary(bin, _), do: bin
 
   ## Shape
@@ -453,6 +461,7 @@ defmodule Torchx.Backend do
     tensor
     |> from_nx()
     |> Torchx.argsort(stable, axis, is_descending)
+    |> Torchx.to_type(to_torch_type(out.type))
     |> to_nx(out)
   end
 
@@ -462,6 +471,8 @@ defmodule Torchx.Backend do
       tensor
       |> from_nx()
       |> Torchx.top_k(Keyword.fetch!(opts, :k))
+
+    indices = Torchx.to_type(indices, to_torch_type(out_indices.type))
 
     {to_nx(values, out_values), to_nx(indices, out_indices)}
   end
@@ -484,6 +495,7 @@ defmodule Torchx.Backend do
     t
     |> from_nx()
     |> Torchx.sum(axes, keep_axes)
+    |> Torchx.to_type(to_torch_type(out.type))
     |> to_nx(out)
   end
 
@@ -494,12 +506,14 @@ defmodule Torchx.Backend do
 
     result =
       if axes == [] do
-        aggregate_whole_tensor(t, keep_axes, &Torchx.product/1)
+        aggregate_whole_tensor(t, &Torchx.product/1)
       else
         aggregate_over_axes(t, axes, keep_axes, &Torchx.product/3)
       end
 
-    to_nx(result, out)
+    result
+    |> Torchx.to_type(to_torch_type(out.type))
+    |> to_nx(out)
   end
 
   @impl true
@@ -509,7 +523,7 @@ defmodule Torchx.Backend do
 
     result =
       if axes == [] do
-        aggregate_whole_tensor(t, keep_axes, &Torchx.any/1)
+        aggregate_whole_tensor(t, &Torchx.any/1)
       else
         aggregate_over_axes(t, axes, keep_axes, &Torchx.any/3)
       end
@@ -524,7 +538,7 @@ defmodule Torchx.Backend do
 
     result =
       if axes == [] do
-        aggregate_whole_tensor(t, keep_axes, &Torchx.all/1)
+        aggregate_whole_tensor(t, &Torchx.all/1)
       else
         aggregate_over_axes(t, axes, keep_axes, &Torchx.all/3)
       end
@@ -549,18 +563,10 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  defp aggregate_whole_tensor(t, keep_axes, fun) when is_function(fun, 1) do
-    result =
-      t
-      |> from_nx()
-      |> then(fun)
-
-    if keep_axes do
-      shape = t.shape |> Tuple.delete_at(-1) |> Tuple.append(1)
-      Torchx.reshape(result, shape)
-    else
-      result
-    end
+  defp aggregate_whole_tensor(t, fun) when is_function(fun, 1) do
+    t
+    |> from_nx()
+    |> then(fun)
   end
 
   defp aggregate_over_axes(t, axes, keep_axes, fun) when is_function(fun, 3) do
@@ -622,6 +628,7 @@ defmodule Torchx.Backend do
 
     if tie_break == :low do
       apply(Torchx, fun, [t_tx, axis, keep_axis])
+      |> Torchx.to_type(to_torch_type(out.type))
       |> to_nx(out)
     else
       %{data: %{ref: {device, _}}, shape: shape} = t
@@ -633,6 +640,7 @@ defmodule Torchx.Backend do
 
       scalar
       |> Torchx.subtract(result)
+      |> Torchx.to_type(to_torch_type(out.type))
       |> to_nx(out)
     end
   end
@@ -675,9 +683,12 @@ defmodule Torchx.Backend do
     if reverse do
       result
       |> Torchx.flip([axis])
+      |> Torchx.to_type(to_torch_type(out.type))
       |> to_nx(out)
     else
-      to_nx(result, out)
+      result
+      |> Torchx.to_type(to_torch_type(out.type))
+      |> to_nx(out)
     end
   end
 
@@ -798,9 +809,6 @@ defmodule Torchx.Backend do
     type = Nx.Type.merge(left.type, right.type)
     {Nx.as_type(left, type), Nx.as_type(right, type)}
   end
-
-  defp maybe_broadcast_bin_args(_out_shape, %{shape: {}} = l, r), do: {from_nx(l), from_nx(r)}
-  defp maybe_broadcast_bin_args(_out_shape, l, %{shape: {}} = r), do: {from_nx(l), from_nx(r)}
 
   defp maybe_broadcast_bin_args(out_shape, l, r) do
     l_tx =
@@ -1707,6 +1715,7 @@ defmodule Torchx.Backend do
   def from_torch_type(:int), do: {:s, 32}
   def from_torch_type(:long), do: {:s, 64}
   def from_torch_type(:brain), do: {:bf, 16}
+  def from_torch_type(:float8_e5m2), do: {:f, 8}
   def from_torch_type(:half), do: {:f, 16}
   def from_torch_type(:float), do: {:f, 32}
   def from_torch_type(:double), do: {:f, 64}
@@ -1714,15 +1723,20 @@ defmodule Torchx.Backend do
   def from_torch_type(:complex_double), do: {:c, 128}
 
   defp to_torch_type(nx_type, hint \\ "")
+  defp to_torch_type({:u, 2}, _), do: :byte
+  defp to_torch_type({:u, 4}, _), do: :byte
   defp to_torch_type({:u, 8}, _), do: :byte
   defp to_torch_type({:u, 16}, _), do: :int
   defp to_torch_type({:u, 32}, _), do: :long
   defp to_torch_type({:u, 64}, _), do: :long
+  defp to_torch_type({:s, 2}, _), do: :char
+  defp to_torch_type({:s, 4}, _), do: :char
   defp to_torch_type({:s, 8}, _), do: :char
   defp to_torch_type({:s, 16}, _), do: :short
   defp to_torch_type({:s, 32}, _), do: :int
   defp to_torch_type({:s, 64}, _), do: :long
   defp to_torch_type({:bf, 16}, _), do: :brain
+  defp to_torch_type({:f, 8}, _), do: :float8_e5m2
   defp to_torch_type({:f, 16}, _), do: :half
   defp to_torch_type({:f, 32}, _), do: :float
   defp to_torch_type({:f, 64}, _), do: :double
@@ -1734,6 +1748,12 @@ defmodule Torchx.Backend do
       current_type = Torchx.scalar_type(device_ref) |> from_torch_type()
 
       case {current_type, type} do
+        {{:s, 8}, {:s, qint}} when qint in [2, 4] ->
+          :ok
+
+        {{:u, 8}, {:u, qint}} when qint in [2, 4] ->
+          :ok
+
         {{:s, 32}, {:u, 16}} ->
           :ok
 

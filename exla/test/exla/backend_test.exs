@@ -32,9 +32,9 @@ defmodule EXLA.BackendTest do
 
   test "Nx.to_binary/1" do
     t = Nx.tensor([1, 2, 3, 4], backend: EXLA.Backend)
-    assert Nx.to_binary(t) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
-    assert Nx.to_binary(t, limit: 2) == <<1::64-native, 2::64-native>>
-    assert Nx.to_binary(t, limit: 6) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
+    assert Nx.to_binary(t) == <<1::32-native, 2::32-native, 3::32-native, 4::32-native>>
+    assert Nx.to_binary(t, limit: 2) == <<1::32-native, 2::32-native>>
+    assert Nx.to_binary(t, limit: 6) == <<1::32-native, 2::32-native, 3::32-native, 4::32-native>>
   end
 
   test "Nx.backend_transfer/1" do
@@ -44,7 +44,7 @@ defmodule EXLA.BackendTest do
     assert %EXLA.Backend{buffer: %EXLA.DeviceBuffer{}} = et.data
 
     nt = Nx.backend_transfer(et)
-    assert Nx.to_binary(nt) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
+    assert Nx.to_binary(nt) == <<1::32-native, 2::32-native, 3::32-native, 4::32-native>>
 
     assert_raise RuntimeError, ~r"called on deleted or donated buffer", fn ->
       Nx.backend_transfer(et)
@@ -63,7 +63,7 @@ defmodule EXLA.BackendTest do
     assert old_buffer == new_buffer
 
     nt = Nx.backend_transfer(et)
-    assert Nx.to_binary(nt) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
+    assert Nx.to_binary(nt) == <<1::32-native, 2::32-native, 3::32-native, 4::32-native>>
 
     assert_raise RuntimeError, ~r"called on deleted or donated buffer", fn ->
       Nx.backend_transfer(et)
@@ -83,10 +83,10 @@ defmodule EXLA.BackendTest do
       assert old_buffer != new_buffer
 
       nt = Nx.backend_copy(et)
-      assert Nx.to_binary(nt) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
+      assert Nx.to_binary(nt) == <<1::32-native, 2::32-native, 3::32-native, 4::32-native>>
 
       nt = Nx.backend_copy(et)
-      assert Nx.to_binary(nt) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
+      assert Nx.to_binary(nt) == <<1::32-native, 2::32-native, 3::32-native, 4::32-native>>
     end
 
     test "different clients" do
@@ -102,10 +102,10 @@ defmodule EXLA.BackendTest do
       assert new_buffer.device_id == 0
 
       nt = Nx.backend_copy(et)
-      assert Nx.to_binary(nt) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
+      assert Nx.to_binary(nt) == <<1::32-native, 2::32-native, 3::32-native, 4::32-native>>
 
       nt = Nx.backend_copy(et)
-      assert Nx.to_binary(nt) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
+      assert Nx.to_binary(nt) == <<1::32-native, 2::32-native, 3::32-native, 4::32-native>>
     end
   end
 
@@ -139,10 +139,12 @@ defmodule EXLA.BackendTest do
     assert_equal(Nx.add(a, 2), Nx.tensor(3))
 
     a = Nx.tensor([[1]], backend: {EXLA.Backend, client: :other_host, device_id: 0})
-    assert Nx.reshape(a, {1}).data.buffer.client_name == :other_host
+    assert %{device_id: 0, client_name: :other_host} = a.data.buffer
+    assert %{device_id: 0, client_name: :other_host} = Nx.reshape(a, {1}).data.buffer
 
     a = Nx.tensor([[1]], backend: {EXLA.Backend, client: :other_host, device_id: 1})
-    assert Nx.reshape(a, {1}).data.buffer.client_name == :other_host
+    assert %{device_id: 1, client_name: :other_host} = a.data.buffer
+    assert %{device_id: 1, client_name: :other_host} = Nx.reshape(a, {1}).data.buffer
   end
 
   test "Kernel.inspect/2" do
@@ -151,7 +153,7 @@ defmodule EXLA.BackendTest do
     assert inspect(t) ==
              """
              #Nx.Tensor<
-               s64[4]
+               s32[4]
                [1, 2, 3, 4]
              >\
              """
@@ -194,5 +196,77 @@ defmodule EXLA.BackendTest do
   test "conjugate" do
     assert inspect(Nx.conjugate(~VEC[1 2-0i 3+0i 0-i 0-2i])) =~
              "1.0-0.0i, 2.0+0.0i, 3.0-0.0i, 0.0+1.0i, 0.0+2.0i"
+  end
+
+  describe "quantized types" do
+    test "s2" do
+      tensor = Nx.s2(-1)
+      assert <<-1::2-signed-native>> = Nx.to_binary(tensor)
+
+      tensor = Nx.s2([-2, -1, 1])
+      assert tensor.type == {:s, 2}
+
+      assert <<-2::2-signed-native, -1::2-signed-native, 1::2-signed-native>> =
+               Nx.to_binary(tensor)
+
+      assert [-2, -1, 1] = Nx.to_flat_list(tensor)
+      assert 0 = Nx.byte_size(tensor)
+      assert 6 = Nx.bit_size(tensor)
+
+      tensor = Nx.s2([-2, -1, 0, 1, 0, -1, -2])
+      assert 1 = Nx.byte_size(tensor)
+      assert 14 = Nx.bit_size(tensor)
+    end
+
+    test "s4" do
+      tensor = Nx.s4(-1)
+      assert <<-1::4-signed-native>> = Nx.to_binary(tensor)
+
+      tensor = Nx.s4([-8, -1, 7])
+      assert tensor.type == {:s, 4}
+
+      assert <<-8::4-signed-native, -1::4-signed-native, 7::4-signed-native>> =
+               Nx.to_binary(tensor)
+
+      assert [-8, -1, 7] = Nx.to_flat_list(tensor)
+      assert 1 = Nx.byte_size(tensor)
+      assert 12 = Nx.bit_size(tensor)
+
+      tensor = Nx.s4([-8, -3, 0, 7, 0, -3, -8])
+      assert 3 = Nx.byte_size(tensor)
+      assert 28 = Nx.bit_size(tensor)
+    end
+
+    test "u2" do
+      tensor = Nx.u2(1)
+      assert <<1::2-native>> = Nx.to_binary(tensor)
+
+      tensor = Nx.u2([1, 2, 3])
+      assert tensor.type == {:u, 2}
+      assert <<1::2-native, 2::2-native, 3::2-native>> = Nx.to_binary(tensor)
+      assert [1, 2, 3] = Nx.to_flat_list(tensor)
+      assert 0 = Nx.byte_size(tensor)
+      assert 6 = Nx.bit_size(tensor)
+
+      tensor = Nx.u2([0, 1, 2, 3, 2, 1, 0])
+      assert 1 = Nx.byte_size(tensor)
+      assert 14 = Nx.bit_size(tensor)
+    end
+
+    test "u4" do
+      tensor = Nx.u4(1)
+      assert <<1::4-native>> = Nx.to_binary(tensor)
+
+      tensor = Nx.u4([0, 7, 15])
+      assert tensor.type == {:u, 4}
+      assert <<0::4-native, 7::4-native, 15::4-native>> = Nx.to_binary(tensor)
+      assert [0, 7, 15] = Nx.to_flat_list(tensor)
+      assert 1 = Nx.byte_size(tensor)
+      assert 12 = Nx.bit_size(tensor)
+
+      tensor = Nx.u4([0, 1, 2, 3, 13, 14, 15])
+      assert 3 = Nx.byte_size(tensor)
+      assert 28 = Nx.bit_size(tensor)
+    end
   end
 end

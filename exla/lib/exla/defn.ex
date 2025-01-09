@@ -31,218 +31,6 @@ defmodule EXLA.Defn do
   end
 
   @doc false
-  def __stream__(key, input, acc, vars, fun, [args], options) do
-    {run_options, compile_options} = Keyword.pop(options, :run_options, [])
-
-    {client_name, compile_options} =
-      Keyword.pop_lazy(compile_options, :client, &EXLA.Client.default_name/0)
-
-    client = EXLA.Client.fetch!(client_name)
-    compile_options = Keyword.put(compile_options, :lazy_transfers, :never)
-
-    input_length = length(Nx.Defn.Composite.flatten_list([input]))
-    acc_length = length(Nx.Defn.Composite.flatten_list([acc]))
-
-    # The input vars should not be converted to buffers as they come from infeed
-    # Accs are always considered as used
-    used_buffers = input_length
-    used_inputs = Enum.to_list(input_length..(input_length + acc_length - 1)//1)
-
-    comp_fun =
-      &to_stream_computation(client, input_length, acc_length, &1, &2, &3, &4, compile_options)
-
-    {executable, used_inputs, {output, acc_output}, outfeed, extra, debug?} =
-      compile(
-        client,
-        {:stream, key},
-        vars,
-        fun,
-        compile_options,
-        used_buffers,
-        used_inputs,
-        _stream = true,
-        comp_fun
-      )
-
-    {input_typespecs, input_indexes} = extra
-
-    # Also discard the stream inputs from used inputs, similar to how it is done to buffers
-    # Note we discard all lazy transfers too, as they are not possible with streams
-    used_inputs = Enum.sort(for {i, nil} <- used_inputs, i >= used_buffers, do: i)
-
-    # Execution of streams requires the coordination of
-    # multiple processes which is outlined below.
-
-    # First, we get a lock on the executable, because we want
-    # to avoid transfer to the device unless we know we are
-    # ready to use the device.
-    {time, lock} =
-      :timer.tc(fn ->
-        EXLA.Defn.Lock.lock(run_key(executable))
-      end)
-
-    if debug? do
-      Logger.debug("EXLA device #{executable.device_id} lock in #{us_to_ms(time)}ms")
-    end
-
-    {time, streams} =
-      :timer.tc(fn ->
-        buffers =
-          EXLA.Defn.Buffers.filter_by_indexes(args, used_inputs, fn arg, _ ->
-            EXLA.Defn.Buffers.from_nx!(arg, executable)
-          end)
-
-        # Now that we have transferred to device, we spawn a runner process
-        # to execute the stream. We use a runner instead of a task to avoid
-        # leaking messages in the inbox. We also don't use a supervisor
-        # to keep them linked, which is safe because the agent is not used
-        # outside the scope of the current process.
-        #
-        # Finally, note the runner cannot start immediately, we need to
-        # setup the outfeed reader and register the on_unlock callback
-        # that cancels the stream atomically. This is done inside
-        # EXLA.Defn.Stream.run.
-        {:ok, runner} =
-          EXLA.Defn.Runner.start_link(lock, fn ->
-            EXLA.Executable.run(executable, [buffers], run_options)
-          end)
-
-        # The outfeed reader will redirect all outputs with flag 1 to the current
-        # process. Once flag 0 is emitted, we know the stream is done.
-        {output_typespecs, outfeed} = Outfeed.configure_stream_hook(outfeed, self(), lock)
-        {:ok, outfeed_pid} = Outfeed.start_child(executable, outfeed, Process.group_leader())
-
-        stream =
-          EXLA.Defn.Stream.run(
-            executable,
-            lock,
-            runner,
-            outfeed_pid,
-            input,
-            input_typespecs,
-            input_indexes,
-            output,
-            output_typespecs,
-            acc_output
-          )
-
-        [stream]
-      end)
-
-    if debug? do
-      Logger.debug("EXLA stream start on device #{executable.device_id} in #{us_to_ms(time)}ms")
-    end
-
-    streams
-  end
-
-  defp to_stream_computation(
-         client,
-         input_length,
-         acc_length,
-         %Function{} = builder,
-         expr,
-         used_typespecs,
-         outfeed,
-         options
-       ) do
-    %{token: root_token, infeeds: []} = outfeed
-
-    {input_typespecs, used_typespecs} =
-      Enum.split_while(used_typespecs, fn {i, _} -> i < input_length end)
-
-    # Get all input indexes and shape
-    input_indexes = Enum.map(input_typespecs, &elem(&1, 0))
-
-    # Drop all accumulator entries from used_typespecs as we will handle it separately.
-    {acc_typespecs, used_typespecs} = Enum.split(used_typespecs, acc_length)
-
-    # The stream loop will be a three element tuple:
-    #
-    #   The result of calling infeed.
-    #   The looping accumulator.
-    #   The looping constants.
-    #
-    # The input will be read as part of the infeed.
-    acc_typespecs_l = Enum.map(acc_typespecs, &elem(&1, 1))
-    acc_typespec = List.to_tuple(acc_typespecs_l)
-
-    flag_typespec = Typespec.tensor({:pred, 8}, {})
-
-    args = EXLA.MLIR.Function.get_arguments(builder)
-
-    {token, [flag]} = Value.infeed(root_token, [flag_typespec])
-
-    init = [flag, token | args]
-
-    arg_typespecs = Enum.map(init, &Value.get_typespec/1)
-    {pred_computation, [flag | _]} = Function.push_region(builder, arg_typespecs)
-    typespec = Typespec.tensor({:pred, 8}, {})
-    r0 = Value.constant(builder, [1], typespec)
-    pred_op = Value.equal(flag, r0, typespec)
-    Value.return(builder, [pred_op])
-    Function.pop_region(builder)
-
-    {body_computation, [_flag, token | args]} = Function.push_region(builder, arg_typespecs)
-
-    {acc, constant} = Enum.split(args, acc_length)
-
-    {indices, input_typespecs} = Enum.unzip(input_typespecs)
-    {token, input} = Value.infeed(token, input_typespecs)
-
-    input_params = Enum.zip(indices, input)
-
-    {%Outfeed{token: token} = outfeed, acc} =
-      case expr do
-        {output_expr, acc_expr} ->
-          acc_params =
-            Enum.map(acc_typespecs, fn {pos, _typespec} ->
-              {pos, Enum.fetch!(acc, pos - input_length)}
-            end)
-
-          constant_params =
-            Enum.with_index(used_typespecs, fn {pos, _typespec}, index ->
-              {pos, Enum.fetch!(constant, index)}
-            end)
-
-          state = %{
-            client: client,
-            builder: builder,
-            precision: Keyword.get(options, :precision, :default),
-            params: Map.new(input_params ++ acc_params ++ constant_params),
-            scope_ids: Tree.scope_ids(expr)
-          }
-
-          outfeed = Outfeed.with_token(outfeed, token)
-          {output, cache} = recur_flatten(output_expr, state, new_cache(outfeed))
-          {acc, cache} = recur_flatten(acc_expr, state, cache)
-          outfeed = cache |> get_outfeed() |> Outfeed.add_stream_hook(builder, output)
-          {outfeed, acc}
-
-        _ ->
-          raise "expected the function given to Nx.stream/3 to return a two-element tuple, got: " <>
-                  inspect(expr)
-      end
-
-    # Emit the stream hook to signal loop output
-    {token, [flag]} = Value.infeed(token, [flag_typespec])
-
-    Value.return(flag.function, [flag, token | acc] ++ List.flatten(constant))
-
-    Function.pop_region(builder)
-
-    [_flag, out_token | results] = Value.while(builder, pred_computation, body_computation, init)
-
-    acc = Enum.take(results, acc_length)
-    output = wrap_tuple_result(acc, acc_typespec)
-
-    outfeed = outfeed |> Outfeed.with_token(out_token) |> Outfeed.close(builder)
-    Value.func_return(builder, output)
-
-    {{input_typespecs, input_indexes}, outfeed}
-  end
-
-  @doc false
   def __jit__(key, vars, fun, args_list, options) do
     __compile__(key, vars, fun, options).(args_list)
   end
@@ -250,16 +38,15 @@ defmodule EXLA.Defn do
   @doc false
   def __compile__(key, vars, fun, options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
+    debug? = Keyword.get(compile_options, :debug, false)
+    callback = &to_computation(&1, &2, &3, &4, &5, compile_options)
 
-    {client_name, compile_options} =
-      Keyword.pop_lazy(compile_options, :client, &EXLA.Client.default_name/0)
+    {executable, {used_inputs, outputs, outfeed, _input_typespecs?}} =
+      compile(key, vars, fun, compile_options, 0, [], callback)
 
-    client = EXLA.Client.fetch!(client_name)
-
-    callback = &to_root_computation(&1, &2, &3, &4, Keyword.put(compile_options, :client, client))
-
-    {executable, used_inputs, outputs, outfeed, :ok, debug?} =
-      compile(client, key, vars, fun, compile_options, 0, [], _stream = false, callback)
+    if compile_options[:module_compilation] == :to_mlir do
+      throw({:mlir_module, executable.ref, MapSet.new(Map.keys(used_inputs)), outputs})
+    end
 
     fn [args] ->
       {time, lock} =
@@ -267,30 +54,25 @@ defmodule EXLA.Defn do
           EXLA.Defn.Lock.lock(run_key(executable))
         end)
 
-      if debug? do
-        Logger.debug("EXLA device #{executable.device_id} lock in #{us_to_ms(time)}ms")
-      end
+      debug? && Logger.debug("EXLA device #{executable.device_id} lock in #{us_to_ms(time)}ms")
 
       {time, res} =
         :timer.tc(fn ->
           maybe_outfeed(lock, executable, args, used_inputs, outputs, outfeed, run_options)
         end)
 
-      if debug? do
+      debug? &&
         Logger.debug("EXLA execution on device #{executable.device_id} in #{us_to_ms(time)}ms")
-      end
 
       res
     end
   end
 
-  defp to_root_computation(%Function{} = function, expr, used_typespecs, outfeed, options) do
+  defp to_computation(%Function{} = function, expr, used_typespecs, outfeed, client, options) do
     params =
       Enum.zip_with(used_typespecs, Function.get_arguments(function), fn {pos, _typespec}, arg ->
         {pos, arg}
       end)
-
-    client = Keyword.fetch!(options, :client)
 
     unless client do
       raise ArgumentError, "missing client"
@@ -306,10 +88,8 @@ defmodule EXLA.Defn do
 
     {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
     outfeed = cache |> get_outfeed() |> Outfeed.close(function)
-
     Value.func_return(function, res)
-
-    {:ok, outfeed}
+    outfeed
   end
 
   defp maybe_outfeed(lock, executable, args, used_inputs, outputs, outfeed, run_options)
@@ -358,28 +138,14 @@ defmodule EXLA.Defn do
 
   ## Compile
 
-  defp compile(
-         client,
-         key,
-         vars,
-         fun,
-         options,
-         used_buffers,
-         used_inputs,
-         stream?,
-         to_computation
-       ) do
-    {{expr_cache_fun, comp_cache_fun}, options} =
-      case Keyword.pop(options, :cache, true) do
-        {true, options} ->
-          Keyword.pop(options, EXLA, {&EXLA.Defn.LockedCache.run/2, &EXLA.Defn.LockedCache.run/2})
-
-        {false, options} ->
-          cache_fun = fn _key, fun -> fun.() end
-          {{cache_fun, cache_fun}, options}
-      end
-
+  defp compile(key, vars, fun, options, used_buffers, used_inputs, to_computation) do
+    {cache, options} = Keyword.pop(options, :cache, true)
+    {hooks, options} = Keyword.pop(options, :hooks, %{})
     {debug?, options} = Keyword.pop(options, :debug, false)
+    {lazy_transfers, options} = Keyword.pop(options, :lazy_transfers, :opt_in)
+
+    {client_name, options} = Keyword.pop_lazy(options, :client, &EXLA.Client.default_name/0)
+    client = EXLA.Client.fetch!(client_name)
 
     {args_key, reverse_args_identifiers} =
       Enum.map_reduce(vars, [], fn var, acc ->
@@ -392,126 +158,125 @@ defmodule EXLA.Defn do
         end)
       end)
 
-    {lazy_transfers, options} = Keyword.pop(options, :lazy_transfers, :opt_in)
+    disk_key = %{
+      client: client.name,
+      args: args_key,
+      lazy_transfers: lazy_transfers,
+      hooks: Map.keys(hooks),
+      options: options
+    }
 
-    {eval_time, {expr, {ref, outputs, {used_inputs, defined_hooks}}}} =
-      :timer.tc(fn ->
-        expr_cache_fun.({key, args_key, lazy_transfers}, fn ->
-          expr = fun.(vars)
-          inputs_and_hooks = Outfeed.used_inputs_and_hooks(expr, used_inputs, lazy_transfers)
-          {expr, {make_ref(), Nx.to_template(expr), inputs_and_hooks}}
-        end)
-      end)
+    EXLA.Defn.Disk.cache(cache, client, disk_key, debug?, fn ->
+      {{expr_cache_fun, comp_cache_fun}, options} =
+        if cache do
+          Keyword.pop(options, EXLA, {&EXLA.Defn.LockedCache.run/2, &EXLA.Defn.LockedCache.run/2})
+        else
+          cache_fun = fn _key, fun -> fun.() end
+          {{cache_fun, cache_fun}, Keyword.delete(options, EXLA)}
+        end
 
-    if debug? do
-      hit_or_miss = if expr, do: "miss", else: "hit"
-
-      Logger.debug(
-        "EXLA defn evaluation #{inspect(key)} cache #{hit_or_miss} in #{us_to_ms(eval_time)}ms"
-      )
-    end
-
-    {hooks, options} = Keyword.pop(options, :hooks, %{})
-
-    outfeed = Outfeed.new(hooks, defined_hooks)
-
-    comp_key = {ref, client.name, outfeed.used_hooks, lazy_transfers, options}
-
-    {comp_time, {evaled, {xla_time, executable, extra, outfeed}}} =
-      :timer.tc(fn ->
-        comp_cache_fun.(comp_key, fn ->
-          {reverse_inputs_and_typespecs, reverse_infeeds} =
-            reverse_args_identifiers
-            |> Enum.reverse()
-            |> EXLA.Defn.Buffers.split_by_value(used_inputs, fn
-              {type, shape, _names}, i, nil -> {i, Typespec.tensor(type, shape)}
-              {type, shape, _names}, i, depth -> {i, depth, Typespec.tensor(type, shape)}
-            end)
-
-          inputs_and_typespecs = Enum.reverse(reverse_inputs_and_typespecs)
-
-          comp_arg_typespecs =
-            for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
-
-          outputs =
-            if stream? do
-              # The computation returns the final accumulator value
-              {_chunk_result, acc} = outputs
-              acc
-            else
-              outputs
-            end
-
-          out_typespecs =
-            [outputs]
-            |> Nx.Defn.Composite.flatten_list()
-            |> Enum.map(fn t ->
-              t
-              |> Nx.devectorize()
-              |> then(&Typespec.tensor(&1.type, &1.shape))
-            end)
-
-          EXLA.MLIR.Module.new(comp_arg_typespecs, out_typespecs, fn builder ->
-            # Only create the token when we know it will actually be
-            # used, that is: streaming, lazy transfers or hooks
-            outfeed =
-              if stream? or reverse_infeeds != [] or hooks != %{} or defined_hooks != %{} do
-                outfeed
-                |> Outfeed.with_token(Value.create_token(builder))
-                |> Outfeed.add_infeeds(builder, reverse_infeeds)
-              else
-                outfeed
-              end
-
-            expr = Nx.Defn.Composite.traverse(expr || fun.(vars), &Nx.devectorize/1)
-
-            {extra, outfeed} =
-              to_computation.(builder, expr, inputs_and_typespecs, outfeed)
-
-            {xla_time, executable} =
-              :timer.tc(fn ->
-                typespecs =
-                  for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
-
-                EXLA.MLIR.Module.compile(
-                  builder.module,
-                  client,
-                  typespecs,
-                  builder.return_typespecs,
-                  options
-                )
-              end)
-
-            {:ok, {xla_time, executable, extra, %{outfeed | infeeds: []}}}
+      {eval_time, {expr, {ref, outputs, {used_inputs, defined_hooks}}}} =
+        :timer.tc(fn ->
+          expr_cache_fun.({key, args_key, lazy_transfers}, fn ->
+            expr = fun.(vars)
+            inputs_and_hooks = Outfeed.used_inputs_and_hooks(expr, used_inputs, lazy_transfers)
+            {expr, {make_ref(), Nx.to_template(expr), inputs_and_hooks}}
           end)
         end)
-      end)
 
-    cond do
-      not debug? ->
-        :ok
+      if debug? do
+        hit_or_miss = if expr, do: "miss", else: "hit"
 
-      evaled ->
         Logger.debug(
-          "EXLA compilation #{inspect(key)} cache miss in #{us_to_ms(comp_time)}ms (#{us_to_ms(xla_time)}ms in XLA)"
+          "EXLA defn evaluation #{inspect(key)} cache #{hit_or_miss} in #{us_to_ms(eval_time)}ms"
         )
+      end
 
-      true ->
-        Logger.debug("EXLA compilation #{inspect(key)} cache hit in #{us_to_ms(comp_time)}ms")
-    end
+      outfeed = Outfeed.new(hooks, defined_hooks)
+      comp_key = {ref, client.name, outfeed.used_hooks, lazy_transfers, options}
 
-    if expr || evaled do
-      measurements = %{
-        eval_time: eval_time,
-        compile_time: comp_time,
-        total_time: eval_time + comp_time
-      }
+      {comp_time, {evaled, {xla_time, executable, inputs_and_typespecs, outfeed}}} =
+        :timer.tc(fn ->
+          comp_cache_fun.(comp_key, fn ->
+            {reverse_inputs_and_typespecs, reverse_infeeds} =
+              reverse_args_identifiers
+              |> Enum.reverse()
+              |> EXLA.Defn.Buffers.split_by_value(used_inputs, fn
+                {type, shape, _names}, i, nil -> {i, Typespec.tensor(type, shape)}
+                {type, shape, _names}, i, depth -> {i, depth, Typespec.tensor(type, shape)}
+              end)
 
-      :telemetry.execute([:exla, :compilation], measurements, %{key: key})
-    end
+            inputs_and_typespecs = Enum.reverse(reverse_inputs_and_typespecs)
 
-    outfeed = Outfeed.with_user_hooks(outfeed, hooks)
-    {executable, used_inputs, outputs, outfeed, extra, debug?}
+            comp_typespecs =
+              for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
+
+            out_typespecs =
+              [outputs]
+              |> Nx.Defn.Composite.flatten_list()
+              |> Enum.map(fn t ->
+                t
+                |> Nx.devectorize()
+                |> then(&Typespec.tensor(&1.type, &1.shape))
+              end)
+
+            EXLA.MLIR.Module.new(comp_typespecs, out_typespecs, fn builder ->
+              # Only create the token when we know it will actually be
+              # used, that is: streaming, lazy transfers or hooks
+              outfeed =
+                if reverse_infeeds != [] or hooks != %{} or defined_hooks != %{} do
+                  outfeed
+                  |> Outfeed.with_token(Value.create_token(builder))
+                  |> Outfeed.add_infeeds(builder, reverse_infeeds)
+                else
+                  outfeed
+                end
+
+              expr = Nx.Defn.Composite.traverse(expr || fun.(vars), &Nx.devectorize/1)
+              outfeed = to_computation.(builder, expr, inputs_and_typespecs, outfeed, client)
+
+              {xla_time, executable} =
+                :timer.tc(fn ->
+                  EXLA.MLIR.Module.compile(
+                    builder.module,
+                    client,
+                    comp_typespecs,
+                    builder.return_typespecs,
+                    options
+                  )
+                end)
+
+              {:ok, {xla_time, executable, inputs_and_typespecs, %{outfeed | infeeds: []}}}
+            end)
+          end)
+        end)
+
+      cond do
+        not debug? ->
+          :ok
+
+        evaled ->
+          Logger.debug(
+            "EXLA compilation #{inspect(key)} cache miss in #{us_to_ms(comp_time)}ms (#{us_to_ms(xla_time)}ms in XLA)"
+          )
+
+        true ->
+          Logger.debug("EXLA compilation #{inspect(key)} cache hit in #{us_to_ms(comp_time)}ms")
+      end
+
+      if expr || evaled do
+        measurements = %{
+          eval_time: eval_time,
+          compile_time: comp_time,
+          total_time: eval_time + comp_time
+        }
+
+        :telemetry.execute([:exla, :compilation], measurements, %{key: key})
+      end
+
+      outfeed = Outfeed.with_user_hooks(outfeed, hooks)
+      {executable, {used_inputs, outputs, outfeed, inputs_and_typespecs}}
+    end)
   end
 
   defp us_to_ms(time), do: Float.round(time / 1000, 1)
@@ -637,6 +402,45 @@ defmodule EXLA.Defn do
          :optional,
          %T{
            data: %Expr{
+             args: [
+               %{data: %{op: :eigh, args: [tensor, _opts]}},
+               {eigenvecs_expr, eigenvals_expr},
+               _callback
+             ]
+           }
+         },
+         %{client: %EXLA.Client{platform: :host}, builder: %Function{}} = state,
+         cache
+       ) do
+    # We match only on platform: :host for MLIR, as we want to support
+    # eigh-on-cpu as a custom call only in this case
+    {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
+
+    # convert to float and ensure that we're either using f32 or f64, because Eigen
+    # only supports f32 and f64 easily.
+    out_type = Nx.Type.merge(Nx.Type.to_floating(eigenvecs_expr.type), {:f, 32})
+
+    tensor =
+      if op_type(tensor) != out_type do
+        to_type(tensor, out_type)
+      else
+        tensor
+      end
+
+    {eigenvecs, eigenvals} =
+      Value.eigh(
+        tensor,
+        expr_to_typespec(%{eigenvecs_expr | type: out_type}),
+        expr_to_typespec(%{eigenvals_expr | type: out_type})
+      )
+
+    {[to_type(eigenvecs, eigenvecs_expr.type), to_type(eigenvals, eigenvals_expr.type)], cache}
+  end
+
+  defp cached_recur_operator(
+         :optional,
+         %T{
+           data: %Expr{
              args: [%{data: %{op: :take, args: [tensor, indices, opts]}}, expr, _callback]
            }
          },
@@ -738,6 +542,43 @@ defmodule EXLA.Defn do
       result = Value.call(state.builder, call_args, call_body, typespecs)
       {wrap_tuple_result(result, expr), cache}
     end
+  end
+
+  defp cached_recur_operator(
+         :lu,
+         %T{data: %Expr{args: [{p_expr, l_expr, u_expr}, tensor, _opts]}},
+         state,
+         cache
+       ) do
+    %{type: {p_type_kind, _}} = p_expr
+    %{type: {out_type_kind, _}} = l_expr
+
+    if state.client.platform != :host do
+      raise ArgumentError, "XLA does not currently support the LU operation on non-host devices"
+    end
+
+    if p_type_kind == :c or out_type_kind == :c do
+      raise ArgumentError, "XLA does not currently support the LU operation for complex inputs"
+    end
+
+    {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
+
+    tensor =
+      if op_type(tensor) != u_expr.type do
+        to_type(tensor, u_expr.type)
+      else
+        tensor
+      end
+
+    {p, l, u} =
+      Value.lu(
+        tensor,
+        expr_to_typespec(p_expr),
+        expr_to_typespec(l_expr),
+        expr_to_typespec(u_expr)
+      )
+
+    {[p, l, u], cache}
   end
 
   defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do
@@ -946,8 +787,8 @@ defmodule EXLA.Defn do
     transform = Keyword.fetch!(opts, :transform_a)
 
     case Value.get_typespec(b).shape do
-      {_} = b_shape ->
-        b_shape = Tuple.append(b_shape, 1)
+      {dim} ->
+        b_shape = {dim, 1}
 
         b =
           b
@@ -966,10 +807,6 @@ defmodule EXLA.Defn do
         to_type(a, type)
         |> Value.triangular_solve(to_type(b, type), left_side, lower, transform, typespec)
     end
-  end
-
-  defp to_operator(:lu, [{_, _, _}, _tensor, _opts], _ans, _state) do
-    raise ArgumentError, "XLA does not currently support the LU operation"
   end
 
   ## to_operator element-wise
@@ -1530,28 +1367,40 @@ defmodule EXLA.Defn do
 
   ## Computation helpers
 
-  defp sort_computation(op, type, arg_typespecs, %{builder: %EXLA.MLIR.Function{} = function}) do
+  defp sort_computation(operator, type, arg_typespecs, %{
+         builder: %EXLA.MLIR.Function{} = function
+       }) do
     {region, [lhs, rhs | _]} = Function.push_region(function, arg_typespecs)
 
     typespec = Typespec.tensor({:pred, 8}, {})
 
-    op =
-      cond do
-        Nx.Type.integer?(type) ->
-          apply(Value, op, [lhs, rhs, typespec])
-
-        op == :less ->
-          is_nan = Value.is_nan(rhs, typespec)
-          Value.bitwise_or(is_nan, Value.less(lhs, rhs, typespec), typespec)
-
-        op == :greater ->
-          is_nan = Value.is_nan(lhs, typespec)
-          Value.bitwise_or(is_nan, Value.greater(lhs, rhs, typespec), typespec)
+    {lhs, rhs} =
+      if Nx.Type.integer?(type) do
+        {lhs, rhs}
+      else
+        {sort_computation_canonicalize_float(lhs), sort_computation_canonicalize_float(rhs)}
       end
+
+    op = apply(Value, operator, [lhs, rhs, typespec, [total_order: true]])
 
     Value.return(function, [op])
     Function.pop_region(function)
     region
+  end
+
+  defp sort_computation_canonicalize_float(%Value{function: func} = op) do
+    # Standardize the representation of NaNs (-NaN, NaN) and zeros (-0, 0).
+    # See https://github.com/google/jax/blob/e81c82605f0e1813080cfe1037d043b27b38291d/jax/_src/lax/lax.py#L4248-L4253
+
+    op_typespec = Value.get_typespec(op)
+
+    zero = Value.constant(func, [0], Typespec.to_shape(op_typespec, {}))
+    zeros = Value.constant(func, [0], op_typespec)
+    nans = Value.constant(func, [:nan], op_typespec)
+
+    pred_typespec = Typespec.tensor({:pred, 8}, {})
+    op = Value.select(Value.equal(op, zero, pred_typespec), zeros, op, op_typespec)
+    Value.select(Value.is_nan(op, pred_typespec), nans, op, op_typespec)
   end
 
   defp op_computation(

@@ -164,10 +164,10 @@ defmodule Nx.Defn.Kernel do
 
       #Nx.Tensor<
         Nx.Defn.Expr
-        parameter a s64
-        parameter c s64
+        parameter a s32
+        parameter c s32
         b = tanh [ a ] f64
-        d = pow [ c, 2 ] s64
+        d = pow [ c, 2 ] s32
         e = add [ b, d ] f64
       >
 
@@ -325,7 +325,7 @@ defmodule Nx.Defn.Kernel do
       iex> t = Nx.tensor([1, 2, 3])
       iex> t[..]
       #Nx.Tensor<
-        s64[3]
+        s32[3]
         [1, 2, 3]
       >
 
@@ -347,7 +347,7 @@ defmodule Nx.Defn.Kernel do
       iex> t = Nx.tensor([1, 2, 3])
       iex> t[1..2]
       #Nx.Tensor<
-        s64[2]
+        s32[2]
         [2, 3]
       >
 
@@ -364,7 +364,7 @@ defmodule Nx.Defn.Kernel do
       iex> t = Nx.tensor([1, 2, 3])
       iex> t[1..2//1]
       #Nx.Tensor<
-        s64[2]
+        s32[2]
         [2, 3]
       >
 
@@ -857,7 +857,7 @@ defmodule Nx.Defn.Kernel do
 
   The second argument must be a list of atoms, specifying
   a given key, or tuples specifying a key and a default value.
-  If any of the keys in the `keyword` is not defined on
+  If any of the keys in the `keyword` is not defined in
   `values`, it raises an error.
 
   This does not validate required keys. For such, use `assert_keys/2`
@@ -1368,11 +1368,11 @@ defmodule Nx.Defn.Kernel do
 
       Hooks.add_and_mult(2, 3)
       {:add, #Nx.Tensor<
-         s64
+         s32
          5
       >}
       {:mult, #Nx.Tensor<
-         s64
+         s32
          6
       >}
 
@@ -1398,8 +1398,8 @@ defmodule Nx.Defn.Kernel do
   ## Named hooks
 
   It is possible to give names to the hooks. This allows them
-  to be defined or overridden by calling `Nx.Defn.jit/2` or
-  `Nx.Defn.stream/2`. Let's see an example:
+  to be defined or overridden by calling `Nx.Defn.jit/2`.
+  Let's see an example:
 
       defmodule Hooks do
         import Nx.Defn
@@ -1437,9 +1437,8 @@ defmodule Nx.Defn.Kernel do
         {add, mult}
       end
 
-  If a hook with the same name is given to `Nx.Defn.jit/2`
-  or `Nx.Defn.stream/2`, then it will override the default
-  callback.
+  If a hook with the same name is given to `Nx.Defn.jit/2`,
+  then it will override the default callback.
 
   ## Hooks and tokens
 

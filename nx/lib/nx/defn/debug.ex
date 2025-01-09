@@ -10,9 +10,6 @@ defmodule Nx.Defn.Debug do
   def __to_backend__(_), do: raise("not implemented")
 
   @impl true
-  def __stream__(_, _, _, _, _, _, _), do: raise("not implemented")
-
-  @impl true
   def __compile__(_, _, _, _), do: raise("not implemented")
 
   @impl true

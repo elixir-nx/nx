@@ -216,12 +216,14 @@ defmodule Nx.Serving do
   This can be done by passing either `Nx.backend_transfer/1` or `Nx.backend_copy/1`
   as third argument:
 
-      Nx.Serving.batched_run(MyDistributedServing, input, &Nx.backend_copy/1)
+      Nx.Serving.batched_run(MyDistributedServing, input, &Nx.backend_copy(&1, Nx.BinaryBackend))
 
   Use `backend_transfer/1` if you know the input will no longer be used.
 
-  Similarly, the serving has a `distributed_postprocessing` callback which can do
-  equivalent before sending the reply to the caller.
+  Similarly, the serving has a `distributed_postprocessing` callback which is
+  called on the remote machine before sending the reply to the caller. It can
+  be used to transfer resources to the binary backend before sending them over
+  the network.
 
   The servings are dispatched using Erlang Distribution. You can use
   `Node.connect/1` to manually connect nodes. In a production setup, this is
@@ -333,7 +335,7 @@ defmodule Nx.Serving do
   but it could also be used to perform the same operation for different
   templates:
 
-      iex> args = [Nx.template({10}, :s64)]
+      iex> args = [Nx.template({10}, :s32)]
       iex> serving = Nx.Serving.new(fn
       ...>   :double, opts -> Nx.Defn.compile(&Nx.multiply(&1, 2), args, opts)
       ...>   :half, opts -> Nx.Defn.compile(&Nx.divide(&1, 2), args, opts)
@@ -341,7 +343,7 @@ defmodule Nx.Serving do
       iex> double_batch = Nx.Batch.concatenate([Nx.iota({10})]) |> Nx.Batch.key(:double)
       iex> Nx.Serving.run(serving, double_batch)
       #Nx.Tensor<
-        s64[10]
+        s32[10]
         [0, 2, 4, 6, 8, 10, 12, 14, 16, 18]
       >
       iex> half_batch = Nx.Batch.concatenate([Nx.iota({10})]) |> Nx.Batch.key(:half)
@@ -1115,7 +1117,7 @@ defmodule Nx.Serving do
   end
 
   defp distributed_batched_run_with_retries!(name, input, retries) do
-    case :pg.get_members(Nx.Serving.PG, __MODULE__) do
+    case :pg.get_members(Nx.Serving.PG, name) do
       [] ->
         exit({:noproc, {__MODULE__, :distributed_batched_run, [name, input, [retries: retries]]}})
 
@@ -1330,7 +1332,7 @@ defmodule Nx.Serving do
     )
 
     serving_weight = max(1, weight * partitions_count)
-    :pg.join(Nx.Serving.PG, __MODULE__, List.duplicate(self(), serving_weight))
+    :pg.join(Nx.Serving.PG, name, List.duplicate(self(), serving_weight))
 
     for batch_key <- batch_keys do
       stack_init(batch_key)
@@ -1610,7 +1612,7 @@ defmodule Nx.Serving do
             send(ref, {ref, {:batch, {start, size, output, metadata}}})
 
             for pid <- pids do
-              send(pid, {ref, size - start})
+              send(pid, {ref, size})
             end
           end
 
