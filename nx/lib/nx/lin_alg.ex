@@ -1365,7 +1365,7 @@ defmodule Nx.LinAlg do
        %{tensor | names: eigenvecs_name, type: output_type, shape: eigenvecs_shape}}
 
     :eigh
-    |> Nx.Shared.optional([tensor, opts], output, &Nx.LinAlg.Eigh.eigh/2)
+    |> Nx.Shared.optional([tensor, opts], output, &Nx.LinAlg.BlockEigh.eigh/2)
     |> Nx.vectorize(vectorized_axes)
   end
 
