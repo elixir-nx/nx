@@ -1,18 +1,17 @@
+#include <sstream>
 #include <string>
 
-#include "exla_mlir.h"
 #include "exla_client.h"
 #include "exla_cuda.h"
 #include "exla_log_sink.h"
+#include "exla_mlir.h"
 #include "exla_nif_util.h"
-
-#include "xla/pjrt/pjrt_api.h"
-#include "xla/service/platform_util.h"
-
-#include "mhlo/IR/hlo_ops.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "ipc.h"
 #include "stablehlo/dialect/ChloOps.h"
 #include "stablehlo/dialect/StablehloOps.h"
+#include "xla/pjrt/pjrt_api.h"
+#include "xla/service/platform_util.h"
+#include "llvm/Support/ThreadPool.h"
 
 // All of these are created with calls to `new` and subsequently
 // passed to the VM as pointers-to-pointers so we balance it out
@@ -71,11 +70,25 @@ static int open_resources(ErlNifEnv* env) {
   if (!exla::nif::open_resource<mlir::MLIRContext*>(env, mod, "MLIRContext")) {
     return -1;
   }
+
+  if (!exla::nif::open_resource<llvm::StdThreadPool*>(env, mod, "TheadPool")) {
+    return -1;
+  }
   return 1;
 }
 
 static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info) {
   if (open_resources(env) == -1) return -1;
+
+  return 0;
+}
+
+static int upgrade(ErlNifEnv* env, void** priv_data, void** old_priv_data, ERL_NIF_TERM load_info) {
+  // Silence "unused var" warnings.
+  (void)(env);
+  (void)(priv_data);
+  (void)(old_priv_data);
+  (void)(load_info);
 
   return 0;
 }
@@ -142,15 +155,42 @@ ERL_NIF_TERM mlir_compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, exla::nif::make<exla::ExlaExecutable*>(env, executable));
 }
 
-ERL_NIF_TERM mlir_new_context(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 0) {
+
+ERL_NIF_TERM mlir_new_thread_pool(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
-  mlir::MLIRContext* context = new mlir::MLIRContext();
+  int concurrency;
+
+  if (!exla::nif::get(env, argv[0], &concurrency)) {
+    return exla::nif::error(env, "Unable to get concurrency.");
+  }
+
+  llvm::ThreadPoolStrategy strategy = llvm::hardware_concurrency(concurrency);
+  llvm::StdThreadPool* pool = new llvm::StdThreadPool(strategy);
+
+  auto ret = exla::nif::make<llvm::StdThreadPool*>(env, pool);
+  return exla::nif::ok(env, ret);
+}
+
+ERL_NIF_TERM mlir_new_context(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  llvm::StdThreadPool** thread_pool;
+
+  if (!exla::nif::get<llvm::StdThreadPool*>(env, argv[0], thread_pool)) {
+    return exla::nif::error(env, "Unable to get thread pool.");
+  }
+
+  mlir::MLIRContext* context = new mlir::MLIRContext(mlir::MLIRContext::Threading::DISABLED);
+
+  auto interface_ptr = reinterpret_cast<llvm::ThreadPoolInterface*>(*thread_pool);
+  context->setThreadPool(*interface_ptr);
   context->getOrLoadDialect<mlir::func::FuncDialect>();
   context->getOrLoadDialect<mlir::stablehlo::StablehloDialect>();
-  context->getOrLoadDialect<mlir::mhlo::MhloDialect>();
   context->getOrLoadDialect<mlir::chlo::ChloDialect>();
 
   auto ret = exla::nif::make<mlir::MLIRContext*>(env, context);
@@ -202,9 +242,9 @@ ERL_NIF_TERM mlir_create_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 
   auto arg_types = std::vector<mlir::Type>{};
 
-  for (auto const & type_string : arg_type_strings) {
+  for (auto const& type_string : arg_type_strings) {
     auto type = (*module)->ParseType(type_string);
-    if(type == nullptr) {
+    if (type == nullptr) {
       return type_parsing_error(env, type_string);
     }
     arg_types.push_back(type);
@@ -212,9 +252,9 @@ ERL_NIF_TERM mlir_create_function(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 
   auto ret_types = std::vector<mlir::Type>{};
 
-  for (auto const & type_string : ret_type_strings) {
+  for (auto const& type_string : ret_type_strings) {
     auto type = (*module)->ParseType(type_string);
-    if(type == nullptr) {
+    if (type == nullptr) {
       return type_parsing_error(env, type_string);
     }
     ret_types.push_back(type);
@@ -281,9 +321,9 @@ ERL_NIF_TERM mlir_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   auto result_types = std::vector<mlir::Type>{};
 
-  for (auto const & type_string : result_type_strings) {
+  for (auto const& type_string : result_type_strings) {
     auto type = (*function)->module()->ParseType(type_string);
-    if(type == nullptr) {
+    if (type == nullptr) {
       return type_parsing_error(env, type_string);
     }
     result_types.push_back(type);
@@ -291,9 +331,9 @@ ERL_NIF_TERM mlir_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   auto attributes = std::vector<std::pair<std::string, mlir::Attribute>>{};
 
-  for (auto const & pair : attributes_kwlist) {
+  for (auto const& pair : attributes_kwlist) {
     auto attribute_value = (*function)->module()->ParseAttribute(pair.second);
-    if(attribute_value == nullptr) {
+    if (attribute_value == nullptr) {
       return attribute_parsing_error(env, pair.second);
     }
     attributes.push_back(std::pair{pair.first, attribute_value});
@@ -303,7 +343,6 @@ ERL_NIF_TERM mlir_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   return exla::nif::ok(env, exla::nif::make_list<mlir::Value>(env, results));
 }
-
 
 ERL_NIF_TERM mlir_push_region(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2) {
@@ -322,9 +361,9 @@ ERL_NIF_TERM mlir_push_region(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
 
   auto types = std::vector<mlir::Type>{};
 
-  for (auto const & type_string : arg_types) {
+  for (auto const& type_string : arg_types) {
     auto type = (*function)->module()->ParseType(type_string);
-    if(type == nullptr) {
+    if (type == nullptr) {
       return type_parsing_error(env, type_string);
     }
     types.push_back(type);
@@ -352,6 +391,62 @@ ERL_NIF_TERM mlir_pop_region(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
   return exla::nif::ok(env);
 }
 
+std::string mlir_numeric_type_to_string(mlir::Type type) {
+  if (type.isSignlessInteger(1)) {
+    return "pred";
+  }
+  if (auto integer_type = type.dyn_cast<mlir::IntegerType>()) {
+    if (integer_type.isUnsigned()) {
+      return "u" + std::to_string(integer_type.getWidth());
+    } else {
+      return "s" + std::to_string(integer_type.getWidth());
+    }
+  }
+  if (type.isBF16()) {
+    return "bf16";
+  }
+  if (auto float_type = type.dyn_cast<mlir::FloatType>()) {
+    return "f" + std::to_string(float_type.getWidth());
+  }
+  if (auto complex_type = type.dyn_cast<mlir::ComplexType>()) {
+    auto element_type = complex_type.getElementType();
+    return "c" + std::to_string(element_type.cast<mlir::FloatType>().getWidth() * 2);
+  }
+
+  std::cerr << "Unexpected mlir type" << std::endl;
+  exit(1);
+}
+
+ERL_NIF_TERM make_typespec(ErlNifEnv* env, mlir::Type type) {
+  if (type.isa<mlir::stablehlo::TokenType>()) {
+    auto type_term = exla::nif::make(env, "token");
+    auto shape_term = enif_make_tuple(env, 0);
+
+    return enif_make_tuple(env, 2, type_term, shape_term);
+  }
+
+  if (type.isa<mlir::RankedTensorType>()) {
+    auto tensor_type = type.cast<mlir::RankedTensorType>();
+    auto dims = tensor_type.getShape();
+    auto element_type = tensor_type.getElementType();
+
+    auto dims_array = std::vector<ERL_NIF_TERM>{};
+    dims_array.reserve(dims.size());
+
+    for (auto dim : dims) {
+      dims_array.push_back(enif_make_int(env, dim));
+    }
+
+    auto type_term = exla::nif::make(env, mlir_numeric_type_to_string(element_type));
+    auto shape_term = enif_make_tuple_from_array(env, dims_array.data(), dims_array.size());
+
+    return enif_make_tuple(env, 2, type_term, shape_term);
+  }
+
+  std::cerr << "Unexpected mlir type" << std::endl;
+  exit(1);
+}
+
 ERL_NIF_TERM mlir_get_typespec(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 1) {
     return exla::nif::error(env, "Bad argument count.");
@@ -365,7 +460,7 @@ ERL_NIF_TERM mlir_get_typespec(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv
 
   mlir::Type type = t->getType();
 
-  return exla::nif::ok(env, exla::nif::make_typespec(env, type));
+  return exla::nif::ok(env, make_typespec(env, type));
 }
 
 ERL_NIF_TERM mlir_module_to_string(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -379,9 +474,13 @@ ERL_NIF_TERM mlir_module_to_string(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
     return exla::nif::error(env, "Unable to get builder.");
   }
 
-  auto string = (*module)->ToString();
+  std::string string = (*module)->ToString();
 
-  return exla::nif::ok(env, exla::nif::make(env, string));
+  ErlNifBinary bin;
+  enif_alloc_binary(string.size(), &bin);
+  memcpy(bin.data, string.c_str(), string.size());
+
+  return exla::nif::ok(env, exla::nif::make(env, bin));
 }
 
 // ExlaBuffer Functions
@@ -399,40 +498,66 @@ ERL_NIF_TERM get_buffer_device_pointer(ErlNifEnv* env, int argc, const ERL_NIF_T
     return exla::nif::error(env, "Unable to get client.");
   }
   if (!exla::nif::get<exla::ExlaBuffer*>(env, argv[1], buffer)) {
-    return exla::nif::error(env, "Unable to get buffer.");
+    return exla::nif::error(env, "Unable to get buffer (it may belong to another node or have been garbage collected, consider using Nx.backend_transfer/1).");
   }
   if (!exla::nif::get_atom(env, argv[2], pointer_kind)) {
     return exla::nif::error(env, "Unable to get device pointer kind.");
   }
 
+  EXLA_ASSIGN_OR_RETURN_NIF(unsigned long device_size, (*buffer)->GetOnDeviceSizeInBytes(), env);
+
   EXLA_ASSIGN_OR_RETURN_NIF(std::uintptr_t ptr,
                             (*buffer)->GetDevicePointer((*client)->client()), env);
 
-  std::vector<unsigned char> pointer_vec;
+  ERL_NIF_TERM out_term;
   if (pointer_kind == "local") {
-    unsigned char* bytePtr = reinterpret_cast<unsigned char*>(&ptr);
-    for (size_t i = 0; i < sizeof(void*); i++) {
-      pointer_vec.push_back(bytePtr[i]);
+    ERL_NIF_TERM ptr_term = enif_make_ulong(env, ptr);
+    ERL_NIF_TERM size_term = enif_make_ulong(env, device_size);
+    out_term = enif_make_tuple2(env, ptr_term, size_term);
+  } else if (pointer_kind == "host_ipc") {
+    std::ostringstream handle_name_stream;
+    handle_name_stream << "exla:ipc:" << device_size << ":" << ptr;
+    std::string handle_name = handle_name_stream.str();
+    int fd = get_ipc_handle((char*)handle_name.c_str(), device_size);
+
+    if (fd == -1) {
+      return exla::nif::error(env, "Unable to get IPC handle");
     }
+
+    void* ipc_ptr = open_ipc_handle(fd, device_size);
+    if (ipc_ptr == nullptr) {
+      return exla::nif::error(env, "Unable to open IPC handle");
+    }
+
+    memcpy(ipc_ptr, (void*)ptr, device_size);
+
+    ErlNifBinary handle_name_bin;
+    enif_alloc_binary(handle_name.size(), &handle_name_bin);
+    for (int i = 0; i < handle_name.size(); i++) {
+      handle_name_bin.data[i] = handle_name[i];
+    }
+    ERL_NIF_TERM handle_name_term = enif_make_binary(env, &handle_name_bin);
+    ERL_NIF_TERM size_term = enif_make_uint64(env, device_size);
+    ERL_NIF_TERM fd_term = enif_make_int(env, fd);
+    out_term = enif_make_tuple3(env, handle_name_term, fd_term, size_term);
   } else if (pointer_kind == "cuda_ipc") {
     auto result = get_cuda_ipc_handle(ptr);
     if (result.second) {
       return exla::nif::error(env, "Unable to get cuda IPC handle");
     }
-    pointer_vec = result.first;
+    auto pointer_vec = result.first;
+
+    ErlNifBinary handle_bin;
+    enif_alloc_binary(pointer_vec.size(), &handle_bin);
+    for (int i = 0; i < pointer_vec.size(); i++) {
+      handle_bin.data[i] = pointer_vec[i];
+    }
+    ERL_NIF_TERM handle_term = enif_make_binary(env, &handle_bin);
+    ERL_NIF_TERM size_term = enif_make_uint64(env, device_size);
+    out_term = enif_make_tuple2(env, handle_term, size_term);
   }
 
-  EXLA_ASSIGN_OR_RETURN_NIF(unsigned long device_size, (*buffer)->GetOnDeviceSizeInBytes(), env);
-
-  ERL_NIF_TERM handle_list[pointer_vec.size()];
-  for (int i = 0; i < pointer_vec.size(); i++) {
-    handle_list[i] = enif_make_uint(env, pointer_vec[i]);
-  }
-
-  ERL_NIF_TERM handle_list_term = enif_make_list_from_array(env, handle_list, pointer_vec.size());
-  ERL_NIF_TERM device_size_term = enif_make_uint64(env, device_size);
-
-  return exla::nif::ok(env, enif_make_tuple2(env, handle_list_term, device_size_term));
+  return exla::nif::ok(env, out_term);
 }
 
 ERL_NIF_TERM create_buffer_from_device_pointer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -441,20 +566,46 @@ ERL_NIF_TERM create_buffer_from_device_pointer(ErlNifEnv* env, int argc, const E
   }
 
   exla::ExlaClient** client;
-  std::vector<int64_t> pointer_vec;
+  ErlNifBinary cuda_ipc_handle_bin;
+  int cuda_ipc_handle_size = 0;
   xla::Shape shape;
   int device_id;
   std::string pointer_kind;
+  void* ptr;
+  int fd = -1;
+  std::string memname;
 
   if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
     return exla::nif::error(env, "Unable to get client.");
   }
-  if (!exla::nif::get_list(env, argv[1], pointer_vec)) {
-    return exla::nif::error(env, "Unable to get device pointer.");
-  }
-  if (!exla::nif::get_atom(env, argv[2], pointer_kind)) {
+  if (!exla::nif::get_atom(env, argv[1], pointer_kind)) {
     return exla::nif::error(env, "Unable to get device pointer kind.");
   }
+
+  if (pointer_kind == "cuda_ipc") {
+    if (!enif_inspect_binary(env, argv[2], &cuda_ipc_handle_bin)) {
+      return exla::nif::error(env, "Unable to get CUDA IPC handle.");
+    }
+  } else if (pointer_kind == "host_ipc") {
+    const ERL_NIF_TERM* tuple;
+    int arity;
+    if (
+        !enif_get_tuple(env, argv[2], &arity, &tuple) ||
+        (arity != 2) ||
+        !exla::nif::get(env, tuple[0], &fd) ||
+        (fd == -1) ||
+        !exla::nif::get(env, tuple[1], memname)) {
+      return exla::nif::error(env, "Unable to get IPC handle.");
+    }
+  } else if (pointer_kind == "local") {
+    int64_t ptr_int;
+    if (!exla::nif::get(env, argv[2], &ptr_int)) {
+      return exla::nif::error(env, "Unable to get pointer.");
+    }
+
+    ptr = (void*)ptr_int;
+  }
+
   if (!exla::nif::get_typespec_as_xla_shape(env, argv[3], &shape)) {
     return exla::nif::error(env, "Unable to get shape.");
   }
@@ -462,19 +613,21 @@ ERL_NIF_TERM create_buffer_from_device_pointer(ErlNifEnv* env, int argc, const E
     return exla::nif::error(env, "Unable to get device ordinal.");
   }
 
-  void* ptr;
-  if (pointer_kind == "local") {
-    if (pointer_vec.size() != sizeof(void*)) {
-      // This helps prevent segfaults if someone passes an IPC handle instead of
-      // a local pointer.
-      return exla::nif::error(env, "Invalid pointer size for selected mode.");
+  std::function<void()> on_delete_callback = []() {};
+
+  if (pointer_kind == "host_ipc") {
+    size_t device_size = (size_t)xla::ShapeUtil::ByteSizeOf(shape);
+
+    ptr = open_ipc_handle(fd, device_size);
+    if (ptr == nullptr) {
+      return exla::nif::error(env, "Unable to get pointer for IPC handle.");
     }
-    unsigned char* bytePtr = reinterpret_cast<unsigned char*>(&ptr);
-    for (size_t i = 0; i < sizeof(void*); i++) {
-      bytePtr[i] = pointer_vec[i];
-    }
+
+    on_delete_callback = [fd, memname, ptr, device_size]() {
+      close_ipc_handle(fd, ptr, (char*)memname.c_str(), device_size);
+    };
   } else if (pointer_kind == "cuda_ipc") {
-    auto result = get_pointer_for_ipc_handle(pointer_vec, device_id);
+    auto result = get_pointer_for_ipc_handle(cuda_ipc_handle_bin.data, cuda_ipc_handle_bin.size, device_id);
     if (result.second) {
       return exla::nif::error(env, "Unable to get pointer for IPC handle.");
     }
@@ -483,8 +636,8 @@ ERL_NIF_TERM create_buffer_from_device_pointer(ErlNifEnv* env, int argc, const E
 
   EXLA_ASSIGN_OR_RETURN_NIF(xla::PjRtDevice * device, (*client)->client()->LookupDevice(xla::PjRtGlobalDeviceId(device_id)), env);
 
-  std::function<void()> on_delete_callback = []() {};
   EXLA_ASSIGN_OR_RETURN_NIF(std::unique_ptr<xla::PjRtBuffer> buffer, (*client)->client()->CreateViewOfDeviceBuffer(ptr, shape, device, on_delete_callback), env);
+
   exla::ExlaBuffer* exla_buffer = new exla::ExlaBuffer(std::move(buffer));
   return exla::nif::ok(env, exla::nif::make<exla::ExlaBuffer*>(env, exla_buffer));
 }
@@ -494,16 +647,12 @@ ERL_NIF_TERM binary_to_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     return exla::nif::error(env, "Bad argument count.");
   }
 
-  ErlNifBinary bin;
   xla::Shape shape;
   exla::ExlaClient** client;
   int device_id;
 
   if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
     return exla::nif::error(env, "Unable to get client.");
-  }
-  if (!exla::nif::get_binary(env, argv[1], &bin)) {
-    return exla::nif::error(env, "Unable to get data.");
   }
   if (!exla::nif::get_typespec_as_xla_shape(env, argv[2], &shape)) {
     return exla::nif::error(env, "Unable to get shape.");
@@ -526,7 +675,7 @@ ERL_NIF_TERM read_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
   exla::int64 size;
 
   if (!exla::nif::get<exla::ExlaBuffer*>(env, argv[0], buffer)) {
-    return exla::nif::error(env, "Unable to get buffer.");
+    return exla::nif::error(env, "Unable to get buffer (it may belong to another node or have been garbage collected, consider using Nx.backend_transfer/1).");
   }
   if (!exla::nif::get(env, argv[1], &size)) {
     return exla::nif::error(env, "Unable to get size.");
@@ -545,7 +694,7 @@ ERL_NIF_TERM deallocate_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
   exla::ExlaBuffer** buffer;
 
   if (!exla::nif::get<exla::ExlaBuffer*>(env, argv[0], buffer)) {
-    return exla::nif::error(env, "Unable to get buffer.");
+    return exla::nif::error(env, "Unable to get buffer (it may belong to another node or have been garbage collected, consider using Nx.backend_transfer/1).");
   }
 
   xla::Status dealloc_status = (*buffer)->Deallocate();
@@ -672,7 +821,7 @@ ERL_NIF_TERM copy_buffer_to_device(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
     return exla::nif::error(env, "Unable to get client.");
   }
   if (!exla::nif::get<exla::ExlaBuffer*>(env, argv[1], buffer)) {
-    return exla::nif::error(env, "Unable to get buffer.");
+    return exla::nif::error(env, "Unable to get buffer (it may belong to another node or have been garbage collected, consider using Nx.backend_transfer/1).");
   }
   if (!exla::nif::get(env, argv[2], &device_id)) {
     return exla::nif::error(env, "Unable to get device ID.");
@@ -902,7 +1051,8 @@ ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 
 static ErlNifFunc exla_funcs[] = {
     // MLIR Builder
-    {"mlir_new_context", 0, mlir_new_context},
+    {"mlir_new_thread_pool", 1, mlir_new_thread_pool},
+    {"mlir_new_context", 1, mlir_new_context},
     {"mlir_new_module", 1, mlir_new_module},
     {"mlir_create_function", 5, mlir_create_function},
     {"mlir_get_function_arguments", 1, mlir_get_function_arguments},
@@ -938,4 +1088,4 @@ static ErlNifFunc exla_funcs[] = {
     {"serialize_executable", 1, serialize_executable},
     {"deserialize_executable", 2, deserialize_executable}};
 
-ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, NULL, NULL);
+ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, &upgrade, NULL);

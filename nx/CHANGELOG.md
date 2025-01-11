@@ -1,6 +1,37 @@
 # Changelog
 
-## v0.8.0-dev
+## v0.9.2 (2024-11-16)
+
+### Bug fixes
+
+  * [Nx] Fix deprecation warnings on latest Elixir
+  * [Nx.LinAlg] Fix `least_squares` implementation
+  * [Nx.Random] Fix `Nx.Random.shuffle` repeating a single value in certain cases on GPU
+
+## v0.9.1 (2024-10-08)
+
+### Deprecations
+
+  * [Nx] Deprecate `Nx.Defn.stream`
+
+## v0.9.0 (2024-09-26)
+
+### Enhancements
+
+  * [Nx] Add 8-bit Floating Point numerical type
+  * [Nx] Add quantized int types (s2, s4, u2, u4)
+
+### Bug fixes
+
+  * [Nx.LinAlg] Minor range slicing fixes on QR decomposition
+  * [Nx] Nx.Defn.Grad now supports more vectorization cases
+
+### Deprecations and incompatibilities
+
+  * [Nx] Default integer type is now `s32`
+  * [Nx] Interface breaking changes for `Nx.to_pointer` and `Nx.from_pointer`
+
+## v0.8.0 (2024-08-19)
 
 ### Enhancements
 
@@ -10,15 +41,20 @@
   * [Nx] Implement `stack` as a callback for performance
   * [Nx] Make `take` an optional callback
   * [Nx] Make `take_along_axis` an optional callback
+  * [Nx.LinAlg] Support `:keep_axes` in eigh
 
 ### Bug fixes
 
   * [Nx] Fix a bug with `gather` when `indices` had more dimensions than the input `tensor`
+  * [Nx] Fix min/max value for 16 bit signed type
+  * [Nx] Fix argmax/argmin behaviour with NaNs
+  * [Nx.Serving] Fix a bug where streaming responses were never closing
 
-### Deprecations
+### Deprecations and incompatibilities
 
   * [Nx] Deprecate `~V` in favor of `~VEC`
   * [Nx] Deprecate `~M` in favor of `~MAT`
+  * [Nx] Remove `Nx.map/2`
 
 ## v0.7.1 (2024-02-27)
 

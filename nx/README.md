@@ -4,7 +4,7 @@
 
 Nx is a multi-dimensional tensors library for Elixir with multi-staged compilation to the CPU/GPU. Its high-level features are:
 
-  * Typed multi-dimensional tensors, where the tensors can be unsigned integers (`u8`, `u16`, `u32`, `u64`), signed integers (`s8`, `s16`, `s32`, `s64`), floats (`f16`, `f32`, `f64`), brain floats (`bf16`), and complex numbers (`c64`, `c128`);
+  * Typed multi-dimensional tensors, where the tensors can be unsigned integers (`u2`, `u4`, `u8`, `u16`, `u32`, `u64`), signed integers (`s2`, `s4`, `s8`, `s16`, `s32`, `s64`), floats (`f8`, `f16`, `f32`, `f64`), brain floats (`bf16`), and complex numbers (`c64`, `c128`);
 
   * Named tensors, allowing developers to give names to each dimension, leading to more readable and less error prone codebases;
 
@@ -16,7 +16,7 @@ Nx is a multi-dimensional tensors library for Elixir with multi-staged compilati
 
   * Built-in distributed² serving: encapsulate complex numerical pipelines into `Nx.Serving`. Servings provide batching, streaming, and partitioning out of the box. You can distribute servings over multiple CPU cores and GPU devices, as well as over a cluster of machines;
 
-  * Support for data streaming and hooks, allowing developers to send and receive data from CPUs/GPUs/TPUs while computations are running;
+  * Support for hooks, allowing developers to send and receive data from CPUs/GPUs/TPUs while computations are running;
 
   * Support for linear algebra primitives via `Nx.LinAlg`;
 

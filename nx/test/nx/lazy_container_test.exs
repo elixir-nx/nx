@@ -1,4 +1,4 @@
-defmodule Nx.LazyLazyOnlyTest do
+defmodule Nx.LazyOnlyTest do
   use ExUnit.Case, async: true
 
   test "to_tensor" do
@@ -12,16 +12,16 @@ defmodule Nx.LazyLazyOnlyTest do
   test "to_template" do
     assert Nx.to_template(%LazyOnly{a: 1, b: 2, c: 3}) ==
              %LazyWrapped{
-               a: Nx.template({}, {:s, 64}),
-               b: Nx.template({}, {:s, 64}),
-               c: Nx.template({}, {:s, 64})
+               a: Nx.template({}, {:s, 32}),
+               b: Nx.template({}, {:s, 32}),
+               c: Nx.template({}, {:s, 32})
              }
 
     assert Nx.to_template(%LazyOnly{a: 1, b: {2, 3.0}, c: 4}) ==
              %LazyWrapped{
-               a: Nx.template({}, {:s, 64}),
-               b: {Nx.template({}, {:s, 64}), Nx.template({}, {:f, 32})},
-               c: Nx.template({}, {:s, 64})
+               a: Nx.template({}, {:s, 32}),
+               b: {Nx.template({}, {:s, 32}), Nx.template({}, {:f, 32})},
+               c: Nx.template({}, {:s, 32})
              }
   end
 

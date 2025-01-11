@@ -144,6 +144,7 @@ defmodule Torchx do
    `{:s, 32}`  | `:int`            | Signed 32-bit integer
    `{:s, 64}`  | `:long`           | Signed 64-bit integer
    `{:bf, 16}` | `:brain`          | 16-bit brain floating-point number
+   `{:f, 8}`   | `:float8_e5m2`    | 8-bit floating-point number
    `{:f, 16}`  | `:half`           | 16-bit floating-point number
    `{:f, 32}`  | `:float`          | 32-bit floating-point number
    `{:f, 64}`  | `:double`         | 64-bit floating-point number

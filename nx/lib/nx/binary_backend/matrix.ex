@@ -116,18 +116,24 @@ defmodule Nx.BinaryBackend.Matrix do
 
   defp do_ts([], [], _idx, acc), do: acc
 
-  defp qr_decomposition(matrix, m, n, eps) when m >= n do
-    # QR decomposition is performed by using Householder transform
+  defp qr_decomposition(matrix, n, _eps) when n in 0..1 do
+    {[[1.0]], matrix}
+  end
 
-    max_i = if m == n, do: n - 2, else: n - 1
+  defp qr_decomposition(matrix, n, eps) when n >= 2 do
+    # QR decomposition is performed by using Householder transform
+    # this function originally supported generic QR, but
+    # it is now only used by eigh. Because of this,
+    # we simplified the function signature to only
+    # support square matrices.
 
     {q_matrix, r_matrix} =
-      for i <- 0..max_i, reduce: {nil, matrix} do
+      for i <- 0..(n - 2)//1, reduce: {nil, matrix} do
         {q, r} ->
           h =
             r
-            |> slice_matrix([i, i], [m - i, 1])
-            |> householder_reflector(m, eps)
+            |> slice_matrix([i, i], [n - i, 1])
+            |> householder_reflector(n, eps)
 
           # If we haven't allocated Q yet, let Q = H1
           # TODO: Resolve inconsistent with the Householder reflector.
@@ -144,10 +150,6 @@ defmodule Nx.BinaryBackend.Matrix do
       end
 
     {approximate_zeros(q_matrix, eps), approximate_zeros(r_matrix, eps)}
-  end
-
-  defp qr_decomposition(_, _, _, _) do
-    raise ArgumentError, "tensor must have at least as many rows as columns"
   end
 
   defp raise_not_hermitian do
@@ -179,7 +181,7 @@ defmodule Nx.BinaryBackend.Matrix do
     {eigenvals_diag, eigenvecs} =
       Enum.reduce_while(1..max_iter//1, {h, q_h}, fn _, {a_old, q_old} ->
         # QR decomposition
-        {q_now, r_now} = qr_decomposition(a_old, n, n, eps)
+        {q_now, r_now} = qr_decomposition(a_old, n, eps)
 
         # Update matrix A, Q
         a_new = dot_matrix_real(r_now, q_now)
@@ -204,10 +206,14 @@ defmodule Nx.BinaryBackend.Matrix do
      eigenvecs |> approximate_zeros(eps) |> matrix_to_binary(output_type)}
   end
 
+  defp hessenberg_decomposition(matrix, n, _eps) when n in 0..1 do
+    {matrix, [[1.0]]}
+  end
+
   defp hessenberg_decomposition(matrix, n, eps) do
     # Hessenberg decomposition is performed by using Householder transform
     {hess_matrix, q_matrix} =
-      for i <- 0..(n - 2), reduce: {matrix, nil} do
+      for i <- 0..(n - 2)//1, reduce: {matrix, nil} do
         {hess, q} ->
           h =
             hess

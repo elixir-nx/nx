@@ -24,8 +24,8 @@ libraries that support those tensors. Nx has three primary capabilities:
   such as machine learning, simulations, curve fitting, and probabilistic models.
 
 Here's more about each of those capabilities. Nx [tensors]() can hold
-unsigned integers (u8, u16, u32, u64),
-signed integers (s8, s16, s32, s64),
+unsigned integers (u2, u4, u8, u16, u32, u64),
+signed integers (s2, s4s8, s16, s32, s64),
 floats (f32, f64), brain floats (bf16), and complex (c64, c128).
 Tensors support backends implemented outside of Elixir, including Google's
 Accelerated Linear Algebra (XLA) and LibTorch.

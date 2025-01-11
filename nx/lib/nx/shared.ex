@@ -6,12 +6,19 @@ defmodule Nx.Shared do
 
   ## Type macros
 
+  defmacro generated_case(expr, do: clauses) do
+    clauses =
+      Enum.map(clauses, fn {:->, meta, args} -> {:->, [generated: true] ++ meta, args} end)
+
+    {:case, [generated: true], [expr, [do: clauses]]}
+  end
+
   @doc """
   Match the cartesian product of all given types.
 
-  A macro that allows us to writes all possibles match types
+  A macro that allows us to write all possible match types
   in the most efficient format. This is done by looking at @0,
-  @1, etc., and replacing them by currently matched type at the
+  @1, etc., and replacing them with the currently matched type at the
   given position. In other words, this:
 
      match_types [input_type, output_type] do
@@ -22,9 +29,9 @@ defmodule Nx.Shared do
 
      for <<seg::float-native-size(...) <- data>>, into: <<>>, do: <<seg+right::float-native-size(...)>>
 
-  for all possible valid types between input and input types.
+  for all possible valid types between input and output types.
 
-  `match!` is used in matches and must be always followed by a `read!`.
+  `match!` is used in matches and must always be followed by a `read!`.
   `write!` is used to write to the binary.
 
   The implementation unfolds the loops at the top level. In particular,
@@ -34,7 +41,7 @@ defmodule Nx.Shared do
         <<seg+number::signed-integer-size(size)>>
       end
 
-  is twice as fast and uses twice less memory than:
+  is twice as fast and uses half the memory compared to:
 
       for <<seg::size(size)-signed-integer <- data>>, into: <<>> do
         case output_type do
@@ -105,9 +112,14 @@ defmodule Nx.Shared do
     quote do: Nx.Shared.read_bf16(unquote(var))
   end
 
+  defp read_bin_modifier(var, :f, 8) do
+    quote do: Nx.Shared.read_f8(unquote(var))
+  end
+
   defp read_bin_modifier(var, :f, size) do
     quote do
       case unquote(var) do
+        _ when unquote(size) == 8 -> Nx.Shared.read_f8(unquote(var))
         <<var::float-native-size(unquote(size))>> -> var
         var -> Nx.Shared.read_non_finite(var, unquote(size))
       end
@@ -122,14 +134,14 @@ defmodule Nx.Shared do
       quote do
         case unquote(var) do
           x when is_number(x) -> binary_part(<<x::float-native-32>>, 2, 2)
-          x -> Nx.Shared.write_bf16(x)
+          x -> Nx.Shared.write_non_finite_bf16(x)
         end :: binary
       end
     else
       quote do
         case unquote(var) do
           x when is_number(x) -> binary_part(<<x::float-native-32>>, 0, 2)
-          x -> Nx.Shared.write_bf16(x)
+          x -> Nx.Shared.write_non_finite_bf16(x)
         end :: binary
       end
     end
@@ -155,7 +167,8 @@ defmodule Nx.Shared do
   defp write_bin_modifier(var, :f, size) do
     quote do
       case unquote(var) do
-        x when is_number(x) -> <<x::float-native-size(unquote(size))>>
+        x when is_number(x) and unquote(size) != 8 -> <<x::float-native-size(unquote(size))>>
+        x when is_number(x) -> Nx.Shared.write_finite_f8(unquote(var))
         x -> Nx.Shared.write_non_finite(x, unquote(size))
       end :: binary
     end
@@ -193,6 +206,22 @@ defmodule Nx.Shared do
   end
 
   @doc """
+  F8 read callback.
+  """
+  def read_f8(<<0xFC::8-native>>), do: :neg_infinity
+  def read_f8(<<0x7C::8-native>>), do: :infinity
+  def read_f8(<<_sign::1, 31::5, mantissa::2>>) when mantissa != 0, do: :nan
+
+  def read_f8(<<sign::1, exp::5, mantissa::2>>) do
+    float = :math.pow(2, exp - 15) * (1 + mantissa / 4)
+
+    case sign do
+      0 -> float
+      _ -> -float
+    end
+  end
+
+  @doc """
   C64 and C128 callback.
   """
   def read_complex(val, size) do
@@ -217,11 +246,21 @@ defmodule Nx.Shared do
   @doc """
   BF16 write callback.
   """
-  def write_bf16(data) do
+  def write_non_finite_bf16(data) do
     case data do
       :infinity -> unquote(Nx.Type.infinity_binary({:bf, 16}))
       :neg_infinity -> unquote(Nx.Type.neg_infinity_binary({:bf, 16}))
       :nan -> unquote(Nx.Type.nan_binary({:bf, 16}))
+    end
+  end
+
+  if System.endianness() == :little do
+    def write_finite_f8(x) do
+      binary_part(<<x::float-native-16>>, 1, 1)
+    end
+  else
+    def write_finite_f8(x) do
+      binary_part(<<x::float-native-16>>, 0, 1)
     end
   end
 
@@ -247,6 +286,14 @@ defmodule Nx.Shared do
   @doc """
   Non-finite read callback.
   """
+  def read_non_finite(data, 8) do
+    case data do
+      <<0xFC::8-native>> -> :neg_infinity
+      <<0x7C::8-native>> -> :infinity
+      _ -> :nan
+    end
+  end
+
   def read_non_finite(data, 16) do
     case data do
       <<0xFC00::16-native>> -> :neg_infinity
@@ -274,7 +321,7 @@ defmodule Nx.Shared do
   @doc """
   Non-finite write callback.
   """
-  for size <- [16, 32, 64] do
+  for size <- [8, 16, 32, 64] do
     def write_non_finite(data, unquote(size)) do
       case data do
         :infinity -> unquote(Nx.Type.infinity_binary({:f, size}))
@@ -397,6 +444,13 @@ defmodule Nx.Shared do
   defp type(_other), do: {:f, 32}
 
   ## Helpers
+
+  @doc """
+  Appends an element to a tuple.
+  """
+  def tuple_append(tuple, elem) do
+    Tuple.insert_at(tuple, tuple_size(tuple), elem)
+  end
 
   @doc """
   Extracts the backend from the given options.
@@ -560,7 +614,7 @@ defmodule Nx.Shared do
 
   @doc false
   def raise_vectorization_not_supported(%T{vectorized_axes: [_ | _]}, {function, arity}) do
-    raise ArgumentError, "#{function}/#{arity} is does not support vectorized inputs"
+    raise ArgumentError, "#{function}/#{arity} does not support vectorized inputs"
   end
 
   def raise_vectorization_not_supported(_, _), do: nil

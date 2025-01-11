@@ -13,8 +13,15 @@ defmodule EXLA.MLIR.ContextPool do
   end
 
   @impl NimblePool
-  def init_worker(pool_state) do
-    {:ok, context} = EXLA.NIF.mlir_new_context()
+  def init_pool(%{pool_size: pool_size}) do
+    {:ok, thread_pool} = EXLA.NIF.mlir_new_thread_pool(pool_size)
+
+    {:ok, %{thread_pool: thread_pool}}
+  end
+
+  @impl NimblePool
+  def init_worker(%{thread_pool: thread_pool} = pool_state) do
+    {:ok, context} = EXLA.NIF.mlir_new_context(thread_pool)
     {:ok, context, pool_state}
   end
 

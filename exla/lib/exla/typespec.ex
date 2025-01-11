@@ -53,10 +53,14 @@ defmodule EXLA.Typespec do
   type_to_charlist = %{
     :token => ~c"token",
     {:pred, 8} => ~c"pred",
+    {:s, 2} => ~c"s2",
+    {:s, 4} => ~c"s4",
     {:s, 8} => ~c"s8",
     {:s, 16} => ~c"s16",
     {:s, 32} => ~c"s32",
     {:s, 64} => ~c"s64",
+    {:u, 2} => ~c"u2",
+    {:u, 4} => ~c"u4",
     {:u, 8} => ~c"u8",
     {:u, 16} => ~c"u16",
     {:u, 32} => ~c"u32",
@@ -68,6 +72,9 @@ defmodule EXLA.Typespec do
     {:c, 64} => ~c"c64",
     {:c, 128} => ~c"c128"
   }
+
+  defp type_to_charlist({:f, 8}), do: ~c"f8e5m2"
+  defp charlist_to_type(~c"f8"), do: {:f, 8}
 
   for {type, charlist} <- type_to_charlist do
     defp charlist_to_type(unquote(charlist)), do: unquote(type)

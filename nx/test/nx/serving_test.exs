@@ -607,9 +607,10 @@ defmodule Nx.ServingTest do
       # One task should succeed and the other terminate
       assert_receive {:DOWN, ref, _, _,
                       {{%RuntimeError{}, _}, {Nx.Serving, :local_batched_run, [_, _]}}}
-                     when ref in [ref1, ref2]
 
-      assert_receive {:DOWN, ref, _, _, :normal} when ref in [ref1, ref2]
+      assert [other_ref] = [ref1, ref2] -- [ref]
+
+      assert_receive {:DOWN, ^other_ref, _, _, :normal}
       refute_received {:execute, _partition, _executor}
     end
 
@@ -631,14 +632,14 @@ defmodule Nx.ServingTest do
 
       assert_receive {:execute, 0, executor}
       send(serving_pid, {:system, {self(), make_ref()}, {:terminate, :shutdown}})
-      send(executor, :continue)
 
-      # One task should succeed and the other terminate
-      assert_receive {:DOWN, ref, _, _, :normal}
-                     when ref in [ref1, ref2]
-
+      # The queued caller should be terminated with :noproc right away
       assert_receive {:DOWN, ref, _, _, {:noproc, {Nx.Serving, :local_batched_run, [_, _]}}}
-                     when ref in [ref1, ref2]
+      assert [other_ref] = [ref1, ref2] -- [ref]
+
+      # The executing caller should be able to finish
+      send(executor, :continue)
+      assert_receive {:DOWN, ^other_ref, _, _, :normal}
 
       refute_received {:execute, _partition, _executor}
     end
@@ -661,14 +662,14 @@ defmodule Nx.ServingTest do
 
       assert_receive {:execute, 0, executor}
       send(serving_pid, {:system, {self(), make_ref()}, {:terminate, :shutdown}})
-      send(executor, :continue)
 
-      # One task should succeed and the other terminate
-      assert_receive {:DOWN, ref, _, _, :normal}
-                     when ref in [ref1, ref2]
-
+      # The stacked caller should be terminated with :noproc right away
       assert_receive {:DOWN, ref, _, _, {:noproc, {Nx.Serving, :local_batched_run, [_, _]}}}
-                     when ref in [ref1, ref2]
+      assert [other_ref] = [ref1, ref2] -- [ref]
+
+      # The executing caller should be able to finish
+      send(executor, :continue)
+      assert_receive {:DOWN, ^other_ref, _, _, :normal}
 
       refute_received {:execute, _partition, _executor}
     end
@@ -711,8 +712,8 @@ defmodule Nx.ServingTest do
     test "batch keys", config do
       serving =
         Nx.Serving.new(fn
-          :double, opts -> Nx.Defn.compile(&Nx.multiply(&1, 2), [Nx.template({3}, :s64)], opts)
-          :half, opts -> Nx.Defn.compile(&Nx.divide(&1, 2), [Nx.template({3}, :s64)], opts)
+          :double, opts -> Nx.Defn.compile(&Nx.multiply(&1, 2), [Nx.template({3}, :s32)], opts)
+          :half, opts -> Nx.Defn.compile(&Nx.divide(&1, 2), [Nx.template({3}, :s32)], opts)
         end)
 
       simple_supervised!(config,
@@ -1086,7 +1087,25 @@ defmodule Nx.ServingTest do
       Task.await(t2, :infinity)
     end
 
-    test "with input streaming", config do
+    test "with limited concurrent pushing", config do
+      serving = Nx.Serving.new(Simple, self())
+      simple_supervised!(config, batch_size: 4, serving: serving)
+
+      assert Task.async_stream(
+               1..4,
+               fn _ ->
+                 data = Stream.map([Nx.Batch.stack([Nx.tensor([1, 2, 3])])], & &1)
+
+                 Nx.Serving.batched_run(config.test, data)
+               end,
+               # A bug only shows with limited concurrency
+               max_concurrency: 2
+             )
+             |> Enum.map(fn {:ok, results} -> results end)
+             |> Enum.to_list() == List.duplicate(Nx.tensor([[2, 4, 6]]), 4)
+    end
+
+    test "with output streaming", config do
       serving = Nx.Serving.new(Simple, self()) |> Nx.Serving.streaming()
       simple_supervised!(config, batch_size: 2, serving: serving)
       stream = Stream.map([[1, 2], [3]], &Nx.Batch.concatenate([Nx.tensor(&1)]))
@@ -1109,7 +1128,7 @@ defmodule Nx.ServingTest do
       refute_received {:DOWN, _, _, _, _}
     end
 
-    test "with input streaming and hooks", config do
+    test "with output streaming and hooks", config do
       serving = Nx.Serving.new(Simple, self()) |> Nx.Serving.streaming(hooks: [:foo, :bar])
       simple_supervised!(config, batch_size: 2, serving: serving)
       stream = Stream.map([[1, 2], [3]], &Nx.Batch.concatenate([Nx.tensor(&1)]))
@@ -1269,7 +1288,8 @@ defmodule Nx.ServingTest do
       ]
 
       Node.spawn_link(:"secondary@127.0.0.1", DistributedServings, :multiply, [parent, opts])
-      assert_receive {_, :join, Nx.Serving, _}
+      assert_receive {_, :join, name, _}
+      assert name == config.test
 
       batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
 
@@ -1308,14 +1328,16 @@ defmodule Nx.ServingTest do
       opts2 = Keyword.put(opts, :distribution_weight, 4)
 
       Node.spawn_link(:"secondary@127.0.0.1", DistributedServings, :multiply, [parent, opts])
-      assert_receive {_, :join, Nx.Serving, pids}
+      assert_receive {_, :join, name, pids}
       assert length(pids) == 1
+      assert name == config.test
 
       Node.spawn_link(:"tertiary@127.0.0.1", DistributedServings, :multiply, [parent, opts2])
-      assert_receive {_, :join, Nx.Serving, pids}
+      assert_receive {_, :join, name, pids}
       assert length(pids) == 4
+      assert name == config.test
 
-      members = :pg.get_members(Nx.Serving.PG, Nx.Serving)
+      members = :pg.get_members(Nx.Serving.PG, config.test)
       assert length(members) == 5
     end
 
@@ -1337,7 +1359,8 @@ defmodule Nx.ServingTest do
 
       args = [parent, opts]
       Node.spawn_link(:"secondary@127.0.0.1", DistributedServings, :add_five_round_about, args)
-      assert_receive {_, :join, Nx.Serving, _}
+      assert_receive {_, :join, name, _}
+      assert name == config.test
 
       batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
 
@@ -1393,7 +1416,8 @@ defmodule Nx.ServingTest do
       ]
 
       Node.spawn_link(:"tertiary@127.0.0.1", DistributedServings, :multiply, [parent, opts])
-      assert_receive {_, :join, Nx.Serving, _}
+      assert_receive {_, :join, name, _}
+      assert name == config.test
 
       batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
 

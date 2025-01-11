@@ -2,7 +2,7 @@ defmodule EXLA.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx"
-  @version "0.7.1"
+  @version "0.9.1"
 
   def project do
     make_args =
@@ -35,7 +35,8 @@ defmodule EXLA.MixProject do
 
         %{
           "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}",
-          "CWD_RELATIVE_TO_PRIV_PATH" => cwd_relative_to_priv
+          "CWD_RELATIVE_TO_PRIV_PATH" => cwd_relative_to_priv,
+          "EXLA_VERSION" => "#{@version}"
         }
       end,
       make_args: make_args
@@ -63,10 +64,10 @@ defmodule EXLA.MixProject do
 
   defp deps do
     [
-      # {:nx, "~> 0.7.1"},
+      # {:nx, "~> 0.9.0"},
       {:nx, path: "../nx"},
       {:telemetry, "~> 0.4.0 or ~> 1.0"},
-      {:xla, "~> 0.7.0", runtime: false},
+      {:xla, "~> 0.8.0", runtime: false},
       {:elixir_make, "~> 0.6", runtime: false},
       {:benchee, "~> 1.0", only: :dev},
       {:ex_doc, "~> 0.29", only: :docs},
@@ -100,7 +101,7 @@ defmodule EXLA.MixProject do
 
   defp package do
     [
-      maintainers: ["Sean Moriarity", "José Valim"],
+      maintainers: ["Sean Moriarity", "José Valim", "Paulo Valente", "Jonatan Kłosko"],
       licenses: ["Apache-2.0"],
       links: %{"GitHub" => @source_url}
     ]
@@ -133,7 +134,34 @@ defmodule EXLA.MixProject do
     {:ok, []}
   end
 
-  defp cached_make(_) do
+  defp cached_make(args) do
+    force_rebuild_env_var = System.get_env("EXLA_FORCE_REBUILD", "")
+
+    force_rebuild_mode =
+      cond do
+        force_rebuild_env_var in ["", "false", "0"] ->
+          :none
+
+        force_rebuild_env_var == "partial" ->
+          :partial
+
+        force_rebuild_env_var in ["true", "1"] ->
+          :full
+
+        true ->
+          Mix.raise(
+            "invalid value for EXLA_FORCE_REBUILD: '#{force_rebuild_env_var}'. Expected one of: partial, true, false"
+          )
+      end
+
+    File.mkdir_p!("cache/#{@version}")
+
+    # remove only in full mode
+    if force_rebuild_mode in [:partial, :full] do
+      Mix.shell().info("Removing cached .o files in cache/#{@version}/objs")
+      File.rm_rf!("cache/#{@version}/objs")
+    end
+
     contents =
       for path <- Path.wildcard("c_src/**/*"),
           {:ok, contents} <- [File.read(path)],
@@ -148,14 +176,22 @@ defmodule EXLA.MixProject do
       "elixir-#{System.version()}-erts-#{:erlang.system_info(:version)}-xla-#{Application.spec(:xla, :vsn)}-exla-#{@version}-#{md5}"
 
     cached_so = Path.join([xla_cache_dir(), "exla", cache_key, "libexla.so"])
-    cached? = File.exists?(cached_so)
+    cached? = File.exists?(cached_so) and force_rebuild_mode == :none
+
+    if force_rebuild_mode in [:partial, :full] do
+      Mix.shell().info("Removing cached libexla.so file in cache/libexla.so")
+      File.rm_rf!("cache/libexla.so")
+
+      Mix.shell().info("Removing libexla.so cache at #{cached_so}")
+      File.rm_rf!(cached_so)
+    end
 
     if cached? do
       Mix.shell().info("Using libexla.so from #{cached_so}")
       File.cp!(cached_so, "cache/libexla.so")
     end
 
-    result = Mix.Tasks.Compile.ElixirMake.run([])
+    result = Mix.Tasks.Compile.ElixirMake.run(args)
 
     if not cached? and match?({:ok, _}, result) do
       Mix.shell().info("Caching libexla.so at #{cached_so}")
