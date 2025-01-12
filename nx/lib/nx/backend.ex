@@ -138,7 +138,7 @@ defmodule Nx.Backend do
   First we will attempt to call the optional callback itself
   (one of the many callbacks defined below), then we attempt
   to call this callback (which is also optional), then we
-  fallback to the default iomplementation.
+  fallback to the default implementation.
   """
   @callback optional(atom, [term], fun) :: tensor
 
