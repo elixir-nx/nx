@@ -21,8 +21,7 @@ defmodule Nx.LinAlg.BlockEigh do
     {tr, w} =
       if complex? do
         abs_tr = Nx.abs(tr)
-        pred = Nx.equal(abs_tr, 0)
-        {abs_tr, Nx.select(pred, 1, Nx.conjugate(tr) / Nx.complex(abs_tr, 0))}
+        {abs_tr, Nx.select(abs_tr == 0, 1, Nx.conjugate(tr) / abs_tr)}
       else
         {tr, 1}
       end
@@ -71,7 +70,7 @@ defmodule Nx.LinAlg.BlockEigh do
   end
 
   defn eigh(matrix, opts \\ []) do
-    opts = keyword!(opts, eps: 1.0e-4, max_iter: 15)
+    opts = keyword!(opts, eps: 1.0e-6, max_iter: 15)
 
     matrix
     |> Nx.revectorize([collapsed_axes: :auto],
@@ -110,6 +109,7 @@ defmodule Nx.LinAlg.BlockEigh do
     matrix = Nx.as_type(matrix, out_type)
     {n, _} = Nx.shape(matrix)
     i_n = n - 1
+    # TO-DO: use a deftransform to calculate this without slicing
     {mid, _} = Nx.shape(matrix[[0..i_n//2, 0..i_n//2]])
     i_mid = mid - 1
 
@@ -130,10 +130,8 @@ defmodule Nx.LinAlg.BlockEigh do
 
     # Initialze tensors to hold eigenvectors
     type = tl |> Nx.type() |> Nx.Type.to_floating()
-    v_tl = Nx.eye(mid, type: type)
-    v_tr = Nx.broadcast(Nx.tensor(0, type: type), {mid, mid})
-    v_bl = Nx.broadcast(Nx.tensor(0, type: type), {mid, mid})
-    v_br = Nx.eye(mid, type: type)
+    v_tl = v_br = Nx.eye(mid, type: type)
+    v_tr = v_bl = Nx.broadcast(Nx.tensor(0, type: type), {mid, mid})
 
     {frob_norm, off_norm} = norms(tl, tr, bl, br)
 

@@ -642,39 +642,55 @@ defmodule Nx.LinAlgTest do
       for type <- [f: 32, c: 64], reduce: key do
         key ->
           # Unitary matrix from a random matrix
-          {base, key} = Nx.Random.uniform(key, shape: {3, 3, 3}, type: type)
+          {base, key} = Nx.Random.uniform(key, shape: {2, 3, 3}, type: type)
           {q, _} = Nx.LinAlg.qr(base)
 
           # Different eigenvalues from random values
           evals_test =
-            [{100, 30}, {4, 6}, {0.7, 0.9}]
-            |> Enum.map(fn {low, up} ->
-              if :rand.uniform() - 0.5 > 0 do
-                {low, up}
-              else
-                {-up, -low}
-              end
+            [100, 10, 1]
+            |> Enum.map(fn magnitude ->
+              sign =
+                if :rand.uniform() - 0.5 > 0 do
+                  1
+                else
+                  -1
+                end
+
+              rand = :rand.uniform() * magnitude * 0.1 + magnitude
+              rand * sign
             end)
-            |> Enum.map(fn {low, up} ->
-              rand = :rand.uniform() * (up - low) + low
-              Nx.tensor([rand], type: :f64)
-            end)
-            |> Nx.concatenate()
+            |> Nx.tensor(type: :f64)
+
+          evals_test_diag =
+            evals_test
+            |> Nx.make_diagonal()
+            |> Nx.reshape({1, 3, 3})
+            |> Nx.tile([2, 1, 1])
 
           # Hermitian matrix with different eigenvalues
           # using A = A^* = Q^*.Λ.Q.
           a =
             q
             |> Nx.LinAlg.adjoint()
-            |> Nx.multiply(evals_test)
+            |> Nx.dot([2], [0], evals_test_diag, [1], [0])
             |> Nx.dot([2], [0], q, [1], [0])
 
+          dbg(a)
+
           # Eigenvalues and eigenvectors
-          assert {evals, evecs} = Nx.LinAlg.eigh(a, max_iter: 10_000)
-          assert_all_close(evals_test, evals, atol: 1.0e-1)
+          assert {evals, evecs} = Nx.LinAlg.eigh(a, max_iter: 100_000, eps: 1.0e-8)
+
+          assert_all_close(evals_test, evals[0], atol: 1.0e-1)
+          assert_all_close(evals_test, evals[1], atol: 1.0e-1)
+
+          evals =
+            evals
+            |> Nx.vectorize(:x)
+            |> Nx.make_diagonal()
+            |> Nx.devectorize(keep_names: false)
 
           # Eigenvalue equation
-          evecs_evals = Nx.multiply(evecs, evals)
+          evecs_evals = Nx.dot(evecs, [2], [0], evals, [1], [0])
           a_evecs = Nx.dot(a, [2], [0], evecs, [1], [0])
 
           assert_all_close(evecs_evals, a_evecs, atol: 1.0e-1)
