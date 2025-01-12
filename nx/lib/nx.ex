@@ -417,7 +417,7 @@ defmodule Nx do
         config: [nx: [default_backend: EXLA.Backend]]
       )
 
-  Or by calling `Nx.global_default_backend/1` (less preferrable):
+  Or by calling `Nx.global_default_backend/1` (less preferable):
 
       Nx.global_default_backend(EXLA.Backend)
 
@@ -614,7 +614,7 @@ defmodule Nx do
       >
 
   Certain backends and compilers support 8-bit floats. The precision
-  iomplementation of 8-bit floats may change per backend, so you must
+  implementation of 8-bit floats may change per backend, so you must
   be careful when transferring data across. The binary backend implements
   F8E5M2:
 
@@ -7684,7 +7684,7 @@ defmodule Nx do
   number of indices, while `updates` must have a compatible `{n, ...j}` shape, such that
   `i + j = rank(tensor)`.
 
-  In case of repeating indices, the result is non-determinstic, since the operation happens
+  In case of repeating indices, the result is non-deterministic, since the operation happens
   in parallel when running on devices such as the GPU.
 
   See also: `indexed_add/3`, `put_slice/3`.
