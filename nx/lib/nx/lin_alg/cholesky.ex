@@ -31,7 +31,10 @@ defmodule Nx.LinAlg.Cholesky do
 
     {l, _} =
       while {l = Nx.multiply(0.0, a), {a}}, i <- 0..(n - 1) do
-        {l, _} =
+        # TODO bring back the assignment (dynamic slice inside while causes a segfault)
+        # Reported in https://github.com/google/jax/issues/21552 and https://github.com/jax-ml/jax/issues/23931
+        # {l, _} =
+        _result =
           while {l, {a, i, j = 0}}, j <= i do
             value =
               if i == j do

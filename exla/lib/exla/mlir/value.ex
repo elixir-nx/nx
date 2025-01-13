@@ -672,9 +672,15 @@ defmodule EXLA.MLIR.Value do
         typespecs
       ) do
     result_types = typespecs_to_mlir_types(typespecs)
-    regions = [on_true, on_false]
-    pred = convert(pred, Typespec.tensor({:pred, 8}, {}))
-    op(func, "stablehlo.if", [pred], result_types, regions: regions)
+
+    # TODO Jax does not support stablehlo.if, they use stablhelo.case instead.
+    # It most likely makes sense for use to do the same. That said, note that
+    # stablehlo.case is implemented for Metal, but does not lower reliably.
+    # Reported in https://github.com/google/jax/issues/21601
+
+    regions = [on_false, on_true]
+    pred = convert(pred, Typespec.tensor({:s, 32}, {}))
+    op(func, "stablehlo.case", [pred], result_types, regions: regions)
   end
 
   def infeed(%Value{function: func} = token, typespecs) do
