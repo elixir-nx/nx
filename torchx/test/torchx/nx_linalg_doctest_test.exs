@@ -18,7 +18,7 @@ defmodule Torchx.NxLinAlgDoctestTest do
     invert: 1,
     determinant: 1,
     pinv: 2,
-    least_squares: 2
+    least_squares: 3
   ]
 
   # Results do not match but properties are respected
