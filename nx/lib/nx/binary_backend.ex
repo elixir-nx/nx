@@ -1241,25 +1241,6 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def eigh(
-        {%{type: output_type} = eigenvals_holder, eigenvecs_holder},
-        %{type: input_type, shape: input_shape} = tensor,
-        opts
-      ) do
-    bin = to_binary(tensor)
-    rank = tuple_size(input_shape)
-    n = elem(input_shape, rank - 1)
-
-    {eigenvals, eigenvecs} =
-      bin_batch_reduce(bin, n * n, input_type, {<<>>, <<>>}, fn matrix, {vals_acc, vecs_acc} ->
-        {vals, vecs} = B.Matrix.eigh(matrix, input_type, {n, n}, output_type, opts)
-        {vals_acc <> vals, vecs_acc <> vecs}
-      end)
-
-    {from_binary(eigenvals_holder, eigenvals), from_binary(eigenvecs_holder, eigenvecs)}
-  end
-
-  @impl true
   def lu(
         {%{type: p_type} = p_holder, %{type: l_type} = l_holder, %{type: u_type} = u_holder},
         %{type: input_type, shape: input_shape} = tensor,
