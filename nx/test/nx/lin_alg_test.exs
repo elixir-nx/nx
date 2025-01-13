@@ -647,7 +647,7 @@ defmodule Nx.LinAlgTest do
               rand = :rand.uniform() * magnitude * 0.1 + magnitude
               rand * sign
             end)
-            |> Nx.tensor(type: :f64)
+            |> Nx.tensor(type: type)
 
           evals_test_diag =
             evals_test
@@ -664,10 +664,10 @@ defmodule Nx.LinAlgTest do
             |> Nx.dot([2], [0], q, [1], [0])
 
           # Eigenvalues and eigenvectors
-          assert {evals, evecs} = Nx.LinAlg.eigh(a, max_iter: 100_000, eps: 1.0e-8)
+          assert {evals, evecs} = Nx.LinAlg.eigh(a, eps: 1.0e-8)
 
           assert_all_close(evals_test, evals[0], atol: 1.0e-1)
-          # assert_all_close(evals_test, evals[1], atol: 1.0e-1)
+          assert_all_close(evals_test, evals[1], atol: 1.0e-1)
 
           evals =
             evals
@@ -679,7 +679,7 @@ defmodule Nx.LinAlgTest do
           evecs_evals = Nx.dot(evecs, [2], [0], evals, [1], [0])
           a_evecs = Nx.dot(evecs_evals, [2], [0], Nx.LinAlg.adjoint(evecs), [1], [0])
 
-          assert_all_close(a, a_evecs, atol: 1.0e-1)
+          assert_all_close(a, a_evecs, atol: 1.0e-8)
           key
       end
     end
