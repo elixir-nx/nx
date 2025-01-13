@@ -666,8 +666,8 @@ defmodule Nx.LinAlgTest do
           # Eigenvalues and eigenvectors
           assert {evals, evecs} = Nx.LinAlg.eigh(a, eps: 1.0e-8)
 
-          assert_all_close(evals_test, evals[0], atol: 1.0e-1)
-          assert_all_close(evals_test, evals[1], atol: 1.0e-1)
+          assert_all_close(evals_test, evals[0], atol: 1.0e-8)
+          assert_all_close(evals_test, evals[1], atol: 1.0e-8)
 
           evals =
             evals
