@@ -189,20 +189,34 @@ defmodule Nx.LinAlg.BlockEigh do
       c_h = Nx.reshape(c, {1, mid})
       s_h = Nx.reshape(s, {1, mid})
 
+      s_conj =
+        if Nx.type(s) |> Nx.Type.complex?() do
+          Nx.conjugate(s_v)
+        else
+          s_v
+        end
+
       # Rotate rows
       {tl, tr, bl, br} = {
-        tl * c_v - bl * s_v,
-        tr * c_v - br * s_v,
+        tl * c_v - bl * s_conj,
+        tr * c_v - br * s_conj,
         tl * s_v + bl * c_v,
         tr * s_v + br * c_v
       }
 
+      s_conj =
+        if Nx.type(s) |> Nx.Type.complex?() do
+          Nx.conjugate(s_h)
+        else
+          s_h
+        end
+
       # Rotate cols
       {tl, tr, bl, br} = {
         tl * c_h - tr * s_h,
-        tl * s_h + tr * c_h,
+        tl * s_conj + tr * c_h,
         bl * c_h - br * s_h,
-        bl * s_h + br * c_h
+        bl * s_conj + br * c_h
       }
 
       # Store results and permute values across sub matrices
@@ -216,10 +230,11 @@ defmodule Nx.LinAlg.BlockEigh do
       {tl, bl} = permute_rows_in_col(tl, bl)
       {tr, br} = permute_rows_in_col(tr, br)
 
+      s_v_conj = if Nx.type(s_v) |> Nx.Type.complex?(), do: Nx.conjugate(s_v), else: s_v
       # Rotate to calc vectors
       {v_tl, v_tr, v_bl, v_br} = {
-        v_tl * c_v - v_bl * s_v,
-        v_tr * c_v - v_br * s_v,
+        v_tl * c_v - v_bl * s_v_conj,
+        v_tr * c_v - v_br * s_v_conj,
         v_tl * s_v + v_bl * c_v,
         v_tr * s_v + v_br * c_v
       }
