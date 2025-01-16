@@ -373,7 +373,9 @@ defmodule Nx.Type do
   bits. Otherwise it casts to f64.
 
   In the case of complex numbers, the maximum bit size is 128 bits
-  because they are composed of two floats.
+  because they are composed of two floats. Float types are promoted
+  to c64 by default, with the exception of f64, which is promoted to
+  c128 so that a single component can represent an f64 number properly.
 
   ## Examples
 
@@ -429,8 +431,15 @@ defmodule Nx.Type do
       iex> Nx.Type.merge({:f, 64}, {:bf, 16})
       {:f, 64}
 
+      iex> Nx.Type.merge({:f, 16}, {:c, 64})
+      {:c, 64}
+      iex> Nx.Type.merge({:f, 32}, {:c, 64})
+      {:c, 64}
+      iex> Nx.Type.merge({:f, 64}, {:c, 64})
+      {:c, 128}
       iex> Nx.Type.merge({:c, 64}, {:f, 32})
       {:c, 64}
+
       iex> Nx.Type.merge({:c, 64}, {:c, 64})
       {:c, 64}
       iex> Nx.Type.merge({:c, 128}, {:c, 64})
@@ -443,6 +452,7 @@ defmodule Nx.Type do
   def merge(left, right) do
     case sort(left, right) do
       {{:u, size1}, {:s, size2}} -> {:s, max(min(size1 * 2, 64), size2)}
+      {{:f, size1}, {:c, size2}} -> {:c, max(size1 * 2, size2)}
       {_, type2} -> type2
     end
   end
