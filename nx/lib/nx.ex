@@ -4822,7 +4822,7 @@ defmodule Nx do
 
     vectorized_axes = vec_axes ++ new_vectorized_axes
 
-    %Nx.Tensor{
+    %{
       tensor
       | shape: List.to_tuple(new_shape_l),
         names: names,
