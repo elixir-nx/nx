@@ -231,6 +231,60 @@ defmodule Nx.ComplexTest do
                      end
       end
     end
+
+    test "equal" do
+      one_r = 1
+      one_u8 = Nx.tensor(1, type: {:u, 8})
+      zero_r = 0
+      zero_u8 = Nx.tensor(0, type: {:u, 8})
+      one_c = Complex.new(1, 0)
+      zero_c = Complex.new(0, 0)
+
+      assert Nx.equal(one_r, one_r) == one_u8
+      assert Nx.equal(one_r, zero_r) == zero_u8
+
+      assert Nx.equal(one_c, one_c) == one_u8
+      assert Nx.equal(one_c, zero_c) == zero_u8
+
+      assert Nx.equal(one_r, one_c) == one_u8
+      assert Nx.equal(zero_r, one_c) == zero_u8
+
+      assert Nx.equal(one_c, one_r) == one_u8
+      assert Nx.equal(one_c, zero_r) == zero_u8
+
+      assert Nx.equal(:nan, one_r) == zero_u8
+      assert Nx.equal(:nan, one_c) == zero_u8
+
+      assert Nx.equal(one_r, :nan) == zero_u8
+      assert Nx.equal(one_c, :nan) == zero_u8
+    end
+
+    test "not_equal" do
+      one_r = 1
+      one_u8 = Nx.tensor(1, type: {:u, 8})
+      zero_r = 0
+      zero_u8 = Nx.tensor(0, type: {:u, 8})
+      one_c = Complex.new(1, 0)
+      zero_c = Complex.new(0, 0)
+
+      assert Nx.not_equal(one_r, one_r) == zero_u8
+      assert Nx.not_equal(one_r, zero_r) == one_u8
+
+      assert Nx.not_equal(one_c, one_c) == zero_u8
+      assert Nx.not_equal(one_c, zero_c) == one_u8
+
+      assert Nx.not_equal(one_r, one_c) == zero_u8
+      assert Nx.not_equal(zero_r, one_c) == one_u8
+
+      assert Nx.not_equal(one_c, one_r) == zero_u8
+      assert Nx.not_equal(one_c, zero_r) == one_u8
+
+      assert Nx.not_equal(:nan, one_r) == one_u8
+      assert Nx.not_equal(:nan, one_c) == one_u8
+
+      assert Nx.not_equal(one_r, :nan) == one_u8
+      assert Nx.not_equal(one_c, :nan) == one_u8
+    end
   end
 
   describe "LinAlg not yet implemented" do

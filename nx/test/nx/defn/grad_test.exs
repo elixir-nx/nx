@@ -698,7 +698,10 @@ defmodule Nx.Defn.GradTest do
       lhs = grad_mean_conv_y_general_stride_rhs_dilated(x, y)
 
       rhs =
-        Nx.tensor([[[[7.4000006, 8.2], [7.4000006, 8.2]]], [[[7.4000006, 8.2], [7.4000006, 8.2]]]])
+        Nx.tensor([
+          [[[7.4000006, 8.2], [7.4000006, 8.2]]],
+          [[[7.4000006, 8.2], [7.4000006, 8.2]]]
+        ])
 
       assert_all_close(lhs, rhs)
     end
