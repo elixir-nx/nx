@@ -25,6 +25,10 @@ defmodule Nx.DefnTest do
     @tensor [1, 2, 3]
     defn(list_constant, do: Nx.tensor(@tensor))
 
+    defn complex_constant do
+      Complex.new(1, :infinity)
+    end
+
     test "from list" do
       assert %T{data: %Expr{op: :tensor}} = list_constant()
     end
@@ -34,6 +38,11 @@ defmodule Nx.DefnTest do
 
     test "from binary" do
       assert %T{data: %Expr{op: :tensor}} = binary_constant()
+    end
+
+    test "complex literals" do
+      assert %T{data: %Expr{op: :constant, args: [%Complex{} = c]}} = complex_constant()
+      assert c == Complex.new(1, :infinity)
     end
   end
 
