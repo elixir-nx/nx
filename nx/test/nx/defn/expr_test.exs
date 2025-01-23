@@ -198,6 +198,29 @@ defmodule Nx.Defn.ExprTest do
                c = metadata b, :stop_grad                     s32[1]
              """
     end
+
+    test "upcast float constants when operating against higher precision types" do
+      t_f32 = Nx.tensor([2, 2], type: :f32) |> Expr.tensor()
+      c_f64 = Expr.constant(Nx.tensor(0.7, type: :f64), 0.7, [])
+
+      assert %T{type: {:f, 64}, data: %Expr{op: :multiply, args: [^c_f64, ^t_f32]}} =
+               Nx.multiply(t_f32, c_f64)
+
+      t_f64 = Nx.tensor([2, 2], type: :f64) |> Expr.tensor()
+      c_f32 = Expr.constant(Nx.tensor(0.7, type: :f32), 0.7, [])
+
+      assert %T{type: {:f, 64}, data: %Expr{op: :multiply, args: [^c_f64, ^t_f64]}} =
+               Nx.multiply(t_f64, c_f32)
+
+      c_c64 = Expr.constant(Nx.tensor(0.7, type: :c64), 0.7, [])
+      c_c128 = Expr.constant(Nx.tensor(0.7, type: :c128), 0.7, [])
+
+      assert %T{type: {:c, 64}, data: %Expr{op: :multiply, args: [^c_c64, ^t_f32]}} =
+               Nx.multiply(t_f32, c_c64)
+
+      assert %T{type: {:c, 128}, data: %Expr{op: :multiply, args: [^c_c128, ^t_f64]}} =
+               Nx.multiply(t_f64, c_c64)
+    end
   end
 
   describe "inspect" do
