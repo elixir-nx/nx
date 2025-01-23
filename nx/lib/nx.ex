@@ -943,7 +943,7 @@ defmodule Nx do
 
   for t <-
         [:u2, :u4, :u8, :u16, :u32, :u64, :s2, :s4, :s8, :s16, :s32, :s64] ++
-          [:f8, :bf16, :f16, :f32, :f64] do
+          [:f8, :bf16, :f16, :f32, :f64, :c64, :c128] do
     @doc """
     Short-hand function for creating tensor of type `#{t}`.
 

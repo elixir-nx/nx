@@ -249,9 +249,18 @@ defmodule Nx.Defn.Expr do
 
     result =
       for expr <- [last | exprs] do
-        expr
-        |> Nx.as_type(type)
-        |> Nx.broadcast(shape, names: names)
+        typed_expr =
+          case expr do
+            %T{data: %Expr{op: :constant}} ->
+              expr
+              |> maybe_upcast_float_constant(type)
+              |> Nx.as_type(type)
+
+            expr ->
+              Nx.as_type(expr, type)
+          end
+
+        Nx.broadcast(typed_expr, shape, names: names)
       end
 
     {result, vectorized_axes}
@@ -1401,6 +1410,10 @@ defmodule Nx.Defn.Expr do
   defp constant(%{shape: shape, type: type} = out, number) do
     number =
       cond do
+        Nx.Type.complex?(type) and
+            (is_number(number) or number in [:infinity, :neg_infinity, :nan]) ->
+          Complex.new(number, 0.0)
+
         is_integer(number) and Nx.Type.float?(type) ->
           Complex.multiply(1.0, number)
 
