@@ -1185,7 +1185,7 @@ defmodule Nx.DefnTest do
     end
 
     test "upcasts float literals based on the accumulated clause type" do
-      for input_type <- [f: 32, f: 64, c: 64, c: 128] do
+      for input_type <- [f: 32, f: 64] do
         assert %T{
                  type: ^input_type,
                  data: %Expr{op: :cond, args: [[clause1, clause2], _last]}
@@ -1193,7 +1193,28 @@ defmodule Nx.DefnTest do
                  cond_upcast_float_literals(Nx.tensor(10.0, type: input_type))
 
         assert {_, %T{type: ^input_type, data: %Expr{op: :constant, args: [1.4]}}} = clause1
-        assert {_, %T{type: {:s, 32}, data: %Expr{op: :constant, args: [2]}}} = clause2
+        assert {_, %T{type: ^input_type, data: %Expr{op: :constant, args: [2.0]}}} = clause2
+      end
+
+      for input_type <- [c: 64, c: 128] do
+        assert %T{
+                 type: ^input_type,
+                 data: %Expr{op: :cond, args: [[clause1, clause2], _last]}
+               } =
+                 cond_upcast_float_literals(Nx.tensor(10.0, type: input_type))
+
+        assert {_,
+                %T{
+                  type: ^input_type,
+                  data: %Expr{op: :constant, args: [%Complex{re: 1.4, im: +0.0}]}
+                }} = clause1
+
+        assert {_,
+                %T{
+                  type: ^input_type,
+                  data: %Expr{op: :constant, args: [%Complex{re: 2.0, im: +0.0}]}
+                }} =
+                 clause2
       end
     end
 
