@@ -755,11 +755,29 @@ defmodule Nx.BinaryBackend do
 
   defp element_equal(_, :nan, _), do: 0
   defp element_equal(_, _, :nan), do: 0
-  defp element_equal(_, a, b), do: boolean_as_number(a == b)
+
+  defp element_equal(_, a, b) do
+    bool =
+      case {a, b} do
+        {%Complex{re: re_a, im: im_a}, b} when is_number(b) ->
+          re_a == b and im_a == 0
+
+        {a, %Complex{re: re_b, im: im_b}} when is_number(a) ->
+          a == re_b and im_b == 0
+
+        {a, b} ->
+          a == b
+      end
+
+    boolean_as_number(bool)
+  end
 
   defp element_not_equal(_, :nan, _), do: 1
   defp element_not_equal(_, _, :nan), do: 1
-  defp element_not_equal(_, a, b), do: boolean_as_number(a != b)
+
+  defp element_not_equal(out, a, b) do
+    1 - element_equal(out, a, b)
+  end
 
   defp element_logical_and(_, a, b), do: boolean_as_number(as_boolean(a) and as_boolean(b))
   defp element_logical_or(_, a, b), do: boolean_as_number(as_boolean(a) or as_boolean(b))
