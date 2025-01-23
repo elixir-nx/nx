@@ -249,9 +249,13 @@ defmodule Nx.Defn.Expr do
 
     result =
       for expr <- [last | exprs] do
-        expr
-        |> Nx.as_type(type)
-        |> Nx.broadcast(shape, names: names)
+        typed_expr =
+          case expr do
+            %T{data: %Expr{op: :constant}} -> maybe_upcast_float_constant(expr, type)
+            expr -> Nx.as_type(expr, type)
+          end
+
+        Nx.broadcast(typed_expr, shape, names: names)
       end
 
     {result, vectorized_axes}

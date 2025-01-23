@@ -1176,6 +1176,27 @@ defmodule Nx.DefnTest do
                )
     end
 
+    defn cond_upcast_float_literals(n) do
+      cond do
+        n == 1 -> 1.4
+        n == 2 -> 2
+        true -> n
+      end
+    end
+
+    test "upcasts float literals based on the accumulated clause type" do
+      for input_type <- [f: 32, f: 64, c: 64, c: 128] do
+        assert %T{
+                 type: ^input_type,
+                 data: %Expr{op: :cond, args: [[clause1, clause2], _last]}
+               } =
+                 cond_upcast_float_literals(Nx.tensor(10.0, type: input_type))
+
+        assert {_, %T{type: ^input_type, data: %Expr{op: :constant, args: [1.4]}}} = clause1
+        assert {_, %T{type: {:s, 32}, data: %Expr{op: :constant, args: [2]}}} = clause2
+      end
+    end
+
     defn cond_list(a) do
       if Nx.any(a), do: 1, else: -1
     end
