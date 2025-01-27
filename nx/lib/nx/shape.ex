@@ -1739,8 +1739,6 @@ defmodule Nx.Shape do
     end)
   end
 
-  defp assert_non_concat_dims_equal([], _axis), do: :ok
-
   defp assert_non_concat_dims_equal([s1 | shapes], axis) do
     s1_size = tuple_size(s1)
     template = Tuple.delete_at(s1, axis)

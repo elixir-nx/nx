@@ -755,11 +755,29 @@ defmodule Nx.BinaryBackend do
 
   defp element_equal(_, :nan, _), do: 0
   defp element_equal(_, _, :nan), do: 0
-  defp element_equal(_, a, b), do: boolean_as_number(a == b)
+
+  defp element_equal(_, a, b) do
+    bool =
+      case {a, b} do
+        {%Complex{re: re_a, im: im_a}, b} when is_number(b) ->
+          re_a == b and im_a == 0
+
+        {a, %Complex{re: re_b, im: im_b}} when is_number(a) ->
+          a == re_b and im_b == 0
+
+        {a, b} ->
+          a == b
+      end
+
+    boolean_as_number(bool)
+  end
 
   defp element_not_equal(_, :nan, _), do: 1
   defp element_not_equal(_, _, :nan), do: 1
-  defp element_not_equal(_, a, b), do: boolean_as_number(a != b)
+
+  defp element_not_equal(out, a, b) do
+    1 - element_equal(out, a, b)
+  end
 
   defp element_logical_and(_, a, b), do: boolean_as_number(as_boolean(a) and as_boolean(b))
   defp element_logical_or(_, a, b), do: boolean_as_number(as_boolean(a) or as_boolean(b))
@@ -1241,25 +1259,6 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def eigh(
-        {%{type: output_type} = eigenvals_holder, eigenvecs_holder},
-        %{type: input_type, shape: input_shape} = tensor,
-        opts
-      ) do
-    bin = to_binary(tensor)
-    rank = tuple_size(input_shape)
-    n = elem(input_shape, rank - 1)
-
-    {eigenvals, eigenvecs} =
-      bin_batch_reduce(bin, n * n, input_type, {<<>>, <<>>}, fn matrix, {vals_acc, vecs_acc} ->
-        {vals, vecs} = B.Matrix.eigh(matrix, input_type, {n, n}, output_type, opts)
-        {vals_acc <> vals, vecs_acc <> vecs}
-      end)
-
-    {from_binary(eigenvals_holder, eigenvals), from_binary(eigenvecs_holder, eigenvecs)}
-  end
-
-  @impl true
   def lu(
         {%{type: p_type} = p_holder, %{type: l_type} = l_holder, %{type: u_type} = u_holder},
         %{type: input_type, shape: input_shape} = tensor,
@@ -1492,7 +1491,7 @@ defmodule Nx.BinaryBackend do
     dilations = opts[:window_dilations]
 
     %T{shape: padded_shape, type: {_, size} = type} =
-      tensor = Nx.pad(tensor, acc, Enum.map(padding_config, &Tuple.append(&1, 0)))
+      tensor = Nx.pad(tensor, acc, Enum.map(padding_config, &tuple_append(&1, 0)))
 
     acc = scalar_to_number(acc)
 
@@ -1608,7 +1607,7 @@ defmodule Nx.BinaryBackend do
     init_value = scalar_to_number(init_value)
 
     %T{shape: padded_shape, type: {_, size} = type} =
-      tensor = Nx.pad(t, init_value, Enum.map(padding, &Tuple.append(&1, 0)))
+      tensor = Nx.pad(t, init_value, Enum.map(padding, &tuple_append(&1, 0)))
 
     input_data = to_binary(tensor)
     input_weighted_shape = weighted_shape(padded_shape, size, window_dimensions)
@@ -2077,7 +2076,7 @@ defmodule Nx.BinaryBackend do
             for <<match!(x, 0) <- data>>, into: <<>> do
               x = read!(x, 0)
 
-              case x do
+              generated_case x do
                 %Complex{re: re} when float_output? and real_output? ->
                   number_to_binary(re, output_type)
 
@@ -2253,17 +2252,16 @@ defmodule Nx.BinaryBackend do
         end
       end
 
-    output_data =
-      match_types [out.type] do
-        for row <- result, %Complex{re: re, im: im} <- row, into: <<>> do
-          re = if abs(re) <= eps, do: 0, else: re
-          im = if abs(im) <= eps, do: 0, else: im
+    %{type: {_, output_size}} = out
 
-          <<write!(Complex.new(re, im), 0)>>
-        end
+    output_data =
+      for row <- result, %Complex{re: re, im: im} <- row, into: <<>> do
+        re = if abs(re) <= eps, do: 0, else: re
+        im = if abs(im) <= eps, do: 0, else: im
+        <<write_complex(re, im, div(output_size, 2))::binary>>
       end
 
-    intermediate_shape = out.shape |> Tuple.delete_at(axis) |> Tuple.append(n)
+    intermediate_shape = out.shape |> Tuple.delete_at(axis) |> tuple_append(n)
 
     permuted_output = from_binary(%{out | shape: intermediate_shape}, output_data)
 
@@ -2388,20 +2386,6 @@ defmodule Nx.BinaryBackend do
         end
 
       scalar_to_binary!(result, type)
-    end
-  end
-
-  defp bin_zip_reduce(t1, [], t2, [], type, acc, fun) do
-    %{type: {_, s1}} = t1
-    %{type: {_, s2}} = t2
-    b1 = to_binary(t1)
-    b2 = to_binary(t2)
-
-    match_types [t1.type, t2.type] do
-      for <<d1::size(s1)-bitstring <- b1>>, <<d2::size(s2)-bitstring <- b2>>, into: <<>> do
-        {result, _} = fun.(d1, d2, acc)
-        scalar_to_binary!(result, type)
-      end
     end
   end
 

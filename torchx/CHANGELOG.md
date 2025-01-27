@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.9.2 (2024-11-16)
+
+  * Update to latest Nx
+
 ## v0.9.1 (2024-10-08)
 
   * Update to latest Nx

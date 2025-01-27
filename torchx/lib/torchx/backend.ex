@@ -506,7 +506,7 @@ defmodule Torchx.Backend do
 
     result =
       if axes == [] do
-        aggregate_whole_tensor(t, keep_axes, &Torchx.product/1)
+        aggregate_whole_tensor(t, &Torchx.product/1)
       else
         aggregate_over_axes(t, axes, keep_axes, &Torchx.product/3)
       end
@@ -523,7 +523,7 @@ defmodule Torchx.Backend do
 
     result =
       if axes == [] do
-        aggregate_whole_tensor(t, keep_axes, &Torchx.any/1)
+        aggregate_whole_tensor(t, &Torchx.any/1)
       else
         aggregate_over_axes(t, axes, keep_axes, &Torchx.any/3)
       end
@@ -538,7 +538,7 @@ defmodule Torchx.Backend do
 
     result =
       if axes == [] do
-        aggregate_whole_tensor(t, keep_axes, &Torchx.all/1)
+        aggregate_whole_tensor(t, &Torchx.all/1)
       else
         aggregate_over_axes(t, axes, keep_axes, &Torchx.all/3)
       end
@@ -563,18 +563,10 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  defp aggregate_whole_tensor(t, keep_axes, fun) when is_function(fun, 1) do
-    result =
-      t
-      |> from_nx()
-      |> then(fun)
-
-    if keep_axes do
-      shape = t.shape |> Tuple.delete_at(-1) |> Tuple.append(1)
-      Torchx.reshape(result, shape)
-    else
-      result
-    end
+  defp aggregate_whole_tensor(t, fun) when is_function(fun, 1) do
+    t
+    |> from_nx()
+    |> then(fun)
   end
 
   defp aggregate_over_axes(t, axes, keep_axes, fun) when is_function(fun, 3) do

@@ -787,8 +787,8 @@ defmodule EXLA.Defn do
     transform = Keyword.fetch!(opts, :transform_a)
 
     case Value.get_typespec(b).shape do
-      {_} = b_shape ->
-        b_shape = Tuple.append(b_shape, 1)
+      {dim} ->
+        b_shape = {dim, 1}
 
         b =
           b

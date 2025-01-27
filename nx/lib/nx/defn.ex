@@ -66,7 +66,7 @@ defmodule Nx.Defn do
   ## JIT compilers
 
   The power of `Nx.Defn` is given by its compilers. The default
-  compiler is `Nx.Defn.Evaluator`, which evalutes the code.
+  compiler is `Nx.Defn.Evaluator`, which evaluates the code.
   You can use `jit/3` to compile a function on the fly using a
   different compiler, such as `EXLA`:
 

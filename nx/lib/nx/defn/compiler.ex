@@ -585,6 +585,13 @@ defmodule Nx.Defn.Compiler do
     {{{:., dot_meta, [Nx, name]}, meta, args}, state}
   end
 
+  # We also allow specifically Complex.new so that literal complex numbers
+  # can be written in defn.
+  defp normalize({{:., dot_meta, [Complex, :new]}, meta, args}, state) do
+    {args, state} = normalize_list(args, state)
+    {{{:., dot_meta, [Complex, :new]}, meta, args}, state}
+  end
+
   defp normalize({{:., dot_meta, [mod, name]}, meta, args}, state) when mod in @allowed_modules do
     {args, state} = normalize_list(args, state)
     {{{:., dot_meta, [mod, name]}, meta, args}, state}
