@@ -3,10 +3,7 @@
 ```elixir
 Mix.install(
   [
-    {:nx, github: "elixir-nx/nx", sparse: "nx", branch: "pv-feat/nx-constants-arbitrary-precision", override: true},
-    {:kino, "~> 0.14"},
-    {:kino_vega_lite, "~> 0.1"},
-    {:nx_signal, "~> 0.2"}
+    {:nx, github: "elixir-nx/nx", sparse: "nx", branch: "pv-feat/nx-constants-arbitrary-precision", override: true}
   ]
 )
 ```
