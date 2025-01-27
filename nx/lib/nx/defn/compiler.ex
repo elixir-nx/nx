@@ -592,6 +592,18 @@ defmodule Nx.Defn.Compiler do
     {{{:., dot_meta, [Complex, :new]}, meta, args}, state}
   end
 
+  defp normalize({{:., dot_meta, [Nx.Constants, :i]}, meta, []}, state) do
+    {{{:., dot_meta, [Complex, :new]}, meta, [0, 1]}, state}
+  end
+
+  defp normalize({{:., dot_meta, [Nx.Constants, :e]}, meta, []}, state) do
+    {{{:., dot_meta, [:math, :exp]}, meta, [1]}, state}
+  end
+
+  defp normalize({{:., dot_meta, [Nx.Constants, :pi]}, meta, []}, state) do
+    {{{:., dot_meta, [:math, :pi]}, meta, []}, state}
+  end
+
   defp normalize({{:., dot_meta, [mod, name]}, meta, args}, state) when mod in @allowed_modules do
     {args, state} = normalize_list(args, state)
     {{{:., dot_meta, [mod, name]}, meta, args}, state}
