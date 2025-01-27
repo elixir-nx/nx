@@ -11,7 +11,6 @@ defmodule Nx.NonFiniteTest do
   @arg Complex.new(:infinity, 3)
   @arg2 Complex.new(-2, 4)
 
-  @inf_inf Complex.new(:infinity, :infinity)
   @nan_nan Complex.new(:nan, :nan)
 
   @one Nx.tensor(1, type: {:u, 8})
@@ -19,11 +18,11 @@ defmodule Nx.NonFiniteTest do
 
   describe "unary operations" do
     test "exp" do
-      assert Nx.exp(@arg) == Nx.tensor(@inf_inf)
+      assert Nx.exp(@arg) == Nx.tensor(Complex.new(:neg_infinity, :infinity))
     end
 
     test "expm1" do
-      assert Nx.expm1(@arg) == Nx.tensor(@inf_inf)
+      assert Nx.expm1(@arg) == Nx.tensor(Complex.new(:neg_infinity, :infinity))
     end
 
     test "log" do
@@ -51,11 +50,11 @@ defmodule Nx.NonFiniteTest do
     end
 
     test "cosh" do
-      assert Nx.cosh(@arg) == Nx.tensor(@inf_inf)
+      assert Nx.cosh(@arg) == Nx.tensor(Complex.new(:neg_infinity, :infinity))
     end
 
     test "sinh" do
-      assert Nx.sinh(@arg) == Nx.tensor(@inf_inf)
+      assert Nx.sinh(@arg) == Nx.tensor(Complex.new(:neg_infinity, :infinity))
     end
 
     test "tanh" do
@@ -145,7 +144,7 @@ defmodule Nx.NonFiniteTest do
     end
 
     test "product" do
-      assert Nx.product(Nx.tensor([@arg, @arg2])) == Nx.multiply(@arg, @arg2)
+      assert Nx.product(Nx.tensor([@arg, @arg2])) == Nx.tensor(Complex.new(:nan, :nan))
       assert Nx.product(Nx.tensor(:infinity)) == Nx.tensor(:infinity)
     end
 

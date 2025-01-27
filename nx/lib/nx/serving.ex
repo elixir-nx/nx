@@ -1117,7 +1117,7 @@ defmodule Nx.Serving do
   end
 
   defp distributed_batched_run_with_retries!(name, input, retries) do
-    case :pg.get_members(Nx.Serving.PG, __MODULE__) do
+    case :pg.get_members(Nx.Serving.PG, name) do
       [] ->
         exit({:noproc, {__MODULE__, :distributed_batched_run, [name, input, [retries: retries]]}})
 
@@ -1332,7 +1332,7 @@ defmodule Nx.Serving do
     )
 
     serving_weight = max(1, weight * partitions_count)
-    :pg.join(Nx.Serving.PG, __MODULE__, List.duplicate(self(), serving_weight))
+    :pg.join(Nx.Serving.PG, name, List.duplicate(self(), serving_weight))
 
     for batch_key <- batch_keys do
       stack_init(batch_key)

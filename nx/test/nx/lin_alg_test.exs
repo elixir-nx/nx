@@ -574,11 +574,11 @@ defmodule Nx.LinAlgTest do
       assert_all_close(
         eigenvecs,
         Nx.tensor([
-          [0.112, -0.005, -0.831, -0.436, -0.328],
-          [0.395, 0.163, 0.530, -0.537, -0.497],
-          [0.427, 0.326, -0.133, 0.700, -0.452],
-          [0.603, -0.783, -0.007, 0.079, 0.130],
-          [0.534, 0.504, -0.104, -0.160, 0.651]
+          [0.112, 0.004, 0.828, -0.440, -0.328],
+          [0.395, -0.163, -0.533, -0.534, -0.497],
+          [0.427, -0.326, 0.137, 0.700, -0.452],
+          [0.603, 0.783, 0.008, 0.079, 0.130],
+          [0.534, -0.504, 0.103, -0.160, 0.651]
         ]),
         atol: 1.0e-3,
         rtol: 1.0e-3
@@ -600,28 +600,20 @@ defmodule Nx.LinAlgTest do
 
         # Eigenvalues
         assert eigenvals ==
-                 Nx.tensor([Complex.new(-5, 0), Complex.new(3, 0), Complex.new(1, 0)])
+                 Nx.tensor([
+                   Complex.new(-5, 0),
+                   Complex.new(3, 0),
+                   Complex.new(0.9999998807907104, 0)
+                 ])
 
         # Eigenvectors
         assert_all_close(
           eigenvecs,
-          Nx.tensor([
-            [
-              Complex.new(-0.408, 0.0),
-              Complex.new(-0.0, 0.707),
-              Complex.new(0.577, 0.0)
-            ],
-            [
-              Complex.new(-0.0, -0.816),
-              Complex.new(0.0, 0.0),
-              Complex.new(0.0, -0.577)
-            ],
-            [
-              Complex.new(0.408, 0.0),
-              Complex.new(-0.0, 0.707),
-              Complex.new(-0.577, 0.0)
-            ]
-          ]),
+          ~MAT[
+            0.0000-0.4082i 0.7071-0.0i 00.5773-0.0000i
+            0.8164-0.0000i 0.0000+0.0i 00.0000-0.5773i
+            0.0000+0.4082i 0.7071-0.0i -0.5773-0.0000i
+          ],
           atol: 1.0e-3,
           rtol: 1.0e-3
         )
@@ -638,42 +630,56 @@ defmodule Nx.LinAlgTest do
       for type <- [f: 32, c: 64], reduce: key do
         key ->
           # Unitary matrix from a random matrix
-          {base, key} = Nx.Random.uniform(key, shape: {3, 3, 3}, type: type)
+          {base, key} = Nx.Random.uniform(key, shape: {2, 3, 3}, type: type)
           {q, _} = Nx.LinAlg.qr(base)
 
           # Different eigenvalues from random values
           evals_test =
-            [{100, 30}, {4, 6}, {0.7, 0.9}]
-            |> Enum.map(fn {low, up} ->
-              if :rand.uniform() - 0.5 > 0 do
-                {low, up}
-              else
-                {-up, -low}
-              end
+            [100, 10, 1]
+            |> Enum.map(fn magnitude ->
+              sign =
+                if :rand.uniform() - 0.5 > 0 do
+                  1
+                else
+                  -1
+                end
+
+              rand = :rand.uniform() * magnitude * 0.1 + magnitude
+              rand * sign
             end)
-            |> Enum.map(fn {low, up} ->
-              rand = :rand.uniform() * (up - low) + low
-              Nx.tensor([rand], type: :f64)
-            end)
-            |> Nx.concatenate()
+            |> Nx.tensor(type: type)
+
+          evals_test_diag =
+            evals_test
+            |> Nx.make_diagonal()
+            |> Nx.reshape({1, 3, 3})
+            |> Nx.tile([2, 1, 1])
 
           # Hermitian matrix with different eigenvalues
           # using A = A^* = Q^*.Λ.Q.
           a =
             q
             |> Nx.LinAlg.adjoint()
-            |> Nx.multiply(evals_test)
+            |> Nx.dot([2], [0], evals_test_diag, [1], [0])
             |> Nx.dot([2], [0], q, [1], [0])
 
           # Eigenvalues and eigenvectors
-          assert {evals, evecs} = Nx.LinAlg.eigh(a, max_iter: 10_000)
-          assert_all_close(evals_test, evals, atol: 1.0e-1)
+          assert {evals, evecs} = Nx.LinAlg.eigh(a, eps: 1.0e-8)
+
+          assert_all_close(evals_test, evals[0], atol: 1.0e-8)
+          assert_all_close(evals_test, evals[1], atol: 1.0e-8)
+
+          evals =
+            evals
+            |> Nx.vectorize(:x)
+            |> Nx.make_diagonal()
+            |> Nx.devectorize(keep_names: false)
 
           # Eigenvalue equation
-          evecs_evals = Nx.multiply(evecs, evals)
-          a_evecs = Nx.dot(a, [2], [0], evecs, [1], [0])
+          evecs_evals = Nx.dot(evecs, [2], [0], evals, [1], [0])
+          a_evecs = Nx.dot(evecs_evals, [2], [0], Nx.LinAlg.adjoint(evecs), [1], [0])
 
-          assert_all_close(evecs_evals, a_evecs, atol: 1.0e-1)
+          assert_all_close(a, a_evecs, atol: 1.0e-8)
           key
       end
     end
@@ -734,10 +740,10 @@ defmodule Nx.LinAlgTest do
       assert_all_close(
         u,
         Nx.tensor([
-          [0.141, 0.825, -0.001, 0.019],
-          [0.344, 0.426, 0.00200, 0.382],
-          [0.547, 0.028, 0.0, -0.822],
-          [0.75, -0.370, -0.001, 0.421]
+          [0.141, -0.825, -0.001, 0.019],
+          [0.344, -0.426, 0.00200, 0.382],
+          [0.547, -0.028, 0.0, -0.822],
+          [0.75, 0.370, -0.001, 0.421]
         ]),
         atol: 1.0e-3,
         rtol: 1.0e-3
@@ -747,8 +753,8 @@ defmodule Nx.LinAlgTest do
 
       assert_all_close(
         Nx.tensor([
-          [0.505, 0.575, 0.644],
-          [-0.761, -0.057, 0.647],
+          [0.504, 0.575, 0.644],
+          [0.761, 0.057, -0.647],
           [-0.408, 0.816, -0.408]
         ]),
         v,
@@ -801,9 +807,9 @@ defmodule Nx.LinAlgTest do
       assert_all_close(
         u,
         Nx.tensor([
-          [0.336, -0.407, -0.849],
-          [0.037, -0.895, 0.444],
-          [0.941, 0.181, 0.286]
+          [0.335, 0.408, 0.849],
+          [0.036, 0.895, -0.445],
+          [0.941, -0.18, -0.286]
         ]),
         atol: 1.0e-3,
         rtol: 1.0e-3
@@ -815,9 +821,9 @@ defmodule Nx.LinAlgTest do
 
       assert_all_close(
         Nx.tensor([
-          [0.035, 0.0869, 0.996],
-          [-0.091, -0.992, 0.09],
-          [-0.995, 0.094, 0.027]
+          [0.035, 0.0856, 0.996],
+          [0.092, 0.992, -0.089],
+          [0.995, -0.094, -0.027]
         ]),
         v,
         atol: 1.0e-3,

@@ -1288,7 +1288,8 @@ defmodule Nx.ServingTest do
       ]
 
       Node.spawn_link(:"secondary@127.0.0.1", DistributedServings, :multiply, [parent, opts])
-      assert_receive {_, :join, Nx.Serving, _}
+      assert_receive {_, :join, name, _}
+      assert name == config.test
 
       batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
 
@@ -1327,14 +1328,16 @@ defmodule Nx.ServingTest do
       opts2 = Keyword.put(opts, :distribution_weight, 4)
 
       Node.spawn_link(:"secondary@127.0.0.1", DistributedServings, :multiply, [parent, opts])
-      assert_receive {_, :join, Nx.Serving, pids}
+      assert_receive {_, :join, name, pids}
       assert length(pids) == 1
+      assert name == config.test
 
       Node.spawn_link(:"tertiary@127.0.0.1", DistributedServings, :multiply, [parent, opts2])
-      assert_receive {_, :join, Nx.Serving, pids}
+      assert_receive {_, :join, name, pids}
       assert length(pids) == 4
+      assert name == config.test
 
-      members = :pg.get_members(Nx.Serving.PG, Nx.Serving)
+      members = :pg.get_members(Nx.Serving.PG, config.test)
       assert length(members) == 5
     end
 
@@ -1356,7 +1359,8 @@ defmodule Nx.ServingTest do
 
       args = [parent, opts]
       Node.spawn_link(:"secondary@127.0.0.1", DistributedServings, :add_five_round_about, args)
-      assert_receive {_, :join, Nx.Serving, _}
+      assert_receive {_, :join, name, _}
+      assert name == config.test
 
       batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
 
@@ -1412,7 +1416,8 @@ defmodule Nx.ServingTest do
       ]
 
       Node.spawn_link(:"tertiary@127.0.0.1", DistributedServings, :multiply, [parent, opts])
-      assert_receive {_, :join, Nx.Serving, _}
+      assert_receive {_, :join, name, _}
+      assert name == config.test
 
       batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
 

@@ -59,9 +59,9 @@ defmodule Nx.LinAlg.SVD do
 
     collapsed_axes = shape |> Tuple.delete_at(rank - 2) |> Tuple.delete_at(rank - 2)
 
-    u_shape = collapsed_axes |> Tuple.append(m) |> Tuple.append(:auto)
-    s_shape = Tuple.append(collapsed_axes, :auto)
-    vt_shape = Tuple.append(s_shape, n)
+    u_shape = collapsed_axes |> Nx.Shared.tuple_append(m) |> Nx.Shared.tuple_append(:auto)
+    s_shape = Nx.Shared.tuple_append(collapsed_axes, :auto)
+    vt_shape = Nx.Shared.tuple_append(s_shape, n)
 
     {{m, n}, u_shape, s_shape, vt_shape}
   end

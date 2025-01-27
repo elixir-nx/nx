@@ -746,7 +746,7 @@ defmodule Nx.Random do
           {dim}
 
         dims when is_tuple(dims) ->
-          Tuple.append(dims, dim)
+          Nx.Shared.tuple_append(dims, dim)
 
         _ ->
           raise ArgumentError,
@@ -1126,7 +1126,7 @@ defmodule Nx.Random do
     case type do
       {:c, _} ->
         type = Nx.Type.to_real(type)
-        data = fun.(key, type, Tuple.append(shape, 2))
+        data = fun.(key, type, Nx.Shared.tuple_append(shape, 2))
         to_complex = Nx.stack([1, Nx.Constants.i()])
         Nx.dot(data, to_complex)
 
