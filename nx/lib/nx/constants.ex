@@ -3,6 +3,10 @@ defmodule Nx.Constants do
   Common constants used in computations.
 
   This module can be used in `defn`.
+
+  The functions `e/0`, `pi/0` and `i/0` will follow the same rules as
+  literal constants when used inside `defn`. This means that they will
+  use the surrounding precision instead of defaulting to f32.
   """
 
   import Nx.Shared
