@@ -1,11 +1,7 @@
 # Discrete Fourier Transform with Nx
 
 ```elixir
-Mix.install(
-  [
-    {:nx, github: "elixir-nx/nx", sparse: "nx", branch: "pv-feat/nx-constants-arbitrary-precision", override: true}
-  ]
-)
+Mix.install([{:nx, github: "elixir-nx/nx", sparse: "nx"}])
 ```
 
 ## Using complex numbers
