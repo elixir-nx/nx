@@ -3,16 +3,12 @@
 ```elixir
 Mix.install(
   [
-    {:nx, "~> 0.9.1"},
-    {:kino, "~> 0.14.2"},
-    {:kino_vega_lite, "~> 0.1.11"},
-    {:exla, "~> 0.9.1"},
-    {:nx_signal, "~> 0.2.0"}
-  ],
-  config: [nx: [default_backend: EXLA.Backend]]
+    {:nx, github: "elixir-nx/nx", sparse: "nx", override: true},
+    {:kino, "~> 0.14"},
+    {:kino_vega_lite, "~> 0.1"},
+    {:nx_signal, "~> 0.2"}
+  ]
 )
-
-Nx.Defn.global_default_options(compiler: EXLA, client: :host)
 ```
 
 ## Using complex numbers
@@ -23,11 +19,12 @@ Since `Nx` depends in the library `Complex`, we can define a complex number by `
 
 ```elixir
 z = Complex.new(1,1)
+```
 
 Its absolute value is $ \sqrt{2} \approx 1.4142$ and its phase is $\pi/4 \approx 0.7853$ radians.
 
 ```elixir
-{Complex.abs(one), Complex.phase(one)}
+{Complex.abs(z), Complex.phase(z)}
 ```
 
 Its polar form is:
@@ -37,34 +34,28 @@ $ \sqrt{2} \exp^{i \pi/4} \coloneqq \sqrt{2}\lparen \cos(\pi/4) + i\sin(\pi/4) \
 We can use `Complex.from_polar/2` to build a complex number from it's polar definition:
 
 ```elixir
-z = Complex.from_polar(:math.sqrt(2), :math.pi() / 4)
+z = Complex.from_polar(Complex.abs(z), Complex.phase(z))
 ```
 
 If we need a tensor from `z`, we can then do:
 
 ```elixir
 Nx.tensor(z)
+```
 
-We can use directly `Nx` to build a complex from its cartesian coordinates:
+We can use directly `Nx` to build a complex from its cartesian coordinates
 
 ```elixir
 t = Nx.complex(1,1)
 ```
 
-and compute its absolute value and phase:
+And compute its absolute value and phase, through these tensor-aware functions
 
 ```elixir
 {Nx.abs(t), Nx.phase(t)}
-
-These are "tensor" aware functions.
-
-```elixir
-t = Nx.stack([z, 1])
-
-Nx.abs(t)
 ```
 
-We also have the imaginary constant $i$ defined within `Nx.Constants`:
+We also have the imaginary constant $i$ defined within `Nx.Constants`
 
 ```elixir
 i = Nx.Constants.i()
@@ -72,20 +63,39 @@ i = Nx.Constants.i()
 Nx.add(1 , i)
 ```
 
-It can be useful within a numerical function, defined using `defn`.
-For example, we can do:
+When writing a `defn`, 
+For example, we can use the following code to build the imaginary constant while keeping the correct precision based on the input.
 
 ```elixir
 defmodule Example do
   import Nx.Defn
-  import Nx.Constants, only: [i: 0]
+  import Nx.Constants, only: [i: 1]
 
   defn rotate(z) do
-     i() * z
+    z * Complex.new(0, 1)
+  end
+
+  defn shift(z) do
+    z + Complex.new(10)
   end
 end
+```
 
-Example.rotate(z)
+```elixir
+{
+  Example.rotate(10),
+  Example.rotate(Nx.f64(20)),
+  Example.rotate(Nx.f8(0.2))
+}
+```
+
+```elixir
+
+{
+  Example.shift(10),
+  Example.shift(Nx.f64(20)),
+  Example.shift(Nx.f8(0.2))
+}
 ```
 
 ## Advanced Applications - The Discrete Fourier Transform (DFT)
@@ -111,6 +121,10 @@ Suppose we can sample at `fs=50Hz` (meaning 50 samples per second) and our aquis
 We build a time series of `t` points equally spaced with the given `duration` interval with `Nx.linspace`.
 
 For each value of this serie (the discrete time $t$), we will calculate the "hidden" signal $f(t)$ in the module below. This will give us the sampling.
+
+```elixir
+
+```
 
 ```elixir
 defmodule Signal do
