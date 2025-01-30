@@ -7,7 +7,7 @@ defmodule Nx.Defn.CompilerTest do
     end
   end
 
-  test "it raises an error if the __compile__ callback is missing" do
+  test "raises an error if the __compile__ callback is missing" do
     msg =
       "The expected compiler callback __compile__/4 is missing. Please check that the module SomeInvalidCompiler is an Nx.Defn.Compiler."
 

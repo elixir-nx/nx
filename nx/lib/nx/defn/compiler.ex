@@ -141,7 +141,7 @@ defmodule Nx.Defn.Compiler do
     case exception do
       %UndefinedFunctionError{module: compiler, function: ^name, arity: ^arity} ->
         raise ArgumentError,
-              "The expected compiler callback #{name}/#{arity} is missing. Please check that the module #{inspect(compiler)} is an Nx.Defn.Compiler."
+              "the expected compiler callback #{name}/#{arity} is missing. Please check that the module #{inspect(compiler)} is an Nx.Defn.Compiler."
 
       _ ->
         # This is not an error that should've been caught by this function, so we pass the exception along
