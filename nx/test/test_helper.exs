@@ -1,5 +1,3 @@
-ExUnit.start(assert_receive_timeout: 1000)
-
 try_starting_epmd? = fn ->
   case :os.type() do
     {:unix, _} ->
@@ -27,3 +25,5 @@ cond do
   true ->
     ExUnit.configure(exclude: [:distributed])
 end
+
+ExUnit.start(assert_receive_timeout: 1000)

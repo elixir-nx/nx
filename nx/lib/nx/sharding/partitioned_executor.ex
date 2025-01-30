@@ -1,14 +1,12 @@
 defmodule Nx.Sharding.PartitionedExecutor do
   @moduledoc false
+  use GenServer
 
   # Receives a acyclic directed graph of functions which depend on each other's results
   # and runs them in an as parallel as possible manner.
 
   # The graph is just represent as a list of Function structs, which themselves
   # contain the function dependencies.
-
-  alias Nx.Sharding.PartitionedExecutor.Function, as: F
-  alias Nx.Sharding.PartitionedExecutor.Supervisor, as: S
 
   def start_link(graph) do
     GenServer.start_link(__MODULE__, graph)
@@ -17,38 +15,49 @@ defmodule Nx.Sharding.PartitionedExecutor do
   def init(graph) do
     Process.send_after(self(), :start_workflow, 0)
 
-    {:ok, %{graph: graph, supervisor_pid: nil, producers: nil}}
-  end
-
-  def check_status(executor_pid, producer_id) do
-    GenServer.call(executor_pid, {:check_status, producer_id})
+    {:ok, %{graph: graph}}
   end
 
   def handle_info(:start_workflow, state) do
-    {:ok, supervisor_pid} =
-      S.start_link({self(), state.graph})
-
-    producers =
-      supervisor_pid
-      |> Supervisor.which_children()
-      |> Map.new(fn {{F, id}, pid, _, _} ->
-        # TODO: deal with the possibility of
-        # a producer dying
-        {id, pid}
+    # Group functions by node
+    functions_by_node =
+      Enum.group_by(state.graph, fn function ->
+        if function.node == Node.self() do
+          nil
+        else
+          function.node
+        end
       end)
 
-    {:noreply, %{state | supervisor_pid: supervisor_pid, producers: producers}}
+    # Start supervisors and functions on each node
+    Enum.each(functions_by_node, fn
+      {nil, functions} ->
+        # Start supervisor on current node
+        {:ok, _} =
+          Nx.Sharding.PartitionedExecutor.Supervisor.start_link(functions)
+
+      {node, functions} ->
+        if !Node.connect(node) do
+          raise "Failed to connect to node #{node}"
+        end
+
+        functions =
+          Enum.map(functions, fn f ->
+            %{f | code: :erlang.term_to_binary(f.code, [:compressed, :deterministic])}
+          end)
+
+        {:ok, _pid} =
+          :rpc.block_call(node, Nx.Sharding.PartitionedExecutor.Supervisor, :start_link, [
+            functions
+          ])
+    end)
+
+    :global.sync()
+
+    {:noreply, state}
   end
 
-  def handle_call({:check_status, producer_id}, _from, state) do
-    pid = Map.fetch!(state.producers, producer_id)
-
-    result =
-      case F.check_status(pid) do
-        :ok -> {:ok, pid}
-        {:error, :pending} -> {:error, :pending}
-      end
-
-    {:reply, result, state}
+  def handle_info(_, state) do
+    {:noreply, state}
   end
 end
