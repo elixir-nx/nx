@@ -9,7 +9,7 @@ defmodule Nx.Defn.CompilerTest do
 
   test "raises an error if the __compile__ callback is missing" do
     msg =
-      "The expected compiler callback __compile__/4 is missing. Please check that the module SomeInvalidCompiler is an Nx.Defn.Compiler."
+      "the expected compiler callback __compile__/4 is missing. Please check that the module SomeInvalidCompiler is an Nx.Defn.Compiler."
 
     assert_raise ArgumentError, msg, fn ->
       Nx.Defn.compile(&Function.identity/1, [Nx.template({}, :f32)],
@@ -18,18 +18,18 @@ defmodule Nx.Defn.CompilerTest do
     end
   end
 
-  test "it raises an error if the __jit__ callback is missing" do
+  test "raises an error if the __jit__ callback is missing" do
     msg =
-      "The expected compiler callback __jit__/5 is missing. Please check that the module SomeInvalidCompiler is an Nx.Defn.Compiler."
+      "the expected compiler callback __jit__/5 is missing. Please check that the module SomeInvalidCompiler is an Nx.Defn.Compiler."
 
     assert_raise ArgumentError, msg, fn ->
       Nx.Defn.jit(&Function.identity/1, compiler: SomeInvalidCompiler).(1)
     end
   end
 
-  test "it raises an error if the __partitions_options__ callback is missing" do
+  test "raises an error if the __partitions_options__ callback is missing" do
     msg =
-      "The expected compiler callback __partitions_options__/1 is missing. Please check that the module SomeInvalidCompiler is an Nx.Defn.Compiler."
+      "the expected compiler callback __partitions_options__/1 is missing. Please check that the module SomeInvalidCompiler is an Nx.Defn.Compiler."
 
     serving = Nx.Serving.new(SomeInvalidServing, [], compiler: SomeInvalidCompiler)
 
@@ -38,9 +38,9 @@ defmodule Nx.Defn.CompilerTest do
     end
   end
 
-  test "it raises an error if the __to_backend__ callback is missing" do
+  test "raises an error if the __to_backend__ callback is missing" do
     msg =
-      "The expected compiler callback __to_backend__/1 is missing. Please check that the module SomeInvalidCompiler is an Nx.Defn.Compiler."
+      "the expected compiler callback __to_backend__/1 is missing. Please check that the module SomeInvalidCompiler is an Nx.Defn.Compiler."
 
     assert_raise ArgumentError, msg, fn ->
       Nx.Defn.to_backend(compiler: SomeInvalidCompiler)
