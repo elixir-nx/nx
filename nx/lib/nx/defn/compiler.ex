@@ -112,6 +112,9 @@ defmodule Nx.Defn.Compiler do
   def __to_backend__(opts) do
     {compiler, opts} = Keyword.pop(opts, :compiler, Nx.Defn.Evaluator)
     compiler.__to_backend__(opts)
+  rescue
+    e in [UndefinedFunctionError] ->
+      raise_missing_callback(e, :__to_backend__, 1, __STACKTRACE__)
   end
 
   ## JIT/Stream
@@ -120,12 +123,30 @@ defmodule Nx.Defn.Compiler do
   def __compile__(fun, params, opts) do
     {compiler, runtime_fun, opts} = prepare_options(fun, opts)
     compiler.__compile__(fun, params, runtime_fun, opts)
+  rescue
+    e in [UndefinedFunctionError] ->
+      raise_missing_callback(e, :__compile__, 4, __STACKTRACE__)
   end
 
   @doc false
   def __jit__(fun, params, args_list, opts) do
     {compiler, runtime_fun, opts} = prepare_options(fun, opts)
     compiler.__jit__(fun, params, runtime_fun, args_list, opts)
+  rescue
+    e in [UndefinedFunctionError] ->
+      raise_missing_callback(e, :__jit__, 5, __STACKTRACE__)
+  end
+
+  defp raise_missing_callback(exception, name, arity, stacktrace) do
+    case exception do
+      %UndefinedFunctionError{module: compiler, function: ^name, arity: ^arity} ->
+        raise ArgumentError,
+              "the expected compiler callback #{name}/#{arity} is missing. Please check that the module #{inspect(compiler)} is an Nx.Defn.Compiler."
+
+      _ ->
+        # This is not an error that should've been caught by this function, so we pass the exception along
+        reraise exception, stacktrace
+    end
   end
 
   defp prepare_options(fun, opts) do

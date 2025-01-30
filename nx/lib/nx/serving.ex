@@ -1359,6 +1359,17 @@ defmodule Nx.Serving do
   defp serving_partitions(%Nx.Serving{defn_options: defn_options}, true) do
     compiler = Keyword.get(defn_options, :compiler, Nx.Defn.Evaluator)
     compiler.__partitions_options__(defn_options)
+  rescue
+    e in [UndefinedFunctionError] ->
+      case e do
+        %UndefinedFunctionError{module: compiler, function: :__partitions_options__, arity: 1} ->
+          raise ArgumentError,
+                "the expected compiler callback __partitions_options__/1 is missing. Please check that the module #{inspect(compiler)} is an Nx.Defn.Compiler."
+
+        _ ->
+          # This is not an error that should've been caught by this function, so we pass the exception along
+          reraise e, __STACKTRACE__
+      end
   end
 
   defp serving_partitions(%Nx.Serving{defn_options: defn_options}, false) do
