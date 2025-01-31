@@ -19,9 +19,17 @@ defmodule Nx.Sharding.PartitionedExecutor do
   end
 
   def handle_info(:start_workflow, state) do
+    execution_group_id = make_ref()
+
     # Group functions by node
     functions_by_node =
-      Enum.group_by(state.graph, fn function ->
+      state.graph
+      |> Enum.map(fn function ->
+        id = {execution_group_id, function.id}
+        args = Enum.map(function.args, fn {id, index} -> {{execution_group_id, id}, index} end)
+        %{function | id: id, args: args}
+      end)
+      |> Enum.group_by(fn function ->
         if function.node == Node.self() do
           nil
         else
