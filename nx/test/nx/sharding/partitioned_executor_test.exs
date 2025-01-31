@@ -183,7 +183,10 @@ defmodule Nx.Sharding.PartitionedExecutorTest do
 
     {:ok, _executor} = Nx.Sharding.PartitionedExecutor.start_link(graph)
 
-    assert_receive {:result, ^ref, result}, 5_000
+    assert_receive {:result, ^ref, result}, 1_000
     assert result == {Nx.add(x, y), Nx.subtract(x, y), Nx.subtract(z, 1)}
+
+    require IEx
+    IEx.pry()
   end
 end

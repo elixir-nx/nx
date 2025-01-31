@@ -13,23 +13,24 @@ defmodule Nx.Sharding.PartitionedExecutor do
   end
 
   def init(graph) do
+    execution_group_id = make_ref()
+
+    graph =
+      Enum.map(graph, fn function ->
+        id = {execution_group_id, function.id}
+        args = Enum.map(function.args, fn {id, index} -> {{execution_group_id, id}, index} end)
+        %{function | id: id, args: args}
+      end)
+
     Process.send_after(self(), :start_workflow, 0)
 
     {:ok, %{graph: graph}}
   end
 
   def handle_info(:start_workflow, state) do
-    execution_group_id = make_ref()
-
     # Group functions by node
     functions_by_node =
-      state.graph
-      |> Enum.map(fn function ->
-        id = {execution_group_id, function.id}
-        args = Enum.map(function.args, fn {id, index} -> {{execution_group_id, id}, index} end)
-        %{function | id: id, args: args}
-      end)
-      |> Enum.group_by(fn function ->
+      Enum.group_by(state.graph, fn function ->
         if function.node == Node.self() do
           nil
         else
@@ -49,15 +50,13 @@ defmodule Nx.Sharding.PartitionedExecutor do
           raise "Failed to connect to node #{node}"
         end
 
-        functions =
-          Enum.map(functions, fn f ->
-            %{f | code: :erlang.term_to_binary(f.code, [:compressed, :deterministic])}
-          end)
-
-        {:ok, _pid} =
+        # TO-DO: we should be monitoring the supervisor and restarting it if it dies
+        {:ok, pid} =
           :rpc.block_call(node, Nx.Sharding.PartitionedExecutor.Supervisor, :start_link, [
             functions
           ])
+
+        Process.link(pid)
     end)
 
     :global.sync()
