@@ -58,6 +58,8 @@ defmodule Nx.MixProject do
       extras: [
         "CHANGELOG.md",
         "guides/intro-to-nx.livemd",
+        "guides/getting_started/introduction.md",
+        "guides/getting_started/quickstart.livemd",
         "guides/advanced/vectorization.livemd",
         "guides/advanced/aggregation.livemd",
         "guides/exercises/exercises-1-20.livemd"
@@ -112,6 +114,7 @@ defmodule Nx.MixProject do
         ]
       ],
       groups_for_extras: [
+        Getting_Started: ~r"^guides/getting_started/",
         Exercises: ~r"^guides/exercises/",
         Advanced: ~r"^guides/advanced/"
       ]

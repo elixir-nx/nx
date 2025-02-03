@@ -1,0 +1,395 @@
+# Nx quickstart
+
+## Prerequisites
+
+You will need to know a bit of Elixir. For a refresher, check out the
+[Elixir Getting Started Guide](https://hexdocs.pm/elixir/introduction.html).
+
+To work the examples you can run using the livebook buttom in this page.
+
+#### Learning Objectives
+
+This is a overview of Nx tensors. In this section, we'll look at some of the various tools for
+creating and interacting with tensors. The IEx helpers will assist our
+exploration of the core tensor concepts.
+
+```elixir
+import IEx.Helpers
+```
+
+After reading, you should be able to understand:
+
+- Create 1, 2 and N-dimensional tensors in `Nx`;
+- How to index, slice and iterate through tensors;
+- Basic tensor functions;
+- How to apply some linear algebra operations to n-dimensional tensors without using for-loops;
+- Axis and shape properties for n-dimensional tensors.
+
+## The Basics
+
+Now, everything is set up, so we're ready to create some tensors.
+
+```elixir
+Mix.install([
+  {:nx, "~> 0.5"}
+])
+```
+
+### Creating tensors
+
+The argument must be one of:
+
+- a tensor
+- a number (which means the tensor is scalar/zero-dimensional)
+- a boolean (also scalar/zero-dimensional)
+- an arbitrarily nested list of numbers and booleans
+
+If a new tensor is allocated, it will be allocated in the backend defined by
+`Nx.default_backend/0`, unless the `:backend` option is given, which overrides the
+default.
+
+#### Examples
+
+A number returns a tensor of zero dimensions:
+
+```elixir
+Nx.tensor(0)
+```
+
+```elixir
+Nx.tensor(1.0)
+```
+
+Giving a list returns a vector (a one-dimensional tensor):
+
+```elixir
+Nx.tensor([1, 2, 3])
+```
+
+```elixir
+Nx.tensor([1.2, 2.3, 3.4, 4.5])
+```
+
+Multi-dimensional tensors are also possible:
+
+```elixir
+Nx.tensor([[1, 2, 3], [4, 5, 6]])
+```
+
+```elixir
+Nx.tensor([[1, 2], [3, 4], [5, 6]])
+```
+
+```elixir
+Nx.tensor([[[1, 2], [3, 4], [5, 6]], [[-1, -2], [-3, -4], [-5, -6]]])
+```
+
+Tensors can also be given as inputs, which is useful for functions that don´t want to care
+about the input kind:
+
+```elixir
+Nx.tensor(Nx.tensor([1, 2, 3]))
+```
+
+### Naming dimensions
+
+You can provide names for tensor dimensions. Names are atoms:
+
+```elixir
+Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y])
+```
+
+Names make your code more expressive:
+
+```elixir
+Nx.tensor([[[1, 2, 3], [4, 5, 6], [7, 8, 9]]], names: [:batch, :height, :width])
+```
+
+You can also leave dimension names as `nil`:
+
+```elixir
+Nx.tensor([[[1, 2, 3], [4, 5, 6], [7, 8, 9]]], names: [:batch, nil, nil])
+```
+
+However, you must provide a name for every dimension in the tensor. For example,
+the following code snippet raises an error:
+
+```elixir
+Nx.tensor([[[1, 2, 3], [4, 5, 6], [7, 8, 9]]], names: [:batch])
+```
+
+### Indexing and Slicing tensor values
+
+We can get any cell of the tensor:
+
+```elixir
+tensor = Nx.tensor([[1, 2], [3, 4]], names: [:y, :x])
+tensor[[0, 1]]
+```
+
+```elixir
+tensor = Nx.tensor([[1, 2], [3, 4], [5, 6]], names: [:y, :x])
+tensor[[-1, -1]]
+```
+
+Now, try getting the first row of the tensor:
+
+```elixir
+# ...your code here...
+```
+
+We can also get a whole dimension:
+
+```elixir
+tensor[x: 1]
+```
+
+or a range:
+
+```elixir
+tensor[y: 0..1]
+```
+
+`tensor[[.., 1]]` will achieve the same result as `tensor[x: 1]`.
+This is because Elixir has the syntax sugar `..` for a `0..-1//1` range.
+
+Now,
+
+- create your own `{3, 3}` tensor with named dimensions
+- return a `{2, 2}` tensor containing the first two columns
+  of the first two rows
+
+```elixir
+# ...your code here...
+```
+
+### Floats and Complex numbers
+
+Besides single-precision (32 bits), floats can have other kinds of precision, such as half-precision (16) or
+double-precision (64):
+
+```elixir
+Nx.tensor([1, 2, 3], type: :f16)
+```
+
+```elixir
+Nx.tensor([1, 2, 3], type: :f64)
+```
+
+Brain-floating points are also supported:
+
+```elixir
+Nx.tensor([1, 2, 3], type: :bf16)
+```
+
+Certain backends and compilers support 8-bit floats. The precision
+implementation of 8-bit floats may change per backend, so you must be careful
+when transferring data across. The binary backend implements F8E5M2:
+
+```elixir
+Nx.tensor([1, 2, 3], type: :f8)
+```
+
+In all cases, the non-finite values negative infinity (-Inf), infinity (Inf),
+and "not a number" (NaN) can be represented by the atoms `:neg_infinity`,
+`:infinity`, and `:nan respectively`:
+
+```elixir
+Nx.tensor([:neg_infinity, :nan, :infinity])
+```
+
+Finally, complex numbers are also supported in tensors:
+
+```elixir
+Nx.tensor(Complex.new(1, -1))
+```
+
+Check out the documentation for `Nx.tensor/2` for more documentation on the accepted options.
+
+## Basic operations
+
+Nx supports element-wise arithmetic operations for tensors and broadcasting when necessary.
+
+### Addition
+
+`Nx.add/2`: Adds corresponding elements of two tensors.
+
+```elixir
+a = Nx.tensor([1, 2, 3])
+b = Nx.tensor([0, 1, 2])
+Nx.add(a , b)
+```
+
+### Subtraction
+
+`Nx.subtract/2`: Subtracts the elements of the second tensor from the first.
+
+```elixir
+a = Nx.tensor([10, 20, 30])
+b = Nx.tensor([0, 1, 2])
+Nx.subtract(a , b)
+```
+
+### Multiplication
+
+`Nx.multiply/2`: Multiplies corresponding elements of two tensors.
+
+```elixir
+a = Nx.tensor([2, 3, 4])
+b = Nx.tensor([0, 1, 2])
+Nx.multiply(a , b)
+```
+
+### Division
+
+`Nx.divide/2`: Divides the elements of the first tensor by the second tensor.
+
+```elixir
+a = Nx.tensor([10, 30, 40])
+b = Nx.tensor([5, 6, 8])
+Nx.divide(a , b)
+```
+
+### Exponentiation
+
+`Nx.pow/2`: Raises each element of the first tensor to the power of the corresponding element in the second tensor.
+
+```elixir
+a = Nx.tensor([2, 3, 4])
+b = Nx.tensor([2])
+Nx.pow(a , b)
+```
+
+### Quotient
+
+`Nx.quotient/2`: Returns a new tensor where each element is the integer division (div/2) of left by right.
+
+```elixir
+a = Nx.tensor([10, 20, 30])
+b = Nx.tensor([3, 7, 4])
+
+Nx.quotient(a, b)
+```
+
+### Remainder
+
+`Nx.remainder/2`: Computes the remainder of the division of two integer tensors.
+
+```elixir
+a = Nx.tensor([27, 32, 43])
+b = Nx.tensor([2, 3, 4])
+Nx.remainder(a , b)
+```
+
+### Negation
+
+`Nx.negate/1`: Negates each element of a tensor.
+
+```elixir
+a = Nx.tensor([2, 3, 4])
+Nx.negate(a)
+```
+
+### Square Root
+
+`Nx.sqrt/1`: It computes the element-wise square root of the given tensor.
+
+```elixir
+a = Nx.tensor([4, 9, 16])
+Nx.sqrt(a)
+```
+
+## Element-Wise Comparison
+
+Returns 1 when true and 0 when false
+
+### Equality and Inequality
+
+`Nx.equal/2`, `Nx.not_equal/2`
+
+```elixir
+a = Nx.tensor([4, 9, 16])
+b = Nx.tensor([4, 9, 16])
+Nx.equal(a, b)
+```
+
+```elixir
+a = Nx.tensor([4, 9, 16])
+b = Nx.tensor([4.0, 9.0, 16.0])
+Nx.not_equal(a, b)
+```
+
+### Greater and Less
+
+`Nx.greater/2`, `Nx.less/2`
+
+```elixir
+a = Nx.tensor([4, 9, 16])
+b = Nx.tensor([4, 8, 17])
+Nx.greater(a, b)
+```
+
+```elixir
+a = Nx.tensor([4, 9, 16])
+b = Nx.tensor([4.2, 9.0, 16.7])
+Nx.less(a, b)
+```
+
+### Greater_Equal and Less_Equal
+
+`Nx.greater_equal/2`, `Nx.less_equal/2`
+
+```elixir
+a = Nx.tensor([3, 5, 2])
+b = Nx.tensor([2, 5, 4])
+
+Nx.greater_equal(a, b)
+```
+
+```elixir
+a = Nx.tensor([3, 5, 2])
+b = Nx.tensor([2, 5, 4])
+
+Nx.less_equal(a, b)
+```
+
+## Aggregate functions
+
+These operations aggregate values across tensor axes.
+
+### Sum
+
+`Nx.sum/1`: Sums all elements
+
+```elixir
+a = Nx.tensor([[4, 9, 16], [4.2, 9.0, 16.7]])
+Nx.sum(a)
+```
+
+### Mean
+
+`Nx.mean/1`: Computes the mean value of the tensor
+
+```elixir
+a = Nx.tensor([[4, 9, 16], [4.2, 9.0, 16.7]])
+Nx.mean(a)
+```
+
+### Product
+
+`Nx.product/1`: Computes the product of all elements.
+
+```elixir
+a = Nx.tensor([[4, 9, 16], [4.2, 9.0, 16.7]])
+Nx.product(a)
+```
+
+## Matrix Multiplication
+
+`Nx.dot/4`: Computes the generalized dot product between two tensors, given the contracting axes.hyunnnn
+
+```elixir
+t1 = Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
+t2 = Nx.tensor([[10, 20], [30, 40]], names: [:height, :width])
+Nx.dot(t1, [0], t2, [0])
+```
