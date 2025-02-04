@@ -16812,7 +16812,7 @@ defmodule Nx do
 
   ## Options
 
-    * `:kind` - one of `:local`, `:ipc`. `:local` means the returned value
+    * `:mode` - one of `:local`, `:ipc`. `:local` means the returned value
       represents a pointer internal to the current process. `:ipc` means
       the returned value represents an IPC handle that can be shared between
       processes. Defaults to `:local`.
@@ -16822,11 +16822,11 @@ defmodule Nx do
   ## Examples
 
       t = Nx.u8([10, 20, 30])
-      Nx.to_pointer(t, kind: :local)
+      Nx.to_pointer(t, mode: :local)
       %Nx.Pointer{kind: :local, address: 1234, data_size: 3, handle: nil}
 
       t = Nx.s32([1, 2, 3])
-      Nx.to_pointer(t, kind: :ipc)
+      Nx.to_pointer(t, mode: :ipc)
       %Nx.Pointer{kind: :ipc, address: nil, data_size: 32, handle: "some-ipc-handle"}
   """
   @doc type: :creation
