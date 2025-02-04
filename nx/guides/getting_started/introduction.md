@@ -1,30 +1,28 @@
 # What is Nx?
 
-Nx is the numerical computing library of Elixir. Since Elixir´s primary numerical datatypes and structures are not optimized for numerical programming, Nx is the fundamental package built to bridge this gap.
+Nx is the numerical computing library of Elixir. Since Elixir's primary numerical datatypes and structures are not optimized for numerical programming, Nx is the fundamental package built to bridge this gap.
 
-[Elixir Nx](https://github.com/elixir-nx/nx) smoothly integrate to typed, multidimensional data implemented on other
-platforms (called [tensors](introduction.html#what-are-tensors)). This support extends to the compilers and
-libraries that support those tensors. Nx has four primary capabilities:
+[Elixir Nx](https://github.com/elixir-nx/nx) smoothly integrates typed, multidimensional data called [tensors](introduction.html#what-are-tensors)). 
+Nx has four primary capabilities:
 
-- In Nx, tensors hold typed data in multiple, named dimensions.
+- In Nx, tensors hold typed data in multiple, optionally named dimensions.
 - Numerical definitions, known as `defn`, support custom code with
   tensor-aware operators and functions.
 - [Automatic differentiation](https://arxiv.org/abs/1502.05767), also known as
   autograd or autodiff, supports common computational scenarios
   such as machine learning, simulations, curve fitting, and probabilistic models.
-- Broadcasting, which is term for element-by-element operations. Most of the Nx operations
-  automatically broadcast using an effective algorithm. You can see more on broadcast
+- Broadcasting, which is a term for element-by-element operations. Most of the Nx operations
+  make use of automatic implicit broadcasting. You can see more on broadcasting
   [here.](intro-to-nx.html#broadcasts)
 
-Here's more about each of those capabilities. Nx tensors can hold
-unsigned integers (u2, u4, u8, u16, u32, u64),
+Nx tensors can hold unsigned integers (u2, u4, u8, u16, u32, u64),
 signed integers (s2, s4, s8, s16, s32, s64),
-floats (f32, f64), brain floats (bf16), and complex (c64, c128).
-Tensors support backends implemented outside of Elixir, including Google's
-Accelerated Linear Algebra (XLA) and LibTorch.
+floats (f8, f16, f32, f64), brain floats (bf16), and complex (c64, c128).
+Tensors support backends implemented outside of Elixir, such as Google's
+Accelerated Linear Algebra (XLA) and PyTorch.
 
-Numerical definitions have compiler support to allow just-in-time compilation
-that support specialized processors to speed up numeric computation including
+Numerical definitions provide compiler support to allow just-in-time compilation
+targetting specialized processors to speed up numeric computation including
 TPUs and GPUs.
 
 ## What are Tensors?
@@ -74,13 +72,11 @@ Output:
 #Nx.Tensor<
 s32[2][2]
 [
-[1, 2],
-[3, 4]
+  [1, 2],
+  [3, 4]
 ]
-
 ```
 
-To know Nx, we'll get to know tensors first. The following overview will touch
-on the major libraries. Then, future notebooks will take a deep dive into working
-with tensors in detail, autograd, and backends. Then, we'll dive into specific
-problem spaces like Axon, the machine learning library.
+To learn Nx, we'll get to know tensors first. The following overview will touch
+on the major features. The advanced section of the documentation will take a deep dive into working
+with tensors in detail, autodiff, and backends.
