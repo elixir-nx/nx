@@ -56,8 +56,10 @@ defmodule Nx.LinAlg.QR do
     base_h = Nx.eye({m, m}, type: type, vectorized_axes: a.vectorized_axes)
     column_iota = Nx.iota({Nx.axis_size(a, 0)}, vectorized_axes: a.vectorized_axes)
 
+    # TODO remove :unroll (dynamic slice inside while causes a segfault)
+    # Reported in https://github.com/google/jax/issues/21552 and https://github.com/jax-ml/jax/issues/23931
     {{q, r}, _} =
-      while {{q = base_h, r = Nx.as_type(a, type)}, {column_iota}}, i <- 0..max_i//1 do
+      while {{q = base_h, r = Nx.as_type(a, type)}, {column_iota}}, i <- 0..max_i//1, unroll: true do
         x = r[[.., i]]
         x = Nx.select(column_iota < i, 0, x)
         h = householder_reflector(x, i, eps)
