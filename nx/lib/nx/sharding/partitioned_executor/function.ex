@@ -8,7 +8,7 @@ defmodule Nx.Sharding.PartitionedExecutor.Function do
   # args is a list of {argument id, indices}
   # results is a tuple with the results
   # id is a unique identifier for the function
-  # function is a function of arity length(args) which returns a tuple of size length(results)
+  # code is a function of arity 1 + length(extra_args) which returns a tuple of size length(results)
 
   # a result id is a tuple of {producer_id, index}
   # an argument id is always a result id from some other function
