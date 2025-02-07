@@ -2,7 +2,7 @@ defmodule Nx.Sharding.PartitionedExecutor do
   @moduledoc false
   use GenServer
 
-  # Receives a acyclic directed graph of functions which depend on each other's results
+  # Receives a Direct Acyclic (we don't verify this) Graph, also known as a DAG, of functions which depend on each other's results
   # and runs them in an as parallel as possible manner.
 
   # The graph is just represent as a list of Function structs, which themselves
