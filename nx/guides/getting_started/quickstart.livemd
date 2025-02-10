@@ -106,6 +106,8 @@ Names make your code more expressive:
 Nx.tensor([[[1, 2, 3], [4, 5, 6], [7, 8, 9]]], names: [:batch, :height, :width])
 ```
 
+We created a tensor of the shape `{3, 3}`, and two axes named `height` and `width`.
+
 You can also leave dimension names as `nil` (which is the default):
 
 ```elixir
@@ -128,7 +130,7 @@ tensor = Nx.tensor([[1, 2], [3, 4]], names: [:y, :x])
 tensor[[0, 1]]
 ```
 
-Negative indices will start counting from the end of the axis. 
+Negative indices will start counting from the end of the axis.
 `-1` is the last entry, `-2` the second to last and so on.
 
 ```elixir
@@ -167,6 +169,23 @@ Now,
 # ...your code here...
 ```
 
+### Tensor shape and reshape
+
+```elixir
+Nx.shape(tensor)
+```
+
+We can also create a new tensor with a new shape using `Nx.reshape/2`:
+
+```elixir
+Nx.reshape(tensor, {1, 4}, names: [:batches, :values])
+```
+
+This operation reuses all of the tensor data and simply
+changes the metadata, so it has no notable cost.
+
+The new tensor has the same type, but a new shape.
+
 ### Floats and Complex numbers
 
 Besides single-precision (32 bits), floats can have other kinds of precision, such as half-precision (16) or
@@ -177,13 +196,13 @@ Nx.tensor([0.0, 0.2, 0.4, 1.0], type: :f16)
 ```
 
 ```elixir
-Nx.tensor([0.0, 0.2, 0.4, 1.0, type: :f64)
+Nx.tensor([0.0, 0.2, 0.4, 1.0], type: :f64)
 ```
 
 Brain floats are also supported:
 
 ```elixir
-Nx.tensor([0.0, 0.2, 0.4, 1.0, type: :bf16)
+Nx.tensor([0.0, 0.2, 0.4, 1.0], type: :bf16)
 ```
 
 Certain backends and compilers support 8-bit floats. The precision
