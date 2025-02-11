@@ -6,7 +6,7 @@ Mix.install([
 ])
 ```
 
-## What is Function Differentiation
+## What is Function Differentiation?
 
 Nx, through the `Nx.Defn.grad/2` and `Nx.Defn.value_and_grad/3` functions allows the user to differentiate functions that were defined through `defn`.
 
@@ -31,23 +31,30 @@ $$
 These may look similar, but the difference is that $f(\bold{x})$ takes in $\bold{x}$ which is a tensor argument. This means that we can have the following argument and results for the function and its gradient:
 
 $$
-\bold{x} = \begin{bmatrix}
+\bold{x} =
+\begin{bmatrix}
 1 & 1 \\
 2 & 3 \\
 5 & 8 \\
-\end{bmatrix}\\
+\end{bmatrix}\\\
+$$
 
-f(\bold{x}) = \bold{x}^3 + \bold{x} = \begin{bmatrix}
+$$
+f(\bold{x}) = \bold{x}^3 + \bold{x} =
+\begin{bmatrix}
 2 & 2 \\
 10 & 30 \\
 130 & 520
-\end{bmatrix}\\
+\end{bmatrix}
+$$
 
-\nabla f(\bold{x}) = 3 \bold{x} ^ 2 + 1 = \begin{bmatrix}
+$$
+\nabla f(\bold{x}) = 3 \bold{x} ^ 2 + 1 =
+\begin{bmatrix}
 4 & 4 \\
 13 & 28 \\
 76 & 193
-\end{bmatrix}\\
+\end{bmatrix}
 $$
 
 ## Automatic Differentiation
@@ -89,7 +96,7 @@ As we can see, we get the results we expected, aside from the type of the grad, 
 Next, we'll using `Nx.Defn.debug_expr` to see what's happening under the hood.
 
 ```elixir
-Nx.Defn.debug_expr(&Math.f/1).(x)  
+Nx.Defn.debug_expr(&Math.f/1).(x)
 ```
 
 ```elixir
@@ -159,8 +166,8 @@ x =
   ])
 
 # Notice that the returned values are the 2 addition terms from `Math.f/1`
-multi_valued_return_fn = 
-  fn x -> 
+multi_valued_return_fn =
+  fn x ->
     {Nx.pow(x, 3), x}
   end
 
@@ -170,3 +177,6 @@ transform_fn = fn {x_cubed, x} -> Nx.add(x_cubed, x) end
 ```
 
 If we go back to the start of this livebook, we can see that `grad` holds exactly the result `Math.grad_f`, but now we have access to `x ** 3`, which wasn't accessible before, as originally we could only obtain `x ** 3 + x`.
+
+$$
+$$
