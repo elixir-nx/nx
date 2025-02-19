@@ -217,9 +217,9 @@ FINE_NIF(mlir_compile, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 // ExlaBuffer Functions
 
-std::variant<fine::Ok<uint64_t, uint64_t>,
-             fine::Ok<std::string, uint64_t, uint64_t>,
-             fine::Ok<std::string, uint64_t>, fine::Error<std::string>>
+std::variant<std::tuple<fine::Atom, uint64_t, uint64_t>,
+             std::tuple<fine::Atom, std::string, uint64_t, uint64_t>,
+             std::tuple<fine::Atom, std::string, uint64_t>>
 get_buffer_device_pointer(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
                           fine::Term buffer_term, fine::Atom pointer_kind) {
   auto buffer = decode_exla_buffer(env, buffer_term);
@@ -228,7 +228,7 @@ get_buffer_device_pointer(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
   uint64_t ptr = unwrap(buffer->GetDevicePointer(client->client()));
 
   if (pointer_kind == "local") {
-    return fine::Ok(ptr, device_size);
+    return std::make_tuple(pointer_kind, ptr, device_size);
   }
 
   if (pointer_kind == "host_ipc") {
@@ -237,26 +237,27 @@ get_buffer_device_pointer(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
     auto fd = get_ipc_handle(handle_name.c_str(), device_size);
 
     if (fd == -1) {
-      return fine::Error(std::string("unable to get IPC handle"));
+      throw std::runtime_error("unable to get IPC handle");
     }
 
     auto ipc_ptr = open_ipc_handle(fd, device_size);
     if (ipc_ptr == nullptr) {
-      return fine::Error(std::string("unable to open IPC handle"));
+      throw std::runtime_error("unable to open IPC handle");
     }
 
     memcpy(ipc_ptr, reinterpret_cast<void *>(ptr), device_size);
 
-    return fine::Ok(handle_name, static_cast<uint64_t>(fd), device_size);
+    return std::make_tuple(pointer_kind, handle_name, static_cast<uint64_t>(fd),
+                           device_size);
   }
 
   if (pointer_kind == "cuda_ipc") {
     auto maybe_handle = get_cuda_ipc_handle(ptr);
     if (!maybe_handle) {
-      return fine::Error(std::string("unable to get cuda IPC handle"));
+      throw std::runtime_error("unable to get cuda IPC handle");
     }
 
-    return fine::Ok(maybe_handle.value(), device_size);
+    return std::make_tuple(pointer_kind, maybe_handle.value(), device_size);
   }
 
   throw std::invalid_argument("unexpected pointer type");
@@ -264,12 +265,10 @@ get_buffer_device_pointer(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
 
 FINE_NIF(get_buffer_device_pointer, 0);
 
-std::variant<fine::Ok<fine::ResourcePtr<ExlaBuffer>>, fine::Error<std::string>>
-create_buffer_from_device_pointer(ErlNifEnv *env,
-                                  fine::ResourcePtr<ExlaClient> client,
-                                  fine::Atom pointer_kind,
-                                  fine::Term pointer_data, xla::Shape shape,
-                                  int64_t device_id) {
+fine::ResourcePtr<ExlaBuffer> create_buffer_from_device_pointer(
+    ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
+    fine::Atom pointer_kind, fine::Term pointer_data, xla::Shape shape,
+    int64_t device_id) {
   void *ptr = nullptr;
   std::function<void()> on_delete_callback = []() {};
 
@@ -278,7 +277,7 @@ create_buffer_from_device_pointer(ErlNifEnv *env,
     auto maybe_pointer = get_pointer_for_ipc_handle(
         cuda_ipc_handle_bin.data, cuda_ipc_handle_bin.size, device_id);
     if (!maybe_pointer) {
-      return fine::Error<std::string>("unable to get pointer for IPC handle");
+      throw std::runtime_error("unable to get pointer for IPC handle");
     }
     ptr = maybe_pointer.value();
   } else if (pointer_kind == "host_ipc") {
@@ -289,7 +288,7 @@ create_buffer_from_device_pointer(ErlNifEnv *env,
     auto device_size = xla::ShapeUtil::ByteSizeOf(shape);
     ptr = open_ipc_handle(fd, device_size);
     if (ptr == nullptr) {
-      return fine::Error<std::string>("unable to get pointer for IPC handle");
+      throw std::runtime_error("unable to get pointer for IPC handle");
     }
     on_delete_callback = [fd, memname, ptr, device_size]() {
       close_ipc_handle(fd, ptr, memname.c_str(), device_size);
@@ -305,7 +304,7 @@ create_buffer_from_device_pointer(ErlNifEnv *env,
       client->client()->LookupDevice(xla::PjRtGlobalDeviceId(device_id)));
   auto buffer = unwrap(client->client()->CreateViewOfDeviceBuffer(
       ptr, shape, device, on_delete_callback));
-  return fine::Ok(fine::make_resource<ExlaBuffer>(std::move(buffer)));
+  return fine::make_resource<ExlaBuffer>(std::move(buffer));
 }
 
 FINE_NIF(create_buffer_from_device_pointer, 0);

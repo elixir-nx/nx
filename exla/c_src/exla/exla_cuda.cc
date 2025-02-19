@@ -20,9 +20,7 @@ std::optional<std::string> get_cuda_ipc_handle(std::uintptr_t ptr) {
   const size_t size = sizeof(cudaIpcMemHandle_t);
 
   // Copy the memory handle to a buffer
-  std::string buffer;
-  buffer.resize(size);
-  memcpy(&(*(buffer.begin())), &ipc_handle, size);
+  auto buffer = std::string(reinterpret_cast<const char*>(&ipc_handle), size);
 
   return buffer;
 }
