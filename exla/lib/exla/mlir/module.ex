@@ -15,7 +15,7 @@ defmodule EXLA.MLIR.Module do
   """
   def new(arg_typespecs, return_typespecs, fun) when is_function(fun, 1) do
     ContextPool.checkout(fn context ->
-      ref = context |> EXLA.NIF.mlir_new_module() |> unwrap!()
+      ref = EXLA.NIF.mlir_new_module(context)
 
       %__MODULE__{ref: ref}
       |> create_function("main", arg_typespecs, return_typespecs, true)
@@ -47,9 +47,8 @@ defmodule EXLA.MLIR.Module do
         name,
         arg_types,
         return_types,
-        if(is_public, do: 1, else: 0)
+        is_public
       )
-      |> unwrap!()
 
     %Function{module: module, ref: ref, name: name, return_typespecs: return_typespecs}
   end
@@ -96,7 +95,7 @@ defmodule EXLA.MLIR.Module do
 
     # JAX comments say SPMD can lead to subtle bugs so they only enable
     # when strictly necessary, which is when num_partitions is greater than 1.
-    use_spmd = if Keyword.get(options, :use_spmd, true) or num_partitions >= 1, do: 1, else: 0
+    use_spmd = Keyword.get(options, :use_spmd, true) or num_partitions >= 1
 
     device_id =
       if num_replicas > 1 or num_partitions > 1,
@@ -115,13 +114,12 @@ defmodule EXLA.MLIR.Module do
           EXLA.NIF.mlir_compile(
             client.ref,
             module.ref,
-            Enum.map(argument_typespecs, &EXLA.Typespec.nif_encode/1),
+            argument_typespecs,
             num_replicas,
             num_partitions,
             use_spmd,
             device_id
           )
-          |> unwrap!()
       end
 
     %Executable{
@@ -139,10 +137,6 @@ defmodule EXLA.MLIR.Module do
   syntax.
   """
   def as_string(module = %__MODULE__{}) do
-    EXLA.NIF.mlir_module_to_string(module.ref) |> unwrap!()
+    EXLA.NIF.mlir_module_to_string(module.ref)
   end
-
-  defp unwrap!(:ok), do: :ok
-  defp unwrap!({:ok, ref}), do: ref
-  defp unwrap!({:error, error}), do: raise(List.to_string(error))
 end

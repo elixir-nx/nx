@@ -909,8 +909,6 @@ defmodule EXLA.MLIR.Value do
 
   def get_typespec(value) do
     EXLA.NIF.mlir_get_typespec(value.ref)
-    |> unwrap!()
-    |> Typespec.nif_decode()
   end
 
   def typespecs_to_mlir_types(shapes) do
@@ -919,10 +917,6 @@ defmodule EXLA.MLIR.Value do
 
   defp typespec_to_mlir_type(%{type: :token}), do: type_token()
   defp typespec_to_mlir_type(%{type: type, shape: shape}), do: type_tensor(type, shape)
-
-  defp unwrap!(:ok), do: :ok
-  defp unwrap!({:ok, value}), do: value
-  defp unwrap!(other), do: raise("#{inspect(other)}")
 
   defp one!([value]), do: value
 
@@ -951,7 +945,6 @@ defmodule EXLA.MLIR.Value do
         opts[:attributes],
         opts[:regions]
       )
-      |> unwrap!()
 
     Enum.map(refs, &%Value{function: function, ref: &1})
   end

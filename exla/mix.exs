@@ -34,6 +34,7 @@ defmodule EXLA.MixProject do
         cwd_relative_to_priv = relative_to(File.cwd!(), priv_path)
 
         %{
+          "FINE_INCLUDE_DIR" => Fine.include_dir(),
           "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}",
           "CWD_RELATIVE_TO_PRIV_PATH" => cwd_relative_to_priv,
           "EXLA_VERSION" => "#{@version}"
@@ -68,6 +69,7 @@ defmodule EXLA.MixProject do
       {:nx, path: "../nx"},
       {:telemetry, "~> 0.4.0 or ~> 1.0"},
       {:xla, "~> 0.8.0", runtime: false},
+      {:fine, "~> 0.1.0", runtime: false},
       {:elixir_make, "~> 0.6", runtime: false},
       {:benchee, "~> 1.0", only: :dev},
       {:ex_doc, "~> 0.29", only: :docs},

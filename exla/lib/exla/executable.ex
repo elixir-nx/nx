@@ -51,7 +51,6 @@ defmodule EXLA.Executable do
     serialized_exec =
       ref
       |> EXLA.NIF.serialize_executable()
-      |> unwrap!()
       |> IO.iodata_to_binary()
 
     %{
@@ -79,10 +78,7 @@ defmodule EXLA.Executable do
       device_id: device_id
     } = data
 
-    ref =
-      serialized
-      |> then(&EXLA.NIF.deserialize_executable(client.ref, &1))
-      |> unwrap!()
+    ref = EXLA.NIF.deserialize_executable(client.ref, serialized)
 
     %EXLA.Executable{
       output_typespecs: output_typespecs,
@@ -102,17 +98,14 @@ defmodule EXLA.Executable do
             ref
 
           %BinaryBuffer{data: data, typespec: typespec} ->
-            {data, EXLA.Typespec.nif_encode(typespec)}
+            {data, typespec}
         end)
       end
 
-    data =
-      case client.platform do
-        :host -> EXLA.NIF.run_cpu(client.ref, ref, inputs, device_id)
-        _ -> EXLA.NIF.run_io(client.ref, ref, inputs, device_id)
-      end
-
-    unwrap!(data)
+    case client.platform do
+      :host -> EXLA.NIF.run_cpu(ref, inputs, device_id)
+      _ -> EXLA.NIF.run_io(ref, inputs, device_id)
+    end
   end
 
   defp decompose_output({data, device_id}, output_typespecs, client) do
@@ -124,8 +117,4 @@ defmodule EXLA.Executable do
         BinaryBuffer.from_binary(buf, typespec)
     end)
   end
-
-  defp unwrap!(:ok), do: :ok
-  defp unwrap!({:ok, ref}), do: ref
-  defp unwrap!({:error, error}), do: raise(List.to_string(error))
 end
