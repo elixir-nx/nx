@@ -1,11 +1,10 @@
 #include "ipc.h"
 
+#include <cstdio>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
-
-#include <iostream>
 
 // Function to create or open a shared memory object and set its size
 int get_ipc_handle(const char* memname, size_t memsize) {
