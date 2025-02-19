@@ -33,10 +33,7 @@ defmodule EXLA.DeviceBuffer do
           data
       end
 
-    ref =
-      client.ref
-      |> EXLA.NIF.binary_to_device_mem(data, EXLA.Typespec.nif_encode(typespec), device_id)
-      |> unwrap!()
+    ref = EXLA.NIF.binary_to_device_mem(client.ref, data, typespec, device_id)
 
     %DeviceBuffer{ref: ref, client_name: client.name, device_id: device_id, typespec: typespec}
   end
@@ -50,7 +47,7 @@ defmodule EXLA.DeviceBuffer do
         device_id
       )
       when is_integer(device_id) do
-    ref = client.ref |> EXLA.NIF.copy_buffer_to_device(buffer, device_id) |> unwrap!()
+    ref = EXLA.NIF.copy_buffer_to_device(client.ref, buffer, device_id)
     %DeviceBuffer{ref: ref, client_name: client.name, device_id: device_id, typespec: typespec}
   end
 
@@ -62,7 +59,7 @@ defmodule EXLA.DeviceBuffer do
   reads the whole buffer.
   """
   def read(%DeviceBuffer{ref: ref, typespec: typespec}, size \\ -1) do
-    data = EXLA.NIF.read_device_mem(ref, size) |> unwrap!()
+    data = EXLA.NIF.read_device_mem(ref, size)
 
     # At the moment XLA does not support reading a packed buffer,
     # so we pack the elements ourselves
@@ -83,10 +80,10 @@ defmodule EXLA.DeviceBuffer do
 
   Returns `:ok` | `:already_deallocated`.
   """
-  def deallocate(%DeviceBuffer{ref: ref}),
-    do: EXLA.NIF.deallocate_device_mem(ref) |> unwrap!()
-
-  defp unwrap!({:ok, ref}), do: ref
-  defp unwrap!({:error, error}), do: raise(List.to_string(error))
-  defp unwrap!(status) when is_atom(status), do: status
+  def deallocate(%DeviceBuffer{ref: ref}) do
+    case EXLA.NIF.deallocate_device_mem(ref) do
+      :ok -> :ok
+      {:error, :already_deallocated} -> :already_deallocated
+    end
+  end
 end

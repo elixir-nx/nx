@@ -114,34 +114,35 @@ defmodule EXLA.Backend do
     client = EXLA.Client.fetch!(buffer.client_name)
 
     case EXLA.NIF.get_buffer_device_pointer(client.ref, buffer.ref, mode) do
-      {:ok, result} ->
-        handle =
-          case {result, mode} do
-            {{ptr, size}, :local} when is_integer(ptr) ->
-              # pointer is an integer here
-              %Nx.Pointer{kind: :local, address: ptr, data_size: size}
+      {:ok, ptr, size} when mode == :local and is_integer(ptr) ->
+        # Pointer is an integer here
+        {:ok,
+         %Nx.Pointer{
+           kind: :local,
+           address: ptr,
+           data_size: size
+         }}
 
-            {{handle_name, fd, size}, :host_ipc} ->
-              %Nx.Pointer{
-                kind: :ipc,
-                handle: handle_name,
-                address: fd,
-                data_size: size
-              }
+      {:ok, handle_name, fd, size} when mode == :host_ipc ->
+        {:ok,
+         %Nx.Pointer{
+           kind: :ipc,
+           handle: handle_name,
+           address: fd,
+           data_size: size
+         }}
 
-            {{handle, size}, :cuda_ipc} ->
-              %Nx.Pointer{
-                kind: :ipc,
-                handle: handle,
-                address: buffer.device_id,
-                data_size: size
-              }
-          end
+      {:ok, handle, size} when mode === :cuda_ipc ->
+        {:ok,
+         %Nx.Pointer{
+           kind: :ipc,
+           handle: handle,
+           address: buffer.device_id,
+           data_size: size
+         }}
 
-        {:ok, handle}
-
-      error ->
-        error
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -169,7 +170,7 @@ defmodule EXLA.Backend do
           raise ArgumentError,
                 "invalid pointer data_size for shape, expected: #{shape_size}, got: #{size}"
 
-        {%Nx.Pointer{address: address, kind: :local}, _} ->
+        {%Nx.Pointer{kind: :local, address: address}, _} ->
           {:local, address}
 
         {%Nx.Pointer{kind: :ipc, address: fd, handle: handle}, :host} ->
@@ -184,7 +185,7 @@ defmodule EXLA.Backend do
         client.ref,
         mode,
         handle_nif,
-        EXLA.Typespec.nif_encode(typespec),
+        typespec,
         device_id
       )
 
