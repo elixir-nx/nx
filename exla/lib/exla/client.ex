@@ -78,11 +78,6 @@ defmodule EXLA.Client do
   """
   def get_supported_platforms do
     EXLA.NIF.get_supported_platforms()
-    |> unwrap!()
-    |> Map.new(fn {k, v} ->
-      k = k |> List.to_string() |> String.downcase(:ascii) |> String.to_atom()
-      {k, v}
-    end)
   end
 
   @doc """
@@ -94,12 +89,8 @@ defmodule EXLA.Client do
   """
   def to_infeed(%EXLA.Client{ref: client}, device_id, data_and_typespecs)
       when is_list(data_and_typespecs) do
-    data_and_typespecs =
-      Enum.map(data_and_typespecs, fn {binary, typespec} when is_binary(binary) ->
-        {binary, EXLA.Typespec.nif_encode(typespec)}
-      end)
-
-    EXLA.NIF.transfer_to_infeed(client, device_id, data_and_typespecs) |> unwrap!()
+    {buffers, typespecs} = Enum.unzip(data_and_typespecs)
+    EXLA.NIF.transfer_to_infeed(client, device_id, buffers, typespecs)
   end
 
   @doc """
@@ -107,8 +98,7 @@ defmodule EXLA.Client do
   """
   def from_outfeed(%EXLA.Client{ref: client}, device_id, typespecs, pid, ref)
       when is_list(typespecs) do
-    typespecs = Enum.map(typespecs, &EXLA.Typespec.nif_encode/1)
-    EXLA.NIF.transfer_from_outfeed(client, device_id, typespecs, pid, ref) |> unwrap!()
+    EXLA.NIF.transfer_from_outfeed(client, device_id, typespecs, pid, ref)
   end
 
   ## Callbacks
@@ -134,7 +124,6 @@ defmodule EXLA.Client do
     platform = Keyword.get(options, :platform)
     memory_fraction = Keyword.get(options, :memory_fraction, 0.9)
     preallocate = Keyword.get(options, :preallocate, true)
-    preallocate_int = if preallocate, do: 1, else: 0
     platforms = Map.keys(EXLA.Client.get_supported_platforms())
 
     ref =
@@ -151,10 +140,10 @@ defmodule EXLA.Client do
           EXLA.NIF.get_host_client()
 
         :cuda ->
-          EXLA.NIF.get_gpu_client(memory_fraction, preallocate_int)
+          EXLA.NIF.get_gpu_client(memory_fraction, preallocate)
 
         :rocm ->
-          EXLA.NIF.get_gpu_client(memory_fraction, preallocate_int)
+          EXLA.NIF.get_gpu_client(memory_fraction, preallocate)
 
         :tpu ->
           EXLA.NIF.get_tpu_client()
@@ -162,9 +151,8 @@ defmodule EXLA.Client do
         _ ->
           raise ArgumentError, "unknown EXLA platform: #{inspect(platform)}"
       end
-      |> unwrap!()
 
-    device_count = EXLA.NIF.get_device_count(ref) |> unwrap!()
+    device_count = EXLA.NIF.get_device_count(ref)
     default_device_id = Keyword.get(options, :default_device_id, 0)
 
     if default_device_id not in 0..(device_count - 1) do
@@ -182,8 +170,4 @@ defmodule EXLA.Client do
       automatic_transfers: automatic_transfers
     }
   end
-
-  defp unwrap!(:ok), do: :ok
-  defp unwrap!({:ok, ref}), do: ref
-  defp unwrap!({:error, error}), do: raise(List.to_string(error))
 end

@@ -1,6 +1,7 @@
 #ifndef EXLA_MLIR_BUILDER_H_
 #define EXLA_MLIR_BUILDER_H_
 
+#include <fine.hpp>
 #include <stack>
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -15,36 +16,35 @@ class MLIRModule;
 
 class MLIRFunction {
  public:
-  MLIRFunction(MLIRModule *module, std::unique_ptr<mlir::func::FuncOp> func);
+  MLIRFunction(fine::ResourcePtr<MLIRModule> module, std::unique_ptr<mlir::func::FuncOp> func);
 
-  std::vector<mlir::Value> Op(
-      std::string op_name,
-      std::vector<mlir::Value> operands,
+  std::vector<fine::ResourcePtr<mlir::Value>> Op(
+      std::string op_name, std::vector<fine::ResourcePtr<mlir::Value>> operands,
       std::vector<mlir::Type> result_types,
-      std::vector<std::pair<std::string, mlir::Attribute>> attributes,
-      std::vector<mlir::Region *> regions);
+      std::vector<std::tuple<std::string, mlir::Attribute>> attributes,
+      std::vector<fine::ResourcePtr<mlir::Region>> regions);
 
-  std::pair<mlir::Region *, std::vector<mlir::Value>> PushRegion(std::vector<mlir::Type> types);
+  std::tuple<fine::ResourcePtr<mlir::Region>, std::vector<fine::ResourcePtr<mlir::Value>>> PushRegion(std::vector<mlir::Type> types);
   void PopRegion();
 
   llvm::MutableArrayRef<mlir::BlockArgument> GetArguments() { return func_->getBody().front().getArguments(); }
 
-  std::shared_ptr<MLIRModule> module() { return module_; }
+  fine::ResourcePtr<MLIRModule> module() { return module_; }
 
  private:
-  std::shared_ptr<MLIRModule> module_;
+  fine::ResourcePtr<MLIRModule> module_;
   std::unique_ptr<mlir::func::FuncOp> func_;
 
-  std::stack<mlir::Region *> region_stack;
+  std::stack<fine::ResourcePtr<mlir::Region>> region_stack;
 
   void setInsertionPoint();
 };
 
 class MLIRModule {
  public:
-  MLIRModule(mlir::MLIRContext *context);
+  MLIRModule(fine::ResourcePtr<mlir::MLIRContext> context);
 
-  MLIRFunction *CreateFunction(
+  std::unique_ptr<mlir::func::FuncOp> CreateFunction(
       std::string name,
       std::vector<mlir::Type> arg_types,
       std::vector<mlir::Type> ret_types,
@@ -60,7 +60,7 @@ class MLIRModule {
   mlir::OpBuilder *builder() { return builder_.get(); }
 
  private:
-  mlir::MLIRContext *context_;
+  fine::ResourcePtr<mlir::MLIRContext> context_;
   mlir::OwningOpRef<mlir::ModuleOp> module_;
   std::unique_ptr<mlir::OpBuilder> builder_;
 };
