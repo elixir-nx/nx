@@ -247,7 +247,8 @@ get_buffer_device_pointer(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
 
     memcpy(ipc_ptr, reinterpret_cast<void *>(ptr), device_size);
 
-    return std::make_tuple(pointer_kind, handle_name, static_cast<uint64_t>(fd), device_size);
+    return std::make_tuple(pointer_kind, handle_name, static_cast<uint64_t>(fd),
+                           device_size);
   }
 
   if (pointer_kind == "cuda_ipc") {
