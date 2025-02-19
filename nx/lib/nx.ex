@@ -16823,11 +16823,11 @@ defmodule Nx do
 
       t = Nx.u8([10, 20, 30])
       Nx.to_pointer(t, mode: :local)
-      #=> {:ok, %Nx.Pointer{kind: :local, address: 1234, data_size: 3, handle: nil}}
+      #=> %Nx.Pointer{kind: :local, address: 1234, data_size: 3, handle: nil}
 
       t = Nx.s32([1, 2, 3])
       Nx.to_pointer(t, mode: :ipc)
-      #=> {:ok, %Nx.Pointer{kind: :ipc, address: nil, data_size: 32, handle: "some-ipc-handle"}}
+      #=> %Nx.Pointer{kind: :ipc, address: nil, data_size: 32, handle: "some-ipc-handle"}
   """
   @doc type: :creation
   def to_pointer(tensor, opts \\ []) do
