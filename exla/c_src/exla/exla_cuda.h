@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <vector>
 
 std::optional<std::string> get_cuda_ipc_handle(std::uintptr_t);

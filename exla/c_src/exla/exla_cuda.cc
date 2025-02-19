@@ -6,6 +6,7 @@
 #include <cstring>
 #include <iostream>
 #include <optional>
+#include <string>
 
 std::optional<std::string> get_cuda_ipc_handle(std::uintptr_t ptr) {
   cudaIpcMemHandle_t ipc_handle;
