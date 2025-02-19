@@ -16771,21 +16771,21 @@ defmodule Nx do
 
       pointer = %Nx.Pointer{kind: :local, address: 1234}
       Nx.from_pointer(MyBackend, pointer, {:s, 32}, {1, 3})
-      #Nx.Tensor<
-        s32[1][3]
-        [
-          [10, 20, 30]
-        ]
-      >
+      #=> #Nx.Tensor<
+      #=>   s32[1][3]
+      #=>   [
+      #=>     [10, 20, 30]
+      #=>   ]
+      #=> >
 
       pointer = %Nx.Pointer{kind: :ipc, handle: "some-ipc-handle"}
       Nx.from_pointer({MyBackend, some: :opt}, pointer, {:s, 32}, {1, 3}, names: [nil, :col])
-      #Nx.Tensor<
-        s32[1][col: 3]
-        [
-          [10, 20, 30]
-        ]
-      >
+      #=> #Nx.Tensor<
+      #=>   s32[1][col: 3]
+      #=>   [
+      #=>     [10, 20, 30]
+      #=>   ]
+      #=> >
   """
   @doc type: :creation
   def from_pointer(backend, pointer, type, shape, opts \\ [])
