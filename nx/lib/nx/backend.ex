@@ -57,8 +57,8 @@ defmodule Nx.Backend do
               shape :: tuple(),
               backend_opts :: keyword(),
               opts :: keyword()
-            ) :: {:ok, tensor} | {:error, term()}
-  @callback to_pointer(tensor, opts :: keyword) :: {:ok, term()} | {:error, term()}
+            ) :: tensor | no_return()
+  @callback to_pointer(tensor, opts :: keyword) :: term() | no_return()
 
   @callback as_type(out :: tensor, tensor) :: tensor
   @callback bitcast(out :: tensor, tensor) :: tensor

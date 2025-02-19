@@ -114,35 +114,15 @@ defmodule EXLA.Backend do
     client = EXLA.Client.fetch!(buffer.client_name)
 
     case EXLA.NIF.get_buffer_device_pointer(client.ref, buffer.ref, mode) do
-      {:ok, ptr, size} when mode == :local and is_integer(ptr) ->
+      {:local, ptr, size} ->
         # Pointer is an integer here
-        {:ok,
-         %Nx.Pointer{
-           kind: :local,
-           address: ptr,
-           data_size: size
-         }}
+        %Nx.Pointer{kind: :local, address: ptr, data_size: size}
 
-      {:ok, handle_name, fd, size} when mode == :host_ipc ->
-        {:ok,
-         %Nx.Pointer{
-           kind: :ipc,
-           handle: handle_name,
-           address: fd,
-           data_size: size
-         }}
+      {:host_ipc, handle_name, fd, size} ->
+        %Nx.Pointer{kind: :ipc, handle: handle_name, address: fd, data_size: size}
 
-      {:ok, handle, size} when mode === :cuda_ipc ->
-        {:ok,
-         %Nx.Pointer{
-           kind: :ipc,
-           handle: handle,
-           address: buffer.device_id,
-           data_size: size
-         }}
-
-      {:error, reason} ->
-        {:error, reason}
+      {:cuda_ipc, handle, size} ->
+        %Nx.Pointer{kind: :ipc, handle: handle, address: buffer.device_id, data_size: size}
     end
   end
 
@@ -180,7 +160,7 @@ defmodule EXLA.Backend do
           {:cuda_ipc, handle}
       end
 
-    result =
+    ref =
       EXLA.NIF.create_buffer_from_device_pointer(
         client.ref,
         mode,
@@ -189,14 +169,8 @@ defmodule EXLA.Backend do
         device_id
       )
 
-    case result do
-      {:ok, ref} ->
-        buffer = EXLA.DeviceBuffer.from_ref(ref, client, device_id, typespec)
-        {:ok, %{template | data: %EXLA.Backend{buffer: buffer}}}
-
-      error ->
-        error
-    end
+    buffer = EXLA.DeviceBuffer.from_ref(ref, client, device_id, typespec)
+    %{template | data: %EXLA.Backend{buffer: buffer}}
   end
 
   @impl true
