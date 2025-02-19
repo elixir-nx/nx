@@ -60,6 +60,7 @@ defmodule Nx.MixProject do
         "guides/intro-to-nx.livemd",
         "guides/advanced/vectorization.livemd",
         "guides/advanced/aggregation.livemd",
+        "guides/advanced/automatic_differentiation.livemd",
         "guides/exercises/exercises-1-20.livemd"
       ],
       skip_undefined_reference_warnings_on: ["CHANGELOG.md"],
