@@ -16,7 +16,7 @@ defmodule Nx.LinAlg.QR do
       |> revectorize_result(a.shape, vectorized_axes, opts)
 
     custom_grad(result, [a], fn g ->
-      qr_grad(result, a, g)
+      qr_grad(result, g)
     end)
   end
 
@@ -145,7 +145,7 @@ defmodule Nx.LinAlg.QR do
     Nx.select(selector, eye - scale * Nx.outer(v, v), eye)
   end
 
-  defn qr_grad({q, r}, _input, {dq, dr}) do
+  defn qr_grad({q, r}, {dq, dr}) do
     # Definition taken from https://arxiv.org/pdf/2009.10071.pdf
     # Equation (3)
     r_inv = Nx.LinAlg.invert(r)

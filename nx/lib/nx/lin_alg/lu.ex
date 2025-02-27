@@ -1,13 +1,25 @@
 defmodule Nx.LinAlg.LU do
   import Nx.Defn
 
-  defn lu(input_data, opts \\ []) do
+  defn lu(a, opts \\ []) do
     opts = keyword!(opts, eps: 1.0e-10)
+
+    vectorized_axes = a.vectorized_axes
+
+    a
+    |> Nx.revectorize([collapsed_axes: :auto],
+      target_shape: {Nx.axis_size(a, -2), Nx.axis_size(a, -1)}
+    )
+    |> lu_matrix(opts)
+    |> revectorize_result(a.shape, vectorized_axes)
+  end
+
+  defnp lu_matrix(a, opts \\ []) do
     eps = opts[:eps]
 
-    {p, a_prime} = lu_validate_and_pivot(input_data)
+    {p, a_prime} = lu_validate_and_pivot(a)
 
-    {n, _} = Nx.shape(input_data)
+    {n, _} = Nx.shape(a)
 
     l = u = Nx.fill(a_prime, 0.0)
 
@@ -59,6 +71,16 @@ defmodule Nx.LinAlg.LU do
       end
 
     {p, l, u}
+  end
+
+  deftransformp revectorize_result({p, l, u}, shape, vectorized_axes) do
+    {p_shape, l_shape, u_shape} = Nx.Shape.lu(shape)
+
+    {
+      Nx.revectorize(p, vectorized_axes, target_shape: p_shape),
+      Nx.revectorize(l, vectorized_axes, target_shape: l_shape),
+      Nx.revectorize(u, vectorized_axes, target_shape: u_shape)
+    }
   end
 
   defnp vector_dot_slice(u, v, last_idx) do
