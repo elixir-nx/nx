@@ -945,6 +945,64 @@ defmodule Nx.LinAlgTest do
           key
       end
     end
+
+    test "LU decomposition of a 2x2 tensor" do
+      a =
+        Nx.tensor(
+          [
+            [4, 3],
+            [6, 3]
+          ],
+          type: :f32
+        )
+
+      {p, l, u} = Nx.LinAlg.lu(a)
+
+      assert Nx.dot(p, Nx.dot(l, u))
+             |> Nx.multiply(10)
+             |> Nx.round()
+             |> Nx.divide(10) == a
+    end
+
+    test "LU decomposition of a 3x3 tensor" do
+      a =
+        Nx.tensor(
+          [
+            [2, 3, 1],
+            [4, 7, 3],
+            [6, 18, 5]
+          ],
+          type: :f32
+        )
+
+      {p, l, u} = Nx.LinAlg.lu(a)
+
+      assert Nx.dot(p, Nx.dot(l, u))
+             |> Nx.multiply(10)
+             |> Nx.round()
+             |> Nx.divide(10) == a
+    end
+
+    test "LU decomposition of a 3D tensor" do
+      a =
+        Nx.tensor(
+          [
+            [
+              [1.0, 2.0, 3.0],
+              [4.0, 5.0, 6.0]
+            ],
+            [
+              [7.0, 8.0, 9.0],
+              [10.0, 11.0, 12.0]
+            ]
+          ],
+          type: :f32
+        )
+
+      assert_raise ArgumentError, fn ->
+        Nx.LinAlg.lu(a)
+      end
+    end
   end
 
   describe "cholesky" do
