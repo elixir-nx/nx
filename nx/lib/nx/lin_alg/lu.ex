@@ -6,12 +6,17 @@ defmodule Nx.LinAlg.LU do
 
     vectorized_axes = a.vectorized_axes
 
-    a
-    |> Nx.revectorize([collapsed_axes: :auto],
-      target_shape: {Nx.axis_size(a, -2), Nx.axis_size(a, -1)}
-    )
-    |> lu_matrix(opts)
-    |> revectorize_result(a.shape, vectorized_axes)
+    result =
+      a
+      |> Nx.revectorize([collapsed_axes: :auto],
+        target_shape: {Nx.axis_size(a, -2), Nx.axis_size(a, -1)}
+      )
+      |> lu_matrix(opts)
+      |> revectorize_result(a.shape, vectorized_axes)
+
+    custom_grad(result, [a], fn g ->
+      lu_grad(result, g)
+    end)
   end
 
   defnp lu_matrix(a, opts \\ []) do
@@ -116,5 +121,20 @@ defmodule Nx.LinAlg.LU do
     permutation = Nx.new_axis(p, 1) == Nx.iota({1, n})
 
     {permutation, t[p]}
+  end
+
+  defn lu_grad({l, u}, {dl, du}) do
+    # Definition taken from https://arxiv.org/pdf/2009.10071.pdf
+    # Equation (3)
+    r_inv = Nx.LinAlg.invert(u)
+
+    m = Nx.dot(u, Nx.LinAlg.adjoint(du)) |> Nx.subtract(Nx.dot(Nx.LinAlg.adjoint(dl), l))
+
+    # copyltu
+    m_ltu = Nx.tril(m) |> Nx.add(m |> Nx.tril(k: -1) |> Nx.LinAlg.adjoint())
+
+    da = dl |> Nx.add(Nx.dot(l, m_ltu)) |> Nx.dot(Nx.LinAlg.adjoint(r_inv))
+
+    [da]
   end
 end
