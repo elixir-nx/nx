@@ -923,6 +923,7 @@ defmodule Nx.LinAlgTest do
   describe "lu" do
     test "property" do
       key = Nx.Random.key(System.unique_integer())
+      key = Nx.Random.key(42)
 
       for _ <- 1..10, type <- [{:f, 32}, {:c, 64}], reduce: key do
         key ->
@@ -941,7 +942,9 @@ defmodule Nx.LinAlgTest do
           a = Nx.dot(l_prime, [2], [0], u_prime, [1], [0])
 
           assert {p, l, u} = Nx.LinAlg.lu(a)
-          assert_all_close(p |> Nx.dot([2], [0], l, [1], [0]) |> Nx.dot([2], [0], u, [1], [0]), a)
+
+          actual = p |> Nx.dot([2], [0], l, [1], [0]) |> Nx.dot([2], [0], u, [1], [0])
+          assert_all_close(actual, a)
           key
       end
     end

@@ -21,55 +21,77 @@ defmodule Nx.LinAlg.LU do
 
   defnp lu_matrix(a, opts \\ []) do
     eps = opts[:eps]
+    type = Nx.Type.to_floating(a.type)
+    real_type = Nx.Type.to_real(type)
 
     {p, a_prime} = lu_validate_and_pivot(a)
+    # {p, a_prime} = {Nx.eye(a.shape, vectorized_axes: a.vectorized_axes, type: a.type), a}
+    a_prime = Nx.as_type(a_prime, type)
 
     {n, _} = Nx.shape(a)
 
     l = u = Nx.fill(a_prime, 0.0)
+    [eps, _] = Nx.broadcast_vectors([Nx.as_type(eps, real_type), l])
 
     {l, u, _} =
       while {l, u, {a_prime, eps, n}}, j <- 0..(n - 1) do
-        l = Nx.put_slice(l, [j, j], Nx.tensor([[1.0]]))
+        l = Nx.put_slice(l, [j, j], Nx.tensor([[1.0]], type: type))
+        [j, i, _] = Nx.broadcast_vectors([j, 0, l])
 
         {u, _} =
-          while {u, {l, a_prime, eps, j, i = 0}}, Nx.less_equal(i, j) do
+          while {u, {l, a_prime, eps, j, i}}, i <= j do
             sum = vector_dot_slice(u[[.., j]], l[i], i)
             a_ij = a_prime[i][j]
 
             value = a_ij - sum
 
-            if Nx.less(Nx.abs(value), eps) do
-              {Nx.put_slice(u, [i, j], Nx.tensor([[0.0]])), {l, a_prime, eps, j, i + 1}}
-            else
-              {Nx.put_slice(u, [i, j], Nx.reshape(value, {1, 1})), {l, a_prime, eps, j, i + 1}}
-            end
+            updated_u =
+              if Nx.abs(value) < eps do
+                Nx.put_slice(u, [i, j], Nx.tensor([[0]], type: type))
+              else
+                Nx.put_slice(u, [i, j], Nx.reshape(value, {1, 1}))
+              end
+
+            {updated_u, {l, a_prime, eps, j, i + 1}}
           end
 
         {l, _} =
-          while {l, {u, a_prime, eps, j, n, i = j + 1}}, Nx.less_equal(i, n - 1) do
+          while {l, {u, a_prime, eps, j, n, i = j + 1}}, i <= n - 1 do
             sum = vector_dot_slice(u[[.., j]], l[i], i)
 
             a_ij = a_prime[i][j]
             u_jj = u[j][j]
 
             value =
-              cond do
-                u_jj != 0 ->
-                  (a_ij - sum) / u_jj
-
-                a_ij >= sum ->
-                  Nx.Constants.infinity()
-
+              case Nx.Type.complex?(type) do
                 true ->
-                  Nx.Constants.neg_infinity()
+                  if u_jj != 0 do
+                    (a_ij - sum) / u_jj
+                  else
+                    Nx.Constants.nan(real_type)
+                  end
+
+                false ->
+                  cond do
+                    u_jj != 0 ->
+                      (a_ij - sum) / u_jj
+
+                    a_ij >= sum ->
+                      Nx.Constants.infinity(real_type)
+
+                    true ->
+                      Nx.Constants.neg_infinity(real_type)
+                  end
               end
 
-            if Nx.abs(value) < eps do
-              {Nx.put_slice(l, [i, j], Nx.tensor([[0]])), {u, a_prime, eps, j, n, i + 1}}
-            else
-              {Nx.put_slice(l, [i, j], Nx.reshape(value, {1, 1})), {u, a_prime, eps, j, n, i + 1}}
-            end
+            updated_l =
+              if Nx.abs(value) < eps do
+                Nx.put_slice(l, [i, j], Nx.tensor([[0]], type: type))
+              else
+                Nx.put_slice(l, [i, j], Nx.reshape(value, {1, 1}))
+              end
+
+            {updated_l, {u, a_prime, eps, j, n, i + 1}}
           end
 
         {l, u, {a_prime, eps, n}}
@@ -90,15 +112,15 @@ defmodule Nx.LinAlg.LU do
 
   defnp vector_dot_slice(u, v, last_idx) do
     {n} = Nx.shape(u)
-    u = Nx.select(Nx.iota({n}) < last_idx, u, 0)
-    {n} = Nx.shape(v)
-    v = Nx.select(Nx.iota({n}) < last_idx, v, 0)
+    selector = Nx.iota({n}) < last_idx
+    u = Nx.select(selector, u, 0)
+    v = Nx.select(selector, v, 0)
     Nx.dot(u, v)
   end
 
   defnp lu_validate_and_pivot(t) do
     {n, _} = Nx.shape(t)
-    p = Nx.iota({n})
+    p = Nx.iota({n}, vectorized_axes: t.vectorized_axes)
 
     {p, _} =
       while {p, t}, i <- 0..(n - 2) do
@@ -120,20 +142,25 @@ defmodule Nx.LinAlg.LU do
 
     permutation = Nx.new_axis(p, 1) == Nx.iota({1, n})
 
-    {permutation, t[p]}
+    {Nx.as_type(permutation, t.type), t[p]}
   end
 
-  defn lu_grad({l, u}, {dl, du}) do
+  defn lu_grad({p, l, u}, {_dp, dl, du}) do
     # Definition taken from https://arxiv.org/pdf/2009.10071.pdf
     # Equation (3)
-    r_inv = Nx.LinAlg.invert(u)
 
-    m = Nx.dot(u, Nx.LinAlg.adjoint(du)) |> Nx.subtract(Nx.dot(Nx.LinAlg.adjoint(dl), l))
+    u_h = Nx.LinAlg.adjoint(u)
+    l_h = Nx.LinAlg.adjoint(l)
+    p_t = Nx.LinAlg.adjoint(p)
 
-    # copyltu
-    m_ltu = Nx.tril(m) |> Nx.add(m |> Nx.tril(k: -1) |> Nx.LinAlg.adjoint())
+    lh_dl = Nx.dot(l_h, dl)
+    du_uh = Nx.dot(du, u_h)
 
-    da = dl |> Nx.add(Nx.dot(l, m_ltu)) |> Nx.dot(Nx.LinAlg.adjoint(r_inv))
+    lt_inv = Nx.LinAlg.invert(l_h)
+    ut_inv = Nx.LinAlg.invert(u_h)
+
+    df = lh_dl |> Nx.tril(k: -1) |> Nx.add(Nx.triu(du_uh))
+    da = p_t |> Nx.dot(lt_inv) |> Nx.dot(df) |> Nx.dot(ut_inv)
 
     [da]
   end

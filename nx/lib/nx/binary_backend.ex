@@ -1259,26 +1259,6 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def lu(
-        {%{type: p_type} = p_holder, %{type: l_type} = l_holder, %{type: u_type} = u_holder},
-        %{type: input_type, shape: input_shape} = tensor,
-        opts
-      ) do
-    bin = to_binary(tensor)
-    rank = tuple_size(input_shape)
-    n = elem(input_shape, rank - 1)
-
-    {p, l, u} =
-      bin_batch_reduce(bin, n * n, input_type, {<<>>, <<>>, <<>>}, fn matrix,
-                                                                      {p_acc, l_acc, u_acc} ->
-        {p, l, u} = B.Matrix.lu(matrix, input_type, {n, n}, p_type, l_type, u_type, opts)
-        {p_acc <> p, l_acc <> l, u_acc <> u}
-      end)
-
-    {from_binary(p_holder, p), from_binary(l_holder, l), from_binary(u_holder, u)}
-  end
-
-  @impl true
   def triangular_solve(
         %{type: output_type} = out,
         %{type: {_, a_size} = a_type, shape: a_shape} = a,
@@ -2412,17 +2392,6 @@ defmodule Nx.BinaryBackend do
     <<y::size(s2)-bitstring, rest2::bitstring>> = b2
     {bin, acc} = fun.(x, y, acc)
     bin_zip_reduce_axis(rest1, rest2, s1, s2, bin, acc, fun)
-  end
-
-  defp bin_batch_reduce(bin, batch_size, {_, size}, acc, fun) do
-    batch_bit_size = batch_size * size
-    batches = bit_size(bin) |> div(batch_bit_size)
-
-    for i <- 0..(batches - 1), reduce: acc do
-      acc ->
-        batch = bitstring_part(bin, i * batch_bit_size, batch_bit_size)
-        fun.(batch, acc)
-    end
   end
 
   ## Conversion helpers
