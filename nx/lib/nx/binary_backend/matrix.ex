@@ -1,8 +1,6 @@
 defmodule Nx.BinaryBackend.Matrix do
   @moduledoc false
   use Complex.Kernel
-  import Kernel, except: [abs: 1]
-  import Complex, only: [abs: 1]
 
   import Nx.Shared
 
@@ -116,107 +114,6 @@ defmodule Nx.BinaryBackend.Matrix do
 
   defp do_ts([], [], _idx, acc), do: acc
 
-  def lu(input_data, input_type, {n, n} = input_shape, p_type, l_type, u_type, opts) do
-    a = binary_to_matrix(input_data, input_type, input_shape)
-    eps = opts[:eps]
-
-    {p, a_prime} = lu_validate_and_pivot(a, n)
-
-    # We'll work with linear indices because of the way each matrix
-    # needs to be updated/accessed
-    zeros_matrix = List.duplicate(List.duplicate(0, n), n)
-
-    {l, u} =
-      for j <- 0..(n - 1), reduce: {zeros_matrix, zeros_matrix} do
-        {l, u} ->
-          l = replace_matrix_element(l, j, j, 1.0)
-
-          u =
-            for i <- 0..j, reduce: u do
-              u ->
-                u_slice = slice_matrix(u, [0, j], [i, 1])
-                l_slice = slice_matrix(l, [i, 0], [1, i])
-                sum = dot_matrix(u_slice, l_slice)
-                [a_ij] = get_matrix_elements(a_prime, [[i, j]])
-
-                value = a_ij - sum
-
-                if abs(value) < eps do
-                  replace_matrix_element(u, i, j, 0)
-                else
-                  replace_matrix_element(u, i, j, value)
-                end
-            end
-
-          l =
-            for i <- j..(n - 1), i != j, reduce: l do
-              l ->
-                u_slice = slice_matrix(u, [0, j], [i, 1])
-                l_slice = slice_matrix(l, [i, 0], [1, i])
-                sum = dot_matrix(u_slice, l_slice)
-
-                [a_ij] = get_matrix_elements(a_prime, [[i, j]])
-                [u_jj] = get_matrix_elements(u, [[j, j]])
-
-                value =
-                  cond do
-                    u_jj != 0 ->
-                      (a_ij - sum) / u_jj
-
-                    a_ij >= sum ->
-                      :infinity
-
-                    true ->
-                      :neg_infinity
-                  end
-
-                if abs(value) < eps do
-                  replace_matrix_element(l, i, j, 0)
-                else
-                  replace_matrix_element(l, i, j, value)
-                end
-            end
-
-          {l, u}
-      end
-
-    # Transpose because since P is orthogonal, inv(P) = tranpose(P)
-    # and we want to return P such that A = P.L.U
-    {p |> transpose_matrix() |> matrix_to_binary(p_type),
-     l |> approximate_zeros(eps) |> matrix_to_binary(l_type),
-     u |> approximate_zeros(eps) |> matrix_to_binary(u_type)}
-  end
-
-  defp lu_validate_and_pivot(a, n) do
-    # pivots a tensor so that the biggest elements of each column lie on the diagonal.
-    # if any of the diagonal elements ends up being 0, raises an ArgumentError
-
-    identity =
-      Enum.map(0..(n - 1), fn i -> Enum.map(0..(n - 1), fn j -> if i == j, do: 1, else: 0 end) end)
-
-    # For each row, find the max value by column.
-    # If its index (max_idx) is not in the diagonal (i.e. j != max_idx)
-    # we need to swap rows j and max_idx in both the permutation matrix
-    # and in the a matrix.
-    Enum.reduce(0..(n - 2), {identity, a}, fn j, {p, a} ->
-      [max_idx | _] =
-        Enum.sort_by(j..(n - 1), fn i -> a |> Enum.at(i) |> Enum.at(j) |> abs() end, &>=/2)
-
-      if max_idx == j do
-        {p, a}
-      else
-        p_row = Enum.at(p, max_idx)
-        p_j = Enum.at(p, j)
-        p = p |> List.replace_at(max_idx, p_j) |> List.replace_at(j, p_row)
-
-        a_row = Enum.at(a, max_idx)
-        a_j = Enum.at(a, j)
-        a = a |> List.replace_at(max_idx, a_j) |> List.replace_at(j, a_row)
-        {p, a}
-      end
-    end)
-  end
-
   ## Matrix (2-D array) manipulation
 
   defp dot_matrix([], _), do: 0
@@ -279,41 +176,9 @@ defmodule Nx.BinaryBackend.Matrix do
     |> Enum.chunk_every(num_cols)
   end
 
-  defp slice_matrix(a, [row_start, col_start], [row_length, col_length]) do
-    a
-    |> Enum.slice(row_start, row_length)
-    |> Enum.flat_map(&Enum.slice(&1, col_start, col_length))
-  end
-
   defp get_matrix_column(m, col) do
     Enum.map(m, fn row ->
       Enum.at(row, col)
-    end)
-  end
-
-  defp get_matrix_elements(m, row_col_pairs) do
-    Enum.map(row_col_pairs, fn [row, col] ->
-      m
-      |> Enum.at(row, [])
-      |> Enum.at(col)
-      |> case do
-        nil -> raise ArgumentError, "invalid index [#{row},#{col}] for matrix"
-        item -> item
-      end
-    end)
-  end
-
-  defp replace_matrix_element(m, row, col, value) do
-    updated = m |> Enum.at(row) |> List.replace_at(col, value)
-    List.replace_at(m, row, updated)
-  end
-
-  defp approximate_zeros(matrix, tol) do
-    do_round = fn x -> if Complex.abs(x) < tol, do: 0 * x, else: x end
-
-    Enum.map(matrix, fn
-      row when is_list(row) -> Enum.map(row, do_round)
-      e -> do_round.(e)
     end)
   end
 end

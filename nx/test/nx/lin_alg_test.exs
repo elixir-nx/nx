@@ -941,7 +941,9 @@ defmodule Nx.LinAlgTest do
           a = Nx.dot(l_prime, [2], [0], u_prime, [1], [0])
 
           assert {p, l, u} = Nx.LinAlg.lu(a)
-          assert_all_close(p |> Nx.dot([2], [0], l, [1], [0]) |> Nx.dot([2], [0], u, [1], [0]), a)
+
+          actual = p |> Nx.dot([2], [0], l, [1], [0]) |> Nx.dot([2], [0], u, [1], [0])
+          assert_all_close(actual, a)
           key
       end
     end
