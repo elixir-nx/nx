@@ -1,4 +1,5 @@
 defmodule Nx.LinAlg.LU do
+  @moduledoc false
   import Nx.Defn
 
   defn lu(a, opts \\ []) do
