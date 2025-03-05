@@ -20,7 +20,7 @@ to minimize a given function. For higher dimensional problems, we deal with func
 The gradient, then, is a vector that points in the direction where the function changes the most, which leads to the so-called gradient descent method of optimization.
 
 In the gradient descent method, we take tiny steps following the gradient of the function in order to find the nearest local minimum (which hopefully is either the global minimum or close enough to it).
-This is what makes function differentiation so important for machine learning.
+This is what makes function differentiation so important for Machine Learning.
 
 Let's take for example the following $f(x)$ and $f'(x)$ scalar function and derivative pair:
 
