@@ -1523,7 +1523,7 @@ defmodule Nx.LinAlg do
         [
           [1.0, 0.0, 0.0],
           [0.5714285969734192, 1.0, 0.0],
-          [0.1428571492433548, 2.0, 1.0]
+          [0.1428571492433548, 2.0000009536743164, 1.0]
         ]
       >
       iex> u
@@ -1531,7 +1531,7 @@ defmodule Nx.LinAlg do
         f32[3][3]
         [
           [7.0, 8.0, 9.0],
-          [0.0, 0.4285714328289032, 0.8571428656578064],
+          [0.0, 0.4285712242126465, 0.857142448425293],
           [0.0, 0.0, 0.0]
         ]
       >
@@ -1607,7 +1607,7 @@ defmodule Nx.LinAlg do
           [
             [1.0, 0.0, 0.0],
             [0.6666666865348816, 1.0, 0.0],
-            [0.3333333432674408, 2.0, 1.0]
+            [0.3333333432674408, 1.9999992847442627, 1.0]
           ],
           [
             [1.0, 0.0, 0.0],
@@ -1622,8 +1622,8 @@ defmodule Nx.LinAlg do
         [
           [
             [9.0, 8.0, 7.0],
-            [0.0, -0.3333333432674408, -0.6666666865348816],
-            [0.0, 0.0, 0.0]
+            [0.0, -0.33333349227905273, -0.6666669845581055],
+            [0.0, 0.0, 5.960464477539063e-8]
           ],
           [
             [-1.0, 0.0, -1.0],
@@ -1638,7 +1638,7 @@ defmodule Nx.LinAlg do
         [
           [
             [9.0, 8.0, 7.0],
-            [6.0, 5.0, 4.0],
+            [6.0, 5.0, 3.999999761581421],
             [3.0, 2.0, 1.0]
           ],
           [
@@ -1676,7 +1676,7 @@ defmodule Nx.LinAlg do
           [
             [1.0, 0.0, 0.0],
             [0.6666666865348816, 1.0, 0.0],
-            [0.3333333432674408, 2.0, 1.0]
+            [0.3333333432674408, 1.9999992847442627, 1.0]
           ],
           [
             [1.0, 0.0, 0.0],
@@ -1692,8 +1692,8 @@ defmodule Nx.LinAlg do
         [
           [
             [9.0, 8.0, 7.0],
-            [0.0, -0.3333333432674408, -0.6666666865348816],
-            [0.0, 0.0, 0.0]
+            [0.0, -0.33333349227905273, -0.6666669845581055],
+            [0.0, 0.0, 5.960464477539063e-8]
           ],
           [
             [-1.0, 0.0, -1.0],
@@ -1709,22 +1709,22 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) tensor must be a square matrix or a batch of square matrices, got shape: {3, 4}
   """
   def lu(tensor, opts \\ []) do
-    apply_vectorized(tensor, fn tensor ->
-      opts = keyword!(opts, eps: 1.0e-10)
-      %T{type: type, shape: shape} = tensor
+    opts = keyword!(opts, eps: 1.0e-10)
+    %T{vectorized_axes: vectorized_axes} = tensor = Nx.to_tensor(tensor)
+    %T{type: type, shape: shape} = tensor = Nx.devectorize(tensor)
 
-      output_type = Nx.Type.to_floating(type)
-      {p_shape, l_shape, u_shape} = Nx.Shape.lu(shape)
-      names = List.duplicate(nil, tuple_size(shape))
+    output_type = Nx.Type.to_floating(type)
+    {p_shape, l_shape, u_shape} = Nx.Shape.lu(shape)
+    names = List.duplicate(nil, tuple_size(shape))
 
-      impl!(tensor).lu(
-        {%{tensor | type: type, shape: p_shape, names: names},
-         %{tensor | type: output_type, shape: l_shape, names: names},
-         %{tensor | type: output_type, shape: u_shape, names: names}},
-        tensor,
-        opts
-      )
-    end)
+    output =
+      {%{tensor | type: type, shape: p_shape, names: names},
+       %{tensor | type: output_type, shape: l_shape, names: names},
+       %{tensor | type: output_type, shape: u_shape, names: names}}
+
+    :lu
+    |> Nx.Shared.optional([tensor, opts], output, &Nx.LinAlg.LU.lu/2)
+    |> Nx.vectorize(vectorized_axes)
   end
 
   @doc """
@@ -1892,7 +1892,7 @@ defmodule Nx.LinAlg do
       ...> ]))
       #Nx.Tensor<
         f32
-        48.0
+        47.999996185302734
       >
 
       iex> Nx.LinAlg.determinant(Nx.tensor([
@@ -1904,7 +1904,7 @@ defmodule Nx.LinAlg do
       ...> ]))
       #Nx.Tensor<
         f32
-        48.0
+        47.999996185302734
       >
 
       iex> Nx.LinAlg.determinant(Nx.tensor([

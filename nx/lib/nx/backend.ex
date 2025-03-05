@@ -175,6 +175,7 @@ defmodule Nx.Backend do
     top_k: 3,
     fft2: 3,
     ifft2: 3,
+    lu: 3,
     qr: 3,
     cholesky: 2,
     eigh: 3,
