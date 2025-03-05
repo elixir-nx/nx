@@ -13,7 +13,7 @@ defmodule EXLA.MLIR.Function do
   which can be used in MLIR operations.
   """
   def get_arguments(%Function{ref: ref} = function) do
-    arg_refs = EXLA.NIF.mlir_get_function_arguments(ref) |> unwrap!()
+    arg_refs = EXLA.NIF.mlir_get_function_arguments(ref)
     Enum.map(arg_refs, fn arg -> %Value{ref: arg, function: function} end)
   end
 
@@ -26,7 +26,7 @@ defmodule EXLA.MLIR.Function do
   """
   def push_region(%Function{ref: ref} = function, arg_typespecs) do
     arg_mlir_types = Value.typespecs_to_mlir_types(arg_typespecs)
-    {region, args} = EXLA.NIF.mlir_push_region(ref, arg_mlir_types) |> unwrap!()
+    {region, args} = EXLA.NIF.mlir_push_region(ref, arg_mlir_types)
     {%Region{ref: region}, Enum.map(args, &%Value{function: function, ref: &1})}
   end
 
@@ -34,10 +34,6 @@ defmodule EXLA.MLIR.Function do
   Pops region created with `push_region/2`.
   """
   def pop_region(%Function{ref: ref}) do
-    EXLA.NIF.mlir_pop_region(ref) |> unwrap!()
+    EXLA.NIF.mlir_pop_region(ref)
   end
-
-  defp unwrap!(:ok), do: :ok
-  defp unwrap!({:ok, value}), do: value
-  defp unwrap!(other), do: raise("error: #{inspect(other)}")
 end
