@@ -37,26 +37,28 @@ else
 endif
 
 LDFLAGS = -L$(XLA_EXTENSION_LIB) -lxla_extension -shared
+NVCC := $(CXX)
+NVCCFLAGS = $(CFLAGS)
 
 ifeq ($(CROSSCOMPILE),)
 	# Interrogate the system for local compilation
 	UNAME_S = $(shell uname -s)
 
+ifeq ($(EXLA_CPU_ONLY),)
+$(info EXLA_CPU_ONLY is not set, checking for nvcc availability)
 	NVCC_RESULT := $(shell which nvcc 2> /dev/null)
 	NVCC_TEST := $(notdir $(NVCC_RESULT))
 
-ifeq ($(NVCC_TEST),nvcc)
-	NVCC := nvcc
-	NVCCFLAGS += -DCUDA_ENABLED
+	ifeq ($(NVCC_TEST),nvcc)
+		NVCC := nvcc
+		NVCCFLAGS += -DCUDA_ENABLED
+	endif
 else
-	NVCC := $(CXX)
-	NVCCFLAGS = $(CFLAGS)
+$(info EXLA_CPU_ONLY is set, skipping nvcc step)
 endif
 else
 	# Determine settings for cross-compiled builds like for Nerves
 	UNAME_S = Linux
-	NVCC := $(CXX)
-	NVCCFLAGS = $(CFLAGS)
 endif
 
 ifeq ($(UNAME_S), Darwin)

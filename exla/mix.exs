@@ -33,7 +33,15 @@ defmodule EXLA.MixProject do
         priv_path = Path.join(Mix.Project.app_path(), "priv")
         cwd_relative_to_priv = relative_to(File.cwd!(), priv_path)
 
+        exla_cpu_only =
+          if System.get_env("EXLA_CPU_ONLY") in ["1", "true"] do
+            "true"
+          else
+            ""
+          end
+
         %{
+          "EXLA_CPU_ONLY" => exla_cpu_only,
           "FINE_INCLUDE_DIR" => Fine.include_dir(),
           "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}",
           "CWD_RELATIVE_TO_PRIV_PATH" => cwd_relative_to_priv,
