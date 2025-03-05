@@ -9,10 +9,18 @@ Mix.install([
 ## What is Function Differentiation?
 
 Nx, through the `Nx.Defn.grad/2` and `Nx.Defn.value_and_grad/3` functions allows the user to differentiate functions that were defined through `defn`.
-
 This is really important in Machine Learning settings because, in general, the training process happens through optimization methods that require calculating the gradient of tensor functions.
 
-For those more familiar with the mathematical terminology, the gradient of a tensor function is similar to the derivative of regular (scalar) functions.
+Before we get too far ahead of ourselves, let's talk about what is the derivative or the gradient of a function.
+In simple terms, the derivative tells us how a function changes at a given point and lets us measure things such as where a function as maximum,
+minimum or turning points (for example, where a parabola has its vertex).
+
+The ability to measure local minima and maxima is what makes them important to optimization problems, because if we can find them, we can solve problems that want
+to minimize a given function. For higher dimensional problems, we deal with functions of many variables, and thus we use the gradient, which measures the "derivative" in the axis of each function.
+The gradient, then, is a vector that points in the direction where the function changes the most, which leads to the so-called gradient descent method of optimization.
+
+In the gradient descent method, we take tiny steps following the gradient of the function in order to find the nearest local minimum (which hopefully is either the global minimum or close enough to it).
+This is what makes function differentiation so important for machine learning.
 
 Let's take for example the following $f(x)$ and $f'(x)$ scalar function and derivative pair:
 
@@ -177,6 +185,3 @@ transform_fn = fn {x_cubed, x} -> Nx.add(x_cubed, x) end
 ```
 
 If we go back to the start of this livebook, we can see that `grad` holds exactly the result `Math.grad_f`, but now we have access to `x ** 3`, which wasn't accessible before, as originally we could only obtain `x ** 3 + x`.
-
-$$
-$$
