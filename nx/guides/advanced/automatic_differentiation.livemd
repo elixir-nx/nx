@@ -1,0 +1,187 @@
+# Automatic Differentation
+
+```elixir
+Mix.install([
+  {:nx, "~> 0.7"}
+])
+```
+
+## What is Function Differentiation?
+
+Nx, through the `Nx.Defn.grad/2` and `Nx.Defn.value_and_grad/3` functions allows the user to differentiate functions that were defined through `defn`.
+This is really important in Machine Learning settings because, in general, the training process happens through optimization methods that require calculating the gradient of tensor functions.
+
+Before we get too far ahead of ourselves, let's talk about what is the derivative or the gradient of a function.
+In simple terms, the derivative tells us how a function changes at a given point and lets us measure things such as where a function as maximum,
+minimum or turning points (for example, where a parabola has its vertex).
+
+The ability to measure local minima and maxima is what makes them important to optimization problems, because if we can find them, we can solve problems that want
+to minimize a given function. For higher dimensional problems, we deal with functions of many variables, and thus we use the gradient, which measures the "derivative" in the axis of each function.
+The gradient, then, is a vector that points in the direction where the function changes the most, which leads to the so-called gradient descent method of optimization.
+
+In the gradient descent method, we take tiny steps following the gradient of the function in order to find the nearest local minimum (which hopefully is either the global minimum or close enough to it).
+This is what makes function differentiation so important for Machine Learning.
+
+Let's take for example the following $f(x)$ and $f'(x)$ scalar function and derivative pair:
+
+$$
+f(x) = x^3 + x\\
+f'(x) = 3x^2 + 1
+$$
+
+We can define a similar function-derivative pair for tensor functions:
+
+$$
+f(\bold{x}) = \bold{x}^3 + \bold{x}\\
+\nabla f(\bold{x}) = 3 \bold{x} ^ 2 + 1
+$$
+
+These may look similar, but the difference is that $f(\bold{x})$ takes in $\bold{x}$ which is a tensor argument. This means that we can have the following argument and results for the function and its gradient:
+
+$$
+\bold{x} =
+\begin{bmatrix}
+1 & 1 \\
+2 & 3 \\
+5 & 8 \\
+\end{bmatrix}\\\
+$$
+
+$$
+f(\bold{x}) = \bold{x}^3 + \bold{x} =
+\begin{bmatrix}
+2 & 2 \\
+10 & 30 \\
+130 & 520
+\end{bmatrix}
+$$
+
+$$
+\nabla f(\bold{x}) = 3 \bold{x} ^ 2 + 1 =
+\begin{bmatrix}
+4 & 4 \\
+13 & 28 \\
+76 & 193
+\end{bmatrix}
+$$
+
+## Automatic Differentiation
+
+Now that we have a general feeling of what a function and its gradient are, we can talk about how Nx can use `defn` to calculate gradients for us.
+
+In the following code blocks we're going to define the same tensor function as above and then we'll differentiate it only using Nx, without having to write the explicit derivative at all.
+
+```elixir
+defmodule Math do
+  import Nx.Defn
+
+  defn f(x) do
+    x ** 3 + x
+  end
+
+  defn grad_f(x) do
+    Nx.Defn.grad(x, &f/1)
+  end
+end
+```
+
+```elixir
+x =
+  Nx.tensor([
+    [1, 1],
+    [2, 3],
+    [5, 8]
+  ])
+
+{
+  Math.f(x),
+  Math.grad_f(x)
+}
+```
+
+As we can see, we get the results we expected, aside from the type of the grad, which will always be a floating-point number, even if you pass an integer tensor as input.
+
+Next, we'll using `Nx.Defn.debug_expr` to see what's happening under the hood.
+
+```elixir
+Nx.Defn.debug_expr(&Math.f/1).(x)
+```
+
+```elixir
+Nx.Defn.debug_expr(&Math.grad_f/1).(x)
+```
+
+If we look closely at the returned `Nx.Defn.Expr` representations for `f` and `grad_f`, we can see that they pretty much translate to the mathematical definitions we had originally.
+
+This possible because Nx holds onto the symbolic representation of a `defn` function while inside `defn`-land, and thus `Nx.Defn.grad` (and similar) can operate on that symbolic representation to return a new symbolic representation (as seen in the second block).
+
+<!-- livebook:{"break_markdown":true} -->
+
+`Nx.Defn.value_and_grad` can be used to calculate both things at once for us:
+
+```elixir
+Nx.Defn.value_and_grad(x, &Math.f/1)
+```
+
+And if we use `debug_expr` again, we can see that the symbolic representation is actually both the function and the grad, returned in a tuple:
+
+```elixir
+Nx.Defn.debug_expr(Nx.Defn.value_and_grad(&Math.f/1)).(x)
+```
+
+Finally, we can talk about functions that receive many arguments, such as the following `add_multiply` function:
+
+```elixir
+add_multiply = fn x, y, z ->
+  addition = Nx.add(x, y)
+  Nx.multiply(z, addition)
+end
+```
+
+At first you may think that if we want to differentiate it, we need to wrap it into a single-argument function so that we can differentiate with respect to a specific argument, which would treat other arguments as constants, as we can see below:
+
+```elixir
+x = Nx.tensor([1, 2])
+y = Nx.tensor([3, 4])
+z = Nx.tensor([5, 6])
+
+{
+  Nx.Defn.grad(x, fn t -> add_multiply.(t, y, z) end),
+  Nx.Defn.grad(y, fn t -> add_multiply.(x, t, z) end),
+  Nx.Defn.grad(z, fn t -> add_multiply.(x, y, t) end)
+}
+```
+
+However, Nx is smart enough to deal with multi-valued functions through `Nx.Container` representations such as a tuple or a map:
+
+```elixir
+Nx.Defn.grad({x, y, z}, fn {x, y, z} -> add_multiply.(x, y, z) end)
+```
+
+Likewise, we can also deal with functions that return multiple values.
+
+`Nx.Defn.grad` requires us to return a scalar from function (that is, a tensor of shape `{}`).
+However, there are instances where we might want to use `value_and_grad` to get out a tuple from our function, while still calculating its gradient.
+
+For this, we have the `value_and_grad/3` arity, which accepts a transformation argument.
+
+```elixir
+x =
+  Nx.tensor([
+    [1, 1],
+    [2, 3],
+    [5, 8]
+  ])
+
+# Notice that the returned values are the 2 addition terms from `Math.f/1`
+multi_valued_return_fn =
+  fn x ->
+    {Nx.pow(x, 3), x}
+  end
+
+transform_fn = fn {x_cubed, x} -> Nx.add(x_cubed, x) end
+
+{{x_cubed, x}, grad} = Nx.Defn.value_and_grad(x, multi_valued_return_fn, transform_fn)
+```
+
+If we go back to the start of this livebook, we can see that `grad` holds exactly the result `Math.grad_f`, but now we have access to `x ** 3`, which wasn't accessible before, as originally we could only obtain `x ** 3 + x`.
