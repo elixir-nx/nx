@@ -923,7 +923,6 @@ defmodule Nx.LinAlgTest do
   describe "lu" do
     test "property" do
       key = Nx.Random.key(System.unique_integer())
-      key = Nx.Random.key(42)
 
       for _ <- 1..10, type <- [{:f, 32}, {:c, 64}], reduce: key do
         key ->

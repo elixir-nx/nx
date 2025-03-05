@@ -140,7 +140,9 @@ defmodule Nx.LinAlg.LU do
         end
       end
 
-    permutation = Nx.new_axis(p, 1) == Nx.iota({1, n})
+    # The comparison order here is deliberate, because if
+    # we use p == iota instead, we get the inverse/transposed permutation.
+    permutation = Nx.iota({n, 1}) == Nx.new_axis(p, 0)
 
     {Nx.as_type(permutation, t.type), t[p]}
   end
