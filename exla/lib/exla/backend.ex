@@ -381,7 +381,6 @@ defmodule EXLA.Backend do
        [:tensor, :source, :init_value]},
       {:indexed_add, [:tensor, :indices, :updates, :opts], [:tensor, :indices, :updates]},
       {:indexed_put, [:tensor, :indices, :updates, :opts], [:tensor, :indices, :updates]},
-      {:lu, [:tensor, :opts], [:tensor]},
       {:triangular_solve, [:a, :b, :opts], [:a, :b]},
       {:fft, [:tensor, :opts], [:tensor]},
       {:ifft, [:tensor, :opts], [:tensor]}
