@@ -44,7 +44,7 @@ ifeq ($(CROSSCOMPILE),)
 	# Interrogate the system for local compilation
 	UNAME_S = $(shell uname -s)
 
-ifeq ($(EXLA_CPU_ONLY),)
+ifdef ($(EXLA_CPU_ONLY),)
 $(info EXLA_CPU_ONLY is not set, checking for nvcc availability)
 	NVCC_RESULT := $(shell which nvcc 2> /dev/null)
 	NVCC_TEST := $(notdir $(NVCC_RESULT))
