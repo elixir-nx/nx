@@ -36,9 +36,9 @@ else
 	CFLAGS += -O3
 endif
 
-LDFLAGS = -L$(XLA_EXTENSION_LIB) -lxla_extension -shared
 NVCC := $(CXX)
 NVCCFLAGS = $(CFLAGS)
+LDFLAGS = -L$(XLA_EXTENSION_LIB) -lxla_extension -shared -fvisibility=hidden
 
 ifeq ($(CROSSCOMPILE),)
 	# Interrogate the system for local compilation
