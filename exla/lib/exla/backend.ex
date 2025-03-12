@@ -441,8 +441,6 @@ defmodule EXLA.Backend do
       opts[:device_id] || priority_did || backup_did ||
         EXLA.Client.fetch!(client).default_device_id
 
-    require IEx
-    IEx.pry()
     [client: client, device_id: device_id]
   end
 end
