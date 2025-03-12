@@ -265,6 +265,7 @@ defmodule EXLA.Backend do
     copied = Enum.map(tensors, &Nx.backend_copy(&1, Nx.BinaryBackend))
     result = Nx.BinaryBackend.concatenate(out, copied, axis)
     Nx.backend_transfer(result, {EXLA.Backend, jit_opts([], tensors)})
+    Nx.backend_transfer(result, {EXLA.Backend, jit_opts(tensors, [])})
   end
 
   @impl true
@@ -272,6 +273,7 @@ defmodule EXLA.Backend do
     copied = Enum.map(tensors, &Nx.backend_copy(&1, Nx.BinaryBackend))
     result = Nx.BinaryBackend.stack(out, copied, axis)
     Nx.backend_transfer(result, {EXLA.Backend, jit_opts([], tensors)})
+    Nx.backend_transfer(result, {EXLA.Backend, jit_opts(tensors, [])})
   end
 
   @impl true
