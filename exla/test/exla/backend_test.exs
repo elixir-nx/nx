@@ -149,8 +149,11 @@ defmodule EXLA.BackendTest do
 
   @tag :multi_device
   test "stack and concatenate should end up in the same client" do
-    t_0 = Nx.tensor([1], backend: {EXLA.Backend, client: :no_automatic_transfers_host, device_id: 0})
-    t_1 = Nx.tensor([1], backend: {EXLA.Backend, client: :no_automatic_transfers_host, device_id: 1})
+    t_0 =
+      Nx.tensor([1], backend: {EXLA.Backend, client: :no_automatic_transfers_host, device_id: 0})
+
+    t_1 =
+      Nx.tensor([1], backend: {EXLA.Backend, client: :no_automatic_transfers_host, device_id: 1})
 
     t_stack_0 = Nx.stack([t_0, t_1])
     t_concat_0 = Nx.concatenate([t_0, t_1])
