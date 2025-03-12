@@ -404,14 +404,16 @@ defmodule EXLA.Defn do
            data: %Expr{
              args: [
                %{data: %{op: :eigh, args: [tensor, _opts]}},
-               {eigenvecs_expr, eigenvals_expr},
+               {%{type: {evec_type_kind, _}} = eigenvecs_expr,
+                %{type: {eval_type_kind, _}} = eigenvals_expr},
                _callback
              ]
            }
          },
          %{client: %EXLA.Client{platform: :host}, builder: %Function{}} = state,
          cache
-       ) do
+       )
+       when evec_type_kind != :c and eval_type_kind != :c do
     # We match only on platform: :host for MLIR, as we want to support
     # eigh-on-cpu as a custom call only in this case
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
