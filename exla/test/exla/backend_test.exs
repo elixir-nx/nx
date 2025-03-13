@@ -147,6 +147,33 @@ defmodule EXLA.BackendTest do
     assert %{device_id: 1, client_name: :other_host} = Nx.reshape(a, {1}).data.buffer
   end
 
+  @tag :multi_device
+  test "stack and concatenate should end up in the same client" do
+    t_0 =
+      Nx.tensor([1], backend: {EXLA.Backend, client: :no_automatic_transfers_host, device_id: 0})
+
+    t_1 =
+      Nx.tensor([1], backend: {EXLA.Backend, client: :no_automatic_transfers_host, device_id: 1})
+
+    t_stack_0 = Nx.stack([t_0, t_1])
+    t_concat_0 = Nx.concatenate([t_0, t_1])
+
+    assert t_stack_0.data.buffer.client_name == :no_automatic_transfers_host
+    assert t_stack_0.data.buffer.device_id == 1
+
+    assert t_concat_0.data.buffer.client_name == :no_automatic_transfers_host
+    assert t_concat_0.data.buffer.device_id == 1
+
+    t_stack_1 = Nx.stack([t_1, t_0])
+    t_concat_1 = Nx.concatenate([t_1, t_0])
+
+    assert t_stack_1.data.buffer.client_name == :no_automatic_transfers_host
+    assert t_stack_1.data.buffer.device_id == 0
+
+    assert t_concat_1.data.buffer.client_name == :no_automatic_transfers_host
+    assert t_concat_1.data.buffer.device_id == 0
+  end
+
   test "Kernel.inspect/2" do
     t = Nx.tensor([1, 2, 3, 4], backend: EXLA.Backend)
 
