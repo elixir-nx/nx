@@ -1,28 +1,20 @@
-defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
+defmodule Nx.Defn.GraphSplitter do
   alias Nx.Defn.Composite
 
   alias Nx.Tensor, as: T
   alias Nx.Defn.Expr
-  alias Nx.Defn.ShardingCompiler.Shard
-  alias Nx.Defn.ShardingCompiler.Passes.GraphSplitter.Stage
+  alias Nx.Defn.GraphSplitter.Stage
 
-  @gather_ops [:dot]
-  @reduction_ops [:sum]
-
-  @ops_to_split Map.merge(
-                  Map.new(@gather_ops, &{&1, :gather}),
-                  Map.new(@reduction_ops, &{&1, :reduce})
-                )
-
-  def traverse(expr, expr_shards \\ %{}, ops_to_split \\ @ops_to_split) do
+  @doc """
+  Traverses the expression and splits it into stages.
+  """
+  def traverse(expr, expr_split_fn \\ fn _ -> false end) do
     # expression_chain is going to be a reverse-accumulation of {category, subexpr}
     # that we can then compile and chain-execute elsewhere. category is either :gather, :reduce or :none
     state = %{
       expression_chain: [],
       nodes_to_replace: %{},
-      ops_to_split: ops_to_split,
-      # contains the sharding configuration for each node by id
-      shards: expr_shards,
+      expr_split_fn: expr_split_fn,
       # args is a map of id -> {stage_id, output_container_position}
       args: %{}
     }
@@ -32,9 +24,9 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
 
     expr_chain =
       Enum.reduce(
-        [{make_ref(), :none, expr, state.nodes_to_replace} | state.expression_chain],
+        [{make_ref(), expr, state.nodes_to_replace} | state.expression_chain],
         [],
-        fn {id, category, expr, nodes_to_replace}, acc ->
+        fn {id, expr, nodes_to_replace}, acc ->
           # TO-DO: we need to also do a pass to avoid recalculating results that have been previously calculated.
           # For example:
           # x = arg0 + arg1
@@ -54,28 +46,19 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
 
           arg_remapping =
             used_args
-            |> Enum.sort_by(fn {_id, {%T{data: %Expr{op: :parameter, args: [idx]}}, _shards}} ->
-              idx
-            end)
+            |> Enum.sort_by(fn {_id, %T{data: %Expr{op: :parameter, args: [idx]}}} -> idx end)
             |> Enum.with_index(fn
-              {id, {expr, nil}}, idx ->
+              {id, expr}, idx ->
                 {id, put_in(expr.data.args, [idx])}
-
-              {id, {expr, _shard_propagation}}, idx ->
-                expr = put_in(expr.data.args, [idx])
-                {id, expr}
             end)
             |> Map.new()
 
           {expr, _} =
             composite_rewrite_subtree(expr, %{state | nodes_to_replace: arg_remapping})
 
-          # Traverse the expression to remap all shapes according to the sharding given
-          expr = set_shard_metadata(expr, state.shards)
-
           arguments =
             Map.new(arg_remapping, fn {_id, arg_expr} ->
-              {arg_expr.data.id, set_shard_metadata(arg_expr, state.shards)}
+              {arg_expr.data.id, arg_expr}
             end)
 
           argument_sources =
@@ -88,7 +71,6 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
           [
             %Stage{
               id: id,
-              category: category,
               expr: expr,
               arguments: arguments,
               argument_sources: argument_sources
@@ -106,19 +88,20 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
   end
 
   defp eval(%T{data: %Expr{id: id, op: op}} = ans, {cache, state}) do
-    case {cache, state.nodes_to_replace, state.ops_to_split} do
-      {_, %{^id => res}, _} ->
+    case {cache, state.nodes_to_replace} do
+      {_, %{^id => res}} ->
         # Replace the node with the corresponding parameter
         {res, {Map.put(cache, id, res), state}}
 
-      {%{^id => res}, _, _} ->
+      {%{^id => res}, _} ->
         {res, {cache, state}}
 
-      {_, _, %{^op => category}} ->
-        rewrite_args(ans, category, {cache, state})
-
       _ ->
-        eval_apply(op, ans, {cache, state})
+        if state.expr_split_fn.(ans) do
+          split_expr(ans, {cache, state})
+        else
+          eval_apply(op, ans, {cache, state})
+        end
     end
   end
 
@@ -126,52 +109,8 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
     {other, {cache, state}}
   end
 
-  defp rewrite_args(expr, category, {cache, state}) do
+  defp split_expr(expr, {cache, state}) do
     {args, {cache, state}} = Nx.Defn.Tree.apply_args(expr, {cache, state}, &eval/2)
-
-    if must_split_expr?(expr.data.op, args, state.shards) do
-      split_expr(expr, args, category, {cache, state})
-    else
-      {expr, {cache, state}}
-    end
-  end
-
-  defp must_split_expr?(:dot, [t0, c0, _b0, t1, c1, _b1], shards) do
-    left_shards =
-      case shards[t0.data.id] do
-        %{shards: shards} -> shards
-        _ -> nil
-      end
-
-    left_valid =
-      Enum.all?(c0, fn axis ->
-        case left_shards[axis] do
-          [%Shard{start: 0, length: length}] -> length == elem(t0.shape, axis)
-          _ -> false
-        end
-      end)
-
-    right_shards =
-      case shards[t1.data.id] do
-        %{shards: shards} -> shards
-        _ -> nil
-      end
-
-    right_valid =
-      Enum.all?(c1, fn axis ->
-        case right_shards[axis] do
-          [%Shard{start: 0, length: length}] -> length == elem(t1.shape, axis)
-          _ -> false
-        end
-      end)
-
-    not (left_valid and right_valid)
-  end
-
-  # default to true so that we can optimize this gradually
-  defp must_split_expr?(_, _, _), do: true
-
-  defp split_expr(expr, args, category, {cache, state}) do
     # We need to save this so that each previous stage
     # isn't affected by following ones
     nodes_to_replace = state.nodes_to_replace
@@ -186,8 +125,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
           state = %{
             state
             | args: Map.put(state.args, arg.data.id, {stage_id, out_position}),
-              nodes_to_replace: Map.put(state.nodes_to_replace, expr.data.id, arg),
-              shards: Map.put(state.shards, arg.data.id, state.shards[expr.data.id])
+              nodes_to_replace: Map.put(state.nodes_to_replace, expr.data.id, arg)
           }
 
           {arg, {[expr | tensor_args], out_position + 1, state}}
@@ -202,7 +140,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
       update_in(
         state.expression_chain,
         &[
-          {stage_id, category, List.to_tuple(Enum.reverse(tensor_args)), nodes_to_replace}
+          {stage_id, List.to_tuple(Enum.reverse(tensor_args)), nodes_to_replace}
           | &1
         ]
       )
@@ -251,10 +189,10 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
   defp rewrite_subtree(%T{data: %Expr{id: id, op: :parameter}} = expr, state, acc) do
     case state.nodes_to_replace do
       %{^id => res} ->
-        {res, put_in(acc.used_args[id], {res, state.shards[id]})}
+        {res, put_in(acc.used_args[id], res)}
 
       _ ->
-        {expr, put_in(acc.used_args[id], {expr, state.shards[id]})}
+        {expr, put_in(acc.used_args[id], expr)}
     end
   end
 
@@ -265,7 +203,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
        ) do
     case state.nodes_to_replace do
       %{^id => res} ->
-        {res, put_in(acc.used_args[id], {res, state.shards[id]})}
+        {res, put_in(acc.used_args[id], res)}
 
       _ ->
         {call, acc} = rewrite_subtree(call, state, acc)
@@ -281,7 +219,7 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
     case state.nodes_to_replace do
       %{^id => res} ->
         # nodes_to_replace always contains a param
-        {res, put_in(acc.used_args[id], {res, state.shards[id]})}
+        {res, put_in(acc.used_args[id], res)}
 
       _ ->
         {args, acc} = composite_rewrite_subtree(args, state, acc)
@@ -290,43 +228,4 @@ defmodule Nx.Defn.ShardingCompiler.Passes.GraphSplitter do
   end
 
   defp rewrite_subtree(other, _, acc), do: {other, acc}
-
-  defp set_shard_metadata(expr, shards) do
-    Composite.traverse(expr, fn
-      %T{data: %Expr{id: id}} = t ->
-        if shard_propagation = shards[id] do
-          shape =
-            shard_propagation.shards
-            |> Enum.sort()
-            |> Enum.map(fn {_axis, [%Shard{length: length} | _]} -> length end)
-            |> List.to_tuple()
-
-          t = do_set_shard_metadata(%{t | shape: shape}, shards)
-          Expr.metadata(t, %{shards: shard_propagation.shards})
-        else
-          do_set_shard_metadata(t, shards)
-        end
-
-      other ->
-        other
-    end)
-  end
-
-  defp do_set_shard_metadata(%T{data: %Expr{args: args}} = expr, shards) do
-    args =
-      Enum.map(args, fn
-        %T{} = arg ->
-          set_shard_metadata(arg, shards)
-
-        arg when is_list(arg) ->
-          Enum.map(arg, &do_set_shard_metadata(&1, shards))
-
-        arg ->
-          arg
-      end)
-
-    put_in(expr.data.args, args)
-  end
-
-  defp do_set_shard_metadata(other, _), do: other
 end
