@@ -9,6 +9,12 @@ defmodule Nx.Defn.GraphSplitter do
   Traverses the expression and splits it into stages.
   """
   def traverse(expr, expr_split_fn \\ fn _ -> false end) do
+    {chain, _, _} = traverse_and_return_cache(expr, expr_split_fn)
+    chain
+  end
+
+  @doc false
+  def traverse_and_return_cache(expr, expr_split_fn) do
     # expression_chain is going to be a reverse-accumulation of {category, subexpr}
     # that we can then compile and chain-execute elsewhere. category is either :gather, :reduce or :none
     state = %{

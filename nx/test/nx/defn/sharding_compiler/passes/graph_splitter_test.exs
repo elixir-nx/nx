@@ -23,7 +23,7 @@ defmodule Nx.Defn.GraphSplitterTest do
         _ -> false
       end
 
-      {chain, cache, state} = GraphSplitter.traverse(expr, split_fn)
+      {chain, cache, state} = GraphSplitter.traverse_and_return_cache(expr, split_fn)
 
       assert [
                %Stage{
@@ -143,7 +143,7 @@ defmodule Nx.Defn.GraphSplitterTest do
         _ -> false
       end
 
-      {chain, cache, state} = GraphSplitter.traverse(expr, split_fn)
+      {chain, cache, state} = GraphSplitter.traverse_and_return_cache(expr, split_fn)
 
       assert [
                %Stage{
@@ -292,8 +292,7 @@ defmodule Nx.Defn.GraphSplitterTest do
         _ -> false
       end
 
-      assert {[%Stage{} = stage_0, %Stage{} = stage_1], _cache, _state} =
-               GraphSplitter.traverse(expr, split_fn)
+      assert [%Stage{} = stage_0, %Stage{} = stage_1] = GraphSplitter.traverse(expr, split_fn)
 
       [{arg1_id, %T{shape: {2, 3}, type: {:u, 8}, data: %Expr{args: [0]}}}] =
         Enum.to_list(stage_0.arguments)
@@ -358,8 +357,7 @@ defmodule Nx.Defn.GraphSplitterTest do
         _ -> false
       end
 
-      assert {[%Stage{} = stage_0, %Stage{} = stage_1], _cache, _state} =
-               GraphSplitter.traverse(expr, split_fn)
+      assert [%Stage{} = stage_0, %Stage{} = stage_1] = GraphSplitter.traverse(expr, split_fn)
 
       [{arg1_id, %T{shape: {2, 3}, type: {:u, 8}, data: %Expr{args: [0]}}}] =
         Enum.to_list(stage_0.arguments)
