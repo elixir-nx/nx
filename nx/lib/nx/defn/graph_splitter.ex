@@ -262,7 +262,10 @@ defmodule Nx.Defn.GraphSplitter do
 
     # Perform topological sort
     sorted_ids =
-      :digraph_utils.topsort(graph) |> Enum.map(fn {stage_id, _} -> stage_id end) |> Enum.uniq()
+      graph
+      |> :digraph_utils.topsort()
+      |> Enum.map(fn {stage_id, _} -> stage_id end)
+      |> Enum.uniq()
 
     # Clean up the graph
     :digraph.delete(graph)
