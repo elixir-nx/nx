@@ -86,7 +86,10 @@ defmodule Nx.Defn.GraphSplitter do
         end
       )
 
-    {expr_chain, cache, Map.delete(state, :expression_chain)}
+    # Apply topological sort to the expr_chain
+    sorted_expr_chain = topological_sort(expr_chain)
+
+    {sorted_expr_chain, cache, Map.delete(state, :expression_chain)}
   end
 
   defp composite_eval(expr, state, cache) do
@@ -234,4 +237,39 @@ defmodule Nx.Defn.GraphSplitter do
   end
 
   defp rewrite_subtree(other, _, acc), do: {other, acc}
+
+  defp topological_sort(expr_chain) do
+    # Create a new directed graph
+    graph = :digraph.new()
+
+    # Add vertices for each stage output
+    Enum.each(expr_chain, fn %Stage{id: id, arguments: arguments} ->
+      Enum.with_index(arguments, fn _, idx ->
+        :digraph.add_vertex(graph, {id, idx})
+      end)
+    end)
+
+    # Add edges based on argument sources
+    Enum.each(expr_chain, fn %Stage{id: id, argument_sources: sources} ->
+      Enum.each(sources, fn {_arg_id, {source_stage_id, source_index}} ->
+        if source_stage_id != nil do
+          Enum.each(0..(map_size(sources) - 1)//1, fn idx ->
+            :digraph.add_edge(graph, {source_stage_id, source_index}, {id, idx})
+          end)
+        end
+      end)
+    end)
+
+    # Perform topological sort
+    sorted_ids =
+      :digraph_utils.topsort(graph) |> Enum.map(fn {stage_id, _} -> stage_id end) |> Enum.uniq()
+
+    # Clean up the graph
+    :digraph.delete(graph)
+
+    # Return the sorted stages based on sorted_ids
+    Enum.map(sorted_ids, fn stage_id ->
+      Enum.find(expr_chain, fn %Stage{id: id} -> id == stage_id end)
+    end)
+  end
 end
