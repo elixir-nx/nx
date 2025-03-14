@@ -1,5 +1,5 @@
 defmodule Nx.Defn.Expr do
-  @doc """
+  @moduledoc """
   The expression used by `Nx.Defn.Compiler`.
 
   `Nx.Defn.Compiler` changes `Nx` default backend from `Nx.BinaryBackend`
@@ -249,9 +249,18 @@ defmodule Nx.Defn.Expr do
 
     result =
       for expr <- [last | exprs] do
-        expr
-        |> Nx.as_type(type)
-        |> Nx.broadcast(shape, names: names)
+        typed_expr =
+          case expr do
+            %T{data: %Expr{op: :constant}} ->
+              expr
+              |> maybe_upcast_float_constant(type)
+              |> Nx.as_type(type)
+
+            expr ->
+              Nx.as_type(expr, type)
+          end
+
+        Nx.broadcast(typed_expr, shape, names: names)
       end
 
     {result, vectorized_axes}
@@ -1180,14 +1189,6 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def lu({p, l, u}, tensor, opts) do
-    tensor = to_expr(tensor)
-    context = tensor.data.context
-    out = %T{names: [], shape: {}, type: {:tuple, 3}}
-    tuple(expr(out, context, :lu, [{p, l, u}, tensor, opts]), [p, l, u])
-  end
-
-  @impl true
   def sort(out, tensor, opts) do
     %{data: %{context: context}} = tensor = to_expr(tensor)
     expr(out, context, :sort, [tensor, opts])
@@ -1271,7 +1272,7 @@ defmodule Nx.Defn.Expr do
             "value and inline it inside the defn expression. Got: #{inspect(t)}"
   end
 
-  defp to_expr(number) when is_number(number),
+  defp to_expr(number) when is_number(number) or is_struct(number, Complex),
     do: constant(%T{shape: {}, names: [], type: Nx.Type.infer(number)}, number)
 
   defp to_expr(other) do
@@ -1401,6 +1402,10 @@ defmodule Nx.Defn.Expr do
   defp constant(%{shape: shape, type: type} = out, number) do
     number =
       cond do
+        Nx.Type.complex?(type) and
+            (is_number(number) or number in [:infinity, :neg_infinity, :nan]) ->
+          Complex.new(number, 0.0)
+
         is_integer(number) and Nx.Type.float?(type) ->
           Complex.multiply(1.0, number)
 
@@ -1468,16 +1473,42 @@ defmodule Nx.Defn.Expr do
     c1 = maybe_constant(arg1)
     c2 = maybe_constant(arg2)
 
-    if c1 && c2 do
-      apply(Nx.BinaryBackend, op, [
-        %{out | shape: {}, names: []},
-        constant_binary(arg1, c1),
-        constant_binary(arg2, c2)
-      ])
-      |> Nx.to_number()
-      |> then(&constant(out, &1))
+    cond do
+      c1 && c2 ->
+        apply(Nx.BinaryBackend, op, [
+          %{out | shape: {}, names: []},
+          constant_binary(arg1, c1),
+          constant_binary(arg2, c2)
+        ])
+        |> Nx.to_number()
+        |> then(&constant(out, &1))
+
+      c1 ->
+        expr(out, context, op, [maybe_upcast_float_constant(arg1, out.type), arg2])
+
+      c2 ->
+        expr(out, context, op, [arg1, maybe_upcast_float_constant(arg2, out.type)])
+
+      true ->
+        expr(out, context, op, [arg1, arg2])
+    end
+  end
+
+  defp maybe_upcast_float_constant(
+         %T{type: type, data: %Expr{op: :constant, args: [number]}} = t,
+         out_type
+       ) do
+    # By default, Elixir floats are 64 bits, so we're not really upcasting
+    # if out_type is higher precision than what's annotated.
+    # This is just so that downstream code that relies on this type annotation
+    # properly interprets the f64 value as the higher precision type.
+    # This also means that if out_type is lower precision, `number` will be
+    # downcast to the lower precision type.
+
+    if Nx.Type.float?(type) and Nx.Type.float?(out_type) do
+      constant(%{t | type: out_type}, number)
     else
-      expr(out, context, op, [arg1, arg2])
+      t
     end
   end
 

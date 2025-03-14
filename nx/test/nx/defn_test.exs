@@ -25,6 +25,10 @@ defmodule Nx.DefnTest do
     @tensor [1, 2, 3]
     defn(list_constant, do: Nx.tensor(@tensor))
 
+    defn complex_constant do
+      Complex.new(1, :infinity)
+    end
+
     test "from list" do
       assert %T{data: %Expr{op: :tensor}} = list_constant()
     end
@@ -34,6 +38,76 @@ defmodule Nx.DefnTest do
 
     test "from binary" do
       assert %T{data: %Expr{op: :tensor}} = binary_constant()
+    end
+
+    test "complex literals" do
+      assert %T{data: %Expr{op: :constant, args: [%Complex{} = c]}} = complex_constant()
+      assert c == Complex.new(1, :infinity)
+    end
+
+    defn real_constants_as_arbitrary_precision(x) do
+      cond do
+        x == 0 -> Nx.Constants.e()
+        x == 1 -> Nx.Constants.pi()
+        true -> x
+      end
+    end
+
+    defn imaginary_constant_as_arbitrary_precision(x) do
+      x * Nx.Constants.i()
+    end
+
+    test "Defines real constants as numerical when used with arity 0 inside defn" do
+      for input_type <- [f: 8, f: 16, f: 32, f: 64] do
+        assert %T{
+                 type: ^input_type,
+                 data: %Expr{op: :cond, args: [[clause1, clause2], _last]}
+               } =
+                 real_constants_as_arbitrary_precision(Nx.tensor(10.0, type: input_type))
+
+        e = :math.exp(1)
+        pi = :math.pi()
+        assert {_, %T{type: ^input_type, data: %Expr{op: :constant, args: [^e]}}} = clause1
+        assert {_, %T{type: ^input_type, data: %Expr{op: :constant, args: [^pi]}}} = clause2
+      end
+
+      for input_type <- [c: 64, c: 128] do
+        assert %T{
+                 type: ^input_type,
+                 data: %Expr{op: :cond, args: [[clause1, clause2], _last]}
+               } =
+                 real_constants_as_arbitrary_precision(Nx.tensor(10.0, type: input_type))
+
+        e = Complex.new(:math.exp(1))
+        pi = Complex.new(:math.pi())
+        assert {_, %T{type: ^input_type, data: %Expr{op: :constant, args: [^e]}}} = clause1
+        assert {_, %T{type: ^input_type, data: %Expr{op: :constant, args: [^pi]}}} = clause2
+      end
+    end
+
+    test "Defines imaginary constant as Complex.new(0, 1) when used with arity 0 inside defn" do
+      for input_type <- [f: 8, f: 16, f: 32, f: 64, c: 64, c: 128] do
+        type =
+          case input_type do
+            {:f, 64} -> {:c, 128}
+            {:c, 128} -> {:c, 128}
+            _ -> {:c, 64}
+          end
+
+        # note: we expect the number to be shifted to the left
+        # because after AST normalization, but before Expr parsing,
+        # Nx.Constants.i() is converted to Complex.new(0, 1), which is
+        # a literal number.
+        assert %T{
+                 type: ^type,
+                 data: %Expr{op: :multiply, args: [arg0, arg1]}
+               } =
+                 imaginary_constant_as_arbitrary_precision(Nx.tensor(10.0, type: input_type))
+
+        i = Complex.new(0, 1)
+        %T{data: %Expr{op: :constant, args: [^i]}} = arg0
+        %T{data: %Expr{op: :parameter, args: [0]}} = arg1
+      end
     end
   end
 
@@ -1176,6 +1250,48 @@ defmodule Nx.DefnTest do
                )
     end
 
+    defn cond_upcast_float_literals(n) do
+      cond do
+        n == 1 -> 1.4
+        n == 2 -> 2
+        true -> n
+      end
+    end
+
+    test "upcasts float literals based on the accumulated clause type" do
+      for input_type <- [f: 32, f: 64] do
+        assert %T{
+                 type: ^input_type,
+                 data: %Expr{op: :cond, args: [[clause1, clause2], _last]}
+               } =
+                 cond_upcast_float_literals(Nx.tensor(10.0, type: input_type))
+
+        assert {_, %T{type: ^input_type, data: %Expr{op: :constant, args: [1.4]}}} = clause1
+        assert {_, %T{type: ^input_type, data: %Expr{op: :constant, args: [2.0]}}} = clause2
+      end
+
+      for input_type <- [c: 64, c: 128] do
+        assert %T{
+                 type: ^input_type,
+                 data: %Expr{op: :cond, args: [[clause1, clause2], _last]}
+               } =
+                 cond_upcast_float_literals(Nx.tensor(10.0, type: input_type))
+
+        assert {_,
+                %T{
+                  type: ^input_type,
+                  data: %Expr{op: :constant, args: [%Complex{re: 1.4, im: +0.0}]}
+                }} = clause1
+
+        assert {_,
+                %T{
+                  type: ^input_type,
+                  data: %Expr{op: :constant, args: [%Complex{re: 2.0, im: +0.0}]}
+                }} =
+                 clause2
+      end
+    end
+
     defn cond_list(a) do
       if Nx.any(a), do: 1, else: -1
     end
@@ -1995,7 +2111,7 @@ defmodule Nx.DefnTest do
 
     defn while_mixed_return(a, b) do
       while {a, b}, Nx.less(a, 10) do
-        %{a: a, b: b}
+        %{"a" => a, "b" => b}
       end
     end
 
@@ -2003,7 +2119,7 @@ defmodule Nx.DefnTest do
       expected_error =
         [
           "the do-block in while must return tensors with the same shape, type, and names as the initial arguments.",
-          "\n\n\e\\[32m\n<<<<< Body \\(do-block\\) <<<<<\n%\\{a: #Nx.Tensor<\n    s32\n  >, b: #Nx.Tensor<\n    s32\n  >\\}",
+          "\n\n\e\\[32m\n<<<<< Body \\(do-block\\) <<<<<\n%\\{\"a\" => #Nx.Tensor<\n    s32\n  >, \"b\" => #Nx.Tensor<\n    s32\n  >\\}",
           "\n==========\n\e\\[31m\\{#Nx.Tensor<\n   s32\n >, #Nx.Tensor<\n   s32\n >\\}\n>>>>>     Initial     >>>>>\n\e\\[0m\n$"
         ]
         |> IO.iodata_to_binary()

@@ -112,6 +112,9 @@ defmodule Nx.Defn.Compiler do
   def __to_backend__(opts) do
     {compiler, opts} = Keyword.pop(opts, :compiler, Nx.Defn.Evaluator)
     compiler.__to_backend__(opts)
+  rescue
+    e in [UndefinedFunctionError] ->
+      raise_missing_callback(e, :__to_backend__, 1, __STACKTRACE__)
   end
 
   ## JIT/Stream
@@ -120,12 +123,30 @@ defmodule Nx.Defn.Compiler do
   def __compile__(fun, params, opts) do
     {compiler, runtime_fun, opts} = prepare_options(fun, opts)
     compiler.__compile__(fun, params, runtime_fun, opts)
+  rescue
+    e in [UndefinedFunctionError] ->
+      raise_missing_callback(e, :__compile__, 4, __STACKTRACE__)
   end
 
   @doc false
   def __jit__(fun, params, args_list, opts) do
     {compiler, runtime_fun, opts} = prepare_options(fun, opts)
     compiler.__jit__(fun, params, runtime_fun, args_list, opts)
+  rescue
+    e in [UndefinedFunctionError] ->
+      raise_missing_callback(e, :__jit__, 5, __STACKTRACE__)
+  end
+
+  defp raise_missing_callback(exception, name, arity, stacktrace) do
+    case exception do
+      %UndefinedFunctionError{module: compiler, function: ^name, arity: ^arity} ->
+        raise ArgumentError,
+              "the expected compiler callback #{name}/#{arity} is missing. Please check that the module #{inspect(compiler)} is an Nx.Defn.Compiler."
+
+      _ ->
+        # This is not an error that should've been caught by this function, so we pass the exception along
+        reraise exception, stacktrace
+    end
   end
 
   defp prepare_options(fun, opts) do
@@ -583,6 +604,25 @@ defmodule Nx.Defn.Compiler do
 
     {args, state} = normalize_list(args, state)
     {{{:., dot_meta, [Nx, name]}, meta, args}, state}
+  end
+
+  # We also allow specifically Complex.new so that literal complex numbers
+  # can be written in defn.
+  defp normalize({{:., dot_meta, [Complex, :new]}, meta, args}, state) do
+    {args, state} = normalize_list(args, state)
+    {{{:., dot_meta, [Complex, :new]}, meta, args}, state}
+  end
+
+  defp normalize({{:., dot_meta, [Nx.Constants, :i]}, meta, []}, state) do
+    {{{:., dot_meta, [Complex, :new]}, meta, [0, 1]}, state}
+  end
+
+  defp normalize({{:., dot_meta, [Nx.Constants, :e]}, meta, []}, state) do
+    {{{:., dot_meta, [:math, :exp]}, meta, [1]}, state}
+  end
+
+  defp normalize({{:., dot_meta, [Nx.Constants, :pi]}, meta, []}, state) do
+    {{{:., dot_meta, [:math, :pi]}, meta, []}, state}
   end
 
   defp normalize({{:., dot_meta, [mod, name]}, meta, args}, state) when mod in @allowed_modules do

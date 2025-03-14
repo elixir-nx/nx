@@ -1,0 +1,90 @@
+# Discrete Fourier Transform with Nx
+
+```elixir
+Mix.install([{:nx, github: "elixir-nx/nx", sparse: "nx"}])
+```
+
+## Using complex numbers
+
+Take the complex number "z" defined by: $1+i$.
+
+Since `Nx` depends in the library `Complex`, we can define a complex number by `Complex.new/1`:
+
+```elixir
+z = Complex.new(1,1)
+```
+
+Its absolute value is $ \sqrt{2} \approx 1.4142$ and its phase is $\pi/4 \approx 0.7853$ radians.
+
+```elixir
+{Complex.abs(z), Complex.phase(z)}
+```
+
+Its polar form is:
+
+$ \sqrt{2} \exp^{i \pi/4} \coloneqq \sqrt{2}\lparen \cos(\pi/4) + i\sin(\pi/4) \rparen$.
+
+We can use `Complex.from_polar/2` to build a complex number from it's polar definition:
+
+```elixir
+z = Complex.from_polar(Complex.abs(z), Complex.phase(z))
+```
+
+If we need a tensor from `z`, we can then do:
+
+```elixir
+Nx.tensor(z)
+```
+
+We can use directly `Nx` to build a complex from its cartesian coordinates
+
+```elixir
+t = Nx.complex(1,1)
+```
+
+And compute its absolute value and phase, through these tensor-aware functions
+
+```elixir
+{Nx.abs(t), Nx.phase(t)}
+```
+
+We also have the imaginary constant $i$ defined within `Nx.Constants`
+
+```elixir
+i = Nx.Constants.i()
+
+Nx.add(1 , i)
+```
+
+For example, we can use the following code to build the imaginary constant while keeping the correct precision based on the input.
+
+```elixir
+defmodule Example do
+  import Nx.Defn
+  import Nx.Constants, only: [i: 0]
+
+  defn rotate(z) do
+    z * Nx.Constants.i()
+  end
+
+  defn shift(z) do
+    z + Complex.new(10)
+  end
+end
+```
+
+```elixir
+{
+  Example.rotate(1.4),
+  Example.rotate(Nx.f64(1.4)),
+  Example.rotate(Nx.f8(1.4))
+}
+```
+
+```elixir
+{
+  Example.shift(1.4),
+  Example.shift(Nx.f64(1.4)),
+  Example.shift(Nx.f8(0.2))
+}
+```

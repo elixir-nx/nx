@@ -1,11 +1,10 @@
 #include "ipc.h"
 
+#include <cstdio>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
-
-#include <iostream>
 
 // Function to create or open a shared memory object and set its size
 int get_ipc_handle(const char* memname, size_t memsize) {
@@ -32,7 +31,7 @@ void* open_ipc_handle(int fd, size_t memsize) {
   return ptr;
 }
 
-int close_ipc_handle(int fd, void* ptr, char* memname, size_t memsize) {
+int close_ipc_handle(int fd, void* ptr, const char* memname, size_t memsize) {
   if (munmap(ptr, memsize) == -1) {
     return -1;
   }

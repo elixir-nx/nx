@@ -404,14 +404,16 @@ defmodule EXLA.Defn do
            data: %Expr{
              args: [
                %{data: %{op: :eigh, args: [tensor, _opts]}},
-               {eigenvecs_expr, eigenvals_expr},
+               {%{type: {evec_type_kind, _}} = eigenvecs_expr,
+                %{type: {eval_type_kind, _}} = eigenvals_expr},
                _callback
              ]
            }
          },
          %{client: %EXLA.Client{platform: :host}, builder: %Function{}} = state,
          cache
-       ) do
+       )
+       when evec_type_kind != :c and eval_type_kind != :c do
     # We match only on platform: :host for MLIR, as we want to support
     # eigh-on-cpu as a custom call only in this case
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
@@ -542,6 +544,37 @@ defmodule EXLA.Defn do
       result = Value.call(state.builder, call_args, call_body, typespecs)
       {wrap_tuple_result(result, expr), cache}
     end
+  end
+
+  defp cached_recur_operator(
+         :lu,
+         %T{
+           data: %Expr{args: [{p_expr, l_expr, u_expr}, %{type: {type_kind, _}} = tensor, _opts]}
+         },
+         %{client: %{platform: :host}} = state,
+         cache
+       )
+       when type_kind != :c do
+    # We only want to accelerate the LU operation for real inputs on the host device.
+    # Otherwise, we use the default implementation in Nx.
+    {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
+
+    tensor =
+      if op_type(tensor) != u_expr.type do
+        to_type(tensor, u_expr.type)
+      else
+        tensor
+      end
+
+    {p, l, u} =
+      Value.lu(
+        tensor,
+        expr_to_typespec(p_expr),
+        expr_to_typespec(l_expr),
+        expr_to_typespec(u_expr)
+      )
+
+    {[p, l, u], cache}
   end
 
   defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do
@@ -750,8 +783,8 @@ defmodule EXLA.Defn do
     transform = Keyword.fetch!(opts, :transform_a)
 
     case Value.get_typespec(b).shape do
-      {_} = b_shape ->
-        b_shape = Tuple.append(b_shape, 1)
+      {dim} ->
+        b_shape = {dim, 1}
 
         b =
           b
@@ -770,10 +803,6 @@ defmodule EXLA.Defn do
         to_type(a, type)
         |> Value.triangular_solve(to_type(b, type), left_side, lower, transform, typespec)
     end
-  end
-
-  defp to_operator(:lu, [{_, _, _}, _tensor, _opts], _ans, _state) do
-    raise ArgumentError, "XLA does not currently support the LU operation"
   end
 
   ## to_operator element-wise
@@ -1334,28 +1363,40 @@ defmodule EXLA.Defn do
 
   ## Computation helpers
 
-  defp sort_computation(op, type, arg_typespecs, %{builder: %EXLA.MLIR.Function{} = function}) do
+  defp sort_computation(operator, type, arg_typespecs, %{
+         builder: %EXLA.MLIR.Function{} = function
+       }) do
     {region, [lhs, rhs | _]} = Function.push_region(function, arg_typespecs)
 
     typespec = Typespec.tensor({:pred, 8}, {})
 
-    op =
-      cond do
-        Nx.Type.integer?(type) ->
-          apply(Value, op, [lhs, rhs, typespec])
-
-        op == :less ->
-          is_nan = Value.is_nan(rhs, typespec)
-          Value.bitwise_or(is_nan, Value.less(lhs, rhs, typespec), typespec)
-
-        op == :greater ->
-          is_nan = Value.is_nan(lhs, typespec)
-          Value.bitwise_or(is_nan, Value.greater(lhs, rhs, typespec), typespec)
+    {lhs, rhs} =
+      if Nx.Type.integer?(type) do
+        {lhs, rhs}
+      else
+        {sort_computation_canonicalize_float(lhs), sort_computation_canonicalize_float(rhs)}
       end
+
+    op = apply(Value, operator, [lhs, rhs, typespec, [total_order: true]])
 
     Value.return(function, [op])
     Function.pop_region(function)
     region
+  end
+
+  defp sort_computation_canonicalize_float(%Value{function: func} = op) do
+    # Standardize the representation of NaNs (-NaN, NaN) and zeros (-0, 0).
+    # See https://github.com/google/jax/blob/e81c82605f0e1813080cfe1037d043b27b38291d/jax/_src/lax/lax.py#L4248-L4253
+
+    op_typespec = Value.get_typespec(op)
+
+    zero = Value.constant(func, [0], Typespec.to_shape(op_typespec, {}))
+    zeros = Value.constant(func, [0], op_typespec)
+    nans = Value.constant(func, [:nan], op_typespec)
+
+    pred_typespec = Typespec.tensor({:pred, 8}, {})
+    op = Value.select(Value.equal(op, zero, pred_typespec), zeros, op, op_typespec)
+    Value.select(Value.is_nan(op, pred_typespec), nans, op, op_typespec)
   end
 
   defp op_computation(

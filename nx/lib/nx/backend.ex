@@ -57,8 +57,8 @@ defmodule Nx.Backend do
               shape :: tuple(),
               backend_opts :: keyword(),
               opts :: keyword()
-            ) :: {:ok, tensor} | {:error, term()}
-  @callback to_pointer(tensor, opts :: keyword) :: {:ok, term()} | {:error, term()}
+            ) :: tensor | no_return()
+  @callback to_pointer(tensor, opts :: keyword) :: term() | no_return()
 
   @callback as_type(out :: tensor, tensor) :: tensor
   @callback bitcast(out :: tensor, tensor) :: tensor
@@ -138,7 +138,7 @@ defmodule Nx.Backend do
   First we will attempt to call the optional callback itself
   (one of the many callbacks defined below), then we attempt
   to call this callback (which is also optional), then we
-  fallback to the default iomplementation.
+  fallback to the default implementation.
   """
   @callback optional(atom, [term], fun) :: tensor
 
@@ -175,6 +175,7 @@ defmodule Nx.Backend do
     top_k: 3,
     fft2: 3,
     ifft2: 3,
+    lu: 3,
     qr: 3,
     cholesky: 2,
     eigh: 3,

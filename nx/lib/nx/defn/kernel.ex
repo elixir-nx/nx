@@ -1398,8 +1398,8 @@ defmodule Nx.Defn.Kernel do
   ## Named hooks
 
   It is possible to give names to the hooks. This allows them
-  to be defined or overridden by calling `Nx.Defn.jit/2` or
-  `Nx.Defn.stream/2`. Let's see an example:
+  to be defined or overridden by calling `Nx.Defn.jit/2`.
+  Let's see an example:
 
       defmodule Hooks do
         import Nx.Defn
@@ -1437,9 +1437,8 @@ defmodule Nx.Defn.Kernel do
         {add, mult}
       end
 
-  If a hook with the same name is given to `Nx.Defn.jit/2`
-  or `Nx.Defn.stream/2`, then it will override the default
-  callback.
+  If a hook with the same name is given to `Nx.Defn.jit/2`,
+  then it will override the default callback.
 
   ## Hooks and tokens
 

@@ -1179,8 +1179,8 @@ defmodule Nx.LinAlg do
       #Nx.Tensor<
         f32[2][2]
         [
-          [3.9924824237823486, -1.0052783489227295],
-          [-3.0051186084747314, 1.0071179866790771]
+          [4.000002861022949, -1.0000008344650269],
+          [-3.000002384185791, 1.0000005960464478]
         ]
       >
 
@@ -1275,14 +1275,14 @@ defmodule Nx.LinAlg do
       iex> Nx.round(eigenvals)
       #Nx.Tensor<
         f32[2]
-        [1.0, 2.0]
+        [2.0, 1.0]
       >
       iex> eigenvecs
       #Nx.Tensor<
         f32[2][2]
         [
-          [1.0, 0.0],
-          [0.0, 1.0]
+          [0.0, 1.0],
+          [1.0, 0.0]
         ]
       >
 
@@ -1296,9 +1296,9 @@ defmodule Nx.LinAlg do
       #Nx.Tensor<
         f32[3][3]
         [
-          [0.4075949788093567, 0.9131628274917603, 0.0],
-          [0.40837883949279785, -0.18228201568126678, 0.8944271802902222],
-          [0.8167576789855957, -0.36456403136253357, -0.4472135901451111]
+          [0.40824827551841736, -0.18257419764995575, 0.8944271802902222],
+          [0.40824833512306213, 0.9128708839416504, 0.0],
+          [0.8164965510368347, -0.3651483952999115, -0.4472135901451111]
         ]
       >
 
@@ -1308,7 +1308,7 @@ defmodule Nx.LinAlg do
         f32[2][2]
         [
           [9.0, -1.0],
-          [1.0, 4.0]
+          [4.0, 1.0]
         ]
       >
       iex> eigenvecs
@@ -1316,12 +1316,12 @@ defmodule Nx.LinAlg do
         f32[2][2][2]
         [
           [
-            [0.5612090229988098, -0.8276740908622742],
-            [0.8276740908622742, 0.5612090229988098]
+            [0.5606288313865662, 0.8280671834945679],
+            [0.8280671834945679, -0.5606288313865662]
           ],
           [
-            [1.0, 0.0],
-            [0.0, 1.0]
+            [0.0, 1.0],
+            [1.0, 0.0]
           ]
         ]
       >
@@ -1334,7 +1334,7 @@ defmodule Nx.LinAlg do
         f32[2]
         [
           [9.0, -1.0],
-          [1.0, 4.0]
+          [4.0, 1.0]
         ]
       >
       iex> eigenvecs
@@ -1343,12 +1343,12 @@ defmodule Nx.LinAlg do
         f32[2][2]
         [
           [
-            [0.5612090229988098, -0.8276740908622742],
-            [0.8276740908622742, 0.5612090229988098]
+            [0.5606288313865662, 0.8280671834945679],
+            [0.8280671834945679, -0.5606288313865662]
           ],
           [
-            [1.0, 0.0],
-            [0.0, 1.0]
+            [0.0, 1.0],
+            [1.0, 0.0]
           ]
         ]
       >
@@ -1376,7 +1376,7 @@ defmodule Nx.LinAlg do
        %{tensor | names: eigenvecs_name, type: output_type, shape: eigenvecs_shape}}
 
     :eigh
-    |> Nx.Shared.optional([tensor, opts], output, &Nx.LinAlg.Eigh.eigh/2)
+    |> Nx.Shared.optional([tensor, opts], output, &Nx.LinAlg.BlockEigh.eigh/2)
     |> Nx.vectorize(vectorized_axes)
   end
 
@@ -1523,7 +1523,7 @@ defmodule Nx.LinAlg do
         [
           [1.0, 0.0, 0.0],
           [0.5714285969734192, 1.0, 0.0],
-          [0.1428571492433548, 2.0, 1.0]
+          [0.1428571492433548, 2.0000009536743164, 1.0]
         ]
       >
       iex> u
@@ -1531,7 +1531,7 @@ defmodule Nx.LinAlg do
         f32[3][3]
         [
           [7.0, 8.0, 9.0],
-          [0.0, 0.4285714328289032, 0.8571428656578064],
+          [0.0, 0.4285712242126465, 0.857142448425293],
           [0.0, 0.0, 0.0]
         ]
       >
@@ -1607,7 +1607,7 @@ defmodule Nx.LinAlg do
           [
             [1.0, 0.0, 0.0],
             [0.6666666865348816, 1.0, 0.0],
-            [0.3333333432674408, 2.0, 1.0]
+            [0.3333333432674408, 1.9999992847442627, 1.0]
           ],
           [
             [1.0, 0.0, 0.0],
@@ -1622,8 +1622,8 @@ defmodule Nx.LinAlg do
         [
           [
             [9.0, 8.0, 7.0],
-            [0.0, -0.3333333432674408, -0.6666666865348816],
-            [0.0, 0.0, 0.0]
+            [0.0, -0.33333349227905273, -0.6666669845581055],
+            [0.0, 0.0, 5.960464477539063e-8]
           ],
           [
             [-1.0, 0.0, -1.0],
@@ -1638,7 +1638,7 @@ defmodule Nx.LinAlg do
         [
           [
             [9.0, 8.0, 7.0],
-            [6.0, 5.0, 4.0],
+            [6.0, 5.0, 3.999999761581421],
             [3.0, 2.0, 1.0]
           ],
           [
@@ -1676,7 +1676,7 @@ defmodule Nx.LinAlg do
           [
             [1.0, 0.0, 0.0],
             [0.6666666865348816, 1.0, 0.0],
-            [0.3333333432674408, 2.0, 1.0]
+            [0.3333333432674408, 1.9999992847442627, 1.0]
           ],
           [
             [1.0, 0.0, 0.0],
@@ -1692,8 +1692,8 @@ defmodule Nx.LinAlg do
         [
           [
             [9.0, 8.0, 7.0],
-            [0.0, -0.3333333432674408, -0.6666666865348816],
-            [0.0, 0.0, 0.0]
+            [0.0, -0.33333349227905273, -0.6666669845581055],
+            [0.0, 0.0, 5.960464477539063e-8]
           ],
           [
             [-1.0, 0.0, -1.0],
@@ -1709,22 +1709,22 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) tensor must be a square matrix or a batch of square matrices, got shape: {3, 4}
   """
   def lu(tensor, opts \\ []) do
-    apply_vectorized(tensor, fn tensor ->
-      opts = keyword!(opts, eps: 1.0e-10)
-      %T{type: type, shape: shape} = tensor
+    opts = keyword!(opts, eps: 1.0e-10)
+    %T{vectorized_axes: vectorized_axes} = tensor = Nx.to_tensor(tensor)
+    %T{type: type, shape: shape} = tensor = Nx.devectorize(tensor)
 
-      output_type = Nx.Type.to_floating(type)
-      {p_shape, l_shape, u_shape} = Nx.Shape.lu(shape)
-      names = List.duplicate(nil, tuple_size(shape))
+    output_type = Nx.Type.to_floating(type)
+    {p_shape, l_shape, u_shape} = Nx.Shape.lu(shape)
+    names = List.duplicate(nil, tuple_size(shape))
 
-      impl!(tensor).lu(
-        {%{tensor | type: type, shape: p_shape, names: names},
-         %{tensor | type: output_type, shape: l_shape, names: names},
-         %{tensor | type: output_type, shape: u_shape, names: names}},
-        tensor,
-        opts
-      )
-    end)
+    output =
+      {%{tensor | type: type, shape: p_shape, names: names},
+       %{tensor | type: output_type, shape: l_shape, names: names},
+       %{tensor | type: output_type, shape: u_shape, names: names}}
+
+    :lu
+    |> Nx.Shared.optional([tensor, opts], output, &Nx.LinAlg.LU.lu/2)
+    |> Nx.vectorize(vectorized_axes)
   end
 
   @doc """
@@ -1892,7 +1892,7 @@ defmodule Nx.LinAlg do
       ...> ]))
       #Nx.Tensor<
         f32
-        48.0
+        47.999996185302734
       >
 
       iex> Nx.LinAlg.determinant(Nx.tensor([
@@ -1904,7 +1904,7 @@ defmodule Nx.LinAlg do
       ...> ]))
       #Nx.Tensor<
         f32
-        48.0
+        47.999996185302734
       >
 
       iex> Nx.LinAlg.determinant(Nx.tensor([
@@ -2152,24 +2152,28 @@ defmodule Nx.LinAlg do
   @doc """
   Return the least-squares solution to a linear matrix equation Ax = b.
 
+  ## Options
+
+    * `:eps` - Rounding error threshold used to assume values as 0. Defaults to `1.0e-15`
+
   ## Examples
 
       iex> Nx.LinAlg.least_squares(Nx.tensor([[1, 2], [2, 3]]), Nx.tensor([1, 2]))
       #Nx.Tensor<
         f32[2]
-        [1.0000004768371582, -2.665601925855299e-7]
+        [1.0000028610229492, -2.384185791015625e-6]
       >
 
       iex> Nx.LinAlg.least_squares(Nx.tensor([[0, 1], [1, 1], [2, 1], [3, 1]]), Nx.tensor([-1, 0.2, 0.9, 2.1]))
       #Nx.Tensor<
         f32[2]
-        [0.9966151118278503, -0.947966456413269]
+        [0.9999998211860657, -0.9500012993812561]
       >
 
       iex> Nx.LinAlg.least_squares(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([1, 2]))
       #Nx.Tensor<
         f32[3]
-        [-0.05534052848815918, 0.1111316829919815, 0.27760395407676697]
+        [-0.05555540323257446, 0.1111111044883728, 0.27777770161628723]
       >
 
   ## Error cases
@@ -2187,7 +2191,9 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) the number of rows of the matrix as the 1st argument and the number of columns of the vector as the 2nd argument must be the same, got 1st argument shape {2, 2} and 2nd argument shape {3}
   """
   @doc from_backend: false
-  defn least_squares(a, b) do
+  defn least_squares(a, b, opts \\ []) do
+    opts = keyword!(opts, eps: 1.0e-15)
+
     %T{type: a_type, shape: a_shape} = Nx.to_tensor(a)
     a_size = Nx.rank(a_shape)
     %T{type: b_type, shape: b_shape} = Nx.to_tensor(b)
@@ -2235,17 +2241,9 @@ defmodule Nx.LinAlg do
       )
     end
 
-    case a_shape do
-      {m, n} when m == n ->
-        Nx.LinAlg.solve(a, b)
-
-      {m, n} when m != n ->
-        Nx.LinAlg.pinv(a, eps: 1.0e-15)
-        |> Nx.dot(b)
-
-      _ ->
-        nil
-    end
+    a
+    |> Nx.LinAlg.pinv(eps: opts[:eps])
+    |> Nx.dot(b)
   end
 
   defp apply_vectorized(tensor, fun) when is_function(fun, 1) do

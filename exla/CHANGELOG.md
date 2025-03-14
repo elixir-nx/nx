@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.9.2 (2024-11-16)
+
+### Enhancements
+
+  * Support cross-compilation for use with Nerves
+  * Optimize LU with a custom call
+
 ## v0.9.1 (2024-10-08)
 
 ### Enhancements

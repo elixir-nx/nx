@@ -417,7 +417,7 @@ defmodule Nx do
         config: [nx: [default_backend: EXLA.Backend]]
       )
 
-  Or by calling `Nx.global_default_backend/1` (less preferrable):
+  Or by calling `Nx.global_default_backend/1` (less preferable):
 
       Nx.global_default_backend(EXLA.Backend)
 
@@ -614,7 +614,7 @@ defmodule Nx do
       >
 
   Certain backends and compilers support 8-bit floats. The precision
-  iomplementation of 8-bit floats may change per backend, so you must
+  implementation of 8-bit floats may change per backend, so you must
   be careful when transferring data across. The binary backend implements
   F8E5M2:
 
@@ -943,7 +943,7 @@ defmodule Nx do
 
   for t <-
         [:u2, :u4, :u8, :u16, :u32, :u64, :s2, :s4, :s8, :s16, :s32, :s64] ++
-          [:f8, :bf16, :f16, :f32, :f64] do
+          [:f8, :bf16, :f16, :f32, :f64, :c64, :c128] do
     @doc """
     Short-hand function for creating tensor of type `#{t}`.
 
@@ -1305,7 +1305,7 @@ defmodule Nx do
       out =
         case shape do
           {n} ->
-            intermediate_shape = Tuple.duplicate(1, tuple_size(out_shape) - 1) |> Tuple.append(n)
+            intermediate_shape = Tuple.duplicate(1, tuple_size(out_shape) - 1) |> tuple_append(n)
 
             backend.eye(
               %T{type: type, shape: intermediate_shape, names: names},
@@ -1609,7 +1609,7 @@ defmodule Nx do
       t
     else
       diag_length = div(Nx.size(t), Tuple.product(batch_shape))
-      Nx.reshape(t, Tuple.append(batch_shape, diag_length))
+      Nx.reshape(t, tuple_append(batch_shape, diag_length))
     end
   end
 
@@ -7684,7 +7684,7 @@ defmodule Nx do
   number of indices, while `updates` must have a compatible `{n, ...j}` shape, such that
   `i + j = rank(tensor)`.
 
-  In case of repeating indices, the result is non-determinstic, since the operation happens
+  In case of repeating indices, the result is non-deterministic, since the operation happens
   in parallel when running on devices such as the GPU.
 
   See also: `indexed_add/3`, `put_slice/3`.
@@ -8682,7 +8682,7 @@ defmodule Nx do
   You may set the absolute tolerance, `:atol` and relative tolerance
   `:rtol`. Given tolerances, this functions returns 1 if
 
-     absolute(a - b) <= (atol + rtol * absolute(b))
+      absolute(a - b) <= (atol + rtol * absolute(b))
 
   is true for all elements of a and b.
 
@@ -8695,67 +8695,67 @@ defmodule Nx do
 
   ## Examples
 
-     iex> Nx.all_close(Nx.tensor([1.0e10, 1.0e-7]), Nx.tensor([1.00001e10, 1.0e-8]))
-     #Nx.Tensor<
-       u8
-       0
-     >
+      iex> Nx.all_close(Nx.tensor([1.0e10, 1.0e-7]), Nx.tensor([1.00001e10, 1.0e-8]))
+      #Nx.Tensor<
+        u8
+        0
+      >
 
-     iex> Nx.all_close(Nx.tensor([1.0e-8, 1.0e-8]), Nx.tensor([1.0e-8, 1.0e-9]))
-     #Nx.Tensor<
-       u8
-       1
-     >
+      iex> Nx.all_close(Nx.tensor([1.0e-8, 1.0e-8]), Nx.tensor([1.0e-8, 1.0e-9]))
+      #Nx.Tensor<
+        u8
+        1
+      >
 
   Although `NaN` by definition isn't equal to itself, so this implementation
   also considers all `NaN`s different from each other by default:
 
-     iex> Nx.all_close(Nx.tensor(:nan), Nx.tensor(:nan))
-     #Nx.Tensor<
-       u8
-       0
-     >
+      iex> Nx.all_close(Nx.tensor(:nan), Nx.tensor(:nan))
+      #Nx.Tensor<
+        u8
+        0
+      >
 
-     iex> Nx.all_close(Nx.tensor(:nan), Nx.tensor(0))
-     #Nx.Tensor<
-       u8
-       0
-     >
+      iex> Nx.all_close(Nx.tensor(:nan), Nx.tensor(0))
+      #Nx.Tensor<
+        u8
+        0
+      >
 
   We can change this behavior with the `:equal_nan` option:
 
-     iex> t = Nx.tensor([:nan, 1])
-     iex> Nx.all_close(t, t, equal_nan: true) # nan == nan -> true
-     #Nx.Tensor<
-       u8
-       1
-     >
-     iex> Nx.all_close(t, t, equal_nan: false) # nan == nan -> false, default behavior
-     #Nx.Tensor<
-       u8
-       0
-     >
+      iex> t = Nx.tensor([:nan, 1])
+      iex> Nx.all_close(t, t, equal_nan: true) # nan == nan -> true
+      #Nx.Tensor<
+        u8
+        1
+      >
+      iex> Nx.all_close(t, t, equal_nan: false) # nan == nan -> false, default behavior
+      #Nx.Tensor<
+        u8
+        0
+      >
 
   Infinities behave as expected, being "close" to themselves but not
   to other numbers:
 
-     iex> Nx.all_close(Nx.tensor(:infinity), Nx.tensor(:infinity))
-     #Nx.Tensor<
-       u8
-       1
-     >
+      iex> Nx.all_close(Nx.tensor(:infinity), Nx.tensor(:infinity))
+      #Nx.Tensor<
+        u8
+        1
+      >
 
-     iex> Nx.all_close(Nx.tensor(:infinity), Nx.tensor(:neg_infinity))
-     #Nx.Tensor<
-       u8
-       0
-     >
+      iex> Nx.all_close(Nx.tensor(:infinity), Nx.tensor(:neg_infinity))
+      #Nx.Tensor<
+        u8
+        0
+      >
 
-     iex> Nx.all_close(Nx.tensor(1.0e30), Nx.tensor(:infinity))
-     #Nx.Tensor<
-       u8
-       0
-     >
+      iex> Nx.all_close(Nx.tensor(1.0e30), Nx.tensor(:infinity))
+      #Nx.Tensor<
+        u8
+        0
+      >
 
   ## Vectorized tensors
 
@@ -10365,9 +10365,9 @@ defmodule Nx do
               if opts[:keep_axis] do
                 new_shape
                 |> Tuple.delete_at(tuple_size(new_shape) - 1)
-                |> Tuple.append(:auto)
+                |> tuple_append(:auto)
               else
-                Tuple.append(new_shape, :auto)
+                tuple_append(new_shape, :auto)
               end
 
             reshaped_tensor = reshape(tensor, flattened_shape)
@@ -12919,6 +12919,11 @@ defmodule Nx do
   of summing the element-wise products in the window across
   each input channel.
 
+  > #### Kernel Reflection {: .info}
+  >
+  > See the note at the end of this section for more details
+  > on the convention for kernel reflection and conjugation.
+
   The ranks of both `input` and `kernel` must match. By
   default, both `input` and `kernel` are expected to have shapes
   of the following form:
@@ -12999,6 +13004,45 @@ defmodule Nx do
   specifying `:batch_group_size`. This will compute a grouped convolution
   in the same way as with `:feature_group_size`, however, the input
   tensor will be split into groups along the batch dimension.
+
+  > #### Convolution vs Correlation {: .tip}
+  >
+  > `conv/3` does not perform reversion of the kernel.
+  > This means that if you come from a Signal Processing background,
+  > you might treat it as a cross-correlation operation instead of a convolution.
+  >
+  > This function is not exactly a cross-correlation function, as it does not
+  > perform conjugation of the kernel, as is done in [scipy.signal.correlate](https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.correlate.html).
+  > This can be remedied via `Nx.conjugate/1`, as seen below:
+  >
+  > ```elixir
+  > kernel =
+  >   if Nx.Type.complex?(Nx.type(kernel)) do
+  >     Nx.conjugate(kernel)
+  >   else
+  >     kernel
+  >   end
+  >
+  > Nx.conv(tensor, kernel)
+  > ```
+  >
+  > If you need the proper Signal Processing convolution, such as the one in
+  > [scipy.signal.convolve](https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.convolve.html),
+  > you can use `reverse/2`, like in the example:
+  >
+  > ```elixir
+  > reversal_axes =
+  >   case Nx.rank(kernel) do
+  >     0 -> []
+  >     1 -> [1]
+  >     2 -> [0, 1]
+  >     _ -> Enum.drop(Nx.axes(kernel), 2)
+  >   end
+  >
+  > kernel = Nx.reverse(kernel, axes: reversal_axes)
+  >
+  > Nx.conv(tensor, kernel)
+  > ```
 
   ## Examples
 
@@ -13554,7 +13598,7 @@ defmodule Nx do
         end)
         |> Nx.stack()
         |> Nx.revectorize(vectorized_axes,
-          target_shape: Tuple.append(List.to_tuple(lengths), :auto)
+          target_shape: tuple_append(List.to_tuple(lengths), :auto)
         )
 
       Nx.gather(tensor, idx)
@@ -14288,7 +14332,7 @@ defmodule Nx do
       Nx.Shared.optional(:take_along_axis, [tensor, indices, [axis: axis]], out, fn
         tensor, indices, _opts ->
           axes_range = axes(indices)
-          new_axis_shape = Tuple.append(shape(indices), 1)
+          new_axis_shape = tuple_append(shape(indices), 1)
 
           full_indices =
             axes_range
@@ -14471,7 +14515,7 @@ defmodule Nx do
         indices = devectorize(indices, keep_names: false)
 
         iota_shape =
-          indices.shape |> Tuple.delete_at(tuple_size(indices.shape) - 1) |> Tuple.append(1)
+          indices.shape |> Tuple.delete_at(tuple_size(indices.shape) - 1) |> tuple_append(1)
 
         offset_axes = (offset - 1)..0//-1
 
@@ -16727,21 +16771,21 @@ defmodule Nx do
 
       pointer = %Nx.Pointer{kind: :local, address: 1234}
       Nx.from_pointer(MyBackend, pointer, {:s, 32}, {1, 3})
-      #Nx.Tensor<
-        s32[1][3]
-        [
-          [10, 20, 30]
-        ]
-      >
+      #=> #Nx.Tensor<
+      #=>   s32[1][3]
+      #=>   [
+      #=>     [10, 20, 30]
+      #=>   ]
+      #=> >
 
       pointer = %Nx.Pointer{kind: :ipc, handle: "some-ipc-handle"}
       Nx.from_pointer({MyBackend, some: :opt}, pointer, {:s, 32}, {1, 3}, names: [nil, :col])
-      #Nx.Tensor<
-        s32[1][col: 3]
-        [
-          [10, 20, 30]
-        ]
-      >
+      #=> #Nx.Tensor<
+      #=>   s32[1][col: 3]
+      #=>   [
+      #=>     [10, 20, 30]
+      #=>   ]
+      #=> >
   """
   @doc type: :creation
   def from_pointer(backend, pointer, type, shape, opts \\ [])
@@ -16768,7 +16812,7 @@ defmodule Nx do
 
   ## Options
 
-    * `:kind` - one of `:local`, `:ipc`. `:local` means the returned value
+    * `:mode` - one of `:local`, `:ipc`. `:local` means the returned value
       represents a pointer internal to the current process. `:ipc` means
       the returned value represents an IPC handle that can be shared between
       processes. Defaults to `:local`.
@@ -16778,12 +16822,12 @@ defmodule Nx do
   ## Examples
 
       t = Nx.u8([10, 20, 30])
-      Nx.to_pointer(t, kind: :local)
-      %Nx.Pointer{kind: :local, address: 1234, data_size: 3, handle: nil}
+      Nx.to_pointer(t, mode: :local)
+      #=> %Nx.Pointer{kind: :local, address: 1234, data_size: 3, handle: nil}
 
       t = Nx.s32([1, 2, 3])
-      Nx.to_pointer(t, kind: :ipc)
-      %Nx.Pointer{kind: :ipc, address: nil, data_size: 32, handle: "some-ipc-handle"}
+      Nx.to_pointer(t, mode: :ipc)
+      #=> %Nx.Pointer{kind: :ipc, address: nil, data_size: 32, handle: "some-ipc-handle"}
   """
   @doc type: :creation
   def to_pointer(tensor, opts \\ []) do

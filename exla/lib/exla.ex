@@ -6,11 +6,15 @@ defmodule EXLA do
 
   ## XLA binaries
 
-  EXLA relies on the [XLA](https://github.com/elixir-nx/xla) package to
-  provide the necessary XLA binaries. Whenever possible it tries to download
-  precompiled builds, but you may need to build from source if there is no
-  version matching your target environment. For more details, including
-  GPU/TPU support see [the usage section](https://github.com/elixir-nx/xla#usage).
+  EXLA relies on the `XLA` package to provide the necessary XLA binaries.
+  Whenever possible it tries to download precompiled builds, but you may
+  need to build from source if there is no version matching your target
+  environment. For more details, including GPU/TPU support and requirements
+  see the `XLA` docs.
+
+  > #### Version requirements {: .info}
+  >
+  > For precise requirements, such as CUDA and cuDNN versions, see `XLA` docs.
 
   ## Configuration
 

@@ -35,7 +35,7 @@ defmodule Nx.MixProject do
 
   defp deps do
     [
-      {:complex, "~> 0.5"},
+      {:complex, "~> 0.6"},
       {:telemetry, "~> 0.4.0 or ~> 1.0"},
       {:ex_doc, "~> 0.29", only: :docs}
     ]
@@ -60,6 +60,7 @@ defmodule Nx.MixProject do
         "guides/intro-to-nx.livemd",
         "guides/advanced/vectorization.livemd",
         "guides/advanced/aggregation.livemd",
+        "guides/advanced/automatic_differentiation.livemd",
         "guides/exercises/exercises-1-20.livemd"
       ],
       skip_undefined_reference_warnings_on: ["CHANGELOG.md"],

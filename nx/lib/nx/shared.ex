@@ -6,6 +6,13 @@ defmodule Nx.Shared do
 
   ## Type macros
 
+  defmacro generated_case(expr, do: clauses) do
+    clauses =
+      Enum.map(clauses, fn {:->, meta, args} -> {:->, [generated: true] ++ meta, args} end)
+
+    {:case, [generated: true], [expr, [do: clauses]]}
+  end
+
   @doc """
   Match the cartesian product of all given types.
 
@@ -437,6 +444,13 @@ defmodule Nx.Shared do
   defp type(_other), do: {:f, 32}
 
   ## Helpers
+
+  @doc """
+  Appends an element to a tuple.
+  """
+  def tuple_append(tuple, elem) do
+    Tuple.insert_at(tuple, tuple_size(tuple), elem)
+  end
 
   @doc """
   Extracts the backend from the given options.
