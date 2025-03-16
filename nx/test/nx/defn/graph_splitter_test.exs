@@ -426,17 +426,11 @@ defmodule Nx.Defn.GraphSplitterTest do
 
       chain = GraphSplitter.traverse(expr, split_fn)
 
-      assert [root, side1, side2, merge] = chain
+      assert [root, right, left, merge] = chain
 
       assert {%T{data: %Expr{op: :multiply, args: [arg0, arg1]}}} = root.expr
       assert %T{data: %Expr{op: :parameter, args: [0]}} = arg0
       assert %T{data: %Expr{op: :parameter, args: [1]}} = arg1
-
-      # because things are balanced, we don't know which of side1 and side2 are left and right
-      # in our expr, so we should disambiguate:
-
-      {[%Stage{} = left], [%Stage{} = right]} =
-        Enum.split_with([side1, side2], fn %Stage{expr: {expr}} -> expr.data.op == :multiply end)
 
       # left should depend on exactly the same parameters as the root, as it's pulling from
       # the global scope
