@@ -13,6 +13,58 @@ defmodule Nx.Defn.GraphSplitter do
     chain
   end
 
+  @doc """
+  Executes the stage chain with the given arguments.
+  """
+  def run(chain, args) do
+    scope =
+      Enum.with_index(args, fn arg, idx -> {{nil, idx}, arg} end)
+      |> Map.new()
+
+    scope =
+      Enum.reduce(chain, scope, fn stage, scope ->
+        %{id: id, expr: expr, argument_sources: argument_sources, arguments: arguments} = stage
+
+        args =
+          arguments
+          |> Enum.map(fn {id, %T{data: %Expr{args: [idx]}}} ->
+            source = Map.fetch!(argument_sources, id)
+            argument = Map.fetch!(scope, source)
+            {idx, argument}
+          end)
+          |> Enum.sort_by(fn {idx, _} -> idx end)
+          |> Enum.map(fn {_, argument} -> argument end)
+
+        case Nx.Defn.jit_apply(fn _ -> expr end, [List.to_tuple(args)]) do
+          %T{} = tensor ->
+            Map.put(scope, {id, 0}, tensor)
+
+          tuple ->
+            {_idx, scope} =
+              tuple
+              |> Tuple.to_list()
+              |> Enum.reduce({0, scope}, fn tensor, {idx, scope} ->
+                {idx + 1, Map.put(scope, {id, idx}, tensor)}
+              end)
+
+            scope
+        end
+      end)
+
+    last_stage = List.last(chain)
+
+    if is_tuple(last_stage.expr) do
+      scope
+      |> Enum.filter(fn {{id, _}, _} -> id == last_stage.id end)
+      |> Enum.sort_by(fn {{_, idx}, _} -> idx end)
+      |> Enum.map(fn {_, tensor} -> tensor end)
+      |> List.to_tuple()
+    else
+      {_, tensor} = Enum.find(scope, fn {{id, _}, _} -> id == last_stage.id end)
+      tensor
+    end
+  end
+
   @doc false
   def traverse_and_return_cache(expr, expr_split_fn) do
     # expression_chain is going to be a reverse-accumulation of {category, subexpr}

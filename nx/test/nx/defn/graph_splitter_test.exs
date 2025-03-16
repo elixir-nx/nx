@@ -395,4 +395,113 @@ defmodule Nx.Defn.GraphSplitterTest do
       assert %T{data: %Expr{id: ^arg_1_id, op: :parameter, args: [1]}} = a
     end
   end
+
+  describe "run/2" do
+    test "executes the stages chain and returns the correct result" do
+      function = fn arg0, arg1 ->
+        # root
+        x = Nx.multiply(arg0, arg1) |> Nx.Defn.Expr.metadata(%{split: true})
+
+        # left side
+        w_left = Nx.multiply(x, arg1) |> Nx.Defn.Expr.metadata(%{split: true})
+
+        # right side
+        w_right = Nx.divide(x, arg1) |> Nx.Defn.Expr.metadata(%{split: true})
+
+        # merge
+        Nx.add(w_right, w_left)
+      end
+
+      args = [Nx.tensor([1, 2]), Nx.tensor([3, 4])]
+
+      # This is used in the final assertion of this test
+      expected_result = Nx.Defn.jit_apply(function, args)
+
+      expr = apply(Nx.Defn.debug_expr(function), args)
+
+      split_fn = fn
+        %T{data: %Expr{op: :metadata, args: [_expr, %{split: true}]}} -> true
+        _ -> false
+      end
+
+      chain = GraphSplitter.traverse(expr, split_fn)
+
+      assert [root, side1, side2, merge] = chain
+
+      assert {%T{data: %Expr{op: :multiply, args: [arg0, arg1]}}} = root.expr
+      assert %T{data: %Expr{op: :parameter, args: [0]}} = arg0
+      assert %T{data: %Expr{op: :parameter, args: [1]}} = arg1
+
+      # because things are balanced, we don't know which of side1 and side2 are left and right
+      # in our expr, so we should disambiguate:
+
+      {[%Stage{} = left], [%Stage{} = right]} =
+        Enum.split_with([side1, side2], fn %Stage{expr: {expr}} -> expr.data.op == :multiply end)
+
+      # left should depend on exactly the same parameters as the root, as it's pulling from
+      # the global scope
+      assert {%T{data: %Expr{op: :multiply, args: [x, arg1_left]}}} = left.expr
+
+      assert %T{
+               data: %Expr{
+                 op: :metadata,
+                 args: [
+                   %T{data: %Expr{id: x_left_id, op: :parameter, args: [1]}},
+                   %{split: true}
+                 ]
+               }
+             } = x
+
+      assert %T{data: %Expr{id: arg1_left_id, op: :parameter, args: [0]}} = arg1_left
+
+      assert left.argument_sources[arg1_left_id] == {nil, 1}
+      assert left.argument_sources[x_left_id] == {root.id, 0}
+
+      # right should depend on the result of the root and on arg1, but arg1 will be reindexed
+      # we should assert that the argument source for arg1_right is correct
+      assert {%T{data: %Expr{op: :divide, args: [x, arg1_right]}}} = right.expr
+
+      assert %T{
+               data: %Expr{
+                 op: :metadata,
+                 args: [
+                   %T{data: %Expr{id: x_right_id, op: :parameter, args: [1]}},
+                   %{split: true}
+                 ]
+               }
+             } = x
+
+      assert %T{data: %Expr{id: arg1_right_id, op: :parameter, args: [0]}} = arg1_right
+
+      assert right.argument_sources[arg1_right_id] == {nil, 1}
+      assert right.argument_sources[x_right_id] == {root.id, 0}
+
+      assert %T{data: %Expr{op: :add, args: [w_right, w_left]}} = merge.expr
+
+      assert %T{
+               data: %Expr{
+                 op: :metadata,
+                 args: [
+                   %T{data: %Expr{id: w_right_id, op: :parameter, args: [0]}},
+                   %{split: true}
+                 ]
+               }
+             } = w_right
+
+      assert %T{
+               data: %Expr{
+                 op: :metadata,
+                 args: [
+                   %T{data: %Expr{id: w_left_id, op: :parameter, args: [1]}},
+                   %{split: true}
+                 ]
+               }
+             } = w_left
+
+      assert merge.argument_sources[w_right_id] == {right.id, 0}
+      assert merge.argument_sources[w_left_id] == {left.id, 0}
+
+      assert GraphSplitter.run(chain, args) == expected_result
+    end
+  end
 end
