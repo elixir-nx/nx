@@ -91,4 +91,30 @@ defmodule EXLA.MLIR.NxLinAlgDoctestTest do
       end
     end
   end
+
+  describe "cholesky" do
+    test "property" do
+      key = Nx.Random.key(System.unique_integer())
+
+      for _ <- 1..10, type <- [{:f, 32}, {:c, 64}], reduce: key do
+        key ->
+          # Generate random L matrix so we can construct
+          # a factorizable A matrix:
+          shape = {3, 4, 4}
+
+          {a_prime, key} = Nx.Random.normal(key, 0, 1, shape: shape, type: type)
+
+          a_prime = Nx.add(a_prime, Nx.eye(shape))
+          b = Nx.dot(Nx.LinAlg.adjoint(a_prime), [-1], [0], a_prime, [-2], [0])
+
+          d = Nx.eye(shape) |> Nx.multiply(0.1)
+
+          a = Nx.add(b, d)
+
+          assert l = Nx.LinAlg.cholesky(a)
+          assert_all_close(Nx.dot(l, [2], [0], Nx.LinAlg.adjoint(l), [1], [0]), a, atol: 1.0e-2)
+          key
+      end
+    end
+  end
 end
