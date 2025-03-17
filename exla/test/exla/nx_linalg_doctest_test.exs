@@ -16,7 +16,7 @@ defmodule EXLA.MLIR.NxLinAlgDoctestTest do
     cholesky: 1,
     least_squares: 3,
     determinant: 1,
-    matrix_power: 2,
+    # matrix_power: 2,
     lu: 2
   ]
 
@@ -152,6 +152,39 @@ defmodule EXLA.MLIR.NxLinAlgDoctestTest do
 
           key
       end
+    end
+  end
+
+  describe "determinant" do
+    test "supports batched matrices" do
+      two_by_two = Nx.tensor([[[2, 3], [4, 5]], [[6, 3], [4, 8]]])
+      assert_equal(Nx.LinAlg.determinant(two_by_two), Nx.tensor([-2.0, 36.0]))
+
+      three_by_three =
+        Nx.tensor([
+          [[1.0, 2.0, 3.0], [1.0, 5.0, 3.0], [7.0, 6.0, 9.0]],
+          [[5.0, 2.0, 3.0], [8.0, 5.0, 4.0], [3.0, 1.0, -9.0]]
+        ])
+
+      assert_equal(Nx.LinAlg.determinant(three_by_three), Nx.tensor([-36.0, -98.0]))
+
+      four_by_four =
+        Nx.tensor([
+          [
+            [1.0, 2.0, 3.0, 0.0],
+            [1.0, 5.0, 3.0, 0.0],
+            [7.0, 6.0, 9.0, 0.0],
+            [0.0, -11.0, 2.0, 3.0]
+          ],
+          [
+            [5.0, 2.0, 3.0, 0.0],
+            [8.0, 5.0, 4.0, 0.0],
+            [3.0, 1.0, -9.0, 0.0],
+            [8.0, 2.0, -4.0, 5.0]
+          ]
+        ])
+
+      assert_all_close(Nx.LinAlg.determinant(four_by_four), Nx.tensor([-108.0, -490]))
     end
   end
 end
