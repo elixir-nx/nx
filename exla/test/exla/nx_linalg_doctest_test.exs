@@ -1,4 +1,4 @@
-defmodule EXLA.MLIR.NxLinAlgDoctestTest do
+defmodule EXLA.NxLinAlgDoctestTest do
   use EXLA.Case, async: true
   import Nx, only: :sigils
 
@@ -366,6 +366,39 @@ defmodule EXLA.MLIR.NxLinAlgDoctestTest do
         assert_all_close(u, Nx.eye({m, m}))
         assert_all_close(s, Nx.broadcast(0, {k}))
         assert_all_close(vt, Nx.eye({n, n}))
+      end
+    end
+  end
+
+  describe "pinv" do
+    test "does not raise for 0 singular values" do
+      key = Nx.Random.key(System.unique_integer())
+
+      for {m, n} <- [{3, 4}, {3, 3}, {4, 3}], reduce: key do
+        key ->
+          # generate u and vt as random orthonormal matrices
+          {base_u, key} = Nx.Random.uniform(key, 0, 1, shape: {m, m}, type: :f64)
+          {u, _} = Nx.LinAlg.qr(base_u)
+          {base_vt, key} = Nx.Random.uniform(key, 0, 1, shape: {n, n}, type: :f64)
+          {vt, _} = Nx.LinAlg.qr(base_vt)
+
+          # because min(m, n) is always 3, we can use fixed values here
+          # the important thing is that there's at least one zero in the
+          # diagonal, to ensure that we're guarding against 0 division
+          zeros = Nx.broadcast(0, {m, n})
+          s = Nx.put_diagonal(zeros, Nx.f64([1, 4, 0]))
+          s_inv = Nx.put_diagonal(Nx.transpose(zeros), Nx.f64([1, 0.25, 0]))
+
+          # construct t with the given singular values
+          t = u |> Nx.dot(s) |> Nx.dot(vt)
+          pinv = Nx.LinAlg.pinv(t)
+
+          # ensure that the returned pinv is close to what we expect
+          assert_all_close(pinv, Nx.transpose(vt) |> Nx.dot(s_inv) |> Nx.dot(Nx.transpose(u)),
+            atol: 1.0e-2
+          )
+
+          key
       end
     end
   end
