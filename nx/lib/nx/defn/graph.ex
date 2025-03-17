@@ -102,8 +102,8 @@ defmodule Nx.Defn.Graph do
 
   @doc false
   def __split__(expr, expr_split_fn) do
-    # expression_chain is going to be a reverse-accumulation of {category, subexpr}
-    # that we can then compile and chain-execute elsewhere. category is either :gather, :reduce or :none
+    # state.expression_chain is a reverse accumulation of the stages and
+    # snapshots of the state at each one so that we can properly remap parameters for each stage.
     state = %{
       expression_chain: [],
       nodes_to_replace: %{},
