@@ -1141,8 +1141,7 @@ defmodule EXLA.Defn do
       end
 
     batch_size = tensor_rank - length(axes)
-    offset_size = indices_rank - length(axes)
-    offset_dims = count_up(batch_size, offset_size)
+    offset_dims = count_up(batch_size, index_vector_dim)
 
     Value.gather(
       tensor,

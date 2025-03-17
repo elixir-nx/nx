@@ -225,6 +225,42 @@ defmodule EXLA.BackendTest do
              "1.0-0.0i, 2.0+0.0i, 3.0-0.0i, 0.0+1.0i, 0.0+2.0i"
   end
 
+  test "gather vectorized regression" do
+    gradients =
+      Nx.tensor(
+        [
+          [1.0, 1.0],
+          [-1.0, 1.0],
+          [1.0, -1.0],
+          [-1.0, -1.0]
+        ],
+        backend: EXLA.Backend
+      )
+
+    i =
+      Nx.tensor([[0, 2, 3, 2, 2, 2, 2, 1]], type: {:u, 16}, backend: EXLA.Backend)
+      |> Nx.vectorize([:x, :octaves])
+
+    result = Nx.gather(gradients, Nx.reshape(i, {1}))
+
+    assert_equal(
+      result,
+      Nx.tensor([
+        [
+          [1.0, 1.0],
+          [1.0, -1.0],
+          [-1.0, -1.0],
+          [1.0, -1.0],
+          [1.0, -1.0],
+          [1.0, -1.0],
+          [1.0, -1.0],
+          [-1.0, 1.0]
+        ]
+      ])
+      |> Nx.vectorize([:x, :octaves])
+    )
+  end
+
   describe "quantized types" do
     test "s2" do
       tensor = Nx.s2(-1)
