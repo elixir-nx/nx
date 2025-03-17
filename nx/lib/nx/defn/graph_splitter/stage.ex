@@ -9,12 +9,7 @@ defmodule Nx.Defn.GraphSplitter.Stage do
   @type t :: %__MODULE__{
           id: reference(),
           expr: %{__struct__: Nx.Defn.Expr},
-          arguments: %{
-            reference() => %{
-              source: {reference() | nil, non_neg_integer()},
-              index: non_neg_integer()
-            }
-          }
+          arguments: [%{source: {reference() | nil, non_neg_integer()}}]
         }
 
   defstruct [:id, :expr, :arguments]

@@ -26,13 +26,9 @@ defmodule Nx.Defn.GraphSplitter do
         %{id: id, expr: expr, arguments: arguments} = stage
 
         args =
-          arguments
-          |> Enum.map(fn {_id, %{source: source, index: idx}} ->
-            argument = Map.fetch!(scope, source)
-            {idx, argument}
+          Enum.map(arguments, fn %{source: source} ->
+            Map.fetch!(scope, source)
           end)
-          |> Enum.sort_by(fn {idx, _} -> idx end)
-          |> Enum.map(fn {_, argument} -> argument end)
 
         case Nx.Defn.jit_apply(fn _ -> expr end, [List.to_tuple(args)]) do
           %T{} = tensor ->
@@ -114,12 +110,15 @@ defmodule Nx.Defn.GraphSplitter do
             composite_rewrite_subtree(expr, %{state | nodes_to_replace: arg_remapping})
 
           arguments =
-            Map.new(arg_remapping, fn {_id, arg_expr} ->
+            arg_remapping
+            |> Enum.map(fn {_id, arg_expr} ->
               id = arg_expr.data.id
               [idx] = arg_expr.data.args
               source = Map.fetch!(state.args, id)
-              {id, %{source: source, index: idx}}
+              {idx, %{source: source}}
             end)
+            |> Enum.sort_by(fn {idx, _} -> idx end)
+            |> Enum.map(fn {_, arg} -> arg end)
 
           [
             %Stage{
