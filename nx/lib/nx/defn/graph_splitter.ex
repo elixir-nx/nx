@@ -21,8 +21,8 @@ defmodule Nx.Defn.GraphSplitter do
       Enum.with_index(args, fn arg, idx -> {{nil, idx}, arg} end)
       |> Map.new()
 
-    scope =
-      Enum.reduce(chain, scope, fn stage, scope ->
+    {results, _scope} =
+      Enum.reduce(chain, {nil, scope}, fn stage, {_results, scope} ->
         %{id: id, expr: expr, arguments: arguments} = stage
 
         args =
@@ -32,31 +32,26 @@ defmodule Nx.Defn.GraphSplitter do
 
         case Nx.Defn.jit_apply(fn _ -> expr end, [List.to_tuple(args)]) do
           %T{} = tensor ->
-            Map.put(scope, {id, 0}, tensor)
+            {tensor, Map.put(scope, {id, 0}, tensor)}
 
           tuple ->
-            {_idx, scope} =
+            {_idx, scope, reverse_results} =
               tuple
               |> Tuple.to_list()
-              |> Enum.reduce({0, scope}, fn tensor, {idx, scope} ->
-                {idx + 1, Map.put(scope, {id, idx}, tensor)}
+              |> Enum.reduce({0, scope, []}, fn tensor, {idx, scope, results_acc} ->
+                {idx + 1, Map.put(scope, {id, idx}, tensor), [tensor | results_acc]}
               end)
 
-            scope
+            {reverse_results, scope}
         end
       end)
 
-    last_stage = List.last(chain)
-
-    if is_tuple(last_stage.expr) do
-      scope
-      |> Enum.filter(fn {{id, _}, _} -> id == last_stage.id end)
-      |> Enum.sort_by(fn {{_, idx}, _} -> idx end)
-      |> Enum.map(fn {_, tensor} -> tensor end)
+    if is_list(results) do
+      results
+      |> Enum.reverse()
       |> List.to_tuple()
     else
-      {_, tensor} = Enum.find(scope, fn {{id, _}, _} -> id == last_stage.id end)
-      tensor
+      results
     end
   end
 
