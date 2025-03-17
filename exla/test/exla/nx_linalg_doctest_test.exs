@@ -1,5 +1,6 @@
 defmodule EXLA.MLIR.NxLinAlgDoctestTest do
   use EXLA.Case, async: true
+  import Nx, only: :sigils
 
   @invalid_type_error_doctests [
     svd: 2,
@@ -16,7 +17,7 @@ defmodule EXLA.MLIR.NxLinAlgDoctestTest do
     cholesky: 1,
     least_squares: 3,
     determinant: 1,
-    # matrix_power: 2,
+    matrix_power: 2,
     lu: 2
   ]
 
@@ -185,6 +186,58 @@ defmodule EXLA.MLIR.NxLinAlgDoctestTest do
         ])
 
       assert_all_close(Nx.LinAlg.determinant(four_by_four), Nx.tensor([-108.0, -490]))
+    end
+  end
+
+  describe "matrix_power" do
+    test "supports complex with positive exponent" do
+      a = ~MAT[
+        1 1i
+        -1i 1
+      ]
+
+      n = 5
+
+      assert_all_close(Nx.LinAlg.matrix_power(a, n), Nx.multiply(2 ** (n - 1), a))
+    end
+
+    test "supports complex with 0 exponent" do
+      a = ~MAT[
+        1 1i
+        -1i 1
+      ]
+
+      assert_all_close(Nx.LinAlg.matrix_power(a, 0), Nx.eye(Nx.shape(a)))
+    end
+
+    test "supports complex with negative exponent" do
+      a = ~MAT[
+        1 -0.5i
+        0 0.5
+      ]
+
+      result = ~MAT[
+        1 15i
+        0 16
+      ]
+
+      assert_all_close(Nx.LinAlg.matrix_power(a, -4), result)
+    end
+
+    test "supports batched matrices" do
+      a =
+        Nx.tensor([
+          [[5, 3], [1, 2]],
+          [[9, 0], [4, 7]]
+        ])
+
+      result =
+        Nx.tensor([
+          [[161, 126], [42, 35]],
+          [[729, 0], [772, 343]]
+        ])
+
+      assert_all_close(Nx.LinAlg.matrix_power(a, 3), result)
     end
   end
 end
