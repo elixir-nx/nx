@@ -23,12 +23,11 @@ defmodule Nx.Defn.GraphSplitter do
 
     scope =
       Enum.reduce(chain, scope, fn stage, scope ->
-        %{id: id, expr: expr, argument_sources: argument_sources, arguments: arguments} = stage
+        %{id: id, expr: expr, arguments: arguments} = stage
 
         args =
           arguments
-          |> Enum.map(fn {id, idx} ->
-            source = Map.fetch!(argument_sources, id)
+          |> Enum.map(fn {_id, %{source: source, index: idx}} ->
             argument = Map.fetch!(scope, source)
             {idx, argument}
           end)
@@ -116,23 +115,17 @@ defmodule Nx.Defn.GraphSplitter do
 
           arguments =
             Map.new(arg_remapping, fn {_id, arg_expr} ->
+              id = arg_expr.data.id
               [idx] = arg_expr.data.args
-              {arg_expr.data.id, idx}
-            end)
-
-          argument_sources =
-            state.args
-            |> Map.take(Map.keys(arg_remapping))
-            |> Map.new(fn {remap_id, v} ->
-              {arg_remapping[remap_id].data.id, v}
+              source = Map.fetch!(state.args, id)
+              {id, %{source: source, index: idx}}
             end)
 
           [
             %Stage{
               id: id,
               expr: expr,
-              arguments: arguments,
-              argument_sources: argument_sources
+              arguments: arguments
             }
             | acc
           ]

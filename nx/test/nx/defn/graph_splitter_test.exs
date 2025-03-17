@@ -29,16 +29,16 @@ defmodule Nx.Defn.GraphSplitterTest do
                %Stage{
                  id: stage_0_id,
                  expr: stage_0_expr,
-                 argument_sources: stage_0_argument_sources
+                 arguments: stage_0_arguments
                },
                %Stage{
                  id: _stage_1_id,
                  expr: stage_1_expr,
-                 argument_sources: stage_1_argument_sources
+                 arguments: stage_1_arguments
                }
              ] = chain
 
-      assert Enum.all?(stage_0_argument_sources, fn {_id, {source_id, _idx}} ->
+      assert Enum.all?(stage_0_arguments, fn {_id, %{source: {source_id, _idx}}} ->
                source_id == nil
              end)
 
@@ -52,10 +52,10 @@ defmodule Nx.Defn.GraphSplitterTest do
 
       # ensure that arg2 and arg3 map to the correct stage and output container position
       assert %{
-               arg_2_id => {stage_0_id, 0},
-               arg_3_id => {stage_0_id, 1}
+               arg_2_id => %{source: {stage_0_id, 0}, index: 0},
+               arg_3_id => %{source: {stage_0_id, 1}, index: 1}
              } ==
-               stage_1_argument_sources
+               stage_1_arguments
 
       # ensure that arg2 and arg3 are replacing the correct nodes
       {_dot_node_id, %T{data: %Expr{args: [dot_arg_0, _, _, dot_arg_1, _, _]}}} =
@@ -149,21 +149,21 @@ defmodule Nx.Defn.GraphSplitterTest do
                %Stage{
                  id: stage_0_id,
                  expr: stage_0_expr,
-                 argument_sources: stage_0_argument_sources
+                 arguments: stage_0_arguments
                },
                %Stage{
                  id: stage_1_id,
                  expr: stage_1_expr,
-                 argument_sources: stage_1_argument_sources
+                 arguments: stage_1_arguments
                },
                %Stage{
                  id: _stage_2_id,
                  expr: stage_2_expr,
-                 argument_sources: stage_2_argument_sources
+                 arguments: stage_2_arguments
                }
              ] = chain
 
-      assert Enum.all?(stage_0_argument_sources, fn {_id, {source_id, _idx}} ->
+      assert Enum.all?(stage_0_arguments, fn {_id, %{source: {source_id, _idx}}} ->
                source_id == nil
              end)
 
@@ -200,10 +200,10 @@ defmodule Nx.Defn.GraphSplitterTest do
 
       # ensure that arg3 and arg4 map to the correct stage and output container position
       assert %{
-               arg_3_id => {stage_0_id, 0},
-               arg_4_id => {stage_0_id, 1}
+               arg_3_id => %{source: {stage_0_id, 0}, index: 0},
+               arg_4_id => %{source: {stage_0_id, 1}, index: 1}
              } ==
-               stage_1_argument_sources
+               stage_1_arguments
 
       # ensure that arg3 and arg4 are replacing the correct nodes
       {_dot_node_id, %T{data: %Expr{args: [dot_arg_0, _, _, dot_arg_1, _, _]}}} =
@@ -269,7 +269,10 @@ defmodule Nx.Defn.GraphSplitterTest do
       assert %T{data: %Expr{op: :sum, args: [^a, [axes: nil, keep_axes: false]]}} = b
       assert %T{data: %Expr{id: ^arg_5_id, op: :parameter, args: [1]}} = a
 
-      assert %{arg_2_id => {nil, 2}, arg_5_id => {stage_1_id, 0}} == stage_2_argument_sources
+      assert %{
+               arg_2_id => %{source: {nil, 2}, index: 0},
+               arg_5_id => %{source: {stage_1_id, 0}, index: 1}
+             } == stage_2_arguments
     end
 
     test "supports optional callbacks" do
@@ -294,21 +297,26 @@ defmodule Nx.Defn.GraphSplitterTest do
 
       assert [%Stage{} = stage_0, %Stage{} = stage_1] = GraphSplitter.traverse(expr, split_fn)
 
-      [{arg1_id, 0}] =
+      [{arg1_id, %{source: {nil, 1}, index: 0}}] =
         Enum.to_list(stage_0.arguments)
 
-      assert stage_0.argument_sources == %{arg1_id => {nil, 1}}
+      assert stage_0.arguments == %{arg1_id => %{source: {nil, 1}, index: 0}}
 
       stage_1_args =
         Enum.sort_by(stage_1.arguments, fn {_id, idx} -> idx end)
 
+      stage_0_id = stage_0.id
+
       assert [
-               {arg_0_id, 0},
-               {arg_1_id, 1}
+               {arg_0_id, %{source: {nil, 0}, index: 0}},
+               {arg_1_id, %{source: {^stage_0_id, 0}, index: 1}}
              ] =
                stage_1_args
 
-      assert stage_1.argument_sources == %{arg_0_id => {nil, 0}, arg_1_id => {stage_0.id, 0}}
+      assert stage_1.arguments == %{
+               arg_0_id => %{source: {nil, 0}, index: 0},
+               arg_1_id => %{source: {stage_0.id, 0}, index: 1}
+             }
 
       assert %T{data: %Expr{op: :subtract, args: [c, d]}} = stage_1.expr
       assert %T{data: %Expr{op: :optional, args: [call, subexpr, _fun]}} = c
@@ -357,16 +365,21 @@ defmodule Nx.Defn.GraphSplitterTest do
 
       assert [%Stage{} = stage_0, %Stage{} = stage_1] = GraphSplitter.traverse(expr, split_fn)
 
-      [{arg1_id, 0}] = Enum.to_list(stage_0.arguments)
-
-      assert stage_0.argument_sources == %{arg1_id => {nil, 1}}
+      assert [{stage_0_arg_0_id, %{source: {nil, 1}, index: 0}}] = Enum.to_list(stage_0.arguments)
 
       stage_1_args =
         Enum.sort_by(stage_1.arguments, fn {_id, idx} -> idx end)
 
-      assert [{arg_0_id, 0}, {arg_1_id, 1}] = stage_1_args
+      stage_0_id = stage_0.id
 
-      assert stage_1.argument_sources == %{arg_0_id => {nil, 0}, arg_1_id => {stage_0.id, 0}}
+      assert [
+               {arg_0_id, %{source: {nil, 0}, index: 0}},
+               {arg_1_id, %{source: {^stage_0_id, 0}, index: 1}}
+             ] = stage_1_args
+
+      assert arg_0_id != arg_1_id
+      assert arg_0_id != stage_0_arg_0_id
+      assert arg_1_id != stage_0_arg_0_id
 
       assert %T{data: %Expr{op: :subtract, args: [c, d]}} = stage_1.expr
 
@@ -439,8 +452,8 @@ defmodule Nx.Defn.GraphSplitterTest do
 
       assert %T{data: %Expr{id: arg1_left_id, op: :parameter, args: [0]}} = arg1_left
 
-      assert left.argument_sources[arg1_left_id] == {nil, 1}
-      assert left.argument_sources[x_left_id] == {root.id, 0}
+      assert left.arguments[arg1_left_id].source == {nil, 1}
+      assert left.arguments[x_left_id].source == {root.id, 0}
 
       # right should depend on the result of the root and on arg1, but arg1 will be reindexed
       # we should assert that the argument source for arg1_right is correct
@@ -458,8 +471,8 @@ defmodule Nx.Defn.GraphSplitterTest do
 
       assert %T{data: %Expr{id: arg1_right_id, op: :parameter, args: [0]}} = arg1_right
 
-      assert right.argument_sources[arg1_right_id] == {nil, 1}
-      assert right.argument_sources[x_right_id] == {root.id, 0}
+      assert right.arguments[arg1_right_id].source == {nil, 1}
+      assert right.arguments[x_right_id].source == {root.id, 0}
 
       assert %T{data: %Expr{op: :add, args: [w_right, w_left]}} = merge.expr
 
@@ -483,8 +496,8 @@ defmodule Nx.Defn.GraphSplitterTest do
                }
              } = w_left
 
-      assert merge.argument_sources[w_right_id] == {right.id, 0}
-      assert merge.argument_sources[w_left_id] == {left.id, 0}
+      assert merge.arguments[w_right_id].source == {right.id, 0}
+      assert merge.arguments[w_left_id].source == {left.id, 0}
 
       assert GraphSplitter.run(chain, args) == expected_result
     end
