@@ -8,12 +8,10 @@ defmodule Nx.Defn.Graph do
     @typedoc """
     A stage in the graph splitter.
 
-    * `:arguments`: a list of maps that point to the source from which to fetch the corresponding
-      value for the given argument.
-
-    * `:expr`: the expression that represents the computation for the Stage.
-
-    * `:id`: the unique id for the Stage.
+      * `:arguments`: a list of maps that point to the source from which to fetch the corresponding
+        value for the given argument.
+      * `:expr`: the expression that represents the computation for the Stage.
+      * `:id`: the unique id for the Stage.
     """
     @type t :: %__MODULE__{
             id: reference(),
