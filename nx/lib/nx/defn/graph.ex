@@ -1,15 +1,60 @@
-defmodule Nx.Defn.GraphSplitter do
+defmodule Nx.Defn.Graph do
   alias Nx.Defn.Composite
 
   alias Nx.Tensor, as: T
   alias Nx.Defn.Expr
-  alias Nx.Defn.GraphSplitter.Stage
+
+  defmodule Stage do
+    @typedoc """
+    A stage in the graph splitter.
+
+    * `:arguments`: a list of maps that point to the source from which to fetch the corresponding
+      value for the given argument.
+
+    * `:expr`: the expression that represents the computation for the Stage.
+
+    * `:id`: the unique id for the Stage.
+    """
+    @type t :: %__MODULE__{
+            id: reference(),
+            expr: %{__struct__: Nx.Defn.Expr},
+            arguments: [%{source: {reference() | nil, non_neg_integer()}}]
+          }
+
+    defstruct [:id, :expr, :arguments]
+  end
 
   @doc """
-  Traverses the expression and splits it into stages.
+  Splits the received Nx.Defn.Expr into stages given the rules
+  defined by `expr_split_fn`.
+
+  ## Examples
+
+      iex> expr = Nx.Defn.debug_expr(fn x, y -> x |> Nx.negate() |> Nx.sin() |> Nx.cos() |> Nx.add(y) end).(1, 2)
+      iex> [stage0, stage1] = Nx.Defn.Graph.split(expr, fn %Nx.Tensor{data: %Nx.Defn.Expr{op: op}} -> op == :cos end)
+      iex> {out0} = stage0.expr
+      iex> out0
+      #Nx.Tensor<
+        f32
+        \n\
+        Nx.Defn.Expr
+        parameter a:0   s32
+        b = negate a    s32
+        c = sin b       f32
+      >
+      iex> stage1.expr
+      #Nx.Tensor<
+        f32
+        \n\
+        Nx.Defn.Expr
+        parameter a:1   f32
+        parameter c:0   s32
+        b = cos a       f32
+        d = add b, c    f32
+      >
   """
-  def traverse(expr, expr_split_fn \\ fn _ -> false end) do
-    {chain, _, _} = __traverse__(expr, expr_split_fn)
+  def split(expr, expr_split_fn \\ fn _ -> false end) do
+    {chain, _, _} = __split__(expr, expr_split_fn)
     chain
   end
 
@@ -56,7 +101,7 @@ defmodule Nx.Defn.GraphSplitter do
   end
 
   @doc false
-  def __traverse__(expr, expr_split_fn) do
+  def __split__(expr, expr_split_fn) do
     # expression_chain is going to be a reverse-accumulation of {category, subexpr}
     # that we can then compile and chain-execute elsewhere. category is either :gather, :reduce or :none
     state = %{

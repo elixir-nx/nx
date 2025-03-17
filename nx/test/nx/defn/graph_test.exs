@@ -1,11 +1,13 @@
-defmodule Nx.Defn.GraphSplitterTest do
+defmodule Nx.Defn.GraphTest do
   use ExUnit.Case, async: true
 
-  alias Nx.Defn.GraphSplitter
-  alias Nx.Defn.GraphSplitter.Stage
+  alias Nx.Defn.Graph
+  alias Nx.Defn.Graph.Stage
 
   alias Nx.Tensor, as: T
   alias Nx.Defn.Expr
+
+  doctest Nx.Defn.Graph
 
   describe "traverse/1" do
     test "simple expression with 1 split and no common nodes" do
@@ -23,7 +25,7 @@ defmodule Nx.Defn.GraphSplitterTest do
         _ -> false
       end
 
-      {chain, cache, state} = GraphSplitter.traverse_and_return_cache(expr, split_fn)
+      {chain, cache, state} = Graph.__split__(expr, split_fn)
 
       assert [
                %Stage{
@@ -137,7 +139,7 @@ defmodule Nx.Defn.GraphSplitterTest do
         _ -> false
       end
 
-      {chain, cache, state} = GraphSplitter.traverse_and_return_cache(expr, split_fn)
+      {chain, cache, state} = Graph.__split__(expr, split_fn)
 
       assert [
                %Stage{
@@ -280,7 +282,7 @@ defmodule Nx.Defn.GraphSplitterTest do
         _ -> false
       end
 
-      assert [%Stage{} = stage_0, %Stage{} = stage_1] = GraphSplitter.traverse(expr, split_fn)
+      assert [%Stage{} = stage_0, %Stage{} = stage_1] = Graph.split(expr, split_fn)
 
       assert stage_0.arguments == [%{source: {nil, 1}}]
       assert stage_1.arguments == [%{source: {nil, 0}}, %{source: {stage_0.id, 0}}]
@@ -330,7 +332,7 @@ defmodule Nx.Defn.GraphSplitterTest do
         _ -> false
       end
 
-      assert [%Stage{} = stage_0, %Stage{} = stage_1] = GraphSplitter.traverse(expr, split_fn)
+      assert [%Stage{} = stage_0, %Stage{} = stage_1] = Graph.split(expr, split_fn)
 
       assert [%{source: {nil, 1}}] == stage_0.arguments
 
@@ -382,7 +384,7 @@ defmodule Nx.Defn.GraphSplitterTest do
         _ -> false
       end
 
-      chain = GraphSplitter.traverse(expr, split_fn)
+      chain = Graph.split(expr, split_fn)
 
       assert [root, right, left, merge] = chain
 
@@ -453,7 +455,7 @@ defmodule Nx.Defn.GraphSplitterTest do
       assert Enum.fetch!(merge.arguments, 0).source == {right.id, 0}
       assert Enum.fetch!(merge.arguments, 1).source == {left.id, 0}
 
-      assert GraphSplitter.run(chain, args) == expected_result
+      assert Graph.run(chain, args) == expected_result
     end
   end
 end
