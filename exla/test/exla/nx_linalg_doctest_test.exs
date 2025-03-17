@@ -240,4 +240,33 @@ defmodule EXLA.MLIR.NxLinAlgDoctestTest do
       assert_all_close(Nx.LinAlg.matrix_power(a, 3), result)
     end
   end
+
+  describe "lu" do
+    test "property" do
+      key = Nx.Random.key(System.unique_integer())
+
+      for _ <- 1..10, type <- [{:f, 32}, {:c, 64}], reduce: key do
+        key ->
+          # Generate random L and U matrices so we can construct
+          # a factorizable A matrix:
+          shape = {3, 4, 4}
+          lower_selector = Nx.iota(shape, axis: 1) |> Nx.greater_equal(Nx.iota(shape, axis: 2))
+          upper_selector = Nx.LinAlg.adjoint(lower_selector)
+
+          {l_prime, key} = Nx.Random.uniform(key, 0, 1, shape: shape, type: type)
+          l_prime = Nx.multiply(l_prime, lower_selector)
+
+          {u_prime, key} = Nx.Random.uniform(key, 0, 1, shape: shape, type: type)
+          u_prime = Nx.multiply(u_prime, upper_selector)
+
+          a = Nx.dot(l_prime, [2], [0], u_prime, [1], [0])
+
+          assert {p, l, u} = Nx.LinAlg.lu(a)
+
+          actual = p |> Nx.dot([2], [0], l, [1], [0]) |> Nx.dot([2], [0], u, [1], [0])
+          assert_all_close(actual, a)
+          key
+      end
+    end
+  end
 end
