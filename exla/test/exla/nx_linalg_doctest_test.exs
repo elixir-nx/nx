@@ -2,16 +2,13 @@ defmodule EXLA.MLIR.NxLinAlgDoctestTest do
   use EXLA.Case, async: true
   import Nx, only: :sigils
 
-  @invalid_type_error_doctests [
-    svd: 2,
-    pinv: 2
-  ]
-
   @function_clause_error_doctests [
     solve: 2
   ]
 
   @rounding_error_doctests [
+    svd: 2,
+    pinv: 2,
     triangular_solve: 3,
     eigh: 2,
     cholesky: 1,
@@ -23,7 +20,6 @@ defmodule EXLA.MLIR.NxLinAlgDoctestTest do
 
   @excluded_doctests @function_clause_error_doctests ++
                        @rounding_error_doctests ++
-                       @invalid_type_error_doctests ++
                        [:moduledoc]
   doctest Nx.LinAlg, except: @excluded_doctests
 
@@ -266,6 +262,110 @@ defmodule EXLA.MLIR.NxLinAlgDoctestTest do
           actual = p |> Nx.dot([2], [0], l, [1], [0]) |> Nx.dot([2], [0], u, [1], [0])
           assert_all_close(actual, a)
           key
+      end
+    end
+  end
+
+  describe "svd" do
+    test "finds the singular values of tall matrices" do
+      t = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0], [10.0, 11.0, 12.0]])
+
+      assert {%{type: output_type} = u, %{type: output_type} = s, %{type: output_type} = v} =
+               Nx.LinAlg.svd(t, max_iter: 1000)
+
+      s_matrix = 0 |> Nx.broadcast({4, 3}) |> Nx.put_diagonal(s)
+
+      assert_all_close(t, u |> Nx.dot(s_matrix) |> Nx.dot(v), atol: 1.0e-2, rtol: 1.0e-2)
+
+      assert_all_close(
+        u,
+        Nx.tensor([
+          [0.140, 0.824, 0.521, -0.166],
+          [0.343, 0.426, -0.571, 0.611],
+          [0.547, 0.0278, -0.422, -0.722],
+          [0.750, -0.370, 0.472, 0.277]
+        ]),
+        atol: 1.0e-3,
+        rtol: 1.0e-3
+      )
+
+      assert_all_close(Nx.tensor([25.462, 1.291, 0.0]), s, atol: 1.0e-3, rtol: 1.0e-3)
+
+      assert_all_close(
+        Nx.tensor([
+          [0.504, 0.574, 0.644],
+          [-0.760, -0.057, 0.646],
+          [0.408, -0.816, 0.408]
+        ]),
+        v,
+        atol: 1.0e-3,
+        rtol: 1.0e-3
+      )
+    end
+
+    test "works with batched matrices" do
+      t =
+        Nx.tensor([
+          [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]],
+          [[1.0, 2.0, 3.0], [0.0, 4.0, 0.0], [0.0, 0.0, 9.0]]
+        ])
+
+      assert {u, s, v} = Nx.LinAlg.svd(t)
+
+      s_matrix =
+        Nx.stack([
+          Nx.broadcast(0, {3, 3}) |> Nx.put_diagonal(s[0]),
+          Nx.broadcast(0, {3, 3}) |> Nx.put_diagonal(s[1])
+        ])
+
+      reconstructed_t =
+        u
+        |> Nx.dot([2], [0], s_matrix, [1], [0])
+        |> Nx.dot([2], [0], v, [1], [0])
+
+      assert_all_close(t, reconstructed_t, atol: 1.0e-2, rtol: 1.0e-2)
+    end
+
+    test "works with vectorized tensors matrices" do
+      t =
+        Nx.tensor([
+          [[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]]],
+          [[[1.0, 2.0, 3.0], [0.0, 4.0, 0.0], [0.0, 0.0, 9.0]]]
+        ])
+        |> Nx.vectorize(x: 2, y: 1)
+
+      assert {u, s, v} = Nx.LinAlg.svd(t)
+
+      s_matrix = Nx.put_diagonal(Nx.broadcast(0, {3, 3}), s)
+
+      reconstructed_t =
+        u
+        |> Nx.dot(s_matrix)
+        |> Nx.dot(v)
+
+      assert reconstructed_t.vectorized_axes == [x: 2, y: 1]
+      assert reconstructed_t.shape == {3, 3}
+
+      assert_all_close(Nx.devectorize(t), Nx.devectorize(reconstructed_t),
+        atol: 1.0e-2,
+        rtol: 1.0e-2
+      )
+    end
+
+    test "works with vectors" do
+      t = Nx.tensor([[-2], [1]])
+
+      {u, s, vt} = Nx.LinAlg.svd(t)
+      assert_all_close(u |> Nx.dot(Nx.stack([s, Nx.tensor([0])])) |> Nx.dot(vt), t)
+    end
+
+    test "works with zero-tensor" do
+      for {m, n, k} <- [{3, 3, 3}, {3, 4, 3}, {4, 3, 3}] do
+        t = Nx.broadcast(0, {m, n})
+        {u, s, vt} = Nx.LinAlg.svd(t)
+        assert_all_close(u, Nx.eye({m, m}))
+        assert_all_close(s, Nx.broadcast(0, {k}))
+        assert_all_close(vt, Nx.eye({n, n}))
       end
     end
   end
