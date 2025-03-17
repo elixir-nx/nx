@@ -3,13 +3,13 @@ defmodule EXLA.NxLinAlgDoctestTest do
   import Nx, only: :sigils
 
   @function_clause_error_doctests [
-    solve: 2
+    solve: 2,
+    triangular_solve: 3
   ]
 
   @rounding_error_doctests [
     svd: 2,
     pinv: 2,
-    triangular_solve: 3,
     eigh: 2,
     cholesky: 1,
     least_squares: 3,
