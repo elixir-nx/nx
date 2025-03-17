@@ -27,7 +27,7 @@ defmodule Nx.Defn.GraphSplitter do
 
         args =
           arguments
-          |> Enum.map(fn {id, %T{data: %Expr{args: [idx]}}} ->
+          |> Enum.map(fn {id, idx} ->
             source = Map.fetch!(argument_sources, id)
             argument = Map.fetch!(scope, source)
             {idx, argument}
@@ -116,7 +116,8 @@ defmodule Nx.Defn.GraphSplitter do
 
           arguments =
             Map.new(arg_remapping, fn {_id, arg_expr} ->
-              {arg_expr.data.id, arg_expr}
+              [idx] = arg_expr.data.args
+              {arg_expr.data.id, idx}
             end)
 
           argument_sources =

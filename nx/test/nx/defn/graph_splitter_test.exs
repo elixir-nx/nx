@@ -294,19 +294,17 @@ defmodule Nx.Defn.GraphSplitterTest do
 
       assert [%Stage{} = stage_0, %Stage{} = stage_1] = GraphSplitter.traverse(expr, split_fn)
 
-      [{arg1_id, %T{shape: {2, 3}, type: {:u, 8}, data: %Expr{args: [0]}}}] =
+      [{arg1_id, 0}] =
         Enum.to_list(stage_0.arguments)
 
       assert stage_0.argument_sources == %{arg1_id => {nil, 1}}
 
       stage_1_args =
-        Enum.sort_by(stage_1.arguments, fn {_id, %T{data: %Expr{op: :parameter, args: [idx]}}} ->
-          idx
-        end)
+        Enum.sort_by(stage_1.arguments, fn {_id, idx} -> idx end)
 
       assert [
-               {arg_0_id, %T{shape: {}, type: {:s, 32}}},
-               {arg_1_id, %T{shape: {2, 3}, type: {:u, 8}}}
+               {arg_0_id, 0},
+               {arg_1_id, 1}
              ] =
                stage_1_args
 
@@ -359,21 +357,14 @@ defmodule Nx.Defn.GraphSplitterTest do
 
       assert [%Stage{} = stage_0, %Stage{} = stage_1] = GraphSplitter.traverse(expr, split_fn)
 
-      [{arg1_id, %T{shape: {2, 3}, type: {:u, 8}, data: %Expr{args: [0]}}}] =
-        Enum.to_list(stage_0.arguments)
+      [{arg1_id, 0}] = Enum.to_list(stage_0.arguments)
 
       assert stage_0.argument_sources == %{arg1_id => {nil, 1}}
 
       stage_1_args =
-        Enum.sort_by(stage_1.arguments, fn {_id, %T{data: %Expr{op: :parameter, args: [idx]}}} ->
-          idx
-        end)
+        Enum.sort_by(stage_1.arguments, fn {_id, idx} -> idx end)
 
-      assert [
-               {arg_0_id, %T{shape: {}, type: {:s, 32}}},
-               {arg_1_id, %T{shape: {2, 3}, type: {:u, 8}}}
-             ] =
-               stage_1_args
+      assert [{arg_0_id, 0}, {arg_1_id, 1}] = stage_1_args
 
       assert stage_1.argument_sources == %{arg_0_id => {nil, 0}, arg_1_id => {stage_0.id, 0}}
 
