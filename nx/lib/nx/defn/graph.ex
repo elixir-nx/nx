@@ -1,4 +1,15 @@
 defmodule Nx.Defn.Graph do
+  @moduledoc """
+  A module for splitting Nx.Defn.Expr into stages.
+
+  This module is used to split an Nx.Defn.Expr into stages, which are then
+  executed in a chain.
+
+  `split/2` and `t:Stage.t()` describe how to split
+  the graph and what's the expected result.
+
+  `run/2` executes the given graph against the provided arguments in a sequential manner.
+  """
   alias Nx.Defn.Composite
 
   alias Nx.Tensor, as: T
@@ -23,8 +34,10 @@ defmodule Nx.Defn.Graph do
   end
 
   @doc """
-  Splits the received Nx.Defn.Expr into stages given the rules
-  defined by `expr_split_fn`.
+  Splits the received Nx.Defn.Expr into stages given the rules.
+
+  `expr_split_fn` is a function that receives an `Nx.Tensor` containing an `Nx.Defn.Expr`
+  and returns `true` when a split must happen, and `false` otherwise.
 
   ## Examples
 
@@ -51,7 +64,7 @@ defmodule Nx.Defn.Graph do
         d = add b, c    f32
       >
   """
-  def split(expr, expr_split_fn \\ fn _ -> false end) do
+  def split(expr, expr_split_fn) when is_function(expr_split_fn, 1) do
     {chain, _, _} = __split__(expr, expr_split_fn)
     chain
   end
