@@ -66,8 +66,8 @@ defmodule Nx.Defn.Graph do
       Enum.with_index(args, fn arg, idx -> {{nil, idx}, arg} end)
       |> Map.new()
 
-    {results, _scope} =
-      Enum.reduce(chain, {nil, scope}, fn stage, {_results, scope} ->
+    {result, _scope} =
+      Enum.reduce(chain, {nil, scope}, fn stage, {_result, scope} ->
         %{id: id, expr: expr, arguments: arguments} = stage
 
         args =
@@ -80,24 +80,18 @@ defmodule Nx.Defn.Graph do
             {tensor, Map.put(scope, {id, 0}, tensor)}
 
           tuple ->
-            {_idx, scope, reverse_results} =
+            {_idx, scope} =
               tuple
               |> Tuple.to_list()
-              |> Enum.reduce({0, scope, []}, fn tensor, {idx, scope, results_acc} ->
-                {idx + 1, Map.put(scope, {id, idx}, tensor), [tensor | results_acc]}
+              |> Enum.reduce({0, scope}, fn tensor, {idx, scope} ->
+                {idx + 1, Map.put(scope, {id, idx}, tensor)}
               end)
 
-            {reverse_results, scope}
+            {tuple, scope}
         end
       end)
 
-    if is_list(results) do
-      results
-      |> Enum.reverse()
-      |> List.to_tuple()
-    else
-      results
-    end
+    result
   end
 
   @doc false
