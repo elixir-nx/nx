@@ -2,6 +2,11 @@ defmodule EXLA.NxLinAlgDoctestTest do
   use EXLA.Case, async: true
   import Nx, only: :sigils
 
+  setup do
+    Nx.default_backend(EXLA.Backend)
+    :ok
+  end
+
   @function_clause_error_doctests [
     solve: 2,
     triangular_solve: 3
@@ -400,6 +405,85 @@ defmodule EXLA.NxLinAlgDoctestTest do
 
           key
       end
+    end
+  end
+
+  describe "triangular_solve" do
+    test "works with batched input" do
+      a =
+        Nx.tensor([
+          [
+            [-1, 0, 0],
+            [1, 1, 0],
+            [1, 1, 1]
+          ],
+          [
+            [2, 0, 0],
+            [4, -2, 0],
+            [-5, 1, 3]
+          ]
+        ])
+
+      b =
+        Nx.tensor([
+          [1.0, 2.0, 3.0],
+          [6, 10, 1]
+        ])
+
+      assert Nx.dot(a, [2], [0], Nx.LinAlg.triangular_solve(a, b), [1], [0]) == b
+    end
+
+    test "works with B that has more columns than rows" do
+      a =
+        Nx.tensor(
+          [
+            [1, 0],
+            [1, 1]
+          ],
+          type: :f64
+        )
+
+      b =
+        Nx.tensor(
+          [
+            [1, 1, 1],
+            [2, 2, 2]
+          ],
+          type: :f64
+        )
+
+      x = Nx.LinAlg.triangular_solve(a, b)
+
+      assert x ==
+               Nx.tensor(
+                 [
+                   [1, 1, 1],
+                   [1, 1, 1]
+                 ],
+                 type: :f64
+               )
+    end
+
+    test "property" do
+      a = Nx.tensor([[1, 0, 0], [1, 1, 0], [0, 1, 1]])
+      b = Nx.tensor([[1.0, 2.0, 3.0], [2.0, 2.0, 4.0], [2.0, 0.0, 1.0]])
+      assert Nx.dot(a, Nx.LinAlg.triangular_solve(a, b)) == b
+
+      upper = Nx.transpose(a)
+      assert Nx.dot(upper, Nx.LinAlg.triangular_solve(upper, b, lower: false)) == b
+
+      assert Nx.dot(
+               Nx.LinAlg.triangular_solve(upper, b, left_side: false, lower: false),
+               upper
+             ) == b
+
+      assert Nx.LinAlg.triangular_solve(a, b, transform_a: :transpose) ==
+               Nx.LinAlg.triangular_solve(upper, b, lower: false)
+
+      assert Nx.dot(
+               Nx.transpose(a),
+               Nx.LinAlg.triangular_solve(a, b, transform_a: :transpose)
+             ) == b
     end
   end
 end

@@ -585,6 +585,11 @@ defmodule EXLA.MLIR.Value do
     |> Enum.map_join(",", fn {_dim, mark} -> mark end)
   end
 
+  defp get_shape(%Value{function: %EXLA.MLIR.Function{return_typespecs: [typespec | _]}}),
+    do: typespec.shape
+
+  defp attr_shape(shape), do: {:array, Tuple.to_list(shape)}
+
   def triangular_solve(
         %Value{function: func} = a,
         %Value{function: func} = b,
@@ -611,7 +616,23 @@ defmodule EXLA.MLIR.Value do
       transpose_a: transpose_a
     ]
 
-    op(func, "stablehlo.triangular_solve", [a, b], result_types, attributes: attributes) |> one!()
+    a_shape = get_shape(a)
+    b_shape = get_shape(b)
+
+    a_rank = tuple_size(a_shape)
+    b_rank = tuple_size(b_shape)
+
+    if a_rank == 3 and b_rank == 2 do
+      # Convert {2, 3} → {2, 3, 1}
+      new_b_shape = {2, 3, 1}
+
+      new_b_typespec = %{typespec | shape: new_b_shape}
+
+      b = reshape(b, new_b_typespec)
+    end
+
+    op(func, "stablehlo.triangular_solve", [a, b], result_types, attributes: attributes)
+    |> one!()
   end
 
   def dynamic_update_slice(%Value{function: func} = operand, updates, starts, typespec) do
