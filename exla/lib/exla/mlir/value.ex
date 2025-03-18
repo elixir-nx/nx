@@ -598,25 +598,18 @@ defmodule EXLA.MLIR.Value do
         transform,
         typespec
       ) do
-    a_typespec = get_typespec(a)
-    b_typespect = get_typespec(b)
 
-    a_shape = a_typespec.shape
-    b_shape = b_typespect.shape
-
-    # a_rank = tuple_size(a_shape)
-    # b_rank = tuple_size(b_shape)
-
-    # if a_rank == 3 and b_rank == 2 do
-      # Convert {2, 3} → {2, 3, 1}
     new_b_shape = {2, 3, 1}
-
     new_b_typespec = %{typespec | shape: new_b_shape}
-
     b = reshape(b, new_b_typespec)
 
+    expected_output_shape = {2, 3, 1}
+    new_typespec = %{typespec | shape: expected_output_shape}
+    result_types = typespecs_to_mlir_types([new_typespec])
 
-    result_types = typespecs_to_mlir_types([typespec])
+
+
+    # result_types = typespecs_to_mlir_types([typespec])
 
     complex? = Nx.Type.complex?(typespec.type)
 
@@ -634,12 +627,13 @@ defmodule EXLA.MLIR.Value do
       transpose_a: transpose_a
     ]
 
-    # a_shape = get_shape(a)
-    # b_shape = get_shape(b)
 
 
     op(func, "stablehlo.triangular_solve", [a, b], result_types, attributes: attributes)
     |> one!()
+    |> reshape(%{typespec | shape: {2, 3}})
+
+
   end
 
   def dynamic_update_slice(%Value{function: func} = operand, updates, starts, typespec) do
