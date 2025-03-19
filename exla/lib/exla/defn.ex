@@ -782,26 +782,27 @@ defmodule EXLA.Defn do
     lower = Keyword.fetch!(opts, :lower)
     transform = Keyword.fetch!(opts, :transform_a)
 
-    case Value.get_typespec(b).shape do
-      {dim} ->
-        b_shape = {dim, 1}
+    a_shape = Value.get_typespec(a).shape
+    b_shape = Value.get_typespec(b).shape
 
-        b =
-          b
-          |> to_type(type)
-          |> Value.reshape(Typespec.tensor(type, b_shape))
+    if tuple_size(a_shape) > tuple_size(b_shape) do
+      b_shape = Tuple.insert_at(b_shape, tuple_size(b_shape), 1)
 
-        typespec = Typespec.tensor(type, b_shape)
+      b =
+        b
+        |> to_type(type)
+        |> Value.reshape(Typespec.tensor(type, b_shape))
 
-        to_type(a, type)
-        |> Value.triangular_solve(b, left_side, lower, transform, typespec)
-        |> Value.reshape(Typespec.tensor(type, ans.shape))
+      typespec = Typespec.tensor(type, b_shape)
 
-      _ ->
-        typespec = Typespec.tensor(type, ans.shape)
+      to_type(a, type)
+      |> Value.triangular_solve(b, left_side, lower, transform, typespec)
+      |> Value.reshape(Typespec.tensor(type, ans.shape))
+    else
+      typespec = Typespec.tensor(type, ans.shape)
 
-        to_type(a, type)
-        |> Value.triangular_solve(to_type(b, type), left_side, lower, transform, typespec)
+      to_type(a, type)
+      |> Value.triangular_solve(to_type(b, type), left_side, lower, transform, typespec)
     end
   end
 
