@@ -7,10 +7,10 @@ defmodule Nx.Defn.Composite do
   Numerical values, such as integers, floats, and complex numbers
   are not normalized before hand. Use `Nx.to_tensor/1` to do so.
 
-  The functions in this module can be used both inside and outside `defn`.
-  Note that, when a value is given to `defn`, it is first converted to
-  tensors and containers via `Nx.LazyContainer`. Inside `defn`, there are
-  no lazy containers, only containers.
+  The functions in this module are invoked outside of `defn` or inside
+  `deftransform`. Note that, when a value is given to `defn`, it is
+  first converted to tensors and containers via `Nx.LazyContainer`.
+  Inside `defn`, there are no lazy containers, only containers.
   """
 
   alias Nx.Tensor, as: T
