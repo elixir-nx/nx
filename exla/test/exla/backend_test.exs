@@ -147,6 +147,33 @@ defmodule EXLA.BackendTest do
     assert %{device_id: 1, client_name: :other_host} = Nx.reshape(a, {1}).data.buffer
   end
 
+  @tag :multi_device
+  test "stack and concatenate should end up in the same client" do
+    t_0 =
+      Nx.tensor([1], backend: {EXLA.Backend, client: :no_automatic_transfers_host, device_id: 0})
+
+    t_1 =
+      Nx.tensor([1], backend: {EXLA.Backend, client: :no_automatic_transfers_host, device_id: 1})
+
+    t_stack_0 = Nx.stack([t_0, t_1])
+    t_concat_0 = Nx.concatenate([t_0, t_1])
+
+    assert t_stack_0.data.buffer.client_name == :no_automatic_transfers_host
+    assert t_stack_0.data.buffer.device_id == 1
+
+    assert t_concat_0.data.buffer.client_name == :no_automatic_transfers_host
+    assert t_concat_0.data.buffer.device_id == 1
+
+    t_stack_1 = Nx.stack([t_1, t_0])
+    t_concat_1 = Nx.concatenate([t_1, t_0])
+
+    assert t_stack_1.data.buffer.client_name == :no_automatic_transfers_host
+    assert t_stack_1.data.buffer.device_id == 0
+
+    assert t_concat_1.data.buffer.client_name == :no_automatic_transfers_host
+    assert t_concat_1.data.buffer.device_id == 0
+  end
+
   test "Kernel.inspect/2" do
     t = Nx.tensor([1, 2, 3, 4], backend: EXLA.Backend)
 
@@ -196,6 +223,42 @@ defmodule EXLA.BackendTest do
   test "conjugate" do
     assert inspect(Nx.conjugate(~VEC[1 2-0i 3+0i 0-i 0-2i])) =~
              "1.0-0.0i, 2.0+0.0i, 3.0-0.0i, 0.0+1.0i, 0.0+2.0i"
+  end
+
+  test "gather vectorized regression" do
+    gradients =
+      Nx.tensor(
+        [
+          [1.0, 1.0],
+          [-1.0, 1.0],
+          [1.0, -1.0],
+          [-1.0, -1.0]
+        ],
+        backend: EXLA.Backend
+      )
+
+    i =
+      Nx.tensor([[0, 2, 3, 2, 2, 2, 2, 1]], type: {:u, 16}, backend: EXLA.Backend)
+      |> Nx.vectorize([:x, :octaves])
+
+    result = Nx.gather(gradients, Nx.reshape(i, {1}))
+
+    assert_equal(
+      result,
+      Nx.tensor([
+        [
+          [1.0, 1.0],
+          [1.0, -1.0],
+          [-1.0, -1.0],
+          [1.0, -1.0],
+          [1.0, -1.0],
+          [1.0, -1.0],
+          [1.0, -1.0],
+          [-1.0, 1.0]
+        ]
+      ])
+      |> Nx.vectorize([:x, :octaves])
+    )
   end
 
   describe "quantized types" do

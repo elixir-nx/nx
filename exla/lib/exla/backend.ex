@@ -114,34 +114,15 @@ defmodule EXLA.Backend do
     client = EXLA.Client.fetch!(buffer.client_name)
 
     case EXLA.NIF.get_buffer_device_pointer(client.ref, buffer.ref, mode) do
-      {:ok, result} ->
-        handle =
-          case {result, mode} do
-            {{ptr, size}, :local} when is_integer(ptr) ->
-              # pointer is an integer here
-              %Nx.Pointer{kind: :local, address: ptr, data_size: size}
+      {:local, ptr, size} ->
+        # Pointer is an integer here
+        %Nx.Pointer{kind: :local, address: ptr, data_size: size}
 
-            {{handle_name, fd, size}, :host_ipc} ->
-              %Nx.Pointer{
-                kind: :ipc,
-                handle: handle_name,
-                address: fd,
-                data_size: size
-              }
+      {:host_ipc, handle_name, fd, size} ->
+        %Nx.Pointer{kind: :ipc, handle: handle_name, address: fd, data_size: size}
 
-            {{handle, size}, :cuda_ipc} ->
-              %Nx.Pointer{
-                kind: :ipc,
-                handle: handle,
-                address: buffer.device_id,
-                data_size: size
-              }
-          end
-
-        {:ok, handle}
-
-      error ->
-        error
+      {:cuda_ipc, handle, size} ->
+        %Nx.Pointer{kind: :ipc, handle: handle, address: buffer.device_id, data_size: size}
     end
   end
 
@@ -169,7 +150,7 @@ defmodule EXLA.Backend do
           raise ArgumentError,
                 "invalid pointer data_size for shape, expected: #{shape_size}, got: #{size}"
 
-        {%Nx.Pointer{address: address, kind: :local}, _} ->
+        {%Nx.Pointer{kind: :local, address: address}, _} ->
           {:local, address}
 
         {%Nx.Pointer{kind: :ipc, address: fd, handle: handle}, :host} ->
@@ -179,23 +160,17 @@ defmodule EXLA.Backend do
           {:cuda_ipc, handle}
       end
 
-    result =
+    ref =
       EXLA.NIF.create_buffer_from_device_pointer(
         client.ref,
         mode,
         handle_nif,
-        EXLA.Typespec.nif_encode(typespec),
+        typespec,
         device_id
       )
 
-    case result do
-      {:ok, ref} ->
-        buffer = EXLA.DeviceBuffer.from_ref(ref, client, device_id, typespec)
-        {:ok, %{template | data: %EXLA.Backend{buffer: buffer}}}
-
-      error ->
-        error
-    end
+    buffer = EXLA.DeviceBuffer.from_ref(ref, client, device_id, typespec)
+    %{template | data: %EXLA.Backend{buffer: buffer}}
   end
 
   @impl true
@@ -289,14 +264,14 @@ defmodule EXLA.Backend do
   def concatenate(out, tensors, axis) do
     copied = Enum.map(tensors, &Nx.backend_copy(&1, Nx.BinaryBackend))
     result = Nx.BinaryBackend.concatenate(out, copied, axis)
-    Nx.backend_transfer(result, {EXLA.Backend, jit_opts([], tensors)})
+    Nx.backend_transfer(result, {EXLA.Backend, jit_opts(tensors, [])})
   end
 
   @impl true
   def stack(out, tensors, axis) do
     copied = Enum.map(tensors, &Nx.backend_copy(&1, Nx.BinaryBackend))
     result = Nx.BinaryBackend.stack(out, copied, axis)
-    Nx.backend_transfer(result, {EXLA.Backend, jit_opts([], tensors)})
+    Nx.backend_transfer(result, {EXLA.Backend, jit_opts(tensors, [])})
   end
 
   @impl true
@@ -406,7 +381,6 @@ defmodule EXLA.Backend do
        [:tensor, :source, :init_value]},
       {:indexed_add, [:tensor, :indices, :updates, :opts], [:tensor, :indices, :updates]},
       {:indexed_put, [:tensor, :indices, :updates, :opts], [:tensor, :indices, :updates]},
-      {:lu, [:tensor, :opts], [:tensor]},
       {:triangular_solve, [:a, :b, :opts], [:a, :b]},
       {:fft, [:tensor, :opts], [:tensor]},
       {:ifft, [:tensor, :opts], [:tensor]}

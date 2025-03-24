@@ -716,29 +716,6 @@ defmodule Nx.Defn.Grad do
     pairs
   end
 
-  defp grad(:lu, [{p, l, u}, input, _opts], ans, [_dp, dl, du]) do
-    # Definition taken from: https://sethaxen.com/blog/2021/02/differentiating-the-lu-decomposition/
-    # Where dF = tril_strict(L^* . dL) + triu(dU . U^*)
-    # dA = P^t . (L^*)^-1 . dF . (U^*)^-1
-
-    {p, l, u} = Nx.Defn.Expr.tuple(ans, [p, l, u])
-
-    u_h = Nx.LinAlg.adjoint(u)
-    l_h = Nx.LinAlg.adjoint(l)
-    p_t = Nx.LinAlg.adjoint(p)
-
-    lh_dl = Nx.dot(l_h, dl)
-    du_uh = Nx.dot(du, u_h)
-
-    lt_inv = Nx.LinAlg.invert(l_h)
-    ut_inv = Nx.LinAlg.invert(u_h)
-
-    df = lh_dl |> Nx.tril(k: -1) |> Nx.add(Nx.triu(du_uh))
-    da = p_t |> Nx.dot(lt_inv) |> Nx.dot(df) |> Nx.dot(ut_inv)
-
-    [{input, da}]
-  end
-
   defp grad(:sort, [t, opts], _ans, g) do
     idx = Nx.argsort(t, opts)
     take_along_opts = Keyword.take(opts, [:axis])

@@ -16771,21 +16771,21 @@ defmodule Nx do
 
       pointer = %Nx.Pointer{kind: :local, address: 1234}
       Nx.from_pointer(MyBackend, pointer, {:s, 32}, {1, 3})
-      #Nx.Tensor<
-        s32[1][3]
-        [
-          [10, 20, 30]
-        ]
-      >
+      #=> #Nx.Tensor<
+      #=>   s32[1][3]
+      #=>   [
+      #=>     [10, 20, 30]
+      #=>   ]
+      #=> >
 
       pointer = %Nx.Pointer{kind: :ipc, handle: "some-ipc-handle"}
       Nx.from_pointer({MyBackend, some: :opt}, pointer, {:s, 32}, {1, 3}, names: [nil, :col])
-      #Nx.Tensor<
-        s32[1][col: 3]
-        [
-          [10, 20, 30]
-        ]
-      >
+      #=> #Nx.Tensor<
+      #=>   s32[1][col: 3]
+      #=>   [
+      #=>     [10, 20, 30]
+      #=>   ]
+      #=> >
   """
   @doc type: :creation
   def from_pointer(backend, pointer, type, shape, opts \\ [])
@@ -16812,7 +16812,7 @@ defmodule Nx do
 
   ## Options
 
-    * `:kind` - one of `:local`, `:ipc`. `:local` means the returned value
+    * `:mode` - one of `:local`, `:ipc`. `:local` means the returned value
       represents a pointer internal to the current process. `:ipc` means
       the returned value represents an IPC handle that can be shared between
       processes. Defaults to `:local`.
@@ -16822,12 +16822,12 @@ defmodule Nx do
   ## Examples
 
       t = Nx.u8([10, 20, 30])
-      Nx.to_pointer(t, kind: :local)
-      %Nx.Pointer{kind: :local, address: 1234, data_size: 3, handle: nil}
+      Nx.to_pointer(t, mode: :local)
+      #=> %Nx.Pointer{kind: :local, address: 1234, data_size: 3, handle: nil}
 
       t = Nx.s32([1, 2, 3])
-      Nx.to_pointer(t, kind: :ipc)
-      %Nx.Pointer{kind: :ipc, address: nil, data_size: 32, handle: "some-ipc-handle"}
+      Nx.to_pointer(t, mode: :ipc)
+      #=> %Nx.Pointer{kind: :ipc, address: nil, data_size: 32, handle: "some-ipc-handle"}
   """
   @doc type: :creation
   def to_pointer(tensor, opts \\ []) do

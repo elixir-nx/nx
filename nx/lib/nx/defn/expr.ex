@@ -1189,14 +1189,6 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def lu({p, l, u}, tensor, opts) do
-    tensor = to_expr(tensor)
-    context = tensor.data.context
-    out = %T{names: [], shape: {}, type: {:tuple, 3}}
-    tuple(expr(out, context, :lu, [{p, l, u}, tensor, opts]), [p, l, u])
-  end
-
-  @impl true
   def sort(out, tensor, opts) do
     %{data: %{context: context}} = tensor = to_expr(tensor)
     expr(out, context, :sort, [tensor, opts])

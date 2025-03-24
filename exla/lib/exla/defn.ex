@@ -404,14 +404,16 @@ defmodule EXLA.Defn do
            data: %Expr{
              args: [
                %{data: %{op: :eigh, args: [tensor, _opts]}},
-               {eigenvecs_expr, eigenvals_expr},
+               {%{type: {evec_type_kind, _}} = eigenvecs_expr,
+                %{type: {eval_type_kind, _}} = eigenvals_expr},
                _callback
              ]
            }
          },
          %{client: %EXLA.Client{platform: :host}, builder: %Function{}} = state,
          cache
-       ) do
+       )
+       when evec_type_kind != :c and eval_type_kind != :c do
     # We match only on platform: :host for MLIR, as we want to support
     # eigh-on-cpu as a custom call only in this case
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
@@ -546,21 +548,15 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(
          :lu,
-         %T{data: %Expr{args: [{p_expr, l_expr, u_expr}, tensor, _opts]}},
-         state,
+         %T{
+           data: %Expr{args: [{p_expr, l_expr, u_expr}, %{type: {type_kind, _}} = tensor, _opts]}
+         },
+         %{client: %{platform: :host}} = state,
          cache
-       ) do
-    %{type: {p_type_kind, _}} = p_expr
-    %{type: {out_type_kind, _}} = l_expr
-
-    if state.client.platform != :host do
-      raise ArgumentError, "XLA does not currently support the LU operation on non-host devices"
-    end
-
-    if p_type_kind == :c or out_type_kind == :c do
-      raise ArgumentError, "XLA does not currently support the LU operation for complex inputs"
-    end
-
+       )
+       when type_kind != :c do
+    # We only want to accelerate the LU operation for real inputs on the host device.
+    # Otherwise, we use the default implementation in Nx.
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
     tensor =
@@ -786,26 +782,27 @@ defmodule EXLA.Defn do
     lower = Keyword.fetch!(opts, :lower)
     transform = Keyword.fetch!(opts, :transform_a)
 
-    case Value.get_typespec(b).shape do
-      {dim} ->
-        b_shape = {dim, 1}
+    a_shape = Value.get_typespec(a).shape
+    b_shape = Value.get_typespec(b).shape
 
-        b =
-          b
-          |> to_type(type)
-          |> Value.reshape(Typespec.tensor(type, b_shape))
+    if tuple_size(a_shape) > tuple_size(b_shape) do
+      b_shape = Tuple.insert_at(b_shape, tuple_size(b_shape), 1)
 
-        typespec = Typespec.tensor(type, b_shape)
+      b =
+        b
+        |> to_type(type)
+        |> Value.reshape(Typespec.tensor(type, b_shape))
 
-        to_type(a, type)
-        |> Value.triangular_solve(b, left_side, lower, transform, typespec)
-        |> Value.reshape(Typespec.tensor(type, ans.shape))
+      typespec = Typespec.tensor(type, b_shape)
 
-      _ ->
-        typespec = Typespec.tensor(type, ans.shape)
+      to_type(a, type)
+      |> Value.triangular_solve(b, left_side, lower, transform, typespec)
+      |> Value.reshape(Typespec.tensor(type, ans.shape))
+    else
+      typespec = Typespec.tensor(type, ans.shape)
 
-        to_type(a, type)
-        |> Value.triangular_solve(to_type(b, type), left_side, lower, transform, typespec)
+      to_type(a, type)
+      |> Value.triangular_solve(to_type(b, type), left_side, lower, transform, typespec)
     end
   end
 
@@ -1145,8 +1142,7 @@ defmodule EXLA.Defn do
       end
 
     batch_size = tensor_rank - length(axes)
-    offset_size = indices_rank - length(axes)
-    offset_dims = count_up(batch_size, offset_size)
+    offset_dims = count_up(batch_size, index_vector_dim)
 
     Value.gather(
       tensor,

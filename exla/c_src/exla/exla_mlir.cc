@@ -1,32 +1,40 @@
 #include "exla_mlir.h"
 
+#include <fine.hpp>
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/AsmParser/AsmParser.h"
+#include "mlir/IR/Region.h"
 
 namespace exla {
-MLIRFunction::MLIRFunction(MLIRModule *module, std::unique_ptr<mlir::func::FuncOp> func)
+MLIRFunction::MLIRFunction(fine::ResourcePtr<MLIRModule> module, std::unique_ptr<mlir::func::FuncOp> func)
     : func_(std::move(func)),
       module_(module) {}
 
-std::vector<mlir::Value> MLIRFunction::Op(
-    std::string op_name, std::vector<mlir::Value> operands,
+std::vector<fine::ResourcePtr<mlir::Value>> MLIRFunction::Op(
+    std::string op_name, std::vector<fine::ResourcePtr<mlir::Value>> operands,
     std::vector<mlir::Type> result_types,
-    std::vector<std::pair<std::string, mlir::Attribute>> attributes,
-    std::vector<mlir::Region *> regions) {
+    std::vector<std::tuple<std::string, mlir::Attribute>> attributes,
+    std::vector<fine::ResourcePtr<mlir::Region>> regions) {
   auto builder = module_->builder();
   auto context = builder->getContext();
 
   auto types_range = mlir::TypeRange{llvm::ArrayRef<mlir::Type>{result_types}};
 
   auto named_attributes = std::vector<mlir::NamedAttribute>{};
-  for (auto const &pair : attributes) {
-    auto attribute = builder->getNamedAttr(pair.first, pair.second);
+  for (auto const &[key, value] : attributes) {
+    auto attribute = builder->getNamedAttr(key, value);
     named_attributes.push_back(attribute);
   }
 
-  auto operands_range = mlir::ValueRange{
-      llvm::ArrayRef<mlir::Value>(operands.data(), operands.size())};
+
+  auto operand_values = std::vector<mlir::Value>();
+  operand_values.reserve(operands.size());
+  for (const auto &operand : operands) {
+    operand_values.push_back(*operand);
+  }
+
+  auto operands_range = mlir::ValueRange{llvm::ArrayRef<mlir::Value>{operand_values}};
   auto attributes_array = llvm::ArrayRef<mlir::NamedAttribute>{named_attributes};
 
   setInsertionPoint();
@@ -46,29 +54,37 @@ std::vector<mlir::Value> MLIRFunction::Op(
 
   auto op = builder->create(op_state);
 
-  auto results = op->getResults();
-  return std::vector<mlir::Value>(results.begin(), results.end());
+  auto result_values = op->getResults();
+
+  auto results = std::vector<fine::ResourcePtr<mlir::Value>>();
+  results.reserve(result_values.size());
+  for (const auto &result : result_values) {
+    results.push_back(fine::make_resource<mlir::Value>(result));
+  }
+
+  return results;
 }
 
-std::pair<mlir::Region *, std::vector<mlir::Value>> MLIRFunction::PushRegion(std::vector<mlir::Type> types) {
+std::tuple<fine::ResourcePtr<mlir::Region>, std::vector<fine::ResourcePtr<mlir::Value>>>
+MLIRFunction::PushRegion(std::vector<mlir::Type> types) {
   auto context = module_->builder()->getContext();
 
-  auto region = new mlir::Region();
+  auto region = fine::make_resource<mlir::Region>();
   auto & block = region->emplaceBlock();
 
   for (mlir::Type type : types) {
     block.addArgument(type, mlir::UnknownLoc::get(context));
   }
 
-  auto args = std::vector<mlir::Value>{};
+  auto args = std::vector<fine::ResourcePtr<mlir::Value>>();
   for (auto &arg : block.getArguments()) {
-    args.push_back(arg);
+    args.push_back(fine::make_resource<mlir::Value>(arg));
   }
 
-  region_stack.push(std::move(region));
+  region_stack.push(region);
   setInsertionPoint();
 
-  return {region, args};
+  return std::make_tuple(region, args);
 }
 
 void MLIRFunction::PopRegion() {
@@ -84,14 +100,14 @@ void MLIRFunction::setInsertionPoint() {
   }
 }
 
-MLIRModule::MLIRModule(mlir::MLIRContext *context) {
+MLIRModule::MLIRModule(fine::ResourcePtr<mlir::MLIRContext> context) {
   context_ = context;
-  module_ = mlir::OwningOpRef<mlir::ModuleOp>(mlir::ModuleOp::create(mlir::UnknownLoc::get(context_)));
-  builder_ = std::make_unique<mlir::OpBuilder>(context_);
+  module_ = mlir::OwningOpRef<mlir::ModuleOp>(mlir::ModuleOp::create(mlir::UnknownLoc::get(context_.get())));
+  builder_ = std::make_unique<mlir::OpBuilder>(context_.get());
   builder_->setInsertionPointToStart(module_->getBody());
 }
 
-MLIRFunction *MLIRModule::CreateFunction(
+std::unique_ptr<mlir::func::FuncOp> MLIRModule::CreateFunction(
     std::string name,
     std::vector<mlir::Type> arg_types,
     std::vector<mlir::Type> ret_types,
@@ -106,7 +122,7 @@ MLIRFunction *MLIRModule::CreateFunction(
   funcOp->addEntryBlock();
   builder_->setInsertionPointToStart(&funcOp->getBody().front());
 
-  return new MLIRFunction(this, std::move(funcOp));
+  return funcOp;
 }
 
 std::string MLIRModule::ToString() {
@@ -117,11 +133,23 @@ std::string MLIRModule::ToString() {
 }
 
 mlir::Type MLIRModule::ParseType(std::string string) {
-  return mlir::parseType(string, context_);
+  auto type = mlir::parseType(string, context_.get());
+
+  if (type == nullptr) {
+    throw std::runtime_error("unable to parse MLIR type: " + string);
+  }
+
+  return type;
 }
 
 mlir::Attribute MLIRModule::ParseAttribute(std::string string) {
-  return mlir::parseAttribute(string, context_);
+  auto attribute = mlir::parseAttribute(string, context_.get());
+
+  if (attribute == nullptr) {
+    throw std::runtime_error("unable to parse MLIR type: " + string);
+  }
+
+  return attribute;
 }
 
 }  // namespace exla

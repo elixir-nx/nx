@@ -11,9 +11,9 @@ defmodule EXLA.DeviceMemorySharingTest do
 
       assert inspect(t1) =~ "1, 2, 3"
 
-      assert {:ok, pointer} = Nx.to_pointer(t1, mode: :local)
+      assert pointer = Nx.to_pointer(t1, mode: :local)
 
-      assert {:ok, t2} =
+      assert t2 =
                Nx.from_pointer(
                  {EXLA.Backend, client: unquote(client_name)},
                  pointer,

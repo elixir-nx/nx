@@ -5,7 +5,8 @@
 #include <utility>
 #include <vector>
 
-#include "erl_nif.h"
+#include <fine.hpp>
+#include <erl_nif.h>
 #include "exla_types.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/OwningOpRef.h"
@@ -27,7 +28,7 @@ class ExlaBuffer {
 
   int device_id() { return buffer_->device()->id(); }
   xla::PjRtBuffer* buffer() { return buffer_.get(); }
-  xla::StatusOr<ExlaBuffer*> CopyToDevice(xla::PjRtDevice* dst_device);
+  xla::StatusOr<fine::ResourcePtr<ExlaBuffer>> CopyToDevice(xla::PjRtDevice* dst_device);
   xla::StatusOr<ERL_NIF_TERM> ToBinary(ErlNifEnv* env, exla::int64 size);
   xla::Status Deallocate();
 
@@ -50,15 +51,19 @@ class ExlaBuffer {
 
 class ExlaExecutable {
  public:
+ using ReplicaArgument = std::variant<fine::ResourcePtr<ExlaBuffer>, std::tuple<fine::Term, xla::Shape>>;
+ using RunArguments = std::vector<std::vector<ReplicaArgument>>;
+
+ using RunReplicaResult = std::tuple<std::vector<fine::ResourcePtr<ExlaBuffer>>, int64_t>;
+ using RunResult =std::vector<RunReplicaResult>;
+
   ExlaExecutable(std::unique_ptr<xla::PjRtLoadedExecutable> executable,
                  absl::optional<std::string> fingerprint,
                  ExlaClient* client);
 
   xla::PjRtLoadedExecutable* executable() { return executable_.get(); }
 
-  xla::StatusOr<ERL_NIF_TERM> Run(ErlNifEnv* env,
-                                  ERL_NIF_TERM arguments,
-                                  int device_id);
+  xla::StatusOr<RunResult> Run(ErlNifEnv* env, RunArguments arguments, int device_id);
 
   xla::StatusOr<std::string> SerializeExecutable() { return executable_->SerializeExecutable(); }
 
@@ -78,17 +83,16 @@ class ExlaClient {
 
   // Compiles the given computation with the given compile options
 
-  xla::StatusOr<ExlaExecutable*> Compile(const mlir::OwningOpRef<mlir::ModuleOp>& computation,
+  xla::StatusOr<fine::ResourcePtr<ExlaExecutable>> Compile(mlir::ModuleOp computation,
                                          std::vector<xla::Shape> argument_layouts,
                                          xla::ExecutableBuildOptions& options,
                                          bool compile_portable_executable);
 
-  xla::StatusOr<ExlaBuffer*> BufferFromBinary(ErlNifEnv* env,
-                                              ERL_NIF_TERM binary_term,
+  xla::StatusOr<fine::ResourcePtr<ExlaBuffer>> BufferFromBinary(ERL_NIF_TERM binary_term,
                                               xla::Shape& shape,
                                               int device_id);
 
-  xla::StatusOr<ExlaExecutable*> DeserializeExecutable(std::string serialized_executable);
+  xla::StatusOr<fine::ResourcePtr<ExlaExecutable>> DeserializeExecutable(std::string serialized_executable);
 
   // TODO(seanmor5): This is device logic and should be refactored
   xla::Status TransferToInfeed(ErlNifEnv* env,
@@ -102,15 +106,15 @@ class ExlaClient {
   std::shared_ptr<xla::PjRtClient> client_;
 };
 
-xla::StatusOr<ExlaClient*> GetHostClient();
+xla::StatusOr<fine::ResourcePtr<ExlaClient>> GetHostClient();
 
-xla::StatusOr<ExlaClient*> GetGpuClient(double memory_fraction,
+xla::StatusOr<fine::ResourcePtr<ExlaClient>> GetGpuClient(double memory_fraction,
                                         bool preallocate,
                                         xla::GpuAllocatorConfig::Kind kind);
 
-xla::StatusOr<ExlaClient*> GetTpuClient();
+xla::StatusOr<fine::ResourcePtr<ExlaClient>> GetTpuClient();
 
-xla::StatusOr<ExlaClient*> GetCApiClient(std::string device_type);
+xla::StatusOr<fine::ResourcePtr<ExlaClient>> GetCApiClient(std::string device_type);
 }  // namespace exla
 
 #endif

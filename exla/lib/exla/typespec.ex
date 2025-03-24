@@ -39,45 +39,4 @@ defmodule EXLA.Typespec do
   Returns an updated typespec with the given shape.
   """
   def to_shape(typespec, shape), do: %{typespec | shape: shape}
-
-  @doc false
-  def nif_encode(typespec) do
-    {type_to_charlist(typespec.type), typespec.shape}
-  end
-
-  @doc false
-  def nif_decode({type_charlist, shape}) do
-    %__MODULE__{shape: shape, type: charlist_to_type(type_charlist)}
-  end
-
-  type_to_charlist = %{
-    :token => ~c"token",
-    {:pred, 8} => ~c"pred",
-    {:s, 2} => ~c"s2",
-    {:s, 4} => ~c"s4",
-    {:s, 8} => ~c"s8",
-    {:s, 16} => ~c"s16",
-    {:s, 32} => ~c"s32",
-    {:s, 64} => ~c"s64",
-    {:u, 2} => ~c"u2",
-    {:u, 4} => ~c"u4",
-    {:u, 8} => ~c"u8",
-    {:u, 16} => ~c"u16",
-    {:u, 32} => ~c"u32",
-    {:u, 64} => ~c"u64",
-    {:f, 16} => ~c"f16",
-    {:f, 32} => ~c"f32",
-    {:f, 64} => ~c"f64",
-    {:bf, 16} => ~c"bf16",
-    {:c, 64} => ~c"c64",
-    {:c, 128} => ~c"c128"
-  }
-
-  defp type_to_charlist({:f, 8}), do: ~c"f8e5m2"
-  defp charlist_to_type(~c"f8"), do: {:f, 8}
-
-  for {type, charlist} <- type_to_charlist do
-    defp charlist_to_type(unquote(charlist)), do: unquote(type)
-    defp type_to_charlist(unquote(type)), do: unquote(charlist)
-  end
 end
