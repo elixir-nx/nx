@@ -1,0 +1,121 @@
+# Numerical definitions (defn)
+
+The `defn` macro simplifies the expression of mathematical formulas
+containing tensors. Numerical definitions have two primary benefits
+over classic Elixir functions.
+
+- They are _tensor-aware_. Nx replaces operators like `Kernel.-/2`
+  with the `Defn` counterparts &mdash; which in turn use `Nx` functions
+  optimized for tensors &mdash; so the formulas we express can use
+  tensors out of the box.
+
+- `defn` definitions allow for building computation graph of all the
+  individual operations and using a just-in-time (JIT) compiler to emit
+  highly specialized native code for the desired computation unit.
+
+We don't have to do anything special to get access to
+get tensor awareness beyond importing `Nx.Defn` and writing
+our code within a `defn` block.
+
+To use Nx in a Mix project or a notebook, we need to include
+the `:nx` dependency and import the `Nx.Defn` module,
+like this:
+
+```elixir
+Mix.install([
+  {:nx, "~> 0.5"}
+])
+```
+
+```elixir
+import Nx.Defn
+```
+
+Just as the Elixir language supports `def`, `defmacro`, and `defp`,
+Nx supports `defn`. There are a few restrictions. It allows only
+numerical arguments in the form of primitives or tensors as arguments
+or return values, and supports only a subset of the language.
+
+The subset of Elixir allowed within `defn` is quite broad, though. We can
+use macros, pipes, and even conditionals, so we're not giving up
+much when you're declaring mathematical functions.
+
+Additionally, despite these small concessions, `defn` provides huge benefits.
+Code in a `defn` block uses tensor aware operators and types, so the math
+beneath your functions has a better chance to shine through. Numerical
+definitions can also run on accelerated numerical processors like GPUs and
+TPUs. Here's an example numerical definition:
+
+```elixir
+defmodule TensorMath do
+  import Nx.Defn
+
+  defn subtract(a, b) do
+    a - b
+  end
+end
+```
+
+This module has a numerical definition that will be compiled.
+If we wanted to specify a compiler for this module, we could add
+a module attribute before the `defn` clause. One of such compilers
+is [the EXLA compiler](https://github.com/elixir-nx/nx/tree/main/exla).
+You'd add the `mix` dependency for EXLA and do this:
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+@defn_compiler EXLA
+defn subtract(a, b) do
+  a - b
+end
+```
+
+Now, it's your turn. Add a `defn` to `TensorMath`
+that accepts two tensors representing the lengths of sides of a
+right triangle and uses the pythagorean theorem to return the
+[length of the hypotenuse](https://www.mathsisfun.com/pythagoras.html).
+Add your function directly to the previous Code cell.
+
+## deftransform
+
+The defn macro in Nx allows you to define functions that compile to efficient
+numerical computations, but it comes with certain limitations—such as restrictions
+on argument types, return values, and the subset of Elixir that it supports.
+To overcome many of these limitations, Nx offers the deftransform macro.
+
+deftransform lets you perform computations or execute code that isn't directly
+supported by defn, and then incorporate those results back into your numerical
+function. This separation lets you use standard Elixir features where necessary
+while keeping your core numerical logic optimized.
+
+In the following example, we define a deftransform function called
+compute_tensor_from_list/1 that receives a list, which is not allowed
+inside defn. Inside this transform function, we convert the list to a tensor
+using Nx.tensor/1, and then pass it to a defn function called double_tensor/1,
+which performs the actual numerical computation.
+
+```elixir
+defmodule MyMath do
+  import Nx.Defn
+
+  defn double_tensor(tensor) do
+    tensor * 2
+  end
+
+  deftransform compute_tensor_from_list(list) do
+    tensor = Nx.tensor(list)
+    double_tensor(tensor)
+  end
+end
+
+```
+
+```elixir
+input = [1, 2, 3, 4]
+result = MyMath.compute_tensor_from_list(input)
+```
+
+This setup allows us to keep our defn code clean and focused only on tensor
+operations, while using deftransform to handle Elixir-native types and
+preprocessing.
