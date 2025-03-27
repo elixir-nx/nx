@@ -4,4 +4,51 @@ This cheatsheet is designed to assist Python developers in transitioning to Elix
 specifically by providing equivalent commands and code examples between NumPy and Nx.
 
 ## Numpy -> Nx
+{: .col-2}
 
+### Array Creation 
+
+
+#### Python code
+
+```python
+import numpy as np
+
+# From list or nested list
+a = np.array([1, 2, 3])
+b = np.array([[1, 2], [3, 4]])
+
+# zeros and ones
+np.zeros((2, 3))  # 2x3 array filled with zeros
+np.ones((2, 3))   # 2x3 array filled with ones
+
+# Range of Numbers (like range())
+np.arange(0, 10, 2)  # [0 2 4 6 8]
+
+# Linearly Spaced Values
+np.linspace(0, 1, 5)  # [0.   0.25 0.5  0.75 1. ]
+
+```
+
+### Tensor Creation
+
+#### Elixir code
+
+```elixir
+Mix.install([:nx])
+
+# From list or nested list
+a = Nx.tensor([1, 2, 3])
+b = Nx.tensor([[1, 2], [3, 4]])
+
+# zeros and ones
+Nx.broadcast(0, {2, 3})  # 2x3 tensor filled with zeros
+Nx.broadcast(1, {2, 3})  # 2x3 tensor filled with ones
+
+# Range of Numbers (like range())
+Nx.iota({5}, axis: 0) |> Nx.multiply(2)  # [0 2 4 6 8]
+
+# Linearly Spaced Values
+Nx.iota({5}) |> Nx.divide(4)  # [0.0, 0.25, 0.5, 0.75, 1.0]
+
+```
