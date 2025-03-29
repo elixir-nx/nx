@@ -1,15 +1,17 @@
 # Numerical definitions (defn)
 
+## Section
+
 The `defn` macro simplifies the expression of mathematical formulas
 containing tensors. Numerical definitions have two primary benefits
 over classic Elixir functions.
 
-- They are _tensor-aware_. Nx replaces operators like `Kernel.-/2`
+* They are _tensor-aware_. Nx replaces operators like `Kernel.-/2`
   with the `Defn` counterparts &mdash; which in turn use `Nx` functions
   optimized for tensors &mdash; so the formulas we express can use
   tensors out of the box.
 
-- `defn` definitions allow for building computation graph of all the
+* `defn` definitions allow for building computation graph of all the
   individual operations and using a just-in-time (JIT) compiler to emit
   highly specialized native code for the desired computation unit.
 
@@ -99,21 +101,40 @@ which performs the actual numerical computation.
 defmodule MyMath do
   import Nx.Defn
 
-  defn double_tensor(tensor) do
-    tensor * 2
+  # Numerical function that just multiplies the tensor by a scalar
+  defn scale_tensor(tensor) do
+    Nx.multiply(tensor, 10)
   end
 
-  deftransform compute_tensor_from_list(list) do
-    tensor = Nx.tensor(list)
-    double_tensor(tensor)
+  # This transform receives a 2D list, validates it, reshapes it,
+  # adds a new axis, and then passes it to a numerical function.
+  deftransform compute_from_2d_list(list_2d) do
+    # Validate that it's a proper matrix (all rows same length)
+    lengths = Enum.map(list_2d, &length/1)
+    if Enum.uniq(lengths) != [hd(lengths)] do
+      raise ArgumentError, "All inner lists must have the same length"
+    end
+
+    # Convert to tensor (e.g., shape {2, 3})
+    tensor = Nx.tensor(list_2d)
+
+    # Add a new axis at the beginning: {2, 3} -> {1, 2, 3}
+    reshaped = Nx.new_axis(tensor, 0)
+
+    # Pass to defn function
+    scale_tensor(reshaped)
   end
 end
 
 ```
 
 ```elixir
-input = [1, 2, 3, 4]
-result = MyMath.compute_tensor_from_list(input)
+matrix = [
+  [1, 2, 3],
+  [4, 5, 6]
+]
+
+result = MyMath.compute_from_2d_list(matrix)
 ```
 
 This setup allows us to keep our defn code clean and focused only on tensor
