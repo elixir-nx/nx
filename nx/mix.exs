@@ -57,7 +57,6 @@ defmodule Nx.MixProject do
       before_closing_body_tag: &before_closing_body_tag/1,
       extras: [
         "CHANGELOG.md",
-        "guides/intro-to-nx.livemd",
         "guides/getting_started/introduction.md",
         "guides/getting_started/installation.md",
         "guides/getting_started/quickstart.livemd",

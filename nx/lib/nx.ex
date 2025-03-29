@@ -29,7 +29,7 @@ defmodule Nx do
 
   Here is a general outline of the main references in this library:
 
-    * For an introduction, see our [Intro to Nx](intro-to-nx.livemd) guide
+    * For an introduction, see our [Intro to Nx](introduction.md) guide
 
     * This module provides the main API for working with tensors
 
