@@ -8,7 +8,6 @@ specifically by providing equivalent commands and code examples between NumPy an
 
 ### Array Creation 
 
-
 #### Python code
 
 ```python
@@ -28,6 +27,44 @@ np.arange(0, 10, 2)  # [0 2 4 6 8]
 # Linearly Spaced Values
 np.linspace(0, 1, 5)  # [0.   0.25 0.5  0.75 1. ]
 
+```
+
+### Array Inspection
+
+#### Python code
+
+```python
+
+# Shape
+a = np.array([[1, 2, 3], [4, 5, 6]])
+a.shape  # (2, 3)
+
+# Number of dimensions
+a.ndim  # 2
+
+# Data Type
+a.dtype  # dtype('int64')
+
+# Total Number of Elements
+a.size
+```
+
+### Indexing and Slicing: Array
+
+#### Python code
+```python
+
+# Indexing a Single Element
+a = np.array([[10, 20], [30, 40]])
+a[0, 1]  # 20
+
+# Slicing a Range
+a = np.array([10, 20, 30, 40, 50])
+a[1:4]  # [20 30 40]
+
+# Selecting Along a Specific Axis
+a = np.array([[1, 2], [3, 4], [5, 6]])
+a[:, 1]  # [2 4 6]
 ```
 
 ### Tensor Creation
@@ -51,4 +88,42 @@ Nx.iota({5}, axis: 0) |> Nx.multiply(2)  # [0 2 4 6 8]
 # Linearly Spaced Values
 Nx.iota({5}) |> Nx.divide(4)  # [0.0, 0.25, 0.5, 0.75, 1.0]
 
+```
+
+### Tensor Inspection
+
+#### Elixir code
+
+```elixir
+
+# Shape
+a = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+Nx.shape(a)  # {2, 3}
+
+#  Number of Dimensions
+Nx.rank(a)  # 2
+
+# Data Type
+Nx.type(a)  # {:s, 64}
+
+# Total Number of Elements
+Nx.size(a)  # 6
+```
+
+### Indexing ans Slicing: Tensor
+
+#### Elixir code
+```elixir
+# Indexing a Single Element
+a = Nx.tensor([[10, 20], [30, 40]])
+tensor[[0, 1]] # Returns a tensor, even for a single value (not a scalar like NumPy).
+
+# Slicing a Range
+
+a = Nx.tensor([10, 20, 30, 40, 50])
+a[1..3] # [20 30 40]
+
+# Selecting Along a Specific Axis
+a = Nx.tensor([[1, 2], [3, 4], [5, 6]])
+a[[.., 1]] # [2 4 6]
 ```
