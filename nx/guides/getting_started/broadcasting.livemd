@@ -1,8 +1,8 @@
-# Broadcasts
+# Broadcasting
 
-Often, the dimensions of tensors in an operator don't match.
+The dimensions of tensors in an operator don't always match.
 For example, you might want to subtract a `1` from every
-element of a `{2, 2}` tensor, like this:
+element of a `{2, 2}`-shaped tensor, like this:
 
 $$
 \begin{bmatrix}
@@ -15,7 +15,7 @@ $$
 \end{bmatrix}
 $$
 
-Mathematically, it's the same as this:
+Mathematically, this is the same as:
 
 $$
 \begin{bmatrix}
@@ -32,7 +32,7 @@ $$
 \end{bmatrix}
 $$
 
-That means we need a way to convert `1` to a `{2, 2}` tensor.
+This means we need a way to convert `1` to a `{2, 2}`-shaped tensor.
 `Nx.broadcast/2` solves that problem. This function takes
 a tensor or a scalar and a shape.
 
@@ -45,7 +45,7 @@ Mix.install([
 Nx.broadcast(1, {2, 2})
 ```
 
-This broadcast takes the scalar `1` and translates it
+This call takes the scalar `1` and translates it
 to a compatible shape by copying it. Sometimes, it's easier
 to provide a tensor as the second argument, and let `broadcast/2`
 extract its shape:
@@ -103,22 +103,22 @@ $$
 \end{bmatrix}
 $$
 
-This rewrite happens in Nx too, also through a broadcast. We want to
-broadcast the tensor `[1, 2]` to match the `{2, 2}` shape, like this:
+This rewrite happens in Nx as well, through a broadcast operation. We want to
+broadcast the tensor `[1, 2]` to match the `{2, 2}` shape:
 
 ```elixir
 Nx.broadcast(Nx.tensor([1, 2]), {2, 2})
 ```
 
 The `subtract` function in `Nx` takes care of that broadcast
-implicitly, as before:
+implicitly, as discussed above:
 
 ```elixir
 Nx.subtract(tensor, Nx.tensor([1, 2]))
 ```
 
-The broadcast worked as advertised, copying the `[1, 2]` row
-enough times to fill a `{2, 2}` tensor. A tensor with a
+The broadcast worked as expected, copying the `[1, 2]` row
+enough times to fill a `{2, 2}`-shaped tensor. A tensor with a
 dimension of `1` will broadcast to fill the tensor:
 
 ```elixir
