@@ -38,7 +38,7 @@ a tensor or a scalar and a shape.
 
 ```elixir
 Mix.install([
-  {:nx, "~> 0.5"}
+  {:nx, "~> 0.9"}
 ])
 
 

@@ -6,7 +6,7 @@ Mix.install(
     {:nx, github: "elixir-nx/nx", override: true, sparse: "nx"},
     {:req, "~> 0.3.5"},
     {:kino, "~> 0.8.1"},
-    {:exla, "~> 0.5"},
+    {:exla, "~> 0.9"},
     {:stb_image, "~> 0.6"}
   ],
   config: [

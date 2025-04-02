@@ -6,12 +6,12 @@ The `defn` macro simplifies the expression of mathematical formulas
 containing tensors. Numerical definitions have two primary benefits
 over classic Elixir functions.
 
-* They are _tensor-aware_. Nx replaces operators like `Kernel.-/2`
+- They are _tensor-aware_. Nx replaces operators like `Kernel.-/2`
   with the `Defn` counterparts &mdash; which in turn use `Nx` functions
   optimized for tensors &mdash; so the formulas we express can use
   tensors out of the box.
 
-* `defn` definitions allow for building computation graph of all the
+- `defn` definitions allow for building computation graph of all the
   individual operations and using a just-in-time (JIT) compiler to emit
   highly specialized native code for the desired computation unit.
 
@@ -25,7 +25,7 @@ like this:
 
 ```elixir
 Mix.install([
-  {:nx, "~> 0.5"}
+  {:nx, "~> 0.9"}
 ])
 ```
 
