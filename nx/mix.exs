@@ -60,7 +60,7 @@ defmodule Nx.MixProject do
         "guides/getting_started/introduction.md",
         "guides/getting_started/installation.md",
         "guides/getting_started/quickstart.livemd",
-        "guides/getting_started/broadcast.livemd",
+        "guides/getting_started/broadcasting.livemd",
         "guides/getting_started/numerical_definitions.livemd",
         "guides/advanced/vectorization.livemd",
         "guides/advanced/aggregation.livemd",
