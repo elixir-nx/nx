@@ -57,13 +57,11 @@ defmodule Nx.MixProject do
       before_closing_body_tag: &before_closing_body_tag/1,
       extras: [
         "CHANGELOG.md",
-        "guides/intro-to-nx.livemd",
         "guides/getting_started/introduction.md",
         "guides/getting_started/installation.md",
         "guides/getting_started/quickstart.livemd",
-        "guides/getting_started/broadcast.livemd",
+        "guides/getting_started/broadcasting.livemd",
         "guides/getting_started/numerical_definitions.livemd",
-        "guides/cheatsheet/cheatsheet.cheatmd",
         "guides/advanced/vectorization.livemd",
         "guides/advanced/aggregation.livemd",
         "guides/advanced/automatic_differentiation.livemd",
@@ -120,7 +118,6 @@ defmodule Nx.MixProject do
       ],
       groups_for_extras: [
         "Getting Started": ~r"^guides/getting_started/",
-        Cheatsheet: ~r"^guides/cheatsheet/",
         Exercises: ~r"^guides/exercises/",
         Advanced: ~r"^guides/advanced/"
       ]

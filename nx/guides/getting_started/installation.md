@@ -1,7 +1,7 @@
 # Installation
 
-The only prerequisite for installing Nx is Elixir itself. If you don´t have Elixir installed
-in your machine you can visit this [intallation page](https://elixir-lang.org/install.html).
+The only prerequisite for installing Nx is Elixir itself. If you don't have Elixir installed
+in your machine you can visit this [installation page](https://elixir-lang.org/install.html).
 
 There are several ways to install Nx (Numerical Elixir), depending on your project type and needs.
 
@@ -14,7 +14,7 @@ If you are working inside a Mix project, the recommended way to install Nx is by
 ```elixir
 defp deps do
   [
-    {:nx, "~> 0.5"}  # Install the latest stable version
+    {:nx, "~> 0.9"}  # Install the latest stable version
   ]
 end
 ```
@@ -29,22 +29,20 @@ mix deps.get
 
 If you need the latest, unreleased features, install Nx directly from the GitHub repository.
 
-1. Modify mix.exs:
+1. Modify `mix.exs`:
 
 ```elixir
 defp deps do
   [
-    {:nx, github: "elixir-nx/nx", branch: "main"}
+    {:nx, github: "elixir-nx/nx", branch: "main", sparse: "nx"}
   ]
 end
-
 ```
 
 2. Fetch dependencies:
 
 ```sh
 mix deps.get
-
 ```
 
 ## Installing Nx in a Standalone Script (Without a Mix Project)
@@ -58,14 +56,12 @@ require Nx
 
 tensor = Nx.tensor([1, 2, 3])
 IO.inspect(tensor)
-
 ```
 
 Run the script with:
 
 ```sh
 elixir my_script.exs
-
 ```
 
 Best for: Quick experiments, small scripts, or one-off computations.
@@ -76,7 +72,7 @@ To use the latest development version in a script (without a Mix project):
 
 ```elixir
 Mix.install([
-  {:nx, github: "elixir-nx/nx", branch: "main"}
+  {:nx, github: "elixir-nx/nx", branch: "main", sparse: "nx"}
 ])
 
 require Nx
@@ -89,7 +85,6 @@ Run:
 
 ```sh
 elixir my_script.exs
-
 ```
 
 Best for: Trying new features from Nx without creating a full project.
@@ -103,8 +98,8 @@ To enable GPU/TPU acceleration with Google’s XLA backend, install Nx along wit
 ```elixir
 defp deps do
   [
-    {:nx, "~> 0.5"},
-    {:exla, "~> 0.5"}  # EXLA (Google XLA Backend)
+    {:nx, "~> 0.9"},
+    {:exla, "~> 0.9"}  # EXLA (Google XLA Backend)
   ]
 end
 ```
@@ -118,7 +113,8 @@ mix deps.get
 3. Run with EXLA enabled:
 
 ```elixir
-EXLA.set_preferred_backend(:tpu)
+Nx.default_backend(EXLA.Backend)
+Nx.Defn.default_options(compiler: EXLA)
 ```
 
 Best for: Running Nx on GPUs or TPUs using Google’s XLA compiler.
@@ -132,8 +128,8 @@ To run Nx operations on PyTorch’s backend (LibTorch):
 ```elixir
 defp deps do
   [
-    {:nx, "~> 0.5"},
-    {:torchx, "~> 0.5"}  # PyTorch Backend
+    {:nx, "~> 0.9"},
+    {:torchx, "~> 0.9"}  # PyTorch Backend
   ]
 end
 
@@ -145,42 +141,10 @@ end
 mix deps.get
 ```
 
-3. Run with EXLA enabled:
+3. Run with Torchx enabled:
 
 ```elixir
-Torchx.set_preferred_backend()
+Nx.default_backend(Torchx.Backend)
 ```
 
 Best for: Deep learning applications with PyTorch acceleration.
-
-## Installing Nx with OpenBLAS for CPU Optimization
-
-To optimize CPU performance with OpenBLAS:
-
-1. Install OpenBLAS (libopenblas):
-   - Ubuntu/Debian:
-     ```sh
-     sudo apt install libopenblas-dev
-     ```
-   - MacOS (using Homebrew):
-     ```sh
-     brew install openblas
-     ```
-2. Modify mix.exs:
-
-```elixir
-defp deps do
-  [
-    {:nx, "~> 0.5"},
-    {:openblas, "~> 0.5"}  # CPU-optimized BLAS backend
-  ]
-end
-```
-
-3. Fetch dependencies:
-
-```sh
-mix deps.get
-```
-
-Best for: Optimizing CPU-based tensor computations.
