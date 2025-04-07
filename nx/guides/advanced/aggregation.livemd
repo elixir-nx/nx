@@ -4,7 +4,7 @@
 
 ```elixir
 Mix.install([
-  {:nx, "~> 0.5"}
+  {:nx, "~> 0.9"}
 ])
 ```
 
@@ -93,7 +93,7 @@ m = ~MAT[
 >
 ```
 
-First, we'll compute the full-tensor aggregation. The calculations are developed below. We calculate an "array product" (aka [Hadamard product](https://en.wikipedia.org/wiki/Hadamard_product_(matrices)#:~:text=In%20mathematics%2C%20the%20Hadamard%20product,elements%20i%2C%20j%20of%20the), an element-wise product) of our tensor with the tensor of weights, then sum all the elements and divide by the sum of the weights.
+First, we'll compute the full-tensor aggregation. The calculations are developed below. We calculate an "array product" (aka [Hadamard product](<https://en.wikipedia.org/wiki/Hadamard_product_(matrices)#:~:text=In%20mathematics%2C%20the%20Hadamard%20product,elements%20i%2C%20j%20of%20the>), an element-wise product) of our tensor with the tensor of weights, then sum all the elements and divide by the sum of the weights.
 
 ```elixir
 w = ~MAT[
@@ -689,8 +689,6 @@ $$
 
 <!-- livebook:{"break_markdown":true} -->
 
-
-
 ```elixir
 Nx.argmax(t, axis: :z)
 ```
@@ -784,8 +782,6 @@ y=2 &
 $$
 
 <!-- livebook:{"break_markdown":true} -->
-
-
 
 ```elixir
 Nx.argmin(t, axis: 3)

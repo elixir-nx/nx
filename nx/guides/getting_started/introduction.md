@@ -1,15 +1,15 @@
 # What is Nx?
 
-Nx is the numerical computing library of Elixir. Since Elixir's primary numerical datatypes and structures are not optimized for numerical programming, Nx is the fundamental package built to bridge this gap.
+Nx is a numerical computing library in Elixir. Since Elixir's primary numerical data types and structures are not optimized for numerical programming, Nx is the fundamental package built to bridge this gap.
 
-[Elixir Nx](https://github.com/elixir-nx/nx) smoothly integrates typed, multidimensional data called [tensors](introduction.html#what-are-tensors)). 
+[Elixir Nx](https://github.com/elixir-nx/nx) smoothly integrates typed, multidimensional data called [tensors](introduction.html#what-are-tensors)).
 Nx has four primary capabilities:
 
-- In Nx, tensors hold typed data in multiple, optionally named dimensions.
+- Tensors hold typed data in multiple, optionally named dimensions.
 - Numerical definitions, known as `defn`, support custom code with
   tensor-aware operators and functions.
 - [Automatic differentiation](https://arxiv.org/abs/1502.05767), also known as
-  autograd or autodiff, supports common computational scenarios
+  autodiff, supports common computational scenarios
   such as machine learning, simulations, curve fitting, and probabilistic models.
 - Broadcasting, which is a term for element-by-element operations. Most of the Nx operations
   make use of automatic implicit broadcasting. You can see more on broadcasting
@@ -79,4 +79,4 @@ s32[2][2]
 
 To learn Nx, we'll get to know tensors first. The following overview will touch
 on the major features. The advanced section of the documentation will take a deep dive into working
-with tensors in detail, autodiff, and backends.
+with tensors in detail, automatic differentiation, and backends.

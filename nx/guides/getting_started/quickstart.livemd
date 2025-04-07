@@ -1,4 +1,4 @@
-# Nx quickstart
+# Nx Quickstart
 
 ## Prerequisites
 
@@ -26,11 +26,11 @@ First, let's install Nx with `Mix.install`.
 
 ```elixir
 Mix.install([
-  {:nx, "~> 0.5"}
+  {:nx, "~> 0.9"}
 ])
 ```
 
-The `IEx.Helpers` module will assist our exploration of the core tensor concepts.
+The `IEx.Helpers` module will assist our exploration of core tensor concepts.
 
 ```elixir
 import IEx.Helpers
@@ -44,7 +44,7 @@ The argument for `Nx.tensor/1` must be one of:
 - a number (which means the tensor is scalar/zero-dimensional);
 - a boolean (also scalar/zero-dimensional);
 - an arbitrarily nested list of numbers and booleans
-- the special atoms `:nan`, `:infinity`, `:neg_infinity`, which represent values not supported by Elixir floats.
+- the special atoms `:nan`, `:infinity`, `:neg_infinity`, which represent non-finite numbers which are not supported by Elixir floats.
 
 If a new tensor is allocated, it will be allocated in the backend defined by the `:backend` option.
 If it is not provided, `Nx.default_backend/0` will be used instead.
@@ -85,7 +85,7 @@ Nx.tensor([[1, 2], [3, 4], [5, 6]])
 Nx.tensor([[[1, 2], [3, 4], [5, 6]], [[-1, -2], [-3, -4], [-5, -6]]])
 ```
 
-Tensors can also be given as inputs, which is useful for functions that don´t want to care
+Tensors can also be given as inputs, which is useful for functions that don't care
 about the input kind:
 
 ```elixir
@@ -138,12 +138,6 @@ tensor = Nx.tensor([[1, 2], [3, 4], [5, 6]], names: [:y, :x])
 tensor[[-1, -1]]
 ```
 
-Now, try getting the first row of the tensor:
-
-```elixir
-# ...your code here...
-```
-
 We can also get a whole dimension:
 
 ```elixir
@@ -159,37 +153,26 @@ tensor[y: 0..1]
 `tensor[[.., 1]]` will achieve the same result as `tensor[x: 1]`.
 This is because Elixir has the syntax sugar `..` for a `0..-1//1` range.
 
-Now,
-
-- create your own `{3, 3}` tensor with named dimensions
-- return a `{2, 2}` tensor containing the first two columns
-  of the first two rows
-
-```elixir
-# ...your code here...
-```
-
 ### Tensor shape and reshape
 
 ```elixir
 Nx.shape(tensor)
 ```
 
-We can also create a new tensor with a new shape using `Nx.reshape/2`:
+We can also create a new tensor with the given shape using `Nx.reshape/2`:
 
 ```elixir
 Nx.reshape(tensor, {1, 4}, names: [:batches, :values])
 ```
 
-This operation reuses all of the tensor data and simply
+This operation generally reuses all of the tensor data and simply
 changes the metadata, so it has no notable cost.
-
 The new tensor has the same type, but a new shape.
 
 ### Floats and Complex numbers
 
-Besides single-precision (32 bits), floats can have other kinds of precision, such as half-precision (16) or
-double-precision (64):
+Besides single-precision (32 bits) floats, Nx floating-point numbers can also have other kinds of precision,
+such as half-precision (16) or double-precision (64):
 
 ```elixir
 Nx.tensor([0.0, 0.2, 0.4, 1.0], type: :f16)
@@ -207,7 +190,7 @@ Nx.tensor([0.0, 0.2, 0.4, 1.0], type: :bf16)
 
 Certain backends and compilers support 8-bit floats. The precision
 implementation of 8-bit floats may change per backend, so you must be careful
-when transferring data across different backends. The binary backend implements F8E5M2:
+when transferring data across different backends. `Nx.BinaryBackend` implements F8E5M2:
 
 ```elixir
 Nx.tensor([1, 2, 3], type: :f8)
@@ -296,7 +279,7 @@ Nx.quotient(a, b)
 
 ### Remainder
 
-`Nx.remainder/2`: Computes the remainder of the integer division.
+`Nx.remainder/2`: Computes the integer division remainder.
 
 ```elixir
 a = Nx.tensor([27, 32, 43])
@@ -380,6 +363,9 @@ Nx.less_equal(a, b)
 
 These operations aggregate values across tensor axes.
 
+See also [the aggregation guide](guides/advanced/aggregation.livemd)
+for a more in-depth exploration on the subject.
+
 ### Sum
 
 `Nx.sum/1`: Sums all elements.
@@ -409,7 +395,7 @@ Nx.product(a)
 
 ## Matrix Multiplication
 
-`Nx.dot/4`: Computes the generalized dot product between two tensors, given the contracting axes.
+`Nx.dot/4`: Computes the generalized dot product between two tensors, operating on specific contracting axes.
 
 ```elixir
 t1 = Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
