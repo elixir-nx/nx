@@ -1,0 +1,184 @@
+# Numpy -> Nx
+
+This cheatsheet is designed to assist Python developers in transitioning to Elixir, 
+specifically by providing equivalent commands and code examples between NumPy and Nx.
+
+## Tensor Creation
+{: .col-2}
+
+### Python
+
+```python
+import numpy as np
+
+# From list or nested list
+a = np.array([1, 2, 3])
+b = np.array([[1, 2], [3, 4]])
+
+# zeros and ones
+np.zeros((2, 3))  # 2x3 array filled with zeros
+np.ones((2, 3))   # 2x3 array filled with ones
+
+# Range of Numbers (like range())
+np.arange(0, 10, 2)  # [0 2 4 6 8]
+
+# Linearly Spaced Values
+np.linspace(0, 1, 5)  # [0.   0.25 0.5  0.75 1. ]
+
+```
+
+### Elixir
+
+```elixir
+Mix.install([:nx])
+
+# From list or nested list
+a = Nx.tensor([1, 2, 3])
+b = Nx.tensor([[1, 2], [3, 4]])
+
+# zeros and ones
+Nx.broadcast(0, {2, 3})  # 2x3 tensor filled with zeros
+Nx.broadcast(1, {2, 3})  # 2x3 tensor filled with ones
+
+# Range of Numbers (like range())
+Nx.iota({5}, axis: 0) |> Nx.multiply(2)  # [0 2 4 6 8]
+
+# Linearly Spaced Values
+Nx.iota({5}) |> Nx.divide(4)  # [0.0, 0.25, 0.5, 0.75, 1.0]
+
+```
+
+## Tensor Inspection
+{: .col-2}
+
+### Python
+
+```python
+# Shape
+a = np.array([[1, 2, 3], [4, 5, 6]])
+a.shape  # (2, 3)
+
+# Number of dimensions
+a.ndim  # 2
+
+# Data Type
+a.dtype  # dtype('int64')
+
+# Total Number of Elements
+a.size
+```
+
+### Elixir
+
+```elixir
+# Shape
+a = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+Nx.shape(a)  # {2, 3}
+
+#  Number of Dimensions
+Nx.rank(a)  # 2
+
+# Data Type
+Nx.type(a)  # {:s, 64}
+
+# Total Number of Elements
+Nx.size(a)  # 6
+```
+
+## Indexing and Slicing
+{: .col-2}
+
+### Python
+```python
+# Indexing a Single Element
+a = np.array([[10, 20], [30, 40]])
+a[0, 1]  # 20
+
+# Slicing a Range
+a = np.array([10, 20, 30, 40, 50])
+a[1:4]  # [20 30 40]
+
+# Selecting Along a Specific Axis
+a = np.array([[1, 2], [3, 4], [5, 6]])
+a[:, 1]  # [2 4 6]
+```
+
+### Elixir
+```elixir
+# Indexing a Single Element
+a = Nx.tensor([[10, 20], [30, 40]])
+tensor[[0, 1]] # Returns a tensor, even for a single value (not a scalar like NumPy).
+
+# Slicing a Range
+a = Nx.tensor([10, 20, 30, 40, 50])
+a[1..3] # [20 30 40]
+
+# Selecting Along a Specific Axis
+a = Nx.tensor([[1, 2], [3, 4], [5, 6]])
+a[[.., 1]] # [2 4 6]
+```
+
+## Linear Algebra Operations
+{: .col-2}
+
+### Python
+```python
+# Matrix Multiplication
+A = np.array([[1, 2], [3, 4]])
+B = np.array([[5, 6], [7, 8]])
+
+np.matmul(A, B)
+# or simply
+A @ B
+
+# Transpose
+A.T
+
+# Identity Matrix
+np.eye(3)
+
+# Determinant
+np.linalg.det(A)
+
+# Inverse
+np.linalg.inv(A)
+
+# Solve a System of Linear Equations
+A = np.array([[3, 1], [1, 2]])
+b = np.array([9, 8])
+
+np.linalg.solve(A, b)
+
+# Eigenvalues and Eigenvectors
+np.linalg.eigh(A)
+```
+
+### Elixir
+```elixir
+# Matrix Multiplication
+a = Nx.tensor([[1, 2], [3, 4]])
+b = Nx.tensor([[5, 6], [7, 8]])
+
+Nx.dot(a, b)
+
+# Transpose
+Nx.transpose(a)
+
+# Identity Matrix
+Nx.eye({3, 3})
+
+# Determinant
+Nx.LinAlg.det(a)
+
+# Inverse
+Nx.LinAlg.inverse(a)
+
+# Solve a System of Linear Equations
+a = Nx.tensor([[3.0, 1.0], [1.0, 2.0]])
+b = Nx.tensor([9.0, 8.0])
+
+Nx.LinAlg.solve(a, b)
+
+# Eigenvalues and Eigenvectors
+Nx.LinAlg.eigh(a)
+```
