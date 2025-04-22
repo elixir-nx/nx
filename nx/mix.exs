@@ -38,8 +38,8 @@ defmodule Nx.MixProject do
       {:complex, "~> 0.6"},
       {:telemetry, "~> 0.4.0 or ~> 1.0"},
       {:ex_doc, "~> 0.29", only: :docs},
-      {:makeup, "~> 1.2.1"},
-      {:makeup_syntect, "~> 0.1"}
+      {:makeup, "~> 1.2.1", only: :docs},
+      {:makeup_syntect, "~> 0.1", only: :docs}
     ]
   end
 
