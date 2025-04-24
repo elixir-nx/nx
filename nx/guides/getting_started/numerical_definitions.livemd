@@ -1,14 +1,6 @@
-<<<<<<< HEAD
 # Numerical definitions (defn)
 
 The `defn` macro simplifies the expression of mathematical formulas
-=======
-# Numerical Definitions (defn)
-
-## Section
-
-The `defn` macro and its siblings simplify the expression of mathematical formulas
->>>>>>> f9428e6e2b3fac14ea675ad71ab2f024b6d467b5
 containing tensors. Numerical definitions have two primary benefits
 over classic Elixir functions.
 
