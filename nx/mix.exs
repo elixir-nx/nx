@@ -37,7 +37,9 @@ defmodule Nx.MixProject do
     [
       {:complex, "~> 0.6"},
       {:telemetry, "~> 0.4.0 or ~> 1.0"},
-      {:ex_doc, "~> 0.29", only: :docs}
+      {:ex_doc, "~> 0.29", only: :docs},
+      {:makeup, "~> 1.2.1", only: :docs},
+      {:makeup_syntect, "~> 0.1", only: :docs}
     ]
   end
 
@@ -62,6 +64,7 @@ defmodule Nx.MixProject do
         "guides/getting_started/quickstart.livemd",
         "guides/getting_started/broadcasting.livemd",
         "guides/getting_started/numerical_definitions.livemd",
+        "guides/cheatsheets/numpy_nx.cheatmd",
         "guides/advanced/vectorization.livemd",
         "guides/advanced/aggregation.livemd",
         "guides/advanced/automatic_differentiation.livemd",
@@ -118,6 +121,7 @@ defmodule Nx.MixProject do
       ],
       groups_for_extras: [
         "Getting Started": ~r"^guides/getting_started/",
+        Cheatsheets: ~r"^guides/cheatsheets/",
         Exercises: ~r"^guides/exercises/",
         Advanced: ~r"^guides/advanced/"
       ]
