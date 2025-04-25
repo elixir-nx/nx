@@ -11,28 +11,55 @@ specifically by providing equivalent commands and code examples between NumPy an
 ```python
 >>> import numpy as np
 
+
 # From list or nested list
 >>> np.array([1, 2, 3])
 array([1, 2, 3])
+
+
+
+
 >>> np.array([[1, 2], [3, 4]])
 array([[1, 2],
        [3, 4]])
+
+
+
+
+
 
 # zeros and ones
 >>> np.zeros((2, 3))
 array([[0., 0., 0.],
        [0., 0., 0.]])
+
+
+
+
+
+
 >>> np.ones((2, 3))
 array([[1., 1., 1.],
        [1., 1., 1.]])
+
+
+
+
+
 
 # Range of Numbers (like range())
 >>> np.arange(0, 10, 2)
 array([0, 2, 4, 6, 8])
 
+
+
+
 # Linearly Spaced Values
 >>> np.linspace(0, 1, 5)
 array([0.  , 0.25, 0.5 , 0.75, 1.  ])
+
+
+
 
 ```
 
@@ -48,6 +75,7 @@ iex> Nx.tensor([1, 2, 3])
   s32[3]
   [1, 2, 3]
 >
+
 iex> Nx.tensor([[1, 2], [3, 4]])
 #Nx.Tensor<
   s32[2][2]
@@ -66,6 +94,7 @@ iex> Nx.broadcast(0, {2, 3})
     [0, 0, 0]
   ]
 >
+
 iex> Nx.broadcast(1, {2, 3})
 #Nx.Tensor<
   s32[2][3]
@@ -88,7 +117,6 @@ iex> Nx.iota({5}) |> Nx.divide(4)
   f32[5]
   [0.0, 0.25, 0.5, 0.75, 1.0]
 >
-
 ```
 
 ## Tensor Inspection
@@ -99,8 +127,17 @@ iex> Nx.iota({5}) |> Nx.divide(4)
 ```python
 >>> import numpy as np
 
+
 # Shape
 >>> a = np.array([[1, 2, 3], [4, 5, 6]])
+
+
+
+
+
+
+
+
 >>> a.shape
 (2, 3)
 
@@ -132,6 +169,7 @@ iex> a = Nx.tensor([[1, 2, 3], [4, 5, 6]])
     [4, 5, 6]
   ]
 >
+
 iex> Nx.shape(a)
 {2, 3}
 
@@ -155,25 +193,59 @@ iex> Nx.size(a)
 ```python
 >>> import numpy as np
 
+
 # Indexing a Single Element
 >>> a = np.array([[10, 20], [30, 40]])
+
+
+
+
+
+
+
+
 >>> a[0, 1]  
 np.int64(20)
 
+
+
+
 # Slicing a Range
 >>> a = np.array([10, 20, 30, 40, 50])
+
+
+
+
+
 >>> a[1:4]  
 array([20, 30, 40])
 
+
+
+
 # Selecting Along a Specific Axis
 >>> a = np.array([[1, 2], [3, 4], [5, 6]])
+
+
+
+
+
+
+
+
+
 >>> a[:, 1]
 array([2, 4, 6])
+
+
+
 
 # Boolean Masking
 >>> x = np.arange(10)
 >>> x[x % 2 == 0] 
 array([0, 2, 4, 6, 8])
+
+
 ```
 
 ### Elixir
@@ -190,6 +262,7 @@ iex> tensor = Nx.tensor([[10, 20], [30, 40]])
     [30, 40]
   ]
 >
+
 iex> tensor[[0, 1]]
 #Nx.Tensor<
   s32
@@ -202,6 +275,7 @@ iex> a = Nx.tensor([10, 20, 30, 40, 50])
   s32[5]
   [10, 20, 30, 40, 50]
 >
+
 iex> a[1..3]
 #Nx.Tensor<
   s32[3]
@@ -218,6 +292,7 @@ iex> a = Nx.tensor([[1, 2], [3, 4], [5, 6]])
     [5, 6]
   ]
 >
+
 iex> a[[.., 1]]
 #Nx.Tensor<
   s32[3]
@@ -225,9 +300,10 @@ iex> a[[.., 1]]
 >
 
 # Boolean Masking
-# requires dynamic shape behavior, which is not directly supported 
-# in Nx because Nx compiles all operations ahead-of-time (like XLA or JAX), 
-# and tensors must have static shapes.
+# requires dynamic shape behavior, which is not directly
+# supported in Nx because Nx compiles all operations 
+# ahead-of-time (like XLA or JAX), and tensors must have 
+# static shapes.
 ```
 
 ## Linear Algebra Operations
@@ -237,17 +313,44 @@ iex> a[[.., 1]]
 ```python
 >>> import numpy as np
 
+
 # Matrix Multiplication
 >>> A = np.array([[1, 2], [3, 4]])
+
+
+
+
+
+
+
+
 >>> B = np.array([[5, 6], [7, 8]])
+
+
+
+
+
+
+
+
 >>> np.matmul(A, B)
 array([[19, 22],
        [43, 50]])
+
+
+
+
+
 
 # Transpose
 >>> A.T
 array([[1, 3],
        [2, 4]])
+
+
+
+
+
 
 # Identity Matrix
 >>> np.eye(3)
@@ -255,25 +358,63 @@ array([[1., 0., 0.],
        [0., 1., 0.],
        [0., 0., 1.]])
 
+
+
+
+
+
 # Determinant
 >>> np.linalg.det(A)
 np.float64(-2.0000000000000004)
+
+
+
 
 # Inverse
 >>> np.linalg.inv(A)
 array([[-2. ,  1. ],
        [ 1.5, -0.5]])
 
+
+
+
+
+
 # Solve a System of Linear Equations
 >>> A = np.array([[3, 1], [1, 2]])
+
+
+
+
+
+
+
+
 >>> b = np.array([9, 8])
+
+
+
+
+
 >>> np.linalg.solve(A, b)
 array([2., 3.])
 
+
+
+
 # Eigenvalues and Eigenvectors
 >>> np.linalg.eigh(A)
-EighResult(eigenvalues=array([1.38196601, 3.61803399]), eigenvectors=array([[ 0.52573111, -0.85065081],
-       [-0.85065081, -0.52573111]]))
+EighResult(
+          eigenvalues=array([1.38196601, 3.61803399]), 
+          eigenvectors=array([
+                              [ 0.52573111, -0.85065081],
+                              [-0.85065081, -0.52573111]
+                              ]))
+
+
+
+
+               
 ```
 
 ### Elixir
@@ -290,6 +431,7 @@ iex> a = Nx.tensor([[1, 2], [3, 4]])
     [3, 4]
   ]
 >
+
 iex> b = Nx.tensor([[5, 6], [7, 8]])
 #Nx.Tensor<
   s32[2][2]
@@ -298,6 +440,7 @@ iex> b = Nx.tensor([[5, 6], [7, 8]])
     [7, 8]
   ]
 >
+
 iex> Nx.dot(a, b)
 #Nx.Tensor<
   s32[2][2]
@@ -354,11 +497,13 @@ iex> a = Nx.tensor([[3.0, 1.0], [1.0, 2.0]])
     [1.0, 2.0]
   ]
 >
+
 iex> b = Nx.tensor([9.0, 8.0])
 #Nx.Tensor<
   f32[2]
   [9.0, 8.0]
 >
+
 iex> Nx.LinAlg.solve(a, b)
 #Nx.Tensor<
   f32[2]
