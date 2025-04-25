@@ -121,7 +121,7 @@ defmodule Nx.MixProject do
       ],
       groups_for_extras: [
         "Getting Started": ~r"^guides/getting_started/",
-        "Cheatsheets": ~r"^guides/cheatsheets/",
+        Cheatsheets: ~r"^guides/cheatsheets/",
         Exercises: ~r"^guides/exercises/",
         Advanced: ~r"^guides/advanced/"
       ]
