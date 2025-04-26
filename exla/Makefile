@@ -44,14 +44,17 @@ ifeq ($(CROSSCOMPILE),)
 	# Interrogate the system for local compilation
 	UNAME_S = $(shell uname -s)
 
-ifdef ($(EXLA_CPU_ONLY),)
+ifndef EXLA_CPU_ONLY
 $(info EXLA_CPU_ONLY is not set, checking for nvcc availability)
 	NVCC_RESULT := $(shell which nvcc 2> /dev/null)
 	NVCC_TEST := $(notdir $(NVCC_RESULT))
 
 	ifeq ($(NVCC_TEST),nvcc)
+$(info CUDA is available.)
 		NVCC := nvcc
 		NVCCFLAGS += -DCUDA_ENABLED
+	else
+$(info CUDA is not available.)
 	endif
 else
 $(info EXLA_CPU_ONLY is set, skipping nvcc step)
