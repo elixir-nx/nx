@@ -23,22 +23,19 @@ EXLA_CACHE_SO_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(EXLA_CACHE_SO)
 
 # Build flags
 # Note that XLA requires c++17, Fine as well
-CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(FINE_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -Wall -Wno-sign-compare \
+CFLAGS += -fPIC -I$(ERTS_INCLUDE_DIR) -I$(FINE_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -Wall -Wno-sign-compare \
 	 -Wno-unused-parameter -Wno-missing-field-initializers -Wno-comment \
 	 -std=c++17 -w -DLLVM_VERSION_STRING=
 
-NVCCFLAGS = -shared -Xcompiler -fPIC
-
 ifdef DEBUG
 	CFLAGS += -g
-	NVCCFLAGS += -g
 else
 	CFLAGS += -O3
 endif
 
 NVCC := $(CXX)
 NVCCFLAGS = $(CFLAGS)
-LDFLAGS = -L$(XLA_EXTENSION_LIB) -lxla_extension -shared -fvisibility=hidden
+LDFLAGS += -L$(XLA_EXTENSION_LIB) -lxla_extension -shared -fvisibility=hidden
 
 ifeq ($(CROSSCOMPILE),)
 	# Interrogate the system for local compilation
