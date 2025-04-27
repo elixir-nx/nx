@@ -14,7 +14,7 @@
 #include "stablehlo/dialect/StablehloOps.h"
 #include "xla/pjrt/pjrt_api.h"
 #include "xla/service/platform_util.h"
-#include "xla/statusor.h"
+#include "xla/tsl/platform/statusor.h"
 #include "llvm/Support/ThreadPool.h"
 
 namespace exla {
@@ -178,7 +178,7 @@ std::string mlir_module_to_string(ErlNifEnv *env,
 
 FINE_NIF(mlir_module_to_string, 0);
 
-template <typename T> T unwrap(xla::StatusOr<T> status_or) {
+template <typename T> T unwrap(tsl::StatusOr<T> status_or) {
   if (!status_or.ok()) {
     throw std::runtime_error(status_or.status().message().data());
   }
@@ -186,7 +186,7 @@ template <typename T> T unwrap(xla::StatusOr<T> status_or) {
   return std::move(status_or.value());
 }
 
-void unwrap(xla::Status status) {
+void unwrap(tsl::Status status) {
   if (!status.ok()) {
     throw std::runtime_error(status.message().data());
   }
@@ -302,8 +302,9 @@ fine::ResourcePtr<ExlaBuffer> create_buffer_from_device_pointer(
 
   auto device = unwrap(
       client->client()->LookupDevice(xla::PjRtGlobalDeviceId(device_id)));
+  auto memory_space = unwrap(device->default_memory_space());
   auto buffer = unwrap(client->client()->CreateViewOfDeviceBuffer(
-      ptr, shape, device, on_delete_callback));
+      ptr, shape, memory_space, on_delete_callback));
   return fine::make_resource<ExlaBuffer>(std::move(buffer));
 }
 
@@ -329,7 +330,7 @@ std::variant<fine::Ok<>, fine::Error<fine::Atom>>
 deallocate_device_mem(ErlNifEnv *env, fine::Term buffer_term) {
   auto buffer = decode_exla_buffer(env, buffer_term);
 
-  xla::Status dealloc_status = buffer->Deallocate();
+  tsl::Status dealloc_status = buffer->Deallocate();
 
   if (!dealloc_status.ok()) {
     return fine::Error(atoms::already_deallocated);
