@@ -6,29 +6,43 @@ defmodule Nx.Testing do
   approximate equality within specified tolerances.
   """
 
+  import ExUnit.Assertions
+  import Nx, only: [is_tensor: 1]
+
   @doc """
   Asserts that two tensors are exactly equal.
 
   This handles NaN values correctly by considering NaN == NaN as true.
   """
-  def assert_equal(left, right) do
-    both_nan = Nx.is_nan(left) |> Nx.logical_and(Nx.is_nan(right))
-
-    equals =
-      left
-      |> Nx.equal(right)
-      |> Nx.logical_or(both_nan)
-      |> Nx.all()
-      |> Nx.to_flat_list()
-      |> Enum.all?(&(&1 == 1))
-
-    if !equals do
+  def assert_equal(left, right) when not is_tensor(left) or not is_tensor(right) do
+    if not Nx.Defn.Composite.compatible?(left, right, &tensor_equal?/2) do
       flunk("""
       Tensor assertion failed.
       left: #{inspect(left)}
       right: #{inspect(right)}
       """)
     end
+  end
+
+  def assert_equal(left, right) do
+    if !tensor_equal?(left, right) do
+      flunk("""
+      Tensor assertion failed.
+      left: #{inspect(left)}
+      right: #{inspect(right)}
+      """)
+    end
+  end
+
+  def tensor_equal?(left, right) do
+    both_nan = Nx.is_nan(left) |> Nx.logical_and(Nx.is_nan(right))
+
+    left
+    |> Nx.equal(right)
+    |> Nx.logical_or(both_nan)
+    |> Nx.all()
+    |> Nx.to_flat_list()
+    |> Enum.all?(&(&1 == 1))
   end
 
   @doc """
@@ -65,15 +79,5 @@ defmodule Nx.Testing do
       #{inspect(right)}
       """)
     end
-  end
-
-  @doc """
-  Converts a tensor to the binary backend.
-
-  This is useful for comparing tensors in assertions, as it ensures
-  consistent representation regardless of the original backend.
-  """
-  def to_binary_backend(tensor) do
-    Nx.backend_copy(tensor, Nx.BinaryBackend)
   end
 end
