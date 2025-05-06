@@ -25,7 +25,7 @@ defmodule Nx.Testing do
   end
 
   def assert_equal(left, right) do
-    if !tensor_equal?(left, right) do
+    if not tensor_equal?(left, right) do
       flunk("""
       Tensor assertion failed.
       left: #{inspect(left)}
@@ -34,7 +34,7 @@ defmodule Nx.Testing do
     end
   end
 
-  def tensor_equal?(left, right) do
+  defp tensor_equal?(left, right) do
     both_nan = Nx.is_nan(left) |> Nx.logical_and(Nx.is_nan(right))
 
     left
