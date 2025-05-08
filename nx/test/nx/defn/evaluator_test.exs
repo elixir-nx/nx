@@ -753,4 +753,81 @@ defmodule Nx.Defn.EvaluatorTest do
       assert a == vectorized_metadata(a)
     end
   end
+
+  defn debug_test_fun(x, y) do
+    a = Nx.add(x, y)
+    b = Nx.multiply(a, 2)
+    Nx.subtract(b, 1)
+  end
+
+  # Place this at the top level, outside of any test
+  defn reuse_fun(x) do
+    a = Nx.add(x, 1)
+    Nx.add(a, a)
+  end
+
+  def debug_test_fun(x, y, opts), do: Nx.Defn.jit(&debug_test_fun/2, opts).(x, y)
+  def reuse_fun(x, opts), do: Nx.Defn.jit(&reuse_fun/1, opts).(x)
+
+  describe "debug_options" do
+    test "prints node info to stdout" do
+      x = Nx.tensor([1, 2])
+      y = Nx.tensor([3, 4])
+      opts = [compiler: Nx.Defn.Evaluator, debug_options: [inspect_limit: 5]]
+      output = ExUnit.CaptureIO.capture_io(fn -> debug_test_fun(x, y, opts) end)
+      assert output =~ "Node ID:"
+      assert output =~ "Operation: :add"
+      assert output =~ "Operation: :multiply"
+      assert output =~ "Operation: :subtract"
+      assert output =~ "Result:"
+      # Each node only once
+      assert Regex.scan(~r/Operation: :add/, output) |> length() == 1
+      assert Regex.scan(~r/Operation: :multiply/, output) |> length() == 1
+      assert Regex.scan(~r/Operation: :subtract/, output) |> length() == 1
+    end
+
+    test "saves node info to files" do
+      x = Nx.tensor([1, 2])
+      y = Nx.tensor([3, 4])
+      tmp_dir = Path.join(System.tmp_dir!(), "nx_debug_test_#{System.unique_integer()}")
+      opts = [compiler: Nx.Defn.Evaluator, debug_options: [inspect_limit: 5, save_path: tmp_dir]]
+      try do
+        debug_test_fun(x, y, opts)
+        files = File.ls!(tmp_dir)
+        assert Enum.any?(files, &String.starts_with?(&1, "node_"))
+        contents = Enum.map(files, &File.read!(Path.join(tmp_dir, &1)))
+        assert Enum.count(contents, &String.contains?(&1, "Operation: :add")) == 1
+        assert Enum.count(contents, &String.contains?(&1, "Operation: :multiply")) == 1
+        assert Enum.count(contents, &String.contains?(&1, "Operation: :subtract")) == 1
+        # Each node only once
+        assert length(files) == 5
+      after
+        File.rm_rf!(tmp_dir)
+      end
+    end
+
+    test "node info for reused node only once" do
+      x = Nx.tensor([1, 2])
+      opts = [compiler: Nx.Defn.Evaluator, debug_options: [inspect_limit: 5]]
+      output = ExUnit.CaptureIO.capture_io(fn -> reuse_fun(x, opts) end)
+      # Only one :add node for a, one for the final add
+      assert length(Regex.scan(~r/Operation: :add/, output)) == 3
+    end
+
+    test "respects inspect_limit" do
+      x = Nx.tensor(Enum.to_list(1..20))
+      y = Nx.tensor(Enum.to_list(21..40))
+      opts = [compiler: Nx.Defn.Evaluator, debug_options: [inspect_limit: 2]]
+      output = ExUnit.CaptureIO.capture_io(fn -> debug_test_fun(x, y, opts) end)
+      # Should not print all elements
+      assert output =~ "..."
+    end
+
+    test "does nothing when feature is disabled" do
+      x = Nx.tensor([1, 2])
+      y = Nx.tensor([3, 4])
+      output = ExUnit.CaptureIO.capture_io(fn -> debug_test_fun(x, y) end)
+      assert output == ""
+    end
+  end
 end
