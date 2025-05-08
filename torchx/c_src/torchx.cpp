@@ -752,7 +752,7 @@ NIF(triangular_solve) {
     upper = !upper;
   }
 
-  torch::Tensor result = torch::linalg::solve_triangular(ts_a, *b, upper, true, false);
+  torch::Tensor result = torch::linalg_solve_triangular(ts_a, *b, upper, true, false);
 
   TENSOR(result);
 }
@@ -963,10 +963,10 @@ NIF(cholesky) {
   }
 
   if (upper) {
-    TENSOR(torch::linalg::cholesky(*t).mH());
+    TENSOR(torch::cholesky(*t).mH());
   }
 
-  TENSOR(torch::linalg::cholesky(*t));
+  TENSOR(torch::cholesky(*t));
 }
 
 NIF(pad) {
@@ -1004,7 +1004,7 @@ NIF(svd) {
 NIF(lu) {
   TENSOR_PARAM(0, t);
 
-  std::tuple<torch::Tensor, torch::Tensor> lu_result = torch::linalg::lu_factor(*t);
+  std::tuple<torch::Tensor, torch::Tensor> lu_result = torch::linalg_lu_factor(*t);
   std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> plu = torch::lu_unpack(std::get<0>(lu_result), std::get<1>(lu_result));
 
   TENSOR_TUPLE_3(plu);
