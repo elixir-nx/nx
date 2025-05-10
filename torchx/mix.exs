@@ -79,7 +79,7 @@ defmodule Torchx.MixProject do
     env_dir = System.get_env("LIBTORCH_DIR")
 
     %{
-      valid_targets: ["cpu", "cu118", "cu121"],
+      valid_targets: ["cpu", "cu118", "cu126", "cu128"],
       target: target,
       version: version,
       base: "libtorch",
