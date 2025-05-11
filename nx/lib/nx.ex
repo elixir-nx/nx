@@ -4515,14 +4515,15 @@ defmodule Nx do
 
   ## Examples
 
-    iex> Nx.backend_copy(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
-    #Nx.Tensor<
-      s32[2][3]
-      [
-        [1, 2, 3],
-        [4, 5, 6]
-      ]
-    >
+      iex> Nx.backend_copy(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
+      #Nx.Tensor<
+        s32[2][3]
+        [
+          [1, 2, 3],
+          [4, 5, 6]
+        ]
+      >
+
   """
   @doc type: :backend
   def backend_copy(tensor_or_container, backend \\ Nx.BinaryBackend) do
