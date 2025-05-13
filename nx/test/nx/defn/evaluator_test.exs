@@ -775,10 +775,6 @@ defmodule Nx.Defn.EvaluatorTest do
       opts = [compiler: Nx.Defn.Evaluator, debug_options: [inspect_limit: 5]]
       output = ExUnit.CaptureIO.capture_io(fn -> debug_test_fun(x, y, opts) end)
 
-
-      assert output =~ "Operation: :add"
-      assert output =~ "Operation: :multiply"
-      assert output =~ "Operation: :subtract"
       assert length(Regex.scan(~r/Operation: :add/, output)) == 1
       assert length(Regex.scan(~r/Operation: :multiply/, output)) == 1
       assert length(Regex.scan(~r/Operation: :subtract/, output)) == 1

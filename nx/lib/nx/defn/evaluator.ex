@@ -509,7 +509,6 @@ defmodule Nx.Defn.Evaluator do
       |> Enum.join(",\n")
     result_str = inspect(res, limit: inspect_limit)
     """
-[Nx.BinaryBackend]
 Node ID: #{inspect(id)}
 Operation: #{inspect(op)}
 Args: [
