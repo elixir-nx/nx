@@ -1543,7 +1543,15 @@ defmodule Nx.Defn.Expr do
         limit: opts.limit
       })
 
-    concat(line(), color("Nx.Defn.Expr", :map, opts))
+    base =
+      if opts.custom_options[:print_id] do
+        ~c"#Ref<" ++ rest = :erlang.ref_to_list(tensor.data.id)
+        concat(line(), color("Nx.Defn.Expr<" <> List.to_string(rest), :map, opts))
+      else
+        concat(line(), color("Nx.Defn.Expr", :map, opts))
+      end
+
+    base
     |> append_lines(parameters, length + 3)
     |> append_lines(exprs, length + 3)
   end
