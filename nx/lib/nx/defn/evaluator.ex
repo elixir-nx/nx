@@ -14,6 +14,16 @@ defmodule Nx.Defn.Evaluator do
     * `:max_concurrency` - the number of partitions to
       start when running a `Nx.Serving` with this compiler
 
+    * `:debug_options` - a keyword list of options for
+      debugging the evaluation of the expression tree.
+      If not given, no debugging information will be printed or saved.
+      The following options are supported:
+
+      * `:save_path` - the base path for output files. If not given,
+        the output will be printed to the standard output.
+      * `:inspect_limit` - limit that will be passed to `inspect/2`
+        for the result and arguments of each node.
+
   """
 
   @behaviour Nx.Defn.Compiler
