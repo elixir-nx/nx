@@ -52,14 +52,14 @@ defmodule Nx.Defn.Evaluator do
       end
     end
 
-    printed_nodes =
-      if debug_options do
-        :ets.new(:printed_nodes, [:set, :protected])
-      end
-
     {expr, output, cache} = precompile(fun, vars, hooks)
 
     fn [params] ->
+      printed_nodes =
+        if debug_options do
+          :ets.new(:printed_nodes, [:set, :protected])
+        end
+
       state = %{
         params: params,
         gc: gc?,
@@ -68,11 +68,18 @@ defmodule Nx.Defn.Evaluator do
         printed_nodes: printed_nodes
       }
 
-      [
-        expr
-        |> composite_eval(state, [cache])
-        |> apply_output(output)
-      ]
+      result =
+        [
+          expr
+          |> composite_eval(state, [cache])
+          |> apply_output(output)
+        ]
+
+      if printed_nodes do
+        :ets.delete(printed_nodes)
+      end
+
+      result
     end
   end
 
