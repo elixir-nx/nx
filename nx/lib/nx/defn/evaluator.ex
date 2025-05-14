@@ -40,8 +40,6 @@ defmodule Nx.Defn.Evaluator do
 
   @impl true
   def __compile__(_key, vars, fun, opts) do
-    # We don't use solely Keyword.validate because we want to allow
-    # force minimal friction when changing compilers for the user.
     hooks = Keyword.get(opts, :hooks, %{})
     gc? = Keyword.get(opts, :garbage_collect, false)
     debug_options = Keyword.get(opts, :debug_options)
