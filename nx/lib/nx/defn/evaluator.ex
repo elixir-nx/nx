@@ -40,20 +40,27 @@ defmodule Nx.Defn.Evaluator do
 
   @impl true
   def __compile__(_key, vars, fun, opts) do
+    # We don't use solely Keyword.validate because we want to allow
+    # force minimal friction when changing compilers for the user.
     hooks = Keyword.get(opts, :hooks, %{})
     gc? = Keyword.get(opts, :garbage_collect, false)
-    debug_options = Keyword.get(opts, :debug_options, nil)
-    {expr, output, cache} = precompile(fun, vars, hooks)
+    debug_options = Keyword.get(opts, :debug_options)
+
+    printed_nodes = if debug_options, do: MapSet.new(), else: nil
+
+    {expr, output, cache} = precompile(fun, vars, opts)
 
     fn [params] ->
+      state = %{
+        params: params,
+        gc: gc?,
+        debug_options: debug_options,
+        printed_nodes: printed_nodes
+      }
+
       [
         expr
-        |> composite_eval(%{
-          params: params,
-          gc: gc?,
-          debug_options: debug_options,
-          printed_nodes: if(debug_options, do: MapSet.new(), else: nil)
-        }, [cache])
+        |> composite_eval(state, [cache])
         |> apply_output(output)
       ]
     end
@@ -480,42 +487,57 @@ defmodule Nx.Defn.Evaluator do
 
   # Debug hook: print/save node info if enabled and not already printed
   defp maybe_debug_node(ans, res, %{debug_options: nil} = state), do: {res, state}
-  defp maybe_debug_node(%Nx.Tensor{data: %Expr{id: id, op: op, args: args}} = ans, res, %{debug_options: opts, printed_nodes: printed_nodes} = state) do
+
+  defp maybe_debug_node(
+         %Nx.Tensor{data: %Expr{id: id, op: op, args: args}} = ans,
+         res,
+         %{debug_options: opts, printed_nodes: printed_nodes} = state
+       ) do
     if MapSet.member?(printed_nodes, id) do
       {res, state}
     else
       inspect_limit = Keyword.get(opts, :inspect_limit, 10)
       save_path = Keyword.get(opts, :save_path, nil)
       node_info = format_node_info(ans, args, res, inspect_limit)
+
       if save_path do
         :ok = save_node_info_to_file(save_path, id, node_info)
       else
         IO.puts(node_info)
       end
+
       {res, %{state | printed_nodes: MapSet.put(printed_nodes, id)}}
     end
   end
 
-  defp format_node_info(%Nx.Tensor{data: %Expr{id: id, op: op, args: args}}, args_list, res, inspect_limit) do
+  defp format_node_info(
+         %Nx.Tensor{data: %Expr{id: id, op: op, args: args}},
+         args_list,
+         res,
+         inspect_limit
+       ) do
     args_str =
       Enum.map(args_list, fn arg ->
         case arg do
           %Nx.Tensor{data: %Expr{id: arg_id}} ->
             "  <#{inspect(arg_id)}>: " <> inspect(arg, limit: inspect_limit)
+
           _ ->
             inspect(arg, limit: inspect_limit)
         end
       end)
       |> Enum.join(",\n")
+
     result_str = inspect(res, limit: inspect_limit)
+
     """
-Node ID: #{inspect(id)}
-Operation: #{inspect(op)}
-Args: [
-#{args_str}
-]
-Result: #{result_str}
-"""
+    Node ID: #{inspect(id)}
+    Operation: #{inspect(op)}
+    Args: [
+    #{args_str}
+    ]
+    Result: #{result_str}
+    """
   end
 
   defp save_node_info_to_file(save_path, id, node_info) do
