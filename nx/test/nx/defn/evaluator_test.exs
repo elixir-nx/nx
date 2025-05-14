@@ -753,4 +753,183 @@ defmodule Nx.Defn.EvaluatorTest do
       assert a == vectorized_metadata(a)
     end
   end
+
+  defn debug_test_fun(x, y) do
+    a = Nx.add(x, y)
+    b = Nx.multiply(a, 2)
+    Nx.subtract(b, 1)
+  end
+
+  defn reuse_fun(x) do
+    a = Nx.add(x, 1)
+    Nx.add(a, a)
+  end
+
+  def debug_test_fun(x, y, opts), do: Nx.Defn.jit(&debug_test_fun/2, opts).(x, y)
+  def reuse_fun(x, opts), do: Nx.Defn.jit(&reuse_fun/1, opts).(x)
+
+  describe "debug_options" do
+    test "prints node info to stdout" do
+      x = Nx.tensor([1, 2])
+      y = Nx.tensor([3, 4])
+      opts = [compiler: Nx.Defn.Evaluator, debug_options: [inspect_limit: 5]]
+      output = ExUnit.CaptureIO.capture_io(fn -> debug_test_fun(x, y, opts) end)
+
+      node_id_regex = ~r/Node ID: (.*)/
+
+      assert [id0, id1, id2, id3, id4] =
+               Regex.scan(node_id_regex, output, capture: :all_but_first)
+
+      output =
+        output
+        |> String.replace(id0, "::id0::")
+        |> String.replace(id1, "::id1::")
+        |> String.replace(id2, "::id2::")
+        |> String.replace(id3, "::id3::")
+        |> String.replace(id4, "::id4::")
+
+      assert output == """
+             Node ID: ::id0::
+             Operation: :parameter
+             Args:
+             0
+             Result:
+             #Nx.Tensor<
+               s32[2]
+               [1, 2]
+             >
+             Node ID: ::id1::
+             Operation: :parameter
+             Args:
+             1
+             Result:
+             #Nx.Tensor<
+               s32[2]
+               [3, 4]
+             >
+             Node ID: ::id2::
+             Operation: :add
+             Args:
+             #Nx.Tensor<
+               s32[2]
+             \s\s
+               Nx.Defn.Expr<::id0::>
+               parameter a:0   s32[2]
+             >
+             #Nx.Tensor<
+               s32[2]
+             \s\s
+               Nx.Defn.Expr<::id1::>
+               parameter a:1   s32[2]
+             >
+             Result:
+             #Nx.Tensor<
+               s32[2]
+               [4, 6]
+             >
+             Node ID: ::id3::
+             Operation: :multiply
+             Args:
+             #Nx.Tensor<
+               s32
+             \s\s
+               Nx.Defn.Expr
+               2
+             >
+             #Nx.Tensor<
+               s32[2]
+             \s\s
+               Nx.Defn.Expr<::id2::>
+               parameter a:0   s32[2]
+               parameter b:1   s32[2]
+               c = add a, b    s32[2]
+             >
+             Result:
+             #Nx.Tensor<
+               s32[2]
+               [8, 12]
+             >
+             Node ID: ::id4::
+             Operation: :subtract
+             Args:
+             #Nx.Tensor<
+               s32[2]
+             \s\s
+               Nx.Defn.Expr<::id3::>
+               parameter a:0       s32[2]
+               parameter b:1       s32[2]
+               c = add a, b        s32[2]
+               d = multiply 2, c   s32[2]
+             >
+             #Nx.Tensor<
+               s32
+             \s\s
+               Nx.Defn.Expr
+               1
+             >
+             Result:
+             #Nx.Tensor<
+               s32[2]
+               [7, 11]
+             >
+             """
+    end
+
+    test "saves node info to files" do
+      x = Nx.tensor([1, 2])
+      y = Nx.tensor([3, 4])
+      tmp_dir = Path.join(System.tmp_dir!(), "nx_debug_test_#{System.unique_integer()}")
+      on_exit(fn -> File.rm_rf!(tmp_dir) end)
+      opts = [compiler: Nx.Defn.Evaluator, debug_options: [inspect_limit: 5, save_path: tmp_dir]]
+
+      debug_test_fun(x, y, opts)
+      files = File.ls!(tmp_dir)
+      assert Enum.any?(files, &String.starts_with?(&1, "node_"))
+      contents = Enum.map(files, &File.read!(Path.join(tmp_dir, &1)))
+      assert {[_], rest} = Enum.split_with(contents, &(&1 =~ "Operation: :add"))
+      assert {[_], rest} = Enum.split_with(rest, &(&1 =~ "Operation: :multiply"))
+      assert {[_], rest} = Enum.split_with(rest, &(&1 =~ "Operation: :subtract"))
+      assert length(rest) == 2
+    end
+
+    test "node info for reused node only once" do
+      x = Nx.tensor([1, 2])
+      opts = [compiler: Nx.Defn.Evaluator, debug_options: [inspect_limit: 5]]
+      output = ExUnit.CaptureIO.capture_io(fn -> reuse_fun(x, opts) end)
+
+      node_id_regex = ~r/Node ID: (.*)/
+
+      assert [id0, id1, id2, id3] =
+               Regex.scan(node_id_regex, output, capture: :all_but_first)
+
+      output =
+        output
+        |> String.replace(id0, "::id0::")
+        |> String.replace(id1, "::id1::")
+        |> String.replace(id2, "::id2::")
+        |> String.replace(id3, "::id3::")
+
+      # ensure that each node id is printed exactly once
+      assert output =~ ~r/.*(?:Node ID: ::id0::){1}.*/
+      assert output =~ ~r/.*(?:Node ID: ::id1::){1}.*/
+      assert output =~ ~r/.*(?:Node ID: ::id2::){1}.*/
+      assert output =~ ~r/.*(?:Node ID: ::id3::){1}.*/
+    end
+
+    test "respects inspect_limit" do
+      x = Nx.tensor(Enum.to_list(1..20))
+      y = Nx.tensor(Enum.to_list(21..40))
+      opts = [compiler: Nx.Defn.Evaluator, debug_options: [inspect_limit: 2]]
+      output = ExUnit.CaptureIO.capture_io(fn -> debug_test_fun(x, y, opts) end)
+
+      assert output =~ "..."
+    end
+
+    test "does nothing when feature is disabled" do
+      x = Nx.tensor([1, 2])
+      y = Nx.tensor([3, 4])
+      output = ExUnit.CaptureIO.capture_io(fn -> debug_test_fun(x, y) end)
+      assert output == ""
+    end
+  end
 end

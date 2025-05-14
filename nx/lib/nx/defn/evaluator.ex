@@ -42,14 +42,42 @@ defmodule Nx.Defn.Evaluator do
   def __compile__(_key, vars, fun, opts) do
     hooks = Keyword.get(opts, :hooks, %{})
     gc? = Keyword.get(opts, :garbage_collect, false)
+    debug_options = Keyword.get(opts, :debug_options)
+
+    if debug_options do
+      if save_path = Keyword.get(debug_options, :save_path) do
+        File.mkdir_p!(save_path)
+      end
+    end
+
     {expr, output, cache} = precompile(fun, vars, hooks)
 
     fn [params] ->
-      [
-        expr
-        |> composite_eval(%{params: params, gc: gc?}, [cache])
-        |> apply_output(output)
-      ]
+      printed_nodes =
+        if debug_options do
+          :ets.new(:printed_nodes, [:set, :protected])
+        end
+
+      state = %{
+        params: params,
+        gc: gc?,
+        hooks: hooks,
+        debug_options: debug_options,
+        printed_nodes: printed_nodes
+      }
+
+      result =
+        [
+          expr
+          |> composite_eval(state, [cache])
+          |> apply_output(output)
+        ]
+
+      if printed_nodes do
+        :ets.delete(printed_nodes)
+      end
+
+      result
     end
   end
 
@@ -235,9 +263,11 @@ defmodule Nx.Defn.Evaluator do
       %{^id => count} when is_integer(count) ->
         {res, [cache | caches]} = eval_apply(op, ans, state, [cache | caches])
         state.gc && :erlang.garbage_collect(self())
+        debug_node(ans, res, state)
         {res, [decrement_cache(cache, id, count, res) | caches]}
 
       %{^id => {count, res}} ->
+        debug_node(ans, res, state)
         {res, [decrement_cache(cache, id, count, res) | caches]}
 
       %{} ->
@@ -468,5 +498,63 @@ defmodule Nx.Defn.Evaluator do
 
   defp composite_to_params(other, acc) do
     [fn -> other end | acc]
+  end
+
+  # Debug hook: print/save node info if enabled and not already printed
+  defp debug_node(_ans, _res, %{debug_options: nil}), do: :ok
+
+  defp debug_node(%Nx.Tensor{data: expr}, res, state) do
+    %Expr{id: id} = expr
+    %{debug_options: opts} = state
+    opts = Keyword.validate!(opts, [:inspect_limit, :save_path])
+
+    if [] == :ets.lookup(state.printed_nodes, id) do
+      inspect_limit = opts[:inspect_limit]
+      save_path = opts[:save_path]
+      node_info = format_node_info(expr, res, inspect_limit)
+
+      :ok =
+        if save_path do
+          save_node_info_to_file(save_path, id, node_info)
+        else
+          IO.puts(node_info)
+        end
+
+      :ets.insert(state.printed_nodes, {id})
+    end
+  end
+
+  defp format_node_info(%Expr{id: id, op: op, args: args}, res, inspect_limit) do
+    args =
+      Enum.map(
+        args,
+        &inspect(&1, custom_options: [print_id: true], limit: inspect_limit)
+      )
+
+    result_str = inspect(res, limit: inspect_limit)
+
+    import Inspect.Algebra
+
+    id = :erlang.ref_to_list(id) |> List.to_string() |> String.replace(["#Ref<", ">"], "")
+
+    concat([
+      "Node ID: #{id}",
+      line(),
+      "Operation: #{inspect(op)}",
+      line(),
+      concat(Enum.intersperse(["Args:" | args], line())),
+      line(),
+      "Result:",
+      line(),
+      result_str
+    ])
+    |> format(100)
+    |> IO.iodata_to_binary()
+  end
+
+  defp save_node_info_to_file(save_path, id, node_info) do
+    sanitized_id = inspect(id) |> String.replace(~r/[^a-zA-Z0-9_]/, "_")
+    file = Path.join(save_path, "node_#{sanitized_id}.txt")
+    File.write!(file, node_info)
   end
 end
