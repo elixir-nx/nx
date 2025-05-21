@@ -34,7 +34,7 @@ else
 endif
 
 NVCC := $(CXX)
-NVCCFLAGS = $(CFLAGS)
+NVCCFLAGS = -Xcompiler "$(CFLAGS)"
 LDFLAGS += -L$(XLA_EXTENSION_LIB) -lxla_extension -shared -fvisibility=hidden
 
 ifeq ($(CROSSCOMPILE),)
