@@ -37,13 +37,13 @@ defmodule Nx.Shared do
   The implementation unfolds the loops at the top level. In particular,
   note that a rolled out case such as:
 
-      for <<seg::size(size)-signed-integer <- data>>, into: <<>> do
+      for <<seg::size(^size)-signed-integer <- data>>, into: <<>> do
         <<seg+number::signed-integer-size(size)>>
       end
 
   is twice as fast and uses half the memory compared to:
 
-      for <<seg::size(size)-signed-integer <- data>>, into: <<>> do
+      for <<seg::size(^size)-signed-integer <- data>>, into: <<>> do
         case output_type do
           {:s, size} ->
             <<seg+number::signed-integer-size(size)>>
@@ -99,10 +99,10 @@ defmodule Nx.Shared do
   defp match_types([]), do: [[]]
 
   defp match_bin_modifier(var, type, size) when type in [:f, :bf, :c],
-    do: quote(do: unquote(var) :: bitstring - size(unquote(size)))
+    do: quote(do: unquote(var) :: bitstring - size(^unquote(size)))
 
   defp match_bin_modifier(var, type, size),
-    do: shared_bin_modifier(var, type, size)
+    do: shared_bin_modifier(var, type, {:^, [], [size]})
 
   defp read_bin_modifier(var, :c, size) do
     quote do: Nx.Shared.read_complex(unquote(var), unquote(size))
@@ -120,7 +120,7 @@ defmodule Nx.Shared do
     quote do
       case unquote(var) do
         _ when unquote(size) == 8 -> Nx.Shared.read_f8(unquote(var))
-        <<var::float-native-size(unquote(size))>> -> var
+        <<var::float-native-size(^unquote(size))>> -> var
         var -> Nx.Shared.read_non_finite(var, unquote(size))
       end
     end
@@ -226,17 +226,17 @@ defmodule Nx.Shared do
   """
   def read_complex(val, size) do
     elem_size = div(size, 2)
-    <<real_part::bitstring-size(elem_size), imag_part::bitstring-size(elem_size)>> = val
+    <<real_part::bitstring-size(^elem_size), imag_part::bitstring-size(^elem_size)>> = val
 
     re =
       case real_part do
-        <<x::float-native-size(elem_size)>> -> x
+        <<x::float-native-size(^elem_size)>> -> x
         _ -> read_non_finite(real_part, elem_size)
       end
 
     im =
       case imag_part do
-        <<x::float-native-size(elem_size)>> -> x
+        <<x::float-native-size(^elem_size)>> -> x
         _ -> read_non_finite(imag_part, elem_size)
       end
 

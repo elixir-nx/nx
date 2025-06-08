@@ -246,7 +246,7 @@ defmodule Nx.BinaryBackend do
        when elem(old_shape, old_pos) == dim do
     chunk_size = div(chunk_size, dim)
 
-    for <<chunk::size(chunk_size)-bitstring <- data>> do
+    for <<chunk::size(^chunk_size)-bitstring <- data>> do
       unary_broadcast(dims, axis + 1, old_shape, old_pos + 1, axes, chunk, chunk_size)
     end
   end
@@ -293,7 +293,7 @@ defmodule Nx.BinaryBackend do
     traverse_list = Enum.map(list, &Enum.fetch!(weighted_shape, &1))
 
     data =
-      for <<chunk::size(chunk_size)-bitstring <- data>> do
+      for <<chunk::size(^chunk_size)-bitstring <- data>> do
         weighted_traverse(traverse_list, chunk, read_size)
       end
 
@@ -373,12 +373,12 @@ defmodule Nx.BinaryBackend do
     interior_padded =
       for bin <- view do
         padded =
-          for <<dim::size(size)-bitstring <- bin>>, into: <<>> do
-            <<dim::size(size)-bitstring, interior_padding::bitstring>>
+          for <<dim::size(^size)-bitstring <- bin>>, into: <<>> do
+            <<dim::bitstring, interior_padding::bitstring>>
           end
 
         new_bytes = bit_size(padded) - interior_padding_size
-        <<new_bin::size(new_bytes)-bitstring, _::bitstring>> = padded
+        <<new_bin::size(^new_bytes)-bitstring, _::bitstring>> = padded
         new_bin
       end
 
@@ -390,20 +390,20 @@ defmodule Nx.BinaryBackend do
             high_byte = abs(edge_high) * size
             new_bytes = bit_size(bin) - high_byte - low_byte
 
-            <<_::size(low_byte)-bitstring, new_bin::size(new_bytes)-bitstring, _::bitstring>> =
+            <<_::size(^low_byte)-bitstring, new_bin::size(^new_bytes)-bitstring, _::bitstring>> =
               bin
 
             new_bin
 
           edge_low < 0 and edge_high >= 0 ->
             low_byte = abs(edge_low) * size
-            <<_::size(low_byte)-bitstring, new_bin::bitstring>> = bin
+            <<_::size(^low_byte)-bitstring, new_bin::bitstring>> = bin
             <<new_bin::bitstring, edge_high_padding::bitstring>>
 
           edge_low >= 0 and edge_high < 0 ->
             high_byte = abs(edge_high) * size
             new_bytes = bit_size(bin) - high_byte
-            <<new_bin::size(new_bytes)-bitstring, _::bitstring>> = bin
+            <<new_bin::size(^new_bytes)-bitstring, _::bitstring>> = bin
             <<edge_low_padding::bitstring, new_bin::bitstring>>
 
           true ->
@@ -449,7 +449,7 @@ defmodule Nx.BinaryBackend do
       |> reverse_traverse(min, axes)
 
     data =
-      for <<chunk::size(chunk_size)-bitstring <- data>> do
+      for <<chunk::size(^chunk_size)-bitstring <- data>> do
         weighted_traverse(traverse, chunk, read_size)
       end
 
@@ -521,13 +521,13 @@ defmodule Nx.BinaryBackend do
         left_batch_item_bits = left_batch_item_length * left_size
         right_batch_item_bits = right_batch_item_length * right_size
 
-        <<_::bitstring-size(left_offset_bits),
-          left_batch_item_binary::bitstring-size(left_batch_item_bits),
-          _::bitstring>> = left_binary
+        <<_::bitstring-size(^left_offset_bits),
+          left_batch_item_binary::bitstring-size(^left_batch_item_bits), _::bitstring>> =
+          left_binary
 
-        <<_::bitstring-size(right_offset_bits),
-          right_batch_item_binary::bitstring-size(right_batch_item_bits),
-          _::bitstring>> = right_binary
+        <<_::bitstring-size(^right_offset_bits),
+          right_batch_item_binary::bitstring-size(^right_batch_item_bits), _::bitstring>> =
+          right_binary
 
         bin_dot(
           from_binary(left_batch_item_template, left_batch_item_binary),
@@ -621,7 +621,7 @@ defmodule Nx.BinaryBackend do
         pred =
           match_types [pred_type] do
             consumed = i * pred_size
-            <<_::size(consumed)-bitstring, match!(pred, 0), _::bitstring>> = pred_data
+            <<_::size(^consumed)-bitstring, match!(pred, 0), _::bitstring>> = pred_data
             read!(pred, 0)
           end
 
@@ -629,13 +629,13 @@ defmodule Nx.BinaryBackend do
           if pred == 0 do
             match_types [right_type] do
               consumed = i * right_size
-              <<_::size(consumed)-bitstring, match!(x, 0), _::bitstring>> = on_false_data
+              <<_::size(^consumed)-bitstring, match!(x, 0), _::bitstring>> = on_false_data
               read!(x, 0)
             end
           else
             match_types [left_type] do
               consumed = i * left_size
-              <<_::size(consumed)-bitstring, match!(x, 0), _::bitstring>> = on_true_data
+              <<_::size(^consumed)-bitstring, match!(x, 0), _::bitstring>> = on_true_data
               read!(x, 0)
             end
           end
@@ -695,11 +695,11 @@ defmodule Nx.BinaryBackend do
       match_types [left_type, right_type, type] do
         for i <- 0..(count - 1), into: <<>> do
           left_consumed = i * left_size
-          <<_::size(left_consumed)-bitstring, match!(x, 0), _::bitstring>> = left_data
+          <<_::size(^left_consumed)-bitstring, match!(x, 0), _::bitstring>> = left_data
           x = read!(x, 0)
 
           right_consumed = i * right_size
-          <<_::size(right_consumed)-bitstring, match!(y, 1), _::bitstring>> = right_data
+          <<_::size(^right_consumed)-bitstring, match!(y, 1), _::bitstring>> = right_data
           y = read!(y, 1)
 
           <<write!(fun.(type, x, y), 2)>>
@@ -848,7 +848,7 @@ defmodule Nx.BinaryBackend do
   defp element_wise_bit_op(out, %{type: {_, size}} = tensor, fun) do
     data =
       match_types [out.type] do
-        for <<seg::unsigned-size(size)-native <- to_binary(tensor)>>, into: <<>> do
+        for <<seg::unsigned-size(^size)-native <- to_binary(tensor)>>, into: <<>> do
           <<write!(fun.(seg), 0)>>
         end
       end
@@ -870,7 +870,7 @@ defmodule Nx.BinaryBackend do
     data = to_binary(tensor)
 
     result =
-      for <<real::bitstring-size(component_size), _::bitstring-size(component_size) <- data>>,
+      for <<real::bitstring-size(^component_size), _::bitstring-size(^component_size) <- data>>,
         into: <<>>,
         do: real
 
@@ -882,7 +882,7 @@ defmodule Nx.BinaryBackend do
     data = to_binary(tensor)
 
     result =
-      for <<_::bitstring-size(component_size), imag::bitstring-size(component_size) <- data>>,
+      for <<_::bitstring-size(^component_size), imag::bitstring-size(^component_size) <- data>>,
         into: <<>>,
         do: imag
 
@@ -1162,7 +1162,7 @@ defmodule Nx.BinaryBackend do
             else: filter_groups_with_index
 
         # Traverse the batch dim first
-        for <<batch::size(batch_size)-bitstring <- batch_group>>,
+        for <<batch::size(^batch_size)-bitstring <- batch_group>>,
             # Traverse the filters next, this allows us to rebuild
             # the resulting binary correctly
             {filter, feature_group} <- current_filter_group_with_index,
@@ -1191,9 +1191,9 @@ defmodule Nx.BinaryBackend do
             for i <- 0..(num_input_channels - 1) do
               current_input_pos = i * input_field_size
               current_filter_pos = i * filter_field_size
-              <<_::size(current_input_pos)-bitstring, input_receptive_field::bitstring>> = window
+              <<_::size(^current_input_pos)-bitstring, input_receptive_field::bitstring>> = window
 
-              <<_::size(current_filter_pos)-bitstring, filter_receptive_field::bitstring>> =
+              <<_::size(^current_filter_pos)-bitstring, filter_receptive_field::bitstring>> =
                 filter
 
               for j <- 0..(Nx.size(filter_shape) - 1) do
@@ -1201,7 +1201,7 @@ defmodule Nx.BinaryBackend do
                   match_types [input_type] do
                     left_consumed = j * input_size
 
-                    <<_::size(left_consumed)-bitstring, match!(x, 0), _::bitstring>> =
+                    <<_::size(^left_consumed)-bitstring, match!(x, 0), _::bitstring>> =
                       input_receptive_field
 
                     read!(x, 0)
@@ -1211,7 +1211,7 @@ defmodule Nx.BinaryBackend do
                   match_types [kernel_type] do
                     right_consumed = j * kernel_size
 
-                    <<_::size(right_consumed)-bitstring, match!(y, 0), _::bitstring>> =
+                    <<_::size(^right_consumed)-bitstring, match!(y, 0), _::bitstring>> =
                       filter_receptive_field
 
                     read!(y, 0)
@@ -1237,9 +1237,9 @@ defmodule Nx.BinaryBackend do
 
     for i <- 0..(groups - 1),
         offset = group_size * i,
-        <<_::size(offset)-bitstring, data_group::size(group_size)-bitstring, _::bitstring>> =
+        <<_::size(^offset)-bitstring, data_group::size(^group_size)-bitstring, _::bitstring>> =
           data,
-        <<out_data::size(data_size)-bitstring <- data_group>>,
+        <<out_data::size(^data_size)-bitstring <- data_group>>,
         do: {out_data, i}
   end
 
@@ -1251,7 +1251,7 @@ defmodule Nx.BinaryBackend do
       for i <- 0..(num_groups - 1),
           j <- 0..(groups - 1) do
         offset = (i + j * num_groups) * item_size
-        <<_::size(offset)-bitstring, item::size(item_size)-bitstring, _::bitstring>> = data
+        <<_::size(^offset)-bitstring, item::size(^item_size)-bitstring, _::bitstring>> = data
         item
       end
 
@@ -1630,7 +1630,7 @@ defmodule Nx.BinaryBackend do
 
         source_consumed = i * source_size
 
-        <<_::size(source_consumed)-bitstring, from_source::size(source_size)-bitstring,
+        <<_::size(^source_consumed)-bitstring, from_source::size(^source_size)-bitstring,
           _::bitstring>> = source_data
 
         source_value = binary_to_number(from_source, source_type)
@@ -1660,13 +1660,12 @@ defmodule Nx.BinaryBackend do
           source_val = to_binary(value)
           new_binary = :erlang.list_to_bitstring([vals_before, source_val])
 
-          {offset + output_size,
-           <<acc_binary::size(acc_offset)-bitstring, new_binary::bitstring>>}
+          {offset + output_size, <<acc_binary::bitstring, new_binary::bitstring>>}
       end
 
     num_vals_left = div(output_size * Nx.size(output_shape) - final_offset, output_size)
     vals_left = :erlang.list_to_bitstring(List.duplicate(init_binary, num_vals_left))
-    output_data = <<unpadded_output_data::size(final_offset)-bitstring, vals_left::bitstring>>
+    output_data = <<unpadded_output_data::bitstring, vals_left::bitstring>>
 
     from_binary(out, output_data)
   end
@@ -1720,7 +1719,7 @@ defmodule Nx.BinaryBackend do
       target_chunk = updates_count * target_size
 
       updates_list =
-        for <<x::bitstring-size(updates_chunk) <- updates_binary>> do
+        for <<x::bitstring-size(^updates_chunk) <- updates_binary>> do
           binary_to_list(x, updates.type)
         end
 
@@ -1756,9 +1755,9 @@ defmodule Nx.BinaryBackend do
           {traversed, to_traverse} ->
             before_slice_size = current - previous
 
-            <<before_offset::bitstring-size(before_slice_size),
-              current_bitstring::bitstring-size(target_chunk),
-              to_traverse::bitstring>> = to_traverse
+            <<before_offset::bitstring-size(^before_slice_size),
+              current_bitstring::bitstring-size(^target_chunk), to_traverse::bitstring>> =
+              to_traverse
 
             updated_elements =
               match_types [target.type, out.type] do
@@ -1895,15 +1894,13 @@ defmodule Nx.BinaryBackend do
 
     {_, data} =
       for offset <- offsets, reduce: {to_binary(slice), to_binary(tensor)} do
-        {<<cur_elem::size(size)-bitstring, rest_of_slice::bitstring>>, binary} ->
-          <<before::size(offset)-bitstring, prev_elem::size(size)-bitstring,
+        {<<cur_elem::size(^size)-bitstring, rest_of_slice::bitstring>>, binary} ->
+          <<before::size(^offset)-bitstring, prev_elem::size(^size)-bitstring,
             rest_of_tensor::bitstring>> = binary
 
           new_elem = combine_fn.(prev_elem, cur_elem)
 
-          {rest_of_slice,
-           <<before::size(offset)-bitstring, new_elem::size(size)-bitstring,
-             rest_of_tensor::bitstring>>}
+          {rest_of_slice, <<before::bitstring, new_elem::bitstring, rest_of_tensor::bitstring>>}
       end
 
     from_binary(out, data)
@@ -1937,9 +1934,9 @@ defmodule Nx.BinaryBackend do
     count = div(Tuple.product(out.shape), div(indices_count, indices_depth))
 
     new_data =
-      for <<bin::size(last_dim_bin_size)-bitstring <- to_binary(indices)>>, into: <<>> do
+      for <<bin::size(^last_dim_bin_size)-bitstring <- to_binary(indices)>>, into: <<>> do
         slice_start =
-          for <<bin::size(indices_size)-bitstring <- bin>>,
+          for <<bin::size(^indices_size)-bitstring <- bin>>,
             do: binary_to_number(bin, indices.type)
 
         offset = index_to_binary_offset(slice_start, shape)
@@ -2008,7 +2005,7 @@ defmodule Nx.BinaryBackend do
     bin_concatenate_outer(0, steps, binaries_shapes, "", fn binary, shape, step ->
       product = product_part(shape, axis, rank) * size
       before = step * product
-      <<_::bitstring-size(before), part::bitstring-size(product), _::bitstring>> = binary
+      <<_::bitstring-size(^before), part::bitstring-size(^product), _::bitstring>> = binary
       part
     end)
   end
@@ -2173,7 +2170,7 @@ defmodule Nx.BinaryBackend do
 
     new_data =
       for bin <- view, into: <<>> do
-        data = for <<x::size(size)-bitstring <- bin>>, do: x
+        data = for <<x::size(^size)-bitstring <- bin>>, do: x
 
         sorted =
           if return_indices do
@@ -2361,7 +2358,7 @@ defmodule Nx.BinaryBackend do
 
     for axis <- view, into: <<>> do
       {result, _} =
-        for <<bin::size(size)-bitstring <- axis>>, reduce: {<<>>, acc} do
+        for <<bin::size(^size)-bitstring <- axis>>, reduce: {<<>>, acc} do
           {_, acc} -> fun.(bin, acc)
         end
 
@@ -2388,8 +2385,8 @@ defmodule Nx.BinaryBackend do
     do: {bin, acc}
 
   defp bin_zip_reduce_axis(b1, b2, s1, s2, _bin, acc, fun) do
-    <<x::size(s1)-bitstring, rest1::bitstring>> = b1
-    <<y::size(s2)-bitstring, rest2::bitstring>> = b2
+    <<x::size(^s1)-bitstring, rest1::bitstring>> = b1
+    <<y::size(^s2)-bitstring, rest2::bitstring>> = b2
     {bin, acc} = fun.(x, y, acc)
     bin_zip_reduce_axis(rest1, rest2, s1, s2, bin, acc, fun)
   end
@@ -2397,7 +2394,7 @@ defmodule Nx.BinaryBackend do
   ## Conversion helpers
 
   defp bitstring_part(bitstring, skip, size) do
-    <<_::size(skip)-bitstring, part::size(size)-bitstring, _::bitstring>> = bitstring
+    <<_::size(^skip)-bitstring, part::size(^size)-bitstring, _::bitstring>> = bitstring
     part
   end
 
@@ -2480,7 +2477,7 @@ defmodule Nx.BinaryBackend do
     {chunk_size, read_size, path} = aggregate_axes(axes, shape, size)
 
     view =
-      for <<chunk::size(chunk_size)-bitstring <- binary>> do
+      for <<chunk::size(^chunk_size)-bitstring <- binary>> do
         weighted_traverse(path, chunk, read_size)
       end
 
@@ -2575,7 +2572,7 @@ defmodule Nx.BinaryBackend do
   defp weighted_traverse(weighted_shape, binary, read_size, offset \\ 0)
 
   defp weighted_traverse([], data, read_size, offset) do
-    <<_::size(offset)-bitstring, chunk::size(read_size)-bitstring, _::bitstring>> = data
+    <<_::size(^offset)-bitstring, chunk::size(^read_size)-bitstring, _::bitstring>> = data
     chunk
   end
 
@@ -2595,7 +2592,7 @@ defmodule Nx.BinaryBackend do
         [head]
 
       _ ->
-        <<_::size(dim_size)-bitstring, data::bitstring>> = data
+        <<_::size(^dim_size)-bitstring, data::bitstring>> = data
         [head | weighted_traverse(dim - 1, dim_size, dims, data, read_size, offset)]
     end
   end

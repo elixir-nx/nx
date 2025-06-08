@@ -2861,9 +2861,9 @@ defmodule NxTest do
       x2 = Nx.iota({1}, vectorized_axes: [x: 2])
 
       assert [
-               %Nx.Tensor{x | vectorized_axes: [x: 1, y: 1]},
-               %Nx.Tensor{xy | vectorized_axes: [x: 1, y: 2]},
-               %Nx.Tensor{x2 | vectorized_axes: [x: 2, y: 1]}
+               %{x | vectorized_axes: [x: 1, y: 1]},
+               %{xy | vectorized_axes: [x: 1, y: 2]},
+               %{x2 | vectorized_axes: [x: 2, y: 1]}
              ] == Nx.reshape_vectors([x, xy, x2])
     end
   end
