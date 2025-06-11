@@ -33,8 +33,8 @@ else
 	CFLAGS += -O3
 endif
 
-NVCC := $(CXX)
-NVCCFLAGS = -Xcompiler "$(CFLAGS)"
+NVCC = $(CXX)
+NVCCFLAGS = $(CFLAGS)
 LDFLAGS += -L$(XLA_EXTENSION_LIB) -lxla_extension -shared -fvisibility=hidden
 
 ifeq ($(CROSSCOMPILE),)
@@ -48,8 +48,8 @@ $(info EXLA_CPU_ONLY is not set, checking for nvcc availability)
 
 	ifeq ($(NVCC_TEST),nvcc)
 $(info CUDA is available.)
-		NVCC := nvcc
-		NVCCFLAGS += -DCUDA_ENABLED
+		NVCC = nvcc
+		NVCCFLAGS = -Xcompiler "$(CFLAGS)" -DCUDA_ENABLED
 	else
 $(info CUDA is not available.)
 	endif

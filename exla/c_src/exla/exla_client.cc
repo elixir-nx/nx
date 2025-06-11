@@ -4,6 +4,7 @@
 #include <erl_nif.h>
 #include "exla_nif_util.h"
 #include "xla/layout_util.h"
+#include "xla/pjrt/cpu/cpu_client.h"
 #include "xla/pjrt/gpu/gpu_helpers.h"
 #include "xla/pjrt/gpu/se_gpu_pjrt_client.h"
 #include "xla/pjrt/pjrt_api.h"
@@ -390,8 +391,10 @@ tsl::StatusOr<ERL_NIF_TERM> ExlaClient::TransferFromOutfeed(ErlNifEnv* env, int 
 }
 
 tsl::StatusOr<fine::ResourcePtr<ExlaClient>> GetHostClient() {
+  xla::CpuClientOptions options;
+  options.asynchronous = false;
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtClient> client,
-                        xla::GetTfrtCpuClient(false));
+                        xla::GetXlaPjrtCpuClient(options));
 
   return fine::make_resource<ExlaClient>(std::move(client));
 }
