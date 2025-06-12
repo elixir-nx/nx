@@ -1,11 +1,15 @@
 #pragma once
 
-#include "Eigen/Eigenvalues"
-
 #include <algorithm>
 #include <iostream>
 #include <numeric>
 #include <vector>
+
+#include "Eigen/Eigenvalues"
+#include "xla/ffi/api/ffi.h"
+#include "xla/ffi/ffi_api.h"
+
+namespace ffi = xla::ffi;
 
 template <typename DataType>
 void single_matrix_eigh_cpu_custom_call(DataType *eigenvalues_out,
@@ -55,51 +59,32 @@ void single_matrix_eigh_cpu_custom_call(DataType *eigenvalues_out,
               m * n * sizeof(DataType));
 }
 
-template <typename DataType>
-void eigh_cpu_custom_call(void *out[], const void *in[]) {
-  DataType *operand = (DataType *)in[0];
-
-  uint64_t *dim_sizes = (uint64_t *)in[1];
-  uint64_t num_operand_dims = dim_sizes[0];
-  uint64_t num_eigenvalues_dims = dim_sizes[1];
-  uint64_t num_eigenvectors_dims = dim_sizes[2];
-
-  uint64_t *operand_dims_ptr = (uint64_t *)in[2];
-  std::vector<uint64_t> operand_dims(operand_dims_ptr,
-                                     operand_dims_ptr + num_operand_dims);
-
-  uint64_t *eigenvalues_dims_ptr = (uint64_t *)in[3];
-  std::vector<uint64_t> eigenvalues_dims(
-      eigenvalues_dims_ptr, eigenvalues_dims_ptr + num_eigenvalues_dims);
-
-  uint64_t *eigenvectors_dims_ptr = (uint64_t *)in[4];
-  std::vector<uint64_t> eigenvectors_dims(
-      eigenvectors_dims_ptr, eigenvectors_dims_ptr + num_eigenvectors_dims);
+template <typename DataType, typename BufferType>
+ffi::Error eigh_cpu_custom_call_impl(BufferType operand,
+                                     ffi::Result<BufferType> eigenvalues,
+                                     ffi::Result<BufferType> eigenvectors) {
+  auto operand_dims = operand.dimensions();
+  auto eigenvalues_dims = eigenvalues->dimensions();
+  auto eigenvectors_dims = eigenvectors->dimensions();
 
   uint64_t m = eigenvectors_dims[eigenvectors_dims.size() - 2];
   uint64_t n = eigenvectors_dims[eigenvectors_dims.size() - 1];
 
-  auto leading_dimensions =
-      std::vector<uint64_t>(operand_dims.begin(), operand_dims.end() - 2);
-
   uint64_t batch_items = 1;
-  for (uint64_t i = 0; i < leading_dimensions.size(); i++) {
-    batch_items *= leading_dimensions[i];
+  for (auto it = operand_dims.begin(); it != operand_dims.end() - 2; it++) {
+    batch_items *= *it;
   }
 
-  DataType *eigenvalues = (DataType *)out[0];
-  DataType *eigenvectors = (DataType *)out[1];
-
   uint64_t eigenvalues_stride = eigenvalues_dims[eigenvalues_dims.size() - 1];
-  uint64_t eigenvectors_stride =
-      eigenvectors_dims[eigenvectors_dims.size() - 1] *
-      eigenvectors_dims[eigenvectors_dims.size() - 2];
+  uint64_t eigenvectors_stride = m * n;
   uint64_t inner_stride = m * n;
 
   for (uint64_t i = 0; i < batch_items; i++) {
     single_matrix_eigh_cpu_custom_call<DataType>(
-        eigenvalues + i * eigenvalues_stride,
-        eigenvectors + i * eigenvectors_stride, operand + i * inner_stride, m,
-        n);
+        eigenvalues->typed_data() + i * eigenvalues_stride,
+        eigenvectors->typed_data() + i * eigenvectors_stride,
+        operand.typed_data() + i * inner_stride, m, n);
   }
+
+  return ffi::Error::Success();
 }
