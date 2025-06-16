@@ -16,7 +16,7 @@ jobs:
           - elixir: "1.15.8"
             otp: "25.3"
           - elixir: "1.18.4"
-            otp: "28.0"
+            otp: "27.3"
             lint: true
     defaults:
       run:
