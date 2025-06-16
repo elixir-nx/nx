@@ -1113,11 +1113,11 @@ defmodule Nx.Random do
   deftransformp next_after_minus_1({_, bits}) do
     # Get the floating point representation of -1 and
     # convert it to a big integer so the precision comes last (after exponent)
-    <<x::size(bits)-big>> = <<-1::float-size(bits)-big>>
+    <<x::size(^bits)-big>> = <<-1::float-size(bits)-big>>
 
     # Decrement the precision by one (decrement because the sign is separate)
     # and convert it back to a float
-    <<f::float-size(bits)-big>> = <<x - 1::integer-size(bits)-big>>
+    <<f::float-size(^bits)-big>> = <<x - 1::integer-size(bits)-big>>
 
     f
   end

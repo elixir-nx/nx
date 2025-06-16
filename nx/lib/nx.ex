@@ -4822,7 +4822,7 @@ defmodule Nx do
 
     vectorized_axes = vec_axes ++ new_vectorized_axes
 
-    %Nx.Tensor{
+    %{
       tensor
       | shape: List.to_tuple(new_shape_l),
         names: names,
@@ -15553,11 +15553,11 @@ defmodule Nx do
   end
 
   defp do_numpy_to_tensor(rest, header_size) when is_binary(rest) do
-    <<header::size(header_size)-binary, array::binary>> = rest
+    <<header::size(^header_size)-binary, array::binary>> = rest
     {byte_order, {_, size} = type, shape, fortran_order?} = parse_header(header)
     bit_size_of_array = size * Nx.size(shape)
 
-    <<data::size(bit_size_of_array)-bitstring>> = array
+    <<data::size(^bit_size_of_array)-bitstring>> = array
 
     data
     |> new_byte_order(size, byte_order)
@@ -15629,7 +15629,7 @@ defmodule Nx do
       binary
     else
       data =
-        for <<data::size(size)-binary <- binary>> do
+        for <<data::size(^size)-binary <- binary>> do
           data
           |> :binary.decode_unsigned()
           |> :binary.encode_unsigned(endianness)

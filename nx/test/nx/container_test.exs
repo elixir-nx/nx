@@ -116,20 +116,12 @@ defmodule Nx.ContainerTest do
       assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :subtract, args: [^left, ^right]}} = b
     end
 
-    defn update_struct(var, x) do
-      %C{var | b: x}
-    end
-
     defn update_map(var, x) do
       %{var | b: x}
     end
 
     test "can be updated" do
       inp = %Container{a: 1, b: 2.0}
-
-      assert %Container{a: a, b: b} = update_struct(inp, 8)
-      assert %T{shape: {}, type: {:s, 32}, data: %Expr{op: :parameter, args: [0]}} = a
-      assert %T{shape: {}, type: {:s, 32}, data: %Expr{op: :parameter, args: [2]}} = b
 
       assert %Container{a: a, b: b} = update_map(inp, 8)
       assert %T{shape: {}, type: {:s, 32}, data: %Expr{op: :parameter, args: [0]}} = a
