@@ -522,11 +522,13 @@ defmodule Nx.BinaryBackend do
         right_batch_item_bits = right_batch_item_length * right_size
 
         <<_::bitstring-size(^left_offset_bits),
-          left_batch_item_binary::bitstring-size(^left_batch_item_bits), _::bitstring>> =
+          left_batch_item_binary::bitstring-size(^left_batch_item_bits),
+          _::bitstring>> =
           left_binary
 
         <<_::bitstring-size(^right_offset_bits),
-          right_batch_item_binary::bitstring-size(^right_batch_item_bits), _::bitstring>> =
+          right_batch_item_binary::bitstring-size(^right_batch_item_bits),
+          _::bitstring>> =
           right_binary
 
         bin_dot(
@@ -1756,7 +1758,8 @@ defmodule Nx.BinaryBackend do
             before_slice_size = current - previous
 
             <<before_offset::bitstring-size(^before_slice_size),
-              current_bitstring::bitstring-size(^target_chunk), to_traverse::bitstring>> =
+              current_bitstring::bitstring-size(^target_chunk),
+              to_traverse::bitstring>> =
               to_traverse
 
             updated_elements =
