@@ -28,12 +28,13 @@ defmodule EXLA.DeviceMemorySharingTest do
 
   @tag :cuda_required
   test "invalid ipc handles don't crash the runtime" do
-    assert {:error, ~c"Unable to get pointer for IPC handle."} ==
-             Nx.from_pointer(
-               {EXLA.Backend, client: :cuda},
-               %Nx.Pointer{handle: "#{System.unique_integer()}", kind: :ipc, data_size: 4},
-               {:f, 32},
-               {1}
-             )
+    assert_raise RuntimeError, "unable to get pointer for IPC handle", fn ->
+      Nx.from_pointer(
+        {EXLA.Backend, client: :cuda},
+        %Nx.Pointer{handle: "#{System.unique_integer()}", kind: :ipc, data_size: 4},
+        {:f, 32},
+        {1}
+      )
+    end
   end
 end
