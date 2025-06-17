@@ -404,8 +404,8 @@ defmodule EXLA.Defn do
            data: %Expr{
              args: [
                %{data: %{op: :eigh, args: [tensor, _opts]}},
-               {%{type: {evec_type_kind, _}} = eigenvecs_expr,
-                %{type: {eval_type_kind, _}} = eigenvals_expr},
+               {%{type: {evec_type_kind, _}} = eigenvals_expr,
+                %{type: {eval_type_kind, _}} = eigenvecs_expr},
                _callback
              ]
            }
@@ -429,14 +429,14 @@ defmodule EXLA.Defn do
         tensor
       end
 
-    {eigenvecs, eigenvals} =
+    {eigenvals, eigenvecs} =
       Value.eigh(
         tensor,
-        expr_to_typespec(%{eigenvecs_expr | type: out_type}),
-        expr_to_typespec(%{eigenvals_expr | type: out_type})
+        expr_to_typespec(%{eigenvals_expr | type: out_type}),
+        expr_to_typespec(%{eigenvecs_expr | type: out_type})
       )
 
-    {[to_type(eigenvecs, eigenvecs_expr.type), to_type(eigenvals, eigenvals_expr.type)], cache}
+    {[to_type(eigenvals, eigenvals_expr.type), to_type(eigenvecs, eigenvecs_expr.type)], cache}
   end
 
   defp cached_recur_operator(

@@ -719,30 +719,11 @@ defmodule EXLA.MLIR.Value do
     op(func, "stablehlo.return", values, [])
   end
 
-  def eigh(%Value{function: func} = value, eigenvecs_typespec, eigenvals_typespec) do
-    %{type: op_type, shape: op_shape} = get_typespec(value)
-    %{type: eigenvecs_type, shape: eigenvecs_shape} = eigenvecs_typespec
-    %{type: eigenvals_type, shape: eigenvals_shape} = eigenvals_typespec
+  def eigh(%Value{function: func} = value, eigenvals_typespec, eigenvecs_typespec) do
+    %{type: op_type} = get_typespec(value)
 
-    dim_sizes = [tuple_size(op_shape), tuple_size(eigenvecs_shape), tuple_size(eigenvals_shape)]
-    operand_dims = Tuple.to_list(op_shape)
-    eigenvecs_dims = Tuple.to_list(eigenvecs_shape)
-    eigenvals_dims = Tuple.to_list(eigenvals_shape)
-
-    dim_sizes = constant(func, dim_sizes, Typespec.tensor({:u, 64}, {length(dim_sizes)}))
-    operand_dims = constant(func, operand_dims, Typespec.tensor({:u, 64}, {length(operand_dims)}))
-
-    eigenvecs_dims =
-      constant(func, eigenvecs_dims, Typespec.tensor({:u, 64}, {length(eigenvecs_dims)}))
-
-    eigenvals_dims =
-      constant(func, eigenvals_dims, Typespec.tensor({:u, 64}, {length(eigenvals_dims)}))
-
-    operands = [value, dim_sizes, operand_dims, eigenvecs_dims, eigenvals_dims]
-
-    eigenvecs_result_type = type_tensor(eigenvecs_type, eigenvecs_shape)
-    eigenvals_result_type = type_tensor(eigenvals_type, eigenvals_shape)
-    result_types = [type_tuple([eigenvecs_result_type, eigenvals_result_type])]
+    operands = [value]
+    result_types = typespecs_to_mlir_types([eigenvals_typespec, eigenvecs_typespec])
 
     call_target_name =
       case op_type do
@@ -759,37 +740,20 @@ defmodule EXLA.MLIR.Value do
 
     attributes = [
       call_target_name: attr_string(call_target_name),
-      backend_config: attr_string("Host")
+      api_version: attr_i32(4)
     ]
 
-    result =
-      op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes) |> one!()
+    [eigenvals, eigenvecs] =
+      op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes)
 
-    eigenvecs = get_tuple_element(result, 0, eigenvecs_typespec)
-    eigenvals = get_tuple_element(result, 1, eigenvals_typespec)
-
-    {eigenvecs, eigenvals}
+    {eigenvals, eigenvecs}
   end
 
   def qr(%Value{function: func} = value, q_typespec, r_typespec) do
-    %{type: op_type, shape: op_shape} = get_typespec(value)
-    %{type: q_type, shape: q_shape} = q_typespec
-    %{type: r_type, shape: r_shape} = r_typespec
+    %{type: op_type} = get_typespec(value)
 
-    dim_sizes = [tuple_size(op_shape), tuple_size(q_shape), tuple_size(r_shape)]
-    operand_dims = Tuple.to_list(op_shape)
-    q_dims = Tuple.to_list(q_shape)
-    r_dims = Tuple.to_list(r_shape)
-
-    dim_sizes = constant(func, dim_sizes, Typespec.tensor({:u, 64}, {length(dim_sizes)}))
-    operand_dims = constant(func, operand_dims, Typespec.tensor({:u, 64}, {length(operand_dims)}))
-    q_dims = constant(func, q_dims, Typespec.tensor({:u, 64}, {length(q_dims)}))
-    r_dims = constant(func, r_dims, Typespec.tensor({:u, 64}, {length(r_dims)}))
-    operands = [value, dim_sizes, operand_dims, q_dims, r_dims]
-
-    q_result_type = type_tensor(q_type, q_shape)
-    r_result_type = type_tensor(r_type, r_shape)
-    result_types = [type_tuple([q_result_type, r_result_type])]
+    operands = [value]
+    result_types = typespecs_to_mlir_types([q_typespec, r_typespec])
 
     call_target_name =
       case op_type do
@@ -812,48 +776,23 @@ defmodule EXLA.MLIR.Value do
 
     attributes = [
       call_target_name: attr_string(call_target_name),
-      backend_config: attr_string("Host")
+      api_version: attr_i32(4)
     ]
 
-    result =
-      op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes) |> one!()
-
-    q = get_tuple_element(result, 0, q_typespec)
-    r = get_tuple_element(result, 1, r_typespec)
+    [q, r] =
+      op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes)
 
     {q, r}
   end
 
   def lu(%Value{function: func} = value, p_typespec, l_typespec, u_typespec) do
-    %{type: op_type, shape: op_shape} = get_typespec(value)
-    %{type: _p_type, shape: p_shape} = p_typespec
-    %{type: l_type, shape: l_shape} = l_typespec
-    %{type: u_type, shape: u_shape} = u_typespec
+    %{type: op_type} = get_typespec(value)
 
-    dim_sizes = [
-      tuple_size(op_shape),
-      tuple_size(p_shape),
-      tuple_size(l_shape),
-      tuple_size(u_shape)
-    ]
+    operands = [value]
 
-    operand_dims = Tuple.to_list(op_shape)
-    p_dims = Tuple.to_list(p_shape)
-    l_dims = Tuple.to_list(l_shape)
-    u_dims = Tuple.to_list(u_shape)
-
-    dim_sizes = constant(func, dim_sizes, Typespec.tensor({:u, 64}, {length(dim_sizes)}))
-    operand_dims = constant(func, operand_dims, Typespec.tensor({:u, 64}, {length(operand_dims)}))
-    p_dims = constant(func, p_dims, Typespec.tensor({:u, 64}, {length(p_dims)}))
-    l_dims = constant(func, l_dims, Typespec.tensor({:u, 64}, {length(l_dims)}))
-    u_dims = constant(func, u_dims, Typespec.tensor({:u, 64}, {length(u_dims)}))
-    operands = [value, dim_sizes, operand_dims, p_dims, l_dims, u_dims]
-
-    # Force P to always b u8 to avoid requiring too many template instances during custom_call registration
-    p_result_type = type_tensor({:u, 8}, p_shape)
-    l_result_type = type_tensor(l_type, l_shape)
-    u_result_type = type_tensor(u_type, u_shape)
-    result_types = [type_tuple([p_result_type, l_result_type, u_result_type])]
+    # Force P to always be u8 to avoid requiring too many template instances during custom_call registration
+    u8_typespec = Typespec.to_type(p_typespec, {:u, 8})
+    result_types = typespecs_to_mlir_types([u8_typespec, l_typespec, u_typespec])
 
     call_target_name =
       case op_type do
@@ -876,25 +815,19 @@ defmodule EXLA.MLIR.Value do
 
     attributes = [
       call_target_name: attr_string(call_target_name),
-      backend_config: attr_string("Host")
+      api_version: attr_i32(4)
     ]
 
-    result =
-      op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes) |> one!()
+    [p, l, u] =
+      op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes)
 
-    # This is not the best approach, but the alternative would require many more template instances
-    u8_typespec = Typespec.to_type(p_typespec, {:u, 8})
-    p = get_tuple_element(result, 0, u8_typespec)
-
+    # Convert p to the requested type if necessary
     p =
       if u8_typespec != p_typespec do
         convert(p, p_typespec)
       else
         p
       end
-
-    l = get_tuple_element(result, 1, l_typespec)
-    u = get_tuple_element(result, 2, u_typespec)
 
     {p, l, u}
   end
@@ -964,10 +897,6 @@ defmodule EXLA.MLIR.Value do
   defp type_number({:c, 128}), do: "complex<f64>"
 
   defp type_token(), do: "!stablehlo.token"
-
-  defp type_tuple(children) do
-    "tuple<#{Enum.join(children, ", ")}>"
-  end
 
   defp number_literal(value, type) do
     cond do

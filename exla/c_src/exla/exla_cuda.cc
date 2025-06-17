@@ -27,7 +27,7 @@ std::optional<std::string> get_cuda_ipc_handle(std::uintptr_t ptr) {
 
 std::optional<void*> get_pointer_for_ipc_handle(uint8_t* handle_bin, size_t handle_size, int device_id) {
   if (handle_size != sizeof(cudaIpcMemHandle_t)) {
-    return std::make_tuple(nullptr, 1);  // Return with error status
+    return std::nullopt;
   }
 
   unsigned char ipc_handle_data[sizeof(cudaIpcMemHandle_t)];

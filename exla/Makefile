@@ -25,7 +25,7 @@ EXLA_CACHE_SO_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(EXLA_CACHE_SO)
 # Note that XLA requires c++17, Fine as well
 CFLAGS += -fPIC -I$(ERTS_INCLUDE_DIR) -I$(FINE_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -Wall -Wno-sign-compare \
 	 -Wno-unused-parameter -Wno-missing-field-initializers -Wno-comment \
-	 -std=c++17 -w -DLLVM_VERSION_STRING=
+	 -std=c++17 -w
 
 ifdef DEBUG
 	CFLAGS += -g
@@ -33,7 +33,7 @@ else
 	CFLAGS += -O3
 endif
 
-NVCC := $(CXX)
+NVCC = $(CXX)
 NVCCFLAGS = $(CFLAGS)
 LDFLAGS += -L$(XLA_EXTENSION_LIB) -lxla_extension -shared -fvisibility=hidden
 
@@ -48,8 +48,8 @@ $(info EXLA_CPU_ONLY is not set, checking for nvcc availability)
 
 	ifeq ($(NVCC_TEST),nvcc)
 $(info CUDA is available.)
-		NVCC := nvcc
-		NVCCFLAGS += -DCUDA_ENABLED
+		NVCC = nvcc
+		NVCCFLAGS = -Xcompiler "$(CFLAGS)" -DCUDA_ENABLED
 	else
 $(info CUDA is not available.)
 	endif
@@ -82,7 +82,7 @@ $(EXLA_SO): $(EXLA_CACHE_SO)
 		ln -sf $(EXLA_CACHE_SO_LINK_PATH) $(EXLA_SO) ; \
 	fi
 
-SOURCES = $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_mlir.cc $(EXLA_DIR)/custom_calls.cc $(EXLA_DIR)/ipc.cc
+SOURCES = $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_mlir.cc $(EXLA_DIR)/ipc.cc
 SOURCES += $(wildcard $(EXLA_DIR)/custom_calls/*.cc)
 HEADERS = $(EXLA_DIR)/exla_mlir.h $(EXLA_DIR)/custom_calls/qr.h $(EXLA_DIR)/custom_calls/eigh.h $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h $(EXLA_DIR)/ipc.h
 OBJECTS = $(patsubst $(EXLA_DIR)/%.cc,$(EXLA_CACHE_OBJ_DIR)/%.o,$(SOURCES)) $(EXLA_CACHE_OBJ_DIR)/exla_cuda.o

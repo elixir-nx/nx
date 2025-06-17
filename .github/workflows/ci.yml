@@ -12,10 +12,12 @@ jobs:
       fail-fast: false
       matrix:
         working_directory: ["nx", "exla", "torchx"]
-        elixir: ["1.15.4", "1.16.2"]
-        otp: ["25.3"]
+        elixir: ["1.15.8", "1.18.4"]
         include:
-          - elixir: "1.16.2"
+          - elixir: "1.15.8"
+            otp: "25.3"
+          - elixir: "1.18.4"
+            otp: "27.3"
             lint: true
     defaults:
       run:
@@ -57,8 +59,9 @@ jobs:
       fail-fast: false
       matrix:
         working_directory: ["nx", "torchx"]
-        elixir: ["1.16.2"]
-        otp: ["25.2"]
+        include:
+          - elixir: "1.18.4"
+            otp: "27.3"
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}
