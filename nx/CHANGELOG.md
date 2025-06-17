@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.10.0 (2025-06-17)
+
+### Enhancements
+
+  * [Nx] Improvements to documentation, including new advanced guides and a revamped Getting Started section and cheatsheets for comparison between Nx and NumPy
+  * [Nx.Defn.Expr] floating-point constants now take on the precision of the surrounding operations, improving precision of f64 calculations
+  * [Nx] `Nx.to_pointer/2` and `Nx.from_pointer/5` now raise on errors
+  * [Nx.LinAlg] `Nx.LinAlg.lu/2` now has a `defn` implementation
+  * [Nx.Defn.Graph] Create new module for splitting an `Nx.Defn.Expr` computation into connected computation stages
+  * [Nx.Testing] New module for testing functions that rely on Nx
+  * [Nx.Defn.Evaluator] Add new debugging option for saving all intermediate results to disk or printing to stdout
+
 ## v0.9.2 (2024-11-16)
 
 ### Bug fixes

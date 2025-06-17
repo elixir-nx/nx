@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.10.0 (2025-06-17)
+
+### Enhancements
+
+  * NIFs now use Fine for wrapping the C++ code
+  * Nx.to_pointer/2 and Nx.from_pointer/5 now raise on errors
+  * LU decomposition is now supported in all devices
+  * New EXLA_CPU_ONLY compilation flag for disabling the CUDA-specific EXLA files
+  * Update XLA to latest version
+
+### Bug fixes
+
+  * Device id is now respected when automatic transfers are disabled
+  * Improve vectorized gather implementation
+  * Fix hook order inside while loop
+
 ## v0.9.2 (2024-11-16)
 
 ### Enhancements

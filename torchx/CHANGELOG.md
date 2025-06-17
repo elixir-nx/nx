@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.10.0 (2025-06-17)
+
+  * Update Libtorch to version 2.7
+  * Update to latest Nx
+
 ## v0.9.2 (2024-11-16)
 
   * Update to latest Nx
