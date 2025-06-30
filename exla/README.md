@@ -17,7 +17,7 @@ Then you can add `EXLA` as dependency in your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:exla, "~> 0.9"}
+    {:exla, "~> 0.10"}
   ]
 end
 ```
@@ -26,7 +26,7 @@ If you are using Livebook or IEx, you can instead run:
 
 ```elixir
 Mix.install([
-  {:exla, "~> 0.9"}
+  {:exla, "~> 0.10"}
 ])
 ```
 
