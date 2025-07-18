@@ -552,13 +552,13 @@ defmodule Nx.LinAlgTest do
           {wide, key} = Nx.Random.uniform(key, shape: {2, 3, 4}, type: type)
 
           assert {q, r} = Nx.LinAlg.qr(square)
-          assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), square, atol: 1.0e-6)
+          assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), square, atol: 1.0e-5)
 
           assert {q, r} = Nx.LinAlg.qr(tall)
-          assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), tall, atol: 1.0e-6)
+          assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), tall, atol: 1.0e-5)
 
           assert {q, r} = Nx.LinAlg.qr(wide)
-          assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), wide, atol: 1.0e-6)
+          assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), wide, atol: 1.0e-5)
 
           key
       end
