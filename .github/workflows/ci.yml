@@ -76,7 +76,7 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@v1
         with:
           toolset: 14.2
-          vsversion: 2019
+          vsversion: 2022
           arch: x64
       - uses: erlef/setup-beam@v1
         with:
