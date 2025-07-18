@@ -54,7 +54,7 @@ jobs:
 
   win:
     name: Windows (${{ matrix.working_directory }}, ${{ matrix.elixir }}, ${{ matrix.otp }})
-    runs-on: windows-2019
+    runs-on: windows-2022
     strategy:
       fail-fast: false
       matrix:
@@ -76,7 +76,7 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@v1
         with:
           toolset: 14.2
-          vsversion: 2019
+          vsversion: 2022
           arch: x64
       - uses: erlef/setup-beam@v1
         with:
