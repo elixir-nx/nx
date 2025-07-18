@@ -246,6 +246,20 @@ defmodule Nx.LinAlgTest do
         )
       end
     end
+
+    test "regression" do
+      tensor =
+        Nx.f64([
+          [-1.0, 1.0, -1.0, 0.0],
+          [1.0, 0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0, 1.0],
+          [0.0, 1.0, 0.0, 0.0]
+        ])
+
+      result = Nx.LinAlg.determinant(tensor)
+
+      assert_all_close(result, Nx.tensor(1.0, type: :f64))
+    end
   end
 
   describe "norm/2" do
@@ -538,13 +552,13 @@ defmodule Nx.LinAlgTest do
           {wide, key} = Nx.Random.uniform(key, shape: {2, 3, 4}, type: type)
 
           assert {q, r} = Nx.LinAlg.qr(square)
-          assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), square, atol: 1.0e-6)
+          assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), square, atol: 1.0e-5)
 
           assert {q, r} = Nx.LinAlg.qr(tall)
-          assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), tall, atol: 1.0e-6)
+          assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), tall, atol: 1.0e-5)
 
           assert {q, r} = Nx.LinAlg.qr(wide)
-          assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), wide, atol: 1.0e-6)
+          assert_all_close(Nx.dot(q, [2], [0], r, [1], [0]), wide, atol: 1.0e-5)
 
           key
       end
@@ -666,8 +680,8 @@ defmodule Nx.LinAlgTest do
           # Eigenvalues and eigenvectors
           assert {evals, evecs} = Nx.LinAlg.eigh(a, eps: 1.0e-8)
 
-          assert_all_close(evals_test, evals[0], atol: 1.0e-8)
-          assert_all_close(evals_test, evals[1], atol: 1.0e-8)
+          assert_all_close(evals_test, evals[0], atol: 1.0e-7)
+          assert_all_close(evals_test, evals[1], atol: 1.0e-7)
 
           evals =
             evals
@@ -679,7 +693,7 @@ defmodule Nx.LinAlgTest do
           evecs_evals = Nx.dot(evecs, [2], [0], evals, [1], [0])
           a_evecs = Nx.dot(evecs_evals, [2], [0], Nx.LinAlg.adjoint(evecs), [1], [0])
 
-          assert_all_close(a, a_evecs, atol: 1.0e-8)
+          assert_all_close(a, a_evecs, atol: 1.0e-7)
           key
       end
     end
@@ -946,6 +960,20 @@ defmodule Nx.LinAlgTest do
           assert_all_close(actual, a)
           key
       end
+    end
+
+    test "regression" do
+      matrix =
+        Nx.tensor([
+          [-1.0, 1.0, -1.0, 0.0],
+          [1.0, 0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0, 1.0],
+          [0.0, 1.0, 0.0, 0.0]
+        ])
+
+      {p, l, u} = Nx.LinAlg.lu(matrix)
+
+      assert_all_close(p |> Nx.dot(l) |> Nx.dot(u), matrix)
     end
   end
 

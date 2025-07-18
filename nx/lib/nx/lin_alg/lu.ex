@@ -2,9 +2,7 @@ defmodule Nx.LinAlg.LU do
   @moduledoc false
   import Nx.Defn
 
-  defn lu(a, opts \\ []) do
-    opts = keyword!(opts, eps: 1.0e-10)
-
+  defn lu(a, _opts \\ []) do
     vectorized_axes = a.vectorized_axes
 
     result =
@@ -12,7 +10,7 @@ defmodule Nx.LinAlg.LU do
       |> Nx.revectorize([collapsed_axes: :auto],
         target_shape: {Nx.axis_size(a, -2), Nx.axis_size(a, -1)}
       )
-      |> lu_matrix(opts)
+      |> lu_matrix()
       |> revectorize_result(a.shape, vectorized_axes)
 
     custom_grad(result, [a], fn g ->
@@ -20,85 +18,128 @@ defmodule Nx.LinAlg.LU do
     end)
   end
 
-  defnp lu_matrix(a, opts \\ []) do
-    eps = opts[:eps]
+  defnp lu_matrix(a) do
+    {m, n} = Nx.shape(a)
+    input_type = a.type
     type = Nx.Type.to_floating(a.type)
-    real_type = Nx.Type.to_real(type)
 
-    {p, a_prime} = lu_validate_and_pivot(a)
-    # {p, a_prime} = {Nx.eye(a.shape, vectorized_axes: a.vectorized_axes, type: a.type), a}
-    a_prime = Nx.as_type(a_prime, type)
+    # Initialize state
+    pivot = Nx.iota({m}, vectorized_axes: a.vectorized_axes)
+    perm = Nx.iota({m}, vectorized_axes: a.vectorized_axes)
+    k = Nx.tensor(0)
 
-    {n, _} = Nx.shape(a)
+    # Create index arrays once
+    m_idx = Nx.iota({m}, vectorized_axes: a.vectorized_axes)
+    n_idx = Nx.iota({n}, vectorized_axes: a.vectorized_axes)
 
-    l = u = Nx.fill(a_prime, 0.0)
-    [eps, _] = Nx.broadcast_vectors([Nx.as_type(eps, real_type), l])
+    # Main decomposition loop - using the EXACT same logic as the working debug
+    a = Nx.as_type(a, type)
 
-    {l, u, _} =
-      while {l, u, {a_prime, eps, n}}, j <- 0..(n - 1) do
-        l = Nx.put_slice(l, [j, j], Nx.tensor([[1.0]], type: type))
-        [j, i, _] = Nx.broadcast_vectors([j, 0, l])
+    {_k, _pivot, perm, a, _m_idx, _n_idx} =
+      while {k, pivot, perm, a, m_idx, n_idx}, Nx.less(k, m) do
+        # STEP 1: Find pivot
+        col_k = a[[.., k]]
+        masked_magnitude = Nx.select(m_idx >= k, Nx.abs(col_k), :neg_infinity)
+        pivot_row = Nx.argmax(masked_magnitude)
 
-        {u, _} =
-          while {u, {l, a_prime, eps, j, i}}, i <= j do
-            sum = vector_dot_slice(u[[.., j]], l[i], i)
-            a_ij = a_prime[i][j]
+        # STEP 2: Record pivot and perform row swaps
+        pivot = Nx.indexed_put(pivot, Nx.reshape(k, {1}), Nx.reshape(pivot_row, {}))
 
-            value = a_ij - sum
-
-            updated_u =
-              if Nx.abs(value) < eps do
-                Nx.put_slice(u, [i, j], Nx.tensor([[0]], type: type))
-              else
-                Nx.put_slice(u, [i, j], Nx.reshape(value, {1, 1}))
-              end
-
-            {updated_u, {l, a_prime, eps, j, i + 1}}
+        # Update matrix and permutation
+        {a, perm} =
+          if k != pivot_row do
+            {swap_rows(a, k, pivot_row), swap_elements(perm, k, pivot_row)}
+          else
+            {a, perm}
           end
 
-        {l, _} =
-          while {l, {u, a_prime, eps, j, n, i = j + 1}}, i <= n - 1 do
-            sum = vector_dot_slice(u[[.., j]], l[i], i)
+        # STEP 3: Scale column below diagonal
+        diagonal = a[[k, k]]
+        col_k_new = a[[.., k]]
+        scale_mask = m_idx > k
 
-            a_ij = a_prime[i][j]
-            u_jj = u[j][j]
-
-            value =
-              case Nx.Type.complex?(type) do
-                true ->
-                  if u_jj != 0 do
-                    (a_ij - sum) / u_jj
-                  else
-                    Nx.Constants.nan(real_type)
-                  end
-
-                false ->
-                  cond do
-                    u_jj != 0 ->
-                      (a_ij - sum) / u_jj
-
-                    a_ij >= sum ->
-                      Nx.Constants.infinity(real_type)
-
-                    true ->
-                      Nx.Constants.neg_infinity(real_type)
-                  end
-              end
-
-            updated_l =
-              if Nx.abs(value) < eps do
-                Nx.put_slice(l, [i, j], Nx.tensor([[0]], type: type))
-              else
-                Nx.put_slice(l, [i, j], Nx.reshape(value, {1, 1}))
-              end
-
-            {updated_l, {u, a_prime, eps, j, n, i + 1}}
+        scaled_col =
+          if diagonal == 0 do
+            col_k_new
+          else
+            Nx.select(scale_mask, col_k_new / diagonal, col_k_new)
           end
 
-        {l, u, {a_prime, eps, n}}
+        a = Nx.put_slice(a, [0, k], Nx.reshape(scaled_col, {m, 1}))
+
+        has_trailing = k < m - 1 and k < n - 1
+
+        a =
+          cond do
+            has_trailing ->
+              # Get L column and U row after scaling
+              l_col = a[[.., k]]
+              u_row = a[k]
+
+              # Create outer product
+              outer = Nx.outer(l_col, Nx.LinAlg.adjoint(u_row))
+
+              # Create mask for trailing submatrix
+              trailing_mask = Nx.reshape(m_idx > k, {m, 1}) and Nx.reshape(n_idx > k, {1, n})
+
+              # Apply masked update
+              masked_update = Nx.select(trailing_mask, outer, 0)
+              a - masked_update
+
+            true ->
+              a
+          end
+
+        # Increment counter
+        k = Nx.add(k, 1)
+        {k, pivot, perm, a, m_idx, n_idx}
       end
 
+    l = Nx.tril(a, k: -1) + Nx.eye(m)
+    u = Nx.triu(a)
+
+    p = Nx.equal(Nx.iota({m, 1}), Nx.reshape(perm, {1, m})) |> Nx.as_type(input_type)
+
     {p, l, u}
+  end
+
+  defnp swap_rows(matrix, i, j) do
+    vectorized_axes = matrix.vectorized_axes
+    [i, j, _] = Nx.broadcast_vectors([i, j, matrix])
+
+    row_i = matrix[i] |> Nx.devectorize()
+    row_j = matrix[j] |> Nx.devectorize()
+    i = Nx.devectorize(i)
+    j = Nx.devectorize(j)
+
+    matrix = Nx.devectorize(matrix)
+
+    # matrix is {k, m, n}
+    # row_i is {k, n}
+    # row_j is {k, n}
+
+    {max_k, m, n} = Nx.shape(matrix)
+
+    {matrix, _} =
+      while {matrix, {row_i, row_j, i, j, k = 0}}, k < max_k do
+        matrix =
+          matrix
+          |> Nx.put_slice([k, i[k], 0], Nx.reshape(row_j[k], {1, 1, n}))
+          |> Nx.put_slice([k, j[k], 0], Nx.reshape(row_i[k], {1, 1, n}))
+
+        {matrix, {row_i, row_j, i, j, k + 1}}
+      end
+
+    Nx.revectorize(matrix, vectorized_axes, target_shape: {m, n})
+  end
+
+  defnp swap_elements(vector, i, j) do
+    elem_i = vector[i]
+    elem_j = vector[j]
+
+    vector
+    |> Nx.indexed_put(Nx.reshape(i, {1}), Nx.reshape(elem_j, {}))
+    |> Nx.indexed_put(Nx.reshape(j, {1}), Nx.reshape(elem_i, {}))
   end
 
   deftransformp revectorize_result({p, l, u}, shape, vectorized_axes) do
@@ -109,43 +150,6 @@ defmodule Nx.LinAlg.LU do
       Nx.revectorize(l, vectorized_axes, target_shape: l_shape),
       Nx.revectorize(u, vectorized_axes, target_shape: u_shape)
     }
-  end
-
-  defnp vector_dot_slice(u, v, last_idx) do
-    {n} = Nx.shape(u)
-    selector = Nx.iota({n}) < last_idx
-    u = Nx.select(selector, u, 0)
-    v = Nx.select(selector, v, 0)
-    Nx.dot(u, v)
-  end
-
-  defnp lu_validate_and_pivot(t) do
-    {n, _} = Nx.shape(t)
-    p = Nx.iota({n}, vectorized_axes: t.vectorized_axes)
-
-    {p, _} =
-      while {p, t}, i <- 0..(n - 2) do
-        max_idx =
-          Nx.select(Nx.iota({n}) < i, 0, Nx.abs(t[[.., i]]))
-          |> Nx.argmax(axis: 0)
-
-        if max_idx == i do
-          {p, t}
-        else
-          indices = Nx.stack([i, max_idx]) |> Nx.reshape({2, 1})
-          updates = Nx.stack([p[max_idx], p[i]])
-
-          p = Nx.indexed_put(p, indices, updates)
-
-          {p, Nx.take(t, p)}
-        end
-      end
-
-    # The comparison order here is deliberate, because if
-    # we use p == iota instead, we get the inverse/transposed permutation.
-    permutation = Nx.iota({n, 1}) == Nx.new_axis(p, 0)
-
-    {Nx.as_type(permutation, t.type), t[p]}
   end
 
   defn lu_grad({p, l, u}, {_dp, dl, du}) do

@@ -245,7 +245,7 @@ defmodule EXLA.NxLinAlgDoctestTest do
 
   describe "lu" do
     test "property" do
-      key = Nx.Random.key(System.unique_integer())
+      key = Nx.Random.key(:rand.uniform(1000))
 
       for _ <- 1..10, type <- [{:f, 32}, {:c, 64}], reduce: key do
         key ->
