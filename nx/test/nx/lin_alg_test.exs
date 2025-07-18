@@ -246,6 +246,20 @@ defmodule Nx.LinAlgTest do
         )
       end
     end
+
+    test "regression" do
+      tensor =
+        Nx.f64([
+          [-1.0, 1.0, -1.0, 0.0],
+          [1.0, 0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0, 1.0],
+          [0.0, 1.0, 0.0, 0.0]
+        ])
+
+      result = Nx.LinAlg.determinant(tensor)
+
+      assert_all_close(result, Nx.tensor(1.0, type: :f64))
+    end
   end
 
   describe "norm/2" do
