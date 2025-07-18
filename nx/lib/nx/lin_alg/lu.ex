@@ -103,7 +103,6 @@ defmodule Nx.LinAlg.LU do
     {p, l, u}
   end
 
-  # Helper functions (same as before)
   defnp swap_rows(matrix, i, j) do
     vectorized_axes = matrix.vectorized_axes
     [i, j, _] = Nx.broadcast_vectors([i, j, matrix])
