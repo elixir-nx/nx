@@ -947,6 +947,20 @@ defmodule Nx.LinAlgTest do
           key
       end
     end
+
+    test "regression" do
+      matrix =
+        Nx.tensor([
+          [-1.0, 1.0, -1.0, 0.0],
+          [1.0, 0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0, 1.0],
+          [0.0, 1.0, 0.0, 0.0]
+        ])
+
+      {p, l, u} = Nx.LinAlg.lu(matrix)
+
+      assert_all_close(p |> Nx.dot(l) |> Nx.dot(u), matrix)
+    end
   end
 
   describe "cholesky" do
