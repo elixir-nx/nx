@@ -37,42 +37,32 @@ defmodule Nx.LinAlg.LU do
 
     {_k, _pivot, perm, a, _m_idx, _n_idx} =
       while {k, pivot, perm, a, m_idx, n_idx}, Nx.less(k, m) do
-        # STEP 1: Find pivot (same as debug)
+        # STEP 1: Find pivot
         col_k = a[[.., k]]
-        pivot_mask = Nx.greater_equal(m_idx, k)
-        magnitude = Nx.abs(col_k)
-        masked_magnitude = Nx.select(pivot_mask, magnitude, -999.0)
+        masked_magnitude = Nx.select(m_idx >= k, Nx.abs(col_k), :neg_infinity)
         pivot_row = Nx.argmax(masked_magnitude)
 
-        # STEP 2: Record pivot and perform row swaps (same as debug)
+        # STEP 2: Record pivot and perform row swaps
         pivot = Nx.indexed_put(pivot, Nx.reshape(k, {1}), Nx.reshape(pivot_row, {}))
 
-        # Row swap logic - exactly like debug
-        need_swap = Nx.not_equal(k, pivot_row)
-
-        a =
-          cond do
-            need_swap -> swap_rows(a, k, pivot_row)
-            true -> a
+        # Update matrix and permutation
+        {a, perm} =
+          if k != pivot_row do
+            {swap_rows(a, k, pivot_row), swap_elements(perm, k, pivot_row)}
+          else
+            {a, perm}
           end
 
-        # Update permutation
-        perm =
-          cond do
-            need_swap -> swap_elements(perm, k, pivot_row)
-            true -> perm
-          end
-
-        # STEP 3: Scale column below diagonal (same as debug)
-        diagonal = a[k][k]
+        # STEP 3: Scale column below diagonal
+        diagonal = a[[k, k]]
         col_k_new = a[[.., k]]
-        scale_mask = Nx.greater(m_idx, k)
+        scale_mask = m_idx > k
 
         scaled_col =
           if diagonal == 0 do
             col_k_new
           else
-            Nx.select(scale_mask, Nx.divide(col_k_new, diagonal), col_k_new)
+            Nx.select(scale_mask, col_k_new / diagonal, col_k_new)
           end
 
         a = Nx.put_slice(a, [0, k], Nx.reshape(scaled_col, {m, 1}))
@@ -90,18 +80,11 @@ defmodule Nx.LinAlg.LU do
               outer = Nx.outer(l_col, Nx.LinAlg.adjoint(u_row))
 
               # Create mask for trailing submatrix
-              row_mask = Nx.greater(m_idx, k)
-              col_mask = Nx.greater(n_idx, k)
-
-              trailing_mask =
-                Nx.logical_and(
-                  Nx.reshape(row_mask, {m, 1}),
-                  Nx.reshape(col_mask, {1, n})
-                )
+              trailing_mask = Nx.reshape(m_idx > k, {m, 1}) and Nx.reshape(n_idx > k, {1, n})
 
               # Apply masked update
               masked_update = Nx.select(trailing_mask, outer, 0)
-              Nx.subtract(a, masked_update)
+              a - masked_update
 
             true ->
               a
