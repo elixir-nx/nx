@@ -620,14 +620,14 @@ defmodule Nx.LinAlg do
   ## Examples
 
       iex> a = Nx.tensor([[1, 3, 2, 1], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]])
-      iex> Nx.LinAlg.solve(a, Nx.tensor([-3, 0, 4, -2])) |> Nx.round()
+      iex> Nx.LinAlg.solve(a, Nx.tensor([-3, 0, 4, -2]))
       #Nx.Tensor<
         f32[4]
-        [1.0, -2.0, 3.0, -4.0]
+        [1.0, -2.0, 3.000000238418579, -4.0]
       >
 
       iex> a = Nx.tensor([[1, 0, 1], [1, 1, 0], [1, 1, 1]], type: :f64)
-      iex> Nx.LinAlg.solve(a, Nx.tensor([0, 2, 1])) |> Nx.round()
+      iex> Nx.LinAlg.solve(a, Nx.tensor([0, 2, 1]))
       #Nx.Tensor<
         f64[3]
         [1.0, 1.0, -1.0]
@@ -635,7 +635,7 @@ defmodule Nx.LinAlg do
 
       iex> a = Nx.tensor([[1, 0, 1], [1, 1, 0], [0, 1, 1]])
       iex> b = Nx.tensor([[2, 2, 3], [2, 2, 4], [2, 0, 1]])
-      iex> Nx.LinAlg.solve(a, b) |> Nx.round()
+      iex> Nx.LinAlg.solve(a, b)
       #Nx.Tensor<
         f32[3][3]
         [
@@ -647,17 +647,17 @@ defmodule Nx.LinAlg do
 
       iex> a = Nx.tensor([[[14, 10], [9, 9]], [[4, 11], [2, 3]]])
       iex> b = Nx.tensor([[[2, 4], [3, 2]], [[1, 5], [-3, -1]]])
-      iex> Nx.LinAlg.solve(a, b) |> Nx.round()
+      iex> Nx.LinAlg.solve(a, b)
       #Nx.Tensor<
         f32[2][2][2]
         [
           [
-            [0.0, 0.0],
-            [1.0, 0.0]
+            [-0.3333333134651184, 0.4444444179534912],
+            [0.6666666269302368, -0.2222221940755844]
           ],
           [
-            [-4.0, -3.0],
-            [1.0, 1.0]
+            [-3.5999999046325684, -2.5999999046325684],
+            [1.399999976158142, 1.399999976158142]
           ]
         ]
       >
@@ -683,7 +683,7 @@ defmodule Nx.LinAlg do
   If the axes are named, their names are not preserved in the output:
 
       iex> a = Nx.tensor([[1, 0, 1], [1, 1, 0], [1, 1, 1]], names: [:x, :y])
-      iex> Nx.LinAlg.solve(a, Nx.tensor([0, 2, 1], names: [:z])) |> Nx.round()
+      iex> Nx.LinAlg.solve(a, Nx.tensor([0, 2, 1], names: [:z]))
       #Nx.Tensor<
         f32[3]
         [1.0, 1.0, -1.0]
@@ -719,13 +719,35 @@ defmodule Nx.LinAlg do
         # triangular matrices with the `lower: false` option,
         # we can solve a system as follows:
 
-        # A.X = B -> QR.X = B -> R.X = adjoint(Q).B
+        # A.X = B -> P.L.U.X = B -> L.U.X = transpose(P).B, because transpose(P) = inv(P) for permutation matrices
+        # L.Y = transpose(P).B
+        # U.X = Y
 
-        {q, r} = Nx.LinAlg.qr(a)
-        q_rank = Nx.rank(q)
-        batches = Enum.to_list(0..(q_rank - 3)//1)
-        qb = Nx.dot(adjoint(q), [q_rank - 1], batches, b, [q_rank - 2], batches)
-        triangular_solve(r, qb, lower: false)
+        {p, l, u} = Nx.LinAlg.lu(a)
+
+        p_rank = Nx.rank(p)
+        b_rank = Nx.rank(b)
+
+        p = Nx.rename(p, List.duplicate(nil, p_rank))
+        batches = Enum.to_list(0..(p_rank - 3)//1)
+
+        b =
+          if b_rank < p_rank do
+            Nx.new_axis(b, -1)
+          else
+            b
+          end
+
+        # contract p -2 with b -2 to get b_prime with implicit transpose
+        b_prime =
+          Nx.dot(p, [p_rank - 2], batches, b, [p_rank - 2], batches)
+
+        y = Nx.LinAlg.triangular_solve(l, b_prime, lower: true)
+        result = Nx.LinAlg.triangular_solve(u, y, lower: false)
+
+        # reshape back to output shape due to the possibly
+        # added axis to b/b_prime
+        Nx.reshape(result, output_shape)
       end)
 
     Nx.vectorize(result, vectorized_axes)
@@ -1769,8 +1791,8 @@ defmodule Nx.LinAlg do
       #Nx.Tensor<
         f32[2][2]
         [
-          [-2.000000476837158, 1.0000003576278687],
-          [1.5000004768371582, -0.5000002384185791]
+          [-2.000000238418579, 1.0000001192092896],
+          [1.5000001192092896, -0.5000000596046448]
         ]
       >
 
@@ -1798,8 +1820,8 @@ defmodule Nx.LinAlg do
             [2.75, -0.75]
           ],
           [
-            [-110.37397766113281, 76.8742904663086],
-            [92.24915313720703, -64.2494125366211]
+            [-110.37471008300781, 76.87478637695312],
+            [92.24976348876953, -64.24983215332031]
           ]
         ]
       >

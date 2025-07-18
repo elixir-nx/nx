@@ -118,6 +118,13 @@ defmodule Nx.OptionalTest do
       |> Nx.backend_transfer(__MODULE__)
     end
 
+    def lu(_, a, _) do
+      a
+      |> Nx.backend_transfer(BinaryBackend)
+      |> Nx.LinAlg.lu()
+      |> Nx.backend_transfer(__MODULE__)
+    end
+
     def triangular_solve(_, a, b, _) do
       a
       |> Nx.backend_transfer(BinaryBackend)
