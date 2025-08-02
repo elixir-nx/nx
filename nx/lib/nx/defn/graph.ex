@@ -39,7 +39,13 @@ defmodule Nx.Defn.Graph do
   `expr_split_fn` is a function that receives an `Nx.Tensor` containing an `Nx.Defn.Expr`
   and returns `true` when a split must happen, and `false` otherwise.
 
+  Alternatively, `expr_split_fn` can be a function that receives an `Nx.Tensor` and an
+  accumulator, returning `{true, new_acc}` when a split must happen, and `{false, new_acc}`
+  otherwise. In this case, an initial accumulator must be provided as the third argument.
+
   ## Examples
+
+  ### Basic splitting (arity 1 function)
 
       iex> expr = Nx.Defn.debug_expr(fn x, y -> x |> Nx.negate() |> Nx.sin() |> Nx.cos() |> Nx.add(y) end).(1, 2)
       iex> [stage0, stage1] = Nx.Defn.Graph.split(expr, fn %Nx.Tensor{data: %Nx.Defn.Expr{op: op}} -> op == :cos end)
@@ -63,9 +69,24 @@ defmodule Nx.Defn.Graph do
         b = cos a       f32
         d = add b, c    f32
       >
+
+  ### Splitting with accumulator (arity 2 function)
+
+      # Count operations and split every 3 operations
+      split_fn = fn _tensor, count ->
+        new_count = count + 1
+        {rem(new_count, 3) == 0, new_count}
+      end
+
+      stages = Nx.Defn.Graph.split(expr, split_fn, 0)
   """
   def split(expr, expr_split_fn) when is_function(expr_split_fn, 1) do
-    {chain, _, _} = __split__(expr, expr_split_fn)
+    {chain, _, _} = __split__(expr, expr_split_fn, nil)
+    chain
+  end
+
+  def split(expr, expr_split_fn, initial_acc) when is_function(expr_split_fn, 2) do
+    {chain, _, _} = __split__(expr, expr_split_fn, initial_acc)
     chain
   end
 
@@ -106,13 +127,14 @@ defmodule Nx.Defn.Graph do
   end
 
   @doc false
-  def __split__(expr, expr_split_fn) do
+  def __split__(expr, expr_split_fn, initial_acc) do
     # state.expression_chain is a reverse accumulation of the stages and
     # snapshots of the state at each one so that we can properly remap parameters for each stage.
     state = %{
       expression_chain: [],
       nodes_to_replace: %{},
       expr_split_fn: expr_split_fn,
+      split_acc: initial_acc,
       # args is a map of id -> {stage_id, output_container_position}
       args: %{}
     }
@@ -193,7 +215,19 @@ defmodule Nx.Defn.Graph do
         {res, {cache, state}}
 
       _ ->
-        if state.expr_split_fn.(ans) do
+        # Handle both arity 1 and arity 2 functions
+        {should_split?, new_acc} =
+          case :erlang.fun_info(state.expr_split_fn, :arity) do
+            {:arity, 1} ->
+              {state.expr_split_fn.(ans), state.split_acc}
+
+            {:arity, 2} ->
+              state.expr_split_fn.(ans, state.split_acc)
+          end
+
+        state = %{state | split_acc: new_acc}
+
+        if should_split? do
           split_expr(ans, {cache, state})
         else
           eval_apply(op, ans, {cache, state})
