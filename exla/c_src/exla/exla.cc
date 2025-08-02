@@ -486,6 +486,41 @@ deserialize_executable(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
 
 FINE_NIF(deserialize_executable, 0);
 
+// Memory tracking functions
+
+int64_t get_allocated_memory(ErlNifEnv *env,
+                             fine::ResourcePtr<ExlaClient> client) {
+  return client->GetAllocatedMemory();
+}
+
+FINE_NIF(get_allocated_memory, 0);
+
+int64_t get_peak_memory(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client) {
+  return client->GetPeakMemory();
+}
+
+FINE_NIF(get_peak_memory, 0);
+
+fine::Ok<> reset_peak_memory(ErlNifEnv *env,
+                             fine::ResourcePtr<ExlaClient> client) {
+  client->ResetPeakMemory();
+  return fine::Ok();
+}
+
+FINE_NIF(reset_peak_memory, 0);
+
+std::map<int64_t, int64_t>
+get_per_device_memory(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client) {
+  auto device_memory = client->GetPerDeviceMemory();
+  std::map<int64_t, int64_t> result;
+  for (const auto &pair : device_memory) {
+    result[pair.first] = pair.second;
+  }
+  return result;
+}
+
+FINE_NIF(get_per_device_memory, 0);
+
 // Logging
 
 fine::Ok<> start_log_sink(ErlNifEnv *env, ErlNifPid logger_pid) {

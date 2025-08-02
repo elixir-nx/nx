@@ -73,6 +73,10 @@ defmodule EXLA.NIF do
   def serialize_executable(_executable), do: err!()
   def deserialize_executable(_client, _string), do: err!()
   def start_log_sink(_sink_pid), do: err!()
+  def get_allocated_memory(_client), do: err!()
+  def get_peak_memory(_client), do: err!()
+  def reset_peak_memory(_client), do: err!()
+  def get_per_device_memory(_client), do: err!()
 
   defp err!(), do: :erlang.nif_error(:undef)
 end
