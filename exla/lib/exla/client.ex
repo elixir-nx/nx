@@ -101,6 +101,43 @@ defmodule EXLA.Client do
     EXLA.NIF.transfer_from_outfeed(client, device_id, typespecs, pid, ref)
   end
 
+  @doc """
+  Returns the memory statistics for a client.
+
+  Returns a map with the following keys:
+    * `:allocated` - Currently allocated memory in bytes
+    * `:peak` - Peak memory usage in bytes
+    * `:per_device` - Map of device ID to allocated memory in bytes
+
+  ## Examples
+
+      client = EXLA.Client.fetch!(:host)
+      EXLA.Client.get_memory_statistics(client)
+      %{allocated: 0, peak: 0, per_device: %{0 => 0}}
+
+  """
+  def get_memory_statistics(%__MODULE__{ref: ref}) do
+    %{
+      allocated: EXLA.NIF.get_allocated_memory(ref),
+      peak: EXLA.NIF.get_peak_memory(ref),
+      per_device: EXLA.NIF.get_per_device_memory(ref)
+    }
+  end
+
+  @doc """
+  Resets the peak memory counter for a client.
+
+  ## Examples
+
+      iex> client = EXLA.Client.fetch!(:host)
+      iex> EXLA.Client.reset_peak_memory(client)
+      :ok
+
+  """
+  def reset_peak_memory(%__MODULE__{ref: ref}) do
+    EXLA.NIF.reset_peak_memory(ref)
+  end
+
   ## Callbacks
 
   @doc false
