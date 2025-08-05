@@ -5,9 +5,48 @@ on:
       - main
   pull_request:
 jobs:
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      nx-changed: ${{ steps.changes.outputs.nx }}
+      exla-changed: ${{ steps.changes.outputs.exla }}
+      torchx-changed: ${{ steps.changes.outputs.torchx }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Detect changes
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # For PRs, compare with the base branch
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          else
+            # For pushes, use the previous commit
+            BASE_SHA="${{ github.event.before }}"
+          fi
+
+          if git diff --name-only $BASE_SHA ${{ github.sha }} | grep -q "^nx/"; then
+            echo "nx=true" >> $GITHUB_OUTPUT
+          else
+            echo "nx=false" >> $GITHUB_OUTPUT
+          fi
+
+          if git diff --name-only $BASE_SHA ${{ github.sha }} | grep -q "^exla/"; then
+            echo "exla=true" >> $GITHUB_OUTPUT
+          else
+            echo "exla=false" >> $GITHUB_OUTPUT
+          fi
+
+          if git diff --name-only $BASE_SHA ${{ github.sha }} | grep -q "^torchx/"; then
+            echo "torchx=true" >> $GITHUB_OUTPUT
+          else
+            echo "torchx=false" >> $GITHUB_OUTPUT
+          fi
+
   main:
     name: Linux (${{ matrix.working_directory }}, ${{ matrix.elixir }}, ${{ matrix.otp }})
     runs-on: ubuntu-latest
+    needs: detect-changes
     strategy:
       fail-fast: false
       matrix:
@@ -26,12 +65,26 @@ jobs:
       MIX_ENV: test
       XLA_FLAGS: --xla_force_host_platform_device_count=2
     steps:
+      - name: Set conditional variables
+        working-directory: .
+        run: |
+          if [ "${{ needs.detect-changes.outputs.nx-changed }}" = "true" ] && [ "${{ matrix.working_directory }}" = "nx" ]; then
+            echo "should_run=true" >> $GITHUB_ENV
+          elif [ "${{ needs.detect-changes.outputs.exla-changed }}" = "true" ] && [ "${{ matrix.working_directory }}" = "exla" ]; then
+            echo "should_run=true" >> $GITHUB_ENV
+          elif [ "${{ needs.detect-changes.outputs.torchx-changed }}" = "true" ] && [ "${{ matrix.working_directory }}" = "torchx" ]; then
+            echo "should_run=true" >> $GITHUB_ENV
+          else
+            echo "should_run=false" >> $GITHUB_ENV
+          fi
+
       - uses: actions/checkout@v2
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{ matrix.otp }}
           elixir-version: ${{ matrix.elixir }}
       - name: Retrieve dependencies cache
+        if: ${{ steps.mix-cache.outputs.cache-hit != 'true' && env.should_run == 'true' }}
         env:
           cache-name: cache-mix-deps
         uses: actions/cache@v3
@@ -40,21 +93,25 @@ jobs:
           path: ${{ github.workspace }}/${{ matrix.working_directory }}/deps
           key: ${{ runner.os }}-Elixir-v${{ matrix.elixir }}-OTP-${{ matrix.otp }}-${{ hashFiles(format('{0}/{1}/mix.lock', github.workspace, matrix.working_directory)) }}-v1
       - name: Install dependencies
-        if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
+        if: ${{ steps.mix-cache.outputs.cache-hit != 'true' && env.should_run == 'true' }}
         run: mix deps.get
       - name: Compile and check warnings
+        if: ${{ env.should_run == 'true' }}
         run: mix compile --warnings-as-errors
       - name: Check formatting
-        if: ${{ matrix.lint }}
+        if: ${{ matrix.lint && env.should_run == 'true' }}
         run: mix format --check-formatted
       - name: Run epmd for distributed tests
+        if: ${{ env.should_run == 'true' }}
         run: epmd -daemon
       - name: Run tests
+        if: ${{ env.should_run == 'true' }}
         run: mix test
 
   win:
     name: Windows (${{ matrix.working_directory }}, ${{ matrix.elixir }}, ${{ matrix.otp }})
     runs-on: windows-2022
+    needs: detect-changes
     strategy:
       fail-fast: false
       matrix:
@@ -69,6 +126,19 @@ jobs:
       MIX_ENV: test
       XLA_FLAGS: --xla_force_host_platform_device_count=2
     steps:
+      - name: Set conditional variables
+        working-directory: .
+        shell: pwsh
+        run: |
+          if ("${{ needs.detect-changes.outputs.nx-changed }}" -eq "true" -and "${{ matrix.working_directory }}" -eq "nx") {
+            echo "should_run=true" >> $env:GITHUB_ENV
+          } elseif ("${{ needs.detect-changes.outputs.exla-changed }}" -eq "true" -and "${{ matrix.working_directory }}" -eq "exla") {
+            echo "should_run=true" >> $env:GITHUB_ENV
+          } elseif ("${{ needs.detect-changes.outputs.torchx-changed }}" -eq "true" -and "${{ matrix.working_directory }}" -eq "torchx") {
+            echo "should_run=true" >> $env:GITHUB_ENV
+          } else {
+            echo "should_run=false" >> $env:GITHUB_ENV
+          }
       - name: Configure Git
         run: git config --global core.autocrlf input
         working-directory: .
@@ -83,6 +153,7 @@ jobs:
           otp-version: ${{ matrix.otp }}
           elixir-version: ${{ matrix.elixir }}
       - name: Retrieve dependencies cache
+        if: ${{ steps.mix-cache.outputs.cache-hit != 'true' && env.should_run == 'true' }}
         env:
           cache-name: cache-mix-deps
         uses: actions/cache@v3
@@ -91,9 +162,11 @@ jobs:
           path: ${{ github.workspace }}\${{ matrix.working_directory }}\deps
           key: ${{ runner.os }}-Elixir-v${{ matrix.elixir }}-OTP-${{ matrix.otp }}-${{ hashFiles(format('{0}\{1}\mix.lock', github.workspace, matrix.working_directory)) }}-v1
       - name: Install dependencies
-        if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
+        if: ${{ steps.mix-cache.outputs.cache-hit != 'true' && env.should_run == 'true' }}
         run: mix deps.get
       - name: Compile and check warnings
+        if: ${{ env.should_run == 'true' }}
         run: mix compile --warnings-as-errors
       - name: Run tests
+        if: ${{ env.should_run == 'true' }}
         run: mix test
