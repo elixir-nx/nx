@@ -94,6 +94,7 @@ defmodule EXLA.MemoryTrackingTest do
 
   test "tracks memory deallocation when buffer is garbage collected" do
     client = Client.fetch!(:host)
+    :erlang.garbage_collect()
     Client.reset_peak_memory(client)
 
     assert %{allocated: baseline_allocated, peak: 0} = Client.get_memory_statistics(client)
