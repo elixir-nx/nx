@@ -1,7 +1,5 @@
 #include "exla_client.h"
 
-#include <fine.hpp>
-#include <erl_nif.h>
 #include "exla_nif_util.h"
 #include "xla/layout_util.h"
 #include "xla/pjrt/cpu/cpu_client.h"
@@ -12,24 +10,52 @@
 #include "xla/pjrt/pjrt_compiler.h"
 #include "xla/pjrt/tfrt_cpu_pjrt_client.h"
 #include "xla/shape_util.h"
+#include <erl_nif.h>
+#include <fine.hpp>
 #include <memory>
 
 namespace exla {
 
-ExlaBuffer::ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer) : buffer_(std::move(buffer)) {}
+ExlaBuffer::ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer)
+    : buffer_(std::move(buffer)) {}
 
-void CopyLiteralToBinary(xla::Literal* literal, ErlNifBinary* binary, exla::int64 size) {
+ExlaBuffer::~ExlaBuffer() {
+  // Theoretically this may block if a computation is running
+  // but we always block the host until the computation is done.
+
+  // Track memory deallocation when buffer is garbage collected
+  // (only if not already explicitly deallocated)
+  if (buffer_ && !buffer_->IsDeleted()) {
+    TrackDeallocation();
+  }
+}
+
+void ExlaBuffer::TrackDeallocation() {
+  if (client_) {
+    auto size_or = GetOnDeviceSizeInBytes();
+    if (size_or.ok()) {
+      client_->TrackBufferDeallocated(device_id(), size_or.value());
+    }
+  }
+}
+
+void CopyLiteralToBinary(xla::Literal *literal, ErlNifBinary *binary,
+                         exla::int64 size) {
   exla::int64 actual_size = literal->size_bytes();
-  if (size < 0 or size > actual_size) size = actual_size;
+  if (size < 0 or size > actual_size)
+    size = actual_size;
   enif_alloc_binary(size, binary);
   std::memcpy(binary->data, literal->untyped_data(), size);
 }
 
-tsl::StatusOr<ERL_NIF_TERM> ExlaBuffer::ToBinary(ErlNifEnv* env, exla::int64 size) {
-  EXLA_ASSIGN_OR_RETURN(std::shared_ptr<xla::Literal> literal, buffer_->ToLiteralSync());
+tsl::StatusOr<ERL_NIF_TERM> ExlaBuffer::ToBinary(ErlNifEnv *env,
+                                                 exla::int64 size) {
+  EXLA_ASSIGN_OR_RETURN(std::shared_ptr<xla::Literal> literal,
+                        buffer_->ToLiteralSync());
 
   exla::int64 actual_size = literal->size_bytes();
-  if (size < 0 or size > actual_size) size = actual_size;
+  if (size < 0 or size > actual_size)
+    size = actual_size;
 
   ERL_NIF_TERM binary_term;
   auto data = enif_make_new_binary(env, size, &binary_term);
@@ -40,70 +66,90 @@ tsl::StatusOr<ERL_NIF_TERM> ExlaBuffer::ToBinary(ErlNifEnv* env, exla::int64 siz
 
 tsl::Status ExlaBuffer::Deallocate() {
   if (buffer_->IsDeleted()) {
-    return xla::FailedPrecondition("Attempt to deallocate already deallocated buffer.");
+    return xla::FailedPrecondition(
+        "Attempt to deallocate already deallocated buffer.");
   } else {
+    // Track memory before marking as deleted
+    TrackDeallocation();
     buffer_->Delete();
     return tsl::OkStatus();
   }
 }
 
-tsl::StatusOr<fine::ResourcePtr<ExlaBuffer>> ExlaBuffer::CopyToDevice(xla::PjRtDevice* dst_device) {
-  EXLA_ASSIGN_OR_RETURN(auto memory_space,
-                        dst_device->default_memory_space());
+tsl::StatusOr<fine::ResourcePtr<ExlaBuffer>>
+ExlaBuffer::CopyToDevice(xla::PjRtDevice *dst_device) {
+  EXLA_ASSIGN_OR_RETURN(auto memory_space, dst_device->default_memory_space());
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtBuffer> buf,
                         buffer_->CopyToMemorySpace(memory_space));
-  return fine::make_resource<ExlaBuffer>(std::move(buf));
+  auto new_buffer = fine::make_resource<ExlaBuffer>(std::move(buf));
+
+  // Copy client tracking
+  new_buffer->SetClient(client_);
+  if (client_) {
+    auto size_or = new_buffer->GetOnDeviceSizeInBytes();
+    if (size_or.ok()) {
+      client_->TrackBufferAllocated(new_buffer->device_id(), size_or.value());
+    }
+  }
+
+  return new_buffer;
 }
 
-ExlaExecutable::ExlaExecutable(std::unique_ptr<xla::PjRtLoadedExecutable> executable,
-                               absl::optional<std::string> fingerprint,
-                               ExlaClient* client) : executable_(std::move(executable)),
-                                                     fingerprint_(std::move(fingerprint)),
-                                                     client_(client) {}
+ExlaExecutable::ExlaExecutable(
+    std::unique_ptr<xla::PjRtLoadedExecutable> executable,
+    absl::optional<std::string> fingerprint, ExlaClient *client)
+    : executable_(std::move(executable)), fingerprint_(std::move(fingerprint)),
+      client_(client) {}
 
-tsl::StatusOr<std::unique_ptr<xla::PjRtBuffer>> PjRtBufferFromBinary(xla::PjRtClient* client,
-                                                                     ERL_NIF_TERM source_term,
-                                                                     const xla::Shape& shape,
-                                                                     int device_id) {
+tsl::StatusOr<std::unique_ptr<xla::PjRtBuffer>>
+PjRtBufferFromBinary(xla::PjRtClient *client, ERL_NIF_TERM source_term,
+                     const xla::Shape &shape, int device_id) {
   // We copy the binary term into a new env and point the buffer to
   // the binary content. Since larger binaries are shared and refcounted
   // this should be zero-copy.
 
-  ErlNifEnv* copy_env = enif_alloc_env();
+  ErlNifEnv *copy_env = enif_alloc_env();
   ERL_NIF_TERM dest_term = enif_make_copy(copy_env, source_term);
 
   auto binary = fine::decode<ErlNifBinary>(copy_env, dest_term);
 
-  xla::PjRtClient::HostBufferSemantics semantics = xla::PjRtClient::HostBufferSemantics::kImmutableZeroCopy;
-  std::function<void()> on_done_with_host_buffer = [copy_env]() { enif_free_env(copy_env); };
+  xla::PjRtClient::HostBufferSemantics semantics =
+      xla::PjRtClient::HostBufferSemantics::kImmutableZeroCopy;
+  std::function<void()> on_done_with_host_buffer = [copy_env]() {
+    enif_free_env(copy_env);
+  };
 
-  EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice * device, client->LookupDevice(xla::PjRtGlobalDeviceId(device_id)));
+  EXLA_ASSIGN_OR_RETURN(
+      xla::PjRtDevice * device,
+      client->LookupDevice(xla::PjRtGlobalDeviceId(device_id)));
   EXLA_ASSIGN_OR_RETURN(auto memory_space, device->default_memory_space());
   // Passing std::nullopt should work, but it fails for subbyte types,
-  // so we build the default strides. See https://github.com/openxla/xla/issues/16795
+  // so we build the default strides. See
+  // https://github.com/openxla/xla/issues/16795
   auto byte_strides = xla::ShapeUtil::ByteStrides(shape);
-  EXLA_ASSIGN_OR_RETURN(auto buffer, client->BufferFromHostBuffer(
-                                         binary.data, shape.element_type(), shape.dimensions(), byte_strides, semantics, on_done_with_host_buffer, memory_space, /*device_layout=*/nullptr));
+  EXLA_ASSIGN_OR_RETURN(
+      auto buffer, client->BufferFromHostBuffer(
+                       binary.data, shape.element_type(), shape.dimensions(),
+                       byte_strides, semantics, on_done_with_host_buffer,
+                       memory_space, /*device_layout=*/nullptr));
 
   return std::move(buffer);
 }
 
-tsl::StatusOr<std::vector<std::vector<xla::PjRtBuffer*>>>
-UnpackRunArguments(ErlNifEnv* env,
-                   ExlaExecutable::RunArguments arguments,
-                   std::vector<std::unique_ptr<xla::PjRtBuffer>> &transient_buffers,
-                   ExlaClient* client,
-                   xla::DeviceAssignment device_assignment,
-                   int device_id) {
-  std::vector<std::vector<xla::PjRtBuffer*>> arg_buffers;
+tsl::StatusOr<std::vector<std::vector<xla::PjRtBuffer *>>> UnpackRunArguments(
+    ErlNifEnv *env, ExlaExecutable::RunArguments arguments,
+    std::vector<std::unique_ptr<xla::PjRtBuffer>> &transient_buffers,
+    ExlaClient *client, xla::DeviceAssignment device_assignment,
+    int device_id) {
+  std::vector<std::vector<xla::PjRtBuffer *>> arg_buffers;
   arg_buffers.reserve(arguments.size());
 
   int replica = 0;
 
-  for (const auto & replica_arguments : arguments) {
+  for (const auto &replica_arguments : arguments) {
     auto device = device_id >= 0 ? device_id : device_assignment(replica, 0);
 
-    auto replica_buffers = std::vector<xla::PjRtBuffer*>();
+    auto replica_buffers = std::vector<xla::PjRtBuffer *>();
     replica_buffers.reserve(replica_arguments.size());
 
     // For a single replica, the argument is a flat list of buffers where
@@ -111,25 +157,29 @@ UnpackRunArguments(ErlNifEnv* env,
     // EXLA buffer, it is not possible for any of the arguments to be nested
     // tuples because we handle normalization/flattening of tuples on the
     // Elixir side
-    for (const auto & argument : replica_arguments) {
-      if (auto value = std::get_if<std::tuple<fine::Term, xla::Shape>>(&argument)) {
+    for (const auto &argument : replica_arguments) {
+      if (auto value =
+              std::get_if<std::tuple<fine::Term, xla::Shape>>(&argument)) {
         auto [term, shape] = *value;
         // We convert the binary into a buffer and transfer it to the
         // correct device, this buffer is not managed by the erlang vm
         // so it must be deallocated explicitly after use by the execution
-        EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtBuffer> buf,
-                              PjRtBufferFromBinary(client->client(), term, shape, device));
+        EXLA_ASSIGN_OR_RETURN(
+            std::unique_ptr<xla::PjRtBuffer> buf,
+            PjRtBufferFromBinary(client->client(), term, shape, device));
         replica_buffers.push_back(buf.get());
         // Keep track of the buffer pointer, for automatic deallocation later
         transient_buffers.push_back(std::move(buf));
-      } else if (auto value = std::get_if<fine::ResourcePtr<ExlaBuffer>>(&argument)) {
+      } else if (auto value =
+                     std::get_if<fine::ResourcePtr<ExlaBuffer>>(&argument)) {
         auto buffer = *value;
         // if the buffer is not a tuple it must be a reference to an exla buffer
-        // which means the resource is already managed by the vm, and should already
-        // be on the correct device, if it is not, we will not do any implicit transfers
-        // and instead raise an error
+        // which means the resource is already managed by the vm, and should
+        // already be on the correct device, if it is not, we will not do any
+        // implicit transfers and instead raise an error
         if (buffer->device_id() != device) {
-          return xla::InvalidArgument("Expected buffer to be placed on device %d", device);
+          return xla::InvalidArgument(
+              "Expected buffer to be placed on device %d", device);
         }
         replica_buffers.push_back(buffer->buffer());
       }
@@ -143,31 +193,42 @@ UnpackRunArguments(ErlNifEnv* env,
   return arg_buffers;
 }
 
-ExlaExecutable::RunResult UnpackResult(ErlNifEnv* env,
-                                       std::vector<std::vector<std::unique_ptr<xla::PjRtBuffer>>> result,
-                                       xla::DeviceAssignment device_assignment,
-                                       int device_id) {
-  auto per_replica_results = std::vector<std::tuple<std::vector<fine::ResourcePtr<ExlaBuffer>>, int64_t>>();
+ExlaExecutable::RunResult
+UnpackResult(ErlNifEnv *env,
+             std::vector<std::vector<std::unique_ptr<xla::PjRtBuffer>>> result,
+             xla::DeviceAssignment device_assignment, int device_id,
+             ExlaClient *client) {
+  auto per_replica_results = std::vector<
+      std::tuple<std::vector<fine::ResourcePtr<ExlaBuffer>>, int64_t>>();
 
   for (int i = 0; i < result.size(); i++) {
     auto replica_results = std::vector<fine::ResourcePtr<ExlaBuffer>>();
     int64_t device = device_id >= 0 ? device_id : device_assignment(i, 0);
 
-    for (auto& pjrt_buf : result.at(i)) {
+    for (auto &pjrt_buf : result.at(i)) {
       pjrt_buf->GetReadyFuture().Await();
       auto result = fine::make_resource<ExlaBuffer>(std::move(pjrt_buf));
+
+      // Track memory allocation
+      result->SetClient(client);
+      auto size_or = result->GetOnDeviceSizeInBytes();
+      if (size_or.ok()) {
+        client->TrackBufferAllocated(result->device_id(), size_or.value());
+      }
+
       replica_results.push_back(result);
     }
 
-    per_replica_results.push_back(std::make_tuple(std::move(replica_results), device));
+    per_replica_results.push_back(
+        std::make_tuple(std::move(replica_results), device));
   }
 
   return per_replica_results;
 }
 
-tsl::StatusOr<ExlaExecutable::RunResult> ExlaExecutable::Run(ErlNifEnv* env,
-  ExlaExecutable::RunArguments arguments,
-  int device_id) {
+tsl::StatusOr<ExlaExecutable::RunResult>
+ExlaExecutable::Run(ErlNifEnv *env, ExlaExecutable::RunArguments arguments,
+                    int device_id) {
   xla::ExecuteOptions options;
   // arguments are not passed as a single PjRt tuple buffer, but instead
   // as multiple pjrt buffers
@@ -193,17 +254,19 @@ tsl::StatusOr<ExlaExecutable::RunResult> ExlaExecutable::Run(ErlNifEnv* env,
   int num_replicas = executable_->num_replicas();
 
   // input buffers are a list of lists, where each list maps to the args
-  // to pass to one of the replicas in a computation, e.g. [replica_args1, replica_args2, ...]
-  std::vector<std::vector<xla::PjRtBuffer*>> input_buffers;
+  // to pass to one of the replicas in a computation, e.g. [replica_args1,
+  // replica_args2, ...]
+  std::vector<std::vector<xla::PjRtBuffer *>> input_buffers;
 
-  // the device assignment is a 2d array which maps coordinates (replica, partition)
-  // to a device; or in this case just maps a replica to a device
+  // the device assignment is a 2d array which maps coordinates (replica,
+  // partition) to a device; or in this case just maps a replica to a device
   xla::DeviceAssignment device_assignment;
   if (client_->client()->platform_name() == "METAL") {
     device_assignment = xla::DeviceAssignment(1, 1);
   } else {
-    EXLA_ASSIGN_OR_RETURN(device_assignment,
-                          client_->client()->GetDefaultDeviceAssignment(num_replicas, 1));
+    EXLA_ASSIGN_OR_RETURN(
+        device_assignment,
+        client_->client()->GetDefaultDeviceAssignment(num_replicas, 1));
   }
 
   // Buffers allocated from binaries for this specific run need to be
@@ -213,47 +276,60 @@ tsl::StatusOr<ExlaExecutable::RunResult> ExlaExecutable::Run(ErlNifEnv* env,
   auto transient_buffers = std::vector<std::unique_ptr<xla::PjRtBuffer>>();
 
   if (device_id >= 0 && num_replicas > 1) {
-    // if the device id is greater than or equal to 1, that means we've specified
-    // a portable executable which cannot be pmapped, this code path should never
-    // be reached as it should be controlled from Elixir
-    return xla::InvalidArgument("Cannot specify a device for replicated executable.");
+    // if the device id is greater than or equal to 1, that means we've
+    // specified a portable executable which cannot be pmapped, this code path
+    // should never be reached as it should be controlled from Elixir
+    return xla::InvalidArgument(
+        "Cannot specify a device for replicated executable.");
   } else {
-    // else we handle unpacking/validating the run arguments to the correct devices
-    // according to the device id and the device assignment
-    EXLA_ASSIGN_OR_RETURN(input_buffers, UnpackRunArguments(env, arguments, transient_buffers, client_, device_assignment, device_id));
+    // else we handle unpacking/validating the run arguments to the correct
+    // devices according to the device id and the device assignment
+    EXLA_ASSIGN_OR_RETURN(input_buffers,
+                          UnpackRunArguments(env, arguments, transient_buffers,
+                                             client_, device_assignment,
+                                             device_id));
   }
 
   // at this point input buffers is a vector of arguments per replica
   // and the size of that vector should equal the number of replicas in the
   // executable, otherwise it is invalid
   if (num_replicas != input_buffers.size()) {
-    return xla::InvalidArgument("Got %d replica arguments for %d replicas", input_buffers.size(), num_replicas);
+    return xla::InvalidArgument("Got %d replica arguments for %d replicas",
+                                input_buffers.size(), num_replicas);
   }
 
-  std::vector<std::vector<std::unique_ptr<xla::PjRtBuffer>>> per_replica_results;
+  std::vector<std::vector<std::unique_ptr<xla::PjRtBuffer>>>
+      per_replica_results;
 
   if (device_id >= 0) {
-    // if we specified a device id, then we need to execute the executable as a portable
-    // executable, meaning we need to find the device corresponding to the specific device
-    // id and execute on that device, we've already guaranteed this executable only has 1
-    // replica
-    EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice * device, client_->client()->LookupDevice(xla::PjRtGlobalDeviceId(device_id)));
-    // because this is a portable executable, it only has 1 replica and so we only need
-    // to get the arguments at the first position of the input buffers
-    std::vector<xla::PjRtBuffer*> portable_args = input_buffers.at(0);
-    EXLA_ASSIGN_OR_RETURN(auto portable_result,
-                          executable_->ExecutePortable(portable_args, device, options));
-    // the logic for handling unpacking of results is shared between portable code path
-    // and the replicated code-path, so we take ownership of the result buffers to unpack
+    // if we specified a device id, then we need to execute the executable as a
+    // portable executable, meaning we need to find the device corresponding to
+    // the specific device id and execute on that device, we've already
+    // guaranteed this executable only has 1 replica
+    EXLA_ASSIGN_OR_RETURN(
+        xla::PjRtDevice * device,
+        client_->client()->LookupDevice(xla::PjRtGlobalDeviceId(device_id)));
+    // because this is a portable executable, it only has 1 replica and so we
+    // only need to get the arguments at the first position of the input buffers
+    std::vector<xla::PjRtBuffer *> portable_args = input_buffers.at(0);
+    EXLA_ASSIGN_OR_RETURN(
+        auto portable_result,
+        executable_->ExecutePortable(portable_args, device, options));
+    // the logic for handling unpacking of results is shared between portable
+    // code path and the replicated code-path, so we take ownership of the
+    // result buffers to unpack
     per_replica_results.push_back(std::move(portable_result));
   } else {
-    // no device ID is present, so it may be a replicated executable which means we need
-    // to use the replica execution path
-    // TODO: This now exposes a `returned_futures` API, does this make sense for us?
-    EXLA_ASSIGN_OR_RETURN(per_replica_results, executable_->Execute(input_buffers, options));
+    // no device ID is present, so it may be a replicated executable which means
+    // we need to use the replica execution path
+    // TODO: This now exposes a `returned_futures` API, does this make sense for
+    // us?
+    EXLA_ASSIGN_OR_RETURN(per_replica_results,
+                          executable_->Execute(input_buffers, options));
   }
 
-  // EXLA_ASSIGN_OR_RETURN(per_replica_results, executable_->Execute(input_buffers, options));
+  // EXLA_ASSIGN_OR_RETURN(per_replica_results,
+  // executable_->Execute(input_buffers, options));
 
   // sanity check
   if (per_replica_results.size() != num_replicas) {
@@ -261,25 +337,38 @@ tsl::StatusOr<ExlaExecutable::RunResult> ExlaExecutable::Run(ErlNifEnv* env,
   }
 
   // we need to unpack the results into Erlang terms, the result is a vector
-  // of vectors of unique ptrs to pjrt buffers, where the size of the output equals
-  // the number of replicas and each individual replica is a vector of buffers, the
-  // inner buffer represents a flattened output because we told PjRt we would always
-  // return a tuple from the computation
-  auto ret = UnpackResult(env, std::move(per_replica_results), device_assignment, device_id);
+  // of vectors of unique ptrs to pjrt buffers, where the size of the output
+  // equals the number of replicas and each individual replica is a vector of
+  // buffers, the inner buffer represents a flattened output because we told
+  // PjRt we would always return a tuple from the computation
+  auto ret = UnpackResult(env, std::move(per_replica_results),
+                          device_assignment, device_id, client_);
 
   return ret;
 }
 
-ExlaClient::ExlaClient(std::shared_ptr<xla::PjRtClient> client) : client_(std::move(client)) {}
+ExlaClient::ExlaClient(std::shared_ptr<xla::PjRtClient> client)
+    : client_(std::move(client)) {}
 
-tsl::StatusOr<fine::ResourcePtr<ExlaBuffer>> ExlaClient::BufferFromBinary(ERL_NIF_TERM source_term,
-                                                        xla::Shape& shape,
-                                                        int device_id) {
-  EXLA_ASSIGN_OR_RETURN(auto buffer, PjRtBufferFromBinary(client(), source_term, shape, device_id));
-  return fine::make_resource<ExlaBuffer>(std::move(buffer));
+tsl::StatusOr<fine::ResourcePtr<ExlaBuffer>>
+ExlaClient::BufferFromBinary(ERL_NIF_TERM source_term, xla::Shape &shape,
+                             int device_id) {
+  EXLA_ASSIGN_OR_RETURN(auto buffer, PjRtBufferFromBinary(client(), source_term,
+                                                          shape, device_id));
+  auto exla_buffer = fine::make_resource<ExlaBuffer>(std::move(buffer));
+
+  // Track memory allocation
+  exla_buffer->SetClient(this);
+  auto size_or = exla_buffer->GetOnDeviceSizeInBytes();
+  if (size_or.ok()) {
+    TrackBufferAllocated(device_id, size_or.value());
+  }
+
+  return exla_buffer;
 }
 
-tsl::StatusOr<std::optional<std::string>> ExecutableFingerprint(std::unique_ptr<xla::PjRtLoadedExecutable>& executable) {
+tsl::StatusOr<std::optional<std::string>>
+ExecutableFingerprint(std::unique_ptr<xla::PjRtLoadedExecutable> &executable) {
   auto fingerprint = executable->FingerprintExecutable();
 
   if (fingerprint.ok()) {
@@ -292,24 +381,28 @@ tsl::StatusOr<std::optional<std::string>> ExecutableFingerprint(std::unique_ptr<
   }
 }
 
-tsl::StatusOr<fine::ResourcePtr<ExlaExecutable>> ExlaClient::DeserializeExecutable(std::string deserialized_executable) {
-  EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtLoadedExecutable> executable,
-                        client_->LoadSerializedExecutable(deserialized_executable, std::nullopt, xla::LoadOptions()));
+tsl::StatusOr<fine::ResourcePtr<ExlaExecutable>>
+ExlaClient::DeserializeExecutable(std::string deserialized_executable) {
+  EXLA_ASSIGN_OR_RETURN(
+      std::unique_ptr<xla::PjRtLoadedExecutable> executable,
+      client_->LoadSerializedExecutable(deserialized_executable, std::nullopt,
+                                        xla::LoadOptions()));
 
   EXLA_ASSIGN_OR_RETURN(absl::optional<std::string> fingerprint,
                         ExecutableFingerprint(executable));
 
-  return fine::make_resource<ExlaExecutable>(std::move(executable), std::move(fingerprint), this);
+  return fine::make_resource<ExlaExecutable>(std::move(executable),
+                                             std::move(fingerprint), this);
 }
 
-tsl::StatusOr<fine::ResourcePtr<ExlaExecutable>> ExlaClient::Compile(mlir::ModuleOp module,
-                                                   std::vector<xla::Shape> argument_layouts,
-                                                   xla::ExecutableBuildOptions& options,
-                                                   bool compile_portable_executable) {
+tsl::StatusOr<fine::ResourcePtr<ExlaExecutable>> ExlaClient::Compile(
+    mlir::ModuleOp module, std::vector<xla::Shape> argument_layouts,
+    xla::ExecutableBuildOptions &options, bool compile_portable_executable) {
   std::vector<xla::Shape> layouts;
   layouts.reserve(argument_layouts.size());
   for (auto shape : argument_layouts) {
-    xla::Shape cpy_shape = xla::ShapeUtil::MakeShape(shape.element_type(), shape.dimensions());
+    xla::Shape cpy_shape =
+        xla::ShapeUtil::MakeShape(shape.element_type(), shape.dimensions());
     xla::LayoutUtil::ClearLayout(&cpy_shape);
     layouts.push_back(cpy_shape);
   }
@@ -320,23 +413,26 @@ tsl::StatusOr<fine::ResourcePtr<ExlaExecutable>> ExlaClient::Compile(mlir::Modul
   compile_opts.executable_build_options = options;
   compile_opts.compile_portable_executable = compile_portable_executable;
 
-  EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtLoadedExecutable> executable,
-                        client_->CompileAndLoad(module, std::move(compile_opts)));
+  EXLA_ASSIGN_OR_RETURN(
+      std::unique_ptr<xla::PjRtLoadedExecutable> executable,
+      client_->CompileAndLoad(module, std::move(compile_opts)));
   EXLA_ASSIGN_OR_RETURN(absl::optional<std::string> fingerprint,
                         ExecutableFingerprint(executable));
 
-  return fine::make_resource<ExlaExecutable>(std::move(executable), std::move(fingerprint), this);
+  return fine::make_resource<ExlaExecutable>(std::move(executable),
+                                             std::move(fingerprint), this);
 }
 
-tsl::Status ExlaClient::TransferToInfeed(ErlNifEnv* env,
+tsl::Status ExlaClient::TransferToInfeed(ErlNifEnv *env,
                                          std::vector<ErlNifBinary> buffer_bins,
                                          std::vector<xla::Shape> shapes,
                                          int device_id) {
-  std::vector<const char*> buf_ptrs;
+  std::vector<const char *> buf_ptrs;
   buf_ptrs.reserve(buffer_bins.size());
 
-  for (const auto& buffer_bin : buffer_bins) {
-    const char* data_ptr = const_cast<char*>(reinterpret_cast<char*>(buffer_bin.data));
+  for (const auto &buffer_bin : buffer_bins) {
+    const char *data_ptr =
+        const_cast<char *>(reinterpret_cast<char *>(buffer_bin.data));
     buf_ptrs.push_back(data_ptr);
   }
 
@@ -357,21 +453,31 @@ tsl::Status ExlaClient::TransferToInfeed(ErlNifEnv* env,
   //
   // Given that a flat tuple works in both cases, we just do that.
   //
-  // [1]: https://github.com/openxla/xla/blob/fd58925adee147d38c25a085354e15427a12d00a/xla/service/cpu/ir_emitter.cc#L449-L450
-  // [2]: https://github.com/openxla/xla/blob/fd58925adee147d38c25a085354e15427a12d00a/xla/service/cpu/cpu_runtime.cc#L222
-  // [3]: https://github.com/openxla/xla/blob/fd58925adee147d38c25a085354e15427a12d00a/xla/service/cpu/cpu_xfeed.cc#L178
-  // [4]: https://github.com/openxla/xla/blob/fd58925adee147d38c25a085354e15427a12d00a/xla/service/gpu/runtime/infeed_thunk.cc#L40-L41
+  // [1]:
+  // https://github.com/openxla/xla/blob/fd58925adee147d38c25a085354e15427a12d00a/xla/service/cpu/ir_emitter.cc#L449-L450
+  // [2]:
+  // https://github.com/openxla/xla/blob/fd58925adee147d38c25a085354e15427a12d00a/xla/service/cpu/cpu_runtime.cc#L222
+  // [3]:
+  // https://github.com/openxla/xla/blob/fd58925adee147d38c25a085354e15427a12d00a/xla/service/cpu/cpu_xfeed.cc#L178
+  // [4]:
+  // https://github.com/openxla/xla/blob/fd58925adee147d38c25a085354e15427a12d00a/xla/service/gpu/runtime/infeed_thunk.cc#L40-L41
   xla::BorrowingLiteral literal(buf_ptrs, shape);
 
-  EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice * device, client_->LookupDevice(xla::PjRtGlobalDeviceId(device_id)));
+  EXLA_ASSIGN_OR_RETURN(
+      xla::PjRtDevice * device,
+      client_->LookupDevice(xla::PjRtGlobalDeviceId(device_id)));
 
   tsl::Status status = device->TransferToInfeed(literal);
 
   return status;
 }
 
-tsl::StatusOr<ERL_NIF_TERM> ExlaClient::TransferFromOutfeed(ErlNifEnv* env, int device_id, xla::Shape& shape) {
-  EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice * device, client_->LookupDevice(xla::PjRtGlobalDeviceId(device_id)));
+tsl::StatusOr<ERL_NIF_TERM> ExlaClient::TransferFromOutfeed(ErlNifEnv *env,
+                                                            int device_id,
+                                                            xla::Shape &shape) {
+  EXLA_ASSIGN_OR_RETURN(
+      xla::PjRtDevice * device,
+      client_->LookupDevice(xla::PjRtGlobalDeviceId(device_id)));
 
   auto literal = std::make_shared<xla::Literal>(shape);
 
@@ -399,16 +505,15 @@ tsl::StatusOr<fine::ResourcePtr<ExlaClient>> GetHostClient() {
   return fine::make_resource<ExlaClient>(std::move(client));
 }
 
-tsl::StatusOr<fine::ResourcePtr<ExlaClient>> GetGpuClient(double memory_fraction,
-                                        bool preallocate,
-                                        xla::GpuAllocatorConfig::Kind kind) {
-  xla::GpuAllocatorConfig allocator_config = {
-      .kind = kind,
-      .memory_fraction = memory_fraction,
-      .preallocate = preallocate};
+tsl::StatusOr<fine::ResourcePtr<ExlaClient>>
+GetGpuClient(double memory_fraction, bool preallocate,
+             xla::GpuAllocatorConfig::Kind kind) {
+  xla::GpuAllocatorConfig allocator_config = {.kind = kind,
+                                              .memory_fraction =
+                                                  memory_fraction,
+                                              .preallocate = preallocate};
 
-  xla::GpuClientOptions client_options = {
-      .allocator_config = allocator_config};
+  xla::GpuClientOptions client_options = {.allocator_config = allocator_config};
 
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtClient> client,
                         xla::GetStreamExecutorGpuClient(client_options));
@@ -434,10 +539,47 @@ tsl::StatusOr<fine::ResourcePtr<ExlaClient>> GetTpuClient() {
   return fine::make_resource<ExlaClient>(std::move(client));
 }
 
-tsl::StatusOr<fine::ResourcePtr<ExlaClient>> GetCApiClient(std::string device_type) {
+tsl::StatusOr<fine::ResourcePtr<ExlaClient>>
+GetCApiClient(std::string device_type) {
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtClient> client,
                         xla::GetCApiClient(device_type));
 
   return fine::make_resource<ExlaClient>(std::move(client));
 }
-}  // namespace exla
+
+// Memory tracking implementations
+void ExlaClient::TrackBufferAllocated(int device_id, size_t size) {
+  std::lock_guard<std::mutex> lock(memory_mutex_);
+  device_memory_[device_id] += size;
+  total_memory_ += size;
+  if (total_memory_ > peak_memory_) {
+    peak_memory_ = total_memory_;
+  }
+}
+
+void ExlaClient::TrackBufferDeallocated(int device_id, size_t size) {
+  std::lock_guard<std::mutex> lock(memory_mutex_);
+  device_memory_[device_id] -= size;
+  total_memory_ -= size;
+}
+
+size_t ExlaClient::GetAllocatedMemory() const {
+  std::lock_guard<std::mutex> lock(memory_mutex_);
+  return total_memory_;
+}
+
+size_t ExlaClient::GetPeakMemory() const {
+  std::lock_guard<std::mutex> lock(memory_mutex_);
+  return peak_memory_;
+}
+
+void ExlaClient::ResetPeakMemory() {
+  std::lock_guard<std::mutex> lock(memory_mutex_);
+  peak_memory_ = total_memory_;
+}
+
+std::map<int, size_t> ExlaClient::GetPerDeviceMemory() const {
+  std::lock_guard<std::mutex> lock(memory_mutex_);
+  return device_memory_;
+}
+} // namespace exla
