@@ -45,7 +45,9 @@ defmodule Nx.Defn.Graph do
 
   ## Examples
 
-  ### Basic splitting (arity 1 function)
+  ### Simple splitting
+
+  With the arity-1 version of `expr_split_fn`, the decision to split is made solely based on the expression.
 
       iex> expr = Nx.Defn.debug_expr(fn x, y -> x |> Nx.negate() |> Nx.sin() |> Nx.cos() |> Nx.add(y) end).(1, 2)
       iex> [stage0, stage1] = Nx.Defn.Graph.split(expr, fn %Nx.Tensor{data: %Nx.Defn.Expr{op: op}} -> op == :cos end)
@@ -70,23 +72,27 @@ defmodule Nx.Defn.Graph do
         d = add b, c    f32
       >
 
-  ### Splitting with accumulator (arity 2 function)
+  ### Splitting with accumulator
+
+  With the arity-2 version of `expr_split_fn`, the decision to split can be made based on the expression and the accumulator.
+  This allows for more complex decisions to be made, such as splitting every 3 operations as in the example below. One might want to
+  split the graph to avoid running out of memory, for example.
 
       # Count operations and split every 3 operations
       split_fn = fn _tensor, count ->
         new_count = count + 1
-        {rem(new_count, 3) == 0, new_count}
+        {count > 0 and rem(new_count, 3) == 0, new_count}
       end
 
-      stages = Nx.Defn.Graph.split(expr, split_fn, 0)
+      stages = Nx.Defn.Graph.split(expr, 0, split_fn)
   """
   def split(expr, expr_split_fn) when is_function(expr_split_fn, 1) do
-    {chain, _, _} = __split__(expr, expr_split_fn, nil)
+    {chain, _, _} = __split__(expr, nil, fn node, acc -> {expr_split_fn.(node), acc} end)
     chain
   end
 
-  def split(expr, expr_split_fn, initial_acc) when is_function(expr_split_fn, 2) do
-    {chain, _, _} = __split__(expr, expr_split_fn, initial_acc)
+  def split(expr, initial_acc, expr_split_fn) when is_function(expr_split_fn, 2) do
+    {chain, _, _} = __split__(expr, initial_acc, expr_split_fn)
     chain
   end
 
@@ -127,7 +133,7 @@ defmodule Nx.Defn.Graph do
   end
 
   @doc false
-  def __split__(expr, expr_split_fn, initial_acc) do
+  def __split__(expr, initial_acc, expr_split_fn) do
     # state.expression_chain is a reverse accumulation of the stages and
     # snapshots of the state at each one so that we can properly remap parameters for each stage.
     state = %{
@@ -181,7 +187,28 @@ defmodule Nx.Defn.Graph do
             |> Enum.map(fn {_id, arg_expr} ->
               id = arg_expr.data.id
               [idx] = arg_expr.data.args
-              source = Map.fetch!(state.args, id)
+
+              # Try exact ID lookup first, then fallback to index lookup
+              source =
+                case Map.get(state.args, id) do
+                  nil ->
+                    # If we can't find this exact ID, look for any parameter with the same index
+                    case Enum.find(state.args, fn {_param_id, {nil, param_idx}} ->
+                           param_idx == idx
+                         end) do
+                      {_found_id, found_source} ->
+                        found_source
+
+                      nil ->
+                        # If we can't find any parameter with this index, it must be an original argument
+                        # This happens when parameters are shared across expression parts but not all are in state.args
+                        {nil, idx}
+                    end
+
+                  found_source ->
+                    found_source
+                end
+
               {idx, %{source: source}}
             end)
             |> Enum.sort_by(fn {idx, _} -> idx end)
@@ -215,22 +242,30 @@ defmodule Nx.Defn.Graph do
         {res, {cache, state}}
 
       _ ->
-        # Handle both arity 1 and arity 2 functions
-        {should_split?, new_acc} =
-          case :erlang.fun_info(state.expr_split_fn, :arity) do
-            {:arity, 1} ->
-              {state.expr_split_fn.(ans), state.split_acc}
+        # Handle special operations that don't follow the normal pattern
+        case op do
+          :parameter ->
+            eval_apply(:parameter, ans, {cache, state})
 
-            {:arity, 2} ->
-              state.expr_split_fn.(ans, state.split_acc)
-          end
+          :elem ->
+            eval_apply(:elem, ans, {cache, state})
 
-        state = %{state | split_acc: new_acc}
+          _ ->
+            # First process the arguments with the current accumulator
+            {args, {cache, state}} = Nx.Defn.Tree.apply_args(ans, {cache, state}, &eval/2)
 
-        if should_split? do
-          split_expr(ans, {cache, state})
-        else
-          eval_apply(op, ans, {cache, state})
+            # Then check if we should split based on this node
+            {should_split?, new_acc} = state.expr_split_fn.(ans, state.split_acc)
+            state = %{state | split_acc: new_acc}
+
+            if should_split? do
+              # Use the already processed args for splitting
+              split_expr_with_args(ans, args, {cache, state})
+            else
+              # Apply the operation with the processed args
+              ans = put_in(ans.data.args, args)
+              {ans, {Map.put(cache, ans.data.id, ans), state}}
+            end
         end
     end
   end
@@ -239,8 +274,7 @@ defmodule Nx.Defn.Graph do
     {other, {cache, state}}
   end
 
-  defp split_expr(expr, {cache, state}) do
-    {args, {cache, state}} = Nx.Defn.Tree.apply_args(expr, {cache, state}, &eval/2)
+  defp split_expr_with_args(expr, args, {cache, state}) do
     # We need to save this so that each previous stage
     # isn't affected by following ones
     nodes_to_replace = state.nodes_to_replace
@@ -249,6 +283,20 @@ defmodule Nx.Defn.Graph do
 
     {args, {tensor_args, _out_position, state}} =
       Enum.map_reduce(args, {[], 0, state}, fn
+        %T{data: %Expr{op: :parameter}} = arg, {tensor_args, out_position, state} ->
+          # Parameters are not computed values, so don't add them to tensor_args
+          # Just update the state if needed
+          state =
+            case Map.has_key?(state.args, arg.data.id) do
+              false ->
+                %{state | args: Map.put(state.args, arg.data.id, {stage_id, out_position})}
+
+              true ->
+                state
+            end
+
+          {arg, {tensor_args, out_position, state}}
+
         %T{} = expr, {tensor_args, out_position, state} ->
           arg = Expr.parameter(expr, map_size(state.args))
 
@@ -266,11 +314,24 @@ defmodule Nx.Defn.Graph do
 
     new_expr = put_in(expr.data.args, args)
 
+    # When we split, we always create a stage
+    # The tensor_args represent the computed arguments that this stage produces
+    stage_expr =
+      case tensor_args do
+        [] ->
+          # No computed arguments, the stage just contains the current expression
+          new_expr
+
+        _ ->
+          # The stage contains the computed arguments as a tuple
+          List.to_tuple(Enum.reverse(tensor_args))
+      end
+
     state =
       update_in(
         state.expression_chain,
         &[
-          {stage_id, List.to_tuple(Enum.reverse(tensor_args)), nodes_to_replace}
+          {stage_id, stage_expr, nodes_to_replace}
           | &1
         ]
       )
