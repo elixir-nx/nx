@@ -22,6 +22,21 @@ ExlaBuffer::ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer)
 ExlaBuffer::~ExlaBuffer() {
   // Theoretically this may block if a computation is running
   // but we always block the host until the computation is done.
+
+  // Track memory deallocation when buffer is garbage collected
+  // (only if not already explicitly deallocated)
+  if (buffer_ && !buffer_->IsDeleted()) {
+    TrackDeallocation();
+  }
+}
+
+void ExlaBuffer::TrackDeallocation() {
+  if (client_) {
+    auto size_or = GetOnDeviceSizeInBytes();
+    if (size_or.ok()) {
+      client_->TrackBufferDeallocated(device_id(), size_or.value());
+    }
+  }
 }
 
 void CopyLiteralToBinary(xla::Literal *literal, ErlNifBinary *binary,
@@ -54,14 +69,8 @@ tsl::Status ExlaBuffer::Deallocate() {
     return xla::FailedPrecondition(
         "Attempt to deallocate already deallocated buffer.");
   } else {
-    // Track memory deallocation before deleting
-    if (client_) {
-      auto size_or = GetOnDeviceSizeInBytes();
-      if (size_or.ok()) {
-        client_->TrackBufferDeallocated(device_id(), size_or.value());
-      }
-    }
-
+    // Track memory before marking as deleted
+    TrackDeallocation();
     buffer_->Delete();
     return tsl::OkStatus();
   }

@@ -6,6 +6,8 @@ defmodule EXLA.MemoryTrackingTest do
   test "tracks memory allocation and deallocation" do
     client = Client.fetch!(:host)
     other_host_client = Client.fetch!(:other_host)
+    Client.reset_peak_memory(client)
+    Client.reset_peak_memory(other_host_client)
 
     baseline_stats_other_host = Client.get_memory_statistics(other_host_client)
 
@@ -88,5 +90,56 @@ defmodule EXLA.MemoryTrackingTest do
     # After reset, peak should equal current allocated
     assert stats.peak == stats.allocated
     assert stats.peak == baseline_allocated
+  end
+
+  test "tracks memory deallocation when buffer is garbage collected" do
+    client = Client.fetch!(:host)
+    Client.reset_peak_memory(client)
+
+    assert %{allocated: baseline_allocated, peak: 0} = Client.get_memory_statistics(client)
+
+    t = Nx.iota({1000}, type: :u8, backend: EXLA.Backend)
+    f = fn t, f -> f.(t, f) end
+
+    test_pid = self()
+    ref = make_ref()
+
+    task =
+      Task.async(fn ->
+        t2 = Nx.iota({10000}, type: :u8, backend: EXLA.Backend)
+        send(test_pid, {ref, :allocated})
+        f.(t2, f)
+      end)
+
+    Process.unlink(task.pid)
+
+    assert_receive {^ref, :allocated}
+
+    assert Client.get_memory_statistics(client) == %{
+             allocated: 11000 + baseline_allocated,
+             peak: 11000,
+             per_device: %{0 => 11000 + baseline_allocated}
+           }
+
+    Process.exit(task.pid, :stop)
+
+    task_ref = task.ref
+    assert_receive {:DOWN, ^task_ref, :process, _, :stop}
+
+    :erlang.garbage_collect()
+
+    assert Client.get_memory_statistics(client) == %{
+             allocated: 1000 + baseline_allocated,
+             peak: 11000,
+             per_device: %{0 => 1000 + baseline_allocated}
+           }
+
+    assert :ok == Nx.backend_deallocate(t)
+
+    assert Client.get_memory_statistics(client) == %{
+             allocated: baseline_allocated,
+             peak: 11000,
+             per_device: %{0 => 0}
+           }
   end
 end

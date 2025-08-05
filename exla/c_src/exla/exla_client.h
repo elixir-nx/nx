@@ -50,6 +50,8 @@ public:
 private:
   std::unique_ptr<xla::PjRtBuffer> buffer_;
   ExlaClient *client_ = nullptr;
+
+  void TrackDeallocation();
 };
 
 class ExlaExecutable {
