@@ -40,9 +40,6 @@ defmodule Nx.Defn.GraphTest do
                }
              ] = chain
 
-      dbg(stage_0_id)
-      dbg(stage_0_expr)
-
       assert [%{source: {nil, 0}}, %{source: {nil, 1}}] == stage_0_arguments
 
       assert [{2, arg_2_original_node_id, arg_2_id}, {3, arg_3_original_node_id, arg_3_id}] =
@@ -369,20 +366,29 @@ defmodule Nx.Defn.GraphTest do
           {x10, x20, x30}
         end).(1, 2, 3, 4, 5)
 
-      counters = :counters.new(1, [])
-
       split_fn = fn
-        _node, counters ->
-          acc = :counters.get(counters, 1)
-          :ok = :counters.add(counters, 1, 1)
-          {acc > 0 and rem(acc, 2) == 0, counters}
+        _node, acc ->
+          {acc > 0 and rem(acc, 2) == 0, acc + 1}
       end
 
-      chain = Graph.split(expr, counters, split_fn)
+      chain = Graph.split(expr, 0, split_fn)
+
+      assert [stage_0, stage_1, stage_2] = chain
 
       dbg(chain)
 
-      assert [stage_0, stage_1, stage_2] = chain
+      assert stage_0.arguments == [%{source: {nil, 0}}, %{source: {nil, 1}}, %{source: {nil, 2}}]
+
+      assert stage_1.arguments == [
+               %{source: {nil, 3}},
+               %{source: {stage_0.id, 0}}
+             ]
+
+      assert stage_2.arguments == [
+               %{source: {nil, 4}},
+               %{source: {stage_0.id, 0}},
+               %{source: {stage_1.id, 0}}
+             ]
     end
   end
 

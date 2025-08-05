@@ -213,6 +213,7 @@ defmodule Nx.Defn.Graph do
             end)
             |> Enum.sort_by(fn {idx, _} -> idx end)
             |> Enum.map(fn {_, arg} -> arg end)
+            |> Enum.uniq_by(fn %{source: source} -> source end)
 
           [
             %Stage{
@@ -401,9 +402,14 @@ defmodule Nx.Defn.Graph do
   defp rewrite_subtree(%T{data: %Expr{id: id, op: :parameter}} = expr, state, acc) do
     case state.nodes_to_replace do
       %{^id => res} ->
-        {res, put_in(acc.used_args[id], res)}
+        # This parameter is being replaced by a stage output - collect the replacement
+        # We collect both the original id and the replacement id to ensure proper tracking
+        acc = put_in(acc.used_args[id], res)
+        acc = put_in(acc.used_args[res.data.id], res)
+        {res, acc}
 
       _ ->
+        # This is an original parameter - collect it
         {expr, put_in(acc.used_args[id], expr)}
     end
   end
