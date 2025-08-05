@@ -40,6 +40,9 @@ defmodule Nx.Defn.GraphTest do
                }
              ] = chain
 
+      dbg(stage_0_id)
+      dbg(stage_0_expr)
+
       assert [%{source: {nil, 0}}, %{source: {nil, 1}}] == stage_0_arguments
 
       assert [{2, arg_2_original_node_id, arg_2_id}, {3, arg_3_original_node_id, arg_3_id}] =
@@ -361,8 +364,8 @@ defmodule Nx.Defn.GraphTest do
       expr =
         Nx.Defn.debug_expr(fn x0, x1, x2, x3, x4 ->
           x10 = Nx.add(x0, Nx.add(x1, x2))
-          x20 = Nx.add(x10, Nx.add(x1, x3))
-          x30 = Nx.add(x20, Nx.add(x1, x4))
+          x20 = Nx.add(x10, Nx.add(x10, x3))
+          x30 = Nx.add(x20, Nx.add(x20, x4))
           {x10, x20, x30}
         end).(1, 2, 3, 4, 5)
 

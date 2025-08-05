@@ -193,7 +193,7 @@ defmodule Nx.Defn.Graph do
                 case Map.get(state.args, id) do
                   nil ->
                     # If we can't find this exact ID, look for any parameter with the same index
-                    case Enum.find(state.args, fn {_param_id, {nil, param_idx}} ->
+                    case Enum.find(state.args, fn {_param_id, {_stage_id, param_idx}} ->
                            param_idx == idx
                          end) do
                       {_found_id, found_source} ->
@@ -314,17 +314,38 @@ defmodule Nx.Defn.Graph do
 
     new_expr = put_in(expr.data.args, args)
 
-    # When we split, we always create a stage
-    # The tensor_args represent the computed arguments that this stage produces
-    stage_expr =
+    # When we split, decide what to include in the stage and create parameter replacement
+    {stage_expr, result_expr} =
       case tensor_args do
         [] ->
-          # No computed arguments, the stage just contains the current expression
-          new_expr
+          # No intermediate computations - create a parameter for this split operation
+          # The current expression will be computed in the next stage
+          param = Expr.parameter(new_expr, map_size(state.args))
+          {{param}, param}
 
         _ ->
-          # The stage contains the computed arguments as a tuple
-          List.to_tuple(Enum.reverse(tensor_args))
+          # There are intermediate computations - only include those in the current stage
+          # The current expression will be computed in the next stage using these outputs
+          stage_expr = List.to_tuple(Enum.reverse(tensor_args))
+          {stage_expr, new_expr}
+      end
+
+    # Update state with parameter mapping if we created one
+    state =
+      case tensor_args do
+        [] ->
+          # Add parameter mapping and node replacement for the split operation
+          # Extract the parameter from the tuple
+          param = elem(stage_expr, 0)
+
+          %{
+            state
+            | args: Map.put(state.args, param.data.id, {stage_id, 0}),
+              nodes_to_replace: Map.put(state.nodes_to_replace, new_expr.data.id, param)
+          }
+
+        _ ->
+          state
       end
 
     state =
@@ -336,9 +357,9 @@ defmodule Nx.Defn.Graph do
         ]
       )
 
-    cache = Map.put(cache, new_expr.data.id, new_expr)
+    cache = Map.put(cache, result_expr.data.id, result_expr)
 
-    {new_expr, {cache, state}}
+    {result_expr, {cache, state}}
   end
 
   defp eval_apply(:parameter, %T{data: %Expr{id: id, args: [idx]}} = expr, {cache, state}) do
