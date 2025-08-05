@@ -19,19 +19,27 @@ jobs:
       - name: Detect changes
         id: changes
         run: |
-          if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q "^nx/"; then
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # For PRs, compare with the base branch
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          else
+            # For pushes, use the previous commit
+            BASE_SHA="${{ github.event.before }}"
+          fi
+
+          if git diff --name-only $BASE_SHA ${{ github.sha }} | grep -q "^nx/"; then
             echo "nx=true" >> $GITHUB_OUTPUT
           else
             echo "nx=false" >> $GITHUB_OUTPUT
           fi
 
-          if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q "^exla/"; then
+          if git diff --name-only $BASE_SHA ${{ github.sha }} | grep -q "^exla/"; then
             echo "exla=true" >> $GITHUB_OUTPUT
           else
             echo "exla=false" >> $GITHUB_OUTPUT
           fi
 
-          if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q "^torchx/"; then
+          if git diff --name-only $BASE_SHA ${{ github.sha }} | grep -q "^torchx/"; then
             echo "torchx=true" >> $GITHUB_OUTPUT
           else
             echo "torchx=false" >> $GITHUB_OUTPUT
