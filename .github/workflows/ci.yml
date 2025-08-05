@@ -130,16 +130,17 @@ jobs:
     steps:
       - name: Set conditional variables
         working-directory: "."
+        shell: pwsh
         run: |
-          if [ "${{ needs.detect-changes.outputs.nx-changed }}" = "true" ] && [ "${{ matrix.working_directory }}" = "nx" ]; then
-            echo "should_run=true" >> $GITHUB_ENV
-          elif [ "${{ needs.detect-changes.outputs.exla-changed }}" = "true" ] && [ "${{ matrix.working_directory }}" = "exla" ]; then
-            echo "should_run=true" >> $GITHUB_ENV
-          elif [ "${{ needs.detect-changes.outputs.torchx-changed }}" = "true" ] && [ "${{ matrix.working_directory }}" = "torchx" ]; then
-            echo "should_run=true" >> $GITHUB_ENV
-          else
-            echo "should_run=false" >> $GITHUB_ENV
-          fi
+          if ("${{ needs.detect-changes.outputs.nx-changed }}" -eq "true" -and "${{ matrix.working_directory }}" -eq "nx") {
+            echo "should_run=true" >> $env:GITHUB_ENV
+          } elseif ("${{ needs.detect-changes.outputs.exla-changed }}" -eq "true" -and "${{ matrix.working_directory }}" -eq "exla") {
+            echo "should_run=true" >> $env:GITHUB_ENV
+          } elseif ("${{ needs.detect-changes.outputs.torchx-changed }}" -eq "true" -and "${{ matrix.working_directory }}" -eq "torchx") {
+            echo "should_run=true" >> $env:GITHUB_ENV
+          } else {
+            echo "should_run=false" >> $env:GITHUB_ENV
+          }
       - name: Configure Git
         run: git config --global core.autocrlf input
         working-directory: .
