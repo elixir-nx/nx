@@ -13,9 +13,7 @@ jobs:
       exla-changed: ${{ steps.changes.outputs.exla }}
       torchx-changed: ${{ steps.changes.outputs.torchx }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v2
       - name: Detect changes
         id: changes
         run: |
