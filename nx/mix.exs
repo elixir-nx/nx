@@ -149,3 +149,4 @@ defmodule Nx.MixProject do
 
   defp before_closing_body_tag(_), do: ""
 end
+ 

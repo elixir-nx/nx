@@ -68,7 +68,7 @@ jobs:
       XLA_FLAGS: --xla_force_host_platform_device_count=2
     steps:
       - name: Set conditional variables
-        working-directory: "."
+        working-directory: .
         run: |
           if [ "${{ needs.detect-changes.outputs.nx-changed }}" = "true" ] && [ "${{ matrix.working_directory }}" = "nx" ]; then
             echo "should_run=true" >> $GITHUB_ENV
@@ -129,7 +129,7 @@ jobs:
       XLA_FLAGS: --xla_force_host_platform_device_count=2
     steps:
       - name: Set conditional variables
-        working-directory: "."
+        working-directory: .
         shell: pwsh
         run: |
           if ("${{ needs.detect-changes.outputs.nx-changed }}" -eq "true" -and "${{ matrix.working_directory }}" -eq "nx") {
