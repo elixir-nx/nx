@@ -111,8 +111,8 @@ defmodule EXLA.Client do
 
   ## Examples
 
-      iex> client = EXLA.Client.fetch!(:host)
-      iex> EXLA.Client.get_memory_statistics(client)
+      client = EXLA.Client.fetch!(:host)
+      EXLA.Client.get_memory_statistics(client)
       %{allocated: 0, peak: 0, per_device: %{0 => 0}}
 
   """
