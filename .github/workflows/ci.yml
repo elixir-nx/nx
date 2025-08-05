@@ -49,7 +49,6 @@ jobs:
     name: Linux (${{ matrix.working_directory }}, ${{ matrix.elixir }}, ${{ matrix.otp }})
     runs-on: ubuntu-latest
     needs: detect-changes
-    if: ${{ needs.detect-changes.outputs.nx-changed == 'true' && matrix.working_directory == 'nx' || needs.detect-changes.outputs.exla-changed == 'true' && matrix.working_directory == 'exla' || needs.detect-changes.outputs.torchx-changed == 'true' && matrix.working_directory == 'torchx' }}
     strategy:
       fail-fast: false
       matrix:
