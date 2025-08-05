@@ -116,11 +116,10 @@ defmodule EXLA.MemoryTrackingTest do
 
     assert_receive {^ref, :allocated}
 
-    assert Client.get_memory_statistics(client) == %{
-             allocated: 11000 + baseline_allocated,
-             peak: 11000 + baseline_allocated,
-             per_device: %{0 => 11000 + baseline_allocated}
-           }
+    stats = Client.get_memory_statistics(client)
+    assert stats.allocated == 11000 + baseline_allocated
+    assert stats.peak == 11000 + baseline_allocated
+    assert Map.get(stats.per_device, 0) == 11000 + baseline_allocated
 
     Process.exit(task.pid, :stop)
 
@@ -129,18 +128,17 @@ defmodule EXLA.MemoryTrackingTest do
 
     :erlang.garbage_collect()
 
-    assert Client.get_memory_statistics(client) == %{
-             allocated: 1000 + baseline_allocated,
-             peak: 11000 + baseline_allocated,
-             per_device: %{0 => 1000 + baseline_allocated}
-           }
+    stats = Client.get_memory_statistics(client)
+
+    assert stats.allocated == 1000 + baseline_allocated
+    assert stats.peak == 11000 + baseline_allocated
+    assert Map.get(stats.per_device, 0) == 1000 + baseline_allocated
 
     assert :ok == Nx.backend_deallocate(t)
 
-    assert Client.get_memory_statistics(client) == %{
-             allocated: baseline_allocated,
-             peak: 11000 + baseline_allocated,
-             per_device: %{0 => baseline_allocated}
-           }
+    stats = Client.get_memory_statistics(client)
+    assert stats.allocated == baseline_allocated
+    assert stats.peak == 11000 + baseline_allocated
+    assert Map.get(stats.per_device, 0) == baseline_allocated
   end
 end
