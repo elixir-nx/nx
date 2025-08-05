@@ -118,7 +118,7 @@ defmodule EXLA.MemoryTrackingTest do
 
     assert Client.get_memory_statistics(client) == %{
              allocated: 11000 + baseline_allocated,
-             peak: 11000,
+             peak: 11000 + baseline_allocated,
              per_device: %{0 => 11000 + baseline_allocated}
            }
 
@@ -131,7 +131,7 @@ defmodule EXLA.MemoryTrackingTest do
 
     assert Client.get_memory_statistics(client) == %{
              allocated: 1000 + baseline_allocated,
-             peak: 11000,
+             peak: 11000 + baseline_allocated,
              per_device: %{0 => 1000 + baseline_allocated}
            }
 
@@ -139,8 +139,8 @@ defmodule EXLA.MemoryTrackingTest do
 
     assert Client.get_memory_statistics(client) == %{
              allocated: baseline_allocated,
-             peak: 11000,
-             per_device: %{0 => 0}
+             peak: 11000 + baseline_allocated,
+             per_device: %{0 => baseline_allocated}
            }
   end
 end
