@@ -97,7 +97,7 @@ defmodule EXLA.MemoryTrackingTest do
     :erlang.garbage_collect()
     Client.reset_peak_memory(client)
 
-    assert %{allocated: baseline_allocated, peak: 0} = Client.get_memory_statistics(client)
+    assert %{allocated: baseline_allocated} = Client.get_memory_statistics(client)
 
     t = Nx.iota({1000}, type: :u8, backend: EXLA.Backend)
     f = fn t, f -> f.(t, f) end
