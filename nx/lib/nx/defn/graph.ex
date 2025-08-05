@@ -170,45 +170,55 @@ defmodule Nx.Defn.Graph do
               %{state | nodes_to_replace: nodes_to_replace}
             )
 
-          arg_remapping =
+          {arg_remapping, _, _} =
             used_args
             |> Enum.sort_by(fn {_id, %T{data: %Expr{op: :parameter, args: [idx]}}} -> idx end)
-            |> Enum.with_index(fn
-              {id, expr}, idx ->
-                {id, put_in(expr.data.args, [idx])}
+            |> Enum.reduce({%{}, %{}, 0}, fn
+              {id, expr}, {acc, sources, idx} ->
+                # For replacement parameters, use the original parameter ID to find the source
+                source_id = if Map.has_key?(state.args, expr.data.id), do: expr.data.id, else: id
+                source = Map.fetch!(state.args, source_id)
+
+                if visited_expr = Map.get(sources, source) do
+                  {Map.put(acc, id, visited_expr), sources, idx}
+                else
+                  expr = put_in(expr.data.args, [idx])
+                  {Map.put(acc, id, expr), Map.put(sources, source, expr), idx + 1}
+                end
             end)
-            |> Map.new()
 
           {expr, _} =
             composite_rewrite_subtree(expr, %{state | nodes_to_replace: arg_remapping})
 
+          # Final pass: collect all parameters in the rewritten expression and ensure sequential indices
+          {expr, %{used_args: final_used_args}} =
+            composite_rewrite_subtree(expr, %{state | nodes_to_replace: %{}})
+
+          # Create final sequential remapping for all parameters found
+          final_remapping =
+            final_used_args
+            |> Enum.sort_by(fn {_id, %T{data: %Expr{op: :parameter, args: [idx]}}} -> idx end)
+            |> Enum.with_index(fn {id, param_expr}, new_idx ->
+              {id, put_in(param_expr.data.args, [new_idx])}
+            end)
+            |> Map.new()
+
+          # Apply final remapping
+          {expr, _} =
+            composite_rewrite_subtree(expr, %{state | nodes_to_replace: final_remapping})
+
+          # Create arguments list from final remapping, preserving the deduplicated order
           arguments =
-            arg_remapping
-            |> Enum.map(fn {_id, arg_expr} ->
-              id = arg_expr.data.id
+            final_remapping
+            |> Enum.map(fn {original_id, arg_expr} ->
               [idx] = arg_expr.data.args
+              # Use the same logic as above to find the correct source
+              source_id =
+                if Map.has_key?(state.args, arg_expr.data.id),
+                  do: arg_expr.data.id,
+                  else: original_id
 
-              # Try exact ID lookup first, then fallback to index lookup
-              source =
-                case Map.get(state.args, id) do
-                  nil ->
-                    # If we can't find this exact ID, look for any parameter with the same index
-                    case Enum.find(state.args, fn {_param_id, {_stage_id, param_idx}} ->
-                           param_idx == idx
-                         end) do
-                      {_found_id, found_source} ->
-                        found_source
-
-                      nil ->
-                        # If we can't find any parameter with this index, it must be an original argument
-                        # This happens when parameters are shared across expression parts but not all are in state.args
-                        {nil, idx}
-                    end
-
-                  found_source ->
-                    found_source
-                end
-
+              source = Map.fetch!(state.args, source_id)
               {idx, %{source: source}}
             end)
             |> Enum.sort_by(fn {idx, _} -> idx end)

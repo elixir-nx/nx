@@ -375,20 +375,78 @@ defmodule Nx.Defn.GraphTest do
 
       assert [stage_0, stage_1, stage_2] = chain
 
-      dbg(chain)
-
       assert stage_0.arguments == [%{source: {nil, 0}}, %{source: {nil, 1}}, %{source: {nil, 2}}]
+
+      assert {
+               %T{
+                 data: %Expr{
+                   op: :add,
+                   args: [
+                     %T{data: %Expr{op: :parameter, args: [0]}},
+                     %T{
+                       data: %Expr{
+                         args: [
+                           %T{data: %Expr{op: :parameter, args: [1]}},
+                           %T{data: %Expr{op: :parameter, args: [2]}}
+                         ],
+                         op: :add
+                       }
+                     }
+                   ]
+                 }
+               }
+             } = stage_0.expr
 
       assert stage_1.arguments == [
                %{source: {nil, 3}},
                %{source: {stage_0.id, 0}}
              ]
 
+      assert {
+               %T{
+                 data: %Expr{
+                   op: :add,
+                   args: [
+                     %T{data: %Expr{op: :parameter, args: [1]}},
+                     %T{
+                       data: %Expr{
+                         args: [
+                           %T{data: %Expr{op: :parameter, args: [1]}},
+                           %T{data: %Expr{op: :parameter, args: [0]}}
+                         ],
+                         op: :add
+                       }
+                     }
+                   ]
+                 }
+               }
+             } = stage_1.expr
+
       assert stage_2.arguments == [
                %{source: {nil, 4}},
-               %{source: {stage_0.id, 0}},
-               %{source: {stage_1.id, 0}}
+               %{source: {stage_1.id, 0}},
+               %{source: {stage_0.id, 0}}
              ]
+
+      assert {%T{data: %Expr{op: :parameter, args: [2]}},
+              %T{data: %Expr{op: :parameter, args: [1]}},
+              %T{
+                data: %Expr{
+                  op: :add,
+                  args: [
+                    %T{data: %Expr{op: :parameter, args: [1]}},
+                    %T{
+                      data: %Expr{
+                        args: [
+                          %T{data: %Expr{op: :parameter, args: [1]}},
+                          %T{data: %Expr{op: :parameter, args: [0]}}
+                        ],
+                        op: :add
+                      }
+                    }
+                  ]
+                }
+              }} = stage_2.expr
     end
   end
 
