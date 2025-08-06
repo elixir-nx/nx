@@ -235,7 +235,6 @@ defmodule Nx.Defn.Graph do
         {res, {cache, state}}
 
       _ ->
-        # Handle special operations that don't follow the normal pattern
         case op do
           :parameter ->
             eval_apply(:parameter, ans, {cache, state})
