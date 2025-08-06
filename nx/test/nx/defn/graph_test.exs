@@ -424,21 +424,21 @@ defmodule Nx.Defn.GraphTest do
 
       assert stage_2.arguments == [
                %{source: {nil, 4}},
-               %{source: {stage_1.id, 0}},
-               %{source: {stage_0.id, 0}}
+               %{source: {stage_0.id, 0}},
+               %{source: {stage_1.id, 0}}
              ]
 
-      assert {%T{data: %Expr{op: :parameter, args: [2]}},
-              %T{data: %Expr{op: :parameter, args: [1]}},
+      assert {%T{data: %Expr{op: :parameter, args: [1]}},
+              %T{data: %Expr{op: :parameter, args: [2]}},
               %T{
                 data: %Expr{
                   op: :add,
                   args: [
-                    %T{data: %Expr{op: :parameter, args: [1]}},
+                    %T{data: %Expr{op: :parameter, args: [2]}},
                     %T{
                       data: %Expr{
                         args: [
-                          %T{data: %Expr{op: :parameter, args: [1]}},
+                          %T{data: %Expr{op: :parameter, args: [2]}},
                           %T{data: %Expr{op: :parameter, args: [0]}}
                         ],
                         op: :add

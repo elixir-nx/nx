@@ -176,8 +176,8 @@ defmodule Nx.Defn.Graph do
             |> Enum.reduce({%{}, %{}, 0}, fn
               {id, expr}, {acc, sources, idx} ->
                 # For replacement parameters, use the original parameter ID to find the source
-                source_id = if Map.has_key?(state.args, expr.data.id), do: expr.data.id, else: id
-                source = Map.fetch!(state.args, source_id)
+                id = if Map.has_key?(state.args, expr.data.id), do: expr.data.id, else: id
+                source = Map.fetch!(state.args, id)
 
                 if visited_expr = Map.get(sources, source) do
                   {Map.put(acc, id, visited_expr), sources, idx}
@@ -190,26 +190,9 @@ defmodule Nx.Defn.Graph do
           {expr, _} =
             composite_rewrite_subtree(expr, %{state | nodes_to_replace: arg_remapping})
 
-          # Final pass: collect all parameters in the rewritten expression and ensure sequential indices
-          {expr, %{used_args: final_used_args}} =
-            composite_rewrite_subtree(expr, %{state | nodes_to_replace: %{}})
-
-          # Create final sequential remapping for all parameters found
-          final_remapping =
-            final_used_args
-            |> Enum.sort_by(fn {_id, %T{data: %Expr{op: :parameter, args: [idx]}}} -> idx end)
-            |> Enum.with_index(fn {id, param_expr}, new_idx ->
-              {id, put_in(param_expr.data.args, [new_idx])}
-            end)
-            |> Map.new()
-
-          # Apply final remapping
-          {expr, _} =
-            composite_rewrite_subtree(expr, %{state | nodes_to_replace: final_remapping})
-
           # Create arguments list from final remapping, preserving the deduplicated order
           arguments =
-            final_remapping
+            arg_remapping
             |> Enum.map(fn {original_id, arg_expr} ->
               [idx] = arg_expr.data.args
               # Use the same logic as above to find the correct source
@@ -223,7 +206,6 @@ defmodule Nx.Defn.Graph do
             end)
             |> Enum.sort_by(fn {idx, _} -> idx end)
             |> Enum.map(fn {_, arg} -> arg end)
-            |> Enum.uniq_by(fn %{source: source} -> source end)
 
           [
             %Stage{
