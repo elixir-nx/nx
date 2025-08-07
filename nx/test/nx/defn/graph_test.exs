@@ -9,7 +9,7 @@ defmodule Nx.Defn.GraphTest do
 
   doctest Nx.Defn.Graph
 
-  describe "traverse/1" do
+  describe "split/2" do
     test "simple expression with 1 split and no common nodes" do
       expr =
         Nx.Defn.debug_expr(fn arg0, arg1 ->
@@ -21,11 +21,11 @@ defmodule Nx.Defn.GraphTest do
         end).(Nx.tensor([1, 2]), Nx.tensor([3, 4]))
 
       split_fn = fn
-        %T{data: %Expr{op: :dot}} -> true
-        _ -> false
+        %T{data: %Expr{op: :dot}}, acc -> {true, acc}
+        _, acc -> {false, acc}
       end
 
-      {chain, cache, state} = Graph.__split__(expr, split_fn)
+      {chain, cache, state} = Graph.__split__(expr, nil, split_fn)
 
       assert [
                %Stage{
@@ -134,12 +134,12 @@ defmodule Nx.Defn.GraphTest do
         end).(Nx.tensor([[1, 2]]), Nx.tensor([[3], [4]]), Nx.tensor([5, 6]))
 
       split_fn = fn
-        %T{data: %Expr{op: :dot}} -> true
-        %T{data: %Expr{op: :sum}} -> true
-        _ -> false
+        %T{data: %Expr{op: :dot}}, acc -> {true, acc}
+        %T{data: %Expr{op: :sum}}, acc -> {true, acc}
+        _, acc -> {false, acc}
       end
 
-      {chain, cache, state} = Graph.__split__(expr, split_fn)
+      {chain, cache, state} = Graph.__split__(expr, nil, split_fn)
 
       assert [
                %Stage{
@@ -353,6 +353,100 @@ defmodule Nx.Defn.GraphTest do
 
       assert %T{data: %Expr{op: :sum, args: [a, [axes: [1], keep_axes: false]]}} = left
       assert %T{data: %Expr{op: :parameter, args: [1]}} = a
+    end
+  end
+
+  describe "split/3" do
+    test "splits with accumulator" do
+      expr =
+        Nx.Defn.debug_expr(fn x0, x1, x2, x3, x4 ->
+          x10 = Nx.add(x0, Nx.add(x1, x2))
+          x20 = Nx.add(x10, Nx.add(x10, x3))
+          x30 = Nx.add(x20, Nx.add(x20, x4))
+          {x10, x20, x30}
+        end).(1, 2, 3, 4, 5)
+
+      split_fn = fn
+        _node, acc ->
+          {acc > 0 and rem(acc, 2) == 0, acc + 1}
+      end
+
+      chain = Graph.split(expr, 0, split_fn)
+
+      assert [stage_0, stage_1, stage_2] = chain
+
+      assert stage_0.arguments == [%{source: {nil, 0}}, %{source: {nil, 1}}, %{source: {nil, 2}}]
+
+      assert {
+               %T{
+                 data: %Expr{
+                   op: :add,
+                   args: [
+                     %T{data: %Expr{op: :parameter, args: [0]}},
+                     %T{
+                       data: %Expr{
+                         args: [
+                           %T{data: %Expr{op: :parameter, args: [1]}},
+                           %T{data: %Expr{op: :parameter, args: [2]}}
+                         ],
+                         op: :add
+                       }
+                     }
+                   ]
+                 }
+               }
+             } = stage_0.expr
+
+      assert stage_1.arguments == [
+               %{source: {nil, 3}},
+               %{source: {stage_0.id, 0}}
+             ]
+
+      assert {
+               %T{
+                 data: %Expr{
+                   op: :add,
+                   args: [
+                     %T{data: %Expr{op: :parameter, args: [1]}},
+                     %T{
+                       data: %Expr{
+                         args: [
+                           %T{data: %Expr{op: :parameter, args: [1]}},
+                           %T{data: %Expr{op: :parameter, args: [0]}}
+                         ],
+                         op: :add
+                       }
+                     }
+                   ]
+                 }
+               }
+             } = stage_1.expr
+
+      assert stage_2.arguments == [
+               %{source: {nil, 4}},
+               %{source: {stage_0.id, 0}},
+               %{source: {stage_1.id, 0}}
+             ]
+
+      assert {%T{data: %Expr{op: :parameter, args: [1]}},
+              %T{data: %Expr{op: :parameter, args: [2]}},
+              %T{
+                data: %Expr{
+                  op: :add,
+                  args: [
+                    %T{data: %Expr{op: :parameter, args: [2]}},
+                    %T{
+                      data: %Expr{
+                        args: [
+                          %T{data: %Expr{op: :parameter, args: [2]}},
+                          %T{data: %Expr{op: :parameter, args: [0]}}
+                        ],
+                        op: :add
+                      }
+                    }
+                  ]
+                }
+              }} = stage_2.expr
     end
   end
 

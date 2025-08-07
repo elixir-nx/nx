@@ -34,7 +34,7 @@ defmodule Nx.Defn.Graph do
   end
 
   @doc """
-  Splits the received Nx.Defn.Expr into stages given the rules.
+  Splits the received Nx.Defn.Expr into stages based on each tensor.
 
   `expr_split_fn` is a function that receives an `Nx.Tensor` containing an `Nx.Defn.Expr`
   and returns `true` when a split must happen, and `false` otherwise.
@@ -65,7 +65,30 @@ defmodule Nx.Defn.Graph do
       >
   """
   def split(expr, expr_split_fn) when is_function(expr_split_fn, 1) do
-    {chain, _, _} = __split__(expr, expr_split_fn)
+    {chain, _, _} = __split__(expr, nil, fn node, acc -> {expr_split_fn.(node), acc} end)
+    chain
+  end
+
+  @doc """
+  Splits the received Nx.Defn.Expr into stages based on each tensor and the accumulator.
+
+  `expr_split_fn` is a function that receives an `Nx.Tensor` and the accumulator,
+  returning `{true, new_acc}` when a split must happen, and `{false, new_acc}`
+  otherwise.
+
+  The decision to split is made based on the expression and the accumulator.
+  This allows for more complex decisions to be made, such as splitting every 3 operations as in the example below.
+
+      # Count operations and split every 3 operations
+      split_fn = fn _tensor, count ->
+        new_count = count + 1
+        {count > 0 and rem(new_count, 3) == 0, new_count}
+      end
+
+      stages = Nx.Defn.Graph.split(expr, 0, split_fn)
+  """
+  def split(expr, initial_acc, expr_split_fn) when is_function(expr_split_fn, 2) do
+    {chain, _, _} = __split__(expr, initial_acc, expr_split_fn)
     chain
   end
 
@@ -106,13 +129,14 @@ defmodule Nx.Defn.Graph do
   end
 
   @doc false
-  def __split__(expr, expr_split_fn) do
+  def __split__(expr, initial_acc, expr_split_fn) do
     # state.expression_chain is a reverse accumulation of the stages and
     # snapshots of the state at each one so that we can properly remap parameters for each stage.
     state = %{
       expression_chain: [],
       nodes_to_replace: %{},
       expr_split_fn: expr_split_fn,
+      split_acc: initial_acc,
       # args is a map of id -> {stage_id, output_container_position}
       args: %{}
     }
@@ -142,24 +166,38 @@ defmodule Nx.Defn.Graph do
               %{state | nodes_to_replace: nodes_to_replace}
             )
 
-          arg_remapping =
+          {arg_remapping, _, _} =
             used_args
             |> Enum.sort_by(fn {_id, %T{data: %Expr{op: :parameter, args: [idx]}}} -> idx end)
-            |> Enum.with_index(fn
-              {id, expr}, idx ->
-                {id, put_in(expr.data.args, [idx])}
+            |> Enum.reduce({%{}, %{}, 0}, fn
+              {id, expr}, {acc, sources, idx} ->
+                # For replacement parameters, use the original parameter ID to find the source
+                id = if Map.has_key?(state.args, expr.data.id), do: expr.data.id, else: id
+                source = Map.fetch!(state.args, id)
+
+                if visited_expr = Map.get(sources, source) do
+                  {Map.put(acc, id, visited_expr), sources, idx}
+                else
+                  expr = put_in(expr.data.args, [idx])
+                  {Map.put(acc, id, expr), Map.put(sources, source, expr), idx + 1}
+                end
             end)
-            |> Map.new()
 
           {expr, _} =
             composite_rewrite_subtree(expr, %{state | nodes_to_replace: arg_remapping})
 
+          # Create arguments list from final remapping, preserving the deduplicated order
           arguments =
             arg_remapping
-            |> Enum.map(fn {_id, arg_expr} ->
-              id = arg_expr.data.id
+            |> Enum.map(fn {original_id, arg_expr} ->
               [idx] = arg_expr.data.args
-              source = Map.fetch!(state.args, id)
+              # Use the same logic as above to find the correct source
+              source_id =
+                if Map.has_key?(state.args, arg_expr.data.id),
+                  do: arg_expr.data.id,
+                  else: original_id
+
+              source = Map.fetch!(state.args, source_id)
               {idx, %{source: source}}
             end)
             |> Enum.sort_by(fn {idx, _} -> idx end)
@@ -193,10 +231,29 @@ defmodule Nx.Defn.Graph do
         {res, {cache, state}}
 
       _ ->
-        if state.expr_split_fn.(ans) do
-          split_expr(ans, {cache, state})
-        else
-          eval_apply(op, ans, {cache, state})
+        case op do
+          :parameter ->
+            eval_apply(:parameter, ans, {cache, state})
+
+          :elem ->
+            eval_apply(:elem, ans, {cache, state})
+
+          _ ->
+            # First process the arguments with the current accumulator
+            {args, {cache, state}} = Nx.Defn.Tree.apply_args(ans, {cache, state}, &eval/2)
+
+            # Then check if we should split based on this node
+            {should_split?, new_acc} = state.expr_split_fn.(ans, state.split_acc)
+            state = %{state | split_acc: new_acc}
+
+            if should_split? do
+              # Use the already processed args for splitting
+              split_expr_with_args(ans, args, {cache, state})
+            else
+              # Apply the operation with the processed args
+              ans = put_in(ans.data.args, args)
+              {ans, {Map.put(cache, ans.data.id, ans), state}}
+            end
         end
     end
   end
@@ -205,8 +262,7 @@ defmodule Nx.Defn.Graph do
     {other, {cache, state}}
   end
 
-  defp split_expr(expr, {cache, state}) do
-    {args, {cache, state}} = Nx.Defn.Tree.apply_args(expr, {cache, state}, &eval/2)
+  defp split_expr_with_args(expr, args, {cache, state}) do
     # We need to save this so that each previous stage
     # isn't affected by following ones
     nodes_to_replace = state.nodes_to_replace
@@ -215,6 +271,20 @@ defmodule Nx.Defn.Graph do
 
     {args, {tensor_args, _out_position, state}} =
       Enum.map_reduce(args, {[], 0, state}, fn
+        %T{data: %Expr{op: :parameter}} = arg, {tensor_args, out_position, state} ->
+          # Parameters are not computed values, so don't add them to tensor_args
+          # Just update the state if needed
+          state =
+            case Map.has_key?(state.args, arg.data.id) do
+              false ->
+                %{state | args: Map.put(state.args, arg.data.id, {stage_id, out_position})}
+
+              true ->
+                state
+            end
+
+          {arg, {tensor_args, out_position, state}}
+
         %T{} = expr, {tensor_args, out_position, state} ->
           arg = Expr.parameter(expr, map_size(state.args))
 
@@ -232,18 +302,52 @@ defmodule Nx.Defn.Graph do
 
     new_expr = put_in(expr.data.args, args)
 
+    # When we split, decide what to include in the stage and create parameter replacement
+    {stage_expr, result_expr} =
+      case tensor_args do
+        [] ->
+          # No intermediate computations - create a parameter for this split operation
+          # The current expression will be computed in the next stage
+          param = Expr.parameter(new_expr, map_size(state.args))
+          {{param}, param}
+
+        _ ->
+          # There are intermediate computations - only include those in the current stage
+          # The current expression will be computed in the next stage using these outputs
+          stage_expr = List.to_tuple(Enum.reverse(tensor_args))
+          {stage_expr, new_expr}
+      end
+
+    # Update state with parameter mapping if we created one
+    state =
+      case tensor_args do
+        [] ->
+          # Add parameter mapping and node replacement for the split operation
+          # Extract the parameter from the tuple
+          param = elem(stage_expr, 0)
+
+          %{
+            state
+            | args: Map.put(state.args, param.data.id, {stage_id, 0}),
+              nodes_to_replace: Map.put(state.nodes_to_replace, new_expr.data.id, param)
+          }
+
+        _ ->
+          state
+      end
+
     state =
       update_in(
         state.expression_chain,
         &[
-          {stage_id, List.to_tuple(Enum.reverse(tensor_args)), nodes_to_replace}
+          {stage_id, stage_expr, nodes_to_replace}
           | &1
         ]
       )
 
-    cache = Map.put(cache, new_expr.data.id, new_expr)
+    cache = Map.put(cache, result_expr.data.id, result_expr)
 
-    {new_expr, {cache, state}}
+    {result_expr, {cache, state}}
   end
 
   defp eval_apply(:parameter, %T{data: %Expr{id: id, args: [idx]}} = expr, {cache, state}) do
@@ -285,9 +389,14 @@ defmodule Nx.Defn.Graph do
   defp rewrite_subtree(%T{data: %Expr{id: id, op: :parameter}} = expr, state, acc) do
     case state.nodes_to_replace do
       %{^id => res} ->
-        {res, put_in(acc.used_args[id], res)}
+        # This parameter is being replaced by a stage output - collect the replacement
+        # We collect both the original id and the replacement id to ensure proper tracking
+        acc = put_in(acc.used_args[id], res)
+        acc = put_in(acc.used_args[res.data.id], res)
+        {res, acc}
 
       _ ->
+        # This is an original parameter - collect it
         {expr, put_in(acc.used_args[id], expr)}
     end
   end
