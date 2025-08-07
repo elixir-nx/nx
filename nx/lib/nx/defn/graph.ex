@@ -34,7 +34,7 @@ defmodule Nx.Defn.Graph do
   end
 
   @doc """
-  Splits the received Nx.Defn.Expr into stages given the rules.
+  Splits the received Nx.Defn.Expr into stages based on each tensor.
 
   `expr_split_fn` is a function that receives an `Nx.Tensor` containing an `Nx.Defn.Expr`
   and returns `true` when a split must happen, and `false` otherwise.
@@ -70,7 +70,7 @@ defmodule Nx.Defn.Graph do
   end
 
   @doc """
-  Splits the received Nx.Defn.Expr into stages with an accumulator.
+  Splits the received Nx.Defn.Expr into stages based on each tensor and the accumulator.
 
   `expr_split_fn` is a function that receives an `Nx.Tensor` and the accumulator,
   returning `{true, new_acc}` when a split must happen, and `{false, new_acc}`
