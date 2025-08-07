@@ -39,15 +39,7 @@ defmodule Nx.Defn.Graph do
   `expr_split_fn` is a function that receives an `Nx.Tensor` containing an `Nx.Defn.Expr`
   and returns `true` when a split must happen, and `false` otherwise.
 
-  Alternatively, `expr_split_fn` can be a function that receives an `Nx.Tensor` and an
-  accumulator, returning `{true, new_acc}` when a split must happen, and `{false, new_acc}`
-  otherwise. In this case, an initial accumulator must be provided as the third argument.
-
   ## Examples
-
-  ### Simple splitting
-
-  With the arity-1 version of `expr_split_fn`, the decision to split is made solely based on the expression.
 
       iex> expr = Nx.Defn.debug_expr(fn x, y -> x |> Nx.negate() |> Nx.sin() |> Nx.cos() |> Nx.add(y) end).(1, 2)
       iex> [stage0, stage1] = Nx.Defn.Graph.split(expr, fn %Nx.Tensor{data: %Nx.Defn.Expr{op: op}} -> op == :cos end)
@@ -71,12 +63,21 @@ defmodule Nx.Defn.Graph do
         b = cos a       f32
         d = add b, c    f32
       >
+  """
+  def split(expr, expr_split_fn) when is_function(expr_split_fn, 1) do
+    {chain, _, _} = __split__(expr, nil, fn node, acc -> {expr_split_fn.(node), acc} end)
+    chain
+  end
 
-  ### Splitting with accumulator
+  @doc """
+  Splits the received Nx.Defn.Expr into stages with an accumulator.
 
-  With the arity-2 version of `expr_split_fn`, the decision to split can be made based on the expression and the accumulator.
-  This allows for more complex decisions to be made, such as splitting every 3 operations as in the example below. One might want to
-  split the graph to avoid running out of memory, for example.
+  `expr_split_fn` is a function that receives an `Nx.Tensor` and the accumulator,
+  returning `{true, new_acc}` when a split must happen, and `{false, new_acc}`
+  otherwise.
+
+  The decision to split is made based on the expression and the accumulator.
+  This allows for more complex decisions to be made, such as splitting every 3 operations as in the example below.
 
       # Count operations and split every 3 operations
       split_fn = fn _tensor, count ->
@@ -86,11 +87,6 @@ defmodule Nx.Defn.Graph do
 
       stages = Nx.Defn.Graph.split(expr, 0, split_fn)
   """
-  def split(expr, expr_split_fn) when is_function(expr_split_fn, 1) do
-    {chain, _, _} = __split__(expr, nil, fn node, acc -> {expr_split_fn.(node), acc} end)
-    chain
-  end
-
   def split(expr, initial_acc, expr_split_fn) when is_function(expr_split_fn, 2) do
     {chain, _, _} = __split__(expr, initial_acc, expr_split_fn)
     chain
