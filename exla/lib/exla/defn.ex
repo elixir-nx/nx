@@ -546,6 +546,23 @@ defmodule EXLA.Defn do
     end
   end
 
+  defp cached_recur_operator(:elixir_call, %T{data: %Expr{args: args}}, state, cache) do
+    [call, expr, _callback] = args
+    %{data: %{args: in_args}} = call
+
+    {args, opts} = Enum.split_while(in_args, &(not is_list(&1)))
+    {_opts, _ignored} = {opts, nil}
+
+    {operands, cache} = Enum.map_reduce(args, cache, &recur_operator(&1, state, &2))
+
+    out_typespecs = container_to_typespecs(expr)
+
+    # Emit a generic custom call that the EXLA runtime can bind to Erlang/Elixir.
+    results = Value.custom_call(state.builder, "nx_elixir_custom_call", operands, out_typespecs)
+
+    {wrap_tuple_result(results, expr), cache}
+  end
+
   defp cached_recur_operator(
          :lu,
          %T{

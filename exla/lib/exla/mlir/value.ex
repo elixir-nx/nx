@@ -840,6 +840,19 @@ defmodule EXLA.MLIR.Value do
     |> one!()
   end
 
+  def custom_call(
+        %Function{} = func,
+        call_target_name,
+        operands,
+        out_typespecs,
+        extra_attrs \\ []
+      ) do
+    result_types = typespecs_to_mlir_types(out_typespecs)
+    attributes = [call_target_name: attr_string(call_target_name), api_version: attr_i32(4), has_side_effect: attr_boolean(true)]
+    attributes = attributes ++ extra_attrs
+    op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes)
+  end
+
   def get_typespec(value) do
     EXLA.NIF.mlir_get_typespec(value.ref)
   end

@@ -192,6 +192,19 @@ defmodule Nx.Defn.Tree do
     {[call, expr, callback], acc}
   end
 
+  def apply_args(%T{data: %Expr{op: :elixir_call, args: args}}, type, acc, fun) do
+    [call, expr, callback] = args
+    {call, acc} = fun.(call, acc)
+
+    {expr, acc} =
+      case type do
+        :all -> Composite.traverse(expr, acc, fun)
+        :scope -> {expr, acc}
+      end
+
+    {[call, expr, callback], acc}
+  end
+
   def apply_args(%T{data: %Expr{op: :token, args: [token]}}, _type, acc, fun) do
     {hooks, acc} =
       Enum.map_reduce(token.hooks, acc, fn %{expr: expr} = token, acc ->

@@ -2658,4 +2658,9 @@ defmodule Nx.BinaryBackend do
   defp bitstring_copy(bitstring, n) do
     for _ <- 1..n, into: <<>>, do: bitstring
   end
+
+  @impl true
+  def elixir_call(_name, args, fun) when is_function(fun) do
+    apply(fun, args)
+  end
 end

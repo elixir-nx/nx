@@ -175,6 +175,28 @@ defmodule Nx.Defn.Evaluator do
     Map.put(cache, [:optional | id], optional_expr_cache)
   end
 
+  defp compute_cache(:elixir_call, %{data: %Expr{args: args, id: id}}, state, cache) do
+    [call, expr, _callback] = args
+    %{data: %{args: call_args_in, op: call_name}} = call
+
+    {call_args, opts} = Enum.split_while(call_args_in, &(not is_list(&1)))
+
+    cache = Enum.reduce(call_args, cache, &compute_cache(&1, state, &2))
+    key = computation_key(call_name, call_args ++ opts)
+
+    {optional_expr_cache, cache} =
+      case cache do
+        %{^key => optional_expr_cache} ->
+          {optional_expr_cache, cache}
+
+        %{} ->
+          optional_expr_cache = {expr, init_compute_cache(expr, state)}
+          {optional_expr_cache, Map.put(cache, key, optional_expr_cache)}
+      end
+
+    Map.put(cache, [:optional | id], optional_expr_cache)
+  end
+
   defp compute_cache(:cond, %{data: %Expr{args: [clauses, last], id: id}}, state, cache) do
     %{parent_ids: parent_ids, current_ids: current_ids} = state
 
@@ -412,6 +434,31 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp eval_apply(:optional, %{data: %Expr{args: [call, out, _callback], id: id}}, state, caches) do
+    {args, caches} = Tree.apply_args(call, caches, &eval(&1, state, &2))
+    backend = Nx.Shared.list_impl!(args)
+
+    if function_exported?(backend, call.data.op, length(args) + 1) do
+      out =
+        case call do
+          %{type: {:tuple, _}} -> out
+          _ -> call
+        end
+
+      {apply(backend, call.data.op, [out | args]), caches}
+    else
+      params = Enum.map(args, &fn -> &1 end)
+      {{expr, optional_cache}, caches} = pop_cache!(caches, [:optional | id])
+      {res, _} = composite_eval(expr, %{state | params: params}, [optional_cache])
+      {res, caches}
+    end
+  end
+
+  defp eval_apply(
+         :elixir_call,
+         %{data: %Expr{args: [call, out, _callback], id: id}},
+         state,
+         caches
+       ) do
     {args, caches} = Tree.apply_args(call, caches, &eval(&1, state, &2))
     backend = Nx.Shared.list_impl!(args)
 

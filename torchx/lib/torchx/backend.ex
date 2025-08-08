@@ -1825,4 +1825,9 @@ defmodule Torchx.Backend do
       raise "operation #{unquote(fun)} is not supported on Torchx.Backend"
     end
   end
+
+  @impl true
+  def elixir_call(_name, args, fun) when is_function(fun) do
+    apply(fun, args)
+  end
 end
