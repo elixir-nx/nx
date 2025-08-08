@@ -1827,7 +1827,7 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def elixir_call(_name, args, fun) when is_function(fun) do
+  def elixir_call(_out, args, fun) when is_function(fun) do
     apply(fun, args)
   end
 end

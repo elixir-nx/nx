@@ -584,21 +584,17 @@ defmodule Nx.Shared do
   end
 
   @doc false
-  def elixir_call(output, function_name, args, default_impl)
-      when is_atom(function_name) and is_list(args) and is_function(default_impl) do
+  def elixir_call(output, args, fun) when is_list(args) and is_function(fun) do
     arity = length(args) + 1
     backend = list_impl!(args)
 
     cond do
-      function_exported?(backend, function_name, arity) ->
-        apply(backend, function_name, [output | args])
-
       function_exported?(backend, :elixir_call, 3) ->
-        backend.elixir_call(function_name, args, default_impl)
+        backend.elixir_call(output, args, fun)
         |> ensure_optional_compatible!(output)
 
       true ->
-        default_impl
+        fun
         |> apply(args)
         |> ensure_optional_compatible!(output)
     end

@@ -330,14 +330,8 @@ defmodule EXLA.Backend do
   end
 
   @impl true
-  def elixir_call(name, args, fun) do
-    {tensors, rest} = Enum.split_while(args, &is_struct(&1, Nx.Tensor))
-
-    wrapper_fun = fn tensors ->
-      Nx.Defn.Expr.elixir_call(name, Tuple.to_list(tensors) ++ rest, fun)
-    end
-
-    jit([], wrapper_fun, tensors, [List.to_tuple(tensors)])
+  def elixir_call(_out, args, fun) do
+    apply(fun, args)
   end
 
   binary_ops =

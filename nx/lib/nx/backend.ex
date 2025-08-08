@@ -149,7 +149,7 @@ defmodule Nx.Backend do
   to a custom_call that interacts with Erlang/Elixir via C; pure CPU
   backends may call the function directly.
   """
-  @callback elixir_call(atom, [term], fun) :: tensor
+  @callback elixir_call(out :: tensor | tuple, [term], fun) :: tensor
 
   @callback qr({q :: tensor, r :: tensor}, tensor, keyword) :: tensor
   @callback cholesky(out :: tensor, tensor) :: tensor

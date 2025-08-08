@@ -387,18 +387,18 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def elixir_call(name, in_args, fun) do
-    {args, opts} = Enum.split_while(in_args, &(not is_list(&1)))
-    params = Enum.with_index(args, &parameter/2)
+  def elixir_call(out, in_args, fun) do
+    {tensor_args, _opts} = Enum.split_while(in_args, &(not is_list(&1)))
+    [%T{data: %Expr{context: context}} | _] = Enum.map(tensor_args, &to_expr/1)
 
-    case apply(fun, params ++ opts) do
-      %{data: %{context: context}} = res ->
-        expr(res, context, :elixir_call, [expr(res, context, name, in_args), res, fun])
+    case out do
+      t when is_struct(t, Nx.Tensor) ->
+        expr(t, context, :elixir_call, [in_args, fun])
 
-      t when is_tuple(t) ->
-        context = elem(t, 0).data.context
-        out = expr(tuple_out(tuple_size(t)), context, name, in_args)
-        tuple(expr(out, context, :elixir_call, [out, t, fun]), Tuple.to_list(t))
+      tuple when is_tuple(tuple) ->
+        out_template = tuple_out(tuple_size(tuple))
+        expr_node = expr(out_template, context, :elixir_call, [in_args, fun])
+        tuple(expr_node, Tuple.to_list(tuple))
     end
   end
 
