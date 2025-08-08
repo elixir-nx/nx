@@ -10,7 +10,7 @@ In order to use `Torchx`, you will need Elixir installed. Then create an Elixir 
 via the `mix` build tool:
 
 ```
-$ mix new my_app
+mix new my_app
 ```
 
 Then you can add `Torchx` as dependency in your `mix.exs`:
@@ -33,15 +33,16 @@ Mix.install([
 
 We will automatically download a precompiled version of `LibTorch` that
 runs on the CPU. If you want to use another version, you can set `LIBTORCH_VERSION`
-to `2.1.0` or later.
+to `2.4.0` or later.
 
 If you want torch with CUDA support, please use `LIBTORCH_TARGET` to choose
 CUDA versions. The current supported targets are:
 
 - `cpu` default CPU only version
-- `cu118` CUDA 11.8 and CPU version (no macOS support)
+- `cu118` CUDA 11.8 and CPU version (no macOS support, libtorch `< 2.8.0` only)
 - `cu126` CUDA 12.6 and CPU version (no macOS support)
 - `cu128` CUDA 12.8 and CPU version (no macOS support)
+- `cu129` CUDA 12.9 and CPU version (no macOS support, libtorch `>= 2.8.0` only)
 
 Once downloaded, we will compile `Torchx` bindings. You will need `make`/`nmake`,
 `cmake` (3.12+) and a `C++` compiler. If building on Windows, you will need:
