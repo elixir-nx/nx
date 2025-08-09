@@ -192,7 +192,7 @@ defmodule Nx.Defn.Tree do
     {[call, expr, callback], acc}
   end
 
-  def apply_args(%T{data: %Expr{op: :elixir_call, args: args}}, type, acc, fun) do
+  def apply_args(%T{data: %Expr{op: :elixir_call, args: args}}, _type, acc, fun) do
     [in_args, callback] = args
 
     {in_args, acc} =

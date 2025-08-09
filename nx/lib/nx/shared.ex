@@ -584,23 +584,6 @@ defmodule Nx.Shared do
   end
 
   @doc false
-  def elixir_call(output, args, fun) when is_list(args) and is_function(fun) do
-    arity = length(args) + 1
-    backend = list_impl!(args)
-
-    cond do
-      function_exported?(backend, :elixir_call, 3) ->
-        backend.elixir_call(output, args, fun)
-        |> ensure_optional_compatible!(output)
-
-      true ->
-        fun
-        |> apply(args)
-        |> ensure_optional_compatible!(output)
-    end
-  end
-
-  @doc false
   def raise_complex_not_supported(function, arity) do
     raise ArgumentError, "Nx.#{function}/#{arity} does not support complex inputs"
   end

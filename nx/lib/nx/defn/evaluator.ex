@@ -175,7 +175,7 @@ defmodule Nx.Defn.Evaluator do
     Map.put(cache, [:optional | id], optional_expr_cache)
   end
 
-  defp compute_cache(:elixir_call, %{data: %Expr{args: args, id: id}}, state, cache) do
+  defp compute_cache(:elixir_call, %{data: %Expr{args: args}}, state, cache) do
     [in_args, _fun] = args
 
     Enum.reduce(in_args, cache, fn
@@ -442,7 +442,7 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval_apply(
          :elixir_call,
-         %{data: %Expr{args: [in_args, fun], id: id}} = expr,
+         %{data: %Expr{args: [in_args, fun]}} = expr,
          state,
          caches
        ) do

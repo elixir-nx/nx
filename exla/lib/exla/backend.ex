@@ -329,11 +329,6 @@ defmodule EXLA.Backend do
     jit([], wrapper_fun, tensors, [List.to_tuple(tensors)])
   end
 
-  @impl true
-  def elixir_call(_out, args, fun) do
-    apply(fun, args)
-  end
-
   binary_ops =
     [:add, :subtract, :multiply, :pow, :remainder, :divide, :atan2, :min, :max, :quotient] ++
       [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++

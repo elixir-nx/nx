@@ -2196,6 +2196,61 @@ defmodule Nx do
     list
   end
 
+  @doc """
+  Invokes an Elixir function from within defn.
+
+  This function allows integrating arbitrary Elixir code into `defn` graphs.
+  It receives an output template (a tensor or a tuple of tensors) that
+  specifies the expected shapes, types, and names of the result, a list of
+  arguments to pass to the Elixir function, and the function itself.
+
+  Inside `defn`, this builds an expression node understood by compilers.
+  Outside `defn` or on backends without special support, it executes `fun`
+  directly and validates the result matches the template.
+  """
+  @doc type: :backend
+  def elixir_call(output, args, fun) when is_list(args) and is_function(fun) do
+    {:arity, arity} = Function.info(fun, :arity)
+    num_args = length(args)
+
+    if arity != num_args do
+      raise ArgumentError,
+            "expected #{arity} arguments, got #{num_args}"
+    end
+
+    backend = Nx.Shared.list_impl!(args)
+
+    cond do
+      function_exported?(backend, :elixir_call, 3) ->
+        output
+        |> backend.elixir_call(args, fun)
+        |> ensure_call_compatible!(output)
+
+      true ->
+        fun
+        |> apply(args)
+        |> ensure_call_compatible!(output)
+    end
+  end
+
+  defp ensure_call_compatible!(left, right) when tuple_size(left) == tuple_size(right) do
+    [Tuple.to_list(left), Tuple.to_list(right)]
+    |> Enum.zip_with(fn [l, r] -> ensure_call_compatible!(l, r) end)
+
+    left
+  end
+
+  defp ensure_call_compatible!(
+         %{shape: shape, type: type, names: names} = left,
+         %{shape: shape, type: type, names: names}
+       ),
+       do: left
+
+  defp ensure_call_compatible!(left, right) do
+    raise ArgumentError,
+          "expected the elixir_call function to match the given output template #{inspect(right)}, got: #{inspect(left)}"
+  end
+
   defp chunk([], data, type) do
     match_types [type] do
       <<match!(head, 0), tail::binary>> = data
