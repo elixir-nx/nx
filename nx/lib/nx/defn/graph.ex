@@ -304,8 +304,23 @@ defmodule Nx.Defn.Graph do
 
     # When we split, decide what to include in the stage and create parameter replacement
     {stage_expr, result_expr} =
-      case tensor_args do
-        [] ->
+      case {tensor_args, expr.data.op} do
+        # Special case: metadata operation with empty tensor_args should include the computation
+        {[], :metadata} ->
+          # For metadata operations, we want to compute the wrapped expression in this stage
+          [wrapped_expr, _metadata] = args
+
+          # If the wrapped expression is a tuple, extract its elements for the stage
+          case wrapped_expr do
+            t when is_tuple(t) ->
+              {t, new_expr}
+
+            %T{} ->
+              # Single tensor - include it in the stage
+              {{wrapped_expr}, new_expr}
+          end
+
+        {[], _} ->
           # No intermediate computations - create a parameter for this split operation
           # The current expression will be computed in the next stage
           param = Expr.parameter(new_expr, map_size(state.args))
@@ -320,8 +335,38 @@ defmodule Nx.Defn.Graph do
 
     # Update state with parameter mapping if we created one
     state =
-      case tensor_args do
-        [] ->
+      case {tensor_args, expr.data.op} do
+        {[], :metadata} ->
+          # For metadata operations with tuples, register each tuple element
+          [wrapped_expr, _metadata] = args
+
+          case wrapped_expr do
+            t when is_tuple(t) ->
+              # For tuple metadata operations, output the individual elements
+              tuple_elements = Tuple.to_list(t)
+
+              # Register each element with its position so they become stage arguments
+              state =
+                tuple_elements
+                |> Enum.with_index()
+                |> Enum.reduce(state, fn {elem_expr, index}, state ->
+                  %{
+                    state
+                    | args: Map.put(state.args, elem_expr.data.id, {stage_id, index})
+                  }
+                end)
+
+              state
+
+            %T{} ->
+              # Single tensor - register with position 0
+              %{
+                state
+                | args: Map.put(state.args, wrapped_expr.data.id, {stage_id, 0})
+              }
+          end
+
+        {[], _} ->
           # Add parameter mapping and node replacement for the split operation
           # Extract the parameter from the tuple
           param = elem(stage_expr, 0)
@@ -355,9 +400,15 @@ defmodule Nx.Defn.Graph do
     {expr, {Map.put(cache, id, expr), state}}
   end
 
-  defp eval_apply(:elem, %T{data: %Expr{id: id, args: [tuple, i]}}, {cache, state}) do
-    {tuple, cache} = composite_eval(tuple, state, cache)
-    res = elem(tuple, i)
+  defp eval_apply(:elem, %T{data: %Expr{id: id, args: [tuple, i]}} = expr, {cache, state}) do
+    {tuple, {cache, state}} = composite_eval(tuple, state, cache)
+
+    res =
+      case tuple do
+        t when is_tuple(t) -> elem(t, i)
+        %T{} -> put_in(expr.data.args, [tuple, i])
+      end
+
     {res, {Map.put(cache, id, res), state}}
   end
 
@@ -417,6 +468,92 @@ defmodule Nx.Defn.Graph do
         # keep it as is.
 
         {put_in(expr.data.args, [call, subexpr, fun]), acc}
+    end
+  end
+
+  defp rewrite_subtree(
+         %T{data: %Expr{id: id, op: :elem, args: [tuple_expr, index]}} = expr,
+         state,
+         acc
+       ) do
+    case state.nodes_to_replace do
+      %{^id => res} ->
+        # This elem operation is being replaced
+        {res, put_in(acc.used_args[id], res)}
+
+      _ ->
+        # Check if this elem operation references a split tuple element
+        {tuple_expr, acc} = rewrite_subtree(tuple_expr, state, acc)
+
+        # If the tuple expression is a tuple, check if its elements are in state.args
+        case tuple_expr do
+          t when is_tuple(t) ->
+            tuple_elements = Tuple.to_list(t)
+
+            case Enum.at(tuple_elements, index) do
+              %T{data: %Expr{id: elem_id}} = elem_expr ->
+                # Check if this element was registered as a split tuple element
+                case Map.get(state.args, elem_id) do
+                  {_stage_id, _position} ->
+                    # This element is from a split tuple, create a parameter for it
+                    # Will be reindexed later
+                    param = Expr.parameter(elem_expr, 0)
+                    {param, put_in(acc.used_args[elem_id], param)}
+
+                  _ ->
+                    # Regular elem operation
+                    {put_in(expr.data.args, [tuple_expr, index]), acc}
+                end
+
+              _ ->
+                # Regular elem operation
+                {put_in(expr.data.args, [tuple_expr, index]), acc}
+            end
+
+          %T{type: {:tuple, _}} = _tuple_tensor ->
+            # Check if any elements in state.args have the same stage ID (indicating a tuple split)
+            stage_ids =
+              state.args
+              |> Enum.map(fn {_id, {stage_id, _pos}} -> stage_id end)
+              |> Enum.frequencies()
+
+            # Find stage IDs that appear multiple times (indicating tuple elements)
+            tuple_stage_id =
+              Enum.find_value(stage_ids, fn
+                {stage_id, count} when count > 1 and stage_id != nil -> stage_id
+                _ -> nil
+              end)
+
+            case tuple_stage_id do
+              nil ->
+                # No tuple split detected, regular elem operation
+                {put_in(expr.data.args, [tuple_expr, index]), acc}
+
+              stage_id ->
+                # Tuple was split, create a parameter for this element
+                param = Expr.parameter(expr, index)
+                # We need to find the element ID that corresponds to this index
+                elem_id =
+                  Enum.find_value(state.args, fn
+                    {id, {^stage_id, ^index}} -> id
+                    _ -> nil
+                  end)
+
+                case elem_id do
+                  nil ->
+                    # Couldn't find the element, fallback to regular elem
+                    {put_in(expr.data.args, [tuple_expr, index]), acc}
+
+                  elem_id ->
+                    # Found the element, create parameter and add to used_args
+                    {param, put_in(acc.used_args[elem_id], param)}
+                end
+            end
+
+          _ ->
+            # Regular elem operation
+            {put_in(expr.data.args, [tuple_expr, index]), acc}
+        end
     end
   end
 
