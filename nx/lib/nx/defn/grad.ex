@@ -122,6 +122,10 @@ defmodule Nx.Defn.Grad do
     acc
   end
 
+  defp parents_args(:elixir_call, _expr, _id, acc, _parent_vectorized_names) do
+    acc
+  end
+
   defp parents_args(
          :optional,
          %{data: %{args: [call, _expr, callback]}} = t,
