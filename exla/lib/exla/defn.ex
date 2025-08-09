@@ -1209,6 +1209,10 @@ defmodule EXLA.Defn do
     EXLA.Lib.argsort(state.builder, tensor, dimension, stable, comp, ans.type)
   end
 
+  defp to_operator(:elixir_call, _, _, _) do
+    raise "Nx.elixir_call/3 is not supported yet. Use Nx.Defn.Evaluator as your compiler."
+  end
+
   defp fft(exla_op, [%Value{} = tensor, opts], %{type: type} = ans, state) do
     n = opts[:length]
     axis = opts[:axis]
