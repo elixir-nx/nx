@@ -354,6 +354,41 @@ defmodule Nx.Defn.GraphTest do
       assert %T{data: %Expr{op: :sum, args: [a, [axes: [1], keep_axes: false]]}} = left
       assert %T{data: %Expr{op: :parameter, args: [1]}} = a
     end
+
+    test "supports splitting on tuples with metadata" do
+      expr =
+        Nx.Defn.debug_expr(fn x ->
+          y = Nx.add(x, 1)
+          z = Nx.add(x, 2)
+          w = {Nx.add(y, 3), Nx.add(z, 4)}
+          {a, b} = Nx.Defn.Expr.metadata(w, %{split: true})
+          Nx.add(a, b)
+        end).(Nx.tensor([1, 2, 3]))
+
+      split_fn = fn
+        %T{data: %Expr{op: :metadata, args: [_expr, %{split: true}]}} -> true
+        _ -> false
+      end
+
+      assert [%Stage{} = stage_0, %Stage{} = stage_1] = Graph.split(expr, split_fn)
+
+      assert [%{source: {nil, 0}}] = stage_0.arguments
+      assert {add_y, add_z} = stage_0.expr
+
+      assert %T{data: %Expr{op: :add, args: [%T{data: %Expr{op: :constant, args: [4]}}, y]}} =
+               add_y
+
+      assert %T{data: %Expr{op: :parameter, args: [0]}} = y
+
+      assert %T{data: %Expr{op: :add, args: [%T{data: %Expr{op: :constant, args: [6]}}, ^y]}} =
+               add_z
+
+      assert stage_1.arguments == [%{source: {stage_0.id, 0}}, %{source: {stage_0.id, 1}}]
+      assert %T{data: %Expr{op: :add, args: [add_y, add_z]}} = stage_1.expr
+
+      assert %T{data: %Expr{op: :parameter, args: [0]}} = add_y
+      assert %T{data: %Expr{op: :parameter, args: [1]}} = add_z
+    end
   end
 
   describe "split/3" do
