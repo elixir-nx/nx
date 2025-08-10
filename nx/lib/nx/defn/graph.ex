@@ -302,31 +302,24 @@ defmodule Nx.Defn.Graph do
 
     new_expr = put_in(expr.data.args, args)
 
-    # When we split, decide what to include in the stage and create parameter replacement
+    # Special handling: if we are splitting on metadata wrapping a tuple, make
+    # each tuple element the stage output and register element params for later stages.
+    metadata_wrapped_tuple? =
+      match?({:metadata, [wrapped, _]} when is_tuple(wrapped), {expr.data.op, args})
+
     {stage_expr, result_expr} =
-      case {tensor_args, expr.data.op} do
-        # Special case: metadata operation with empty tensor_args should include the computation
-        {[], :metadata} ->
-          # For metadata operations, we want to compute the wrapped expression in this stage
-          [wrapped_expr, _metadata] = args
+      cond do
+        metadata_wrapped_tuple? ->
+          [wrapped_expr, _] = args
+          {wrapped_expr, new_expr}
 
-          # If the wrapped expression is a tuple, extract its elements for the stage
-          case wrapped_expr do
-            t when is_tuple(t) ->
-              {t, new_expr}
-
-            %T{} ->
-              # Single tensor - include it in the stage
-              {{wrapped_expr}, new_expr}
-          end
-
-        {[], _} ->
+        tensor_args == [] ->
           # No intermediate computations - create a parameter for this split operation
           # The current expression will be computed in the next stage
           param = Expr.parameter(new_expr, map_size(state.args))
           {{param}, param}
 
-        _ ->
+        true ->
           # There are intermediate computations - only include those in the current stage
           # The current expression will be computed in the next stage using these outputs
           stage_expr = List.to_tuple(Enum.reverse(tensor_args))
@@ -335,38 +328,28 @@ defmodule Nx.Defn.Graph do
 
     # Update state with parameter mapping if we created one
     state =
-      case {tensor_args, expr.data.op} do
-        {[], :metadata} ->
-          # For metadata operations with tuples, register each tuple element
-          [wrapped_expr, _metadata] = args
+      cond do
+        metadata_wrapped_tuple? ->
+          # Register each tuple element as a stage output and create a replacement parameter
+          [wrapped_expr, _] = args
 
-          case wrapped_expr do
-            t when is_tuple(t) ->
-              # For tuple metadata operations, output the individual elements
-              tuple_elements = Tuple.to_list(t)
+          wrapped_expr
+          |> Tuple.to_list()
+          |> Enum.with_index()
+          |> Enum.reduce(state, fn {%T{} = elem_expr, index}, state ->
+            param = Expr.parameter(elem_expr, index)
 
-              # Register each element with its position so they become stage arguments
-              state =
-                tuple_elements
-                |> Enum.with_index()
-                |> Enum.reduce(state, fn {elem_expr, index}, state ->
-                  %{
-                    state
-                    | args: Map.put(state.args, elem_expr.data.id, {stage_id, index})
-                  }
-                end)
-
+            %{
               state
+              | args:
+                  state.args
+                  |> Map.put(elem_expr.data.id, {stage_id, index})
+                  |> Map.put(param.data.id, {stage_id, index}),
+                nodes_to_replace: Map.put(state.nodes_to_replace, elem_expr.data.id, param)
+            }
+          end)
 
-            %T{} ->
-              # Single tensor - register with position 0
-              %{
-                state
-                | args: Map.put(state.args, wrapped_expr.data.id, {stage_id, 0})
-              }
-          end
-
-        {[], _} ->
+        tensor_args == [] ->
           # Add parameter mapping and node replacement for the split operation
           # Extract the parameter from the tuple
           param = elem(stage_expr, 0)
@@ -377,7 +360,7 @@ defmodule Nx.Defn.Graph do
               nodes_to_replace: Map.put(state.nodes_to_replace, new_expr.data.id, param)
           }
 
-        _ ->
+        true ->
           state
       end
 
@@ -471,93 +454,8 @@ defmodule Nx.Defn.Graph do
     end
   end
 
-  defp rewrite_subtree(
-         %T{data: %Expr{id: id, op: :elem, args: [tuple_expr, index]}} = expr,
-         state,
-         acc
-       ) do
-    case state.nodes_to_replace do
-      %{^id => res} ->
-        # This elem operation is being replaced
-        {res, put_in(acc.used_args[id], res)}
-
-      _ ->
-        # Check if this elem operation references a split tuple element
-        {tuple_expr, acc} = rewrite_subtree(tuple_expr, state, acc)
-
-        # If the tuple expression is a tuple, check if its elements are in state.args
-        case tuple_expr do
-          t when is_tuple(t) ->
-            tuple_elements = Tuple.to_list(t)
-
-            case Enum.at(tuple_elements, index) do
-              %T{data: %Expr{id: elem_id}} = elem_expr ->
-                # Check if this element was registered as a split tuple element
-                case Map.get(state.args, elem_id) do
-                  {_stage_id, _position} ->
-                    # This element is from a split tuple, create a parameter for it
-                    # Will be reindexed later
-                    param = Expr.parameter(elem_expr, 0)
-                    {param, put_in(acc.used_args[elem_id], param)}
-
-                  _ ->
-                    # Regular elem operation
-                    {put_in(expr.data.args, [tuple_expr, index]), acc}
-                end
-
-              _ ->
-                # Regular elem operation
-                {put_in(expr.data.args, [tuple_expr, index]), acc}
-            end
-
-          %T{type: {:tuple, _}} = _tuple_tensor ->
-            # Check if any elements in state.args have the same stage ID (indicating a tuple split)
-            stage_ids =
-              state.args
-              |> Enum.map(fn {_id, {stage_id, _pos}} -> stage_id end)
-              |> Enum.frequencies()
-
-            # Find stage IDs that appear multiple times (indicating tuple elements)
-            tuple_stage_id =
-              Enum.find_value(stage_ids, fn
-                {stage_id, count} when count > 1 and stage_id != nil -> stage_id
-                _ -> nil
-              end)
-
-            case tuple_stage_id do
-              nil ->
-                # No tuple split detected, regular elem operation
-                {put_in(expr.data.args, [tuple_expr, index]), acc}
-
-              stage_id ->
-                # Tuple was split, create a parameter for this element
-                param = Expr.parameter(expr, index)
-                # We need to find the element ID that corresponds to this index
-                elem_id =
-                  Enum.find_value(state.args, fn
-                    {id, {^stage_id, ^index}} -> id
-                    _ -> nil
-                  end)
-
-                case elem_id do
-                  nil ->
-                    # Couldn't find the element, fallback to regular elem
-                    {put_in(expr.data.args, [tuple_expr, index]), acc}
-
-                  elem_id ->
-                    # Found the element, create parameter and add to used_args
-                    {param, put_in(acc.used_args[elem_id], param)}
-                end
-            end
-
-          _ ->
-            # Regular elem operation
-            {put_in(expr.data.args, [tuple_expr, index]), acc}
-        end
-    end
-  end
-
-  defp rewrite_subtree(%T{data: %Expr{id: id, args: args}} = expr, state, acc) do
+  defp rewrite_subtree(%T{data: %Expr{id: id, args: args, op: op}} = expr, state, acc)
+       when op != :elem do
     case state.nodes_to_replace do
       %{^id => res} ->
         # nodes_to_replace always contains a param
@@ -566,6 +464,42 @@ defmodule Nx.Defn.Graph do
       _ ->
         {args, acc} = composite_rewrite_subtree(args, state, acc)
         {put_in(expr.data.args, args), acc}
+    end
+  end
+
+  defp rewrite_subtree(
+         %T{data: %Expr{id: id, op: :elem, args: [tuple_expr, index]}} = expr,
+         state,
+         acc
+       ) do
+    case state.nodes_to_replace do
+      %{^id => res} ->
+        {res, put_in(acc.used_args[id], res)}
+
+      _ ->
+        {tuple_expr, acc} = rewrite_subtree(tuple_expr, state, acc)
+
+        case tuple_expr do
+          # Literal tuple: turn elem into a parameter for that element
+          t when is_tuple(t) ->
+            elem_expr = elem(t, index)
+            param = Expr.parameter(elem_expr, index)
+            {param, put_in(acc.used_args[elem_expr.data.id], param)}
+
+          # Metadata-wrapped tuple: same as above
+          %T{data: %Expr{op: :metadata, args: [wrapped, _]}} when is_tuple(wrapped) ->
+            elem_expr = elem(wrapped, index)
+            param = Expr.parameter(elem_expr, index)
+            {param, put_in(acc.used_args[elem_expr.data.id], param)}
+
+          # Tuple tensor: create a parameter pointing to this index
+          %T{type: {:tuple, _}} ->
+            param = Expr.parameter(expr, index)
+            {param, put_in(acc.used_args[param.data.id], param)}
+
+          _ ->
+            {put_in(expr.data.args, [tuple_expr, index]), acc}
+        end
     end
   end
 
