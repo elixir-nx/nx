@@ -21,8 +21,8 @@ defmodule Nx.Defn.GraphTest do
         end).(Nx.tensor([1, 2]), Nx.tensor([3, 4]))
 
       split_fn = fn
-        %T{data: %Expr{op: :dot}}, acc -> {true, acc}
-        _, acc -> {false, acc}
+        %T{data: %Expr{op: :dot}}, acc -> {:before, acc}
+        _, acc -> {:none, acc}
       end
 
       {chain, cache, state} = Graph.__split__(expr, nil, split_fn)
@@ -134,9 +134,9 @@ defmodule Nx.Defn.GraphTest do
         end).(Nx.tensor([[1, 2]]), Nx.tensor([[3], [4]]), Nx.tensor([5, 6]))
 
       split_fn = fn
-        %T{data: %Expr{op: :dot}}, acc -> {true, acc}
-        %T{data: %Expr{op: :sum}}, acc -> {true, acc}
-        _, acc -> {false, acc}
+        %T{data: %Expr{op: :dot}}, acc -> {:before, acc}
+        %T{data: %Expr{op: :sum}}, acc -> {:before, acc}
+        _, acc -> {:none, acc}
       end
 
       {chain, cache, state} = Graph.__split__(expr, nil, split_fn)
@@ -278,8 +278,8 @@ defmodule Nx.Defn.GraphTest do
         end).(1, arg0)
 
       split_fn = fn
-        %T{data: %Expr{op: :sum}} -> true
-        _ -> false
+        %T{data: %Expr{op: :sum}} -> :before
+        _ -> :none
       end
 
       assert [%Stage{} = stage_0, %Stage{} = stage_1] = Graph.split(expr, split_fn)
@@ -328,8 +328,8 @@ defmodule Nx.Defn.GraphTest do
         end).(1, arg0)
 
       split_fn = fn
-        %T{data: %Expr{op: :sum}} -> true
-        _ -> false
+        %T{data: %Expr{op: :sum}} -> :before
+        _ -> :none
       end
 
       assert [%Stage{} = stage_0, %Stage{} = stage_1] = Graph.split(expr, split_fn)
@@ -366,8 +366,8 @@ defmodule Nx.Defn.GraphTest do
         end).(Nx.tensor([1, 2, 3]))
 
       split_fn = fn
-        %T{data: %Expr{op: :metadata, args: [_expr, %{split: true}]}} -> true
-        _ -> false
+        %T{data: %Expr{op: :metadata, args: [_expr, %{split: true}]}} -> :before
+        _ -> :none
       end
 
       assert [%Stage{} = stage_0, %Stage{} = stage_1] = Graph.split(expr, split_fn)
@@ -403,7 +403,8 @@ defmodule Nx.Defn.GraphTest do
 
       split_fn = fn
         _node, acc ->
-          {acc > 0 and rem(acc, 2) == 0, acc + 1}
+          decision = if acc > 0 and rem(acc, 2) == 0, do: :before, else: :none
+          {decision, acc + 1}
       end
 
       chain = Graph.split(expr, 0, split_fn)
@@ -509,8 +510,8 @@ defmodule Nx.Defn.GraphTest do
       expr = apply(Nx.Defn.debug_expr(function), args)
 
       split_fn = fn
-        %T{data: %Expr{op: :metadata, args: [_expr, %{split: true}]}} -> true
-        _ -> false
+        %T{data: %Expr{op: :metadata, args: [_expr, %{split: true}]}} -> :before
+        _ -> :none
       end
 
       chain = Graph.split(expr, split_fn)
@@ -588,7 +589,7 @@ defmodule Nx.Defn.GraphTest do
     end
   end
 
-  describe "split with new modes" do
+  describe "split with :after and :both modes" do
     test ":after mode creates stage that computes the target node" do
       expr =
         Nx.Defn.debug_expr(fn arg0, arg1 ->
@@ -710,7 +711,7 @@ defmodule Nx.Defn.GraphTest do
       assert [%{source: {^stage_1_id, 0}}] = stage_2_arguments
     end
 
-    test "backward compatibility with boolean returns" do
+    test "basic functionality with befor and none returns" do
       expr =
         Nx.Defn.debug_expr(fn arg0, arg1 ->
           x = Nx.add(arg0, arg1)
@@ -718,26 +719,26 @@ defmodule Nx.Defn.GraphTest do
           Nx.dot(x, y)
         end).(Nx.tensor([1, 2]), Nx.tensor([3, 4]))
 
-      # Test that true maps to :before (existing behavior)
-      split_fn_true = fn
-        %T{data: %Expr{op: :dot}}, acc -> {true, acc}
-        _, acc -> {false, acc}
-      end
-
+      # Test that :before and :none work correctly
       split_fn_before = fn
         %T{data: %Expr{op: :dot}}, acc -> {:before, acc}
         _, acc -> {:none, acc}
       end
 
-      {chain_true, _, _} = Graph.__split__(expr, nil, split_fn_true)
       {chain_before, _, _} = Graph.__split__(expr, nil, split_fn_before)
 
-      # Both should produce equivalent results
-      assert length(chain_true) == length(chain_before)
-      assert length(chain_true) == 2
+      assert [stage_0, stage_1] = chain_before
+
+      stage_0_id = stage_0.id
+
+      assert {%T{data: %Expr{op: :add}}, %T{data: %Expr{op: :subtract}}} = stage_0.expr
+      assert %T{data: %Expr{op: :dot}} = stage_1.expr
+
+      assert [%{source: {nil, 0}}, %{source: {nil, 1}}] = stage_0.arguments
+      assert [%{source: {^stage_0_id, 0}}, %{source: {^stage_0_id, 1}}] = stage_1.arguments
     end
 
-    test "public API integration with new modes" do
+    test "public API integration with after and both modes" do
       expr =
         Nx.Defn.debug_expr(fn arg0, arg1 ->
           x = Nx.add(arg0, arg1)
@@ -749,7 +750,7 @@ defmodule Nx.Defn.GraphTest do
       chain_after =
         Graph.split(expr, fn
           %T{data: %Expr{op: :multiply}} -> :after
-          _ -> false
+          _ -> :none
         end)
 
       assert length(chain_after) == 2
@@ -758,7 +759,7 @@ defmodule Nx.Defn.GraphTest do
       chain_both =
         Graph.split(expr, fn
           %T{data: %Expr{op: :multiply}} -> :both
-          _ -> false
+          _ -> :none
         end)
 
       assert length(chain_both) == 3
