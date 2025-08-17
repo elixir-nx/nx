@@ -587,4 +587,197 @@ defmodule Nx.Defn.GraphTest do
       assert Graph.run(chain, args) == expected_result
     end
   end
+
+  describe "split with new modes" do
+    test ":after mode creates stage that computes the target node" do
+      expr =
+        Nx.Defn.debug_expr(fn arg0, arg1 ->
+          x = Nx.add(arg0, arg1)
+          y = Nx.multiply(x, 2)
+          Nx.subtract(y, arg0)
+        end).(Nx.tensor([1, 2]), Nx.tensor([3, 4]))
+
+      split_fn = fn
+        %T{data: %Expr{op: :multiply}}, _acc -> {:after, nil}
+        _, acc -> {:none, acc}
+      end
+
+      {chain, _cache, _state} = Graph.__split__(expr, nil, split_fn)
+
+      assert [
+               %Stage{
+                 id: stage_0_id,
+                 expr: stage_0_expr,
+                 arguments: stage_0_arguments
+               },
+               %Stage{
+                 id: _stage_1_id,
+                 expr: stage_1_expr,
+                 arguments: stage_1_arguments
+               }
+             ] = chain
+
+      # Stage 0 should compute the multiply operation including its dependencies
+      assert {%T{data: %Expr{op: :multiply, args: [const_2, add_result]}}} = stage_0_expr
+      assert %T{data: %Expr{op: :constant, args: [2]}} = const_2
+      assert %T{data: %Expr{op: :add, args: [param_0, param_1]}} = add_result
+      assert %T{data: %Expr{op: :parameter, args: [0]}} = param_0
+      assert %T{data: %Expr{op: :parameter, args: [1]}} = param_1
+
+      # Stage 0 arguments should come from the original function inputs
+      assert [%{source: {nil, 0}}, %{source: {nil, 1}}] = stage_0_arguments
+
+      # Stage 1 should use the multiply result and original arg0
+      assert [%{source: {nil, 0}}, %{source: {^stage_0_id, 0}}] = stage_1_arguments
+
+      assert %T{data: %Expr{op: :subtract, args: [mult_result, arg0]}} = stage_1_expr
+      assert %T{data: %Expr{op: :parameter, args: [1]}} = mult_result
+      assert %T{data: %Expr{op: :parameter, args: [0]}} = arg0
+    end
+
+    test ":both mode with intermediate computations creates two stages" do
+      expr =
+        Nx.Defn.debug_expr(fn arg0, arg1 ->
+          x = Nx.add(arg0, arg1)
+          y = Nx.subtract(arg0, arg1)
+          z = Nx.multiply(x, y)
+          Nx.divide(z, 2)
+        end).(Nx.tensor([1, 2]), Nx.tensor([3, 4]))
+
+      split_fn = fn
+        %T{data: %Expr{op: :multiply}}, _acc -> {:both, nil}
+        _, acc -> {:none, acc}
+      end
+
+      {chain, _cache, _state} = Graph.__split__(expr, nil, split_fn)
+
+      assert [
+               %Stage{id: stage_0_id, expr: stage_0_expr, arguments: stage_0_arguments},
+               %Stage{id: stage_1_id, expr: stage_1_expr, arguments: stage_1_arguments},
+               %Stage{id: _stage_2_id, expr: stage_2_expr, arguments: stage_2_arguments}
+             ] = chain
+
+      # Stage 0 should compute the arguments to multiply (x and y)
+      assert {%T{data: %Expr{op: :add}} = _x_expr, %T{data: %Expr{op: :subtract}} = _y_expr} =
+               stage_0_expr
+
+      assert [%{source: {nil, 0}}, %{source: {nil, 1}}] = stage_0_arguments
+
+      # Stage 1 should compute the multiply operation using stage 0 outputs
+      assert {%T{data: %Expr{op: :multiply, args: [x_param, y_param]}}} = stage_1_expr
+      assert %T{data: %Expr{op: :parameter, args: [0]}} = x_param
+      assert %T{data: %Expr{op: :parameter, args: [1]}} = y_param
+      assert [%{source: {^stage_0_id, 0}}, %{source: {^stage_0_id, 1}}] = stage_1_arguments
+
+      # Stage 2 should compute the final divide operation
+      assert %T{data: %Expr{op: :divide, args: [mult_result, const_2]}} = stage_2_expr
+      assert %T{data: %Expr{op: :parameter, args: [0]}} = mult_result
+      assert %T{data: %Expr{op: :constant, args: [2]}} = const_2
+      assert [%{source: {^stage_1_id, 0}}] = stage_2_arguments
+    end
+
+    test ":both mode with no intermediate computations creates stages for final expression" do
+      expr =
+        Nx.Defn.debug_expr(fn arg0, arg1 ->
+          x = Nx.add(arg0, arg1)
+          Nx.negate(x)
+        end).(Nx.tensor([1, 2]), Nx.tensor([3, 4]))
+
+      split_fn = fn
+        %T{data: %Expr{op: :negate}}, _acc -> {:both, nil}
+        _, acc -> {:none, acc}
+      end
+
+      {chain, _cache, _state} = Graph.__split__(expr, nil, split_fn)
+
+      # Should create 3 stages: one for add (dependency), one for negate, one for final result
+      assert [
+               %Stage{id: stage_0_id, expr: stage_0_expr, arguments: stage_0_arguments},
+               %Stage{id: stage_1_id, expr: stage_1_expr, arguments: stage_1_arguments},
+               %Stage{id: _stage_2_id, expr: _stage_2_expr, arguments: stage_2_arguments}
+             ] = chain
+
+      # Stage 0 computes add
+      assert {%T{data: %Expr{op: :add}}} = stage_0_expr
+      assert [%{source: {nil, 0}}, %{source: {nil, 1}}] = stage_0_arguments
+
+      # Stage 1 computes negate using stage 0 output
+      assert {%T{data: %Expr{op: :negate, args: [x_param]}}} = stage_1_expr
+      assert %T{data: %Expr{op: :parameter, args: [0]}} = x_param
+      assert [%{source: {^stage_0_id, 0}}] = stage_1_arguments
+
+      # Stage 2 uses the negate result
+      assert [%{source: {^stage_1_id, 0}}] = stage_2_arguments
+    end
+
+    test "backward compatibility with boolean returns" do
+      expr =
+        Nx.Defn.debug_expr(fn arg0, arg1 ->
+          x = Nx.add(arg0, arg1)
+          y = Nx.subtract(arg0, arg1)
+          Nx.dot(x, y)
+        end).(Nx.tensor([1, 2]), Nx.tensor([3, 4]))
+
+      # Test that true maps to :before (existing behavior)
+      split_fn_true = fn
+        %T{data: %Expr{op: :dot}}, acc -> {true, acc}
+        _, acc -> {false, acc}
+      end
+
+      split_fn_before = fn
+        %T{data: %Expr{op: :dot}}, acc -> {:before, acc}
+        _, acc -> {:none, acc}
+      end
+
+      {chain_true, _, _} = Graph.__split__(expr, nil, split_fn_true)
+      {chain_before, _, _} = Graph.__split__(expr, nil, split_fn_before)
+
+      # Both should produce equivalent results
+      assert length(chain_true) == length(chain_before)
+      assert length(chain_true) == 2
+    end
+
+    test "public API integration with new modes" do
+      expr =
+        Nx.Defn.debug_expr(fn arg0, arg1 ->
+          x = Nx.add(arg0, arg1)
+          y = Nx.multiply(x, 2)
+          Nx.subtract(y, arg0)
+        end).(Nx.tensor([1, 2]), Nx.tensor([3, 4]))
+
+      # Test :after mode
+      chain_after =
+        Graph.split(expr, fn
+          %T{data: %Expr{op: :multiply}} -> :after
+          _ -> false
+        end)
+
+      assert length(chain_after) == 2
+
+      # Test :both mode
+      chain_both =
+        Graph.split(expr, fn
+          %T{data: %Expr{op: :multiply}} -> :both
+          _ -> false
+        end)
+
+      assert length(chain_both) == 3
+
+      # Test that run/2 works with new modes
+      args = [Nx.tensor([1, 2]), Nx.tensor([3, 4])]
+
+      expected_result =
+        Nx.Defn.jit_apply(
+          fn arg0, arg1 ->
+            x = Nx.add(arg0, arg1)
+            y = Nx.multiply(x, 2)
+            Nx.subtract(y, arg0)
+          end,
+          args
+        )
+
+      assert Graph.run(chain_after, args) == expected_result
+      assert Graph.run(chain_both, args) == expected_result
+    end
+  end
 end
