@@ -9,6 +9,7 @@ defmodule EXLA.Defn do
   alias EXLA.Typespec
   alias EXLA.MLIR.Value
   alias EXLA.MLIR.Function
+  alias EXLA.Defn.MessageComm
 
   @doc false
   def __partitions_options__(options) do
@@ -58,7 +59,26 @@ defmodule EXLA.Defn do
 
       {time, res} =
         :timer.tc(fn ->
-          maybe_outfeed(lock, executable, args, used_inputs, outputs, outfeed, run_options)
+          # Check if we should use message-based communication
+          use_message_comm? = Keyword.get(compile_options, :use_message_comm, false)
+
+          if use_message_comm? do
+            # Extract message handlers - for now use empty map
+            # In a full implementation, we'd extract handlers from the compilation cache
+            message_handlers = %{}
+
+            maybe_message_comm(
+              lock,
+              executable,
+              args,
+              used_inputs,
+              outputs,
+              message_handlers,
+              run_options
+            )
+          else
+            maybe_outfeed(lock, executable, args, used_inputs, outputs, outfeed, run_options)
+          end
         end)
 
       debug? &&
@@ -83,7 +103,8 @@ defmodule EXLA.Defn do
       precision: Keyword.get(options, :precision, :default),
       builder: function,
       params: Map.new(params ++ outfeed.infeeds),
-      scope_ids: Tree.scope_ids(expr)
+      scope_ids: Tree.scope_ids(expr),
+      use_message_comm: Keyword.get(options, :use_message_comm, false)
     }
 
     {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
@@ -129,6 +150,32 @@ defmodule EXLA.Defn do
     else
       [result] ->
         [EXLA.Defn.Buffers.to_nx!(result, outputs)]
+    after
+      EXLA.Defn.Lock.unlock(lock)
+    end
+  end
+
+  # Message-based execution that handles communication via direct message passing
+  defp maybe_message_comm(
+         lock,
+         executable,
+         args,
+         used_inputs,
+         outputs,
+         message_handlers,
+         run_options
+       ) do
+    try do
+      buffers =
+        EXLA.Defn.Buffers.filter_by_indexes(args, used_inputs, fn arg, _i ->
+          EXLA.Defn.Buffers.from_nx!(arg, executable)
+        end)
+
+      # Use MessageComm for execution
+      [result] =
+        MessageComm.execute_with_messages(executable, [buffers], message_handlers, run_options)
+
+      [EXLA.Defn.Buffers.to_nx!(result, outputs)]
     after
       EXLA.Defn.Lock.unlock(lock)
     end
@@ -586,19 +633,42 @@ defmodule EXLA.Defn do
   defp cached_recur_operator(:token, %T{data: %Expr{args: [token]}}, state, cache) do
     builder = state.builder
 
-    cache =
-      List.foldr(token.hooks, cache, fn %{name: name, expr: expr}, cache ->
-        # First traverse the child because if it has hooks,
-        # we need to handle them first
-        {tuple, cache} = recur_flatten(expr, state, cache)
+    # Check if we should use message-based communication
+    use_message_comm? = Map.get(state, :use_message_comm, false)
 
-        cache
-        |> get_outfeed()
-        |> Outfeed.maybe_add_function_hook(builder, tuple, name, expr)
-        |> then(&put_outfeed(cache, &1))
-      end)
+    if use_message_comm? do
+      # Use message-based communication instead of traditional outfeed
+      message_comm = get_message_comm(cache) || MessageComm.new(builder)
 
-    {[], cache}
+      cache =
+        List.foldr(token.hooks, cache, fn %{name: name, expr: expr}, cache ->
+          # First traverse the child because if it has hooks,
+          # we need to handle them first
+          {tuple, cache} = recur_flatten(expr, state, cache)
+
+          # Use message-based communication for the hook
+          MessageComm.process_hook(message_comm, tuple, name)
+
+          put_message_comm(cache, message_comm)
+        end)
+
+      {[], cache}
+    else
+      # Original token-based implementation
+      cache =
+        List.foldr(token.hooks, cache, fn %{name: name, expr: expr}, cache ->
+          # First traverse the child because if it has hooks,
+          # we need to handle them first
+          {tuple, cache} = recur_flatten(expr, state, cache)
+
+          cache
+          |> get_outfeed()
+          |> Outfeed.maybe_add_function_hook(builder, tuple, name, expr)
+          |> then(&put_outfeed(cache, &1))
+        end)
+
+      {[], cache}
+    end
   end
 
   defp cached_recur_operator(op, expr, state, cache) do
@@ -679,13 +749,93 @@ defmodule EXLA.Defn do
 
   ## to_operator others
 
-  defp to_operator(:metadata, [op, _metadata], _ans, _state) do
-    case op do
-      %Value{} ->
-        op
+  defp to_operator(:metadata, [op, metadata], ans, _state) do
+    case metadata do
+      %{exla_custom_call: function_name} when is_atom(function_name) ->
+        # Handle EXLA custom call metadata
+        case op do
+          %Value{} = value ->
+            # Call the custom function and return the result
+            apply(Value, function_name, [value, expr_to_typespec(ans)])
 
-      op when is_tuple(op) ->
-        Tuple.to_list(op)
+          _ ->
+            raise ArgumentError,
+                  "EXLA custom call metadata can only be applied to tensor values, got: #{inspect(op)}"
+        end
+
+      %{exla_custom_call: call_target_name, result_types: result_types}
+      when is_binary(call_target_name) ->
+        # Handle custom call with explicit target name and result types
+        case op do
+          %Value{} = value ->
+            # Create typespecs from the result types
+            typespecs =
+              Enum.map(result_types, fn template ->
+                Typespec.tensor(template.type, template.shape)
+              end)
+
+            # Determine if this is infeed or outfeed based on the call target name
+            results =
+              if String.contains?(call_target_name, "infeed") do
+                Value.message_infeed_with_operands(value, [value], call_target_name, typespecs)
+              else
+                Value.message_outfeed_with_operands(value, [value], call_target_name, typespecs)
+              end
+
+            # Return single result or list based on count
+            case results do
+              [single_result] -> single_result
+              multiple_results -> multiple_results
+            end
+
+          values when is_tuple(values) ->
+            [%Value{} = first_value | _] = Tuple.to_list(values)
+            # Handle multiple operands using the new function
+
+            # Create typespecs from the result types
+            typespecs =
+              Enum.map(result_types, fn template ->
+                Typespec.tensor(template.type, template.shape)
+              end)
+
+            # Determine if this is infeed or outfeed based on the call target name
+            results =
+              if String.contains?(call_target_name, "infeed") do
+                Value.message_infeed_with_operands(
+                  first_value,
+                  Tuple.to_list(values),
+                  call_target_name,
+                  typespecs
+                )
+              else
+                Value.message_outfeed_with_operands(
+                  first_value,
+                  Tuple.to_list(values),
+                  call_target_name,
+                  typespecs
+                )
+              end
+
+            # Return single result or list based on count
+            case results do
+              [single_result] -> single_result
+              multiple_results -> multiple_results
+            end
+
+          _ ->
+            raise ArgumentError,
+                  "EXLA custom call metadata can only be applied to tensor values, got: #{inspect(op)}"
+        end
+
+      _ ->
+        # Default metadata handling
+        case op do
+          %Value{} ->
+            op
+
+          op when is_tuple(op) ->
+            Tuple.to_list(op)
+        end
     end
   end
 
@@ -1360,6 +1510,12 @@ defmodule EXLA.Defn do
   defp get_outfeed(%{__MODULE__ => value}), do: value
 
   defp put_outfeed(cache, outfeed), do: %{cache | __MODULE__ => outfeed}
+
+  # Message communication cache helpers
+  defp get_message_comm(%{message_comm: comm}), do: comm
+  defp get_message_comm(_), do: nil
+
+  defp put_message_comm(cache, comm), do: Map.put(cache, :message_comm, comm)
 
   ## Computation helpers
 

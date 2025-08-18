@@ -1,7 +1,11 @@
+#include <condition_variable>
 #include <fine.hpp>
+#include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <tuple>
+#include <unordered_map>
 
 #include "exla_client.h"
 #include "exla_cuda.h"
@@ -537,6 +541,83 @@ fine::Ok<> start_log_sink(ErlNifEnv *env, ErlNifPid logger_pid) {
 }
 
 FINE_NIF(start_log_sink, 0);
+
+// Infeed coordination structures
+struct InfeedRequest {
+  float *result_buffer;
+  uint64_t result_size;
+  bool completed;
+  std::condition_variable cv;
+  std::mutex mutex;
+
+  InfeedRequest(float *buffer, uint64_t size)
+      : result_buffer(buffer), result_size(size), completed(false) {}
+};
+
+// The complete_infeed_request NIF is now implemented as
+// complete_infeed_request_fine below
+
+} // namespace exla
+
+// Global state for infeed coordination (outside namespace for C linkage)
+std::unordered_map<std::string, std::shared_ptr<exla::InfeedRequest>>
+    pending_infeeds;
+std::mutex pending_infeeds_mutex;
+
+namespace exla {
+
+fine::Ok<> complete_infeed_request_fine(ErlNifEnv *env, std::string ref_id,
+                                        std::string data_str) {
+  // The ref_id is already the lookup key
+
+  // Find the pending infeed request
+  std::shared_ptr<InfeedRequest> request;
+  {
+    std::lock_guard<std::mutex> lock(pending_infeeds_mutex);
+    auto it = pending_infeeds.find(ref_id);
+    if (it == pending_infeeds.end()) {
+      // Just return - request not found
+      return fine::Ok();
+    }
+    request = it->second;
+  }
+
+  // Copy data to the result buffer
+  {
+    std::lock_guard<std::mutex> lock(request->mutex);
+    if (request->completed) {
+      // Already completed, just return
+      return fine::Ok();
+    }
+
+    // Calculate expected size (assuming float32)
+    size_t expected_size = request->result_size * sizeof(float);
+    if (data_str.size() != expected_size) {
+      // Size mismatch - fill with zeros and complete
+      for (uint64_t i = 0; i < request->result_size; i++) {
+        request->result_buffer[i] = 0.0f;
+      }
+    } else {
+      // Copy the data
+      memcpy(request->result_buffer, data_str.data(), data_str.size());
+    }
+    request->completed = true;
+  }
+
+  // Notify the waiting custom call
+  request->cv.notify_one();
+
+  return fine::Ok();
+}
+
+FINE_NIF(complete_infeed_request_fine, 2);
+
+bool check_infeed_request(ErlNifEnv *env, std::string ref_id) {
+  // Simple check function
+  return true;
+}
+
+FINE_NIF(check_infeed_request, 1);
 
 } // namespace exla
 

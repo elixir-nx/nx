@@ -691,6 +691,119 @@ defmodule EXLA.MLIR.Value do
     op(func, "stablehlo.outfeed", inputs ++ [token], result_types) |> one!()
   end
 
+  # Message-based infeed: receives data from Elixir process via message passing
+  def message_infeed(%Value{function: func} = pid_value, typespec) do
+    %{type: pid_type} = get_typespec(pid_value)
+
+    unless pid_type == {:u, 8} do
+      raise "Message infeed PID must be u8 type, got: #{inspect(pid_type)}"
+    end
+
+    operands = [pid_value]
+    result_types = typespecs_to_mlir_types([typespec])
+
+    call_target_name =
+      case typespec.type do
+        {:f, 32} -> "message_infeed_f32_simple"
+        {:f, 64} -> "message_infeed_f64_simple"
+        {:s, 32} -> "message_infeed_s32_simple"
+        type -> raise "Message infeed not supported for type #{inspect(type)}"
+      end
+
+    attributes = [
+      call_target_name: attr_string(call_target_name),
+      api_version: attr_i32(4)
+    ]
+
+    op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes) |> one!()
+  end
+
+  # Message-based outfeed: sends tensor data to Elixir process via message passing
+  def message_outfeed(%Value{function: func} = pid_value, %Value{function: func} = data_value) do
+    %{type: pid_type} = get_typespec(pid_value)
+    %{type: data_type} = get_typespec(data_value)
+
+    unless pid_type == {:u, 8} do
+      raise "Message outfeed PID must be u8 type, got: #{inspect(pid_type)}"
+    end
+
+    operands = [pid_value, data_value]
+    result_types = typespecs_to_mlir_types([Typespec.tensor({:u, 8}, {})])
+
+    call_target_name =
+      case data_type do
+        {:f, 32} -> "message_outfeed_f32_simple"
+        {:f, 64} -> "message_outfeed_f64_simple"
+        {:s, 32} -> "message_outfeed_s32_simple"
+        type -> raise "Message outfeed not supported for type #{inspect(type)}"
+      end
+
+    attributes = [
+      call_target_name: attr_string(call_target_name),
+      api_version: attr_i32(4)
+    ]
+
+    op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes) |> one!()
+  end
+
+  # Message-based multi-outfeed: sends multiple tensors to Elixir process
+  def message_multi_outfeed(%Value{function: _func} = pid_value, data_values)
+      when is_list(data_values) do
+    %{type: pid_type} = get_typespec(pid_value)
+
+    unless pid_type == {:u, 8} do
+      raise "Message outfeed PID must be u8 type, got: #{inspect(pid_type)}"
+    end
+
+    # For now, we'll implement this by calling individual outfeeds
+    # A more efficient implementation would create a custom call that handles multiple tensors
+    Enum.reduce(data_values, pid_value, fn data_value, _acc ->
+      message_outfeed(pid_value, data_value)
+      # Return pid_value to chain calls
+      pid_value
+    end)
+  end
+
+  @doc """
+  Creates a message-based outfeed custom call with explicit operands.
+  This allows passing multiple tensors (like PID and data) to the custom call.
+  """
+  def message_outfeed_with_operands(
+        %Value{function: func} = _first_operand,
+        operands,
+        call_target_name,
+        result_typespecs
+      ) do
+    result_types = typespecs_to_mlir_types(result_typespecs)
+
+    attributes = [
+      call_target_name: attr_string(call_target_name),
+      api_version: attr_i32(4)
+    ]
+
+    op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes)
+  end
+
+  @doc """
+  Creates a message-based infeed custom call.
+  This requests tensor data from the Elixir process.
+  """
+  def message_infeed_with_operands(
+        %Value{function: func} = _first_operand,
+        operands,
+        call_target_name,
+        result_typespecs
+      ) do
+    result_types = typespecs_to_mlir_types(result_typespecs)
+
+    attributes = [
+      call_target_name: attr_string(call_target_name),
+      api_version: attr_i32(4)
+    ]
+
+    op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes)
+  end
+
   def create_token(%Function{} = func) do
     result_types = [type_token()]
     op(func, "stablehlo.create_token", [], result_types) |> one!()
@@ -830,6 +943,32 @@ defmodule EXLA.MLIR.Value do
       end
 
     {p, l, u}
+  end
+
+  def process_pid(%Value{function: func} = value, result_typespec) do
+    %{type: op_type} = get_typespec(value)
+
+    operands = [value]
+    result_types = typespecs_to_mlir_types([result_typespec])
+
+    call_target_name =
+      case op_type do
+        {:u, 8} ->
+          "pid_cpu_custom_call_u8"
+
+        type ->
+          # Due to matching on EXLA.Defn, we are sure that the device here is always :host
+          raise "PID processing not supported on :host device for type #{inspect(type)}"
+      end
+
+    dbg(call_target_name)
+
+    attributes = [
+      call_target_name: attr_string(call_target_name),
+      api_version: attr_i32(4)
+    ]
+
+    op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes) |> one!()
   end
 
   def get_tuple_element(%Value{function: func} = operand, index, typespec) do

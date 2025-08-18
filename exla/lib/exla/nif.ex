@@ -78,5 +78,10 @@ defmodule EXLA.NIF do
   def reset_peak_memory(_client), do: err!()
   def get_per_device_memory(_client), do: err!()
 
+  # Message-based infeed/outfeed functions
+  def complete_infeed_request_fine(_ref_id, _data), do: err!()
+  def complete_infeed_request(_ref_id, _data), do: err!()
+  def check_infeed_request(_ref_id), do: err!()
+
   defp err!(), do: :erlang.nif_error(:undef)
 end
