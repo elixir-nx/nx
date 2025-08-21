@@ -414,4 +414,19 @@ defmodule EXLA do
 
   @impl true
   defdelegate __to_backend__(opts), to: EXLA.Defn
+
+  def add_one(value, callback) do
+    # Use `NifCall.run/3` to call the NIF function
+    #
+    # - The second argument is the callback function that will be called from the NIF
+    #
+    # - The third argument is the function that can invoke somes NIF functions,
+    #   this is where you normally call the NIF function
+    #
+    #   notice that the third argument is a function that takes a `tag` as an argument
+    #   the `tag` is used as a reference to the callback function in your `Demo.Runner` process
+    NifCall.run(EXLA.NifCall.Runner, callback, fn tag ->
+      EXLA.NIF.add_one(value, tag)
+    end)
+  end
 end

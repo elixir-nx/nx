@@ -7,6 +7,7 @@
 #include "exla_cuda.h"
 #include "exla_log_sink.h"
 #include "exla_mlir.h"
+#include "exla_nif_call.h"
 #include "exla_nif_util.h"
 #include "ipc.h"
 #include "mlir/IR/MLIRContext.h"
@@ -17,6 +18,11 @@
 #include "xla/tsl/platform/statusor.h"
 #include "llvm/Support/ThreadPool.h"
 
+#include "../nif_call.h"
+
+// Make NifCall’s evaluator NIF visible to Fine
+static auto __nif_registration_nif_call = fine::Registration::register_nif(
+    {"nif_call_evaluated", 2, exla_nif_call_evaluated, 0});
 namespace exla {
 
 FINE_RESOURCE(llvm::StdThreadPool);
@@ -540,4 +546,42 @@ FINE_NIF(start_log_sink, 0);
 
 } // namespace exla
 
+namespace fine {
+namespace __private__ {
+int load_with_nif_call(ErlNifEnv *env, void **priv, ERL_NIF_TERM info) {
+  // First: let FINE initialize atoms/resources
+  if (fine::__private__::load(env, priv, info) != 0)
+    return -1;
+  // Then: initialize NifCall
+  if (exla_nif_call_onload(env) != 0)
+    return -1;
+  return 0;
+}
+} // namespace __private__
+} // namespace fine
+
+static ERL_NIF_TERM add_one(ErlNifEnv *env, int argc,
+                            const ERL_NIF_TERM argv[]) {
+  ErlNifSInt64 a;
+  ERL_NIF_TERM tag = argv[1];
+
+  if (!enif_get_int64(env, argv[0], &a))
+    return enif_make_badarg(env);
+  ERL_NIF_TERM result_term = enif_make_int64(env, a + 1);
+
+  // Delegate to exla_nif_call wrapper to avoid duplicate nif_call symbols
+  ERL_NIF_TERM out;
+  if (exla_nif_call_make(env, tag, result_term, &out)) {
+    return out;
+  }
+  return enif_make_tuple2(env, enif_make_atom(env, "error"),
+                          enif_make_atom(env, "nif_call_failed"));
+}
+
+static auto __nif_registration_add_one = fine::Registration::register_nif(
+    {"add_one", 2, add_one, ERL_NIF_DIRTY_JOB_CPU_BOUND});
+
+// This should be upstreamed. This is a hack to get NifCall to work with Fine.
+// Fine should provide a way to extend the load function.
+#define load load_with_nif_call
 FINE_INIT("Elixir.EXLA.NIF");

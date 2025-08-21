@@ -13,6 +13,9 @@ defmodule EXLA.Application do
     pool_size = System.schedulers_online()
 
     children = [
+      {NifCall.Runner,
+       runner_opts: [nif_module: EXLA.NIF, on_evaluated: :nif_call_evaluated],
+       name: EXLA.NifCall.Runner},
       EXLA.Logger,
       {NimblePool,
        worker: {EXLA.MLIR.ContextPool, %{pool_size: pool_size}},

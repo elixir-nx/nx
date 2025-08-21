@@ -1,4 +1,6 @@
 defmodule EXLA.NIF do
+  use NifCall.NIF
+
   @moduledoc false
   @on_load :__on_load__
 
@@ -19,6 +21,8 @@ defmodule EXLA.NIF do
         """
     end
   end
+
+  def add_one(_value, _tag), do: err!()
 
   def mlir_new_thread_pool(_concurrency), do: err!()
   def mlir_new_context(_thread_pool_ref), do: err!()

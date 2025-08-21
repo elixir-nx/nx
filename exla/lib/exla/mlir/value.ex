@@ -684,6 +684,21 @@ defmodule EXLA.MLIR.Value do
     {token, results}
   end
 
+  # Custom infeed via xla::ffi using nif_call. The second argument is a u8
+  # tensor carrying :erlang.term_to_binary(tag), where tag is the value
+  # returned by NifCall.run (a {pid, ref} tuple).
+  # Currently implemented for a single s32 tensor result.
+  def infeed_custom(%Value{function: func} = tag, typespec) do
+    result_types = typespecs_to_mlir_types([typespec])
+
+    attributes = [
+      call_target_name: attr_string("infeed_cpu_custom_call_s32"),
+      api_version: attr_i32(4)
+    ]
+
+    op(func, "stablehlo.custom_call", [tag], result_types, attributes: attributes)
+  end
+
   def outfeed(%Value{} = input, token), do: outfeed([input], token)
 
   def outfeed(inputs, %Value{function: func} = token) do

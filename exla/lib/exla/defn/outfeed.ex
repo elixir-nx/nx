@@ -126,7 +126,14 @@ defmodule EXLA.Defn.Outfeed do
           compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed, pos, typespec})
 
           token = Value.outfeed(Value.constant(builder, [next_flag], flag_typespec()), token)
-          {token, [input]} = Value.infeed(token, [typespec])
+
+          # Build the tag in Elixir land at run time: we pass a zero-sized
+          # placeholder here which compile-time will be replaced by the
+          # real tag as an argument. To keep compilation pure, encode a
+          # dummy empty binary shape here (it will be ignored by custom call).
+          u8_typespec = EXLA.Typespec.tensor({:u, 8}, {})
+          empty_tag = Value.constant(builder, [], u8_typespec)
+          [input] = Value.infeed_custom(empty_tag, typespec)
 
           {{pos, input}, {compiled_hooks, token}}
       end)
