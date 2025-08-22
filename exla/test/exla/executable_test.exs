@@ -288,6 +288,88 @@ defmodule EXLA.ExecutableFeedTest do
     end
   end
 
+  describe "outfeed custom call" do
+    test "outfeeds s32 to an encoded pid" do
+      pid_bin = :erlang.term_to_binary(self())
+      pid_spec = Typespec.tensor({:u, 8}, {byte_size(pid_bin)})
+      pid_buf = BinaryBuffer.from_binary(pid_bin, pid_spec)
+
+      exec =
+        compile([pid_spec], [], [s32_typespec()], fn b, pid_mlir ->
+          val = Value.constant(b, [21], s32_typespec())
+          out = Value.add(val, val, s32_typespec())
+          _tok = Value.outfeed_custom(out, pid_mlir, s32_typespec())
+          [out]
+        end)
+
+      assert [[res = %DeviceBuffer{}]] = EXLA.Executable.run(exec, [[pid_buf]])
+      assert DeviceBuffer.read(res) == <<42::32-native>>
+
+      assert_receive bin when is_binary(bin)
+      assert bin == <<42::32-native>>
+    end
+
+    test "outfeeds f32 to an encoded pid" do
+      pid_bin = :erlang.term_to_binary(self())
+      pid_spec = Typespec.tensor({:u, 8}, {byte_size(pid_bin)})
+      pid_buf = BinaryBuffer.from_binary(pid_bin, pid_spec)
+
+      t_spec = Typespec.tensor({:f, 32}, {})
+
+      exec =
+        compile([pid_spec], [], [t_spec], fn b, pid_mlir ->
+          one_point_five = Value.constant(b, [1.5], t_spec)
+          out = Value.add(one_point_five, one_point_five, t_spec)
+          _tok = Value.outfeed_custom(out, pid_mlir, t_spec)
+          [out]
+        end)
+
+      assert [[res = %DeviceBuffer{}]] = EXLA.Executable.run(exec, [[pid_buf]])
+      assert DeviceBuffer.read(res) == <<3.0::float-native-32>>
+
+      assert_receive bin when is_binary(bin)
+      assert bin == <<3.0::float-native-32>>
+    end
+
+    for {type, data, val} <- [
+          {{:u, 8}, <<42>>, 42},
+          {{:s, 8}, <<-5::signed-8>>, -5},
+          {{:s, 16}, <<-123::signed-16-native>>, -123},
+          {{:u, 16}, <<123::unsigned-16-native>>, 123},
+          {{:u, 32}, <<123_456::unsigned-32-native>>, 123_456},
+          {{:u, 64}, <<123_456_789::unsigned-64-native>>, 123_456_789},
+          {{:s, 64}, <<-123_456_789::signed-64-native>>, -123_456_789},
+          {{:f, 16}, <<1.5::float-native-16>>, 1.5},
+          {{:bf, 16}, Nx.bf16(1.5) |> Nx.to_binary(), 1.5},
+          {{:f, 64}, <<3.5::float-native-64>>, 3.5},
+          {{:c, 64}, <<1.5::float-native-32, -2.5::float-native-32>>,
+           %Complex{re: 1.5, im: -2.5}},
+          {{:c, 128}, <<1.5::float-native-64, -2.5::float-native-64>>,
+           %Complex{re: 1.5, im: -2.5}}
+        ] do
+      test "outfeeds #{inspect(type)} to an encoded pid" do
+        pid_bin = :erlang.term_to_binary(self())
+        pid_spec = Typespec.tensor({:u, 8}, {byte_size(pid_bin)})
+        pid_buf = BinaryBuffer.from_binary(pid_bin, pid_spec)
+
+        t_spec = Typespec.tensor(unquote(type), {})
+
+        exec =
+          compile([pid_spec], [], [t_spec], fn b, pid_mlir ->
+            const = Value.constant(b, [unquote(Macro.escape(val))], t_spec)
+            _tok = Value.outfeed_custom(const, pid_mlir, t_spec)
+            [const]
+          end)
+
+        assert [[res = %DeviceBuffer{}]] = EXLA.Executable.run(exec, [[pid_buf]])
+        assert DeviceBuffer.read(res) == unquote(data)
+
+        assert_receive bin when is_binary(bin)
+        assert bin == unquote(data)
+      end
+    end
+  end
+
   defp s32_typespec(), do: Typespec.tensor({:s, 32}, {})
 
   defp from_outfeed(client, device_id, typespec) do

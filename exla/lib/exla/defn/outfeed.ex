@@ -127,17 +127,18 @@ defmodule EXLA.Defn.Outfeed do
 
           token = Value.outfeed(Value.constant(builder, [next_flag], flag_typespec()), token)
 
-          # Build the tag in Elixir land at run time: we pass a zero-sized
-          # placeholder here which compile-time will be replaced by the
-          # real tag as an argument. To keep compilation pure, encode a
-          # dummy empty binary shape here (it will be ignored by custom call).
-          u8_typespec = EXLA.Typespec.tensor({:u, 8}, {})
-          empty_tag = Value.constant(builder, [], u8_typespec)
-          # TODO: token should now be a tuple of {next_tag, pid}, where next_tag
-          # is used for infeeds and pid is used for outfeeds
-          {_next_tag, input} = Value.infeed_custom(empty_tag, typespec)
-
-          {{pos, input}, {compiled_hooks, token}}
+          if System.get_env("EXLA_INFEED_VIA_NIF_CALL") == "1" do
+            # Build the tag in Elixir land at run time: we pass a placeholder
+            # here which runtime will be replaced by the real tag as an arg.
+            # This path is experimental and off by default.
+            u8_typespec = EXLA.Typespec.tensor({:u, 8}, {})
+            empty_tag = Value.constant(builder, [0], u8_typespec)
+            {_next_tag, input} = Value.infeed_custom(empty_tag, typespec)
+            {{pos, input}, {compiled_hooks, token}}
+          else
+            {token, [input]} = Value.infeed(token, [typespec])
+            {{pos, input}, {compiled_hooks, token}}
+          end
       end)
 
     %{outfeed | compiled_hooks: compiled_hooks, token: token, infeeds: infeeds}

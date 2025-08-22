@@ -730,6 +730,36 @@ defmodule EXLA.MLIR.Value do
     op(func, "stablehlo.outfeed", inputs ++ [token], result_types) |> one!()
   end
 
+  # Custom outfeed via xla::ffi using enif_send.
+  # pid_tag is a u8 tensor of :erlang.term_to_binary(pid).
+  def outfeed_custom(%Value{function: func} = input, %Value{function: func} = pid_tag, typespec) do
+    result_types = [type_token()]
+
+    attributes = [
+      call_target_name: attr_string(outfeed_custom_call_target(typespec)),
+      api_version: attr_i32(4),
+      has_side_effect: attr_boolean(true)
+    ]
+
+    op(func, "stablehlo.custom_call", [input, pid_tag], result_types, attributes: attributes)
+    |> one!()
+  end
+
+  defp outfeed_custom_call_target(%{type: {:u, 8}}), do: "outfeed_cpu_custom_call_u8"
+  defp outfeed_custom_call_target(%{type: {:s, 8}}), do: "outfeed_cpu_custom_call_s8"
+  defp outfeed_custom_call_target(%{type: {:s, 16}}), do: "outfeed_cpu_custom_call_s16"
+  defp outfeed_custom_call_target(%{type: {:u, 16}}), do: "outfeed_cpu_custom_call_u16"
+  defp outfeed_custom_call_target(%{type: {:s, 32}}), do: "outfeed_cpu_custom_call_s32"
+  defp outfeed_custom_call_target(%{type: {:u, 32}}), do: "outfeed_cpu_custom_call_u32"
+  defp outfeed_custom_call_target(%{type: {:u, 64}}), do: "outfeed_cpu_custom_call_u64"
+  defp outfeed_custom_call_target(%{type: {:s, 64}}), do: "outfeed_cpu_custom_call_s64"
+  defp outfeed_custom_call_target(%{type: {:f, 16}}), do: "outfeed_cpu_custom_call_f16"
+  defp outfeed_custom_call_target(%{type: {:bf, 16}}), do: "outfeed_cpu_custom_call_bf16"
+  defp outfeed_custom_call_target(%{type: {:f, 32}}), do: "outfeed_cpu_custom_call_f32"
+  defp outfeed_custom_call_target(%{type: {:f, 64}}), do: "outfeed_cpu_custom_call_f64"
+  defp outfeed_custom_call_target(%{type: {:c, 64}}), do: "outfeed_cpu_custom_call_c64"
+  defp outfeed_custom_call_target(%{type: {:c, 128}}), do: "outfeed_cpu_custom_call_c128"
+
   def create_token(%Function{} = func) do
     result_types = [type_token()]
     op(func, "stablehlo.create_token", [], result_types) |> one!()
