@@ -684,19 +684,37 @@ defmodule EXLA.MLIR.Value do
     {token, results}
   end
 
-  # Custom infeed via xla::ffi using nif_call. The second argument is a u8
-  # tensor carrying :erlang.term_to_binary(tag), where tag is the value
-  # returned by NifCall.run (a {pid, ref} tuple).
-  # Currently implemented for a single s32 tensor result.
+  # Custom infeed via xla::ffi using nif_call. The argument is a u8 tensor
+  # carrying :erlang.term_to_binary(tag), where tag is the value returned by
+  # NifCall.run (a {pid, ref} tuple). Supports multiple dtypes.
   def infeed_custom(%Value{function: func} = tag, typespec) do
     result_types = typespecs_to_mlir_types([typespec])
 
     attributes = [
-      call_target_name: attr_string("infeed_cpu_custom_call_s32"),
+      call_target_name: attr_string(infeed_custom_call_target(typespec)),
       api_version: attr_i32(4)
     ]
 
     op(func, "stablehlo.custom_call", [tag], result_types, attributes: attributes)
+  end
+
+  defp infeed_custom_call_target(%{type: {:u, 8}}), do: "infeed_cpu_custom_call_u8"
+  defp infeed_custom_call_target(%{type: {:s, 8}}), do: "infeed_cpu_custom_call_s8"
+  defp infeed_custom_call_target(%{type: {:s, 16}}), do: "infeed_cpu_custom_call_s16"
+  defp infeed_custom_call_target(%{type: {:u, 16}}), do: "infeed_cpu_custom_call_u16"
+  defp infeed_custom_call_target(%{type: {:s, 32}}), do: "infeed_cpu_custom_call_s32"
+  defp infeed_custom_call_target(%{type: {:u, 32}}), do: "infeed_cpu_custom_call_u32"
+  defp infeed_custom_call_target(%{type: {:u, 64}}), do: "infeed_cpu_custom_call_u64"
+  defp infeed_custom_call_target(%{type: {:s, 64}}), do: "infeed_cpu_custom_call_s64"
+  defp infeed_custom_call_target(%{type: {:f, 32}}), do: "infeed_cpu_custom_call_f32"
+  defp infeed_custom_call_target(%{type: {:f, 64}}), do: "infeed_cpu_custom_call_f64"
+  defp infeed_custom_call_target(%{type: {:f, 16}}), do: "infeed_cpu_custom_call_f16"
+  defp infeed_custom_call_target(%{type: {:bf, 16}}), do: "infeed_cpu_custom_call_bf16"
+  defp infeed_custom_call_target(%{type: {:c, 64}}), do: "infeed_cpu_custom_call_c64"
+  defp infeed_custom_call_target(%{type: {:c, 128}}), do: "infeed_cpu_custom_call_c128"
+
+  defp infeed_custom_call_target(%{type: type}) do
+    raise ArgumentError, "infeed custom_call not implemented for type #{inspect(type)}"
   end
 
   def outfeed(%Value{} = input, token), do: outfeed([input], token)

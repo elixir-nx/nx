@@ -241,6 +241,42 @@ defmodule EXLA.ExecutableFeedTest do
     end
   end
 
+  describe "infeed custom call dtypes" do
+    defp tag_typespec(bin), do: Typespec.tensor({:u, 8}, {byte_size(bin)})
+
+    for {type, data} <- [
+          {{:u, 8}, <<42>>},
+          {{:s, 8}, <<-5::signed-8>>},
+          {{:s, 16}, <<-123::signed-16-native>>},
+          {{:u, 16}, <<123::unsigned-16-native>>},
+          {{:u, 32}, <<123_456::unsigned-32-little>>},
+          {{:u, 64}, <<123_456_789::unsigned-64-little>>},
+          {{:s, 64}, <<-123_456_789::signed-64-little>>},
+          {{:c, 64}, <<1.5::float-little-32, -2.5::float-little-32>>},
+          {{:c, 128}, <<1.5::float-little-64, -2.5::float-little-64>>}
+        ] do
+      test "custom infeed #{inspect(type)}" do
+        data_typespec = Typespec.tensor(unquote(Macro.escape(type)), {})
+
+        NifCall.run(EXLA.NifCall.Runner, fn _arg -> unquote(data) end, fn tag ->
+          tag_bin = :erlang.term_to_binary(tag)
+          tag_spec = tag_typespec(tag_bin)
+
+          tag_buf = BinaryBuffer.from_binary(tag_bin, tag_spec)
+
+          exec =
+            compile([tag_spec], [], [data_typespec], fn _b, tag_mlir ->
+              [res] = Value.infeed_custom(tag_mlir, data_typespec)
+              [res]
+            end)
+
+          assert [[res = %DeviceBuffer{}]] = EXLA.Executable.run(exec, [[tag_buf]])
+          assert DeviceBuffer.read(res) == unquote(data)
+        end)
+      end
+    end
+  end
+
   defp s32_typespec(), do: Typespec.tensor({:s, 32}, {})
 
   defp from_outfeed(client, device_id, typespec) do
