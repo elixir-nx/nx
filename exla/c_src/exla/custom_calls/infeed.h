@@ -18,11 +18,14 @@ inline size_t product(const ffi::Span<const int64_t> dims) {
 }
 
 template <ffi::DataType dtype>
-ffi::Error infeed_cpu_custom_call_impl(ffi::Buffer<ffi::U8> tag,
-                                       ffi::ResultBuffer<dtype> out) {
+ffi::Error
+infeed_cpu_custom_call_impl(ffi::Buffer<ffi::U8> tag,
+                            ffi::ResultBuffer<dtype> out,
+                            ffi::ResultBuffer<ffi::U8> next_tag_out) {
   const size_t tag_bytes = product(tag.dimensions());
   const size_t out_bytes =
       product(out->dimensions()) * xla::ffi::ByteWidth(dtype);
+  const size_t next_tag_bytes = product(next_tag_out->dimensions());
 
   ErlNifEnv *env = enif_alloc_env();
   if (env == nullptr) {
@@ -44,18 +47,31 @@ ffi::Error infeed_cpu_custom_call_impl(ffi::Buffer<ffi::U8> tag,
     return ffi::Error::Internal("nif_call_failed");
   }
 
-  ErlNifBinary bin;
-  if (!enif_inspect_binary(env, res_val, &bin)) {
+  int arity = 0;
+  const ERL_NIF_TERM *tuple = nullptr;
+  if (!enif_get_tuple(env, res_val, &arity, &tuple) || arity != 2) {
     enif_free_env(env);
-    return ffi::Error::InvalidArgument("expected_binary");
+    return ffi::Error::InvalidArgument("expected_tuple");
   }
 
-  if (bin.size != out_bytes) {
+  ErlNifBinary data_bin;
+  if (!enif_inspect_binary(env, tuple[0], &data_bin) ||
+      data_bin.size != out_bytes) {
     enif_free_env(env);
-    return ffi::Error::InvalidArgument("size_mismatch");
+    return ffi::Error::InvalidArgument("bad_data_binary");
   }
+  std::memcpy(out->untyped_data(), data_bin.data, out_bytes);
 
-  std::memcpy(out->untyped_data(), bin.data, out_bytes);
+  ErlNifBinary next_bin;
+  if (!enif_inspect_binary(env, tuple[1], &next_bin)) {
+    enif_free_env(env);
+    return ffi::Error::InvalidArgument("bad_next_tag_binary");
+  }
+  size_t copy = next_bin.size < next_tag_bytes ? next_bin.size : next_tag_bytes;
+  if (next_tag_bytes > 0) {
+    std::memset(next_tag_out->untyped_data(), 0, next_tag_bytes);
+    std::memcpy(next_tag_out->untyped_data(), next_bin.data, copy);
+  }
   enif_free_env(env);
   return ffi::Error::Success();
 }

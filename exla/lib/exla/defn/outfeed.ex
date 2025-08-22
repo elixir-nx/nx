@@ -133,7 +133,9 @@ defmodule EXLA.Defn.Outfeed do
           # dummy empty binary shape here (it will be ignored by custom call).
           u8_typespec = EXLA.Typespec.tensor({:u, 8}, {})
           empty_tag = Value.constant(builder, [], u8_typespec)
-          [input] = Value.infeed_custom(empty_tag, typespec)
+          # TODO: token should now be a tuple of {next_tag, pid}, where next_tag
+          # is used for infeeds and pid is used for outfeeds
+          {_next_tag, input} = Value.infeed_custom(empty_tag, typespec)
 
           {{pos, input}, {compiled_hooks, token}}
       end)

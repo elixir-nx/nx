@@ -256,22 +256,33 @@ defmodule EXLA.ExecutableFeedTest do
           {{:c, 128}, <<1.5::float-little-64, -2.5::float-little-64>>}
         ] do
       test "custom infeed #{inspect(type)}" do
-        data_typespec = Typespec.tensor(unquote(Macro.escape(type)), {})
+        first_data_typespec = Typespec.tensor(unquote(Macro.escape(type)), {})
+        second_data_typespec = Typespec.tensor({:s, 32}, {2})
 
-        NifCall.run(EXLA.NifCall.Runner, fn _arg -> unquote(data) end, fn tag ->
+        pid =
+          start_supervised!(
+            {Agent, fn -> [unquote(data), <<42::32-native, 1337::32-native>>] end}
+          )
+
+        NifCall.run(EXLA.NifCall.Runner, &infeed_callback(&1, pid), fn tag ->
           tag_bin = :erlang.term_to_binary(tag)
           tag_spec = tag_typespec(tag_bin)
 
           tag_buf = BinaryBuffer.from_binary(tag_bin, tag_spec)
 
           exec =
-            compile([tag_spec], [], [data_typespec], fn _b, tag_mlir ->
-              [res] = Value.infeed_custom(tag_mlir, data_typespec)
-              [res]
+            compile([tag_spec], [], [first_data_typespec, second_data_typespec], fn _b,
+                                                                                    tag_mlir ->
+              {next_tag, res1} = Value.infeed_custom(tag_mlir, first_data_typespec)
+              {_next_tag, res2} = Value.infeed_custom(next_tag, second_data_typespec)
+              [res1, res2]
             end)
 
-          assert [[res = %DeviceBuffer{}]] = EXLA.Executable.run(exec, [[tag_buf]])
-          assert DeviceBuffer.read(res) == unquote(data)
+          assert [[res1 = %DeviceBuffer{}, res2 = %DeviceBuffer{}]] =
+                   EXLA.Executable.run(exec, [[tag_buf]])
+
+          assert DeviceBuffer.read(res1) == unquote(data)
+          assert DeviceBuffer.read(res2) == <<42::32-native, 1337::32-native>>
         end)
       end
     end
@@ -286,5 +297,13 @@ defmodule EXLA.ExecutableFeedTest do
     receive do
       {^ref, msg} -> msg
     end
+  end
+
+  def infeed_callback(_, pid) do
+    Agent.get_and_update(pid, fn [h | tl] ->
+      tag = NifCall.Runner.register(EXLA.NifCall.Runner, &infeed_callback(&1, pid))
+      tag_bin = :erlang.term_to_binary(tag)
+      {{h, tag_bin}, tl}
+    end)
   end
 end

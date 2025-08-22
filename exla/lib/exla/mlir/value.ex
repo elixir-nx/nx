@@ -688,14 +688,20 @@ defmodule EXLA.MLIR.Value do
   # carrying :erlang.term_to_binary(tag), where tag is the value returned by
   # NifCall.run (a {pid, ref} tuple). Supports multiple dtypes.
   def infeed_custom(%Value{function: func} = tag, typespec) do
-    result_types = typespecs_to_mlir_types([typespec])
+    # We request the value plus a next-tag buffer to allow re-registration
+    # semantics across multiple calls. We currently fix next-tag to 64 bytes.
+    next_tag_typespec = Typespec.tensor({:u, 8}, {65})
+    result_types = typespecs_to_mlir_types([typespec, next_tag_typespec])
 
     attributes = [
       call_target_name: attr_string(infeed_custom_call_target(typespec)),
       api_version: attr_i32(4)
     ]
 
-    op(func, "stablehlo.custom_call", [tag], result_types, attributes: attributes)
+    [result, next_tag] =
+      op(func, "stablehlo.custom_call", [tag], result_types, attributes: attributes)
+
+    {next_tag, result}
   end
 
   defp infeed_custom_call_target(%{type: {:u, 8}}), do: "infeed_cpu_custom_call_u8"
