@@ -723,6 +723,26 @@ defmodule EXLA.MLIR.Value do
     raise ArgumentError, "infeed custom_call not implemented for type #{inspect(type)}"
   end
 
+  # Variadic infeed custom call for multiple tensors
+  def infeed_variadic_custom(%Value{function: func} = tag, typespecs) when is_list(typespecs) do
+    # We request all the values plus a next-tag buffer to allow re-registration
+    # semantics across multiple calls. We currently fix next-tag to 64 bytes.
+    next_tag_typespec = Typespec.tensor({:u, 8}, {65})
+    result_typespecs = typespecs ++ [next_tag_typespec]
+    result_types = typespecs_to_mlir_types(result_typespecs)
+
+    attributes = [
+      call_target_name: attr_string("infeed_variadic_cpu_custom_call"),
+      api_version: attr_i32(4)
+    ]
+
+    results =
+      op(func, "stablehlo.custom_call", [tag], result_types, attributes: attributes)
+
+    # Return {next_tag, [tensor_results]}
+    {List.last(results), Enum.drop(results, -1)}
+  end
+
   def outfeed(%Value{} = input, token), do: outfeed([input], token)
 
   def outfeed(inputs, %Value{function: func} = token) do
@@ -759,6 +779,23 @@ defmodule EXLA.MLIR.Value do
   defp outfeed_custom_call_target(%{type: {:f, 64}}), do: "outfeed_cpu_custom_call_f64"
   defp outfeed_custom_call_target(%{type: {:c, 64}}), do: "outfeed_cpu_custom_call_c64"
   defp outfeed_custom_call_target(%{type: {:c, 128}}), do: "outfeed_cpu_custom_call_c128"
+
+  # Variadic outfeed custom call for multiple tensors
+  def outfeed_variadic_custom(inputs, %Value{function: func} = pid_tag) when is_list(inputs) do
+    result_types = [type_token()]
+
+    attributes = [
+      call_target_name: attr_string("outfeed_variadic_cpu_custom_call"),
+      api_version: attr_i32(4),
+      has_side_effect: attr_boolean(true)
+    ]
+
+    # All tensor inputs plus pid_tag at the end
+    all_inputs = inputs ++ [pid_tag]
+
+    op(func, "stablehlo.custom_call", all_inputs, result_types, attributes: attributes)
+    |> one!()
+  end
 
   def create_token(%Function{} = func) do
     result_types = [type_token()]

@@ -7,6 +7,7 @@ defmodule EXLA.Defn.Outfeed do
 
   alias EXLA.MLIR.Function
   alias EXLA.MLIR.Value
+  alias EXLA.Typespec
 
   defstruct user_hooks: %{},
             default_hooks: %{},
@@ -116,32 +117,61 @@ defmodule EXLA.Defn.Outfeed do
   def add_infeeds(%Outfeed{} = outfeed, builder, entries) do
     %{compiled_hooks: compiled_hooks, token: token} = outfeed
 
-    # Reversed because higher depth comes first
-    {infeeds, {compiled_hooks, token}} =
-      entries
-      |> List.keysort(1, :desc)
-      |> Enum.map_reduce({compiled_hooks, token}, fn
-        {pos, _, typespec}, {compiled_hooks, token} ->
-          next_flag = next_hook(compiled_hooks)
-          compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed, pos, typespec})
+    # Check if we should use variadic infeeds
+    use_variadic = System.get_env("EXLA_VARIADIC_INFEED") == "1"
 
-          token = Value.outfeed(Value.constant(builder, [next_flag], flag_typespec()), token)
+    if use_variadic and length(entries) > 1 do
+      # Use variadic infeed for multiple entries
+      next_flag = next_hook(compiled_hooks)
+      compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed_variadic, entries})
 
-          if System.get_env("EXLA_INFEED_VIA_NIF_CALL") == "1" do
-            # Build the tag in Elixir land at run time: we pass a placeholder
-            # here which runtime will be replaced by the real tag as an arg.
-            # This path is experimental and off by default.
-            u8_typespec = EXLA.Typespec.tensor({:u, 8}, {})
-            empty_tag = Value.constant(builder, [0], u8_typespec)
-            {_next_tag, input} = Value.infeed_custom(empty_tag, typespec)
-            {{pos, input}, {compiled_hooks, token}}
-          else
-            {token, [input]} = Value.infeed(token, [typespec])
-            {{pos, input}, {compiled_hooks, token}}
-          end
-      end)
+      token = Value.outfeed(Value.constant(builder, [next_flag], flag_typespec()), token)
 
-    %{outfeed | compiled_hooks: compiled_hooks, token: token, infeeds: infeeds}
+      # Build the tag in Elixir land at run time: we pass a placeholder
+      # here which runtime will be replaced by the real tag as an arg.
+      u8_typespec = EXLA.Typespec.tensor({:u, 8}, {})
+      empty_tag = Value.constant(builder, [0], u8_typespec)
+
+      # Extract typespecs for variadic call
+      typespecs = Enum.map(entries, fn {_pos, _depth, typespec} -> typespec end)
+      {_next_tag, inputs} = Value.infeed_variadic_custom(empty_tag, typespecs)
+
+      # Map inputs back to positions
+      infeeds =
+        entries
+        |> Enum.zip(inputs)
+        |> Enum.map(fn {{pos, _depth, _typespec}, input} -> {pos, input} end)
+
+      %{outfeed | compiled_hooks: compiled_hooks, token: token, infeeds: infeeds}
+    else
+      # Original approach: process each entry individually
+      # Reversed because higher depth comes first
+      {infeeds, {compiled_hooks, token}} =
+        entries
+        |> List.keysort(1, :desc)
+        |> Enum.map_reduce({compiled_hooks, token}, fn
+          {pos, _, typespec}, {compiled_hooks, token} ->
+            next_flag = next_hook(compiled_hooks)
+            compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed, pos, typespec})
+
+            token = Value.outfeed(Value.constant(builder, [next_flag], flag_typespec()), token)
+
+            if System.get_env("EXLA_INFEED_VIA_NIF_CALL") == "1" do
+              # Build the tag in Elixir land at run time: we pass a placeholder
+              # here which runtime will be replaced by the real tag as an arg.
+              # This path is experimental and off by default.
+              u8_typespec = EXLA.Typespec.tensor({:u, 8}, {})
+              empty_tag = Value.constant(builder, [0], u8_typespec)
+              {_next_tag, input} = Value.infeed_custom(empty_tag, typespec)
+              {{pos, input}, {compiled_hooks, token}}
+            else
+              {token, [input]} = Value.infeed(token, [typespec])
+              {{pos, input}, {compiled_hooks, token}}
+            end
+        end)
+
+      %{outfeed | compiled_hooks: compiled_hooks, token: token, infeeds: infeeds}
+    end
   end
 
   defp flag_typespec(), do: EXLA.Typespec.tensor({:u, 16}, {})
@@ -183,9 +213,18 @@ defmodule EXLA.Defn.Outfeed do
     typespecs = Enum.map(tuple, &Value.get_typespec/1)
 
     token =
-      Enum.reduce(tuple, token, fn elem, token ->
-        Value.outfeed(elem, token)
-      end)
+      if System.get_env("EXLA_VARIADIC_OUTFEED") == "1" do
+        # Use variadic outfeed for multiple tensors
+        pid_tag = Value.constant(builder, [:erlang.term_to_binary(self())],
+                                Typespec.tensor({:u, 8}, {byte_size(:erlang.term_to_binary(self()))}))
+        Value.outfeed_variadic_custom(tuple, pid_tag)
+        token  # Return the original token since variadic call returns its own
+      else
+        # Original approach: outfeed each tensor individually
+        Enum.reduce(tuple, token, fn elem, token ->
+          Value.outfeed(elem, token)
+        end)
+      end
 
     {%{outfeed | token: token}, flag, typespecs}
   end
@@ -245,6 +284,20 @@ defmodule EXLA.Defn.Outfeed do
               end
 
             EXLA.Client.to_infeed(client, device_id, [{data, data_typespec}])
+            loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
+
+          {:infeed_variadic, entries} ->
+            # Handle variadic infeed: collect data for all entries
+            data_list =
+              Enum.map(entries, fn {pos, _depth, data_typespec} ->
+                data = case Map.fetch!(infeeds, pos) do
+                  %EXLA.DeviceBuffer{} = buffer -> EXLA.DeviceBuffer.read(buffer)
+                  %EXLA.BinaryBuffer{data: data} -> data
+                end
+                {data, data_typespec}
+              end)
+
+            EXLA.Client.to_infeed(client, device_id, data_list)
             loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
 
           {:function, typespecs, name, template} ->
