@@ -89,6 +89,7 @@ defmodule EXLA.Client do
   """
   def to_infeed(%EXLA.Client{ref: client}, device_id, data_and_typespecs)
       when is_list(data_and_typespecs) do
+    # Always enqueue via NIF for the infeed queue consumed by the custom call
     {buffers, typespecs} = Enum.unzip(data_and_typespecs)
     EXLA.NIF.transfer_to_infeed(client, device_id, buffers, typespecs)
   end
@@ -98,7 +99,12 @@ defmodule EXLA.Client do
   """
   def from_outfeed(%EXLA.Client{ref: client}, device_id, typespecs, pid, ref)
       when is_list(typespecs) do
-    EXLA.NIF.transfer_from_outfeed(client, device_id, typespecs, pid, ref)
+    # Keep compatibility: allow registering with a user reader in the
+    # Elixir outfeed process. If no process exists, fallback to NIF.
+    case Process.whereis(:"outfeed_process_#{device_id}") do
+      nil -> EXLA.NIF.transfer_from_outfeed(client, device_id, typespecs, pid, ref)
+      outfeed_pid -> send(outfeed_pid, {:register_outfeed_reader, pid, ref, typespecs}); :ok
+    end
   end
 
   @doc """

@@ -678,16 +678,10 @@ defmodule EXLA.MLIR.Value do
   end
 
   def infeed(%Value{function: func} = token, typespecs) when is_list(typespecs) do
-    # Use custom call for infeed - main version with token
-    result_types = typespecs_to_mlir_types(typespecs)
-
-    attributes = [
-      call_target_name: attr_string("infeed_main_custom_call"),
-      api_version: attr_i32(4)
-    ]
-
-    results = op(func, "stablehlo.custom_call", [token], result_types, attributes: attributes)
-
+    # Use the per-function tag argument to drive variadic infeed via custom-call.
+    # The last function argument is reserved for the session tag when streaming is enabled.
+    [tag_arg] = func |> EXLA.MLIR.Function.get_arguments() |> Enum.reverse() |> Enum.take(1)
+    {_, results} = infeed_custom(tag_arg, typespecs)
     {token, results}
   end
 
@@ -741,7 +735,8 @@ defmodule EXLA.MLIR.Value do
   end
 
   def outfeed(inputs, %Value{function: func} = token) when is_list(inputs) do
-    # Use custom call for outfeed - main version with token
+    # Send data directly to XLA's outfeed queue using outfeed_main_custom_call
+    # This should coordinate with Client.from_outfeed
     attributes = [
       call_target_name: attr_string("outfeed_main_custom_call"),
       api_version: attr_i32(4),
@@ -795,17 +790,10 @@ defmodule EXLA.MLIR.Value do
     nil
   end
 
-  def create_token(%Function{} = func, pid \\ nil) do
-    # Create a token with the actual {pid, {ref, pid}} term encoding
-    target_pid = pid || self()
-    ref = make_ref()
-    process_tag = :erlang.term_to_binary({target_pid, {ref, target_pid}})
-
-    # Use the actual byte size of the encoded term
-    token_size = byte_size(process_tag)
-
-    Value.constant(func, :binary.bin_to_list(process_tag),
-                  Typespec.tensor({:u, 8}, {token_size}))
+  def create_token(%Function{} = func, _pid \\ nil) do
+    # Create a simple scalar token for consistency with stablehlo.if operations
+    # The PID information will be handled separately in the custom calls
+    Value.constant(func, [0], Typespec.tensor({:u, 8}, {}))
   end
 
   def call(%Function{} = func, args, %Function{} = computation, typespecs) do

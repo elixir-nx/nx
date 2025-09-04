@@ -132,11 +132,9 @@ defmodule EXLA.Defn.Outfeed do
           # Send flag notification via outfeed
           Value.outfeed([Value.constant(builder, [next_flag], EXLA.Typespec.tensor({:u, 16}, {}))], builder)
 
-          # Create simple tag placeholder
-          u8_typespec = EXLA.Typespec.tensor({:u, 8}, {})
-          empty_tag = Value.constant(builder, [0], u8_typespec)
-
-          {_next_tag, input} = Value.infeed_custom(empty_tag, typespec)
+          # Use the session tag argument (last function arg)
+          [tag_arg] = EXLA.MLIR.Function.get_arguments(builder) |> Enum.reverse() |> Enum.take(1)
+          {_next_tag, input} = Value.infeed_custom(tag_arg, typespec)
 
           %{outfeed | compiled_hooks: compiled_hooks, token: token, infeeds: [{pos, input}]}
         else
@@ -147,13 +145,10 @@ defmodule EXLA.Defn.Outfeed do
           # Send flag notification via outfeed
           Value.outfeed([Value.constant(builder, [next_flag], EXLA.Typespec.tensor({:u, 16}, {}))], builder)
 
-          # Create simple tag placeholder
-          u8_typespec = EXLA.Typespec.tensor({:u, 8}, {})
-          empty_tag = Value.constant(builder, [0], u8_typespec)
-
           # Extract typespecs for variadic call
           typespecs = Enum.map(entries, fn {_pos, _depth, typespec} -> typespec end)
-          {_next_tag, inputs} = Value.infeed_custom(empty_tag, typespecs)
+          [tag_arg] = EXLA.MLIR.Function.get_arguments(builder) |> Enum.reverse() |> Enum.take(1)
+          {_next_tag, inputs} = Value.infeed_custom(tag_arg, typespecs)
 
           # Map inputs back to positions
           infeeds =
@@ -207,9 +202,11 @@ defmodule EXLA.Defn.Outfeed do
     Value.outfeed([Value.constant(builder, [flag], EXLA.Typespec.tensor({:u, 16}, {}))], builder)
     typespecs = Enum.map(tuple, &Value.get_typespec/1)
 
-    # Use individual tensor outfeeds for function hooks to maintain compatibility
+    # Send individual tensor outfeeds using the main outfeed custom call.
+    # We purposely avoid XLA's native outfeed queues and rely on our
+    # custom-call implementation to deliver binaries to the Elixir process.
     Enum.each(tuple, fn elem ->
-      Value.outfeed_custom([elem], builder)
+      Value.outfeed([elem], builder)
     end)
 
     {%{outfeed | token: token}, flag, typespecs}
@@ -239,28 +236,73 @@ defmodule EXLA.Defn.Outfeed do
 
     hooks = Map.merge(default_hooks, user_hooks)
 
-    Task.Supervisor.start_child(EXLA.Defn.TaskSupervisor, fn ->
-      init(client, device_id, hooks, compiled_hooks, infeeds, group_leader)
-    end)
+    # Ensure a single coordinator per device; if it exists, reuse and begin a new session.
+    name = :"exla_feed_process_#{device_id}"
+    pid =
+      case Process.whereis(name) do
+        nil ->
+          {:ok, pid} =
+            Task.Supervisor.start_child(EXLA.Defn.TaskSupervisor, fn ->
+              init(client, device_id, hooks, compiled_hooks, infeeds, group_leader)
+            end)
+
+          pid
+
+        pid when is_pid(pid) ->
+          pid
+      end
+
+    # Create and provide a fresh session tag for this run (closure binds device_id)
+    fun = fn action -> infeed_callback(device_id, action) end
+    tag = EXLA.NifCall.Runner.register(EXLA.NifCall.Runner, fun)
+    send(pid, {:begin_session, hooks, compiled_hooks, infeeds, self(), tag})
+    receive do
+      {:session_ready, ^pid} -> {:ok, {pid, tag}}
+    after
+      5_000 -> {:error, :session_timeout}
+    end
   end
 
   defp init(client, device_id, hooks, compiled_hooks, infeeds, group_leader) do
     Process.flag(:trap_exit, true)
     # Copy the group leader so we report to the proper device
     Process.group_leader(self(), group_leader)
-    ref = make_ref()
+
+    # Register this process for infeed/outfeed coordination (idempotent)
+    name = :"exla_feed_process_#{device_id}"
+    _ = Process.whereis(name) || Process.register(self(), name)
+
+    # Enter the loop. We no longer use XLA's outfeed queues – the native
+    # custom-calls send messages directly to this process.
     typespec = EXLA.Typespec.tensor({:u, 16}, {})
-    loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
+    loop(client, device_id, typespec, hooks, compiled_hooks, infeeds, %{infeed_q: :queue.new(), session_tag: nil})
   end
 
-  defp loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds) do
-    :ok = EXLA.Client.from_outfeed(client, device_id, [typespec], self(), ref)
-
+  defp loop(client, device_id, typespec, hooks, compiled_hooks, infeeds, state) do
     receive do
-      {^ref, <<0::native-unsigned-16>>} ->
+      {:begin_session, new_hooks, new_compiled_hooks, new_infeeds, caller, tag} ->
+        send(caller, {:session_ready, self()})
+        loop(client, device_id, typespec, new_hooks, new_compiled_hooks, new_infeeds, %{infeed_q: :queue.new(), session_tag: tag})
+
+      # Handle infeed data requests
+      {:infeed_data, data_and_typespecs} ->
+        # Enqueue data into the infeed queue
+        updated_q = :queue.in(data_and_typespecs, state.infeed_q)
+        updated_state = %{state | infeed_q: updated_q}
+        loop(client, device_id, typespec, hooks, compiled_hooks, infeeds, updated_state)
+
+      # Handle outfeed reader registrations
+      {:register_outfeed_reader, reader_pid, reader_ref, reader_typespecs} ->
+        # Store outfeed reader info
+        updated_state = Map.put(state, :outfeed_reader, {reader_pid, reader_ref, reader_typespecs})
+        loop(client, device_id, typespec, hooks, compiled_hooks, infeeds, updated_state)
+
+      # Close signal sent by native outfeed custom-call (flag 0)
+      <<0::native-unsigned-16>> ->
         :ok
 
-      {^ref, <<flag::native-unsigned-16>>} ->
+      # Flag sent by native outfeed custom-call
+      <<flag::native-unsigned-16>> ->
         case Map.fetch!(compiled_hooks, flag) do
           {:infeed, index, data_typespec} ->
             data =
@@ -269,8 +311,10 @@ defmodule EXLA.Defn.Outfeed do
                 %EXLA.BinaryBuffer{data: data} -> data
               end
 
-            EXLA.Client.to_infeed(client, device_id, [{data, data_typespec}])
-            loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
+            # Enqueue into infeed queue for the custom infeed to consume
+            updated_q = :queue.in([{data, data_typespec}], state.infeed_q)
+            state = %{state | infeed_q: updated_q}
+            loop(client, device_id, typespec, hooks, compiled_hooks, infeeds, state)
 
           {:infeed_variadic, entries} ->
             # Handle variadic infeed: collect data for all entries
@@ -282,24 +326,71 @@ defmodule EXLA.Defn.Outfeed do
                 end
                 {data, data_typespec}
               end)
-
-            EXLA.Client.to_infeed(client, device_id, data_list)
-            loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
+            updated_q = :queue.in(data_list, state.infeed_q)
+            state = %{state | infeed_q: updated_q}
+            loop(client, device_id, typespec, hooks, compiled_hooks, infeeds, state)
 
           {:function, typespecs, name, template} ->
             fun = Map.fetch!(hooks, name)
-            length = length(typespecs)
-            parent = self()
-            ref = make_ref()
-            pid = spawn(fn -> apply_hook(parent, ref, length, fun, template) end)
-            :ok = EXLA.Client.from_outfeed(client, device_id, typespecs, pid, ref)
+            # Expect the next N tensor messages to arrive via custom-call
+            # Deliver them to the hook once collected.
+            pending = %{fun: fun, template: template, remaining: length(typespecs), acc: []}
+            loop(client, device_id, typespec, hooks, compiled_hooks, infeeds, Map.put(state, :pending_hook, pending))
+        end
 
-            receive do
-              ^ref -> loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
-            end
+      # Tensor payloads delivered by native outfeed custom-call.
+      # They arrive as a list of binaries when multiple tensors are sent at once,
+      # or a single binary for individual sends.
+      list when is_list(list) ->
+        state = Enum.reduce(list, state, &handle_tensor/2)
+        loop(client, device_id, typespec, hooks, compiled_hooks, infeeds, state)
+
+      bin when is_binary(bin) ->
+        state = handle_tensor(bin, state)
+        loop(client, device_id, typespec, hooks, compiled_hooks, infeeds, state)
+    end
+  end
+
+  # Called from native infeed custom call via NifCall with the current session tag
+  defp infeed_callback(device_id, :next_variadic) do
+    case Process.whereis(:"exla_feed_process_#{device_id}") do
+      nil -> {[], :erlang.term_to_binary(nil)}
+      pid ->
+        send(pid, {:pop_infeed, self()})
+        receive do
+          {:infeed_data, list} ->
+            binaries = Enum.map(list, &elem(&1, 0))
+            {binaries, :erlang.term_to_binary(nil)}
+        after
+          0 -> {[], :erlang.term_to_binary(nil)}
         end
     end
   end
+
+  defp handle_tensor(binary, %{pending_hook: %{remaining: n} = pending} = state) when n > 0 do
+    new_pending = %{pending | remaining: n - 1, acc: [binary | pending.acc]}
+
+    if new_pending.remaining == 0 do
+      # Reverse to preserve original order
+      buffers = Enum.reverse(new_pending.acc)
+      new_pending.fun.(EXLA.Defn.Buffers.to_nx!(buffers, new_pending.template))
+      Map.delete(state, :pending_hook)
+    else
+      %{state | pending_hook: new_pending}
+    end
+  end
+
+  defp handle_tensor(binary, %{outfeed_reader: {pid, ref, [_ | rest]} = reader} = state) do
+    send(pid, {ref, binary})
+
+    if rest == [] do
+      Map.delete(state, :outfeed_reader)
+    else
+      %{state | outfeed_reader: {pid, ref, rest}}
+    end
+  end
+
+  defp handle_tensor(_binary, state), do: state
 
   defp apply_hook(parent, ref, length, fun, template) do
     buffers =

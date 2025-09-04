@@ -143,4 +143,87 @@ outfeed_cpu_custom_call_impl(ffi::RemainingArgs remaining_args) {
   return ffi::Error::Success();
 }
 
+// Main outfeed implementation for token-based calls
+// Sends tensor payloads directly to the registered outfeed process for the
+// device.
+static inline ffi::Error
+outfeed_main_custom_call_impl(ffi::RemainingArgs remaining_args) {
+  if (remaining_args.size() < 2) {
+    return ffi::Error::InvalidArgument("insufficient_args");
+  }
+
+  // Execution context gives us the device id; the Elixir side registers
+  // an outfeed process named :"exla_feed_process_<device_id>" that receives
+  // binaries or lists of binaries.
+  auto *execution_context = ffi::GetExecutionContext();
+  if (!execution_context) {
+    return ffi::Error::Success();
+  }
+
+  auto *device = execution_context->device();
+  if (!device) {
+    return ffi::Error::Success();
+  }
+
+  // The last argument is the token. All prior args are tensors to send.
+  const size_t num_payloads = remaining_args.size() - 1;
+
+  // Build the registered process name: "exla_feed_process_<id>"
+  int device_id = device->device_ordinal();
+
+  ErlNifEnv *env = enif_alloc_env();
+  if (env == nullptr) {
+    return ffi::Error::Internal("enomem");
+  }
+
+  // Construct the atom name dynamically
+  char name_buf[64];
+  int name_len =
+      snprintf(name_buf, sizeof(name_buf), "exla_feed_process_%d", device_id);
+  if (name_len < 0 || name_len >= (int)sizeof(name_buf)) {
+    enif_free_env(env);
+    return ffi::Error::Internal("name_overflow");
+  }
+
+  ERL_NIF_TERM reg_name = enif_make_atom(env, name_buf);
+  ErlNifPid pid;
+  if (!enif_whereis_pid(env, reg_name, &pid)) {
+    // If the process is not registered, just succeed (no receiver)
+    enif_free_env(env);
+    return ffi::Error::Success();
+  }
+
+  // Prepare tensor binary list
+  ERL_NIF_TERM *tensor_terms = new ERL_NIF_TERM[num_payloads];
+  for (size_t i = 0; i < num_payloads; ++i) {
+    auto arg_or_error = remaining_args.get<ffi::AnyBuffer>(i);
+    if (!arg_or_error.has_value()) {
+      delete[] tensor_terms;
+      enif_free_env(env);
+      return ffi::Error::InvalidArgument("invalid_tensor_arg");
+    }
+
+    auto arg = arg_or_error.value();
+    const void *data_ptr = arg.untyped_data();
+    size_t data_bytes = arg.size_bytes();
+
+    unsigned char *msg_ptr =
+        enif_make_new_binary(env, data_bytes, &tensor_terms[i]);
+    std::memcpy(msg_ptr, data_ptr, data_bytes);
+  }
+
+  ERL_NIF_TERM payload;
+  if (num_payloads == 1) {
+    payload = tensor_terms[0];
+  } else {
+    payload = enif_make_list_from_array(env, tensor_terms, num_payloads);
+  }
+
+  enif_send(env, &pid, env, payload);
+
+  delete[] tensor_terms;
+  enif_free_env(env);
+  return ffi::Error::Success();
+}
+
 } // namespace exla_outfeed

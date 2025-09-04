@@ -220,6 +220,15 @@ defmodule EXLA.Defn do
                 |> then(&Typespec.tensor(&1.type, &1.shape))
               end)
 
+            # If streaming (infeeds/hooks) is present, append a fixed-size tag argument
+            {comp_typespecs, tag_typespec} =
+              if reverse_infeeds != [] or hooks != %{} or defined_hooks != %{} do
+                tag_typespec = Typespec.tensor({:u, 8}, {65})
+                {comp_typespecs ++ [tag_typespec], tag_typespec}
+              else
+                {comp_typespecs, nil}
+              end
+
             EXLA.MLIR.Module.new(comp_typespecs, out_typespecs, fn builder ->
               # Only create the token when we know it will actually be
               # used, that is: streaming, lazy transfers or hooks
