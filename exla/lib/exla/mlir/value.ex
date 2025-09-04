@@ -678,11 +678,11 @@ defmodule EXLA.MLIR.Value do
   end
 
   def infeed(%Value{function: func} = token, typespecs) when is_list(typespecs) do
-    # Use custom call for infeed
+    # Use custom call for infeed - main version with token
     result_types = typespecs_to_mlir_types(typespecs)
 
     attributes = [
-      call_target_name: attr_string("infeed_cpu_custom_call"),
+      call_target_name: attr_string("infeed_main_custom_call"),
       api_version: attr_i32(4)
     ]
 
@@ -741,9 +741,9 @@ defmodule EXLA.MLIR.Value do
   end
 
   def outfeed(inputs, %Value{function: func} = token) when is_list(inputs) do
-    # Use custom call for outfeed
+    # Use custom call for outfeed - main version with token
     attributes = [
-      call_target_name: attr_string("outfeed_cpu_custom_call"),
+      call_target_name: attr_string("outfeed_main_custom_call"),
       api_version: attr_i32(4),
       has_side_effect: attr_boolean(true)
     ]
@@ -771,12 +771,16 @@ defmodule EXLA.MLIR.Value do
   end
 
   # Variadic outfeed for multiple tensors with custom pid handling
-  def outfeed_custom(inputs, %Function{} = func) when is_list(inputs) do
+  def outfeed_custom(inputs, %Function{} = func, pid \\ nil) when is_list(inputs) do
+    # Use provided pid or fall back to self() for backward compatibility
+    target_pid = pid || self()
+
     # Create pid argument for the outfeed target
-    pid_bin = :erlang.term_to_binary(self())
+    pid_bin = :erlang.term_to_binary(target_pid)
     pid_arg = Value.constant(func, :binary.bin_to_list(pid_bin),
                             Typespec.tensor({:u, 8}, {byte_size(pid_bin)}))
 
+    # Use generic variadic outfeed custom call
     attributes = [
       call_target_name: attr_string("outfeed_cpu_custom_call"),
       api_version: attr_i32(4),
@@ -785,18 +789,23 @@ defmodule EXLA.MLIR.Value do
 
     # All tensor inputs plus pid at the end
     all_inputs = inputs ++ [pid_arg]
-
     op(func, "stablehlo.custom_call", all_inputs, [], attributes: attributes)
 
     # Return nothing - no token needed
     nil
   end
 
-  def create_token(%Function{} = func) do
-    # Create a {pid, tag} token using process communication
-    process_tag = :erlang.term_to_binary({self(), make_ref()})
+  def create_token(%Function{} = func, pid \\ nil) do
+    # Create a token with the actual {pid, {ref, pid}} term encoding
+    target_pid = pid || self()
+    ref = make_ref()
+    process_tag = :erlang.term_to_binary({target_pid, {ref, target_pid}})
+
+    # Use the actual byte size of the encoded term
+    token_size = byte_size(process_tag)
+
     Value.constant(func, :binary.bin_to_list(process_tag),
-                  Typespec.tensor({:u, 8}, {byte_size(process_tag)}))
+                  Typespec.tensor({:u, 8}, {token_size}))
   end
 
   def call(%Function{} = func, args, %Function{} = computation, typespecs) do

@@ -8,6 +8,15 @@ infeed_cpu_custom_call_impl_wrapper(ffi::Buffer<ffi::U8> token,
   return exla_infeed::infeed_cpu_custom_call_impl(token, remaining_results);
 }
 
+// Main infeed custom call (token-based)
+XLA_FFI_DEFINE_HANDLER_SYMBOL(
+    infeed_main_custom_call, infeed_cpu_custom_call_impl_wrapper,
+    ffi::Ffi::Bind().Arg<ffi::Buffer<ffi::U8>>().RemainingRets());
+
+XLA_FFI_REGISTER_HANDLER(ffi::GetXlaFfiApi(), "infeed_main_custom_call", "Host",
+                         infeed_main_custom_call);
+
+// Original variadic infeed custom call (NIF-based)
 XLA_FFI_DEFINE_HANDLER_SYMBOL(
     infeed_cpu_custom_call, infeed_cpu_custom_call_impl_wrapper,
     ffi::Ffi::Bind().Arg<ffi::Buffer<ffi::U8>>().RemainingRets());
