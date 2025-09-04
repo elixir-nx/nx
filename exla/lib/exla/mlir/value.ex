@@ -677,54 +677,41 @@ defmodule EXLA.MLIR.Value do
     op(func, "stablehlo.if", [pred], result_types, regions: regions)
   end
 
-  def infeed(%Value{function: func} = token, typespecs) do
-    result_types = typespecs_to_mlir_types(typespecs ++ [Typespec.token()])
-    results = op(func, "stablehlo.infeed", [token], result_types)
-    {results, [token]} = Enum.split(results, -1)
-    {token, results}
-  end
-
-  # Custom infeed via xla::ffi using nif_call. The argument is a u8 tensor
-  # carrying :erlang.term_to_binary(tag), where tag is the value returned by
-  # NifCall.run (a {pid, ref} tuple). Supports multiple dtypes.
-  def infeed_custom(%Value{function: func} = tag, typespec) do
-    # We request the value plus a next-tag buffer to allow re-registration
-    # semantics across multiple calls. We currently fix next-tag to 64 bytes.
-    next_tag_typespec = Typespec.tensor({:u, 8}, {65})
-    result_types = typespecs_to_mlir_types([typespec, next_tag_typespec])
+  def infeed(%Value{function: func} = token, typespecs) when is_list(typespecs) do
+    # Use custom call for infeed
+    result_types = typespecs_to_mlir_types(typespecs)
 
     attributes = [
-      call_target_name: attr_string(infeed_custom_call_target(typespec)),
+      call_target_name: attr_string("infeed_cpu_custom_call"),
       api_version: attr_i32(4)
     ]
 
-    [result, next_tag] =
-      op(func, "stablehlo.custom_call", [tag], result_types, attributes: attributes)
+    results = op(func, "stablehlo.custom_call", [token], result_types, attributes: attributes)
 
-    {next_tag, result}
+    {token, results}
   end
 
-  defp infeed_custom_call_target(%{type: {:u, 8}}), do: "infeed_cpu_custom_call_u8"
-  defp infeed_custom_call_target(%{type: {:s, 8}}), do: "infeed_cpu_custom_call_s8"
-  defp infeed_custom_call_target(%{type: {:s, 16}}), do: "infeed_cpu_custom_call_s16"
-  defp infeed_custom_call_target(%{type: {:u, 16}}), do: "infeed_cpu_custom_call_u16"
-  defp infeed_custom_call_target(%{type: {:s, 32}}), do: "infeed_cpu_custom_call_s32"
-  defp infeed_custom_call_target(%{type: {:u, 32}}), do: "infeed_cpu_custom_call_u32"
-  defp infeed_custom_call_target(%{type: {:u, 64}}), do: "infeed_cpu_custom_call_u64"
-  defp infeed_custom_call_target(%{type: {:s, 64}}), do: "infeed_cpu_custom_call_s64"
-  defp infeed_custom_call_target(%{type: {:f, 32}}), do: "infeed_cpu_custom_call_f32"
-  defp infeed_custom_call_target(%{type: {:f, 64}}), do: "infeed_cpu_custom_call_f64"
-  defp infeed_custom_call_target(%{type: {:f, 16}}), do: "infeed_cpu_custom_call_f16"
-  defp infeed_custom_call_target(%{type: {:bf, 16}}), do: "infeed_cpu_custom_call_bf16"
-  defp infeed_custom_call_target(%{type: {:c, 64}}), do: "infeed_cpu_custom_call_c64"
-  defp infeed_custom_call_target(%{type: {:c, 128}}), do: "infeed_cpu_custom_call_c128"
-
-  defp infeed_custom_call_target(%{type: type}) do
-    raise ArgumentError, "infeed custom_call not implemented for type #{inspect(type)}"
+  # Handle case where a Function is passed directly (from create_token scenarios)
+  def infeed(%Function{} = func, typespecs) when is_list(typespecs) do
+    # Create a dummy token-like value and call the main infeed function
+    dummy_token = Value.constant(func, [0], Typespec.tensor({:u, 8}, {}))
+    infeed(dummy_token, typespecs)
   end
 
-  # Variadic infeed custom call for multiple tensors
-  def infeed_variadic_custom(%Value{function: func} = tag, typespecs) when is_list(typespecs) do
+  # Single tensor infeed
+  def infeed(%Value{} = token_or_tag, typespec) do
+    {custom_token, [result]} = infeed(token_or_tag, [typespec])
+    {custom_token, result}
+  end
+
+  # Single tensor infeed with Function
+  def infeed(%Function{} = func, typespec) do
+    {custom_token, result} = infeed(func, typespec)
+    {custom_token, result}
+  end
+
+  # Tag-based infeed for NIF calls (variadic)
+  def infeed_custom(%Value{function: func} = tag, typespecs) when is_list(typespecs) do
     # We request all the values plus a next-tag buffer to allow re-registration
     # semantics across multiple calls. We currently fix next-tag to 64 bytes.
     next_tag_typespec = Typespec.tensor({:u, 8}, {65})
@@ -732,7 +719,7 @@ defmodule EXLA.MLIR.Value do
     result_types = typespecs_to_mlir_types(result_typespecs)
 
     attributes = [
-      call_target_name: attr_string("infeed_variadic_cpu_custom_call"),
+      call_target_name: attr_string("infeed_cpu_custom_call"),
       api_version: attr_i32(4)
     ]
 
@@ -743,63 +730,73 @@ defmodule EXLA.MLIR.Value do
     {List.last(results), Enum.drop(results, -1)}
   end
 
-  def outfeed(%Value{} = input, token), do: outfeed([input], token)
-
-  def outfeed(inputs, %Value{function: func} = token) do
-    result_types = [type_token()]
-    op(func, "stablehlo.outfeed", inputs ++ [token], result_types) |> one!()
+  # Single tensor tag-based infeed
+  def infeed_custom(%Value{} = tag, typespec) do
+    {next_tag, [result]} = infeed_custom(tag, [typespec])
+    {next_tag, result}
   end
 
-  # Custom outfeed via xla::ffi using enif_send.
-  # pid_tag is a u8 tensor of :erlang.term_to_binary(pid).
-  def outfeed_custom(%Value{function: func} = input, %Value{function: func} = pid_tag, typespec) do
-    result_types = [type_token()]
+  def outfeed(%Value{function: func} = input, %Value{function: func} = token) do
+    outfeed([input], token)
+  end
 
+  def outfeed(inputs, %Value{function: func} = token) when is_list(inputs) do
+    # Use custom call for outfeed
     attributes = [
-      call_target_name: attr_string(outfeed_custom_call_target(typespec)),
+      call_target_name: attr_string("outfeed_cpu_custom_call"),
       api_version: attr_i32(4),
       has_side_effect: attr_boolean(true)
     ]
 
-    op(func, "stablehlo.custom_call", [input, pid_tag], result_types, attributes: attributes)
-    |> one!()
+    op(func, "stablehlo.custom_call", inputs ++ [token], [], attributes: attributes)
+
+    token
   end
 
-  defp outfeed_custom_call_target(%{type: {:u, 8}}), do: "outfeed_cpu_custom_call_u8"
-  defp outfeed_custom_call_target(%{type: {:s, 8}}), do: "outfeed_cpu_custom_call_s8"
-  defp outfeed_custom_call_target(%{type: {:s, 16}}), do: "outfeed_cpu_custom_call_s16"
-  defp outfeed_custom_call_target(%{type: {:u, 16}}), do: "outfeed_cpu_custom_call_u16"
-  defp outfeed_custom_call_target(%{type: {:s, 32}}), do: "outfeed_cpu_custom_call_s32"
-  defp outfeed_custom_call_target(%{type: {:u, 32}}), do: "outfeed_cpu_custom_call_u32"
-  defp outfeed_custom_call_target(%{type: {:u, 64}}), do: "outfeed_cpu_custom_call_u64"
-  defp outfeed_custom_call_target(%{type: {:s, 64}}), do: "outfeed_cpu_custom_call_s64"
-  defp outfeed_custom_call_target(%{type: {:f, 16}}), do: "outfeed_cpu_custom_call_f16"
-  defp outfeed_custom_call_target(%{type: {:bf, 16}}), do: "outfeed_cpu_custom_call_bf16"
-  defp outfeed_custom_call_target(%{type: {:f, 32}}), do: "outfeed_cpu_custom_call_f32"
-  defp outfeed_custom_call_target(%{type: {:f, 64}}), do: "outfeed_cpu_custom_call_f64"
-  defp outfeed_custom_call_target(%{type: {:c, 64}}), do: "outfeed_cpu_custom_call_c64"
-  defp outfeed_custom_call_target(%{type: {:c, 128}}), do: "outfeed_cpu_custom_call_c128"
+  # Handle outfeed with a dummy token (from create_token)
+  def outfeed(%Value{} = input, %Value{function: func}) do
+    token = create_token(func)
+    outfeed([input], token)
+  end
 
-  # Variadic outfeed custom call for multiple tensors
-  def outfeed_variadic_custom(inputs, %Value{function: func} = pid_tag) when is_list(inputs) do
-    result_types = [type_token()]
+  def outfeed(inputs, %Function{} = func) when is_list(inputs) do
+    # Create a token for outfeed operation
+    token = create_token(func)
+    outfeed(inputs, token)
+  end
+
+  # Handle outfeed with list and dummy token
+  def outfeed(inputs, %Value{function: func}) when is_list(inputs) do
+    outfeed(inputs, func)
+  end
+
+  # Variadic outfeed for multiple tensors with custom pid handling
+  def outfeed_custom(inputs, %Function{} = func) when is_list(inputs) do
+    # Create pid argument for the outfeed target
+    pid_bin = :erlang.term_to_binary(self())
+    pid_arg = Value.constant(func, :binary.bin_to_list(pid_bin),
+                            Typespec.tensor({:u, 8}, {byte_size(pid_bin)}))
 
     attributes = [
-      call_target_name: attr_string("outfeed_variadic_cpu_custom_call"),
+      call_target_name: attr_string("outfeed_cpu_custom_call"),
       api_version: attr_i32(4),
       has_side_effect: attr_boolean(true)
     ]
 
-    # All tensor inputs plus pid_tag at the end
-    all_inputs = inputs ++ [pid_tag]
+    # All tensor inputs plus pid at the end
+    all_inputs = inputs ++ [pid_arg]
 
-    op(func, "stablehlo.custom_call", all_inputs, result_types, attributes: attributes)
-    |> one!()
+    op(func, "stablehlo.custom_call", all_inputs, [], attributes: attributes)
+
+    # Return nothing - no token needed
+    nil
   end
 
   def create_token(%Function{} = func) do
-    result_types = [type_token()]
-    op(func, "stablehlo.create_token", [], result_types) |> one!()
+    # Create a {pid, tag} token using process communication
+    process_tag = :erlang.term_to_binary({self(), make_ref()})
+    Value.constant(func, :binary.bin_to_list(process_tag),
+                  Typespec.tensor({:u, 8}, {byte_size(process_tag)}))
   end
 
   def call(%Function{} = func, args, %Function{} = computation, typespecs) do
@@ -954,7 +951,7 @@ defmodule EXLA.MLIR.Value do
     Enum.map(shapes, &typespec_to_mlir_type/1)
   end
 
-  defp typespec_to_mlir_type(%{type: :token}), do: type_token()
+  defp typespec_to_mlir_type(%{type: :token}), do: type_tensor({:u, 8}, {})
   defp typespec_to_mlir_type(%{type: type, shape: shape}), do: type_tensor(type, shape)
 
   defp one!([value]), do: value
@@ -1002,7 +999,7 @@ defmodule EXLA.MLIR.Value do
   defp type_number({:c, 64}), do: "complex<f32>"
   defp type_number({:c, 128}), do: "complex<f64>"
 
-  defp type_token(), do: "!stablehlo.token"
+
 
   defp number_literal(value, type) do
     cond do

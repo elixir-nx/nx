@@ -7,7 +7,6 @@ defmodule EXLA.Defn.Outfeed do
 
   alias EXLA.MLIR.Function
   alias EXLA.MLIR.Value
-  alias EXLA.Typespec
 
   defstruct user_hooks: %{},
             default_hooks: %{},
@@ -117,64 +116,57 @@ defmodule EXLA.Defn.Outfeed do
   def add_infeeds(%Outfeed{} = outfeed, builder, entries) do
     %{compiled_hooks: compiled_hooks, token: token} = outfeed
 
-    # Check if we should use variadic infeeds
-    use_variadic = System.get_env("EXLA_VARIADIC_INFEED") == "1"
+    case entries do
+      [] ->
+        # No entries - return outfeed unchanged
+        outfeed
 
-    if use_variadic and length(entries) > 1 do
-      # Use variadic infeed for multiple entries
-      next_flag = next_hook(compiled_hooks)
-      compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed_variadic, entries})
+      _ ->
+        # Use custom infeed only for actual streaming scenarios
+        if length(entries) == 1 do
+          # Single entry
+          [{pos, _, typespec}] = entries
+          next_flag = next_hook(compiled_hooks)
+          compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed, pos, typespec})
 
-      token = Value.outfeed(Value.constant(builder, [next_flag], flag_typespec()), token)
+          # Send flag notification via outfeed
+          Value.outfeed([Value.constant(builder, [next_flag], EXLA.Typespec.tensor({:u, 16}, {}))], builder)
 
-      # Build the tag in Elixir land at run time: we pass a placeholder
-      # here which runtime will be replaced by the real tag as an arg.
-      u8_typespec = EXLA.Typespec.tensor({:u, 8}, {})
-      empty_tag = Value.constant(builder, [0], u8_typespec)
+          # Create simple tag placeholder
+          u8_typespec = EXLA.Typespec.tensor({:u, 8}, {})
+          empty_tag = Value.constant(builder, [0], u8_typespec)
 
-      # Extract typespecs for variadic call
-      typespecs = Enum.map(entries, fn {_pos, _depth, typespec} -> typespec end)
-      {_next_tag, inputs} = Value.infeed_variadic_custom(empty_tag, typespecs)
+          {_next_tag, input} = Value.infeed_custom(empty_tag, typespec)
 
-      # Map inputs back to positions
-      infeeds =
-        entries
-        |> Enum.zip(inputs)
-        |> Enum.map(fn {{pos, _depth, _typespec}, input} -> {pos, input} end)
+          %{outfeed | compiled_hooks: compiled_hooks, token: token, infeeds: [{pos, input}]}
+        else
+          # Multiple entries
+          next_flag = next_hook(compiled_hooks)
+          compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed_variadic, entries})
 
-      %{outfeed | compiled_hooks: compiled_hooks, token: token, infeeds: infeeds}
-    else
-      # Original approach: process each entry individually
-      # Reversed because higher depth comes first
-      {infeeds, {compiled_hooks, token}} =
-        entries
-        |> List.keysort(1, :desc)
-        |> Enum.map_reduce({compiled_hooks, token}, fn
-          {pos, _, typespec}, {compiled_hooks, token} ->
-            next_flag = next_hook(compiled_hooks)
-            compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed, pos, typespec})
+          # Send flag notification via outfeed
+          Value.outfeed([Value.constant(builder, [next_flag], EXLA.Typespec.tensor({:u, 16}, {}))], builder)
 
-            token = Value.outfeed(Value.constant(builder, [next_flag], flag_typespec()), token)
+          # Create simple tag placeholder
+          u8_typespec = EXLA.Typespec.tensor({:u, 8}, {})
+          empty_tag = Value.constant(builder, [0], u8_typespec)
 
-            if System.get_env("EXLA_INFEED_VIA_NIF_CALL") == "1" do
-              # Build the tag in Elixir land at run time: we pass a placeholder
-              # here which runtime will be replaced by the real tag as an arg.
-              # This path is experimental and off by default.
-              u8_typespec = EXLA.Typespec.tensor({:u, 8}, {})
-              empty_tag = Value.constant(builder, [0], u8_typespec)
-              {_next_tag, input} = Value.infeed_custom(empty_tag, typespec)
-              {{pos, input}, {compiled_hooks, token}}
-            else
-              {token, [input]} = Value.infeed(token, [typespec])
-              {{pos, input}, {compiled_hooks, token}}
-            end
-        end)
+          # Extract typespecs for variadic call
+          typespecs = Enum.map(entries, fn {_pos, _depth, typespec} -> typespec end)
+          {_next_tag, inputs} = Value.infeed_custom(empty_tag, typespecs)
 
-      %{outfeed | compiled_hooks: compiled_hooks, token: token, infeeds: infeeds}
+          # Map inputs back to positions
+          infeeds =
+            entries
+            |> Enum.zip(inputs)
+            |> Enum.map(fn {{pos, _depth, _typespec}, input} -> {pos, input} end)
+
+          %{outfeed | compiled_hooks: compiled_hooks, token: token, infeeds: infeeds}
+        end
     end
   end
 
-  defp flag_typespec(), do: EXLA.Typespec.tensor({:u, 16}, {})
+
 
   @doc """
   Adds a function hook if it has a callback defined for it.
@@ -200,31 +192,25 @@ defmodule EXLA.Defn.Outfeed do
   """
   def close(outfeed, builder)
 
-  def close(%Outfeed{} = outfeed, %Function{} = builder) when will_outfeed(outfeed),
-    do:
-      update_in(outfeed.token, &Value.outfeed(Value.constant(builder, [0], flag_typespec()), &1))
+  def close(%Outfeed{} = outfeed, %Function{} = builder) when will_outfeed(outfeed) do
+    # Send close signal via outfeed
+    Value.outfeed([Value.constant(builder, [0], EXLA.Typespec.tensor({:u, 16}, {}))], builder)
+    outfeed
+  end
 
   def close(%Outfeed{} = outfeed, _builder),
     do: outfeed
 
   defp outfeed_flat_tuple(%Outfeed{token: token, compiled_hooks: ch} = outfeed, builder, tuple) do
     flag = next_hook(ch)
-    token = Value.outfeed(Value.constant(builder, [flag], flag_typespec()), token)
+    # Send flag notification via outfeed
+    Value.outfeed([Value.constant(builder, [flag], EXLA.Typespec.tensor({:u, 16}, {}))], builder)
     typespecs = Enum.map(tuple, &Value.get_typespec/1)
 
-    token =
-      if System.get_env("EXLA_VARIADIC_OUTFEED") == "1" do
-        # Use variadic outfeed for multiple tensors
-        pid_tag = Value.constant(builder, [:erlang.term_to_binary(self())],
-                                Typespec.tensor({:u, 8}, {byte_size(:erlang.term_to_binary(self()))}))
-        Value.outfeed_variadic_custom(tuple, pid_tag)
-        token  # Return the original token since variadic call returns its own
-      else
-        # Original approach: outfeed each tensor individually
-        Enum.reduce(tuple, token, fn elem, token ->
-          Value.outfeed(elem, token)
-        end)
-      end
+    # Use individual tensor outfeeds for function hooks to maintain compatibility
+    Enum.each(tuple, fn elem ->
+      Value.outfeed_custom([elem], builder)
+    end)
 
     {%{outfeed | token: token}, flag, typespecs}
   end

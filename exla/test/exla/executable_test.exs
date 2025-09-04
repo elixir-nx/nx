@@ -242,7 +242,7 @@ defmodule EXLA.ExecutableFeedTest do
   end
 
   describe "infeed custom call dtypes" do
-    defp tag_typespec(bin), do: Typespec.tensor({:u, 8}, {byte_size(bin)})
+
 
     for {type, data} <- [
           {{:u, 8}, <<42>>},
@@ -264,17 +264,15 @@ defmodule EXLA.ExecutableFeedTest do
             {Agent, fn -> [unquote(data), <<42::32-native, 1337::32-native>>] end}
           )
 
-        NifCall.run(EXLA.NifCall.Runner, &infeed_callback(&1, pid), fn tag ->
-          tag_bin = :erlang.term_to_binary(tag)
-          tag_spec = tag_typespec(tag_bin)
-
+        NifCall.run(EXLA.NifCall.Runner, &infeed_callback(&1, pid), fn nif_call_tag ->
+          tag_bin = :erlang.term_to_binary(nif_call_tag)
+          tag_spec = Typespec.tensor({:u, 8}, {byte_size(tag_bin)})
           tag_buf = BinaryBuffer.from_binary(tag_bin, tag_spec)
 
           exec =
             compile([tag_spec], [], [first_data_typespec, second_data_typespec], fn _b,
                                                                                     tag_mlir ->
-              {next_tag, res1} = Value.infeed_custom(tag_mlir, first_data_typespec)
-              {_next_tag, res2} = Value.infeed_custom(next_tag, second_data_typespec)
+              {_next_tag, [res1, res2]} = Value.infeed_custom(tag_mlir, [first_data_typespec, second_data_typespec])
               [res1, res2]
             end)
 
@@ -290,45 +288,39 @@ defmodule EXLA.ExecutableFeedTest do
 
   describe "outfeed custom call" do
     test "outfeeds s32 to an encoded pid" do
-      pid_bin = :erlang.term_to_binary(self())
-      pid_spec = Typespec.tensor({:u, 8}, {byte_size(pid_bin)})
-      pid_buf = BinaryBuffer.from_binary(pid_bin, pid_spec)
-
       exec =
-        compile([pid_spec], [], [s32_typespec()], fn b, pid_mlir ->
+        compile([], [], [s32_typespec()], fn b ->
           val = Value.constant(b, [21], s32_typespec())
           out = Value.add(val, val, s32_typespec())
-          _tok = Value.outfeed_custom(out, pid_mlir, s32_typespec())
+          Value.outfeed_custom([out], b)
           [out]
         end)
 
-      assert [[res = %DeviceBuffer{}]] = EXLA.Executable.run(exec, [[pid_buf]])
+      assert [[res = %DeviceBuffer{}]] = EXLA.Executable.run(exec, [[]])
       assert DeviceBuffer.read(res) == <<42::32-native>>
 
-      assert_receive bin when is_binary(bin)
-      assert bin == <<42::32-native>>
+      assert_receive bin when is_list(bin)
+      assert length(bin) == 1
+      assert hd(bin) == <<42::32-native>>
     end
 
     test "outfeeds f32 to an encoded pid" do
-      pid_bin = :erlang.term_to_binary(self())
-      pid_spec = Typespec.tensor({:u, 8}, {byte_size(pid_bin)})
-      pid_buf = BinaryBuffer.from_binary(pid_bin, pid_spec)
-
       t_spec = Typespec.tensor({:f, 32}, {})
 
       exec =
-        compile([pid_spec], [], [t_spec], fn b, pid_mlir ->
+        compile([], [], [t_spec], fn b ->
           one_point_five = Value.constant(b, [1.5], t_spec)
           out = Value.add(one_point_five, one_point_five, t_spec)
-          _tok = Value.outfeed_custom(out, pid_mlir, t_spec)
+          Value.outfeed_custom([out], b)
           [out]
         end)
 
-      assert [[res = %DeviceBuffer{}]] = EXLA.Executable.run(exec, [[pid_buf]])
+      assert [[res = %DeviceBuffer{}]] = EXLA.Executable.run(exec, [[]])
       assert DeviceBuffer.read(res) == <<3.0::float-native-32>>
 
-      assert_receive bin when is_binary(bin)
-      assert bin == <<3.0::float-native-32>>
+      assert_receive bin when is_list(bin)
+      assert length(bin) == 1
+      assert hd(bin) == <<3.0::float-native-32>>
     end
 
     for {type, data, val} <- [
@@ -348,24 +340,21 @@ defmodule EXLA.ExecutableFeedTest do
            %Complex{re: 1.5, im: -2.5}}
         ] do
       test "outfeeds #{inspect(type)} to an encoded pid" do
-        pid_bin = :erlang.term_to_binary(self())
-        pid_spec = Typespec.tensor({:u, 8}, {byte_size(pid_bin)})
-        pid_buf = BinaryBuffer.from_binary(pid_bin, pid_spec)
-
         t_spec = Typespec.tensor(unquote(type), {})
 
         exec =
-          compile([pid_spec], [], [t_spec], fn b, pid_mlir ->
+          compile([], [], [t_spec], fn b ->
             const = Value.constant(b, [unquote(Macro.escape(val))], t_spec)
-            _tok = Value.outfeed_custom(const, pid_mlir, t_spec)
+            Value.outfeed_custom([const], b)
             [const]
           end)
 
-        assert [[res = %DeviceBuffer{}]] = EXLA.Executable.run(exec, [[pid_buf]])
+        assert [[res = %DeviceBuffer{}]] = EXLA.Executable.run(exec, [[]])
         assert DeviceBuffer.read(res) == unquote(data)
 
-        assert_receive bin when is_binary(bin)
-        assert bin == unquote(data)
+        assert_receive bin when is_list(bin)
+        assert length(bin) == 1
+        assert hd(bin) == unquote(data)
       end
     end
   end
@@ -386,14 +375,14 @@ defmodule EXLA.ExecutableFeedTest do
 
       pid = start_supervised!({Agent, fn -> data_list end})
 
-      NifCall.run(EXLA.NifCall.Runner, &infeed_callback(&1, pid), fn tag ->
-        tag_bin = :erlang.term_to_binary(tag)
+      NifCall.run(EXLA.NifCall.Runner, &infeed_callback(&1, pid), fn nif_call_tag ->
+        tag_bin = :erlang.term_to_binary(nif_call_tag)
         tag_spec = Typespec.tensor({:u, 8}, {byte_size(tag_bin)})
         tag_buf = BinaryBuffer.from_binary(tag_bin, tag_spec)
 
         exec =
           compile([tag_spec], [], typespecs, fn _b, tag_mlir ->
-            {_next_tag, results} = Value.infeed_variadic_custom(tag_mlir, typespecs)
+            {_next_tag, results} = Value.infeed_custom(tag_mlir, typespecs)
             results
           end)
 
@@ -408,10 +397,6 @@ defmodule EXLA.ExecutableFeedTest do
     end
 
     test "variadic outfeed with multiple tensor types" do
-      pid_bin = :erlang.term_to_binary(self())
-      pid_spec = Typespec.tensor({:u, 8}, {byte_size(pid_bin)})
-      pid_buf = BinaryBuffer.from_binary(pid_bin, pid_spec)
-
       typespecs = [
         Typespec.tensor({:u, 8}, {}),
         Typespec.tensor({:s, 16}, {}),
@@ -419,16 +404,16 @@ defmodule EXLA.ExecutableFeedTest do
       ]
 
       exec =
-        compile([pid_spec], [], typespecs, fn b, pid_mlir ->
+        compile([], [], typespecs, fn b ->
           val1 = Value.constant(b, [42], Enum.at(typespecs, 0))
           val2 = Value.constant(b, [-123], Enum.at(typespecs, 1))
           val3 = Value.constant(b, [3.14], Enum.at(typespecs, 2))
 
-          _tok = Value.outfeed_variadic_custom([val1, val2, val3], pid_mlir)
+          Value.outfeed_custom([val1, val2, val3], b)
           [val1, val2, val3]
         end)
 
-      assert [results] = EXLA.Executable.run(exec, [[pid_buf]])
+      assert [results] = EXLA.Executable.run(exec, [[]])
       assert length(results) == 3
 
       # Should receive a list of binaries
@@ -455,14 +440,6 @@ defmodule EXLA.ExecutableFeedTest do
 
   def infeed_callback(action, pid) do
     case action do
-      :next ->
-        # Single tensor callback
-        Agent.get_and_update(pid, fn [h | tl] ->
-          tag = NifCall.Runner.register(EXLA.NifCall.Runner, &infeed_callback(&1, pid))
-          tag_bin = :erlang.term_to_binary(tag)
-          {{h, tag_bin}, tl}
-        end)
-
       :next_variadic ->
         # Variadic callback - return list of tensors
         Agent.get_and_update(pid, fn data_list ->
@@ -471,12 +448,18 @@ defmodule EXLA.ExecutableFeedTest do
           {{data_list, tag_bin}, []}
         end)
 
-      # Backward compatibility - treat atom as :next
-      _ when is_atom(action) ->
-        Agent.get_and_update(pid, fn [h | tl] ->
-          tag = NifCall.Runner.register(EXLA.NifCall.Runner, &infeed_callback(&1, pid))
-          tag_bin = :erlang.term_to_binary(tag)
-          {{h, tag_bin}, tl}
+      # Backward compatibility - treat any other atom as variadic with single item
+      _ ->
+        Agent.get_and_update(pid, fn
+          [h | tl] ->
+            tag = NifCall.Runner.register(EXLA.NifCall.Runner, &infeed_callback(&1, pid))
+            tag_bin = :erlang.term_to_binary(tag)
+            {{[h], tag_bin}, tl}
+
+          data_list when is_list(data_list) ->
+            tag = NifCall.Runner.register(EXLA.NifCall.Runner, &infeed_callback(&1, pid))
+            tag_bin = :erlang.term_to_binary(tag)
+            {{data_list, tag_bin}, []}
         end)
     end
   end
