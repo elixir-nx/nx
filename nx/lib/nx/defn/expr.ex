@@ -41,6 +41,8 @@ defmodule Nx.Defn.Expr do
 
     * `attach_token(token(%Nx.Defn.Token{}), expr)`
 
+    * `elixir_call(name, args, fun)`
+
   `defn` compilers must handle said nodes accordingly.
   """
 
@@ -381,6 +383,22 @@ defmodule Nx.Defn.Expr do
         context = elem(t, 0).data.context
         out = expr(tuple_out(tuple_size(t)), context, name, in_args)
         tuple(expr(out, context, :optional, [out, t, fun]), Tuple.to_list(t))
+    end
+  end
+
+  @impl true
+  def elixir_call(out, in_args, fun) do
+    {tensor_args, _opts} = Enum.split_while(in_args, &(not is_list(&1)))
+    [%T{data: %Expr{context: context}} | _] = Enum.map(tensor_args, &to_expr/1)
+
+    case out do
+      t when is_struct(t, Nx.Tensor) ->
+        expr(t, context, :elixir_call, [in_args, fun])
+
+      tuple when is_tuple(tuple) ->
+        out_template = tuple_out(tuple_size(tuple))
+        expr_node = expr(out_template, context, :elixir_call, [in_args, fun])
+        tuple(expr_node, Tuple.to_list(tuple))
     end
   end
 
