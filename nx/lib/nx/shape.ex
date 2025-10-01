@@ -1026,6 +1026,9 @@ defmodule Nx.Shape do
 
       iex> Nx.Shape.pad({2, 2, 3}, [{0, 1, 0}, {1, 2, 0}])
       ** (ArgumentError) invalid padding configuration, rank of padding configuration and shape must match
+
+      iex> Nx.Shape.pad({2, 2, 3}, [{0, 1, -1}, {0, 0, 0}, {0, 0, 0}])
+      ** (ArgumentError) invalid padding configuration, interior padding must be non-negative
   """
   def pad(shape, padding_config) do
     shape
@@ -1054,6 +1057,10 @@ defmodule Nx.Shape do
       )
 
   defp padded_dims([s | shape], [{edge_low, edge_high, interior} | config], acc) do
+    if interior < 0 do
+      raise ArgumentError, "invalid padding configuration, interior padding must be non-negative"
+    end
+
     interior_padding_factor = (s - 1) * interior
     padded_dims(shape, config, [s + interior_padding_factor + edge_low + edge_high | acc])
   end
