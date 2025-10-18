@@ -42,7 +42,7 @@ CUDA versions. The current supported targets are:
 - `cu118` CUDA 11.8 and CPU version (no macOS support, libtorch `< 2.8.0` only)
 - `cu126` CUDA 12.6 and CPU version (no macOS support)
 - `cu128` CUDA 12.8 and CPU version (no macOS support)
-- `cu129` CUDA 12.9 and CPU version (no macOS support, libtorch `>= 2.8.0` only)
+- `cu130` CUDA 13.0 and CPU version (no macOS support, libtorch `>= 2.9.0` only)
 
 Once downloaded, we will compile `Torchx` bindings. You will need `make`/`nmake`,
 `cmake` (3.12+) and a `C++` compiler. If building on Windows, you will need:
