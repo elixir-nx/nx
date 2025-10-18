@@ -38,11 +38,11 @@ to `2.4.0` or later.
 If you want torch with CUDA support, please use `LIBTORCH_TARGET` to choose
 CUDA versions. The current supported targets are:
 
-| Torch Version   | Supported Targets                                    |
-| --------------- | ---------------------------------------------------- |
-| 2.7.0           | cpu, cu118 (CUDA 11.8), cu126 (12.6), cu128 (12.8)   |
-| 2.8.0           | cpu, cu126 (CUDA 12.6), cu128 (12.8), cu129 (12.9)   |
-| 2.9.0           | cpu, cu126 (CUDA 12.6), cu128 (12.8), cu130 (13.0)   |
+| Torch Version   | Supported Targets                                              |
+| --------------- | -------------------------------------------------------------- |
+| 2.7.0           | cpu, cu118 (CUDA 11.8), cu126 (CUDA 12.6), cu128 (CUDA 12.8)   |
+| 2.8.0           | cpu, cu126 (CUDA 12.6), cu128 (CUDA 12.8), cu129 (CUDA 12.9)   |
+| 2.9.0           | cpu, cu126 (CUDA 12.6), cu128 (CUDA 12.8), cu130 (CUDA 13.0)   |
 
 Once downloaded, we will compile `Torchx` bindings. You will need `make`/`nmake`,
 `cmake` (3.12+) and a `C++` compiler. If building on Windows, you will need:
