@@ -74,22 +74,19 @@ defmodule Torchx.MixProject do
   end
 
   defp libtorch_config() do
-    target = System.get_env("LIBTORCH_TARGET", "cpu")
-    version = System.get_env("LIBTORCH_VERSION", "2.8.0")
-    env_dir = System.get_env("LIBTORCH_DIR")
-
-    # 2.8.0 is the first version that supports cu129 and drops cu118
-    # cu118 might still be needed for older hardware, so we're keeping it
-    # for now.
-    valid_targets = ["cpu", "cu118", "cu126", "cu128"]
-
+    # Supported targets for each LibTorch version:
     valid_targets =
       case Version.parse(version) do
         {:ok, parsed} ->
-          if Version.match?(parsed, "<= 2.7.0") do
-            valid_targets
-          else
-            (valid_targets -- ["cu118"]) ++ ["cu129"]
+          cond do
+            Version.match?(parsed, "< 2.8.0") ->
+              ["cpu", "cu118", "cu126", "cu128"]
+
+            Version.match?(parsed, "< 2.9.0") ->
+              ["cpu", "cu126", "cu129"]
+
+            true ->
+              ["cpu", "cu126", "cu128", "cu130"]
           end
 
         _ ->
