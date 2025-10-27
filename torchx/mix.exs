@@ -74,26 +74,33 @@ defmodule Torchx.MixProject do
   end
 
   defp libtorch_config() do
+    target = System.get_env("LIBTORCH_TARGET", "cpu")
+    version = System.get_env("LIBTORCH_VERSION", "2.9.0")
+    env_dir = System.get_env("LIBTORCH_DIR")
+
     # Supported targets for each LibTorch version:
-    valid_targets =
+    {has_cxx11_abi, valid_targets} =
       case Version.parse(version) do
         {:ok, parsed} ->
           cond do
             Version.match?(parsed, "< 2.8.0") ->
-              ["cpu", "cu118", "cu126", "cu128"]
+              {true, ["cpu", "cu118", "cu126", "cu128"]}
 
             Version.match?(parsed, "< 2.9.0") ->
-              ["cpu", "cu126", "cu129"]
+              {false, ["cpu", "cu126", "cu129"]}
 
             true ->
-              ["cpu", "cu126", "cu128", "cu130"]
+              {false, ["cpu", "cu126", "cu128", "cu130"]}
           end
 
         _ ->
-          valid_targets
+          raise ArgumentError, "Unsupported LibTorch version"
       end
 
     %{
+      # Latest LibTorch does not support cxx11-abi
+      # but older versions still do
+      has_cxx11_abi: has_cxx11_abi,
       valid_targets: valid_targets,
       target: target,
       version: version,
@@ -147,7 +154,11 @@ defmodule Torchx.MixProject do
       url =
         case :os.type() do
           {:unix, :linux} ->
-            "https://download.pytorch.org/libtorch/#{libtorch_config.target}/libtorch-cxx11-abi-shared-with-deps-#{libtorch_config.version}%2B#{libtorch_config.target}.zip"
+            if libtorch_config.has_cxx11_abi do
+              "https://download.pytorch.org/libtorch/#{libtorch_config.target}/libtorch-cxx11-abi-shared-with-deps-#{libtorch_config.version}%2B#{libtorch_config.target}.zip"
+            else
+              "https://download.pytorch.org/libtorch/#{libtorch_config.target}/libtorch-shared-with-deps-#{libtorch_config.version}%2B#{libtorch_config.target}.zip"
+            end
 
           {:unix, :darwin} ->
             case List.to_string(:erlang.system_info(:system_architecture)) do
