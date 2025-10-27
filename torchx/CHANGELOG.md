@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.10.2 (2025-06-17)
+
+  * Allow Libtorch version 2.9
+  * Fix Linux installation URL for Torch >= 2.8
+
 ## v0.10.1 (2025-06-17)
 
   * Update Libtorch to version 2.8
