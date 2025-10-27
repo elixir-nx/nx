@@ -153,8 +153,7 @@ defmodule Torchx.MixProject do
 
       url =
         case :os.type() do
-          {:unix, _} ->
-          # {:unix, :linux} ->
+          {:unix, :linux} ->
             if libtorch_config.has_cxx11_abi do
               "https://download.pytorch.org/libtorch/#{libtorch_config.target}/libtorch-cxx11-abi-shared-with-deps-#{libtorch_config.version}%2B#{libtorch_config.target}.zip"
             else
