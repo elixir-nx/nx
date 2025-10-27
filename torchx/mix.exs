@@ -75,7 +75,7 @@ defmodule Torchx.MixProject do
 
   defp libtorch_config() do
     target = System.get_env("LIBTORCH_TARGET", "cpu")
-    version = System.get_env("LIBTORCH_VERSION", "2.9.0")
+    version = System.get_env("LIBTORCH_VERSION", "2.8.0")
     env_dir = System.get_env("LIBTORCH_DIR")
 
     # Supported targets for each LibTorch version:
