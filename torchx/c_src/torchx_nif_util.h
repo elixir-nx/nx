@@ -79,7 +79,9 @@ public:
   bool deallocate() {
     if (!deallocated_) {
       deallocated_ = true;
-      // Reset the tensor to free its memory
+      // Assignment to empty tensor properly handles destruction and frees
+      // memory The destructor will be called automatically by the assignment
+      // operator
       tensor_ = torch::Tensor();
       return true;
     }
