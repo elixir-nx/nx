@@ -28,6 +28,7 @@ message(STATUS "C_SRC: ${C_SRC}")
 message(STATUS "PRIV_DIR: $ENV{PRIV_DIR}")
 message(STATUS "LIBTORCH_DIR: $ENV{LIBTORCH_DIR}")
 message(STATUS "ERTS_INCLUDE_DIR: $ENV{ERTS_INCLUDE_DIR}")
+message(STATUS "FINE_INCLUDE_DIR: $ENV{FINE_INCLUDE_DIR}")
 message(STATUS "LIBTORCH_BASE: $ENV{LIBTORCH_BASE}")
 message(STATUS "MIX_BUILD_EMBEDDED $ENV{MIX_BUILD_EMBEDDED}")
 message(STATUS "LIBTORCH_LINK $ENV{LIBTORCH_LINK}")
@@ -43,7 +44,7 @@ add_library(torchx SHARED ${torchx_sources})
 target_link_libraries(torchx "${TORCH_LIBRARIES}")
 set_property(TARGET torchx PROPERTY CXX_STANDARD 17)
 
-target_include_directories(torchx PUBLIC $ENV{ERTS_INCLUDE_DIR})
+target_include_directories(torchx PUBLIC $ENV{ERTS_INCLUDE_DIR} $ENV{FINE_INCLUDE_DIR})
 
 install(
     TARGETS torchx

@@ -43,6 +43,7 @@ defmodule Torchx.MixProject do
     [
       {:nx, "~> 0.10.0"},
       # {:nx, path: "../nx"},
+      {:fine, "~> 0.1.0", runtime: false},
       {:ex_doc, "~> 0.29", only: :docs}
     ]
   end
@@ -284,7 +285,8 @@ defmodule Torchx.MixProject do
       "LIBTORCH_LINK" => "#{libtorch_link_path}/lib",
       "MIX_APP_PATH" => mix_app_path,
       "PRIV_DIR" => priv_path,
-      "ERTS_INCLUDE_DIR" => erts_include_dir
+      "ERTS_INCLUDE_DIR" => erts_include_dir,
+      "FINE_INCLUDE_DIR" => Fine.include_dir()
     }
 
     cmd!(cmake, ["-S", ".", "-B", cmake_build_dir], env)
