@@ -24,6 +24,21 @@ FINE_RESOURCE(TorchTensor);
   FINE_NIF(NAME##_cpu, ERL_NIF_DIRTY_JOB_CPU_BOUND);                           \
   FINE_NIF(NAME##_io, ERL_NIF_DIRTY_JOB_IO_BOUND)
 
+// Macro to register both _cpu and _io variants for a specific arity
+// Creates a unified NIF handler that dispatches to the function
+// Usage: REGISTER_TENSOR_NIF_ARITY(name, function_symbol)
+#define REGISTER_TENSOR_NIF_ARITY(NAME, SYMBOL)                                \
+  static ERL_NIF_TERM SYMBOL##_nif(ErlNifEnv *env, int argc,                   \
+                                   const ERL_NIF_TERM argv[]) {                \
+    return fine::nif(env, argc, argv, SYMBOL);                                 \
+  }                                                                            \
+  auto __nif_registration_##SYMBOL##_cpu = fine::Registration::register_nif(   \
+      {#NAME "_cpu", fine::nif_arity(SYMBOL), SYMBOL##_nif,                    \
+       ERL_NIF_DIRTY_JOB_CPU_BOUND});                                          \
+  auto __nif_registration_##SYMBOL##_io = fine::Registration::register_nif(    \
+      {#NAME "_io", fine::nif_arity(SYMBOL), SYMBOL##_nif,                     \
+       ERL_NIF_DIRTY_JOB_IO_BOUND})
+
 // Helper to get tensor from resource, with proper error checking
 torch::Tensor &get_tensor(fine::ResourcePtr<TorchTensor> tensor_res) {
   return tensor_res->tensor();
@@ -94,9 +109,9 @@ from_blob(ErlNifEnv *env, ErlNifBinary blob, std::vector<int64_t> shape,
 
 REGISTER_TENSOR_NIF(from_blob);
 
-// to_blob - overloaded for arity 1 and 2
-fine::Ok<ErlNifBinary> to_blob(ErlNifEnv *env,
-                               fine::ResourcePtr<TorchTensor> tensor_res) {
+// to_blob - arity 1 and 2 versions
+fine::Ok<ErlNifBinary> to_blob_1(ErlNifEnv *env,
+                                 fine::ResourcePtr<TorchTensor> tensor_res) {
   auto &t = get_tensor(tensor_res);
   size_t byte_size = t.nbytes();
 
@@ -117,9 +132,9 @@ fine::Ok<ErlNifBinary> to_blob(ErlNifEnv *env,
   return fine::Ok(result);
 }
 
-fine::Ok<ErlNifBinary> to_blob(ErlNifEnv *env,
-                               fine::ResourcePtr<TorchTensor> tensor_res,
-                               int64_t limit) {
+fine::Ok<ErlNifBinary> to_blob_2(ErlNifEnv *env,
+                                 fine::ResourcePtr<TorchTensor> tensor_res,
+                                 int64_t limit) {
   auto &t = get_tensor(tensor_res);
   size_t byte_size = limit * t.itemsize();
 
@@ -141,47 +156,8 @@ fine::Ok<ErlNifBinary> to_blob(ErlNifEnv *env,
   return fine::Ok(result);
 }
 
-// Wrapper functions for to_blob
-fine::Ok<ErlNifBinary>
-to_blob_1_cpu(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor_res) {
-  return to_blob(env, tensor_res);
-}
-
-fine::Ok<ErlNifBinary> to_blob_1_io(ErlNifEnv *env,
-                                    fine::ResourcePtr<TorchTensor> tensor_res) {
-  return to_blob(env, tensor_res);
-}
-
-fine::Ok<ErlNifBinary> to_blob_2_cpu(ErlNifEnv *env,
-                                     fine::ResourcePtr<TorchTensor> tensor_res,
-                                     int64_t limit) {
-  return to_blob(env, tensor_res, limit);
-}
-
-fine::Ok<ErlNifBinary> to_blob_2_io(ErlNifEnv *env,
-                                    fine::ResourcePtr<TorchTensor> tensor_res,
-                                    int64_t limit) {
-  return to_blob(env, tensor_res, limit);
-}
-
-// Single NIF handler for to_blob that dispatches based on argc
-static ERL_NIF_TERM to_blob_nif(ErlNifEnv *env, int argc,
-                                const ERL_NIF_TERM argv[]) {
-  if (argc == 1)
-    return fine::nif(env, argc, argv, to_blob_1_cpu);
-  if (argc == 2)
-    return fine::nif(env, argc, argv, to_blob_2_cpu);
-  return enif_make_badarg(env);
-}
-
-auto __nif_registration_to_blob_cpu_1 = fine::Registration::register_nif(
-    {"to_blob_cpu", 1, to_blob_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND});
-auto __nif_registration_to_blob_io_1 = fine::Registration::register_nif(
-    {"to_blob_io", 1, to_blob_nif, ERL_NIF_DIRTY_JOB_IO_BOUND});
-auto __nif_registration_to_blob_cpu_2 = fine::Registration::register_nif(
-    {"to_blob_cpu", 2, to_blob_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND});
-auto __nif_registration_to_blob_io_2 = fine::Registration::register_nif(
-    {"to_blob_io", 2, to_blob_nif, ERL_NIF_DIRTY_JOB_IO_BOUND});
+REGISTER_TENSOR_NIF_ARITY(to_blob, to_blob_1);
+REGISTER_TENSOR_NIF_ARITY(to_blob, to_blob_2);
 
 fine::Ok<torch::Scalar> item(ErlNifEnv *env,
                              fine::ResourcePtr<TorchTensor> tensor) {
@@ -508,10 +484,10 @@ normal(ErlNifEnv *env, double mean, double std, std::vector<int64_t> shape,
 
 REGISTER_TENSOR_NIF(normal);
 
-// arange - overloaded for arity 5 and 6
+// arange - arity 5 and 6 versions
 fine::Ok<fine::ResourcePtr<TorchTensor>>
-arange(ErlNifEnv *env, int64_t start, int64_t end, int64_t step,
-       fine::Atom type_atom, std::tuple<int64_t, int64_t> device_tuple) {
+arange_5(ErlNifEnv *env, int64_t start, int64_t end, int64_t step,
+         fine::Atom type_atom, std::tuple<int64_t, int64_t> device_tuple) {
   auto type = string2type(type_atom.to_string());
   auto device = tuple_to_device(device_tuple);
   return tensor_ok(torch::arange(
@@ -520,9 +496,9 @@ arange(ErlNifEnv *env, int64_t start, int64_t end, int64_t step,
 }
 
 fine::Ok<fine::ResourcePtr<TorchTensor>>
-arange(ErlNifEnv *env, int64_t start, int64_t end, int64_t step,
-       fine::Atom type_atom, std::tuple<int64_t, int64_t> device_tuple,
-       std::vector<int64_t> shape) {
+arange_6(ErlNifEnv *env, int64_t start, int64_t end, int64_t step,
+         fine::Atom type_atom, std::tuple<int64_t, int64_t> device_tuple,
+         std::vector<int64_t> shape) {
   auto type = string2type(type_atom.to_string());
   auto device = tuple_to_device(device_tuple);
   auto result = torch::arange(
@@ -531,60 +507,8 @@ arange(ErlNifEnv *env, int64_t start, int64_t end, int64_t step,
   return tensor_ok(torch::reshape(result, vec_to_array_ref(shape)));
 }
 
-// Wrapper functions for arange - unique names for each arity
-fine::Ok<fine::ResourcePtr<TorchTensor>>
-arange_5_cpu(ErlNifEnv *env, int64_t start, int64_t end, int64_t step,
-             fine::Atom type_atom, std::tuple<int64_t, int64_t> device_tuple) {
-  return arange(env, start, end, step, type_atom, device_tuple);
-}
-
-fine::Ok<fine::ResourcePtr<TorchTensor>>
-arange_5_io(ErlNifEnv *env, int64_t start, int64_t end, int64_t step,
-            fine::Atom type_atom, std::tuple<int64_t, int64_t> device_tuple) {
-  return arange(env, start, end, step, type_atom, device_tuple);
-}
-
-fine::Ok<fine::ResourcePtr<TorchTensor>>
-arange_6_cpu(ErlNifEnv *env, int64_t start, int64_t end, int64_t step,
-             fine::Atom type_atom, std::tuple<int64_t, int64_t> device_tuple,
-             std::vector<int64_t> shape) {
-  return arange(env, start, end, step, type_atom, device_tuple, shape);
-}
-
-fine::Ok<fine::ResourcePtr<TorchTensor>>
-arange_6_io(ErlNifEnv *env, int64_t start, int64_t end, int64_t step,
-            fine::Atom type_atom, std::tuple<int64_t, int64_t> device_tuple,
-            std::vector<int64_t> shape) {
-  return arange(env, start, end, step, type_atom, device_tuple, shape);
-}
-
-// Register with base name "arange"
-static ERL_NIF_TERM arange_cpu_nif(ErlNifEnv *env, int argc,
-                                   const ERL_NIF_TERM argv[]) {
-  if (argc == 5)
-    return fine::nif(env, argc, argv, arange_5_cpu);
-  if (argc == 6)
-    return fine::nif(env, argc, argv, arange_6_cpu);
-  return enif_make_badarg(env);
-}
-
-static ERL_NIF_TERM arange_io_nif(ErlNifEnv *env, int argc,
-                                  const ERL_NIF_TERM argv[]) {
-  if (argc == 5)
-    return fine::nif(env, argc, argv, arange_5_io);
-  if (argc == 6)
-    return fine::nif(env, argc, argv, arange_6_io);
-  return enif_make_badarg(env);
-}
-
-auto __nif_registration_arange_cpu_5 = fine::Registration::register_nif(
-    {"arange_cpu", 5, arange_cpu_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND});
-auto __nif_registration_arange_io_5 = fine::Registration::register_nif(
-    {"arange_io", 5, arange_io_nif, ERL_NIF_DIRTY_JOB_IO_BOUND});
-auto __nif_registration_arange_cpu_6 = fine::Registration::register_nif(
-    {"arange_cpu", 6, arange_cpu_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND});
-auto __nif_registration_arange_io_6 = fine::Registration::register_nif(
-    {"arange_io", 6, arange_io_nif, ERL_NIF_DIRTY_JOB_IO_BOUND});
+REGISTER_TENSOR_NIF_ARITY(arange, arange_5);
+REGISTER_TENSOR_NIF_ARITY(arange, arange_6);
 
 fine::Ok<fine::ResourcePtr<TorchTensor>>
 ones(ErlNifEnv *env, std::vector<int64_t> shape, fine::Atom type_atom,
@@ -757,8 +681,9 @@ tensordot(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> a,
     torch::Tensor batched_b = at::makeBatched(
         get_tensor(b), at::BatchDims(batch_dims_b.begin(), batch_dims_b.end()));
 
-    torch::Tensor batched_result = torch::tensordot(
-        batched_a, batched_b, vec_to_array_ref(axes_a), vec_to_array_ref(axes_b));
+    torch::Tensor batched_result =
+        torch::tensordot(batched_a, batched_b, vec_to_array_ref(axes_a),
+                         vec_to_array_ref(axes_b));
 
     auto impl = at::maybeGetBatchedImpl(batched_result);
     if (!impl) {
@@ -766,8 +691,9 @@ tensordot(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> a,
     }
     result = torch::clone(impl->value());
   } else {
-    result = torch::tensordot(get_tensor(a), get_tensor(b),
-                              vec_to_array_ref(axes_a), vec_to_array_ref(axes_b));
+    result =
+        torch::tensordot(get_tensor(a), get_tensor(b), vec_to_array_ref(axes_a),
+                         vec_to_array_ref(axes_b));
   }
 
   return tensor_ok(result);
@@ -856,68 +782,20 @@ fine::Ok<fine::ResourcePtr<TorchTensor>> sum(ErlNifEnv *env,
 
 REGISTER_TENSOR_NIF(sum);
 
-// product - overloaded for arity 1 and 3
+// product - arity 1 and 3 versions
 fine::Ok<fine::ResourcePtr<TorchTensor>>
-product(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
+product_1(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
   return tensor_ok(torch::prod(get_tensor(t)));
 }
 
 fine::Ok<fine::ResourcePtr<TorchTensor>>
-product(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, int64_t dim,
-        bool keep_dim) {
+product_3(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, int64_t dim,
+          bool keep_dim) {
   return tensor_ok(torch::prod(get_tensor(t), dim, keep_dim));
 }
 
-// Wrapper functions - unique names for each arity
-fine::Ok<fine::ResourcePtr<TorchTensor>>
-product_1_cpu(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
-  return product(env, t);
-}
-
-fine::Ok<fine::ResourcePtr<TorchTensor>>
-product_1_io(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
-  return product(env, t);
-}
-
-fine::Ok<fine::ResourcePtr<TorchTensor>>
-product_3_cpu(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, int64_t dim,
-              bool keep_dim) {
-  return product(env, t, dim, keep_dim);
-}
-
-fine::Ok<fine::ResourcePtr<TorchTensor>>
-product_3_io(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, int64_t dim,
-             bool keep_dim) {
-  return product(env, t, dim, keep_dim);
-}
-
-// Register with base name "product"
-static ERL_NIF_TERM product_cpu_nif(ErlNifEnv *env, int argc,
-                                    const ERL_NIF_TERM argv[]) {
-  if (argc == 1)
-    return fine::nif(env, argc, argv, product_1_cpu);
-  if (argc == 3)
-    return fine::nif(env, argc, argv, product_3_cpu);
-  return enif_make_badarg(env);
-}
-
-static ERL_NIF_TERM product_io_nif(ErlNifEnv *env, int argc,
-                                   const ERL_NIF_TERM argv[]) {
-  if (argc == 1)
-    return fine::nif(env, argc, argv, product_1_io);
-  if (argc == 3)
-    return fine::nif(env, argc, argv, product_3_io);
-  return enif_make_badarg(env);
-}
-
-auto __nif_registration_product_cpu_1 = fine::Registration::register_nif(
-    {"product_cpu", 1, product_cpu_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND});
-auto __nif_registration_product_io_1 = fine::Registration::register_nif(
-    {"product_io", 1, product_io_nif, ERL_NIF_DIRTY_JOB_IO_BOUND});
-auto __nif_registration_product_cpu_3 = fine::Registration::register_nif(
-    {"product_cpu", 3, product_cpu_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND});
-auto __nif_registration_product_io_3 = fine::Registration::register_nif(
-    {"product_io", 3, product_io_nif, ERL_NIF_DIRTY_JOB_IO_BOUND});
+REGISTER_TENSOR_NIF_ARITY(product, product_1);
+REGISTER_TENSOR_NIF_ARITY(product, product_3);
 
 fine::Ok<fine::ResourcePtr<TorchTensor>>
 argmax(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, int64_t dim,
@@ -977,131 +855,35 @@ ifft2(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor,
 
 REGISTER_TENSOR_NIF(ifft2);
 
-// all - overloaded for arity 1 and 3
-fine::Ok<fine::ResourcePtr<TorchTensor>> all(ErlNifEnv *env,
-                                             fine::ResourcePtr<TorchTensor> t) {
+// all - arity 1 and 3 versions
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+all_1(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
   return tensor_ok(torch::all(get_tensor(t)));
 }
 
-fine::Ok<fine::ResourcePtr<TorchTensor>> all(ErlNifEnv *env,
-                                             fine::ResourcePtr<TorchTensor> t,
-                                             int64_t axis, bool keep_dim) {
+fine::Ok<fine::ResourcePtr<TorchTensor>> all_3(ErlNifEnv *env,
+                                               fine::ResourcePtr<TorchTensor> t,
+                                               int64_t axis, bool keep_dim) {
   return tensor_ok(torch::all(get_tensor(t), axis, keep_dim));
 }
 
-// Wrapper functions for all - unique names for each arity
+REGISTER_TENSOR_NIF_ARITY(all, all_1);
+REGISTER_TENSOR_NIF_ARITY(all, all_3);
+
+// any - arity 1 and 3 versions
 fine::Ok<fine::ResourcePtr<TorchTensor>>
-all_1_cpu(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
-  return all(env, t);
-}
-
-fine::Ok<fine::ResourcePtr<TorchTensor>>
-all_1_io(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
-  return all(env, t);
-}
-
-fine::Ok<fine::ResourcePtr<TorchTensor>>
-all_3_cpu(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, int64_t axis,
-          bool keep_dim) {
-  return all(env, t, axis, keep_dim);
-}
-
-fine::Ok<fine::ResourcePtr<TorchTensor>>
-all_3_io(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, int64_t axis,
-         bool keep_dim) {
-  return all(env, t, axis, keep_dim);
-}
-
-// Register with base name "all"
-static ERL_NIF_TERM all_cpu_nif(ErlNifEnv *env, int argc,
-                                const ERL_NIF_TERM argv[]) {
-  if (argc == 1)
-    return fine::nif(env, argc, argv, all_1_cpu);
-  if (argc == 3)
-    return fine::nif(env, argc, argv, all_3_cpu);
-  return enif_make_badarg(env);
-}
-
-static ERL_NIF_TERM all_io_nif(ErlNifEnv *env, int argc,
-                               const ERL_NIF_TERM argv[]) {
-  if (argc == 1)
-    return fine::nif(env, argc, argv, all_1_io);
-  if (argc == 3)
-    return fine::nif(env, argc, argv, all_3_io);
-  return enif_make_badarg(env);
-}
-
-auto __nif_registration_all_cpu_1 = fine::Registration::register_nif(
-    {"all_cpu", 1, all_cpu_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND});
-auto __nif_registration_all_io_1 = fine::Registration::register_nif(
-    {"all_io", 1, all_io_nif, ERL_NIF_DIRTY_JOB_IO_BOUND});
-auto __nif_registration_all_cpu_3 = fine::Registration::register_nif(
-    {"all_cpu", 3, all_cpu_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND});
-auto __nif_registration_all_io_3 = fine::Registration::register_nif(
-    {"all_io", 3, all_io_nif, ERL_NIF_DIRTY_JOB_IO_BOUND});
-
-// any - overloaded for arity 1 and 3
-fine::Ok<fine::ResourcePtr<TorchTensor>> any(ErlNifEnv *env,
-                                             fine::ResourcePtr<TorchTensor> t) {
+any_1(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
   return tensor_ok(torch::any(get_tensor(t)));
 }
 
-fine::Ok<fine::ResourcePtr<TorchTensor>> any(ErlNifEnv *env,
-                                             fine::ResourcePtr<TorchTensor> t,
-                                             int64_t axis, bool keep_dim) {
+fine::Ok<fine::ResourcePtr<TorchTensor>> any_3(ErlNifEnv *env,
+                                               fine::ResourcePtr<TorchTensor> t,
+                                               int64_t axis, bool keep_dim) {
   return tensor_ok(torch::any(get_tensor(t), axis, keep_dim));
 }
 
-// Wrapper functions for any - unique names for each arity
-fine::Ok<fine::ResourcePtr<TorchTensor>>
-any_1_cpu(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
-  return any(env, t);
-}
-
-fine::Ok<fine::ResourcePtr<TorchTensor>>
-any_1_io(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
-  return any(env, t);
-}
-
-fine::Ok<fine::ResourcePtr<TorchTensor>>
-any_3_cpu(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, int64_t axis,
-          bool keep_dim) {
-  return any(env, t, axis, keep_dim);
-}
-
-fine::Ok<fine::ResourcePtr<TorchTensor>>
-any_3_io(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, int64_t axis,
-         bool keep_dim) {
-  return any(env, t, axis, keep_dim);
-}
-
-// Register with base name "any"
-static ERL_NIF_TERM any_cpu_nif(ErlNifEnv *env, int argc,
-                                const ERL_NIF_TERM argv[]) {
-  if (argc == 1)
-    return fine::nif(env, argc, argv, any_1_cpu);
-  if (argc == 3)
-    return fine::nif(env, argc, argv, any_3_cpu);
-  return enif_make_badarg(env);
-}
-
-static ERL_NIF_TERM any_io_nif(ErlNifEnv *env, int argc,
-                               const ERL_NIF_TERM argv[]) {
-  if (argc == 1)
-    return fine::nif(env, argc, argv, any_1_io);
-  if (argc == 3)
-    return fine::nif(env, argc, argv, any_3_io);
-  return enif_make_badarg(env);
-}
-
-auto __nif_registration_any_cpu_1 = fine::Registration::register_nif(
-    {"any_cpu", 1, any_cpu_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND});
-auto __nif_registration_any_io_1 = fine::Registration::register_nif(
-    {"any_io", 1, any_io_nif, ERL_NIF_DIRTY_JOB_IO_BOUND});
-auto __nif_registration_any_cpu_3 = fine::Registration::register_nif(
-    {"any_cpu", 3, any_cpu_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND});
-auto __nif_registration_any_io_3 = fine::Registration::register_nif(
-    {"any_io", 3, any_io_nif, ERL_NIF_DIRTY_JOB_IO_BOUND});
+REGISTER_TENSOR_NIF_ARITY(any, any_1);
+REGISTER_TENSOR_NIF_ARITY(any, any_3);
 
 fine::Ok<fine::ResourcePtr<TorchTensor>>
 all_close(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> a,
@@ -1148,73 +930,27 @@ cumulative_max(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, int64_t axis) {
 
 REGISTER_TENSOR_NIF(cumulative_max);
 
-// cholesky - overloaded for arity 1 and 2
+// cholesky - arity 1 and 2 versions
 fine::Ok<fine::ResourcePtr<TorchTensor>>
-cholesky(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
+cholesky_1(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
   return tensor_ok(torch::cholesky(get_tensor(t)));
 }
 
 fine::Ok<fine::ResourcePtr<TorchTensor>>
-cholesky(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, bool upper) {
+cholesky_2(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, bool upper) {
   if (upper) {
     return tensor_ok(torch::cholesky(get_tensor(t)).mH());
   }
   return tensor_ok(torch::cholesky(get_tensor(t)));
 }
 
-// Wrapper functions for cholesky
-fine::Ok<fine::ResourcePtr<TorchTensor>>
-cholesky_1_cpu(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
-  return cholesky(env, t);
-}
+REGISTER_TENSOR_NIF_ARITY(cholesky, cholesky_1);
+REGISTER_TENSOR_NIF_ARITY(cholesky, cholesky_2);
 
-fine::Ok<fine::ResourcePtr<TorchTensor>>
-cholesky_1_io(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
-  return cholesky(env, t);
-}
-
-fine::Ok<fine::ResourcePtr<TorchTensor>>
-cholesky_2_cpu(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, bool upper) {
-  return cholesky(env, t, upper);
-}
-
-fine::Ok<fine::ResourcePtr<TorchTensor>>
-cholesky_2_io(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, bool upper) {
-  return cholesky(env, t, upper);
-}
-
-// Register with base name "cholesky"
-static ERL_NIF_TERM cholesky_cpu_nif(ErlNifEnv *env, int argc,
-                                     const ERL_NIF_TERM argv[]) {
-  if (argc == 1)
-    return fine::nif(env, argc, argv, cholesky_1_cpu);
-  if (argc == 2)
-    return fine::nif(env, argc, argv, cholesky_2_cpu);
-  return enif_make_badarg(env);
-}
-
-static ERL_NIF_TERM cholesky_io_nif(ErlNifEnv *env, int argc,
-                                    const ERL_NIF_TERM argv[]) {
-  if (argc == 1)
-    return fine::nif(env, argc, argv, cholesky_1_io);
-  if (argc == 2)
-    return fine::nif(env, argc, argv, cholesky_2_io);
-  return enif_make_badarg(env);
-}
-
-auto __nif_registration_cholesky_cpu_1 = fine::Registration::register_nif(
-    {"cholesky_cpu", 1, cholesky_cpu_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND});
-auto __nif_registration_cholesky_io_1 = fine::Registration::register_nif(
-    {"cholesky_io", 1, cholesky_io_nif, ERL_NIF_DIRTY_JOB_IO_BOUND});
-auto __nif_registration_cholesky_cpu_2 = fine::Registration::register_nif(
-    {"cholesky_cpu", 2, cholesky_cpu_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND});
-auto __nif_registration_cholesky_io_2 = fine::Registration::register_nif(
-    {"cholesky_io", 2, cholesky_io_nif, ERL_NIF_DIRTY_JOB_IO_BOUND});
-
-// qr - overloaded for arity 1 and 2
+// qr - arity 1 and 2 versions
 fine::Ok<
     std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>>>
-qr(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
+qr_1(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
   auto result = torch::linalg_qr(get_tensor(t), "reduced");
   return fine::Ok(
       std::make_tuple(fine::make_resource<TorchTensor>(std::get<0>(result)),
@@ -1223,7 +959,7 @@ qr(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
 
 fine::Ok<
     std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>>>
-qr(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, bool reduced) {
+qr_2(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, bool reduced) {
   auto result =
       torch::linalg_qr(get_tensor(t), reduced ? "reduced" : "complete");
   return fine::Ok(
@@ -1231,64 +967,14 @@ qr(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, bool reduced) {
                       fine::make_resource<TorchTensor>(std::get<1>(result))));
 }
 
-// Wrapper functions for qr
-fine::Ok<
-    std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>>>
-qr_1_cpu(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
-  return qr(env, t);
-}
+REGISTER_TENSOR_NIF_ARITY(qr, qr_1);
+REGISTER_TENSOR_NIF_ARITY(qr, qr_2);
 
-fine::Ok<
-    std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>>>
-qr_1_io(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
-  return qr(env, t);
-}
-
-fine::Ok<
-    std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>>>
-qr_2_cpu(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, bool reduced) {
-  return qr(env, t, reduced);
-}
-
-fine::Ok<
-    std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>>>
-qr_2_io(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, bool reduced) {
-  return qr(env, t, reduced);
-}
-
-// Register with base name "qr"
-static ERL_NIF_TERM qr_cpu_nif(ErlNifEnv *env, int argc,
-                               const ERL_NIF_TERM argv[]) {
-  if (argc == 1)
-    return fine::nif(env, argc, argv, qr_1_cpu);
-  if (argc == 2)
-    return fine::nif(env, argc, argv, qr_2_cpu);
-  return enif_make_badarg(env);
-}
-
-static ERL_NIF_TERM qr_io_nif(ErlNifEnv *env, int argc,
-                              const ERL_NIF_TERM argv[]) {
-  if (argc == 1)
-    return fine::nif(env, argc, argv, qr_1_io);
-  if (argc == 2)
-    return fine::nif(env, argc, argv, qr_2_io);
-  return enif_make_badarg(env);
-}
-
-auto __nif_registration_qr_cpu_1 = fine::Registration::register_nif(
-    {"qr_cpu", 1, qr_cpu_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND});
-auto __nif_registration_qr_io_1 = fine::Registration::register_nif(
-    {"qr_io", 1, qr_io_nif, ERL_NIF_DIRTY_JOB_IO_BOUND});
-auto __nif_registration_qr_cpu_2 = fine::Registration::register_nif(
-    {"qr_cpu", 2, qr_cpu_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND});
-auto __nif_registration_qr_io_2 = fine::Registration::register_nif(
-    {"qr_io", 2, qr_io_nif, ERL_NIF_DIRTY_JOB_IO_BOUND});
-
-// svd - overloaded for arity 1 and 2
+// svd - arity 1 and 2 versions
 fine::Ok<
     std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>,
                fine::ResourcePtr<TorchTensor>>>
-svd(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
+svd_1(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
   auto result = torch::linalg_svd(get_tensor(t), true);
   return fine::Ok(
       std::make_tuple(fine::make_resource<TorchTensor>(std::get<0>(result)),
@@ -1299,7 +985,7 @@ svd(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
 fine::Ok<
     std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>,
                fine::ResourcePtr<TorchTensor>>>
-svd(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, bool full_matrices) {
+svd_2(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, bool full_matrices) {
   auto result = torch::linalg_svd(get_tensor(t), full_matrices);
   return fine::Ok(
       std::make_tuple(fine::make_resource<TorchTensor>(std::get<0>(result)),
@@ -1307,54 +993,8 @@ svd(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, bool full_matrices) {
                       fine::make_resource<TorchTensor>(std::get<2>(result))));
 }
 
-// Wrapper functions for svd
-fine::Ok<
-    std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>,
-               fine::ResourcePtr<TorchTensor>>>
-svd_1_cpu(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
-  return svd(env, t);
-}
-
-fine::Ok<
-    std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>,
-               fine::ResourcePtr<TorchTensor>>>
-svd_1_io(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
-  return svd(env, t);
-}
-
-fine::Ok<
-    std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>,
-               fine::ResourcePtr<TorchTensor>>>
-svd_2_cpu(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t,
-          bool full_matrices) {
-  return svd(env, t, full_matrices);
-}
-
-fine::Ok<
-    std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>,
-               fine::ResourcePtr<TorchTensor>>>
-svd_2_io(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, bool full_matrices) {
-  return svd(env, t, full_matrices);
-}
-
-// Single NIF handler for svd that dispatches based on argc
-static ERL_NIF_TERM svd_nif(ErlNifEnv *env, int argc,
-                            const ERL_NIF_TERM argv[]) {
-  if (argc == 1)
-    return fine::nif(env, argc, argv, svd_1_cpu);
-  if (argc == 2)
-    return fine::nif(env, argc, argv, svd_2_cpu);
-  return enif_make_badarg(env);
-}
-
-auto __nif_registration_svd_cpu_1 = fine::Registration::register_nif(
-    {"svd_cpu", 1, svd_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND});
-auto __nif_registration_svd_io_1 = fine::Registration::register_nif(
-    {"svd_io", 1, svd_nif, ERL_NIF_DIRTY_JOB_IO_BOUND});
-auto __nif_registration_svd_cpu_2 = fine::Registration::register_nif(
-    {"svd_cpu", 2, svd_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND});
-auto __nif_registration_svd_io_2 = fine::Registration::register_nif(
-    {"svd_io", 2, svd_nif, ERL_NIF_DIRTY_JOB_IO_BOUND});
+REGISTER_TENSOR_NIF_ARITY(svd, svd_1);
+REGISTER_TENSOR_NIF_ARITY(svd, svd_2);
 
 fine::Ok<
     std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>,
