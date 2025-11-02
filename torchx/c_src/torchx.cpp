@@ -37,7 +37,8 @@ FINE_RESOURCE(TorchTensor);
        ERL_NIF_DIRTY_JOB_CPU_BOUND});                                          \
   auto __nif_registration_##SYMBOL##_io = fine::Registration::register_nif(    \
       {#NAME "_io", fine::nif_arity(SYMBOL), SYMBOL##_nif,                     \
-       ERL_NIF_DIRTY_JOB_IO_BOUND})
+       ERL_NIF_DIRTY_JOB_IO_BOUND});                                           \
+  static_assert(true, "require a semicolon after the macro")
 
 // Helper to get tensor from resource, with proper error checking
 torch::Tensor &get_tensor(fine::ResourcePtr<TorchTensor> tensor_res) {
