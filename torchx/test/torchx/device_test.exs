@@ -50,7 +50,7 @@ defmodule Torchx.DeviceTest do
     test "works" do
       t = Nx.tensor([[1, 2], [3, 4]], backend: {TB, device: @device})
       t2 = Nx.tensor([[2, 6], [3, 1]], backend: {TB, device: @device})
-      assert Nx.window_scatter_max(t, t2, 0, {2, 3}, backend: {TB, device: @device}) == Nx.tensor([[0, 0, 0, 0, 6, 0], [0, 0, 2, 0, 0, 0], [0, 0, 3, 0, 0, 0], [0, 0, 0, 0, 0, 1]], backend: {TB, device: @device})
+      assert_equal Nx.window_scatter_max(t, t2, 0, {2, 3}), Nx.tensor([[0, 0, 0, 0, 6, 0], [0, 0, 2, 0, 0, 0], [0, 0, 3, 0, 0, 0], [0, 0, 0, 0, 0, 1]], backend: {TB, device: @device})
     end
   end
 end
