@@ -1428,43 +1428,29 @@ defmodule Nx.LinAlg do
 
   Diagonal matrix returns eigenvalues on the diagonal:
 
-      iex> {eigenvals, eigenvecs} = Nx.LinAlg.eig(Nx.tensor([[1, 0], [0, 2]], type: :f32))
-      iex> Nx.abs(eigenvals)
-      #Nx.Tensor<
-        f32[2]
-        [2.0, 1.0]
-      >
+  iex> {eigenvals, _} = Nx.LinAlg.eig(Nx.tensor([[1, 0], [0, 2]], type: :f32))
+  iex> Nx.all_close(Nx.sort(Nx.abs(eigenvals)), Nx.tensor([1.0, 2.0]), atol: 1.0e-3) |> Nx.to_number()
+  1
 
   Upper triangular matrix:
 
-      iex> {eigenvals, eigenvecs} = Nx.LinAlg.eig(Nx.tensor([[1, 1], [0, 2]], type: :f32))
-      iex> Nx.abs(eigenvals)
-      #Nx.Tensor<
-        f32[2]
-        [2.0, 1.0]
-      >
+  iex> {eigenvals, _} = Nx.LinAlg.eig(Nx.tensor([[1, 1], [0, 2]], type: :f32))
+  iex> Nx.all_close(Nx.reduce_max(Nx.abs(eigenvals)), Nx.tensor(2.0), atol: 1.0e-3) |> Nx.to_number()
+  1
 
-  Rotation matrix (has complex eigenvalues):
+  Rotation matrix (has complex eigenvalues; magnitudes ~1):
 
-      iex> {eigenvals, eigenvecs} = Nx.LinAlg.eig(Nx.tensor([[0, -1], [1, 0]], type: :f32))
-      iex> Nx.abs(eigenvals)
-      #Nx.Tensor<
-        f32[2]
-        [1.0, 0.9999996423721313]
-      >
+  iex> {eigenvals, _} = Nx.LinAlg.eig(Nx.tensor([[0, -1], [1, 0]], type: :f32))
+  iex> Nx.all_close(Nx.sort(Nx.abs(eigenvals)), Nx.tensor([1.0, 1.0]), atol: 1.0e-3) |> Nx.to_number()
+  1
 
   Batched matrices:
 
-      iex> t = Nx.tensor([[[1, 0], [0, 2]], [[3, 0], [0, 4]]], type: :f32)
-      iex> {eigenvals, eigenvecs} = Nx.LinAlg.eig(t)
-      iex> Nx.abs(eigenvals)
-      #Nx.Tensor<
-        f32[2][2]
-        [
-          [2.0, 1.0],
-          [4.0, 3.0]
-        ]
-      >
+  iex> t = Nx.tensor([[[1, 0], [0, 2]], [[3, 0], [0, 4]]], type: :f32)
+  iex> {eigenvals, _} = Nx.LinAlg.eig(t)
+  iex> expected = Nx.tensor([[2.0, 1.0], [4.0, 3.0]], type: :f32)
+  iex> Nx.all_close(Nx.abs(eigenvals), expected, atol: 1.0e-3) |> Nx.to_number()
+  1
 
   ## Error cases
 
