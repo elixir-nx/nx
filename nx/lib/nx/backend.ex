@@ -173,6 +173,7 @@ defmodule Nx.Backend do
     cumulative_max: 3,
     all_close: 4,
     svd: 3,
+    eig: 3,
     top_k: 3,
     fft2: 3,
     ifft2: 3,

@@ -80,7 +80,11 @@ defmodule Nx.LinAlg.Eig do
             {eigenvals, eigenvecs}
           else
             if is_hermitian(a, opts) do
-              {eigs_h, vecs_h} = Nx.LinAlg.eigh(a)
+              # Run eigh on a real-valued view to match backend expectations (real eigenvalues/vectors),
+              # then cast results to complex output type.
+              real_type = Nx.Type.to_floating(Nx.Type.to_real(type))
+              a_real = a |> Nx.real() |> Nx.as_type(real_type)
+              {eigs_h, vecs_h} = Nx.LinAlg.eigh(a_real)
               {Nx.as_type(eigs_h, type), Nx.as_type(vecs_h, type)}
             else
               # Reduce to Hessenberg form and keep the orthogonal transformation Q
@@ -259,8 +263,9 @@ defmodule Nx.LinAlg.Eig do
     first_idx = Nx.argmax(mask)
     first_elem = x[[first_idx]]
 
-    # Sign to avoid cancellation
-    alpha = -Nx.sign(first_elem) * norm_x
+  # Phase to avoid cancellation (works for real and complex): first_elem/|first_elem|
+  phase = first_elem / (Nx.abs(first_elem) + eps)
+  alpha = -phase * norm_x
 
     # Create e1 (first unit vector in the masked subspace)
     idx_range = Nx.iota({n}, type: {:s, 32})
@@ -412,7 +417,9 @@ defmodule Nx.LinAlg.Eig do
         lambda = eigenvals[[k]]
 
         # Deterministic initial vector
-        v = Nx.iota({n}, type: type) |> Nx.add(k)
+  # Use a real iota to avoid complex iota backend limitations, then cast to complex
+  v_real = Nx.iota({n}, type: Nx.Type.to_floating(Nx.Type.to_real(type)))
+  v = v_real |> Nx.as_type(type) |> Nx.add(k)
         v = v / (Nx.LinAlg.norm(v) + eps)
 
         # Orthogonalize against previously computed eigenvectors
