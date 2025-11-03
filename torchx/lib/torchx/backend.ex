@@ -1033,6 +1033,45 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def eig({eigenvals, eigenvecs}, tensor, _opts) do
+    {vals_tx, vecs_tx} =
+      tensor
+      |> from_nx()
+      |> Torchx.eig()
+
+    abs_type = to_torch_type(Nx.Type.to_real(eigenvals.type))
+
+    m = Nx.axis_size(eigenvecs, -2)
+    n = Nx.axis_size(eigenvecs, -1)
+
+    sort_nx =
+      vals_tx
+      |> Torchx.abs()
+      |> Torchx.to_type(abs_type)
+      |> Torchx.to_nx()
+      |> Nx.argsort(axis: -1, direction: :desc)
+      |> Nx.revectorize([leading: :auto], target_shape: {n})
+
+    # Nx expects the eigenvalues and eigenvectors to be sorted
+    # We rely on vectorization so that we can use Nx.take/2
+    # in a similar way to what the reference implementation for Nx does
+
+    {vals_tx
+     |> Torchx.to_type(to_torch_type(eigenvals.type))
+     |> to_nx(eigenvals)
+     |> Nx.revectorize([leading: :auto], target_shape: {n})
+     |> Nx.take(sort_nx)
+     |> Nx.devectorize(keep_names: false)
+     |> Nx.revectorize([], target_shape: eigenvals.shape, target_names: eigenvals.names),
+     vecs_tx
+     |> Torchx.to_type(to_torch_type(eigenvecs.type))
+     |> to_nx(eigenvecs)
+     |> Nx.revectorize([leading: :auto], target_shape: {m, n})
+     |> Nx.take(sort_nx, axis: 1)
+     |> Nx.revectorize([], target_shape: eigenvecs.shape, target_names: eigenvecs.names)}
+  end
+
+  @impl true
   def qr({q_holder, r_holder}, tensor, opts) do
     {q, r} =
       tensor

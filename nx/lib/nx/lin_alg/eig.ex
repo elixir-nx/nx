@@ -263,9 +263,9 @@ defmodule Nx.LinAlg.Eig do
     first_idx = Nx.argmax(mask)
     first_elem = x[[first_idx]]
 
-  # Phase to avoid cancellation (works for real and complex): first_elem/|first_elem|
-  phase = first_elem / (Nx.abs(first_elem) + eps)
-  alpha = -phase * norm_x
+    # Phase to avoid cancellation (works for real and complex): first_elem/|first_elem|
+    phase = first_elem / (Nx.abs(first_elem) + eps)
+    alpha = -phase * norm_x
 
     # Create e1 (first unit vector in the masked subspace)
     idx_range = Nx.iota({n}, type: {:s, 32})
@@ -417,9 +417,9 @@ defmodule Nx.LinAlg.Eig do
         lambda = eigenvals[[k]]
 
         # Deterministic initial vector
-  # Use a real iota to avoid complex iota backend limitations, then cast to complex
-  v_real = Nx.iota({n}, type: Nx.Type.to_floating(Nx.Type.to_real(type)))
-  v = v_real |> Nx.as_type(type) |> Nx.add(k)
+        # Use a real iota to avoid complex iota backend limitations, then cast to complex
+        v_real = Nx.iota({n}, type: Nx.Type.to_floating(Nx.Type.to_real(type)))
+        v = v_real |> Nx.as_type(type) |> Nx.add(k)
         v = v / (Nx.LinAlg.norm(v) + eps)
 
         # Orthogonalize against previously computed eigenvectors
@@ -430,7 +430,7 @@ defmodule Nx.LinAlg.Eig do
         ah = Nx.LinAlg.adjoint(a)
 
         {v, _} =
-          while {v, {iter = 0, a, ah, eye}}, iter < 20 do
+          while {v, {iter = 0, a, ah, eye}}, iter < 40 do
             # Right-hand side: b = A^H v
             b = Nx.dot(ah, [1], v, [0])
             # Normal equations matrix: N = A^H A + mu I
@@ -609,7 +609,7 @@ defmodule Nx.LinAlg.Eig do
 
   # Polish eigenvectors in A-space with fixed eigenvalues using normal equations
   defnp polish_eigenvectors(a, eigenvals, eigenvecs, opts) do
-    polish_eigenvectors_with_iters(a, eigenvals, eigenvecs, opts, 25)
+    polish_eigenvectors_with_iters(a, eigenvals, eigenvecs, opts, 40)
   end
 
   # Variant with configurable iteration count for pre- or post-polish
@@ -633,7 +633,7 @@ defmodule Nx.LinAlg.Eig do
           while {v, {iter = 0, a_shift, ah, eye}}, iter < iters do
             b = Nx.dot(ah, [1], v, [0])
             ah_a = Nx.dot(ah, a_shift)
-            mu = Nx.LinAlg.norm(ah_a) * 1.0e-4 + eps
+            mu = Nx.LinAlg.norm(ah_a) * 1.0e-5 + eps
             nmat = ah_a + mu * eye
             v_new = Nx.LinAlg.solve(nmat, b)
             v_norm = Nx.LinAlg.norm(v_new)
@@ -667,7 +667,7 @@ defmodule Nx.LinAlg.Eig do
     [v, eigenvecs] = Nx.broadcast_vectors([v, eigenvecs])
 
     {v_orthog, _} =
-      while {v_orthog = v, {j = 0, max_iters, eigenvecs, k}}, j < 5 do
+      while {v_orthog = v, {j = 0, max_iters, eigenvecs, k}}, j < max_iters do
         # Only process if j < k and j < n_cols
         should_process = Nx.logical_and(j < k, j < n_cols)
 

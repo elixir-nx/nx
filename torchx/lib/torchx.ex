@@ -359,6 +359,7 @@ defmodule Torchx do
 
   deftensor cholesky(tensor)
   deftensor cholesky(tensor, upper)
+  deftensor eig(tensor)
   deftensor eigh(tensor)
   deftensor qr(tensor)
   deftensor qr(tensor, reduced)

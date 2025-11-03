@@ -1043,6 +1043,17 @@ eigh(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor) {
 
 REGISTER_TENSOR_NIF(eigh);
 
+fine::Ok<
+    std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>>>
+eig(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor) {
+  auto result = torch::linalg_eig(get_tensor(tensor));
+  return fine::Ok(
+      std::make_tuple(fine::make_resource<TorchTensor>(std::get<0>(result)),
+                      fine::make_resource<TorchTensor>(std::get<1>(result))));
+}
+
+REGISTER_TENSOR_NIF(eig);
+
 fine::Ok<fine::ResourcePtr<TorchTensor>>
 solve(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensorA,
       fine::ResourcePtr<TorchTensor> tensorB) {
